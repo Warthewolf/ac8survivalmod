@@ -4,26 +4,53 @@
 -- state (UE4SS gives each Lua mod its own): a name one part shares with the others is a global of that state, each
 -- part's own helpers stay local to it. A part that fails to load stops the rest, as one file used to.
 -- (Hard rule 23 counts locals per part now: python tools/checks/lua_check.py Scripts/*.lua checks them all.)
-VERSION = "0.70.6"
+VERSION = "0.74.9"
 
 local MODULES = {
     "sv_core",
     "sv_config",
+    "sv_config_specials",          -- (sv_config.lua's next piece: tools/lua_split_part.py)
+    "sv_config_ini",               -- (sv_config.lua's next piece: tools/lua_split_part.py)
     "sv_rows",
     "sv_ai",
     "sv_hud",
+    "sv_subs",                     -- the subtitle strip and the results card: SUB.say (GONE FISHIN', THE FESTIVAL)
+    "sv_sky",                      -- the sky Survival changes, the day-night arc's owner (tools/re/FISHING.md 5)
     "sv_sound",
     "sv_spawn",
     "sv_anomalies",
+    "sv_anomalies_valka",          -- (sv_anomalies.lua's next piece: tools/lua_split_part.py)
+    "sv_anomalies_dev",            -- (sv_anomalies.lua's next piece: tools/lua_split_part.py)
     "sv_rounds",
     "sv_ladon",
     "sv_leaderboard",
     "sv_alicorn",
     "sv_amphib",
+    "sv_spaceport",                -- the Spaceport Assault and its retake (tools/re/SPACEPORT_ASSAULT.md)
+    "sv_fishing",                  -- GONE FISHIN': the shoals and SAL's boat (tools/re/FISHING.md 1-4)
+    "sv_festival",                 -- THE FESTIVAL: the cruise missiles and the siren (tools/re/FISHING.md 6)
+    "sv_decoy",                    -- THE DECOY: the bait, the Spear UAVs' locks and the Tonitrus Spear (tools/re/DECOY.md)
     "sv_flights",
     "sv_shop",
     "sv_allies",
     "sv_tactical",
+    "sv_stats",                    -- the behaviour roadmap's measurements and P6's learning layer (BEHAVIOUR_DIRECTOR.md)
+    "sv_weaponlog",                -- what the enemies carry and fire, in the log (CFG.log.weapons)
+    "sv_spweapons",                -- the enemies' special weapons fired (CFG.special.fire)
+    "sv_tells",                    -- P3's tells (before sv_coop: it keeps SV_Event as it was unwrapped)
+    "sv_director",                 -- P2's squad director (calls SV_Event by name at run time: sv_coop wraps it)
+    "sv_escort",                   -- THE ESCORT and the ZFA-44 carriers (tools/re/ESCORT.md; before sv_coop: its logPlane wrap)
+    "sv_escort_subs",              -- what CHARLENE, her KMG escorts and Comona say; the Anomalies' wait for her (2026-11-07)
+    "sv_escort_laser",             -- the ZFA-44 carriers' anti-missile laser: its rows, its arm in the log, its kills (2026-11-07)
+    "sv_menu",
+    "sv_coop",
+    "sv_coop_joiner",              -- (sv_coop.lua's next piece: tools/lua_split_part.py)
+    "sv_coop_planes",              -- (sv_coop.lua's next piece: tools/lua_split_part.py)
+    "sv_coop_sync",                -- (sv_coop.lua's next piece: tools/lua_split_part.py)
+    "sv_coop_migration",           -- (sv_coop.lua's next piece: tools/lua_split_part.py)
+    "sv_down",                     -- co-op's revives and the spectator camera (after sv_coop: its messages and players)
+    "sv_audit",                    -- the run's audits in the log: targets, pay, sync (after sv_coop: its addCredits wrap)
+    "sv_zfa44",                    -- the ZFA-44's test T0 (tools/re/ZFA44.md; test code only: empty in every zip)
     "sv_main",
 }
 

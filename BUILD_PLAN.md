@@ -321,7 +321,8 @@ mission slot or files. The menu entry is part of this milestone (moved up from t
   one tier up; difficulty adds -1 / 0 / +1. PilotRank written live on each enemy (log "tiers:"); post-stall needs
   both the model (CFG.maneuvers) and the tier. The probe's blanket rank 5 is off. Own scripts per tier: below.
 - [~] (user 2026-10-22) Survival's OWN behaviour sets (step 2, after the probe proves our scripts load): first one,
-  NLID_SV_Fighter, built and confirmed (Lua 0.19.x); per-tier sets and the learning layer not started.
+  NLID_SV_Fighter, built and confirmed (Lua 0.19.x); per-tier sets not started. The learning layer: built on branch
+  TestBranch_Behavioural (behaviour roadmap P6, tools/re/BEHAVIOUR_DIRECTOR.md unit 8; untested in game).
   - Scripts: one LA_SV_<Tier>_<Slot>.lua per slot that differs, in Scripts/ai, packaged at /Game/LuaSource/SurvivalMode/AI
     (tools/build_survival.py LUA_SCRIPTS), built from the stock node factories (AI_BEHAVIOURS.md). Unchanged slots keep
     stock scripts.

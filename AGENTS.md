@@ -16,6 +16,26 @@ A round-based survival mode mod for Ace Combat 8 (PC).
 - Survival Mode is built only from stock game files; nothing from Stonehenge Returns is used or shipped.
   One exception, at the user's request (2026-10-24): the VALKA special may use Ace Combat 7 assets (the X-02S model,
   Mihaly's railgun effects and sounds). Never AC7 voice lines. See tools/re/VALKA.md.
+- No other mod's files, assets, tables, values or text go into Survival's build, mod/, tools/, this repo (docs and
+  commit messages included) or a release zip, and nothing here names or credits another mod as the source of an enemy
+  change (user, 2026-11-06). Survival's enemy changes are its own: designed from AC8's tables and tuned in Survival's
+  own tests.
+  One exception, the user's own work (2026-11-06: "Alicorn Special Raid IV is my own mod and I NEED the FA44 that is
+  within the files of the Alicorn Special Raid as the Model inside is edited"): the ZFA-44 from the user's AC7 mod
+  Alicorn Special Raid IV may be used for a Survival special round: its edited model (the mod's
+  Vehicles/Aircraft/uavs/uavs_SM, a CFA-44-based static mesh), its paint (fa44_00_D, fa44_00xMREC, fa44_00_Inst), its
+  actor ex_uavs and its weapons, with the AC7 stock assets they use. Source: the user's work folder
+  D:\Ace Combat PAKS\unrealpak\Engine\Binaries\Win64\Alicorn_Special_Raid_IV (unencrypted). Never AC7 voice lines.
+  The same exception (2026-11-07: "Check this mod out, we fixed the Clouds in this one", "in a previous mod we built,
+  this happened and we were able to fix it"): the user's own AC8 mod Orbital Tonitrus Spear Strike (RoGLaser) and its
+  cloud fix for the Spear's rods (each rod's blast at the clouds' height, the sky's ExplosionEffect as Mission 30's big
+  one, a little wider: Scripts/sv_decoy.lua's clouds). Read only, from the user's upload; none of its files ship.
+- Release zips always go to the main tree's build/release, `E:\ACE8 Survival Mode\build\release`, from any worktree
+  (user, 2026-11-07): tools/package_release.sh and package_test.sh find it through tools/release_dir.sh.
+- The runtime's leaderboard address and key come from the main tree's leaderboard/submit.local from any worktree
+  (runtime/build.sh: .env's SV_LB_LOCAL, this checkout's, else the main tree's). Every 0.74.0-0.74.8 build was made in a
+  worktree without it and could send no run; package_release.sh online and package_dev.sh now refuse a runtime without
+  it (build/runtime/submit_cfg.h). A build's log must say "leaderboard: runs go to ...".
 - Survival's own build: `tools/build_all.sh` (see tools/README.md). Packages are generated into `mod/Content`
   by `tools/build_survival.py`. Edit that script, not the binaries. The container is `SurvivalMode_P`, packages live under `/Game/Mods/SurvivalMode/`.
 - Survival Mode is its own mod: never repoint or override Stonehenge Returns' (or any other mod's) files or mission slot.
@@ -211,15 +231,126 @@ Copy a working stock pattern before inventing a new one.
     VALKA's flare and paint variants 9-11 never built that way (test of 2026-10-25, "NOT up (nil)"). Write
     `if x then ok, v = pcall(f) end`; lua_check.py fails the build on the pattern.
 
-## Economy review build (Lua 0.70.x, runtime 0.19.0, 2026-10-25; untested in game)
-The Claude Docs "Economy, Enemies & Allies Review"'s proposals, all built on branch `feature/economy-review`: waves,
-late-round scaling, raids from one direction with escorts, the jammer, more airframes, kill attribution by side
-(DamageHistoryMap), WINGMEN, ally orders, repairs between rounds, FULL REARM, upgrades, tactical items, SECOND CHANCE,
-a 5-page STORE. tools/re/ECONOMY_REVIEW.md lists every mechanism and the log lines to check. None of it is a hard rule
-until a test confirms it. A build without VALKA: `NOVALKA=1 sh tools/package_release.sh online <version>`.
-`python -X utf8 -I tools/checks/ini_check.py` checks survival.default.ini against CFG (build_all.sh runs it).
+48. Survival COOP works over Steam P2P with up to 4 players (test of 2026-10-25, coop.4: host + 3 joiners to round 5):
+    joiners' copies of the host's enemies, moved every frame through the AI plane's vtable slot 315 (TeleportTo +
+    OnReposition), flew with 0 failed moves and attacked the joiners (user: "Enemies attacked them yes"); joiners' hits
+    reached the host (16 of its 28 kills "by wingmate"); rounds, callouts, the airfield and the shop ran on every game.
 
-## Runtime layout (Lua, from 0.66.0)
+49. A joiner must not spawn while its Survival level is still loading: the level's LiveUnitSpawner has no world yet and
+    the game's spawn ends in UWorld::SpawnActor(NULL) (access violation reading +0x30): two joiners crashed the moment
+    the host's first flights arrived (coop.3). SpawnerReady answers SV_ERR_LOADING (-6) while GetWorld is null, and a
+    joiner holds the host's spawns until its own plane is in the level + 3 s (coop.4, confirmed the same night).
+
+50. A setting players must write into survival.ini can fail silently (a hand-made file, the default ini edited, a
+    restart forgotten): three friends set role = join and still hosted (coop.2). Make co-op need no setting: role auto
+    (look for a host, host after 20-40 s, step back on meeting one) linked all three at once (coop.3 and coop.4).
+
+51. A second ALivePlayerPlane (Online Mode's remote-player spawn, tools/re/COOP.md 6) is spawned DEFERRED: give it a
+    loadout and call AActor::FinishSpawning, or its weapons have no owner and the first teleport crashes. With role 2
+    (another player's) and no network data its own tick holds it at the map's centre; with its actor tick off and moved
+    on EVERY input-build call (2-3 a frame, not the first only) it flies solid and smooth beside you, ALLY-tagged.
+    Its slot 315 fires OnReposition, which resets a player plane's look: move it with AActor::TeleportTo + the flight
+    reset only. Confirmed solo 2026-10-25 (runtimes 0.22.2-0.22.7); not yet the co-op stand-in.
+
+52. The main menu opens a row's page (its MenuID) through ELiveMenuMainIDs, the game's FIXED enum of its pages
+    (GameTitle ... CampaignTraining, MAX): a page of a new name never opens, whatever the page list holds (25 presses,
+    nothing). New pages borrow a stock id instead: main.dll points that id's MenuWidgetClassList entry (manager+0x118,
+    { FString, UClass* } 0x18 each) at the page's class just before the press goes on (SV_MenuClass / SV_MenuSlot).
+    The game ignores a request for the page shown, and goes BACK to a page already open under it rather than open it
+    again: consecutive pages need different ids (Survival: CampaignTraining, InitialSetting_DualSence,
+    InitialSetting_Accessibility), and a BACK row naming the page under it is a working way back. Copies of the main
+    menu's top page have no cancel. Confirmed by the tests of 2026-10-29 (runtimes 0.27.0-0.28.3).
+
+53. A remote player plane (role 2) flies itself when its network object's messages are fed each frame before its
+    RemoteUpdate (0x147d6f0c0): the physics message *(N+0x98) and the input message *(N+0x170), both pointers (N+0x170
+    is a TSharedPtr: writing at N+0x178 hit its reference controller and Quit Mission crashed, test of 2026-10-30). Its
+    afterburner glow is plane+0x39d0, reset every frame on a remote plane, so it's written just before the surface
+    update (0x147d32b00) reads it. Enemies attack one only when an order names it (Survival's name "Player": your plane),
+    and hits on it reach the player plane's damage (0x147d5a430) but are never applied. Confirmed by T1c-T1e
+    (tools/re/COOP2MP.md, 2026-10-30).
+
+54. A fast AI plane (the Ladons at 2500 km/h) doesn't take a new path handed over at its last path's PathFinish, even
+    one started 2.5 km ahead along its way: it holds the old path's end tangent (0.73.73, the user's test of 2026-11-02
+    23:16: legs 0, down to 0.2 km 29 km out), while a slow one does (VOID WATCHER at 450-550 km/h took its climb-out ->
+    lead-in handover). Put everything such a plane must fly into the path started at its appearance: the Ladons' route
+    carries 15 laps of their circuit (survival_events.LADON_LAPS), and they looped the airfield 4 passes until shot down
+    (0.73.75, the test of 23:31-23:39). Confirmed 2026-11-02.
+
+55. The runtime's formatter (runtime/vfmt.h, Log's and Crumb's) must keep reading its input when the line is full: until
+    0.32.23 its PUT skipped `*s++` / `t[--n]` past the buffer, so a line over 1,023 characters looped for ever holding the
+    log lock. 0.32.22's three new Lua functions made RegisterLua's "Lua bridge: ... registered" line 1,031 characters: UE4SS's
+    Lua start never returned, Survival's Lua never ran (no SURVIVAL MODE on the menu) and every later Log waited (the user's
+    launches of 2026-11-03 23:33 and 23:48; a crumb before each registration found it). Fixed in 0.32.23, confirmed at 23:54
+    (tools/checks/vfmt_test.sh fails on the old macro). A bounded writer must still consume what it's given.
+
+56. Cloudly draws the sky, and sets its sun light, from the level's CloudlySkyParamsAsset (Survival's: Mission 4's
+    CSP_ms04_20251218b), copied every frame into the renderer's drawn copy (CloudlyRenderer .Data.SkyParamsRO, and two of
+    the seven OurSkyParams) and onto the sun light (rotation, intensity, colour): writes to the renderer's copies, the
+    interpolated params or the light are undone within a frame. Its custom sun API (SetCustomSunPosition /
+    SetCustomMoonPosition) writes into the asset itself and stays there after the custom flags go off. The exposure (the
+    post-process volumes), the level's sky light controller and the MPCs do hold. The user's sky test of 2026-11-07
+    (0.74.1, Ctrl+F6: the step-3 read-back undid the copies and the light; step 2 moved the asset to -2 / -105 and gave a
+    real sunset in the screenshot; a whole run of the arc on the copies showed no sun move at all and a blown-out night).
+    Write the asset (sv_sky.lua v.asset) and put back every value of it: it outlives the level, and the campaign reads it.
+
+## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
+SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
+each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
+page. The pages are copies of the game's main-menu page (tools/build_survival.py MENU_PAGES; tools/menu_stock.py finds the
+stock), so their presses reach OnMainDecide; they open through borrowed stock page ids (hard rule 52; the user gave
+CAMPAIGN TRAINING over completely, 2026-10-29, and its row stays hidden; the two first-start pages get their own class
+back when any other main-menu entry is picked). Scripts/sv_menu.lua keeps one run setup per mode (CFG.setup,
+survival.ini [setup.*]) that the rounds, store and leaderboard read through SETUP.*. Without the pages ([menu] pages =
+false) the main menu has the flat rows. Confirmed 2026-10-29: the pages open, settings step in place and save, BACK
+works all the way out. Not yet: B / Esc on the pages (no cancel), a whole run started from a setup page with its rules.
+tools/re/MENU_PAGES.md has the design and log lines. Lua tests: tools/checks/menu_test.sh (and coop_settings_test.sh),
+the build's: tools/checks/menu_pages_test.py (build_all.sh runs it).
+
+## Survival COOP (Lua 0.70.6-coop.11, runtime 0.26.0, 2026-10-26; played up to coop.4: hard rules 48-51)
+Up to 24 players (protocol 3), host-authoritative (after Double Trigger, the AC7 co-op mod), on branch
+`feature/survival-coop`. tools/re/COOP.md has the RE (AC8's AI plane teleport: vtable slot 315, called every frame on a
+puppet; Steam P2P without callbacks; a real second player plane, section 6), the protocol and the test checklist.
+Native half runtime/coop.c (SV_Coop*), Lua half Scripts/sv_coop.lua, world-data units SV_Unit_CoopPeerA-X (each other
+player's stand-in, an allied AI plane of their airframe: CFG.coop.airframes), name keys SV_CoopName_A-X.
+Untested in game since coop.4 (coop.5-coop.11): every RE_SV_* event forwarded to the joiners but each player's own;
+SURVIVAL CO-OP: HOST / JOIN on the main menu (OnMainDecide, SV_MenuChoice); names on the stand-ins' target boxes; an
+online-style pause; the host's Q batches for up to 24 players; more enemies per player (COOP.more); the host's settings
+for everyone (M.sendSettings: CFG's differences from CFG_DEFAULTS, data only); the main menu's settings rows (SV_Set_*,
+SV_MenuSetting, iniSet). Build: `COOP=1 NOVALKA=1 sh tools/package_release.sh online <version>` (bump
+tools/coop_edition.py COOP_TAG for every build friends get: from runtime 0.32.6 games with different builds refuse to link (coop.c CoSameVer, both ways); before it they linked with a CO-OP VERSION MISMATCH callout, only a different CO_PROTO refusing: two players on 0.73.26 joined a 0.73.27 host, 2026-10-31).
+Guards on what other games send (security review of 2026-10-26; keep them when adding messages): coop.c drops any
+state with a non-finite or far-off position or a non-unit rotation before it can reach a teleport (CoSaneState);
+sv_coop.lua cuts texts, checks slots, zollars, damage and poses, sets only NPC rows this game's DT_SV_NpcMission has
+(knownRow) and stand-in rows of CFG.coop.airframes, and takes a host's settings only where the shipped CFG has that
+setting with a value of the same type and size (fits; build data and each player's own sections never). The main menu:
+any entry but HOST / JOIN closes co-op; picking one again retries a failed open (SV_MenuChoice counts the picks).
+Checks without the game: `sh tools/checks/coop_test.sh` (the transport, 4 and 12 players over lossy UDP),
+`sh tools/checks/coop_settings_test.sh` (the settings sync, rows and scaling on the real parts) and
+`sh tools/checks/lua_load_test.sh [mod folder]` (every part of main.lua loads). The last two run on a real Lua 5.4.6
+that tools/checks/lua_build.sh builds into build/checks (there's no Lua on the build machine otherwise).
+Player guide: Claude Docs "Survival COOP: Player Guide".
+Since the behaviour branch's code review (2026-10-29, TestBranch_Behavioural; untested in game, not a hard rule): the
+host down at the airfield no longer holds the room while another player flies (sv_rounds.lua othersFlying: alive,
+fresh, not on the airfield). The spawns go on, a flight's orders fire (RE_SV_FlightOrders_NN every 5 s while the host
+is down, not counted as tries), the wave clock runs, the ALICORN's deck launches, a Wolf trap is held after its orders
+and the shuttle's countdown runs, the shuttle not invulnerable then (user, 2026-10-29: "Keep it running while others
+are flying"); solo, or with nobody else flying, all held until the takeoff as before (user's question of 2026-10-29:
+Shazzy's host log had 10-43 s holds). The CO-OP row is behind the HUD's info key (I), with a line a player when open
+(tools/re/COOP.md section 7, tools/re/HUD_LAYOUT.md).
+
+## Leaderboard
+leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
+co-op versions (0.72.2-coop.20), has an admin page for the user only (GET /admin; ADMIN_KEY in the POST body, 5 wrong
+keys lock an address out: reset (archived, undoable), restore, builds, verification), and counts a run only from a
+registered build: the runtime hashes the mod's files (runtime/build_hash.c, the same as tools/build_hash.py:
+tools/checks/build_hash_test.sh) and sends X-SV-Build, signed with the run; package_release.sh online writes
+<zip>.buildhash.txt to register. Register every zip given out before players send runs from it. The game doesn't send
+an edited run (LB.edited: gameplay settings against CFG_DEFAULTS, a survival_config.lua, test keys;
+tools/checks/leaderboard_test.sh): a new setting that's only on screen or each player's own goes in its free lists.
+The Worker is deployed with the co-op boards; packaging registers every build itself (tools/lb_register.py, the
+admin key from the main tree's leaderboard/keys.secret). leaderboard/README.md has the rest.
+
+## Runtime layout (Lua parts from 0.66.0; families and the native parts from 2026-11-07)
 - `Scripts/main.lua` is only the controller: it holds VERSION and runs the parts `Scripts/sv_*.lua` in its MODULES
   order (tools/lua_split.py made them from the old 7.6k-line main.lua, 2026-10-24: friend's advice "split the runtime
   into modules with a smaller central controller"; confirmed in game the same day, 0.66.0: a full
@@ -231,6 +362,40 @@ until a test confirms it. A build without VALKA: `NOVALKA=1 sh tools/package_rel
 - Hard rule 23's 200-local limit now counts per part (lua_check prints each part's count).
 - Packaging strips test-only code and picks the edition across every part (tools/strip_test_only.py,
   tools/edition.py over Scripts/*.lua).
+- No source file over 2,000 lines (a contributor, 2026-11-07: "not maintainable for human or AI";
+  tools/checks/size_check.py fails build_all.sh on one). tools/lua_split_part.py split sv_coop.lua (+ _joiner,
+  _planes, _sync, _migration), sv_config.lua (+ _specials: CFG.specials / sky / music / hud as `CFG.<key> = {...}`
+  statements; + _ini: CFG_DEFAULTS, survival.ini, TIER / ROLE / ACE / GLS) and sv_anomalies.lua (+ _valka; + _dev,
+  the test-only lightning Anomaly, only its header left in a release). A part's family is the part and the MODULES
+  entries right after it named <part>_<topic>. Tools that read or patch a part's text go through tools/lua_parts.py,
+  the Lua tests through tools/checks/parts.lua (PARTS.load / read / dofile; each source edit applied in the piece that
+  holds it). A local one piece uses from another is a global (check no other part has that name). sv_coop's M stays
+  local, handed on as COOP.M (`local M = COOP.M` atop each later piece), because sv_flights' music state is the global
+  M. To split again: a PLANS entry in lua_split_part.py, the analysis first, every TEST ONLY / ONLINE ONLY block whole
+  in one piece.
+- The native runtime (2026-11-07, runtime 0.32.24, no code change): runtime/build.sh still compiles survival_rt.c alone
+  as ONE translation unit, but the files over 2,000 lines were cut at section boundaries into parts #included in place,
+  so statics and code order are unchanged (the split built the same main.dll but for its link timestamp, and the same
+  map). survival_rt.c is the spine: helpers, log, crumbs, patching, menu handlers, the Lua bridge's argument helpers,
+  RegisterLua's table (lua_check.py reads it there), install and the mod object; RT_VERSION stays in it for build.sh and
+  the package scripts. In order it includes survival_rt_game.c (spawner, teardown gate, recycles, unit descs, ammo,
+  music, remote events, the game's Lua), coop.c (+ coop_lua.c: co-op's Lua functions and the second player plane),
+  flight.c (+ flight_coop2mp.c: the real planes and their weapons; + flight_guards.c: the game-bug guards and the STORE
+  freeze) and survival_rt_lua.c (sound, the SV_* Lua functions, the leaderboard). Edit the part, never compile one on
+  its own, and add an #include where the code belongs to keep a file under 2,000 lines.
+- The Python generators (2026-11-07; output byte-identical to the single files: 67 packages, sv_menu_stock.lua,
+  stdout, the importing checks): tools/survival_events.py keeps the shared names, the record helpers and Graph,
+  build_events, write_records and the builders the Lua tests read as text (heavies, jammer, raid pings, Spaceport
+  Assault, run-over); its parts survival_events_specials.py (LCAC, Ladons, Alicorn, Anomaly, AB.L..IN, VALKA, shuttle),
+  _squads.py (review orders, ace moves, Wolf, director, tells, Wraith, allies, VOID WATCHER), _festival.py and
+  _escort.py are imported at its end with `from <part> import *`, each starting with `from survival_events import *`.
+  tools/build_survival.py keeps the folders and package helpers, shop rows, menu pages, NPC rows and table, behaviour
+  scripts, read-back checks, main and every function reading STOCK / OUT / ROOT / MENU_STOCK* / AI_SRC
+  (menu_pages_test.py sets them on build_survival); its parts build_survival_rows.py, _units.py and _world.py work the
+  same way (run as a script it registers itself as build_survival first). survival_events.X / build_survival.X still
+  name everything: import the main module, never a part (a guard asserts it). A part's functions see the main module's
+  names above the part's import, and earlier parts' names only. The Lua tests grep the two main modules' text
+  (coop_fire, coop_revive, defences, escort, heavy, roles, spaceport, spweapons), so their anchors stay there.
 
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
@@ -243,7 +408,9 @@ until a test confirms it. A build without VALKA: `NOVALKA=1 sh tools/package_rel
 - The pool's flights must also be in tools/survival_events.py POOL (that's where they get their attack orders and the
   chase that moves their 6 km unit area onto the player every 6 s).
 - No Lua interpreter on the build machine: run `python -X utf8 tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua`
-  after every Lua edit (all the parts together: a global one sets is known to the others).
+  after every Lua edit (all the parts together: a global one sets is known to the others). To run Lua code,
+  `sh tools/checks/lua_build.sh` builds a Lua 5.4.6 (UE4SS's) from lua.org's source into build/checks/lua.exe;
+  `sh tools/checks/lua_load_test.sh` then loads every part outside the game, with the game's API stubbed.
 
 ## User friendliness (top priority)
 - Install through ACE8 Mod Launcher, with Survival Mode as a toggle.
@@ -256,6 +423,29 @@ until a test confirms it. A build without VALKA: `NOVALKA=1 sh tools/package_rel
   - Claude Code: UE4SS scripts and the native runtime (menu, rounds, shop, landing, credits).
   - Codex: config/wave tables, launcher integration, packaging.
 - Commit with git after every working test build. Message format: `[agent] what changed`.
+- Every build the user is handed gets its own version (user, 2026-11-07: "update the version number each time you
+  hand me a new file"): `python -I tools/bump_version.py` (main.lua VERSION's last number + COOP_TAG, together;
+  --minor for a new feature line) BEFORE build_all.sh; package_release.sh refuses a zip name that already exists
+  (REPACK=1 only to remake the same build's zip). Never two different builds under one version.
 - Before starting, pull/read the latest commits and this file.
 - Record any new lesson here under "Hard rules" once a test build confirms it.
 - Never delete or overwrite game files directly. Work on copies inside this folder.
+- Record each build's notes at the END of HISTORY.md, never here: AGENTS.md keeps only the rules, the layout and the
+  how-tos, because every session loads it whole. A lesson a test confirms goes here as a hard rule.
+- No source file over 2,000 lines (tools/checks/size_check.py, run by build_all.sh): split a growing file at a topic
+  boundary (Runtime layout, below).
+- Your machine's paths and keys are in .env (from .env.example; tools/env.sh, tools/env.py), never in a tool or in git.
+  CONTRIBUTING.md has the whole setup.
+
+## Build history and feature notes
+Every build's notes are in HISTORY.md, oldest first: the economy review (0.70), the enemy behaviour layer (0.72),
+COOP2MP's T1-T4 and every build since, through the newest. It isn't loaded into sessions (it was most of this file's
+~190 KB): grep it for a version, a feature or a log line, and read only the entry you need. Each feature's design,
+reverse engineering, log lines and test checklist are in tools/re/*.md (COOP.md, COOP2MP.md, BEHAVIOUR_DIRECTOR.md,
+ESCORT.md, FISHING.md, DECOY.md, SPACEPORT_ASSAULT.md, ZFA44.md, THUNDER.md, VALKA.md, ...).
+- COOP2MP is the working main since 2026-10-30: the other players fly as real player planes (ALivePlayerPlane fed from
+  their stream, their weapons replayed from their own plane), the AI stand-ins only as a fallback. VERSION 0.7x.y with
+  COOP_TAG -coop2mp.N (tools/coop_edition.py); friends' zips: BUILD_NAME=COOP2MP COOP=1 sh tools/package_release.sh online
+  <version> (ZFA=1, SONG=1 as the build has them); the user's own install: VALKA=1 ZFA=1 sh tools/package_dev.sh <version>.
+- The enemy behaviour layer: fighter roles, the squad director, tells, intensity, learning, boss phases, late rounds
+  (tools/re/BEHAVIOUR_DIRECTOR.md); each mechanism has its own `enabled` in survival.ini.

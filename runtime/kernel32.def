@@ -13,6 +13,9 @@ ReadFile
 GetFileSizeEx
 CloseHandle
 GetFileAttributesW
+FindFirstFileW
+FindNextFileW
+FindClose
 WideCharToMultiByte
 VirtualAlloc
 VirtualProtect
@@ -33,3 +36,5 @@ Sleep
 GetTickCount64
 GetLocalTime
 K32GetProcessMemoryInfo
+QueryPerformanceCounter
+QueryPerformanceFrequency

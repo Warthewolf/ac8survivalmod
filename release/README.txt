@@ -25,13 +25,37 @@ Install
 3. Copy the "ue4ss" folder from this zip into
        ...\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\
    and let Windows merge the folders.
-4. Start the game. SURVIVAL MODE is on the main menu, above QUIT GAME.
+4. Start the game. SURVIVAL MODE is on the main menu, above QUIT GAME. (If its pages can't be added on your setup,
+   SURVIVAL MODE goes straight to the difficulty select, with the default rules; please send the logs.)
 
 
 Play
 ----
-Main menu -> SURVIVAL MODE -> pick a difficulty -> hangar -> sortie. You start over Comona Airport.
-- Shoot down every enemy to clear a round; the next one starts 20 seconds later.
+Main menu -> SURVIVAL MODE -> pick how you play:
+  SURVIVAL MODE SP OFFLINE   alone, with your own rules; nothing is sent anywhere
+ONLINE ONLY BEGIN
+  SURVIVAL MODE SP ONLINE    alone, for the Discord leaderboard (custom rules make a run unranked)
+ONLINE ONLY END
+  SURVIVAL MODE COOP HOST    host a run for your Steam friends (Survival COOP build)
+  SURVIVAL MODE COOP JOIN    join a friend who hosts (straight to the difficulty: you play the host's rules)
+  QUICK START                the last mode you played, with its rules, straight to the difficulty
+Each mode but JOIN opens its RUN SETUP page. Press a row to change it; every mode remembers its own (survival.ini
+[setup.offline] / [setup.host], and [setup.online] in the Online edition):
+  START RUN                  next: the difficulty, then the hangar
+ONLINE ONLY BEGIN
+                             (on SP ONLINE it says RANKED or UNRANKED: only ranked runs go to the leaderboard)
+ONLINE ONLY END
+  PRESET                     AUTO (follows the difficulty), CASUAL, STANDARD or ACE: your ammo caps, enemy skill and
+                             how many enemies fly at once
+  STARTING ZOLLARS           0 to 25,000
+  ENEMY AIRCRAFT             50 % to 200 % of each round's enemies
+  COOP HOST also has         LOBBY (who has joined so far), CO-OP ROOM (how many players) and CO-OP ENEMIES
+  MORE RULES >               START AT ROUND, BREAK BETWEEN ROUNDS, SPECIAL ROUNDS (normal / more / fewer / off),
+                             AIRFIELD HEALTH, ZOLLAR INCOME, ENEMY SKILL, RESET TO DEFAULTS
+The bottom line of the menu explains the row you're on, with numbers (how many enemies round 10 brings, what a kill
+pays ...). Then: pick a difficulty -> hangar -> sortie. You start over Comona Airport.
+- Shoot down every enemy to clear a round; the next one starts after the break (20 seconds, or your BREAK BETWEEN
+  ROUNDS).
 - Big rounds come in WAVES (at most 14 / 18 / 22 aircraft up at once on Casual / Standard / Ace): the next wave comes
   once the last one is down to a few. The ROUND row shows WAVE 2/3. After round 15 rounds stop growing and the
   enemies get tougher instead.
@@ -48,11 +72,13 @@ Main menu -> SURVIVAL MODE -> pick a difficulty -> hangar -> sortie. You start o
     UPGRADES: for the rest of the run, in tiers: AIRFRAME (+25 % health a tier), WEAPON BAYS (+50 % missiles and
               special weapons), GUN (+15 % damage), FLARE PODS (+2 flares). Buy the extra ammo after.
     TACTICAL: items you carry until you use them (up to 2 each):
-              AIRSTRIKE  (Ctrl+F1) destroys the biggest enemy flight near you
+              AIRSTRIKE  (Ctrl+F1) destroys up to 4 aircraft of the biggest enemy flight near you, never an ace
+                         squadron's; one a round (bought or called), only when you call it; its kills pay a quarter
               ECM BURST  (Ctrl+F2) breaks every missile lock on you for 10 seconds
               DECOY      (Ctrl+F3) the nearest enemy flight breaks off for 30 seconds
-              Each also goes off by itself when it's needed (8 enemies close, 2 missiles closing in, a big flight
-              on you). SECOND CHANCE: survive one shoot-down (not a crash into the ground).
+              They cost more as the rounds go up. ECM BURST and DECOY also go off by themselves when they're needed
+              (2 missiles closing in, a big flight on you). SECOND CHANCE: survive one shoot-down (not a crash into
+              the ground).
     AIRFIELD: REPAIR AIRCRAFT, REPAIR AIRFIELD (repairs its AA guns and SAM sites too), BUILD AA GUN, BUILD SAM SITE
     ALLIES:   WINGMEN (two F-16Cs, cheap), MOONCHILD (two F-22s), AEGIS DESTROYER, and ALLY ORDERS: HUNT (anywhere),
               COVER (stay with you) or DEFEND (the airfield). Ctrl+F4 changes the order in flight.
@@ -61,6 +87,9 @@ Main menu -> SURVIVAL MODE -> pick a difficulty -> hangar -> sortie. You start o
   and how many zollars you have. (If the STORE can't be added on your setup, the landing menu shows the four shop
   rows instead.)
 - The ITEMS row on the HUD shows the tactical items you carry and the SECOND CHANCE.
+- The ALLIES, ITEMS and CO-OP rows stay hidden until you press I (press it again to hide them); each still shows for
+  a few seconds when something in it changes (an item bought or used, the allies' order, a player joining). The game
+  gets the I key too: survival.ini [hud.info] picks another key, or turns this off to show the rows all the time.
 - Pause menu -> Music Player picks your music.
 
 Enemy pilots: they get better as the rounds go (Rookie, Regular, Veteran, Elite, Ace, then Mercenary, Legend, Demon,
@@ -97,7 +126,13 @@ Leaderboard (Discord)
 Every run you finish (shot down, restarted, or left) is submitted to the Survival leaderboard on Discord, and a summary
 shows how it went: round, score, kills, specials beaten, time. You appear under your Steam name; to use another, set
 pilot = Your Name  under [leaderboard] in survival.ini. If you're offline the run is kept and sent next time. Only the
-leaderboard's own server is contacted; nothing about your PC is sent besides the run.
+leaderboard's own server is contacted; nothing about your PC is sent besides the run and a fingerprint (hash) of
+Survival Mode's own files, so the leaderboard can tell a released copy from an edited one.
+Only stock runs are ranked. A run isn't sent (its summary says NOT RANKED: EDITED and the log, AC8SurvivalMode_lua.log,
+names what's changed) when a gameplay setting in survival.ini differs from the shipped one (the HUD, sound, music, your
+pilot name, key bindings and texts don't count), when there's a Scripts\survival_config.lua, or when it started past
+round 1. Runs from changed mod files are refused by the leaderboard (NOT ACCEPTED: EDITED OR UNKNOWN BUILD): put the
+release back, and install it into a clean folder so no files of an older version are left in Scripts.
 If the summary always says NO CONNECTION while your internet works, a firewall or antivirus is blocking the game:
 allow AceCombat8.exe outbound access. Runs kept until then are sent automatically afterwards.
 Score: 1000 a round reached, 100 an aircraft, 50 a ground or sea target, 3000 a special round beaten, x0.75 Casual,
@@ -132,6 +167,18 @@ AC8IoStoreLoader.log):
 - after a crash: the newest folder in %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\
   (paste that path into the File Explorer address bar)
 Copy the logs right after you close the game (they're rewritten every time it starts).
+
+After a crash, send this
+------------------------
+Before you start the game again (it rewrites the logs), zip and send:
+1. The newest UECC-Windows-... folder in %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\
+   (sort by date): its UEMinidump.dmp and CrashContext.runtime-xml matter most.
+2. From ...\Win64\ue4ss\Mods\AC8SurvivalMode\: AC8SurvivalMode_lua.log, AC8SurvivalMode.log,
+   AC8SurvivalMode_crumbs.log and AC8SurvivalMode_crumbs.prev.log (the crumbs.prev file is the crashed session's last
+   steps, if you already started the game again).
+3. ...\Win64\ue4ss\UE4SS.log
+4. A line on what happened: the round, what you were doing (flying, in the STORE, DOWN and spectating, quitting the
+   mission, a special round), and in co-op who hosted.
 
 To uninstall, delete the two folders listed in Install step 2.
 

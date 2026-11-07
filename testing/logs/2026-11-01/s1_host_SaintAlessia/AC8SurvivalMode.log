@@ -1,0 +1,177 @@
+10:13:38 AC8 Survival Mode runtime 0.32.18
+10:13:39 leaderboard: the game started: build hash 8940cf286b901c240f80450b657fc825bb7a89f6647bf9547a377ed1e8cd4474 (30 scripts, 12 behaviour scripts, the ini, main.dll and the container: 46 files, 3690 KB, 31 ms)
+10:13:40 UE4SS calls mod slot 3
+10:13:40 UE4SS calls mod slot 15
+10:13:40 UE4SS calls mod slot 13
+10:13:47 UE4SS calls mod slot 2
+10:13:47 UE4SS calls mod slot 4
+10:13:47 UE4SS calls mod slot 6
+10:13:47 UE4SS calls mod slot 8
+10:13:47 UE4SS calls mod slot 5
+10:13:47 UE4SS calls mod slot 7
+10:13:47 UE4SS: Lua mod AC8SurvivalMode started (mod slot 6)
+10:13:47 Lua bridge: SV_Version, SV_MenuChoice, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Crumb, SV_Ammo, SV_SetAmmo, SV_AmmoMax, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_MusicHold, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_PlayerTarget, SV_SetText, SV_ShopRequest, SV_MenuSetting, SV_MenuPages, SV_MenuClass, SV_MenuSlot, SV_MenuQuick, SV_BGMNames, SV_CoopOpen, SV_CoopClose, SV_CoopInfo, SV_CoopSend, SV_CoopRecv, SV_CoopMe, SV_CoopPeer, SV_CoopTrack, SV_CoopBind, SV_CoopPeerAt, SV_CoopReset, SV_CoopSpawnPP, SV_CoopKillPP, SV_CoopFollow, SV_CoopPPRole, SV_CoopFeed, SV_CoopPPFx, SV_CoopFire, SV_CoopShots, SV_CoopPPShot, SV_CoopPeerIds, SV_CoopSwapPP, SV_ObjChain, SV_CoopLoadout, SV_SpawnCam, SV_StickNow, SV_PPName, SV_CoopPaint, SV_InputNow, SV_Down, SV_Respawn, SV_MemMB, SV_SndLoad, SV_SndPlay, SV_SndSet, SV_SndStop, SV_SndMaster, SV_Post, SV_PostResult, SV_PostReply, SV_SteamName, SV_BuildHash registered
+10:13:47 UE4SS: Lua mod AC8SurvivalMode started (mod slot 8)
+10:13:47 Lua bridge: SV_Version, SV_MenuChoice, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Crumb, SV_Ammo, SV_SetAmmo, SV_AmmoMax, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_MusicHold, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_PlayerTarget, SV_SetText, SV_ShopRequest, SV_MenuSetting, SV_MenuPages, SV_MenuClass, SV_MenuSlot, SV_MenuQuick, SV_BGMNames, SV_CoopOpen, SV_CoopClose, SV_CoopInfo, SV_CoopSend, SV_CoopRecv, SV_CoopMe, SV_CoopPeer, SV_CoopTrack, SV_CoopBind, SV_CoopPeerAt, SV_CoopReset, SV_CoopSpawnPP, SV_CoopKillPP, SV_CoopFollow, SV_CoopPPRole, SV_CoopFeed, SV_CoopPPFx, SV_CoopFire, SV_CoopShots, SV_CoopPPShot, SV_CoopPeerIds, SV_CoopSwapPP, SV_ObjChain, SV_CoopLoadout, SV_SpawnCam, SV_StickNow, SV_PPName, SV_CoopPaint, SV_InputNow, SV_Down, SV_Respawn, SV_MemMB, SV_SndLoad, SV_SndPlay, SV_SndSet, SV_SndStop, SV_SndMaster, SV_Post, SV_PostResult, SV_PostReply, SV_SteamName, SV_BuildHash registered
+10:13:47 UE4SS calls mod slot 1
+10:14:11 game functions (32937 ms): base 147A8B180, main decide 147B4FF50, difficulty decide 147B10E20, next 146ECA6E0, goto 147A88410, set difficulty 147B91AC0, transition 147A88370, text 1473B1750
+10:14:11 spawn functions: spawn unit 147E119D0, unregister unit 147E1DAC0, unit check 147E1DE00, destroy actor 143FE0160
+10:14:11 ammo functions: node execute 147403FB0, flare lambda 14741F3E0, weapons lambda 147404460, free restock 147405BC0
+10:14:11 game Lua: GetGameLuaState 144ED8940
+10:14:11 music and events: BGM node 1473DF1F0, remote-event node 1473F86B0, pause list 147B575D0, landing menu decide 147B02960
+10:14:11 music player: track clock tick 147B28560, next track 147B3A230
+10:14:11 flight input: BuildFlightInput 147D689B0
+10:14:11 coop: AI plane teleport 147D1E390, inner 147D1E560
+10:14:11 coop: player plane: spawn 1471E5500, world spawn 14465A120, teleport 147D4F6B0, inner 147D4F6F0; remote spawn sites: possess 1471CC614, network object 1471CC63B, role 1471CC778, dummy class 1471CC56D, loadout 1471CC8F7, loadout bytes 1471CC9A3, finish 1471CCF8A
+10:14:11 flight: one-shot fire 147C8FE20 (LiveFireOneShotWeapon's Execute 1473ED1E0), AI takeoff afterburner 147CCF3F0, player plane respawn 147D6D440, remote update 147D6F0C0, surface update 147D32B00, player plane damage 147D5A430
+10:14:11 coop2mp: weapons fired 147D71060, remote plane fire 147D71EA0, launch weapon 147F7A880, flares 147F61D90, network manager 147EE02E0, select special 147D71E20, arm special 147D62AB0, gear site 1474DCBD4
+10:14:11 guard: AI unit effect update 147CB2850, a second unit update 147CB86C0, target entry check 147443690; coop2mp: plane electronic update 147D27D50
+10:14:11 text lookup: hooked at 1473B1750
+10:14:12 pause menu list: hooked at 147B575D0
+10:14:12 landing menu decide: hooked at 147B02960
+10:14:12 music player clock: hooked at 147B28560
+10:14:12 music player next track: hooked at 147B3A230
+10:14:12 flight input: hooked at 147D689B0
+10:14:12 remote player plane update: hooked at 147D6F0C0
+10:14:12 guard: GUObjectArray chunks at 14DC60CE0, count at 14DC60CF4 (56804 objects), GC flag at 14DC49620 (now 1)
+10:14:12 guard: AI unit effect update: vtable slot 14C51E7C8, next 147CB2850
+10:14:12 guard: second AI unit update (+0x42c0): vtable slot 14C51CCF8, next 147CB86C0
+10:14:12 guard: the target search's fault catcher in; the world getter 143FC1CA0
+10:14:12 guard: target entry check: vtable slot 14C69FAE0, next 147466940
+10:14:12 guard: target entry check: vtable slot 14CB55D48, next 147449300
+10:14:12 guard: target entry check: vtable slot 14CB5F2C0, next 147452F60
+10:14:12 guard: target entry check: vtable slot 14CB5F3F8, next 14743BB00
+10:14:12 guard: target entry check: vtable slot 14CB77740, next 14745D670
+10:14:12 guard: target entry check: vtable slot 14CB77AE8, next 147457740
+10:14:12 guard: target entry check: vtable slot 14CB77B50, next 147456600
+10:14:12 guard: target entry check: vtable slot 14CB77DC0, next 147454050
+10:14:12 guard: target entry check: vtable slot 14CB77E28, next 1474515A0
+10:14:12 guard: target entry check: vtable slot 14CB77FC8, next 14744CB80
+10:14:12 guard: target entry check: vtable slot 14CB78030, next 1474481D0
+10:14:12 guard: target entry check: vtable slot 14CB78098, next 147448160
+10:14:12 guard: target entry check: vtable slot 14CB78100, next 147448160
+10:14:12 guard: target entry check (class with game object): vtable slot 14CB783D8, next 147443690
+10:14:12 guard: target entry check: vtable slot 14CB78780, next 14743D2B0
+10:14:12 guard: target entry check: vtable slot 14CB787E8, next 147439690
+10:14:12 guard: target entry check: vtable slot 14CB7A408, next 14744E0D0
+10:14:12 guard: target entry check: vtable slot 14CB7A818, next 14743A4C0
+10:14:12 guard: 18 target entry classes guarded (the first 1, a weak actor unchecked 3, the world unchecked 14; 151 vtables of the family, 133 left alone)
+10:14:12 plane electronic update: hooked at 147D27D50
+10:14:12 player plane surface update: hooked at 147D32B00
+10:14:12 player plane damage: hooked at 147D5A430
+10:14:12 player plane weapons fired: hooked at 147D71060
+10:14:12 launch weapon: hooked at 147F7A880
+10:14:12 fire flares: hooked at 147F61D90
+10:14:12 menu tables: main menu 14C82CF38, difficulty page 14C7F5C20
+10:14:12 menu transition: hooked at 147A88370
+10:14:12 main menu decide: vtable slot 14C82D6A8, next 147B4FF50
+10:14:12 difficulty decide: vtable slot 14C7F6390, next 147B10E20
+10:14:12 difficulty next menu: vtable slot 14C7F64A8, next 146ECA6E0
+10:14:12 menu hooks installed (mission 9101, hangar menu F)
+10:14:31 game Lua: Lua 5.3 API from the game's exports (pcallk 144E6D450), context slot 14DD0AE20
+10:14:34 main menu: Survival's pages open through CampaignTraining's page (entry 40, list at manager+118)
+10:14:34 main menu: Survival's pages open through InitialSetting_DualSence's page (entry 38, list at manager+118)
+10:14:34 main menu: Survival's pages open through InitialSetting_Accessibility's page (entry 37, list at manager+118)
+10:14:34 main menu: Survival's pages are in the game's page list
+10:15:30 main menu: Survival's page row 'SurvivalMenu': Survival's pages
+10:15:32 main menu: Survival's page row 'SV_Mode_Host': Co-op: Host
+10:15:32 coop: open: Steam P2P, host, up to 24 players, partner "auto", port 27777, interpolation 120 ms, mod 0.73.70-coop2mp.71; teleport functions 147D1E390 / 147D1E560
+10:15:32 ammo layout: owner fn 147EDCD00, weapons +16A8, slots +2E8 (data +28, count +30, current +C, max +8, A0 bytes each), flares +2E0 (count +C4, max +27C, notify +B8, free restock +164), set fn 147F62B00, flare fn 147F77050
+10:15:32 coop: looking for players: 1 Steam friend(s) to try
+10:15:43 coop: joined: Shazzy (joiner, mod 0.73.70-coop2mp.71) as player 2
+10:15:43 coop: player 2: link up
+10:15:43 main menu: Survival's page row 'SV_Go_Host': Co-op: Host, opening the difficulty select to start
+10:15:45 menu transition 7 while Survival is chosen, but no difficulty page was found; passed on
+10:15:46 difficulty page: next menu asked while Survival is chosen: going to the hangar instead of Free Mission
+10:15:46 start: keeping the difficulty the game's page applied (fallback reading would be Casual)
+10:15:46 start (next menu): difficulty set by the game (unchanged), context mode 0 -> 0, mission -1 -> 9101
+10:15:46 start: going to the hangar (menu F)
+10:16:33 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+10:16:33 coop:   player 2 Shazzy: linked, rtt 242 ms; sent 57 packets (6 KB), got 52 (3 KB), 0 resent; their plane 0 moves
+10:17:33 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+10:17:33 coop:   player 2 Shazzy: linked, rtt 244 ms; sent 116 packets (13 KB), got 52 (3 KB), 0 resent; their plane 0 moves
+10:18:33 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+10:18:33 coop:   player 2 Shazzy: linked, rtt 240 ms; sent 175 packets (20 KB), got 52 (3 KB), 0 resent; their plane 0 moves
+10:19:33 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+10:19:33 coop:   player 2 Shazzy: linked, rtt 222 ms; sent 232 packets (26 KB), got 52 (3 KB), 0 resent; their plane 0 moves
+10:20:33 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+10:20:33 coop:   player 2 Shazzy: linked, rtt 256 ms; sent 290 packets (33 KB), got 52 (3 KB), 0 resent; their plane 0 moves
+10:21:13 spawner layout: unit desc B0 bytes (UniqueID +0, Name +4, AI list +18, point +58, rotation +70), AI desc 130 bytes (point +38, rotation +50, NPC id +14), phase world data +0, phase units +178/+180, unit id interface +2A0 slot +20, vector 24 bytes, LivePhase.ManipulableObjects +178
+10:21:13 spawner: LiveUnitSpawner 4625950, global phase 4625C98, world data 378B2EAC0
+10:21:13 spawner 4625950: no world yet (the level is still loading); spawns wait
+10:21:30 music layout: game instance +1D8 (class fn 146E428D0), BGM manager +908 (flag +1D5), controller +170, play 1478BDAD0; controller ids +138 / +128, status +148
+10:21:30 coop: offsets: RootComponent +1A0, RelativeLocation +128, RelativeRotation +140, HealthInternal +DA8, MaxHealth +3B4
+10:21:33 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+10:21:33 coop:   player 2 Shazzy: linked, rtt 434 ms; sent 401 packets (42 KB), got 185 (13 KB), 0 resent; their plane 0 moves
+10:21:34 coop: second player plane: dummy controller class 37526600 (by name)
+10:21:34 coop: second player plane: their loadout given (13 and 0 entries, bytes 15 18)
+10:21:34 coop: second player plane: their paint given (skin 28012001, emblem flags 255, 8 emblems)
+10:21:34 coop: second player plane 1317492CE0 (class 1211D8AC00, another airframe: no loadout of yours) spawned, controller 15C7433C00, possessed (slot +798, Possess 144354890), network object 1CBFF0D00 (+ED0), role byte +ED8 = 2 (yours 1)
+10:21:34 coop: second player plane: loadout 104D0000 (+1328; yours 0: 13 and 0 entries), bytes +FA0 +FA1 = 15 18, spawn finished: yes, weapons 1571A185F0 (+16A8), their owner 1317492CE0
+10:21:34 coop: player 2's real plane is 1317492CE0
+10:21:34 coop: player plane 1317492CE0's callsign (under ALLY) set: Shazzy; its aircraft: SU35
+10:21:34 coop: player 2's plane is 1317492CE0 (a real player plane: its own update flies it, fed from their stream)
+10:21:34 coop2mp: the other players' ESM / ECM fields count on this game (1 real planes looked at as local for each plane's electronic update)
+10:21:34 coop2mp: player 2's real plane 1317492CE0 fed from their stream: speed 163 m/s, flight block yes, State 0
+10:21:39 events layout: event vtable 14CB68CE0 (type 4F, check slot +48), manager fn 1470D2460, dispatch 147421660, GMalloc 14E426090 (free +48)
+10:21:47 units (round 1 start): 1 on the phase's list
+10:21:47   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+10:21:47 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (19562, 18140) m, 3119 m high, heading 261
+10:21:51 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (23367, 16314) m, 3195 m high, heading 250
+10:22:16 coop2mp: T4b: player 2's shot (weapon 1, slot 0, lock-ons 1) on their real plane 1317492CE0 here: launched (793D4D80), target 1B8412020
+10:22:16 coop2mp: T4b: player 2's shot (weapon 1, slot 1, lock-ons 1) on their real plane 1317492CE0 here: launched (15CA0A40C0), target 1B8412020
+10:22:21 coop2mp: T4b: player 2's shot (weapon 1, slot 0, lock-ons 1) on their real plane 1317492CE0 here: launched (1390F1F340), target 1B8412020
+10:22:30 coop2mp: player 2's real plane: 2016 frames fed, 0 not (no stream yet / no message) this minute; at most 89 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+10:22:30 coop2mp: T4b this minute: your launches sent 0 (0 dropped); theirs 3 queued here, 0 refused, 3 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+10:22:30 coop2mp: player 2's real plane 1317492CE0 fed from their stream: speed 301 m/s, flight block yes, State 90
+10:22:32 coop2mp: T4b: player 2's shot (weapon 1, slot 1, lock-ons 1) on their real plane 1317492CE0 here: launched (15C75C0100), target 17CDD2020
+10:22:32 coop2mp: T4b: player 2's shot (weapon 1, slot 0, lock-ons 1) on their real plane 1317492CE0 here: launched (15C75C6700), target 17CDD2020
+10:22:33 down: autopilot on plane 12B8219670: circling (16096, -4364) m at 2500 m, radius 4000 m; the plane at (18064, -5022) m, 15 m high, heading -171, bank 54; learning the input signs first (about 5 s of small roll and pitch inputs)
+10:22:33 coop: spectator camera actor D8A266B40 spawned
+10:22:33 coop: you are player 1; 3 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+10:22:33 coop:   player 2 Shazzy: linked, rtt 61 ms; sent 2105 packets (165 KB), got 1812 (130 KB), 0 resent; their plane 0 moves
+10:22:33 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 2 120/47 ms 0/0
+10:22:36 down: roll probe: body roll rate 1 deg/s at input +0.3, -7 at -0.3: inconclusive, roll input sign kept 1
+10:22:40 down: pitch probe: body pitch rate 0 deg/s at input +0.3, 0 at -0.3: inconclusive, pitch input sign kept 1
+10:22:43 down: autopilot (circling, 10 s): 1610 m from the centre (radius 4000), 194 m high (want 2500), heading error 73 deg, bank 30 (want 25), climb 13 deg; inputs pitch 55, roll -42 (x1000); input signs roll 1, pitch 1 (rates along the inputs roll 0, pitch 0 deg/s; 0 flips)
+10:22:50 down: pitch input sign flipped to -1: the plane pitched against the inputs (-8 deg/s along them); 1 flips
+10:22:53 down: autopilot (circling, 20 s): 1561 m from the centre (radius 4000), 651 m high (want 2500), heading error 26 deg, bank 22 (want 23), climb 42 deg; inputs pitch 350, roll 27 (x1000); input signs roll 1, pitch -1 (rates along the inputs roll 0, pitch 1 deg/s; 1 flips)
+10:22:55 down: pitch input sign -1 confirmed in flight (6 deg/s along the inputs)
+10:23:02 pause menu: the music player row shown, restart checkpoint and select difficulty hidden (Survival's mission)
+10:23:03 down: autopilot (circling, 30 s): 2099 m from the centre (radius 4000), 1084 m high (want 2500), heading error 4 deg, bank 3 (want 3), climb 15 deg; inputs pitch 7, roll -15 (x1000); input signs roll 1, pitch -1 (rates along the inputs roll 0, pitch 6 deg/s; 1 flips)
+10:23:04 coop2mp: T4b: player 2's shot (weapon 2, slot 0, lock-ons 0) on their real plane 1317492CE0 here: launched (15A1668D40), target 17CDD2020
+10:23:04 coop2mp: T4b: player 2's shot (weapon 2, slot 1, lock-ons 0) on their real plane 1317492CE0 here: launched (D03AF2740), target 12C58D2020
+10:23:13 down: autopilot (circling, 40 s): 3334 m from the centre (radius 4000), 1509 m high (want 2500), heading error -30 deg, bank -26 (want -25), climb 15 deg; inputs pitch 6, roll 21 (x1000); input signs roll 1, pitch -1 (rates along the inputs roll 0, pitch 6 deg/s; 1 flips)
+10:23:14 coop2mp: T4b: player 2's shot (weapon 1, slot 1, lock-ons 1) on their real plane 1317492CE0 here: launched (793D4D80), target 14FA672020
+10:23:23 down: autopilot (circling, 50 s): 4743 m from the centre (radius 4000), 1945 m high (want 2500), heading error -69 deg, bank -43 (want -40), climb 15 deg; inputs pitch 12, roll 13 (x1000); input signs roll 1, pitch -1 (rates along the inputs roll 0, pitch 6 deg/s; 1 flips)
+10:23:26 units (round 1 clear): 3 on the phase's list
+10:23:26   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+10:23:26   #1: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+10:23:26   #2: ERA_Unit_06_Dep_Air0 (id D6385FA0), 0 of 2 aircraft alive
+10:23:30 coop2mp: player 2's real plane: 2119 frames fed, 0 not (no stream yet / no message) this minute; at most 211 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+10:23:30 coop2mp: T4b this minute: your launches sent 0 (0 dropped); theirs 8 queued here, 0 refused, 8 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+10:23:30 coop2mp: player 2's real plane 1317492CE0 fed from their stream: speed 363 m/s, flight block yes, State 40000
+10:23:33 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+10:23:33 coop:   player 2 Shazzy: linked, rtt 78 ms; sent 3788 packets (272 KB), got 3401 (246 KB), 1 resent; their plane 0 moves
+10:23:33 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 2 120/49 ms 0/0
+10:23:33 down: autopilot (circling, 60 s): 6030 m from the centre (radius 4000), 2549 m high (want 2500), heading error -91 deg, bank -41 (want -40), climb 38 deg; inputs pitch -129, roll 59 (x1000); input signs roll 1, pitch -1 (rates along the inputs roll 0, pitch 6 deg/s; 1 flips)
+10:23:43 down: autopilot (circling, 70 s): 6521 m from the centre (radius 4000), 3798 m high (want 2500), heading error -76 deg, bank -40 (want -40), climb 56 deg; inputs pitch 14, roll 37 (x1000); input signs roll 1, pitch -1 (rates along the inputs roll 0, pitch 6 deg/s; 1 flips)
+10:23:47 units (round 2 start): 3 on the phase's list
+10:23:47   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+10:23:47   #1: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+10:23:47   #2: ERA_Unit_06_Dep_Air0 (id D6385FA0), 0 of 2 aircraft alive
+10:23:47 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+10:23:47 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (15688, 18604) m, 2588 m high, heading 271
+10:23:50 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (25979, -19936) m, 2302 m high, heading 122
+10:23:53 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+10:23:53 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (-2006, -19960) m, 3808 m high, heading 40
+10:23:54 down: autopilot (circling, 80 s): 6808 m from the centre (radius 4000), 5145 m high (want 2500), heading error -74 deg, bank -41 (want -40), climb 57 deg; inputs pitch 307, roll 53 (x1000); input signs roll 1, pitch -1 (rates along the inputs roll 0, pitch 6 deg/s; 1 flips)
+10:24:04 down: autopilot (circling, 90 s): 7013 m from the centre (radius 4000), 6495 m high (want 2500), heading error -74 deg, bank -40 (want -40), climb 57 deg; inputs pitch 307, roll 32 (x1000); input signs roll 1, pitch -1 (rates along the inputs roll 0, pitch 6 deg/s; 1 flips)
+10:24:14 down: autopilot (circling, 100 s): 7166 m from the centre (radius 4000), 7865 m high (want 2500), heading error -74 deg, bank -40 (want -40), climb 56 deg; inputs pitch 304, roll 21 (x1000); input signs roll 1, pitch -1 (rates along the inputs roll 0, pitch 6 deg/s; 1 flips)
+10:24:24 down: autopilot (circling, 110 s): 7277 m from the centre (radius 4000), 9233 m high (want 2500), heading error -75 deg, bank -40 (want -40), climb 54 deg; inputs pitch 26, roll 26 (x1000); input signs roll 1, pitch -1 (rates along the inputs roll 0, pitch 6 deg/s; 1 flips)
+10:24:30 coop2mp: player 2's real plane: 1873 frames fed, 0 not (no stream yet / no message) this minute; at most 255 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+10:24:30 coop2mp: player 2's real plane 1317492CE0 fed from their stream: speed 24 m/s, flight block yes, State A7200
+10:24:33 coop: you are player 1; 6 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+10:24:33 coop:   player 2 Shazzy: linked, rtt 69 ms; sent 5335 packets (405 KB), got 4858 (352 KB), 1 resent; their plane 0 moves
+10:24:33 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 2 120/45 ms 0/0
+10:24:34 down: autopilot (circling, 120 s): 7354 m from the centre (radius 4000), 10605 m high (want 2500), heading error -76 deg, bank -40 (want -40), climb 52 deg; inputs pitch 14, roll 41 (x1000); input signs roll 1, pitch -1 (rates along the inputs roll 0, pitch 6 deg/s; 1 flips)

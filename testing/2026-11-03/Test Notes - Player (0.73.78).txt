@@ -1,0 +1,90 @@
+SURVIVAL MODE 0.73.78 - PLAYTEST NOTES
+Build: AC8SurvivalMode_COOP2MP_0.73.78_Online_COOP.zip
+
+Thanks for testing! This build fixes a lot of what you reported last time (invisible enemies, crashes on quit and
+at the bomber raid, one-shot deaths, the lag in long runs, bosses leaving things behind) and rebalances the late game.
+Play normally, solo or co-op, and jot down anything that feels wrong.
+
+BEFORE YOU START
+- Everyone in a co-op game needs THIS zip. Co-op refuses a player on an older build (you'll see a callout).
+- Install it over the old one (replace both folders, as the README says).
+- If you run other mods (weapon changers, health changers, plane mods like the Falken), please list them below.
+  Skin mods are fine to keep.
+
+WHEN YOU'RE DONE, zip and send from ...\Win64\ue4ss\Mods\AC8SurvivalMode\:
+  AC8SurvivalMode_lua.log, AC8SurvivalMode.log, AC8SurvivalMode_crumbs.log, AC8SurvivalMode_crumbs.prev.log
+  and ...\Win64\ue4ss\UE4SS.log
+  After a crash, also the newest UECC-Windows-... folder in
+  %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\
+  Copy the logs BEFORE you start the game again (it rewrites them).
+Say who hosted. Rough clock times next to anything odd help a lot.
+Bugs / questions: @voidcallsreaper on Discord.
+
+
+Playing: solo / co-op (how many players?):
+Who hosted:
+Difficulty:
+Highest round reached:
+Other mods you run:
+
+
+1. Did the game crash or freeze? When (round, what you were doing: flying, in the STORE, shot down and watching,
+   quitting the mission, a special round)?
+
+
+
+2. Quit Mission a few times (from flight, from the STORE, and while shot down in co-op). Any crash?
+
+
+
+3. Co-op: did everyone see the same enemies? Any enemy with a target box you couldn't see or hit?
+   Any round that wouldn't end because of one last enemy?
+
+
+
+4. Co-op money: did you get paid for kills you didn't make? (A teammate's kill now pays you a share, not the full amount.)
+
+
+
+5. Did you ever die in one hit with full health? What hit you (if the game said)?
+
+
+
+6. Ace rounds (named squadrons, later Harvest): too long, too short, too many planes, too tanky?
+   Did you see "HARVEST BREAKS OFF" after about 6 minutes of an ace round?
+
+
+
+7. Bosses (VALKA, MINDRIPPER, AB.L..IN, Ladons, the Alicorn): after one died, did anything of it stay behind
+   (a white square on the minimap, a railgun still firing, controls still reversed near where it died)?
+   Co-op: did VALKA's red sky and her song show for everyone?
+
+
+
+8. The STORE: prices now rise with the round for airstrikes, ECM bursts, decoys and revives, and an airstrike is one a
+   round. Did everything you bought do what it said? Did anything feel too cheap or too expensive?
+
+
+
+9. Allies (SNIPER, MOONCHILD, AEGIS, VOID WATCHER 1, airfield defences): did they behave?
+   VOID WATCHER 1 now serves 3 rounds and then flies home. Did it?
+
+
+
+10. Co-op: did anyone leave and rejoin in a DIFFERENT aircraft? Did the others see the new aircraft?
+
+
+
+11. Shot down / revived (co-op): did it work? Could you fire again afterwards?
+
+
+
+12. Did the game stutter or get choppy late in a long run? From about which round?
+
+
+
+13. Too easy / too hard? Which rounds?
+
+
+
+14. Anything else (bugs, ideas, things you liked):

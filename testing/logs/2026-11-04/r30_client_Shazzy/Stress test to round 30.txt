@@ -1,0 +1,11 @@
+Stress test to R30 with Alyssa, Cressendo, Amia and Dunnka
+
+Started the run with no desync issues at all but got progressively worse as it went on, Very noticeable by round 22 making gun kills very hard.
+
+LCAC special is still desynced, Other players do not hit what is visible on my client and I have to kill them all. Their missiles just go into the water.
+
+Valka, Spaceport assault worked just fine noticed no issues, Past round 15 or so shuttle bugged and failsafed to protect the airfield.
+
+Voidcatcher does not show ECM bubble when active nor "stealth" ecm.
+
+Did not get alicorn :'(

@@ -22,6 +22,40 @@ by events: the game never spawns a desc again while its shot-down flight is stil
   RE_SV_BombRun_NN    (one per bomber flight) both aircraft drop BOMB_COUNT bombs (weapon slot 4); Scripts/main.lua
                       fires it when a Tu-95 / Tu-160 of that flight is over the airfield
   SV_Shuttle*         Comona Defense (build_shuttle, SHUTTLE_*): countdown, liftoff, hits, loss
+  RE_SV_Radio<Suffix> a tell's radio line (TELL_LINES, build_tells: one DT_SV_Radio group each), fired by
+                      Scripts/sv_tells.lua (behaviour roadmap P3)
+  RE_SV_WolfHold / WolfFree / WolfTurn_<NN><L>  one Wolf trap object's hold, release and LastTGT (build_wolf; P1's
+                      fighter roles), fired by Scripts/sv_spawn.lua WOLF
+  RE_SV_Salvo_<NN><L> one pool object's missile at the player; RE_SV_DirHold_NN / RE_SV_DirFree_NN a pool flight's
+                      engagement held (None) and given back (build_director; P2's squad director, Scripts/sv_director.lua)
+  RE_SV_WraithBlink<K><J>  an ace squadron flight's lead teleported to bearing J round the player (build_wraith; P9's
+                      ace personalities, Scripts/sv_ai.lua ACE.squadTick)
+  SV_FestUp<g> / RE_SV_FestUp_<g>  THE FESTIVAL's Tu-160 formation g (N W S) up: gear up, engagement None, once a spawn
+                      its path (run in, then FEST_LAPS racetrack laps through its launch point; build_festival)
+  RE_SV_FestCM_<g><k> / RE_SV_FestCMHit_<g><k>_<i>  a cruise missile salvo's paths to the runway (Mission 30's records)
+                      and missile i's impact (LiveDestroyUnitExecution), fired by the festival's Lua
+  RE_SV_Char<Step> / RE_SV_Esc<Name><Step>  THE ESCORT: CHARLENE's and her escorts' route, wait, final, rollout, taxi to
+                      a parking slot and stop (build_escort; tools/re/ESCORT.md "Build names"); RE_SV_CargoLaunch_<s>_<n>
+                      a ZFA-44 two-ship from cargo ship s's container launcher arm n
+  RE_SV_Decoy*        THE DECOY: the bait's and the trap UAVs' lasers, the marks, the Spear, its impact counter
+                      SV_DecoySpearHit, the sure kill and the radio (build_decoy; tools/re/DECOY.md "Build names")
+
+The parts (2026-11-07: no source file over 2,000 lines, tools/checks/size_check.py). This file keeps the shared names
+(the units, rows, slots and flags that build_survival.py, tools/checks and Scripts/*.lua read), the record helpers and
+Graph, build_events, and the builders whose text the Lua tests read here (tools/checks/*_test.lua: the heavies, the
+jammer, the raid pings, the Spaceport Assault, the run-over). The rest is in four parts, imported at the end of this
+file with `from <part> import *`, so survival_events.<name> reaches every name of every part:
+  - survival_events_specials.py: the Amphibious Assault, the Ladons, the Alicorn, the Anomaly, AB.L..IN, VALKA and the
+    shuttle
+  - survival_events_squads.py: the economy review's orders, ace moves, the Wolf trap, the squad director, the tells,
+    Wraith's blinks, the STORE's allies and VOID WATCHER 1
+  - survival_events_festival.py: GONE FISHIN' and THE FESTIVAL
+  - survival_events_escort.py: THE ESCORT, the ZFA-44 cargo ships and THE DECOY
+Each part begins with `from survival_events import *`, so it sees every name defined above its import line here and
+every name of the parts imported before it, as when this was one file. The int flags (KEEP_AT_START, INT_FLAGS) are made
+between the imports: after the specials (they read the specials' names), before the parts that add flags of their own.
+build_survival.py sets ANOMALY_OBJ, GLITCH_OBJ and VALKA_OBJ on this module, so the specials' builders read them as
+survival_events.<name>. Import survival_events, never a part on its own.
 """
 import copy, os, struct, sys, zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -64,7 +98,8 @@ BOMB_GAP_S = 0.4
 # anything still alive can't be spawned again) and gives it Survival's NPC row, for its name SV_Shuttle_Name.
 # Scripts/main.lua spawns both in place (SV_Spawn without a position) and runs the countdown on a clock of its own
 # that stops while the player is down at the airfield (user, 2026-10-23: "Shuttle timer continues to countdown while in
-# the airfield landing store"; exec delays from the shuttle's appearance couldn't stop): at each whole second s of it,
+# the airfield landing store"; exec delays from the shuttle's appearance couldn't stop; a co-op host's runs on while
+# another player flies, user, 2026-10-29: sv_rounds.lua othersFlying): at each whole second s of it,
 # main.lua fires RE_SV_ShuttleT_<s>, which carries that second's records (radio, ignition, liftoff at
 # SHUTTLE_COUNTDOWN_S = main.lua CFG.specials.shuttle.countdown_s, the climb after it). SHUTTLE_REMOVE_S after liftoff
 # it is taken off (LiveDestroyUnitExecution) so the next special can spawn it again. Flags for Lua: SV_ShuttleRound 1 while it's on the pad (strike flights go for it instead of the
@@ -101,288 +136,6 @@ SHUTTLE_SOUND_FLAGS = [(33, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_33sec_
                        (8, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_08sec_Set'),
                        (2, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_02sec_Set')]
 SHUTTLE_SOUND = 'AKE_Ms22_ARMS_SKY_OP0057_sstb_Body_'
-# Special round "Amphibious Assault" (SURVIVAL_SPEC.md 7; tools/re/SPECIAL_ROUNDS.md 12b): Mission 13's enemy LCAC
-# pattern on Comona. Each lane: a unit of four landing craft (LCAC_CRAFT; a copy of Mission 13's E_Unit02_02_Ship0, NPC row
-# lcac_common) that Scripts/main.lua spawns at the lane's start point at sea; its appearance sends each craft along
-# its own path (side by side, LCAC_GAP_CM apart) onto the beach; at the end of it the craft leaves its path, the
-# event package sets SV_LcacLand<lane><craft> and main.lua spawns that craft's troops (a copy of Mission 13's
-# E_Unit02_02_Ground0, one BTR-90, btr9_common) on the beach; LCAC_RETURN_S later the craft heads back out along the
-# lane, and main.lua takes the lane's craft off (RE_SV_LcacRemove<lane>) once they're well away, so the lane can come
-# again. Lanes from the user's Ctrl+F10 marks (config/coast_marks.txt, 2026-10-23): the first five are beaches, the
-# four after them start points at sea; each start goes to the beach it faces (the fifth beach mark, at sea level,
-# 350, isn't used).
-LCAC_SOURCE_UNIT = 'E_Unit02_02_Ship0'
-LCAC_SOURCE_PATH = '02_ship0_lcac_0_Path0'
-LCAC_TROOP_SOURCE = 'E_Unit02_02_Ground0'
-LCAC_ROW, LCAC_TROOP_ROW = 'lcac_common', 'btr9_common'
-LCAC_LANES = [   # (lane, start at sea (x, y) cm, beach (x, y, ground z) cm) - main.lua CFG.specials.amphibious.lanes
-    ('A', (1124592, 601882), (1125609, -41221, 500)),
-    ('B', (1181763, -939973), (1451014, -405292, 393)),
-    ('C', (1202428, -1235402), (1600055, -489665, 500)),
-    ('D', (1472712, -1417822), (1781906, -515173, 496)),
-]
-LCAC_CRAFT = 'WXYZ'            # the craft of a lane, side by side across its line (user, 2026-10-23: "spawn more
-                               # LCAC's": four a lane, was two; Mission 13's unit has two, the others are copies)
-LCAC_GAP_CM = 18000.0          # between two neighbours
-LCAC_SEA_Z = -20.0             # Mission 13's craft and path points at sea
-LCAC_SPEED = '180.0'           # Mission 13's (02_ReinforcementAppearance)
-LCAC_RETURN_S = 20.0           # Mission 13's: landing to heading back out
-# The troops drive from where their craft landed to the runway (user, 2026-10-23: "draw a path for the Troops to Drive
-# on so that they reach the airfield"), each to its own spot along it (Mission 22's runway: centre, heading), on
-# Mission 13's order (EvadeOnly: they keep driving) at LCAC_TROOP_SPEED; reaching the end of the path sets
-# SV_LcacRunway<lane><craft> and Scripts/main.lua adds to the airfield's capture.
-LCAC_RUNWAY = ((1609574.0, -435747.0), -23.0)
-LCAC_RUNWAY_SPREAD_CM = 90000.0   # the spots, from one end of this stretch along the runway to the other
-LCAC_GROUND_Z = 300.0             # path points over land (Mission 13's drive path: 48-200; the airport is near sea level)
-LCAC_TROOP_SPEED = '60.0'         # km/h (Mission 13's 25.0)
-LCAC_TROOP_SOURCE_PATH = '02_Ground0_Tank_0_Path0'
-
-
-def lcac_craft():
-    """One dict per landing craft: its lane's unit and object, its paths, its troops and its landing flag."""
-    import math
-    out = []
-    (rx, ry), ryaw = LCAC_RUNWAY
-    rux, ruy = math.cos(math.radians(ryaw)), math.sin(math.radians(ryaw))
-    total = len(LCAC_LANES) * len(LCAC_CRAFT)
-    for lane, start, beach in LCAC_LANES:
-        dx, dy = beach[0] - start[0], beach[1] - start[1]
-        length = math.hypot(dx, dy)
-        ux, uy = dx / length, dy / length
-        for k, c in enumerate(LCAC_CRAFT):
-            side = (k - (len(LCAC_CRAFT) - 1) / 2.0) * LCAC_GAP_CM   # across the line, in order
-            ox, oy = -uy * side, ux * side
-            i = len(out)                                          # its spot on the runway
-            along = (i / max(1, total - 1) - 0.5) * LCAC_RUNWAY_SPREAD_CM
-            out.append(dict(
-                lane=lane, craft=c, k=k, unit=f'SV_Unit_Lcac{lane}', obj_base=f'SV_Obj_Lcac{lane}',
-                obj=f'SV_Obj_Lcac{lane}_{k}',                              # as event args write the 2-craft unit's objects
-                path=f'SV_Path_Lcac{lane}{c}', back=f'SV_Path_Lcac{lane}{c}Back',
-                troops=f'SV_Unit_LcacTroops{lane}{c}', troop_obj=f'SV_Obj_LcacTroops{lane}{c}',
-                flag=f'SV_LcacLand{lane}{c}', land=f'SV_LcacLanded{lane}{c}', up=f'SV_LcacUp{lane}',
-                drive=f'SV_Path_LcacDrive{lane}{c}', troops_up=f'SV_LcacTroopsUp{lane}{c}',
-                rflag=f'SV_LcacRunway{lane}{c}', at_runway=f'SV_LcacAtRunway{lane}{c}',
-                runway=(rx + rux * along, ry + ruy * along, LCAC_GROUND_Z),
-                start=(start[0] + ox, start[1] + oy, LCAC_SEA_Z), beach=(beach[0] + ox, beach[1] + oy, float(beach[2])),
-                yaw=math.degrees(math.atan2(dy, dx)), length=length))
-    return out
-
-
-# Special round "Ladon" (user, 2026-10-23: "adding the LADON special round, the HP needs to be nerfed a bit and their
-# speed needs a nerf slightly, have them spawn on the far western side of the map and create a path that takes the
-# players on a bit of a ride back to the airfield, have no other aircraft spawn"; "KOT and MISHKA are the two LADON
-# names"). Two Ladons, each a copy of Mission 16's B_Unit_01_Air0 (its 18 parts: ChildAIObjectDescs with the parts'
-# blueprint classes as imports, hard rule 7), each on a mission row of its own (sv_ladon_<key> -> SV_Ladon_<Key> in
-# DT_SV_NpcRows, which Scripts/main.lua gives its name, health and speed). From the far west they fly LADON_ROUTE, a
-# long way round, and over the airfield; each time a Ladon ends a pass over it (the end of the route, then of each
-# LADON_LOOP circuit round the airfield) SV_LadonRun<Key> goes up by one and main.lua drops its bombs on the airfield.
-LADON_SOURCE_UNIT = 'B_Unit_01_Air0'
-LADON_SOURCE_PATH = '01_Air0_Ladon_Path1'
-LADON_SOURCE_ROW = 'OP0045_radn_01'          # Mission 16's mission row (NpcId OP0045_ladn_01)
-LADON_NPC_SOURCE = 'OP0045_ladn_01'          # DT_NPC (1200 HP, LuaSet 0031_CP)
-LADONS = [('Kot', 0.0, 0.0), ('Mishka', 2200.0, 300.0)]   # (key, offset north m, height offset m) - main.lua CFG.specials.ladon
-# (x km, y km, altitude km): from the far west (Mission 22's combat zone runs to x -44 km), north, back south across
-# the island's west, east along the south and in over the airfield (16.1, -4.4), where the route ends. The circuit
-# starts a little past the airfield (LADON_LOOP[0]: a new path begins ahead of the aircraft, hard rule 2; its start
-# isn't its end, so it can't "finish" as it begins) and ends over it, so every PathFinish, the bombing run, is over the
-# airfield (code review of 2026-10-23: they ended 6.6 km NE of it).
-LADON_AIRFIELD = (16.1, -4.4, 1.2)
-LADON_ROUTE = [(-42, 4, 3.0), (-34, 17, 3.2), (-20, 24, 2.8), (-6, 16, 2.2), (-11, 2, 1.8), (-3, -13, 2.4),
-               (7, -19, 2.0), (12, -11, 1.6), LADON_AIRFIELD]
-LADON_LOOP = [(16.72, -3.03, 1.25), (19, 2, 1.5), (24, -6, 1.8), (17, -14, 2.0), (8, -10, 1.8), (10, -2, 1.4), LADON_AIRFIELD]
-# the Ladons' unit area (a unit only fights inside it; build_survival.ladon_units): centred on the whole job, not the
-# spawn, big enough for all of it (code review of 2026-10-23: 40 km round the spawn left the airfield 59 km out, so the
-# AI kept turning them back west)
-LADON_AREA = ((-9.0, 2.0), 80000.0)          # (centre x, y km), radius m
-# the parts that fire. The CIWS turrets: Mission 16's Normal engagement order on each (its Default_RemoteEvent_20
-# record). The missiles never fire on an order alone (test of 2026-10-23: none at all): Mission 16 opens the missile
-# hatch and fires each VLS at its target with LiveFireOneShotWeapon, so RE_SV_LadonVolley<Key> does that at the
-# player, and Scripts/main.lua fires it while the player is in range (CFG.specials.ladon.volley_*).
-LADON_CIWS = ['LCIWS', 'LCIWS1', 'LCIWS2', 'LCIWS3']
-# ... which carry the Arsenal Bird's pulse cannons (user, 2026-10-23: "put the Pulse Lasers that the Arsenal Bird uses
-# online, and Replace the Ladon's CIWS with them"): Online Mode boss BA001 (aias) fires them from its PC_L / PC_R pods,
-# AITurret pawns whose blueprint carries the weapon (AIAS_CannonPod -> BP_wp_pulse_cannon_aias). Each CIWS slot gets
-# that pod's class (from EB_001's world data) and NPC row (Online Mode's aias_CannonPod_01, which Scripts/main.lua adds
-# to the campaign's DT_NPC at the main menu with the Alicorn's rows: build_survival.build_alicorn_rows).
-LADON_PULSE_WD = '/Game/OnlineMode/Maps/EmergencyCall/EB_001/WD_EB_001'
-LADON_PULSE_PART = 'PC_L'
-LADON_PULSE_NPC = 'aias_CannonPod_01'
-LADON_VLS = ['VLS0', 'VLS1']
-LADON_SPEED = '2500.0'                       # km/h (user, 2026-10-23: "make the Ladon Speed 2500"; was 1500. Mission 16: 1200-3200)
-
-
-def ladons():
-    """One dict per Ladon: unit, object, mission / NPC rows, paths, flag, events, its route (cm)."""
-    import math
-    out = []
-    for key, side_m, up_m in LADONS:
-        def place(pts):
-            """pts shifted side_m north (+y) and up_m up: one fixed shift for the whole track, so its shape, its
-            joins and its turns are KOT's (a shift to the side of the way on flipped across the turn over the airfield:
-            MISHKA's next circuit began 1.7 km behind it)"""
-            return [(x * 100000.0, (y + side_m / 1000.0) * 100000.0, (a * 1000.0 + up_m) * 100.0) for x, y, a in pts]
-        out.append(dict(key=key, unit=f'SV_Unit_Ladon{key}', obj=f'SV_Obj_Ladon{key}', row=f'sv_ladon_{key.lower()}',
-                        npc=f'SV_Ladon_{key}', name_key=f'SV_Ladon_{key}', path=f'SV_Path_Ladon{key}',
-                        loop=f'SV_Path_Ladon{key}Loop', flag=f'SV_LadonRun{key}', up=f'SV_LadonUp{key}',
-                        over=f'SV_LadonOver{key}', lap=f'SV_LadonLap{key}',
-                        route=place(LADON_ROUTE), circuit=place(LADON_LOOP)))
-    return out
-
-
-# Special round "Alicorn" (user, 2026-10-23: "start working on the ALICORN special round ... spawn none of the normal
-# aircraft"; tools/re/ALICORN.md): the submarine carrier exists only in Online Mode, as Emergency Call EB_002's boss
-# (unit Boss_0: one AI object with 30 parts, their blueprints Online Mode's). Survival's copy keeps the hull, core,
-# ballast tanks, railguns, rail cannon, ECM, VLS and the 12 weapon hatches, and leaves out the pools of fighters and
-# drones it launches (ALCN_DROP). It sails Mission 22's allied fleet lane in the west sea and back (EB_002's speed,
-# 120); Scripts/main.lua fires its actions as remote events: dive / surface, railgun, the VLS volley at the player,
-# and once its four ballast tanks are gone the core's opening (ALCN_OpenCore). Destroying the core sinks it.
-ALCN_SOURCE_UNIT = 'Boss_0'
-ALCN_SOURCE_PATH = 'Path_Boss0_ALCN_0_0'
-ALCN_ROW = 'alcn_01'                          # mission row = NpcId (DT_NPC_Mission_EB_002_ON / DT_NPC_ON)
-ALCN_UNIT, ALCN_OBJ = 'SV_Unit_Alicorn', 'SV_Obj_Alicorn'
-ALCN_DROP = {'airs0', 'airs1', 'airs2', 'Airs0', 'Airs1', 'Airs2', 'BarrierDrones', 'SLUAVs'}
-# (x km, y km): Mission 22's allied fleet lane (01_Ship0_freeAlly_0_Path0: -27.7,-4.4 -> -15.3,-6.3), on east a little
-ALCN_ROUTE = [(-27.7, -4.4), (-23.0, -5.1), (-19.0, -5.8), (-15.3, -6.3), (-11.5, -6.4)]
-ALCN_SPEED = '120.0'
-ALCN_VLS = ['vls_L_1', 'vls_L_2', 'vls_R_1', 'vls_R_2']
-# The parts' damage table (user, 2026-10-23: "how tough are those ballast tanks"; 14 missiles and specials took none
-# down; then "lower the health down on the alicorns weaponry"): Online Mode's NWDID_SubMarine* tables take 10-62.5 %
-# from most weapon categories. Every part row naming one (the ballast tanks, the core, the railguns, VLS, hatches and
-# their guns, the ECM; not the hull ALCN_ROW) names Survival's copy ALCN_PART_DURABILITY instead: 100 % from every
-# category. Their health is main.lua's (CFG.specials.alicorn tank_missiles / weapon_missiles / railgun_missiles).
-ALCN_DURABLE_FROM = 'NWDID_SubMarine'          # (a prefix: NWDID_SubMarine, ..MainArm, ..Ciws, ..ECM)
-ALCN_DURABLE_MIN = 5                           # at least the 4 tanks and the core
-ALCN_PART_DURABILITY = 'NWDID_SV_AlcnParts'
-ALCN_PART_DURABILITY_SOURCE = 'NWDID_SubMarine'
-# the railguns: _Distributed, as EB_002 fires them (TargetMode 1: at the players); _Focus (TargetMode 0) didn't aim at
-# the player (user, 2026-10-23: "the alicorns railguns ... don't seem to target the player")
-ALCN_ACTIONS = {'RE_SV_AlcnRailgun': 'ALCN_ShotRailgun_Distributed', 'RE_SV_AlcnOpenCore': 'ALCN_OpenCore',
-                'RE_SV_AlcnAdvance': 'ALCN_AdvancePhase'}
-
-
-def alcn_paths():
-    """The Alicorn's way out and back (cm, on the surface)."""
-    out = [(x * 100000.0, y * 100000.0, 0.0) for x, y in ALCN_ROUTE]
-    return [('SV_Path_AlicornOut', out), ('SV_Path_AlicornBack', list(reversed(out)))]
-
-
-def lcac_lane_names():
-    return [lane for lane, _, _ in LCAC_LANES]
-
-
-# Special round "The Anomaly" (tools/re/SPECIAL_ROUNDS.md 13; user, 2026-10-22: the ace flies an F-4 and is named
-# MINDRIPPER; its own HUD warning; the mission-update beep when its round starts; the shuttle's zoom-in camera on it).
-# build_survival.py copies pool flight ANOMALY_SOURCE (Survival's fighter behaviour, 40 km area) into MINDRIPPER's own
-# one-aircraft unit and a guard unit; Scripts/main.lua spawns both, gives MINDRIPPER its NPC row and flies the field
-# (inside 3 km the player's pitch and roll invert: dlls/main.dll SV_Invert). The records here are the stock
-# presentation: Mission 22's MISSION UPDATE message (its beep) and focus camera, and Mission 15's forced WARNING
-# message, radar noise and glasses effect (Graph.foreign_template: classes Mission 22's package doesn't import).
-ANOMALY_SOURCE = 'ERA_Unit_01_Dep_Air1'     # a 4-ship of the pool
-ANOMALY_UNIT = 'SV_Unit_Anomaly'
-ANOMALY_GUARD_UNIT = 'SV_Unit_AnomalyGuards'
-ANOMALY_GUARDS = 4
-ANOMALY_GUARD_RADIUS_M = 2000.0             # its guards' unit area, on it: they circle inside it
-# The game's throttle on how hard enemies may press the player (Mission 22 sets it per wave): how many missiles may be
-# aimed at the player at once, how many enemies may attack at once, and its attack cooldowns. Survival never set it, so
-# it ran on the game's defaults; ATTACK_BASE (Mission 22's wave 3) from the mission start and after the Anomaly, and
-# while MINDRIPPER is up ANOMALY_ATTACK (user, 2026-10-22: "mindripper still wasn't aggressive enough").
-ATTACK_BASE = {'missiles': 4, 'attackers': 6, 'cooldown': (4.0, 8.0, 15.0, 20.0)}
-ANOMALY_ATTACK = {'missiles': 8, 'attackers': 10, 'cooldown': (0.5, 1.0, 3.0, 5.0)}
-ANOMALY_OBJ = None                          # MINDRIPPER's AI object name, set by build_survival.py copy_unit
-# The arrival (user, 2026-10-22: "the zoom in camera appears, then the portal, then MINDRIPPER"): it spawns hidden
-# (Scripts/main.lua CFG.specials.anomaly.portal) and the focus camera swings onto it at once; Lua opens the portal on it
-# and shows it ~3 s in, so the camera holds on through the burst.
-ANOMALY_CAMERA_S = 9.0                      # (Mission 22's shuttle camera: 9 s)
-# Its camera settings (BP_InGameCameraParameter names): RE_SV_AnomalyCam_<n> focuses on it with the nth, then lets go;
-# Scripts/main.lua fires the one CFG.specials.anomaly.camera names (user, 2026-10-22: ms22-01, the shuttle's, was
-# "far too zoomed in"; the game zooms harder the farther the target is). Keep in step with main.lua ANOMALY_CAMERAS.
-ANOMALY_CAMERAS = ['LookAt_Event_Camera', 'LookAt_Event_Camera_ms08-01', 'LookAt_Event_Camera_ms04-01',
-                   'LookAt_Event_Camera_ms23-01', 'LookAt_Event_Camera_ms22-01']
-ANOMALY_HUM = 'AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Electricity_'   # + Play / Stop: the Celaeno core's crackle
-# its death plays the Celaeno's (Mission 23; user, 2026-10-22: "the celaeno has this special sound when its destroyed,
-# add that when MINDRIPPER is destroyed"): the airship's three-part body explosion, on its wreck, seconds after the
-# kill. Mission 23's sound events: Scripts/main.lua loads their assets when the level starts (CFG.specials.anomaly).
-ANOMALY_DOWN_SOUNDS = [(0.0, 'AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq01_Play'),
-                       (1.5, 'AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq02_Play'),
-                       (3.0, 'AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq03_Play'),
-                       (0.5, 'AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Collapse_Play')]
-# Special round "AB.L..IN" (user, 2026-10-23: "One Last Anomaly. an EA-18G Growler ... its Squadron Tag is IFF: FATAL
-# ERROR, it's name is AB.L..IN"): one EA-18G (the campaign named-ace row, its ECM pod held up by main.lua) in its own
-# one-aircraft unit, a copy of pool flight ANOMALY_SOURCE like MINDRIPPER's; Scripts/main.lua spawns it hidden, shows
-# it in a puff of smoke and, each time it's hit, blinks it around the player for a few seconds, aimed at them, gun
-# firing (CFG.specials.glitch). The records here: the pool's orders and the MISSION UPDATE banner when it appears.
-GLITCH_UNIT = 'SV_Unit_Glitch'
-GLITCH_OBJ = None                           # its AI object name, set by build_survival.py build_wd_global
-# Its blinks (user, 2026-10-23: "the teleport did not work": Lua's K2_SetActorLocationAndRotation read back right but
-# the flight model put the plane back): Mission 22's LiveActorTeleportExecution, which moved its dummies onto the player
-# (target Player, world offsets, Absolute), one remote event per spot: RE_SV_GlitchBlink_<tag> puts AB.L..IN `m` metres
-# from the player at bearing `deg` (world: 0 = +X, 90 = +Y), at their height, its nose (yaw) on them. Scripts/main.lua
-# picks the spot (CFG.specials.glitch.blinks: keep in step).
-# Its gun and ECM pod on command (user, 2026-10-23: "no crazy guns either"; "ECM didn't turn on"): Mission 19's
-# LiveFireOneShotWeapon, which has a Rafale fire WN_WEAPON_3 at the player. WN_WEAPON_<n> is fire-control slot n - 1
-# (that Rafale's row: flares, gun, missiles; the Ladon VLS's WN_WEAPON_1 / _2 are its two missiles), so on the EA-18G's
-# row (flares, gun, missiles, ECM) the gun is WN_WEAPON_2 and the ECM pod WN_WEAPON_4. Scripts/main.lua fires
-# RE_SV_GlitchGun through each frenzy and RE_SV_GlitchEcm every ecm_every_s.
-GLITCH_GUN_SLOT = 'WN_WEAPON_2'
-GLITCH_ECM_SLOT = 'WN_WEAPON_4'
-# each RE_SV_GlitchGun fires the gun GLITCH_GUN_SHOTS times GLITCH_GUN_EVERY_S apart (user, 2026-10-23: "make it fire at
-# 0.1"; Lua's tick is 250 ms, so the repeat is the record's: delay + loop, as the bombers' runs); main.lua fires the
-# event every GLITCH_GUN_SHOTS x GLITCH_GUN_EVERY_S (CFG.specials.glitch.gun_every_s: keep in step)
-# its post-stalls, RE_SV_Glitch<name> -> the stock unique action (Mission 28's Shadows', Mission 19's Toprak's kulbit,
-# Mission 2's Tasha's cobra); main.lua CFG.specials.glitch.post_stall_moves names the same <name>s
-GLITCH_POST_STALL = (('Kulbit', 'Shadow_Kulbit'), ('KulbitB', 'Toprak_Kulbit'), ('Cobra', 'Tasha_Cobra'))
-GLITCH_GUN_EVERY_S = 0.1
-GLITCH_GUN_SHOTS = 5
-GLITCH_BLINK_STEP_DEG = 30
-GLITCH_BLINK_RINGS_M = (500, 800)
-
-
-def glitch_blinks():
-    """[(event, bearing deg, metres)]; tags are letters (hard rule 17)."""
-    out = []
-    for ring, m in enumerate(GLITCH_BLINK_RINGS_M):
-        for k, deg in enumerate(range(0, 360, GLITCH_BLINK_STEP_DEG)):
-            out.append((f'RE_SV_GlitchBlink_{chr(65 + ring)}{chr(65 + k)}', deg, m))
-    return out
-
-
-# Special round "VALKA" (user, 2026-10-24: "port the Mihaly fight from ACE7 into ACE8 Survival Mode as an Anomaly Boss
-# ... VALKA, who uses an EML"): AC7 Mission 18's opener, then a Super AI with AB.L..IN's blinks and a chance of
-# MINDRIPPER's inverted controls. AC7's opener (ms18_Phase_01, tools/re/VALKA.md): a hidden dummy railgun of its own
-# (ms18_dummy_eml_p1, not Mihaly), placed once ahead of the player along where they're aiming, facing them, charges
-# 6 s (HUD warning, a flash of light at it), then fires at them; Mihaly shows after. Ours: the dummy is the X-40A's
-# RailGun part alone (VALKA_EML_*: DT_NPC OP1016_x40a_RG on its own unit), spawned once by main.lua 9 km along your aim
-# (user, 2026-10-24: "9km from me in a fixed position in the sky that the player was currently aiming at, she can't
-# be attached to the aircraft at all"; AC7's 70000 is not 700 m), held (EvadeOnly) and fired once (RE_SV_ValkaEmlShot:
-# Mission 26's LiveFireOneShotWeapon on its x40a's railgun), then removed; VALKA spawns at its spot after the shot and
-# the focus camera swings onto her. AC8 has no X-02S: she flies Mission 26's X-40A (EI_Unit_01_Air0 with its four
-# parts, ported as the Ladon is) until the X-02S model is built.
-# Scripts/main.lua CFG.specials.valka drives it (SPC.V.*); keep VALKA_SPOTS in step with its `spots`.
-VALKA_SOURCE_UNIT = 'EI_Unit_01_Air0'          # Mission 26's x40a ("Nightmare") and its parts
-VALKA_UNIT = 'SV_Unit_Valka'
-VALKA_OBJ = None                               # her AI object name, set by build_survival.py valka_unit
-VALKA_PARTS = {}                               # component -> its object name (RailGun, RailGunCK, RailGunPF, LaserPod)
-VALKA_RAILGUN = 'RailGun'                      # the part she fires (the CK one is Mission 26's scripted sure kill)
-VALKA_IDLE_PARTS = ('RailGunCK', 'RailGunPF', 'LaserPod')   # held back (EvadeOnly), as Mission 26 holds its CK railgun
-VALKA_EML_UNIT = 'SV_Unit_ValkaEml'            # the opener's dummy railgun (build_survival.py valka_eml_unit)
-VALKA_EML_OBJ = 'SV_Obj_ValkaEml'
-VALKA_EML_ROW = 'sv_valka_eml'                 # mission row -> DT_NPC OP1016_x40a_RG (the x40a's RailGun part)
-VALKA_EML_NPC = 'OP1016_x40a_RG'
-VALKA_MISS_UP_M = 250                           # the opener's aim: a dummy this high above the player (it has to miss)
-VALKA_DUMMY = 'A_Obj_01_dummyN0'                # Mission 22's dummy (Unit_dummyN0, in Survival's world data, unused)
-# teleport rings for her blinks: (ring letter, metres, step deg)
-VALKA_SPOTS = (('B', 500, 30), ('C', 800, 30))
-VALKA_CHARGE_SOUND = 'AKE_Ms29_ARMS_SKY_OP1016_x40a_Railgun_Charge_'      # + Play / Stop: the x40a railgun's charge
-VALKA_POST_STALL = (('Turn', 'LastTGT'), ('Kulbit', 'Shadow_Kulbit'), ('KulbitB', 'Toprak_Kulbit'), ('Cobra', 'Tasha_Cobra'))
-
-
-def valka_spots():
-    """[(event, bearing deg, metres)]: two bearing letters (36 steps), no digits (hard rule 17)."""
-    out = []
-    for ring, m, step in VALKA_SPOTS:
-        for k, deg in enumerate(range(0, 360, step)):
-            out.append((f'RE_SV_ValkaTp_{ring}{chr(65 + k // 26)}{chr(65 + k % 26)}', deg, m))
-    return out
 # Airfield defences the shop builds (user, 2026-10-22: "purchase AA guns that sit around the airfield or SAM sites, make
 # them expensive"): Mission 22's own airport AA guns and SAM sites (AB_Unit_01_Ground0, never spawned by Survival), each
 # moved into a unit of its own by build_survival.py, so Scripts/main.lua (CFG.shop.items.Airfield.defences) spawns them
@@ -394,6 +147,44 @@ DEFENCES = ([(f'SV_Unit_AAGun_{c}', f'AB_Obj_01_Ground0_AAGUN_{k}', 'gepa_common
 # (Survival's mission row, its DT_SV_NpcRows copy of the DT_NPC row), so Scripts/main.lua can give their weapons fire
 # control of their own (CFG.shop.items.Airfield.defences.fcs) without touching the stock rows
 DEFENCE_ROWS = {'gepa_common': ('sv_def_gepa', 'SV_Def_Gepa'), 'avng_common': ('sv_def_avng', 'SV_Def_Avng')}
+# The STORE's CIWS (0.72.1; user, 2026-10-29: "Add CIWS that can be purchased and placed around the airfield", "fixed
+# spots around the runway are fine"): the game's land Phalanx, GR033_ciws (BP_AITurret_Pawn; one arms of
+# LiveFCSModule_AIControlCIWS / LauncherBoneControl / ProjectileCommon on TurretPoseableMesh, all the way round). Four
+# units of their own, each a copy of Survival's first AA gun unit (Mission 22's allied airport unit: faction 1, its
+# tags, its ground objects' flags) on mission row DEFENCE_CIWS_ROW[0] (a copy of gepa_common's) -> DT_SV_NpcRows'
+# DEFENCE_CIWS_ROW[1], a copy of DT_NPC's DEFENCE_CIWS_NPC on the game's own allied model row DEFENCE_CIWS_MODEL
+# (BP_GR033_ciws_CP_Ally: BP_GR033_ciws_CP with an ally's destruction effects). Scripts/sv_config.lua
+# CFG.shop.items.Airfield.defences.ciws sells them, in DEFENCE_CIWS's order (keep its units in step).
+# Spots: km along Mission 22's runway axis from its centre (+ ENE) and across it (+ SSE), by its two ends, each side;
+# >= 170 m from every airport object (AA guns, SAM sites, dummies, the parked F/A-18s, the scramble taxi), >= 170 m off
+# the axis (the runway is 30 m wide, its approach box 98 m), >= 80 m from the amphibious troops' drives (lcac_craft),
+# well inside the beaches the coast marks give (LCAC_LANES: 0.45-0.55 km off the axis by the runway's middle); on the
+# ground at the airport objects' 5 m.
+# Every defence unit's area (0.72.1): Mission 22's airport unit has 6 km and 500-6000 m, and turrets engage only inside
+# their unit's area (the Aegis's 20 km missiles stopped at its 10 km: ALLY_SHIP_AREA_M), which would hold the SAM
+# sites' 8 km lock-on and the defences' 10 km search (CFG.shop.items.Airfield.defences.fcs) in; the ships' then.
+DEFENCE_AREA_M, DEFENCE_ALT_M = 30000.0, (0.0, 15000.0)   # (2026-10-31: 25 -> 30 km, the SAM sites' 20 km missiles)
+DEFENCE_CIWS_ROW = ('sv_def_ciws', 'SV_Def_Ciws')
+DEFENCE_CIWS_MISSION_SOURCE = 'gepa_common'
+DEFENCE_CIWS_NPC = 'GR033_ciws_01'
+DEFENCE_CIWS_MODEL = 'GR033_ciws_Ally'
+DEFENCE_CIWS_SOURCE_UNIT = 'SV_Unit_AAGun_A'     # (DEFENCES' first unit: made by build_survival.py split_units)
+DEFENCE_CIWS_Z_CM = 500.0
+DEFENCE_CIWS = [  # (unit, object, km along, km across)
+    ('SV_Unit_Ciws_A', 'SV_Obj_CiwsA', -0.70, -0.25),     # the WSW end, north side
+    ('SV_Unit_Ciws_B', 'SV_Obj_CiwsB', -0.75, +0.25),     # the WSW end, south side
+    ('SV_Unit_Ciws_C', 'SV_Obj_CiwsC', +0.80, -0.17),     # the ENE end, north side
+    ('SV_Unit_Ciws_D', 'SV_Obj_CiwsD', +0.85, +0.20),     # the ENE end, south side
+]
+
+
+def defence_ciws():
+    """[(unit, object, (x, y, z) cm, yaw deg)]: DEFENCE_CIWS on the runway (LCAC_RUNWAY: Mission 22's), facing along it."""
+    import math
+    (rx, ry), ryaw = LCAC_RUNWAY
+    ux, uy = math.cos(math.radians(ryaw)), math.sin(math.radians(ryaw))
+    return [(unit, obj, (rx + (al * ux - ac * uy) * 1e5, ry + (al * uy + ac * ux) * 1e5, DEFENCE_CIWS_Z_CM), ryaw)
+            for unit, obj, al, ac in DEFENCE_CIWS]
 # Allies the STORE sells (user, 2026-10-23: "buy Allied Aircraft from the Store from the Airfield Page ... a Docks Page
 # ... Different Allied Ships that will cruise around on the water ... expensive ... boost their FCS ... enemies can
 # target these ... Allied Aircraft are F-22's and they spawn in at the Airfield, Take Off from the airfield and their
@@ -416,7 +207,87 @@ ALLY_WINGMEN_ROW = 'sv_ally_wingmen'        # DT_SV_NpcMission row -> NpcId ALLY
 ALLY_WINGMEN_NPC = 'SV_Ally_Wingmen'
 ALLY_WINGMEN_SOURCE_NPC = 'OP1022_f16c_01'
 ALLY_WINGMEN_NAME_KEY = 'SV_Wingmen'
+# Squadron SNIPER (was VIPER; user, 2026-10-31: "rename VIPER to SNIPER and change their standard missiles to LAAM's",
+# "I think you might need to edit the aircraft files themselves"): Survival's copy of the F-16C row (ALLY_WINGMEN_NPC in
+# DT_SV_NpcRows, never the game's) has the game's AI LAAM fire control (the row the Shadow aces' LAAMs are on) where the
+# stock row has its standard missile; Scripts/sv_allies.lua then boosts it as every allied weapon (<FCS>_SVA)
+ALLY_WINGMEN_MISSILE = ('NPC_FCS_PlaneMsl000', 'NPC_FCS_PlaneLAAM000')
 ALLY_AIR_OBJS = {}                          # unit -> [lead, wing] object names, set by build_survival.py
+# VOID WATCHER 1 (user, 2026-10-31: "Take off from the airfield as a purchasable ally", "Rename it too VOID WATCHER 1",
+# "give it's ESM a huge boost in range and have it orbit around the airfield"): Mission 28's E-767 AWACS Magnolia
+# (OP0005_e767_MS28: flares and its ESM, MS28ESM000 -> BP_wp_esm_MS28) under Survival's name key, one AI object copied
+# from MOONCHILD's lead parked at Comona Airport (its NPC row the E-767's in the world data, so it builds the large
+# aircraft's behaviour set NLID_1000 at level load: hard rule 20). Its appearance runs MOONCHILD's lead's scramble
+# (hold, taxi, roll, climb); airborne, gear up, no longer invincible, no fighting (engagement None) and onto its orbit
+# (awacs_orbit: a lead-in from the climb-out onto a circle round the airfield, then its two arcs, each one's end starting
+# the other; 0.73.73). Lua (Scripts/sv_allies.lua,
+# CFG.allies.awacs) sells and spawns it, fires its ESM (RE_SV_AwacsEsm: AWACS_ESM_SLOT, as the jammer's ECM: the AI
+# never switches a pod on by itself) and sets each ESM field's range. SV_AwacsAir: 1 once it's airborne.
+AWACS_UNIT = 'SV_Unit_VoidWatcher'           # Scripts/sv_config.lua CFG.allies.awacs.unit
+AWACS_OBJ = 'SV_Obj_VoidWatcher'
+AWACS_ROW = 'sv_ally_voidwatcher'            # DT_SV_NpcMission row -> NpcId AWACS_NPC (on Mission 22's e767_common)
+AWACS_ROW_TEMPLATE = 'e767_common'
+AWACS_NPC = 'SV_Ally_VoidWatcher'            # DT_SV_NpcRows: AWACS_SOURCE_NPC under name key AWACS_NAME_KEY
+AWACS_SOURCE_NPC = 'OP0005_e767_MS28'
+AWACS_NAME_KEY = 'SV_VoidWatcher'            # its text, VOID WATCHER 1, set by Lua (SV_SetText)
+# its row's fire control: NpcFCSId0 PlaneFlr100, 1 and 2 empty, NpcFCSId3 MS28ESM000, so its ESM is WN_WEAPON_4 (hard rule
+# 40: slot n - 1). 0.73.33 fired WN_WEAPON_2, an empty slot: "it's being reported that ESM is not turning on at all"
+AWACS_ESM_SLOT = 'WN_WEAPON_4'
+# its model row: Survival's copy of Magnolia's (OP0005_e767_Ally_Magnolia: its blueprint and 01c paint) with the game's
+# plain E-767 name, not ContainerAllyCallsign_Name_Magnolia ("MAGNOLIA" on its box; user, 2026-10-31: "Delete the
+# MAGNOLIA tag from the EW aircraft"); DT_SV_ModelRows, added to DT_NPC_Model by Scripts/sv_allies.lua
+AWACS_MODEL = 'SV_Model_VoidWatcher'
+AWACS_MODEL_SOURCE = 'OP0005_e767_Ally_Magnolia'
+AWACS_MODEL_NAME = 'ContainerAircraft_Name_e767'
+# (0.73.73) Its orbit, a path again (SA's test of 2026-11-01: "perhaps expand their holding pattern to a circle with a
+# 5-7 kilometer radius, they were flying in tight circles making them an easy target"; its unit-area orbit since 0.73.62
+# ran 0.9-6.9 km from the airfield, turning tight). The orbit paths of 0.73.33-0.73.61 were never flown for the reason
+# the Ladons' circuit wasn't (LADON_CIRCUIT_KM's note): the circle's start wasn't ahead of the plane along its way out of
+# the climb-out. So: the lead-in (AWACS_PATH_IN) starts a step along a turn out of the climb-out's own end, on its way
+# (AWACS_CLIMB_END / _DIR, Mission 22's 01_Air0_f18e_0_Path2: 0.4 km up, heading 234, climbing 30 deg; build_survival.py
+# checks them on the stock path), turning the circle's way at the widest radius that meets the circle tangentially from
+# inside (~2.9 km), climbing to AWACS_IN_TOP_KM, then on round the circle AWACS_IN_CIRCLE_DEG to AWACS_ALT_KM; then
+# arcs B and A in turn (as the Ladons': each starts a step past the other's end, its own end half a circle away). Its
+# unit area (AWACS_AREA_M) takes the circle in with room (the Ladons' 40 km area once turned them back off their
+# route); Lua's backstop RE_SV_AwacsOrbit takes it off its path onto the area orbit at AWACS_FALLBACK_AREA_M
+# (0.73.62-0.73.72's).
+AWACS_PATH_IN = 'SV_Path_VoidWatcherIn'
+AWACS_ARC_A = 'SV_Path_VoidWatcherArcA'
+AWACS_ARC_B = 'SV_Path_VoidWatcherArcB'
+AWACS_CLIMB_END = (15.288252, -3.91496, 0.4)  # km: TAKEOFF_LEAD[2]'s last point
+AWACS_CLIMB_DIR = (-27610.5, 19978.8)          # its tangent there (cm, horizontal)
+AWACS_ORBIT_KM = 6.0                         # 550 km/h round 6 km: ~22 deg of bank
+AWACS_ARC_STEP_DEG = 15.0                    # its points (and each arc's start past the other's end) every N deg
+AWACS_IN_STEP_DEG = 20.0                     # the lead-in turn's points every N deg (its first one N deg on)
+AWACS_IN_TOP_KM = 3.5                        # the lead-in's height where it meets the circle (its area's floor)
+AWACS_IN_CIRCLE_DEG = 300.0                  # then round the circle, climbing to AWACS_ALT_KM
+AWACS_ALT_KM = 4.5
+AWACS_SPEED = '550.0'
+AWACS_IN_SPEED = '450.0'                     # the lead-in (its turn ~29 deg of bank at 450)
+AWACS_ALT_BAND_M = (3500.0, 5000.0)          # its unit area's height band (build_survival.py, 0.73.68)
+AWACS_AREA_M = 9000.0                        # its unit area on the airport, the orbit inside it (0.73.62: 6 km)
+AWACS_FALLBACK_AREA_M = 6000.0               # Lua's backstop's area orbit (0.73.62-0.73.72's orbit)
+# (0.73.78, plan G5: "3 rounds of service, rising price, 8-10 km field, a strike flight after it") Its way home. Survival
+# has no landing an AI plane can fly (the stock missions' landings are the player's, LiveSetTakeoffAndLandingEventExecution;
+# no stock record lands an AI plane), so it flies out and is taken off: after Lua's RE_SV_AwacsHome (SV_AwacsHome 1) the
+# end of the arc it's on starts its exit instead of the other arc (the conditions are read as the PathFinish fires, after
+# Lua set the flag: hard rule 26, the Ladons' rage's way), a straight leg along that arc's end tangent from a step ahead
+# of it (as each arc starts: hard rule 54's handover, which VOID WATCHER takes at 550 km/h) out to AWACS_OUT_KM at the
+# orbit's height (its area's band), its area AWACS_HOME_AREA_M round the airport so it isn't turned back. SV_AwacsOut 1 as
+# the exit starts, 2 at its end. Lua takes it off (RE_SV_AwacsRemove, Mission 22's own despawn on its unit, then
+# SV_Recycle) once it's far enough out, at the exit's end or after a time (hard rule 4).
+AWACS_OUT_A = 'SV_Path_VoidWatcherOutA'      # from arc A's end
+AWACS_OUT_B = 'SV_Path_VoidWatcherOutB'      # from arc B's end
+AWACS_OUT_KM = 24.0                          # the exit's length from the arc's end
+AWACS_OUT_STEP_KM = 3.0                      # its points every N km (its first a step of the arc ahead)
+AWACS_HOME_AREA_M = 40000.0                  # its unit area round the airport on the way out (AREA_RADIUS_M's)
+# Survival COOP (runtime 0.20.0; Scripts/sv_coop.lua, tools/re/COOP.md): the other player's plane in this game, a one-plane
+# copy of MOONCHILD's source (allied, and invincible as Mission 22 parks it). Lua sets its airframe to the other player's,
+# turns its fire, engagement and flares off, and the runtime moves it every frame to where the other player is
+# (coop.c: the AI plane's own teleport). Its appearance: gear up, no engagement (its fire stays off from Lua too).
+COOP_PEER_SLOTS = 'ABCDEFGHIJKLMNOPQRSTUVWX'   # one per player slot (A = player 1, the host ... X = player 24)
+COOP_PEER_UNITS = [f'SV_Unit_CoopPeer{c}' for c in COOP_PEER_SLOTS]
+COOP_PEER_OBJS = [f'SV_Obj_CoopPeer{c}' for c in COOP_PEER_SLOTS]
 TAKEOFF_LEAD = ['01_Air0_f18e_0_Path0', '01_Air0_f18e_0_Path1', '01_Air0_f18e_0_Path2']   # taxi, roll, climb
 TAKEOFF_WING_FIRST = '01_Air0_f18e_0_Path0_Sub0'     # the wing's taxi onto the lead's start; then the lead's three
 # Ships: Mission 22's own allied hulls, the only ones its world data describes turret by turret (ChildAIObjectDescs:
@@ -436,7 +307,7 @@ ALLY_SHIP_SPEED = '80'                      # Mission 22's allied ships'
 # A ship's unit area: Mission 22's allied hulls have 10 km and 200-6000 m, and its turrets engage only inside it (as
 # the fighters' 6 km area kept them from the player): the Aegis's 25 km search and 20 km missiles stopped at 10 km
 # (user, 2026-10-23: "aegis's didn't seem to fire all that much better"). Survival's ships get this much.
-ALLY_SHIP_AREA_M, ALLY_SHIP_ALT_M = 25000.0, (0.0, 15000.0)
+ALLY_SHIP_AREA_M, ALLY_SHIP_ALT_M = 45000.0, (0.0, 15000.0)   # (2026-10-31: 25 -> 45 km, the 35 km missiles' reach)
 
 
 def ally_ships():
@@ -463,10 +334,31 @@ POOL_BEHAVIOUR_ROW = 'f16c_common_sv'      # its DT_NPC row is made by Scripts/m
 PROBE_UNITS = {'Pkg': 'ERA_Unit_08_Dep_Air2', 'Rt': 'ERA_Unit_08_Dep_Air1'}   # main.lua CFG.probe.units
 PROBE_ROWS = {'Pkg': 'sv_probe_pkg', 'Rt': 'sv_probe_rt'}                     # build_survival.py NPC_EXTRA
 HEAVY_BOMBERS = ['EA_Unit_01_Air1', 'EA_Unit_01_Air2']   # main.lua CFG.airfield.bombers.heavy_units
-# Their unit area (RadiusInMeter, moved onto the airfield by SV_BomberUp_NN): Tu-95s / Tu-160s circle inside it, and
-# with Mission 22's 6 km they circled 8-12 km out and never crossed the runway, so the scripted bomb run never fired
-# (test of 2026-10-22: "TU160's didn't do anything when reaching the airfield"). 1.5 km keeps their orbit over it.
-HEAVY_AREA_RADIUS_M = 1500.0
+# Their unit area (RadiusInMeter, moved onto the airfield by SV_BomberUp_NN). With Mission 22's 6 km they circled 8-12 km
+# out and never crossed the runway, so the scripted bomb run never fired (test of 2026-10-22: "TU160's didn't do anything
+# when reaching the airfield"); with 1.5 km (0.20-0.72.0) they still circled 6-8 km out (the user's run of 2026-10-29:
+# "tu-95's aren't attacking the base, they fly around nearby and do nothing"). So they fly paths now (HEAVY_ROUTE*), and
+# their area takes in every point of them, so they never count as outside it and turn back ("ReturnToWorld").
+HEAVY_AREA_RADIUS_M = 40000.0
+# The heavies' routes: a Ladon's way (hard rules 1, 2, 35: smooth ControlType 1 paths, PathFinish records). Lua
+# (Scripts/sv_flights.lua HEAVY.route, from spawnBomber) fires RE_SV_HeavyRoute_<NN><S> for the compass sector S its
+# flight spawned in: its lead flies in from that side, over the runway and on (the route), then at its end a figure-8
+# along the same line (the loop) that crosses the runway twice a lap and ends over it, each PathFinish starting it again;
+# the bomb run is Lua's, within CFG.airfield.bombers.drop_km of the runway (bombTick). Only the lead flies them (its
+# wingmen keep formation on it); when it's shot down Lua fires RE_SV_HeavyLoop_<NN><L><S> for the next of the flight
+# (object L). The second heavy flight's tracks sit 1 km to the side and 400 m up. A sector's route starts nearer where
+# the zone's edge is closer (east of the airfield), and a loop shrinks to fit.
+HEAVY_SECTORS = 'ABCDEFGH'                  # compass 0, 45 ... 315 degrees from the airfield (north -y, east +x)
+HEAVY_ROUTE_KM = 22.0                       # the route's first point (or nearer, inside the zone), then these shares of it
+HEAVY_ROUTE_FRAC = (1.0, 0.55, 0.18)
+HEAVY_PAST_KM = 4.0                         # the route's end, past the runway; the loop starts 2 km on (hard rule 2)
+HEAVY_LOOP = [(6.0, 0.8), (9.0, 3.0), (11.5, 0.0), (9.0, -3.0), (5.0, -1.2), (0.0, 0.0),        # (km on, km aside)
+              (-5.0, 1.2), (-9.0, 3.0), (-11.5, 0.0), (-9.0, -3.0), (-5.0, -1.2), (0.0, 0.0)]
+HEAVY_ALT_KM = (2.2, 1.9, 1.7, 1.6)          # the route's heights in (the rest of it and the loop the last)
+HEAVY_TRACKS = {'EA_Unit_01_Air1': (0.0, 0.0), 'EA_Unit_01_Air2': (-1.0, 0.4)}   # (km aside, km up) a heavy flight
+HEAVY_SPEED = '850.0'                       # km/h (the user's Tu-95s of 2026-10-29 came in at ~830)
+AIRFIELD_KM = (16.09639, -4.36414)          # Scripts/sv_core.lua AIRFIELD (cm / 100000)
+ZONE_KM = ((-7.07336, -2.61895), 37.0)      # Scripts/sv_ai.lua ZONE (centre, half), its 3 km margin in it
 STRIKE_BEHAVIOUR_ROW = 'su34_common'       # Mission 22's strike Su-34s (0021_CP)
 HEAVY_BEHAVIOUR_ROW = 't160_common'        # Mission 4's Tu-160 (NLID_1000: large aircraft, no dogfighting)
 
@@ -479,23 +371,179 @@ def flight_size(unit):
     return None
 
 
+# Fighter roles (behaviour roadmap P1; tools/re/BEHAVIOUR_DIRECTOR.md unit 5): the pool is split into role groups by
+# flight number NN, each with its 2 / 4 / 6-ship trio (CFG.squadrons: every role can field a 2-ship from round 1). A
+# role's flights name its behaviour row in the world data, so they build its behaviour set when the level loads (hard
+# rule 20); the spawner (Scripts/sv_rounds.lua, sv_spawn.lua) draws flights by the round's role mix and gives each its
+# role's airframes. ROLE_BY_FLIGHT is Scripts/sv_config.lua's (build_wolf checks they match). NN 08's Air1 / Air2 are the
+# behaviour probe's (PROBE_UNITS: their own rows, never in a round), so the Skirmishers have NN 07 and 08's 2-ship.
+ROLE_BY_FLIGHT = ['duelist', 'duelist', 'lancer', 'lancer', 'wolf', 'wolf', 'skirm', 'skirm']
+POOL_ROLE = {u: ROLE_BY_FLIGHT[int(u[len('ERA_Unit_'):len('ERA_Unit_') + 2]) - 1] for u in POOL}
+# The roles' behaviour rows (DT_SV_NpcMission, build_survival.py NPC_EXTRA; each names a DT_NPC row Scripts/sv_rows.lua
+# rolesSetup makes at the main menu with the role's behaviour set, CFG.roles.sets): the Duelists keep the fighters' row.
+# A Wolf flight is bait and trap pairs: its even objects (0, 2, 4: the lead and the pairs' leads) the bait's row, its
+# odd ones the trap's (held at engagement None from their appearance until the trap springs: build_wolf, sv_spawn.lua WOLF).
+ROLE_ROW = {'duelist': POOL_BEHAVIOUR_ROW, 'lancer': 'sv_role_lancer', 'wolf': 'sv_role_wolf_lead',
+            'skirm': 'sv_role_skirmish'}
+WOLF_WING_ROW = 'sv_role_wolf_wing'
+ROLE_NPC = {'sv_role_lancer': 'SV_Role_Lancer', 'sv_role_wolf_lead': 'SV_Role_WolfLead',
+            'sv_role_wolf_wing': 'SV_Role_WolfWing', 'sv_role_skirmish': 'SV_Role_Skirmish'}
+# The Lancers' unit altitude band tops out here (build_survival.py build_wd_global; Mission 22's: 4-5 km), so they can
+# spawn 2 km above the others (CFG.roles.lancer.alt_add_m, kept under this less 500 m) and their zoom climbs, gated on the
+# band's top less 1 km (LA_SV_LancerZoom), still climb there: the critic's correction (a plane over its band's top may
+# count as outside its unit area and return to it, [?]). Scripts/sv_config.lua ROLE.LANCER_TOP_M is the same.
+LANCER_MAX_ALT_M = 9000.0
+# Every pool flight's AI object names after sizing (event-arg form, 'Base_N-1'), filled by build_survival.py
+# build_wd_global before the event package is built: the Wolf trap's per-object events need them.
+POOL_OBJS = {}
+
+
+def heavy_routes():
+    """One dict per heavy flight and compass sector (HEAVY_*): unit, its BOMBERS index n, sector letter and bearing,
+    the route's and loop's path names and points (cm), and the route's event."""
+    import math
+    (zx, zy), half = ZONE_KM
+
+    def inside(p):
+        return abs(p[0] - zx) < half - 1.0 and abs(p[1] - zy) < half - 1.0
+    out = []
+    for unit, (side, up) in HEAVY_TRACKS.items():
+        n = BOMBERS.index(unit) + 1
+        for k, s in enumerate(HEAVY_SECTORS):
+            b = math.radians(45.0 * k)
+            on, aside = (-math.sin(b), math.cos(b)), (-math.cos(b), -math.sin(b))   # (away from the sector's side)
+
+            def at(u, v):
+                return AIRFIELD_KM[0] + u * on[0] + v * aside[0], AIRFIELD_KM[1] + u * on[1] + v * aside[1]
+            d = HEAVY_ROUTE_KM
+            while d > 8.0 and not inside(at(-d, side)): d -= 0.5
+            f = 1.0
+            while f > 0.6 and not all(inside(at(u * f, v + side)) for u, v in HEAVY_LOOP): f -= 0.05
+            route = [at(-d * r, side) for r in HEAVY_ROUTE_FRAC] + [at(0.0, side), at(HEAVY_PAST_KM, side)]
+            loop = [at(u * f, v + side) for u, v in HEAVY_LOOP]
+            assert all(inside(p) for p in route + loop), (unit, s, 'a heavy track leaves the zone')
+            alts = list(HEAVY_ALT_KM) + [HEAVY_ALT_KM[-1]] * (len(route) - len(HEAVY_ALT_KM))
+
+            def cm(pts, a):
+                return [(x * 100000.0, y * 100000.0, (h + up) * 100000.0) for (x, y), h in zip(pts, a)]
+            out.append(dict(unit=unit, n=n, sector=s, bearing=45 * k, route_km=d, loop_x=f,
+                            path=f'SV_Path_Heavy{n}{s}', loop=f'SV_Path_Heavy{n}{s}Loop', ev=f'RE_SV_HeavyRoute_{n:02d}{s}',
+                            route=cm(route, alts), circuit=cm(loop, [HEAVY_ALT_KM[-1]] * len(loop))))
+    return out
+
+
+def awacs_orbit():
+    """VOID WATCHER 1's orbit (AWACS_*; 0.73.73), cm: {'in', 'arc_a', 'arc_b' (points), 'in_before', 'in_after',
+    'a_before', 'a_after', 'b_before', 'b_after' (the points just outside each, for its tangents)} and, km / deg, the
+    lead-in's turn {'rho', 'turn', 'sense'} and the circle {'centre', 'pt' (psi deg round from the lead-in's join)}. The
+    lead-in turns from the climb-out's end (AWACS_CLIMB_*) to the side that gives the wider turn, on the circle of radius
+    rho that touches the orbit from inside, so it meets the orbit along it; the orbit goes round the same way."""
+    import math
+    (zx, zy), half = ZONE_KM
+    c, r = AIRFIELD_KM, AWACS_ORBIT_KM
+    ex, ey, ez = AWACS_CLIMB_END
+    n = math.hypot(*AWACS_CLIMB_DIR)
+    hx, hy = AWACS_CLIMB_DIR[0] / n, AWACS_CLIMB_DIR[1] / n
+    wx, wy = ex - c[0], ey - c[1]
+    best = None
+    for s in (1, -1):                                      # +1: its centre on the left, a counter-clockwise turn
+        px, py = -s * hy, s * hx
+        rho = (r * r - wx * wx - wy * wy) / (2.0 * (wx * px + wy * py) + 2.0 * r)
+        if best is None or rho > best[0]: best = (rho, s, px, py)
+    rho, s, px, py = best
+    q = (ex + rho * px, ey + rho * py)                     # the lead-in turn's centre
+    qd = math.hypot(q[0] - c[0], q[1] - c[1])
+    assert abs(qd - (r - rho)) < 1e-6 and 2.5 <= rho <= r / 2.0 + 1e-9, ('the AWACS lead-in turn', rho, qd)
+    j = (c[0] + r * (q[0] - c[0]) / qd, c[1] + r * (q[1] - c[1]) / qd)   # where it meets the orbit
+    b0 = math.atan2(ey - q[1], ex - q[0])
+    turn = math.degrees((math.atan2(j[1] - q[1], j[0] - q[0]) - b0) * s) % 360.0
+    m = int(math.ceil(turn / AWACS_IN_STEP_DEG))
+    lead = [circle_point(q, rho, b0, s, turn * k / m, ez + (AWACS_IN_TOP_KM - ez) * k / m) for k in range(1, m + 1)]
+    a0 = math.atan2(j[1] - c[1], j[0] - c[0])
+    pt = lambda psi, alt: circle_point(c, r, a0, s, psi, alt)
+    step = AWACS_ARC_STEP_DEG
+    k_in, k_arc = AWACS_IN_CIRCLE_DEG / step, 180.0 / step
+    assert abs(k_in - round(k_in)) < 1e-9 and abs(k_arc - round(k_arc)) < 1e-9, 'AWACS_ARC_STEP_DEG must divide both'
+    k_in, k_arc = int(round(k_in)), int(round(k_arc))
+    climb = [pt(step * i, AWACS_IN_TOP_KM + (AWACS_ALT_KM - AWACS_IN_TOP_KM) * i / k_in) for i in range(1, k_in + 1)]
+    pe = AWACS_IN_CIRCLE_DEG                                # the lead-in's end; arc B from a step past it, then arc A
+    arc_b = [pt(pe + step * i, AWACS_ALT_KM) for i in range(1, k_arc + 1)]
+    arc_a = [pt(pe + 180.0 + step * i, AWACS_ALT_KM) for i in range(1, k_arc + 1)]
+    for x, y, _ in lead + climb + arc_a + arc_b:
+        assert abs(x - zx) < half - 1.0 and abs(y - zy) < half - 1.0, 'the AWACS orbit leaves the zone'
+    # (0.73.78, G5) its exits (AWACS_OUT_*): from each arc's end along the circle's tangent there, the first point a step
+    # of the arc (its chord) ahead, then every AWACS_OUT_STEP_KM to AWACS_OUT_KM, at the orbit's height
+    chord = 2.0 * r * math.sin(math.radians(step) / 2.0)
+
+    def exit_from(psi):
+        e = pt(psi, AWACS_ALT_KM)
+        a = a0 + s * math.radians(psi)
+        tx, ty = -s * math.sin(a), s * math.cos(a)
+        ds, d = [], chord
+        while d <= AWACS_OUT_KM + 1e-9:
+            ds.append(d)
+            d += AWACS_OUT_STEP_KM
+        out = [(e[0] + tx * d, e[1] + ty * d, AWACS_ALT_KM) for d in ds]
+        nxt = ds[-1] + AWACS_OUT_STEP_KM
+        return e, out, (e[0] + tx * nxt, e[1] + ty * nxt, AWACS_ALT_KM)
+    eb, out_b, out_b_after = exit_from(pe + 180.0)                 # arc B's end
+    ea, out_a, out_a_after = exit_from(pe + 360.0)                 # arc A's end
+    assert math.dist(eb[:2], arc_b[-1][:2]) < 1e-6 and math.dist(ea[:2], arc_a[-1][:2]) < 1e-6, 'the AWACS exits: not at the arcs\' ends'
+    for x, y, _ in out_a + out_b:
+        assert abs(x - zx) < half - 1.0 and abs(y - zy) < half - 1.0, 'an AWACS exit leaves the zone'
+    cm = lambda p: (p[0] * 100000.0, p[1] * 100000.0, p[2] * 100000.0)
+    return dict(rho=rho, turn=turn, sense=s, centre=c, pt=pt,
+                **{'in': [cm(p) for p in lead + climb]}, arc_a=[cm(p) for p in arc_a], arc_b=[cm(p) for p in arc_b],
+                in_before=cm((ex, ey, ez)), in_after=cm(arc_b[0]),
+                b_before=cm(climb[-1]), b_after=cm(arc_a[0]), a_before=cm(arc_b[-1]), a_after=cm(arc_b[0]),
+                out_a=[cm(p) for p in out_a], out_b=[cm(p) for p in out_b], out_a_before=cm(ea), out_b_before=cm(eb),
+                out_a_after=cm(out_a_after), out_b_after=cm(out_b_after))
+
+
+def wolf_held(k):
+    """A Wolf flight's object k is the trap (held until sprung): the odd ones, each bait-and-trap pair's second."""
+    return k % 2 == 1
+
+
 def behaviour_row(unit):
     """The NPC row a flight's AI objects name in the world data (its behaviour), or None to leave Mission 22's."""
     for v, u in PROBE_UNITS.items():
         if u == unit: return PROBE_ROWS[v]
     if unit in BOMBERS: return HEAVY_BEHAVIOUR_ROW if unit in HEAVY_BOMBERS else STRIKE_BEHAVIOUR_ROW
-    if unit in POOL: return POOL_BEHAVIOUR_ROW
+    if unit in POOL: return ROLE_ROW[POOL_ROLE[unit]]
     return None
-KEEP_AT_START = {AIRFIELD_UNIT: None}                 # units spawned at mission start (name -> spawn point or None)
-# SV_Alive / SV_Kills: diagnostics, logged by Scripts/main.lua. SV_Up_NN: 1 while pool flight NN is up (its orders
-# came; main.lua's ordersTick checks it). SV_Shuttle*: Comona Defense (build_shuttle).
-INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for k in range(len(POOL))]
-             + ['SV_ShuttleRound', 'SV_ShuttleLaunched', 'SV_ShuttleLost', 'SV_ShuttleHits', 'SV_ShuttleNearSaid']
-             + [f'SV_ShuttleDmg{c}' for c in 'ABC'] + ['SV_AnomalyUp']
-             + ['SV_AllyAir' + u[-1] for u in ALLY_AIR_UNITS]
-             + [f'SV_LcacLand{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
-             + [f'SV_LcacRunway{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
-             + [f'SV_LadonRun{key}' for key, _, _ in LADONS] + ['SV_Beat', 'SV_ValkaUp'])
+
+
+def behaviour_rows(unit, k):
+    """The NPC row object k of a flight names: its flight's (behaviour_row), but a Wolf flight's trap objects the trap's."""
+    row = behaviour_row(unit)
+    if row == ROLE_ROW['wolf'] and wolf_held(k): return WOLF_WING_ROW
+    return row
+
+
+# ---------------------------------------------------------------- names the Lua tests read here (builders: the parts)
+# (survival_events_squads.py build_director fires these two slots; tools/checks/spweapons_test.lua reads SPEC_SLOT here)
+# The squad director's missile shot (behaviour roadmap P2's bracket salvo; Scripts/sv_director.lua): Mission 19's
+# LiveFireOneShotWeapon, which has its Rafale fire WN_WEAPON_3 at the player. WN_WEAPON_<n> is fire-control slot n - 1
+# of the plane's NPC row (hard rule 40): the fighters' missiles are slot 2 (DT_NPC: 246 of the 261 OP1xxx rows have
+# their first NPC_FCS_PlaneMsl there; the rest none, scripted or part rows, or one ally's in slot 5; every row Survival
+# flies is checked at the main menu, sv_rows.lua SR.mslSlot, and the director fires only planes whose row has it
+# there). Never the special slot (3+): it holds a different random weapon on each co-op game.
+SALVO_SLOT = 'WN_WEAPON_3'
+# The enemies' special weapons (the user, 2026-10-31: "I want the Enemies to fire their Special Weapons too"; the weapons
+# log: their 2AAM / HCAA carried, never fired, while the standard missiles fired every minute: their AI never picks the
+# slot): Scripts/sv_spweapons.lua fires RE_SV_SpecFire_<NN><L>, one pool object's SPEC_SLOT at the player, Mission 19's
+# LiveFireOneShotWeapon as the salvo. The special is in slot 3 (sv_rows.lua puts CFG.special.fcs's pick in the first free
+# slot from 3: SR.spSlot); the jammer's (its ECM pod there, the special in 4) isn't fired.
+SPEC_SLOT = 'WN_WEAPON_4'
+
+# THE ESCORT's start and her escorts (the rest of THE ESCORT is survival_events_escort.py; tools/checks/escort_test.lua
+# reads these two from this file)
+ESC_START = (-4110000.0, 3140000.0, 300000.0)   # the contract's start: 6 km inside the SW corner, 3 km up
+# her four escorts: (name, mission row, km to her right on the way in, km above her). Each one unit of one object, a copy of
+# MOONCHILD's lead (ALLY_AIR_SOURCE: allied, parked at the airport; not invincible here), its callsign key SV_<Name>
+ESC_ESCORTS = [('Yorke', 'sv_esc_su57', 0.6, 0.10), ('Rock', 'sv_esc_su57', -0.6, 0.10),
+               ('Ali', 'sv_esc_su33', 1.2, 0.25), ('Danielle', 'sv_esc_su35', -1.2, 0.25)]
 
 
 # ---------------------------------------------------------------- record helpers (uprop struct tuples)
@@ -763,6 +811,26 @@ def build_events(stock_ep):
         g.trigger('RE_Wave2_AreaB_PathSet', run)
         for obj in objs[unit][:BOMBER_SIZES[unit]]:   # build_survival.py keeps these first aircraft
             g.execute(t_fire, run, {1: obj}, delay=BOMB_GAP_S, loop=BOMB_COUNT)
+    # the minimap's alert on a raid (user, 2026-10-31: "an alert that pings the aircraft via the minimap that are
+    # attacking the airfield"): RE_SV_RaidPing_NN pings bomber flight NN on the radar, Mission 22's own "look here"
+    # (LiveBattleNavigationExecution {tag, unit, timing, force the battle map}: its shuttle and control-centre pings);
+    # Scripts/sv_flights.lua raidPings fires it every ping.every_s while that flight is up near the airfield, not sent at
+    # a ship. Forwarded in co-op: each joiner's game pings its copies.
+    assert '"RE_SV_RaidPing_%02d"' in runtime_lua(), 'Scripts/sv_flights.lua never fires RE_SV_RaidPing_NN'
+    t_nav = g.exec_template('LiveBattleNavigationExecution', 'Default_PreRadioEvent_28')
+    assert arg_values(t_nav)[1:] == ['AA_Unit_01_Ground0', 'Quadruple', 'false'], arg_values(t_nav)
+    for k, unit in enumerate(BOMBERS):
+        ping = f'RE_SV_RaidPing_{k + 1:02d}'
+        g.trigger('RE_Wave2_AreaB_PathSet', ping)                                  # a remote-event trigger
+        g.execute(t_nav, ping, {1: unit})
+    # (0.73.77, plan A7: "end the long tail") the round's last enemies pinged the same way: RE_SV_LastPing_NN on pool
+    # flight NN, fired by Scripts/sv_rounds.lua tailTick when a round has had no kill for [rounds.tail] quiet_s with 1-4
+    # of its aircraft left (a bomber flight's own RE_SV_RaidPing_NN); forwarded in co-op as the raid pings are
+    assert '"RE_SV_LastPing_%02d"' in runtime_lua(), 'Scripts/sv_rounds.lua never fires RE_SV_LastPing_NN'
+    for k, unit in enumerate(POOL):
+        ping = f'RE_SV_LastPing_{k + 1:02d}'
+        g.trigger('RE_Wave2_AreaB_PathSet', ping)
+        g.execute(t_nav, ping, {1: unit})
     assert arg_values(t_landing)[0] == 'false'
     # the run's heartbeat (Scripts/main.lua fires it every 10 s): a mission restart sets every flag back to 0, so a drop
     # in SV_Beat is a restart even in a round without a kill or an airfield hit (test of 2026-10-23: a retry after the
@@ -777,297 +845,508 @@ def build_events(stock_ep):
     build_glitch(g, t_search, t_engage, stock_ep)
     build_valka(g, flag, t_search, t_engage, stock_ep)
     build_repair(g, stock_ep)
+    build_run_over(g, stock_ep)
     build_allies(g, flag, t_search, t_move, t_bsearch)
     build_amphib(g, flag, stock_ep)
     build_ladon(g, flag, stock_ep)
     build_alicorn(g, flag, stock_ep)
+    build_spaceport(g, flag, stock_ep)
+    build_tells(g)
     build_ace_moves(g, flag, stock_ep)
     build_review(g, stock_ep, t_search, t_engage, t_bmove)
+    build_wolf(g, stock_ep, t_search, t_engage)
+    build_director(g, stock_ep, t_search, t_engage)
+    build_heavy(g, stock_ep)
+    build_awacs(g, stock_ep)
+    build_jammer(g, stock_ep)
+    build_wraith(g)
+    build_festival(g, flag, stock_ep)
+    build_escort(g, flag, stock_ep)          # THE ESCORT and the ZFA-44 cargo ships (ESC_* / CARGO_* / ZFA_*)
+    build_decoy(g, flag, stock_ep)           # THE DECOY (DECOY_*)
     return g
 
 
-ESCORT_RADIUS_M = 8000.0          # a raid's escorts hold this close over the airfield (main.lua CFG.escorts)
-ALLY_COVER_RADIUS_M = 5000.0      # main.lua CFG.allies.orders cover_radius_m / defend_radius_m (keep in step)
-ALLY_DEFEND_RADIUS_M = 8000.0
-
-
-def build_review(g, stock_ep, t_search, t_engage, t_bmove):
-    """The economy review's orders (2026-10-25), all remote events Scripts/sv_*.lua fires:
-    RE_SV_Escort_NN      pool flight NN escorts a raid: its area on the airfield (Mission 22's airport strike move,
-                         ESCORT_RADIUS_M), air-only search, Normal / PlayerFirst (you first, then the allied aircraft)
-    RE_SV_Decoy_NN       pool flight NN breaks off: engagement None (as MOONCHILD's hold on the ground)
-    RE_SV_DecoyEnd_NN    ... and back: its appearance's orders (air-only, PlayerOnlyNoLimit)
-    RE_SV_Ally<Order><X> MOONCHILD / WINGMEN flight X's orders: Hunt (its area back on the airfield, the pool's 40 km),
-                         Cover (its area moved near you, Mission 6's NearPlayer move, ALLY_COVER_RADIUS_M) and Defend (on
-                         the airfield, ALLY_DEFEND_RADIUS_M). The radius is Mission 6's LiveChangeUnitRadius."""
-    m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
-    t_radius = g.foreign_template(m06, 'LiveChangeUnitRadius', 'PhaseStart_Phase02_2')
-    t_near = g.foreign_template(m06, 'LiveUnitMoveActor', 'CE_ReinforceAppear_Phase01_2')
-    assert arg_values(t_near)[12] == 'NearPlayer', arg_values(t_near)
-    assert len(arg_values(t_radius)) == 3, arg_values(t_radius)
-    t_hold = g.exec_template('LiveAIEngagementOrder', 'RE_Wave01_Start', lambda a, e: a[0] == 'AB_Obj_01_Air1_f18e_0')
-    assert arg_values(t_hold)[3] == 'None', arg_values(t_hold)
-    for k, unit in enumerate(POOL):
-        ev = f'RE_SV_Escort_{k + 1:02d}'
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t_bmove, ev, {0: unit})
-        g.execute(t_radius, ev, {0: unit, 1: 'NoneSelect', 2: f'{ESCORT_RADIUS_M:.1f}'})
-        g.execute(t_search, ev, {1: unit}, delay=1.0)
-        g.execute(t_engage, ev, {1: unit, 6: 'PlayerFirst'}, delay=1.0)
-        ev = f'RE_SV_Decoy_{k + 1:02d}'
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t_hold, ev, {0: 'NoneSelect', 1: unit})
-        ev = f'RE_SV_DecoyEnd_{k + 1:02d}'
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t_search, ev, {1: unit})
-        g.execute(t_engage, ev, {1: unit, 6: 'PlayerOnlyNoLimit'})
-    for unit in ALLY_AIR_UNITS:
-        x = unit[-1]
-        ev = f'RE_SV_AllyHunt{x}'
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t_bmove, ev, {0: unit})
-        g.execute(t_radius, ev, {0: unit, 1: 'NoneSelect', 2: f'{AREA_RADIUS_M:.1f}'})
-        ev = f'RE_SV_AllyCover{x}'
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t_near, ev, {0: unit})
-        g.execute(t_radius, ev, {0: unit, 1: 'NoneSelect', 2: f'{ALLY_COVER_RADIUS_M:.1f}'})
-        ev = f'RE_SV_AllyDefend{x}'
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t_bmove, ev, {0: unit})
-        g.execute(t_radius, ev, {0: unit, 1: 'NoneSelect', 2: f'{ALLY_DEFEND_RADIUS_M:.1f}'})
-
-
-def build_ace_moves(g, flag, stock_ep):
-    """Ace moves (2026-10-23, "a proper fix for the cannon fodder"; tools/re/UNIQUE_ACTIONS.md): remote events that
-    Scripts/main.lua fires on a pool flight flying a top tier (CFG.aces.flight <tier>.moves) when the player gets
-    behind one of its aircraft: RE_SV_AceTurn_NN = the campaign aces' LastTGT (a hard 600 km/h turn onto the player,
-    then 10 s 200 m behind it, twice), RE_SV_AceKulbit_NN = the Shadow squadron's kulbit (0.5 s straight, a kulbit firing
-    its special weapon). Both OneShot (they end by themselves), by unit (every plane of the flight), Below_Return
-    (they outrank evading, provoke and pursuit). The stock EnemyBehind trigger isn't used: it only fires for the
-    player's selected target, matches a callsign, and re-fires every frame (restarting the move)."""
-    m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
-    t_req = g.foreign_template(m06, 'LiveAIRequestUniqueAction', 'EnemyBehind_LastTGT')
-    assert arg_values(t_req)[3] == 'LastTGT', arg_values(t_req)
-    for k, unit in enumerate(POOL):
-        for name, action in (('AceTurn', 'LastTGT'), ('AceKulbit', 'Shadow_Kulbit')):
-            ev = f'RE_SV_{name}_{k + 1:02d}'
-            g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-            g.execute(t_req, ev, {0: 'NoneSelect', 1: unit, 2: '', 3: action, 4: 'OneShot', 5: 'Below_Return', 6: 'NoneSelect', 7: 'false'})
-
-
-def build_allies(g, flag, t_search, t_move, t_bsearch):
-    """The STORE's allies (ALLY_*): MOONCHILD's scramble, the ships' lanes, and the enemy orders Scripts/main.lua fires
-    at them: RE_SV_Hunt_NN (pool flight NN prefers AI targets: allied aircraft over the player) and
-    RE_SV_Strike<ship unit>_NN (bomber flight NN attacks that ship only)."""
-    tpl = lambda cls, ev, pred=None: g.exec_template(cls, ev, pred)
-    lead = lambda i: (lambda a, e: a[i] == 'AB_Obj_01_Air1_f18e_0')
-    t_hold = tpl('LiveAIPathExecution', 'RE_Wave01_Start', lead(0))                   # Path0 at speed 0
-    t_taxi = tpl('LiveAIPathExecution', '01_Wave01_CheckDistanceEvent', lead(0))      # Path0 at 50
-    t_roll = tpl('LiveAIPathExecution', '01_A_Air1_f18e_PathFinish')                  # Path1 at 600
-    t_climb = tpl('LiveAIPathExecution', '01_A_Air1_f18e_PathFinish_1')               # Path2 at 800
-    t_gear_dn = tpl('LiveEnableLandingGear', 'RE_Wave01_Start', lead(0))
-    t_gear_up = tpl('LiveEnableLandingGear', '01_A_Air1_f18e_PathFinish_3')
-    t_attr_hold = tpl('LiveSetCommonAttribute', 'RE_Wave01_Start', lead(1))
-    t_attr_taxi = tpl('LiveSetCommonAttribute', '01_Wave01_CheckDistanceEvent', lead(1))
-    t_attr_air = tpl('LiveSetCommonAttribute', '01_A_Air1_f18e_PathFinish_3')
-    t_eng_hold = tpl('LiveAIEngagementOrder', 'RE_Wave01_Start', lead(0))             # None: no fighting on the ground
-    t_eng_air = tpl('LiveAIEngagementOrder', '01_A_Air1_f18e_PathFinish_3')           # Normal, Default
-    t_radio = tpl('LiveRadioPlayExecution', '01_Wave01_CheckDistanceEvent')           # allies taking off
-    assert [arg_values(t)[2] for t in (t_hold, t_taxi, t_roll, t_climb)] == TAKEOFF_LEAD[:1] * 2 + TAKEOFF_LEAD[1:]
-    assert arg_values(t_hold)[4] in ('0', '0.0') and arg_values(t_taxi)[4] == '50'
-    assert arg_values(t_gear_dn)[3] == 'true' and arg_values(t_gear_up)[3] == 'false'
-    assert arg_values(t_attr_hold)[3:5] == ['false', 'true'] and arg_values(t_attr_air)[3:5] == ['true', 'false']
-    assert arg_values(t_eng_air)[3] == 'Normal' and arg_values(t_eng_air)[6] == 'Default'
-    assert arg_values(t_radio)[0] == '01_Wave1_Ally_Take_Off'
+def build_heavy(g, stock_ep):
+    """The heavies' routes (HEAVY_*), on Mission 16's Ladon path record and Mission 22's PathFinish trigger, as the
+    Ladons': RE_SV_HeavyRoute_<NN><S> -> the lead's route; its end -> the loop; each loop's end -> the loop again;
+    RE_SV_HeavyLoop_<NN><L><S> -> object L on the loop (the next lead when the one before is shot down)."""
+    import re
+    lua = runtime_lua()
+    for fmt in ('"RE_SV_HeavyRoute_%02d%s"', '"RE_SV_HeavyLoop_%02d%s%s"'):
+        assert fmt in lua, f'Scripts/sv_flights.lua never fires {fmt}'
+    m = re.search(r'AIRFIELD = \{ X = ([-\d.]+), Y = ([-\d.]+) \}', lua)
+    assert m and abs(float(m.group(1)) / 100000 - AIRFIELD_KM[0]) < 1e-6 and \
+        abs(float(m.group(2)) / 100000 - AIRFIELD_KM[1]) < 1e-6, 'AIRFIELD_KM != Scripts/sv_core.lua AIRFIELD'
+    m = re.search(r'ZONE = \{ X = ([-\d.]+), Y = ([-\d.]+), HALF = ([\d.]+) \}', lua)
+    (zx, zy), half = ZONE_KM
+    assert m and abs(float(m.group(1)) / 100000 - zx) < 1e-6 and abs(float(m.group(2)) / 100000 - zy) < 1e-6 and \
+        abs(float(m.group(3)) / 100000 - half) < 1e-6, 'ZONE_KM != Scripts/sv_ai.lua ZONE'
+    assert f'HEAVY_SECTORS = "{HEAVY_SECTORS}"' in lua, 'Scripts/sv_flights.lua HEAVY_SECTORS != HEAVY_SECTORS'
+    m16 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission016', 'EP_Mission016_global.uasset')
+    t_path = g.foreign_template(m16, 'LiveAIPathExecution', 'PathFinish_Ladon0_0', lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0')
     finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
-    assert arg_values(g.trig_template(finish))[2] == TAKEOFF_LEAD[0]
-    for unit in ALLY_AIR_UNITS:
-        x = unit[-1]
-        o_lead, o_wing = ALLY_AIR_OBJS[unit]
-        up, air = f'SV_AllyUp{x}', f'SV_AllyAir{x}'
-        g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: unit})
-        flag(up, air, 'Set', 0)
-        for o, path in ((o_lead, TAKEOFF_LEAD[0]), (o_wing, TAKEOFF_WING_FIRST)):
-            g.execute(t_hold, up, {0: o, 2: path})
-            g.execute(t_gear_dn, up, {0: o})
-            g.execute(t_attr_hold, up, {1: o})
-            g.execute(t_eng_hold, up, {0: o})
-        g.execute(t_taxi, up, {0: o_lead}, delay=3.0)
-        g.execute(t_taxi, up, {0: o_wing, 2: TAKEOFF_WING_FIRST}, delay=8.0)
-        for o in (o_lead, o_wing):
-            g.execute(t_attr_taxi, up, {1: o}, delay=3.0)
-        g.execute(t_radio, up, delay=3.0)
-        # the chain, one PathFinish trigger per aircraft and path: wing onto the lead's start first
-        chain = [(o_lead, TAKEOFF_LEAD[0], t_roll, 'L1'), (o_wing, TAKEOFF_WING_FIRST, t_taxi, 'W0'),
-                 (o_wing, TAKEOFF_LEAD[0], t_roll, 'W1'), (o_lead, TAKEOFF_LEAD[1], t_climb, 'L2'),
-                 (o_wing, TAKEOFF_LEAD[1], t_climb, 'W2')]
-        for o, path, nxt, tag in chain:
-            ev = f'SV_AllyTakeoff{x}{tag}'
-            g.trigger(finish, ev, arg_changes={0: o, 2: path})
-            g.execute(nxt, ev, {0: o})
-        for o, tag in ((o_lead, 'L'), (o_wing, 'W')):
-            ev = f'SV_AllyAirborne{x}{tag}'                  # the end of the climb out: a fighter now
-            g.trigger(finish, ev, arg_changes={0: o, 2: TAKEOFF_LEAD[2]})
-            g.execute(t_gear_up, ev, {0: o})
-            g.execute(t_attr_air, ev, {1: o})
-            g.execute(t_eng_air, ev, {0: o})
-            g.execute(t_search, ev, {0: o, 1: 'NoneSelect'})
-            flag(ev, air, 'Add', 1)
-    # ships: on their lane at once, and again from its start whenever they reach its end; turrets fire at will
-    t_spath = tpl('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[0] == 'AC_Obj_01_Ship1_aegs_0')
-    t_upath = tpl('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[1] == 'AC_Unit_01_Ship1')
-    t_seng = tpl('LiveAIEngagementOrder', 'UnitDamage_Enemy_Ship_Last1', lambda a, e: a[0].startswith('AC_Obj_01_Ship1'))
-    assert arg_values(t_spath)[4] == ALLY_SHIP_SPEED and arg_values(t_seng)[3] == 'Normal'
-    for key, n, unit, obj, lane in ally_ships():
-        up, lap = f'SV_ShipUp{key}{unit[-1]}', f'SV_ShipLap{key}{unit[-1]}'
-        g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: unit})
-        g.trigger(finish, lap, arg_changes={0: obj, 2: lane})
-        for ev, delay in ((up, 1.0), (lap, 2.0)):
-            g.execute(t_spath, ev, {0: obj, 2: lane}, delay=delay)
-            g.execute(t_upath, ev, {1: unit, 2: lane}, delay=delay)
-        g.execute(t_seng, up, {0: 'NoneSelect', 1: unit}, delay=2.0)
-    # enemy orders on them: a fighter flight that prefers AI targets (Mission 22's AIFirst order, no target: the allied
-    # aircraft first, else the player; still air-only), and a strike flight on one ship (as on the shuttle)
-    t_hunt = g.exec_template('LiveAIEngagementOrder', pred=lambda a, e: a[3] == 'Normal' and a[6] == 'AIFirst')
-    t_strike = tpl('LiveAIEngagementOrder', 'RE_Wave02_TargetUpdate')
-    assert arg_values(t_strike)[3] == 'AttackOnly' and arg_values(t_strike)[6] == 'AIOnly'
-    for k, unit in enumerate(POOL):
-        ev = f'RE_SV_Hunt_{k + 1:02d}'
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t_hunt, ev, {0: 'NoneSelect', 1: unit, 2: 'NoneSelect', 4: 'NoneSelect', 5: 'NoneSelect'})
-    for key, n, ship, obj, lane in ally_ships():
-        for k, unit in enumerate(BOMBERS):
-            ev = f'RE_SV_Strike{key}{ship[-1]}_{k + 1:02d}'
+    objs = unit_objects(stock_ep, list(HEAVY_TRACKS))
+    n = 0
+    for H in heavy_routes():
+        obs = objs[H['unit']][:BOMBER_SIZES[H['unit']]]
+        g.trigger('RE_SpawnEnemy_kokatu_1st', H['ev'])                          # a remote event Lua fires
+        g.execute(t_path, H['ev'], {0: obs[0], 2: H['path'], 4: HEAVY_SPEED})
+        g.trigger(finish, f'SV_HeavyIn{H["n"]}{H["sector"]}', arg_changes={0: obs[0], 2: H['path']})
+        g.execute(t_path, f'SV_HeavyIn{H["n"]}{H["sector"]}', {0: obs[0], 2: H['loop'], 4: HEAVY_SPEED})
+        for j, ob in enumerate(obs):
+            ev, lap = f'RE_SV_HeavyLoop_{H["n"]:02d}{chr(65 + j)}{H["sector"]}', f'SV_HeavyLap{H["n"]}{chr(65 + j)}{H["sector"]}'
             g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-            g.execute(t_move, ev, {0: unit, 1: obj, 3: 'NoneSelect'})
-            g.execute(t_bsearch, ev, {1: unit, 3: 'AIR_AND_GROUND'})
-            g.execute(t_strike, ev, {0: 'NoneSelect', 1: unit, 5: ship})
+            g.execute(t_path, ev, {0: ob, 2: H['loop'], 4: HEAVY_SPEED})
+            g.trigger(finish, lap, arg_changes={0: ob, 2: H['loop']})
+            g.execute(t_path, lap, {0: ob, 2: H['loop'], 4: HEAVY_SPEED})
+        n += 1
+    print(f'  heavies: {n} routes and loops ({len(HEAVY_SECTORS)} sectors x {len(HEAVY_TRACKS)} flights, '
+          f'RE_SV_HeavyRoute_<NN><S> / HeavyLoop_<NN><L><S>, {HEAVY_SPEED} km/h)')
 
 
-def build_amphib(g, flag, stock_ep):
-    """The amphibious assault (LCAC_*), in Mission 13's order (hard rule 5): the lane's craft appear -> each craft and
-    the unit get their path -> PathFinish (hard rule 1) -> the craft leaves its path, SV_LcacLand<lane><craft> = 1
-    (Scripts/main.lua spawns its troops) -> LCAC_RETURN_S later back out along the lane. RE_SV_LcacRemove<lane> and
-    RE_SV_LcacTroopsRemove<lane><craft> (main.lua) take a lane's craft / a craft's troops off, so they can come again."""
+# The Spaceport Assault's map (tools/re/SPACEPORT_ASSAULT.md): the user's marks of 2026-10-31 (tools/re/spaceport/
+# spaceport_marks.txt / spaceport_rings.txt: Ctrl+HOME beaches, Ctrl+PAGE_UP sea, Ctrl+PAGE_DOWN the troops' spots; hard
+# rule 27), cm. The beaches' rings read sea (4 m) west and north of each, land (5 m) east and south: the craft come in
+# from the west. Spaceport spots 3 and 4 were one double press (50 m apart): one kept.
+SPACEPORT_BEACHES = [(-1512225, -20610, 500), (-1530847, 28330, 500), (-1557771, 95289, 500), (-1597594, 197576, 500)]
+SPACEPORT_SEA = [(-2810707, 432930), (-2785643, 238488), (-2769543, 113592), (-2748663, -48395), (-2964629, -26491)]
+SPACEPORT_TROOP_SPOTS = [(-1490317, 157461, 500), (-1484219, 75102, 500), (-1419829, -21557, 500)]
+SPACEPORT_PAD = (-1325196, 59778)                # Mission 19's rocket 1 / Mission 22's shuttle pad
+
+# Special round "Spaceport Assault" (tools/re/SPACEPORT_ASSAULT.md; user, 2026-10-31): an enemy fleet off the spaceport's
+# west shore. Four amphibious groups on the first four sea marks (north to south), each a Wasp (Mission 28's
+# AUnit01_Sea_0), two Aegis (Survival's copy of Mission 22's AC_Unit_01_Ship1) ahead of it either side of its lane and
+# two missile boats (Training006's EA_UNIT_2_1) further in; and the carrier group on the fifth mark, the Gerald R. Ford
+# (Mission 16's A_Unit_01_Ship0) in a ring of six Aegis: 14 Aegis in all (user: "put into the budget for 14 aegis
+# ships"). Every ship is an enemy (Faction 2: no stock world data has an enemy Ford, Aegis or Wasp) on the enemy DT_NPC
+# rows (SP_NPC_ROWS), boxed and TGT-marked, and holds its spot (no path). Each Wasp's lane runs from just ahead of it to
+# the beach it faces (SP_WASP_BEACH: the northern-most Wasp to the northern-most beach); its landing craft (Mission 13's,
+# as the airfield's assault) come in waves of two, SP_WAVES units a lane, so a wave can come every minute while the
+# last ones are still on their way. Each craft that lands puts a BTR-90 ashore (invincible this round, no box) that
+# drives to the troops' spot nearest its beach: Scripts/sv_spaceport.lua's capture meter counts the arrivals. After a
+# captured spaceport, the retake round's garrison (SP_GARRISON: one unit of SP_GARRISON_N targetable BTR-90s a troops'
+# spot) stands in for the troops.
+SP_GROUPS = 'ABCD'                               # the Wasps' groups, on SPACEPORT_SEA[0..3]
+SP_WASP_BEACH = {'A': 3, 'B': 2, 'C': 1, 'D': 0}  # each group's beach (SPACEPORT_BEACHES index)
+SP_FORD_SEA = 4                                  # the carrier group's mark
+SP_SHIP_Z = {'aegis': 300.0, 'wasp': 0.0, 'boat': 0.0, 'ford': 50.0}    # their sources' heights
+SP_AEGIS_AHEAD_CM, SP_AEGIS_SIDE_CM = 150000.0, 45000.0    # a group's Aegis: ahead of the Wasp, either side of its lane
+SP_BOAT_AHEAD_CM, SP_BOAT_SIDE_CM = 400000.0, 35000.0      # its missile boats
+# each boat patrols its side of the lane, from SP_BOAT_AHEAD_CM to SP_BOAT_PATROL_CM ahead of the Wasp and back (the user's
+# test of 2026-10-31: "the Missile Boats don't Partol Around Either"), at SP_BOAT_SPEED, on a Mission 22 ship lane's shape
+SP_BOAT_PATROL_CM, SP_BOAT_SPEED, SP_BOAT_PATH_TEMPLATE = 900000.0, '90', '01_Ship1_grig_0_Path0'
+SP_RING_CM, SP_RING_DEG = 180000.0, [30, 90, 150, 210, 270, 330]   # the carrier's Aegis (none dead ahead: a Wasp's there)
+# (their turrets engage only inside it: 40 km round each ship, as far as their boosted search and missiles reach, SP_TURRETS)
+SP_SHIP_AREA_M, SP_SHIP_ALT_M = 45000.0, (0.0, 15000.0)        # (2026-10-31: 40 -> 45 km)
+SP_WAVES = 'VWXYZ'                               # a lane's craft units (letters: hard rule 17)
+SP_CRAFT = 'LR'                                  # a wave's two craft, side by side
+SP_CRAFT_GAP_CM = 18000.0
+SP_LCAC_START_CM = 50000.0                       # the craft start this far ahead of their Wasp
+SP_LCAC_SPEED = '220.0'                          # km/h (Mission 13's 180: ~12 km to the beach in about 3.3 minutes)
+SP_TROOP_SPREAD_CM = 4000.0                      # the troops' spots: each arrival this far from the next
+SP_GARRISON = 'ABC'                              # the retake's garrison units, one a SPACEPORT_TROOP_SPOTS spot
+SP_GARRISON_N = 4
+# The retake's rockets (tools/re/SPACEPORT_ASSAULT.md "Mission 19's rockets"; user, 2026-10-31: "can you please build the
+# rockets this time?"): Mission 19's two rockets (E_Unit_05_Rocket_0: one on each pad, the second the shuttle's) as
+# Survival's unit SV_Unit_SpRockets (objects SV_Obj_SpRocket_0 / _1, on the pads, invincible until launched), each on a
+# whole copy of its Mission 19 climb (900 m up to 20.2 km: SV_Path_SpRocketA / B). Mission 19's split: the rocket's
+# blueprint brings in its debris world-data objects BY THEIR EXACT NAMES (E_Obj_Rocket_Debri_Phase<N>_0 / _1) at its
+# sockets when the last rocket of the unit is killed with its destroy spawner on; each stage's pieces the stage before's
+# death brings in. Survival's three debris units hold them under those names (built as port_unit names a pair: base _0,
+# base _1), at Mission 19's spot 500 m down, on copies of Mission 19's rows (no numeric tail: hard rule 17).
+SP_ROCKET_SOURCE = ('/Game/Maps/Ingame/Mission019/WD_Mission019_global', 'E_Unit_05_Rocket_0')
+SP_ROCKET_UNIT, SP_ROCKET_OBJ, SP_ROCKET_ROW = 'SV_Unit_SpRockets', 'SV_Obj_SpRocket', 'sv_sp_rocket'
+SP_ROCKET_PATHS = [('E_Obj_03_Rocket_0_Path0', 'SV_Path_SpRocketA'), ('E_Obj_03_Rocket_1_Path0', 'SV_Path_SpRocketB')]
+SP_ROCKET_SPEED = ('280.0', '280.0')             # its launch (Mission 19's 05_PhaseStart_2: speed, acceleration)
+SP_ROCKET_AREA_M, SP_ROCKET_ALT_M = 30000.0, (0.0, 25000.0)
+SP_DEBRIS = [  # (Mission 19's unit, Survival's unit, its objects' base name (exact), [(Survival's row, Mission 19's)])
+    ('Rocket_Debri_Phase1_0', 'SV_Unit_SpDebriA', 'E_Obj_Rocket_Debri_Phase1',
+     [('sv_sp_debri_a', 'Rocket_Debri_1_1'), ('sv_sp_debri_b', 'Rocket_Debri_1_2')]),
+    ('Rocket_Debri_Phase2_0', 'SV_Unit_SpDebriB', 'E_Obj_Rocket_Debri_Phase2',
+     [('sv_sp_debri_c', 'Rocket_Debri_2_1'), ('sv_sp_debri_d', 'Rocket_Debri_2_2')]),
+    ('Rocket_Debri_Phase3_0', 'SV_Unit_SpDebriC', 'E_Obj_Rocket_Debri_Phase3',
+     [('sv_sp_debri_e', 'Rocket_Debri_3_1'), ('sv_sp_debri_f', 'Rocket_Debri_3_2')]),
+]
+SP_ROCKET_ROWS = [(SP_ROCKET_ROW, 'Rocket')] + [r for d in SP_DEBRIS for r in d[3]]   # (Survival's, DT_NPC_Mission019's)
+# The retake's island enemies (user, 2026-10-31: "on the spaceport retake, add more enemies around the island", their
+# picks: air defences, armour, more aircraft, about 30; "do a building check so that no enemies spawn in buildings"):
+# Mission 6's EXSAM site whole (its radar and four launchers in Mission 6's layout), its flak guns, Gecko SAMs and Shilka
+# AA guns, Mission 7's T-90s and the BTR-90s, each unit another mission's enemy ground unit (port_unit: its first object
+# for every spot, clone_first, but the site) on Survival's copy of its mission row; the spots from tools/spaceport_spots.py
+# (the building check: every building and prop's box round the spaceport). Scripts/sv_spaceport.lua spawns them with the
+# retake's garrison; the round holds until they're down.
+M06_WD, M07_WD = '/Game/Maps/Ingame/MIssion006/WD_Mission006_global', '/Game/Maps/Ingame/Mission007/WD_Mission007_global'
+SP_ISLAND_ROWS = {'/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission006': [('sv_isl_radar', 'exsamsr_common'),
+                  ('sv_isl_exsam', 'exsam_MS06'), ('sv_isl_flak', 'flak_02'), ('sv_isl_sam', 'geck_common'),
+                  ('sv_isl_aa', 'shil_common')],
+                  '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission007': [('sv_isl_tank', 't090_common')]}
+SP_EXSAM_SITE = ((0.0, 0.0), (-9900.0, -5400.0), (5300.0, -9900.0), (-5300.0, 10000.0), (9900.0, 5200.0))   # (Mission 6's)
+SP_ISLAND_AREA_M, SP_ISLAND_ALT_M = 20000.0, (0.0, 15000.0)     # (ground air defences engage only inside their unit's area)
+SP_ISLAND_PADS = [(-1384043.4, -41260.8), (-1325196.1, 59777.7)]
+SP_ISLAND_AD_CENTRE, SP_ISLAND_ARMOUR_CENTRE, SP_ISLAND_SITE_CENTRE = (-1354620.0, 9258.0), (-1465000.0, 70000.0), (-1440000.0, 60000.0)
+SP_ISLAND_AD = ['aa', 'sam', 'flak'] * 4 + ['aa']          # the single air defences, in their spots' spread order
+
+
+def sp_island():
+    """The retake's island units: dict(unit, obj, kind ('ad' or 'armour'), src (world data, unit), rows, points (cm),
+    yaw, clone_first), their spots picked by tools/spaceport_spots.py (the same every build)."""
+    if hasattr(sp_island, 'done'): return sp_island.done
+    import math
+    import spaceport_spots as S
+    avoid = SP_ISLAND_PADS + [p[:2] for p in SPACEPORT_TROOP_SPOTS]
+    site = S.candidates(SP_ISLAND_SITE_CENTRE, 140000.0, avoid, SP_EXSAM_SITE)
+    assert site, 'no clear spot for the EXSAM site'
+    sx, sy = site[0]
+    site_pts = [(sx + ox, sy + oy) for ox, oy in SP_EXSAM_SITE]
+    ad = S.spread(S.candidates(SP_ISLAND_AD_CENTRE, 170000.0, avoid), len(SP_ISLAND_AD), 20000.0, site_pts)
+    armour = S.spread(S.candidates(SP_ISLAND_ARMOUR_CENTRE, 170000.0, avoid), 12, 12000.0, site_pts + ad)
+    tanks, apcs = sorted(armour[:8]), armour[8:]
+    cx, cy = SP_ISLAND_AD_CENTRE
+    face = lambda pts: math.degrees(math.atan2(sum(p[1] for p in pts) / len(pts) - cy, sum(p[0] for p in pts) / len(pts) - cx))
+    by = lambda k: [p for p, kk in zip(ad, SP_ISLAND_AD) if kk == k]
+    out = [dict(unit='SV_Unit_SpIslExsam', obj='SV_Obj_SpIslExsam', kind='ad', src=(M06_WD, 'EA_Unit_01_Ground_8'),
+                rows=['sv_isl_radar'] + ['sv_isl_exsam'] * 4, points=site_pts, clone_first=False)]
+    for unit, obj, kind, src, row, pts in (
+            ('SV_Unit_SpIslFlak', 'SV_Obj_SpIslFlak', 'ad', (M06_WD, 'EA_Unit_01_Ground_4'), 'sv_isl_flak', by('flak')),
+            ('SV_Unit_SpIslSam', 'SV_Obj_SpIslSam', 'ad', (M06_WD, 'EA_Unit_02_Ground_5'), 'sv_isl_sam', by('sam')),
+            ('SV_Unit_SpIslAA', 'SV_Obj_SpIslAA', 'ad', (M06_WD, 'EA_Unit_01_Ground_6'), 'sv_isl_aa', by('aa')),
+            ('SV_Unit_SpIslTankA', 'SV_Obj_SpIslTankA', 'armour', (M07_WD, 'ECUnit02_Ground_5'), 'sv_isl_tank', tanks[:4]),
+            ('SV_Unit_SpIslTankB', 'SV_Obj_SpIslTankB', 'armour', (M07_WD, 'ECUnit02_Ground_5'), 'sv_isl_tank', tanks[4:]),
+            ('SV_Unit_SpIslApc', 'SV_Obj_SpIslApc', 'armour', (M06_WD, 'EA_Unit_01_Ground_1'), LCAC_TROOP_ROW, apcs)):
+        out.append(dict(unit=unit, obj=obj, kind=kind, src=src, rows=[row] * len(pts), points=pts, clone_first=True))
+    for u in out:
+        u['yaw'] = face(u['points'])
+        u['points'] = S.with_z(u['points'])
+        for x, y, _ in u['points']:                 # the building check, again on what's built
+            c, mesh = S.clearance(x, y)
+            assert c >= S.CLEAR_CM and S.on_land(x, y), (u['unit'], x, y, c, mesh)
+    sp_island.done = out
+    return out
+SP_NPC_ROWS = [  # (DT_SV_NpcMission row, the Mission 22 row it's shaped like, the enemy DT_NPC row) - tools/build_survival.py
+    ('sv_sp_wasp', 'aegs_common', 'VE023_wasp_01'),               # (no parts: the stock row as it is)
+]
+# The armed hulls on rows of their own (0.73.45; the user's test of 0.73.44: "im not being locked on by any of the aegis
+# ships and the range updates etc we applied don't seem to be working": the Aegis VLS fired from 2.1 km, the boats' SAMs
+# from 1.5 km, their stock 3 km lock-on): a ship's parts are spawned on the rows its hull's DT_NPC row names
+# (ChildNPCId; hard rule 38's Ladon pods the same), not on their world data descs' rows, so the turrets flew their stock
+# rows. Each hull's DT_SV_NpcRows copy names the turrets' (SP_TURRETS) in its ChildNPCId, as do the turrets' own copies
+# (the Aegis's gun mount's artillery). (DT_SV_NpcMission row, DT_SV_NpcRows row, the stock DT_NPC row it copies)
+SP_HULLS = [
+    ('sv_fleet_aegishull', 'SV_Fleet_AegisHull', 'VE002_aegs_01'),
+    ('sv_sp_boat', 'SV_Fleet_BoatHull', 'VE011_mslb_01'),
+    ('sv_sp_ford', 'SV_Fleet_FordHull', 'VE004_grfd_01'),
+]
+# The turrets, on Survival's own rows (the user, 2026-10-31: "up the Activation Range and Targetting Range and Lifetime of
+# ALL Ships currently at the Spaceport"): each turret's own DT_SV_NpcMission row (shaped as aegs_mk15) naming a
+# DT_SV_NpcRows copy of its stock DT_NPC row, which Scripts/sv_allies.lua puts into DT_NPC at the main menu on fire control
+# of its own as the STORE's ships' (<FCS>_SVA_Fleet, CFG.specials.spaceport.fcs: their search module, lock-on range, guns'
+# reach, missiles' range and flight time); the stock rows stay as they are. Scripts/sv_spaceport.lua SPORT.FLEET_ROWS
+# lists the DT_NPC rows (no digit at the end: hard rule 17).
+SP_TURRETS = [  # (the part's row in its source world data, Survival's mission row, Survival's DT_NPC row, its stock DT_NPC
+                # row: None for the Aegis's, which Mission 22's mission row names)
+    ('aegs_mk15', 'sv_fleet_mk15aegis', 'SV_Fleet_Mk15Aegis', None),
+    ('aegs_mk41', 'sv_fleet_mk41aegis', 'SV_Fleet_Mk41Aegis', None),
+    ('aegs_mk45', 'sv_fleet_mk45aegis', 'SV_Fleet_Mk45Aegis', None),
+    ('aegs_artillery', 'sv_fleet_artaegis', 'SV_Fleet_ArtAegis', None),
+] + [(f'VE004_grfd_mk15_{p}_Ally_01', f'sv_fleet_mk15ford{p.lower()}', f'SV_Fleet_Mk15Ford{p}', f'VE004_grfd_mk15_{p}_01')
+     for p in ('LB', 'RF', 'LF', 'RB')] + [
+    ('VE011_mslb_sam_01', 'sv_fleet_samboat', 'SV_Fleet_SamBoat', 'VE011_mslb_sam_01')]
+SP_TURRET_SHAPE = 'aegs_mk15'
+SP_AEGIS_ROW = 'sv_fleet_aegishull'              # (SP_HULLS: VE002_aegs_01's copy, its turrets on SP_TURRETS' rows)
+SP_WASP_SOURCE = ('/Game/Maps/Ingame/Mission028/WD_Mission028_global', 'AUnit01_Sea_0')
+SP_BOAT_SOURCE = ('/Game/Maps/Ingame/Training006/WD_Training006_phase02', 'EA_UNIT_2_1')
+SP_FORD_SOURCE = ('/Game/Maps/Ingame/Mission016/WD_Mission016_global', 'A_Unit_01_Ship0')
+SP_AEGIS_SOURCE = 'AC_Unit_01_Ship1'             # Survival's own copy (Mission 22's)
+
+
+def sp_lanes():
+    """Each Wasp's lane: dict(group, sea (x, y), start (x, y), beach (x, y, z), spot (x, y, z), ux, uy, yaw, length)."""
+    import math
+    out = []
+    for k, grp in enumerate(SP_GROUPS):
+        sx, sy = SPACEPORT_SEA[k]
+        bx, by, bz = SPACEPORT_BEACHES[SP_WASP_BEACH[grp]]
+        dx, dy = bx - sx, by - sy
+        d = math.hypot(dx, dy)
+        ux, uy = dx / d, dy / d
+        spot = min(SPACEPORT_TROOP_SPOTS, key=lambda p: math.hypot(p[0] - bx, p[1] - by))
+        start = (sx + ux * SP_LCAC_START_CM, sy + uy * SP_LCAC_START_CM)
+        out.append(dict(group=grp, sea=(sx, sy), start=start, beach=(bx, by, bz), spot=spot, ux=ux, uy=uy,
+                        yaw=math.degrees(math.atan2(dy, dx)), length=math.hypot(bx - start[0], by - start[1])))
+    return out
+
+
+def sp_fleet():
+    """Every ship of the fleet: dict(kind, key, unit, obj, point (x, y, z) cm, yaw, group), the Ford first."""
+    import math
+    out = []
+    fx, fy = SPACEPORT_SEA[SP_FORD_SEA]
+    fyaw = math.degrees(math.atan2(SPACEPORT_PAD[1] - fy, SPACEPORT_PAD[0] - fx))
+    out.append(dict(kind='ford', key='', unit='SV_Unit_SpFord', obj='SV_Obj_SpFord', point=(fx, fy, SP_SHIP_Z['ford']),
+                    yaw=fyaw, group='Ford'))
+    aegis, boats = iter('ABCDEFGHIJKLMN'), iter('ABCDEFGH')
+    for L in sp_lanes():
+        (sx, sy), ux, uy = L['sea'], L['ux'], L['uy']
+        out.append(dict(kind='wasp', key=L['group'], unit=f"SV_Unit_SpWasp{L['group']}", obj=f"SV_Obj_SpWasp{L['group']}",
+                        point=(sx, sy, SP_SHIP_Z['wasp']), yaw=L['yaw'], group=L['group']))
+        for kind, ahead, side, keys in (('aegis', SP_AEGIS_AHEAD_CM, SP_AEGIS_SIDE_CM, aegis),
+                                        ('boat', SP_BOAT_AHEAD_CM, SP_BOAT_SIDE_CM, boats)):
+            for sgn in (1, -1):
+                key = next(keys)
+                x, y = sx + ux * ahead - uy * side * sgn, sy + uy * ahead + ux * side * sgn
+                name = 'Aegis' if kind == 'aegis' else 'Boat'
+                s = dict(kind=kind, key=key, unit=f'SV_Unit_Sp{name}{key}', obj=f'SV_Obj_Sp{name}{key}',
+                         point=(x, y, SP_SHIP_Z[kind]), yaw=L['yaw'], group=L['group'])
+                if kind == 'boat':                    # its patrol, out along the lane and back
+                    at = lambda d: (sx + ux * d - uy * side * sgn, sy + uy * d + ux * side * sgn, SP_SHIP_Z['boat'])
+                    legs = [SP_BOAT_AHEAD_CM + (SP_BOAT_PATROL_CM - SP_BOAT_AHEAD_CM) * t for t in (0.0, 0.34, 0.67, 1.0)]
+                    s.update(out_path=f'SV_Path_SpBoat{key}Out', back_path=f'SV_Path_SpBoat{key}Back',
+                             out_pts=[at(d) for d in legs], back_pts=[at(d) for d in reversed(legs)])
+                out.append(s)
+    for deg in SP_RING_DEG:
+        key = next(aegis)
+        a = math.radians(fyaw + deg)
+        out.append(dict(kind='aegis', key=key, unit=f'SV_Unit_SpAegis{key}', obj=f'SV_Obj_SpAegis{key}',
+                        point=(fx + math.cos(a) * SP_RING_CM, fy + math.sin(a) * SP_RING_CM, SP_SHIP_Z['aegis']),
+                        yaw=fyaw, group='Ford'))
+    assert sum(1 for s in out if s['kind'] == 'aegis') == 14, 'the fleet has 14 Aegis'
+    return out
+
+
+def sp_craft():
+    """One dict per landing craft (lane group g, wave w, craft c): its unit SV_Unit_SpLcac<g><w> (the wave's two
+    craft), object, paths in and out, its troops' unit, drive path and flags."""
+    import math
+    out = []
+    for L in sp_lanes():
+        g, (sx, sy), (bx, by, bz), ux, uy = L['group'], L['start'], L['beach'], L['ux'], L['uy']
+        tx, ty, tz = L['spot']
+        for wi, w in enumerate(SP_WAVES):
+            for k, c in enumerate(SP_CRAFT):
+                side = (k - (len(SP_CRAFT) - 1) / 2.0) * SP_CRAFT_GAP_CM
+                ox, oy = -uy * side, ux * side
+                n = wi * len(SP_CRAFT) + k                    # its troops' place round the spot (a spiral: no two on one)
+                a = math.radians(n * 137.5 + (ord(g) - 65) * 31.0)
+                r = SP_TROOP_SPREAD_CM * math.sqrt(n + 0.5)
+                out.append(dict(
+                    group=g, wave=w, craft=c, k=k, unit=f'SV_Unit_SpLcac{g}{w}', obj_base=f'SV_Obj_SpLcac{g}{w}',
+                    obj=f'SV_Obj_SpLcac{g}{w}_{k}', path=f'SV_Path_SpLcac{g}{w}{c}', back=f'SV_Path_SpLcac{g}{w}{c}Back',
+                    troops=f'SV_Unit_SpTroops{g}{w}{c}', troop_obj=f'SV_Obj_SpTroops{g}{w}{c}',
+                    flag=f'SV_SpLand{g}{w}{c}', land=f'SV_SpLanded{g}{w}{c}', up=f'SV_SpLcacUp{g}{w}',
+                    drive=f'SV_Path_SpDrive{g}{w}{c}', troops_up=f'SV_SpTroopsUp{g}{w}{c}',
+                    aflag=f'SV_SpAt{g}{w}{c}', at=f'SV_SpAtSpot{g}{w}{c}',
+                    spot=(tx + math.cos(a) * r, ty + math.sin(a) * r, tz),
+                    start=(sx + ox, sy + oy, LCAC_SEA_Z), beach=(bx + ox, by + oy, float(bz)),
+                    yaw=L['yaw'], length=L['length']))
+    return out
+
+
+# Each ship's turrets, as the world data names them (build_survival.py retag_turrets / retag_parts / the Ford's own, and
+# asserts it): a ship's parts need their own engagement orders, the hull's never reaches them (the user's first test
+# of 2026-10-31: "only some of the ships are firing, none of their Anti Air is firing"; no SAM fired at all), as the
+# Ladon's CIWS needed theirs (Mission 16's Default_RemoteEvent_20: Normal, PlayerFirst) and Mission 22 / 26 order each
+# turret by name. The Wasps have none.
+SP_AEGIS_PARTS = ['BP_VE002_aegs_mk15_Base', 'BP_VE002_aegs_mk41_Base', 'BP_VE002_aegs_mk45_Base',
+                  'BP_VE002_aegs_mk45_Base_Artillery']
+SP_FORD_PARTS = ['Mk15LB', 'Mk15RF', 'Mk15LF', 'Mk15RB']
+SP_BOAT_PARTS = ['BP_VE011_mslb_sam']
+
+
+def sp_parts(s):
+    """Ship `s`'s (an sp_fleet entry) turret objects, as event args write them."""
+    parts = {'aegis': SP_AEGIS_PARTS, 'ford': SP_FORD_PARTS, 'boat': SP_BOAT_PARTS}.get(s['kind'], [])
+    return [f"{s['obj']}_{p}" for p in parts]
+
+
+def sp_garrison():
+    """The retake's garrison: (unit, object base, [points]) one a troops' spot."""
+    import math
+    out = []
+    for key, (x, y, zz) in zip(SP_GARRISON, SPACEPORT_TROOP_SPOTS):
+        pts = [(x + math.cos(math.radians(90 * k + 45)) * 6000.0, y + math.sin(math.radians(90 * k + 45)) * 6000.0, zz)
+               for k in range(SP_GARRISON_N)]
+        out.append((f'SV_Unit_SpGarrison{key}', f'SV_Obj_SpGarrison{key}', pts))
+    return out
+
+
+JAM_ECM_SLOT = 'WN_WEAPON_4'                   # the EA-18G's row: flares, gun, missiles, ECM (AB.L..IN's, hard rule 40)
+
+
+def build_jammer(g, stock_ep):
+    """The jammer's ECM pod (CFG.jammer.ecm; user, 2026-10-29: "the EA-18G never activated it's ECM": the AI never
+    switches it on by itself, as AB.L..IN's needed RE_SV_GlitchEcm): RE_SV_JamEcm_NN fires JAM_ECM_SLOT on pool
+    flight NN's lead (the jammer leads its flight), as build_director's salvos; Scripts/sv_ai.lua JAM.tick fires it
+    every ecm_every_s while the jammer is up. Forwarded in co-op: each joiner's copy jams there too."""
+    lua = runtime_lua()
+    assert '"RE_SV_JamEcm_%02d"' in lua, 'Scripts/sv_ai.lua JAM.tick never fires RE_SV_JamEcm_NN'
+    m19 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission019', 'EP_Mission019_global.uasset')
+    t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
+    probes = set(PROBE_UNITS.values())
+    n = 0
+    for k, unit in enumerate(POOL):
+        if unit in probes: continue
+        objs = POOL_OBJS.get(unit)
+        assert objs, unit                                                        # (build_wd_global runs first)
+        ev = f'RE_SV_JamEcm_{k + 1:02d}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_fire, ev, {0: JAM_ECM_SLOT, 1: objs[0]})
+        n += 1
+    print(f'  jammer: its ECM pod on {n} flights\' leads (RE_SV_JamEcm_NN, {JAM_ECM_SLOT})')
+
+
+def build_spaceport(g, flag, stock_ep):
+    """The Spaceport Assault (SP_*): each fleet unit's Mission 22 ship engagement order as it appears; each wave of
+    landing craft as the airfield's assault (build_amphib, Mission 13's records): appearance -> each craft on its path
+    in (SP_LCAC_SPEED) -> PathFinish (hard rule 1) -> SV_SpLand<g><w><c> = 1 (Scripts/sv_spaceport.lua puts its troops
+    ashore) -> back out; the troops drive to their spot, its PathFinish sets SV_SpAt<g><w><c>. Remote events for Lua:
+    RE_SV_SpLcacRemove<g><w>, RE_SV_SpTroopsRemove<g><w><c>, RE_SV_SpFleetRemove (every ship), RE_SV_SpGarrisonRemove."""
     m13 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission013', 'EP_Mission013_global.uasset')
     t_cpath = g.foreign_template(m13, 'LiveAIPathExecution', '02_ReinforcementAppearance',
                                  lambda a, e: a[0] == 'E_Obj02_02_Ship0_lcac_0')
     t_upath = g.foreign_template(m13, 'LiveAIPathExecution', '02_ReinforcementAppearance',
                                  lambda a, e: a[1] == 'E_Unit02_02_Ship0')
     t_exit = g.foreign_template(m13, 'LiveAIPathExitExecution', '02_LCAC_PathFinish_0')
-    t_remove = g.exec_template('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
     t_tpath = g.foreign_template(m13, 'LiveAIPathExecution', '02_Reinforce_tank_0',
                                  lambda a, e: a[0] == 'E_Obj02_02_Ground0_tank_0')
     t_tengage = g.foreign_template(m13, 'LiveAIEngagementOrder', '02_Reinforce_tank_0',
                                    lambda a, e: a[1] == 'E_Unit02_02_Ground0')
-    assert arg_values(t_tpath)[2] == LCAC_TROOP_SOURCE_PATH and arg_values(t_tengage)[3] == 'EvadeOnly'
-    assert arg_values(t_cpath)[2] == LCAC_SOURCE_PATH and arg_values(t_cpath)[4] == LCAC_SPEED, arg_values(t_cpath)
-    assert arg_values(t_upath)[2] == LCAC_SOURCE_PATH, arg_values(t_upath)
+    t_remove = g.exec_template('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
+    t_seng = g.exec_template('LiveAIEngagementOrder', 'UnitDamage_Enemy_Ship_Last1', lambda a, e: a[0].startswith('AC_Obj_01_Ship1'))
+    assert arg_values(t_seng)[3] == 'Normal' and arg_values(t_tengage)[3] == 'EvadeOnly', (arg_values(t_seng), arg_values(t_tengage))
+    m16 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission016', 'EP_Mission016_global.uasset')
+    t_part = g.foreign_template(m16, 'LiveAIEngagementOrder', 'Default_RemoteEvent_20',
+                                lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0_LCIWS')
+    assert arg_values(t_part)[3] == 'Normal' and arg_values(t_part)[6] == 'PlayerFirst', arg_values(t_part)
     finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
-    craft = lcac_craft()
-    for lane in lcac_lane_names():
-        cs = [c for c in craft if c['lane'] == lane]
+    fleet = sp_fleet()
+    parts = 0
+    for s in fleet:                                        # (fights whatever comes: Normal, as the STORE's ships)
+        up = f"SV_SpShipUp{s['kind'].title()}{s['key']}"
+        g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: s['unit']})
+        g.execute(t_seng, up, {0: 'NoneSelect', 1: s['unit']}, delay=2.0)
+        for p in sp_parts(s):                              # (and each turret its own: the Ladon's CIWS order)
+            g.execute(t_part, up, {0: p}, delay=2.5)
+            parts += 1
+    # the missile boats' patrols (the STORE's ships' lane records, Mission 22's): out at once, back at its end, out again
+    t_spath = g.exec_template('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[0] == 'AC_Obj_01_Ship1_aegs_0')
+    t_upath2 = g.exec_template('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[1] == 'AC_Unit_01_Ship1')
+    for s in fleet:
+        if s['kind'] != 'boat': continue
+        up = f"SV_SpShipUpBoat{s['key']}"
+        g.execute(t_spath, up, {0: s['obj'], 2: s['out_path'], 4: SP_BOAT_SPEED}, delay=1.0)
+        g.execute(t_upath2, up, {1: s['unit'], 2: s['out_path']}, delay=1.0)
+        for ev, done, nxt in ((f"SV_SpBoatOut{s['key']}", s['out_path'], s['back_path']),
+                              (f"SV_SpBoatBack{s['key']}", s['back_path'], s['out_path'])):
+            g.trigger(finish, ev, arg_changes={0: s['obj'], 2: done})
+            g.execute(t_spath, ev, {0: s['obj'], 2: nxt, 4: SP_BOAT_SPEED}, delay=1.0)
+            g.execute(t_upath2, ev, {1: s['unit'], 2: nxt}, delay=1.0)
+    # the round's fighters falling back when the spaceport is captured (Scripts/sv_spaceport.lua withdraw: the round can
+    # end and the retake come; the user's test of 2026-10-31: "after the spaceport was captured, the next round didn't
+    # start", six fighters still up): RE_SV_FlightOff_NN, Mission 22's own despawn on the pool flight's unit
+    t_off = g.exec_template('LiveSetActiveGameObjectExecution', None, lambda a, e: a[0] != 'NoneSelect' and a[3] == 'false')
+    for k, unit in enumerate(POOL):
+        ev = f'RE_SV_FlightOff_{k + 1:02d}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_off, ev, {0: 'NoneSelect', 1: unit, 2: 'NoneSelect', 3: 'false'})
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpFleetRemove')
+    for s in fleet:
+        g.execute(t_remove, 'RE_SV_SpFleetRemove', {0: 'NoneSelect', 1: s['unit'], 2: 'NoneSelect'})
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpGarrisonRemove')
+    for unit, _, _ in sp_garrison():
+        g.execute(t_remove, 'RE_SV_SpGarrisonRemove', {0: 'NoneSelect', 1: unit, 2: 'NoneSelect'})
+    craft = sp_craft()
+    waves = []
+    for c in craft:
+        if (c['group'], c['wave']) not in waves: waves.append((c['group'], c['wave']))
+    for grp, w in waves:
+        cs = [c for c in craft if c['group'] == grp and c['wave'] == w]
         up = cs[0]['up']
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: cs[0]['unit']})
         for c in cs:
             flag(up, c['flag'], 'Set', 0)
-            g.execute(t_cpath, up, {0: c['obj'], 2: c['path']}, delay=0.5 + c['k'] * 1.5)
+            g.execute(t_cpath, up, {0: c['obj'], 2: c['path'], 4: SP_LCAC_SPEED}, delay=0.5 + c['k'] * 1.5)
         g.execute(t_upath, up, {1: cs[0]['unit'], 2: cs[0]['path']}, delay=0.5)
-        rm = f'RE_SV_LcacRemove{lane}'
-        g.trigger('RE_SpawnEnemy_kokatu_1st', rm)                  # a remote-event trigger
+        rm = f'RE_SV_SpLcacRemove{grp}{w}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', rm)
         g.execute(t_remove, rm, {0: 'NoneSelect', 1: cs[0]['unit'], 2: 'NoneSelect'})
         for c in cs:
             g.trigger(finish, c['land'], arg_changes={0: c['obj'], 2: c['path']})
             g.execute(t_exit, c['land'], {0: c['obj']})
             flag(c['land'], c['flag'], 'Set', 1)
-            g.execute(t_cpath, c['land'], {0: c['obj'], 2: c['back']}, delay=LCAC_RETURN_S)
-            # its troops: off the beach along their path to the runway, driving on whatever shoots at them
+            g.execute(t_cpath, c['land'], {0: c['obj'], 2: c['back'], 4: SP_LCAC_SPEED}, delay=LCAC_RETURN_S)
             g.trigger('01_E_AreaA_ReinforcementAppearance_0', c['troops_up'], arg_changes={0: c['troops']})
-            flag(c['troops_up'], c['rflag'], 'Set', 0)
+            flag(c['troops_up'], c['aflag'], 'Set', 0)
             g.execute(t_tengage, c['troops_up'], {1: c['troops']})
             g.execute(t_tpath, c['troops_up'], {0: c['troop_obj'], 2: c['drive'], 4: LCAC_TROOP_SPEED}, delay=0.5)
-            g.trigger(finish, c['at_runway'], arg_changes={0: c['troop_obj'], 2: c['drive']})
-            flag(c['at_runway'], c['rflag'], 'Set', 1)
-            trm = f'RE_SV_LcacTroopsRemove{lane}{c["craft"]}'
+            g.trigger(finish, c['at'], arg_changes={0: c['troop_obj'], 2: c['drive']})
+            flag(c['at'], c['aflag'], 'Set', 1)
+            trm = f"RE_SV_SpTroopsRemove{grp}{w}{c['craft']}"
             g.trigger('RE_SpawnEnemy_kokatu_1st', trm)
             g.execute(t_remove, trm, {0: 'NoneSelect', 1: c['troops'], 2: 'NoneSelect'})
-
-
-def build_ladon(g, flag, stock_ep):
-    """The Ladons (LADON*), on Mission 16's records: appearance -> its route (PathFinish triggers: hard rule 1) and
-    Mission 16's Normal engagement order; the end of the route or of a circuit -> SV_LadonRun<Key> + 1 and the next
-    circuit."""
-    m16 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission016', 'EP_Mission016_global.uasset')
-    t_path = g.foreign_template(m16, 'LiveAIPathExecution', 'PathFinish_Ladon0_0', lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0')
-    t_eng = g.foreign_template(m16, 'LiveAIEngagementOrder', 'Default_CompositeEvent_83',
-                               lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0')
-    assert arg_values(t_eng)[3] == 'Normal', arg_values(t_eng)
-    # its guns' own orders (code review of 2026-10-23: only the body had one) and its missile volleys (LADON_VLS)
-    t_ciws = g.foreign_template(m16, 'LiveAIEngagementOrder', 'Default_RemoteEvent_20',
-                                lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0_LCIWS')
-    assert arg_values(t_ciws)[3] == 'Normal' and arg_values(t_ciws)[6] == 'PlayerFirst', arg_values(t_ciws)
-    t_hatch = g.foreign_template(m16, 'LiveFireOneShotWeapon', 'Default_VolumeEvent_51',
-                                 lambda a, e: a[1] == 'B_Obj_01_Air0_Ladon0_MissileHatch')
-    t_vls = g.foreign_template(m16, 'LiveFireOneShotWeapon', 'Default_CompositeEvent_44',
-                               lambda a, e: a[1] == 'B_Obj_01_Air0_Ladon0_VLS0' and a[2] == 'A_Obj_01_Air0_f18c_0')
-    assert arg_values(t_hatch)[0] == 'WN_WEAPON_1' and arg_values(t_vls)[0] == 'WN_WEAPON_2', (arg_values(t_hatch), arg_values(t_vls))
-    finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
-    for L in ladons():
-        g.trigger('01_E_AreaA_ReinforcementAppearance_0', L['up'], arg_changes={0: L['unit']})
-        flag(L['up'], L['flag'], 'Set', 0)
-        g.execute(t_path, L['up'], {0: L['obj'], 2: L['path'], 4: LADON_SPEED}, delay=1.0)
-        g.execute(t_eng, L['up'], {0: L['obj']}, delay=2.0)
-        for part in LADON_CIWS:
-            g.execute(t_ciws, L['up'], {0: f"{L['obj']}_{part}"}, delay=2.5)
-        # one launcher a volley (user, 2026-10-23: "nerf the enemy LADONs VLS, way too insane": both at once shot the
-        # player down within 9 s of the first volley): RE_SV_LadonVolley<Key>L / R, main.lua alternates them
-        for side, part in zip('LR', LADON_VLS):
-            volley = f"RE_SV_LadonVolley{L['key']}{side}"
-            g.trigger('RE_SpawnEnemy_kokatu_1st', volley)
-            g.execute(t_hatch, volley, {1: f"{L['obj']}_MissileHatch"})
-            # WN_WEAPON_1: the launcher's ordinary missile (BP_wp_vls_ladon). WN_WEAPON_2, Mission 16's record, is
-            # BP_wp_vls_certain_ladon, the scripted sure kill it fires at the allied F/A-18s: flares did nothing
-            # against it (user, 2026-10-23: "the VLS guidance needs to be nerfed ... Flares don't even work")
-            g.execute(t_vls, volley, {0: 'WN_WEAPON_1', 1: f"{L['obj']}_{part}", 2: 'Player'}, delay=1.5)
-        for ev, path in ((L['over'], L['path']), (L['lap'], L['loop'])):
-            g.trigger(finish, ev, arg_changes={0: L['obj'], 2: path})
-            flag(ev, L['flag'], 'Add', 1)
-            g.execute(t_path, ev, {0: L['obj'], 2: L['loop'], 4: LADON_SPEED})
-
-
-def build_alicorn(g, flag, stock_ep):
-    """The Alicorn (ALCN_*), on EB_002's records: appearance -> out along its lane, and back at each end (PathFinish);
-    remote events for Lua: RE_SV_AlcnDive / Surface (LiveSubmarineOperation), the ALCN_ACTIONS (LiveAIActionEvent-
-    Execution), RE_SV_AlcnVolley (each VLS fires at the player, LiveFireOneShotWeapon), RE_SV_AlcnRemove."""
-    eb = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(stock_ep)))), 'OnlineMode', 'Maps', 'EmergencyCall',
-                      'EB_002', 'EP_EB_002.uasset')
-    t_path = g.foreign_template(eb, 'LiveAIPathExecution', 'MissionStart', lambda a, e: a[0] == 'Boss_0_ALCN_0')
-    t_dive = g.foreign_template(eb, 'LiveSubmarineOperation', 'Debug_Dive')
-    t_surface = g.foreign_template(eb, 'LiveSubmarineOperation', 'Debug_Surface')
-    t_action = g.foreign_template(eb, 'LiveAIActionEventExecution', 'Debug_OpenCore')
-    t_vls = g.foreign_template(eb, 'LiveFireOneShotWeapon', 'ElapsedTime_5s', lambda a, e: a[1] == 'Boss_0_ALCN_0_vls_L_1')
-    t_eng = g.exec_template('LiveAIEngagementOrder', 'UnitDamage_Enemy_Ship_Last1', lambda a, e: a[0].startswith('AC_Obj_01_Ship1'))
-    t_remove = g.exec_template('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
-    assert arg_values(t_path)[4] == ALCN_SPEED and arg_values(t_dive)[1] == 'Diving' and arg_values(t_surface)[1] == 'Surface'
-    finish = '01_A_Air1_f18e_PathFinish'
-    (out, _), (back, _) = alcn_paths()
-    g.trigger('01_E_AreaA_ReinforcementAppearance_0', 'SV_AlcnUp', arg_changes={0: ALCN_UNIT})
-    g.execute(t_path, 'SV_AlcnUp', {0: ALCN_OBJ, 2: out}, delay=1.0)
-    g.execute(t_eng, 'SV_AlcnUp', {0: 'NoneSelect', 1: ALCN_UNIT}, delay=2.0)
-    for ev, a, b in (('SV_AlcnOut', out, back), ('SV_AlcnBack', back, out)):
-        g.trigger(finish, ev, arg_changes={0: ALCN_OBJ, 2: a})
-        g.execute(t_path, ev, {0: ALCN_OBJ, 2: b})
-    for ev, t in (('RE_SV_AlcnDive', t_dive), ('RE_SV_AlcnSurface', t_surface)):
+    # the retake's rockets (SP_ROCKET_*, SP_DEBRIS; Scripts/sv_spaceport.lua's rockets), on Mission 19's own records,
+    # each fired from Lua by its remote event (Mission 19 drives them with PathPointReceive and object-destroy triggers:
+    # hard rule 1, and Survival's objects carry no tags)
+    m19 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission019', 'EP_Mission019_global.uasset')
+    t_rpath = g.foreign_template(m19, 'LiveAIPathExecution', '05_PhaseStart_2', lambda a, e: a[0] == 'E_Obj_05_Rocket_0')
+    t_rboost = g.foreign_template(m19, 'LiveAIPathExecution', '05_PathPoint_Rocket_0_0')
+    t_attr = g.foreign_template(m19, 'LiveSetCommonAttribute', 'Debri_HUD', lambda a, e: a[1] == 'E_Obj_Rocket_Debri_Phase1_0')
+    t_minh = g.foreign_template(m19, 'LiveSetMinHealthExecution', 'Debri_HUD')
+    t_split = g.foreign_template(m19, 'LiveSetActiveOnDestroySpawnerEvent', '05_PhaseStart_1')
+    assert arg_values(t_attr)[3:6] == ['true', 'false', 'TGT'], arg_values(t_attr)       # (shown, not invincible, TGT)
+    assert arg_values(t_split)[1:3] == ['E_Unit_05_Rocket_0', 'false'], arg_values(t_split)
+    assert arg_values(t_rpath)[2] == 'E_Obj_03_Rocket_0_Path0' and arg_values(t_rpath)[9] == 'true', arg_values(t_rpath)
+    assert arg_values(t_rboost)[4] == '1000' and arg_values(t_rboost)[9] == 'false', arg_values(t_rboost)   # (on along it)
+    rockets = [f'{SP_ROCKET_OBJ}_{k}' for k in range(2)]
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpRocketSplitOff')      # the retake's start: no split yet, the debris held
+    g.execute(t_split, 'RE_SV_SpRocketSplitOff', {0: 'NoneSelect', 1: SP_ROCKET_UNIT, 2: 'false'})
+    for _, _, obj, _ in SP_DEBRIS:
+        for k in range(2):
+            g.execute(t_minh, 'RE_SV_SpRocketSplitOff', {0: f'{obj}_{k}', 3: '1.0'})
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpRocketSplitOn')       # one rocket left: the last one breaks up
+    g.execute(t_split, 'RE_SV_SpRocketSplitOn', {0: 'NoneSelect', 1: SP_ROCKET_UNIT, 2: 'true'})
+    for (_, path), obj, L in zip(SP_ROCKET_PATHS, rockets, 'AB'):
+        go = f'RE_SV_SpRocketLaunch{L}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', go)
+        flag(go, f'SV_SpRocketEsc{L}', 'Set', 0)
+        g.execute(t_attr, go, {0: 'NoneSelect', 1: obj, 2: 'NoneSelect', 3: 'true', 4: 'false', 5: 'TGT'})
+        g.execute(t_rpath, go, {0: obj, 2: path, 4: SP_ROCKET_SPEED[0], 5: SP_ROCKET_SPEED[1]}, delay=0.5)
+        boost = f'RE_SV_SpRocketBoost{L}'                                 # (Mission 19's at its first path point)
+        g.trigger('RE_SpawnEnemy_kokatu_1st', boost)
+        g.execute(t_rboost, boost, {0: obj, 2: path})
+        esc = f'SV_SpRocketOut{L}'                                        # its climb's end: escaped
+        g.trigger(finish, esc, arg_changes={0: obj, 2: path})
+        flag(esc, f'SV_SpRocketEsc{L}', 'Set', 1)
+        g.execute(t_attr, esc, {0: 'NoneSelect', 1: obj, 2: 'NoneSelect', 3: 'false', 4: 'true', 5: 'None'})
+        g.execute(t_off, esc, {0: obj, 1: 'NoneSelect', 2: 'NoneSelect', 3: 'false'}, delay=1.0)
+    for st, (_, unit, obj, _) in enumerate(SP_DEBRIS, 1):                # each stage targetable in turn
+        ev = f'RE_SV_SpDebriTgt{st}'
         g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t, ev, {0: ALCN_OBJ})
-    for ev, row in ALCN_ACTIONS.items():
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t_action, ev, {0: ALCN_OBJ, 1: row})
-    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_AlcnVolley')
-    for k, v in enumerate(ALCN_VLS):
-        g.execute(t_vls, 'RE_SV_AlcnVolley', {1: f'{ALCN_OBJ}_{v}', 2: 'Player'}, delay=0.2 + 0.3 * k)
-    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_AlcnRemove')
-    g.execute(t_remove, 'RE_SV_AlcnRemove', {0: 'NoneSelect', 1: ALCN_UNIT, 2: 'NoneSelect'})
+        for k in range(2):
+            g.execute(t_attr, ev, {0: 'NoneSelect', 1: f'{obj}_{k}', 2: 'NoneSelect', 3: 'true', 4: 'false', 5: 'TGT'})
+            g.execute(t_minh, ev, {0: f'{obj}_{k}', 3: '0.0'})
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpRocketRemove')
+    for unit in [SP_ROCKET_UNIT] + [d[1] for d in SP_DEBRIS]:
+        g.execute(t_remove, 'RE_SV_SpRocketRemove', {0: 'NoneSelect', 1: unit, 2: 'NoneSelect'})
+    # the island's enemies: each unit fights as it appears (Normal, as the fleet's hulls), all of them taken off at the end
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_SpIslandRemove')
+    for u in sp_island():
+        up = 'SV_SpIslUp' + u['unit'][len('SV_Unit_SpIsl'):]
+        g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: u['unit']})
+        g.execute(t_seng, up, {0: 'NoneSelect', 1: u['unit']}, delay=2.0)
+        g.execute(t_remove, 'RE_SV_SpIslandRemove', {0: 'NoneSelect', 1: u['unit'], 2: 'NoneSelect'})
+    lua = runtime_lua()
+    for npc in [t[2] for t in SP_TURRETS] + [h[1] for h in SP_HULLS]:
+        assert f'"{npc}"' in lua, f'Scripts/sv_spaceport.lua SPORT.FLEET_ROWS has no {npc}'
+    for unit in [SP_ROCKET_UNIT] + [d[1] for d in SP_DEBRIS] + [u['unit'] for u in sp_island()]:
+        assert f'"{unit}"' in lua, f'Scripts/sv_spaceport.lua has no {unit}'
+    print(f'  spaceport assault: {len(fleet)} ships ({parts} turrets ordered: Normal, PlayerFirst), {len(waves)} landing '
+          f'waves of {len(SP_CRAFT)} craft, {len(sp_garrison())} garrison units; the retake: 2 rockets, {len(SP_DEBRIS)} debris '
+          f'stages, {sum(len(u["points"]) for u in sp_island())} island enemies in {len(sp_island())} units')
+
+
+def survival_fname_plain(name):
+    """True when name is stored whole as an FName (no numeric tail split off: hard rule 17)."""
+    return fname(name) == ('name', name, 0)
 
 
 def build_repair(g, stock_ep):
@@ -1079,386 +1358,17 @@ def build_repair(g, stock_ep):
     g.execute(t_restore, 'RE_SV_RepairAircraft')
 
 
-def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
-    """The Anomaly (see ANOMALY_*): MINDRIPPER's appearance, its guards' orders, its death, and the field's effects
-    Scripts/main.lua switches with RE_SV_AnomalyFieldOn / RE_SV_AnomalyFieldOff (RE_SV_AnomalyEnd: everything off)."""
-    assert ANOMALY_OBJ, 'build_survival.py build_wd_global sets ANOMALY_OBJ first'
+def build_run_over(g, stock_ep):
+    """RE_SV_RunOver: a co-op run's end (Scripts/sv_down.lua: every player down, the host's "ro"; each game fires its
+    own, Scripts/sv_coop.lua KEEP_EVENTS): Mission 15's LiveMissionFinishExecution MissionFailed, false, true (the retry
+    menu, no debriefing, no save: tools/re/KILLS_HEALTH_DEATH.md 3, 4). A remote event Lua fires, no conditions."""
     m15 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission015', 'EP_Mission015_global.uasset')
-    t_msg = g.exec_template('LiveMessageExecution', 'RE_FinishMessage')                  # {0e MISSION_ACCOMPLISHED}
-    t_cam_on = g.exec_template('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == SHUTTLE)
-    t_cam_off = g.exec_template('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == 'NoneSelect')
-    t_warn_on = g.foreign_template(m15, 'LiveSetForceWarinigMessageExecution', '01_Start_Enemy_Attack')
-    t_warn_off = g.foreign_template(m15, 'LiveSetForceWarinigMessageExecution', 'Green_SpeedUp_0')
-    t_noise = g.foreign_template(m15, 'LiveStartHUDRaderMapNoiseExecution', 'RadarNoise_01')       # 4 / 3 / 6
-    t_noise_hard = g.foreign_template(m15, 'LiveStartHUDRaderMapNoiseExecution', 'RadarNoise_02')  # 5 / 5 / 8
-    t_noise_off = g.foreign_template(m15, 'LiveStopHUDRaderMapNoiseExecution', 'NoiseCancel03')
-    t_glass_on = g.foreign_template(m15, 'LiveActivateGlassesEffectExecution')
-    t_glass_off = g.foreign_template(m15, 'LiveDeactivateGlassesEffectExecution')
-    # no health bar (user, 2026-10-23: "don't have a healthbar, our original version didn't have one either"; Mission
-    # 6's LiveUnitHealthDisplaySwitch drew a "None" list entry and a gauge in the sea at the unit's spawn point)
-    t_sound = g.exec_template('LiveSoundGeneralPostEventExecution', 'RE_Shuttle_Launch', lambda a, e: a[0].endswith('LiftOff_Play'))
-    t_mm = g.exec_template('LiveSetPlayerMaxAttackerMissiles', '01_Wave03_RemainingTime_0')     # [BOTH_MISSILE, n, false]
-    t_cd = g.exec_template('LivePlayerAttackCooldownOverrideExecution', '01_Wave03_RemainingTime_0')   # 4 floats
-    t_ma = g.exec_template('LiveChangePlayerMaxAttackersNumExecution', '01_Wave03_RemainingTime_0')    # [n]
-    assert arg_values(t_mm)[0] == 'BOTH_MISSILE' and len(arg_values(t_cd)) == 4 and len(arg_values(t_ma)) == 1
-    def attack(ev, a, delay=None):
-        g.execute(t_mm, ev, {1: a['missiles']}, delay=delay)
-        g.execute(t_ma, ev, {0: a['attackers']}, delay=delay)
-        g.execute(t_cd, ev, {i: f'{v}' for i, v in enumerate(a['cooldown'])}, delay=delay)
-    attack('MissionStart', ATTACK_BASE)
-    assert arg_values(t_warn_on) == ['true'] and arg_values(t_warn_off) == ['false'], (arg_values(t_warn_on), arg_values(t_warn_off))
-    up, guards, down = 'SV_AnomalyUp', 'SV_AnomalyGuardsUp', 'SV_AnomalyDown'
-    g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: ANOMALY_UNIT})
-    g.trigger('01_E_AreaA_ReinforcementAppearance_0', guards, arg_changes={0: ANOMALY_GUARD_UNIT})
-    g.execute(t_search, up, {1: ANOMALY_UNIT}, delay=2.0)                    # MINDRIPPER: the pool's orders
-    g.execute(t_engage, up, {1: ANOMALY_UNIT, 6: 'PlayerOnlyNoLimit'}, delay=2.0)
-    # Its guards circle it (user, 2026-10-22: "they need to circle MINDRIPPER, currently they leave mindripper alone
-    # after they sight the player"): Mission 26's escort pattern, their unit area on it (ANOMALY_GUARD_RADIUS_M,
-    # following it: arg 10 true, as Start_WaveI_UAV_Setting keeps the UAVs on the x40a), and PlayerOnly instead of the
-    # pool's PlayerOnlyNoLimit, so they attack the player near it and go back to it. Once it's down they hunt the player.
-    assert arg_values(t_move)[1] == 'NoneSelect' and arg_values(t_move)[10] == 'false', arg_values(t_move)
-    g.execute(t_search, guards, {1: ANOMALY_GUARD_UNIT}, delay=2.0)
-    g.execute(t_engage, guards, {1: ANOMALY_GUARD_UNIT, 6: 'PlayerOnly'}, delay=2.0)
-    g.execute(t_move, guards, {0: ANOMALY_GUARD_UNIT, 1: ANOMALY_OBJ, 3: 'NoneSelect', 5: f'{ANOMALY_GUARD_RADIUS_M}',
-                               10: 'true'}, delay=2.5)
-    flag(up, 'SV_AnomalyUp', 'Set', 1)
-    attack(up, ANOMALY_ATTACK)
-    g.execute(t_msg, up, {0: 'MISSION_UPDATE'})                               # the stock banner and its beep
-    g.execute(t_warn_on, up, delay=1.0)                                       # WARNING until it's down
-    g.execute(t_noise, up, delay=1.0)
-    assert arg_values(t_cam_on)[4] == 'LookAt_Event_Camera_ms22-01', arg_values(t_cam_on)
-    for k, cam in enumerate(ANOMALY_CAMERAS):
-        ev = f'RE_SV_AnomalyCam_{chr(65 + k)}'                                  # letters: hard rule 17
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t_cam_on, ev, {0: ANOMALY_OBJ, 4: cam})
-        g.execute(t_cam_off, ev, delay=ANOMALY_CAMERA_S)
-    g.execute(t_sound, up, {0: ANOMALY_HUM + 'Play', 1: ANOMALY_OBJ}, delay=1.0)   # crackles from the portal on
-    for name in ('RE_SV_AnomalyFieldOn', 'RE_SV_AnomalyFieldOff', 'RE_SV_AnomalyEnd'):
-        g.trigger('RE_SpawnEnemy_kokatu_1st', name)                           # remote events Lua fires (SV_Event)
-    g.execute(t_glass_on, 'RE_SV_AnomalyFieldOn')
-    g.execute(t_noise_hard, 'RE_SV_AnomalyFieldOn')
-    g.execute(t_glass_off, 'RE_SV_AnomalyFieldOff')
-    g.execute(t_noise, 'RE_SV_AnomalyFieldOff')
-    g.trigger('UnitDamage_Ship_Destroy_0', down, arg_changes={0: ANOMALY_UNIT})
-    g.execute(t_sound, down, {0: ANOMALY_HUM + 'Stop', 1: ANOMALY_OBJ})
-    for delay, key in ANOMALY_DOWN_SOUNDS:
-        g.execute(t_sound, down, {0: key, 1: ANOMALY_OBJ}, delay=delay)
-    for ev in (down, 'RE_SV_AnomalyEnd'):
-        attack(ev, ATTACK_BASE)
-        g.execute(t_engage, ev, {1: ANOMALY_GUARD_UNIT, 6: 'PlayerOnlyNoLimit'})     # the guards, loose
-        g.execute(t_move, ev, {0: ANOMALY_GUARD_UNIT, 5: f'{AREA_RADIUS_M}'})        # (Mission 22's mark, the whole zone)
-        flag(ev, 'SV_AnomalyUp', 'Set', 0)
-        g.execute(t_warn_off, ev)
-        g.execute(t_noise_off, ev)
-        g.execute(t_glass_off, ev)
-
-
-def build_glitch(g, t_search, t_engage, stock_ep):
-    """AB.L..IN (see GLITCH_*): the pool's orders when it appears (search, then engage the player anywhere), the
-    stock MISSION UPDATE banner and beep, and its blinks (GLITCH_BLINK_*). Everything else is Scripts/main.lua's
-    (ANOM.glitchTick)."""
-    import math
-    assert GLITCH_OBJ, 'build_survival.py build_wd_global sets GLITCH_OBJ first'
-    t_msg = g.exec_template('LiveMessageExecution', 'RE_FinishMessage')                  # {0e MISSION_ACCOMPLISHED}
-    # Mission 22's: A_Obj_01_dummyN0 onto the player, 6.5 km north ({1: obj, 2: Player, 4-6: offset cm, 9-11: rotation
-    # (roll, pitch, yaw), 13: Absolute})
-    t_tp = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[1] == 'A_Obj_01_dummyN0')
-    v = arg_values(t_tp)
-    assert v[2] == 'Player' and v[13] == 'Absolute' and v[8] == 'NoneSelect', v
-    # main.lua builds the same names from CFG.specials.glitch (blinks, gun_every_s): checked here so the two can't drift
-    # (code review of 2026-10-23)
-    import re
+    t_fail = g.foreign_template(m15, 'LiveMissionFinishExecution', pred=lambda a, e: a[0] == 'MissionFailed')
+    assert arg_values(t_fail) == ['MissionFailed', 'false', 'true'], arg_values(t_fail)
     lua = runtime_lua()
-    m_bl = re.search(r'blinks = \{ step_deg = (\d+), rings_m = \{ ([\d, ]+) \} \}', lua)
-    m_gun = re.search(r'[^a-z_]gun_every_s = ([\d.]+)', lua)          # (not railgun_every_s)
-    assert m_bl and int(m_bl.group(1)) == GLITCH_BLINK_STEP_DEG and         tuple(int(x) for x in m_bl.group(2).split(',')) == GLITCH_BLINK_RINGS_M, 'main.lua CFG.specials.glitch.blinks != GLITCH_BLINK_*'
-    assert m_gun and abs(float(m_gun.group(1)) - GLITCH_GUN_SHOTS * GLITCH_GUN_EVERY_S) < 1e-6, 'main.lua gun_every_s != GLITCH_GUN_*'
-    for ev, deg, m in glitch_blinks():
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)                                  # a remote event Lua fires
-        dx, dy = m * 100 * math.cos(math.radians(deg)), m * 100 * math.sin(math.radians(deg))
-        yaw = (deg + 180 + 180) % 360 - 180                                     # facing back at the player
-        g.execute(t_tp, ev, {1: GLITCH_OBJ, 4: f'{dx:.1f}', 5: f'{dy:.1f}', 6: '0.0', 9: '0.0', 10: '0.0', 11: f'{yaw:.1f}'})
-    m19 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission019', 'EP_Mission019_global.uasset')
-    t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
-    assert arg_values(t_fire)[0] == 'WN_WEAPON_3' and arg_values(t_fire)[2] == 'Player', arg_values(t_fire)
-    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_GlitchGun')
-    g.execute(t_fire, 'RE_SV_GlitchGun', {0: GLITCH_GUN_SLOT, 1: GLITCH_OBJ}, delay=GLITCH_GUN_EVERY_S, loop=GLITCH_GUN_SHOTS)
-    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_GlitchEcm')
-    g.execute(t_fire, 'RE_SV_GlitchEcm', {0: GLITCH_ECM_SLOT, 1: GLITCH_OBJ})
-    # its post-stalls on command (user, 2026-10-24: "make the EA-18G do post stalls even more"): the campaign's own
-    # unique actions (tools/re/UNIQUE_ACTIONS.md 9), OneShot (they end by themselves), Below_Return (above evading and
-    # pursuit), as build_ace_moves; Scripts/main.lua ANOM.glitchTick picks one (CFG.specials.glitch.post_stall_*)
-    m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
-    t_req = g.foreign_template(m06, 'LiveAIRequestUniqueAction', 'EnemyBehind_LastTGT')
-    assert arg_values(t_req)[3] == 'LastTGT', arg_values(t_req)
-    for name, action in GLITCH_POST_STALL:
-        ev = f'RE_SV_Glitch{name}'
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t_req, ev, {0: 'NoneSelect', 1: GLITCH_UNIT, 2: '', 3: action, 4: 'OneShot', 5: 'Below_Return',
-                              6: 'NoneSelect', 7: 'false'})
-    # its death: MINDRIPPER's (user, 2026-10-23: "add the same death scream MINDRIPPER has on its kill"), the Celaeno's
-    # body explosion and core collapse (ANOMALY_DOWN_SOUNDS) on its wreck
-    t_sound = g.exec_template('LiveSoundGeneralPostEventExecution', 'RE_Shuttle_Launch', lambda a, e: a[0].endswith('LiftOff_Play'))
-    down = 'SV_GlitchDown'
-    g.trigger('UnitDamage_Ship_Destroy_0', down, arg_changes={0: GLITCH_UNIT})
-    for delay, key in ANOMALY_DOWN_SOUNDS:
-        g.execute(t_sound, down, {0: key, 1: GLITCH_OBJ}, delay=delay)
-    up = 'SV_GlitchUp'
-    g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: GLITCH_UNIT})
-    g.execute(t_search, up, {1: GLITCH_UNIT}, delay=2.0)
-    g.execute(t_engage, up, {1: GLITCH_UNIT, 6: 'PlayerOnlyNoLimit'}, delay=2.0)
-    g.execute(t_msg, up, {0: 'MISSION_UPDATE'})
-
-
-def build_valka(g, flag, t_search, t_engage, stock_ep):
-    """VALKA (see VALKA_*): the orders when she spawns (the player only, anywhere; her spare railguns and laser pod
-    held back), her teleport spots, the railgun shot, the opener's warning / charge, her reveal (MISSION UPDATE, the
-    focus camera, the Anomaly's attack pressure), LastTGT and the post-stalls. The rest is Scripts/main.lua's (VALK.*)."""
-    import math, re
-    assert VALKA_OBJ and VALKA_RAILGUN in VALKA_PARTS, 'build_survival.py valka_unit sets VALKA_OBJ / VALKA_PARTS first'
-    lua = runtime_lua()
-    m = re.search(r'spots = \{ ((?:\{ [^}]* \},? )+)\}', lua)
-    lua_spots = re.findall(r'\{ "(\w)", (\d+), (\d+) \}', m.group(1)) if m else []
-    assert [(r, int(a), int(b)) for r, a, b in lua_spots] == list(VALKA_SPOTS), 'main.lua CFG.specials.valka.spots != VALKA_SPOTS'
-    dirn = os.path.dirname(os.path.dirname(stock_ep))
-    m15 = os.path.join(dirn, 'Mission015', 'EP_Mission015_global.uasset')
-    m19 = os.path.join(dirn, 'Mission019', 'EP_Mission019_global.uasset')
-    m26 = os.path.join(dirn, 'Mission026', 'EP_Mission026_global.uasset')
-    m06 = os.path.join(dirn, 'MIssion006', 'EP_Mission006_global.uasset')
-    m18 = os.path.join(dirn, 'Mission018', 'EP_Mission018_global.uasset')
-    t_msg = g.exec_template('LiveMessageExecution', 'RE_FinishMessage')
-    t_tp = g.exec_template('LiveActorTeleportExecution', '01_Wave05_YesEvent02', lambda a, e: a[1] == 'A_Obj_01_dummyN0')
-    t_fire = g.foreign_template(m19, 'LiveFireOneShotWeapon', '05_PhaseStart_4', lambda a, e: a[1] == 'E_Obj_00_Air0_rflm_0')
-    t_hold = g.foreign_template(m26, 'LiveAIEngagementOrder', 'x40a_fire_AB_Ship0_3')        # {0 part, 3 EvadeOnly}
-    t_alert = g.foreign_template(m18, 'LiveSetRailgunAlertEnable', 'RemoteEvent_OverAltitude')     # {0 bool}
-    assert arg_values(t_alert) == ['true'], arg_values(t_alert)
-    m_miss = re.search(r'opener_miss_up_m = (\d+)', lua)
-    assert m_miss and int(m_miss.group(1)) == VALKA_MISS_UP_M, "main.lua opener_miss_up_m != VALKA_MISS_UP_M"
-    t_req = g.foreign_template(m06, 'LiveAIRequestUniqueAction', 'EnemyBehind_LastTGT')
-    t_warn_on = g.foreign_template(m15, 'LiveSetForceWarinigMessageExecution', '01_Start_Enemy_Attack')
-    t_warn_off = g.foreign_template(m15, 'LiveSetForceWarinigMessageExecution', 'Green_SpeedUp_0')
-    t_noise = g.foreign_template(m15, 'LiveStartHUDRaderMapNoiseExecution', 'RadarNoise_02')
-    t_noise_off = g.foreign_template(m15, 'LiveStopHUDRaderMapNoiseExecution', 'NoiseCancel03')
-    t_sound = g.exec_template('LiveSoundGeneralPostEventExecution', 'RE_Shuttle_Launch', lambda a, e: a[0].endswith('LiftOff_Play'))
-    t_cam_on = g.exec_template('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == SHUTTLE)
-    t_cam_off = g.exec_template('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == 'NoneSelect')
-    t_remove = g.exec_template('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
-    t_mm = g.exec_template('LiveSetPlayerMaxAttackerMissiles', '01_Wave03_RemainingTime_0')
-    t_cd = g.exec_template('LivePlayerAttackCooldownOverrideExecution', '01_Wave03_RemainingTime_0')
-    t_ma = g.exec_template('LiveChangePlayerMaxAttackersNumExecution', '01_Wave03_RemainingTime_0')
-    v = arg_values(t_tp)
-    assert v[2] == 'Player' and v[13] == 'Absolute', v
-    assert arg_values(t_fire)[0] == 'WN_WEAPON_3' and arg_values(t_fire)[2] == 'Player', arg_values(t_fire)
-    assert arg_values(t_hold)[3] == 'EvadeOnly' and arg_values(t_hold)[0].endswith('_RailGunCK'), arg_values(t_hold)
-    assert arg_values(t_req)[3] == 'LastTGT', arg_values(t_req)
-    assert arg_values(t_warn_on) == ['true'] and arg_values(t_warn_off) == ['false']
-    def attack(ev, a):
-        g.execute(t_mm, ev, {1: a['missiles']})
-        g.execute(t_ma, ev, {0: a['attackers']})
-        g.execute(t_cd, ev, {i: f'{x}' for i, x in enumerate(a['cooldown'])})
-    remote = lambda ev: g.trigger('RE_SpawnEnemy_kokatu_1st', ev)          # remote events Lua fires (SV_Event)
-    up = 'SV_ValkaUp'
-    g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: VALKA_UNIT})
-    g.execute(t_search, up, {1: VALKA_UNIT}, delay=2.0)
-    g.execute(t_engage, up, {1: VALKA_UNIT, 6: 'PlayerOnlyNoLimit'}, delay=2.0)
-    for comp in VALKA_IDLE_PARTS:
-        g.execute(t_hold, up, {0: VALKA_PARTS[comp]}, delay=3.0)
-    # all four parts, her own RailGun too, held again whenever main.lua asks (every hold_s while she hunts): held parts
-    # still fire on command (the opener's held dummy did); test of 2026-10-24: the unheld RailGun (or a hold that
-    # lapsed) hit the airfield 38 times in 13 s
-    remote('RE_SV_ValkaHold')
-    for comp in (VALKA_RAILGUN,) + VALKA_IDLE_PARTS:
-        g.execute(t_hold, 'RE_SV_ValkaHold', {0: VALKA_PARTS[comp]})
-    # her search and attack orders (the player only, anywhere) again whenever main.lua asks (every engage_every_s while
-    # she hunts; user, 2026-10-24: "adjust her behaviours so that she tries to follow you more often")
-    remote('RE_SV_ValkaEngage')
-    g.execute(t_search, 'RE_SV_ValkaEngage', {1: VALKA_UNIT})
-    g.execute(t_engage, 'RE_SV_ValkaEngage', {1: VALKA_UNIT, 6: 'PlayerOnlyNoLimit'})
-    flag(up, 'SV_ValkaUp', 'Set', 1)
-    # the opener's dummy railgun: held (EvadeOnly: it never attacks by itself; twice, in case the first is early),
-    # one shot at the player on command (as Mission 26 fires its held CK railgun), its charge heard at the player (it's
-    # 9 km out), removed by main.lua after the shot
-    eml_up = 'SV_ValkaEmlUp'
-    g.trigger('01_E_AreaA_ReinforcementAppearance_0', eml_up, arg_changes={0: VALKA_EML_UNIT})
-    for d in (0.5, 2.0):
-        g.execute(t_hold, eml_up, {0: VALKA_EML_OBJ}, delay=d)
-    # the opener's shot misses (user, 2026-10-24: "that first shot HAS to miss me"): aimed at Mission 22's dummy, put
-    # VALKA_MISS_UP_M straight above the player first (a world offset: whichever way you fly); main.lua also makes its
-    # rounds harmless
-    remote('RE_SV_ValkaEmlShot')
-    g.execute(t_tp, 'RE_SV_ValkaEmlShot', {1: VALKA_DUMMY, 4: '0.0', 5: '0.0', 6: f'{VALKA_MISS_UP_M * 100:.1f}',
-                                           9: '0.0', 10: '0.0', 11: '0.0'})
-    g.execute(t_fire, 'RE_SV_ValkaEmlShot', {0: 'WN_WEAPON_1', 1: VALKA_EML_OBJ, 2: VALKA_DUMMY}, delay=0.1)
-    # the railgun alert (Mission 18's) while she's up: on with the opener's charge and every charge of hers
-    remote('RE_SV_ValkaAlertOn')
-    g.execute(t_alert, 'RE_SV_ValkaAlertOn', {0: 'true'})
-    remote('RE_SV_ValkaAlertOff')                          # (main.lua: a few s after each shot, and when she's down)
-    g.execute(t_alert, 'RE_SV_ValkaAlertOff', {0: 'false'})
-    remote('RE_SV_ValkaEmlChargeOn')
-    g.execute(t_noise, 'RE_SV_ValkaEmlChargeOn')
-    g.execute(t_sound, 'RE_SV_ValkaEmlChargeOn', {0: VALKA_CHARGE_SOUND + 'Play', 1: 'Player'})
-    remote('RE_SV_ValkaEmlChargeOff')
-    g.execute(t_noise_off, 'RE_SV_ValkaEmlChargeOff')
-    g.execute(t_sound, 'RE_SV_ValkaEmlChargeOff', {0: VALKA_CHARGE_SOUND + 'Stop', 1: 'Player'})
-    remote('RE_SV_ValkaEmlRemove')
-    g.execute(t_remove, 'RE_SV_ValkaEmlRemove', {0: 'NoneSelect', 1: VALKA_EML_UNIT, 2: 'NoneSelect'})
-    for ev, deg, metres in valka_spots():                  # her spots round the player, at their height, nose on them
-        remote(ev)
-        dx, dy = metres * 100 * math.cos(math.radians(deg)), metres * 100 * math.sin(math.radians(deg))
-        yaw = (deg + 180 + 180) % 360 - 180
-        g.execute(t_tp, ev, {1: VALKA_OBJ, 4: f'{dx:.1f}', 5: f'{dy:.1f}', 6: '0.0', 9: '0.0', 10: '0.0', 11: f'{yaw:.1f}'})
-    remote('RE_SV_ValkaRailgun')                           # one shot (main.lua makes the part a single-shot one)
-    g.execute(t_fire, 'RE_SV_ValkaRailgun', {0: 'WN_WEAPON_1', 1: VALKA_PARTS[VALKA_RAILGUN]})
-    # her attack (user, 2026-10-24: she hides in a normal round and attacks once its fighters are down; "have the WARNING
-    # play for the round just like we do for the other two anomaly rounds"): the forced WARNING from her attack until
-    # she's down (SV_ValkaDown / RE_SV_ValkaEnd)
-    remote('RE_SV_ValkaWarnOn')
-    g.execute(t_warn_on, 'RE_SV_ValkaWarnOn')
-    remote('RE_SV_ValkaChargeOn')                          # a railgun charging at you: radar noise, the hum
-    g.execute(t_noise, 'RE_SV_ValkaChargeOn')
-    g.execute(t_sound, 'RE_SV_ValkaChargeOn', {0: VALKA_CHARGE_SOUND + 'Play', 1: VALKA_OBJ})
-    remote('RE_SV_ValkaChargeOff')
-    g.execute(t_noise_off, 'RE_SV_ValkaChargeOff')
-    g.execute(t_sound, 'RE_SV_ValkaChargeOff', {0: VALKA_CHARGE_SOUND + 'Stop', 1: VALKA_OBJ})
-    remote('RE_SV_ValkaReveal')                            # after the first shot: the banner, the pressure
-    g.execute(t_msg, 'RE_SV_ValkaReveal', {0: 'MISSION_UPDATE'})
-    attack('RE_SV_ValkaReveal', ANOMALY_ATTACK)
-    for k, cam in enumerate(ANOMALY_CAMERAS):              # the focus camera on her (main.lua picks one: `camera`)
-        ev = f'RE_SV_ValkaCam_{chr(65 + k)}'
-        remote(ev)
-        g.execute(t_cam_on, ev, {0: VALKA_OBJ, 4: cam})
-        g.execute(t_cam_off, ev, delay=ANOMALY_CAMERA_S)
-    for name, action in VALKA_POST_STALL:                  # LastTGT and the post-stalls, as build_glitch's
-        ev = f'RE_SV_Valka{name}'
-        remote(ev)
-        g.execute(t_req, ev, {0: 'NoneSelect', 1: VALKA_UNIT, 2: '', 3: action, 4: 'OneShot', 5: 'Below_Return',
-                              6: 'NoneSelect', 7: 'false'})
-    down = 'SV_ValkaDown'
-    g.trigger('UnitDamage_Ship_Destroy_0', down, arg_changes={0: VALKA_UNIT})
-    for ev in (down, 'RE_SV_ValkaEnd'):
-        if ev != down: remote(ev)
-        attack(ev, ATTACK_BASE)
-        flag(ev, 'SV_ValkaUp', 'Set', 0)
-        g.execute(t_warn_off, ev)
-        g.execute(t_noise_off, ev)
-        g.execute(t_sound, ev, {0: VALKA_CHARGE_SOUND + 'Stop', 1: VALKA_OBJ})
-
-
-def build_shuttle(g, flag):
-    """Comona Defense (see SHUTTLE_*): Mission 22's shuttle records, copied with their exact arguments, on main.lua's
-    countdown events (RE_SV_ShuttleT_<second>) instead of Mission 22's mission timer."""
-    T = SHUTTLE_COUNTDOWN_S
-    made = set()
-
-    def at(sec):
-        """The event for second `sec` of the countdown (main.lua fires RE_SV_ShuttleT_1, _2, ... as its clock runs)."""
-        assert float(sec).is_integer() and 1 <= sec <= T + 30, sec
-        name = f'RE_SV_ShuttleT_{int(sec)}'
-        if name not in made:
-            made.add(name)
-            g.trigger('RE_SpawnEnemy_kokatu_1st', name)
-        return name
-    tpl = lambda cls, ev, pred=None: g.exec_template(cls, ev, pred)
-    t_maxhp = tpl('LiveSetMaxHealthExecution', 'MissionStart')
-    t_minhp = tpl('LiveSetMinHealthExecution', 'RE_SetGroundObjMinHP1')
-    t_sound = tpl('LiveSoundGeneralPostEventExecution', 'RE_Shuttle_Launch', lambda a, e: a[0].endswith('LiftOff_Play'))
-    t_sflag = tpl('LiveSoundGeneralPostEventExecution', 'CompositeEvent_CountDown_1')
-    t_radio = tpl('LiveRadioPlayExecution', 'CompositeEvent_CountDown_1')
-    t_vfx_on = tpl('LiveSetActiveVFXExecution', 'RE_Shuttle_Boost_On')
-    t_vfx_off = tpl('LiveSetActiveVFXExecution', 'RE_Shuttle_Boost_Off')
-    t_fire = tpl('LiveAIPathExecution', 'RE_Shuttle_Fire_On')
-    t_climb = tpl('LiveAIPathExecution', 'RE_Shuttle_Launch', lambda a, e: a[4] == '4000.0')
-    t_climb2 = tpl('LiveAIPathExecution', 'RE_Shuttle_Launch', lambda a, e: a[4] == '5000.0')
-    t_cam_on = tpl('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == SHUTTLE)
-    t_cam_off = tpl('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == 'NoneSelect')
-    t_remove = tpl('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
-    for t in (t_fire, t_climb, t_climb2):
-        assert arg_values(t)[0] == SHUTTLE and arg_values(t)[2] == SHUTTLE_PATH
-    assert arg_values(t_remove)[2] == SHUTTLE and arg_values(t_maxhp)[0] == SHUTTLE
-    standing = lambda: [g.cond('SV_ShuttleLost', 'Leq', 0)]          # nothing more once it's been shot down
-    up = 'SV_ShuttleUp'
-    g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: SHUTTLE_UNIT})
-    resets = ['SV_ShuttleLost', 'SV_ShuttleLaunched', 'SV_ShuttleHits', 'SV_ShuttleNearSaid'] + [f'SV_ShuttleDmg{c}' for c in 'ABC']
-    for name in resets:
-        flag(up, name, 'Set', 0)
-    flag(up, 'SV_ShuttleRound', 'Set', 1)
-    g.execute(t_maxhp, up, {3: f'{SHUTTLE_HP}'})
-    g.execute(t_sound, up, {0: SHUTTLE_SOUND + 'Ignition_Stop', 1: SHUTTLE})
-    for before, key in SHUTTLE_RADIO:
-        g.execute(t_radio, at(T - before), {0: key}, conds=standing())
-    for before, key in SHUTTLE_SOUND_FLAGS:
-        g.execute(t_sflag, at(T - before), {0: key}, conds=standing())
-    g.execute(t_minhp, at(T - 20), {0: SHUTTLE, 3: '1.0'}, conds=standing())   # the last 20 s it can't die
-    g.execute(t_vfx_on, at(T - 14), conds=standing())                         # ignition (RE_Shuttle_Boost_On)
-    g.execute(t_sound, at(T - 14), {0: SHUTTLE_SOUND + 'Ignition_Play', 1: SHUTTLE}, conds=standing())
-    g.execute(t_fire, at(T - 4), conds=standing())                            # on its path, engines lit
-    g.execute(t_cam_on, at(T - 2), conds=standing())
-    # liftoff (RE_Shuttle_Launch, without Mission 22's wave cleanup)
-    g.execute(t_climb, at(T), conds=standing())
-    g.execute(t_sound, at(T), {0: SHUTTLE_SOUND + 'Ignition_Stop', 1: SHUTTLE}, conds=standing())
-    g.execute(t_sound, at(T), {0: SHUTTLE_SOUND + 'LiftOff_Play', 1: SHUTTLE}, conds=standing())
-    flag(at(T), 'SV_ShuttleLaunched', 'Set', 1, conds=standing())
-    flag(at(T), 'SV_ShuttleRound', 'Set', 0, conds=standing())
-    g.execute(t_climb2, at(T + 13), conds=standing())
-    g.execute(t_cam_off, at(T + 7))
-    g.execute(t_vfx_off, at(T + 30))
-    # Taking it and the pad's allies off after liftoff: Scripts/main.lua fires RE_SV_ShuttleRemove SHUTTLE_REMOVE_S after
-    # it (test of 2026-10-22: records here on a delay gated on SV_ShuttleLaunched never ran, both units stayed up to
-    # round 9: a delayed record's conditions are checked when its event fires, at the shuttle's appearance).
-    # LiveDestroyUnitExecution kills through TakeDamage(FLT_MAX), which is clamped at the object's MinHealth: the 1.0
-    # set before liftoff has to go back to 0 first (as M019/M021/M026 do), or the shuttle stays up with 1 HP.
-    # (user, 2026-10-23: "the space shuttle and centre hasnt despawned", RE_SV_ShuttleRemove fired: destroying them
-    # through damage never took them off) Both units are switched off with Mission 22's own despawn,
-    # LiveSetActiveGameObjectExecution ({0 object, 1 unit, 2 tag, 3 active}: false), as it does its stray dummies; the
-    # next shuttle round spawns them fresh. The pad's allies (guns, SAMs, tower) go with it: the whole unit.
-    t_off = g.exec_template('LiveSetActiveGameObjectExecution', None, lambda a, e: a[0] != 'NoneSelect' and a[3] == 'false')
-    assert arg_values(t_off)[1] == 'NoneSelect' and arg_values(t_off)[2] == 'NoneSelect', arg_values(t_off)
-    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_ShuttleRemove')
-    for unit in (SHUTTLE_UNIT, PAD_UNIT):
-        g.execute(t_off, 'RE_SV_ShuttleRemove', {0: 'NoneSelect', 1: unit, 2: 'NoneSelect', 3: 'false'})
-    # the flags back to 0 once it's taken off (they're set to 0 at its next appearance too)
-    for name in resets:
-        flag('RE_SV_ShuttleRemove', name, 'Set', 0)
-    # hits: Mission 22's ObjectDamage_Shuttle; its low-health radio (61 / 31 / 16 %) keeps the stock health conditions.
-    # Mission 22 also gates each stage on a bool flag of its own (Bool_Shuttle_Damage_Phase0N), which Survival's flag
-    # asset doesn't have: that check is replaced by an int flag of Survival's, set when the line plays and reset when the
-    # shuttle appears, so the callouts come again every special (a life-1 trigger would fire once a level).
-    hit = 'SV_ShuttleHit'
-    g.trigger('ObjectDamage_Shuttle', hit)
-    g.execute(t_radio, hit, {0: '01_All_Wave_Hit_Shuttle_First'}, conds=[g.cond('SV_ShuttleHits', 'Leq', 0)])
-    flag(hit, 'SV_ShuttleHits', 'Add', 1)
-    for c, stage, line in (('A', 1, 'Durability50'), ('B', 2, 'Durability30'), ('C', 3, 'Durability_Limit')):
-        t = tpl('LiveCallRemoteEventExecution', 'ObjectDamage_Shuttle', lambda a, e, n=stage: a[0] == f'RE_Shuttle_Damage_Phase{n}')
-        stock = fields(t)['ConditionalStatementTables'][3][1]
-        cls = [ep_dump.show(fields(x)['StatementClass'][3], g.z) for x in stock]
-        health = [x for x, c in zip(stock, cls) if c == 'LiveIsLowHealthStatement']     # its band, e.g. < 61 and >= 31 %
-        assert health and set(cls) == {'LiveIsLowHealthStatement', 'LiveCheck_FlagBoolStatement'}, (stage, cls)
-        said = f'SV_ShuttleDmg{c}'
-        ev = f'RE_SV_ShuttleDamage{c}'                               # no numeric tail (hard rule 17)
-        g.execute(t, hit, {0: ev}, conds=health + [g.cond(said, 'Leq', 0)])
-        g.trigger('RE_Shuttle_Damage_Phase1', ev)
-        g.execute(t_radio, ev, {0: f'01_All_Wave_{line}_Shuttle'})
-        flag(ev, said, 'Set', 1)
-    near = 'SV_ShuttleNear'
-    g.trigger('VolumeEvent_Shuttle_Near_1st', near)
-    g.execute(t_radio, near, {0: '01_All_Wave_Close_Shuttle_First'},
-              conds=standing() + [g.cond('SV_ShuttleNearSaid', 'Leq', 0), g.cond('SV_ShuttleRound', 'Geq', 1)])
-    flag(near, 'SV_ShuttleNearSaid', 'Set', 1, conds=[g.cond('SV_ShuttleRound', 'Geq', 1)])
-    # shot down on the pad (Mission 22's ObjectDestroy / ObjectDestroy_1, any attacker or a system kill)
-    on_pad = lambda: [g.cond('SV_ShuttleLaunched', 'Leq', 0)]
-    for src, ev in (('ObjectDestroy', 'SV_ShuttleDown'), ('ObjectDestroy_1', 'SV_ShuttleDownSys')):
-        assert arg_values(g.trig_template(src))[16] == SHUTTLE
-        g.trigger(src, ev)
-        flag(ev, 'SV_ShuttleLost', 'Set', 1, conds=on_pad())
-        flag(ev, 'SV_ShuttleRound', 'Set', 0, conds=on_pad())
-    g.execute(t_radio, 'SV_ShuttleDown', {0: '01_Mission_Failure_Destroy_Shuttle'},
-              conds=[g.cond('SV_ShuttleLaunched', 'Leq', 0)])
-    g.execute(t_sflag, 'SV_ShuttleDown', {0: 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_Interrupted_Set'},
-              conds=[g.cond('SV_ShuttleLaunched', 'Leq', 0)])
-    for k in range(3):
-        g.execute(t_vfx_on, 'SV_ShuttleDown', {0: f'VFX_ShuttleDummy{k}'}, conds=[g.cond('SV_ShuttleLaunched', 'Leq', 0)])
-    g.execute(t_remove, 'SV_ShuttleDown', {0: 'NoneSelect', 1: PAD_UNIT, 2: 'NoneSelect'}, delay=PAD_REMOVE_LOST_S,
-              conds=[g.cond('SV_ShuttleLaunched', 'Leq', 0)])
+    assert '"RE_SV_RunOver"' in lua and '"^RE_SV_RunOver$"' in lua, 'Scripts/sv_down.lua never fires RE_SV_RunOver, or sv_coop.lua forwards it'
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_RunOver')
+    g.execute(t_fail, 'RE_SV_RunOver')
 
 
 def write_records(g, z, prefix_props_bytes):
@@ -1471,3 +1381,38 @@ def write_records(g, z, prefix_props_bytes):
     out += struct.pack('<I', len(g.ex))
     for e in g.ex: out += uprop.write_struct(w, e)
     return bytes(out)
+
+
+# ---------------------------------------------------------------- the parts (this file's docstring)
+# Each imports every name above (from survival_events import *) and comes back here whole. A part already loaded on its
+# own would come back empty: import survival_events, never a part.
+for _part in ('survival_events_specials', 'survival_events_squads', 'survival_events_festival',
+              'survival_events_escort'):
+    assert _part not in sys.modules, f'import survival_events (it loads its parts), not {_part} on its own'
+del _part
+from survival_events_specials import *   # noqa: E402,F401,F403  LCAC, Ladons, Alicorn, Anomaly, AB.L..IN, VALKA
+
+# ---------------------------------------------------------------- the int flags (after the specials: their names)
+KEEP_AT_START = {AIRFIELD_UNIT: None}                 # units spawned at mission start (name -> spawn point or None)
+# SV_Alive / SV_Kills: diagnostics, logged by Scripts/main.lua. SV_Up_NN: 1 while pool flight NN is up (its orders
+# came; main.lua's ordersTick checks it). SV_Shuttle*: Comona Defense (build_shuttle).
+INT_FLAGS = (['SV_Alive', 'SV_Kills', 'SV_AirHits'] + [f'SV_Up_{k + 1:02d}' for k in range(len(POOL))]
+             + ['SV_ShuttleRound', 'SV_ShuttleLaunched', 'SV_ShuttleLost', 'SV_ShuttleHits', 'SV_ShuttleNearSaid']
+             + [f'SV_ShuttleDmg{c}' for c in 'ABC'] + ['SV_AnomalyUp']
+             + ['SV_AllyAir' + u[-1] for u in ALLY_AIR_UNITS] + ['SV_AwacsAir']
+             + [f'SV_LcacLand{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
+             + [f'SV_LcacRunway{lane}{c}' for lane, _, _ in LCAC_LANES for c in LCAC_CRAFT]
+             + [f'SV_LadonRun{key}' for key, _, _ in LADONS] + ['SV_Beat', 'SV_ValkaUp']
+             + [f'SV_LadonRage{key}' for key, _, _ in LADONS])
+# (0.73.73) a Ladon's circuit legs flown, its appearance's once-a-spawn mark and its fires (build_ladon); VOID WATCHER
+# 1's orbit legs flown (build_awacs)
+INT_FLAGS += ([f'SV_Ladon{f}{key}' for f in ('Leg', 'Done', 'Seen') for key, _, _ in LADONS] + ['SV_AwacsLeg'])
+# (0.73.78, G5) VOID WATCHER 1 sent home (Lua's RE_SV_AwacsHome) and its exit (1 begun, 2 flown: build_awacs)
+INT_FLAGS += ['SV_AwacsHome', 'SV_AwacsOut']
+# (the Spaceport Assault's: its craft's landing and arrival flags, its rockets' escapes)
+INT_FLAGS += [c['flag'] for c in sp_craft()] + [c['aflag'] for c in sp_craft()]
+INT_FLAGS += ['SV_SpRocketEscA', 'SV_SpRocketEscB']        # a rocket's climb finished: escaped (Scripts/sv_spaceport.lua)
+
+from survival_events_squads import *     # noqa: E402,F401,F403  orders, ace moves, Wolf, director, tells, allies, AWACS
+from survival_events_festival import *   # noqa: E402,F401,F403  GONE FISHIN', THE FESTIVAL (adds its flags)
+from survival_events_escort import *     # noqa: E402,F401,F403  THE ESCORT, the cargo ships, THE DECOY (adds its flags)

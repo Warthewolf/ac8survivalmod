@@ -1,0 +1,63 @@
+AC8 Survival Mode COOP2MP - change log, 0.73.81 to 0.73.84
+==========================================================
+Newest first. Each version is a patch over a 0.73.78 COOP2MP install and includes every one before it, so 0.73.84 is
+all you need. Everyone in a co-op session needs the same version (a player on another one is refused).
+
+
+0.73.84 (2026-11-05) - crash fixes on quitting
+----------------------------------------------
+- Crash on quit fixed (Shazzy, round 24): with the GUN upgrade bought, quitting the mission could crash the game.
+  Survival put the gun's stock damage back on the way out, sometimes after the game had already unloaded the gun with
+  the level. It now only touches it while the game still has it, and remembers the stock damage for the whole session,
+  so an upgrade never carries into the next run.
+- The same guard for VALKA's red sky (put back at the end of her fight) and the Ladon missile's settings.
+- Shuttle pad: after a shuttle round, quitting and starting a new run could crash the next run's first shuttle round.
+  Fixed; a restart still brings the pad back as before.
+- Quitting during VALKA's song could leave the game's music muted. It's now unmuted as soon as the next Survival level
+  starts (the main menu and hangar before that may still be quiet; restarting the game also clears it).
+
+
+0.73.83 (2026-11-05) - co-op sync, radar, late-run lag
+------------------------------------------------------
+Co-op
+- A player who leaves and comes back: their old plane's radar blip is gone too, not only the plane. Any teammate
+  hidden on your screen (left, DOWN, not in the mission) is off your radar, and back on it when they're back.
+- After the Alicorn round, new enemies sometimes weren't linked between the games: joiners saw extra enemies that
+  couldn't be shot down, and every joiner resynced every few minutes to the end of the run. Fixed.
+- VOID WATCHER 1 going home no longer leaves a frozen copy flying on the joiners' screens.
+- "ROUND N KILLS / YOU N": each player now sees their own kills, not the host's.
+- Host page: when CO-OP ENEMIES isn't the default, the row says so and START RUN reads "UNRANKED" (the co-op
+  leaderboard only takes runs on the default room rules).
+Lag late in long runs
+- Survival asked the game "is this unit still alive?" far more often than needed, and each ask got slower as the run
+  went on (about 7 ms an ask by round 25). Recent answers are reused now.
+- A special's units (the Spaceport's ships and landing craft, the amphibious craft, a downed boss) are cleared from the
+  game's unit list after the round, one every half second, so later rounds stay fast.
+Leaderboard
+- VALKA wins now count fully on the server (they were scored 2,250 - 4,500 short).
+
+
+0.73.82 (2026-11-04) - crash on launch
+--------------------------------------
+- Crash on launch fixed (Saint Alessia): when the main menu took a long time to load, Survival's background tick
+  watchdog ran script work at the same moment as the game thread, and the game crashed. All of Survival's work now runs
+  on the game thread only.
+- Key presses are handled on the game thread too: every key works as before, up to 1/8 s later.
+
+
+0.73.81 (2026-11-04) - Spaceport Assault Tu-160s
+------------------------------------------------
+- Spaceport Assault: every WASP you sink sends 4 TU-160s at the airfield 6 s later, from the north and the south in
+  turn ("TU-160S INBOUND"). They bomb the runway, show on the minimap, pay as heavy bombers, and the round ends only once
+  they're down. If another Wasp sinks while 4 are still up, the next 4 come once those are shot down. None in the
+  retake or after a capture. Settings: [specials.spaceport.tu160] in survival.ini.
+- Bomber raids: when a Tu-95 / Tu-160 flight's lead is shot down first, the next bomber now always takes over the
+  bombing run (before, the rest could fly on without bombing).
+
+
+Coming with the next full build
+-------------------------------
+The native log's lag fix, other players' weapon stand-ins for modded weapons, more Tu-160 flights (4 for every Wasp at
+once), and the music unmute outside a Survival level.
+
+Problems: @voidcallsreaper on Discord.

@@ -1,0 +1,931 @@
+15:09:54 config: survival.ini, 0 settings
+15:09:54 hud: info key I: the info wall (players, allies, items) shown when it's pressed; the CO-OP, ALLIES and ITEMS rows each shown 5.0 s when it changes
+15:09:54 revive: next-player key O bound
+15:09:54 loaded, version 0.73.70-coop2mp.71
+15:09:58 rows: DataTable /Game/Datatables/Information/DT_LiveMissionTable.DT_LiveMissionTable object at 2CC9DFDC0
+15:09:58 rows: DataTable /Game/Datatables/Information/DT_LiveMissionTable.DT_LiveMissionTable pinned (kept loaded) [ReferencedObjects num 0 -> 1, max 0 -> 4]
+15:09:58 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_MissionRows.DT_SV_MissionRows pinned (kept loaded) [ReferencedObjects num 1 -> 2, max 4 -> 4]
+15:09:58 rows: added 'SurvivalMode' to DataTable /Game/Datatables/Information/DT_LiveMissionTable.DT_LiveMissionTable
+15:09:58 rows: DataTable /Game/Datatables/Information/DT_LiveMissionTable.DT_LiveMissionTable now has: Transition, Startup, Mission001, Mission002, Mission003, Mission004, Mission005, Mission006, Mission007, Mission008, Mission009, Mission010, Mission011, Mission012, Mission013, Mission014, Mission015, Mission016, Mission017, Mission018, Mission019, Mission020, Mission021, Mission022, Mission023, Mission024, Mission025_1, Mission025_2, Mission026, Mission027, Mission028, Mission029, Mission030, MainMenu, Briefing, Debriefing, Ending, PreBriefing, Hangar00, Hangar01, Hangar02, Hangar03, Hangar04, Hangar05, Hanga05_NoEmergencyMorningSunny, HangarLoadTest, Training001, Training002, Training003, Training004, Training005, Training006, Training007, Training008, Training009, Training010, Training011, Training012, Training013, Training014, Training015, Mission028_MiniGame, SurvivalMode
+15:09:58 rows: DataTable /Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands.DT_LiveMenuMainTopCommands object at 2F4CD5800
+15:09:58 rows: DataTable /Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands.DT_LiveMenuMainTopCommands pinned (kept loaded) [ReferencedObjects num 2 -> 3, max 4 -> 4]
+15:09:58 rows: 'Shop' taken off the main menu
+15:09:58 rows: 'Online' taken off the main menu
+15:09:58 rows: 'CampaignTraining' taken off the main menu
+15:09:58 world: /Game/Maps/Menu/PL_Startup
+15:09:59 info maps: MissionDataMap_ was missing 9101 (the race at start): added and it is in now
+15:09:59 info maps: LevelDataMap_ was missing 70 (the race at start): added and it is in now
+15:09:59 world: /Game/Maps/Transition/TransitionMap
+15:09:59 learning: profile at the main menu from config\survival_profile.ini: 2 runs (0 learnt from), 43 of your kills; missile -, gun -, tail -, high -, airfield -; the run the game closed in (round 8, 7 of your kills) counted, not learnt from (only 7 of your kills of fighters, min_kills 8) first
+15:09:59 learning: the AI's flares stay stock this session (your saved missile share -; its threshold 0.80)
+15:09:59 rows: DataTable /Game/Datatables/AI/NPC/LuaSet/DT_NPC_LuaSet.DT_NPC_LuaSet pinned (kept loaded) [ReferencedObjects num 3 -> 4, max 4 -> 4]
+15:09:59 rows: behaviour script LA_SV_LancerPass pinned (kept loaded) [ReferencedObjects num 4 -> 5, max 4 -> 24]
+15:09:59 rows: behaviour script LA_SV_LancerBreak pinned (kept loaded) [ReferencedObjects num 5 -> 6, max 24 -> 24]
+15:09:59 rows: behaviour script LA_SV_LancerZoom pinned (kept loaded) [ReferencedObjects num 6 -> 7, max 24 -> 24]
+15:09:59 rows: behaviour script LA_SV_Escape pinned (kept loaded) [ReferencedObjects num 7 -> 8, max 24 -> 24]
+15:09:59 behaviour: set NLID_SV_Lancer in (NLID_0012_CP with EscapeFromPursuerLua = LA_SV_Escape, MoveAwayFromTargetLua = LA_SV_LancerZoom, ProvokeFarLua = LA_SV_LancerBreak, ProvokeMidLua = LA_SV_LancerBreak, ProvokeNearLua = LA_SV_LancerBreak, PursueTargetLua = LA_SV_LancerPass)
+15:09:59 rows: behaviour script LA_SV_WolfStrike pinned (kept loaded) [ReferencedObjects num 8 -> 9, max 24 -> 24]
+15:09:59 rows: behaviour script LA_SV_MoveAway pinned (kept loaded) [ReferencedObjects num 9 -> 10, max 24 -> 24]
+15:09:59 rows: behaviour script LA_SV_ProvokeNear pinned (kept loaded) [ReferencedObjects num 10 -> 11, max 24 -> 24]
+15:09:59 behaviour: set NLID_SV_WolfWing in (NLID_0012_CP with EscapeFromPursuerLua = LA_SV_Escape, MoveAwayFromTargetLua = LA_SV_MoveAway, ProvokeNearLua = LA_SV_ProvokeNear, PursueTargetLua = LA_SV_WolfStrike)
+15:10:00 rows: behaviour script LA_SV_TailChase pinned (kept loaded) [ReferencedObjects num 11 -> 12, max 24 -> 24]
+15:10:00 behaviour: set NLID_SV_Fighter in (NLID_0012_CP with EscapeFromPursuerLua = LA_SV_Escape, MoveAwayFromTargetLua = LA_SV_MoveAway, ProvokeNearLua = LA_SV_ProvokeNear, PursueTargetLua = LA_SV_TailChase)
+15:10:00 rows: behaviour script LA_SV_SkirmPass pinned (kept loaded) [ReferencedObjects num 12 -> 13, max 24 -> 24]
+15:10:00 rows: behaviour script LA_SV_SkirmExtend pinned (kept loaded) [ReferencedObjects num 13 -> 14, max 24 -> 24]
+15:10:00 behaviour: set NLID_SV_Skirmisher in (NLID_0012_CP with MoveAwayFromTargetLua = LA_SV_SkirmExtend, PursueTargetLua = LA_SV_SkirmPass)
+15:10:00 rows: behaviour script LA_SV_WolfDrag pinned (kept loaded) [ReferencedObjects num 14 -> 15, max 24 -> 24]
+15:10:00 behaviour: set NLID_SV_WolfLead in (NLID_0012_CP with MoveAwayFromTargetLua = LA_SV_MoveAway, ProvokeNearLua = LA_SV_WolfDrag, PursueTargetLua = LA_SV_TailChase)
+15:10:00 rows: DataTable /Game/Datatables/AI/NPC/AIModule/DT_NPC_AIModule.DT_NPC_AIModule pinned (kept loaded) [ReferencedObjects num 15 -> 16, max 24 -> 24]
+15:10:00 rows: DataTable /Game/Datatables/AI/NPC/DT_NPC.DT_NPC pinned (kept loaded) [ReferencedObjects num 16 -> 17, max 24 -> 24]
+15:10:00 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcMission pinned (kept loaded) [ReferencedObjects num 17 -> 18, max 24 -> 24]
+15:10:00 rows: DataTable /Game/Datatables/AI/NPC/FCS/DT_NPC_FCS.DT_NPC_FCS pinned (kept loaded) [ReferencedObjects num 18 -> 19, max 24 -> 24]
+15:10:00 rows: DataTable /Game/Datatables/AI/NPC/Weapon/DT_NPC_Weapon.DT_NPC_Weapon pinned (kept loaded) [ReferencedObjects num 19 -> 20, max 24 -> 24]
+15:10:00 special: the Anomaly's guards search 5000 m (NPC_AIModule_SV_Search_Guard)
+15:10:00 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows pinned (kept loaded) [ReferencedObjects num 20 -> 21, max 24 -> 24]
+15:10:00 rows: DataTable /Game/Datatables/AI/NPC/Model/DT_NPC_Model.DT_NPC_Model pinned (kept loaded) [ReferencedObjects num 21 -> 22, max 24 -> 24]
+15:10:00 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_ModelRows.DT_SV_ModelRows pinned (kept loaded) [ReferencedObjects num 22 -> 23, max 24 -> 24]
+15:10:00 aces: model SV_Model_adfx (ADFX-02) in DT_NPC_Model
+15:10:00 aces: 36 rows in DT_NPC, 26 names set
+15:10:00 weapons: GUN_000 -> GUN_000_SV_WOLF (the Wolf airframes' gun rounds: damage x1.5, spread 1.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV_WOLF (the Wolf airframes' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.50 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl000 -> NPC_FCS_PlaneMsl000_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+15:10:00 weapons: OP1022_f16c_01_SV carries NPC_FCS_PlaneLAAM000 (slot 3)
+15:10:00 weapons: GUN_000 -> GUN_000_SVB_WOLF (the Wolf airframes' gun rounds: damage x1.5, spread 1.100 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB_WOLF (the Wolf airframes' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.50 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl000 -> NPC_FCS_PlaneMsl000_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVC_WOLF (the Wolf airframes' gun rounds: damage x1.5, spread 0.800 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC_WOLF (the Wolf airframes' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 0.50 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl000 -> NPC_FCS_PlaneMsl000_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVD_WOLF (the Wolf airframes' gun rounds: damage x1.8, spread 0.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD_WOLF (the Wolf airframes' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 0.50 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl000 -> NPC_FCS_PlaneMsl000_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl300 -> NPC_FCS_PlaneMsl300_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+15:10:00 weapons: OP1032_f18e_Ally_MS22_SV carries NPC_FCS_PlaneHCAA000 (slot 3)
+15:10:00 weapons: NPC_FCS_PlaneMsl300 -> NPC_FCS_PlaneMsl300_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl300 -> NPC_FCS_PlaneMsl300_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl300 -> NPC_FCS_PlaneMsl300_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SV (gun rounds: damage x1.5, spread 1.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV (gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s)
+15:10:00 weapons: OP1025_f15e_01_SV carries NPC_FCS_PlaneLAAM000 (slot 3)
+15:10:00 weapons: GUN_000 -> GUN_000_SVB (gun rounds: damage x1.5, spread 1.100 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB (gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVC (gun rounds: damage x1.5, spread 0.800 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC (gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVD (gun rounds: damage x1.8, spread 0.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD (gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s)
+15:10:00 weapons: OP1023_f14d_01_SV carries NPC_FCS_PlaneLAAM000 (slot 3)
+15:10:00 weapons: NPC_FCS_PlaneMsl002 -> NPC_FCS_PlaneMsl002_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+15:10:00 weapons: OP1027_m21b_01_SV carries NPC_FCS_Plane2AAM000 (slot 3)
+15:10:00 weapons: NPC_FCS_PlaneMsl002 -> NPC_FCS_PlaneMsl002_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl002 -> NPC_FCS_PlaneMsl002_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl002 -> NPC_FCS_PlaneMsl002_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+15:10:00 weapons: OP1020_m29a_01_SV carries NPC_FCS_PlaneQAAM000 (slot 3)
+15:10:00 weapons: OP1026_su47_01_SV carries NPC_FCS_PlaneQAAM000 (slot 3)
+15:10:00 weapons: OP1030_su33_02_SV carries NPC_FCS_Plane2AAM000 (slot 3)
+15:10:00 weapons: OP1009_su34_01_SV carries NPC_FCS_PlaneQAAM000 (slot 3)
+15:10:00 weapons: NPC_FCS_PlaneMsl004 -> NPC_FCS_PlaneMsl004_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+15:10:00 weapons: NPC_FCS_PlaneLAAM000 -> NPC_FCS_PlaneLAAM000_SV_SKIRM (the Skirmishers' LAAM: lock within 7000 m / 45 deg, never inside 2500 m, lock 2.0 s, 4.0 s between, rest 8.0 s)
+15:10:00 weapons: OP1002_f02a_01_SV carries NPC_FCS_PlaneLAAM000_SV_SKIRM (slot 3)
+15:10:00 weapons: NPC_FCS_PlaneMsl004 -> NPC_FCS_PlaneMsl004_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl004 -> NPC_FCS_PlaneMsl004_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl004 -> NPC_FCS_PlaneMsl004_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+15:10:00 weapons: OP1004_f15c_01_SV carries NPC_FCS_Plane2AAM000 (slot 3)
+15:10:00 weapons: OP1008_j39e_01_SV carries NPC_FCS_PlaneLAAM000_SV_SKIRM (slot 3)
+15:10:00 weapons: NPC_FCS_PlaneMsl001 -> NPC_FCS_PlaneMsl001_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+15:10:00 weapons: OP1006_f35c_01_SV carries NPC_FCS_PlaneLAAM000_SV_SKIRM (slot 3)
+15:10:00 weapons: NPC_FCS_PlaneMsl001 -> NPC_FCS_PlaneMsl001_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl001 -> NPC_FCS_PlaneMsl001_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl001 -> NPC_FCS_PlaneMsl001_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+15:10:00 weapons: OP1028_su35_01_SV carries NPC_FCS_PlaneLAAM000 (slot 3)
+15:10:00 weapons: NPC_FCS_PlaneMsl003 -> NPC_FCS_PlaneMsl003_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+15:10:00 weapons: OP1014_rflm_01_SV carries NPC_FCS_PlaneQAAM000 (slot 3)
+15:10:00 weapons: NPC_FCS_PlaneMsl003 -> NPC_FCS_PlaneMsl003_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl003 -> NPC_FCS_PlaneMsl003_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl003 -> NPC_FCS_PlaneMsl003_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+15:10:00 weapons: OP1011_typn_01_SV carries NPC_FCS_PlaneLAAM000 (slot 3)
+15:10:00 weapons: OP1021_su57_01_SV carries NPC_FCS_Plane2AAM000 (slot 3)
+15:10:00 weapons: OP1005_f22a_01_SV carries NPC_FCS_Plane2AAM000 (slot 3)
+15:10:00 weapons: NPC_FCS_ECM000 -> NPC_FCS_ECM000_SVX (ECM pod (MINDRIPPER's, AB.L..IN's): always up (no rest, 15 s on, every 14 s, from 20 km))
+15:10:00 weapons: OP1010_e18g_01_SV (the jammer) carries its ECM pod NPC_FCS_ECM000_SVX (slot 3)
+15:10:00 weapons: OP1010_e18g_01_SV carries NPC_FCS_PlaneHCAA000 (slot 4)
+15:10:00 weapons: GUN_000 -> GUN_000_SV_PHANTOM (phantom aces' gun rounds: damage x1.5, spread 1.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SV_PHANTOM (phantom aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.85 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl402 -> NPC_FCS_PlaneMsl402_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+15:10:00 weapons: sv_ace_phantom_su57_l_sv carries NPC_FCS_PlaneHCAA000 (slot 4)
+15:10:00 weapons: GUN_000 -> GUN_000_SVB_PHANTOM (phantom aces' gun rounds: damage x1.5, spread 1.100 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SVB_PHANTOM (phantom aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.95 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl402 -> NPC_FCS_PlaneMsl402_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVC_PHANTOM (phantom aces' gun rounds: damage x1.5, spread 0.800 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SVC_PHANTOM (phantom aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 1.05 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl402 -> NPC_FCS_PlaneMsl402_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVD_PHANTOM (phantom aces' gun rounds: damage x1.8, spread 0.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SVD_PHANTOM (phantom aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 1.15 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl402 -> NPC_FCS_PlaneMsl402_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+15:10:00 weapons: sv_ace_phantom_su57_w_sv carries NPC_FCS_Plane2AAM000 (slot 4)
+15:10:00 weapons: NPC_FCS_PlaneMsl400 -> NPC_FCS_PlaneMsl400_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+15:10:00 weapons: sv_ace_phantom_typhoon_l_sv carries NPC_FCS_PlaneHCAA000 (slot 4)
+15:10:00 weapons: NPC_FCS_PlaneMsl400 -> NPC_FCS_PlaneMsl400_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl400 -> NPC_FCS_PlaneMsl400_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl400 -> NPC_FCS_PlaneMsl400_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+15:10:00 weapons: sv_ace_phantom_typhoon_w_sv carries NPC_FCS_Plane2AAM000 (slot 4)
+15:10:00 weapons: NPC_FCS_PlaneMsl302 -> NPC_FCS_PlaneMsl302_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+15:10:00 weapons: sv_ace_phantom_su47_l_sv carries NPC_FCS_PlaneHCAA000 (slot 3)
+15:10:00 weapons: NPC_FCS_PlaneMsl302 -> NPC_FCS_PlaneMsl302_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl302 -> NPC_FCS_PlaneMsl302_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl302 -> NPC_FCS_PlaneMsl302_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+15:10:00 weapons: sv_ace_phantom_su47_w_sv carries NPC_FCS_PlaneLAAM000 (slot 3)
+15:10:00 weapons: GUN_000 -> GUN_000_SV_LEGEND (legend aces' gun rounds: damage x1.5, spread 1.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV_LEGEND (legend aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.55 s)
+15:10:00 weapons: sv_ace_legend_su47_l_sv carries NPC_FCS_PlaneQAAM000 (slot 3)
+15:10:00 weapons: GUN_000 -> GUN_000_SVB_LEGEND (legend aces' gun rounds: damage x1.5, spread 1.100 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB_LEGEND (legend aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.65 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVC_LEGEND (legend aces' gun rounds: damage x1.5, spread 0.800 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC_LEGEND (legend aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 0.75 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVD_LEGEND (legend aces' gun rounds: damage x1.8, spread 0.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD_LEGEND (legend aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 0.85 s)
+15:10:00 weapons: sv_ace_legend_su47_w_sv carries NPC_FCS_PlaneHCAA000 (slot 3)
+15:10:00 weapons: sv_ace_legend_rafale_l_sv carries NPC_FCS_PlaneQAAM000 (slot 3)
+15:10:00 weapons: sv_ace_legend_rafale_w_sv carries NPC_FCS_Plane2AAM000 (slot 3)
+15:10:00 special: MINDRIPPER's row sv_ace_anomaly_f04e_l_sv: +940 HP, turn +120/+270/+25, hovers (speed x0.06)
+15:10:00 weapons: GUN_000 -> GUN_000_SVX (MINDRIPPER's gun rounds: damage x3.6, spread 0.013 deg, life x20)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVX (MINDRIPPER's gun: within 78000 m / 82 deg, 0.06 s on target, 120-round bursts, rest 0.06 s, leads 1.00 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl000 -> NPC_FCS_PlaneMsl000_SVX (MINDRIPPER's missiles: lock within 8250 m / 135 deg, arm 0.10 s, lock 0.14 s, 0.20 s between, rest 0.40 s)
+15:10:00 weapons: NPC_FCS_PlaneQAAM000 -> NPC_FCS_PlaneQAAM000_SVX (MINDRIPPER's missiles: lock within 8250 m / 135 deg, arm 0.10 s, lock 0.14 s, 0.20 s between, rest 0.40 s)
+15:10:00 weapons: NPC_FCS_Plane2AAM000 -> NPC_FCS_Plane2AAM000_SVX (MINDRIPPER's missiles: lock within 8250 m / 135 deg, arm 0.10 s, lock 0.14 s, 0.20 s between, rest 0.40 s)
+15:10:00 weapons: sv_ace_anomaly_f04e_l_sv (MINDRIPPER) carries NPC_FCS_PlaneQAAM000_SVX, NPC_FCS_Plane2AAM000_SVX, NPC_FCS_ECM000_SVX
+15:10:00 weapons: GUN_000 -> GUN_000_SV_ANOMALY (anomaly aces' gun rounds: damage x1.5, spread 1.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV_ANOMALY (anomaly aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.85 s)
+15:10:00 weapons: sv_ace_anomaly_f04e_w_sv carries NPC_FCS_Plane2AAM000 (slot 3)
+15:10:00 special: the Anomaly's guards (sv_ace_anomaly_f04e_w_sv) fly NLID_SV_WolfWing (its pack)
+15:10:00 weapons: GUN_000 -> GUN_000_SVB_ANOMALY (anomaly aces' gun rounds: damage x1.5, spread 1.100 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB_ANOMALY (anomaly aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.95 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVC_ANOMALY (anomaly aces' gun rounds: damage x1.5, spread 0.800 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC_ANOMALY (anomaly aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 1.05 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVD_ANOMALY (anomaly aces' gun rounds: damage x1.8, spread 0.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD_ANOMALY (anomaly aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 1.15 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SV_MERCENARY (mercenary aces' gun rounds: damage x1.5, spread 1.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV_MERCENARY (mercenary aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.40 s)
+15:10:00 weapons: sv_ace_mercenary_f15c_l_sv carries NPC_FCS_PlaneQAAM000 (slot 3)
+15:10:00 weapons: GUN_000 -> GUN_000_SVB_MERCENARY (mercenary aces' gun rounds: damage x1.5, spread 1.100 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB_MERCENARY (mercenary aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.50 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVC_MERCENARY (mercenary aces' gun rounds: damage x1.5, spread 0.800 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC_MERCENARY (mercenary aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 0.60 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVD_MERCENARY (mercenary aces' gun rounds: damage x1.8, spread 0.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD_MERCENARY (mercenary aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 0.70 s)
+15:10:00 weapons: sv_ace_mercenary_f15c_w_sv carries NPC_FCS_PlaneQAAM000 (slot 3)
+15:10:00 weapons: sv_ace_mercenary_su35_l_sv carries NPC_FCS_PlaneHCAA000 (slot 4)
+15:10:00 weapons: sv_ace_mercenary_su35_w_sv carries NPC_FCS_Plane2AAM000 (slot 4)
+15:10:00 weapons: sv_ace_mercenary_typhoon_l_sv carries NPC_FCS_Plane2AAM000 (slot 3)
+15:10:00 weapons: sv_ace_mercenary_typhoon_w_sv carries NPC_FCS_PlaneQAAM000 (slot 3)
+15:10:00 weapons: NPC_FCS_PlaneMsl400 -> NPC_FCS_PlaneMsl400_SVX (MINDRIPPER's missiles: lock within 8250 m / 135 deg, arm 0.10 s, lock 0.14 s, 0.20 s between, rest 0.40 s)
+15:10:00 weapons: sv_ace_valka_x40a_l_sv carries NPC_FCS_PlaneLAAM000 (slot 4)
+15:10:00 weapons: sv_ace_valka_x40a_w_sv carries NPC_FCS_PlaneLAAM000 (slot 3)
+15:10:00 special: AB.L..IN's row sv_ace_glitch_e18g_l_sv: 450 HP
+15:10:00 weapons: GUN_000 -> GUN_000_SVG (AB.L..IN's gun rounds: damage x1.5, spread 0.100 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVG (AB.L..IN's gun: within 1500 m / 6 deg, 0.05 s on target, 200-round bursts, rest 0.00 s, leads 0.80 s)
+15:10:00 weapons: sv_ace_glitch_e18g_l_sv carries NPC_FCS_PlaneQAAM000 (slot 4)
+15:10:00 weapons: sv_ace_glitch_e18g_w_sv carries NPC_FCS_PlaneLAAM000 (slot 4)
+15:10:00 aces: sv_ace_reaper_su57_l_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+15:10:00 weapons: GUN_000 -> GUN_000_SV_REAPER (reaper aces' gun rounds: damage x1.5, spread 1.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV_REAPER (reaper aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 1.00 s)
+15:10:00 weapons: sv_ace_reaper_su57_l_sv carries NPC_FCS_PlaneHCAA000 (slot 3)
+15:10:00 weapons: GUN_000 -> GUN_000_SVB_REAPER (reaper aces' gun rounds: damage x1.5, spread 1.100 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB_REAPER (reaper aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 1.10 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVC_REAPER (reaper aces' gun rounds: damage x1.5, spread 0.800 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC_REAPER (reaper aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 1.20 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVD_REAPER (reaper aces' gun rounds: damage x1.8, spread 0.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD_REAPER (reaper aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 1.30 s)
+15:10:00 aces: sv_ace_reaper_su57_w_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+15:10:00 weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SV_REAPER (reaper aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 1.00 s)
+15:10:00 weapons: sv_ace_reaper_su57_w_sv carries NPC_FCS_PlaneHCAA000 (slot 4)
+15:10:00 weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SVB_REAPER (reaper aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 1.10 s)
+15:10:00 weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SVC_REAPER (reaper aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 1.20 s)
+15:10:00 weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SVD_REAPER (reaper aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 1.30 s)
+15:10:00 aces: sv_ace_reaper_f22a_l_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+15:10:00 weapons: sv_ace_reaper_f22a_l_sv carries NPC_FCS_PlaneHCAA000 (slot 3)
+15:10:00 aces: sv_ace_reaper_f22a_w_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+15:10:00 weapons: NPC_FCS_PlaneMsl100 -> NPC_FCS_PlaneMsl100_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+15:10:00 weapons: sv_ace_reaper_f22a_w_sv carries NPC_FCS_PlaneHCAA000 (slot 5)
+15:10:00 weapons: NPC_FCS_PlaneMsl100 -> NPC_FCS_PlaneMsl100_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl100 -> NPC_FCS_PlaneMsl100_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl100 -> NPC_FCS_PlaneMsl100_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+15:10:00 aces: sv_ace_reaper_typhoon_l_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+15:10:00 weapons: sv_ace_reaper_typhoon_l_sv carries NPC_FCS_PlaneHCAA000 (slot 3)
+15:10:00 aces: sv_ace_reaper_typhoon_w_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+15:10:00 weapons: sv_ace_reaper_typhoon_w_sv carries NPC_FCS_PlaneQAAM000 (slot 4)
+15:10:00 aces: sv_ace_reaper_rafale_l_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+15:10:00 weapons: sv_ace_reaper_rafale_l_sv carries NPC_FCS_PlaneHCAA000 (slot 3)
+15:10:00 aces: sv_ace_reaper_rafale_w_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+15:10:00 weapons: sv_ace_reaper_rafale_w_sv carries NPC_FCS_PlaneHCAA000 (slot 4)
+15:10:00 aces: sv_ace_reaper_adfx02_l_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+15:10:00 weapons: sv_ace_reaper_adfx02_l_sv carries NPC_FCS_PlaneQAAM000 (slot 3)
+15:10:00 aces: sv_ace_reaper_adfx02_w_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+15:10:00 weapons: sv_ace_reaper_adfx02_w_sv carries NPC_FCS_PlaneLAAM000 (slot 3)
+15:10:00 weapons: GUN_000 -> GUN_000_SV_DEMON (demon aces' gun rounds: damage x1.5, spread 1.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV_DEMON (demon aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.70 s)
+15:10:00 weapons: sv_ace_demon_f22a_l_sv carries NPC_FCS_Plane2AAM000 (slot 3)
+15:10:00 weapons: GUN_000 -> GUN_000_SVB_DEMON (demon aces' gun rounds: damage x1.5, spread 1.100 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB_DEMON (demon aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.80 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVC_DEMON (demon aces' gun rounds: damage x1.5, spread 0.800 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC_DEMON (demon aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 0.90 s)
+15:10:00 weapons: GUN_000 -> GUN_000_SVD_DEMON (demon aces' gun rounds: damage x1.8, spread 0.500 deg)
+15:10:00 weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD_DEMON (demon aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 1.00 s)
+15:10:00 weapons: sv_ace_demon_f22a_w_sv carries NPC_FCS_Plane2AAM000 (slot 3)
+15:10:00 weapons: NPC_FCS_PlaneGun_Toplak -> NPC_FCS_PlaneGun_Toplak_SV_DEMON (demon aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.70 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl_Toplak -> NPC_FCS_PlaneMsl_Toplak_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+15:10:00 weapons: NPC_FCS_PlaneGun_Toplak -> NPC_FCS_PlaneGun_Toplak_SVB_DEMON (demon aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.80 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl_Toplak -> NPC_FCS_PlaneMsl_Toplak_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+15:10:00 weapons: NPC_FCS_PlaneGun_Toplak -> NPC_FCS_PlaneGun_Toplak_SVC_DEMON (demon aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 0.90 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl_Toplak -> NPC_FCS_PlaneMsl_Toplak_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+15:10:00 weapons: NPC_FCS_PlaneGun_Toplak -> NPC_FCS_PlaneGun_Toplak_SVD_DEMON (demon aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 1.00 s)
+15:10:00 weapons: NPC_FCS_PlaneMsl_Toplak -> NPC_FCS_PlaneMsl_Toplak_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+15:10:00 search: module NPC_AIModule_SV_Search (radius 40000 m, lose target in clouds false; OP1022_f16c_01_SV flies behaviour set NLID_SV_Fighter); 55 of 55 aircraft and ace rows use it
+15:10:00 spikes: 165 difficulty-spike rows made (3 levels)
+15:10:00 specials: 204 rows carry a special in fire-control slot 3 (WN_WEAPON_4: fired at you); elsewhere: e18g_common_sv 4, sv_ace_glitch_e18g_l_sv 4, sv_ace_glitch_e18g_w_sv 4, sv_ace_reaper_f22a_w_sv 4
+15:10:00 director: 216 rows carry their missiles in fire-control slot 2 (WN_WEAPON_3: the salvo); not: f18e_common_sv 5
+15:10:00 roles: behaviour rows lancer sv_role_lancer -> sv_role_lancer flies NLID_SV_Lancer; wolf sv_role_wolf_lead -> SV_Role_WolfLead flies NLID_SV_WolfLead; wolf_wing sv_role_wolf_wing -> SV_Role_WolfWing flies NLID_SV_WolfWing; skirm sv_role_skirmish -> sv_role_skirmish flies NLID_SV_Skirmisher
+15:10:00 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_AlcnNpc.DT_SV_AlcnNpc pinned (kept loaded) [ReferencedObjects num 23 -> 24, max 24 -> 24]
+15:10:00 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_AlcnModel.DT_SV_AlcnModel pinned (kept loaded) [ReferencedObjects num 24 -> 25, max 24 -> 56]
+15:10:00 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_AlcnWpDur.DT_SV_AlcnWpDur pinned (kept loaded) [ReferencedObjects num 25 -> 26, max 56 -> 56]
+15:10:00 rows: DataTable /Game/Datatables/AI/NPC/WeaponDurability/DT_NPC_WeaponDurability.DT_NPC_WeaponDurability pinned (kept loaded) [ReferencedObjects num 26 -> 27, max 56 -> 56]
+15:10:00 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_AlcnExDur.DT_SV_AlcnExDur pinned (kept loaded) [ReferencedObjects num 27 -> 28, max 56 -> 56]
+15:10:00 rows: DataTable /Game/Datatables/AI/NPC/ExplosionDurability/DT_NPC_ExplosionDurability.DT_NPC_ExplosionDurability pinned (kept loaded) [ReferencedObjects num 28 -> 29, max 56 -> 56]
+15:10:00 special: the Alicorn's rows: 72 of 72 in the campaign tables
+15:10:00 special: 2 of 2 Ladon rows in DT_NPC (KOT, MISHKA; -800 HP, speeds x1.00)
+15:10:00 special: shuttle row OP0057_sstb_01_SV in DT_NPC; its name 'EMBDIR Shuttle - CORRIS' set
+15:10:00 allies: Aegis's turrets search 40000 m (NPC_AIModule_SV_Aegis, was 6000 m), not lost in cloud
+15:10:00 allies: the airfield defences' turrets search 25000 m (NPC_AIModule_SV_Defence, was 6000 m), not lost in cloud
+15:10:00 allies: Fleet's turrets search 40000 m (NPC_AIModule_SV_Fleet, was 6000 m), not lost in cloud
+15:10:00 allies: the airfield's CIWS +40 HP (SV_Def_Ciws's MaxHealthDifference now 40.0)
+15:10:00 allies: the CIWS's gun on NPC_FCS_VesselCIWS000: set (boosted below)
+15:10:00 allies: VOID WATCHER 1's model SV_Model_VoidWatcher in DT_NPC_Model
+15:10:00 allies: VOID WATCHER 1's ESM on NPC_FCS_MS28ESM000_SVA: within 60000 m, ready again in 0.5 s
+15:10:00 allies: DDG AEGIS's hull +300 HP (SV_Ally_Aegis's MaxHealthDifference now 300.0)
+15:10:00 allies: the airfield's AA GUN +40 HP (SV_Def_Gepa's MaxHealthDifference now 40.0)
+15:10:00 allies: the airfield's SAM SITE +40 HP (SV_Def_Avng's MaxHealthDifference now 40.0)
+15:10:00 allies: the Spaceport fleet's turrets: 12 of 12 rows in DT_NPC on their own fire control (search 40000 m)
+15:10:00 allies: the ships' and the airfield's own fire control: NPC_FCS_VesselCIWS000_SVA_Defence (within 2500 -> 5000 m, arm 0.50 -> 0.19 s, lock 3.00 -> 1.12 s, 3.00 -> 0.75 s between, rest 1.00 -> 0.25 s, search NPC_AIModule_SV_Defence, yaw -60..60 at 37.5 -> -180..180 at 75.0 deg/s, rounds CIWS_Vessel_000_SVA_Defence: 3.0 -> 6.0 s of flight), NPC_FCS_VehicleAAGun000_SVA_Defence (within 2200 -> 4400 m, arm 0.50 -> 0.19 s, lock 2.00 -> 0.75 s, 2.00 -> 0.50 s between, rest 1.00 -> 0.25 s, search NPC_AIModule_SV_Defence, yaw -180..180 at 30.0 -> -180..180 at 60.0 deg/s, rounds AAGUN_Ground_000_SVA_Defence: hurt out to 2000 -> 4400 m, 20 -> 30 m round), NPC_FCS_VehicleSAM001_SVA_Defence (within 3000 -> 20000 m, arm 2.00 -> 0.75 s, lock 5.00 -> 1.50 s, 5.00 -> 0.50 s between, rest 10.00 -> 2.00 s, search NPC_AIModule_SV_Defence, yaw -180..180 at 30.0 -> -180..180 at 60.0 deg/s, missile SAM_Ground_000_SVA_Defence: 7.3 -> 30 s, up to 3000 -> 3600 km/h, +300 -> +600 km/h a second, turns 15.0 -> 22.5, salvos of 3, 0.50 s apart), NPC_FCS_VesselCIWS000_SVA_Aegis (within 2500 -> 7500 m, arm 0.50 -> 0.12 s, lock 3.00 -> 0.75 s, 3.00 -> 0.75 s between, rest 1.00 -> 0.25 s, search NPC_AIModule_SV_Aegis, rounds CIWS_Vessel_000_SVA_Aegis: 3.0 -> 9.0 s of flight), NPC_FCS_VesselVLSmk41_SVA_Aegis (within 3000 -> 35000 m, arm 2.00 -> 0.50 s, lock 5.00 -> 1.50 s, 5.00 -> 0.50 s between, rest 10.00 -> 2.00 s, search NPC_AIModule_SV_Aegis, missile VLS_Vessel_000_SVA_Aegis: 9.0 -> 45 s, up to 3000 -> 3600 km/h, +300 -> +600 km/h a second, turns 30.0 -> 67.5, homing as EXSAM_Ground_000 (6 of 6), salvos of 3, 0.50 s apart), NPC_FCS_VesselAAGun000_SVA_Aegis (an AA gun on NPC_FCS_FlakGun000's fire control, within 15000 -> 15000 m, arm 0.50 -> 0.12 s, lock 3.00 -> 0.38 s, 3.00 -> 0.38 s between, rest 1.00 -> 0.12 s, search NPC_AIModule_SV_Aegis, flak FlakGun_000_SVA_Aegis: damage 10 -> 20, bursts within 120 -> 24 m, 18 -> 27 m round, from 500 -> 50 m up), NPC_FCS_VesselArtillery010_SVA_Aegis (within 30000 -> 90000 m, arm 0.50 -> 0.12 s, lock 1.00 -> 0.25 s, 1.00 -> 0.25 s between, rest 3.00 -> 0.75 s, search NPC_AIModule_SV_Aegis, rounds Artillery_Vessel_000_SVA_Aegis: 52.0 -> 156.0 s of flight), NPC_FCS_VesselCIWS000_SVA_Fleet (within 2500 -> 7500 m, arm 0.50 -> 0.50 s, lock 3.00 -> 3.00 s, 3.00 -> 3.00 s between, rest 1.00 -> 1.00 s, search NPC_AIModule_SV_Fleet, yaw -60..60 at 37.5 -> -60..60 at 56.2 deg/s, rounds CIWS_Vessel_000_SVA_Fleet: 3.0 -> 9.0 s of flight), NPC_FCS_VesselVLSmk41_SVA_Fleet (within 3000 -> 35000 m, arm 2.00 -> 2.00 s, lock 5.00 -> 1.50 s, 5.00 -> 0.50 s between, rest 10.00 -> 8.00 s, search NPC_AIModule_SV_Fleet, yaw 0..0 at 0.0 -> 0..0 at 0.0 deg/s, missile VLS_Vessel_000_SVA_Fleet: 9.0 -> 45 s, up to 3000 -> 3600 km/h, +300 -> +450 km/h a second, turns 30.0 -> 45.0, homing as EXSAM_Ground_000 (6 of 6), salvos of 3, 0.50 s apart), NPC_FCS_VesselAAGun000_SVA_Fleet (an AA gun on NPC_FCS_FlakGun000's fire control, within 15000 -> 15000 m, arm 0.50 -> 0.50 s, lock 3.00 -> 1.50 s, 3.00 -> 1.50 s between, rest 1.00 -> 0.50 s, search NPC_AIModule_SV_Fleet, yaw -180..180 at 360.0 -> -180..180 at 540.0 deg/s, flak FlakGun_000_SVA_Fleet: damage 10 -> 20, bursts within 120 -> 24 m, 18 -> 27 m round, from 500 -> 50 m up), NPC_FCS_VesselArtillery010_SVA_Fleet (within 30000 -> 90000 m, arm 0.50 -> 0.50 s, lock 1.00 -> 1.00 s, 1.00 -> 1.00 s between, rest 3.00 -> 3.00 s, search NPC_AIModule_SV_Fleet, yaw -110..110 at 30.0 -> -110..110 at 45.0 deg/s, rounds Artillery_Vessel_000_SVA_Fleet: 52.0 -> 156.0 s of flight), NPC_FCS_VesselAAGun001_LB_SVA_Fleet (an AA gun on NPC_FCS_FlakGun000's fire control, within 15000 -> 15000 m, arm 0.50 -> 0.50 s, lock 3.00 -> 1.50 s, 3.00 -> 1.50 s between, rest 1.00 -> 0.50 s, search NPC_AIModule_SV_Fleet, yaw -110..90 at 360.0 -> -110..90 at 540.0 deg/s), NPC_FCS_VesselAAGun001_RF_SVA_Fleet (an AA gun on NPC_FCS_FlakGun000's fire control, within 15000 -> 15000 m, arm 0.50 -> 0.50 s, lock 3.00 -> 1.50 s, 3.00 -> 1.50 s between, rest 1.00 -> 0.50 s, search NPC_AIModule_SV_Fleet, yaw -90..60 at 360.0 -> -90..60 at 540.0 deg/s), NPC_FCS_VesselAAGun001_LF_SVA_Fleet (an AA gun on NPC_FCS_FlakGun000's fire control, within 15000 -> 15000 m, arm 0.50 -> 0.50 s, lock 3.00 -> 1.50 s, 3.00 -> 1.50 s between, rest 1.00 -> 0.50 s, search NPC_AIModule_SV_Fleet, yaw -45..90 at 360.0 -> -45..90 at 540.0 deg/s), NPC_FCS_VesselAAGun001_RB_SVA_Fleet (an AA gun on NPC_FCS_FlakGun000's fire control, within 15000 -> 15000 m, arm 0.50 -> 0.50 s, lock 3.00 -> 1.50 s, 3.00 -> 1.50 s between, rest 1.00 -> 0.50 s, search NPC_AIModule_SV_Fleet, yaw -75..110 at 360.0 -> -75..110 at 540.0 deg/s), NPC_FCS_VesselVLSsam_SVA_Fleet (within 3000 -> 35000 m, arm 2.00 -> 2.00 s, lock 5.00 -> 1.50 s, 5.00 -> 0.50 s between, rest 10.00 -> 8.00 s, search NPC_AIModule_SV_Fleet, yaw 0..0 at 0.0 -> 0..0 at 0.0 deg/s, missile VLS_Vessel_VE011_000_SVA_Fleet: 10.0 -> 45 s, up to 3000 -> 3600 km/h, +300 -> +450 km/h a second, turns 30.0 -> 45.0, homing as EXSAM_Ground_000 (6 of 6), salvos of 3, 0.50 s apart)
+15:10:00 allies: guns: NPC_FCS_PlaneGun000_SVA leads 1.00 s, 30-round bursts, NPC_FCS_VesselCIWS000_SVA_Defence leads 1.20 s, NPC_FCS_VehicleAAGun000_SVA_Defence leads 1.20 s, NPC_FCS_VesselCIWS000_SVA_Aegis leads 1.20 s, NPC_FCS_VesselCIWS000_SVA_Fleet leads 1.20 s
+15:10:00 allies: 8 of 8 rows in DT_NPC, WINGMEN in, CIWS in, VOID WATCHER 1 in, 24 weapons on their own fire control (x1.6 range, x0.5 times), 4 names set
+15:10:00 coopfire: the stand-ins' damage-0 rows: 31 of 31 airframes; ECM pods (the others' ESM shown): e06b_common slot 3 (added), e18g_common slot 3 (added), ea36_common slot 3 (added)
+15:10:00 rows: DataTable /Game/Datatables/UI/Menu/IngameMenu/DT_IngameMenuSettingData.DT_IngameMenuSettingData pinned (kept loaded) [ReferencedObjects num 29 -> 30, max 56 -> 56]
+15:10:00 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_MenuClassRows.DT_SV_MenuClassRows pinned (kept loaded) [ReferencedObjects num 30 -> 31, max 56 -> 56]
+15:10:00 shop: store page SVStore: in the game's table: no; in DT_SV_MenuClassRows: userdata; AddRow ran; now in
+15:10:00 shop: store page SVStoreAirfield: in the game's table: no; in DT_SV_MenuClassRows: userdata; AddRow ran; now in
+15:10:00 shop: store page SVStoreDocks: in the game's table: no; in DT_SV_MenuClassRows: userdata; AddRow ran; now in
+15:10:00 shop: store page SVStoreUpgrades: in the game's table: no; in DT_SV_MenuClassRows: userdata; AddRow ran; now in
+15:10:00 shop: store page SVStoreTactical: in the game's table: no; in DT_SV_MenuClassRows: userdata; AddRow ran; now in
+15:10:00 shop: store page SVStoreDefences: in the game's table: no; in DT_SV_MenuClassRows: userdata; AddRow ran; now in
+15:10:00 shop: in-game menu table rows: NewRow, NewRow_0, NewRow_1, NewRow_2, NewRow_6, NewRow_7, NewRow_8, NewRow_9, NewRow_10, NewRow_11, NewRow_12, NewRow_13, NewRow_14, NewRow_15, NewRow_3, NewRow_4, NewRow_17, NewRow_5, NewRow_16, NewRow_18, SVStore, SVStoreAirfield, SVStoreDocks, SVStoreUpgrades, SVStoreTactical, SVStoreDefences | DT_SV_MenuClassRows: SVStore, SVStoreAirfield, SVStoreDocks, SVStoreUpgrades, SVStoreTactical, SVStoreDefences
+15:10:00 shop: the store's pages in the in-game menu table: SVStore at 20 (want 20), SVStoreAirfield at 21 (want 21), SVStoreDocks at 22 (want 22), SVStoreUpgrades at 23 (want 23), SVStoreTactical at 24 (want 24), SVStoreDefences at 25 (want 25)
+15:10:00 rows: WidgetBlueprintGeneratedClass /Game/Mods/SurvivalMode/UI/WBP_SV_PgModes.WBP_Menu_MainTop_000_C pinned (kept loaded) [ReferencedObjects num 31 -> 32, max 56 -> 56]
+15:10:00 rows: WidgetBlueprintGeneratedClass /Game/Mods/SurvivalMode/UI/WBP_SV_PgOffline.WBP_Menu_MainTop_000_C pinned (kept loaded) [ReferencedObjects num 32 -> 33, max 56 -> 56]
+15:10:00 rows: WidgetBlueprintGeneratedClass /Game/Mods/SurvivalMode/UI/WBP_SV_PgOnline.WBP_Menu_MainTop_000_C pinned (kept loaded) [ReferencedObjects num 33 -> 34, max 56 -> 56]
+15:10:00 rows: WidgetBlueprintGeneratedClass /Game/Mods/SurvivalMode/UI/WBP_SV_PgHost.WBP_Menu_MainTop_000_C pinned (kept loaded) [ReferencedObjects num 34 -> 35, max 56 -> 56]
+15:10:00 rows: WidgetBlueprintGeneratedClass /Game/Mods/SurvivalMode/UI/WBP_SV_PgRules.WBP_Menu_MainTop_000_C pinned (kept loaded) [ReferencedObjects num 35 -> 36, max 56 -> 56]
+15:10:00 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_PgModesCommands.DT_SV_PgModesCommands pinned (kept loaded) [ReferencedObjects num 36 -> 37, max 56 -> 56]
+15:10:00 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_PgOfflineCommands.DT_SV_PgOfflineCommands pinned (kept loaded) [ReferencedObjects num 37 -> 38, max 56 -> 56]
+15:10:00 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_PgOnlineCommands.DT_SV_PgOnlineCommands pinned (kept loaded) [ReferencedObjects num 38 -> 39, max 56 -> 56]
+15:10:00 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_PgHostCommands.DT_SV_PgHostCommands pinned (kept loaded) [ReferencedObjects num 39 -> 40, max 56 -> 56]
+15:10:00 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_PgRulesCommands.DT_SV_PgRulesCommands pinned (kept loaded) [ReferencedObjects num 40 -> 41, max 56 -> 56]
+15:10:01 leaderboard: this build's hash is b10898ab6902390cdb1efcce30bd50d85377a981528f5d5161ca9c255de199e4 (runs count only from a registered build)
+15:10:01 game Lua: state 7F25F9A8
+15:10:01 game Lua: Lua 5.3, io table, os table, debug table, Inherit function, CppObjectBase table, ELiveAIManeuverSpeedType table, modules loaded 40 (20 Chronicle.AI)
+15:10:01 game Lua: helper in
+15:10:01 game Lua: stock Chronicle.AI.LA_AIPlane: true table: 00000001101C7F80
+15:10:01 game Lua: stock Chronicle.AI.LA_PursueTarget_0011: true table: 00000001101CAB40
+15:10:01 game Lua: stock Chronicle.AI.LA_PursueTarget_0400: true table: 00000001101C9D00
+15:10:01 game Lua: stock SurvivalMode.AI.LA_SV_MoveAway: true table: 00000001101C7400
+15:10:01 game Lua: stock SurvivalMode.AI.LA_SV_TailChase: true table: 00000001101C74C0
+15:10:01 game Lua: stock SurvivalMode.AI.LA_SV_ProvokeNear: true table: 00000001101C5000
+15:10:01 game Lua: stock SurvivalMode.AI.LA_SV_Escape: true table: 00000001101C8B40
+15:10:01 game Lua: stock SurvivalMode.AI.LA_SV_LancerPass: true table: 000000003EF2EA40
+15:10:01 game Lua: stock SurvivalMode.AI.LA_SV_LancerZoom: true table: 000000003EF2F000
+15:10:01 game Lua: stock SurvivalMode.AI.LA_SV_LancerBreak: true table: 000000003EF2A480
+15:10:01 game Lua: stock SurvivalMode.AI.LA_SV_WolfDrag: true table: 000000003EF2D340
+15:10:01 game Lua: stock SurvivalMode.AI.LA_SV_WolfStrike: true table: 000000003EF2EC80
+15:10:01 game Lua: stock SurvivalMode.AI.LA_SV_SkirmPass: true table: 000000003EF2EEC0
+15:10:01 game Lua: stock SurvivalMode.AI.LA_SV_SkirmExtend: true table: 000000003EF2E5C0
+15:10:01 info maps: MissionDataMap_ has 9101
+15:10:01 info maps: LevelDataMap_ has 70
+15:10:03 world: /Game/Maps/Menu/PL_MainMenu
+15:10:04 world: /Game/Maps/Transition/TransitionMap
+15:10:04 menu pages: the main menu's page list has 41 pages; Survival's open through CampaignTraining 40, InitialSetting_DualSence 38, InitialSetting_Accessibility 37: SURVIVAL MODE opens them
+15:10:05 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_MenuRows.DT_SV_MenuRows pinned (kept loaded) [ReferencedObjects num 41 -> 42, max 56 -> 56]
+15:10:05 rows: added 'SurvivalMenu' to DataTable /Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands.DT_LiveMenuMainTopCommands (above QuitGame)
+15:10:05 rows: DataTable /Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands.DT_LiveMenuMainTopCommands now has: Campaign, SurvivalMenu, System, QuitGame
+15:10:42 menu: mode COOP JOIN
+15:10:42 coop: role join picked on the main menu
+15:10:42 coop: open as the joiner over steam (partner auto, up to 24 players; SURVIVAL CO-OP: JOIN picked): looking for the host
+15:10:42 coop: open=1;mode=steam;role=join;state=searching;slot=-1;players=1;max=24;me=76561198981123825;cands=2;tele=1;peers=
+15:10:42 coop: waiting for the host (auto)
+15:10:43 menu: 2 text(s) changed (lobby), 0 on screen
+15:10:47 coop: player 1: sys|paired
+15:10:47 coop: player 1: sys|slot|2
+15:10:47 coop: you are player 3
+15:10:47 coop: player 1: sys|up
+15:10:47 coop: open=1;mode=steam;role=join;state=linked;slot=2;players=2;max=24;me=76561198981123825;cands=2;tele=1;peers=0/linked/1959/5/Saint Alessia
+15:10:47 coop: playing with the host's settings (Survival 0.73.70-coop2mp.71, preset ace): 4 differ from the shipped ones: setup.host.zollars, setup.host.skill, setup.host.airfield, setup.host.break_s
+15:10:47 coop: player 1 is Saint Alessia (Survival 0.73.70-coop2mp.71, flies fa36_common)
+15:10:47 hud: callout 'CO-OP LINKED' / 'SAINT ALESSIA IS HOSTING'
+15:10:47 coop: player 2 is Shazzy (Survival 0.73.70-coop2mp.71, flies su35_common)
+15:10:47 hud: callout 'SHAZZY JOINED' / 'PLAYERS 2/24'
+15:10:48 world: /Game/Maps/Hangar/PL_Hangar004
+15:10:48 world: /Game/Maps/Hangar/SL_HangarCamera
+15:10:48 world: /Game/Maps/Transition/TransitionMap
+15:10:48 world: /Game/Maps/Hangar/Hangar004/Hangar004_Snd_Environment
+15:10:48 world: /Game/Maps/Hangar/Hangar004/Hangar004_Lit_EarlyMorning01
+15:10:48 world: /Game/Maps/Hangar/Hangar004/Hangar004_Vfx_Common
+15:10:48 world: /Game/Maps/Hangar/Hangar004/Hangar004_Env_GroundDry
+15:10:49 world: /Game/Maps/Hangar/Hangar004/Hangar004_Env_Map001_Add
+15:10:49 world: /Game/Maps/Hangar/Hangar004/Hangar004_Env_light001
+15:10:49 world: /Game/Maps/Hangar/Hangar004/Hangar004_Env_Map001
+15:11:22 hud: callout 'BOMBER RAID FROM THE SOUTH' / '12 BOMBERS: PROTECT THE AIRFIELD'
+15:11:31 world: /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode
+15:11:31 level loaded: PL_SurvivalMode (memory 18314 MB, committed 22293 MB)
+15:11:31 render settings: r.VirtualTextures=1 r.VT.TileSize=128 r.VT.TileBorderSize=4 r.VT.EnableFeedback=1 r.VT.FeedbackFactor=16 r.VT.MaxUploadsPerFrame=8 r.VT.PoolSizeScale=1.0 r.VT.EnableAutoImport=0 r.VT.Residency.Show=0 r.VT.PoolAutoGrow=0 r.VT.MaxReleasedPerFrame=0 r.Streaming.PoolSize=4000 r.Streaming.UseFixedPoolSize=0 r.Streaming.FullyLoadUsedTextures=0 r.TextureStreaming=1 r.MaterialQualityLevel=1 r.Shaders.FastMath=1 fx.Niagara.GPUSort=0 fx.GPUSort.MaxSortBatchSize=0
+15:11:31 rows: AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq01_Play pinned (kept loaded) [ReferencedObjects num 42 -> 43, max 56 -> 56]
+15:11:31 rows: AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq02_Play pinned (kept loaded) [ReferencedObjects num 43 -> 44, max 56 -> 56]
+15:11:31 rows: AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq03_Play pinned (kept loaded) [ReferencedObjects num 44 -> 45, max 56 -> 56]
+15:11:31 rows: AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Electricity_Play pinned (kept loaded) [ReferencedObjects num 45 -> 46, max 56 -> 56]
+15:11:31 rows: AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Electricity_Stop pinned (kept loaded) [ReferencedObjects num 46 -> 47, max 56 -> 56]
+15:11:31 rows: AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Collapse_Play pinned (kept loaded) [ReferencedObjects num 47 -> 48, max 56 -> 56]
+15:11:31 rows: NS_ElectricSign001 pinned (kept loaded) [ReferencedObjects num 48 -> 49, max 56 -> 56]
+15:11:31 rows: NS_CloudLightning pinned (kept loaded) [ReferencedObjects num 49 -> 50, max 56 -> 56]
+15:11:31 rows: NS_ElectricDischargeM001 pinned (kept loaded) [ReferencedObjects num 50 -> 51, max 56 -> 56]
+15:11:31 rows: NS_ms23FarFlash pinned (kept loaded) [ReferencedObjects num 51 -> 52, max 56 -> 56]
+15:11:31 rows: NS_MGF_CoreDest1st_CoreElectricPlasma pinned (kept loaded) [ReferencedObjects num 52 -> 53, max 56 -> 56]
+15:11:31 special: anomaly sounds and portal systems loaded: 13 of 13
+15:11:31 rounds: native spawner runtime 0.32.18; round 1 in 15 s
+15:11:31 probe: at level load, probe rows ready: package false, run-time false
+15:11:31 search: at level load, 19 of 9 aircraft (and 36 ace rows) fly with the 40000 m search
+15:11:31 roles: at level load lancer NLID_SV_Lancer, wolf NLID_SV_WolfLead, skirm NLID_SV_Skirmisher
+15:11:31 learning: profile at level load from config\survival_profile.ini: 2 runs (0 learnt from), 43 of your kills; missile -, gun -, tail -, high -, airfield -
+15:11:31 music: pause-menu music player on
+15:11:31 music: music player track clock held while the BGM is paused
+15:11:31 menu: the run plays COOP JOIN's setup (host): preset by difficulty, 0 Z, enemies 100%, round 1, break 20 s, specials normal, airfield 100%, income 100%, skill normal.; leaderboard: a co-op run
+15:11:31 coop: in Survival's level as player 3
+15:11:35 world: /Game/Maps/MapCommon/Map17/Mission022/Mission022_Common_Env_CityMap001
+15:11:35 world: /Game/Maps/MapCommon/Map17/Map17_Env_CityTraffic001
+15:11:35 world: /Game/Maps/MapCommon/Map05/Mission004/Mission004_Common_Lit_Cloudly01
+15:11:35 world: /Game/Maps/MapCommon/Map17/Map17_Env_CityHda001_Baked
+15:11:35 world: /Game/Maps/MapCommon/Map17/Map17_SND_AmbientActor
+15:11:35 world: /Game/Maps/MapCommon/Map17/Map17_Env_Terrain001
+15:11:35 world: /Game/Maps/MapCommon/Map17/Mission022/Mission022_Common_Env_Sea
+15:11:35 world: /Game/Maps/MapCommon/Map17/Map17_Env_Foliage_Baked
+15:11:35 world: /Game/Maps/Ingame/Mission022/Mission022_MiniGame
+15:11:35 world: /Game/Maps/MapCommon/Map17/Mission022/Mission022_Env_CityLighting001
+15:11:35 world: /Game/Maps/MapCommon/Map17/Map17_Env_CityMap001
+15:11:35 world: /Game/Maps/MapCommon/Map17/Map17_Env_MassAI
+15:11:35 world: /Game/Maps/MapCommon/Map17/Map17_Env_ComonaAirport
+15:11:36 world: /Game/Maps/Transition/TransitionMap
+15:11:36 allies: speaker ms25_Savia_Mercenary_Leader talks as an ally (was colour 1, Enemy_Fighter_Mob)
+15:11:36 game Lua: built LA_AIPlane x1, LA_PursueTarget_0011 x1, LA_PursueTarget_0400 x1, LA_SV_Escape x1, LA_SV_LancerBreak x1, LA_SV_LancerPass x1, LA_SV_LancerZoom x1, LA_SV_MoveAway x1, LA_SV_ProvokeNear x1, LA_SV_SkirmExtend x1, LA_SV_SkirmPass x1, LA_SV_TailChase x1, LA_SV_WolfDrag x1, LA_SV_WolfStrike x1; all fine
+15:11:36 rounds: on the game clock (stops while paused)
+15:11:36 hud: built (base WBP_HUD_NonGlowMessage_000_C_2147448689, font UI_FontSet_ja, typeface HUD, 87 widgets)
+15:11:36 hud: the game's TIME row hidden (WBP_HUD_SubWidgets_Parts_TimerAndGauge_000_C /Engine/Transient.LiveGameEngine_2147482452:BP_LiveGameInstance_C_2147482376.WBP_HUD_Chronicle_MainFlight_000_C_2147461417.WidgetTree_2147461416.ForEachWidget.WidgetTree_2147461373.WBP_HUD_SubWidgets_Parts_CampaignInfo_000_C_2147448862.WidgetTree_2147448861.TimerAndGauge)
+15:11:36 hud: the game's score limit hidden (TextBlock /Engine/Transient.LiveGameEngine_2147482452:BP_LiveGameInstance_C_2147482376.WBP_HUD_Chronicle_MainFlight_000_C_2147461417.WidgetTree_2147461416.ForEachWidget.WidgetTree_2147461373.WBP_HUD_SubWidgets_Parts_CampaignInfo_000_C_2147448862.WidgetTree_2147448861.BorderScoreText)
+15:11:36 music: the game's BGM controller now plays id 1285945456 (status 0)
+15:11:36 music: the game's BGM controller: track|stop|event = AKE_Bgm_Hangar02_Play|AKE_Bgm_Hangar02_Stop|AKE_Bgm_Menu_Campaign_State
+15:11:36 music: track clock running
+15:11:36 coopfire: your gear up (LandingGearOnMesh hidden)
+15:11:36 coopfire: your throttle 0.000: afterburner off (ab_throttle 0.9)
+15:11:36 coop: your plane (adfx02) isn't in [coop] airframes: the others see it as f16c_common
+15:11:36 attackers: your plane's missiles-at-once limits: MaxNonPlaneAttackerMissiles 2 -> 40, MaxPlaneAttackerMissiles 2 -> 6, MaxPursuitAttackers 2 -> 12 (the game's: planes 2, ships / SAMs 2, chasers 2); waits between attacks: chasers 15.0-20.0 s, others 15.0-20.0 s (the difficulty's x50% / x50%)
+15:11:36 insurance: your aircraft's floor 0.1 HP (co-op's revives)
+15:11:36 round probe: flags SV_AirHits=0 SV_Alive=0 SV_AllyAirA=0 SV_AllyAirB=0 SV_AnomalyUp=0 SV_AwacsAir=0 SV_Beat=0 SV_Kills=0 SV_LadonRageKot=0 SV_LadonRageMishka=0 SV_LadonRunKot=0 SV_LadonRunMishka=0 SV_LcacLandAW=0 SV_LcacLandAX=0 SV_LcacLandAY=0 SV_LcacLandAZ=0 SV_LcacLandBW=0 SV_LcacLandBX=0 SV_LcacLandBY=0 SV_LcacLandBZ=0 SV_LcacLandCW=0 SV_LcacLandCX=0 SV_LcacLandCY=0 SV_LcacLandCZ=0 SV_LcacLandDW=0 SV_LcacLandDX=0 SV_LcacLandDY=0 SV_LcacLandDZ=0 SV_LcacRunwayAW=0 SV_LcacRunwayAX=0 SV_LcacRunwayAY=0 SV_LcacRunwayAZ=0 SV_LcacRunwayBW=0 SV_LcacRunwayBX=0 SV_LcacRunwayBY=0 SV_LcacRunwayBZ=0 SV_LcacRunwayCW=0 SV_LcacRunwayCX=0 SV_LcacRunwayCY=0 SV_LcacRunwayCZ=0 SV_LcacRunwayDW=0 SV_LcacRunwayDX=0 SV_LcacRunwayDY=0 SV_LcacRunwayDZ=0 SV_ShuttleDmgA=0 SV_ShuttleDmgB=0 SV_ShuttleDmgC=0 SV_ShuttleHits=0 SV_ShuttleLaunched=0 SV_ShuttleLost=0 SV_ShuttleNearSaid=0 SV_ShuttleRound=0 SV_SpAtAVL=0 SV_SpAtAVR=0 SV_SpAtAWL=0 SV_SpAtAWR=0 SV_SpAtAXL=0 SV_SpAtAXR=0 SV_SpAtAYL=0 SV_SpAtAYR=0 SV_SpAtAZL=0 SV_SpAtAZR=0 SV_SpAtBVL=0 SV_SpAtBVR=0 SV_SpAtBWL=0 SV_SpAtBWR=0 SV_SpAtBXL=0 SV_SpAtBXR=0 SV_SpAtBYL=0 SV_SpAtBYR=0 SV_SpAtBZL=0 SV_SpAtBZR=0 SV_SpAtCVL=0 SV_SpAtCVR=0 SV_SpAtCWL=0 SV_SpAtCWR=0 SV_SpAtCXL=0 SV_SpAtCXR=0 SV_SpAtCYL=0 SV_SpAtCYR=0 SV_SpAtCZL=0 SV_SpAtCZR=0 SV_SpAtDVL=0 SV_SpAtDVR=0 SV_SpAtDWL=0 SV_SpAtDWR=0 SV_SpAtDXL=0 SV_SpAtDXR=0 SV_SpAtDYL=0 SV_SpAtDYR=0 SV_SpAtDZL=0 SV_SpAtDZR=0 SV_SpLandAVL=0 SV_SpLandAVR=0 SV_SpLandAWL=0 SV_SpLandAWR=0 SV_SpLandAXL=0 SV_SpLandAXR=0 SV_SpLandAYL=0 SV_SpLandAYR=0 SV_SpLandAZL=0 SV_SpLandAZR=0 SV_SpLandBVL=0 SV_SpLandBVR=0 SV_SpLandBWL=0 SV_SpLandBWR=0 SV_SpLandBXL=0 SV_SpLandBXR=0 SV_SpLandBYL=0 SV_SpLandBYR=0 SV_SpLandBZL=0 SV_SpLandBZR=0 SV_SpLandCVL=0 SV_SpLandCVR=0 SV_SpLandCWL=0 SV_SpLandCWR=0 SV_SpLandCXL=0 SV_SpLandCXR=0 SV_SpLandCYL=0 SV_SpLandCYR=0 SV_SpLandCZL=0 SV_SpLandCZR=0 SV_SpLandDVL=0 SV_SpLandDVR=0 SV_SpLandDWL=0 SV_SpLandDWR=0 SV_SpLandDXL=0 SV_SpLandDXR=0 SV_SpLandDYL=0 SV_SpLandDYR=0 SV_SpLandDZL=0 SV_SpLandDZR=0 SV_SpRocketEscA=0 SV_SpRocketEscB=0 SV_ValkaUp=0 flights up (SV_Up_*)=0
+15:11:37 music: the game's BGM controller now plays id 0 (status 0)
+15:11:37 leaderboard: flying the adfx02
+15:11:38 difficulty at mission start: Hard
+15:11:38 attackers: the game put your plane's limits back; set again (MaxNonPlaneAttackerMissiles 4 -> 40, MaxPlaneAttackerMissiles 4 -> 6, MaxPursuitAttackers 6 -> 12)
+15:11:38 ammo: preset ace (difficulty 5): gun 2400/2400, missiles 148/148, special 1 8/8, special 2 4/4, flares 4/4 -> gun 2400/2400, missiles 30/148, special 1 8/8, special 2 4/4, flares 3/4; free restock was 1, now off
+15:11:38 rows: DataTable /Game/Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands.DT_LiveMenuIngameHangarCommands pinned (kept loaded) [ReferencedObjects num 53 -> 54, max 56 -> 56]
+15:11:38 shop: the game's menu list has 26 menus; 20 = SV_Store, 21 = SV_StoreAirfield, 22 = SV_StoreDocks, 23 = SV_StoreUpgrades, 24 = SV_StoreTactical, 25 = SV_StoreDefences: the STORE is in
+15:11:38 rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_ShopRows.DT_SV_ShopRows pinned (kept loaded) [ReferencedObjects num 54 -> 55, max 56 -> 56]
+15:11:38 shop: the STORE: 4 of 4 rows in the landing menu (1, 2, SVShopStore, SVShopStoreUp, SVShopStoreTac, SVShopStoreAf)
+15:11:39 coop: player 1's name on their real plane's box: Saint Alessia (FA36)
+15:11:39 coop: player 1's plane is their real fa36 (a player plane, 377E89670): flown by its own update from their stream; their loadout 2035802,2030802,2028802,2046802,2045802,2044802,2033802,2051802,2004802,2060802,2049802,2008802,2056802,2006802,2005802//24,14; their paint 18601001/255/90003,90003,1340000003,1400003003,1340000003,1400003003,1260000003,1260000003
+15:11:39 coop: player 1's plane shown
+15:11:39 coop: player 1's damage shown on their real plane here (health 96%)
+15:11:39 coop: player 2's name on their real plane's box: Shazzy (SU35)
+15:11:39 coop: player 2's plane is their real su35 (a player plane, 138BD9670): flown by its own update from their stream; their loadout 2051802,2008802,2001802,2003802,2005802,2011802,2014802,2058802,2016802,2047802,2049802,2056802,2025802//15,18; its default paint (none sent)
+15:11:39 coop: player 2's plane shown
+15:11:39 coop: player 2's damage shown on their real plane here (health 69%)
+15:11:40 round probe: AI aircraft created #1: BP_OP1026_su47_CP_C_2147448073 (ERA_Unit_02_Dep_Air1, k 0) at (-2.3, 6.6) km, alt 2.7 km, 21.4 km from the airfield
+15:11:40 round probe: AI aircraft created #2: BP_OP1026_su47_CP_C_2147448040 (ERA_Unit_02_Dep_Air1, k 1) at (-2.5, 6.4) km, alt 2.7 km, 21.4 km from the airfield
+15:11:40 round probe: AI aircraft created #3: BP_OP1026_su47_CP_C_2147448008 (ERA_Unit_02_Dep_Air1, k 2) at (-2.0, 6.5) km, alt 2.7 km, 21.1 km from the airfield
+15:11:40 round probe: AI aircraft created #4: BP_OP1026_su47_CP_C_2147447976 (ERA_Unit_02_Dep_Air1, k 3) at (-2.2, 6.2) km, alt 2.7 km, 21.1 km from the airfield
+15:11:40 round probe: AI aircraft created #5: BP_OP1020_m29a_CP_C_2147447884 (ERA_Unit_06_Dep_Air0, k 0) at (12.9, -23.7) km, alt 3.4 km, 19.6 km from the airfield
+15:11:40 round probe: AI aircraft created #6: BP_OP1020_m29a_CP_C_2147447850 (ERA_Unit_06_Dep_Air0, k 1) at (13.1, -23.7) km, alt 3.4 km, 19.6 km from the airfield
+15:11:40 round probe: AI aircraft created #7: BP_OP1025_f15e_CP_C_2147447814 (ERB_Unit_01_Air2, k 0) at (22.0, 28.9) km, alt 0.8 km, 33.8 km from the airfield
+15:11:40 round probe: AI aircraft created #8: BP_OP1025_f15e_CP_C_2147447779 (ERB_Unit_01_Air2, k 1) at (21.8, 28.8) km, alt 0.8 km, 33.6 km from the airfield
+15:11:40 round probe: AI aircraft created #9: BP_OP1025_f15e_CP_C_2147447745 (ERB_Unit_01_Air2, k 2) at (22.2, 28.7) km, alt 0.8 km, 33.6 km from the airfield
+15:11:40 round probe: AI aircraft created #10: BP_OP1025_f15e_CP_C_2147447711 (ERB_Unit_01_Air2, k 3) at (22.0, 28.5) km, alt 0.8 km, 33.4 km from the airfield
+15:11:40 round probe: AI aircraft created #11: BP_OP1009_su34_CP_C_2147447603 (EB_Unit_01_Air0, k 0) at (16.0, 31.2) km, alt 0.7 km, 35.5 km from the airfield
+15:11:40 round probe: AI aircraft created #12: BP_OP1009_su34_CP_C_2147447570 (EB_Unit_01_Air0, k 1) at (15.9, 30.9) km, alt 0.7 km, 35.2 km from the airfield
+15:11:40 round probe: AI aircraft created #13: BP_OP1009_su34_CP_C_2147447538 (EB_Unit_01_Air0, k 2) at (16.3, 31.1) km, alt 0.7 km, 35.4 km from the airfield
+15:11:40 round probe: AI aircraft created #14: BP_OP1009_su34_CP_C_2147447506 (EB_Unit_01_Air0, k 3) at (16.2, 30.8) km, alt 0.7 km, 35.1 km from the airfield
+15:11:40 round probe: AI aircraft created #15: BP_OP1009_su34_CP_C_2147447474 (EB_Unit_01_Air0, k 4) at (16.6, 31.0) km, alt 0.7 km, 35.3 km from the airfield
+15:11:40 round probe: AI aircraft created #16: BP_OP1009_su34_CP_C_2147447442 (EB_Unit_01_Air0, k 5) at (16.5, 30.7) km, alt 0.7 km, 35.0 km from the airfield
+15:11:40 round probe: AI aircraft created #17: BP_OP0011_tu95_CP_C_2147447399 (EA_Unit_01_Air1, k 0) at (13.9, 24.9) km, alt 2.8 km, 29.3 km from the airfield
+15:11:40 round probe: AI aircraft created #18: BP_OP0011_tu95_CP_C_2147447374 (EA_Unit_01_Air1, k 1) at (13.7, 24.9) km, alt 2.8 km, 29.4 km from the airfield
+15:11:40 round probe: AI aircraft created #19: BP_OP1006_f35c_CP_C_2147447348 (ERA_Unit_07_Dep_Air0, k 0) at (11.5, 19.5) km, alt 4.5 km, 24.3 km from the airfield
+15:11:40 round probe: AI aircraft created #20: BP_OP1006_f35c_CP_C_2147447317 (ERA_Unit_07_Dep_Air0, k 1) at (11.2, 19.5) km, alt 4.5 km, 24.4 km from the airfield
+15:11:40 round probe: AI aircraft created #21: BP_OP1026_su47_CP_C_2147447284 (ERA_Unit_02_Dep_Air0, k 0) at (24.5, 12.8) km, alt 3.0 km, 19.1 km from the airfield
+15:11:40 round probe: AI aircraft created #22: BP_OP1026_su47_CP_C_2147447252 (ERA_Unit_02_Dep_Air0, k 1) at (24.2, 12.9) km, alt 3.0 km, 19.1 km from the airfield
+15:11:40 round probe: AI aircraft created #23: BP_OP1026_su47_CP_C_2147447217 (ERA_Unit_01_Dep_Air0, k 0) at (-2.5, -17.4) km, alt 2.6 km, 22.7 km from the airfield
+15:11:40 round probe: AI aircraft created #24: BP_OP1026_su47_CP_C_2147447185 (ERA_Unit_01_Dep_Air0, k 1) at (-2.3, -17.6) km, alt 2.6 km, 22.7 km from the airfield
+15:11:40 round probe: AI aircraft created #25: BP_OP1004_f15c_CP_C_2147447150 (ERA_Unit_03_Dep_Air0, k 0) at (-6.2, -10.3) km, alt 6.4 km, 23.1 km from the airfield
+15:11:40 round probe: AI aircraft created #26: BP_OP1004_f15c_CP_C_2147447116 (ERA_Unit_03_Dep_Air0, k 1) at (-6.1, -10.6) km, alt 6.4 km, 23.1 km from the airfield
+15:11:40 round probe: AI aircraft created #27: BP_OP1027_m21b_CP_C_2147447080 (ERA_Unit_05_Dep_Air0, k 0) at (-1.0, -13.5) km, alt 2.3 km, 19.4 km from the airfield
+15:11:40 round probe: AI aircraft created #28: BP_OP1027_m21b_CP_C_2147447048 (ERA_Unit_05_Dep_Air0, k 1) at (-0.9, -13.8) km, alt 2.3 km, 19.4 km from the airfield
+15:11:40 tiers: round 9 Veteran (BP_OP1020_m29a_CP_C_2147447884): PilotRank 4 -> 5
+15:11:40 maneuvers: m29a (BP_OP1020_m29a_CP_C_2147447884) post-stall allowed: was cobra false, kulbit false, now cobra true, kulbit true
+15:11:40 provoke: round 9, spike level 1, no tier (BP_OP1020_m29a_CP_C_2147447884): was ProvokeConditionConeAngle 85.0, ProvokeDeterminationTime 2.5, SurroundPursuitMinRange 10000.0, SurroundPursuitMaxRange 30000.0; now ProvokeConditionConeAngle 70, ProvokeDeterminationTime 2.0, SurroundPursuitMinRange 8000, SurroundPursuitMaxRange 22000; reads back 70.0, 2.0, 8000.0, 22000.0 (spike 1 70 deg / 2 s / 80-220 m)
+15:11:40 maneuvers: su34 (BP_OP1009_su34_CP_C_2147447538) post-stall allowed: was cobra false, kulbit false, now cobra true, kulbit true
+15:11:40 maneuvers: su47 (BP_OP1026_su47_CP_C_2147447284) post-stall allowed: was cobra true, kulbit true, now cobra true, kulbit true
+15:11:40 maneuvers: f15e (BP_OP1025_f15e_CP_C_2147447814) post-stall allowed: was cobra false, kulbit false, now cobra true, kulbit true
+15:11:41 round probe: BP_OP1026_su47_CP_C_2147447185 down
+15:11:41 kill: BP_OP1026_su47_CP_C_2147447185; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:11:41 credits: +140 (su47 down (fighter, Veteran x1.25, round x1.16)), now 5140
+15:11:41 kill-time: BP_OP1026_su47_CP_C_2147447185 (ERA_Unit_01_Dep_Air0, no tier, round 9, k 1, ordinary ?): up 1 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:11:41 round probe: flags SV_AirHits=0 SV_Alive=7 SV_AllyAirA=0 SV_AllyAirB=0 SV_AnomalyUp=0 SV_AwacsAir=0 SV_Beat=1 SV_Kills=0 SV_LadonRageKot=0 SV_LadonRageMishka=0 SV_LadonRunKot=0 SV_LadonRunMishka=0 SV_LcacLandAW=0 SV_LcacLandAX=0 SV_LcacLandAY=0 SV_LcacLandAZ=0 SV_LcacLandBW=0 SV_LcacLandBX=0 SV_LcacLandBY=0 SV_LcacLandBZ=0 SV_LcacLandCW=0 SV_LcacLandCX=0 SV_LcacLandCY=0 SV_LcacLandCZ=0 SV_LcacLandDW=0 SV_LcacLandDX=0 SV_LcacLandDY=0 SV_LcacLandDZ=0 SV_LcacRunwayAW=0 SV_LcacRunwayAX=0 SV_LcacRunwayAY=0 SV_LcacRunwayAZ=0 SV_LcacRunwayBW=0 SV_LcacRunwayBX=0 SV_LcacRunwayBY=0 SV_LcacRunwayBZ=0 SV_LcacRunwayCW=0 SV_LcacRunwayCX=0 SV_LcacRunwayCY=0 SV_LcacRunwayCZ=0 SV_LcacRunwayDW=0 SV_LcacRunwayDX=0 SV_LcacRunwayDY=0 SV_LcacRunwayDZ=0 SV_ShuttleDmgA=0 SV_ShuttleDmgB=0 SV_ShuttleDmgC=0 SV_ShuttleHits=0 SV_ShuttleLaunched=0 SV_ShuttleLost=0 SV_ShuttleNearSaid=0 SV_ShuttleRound=1 SV_SpAtAVL=0 SV_SpAtAVR=0 SV_SpAtAWL=0 SV_SpAtAWR=0 SV_SpAtAXL=0 SV_SpAtAXR=0 SV_SpAtAYL=0 SV_SpAtAYR=0 SV_SpAtAZL=0 SV_SpAtAZR=0 SV_SpAtBVL=0 SV_SpAtBVR=0 SV_SpAtBWL=0 SV_SpAtBWR=0 SV_SpAtBXL=0 SV_SpAtBXR=0 SV_SpAtBYL=0 SV_SpAtBYR=0 SV_SpAtBZL=0 SV_SpAtBZR=0 SV_SpAtCVL=0 SV_SpAtCVR=0 SV_SpAtCWL=0 SV_SpAtCWR=0 SV_SpAtCXL=0 SV_SpAtCXR=0 SV_SpAtCYL=0 SV_SpAtCYR=0 SV_SpAtCZL=0 SV_SpAtCZR=0 SV_SpAtDVL=0 SV_SpAtDVR=0 SV_SpAtDWL=0 SV_SpAtDWR=0 SV_SpAtDXL=0 SV_SpAtDXR=0 SV_SpAtDYL=0 SV_SpAtDYR=0 SV_SpAtDZL=0 SV_SpAtDZR=0 SV_SpLandAVL=0 SV_SpLandAVR=0 SV_SpLandAWL=0 SV_SpLandAWR=0 SV_SpLandAXL=0 SV_SpLandAXR=0 SV_SpLandAYL=0 SV_SpLandAYR=0 SV_SpLandAZL=0 SV_SpLandAZR=0 SV_SpLandBVL=0 SV_SpLandBVR=0 SV_SpLandBWL=0 SV_SpLandBWR=0 SV_SpLandBXL=0 SV_SpLandBXR=0 SV_SpLandBYL=0 SV_SpLandBYR=0 SV_SpLandBZL=0 SV_SpLandBZR=0 SV_SpLandCVL=0 SV_SpLandCVR=0 SV_SpLandCWL=0 SV_SpLandCWR=0 SV_SpLandCXL=0 SV_SpLandCXR=0 SV_SpLandCYL=0 SV_SpLandCYR=0 SV_SpLandCZL=0 SV_SpLandCZR=0 SV_SpLandDVL=0 SV_SpLandDVR=0 SV_SpLandDWL=0 SV_SpLandDWR=0 SV_SpLandDXL=0 SV_SpLandDXR=0 SV_SpLandDYL=0 SV_SpLandDYR=0 SV_SpLandDZL=0 SV_SpLandDZR=0 SV_SpRocketEscA=0 SV_SpRocketEscB=0 SV_ValkaUp=0 flights up (SV_Up_*)=7
+15:11:41 maneuvers: tu95 (BP_OP0011_tu95_CP_C_2147447399) post-stall allowed: was cobra false, kulbit false, now cobra true, kulbit true
+15:11:41 maneuvers: f15c (BP_OP1004_f15c_CP_C_2147447150) post-stall allowed: was cobra false, kulbit false, now cobra true, kulbit true
+15:11:41 tiers: round 9 Elite (BP_OP1026_su47_CP_C_2147448040): PilotRank 4 -> 5
+15:11:41 maneuvers: f35c (BP_OP1006_f35c_CP_C_2147447348) post-stall allowed: was cobra false, kulbit false, now cobra true, kulbit true
+15:11:41 late: round 9 enemies' health x0.75 (skirm x0.75) (BP_OP1006_f35c_CP_C_2147447348: 700 -> 525)
+15:11:41 maneuvers: m21b (BP_OP1027_m21b_CP_C_2147447080) post-stall allowed: was cobra false, kulbit false, now cobra true, kulbit true
+15:11:41 hud: hidden (paused)
+15:11:41 coop: paused with 3 players: the world kept running (unpaused; 1 times)
+15:11:41 hud: callout 'CO-OP: THE GAME KEEPS RUNNING' / 'OTHER PLAYERS ARE STILL FLYING'
+15:11:42 hud: shown
+15:11:45 coopfire: your weapon BP_plwp_msl_a0_C: a missile (the stand-ins' slot 2)
+15:11:45 coopfire: your first shot sent (m:0:0;p:0:0:0,1,0,0,177,0,-79,-529,-33,200,-230,0,24075,-10219,9283)
+15:11:48 difficulty 10 s into the mission: Hard
+15:11:56 coopfire: player 1's first launch on their real plane here: queued
+15:11:57 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:11:58 specials: ERA_Unit_07_Dep_Air0 A (f35c_common_svb) fires its NPC_FCS_PlaneLAAM000_SV_SKIRM at you, 11.8 km (RE_SV_SpecFire_19A: 1)
+15:12:01 round probe: BP_OP0011_tu95_CP_C_2147447399 down, last seen 2.5 km up, 21.0 km from you
+15:12:01 kill: BP_OP0011_tu95_CP_C_2147447399; you were 20.9 km away, 16 deg off its nose, altitude -1.3 km; you fired nothing seen in the last 6 s
+15:12:01 credits: +580 (tu95 down (heavy, Veteran x1.25, round x1.16)), now 5720
+15:12:01 kill-time: BP_OP0011_tu95_CP_C_2147447399 (EA_Unit_01_Air1, Veteran, round 9, k 0): up 21 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); 16 deg off its nose at 20.9 km, -1.3 km; by you
+15:12:02 round probe: BP_OP0011_tu95_CP_C_2147447374 down, last seen 2.5 km up, 21.4 km from you
+15:12:02 kill: BP_OP0011_tu95_CP_C_2147447374; you were 21.3 km away, 10 deg off its nose, altitude -1.3 km; you fired nothing seen in the last 6 s
+15:12:02 credits: +650 (tu95 down (heavy, Elite x1.4, round x1.16)), now 6370
+15:12:02 kill-time: BP_OP0011_tu95_CP_C_2147447374 (EA_Unit_01_Air1, Elite, round 9, k 1): up 21 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); 10 deg off its nose at 21.3 km, -1.3 km; by you
+15:12:02 coop: the host's EA_Unit_01_Air1 here: 0 of 2 planes bound to the host's (spawned as gen 65; the host's last ids for it: 4 for gen 65)
+15:12:02 coop: the host's ERA_Unit_01_Dep_Air0 here: 1 of 2 planes bound to the host's (spawned as gen 56; the host's last ids for it: 2 for gen 56)
+15:12:02 coop: strays here: the host asked for the whole picture again (jn)
+15:12:02 coop: 2 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:12:02 coop: a copy here couldn't be finished (health 1000 after)
+15:12:02 coop: 56 copies taken down (the host's run started over), 30 of them never bound to the host's
+15:12:02 stats: round 9 (Veteran, ?, 3 players) (cut short: co-op resync): length 25 s (0 s at the airfield), 1 wave; aircraft down 3 (yours 3), ordinary fighters ? (a joiner can't tell aces; 1 pool fighters down); tailed survival: AI Provoke median - (0 died, 0 escaped), geometric median - (0 died, 1 escaped); kills from behind 0/2 (0%); your kills with missiles 0, gun 0, special 0, nothing seen 3 (0 close); missiles left 27, fired 3 this round; you took 0 HP (missiles -, gun/close -, unknown -); director tactics 0 (none; 0 told); ace reversals 0; tail watch: not measured on a co-op joiner (its enemies are the host's)
+15:12:02 intensity: round 9: you avg 3, peak 5, above 80 for 0 s; comfort avg 51; level 1
+15:12:02 round probe: BP_OP1020_m29a_CP_C_2147447884 taken down here (co-op, not a kill; 1 so far)
+15:12:02 round probe: BP_OP1009_su34_CP_C_2147447538 taken down here (co-op, not a kill; 2 so far)
+15:12:02 round probe: BP_OP1026_su47_CP_C_2147447284 taken down here (co-op, not a kill; 3 so far)
+15:12:02 coop: SV_Unit_PadDummies is up here but no longer tracked (9 alive): 0 of its planes taken down for the host's
+15:12:03 round probe: AI aircraft created #29: BP_OP1026_su47_CP_C_2147444040 (ERA_Unit_02_Dep_Air1, k 0) at (-2.3, 6.6) km, alt 2.7 km, 21.4 km from the airfield
+15:12:03 round probe: AI aircraft created #30: BP_OP1026_su47_CP_C_2147444008 (ERA_Unit_02_Dep_Air1, k 1) at (-2.5, 6.4) km, alt 2.7 km, 21.4 km from the airfield
+15:12:03 round probe: AI aircraft created #31: BP_OP1026_su47_CP_C_2147443976 (ERA_Unit_02_Dep_Air1, k 2) at (-2.0, 6.5) km, alt 2.7 km, 21.1 km from the airfield
+15:12:03 round probe: AI aircraft created #32: BP_OP1026_su47_CP_C_2147443944 (ERA_Unit_02_Dep_Air1, k 3) at (-2.2, 6.2) km, alt 2.7 km, 21.1 km from the airfield
+15:12:03 round probe: AI aircraft created #33: BP_OP1020_m29a_CP_C_2147443885 (ERA_Unit_06_Dep_Air0, k 0) at (12.9, -23.7) km, alt 3.4 km, 19.6 km from the airfield
+15:12:03 round probe: AI aircraft created #34: BP_OP1020_m29a_CP_C_2147443852 (ERA_Unit_06_Dep_Air0, k 1) at (13.1, -23.7) km, alt 3.4 km, 19.6 km from the airfield
+15:12:03 round probe: AI aircraft created #35: BP_OP1025_f15e_CP_C_2147443816 (ERB_Unit_01_Air2, k 0) at (22.0, 28.9) km, alt 0.8 km, 33.8 km from the airfield
+15:12:03 round probe: AI aircraft created #36: BP_OP1025_f15e_CP_C_2147443782 (ERB_Unit_01_Air2, k 1) at (21.8, 28.8) km, alt 0.8 km, 33.6 km from the airfield
+15:12:03 round probe: AI aircraft created #37: BP_OP1025_f15e_CP_C_2147443748 (ERB_Unit_01_Air2, k 2) at (22.2, 28.7) km, alt 0.8 km, 33.6 km from the airfield
+15:12:03 round probe: AI aircraft created #38: BP_OP1025_f15e_CP_C_2147443714 (ERB_Unit_01_Air2, k 3) at (22.0, 28.5) km, alt 0.8 km, 33.4 km from the airfield
+15:12:03 round probe: AI aircraft created #39: BP_OP1009_su34_CP_C_2147443606 (EB_Unit_01_Air0, k 0) at (16.0, 31.2) km, alt 0.7 km, 35.5 km from the airfield
+15:12:03 round probe: AI aircraft created #40: BP_OP1009_su34_CP_C_2147443574 (EB_Unit_01_Air0, k 1) at (15.9, 30.9) km, alt 0.7 km, 35.3 km from the airfield
+15:12:03 round probe: AI aircraft created #41: BP_OP1009_su34_CP_C_2147443542 (EB_Unit_01_Air0, k 2) at (16.3, 31.1) km, alt 0.7 km, 35.4 km from the airfield
+15:12:03 round probe: AI aircraft created #42: BP_OP1009_su34_CP_C_2147443510 (EB_Unit_01_Air0, k 3) at (16.2, 30.8) km, alt 0.7 km, 35.2 km from the airfield
+15:12:03 round probe: AI aircraft created #43: BP_OP1009_su34_CP_C_2147443478 (EB_Unit_01_Air0, k 4) at (16.6, 31.0) km, alt 0.7 km, 35.3 km from the airfield
+15:12:03 round probe: AI aircraft created #44: BP_OP1009_su34_CP_C_2147443446 (EB_Unit_01_Air0, k 5) at (16.5, 30.7) km, alt 0.7 km, 35.1 km from the airfield
+15:12:03 round probe: AI aircraft created #45: BP_OP1006_f35c_CP_C_2147443403 (ERA_Unit_07_Dep_Air0, k 0) at (11.5, 19.5) km, alt 4.5 km, 24.4 km from the airfield
+15:12:03 round probe: AI aircraft created #46: BP_OP1006_f35c_CP_C_2147443373 (ERA_Unit_07_Dep_Air0, k 1) at (11.2, 19.5) km, alt 4.5 km, 24.4 km from the airfield
+15:12:03 round probe: AI aircraft created #47: BP_OP1026_su47_CP_C_2147443340 (ERA_Unit_02_Dep_Air0, k 0) at (24.5, 12.8) km, alt 3.0 km, 19.1 km from the airfield
+15:12:03 round probe: AI aircraft created #48: BP_OP1026_su47_CP_C_2147443308 (ERA_Unit_02_Dep_Air0, k 1) at (24.2, 12.9) km, alt 3.0 km, 19.1 km from the airfield
+15:12:03 round probe: AI aircraft created #49: BP_OP1026_su47_CP_C_2147443273 (ERA_Unit_01_Dep_Air0, k 0) at (-2.5, -17.4) km, alt 2.6 km, 22.7 km from the airfield
+15:12:03 round probe: AI aircraft created #50: BP_OP1026_su47_CP_C_2147443241 (ERA_Unit_01_Dep_Air0, k 1) at (-2.4, -17.6) km, alt 2.6 km, 22.7 km from the airfield
+15:12:03 round probe: AI aircraft created #51: BP_OP1004_f15c_CP_C_2147443206 (ERA_Unit_03_Dep_Air0, k 0) at (-6.2, -10.3) km, alt 6.4 km, 23.1 km from the airfield
+15:12:03 round probe: AI aircraft created #52: BP_OP1004_f15c_CP_C_2147443173 (ERA_Unit_03_Dep_Air0, k 1) at (-6.1, -10.6) km, alt 6.4 km, 23.1 km from the airfield
+15:12:03 round probe: AI aircraft created #53: BP_OP1027_m21b_CP_C_2147443137 (ERA_Unit_05_Dep_Air0, k 0) at (-1.0, -13.5) km, alt 2.3 km, 19.4 km from the airfield
+15:12:03 round probe: AI aircraft created #54: BP_OP1027_m21b_CP_C_2147443106 (ERA_Unit_05_Dep_Air0, k 1) at (-0.9, -13.8) km, alt 2.3 km, 19.4 km from the airfield
+15:12:03 tiers: round 0 Rookie (BP_OP1026_su47_CP_C_2147443976): PilotRank 4 -> 4
+15:12:03 maneuvers: su47 (BP_OP1026_su47_CP_C_2147443976) post-stall off: was cobra true, kulbit true, now cobra false, kulbit false
+15:12:03 maneuvers: su34 (BP_OP1009_su34_CP_C_2147443606) post-stall off: was cobra false, kulbit false, now cobra false, kulbit false
+15:12:03 tiers: round 0 Regular (BP_OP1026_su47_CP_C_2147443308): PilotRank 4 -> 5
+15:12:03 maneuvers: m29a (BP_OP1020_m29a_CP_C_2147443885) post-stall off: was cobra false, kulbit false, now cobra false, kulbit false
+15:12:04 round probe: BP_OP1026_su47_CP_C_2147443241 down
+15:12:04 kill: BP_OP1026_su47_CP_C_2147443241; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:12:04 credits: +140 (su47 down (fighter, Veteran x1.25, round x1.16)), now 6510
+15:12:04 kill-time: BP_OP1026_su47_CP_C_2147443241 (ERA_Unit_01_Dep_Air0, no tier, round 9, k 1, ordinary ?): up 1 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:12:04 round probe: BP_OP1027_m21b_CP_C_2147447048 taken down here (co-op, not a kill; 25 so far)
+15:12:07 ammo: now gun 2400/2400, missiles 27/148, special 1 7/8, special 2 4/4, flares 3/4
+15:12:10 coop: SV_Unit_PadDummies's last copies are still up; spawning anyway
+15:12:10 coop: the host's SV_Unit_PadDummies not spawned here (its last flight is still up)
+15:12:14 coopfire: player 2's first launch on their real plane here: queued
+15:12:17 specials: ERA_Unit_06_Dep_Air0 B (m29a_common_svb) fires its NPC_FCS_PlaneQAAM000 at you, 4.4 km (RE_SV_SpecFire_16B: 1)
+15:12:18 round probe: BP_OP1009_su34_CP_C_2147443542 down, last seen 0.5 km up, 21.6 km from you
+15:12:18 kill: BP_OP1009_su34_CP_C_2147443542; you were 20.9 km away, 4 deg off its nose, altitude +0.8 km; you fired nothing seen in the last 6 s
+15:12:18 credits: +230 (su34 down (bomber, Rookie x1.0, round x1.16)), now 6740
+15:12:18 kill-time: BP_OP1009_su34_CP_C_2147443542 (EB_Unit_01_Air0, Rookie, round 9, k 2): up 15 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); 4 deg off its nose at 20.9 km, +0.8 km; by you
+15:12:18 round probe: BP_OP1009_su34_CP_C_2147443478 down, last seen 0.5 km up, 21.5 km from you
+15:12:18 kill: BP_OP1009_su34_CP_C_2147443478; you were 20.7 km away, 5 deg off its nose, altitude +0.8 km; you fired nothing seen in the last 6 s
+15:12:18 credits: +290 (su34 down (bomber, Veteran x1.25, round x1.16)), now 7030
+15:12:18 kill-time: BP_OP1009_su34_CP_C_2147443478 (EB_Unit_01_Air0, Veteran, round 9, k 4): up 15 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); 5 deg off its nose at 20.7 km, +0.8 km; by you
+15:12:19 round probe: BP_OP1009_su34_CP_C_2147443574 down, last seen 0.3 km up, 14.8 km from you
+15:12:19 kill: BP_OP1009_su34_CP_C_2147443574; you were 13.9 km away, 7 deg off its nose, altitude +1.0 km; you fired msl x2 in the last 6 s
+15:12:19 credits: +230 (su34 down (bomber, Rookie x1.0, round x1.16)), now 7260
+15:12:19 kill-time: BP_OP1009_su34_CP_C_2147443574 (EB_Unit_01_Air0, Rookie, round 9, k 1): up 17 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); 7 deg off its nose at 13.9 km, +1.0 km; by you
+15:12:21 round probe: BP_OP1026_su47_CP_C_2147443308 down, last seen 1.3 km up, 0.1 km from you
+15:12:21 kill: BP_OP1026_su47_CP_C_2147443308; you were 0.9 km away, 157 deg off its nose, altitude +0.0 km; you fired msl x2 in the last 6 s
+15:12:21 credits: +130 (su47 down (fighter, Regular x1.1, round x1.16)), now 7390
+15:12:21 kill-time: BP_OP1026_su47_CP_C_2147443308 (ERA_Unit_02_Dep_Air0, Regular, round 9, k 1, ordinary ?): up 19 s, engaged 18 s (within 5 km), since your first hit -, tailed 4 s (AI Provoke -); 157 deg off its nose at 0.9 km, +0.0 km; by you
+15:12:22 coop: 6 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:12:23 round probe: BP_OP1009_su34_CP_C_2147443606 down, last seen 0.5 km up, 21.6 km from you
+15:12:23 kill: BP_OP1009_su34_CP_C_2147443606; you were 21.0 km away, 3 deg off its nose, altitude +0.7 km; you fired msl x2 in the last 6 s
+15:12:23 credits: +230 (su34 down (bomber, Rookie x1.0, round x1.16)), now 7620
+15:12:23 kill-time: BP_OP1009_su34_CP_C_2147443606 (EB_Unit_01_Air0, Rookie, round 9, k 0): up 20 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); 3 deg off its nose at 21.0 km, +0.7 km; by you
+15:12:26 round probe: BP_OP1009_su34_CP_C_2147443510 down, last seen 0.2 km up, 12.2 km from you
+15:12:26 kill: BP_OP1009_su34_CP_C_2147443510; you were 12.8 km away, 6 deg off its nose, altitude +0.9 km; you fired nothing seen in the last 6 s
+15:12:26 credits: +290 (su34 down (bomber, Veteran x1.25, round x1.16)), now 7910
+15:12:26 kill-time: BP_OP1009_su34_CP_C_2147443510 (EB_Unit_01_Air0, Veteran, round 9, k 3): up 23 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); 6 deg off its nose at 12.8 km, +0.9 km; by you
+15:12:27 coop: the host's ERA_Unit_01_Dep_Air0 here: 1 of 2 planes bound to the host's (spawned as gen 56; the host's last ids for it: 4 for gen 56)
+15:12:27 coop: the host's EB_Unit_01_Air0 here: 0 of 6 planes bound to the host's (spawned as gen 64; the host's last ids for it: 18 for gen 64)
+15:12:27 coop: the host's ERA_Unit_02_Dep_Air0 here: 1 of 2 planes bound to the host's (spawned as gen 55; the host's last ids for it: 4 for gen 55)
+15:12:27 coop: 2 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:12:29 specials: ERA_Unit_05_Dep_Air0 A (m21b_common_svb) fires its NPC_FCS_Plane2AAM000 at you, 5.2 km (RE_SV_SpecFire_13A: 1)
+15:12:31 coopfire: 60 s: 7 shots sent, 17 received (0 fired here, 0 refused, 0 dropped, 6 with their target not here, 6 with no plane here, 0 not shown: you were in the STORE), your gun 3 bursts, your flares 0, your gear flips 1, afterburner flips 16, throttle up to 1.000 (ab_throttle 0.9); real planes' launches (T4b) 11 queued, 0 refused
+15:12:32 round probe: BP_OP1026_su47_CP_C_2147443273 down, last seen 1.3 km up, 6.0 km from you
+15:12:32 kill: BP_OP1026_su47_CP_C_2147443273; you were 7.1 km away, 48 deg off its nose, altitude +0.1 km; you fired msl x2 in the last 6 s
+15:12:32 credits: +130 (su47 down (fighter, Regular x1.1, round x1.16)), now 8040
+15:12:32 kill-time: BP_OP1026_su47_CP_C_2147443273 (ERA_Unit_01_Dep_Air0, Regular, round 9, k 0, ordinary ?): up 29 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); 48 deg off its nose at 7.1 km, +0.1 km; by you
+15:12:32 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:12:32 specials: ERA_Unit_02_Dep_Air0 A (su47_common_svb) fires its NPC_FCS_PlaneQAAM000 at you, 4.1 km (RE_SV_SpecFire_04A: 1)
+15:12:37 perf: tick avg 20.8 ms (halves 14.8 + 5.9), worst half 293.0 ms (first 293, second 80) over 241 ticks; parts (ms a tick / worst, share): coop 6.4/178 31%, allies 1.9/79 9%, shop 1.3/31 6%, coop ammo 1.0/26 5%, rounds 0.9/110 5%, ammo 0.7/24 3%, hud 0.6/110 3%, menu 0.3/7 1%, planes 0.3/4 1%, hits 0.2/5 1%, music 0.1/1 0%, specials 0.1/2 0%; untimed 6.8 33%; memory 22233 MB, committed 29735 MB
+15:12:43 round probe: BP_OP1006_f35c_CP_C_2147443373 down, last seen 1.6 km up, 8.4 km from you
+15:12:43 kill: BP_OP1006_f35c_CP_C_2147443373; you were 7.0 km away, 175 deg off its nose, altitude -0.1 km; you fired gun x15, flr x1 in the last 6 s
+15:12:43 credits: +140 (f35c down (fighter, Veteran x1.25, round x1.16)), now 8180
+15:12:43 kill-time: BP_OP1006_f35c_CP_C_2147443373 (ERA_Unit_07_Dep_Air0, Veteran, round 9, k 1, ordinary ?): up 41 s, engaged 16 s (within 5 km), since your first hit -, tailed - (AI Provoke -); 175 deg off its nose at 7.0 km, -0.1 km; by you
+15:12:45 round probe: BP_OP1025_f15e_CP_C_2147443816 down, last seen 0.8 km up, 5.7 km from you
+15:12:45 kill: BP_OP1025_f15e_CP_C_2147443816; you were 4.4 km away, 137 deg off its nose, altitude +0.7 km; you fired gun x23, flr x1 in the last 6 s
+15:12:45 credits: +290 (f15e down (bomber, Veteran x1.25, round x1.16)), now 8470
+15:12:45 kill-time: BP_OP1025_f15e_CP_C_2147443816 (ERB_Unit_01_Air2, Veteran, round 9, k 0): up 42 s, engaged 8 s (within 5 km), since your first hit -, tailed - (AI Provoke -); 137 deg off its nose at 4.4 km, +0.7 km; by you
+15:12:45 tell: bracket (the host's): RE_SV_RadioBracketA (fired)
+15:12:46 coop: director RE_SV_Salvo_05A fired here (ERA_Unit_02_Dep_Air1): fired
+15:12:46 coop: director RE_SV_Salvo_05B fired here (ERA_Unit_02_Dep_Air1): fired
+15:12:47 round probe: BP_OP1026_su47_CP_C_2147444040 down, last seen 1.3 km up, 1.1 km from you
+15:12:47 kill: BP_OP1026_su47_CP_C_2147444040; you were 2.3 km away, 2 deg off its nose, altitude +0.0 km; you fired gun x49, flr x1 in the last 6 s
+15:12:47 credits: +140 (su47 down (fighter, Veteran x1.25, round x1.16)), now 8610
+15:12:47 kill-time: BP_OP1026_su47_CP_C_2147444040 (ERA_Unit_02_Dep_Air1, Veteran, round 9, k 0, ordinary ?): up 44 s, engaged 4 s (within 5 km), since your first hit -, tailed - (AI Provoke -); 2 deg off its nose at 2.3 km, +0.0 km; by you
+15:12:47 coop: 3 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:13:00 round probe: BP_OP1026_su47_CP_C_2147443976 down, last seen 2.3 km up, 0.4 km from you
+15:13:00 kill: BP_OP1026_su47_CP_C_2147443976; you were 0.4 km away, 179 deg off its nose, altitude -0.2 km; you fired msl x2 in the last 6 s
+15:13:00 credits: +120 (su47 down (fighter, Rookie x1.0, round x1.16)), now 8730
+15:13:00 kill-time: BP_OP1026_su47_CP_C_2147443976 (ERA_Unit_02_Dep_Air1, Rookie, round 9, k 2, ordinary ?): up 57 s, engaged 16 s (within 5 km), since your first hit -, tailed 10 s (AI Provoke -); 179 deg off its nose at 0.4 km, -0.2 km; by you
+15:13:03 coop: 2 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:13:07 tell: cover_ask (the host's): RE_SV_RadioEnCoverC (fired)
+15:13:08 ammo: now gun 2400/2400, missiles 19/148, special 1 7/8, special 2 4/4, flares 2/4
+15:13:16 round probe: BP_OP1006_f35c_CP_C_2147443403 down, last seen 3.2 km up, 2.0 km from you
+15:13:16 kill: BP_OP1006_f35c_CP_C_2147443403; you were 2.6 km away, 66 deg off its nose, altitude -1.6 km; you fired sp1 x1 in the last 6 s
+15:13:16 credits: +140 (f35c down (fighter, Veteran x1.25, round x1.16)), now 8870
+15:13:16 kill-time: BP_OP1006_f35c_CP_C_2147443403 (ERA_Unit_07_Dep_Air0, Veteran, round 9, k 0, ordinary ?): up 73 s, engaged 59 s (within 5 km), since your first hit -, tailed - (AI Provoke -); 66 deg off its nose at 2.6 km, -1.6 km; by you
+15:13:18 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:13:25 hud: callout 'AIRFIELD UNDER ATTACK'
+15:13:26 round probe: BP_OP1026_su47_CP_C_2147443340 down, last seen 3.3 km up, 4.2 km from you
+15:13:26 kill: BP_OP1026_su47_CP_C_2147443340; you were 3.7 km away, 47 deg off its nose, altitude -2.6 km; you fired gun x24 in the last 6 s
+15:13:26 credits: +120 (su47 down (fighter, Rookie x1.0, round x1.16)), now 8990
+15:13:26 kill-time: BP_OP1026_su47_CP_C_2147443340 (ERA_Unit_02_Dep_Air0, Rookie, round 9, k 0, ordinary ?): up 84 s, engaged 55 s (within 5 km), since your first hit -, tailed - (AI Provoke -); 47 deg off its nose at 3.7 km, -2.6 km; by you
+15:13:28 round probe: BP_OP1004_f15c_CP_C_2147443173 down, last seen 1.4 km up, 4.9 km from you
+15:13:28 kill: BP_OP1004_f15c_CP_C_2147443173; you were 5.4 km away, 152 deg off its nose, altitude -0.8 km; you fired gun x24 in the last 6 s
+15:13:28 credits: +160 (f15c down (fighter, Elite x1.4, round x1.16)), now 9150
+15:13:28 kill-time: BP_OP1004_f15c_CP_C_2147443173 (ERA_Unit_03_Dep_Air0, Elite, round 9, k 1, ordinary ?): up 85 s, engaged 77 s (within 5 km), since your first hit 80 s, tailed - (AI Provoke -); 152 deg off its nose at 5.4 km, -0.8 km; by you
+15:13:28 coop: 2 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:13:31 coopfire: 60 s: 4 shots sent, 23 received (0 fired here, 0 refused, 0 dropped, 0 with their target not here, 0 with no plane here, 0 not shown: you were in the STORE), your gun 5 bursts, your flares 1, your gear flips 0, afterburner flips 20, throttle up to 1.000 (ab_throttle 0.9); real planes' launches (T4b) 23 queued, 0 refused
+15:13:35 hud: hidden (paused)
+15:13:35 hud: shown
+15:13:36 round probe: BP_OP1026_su47_CP_C_2147444008 down, last seen 3.5 km up, 9.4 km from you
+15:13:36 kill: BP_OP1026_su47_CP_C_2147444008; you were 9.5 km away, 20 deg off its nose, altitude -2.7 km; you fired gun x30 in the last 6 s
+15:13:36 credits: +140 (su47 down (fighter, Veteran x1.25, round x1.16)), now 9290
+15:13:36 kill-time: BP_OP1026_su47_CP_C_2147444008 (ERA_Unit_02_Dep_Air1, Veteran, round 9, k 1, ordinary ?): up 93 s, engaged 55 s (within 5 km), since your first hit -, tailed - (AI Provoke -); 20 deg off its nose at 9.5 km, -2.7 km; by you
+15:13:38 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:13:40 round probe: BP_OP1025_f15e_CP_C_2147443714 down, last seen 0.6 km up, 1.8 km from you
+15:13:40 kill: BP_OP1025_f15e_CP_C_2147443714; you were 1.8 km away, 34 deg off its nose, altitude +1.3 km; you fired gun x6, msl x2 in the last 6 s
+15:13:40 credits: +290 (f15e down (bomber, Veteran x1.25, round x1.16)), now 9580
+15:13:40 kill-time: BP_OP1025_f15e_CP_C_2147443714 (ERB_Unit_01_Air2, Veteran, round 9, k 3): up 98 s, engaged 71 s (within 5 km), since your first hit 22 s, tailed - (AI Provoke -); 34 deg off its nose at 1.8 km, +1.3 km; by you
+15:13:44 coop: 2 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:13:46 round probe: BP_OP1025_f15e_CP_C_2147443782 down, last seen 1.5 km up, 1.2 km from you
+15:13:46 kill: BP_OP1025_f15e_CP_C_2147443782; you were 1.3 km away, 173 deg off its nose, altitude +0.1 km; you fired msl x2 in the last 6 s
+15:13:46 credits: +290 (f15e down (bomber, Veteran x1.25, round x1.16)), now 9870
+15:13:46 kill-time: BP_OP1025_f15e_CP_C_2147443782 (ERB_Unit_01_Air2, Veteran, round 9, k 1): up 103 s, engaged 75 s (within 5 km), since your first hit 12 s, tailed 6 s (AI Provoke -); 173 deg off its nose at 1.3 km, +0.1 km; by you
+15:13:48 coopfire: your weapon BP_plwp_mpbm_x0_C: a special weapon (the stand-ins' missile slot 2 for now)
+15:13:49 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:13:54 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:14:06 round probe: BP_OP1020_m29a_CP_C_2147443852 down, last seen 1.2 km up, 4.8 km from you
+15:14:06 kill: BP_OP1020_m29a_CP_C_2147443852; you were 4.6 km away, 79 deg off its nose, altitude +0.8 km; you fired msl x2 in the last 6 s
+15:14:06 credits: +80 (m29a down (fighter, Elite x1.4, round x1.16, by defences x0.50)), now 9950
+15:14:06 kills: BP_OP1020_m29a_CP_C_2147443852 (ERA_Unit_06_Dep_Air0) went down to the defences (damage: you 0, allies 0, ships 0, defences 20)
+15:14:06 kill-time: BP_OP1020_m29a_CP_C_2147443852 (ERA_Unit_06_Dep_Air0, Elite, round 9, k 1, ordinary ?): up 123 s, engaged 108 s (within 5 km), since your first hit -, tailed - (AI Provoke -); 79 deg off its nose at 4.6 km, +0.8 km; by defences
+15:14:08 hit: -40 HP in 1 hit, health now 68% (86 HP); missiles near: none (gun / pulse cannon / blast / collision?); nearest enemies: ERA_Unit_06_Dep_Air0 0.11 km, ERA_Unit_05_Dep_Air0 1.71 km
+15:14:09 round probe: BP_OP1027_m21b_CP_C_2147443106 down, last seen 1.9 km up, 1.7 km from you
+15:14:09 kill: BP_OP1027_m21b_CP_C_2147443106; you were 1.4 km away, 146 deg off its nose, altitude -0.0 km; you fired msl x2 in the last 6 s
+15:14:09 credits: +140 (m21b down (fighter, Veteran x1.25, round x1.16)), now 10090
+15:14:09 kill-time: BP_OP1027_m21b_CP_C_2147443106 (ERA_Unit_05_Dep_Air0, Veteran, round 9, k 1, ordinary ?): up 126 s, engaged 98 s (within 5 km), since your first hit -, tailed 6 s (AI Provoke -); 146 deg off its nose at 1.4 km, -0.0 km; by you
+15:14:09 coop: strays here: the host asked for the whole picture again (jn)
+15:14:09 coop: 2 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:14:09 ammo: now gun 2400/2400, missiles 11/148, special 1 6/8, special 2 3/4, flares 1/4
+15:14:10 coop: 18 copies taken down (the host's run started over), 15 of them never bound to the host's
+15:14:10 stats: round 9 (Veteran, ?, 3 players) (cut short: co-op resync): length 126 s (0 s at the airfield), 1 wave; aircraft down 20 (yours 19), ordinary fighters ? (a joiner can't tell aces; 12 pool fighters down); tailed survival: AI Provoke median - (0 died, 0 escaped), geometric median 6 s (4 died, 21 escaped); kills from behind 4/18 (22%); your kills with missiles 8, gun 6, special 1, nothing seen 4 (2 close); missiles left 11, fired 16 this round; you took 40 HP (missiles 0%, gun/close 100%, unknown 0%); director tactics 0 (none; 0 told); ace reversals 0; tail watch: not measured on a co-op joiner (its enemies are the host's)
+15:14:10 coop: SV_Unit_PadDummies is up here but no longer tracked (9 alive): 0 of its planes taken down for the host's
+15:14:10 hud: callout 'SAM SITE LOST' / 'THE STORE CAN BUILD ANOTHER'
+15:14:10 allies: SAM SITE (SV_Unit_SAM_A) lost in round 0
+15:14:10 round probe: AI aircraft created #55: BP_OP1020_m29a_CP_C_2147439060 (ERA_Unit_06_Dep_Air0, k 0) at (12.9, -23.7) km, alt 3.4 km, 19.6 km from the airfield
+15:14:10 round probe: AI aircraft created #56: BP_OP1020_m29a_CP_C_2147439027 (ERA_Unit_06_Dep_Air0, k 1) at (13.1, -23.7) km, alt 3.4 km, 19.6 km from the airfield
+15:14:10 round probe: AI aircraft created #57: BP_OP1004_f15c_CP_C_2147438920 (ERA_Unit_03_Dep_Air0, k 0) at (-6.2, -10.3) km, alt 6.4 km, 23.1 km from the airfield
+15:14:10 round probe: AI aircraft created #58: BP_OP1004_f15c_CP_C_2147438887 (ERA_Unit_03_Dep_Air0, k 1) at (-6.1, -10.6) km, alt 6.4 km, 23.1 km from the airfield
+15:14:11 round probe: BP_OP1020_m29a_CP_C_2147439027 down
+15:14:11 kill: BP_OP1020_m29a_CP_C_2147439027; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:14:11 credits: +140 (m29a down (fighter, Veteran x1.25, round x1.16)), now 10230
+15:14:11 kill-time: BP_OP1020_m29a_CP_C_2147439027 (ERA_Unit_06_Dep_Air0, no tier, round 9, k 1, ordinary ?): up 1 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:14:12 round probe: BP_OP1004_f15c_CP_C_2147438920 down
+15:14:12 kill: BP_OP1004_f15c_CP_C_2147438920; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:14:12 credits: +140 (f15c down (fighter, Veteran x1.25, round x1.16)), now 10370
+15:14:12 kill-time: BP_OP1004_f15c_CP_C_2147438920 (ERA_Unit_03_Dep_Air0, no tier, round 9, k 0, ordinary ?): up 2 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:14:12 round probe: BP_OP1004_f15c_CP_C_2147438887 down
+15:14:12 kill: BP_OP1004_f15c_CP_C_2147438887; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:14:12 credits: +140 (f15c down (fighter, Veteran x1.25, round x1.16)), now 10510
+15:14:12 kill-time: BP_OP1004_f15c_CP_C_2147438887 (ERA_Unit_03_Dep_Air0, no tier, round 9, k 1, ordinary ?): up 2 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:14:17 coop: SV_Unit_PadDummies's last copies are still up; spawning anyway
+15:14:17 coop: the host's SV_Unit_PadDummies not spawned here (its last flight is still up)
+15:14:29 coop: 3 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:14:32 coopfire: 60 s: 13 shots sent, 10 received (0 fired here, 0 refused, 0 dropped, 0 with their target not here, 0 with no plane here, 0 not shown: you were in the STORE), your gun 2 bursts, your flares 0, your gear flips 0, afterburner flips 6, throttle up to 1.000 (ab_throttle 0.9); real planes' launches (T4b) 10 queued, 0 refused
+15:14:35 coop: the host's ERA_Unit_03_Dep_Air0 here: 0 of 2 planes bound to the host's (spawned as gen 57; the host's last ids for it: 6 for gen 57)
+15:14:35 coop: the host's ERA_Unit_06_Dep_Air0 here: 1 of 2 planes bound to the host's (spawned as gen 60; the host's last ids for it: 8 for gen 60)
+15:14:37 credits: +2250 (round 9 cleared (the host's round)), now 12760
+15:14:37 hud: callout 'ROUND 9 COMPLETE' / 'NEXT ROUND IN 30 SECONDS'
+15:14:37 hud: callout 'ALLIES REPAIRED' / '1 BACK TO FULL HEALTH'
+15:14:38 round probe: BP_OP1020_m29a_CP_C_2147439060 down, last seen 3.6 km up, 0.1 km from you
+15:14:38 kill: BP_OP1020_m29a_CP_C_2147439060; you were 0.5 km away, 144 deg off its nose, altitude -0.4 km; you fired msl x2 in the last 6 s
+15:14:38 credits: +140 (m29a down (fighter, Veteran x1.25, round x1.16)), now 12900
+15:14:38 kill-time: BP_OP1020_m29a_CP_C_2147439060 (ERA_Unit_06_Dep_Air0, Veteran, round 9, k 0, ordinary ?): up 28 s, engaged 27 s (within 5 km), since your first hit 8 s, tailed 4 s (AI Provoke -); 144 deg off its nose at 0.5 km, -0.4 km; by you
+15:14:40 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:14:42 stats: round 9 (Veteran, ?, 3 players): length 27 s (0 s at the airfield), 1 wave; aircraft down 4 (yours 4), ordinary fighters ? (a joiner can't tell aces; 4 pool fighters down); tailed survival: AI Provoke median - (0 died, 0 escaped), geometric median 4 s (1 died, 1 escaped); kills from behind 1/1 (100%); your kills with missiles 1, gun 0, special 0, nothing seen 3 (1 close); missiles left 5, fired 6 this round; you took 0 HP (missiles -, gun/close -, unknown -); director tactics 0 (none; 0 told); ace reversals 0; tail watch: not measured on a co-op joiner (its enemies are the host's)
+15:15:05 hud: callout 'ROUND 10' / 'HOSTILES INBOUND'
+15:15:09 round probe: AI aircraft created #59: BP_OP1020_m29a_CP_C_2147438071 (ERA_Unit_05_Dep_Air0, k 0) at (3.2, -21.5) km, alt 3.0 km, 21.5 km from the airfield
+15:15:09 round probe: AI aircraft created #60: BP_OP1020_m29a_CP_C_2147438038 (ERA_Unit_05_Dep_Air0, k 1) at (3.5, -21.7) km, alt 3.0 km, 21.5 km from the airfield
+15:15:09 tiers: round 10 Elite (BP_OP1020_m29a_CP_C_2147438071): PilotRank 4 -> 5
+15:15:10 tiers: round 10 Ace (BP_OP1020_m29a_CP_C_2147438038): PilotRank 4 -> 5
+15:15:11 ammo: now gun 2400/2400, missiles 5/148, special 1 6/8, special 2 3/4, flares 1/4
+15:15:12 round probe: AI aircraft created #61: BP_OP1030_su33_CP_C_2147437974 (ERA_Unit_02_Dep_Air0, k 0) at (9.8, -25.6) km, alt 3.5 km, 22.1 km from the airfield
+15:15:12 round probe: AI aircraft created #62: BP_OP1030_su33_CP_C_2147437938 (ERA_Unit_02_Dep_Air0, k 1) at (10.0, -25.7) km, alt 3.5 km, 22.1 km from the airfield
+15:15:12 maneuvers: su33 (BP_OP1030_su33_CP_C_2147437938) post-stall allowed: was cobra true, kulbit false, now cobra true, kulbit true
+15:15:15 round probe: AI aircraft created #63: BP_OP1004_f15c_CP_C_2147437895 (ERA_Unit_04_Dep_Air1, k 0) at (17.8, -22.8) km, alt 6.5 km, 18.5 km from the airfield
+15:15:15 round probe: AI aircraft created #64: BP_OP1004_f15c_CP_C_2147437862 (ERA_Unit_04_Dep_Air1, k 1) at (18.1, -22.8) km, alt 6.5 km, 18.5 km from the airfield
+15:15:15 round probe: AI aircraft created #65: BP_OP1004_f15c_CP_C_2147437829 (ERA_Unit_04_Dep_Air1, k 2) at (17.8, -22.5) km, alt 6.5 km, 18.2 km from the airfield
+15:15:15 round probe: AI aircraft created #66: BP_OP1004_f15c_CP_C_2147437796 (ERA_Unit_04_Dep_Air1, k 3) at (18.1, -22.5) km, alt 6.5 km, 18.2 km from the airfield
+15:15:18 round probe: AI aircraft created #67: BP_OP1008_j39e_CP_C_2147437756 (ERA_Unit_07_Dep_Air1, k 0) at (0.0, -15.3) km, alt 2.2 km, 19.4 km from the airfield
+15:15:18 round probe: AI aircraft created #68: BP_OP1008_j39e_CP_C_2147437724 (ERA_Unit_07_Dep_Air1, k 1) at (0.2, -15.5) km, alt 2.2 km, 19.4 km from the airfield
+15:15:18 round probe: AI aircraft created #69: BP_OP1008_j39e_CP_C_2147437693 (ERA_Unit_07_Dep_Air1, k 2) at (0.3, -15.1) km, alt 2.2 km, 19.1 km from the airfield
+15:15:18 round probe: AI aircraft created #70: BP_OP1008_j39e_CP_C_2147437662 (ERA_Unit_07_Dep_Air1, k 3) at (0.5, -15.3) km, alt 2.2 km, 19.1 km from the airfield
+15:15:19 maneuvers: j39e (BP_OP1008_j39e_CP_C_2147437756) post-stall allowed: was cobra false, kulbit false, now cobra true, kulbit true
+15:15:19 late: round 10 enemies' health x0.75 (skirm x0.75) (BP_OP1008_j39e_CP_C_2147437756: 413 -> 310)
+15:15:22 round probe: AI aircraft created #71: BP_OP1028_su35_CP_C_2147437625 (ERA_Unit_01_Dep_Air1, k 0) at (2.6, 10.1) km, alt 2.3 km, 19.8 km from the airfield
+15:15:22 round probe: AI aircraft created #72: BP_OP1028_su35_CP_C_2147437594 (ERA_Unit_01_Dep_Air1, k 1) at (2.4, 9.9) km, alt 2.3 km, 19.8 km from the airfield
+15:15:22 round probe: AI aircraft created #73: BP_OP1028_su35_CP_C_2147437564 (ERA_Unit_01_Dep_Air1, k 2) at (2.8, 9.9) km, alt 2.3 km, 19.5 km from the airfield
+15:15:22 round probe: AI aircraft created #74: BP_OP1028_su35_CP_C_2147437534 (ERA_Unit_01_Dep_Air1, k 3) at (2.6, 9.7) km, alt 2.3 km, 19.5 km from the airfield
+15:15:23 maneuvers: su35 (BP_OP1028_su35_CP_C_2147437625) post-stall allowed: was cobra false, kulbit false, now cobra true, kulbit true
+15:15:25 round probe: AI aircraft created #75: BP_OP1028_su35_CP_C_2147437500 (ERA_Unit_01_Dep_Air0, k 0) at (-1.7, 11.8) km, alt 3.7 km, 24.0 km from the airfield
+15:15:25 round probe: AI aircraft created #76: BP_OP1028_su35_CP_C_2147437470 (ERA_Unit_01_Dep_Air0, k 1) at (-1.9, 11.6) km, alt 3.7 km, 24.0 km from the airfield
+15:15:28 round probe: AI aircraft created #77: BP_OP1008_j39e_CP_C_2147437437 (ERA_Unit_08_Dep_Air0, k 0) at (29.7, 11.0) km, alt 2.4 km, 20.5 km from the airfield
+15:15:28 round probe: AI aircraft created #78: BP_OP1008_j39e_CP_C_2147437406 (ERA_Unit_08_Dep_Air0, k 1) at (29.5, 11.2) km, alt 2.4 km, 20.5 km from the airfield
+15:15:32 coopfire: 60 s: 2 shots sent, 1 received (0 fired here, 0 refused, 0 dropped, 0 with their target not here, 0 with no plane here, 0 not shown: you were in the STORE), your gun 0 bursts, your flares 0, your gear flips 0, afterburner flips 0, throttle up to 1.000 (ab_throttle 0.9); real planes' launches (T4b) 1 queued, 0 refused
+15:15:32 round probe: AI aircraft created #79: BP_OP1027_m21b_CP_C_2147437372 (ERA_Unit_05_Dep_Air1, k 0) at (3.9, 9.7) km, alt 2.5 km, 18.6 km from the airfield
+15:15:32 round probe: AI aircraft created #80: BP_OP1027_m21b_CP_C_2147437341 (ERA_Unit_05_Dep_Air1, k 1) at (3.7, 9.5) km, alt 2.5 km, 18.6 km from the airfield
+15:15:32 round probe: AI aircraft created #81: BP_OP1027_m21b_CP_C_2147437310 (ERA_Unit_05_Dep_Air1, k 2) at (4.1, 9.5) km, alt 2.5 km, 18.3 km from the airfield
+15:15:32 round probe: AI aircraft created #82: BP_OP1027_m21b_CP_C_2147437279 (ERA_Unit_05_Dep_Air1, k 3) at (3.9, 9.3) km, alt 2.5 km, 18.3 km from the airfield
+15:15:35 coopfire: player 2's gear down here: EnableLandingGear done
+15:15:35 round probe: AI aircraft created #83: BP_OP1020_m29a_CP_C_2147437245 (ERA_Unit_06_Dep_Air1, k 0) at (-6.1, -10.3) km, alt 4.2 km, 23.0 km from the airfield
+15:15:35 round probe: AI aircraft created #84: BP_OP1020_m29a_CP_C_2147437212 (ERA_Unit_06_Dep_Air1, k 1) at (-6.1, -10.6) km, alt 4.2 km, 23.0 km from the airfield
+15:15:35 round probe: AI aircraft created #85: BP_OP1020_m29a_CP_C_2147437179 (ERA_Unit_06_Dep_Air1, k 2) at (-5.9, -10.2) km, alt 4.2 km, 22.7 km from the airfield
+15:15:35 round probe: AI aircraft created #86: BP_OP1020_m29a_CP_C_2147437146 (ERA_Unit_06_Dep_Air1, k 3) at (-5.8, -10.5) km, alt 4.2 km, 22.7 km from the airfield
+15:15:40 specials: ERA_Unit_07_Dep_Air1 A (j39e_common_svb) fires its NPC_FCS_PlaneLAAM000_SV_SKIRM at you, 12.0 km (RE_SV_SpecFire_20A: 1)
+15:15:55 round probe: BP_OP1004_f15c_CP_C_2147437895 down, last seen 7.7 km up, 0.7 km from you
+15:15:55 kill: BP_OP1004_f15c_CP_C_2147437895; you were 0.8 km away, 128 deg off its nose, altitude -0.1 km; you fired sp2 x1 in the last 6 s
+15:15:55 credits: +170 (f15c down (fighter, Elite x1.4, round x1.18)), now 13070
+15:15:55 kill-time: BP_OP1004_f15c_CP_C_2147437895 (ERA_Unit_04_Dep_Air1, Elite, round 10, k 0, ordinary ?): up 40 s, engaged 18 s (within 5 km), since your first hit -, tailed 6 s (AI Provoke -); 128 deg off its nose at 0.8 km, -0.1 km; by you
+15:15:56 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:16:01 specials: ERA_Unit_02_Dep_Air0 A (su33_common_svb) fires its NPC_FCS_Plane2AAM000 at you, 5.8 km (RE_SV_SpecFire_04A: 1)
+15:16:01 specials: ERA_Unit_04_Dep_Air1 D (f15c_common_svb) fires its NPC_FCS_Plane2AAM000 at you, 1.6 km (RE_SV_SpecFire_11D: 1)
+15:16:12 ammo: now gun 2400/2400, missiles 1/148, special 1 6/8, special 2 2/4, flares 1/4
+15:16:24 tell: bracket (the host's): RE_SV_RadioBracketC (fired)
+15:16:25 coop: director RE_SV_Salvo_04B fired here (ERA_Unit_02_Dep_Air0): fired
+15:16:25 coop: director RE_SV_Salvo_20C fired here (ERA_Unit_07_Dep_Air1): fired
+15:16:27 round probe: BP_OP1004_f15c_CP_C_2147437796 down, last seen 3.5 km up, 0.4 km from you
+15:16:27 kill: BP_OP1004_f15c_CP_C_2147437796; you were 0.9 km away, 164 deg off its nose, altitude +0.2 km; you fired nothing seen in the last 6 s
+15:16:27 credits: +170 (f15c down (fighter, Elite x1.4, round x1.18)), now 13240
+15:16:27 kill-time: BP_OP1004_f15c_CP_C_2147437796 (ERA_Unit_04_Dep_Air1, Elite, round 10, k 3, ordinary ?): up 71 s, engaged 53 s (within 5 km), since your first hit -, tailed 6 s (AI Provoke -); 164 deg off its nose at 0.9 km, +0.2 km; by you
+15:16:27 coop: strays here: the host asked for the whole picture again (jn)
+15:16:27 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:16:27 coopfire: player 2's gear up here: EnableLandingGear done
+15:16:27 coop: 41 copies taken down (the host's run started over), 14 of them never bound to the host's
+15:16:27 stats: round 10 (Elite, ?, 3 players) (cut short: co-op resync): length 78 s (0 s at the airfield), 2 waves; aircraft down 2 (yours 2), ordinary fighters ? (a joiner can't tell aces; 2 pool fighters down); tailed survival: AI Provoke median - (0 died, 0 escaped), geometric median 6 s (2 died, 11 escaped); kills from behind 2/2 (100%); your kills with missiles 0, gun 0, special 1, nothing seen 1 (2 close); missiles left 0, fired 5 this round; you took 0 HP (missiles -, gun/close -, unknown -); director tactics 0 (none; 0 told); ace reversals 0; tail watch: not measured on a co-op joiner (its enemies are the host's)
+15:16:27 coop: SV_Unit_PadDummies is up here but no longer tracked (9 alive): 0 of its planes taken down for the host's
+15:16:28 intensity: round 10: you avg 18, peak 34, above 80 for 0 s; comfort avg 35; level 1
+15:16:28 round probe: AI aircraft created #87: BP_OP1008_j39e_CP_C_2147436273 (ERA_Unit_08_Dep_Air0, k 0) at (29.7, 11.0) km, alt 2.4 km, 20.5 km from the airfield
+15:16:28 round probe: AI aircraft created #88: BP_OP1008_j39e_CP_C_2147436242 (ERA_Unit_08_Dep_Air0, k 1) at (29.5, 11.2) km, alt 2.4 km, 20.5 km from the airfield
+15:16:28 round probe: AI aircraft created #89: BP_OP1004_f15c_CP_C_2147436137 (ERA_Unit_04_Dep_Air1, k 0) at (17.8, -22.8) km, alt 6.5 km, 18.5 km from the airfield
+15:16:28 round probe: AI aircraft created #90: BP_OP1004_f15c_CP_C_2147436104 (ERA_Unit_04_Dep_Air1, k 1) at (18.1, -22.8) km, alt 6.5 km, 18.5 km from the airfield
+15:16:28 round probe: AI aircraft created #91: BP_OP1004_f15c_CP_C_2147436071 (ERA_Unit_04_Dep_Air1, k 2) at (17.8, -22.5) km, alt 6.5 km, 18.2 km from the airfield
+15:16:28 round probe: AI aircraft created #92: BP_OP1004_f15c_CP_C_2147436038 (ERA_Unit_04_Dep_Air1, k 3) at (18.1, -22.5) km, alt 6.5 km, 18.2 km from the airfield
+15:16:28 round probe: AI aircraft created #93: BP_OP1008_j39e_CP_C_2147436002 (ERA_Unit_07_Dep_Air1, k 0) at (0.0, -15.3) km, alt 2.2 km, 19.4 km from the airfield
+15:16:28 round probe: AI aircraft created #94: BP_OP1008_j39e_CP_C_2147435971 (ERA_Unit_07_Dep_Air1, k 1) at (0.2, -15.5) km, alt 2.2 km, 19.4 km from the airfield
+15:16:28 round probe: AI aircraft created #95: BP_OP1008_j39e_CP_C_2147435940 (ERA_Unit_07_Dep_Air1, k 2) at (0.3, -15.1) km, alt 2.2 km, 19.1 km from the airfield
+15:16:28 round probe: AI aircraft created #96: BP_OP1008_j39e_CP_C_2147435909 (ERA_Unit_07_Dep_Air1, k 3) at (0.5, -15.3) km, alt 2.2 km, 19.1 km from the airfield
+15:16:28 round probe: AI aircraft created #97: BP_OP1020_m29a_CP_C_2147435875 (ERA_Unit_06_Dep_Air1, k 0) at (-6.1, -10.3) km, alt 4.2 km, 23.0 km from the airfield
+15:16:28 round probe: AI aircraft created #98: BP_OP1020_m29a_CP_C_2147435842 (ERA_Unit_06_Dep_Air1, k 1) at (-6.1, -10.6) km, alt 4.2 km, 23.0 km from the airfield
+15:16:28 round probe: AI aircraft created #99: BP_OP1020_m29a_CP_C_2147435809 (ERA_Unit_06_Dep_Air1, k 2) at (-5.9, -10.2) km, alt 4.2 km, 22.7 km from the airfield
+15:16:28 round probe: AI aircraft created #100: BP_OP1020_m29a_CP_C_2147435776 (ERA_Unit_06_Dep_Air1, k 3) at (-5.8, -10.5) km, alt 4.2 km, 22.7 km from the airfield
+15:16:28 round probe: AI aircraft created #101: BP_OP1028_su35_CP_C_2147435740 (ERA_Unit_01_Dep_Air1, k 0) at (2.6, 10.1) km, alt 2.3 km, 19.8 km from the airfield
+15:16:28 round probe: AI aircraft created #102: BP_OP1028_su35_CP_C_2147435710 (ERA_Unit_01_Dep_Air1, k 1) at (2.4, 9.9) km, alt 2.3 km, 19.8 km from the airfield
+15:16:28 round probe: AI aircraft created #103: BP_OP1028_su35_CP_C_2147435680 (ERA_Unit_01_Dep_Air1, k 2) at (2.8, 9.9) km, alt 2.3 km, 19.5 km from the airfield
+15:16:28 round probe: AI aircraft created #104: BP_OP1028_su35_CP_C_2147435650 (ERA_Unit_01_Dep_Air1, k 3) at (2.6, 9.7) km, alt 2.3 km, 19.5 km from the airfield
+15:16:28 round probe: AI aircraft created #105: BP_OP1030_su33_CP_C_2147435617 (ERA_Unit_02_Dep_Air0, k 0) at (9.8, -25.6) km, alt 3.5 km, 22.1 km from the airfield
+15:16:28 round probe: AI aircraft created #106: BP_OP1030_su33_CP_C_2147435582 (ERA_Unit_02_Dep_Air0, k 1) at (10.0, -25.7) km, alt 3.5 km, 22.1 km from the airfield
+15:16:28 round probe: AI aircraft created #107: BP_OP1028_su35_CP_C_2147435544 (ERA_Unit_01_Dep_Air0, k 0) at (-1.7, 11.8) km, alt 3.7 km, 24.0 km from the airfield
+15:16:28 round probe: AI aircraft created #108: BP_OP1028_su35_CP_C_2147435514 (ERA_Unit_01_Dep_Air0, k 1) at (-1.9, 11.6) km, alt 3.7 km, 24.1 km from the airfield
+15:16:28 round probe: AI aircraft created #109: BP_OP1020_m29a_CP_C_2147435481 (ERA_Unit_05_Dep_Air0, k 0) at (3.2, -21.5) km, alt 3.0 km, 21.5 km from the airfield
+15:16:28 round probe: AI aircraft created #110: BP_OP1020_m29a_CP_C_2147435448 (ERA_Unit_05_Dep_Air0, k 1) at (3.5, -21.7) km, alt 3.0 km, 21.5 km from the airfield
+15:16:28 round probe: AI aircraft created #111: BP_OP1027_m21b_CP_C_2147435412 (ERA_Unit_05_Dep_Air1, k 0) at (3.9, 9.7) km, alt 2.5 km, 18.6 km from the airfield
+15:16:28 round probe: AI aircraft created #112: BP_OP1027_m21b_CP_C_2147435381 (ERA_Unit_05_Dep_Air1, k 1) at (3.7, 9.6) km, alt 2.5 km, 18.6 km from the airfield
+15:16:28 round probe: AI aircraft created #113: BP_OP1027_m21b_CP_C_2147435350 (ERA_Unit_05_Dep_Air1, k 2) at (4.1, 9.5) km, alt 2.5 km, 18.3 km from the airfield
+15:16:28 round probe: AI aircraft created #114: BP_OP1027_m21b_CP_C_2147435319 (ERA_Unit_05_Dep_Air1, k 3) at (3.9, 9.3) km, alt 2.5 km, 18.3 km from the airfield
+15:16:28 maneuvers: j39e (BP_OP1008_j39e_CP_C_2147436273) post-stall off: was cobra false, kulbit false, now cobra false, kulbit false
+15:16:28 late: round 0 enemies' health x0.75 (skirm x0.75) (BP_OP1008_j39e_CP_C_2147436273: 550 -> 413)
+15:16:28 maneuvers: su35 (BP_OP1028_su35_CP_C_2147435680) post-stall off: was cobra false, kulbit false, now cobra false, kulbit false
+15:16:28 maneuvers: m21b (BP_OP1027_m21b_CP_C_2147435412) post-stall off: was cobra false, kulbit false, now cobra false, kulbit false
+15:16:28 round probe: BP_OP1004_f15c_CP_C_2147436137 down
+15:16:28 kill: BP_OP1004_f15c_CP_C_2147436137; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:16:28 credits: +100 (f15c down (fighter, Rookie x1.0)), now 13340
+15:16:28 kill-time: BP_OP1004_f15c_CP_C_2147436137 (ERA_Unit_04_Dep_Air1, no tier, round 0, k 0, ordinary ?): up 1 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:16:28 maneuvers: su33 (BP_OP1030_su33_CP_C_2147435617) post-stall off: was cobra true, kulbit false, now cobra false, kulbit false
+15:16:29 round probe: BP_OP1020_m29a_CP_C_2147438071 taken down here (co-op, not a kill; 50 so far)
+15:16:29 round probe: BP_OP1004_f15c_CP_C_2147436038 down
+15:16:29 kill: BP_OP1004_f15c_CP_C_2147436038; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:16:29 credits: +170 (f15c down (fighter, Elite x1.4, round x1.18)), now 13510
+15:16:29 kill-time: BP_OP1004_f15c_CP_C_2147436038 (ERA_Unit_04_Dep_Air1, no tier, round 10, k 3, ordinary ?): up 1 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:16:32 coopfire: 60 s: 6 shots sent, 8 received (0 fired here, 0 refused, 0 dropped, 1 with their target not here, 0 with no plane here, 0 not shown: you were in the STORE), your gun 0 bursts, your flares 0, your gear flips 0, afterburner flips 16, throttle up to 1.000 (ab_throttle 0.9); real planes' launches (T4b) 8 queued, 0 refused
+15:16:35 coop: SV_Unit_PadDummies's last copies are still up; spawning anyway
+15:16:35 coop: the host's SV_Unit_PadDummies not spawned here (its last flight is still up)
+15:16:37 tell: cover_ask (the host's): RE_SV_RadioEnCoverA (fired)
+15:16:39 tell: six (the host's): RE_SV_RadioSixC (fired)
+15:16:40 round probe: BP_OP1008_j39e_CP_C_2147435909 down, last seen 2.5 km up, 1.8 km from you
+15:16:40 kill: BP_OP1008_j39e_CP_C_2147435909; you were 2.8 km away, 137 deg off its nose, altitude +0.2 km; you fired nothing seen in the last 6 s
+15:16:40 credits: +120 (j39e down (fighter, Rookie x1.0, round x1.18)), now 13630
+15:16:40 kill-time: BP_OP1008_j39e_CP_C_2147435909 (ERA_Unit_07_Dep_Air1, Rookie, round 10, k 3, ordinary ?): up 12 s, engaged 12 s (within 5 km), since your first hit -, tailed 2 s (AI Provoke -); 137 deg off its nose at 2.8 km, +0.2 km; by you
+15:16:44 round probe: BP_OP1008_j39e_CP_C_2147436002 down, last seen 1.9 km up, 1.0 km from you
+15:16:44 kill: BP_OP1008_j39e_CP_C_2147436002; you were 1.0 km away, 134 deg off its nose, altitude +0.7 km; you fired nothing seen in the last 6 s
+15:16:44 credits: +170 (j39e down (fighter, Elite x1.4, round x1.18)), now 13800
+15:16:44 kill-time: BP_OP1008_j39e_CP_C_2147436002 (ERA_Unit_07_Dep_Air1, Elite, round 10, k 0, ordinary ?): up 16 s, engaged 14 s (within 5 km), since your first hit -, tailed 6 s (AI Provoke -); 134 deg off its nose at 1.0 km, +0.7 km; by you
+15:16:47 coop: 4 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:16:51 specials: ERA_Unit_01_Dep_Air1 B (su35_common_svb) fires its NPC_FCS_PlaneLAAM000 at you, 7.5 km (RE_SV_SpecFire_02B: 1)
+15:16:52 coop: the host's ERA_Unit_04_Dep_Air1 here: 2 of 4 planes bound to the host's (spawned as gen 68; the host's last ids for it: 8 for gen 68)
+15:16:52 coop: the host's ERA_Unit_07_Dep_Air1 here: 2 of 4 planes bound to the host's (spawned as gen 69; the host's last ids for it: 8 for gen 69)
+15:16:57 hit: -80 HP in 1 hit, health now 5% (6 HP); missiles near: BP_wp_msl_r0 27 m from BP_OP1028_su35_CP, BP_wp_msl_r0 387 m from BP_OP1028_su35_CP; nearest enemies: ERA_Unit_02_Dep_Air0 0.34 km, ERA_Unit_01_Dep_Air1 0.37 km, ERA_Unit_01_Dep_Air1 0.64 km
+15:17:00 round probe: BP_OP1020_m29a_CP_C_2147435776 down, last seen 2.6 km up, 3.8 km from you
+15:17:00 kill: BP_OP1020_m29a_CP_C_2147435776; you were 3.5 km away, 149 deg off its nose, altitude -0.3 km; you fired nothing seen in the last 6 s
+15:17:00 credits: +170 (m29a down (fighter, Elite x1.4, round x1.18)), now 13970
+15:17:00 kill-time: BP_OP1020_m29a_CP_C_2147435776 (ERA_Unit_06_Dep_Air1, Elite, round 10, k 3, ordinary ?): up 32 s, engaged 16 s (within 5 km), since your first hit -, tailed - (AI Provoke -); 149 deg off its nose at 3.5 km, -0.3 km; by you
+15:17:01 tell: cover_ask (the host's): RE_SV_RadioEnCoverC (fired)
+15:17:02 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:17:03 tell: six (the host's): RE_SV_RadioSixD (fired)
+15:17:04 hit: -2 HP in 1 hit, health now 4% (4 HP); missiles near: none (gun / pulse cannon / blast / collision?); nearest enemies: ERA_Unit_01_Dep_Air1 0.52 km, ERA_Unit_02_Dep_Air0 0.53 km, ERA_Unit_02_Dep_Air0 0.55 km
+15:17:05 round probe: BP_OP1020_m29a_CP_C_2147435842 down, last seen 2.6 km up, 6.7 km from you
+15:17:05 kill: BP_OP1020_m29a_CP_C_2147435842; you were 6.7 km away, 150 deg off its nose, altitude +0.0 km; you fired nothing seen in the last 6 s
+15:17:05 credits: +180 (m29a down (fighter, Ace x1.5, round x1.18)), now 14150
+15:17:05 kill-time: BP_OP1020_m29a_CP_C_2147435842 (ERA_Unit_06_Dep_Air1, Ace, round 10, k 1, ordinary ?): up 37 s, engaged 22 s (within 5 km), since your first hit -, tailed - (AI Provoke -); 150 deg off its nose at 6.7 km, +0.0 km; by you
+15:17:07 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:17:13 ammo: now gun 2400/2400, missiles 0/148, special 1 6/8, special 2 0/4, flares 1/4
+15:17:14 hit: -4 HP in 1 hit, health now 0% (0 HP); missiles near: none (gun / pulse cannon / blast / collision?); nearest enemies: ERA_Unit_01_Dep_Air1 0.24 km, ERA_Unit_02_Dep_Air0 0.33 km, ERA_Unit_01_Dep_Air1 0.41 km
+15:17:14 spectate: your own view as you went down: BP_PlayerPlane_PP0038_adfx02_L001_C /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_PlayerPlane_PP0038_adfx02_L001_C_2147448819 (your plane)
+15:17:14 down: you're down at 0.1 HP in round 10: hidden, no collision, bEnableWeaponInput false, bEnableFlareInput false, bIsWeaponSystemDisabled true, MaxPlaneAttackerMissiles 6 -> 0, MaxPursuitAttackers 12 -> 0, MaxNonPlaneAttackerMissiles 40 -> 0; loiter round the airfield at 2500 m, 4000 m round: on
+15:17:14 death: round 10 (down), 45 s into the round: last 30 s -86 HP: missiles 93% (1 hits from 1 shooters, 1 brackets), gun/close 7%, unknown 0%; top: ERA_Unit_01_Dep_Air1 82 HP, ERA_Unit_02_Dep_Air0 4 HP; missiles left 0 (fired 30 this run, 0 this round), specials 6/0, flares 1; record: 3 attackers, ERA_Unit_01_Dep_Air1 82, ERA_Unit_04_Dep_Air1 4
+15:17:14 hud: callout 'YOU'RE DOWN' / 'A WINGMAN CAN REVIVE YOU AT THEIR AIRFIELD  [O] NEXT PLAYER'
+15:17:14 spectate: BP_PlayerPlane_PP0018_fa36_C_2147447013's middle is 7.4 m from its root: the camera's pivot moved there
+15:17:14 spectate: replay-style camera on BP_PlayerPlane_PP0018_fa36_C_2147447013 (arm 31 m, your stick swings it, throttle / brake zoom)
+15:17:14 spectate: view SAINT ALESSIA (you're down), reverted 0 times
+15:17:14 down: your plane was 14.6 km from the airfield, 2410 m up: put back over the airfield, 2500 m up (SV_Respawn: done); hidden, no collision, bEnableWeaponInput false, bEnableFlareInput false, bIsWeaponSystemDisabled true, MaxPlaneAttackerMissiles 2 -> 0, MaxPursuitAttackers 2 -> 0, MaxNonPlaneAttackerMissiles 2 -> 0
+15:17:14 down: loiter 4.0 km / 2500 m (from the airfield / up), ? m/s; watching SAINT ALESSIA
+15:17:14 insurance: your aircraft's floor was put back by the game; 0.1 HP again (1 times)
+15:17:14 spectate: your stick's pitch (camera up / down) moves the camera (-0.96)
+15:17:14 spectate: your stick's throttle (zoom in) moves the camera (1.00)
+15:17:14 spectate: your stick's brake (zoom out) moves the camera (1.00)
+15:17:19 down: loiter 4.9 km / 2499 m (from the airfield / up), 155 m/s; watching SAINT ALESSIA
+15:17:19 spectate: replay-style camera on BP_PlayerPlane_PP0028_su35_C_2147446887 (arm 31 m, your stick swings it, throttle / brake zoom)
+15:17:19 spectate: view SHAZZY (key), reverted 0 times
+15:17:24 down: loiter 5.6 km / 2270 m (from the airfield / up), 167 m/s; watching SHAZZY
+15:17:29 down: loiter 5.6 km / 1307 m (from the airfield / up), 230 m/s; watching SHAZZY
+15:17:32 spectate: your stick's roll (camera round) moves the camera (-1.00)
+15:17:32 coopfire: 60 s: 2 shots sent, 7 received (0 fired here, 0 refused, 0 dropped, 0 with their target not here, 0 with no plane here, 0 not shown: you were in the STORE), your gun 0 bursts, your flares 0, your gear flips 0, afterburner flips 7, throttle up to 1.000 (ab_throttle 0.9); real planes' launches (T4b) 7 queued, 0 refused
+15:17:33 hud: hidden (paused)
+15:17:33 hud: shown
+15:17:34 down: loiter 5.7 km / 217 m (from the airfield / up), 216 m/s; watching SHAZZY
+15:17:39 down: loiter 6.2 km / 1858 m (from the airfield / up), 346 m/s; watching SHAZZY
+15:17:43 perf: tick avg 17.4 ms (halves 12.0 + 5.4), worst half 114.0 ms (first 114, second 91) over 1201 ticks; parts (ms a tick / worst, share): coop 5.7/28 33%, allies 1.8/89 10%, shop 1.3/38 7%, coop ammo 0.8/3 5%, ammo 0.6/5 3%, rounds 0.3/99 2%, menu 0.3/8 2%, planes 0.2/7 1%, hud 0.2/5 1%, hits 0.2/5 1%, music 0.1/2 1%, down 0.1/28 1%; untimed 5.7 33%; memory 22243 MB, committed 30109 MB
+15:17:45 down: loiter 5.8 km / 3456 m (from the airfield / up), 313 m/s; watching SHAZZY
+15:17:50 down: loiter 5.4 km / 4687 m (from the airfield / up), 278 m/s; watching SHAZZY
+15:17:51 round probe: BP_OP1008_j39e_CP_C_2147435971 down, last seen 3.8 km up, 18.6 km from you
+15:17:51 kill: BP_OP1008_j39e_CP_C_2147435971; you were 18.8 km away, 84 deg off its nose, altitude +0.7 km; you fired nothing seen in the last 6 s
+15:17:51 credits: +180 (j39e down (fighter, Ace x1.5, round x1.18)), now 14330
+15:17:51 kill-time: BP_OP1008_j39e_CP_C_2147435971 (ERA_Unit_07_Dep_Air1, Ace, round 10, k 1, ordinary ?): up 83 s, engaged 81 s (within 5 km), since your first hit -, tailed - (AI Provoke -); 84 deg off its nose at 18.8 km, +0.7 km; by you
+15:17:53 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:17:55 down: loiter 5.0 km / 5789 m (from the airfield / up), 238 m/s; watching SHAZZY
+15:18:00 down: loiter 4.6 km / 6784 m (from the airfield / up), 218 m/s; watching SHAZZY
+15:18:05 down: loiter 4.3 km / 7708 m (from the airfield / up), 187 m/s; watching SHAZZY
+15:18:07 round probe: BP_OP1020_m29a_CP_C_2147435481 down, last seen 3.4 km up, 14.8 km from you
+15:18:07 kill: BP_OP1020_m29a_CP_C_2147435481; you were 14.8 km away, 70 deg off its nose, altitude +4.4 km; you fired nothing seen in the last 6 s
+15:18:07 credits: +180 (m29a down (fighter, Ace x1.5, round x1.18)), now 14510
+15:18:07 kill-time: BP_OP1020_m29a_CP_C_2147435481 (ERA_Unit_05_Dep_Air0, Ace, round 10, k 0, ordinary ?): up 99 s, engaged 98 s (within 5 km), since your first hit -, tailed - (AI Provoke -); 70 deg off its nose at 14.8 km, +4.4 km; by you
+15:18:09 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:18:10 down: loiter 3.9 km / 8572 m (from the airfield / up), 175 m/s; watching SHAZZY
+15:18:14 spectate: the minute's stick, most each axis: pitch 0.96, yaw 0.00, roll 1.00, throttle 1.00, brake 1.00
+15:18:14 round probe: BP_OP1030_su33_CP_C_2147435617 down, last seen 3.4 km up, 15.4 km from you
+15:18:14 kill: BP_OP1030_su33_CP_C_2147435617; you were 15.3 km away, 86 deg off its nose, altitude +5.6 km; you fired nothing seen in the last 6 s
+15:18:14 credits: +120 (su33 down (fighter, Rookie x1.0, round x1.18)), now 14630
+15:18:14 kill-time: BP_OP1030_su33_CP_C_2147435617 (ERA_Unit_02_Dep_Air0, Rookie, round 10, k 0, ordinary ?): up 106 s, engaged 106 s (within 5 km), since your first hit -, tailed - (AI Provoke -); 86 deg off its nose at 15.3 km, +5.6 km; by you
+15:18:15 down: loiter 3.5 km / 9395 m (from the airfield / up), 167 m/s; watching SHAZZY
+15:18:19 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:18:32 coopfire: 60 s: 0 shots sent, 7 received (0 fired here, 0 refused, 0 dropped, 0 with their target not here, 0 with no plane here, 0 not shown: you were in the STORE), your gun 0 bursts, your flares 0, your gear flips 0, afterburner flips 0, throttle up to 0.000 (ab_throttle 0.9); real planes' launches (T4b) 7 queued, 0 refused
+15:18:45 down: loiter 2.2 km / 10961 m (from the airfield / up), 193 m/s; watching SHAZZY
+15:18:49 coop: strays here: the host asked for the whole picture again (jn)
+15:18:49 coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+15:18:50 coop: 33 copies taken down (the host's run started over), 14 of them never bound to the host's
+15:18:50 revive: back (the host's run started over) after 96 s down: repaired (event fired, health written), 5 s invincible, where the loiter left you
+15:18:50 hud: callout 'BACK IN THE FIGHT' / 'THE HOST'S RUN STARTED OVER'
+15:18:50 stats: round 10 (Elite, ?, 3 players) (cut short: co-op resync): length 141 s (0 s at the airfield), 2 waves; aircraft down 8 (yours 8), ordinary fighters ? (a joiner can't tell aces; 8 pool fighters down); tailed survival: AI Provoke median - (0 died, 0 escaped), geometric median 4 s (2 died, 33 escaped); kills from behind 2/7 (29%); your kills with missiles 0, gun 0, special 0, nothing seen 8 (1 close); missiles left 0, fired 0 this round; you took 86 HP (missiles 93%, gun/close 7%, unknown 0%); director tactics 0 (none; 0 told); ace reversals 0; tail watch: not measured on a co-op joiner (its enemies are the host's)
+15:18:50 coop: SV_Unit_PadDummies is up here but no longer tracked (9 alive): 0 of its planes taken down for the host's
+15:18:50 round probe: AI aircraft created #115: BP_OP1008_j39e_CP_C_2147432641 (ERA_Unit_08_Dep_Air0, k 0) at (29.7, 11.0) km, alt 2.4 km, 20.5 km from the airfield
+15:18:50 round probe: AI aircraft created #116: BP_OP1008_j39e_CP_C_2147432610 (ERA_Unit_08_Dep_Air0, k 1) at (29.5, 11.2) km, alt 2.4 km, 20.5 km from the airfield
+15:18:50 round probe: AI aircraft created #117: BP_OP1004_f15c_CP_C_2147432505 (ERA_Unit_04_Dep_Air1, k 0) at (17.8, -22.8) km, alt 6.5 km, 18.5 km from the airfield
+15:18:50 round probe: AI aircraft created #118: BP_OP1004_f15c_CP_C_2147432472 (ERA_Unit_04_Dep_Air1, k 1) at (18.1, -22.8) km, alt 6.5 km, 18.5 km from the airfield
+15:18:50 round probe: AI aircraft created #119: BP_OP1004_f15c_CP_C_2147432439 (ERA_Unit_04_Dep_Air1, k 2) at (17.8, -22.5) km, alt 6.5 km, 18.2 km from the airfield
+15:18:50 round probe: AI aircraft created #120: BP_OP1004_f15c_CP_C_2147432406 (ERA_Unit_04_Dep_Air1, k 3) at (18.1, -22.5) km, alt 6.5 km, 18.2 km from the airfield
+15:18:50 round probe: AI aircraft created #121: BP_OP1008_j39e_CP_C_2147432370 (ERA_Unit_07_Dep_Air1, k 0) at (0.0, -15.3) km, alt 2.2 km, 19.4 km from the airfield
+15:18:50 round probe: AI aircraft created #122: BP_OP1008_j39e_CP_C_2147432339 (ERA_Unit_07_Dep_Air1, k 1) at (0.2, -15.5) km, alt 2.2 km, 19.4 km from the airfield
+15:18:50 round probe: AI aircraft created #123: BP_OP1008_j39e_CP_C_2147432308 (ERA_Unit_07_Dep_Air1, k 2) at (0.3, -15.1) km, alt 2.2 km, 19.1 km from the airfield
+15:18:50 round probe: AI aircraft created #124: BP_OP1008_j39e_CP_C_2147432277 (ERA_Unit_07_Dep_Air1, k 3) at (0.5, -15.3) km, alt 2.2 km, 19.1 km from the airfield
+15:18:50 round probe: AI aircraft created #125: BP_OP1020_m29a_CP_C_2147432243 (ERA_Unit_06_Dep_Air1, k 0) at (-6.1, -10.3) km, alt 4.2 km, 23.0 km from the airfield
+15:18:50 round probe: AI aircraft created #126: BP_OP1020_m29a_CP_C_2147432210 (ERA_Unit_06_Dep_Air1, k 1) at (-6.1, -10.6) km, alt 4.2 km, 23.0 km from the airfield
+15:18:50 round probe: AI aircraft created #127: BP_OP1020_m29a_CP_C_2147432177 (ERA_Unit_06_Dep_Air1, k 2) at (-5.9, -10.2) km, alt 4.2 km, 22.7 km from the airfield
+15:18:50 round probe: AI aircraft created #128: BP_OP1020_m29a_CP_C_2147432144 (ERA_Unit_06_Dep_Air1, k 3) at (-5.8, -10.5) km, alt 4.2 km, 22.7 km from the airfield
+15:18:50 round probe: AI aircraft created #129: BP_OP1028_su35_CP_C_2147432108 (ERA_Unit_01_Dep_Air1, k 0) at (2.6, 10.1) km, alt 2.3 km, 19.8 km from the airfield
+15:18:50 round probe: AI aircraft created #130: BP_OP1028_su35_CP_C_2147432078 (ERA_Unit_01_Dep_Air1, k 1) at (2.4, 9.9) km, alt 2.3 km, 19.8 km from the airfield
+15:18:50 round probe: AI aircraft created #131: BP_OP1028_su35_CP_C_2147432048 (ERA_Unit_01_Dep_Air1, k 2) at (2.8, 9.9) km, alt 2.3 km, 19.5 km from the airfield
+15:18:50 round probe: AI aircraft created #132: BP_OP1028_su35_CP_C_2147432018 (ERA_Unit_01_Dep_Air1, k 3) at (2.6, 9.7) km, alt 2.3 km, 19.5 km from the airfield
+15:18:50 round probe: AI aircraft created #133: BP_OP1030_su33_CP_C_2147431985 (ERA_Unit_02_Dep_Air0, k 0) at (9.8, -25.6) km, alt 3.5 km, 22.1 km from the airfield
+15:18:50 round probe: AI aircraft created #134: BP_OP1030_su33_CP_C_2147431950 (ERA_Unit_02_Dep_Air0, k 1) at (10.0, -25.7) km, alt 3.5 km, 22.1 km from the airfield
+15:18:50 round probe: AI aircraft created #135: BP_OP1028_su35_CP_C_2147431912 (ERA_Unit_01_Dep_Air0, k 0) at (-1.7, 11.8) km, alt 3.7 km, 24.0 km from the airfield
+15:18:50 round probe: AI aircraft created #136: BP_OP1028_su35_CP_C_2147431882 (ERA_Unit_01_Dep_Air0, k 1) at (-1.9, 11.6) km, alt 3.7 km, 24.0 km from the airfield
+15:18:50 round probe: AI aircraft created #137: BP_OP1027_m21b_CP_C_2147431849 (ERA_Unit_05_Dep_Air1, k 0) at (3.9, 9.7) km, alt 2.5 km, 18.6 km from the airfield
+15:18:50 round probe: AI aircraft created #138: BP_OP1027_m21b_CP_C_2147431818 (ERA_Unit_05_Dep_Air1, k 1) at (3.7, 9.5) km, alt 2.5 km, 18.6 km from the airfield
+15:18:50 round probe: AI aircraft created #139: BP_OP1027_m21b_CP_C_2147431787 (ERA_Unit_05_Dep_Air1, k 2) at (4.1, 9.5) km, alt 2.5 km, 18.3 km from the airfield
+15:18:50 round probe: AI aircraft created #140: BP_OP1027_m21b_CP_C_2147431756 (ERA_Unit_05_Dep_Air1, k 3) at (3.9, 9.3) km, alt 2.5 km, 18.3 km from the airfield
+15:18:50 maneuvers: f15c (BP_OP1004_f15c_CP_C_2147432439) post-stall off: was cobra false, kulbit false, now cobra false, kulbit false
+15:18:51 round probe: BP_OP1004_f15c_CP_C_2147432406 down
+15:18:51 kill: BP_OP1004_f15c_CP_C_2147432406; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:18:51 credits: +100 (f15c down (fighter, Rookie x1.0)), now 14730
+15:18:51 kill-time: BP_OP1004_f15c_CP_C_2147432406 (ERA_Unit_04_Dep_Air1, no tier, round 0, k 3, ordinary ?): up 0 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:18:51 round probe: BP_OP1020_m29a_CP_C_2147432144 down
+15:18:51 kill: BP_OP1020_m29a_CP_C_2147432144; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:18:51 credits: +100 (m29a down (fighter, Rookie x1.0)), now 14830
+15:18:51 kill-time: BP_OP1020_m29a_CP_C_2147432144 (ERA_Unit_06_Dep_Air1, no tier, round 0, k 3, ordinary ?): up 0 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:18:51 round probe: BP_OP1008_j39e_CP_C_2147432370 down
+15:18:51 kill: BP_OP1008_j39e_CP_C_2147432370; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:18:51 credits: +100 (j39e down (fighter, Rookie x1.0)), now 14930
+15:18:51 kill-time: BP_OP1008_j39e_CP_C_2147432370 (ERA_Unit_07_Dep_Air1, no tier, round 0, k 0, ordinary ?): up 1 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:18:51 round probe: BP_OP1008_j39e_CP_C_2147432339 down
+15:18:51 kill: BP_OP1008_j39e_CP_C_2147432339; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:18:51 credits: +170 (j39e down (fighter, Elite x1.4, round x1.18)), now 15100
+15:18:51 kill-time: BP_OP1008_j39e_CP_C_2147432339 (ERA_Unit_07_Dep_Air1, no tier, round 10, k 1, ordinary ?): up 1 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:18:52 round probe: BP_OP1028_su35_CP_C_2147435544 taken down here (co-op, not a kill; 75 so far)
+15:18:52 round probe: BP_OP1008_j39e_CP_C_2147432277 down
+15:18:52 kill: BP_OP1008_j39e_CP_C_2147432277; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:18:52 credits: +170 (j39e down (fighter, Elite x1.4, round x1.18)), now 15270
+15:18:52 kill-time: BP_OP1008_j39e_CP_C_2147432277 (ERA_Unit_07_Dep_Air1, no tier, round 10, k 3, ordinary ?): up 1 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:18:52 round probe: BP_OP1004_f15c_CP_C_2147432505 down
+15:18:52 kill: BP_OP1004_f15c_CP_C_2147432505; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:18:52 credits: +170 (f15c down (fighter, Elite x1.4, round x1.18)), now 15440
+15:18:52 kill-time: BP_OP1004_f15c_CP_C_2147432505 (ERA_Unit_04_Dep_Air1, no tier, round 10, k 0, ordinary ?): up 2 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:18:52 round probe: BP_OP1030_su33_CP_C_2147431985 down
+15:18:52 kill: BP_OP1030_su33_CP_C_2147431985; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:18:52 credits: +170 (su33 down (fighter, Elite x1.4, round x1.18)), now 15610
+15:18:52 kill-time: BP_OP1030_su33_CP_C_2147431985 (ERA_Unit_02_Dep_Air0, no tier, round 10, k 0, ordinary ?): up 2 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:18:52 round probe: BP_OP1020_m29a_CP_C_2147432210 down
+15:18:52 kill: BP_OP1020_m29a_CP_C_2147432210; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+15:18:52 credits: +170 (m29a down (fighter, Elite x1.4, round x1.18)), now 15780
+15:18:52 kill-time: BP_OP1020_m29a_CP_C_2147432210 (ERA_Unit_06_Dep_Air1, no tier, round 10, k 1, ordinary ?): up 2 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+15:18:58 coop: SV_Unit_PadDummies's last copies are still up; spawning anyway
+15:18:58 coop: the host's SV_Unit_PadDummies not spawned here (its last flight is still up)
+15:19:09 hud: hidden (paused)
+15:19:09 hud: shown

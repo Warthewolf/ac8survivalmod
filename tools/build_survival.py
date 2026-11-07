@@ -12,10 +12,28 @@ Every package is a stock game file with Survival's changes (Survival Mode uses n
   - EF_SurvivalMode_global     <- EF_Mission022_global holding Survival's int flags (survival_events.INT_FLAGS)
   - DT_SV_MissionRows / DT_SV_MenuRows / DT_SV_ShopRows / DT_SV_NpcRows <- one-table copies of stock rows, added to the
                                   game's tables at run time by Scripts/main.lua; DT_SV_NpcMission <- DT_NPC_Mission022
+  - Survival's main-menu pages (MENU_PAGES): WBP_SV_Pg* <- the game's main-menu page (tools/menu_stock.py finds it),
+                                  DA_SV_Pg*Settings <- its DA_LiveMenuMainTopPageSettings, DT_SV_Pg*Commands <- rows of
+                                  DT_LiveMenuMainTopCommands, DT_SV_MainMenuClassRows <- DT_IngameMenuSettingData's rows
   - /Game/LuaSource/SurvivalMode/AI/*  <- Survival's behaviour scripts (Scripts/ai)
 Stock packages are pulled with tools/get_stock.sh into build/stock first.
+
+The parts (2026-11-07: no source file over 2,000 lines, tools/checks/size_check.py). This file keeps the folders and
+package helpers, the shop rows, the menu pages, the NPC rows (DT_SV_NpcRows), the NPC mission table and the behaviour
+scripts (the Lua tests read their text here), the build's read-back checks, its main, and every function that reads
+STOCK, OUT, ROOT, MENU_STOCK, MENU_STOCK_LUA or AI_SRC itself (tools/checks/menu_pages_test.py sets them on this module
+to build into a folder of its own). The rest is in three parts, imported at the end of this file with
+`from <part> import *`, so build_survival.<name> reaches every name of every part:
+  - build_survival_rows.py: the radio table (DT_SV_Radio), the mission / menu rows' edits, the model rows, build_rows
+  - build_survival_units.py: the level, its MC and phase world data; the world data's unit and path helpers; the units
+    of the STORE's allies, the Ladons, the heavies' paths, VALKA, the Alicorn and the amphibious assault
+  - build_survival_world.py: the units of the Spaceport Assault, the STORE's CIWS, the airfield's split, GONE FISHIN',
+    THE FESTIVAL, THE ESCORT and THE DECOY; the global world data, its flag asset and the event packages
+Each part begins with `from build_survival import *`, so it sees every name this file defines and every name of the
+parts imported before it, as when this was one file. Run as a script this module is __main__: it registers itself as
+build_survival first, so its parts get it and not a second copy. Import build_survival, never a part on its own.
 """
-import copy, math, os, re, sys, struct, zlib
+import copy, json, math, os, re, sys, struct, zlib
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE); sys.path.insert(0, os.path.join(HERE, 'scripts'))
@@ -23,6 +41,8 @@ from zenpkg import ZenPkg, export_hash
 import uprop, eprec
 sys.path.insert(0, os.path.join(HERE, "checks"))
 import survival_events, ep_dump
+# (run as a script this module is __main__: its parts import it as build_survival, so it is that module too)
+sys.modules.setdefault('build_survival', sys.modules[__name__])
 
 STOCK = os.path.join(ROOT, 'build', 'stock')
 OUT = os.path.join(ROOT, 'mod', 'Content')
@@ -112,883 +132,6 @@ def drop_prop(props, idx):
     props[:] = [p for p in props if p[0] != idx]
 
 
-# ---------------------------------------------------------------- packages
-def build_pl():
-    z = ZenPkg(stock(M22 + 'PL_Mission022'))
-    rename_package(z, M22 + 'PL_Mission022', PL)
-    # Lighting: Mission 4's sky/cloud level instead of Mission 22's.
-    z.rename(LIT_OLD, LIT_NEW); z.rename(LIT_OLD.rsplit('/', 1)[1], LIT_NEW.rsplit('/', 1)[1])
-    # Mission files
-    for n in ('MC_Mission022', 'WD_Mission022_global', 'WD_Mission022_phase01', 'WD_Mission022_phase02',
-              'EP_Mission022_global', 'EP_Mission022_phase01', 'EP_Mission022_phase02'):
-        retarget_import(z, M22 + n, MI + n.replace('Mission022', 'SurvivalMode'))
-    retarget_import(z, RADIO_STOCK, RADIO)                 # Survival's copy of Mission 22's radio lines (build_radio)
-    # World settings: Mission 4's clock and cloud values; drop Mission 22's shuttle-launch cloud light.
-    i = z.export_index('ChronicleWorldSettings')
-    v, rest = props_of(z, i, 'LiveWorldSettings')
-    props = v[2]
-    sc = uprop.U.schema('LiveWorldSettings')
-    idx = {nm: k for k, (nm, t) in sc.items()}
-    set_prop(props, idx['ClockHour'], 'ClockHour', ('raw', 'Int', struct.pack('<i', CLOCK[0])))
-    set_prop(props, idx['ClockMin'], 'ClockMin', ('raw', 'Int', struct.pack('<i', CLOCK[1])))
-    drop_prop(props, idx['CloudDensityScale'])
-    set_prop(props, idx['CloudDensityScaleBySound'], 'CloudDensityScaleBySound',
-             ('raw', 'Float', struct.pack('<f', CLOUD_DENSITY_BY_SOUND)))
-    drop_prop(props, idx['CloudLightSettings'])
-    z.payloads[i] = bytearray(write_props(z, v) + rest)
-    chk, _ = props_of(z, i, 'LiveWorldSettings'); assert chk == v
-    save(z, PL, '.umap')
-
-
-def build_mc():
-    z = ZenPkg(stock(M22 + 'MC_Mission022'))
-    rename_package(z, M22 + 'MC_Mission022', MI + 'MC_SurvivalMode')
-    v, rest = props_of(z, 0, 'LiveCampaignMissionConfig')
-    set_prop(v[2], 7, 'MissionLimitTime', ('raw', 'Float', struct.pack('<f', MISSION_TIME_LIMIT)))
-    z.payloads[0] = bytearray(write_props(z, v) + rest)
-    save(z, MI + 'MC_SurvivalMode')
-
-
-def build_wd_phase(n):
-    old, new = M22 + f'WD_Mission022_phase0{n}', MI + f'WD_SurvivalMode_phase0{n}'
-    z = ZenPkg(stock(old))
-    rename_package(z, old, new)   # also renames the WorldDataName value (same FName)
-    v, rest = props_of(z, 0, 'LiveWorldData')
-    starts = [p for p in v[2] if p[1] == 'PlayerStartDescList'][0][3][1]
-    assert len(starts) == 1
-    ps = starts[0][2]
-    for k, (pi, pn, zero, val) in enumerate(ps):
-        if pn == 'SpawnPoint': ps[k] = (pi, pn, False, ('native', 'Vector', struct.pack('<3d', *START)))
-        if pn == 'Rotation': ps[k] = (pi, pn, False, ('native', 'Rotator', struct.pack('<3d', *START_ROT)))
-    z.payloads[0] = bytearray(write_props(z, v) + rest)
-    save(z, new)
-
-
-FORMATION_CM = 30000.0     # 300 m: pairs side by side, each pair this far behind the one ahead
-
-
-def unit_point(u):
-    sp = [p for p in u[2] if p[1] == 'SpawnPoint']
-    return struct.unpack('<3d', sp[0][3][2]) if sp and sp[0][3] else (0.0, 0.0, 0.0)
-
-
-def set_flight_size(objs, size, unit, point, used_ids, top_number):
-    """Cut or grow a flight's AI object list to `size` (copies of the lead / wingman pair with new UniqueIDs and the next
-    free number of their name: Mission 22 numbers one name across several flights, so top_number is world-wide), and
-    lay it out: lead on the unit point, wingman beside it, each further pair FORMATION_CM back."""
-    del objs[size:]
-    while len(objs) < size:
-        k = len(objs)
-        ob = copy.deepcopy(objs[k % 2])
-        name = [q for q in ob[2] if q[1] == 'Name'][0][3]
-        top_number[name[1]] += 1
-        top = top_number[name[1]] - 1
-        h = zlib.crc32(f'AC8SurvivalMode:{unit}:{k}'.encode())
-        while struct.pack('<I', h) in used_ids: h = (h + 1) & 0xffffffff
-        used_ids.add(struct.pack('<I', h))
-        ob[2][:] = [(q[0], q[1], False, ('name', name[1], top + 1)) if q[1] == 'Name' else
-                    (q[0], q[1], False, ('raw', 'UInt32', struct.pack('<I', h))) if q[1] == 'UniqueID' else q for q in ob[2]]
-        objs.append(ob)
-    for k, ob in enumerate(objs):
-        at = (point[0] - FORMATION_CM * (k // 2), point[1] + (FORMATION_CM if k % 2 else 0.0), point[2])
-        assert any(q[1] == 'SpawnPoint' for q in ob[2]), unit
-        ob[2][:] = [(q[0], q[1], False, ('native', 'Vector', struct.pack('<3d', *at))) if q[1] == 'SpawnPoint' else q
-                    for q in ob[2]]
-
-
-def move_object(units, used_ids, z, src_unit, obj, new_unit, npc_row=None):
-    """Moves AI object `obj` (a name, or a list of names) out of world-data unit `src_unit` into a new unit `new_unit`:
-    a copy of the source's desc (same faction, point, area and tags) with a new UniqueID, holding only those objects
-    (optionally on NPC row `npc_row`). SV_Spawn(new_unit) without a position then puts them where the stock mission
-    placed them. No ground object of Mission 22's leads its unit (bGroupLead 0), so such a unit needs no leader."""
-    dn = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
-    unit_name = lambda u: [p for p in u[2] if p[1] == 'Name'][0][3][1]
-    src = [u for u in units if unit_name(u) == src_unit][0]
-    assert new_unit not in {unit_name(u) for u in units} and not new_unit[-1].isdigit(), new_unit   # hard rule 17
-    objs = [p for p in src[2] if p[1] == 'AIObjectDescList'][0][3][1]
-    wanted = [obj] if isinstance(obj, str) else list(obj)
-    moved = []
-    for name in wanted:
-        hit = [ob for ob in objs if dn([q for q in ob[2] if q[1] == 'Name'][0][3]) == name]
-        assert len(hit) == 1, name
-        objs.remove(hit[0])
-        moved.append(hit[0])
-    new = copy.deepcopy(src)
-    if npc_row:
-        for ob in moved:
-            assert any(q[1] == 'MissionNpcID' for q in ob[2]), obj
-            ob[2][:] = [(q[0], q[1], False, ('name', npc_row, 0)) if q[1] == 'MissionNpcID' else q for q in ob[2]]
-        z.nb.add(npc_row)
-    z.nb.add(new_unit)
-    ids = used_ids | {q[3][2] for u in units for q in u[2] if q[1] == 'UniqueID' and q[3]}
-    h = zlib.crc32(b'AC8SurvivalMode:' + new_unit.encode())
-    while struct.pack('<I', h) in ids: h = (h + 1) & 0xffffffff
-    assert any(q[1] == 'UniqueID' for q in new[2]), 'unit desc without UniqueID'
-    new[2][:] = [(q[0], q[1], False, ('name', new_unit, 0)) if q[1] == 'Name' else
-                 (q[0], q[1], False, ('raw', q[3][1], struct.pack('<I', h))) if q[1] == 'UniqueID' else q for q in new[2]]
-    [p for p in new[2] if p[1] == 'AIObjectDescList'][0][3][1][:] = moved
-    units.append(new)
-    return len(objs)
-
-
-def new_unique_id(used_ids, seed):
-    h = zlib.crc32(seed.encode())
-    while struct.pack('<I', h) in used_ids: h = (h + 1) & 0xffffffff
-    used_ids.add(struct.pack('<I', h))
-    return struct.pack('<I', h)
-
-
-def path_start(v, path):
-    """The world position (cm) of AI path `path`'s first point."""
-    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
-    for el in paths:
-        f = {p[1]: p[3] for p in el[2]}
-        if f['Name'][1:3] == (path, 0):
-            pos = {p[1]: p[3] for p in f['BeginPointDesc'][2]}['Pos']
-            return struct.unpack('<3d', pos[2])
-    raise LookupError(path)
-
-
-def set_unit_point(u, point):
-    """Unit desc `u` and its AI objects (and so their turrets) at `point` (cm)."""
-    vec = ('native', 'Vector', struct.pack('<3d', *point))
-    u[2][:] = [(q[0], q[1], False, vec) if q[1] == 'SpawnPoint' else q for q in u[2]]
-    for ob in [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1]:
-        ob[2][:] = [(q[0], q[1], False, vec) if q[1] == 'SpawnPoint' else q for q in ob[2]]
-
-
-def clear_flags(u, flags):
-    """Every AI object of unit desc `u` with these bool properties written as an explicit false."""
-    for ob in [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1]:
-        ob[2][:] = [(q[0], q[1], True, None) if q[1] in flags else q for q in ob[2]]
-
-
-def retag_turrets(children, owner, rows, used_ids, z):
-    """A copied ship's turret descs (ChildAIObjectDescs / GrandChildrens): named after their new owner as Mission 22
-    names them (<owner>_<component>), new UniqueIDs, and Survival's mission rows (`rows`: stock row -> Survival's)."""
-    for ch in children:
-        d = {p[1]: p for p in ch[2]}
-        data = d['Data'][3][2]
-        comp = [q for q in data if q[1] == 'ComponentFieldName'][0][3][1]
-        stock_row = [q for q in data if q[1] == 'MissionNpcID'][0][3][1]
-        assert stock_row in rows, (owner, stock_row)
-        data[:] = [(q[0], q[1], False, ('name', rows[stock_row], 0)) if q[1] == 'MissionNpcID' else q for q in data]
-        name = f'{owner}_{comp}'
-        assert not name.rpartition('_')[2].isdigit(), name                  # no _<digits> tail: hard rule 17
-        uid = new_unique_id(used_ids, 'AC8SurvivalMode:' + name)
-        ch[2][:] = [(q[0], q[1], False, ('name', name, 0)) if q[1] == 'Name' else
-                    (q[0], q[1], False, ('raw', 'UInt32', uid)) if q[1] == 'UniqueID' else q for q in ch[2]]
-        for n in (name, rows[stock_row]): z.nb.add(n)
-        grand = d.get('GrandChildrens')
-        if grand and grand[3]: retag_turrets(grand[3][1], name, rows, used_ids, z)
-
-
-def ally_units(units, used_ids, z, top_number, v):
-    """The STORE's allies (survival_events.ALLY_*): MOONCHILD's two-ships, parked where Mission 22 parks its scramble
-    jets, and the ships, each at the start of its lane. Both may be targeted and killed (Mission 22's jets are
-    invincible and its allied ships attack-target exceptions)."""
-    unit_by = lambda n: [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == n][0]
-    r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
-    for unit in survival_events.ALLY_AIR_UNITS:
-        names = copy_unit(units, used_ids, z, survival_events.ALLY_AIR_SOURCE, unit, 2, top_number,
-                          'SV_Obj_' + unit[len('SV_Unit_'):], survival_events.ALLY_AIR_ROW)
-        survival_events.ALLY_AIR_OBJS[unit] = names
-        u = unit_by(unit)
-        clear_flags(u, ('bIsInvincible',))
-        u[2][:] = sorted([p for p in u[2] if p[1] != 'RadiusInMeter'] + [(r_idx, 'RadiusInMeter', False,
-                         ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))], key=lambda p: p[0])
-    hulls = {key: (src, hull) for key, src, hull, _ in survival_events.ALLY_SHIPS}
-    for key, n, unit, obj, lane in survival_events.ally_ships():
-        src, hull = hulls[key]
-        rows = {t: survival_events.ally_turret_rows(t)[0] for t in survival_events.ALLY_TURRETS[key]}
-        names = copy_unit(units, used_ids, z, src, unit, 1, top_number, obj, survival_events.ally_ship_rows(key)[0])
-        assert names == [obj], names
-        u = unit_by(unit)
-        clear_flags(u, ('bIsAttackTargetsException',))
-        ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
-        retag_turrets([p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1], obj, rows, used_ids, z)
-        x, y, _ = path_start(v, lane)
-        set_unit_point(u, (x, y, 300.0))
-        area = {'RadiusInMeter': survival_events.ALLY_SHIP_AREA_M, 'MinAltitudeInMeter': survival_events.ALLY_SHIP_ALT_M[0],
-                'MaxAltitudeInMeter': survival_events.ALLY_SHIP_ALT_M[1]}
-        sc = uprop.U.schema('LiveUnitDesc')
-        aidx = {n: k for k, (n, t) in sc.items() if n in area}
-        assert len(aidx) == 3, aidx
-        u[2][:] = sorted([p for p in u[2] if p[1] not in area] + [(aidx[n], n, False, ('raw', 'Float', struct.pack('<f', val)))
-                         for n, val in area.items()], key=lambda p: p[0])
-    print(f'  allies: {len(survival_events.ALLY_AIR_UNITS)} MOONCHILD flights {survival_events.ALLY_AIR_OBJS}, '
-          f'{len(survival_events.ally_ships())} ships')
-
-
-M13 = '/Game/Maps/Ingame/Mission013/'
-
-
-def stock_wd(path):
-    """A stock world data's LiveWorldData properties (for descs copied from another mission)."""
-    zs = ZenPkg(stock(path))
-    i = zs.export_index(path.rsplit('/', 1)[1])
-    v, _ = props_of(zs, i, 'LiveWorldData')
-    return v
-
-
-def desc_named(v, lst, name):
-    for el in [p for p in v[2] if p[1] == lst][0][3][1]:
-        if [p for p in el[2] if p[1] == 'Name'][0][3][1:3] == survival_events.fname(name)[1:]:   # ('Boss_0' = ('Boss', 1))
-            return el
-    raise LookupError((lst, name))
-
-
-def vec(x, y, zz, kind='Vector'):
-    return ('native', kind, struct.pack('<3d', x, y, zz))
-
-
-def port_unit(units, used_ids, z, src, new_unit, obj_name, npc_row, points, yaw, top_number, tgt=False):
-    """A new unit `new_unit` from another mission's unit desc `src`: its first len(points) AI objects at `points`
-    (cm), facing `yaw`, named obj_name (numbered _0, _1 ... when more than one) on NPC row `npc_row`; no tags (they're
-    the other mission's), our world data's name, new UniqueIDs; tgt: a target box and a TGT mark on each (user,
-    2026-10-23: "assault ships and troops did not come with target boxes"). Returns the objects' names as event args
-    write them."""
-    new = copy.deepcopy(src)
-    assert new_unit not in {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}, new_unit
-    assert not new_unit[-1].isdigit() and not obj_name[-1].isdigit() and obj_name not in top_number, obj_name
-    wd = ('name', 'WD_SurvivalMode_global', 0)
-    objs = [p for p in new[2] if p[1] == 'AIObjectDescList'][0][3][1]
-    while len(objs) < len(points): objs.append(copy.deepcopy(objs[-1]))   # more than the source has: copies of its last
-    del objs[len(points):]
-    names = []
-    for k, (ob, pt) in enumerate(zip(objs, points)):
-        num = 0 if len(points) == 1 else k + 1
-        uid = new_unique_id(used_ids, f'AC8SurvivalMode:{new_unit}:{k}')
-        repl = {'Name': ('name', obj_name, num), 'MissionNpcID': ('name', npc_row, 0), 'UniqueID': ('raw', 'UInt32', uid),
-                'SpawnPoint': vec(*pt), 'Rotation': vec(0.0, yaw, 0.0, 'Rotator'), 'WorldDataName': wd,
-                'Tags': ('arr', [])}
-        assert all(any(q[1] == n for q in ob[2]) for n in ('Name', 'MissionNpcID', 'UniqueID', 'SpawnPoint')), new_unit
-        ob[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl and q[3] is not None else q for q in ob[2]]
-        if tgt:                    # the HUD's target box and the red TGT mark (ELiveTargetMarkType 1), as a mission target
-            sc = uprop.U.schema('LiveAIObjectDesc')
-            ix = {n: k for k, (n, t) in sc.items() if n in ('TargetMarkType', 'bShowHUDBox')}
-            ob[2][:] = sorted([q for q in ob[2] if q[1] not in ix] + [
-                (ix['TargetMarkType'], 'TargetMarkType', False, ('enum', 'ELiveTargetMarkType', ('raw', 'Byte', b'\x01'))),
-                (ix['bShowHUDBox'], 'bShowHUDBox', False, ('raw', 'Bool', b'\x01'))], key=lambda q: q[0])
-        names.append(obj_name if num == 0 else f'{obj_name}_{num - 1}')
-    top_number[obj_name] = len(points)
-    uid = new_unique_id(used_ids, f'AC8SurvivalMode:{new_unit}')
-    cx, cy = sum(p[0] for p in points) / len(points), sum(p[1] for p in points) / len(points)
-    repl = {'Name': ('name', new_unit, 0), 'UniqueID': ('raw', 'UInt32', uid), 'SpawnPoint': vec(cx, cy, 0.0),
-            'Rotation': vec(0.0, yaw, 0.0, 'Rotator'), 'WorldDataName': wd, 'Tags': ('arr', [])}
-    new[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl and q[3] is not None else q for q in new[2]]
-    # never at the level's start (the source may say so: Mission 16's Ladons and EB_002's Alicorn did, and build_wd_global's
-    # switch-off has run by now; code review of 2026-10-23): an explicit zero, as Mission 22's reinforcements carry it
-    sp_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'bIsSpawnFromStart'][0]
-    new[2][:] = sorted([q for q in new[2] if q[1] != 'bIsSpawnFromStart'] + [(sp_idx, 'bIsSpawnFromStart', True, None)],
-                       key=lambda q: q[0])
-    assert npc_row in NPC_ROWS, npc_row
-    for n in names_in(new) + [new_unit, obj_name, npc_row, 'WD_SurvivalMode_global']: z.nb.add(n)
-    units.append(new)
-    return names
-
-
-def make_path(z, used_ids, template, name, pts, smooth=False, before=None, after=None):
-    """An AI path desc `name` through `pts` (cm), shaped like `template` (Mission 13's LCAC path: begin point, points
-    with tangents, ControlType 1). Default: short level tangents (at most 1.2 km), up straight up, no pitch: fine for
-    craft and vehicles. smooth=True (aircraft: the Ladons): Mission 16's Ladon path's shape, each tangent along the
-    line through its neighbours (3D) and as long as its shorter leg, so the spline turns in wide curves; up banked into
-    the turn (up to 50 degrees, with the turn's angle) and the rotation's pitch the climb. `before` / `after`: the
-    points just outside `pts` (a circuit's other end, the next path's second point), so the tangent runs on smoothly."""
-    import math
-    new = copy.deepcopy(template)
-    f = {p[1]: p for p in new[2]}
-    begin = f['BeginPointDesc'][3]
-    point_t = f['PathPointDescList'][3][1][0]
-
-    def unit(v):
-        n = math.sqrt(sum(c * c for c in v)) or 1.0
-        return [c / n for c in v]
-
-    def shape(k, pos):
-        prv = pts[k - 1] if k > 0 else (before or pos)
-        nxt = pts[k + 1] if k + 1 < len(pts) else (after or pos)
-        if not smooth:
-            dx, dy = (nxt[0] - prv[0]), (nxt[1] - prv[1])
-            seg = math.hypot(dx, dy) or 1.0
-            tan = (dx / seg * min(seg, 120000.0), dy / seg * min(seg, 120000.0), 0.0)
-            return tan, (0.0, 0.0, 1.0), (0.0, math.degrees(math.atan2(dy, dx)), 0.0)
-        legs = [math.dist(a, b) for a, b in ((prv, pos), (pos, nxt)) if math.dist(a, b) > 1.0]
-        d = unit([nxt[i] - prv[i] for i in range(3)])
-        tan = tuple(c * min(legs or [1.0]) for c in d)
-        din = unit([pos[0] - prv[0], pos[1] - prv[1], 0.0]) if math.dist(prv, pos) > 1.0 else None
-        dout = unit([nxt[0] - pos[0], nxt[1] - pos[1], 0.0]) if math.dist(pos, nxt) > 1.0 else None
-        up = (0.0, 0.0, 1.0)
-        if din and dout:
-            turn = math.acos(max(-1.0, min(1.0, din[0] * dout[0] + din[1] * dout[1])))
-            inside = unit([dout[0] - din[0], dout[1] - din[1], 0.0])
-            bank = min(math.radians(50.0), turn * 0.6)
-            if turn > 0.02:
-                up = (inside[0] * math.sin(bank), inside[1] * math.sin(bank), math.cos(bank))
-        pitch = math.degrees(math.atan2(d[2], math.hypot(d[0], d[1])))
-        return tan, up, (pitch, math.degrees(math.atan2(d[1], d[0])), 0.0)
-
-    def point(el, k, pos, pname):
-        tan, up, rot = shape(k, pos)
-        repl = {'Pos': vec(*pos), 'tan': vec(*tan), 'Up': vec(*up), 'PathPointRotation': vec(*rot, 'Rotator'),
-                'UniqueID': ('raw', 'UInt32', new_unique_id(used_ids, f'AC8SurvivalMode:{name}:{k}')), 'Name': pname}
-        el = copy.deepcopy(el)
-        el[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl and q[3] is not None else q for q in el[2]]
-        return el
-    els, b = [], None
-    for k, pos in enumerate(pts):
-        if k == 0:
-            b = point(begin, k, pos, ('name', 'DefaultPathPoint', 0))
-        else:
-            els.append(point(point_t, k, pos, ('name', name, k)))
-    # no tube data: a template's (Mission 16's Ladon path) names a tube object in its own package, an export index past
-    # ours ("Bad export index 74/19": the game's loader stopped at the hangar, 2026-10-23)
-    tube = ('struct', 'LiveAIPathTubeData', [(0, 'TubeData', False, ('arr', [])), (1, 'MoveData', False, ('arr', []))])
-    # and so no tube control (ControlType 2): a tube path without its tube "finishes" at once, every frame (the Ladons'
-    # PathFinish fired ~30 times a second and restarted their circuit: no route, a bombing run a second, 2026-10-23)
-    ctl = ('enum', 'ELiveAIPathControlType', ('raw', 'Byte', b'\x01'))
-    repl = {'BeginPointDesc': b, 'PathPointDescList': ('arr', els), 'PathTubeData': tube,
-            'UniqueID': ('raw', 'UInt32', new_unique_id(used_ids, f'AC8SurvivalMode:{name}')),
-            'Name': ('name', name, 0), 'WorldDataName': ('name', 'WD_SurvivalMode_global', 0)}
-    ct = [q for q in new[2] if q[1] == 'ControlType']
-    if ct and ct[0][3] is not None and ct[0][3][2][2] == b'\x02': repl['ControlType'] = ctl
-    new[2][:] = [(q[0], q[1], False, repl[q[1]]) if q[1] in repl else q for q in new[2]]
-    for n in names_in(new) + [name, 'DefaultPathPoint']: z.nb.add(n)
-    return new
-
-
-M16 = '/Game/Maps/Ingame/Mission016/'
-
-
-def import_from(z, zs, ref):
-    """Our import index for another package's import `ref` (('obj', -n) in `zs`): the same imported package and public
-    export hash, added to `z`'s import map (and its imported packages) when it isn't there yet. Hard rule 7: pack.py
-    puts the package into the container header from this list."""
-    assert ref[0] == 'obj' and ref[1] < 0, ref
-    x = zs.imports[-ref[1] - 1]
-    assert x >> 62 == 2, hex(x)                               # a package import
-    pkg = zs.imp_pkgs[(x >> 32) & 0x3fffffff]
-    h = zs.imp_hashes[x & 0xffffffff]
-    if pkg not in z.imp_pkgs:
-        z.ipn.add(pkg)
-        z.imp_pkg_nums.append(0)
-    k = z.imp_pkgs.index(pkg)
-    if h not in z.imp_hashes:
-        z.imp_hashes.append(h)
-    new = (2 << 62) | (k << 32) | z.imp_hashes.index(h)
-    if new not in z.imports:
-        z.imports.append(new)
-    return ('obj', -(z.imports.index(new) + 1))
-
-
-def retag_parts(children, owner, used_ids, z, zs):
-    """A ported aircraft's parts (ChildAIObjectDescs / GrandChildrens): named after their new owner (<owner>_<component>,
-    keeping the component's FName number), new UniqueIDs, our world data's name, and their classes imported from the
-    source package `zs`. Their mission rows stay the source mission's (NPC_IMPORT brings them)."""
-    n = 0
-    for ch in children:
-        d = {p[1]: p for p in ch[2]}
-        data = d['Data'][3][2]
-        comp = [q for q in data if q[1] == 'ComponentFieldName'][0][3]
-        data[:] = [(q[0], q[1], False, import_from(z, zs, q[3])) if q[1] == 'Class' and q[3] is not None else q for q in data]
-        name = (f'{owner}_{comp[1]}', comp[2])
-        assert not name[0].rpartition('_')[2].isdigit(), name                 # hard rule 17
-        uid = new_unique_id(used_ids, f'AC8SurvivalMode:{name[0]}:{name[1]}')
-        ch[2][:] = [(q[0], q[1], False, ('name',) + name) if q[1] == 'Name' else
-                    (q[0], q[1], False, ('raw', 'UInt32', uid)) if q[1] == 'UniqueID' else
-                    (q[0], q[1], False, ('name', 'WD_SurvivalMode_global', 0)) if q[1] == 'WorldDataName' and q[3] is not None else q
-                    for q in ch[2]]
-        for nm in names_in(ch): z.nb.add(nm)
-        n += 1
-        grand = d.get('GrandChildrens')       # (after the whole name: EB_002's WP_L #2..#7 each hold a ram / aagun / ciws)
-        sub = f'{owner}_{comp[1]}' + (f'_{comp[2] - 1}' if comp[2] else '')
-        if grand and grand[3]: n += retag_parts(grand[3][1], sub, used_ids, z, zs)
-    return n
-
-
-def zone_area(u):
-    """Unit desc `u`'s area over the whole combat zone (as the pool's: a 6-10 km area keeps an AI from what's outside)."""
-    r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
-    u[2][:] = sorted([p for p in u[2] if p[1] != 'RadiusInMeter'] + [(r_idx, 'RadiusInMeter', False,
-                     ('raw', 'Float', struct.pack('<f', survival_events.AREA_RADIUS_M)))], key=lambda p: p[0])
-
-
-def ladon_units(units, used_ids, z, top_number, v):
-    """The Ladons (survival_events.LADON*): Mission 16's Ladon desc with its parts, once per Ladon, at the start of
-    its route, on its own mission row; its route and its circuit round the airfield."""
-    m16z = ZenPkg(stock(M16 + 'WD_Mission016_global'))
-    i = m16z.export_index('WD_Mission016_global')
-    m16, _ = props_of(m16z, i, 'LiveWorldData')
-    src = desc_named(m16, 'UnitDescList', survival_events.LADON_SOURCE_UNIT)
-    src_path = desc_named(m16, 'AIPathDescList', survival_events.LADON_SOURCE_PATH)
-    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
-    import math
-    pz = ZenPkg(stock(survival_events.LADON_PULSE_WD))       # the pulse cannon pod's class (survival_events.LADON_PULSE_*)
-    pw, _ = props_of(pz, pz.export_index(survival_events.LADON_PULSE_WD.rsplit('/', 1)[1]), 'LiveWorldData')
-    pref = None
-    for pu in [q for q in pw[2] if q[1] == 'UnitDescList'][0][3][1]:
-        for pob in [q for q in pu[2] if q[1] == 'AIObjectDescList'][0][3][1]:
-            pk = [q for q in pob[2] if q[1] == 'ChildAIObjectDescs']
-            for ch in (pk[0][3][1] if pk and pk[0][3] else []):
-                data = [p for p in ch[2] if p[1] == 'Data'][0][3][2]
-                if [q for q in data if q[1] == 'ComponentFieldName'][0][3][1] == survival_events.LADON_PULSE_PART:
-                    pref = [q for q in data if q[1] == 'Class'][0][3]
-    assert pref and pref[0] == 'obj' and pref[1] < 0, pref
-    for L in survival_events.ladons():
-        (x0, y0, z0), (x1, y1, _) = L['route'][0], L['route'][1]
-        yaw = math.degrees(math.atan2(y1 - y0, x1 - x0))
-        names = port_unit(units, used_ids, z, src, L['unit'], L['obj'], L['row'], [L['route'][0]], yaw, top_number)
-        assert names == [L['obj']], names
-        u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == L['unit']][0]
-        ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
-        kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
-        parts = retag_parts(kids, L['obj'], used_ids, z, m16z)
-        pulse = 0                                          # the CIWS slots: the Arsenal Bird's pulse cannon pods
-        for ch in kids:
-            data = [p for p in ch[2] if p[1] == 'Data'][0][3][2]
-            comp = [q for q in data if q[1] == 'ComponentFieldName'][0][3][1]
-            if comp in survival_events.LADON_CIWS:
-                data[:] = [(q[0], q[1], False, import_from(z, pz, pref)) if q[1] == 'Class' and q[3] is not None else q for q in data]
-                pulse += 1
-        assert pulse == len(survival_events.LADON_CIWS), pulse
-        # its area over the whole job (survival_events.LADON_AREA), not 40 km round the far-west spawn
-        (ax, ay), radius = survival_events.LADON_AREA
-        r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
-        u[2][:] = sorted([q for q in u[2] if q[1] != 'RadiusInMeter'] + [(r_idx, 'RadiusInMeter', False,
-                         ('raw', 'Float', struct.pack('<f', radius)))], key=lambda q: q[0])
-        u[2][:] = [(q[0], q[1], False, vec(ax * 100000.0, ay * 100000.0, 0.0)) if q[1] == 'SpawnPoint' else q for q in u[2]]
-        far = max(math.dist((ax * 100000.0, ay * 100000.0), pt[:2]) for pt in L['route'] + L['circuit']) / 100.0
-        assert far < radius * 0.9, (L['unit'], far, radius)
-        # smooth: wide banked turns (players saw sharp flat turns with 1.2 km tangents, 2026-10-23); the route runs on
-        # into the circuit, and the circuit (it ends over the airfield and starts just past it) into itself
-        loop = L['circuit']
-        paths.append(make_path(z, used_ids, src_path, L['path'], L['route'], smooth=True, after=loop[0]))
-        paths.append(make_path(z, used_ids, src_path, L['loop'], loop, smooth=True, before=loop[-1], after=loop[0]))
-        print(f'  ladon: {L["unit"]} ({L["row"]}), {parts} parts, route {len(L["route"])} points + circuit')
-
-
-M26 = '/Game/Maps/Ingame/Mission026/'
-
-
-def valka_unit(units, used_ids, z, top_number):
-    """VALKA (survival_events.VALKA_*): Mission 26's x40a desc with its parts (laser pod, three railguns), as the Ladons
-    are ported, on her ace row (her airframe in the world data too: hard rule 20), her area over the whole zone."""
-    m26z = ZenPkg(stock(M26 + 'WD_Mission026_global'))
-    m26, _ = props_of(m26z, m26z.export_index('WD_Mission026_global'), 'LiveWorldData')
-    src = desc_named(m26, 'UnitDescList', survival_events.VALKA_SOURCE_UNIT)
-    (lead, _, _), _ = ace_rows('valka', 'x40a')
-    # tgt: a target box and TGT mark (Mission 26's x40a desc has none; test of 2026-10-24: no box on her once she
-    # stopped coming hidden, setGone's un-hide had been what gave her one; hard rule 32)
-    names = port_unit(units, used_ids, z, src, survival_events.VALKA_UNIT, 'SV_Obj_Valka', lead + '_sv',
-                      [(0.0, 0.0, 300000.0)], 0.0, top_number, tgt=True)
-    u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.VALKA_UNIT][0]
-    ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
-    kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
-    parts = retag_parts(kids, names[0], used_ids, z, m26z)
-    for ch in kids:
-        data = [p for p in ch[2] if p[1] == 'Data'][0][3][2]
-        comp = [q for q in data if q[1] == 'ComponentFieldName'][0][3][1]
-        survival_events.VALKA_PARTS[comp] = [q for q in ch[2] if q[1] == 'Name'][0][3][1]
-    assert set(survival_events.VALKA_PARTS) >= {survival_events.VALKA_RAILGUN, *survival_events.VALKA_IDLE_PARTS}, survival_events.VALKA_PARTS
-    zone_area(u)
-    survival_events.VALKA_OBJ = names[0]
-    print(f'  valka: {names[0]} in {survival_events.VALKA_UNIT} ({lead}_sv), {parts} parts: {survival_events.VALKA_PARTS}')
-
-
-def valka_eml_unit(units, used_ids, z, top_number):
-    """VALKA's opener railgun (survival_events.VALKA_EML_*): AC7 Mission 18 fires its opener from a hidden dummy
-    railgun of its own (ms18_dummy_eml_p1, an AITurret_Pawn), not from Mihaly. Ours: the x40a's RailGun part alone
-    (its DT_NPC row OP1016_x40a_RG, on mission row VALKA_EML_ROW), on Mission 26's x40a unit desc without its parts
-    (an air unit: main.lua spawns it in the sky, 9 km along the player's aim)."""
-    m26z = ZenPkg(stock(M26 + 'WD_Mission026_global'))
-    m26, _ = props_of(m26z, m26z.export_index('WD_Mission026_global'), 'LiveWorldData')
-    src = desc_named(m26, 'UnitDescList', survival_events.VALKA_SOURCE_UNIT)
-    names = port_unit(units, used_ids, z, src, survival_events.VALKA_EML_UNIT, survival_events.VALKA_EML_OBJ,
-                      survival_events.VALKA_EML_ROW, [(0.0, 0.0, 300000.0)], 0.0, top_number)
-    u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.VALKA_EML_UNIT][0]
-    ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
-    ob[2][:] = [(q[0], q[1], q[2], ('arr', [])) if q[1] == 'ChildAIObjectDescs' else q for q in ob[2]]
-    zone_area(u)
-    assert names == [survival_events.VALKA_EML_OBJ], names
-    print(f'  valka: opener railgun {names[0]} in {survival_events.VALKA_EML_UNIT} ({survival_events.VALKA_EML_ROW} -> {survival_events.VALKA_EML_NPC}), no parts')
-
-
-EB002 = '/Game/OnlineMode/Maps/EmergencyCall/EB_002/'
-
-
-def alcn_units(units, used_ids, z, top_number, v):
-    """The Alicorn (survival_events.ALCN_*): EB_002's Boss_0 at the start of its lane, without the pools it launches,
-    its parts' classes imported (import_from); its ways out and back."""
-    import math
-    ebz = ZenPkg(stock(EB002 + 'WD_EB_002'))
-    i = ebz.export_index('WD_EB_002')
-    eb, _ = props_of(ebz, i, 'LiveWorldData')
-    src = copy.deepcopy(desc_named(eb, 'UnitDescList', survival_events.ALCN_SOURCE_UNIT))
-    ob = [p for p in src[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
-    kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
-    def comp(ch):
-        data = [p for p in ch[2] if p[1] == 'Data'][0][3][2]
-        return [q for q in data if q[1] == 'ComponentFieldName'][0][3][1]
-    dropped = [comp(ch) for ch in kids if comp(ch) in survival_events.ALCN_DROP]
-    kids[:] = [ch for ch in kids if comp(ch) not in survival_events.ALCN_DROP]
-    paths_def = survival_events.alcn_paths()
-    (x0, y0, z0), (x1, y1, _) = paths_def[0][1][0], paths_def[0][1][1]
-    names = port_unit(units, used_ids, z, src, survival_events.ALCN_UNIT, survival_events.ALCN_OBJ,
-                      survival_events.ALCN_ROW, [(x0, y0, z0)], math.degrees(math.atan2(y1 - y0, x1 - x0)), top_number)
-    assert names == [survival_events.ALCN_OBJ], names
-    u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.ALCN_UNIT][0]
-    ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
-    parts = retag_parts([p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1], survival_events.ALCN_OBJ, used_ids, z, ebz)
-    zone_area(u)
-    src_path = desc_named(eb, 'AIPathDescList', survival_events.ALCN_SOURCE_PATH)
-    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
-    for name, pts in paths_def:
-        paths.append(make_path(z, used_ids, src_path, name, pts))
-    print(f'  alicorn: {survival_events.ALCN_UNIT}, {parts} parts ({len(dropped)} pools left out: {", ".join(dropped)})')
-
-
-# The Alicorn's rows, all Online Mode's (tools/re/ALICORN.md 3, 5): copies of the rows it needs, into Survival tables
-# that Scripts/main.lua adds to the campaign tables at the main menu (CFG.specials.alicorn.tables).
-ON_NPC = '/Game/OnlineMode/DataTables/AI/NPC/'
-ALCN_TABLES = [   # (Online table, row struct, Survival's copy, the campaign table main.lua adds the rows to)
-    (ON_NPC + 'DT_NPC_ON', 'LiveNpcDataTable', 'DT_SV_AlcnNpc', '/Game/Datatables/AI/NPC/DT_NPC'),
-    (ON_NPC + 'DT_NPC_Model_ON', 'LiveModelDataTable', 'DT_SV_AlcnModel', '/Game/Datatables/AI/NPC/Model/DT_NPC_Model'),
-    (ON_NPC + 'DT_NPC_WeaponDurability_ON', 'LiveWeaponDurabilityDataTable', 'DT_SV_AlcnWpDur',
-     '/Game/Datatables/AI/NPC/WeaponDurability/DT_NPC_WeaponDurability'),
-    (ON_NPC + 'DT_NPC_ExplosionDurability_ON', 'LiveExplosionDurabilityDataTable', 'DT_SV_AlcnExDur',
-     '/Game/Datatables/AI/NPC/ExplosionDurability/DT_NPC_ExplosionDurability'),
-]
-
-
-def build_alicorn_rows():
-    """DT_SV_Alcn*: the Alicorn's NPC rows (alcn_01 with its pools left out of its children, and every kept part's,
-    down the tree), their model rows and the durability rows they name."""
-    def load(path, st):
-        z = ZenPkg(stock(path))
-        dt, o = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
-        assert o == len(z.payloads[0]), path
-        return z, dt
-    def key(k): return k[0] if k[1] == 0 else f'{k[0]}_{k[1] - 1}'
-    def field(row, n):
-        q = [q for q in row[2] if q[1] == n]
-        return q[0][3] if q else None
-    def nm(v): return None if v is None else (v[1] if v[2] == 0 else f'{v[1]}_{v[2] - 1}')
-    zn, dn = load(ALCN_TABLES[0][0], ALCN_TABLES[0][1])
-    npc = {key(k): (k, row) for k, row in dn['rows']}
-    # (and the Arsenal Bird's pulse cannon pod, on the Ladons' CIWS slots: survival_events.LADON_PULSE_NPC)
-    want, seen, refs = [survival_events.ALCN_ROW, survival_events.LADON_PULSE_NPC], [], {'ModelId': set(), 'WeaponDurabilityId': set(), 'ExplosionDurabilityId': set()}
-    while want:
-        r = want.pop(0)
-        if r in seen or r in ('None', ''): continue
-        seen.append(r)
-        row = npc[r][1]
-        kids, comps = field(row, 'ChildNPCId'), field(row, 'ChildNPCComponentNames')
-        if r == survival_events.ALCN_ROW:        # its pools out
-            keep = [i for i, c in enumerate(comps[1]) if nm(c) not in survival_events.ALCN_DROP]
-            row[2][:] = [(q[0], q[1], q[2], ('arr', [q[3][1][i] for i in keep])) if q[1] in ('ChildNPCId', 'ChildNPCComponentNames')
-                         else q for q in row[2]]
-            kids = field(row, 'ChildNPCId')
-        for k in (kids[1] if kids else []): want.append(nm(k))
-        for f in refs:
-            v = field(row, f)
-            if v is not None and nm(v) not in ('None', ''): refs[f].add(nm(v))
-    keepsets = {0: set(seen), 1: refs['ModelId'], 2: refs['WeaponDurabilityId'], 3: refs['ExplosionDurabilityId']}
-    for i, (src, st, out, _) in enumerate(ALCN_TABLES):
-        z, dt = (zn, dn) if i == 0 else load(src, st)
-        rename_package(z, src, DATA + out)
-        rows = [(k, row) for k, row in dt['rows'] if key(k) in keepsets[i]]
-        assert {key(k) for k, _ in rows} == keepsets[i], (out, keepsets[i] - {key(k) for k, _ in rows})
-        if i == 0:                  # the submarine's parts: Survival's damage table (survival_events.ALCN_PART_* / DURABLE_*)
-            n_parts = 0
-            for k, row in rows:
-                d = nm(field(row, 'WeaponDurabilityId'))
-                if key(k) != survival_events.ALCN_ROW and d and d.startswith(survival_events.ALCN_DURABLE_FROM):
-                    row[2][:] = [(q[0], q[1], q[2], ('name', survival_events.ALCN_PART_DURABILITY, 0))
-                                 if q[1] == 'WeaponDurabilityId' else q for q in row[2]]
-                    n_parts += 1
-            assert n_parts >= survival_events.ALCN_DURABLE_MIN, n_parts
-            print(f'  alicorn: {n_parts} part rows take full damage ({survival_events.ALCN_PART_DURABILITY})')
-        if i == 2:                  # ... a copy of NWDID_SubMarine taking full damage from every weapon category
-            src_row = [row for k, row in rows if key(k) == survival_events.ALCN_PART_DURABILITY_SOURCE][0]
-            new = copy.deepcopy(src_row)
-            full = ('raw', 'Float', struct.pack('<f', 100.0))
-            new[2][:] = [(q[0], q[1], q[2], full) if q[1].startswith('Category') and q[3] is not None
-                         and struct.unpack('<f', q[3][2])[0] < 100.0 else q for q in new[2]]
-            rows.append(((survival_events.ALCN_PART_DURABILITY, 0), new))
-        for k, row in rows:
-            for n in names_in(row) + [k[0]]: z.nb.add(n)
-        dt['rows'] = rows
-        z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
-        chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
-        assert chk['rows'] == dt['rows']
-        save(z, DATA + out)
-        print(f'  {out}: {len(rows)} rows')
-
-
-def lcac_units(units, used_ids, z, top_number, v):
-    """The amphibious assault (survival_events.LCAC_*): per lane a unit of four landing craft (LCAC_CRAFT) at its start, each
-    craft's path in and back out, and per craft a troop unit (one BTR-90) on the beach where it lands."""
-    m13 = stock_wd(M13 + 'WD_Mission013_global')
-    src_craft = desc_named(m13, 'UnitDescList', survival_events.LCAC_SOURCE_UNIT)
-    src_troop = desc_named(m13, 'UnitDescList', survival_events.LCAC_TROOP_SOURCE)
-    src_path = desc_named(m13, 'AIPathDescList', survival_events.LCAC_SOURCE_PATH)
-    src_drive = desc_named(m13, 'AIPathDescList', survival_events.LCAC_TROOP_SOURCE_PATH)
-    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
-    craft = survival_events.lcac_craft()
-    for lane in survival_events.lcac_lane_names():
-        cs = [c for c in craft if c['lane'] == lane]
-        names = port_unit(units, used_ids, z, src_craft, cs[0]['unit'], cs[0]['obj_base'], survival_events.LCAC_ROW,
-                          [c['start'] for c in cs], cs[0]['yaw'], top_number, tgt=True)
-        assert names == [c['obj'] for c in cs], names
-    for c in craft:
-        (sx, sy, sz), (bx, by, bz) = c['start'], c['beach']
-        at = lambda t, zz: (sx + (bx - sx) * t, sy + (by - sy) * t, zz)
-        shore = 1.0 - min(0.08, 60000.0 / c['length'])           # the last point at sea, up to 600 m off the beach
-        inbound = [at(0.0, 0.0), at(0.35, sz), at(0.7, sz), at(shore, sz), at(1.0, bz)]
-        back = [at(1.0, bz), at(shore, sz), at(0.6, sz), at(0.2, sz), at(-0.3, sz)]   # out past the start
-        paths.append(make_path(z, used_ids, src_path, c['path'], inbound))
-        paths.append(make_path(z, used_ids, src_path, c['back'], back))
-        (gx, gy, gz) = c['runway']                                  # the troops' drive: beach to their runway spot
-        gnd = survival_events.LCAC_GROUND_Z
-        drive = [(bx, by, bz)] + [(bx + (gx - bx) * t, by + (gy - by) * t, gnd) for t in (0.15, 0.4, 0.65, 0.9)] + [(gx, gy, gz)]
-        paths.append(make_path(z, used_ids, src_drive, c['drive'], drive))
-        port_unit(units, used_ids, z, src_troop, c['troops'], c['troop_obj'], survival_events.LCAC_TROOP_ROW,
-                  [c['beach']], c['yaw'], top_number, tgt=True)
-    print(f'  amphibious assault: {len(survival_events.LCAC_LANES)} lanes of {len(survival_events.LCAC_CRAFT)} landing craft, {len(craft) * 3} paths, '
-          f'{len(craft)} troop units')
-
-
-def copy_unit(units, used_ids, z, src_unit, new_unit, size, top_number, obj_name, npc_row):
-    """A new unit `new_unit`: a copy of `src_unit`'s desc (faction, point, area, tags) holding its first `size` AI
-    objects, named obj_name (numbered _0, _1, ... when more than one) with new UniqueIDs, on NPC row `npc_row` (their
-    airframe and, built at level load, their behaviour: hard rule 20). Returns the objects' names as event args write them."""
-    unit_name = lambda u: [p for p in u[2] if p[1] == 'Name'][0][3][1]
-    src = [u for u in units if unit_name(u) == src_unit][0]
-    assert new_unit not in {unit_name(u) for u in units} and not new_unit[-1].isdigit(), new_unit   # hard rule 17
-    new = copy.deepcopy(src)
-    objs = [p for p in new[2] if p[1] == 'AIObjectDescList'][0][3][1]
-    assert len(objs) >= size, (src_unit, len(objs), size)
-    del objs[size:]
-    assert obj_name not in top_number and not obj_name[-1].isdigit(), obj_name
-    names = []
-    for k, ob in enumerate(objs):
-        num = 0 if size == 1 else k + 1                       # FName number: 0 = no suffix, n = "_<n-1>"
-        h = zlib.crc32(f'AC8SurvivalMode:{new_unit}:{k}'.encode())
-        while struct.pack('<I', h) in used_ids: h = (h + 1) & 0xffffffff
-        used_ids.add(struct.pack('<I', h))
-        assert any(q[1] == 'MissionNpcID' for q in ob[2]), new_unit
-        ob[2][:] = [(q[0], q[1], False, ('name', obj_name, num)) if q[1] == 'Name' else
-                    (q[0], q[1], False, ('name', npc_row, 0)) if q[1] == 'MissionNpcID' else
-                    (q[0], q[1], False, ('raw', 'UInt32', struct.pack('<I', h))) if q[1] == 'UniqueID' else q for q in ob[2]]
-        names.append(obj_name if num == 0 else f'{obj_name}_{num - 1}')
-    top_number[obj_name] = len(objs)
-    assert npc_row in NPC_ROWS, npc_row
-    for n in (new_unit, obj_name, npc_row): z.nb.add(n)
-    ids = used_ids | {q[3][2] for u in units for q in u[2] if q[1] == 'UniqueID' and q[3]}
-    h = zlib.crc32(b'AC8SurvivalMode:' + new_unit.encode())
-    while struct.pack('<I', h) in ids: h = (h + 1) & 0xffffffff
-    new[2][:] = [(q[0], q[1], False, ('name', new_unit, 0)) if q[1] == 'Name' else
-                 (q[0], q[1], False, ('raw', q[3][1], struct.pack('<I', h))) if q[1] == 'UniqueID' else q for q in new[2]]
-    units.append(new)
-    return names
-
-
-def split_units(units, used_ids, z, top_number):
-    """Comona Defense (survival_events.SHUTTLE_*): the shuttle gets a unit of its own, spawned every special, and the
-    pad's invincible dummies one of theirs (PAD_DUMMY_UNIT, spawned once a run: a unit with anything alive can't be
-    spawned again), so Mission 22's pad unit keeps only what can be destroyed (AA guns, SAMs, tower: removed after
-    each special). Airfield defences (survival_events.DEFENCES): each of Mission 22's airport AA guns and SAM sites
-    becomes a one-object unit the shop can build."""
-    move_object(units, used_ids, z, survival_events.PAD_UNIT, survival_events.SHUTTLE, survival_events.SHUTTLE_UNIT,
-                survival_events.SHUTTLE_NPC_ROW)
-    # Mission 22's shuttle is an attack-target exception (bIsAttackTargetsException): no AI ever aims at it (its
-    # "attacks" are scripted near misses), so Survival's strike flights circled it without a shot (test of 2026-10-23:
-    # 0 hits in 150 s, 1.4-3.3 km out). Survival's copy can be attacked.
-    clear_flags([u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.SHUTTLE_UNIT][0],
-                ('bIsAttackTargetsException',))
-    left = move_object(units, used_ids, z, survival_events.PAD_UNIT, survival_events.PAD_DUMMIES, survival_events.PAD_DUMMY_UNIT)
-    print(f'  shuttle: {survival_events.SHUTTLE} in {survival_events.SHUTTLE_UNIT} (NPC row {survival_events.SHUTTLE_NPC_ROW}), '
-          f'{len(survival_events.PAD_DUMMIES)} dummies in {survival_events.PAD_DUMMY_UNIT}; {survival_events.PAD_UNIT} keeps {left} objects')
-    for new_unit, obj, mrow in survival_events.DEFENCES:
-        move_object(units, used_ids, z, survival_events.DEFENCE_SOURCE, obj, new_unit, survival_events.DEFENCE_ROWS[mrow][0])
-    print(f'  airfield defences: {len(survival_events.DEFENCES)} units from {survival_events.DEFENCE_SOURCE}')
-    # The Anomaly (survival_events.ANOMALY_*): MINDRIPPER alone, and its guards
-    # (user, 2026-10-22: "make mindripper an F-4": its NPC row is the F-4E one in the world data too, not only at spawn)
-    (lead, _, _), (wing, _, _) = ace_rows('anomaly', 'f04e')
-    ace = copy_unit(units, used_ids, z, survival_events.ANOMALY_SOURCE, survival_events.ANOMALY_UNIT, 1, top_number,
-                    'SV_Obj_Mindripper', lead + '_sv')
-    guards = copy_unit(units, used_ids, z, survival_events.ANOMALY_SOURCE, survival_events.ANOMALY_GUARD_UNIT,
-                       survival_events.ANOMALY_GUARDS, top_number, 'SV_Obj_AnomalyGuard', wing + '_sv')
-    survival_events.ANOMALY_OBJ = ace[0]
-    print(f'  anomaly: {ace[0]} in {survival_events.ANOMALY_UNIT}, guards {guards} in {survival_events.ANOMALY_GUARD_UNIT}')
-    # AB.L..IN (survival_events.GLITCH_*): the EA-18G alone, on its ace row (its airframe in the world data too)
-    (glead, _, _), _ = ace_rows('glitch', 'e18g')
-    gl = copy_unit(units, used_ids, z, survival_events.ANOMALY_SOURCE, survival_events.GLITCH_UNIT, 1, top_number,
-                   'SV_Obj_Glitch', glead + '_sv')
-    survival_events.GLITCH_OBJ = gl[0]
-    print(f'  glitch: {gl[0]} in {survival_events.GLITCH_UNIT}')
-
-
-def build_wd_global():
-    """Mission 22's global world data (its units, AI paths, marks, volumes and the combat zone the minimap frames
-    itself on - test 6), with no unit spawning at mission start: Survival's events spawn every unit they use."""
-    old, new = M22 + 'WD_Mission022_global', MI + 'WD_SurvivalMode_global'
-    z = ZenPkg(stock(old))
-    rename_package(z, old, new)               # also renames every WorldDataName value (same FName)
-    i = z.export_index(new.rsplit('/', 1)[1])
-    v, rest = props_of(z, i, 'LiveWorldData')
-    units = [p for p in v[2] if p[1] == 'UnitDescList'][0][3][1]
-    # An absent property means the class default, and bIsSpawnFromStart defaults to true (test M2-1: removing it
-    # spawned all 71 units, 135 aircraft). Mission 22's own reinforcements carry it as an explicit zero: do the same.
-    idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'bIsSpawnFromStart'][0]
-    sp_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'SpawnPoint'][0]
-    r_idx = [k for k, (n, t) in uprop.U.schema('LiveUnitDesc').items() if n == 'RadiusInMeter'][0]
-    POOL_UNITS = set(survival_events.POOL)
-    turned_off = 0
-    behaviours, sized = {}, {}
-    used_ids = {q[3][2] for u in units for p in u[2] if p[1] == 'AIObjectDescList' and p[3]
-                for ob in p[3][1] for q in ob[2] if q[1] == 'UniqueID' and q[3]}
-    top_number = {}                            # AI object name -> highest number used anywhere in the world data
-    for u in units:
-        for p in u[2]:
-            if p[1] == 'AIObjectDescList' and p[3]:
-                for ob in p[3][1]:
-                    for q in ob[2]:
-                        if q[1] == 'Name' and q[3]: top_number[q[3][1]] = max(top_number.get(q[3][1], 0), q[3][2])
-    for u in units:
-        name = [p for p in u[2] if p[1] == 'Name'][0][3][1]
-        keep = name in survival_events.KEEP_AT_START
-        point = survival_events.KEEP_AT_START.get(name)
-        cur = [p for p in u[2] if p[1] == 'bIsSpawnFromStart']
-        if not keep and not (cur and cur[0][2]): turned_off += 1
-        on = (idx, 'bIsSpawnFromStart', False, ('raw', 'Bool', b'\x01')) if keep else (idx, 'bIsSpawnFromStart', True, None)
-        rest_props = [p for p in u[2] if p[1] != 'bIsSpawnFromStart' and not (point and p[1] == 'SpawnPoint')]
-        if point:
-            # the unit's SpawnPoint alone left the anchor at the map origin (probe test 7): its AI object has a
-            # SpawnPoint of its own, which is where it actually stands, so both get the point
-            rest_props.append((sp_idx, 'SpawnPoint', False, ('native', 'Vector', struct.pack('<3d', *point))))
-            for k, p in enumerate(rest_props):
-                if p[1] == 'AIObjectDescList':
-                    for obj in p[3][1]:
-                        obj[2][:] = [(q[0], q[1], False, ('native', 'Vector', struct.pack('<3d', *point)))
-                                     if q[1] == 'SpawnPoint' else q for q in obj[2]]
-        radius = (survival_events.AREA_RADIUS_M if name in POOL_UNITS else       # the pool: an area over the whole zone
-                  survival_events.HEAVY_AREA_RADIUS_M if name in survival_events.HEAVY_BOMBERS else None)
-        if radius:
-            rest_props = [p for p in rest_props if p[1] != 'RadiusInMeter'] + [
-                (r_idx, 'RadiusInMeter', False, ('raw', 'Float', struct.pack('<f', radius)))]
-        row = survival_events.behaviour_row(name)       # the flight's behaviour (survival_events: built at level load)
-        if row:
-            assert row in NPC_ROWS, (name, row)
-            z.nb.add(row)
-            for p in rest_props:
-                if p[1] == 'AIObjectDescList':
-                    for obj in p[3][1]:
-                        assert any(q[1] == 'MissionNpcID' for q in obj[2]), name
-                        obj[2][:] = [(q[0], q[1], False, ('name', row, 0)) if q[1] == 'MissionNpcID' else q for q in obj[2]]
-            behaviours[row] = behaviours.get(row, 0) + 1
-        size = survival_events.flight_size(name)
-        if size:                               # Survival's flights: 2, 4 or 6 aircraft in a standard formation
-            for p in rest_props:
-                if p[1] == 'AIObjectDescList':
-                    objs = p[3][1]
-                    assert any(q[1] == 'bGroupLead' and q[3] == ('raw', 'Bool', b'\x01') for q in objs[0][2]), name
-                    set_flight_size(objs, size, name, unit_point(u), used_ids, top_number)
-                    sized[size] = sized.get(size, 0) + 1
-        u[2][:] = sorted(rest_props + [on], key=lambda p: p[0])
-    split_units(units, used_ids, z, top_number)
-    ally_units(units, used_ids, z, top_number, v)
-    lcac_units(units, used_ids, z, top_number, v)
-    ladon_units(units, used_ids, z, top_number, v)
-    alcn_units(units, used_ids, z, top_number, v)
-    valka_unit(units, used_ids, z, top_number)
-    valka_eml_unit(units, used_ids, z, top_number)
-    names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
-    assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
-    assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names
-    assert any(p[1] == 'CombatZoneDescList' for p in v[2])
-    # every object reference in the world data inside this package (an export index from another mission's desc crashes
-    # the game's loader when the level loads: "Bad export index")
-    def refs(x, out):
-        if isinstance(x, tuple):
-            if x and x[0] == 'obj' and isinstance(x[1], int) and x[1] > len(z.exports): out.append(x)
-            for y in x: refs(y, out)
-        elif isinstance(x, list):
-            for y in x: refs(y, out)
-        return out
-    bad = refs(v, [])
-    assert not bad, f'object references past the {len(z.exports)} exports: {bad[:5]}'
-    z.payloads[i] = bytearray(write_props(z, v) + rest)
-    chk, _ = props_of(z, i, 'LiveWorldData'); assert chk == v
-    print(f'  {len(units)} units, spawn-at-start turned off on {turned_off}; behaviour rows (flights): {behaviours}; '
-          f'flight sizes: {sized}')
-    retarget_import(z, NPC_TABLE_STOCK, NPC_TABLE)        # Survival's own NPC mission table (build_npc_table)
-    save(z, new)
-
-
-def build_ef():
-    """Mission 22's event flag asset with every flag removed, then Survival's int flags (value 0) added."""
-    old = M22 + 'EF_Mission022_global'
-    z = ZenPkg(stock(old))
-    rename_package(z, old, MI + 'EF_SurvivalMode_global')
-    v, rest = props_of(z, 0, 'LiveEventFlagAsset')
-    def clear(s):
-        for k, (pi, pn, zero, val) in enumerate(s[2]):
-            if val and val[0] == 'map': s[2][k] = (pi, pn, False, ('map', 0, []))
-            elif val and val[0] == 'struct': clear(val)
-    clear(v)
-    fd = [p for p in v[2] if p[1] == 'FlagData'][0][3]
-    ints = [p for p in fd[2] if p[1] == 'IntegerFiled'][0][3]
-    for name in survival_events.INT_FLAGS:
-        # The event records name flags by string, which the game turns into an FName that splits a numeric tail
-        # ("SV_Up_19" -> SV_Up, number 20). Keys must be stored the same way or the flag never matches: test of
-        # 2026-10-21 05:07, flights 10-24 were never flagged up, so they were never chased.
-        key = survival_events.fname(name)
-        z.nb.add(key[1])
-        ints[2].append((key, ('struct', 'LiveEventFlagType_Integer', [(0, 'Value', True, None)])))
-    z.payloads[0] = bytearray(write_props(z, v) + rest)
-    chk, _ = props_of(z, 0, 'LiveEventFlagAsset'); assert chk == v
-    save(z, MI + 'EF_SurvivalMode_global')
-
-
-def empty_ep(z, new_path):
-    """Keep the EP's properties (world data, flag asset, package hash), remove every trigger and exec."""
-    p = bytes(z.payloads[0])
-    v, rest = props_of(z, 0, 'LiveEventPackage')
-    props = v[2]
-    for k, (pi, pn, zero, val) in enumerate(props):
-        if pn == 'PackageHash': props[k] = (pi, pn, False, ('raw', 'Int', struct.pack('<I', package_hash(new_path))))
-    head = write_props(z, v)
-    # after the properties: u32 (always 0 so far), u32 trigger count, triggers, u32 exec count, execs
-    assert rest[:4] == b'\0\0\0\0', rest[:4]
-    z.payloads[0] = bytearray(head + b'\0\0\0\0' + struct.pack('<II', 0, 0))
-
-
-def build_ep(part, ef=False):
-    """Mission 22's event package for `part` (global / phase01 / phase02) with every trigger and exec removed;
-    the global one then gets Survival's event graph (tools/survival_events.py)."""
-    old, new = M22 + 'EP_Mission022_' + part, MI + 'EP_SurvivalMode_' + part
-    z = ZenPkg(stock(old))
-    rename_package(z, old, new)
-    retarget_import(z, M22 + 'WD_Mission022_' + part, MI + 'WD_SurvivalMode_' + part)
-    if ef:
-        retarget_import(z, M22 + 'EF_Mission022_global', MI + 'EF_SurvivalMode_global')
-    empty_ep(z, new)
-    if part == 'global':
-        g = survival_events.build_events(stock(old))
-        # exec classes Mission 22's package doesn't import (Graph.foreign_template): the same imports, in the same order
-        assert len(z.imports) + len(g.added_imports) == len(g.z.imports), (len(z.imports), len(g.added_imports))
-        z.imports += g.added_imports
-        head = bytes(z.payloads[0])[:-12]         # empty_ep left: properties + u32 0 + u32 0 + u32 0
-        z.payloads[0] = bytearray(survival_events.write_records(g, z, head))
-        _, _, _, T, E, offs = ep_dump.load_bytes(z)
-        assert len(T) == len(g.trig) and len(E) == len(g.ex) and offs[3] == offs[4], (len(T), len(E), offs)
-        declared = {survival_events.fname(n) for n in survival_events.INT_FLAGS}   # build_ef's keys
-        assert {survival_events.fname(n) for n in g.flags} <= declared, g.flags - set(survival_events.INT_FLAGS)
-        print(f'  events: {len(T)} triggers, {len(E)} execs')
-    save(z, new)
-
-
 # ---------------------------------------------------------------- menu + mission rows
 # Survival's rows live in tables of its own. The Lua runtime copies them into the game's DT_LiveMissionTable and
 # DT_LiveMenuMainTopCommands at run time (AddRow), so no stock or other-mod table is overridden.
@@ -996,78 +139,34 @@ DATA = MOD + '/Data/'
 MISSION_ID = 9101          # must match SURVIVAL_MISSION_ID in runtime/survival_rt.c
 LEVEL_ID = 70              # ELiveLevelID Test02: no stock row uses it
 MENU_ARGS = 'SurvivalMode' # must match SURVIVAL_ARGS in runtime/survival_rt.c
+COOP_HOST_ARGS = 'SurvivalHost'   # must match SURVIVAL_HOST_ARGS in runtime/survival_rt.c (SURVIVAL CO-OP: HOST)
+COOP_JOIN_ARGS = 'SurvivalJoin'   # must match SURVIVAL_JOIN_ARGS (SURVIVAL CO-OP: JOIN)
+MENU_PAGES_ARGS = 'SurvivalMenu'  # must match SURVIVAL_MENU_ARGS (SURVIVAL MODE that opens Survival's pages)
 import dtx
 
 
-def build_rows_table(stock_path, new_path, row_struct, src_row, new_row, edit):
-    """Copy a stock DataTable package, keep one row (renamed new_row) and let edit() change its properties."""
+def build_rows_table(stock_path, new_path, row_struct, src_row, new_row, edit, more=()):
+    """Copy a stock DataTable package, keep one row (renamed new_row) and let edit() change its properties; `more` =
+    (row name, edit) pairs: further copies of the same stock row, each edited by its own function."""
+    import copy
     z = ZenPkg(stock(stock_path))
     rename_package(z, stock_path, new_path)
     p = bytes(z.payloads[0])
     dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, row_struct)
     assert o == len(p), (o, len(p))
     rows = dict(dt['rows'])
-    row = rows[(src_row, 0)]
-    edit(row[2])
-    for n in names_in(row) + [new_row]:
-        z.nb.add(n)
-    dt['rows'] = [((new_row, 0), row)]
+    out = []
+    for name, ed in [(new_row, edit)] + list(more):
+        row = copy.deepcopy(rows[(src_row, 0)])
+        ed(row[2])
+        for n in names_in(row) + [name]:
+            z.nb.add(n)
+        out.append(((name, 0), row))
+    dt['rows'] = out
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, row_struct)
     assert chk['rows'] == dt['rows']
     save(z, new_path)
-
-
-# Radio (tools/re/MUSIC_RADIO_CAMERA.md C): the level's radio table (ChronicleWorldSettings.RadioSettings, a hard
-# import) is Survival's copy of Mission 22's, with only these changes (the voices are in the global AKB_Voice bank, the
-# speakers in the global DT_SpeakerTable):
-RADIO_STOCK = '/Game/Datatables/Radio/DT_Rdo_ST_ms022'
-RADIO = DATA + 'DT_SV_Radio'
-# MOONCHILD's takeoff (01_Wave1_Ally_Take_Off): Mission 25 part 2's Savian mercenary leader, "Our economy relies on mercs
-# like us." (v2501_0054), in place of "This is Singleton Flight. Providing support." (user, 2026-10-23)
-RADIO_REPLACE = {('01_Wave1_Ally_Take_Off', 'v2216_0007'): ('v2501_0054', 'ms25_Savia_Mercenary_Leader')}
-# The shuttle round keeps Nagase's lines and drops the Professor's (Baxter) and Tasha's (user, 2026-10-23); groups left
-# empty aren't played (survival_events.SHUTTLE_RADIO)
-RADIO_DROP_SPEAKERS = ('LIVE_Baxter', 'LIVE_Tasha')
-RADIO_DROP_IN = ('01_Countdown_intermission_1st', '01_Countdown_mainEngine', '01_All_Wave_Hit_Shuttle_First')
-# and MOONCHILD's takeoff is the mercenary's line alone (user, 2026-10-23): Singleton's "We're joining the fight in
-# aircraft we took back from Sotoa." and Tasha's "Okay!" go
-RADIO_DROP_LINES = {('01_Wave1_Ally_Take_Off', 'v2216_0002'), ('01_Wave1_Ally_Take_Off', 'v0003_1682')}
-# Speakers aren't the level's to change: the game reads them from the game instance's own DT_SpeakerTable (a copy for
-# the level, 2026-10-23, changed nothing), so Scripts/main.lua switches the Savian mercenary leader to ally colours at
-# run time (CFG.allies.ally_speakers).
-
-
-def build_radio():
-    z = ZenPkg(stock(RADIO_STOCK))
-    rename_package(z, RADIO_STOCK, RADIO)
-    p = bytes(z.payloads[0])
-    dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, 'LiveRadioTable')
-    assert o == len(p), (o, len(p))
-    def field(row, n): return [q for q in row[2] if q[1] == n][0][3]
-    def full(v): return v[1] if v[0] != 'name' or v[2] == 0 else f'{v[1]}_{v[2] - 1}'   # 'v0003_1682' is ('v0003', 1683)
-    def setf(row, n, v): row[2][:] = [(q[0], q[1], q[2], v) if q[1] == n else q for q in row[2]]
-    keep, done, dropped = [], set(), 0
-    for k, row in dt['rows']:
-        group, text, speaker = full(field(row, 'RadioGroupID')), full(field(row, 'TextID')), field(row, 'SpeakerID')[1]
-        if (group in RADIO_DROP_IN and speaker in RADIO_DROP_SPEAKERS) or (group, text) in RADIO_DROP_LINES:
-            dropped += 1
-            continue
-        new = RADIO_REPLACE.get((group, text))
-        if new:
-            setf(row, 'TextID', survival_events.fname(new[0]))
-            setf(row, 'SpeakerID', ('str', new[1]))
-            z.nb.add(new[0]); z.nb.add(new[1])
-            done.add((group, text))
-        keep.append((k, row))
-    assert done == set(RADIO_REPLACE), done
-    assert dropped == 7, dropped        # Baxter x3 + Tasha x1 in the countdown, Baxter on the first hit, 2 at takeoff
-    dt['rows'] = keep
-    z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
-    chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveRadioTable')
-    assert chk['rows'] == dt['rows']
-    save(z, RADIO)
-    print(f'  radio: {len(keep)} rows ({dropped} dropped, {len(done)} replaced)')
 
 
 # The airfield shop (Milestone 4): rows for the landing menu (the in-game hangar's command list, after its Yes / No).
@@ -1084,20 +183,26 @@ SHOP_ITEMS = ['Missiles', 'Special', 'Flares', 'Airfield']          # Scripts/ma
 # STORE ("20"). Lua checks the game's menu list for them; without them it falls back to the 4 SHOP_ITEMS rows.
 # A page lists 6 rows at most, so the pages link in a ring, each with TAKE OFF (user, 2026-10-23: "add a Docks Page
 # too"). The economy review (2026-10-25) added UPGRADES and TACTICAL and moved the allies onto the DOCKS page (shown as
-# ALLIES): SUPPLIES (20) > UPGRADES (23) > TACTICAL (24) > AIRFIELD (21) > ALLIES (22) > SUPPLIES. The menu-class rows
-# go into the game's table in this list's order, so the menu ids 20-24 follow it: keep it in Scripts/sv_flights.lua
-# SHOP.menuRows' order.
+# ALLIES): SUPPLIES (20) > UPGRADES (23) > TACTICAL (24) > AIRFIELD (21) > ALLIES (22) > SUPPLIES. 0.72.1's CIWS (user,
+# 2026-10-29) left the AIRFIELD page a row short, so the AA gun, SAM site and CIWS rows have a DEFENCES page (25) of
+# their own: AIRFIELD (21) > DEFENCES (25) > ALLIES (22), AIRFIELD's own ALLIES > kept. 0.72.2 put co-op's REVIVE
+# (Scripts/sv_down.lua; user, 2026-10-29: "someone could land at the airfield and buy you back") in the AIRFIELD page's
+# sixth row. The menu-class rows go into the game's table in this list's order, so the menu ids 20-25 follow it: keep it
+# in Scripts/sv_flights.lua SHOP.menuRows' order.
 STORE_PAGES = [  # (menu id, page, title key, rows: item name or (row name, title key, StringArgs))
     ('SV_Store', 'Store', 'SV_Store_Title',
      ['Rearm', 'Missiles', 'Special', 'Flares', ('SVStoreToUpgrades', 'SV_Store_ToUpgrades', '23'), 'takeoff']),
     ('SV_StoreAirfield', 'StoreAirfield', 'SV_Store_TitleAirfield',
-     ['RepairAircraft', 'RepairAirfield', 'AAGun', 'SAM', ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']),
+     ['RepairAircraft', 'RepairAirfield', 'Revive', ('SVStoreToDefences', 'SV_Store_ToDefences', '25'),
+      ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']),
     ('SV_StoreDocks', 'StoreDocks', 'SV_Store_TitleDocks',
      ['Wingmen', 'Moonchild', 'ShipAegis', 'Orders', ('SVStoreToSupplies', 'SV_Store_ToSupplies', '20'), 'takeoff']),
     ('SV_StoreUpgrades', 'StoreUpgrades', 'SV_Store_TitleUpgrades',
      ['UpAirframe', 'UpBays', 'UpGun', 'UpFlares', ('SVStoreToTactical', 'SV_Store_ToTactical', '24'), 'takeoff']),
     ('SV_StoreTactical', 'StoreTactical', 'SV_Store_TitleTactical',
      ['Airstrike', 'Ecm', 'Decoy', 'Insurance', ('SVStoreToAirfield', 'SV_Store_ToAirfield', '21'), 'takeoff']),
+    ('SV_StoreDefences', 'StoreDefences', 'SV_Store_TitleDefences',
+     ['AAGun', 'SAM', 'Ciws', 'VoidWatcher', ('SVStoreToDocks', 'SV_Store_ToDocks', '22'), 'takeoff']),
 ]
 STORE_MENU_FIRST = 20       # the first page's menu id (the game's table has 20 rows): Scripts/sv_flights.lua SHOP.menuRows
 # the landing page's rows, one per page they open (it lists 4 of Survival's beside its 2 stock rows): Scripts/sv_flights.lua
@@ -1210,80 +315,178 @@ def build_shop_rows():
     save(z, DATA + 'DT_SV_MenuClassRows')
 
 
-def names_in(v):
-    """Every FName string a property value uses."""
+# Survival's main-menu pages (user, 2026-10-27: "when you press Survival Mode, it brings you into another Menu, where you
+# can select what version you want to play"; Scripts/sv_menu.lua, tools/re/MENU_PAGES.md). Each page is a copy of the
+# game's own main-menu page (tools/menu_stock.py: the widget blueprint that imports DA_LiveMenuMainTopPageSettings), so
+# its rows' presses reach main.dll's main-menu hook (OnMainDecide, vtable A) as SURVIVAL MODE's always have; its own
+# settings asset (DA_SV_Pg<page>Settings: title, every tab's command table) and command table (DT_SV_Pg<page>Commands:
+# copies of the main menu's Campaign row). DT_SV_MainMenuClassRows names the pages for the game's main-menu page table
+# (MenuID SV_Pg<page>), where Lua adds them at the main menu. A row: (name, StringArgs, MenuID); its texts are
+# SV_Pg_<page>_<name> / _Help (Lua sets them). StringArgs: SV_Mode_<mode> picks a mode (its MenuID opens its setup page,
+# or the difficulty page for Join), SV_Go_<mode> / SV_Quick start (the difficulty page, which starts Survival),
+# SV_Page_<page> opens another page, SV_Set_<what> steps a setting in place (main.dll takes the press). Keep the pages
+# and rows in step with Scripts/sv_menu.lua PAGES / SET (checked below).
+DIFFICULTY_PAGE = 'CampaignFreeMissionDifficulty'
+MAIN_TOP_PAGE = 'Top'                                  # the main menu's own page (ELiveMenuMainIDs)
+# The main menu opens a row's page by ELiveMenuMainIDs, the game's fixed list of its pages, so a row naming SV_Pg<page>
+# opened nothing (test of 2026-10-29). Every row that opens one of Survival's pages names CAMPAIGN TRAINING's page instead
+# (user, 2026-10-29: "feel free to use the Campaign Training and replace it completely"), and main.dll points that page's
+# entry in the game's page list at the page the press opens (OnMainDecide, SV_MenuSlot). MENU_PAGES keeps which page.
+# The game doesn't open the page it's on (test of 2026-10-29: the setup rows on the modes page did nothing), so the
+# setup pages go through a second page PC players never see, the PS5 DualSense first-start setup (main.dll kSlotIds,
+# kPageSlotOf; its own class comes back when any other main-menu entry is picked).
+BORROWED_PAGE = 'CampaignTraining'
+BORROWED_PAGE_2 = 'InitialSetting_DualSence'
+SECOND_SLOT_PAGES = ('SV_PgOffline', 'SV_PgOnline', 'SV_PgHost')
+# A page already open under the one shown isn't opened again: the game goes back to it (test of 2026-10-29: MORE RULES
+# went back to the modes page), so MORE RULES has a third, the first-start Accessibility setup (main.dll slot 2).
+BORROWED_PAGE_3 = 'InitialSetting_Accessibility'
+
+
+def page_menu_id(menu):
+    if menu in SECOND_SLOT_PAGES: return BORROWED_PAGE_2
+    if menu == 'SV_PgRules': return BORROWED_PAGE_3
+    return BORROWED_PAGE if menu.startswith('SV_Pg') else menu
+MENU_PAGES = [
+    ('Modes', [('Offline', 'SV_Mode_Offline', 'SV_PgOffline'), ('Online', 'SV_Mode_Online', 'SV_PgOnline'),
+               ('Host', 'SV_Mode_Host', 'SV_PgHost'), ('Join', 'SV_Mode_Join', DIFFICULTY_PAGE),
+               ('Quick', 'SV_Quick', DIFFICULTY_PAGE), ('Back', 'SV_Back', MAIN_TOP_PAGE)]),
+    ('Offline', [('Go', 'SV_Go_Offline', DIFFICULTY_PAGE), ('Preset', 'SV_Set_Preset', ''), ('Zollars', 'SV_Set_Zollars', ''),
+                 ('Enemies', 'SV_Set_Enemies', ''), ('Rules', 'SV_Page_Rules', 'SV_PgRules'), ('Back', 'SV_Back', 'SV_PgModes')]),
+    ('Online', [('Go', 'SV_Go_Online', DIFFICULTY_PAGE), ('Preset', 'SV_Set_Preset', ''), ('Zollars', 'SV_Set_Zollars', ''),
+                ('Enemies', 'SV_Set_Enemies', ''), ('Rules', 'SV_Page_Rules', 'SV_PgRules'), ('Back', 'SV_Back', 'SV_PgModes')]),
+    ('Host', [('Go', 'SV_Go_Host', DIFFICULTY_PAGE), ('Lobby', 'SV_Set_Lobby', ''), ('Room', 'SV_Set_Room', ''),
+              ('CoopEnemies', 'SV_Set_CoopEnemies', ''), ('Preset', 'SV_Set_Preset', ''), ('Zollars', 'SV_Set_Zollars', ''),
+              ('Enemies', 'SV_Set_Enemies', ''), ('Rules', 'SV_Page_Rules', 'SV_PgRules'), ('Back', 'SV_Back', 'SV_PgModes')]),
+    ('Rules', [('StartRound', 'SV_Set_StartRound', ''), ('Break', 'SV_Set_Break', ''), ('Specials', 'SV_Set_Specials', ''),
+               ('Airfield', 'SV_Set_Airfield', ''), ('Pay', 'SV_Set_Pay', ''), ('Skill', 'SV_Set_Skill', ''),
+               ('Reset', 'SV_Set_Reset', ''), ('Back', 'SV_Back', 'SV_PgOffline')]),
+]
+# BACK (test of 2026-10-29: the pages copy the main menu's top page, whose cancel goes nowhere, so MORE RULES was a dead
+# end) names the page under it (any setup page's id is the same borrowed page), and the game goes back to a page that's
+# already open rather than open it again (the same test: MORE RULES on the modes page's id went back to it).
+MENU_STOCK = os.path.join(ROOT, 'build', 'menu', 'stock.json')            # tools/menu_stock.py
+MENU_STOCK_LUA = os.path.join(ROOT, 'build', 'menu', 'sv_menu_stock.lua')  # staged into Scripts/ by build_all.sh
+MAIN_COMMANDS = '/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands'
+
+
+def check_menu_pages():
+    """MENU_PAGES against Scripts/sv_menu.lua: the same pages and rows in the same order, every SV_Set_ row a setting
+    (or action) it knows, every page row's MenuID one of the pages or the difficulty page."""
+    lua = open(os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'sv_menu.lua'), encoding='utf-8').read()
+    pages = re.findall(r'\{ name = "(\w+)", rows = \{([^}]*)\} \}', lua)
+    assert [(n, re.findall(r'"(\w+)"', r)) for n, r in pages] == [(n, [x[0] for x in rows]) for n, rows in MENU_PAGES], \
+        'tools/build_survival.py MENU_PAGES and Scripts/sv_menu.lua PAGES differ'
+    assert re.findall(r'\{ row = "(\w+)", set = "\w+" \}', lua) == SETTING_ROWS, \
+        'tools/build_survival.py SETTING_ROWS and Scripts/sv_menu.lua FLAT differ'
+    ids = {'SV_Pg' + n for n, _ in MENU_PAGES} | {DIFFICULTY_PAGE, MAIN_TOP_PAGE, ''}
+    for n, rows in MENU_PAGES:
+        for name, args, menu in rows:
+            assert menu in ids, (n, name, menu)
+            assert (menu == '') == args.startswith('SV_Set_'), (n, name, args, menu)   # (a setting row opens nothing)
+            if args.startswith('SV_Set_') and args[7:] not in ('Lobby', 'Reset'):
+                assert re.search(r'\n    ' + args[7:] + r' = \{ (key|coop) = ', lua), f'{args}: not in Scripts/sv_menu.lua SET'
+            assert len(f'SV_Pg_{n}_{name}_Help') < 48, name                  # (the runtime's text keys: DYN_KEY 48)
+
+
+def page_settings(stock_da, new_da, table, title):
+    """The main menu's page settings under Survival's name: its title, and every tab's command table ours."""
+    z = ZenPkg(stock(stock_da))
+    rename_package(z, stock_da, new_da)
+    i = z.export_index(new_da.rsplit('/', 1)[1])
+    v, rest = props_of(z, i, 'LiveMenuPageSettingsData')
+    tabs = uprop.get(v, 'TabSettings')
+    assert tabs and tabs[3][0] == 'arr' and tabs[3][1], f'{stock_da}: no TabSettings'
+    short = table.rsplit('/', 1)[1]
+    for n in (table, short):
+        z.nb.add(n)
+    for tab in tabs[3][1]:
+        uprop.setp(tab, 'CommandSettings', ('soft', ('name', table, 0), ('name', short, 0), ''))
+        uprop.setp(tab, 'TabTitleTextID', s(title))
+        tab[2].sort(key=lambda q: q[0])                         # (setp appends; the read-back is in index order)
+    uprop.setp(v, 'TitleTextID', s(title))
+    v[2].sort(key=lambda q: q[0])
+    z.payloads[i] = bytearray(write_props(z, v) + rest)
+    chk, _ = props_of(z, i, 'LiveMenuPageSettingsData')
+    assert chk == v
+    save(z, new_da)
+    return len(tabs[3][1])
+
+
+def drop_menu_pages():
+    """No pages this build: none left from an earlier one either (mod/Content is not cleaned between builds)."""
+    import glob
+    gone = []
+    for pat in (DATA + 'DT_SV_Pg*Commands', UI + 'DA_SV_Pg*Settings', UI + 'WBP_SV_Pg*', DATA + 'DT_SV_MainMenuClassRows'):
+        for f in glob.glob(os.path.join(OUT, pat[len('/Game/'):]) + '.uasset'):
+            os.remove(f); gone.append(os.path.basename(f))
+    if os.path.exists(MENU_STOCK_LUA): os.remove(MENU_STOCK_LUA)
+    if gone: print(f'  menu pages: removed {len(gone)} left from an earlier build')
+
+
+def build_menu_pages():
+    check_menu_pages()
+    os.makedirs(os.path.dirname(MENU_STOCK_LUA), exist_ok=True)
+    st = json.load(open(MENU_STOCK, encoding='utf-8')) if os.path.exists(MENU_STOCK) else {'why': 'no build/menu/stock.json (tools/menu_stock.py)'}
+    if not st.get('page'):
+        print(f"  menu pages: SKIPPED ({st.get('why')}); the main menu keeps the flat rows")
+        drop_menu_pages()
+        return
+    page, cls, settings = st['page'], st['page_class'], st['settings']
+    widgets = []
+    for name, rows in MENU_PAGES:
+        table, da, widget = DATA + f'DT_SV_Pg{name}Commands', UI + f'DA_SV_Pg{name}Settings', UI + f'WBP_SV_Pg{name}'
+        edits = []
+        for row, args, menu in rows:
+            def edit(props, row=row, args=args, menu=menu, page_name=name):
+                edit_menu_row(props)
+                setv(props, 'CommandID', ('name', f'Main_SV_{page_name}_{row}', 0))
+                setv(props, 'TitleTextID', s(f'SV_Pg_{page_name}_{row}'))
+                setv(props, 'HelpTextID', s(f'SV_Pg_{page_name}_{row}_Help'))
+                setv(props, 'MenuID', s(page_menu_id(menu)))
+                setv(props, 'StringArgs', s(args))
+            edits.append((f'SV{name}{row}', edit))
+        build_rows_table(MAIN_COMMANDS, table, 'LiveMenuCommandsDataTable', 'Campaign', edits[0][0], edits[0][1], more=edits[1:])
+        tabs = page_settings(settings, da, table, f'SV_Pg_{name}_Title')
+        # the page: the main menu's widget blueprint under Survival's path (its objects keep their names: a zen
+        # package's export hashes are package-relative), its settings import retargeted
+        z = ZenPkg(stock(page))
+        z.rename(page, widget)
+        retarget_import(z, settings, da)
+        assert widget in z.names and page not in z.names
+        save(z, widget)
+        widgets.append((f'SV_Pg{name}', widget))
+        print(f'  menu pages: {name}, {len(rows)} rows, {tabs} tab(s)')
+    # the class rows: Survival's pages for the game's main-menu page table (the row struct of the in-game one)
+    z = ZenPkg(stock(MENU_TABLE))
+    rename_package(z, MENU_TABLE, DATA + 'DT_SV_MainMenuClassRows')
+    p = bytes(z.payloads[0])
+    dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, 'LiveMenuClassTable')
+    assert o == len(p), (o, len(p))
+    src = dt['rows'][0][1]
+    mc = {n: k for k, (n, t) in uprop.U.schema('LiveMenuClassTable').items()}
     out = []
-    if isinstance(v, tuple):
-        if v and v[0] == 'name': out.append(v[1])
-        for x in v: out += names_in(x)
-    elif isinstance(v, list):
-        for x in v: out += names_in(x)
-    return out
-
-
-def setv(props, name, value):
-    """Set (or add) a property of a row by name."""
-    sc = uprop.U.schema('LiveLevelTable') if any(p[1] == 'MissionID' for p in props) else uprop.U.schema('LiveMenuCommandsDataTable')
-    idx = [i for i, (n, t) in sc.items() if n == name][0]
-    set_prop(props, idx, name, value)
-
-
-def s(text): return ('str', text)
-
-
-HANGAR_LEVEL_ID = 0x0F    # must match HANGAR_MENU_ID in runtime/survival_rt.c: the hangar the runtime travels to
-
-
-def check_hangar(props):
-    """The hangar level the runtime travels to is 10 + TravelHangarMap; the row's hangar lighting and sublevels belong
-    to that hangar. If they don't match, the hangar loads without light (test 5)."""
-    th = [p for p in props if p[1] == 'TravelHangarMap'][0][3][2][2][0]
-    subs = [p for p in props if p[1] == 'HangarSubLevelList'][0][3][1]
-    assert 10 + th == HANGAR_LEVEL_ID, f'row travels to hangar level {10 + th}, runtime to {HANGAR_LEVEL_ID}'
-    want = f'/Game/Maps/Hangar/Hangar{HANGAR_LEVEL_ID - 11:03d}/'
-    assert all(sl[1][1].startswith(want) for sl in subs), [sl[1][1] for sl in subs]
-
-
-def edit_mission_row(props):
-    check_hangar(props)
-    setv(props, 'MissionID', ('raw', 'Int', struct.pack('<i', MISSION_ID)))
-    setv(props, 'LevelId', ('enum', 'ELiveLevelID', ('raw', 'UInt32', struct.pack('<I', LEVEL_ID))))
-    setv(props, 'LevelStringID', s('Survival Mode'))
-    drop_prop(props, [p for p in props if p[1] == 'ActivityID'][0][0])          # no platform activity
-    setv(props, 'MapReference', ('soft', ('name', PL, 0), ('name', PL.rsplit('/', 1)[1], 0), ''))
-    setv(props, 'StartupSortNumber', ('raw', 'Int', struct.pack('<i', 91)))
-    for k, v in (('MissionNameID', 'SV_Mission_Name'), ('MissionSubtitleTextID', 'SV_Mission_Subtitle'),
-                 ('MissionNumberTextID', 'SV_Mission_Number'), ('MissionNumberOnlyTextID', 'SV_Mission_Number'),
-                 ('MapNameID', 'SV_Mission_Location'), ('MissionClearConditionID', 'SV_Mission_Objective'),
-                 ('MissionOperationTextID', 'SV_Mission_Name'), ('MissionObjectiveTextID', 'SV_Mission_Briefing')):
-        setv(props, k, s(v))
-    setv(props, 'MissionClearConditionIDs', ('arr', [s('SV_Mission_Objective'), s('SV_Mission_Objective')]))
-    setv(props, 'CheckpointTextIndices', ('arr', []))                         # Mission 22's checkpoints
-    # No wingmen in the hangar (Survival flies none). Mission 22's row offers Tasha and Coster with the save's plane and
-    # skin; on a friend's save that skin list was empty and the hangar's "Wingman1 Info" panel crashed reading it
-    # (minidump of 2026-10-22: 0x1479a4153, a null read of entry n-1). WingmanType None x3, as Mission 015's row.
-    for k in ('HangarSelectWingman1st', 'HangarSelectWingman2nd', 'HangarSelectWingman3rd'):
-        st = [p for p in props if p[1] == k][0][3]
-        st[2][:] = [(q[0], q[1], True, None) if q[1] == 'WingmanType' else q for q in st[2]]
-
-
-def edit_menu_row(props):
-    setv(props, 'CommandID', ('name', 'Main_Top_SurvivalMode', 0))
-    setv(props, 'TitleTextID', s('SV_Menu_Title'))
-    setv(props, 'HelpTextID', s('SV_Menu_Help'))
-    setv(props, 'MenuID', s('CampaignFreeMissionDifficulty'))   # the game's own free-mission difficulty page
-    setv(props, 'StringArgs', s(MENU_ARGS))
-    for k in ('ParentNewFlagTrigger', 'RefFeature'):
-        hit = [p for p in props if p[1] == k]
-        if hit: drop_prop(props, hit[0][0])
-
-
-def edit_shuttle_npc(props):
-    """The shuttle's DT_NPC row (Mission 22's OP0057_sstb_01) under Survival's name key: the text hook shows
-    main.lua CFG.specials.shuttle.name for it (user, 2026-10-22: "EMBDIR Shuttle - CORRIS", not Spruce Goose)."""
-    assert dict((p[1], p[3]) for p in props)['GameObjectDisplayName02'] == s('ContainerAircraft_Name_SpruceGoose')
-    idx = [p[0] for p in props if p[1] == 'GameObjectDisplayName02'][0]
-    set_prop(props, idx, 'GameObjectDisplayName02', s('SV_Shuttle_Name'))
+    for menu_id, widget in widgets:
+        row = copy.deepcopy(src)
+        ref = dict((q[1], q[3]) for q in row[2])['MenuWidgetReference']
+        assert ref[0] == 'soft', ref
+        set_prop(row[2], mc['MenuID'], 'MenuID', ('name', menu_id, 0))
+        set_prop(row[2], mc['MenuWidgetReference'], 'MenuWidgetReference', ('soft', ('name', widget, 0), ('name', cls, 0), ref[3]))
+        name = menu_id.replace('_', '')
+        for n in (menu_id, widget, cls, name): z.nb.add(n)
+        out.append(((name, 0), row))
+    dt['rows'] = out
+    z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
+    chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveMenuClassTable')
+    assert chk['rows'] == dt['rows']
+    save(z, DATA + 'DT_SV_MainMenuClassRows')
+    # what the runtime needs to know of the stock (Scripts/sv_menu.lua reads it; build_all.sh stages it)
+    lua = ['-- made by tools/build_survival.py from tools/menu_stock.py\'s finds: the game\'s main-menu page Survival\'s pages',
+           '-- copy (its class) and the game\'s main-menu page tables (Survival\'s pages go in them at start)',
+           'return {', f'    page_class = "{cls}",',
+           '    class_tables = { ' + ', '.join(f'"{t}"' for t in st.get('class_tables', [])) + ' },', '}', '']
+    open(MENU_STOCK_LUA, 'w', encoding='utf-8', newline='\n').write('\n'.join(lua))
+    print(f'  menu pages: {len(widgets)} pages, copies of {page} ({cls}); page tables {st.get("class_tables")}')
 
 
 # Named aces and squadrons of skill tiers 6-10 (main.lua CFG.aces; user, 2026-10-22: "build it with this line up, but
@@ -1325,6 +528,7 @@ ACE_MODELS = {
     ('reaper', 'adfx02'): ('SV_Model_adfx', 'OP1038_adfx02_L001', 'SV_Ac_adfx'),
 }
 MODEL_ON = '/Game/OnlineMode/DataTables/AI/NPC/DT_NPC_Model_ON'
+MODEL_CP = '/Game/Datatables/AI/NPC/Model/DT_NPC_Model'          # (the campaign's: the CIWS's model row is checked there)
 
 
 def ace_rows(tier, key):
@@ -1350,10 +554,18 @@ def build_npc_rows():
     schema = uprop.U.schema('LiveNpcDataTable')
     model_idx = [k for k, (n, t) in schema.items() if n == 'ModelId'][0]
     skin_idx = [k for k, (n, t) in schema.items() if n == 'AirframeSkinId'][0]
+    emptied = []
     for tier, key, lead, wing in ACES:
         for src, (_, npc, text) in zip((lead, wing), ace_rows(tier, key)):
             f = survival_events.fname(src)
             row = copy.deepcopy(rows[(f[1], f[2])])
+            # (0.73.77, G1) a scripted sure kill's slot emptied (the Phantom Su-47s' NPC_FCS_PlaneMsl302 and Mission 19's
+            # hit missile, the Reaper F-22 wings' NPC_FCS_PlaneMsl100): Lua gives a free slot from 3 a special weapon
+            for q in [q for q in row[2] if q[1].startswith('NpcFCSId') and q[3] and q[3][0] == 'name']:
+                why = certain_kill(q[3][1] if q[3][2] == 0 else f'{q[3][1]}_{q[3][2] - 1}')
+                if why:
+                    drop_prop(row[2], q[0])
+                    emptied.append(f'{npc} {q[1]}: {why}')
             set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(text))
             if (tier, key) in ACE_MODELS:
                 set_prop(row[2], model_idx, 'ModelId', ('name', ACE_MODELS[(tier, key)][0], 0))
@@ -1363,17 +575,81 @@ def build_npc_rows():
     # (under its name key) and turrets (as they are: main.lua gives every one of them fire control of its own)
     m22 = mission_npc_ids()
     allies = [(survival_events.ALLY_AIR_SOURCE_NPC, survival_events.ALLY_AIR_NPC, survival_events.ALLY_AIR_NAME_KEY),
-              (survival_events.ALLY_WINGMEN_SOURCE_NPC, survival_events.ALLY_WINGMEN_NPC, survival_events.ALLY_WINGMEN_NAME_KEY)]
+              (survival_events.ALLY_WINGMEN_SOURCE_NPC, survival_events.ALLY_WINGMEN_NPC, survival_events.ALLY_WINGMEN_NAME_KEY),
+              (survival_events.AWACS_SOURCE_NPC, survival_events.AWACS_NPC, survival_events.AWACS_NAME_KEY)]
     allies += [(m22[src], npc, None) for src, (_, npc) in survival_events.DEFENCE_ROWS.items()]   # the airfield's defences
+
     for key, _, hull, _ in survival_events.ALLY_SHIPS:
         _, npc, text = survival_events.ally_ship_rows(key)
         allies.append((m22[hull], npc, text))
         allies += [(m22[t], survival_events.ally_turret_rows(t)[1], None) for t in survival_events.ALLY_TURRETS[key]]
+    # (the STORE's ships: their hulls' and turrets' ChildNPCId naming the allied turret rows, SV_Turret_<row>_Ally: a ship's
+    # parts spawn on the rows its hull's DT_NPC row names (hard rule 38), so with the stock ChildNPCId the turrets flew the
+    # stock rows and never got their own fire control: the user's "aegis ships still don't engage far enough" of 2026-10-23,
+    # found with the Spaceport fleet's of 2026-10-31; user: "I want it fixed also")
+    ally_kid = {m22[t]: survival_events.ally_turret_rows(t)[1] for k, _, _, _ in survival_events.ALLY_SHIPS
+                for t in survival_events.ALLY_TURRETS[k]}
+    ally_ship_rows = ({survival_events.ally_ship_rows(k)[1] for k, _, _, _ in survival_events.ALLY_SHIPS}
+                      | {survival_events.ally_turret_rows(t)[1] for k, _, _, _ in survival_events.ALLY_SHIPS
+                         for t in survival_events.ALLY_TURRETS[k]})
+    ally_shown = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    ally_remapped = 0
     for src, npc, text in allies:
         f = survival_events.fname(src)
         row = copy.deepcopy(rows[(f[1], f[2])])
+        if npc in ally_ship_rows:
+            for i, q in enumerate(row[2]):
+                if q[1] == 'ChildNPCId' and q[3]:
+                    kids = []
+                    for k in q[3][1]:
+                        assert ally_shown(k) in ally_kid, f'{npc}: its child {ally_shown(k)} has no allied turret row'
+                        kids.append(('name', ally_kid[ally_shown(k)], 0))
+                        ally_remapped += 1
+                    row[2][i] = (q[0], q[1], q[2], ('arr', kids))
         if text: set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(text))
+        if npc == survival_events.AWACS_NPC:              # VOID WATCHER 1 on Survival's model row (no MAGNOLIA name)
+            set_prop(row[2], model_idx, 'ModelId', ('name', survival_events.AWACS_MODEL, 0))
+        if npc == survival_events.ALLY_WINGMEN_NPC:      # SNIPER's LAAMs where the F-16C's standard missile is
+            was, now = survival_events.ALLY_WINGMEN_MISSILE
+            swapped = 0
+            for i, q in enumerate(row[2]):
+                if q[1].startswith('NpcFCSId') and q[3] == ('name', was, 0):
+                    row[2][i] = (q[0], q[1], q[2], ('name', now, 0))
+                    swapped += 1
+            assert swapped == 1, f'{npc}: {was} in {swapped} fire-control slots, 1 expected'
+            z.nb.add(now)
         out.append(((npc, 0), row))
+    # the Spaceport fleet's turrets and armed hulls (survival_events.SP_TURRETS / SP_HULLS): copies of their stock rows,
+    # every ChildNPCId naming the fleet's own copy (a ship's parts spawn on the rows its hull's row names: hard rule 38)
+    shown = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    fleet_of = {(stock_npc or m22[src]): npc for src, _, npc, stock_npc in survival_events.SP_TURRETS}
+    remapped = 0
+    for src, npc in ([(stock_npc or m22[src], npc) for src, _, npc, stock_npc in survival_events.SP_TURRETS]
+                     + [(stock, npc) for _, npc, stock in survival_events.SP_HULLS]):
+        f = survival_events.fname(src)
+        row = copy.deepcopy(rows[(f[1], f[2])])
+        for i, q in enumerate(row[2]):
+            if q[1] == 'ChildNPCId' and q[3]:
+                kids = []
+                for k in q[3][1]:
+                    assert shown(k) in fleet_of, f'{npc}: its child {shown(k)} has no fleet row (SP_TURRETS)'
+                    kids.append(('name', fleet_of[shown(k)], 0))
+                    remapped += 1
+                row[2][i] = (q[0], q[1], q[2], ('arr', kids))
+        out.append(((npc, 0), row))
+    assert remapped == 3 + 1 + 1 + 4, remapped              # (the Aegis's 3 and its mount's artillery, the boat's, the Ford's 4)
+    assert ally_remapped == 3 + 1, ally_remapped           # (the Aegis's 3 turrets and its gun mount's artillery)
+    # the STORE's CIWS (survival_events.DEFENCE_CIWS*): the game's land Phalanx on its allied model row (no NpcFCSId: its
+    # blueprint's own arms fire, until main.lua gives it one: CFG.shop.items.Airfield.defences.ciws.fcs_row)
+    f = survival_events.fname(survival_events.DEFENCE_CIWS_NPC)
+    ciws = copy.deepcopy(rows[(f[1], f[2])])
+    assert not any(q[1].startswith('NpcFCSId') and q[3] for q in ciws[2]), 'the CIWS row names a fire control now'
+    zm = ZenPkg(stock(MODEL_CP))                       # (the game's model row, never ours: its blueprint is the ally's)
+    dm, _ = dtx.parse(uprop.Ctx(bytes(zm.payloads[0]), zm.names), 0, 'LiveModelDataTable')
+    bp = dict((q[1], q[3]) for q in dict(dm['rows'])[(survival_events.DEFENCE_CIWS_MODEL, 0)][2])['BlueprintClass']
+    assert bp[0] == 'soft' and bp[2][1] == 'BP_GR033_ciws_CP_Ally_C', bp            # (Scripts/sv_allies.lua DEF_CLASSES)
+    set_prop(ciws[2], model_idx, 'ModelId', ('name', survival_events.DEFENCE_CIWS_MODEL, 0))
+    out.append(((survival_events.DEFENCE_CIWS_ROW[1], 0), ciws))
     # the Ladons (survival_events.LADON*): the stock Ladon under each one's name key (main.lua: name, health, speed)
     for L in survival_events.ladons():
         row = copy.deepcopy(rows[(survival_events.LADON_NPC_SOURCE, 0)])
@@ -1384,58 +660,439 @@ def build_npc_rows():
                                                   for c, k in zip(comps, q[3][1])])) if q[1] == 'ChildNPCId' else q for q in row[2]]
         assert sum(1 for k in [q for q in row[2] if q[1] == 'ChildNPCId'][0][3][1] if k == pulse) == len(survival_events.LADON_CIWS)
         out.append(((L['npc'], 0), row))
+    # GONE FISHIN's shoal (survival_events.FISH_*): the stock invisible turret pawn GR000_dummy (BP_GR000_dummy_CP: no mesh,
+    # no wreck, no children) with the boats' durability rows (the stock row has none: no damage table to take a hit by),
+    # Survival's name key and its own model row (FISH_MODEL: MaxHealth FISH_HEALTH), no score
+    se = survival_events
+    f = se.fname(se.FISH_NPC_SOURCE)
+    row = copy.deepcopy(rows[(f[1], f[2])])
+    have = dict((q[1], q) for q in row[2])
+    assert not any(q[1].startswith('NpcFCSId') and q[3] for q in row[2]) and not have['ChildNPCId'][3][1], 'GR000_dummy changed'
+    assert have['BaseScore'][3] is None and have['ModelId'][3] == ('name', se.FISH_MODEL_SOURCE, 0), (have['BaseScore'], have['ModelId'])
+    for name, value in (('WeaponDurabilityId', ('name', se.FISH_DURABILITY[0], 0)),
+                        ('ExplosionDurabilityId', ('name', se.FISH_DURABILITY[1], 0)),
+                        ('GameObjectDisplayName02', s(se.FISH_SUB_KEY)), ('ModelId', ('name', se.FISH_MODEL, 0))):
+        set_prop(row[2], [k for k, (n, t) in schema.items() if n == name][0], name, value)
+    out.append(((se.FISH_NPC, 0), row))
+    # THE ESCORT's allied rows and the ZFA-44 host, THE DECOY's weaponless UAV (survival_events.ESCORT_DECOY_NPC_ROWS): copies
+    # of the campaign's plain rows; an allied model with no skin row (the model's own look), MOONCHILD's behaviour set
+    # (its row's LuaSet: hard rule 22, never NLID_0400_CP), the UAV's weapons emptied (its laser pod is its blueprint's)
+    zm = ZenPkg(stock(MODEL_CP))
+    models = {k[0] for k, _ in dtx.parse(uprop.Ctx(bytes(zm.payloads[0]), zm.names), 0, 'LiveModelDataTable')[0]['rows']}
+    f = survival_events.fname(survival_events.ALLY_AIR_SOURCE_NPC)
+    ally_set = dict((q[1], q[3]) for q in rows[(f[1], f[2])][2])['LuaSetId']
+    assert ally_set and ally_set[1] != 'NLID_0400_CP', ally_set
+    sidx = lambda n: [k for k, (nm, t) in schema.items() if nm == n][0]
+    for npc, src, model, fly_ally, unarmed, key, full in survival_events.ESCORT_DECOY_NPC_ROWS:
+        f = survival_events.fname(src)
+        row = copy.deepcopy(rows[(f[1], f[2])])
+        if model:
+            assert model in models, f'{npc}: no model row {model}'
+            set_prop(row[2], model_idx, 'ModelId', ('name', model, 0))
+            drop_prop(row[2], skin_idx)
+        if fly_ally:
+            set_prop(row[2], sidx('LuaSetId'), 'LuaSetId', ally_set)
+        if unarmed:
+            row[2][:] = [q for q in row[2] if not q[1].startswith('NpcFCSId')]
+        if key:
+            set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(key))
+        if full:                                             # (the plain Su-47 flies at x0.8; its hit spheres kept)
+            for q in [q for q in row[2] if q[1].endswith('Coefficient') and q[1] != 'SphereCollisionRadiusCoefficient']:
+                set_prop(row[2], q[0], q[1], ('raw', 'Float', struct.pack('<f', 1.0)))
+        assert survival_events.fname(npc)[2] == 0, npc
+        out.append(((npc, 0), row))
+        if npc == survival_events.ZFA_NPC:     # (2026-11-07) ... and its twin with the anti-missile laser in a free slot
+            slot = f'NpcFCSId{survival_events.ZFA_TLS_SLOT}'
+            assert not [q for q in row[2] if q[1] == slot and q[3] is not None], (npc, slot, 'not free')
+            tls = copy.deepcopy(row)
+            set_prop(tls[2], sidx(slot), slot, ('name', survival_events.ZFA_TLS_FCS_ROW, 0))
+            assert survival_events.fname(survival_events.ZFA_TLS_NPC)[2] == 0
+            out.append(((survival_events.ZFA_TLS_NPC, 0), tls))
+    print('  escort / decoy DT_NPC rows (Lua adds them at the main menu): '
+          + ', '.join(f'{r[0]} ({r[1]}' + (f' on {r[2]}' if r[2] else '') + (', unarmed' if r[4] else '') + ')'
+                      for r in survival_events.ESCORT_DECOY_NPC_ROWS) + f'; their behaviour set {ally_set[1]}; '
+          + f'{survival_events.ZFA_TLS_NPC} ({survival_events.ZFA_NPC} with {survival_events.ZFA_TLS_FCS_ROW} in slot '
+          + f'{survival_events.ZFA_TLS_SLOT})')
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
     dt['rows'] = out
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveNpcDataTable')
     assert chk['rows'] == dt['rows']
-    print(f'  DT_SV_NpcRows: {len(out)} rows ({len(ACES)} aces and their wings, {len(allies)} allies)')
+    print(f'  DT_SV_NpcRows: {len(out)} rows ({len(ACES)} aces and their wings, {len(allies)} allies, the CIWS on '
+          f'{survival_events.DEFENCE_CIWS_MODEL})')
+    print(f'  aces: {len(emptied)} scripted sure-kill slots emptied (G1)' + ''.join(f'\n    {e}' for e in emptied))
     save(z, DATA + 'DT_SV_NpcRows')
 
 
-def mission_npc_ids():
-    """Mission 22's NPC mission rows -> the DT_NPC row each names (NpcId), as plain strings."""
-    z = ZenPkg(stock(NPC_TABLE_STOCK))
-    dt, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveNpcMissionDataTable')
-    plain = lambda n, k: n if k == 0 else f'{n}_{k - 1}'
-    return {plain(*k): plain(*dict((q[1], q[3]) for q in r[2])['NpcId'][1:3]) for k, r in dt['rows']}
+def check_no_certain_kill():
+    """(0.73.77, plan G1) Fails the build when a row Survival builds for an enemy, or a fire control the Lua puts on one
+    (CFG.special.fcs, the bosses' weapons ...), carries a scripted sure kill (certain_kill; hard rule 36). Every
+    DT_SV_NpcMission row but the allies' and the co-op stand-ins' (<row>_svcp: damage 0) is followed to the DT_NPC row it
+    flies (the stock DT_NPC, DT_SV_NpcRows, DT_SV_AlcnNpc; for a row whose DT_NPC row Lua clones, its source's: <row>_sv[bcd]
+    the row's, the roles' and probes' NPC_SOURCE's) and down every ChildNPCId (ships', the Ladons', the Alicorn's parts).
+    Reads the packages this build saved."""
+    plain = lambda k: k[0] if k[1] == 0 else f'{k[0]}_{k[1] - 1}'
+    nm = lambda v: plain(v[1:3]) if v and v[0] == 'name' else None
+
+    def load(path, st, built=True):
+        fn = os.path.join(OUT, path[len('/Game/'):]) + '.uasset' if built else stock(path)
+        z = ZenPkg(data=open(fn, 'rb').read())
+        dt, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
+        return {plain(k): dict((q[1], q[3]) for q in r[2]) for k, r in dt['rows']}
+    npc = load('/Game/Datatables/AI/NPC/DT_NPC', 'LiveNpcDataTable', built=False)
+    for t in ('DT_SV_NpcRows', 'DT_SV_AlcnNpc'): npc.update(load(DATA + t, 'LiveNpcDataTable'))
+    mission = load(NPC_TABLE, 'LiveNpcMissionDataTable')
+    se = survival_events
+    allied = ({se.ALLY_AIR_ROW, se.ALLY_WINGMEN_ROW, se.AWACS_ROW, se.DEFENCE_CIWS_ROW[0], se.SHUTTLE_NPC_ROW}
+              | {row for row, _ in se.DEFENCE_ROWS.values()}
+              | {se.ally_ship_rows(k)[0] for k, _, _, _ in se.ALLY_SHIPS}
+              | {se.ally_turret_rows(t)[0] for k, _, _, _ in se.ALLY_SHIPS for t in se.ALLY_TURRETS[k]}
+              | se.ESCORT_ALLIED_ROWS)                     # (THE ESCORT's: CHARLENE, her escorts, the cargo ships, the ZFA-44s)
+    bad = []
+
+    def carries(row, path, seen):
+        if row in seen: return
+        seen.add(row)
+        r = npc.get(row)
+        if r is None:
+            bad.append(f'{path}: no DT_NPC row {row} (what does it carry?)'); return
+        for i in range(6):
+            f = nm(r.get(f'NpcFCSId{i}'))
+            why = f and certain_kill(f)
+            if why: bad.append(f'{path} slot {i}: {why}')
+        kids = r.get('ChildNPCId')
+        for k in (kids[1] if kids and kids[0] == 'arr' else []):
+            carries(nm(k), f'{path} > {nm(k)}', seen)
+
+    def source(m, depth=0):
+        n = nm(mission[m].get('NpcId'))
+        if n in npc or depth > 4: return n
+        b = re.match(r'^(.*)_sv[bcd]?$', m)
+        if b and b.group(1) in mission: return source(b.group(1), depth + 1)
+        if NPC_SOURCE.get(m) in mission: return source(NPC_SOURCE[m], depth + 1)
+        return n
+    enemies = [m for m in sorted(mission) if m not in allied and not m.endswith(COOP_STANDIN_SUFFIX[0])]
+    for m in enemies:
+        n = source(m)
+        carries(n, f'{m} -> {n}', set())
+    lua_fcs = sorted(set(re.findall(r'"(NPC_FCS_\w+)"', survival_events.runtime_lua())))
+    for f in lua_fcs:
+        why = certain_kill(f)
+        if why: bad.append(f'Scripts/*.lua names {why}')
+    if bad:
+        raise SystemExit('G1: a scripted sure kill on an enemy (hard rule 36; PLAIN_NPC_IDS, build_npc_rows):\n  '
+                         + '\n  '.join(bad))
+    print(f'  sure kills: none on {len(enemies)} enemy rows (their parts too) nor on the {len(lua_fcs)} fire controls '
+          f'the Lua names (G1)')
 
 
-def build_model_rows():
-    """DT_SV_ModelRows: ACE_MODELS' copies of Online Mode model rows, for main.lua to add to DT_NPC_Model."""
-    z = ZenPkg(stock(MODEL_ON))
-    rename_package(z, MODEL_ON, DATA + 'DT_SV_ModelRows')
-    p = bytes(z.payloads[0])
-    dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, 'LiveModelDataTable')
-    assert o == len(p), (o, len(p))
-    rows = dict(dt['rows'])
-    schema = uprop.U.schema('LiveModelDataTable')
-    idx = {n: k for k, (n, t) in schema.items()}
-    out = []
-    for new, src, text in ACE_MODELS.values():
-        f = survival_events.fname(src)
-        row = copy.deepcopy(rows[(f[1], f[2])])
-        set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(text))
-        set_prop(row[2], idx['GameObjectId'], 'GameObjectId', ('raw', 'Int', struct.pack('<i', 1)))
-        out.append(((new, 0), row))
-    for k, row in out:
-        for n in names_in(row) + [k[0]]: z.nb.add(n)
-    dt['rows'] = out
-    z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
-    chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveModelDataTable')
-    assert chk['rows'] == dt['rows']
-    print(f'  DT_SV_ModelRows: {len(out)} rows')
-    save(z, DATA + 'DT_SV_ModelRows')
+def check_fishing_build():
+    """(2026-11-06) GONE FISHIN' and THE FESTIVAL read back from the packages this build saved: every unit the build
+    contract names, by the name SV_Spawn gives (a digit tail split as the engine splits it), with its objects, rows, side
+    and spots (each object at its unit's height: SV_Spawn keeps the offsets); every path the records name; every record
+    Lua fires, each exec's objects / units / paths in the world data; the rows Lua adds at the main menu."""
+    se = survival_events
+    plain = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    load = lambda path: ZenPkg(data=open(os.path.join(OUT, path[len('/Game/'):]) + '.uasset', 'rb').read())
+    zw = load(MI + 'WD_SurvivalMode_global')
+    w, _ = props_of(zw, zw.export_index('WD_SurvivalMode_global'), 'LiveWorldData')
+    units = {plain([q for q in u[2] if q[1] == 'Name'][0][3]): u for u in [p for p in w[2] if p[1] == 'UnitDescList'][0][3][1]}
+    paths = {plain([q for q in el[2] if q[1] == 'Name'][0][3]): el for el in [p for p in w[2] if p[1] == 'AIPathDescList'][0][3][1]}
+    objs = {}
+    def walk(ob, unit):
+        objs[plain([q for q in ob[2] if q[1] == 'Name'][0][3])] = unit
+        for ch in (field_of(ob, 'ChildAIObjectDescs') or ('arr', []))[1]:
+            walk(ch, unit)
+    for un, u in units.items():
+        for ob in objects_of(u): walk(ob, un)
+    faction = lambda u: field_of(u, 'Faction')[2][2][0]
+    want = []                                  # (unit, [objects], row, faction)
+    for key, unit, obj, (gx, gy), pts in se.fish_units():
+        want.append((unit, [f'{obj}_{k}' for k in range(se.FISH_PER_GROUND)], se.FISH_ROW, 2))
+    want.append((se.SAL_BOAT_UNIT, [se.SAL_BOAT_OBJ], se.SAL_BOAT_ROW, 1))
+    want += [(F['unit'], F['objs'], se.FEST_BOMBER_ROW, 2) for F in se.fest_bombers()]
+    want += [(M['unit'], M['objs'], se.FEST_CM_ROW, 2) for M in se.fest_missiles()]
+    want += [(unit, [obj], se.FEST_LIGHT_ROW, 1) for unit, obj, _, _ in se.fest_lights()]
+    want.append((se.FEST_TOWN_UNIT, [f'{se.FEST_TOWN_OBJ}_{k}' for k in range(len(se.FEST_TOWN_BOXES))], se.DECOY_MARK_ROW, 1))
+    for unit, names, row, side in want:
+        assert unit in units, f'{unit} not in the world data'
+        u = units[unit]
+        assert survival_events.fname(unit) == [q for q in u[2] if q[1] == 'Name'][0][3], unit
+        got = [plain(field_of(ob, 'Name')) for ob in objects_of(u)]
+        assert got == names, (unit, got)
+        assert all(field_of(ob, 'MissionNpcID') == ('name', row, 0) for ob in objects_of(u)), unit
+        assert faction(u) == side and not field_of(u, 'bIsSpawnFromStart'), unit
+        uz = spot_of(u)[2]
+        assert all(abs(spot_of(ob)[2] - uz) < 0.5 for ob in objects_of(u)), (unit, 'an object off its unit height')
+    # ((2026-11-07) the town's boxes: each object its own callsign key, at its spot, invincible, out of every attack)
+    town = objects_of(units[se.FEST_TOWN_UNIT])
+    for ob, (key, pt) in zip(town, se.fest_town()):
+        assert field_of(ob, 'GameObjectDisplayNameID02') == ('name', key, 0), (key, field_of(ob, 'GameObjectDisplayNameID02'))
+        assert all(field_of(ob, f) == ('raw', 'Bool', b'\x01') for f in ('bShowHUDBox', 'bShowCallSignForAlly', 'bIsInvincible',
+                   'bIsInvincibleFromAI', 'bIsInvincibleFromWingman', 'bIsAttackTargetsException')), key
+        assert math.dist(spot_of(ob), pt) < 1.0 and not field_of(ob, 'bIsLanding') and not field_of(ob, 'TargetMarkType'), key
+    beams = [ch for unit, obj, _, _ in se.fest_lights() for ch in field_of(objects_of(units[unit])[0], 'ChildAIObjectDescs')[1]]
+    assert len(beams) == len(se.FEST_LIGHTS) and all(
+        field_of(field_of(ch, 'Data'), 'MissionNpcID') == ('name', se.FEST_BEAM_ROW, 0) for ch in beams), 'searchlight parts'
+    lanes = {lane for M in se.fest_missiles() for lane, _ in M['lanes']}
+    for name in [F[k] for F in se.fest_bombers() for k in ('path', 'side_path')] + sorted(lanes):
+        assert name in paths and field_of(paths[name], 'ControlType')[2][2] == b'', name     # (hard rule 35)
+    # the records
+    ze = load(MI + 'EP_SurvivalMode_global')
+    _, _, _, T, E, _ = ep_dump.load_bytes(ze)
+    show = lambda v: ep_dump.show(v, ze)
+    trig = [show(ep_dump.fields(t)['EventName']) for t in T]
+    events = [ev for F in se.fest_bombers() for ev in (F['ev'], F['up'])] + [ev for M in se.fest_missiles() for ev in [M['ev']] + M['hits']]
+    for ev in events:
+        assert trig.count(ev) == 1, (ev, trig.count(ev))
+    n_ex = 0
+    for e in E:
+        f = ep_dump.fields(e)
+        ev = show(f['ConnectionEventName'])
+        if ev not in events: continue
+        n_ex += 1
+        args = [show(ep_dump.fields(a)['Value']) for a in f['ArgsInfo'][1]]
+        cls = show(f['ExecutionClass'])
+        if cls in ('LiveAIPathExecution',):
+            assert args[2] in paths and (args[0] in objs or args[1] in units), (ev, args[:3])
+        elif cls in ('LiveEnableLandingGear', 'LiveAIEngagementOrder', 'LiveSetLookAheadTimeSec', 'LiveDestroyUnitExecution'):
+            assert any(a in objs or a in units for a in args[:3]), (ev, cls, args[:3])
+        else:
+            assert cls == 'LiveFlagOperation_IntExecution', (ev, cls)
+    # the rows (DT_SV_NpcMission, DT_SV_NpcRows, DT_SV_ModelRows, DT_SV_AlcnNpc / Model)
+    def table(path, st):
+        z = load(path)
+        dt, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
+        return {plain(('name',) + k): dict((q[1], q[3]) for q in r[2]) for k, r in dt['rows']}
+    mission = table(NPC_TABLE, 'LiveNpcMissionDataTable')
+    for row, npc in ((se.FISH_ROW, se.FISH_NPC), (se.SAL_BOAT_ROW, se.SAL_BOAT_NPC), (se.FEST_CM_ROW, 'OP0039_slcmp_01'),
+                     (se.FEST_LIGHT_ROW, se.FEST_LIGHT_NPC), (se.FEST_BEAM_ROW, 'GR053_seli_light_01'), (se.FEST_BOMBER_ROW, 'OP0012_t160_01')):
+        assert plain(mission[row]['NpcId']) == npc, (row, mission[row]['NpcId'])
+    assert struct.unpack('<f', mission[se.SAL_BOAT_ROW]['MinHealth'][2])[0] == se.SAL_BOAT_MIN_HEALTH
+    npc = table(DATA + 'DT_SV_NpcRows', 'LiveNpcDataTable')[se.FISH_NPC]
+    assert (plain(npc['ModelId']), plain(npc['WeaponDurabilityId']), plain(npc['ExplosionDurabilityId']), npc['GameObjectDisplayName02'])         == (se.FISH_MODEL,) + se.FISH_DURABILITY + (s(se.FISH_SUB_KEY),), npc
+    model = table(DATA + 'DT_SV_ModelRows', 'LiveModelDataTable')[se.FISH_MODEL]
+    assert struct.unpack('<f', model['MaxHealth'][2])[0] == se.FISH_HEALTH, model['MaxHealth']
+    alc = table(DATA + 'DT_SV_AlcnNpc', 'LiveNpcDataTable')
+    alm = table(DATA + 'DT_SV_AlcnModel', 'LiveModelDataTable')
+    assert se.FEST_LIGHT_NPC in alc and 'GR053_seli_light_01' in alc and {'GR053_seli', 'GR053_seli_light'} <= set(alm), 'searchlight rows'
+    print(f'  fishing / festival: {len(want)} units, {len(events)} events ({n_ex} execs) and their rows read back from the '
+          f'packages: all there')
 
 
-def build_rows():
-    build_rows_table('/Game/Datatables/Information/DT_LiveMissionTable', DATA + 'DT_SV_MissionRows',
-                     'LiveLevelTable', 'Mission022', 'SurvivalMode', edit_mission_row)
-    build_npc_rows()
-    build_model_rows()
-    build_rows_table('/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands', DATA + 'DT_SV_MenuRows',
-                     'LiveMenuCommandsDataTable', 'Campaign', 'SurvivalMode', edit_menu_row)
+def check_escort_decoy_build():
+    """(2026-11-06) THE ESCORT, its cargo ships and THE DECOY read back from the packages this build saved: every unit the
+    build contracts name, by the name SV_Spawn gives (a digit tail split as the engine splits it; the launch units exactly
+    as the container launchers' arms name them), with its objects, rows, side, callsign key and parts; every path the
+    records name (and its control type, as VOID WATCHER's proven orbit's); every remote event Lua fires, once each, and
+    every exec's objects / units / paths / flags / radio groups there; the rows (DT_SV_NpcMission, DT_SV_NpcRows,
+    DT_SV_Radio)."""
+    se = survival_events
+    plain = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    load = lambda path: ZenPkg(data=open(os.path.join(OUT, path[len('/Game/'):]) + '.uasset', 'rb').read())
+    zw = load(MI + 'WD_SurvivalMode_global')
+    w, _ = props_of(zw, zw.export_index('WD_SurvivalMode_global'), 'LiveWorldData')
+    units = {plain([q for q in u[2] if q[1] == 'Name'][0][3]): u for u in [p for p in w[2] if p[1] == 'UnitDescList'][0][3][1]}
+    paths = {plain([q for q in el[2] if q[1] == 'Name'][0][3]): el for el in [p for p in w[2] if p[1] == 'AIPathDescList'][0][3][1]}
+    objs = {}
+
+    def walk(ob, unit):
+        objs[plain([q for q in ob[2] if q[1] == 'Name'][0][3])] = unit
+        for ch in (field_of(ob, 'ChildAIObjectDescs') or ('arr', []))[1]:
+            walk(ch, unit)
+    for un, u in units.items():
+        for ob in objects_of(u): walk(ob, un)
+    faction = lambda u: field_of(u, 'Faction')[2][2][0]
+    kids = lambda ob: [plain([q for q in ch[2] if q[1] == 'Name'][0][3]) for ch in (field_of(ob, 'ChildAIObjectDescs') or ('arr', []))[1]]
+    want = []                      # (unit, [objects], row, faction or None, callsign key or None, [parts of the first object])
+    for a in se.esc_aircraft():
+        want.append((a['unit'], [a['obj']], a['row'], 1, a['name_key'], []))
+    for s_, unit, obj, row, _, _, _, _, launcher in se.CARGO_SHIPS:
+        want.append((unit, [obj], row, 1, se.CARGO_NAME_KEY,
+                     sorted(f'{obj}_{c}' for c in ('BP_VE021_ctslf_cntus_01_CP', 'BP_VE021_ctslf_cntus_02_CP',
+                                                   'BP_VE021_ctslf_cntus_03_CP', 'BP_VE021_stgr_Base')
+                            if c in (launcher, 'BP_VE021_stgr_Base', 'BP_VE021_ctslf_cntus_02_CP'))))
+        for n, dunit, dobjs in se.CARGO_ARMS[s_]:
+            want.append((dunit, dobjs, se.ZFA_ROW, 1, se.ZFA_NAME_KEY, []))
+    for L, unit, obj, _ in se.ZFA_FALLBACK:
+        want.append((unit, [f'{obj}_{k}' for k in range(se.ZFA_FALLBACK_N)], se.ZFA_ROW, 1, se.ZFA_NAME_KEY, []))
+    want.append((se.DECOY_BAIT_UNIT, [se.DECOY_BAIT_OBJ], se.DECOY_BAIT_ROW, 2, None, [f'{se.DECOY_BAIT_OBJ}_{se.DECOY_POD}']))
+    want.append((se.DECOY_BAIT_MARK_UNIT, [se.DECOY_BAIT_MARK_OBJ], se.DECOY_MARK_ROW, None, None, []))
+    for _, unit, obj, munit, mobj in se.decoy_uavs():
+        want.append((unit, [obj], se.DECOY_UAV_ROW, 2, None, [f'{obj}_{se.DECOY_POD}']))
+        want.append((munit, [mobj], se.DECOY_MARK_ROW, None, None, []))
+    for unit, obj in se.DECOY_SPEARS:
+        want.append((unit, [obj], se.DECOY_SPEAR_ROW, None, None, [f'{obj}_TargetingDummy']))
+    for unit, names, row, side, key, parts in want:
+        assert unit in units, f'{unit} not in the world data'
+        u = units[unit]
+        assert survival_events.fname(unit) == [q for q in u[2] if q[1] == 'Name'][0][3], unit
+        got = [plain(field_of(ob, 'Name')) for ob in objects_of(u)]
+        assert got == names, (unit, got)
+        assert all(field_of(ob, 'MissionNpcID') == ('name', row, 0) for ob in objects_of(u)), unit
+        assert (side is None or faction(u) == side) and not field_of(u, 'bIsSpawnFromStart'), unit
+        if key:
+            assert all(field_of(ob, 'GameObjectDisplayNameID02') == ('name', key, 0) and
+                       field_of(ob, 'bShowCallSignForAlly') == ('raw', 'Bool', b'\x01') for ob in objects_of(u)), (unit, key)
+        assert sorted(kids(objects_of(u)[0])) == sorted(parts), (unit, kids(objects_of(u)[0]), parts)
+    marks = [munit for _, _, _, munit, _ in se.decoy_uavs()] + [se.DECOY_BAIT_MARK_UNIT] + [u_ for u_, _ in se.DECOY_SPEARS]
+    assert all(field_of(ob, 'bIsInvincible') and field_of(ob, 'bIsAttackTargetsException') for m in marks for ob in objects_of(units[m]))
+    assert field_of(objects_of(units[se.ESC_CHAR_UNIT])[0], 'TargetMarkType') == ('enum', 'ELiveTargetMarkType', ('raw', 'Byte', b'\x03'))
+    # the paths (ControlType as VOID WATCHER's arcs: no tube control, hard rule 35)
+    ct = field_of(paths[se.AWACS_ARC_A], 'ControlType')
+    want_paths = [se.ESC_PATH_ROUTE, se.ESC_PATH_FINAL, se.ESC_PATH_CIRCUIT] + [a['route'] for a in se.esc_aircraft()[1:]]
+    want_paths += [f'SV_Path_{k}Slot{S}' for S, _ in se.ESC_SLOTS for k in ('Taxi', 'Stop')]
+    for name in want_paths:
+        assert name in paths and field_of(paths[name], 'ControlType') == ct, (name, ct)
+    # the records
+    ze = load(MI + 'EP_SurvivalMode_global')
+    _, _, _, T, E, _ = ep_dump.load_bytes(ze)
+    show = lambda v: ep_dump.show(v, ze)
+    trig = [show(ep_dump.fields(t)['EventName']) for t in T]
+    events = [ev for evs in se.ESC_EVENTS.values() for ev in evs] + ['RE_SV_EscortReset']
+    events += [se.cargo_launch_event(s_, n) for s_ in se.CARGO_ARMS for n, _, _ in se.CARGO_ARMS[s_]]
+    events += [f'RE_SV_CargoRemove_{c[0]}' for c in se.CARGO_SHIPS] + [f'RE_SV_ZfaGo{f[0]}' for f in se.ZFA_FALLBACK]
+    events += ['RE_SV_DecoyBaitLaser', 'RE_SV_DecoyBaitLaserOff', 'RE_SV_DecoyBaitPing', 'RE_SV_DecoyKill', 'SV_DecoySpearImpact']
+    events += [f'RE_SV_DecoySpear_{k + 1}' for k in range(len(se.DECOY_SPEARS))]
+    events += [f'RE_SV_Decoy{x}_{nn:02d}' for nn, *_ in se.decoy_uavs() for x in ('LaserOn', 'LaserOff', 'MarkOnMe')]
+    events += [ev for _, ev, _, _, _ in se.decoy_radio()]
+    contract = (['RE_SV_CharGo', 'RE_SV_CharFinal', 'RE_SV_CharRoll', 'RE_SV_CharTaxi', 'RE_SV_CharStop']
+                + [f'RE_SV_Esc{n}{x}' for n, _, _, _ in se.ESC_ESCORTS for x in ('Go', 'Orbit', 'Final', 'Roll', 'Taxi', 'Stop')]
+                + ['RE_SV_DecoyBaitLaser', 'RE_SV_DecoyKill'] + [f'RE_SV_DecoyLaserOn_{k:02d}' for k in range(1, 36)]
+                + [f'RE_SV_DecoyLaserOff_{k:02d}' for k in range(1, 36)] + [f'RE_SV_DecoySpear_{k}' for k in range(1, 5)]
+                + [f'RE_SV_DecoyRadio_{x}' for x in ('Lock', 'Incoming', 'Imminent', 'Hit', 'Brief')])
+    assert set(contract) <= set(events), sorted(set(contract) - set(events))
+    for ev in events:
+        assert trig.count(ev) == 1, (ev, trig.count(ev))
+    zr = load(RADIO)
+    radio = {plain(('name',) + k) for k, _ in dtx.parse(uprop.Ctx(bytes(zr.payloads[0]), zr.names), 0, 'LiveRadioTable')[0]['rows']}
+    mine = set(events) | {t for t in trig if t.startswith(('SV_CharUp', 'SV_EscUp', 'SV_CargoUp', 'SV_ZfaUp', 'SV_DecoyBaitUp',
+                                                             'SV_DecoyUavUp_', 'SV_CharEnd')) or
+                          any(t.startswith(f'SV_{n}End') for n, _, _, _ in se.ESC_ESCORTS)}
+    flags = {se.fname(x) for x in se.INT_FLAGS}
+    n_ex, classes = 0, {}
+    for e in E:
+        f = ep_dump.fields(e)
+        ev = show(f['ConnectionEventName'])
+        if ev not in mine: continue
+        n_ex += 1
+        args = [show(ep_dump.fields(a)['Value']) for a in f['ArgsInfo'][1]]
+        cls = show(f['ExecutionClass'])
+        classes[cls] = classes.get(cls, 0) + 1
+        for c in f['ConditionalStatementTables'][1]:
+            cv = [show(ep_dump.fields(a)['Value']) for a in ep_dump.fields(c)['ArgsInfo'][1]]
+            assert se.fname(cv[0]) in flags, (ev, cv)
+        if cls == 'LiveAIPathExecution':
+            assert args[2] in paths and args[0] in objs, (ev, args[:3])
+        elif cls == 'LiveFireOneShotWeapon':
+            assert args[1] in objs and args[2] in ('Player', 'NoneSelect'), (ev, args[:3])
+        elif cls == 'LiveAirshipLaserDesignate':
+            assert args[0] in objs and args[2] in objs and args[8] == 'NoneSelect', (ev, args)
+        elif cls in ('LiveAirshipStopLaserDesignate', 'LiveEnableLandingGear', 'LiveAIPathExitExecution'):
+            assert args[0] in objs, (ev, cls, args[:2])
+        elif cls in ('LiveSetCommonAttribute', 'LiveActorTeleportExecution'):
+            assert args[1] in objs, (ev, cls, args[:3])
+        elif cls in ('LiveAIEngagementOrder', 'LiveAIChangeEnemySearchType'):
+            assert args[0] in objs or args[1] in units, (ev, cls, args[:3])
+        elif cls in ('LiveUnitMoveActor', 'LiveChangeUnitRadius'):
+            assert args[0] in units and (cls != 'LiveUnitMoveActor' or args[1] in objs), (ev, cls, args[:3])
+        elif cls in ('LiveSetActiveGameObjectExecution', 'LiveBattleNavigationExecution'):
+            assert args[1] in units, (ev, cls, args[:3])
+        elif cls == 'LiveFlagOperation_IntExecution':
+            assert se.fname(args[0]) in flags, (ev, args)
+        elif cls == 'LiveRadioPlayExecution':
+            assert args[0] in radio, (ev, args)
+        else:
+            assert cls == 'LiveDestroyPlayerPlaneExecution' and not args, (ev, cls, args)
+    impact = [t for t in T if show(ep_dump.fields(t)['EventName']) == 'SV_DecoySpearImpact'][0]
+    assert [show(ep_dump.fields(a)['Value']) for a in ep_dump.fields(impact)['ArgsInfo'][1]] == [se.DECOY_SPEAR_TAG]
+    # the rows
+    def table(path, st):
+        z = load(path)
+        dt, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
+        return {plain(('name',) + k): dict((q[1], q[3]) for q in r[2]) for k, r in dt['rows']}
+    mission = table(NPC_TABLE, 'LiveNpcMissionDataTable')
+    npc = table(DATA + 'DT_SV_NpcRows', 'LiveNpcDataTable')
+    for row, _, src, nid, hp in se.ESCORT_DECOY_MISSION_ROWS:
+        assert row in mission, row
+        assert nid is None or plain(mission[row]['NpcId']) == nid, (row, mission[row]['NpcId'])
+        assert hp is None or struct.unpack('<f', mission[row]['MaxHealthDifference'][2])[0] == hp, (row, hp)
+    for row, src, model, fly_ally, unarmed, key, full in se.ESCORT_DECOY_NPC_ROWS:
+        r = npc[row]
+        assert model is None or plain(r['ModelId']) == model, (row, r['ModelId'])
+        assert not fly_ally or plain(r['LuaSetId']) == 'NLID_0003_CP', (row, r['LuaSetId'])
+        assert not unarmed or not any(k.startswith('NpcFCSId') and v for k, v in r.items()), row
+        assert plain(r['LuaSetId']) != 'NLID_0400_CP', row
+    print(f'  escort / decoy: {len(want)} units, {len(want_paths)} paths, {len(events)} events ({n_ex} execs: '
+          + ', '.join(f'{c} {n}' for c, n in sorted(classes.items())) + ') and their rows read back from the packages: all there')
+
+
+def check_zfa_laser_build():
+    """(2026-11-07) The ZFA-44s' anti-missile laser read back from the packages this build saved: its arm
+    BP_FCS_SV_ZfaTLS (named for its path; it imports exactly BP_SwingTLS_ForMSL's 7 public exports and its weapon class
+    is that one; its launcher a LauncherCommon on the host's body at the gun socket, all round; its AIControlCIWS missiles
+    only), its fire-control row in DT_SV_NpcFCS, DT_SV_NpcRows' laser twin of the ZFA-44 host (slot 3 that row, the rest
+    the host's), the interception trigger and its count, and the names Lua uses (Scripts/sv_config.lua's carrier.zfa)."""
+    se = survival_events
+    plain = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    load = lambda path: ZenPkg(data=open(os.path.join(OUT, path[len('/Game/'):]) + '.uasset', 'rb').read())
+    u64 = lambda e, at: struct.unpack_from('<Q', e, at)[0]
+    z = load(se.ZFA_TLS_FCS_PKG)
+    tls, ecm = ZenPkg(stock(se.ZFA_TLS_WEAPON)), ZenPkg(stock(se.ZFA_TLS_LAUNCHER_SOURCE))
+    tls_pub = sorted(u64(e, 56) for e in tls.exports if u64(e, 56))
+    assert z.names[z.name_idx] == se.ZFA_TLS_FCS_PKG and z.imp_pkgs == [se.ZFA_TLS_WEAPON], (z.names[z.name_idx], z.imp_pkgs)
+    got = sorted(z.imp_hashes[x & 0xffffffff] for x in z.imports if x >> 62 == 2)
+    assert got == tls_pub and len(z.imp_hashes) == len(tls_pub), ('the laser imports', [hex(h) for h in got])
+    wc = dict((q[1], q[3]) for q in props_of(z, z.export_index('LiveFCSModule_ProjectileCommon_0'), 'LiveFCSModule_ProjectileCommon')[0][2])
+    w = z.imports[-wc['WeaponClass'][1] - 1]
+    assert w >> 62 == 2 and z.imp_hashes[w & 0xffffffff] == export_hash(se.ZFA_TLS_WEAPON.rsplit('/', 1)[1] + '_C'), wc
+    li = z.export_index('LiveFCSModule_LauncherBoneControl_0')
+    el = ecm.export_index('LiveFCSModule_LauncherCommon_0')
+    assert (u64(z.exports[li], 32), u64(z.exports[li], 48)) == (u64(ecm.exports[el], 32), u64(ecm.exports[el], 48)), 'launcher class'
+    lc = dict((q[1], q[3]) for q in props_of(z, li, 'LiveFCSModule_LauncherCommon')[0][2] if not q[2])
+    perf, fc = (dict((q[1], q) for q in lc[f][2]) for f in ('Performance', 'FireControl'))
+    assert lc['MeshComponentName'] == ('name', ZFA_TLS_MESH, 0) and ('SlotSocketPrefix' not in perf or perf['SlotSocketPrefix'][2]), lc
+    assert fc['LauncherDirection'][3][2] == ('raw', 'Byte', b'\x01'), fc['LauncherDirection']        # SlotSocket
+    assert struct.unpack('<f', fc['CaptureAngleRange'][3][2])[0] == 180.0, fc['CaptureAngleRange']
+    ai = dict((q[1], q[3]) for q in props_of(z, z.export_index('LiveFCSModule_AIControlCIWS_0'), 'LiveFCSModule_AIControlCIWS')[0][2])
+    assert ai['bSearchMissileOnly'] == ('raw', 'Bool', b'\x01'), ai
+    cls = z.export_name(0)
+
+    def table(path, st):
+        zt = load(path)
+        dt, _ = dtx.parse(uprop.Ctx(bytes(zt.payloads[0]), zt.names), 0, st)
+        return {plain(('name',) + k): dict((q[1], q[3]) for q in r[2]) for k, r in dt['rows']}
+    fcs = table(se.ZFA_TLS_FCS_TABLE, 'LiveNpcFCSDataTable')
+    assert list(fcs) == [se.ZFA_TLS_FCS_ROW], list(fcs)
+    r = fcs[se.ZFA_TLS_FCS_ROW]
+    assert r['FCSBlueprintClass'] == ('soft', ('name', se.ZFA_TLS_FCS_PKG, 0), ('name', cls, 0), ''), r['FCSBlueprintClass']
+    assert r['NpcWeaponId'] is None and r['NpcAIModuleId'] is None, r
+    assert [struct.unpack('<f', r[f][2])[0] for f in ('CaptureDistance', 'CaptureAngleRange')] == [3000.0, 180.0], r
+    npc = table(DATA + 'DT_SV_NpcRows', 'LiveNpcDataTable')
+    a, b, slot = npc[se.ZFA_NPC], npc[se.ZFA_TLS_NPC], f'NpcFCSId{se.ZFA_TLS_SLOT}'
+    assert b.get(slot) == ('name', se.ZFA_TLS_FCS_ROW, 0) and a.get(slot) is None, (a.get(slot), b.get(slot))
+    assert {f: v for f, v in a.items() if f != slot} == {f: v for f, v in b.items() if f != slot}, 'the twin differs'
+    # the interception count
+    ze = load(MI + 'EP_SurvivalMode_global')
+    _, _, _, T, E, _ = ep_dump.load_bytes(ze)
+    show = lambda v: ep_dump.show(v, ze)
+    trig = [t for t in T if show(ep_dump.fields(t)['EventName']) == se.ZFA_TLS_EVENT]
+    assert len(trig) == 1 and show(ep_dump.fields(trig[0])['EventType']) == '65', len(trig)
+    vals = [show(ep_dump.fields(x)['Value']) for x in ep_dump.fields(trig[0])['ArgsInfo'][1]]
+    assert vals == ['WID_tls', 'NoneSelect', 'NoneSelect', 'NoneSelect', 'true'], vals
+    ex = [e for e in E if show(ep_dump.fields(e)['ConnectionEventName']) == se.ZFA_TLS_EVENT]
+    assert [(show(ep_dump.fields(e)['ExecutionClass']), [show(ep_dump.fields(x)['Value']) for x in ep_dump.fields(e)['ArgsInfo'][1]])
+            for e in ex] == [('LiveFlagOperation_IntExecution', [se.ZFA_TLS_FLAG, 'Add', '1'])], ex
+    # Lua's names for them (Scripts/sv_config.lua CFG.allies.carrier.zfa)
+    lua = survival_events.runtime_lua()
+    for want in (f'dt_npc = "{se.ZFA_NPC}"', f'laser_row = "{se.ZFA_TLS_NPC}"', f'laser_fcs_row = "{se.ZFA_TLS_FCS_ROW}"',
+                 f'laser_fcs_table = "{se.ZFA_TLS_FCS_TABLE}.{se.ZFA_TLS_FCS_TABLE.rsplit("/", 1)[1]}"',
+                 f'laser_flag = "{se.ZFA_TLS_FLAG}"'):
+        assert want in lua, f'Scripts/sv_config.lua: no {want}'
+    print(f'  zfa laser: {se.ZFA_TLS_FCS_PKG} (imports the 7 of {se.ZFA_TLS_WEAPON.rsplit("/", 1)[1]}, LauncherCommon on '
+          f'{ZFA_TLS_MESH}, missiles only), {se.ZFA_TLS_FCS_ROW}, {se.ZFA_TLS_NPC} slot {se.ZFA_TLS_SLOT} and '
+          f'{se.ZFA_TLS_EVENT} -> {se.ZFA_TLS_FLAG} read back from the packages: all there')
 
 
 # ---------------------------------------------------------------- NPC mission table
@@ -1446,6 +1103,7 @@ def build_rows():
 NPC_TABLE_STOCK = '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission022'
 NPC_TABLE = MOD + '/Data/DT_SV_NpcMission'
 NPC_ROWS = set()           # its row names, filled by build_npc_table
+NPC_SOURCE = {}            # (0.73.77) each Survival row whose DT_NPC row Lua makes -> the mission row it was copied from
 # Rows copied whole from other missions' NPC tables (names and values only, no object references): the heavy bombers
 # of Mission 4 (Milestone 3). Their blueprints are loaded by the spawner from the NpcId's DT_NPC row.
 NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_common', 'tu95_common']),
@@ -1455,14 +1113,25 @@ NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_commo
               # they come with its DT_NPC row's ChildNPCId)
               ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission016', []),
               # the Alicorn's own mission row (its parts name none): Online Mode's EB_002
-              ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_EB_002_ON', ['alcn_01'])]
+              ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_EB_002_ON', ['alcn_01']),
+              # the Spaceport Retake's rockets and their debris (survival_events.SP_ROCKET_ROWS: (Survival's name,
+              # Mission 19's), Mission 19's names end in a numeric tail: copied under Survival's)
+              ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission019', survival_events.SP_ROCKET_ROWS)] + list(
+              survival_events.SP_ISLAND_ROWS.items()) + [   # (the retake's island enemies: Mission 6's and 7's rows)
+              # THE FESTIVAL's cruise missile (survival_events.FEST_CM_*): Mission 30's path-flown SLCM, under Survival's name
+              ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission030', [(survival_events.FEST_CM_ROW, survival_events.FEST_CM_SOURCE_ROW)]),
+              # its searchlights (survival_events.FEST_LIGHT_*): Online Mode C_011's vehicle and its light, under Survival's
+              # names (their DT_NPC_ON rows ride in the Alicorn's tables: build_alicorn_rows)
+              ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_C_011_ON', survival_events.FEST_LIGHT_ROWS)]
 LADON_TABLE_NOTE = 'DT_NPC_Mission016'
 NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a numeric tail (hard rule 17)
     ('sv_probe_pkg', 'm29a_common', 'SV_m29a_ProbePkg'),   # behaviour probe (main.lua): packaged script
     ('sv_probe_rt',  'm29a_common', 'SV_m29a_ProbeRt'),    # behaviour probe: run-time LuaScript
     (survival_events.SHUTTLE_NPC_ROW, 'sstb_common', survival_events.SHUTTLE_NPC),   # Comona Defense's shuttle (its name)
     (survival_events.VALKA_EML_ROW, 'gepa_common', survival_events.VALKA_EML_NPC),   # VALKA's opener railgun (a turret row)
-]
+    (survival_events.FISH_ROW, survival_events.FISH_ROW_TEMPLATE, survival_events.FISH_NPC),   # GONE FISHIN's shoals
+] + [  # the fighter roles' behaviour rows (survival_events.ROLE_ROW, P1): DT_NPC rows Scripts/sv_rows.lua rolesSetup makes
+    (row, 'f16c_common', npc) for row, npc in survival_events.ROLE_NPC.items()]
 # Enemy search (main.lua CFG.search): for each of these rows a copy <row>_sv whose NpcId is <its NpcId>_SV, the DT_NPC
 # copy main.lua adds at run time with Survival's 25 km AI module. Keep in step with main.lua CFG.aircraft.
 SEARCH_AIRCRAFT = ['f16c_common', 'f18e_common', 'f15e_common', 'f14d_common', 'm21b_common',
@@ -1483,11 +1152,96 @@ POOL_EXTRA = [('su47_common', 'su33_common', 'OP1026_su47_01'),
               ('typn_common', 'f18e_common', 'OP1011_typn_01'),
               ('su57_common', 'su33_common', 'OP1021_su57_01'),
               ('f22a_common', 'f15e_common', 'OP1005_f22a_01'),
-              ('e18g_common', 'f18e_common', 'OP1010_e18g_01')]
+              ('e18g_common', 'f18e_common', 'OP1010_e18g_01'),
+              # the co-op stand-ins of the player planes the list above hadn't got (Scripts/sv_config.lua
+              # CFG.coop.airframes; the user, 2026-10-30: "someone who was flying the FA-36 was registering as flying the
+              # F-16"): each one's plain campaign enemy row (build/research/ai/dt_npc.tsv), not in the enemy pool
+              ('fa36_common', 'f18e_common', 'OP1018_fa36_01'),
+              ('ea36_common', 'f18e_common', 'OP1019_ea36_01'),
+              ('f04e_common', 'f16c_common', 'OP1003_f04e_01'),
+              ('f18c_common', 'f18e_common', 'OP1007_f18c_01'),
+              ('f15j_common', 'f15e_common', 'OP1012_f15j_01'),
+              ('a06e_common', 'f18e_common', 'OP1013_a06e_01'),
+              ('su25_common', 'su34_common', 'OP1015_su25_01'),
+              ('x40a_common', 'f15e_common', 'OP1016_x40a_01'),
+              ('mr2k_common', 'f16c_common', 'OP1017_mr2k_01'),
+              ('e06b_common', 'f18e_common', 'OP1031_e06b_01')]
+# Survival COOP's stand-ins (Scripts/sv_coop.lua, the weapon sync; tools/re/COOP.md 8): each other player's plane flies
+# <row>_svcp for its airframe's row (Scripts/sv_config.lua CFG.coop.airframes and default, read from the Lua), whose
+# NpcId <its NpcId>_SVCP is the DT_NPC copy sv_coop.lua COOP.syncSetup makes at the main menu with every weapon on
+# damage-0 rows, so what a stand-in fires on another game only shows (user, 2026-10-29: "work out aircraft syncing,
+# such as missiles being fired"). Letters at the end: hard rule 17.
+COOP_STANDIN_SUFFIX = ('_svcp', '_SVCP')
+
+
+def coop_standin_rows():
+    """The mission rows a co-op stand-in flies: CFG.coop.airframes' values and its default, from the Lua."""
+    lua = survival_events.runtime_lua()
+    m = re.search(r'\n    coop = \{.*?airframes = \{([^}]*)\},\s*default = "(\w+)"', lua, re.S)
+    assert m, 'Scripts/sv_config.lua: no CFG.coop.airframes / default'
+    rows = sorted(set(re.findall(r'=\s*"(\w+)"', m.group(1))) | {m.group(2)})
+    assert rows and all(not r[-1:].isdigit() for r in rows), rows
+    return rows
+
+
 # Difficulty spikes (main.lua CFG.spikes; user, 2026-10-22: "every 7 rounds ... a difficulty spike across the board"):
 # each level after the first gets its own rows, <row>_sv<letter> -> <NpcId>_SV<LETTER>, whose DT_NPC copies main.lua
 # gives that level's fire control. Letters, not digits: hard rule 17. Keep in step with main.lua SPIKE_SUFFIX.
 SPIKE_SUFFIXES = ['b', 'c', 'd']
+
+# (0.73.77, plan G1) No scripted sure kills on enemies. A stock mission's "hit missile" fire controls (BP_FCS_HitMSL_*,
+# which launch BP_MSL_certain_kill_*: homing 180 deg, turning without limit, flares do nothing; hard rule 36) are meant
+# for its events alone (CaptureDistance 0: their AI never picks them), but Scripts/sv_rows.lua copies every
+# NPC_FCS_PlaneMsl* slot onto Survival's missile fire control with a capture distance, so their AI fired them: Mission
+# 22's F/A-18E row (OP1032_f18e_Ally_MS22) carries NPC_FCS_PlaneMsl300 (Missile_300, 9999 damage) in slot 5, which
+# one-shot cressendo twice in round 6 (150 HP each) and liljojofett in round 41 of the 0.73.76 runs; the Phantom Su-47s
+# carry NPC_FCS_PlaneMsl302 (the same) and the Reaper F-22 wings NPC_FCS_PlaneMsl100. Mission 22's Su-33 row
+# (OP1030_su33_02) carries Mission 13's scripted anti-ship pair (1200 damage, unlimited turn). The stock mission rows
+# that name such a row are pointed at the airframe's plain campaign enemy row instead (the one every other mission's
+# <airframe>_common names: Flr / Gun / Msl only), and the aces' copies (build_npc_rows) have those slots emptied;
+# check_no_certain_kill fails the build on any enemy row that still carries one.
+PLAIN_NPC_IDS = {'f18e_common': ('OP1032_f18e_Ally_MS22', 'OP1032_f18e_01'),   # mission row: (stock NpcId, plain)
+                 'su33_common': ('OP1030_su33_02', 'OP1030_su33_01')}
+CERTAIN_KILL_DAMAGE = 1000.0       # a weapon this strong takes a whole health bar (a player's is 100-300 HP)
+CERTAIN_KILL_TURN = 10000.0        # MaxRotationAngle of the scripted kills: a missile that turns without limit
+_FCS_TABLES = {}
+
+
+def npc_fcs_tables():
+    """(fire control rows, weapon rows): the campaign's DT_NPC_FCS / DT_NPC_Weapon and Online Mode's _ON tables, each
+    plain row name -> {property: value} (a campaign row first)."""
+    if not _FCS_TABLES:
+        def load(path, st):
+            z = ZenPkg(stock(path))
+            dt, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
+            return {(k[0] if k[1] == 0 else f'{k[0]}_{k[1] - 1}'): dict((q[1], q[3]) for q in r[2]) for k, r in dt['rows']}
+        for key, st, paths in (('fcs', 'LiveNpcFCSDataTable', ['/Game/Datatables/AI/NPC/FCS/DT_NPC_FCS',
+                                                                 ON_NPC + 'DT_NPC_FCS_ON']),
+                               ('wpn', 'LiveNpcWeaponDataTable', ['/Game/Datatables/AI/NPC/Weapon/DT_NPC_Weapon',
+                                                                   ON_NPC + 'DT_NPC_Weapon_ON'])):
+            t = {}
+            for path in paths:
+                for k, v in load(path, st).items(): t.setdefault(k, v)
+            _FCS_TABLES[key] = t
+    return _FCS_TABLES['fcs'], _FCS_TABLES['wpn']
+
+
+def certain_kill(fcs_row):
+    """Why fire control `fcs_row` is a scripted sure kill, or None: a hit missile's blueprint (BP_FCS_HitMSL_*) or one
+    named certain, or a weapon of CERTAIN_KILL_DAMAGE or more, or one turning CERTAIN_KILL_TURN deg (no flare shakes it)."""
+    fcs, wpn = npc_fcs_tables()
+    r = fcs.get(fcs_row)
+    if r is None: return None
+    bp = r.get('FCSBlueprintClass')
+    cls = bp[2][1] if bp and bp[0] == 'soft' and bp[2] and bp[2][0] == 'name' else ''
+    w = r.get('NpcWeaponId')
+    wname = (w[1] if w[2] == 0 else f'{w[1]}_{w[2] - 1}') if w and w[0] == 'name' else None
+    wr = wpn.get(wname, {}) if wname else {}
+    f = lambda v: struct.unpack('<f', v[2])[0] if v and v[0] == 'raw' and v[1] == 'Float' else 0.0
+    dmg, turn = f(wr.get('damage')), f(wr.get('MaxRotationAngle'))
+    if 'hitmsl' in cls.lower() or 'certain' in cls.lower() or dmg >= CERTAIN_KILL_DAMAGE or turn >= CERTAIN_KILL_TURN:
+        return f'{fcs_row} ({cls or "?"}, weapon {wname}: {dmg:.0f} damage, turns {turn:.0f} deg)'
+    return None
 
 
 def build_npc_table():
@@ -1498,8 +1252,20 @@ def build_npc_table():
     assert o == len(p), (o, len(p))
     rows = dict(dt['rows'])
     npc_idx = [k for k, (n, t) in uprop.U.schema('LiveNpcMissionDataTable').items() if n == 'NpcId'][0]
+    # (0.73.77, G1) the stock rows that named a sure kill: on their airframe's plain enemy row (PLAIN_NPC_IDS), before
+    # anything below copies them or names their <NpcId>_SV clones
+    for mrow, (was, plain) in PLAIN_NPC_IDS.items():
+        have = [q for q in rows[(mrow, 0)][2] if q[0] == npc_idx][0][3]
+        assert (have[1] if have[2] == 0 else f'{have[1]}_{have[2] - 1}') == was, f'{mrow}: NpcId {have}, {was} expected'
+        nid = survival_events.fname(plain)
+        set_prop(rows[(mrow, 0)][2], npc_idx, 'NpcId', nid)
+        z.nb.add(nid[1])
+        print(f'  {mrow}: {was} -> {plain} (no scripted sure kill: G1)')
+    NPC_SOURCE.clear()
     extra = list(NPC_EXTRA)
-    for new_row, src, npc in POOL_EXTRA:
+    # (the Spaceport Assault's enemy ships, survival_events.SP_NPC_ROWS: shaped as an Aegis hull or turret row; SAL's boat,
+    # survival_events.FISH_NPC_ROWS, the same way: the stock boat row's name ends in digits)
+    for new_row, src, npc in POOL_EXTRA + survival_events.SP_NPC_ROWS + survival_events.FISH_NPC_ROWS:
         assert (new_row, 0) not in rows, new_row
         row = copy.deepcopy(rows[(src, 0)])
         nid = survival_events.fname(npc)                                    # (its numeric tail: hard rule 17)
@@ -1507,12 +1273,25 @@ def build_npc_table():
         for n in (new_row, nid[1]): z.nb.add(n)
         rows[(new_row, 0)] = row
         dt['rows'].append(((new_row, 0), row))
+    # SAL's boat afloat: MinHealth 1 on its mission row, as the stock allied ships carry it (Mission 24's wasp_Ally)
+    mh_idx = [k for k, (n, t) in uprop.U.schema('LiveNpcMissionDataTable').items() if n == 'MinHealth'][0]
+    set_prop(rows[(survival_events.SAL_BOAT_ROW, 0)][2], mh_idx, 'MinHealth',
+             ('raw', 'Float', struct.pack('<f', survival_events.SAL_BOAT_MIN_HEALTH)))
     for src in SEARCH_AIRCRAFT:
         npc = [p for p in rows[(src, 0)][2] if p[0] == npc_idx][0][3]          # ('name', base, number)
         base = npc[1] if npc[2] == 0 else f'{npc[1]}_{npc[2] - 1}'
         extra.append((src + '_sv', src, base + '_SV'))
         for suf in SPIKE_SUFFIXES:
             extra.append((src + '_sv' + suf, src, base + '_SV' + suf.upper()))
+    # the co-op stand-ins' damage-0 rows (COOP_STANDIN_SUFFIX): <row>_svcp -> <its NpcId>_SVCP, made by Lua
+    standins = coop_standin_rows()
+    missing = [r for r in standins if (r, 0) not in rows]
+    assert not missing, f'CFG.coop.airframes names rows DT_SV_NpcMission lacks: {missing}'
+    for src in standins:
+        npc = [p for p in rows[(src, 0)][2] if p[0] == npc_idx][0][3]
+        base = npc[1] if npc[2] == 0 else f'{npc[1]}_{npc[2] - 1}'
+        extra.append((src + COOP_STANDIN_SUFFIX[0], src, base + COOP_STANDIN_SUFFIX[1]))
+    print(f'  co-op stand-ins: {len(standins)} damage-0 rows ({", ".join(r + COOP_STANDIN_SUFFIX[0] for r in standins)})')
     # the aces (ACES): <row> -> its DT_SV_NpcRows row, and like the search aircraft <row>_sv[b|c|d] -> <that>_SV[B|C|D]
     for tier, key, _, _ in ACES:
         for row, npc, _ in ace_rows(tier, key):
@@ -1523,8 +1302,15 @@ def build_npc_table():
     # turrets on copies of Mission 22's rows, all pointing at DT_SV_NpcRows copies (their names, their fire control)
     extra.append((survival_events.ALLY_AIR_ROW, 'f18e_common', survival_events.ALLY_AIR_NPC))
     extra.append((survival_events.ALLY_WINGMEN_ROW, 'f18e_common', survival_events.ALLY_WINGMEN_NPC))
+    extra.append((survival_events.AWACS_ROW, survival_events.AWACS_ROW_TEMPLATE, survival_events.AWACS_NPC))
     for src, (row, npc) in survival_events.DEFENCE_ROWS.items():           # the airfield's AA guns and SAM sites
         extra.append((row, src, npc))
+    extra.append((survival_events.DEFENCE_CIWS_ROW[0], survival_events.DEFENCE_CIWS_MISSION_SOURCE,   # and the CIWS
+                  survival_events.DEFENCE_CIWS_ROW[1]))
+    for _, mrow, npc, _ in survival_events.SP_TURRETS:        # the Spaceport fleet's turrets (their own fire control)
+        extra.append((mrow, survival_events.SP_TURRET_SHAPE, npc))
+    for mrow, npc, _ in survival_events.SP_HULLS:              # and its armed hulls (their ChildNPCId: the turrets')
+        extra.append((mrow, 'aegs_common', npc))
     for key, _, hull, _ in survival_events.ALLY_SHIPS:
         row, npc, _ = survival_events.ally_ship_rows(key)
         extra.append((row, hull, npc))
@@ -1536,6 +1322,7 @@ def build_npc_table():
         set_prop(row[2], npc_idx, 'NpcId', ('name', npc, 0))
         for n in (new_row, npc): z.nb.add(n)
         dt['rows'].append(((new_row, 0), row))
+        NPC_SOURCE[new_row] = src                                       # (check_no_certain_kill: a Lua-made row's)
     for table, wanted in NPC_IMPORT:
         zs = ZenPkg(stock(table))
         ds, os_ = dtx.parse(uprop.Ctx(bytes(zs.payloads[0]), zs.names), 0, 'LiveNpcMissionDataTable')
@@ -1549,12 +1336,42 @@ def build_npc_table():
                 dt['rows'].append(((L['row'], 0), row))
                 extra.append((L['row'], LADON_TABLE_NOTE, L['npc']))
         for r in wanted:
-            assert (r, 0) not in rows, r
-            row = copy.deepcopy(srows[(r, 0)])
+            r, src = r if isinstance(r, tuple) else (r, r)          # (a row copied under a name of Survival's)
+            assert (r, 0) not in rows and survival_events.fname(r)[2] == 0, r   # (a name the engine keeps whole)
+            f = survival_events.fname(src)
+            row = copy.deepcopy(srows[(f[1], f[2])])
             assert not any(p[3] and p[3][0] == 'obj' for p in row[2]), r              # names and values only
             for n in names_in(row) + [r]: z.nb.add(n)
             dt['rows'].append(((r, 0), row))
             extra.append((r, table.rsplit('/', 1)[1], None))
+    # THE ESCORT and THE DECOY (survival_events.ESCORT_DECOY_MISSION_ROWS): Mission 22's rows' shape or another mission's
+    # row whole (names and values only), under Survival's names (no digit split: hard rule 17), NpcId and health set
+    md_idx = [k for k, (n, t) in uprop.U.schema('LiveNpcMissionDataTable').items() if n == 'MaxHealthDifference'][0]
+    other = {}
+    for new_row, table, src, npc, hp in survival_events.ESCORT_DECOY_MISSION_ROWS:
+        assert (new_row, 0) not in rows and survival_events.fname(new_row)[2] == 0, new_row
+        if table is None:
+            row = copy.deepcopy(rows[(src, 0)])
+        else:
+            if table not in other:
+                zs = ZenPkg(stock(table))
+                other[table] = dict(dtx.parse(uprop.Ctx(bytes(zs.payloads[0]), zs.names), 0, 'LiveNpcMissionDataTable')[0]['rows'])
+            f = survival_events.fname(src)
+            row = copy.deepcopy(other[table][(f[1], f[2])])
+            assert not any(p[3] and p[3][0] == 'obj' for p in row[2]), new_row              # names and values only
+        if npc:
+            nid = survival_events.fname(npc)
+            set_prop(row[2], npc_idx, 'NpcId', nid)
+            z.nb.add(nid[1])
+        if hp is not None:
+            set_prop(row[2], md_idx, 'MaxHealthDifference', ('raw', 'Float', struct.pack('<f', hp)))
+        for n in names_in(row) + [new_row]: z.nb.add(n)
+        rows[(new_row, 0)] = row
+        dt['rows'].append(((new_row, 0), row))
+        extra.append((new_row, (table or NPC_TABLE_STOCK).rsplit('/', 1)[1], npc))
+    print('  escort / decoy rows: ' + ', '.join(f'{r} ({(t or NPC_TABLE_STOCK).rsplit("_", 1)[-1]} {s_} -> {n or s_}'
+                                                + (f', +{h:.0f} HP' if h else '') + ')'
+                                                for r, t, s_, n, h in survival_events.ESCORT_DECOY_MISSION_ROWS))
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveNpcMissionDataTable')
     assert chk['rows'] == dt['rows']
@@ -1569,7 +1386,10 @@ def build_npc_table():
 # same file); the package is a copy of a stock LA_ script package with our source and our own module name.
 AI_SRC = os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'ai')
 LUA_TEMPLATE = '/Game/LuaSource/Chronicle/AI/LA_PursueTarget_0011'
-LUA_SCRIPTS = ['LA_SV_ProbePursue', 'LA_SV_MoveAway', 'LA_SV_TailChase', 'LA_SV_ProvokeNear', 'LA_SV_Escape']
+LUA_SCRIPTS = ['LA_SV_ProbePursue', 'LA_SV_MoveAway', 'LA_SV_TailChase', 'LA_SV_ProvokeNear', 'LA_SV_Escape',
+               # the fighter roles' (behaviour roadmap P1, Scripts/sv_config.lua CFG.behaviour_sets): Lancer, Wolf, Skirmisher
+               'LA_SV_LancerPass', 'LA_SV_LancerZoom', 'LA_SV_LancerBreak', 'LA_SV_WolfDrag', 'LA_SV_WolfStrike',
+               'LA_SV_SkirmPass', 'LA_SV_SkirmExtend']
 
 
 # The game's Lua require() (AceCombat8.exe 0x144eb8c00) loads module "A.B.C" with StaticLoadObject from
@@ -1580,6 +1400,13 @@ LUA_DIR = '/Game/LuaSource/SurvivalMode/AI/'
 
 
 def build_lua_scripts():
+    # every script a behaviour set names (Scripts/sv_config.lua CFG.behaviour_sets) is packed: a set naming one that isn't
+    # is never made (setsSetup: "not made (script X not in the container)") and its flights fly the fallback set
+    import re
+    lua = survival_events.runtime_lua()
+    sets = lua[lua.index('behaviour_sets = {'):lua.index('-- reactions (user, 2026-10-22')]
+    named = set(re.findall(r'"(LA_SV_\w+)"', sets))
+    assert named and named <= set(LUA_SCRIPTS), f'behaviour sets name scripts not packed: {sorted(named - set(LUA_SCRIPTS))}'
     for name in LUA_SCRIPTS:
         code = open(os.path.join(AI_SRC, name + '.lua'), encoding='utf-8').read().replace('\r\n', '\n').replace('\n', '\r\n')
         new_path = LUA_DIR + name
@@ -1596,6 +1423,17 @@ def build_lua_scripts():
         save(z, new_path)
 
 
+# ---------------------------------------------------------------- the parts (this file's docstring)
+# Each imports every name above (from build_survival import *) and comes back here whole. A part already loaded on its
+# own would come back empty: import build_survival, never a part.
+for _part in ('build_survival_rows', 'build_survival_units', 'build_survival_world'):
+    assert _part not in sys.modules, f'import build_survival (it loads its parts), not {_part} on its own'
+del _part
+from build_survival_rows import *    # noqa: E402,F401,F403  the radio table, the mission / menu rows, the model rows
+from build_survival_units import *   # noqa: E402,F401,F403  the level, MC, phases; unit / path helpers; older specials
+from build_survival_world import *   # noqa: E402,F401,F403  the newer rounds' units; the world data, flags and events
+
+
 if __name__ == '__main__':
     build_radio()
     build_alicorn_rows()
@@ -1603,6 +1441,15 @@ if __name__ == '__main__':
     build_npc_table()
     build_shop_rows()
     build_rows()
+    build_zfa_laser()                    # (2026-11-07: the ZFA-44s' anti-missile laser's arm and its fire-control row)
+    check_no_certain_kill()              # (0.73.77, G1: after the NPC tables it reads are saved)
+    try:
+        build_menu_pages()
+    except Exception:                    # (the rest of the build still comes: the main menu keeps the flat rows)
+        import traceback
+        traceback.print_exc()
+        print('  menu pages: FAILED (above); no pages this build, the main menu keeps the flat rows')
+        drop_menu_pages()
     build_pl()
     build_mc()
     build_wd_global(); build_wd_phase(1); build_wd_phase(2)
@@ -1610,4 +1457,7 @@ if __name__ == '__main__':
     build_ep('global', ef=True)
     build_ep('phase01')
     build_ep('phase02')
+    check_fishing_build()                # (2026-11-06: GONE FISHIN' and THE FESTIVAL read back from the saved packages)
+    check_escort_decoy_build()           # (2026-11-06: THE ESCORT, its cargo ships and THE DECOY read back the same way)
+    check_zfa_laser_build()              # (2026-11-07: the ZFA-44s' laser: its arm, rows and interception count)
     print('player start', tuple(round(x) for x in START), 'yaw', RUNWAY_YAW)

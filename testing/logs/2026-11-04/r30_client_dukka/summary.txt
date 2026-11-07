@@ -1,0 +1,7 @@
+Only things of note from the 30 rounds we played on my end were as follows:
+
+- Standard LCAC Special (airfield capture attempt) was bugged, LCACs spawned partially submerged (targeting was obscured unless attacked from a high enough angle) and were not moving towards land
+
+- General desync/latency started to become noticeable from around round 23 or 24 until the end
+
+- Alyssa showed up was a blue ally instead of green player target box (assume this is relate to/a sanity check to them flying a modded plane in the Falken)

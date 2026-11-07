@@ -35,13 +35,13 @@ Mechanisms to confirm:
 ## Enemies (sv_rounds.lua, sv_spawn.lua, sv_ai.lua)
 | change | how | log lines |
 |---|---|---|
-| waves: at most 14 / 18 / 22 aircraft up (Casual / Standard / Ace), next wave at 4 left or 150 s | makeWaves, roundsTick state "wave" | `round N: ... N waves (18 + 12 aircraft)`, `round N: wave 2 of 2` |
-| max_aircraft 30 (was 60); from round 15 enemy health x(1 + 4 %/round) <= x2, promotion +3 %/round <= 60 % | enemyLate / scaleHealth, TIER.promoteChance | `late: round N enemies' health x...` |
+| waves: at most 14 / 18 / 22 aircraft up (Casual / Standard / Ace), next wave at 4 left or 150 s; from round 26 +1 a round up to 20 / 26 / 30 (behaviour roadmap P8, BEHAVIOUR_DIRECTOR.md unit 3) | makeWaves, roundsTick state "wave", TIER.maxUp | `round N: ... N waves (18 + 12 aircraft); cap C, up to U at once`, `round N: wave 2 of 2` |
+| max_aircraft 30 (was 60), from round 26 +3 a round up to 60 by round 35 (P8: TIER.roundCap / roundBudget, the attack throttle's preset C from 26, D from 31); from round 15 enemy health x(1 + 4.5 %/round) <= x1.5 (P8; was 4 % and x2), promotion +3 %/round <= 60 % | enemyLate / scaleHealth, TIER.promoteChance, startRound's roundPressure | `late: round N enemies' health x...`, `pressure: round N: preset C (was B)` |
 | raids: max 12 bombers, 50 % share, one direction (callout + HUD row) | raidBearing / spawnPoint(compass) | `bomber raid: ... from the NORTH-EAST (bearing 41)` |
 | escorts: half a raid's fighter flights hold over the airfield (area 8 km, air-only, PlayerFirst) | RE_SV_Escort_NN | `events: RE_SV_Escort_NN (...) fired` |
 | strike package: from round 6, 35 % of normal rounds, a 2-ship at the airfield | startRound | `a strike package (...) goes for the airfield` |
 | hunters: at least one flight a round on the allied aircraft while they fly | ALLY.tick | `hunts the allied aircraft` |
-| jammer: from round 8, 50 % of normal rounds, an EA-18G leads a flight; enemies within 6 km +1 PilotRank; pays x3 | JAM.tick | `jammer: ...` |
+| jammer: from round 8, 50 % of normal rounds, an EA-18G leads a flight; enemies within 6 km +1 PilotRank; pays x3; its ECM pod fired every 14 s (0.72.1: "the EA-18G never activated it's ECM"; RE_SV_JamEcm_NN, slot 4 as AB.L..IN's) | JAM.tick | `jammer: ...`, `jammer: its ECM pod on (RE_SV_JamEcm_NN fired)` |
 | more airframes from their round: F-2A 4, F-15C 6, Gripen 7, F-35C 9, Su-35 10, Rafale / Typhoon 12, Su-57 16, F-22A 18; unseen weighting; signature types from Mercenary | pickAircraft (POOL_EXTRA rows) | `round N: ERA_... as f15c_common_sv (pool, ...)` |
 | specials: Ladons / Alicorn / AB.L..IN bring escorts from round 12; more health a round (MINDRIPPER's new) | startRound, ANOM.tick | `the alicorn brings N escorts` |
 | airfield: hit_damage 3, bomb_damage 10 (were 4, 12) | CFG | |

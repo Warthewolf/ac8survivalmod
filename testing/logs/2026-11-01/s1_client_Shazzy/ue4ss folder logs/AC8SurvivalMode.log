@@ -1,0 +1,500 @@
+12:09:04 AC8 Survival Mode runtime 0.26.0
+12:09:05 UE4SS calls mod slot 3
+12:09:05 UE4SS calls mod slot 15
+12:09:05 UE4SS calls mod slot 13
+12:09:12 game functions (7782 ms): base 147A8B180, main decide 147B4FF50, difficulty decide 147B10E20, next 146ECA6E0, goto 147A88410, set difficulty 147B91AC0, transition 147A88370, text 1473B1750
+12:09:12 spawn functions: spawn unit 147E119D0, unregister unit 147E1DAC0, unit check 147E1DE00, destroy actor 143FE0160
+12:09:12 ammo functions: node execute 147403FB0, flare lambda 14741F3E0, weapons lambda 147404460, free restock 147405BC0
+12:09:12 game Lua: GetGameLuaState 144ED8940
+12:09:12 music and events: BGM node 1473DF1F0, remote-event node 1473F86B0, pause list 147B575D0, landing menu decide 147B02960
+12:09:12 music player: track clock tick 147B28560, next track 147B3A230
+12:09:12 flight input: BuildFlightInput 147D689B0
+12:09:12 coop: AI plane teleport 147D1E390, inner 147D1E560
+12:09:12 coop: player plane: spawn 1471E5500, world spawn 14465A120, teleport 147D4F6B0, inner 147D4F6F0; remote spawn sites: possess 1471CC614, network object 1471CC63B, role 1471CC778, dummy class 1471CC56D, loadout 1471CC8F7, loadout bytes 1471CC9A3, finish 1471CCF8A
+12:09:12 text lookup: hooked at 1473B1750
+12:09:12 pause menu list: hooked at 147B575D0
+12:09:12 landing menu decide: hooked at 147B02960
+12:09:12 music player clock: hooked at 147B28560
+12:09:13 music player next track: hooked at 147B3A230
+12:09:13 flight input: hooked at 147D689B0
+12:09:13 menu tables: main menu 14C82CF38, difficulty page 14C7F5C20
+12:09:13 menu transition: hooked at 147A88370
+12:09:13 main menu decide: vtable slot 14C82D6A8, next 147B4FF50
+12:09:13 difficulty decide: vtable slot 14C7F6390, next 147B10E20
+12:09:13 difficulty next menu: vtable slot 14C7F64A8, next 146ECA6E0
+12:09:13 menu hooks installed (mission 9101, hangar menu F)
+12:09:14 UE4SS calls mod slot 2
+12:09:14 UE4SS calls mod slot 4
+12:09:14 UE4SS calls mod slot 5
+12:09:14 UE4SS calls mod slot 7
+12:09:14 UE4SS calls mod slot 6
+12:09:14 UE4SS: Lua mod AC8SurvivalMode started (mod slot 6)
+12:09:14 Lua bridge: SV_Version, SV_MenuChoice, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_AmmoMax, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_MusicHold, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_PlayerTarget, SV_SetText, SV_ShopRequest, SV_MenuSetting, SV_BGMNames, SV_CoopOpen, SV_CoopClose, SV_CoopInfo, SV_CoopSend, SV_CoopRecv, SV_CoopMe, SV_CoopPeer, SV_CoopTrack, SV_CoopBind, SV_CoopPeerAt, SV_CoopReset, SV_CoopSpawnPP, SV_CoopKillPP, SV_CoopFollow, SV_CoopPPRole, SV_MemMB, SV_SndLoad, SV_SndPlay, SV_SndSet, SV_SndStop, SV_SndMaster, SV_Post, SV_PostResult, SV_PostReply, SV_SteamName registered
+12:09:14 UE4SS calls mod slot 8
+12:09:14 UE4SS: Lua mod AC8SurvivalMode started (mod slot 8)
+12:09:14 Lua bridge: SV_Version, SV_MenuChoice, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Ammo, SV_SetAmmo, SV_AmmoMax, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_MusicHold, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_PlayerTarget, SV_SetText, SV_ShopRequest, SV_MenuSetting, SV_BGMNames, SV_CoopOpen, SV_CoopClose, SV_CoopInfo, SV_CoopSend, SV_CoopRecv, SV_CoopMe, SV_CoopPeer, SV_CoopTrack, SV_CoopBind, SV_CoopPeerAt, SV_CoopReset, SV_CoopSpawnPP, SV_CoopKillPP, SV_CoopFollow, SV_CoopPPRole, SV_MemMB, SV_SndLoad, SV_SndPlay, SV_SndSet, SV_SndStop, SV_SndMaster, SV_Post, SV_PostResult, SV_PostReply, SV_SteamName registered
+12:09:14 UE4SS calls mod slot 1
+12:09:22 game Lua: Lua 5.3 API from the game's exports (pcallk 144E6D450), context slot 14DD0AE20
+12:10:14 main menu: setting SV_Set_Break picked
+12:10:48 main menu: Survival Co-op: Host chosen, opening the difficulty select (context mode 0)
+12:10:48 coop: open: Steam P2P, host, up to 24 players, partner "auto", port 27777, interpolation 120 ms, mod 0.70.6-coop.11; teleport functions 147D1E390 / 147D1E560
+12:10:48 coop: looking for players: 1 Steam friend(s) to try
+12:10:50 menu transition 7 while Survival is chosen, but no difficulty page was found; passed on
+12:10:51 difficulty page: next menu asked while Survival is chosen: going to the hangar instead of Free Mission
+12:10:51 start: keeping the difficulty the game's page applied (fallback reading would be Casual)
+12:10:51 start (next menu): difficulty set by the game (unchanged), context mode 0 -> 0, mission -1 -> 9101
+12:10:51 start: going to the hangar (menu F)
+12:11:45 main menu: Survival Co-op: Host chosen, opening the difficulty select (context mode 0)
+12:11:48 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:11:48 menu transition 7 while Survival is chosen, but no difficulty page was found; passed on
+12:11:49 difficulty page: next menu asked while Survival is chosen: going to the hangar instead of Free Mission
+12:11:49 start: keeping the difficulty the game's page applied (fallback reading would be Casual)
+12:11:49 start (next menu): difficulty set by the game (unchanged), context mode 0 -> 0, mission 9101 -> 9101
+12:11:49 start: going to the hangar (menu F)
+12:12:48 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:13:48 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:14:48 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:15:48 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:16:37 coop: looking for players: 0 Steam friend(s) to try
+12:16:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:17:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:17:56 coop: looking for players: 1 Steam friend(s) to try
+12:18:37 coop: joined: mk_zerojon (joiner, mod 0.70.6-coop.11) as player 2
+12:18:37 coop: player 2: link up
+12:18:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:18:49 coop:   player 2 mk_zerojon: linked, rtt 492 ms; sent 20 packets (1 KB), got 5 (0 KB), 0 resent; their plane 0 moves
+12:19:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:19:49 coop:   player 2 mk_zerojon: linked, rtt 258 ms; sent 77 packets (8 KB), got 5 (0 KB), 0 resent; their plane 0 moves
+12:20:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:20:49 coop:   player 2 mk_zerojon: linked, rtt 251 ms; sent 136 packets (15 KB), got 5 (0 KB), 0 resent; their plane 0 moves
+12:21:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:21:49 coop:   player 2 mk_zerojon: linked, rtt 249 ms; sent 195 packets (22 KB), got 5 (0 KB), 0 resent; their plane 0 moves
+12:22:30 music layout: game instance +1D8 (class fn 146E428D0), BGM manager +908 (flag +1D5), controller +170, play 1478BDAD0; controller ids +138 / +128, status +148
+12:22:30 spawner layout: unit desc B0 bytes (UniqueID +0, Name +4, AI list +18, point +58, rotation +70), AI desc 130 bytes (point +38, rotation +50, NPC id +14), phase world data +0, phase units +178/+180, unit id interface +2A0 slot +20, vector 24 bytes, LivePhase.ManipulableObjects +178
+12:22:30 spawner: LiveUnitSpawner 73DC21C0, global phase 73DC2508, world data 6505272C0
+12:22:30 coop: offsets: RootComponent +1A0, RelativeLocation +128, RelativeRotation +140, HealthInternal +DA8, MaxHealth +3B4
+12:22:31 events layout: event vtable 14CB68CE0 (type 4F, check slot +48), manager fn 1470D2460, dispatch 147421660, GMalloc 14E426090 (free +48)
+12:22:32 ammo layout: owner fn 147EDCD00, weapons +16A8, slots +2E8 (data +28, count +30, current +C, max +8, A0 bytes each), flares +2E0 (count +C4, max +27C, notify +B8, free restock +164), set fn 147F62B00, flare fn 147F77050
+12:22:45 units (round 1 start): 1 on the phase's list
+12:22:45   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:22:45 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (2835, 16403) m, 3966 m high, heading 302
+12:22:48 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (-5428, 8215) m, 2231 m high, heading 329
+12:22:49 coop: you are player 1; 4 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:22:49 coop:   player 2 mk_zerojon: linked, rtt 304 ms; sent 756 packets (54 KB), got 15 (0 KB), 0 resent; their plane 0 moves
+12:23:05 pause menu: the music player row shown, restart checkpoint and select difficulty hidden (Survival's mission)
+12:23:49 coop: you are player 1; 4 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:23:49 coop:   player 2 mk_zerojon: linked, rtt 217 ms; sent 3220 packets (221 KB), got 21 (0 KB), 0 resent; their plane 0 moves
+12:23:51 coop: looking for players: 2 Steam friend(s) to try
+12:24:01 coop: player 2: link lost (nothing for 6 s)
+12:24:02 coop: joined: Zakuraido (joiner, mod 0.70.6-coop.11) as player 3
+12:24:02 coop: player 3: link up
+12:24:05 coop: player 2: link up
+12:24:05 spawn SV_Unit_CoopPeerC: up, 1 aircraft, at (16096, -4363) m, 1500 m high, heading -33
+12:24:06 coop: player 3's plane is 4D4E2020
+12:24:06 coop: player 3's plane is 4D4E2020
+12:24:06 spawn SV_Unit_CoopPeerB: up, 1 aircraft, at (16096, -4363) m, 1500 m high, heading -33
+12:24:07 coop: player 2's plane is 1422F2B560
+12:24:07 coop: player 2's plane is 1422F2B560
+12:24:42 units (round 1 clear): 5 on the phase's list
+12:24:42   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:24:42   #1: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:24:42   #2: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:24:42   #3: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:24:42   #4: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:24:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:24:49 coop:   player 2 mk_zerojon: linked, rtt 71 ms; sent 5660 packets (421 KB), got 1162 (71 KB), 40 resent; their plane 5926 moves
+12:24:49 coop:   player 3 Zakuraido: linked, rtt 21 ms; sent 1831 packets (159 KB), got 1180 (73 KB), 0 resent; their plane 6023 moves
+12:25:12 units (round 2 start): 5 on the phase's list
+12:25:12   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:25:12   #1: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:25:12   #2: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:25:12   #3: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:25:12   #4: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:25:12 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:25:12 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (-1242, -16736) m, 3255 m high, heading 35
+12:25:15 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:25:15 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (14295, 14536) m, 3988 m high, heading 275
+12:25:19 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (5261, -19202) m, 2728 m high, heading 53
+12:25:22 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (20440, -25815) m, 3329 m high, heading 101
+12:25:49 coop: you are player 1; 6 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:25:49 coop:   player 2 mk_zerojon: linked, rtt 65 ms; sent 7844 packets (657 KB), got 2771 (170 KB), 40 resent; their plane 14210 moves
+12:25:49 coop:   player 3 Zakuraido: linked, rtt 18 ms; sent 4014 packets (396 KB), got 2728 (169 KB), 0 resent; their plane 14307 moves
+12:26:29 units (round 2 clear): 7 on the phase's list
+12:26:29   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:26:29   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:26:29   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:26:29   #3: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:26:29   #4: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:26:29   #5: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:26:29   #6: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:26:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:26:49 coop:   player 2 mk_zerojon: linked, rtt 61 ms; sent 10038 packets (856 KB), got 4360 (269 KB), 40 resent; their plane 22526 moves
+12:26:49 coop:   player 3 Zakuraido: linked, rtt 111 ms; sent 6206 packets (596 KB), got 4295 (266 KB), 0 resent; their plane 22623 moves
+12:26:59 units (round 3 start): 7 on the phase's list
+12:26:59   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:26:59   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:26:59   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:26:59   #3: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:26:59   #4: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:26:59   #5: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:26:59   #6: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:27:08 landing menu: decide on 18DD48C080, row '20'
+12:27:10 landing menu: decide on 18BC9E6140, row 'SV_Buy_Missiles'
+12:27:10 shop: SV_Buy_Missiles picked on the landing menu
+12:27:11 landing menu: decide on 18BC9E6140, row 'SV_Buy_Missiles'
+12:27:11 shop: SV_Buy_Missiles picked on the landing menu
+12:27:11 landing menu: decide on 18BC9E6140, row 'SV_Buy_Missiles'
+12:27:11 shop: SV_Buy_Missiles picked on the landing menu
+12:27:12 landing menu: decide on 18BC9E6140, row 'SV_Buy_Missiles'
+12:27:12 shop: SV_Buy_Missiles picked on the landing menu
+12:27:13 landing menu: decide on 18BC9E6140, row '-1'
+12:27:32 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:27:32 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (13464, 14424) m, 2122 m high, heading 277
+12:27:35 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:27:35 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (19662, -28991) m, 3998 m high, heading 98
+12:27:38 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:27:38 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (2487, 15760) m, 4118 m high, heading 304
+12:27:41 spawn EA_Unit_01_Air1: up, 6 aircraft, at (1799, 21910) m, 1813 m high, heading 298
+12:27:44 spawn EA_Unit_01_Air0: up, 2 aircraft, at (-10382, 13064) m, 520 m high, heading 326
+12:27:49 coop: you are player 1; 10 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:27:49 coop:   player 2 mk_zerojon: linked, rtt 62 ms; sent 11866 packets (1038 KB), got 5969 (368 KB), 40 resent; their plane 28888 moves
+12:27:49 coop:   player 3 Zakuraido: linked, rtt 25 ms; sent 8035 packets (782 KB), got 5747 (356 KB), 0 resent; their plane 28985 moves
+12:28:49 coop: you are player 1; 3 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:28:49 coop:   player 2 mk_zerojon: linked, rtt 72 ms; sent 14331 packets (1320 KB), got 7567 (467 KB), 40 resent; their plane 37128 moves
+12:28:49 coop:   player 3 Zakuraido: linked, rtt 24 ms; sent 10497 packets (1065 KB), got 7374 (456 KB), 0 resent; their plane 37225 moves
+12:29:26 units (round 3 clear): 9 on the phase's list
+12:29:26   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:29:26   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:29:26   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:29:26   #3: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:29:26   #4: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:29:26   #5: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:29:26   #6: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:29:26   #7: EA_Unit_01_Air1 (id 69CD07C6), 0 of 6 aircraft alive
+12:29:26   #8: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+12:29:40 landing menu: decide on 18DA82F020, row '20'
+12:29:42 landing menu: decide on 18DB05F020, row 'SV_Buy_Special'
+12:29:42 shop: SV_Buy_Special picked on the landing menu
+12:29:43 landing menu: decide on 18DB05F020, row 'SV_Buy_Missiles'
+12:29:43 shop: SV_Buy_Missiles picked on the landing menu
+12:29:44 landing menu: decide on 18DB05F020, row 'SV_Buy_Missiles'
+12:29:44 shop: SV_Buy_Missiles picked on the landing menu
+12:29:45 landing menu: decide on 18DB05F020, row 'SV_Buy_Rearm'
+12:29:45 shop: SV_Buy_Rearm picked on the landing menu
+12:29:46 landing menu: decide on 18DB05F020, row '-1'
+12:29:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:29:49 coop:   player 2 mk_zerojon: linked, rtt 63 ms; sent 16419 packets (1492 KB), got 9090 (562 KB), 40 resent; their plane 43884 moves
+12:29:49 coop:   player 3 Zakuraido: linked, rtt 33 ms; sent 12587 packets (1238 KB), got 8901 (551 KB), 0 resent; their plane 43981 moves
+12:29:56 units (round 4 start): 9 on the phase's list
+12:29:56   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:29:56   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:29:56   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:29:56   #3: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:29:56   #4: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:29:56   #5: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:29:56   #6: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:29:56   #7: EA_Unit_01_Air1 (id 69CD07C6), 0 of 6 aircraft alive
+12:29:56   #8: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+12:30:06 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:30:06 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (28201, 11105) m, 4381 m high, heading 231
+12:30:09 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:30:09 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (1835, -24442) m, 2369 m high, heading 54
+12:30:12 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (-3425, -3105) m, 3449 m high, heading 356
+12:30:15 spawn ERA_Unit_03_Dep_Air1: up, 4 aircraft, at (-4524, 7560) m, 2257 m high, heading 329
+12:30:49 coop: you are player 1; 6 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:30:49 coop:   player 2 mk_zerojon: linked, rtt 90 ms; sent 18648 packets (1758 KB), got 10738 (664 KB), 40 resent; their plane 52120 moves
+12:30:49 coop:   player 3 Zakuraido: linked, rtt 31 ms; sent 14817 packets (1505 KB), got 10508 (650 KB), 0 resent; their plane 52217 moves
+12:31:12 units (round 4 clear): 11 on the phase's list
+12:31:12   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:31:12   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:31:12   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:31:12   #3: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:31:12   #4: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:31:12   #5: EA_Unit_01_Air1 (id 69CD07C6), 0 of 6 aircraft alive
+12:31:12   #6: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+12:31:12   #7: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:31:12   #8: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:31:12   #9: ERA_Unit_01_Dep_Air1 (id D9F5047F), 0 of 4 aircraft alive
+12:31:12   #10: ERA_Unit_03_Dep_Air1 (id 38EEAB78), 0 of 4 aircraft alive
+12:31:42 units (round 5 start): 11 on the phase's list
+12:31:42   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:31:42   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:31:42   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:31:42   #3: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:31:42   #4: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:31:42   #5: EA_Unit_01_Air1 (id 69CD07C6), 0 of 6 aircraft alive
+12:31:42   #6: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+12:31:42   #7: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:31:42   #8: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:31:42   #9: ERA_Unit_01_Dep_Air1 (id D9F5047F), 0 of 4 aircraft alive
+12:31:42   #10: ERA_Unit_03_Dep_Air1 (id 38EEAB78), 0 of 4 aircraft alive
+12:31:42 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:31:42 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (10800, 12859) m, 3534 m high, heading 287
+12:31:45 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:31:45 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (15566, -22996) m, 3430 m high, heading 88
+12:31:48 spawn ERA_Unit_03_Dep_Air1: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:31:48 spawn ERA_Unit_03_Dep_Air1: up, 4 aircraft, at (11344, -27737) m, 3202 m high, heading 78
+12:31:49 coop: you are player 1; 10 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:31:49 coop:   player 2 mk_zerojon: linked, rtt 67 ms; sent 20710 packets (1954 KB), got 12324 (762 KB), 40 resent; their plane 60650 moves
+12:31:49 coop:   player 3 Zakuraido: linked, rtt 21 ms; sent 16884 packets (1704 KB), got 12050 (746 KB), 0 resent; their plane 60747 moves
+12:31:51 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:31:51 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (25353, 18371) m, 3993 m high, heading 247
+12:31:54 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:31:54 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (103, 9630) m, 2370 m high, heading 318
+12:31:57 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:31:57 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (11898, -24829) m, 3244 m high, heading 78
+12:32:49 coop: you are player 1; 12 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:32:49 coop:   player 2 mk_zerojon: linked, rtt 70 ms; sent 23209 packets (2371 KB), got 13937 (862 KB), 40 resent; their plane 69364 moves
+12:32:49 coop:   player 3 Zakuraido: linked, rtt 24 ms; sent 19383 packets (2122 KB), got 13589 (841 KB), 0 resent; their plane 69461 moves
+12:33:49 coop: you are player 1; 3 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:33:49 coop:   player 2 mk_zerojon: linked, rtt 62 ms; sent 25663 packets (2694 KB), got 15527 (960 KB), 40 resent; their plane 77532 moves
+12:33:49 coop:   player 3 Zakuraido: linked, rtt 21 ms; sent 21836 packets (2445 KB), got 15205 (941 KB), 0 resent; their plane 77629 moves
+12:34:02 units (round 5 clear): 11 on the phase's list
+12:34:02   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:34:02   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:34:02   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:34:02   #3: EA_Unit_01_Air1 (id 69CD07C6), 0 of 6 aircraft alive
+12:34:02   #4: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+12:34:02   #5: ERA_Unit_01_Dep_Air1 (id D9F5047F), 0 of 4 aircraft alive
+12:34:02   #6: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:34:02   #7: ERA_Unit_03_Dep_Air1 (id 38EEAB78), 0 of 4 aircraft alive
+12:34:02   #8: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:34:02   #9: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:34:02   #10: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:34:32 units (round 6 start): 11 on the phase's list
+12:34:32   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:34:32   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:34:32   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:34:32   #3: EA_Unit_01_Air1 (id 69CD07C6), 0 of 6 aircraft alive
+12:34:32   #4: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+12:34:32   #5: ERA_Unit_01_Dep_Air1 (id D9F5047F), 0 of 4 aircraft alive
+12:34:32   #6: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:34:32   #7: ERA_Unit_03_Dep_Air1 (id 38EEAB78), 0 of 4 aircraft alive
+12:34:32   #8: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:34:32   #9: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:34:32   #10: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:34:33 landing menu: decide on 18DD7C4180, row '20'
+12:34:34 landing menu: decide on 699A231A0, row '23'
+12:34:35 landing menu: decide on 18DB25C080, row '24'
+12:34:36 landing menu: decide on 189F357120, row '21'
+12:34:38 landing menu: decide on 18B7D121C0, row 'SV_Buy_RepairAircraft'
+12:34:38 shop: SV_Buy_RepairAircraft picked on the landing menu
+12:34:39 landing menu: decide on 18B7D121C0, row '-1'
+12:34:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:34:49 coop:   player 2 mk_zerojon: linked, rtt 72 ms; sent 27402 packets (2850 KB), got 17103 (1058 KB), 40 resent; their plane 84205 moves
+12:34:49 coop:   player 3 Zakuraido: linked, rtt 22 ms; sent 23574 packets (2603 KB), got 16713 (1035 KB), 0 resent; their plane 84302 moves
+12:34:58 spawn SV_Unit_PadDummies: up, 9 aircraft, at (-13253, 615) m, 64 m high, heading 0
+12:34:58 spawn AA_Unit_01_Ground0: up, 11 aircraft, at (-13253, 615) m, 64 m high, heading 0
+12:34:58 spawn SV_Unit_Shuttle: up, 1 aircraft, at (-13253, 615) m, 64 m high, heading 0
+12:35:01 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:35:01 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (-2041, -3845) m, 4122 m high, heading 358
+12:35:04 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:35:04 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (27225, 11286) m, 2220 m high, heading 234
+12:35:07 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:35:07 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (19170, 13935) m, 2314 m high, heading 260
+12:35:10 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:35:10 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (2620, -20504) m, 2276 m high, heading 50
+12:35:13 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:35:13 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (-1642, -490) m, 3337 m high, heading 347
+12:35:16 spawn EA_Unit_01_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:35:16 spawn EA_Unit_01_Air0: up, 2 aircraft, at (526, 22100) m, 642 m high, heading 300
+12:35:19 spawn ERB_Unit_01_Air2: up, 4 aircraft, at (8222, -36112) m, 836 m high, heading 76
+12:35:49 coop: you are player 1; 11 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:35:49 coop:   player 2 mk_zerojon: linked, rtt 64 ms; sent 29763 packets (3178 KB), got 18783 (1159 KB), 41 resent; their plane 92067 moves
+12:35:49 coop:   player 3 Zakuraido: linked, rtt 27 ms; sent 25938 packets (2932 KB), got 18368 (1134 KB), 0 resent; their plane 92164 moves
+12:36:49 coop: you are player 1; 4 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:36:49 coop:   player 2 mk_zerojon: linked, rtt 69 ms; sent 32277 packets (3474 KB), got 20446 (1260 KB), 41 resent; their plane 100028 moves
+12:36:49 coop:   player 3 Zakuraido: linked, rtt 21 ms; sent 28451 packets (3228 KB), got 20064 (1237 KB), 0 resent; their plane 100125 moves
+12:37:29 units (round 6 clear): 15 on the phase's list
+12:37:29   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:37:29   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:37:29   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:37:29   #3: EA_Unit_01_Air1 (id 69CD07C6), 0 of 6 aircraft alive
+12:37:29   #4: ERA_Unit_03_Dep_Air1 (id 38EEAB78), 0 of 4 aircraft alive
+12:37:29   #5: SV_Unit_PadDummies (id 2B504D19), 9 of 9 aircraft alive
+12:37:29   #6: AA_Unit_01_Ground0 (id 5892B2A4), 10 of 11 aircraft alive
+12:37:29   #7: SV_Unit_Shuttle (id D96B9F03), 1 of 1 aircraft alive
+12:37:29   #8: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:37:29   #9: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:37:29   #10: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:37:29   #11: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:37:29   #12: ERA_Unit_01_Dep_Air1 (id D9F5047F), 0 of 4 aircraft alive
+12:37:29   #13: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+12:37:29   #14: ERB_Unit_01_Air2 (id 9B60CB89), 0 of 4 aircraft alive
+12:37:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:37:49 coop:   player 2 mk_zerojon: linked, rtt 67 ms; sent 34447 packets (3659 KB), got 22021 (1355 KB), 41 resent; their plane 107278 moves
+12:37:49 coop:   player 3 Zakuraido: linked, rtt 22 ms; sent 30622 packets (3412 KB), got 21660 (1333 KB), 0 resent; their plane 107375 moves
+12:37:59 units (round 7 start): 15 on the phase's list
+12:37:59   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:37:59   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:37:59   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:37:59   #3: EA_Unit_01_Air1 (id 69CD07C6), 0 of 6 aircraft alive
+12:37:59   #4: ERA_Unit_03_Dep_Air1 (id 38EEAB78), 0 of 4 aircraft alive
+12:37:59   #5: SV_Unit_PadDummies (id 2B504D19), 9 of 9 aircraft alive
+12:37:59   #6: AA_Unit_01_Ground0 (id 5892B2A4), 10 of 11 aircraft alive
+12:37:59   #7: SV_Unit_Shuttle (id D96B9F03), 1 of 1 aircraft alive
+12:37:59   #8: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:37:59   #9: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:37:59   #10: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:37:59   #11: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:37:59   #12: ERA_Unit_01_Dep_Air1 (id D9F5047F), 0 of 4 aircraft alive
+12:37:59   #13: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+12:37:59   #14: ERB_Unit_01_Air2 (id 9B60CB89), 0 of 4 aircraft alive
+12:37:59 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:37:59 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (17966, 15281) m, 3119 m high, heading 264
+12:38:02 spawn ERA_Unit_03_Dep_Air1: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:38:02 spawn ERA_Unit_03_Dep_Air1: up, 4 aircraft, at (23103, 15332) m, 3745 m high, heading 250
+12:38:05 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:38:05 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (14541, -23422) m, 2621 m high, heading 85
+12:38:08 spawn ERA_Unit_06_Dep_Air1: up, 4 aircraft, at (7013, -23940) m, 4174 m high, heading 65
+12:38:11 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:38:11 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (19761, -24085) m, 2992 m high, heading 100
+12:38:14 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:38:14 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (-3469, -7776) m, 2757 m high, heading 9
+12:38:32 landing menu: decide on 2BBAAC080, row '20'
+12:38:33 landing menu: decide on 1736EFE830, row 'SV_Buy_Rearm'
+12:38:33 shop: SV_Buy_Rearm picked on the landing menu
+12:38:34 landing menu: decide on 1736EFE830, row '23'
+12:38:35 landing menu: decide on 189F3631A0, row 'SV_Buy_UpAirframe'
+12:38:35 shop: SV_Buy_UpAirframe picked on the landing menu
+12:38:36 landing menu: decide on 189F3631A0, row 'SV_Buy_UpGun'
+12:38:36 shop: SV_Buy_UpGun picked on the landing menu
+12:38:37 landing menu: decide on 189F3631A0, row '24'
+12:38:39 landing menu: decide on 18B7D18100, row '21'
+12:38:41 landing menu: decide on 18DB37C080, row 'SV_Buy_AAGun'
+12:38:41 shop: SV_Buy_AAGun picked on the landing menu
+12:38:42 spawn SV_Unit_AAGun_A: up, 1 aircraft, at (16096, -4363) m, 5 m high, heading 0
+12:38:43 landing menu: decide on 18DB37C080, row '-1'
+12:38:49 coop: you are player 1; 16 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:38:49 coop:   player 2 mk_zerojon: linked, rtt 74 ms; sent 36647 packets (4013 KB), got 23584 (1450 KB), 41 resent; their plane 113455 moves
+12:38:49 coop:   player 3 Zakuraido: linked, rtt 41 ms; sent 32824 packets (3764 KB), got 23310 (1434 KB), 0 resent; their plane 113552 moves
+12:39:00 spawn EA_Unit_01_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:39:00 spawn EA_Unit_01_Air0: up, 2 aircraft, at (-13615, -22656) m, 669 m high, heading 31
+12:39:49 coop: you are player 1; 8 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:39:49 coop:   player 2 mk_zerojon: linked, rtt 59 ms; sent 39104 packets (4404 KB), got 25076 (1543 KB), 41 resent; their plane 121786 moves
+12:39:49 coop:   player 3 Zakuraido: linked, rtt 22 ms; sent 35286 packets (4149 KB), got 24941 (1535 KB), 0 resent; their plane 121883 moves
+12:40:49 units (round 7 clear): 17 on the phase's list
+12:40:49   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:40:49   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:40:49   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:40:49   #3: EA_Unit_01_Air1 (id 69CD07C6), 0 of 6 aircraft alive
+12:40:49   #4: SV_Unit_PadDummies (id 2B504D19), 9 of 9 aircraft alive
+12:40:49   #5: AA_Unit_01_Ground0 (id 5892B2A4), 10 of 11 aircraft alive
+12:40:49   #6: SV_Unit_Shuttle (id D96B9F03), 1 of 1 aircraft alive
+12:40:49   #7: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:40:49   #8: ERB_Unit_01_Air2 (id 9B60CB89), 0 of 4 aircraft alive
+12:40:49   #9: ERA_Unit_01_Dep_Air1 (id D9F5047F), 0 of 4 aircraft alive
+12:40:49   #10: ERA_Unit_03_Dep_Air1 (id 38EEAB78), 0 of 4 aircraft alive
+12:40:49   #11: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:40:49   #12: ERA_Unit_06_Dep_Air1 (id 754543C6), 0 of 4 aircraft alive
+12:40:49   #13: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:40:49   #14: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:40:49   #15: SV_Unit_AAGun_A (id B30D6DDE), 1 of 1 aircraft alive
+12:40:49   #16: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+12:40:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:40:49 coop:   player 2 mk_zerojon: linked, rtt 66 ms; sent 41553 packets (4630 KB), got 26657 (1640 KB), 41 resent; their plane 130431 moves
+12:40:49 coop:   player 3 Zakuraido: linked, rtt 27 ms; sent 37733 packets (4379 KB), got 26354 (1622 KB), 0 resent; their plane 130528 moves
+12:41:19 units (round 8 start): 17 on the phase's list
+12:41:19   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:41:19   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:41:19   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:41:19   #3: EA_Unit_01_Air1 (id 69CD07C6), 0 of 6 aircraft alive
+12:41:19   #4: SV_Unit_PadDummies (id 2B504D19), 9 of 9 aircraft alive
+12:41:19   #5: AA_Unit_01_Ground0 (id 5892B2A4), 10 of 11 aircraft alive
+12:41:19   #6: SV_Unit_Shuttle (id D96B9F03), 1 of 1 aircraft alive
+12:41:19   #7: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:41:19   #8: ERB_Unit_01_Air2 (id 9B60CB89), 0 of 4 aircraft alive
+12:41:19   #9: ERA_Unit_01_Dep_Air1 (id D9F5047F), 0 of 4 aircraft alive
+12:41:19   #10: ERA_Unit_03_Dep_Air1 (id 38EEAB78), 0 of 4 aircraft alive
+12:41:19   #11: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:41:19   #12: ERA_Unit_06_Dep_Air1 (id 754543C6), 0 of 4 aircraft alive
+12:41:19   #13: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:41:19   #14: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:41:19   #15: SV_Unit_AAGun_A (id B30D6DDE), 1 of 1 aircraft alive
+12:41:19   #16: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+12:41:19 spawn SV_Unit_Alicorn: up, 226 aircraft, at (-27700, -4400) m, 0 m high, heading 0
+12:41:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:41:49 coop:   player 2 mk_zerojon: linked, rtt 66 ms; sent 43083 packets (4774 KB), got 28186 (1736 KB), 41 resent; their plane 138450 moves
+12:41:49 coop:   player 3 Zakuraido: linked, rtt 29 ms; sent 39263 packets (4524 KB), got 27860 (1716 KB), 0 resent; their plane 138547 moves
+12:42:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:42:49 coop:   player 2 mk_zerojon: linked, rtt 59 ms; sent 44685 packets (4926 KB), got 29754 (1833 KB), 41 resent; their plane 147170 moves
+12:42:49 coop:   player 3 Zakuraido: linked, rtt 24 ms; sent 40865 packets (4676 KB), got 29417 (1813 KB), 0 resent; their plane 147267 moves
+12:43:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:43:49 coop:   player 2 mk_zerojon: linked, rtt 64 ms; sent 46380 packets (5084 KB), got 31288 (1929 KB), 41 resent; their plane 156527 moves
+12:43:49 coop:   player 3 Zakuraido: linked, rtt 26 ms; sent 42560 packets (4834 KB), got 30993 (1911 KB), 0 resent; their plane 156624 moves
+12:44:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:44:49 coop:   player 2 mk_zerojon: linked, rtt 81 ms; sent 48038 packets (5236 KB), got 32725 (2018 KB), 41 resent; their plane 165494 moves
+12:44:49 coop:   player 3 Zakuraido: linked, rtt 28 ms; sent 44228 packets (4986 KB), got 32446 (2001 KB), 0 resent; their plane 165591 moves
+12:45:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:45:49 coop:   player 2 mk_zerojon: linked, rtt 72 ms; sent 49677 packets (5389 KB), got 34164 (2107 KB), 41 resent; their plane 174387 moves
+12:45:49 coop:   player 3 Zakuraido: linked, rtt 27 ms; sent 45867 packets (5137 KB), got 33950 (2095 KB), 0 resent; their plane 174484 moves
+12:46:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:46:49 coop:   player 2 mk_zerojon: linked, rtt 68 ms; sent 51350 packets (5545 KB), got 35703 (2203 KB), 41 resent; their plane 183642 moves
+12:46:49 coop:   player 3 Zakuraido: linked, rtt 24 ms; sent 47540 packets (5295 KB), got 35499 (2191 KB), 0 resent; their plane 183739 moves
+12:47:11 coop: player 3: link lost (nothing for 6 s)
+12:47:18 coop: looking for players: 1 Steam friend(s) to try
+12:47:26 units (round 8 clear): 18 on the phase's list
+12:47:26   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:47:26   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:47:26   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:47:26   #3: EA_Unit_01_Air1 (id 69CD07C6), 0 of 6 aircraft alive
+12:47:26   #4: SV_Unit_PadDummies (id 2B504D19), 9 of 9 aircraft alive
+12:47:26   #5: AA_Unit_01_Ground0 (id 5892B2A4), 10 of 11 aircraft alive
+12:47:26   #6: SV_Unit_Shuttle (id D96B9F03), 1 of 1 aircraft alive
+12:47:26   #7: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:47:26   #8: ERB_Unit_01_Air2 (id 9B60CB89), 0 of 4 aircraft alive
+12:47:26   #9: ERA_Unit_01_Dep_Air1 (id D9F5047F), 0 of 4 aircraft alive
+12:47:26   #10: ERA_Unit_03_Dep_Air1 (id 38EEAB78), 0 of 4 aircraft alive
+12:47:26   #11: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:47:26   #12: ERA_Unit_06_Dep_Air1 (id 754543C6), 0 of 4 aircraft alive
+12:47:26   #13: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:47:26   #14: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:47:26   #15: SV_Unit_AAGun_A (id B30D6DDE), 1 of 1 aircraft alive
+12:47:26   #16: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+12:47:26   #17: SV_Unit_Alicorn (id 8985EF91), 214 of 226 aircraft alive
+12:47:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:47:49 coop:   player 2 mk_zerojon: linked, rtt 64 ms; sent 52989 packets (5649 KB), got 37193 (2296 KB), 41 resent; their plane 192176 moves
+12:47:49 coop:   player 3 Zakuraido: link lost, rtt 46 ms; sent 49965 packets (5476 KB), got 35848 (2213 KB), 776 resent; their plane 186686 moves
+12:47:56 units (round 9 start): 18 on the phase's list
+12:47:56   #0: AB_Unit_01_Ground2 (id 39043067), 4 of 4 aircraft alive
+12:47:56   #1: SV_Unit_CoopPeerC (id 4FEB116C), 1 of 1 aircraft alive
+12:47:56   #2: SV_Unit_CoopPeerB (id 38EC21FA), 1 of 1 aircraft alive
+12:47:56   #3: EA_Unit_01_Air1 (id 69CD07C6), 0 of 6 aircraft alive
+12:47:56   #4: SV_Unit_PadDummies (id 2B504D19), 9 of 9 aircraft alive
+12:47:56   #5: AA_Unit_01_Ground0 (id 5892B2A4), 10 of 11 aircraft alive
+12:47:56   #6: SV_Unit_Shuttle (id D96B9F03), 1 of 1 aircraft alive
+12:47:56   #7: ERA_Unit_08_Dep_Air0 (id 89745B02), 0 of 2 aircraft alive
+12:47:56   #8: ERB_Unit_01_Air2 (id 9B60CB89), 0 of 4 aircraft alive
+12:47:56   #9: ERA_Unit_01_Dep_Air1 (id D9F5047F), 0 of 4 aircraft alive
+12:47:56   #10: ERA_Unit_03_Dep_Air1 (id 38EEAB78), 0 of 4 aircraft alive
+12:47:56   #11: ERA_Unit_01_Dep_Air0 (id 7A881819), 0 of 2 aircraft alive
+12:47:56   #12: ERA_Unit_06_Dep_Air1 (id 754543C6), 0 of 4 aircraft alive
+12:47:56   #13: ERA_Unit_04_Dep_Air0 (id 3723F0A7), 0 of 2 aircraft alive
+12:47:56   #14: ERA_Unit_07_Dep_Air0 (id 44B81331), 0 of 2 aircraft alive
+12:47:56   #15: SV_Unit_AAGun_A (id B30D6DDE), 1 of 1 aircraft alive
+12:47:56   #16: EA_Unit_01_Air0 (id CAB01BA0), 0 of 2 aircraft alive
+12:47:56   #17: SV_Unit_Alicorn (id 8985EF91), 204 of 226 aircraft alive
+12:47:56 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:47:56 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (1393, 8065) m, 3750 m high, heading 319
+12:47:59 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:47:59 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (1004, -18710) m, 3663 m high, heading 43
+12:48:02 spawn ERA_Unit_06_Dep_Air1: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:48:02 spawn ERA_Unit_06_Dep_Air1: up, 4 aircraft, at (-5267, 663) m, 3117 m high, heading 346
+12:48:05 spawn EB_Unit_01_Air0: up, 6 aircraft, at (-8076, 12916) m, 723 m high, heading 324
+12:48:08 spawn EA_Unit_01_Air1: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:48:08 spawn EA_Unit_01_Air1: up, 8 aircraft, at (-10584, 11892) m, 2607 m high, heading 328
+12:48:11 spawn EA_Unit_01_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:48:11 spawn EA_Unit_01_Air0: up, 2 aircraft, at (-18813, 3094) m, 543 m high, heading 347
+12:48:35 coop: player 3 gone (nothing for 90 s); the slot is free
+12:48:49 coop: you are player 1; 18 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:48:49 coop:   player 2 mk_zerojon: linked, rtt 68 ms; sent 55296 packets (5995 KB), got 38667 (2386 KB), 41 resent; their plane 200015 moves
+12:49:49 coop: you are player 1; 12 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:49:49 coop:   player 2 mk_zerojon: linked, rtt 62 ms; sent 57754 packets (6344 KB), got 40134 (2477 KB), 41 resent; their plane 207507 moves
+12:50:49 coop: you are player 1; 11 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:50:49 coop:   player 2 mk_zerojon: linked, rtt 63 ms; sent 59896 packets (6598 KB), got 41734 (2576 KB), 41 resent; their plane 210778 moves
+12:51:02 landing menu: decide on 73D16140, row '-1'
+12:51:31 coop: player 2's plane is 1422F2B560
+12:51:32 spawner: LiveUnitSpawner 73DC21C0, global phase 73DC2508, world data 6505272C0
+12:51:49 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets
+12:51:49 coop:   player 2 mk_zerojon: linked, rtt 208 ms; sent 61245 packets (6756 KB), got 43246 (2670 KB), 41 resent; their plane 0 moves
+12:51:51 coop: closed

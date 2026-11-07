@@ -1,0 +1,68 @@
+17:58:06.989 t29124 lua bridge: all registered
+17:58:06.993 t29124 lua bridge: all registered
+17:58:17.246 t27340 lua: tick lost: queued again
+17:58:27.328 t27340 lua: tick lost: queued again
+17:58:40.683 t27340 lua: tick lost: queued again
+17:58:50.766 t27340 lua: tick lost: queued again
+17:59:52.781 t27340 lua: tick lost: queued again
+18:00:02.824 t27340 lua: tick lost: queued again
+18:17:45.114 t19096 lua: coop: player 2 asked for the whole picture: sent (rs|j)
+18:21:24.993 t19096 lua: coop: player 4 asked for the whole picture: sent (rs|j)
+18:25:13.605 t27340 lua: tick lost: queued again
+18:25:17.153 t19096 lua: coop: player 2 asked for the whole picture: sent (rs|j)
+18:25:17.156 t19096 lua: coop: player 4 asked for the whole picture: sent (rs|j)
+18:25:45.528 t19096 lua: coop: player 3 asked for the whole picture: sent (rs|j)
+18:25:53.067 t19096 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+18:25:56.100 t19096 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+18:26:01.197 t19096 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+18:27:35.361 t19096 lua: spawn SV_Unit_PadDummies: 9
+18:27:35.374 t19096 lua: spawn AA_Unit_01_Ground0: 11
+18:27:35.379 t19096 lua: spawn SV_Unit_Shuttle: 1
+18:27:38.387 t19096 recycle ERA_Unit_01_Dep_Air0: unregistering its unit actor 2FA545BC0 (0 alive), its destroy deferred
+18:27:38.388 t19096 recycle ERA_Unit_01_Dep_Air0: done
+18:27:38.399 t19096 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+18:27:41.441 t19096 recycle ERA_Unit_02_Dep_Air0: unregistering its unit actor 7A9232B0 (0 alive), its destroy deferred
+18:27:41.441 t19096 recycle ERA_Unit_02_Dep_Air0: done
+18:27:41.453 t19096 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+18:27:42.783 t16464 guard: target check fault caught, class 19 (1474294B0, event type 16) at 143744E08 reading 898, entry 1374F82C0 (1 so far)
+18:27:42.786 t16464 guard: target check fault caught, class 19 (1474294B0, event type 16) at 143744E08 reading 898, entry 1374F82C0 (2 so far)
+18:27:42.788 t3748 guard: target search skipped a gone unit's entry 12856785D0 (class 16: its game object isn't live; 2 so far)
+18:27:42.790 t16464 guard: target check fault caught, class 19 (1474294B0, event type 16) at 143744E08 reading 898, entry 1374F82C0 (3 so far)
+18:27:42.792 t3748 guard: target search skipped a gone unit's entry 12856785D0 (class 16: its game object isn't live; 3 so far)
+18:27:42.794 t10384 guard: target search skipped a gone unit's entry 12856785D0 (class 16: its game object isn't live; 32 so far)
+18:27:42.796 t32432 guard: event type 27 not matched, its +0x20 object 3AD9C2020 freed (event 121392A950; 2 so far)
+18:27:42.798 t15624 guard: target check fault caught, class 19 (1474294B0, event type 16) at 143744E08 reading 898, entry 1374F82C0 (16 so far)
+18:27:42.801 t14280 guard: event type 27 not matched, its +0x20 object 3AD9C2020 freed (event 121392A950; 1 so far)
+18:27:42.803 t27836 guard: target check fault caught, class 19 (1474294B0, event type 16) at 143744E08 reading 898, entry 1374F82C0 (4 so far)
+18:27:42.805 t15624 guard: event type 27 not matched, its +0x20 object 3AD9C2020 freed (event 121392A950; 8 so far)
+18:27:42.807 t28684 guard: target check fault caught, class 19 (1474294B0, event type 16) at 143744E08 reading 898, entry 1374F82C0 (8 so far)
+18:27:42.809 t21136 guard: target search skipped a gone unit's entry 128567A810 (class 16: its game object isn't live; 1 so far)
+18:27:42.811 t27836 guard: event type 27 not matched, its +0x20 object 3AD9C2020 freed (event 121392A950; 64 so far)
+18:27:42.813 t27444 guard: event type 27 not matched, its +0x20 object 3AD9C2020 freed (event 121392A950; 32 so far)
+18:27:42.816 t28684 guard: target check fault caught, class 19 (1474294B0, event type 16) at 143744E08 reading 898, entry 1374F82C0 (32 so far)
+18:27:42.818 t32432 guard: event type 27 not matched, its +0x20 object 3AD9C2020 freed (event 121392A950; 4 so far)
+18:27:42.821 t32760 guard: target search skipped a gone unit's entry 128567A810 (class 16: its game object isn't live; 16 so far)
+18:27:42.823 t31464 guard: target search skipped a gone unit's entry 12856785D0 (class 16: its game object isn't live; 8 so far)
+18:27:42.825 t5656 guard: target search skipped a gone unit's entry 128567A810 (class 16: its game object isn't live; 4 so far)
+18:27:42.827 t10384 guard: event type 27 not matched, its +0x20 object 3AD9C2020 freed (event 121392A950; 16 so far)
+18:27:42.830 t14280 guard: event type 27 not matched, its +0x20 object 3AD9C2020 freed (event 121392A950; 3 so far)
+18:27:42.832 t21136 guard: target search skipped a gone unit's entry 128567A810 (class 16: its game object isn't live; 128 so far)
+18:27:42.834 t14280 guard: event type 27 not matched, its +0x20 object 3AD9C2020 freed (event 121392A950; 128 so far)
+18:27:42.836 t32760 guard: target search skipped a gone unit's entry 128567A810 (class 16: its game object isn't live; 256 so far)
+18:27:42.838 t3748 guard: target search skipped a gone unit's entry 12856785D0 (class 16: its game object isn't live; 64 so far)
+18:27:42.840 t16464 guard: target check fault caught, class 19 (1474294B0, event type 16) at 143744E08 reading 898, entry 1374F82C0 (64 so far)
+18:27:42.842 t14280 guard: event type 27 not matched, its +0x20 object 3AD9C2020 freed (event 121392A950; 256 so far)
+18:27:42.845 t3748 guard: target search skipped a gone unit's entry 12856785D0 (class 16: its game object isn't live; 512 so far)
+18:27:42.847 t16464 guard: event type 27 not matched, its +0x18 object 3AD9C2020 freed (event 1285670A90; 512 so far)
+18:27:44.763 t19096 recycle ERA_Unit_05_Dep_Air0: unregistering its unit actor 166912C0 (0 alive), its destroy deferred
+18:27:44.764 t19096 recycle ERA_Unit_05_Dep_Air0: done
+18:27:44.776 t19096 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+18:27:47.832 t19096 lua: spawn EA_Unit_01_Air0 at a pose: 2
+18:28:05.936 t19096 teardown gate closed: world 2857A60A0 it was freed; 3 deferred destroys dropped
+18:28:05.936 t19096 lua: level gate closed: objects dropped
+18:28:27.515 t27340 lua: tick lost: queued again
+18:28:37.527 t27340 lua: tick lost: queued again
+18:28:47.605 t27340 lua: tick lost: queued again
+18:28:57.687 t27340 lua: tick lost: queued again
+18:29:07.771 t27340 lua: tick lost: queued again
+18:29:17.877 t27340 lua: tick lost: queued again

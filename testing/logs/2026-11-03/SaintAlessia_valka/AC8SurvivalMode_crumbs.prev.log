@@ -1,0 +1,10 @@
+13:09:02.445 t23888 lua bridge: all registered
+13:09:02.451 t23888 lua bridge: all registered
+13:09:12.698 t23928 lua: tick lost: queued again
+13:09:22.775 t23928 lua: tick lost: queued again
+13:13:33.085 t23928 lua: tick lost: queued again
+13:13:55.062 t27380 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+13:13:58.164 t27380 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+13:14:49.832 t27380 lua: spawn SV_Unit_ShipAegisA: 5
+13:14:52.893 t27380 lua: spawn SV_Unit_ShipAegisC: 5
+13:14:53.441 t27380 lua: spawn SV_Unit_ShipAegisD: 5

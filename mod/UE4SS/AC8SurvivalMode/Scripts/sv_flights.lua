@@ -18,11 +18,96 @@ function planeUnit(p)
 end
 end
 
+-- The heavies' routes (CFG.airfield.bombers.heavy_route; tools/survival_events.py HEAVY_*; user, 2026-10-29: "tu-95's
+-- aren't attacking the base, they fly around nearby and do nothing": over the runway they circled 6-8 km out and never
+-- came within drop_km): a heavy flight's lead flies the route in from the compass sector it spawned in, over the runway,
+-- then a figure-8 crossing it twice a lap (RE_SV_HeavyRoute_<NN><S>, queued route_delay_s after its appearance's
+-- orders); shot down, the next of its flight takes the loop (RE_SV_HeavyLoop_<NN><L><S>). D.heavyPath[unit] = { s, k, at,
+-- seen } (at: the round clock at its spawn; seen: one of that spawn's planes logged since).
+HEAVY = {}
+HEAVY_SECTORS = "ABCDEFGH"                           -- (compass 0, 45 ... 315 from the airfield: survival_events)
+function HEAVY.route(unit, x, y)
+    local b = CFG.airfield.bombers
+    if not (b.heavy_route and D and BOMBER_INDEX[unit] and x and y) then return end
+    local bearing = math.deg(math.atan(x - AIRFIELD.X, -(y - AIRFIELD.Y))) % 360    -- (compass: north -y, east +x)
+    local i = math.floor((bearing + 22.5) / 45) % 8 + 1
+    local s = HEAVY_SECTORS:sub(i, i)
+    D.heavyPath = D.heavyPath or {}
+    D.heavyPath[unit] = { s = s, k = 0, at = D.now or 0 }   -- (its planes reach `planes` ~2 ticks on: heavyNext)
+    queueEvent((D.now or 0) + (b.route_delay_s or 3), string.format("RE_SV_HeavyRoute_%02d%s", BOMBER_INDEX[unit], s),
+        string.format("%s's route in from bearing %.0f", unit, bearing))
+end
+-- (every second, from bombTick) a flight whose lead on the path is down: its next aircraft up takes the loop
+-- ((review of 27097b9, finding 0) Only this spawn's planes count (born at or after its entry: a plane of the flight's last
+-- spawn the sweep hasn't marked down yet isn't taken for its lead), and the entry is dropped only once one of them has
+-- been seen and none is left (or 5 s on with none ever seen): a spawn's planes reach `planes` ~2 ticks after it
+-- (sv_main.lua's pending), and bombTick could run first, dropping the entry, so no handover followed its lead's loss and
+-- the rest of the flight circled out of drop_km, never bombing. The Spaceport's Tu-160 groups spawn up to 4 times a round.)
+local function heavyNext()
+    for unit, h in pairs(D.heavyPath or {}) do
+        local lead, nk = false, nil
+        for _, p in ipairs(planes) do
+            if p.unit == unit and not p.down and valid(p.obj) and (p.born or 0) >= (h.at or 0) then
+                h.seen = true                                                    -- (this spawn's planes are in `planes` now)
+                if p.k == h.k then lead = true elseif p.k and (not nk or p.k < nk) then nk = p.k end
+            end
+        end
+        if not lead and nk and nk < 26 then
+            h.k = nk
+            local ev = string.format("RE_SV_HeavyLoop_%02d%s%s", BOMBER_INDEX[unit], string.char(65 + nk), h.s)
+            local r = SV_Event(ev)
+            log(string.format("bombers: %s's lead down: object %d takes the loop (%s %s)", unit, nk, ev,
+                r == 1 and "fired" or ("not fired: " .. (SV_ERR[r] or tostring(r)))))
+        elseif not lead and not nk and (h.seen or (D.now or 0) - (h.at or 0) > 5) then
+            D.heavyPath[unit] = nil                                              -- (the whole flight down)
+        end
+    end
+end
+
 -- Heavy bombers (CFG.airfield.bombers.heavy) over the airfield: fire their flight's scripted bomb run and queue the
 -- damage. If a plane's flight can't be read, every heavy flight that is up drops.
+-- (once a second) the minimap's alert on a raid (CFG.airfield.bombers.ping; user, 2026-10-31: "an alert that pings the
+-- aircraft via the minimap that are attacking the airfield"): each bomber flight up (not one sent at an allied ship)
+-- with an aircraft within within_km of the airfield is pinged on the radar every every_s (RE_SV_RaidPing_NN: Mission
+-- 22's LiveBattleNavigationExecution on its unit). The host's (or solo): forwarded, each joiner's game pings its copies.
+local function raidPings(tick)
+    local pg = CFG.airfield.bombers.ping
+    if not (pg and pg.enabled and D.up) or (COOP and COOP.client and COOP.client()) then return end
+    local near = {}
+    for _, p in ipairs(planes or {}) do
+        local u = not p.down and valid(p.obj) and planeUnit(p)
+        if u and BOMBER_UNIT[u] and D.up[u] and not (D.shipStrike and D.shipStrike[u]) then
+            local ok, l = pcall(function() return p.obj:K2_GetActorLocation() end)
+            if ok and l then
+                local d = math.sqrt((l.X - AIRFIELD.X) ^ 2 + (l.Y - AIRFIELD.Y) ^ 2)
+                if not near[u] or d < near[u] then near[u] = d end
+            end
+        end
+    end
+    D.pingAt = D.pingAt or {}
+    for u, d in pairs(near) do
+        if d <= pg.within_km * 100000 and tick >= (D.pingAt[u] or 0) then
+            D.pingAt[u] = tick + pg.every_s * 4
+            local ev = string.format("RE_SV_RaidPing_%02d", BOMBER_INDEX[u])
+            local r = SV_Event(ev)
+            D.pinged = D.pinged or {}
+            if not D.pinged[u] or r ~= 1 then
+                D.pinged[u] = true
+                log(string.format("bombers: %s pinged on the minimap, %.1f km from the airfield (%s %s; every %d s while within %d km)",
+                    u, d / 100000, ev, r == 1 and "fired" or ("NOT fired: " .. tostring(r)), pg.every_s, pg.within_km))
+            end
+        end
+    end
+end
+
 function bombTick(tick)
     local b = CFG.airfield.bombers
+    if CFG.airfield.enabled and D and tick % 4 == 2 and type(SV_Event) == "function" then
+        local okP, errP = pcall(raidPings, tick)
+        if not okP and not D.pingErrSaid then D.pingErrSaid = true; log("bombers: minimap ping error " .. tostring(errP)) end
+    end
     if not CFG.airfield.enabled or not D or not D.heavy or tick % 4 ~= 2 or type(SV_Event) ~= "function" then return end
+    if D.heavyPath then pcall(heavyNext) end
     local heavy = {}
     for _, a in ipairs(b.heavy) do heavy[a:match("^(%w+)_") or a] = true end      -- "tu95_common" -> tu95
     D.bombAt = D.bombAt or {}
@@ -33,7 +118,7 @@ function bombTick(tick)
             local dx, dy = ok and l and (l.X - AIRFIELD.X), ok and l and (l.Y - AIRFIELD.Y)
             local dist = dx and math.sqrt(dx * dx + dy * dy)
             if dist and (not p.closest or dist < p.closest) then p.closest = dist end
-            if dist and tick % 40 == 2 then
+            if dist and tick % ((CFG.log and CFG.log.verbose) and 40 or 120) == 2 then   -- (10 s verbose, else 30 s)
                 log(string.format("bombers: %s %.1f km from the airfield, %.1f km up (closest %.1f km; drop within %.1f km)",
                     p.name, dist / 100000, l.Z / 100000, p.closest / 100000, b.drop_km))
             end
@@ -170,12 +255,43 @@ local function ammoLine()
     return table.concat(parts, ", ")
 end
 
-local function applyAmmoCaps()
+-- ((2026-11-07) a player: "I was given 28 machine gun pod bullets total"; the user: "the Special Weapon Machine Gun Pods
+-- should be an exception") A special that fires rounds keeps its stock load: the presets' special count is a missile
+-- count. Each slot's special is the plane's PlaneSpWeaponID1 / PlaneSpWeaponID2 (ELiveWeaponID, build/liveproject:
+-- WID_mgp 20, the machine gun pod; WID_pgun 35); CFG.ammo.uncapped_specials names the ones left uncapped. A slot left
+-- uncapped has no A.caps entry: every reader already takes that as "no cap" (the STORE, FULL REARM, the ammo panel).
+local WID = { mgp = 20, pgun = 35 }
+local function spWeapon(pawn, slot)
+    local v
+    pcall(function() if slot == 1 then v = pawn.PlaneSpWeaponID1 else v = pawn.PlaneSpWeaponID2 end end)
+    return v
+end
+function ammoUncapped(pawn, slot)
+    local id = pawn and spWeapon(pawn, slot)
+    if id == nil then return false, nil end
+    local n = tonumber(id)
+    for _, nm in ipairs(CFG.ammo.uncapped_specials or {}) do
+        local key = tostring(nm):lower()
+        local w = WID[key] or tonumber(nm)
+        if (n and w and n == w) or (not n and tostring(id):lower():find("wid_" .. key, 1, true)) then return true, id end
+    end
+    return false, id
+end
+
+local function applyAmmoCaps(pawn)
     local probe = SV_Ammo(1)
     if probe < 0 and probe ~= -7 then return false, probe end                  -- not ready yet (or no game code)
     local pname, diff = presetName()
     local p = CFG.ammo.presets[pname] or CFG.ammo.presets.standard
     local want = { [1] = p.missiles, [2] = p.special, [3] = p.special, [4] = p.flares }
+    local free = {}
+    for slot = 1, 2 do
+        local u, id = ammoUncapped(pawn, slot)
+        if u then
+            want[slot + 1] = nil
+            free[#free + 1] = string.format("special %d (weapon %s)", slot, tostring(id))
+        end
+    end
     local before = ammoLine()
     for k = 1, 4 do
         if want[k] and SV_Ammo(k) >= 0 then SV_SetAmmo(k, want[k]) end
@@ -184,8 +300,9 @@ local function applyAmmoCaps()
     RUN.dirty = true                                -- the shop's help lines show the caps
     if CFG.ammo.gun_unlimited then SV_SetAmmo(0, -1) end
     local restock = type(SV_FreeRestock) == "function" and SV_FreeRestock(CFG.ammo.free_restock and 1 or 0) or "n/a"
-    log(string.format("ammo: preset %s (difficulty %s): %s -> %s; free restock was %s, now %s", pname, tostring(diff),
-        before, ammoLine(), tostring(restock), CFG.ammo.free_restock and "on" or "off"))
+    log(string.format("ammo: preset %s (difficulty %s): %s -> %s; free restock was %s, now %s%s", pname, tostring(diff),
+        before, ammoLine(), tostring(restock), CFG.ammo.free_restock and "on" or "off",
+        #free > 0 and ("; its stock load kept (rounds, not missiles): " .. table.concat(free, ", ")) or ""))
     return true
 end
 
@@ -202,7 +319,7 @@ function ammoTick(tick, pc)
     if not A or A.pawn ~= pname then A = { pawn = pname, seenAt = tick, applied = false, tries = 0 } end
     if not A.applied and tick - A.seenAt >= 8 and (tick - A.seenAt) % 8 == 0 and A.tries < 10 then   -- 2 s in, retried
         A.tries = A.tries + 1
-        local ok, r, code = pcall(applyAmmoCaps)
+        local ok, r, code = pcall(applyAmmoCaps, pawn)
         if not ok then log("ammo: error " .. tostring(r))
         elseif not r and A.tries == 10 then log("ammo: the player's weapons could not be read (" .. tostring(code) .. "); no ammo cap") end
         A.applied = ok and r
@@ -226,8 +343,17 @@ function ammoTick(tick, pc)
         -- With WEAPON BAYS the game's reload also puts the stock full load back (the bays' is A.bays[k]): until UP.apply
         -- has raised it again (at once, here) a count under what you had is that reload, not shots; then what you had
         -- goes back in (a run of 2026-10-24: 36/36 specials bought, 24/36 after take-off, the rest gone).
+        -- ((2026-11-07) FLARE PODS the same, kind 4: its full load is A.bays[4] (sv_tactical.lua UP.apply); before, only
+        -- kinds 1-3 were seen, so the take-off reload's stock flares were taken for shots in the air and the flares bought
+        -- past the stock load lost: the user, "purchasing flare upgrades from the store didn't seem to work")
         local over, ground, back = {}, playerOnAirfield(), {}
-        for k = 1, 3 do
+        -- the gun's shots for the measurements (STATS.fired, kind 0): what it lost since the last count it had (the 2 s
+        -- refill below sets that to full, so a refill is never taken for shots)
+        if s[0] >= 0 then
+            if A.gunLast and s[0] < A.gunLast and not ground then pcall(STATS.fired, 0, A.gunLast - s[0]) end
+            A.gunLast = s[0]
+        end
+        for k = 1, 4 do
             local m, want = SV_Ammo(k, 1), A.bays and A.bays[k]
             if want and m >= 0 and m < want and not (A.reload and A.reload[k] and tick - A.reload[k] > 40) then
                 if not (A.reload and A.reload[k]) then          -- (10 s at most: a full load that won't go up is the aircraft's)
@@ -236,8 +362,10 @@ function ammoTick(tick, pc)
                     local okU, errU = pcall(UP.apply, pawn)
                     if not okU and not A.upErr then A.upErr = true; log("upgrades: error " .. tostring(errU)) end
                 end
-            elseif A.reload and A.reload[k] and m >= 0 then
-                A.reload[k] = nil
+            elseif ((A.reload and A.reload[k]) or (A.reset and A.reset[k])) and m >= 0 then
+                -- (the dip seen here, or UP.apply's own 2 s pass raised the full load back first: A.reset)
+                if A.reload then A.reload[k] = nil end
+                if A.reset then A.reset[k] = nil end
                 local cap = A.caps and A.caps[k]
                 local to = cap and math.min(cap, m)             -- (another special picked down there: its own load)
                 if to and s[k] >= 0 and s[k] < to then
@@ -257,7 +385,7 @@ function ammoTick(tick, pc)
             -- not the dip in the full load was seen above (UP.apply's own 2 s pass raises it back first a quarter of the
             -- time: a run of 2026-10-25, REARMED to 18/18 and 27/27, 12/18 and 18/27 after take-off, twice). Once the
             -- bays' full load is back, what you had goes in.
-            local m = (ground and k <= 3 and A.bays and A.bays[k] and cap and s[k] >= 0 and s[k] < cap) and SV_Ammo(k, 1) or -1
+            local m = (ground and A.bays and A.bays[k] and cap and s[k] >= 0 and s[k] < cap) and SV_Ammo(k, 1) or -1
             if A.reload and A.reload[k] then                 -- (the bays' full load not back yet: nothing to read)
             elseif m >= 0 and s[k] < math.min(cap, m) then
                 local to = math.min(cap, m)                  -- (another special picked down there: its own load)
@@ -268,11 +396,12 @@ function ammoTick(tick, pc)
                 SV_SetAmmo(k, cap)
                 over[#over + 1] = string.format("%s %d -> %d", AMMO_KINDS[k], s[k], cap)
             elseif cap and s[k] >= 0 and s[k] < cap and not ground then
+                pcall(STATS.fired, k, cap - s[k])           -- (shots: the measurements, sv_stats.lua)
                 A.caps[k] = s[k]
                 RUN.dirty = true                    -- the shop's help lines show the counts
             end
         end
-        if #back > 0 then log("ammo: reloaded by the game to its stock load, put back what you had (weapon bays): " .. table.concat(back, ", ")) end
+        if #back > 0 then log("ammo: reloaded by the game to its stock load, put back what you had (weapon bays / flare pods): " .. table.concat(back, ", ")) end
         if #over > 0 then
             if type(SV_FreeRestock) == "function" and not CFG.ammo.free_restock then SV_FreeRestock(0) end
             log("ammo: refilled by the game, put back to what you had (" .. A.preset .. "): " .. table.concat(over, ", "))
@@ -287,17 +416,35 @@ function ammoTick(tick, pc)
     end
     if CFG.ammo.gun_unlimited and tick % 8 == 0 then                           -- every 2 s: gun back to full
         local n, max = SV_Ammo(0), SV_Ammo(0, 1)
-        if n >= 0 and n < max then SV_SetAmmo(0, -1) end
+        if n >= 0 and n < max then SV_SetAmmo(0, -1); A.gunLast = max end
     end
-    if tick % 40 == 0 then                                                     -- every 10 s: the counts, when they change
+    -- every 10 s with [log] verbose, else every 60 s: the counts, when they change
+    if tick % (logVerbose() and 40 or 240) == 0 then
         local line = ammoLine()
         if line ~= A.lastLine then log("ammo: now " .. line); A.lastLine = line end
     end
 end
 
+-- ((0.73.79, the lag audit's item 7) asked of the game first (GameplayStatics.GetPlayerController on the game instance:
+-- the world's first player controller, nil while there's no world); a walk over every object (35-95 ms on a tester's PC,
+-- at each level start and restart) only after 3 misses in a row, as before)
+local PCH = { miss = 0 }
+local function pcFromGame()
+    local gs, gi = StaticFindObject("/Script/Engine.Default__GameplayStatics"), gameInstance()
+    if not (gs and valid(gs) and gi) then return nil end
+    local ok, pc = pcall(function() return gs:GetPlayerController(gi, 0) end)
+    if not (ok and pc ~= nil and valid(pc) and liveObj(pc) and inSurvival(pc)) then return nil end
+    local okL, isLocal = pcall(function() return pc:IsLocalController() end)
+    if okL and isLocal == false then return nil end
+    return pc
+end
 function playerControllerHere()
-    for _, pc in ipairs(FindAllOf("PlayerController") or {}) do
-        if valid(pc) and inSurvival(pc) then return pc end
+    local okG, pc = pcall(pcFromGame)
+    if okG and pc then PCH.miss = 0; return pc end
+    PCH.miss = PCH.miss + 1
+    if PCH.miss < 3 then return nil end
+    for _, p in ipairs(FindAllOf("PlayerController") or {}) do
+        if valid(p) and inSurvival(p) then PCH.miss = 0; return p end
     end
     return nil
 end
@@ -308,7 +455,7 @@ function roundClock(tick)
     local t = gameClock(survivalPC)
     if D.clock == nil then
         if t then D.clock = "game"; log("rounds: on the game clock (stops while paused)")
-        elseif tick - levelTick >= 20 then
+        elseif tick - levelTick >= 20 and not walkHold() then          -- (0.73.73: the player controller's look held)
             D.clock = "ticks"; log("rounds: the game clock can't be read; using real time (rounds keep running while paused)")
         else return nil end
         D.at = (D.clock == "game" and t or tick / 4) + CFG.first_round_delay_s
@@ -332,15 +479,16 @@ SHOP = {
     rows = { "SVShopMissiles", "SVShopSpecial", "SVShopFlares", "SVShopAirfield" },
     all = { "SVShopStore", "SVShopStoreUp", "SVShopStoreTac", "SVShopStoreAf", "SVShopMissiles", "SVShopSpecial",
             "SVShopFlares", "SVShopAirfield" },
-    -- the store's pages (tools/build_survival.py STORE_PAGES): in-game menus 20-24 (SUPPLIES, AIRFIELD, ALLIES, UPGRADES,
-    -- TACTICAL: rows "20" .. "24" open them), added to the in-game menu table at the main menu, before a level builds its
-    -- menu list from it
+    -- the store's pages (tools/build_survival.py STORE_PAGES): in-game menus 20-25 (SUPPLIES, AIRFIELD, ALLIES, UPGRADES,
+    -- TACTICAL, DEFENCES: rows "20" .. "25" open them), added to the in-game menu table at the main menu, before a level
+    -- builds its menu list from it
     menuMine = "/Game/Mods/SurvivalMode/Data/DT_SV_MenuClassRows.DT_SV_MenuClassRows",
     menuGame = "/Game/Datatables/UI/Menu/IngameMenu/DT_IngameMenuSettingData.DT_IngameMenuSettingData",
     menuRows = { { row = "SVStore", id = "SV_Store", index = 20 }, { row = "SVStoreAirfield", id = "SV_StoreAirfield", index = 21 },
                  { row = "SVStoreDocks", id = "SV_StoreDocks", index = 22 },
                  { row = "SVStoreUpgrades", id = "SV_StoreUpgrades", index = 23 },
-                 { row = "SVStoreTactical", id = "SV_StoreTactical", index = 24 } },
+                 { row = "SVStoreTactical", id = "SV_StoreTactical", index = 24 },
+                 { row = "SVStoreDefences", id = "SV_StoreDefences", index = 25 } },
     -- each row's icon (stock textures; the aircraft repair shows the player's own plane when the game has its icon)
     icons = {
         Missiles = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_msl_a0",
@@ -351,6 +499,7 @@ SHOP = {
         Airfield = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Base_000",
         AAGun    = "/Game/UI/Texture/Icon/Tutorial/T_UI_TutorialIcon_TGT_Gnd_000",
         SAM      = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_saam_a0",
+        Ciws     = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_mgp_a0",                    -- (a gun pod's)
         Moonchild   = "/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP005_f22a",
         ShipAegis   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_GndEscort_000",   -- (no ship icon in the game: an ally's)
         -- (the review build's rows: stock textures already used above)
@@ -361,6 +510,7 @@ SHOP = {
         UpFlares   = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_flr",
         Airstrike  = "/Game/UI/Texture/Icon/Tutorial/T_UI_TutorialIcon_TGT_Gnd_000",
         Ecm        = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Sonar_000",
+        VoidWatcher = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Sonar_000",        -- (the ECM's: no AWACS icon in the game)
         Decoy      = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_flr",
         Insurance  = "/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP005_f22a",
         Wingmen    = "/Game/UI/Texture/Icon/Aircraft/T_HUD_acIcon_PP005_f22a",
@@ -370,6 +520,7 @@ SHOP = {
         ["22"]   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_GndEscort_000",                    -- ALLIES >
         ["23"]   = "/Game/UI/Texture/HUD/ProgressBar/Weapons/T_HUD_w_qaam_a0",                 -- UPGRADES >
         ["24"]   = "/Game/UI/Texture/Icon/Tutorial/T_UI_TutorialIcon_TGT_Gnd_000",            -- TACTICAL >
+        ["25"]   = "/Game/UI/Texture/HUD/Radar/T_Icon_Radar_Gnd_000",                          -- DEFENCES >
     },
 }
 SH = { added = false, addr = nil, warned = {}, decor = {} }
@@ -381,8 +532,12 @@ local function shopWarn(key, msg)
 end
 
 function shopRowsTick(tick)
-    if not CFG.shop.enabled or tick % 16 ~= 1 or containerState ~= true then return end
-    local pc = valid(survivalPC) and survivalPC or (SH.addr and FindFirstOf("PlayerController"))
+    -- ((0.73.79, the lag audit's item 3) once the rows are in on Survival's level, a look every 30 s, not 4 s: each look
+    -- scans for the table and reads the player controller's name; back to every 4 s when another level loads, so the
+    -- rows come out before a stock mission's landing menu)
+    local every = (SH.added and D and svLevelOn == true and not LEAVE.why) and 120 or 16
+    if not CFG.shop.enabled or tick % every ~= 1 or containerState ~= true then return end
+    local pc = liveObj(survivalPC) and survivalPC or (SH.addr and FindFirstOf("PlayerController"))
     if pc and valid(pc) and inSurvival(pc) then
         -- without the native landing-menu hook a shop row would reach the stock decide, which reads it as a page number
         if type(SV_ShopRequest) ~= "function" or type(SV_SetText) ~= "function" or SV_ShopRequest(1) ~= 1 then

@@ -4,10 +4,66 @@
 
 ---------------------------------------------------------------------------------------------------- ladon
 -- CFG.specials.ladon; tools/survival_events.py LADON* builds the units (Mission 16's Ladon, parts and all), routes and
--- records. Ladon <Key> is unit SV_Unit_Ladon<Key> on DT_NPC row SV_Ladon_<Key>; each pass over the airfield adds one to
--- SV_LadonRun<Key>.
+-- records. Ladon <Key> is unit SV_Unit_Ladon<Key> on DT_NPC row SV_Ladon_<Key>; its route's end over the airfield adds
+-- one to SV_LadonRun<Key> (its first pass), each arc of its circuit flown one to SV_LadonLeg<Key> (0.73.73), and its
+-- passes round the circuit are counted here by distance.
 do
 local KEYS = { "Kot", "Mishka" }
+
+-- A Ladon's parts (its 25 objects: the body, the VLS launchers, the pulse cannon pods...), as SV_Spawn makes them
+-- (spawningUnit is its unit then: SPC.ladonSpawn here, a co-op joiner's copies in sv_coop.lua): LADON_PARTS[unit].
+-- The co-op run of 2026-10-30 (0.73.20), round 8: both Ladons shot down (their bodies "down" in the round probe) but
+-- their parts lived on, so SV_UnitAlive (the unit's AliveChildAIGameObjects) never reached 0 and the round never ended
+-- ("it still says both LADONs are alive"), and MISHKA's VLS fired on after its body was gone: four players down 0-4 s
+-- after it, the host from 100 HP in one hit, all of it from BP_OP0045_ladn_VLS_L_Base
+LADON_PARTS = {}
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
+    local u = spawningUnit
+    if not (u and u:find("^SV_Unit_Ladon")) then return end
+    local l = LADON_PARTS[u]
+    if not l or os.clock() - (l.at or 0) > 2 then l = { at = os.clock() }; LADON_PARTS[u] = l end   -- (a new spawn of it)
+    if #l < 60 then l[#l + 1] = o end
+end)
+
+-- Ladon `p` (a body in planes) is down: its parts still up are finished off (no attacker: as a joiner's hit, which the
+-- game takes). Every game, for its own copy. The number finished, or nil
+function ladonPartsDown(p)
+    local l = p and p.unit and LADON_PARTS[p.unit]
+    if not l then return nil end
+    local n, left = 0, 0
+    for _, o in ipairs(l) do
+        if valid(o) and o ~= p.obj then
+            local okH, h = pcall(function() return o.HealthInternal end)
+            if okH and type(h) == "number" and h > 0 then
+                pcall(function() o:SetMinHealth(0.0) end)
+                local ok = pcall(function() o:ModifyHealth(-(h / 10 + 1000), nil, true) end)
+                local okA, h1 = pcall(function() return o.HealthInternal end)
+                if not ok or (okA and type(h1) == "number" and h1 > 0) then
+                    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+                    if valid(gs) then pcall(function() gs:ApplyDamage(o, 100000000.0, nil, nil, nil) end) end
+                    okA, h1 = pcall(function() return o.HealthInternal end)
+                end
+                if okA and type(h1) == "number" and h1 > 0 then left = left + 1 else n = n + 1 end
+            end
+        end
+    end
+    log(string.format("special: %s's body down: %d of its %d parts still up finished off%s", p.unit, n, #l,
+        left > 0 and string.format(", %d NOT (still up)", left) or ""))
+    return n
+end
+
+-- Ladon `unit`'s body (its planes from `from`) seen and every one of them down: the round's own count of it
+local function bodyDown(unit, from)
+    local seen = false
+    for i = from or 1, #planes do
+        local p = planes[i]
+        if p.unit == unit then
+            seen = true
+            if not p.down and valid(p.obj) then return false end
+        end
+    end
+    return seen
+end
 
 -- At the main menu, before the level loads (the spawner caches the rows then): each Ladon's DT_NPC row, from
 -- DT_SV_NpcRows, with its name, health and speed.
@@ -47,6 +103,34 @@ function SPC.ladonSetup()
         table.concat({ c.names.Kot, c.names.Mishka }, ", "), c.health_add, c.speed_x))
 end
 
+-- (0.73.73) Ladon `k`'s appearance may run again (its next spawn): RE_SV_LadonRearm<Key> clears SV_LadonDone<Key>, which
+-- its appearance sets so that a fire again (HOTFIX_NOTES open problem 3: after a volley) never restarts its route
+-- (tools/survival_events.py build_ladon). Fired once that Ladon is gone, and before a spawn if it's still set.
+local function ladonRearm(k, why)
+    local r = type(SV_Event) == "function" and SV_Event("RE_SV_LadonRearm" .. k) or -5
+    log(string.format("special: Ladon %s's appearance armed for its next spawn (%s): RE_SV_LadonRearm%s %s",
+        CFG.specials.ladon.names[k] or k, why, k, r == 1 and "fired" or ("NOT fired: " .. tostring(SV_ERR and SV_ERR[r] or r))))
+end
+
+-- (0.73.73) every 5 s in Survival's level, on every game (HIT.tick: a co-op joiner's copies set the mark too, and a
+-- joiner may host the next Ladon round after a migration): a Ladon whose mark is set and whose unit isn't up is armed
+-- again, long before its next spawn (ladonSpawn's own arming, just before SV_Spawn, may come too late for its
+-- appearance). At most every 30 s a Ladon.
+function SPC.ladonRearmTick(now)
+    if SPC.rearmNow and now < SPC.rearmNow then SPC.rearmAt, SPC.rearmed = nil, nil end   -- (a new run's clock)
+    SPC.rearmNow = now
+    if not svLevelOn or now < (SPC.rearmAt or 0) or type(SV_UnitAlive) ~= "function" then return end
+    SPC.rearmAt = now + 5
+    local f = svFlags() or {}
+    SPC.rearmed = SPC.rearmed or {}
+    for _, k in ipairs(KEYS) do
+        if (f["SV_LadonDone" .. k] or 0) > 0 and SV_UnitAlive("SV_Unit_Ladon" .. k) <= 0 and now >= (SPC.rearmed[k] or 0) then
+            SPC.rearmed[k] = now + 30
+            ladonRearm(k, "its unit's down")
+        end
+    end
+end
+
 function SPC.ladonSpawn(now)
     local c, t = CFG.specials.ladon, CFG.hud.text
     if not (nativeReady() and SPC.ladonReady) then
@@ -55,9 +139,13 @@ function SPC.ladonSpawn(now)
     end
     local s = D.special
     s.units, s.state, s.at, s.runs, s.planeFrom = {}, "run", now, 0, #planes + 1
+    local f0 = svFlags() or {}
     for _, k in ipairs(KEYS) do
         local unit = "SV_Unit_Ladon" .. k
         local r, was = SV_UnitAlive(unit), nil
+        if r <= 0 and (f0["SV_LadonDone" .. k] or 0) > 0 then        -- (its last one's rearm never came: now, late)
+            ladonRearm(k, "still set at its spawn: its route may not start")
+        end
         if r > 0 then was = true                     -- still up from before (a restart mid-round): this round's, then
         else spawningUnit = unit; r = SV_Spawn(unit); spawningUnit = nil end
         log(string.format("special: Ladon %s (%s): %s", c.names[k] or k, unit, r > 0 and (was and "still up, taken on" or "up") or
@@ -77,6 +165,37 @@ function SPC.ladonsLeft(s)
 end
 
 function SPC.ladonBusy(s) return s.state == "run" and SPC.ladonsLeft(s) > 0 end
+
+-- Ladon `downKey` shot down: the other one, still up, is enraged (CFG.specials.ladon.rage; behaviour roadmap P7, "after
+-- one Ladon dies the other changes route and volleys faster"; tools/re/BEHAVIOUR_DIRECTOR.md unit 9; their round stays
+-- theirs alone, user 2026-10-25): its volleys every rage.volley_every_s, the next rage.first_s on (once you're in
+-- range; its tell first, never in the same second: with the other's gap gone it had come with it, code review of unit
+-- 9), and RE_SV_LadonRage<Key> sets its flag, so from the end of the arc it's on it goes round its circuit faster
+-- (tools/survival_events.py LADON_RAGE_SPEED: each arc's PathFinish records pick the speed by the flag; never a path
+-- changed mid-way; 0.73.73: the same circle, no tighter rage circuit of its own, which was never flown). Forwarded to
+-- co-op joiners (their copies are moved by the host's stream; harmless). The tell (its radio call) to every player.
+-- Once a round.
+function SPC.ladonRage(now, s, downKey)
+    local c = CFG.specials.ladon
+    local rg = c.rage
+    if not (rg and rg.enabled) or s.raged then return false end
+    for k2, L2 in pairs(s.units or {}) do
+        if k2 ~= downKey and L2.alive and SV_UnitAlive(L2.unit) > 0 then       -- (both down in one second: no rage)
+            s.raged, L2.rage, L2.rageAt = k2, true, now
+            L2.volleyAt = now + math.max(1, tonumber(rg.first_s) or 0)
+            -- (hotfix3: rg.circuit false: its circuit's speed kept; CFG.specials.ladon.rage)
+            local r = rg.circuit == false and -99 or (type(SV_Event) == "function" and SV_Event("RE_SV_LadonRage" .. k2) or -5)
+            local name = c.names[k2] or k2:upper()
+            if TELL then pcall(TELL.say, "ladon_rage", TELL.ALL) end
+            log(string.format("special: Ladon %s enraged (%s down): volleys every %d s, faster round its circuit from its next arc (RE_SV_LadonRage%s %s)",
+                name, c.names[downKey] or downKey, tonumber(rg.volley_every_s) or c.volley_every_s, k2,
+                r == 1 and "fired" or r == -99 and "not fired: rage.circuit false, it keeps its speed"
+                or ("not fired: " .. tostring(SV_ERR and SV_ERR[r] or r))))
+            return true
+        end
+    end
+    return false
+end
 
 -- Every second: a pass over the airfield (its bombs), a Ladon shot down (its pay).
 function SPC.ladonTick(now, s)
@@ -99,7 +218,8 @@ function SPC.ladonTick(now, s)
         end
     end
     for k, L in pairs(s.units) do
-        if L.alive and now >= (L.volleyAt or s.at + 10) then             -- a missile volley while you're in range
+        -- (patch ladon1: none after its first pass while volley_after_pass is false; see CFG.specials.ladon)
+        if L.alive and now >= (L.volleyAt or s.at + 10) and (c.volley_after_pass ~= false or not L.passed) then
             local near
             for _, p in ipairs(planes) do
                 if p.unit == L.unit and not p.down and valid(p.obj) and p.dist then near = math.min(near or p.dist, p.dist) end
@@ -107,16 +227,28 @@ function SPC.ladonTick(now, s)
             if near and near <= c.volley_range_km then
                 L.inRangeAt = L.inRangeAt or now                       -- (the first volley: once in range volley_warn_s)
                 -- one Ladon's volley at a time, volley_gap_s apart (a friend's test of 2026-10-23: both came into range
-                -- together and fired in the same second, and the player was down 20 s later): the other one waits
-                local gap = c.volley_gap_s or c.volley_every_s / 2
-                if now - L.inRangeAt >= (c.volley_warn_s or 0) and now - (s.volleyAny or -1e9) >= gap then
-                    L.volleyAt, s.volleyAny, s.volleyWho = now + c.volley_every_s, now, c.names[k] or k
+                -- together and fired in the same second, and the player was down 20 s later): the other one waits.
+                -- Enraged (the other one down: rage, P7) its own rage.volley_every_s / volley_warn_s and no gap (the
+                -- other's last volley held a rage volley_every_s under it, and its first, up to 22 s: code review of
+                -- unit 9); still one launcher a volley (both at once killed players in 9 s)
+                local rg = L.rage and c.rage or nil
+                local every = rg and tonumber(rg.volley_every_s) or c.volley_every_s
+                local gap = rg and 0 or (c.volley_gap_s or c.volley_every_s / 2)
+                local warn = rg and tonumber(rg.volley_warn_s) or (c.volley_warn_s or 0)
+                if now - L.inRangeAt >= warn and now - (s.volleyAny or -1e9) >= gap then
+                    L.volleyAt, s.volleyAny, s.volleyWho = now + every, now, c.names[k] or k
                     L.side = (L.side == "L") and "R" or "L"
-                    local ev = "RE_SV_LadonVolley" .. k .. L.side
-                    local r = type(SV_Event) == "function" and SV_Event(ev) or "n/a"
-                    log(string.format("special: Ladon %s fires a launcher at you (%.1f km; %s %s)%s", c.names[k] or k, near, ev,
-                        tostring(r), L.volleySaid and "" or string.format(", one every %d s in range, %d s after the other's",
-                        c.volley_every_s, gap)))
+                    local ev, first = "RE_SV_LadonVolley" .. k .. L.side, not L.volleySaid
+                    local function volley()
+                        local r = type(SV_Event) == "function" and SV_Event(ev) or "n/a"
+                        HIT.sweepUntil = ((D and D.now) or now) + 6      -- (its missiles leave 1.5 s on: HIT.tick's sweep)
+                        log(string.format("special: Ladon %s fires a launcher at you (%.1f km; %s %s)%s%s", c.names[k] or k, near, ev,
+                            tostring(r), first and string.format(", one every %d s in range%s", every,
+                            rg and "" or string.format(", %d s after the other's", gap)) or "", rg and ", enraged" or ""))
+                    end
+                    -- its tell first (behaviour roadmap P3, CFG.tells ladon_vls: "large aircraft has launched missile",
+                    -- every player, as the volley's forwarded), the volley its lead_s after (0: with it; the hatch opens first)
+                    if TELL then TELL.after("ladon_vls", TELL.ALL, volley) else volley() end
                     L.volleySaid = true
                 end
             else
@@ -125,14 +257,85 @@ function SPC.ladonTick(now, s)
         end
         if L.alive then
             local runs = f["SV_LadonRun" .. k] or 0
+            -- (patch ladon1) its pass count went down: only its appearance record sets it to 0, so the appearance
+            -- fired again (and sent it back onto its route from the far west); count from here, or no pass after
+            -- it would ever be counted (runs > L.runs)
+            if runs < L.runs then
+                L.resets = (L.resets or 0) + 1
+                log(string.format("special: Ladon %s's pass count reset %d -> %d (its appearance fired again, %d so far; last volley %s)",
+                    c.names[k] or k, L.runs, runs, L.resets, s.volleyWho and string.format("%s's %.0f s ago", s.volleyWho, now - (s.volleyAny or now)) or "none"))
+                L.runs = runs
+            end
+            -- (0.73.73) its appearance fired again (SV_LadonSeen<Key> counts its fires): since 0.73.73 that can't restart
+            -- its route or its pass count (its records run once a spawn: tools/survival_events.py build_ladon); logged,
+            -- for HOTFIX_NOTES open problem 3 (a volley after its first pass fired it)
+            local seen = f["SV_LadonSeen" .. k] or 0
+            if seen > 0 and not L.seen0 then L.seen0, L.seen = seen, seen
+            elseif L.seen and seen > L.seen then
+                L.seen = seen
+                log(string.format("special: Ladon %s's appearance fired again (%d so far this spawn; last volley %s): its route and pass count kept (SV_LadonDone %d)",
+                    c.names[k] or k, seen - L.seen0, s.volleyWho and string.format("%s's %.0f s ago", s.volleyWho, now - (s.volleyAny or now)) or "none",
+                    f["SV_LadonDone" .. k] or 0))
+            end
+            -- (0.73.73) where it is, once a second (its body: the unit's first plane up): its track, its passes after the
+            -- first, the backstop below
+            local l, dkm
+            for _, p in ipairs(planes) do
+                if p.unit == L.unit and not p.down and liveAddr(p.obj) then
+                    local okL, at = pcall(function() return p.obj:K2_GetActorLocation() end)
+                    if okL and at then l, dkm = at, math.sqrt((at.X - AIRFIELD.X) ^ 2 + (at.Y - AIRFIELD.Y) ^ 2) / 100000 end
+                    break
+                end
+            end
+            local legs = f["SV_LadonLeg" .. k] or 0
+            if l and now >= (L.posAt or 0) and (c.pos_log_s or 0) > 0 then   -- (patch ladon1) where it is, for its track
+                L.posAt = now + c.pos_log_s
+                -- (legs: its circuit's arcs flown, SV_LadonLeg<Key>: two a lap, each one's end starting the other)
+                log(string.format("special: Ladon %s at (%.1f, %.1f) km, alt %.1f km, %.1f km from the airfield; pass flag %d, legs %d, passes %d%s",
+                    c.names[k] or k, l.X / 100000, l.Y / 100000, l.Z / 100000, dkm, runs, legs, L.passes or 0,
+                    L.passed and c.volley_after_pass == false and ", volleys off" or ""))
+            end
             -- (a count left from last time is reset by its appearance; a circuit takes minutes, so one pass in 30 s at
             -- most: a path that "finished" every frame once counted 30 a second and bombed every second, 2026-10-23)
-            if now - s.at >= 5 and runs > L.runs and now - (L.bombAt or 0) >= 30 then
-                L.runs, L.bombAt, s.runs = runs, now, (s.runs or 0) + 1
+            -- Its first pass is its route's end (SV_LadonRun<Key>); the rest by distance, its circuit round the airfield
+            -- with no pass flag (0.73.69, 0.73.73): within 2.5 km of the airfield after being 5 km or more out.
+            -- (0.73.74) its first pass by distance too: its route runs on into its circuit's laps in one path
+            -- (tools/survival_events.py LADON_LAPS), so no route's end over the airfield until the laps run out
+            local near = false
+            if dkm then
+                if dkm >= 5 then L.armed = true
+                elseif dkm <= 2.5 and L.armed then near = true end
+            end
+            -- (0.73.73) a pass flag up within 30 s of a pass counted is that pass (A19, 12:01:59 / 12:02:34: the old
+            -- circuit's end over the airfield 3 s after the distance had counted it, counted again 35 s on)
+            if runs > L.runs and L.bombAt and now - L.bombAt < 30 then
+                log(string.format("special: Ladon %s's pass flag %d -> %d %.0f s after a pass counted: the same pass",
+                    c.names[k] or k, L.runs, runs, now - L.bombAt))
+                L.runs = runs
+            end
+            -- (0.73.73) the backstop: after its first pass its circuit keeps it within ~17 km of the airfield
+            -- (tools/survival_events.py LADON_CIRCUIT_KM); leash_km or more out, it's off it (A19, 0.73.70: 50 km east
+            -- after its second pass): RE_SV_LadonLeash<Key> takes it off its path and its unit area onto the airport,
+            -- where it circles; at most every leash_every_s
+            if dkm and L.passes and L.passes >= 1 and (c.leash_km or 0) > 0 and dkm >= c.leash_km and now >= (L.leashAt or 0) then
+                L.leashAt, L.leashes = now + (c.leash_every_s or 90), (L.leashes or 0) + 1
+                local r = type(SV_Event) == "function" and SV_Event("RE_SV_LadonLeash" .. k) or -5
+                log(string.format("special: Ladon %s %.1f km from the airfield after %d pass(es), off its circuit (legs %d): off its path, its area onto the airport (RE_SV_LadonLeash%s %s; %d so far)",
+                    c.names[k] or k, dkm, L.passes, legs, k, r == 1 and "fired" or ("NOT fired: " .. tostring(SV_ERR and SV_ERR[r] or r)), L.leashes))
+            end
+            if now - s.at >= 5 and (runs > L.runs or near) and now - (L.bombAt or 0) >= 30 then
+                L.armed = false
+                L.runs, L.bombAt, s.runs = math.max(runs, L.runs), now, (s.runs or 0) + 1
+                L.passes = (L.passes or 0) + 1
+                if not L.passed and c.volley_after_pass == false then
+                    log(string.format("special: Ladon %s: no more volleys after its first pass (volley_after_pass false)", c.names[k] or k))
+                end
+                L.passed = true
                 local dmg = c.bomb_damage + (c.bomb_per_round or 0) * math.max(0, D.round - CFG.specials.first)
                 if CFG.airfield.enabled and not AF.down then AF.bomb = AF.bomb + dmg end
                 hudCallout(string.format(t.ladon_run, c.names[k] or k), t.ladon_run_sub)
-                log(string.format("special: Ladon %s's pass over the airfield (%d): -%d", c.names[k] or k, runs, dmg))
+                log(string.format("special: Ladon %s's pass over the airfield (%d): -%d%s", c.names[k] or k, L.passes, dmg,   -- (0.73.76: its pass count, not the route's flag)
+                    L.rage and string.format(" (enraged %.0f s ago)", now - (L.rageAt or now)) or ""))
             end
             local n, gone = SV_UnitAlive(L.unit), false
             if n >= 0 then L.errs = 0 else L.errs = (L.errs or 0) + 1 end
@@ -144,15 +347,22 @@ function SPC.ladonTick(now, s)
                 if not flying then
                     L.alive, gone, s.escaped = false, true, true
                     log(string.format("special: Ladon %s gone without being shot down (SV_UnitAlive %d); no pay", c.names[k] or k, n))
+                    ladonRearm(k, "gone")
                 end
+            end
+            if n > 0 and not gone and bodyDown(L.unit, s.planeFrom) then   -- (its body down, parts still up: down)
+                log(string.format("special: Ladon %s's body is down, %d of its unit still up (its parts): counted down", c.names[k] or k, n))
+                n = 0
             end
             if n == 0 and not gone then
                 L.alive = false
                 local pay = c.reward + (c.reward_per_round or 0) * D.round
                 addCredits(pay, "Ladon " .. (c.names[k] or k) .. " down")
                 LB.stat("air", 1)
-                hudCallout(string.format(t.ladon_down, c.names[k] or k), string.format(t.ladon_down_sub, pay))
+                hudCallout(string.format(t.ladon_down, c.names[k] or k), string.format(t.ladon_down_sub, specialPay(pay)))   -- ((0.73.78) C3)
                 log(string.format("special: round %d, Ladon %s down %.0f s after it appeared", D.round, c.names[k] or k, now - s.at))
+                ladonRearm(k, "down")
+                pcall(SPC.ladonRage, now, s, k)              -- (the other one enraged: P7)
             end
         end
     end
@@ -168,7 +378,11 @@ end
 -- a gun, the Ladons' pulse cannons, a SAM's blast or a collision. The Ladons' VLS missiles are toned down here as they
 -- appear (CFG.specials.ladon.missile_*): from their class default, so a missile seen twice isn't cut twice.
 HIT = { new = {}, msl = {} }
-pcall(NotifyOnNewObject, "/Script/Live.LiveMissile", function(o) if #HIT.new < 200 then HIT.new[#HIT.new + 1] = o end end)
+-- ((0.73.79) hookSeen: this feed works (the Ladons' missile walk then runs once a level, not every 10 s); newDropped: one
+-- was dropped past the 200 kept a tick, so the walk runs again to find it)
+pcall(NotifyOnNewObject, "/Script/Live.LiveMissile", function(o)
+    if #HIT.new < 200 then HIT.new[#HIT.new + 1] = o; HIT.hookSeen = true else HIT.newDropped = true end
+end)
 do
 local LADON_MSL = "BP_wp_vls_ladon"
 local LADON_CDO = "/Game/Blueprints/Weapons/MSL/NPC/Vls/Ladon/BP_wp_vls_ladon.Default__BP_wp_vls_ladon_C"
@@ -181,26 +395,40 @@ local function at(o)
     local ok, v = pcall(function() local l = o:K2_GetActorLocation(); return { X = l.X, Y = l.Y, Z = l.Z } end)
     return ok and v or nil
 end
-local function owner(o)                                    -- who fired it (its owner, else its instigator), or nil
+local function owner(o)                                    -- who fired it (its owner, else its instigator) and that actor, or nil
     for _, f in ipairs({ function() return o:GetOwner() end, function() return o.Instigator end }) do
         local ok, w = pcall(f)
-        if ok and valid(w) then return short(w) end
+        if ok and valid(w) then return short(w), w end
     end
     return nil
 end
 
+-- its turn rates from `base` (the class default) x missile_turn_x (user, 2026-10-29: "make their missiles turn less
+-- faster, they're almost unavoidable"): "a -> b deg/s" for the log
+local function slower(o, base)
+    local x = tonumber(CFG.specials.ladon.missile_turn_x) or 1
+    local r0 = base.MaxRotationAngle
+    o.MaxRotationAngle = r0 * x
+    pcall(function()                                       -- (its turn before it has a lock, where it has one)
+        local n0 = base.MaxRotationAngleNotCaptured
+        if type(n0) == "number" and n0 > 0 then o.MaxRotationAngleNotCaptured = n0 * x end
+    end)
+    return string.format("%.0f -> %.0f deg/s", r0, o.MaxRotationAngle)
+end
+
 local function nerf(o)
     local c = CFG.specials.ladon
-    if not valid(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
-    local base = valid(HIT.cdo) and HIT.cdo or o
+    if not liveObj(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
+    local base = liveObj(HIT.cdo) and HIT.cdo or o
     local ok, err = pcall(function()
         local d0, a0 = base.damage, base.MaxHomingAngle
-        o.damage = d0 * (c.missile_damage_x or 1)
+        o.damage = tonumber(c.missile_damage) or d0
         o.MaxHomingAngle = a0 * (c.missile_homing_x or 1)
+        local turn = slower(o, base)
         if not HIT.nerfSaid then
             HIT.nerfSaid = true
-            log(string.format("hits: the Ladons' missile %s toned down: damage %.1f -> %.1f, homing cone %.0f -> %.0f deg (from %s)",
-                LADON_MSL, d0, o.damage, a0, o.MaxHomingAngle, base == o and "the missile itself" or "its class default"))
+            log(string.format("hits: the Ladons' missile %s toned down: damage %.1f -> %.1f, homing cone %.0f -> %.0f deg, turn %s (from %s)",
+                LADON_MSL, d0, o.damage, a0, o.MaxHomingAngle, turn, base == o and "the missile itself" or "its class default"))
         end
     end)
     if not ok and not HIT.nerfErr then HIT.nerfErr = true; log("hits: the Ladons' missile NOT toned down: " .. tostring(err)) end
@@ -209,20 +437,21 @@ end
 -- Mission 16's scripted sure kill, BP_wp_vls_certain_ladon (hard rule 36): Survival's volleys fire the ordinary
 -- missile, but the Ladon's own fire control can pick it too (a run of 2026-10-24: one shot down the player from 198 HP
 -- with three airframe upgrades, 15 s after a volley). Each one is made the ordinary missile, as toned down above
--- (damage and homing cone from BP_wp_vls_ladon's class default). Never destroyed: a missile destroyed from Lua stays
+-- (missile_damage; homing cone and turn rate from BP_wp_vls_ladon's class default). Never destroyed: a missile destroyed from Lua stays
 -- counted in flight and on the missile alert, and the game crashed (the ECM burst, 2026-10-25).
 local function certain(o)
     local c = CFG.specials.ladon
-    if not valid(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
+    if not liveObj(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
     local ok, err = pcall(function()
         local d0, a0 = o.damage, o.MaxHomingAngle
-        local d1 = valid(HIT.cdo) and HIT.cdo.damage * (c.missile_damage_x or 1) or 12
-        local a1 = valid(HIT.cdo) and HIT.cdo.MaxHomingAngle * (c.missile_homing_x or 1) or a0
+        local d1 = tonumber(c.missile_damage) or 10
+        local a1 = liveObj(HIT.cdo) and HIT.cdo.MaxHomingAngle * (c.missile_homing_x or 1) or a0
         o.damage, o.MaxHomingAngle = d1, math.min(a0, a1)
+        local turn = slower(o, liveObj(HIT.cdo) and HIT.cdo or o)
         if not HIT.certainSaid then
             HIT.certainSaid = true
-            log(string.format("hits: the Ladons' sure-kill missile BP_wp_vls_certain_ladon made an ordinary one: damage %.1f -> %.1f, homing cone %.0f -> %.0f deg",
-                d0, o.damage, a0, o.MaxHomingAngle))
+            log(string.format("hits: the Ladons' sure-kill missile BP_wp_vls_certain_ladon made an ordinary one: damage %.1f -> %.1f, homing cone %.0f -> %.0f deg, turn %s",
+                d0, o.damage, a0, o.MaxHomingAngle, turn))
         end
     end)
     if not ok and not HIT.certainErr then HIT.certainErr = true; log("hits: the Ladons' sure-kill missile NOT toned down: " .. tostring(err)) end
@@ -239,7 +468,7 @@ local function around(me, now)
     for i = 1, math.min(3, #ms) do
         local m = ms[i]
         mt[#mt + 1] = string.format("%s %.0f m%s%s", m.name, m.d, m.from and (" from " .. m.from) or "",
-            valid(m.obj) and "" or " (gone: it hit)")
+            liveAddr(m.obj) and "" or " (gone: it hit)")
     end
     local es = {}
     for _, p in ipairs(planes) do
@@ -255,17 +484,184 @@ local function around(me, now)
         "; nearest enemies: " .. (#et > 0 and table.concat(et, ", ") or "none within 8 km")
 end
 
-function HIT.reset() HIT.new, HIT.msl, HIT.h, HIT.pawn, HIT.sum = {}, {}, nil, nil, nil end
+function HIT.reset()
+    HIT.new, HIT.msl, HIT.h, HIT.pawn, HIT.sum = {}, {}, nil, nil, nil
+    HIT.ladonUntil, HIT.ladonSweepAt = nil, nil
+    HIT.ladonPool, HIT.ladonWalkAt = {}, nil                -- ((0.73.77) B5: the Ladon missiles kept, below)
+    HIT.ladonWalked, HIT.ladonWalkStep, HIT.base, HIT.ladonSweeps = nil, nil, nil, 0   -- ((0.73.79) below)
+    HIT.cdo = nil                  -- ((0.73.84) the Ladon missile's class default goes with its level: looked for again, and
+                                   -- liveObj, not valid(), on the one kept (valid() reads a freed one: the gun's of TAC.reset)
+end
+
+-- (0.73.77, Workstream B5) Every Ladon missile the game has made, by address: HIT.ladonPool[a] = { obj, name, certain }.
+-- They come in through HIT.new as they're made (NotifyOnNewObject; a pool only grows, its items launched again and
+-- again), so the toning sweep below goes over these instead of walking every object for the two classes on each sweep
+-- (twice every 0.5 s while a Ladon is up, every tick of a volley): gloom's Ladon round of 2026-11-02, the hits part 7.5 ms
+-- a tick (27 % of the tick); the testers' of 2026-11-01, 13-27 ms. A walk every LADON_WALK_S still, for one HIT.new
+-- dropped (it keeps 200 a tick); each kept one checked live, and its name, before it's touched (an address used again).
+-- ((0.73.79, the lag audit's item 6) The walk, one class a sweep (~35 ms each on a tester's PC, two at once were a 70 ms
+-- hitch every 10 s of a Ladon round), runs once a level, again when the feed dropped one (HIT.newDropped) and every
+-- LADON_WALK_S as a backstop; every LADON_BLIND_S while the feed has never delivered a missile (HIT.hookSeen: its
+-- registration failed). Each sweep reads a kept missile's four toned values and writes them only when they differ from
+-- what they should be (HIT.base: its class default's, read once a level): a relaunch resets them, as the game does
+-- (`caught at damage 750`), and is toned again the same sweep. A kept address that holds another Ladon missile now is
+-- kept as that one.)
+local LADON_WALK_S, LADON_BLIND_S = 60, 10
+-- (the sure kill first: a missed one is the deadly one, toned the first sweep)
+local WALK_CLS = { { LADON_CERTAIN .. "_C", true }, { LADON_MSL .. "_C", false } }
+-- the class default's values the toning starts from, once a level (nil when it can't be read: the old path then)
+local function ladonBase()
+    if HIT.base then return HIT.base end
+    if not liveObj(HIT.cdo) then HIT.cdo = StaticFindObject(LADON_CDO) end
+    if not liveObj(HIT.cdo) then return nil end
+    local ok, b = pcall(function()
+        local r = { d = HIT.cdo.damage, homing = HIT.cdo.MaxHomingAngle, rot = HIT.cdo.MaxRotationAngle, rotNC = nil }
+        pcall(function() r.rotNC = HIT.cdo.MaxRotationAngleNotCaptured end)
+        return r
+    end)
+    if ok and type(b) == "table" and type(b.d) == "number" and type(b.homing) == "number" and type(b.rot) == "number" then
+        HIT.base = b
+    end
+    return HIT.base
+end
+-- true when a kept missile already holds its toned values (read in one go; any read failing: false, so it's toned)
+local function toned(o, isCertain)
+    local b = ladonBase()
+    if not b then return false end
+    local c = CFG.specials.ladon
+    local tx = tonumber(c.missile_turn_x) or 1
+    local ok, same = pcall(function()
+        local d, h, r = o.damage, o.MaxHomingAngle, o.MaxRotationAngle
+        local wantD = tonumber(c.missile_damage) or (isCertain and 10 or b.d)
+        local wantH = b.homing * (c.missile_homing_x or 1)
+        if math.abs(d - wantD) > 0.01 or math.abs(r - b.rot * tx) > 0.01 then return false end
+        if isCertain then if h > wantH + 0.01 then return false end      -- (certain(): the smaller of its own and the toned)
+        elseif math.abs(h - wantH) > 0.01 then return false end
+        if type(b.rotNC) == "number" and b.rotNC > 0 and math.abs(o.MaxRotationAngleNotCaptured - b.rotNC * tx) > 0.01 then return false end
+        return true
+    end)
+    return ok and same == true
+end
+-- ((0.73.77) the teardown gate's drop, sv_core.lua levelDrop: the missiles kept here forgotten, none of them touched)
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS.hits = function() HIT.reset() end end
+local function ladonKeep(o, isCertain)
+    local a = liveAddr(o)
+    if not a then return false end
+    HIT.ladonPool = HIT.ladonPool or {}
+    if HIT.ladonPool[a] then return false end
+    HIT.ladonPool[a] = { obj = o, name = nameOf(o), certain = isCertain }
+    return true
+end
 
 -- every tick in a run (now: the round clock)
 function HIT.tick(pc, now)
     local new = HIT.new
     HIT.new = {}
+    if now then pcall(SPC.ladonRearmTick, now) end         -- (0.73.73: a gone Ladon's appearance armed again)
+    -- Weapons are pooled (LiveWeaponBase is a LiveObjectPoolItem: the co-op fire research of 2026-10-29), so a volley's
+    -- reused missiles never come in as new objects: for sweep_s after each volley (HIT.sweepUntil, sv_ladon's volley)
+    -- every Ladon missile up is toned down again (from the class default, so twice is the same as once)
+    -- Also every 0.5 s while a Ladon is up and 40 s after the last: its own fire control fires the sure kill too, pooled,
+    -- outside Survival's volleys (the co-op run of 2026-10-30, round 8: four players down within 4 s of Ladon MISHKA's
+    -- end, the host from 100 HP in one hit, all of it from BP_OP0045_ladn_VLS_L_Base, its volley 39 s before)
+    if now then
+        for _, p in ipairs(planes or {}) do
+            if not p.down and ((p.unit or ""):find("Ladon", 1, true) or (p.name or ""):find("_ladn_", 1, true)) then
+                HIT.ladonUntil = now + 40
+                break
+            end
+        end
+    end
+    local volleyOn = HIT.sweepUntil and now and now < HIT.sweepUntil
+    local ladonOn = HIT.ladonUntil and now and now < HIT.ladonUntil and now >= (HIT.ladonSweepAt or 0)
+    if volleyOn or ladonOn then
+        if ladonOn then HIT.ladonSweepAt = now + 0.5 end
+        local tS = os.clock()
+        -- ((0.73.77, B5) from the kept pool, ladonKeep; (0.73.79) the walk one class a sweep, when due: above)
+        local step = HIT.ladonWalkStep
+        if not step and (not HIT.ladonWalked or HIT.newDropped or now >= (HIT.ladonWalkAt or 0)) then step = 1 end
+        if step then
+            local cls, isCertain = WALK_CLS[step][1], WALK_CLS[step][2]
+            -- (UE4SS answers nil for none found too: only a held walk (sv_core.lua held(): WALK.heldWhy) is tried again
+            -- next sweep; review of 2026-11-04: before any Ladon missile existed it walked every sweep)
+            local list = FindAllOf(cls)
+            if list == nil and not (WALK and WALK.heldWhy) then list = {} end
+            if type(list) == "table" then
+                if step == 1 then HIT.newDropped, HIT.ladonWalkAdded = nil, 0 end
+                local added = 0
+                for _, o in ipairs(list) do
+                    if valid(o) and not short(o):find("^Default__") and ladonKeep(o, isCertain) then added = added + 1 end
+                end
+                HIT.ladonWalkAdded = (HIT.ladonWalkAdded or 0) + added
+                if step == 1 then HIT.ladonWalkStep = 2
+                else
+                    HIT.ladonWalkStep, HIT.ladonWalked = nil, true
+                    HIT.ladonWalkAt = now + (HIT.hookSeen and LADON_WALK_S or LADON_BLIND_S)
+                    HIT.ladonWalks = (HIT.ladonWalks or 0) + 1
+                    if (HIT.ladonWalks >= 2 and HIT.ladonWalkAdded > 0) or (HIT.ladonWalks == 1 and not HIT.poolSaid) then
+                        HIT.poolSaid = true
+                        local k = 0
+                        for _ in pairs(HIT.ladonPool or {}) do k = k + 1 end
+                        log(string.format("hits: the Ladons' missiles toned from their pool as it's kept (%d now; a walk %s for "
+                            .. "any missed: %d more this time; 0.73.79)", k, HIT.hookSeen and ("once a level, on a dropped one and every "
+                            .. LADON_WALK_S .. " s") or ("every " .. LADON_BLIND_S .. " s: no missile from the feed yet"), HIT.ladonWalkAdded))
+                    end
+                end
+            end
+        end
+        HIT.ladonSweeps = (HIT.ladonSweeps or 0) + 1
+        local nameCheck = HIT.ladonSweeps % 20 == 0          -- (every 20th sweep the names anyway: an address used again)
+        local n = 0
+        for a, e in pairs(HIT.ladonPool or {}) do
+            local o = e.obj
+            local drop = liveAddr(o) ~= a
+            local same = not drop and not nameCheck and toned(o, e.certain)
+            if not drop and not same then                  -- (not as it should be: whose is it now, before it's touched)
+                local nm = nameOf(o)
+                if nm ~= e.name then
+                    local sh = short(o)
+                    if sh == LADON_MSL or sh == LADON_CERTAIN then e.name, e.certain = nm, sh == LADON_CERTAIN
+                    else drop = true end
+                end
+                if not drop and nameCheck and toned(o, e.certain) then same = true end
+            end
+            if drop then
+                HIT.ladonPool[a] = nil                    -- (gone, or its address another object's now)
+            elseif same then
+                n = n + 1                                 -- (toned already: nothing written)
+            else
+                if e.certain then
+                    local okD, d = pcall(function() return o.damage end)
+                    if okD and type(d) == "number" and d > (tonumber(CFG.specials.ladon.missile_damage) or 10) + 0.5 then
+                        HIT.certainCaught = (HIT.certainCaught or 0) + 1
+                        if now - (HIT.certainCaughtSaid or -1e9) >= 60 then
+                            HIT.certainCaughtSaid = now
+                            log(string.format("hits: a Ladon's sure-kill missile caught at damage %.0f, made ordinary (%d so far; %s)",
+                                d, HIT.certainCaught, volleyOn and "a volley's" or "its own fire control's"))
+                        end
+                    end
+                    certain(o)
+                else
+                    nerf(o)
+                end
+                n = n + 1
+            end
+        end
+        if volleyOn and n > (HIT.sweepN or 0) then HIT.sweepN = n end
+        if PERF and PERF.add then PERF.add("hits/Ladon missiles", tS) end
+    elseif HIT.sweepUntil and not volleyOn then
+        if not HIT.sweepSaid then
+            HIT.sweepSaid = true
+            log(string.format("hits: a Ladon volley's missiles toned down as they flew (up to %d at once, pooled ones too)", HIT.sweepN or 0))
+        end
+        HIT.sweepUntil, HIT.sweepN = nil, nil
+    end
     for _, o in ipairs(new) do                             -- the new missiles: enemies' tracked, the Ladons' toned down
-        if valid(o) then
+        if liveAddr(o) then                                -- (hotfix2: caught a tick ago; not valid(), sv_core liveAddr)
             local n = short(o)
             if not n:find("^BP_plwp_") and not n:find("^Default__") then
-                if n == LADON_MSL then nerf(o) elseif n == LADON_CERTAIN then certain(o) end
+                if n == LADON_MSL then nerf(o); ladonKeep(o, false)                  -- ((0.73.77) kept: B5)
+                elseif n == LADON_CERTAIN then certain(o); ladonKeep(o, true) end
                 if #HIT.msl >= 60 then table.remove(HIT.msl, 1) end
                 HIT.msl[#HIT.msl + 1] = { obj = o, name = n, born = now }
             end
@@ -275,25 +671,44 @@ function HIT.tick(pc, now)
     if not valid(pawn) then return end
     local me = at(pawn)
     local keep = {}
+    local tM = os.clock()
+    -- ((0.73.77, Workstream B5) one more than MSL_FAR_M off read every other tick (half of them each tick), the near ones
+    -- every tick: a Ladon volley fills the 60, each read every tick; what's near you at a hit, around(), is the near ones)
+    local MSL_FAR_M = 3000
     for _, m in ipairs(HIT.msl) do                         -- where each one is (kept 2 s after it's gone)
-        if valid(m.obj) and now - m.born < 30 then
-            m.from = m.from or owner(m.obj)
-            local v = me and at(m.obj)
-            if v then m.d, m.seen = km(v, me) * 1000, now end
+        if liveAddr(m.obj) and now - m.born < 30 then     -- (hotfix2: not valid(), sv_core liveAddr)
+            if not m.from then                             -- (its shooter's address: which plane, for the measurements)
+                local nm, w = owner(m.obj)
+                m.from = nm
+                if w then m.fromAddr = addrOf(w) end
+            end
+            local far = m.d and m.d > MSL_FAR_M
+            m.alt = far and not m.alt or false             -- (a far one: read one tick, skipped the next)
+            if not m.alt then
+                local v = me and at(m.obj)
+                if v then m.d, m.seen = km(v, me) * 1000, now end
+            end
             keep[#keep + 1] = m
         elseif now - (m.seen or m.born) < 2 then keep[#keep + 1] = m end
     end
     HIT.msl = keep
+    if PERF and PERF.add then PERF.add("hits/missiles", tM) end
     local okA, addr = pcall(function() return tostring(pawn:GetAddress()) end)
     if not okA then addr = nameOf(pawn) end
     if addr ~= HIT.pawn then HIT.pawn, HIT.h, HIT.sum = addr, nil, nil end    -- (a new aircraft: a restart)
+    -- ((0.73.77) G2: the AIRFRAME upgrade put back the moment the game resets it at the airfield, before the health is
+    -- read: the reset and its restore are never a hit)
+    local okG, guarded = true, false
+    if UP and UP.healthGuard then okG, guarded = pcall(UP.healthGuard, pawn) end
     local ok, h = pcall(function() return pawn.HealthInternal end)
     if not ok or type(h) ~= "number" then return end
     local last = HIT.h
     HIT.h = h
+    if okG and guarded then last = nil end
     if last and h < last then
         if not HIT.sum then HIT.sum, HIT.n, HIT.near = 0, 0, me and around(me, now) or "?" end   -- (as it was at the first)
         HIT.sum, HIT.n = HIT.sum + (last - h), HIT.n + 1
+        pcall(STATS.hit, now, (last - h) / 10, pawn)     -- (each drop by its source: the measurements, sv_stats.lua)
     end
     if HIT.sum and now - (HIT.logged or -1e9) >= 1 then
         local okM, maxHp = pcall(function() return pawn.MaxHealth end)

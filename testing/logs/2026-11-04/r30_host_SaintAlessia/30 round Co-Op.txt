@@ -1,0 +1,60 @@
+as host, no real issues, did start getting some stuttering around wave 20-25 maybe? wasn't counting, but it was nowhere near as bad as last night at wave 18
+
+clients were reporting only hit markers in the UI and no destroyed markers
+
+some weird interactions with menus causing permanent stalling were reported
+
+void watcher taking off at the same time as another player caused some weird interactions with clipping
+
+AI allies were pretty much useless according to the score
+
+had my music stop at least once and need a reset
+
+still had a lag spike with Valka spawning in, FPS was low during her existence, likely due to her spewing her cannon constantly
+
+space port invasion worked well for host, reports of LCAC desync from some clients
+
+airfield invasion went similarly well, unsure of LCAC desync during that one
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+Suggestions for gameplay and balance
+
+Ace System: key players generating lots of score or otherwise being a threat should cause the enemies to focus heavily on them, increase the difficulty of the ai near them, and in general harass them in an attempt to kill or otherwise remove the threat they pose and weaken the team and allow other players to shine by giving the Ace very little breathing room
+
+Bomber changes: Tu-160s and B-1s should be mach 2 or 3 (2500-3500 km/h) and take a similar approach to the base as Bigfoot 1 does in mission 19. 
+This would make them an actual threat that players in fast planes should prioritize while the Tu-95s should approach from near max altitude at their normal speed being escorted by fighters. Keep the attackers as they are, they are actually the main threat at the moment.
+
+Special round frequency: right now its utterly random and that makes the session feel repetitive for a good chunk of time followed byt a couple rounds of chaos quickly back to back. in 30 rounds i think we only had 3 specials
+
+Special Rounds and Modifiers: i gave some ideas before but ill just throw them here at the end so theyre not lost/buried/forgotten
+
+1. special round- "what if trigger failed?"
+
+-ADF-11F, MQ-101 and other UAVs
+-the Arsenal Bird
+-Triumphant
+
+a wave that utilizes all the AI enemies and their unique abilities comes in and we need to protect both the Spaceport and the Airbase from being destroyed
+
+2. Special round-  Tonitrus Strikes
+
+rainband airships and/or marker UAVs come in and start lasing the airbase we have to defend against them for 5 minutes or so while also dealing with fighters harassing us. every time an airship or Marker UAV is destroyed, a tonitrus spear still falls, just like in "Over the Rainband" they simply miss and land somewhere near the base within 6 km perhaps, should be very cinematic
+
+3. modifier- Railgun bombardment
+
+in Retaking of Theve 1, we are forced to evade land battleship railgun strikes from off the map, this is simply that.
+the weather the round prior should turn very cloudy, causing visibility issues to make this spicy
+
+4. special modifier- helios missiles 
+
+similar to railgun bombardment, but it happens the round right before the "what if trigger failed" special round
+
+5. change to current special round- Alicorn
+
+as it stands, its basically target practice
+what if you gave us a timer
+
+10 minutes to kill it or it will nuke Oured, Theve, Gracemeria, whatever Major City it chooses from a list
+
+However if we destroy 2 of the 4 ballasts within the first 2 or 3, it cuts the time down to 3 minutes to kill it quickly, make it a game ender if were slow and fail

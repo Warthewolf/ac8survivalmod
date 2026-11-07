@@ -1,0 +1,13 @@
+10:15:43.853 t20492 lua: coop: player 2 asked for the whole picture: sent (rs)
+10:21:29.183 t20492 lua: coop: player 2 asked for the whole picture: sent (rs)
+10:21:30.294 t20492 lua: coop: player 2 asked for the whole picture: sent (rs)
+10:21:47.679 t20492 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+10:21:51.051 t20492 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2
+10:22:28.073 t20492 lua: coop: player 2 asked for the whole picture: sent (rs)
+10:23:47.393 t20492 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 15C738C4B0
+10:23:47.394 t20492 recycle ERA_Unit_01_Dep_Air0: done
+10:23:47.402 t20492 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+10:23:50.566 t20492 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+10:23:53.861 t20492 recycle ERA_Unit_06_Dep_Air0: unregistering and destroying its unit actor 15C738A4C0
+10:23:53.861 t20492 recycle ERA_Unit_06_Dep_Air0: done
+10:23:53.874 t20492 lua: spawn ERA_Unit_06_Dep_Air0 at a pose: 2

@@ -115,6 +115,82 @@ function SND.stopAll()
         for h in pairs(SND.live) do SV_SndStop(h, 0) end
     end
     SND.live = {}
+    SND.songStop(true)
+end
+
+-- (0.73.76) A song (CFG.specials.valka.song, the user's own track in their VALKA build: "have it start as the Red Starts
+-- to Fade in ... Fade out after her death", "at 75% volume"): one voice, centred, not panned, at `volume` (linear),
+-- looped unless loop = false; SND.songFade(s) fades it out over s seconds, then it stops. With game_music = "stop" the
+-- game's mission track is stopped while it plays (its BGM controller's <track>_Stop) and posted again after.
+SND.song = nil
+-- ((0.73.84, the review of the crash-on-quit fix) a quit during her song stops it as the level's torn down, when the runtime
+-- refuses every BGM post (its BGM controller is reached through the spawner, and the teardown gate holds it): the
+-- AKE_System_BGM_Mute_Off was lost and the game's music stayed muted. Refused, it's due (SND.unmuteDue) and posted
+-- again from the next level's sound tick (unmuteTick: every 2 s, 15 tries), unless a song of that level mutes it first.)
+SND.unmuteDue = nil
+local function songMusicBack(sg)
+    if sg and sg.muted and type(SV_PlayBGM) == "function" then
+        local r = SV_PlayBGM("AKE_System_BGM_Mute_Off")
+        local ok = type(r) == "number" and r > 0
+        if not ok then SND.unmuteDue, SND.unmuteAt, SND.unmuteTries = true, nil, 0 end
+        log("sound: the game's music back after the song (AKE_System_BGM_Mute_Off: " .. tostring(r) .. ")"
+            .. (ok and "" or "; refused: posted again in the next level"))
+    end
+    if sg and sg.track and type(SV_PlayBGM) == "function" then
+        local r = SV_PlayBGM(sg.track)
+        log("sound: the game's music back after the song: " .. sg.track .. " (" .. tostring(r) .. ")")
+    end
+end
+function SND.songStart(sc)
+    if SND.song or type(sc) ~= "table" or sc.enabled == false or not sc.file then return end
+    local id = SND.id(sc.file)
+    if not id then return end
+    local v = math.max(0, math.min(1, tonumber(sc.volume) or 0.75))
+    local h = SV_SndPlay(id, v, v, 1, sc.loop == false and 0 or 1)
+    if not h or h <= 0 then log("sound: the song " .. sc.file .. " didn't play (" .. tostring(h) .. ")"); return end
+    SND.song = { h = h, v = v, top = v, at = os.clock() }
+    local said = ""
+    if sc.game_music == "mute" and type(SV_PlayBGM) == "function" then
+        -- (0.73.76) AC8's system mute, whatever plays (the pause menu's music player too: its jukebox kept playing past
+        -- the _Stop of the controller's last track, which was the hangar's: tools/re/MUSIC_RADIO_CAMERA.md)
+        local r = SV_PlayBGM("AKE_System_BGM_Mute_On")
+        SND.song.muted = true
+        SND.unmuteDue = nil                         -- ((0.73.84) this song's end unmutes)
+        said = "; the game's music muted (AKE_System_BGM_Mute_On: " .. tostring(r) .. ")"
+    elseif sc.game_music == "stop" and type(SV_BGMNames) == "function" and type(SV_PlayBGM) == "function" then
+        local track = (SV_BGMNames() or ""):match("^([^|]*)") or ""
+        local stop = track:gsub("_Play$", "_Stop")
+        if track ~= "" and stop ~= track then
+            SND.song.track = track
+            said = string.format("; the game's %s stopped (%s: %s)", track, stop, tostring(SV_PlayBGM(stop)))
+        else
+            said = "; the game's music left as it is (no track to stop: '" .. track .. "')"
+        end
+    end
+    log(string.format("sound: the song %s playing at %d%%%s%s", sc.file, math.floor(v * 100 + 0.5),
+        sc.loop == false and "" or ", looped", said))
+end
+function SND.songFade(secs)
+    local sg = SND.song
+    if not sg or sg.fadeS then return end
+    sg.fadeS, sg.fadeAt = math.max(0.1, tonumber(secs) or 5), os.clock()
+    log(string.format("sound: the song fading out over %.0f s", sg.fadeS))
+end
+function SND.songStop(quiet)
+    local sg = SND.song
+    if not sg then return end
+    SND.song = nil
+    if type(SV_SndStop) == "function" then SV_SndStop(sg.h, 0) end
+    if not quiet then log("sound: the song stopped") end
+    songMusicBack(sg)
+end
+local function songTick()
+    local sg = SND.song
+    if not (sg and sg.fadeS) then return end
+    local t = (os.clock() - sg.fadeAt) / sg.fadeS
+    if t >= 1 then SND.songStop(); return end
+    local v = sg.top * (1 - t)
+    if SV_SndSet(sg.h, v, v, 1) ~= 1 then SND.song = nil; songMusicBack(sg) end
 end
 
 -- the game paused / running: Survival's sounds silent while it's paused (their clock stops, a loop would play on)
@@ -135,9 +211,61 @@ function SND.event(list, at, extraDb, ratio)
     return hs
 end
 
+-- ((0.73.79, the lag audit's item 7) VALKA's sounds loaded before her fight: the runtime reads a whole file on the game
+-- thread the first time it's played (the song's 45 MB: ~106 ms at her mood's start, ~98 ms at her opener's shot on a
+-- tester's PC). SND.preloadValka() queues her song and every file of CFG.sound.valka (from the break before her round,
+-- the round's start, or the host's VALKA round on a joiner), and SND.tick loads one a tick: the same ids SND.id keeps
+-- after a first play, nothing played)
+SND.preQ = nil
+function SND.preloadValka()
+    if SND.preDone or SND.preQ or not CFG.sound.enabled or type(SV_SndLoad) ~= "function" then return end
+    local q, seen = {}, {}
+    local function add(f) if type(f) == "string" and not seen[f] and SND.ids[f] == nil then seen[f] = true; q[#q + 1] = f end end
+    local sp = CFG.specials and CFG.specials.valka
+    if type(sp) == "table" and type(sp.song) == "table" and sp.song.enabled ~= false then add(sp.song.file) end
+    local function layers(t)
+        if type(t) ~= "table" then return end
+        if t.file or t.pick then t = { t } end
+        for _, l in ipairs(t) do
+            if type(l) == "table" then
+                add(l.file)
+                for _, p in ipairs(type(l.pick) == "table" and l.pick or {}) do if type(p) == "table" then add(p[1]) end end
+            end
+        end
+    end
+    for _, ev in pairs(type(CFG.sound.valka) == "table" and CFG.sound.valka or {}) do layers(ev) end
+    SND.preQ, SND.preDone = q, true
+    log(string.format("sound: VALKA's %d sound files loading, one a tick, before her fight", #q))
+end
+local function preloadTick()
+    local q = SND.preQ
+    if not q then return end
+    local f = table.remove(q, 1)
+    if f then SND.id(f) end
+    if #q == 0 then SND.preQ = nil end
+end
+
 -- every tick: the playing voices follow their source and you (pan, distance); the finished ones dropped
+local function unmuteTick()
+    if not SND.unmuteDue or type(SV_PlayBGM) ~= "function" then return end
+    if SND.song and SND.song.muted then SND.unmuteDue = nil; return end
+    local now = os.clock()
+    if now < (SND.unmuteAt or 0) then return end
+    SND.unmuteAt, SND.unmuteTries = now + 2, (SND.unmuteTries or 0) + 1
+    local r = SV_PlayBGM("AKE_System_BGM_Mute_Off")
+    if type(r) == "number" and r > 0 then
+        SND.unmuteDue = nil
+        log("sound: the game's music unmuted (VALKA's song was stopped as the last level went: AKE_System_BGM_Mute_Off " .. r .. ")")
+    elseif SND.unmuteTries >= 15 then
+        SND.unmuteDue = nil
+        log("sound: the game's music NOT unmuted after 15 tries (AKE_System_BGM_Mute_Off: " .. tostring(r) .. ")")
+    end
+end
 function SND.tick()
     if type(SV_SndSet) ~= "function" then return end
+    pcall(unmuteTick)                                  -- ((0.73.84) a mute left by a quit during VALKA's song)
+    pcall(preloadTick)                                  -- ((0.73.79) VALKA's files, one a tick, before her fight)
+    pcall(songTick)                                     -- (0.73.76) the song's fade
     for h, v in pairs(SND.live) do
         local where = v.at
         if type(v.at) == "function" then                -- (its source gone: where it last was, not on you)

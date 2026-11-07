@@ -1,0 +1,1343 @@
+[2026-11-01 10:04:57.2555937] Console created
+[2026-11-01 10:04:57.2601503] UE4SS - v3.0.1 Beta #0 - Git SHA #e3ba1016
+[2026-11-01 10:04:57.2601928] Timezone: America/Los_Angeles
+[2026-11-01 10:04:57.2602074] UE4SS Build Configuration: Game__Shipping__Win64 (MSVC)
+[2026-11-01 10:04:57.2618127] Setting up mods...
+[2026-11-01 10:04:57.2618814] Loading mods from: c:\program files (x86)\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods
+[2026-11-01 10:04:57.2641766] Starting mods (from enabled.txt (c:\program files (x86)\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods), no defined load order)...
+[2026-11-01 10:04:57.2643161] Mod 'AC8SurvivalMode' has enabled.txt, starting mod.
+[2026-11-01 10:04:57.2729552] Mod 'IoStoreLoaderMod' has enabled.txt, starting mod.
+[2026-11-01 10:04:59.8810033] No specific game configuration found, using default configuration file
+[2026-11-01 10:04:59.8810806] Config: c:\program files (x86)\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\UE4SS-settings.ini
+
+[2026-11-01 10:04:59.8810998] root directory: c:\program files (x86)\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss
+[2026-11-01 10:04:59.8811140] working directory: c:\program files (x86)\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss
+[2026-11-01 10:04:59.8811272] game executable directory: c:\program files (x86)\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64
+[2026-11-01 10:04:59.8812742] game executable: c:\program files (x86)\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\AceCombat8.exe (555102832 bytes)
+
+
+[2026-11-01 10:04:59.8812972] mods directories: 
+[2026-11-01 10:04:59.8813107] [0] c:\program files (x86)\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods
+[2026-11-01 10:04:59.8813234] 
+[2026-11-01 10:04:59.8813374] log directory: c:\program files (x86)\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss
+[2026-11-01 10:04:59.8813533] object dumper directory: c:\program files (x86)\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss
+
+
+[2026-11-01 10:04:59.8896566] PS Scan attempt 1 (Phase 2)
+[2026-11-01 10:04:59.8914752] [PS] Reading image
+[2026-11-01 10:04:59.8956520] [PS] Starting scan
+[2026-11-01 10:05:00.4505217] [PS] Scan finished in 554.8349ms
+[2026-11-01 10:05:00.4506310] [PS] Found EngineVersion: 5.4
+[2026-11-01 10:05:00.4506492] [PS] Found BuildConfiguration: Shipping
+[2026-11-01 10:05:00.4506634] [PS] Found Stats: Off
+[2026-11-01 10:05:00.4506785] [PS] Found GUObjectArray: 0x14dc60cd0
+[2026-11-01 10:05:00.4506917] [PS] Found GMalloc: 0x14e426090
+[2026-11-01 10:05:00.4507052] [PS] Found FName::ToString: 0x14186f950
+[2026-11-01 10:05:00.4507188] [PS] Found FName::FName(wchar_t*): 0x14186f190
+[2026-11-01 10:05:00.4507321] [PS] Found StaticConstructObject_Internal: 0x141abd340
+[2026-11-01 10:05:00.4507477] [PS] Failed to find FUObjectHashTables::Get(): FUObjectHashTablesGet: expected at least one value
+[2026-11-01 10:05:00.4507609] [PS] You can supply your own AOB in 'UE4SS_Signatures/GUObjectHashTables.lua'
+[2026-11-01 10:05:00.4507747] [PS] Found GNatives: 0x14e24de40
+[2026-11-01 10:05:00.4507881] [PS] Failed to find ConsoleManagerSingleton: ConsoleManagerSingleton: found 2 unique values [1416FDB00, 148C21760]
+[2026-11-01 10:05:00.4508011] [PS] You can supply your own AOB in 'UE4SS_Signatures/ConsoleManager.lua'
+[2026-11-01 10:05:00.4508135] [PS] Found GameEngineTick: 0x144430690
+[2026-11-01 10:05:00.4508312] PS scan successful
+[2026-11-01 10:05:00.4508435] Build configuration: shipping, detected
+[2026-11-01 10:05:00.4508556] Stats: off, detected
+[2026-11-01 10:05:00.4590080] Running second pass of Lua override scans
+[2026-11-01 10:05:00.4590857] Lua Scan attempt 1 (Phase 2)
+[2026-11-01 10:05:00.4600006] Phase 2: Verifying FName constructor...
+[2026-11-01 10:05:00.4679617] [UE4SS.FNameConstructor.FNameConstructorVerificationHook] Added posthook with Id '0X8000200000000001'!
+[2026-11-01 10:05:00.9461802] FName constructor verified at 0x000000014186F190
+[2026-11-01 10:05:00.9465780] Using engine version: 5.4
+[2026-11-01 10:05:00.9466791] Waiting for object construction...
+[2026-11-01 10:05:07.1913003] Still waiting for object construction, 0 objects constructed so far
+[2026-11-01 10:05:11.6442991] Still waiting for object construction, 9473 objects constructed so far
+[2026-11-01 10:05:13.2362068] Locating KismetStringLibrary...
+[2026-11-01 10:05:13.2392544] KismetStringLibrary located: 0x00000000216A3400 [n: 3AE0D]
+[2026-11-01 10:05:13.2393468] Locating KismetStringLibrary:Conv_NameToString...
+[2026-11-01 10:05:13.3554908] KismetStringLibrary:Conv_NameToString located: 0x000000010E0990E0 [n: 3AF0C]
+[2026-11-01 10:05:13.3555940] Locating KismetStringLibrary CDO...
+[2026-11-01 10:05:13.7609720] KismetStringLibrary CDO located: 0x00000001113A84A0 [n: 643658]
+[2026-11-01 10:05:13.7612821] Already constructed: ["/Script/CoreUObject", "Class"]
+[2026-11-01 10:05:13.7613497] Already constructed: ["/Script/CoreUObject"]
+[2026-11-01 10:05:13.7613739] Already constructed: ["/Script/CoreUObject", "Struct"]
+[2026-11-01 10:05:13.7614598] Already constructed: ["/Script/Engine", "Pawn"]
+[2026-11-01 10:05:13.7615047] Already constructed: ["/Script/Engine", "Character"]
+[2026-11-01 10:05:13.7615257] Already constructed: ["/Script/Engine", "Actor"]
+[2026-11-01 10:05:13.7625409] Already constructed: ["/Script/Engine", "Default__DefaultPawn"]
+[2026-11-01 10:05:13.7631682] Already constructed: ["/Script/Engine", "Default__MaterialExpression"]
+[2026-11-01 10:05:13.7632023] Already constructed: ["/Script/Engine", "ActorComponent"]
+[2026-11-01 10:05:13.7632330] Already constructed: ["/Script/Engine", "MovementComponent"]
+[2026-11-01 10:05:13.7632474] Already constructed: ["/Script/Engine", "HUD"]
+[2026-11-01 10:05:13.7632748] Already constructed: ["/Script/Engine", "PlayerController"]
+[2026-11-01 10:05:13.7636923] Already constructed: ["/Script/Engine", "PlayerCameraManager"]
+[2026-11-01 10:05:13.7644141] Already constructed: ["/Script/CoreUObject", "Vector"]
+[2026-11-01 10:05:13.7646399] Already constructed: ["/Script/Engine", "HitResult"]
+[2026-11-01 10:05:13.7648254] Already constructed: ["/Script/CoreUObject", "OrientedBox"]
+[2026-11-01 10:05:13.7650004] Already constructed: ["/Script/CoreUObject", "EInterpCurveMode"]
+[2026-11-01 10:05:13.7652171] Already constructed: ["/Script/Engine", "ENetRole"]
+[2026-11-01 10:05:13.7654954] Already constructed: ["/Script/MovieScene", "MovieSceneEditorData"]
+[2026-11-01 10:05:13.7655318] Already constructed: ["/Script/UMG", "Widget"]
+[2026-11-01 10:05:13.7655574] Already constructed: ["/Script/UMG", "ComboBoxString"]
+[2026-11-01 10:05:13.7655715] Already constructed: ["/Script/CoreUObject", "Interface"]
+[2026-11-01 10:05:13.7665180] Object CDO: 0x00000000176CF820 [n: 5347C4]
+[2026-11-01 10:05:13.7705329] Struct CDO: 0x00000000473C8980 [n: 534CE3]
+[2026-11-01 10:05:13.7705807] Finding 'GameEngine'
+[2026-11-01 10:05:13.7749414] Could not find 'GameEngine', falling back to '/Script/Engine.Default__GameEngine'
+[2026-11-01 10:05:13.7913358] GameEngine CDO/Instance: 0x0000000045B8BBC0 [n: 64322B]
+[2026-11-01 10:05:13.7914099] Finding 'GameModeBase'
+[2026-11-01 10:05:13.7930450] Could not find 'GameModeBase', falling back to '/Script/Engine.Default__GameModeBase'
+[2026-11-01 10:05:13.8088056] GameMode CDO/Instance: 0x00000000730BFC80 [n: 64340A]
+[2026-11-01 10:05:13.8283675] Actor CDO: 0x00000000712C31C0 [n: 63D65C]
+[2026-11-01 10:05:13.8284514] Finding 'GameViewportClient'
+[2026-11-01 10:05:13.8315748] Could not find 'GameViewportClient', falling back to '/Script/Engine.Default__GameViewportClient'
+[2026-11-01 10:05:13.8541254] GameViewportClient CDO/Instance: 0x00000000566795B0 [n: 64346C]
+[2026-11-01 10:05:13.8542144] Finding GameEngine::LoadMap
+[2026-11-01 10:05:13.8546638] GameEngine::LoadMap address 0x144bc8ed0
+[2026-11-01 10:05:13.8546966] Finding GameEngine::Tick
+[2026-11-01 10:05:13.8547122] GameEngine::Tick address (vtable: 0x144430690; scan: 0x144430690)
+[2026-11-01 10:05:13.8550878] Using scan address for GameEngine::Tick
+[2026-11-01 10:05:13.8593584] [UE4SS.EngineTick.GameThreadInitializer] Added prehook with Id '0X6020000000000001'!
+[2026-11-01 10:05:13.8594045] Finding GameModeBase::InitGameState
+[2026-11-01 10:05:13.8594281] GameModeBase::InitGameState address 0x144453a30
+[2026-11-01 10:05:13.8594435] Finding AActor::BeginPlay
+[2026-11-01 10:05:13.8594607] AActor::BeginPlay address 0x143fde350
+[2026-11-01 10:05:13.8594755] Finding AActor::EndPlay
+[2026-11-01 10:05:13.8594920] AActor::EndPlay address 0x143fc8460
+[2026-11-01 10:05:13.8595068] Finding AActor::Tick
+[2026-11-01 10:05:13.8595234] AActor::Tick address 0x143fc7ad0
+[2026-11-01 10:05:13.8595383] Finding GameViewportClient::Tick
+[2026-11-01 10:05:13.8595551] GameViewportClient::Tick address 0x1444a0ec0
+[2026-11-01 10:05:13.8595778] Finding ProcessEvent
+[2026-11-01 10:05:13.8595948] ProcessEvent address 0x141a99f00
+[2026-11-01 10:05:13.8596093] Finding ProcessConsoleExec
+[2026-11-01 10:05:13.8601638] ProcessConsoleExec address 0x141946200
+[2026-11-01 10:05:13.8602019] Finding UStruct::Link
+[2026-11-01 10:05:13.8604322] UStruct::Link address 0x141969b10
+[2026-11-01 10:05:13.8604563] Initializing global FName variables
+[2026-11-01 10:05:13.8607810] Constructed 0 of 0 objects
+[2026-11-01 10:05:13.8608230] Initializing type system
+[2026-11-01 10:05:13.9846655] FText size detected as 0x10 bytes.
+[2026-11-01 10:05:13.9888578] FSoftObjectPath layout: size 0x20, SubPathString at 0x10, FTopLevelAssetPath shape, from reflection
+[2026-11-01 10:05:13.9889330] Finding ProcessInternal
+[2026-11-01 10:05:13.9906752] ProcessInternal address: 0x141a98f70
+[2026-11-01 10:05:13.9907440] Finding ProcessLocalScriptFunction
+[2026-11-01 10:05:13.9907795] ProcessLocalScriptFunction address: 0x141a98e40
+[2026-11-01 10:05:13.9907974] UnrealConfig.FExecVTableOffsetInLocalPlayer: 28
+[2026-11-01 10:05:13.9908156] Post-initialization: GMalloc: 0x14e426090 -> 0xdf56040
+[2026-11-01 10:05:13.9912388] Adding shutdown listener
+[2026-11-01 10:05:13.9916939] Starting callback garbage collector!
+[2026-11-01 10:05:13.9924664] Hooking StaticConstructObject for searcher pools
+[2026-11-01 10:05:13.9976167] [UE4SS.StaticConstructObject.ObjectSearcherPoolHook] Added posthook with Id '0X9000000000000001'!
+[2026-11-01 10:05:13.9976990] FAssetData Size: 0x68
+[2026-11-01 10:05:13.9977169] FVector Size: 0x18
+[2026-11-01 10:05:13.9977300] FQuat Size: 0x20
+[2026-11-01 10:05:13.9977428] FFieldVariant Size: 0x8
+[2026-11-01 10:05:13.9977547] FText Size: 0x10
+[2026-11-01 10:05:13.9977667] FName Size: 0x8
+[2026-11-01 10:05:13.9977786] FName Alignment: 0x4
+[2026-11-01 10:05:13.9977913] 
+##### MEMBER OFFSETS START (Coalesced) #####
+
+[2026-11-01 10:05:13.9982212] UObjectBase::NamePrivate = 0x18
+[2026-11-01 10:05:13.9982730] UObjectBase::ObjectFlags = 0x8
+[2026-11-01 10:05:13.9982923] UObjectBase::ClassPrivate = 0x10
+[2026-11-01 10:05:13.9983090] UObjectBase::InternalIndex_Private = 0xC
+[2026-11-01 10:05:13.9983254] UObjectBase::OuterPrivate = 0x20
+[2026-11-01 10:05:13.9983422] UObjectBase::UEP_TotalSize = 0x28
+[2026-11-01 10:05:13.9983583] UScriptStruct::ICppStructOps::Size = 0x8
+[2026-11-01 10:05:13.9983741] UScriptStruct::ICppStructOps::Alignment = 0xC
+[2026-11-01 10:05:13.9983897] UScriptStruct::ICppStructOps::UEP_TotalSize = 0x10
+[2026-11-01 10:05:13.9984061] UStruct::SuperStruct = 0x40
+[2026-11-01 10:05:13.9984213] UStruct::ChildProperties = 0x50
+[2026-11-01 10:05:13.9984367] UStruct::Children = 0x48
+[2026-11-01 10:05:13.9984521] UStruct::PropertiesSize = 0x58
+[2026-11-01 10:05:13.9984688] UStruct::UnresolvedScriptProperties = 0xA0
+[2026-11-01 10:05:13.9984839] UStruct::MinAlignment = 0x5C
+[2026-11-01 10:05:13.9984983] UStruct::PropertyLink = 0x70
+[2026-11-01 10:05:13.9985129] UStruct::Script = 0x60
+[2026-11-01 10:05:13.9985272] UStruct::RefLink = 0x78
+[2026-11-01 10:05:13.9986244] UStruct::DestructorLink = 0x80
+[2026-11-01 10:05:13.9986426] UStruct::PostConstructLink = 0x88
+[2026-11-01 10:05:13.9986571] UStruct::ScriptAndPropertyObjectReferences = 0x90
+[2026-11-01 10:05:13.9986709] UStruct::UEP_TotalSize = 0xB0
+[2026-11-01 10:05:13.9986846] UScriptStruct::UEP_TotalSize = 0xC0
+[2026-11-01 10:05:13.9986972] UScriptStruct::CppStructOps = 0xB8
+[2026-11-01 10:05:13.9987127] UScriptStruct::StructFlags = 0xB0
+[2026-11-01 10:05:13.9987273] UScriptStruct::bPrepareCppStructOpsCompleted = 0xB4
+[2026-11-01 10:05:13.9987431] UClass::ClassConstructor = 0xB0
+[2026-11-01 10:05:13.9987597] UClass::ClassVTableHelperCtorCaller = 0xB8
+[2026-11-01 10:05:13.9987749] UClass::ClassUnique = 0xC8
+[2026-11-01 10:05:13.9987866] UClass::ClassCastFlags = 0xD8
+[2026-11-01 10:05:13.9987983] UClass::FirstOwnedClassRep = 0xCC
+[2026-11-01 10:05:13.9988100] UClass::ClassWithin = 0xE0
+[2026-11-01 10:05:13.9988214] UClass::bLayoutChanging = 0xD1
+[2026-11-01 10:05:13.9988329] UClass::ClassConfigName = 0xE8
+[2026-11-01 10:05:13.9988443] UClass::bCooked = 0xD0
+[2026-11-01 10:05:13.9988558] UClass::ClassFlags = 0xD4
+[2026-11-01 10:05:13.9988673] UClass::NetFields = 0x100
+[2026-11-01 10:05:13.9988786] UClass::ClassDefaultObject = 0x110
+[2026-11-01 10:05:13.9988901] UClass::SparseClassData = 0x118
+[2026-11-01 10:05:13.9989018] UClass::SparseClassDataStruct = 0x120
+[2026-11-01 10:05:13.9989137] UClass::FuncMap = 0x128
+[2026-11-01 10:05:13.9989254] UClass::AllFunctionsCache = 0x180
+[2026-11-01 10:05:13.9989372] UClass::Interfaces = 0x1D8
+[2026-11-01 10:05:13.9989489] UClass::ReferenceSchema = 0x1E8
+[2026-11-01 10:05:13.9989612] UClass::NativeFunctionLookupTable = 0x1F0
+[2026-11-01 10:05:13.9989729] UClass::UEP_TotalSize = 0x200
+[2026-11-01 10:05:13.9989858] UEnum::CppType = 0x30
+[2026-11-01 10:05:13.9990003] UEnum::EnumFlags_Internal = 0x54
+[2026-11-01 10:05:13.9990140] UEnum::Names = 0x40
+[2026-11-01 10:05:13.9990293] UEnum::CppForm = 0x50
+[2026-11-01 10:05:13.9990415] UEnum::EnumDisplayNameFn = 0x58
+[2026-11-01 10:05:13.9990531] UEnum::EnumPackage = 0x60
+[2026-11-01 10:05:13.9990646] UEnum::UEP_TotalSize = 0x68
+[2026-11-01 10:05:13.9990762] UFunction::FunctionFlags = 0xB0
+[2026-11-01 10:05:13.9990882] UFunction::NumParms = 0xB4
+[2026-11-01 10:05:13.9990996] UFunction::ParmsSize = 0xB6
+[2026-11-01 10:05:13.9991113] UFunction::FirstPropertyToInit = 0xC0
+[2026-11-01 10:05:13.9991230] UFunction::RPCId = 0xBA
+[2026-11-01 10:05:13.9991347] UFunction::ReturnValueOffset = 0xB8
+[2026-11-01 10:05:13.9991464] UFunction::RPCResponseId = 0xBC
+[2026-11-01 10:05:13.9991618] UFunction::EventGraphFunction = 0xC8
+[2026-11-01 10:05:13.9991809] UFunction::EventGraphCallOffset = 0xD0
+[2026-11-01 10:05:13.9991980] UFunction::Func = 0xD8
+[2026-11-01 10:05:13.9992133] UFunction::UEP_TotalSize = 0xE0
+[2026-11-01 10:05:13.9995886] UField::Next = 0x28
+[2026-11-01 10:05:13.9996295] UField::UEP_TotalSize = 0x30
+[2026-11-01 10:05:13.9996469] FField::ClassPrivate = 0x8
+[2026-11-01 10:05:13.9996732] FField::Owner = 0x10
+[2026-11-01 10:05:13.9996885] FField::Next = 0x18
+[2026-11-01 10:05:13.9997038] FField::FlagsPrivate = 0x28
+[2026-11-01 10:05:13.9997188] FField::NamePrivate = 0x20
+[2026-11-01 10:05:13.9997338] FField::UEP_TotalSize = 0x30
+[2026-11-01 10:05:13.9997490] FProperty::RepIndex = 0x40
+[2026-11-01 10:05:13.9997639] FProperty::ArrayDim = 0x30
+[2026-11-01 10:05:13.9997789] FProperty::ElementSize = 0x34
+[2026-11-01 10:05:13.9997940] FProperty::PropertyLinkNext = 0x48
+[2026-11-01 10:05:13.9998093] FProperty::PropertyFlags = 0x38
+[2026-11-01 10:05:13.9998244] FProperty::Offset_Internal = 0x44
+[2026-11-01 10:05:13.9998398] FProperty::NextRef = 0x50
+[2026-11-01 10:05:13.9998552] FProperty::DestructorLinkNext = 0x58
+[2026-11-01 10:05:13.9998704] FProperty::PostConstructLinkNext = 0x60
+[2026-11-01 10:05:13.9998853] FProperty::RepNotifyFunc = 0x68
+[2026-11-01 10:05:13.9999003] FProperty::UEP_TotalSize = 0x70
+[2026-11-01 10:05:13.9999152] FNumericProperty::RepIndex = 0x40
+[2026-11-01 10:05:13.9999303] FNumericProperty::ArrayDim = 0x30
+[2026-11-01 10:05:13.9999449] FNumericProperty::ElementSize = 0x34
+[2026-11-01 10:05:13.9999592] FNumericProperty::PropertyLinkNext = 0x48
+[2026-11-01 10:05:13.9999736] FNumericProperty::PropertyFlags = 0x38
+[2026-11-01 10:05:13.9999882] FNumericProperty::Offset_Internal = 0x44
+[2026-11-01 10:05:14.0000034] FNumericProperty::NextRef = 0x50
+[2026-11-01 10:05:14.0000183] FNumericProperty::DestructorLinkNext = 0x58
+[2026-11-01 10:05:14.0000829] FNumericProperty::PostConstructLinkNext = 0x60
+[2026-11-01 10:05:14.0001002] FNumericProperty::RepNotifyFunc = 0x68
+[2026-11-01 10:05:14.0001149] FNumericProperty::UEP_TotalSize = 0x70
+[2026-11-01 10:05:14.0001301] FObjectPropertyBase::PropertyClass = 0x70
+[2026-11-01 10:05:14.0001453] FObjectPropertyBase::UEP_TotalSize = 0x78
+[2026-11-01 10:05:14.0001617] FStructProperty::Struct = 0x70
+[2026-11-01 10:05:14.0001778] FStructProperty::UEP_TotalSize = 0x78
+[2026-11-01 10:05:14.0001927] FArrayProperty::Inner = 0x78
+[2026-11-01 10:05:14.0002077] FArrayProperty::ArrayFlags = 0x70
+[2026-11-01 10:05:14.0002225] FArrayProperty::UEP_TotalSize = 0x80
+[2026-11-01 10:05:14.0002376] FMapProperty::KeyProp = 0x70
+[2026-11-01 10:05:14.0002525] FMapProperty::MapLayout = 0x80
+[2026-11-01 10:05:14.0002675] FMapProperty::ValueProp = 0x78
+[2026-11-01 10:05:14.0002824] FMapProperty::MapFlags = 0x98
+[2026-11-01 10:05:14.0002972] FMapProperty::UEP_TotalSize = 0xA0
+[2026-11-01 10:05:14.0003123] FSetProperty::ElementProp = 0x70
+[2026-11-01 10:05:14.0003271] FSetProperty::UEP_TotalSize = 0x90
+[2026-11-01 10:05:14.0003420] FSetProperty::SetLayout = 0x78
+[2026-11-01 10:05:14.0003571] FBoolProperty::ByteOffset = 0x71
+[2026-11-01 10:05:14.0003720] FBoolProperty::FieldSize = 0x70
+[2026-11-01 10:05:14.0003871] FBoolProperty::FieldMask = 0x73
+[2026-11-01 10:05:14.0004020] FBoolProperty::ByteMask = 0x72
+[2026-11-01 10:05:14.0004172] FBoolProperty::UEP_TotalSize = 0x78
+[2026-11-01 10:05:14.0004323] FByteProperty::Enum = 0x70
+[2026-11-01 10:05:14.0004472] FByteProperty::UEP_TotalSize = 0x78
+[2026-11-01 10:05:14.0004634] FEnumProperty::UEP_TotalSize = 0x80
+[2026-11-01 10:05:14.0004784] FEnumProperty::UnderlyingProp = 0x70
+[2026-11-01 10:05:14.0004933] FEnumProperty::Enum = 0x78
+[2026-11-01 10:05:14.0005091] FClassProperty::MetaClass = 0x78
+[2026-11-01 10:05:14.0005239] FClassProperty::UEP_TotalSize = 0x80
+[2026-11-01 10:05:14.0005389] FSoftClassProperty::MetaClass = 0x78
+[2026-11-01 10:05:14.0005539] FSoftClassProperty::UEP_TotalSize = 0x80
+[2026-11-01 10:05:14.0005693] FDelegateProperty::SignatureFunction = 0x70
+[2026-11-01 10:05:14.0005846] FDelegateProperty::UEP_TotalSize = 0x78
+[2026-11-01 10:05:14.0005998] FMulticastDelegateProperty::SignatureFunction = 0x70
+[2026-11-01 10:05:14.0006151] FMulticastDelegateProperty::UEP_TotalSize = 0x78
+[2026-11-01 10:05:14.0006304] FInterfaceProperty::InterfaceClass = 0x70
+[2026-11-01 10:05:14.0006452] FInterfaceProperty::UEP_TotalSize = 0x78
+[2026-11-01 10:05:14.0006605] FFieldPathProperty::PropertyClass = 0x70
+[2026-11-01 10:05:14.0006769] FFieldPathProperty::UEP_TotalSize = 0x78
+[2026-11-01 10:05:14.0006921] FWorldContext::ThisCurrentWorld = 0x2C0
+[2026-11-01 10:05:14.0007076] FWorldContext::ExternalReferences = 0x2B0
+[2026-11-01 10:05:14.0007229] FWorldContext::LastRemoteURL = 0x128
+[2026-11-01 10:05:14.0007377] FWorldContext::ContextHandle = 0xA0
+[2026-11-01 10:05:14.0007526] FWorldContext::PendingMapChangeFailureDescription = 0x1C8
+[2026-11-01 10:05:14.0007679] FWorldContext::TravelURL = 0xA8
+[2026-11-01 10:05:14.0007828] FWorldContext::TravelType = 0xB8
+[2026-11-01 10:05:14.0007977] FWorldContext::LastURL = 0xC0
+[2026-11-01 10:05:14.0008126] FWorldContext::LevelsToLoadForPendingMapChange = 0x1A8
+[2026-11-01 10:05:14.0008275] FWorldContext::GarbageObjectsToVerify = 0x260
+[2026-11-01 10:05:14.0008425] FWorldContext::bShouldCommitPendingMapChange = 0x1D8
+[2026-11-01 10:05:14.0008575] FWorldContext::GameViewport = 0x200
+[2026-11-01 10:05:14.0008727] FWorldContext::PIEInstance = 0x220
+[2026-11-01 10:05:14.0008876] FWorldContext::PIEFixedTickSeconds = 0x258
+[2026-11-01 10:05:14.0009024] FWorldContext::PIEPrefix = 0x228
+[2026-11-01 10:05:14.0009171] FWorldContext::RunAsDedicated = 0x23C
+[2026-11-01 10:05:14.0009319] FWorldContext::bWaitingOnOnlineSubsystem = 0x23D
+[2026-11-01 10:05:14.0009468] FWorldContext::bIsPrimaryPIEInstance = 0x23E
+[2026-11-01 10:05:14.0009618] FWorldContext::AudioDeviceID = 0x240
+[2026-11-01 10:05:14.0009766] FWorldContext::CustomDescription = 0x248
+[2026-11-01 10:05:14.0009936] FWorldContext::PIEAccumulatedTickSeconds = 0x25C
+[2026-11-01 10:05:14.0010091] FWorldContext::UEP_TotalSize = 0x2C8
+[2026-11-01 10:05:14.0010241] FOutputDevice::bSuppressEventTag = 0x8
+[2026-11-01 10:05:14.0010390] FOutputDevice::bAutoEmitLineTerminator = 0x9
+[2026-11-01 10:05:14.0010540] FOutputDevice::UEP_TotalSize = 0x10
+[2026-11-01 10:05:14.0010689] FArchiveState::ArIsTextFormat = 0x28
+[2026-11-01 10:05:14.0010839] FArchiveState::ArIsLoading = 0x28
+[2026-11-01 10:05:14.0010989] FArchiveState::ArIsLoadingFromCookedPackage = 0x28
+[2026-11-01 10:05:14.0011144] FArchiveState::ArPortFlags = 0x30
+[2026-11-01 10:05:14.0011314] FArchiveState::ArIsTransacting = 0x28
+[2026-11-01 10:05:14.0011469] FArchiveState::ArIsSaving = 0x28
+[2026-11-01 10:05:14.0011630] FArchiveState::ArForceUnicode = 0x28
+[2026-11-01 10:05:14.0011781] FArchiveState::ArIsModifyingWeakAndStrongReferences = 0x2B
+[2026-11-01 10:05:14.0011956] FArchiveState::ArUseUnversionedPropertySerialization = 0x28
+[2026-11-01 10:05:14.0012119] FArchiveState::ArWantBinaryPropertySerialization = 0x28
+[2026-11-01 10:05:14.0012271] FArchiveState::ArIsObjectReferenceCollector = 0x2B
+[2026-11-01 10:05:14.0012428] FArchiveState::ArIsPersistent = 0x29
+[2026-11-01 10:05:14.0012579] FArchiveState::ArForceByteSwapping = 0x2A
+[2026-11-01 10:05:14.0012731] FArchiveState::ArIsError = 0x29
+[2026-11-01 10:05:14.0012879] FArchiveState::ArUEVer = 0x40
+[2026-11-01 10:05:14.0013033] FArchiveState::ArIsCriticalError = 0x29
+[2026-11-01 10:05:14.0013234] FArchiveState::ArMaxSerializeSize = 0x38
+[2026-11-01 10:05:14.0013390] FArchiveState::ArShouldSkipCompilingAssets = 0x29
+[2026-11-01 10:05:14.0013544] FArchiveState::ArShouldSkipUpdateCustomVersion = 0x29
+[2026-11-01 10:05:14.0013694] FArchiveState::ArCustomPropertyList = 0x60
+[2026-11-01 10:05:14.0013843] FArchiveState::ArContainsCode = 0x29
+[2026-11-01 10:05:14.0013994] FArchiveState::ArIsNetArchive = 0x2B
+[2026-11-01 10:05:14.0014143] FArchiveState::ArContainsMap = 0x29
+[2026-11-01 10:05:14.0014292] FArchiveState::ArRequiresLocalizationGather = 0x29
+[2026-11-01 10:05:14.0014442] FArchiveState::ArIgnoreArchetypeRef = 0x2A
+[2026-11-01 10:05:14.0014593] FArchiveState::ArNoDelta = 0x2A
+[2026-11-01 10:05:14.0014743] FArchiveState::ArNoIntraPropertyDelta = 0x2A
+[2026-11-01 10:05:14.0014893] FArchiveState::ArIgnoreOuterRef = 0x2A
+[2026-11-01 10:05:14.0015041] FArchiveState::ArIgnoreClassGeneratedByRef = 0x2A
+[2026-11-01 10:05:14.0015192] FArchiveState::ArLicenseeUEVer = 0x48
+[2026-11-01 10:05:14.0015342] FArchiveState::ArIgnoreClassRef = 0x2A
+[2026-11-01 10:05:14.0015491] FArchiveState::ArAllowLazyLoading = 0x2A
+[2026-11-01 10:05:14.0015641] FArchiveState::NextProxy = 0x88
+[2026-11-01 10:05:14.0015789] FArchiveState::ArIsCountingMemory = 0x2B
+[2026-11-01 10:05:14.0015940] FArchiveState::bCustomVersionsAreReset = 0x80
+[2026-11-01 10:05:14.0016090] FArchiveState::ArShouldSkipBulkData = 0x2B
+[2026-11-01 10:05:14.0016239] FArchiveState::ArIsFilterEditorOnly = 0x2B
+[2026-11-01 10:05:14.0016388] FArchiveState::ArIsSaveGame = 0x2B
+[2026-11-01 10:05:14.0016540] FArchiveState::ArUseCustomPropertyList = 0x2B
+[2026-11-01 10:05:14.0016693] FArchiveState::UEP_TotalSize = 0x90
+[2026-11-01 10:05:14.0016843] FArchiveState::ArSerializingDefaults = 0x2C
+[2026-11-01 10:05:14.0016992] FArchiveState::ArEngineVer = 0x4C
+[2026-11-01 10:05:14.0017141] FArchiveState::CustomVersionContainer = 0x58
+[2026-11-01 10:05:14.0017290] FArchiveState::SerializedProperty = 0x70
+[2026-11-01 10:05:14.0017443] AActor::PrimaryActorTick = 0x28
+[2026-11-01 10:05:14.0017595] AActor::bNetTemporary = 0x58
+[2026-11-01 10:05:14.0017745] AActor::ActorHasBegunPlay = 0x5D
+[2026-11-01 10:05:14.0017897] AActor::bReplicateUsingRegisteredSubObjectList = 0x5B
+[2026-11-01 10:05:14.0018049] AActor::bIsEditorOnlyActor = 0x5B
+[2026-11-01 10:05:14.0018199] AActor::bReplicateMovement = 0x58
+[2026-11-01 10:05:14.0018349] AActor::bAlwaysRelevant = 0x58
+[2026-11-01 10:05:14.0018501] AActor::bNetStartup = 0x58
+[2026-11-01 10:05:14.0018656] AActor::bActorIsBeingConstructed = 0x5D
+[2026-11-01 10:05:14.0018833] AActor::bActorBeginningPlayFromLevelStreaming = 0x5C
+[2026-11-01 10:05:14.0019000] AActor::bNetCheckedInitialPhysicsState = 0x5B
+[2026-11-01 10:05:14.0019154] AActor::bOnlyRelevantToOwner = 0x58
+[2026-11-01 10:05:14.0019305] AActor::bCallPreReplicationForReplay = 0x58
+[2026-11-01 10:05:14.0019458] AActor::bCallPreReplication = 0x58
+[2026-11-01 10:05:14.0019609] AActor::bReplayRewindable = 0x59
+[2026-11-01 10:05:14.0019761] AActor::bHidden = 0x58
+[2026-11-01 10:05:14.0019911] AActor::bTearOff = 0x59
+[2026-11-01 10:05:14.0020062] AActor::bForceNetAddressable = 0x59
+[2026-11-01 10:05:14.0020228] AActor::InputPriority = 0x154
+[2026-11-01 10:05:14.0020379] AActor::bCanBeInCluster = 0x5B
+[2026-11-01 10:05:14.0020530] AActor::bAllowTickBeforeBeginPlay = 0x5A
+[2026-11-01 10:05:14.0020684] AActor::bExchangedRoles = 0x59
+[2026-11-01 10:05:14.0020853] AActor::bNetLoadOnClient = 0x59
+[2026-11-01 10:05:14.0021002] AActor::AutoReceiveInput = 0x153
+[2026-11-01 10:05:14.0021156] AActor::bNetUseOwnerRelevancy = 0x59
+[2026-11-01 10:05:14.0021316] AActor::Role = 0x150
+[2026-11-01 10:05:14.0021482] AActor::bGenerateOverlapEventsDuringLevelStreaming = 0x5A
+[2026-11-01 10:05:14.0021648] AActor::bCollideWhenPlacing = 0x5A
+[2026-11-01 10:05:14.0021794] AActor::bRelevantForNetworkReplays = 0x59
+[2026-11-01 10:05:14.0021940] AActor::bEnableAutoLODGeneration = 0x5B
+[2026-11-01 10:05:14.0022088] AActor::bHasRegisteredAllComponents = 0x5C
+[2026-11-01 10:05:14.0022234] AActor::bActorInitialized = 0x5C
+[2026-11-01 10:05:14.0022394] AActor::bRelevantForLevelBounds = 0x59
+[2026-11-01 10:05:14.0022540] AActor::InputComponent = 0x160
+[2026-11-01 10:05:14.0022682] AActor::bHasFinishedSpawning = 0x5C
+[2026-11-01 10:05:14.0022830] AActor::bAutoDestroyWhenFinished = 0x5A
+[2026-11-01 10:05:14.0022976] AActor::bCanBeDamaged = 0x5A
+[2026-11-01 10:05:14.0023120] AActor::SpawnCollisionHandlingMethod = 0x152
+[2026-11-01 10:05:14.0023263] AActor::bIgnoresOriginShifting = 0x5A
+[2026-11-01 10:05:14.0023411] AActor::bBlockInput = 0x5A
+[2026-11-01 10:05:14.0023557] AActor::bFindCameraComponentWhenViewTarget = 0x5A
+[2026-11-01 10:05:14.0023710] AActor::bActorSeamlessTraveled = 0x5B
+[2026-11-01 10:05:14.0023858] AActor::bReplicates = 0x5B
+[2026-11-01 10:05:14.0024000] AActor::bActorEnableCollision = 0x5C
+[2026-11-01 10:05:14.0024119] AActor::bAllowReceiveTickEventOnDedicatedServer = 0x5B
+[2026-11-01 10:05:14.0024237] AActor::bTickFunctionsRegistered = 0x5C
+[2026-11-01 10:05:14.0024353] AActor::bHasDeferredComponentRegistration = 0x5C
+[2026-11-01 10:05:14.0024488] AActor::AttachmentReplication = 0x70
+[2026-11-01 10:05:14.0024632] AActor::bRunningUserConstructionScript = 0x5C
+[2026-11-01 10:05:14.0024771] AActor::bActorIsBeingDestroyed = 0x5D
+[2026-11-01 10:05:14.0024913] AActor::bActorWantsDestroyDuringBeginPlay = 0x5D
+[2026-11-01 10:05:14.0025052] AActor::bAsyncPhysicsTickEnabled = 0x5D
+[2026-11-01 10:05:14.0025197] AActor::UpdateOverlapsMethodDuringLevelStreaming = 0x5E
+[2026-11-01 10:05:14.0025342] AActor::DefaultUpdateOverlapsMethodDuringLevelStreaming = 0x5F
+[2026-11-01 10:05:14.0025484] AActor::RemoteRole = 0x60
+[2026-11-01 10:05:14.0025599] AActor::ActorCategory = 0x61
+[2026-11-01 10:05:14.0025715] AActor::InitialLifeSpan = 0x64
+[2026-11-01 10:05:14.0025830] AActor::CustomTimeDilation = 0x68
+[2026-11-01 10:05:14.0025946] AActor::RayTracingGroupId = 0x6C
+[2026-11-01 10:05:14.0026061] AActor::ReplicatedMovement = 0xD0
+[2026-11-01 10:05:14.0026175] AActor::Owner = 0x140
+[2026-11-01 10:05:14.0026290] AActor::NetDriverName = 0x148
+[2026-11-01 10:05:14.0026410] AActor::NetDormancy = 0x151
+[2026-11-01 10:05:14.0026527] AActor::CreationTime = 0x158
+[2026-11-01 10:05:14.0026641] AActor::NetCullDistanceSquared = 0x168
+[2026-11-01 10:05:14.0026756] AActor::NetTag = 0x16C
+[2026-11-01 10:05:14.0026872] AActor::NetUpdateFrequency = 0x170
+[2026-11-01 10:05:14.0026985] AActor::MinNetUpdateFrequency = 0x174
+[2026-11-01 10:05:14.0027108] AActor::NetPriority = 0x178
+[2026-11-01 10:05:14.0027224] AActor::PhysicsReplicationMode = 0x17C
+[2026-11-01 10:05:14.0027358] AActor::LastRenderTime = 0x180
+[2026-11-01 10:05:14.0027485] AActor::Children = 0x190
+[2026-11-01 10:05:14.0027603] AActor::RootComponent = 0x1A0
+[2026-11-01 10:05:14.0027744] AActor::TimerHandle_LifeSpanExpired = 0x1A8
+[2026-11-01 10:05:14.0027861] AActor::Layers = 0x1B0
+[2026-11-01 10:05:14.0027988] AActor::ParentComponent = 0x1C0
+[2026-11-01 10:05:14.0028135] AActor::Tags = 0x1C8
+[2026-11-01 10:05:14.0028293] AActor::OnTakeAnyDamage = 0x1D8
+[2026-11-01 10:05:14.0028452] AActor::OnTakePointDamage = 0x1D9
+[2026-11-01 10:05:14.0028580] AActor::OnTakeRadialDamage = 0x1DA
+[2026-11-01 10:05:14.0028698] AActor::OnActorBeginOverlap = 0x1DB
+[2026-11-01 10:05:14.0028829] AActor::OnActorEndOverlap = 0x1DC
+[2026-11-01 10:05:14.0028987] AActor::OnBeginCursorOver = 0x1DD
+[2026-11-01 10:05:14.0029155] AActor::OnEndCursorOver = 0x1DE
+[2026-11-01 10:05:14.0029313] AActor::OnClicked = 0x1DF
+[2026-11-01 10:05:14.0029463] AActor::OnReleased = 0x1E0
+[2026-11-01 10:05:14.0029589] AActor::OnInputTouchBegin = 0x1E1
+[2026-11-01 10:05:14.0029718] AActor::OnInputTouchEnd = 0x1E2
+[2026-11-01 10:05:14.0029836] AActor::OnInputTouchEnter = 0x1E3
+[2026-11-01 10:05:14.0029950] AActor::OnInputTouchLeave = 0x1E4
+[2026-11-01 10:05:14.0030080] AActor::OnActorHit = 0x1E5
+[2026-11-01 10:05:14.0030202] AActor::OnDestroyed = 0x1E6
+[2026-11-01 10:05:14.0030327] AActor::OnEndPlay = 0x1E7
+[2026-11-01 10:05:14.0030456] AActor::ReplicatedSubObjects = 0x1E8
+[2026-11-01 10:05:14.0030581] AActor::ReplicatedComponentsInfo = 0x1F8
+[2026-11-01 10:05:14.0030706] AActor::DetachFence = 0x288
+[2026-11-01 10:05:14.0030838] AActor::UEP_TotalSize = 0x290
+[2026-11-01 10:05:14.0030952] AGameModeBase::OptionsString = 0x290
+[2026-11-01 10:05:14.0031076] AGameModeBase::ServerStatReplicator = 0x2F8
+[2026-11-01 10:05:14.0031205] AGameModeBase::GameSessionClass = 0x2A0
+[2026-11-01 10:05:14.0031336] AGameModeBase::PlayerStateClass = 0x2B8
+[2026-11-01 10:05:14.0031460] AGameModeBase::HUDClass = 0x2C0
+[2026-11-01 10:05:14.0031600] AGameModeBase::SpectatorClass = 0x2D0
+[2026-11-01 10:05:14.0031724] AGameModeBase::GameSession = 0x2E8
+[2026-11-01 10:05:14.0031851] AGameModeBase::ServerStatReplicatorClass = 0x2E0
+[2026-11-01 10:05:14.0031980] AGameModeBase::DefaultPlayerName = 0x300
+[2026-11-01 10:05:14.0032108] AGameModeBase::bUseSeamlessTravel = 0x310
+[2026-11-01 10:05:14.0032235] AGameModeBase::bStartPlayersAsSpectators = 0x310
+[2026-11-01 10:05:14.0032357] AGameModeBase::bPauseable = 0x310
+[2026-11-01 10:05:14.0032493] AGameModeBase::GameNetDriverReplicationSystem = 0x314
+[2026-11-01 10:05:14.0032626] AGameModeBase::UEP_TotalSize = 0x328
+[2026-11-01 10:05:14.0032748] AGameMode::NumBots = 0x33C
+[2026-11-01 10:05:14.0032874] AGameMode::MatchState = 0x328
+[2026-11-01 10:05:14.0032989] AGameMode::NumSpectators = 0x334
+[2026-11-01 10:05:14.0033160] AGameMode::NumPlayers = 0x338
+[2026-11-01 10:05:14.0033286] AGameMode::bDelayedStart = 0x330
+[2026-11-01 10:05:14.0033412] AGameMode::MinRespawnDelay = 0x340
+[2026-11-01 10:05:14.0033541] AGameMode::EngineMessageClass = 0x348
+[2026-11-01 10:05:14.0033676] AGameMode::NumTravellingPlayers = 0x344
+[2026-11-01 10:05:14.0033799] AGameMode::InactivePlayerArray = 0x350
+[2026-11-01 10:05:14.0033913] AGameMode::InactivePlayerStateLifeSpan = 0x360
+[2026-11-01 10:05:14.0034030] AGameMode::MaxInactivePlayers = 0x364
+[2026-11-01 10:05:14.0034160] AGameMode::bHandleDedicatedServerReplays = 0x368
+[2026-11-01 10:05:14.0034307] AGameMode::UEP_TotalSize = 0x370
+[2026-11-01 10:05:14.0034452] UEngine::NamePrivate = 0x18
+[2026-11-01 10:05:14.0034586] UEngine::ObjectFlags = 0x8
+[2026-11-01 10:05:14.0034717] UEngine::ClassPrivate = 0x10
+[2026-11-01 10:05:14.0034875] UEngine::InternalIndex_Private = 0xC
+[2026-11-01 10:05:14.0035027] UEngine::OuterPrivate = 0x20
+[2026-11-01 10:05:14.0035189] UEngine::UEP_TotalSize = 0x28
+[2026-11-01 10:05:14.0035374] UGameViewportClient::ViewportConsole = 0x40
+[2026-11-01 10:05:14.0035569] UGameViewportClient::SplitscreenInfo = 0x58
+[2026-11-01 10:05:14.0035713] UGameViewportClient::HardwareCursorCache = 0x170
+[2026-11-01 10:05:14.0036285] UGameViewportClient::DebugProperties = 0x48
+[2026-11-01 10:05:14.0036447] UGameViewportClient::ActiveSplitscreenType = 0x70
+[2026-11-01 10:05:14.0036568] UGameViewportClient::World = 0x78
+[2026-11-01 10:05:14.0036686] UGameViewportClient::ViewportOverlayWidget = 0x110
+[2026-11-01 10:05:14.0036802] UGameViewportClient::bHasAudioFocus = 0xFC
+[2026-11-01 10:05:14.0036916] UGameViewportClient::MaxSplitscreenPlayers = 0x68
+[2026-11-01 10:05:14.0037031] UGameViewportClient::bDisableWorldRendering = 0x6C
+[2026-11-01 10:05:14.0037148] UGameViewportClient::bIsPlayInEditorViewport = 0x6C
+[2026-11-01 10:05:14.0037263] UGameViewportClient::CurrentLumenVisualizationMode = 0x140
+[2026-11-01 10:05:14.0037379] UGameViewportClient::bSuppressTransitionMessage = 0x88
+[2026-11-01 10:05:14.0037494] UGameViewportClient::ViewModeIndex = 0xB0
+[2026-11-01 10:05:14.0037610] UGameViewportClient::EngineShowFlags = 0xB8
+[2026-11-01 10:05:14.0037724] UGameViewportClient::Viewport = 0xE8
+[2026-11-01 10:05:14.0037842] UGameViewportClient::MouseLockMode = 0x3AC
+[2026-11-01 10:05:14.0037958] UGameViewportClient::ViewportFrame = 0xF0
+[2026-11-01 10:05:14.0038074] UGameViewportClient::AudioDeviceHandle = 0xF8
+[2026-11-01 10:05:14.0038190] UGameViewportClient::bDisableSplitScreenOverride = 0x3A8
+[2026-11-01 10:05:14.0038304] UGameViewportClient::Window = 0x100
+[2026-11-01 10:05:14.0038418] UGameViewportClient::CurrentGroomVisualizationMode = 0x150
+[2026-11-01 10:05:14.0038532] UGameViewportClient::GameLayerManagerPtr = 0x120
+[2026-11-01 10:05:14.0038649] UGameViewportClient::UEP_TotalSize = 0x3B0
+[2026-11-01 10:05:14.0038763] UGameViewportClient::CurrentBufferVisualizationMode = 0x130
+[2026-11-01 10:05:14.0038877] UGameViewportClient::CurrentNaniteVisualizationMode = 0x138
+[2026-11-01 10:05:14.0038992] UGameViewportClient::CurrentSubstrateVisualizationMode = 0x148
+[2026-11-01 10:05:14.0039105] UGameViewportClient::CurrentVirtualShadowMapVisualizationMode = 0x158
+[2026-11-01 10:05:14.0039225] UGameViewportClient::HighResScreenshotDialog = 0x160
+[2026-11-01 10:05:14.0039340] UGameViewportClient::HardwareCursors = 0x1C0
+[2026-11-01 10:05:14.0039455] UGameViewportClient::CursorWidgets = 0x210
+[2026-11-01 10:05:14.0039570] UGameViewportClient::bUseSoftwareCursorWidgets = 0x260
+[2026-11-01 10:05:14.0039683] UGameViewportClient::StatUnitData = 0x398
+[2026-11-01 10:05:14.0039797] UGameViewportClient::StatHitchesData = 0x3A0
+[2026-11-01 10:05:14.0039911] UGameViewportClient::bIgnoreInput = 0x3A9
+[2026-11-01 10:05:14.0040024] UGameViewportClient::MouseCaptureMode = 0x3AA
+[2026-11-01 10:05:14.0040141] UGameViewportClient::bHideCursorDuringCapture = 0x3AB
+[2026-11-01 10:05:14.0040258] UGameViewportClient::bIsMouseOverClient = 0x3AD
+[2026-11-01 10:05:14.0040372] UPlayer::CurrentNetSpeed = 0x38
+[2026-11-01 10:05:14.0040485] UPlayer::UEP_TotalSize = 0x48
+[2026-11-01 10:05:14.0040600] UPlayer::ConfiguredLanSpeed = 0x40
+[2026-11-01 10:05:14.0040713] UPlayer::ConfiguredInternetSpeed = 0x3C
+[2026-11-01 10:05:14.0040828] ULocalPlayer::SlateOperations = 0x1F8
+[2026-11-01 10:05:14.0040942] ULocalPlayer::ControllerId = 0xE0
+[2026-11-01 10:05:14.0041056] ULocalPlayer::CachedUniqueNetId = 0x48
+[2026-11-01 10:05:14.0041169] ULocalPlayer::ViewportClient = 0x78
+[2026-11-01 10:05:14.0041282] ULocalPlayer::AspectRatioAxisConstraint = 0xB8
+[2026-11-01 10:05:14.0041410] ULocalPlayer::bSentSplitJoin = 0xC8
+[2026-11-01 10:05:14.0041559] ULocalPlayer::PlatformUserId = 0x100
+[2026-11-01 10:05:14.0041708] ULocalPlayer::UEP_TotalSize = 0x2B0
+[2026-11-01 10:05:14.0041859] UWorld::PerModuleDataObjects = 0x78
+[2026-11-01 10:05:14.0042007] UWorld::ExtraReferencedObjects = 0x68
+[2026-11-01 10:05:14.0042155] UWorld::bPlayersOnlyPending = 0x13D
+[2026-11-01 10:05:14.0042305] UWorld::bWorldWasLoadedThisTick = 0x13B
+[2026-11-01 10:05:14.0042455] UWorld::bShouldForceVisibleStreamingLevels = 0x13E
+[2026-11-01 10:05:14.0042606] UWorld::bSupportsMakingVisibleTransactionRequests = 0xD8
+[2026-11-01 10:05:14.0042756] UWorld::bAggressiveLOD = 0x13C
+[2026-11-01 10:05:14.0042906] UWorld::StreamingLevelsPrefix = 0xC8
+[2026-11-01 10:05:14.0043068] UWorld::bSupportsMakingInvisibleTransactionRequests = 0xDA
+[2026-11-01 10:05:14.0043222] UWorld::bPlayersOnly = 0x13D
+[2026-11-01 10:05:14.0043372] UWorld::DeltaTimeSeconds = 0x6E4
+[2026-11-01 10:05:14.0043520] UWorld::bIsRunningConstructionScript = 0x13C
+[2026-11-01 10:05:14.0043669] UWorld::bAllowDeferredPhysicsStateCreation = 0x108
+[2026-11-01 10:05:14.0043820] UWorld::LastRenderTime = 0x130
+[2026-11-01 10:05:14.0043968] UWorld::StreamingVolumeUpdateDelay = 0x67C
+[2026-11-01 10:05:14.0044117] UWorld::bIsLevelStreamingFrozen = 0x13B
+[2026-11-01 10:05:14.0044267] UWorld::bTriggerPostLoadMap = 0x13B
+[2026-11-01 10:05:14.0044414] UWorld::bInTick = 0x13B
+[2026-11-01 10:05:14.0044563] UWorld::TimeSeconds = 0x6C0
+[2026-11-01 10:05:14.0044712] UWorld::bIsBuilt = 0x13B
+[2026-11-01 10:05:14.0044862] UWorld::DeltaRealTimeSeconds = 0x6E0
+[2026-11-01 10:05:14.0045011] UWorld::bTickNewlySpawned = 0x13B
+[2026-11-01 10:05:14.0045159] UWorld::AuthorityGameMode = 0x158
+[2026-11-01 10:05:14.0045308] UWorld::bPostTickComponentUpdate = 0x13B
+[2026-11-01 10:05:14.0045456] UWorld::bShouldSimulatePhysics = 0x13C
+[2026-11-01 10:05:14.0045603] UWorld::bIsWorldInitialized = 0x13B
+[2026-11-01 10:05:14.0045752] UWorld::bDoDelayedUpdateCullDistanceVolumes = 0x13C
+[2026-11-01 10:05:14.0045901] UWorld::bRequestedBlockOnAsyncLoading = 0x13C
+[2026-11-01 10:05:14.0046049] UWorld::bDropDetail = 0x13C
+[2026-11-01 10:05:14.0046198] UWorld::PlayerNum = 0x678
+[2026-11-01 10:05:14.0046346] UWorld::bIsDefaultLevel = 0x13C
+[2026-11-01 10:05:14.0046495] UWorld::bIsBeingCleanedUp = 0x140
+[2026-11-01 10:05:14.0046644] UWorld::bActorsInitialized = 0x13C
+[2026-11-01 10:05:14.0046793] UWorld::bBegunPlay = 0x13D
+[2026-11-01 10:05:14.0046942] UWorld::bIsCameraMoveableWhenPaused = 0x13E
+[2026-11-01 10:05:14.0047099] UWorld::bMatchStarted = 0x13D
+[2026-11-01 10:05:14.0047262] UWorld::bStartup = 0x13D
+[2026-11-01 10:05:14.0047410] UWorld::bAreConstraintsDirty = 0x13E
+[2026-11-01 10:05:14.0047559] UWorld::bIsTearingDown = 0x13D
+[2026-11-01 10:05:14.0047707] UWorld::bKismetScriptError = 0x13D
+[2026-11-01 10:05:14.0047855] UWorld::bDebugPauseExecution = 0x13D
+[2026-11-01 10:05:14.0048003] UWorld::ActiveLevelCollectionIndex = 0x198
+[2026-11-01 10:05:14.0048152] UWorld::bAllowAudioPlayback = 0x13E
+[2026-11-01 10:05:14.0048301] UWorld::bRequiresHitProxies = 0x13E
+[2026-11-01 10:05:14.0048450] UWorld::bShouldTick = 0x13E
+[2026-11-01 10:05:14.0048598] UWorld::bStreamingDataDirty = 0x13E
+[2026-11-01 10:05:14.0048746] UWorld::bShouldForceUnloadStreamingLevels = 0x13E
+[2026-11-01 10:05:14.0048894] UWorld::NextURL = 0x740
+[2026-11-01 10:05:14.0049044] UWorld::RealTimeSeconds = 0x6D0
+[2026-11-01 10:05:14.0049196] UWorld::bMaterialParameterCollectionInstanceNeedsDeferredUpdate = 0x13F
+[2026-11-01 10:05:14.0049349] UWorld::NextSwitchCountdown = 0x720
+[2026-11-01 10:05:14.0049497] UWorld::bHasEverBeenInitialized = 0x13F
+[2026-11-01 10:05:14.0049647] UWorld::PreparingLevelNames = 0x750
+[2026-11-01 10:05:14.0049799] UWorld::IsInBlockTillLevelStreamingCompleted = 0x144
+[2026-11-01 10:05:14.0049948] UWorld::BlockTillLevelStreamingCompletedEpoch = 0x148
+[2026-11-01 10:05:14.0050099] UWorld::BuildStreamingDataTimer = 0x4A8
+[2026-11-01 10:05:14.0050248] UWorld::URL = 0x5A0
+[2026-11-01 10:05:14.0050415] UWorld::LastTimeUnbuiltLightingWasEncountered = 0x6B8
+[2026-11-01 10:05:14.0050565] UWorld::UnpausedTimeSeconds = 0x6C8
+[2026-11-01 10:05:14.0050724] UWorld::CommittedPersistentLevelName = 0x760
+[2026-11-01 10:05:14.0050882] UWorld::AudioTimeSeconds = 0x6D8
+[2026-11-01 10:05:14.0051032] UWorld::PauseDelay = 0x6E8
+[2026-11-01 10:05:14.0051185] UWorld::NumStreamingLevelsBeingLoaded = 0x73A
+[2026-11-01 10:05:14.0051347] UWorld::bMarkedObjectsPendingKill = 0x768
+[2026-11-01 10:05:14.0051492] UWorld::CleanupWorldTag = 0x76C
+[2026-11-01 10:05:14.0051644] UWorld::UEP_TotalSize = 0x8F8
+[2026-11-01 10:05:14.0051790] UDataTable::RowStruct = 0x28
+[2026-11-01 10:05:14.0051936] UDataTable::RowMap = 0x30
+[2026-11-01 10:05:14.0052080] UDataTable::bStripFromClientBuilds = 0x80
+[2026-11-01 10:05:14.0052238] UDataTable::bIgnoreExtraFields = 0x80
+[2026-11-01 10:05:14.0052393] UDataTable::bIgnoreMissingFields = 0x80
+[2026-11-01 10:05:14.0052540] UDataTable::UEP_TotalSize = 0xB0
+[2026-11-01 10:05:14.0052688] UDataTable::ImportKeyField = 0x88
+[2026-11-01 10:05:14.0052840] FUObjectItem::Object = 0x0
+[2026-11-01 10:05:14.0052990] FUObjectItem::Flags = 0x8
+[2026-11-01 10:05:14.0053188] FUObjectItem::ClusterRootIndex = 0xC
+[2026-11-01 10:05:14.0053339] FUObjectItem::SerialNumber = 0x10
+[2026-11-01 10:05:14.0053488] FUObjectItem::UEP_TotalSize = 0x18
+[2026-11-01 10:05:14.0053639] FUObjectArray::ObjFirstGCIndex = 0x0
+[2026-11-01 10:05:14.0053789] FUObjectArray::ObjLastNonGCIndex = 0x4
+[2026-11-01 10:05:14.0053939] FUObjectArray::MaxObjectsNotConsideredByGC = 0x8
+[2026-11-01 10:05:14.0054089] FUObjectArray::ObjObjects = 0x10
+[2026-11-01 10:05:14.0054238] FUObjectArray::UObjectCreateListeners = 0x68
+[2026-11-01 10:05:14.0054388] FUObjectArray::OpenForDisregardForGC = 0xC
+[2026-11-01 10:05:14.0054536] FUObjectArray::UObjectDeleteListeners = 0x78
+[2026-11-01 10:05:14.0054684] FUObjectArray::ObjAvailableList = 0x58
+[2026-11-01 10:05:14.0054832] FUObjectArray::PrimarySerialNumber = 0xB0
+[2026-11-01 10:05:14.0054981] FUObjectArray::bShouldRecycleObjectIndices = 0xB4
+[2026-11-01 10:05:14.0055131] FUObjectArray::UEP_TotalSize = 0xB8
+[2026-11-01 10:05:14.0055284] TUObjectArray::NumChunks = 0x1C
+[2026-11-01 10:05:14.0055433] TUObjectArray::Objects = 0x0
+[2026-11-01 10:05:14.0055584] TUObjectArray::UEP_TotalSize = 0x20
+[2026-11-01 10:05:14.0055732] TUObjectArray::PreAllocatedObjects = 0x8
+[2026-11-01 10:05:14.0055881] TUObjectArray::MaxElements = 0x10
+[2026-11-01 10:05:14.0056029] TUObjectArray::NumElements = 0x14
+[2026-11-01 10:05:14.0056178] TUObjectArray::MaxChunks = 0x18
+[2026-11-01 10:05:14.0056331] 
+##### MEMBER OFFSETS END (Coalesced) #####
+
+[2026-11-01 10:05:14.0056485] [HashTables] FUObjectHashTables unavailable, object lookups use GUObjectArray
+[2026-11-01 10:05:14.0056664] Unreal Engine modules (non-modular):
+[2026-11-01 10:05:14.0057342] MainExe @ 0x140000000 size=0x2195a000
+[2026-11-01 10:05:14.0071494] m_shared_functions: 0x1095be0
+[2026-11-01 10:05:14.0096604] Input source set to: Win32Async
+[2026-11-01 10:05:14.0129279] [UE4SS.LoadMap.LuaModImpl] Added prehook with Id '0X2040000000000001'!
+[2026-11-01 10:05:14.0129779] [UE4SS.LoadMap.LuaModImpl] Added posthook with Id '0X40000000000002'!
+[2026-11-01 10:05:14.0151055] [UE4SS.InitGameState.LuaModImpl] Added prehook with Id '0X2010000000000001'!
+[2026-11-01 10:05:14.0151547] [UE4SS.InitGameState.LuaModImpl] Added posthook with Id '0X10000000000002'!
+[2026-11-01 10:05:14.0170641] [UE4SS.BeginPlay.LuaModImpl] Added prehook with Id '0X2008000000000001'!
+[2026-11-01 10:05:14.0171064] [UE4SS.BeginPlay.LuaModImpl] Added posthook with Id '0X8000000000002'!
+[2026-11-01 10:05:14.0188400] [UE4SS.EndPlay.LuaModImpl] Added prehook with Id '0X2004000000000001'!
+[2026-11-01 10:05:14.0188819] [UE4SS.EndPlay.LuaModImpl] Added posthook with Id '0X4000000000002'!
+[2026-11-01 10:05:14.0189014] [UnknownMod.StaticConstructObject.PostHook] Added posthook with Id '0X1000000000000002'!
+[2026-11-01 10:05:14.0395191] [UnknownMod.ULocalPlayerExec.PreHook] Added prehook with Id '0X2000400000000001'!
+[2026-11-01 10:05:14.0395852] [UnknownMod.ULocalPlayerExec.PostHook] Added posthook with Id '0X400000000002'!
+[2026-11-01 10:05:14.0413594] [UnknownMod.CallFunctionByNameWithArguments.PreHook] Added prehook with Id '0X2000800000000001'!
+[2026-11-01 10:05:14.0414148] [UnknownMod.CallFunctionByNameWithArguments.PostHook] Added posthook with Id '0X800000000002'!
+[2026-11-01 10:05:14.0430509] [.ProcessConsoleExec.] Failed to add hook, detour installation likely failed!
+[2026-11-01 10:05:14.0448103] [.ProcessConsoleExec.] Failed to add hook, detour installation likely failed!
+[2026-11-01 10:05:14.0463345] [.ProcessConsoleExec.] Failed to add hook, detour installation likely failed!
+[2026-11-01 10:05:14.0477904] [.ProcessConsoleExec.] Failed to add hook, detour installation likely failed!
+[2026-11-01 10:05:14.0493224] [.ProcessConsoleExec.] Failed to add hook, detour installation likely failed!
+[2026-11-01 10:05:14.0493597] Enabling custom events
+[2026-11-01 10:05:14.0511845] [UE4SS.ProcessLocalScriptFunction.LuaModImplScriptHook] Added posthook with Id '0X80000000000001'!
+[2026-11-01 10:05:14.0518895] Starting mods (from enabled.txt (c:\program files (x86)\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods), no defined load order)...
+[2026-11-01 10:05:14.0520879] Mod 'AC8SurvivalMode' has enabled.txt, starting mod.
+[2026-11-01 10:05:14.0575551] [Lua] Exposing size of 'class RC::Unreal::FObjectProperty' as 0x8
+[2026-11-01 10:05:14.0591043] [Lua] Failed to expose size of 'class RC::Unreal::FObjectPtrProperty', internal value invalid, manually set this value in your Lua mod if you intend to use it.
+[2026-11-01 10:05:14.0591729] [Lua] Exposing size of 'class RC::Unreal::FInt8Property' as 0x1
+[2026-11-01 10:05:14.0591983] [Lua] Exposing size of 'class RC::Unreal::FInt16Property' as 0x2
+[2026-11-01 10:05:14.0597899] [Lua] Exposing size of 'class RC::Unreal::FIntProperty' as 0x4
+[2026-11-01 10:05:14.0598485] [Lua] Exposing size of 'class RC::Unreal::FInt64Property' as 0x8
+[2026-11-01 10:05:14.0598717] [Lua] Exposing size of 'class RC::Unreal::FByteProperty' as 0x1
+[2026-11-01 10:05:14.0600767] [Lua] Exposing size of 'class RC::Unreal::FUInt16Property' as 0x2
+[2026-11-01 10:05:14.0601021] [Lua] Exposing size of 'class RC::Unreal::FUInt32Property' as 0x4
+[2026-11-01 10:05:14.0601220] [Lua] Exposing size of 'class RC::Unreal::FUInt64Property' as 0x8
+[2026-11-01 10:05:14.0601491] [Lua] Exposing size of 'class RC::Unreal::FNameProperty' as 0x8
+[2026-11-01 10:05:14.0601681] [Lua] Exposing size of 'class RC::Unreal::FFloatProperty' as 0x4
+[2026-11-01 10:05:14.0601901] [Lua] Exposing size of 'class RC::Unreal::FBoolProperty' as 0x1
+[2026-11-01 10:05:14.0602080] [Lua] Exposing size of 'class RC::Unreal::FArrayProperty' as 0x10
+[2026-11-01 10:05:14.0602256] [Lua] Exposing size of 'class RC::Unreal::FSetProperty' as 0x50
+[2026-11-01 10:05:14.0602433] [Lua] Exposing size of 'class RC::Unreal::FMapProperty' as 0x50
+[2026-11-01 10:05:14.0602610] [Lua] Exposing size of 'class RC::Unreal::FStructProperty' as 0x38
+[2026-11-01 10:05:14.0602801] [Lua] Exposing size of 'class RC::Unreal::FClassProperty' as 0x8
+[2026-11-01 10:05:14.0602984] [Lua] Exposing size of 'class RC::Unreal::FWeakObjectProperty' as 0x8
+[2026-11-01 10:05:14.0603166] [Lua] Exposing size of 'class RC::Unreal::FEnumProperty' as 0x1
+[2026-11-01 10:05:14.0603343] [Lua] Exposing size of 'class RC::Unreal::FTextProperty' as 0x10
+[2026-11-01 10:05:14.0603523] [Lua] Exposing size of 'class RC::Unreal::FStrProperty' as 0x10
+[2026-11-01 10:05:14.0722388] [NotifyOnNewObject] Registered notification for /Script/Live.LiveAIPlane
+[2026-11-01 10:05:14.0745561] [NotifyOnNewObject] Registered notification for /Script/Engine.World
+[2026-11-01 10:05:14.0797101] [Lua] [AC8SurvivalMode] config: made config\survival.ini from survival.default.ini
+[2026-11-01 10:05:14.0863601] [Lua] [AC8SurvivalMode] config: survival.ini, 0 settings
+[2026-11-01 10:05:14.0932586] [Lua] [AC8SurvivalMode] hud: info key I: the info wall (players, allies, items) shown when it's pressed; the CO-OP, ALLIES and ITEMS rows each shown 5.0 s when it changes
+[2026-11-01 10:05:14.0948790] [NotifyOnNewObject] Registered notification for /Script/Live.LiveAIGameObject
+[2026-11-01 10:05:14.0992685] [NotifyOnNewObject] Registered notification for /Script/Live.LiveAIGameObject
+[2026-11-01 10:05:14.0993366] [NotifyOnNewObject] Registered notification for /Script/Live.LiveMissile
+[2026-11-01 10:05:14.1009227] [NotifyOnNewObject] Registered notification for /Script/Live.LiveAIGameObject
+[2026-11-01 10:05:14.1019475] [NotifyOnNewObject] Registered notification for /Script/Live.LiveAIGameObject
+[2026-11-01 10:05:14.1019999] [NotifyOnNewObject] Registered notification for /Script/Live.LiveAIGameObject
+[2026-11-01 10:05:14.1052381] [NotifyOnNewObject] Registered notification for /Script/Live.LiveElectronicSupportMeasures
+[2026-11-01 10:05:14.1121938] [NotifyOnNewObject] Registered notification for /Script/Live.LiveMenuManager
+[2026-11-01 10:05:14.1171860] [NotifyOnNewObject] Registered notification for /Script/Live.LiveAIGameObject
+[2026-11-01 10:05:14.1188308] [Lua] [AC8SurvivalMode] revive: next-player key O bound
+[2026-11-01 10:05:14.1204546] [Lua] [AC8SurvivalMode] loaded, version 0.73.70-coop2mp.71
+[2026-11-01 10:05:14.1209278] Event loop start
+[2026-11-01 10:05:14.2496601] [UE4SS.EngineTick.LuaModImpl] Added prehook with Id '0X2020000000000002'!
+[2026-11-01 10:05:21.4533711] Unhooking FName constructor
+[2026-11-01 10:05:21.4591805] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/Information/DT_LiveMissionTable.DT_LiveMissionTable object at 1297B1CC0
+[2026-11-01 10:05:21.4626733] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/Information/DT_LiveMissionTable.DT_LiveMissionTable pinned (kept loaded) [ReferencedObjects num 0 -> 1, max 0 -> 4]
+[2026-11-01 10:05:21.4731754] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_MissionRows.DT_SV_MissionRows pinned (kept loaded) [ReferencedObjects num 1 -> 2, max 4 -> 4]
+[2026-11-01 10:05:21.4739235] [Lua] [AC8SurvivalMode] rows: added 'SurvivalMode' to DataTable /Game/Datatables/Information/DT_LiveMissionTable.DT_LiveMissionTable
+[2026-11-01 10:05:21.4747840] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/Information/DT_LiveMissionTable.DT_LiveMissionTable now has: Transition, Startup, Mission001, Mission002, Mission003, Mission004, Mission005, Mission006, Mission007, Mission008, Mission009, Mission010, Mission011, Mission012, Mission013, Mission014, Mission015, Mission016, Mission017, Mission018, Mission019, Mission020, Mission021, Mission022, Mission023, Mission024, Mission025_1, Mission025_2, Mission026, Mission027, Mission028, Mission029, Mission030, MainMenu, Briefing, Debriefing, Ending, PreBriefing, Hangar00, Hangar01, Hangar02, Hangar03, Hangar04, Hangar05, Hanga05_NoEmergencyMorningSunny, HangarLoadTest, Training001, Training002, Training003, Training004, Training005, Training006, Training007, Training008, Training009, Training010, Training011, Training012, Training013, Training014, Training015, Mission028_MiniGame, SurvivalMode
+[2026-11-01 10:05:21.4825826] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands.DT_LiveMenuMainTopCommands object at 3D1A43F40
+[2026-11-01 10:05:21.4843783] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands.DT_LiveMenuMainTopCommands pinned (kept loaded) [ReferencedObjects num 2 -> 3, max 4 -> 4]
+[2026-11-01 10:05:21.4844528] [Lua] [AC8SurvivalMode] rows: 'Shop' taken off the main menu
+[2026-11-01 10:05:21.4844799] [Lua] [AC8SurvivalMode] rows: 'Online' taken off the main menu
+[2026-11-01 10:05:21.4845053] [Lua] [AC8SurvivalMode] rows: 'CampaignTraining' taken off the main menu
+[2026-11-01 10:05:21.4868139] [Lua] [AC8SurvivalMode] world: /Game/Maps/Menu/PL_Startup
+[2026-11-01 10:05:21.8995389] [Lua] [AC8SurvivalMode] world: /Game/Maps/Transition/TransitionMap
+[2026-11-01 10:05:21.9222631] [Lua] [AC8SurvivalMode] info maps: MissionDataMap_ was missing 9101 (the race at start): added and it is in now
+[2026-11-01 10:05:21.9224274] [Lua] [AC8SurvivalMode] info maps: LevelDataMap_ was missing 70 (the race at start): added and it is in now
+[2026-11-01 10:05:22.5567521] [Lua] [AC8SurvivalMode] game Lua: state 2CB08E688
+[2026-11-01 10:05:22.5571751] [Lua] [AC8SurvivalMode] game Lua: Lua 5.3, io table, os table, debug table, Inherit function, CppObjectBase table, ELiveAIManeuverSpeedType table, modules loaded 40 (20 Chronicle.AI)
+[2026-11-01 10:05:22.5572973] [Lua] [AC8SurvivalMode] game Lua: helper in
+[2026-11-01 10:05:22.5578538] [Lua] [AC8SurvivalMode] game Lua: stock Chronicle.AI.LA_AIPlane: true table: 000000011A042C00
+[2026-11-01 10:05:22.5583607] [Lua] [AC8SurvivalMode] game Lua: stock Chronicle.AI.LA_PursueTarget_0011: true table: 000000011A046540
+[2026-11-01 10:05:22.5587231] [Lua] [AC8SurvivalMode] game Lua: stock Chronicle.AI.LA_PursueTarget_0400: true table: 00000003E148B040
+[2026-11-01 10:05:22.5601187] [Lua] [AC8SurvivalMode] game Lua: stock SurvivalMode.AI.LA_SV_MoveAway: true table: 000000011A045CC0
+[2026-11-01 10:05:22.5608907] [Lua] [AC8SurvivalMode] game Lua: stock SurvivalMode.AI.LA_SV_TailChase: true table: 000000011A045F00
+[2026-11-01 10:05:22.5621533] [Lua] [AC8SurvivalMode] game Lua: stock SurvivalMode.AI.LA_SV_ProvokeNear: true table: 0000000319114C40
+[2026-11-01 10:05:22.5629862] [Lua] [AC8SurvivalMode] game Lua: stock SurvivalMode.AI.LA_SV_Escape: true table: 0000000319114B80
+[2026-11-01 10:05:22.5641184] [Lua] [AC8SurvivalMode] game Lua: stock SurvivalMode.AI.LA_SV_LancerPass: true table: 0000000319112040
+[2026-11-01 10:05:22.5647538] [Lua] [AC8SurvivalMode] game Lua: stock SurvivalMode.AI.LA_SV_LancerZoom: true table: 0000000319113B00
+[2026-11-01 10:05:22.5655773] [Lua] [AC8SurvivalMode] game Lua: stock SurvivalMode.AI.LA_SV_LancerBreak: true table: 0000000319113C00
+[2026-11-01 10:05:22.5666536] [Lua] [AC8SurvivalMode] game Lua: stock SurvivalMode.AI.LA_SV_WolfDrag: true table: 0000000319114600
+[2026-11-01 10:05:22.5677788] [Lua] [AC8SurvivalMode] game Lua: stock SurvivalMode.AI.LA_SV_WolfStrike: true table: 0000000319114940
+[2026-11-01 10:05:22.5685364] [Lua] [AC8SurvivalMode] game Lua: stock SurvivalMode.AI.LA_SV_SkirmPass: true table: 0000000319114900
+[2026-11-01 10:05:22.5692201] [Lua] [AC8SurvivalMode] game Lua: stock SurvivalMode.AI.LA_SV_SkirmExtend: true table: 0000000319116400
+[2026-11-01 10:05:22.5694672] [Lua] [AC8SurvivalMode] learning: profile at the main menu: none yet (config\survival_profile.ini is made at your first run's end)
+[2026-11-01 10:05:22.5695590] [Lua] [AC8SurvivalMode] learning: the AI's flares stay stock this session (your saved missile share -; its threshold 0.80)
+[2026-11-01 10:05:22.5790707] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/AI/NPC/LuaSet/DT_NPC_LuaSet.DT_NPC_LuaSet pinned (kept loaded) [ReferencedObjects num 3 -> 4, max 4 -> 4]
+[2026-11-01 10:05:22.5832556] [Lua] [AC8SurvivalMode] rows: behaviour script LA_SV_Escape pinned (kept loaded) [ReferencedObjects num 4 -> 5, max 4 -> 24]
+[2026-11-01 10:05:22.5865441] [Lua] [AC8SurvivalMode] rows: behaviour script LA_SV_TailChase pinned (kept loaded) [ReferencedObjects num 5 -> 6, max 24 -> 24]
+[2026-11-01 10:05:22.5896828] [Lua] [AC8SurvivalMode] rows: behaviour script LA_SV_MoveAway pinned (kept loaded) [ReferencedObjects num 6 -> 7, max 24 -> 24]
+[2026-11-01 10:05:22.5927990] [Lua] [AC8SurvivalMode] rows: behaviour script LA_SV_ProvokeNear pinned (kept loaded) [ReferencedObjects num 7 -> 8, max 24 -> 24]
+[2026-11-01 10:05:22.5932598] [Lua] [AC8SurvivalMode] behaviour: set NLID_SV_Fighter in (NLID_0012_CP with EscapeFromPursuerLua = LA_SV_Escape, MoveAwayFromTargetLua = LA_SV_MoveAway, ProvokeNearLua = LA_SV_ProvokeNear, PursueTargetLua = LA_SV_TailChase)
+[2026-11-01 10:05:22.5993888] [Lua] [AC8SurvivalMode] rows: behaviour script LA_SV_WolfStrike pinned (kept loaded) [ReferencedObjects num 8 -> 9, max 24 -> 24]
+[2026-11-01 10:05:22.6067457] [Lua] [AC8SurvivalMode] behaviour: set NLID_SV_WolfWing in (NLID_0012_CP with EscapeFromPursuerLua = LA_SV_Escape, MoveAwayFromTargetLua = LA_SV_MoveAway, ProvokeNearLua = LA_SV_ProvokeNear, PursueTargetLua = LA_SV_WolfStrike)
+[2026-11-01 10:05:22.6161464] [Lua] [AC8SurvivalMode] rows: behaviour script LA_SV_WolfDrag pinned (kept loaded) [ReferencedObjects num 9 -> 10, max 24 -> 24]
+[2026-11-01 10:05:22.6162990] [Lua] [AC8SurvivalMode] behaviour: set NLID_SV_WolfLead in (NLID_0012_CP with MoveAwayFromTargetLua = LA_SV_MoveAway, ProvokeNearLua = LA_SV_WolfDrag, PursueTargetLua = LA_SV_TailChase)
+[2026-11-01 10:05:22.6195461] [Lua] [AC8SurvivalMode] rows: behaviour script LA_SV_SkirmExtend pinned (kept loaded) [ReferencedObjects num 10 -> 11, max 24 -> 24]
+[2026-11-01 10:05:22.6236256] [Lua] [AC8SurvivalMode] rows: behaviour script LA_SV_SkirmPass pinned (kept loaded) [ReferencedObjects num 11 -> 12, max 24 -> 24]
+[2026-11-01 10:05:22.6238147] [Lua] [AC8SurvivalMode] behaviour: set NLID_SV_Skirmisher in (NLID_0012_CP with MoveAwayFromTargetLua = LA_SV_SkirmExtend, PursueTargetLua = LA_SV_SkirmPass)
+[2026-11-01 10:05:22.6275641] [Lua] [AC8SurvivalMode] rows: behaviour script LA_SV_LancerBreak pinned (kept loaded) [ReferencedObjects num 12 -> 13, max 24 -> 24]
+[2026-11-01 10:05:22.6321889] [Lua] [AC8SurvivalMode] rows: behaviour script LA_SV_LancerPass pinned (kept loaded) [ReferencedObjects num 13 -> 14, max 24 -> 24]
+[2026-11-01 10:05:22.6415349] [Lua] [AC8SurvivalMode] rows: behaviour script LA_SV_LancerZoom pinned (kept loaded) [ReferencedObjects num 14 -> 15, max 24 -> 24]
+[2026-11-01 10:05:22.6432120] [Lua] [AC8SurvivalMode] behaviour: set NLID_SV_Lancer in (NLID_0012_CP with EscapeFromPursuerLua = LA_SV_Escape, MoveAwayFromTargetLua = LA_SV_LancerZoom, ProvokeFarLua = LA_SV_LancerBreak, ProvokeMidLua = LA_SV_LancerBreak, ProvokeNearLua = LA_SV_LancerBreak, PursueTargetLua = LA_SV_LancerPass)
+[2026-11-01 10:05:22.6543231] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/AI/NPC/AIModule/DT_NPC_AIModule.DT_NPC_AIModule pinned (kept loaded) [ReferencedObjects num 15 -> 16, max 24 -> 24]
+[2026-11-01 10:05:22.6565803] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/AI/NPC/DT_NPC.DT_NPC pinned (kept loaded) [ReferencedObjects num 16 -> 17, max 24 -> 24]
+[2026-11-01 10:05:22.6583036] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_NpcMission.DT_SV_NpcMission pinned (kept loaded) [ReferencedObjects num 17 -> 18, max 24 -> 24]
+[2026-11-01 10:05:22.6615716] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/AI/NPC/FCS/DT_NPC_FCS.DT_NPC_FCS pinned (kept loaded) [ReferencedObjects num 18 -> 19, max 24 -> 24]
+[2026-11-01 10:05:22.6644383] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/AI/NPC/Weapon/DT_NPC_Weapon.DT_NPC_Weapon pinned (kept loaded) [ReferencedObjects num 19 -> 20, max 24 -> 24]
+[2026-11-01 10:05:22.6647032] [Lua] [AC8SurvivalMode] special: the Anomaly's guards search 5000 m (NPC_AIModule_SV_Search_Guard)
+[2026-11-01 10:05:22.6706051] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows pinned (kept loaded) [ReferencedObjects num 20 -> 21, max 24 -> 24]
+[2026-11-01 10:05:22.6795674] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/AI/NPC/Model/DT_NPC_Model.DT_NPC_Model pinned (kept loaded) [ReferencedObjects num 21 -> 22, max 24 -> 24]
+[2026-11-01 10:05:22.6828623] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_ModelRows.DT_SV_ModelRows pinned (kept loaded) [ReferencedObjects num 22 -> 23, max 24 -> 24]
+[2026-11-01 10:05:22.6829837] [Lua] [AC8SurvivalMode] aces: model SV_Model_adfx (ADFX-02) in DT_NPC_Model
+[2026-11-01 10:05:22.6834940] [Lua] [AC8SurvivalMode] aces: 36 rows in DT_NPC, 26 names set
+[2026-11-01 10:05:22.6840879] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SV_WOLF (the Wolf airframes' gun rounds: damage x1.5, spread 1.500 deg)
+[2026-11-01 10:05:22.6842118] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV_WOLF (the Wolf airframes' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.50 s)
+[2026-11-01 10:05:22.6842755] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl000 -> NPC_FCS_PlaneMsl000_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+[2026-11-01 10:05:22.6843187] [Lua] [AC8SurvivalMode] weapons: OP1022_f16c_01_SV carries NPC_FCS_PlaneQAAM000 (slot 3)
+[2026-11-01 10:05:22.6844078] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVB_WOLF (the Wolf airframes' gun rounds: damage x1.5, spread 1.100 deg)
+[2026-11-01 10:05:22.6844300] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB_WOLF (the Wolf airframes' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.50 s)
+[2026-11-01 10:05:22.6844651] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl000 -> NPC_FCS_PlaneMsl000_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+[2026-11-01 10:05:22.6845488] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVC_WOLF (the Wolf airframes' gun rounds: damage x1.5, spread 0.800 deg)
+[2026-11-01 10:05:22.6845709] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC_WOLF (the Wolf airframes' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 0.50 s)
+[2026-11-01 10:05:22.6846067] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl000 -> NPC_FCS_PlaneMsl000_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+[2026-11-01 10:05:22.6846818] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVD_WOLF (the Wolf airframes' gun rounds: damage x1.8, spread 0.500 deg)
+[2026-11-01 10:05:22.6847031] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD_WOLF (the Wolf airframes' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 0.50 s)
+[2026-11-01 10:05:22.6847372] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl000 -> NPC_FCS_PlaneMsl000_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+[2026-11-01 10:05:22.6848202] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl300 -> NPC_FCS_PlaneMsl300_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+[2026-11-01 10:05:22.6848489] [Lua] [AC8SurvivalMode] weapons: OP1032_f18e_Ally_MS22_SV carries NPC_FCS_PlaneQAAM000 (slot 3)
+[2026-11-01 10:05:22.6849283] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl300 -> NPC_FCS_PlaneMsl300_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+[2026-11-01 10:05:22.6850012] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl300 -> NPC_FCS_PlaneMsl300_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+[2026-11-01 10:05:22.6850747] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl300 -> NPC_FCS_PlaneMsl300_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+[2026-11-01 10:05:22.6851492] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SV (gun rounds: damage x1.5, spread 1.500 deg)
+[2026-11-01 10:05:22.6851710] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV (gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s)
+[2026-11-01 10:05:22.6852027] [Lua] [AC8SurvivalMode] weapons: OP1025_f15e_01_SV carries NPC_FCS_Plane2AAM000 (slot 3)
+[2026-11-01 10:05:22.6852642] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVB (gun rounds: damage x1.5, spread 1.100 deg)
+[2026-11-01 10:05:22.6852904] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB (gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s)
+[2026-11-01 10:05:22.6853716] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVC (gun rounds: damage x1.5, spread 0.800 deg)
+[2026-11-01 10:05:22.6853980] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC (gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s)
+[2026-11-01 10:05:22.6854823] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVD (gun rounds: damage x1.8, spread 0.500 deg)
+[2026-11-01 10:05:22.6855089] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD (gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s)
+[2026-11-01 10:05:22.6855934] [Lua] [AC8SurvivalMode] weapons: OP1023_f14d_01_SV carries NPC_FCS_PlaneHCAA000 (slot 3)
+[2026-11-01 10:05:22.6857855] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl002 -> NPC_FCS_PlaneMsl002_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+[2026-11-01 10:05:22.6858198] [Lua] [AC8SurvivalMode] weapons: OP1027_m21b_01_SV carries NPC_FCS_Plane2AAM000 (slot 3)
+[2026-11-01 10:05:22.6858914] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl002 -> NPC_FCS_PlaneMsl002_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+[2026-11-01 10:05:22.6860062] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl002 -> NPC_FCS_PlaneMsl002_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+[2026-11-01 10:05:22.6860766] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl002 -> NPC_FCS_PlaneMsl002_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+[2026-11-01 10:05:22.6861534] [Lua] [AC8SurvivalMode] weapons: OP1020_m29a_01_SV carries NPC_FCS_PlaneLAAM000 (slot 3)
+[2026-11-01 10:05:22.6863738] [Lua] [AC8SurvivalMode] weapons: OP1026_su47_01_SV carries NPC_FCS_PlaneHCAA000 (slot 3)
+[2026-11-01 10:05:22.6865879] [Lua] [AC8SurvivalMode] weapons: OP1030_su33_02_SV carries NPC_FCS_Plane2AAM000 (slot 3)
+[2026-11-01 10:05:22.6867730] [Lua] [AC8SurvivalMode] weapons: OP1009_su34_01_SV carries NPC_FCS_PlaneLAAM000 (slot 3)
+[2026-11-01 10:05:22.6869803] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl004 -> NPC_FCS_PlaneMsl004_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+[2026-11-01 10:05:22.6870317] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneLAAM000 -> NPC_FCS_PlaneLAAM000_SV_SKIRM (the Skirmishers' LAAM: lock within 7000 m / 45 deg, never inside 2500 m, lock 2.0 s, 4.0 s between, rest 8.0 s)
+[2026-11-01 10:05:22.6870579] [Lua] [AC8SurvivalMode] weapons: OP1002_f02a_01_SV carries NPC_FCS_PlaneLAAM000_SV_SKIRM (slot 3)
+[2026-11-01 10:05:22.6871277] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl004 -> NPC_FCS_PlaneMsl004_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+[2026-11-01 10:05:22.6871956] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl004 -> NPC_FCS_PlaneMsl004_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+[2026-11-01 10:05:22.6872624] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl004 -> NPC_FCS_PlaneMsl004_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+[2026-11-01 10:05:22.6873316] [Lua] [AC8SurvivalMode] weapons: OP1004_f15c_01_SV carries NPC_FCS_Plane2AAM000 (slot 3)
+[2026-11-01 10:05:22.6875098] [Lua] [AC8SurvivalMode] weapons: OP1008_j39e_01_SV carries NPC_FCS_PlaneLAAM000_SV_SKIRM (slot 3)
+[2026-11-01 10:05:22.6877062] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl001 -> NPC_FCS_PlaneMsl001_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+[2026-11-01 10:05:22.6877402] [Lua] [AC8SurvivalMode] weapons: OP1006_f35c_01_SV carries NPC_FCS_PlaneLAAM000_SV_SKIRM (slot 3)
+[2026-11-01 10:05:22.6878052] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl001 -> NPC_FCS_PlaneMsl001_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+[2026-11-01 10:05:22.6878715] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl001 -> NPC_FCS_PlaneMsl001_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+[2026-11-01 10:05:22.6884360] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl001 -> NPC_FCS_PlaneMsl001_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+[2026-11-01 10:05:22.6898230] [Lua] [AC8SurvivalMode] weapons: OP1028_su35_01_SV carries NPC_FCS_PlaneHCAA000 (slot 3)
+[2026-11-01 10:05:22.6903995] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl003 -> NPC_FCS_PlaneMsl003_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+[2026-11-01 10:05:22.6904664] [Lua] [AC8SurvivalMode] weapons: OP1014_rflm_01_SV carries NPC_FCS_Plane2AAM000 (slot 3)
+[2026-11-01 10:05:22.6905335] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl003 -> NPC_FCS_PlaneMsl003_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+[2026-11-01 10:05:22.6906009] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl003 -> NPC_FCS_PlaneMsl003_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+[2026-11-01 10:05:22.6906691] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl003 -> NPC_FCS_PlaneMsl003_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+[2026-11-01 10:05:22.6907388] [Lua] [AC8SurvivalMode] weapons: OP1011_typn_01_SV carries NPC_FCS_PlaneLAAM000 (slot 3)
+[2026-11-01 10:05:22.6909146] [Lua] [AC8SurvivalMode] weapons: OP1021_su57_01_SV carries NPC_FCS_PlaneHCAA000 (slot 3)
+[2026-11-01 10:05:22.6910930] [Lua] [AC8SurvivalMode] weapons: OP1005_f22a_01_SV carries NPC_FCS_Plane2AAM000 (slot 3)
+[2026-11-01 10:05:22.6912762] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_ECM000 -> NPC_FCS_ECM000_SVX (ECM pod (MINDRIPPER's, AB.L..IN's): always up (no rest, 15 s on, every 14 s, from 20 km))
+[2026-11-01 10:05:22.6912984] [Lua] [AC8SurvivalMode] weapons: OP1010_e18g_01_SV (the jammer) carries its ECM pod NPC_FCS_ECM000_SVX (slot 3)
+[2026-11-01 10:05:22.6913247] [Lua] [AC8SurvivalMode] weapons: OP1010_e18g_01_SV carries NPC_FCS_PlaneQAAM000 (slot 4)
+[2026-11-01 10:05:22.6915314] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SV_MERCENARY (mercenary aces' gun rounds: damage x1.5, spread 1.500 deg)
+[2026-11-01 10:05:22.6915548] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV_MERCENARY (mercenary aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.40 s)
+[2026-11-01 10:05:22.6915868] [Lua] [AC8SurvivalMode] weapons: sv_ace_mercenary_f15c_l_sv carries NPC_FCS_PlaneHCAA000 (slot 3)
+[2026-11-01 10:05:22.6916618] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVB_MERCENARY (mercenary aces' gun rounds: damage x1.5, spread 1.100 deg)
+[2026-11-01 10:05:22.6916882] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB_MERCENARY (mercenary aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.50 s)
+[2026-11-01 10:05:22.6918164] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVC_MERCENARY (mercenary aces' gun rounds: damage x1.5, spread 0.800 deg)
+[2026-11-01 10:05:22.6918452] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC_MERCENARY (mercenary aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 0.60 s)
+[2026-11-01 10:05:22.6919747] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVD_MERCENARY (mercenary aces' gun rounds: damage x1.8, spread 0.500 deg)
+[2026-11-01 10:05:22.6920346] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD_MERCENARY (mercenary aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 0.70 s)
+[2026-11-01 10:05:22.6921489] [Lua] [AC8SurvivalMode] weapons: sv_ace_mercenary_f15c_w_sv carries NPC_FCS_PlaneQAAM000 (slot 3)
+[2026-11-01 10:05:22.6923588] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl402 -> NPC_FCS_PlaneMsl402_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+[2026-11-01 10:05:22.6923943] [Lua] [AC8SurvivalMode] weapons: sv_ace_mercenary_su35_l_sv carries NPC_FCS_PlaneHCAA000 (slot 4)
+[2026-11-01 10:05:22.6924597] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl402 -> NPC_FCS_PlaneMsl402_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+[2026-11-01 10:05:22.6925247] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl402 -> NPC_FCS_PlaneMsl402_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+[2026-11-01 10:05:22.6925908] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl402 -> NPC_FCS_PlaneMsl402_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+[2026-11-01 10:05:22.6926590] [Lua] [AC8SurvivalMode] weapons: sv_ace_mercenary_su35_w_sv carries NPC_FCS_PlaneQAAM000 (slot 4)
+[2026-11-01 10:05:22.6928433] [Lua] [AC8SurvivalMode] weapons: sv_ace_mercenary_typhoon_l_sv carries NPC_FCS_PlaneHCAA000 (slot 3)
+[2026-11-01 10:05:22.6930334] [Lua] [AC8SurvivalMode] weapons: sv_ace_mercenary_typhoon_w_sv carries NPC_FCS_PlaneHCAA000 (slot 3)
+[2026-11-01 10:05:22.6932101] [Lua] [AC8SurvivalMode] special: MINDRIPPER's row sv_ace_anomaly_f04e_l_sv: +940 HP, turn +120/+270/+25, hovers (speed x0.06)
+[2026-11-01 10:05:22.6932674] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVX (MINDRIPPER's gun rounds: damage x3.6, spread 0.013 deg, life x20)
+[2026-11-01 10:05:22.6932886] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVX (MINDRIPPER's gun: within 78000 m / 82 deg, 0.06 s on target, 120-round bursts, rest 0.06 s, leads 1.00 s)
+[2026-11-01 10:05:22.6933264] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl000 -> NPC_FCS_PlaneMsl000_SVX (MINDRIPPER's missiles: lock within 8250 m / 135 deg, arm 0.10 s, lock 0.14 s, 0.20 s between, rest 0.40 s)
+[2026-11-01 10:05:22.6933710] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneQAAM000 -> NPC_FCS_PlaneQAAM000_SVX (MINDRIPPER's missiles: lock within 8250 m / 135 deg, arm 0.10 s, lock 0.14 s, 0.20 s between, rest 0.40 s)
+[2026-11-01 10:05:22.6934077] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_Plane2AAM000 -> NPC_FCS_Plane2AAM000_SVX (MINDRIPPER's missiles: lock within 8250 m / 135 deg, arm 0.10 s, lock 0.14 s, 0.20 s between, rest 0.40 s)
+[2026-11-01 10:05:22.6934366] [Lua] [AC8SurvivalMode] weapons: sv_ace_anomaly_f04e_l_sv (MINDRIPPER) carries NPC_FCS_PlaneQAAM000_SVX, NPC_FCS_Plane2AAM000_SVX, NPC_FCS_ECM000_SVX
+[2026-11-01 10:05:22.6936780] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SV_ANOMALY (anomaly aces' gun rounds: damage x1.5, spread 1.500 deg)
+[2026-11-01 10:05:22.6937010] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV_ANOMALY (anomaly aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.85 s)
+[2026-11-01 10:05:22.6937327] [Lua] [AC8SurvivalMode] weapons: sv_ace_anomaly_f04e_w_sv carries NPC_FCS_PlaneLAAM000 (slot 3)
+[2026-11-01 10:05:22.6937575] [Lua] [AC8SurvivalMode] special: the Anomaly's guards (sv_ace_anomaly_f04e_w_sv) fly NLID_SV_WolfWing (its pack)
+[2026-11-01 10:05:22.6938220] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVB_ANOMALY (anomaly aces' gun rounds: damage x1.5, spread 1.100 deg)
+[2026-11-01 10:05:22.6938481] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB_ANOMALY (anomaly aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.95 s)
+[2026-11-01 10:05:22.6939322] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVC_ANOMALY (anomaly aces' gun rounds: damage x1.5, spread 0.800 deg)
+[2026-11-01 10:05:22.6939598] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC_ANOMALY (anomaly aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 1.05 s)
+[2026-11-01 10:05:22.6940438] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVD_ANOMALY (anomaly aces' gun rounds: damage x1.8, spread 0.500 deg)
+[2026-11-01 10:05:22.6940694] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD_ANOMALY (anomaly aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 1.15 s)
+[2026-11-01 10:05:22.6941435] [Lua] [AC8SurvivalMode] aces: sv_ace_reaper_su57_l_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+[2026-11-01 10:05:22.6941880] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SV_REAPER (reaper aces' gun rounds: damage x1.5, spread 1.500 deg)
+[2026-11-01 10:05:22.6942093] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV_REAPER (reaper aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 1.00 s)
+[2026-11-01 10:05:22.6942409] [Lua] [AC8SurvivalMode] weapons: sv_ace_reaper_su57_l_sv carries NPC_FCS_PlaneLAAM000 (slot 3)
+[2026-11-01 10:05:22.6943150] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVB_REAPER (reaper aces' gun rounds: damage x1.5, spread 1.100 deg)
+[2026-11-01 10:05:22.6943419] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB_REAPER (reaper aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 1.10 s)
+[2026-11-01 10:05:22.6944315] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVC_REAPER (reaper aces' gun rounds: damage x1.5, spread 0.800 deg)
+[2026-11-01 10:05:22.6944584] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC_REAPER (reaper aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 1.20 s)
+[2026-11-01 10:05:22.6945456] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVD_REAPER (reaper aces' gun rounds: damage x1.8, spread 0.500 deg)
+[2026-11-01 10:05:22.6945718] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD_REAPER (reaper aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 1.30 s)
+[2026-11-01 10:05:22.6946404] [Lua] [AC8SurvivalMode] aces: sv_ace_reaper_su57_w_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+[2026-11-01 10:05:22.6946812] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SV_REAPER (reaper aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 1.00 s)
+[2026-11-01 10:05:22.6947138] [Lua] [AC8SurvivalMode] weapons: sv_ace_reaper_su57_w_sv carries NPC_FCS_PlaneQAAM000 (slot 4)
+[2026-11-01 10:05:22.6947820] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SVB_REAPER (reaper aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 1.10 s)
+[2026-11-01 10:05:22.6948683] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SVC_REAPER (reaper aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 1.20 s)
+[2026-11-01 10:05:22.6949692] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SVD_REAPER (reaper aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 1.30 s)
+[2026-11-01 10:05:22.6950516] [Lua] [AC8SurvivalMode] aces: sv_ace_reaper_f22a_l_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+[2026-11-01 10:05:22.6950943] [Lua] [AC8SurvivalMode] weapons: sv_ace_reaper_f22a_l_sv carries NPC_FCS_PlaneQAAM000 (slot 3)
+[2026-11-01 10:05:22.6953014] [Lua] [AC8SurvivalMode] aces: sv_ace_reaper_f22a_w_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+[2026-11-01 10:05:22.6953463] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl400 -> NPC_FCS_PlaneMsl400_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+[2026-11-01 10:05:22.6953893] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl100 -> NPC_FCS_PlaneMsl100_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+[2026-11-01 10:05:22.6954216] [Lua] [AC8SurvivalMode] weapons: sv_ace_reaper_f22a_w_sv carries NPC_FCS_PlaneLAAM000 (slot 5)
+[2026-11-01 10:05:22.6955020] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl400 -> NPC_FCS_PlaneMsl400_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+[2026-11-01 10:05:22.6955442] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl100 -> NPC_FCS_PlaneMsl100_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+[2026-11-01 10:05:22.6956244] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl400 -> NPC_FCS_PlaneMsl400_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+[2026-11-01 10:05:22.6956602] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl100 -> NPC_FCS_PlaneMsl100_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+[2026-11-01 10:05:22.6957419] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl400 -> NPC_FCS_PlaneMsl400_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+[2026-11-01 10:05:22.6957810] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl100 -> NPC_FCS_PlaneMsl100_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+[2026-11-01 10:05:22.6958429] [Lua] [AC8SurvivalMode] aces: sv_ace_reaper_typhoon_l_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+[2026-11-01 10:05:22.6958896] [Lua] [AC8SurvivalMode] weapons: sv_ace_reaper_typhoon_l_sv carries NPC_FCS_PlaneQAAM000 (slot 3)
+[2026-11-01 10:05:22.6961063] [Lua] [AC8SurvivalMode] aces: sv_ace_reaper_typhoon_w_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+[2026-11-01 10:05:22.6961553] [Lua] [AC8SurvivalMode] weapons: sv_ace_reaper_typhoon_w_sv carries NPC_FCS_PlaneQAAM000 (slot 4)
+[2026-11-01 10:05:22.6963716] [Lua] [AC8SurvivalMode] aces: sv_ace_reaper_rafale_l_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+[2026-11-01 10:05:22.6964131] [Lua] [AC8SurvivalMode] weapons: sv_ace_reaper_rafale_l_sv carries NPC_FCS_PlaneLAAM000 (slot 3)
+[2026-11-01 10:05:22.6966214] [Lua] [AC8SurvivalMode] aces: sv_ace_reaper_rafale_w_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+[2026-11-01 10:05:22.6966617] [Lua] [AC8SurvivalMode] weapons: sv_ace_reaper_rafale_w_sv carries NPC_FCS_Plane2AAM000 (slot 4)
+[2026-11-01 10:05:22.6968629] [Lua] [AC8SurvivalMode] aces: sv_ace_reaper_adfx02_l_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+[2026-11-01 10:05:22.6969076] [Lua] [AC8SurvivalMode] weapons: sv_ace_reaper_adfx02_l_sv carries NPC_FCS_Plane2AAM000 (slot 3)
+[2026-11-01 10:05:22.6971207] [Lua] [AC8SurvivalMode] aces: sv_ace_reaper_adfx02_w_sv flies harder: turn +180/+360/+45, speed x1.25, cruise x1.15, +600 HP
+[2026-11-01 10:05:22.6971931] [Lua] [AC8SurvivalMode] weapons: sv_ace_reaper_adfx02_w_sv carries NPC_FCS_PlaneLAAM000 (slot 3)
+[2026-11-01 10:05:22.6977611] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SV_PHANTOM (phantom aces' gun rounds: damage x1.5, spread 1.500 deg)
+[2026-11-01 10:05:22.6978876] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SV_PHANTOM (phantom aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.85 s)
+[2026-11-01 10:05:22.6979588] [Lua] [AC8SurvivalMode] weapons: sv_ace_phantom_su57_l_sv carries NPC_FCS_PlaneQAAM000 (slot 4)
+[2026-11-01 10:05:22.6980917] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVB_PHANTOM (phantom aces' gun rounds: damage x1.5, spread 1.100 deg)
+[2026-11-01 10:05:22.6981346] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SVB_PHANTOM (phantom aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.95 s)
+[2026-11-01 10:05:22.6983058] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVC_PHANTOM (phantom aces' gun rounds: damage x1.5, spread 0.800 deg)
+[2026-11-01 10:05:22.6983429] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SVC_PHANTOM (phantom aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 1.05 s)
+[2026-11-01 10:05:22.6984466] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVD_PHANTOM (phantom aces' gun rounds: damage x1.8, spread 0.500 deg)
+[2026-11-01 10:05:22.6984774] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun_Shadow -> NPC_FCS_PlaneGun_Shadow_SVD_PHANTOM (phantom aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 1.15 s)
+[2026-11-01 10:05:22.6986494] [Lua] [AC8SurvivalMode] weapons: sv_ace_phantom_su57_w_sv carries NPC_FCS_PlaneLAAM000 (slot 4)
+[2026-11-01 10:05:22.6990591] [Lua] [AC8SurvivalMode] weapons: sv_ace_phantom_typhoon_l_sv carries NPC_FCS_PlaneHCAA000 (slot 4)
+[2026-11-01 10:05:22.6994297] [Lua] [AC8SurvivalMode] weapons: sv_ace_phantom_typhoon_w_sv carries NPC_FCS_Plane2AAM000 (slot 4)
+[2026-11-01 10:05:22.6998825] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl302 -> NPC_FCS_PlaneMsl302_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+[2026-11-01 10:05:22.6999627] [Lua] [AC8SurvivalMode] weapons: sv_ace_phantom_su47_l_sv carries NPC_FCS_PlaneLAAM000 (slot 3)
+[2026-11-01 10:05:22.7001483] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl302 -> NPC_FCS_PlaneMsl302_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+[2026-11-01 10:05:22.7002993] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl302 -> NPC_FCS_PlaneMsl302_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+[2026-11-01 10:05:22.7004462] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl302 -> NPC_FCS_PlaneMsl302_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+[2026-11-01 10:05:22.7005815] [Lua] [AC8SurvivalMode] weapons: sv_ace_phantom_su47_w_sv carries NPC_FCS_Plane2AAM000 (slot 3)
+[2026-11-01 10:05:22.7010422] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SV_DEMON (demon aces' gun rounds: damage x1.5, spread 1.500 deg)
+[2026-11-01 10:05:22.7011187] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV_DEMON (demon aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.70 s)
+[2026-11-01 10:05:22.7011797] [Lua] [AC8SurvivalMode] weapons: sv_ace_demon_f22a_l_sv carries NPC_FCS_PlaneHCAA000 (slot 3)
+[2026-11-01 10:05:22.7012990] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVB_DEMON (demon aces' gun rounds: damage x1.5, spread 1.100 deg)
+[2026-11-01 10:05:22.7013357] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB_DEMON (demon aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.80 s)
+[2026-11-01 10:05:22.7014704] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVC_DEMON (demon aces' gun rounds: damage x1.5, spread 0.800 deg)
+[2026-11-01 10:05:22.7015161] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC_DEMON (demon aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 0.90 s)
+[2026-11-01 10:05:22.7016727] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVD_DEMON (demon aces' gun rounds: damage x1.8, spread 0.500 deg)
+[2026-11-01 10:05:22.7017226] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD_DEMON (demon aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 1.00 s)
+[2026-11-01 10:05:22.7018649] [Lua] [AC8SurvivalMode] weapons: sv_ace_demon_f22a_w_sv carries NPC_FCS_PlaneHCAA000 (slot 3)
+[2026-11-01 10:05:22.7021970] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun_Toplak -> NPC_FCS_PlaneGun_Toplak_SV_DEMON (demon aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.70 s)
+[2026-11-01 10:05:22.7022687] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl_Toplak -> NPC_FCS_PlaneMsl_Toplak_SV (missile: lock within 4000 m / 60 deg, arm 0.5 s, lock 1.5 s, 2.0 s between, rest 5.0 s)
+[2026-11-01 10:05:22.7023959] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun_Toplak -> NPC_FCS_PlaneGun_Toplak_SVB_DEMON (demon aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.80 s)
+[2026-11-01 10:05:22.7024613] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl_Toplak -> NPC_FCS_PlaneMsl_Toplak_SVB (missile: lock within 4500 m / 70 deg, arm 0.5 s, lock 1.2 s, 1.6 s between, rest 4.0 s)
+[2026-11-01 10:05:22.7025736] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun_Toplak -> NPC_FCS_PlaneGun_Toplak_SVC_DEMON (demon aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 0.90 s)
+[2026-11-01 10:05:22.7026381] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl_Toplak -> NPC_FCS_PlaneMsl_Toplak_SVC (missile: lock within 5000 m / 80 deg, arm 0.5 s, lock 0.9 s, 1.3 s between, rest 3.0 s)
+[2026-11-01 10:05:22.7028196] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun_Toplak -> NPC_FCS_PlaneGun_Toplak_SVD_DEMON (demon aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 1.00 s)
+[2026-11-01 10:05:22.7029224] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl_Toplak -> NPC_FCS_PlaneMsl_Toplak_SVD (missile: lock within 5500 m / 90 deg, arm 0.5 s, lock 0.7 s, 1.0 s between, rest 2.0 s)
+[2026-11-01 10:05:22.7034535] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneMsl400 -> NPC_FCS_PlaneMsl400_SVX (MINDRIPPER's missiles: lock within 8250 m / 135 deg, arm 0.10 s, lock 0.14 s, 0.20 s between, rest 0.40 s)
+[2026-11-01 10:05:22.7035499] [Lua] [AC8SurvivalMode] weapons: sv_ace_valka_x40a_l_sv carries NPC_FCS_PlaneLAAM000 (slot 4)
+[2026-11-01 10:05:22.7039493] [Lua] [AC8SurvivalMode] weapons: sv_ace_valka_x40a_w_sv carries NPC_FCS_PlaneLAAM000 (slot 3)
+[2026-11-01 10:05:22.7042254] [Lua] [AC8SurvivalMode] special: AB.L..IN's row sv_ace_glitch_e18g_l_sv: 450 HP
+[2026-11-01 10:05:22.7043062] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVG (AB.L..IN's gun rounds: damage x1.5, spread 0.100 deg)
+[2026-11-01 10:05:22.7043321] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVG (AB.L..IN's gun: within 1500 m / 6 deg, 0.05 s on target, 200-round bursts, rest 0.00 s, leads 0.80 s)
+[2026-11-01 10:05:22.7043745] [Lua] [AC8SurvivalMode] weapons: sv_ace_glitch_e18g_l_sv carries NPC_FCS_Plane2AAM000 (slot 4)
+[2026-11-01 10:05:22.7047270] [Lua] [AC8SurvivalMode] weapons: sv_ace_glitch_e18g_w_sv carries NPC_FCS_PlaneLAAM000 (slot 4)
+[2026-11-01 10:05:22.7050386] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SV_LEGEND (legend aces' gun rounds: damage x1.5, spread 1.500 deg)
+[2026-11-01 10:05:22.7050795] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SV_LEGEND (legend aces' gun: within 2000 m / 40 deg, 0.80 s on target, 15-round bursts, rest 0.60 s, leads 0.55 s)
+[2026-11-01 10:05:22.7051199] [Lua] [AC8SurvivalMode] weapons: sv_ace_legend_su47_l_sv carries NPC_FCS_PlaneHCAA000 (slot 3)
+[2026-11-01 10:05:22.7051979] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVB_LEGEND (legend aces' gun rounds: damage x1.5, spread 1.100 deg)
+[2026-11-01 10:05:22.7052269] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVB_LEGEND (legend aces' gun: within 2200 m / 45 deg, 0.60 s on target, 18-round bursts, rest 0.50 s, leads 0.65 s)
+[2026-11-01 10:05:22.7053201] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVC_LEGEND (legend aces' gun rounds: damage x1.5, spread 0.800 deg)
+[2026-11-01 10:05:22.7053506] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVC_LEGEND (legend aces' gun: within 2400 m / 50 deg, 0.45 s on target, 20-round bursts, rest 0.40 s, leads 0.75 s)
+[2026-11-01 10:05:22.7054406] [Lua] [AC8SurvivalMode] weapons: GUN_000 -> GUN_000_SVD_LEGEND (legend aces' gun rounds: damage x1.8, spread 0.500 deg)
+[2026-11-01 10:05:22.7054702] [Lua] [AC8SurvivalMode] weapons: NPC_FCS_PlaneGun000 -> NPC_FCS_PlaneGun000_SVD_LEGEND (legend aces' gun: within 2600 m / 55 deg, 0.30 s on target, 24-round bursts, rest 0.30 s, leads 0.85 s)
+[2026-11-01 10:05:22.7055809] [Lua] [AC8SurvivalMode] weapons: sv_ace_legend_su47_w_sv carries NPC_FCS_Plane2AAM000 (slot 3)
+[2026-11-01 10:05:22.7058000] [Lua] [AC8SurvivalMode] weapons: sv_ace_legend_rafale_l_sv carries NPC_FCS_PlaneQAAM000 (slot 3)
+[2026-11-01 10:05:22.7060523] [Lua] [AC8SurvivalMode] weapons: sv_ace_legend_rafale_w_sv carries NPC_FCS_PlaneLAAM000 (slot 3)
+[2026-11-01 10:05:22.7064423] [Lua] [AC8SurvivalMode] search: module NPC_AIModule_SV_Search (radius 40000 m, lose target in clouds false; OP1022_f16c_01_SV flies behaviour set NLID_SV_Fighter); 55 of 55 aircraft and ace rows use it
+[2026-11-01 10:05:22.7065376] [Lua] [AC8SurvivalMode] spikes: 165 difficulty-spike rows made (3 levels)
+[2026-11-01 10:05:22.7066082] [Lua] [AC8SurvivalMode] specials: 204 rows carry a special in fire-control slot 3 (WN_WEAPON_4: fired at you); elsewhere: e18g_common_sv 4, sv_ace_glitch_e18g_l_sv 4, sv_ace_glitch_e18g_w_sv 4, sv_ace_reaper_f22a_w_sv 4
+[2026-11-01 10:05:22.7066502] [Lua] [AC8SurvivalMode] director: 216 rows carry their missiles in fire-control slot 2 (WN_WEAPON_3: the salvo); not: f18e_common_sv 5
+[2026-11-01 10:05:22.7067646] [Lua] [AC8SurvivalMode] roles: behaviour rows lancer sv_role_lancer -> sv_role_lancer flies NLID_SV_Lancer; wolf sv_role_wolf_lead -> SV_Role_WolfLead flies NLID_SV_WolfLead; wolf_wing sv_role_wolf_wing -> SV_Role_WolfWing flies NLID_SV_WolfWing; skirm sv_role_skirmish -> sv_role_skirmish flies NLID_SV_Skirmisher
+[2026-11-01 10:05:22.7521743] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_AlcnNpc.DT_SV_AlcnNpc pinned (kept loaded) [ReferencedObjects num 23 -> 24, max 24 -> 24]
+[2026-11-01 10:05:22.7554963] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_AlcnModel.DT_SV_AlcnModel pinned (kept loaded) [ReferencedObjects num 24 -> 25, max 24 -> 56]
+[2026-11-01 10:05:22.7587157] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_AlcnWpDur.DT_SV_AlcnWpDur pinned (kept loaded) [ReferencedObjects num 25 -> 26, max 56 -> 56]
+[2026-11-01 10:05:22.7616795] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/AI/NPC/WeaponDurability/DT_NPC_WeaponDurability.DT_NPC_WeaponDurability pinned (kept loaded) [ReferencedObjects num 26 -> 27, max 56 -> 56]
+[2026-11-01 10:05:22.7636227] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_AlcnExDur.DT_SV_AlcnExDur pinned (kept loaded) [ReferencedObjects num 27 -> 28, max 56 -> 56]
+[2026-11-01 10:05:22.7652009] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/AI/NPC/ExplosionDurability/DT_NPC_ExplosionDurability.DT_NPC_ExplosionDurability pinned (kept loaded) [ReferencedObjects num 28 -> 29, max 56 -> 56]
+[2026-11-01 10:05:22.7652820] [Lua] [AC8SurvivalMode] special: the Alicorn's rows: 72 of 72 in the campaign tables
+[2026-11-01 10:05:22.7707347] [Lua] [AC8SurvivalMode] special: 2 of 2 Ladon rows in DT_NPC (KOT, MISHKA; -800 HP, speeds x1.00)
+[2026-11-01 10:05:22.7757688] [Lua] [AC8SurvivalMode] special: shuttle row OP0057_sstb_01_SV in DT_NPC; its name 'EMBDIR Shuttle - CORRIS' set
+[2026-11-01 10:05:22.7883460] [Lua] [AC8SurvivalMode] allies: Fleet's turrets search 40000 m (NPC_AIModule_SV_Fleet, was 6000 m), not lost in cloud
+[2026-11-01 10:05:22.7884877] [Lua] [AC8SurvivalMode] allies: the airfield defences' turrets search 25000 m (NPC_AIModule_SV_Defence, was 6000 m), not lost in cloud
+[2026-11-01 10:05:22.7885249] [Lua] [AC8SurvivalMode] allies: Aegis's turrets search 40000 m (NPC_AIModule_SV_Aegis, was 6000 m), not lost in cloud
+[2026-11-01 10:05:22.7887757] [Lua] [AC8SurvivalMode] allies: the airfield's CIWS +40 HP (SV_Def_Ciws's MaxHealthDifference now 40.0)
+[2026-11-01 10:05:22.7888170] [Lua] [AC8SurvivalMode] allies: the CIWS's gun on NPC_FCS_VesselCIWS000: set (boosted below)
+[2026-11-01 10:05:22.7923237] [Lua] [AC8SurvivalMode] allies: VOID WATCHER 1's model SV_Model_VoidWatcher in DT_NPC_Model
+[2026-11-01 10:05:22.7925300] [Lua] [AC8SurvivalMode] allies: VOID WATCHER 1's ESM on NPC_FCS_MS28ESM000_SVA: within 60000 m, ready again in 0.5 s
+[2026-11-01 10:05:22.7926434] [Lua] [AC8SurvivalMode] allies: DDG AEGIS's hull +300 HP (SV_Ally_Aegis's MaxHealthDifference now 300.0)
+[2026-11-01 10:05:22.7926861] [Lua] [AC8SurvivalMode] allies: the airfield's AA GUN +40 HP (SV_Def_Gepa's MaxHealthDifference now 40.0)
+[2026-11-01 10:05:22.7928181] [Lua] [AC8SurvivalMode] allies: the airfield's SAM SITE +40 HP (SV_Def_Avng's MaxHealthDifference now 40.0)
+[2026-11-01 10:05:22.7941879] [Lua] [AC8SurvivalMode] allies: the Spaceport fleet's turrets: 12 of 12 rows in DT_NPC on their own fire control (search 40000 m)
+[2026-11-01 10:05:22.7942632] [Lua] [AC8SurvivalMode] allies: the ships' and the airfield's own fire control: NPC_FCS_VesselCIWS000_SVA_Defence (within 2500 -> 5000 m, arm 0.50 -> 0.19 s, lock 3.00 -> 1.12 s, 3.00 -> 0.75 s between, rest 1.00 -> 0.25 s, search NPC_AIModule_SV_Defence, yaw -60..60 at 37.5 -> -180..180 at 75.0 deg/s, rounds CIWS_Vessel_000_SVA_Defence: 3.0 -> 6.0 s of flight), NPC_FCS_VehicleAAGun000_SVA_Defence (within 2200 -> 4400 m, arm 0.50 -> 0.19 s, lock 2.00 -> 0.75 s, 2.00 -> 0.50 s between, rest 1.00 -> 0.25 s, search NPC_AIModule_SV_Defence, yaw -180..180 at 30.0 -> -180..180 at 60.0 deg/s, rounds AAGUN_Ground_000_SVA_Defence: hurt out to 2000 -> 4400 m, 20 -> 30 m round), NPC_FCS_VehicleSAM001_SVA_Defence (within 3000 -> 20000 m, arm 2.00 -> 0.75 s, lock 5.00 -> 1.50 s, 5.00 -> 0.50 s between, rest 10.00 -> 2.00 s, search NPC_AIModule_SV_Defence, yaw -180..180 at 30.0 -> -180..180 at 60.0 deg/s, missile SAM_Ground_000_SVA_Defence: 7.3 -> 30 s, up to 3000 -> 3600 km/h, +300 -> +600 km/h a second, turns 15.0 -> 22.5, salvos of 3, 0.50 s apart), NPC_FCS_VesselCIWS000_SVA_Aegis (within 2500 -> 7500 m, arm 0.50 -> 0.12 s, lock 3.00 -> 0.75 s, 3.00 -> 0.75 s between, rest 1.00 -> 0.25 s, search NPC_AIModule_SV_Aegis, rounds CIWS_Vessel_000_SVA_Aegis: 3.0 -> 9.0 s of flight), NPC_FCS_VesselVLSmk41_SVA_Aegis (within 3000 -> 35000 m, arm 2.00 -> 0.50 s, lock 5.00 -> 1.50 s, 5.00 -> 0.50 s between, rest 10.00 -> 2.00 s, search NPC_AIModule_SV_Aegis, missile VLS_Vessel_000_SVA_Aegis: 9.0 -> 45 s, up to 3000 -> 3600 km/h, +300 -> +600 km/h a second, turns 30.0 -> 67.5, homing as EXSAM_Ground_000 (6 of 6), salvos of 3, 0.50 s apart), NPC_FCS_VesselAAGun000_SVA_Aegis (an AA gun on NPC_FCS_FlakGun000's fire control, within 15000 -> 15000 m, arm 0.50 -> 0.12 s, lock 3.00 -> 0.38 s, 3.00 -> 0.38 s between, rest 1.00 -> 0.12 s, search NPC_AIModule_SV_Aegis, flak FlakGun_000_SVA_Aegis: damage 10 -> 20, bursts within 120 -> 24 m, 18 -> 27 m round, from 500 -> 50 m up), NPC_FCS_VesselArtillery010_SVA_Aegis (within 30000 -> 90000 m, arm 0.50 -> 0.12 s, lock 1.00 -> 0.25 s, 1.00 -> 0.25 s between, rest 3.00 -> 0.75 s, search NPC_AIModule_SV_Aegis, rounds Artillery_Vessel_000_SVA_Aegis: 52.0 -> 156.0 s of flight), NPC_FCS_VesselCIWS000_SVA_Fleet (within 2500 -> 7500 m, arm 0.50 -> 0.50 s, lock 3.00 -> 3.00 s, 3.00 -> 3.00 s between, rest 1.00 -> 1.00 s, search NPC_AIModule_SV_Fleet, yaw -60..60 at 37.5 -> -60..60 at 56.2 deg/s, rounds CIWS_Vessel_000_SVA_Fleet: 3.0 -> 9.0 s of flight), NPC_FCS_VesselVLSmk41_SVA_Fleet (within 3000 -> 35000 m, arm 2.00 -> 2.00 s, lock 5.00 -> 1.50 s, 5.00 -> 0.50 s between, rest 10.00 -> 8.00 s, search NPC_AIModule_SV_Fleet, yaw 0..0 at 0.0 -> 0..0 at 0.0 deg/s, missile VLS_Vessel_000_SVA_Fleet: 9.0 -> 45 s, up to 3000 -> 3600 km/h, +300 -> +450 km/h a second, turns 30.0 -> 45.0, homing as EXSAM_Ground_000 (6 of 6), salvos of 3, 0.50 s apart), NPC_FCS_VesselAAGun000_SVA_Fleet (an AA gun on NPC_FCS_FlakGun000's fire control, within 15000 -> 15000 m, arm 0.50 -> 0.50 s, lock 3.00 -> 1.50 s, 3.00 -> 1.50 s between, rest 1.00 -> 0.50 s, search NPC_AIModule_SV_Fleet, yaw -180..180 at 360.0 -> -180..180 at 540.0 deg/s, flak FlakGun_000_SVA_Fleet: damage 10 -> 20, bursts within 120 -> 24 m, 18 -> 27 m round, from 500 -> 50 m up), NPC_FCS_VesselArtillery010_SVA_Fleet (within 30000 -> 90000 m, arm 0.50 -> 0.50 s, lock 1.00 -> 1.00 s, 1.00 -> 1.00 s between, rest 3.00 -> 3.00 s, search NPC_AIModule_SV_Fleet, yaw -110..110 at 30.0 -> -110..110 at 45.0 deg/s, rounds Artillery_Vessel_000_SVA_Fleet: 52.0 -> 156.0 s of flight), NPC_FCS_VesselAAGun001_LB_SVA_Fleet (an AA gun on NPC_FCS_FlakGun000's fire control, within 15000 -> 15000 m, arm 0.50 -> 0.50 s, lock 3.00 -> 1.50 s, 3.00 -> 1.50 s between, rest 1.00 -> 0.50 s, search NPC_AIModule_SV_Fleet, yaw -110..90 at 360.0 -> -110..90 at 540.0 deg/s), NPC_FCS_VesselAAGun001_RF_SVA_Fleet (an AA gun on NPC_FCS_FlakGun000's fire control, within 15000 -> 15000 m, arm 0.50 -> 0.50 s, lock 3.00 -> 1.50 s, 3.00 -> 1.50 s between, rest 1.00 -> 0.50 s, search NPC_AIModule_SV_Fleet, yaw -90..60 at 360.0 -> -90..60 at 540.0 deg/s), NPC_FCS_VesselAAGun001_LF_SVA_Fleet (an AA gun on NPC_FCS_FlakGun000's fire control, within 15000 -> 15000 m, arm 0.50 -> 0.50 s, lock 3.00 -> 1.50 s, 3.00 -> 1.50 s between, rest 1.00 -> 0.50 s, search NPC_AIModule_SV_Fleet, yaw -45..90 at 360.0 -> -45..90 at 540.0 deg/s), NPC_FCS_VesselAAGun001_RB_SVA_Fleet (an AA gun on NPC_FCS_FlakGun000's fire control, within 15000 -> 15000 m, arm 0.50 -> 0.50 s, lock 3.00 -> 1.50 s, 3.00 -> 1.50 s between, rest 1.00 -> 0.50 s, search NPC_AIModule_SV_Fleet, yaw -75..110 at 360.0 -> -75..110 at 540.0 deg/s), NPC_FCS_VesselVLSsam_SVA_Fleet (within 3000 -> 35000 m, arm 2.00 -> 2.00 s, lock 5.00 -> 1.50 s, 5.00 -> 0.50 s between, rest 10.00 -> 8.00 s, search NPC_AIModule_SV_Fleet, yaw 0..0 at 0.0 -> 0..0 at 0.0 deg/s, missile VLS_Vessel_VE011_000_SVA_Fleet: 10.0 -> 45 s, up to 3000 -> 3600 km/h, +300 -> +450 km/h a second, turns 30.0 -> 45.0, homing as EXSAM_Ground_000 (6 of 6), salvos of 3, 0.50 s apart)
+[2026-11-01 10:05:22.7943028] [Lua] [AC8SurvivalMode] allies: guns: NPC_FCS_PlaneGun000_SVA leads 1.00 s, 30-round bursts, NPC_FCS_VesselCIWS000_SVA_Defence leads 1.20 s, NPC_FCS_VehicleAAGun000_SVA_Defence leads 1.20 s, NPC_FCS_VesselCIWS000_SVA_Aegis leads 1.20 s, NPC_FCS_VesselCIWS000_SVA_Fleet leads 1.20 s
+[2026-11-01 10:05:22.7943335] [Lua] [AC8SurvivalMode] allies: 8 of 8 rows in DT_NPC, WINGMEN in, CIWS in, VOID WATCHER 1 in, 24 weapons on their own fire control (x1.6 range, x0.5 times), 4 names set
+[2026-11-01 10:05:22.8110648] [Lua] [AC8SurvivalMode] coopfire: the stand-ins' damage-0 rows: 31 of 31 airframes; ECM pods (the others' ESM shown): e06b_common slot 3 (added), e18g_common slot 3 (added), ea36_common slot 3 (added)
+[2026-11-01 10:05:22.8317816] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/UI/Menu/IngameMenu/DT_IngameMenuSettingData.DT_IngameMenuSettingData pinned (kept loaded) [ReferencedObjects num 29 -> 30, max 56 -> 56]
+[2026-11-01 10:05:22.8359149] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_MenuClassRows.DT_SV_MenuClassRows pinned (kept loaded) [ReferencedObjects num 30 -> 31, max 56 -> 56]
+[2026-11-01 10:05:22.8361332] [Lua] [AC8SurvivalMode] shop: store page SVStore: in the game's table: no; in DT_SV_MenuClassRows: userdata; AddRow ran; now in
+[2026-11-01 10:05:22.8363101] [Lua] [AC8SurvivalMode] shop: store page SVStoreAirfield: in the game's table: no; in DT_SV_MenuClassRows: userdata; AddRow ran; now in
+[2026-11-01 10:05:22.8363511] [Lua] [AC8SurvivalMode] shop: store page SVStoreDocks: in the game's table: no; in DT_SV_MenuClassRows: userdata; AddRow ran; now in
+[2026-11-01 10:05:22.8363790] [Lua] [AC8SurvivalMode] shop: store page SVStoreUpgrades: in the game's table: no; in DT_SV_MenuClassRows: userdata; AddRow ran; now in
+[2026-11-01 10:05:22.8364120] [Lua] [AC8SurvivalMode] shop: store page SVStoreTactical: in the game's table: no; in DT_SV_MenuClassRows: userdata; AddRow ran; now in
+[2026-11-01 10:05:22.8364449] [Lua] [AC8SurvivalMode] shop: store page SVStoreDefences: in the game's table: no; in DT_SV_MenuClassRows: userdata; AddRow ran; now in
+[2026-11-01 10:05:22.8365920] [Lua] [AC8SurvivalMode] shop: in-game menu table rows: NewRow, NewRow_0, NewRow_1, NewRow_2, NewRow_6, NewRow_7, NewRow_8, NewRow_9, NewRow_10, NewRow_11, NewRow_12, NewRow_13, NewRow_14, NewRow_15, NewRow_3, NewRow_4, NewRow_17, NewRow_5, NewRow_16, NewRow_18, SVStore, SVStoreAirfield, SVStoreDocks, SVStoreUpgrades, SVStoreTactical, SVStoreDefences | DT_SV_MenuClassRows: SVStore, SVStoreAirfield, SVStoreDocks, SVStoreUpgrades, SVStoreTactical, SVStoreDefences
+[2026-11-01 10:05:22.8366863] [Lua] [AC8SurvivalMode] shop: the store's pages in the in-game menu table: SVStore at 20 (want 20), SVStoreAirfield at 21 (want 21), SVStoreDocks at 22 (want 22), SVStoreUpgrades at 23 (want 23), SVStoreTactical at 24 (want 24), SVStoreDefences at 25 (want 25)
+[2026-11-01 10:05:22.8534342] [Lua] [AC8SurvivalMode] rows: WidgetBlueprintGeneratedClass /Game/Mods/SurvivalMode/UI/WBP_SV_PgModes.WBP_Menu_MainTop_000_C pinned (kept loaded) [ReferencedObjects num 31 -> 32, max 56 -> 56]
+[2026-11-01 10:05:22.8640218] [Lua] [AC8SurvivalMode] rows: WidgetBlueprintGeneratedClass /Game/Mods/SurvivalMode/UI/WBP_SV_PgOffline.WBP_Menu_MainTop_000_C pinned (kept loaded) [ReferencedObjects num 32 -> 33, max 56 -> 56]
+[2026-11-01 10:05:22.8740496] [Lua] [AC8SurvivalMode] rows: WidgetBlueprintGeneratedClass /Game/Mods/SurvivalMode/UI/WBP_SV_PgOnline.WBP_Menu_MainTop_000_C pinned (kept loaded) [ReferencedObjects num 33 -> 34, max 56 -> 56]
+[2026-11-01 10:05:22.8819071] [Lua] [AC8SurvivalMode] rows: WidgetBlueprintGeneratedClass /Game/Mods/SurvivalMode/UI/WBP_SV_PgHost.WBP_Menu_MainTop_000_C pinned (kept loaded) [ReferencedObjects num 34 -> 35, max 56 -> 56]
+[2026-11-01 10:05:22.8928401] [Lua] [AC8SurvivalMode] rows: WidgetBlueprintGeneratedClass /Game/Mods/SurvivalMode/UI/WBP_SV_PgRules.WBP_Menu_MainTop_000_C pinned (kept loaded) [ReferencedObjects num 35 -> 36, max 56 -> 56]
+[2026-11-01 10:05:22.9008143] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_PgModesCommands.DT_SV_PgModesCommands pinned (kept loaded) [ReferencedObjects num 36 -> 37, max 56 -> 56]
+[2026-11-01 10:05:22.9079982] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_PgOfflineCommands.DT_SV_PgOfflineCommands pinned (kept loaded) [ReferencedObjects num 37 -> 38, max 56 -> 56]
+[2026-11-01 10:05:22.9177646] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_PgOnlineCommands.DT_SV_PgOnlineCommands pinned (kept loaded) [ReferencedObjects num 38 -> 39, max 56 -> 56]
+[2026-11-01 10:05:22.9248074] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_PgHostCommands.DT_SV_PgHostCommands pinned (kept loaded) [ReferencedObjects num 39 -> 40, max 56 -> 56]
+[2026-11-01 10:05:22.9317958] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_PgRulesCommands.DT_SV_PgRulesCommands pinned (kept loaded) [ReferencedObjects num 40 -> 41, max 56 -> 56]
+[2026-11-01 10:05:22.9935000] [FCallbackGarbageCollector] Freed invalid callbacks!
+[2026-11-01 10:05:23.8216025] [Lua] [AC8SurvivalMode] leaderboard: this build's hash is b10898ab6902390cdb1efcce30bd50d85377a981528f5d5161ca9c255de199e4 (runs count only from a registered build)
+[2026-11-01 10:05:25.0967238] [Lua] [AC8SurvivalMode] info maps: MissionDataMap_ has 9101
+[2026-11-01 10:05:25.0968718] [Lua] [AC8SurvivalMode] info maps: LevelDataMap_ has 70
+[2026-11-01 10:05:25.9938469] [FCallbackGarbageCollector] Freed invalid callbacks!
+[2026-11-01 10:05:33.3217057] [Lua] [AC8SurvivalMode] world: /Game/Maps/Menu/PL_MainMenu
+[2026-11-01 10:05:34.3631000] [Lua] [AC8SurvivalMode] world: /Game/Maps/Transition/TransitionMap
+[2026-11-01 10:05:34.6939737] [Lua] [AC8SurvivalMode] menu pages: the main menu's page list has 41 pages; Survival's open through CampaignTraining 40, InitialSetting_DualSence 38, InitialSetting_Accessibility 37: SURVIVAL MODE opens them
+[2026-11-01 10:05:34.9311640] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_MenuRows.DT_SV_MenuRows pinned (kept loaded) [ReferencedObjects num 41 -> 42, max 56 -> 56]
+[2026-11-01 10:05:34.9313387] [Lua] [AC8SurvivalMode] rows: added 'SurvivalMenu' to DataTable /Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands.DT_LiveMenuMainTopCommands (above QuitGame)
+[2026-11-01 10:05:34.9313847] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands.DT_LiveMenuMainTopCommands now has: Campaign, SurvivalMenu, System, QuitGame
+[2026-11-01 10:08:48.6429850] [Lua] [AC8SurvivalMode] menu: mode COOP JOIN
+[2026-11-01 10:08:48.6491500] [Lua] [AC8SurvivalMode] coop: role join picked on the main menu
+[2026-11-01 10:08:48.6512905] [Lua] [AC8SurvivalMode] coop: open as the joiner over steam (partner auto, up to 24 players; SURVIVAL CO-OP: JOIN picked): looking for the host
+[2026-11-01 10:08:48.6554125] [Lua] [AC8SurvivalMode] coop: open=1;mode=steam;role=join;state=searching;slot=-1;players=1;max=24;me=76561198019325874;cands=1;tele=1;peers=
+[2026-11-01 10:08:48.6554841] [Lua] [AC8SurvivalMode] coop: waiting for the host (auto)
+[2026-11-01 10:08:50.6844959] [Lua] [AC8SurvivalMode] menu: 2 text(s) changed (lobby), 0 on screen
+[2026-11-01 10:08:57.8229808] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/PL_Hangar004
+[2026-11-01 10:08:58.8263445] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/SL_HangarCamera
+[2026-11-01 10:08:58.8615765] [Lua] [AC8SurvivalMode] world: /Game/Maps/Transition/TransitionMap
+[2026-11-01 10:08:59.7636820] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Env_GroundDry
+[2026-11-01 10:08:59.7638901] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Env_Map001_Add
+[2026-11-01 10:08:59.7639607] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Env_light001
+[2026-11-01 10:08:59.7639937] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Env_Map001
+[2026-11-01 10:08:59.7640255] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Vfx_Common
+[2026-11-01 10:08:59.7640565] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Snd_Environment
+[2026-11-01 10:08:59.7640810] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Lit_EarlyMorning01
+[2026-11-01 10:15:25.6360366] [Lua] [AC8SurvivalMode] world: /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode
+[2026-11-01 10:15:25.7761183] [Lua] [AC8SurvivalMode] level loaded: PL_SurvivalMode (memory 12269 MB, committed 23397 MB)
+[2026-11-01 10:15:25.7787097] [Lua] [AC8SurvivalMode] render settings: r.VirtualTextures=1 r.VT.TileSize=128 r.VT.TileBorderSize=4 r.VT.EnableFeedback=1 r.VT.FeedbackFactor=16 r.VT.MaxUploadsPerFrame=8 r.VT.PoolSizeScale=1.0 r.VT.EnableAutoImport=0 r.VT.Residency.Show=0 r.VT.PoolAutoGrow=0 r.VT.MaxReleasedPerFrame=0 r.Streaming.PoolSize=4000 r.Streaming.UseFixedPoolSize=0 r.Streaming.FullyLoadUsedTextures=0 r.TextureStreaming=1 r.MaterialQualityLevel=1 r.Shaders.FastMath=1 fx.Niagara.GPUSort=0 fx.GPUSort.MaxSortBatchSize=0
+[2026-11-01 10:15:25.7889916] [Lua] [AC8SurvivalMode] rows: AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq01_Play pinned (kept loaded) [ReferencedObjects num 42 -> 43, max 56 -> 56]
+[2026-11-01 10:15:25.7964757] [Lua] [AC8SurvivalMode] rows: AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq02_Play pinned (kept loaded) [ReferencedObjects num 43 -> 44, max 56 -> 56]
+[2026-11-01 10:15:25.8061554] [Lua] [AC8SurvivalMode] rows: AKE_Ms23_EXP_SKY_OP0049_cleo_Body_Killed_seq03_Play pinned (kept loaded) [ReferencedObjects num 44 -> 45, max 56 -> 56]
+[2026-11-01 10:15:25.8138319] [Lua] [AC8SurvivalMode] rows: AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Electricity_Play pinned (kept loaded) [ReferencedObjects num 45 -> 46, max 56 -> 56]
+[2026-11-01 10:15:25.8196864] [Lua] [AC8SurvivalMode] rows: AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Electricity_Stop pinned (kept loaded) [ReferencedObjects num 46 -> 47, max 56 -> 56]
+[2026-11-01 10:15:25.8250300] [Lua] [AC8SurvivalMode] rows: AKE_Ms23_ARMS_SKY_OP0049_cleo_ControlUnit_Collapse_Play pinned (kept loaded) [ReferencedObjects num 47 -> 48, max 56 -> 56]
+[2026-11-01 10:15:25.8526272] [Lua] [AC8SurvivalMode] rows: NS_ElectricSign001 pinned (kept loaded) [ReferencedObjects num 48 -> 49, max 56 -> 56]
+[2026-11-01 10:15:25.9150610] [Lua] [AC8SurvivalMode] rows: NS_CloudLightning pinned (kept loaded) [ReferencedObjects num 49 -> 50, max 56 -> 56]
+[2026-11-01 10:15:25.9400327] [Lua] [AC8SurvivalMode] rows: NS_ElectricDischargeM001 pinned (kept loaded) [ReferencedObjects num 50 -> 51, max 56 -> 56]
+[2026-11-01 10:15:25.9713145] [Lua] [AC8SurvivalMode] rows: NS_ms23FarFlash pinned (kept loaded) [ReferencedObjects num 51 -> 52, max 56 -> 56]
+[2026-11-01 10:15:25.9972547] [Lua] [AC8SurvivalMode] rows: NS_MGF_CoreDest1st_CoreElectricPlasma pinned (kept loaded) [ReferencedObjects num 52 -> 53, max 56 -> 56]
+[2026-11-01 10:15:26.0012738] [Lua] [AC8SurvivalMode] special: anomaly sounds and portal systems loaded: 13 of 13
+[2026-11-01 10:15:26.0015950] [Lua] [AC8SurvivalMode] rounds: native spawner runtime 0.32.18; round 1 in 15 s
+[2026-11-01 10:15:26.0016754] [Lua] [AC8SurvivalMode] probe: at level load, probe rows ready: package false, run-time false
+[2026-11-01 10:15:26.0017328] [Lua] [AC8SurvivalMode] search: at level load, 19 of 9 aircraft (and 36 ace rows) fly with the 40000 m search
+[2026-11-01 10:15:26.0017699] [Lua] [AC8SurvivalMode] roles: at level load lancer NLID_SV_Lancer, wolf NLID_SV_WolfLead, skirm NLID_SV_Skirmisher
+[2026-11-01 10:15:26.0024401] [Lua] [AC8SurvivalMode] learning: profile at level load: none yet (config\survival_profile.ini is made at your first run's end)
+[2026-11-01 10:15:26.0024935] [Lua] [AC8SurvivalMode] music: pause-menu music player on
+[2026-11-01 10:15:26.0025215] [Lua] [AC8SurvivalMode] music: music player track clock held while the BGM is paused
+[2026-11-01 10:15:26.0075630] [Lua] [AC8SurvivalMode] menu: the run plays COOP JOIN's setup (host): preset by difficulty, 0 Z, enemies 100%, round 1, break 20 s, specials normal, airfield 100%, income 100%, skill normal.; leaderboard: a co-op run
+[2026-11-01 10:15:26.0080584] [Lua] [AC8SurvivalMode] coop: in Survival's level as player 0
+[2026-11-01 10:15:26.0081042] [Lua] [AC8SurvivalMode] hud: callout 'CO-OP: WAITING FOR THE HOST' / 'auto'
+[2026-11-01 10:15:26.1927569] [Lua] [AC8SurvivalMode] allies: speaker ms25_Savia_Mercenary_Leader talks as an ally (was colour 1, Enemy_Fighter_Mob)
+[2026-11-01 10:15:35.4715256] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_CityHda001_Baked
+[2026-11-01 10:15:35.4716437] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Mission022/Mission022_Env_CityLighting001
+[2026-11-01 10:15:35.4716831] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Mission022/Mission022_Common_Env_Sea
+[2026-11-01 10:15:35.4717119] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_Foliage_Baked
+[2026-11-01 10:15:35.4717560] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_Terrain001
+[2026-11-01 10:15:35.4717816] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_MassAI
+[2026-11-01 10:15:35.4718083] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Mission022/Mission022_Common_Env_CityMap001
+[2026-11-01 10:15:35.4718405] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_SND_AmbientActor
+[2026-11-01 10:15:35.4718703] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_CityMap001
+[2026-11-01 10:15:35.4718977] [Lua] [AC8SurvivalMode] world: /Game/Maps/Ingame/Mission022/Mission022_MiniGame
+[2026-11-01 10:15:35.4719303] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_ComonaAirport
+[2026-11-01 10:15:35.4719608] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map05/Mission004/Mission004_Common_Lit_Cloudly01
+[2026-11-01 10:15:35.4719856] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_CityTraffic001
+[2026-11-01 10:15:36.0011832] [Lua] [AC8SurvivalMode] world: /Game/Maps/Transition/TransitionMap
+[2026-11-01 10:15:36.9569472] [Lua] [AC8SurvivalMode] rounds: on the game clock (stops while paused)
+[2026-11-01 10:15:37.0279957] [Lua] [AC8SurvivalMode] hud: built (base WBP_HUD_NonGlowMessage_000_C_2147450353, font UI_FontSet_ja, typeface HUD, 87 widgets)
+[2026-11-01 10:15:37.0483711] [Lua] [AC8SurvivalMode] hud: the game's TIME row hidden (WBP_HUD_SubWidgets_Parts_TimerAndGauge_000_C /Engine/Transient.LiveGameEngine_2147482452:BP_LiveGameInstance_C_2147482376.WBP_HUD_Chronicle_MainFlight_000_C_2147463091.WidgetTree_2147463090.ForEachWidget.WidgetTree_2147463047.WBP_HUD_SubWidgets_Parts_CampaignInfo_000_C_2147450658.WidgetTree_2147450657.TimerAndGauge)
+[2026-11-01 10:15:37.0484895] [Lua] [AC8SurvivalMode] hud: the game's score limit hidden (TextBlock /Engine/Transient.LiveGameEngine_2147482452:BP_LiveGameInstance_C_2147482376.WBP_HUD_Chronicle_MainFlight_000_C_2147463091.WidgetTree_2147463090.ForEachWidget.WidgetTree_2147463047.WBP_HUD_SubWidgets_Parts_CampaignInfo_000_C_2147450658.WidgetTree_2147450657.BorderScoreText)
+[2026-11-01 10:15:37.0568887] [Lua] [AC8SurvivalMode] music: the game's BGM controller now plays id 1285945456 (status 0)
+[2026-11-01 10:15:37.0570549] [Lua] [AC8SurvivalMode] music: the game's BGM controller: track|stop|event = AKE_Bgm_Hangar02_Play|AKE_Bgm_Hangar02_Stop|AKE_Bgm_Menu_Campaign_State
+[2026-11-01 10:15:37.0571219] [Lua] [AC8SurvivalMode] music: track clock running
+[2026-11-01 10:15:37.0577501] [Lua] [AC8SurvivalMode] coopfire: your gear up (LandingGearOnMesh hidden)
+[2026-11-01 10:15:37.0584106] [Lua] [AC8SurvivalMode] coopfire: SV_InputNow gave no throttle (): your afterburner isn't sent
+[2026-11-01 10:15:37.2173982] [Lua] [AC8SurvivalMode] attackers: your plane's missiles-at-once limits: MaxNonPlaneAttackerMissiles 2 -> 40, MaxPlaneAttackerMissiles 2 -> 6, MaxPursuitAttackers 2 -> 12 (the game's: planes 2, ships / SAMs 2, chasers 2); waits between attacks: chasers 15.0-20.0 s, others 15.0-20.0 s (the difficulty's x25% / x25%)
+[2026-11-01 10:15:37.2178087] [Lua] [AC8SurvivalMode] insurance: your aircraft's floor 0.0 HP (none)
+[2026-11-01 10:15:37.2185429] [Lua] [AC8SurvivalMode] round probe: flags SV_AirHits=0 SV_Alive=0 SV_AllyAirA=0 SV_AllyAirB=0 SV_AnomalyUp=0 SV_AwacsAir=0 SV_Beat=0 SV_Kills=0 SV_LadonRageKot=0 SV_LadonRageMishka=0 SV_LadonRunKot=0 SV_LadonRunMishka=0 SV_LcacLandAW=0 SV_LcacLandAX=0 SV_LcacLandAY=0 SV_LcacLandAZ=0 SV_LcacLandBW=0 SV_LcacLandBX=0 SV_LcacLandBY=0 SV_LcacLandBZ=0 SV_LcacLandCW=0 SV_LcacLandCX=0 SV_LcacLandCY=0 SV_LcacLandCZ=0 SV_LcacLandDW=0 SV_LcacLandDX=0 SV_LcacLandDY=0 SV_LcacLandDZ=0 SV_LcacRunwayAW=0 SV_LcacRunwayAX=0 SV_LcacRunwayAY=0 SV_LcacRunwayAZ=0 SV_LcacRunwayBW=0 SV_LcacRunwayBX=0 SV_LcacRunwayBY=0 SV_LcacRunwayBZ=0 SV_LcacRunwayCW=0 SV_LcacRunwayCX=0 SV_LcacRunwayCY=0 SV_LcacRunwayCZ=0 SV_LcacRunwayDW=0 SV_LcacRunwayDX=0 SV_LcacRunwayDY=0 SV_LcacRunwayDZ=0 SV_ShuttleDmgA=0 SV_ShuttleDmgB=0 SV_ShuttleDmgC=0 SV_ShuttleHits=0 SV_ShuttleLaunched=0 SV_ShuttleLost=0 SV_ShuttleNearSaid=0 SV_ShuttleRound=0 SV_SpAtAVL=0 SV_SpAtAVR=0 SV_SpAtAWL=0 SV_SpAtAWR=0 SV_SpAtAXL=0 SV_SpAtAXR=0 SV_SpAtAYL=0 SV_SpAtAYR=0 SV_SpAtAZL=0 SV_SpAtAZR=0 SV_SpAtBVL=0 SV_SpAtBVR=0 SV_SpAtBWL=0 SV_SpAtBWR=0 SV_SpAtBXL=0 SV_SpAtBXR=0 SV_SpAtBYL=0 SV_SpAtBYR=0 SV_SpAtBZL=0 SV_SpAtBZR=0 SV_SpAtCVL=0 SV_SpAtCVR=0 SV_SpAtCWL=0 SV_SpAtCWR=0 SV_SpAtCXL=0 SV_SpAtCXR=0 SV_SpAtCYL=0 SV_SpAtCYR=0 SV_SpAtCZL=0 SV_SpAtCZR=0 SV_SpAtDVL=0 SV_SpAtDVR=0 SV_SpAtDWL=0 SV_SpAtDWR=0 SV_SpAtDXL=0 SV_SpAtDXR=0 SV_SpAtDYL=0 SV_SpAtDYR=0 SV_SpAtDZL=0 SV_SpAtDZR=0 SV_SpLandAVL=0 SV_SpLandAVR=0 SV_SpLandAWL=0 SV_SpLandAWR=0 SV_SpLandAXL=0 SV_SpLandAXR=0 SV_SpLandAYL=0 SV_SpLandAYR=0 SV_SpLandAZL=0 SV_SpLandAZR=0 SV_SpLandBVL=0 SV_SpLandBVR=0 SV_SpLandBWL=0 SV_SpLandBWR=0 SV_SpLandBXL=0 SV_SpLandBXR=0 SV_SpLandBYL=0 SV_SpLandBYR=0 SV_SpLandBZL=0 SV_SpLandBZR=0 SV_SpLandCVL=0 SV_SpLandCVR=0 SV_SpLandCWL=0 SV_SpLandCWR=0 SV_SpLandCXL=0 SV_SpLandCXR=0 SV_SpLandCYL=0 SV_SpLandCYR=0 SV_SpLandCZL=0 SV_SpLandCZR=0 SV_SpLandDVL=0 SV_SpLandDVR=0 SV_SpLandDWL=0 SV_SpLandDWR=0 SV_SpLandDXL=0 SV_SpLandDXR=0 SV_SpLandDYL=0 SV_SpLandDYR=0 SV_SpLandDZL=0 SV_SpLandDZR=0 SV_SpRocketEscA=0 SV_SpRocketEscB=0 SV_ValkaUp=0 flights up (SV_Up_*)=0
+[2026-11-01 10:15:37.3691910] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands.DT_LiveMenuIngameHangarCommands pinned (kept loaded) [ReferencedObjects num 53 -> 54, max 56 -> 56]
+[2026-11-01 10:15:37.3763624] [Lua] [AC8SurvivalMode] shop: the game's menu list has 26 menus; 20 = SV_Store, 21 = SV_StoreAirfield, 22 = SV_StoreDocks, 23 = SV_StoreUpgrades, 24 = SV_StoreTactical, 25 = SV_StoreDefences: the STORE is in
+[2026-11-01 10:15:37.3899850] [Lua] [AC8SurvivalMode] rows: DataTable /Game/Mods/SurvivalMode/Data/DT_SV_ShopRows.DT_SV_ShopRows pinned (kept loaded) [ReferencedObjects num 54 -> 55, max 56 -> 56]
+[2026-11-01 10:15:37.3906645] [Lua] [AC8SurvivalMode] shop: the STORE: 4 of 4 rows in the landing menu (1, 2, SVShopStore, SVShopStoreUp, SVShopStoreTac, SVShopStoreAf)
+[2026-11-01 10:15:37.3928753] [Lua] [AC8SurvivalMode] coopfire: your throttle 0.000: afterburner off (ab_throttle 0.9)
+[2026-11-01 10:15:37.9594105] [Lua] [AC8SurvivalMode] difficulty at mission start: Ace
+[2026-11-01 10:15:38.0985798] [Lua] [AC8SurvivalMode] music: the game's BGM controller now plays id 0 (status 0)
+[2026-11-01 10:15:39.2397819] [Lua] [AC8SurvivalMode] ammo: preset ace (difficulty 5): gun 800/800, missiles 146/146, special 1 16/16, special 2 14/14, flares 4/4 -> gun 800/800, missiles 30/146, special 1 14/16, special 2 14/14, flares 3/4; free restock was 1, now off
+[2026-11-01 10:15:39.4965163] [Lua] [AC8SurvivalMode] attackers: the game put your plane's limits back; set again (MaxPlaneAttackerMissiles 4 -> 6, MaxPursuitAttackers 6 -> 12, MaxNonPlaneAttackerMissiles 4 -> 40)
+[2026-11-01 10:15:43.1970344] [Lua] [AC8SurvivalMode] game Lua: built LA_AIPlane x1, LA_PursueTarget_0011 x1, LA_PursueTarget_0400 x1, LA_SV_Escape x1, LA_SV_LancerBreak x1, LA_SV_LancerPass x1, LA_SV_LancerZoom x1, LA_SV_MoveAway x1, LA_SV_ProvokeNear x1, LA_SV_SkirmExtend x1, LA_SV_SkirmPass x1, LA_SV_TailChase x1, LA_SV_WolfDrag x1, LA_SV_WolfStrike x1; all fine
+[2026-11-01 10:15:43.6968343] [Lua] [AC8SurvivalMode] hud: hidden (paused)
+[2026-11-01 10:15:43.6970327] [Lua] [AC8SurvivalMode] coop: player 1: sys|paired
+[2026-11-01 10:15:43.6972351] [Lua] [AC8SurvivalMode] coop: player 1: sys|up
+[2026-11-01 10:15:44.2191149] [Lua] [AC8SurvivalMode] coop: player 1: sys|slot|1
+[2026-11-01 10:15:44.2192096] [Lua] [AC8SurvivalMode] coop: you are player 2
+[2026-11-01 10:15:44.2204005] [Lua] [AC8SurvivalMode] coop: playing with the host's settings (Survival 0.73.70-coop2mp.71, preset standard): 0 differ from the shipped ones
+[2026-11-01 10:15:44.2205419] [Lua] [AC8SurvivalMode] coop: player 1 is Saint Alessia (Survival 0.73.70-coop2mp.71, flies )
+[2026-11-01 10:15:44.2206096] [Lua] [AC8SurvivalMode] hud: callout 'CO-OP LINKED' / 'SAINT ALESSIA IS HOSTING'
+[2026-11-01 10:15:46.2619565] [Lua] [AC8SurvivalMode] coop: open=1;mode=steam;role=join;state=linked;slot=1;players=2;max=24;me=76561198019325874;cands=2;tele=1;peers=0/linked/564/2044/Saint Alessia
+[2026-11-01 10:15:46.2645818] [Lua] [AC8SurvivalMode] coop: paused with 2 players: the world kept running (unpaused; 1 times)
+[2026-11-01 10:15:46.2646662] [Lua] [AC8SurvivalMode] hud: callout 'CO-OP: THE GAME KEEPS RUNNING' / 'OTHER PLAYERS ARE STILL FLYING'
+[2026-11-01 10:15:46.3710781] [Lua] [AC8SurvivalMode] insurance: your aircraft's floor 0.1 HP (co-op's revives)
+[2026-11-01 10:15:46.5149705] [Lua] [AC8SurvivalMode] hud: shown
+[2026-11-01 10:15:49.1467184] [Lua] [AC8SurvivalMode] music: the game's BGM controller now plays id -1 (status -1)
+[2026-11-01 10:15:49.1468295] [Lua] [AC8SurvivalMode] music: the game's BGM controller: track|stop|event = 
+[2026-11-01 10:15:49.2179343] [Lua] [AC8SurvivalMode] world: /Game/Maps/Menu/PL_MainMenu
+[2026-11-01 10:15:49.7139278] [Lua] [AC8SurvivalMode] music: track clock held (landing store)
+[2026-11-01 10:15:49.7281185] [Lua] [AC8SurvivalMode] world: /Game/Maps/Transition/TransitionMap
+[2026-11-01 10:15:50.3322056] [Lua] [AC8SurvivalMode] difficulty 10 s into the mission: Ace
+[2026-11-01 10:15:51.7189061] [Lua] [AC8SurvivalMode] shop: rows taken out of the landing menu (not in Survival's level)
+[2026-11-01 10:15:56.5516057] [Lua] [AC8SurvivalMode] run over: left Survival's level in round 0 with 0 zollars
+[2026-11-01 10:15:57.4264692] [Lua] [AC8SurvivalMode] allies: speaker ms25_Savia_Mercenary_Leader back to colour 1, Enemy_Fighter_Mob
+[2026-11-01 10:16:08.6559220] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/PL_Hangar004
+[2026-11-01 10:16:09.2330609] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/SL_HangarCamera
+[2026-11-01 10:16:09.2567153] [Lua] [AC8SurvivalMode] world: /Game/Maps/Transition/TransitionMap
+[2026-11-01 10:16:10.0085062] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Snd_Environment
+[2026-11-01 10:16:10.0086457] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Vfx_Common
+[2026-11-01 10:16:10.0086909] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Env_GroundDry
+[2026-11-01 10:16:10.0087274] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Env_Map001_Add
+[2026-11-01 10:16:10.0087672] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Env_light001
+[2026-11-01 10:16:10.0088071] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Env_Map001
+[2026-11-01 10:16:10.0088485] [Lua] [AC8SurvivalMode] world: /Game/Maps/Hangar/Hangar004/Hangar004_Lit_EarlyMorning01
+[2026-11-01 10:21:19.3219658] [Lua] [AC8SurvivalMode] world: /Game/Mods/SurvivalMode/Maps/PL_SurvivalMode
+[2026-11-01 10:21:19.3504077] [Lua] [AC8SurvivalMode] level loaded: PL_SurvivalMode (memory 9313 MB, committed 23475 MB)
+[2026-11-01 10:21:19.3693993] [Lua] [AC8SurvivalMode] special: anomaly sounds and portal systems loaded: 13 of 13
+[2026-11-01 10:21:19.3694767] [Lua] [AC8SurvivalMode] rounds: native spawner runtime 0.32.18; round 1 in 15 s
+[2026-11-01 10:21:19.3695151] [Lua] [AC8SurvivalMode] probe: at level load, probe rows ready: package false, run-time false
+[2026-11-01 10:21:19.3695678] [Lua] [AC8SurvivalMode] search: at level load, 19 of 9 aircraft (and 36 ace rows) fly with the 40000 m search
+[2026-11-01 10:21:19.3696032] [Lua] [AC8SurvivalMode] roles: at level load lancer NLID_SV_Lancer, wolf NLID_SV_WolfLead, skirm NLID_SV_Skirmisher
+[2026-11-01 10:21:19.3698192] [Lua] [AC8SurvivalMode] learning: profile at level load: none yet (config\survival_profile.ini is made at your first run's end)
+[2026-11-01 10:21:19.3698581] [Lua] [AC8SurvivalMode] music: pause-menu music player on
+[2026-11-01 10:21:19.3698841] [Lua] [AC8SurvivalMode] music: music player track clock held while the BGM is paused
+[2026-11-01 10:21:19.3830939] [Lua] [AC8SurvivalMode] menu: the run plays COOP JOIN's setup (host): preset by difficulty, 0 Z, enemies 100%, round 1, break 20 s, specials normal, airfield 100%, income 100%, skill normal.; leaderboard: a co-op run
+[2026-11-01 10:21:19.3833108] [Lua] [AC8SurvivalMode] coop: in Survival's level as player 2
+[2026-11-01 10:21:19.3891986] [Lua] [AC8SurvivalMode] coopfire: 60 s: 0 shots sent, 0 received (0 fired here, 0 refused, 0 dropped, 0 with their target not here, 0 with no plane here, 0 not shown: you were in the STORE), your gun 1 bursts, your flares 0, your gear flips 1, afterburner flips 1, throttle up to 0.000 (ab_throttle 0.9); real planes' launches (T4b) 0 queued, 0 refused
+[2026-11-01 10:21:27.0954357] [Lua] [AC8SurvivalMode] coop: player 1: sys|lost
+[2026-11-01 10:21:27.0955339] [Lua] [AC8SurvivalMode] hud: callout 'CO-OP LINK LOST' / 'SAINT ALESSIA'
+[2026-11-01 10:21:27.0956430] [Lua] [AC8SurvivalMode] coop: open=1;mode=steam;role=join;state=lost;slot=1;players=1;max=24;me=76561198019325874;cands=2;tele=1;peers=0/lost/363/13103/Saint Alessia
+[2026-11-01 10:21:27.0962700] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Mission022/Mission022_Common_Env_Sea
+[2026-11-01 10:21:27.0963070] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Mission022/Mission022_Common_Env_CityMap001
+[2026-11-01 10:21:27.0963397] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_Foliage_Baked
+[2026-11-01 10:21:27.0963725] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_ComonaAirport
+[2026-11-01 10:21:27.0964051] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_CityMap001
+[2026-11-01 10:21:27.0964314] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_SND_AmbientActor
+[2026-11-01 10:21:27.0964558] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_Terrain001
+[2026-11-01 10:21:27.0964789] [Lua] [AC8SurvivalMode] world: /Game/Maps/Ingame/Mission022/Mission022_MiniGame
+[2026-11-01 10:21:27.0965064] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_MassAI
+[2026-11-01 10:21:27.0965299] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_CityHda001_Baked
+[2026-11-01 10:21:27.0965552] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Mission022/Mission022_Env_CityLighting001
+[2026-11-01 10:21:27.0965915] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map17/Map17_Env_CityTraffic001
+[2026-11-01 10:21:27.0966180] [Lua] [AC8SurvivalMode] world: /Game/Maps/MapCommon/Map05/Mission004/Mission004_Common_Lit_Cloudly01
+[2026-11-01 10:21:27.1579047] [Lua] [AC8SurvivalMode] world: /Game/Maps/Transition/TransitionMap
+[2026-11-01 10:21:27.3936246] [Lua] [AC8SurvivalMode] allies: speaker ms25_Savia_Mercenary_Leader talks as an ally (was colour 1, Enemy_Fighter_Mob)
+[2026-11-01 10:21:27.5309656] [Lua] [AC8SurvivalMode] rounds: on the game clock (stops while paused)
+[2026-11-01 10:21:27.6060696] [Lua] [AC8SurvivalMode] hud: built (base WBP_HUD_NonGlowMessage_000_C_2147417886, font UI_FontSet_ja, typeface HUD, 174 widgets)
+[2026-11-01 10:21:27.6066311] [Lua] [AC8SurvivalMode] hud: hidden (no player aircraft)
+[2026-11-01 10:21:27.6287180] [Lua] [AC8SurvivalMode] hud: the game's TIME row hidden (WBP_HUD_SubWidgets_Parts_TimerAndGauge_000_C /Engine/Transient.LiveGameEngine_2147482452:BP_LiveGameInstance_C_2147482376.WBP_HUD_Chronicle_MainFlight_000_C_2147430482.WidgetTree_2147430481.ForEachWidget.WidgetTree_2147430438.WBP_HUD_SubWidgets_Parts_CampaignInfo_000_C_2147417921.WidgetTree_2147417920.TimerAndGauge)
+[2026-11-01 10:21:27.6288340] [Lua] [AC8SurvivalMode] hud: the game's score limit hidden (TextBlock /Engine/Transient.LiveGameEngine_2147482452:BP_LiveGameInstance_C_2147482376.WBP_HUD_Chronicle_MainFlight_000_C_2147430482.WidgetTree_2147430481.ForEachWidget.WidgetTree_2147430438.WBP_HUD_SubWidgets_Parts_CampaignInfo_000_C_2147417921.WidgetTree_2147417920.BorderScoreText)
+[2026-11-01 10:21:27.6359681] [Lua] [AC8SurvivalMode] music: the game's BGM controller now plays id 0 (status 0)
+[2026-11-01 10:21:27.6361156] [Lua] [AC8SurvivalMode] music: the game's BGM controller: track|stop|event = AKE_Bgm_Hangar02_Play|AKE_Bgm_Hangar02_Stop|AKE_Bgm_Menu_Campaign_State
+[2026-11-01 10:21:27.6585512] [Lua] [AC8SurvivalMode] music: track clock running
+[2026-11-01 10:21:27.7770991] [Lua] [AC8SurvivalMode] shop: no STORE row TextBlock under a WBP_Menu_Text_Focus row; row labels are looked for in every TextBlock
+[2026-11-01 10:21:27.8323256] [Lua] [AC8SurvivalMode] round probe: flags SV_AirHits=0 SV_Alive=0 SV_AllyAirA=0 SV_AllyAirB=0 SV_AnomalyUp=0 SV_AwacsAir=0 SV_Beat=0 SV_Kills=0 SV_LadonRageKot=0 SV_LadonRageMishka=0 SV_LadonRunKot=0 SV_LadonRunMishka=0 SV_LcacLandAW=0 SV_LcacLandAX=0 SV_LcacLandAY=0 SV_LcacLandAZ=0 SV_LcacLandBW=0 SV_LcacLandBX=0 SV_LcacLandBY=0 SV_LcacLandBZ=0 SV_LcacLandCW=0 SV_LcacLandCX=0 SV_LcacLandCY=0 SV_LcacLandCZ=0 SV_LcacLandDW=0 SV_LcacLandDX=0 SV_LcacLandDY=0 SV_LcacLandDZ=0 SV_LcacRunwayAW=0 SV_LcacRunwayAX=0 SV_LcacRunwayAY=0 SV_LcacRunwayAZ=0 SV_LcacRunwayBW=0 SV_LcacRunwayBX=0 SV_LcacRunwayBY=0 SV_LcacRunwayBZ=0 SV_LcacRunwayCW=0 SV_LcacRunwayCX=0 SV_LcacRunwayCY=0 SV_LcacRunwayCZ=0 SV_LcacRunwayDW=0 SV_LcacRunwayDX=0 SV_LcacRunwayDY=0 SV_LcacRunwayDZ=0 SV_ShuttleDmgA=0 SV_ShuttleDmgB=0 SV_ShuttleDmgC=0 SV_ShuttleHits=0 SV_ShuttleLaunched=0 SV_ShuttleLost=0 SV_ShuttleNearSaid=0 SV_ShuttleRound=0 SV_SpAtAVL=0 SV_SpAtAVR=0 SV_SpAtAWL=0 SV_SpAtAWR=0 SV_SpAtAXL=0 SV_SpAtAXR=0 SV_SpAtAYL=0 SV_SpAtAYR=0 SV_SpAtAZL=0 SV_SpAtAZR=0 SV_SpAtBVL=0 SV_SpAtBVR=0 SV_SpAtBWL=0 SV_SpAtBWR=0 SV_SpAtBXL=0 SV_SpAtBXR=0 SV_SpAtBYL=0 SV_SpAtBYR=0 SV_SpAtBZL=0 SV_SpAtBZR=0 SV_SpAtCVL=0 SV_SpAtCVR=0 SV_SpAtCWL=0 SV_SpAtCWR=0 SV_SpAtCXL=0 SV_SpAtCXR=0 SV_SpAtCYL=0 SV_SpAtCYR=0 SV_SpAtCZL=0 SV_SpAtCZR=0 SV_SpAtDVL=0 SV_SpAtDVR=0 SV_SpAtDWL=0 SV_SpAtDWR=0 SV_SpAtDXL=0 SV_SpAtDXR=0 SV_SpAtDYL=0 SV_SpAtDYR=0 SV_SpAtDZL=0 SV_SpAtDZR=0 SV_SpLandAVL=0 SV_SpLandAVR=0 SV_SpLandAWL=0 SV_SpLandAWR=0 SV_SpLandAXL=0 SV_SpLandAXR=0 SV_SpLandAYL=0 SV_SpLandAYR=0 SV_SpLandAZL=0 SV_SpLandAZR=0 SV_SpLandBVL=0 SV_SpLandBVR=0 SV_SpLandBWL=0 SV_SpLandBWR=0 SV_SpLandBXL=0 SV_SpLandBXR=0 SV_SpLandBYL=0 SV_SpLandBYR=0 SV_SpLandBZL=0 SV_SpLandBZR=0 SV_SpLandCVL=0 SV_SpLandCVR=0 SV_SpLandCWL=0 SV_SpLandCWR=0 SV_SpLandCXL=0 SV_SpLandCXR=0 SV_SpLandCYL=0 SV_SpLandCYR=0 SV_SpLandCZL=0 SV_SpLandCZR=0 SV_SpLandDVL=0 SV_SpLandDVR=0 SV_SpLandDWL=0 SV_SpLandDWR=0 SV_SpLandDXL=0 SV_SpLandDXR=0 SV_SpLandDYL=0 SV_SpLandDYR=0 SV_SpLandDZL=0 SV_SpLandDZR=0 SV_SpRocketEscA=0 SV_SpRocketEscB=0 SV_ValkaUp=0 flights up (SV_Up_*)=0
+[2026-11-01 10:21:27.8928714] [Lua] [AC8SurvivalMode] hud: shown
+[2026-11-01 10:21:28.0038399] [Lua] [AC8SurvivalMode] insurance: your aircraft's floor 0.0 HP (none)
+[2026-11-01 10:21:28.7642869] [Lua] [AC8SurvivalMode] difficulty at mission start: Ace
+[2026-11-01 10:21:29.6486589] [Lua] [AC8SurvivalMode] game Lua: built LA_AIPlane x2, LA_PursueTarget_0011 x2, LA_PursueTarget_0400 x2, LA_SV_Escape x2, LA_SV_LancerBreak x2, LA_SV_LancerPass x2, LA_SV_LancerZoom x2, LA_SV_MoveAway x2, LA_SV_ProvokeNear x2, LA_SV_SkirmExtend x2, LA_SV_SkirmPass x2, LA_SV_TailChase x2, LA_SV_WolfDrag x2, LA_SV_WolfStrike x2; all fine
+[2026-11-01 10:21:29.6511679] [Lua] [AC8SurvivalMode] coop: player 1: sys|up
+[2026-11-01 10:21:29.6512293] [Lua] [AC8SurvivalMode] hud: callout 'CO-OP LINK BACK' / 'SAINT ALESSIA'
+[2026-11-01 10:21:29.9381815] [Lua] [AC8SurvivalMode] shop: the game's menu list has 26 menus; 20 = SV_Store, 21 = SV_StoreAirfield, 22 = SV_StoreDocks, 23 = SV_StoreUpgrades, 24 = SV_StoreTactical, 25 = SV_StoreDefences: the STORE is in
+[2026-11-01 10:21:29.9512170] [Lua] [AC8SurvivalMode] shop: the STORE: 4 of 4 rows in the landing menu (1, 2, SVShopStoreAf, SVShopStoreTac, SVShopStoreUp, SVShopStore)
+[2026-11-01 10:21:30.0344633] [Lua] [AC8SurvivalMode] ammo: preset standard (difficulty 3): gun 800/800, missiles 146/146, special 1 16/16, special 2 14/14, flares 4/4 -> gun 800/800, missiles 48/146, special 1 16/16, special 2 14/14, flares 4/4; free restock was 1, now off
+[2026-11-01 10:21:31.4294057] [Lua] [AC8SurvivalMode] coop: player 1 flies ea36_common
+[2026-11-01 10:21:31.5316778] [Lua] [AC8SurvivalMode] coop: player 1's name on their real plane's box: Saint Alessia (EA36)
+[2026-11-01 10:21:31.5317720] [Lua] [AC8SurvivalMode] coop: player 1's plane is their real ea36 (a player plane, 16DC462CE0): flown by its own update from their stream; their loadout 2008802,2005802,2051802,2047802,2052802,2027802,2003802,2060802,2007802,2025802,2026802,2019802,2028802,2016802,2056802//41,4; their paint 19010001/255/90003,90003,1340000003,1400003003,1340000003,1400003003,1260010003,1260010003
+[2026-11-01 10:21:31.5325189] [Lua] [AC8SurvivalMode] coop: player 1's plane shown
+[2026-11-01 10:21:31.5325815] [Lua] [AC8SurvivalMode] coop: player 1's damage shown on their real plane here (health 100%)
+[2026-11-01 10:21:32.1936444] [Lua] [AC8SurvivalMode] coop: open=1;mode=steam;role=join;state=linked;slot=1;players=2;max=24;me=76561198019325874;cands=2;tele=1;peers=0/linked/320/127/Saint Alessia
+[2026-11-01 10:21:32.3070718] [Lua] [AC8SurvivalMode] insurance: your aircraft's floor 0.1 HP (co-op's revives)
+[2026-11-01 10:21:36.6372952] [Lua] [AC8SurvivalMode] attackers: your plane's missiles-at-once limits: MaxNonPlaneAttackerMissiles 4 -> 40, MaxPlaneAttackerMissiles 4 -> 6, MaxPursuitAttackers 6 -> 12 (the game's: planes 4, ships / SAMs 4, chasers 6); waits between attacks: chasers 15.0-20.0 s, others 15.0-20.0 s (the difficulty's x25% / x25%)
+[2026-11-01 10:21:38.9301565] [Lua] [AC8SurvivalMode] difficulty 10 s into the mission: Ace
+[2026-11-01 10:21:44.3877435] [Lua] [AC8SurvivalMode] hud: callout 'ROUND 1' / 'HOSTILES INBOUND'
+[2026-11-01 10:21:48.8333309] [Lua] [AC8SurvivalMode] attackers: the game put your plane's limits back; set again (MaxPlaneAttackerMissiles 4 -> 6, MaxPursuitAttackers 6 -> 12, MaxNonPlaneAttackerMissiles 4 -> 40)
+[2026-11-01 10:21:48.8340878] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #1: BP_OP1026_su47_CP_C_2147416755 (ERA_Unit_01_Dep_Air0, k 0) at (19.6, 18.1) km, alt 3.1 km, 22.7 km from the airfield
+[2026-11-01 10:21:48.8343043] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #2: BP_OP1026_su47_CP_C_2147416722 (ERA_Unit_01_Dep_Air0, k 1) at (19.3, 18.1) km, alt 3.1 km, 22.7 km from the airfield
+[2026-11-01 10:21:49.2088789] [Lua] [AC8SurvivalMode] leaderboard: flying the su35
+[2026-11-01 10:21:50.3634821] [Lua] [AC8SurvivalMode] tiers: round 1 Rookie (BP_OP1026_su47_CP_C_2147416755): PilotRank 4 -> 2
+[2026-11-01 10:21:50.3636196] [Lua] [AC8SurvivalMode] maneuvers: su47 (BP_OP1026_su47_CP_C_2147416755) post-stall off: was cobra true, kulbit true, now cobra false, kulbit false
+[2026-11-01 10:21:50.6140734] [Lua] [AC8SurvivalMode] tiers: round 1 Regular (BP_OP1026_su47_CP_C_2147416722): PilotRank 4 -> 3
+[2026-11-01 10:21:52.1448093] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #3: BP_OP1032_f18e_CP_C_2147416681 (ERA_Unit_06_Dep_Air0, k 0) at (23.4, 16.3) km, alt 3.2 km, 21.9 km from the airfield
+[2026-11-01 10:21:52.1452161] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #4: BP_OP1032_f18e_CP_C_2147416646 (ERA_Unit_06_Dep_Air0, k 1) at (23.1, 16.4) km, alt 3.2 km, 21.9 km from the airfield
+[2026-11-01 10:21:52.8993255] [Lua] [AC8SurvivalMode] maneuvers: f18e (BP_OP1032_f18e_CP_C_2147416681) post-stall off: was cobra false, kulbit false, now cobra false, kulbit false
+[2026-11-01 10:22:08.1365195] [Lua] [AC8SurvivalMode] specials: ERA_Unit_01_Dep_Air0 A (su47_common_sv) fires its NPC_FCS_PlaneHCAA000 at you, 6.2 km (RE_SV_SpecFire_01A: 1)
+[2026-11-01 10:22:10.4273831] [Lua] [AC8SurvivalMode] ammo: now gun 800/800, missiles 48/146, special 1 16/16, special 2 14/14, flares 4/4
+[2026-11-01 10:22:16.1539631] [Lua] [AC8SurvivalMode] coopfire: your weapon BP_plwp_msl_r0_C: a missile (the stand-ins' slot 2)
+[2026-11-01 10:22:16.1541020] [Lua] [AC8SurvivalMode] coopfire: your first shot sent (m:1:0;p:1:0:0,1,0,0,13,1,31,195,-704,-98,-1239,0,-21686,-38548,-8028)
+[2026-11-01 10:22:18.8213260] [Lua] [AC8SurvivalMode] hit: -22 HP in 1 hit, health now 81% (98 HP); missiles near: BP_wp_hcaa_r0 61 m from BP_OP1026_su47_CP, BP_wp_msl_r0 369 m from BP_OP1026_su47_CP; nearest enemies: ERA_Unit_01_Dep_Air0 0.69 km, ERA_Unit_01_Dep_Air0 1.48 km, ERA_Unit_06_Dep_Air0 1.70 km
+[2026-11-01 10:22:19.4719934] [Lua] [AC8SurvivalMode] coopfire: 60 s: 2 shots sent, 0 received (0 fired here, 0 refused, 0 dropped, 0 with their target not here, 0 with no plane here, 0 not shown: you were in the STORE), your gun 0 bursts, your flares 0, your gear flips 0, afterburner flips 5, throttle up to 1.000 (ab_throttle 0.9); real planes' launches (T4b) 0 queued, 0 refused
+[2026-11-01 10:22:22.3862992] [Lua] [AC8SurvivalMode] specials: ERA_Unit_06_Dep_Air0 B (f18e_common_sv) fires its NPC_FCS_PlaneQAAM000 at you, 4.5 km (RE_SV_SpecFire_16B: 1)
+[2026-11-01 10:22:22.7872913] [Lua] [AC8SurvivalMode] tell: drag (the host's): RE_SV_RadioDrag (fired)
+[2026-11-01 10:22:24.8206600] [Lua] [AC8SurvivalMode] tell: trap (the host's): RE_SV_RadioEnTrap (fired)
+[2026-11-01 10:22:24.9408574] [Lua] [AC8SurvivalMode] round probe: BP_OP1026_su47_CP_C_2147416755 down, last seen 1.8 km up, 0.4 km from you
+[2026-11-01 10:22:24.9410351] [Lua] [AC8SurvivalMode] kill: BP_OP1026_su47_CP_C_2147416755; you were 0.5 km away, 169 deg off its nose, altitude +0.0 km; you fired gun x2, msl x1 in the last 6 s
+[2026-11-01 10:22:24.9410899] [Lua] [AC8SurvivalMode] credits: +100 (su47 down (fighter, Rookie x1.0)), now 100
+[2026-11-01 10:22:24.9412950] [Lua] [AC8SurvivalMode] kill-time: BP_OP1026_su47_CP_C_2147416755 (ERA_Unit_01_Dep_Air0, Rookie, round 1, k 0, ordinary ?): up 36 s, engaged 14 s (within 5 km), since your first hit 6 s, tailed 10 s (AI Provoke -); 169 deg off its nose at 0.5 km, +0.0 km; by you
+[2026-11-01 10:22:27.7486605] [Lua] [AC8SurvivalMode] perf: tick avg 11.8 ms (halves 9.1 + 2.6), worst half 152.0 ms (first 152, second 88) over 241 ticks; parts (ms a tick / worst, share): coop 3.7/104 31%, coop ammo 0.6/23 5%, hud 0.6/104 5%, ammo 0.6/22 5%, shop 0.5/62 4%, allies 0.4/25 3%, menu 0.3/7 2%, rounds 0.1/16 1%, hits 0.1/1 1%, director 0.1/1 1%, down 0.0/4 0%, music 0.0/1 0%; untimed 4.6 39%; memory 13450 MB, committed 30843 MB
+[2026-11-01 10:22:28.1340870] [Lua] [AC8SurvivalMode] coop: strays here: the host asked for the whole picture again (jn)
+[2026-11-01 10:22:28.1341656] [Lua] [AC8SurvivalMode] coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+[2026-11-01 10:22:28.6420354] [Lua] [AC8SurvivalMode] coop: 3 copies taken down (the host's run started over)
+[2026-11-01 10:22:28.6457239] [Lua] [AC8SurvivalMode] stats: round 1 (Rookie, ?, 2 players) (cut short: co-op resync): length 40 s (0 s at the airfield), 1 wave; aircraft down 1 (yours 1), ordinary fighters ? (a joiner can't tell aces; 1 pool fighters down); tailed survival: AI Provoke median - (0 died, 0 escaped), geometric median 10 s (1 died, 1 escaped); kills from behind 1/1 (100%); your kills with missiles 1, gun 0, special 0, nothing seen 0 (1 close); missiles left 45, fired 3 this round; you took 22 HP (missiles 100%, gun/close 0%, unknown 0%); director tactics 0 (none; 0 told); ace reversals 0; tail watch: not measured on a co-op joiner (its enemies are the host's)
+[2026-11-01 10:22:29.2611183] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #5: BP_OP1032_f18e_CP_C_2147415950 (ERA_Unit_06_Dep_Air0, k 0) at (23.4, 16.3) km, alt 3.2 km, 21.9 km from the airfield
+[2026-11-01 10:22:29.2614059] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #6: BP_OP1032_f18e_CP_C_2147415916 (ERA_Unit_06_Dep_Air0, k 1) at (23.1, 16.4) km, alt 3.2 km, 21.9 km from the airfield
+[2026-11-01 10:22:29.2615511] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #7: BP_OP1026_su47_CP_C_2147415879 (ERA_Unit_01_Dep_Air0, k 0) at (19.6, 18.1) km, alt 3.1 km, 22.7 km from the airfield
+[2026-11-01 10:22:29.2620354] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #8: BP_OP1026_su47_CP_C_2147415847 (ERA_Unit_01_Dep_Air0, k 1) at (19.3, 18.1) km, alt 3.1 km, 22.7 km from the airfield
+[2026-11-01 10:22:29.2621963] [Lua] [AC8SurvivalMode] round probe: BP_OP1026_su47_CP_C_2147416722 taken down here (co-op, not a kill; 1 so far)
+[2026-11-01 10:22:29.5225003] [Lua] [AC8SurvivalMode] intensity: round 1: you avg 22, peak 65, above 80 for 0 s; comfort avg 34; level 0
+[2026-11-01 10:22:29.5232944] [Lua] [AC8SurvivalMode] round probe: BP_OP1032_f18e_CP_C_2147416681 taken down here (co-op, not a kill; 2 so far)
+[2026-11-01 10:22:29.7773743] [Lua] [AC8SurvivalMode] round probe: BP_OP1032_f18e_CP_C_2147416646 taken down here (co-op, not a kill; 3 so far)
+[2026-11-01 10:22:30.5367307] [Lua] [AC8SurvivalMode] round probe: BP_OP1026_su47_CP_C_2147415879 down
+[2026-11-01 10:22:30.5368559] [Lua] [AC8SurvivalMode] kill: BP_OP1026_su47_CP_C_2147415879; you were ? away, ?, altitude ?; you fired nothing seen in the last 6 s
+[2026-11-01 10:22:30.5369067] [Lua] [AC8SurvivalMode] credits: +100 (su47 down (fighter, Rookie x1.0)), now 200
+[2026-11-01 10:22:30.5369560] [Lua] [AC8SurvivalMode] kill-time: BP_OP1026_su47_CP_C_2147415879 (ERA_Unit_01_Dep_Air0, no tier, round 1, k 0, ordinary ?): up 1 s, engaged - (within 5 km), since your first hit -, tailed - (AI Provoke -); aspect ?; by you
+[2026-11-01 10:22:31.4250823] [Lua] [AC8SurvivalMode] tell: cover_ask (the host's): RE_SV_RadioEnCoverB (fired)
+[2026-11-01 10:22:31.4283642] [Lua] [AC8SurvivalMode] coopfire: player 1's gear down here: EnableLandingGear done
+[2026-11-01 10:22:33.7159736] [Lua] [AC8SurvivalMode] tell: six (the host's): RE_SV_RadioSixD (fired)
+[2026-11-01 10:22:34.2093275] [Lua] [AC8SurvivalMode] down: player 1 (SAINT ALESSIA) is down
+[2026-11-01 10:22:34.2094414] [Lua] [AC8SurvivalMode] hud: callout 'SAINT ALESSIA DOWN' / 'LAND AND REVIVE THEM FROM THE STORE'
+[2026-11-01 10:22:34.4732494] [Lua] [AC8SurvivalMode] coop: player 1's plane hidden (down)
+[2026-11-01 10:22:48.4737939] [Lua] [AC8SurvivalMode] coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+[2026-11-01 10:22:53.5642584] [Lua] [AC8SurvivalMode] coop: the host's ERA_Unit_01_Dep_Air0 here: 1 of 2 planes bound to the host's (spawned as gen 1; the host's last ids for it: 4 for gen 1)
+[2026-11-01 10:23:03.8884001] [Lua] [AC8SurvivalMode] hit: -11 HP in 1 hit, health now 72% (86 HP); missiles near: none (gun / pulse cannon / blast / collision?); nearest enemies: ERA_Unit_06_Dep_Air0 0.33 km, ERA_Unit_01_Dep_Air0 1.67 km, ERA_Unit_06_Dep_Air0 3.02 km
+[2026-11-01 10:23:04.2754446] [Lua] [AC8SurvivalMode] coopfire: your weapon BP_plwp_hvaa_r0_C: a special weapon (the stand-ins' missile slot 2 for now)
+[2026-11-01 10:23:06.9252430] [Lua] [AC8SurvivalMode] round probe: BP_OP1032_f18e_CP_C_2147415916 down, last seen 2.2 km up, 1.3 km from you
+[2026-11-01 10:23:06.9253686] [Lua] [AC8SurvivalMode] kill: BP_OP1032_f18e_CP_C_2147415916; you were 2.7 km away, 166 deg off its nose, altitude -0.7 km; you fired sp1 x2 in the last 6 s
+[2026-11-01 10:23:06.9254645] [Lua] [AC8SurvivalMode] credits: +110 (f18e down (fighter, Regular x1.1)), now 310
+[2026-11-01 10:23:06.9255438] [Lua] [AC8SurvivalMode] kill-time: BP_OP1032_f18e_CP_C_2147415916 (ERA_Unit_06_Dep_Air0, Regular, round 1, k 1, ordinary ?): up 38 s, engaged 37 s (within 5 km), since your first hit -, tailed 2 s (AI Provoke -); 166 deg off its nose at 2.7 km, -0.7 km; by you
+[2026-11-01 10:23:07.4299032] [Lua] [AC8SurvivalMode] round probe: BP_OP1026_su47_CP_C_2147415847 down, last seen 1.8 km up, 0.5 km from you
+[2026-11-01 10:23:07.4301225] [Lua] [AC8SurvivalMode] kill: BP_OP1026_su47_CP_C_2147415847; you were 0.9 km away, 163 deg off its nose, altitude -0.2 km; you fired sp1 x2 in the last 6 s
+[2026-11-01 10:23:07.4302400] [Lua] [AC8SurvivalMode] credits: +100 (su47 down (fighter, Rookie x1.0)), now 410
+[2026-11-01 10:23:07.4303242] [Lua] [AC8SurvivalMode] kill-time: BP_OP1026_su47_CP_C_2147415847 (ERA_Unit_01_Dep_Air0, Rookie, round 1, k 1, ordinary ?): up 38 s, engaged 37 s (within 5 km), since your first hit -, tailed 4 s (AI Provoke -); 163 deg off its nose at 0.9 km, -0.2 km; by you
+[2026-11-01 10:23:08.8287994] [Lua] [AC8SurvivalMode] coop: 2 stray enemy copies taken down (here 15 s, never bound to the host's)
+[2026-11-01 10:23:11.5171098] [Lua] [AC8SurvivalMode] ammo: now gun 800/800, missiles 43/146, special 1 14/16, special 2 14/14, flares 4/4
+[2026-11-01 10:23:19.5193370] [Lua] [AC8SurvivalMode] coopfire: 60 s: 7 shots sent, 0 received (0 fired here, 0 refused, 0 dropped, 0 with their target not here, 0 with no plane here, 0 not shown: you were in the STORE), your gun 1 bursts, your flares 0, your gear flips 0, afterburner flips 8, throttle up to 1.000 (ab_throttle 0.9); real planes' launches (T4b) 0 queued, 0 refused
+[2026-11-01 10:23:26.6346845] [Lua] [AC8SurvivalMode] credits: +250 (round 1 cleared (the host's round)), now 660
+[2026-11-01 10:23:26.6348228] [Lua] [AC8SurvivalMode] hud: callout 'ROUND 1 COMPLETE' / 'NEXT ROUND IN 20 SECONDS'
+[2026-11-01 10:23:27.0051837] [Lua] [AC8SurvivalMode] round probe: BP_OP1032_f18e_CP_C_2147415950 down, last seen 1.9 km up, 3.9 km from you
+[2026-11-01 10:23:27.0053225] [Lua] [AC8SurvivalMode] kill: BP_OP1032_f18e_CP_C_2147415950; you were 3.1 km away, 171 deg off its nose, altitude -1.0 km; you fired nothing seen in the last 6 s
+[2026-11-01 10:23:27.0053763] [Lua] [AC8SurvivalMode] credits: +110 (f18e down (fighter, Regular x1.1)), now 770
+[2026-11-01 10:23:27.0054253] [Lua] [AC8SurvivalMode] kill-time: BP_OP1032_f18e_CP_C_2147415950 (ERA_Unit_06_Dep_Air0, Regular, round 1, k 0, ordinary ?): up 58 s, engaged 39 s (within 5 km), since your first hit 2 s, tailed - (AI Provoke -); 171 deg off its nose at 3.1 km, -1.0 km; by you
+[2026-11-01 10:23:29.1710603] [Lua] [AC8SurvivalMode] coop: 1 stray enemy copies taken down (here 15 s, never bound to the host's)
+[2026-11-01 10:23:31.1965877] [Lua] [AC8SurvivalMode] coopfire: your gear down (LandingGearOnMesh shown)
+[2026-11-01 10:23:31.8399657] [Lua] [AC8SurvivalMode] stats: round 1 (Rookie, ?, 2 players): length 58 s (0 s at the airfield), 1 wave; aircraft down 4 (yours 4), ordinary fighters ? (a joiner can't tell aces; 4 pool fighters down); tailed survival: AI Provoke median - (0 died, 0 escaped), geometric median 3 s (2 died, 4 escaped); kills from behind 2/3 (67%); your kills with missiles 0, gun 0, special 2, nothing seen 2 (1 close); missiles left 39, fired 6 this round; you took 11 HP (missiles 0%, gun/close 100%, unknown 0%); director tactics 0 (none; 0 told); ace reversals 0; tail watch: not measured on a co-op joiner (its enemies are the host's)
+[2026-11-01 10:23:44.4653712] [Lua] [AC8SurvivalMode] hud: callout 'ROUND 2' / 'HOSTILES INBOUND'
+[2026-11-01 10:23:46.0221806] [Lua] [AC8SurvivalMode] music: track clock held (landing store)
+[2026-11-01 10:23:46.1135602] [Lua] [AC8SurvivalMode] ammo: refilled by the game, put back to what you had (standard): special 1 16 -> 14
+[2026-11-01 10:23:46.4121603] [Lua] [AC8SurvivalMode] shop: ammo panel WBP_Menu_IngameHangar_WeaponDetail_002_C /Engine/Transient.LiveGameEngine_2147482452:BP_LiveGameInstance_C_2147482376.WBP_Menu_IngameHangar_Weapon1_000_C_2147414867.WidgetTree_2147414866.WBP_Menu_IngameHangar_Common_000.WidgetTree_2147414865.WBP_Menu_IngameHangar_WeaponDetail_002: AmmoTextLTop 'GUN' '800', AmmoTextLCenter 'MSL' '146', AmmoTextLBottom 'FLR' '4', AmmoTextRTop 'HVAA' '16', AmmoTextRCenter 'LAGM' '14', AmmoTextRBottom '(SAMPLE)' 'nil'; maxima 800/146/16/14/4
+[2026-11-01 10:23:46.4140494] [Lua] [AC8SurvivalMode] shop: ammo panel WBP_Menu_IngameHangar_WeaponDetail_002 shows the caps (146 -> 39)
+[2026-11-01 10:23:46.6206380] [Lua] [AC8SurvivalMode] ammo: refilled by the game, put back to what you had (standard): special 1 16 -> 14
+[2026-11-01 10:23:47.1201620] [Lua] [AC8SurvivalMode] ammo: refilled by the game, put back to what you had (standard): special 1 16 -> 14
+[2026-11-01 10:23:48.4496705] [Lua] [AC8SurvivalMode] shop: ammo panel WBP_Menu_IngameHangar_WeaponDetail_002_C /Engine/Transient.LiveGameEngine_2147482452:BP_LiveGameInstance_C_2147482376.WBP_Menu_IngameHangar_Confirmation_000_C_2147414584.WidgetTree_2147414583.WBP_Menu_IngameHangar_Common_000.WidgetTree_2147414582.WBP_Menu_IngameHangar_WeaponDetail_002: AmmoTextLTop 'GUN' '800', AmmoTextLCenter 'MSL' '146', AmmoTextLBottom 'FLR' '4', AmmoTextRTop 'HVAA' '16', AmmoTextRCenter 'LAGM' '14', AmmoTextRBottom '(SAMPLE)' 'nil'; maxima 800/146/16/14/4
+[2026-11-01 10:23:48.4515846] [Lua] [AC8SurvivalMode] shop: ammo panel WBP_Menu_IngameHangar_WeaponDetail_002 shows the caps (146 -> 39)
+[2026-11-01 10:23:48.4527772] [Lua] [AC8SurvivalMode] shop: ammo panel WBP_Menu_IngameHangar_WeaponDetail_002_C /Engine/Transient.LiveGameEngine_2147482452:BP_LiveGameInstance_C_2147482376.WBP_Menu_IngameHangar_Weapon2_000_C_2147414725.WidgetTree_2147414724.WBP_Menu_IngameHangar_Common_000.WidgetTree_2147414723.WBP_Menu_IngameHangar_WeaponDetail_002: AmmoTextLTop 'GUN' '800', AmmoTextLCenter 'MSL' '146', AmmoTextLBottom 'FLR' '4', AmmoTextRTop 'HVAA' '16', AmmoTextRCenter 'LAGM' '14', AmmoTextRBottom '(SAMPLE)' 'nil'; maxima 800/146/16/14/4
+[2026-11-01 10:23:48.4537668] [Lua] [AC8SurvivalMode] shop: ammo panel WBP_Menu_IngameHangar_WeaponDetail_002 shows the caps (146 -> 39)
+[2026-11-01 10:23:48.4548893] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #9: BP_OP1026_su47_CP_C_2147414477 (ERA_Unit_01_Dep_Air0, k 0) at (15.7, 18.6) km, alt 2.6 km, 22.9 km from the airfield
+[2026-11-01 10:23:48.4551163] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #10: BP_OP1026_su47_CP_C_2147414445 (ERA_Unit_01_Dep_Air0, k 1) at (15.4, 18.6) km, alt 2.6 km, 22.9 km from the airfield
+[2026-11-01 10:23:48.6476401] [Lua] [AC8SurvivalMode] tiers: round 2 Rookie (BP_OP1026_su47_CP_C_2147414445): PilotRank 4 -> 2
+[2026-11-01 10:23:50.4691601] [Lua] [AC8SurvivalMode] shop: ammo panel WBP_Menu_IngameHangar_WeaponDetail_002_C /Engine/Transient.LiveGameEngine_2147482452:BP_LiveGameInstance_C_2147482376.WBP_Menu_IngameHangar_Confirmation_000_C_2147414405.WidgetTree_2147414404.WBP_Menu_IngameHangar_Common_000.WidgetTree_2147414403.WBP_Menu_IngameHangar_WeaponDetail_002: AmmoTextLTop 'GUN' '800', AmmoTextLCenter 'MSL' '146', AmmoTextLBottom 'FLR' '4', AmmoTextRTop 'HVAA' '16', AmmoTextRCenter 'LAGM' '14', AmmoTextRBottom '(SAMPLE)' 'nil'; maxima 800/146/16/14/4
+[2026-11-01 10:23:50.4710171] [Lua] [AC8SurvivalMode] shop: ammo panel WBP_Menu_IngameHangar_WeaponDetail_002 shows the caps (146 -> 39)
+[2026-11-01 10:23:51.7000862] [Lua] [AC8SurvivalMode] ammo: refilled by the game, put back to what you had (standard): special 1 16 -> 14
+[2026-11-01 10:23:51.7003098] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #11: BP_OP1030_su33_CP_C_2147414311 (ERA_Unit_02_Dep_Air0, k 0) at (26.0, -19.9) km, alt 2.3 km, 18.4 km from the airfield
+[2026-11-01 10:23:51.7004975] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #12: BP_OP1030_su33_CP_C_2147414275 (ERA_Unit_02_Dep_Air0, k 1) at (26.2, -19.7) km, alt 2.3 km, 18.4 km from the airfield
+[2026-11-01 10:23:52.2240365] [Lua] [AC8SurvivalMode] ammo: refilled by the game, put back to what you had (standard): special 1 16 -> 14
+[2026-11-01 10:23:52.9666103] [Lua] [AC8SurvivalMode] maneuvers: su33 (BP_OP1030_su33_CP_C_2147414311) post-stall off: was cobra true, kulbit false, now cobra false, kulbit false
+[2026-11-01 10:23:55.0114281] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #13: BP_OP1027_m21b_CP_C_2147414168 (ERA_Unit_06_Dep_Air0, k 0) at (-2.0, -19.9) km, alt 3.8 km, 23.9 km from the airfield
+[2026-11-01 10:23:55.0118245] [Lua] [AC8SurvivalMode] round probe: AI aircraft created #14: BP_OP1027_m21b_CP_C_2147414136 (ERA_Unit_06_Dep_Air0, k 1) at (-1.8, -20.2) km, alt 3.8 km, 23.9 km from the airfield
+[2026-11-01 10:23:55.5262521] [Lua] [AC8SurvivalMode] maneuvers: m21b (BP_OP1027_m21b_CP_C_2147414168) post-stall off: was cobra false, kulbit false, now cobra false, kulbit false
+[2026-11-01 10:23:57.3036828] [Lua] [AC8SurvivalMode] ammo: refilled by the game, put back to what you had (standard): special 1 26 -> 14
+[2026-11-01 10:23:57.8220714] [Lua] [AC8SurvivalMode] ammo: refilled by the game, put back to what you had (standard): special 1 16 -> 14
+[2026-11-01 10:23:58.3314406] [Lua] [AC8SurvivalMode] ammo: refilled by the game, put back to what you had (standard): special 1 16 -> 14
+[2026-11-01 10:23:58.6458008] [Lua] [AC8SurvivalMode] shop: ammo panel WBP_Menu_IngameHangar_WeaponDetail_002_C /Engine/Transient.LiveGameEngine_2147482452:BP_LiveGameInstance_C_2147482376.WBP_Menu_IngameHangar_Weapon2_000_C_2147413960.WidgetTree_2147413959.WBP_Menu_IngameHangar_Common_000.WidgetTree_2147413958.WBP_Menu_IngameHangar_WeaponDetail_002: AmmoTextLTop 'GUN' '800', AmmoTextLCenter 'MSL' '146', AmmoTextLBottom 'FLR' '4', AmmoTextRTop 'HVAA' '16', AmmoTextRCenter 'LAGM' '14', AmmoTextRBottom '(SAMPLE)' 'nil'; maxima 800/146/16/14/4
+[2026-11-01 10:23:58.6478637] [Lua] [AC8SurvivalMode] shop: ammo panel WBP_Menu_IngameHangar_WeaponDetail_002 shows the caps (146 -> 39)
+[2026-11-01 10:23:58.8405749] [Lua] [AC8SurvivalMode] ammo: refilled by the game, put back to what you had (standard): special 1 16 -> 14
+[2026-11-01 10:23:59.4940021] [Lua] [AC8SurvivalMode] music: track clock running
+[2026-11-01 10:23:59.6030212] [Lua] [AC8SurvivalMode] insurance: your aircraft's floor was put back by the game; 0.1 HP again (1 times)
+[2026-11-01 10:23:59.8584050] [Lua] [AC8SurvivalMode] ammo: refilled by the game, put back to what you had (standard): missiles 146 -> 39, special 1 16 -> 14
+[2026-11-01 10:24:00.6611757] [Lua] [AC8SurvivalMode] shop: ammo panel WBP_Menu_IngameHangar_WeaponDetail_002_C /Engine/Transient.LiveGameEngine_2147482452:BP_LiveGameInstance_C_2147482376.WBP_Menu_IngameHangar_Confirmation_000_C_2147413819.WidgetTree_2147413818.WBP_Menu_IngameHangar_Common_000.WidgetTree_2147413817.WBP_Menu_IngameHangar_WeaponDetail_002: AmmoTextLTop 'GUN' '800', AmmoTextLCenter 'MSL' '146', AmmoTextLBottom 'FLR' '4', AmmoTextRTop 'HVAA' '16', AmmoTextRCenter 'LAGM' '14', AmmoTextRBottom '(SAMPLE)' 'nil'; maxima 800/146/16/14/4
+[2026-11-01 10:24:00.6630272] [Lua] [AC8SurvivalMode] shop: ammo panel WBP_Menu_IngameHangar_WeaponDetail_002 shows the caps (146 -> 39)
+[2026-11-01 10:24:01.2527127] [Lua] [AC8SurvivalMode] music: the game's BGM controller: track|stop|event = AKE_Bgm_Ms22A_SupplyOut_Stop|AKE_Bgm_Hangar02_Stop|AKE_Bgm_Menu_Campaign_State
+[2026-11-01 10:24:01.7694897] [Lua] [AC8SurvivalMode] hud: hidden (paused)
+[2026-11-01 10:24:01.7696718] [Lua] [AC8SurvivalMode] music: track clock held (landing store)
+[2026-11-01 10:24:02.2687646] [Lua] [AC8SurvivalMode] hud: shown
+[2026-11-01 10:24:02.2897921] [Lua] [AC8SurvivalMode] music: track clock running
+[2026-11-01 10:24:11.1653409] [Lua] [AC8SurvivalMode] hud: hidden (paused)
+[2026-11-01 10:24:11.1655416] [Lua] [AC8SurvivalMode] music: track clock held (landing store)
+[2026-11-01 10:24:11.4214190] [Lua] [AC8SurvivalMode] hud: shown
+[2026-11-01 10:24:11.4419266] [Lua] [AC8SurvivalMode] music: track clock running
+[2026-11-01 10:24:12.5581914] [Lua] [AC8SurvivalMode] ammo: now gun 800/800, missiles 39/146, special 1 14/16, special 2 14/14, flares 4/4
+[2026-11-01 10:24:19.6018877] [Lua] [AC8SurvivalMode] coopfire: 60 s: 2 shots sent, 0 received (0 fired here, 0 refused, 0 dropped, 0 with their target not here, 0 with no plane here, 0 not shown: you were in the STORE), your gun 0 bursts, your flares 0, your gear flips 1, afterburner flips 3, throttle up to 1.000 (ab_throttle 0.9); real planes' launches (T4b) 0 queued, 0 refused
+[2026-11-01 10:24:24.1458769] [Lua] [AC8SurvivalMode] hud: hidden (paused)
+[2026-11-01 10:24:24.1463877] [Lua] [AC8SurvivalMode] music: track clock held (landing store)
+[2026-11-01 10:24:24.3905696] [Lua] [AC8SurvivalMode] hud: shown
+[2026-11-01 10:24:24.4119248] [Lua] [AC8SurvivalMode] music: track clock running
+[2026-11-01 10:24:32.0535922] [Lua] [AC8SurvivalMode] hud: hidden (paused)
+[2026-11-01 10:24:32.0537623] [Lua] [AC8SurvivalMode] music: track clock held (landing store)
+[2026-11-01 10:24:32.3017664] [Lua] [AC8SurvivalMode] hud: shown
+[2026-11-01 10:24:32.3222907] [Lua] [AC8SurvivalMode] music: track clock running
+[2026-11-01 10:24:41.7252246] [Lua] [AC8SurvivalMode] coop: player 1: sys|lost
+[2026-11-01 10:24:41.7253461] [Lua] [AC8SurvivalMode] hud: callout 'CO-OP LINK LOST' / 'SAINT ALESSIA'
+[2026-11-01 10:24:42.4790005] [Lua] [AC8SurvivalMode] hud: hidden (paused)
+[2026-11-01 10:24:42.4791998] [Lua] [AC8SurvivalMode] music: track clock held (landing store)
+[2026-11-01 10:24:42.7340779] [Lua] [AC8SurvivalMode] hud: shown
+[2026-11-01 10:24:42.7597088] [Lua] [AC8SurvivalMode] music: track clock running
+[2026-11-01 10:24:44.5383861] [Lua] [AC8SurvivalMode] coopfire: your gear up (LandingGearOnMesh hidden)
+[2026-11-01 10:24:45.5473584] [Lua] [AC8SurvivalMode] coop: open=1;mode=steam;role=join;state=lost;slot=1;players=1;max=24;me=76561198019325874;cands=2;tele=1;peers=0/lost/65/10071/Saint Alessia
+[2026-11-01 10:24:45.6513376] [Lua] [AC8SurvivalMode] insurance: your aircraft's floor 0.0 HP (none)
+[2026-11-01 10:24:52.6586096] [Lua] [AC8SurvivalMode] hud: hidden (paused)
+[2026-11-01 10:24:53.4347927] [Lua] [AC8SurvivalMode] hud: shown
+[2026-11-01 10:25:11.7735441] [Lua] [AC8SurvivalMode] coop: migration: the host (Saint Alessia) silent 30 s: going down the line of 1
+[2026-11-01 10:25:11.7736661] [Lua] [AC8SurvivalMode] hud: callout 'CO-OP: SAINT ALESSIA (HOST) IS GONE' / 'FINDING THE NEXT HOST...'
+[2026-11-01 10:25:11.7737011] [Lua] [AC8SurvivalMode] coop: migration: this game is the next host (1 of 1 in line); the others are joining it
+[2026-11-01 10:25:11.7751658] [Lua] [AC8SurvivalMode] coop: your own settings are back
+[2026-11-01 10:25:11.7752248] [Lua] [AC8SurvivalMode] coop: open as the host over steam (partner auto, up to 24 players; host migration): looking for players
+[2026-11-01 10:25:11.7769365] [Lua] [AC8SurvivalMode] coop: 6 copies taken down (host migration)
+[2026-11-01 10:25:11.7770117] [Lua] [AC8SurvivalMode] coop: player 1's plane here set aside, hidden (the old host's: you're the host now)
+[2026-11-01 10:25:11.7770446] [Lua] [AC8SurvivalMode] coop: migration: round 2 starts again once everyone's back (up to 60 s), 0 allies and defences to build again
+[2026-11-01 10:25:11.7770732] [Lua] [AC8SurvivalMode] hud: callout 'YOU ARE THE NEW HOST' / 'ROUND 2 STARTS ONCE EVERYONE'S BACK'
+[2026-11-01 10:25:11.8954837] [Lua] [AC8SurvivalMode] perf: tick avg 17.3 ms (halves 13.4 + 4.0), worst half 59.0 ms (first 45, second 59) over 645 ticks; parts (ms a tick / worst, share): coop 3.3/10 19%, ammo panel 1.5/54 9%, icons 0.5/30 3%, ammo 0.5/2 3%, allies 0.4/4 2%, shop 0.2/32 1%, menu 0.2/7 1%, coop ammo 0.2/1 1%, hud 0.2/4 1%, director 0.1/22 1%, rounds 0.1/10 1%, hits 0.1/3 0%; untimed 9.7 56%; memory 13403 MB, committed 32100 MB
+[2026-11-01 10:25:12.0152405] [Lua] [AC8SurvivalMode] rounds: on the game clock (stops while paused)
+[2026-11-01 10:25:12.0198123] [Lua] [AC8SurvivalMode] music: track clock running
+[2026-11-01 10:25:12.0199248] [Lua] [AC8SurvivalMode] menu: the run plays COOP JOIN's setup (host): preset by difficulty, 0 Z, enemies 100%, round 1, break 20 s, specials normal, airfield 100%, income 100%, skill normal.; leaderboard: a co-op run
+[2026-11-01 10:25:12.0200025] [Lua] [AC8SurvivalMode] coop: in Survival's level as the host
+[2026-11-01 10:25:12.0200356] [Lua] [AC8SurvivalMode] hud: callout 'CO-OP: YOU ARE THE HOST' / 'PLAYERS 1/24'
+[2026-11-01 10:25:12.0206908] [Lua] [AC8SurvivalMode] coop: migration: the next hosts, best link first: none
+[2026-11-01 10:25:12.5366821] [Lua] [AC8SurvivalMode] airfield: health 250 (hits so far 0)
+[2026-11-01 10:25:16.0818240] [Lua] [AC8SurvivalMode] coop: open=1;mode=steam;role=host;state=searching;slot=0;players=1;max=24;me=76561198019325874;cands=1;tele=1;peers=
+[2026-11-01 10:25:24.2335247] [Lua] [AC8SurvivalMode] hud: callout 'ROUND 2' / 'HOSTILES INBOUND'
+[2026-11-01 10:25:25.7532588] [Lua] [AC8SurvivalMode] hud: hidden (paused)
+[2026-11-01 10:25:36.8807395] [Lua] [AC8SurvivalMode] music: the game's BGM controller now plays id -1 (status -1)
+[2026-11-01 10:25:36.8808303] [Lua] [AC8SurvivalMode] music: the game's BGM controller: track|stop|event = 
+[2026-11-01 10:25:36.9502981] [Lua] [AC8SurvivalMode] world: /Game/Maps/Menu/PL_MainMenu
+[2026-11-01 10:25:37.3697035] [Lua] [AC8SurvivalMode] music: track clock held (landing store)
+[2026-11-01 10:25:37.3837559] [Lua] [AC8SurvivalMode] world: /Game/Maps/Transition/TransitionMap
+[2026-11-01 10:25:39.3526840] [Lua] [AC8SurvivalMode] shop: rows taken out of the landing menu (not in Survival's level)
+[2026-11-01 10:25:44.1813609] [Lua] [AC8SurvivalMode] run over: left Survival's level in round 1 with 770 zollars
+[2026-11-01 10:25:44.1858413] [Lua] [AC8SurvivalMode] learning: run over (left): 5 of your kills (5 of fighters: missiles 2, gun 1, of 3 with a weapon seen; close 2, from behind 3, of 4 with an aspect), 116 s flown (high 2%, near the airfield 28% of 58 s it didn't need you, on a tail 34%, usually 1.9 km up), 1 landings: missile 0.67, gun 0.50, tail 0.85, high 0.02, airfield 0.28; counted, not learnt from (only 5 of your kills of fighters, min_kills 8); the profile now 1 runs (0 learnt from), 5 of your kills; missile -, gun -, tail -, high -, airfield -, saved to config\survival_profile.ini
+[2026-11-01 10:25:44.1859561] [Lua] [AC8SurvivalMode] stats: run over (left): rounds 1-1; time to kill rounds 7-12 median - (n 0) [target 20-40 s]; tailed survival Veteran+ AI Provoke median - (n 0), geometric median - (n 0) [8 s+]; specials none; special rounds none [5-8 min]; missiles left at the end 39 [under 40]; damage taken 34 HP: missiles 67%, gun/close 33%, unknown 0%, brackets 1 [varied]; director tactics per round avg 0.0 (0 in 2 rounds) [3-6]; kills from behind 75% (3/4) [under 70%]; fired: missiles 9, specials 28, flares 0, gun 3; tail watch Veteran+: not measured on a co-op joiner
+[2026-11-01 10:25:44.1860783] [Lua] [AC8SurvivalMode] leaderboard: Steam name 'Shazzy'
+[2026-11-01 10:25:44.1878187] [Lua] [AC8SurvivalMode] leaderboard: run over (left): round 1, score 2250, 5 air / 0 ground kills, 0 specials beaten, 0:04:25
+[2026-11-01 10:25:44.1878582] [Lua] [AC8SurvivalMode] leaderboard: a co-op run; not sent (CFG.coop.leaderboard)
+[2026-11-01 10:25:44.4239492] [Lua] [AC8SurvivalMode] menu: mode none (another entry)
+[2026-11-01 10:25:44.4261309] [Lua] [AC8SurvivalMode] coop: closed (another main-menu entry picked)
+[2026-11-01 10:25:46.7978747] Event loop end

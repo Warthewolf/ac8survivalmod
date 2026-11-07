@@ -88,25 +88,27 @@ end
 -- A random point distance_km from the airfield, inside the combat zone; returns x, y (cm), distance (km), bearing.
 -- compass (optional): around that compass bearing from the airfield (within spread degrees; north -Y, east +X, as
 -- Mission 22's dummyN0 / dummyS0 sit), for a raid that comes from one direction; the bearing returned is then the
--- compass one too.
-function spawnPoint(range, compass, spread)
+-- compass one too, and a 5th value is true (false: the zone's edge left it a random point, a maths angle). cx, cy
+-- (optional): around that point instead of the airfield (the squad director's pincer, around the player).
+function spawnPoint(range, compass, spread, cx, cy)
     range = range or CFG.distance_km
     local lo, hi = range[1], range[2]
+    local ox, oy = cx or AIRFIELD.X, cy or AIRFIELD.Y
     for try = 1, 30 do
         local d = lo + math.random() * (hi - lo)
         local x, y, b
         if compass and try <= 20 then
             b = (compass + (math.random() * 2 - 1) * (spread or 0)) % 360
-            x = AIRFIELD.X + d * 100000 * math.sin(math.rad(b))
-            y = AIRFIELD.Y - d * 100000 * math.cos(math.rad(b))
+            x = ox + d * 100000 * math.sin(math.rad(b))
+            y = oy - d * 100000 * math.cos(math.rad(b))
         else
             b = math.random() * 360
-            x = AIRFIELD.X + d * 100000 * math.cos(math.rad(b))
-            y = AIRFIELD.Y + d * 100000 * math.sin(math.rad(b))
+            x = ox + d * 100000 * math.cos(math.rad(b))
+            y = oy + d * 100000 * math.sin(math.rad(b))
         end
-        if math.abs(x - ZONE.X) < ZONE.HALF and math.abs(y - ZONE.Y) < ZONE.HALF then return x, y, d, b end
+        if math.abs(x - ZONE.X) < ZONE.HALF and math.abs(y - ZONE.Y) < ZONE.HALF then return x, y, d, b, compass ~= nil and try <= 20 end
     end
-    return AIRFIELD.X, AIRFIELD.Y + lo * 100000, lo, 90
+    return AIRFIELD.X, AIRFIELD.Y + lo * 100000, lo, 90, false
 end
 
 -- A compass bearing from the airfield whose raid spawn points (range km out) are inside the combat zone, or nil.
@@ -127,37 +129,227 @@ function compassName(b)
     return names[math.floor(((b or 0) % 360) / 45 + 0.5) % 8 + 1]
 end
 
+---------------------------------------------------------------------------------------------------- units alive, spread
+-- (0.73.80, the 31-round co-op test of 0.73.79: testing/logs/2026-11-04/R30_FINDINGS.json perf 1 / 2) SV_UnitAlive walks
+-- the spawner's whole unit list with a memory check on each entry, and that list keeps every unit spawned in the level:
+-- 0.3 ms a call at the host's start, 6.6 ms late in its run (16-17 ms its worst). The rounds' once-a-second loops asked it
+-- for every flight up in one tick (45-65 ms in one tick half late in the run; ~140 ms with the Spaceport's 27 ships), so
+-- ALIVE keeps each unit's last answer and spreads the native asks over the ticks:
+--   ALIVE.ask(unit, now, maxAge)  the unit's planes (objects) alive, as SV_UnitAlive answers: the kept answer while it's
+--                                 younger than maxAge (AGE_S, 1 s, when nil), else asked now while the tick's budget
+--                                 lasts (past it an answer up to HARD_S old is used, its age counted in the round's
+--                                 line); a unit with no answer kept (never asked, spawned or recycled since, not asked
+--                                 for in WATCH_S) and one with a plane seen down by the sweep since its answer (`planes`)
+--                                 are asked at once, budget or not: a kill is never read late
+--   ALIVE.fresh(unit, now)        asked now whatever's kept (a check before a spawn, a recycle or a removal)
+--   ALIVE.spawned(unit, r)        a spawn's answer: r > 0 kept as its count, else forgotten (SV_Spawn, wrapped below, and
+--                                 every spawn in sv_spawn / sv_spaceport says it too: a test's stub spawns unwrapped)
+--   ALIVE.forget(unit)            forgotten (SV_Recycle, wrapped below)
+--   ALIVE.tick(now)               once a tick, first thing in roundsTick (and the Spaceport's ticks, the same `now`: no
+--                                 second budget): the tick's budget, spent first on the answers oldest for their maxAge
+--                                 (from REFRESH_X of it), so each watched unit is asked about once a maxAge
+--   ALIVE.report(round)           the round's line at its clear: asks, kept answers used, the budget, the oldest used
+-- The budget: as many asks a second as the units asked for in the last WATCH_S need (one a maxAge each), RATE_MIN to
+-- RATE_MAX, a tick's share each tick (RATE x the time since the last tick, 0.25 to 1 s: 2 to 8 asks at 4 ticks a second).
+-- The round clock (D.now, roundsTick's `now`) is the cache's: it stops while the game's paused, as the world does.
+ALIVE = {}
+do
+local AGE_S, HARD_S, WATCH_S, REFRESH_X = 1.0, 3.0, 3.0, 0.9
+local RATE_MIN, RATE_MAX = 8, 32
+-- unit -> { n, at (its answer's), every (the shortest maxAge asked for lately, everyAt), want (asked for), downs }
+local C = {}
+local T = { D = nil, at = nil, left = 0, budget = 0, rate = RATE_MIN, downs = nil, downsAt = nil }
+local S = {}                                     -- the round's counts (ALIVE.report)
+local function resetStats()
+    S = { asks = 0, forced = 0, kept = 0, past = 0, worst = 0, worstUnit = nil, rate = 0, budget = 0, watched = 0 }
+end
+resetStats()
+local function clockOf(now) return tonumber(now) or (D and tonumber(D.now)) or 0 end
+local function forgetAll()                       -- (a new run, D, or the level gone: nothing kept is the game's now)
+    C, T.D, T.at, T.left, T.downs, T.downsAt, T.downsOf = {}, D, nil, 0, nil, nil, nil
+    resetStats()
+end
+-- planes of `unit` the sweep has seen down (sv_main.lua sets p.down, in the tick's other half), counted once a tick from
+-- `planes` (again for a new list: a round's start prunes it into a new one)
+local function downsOf(unit, now)
+    local pl = type(planes) == "table" and planes or {}
+    if T.downsAt ~= now or T.downsOf ~= pl or not T.downs then
+        local d = {}
+        for _, p in ipairs(pl) do
+            if p.down and p.unit then d[p.unit] = (d[p.unit] or 0) + 1 end
+        end
+        T.downs, T.downsAt, T.downsOf = d, now, pl
+    end
+    return T.downs[unit] or 0
+end
+-- (fromTick: ALIVE.tick's refresh, which keeps the entry's `want`: only a part's ask is "asked for", so a unit nobody
+-- asks about any more is forgotten WATCH_S on, not refreshed for ever)
+local function native(unit, now, every, forced, fromTick)
+    local n = SV_UnitAlive(unit)
+    local e = C[unit]
+    C[unit] = { n = n, at = now, every = math.min((e and e.every) or every, every), everyAt = (e and e.everyAt) or now,
+                want = (fromTick and e and e.want) or now, downs = downsOf(unit, now) }
+    if (tonumber(n) or -5) < 0 and n ~= -7 then C[unit] = nil end  -- (an error, not "not up": asked again next time)
+    T.left = (T.left or 0) - 1
+    S.asks = S.asks + 1
+    if forced then S.forced = S.forced + 1 end
+    return n
+end
+local function used(unit, e, age)                -- a kept answer used: its age for the round's line
+    S.kept = S.kept + 1
+    if age > S.worst then S.worst, S.worstUnit = age, unit end
+    return e.n
+end
+function ALIVE.ask(unit, now, maxAge)
+    if T.D ~= D then forgetAll() end
+    now = clockOf(now)
+    maxAge = tonumber(maxAge) or AGE_S
+    local e = C[unit]
+    if e then
+        e.want = now
+        -- (its refresh: the shortest maxAge asked for lately; a longer one once nobody's asked for the shorter in its time:
+        -- a Spaceport ship's 1 s until its hull is found, HULL_AGE_S after)
+        if maxAge <= (e.every or math.huge) or now - (e.everyAt or now) > (e.every or AGE_S) + 0.5 then
+            e.every, e.everyAt = maxAge, now
+        end
+        local age = now - e.at
+        if age >= 0 then
+            local dn = downsOf(unit, now)
+            if dn < (e.downs or 0) then e.downs = dn end            -- (down planes pruned off the list since)
+            if not ((tonumber(e.n) or 0) > 0 and dn > (e.downs or 0)) then
+                if age < maxAge then return used(unit, e, age) end
+                if T.at == now and (T.left or 0) <= 0 and age < HARD_S then
+                    S.past = S.past + 1
+                    return used(unit, e, age)
+                end
+            else
+                return native(unit, now, maxAge, true)                 -- (a plane of it went down: asked at once)
+            end
+        end
+    end
+    return native(unit, now, maxAge, false)
+end
+function ALIVE.fresh(unit, now)
+    if T.D ~= D then forgetAll() end
+    return native(unit, clockOf(now), AGE_S, false)
+end
+function ALIVE.spawned(unit, r)
+    if type(unit) ~= "string" then return end
+    if T.D ~= D then forgetAll() end
+    r = tonumber(r)
+    if r and r > 0 then
+        local now, e = clockOf(nil), C[unit]
+        C[unit] = { n = r, at = now, every = (e and e.every) or AGE_S, everyAt = (e and e.everyAt) or now, want = now,
+                    downs = downsOf(unit, now) }
+    else
+        C[unit] = nil
+    end
+end
+function ALIVE.forget(unit) if type(unit) == "string" then C[unit] = nil end end
+function ALIVE.tick(now)
+    if T.D ~= D then forgetAll() end
+    now = clockOf(now)
+    if T.at == now then return end                               -- (once a tick: the Spaceport's ticks run inside it)
+    if T.at and now < T.at then forgetAll() end                     -- (the clock went back: a run of its own)
+    if D and T.saidFor ~= D then                                 -- (once a run)
+        T.saidFor = D
+        log(string.format("alive: (0.73.80) the units' SV_UnitAlive answers kept and asked again in turn: %d to %d asks a "
+            .. "second by the units watched (%d to %d a tick), each answer under %.0f s old within the budget (up to %.0f s past "
+            .. "it), a flight with a plane seen down asked at once", RATE_MIN, RATE_MAX, math.ceil(RATE_MIN / 4),
+            math.ceil(RATE_MAX / 4), AGE_S, HARD_S))
+    end
+    local dt = T.at and (now - T.at) or 0.25
+    T.at = now
+    local need, n = 0, 0
+    for u, e in pairs(C) do                                      -- (not asked for in WATCH_S: forgotten)
+        if now - (e.want or e.at) > WATCH_S then C[u] = nil
+        else n = n + 1; need = need + 1 / math.max(0.25, e.every or AGE_S) end
+    end
+    T.rate = math.max(RATE_MIN, math.min(RATE_MAX, math.ceil(need - 1e-9)))
+    T.budget = math.max(1, math.ceil(T.rate * math.max(0.25, math.min(1, dt)) - 1e-9))
+    T.left = T.budget
+    if T.rate > S.rate then S.rate = T.rate end
+    if T.budget > S.budget then S.budget = T.budget end
+    if n > S.watched then S.watched = n end
+    local due = {}
+    for u, e in pairs(C) do
+        local r = (now - e.at) / math.max(0.25, e.every or AGE_S)
+        if r >= REFRESH_X then due[#due + 1] = { u = u, r = r } end
+    end
+    if #due == 0 then return end
+    table.sort(due, function(a, b) if a.r ~= b.r then return a.r > b.r end return a.u < b.u end)
+    for i = 1, math.min(#due, T.left) do native(due[i].u, now, C[due[i].u].every or AGE_S, false, true) end
+end
+-- The round's line (sv_rounds.lua, at its clear), then its counts start again.
+function ALIVE.report(round)
+    log(string.format("alive: round %s: %d native SV_UnitAlive asks (%d at once: a plane of the flight seen down), %d kept "
+        .. "answers used (%d past the tick's budget); the budget up to %d asks a second (%d a tick) for %d units watched; the "
+        .. "oldest answer used %.2f s old%s", tostring(round), S.asks, S.forced, S.kept, S.past, S.rate, S.budget, S.watched,
+        S.worst, S.worstUnit and (" (" .. S.worstUnit .. ")") or ""))
+    resetStats()
+end
+-- (the teardown gate's drop, sv_core.lua levelDrop: the answers forgotten with the level)
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["units alive"] = function() forgetAll(); T.D = nil end end
+-- SV_Spawn and SV_Recycle say what they did (registered by dlls/main.dll before this script ran; sv_coop.lua's wraps and
+-- sv_main.lua's counters come after and call through these)
+do
+    local rawSpawn, rawRecycle = SV_Spawn, SV_Recycle
+    if type(rawSpawn) == "function" then
+        SV_Spawn = function(unit, ...)
+            local r = rawSpawn(unit, ...)
+            ALIVE.spawned(unit, r)
+            return r
+        end
+    end
+    if type(rawRecycle) == "function" then
+        SV_Recycle = function(unit, ...)
+            local r = rawRecycle(unit, ...)
+            ALIVE.forget(unit)
+            return r
+        end
+    end
+end
+end
+
 HEAVY_UNIT = {}
 for _, u in ipairs(CFG.airfield.bombers.heavy_units) do HEAVY_UNIT[u] = true end
 
 -- A bomber flight (CFG.airfield.bombers): its event-package orders send it at the airfield only.
-local function spawnBomber(unit)
+-- opts (optional; spawnBomberFrom: the Spaceport Assault's Tu-160s, CFG.specials.spaceport.tu160): { ac = its NPC row,
+-- bearing = the compass bearing from the airfield it comes from, spread = within that many degrees of it, distance_km =
+-- { lo, hi } }; no callout of its own then (the caller's)
+local function spawnBomber(unit, opts)
     local b = CFG.airfield.bombers
     local heavy = HEAVY_UNIT[unit]
     local list = heavy and b.heavy or b.aircraft
-    local ac = list[math.random(#list)]
+    local ac = (opts and type(opts.ac) == "string" and opts.ac ~= "") and opts.ac or list[math.random(#list)]
     -- strike aircraft spawn on their Survival row (search range + Survival's missile fire control); their behaviour
     -- stays the strike set the world data gave the flight (survival_events.STRIKE_BEHAVIOUR_ROW)
-    if not heavy then ac = searchAircraft(ac, spikeLevel(D.round)) end
+    if not heavy then ac = searchAircraft(ac, levelFor(D.round)) end   -- (the spike's, or the intensity director's)
     local set = SV_SetAircraft(unit, ac)
     -- a raid's bombers from one direction (CFG.airfield.bombers.one_bearing; D.raidBearing, picked in startRound)
     local raid = D.raidBearing and D.raidUnits and D.raidUnits[unit]
-    local x, y, dist, bearing = spawnPoint(b.distance_km, raid and D.raidBearing or nil, b.spread_deg)
+    local compass = (opts and tonumber(opts.bearing)) or (raid and D.raidBearing) or nil
+    local range = (opts and type(opts.distance_km) == "table" and #opts.distance_km == 2) and opts.distance_km or b.distance_km
+    local x, y, dist, bearing, onBearing = spawnPoint(range, compass, (opts and tonumber(opts.spread)) or b.spread_deg)
     -- SV_Spawn's yaw: towards the airfield (spawnPoint's own bearing is a maths angle, a raid's a compass one)
-    local yaw = raid and math.deg(math.atan(AIRFIELD.Y - y, AIRFIELD.X - x)) % 360 or (bearing + 180) % 360
+    local yaw = (raid or opts) and math.deg(math.atan(AIRFIELD.Y - y, AIRFIELD.X - x)) % 360 or (bearing + 180) % 360
     local band = heavy and b.altitude_m or b.strike_altitude_m
     local alt = band[1] + math.random() * (band[2] - band[1])
-    spawningUnit = unit
+    spawningUnit, spawningIdx = unit, 0                    -- (each plane's index in the flight: sv_core.lua p.k)
     local r = SV_Spawn(unit, x, y, alt * 100, yaw)
-    spawningUnit = nil
-    log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f, %.1f km up: %s", D.round,
-        unit, ac, tostring(set), dist, bearing, alt / 1000,
+    spawningUnit, spawningIdx = nil, nil
+    ALIVE.spawned(unit, r)
+    log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f%s, %.1f km up: %s", D.round,
+        unit, ac, tostring(set), dist, bearing, (compass and not onBearing) and string.format(" (not the %s: the zone's edge)",
+            compassName(compass)) or "", alt / 1000,
         r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     D.heavy = D.heavy or {}
     D.heavy[unit] = HEAVY_UNIT[unit] or nil
     if r > 0 then
         D.up[unit], D.flown[unit] = true, true
         if D.shipStrike and D.shipStrike[unit] then ALLY.strike(unit, D.shipStrike[unit]) end   -- (its own callout)
+        if heavy and not (D.shipStrike and D.shipStrike[unit]) then pcall(HEAVY.route, unit, x, y) end   -- (sv_flights.lua)
         if D.bomberCallout ~= D.round and (not D.special or D.special.kind == "amphibious")
             and not (D.shipStrike and D.shipStrike[unit]) then
             D.bomberCallout = D.round
@@ -165,10 +357,14 @@ local function spawnBomber(unit)
             if D.strikeAir and D.strikeAir[unit] then hudCallout(t.strike_air, t.strike_air_sub)   -- (a normal round's package)
             elseif raid and b.warn then hudCallout(string.format(t.raid, compassName(D.raidBearing)), string.format(t.raid_sub, D.raidBombers or 0))
             else hudCallout(t.bombers, t.bombers_sub) end
+            if TELL then pcall(TELL.say, "raid", TELL.ALL) end      -- (its radio call, every player: P3's tells)
         end
     end
     return r
 end
+
+-- (the Spaceport Assault's Tu-160s, sv_spaceport.lua: a bomber flight from a bearing as another row; its spawn's count)
+function spawnBomberFrom(unit, opts) return spawnBomber(unit, opts) end
 
 BOMBER_UNIT, BOMBER_INDEX = {}, {}           -- BOMBER_INDEX: the flight's RE_SV_BombRun_NN
 for i, u in ipairs(CFG.airfield.bombers.pool) do BOMBER_UNIT[u], BOMBER_INDEX[u] = true, i end
@@ -189,7 +385,7 @@ function ACE.flight(unit, tk, level)
     local k = opts[math.random(#opts)]
     local f, id = { wing = searchAircraft(ACE.row(tk, k, "w"), level), tier = tk, key = k }, tk .. "_" .. k
     for u, a in pairs(D.aceOf) do
-        if a == id and (SV_UnitAlive(u) or 0) > 0 then return f end   -- that ace is up: wingmen only
+        if a == id and (ALIVE.ask(u) or 0) > 0 then return f end      -- that ace is up: wingmen only
     end
     if SR.usable[ACE.row(tk, k, "l")] then
         f.lead, f.id, D.aceOf[unit] = searchAircraft(ACE.row(tk, k, "l"), level), id, id
@@ -200,18 +396,53 @@ end
 -- The airframe (a DT_SV_NpcMission row) a fighter flight of tier `tier` flies this round (CFG.aircraft, CFG.variety):
 -- the round-1 pool plus the airframes whose round has come (only those whose Survival rows were in before the level
 -- loaded: SR.usable), types flown less this run picked more often, and from the Mercenary tier on signature_share of
--- flights on the tier's own types. Returns the row and how it was picked ("pool" / "signature").
-function pickAircraft(tier)
+-- flights on the tier's own types. role (a fighter role, CFG.roles; nil: any): only the role's own airframes
+-- (CFG.roles.aircraft) of that list, a signature type only when it's one of them; none unlocked yet (the Skirmishers'
+-- join at rounds 4 / 7 / 9): its fallback role's, else the whole list (the critic's gap fill). Returns the row and how
+-- it was picked ("pool" / "signature" / the role's).
+function pickAircraft(tier, role)
     local v = CFG.variety or {}
     local list, how = {}, "pool"
+    local function roleSet(r)                          -- the airframes role r flies (a set), or nil for any
+        local l = r and CFG.roles and type(CFG.roles.aircraft) == "table" and CFG.roles.aircraft[r]
+        if type(l) ~= "table" then return nil end
+        local s = {}
+        for _, a in ipairs(l) do s[a] = true end
+        return s
+    end
+    local own = roleSet(role)
     if v.enabled and tier and tier.name and v.signature and not D.roundTier and math.random() < (v.signature_share or 0) then
-        for _, a in ipairs(v.signature[tier.name:lower()] or {}) do if SR.usable[a] then list[#list + 1] = a end end
+        for _, a in ipairs(v.signature[tier.name:lower()] or {}) do
+            if SR.usable[a] and (not own or own[a]) then list[#list + 1] = a end
+        end
         if #list > 0 then how = "signature" end
     end
     if #list == 0 then
         for _, a in ipairs(CFG.aircraft) do list[#list + 1] = a end
         if v.enabled then
             for _, e in ipairs(v.late or {}) do if D.round >= e[2] and SR.usable[e[1]] then list[#list + 1] = e[1] end end
+        end
+        if own then                                   -- a role's flight: its own airframes of what's unlocked
+            local function keep(s)
+                local t = {}
+                for _, a in ipairs(list) do if s and s[a] then t[#t + 1] = a end end
+                return t
+            end
+            local mine = keep(own)
+            if #mine > 0 then
+                list, how = mine, role
+            else
+                local fb = CFG.roles.fallback and CFG.roles.fallback[role]
+                local theirs = (type(fb) == "string" and fb ~= role) and keep(roleSet(fb)) or {}
+                how = #theirs > 0 and (role .. ", " .. fb .. "'s airframes") or (role .. ", any airframe")
+                if #theirs > 0 then list = theirs end
+                D.roleNoAc = D.roleNoAc or {}
+                if D.roleNoAc[role] ~= D.round then
+                    D.roleNoAc[role] = D.round
+                    log(string.format("roles: no %s airframe yet in round %d; its flights fly %s", role, D.round,
+                        #theirs > 0 and (fb .. "'s") or "the whole pool's"))
+                end
+            end
         end
     end
     RUN.seenAc = RUN.seenAc or {}
@@ -227,19 +458,36 @@ function pickAircraft(tier)
 end
 
 -- maxLevel (the dev key Ctrl+6): the top skill tier's squadron (its ace leading) on the top fire-control level,
--- whatever the round
-function spawnFlight(unit, maxLevel)
+-- whatever the round. pose (optional: { x, y, z (cm), yaw (deg), why }): spawned there instead of at a spawn point (the
+-- ALICORN's deck launches, P7: CFG.specials.alicorn.deck); the rest (tier, airframe, orders) as any flight's
+function spawnFlight(unit, maxLevel, pose)
     if BOMBER_UNIT[unit] then return spawnBomber(unit) end
     local ti = CFG.tiers.enabled and (maxLevel and #CFG.tiers.list or D.roundTier or TIER.pick(D.round)) or nil
     local tier = ti and CFG.tiers.list[ti] or {}
     D.flightTier = D.flightTier or {}
     D.flightTier[unit] = ti
     local topSpike = CFG.spikes.enabled and math.min(#CFG.spikes.levels, #SPIKE_SUFFIX) or 0
-    local fcsLevel = math.max(maxLevel and topSpike or spikeLevel(D.round), tier.fcs or 0)
-    local base, how = pickAircraft(tier)
+    -- (the round's spike level, or the intensity director's under it: CFG.intensity.level; the tier's fcs the floor)
+    local fcsLevel = math.max(maxLevel and topSpike or levelFor(D.round), tier.fcs or 0)
+    local role = ROLE.flight(unit)                    -- (its fighter role, CFG.roles: nil with roles off)
+    D.flightRole = D.flightRole or {}
+    D.flightRole[unit] = role
+    local base, how = pickAircraft(tier, role)
     local ac = searchAircraft(base, fcsLevel)
-    local ace = (D.roundTier or maxLevel) and tier.name and ACE.flight(unit, tier.name:lower(), fcsLevel)   -- (ace rounds only)
+    -- (ace rounds only; (0.73.78, plan G4) the round's squadron, D.roundSquad: a stand-in for the top one flies at this
+    -- tier's skill, CFG.aces.rotation; the dev key's maxLevel: the top tier's own)
+    local ace = (D.roundTier or maxLevel) and tier.name and ACE.flight(unit, (not maxLevel and D.roundSquad) or tier.name:lower(), fcsLevel)
     if ace then ac, how = ace.wing, "ace squadron" end
+    D.flightSquad = D.flightSquad or {}
+    D.flightSquad[unit] = ace and ace.tier or nil      -- ((0.73.78) its squadron's key: ROLE.ownSet, the break-off)
+    -- (a squadron's opener at first contact, P9's ace personalities: its tier's openers in turn, sv_ai.lua ACE.pickOpener;
+    -- "high" spawns it higher, "trap" holds a Wolf flight's trap: ROLE.spawned)
+    local op = nil
+    if ace and ACE.pickOpener then
+        local okO, o = pcall(ACE.pickOpener, unit, ace.tier, role)
+        if okO then op = o else log("aces: opener error " .. tostring(o)) end
+        ace.opener = op
+    end
     -- the round's jammer (CFG.jammer; D.jammerUnit, picked in startRound): its lead an EA-18G
     local jam = D.jammerUnit == unit and not ace and SR.usable[CFG.jammer.aircraft] and searchAircraft(CFG.jammer.aircraft, fcsLevel)
     local pv = PROBE_OF[unit]
@@ -253,18 +501,50 @@ function spawnFlight(unit, maxLevel)
     if jam then SV_SetAircraft(unit, jam, 0) end                           -- the first aircraft: the jammer
     if type(SV_SetLevel) == "function" then SV_SetLevel(unit, (tier.ai_level or 2) * 100) end   -- every spawn: descs are reused
     local x, y, dist, bearing = spawnPoint()
+    local yaw = (bearing + 180) % 360                                          -- facing the airfield
+    local pin = nil                         -- (a pincer wave's flight: its side's bearing, P2's director, sv_director.lua)
+    if DIR and DIR.spawnAt and not pose then
+        local okPn, pn = pcall(DIR.spawnAt, unit)
+        if okPn then pin = pn else log("director: pincer error " .. tostring(pn)) end
+    end
+    if pin then x, y, dist, bearing, yaw = pin.x, pin.y, pin.d, pin.b, pin.yaw end
     local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
-    spawningUnit = unit
-    local r = SV_Spawn(unit, x, y, alt * 100, (bearing + 180) % 360)          -- facing the airfield
-    spawningUnit = nil
-    log(string.format("round %d: %s%s as %s (%s, %s set, %s)%s, %.0f km out at bearing %.0f, %.1f km up: %s", D.round, unit,
-        D.flown[unit] and " (flown before, recycled)" or "", ac, how, tostring(set), tier.name or "no tier",
-        jam and (", led by the jammer " .. jam) or "", dist, bearing, alt / 1000,
-        r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+    if pose then                                      -- (where its caller says: the ALICORN's deck)
+        x, y, yaw, alt = pose.x, pose.y, (tonumber(pose.yaw) or yaw) % 360, pose.z / 100
+        dist = math.sqrt((x - AIRFIELD.X) ^ 2 + (y - AIRFIELD.Y) ^ 2) / 100000
+        bearing = math.deg(math.atan(y - AIRFIELD.Y, x - AIRFIELD.X)) % 360
+    elseif role == "lancer" then                      -- (the Lancers come from above: CFG.roles.lancer, within their band)
+        alt = math.min(alt + (tonumber(CFG.roles.lancer and CFG.roles.lancer.alt_add_m) or 0), ROLE.LANCER_TOP_M - 500)
+        -- (above your usual height against a player who stays high: P6's learning layer, sv_stats.lua PROF.lancerAlt)
+        local okHi, hi = true, nil
+        if PROF and PROF.lancerAlt then okHi, hi = pcall(PROF.lancerAlt) end
+        if okHi and type(hi) == "number" and hi > alt then alt = math.min(hi, ROLE.LANCER_TOP_M - 500) end
+    elseif op == "high" and ACE.highAlt then          -- (a squadron that comes in high, P9: off a Lancer flight, within its band)
+        local okA, a = pcall(ACE.highAlt, alt)
+        if okA and type(a) == "number" then alt = a end
+    end
+    -- a lead on its own row (the ace's, the jammer's): its airframe, for the spawn index's check (sv_core.lua leadCheck)
+    D.leadRow = D.leadRow or {}
+    D.leadRow[unit] = (ace and ace.lead and { row = ace.lead, code = ace.key }) or (jam and { row = jam, code = "e18g" }) or nil
+    D.flightRow = D.flightRow or {}
+    D.flightRow[unit] = ac                         -- (its wings' row: the director's salvo checks its missile slot, SR.mslSlot)
+    spawningUnit, spawningIdx = unit, 0                                       -- (each plane's index in the flight: p.k)
+    local r = SV_Spawn(unit, x, y, alt * 100, yaw)
+    spawningUnit, spawningIdx = nil, nil
+    ALIVE.spawned(unit, r)                             -- ((0.73.80) its answer kept: the rounds' loops read it)
+    log(string.format("round %d: %s%s%s as %s (%s, %s set, %s)%s, %.0f km out at bearing %.0f%s, %.1f km up: %s", D.round, unit,
+        role and (" [" .. role .. "]") or "", D.flown[unit] and " (flown before, recycled)" or "", ac, how, tostring(set), tier.name or "no tier",
+        jam and (", led by the jammer " .. jam) or "", dist, bearing, pin and (" (compass) from " .. (pin.centre or "the pincer's centre") .. ", a pincer side")
+            or (pose and (", at " .. tostring(pose.why or "its caller's pose"))) or "",
+        alt / 1000, r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+    -- (a role flight's tell and the Wolf trap's hold: below; the director's top cover and regroup)
+    if r > 0 and role then hookErr("roles: ROLE.spawned", pcall(ROLE.spawned, unit, role, r, ace)) end
+    if r > 0 and DIR and DIR.spawned then hookErr("director: DIR.spawned", pcall(DIR.spawned, unit, role, r, ace)) end
     if jam and r > 0 then
         D.jammer = { unit = unit, at = D.now }
         local t = CFG.hud.text
         hudCallout(t.jammer, t.jammer_sub)
+        if TELL then pcall(TELL.say, "jammer", TELL.ALL) end        -- (its radio call, every player: P3's tells)
     elseif D.jammerUnit == unit then
         D.jammerUnit = nil                                                -- (it didn't come: no jammer this round)
     end
@@ -275,6 +555,7 @@ function spawnFlight(unit, maxLevel)
         end
         D.aceSquad = D.aceSquad or {}
         D.aceSquad[unit] = ace and true or nil                -- (the leaderboard's ace squadron kills)
+        if ACE.squadUp then hookErr("aces: ACE.squadUp", pcall(ACE.squadUp, unit, ace, role, r)) end   -- (its opener, P9)
         D.orders = D.orders or {}
         D.orders[unit] = { at = D.now + CFG.orders_check_s, tries = 0 }       -- ordersTick checks it got them
         if ace then
@@ -282,6 +563,18 @@ function spawnFlight(unit, maxLevel)
             local name = ace.lead and tostring(c[ace.key] or ace.key)
             log(string.format("aces: %s is %s squadron (%s)%s", unit, tostring(c.squadron), ace.key,
                 name and (", led by " .. name .. " (" .. ace.lead .. ")") or ", no ace (already up)"))
+            -- ((0.73.78, plan G4) its health, its squadron's tier's: CFG.aces.health, set on each plane as the sweep first
+            -- sees it, sv_ai.lua ACE.setHealth)
+            local wh, htk, _, hw, hl = ACE.healthFor(ace.wing, D.round)
+            local lh = ace.lead and ACE.healthFor(ace.lead, D.round)
+            if wh then
+                local wings = math.max(0, r - (lh and 1 or 0))
+                log(string.format("aces: %s %s health %d (tier %s: wing %s, lead %s)%s%s", tostring(c.squadron), name or "wingmen",
+                    math.floor((lh or wh) + 0.5), htk, tostring(hw), tostring(hl),
+                    lh and string.format("; its %d wingm%sn %d", wings, wings == 1 and "a" or "e", math.floor(wh + 0.5))
+                        or string.format(", %d of them", r),
+                    (tier.name and ace.tier ~= tier.name:lower()) and string.format("; flown at the %s tier's skill", tier.name) or ""))
+            end
             D.aceSaid = D.aceSaid or {}
             if name and CFG.aces.callout and not D.aceSaid[ace.id] then
                 D.aceSaid[ace.id] = true
@@ -296,6 +589,432 @@ end
 function shuffled(t)
     for i = #t, 2, -1 do local j = math.random(i); t[i], t[j] = t[j], t[i] end
     return t
+end
+
+---------------------------------------------------------------------------------------------------- fighter roles
+-- The fighter roles (CFG.roles, behaviour roadmap P1; tools/re/BEHAVIOUR_DIRECTOR.md unit 5; build data ROLE in
+-- sv_config.lua): what this level has, the round's draw by role, each role flight's tell and the Wolf trap's hold.
+-- The host's (or solo): a joiner's copies fly the host's picks, and roundsTick (which calls all of this) is the host's.
+do
+-- ROLE.live: each role's state in this level, from the rows that were in before it loaded (rolesSetup, sv_rows.lua; the
+-- behaviour build and the spawner only know those): true (its set), "duelist" (its set wasn't made: its flights fly the
+-- fighters' set, drawn and armed as duelists) or false (no row: its flights sit out). nil: roles off (or no level yet):
+-- every flight drawn and armed as before roles.
+function ROLE.levelLoad()
+    ROLE.live = nil
+    local c = CFG.roles
+    if not (c and c.enabled) then                    -- (the Lancer units' band is build data: CFG.roles' comment)
+        log(string.format("roles: off; every fighter flight flies the fighters' set, drawn as before (the Lancer units "
+            .. "keep their %.0f km band)", ROLE.LANCER_TOP_M / 1000))
+        return
+    end
+    local live, parts = { duelist = true }, {}
+    for _, r in ipairs(ROLE.LIST) do
+        if r ~= "duelist" then
+            local x = RS and RS.ready and RS.ready[r]
+            local w, wset = x, ROLE.SETS[r]             -- (a Wolf flight's trap row too)
+            if r == "wolf" then w, wset = RS.ready.wolf_wing, ROLE.SETS.wolf_wing end
+            if not (x and w) then live[r] = false
+            elseif x.set == ROLE.SETS[r] and w.set == wset then live[r] = true      -- (its rows fly its own sets)
+            else live[r] = "duelist" end
+            parts[#parts + 1] = string.format("%s %s", r, live[r] == true and ROLE.SETS[r]
+                or (live[r] and "the fighters' set (its own wasn't made)") or "sits out (no behaviour row)")
+        end
+    end
+    ROLE.live = live
+    log("roles: at level load " .. table.concat(parts, ", "))
+end
+
+-- Pool flight `unit`'s role this level (nil: roles off, not a pool fighter, a probe flight or its group sits out).
+function ROLE.flight(unit)
+    local live = ROLE.live
+    local r = live and ROLE.of[unit]
+    if not r or PROBE_OF[unit] then return nil end
+    if live[r] == true then return r end
+    return live[r] == "duelist" and "duelist" or nil
+end
+
+-- Flight `unit` sits out this level (its role's behaviour row wasn't in when it loaded: what its desc would build is
+-- unknown, so it never flies, as the probe flights): the role-blind picks (spares, a special's refill, Ctrl+6) skip it.
+function ROLE.sitsOut(unit)
+    local live = ROLE.live
+    local r = live and ROLE.of[unit]
+    return (r and live[r] == false) and true or false
+end
+
+-- Each role's flights this level ({ role = { units } }; a role flying the fighters' set counts as duelists).
+function ROLE.groups()
+    local g = {}
+    for _, r in ipairs(ROLE.LIST) do g[r] = {} end
+    for _, u in ipairs(CFG.pool) do
+        local r = ROLE.flight(u)
+        if r then g[r][#g[r] + 1] = u end
+    end
+    return g
+end
+
+-- Of `units` (a role's group: a few flights), the free ones (not up, of a size this round allows: CFG.squadrons) whose
+-- aircraft add up to `want` exactly, flights flown before preferred (as pickFlights: the spawner recycles them); none
+-- adds up: the most under it. pickFlights' own random sizes can strand a remainder in a group this small (round 35's
+-- duelist 18 as 2 + 2 + 6 + 6, its 4-ships too big for the 2 left: 1 round in 5 came up short). Groups of more than
+-- 12 flights: nil (pickFlights then).
+local function exactFlights(units, want)
+    local allowed, free = {}, {}
+    for _, q in ipairs(CFG.squadrons) do if D.round >= q.from_round then allowed[q.size] = true end end
+    for _, u in ipairs(units) do if allowed[flightSize(u)] and not D.up[u] then free[#free + 1] = u end end
+    if #free > 12 then return nil end
+    local sols, best, bestSum, bestFlown = {}, {}, 0, -1
+    for mask = 1, (1 << #free) - 1 do
+        local sum, flown, sub = 0, 0, {}
+        for i = 1, #free do
+            if mask & (1 << (i - 1)) ~= 0 then
+                sum = sum + flightSize(free[i]); sub[#sub + 1] = free[i]
+                if D.flown[free[i]] then flown = flown + 1 end
+            end
+        end
+        if sum == want then
+            if flown > bestFlown then sols, bestFlown = {}, flown end
+            if flown == bestFlown then sols[#sols + 1] = sub end
+        elseif sum < want and sum > bestSum then best, bestSum = sub, sum end
+    end
+    if #sols > 0 then return sols[math.random(#sols)] end
+    return best
+end
+
+-- A round's fighters by its role mix (ROLE.mixFor: CFG.roles mix or, in an ace round, ace: true or the round's tier's
+-- key, the squadron's roles (P9) or ace_mix): each role's share in whole
+-- 2-ships (ROLE.quotas) from its own flights (exactFlights, then through `pick`: startRound's, pickFlights with the
+-- round's taken flights skipped); what a role's flights can't field comes from the rest (a duelists' squadron's from
+-- the Wolf pairs' first). Returns the flights
+-- (shuffled, so each wave asks different questions) and their aircraft, as pick does.
+function ROLE.pickRound(nWant, pick, ace)
+    local w, band = ROLE.mixFor(D.round, ace)
+    -- (not an ace round's: the learning layer's role weights, P6: your habits, sv_stats.lua PROF.roleW; a role the band
+    -- has no share for stays out)
+    local hw, habits = nil, false
+    if not ace and PROF and PROF.roleW then
+        local okW, x = pcall(PROF.roleW)
+        if okW and type(x) == "table" then hw = x end
+    end
+    for _, r in ipairs(ROLE.LIST) do
+        local x = hw and tonumber(hw[r]) or 1
+        if x ~= 1 and (w[r] or 0) > 0 then w[r], habits = w[r] * x, true end
+    end
+    local groups = ROLE.groups()
+    for _, r in ipairs(ROLE.LIST) do if #groups[r] == 0 then w[r] = 0 end end
+    local q = ROLE.quotas(nWant, w)
+    local out, got, parts, short = {}, 0, {}, {}
+    local by = {}
+    for _, r in ipairs(ROLE.LIST) do
+        local n = 0
+        if q[r] > 0 then
+            local f
+            local sub = exactFlights(groups[r], q[r])      -- (its flights adding up to the share; pick takes them all)
+            local subN = 0
+            for _, u in ipairs(sub or {}) do subN = subN + flightSize(u) end
+            f, n = pick(sub or groups[r], sub and subN or q[r])
+            for _, u in ipairs(f) do out[#out + 1] = u end
+            if n < q[r] then short[#short + 1] = string.format("%s %d of %d", r, n, q[r]) end
+        end
+        got, by[r] = got + n, n
+    end
+    local fill = ""
+    if nWant - got >= 2 then                          -- (a group short: the rest of the pool, any role)
+        -- (an ace round whose squadron flies the duelists' set alone, Inferno, Wraith, Harvest or ace_mix's: the Wolf
+        -- pairs' flights first, whose pursuits keep the Super branch it's on the duelists for (LA_SV_TailChase,
+        -- LA_SV_WolfStrike); the Lancers' and Skirmishers' have none. F1's review)
+        local first = (ace and (w.duelist or 0) > 0) and groups.wolf or nil
+        for _, r in ipairs(ROLE.LIST) do if first and r ~= "duelist" and (w[r] or 0) > 0 then first = nil end end
+        local f, n = {}, 0
+        if first then f, n = pick(first, nWant - got) end
+        if nWant - got - n >= 2 then
+            local all = {}
+            for _, r in ipairs(ROLE.LIST) do for _, u in ipairs(groups[r]) do all[#all + 1] = u end end
+            local f2, n2 = pick(all, nWant - got - n)
+            for _, u in ipairs(f2) do f[#f + 1] = u end
+            n = n + n2
+        end
+        local from = {}
+        for _, u in ipairs(f) do
+            out[#out + 1] = u
+            local r = ROLE.flight(u)
+            by[r] = (by[r] or 0) + flightSize(u)
+            from[r] = (from[r] or 0) + flightSize(u)
+        end
+        got = got + n
+        local ft = {}
+        for _, r in ipairs(ROLE.LIST) do if from[r] then ft[#ft + 1] = r .. " " .. from[r] end end
+        if n > 0 then
+            fill = "; filled from " .. table.concat(ft, ", ")
+                .. ((first and (from.wolf or 0) > 0) and " (the Wolf pairs first: they keep the Super pursuit)" or "")
+        end
+    end
+    for _, r in ipairs(ROLE.LIST) do parts[#parts + 1] = string.format("%s %d", r, by[r] or 0) end
+    local wt = {}
+    for _, r in ipairs(ROLE.LIST) do wt[#wt + 1] = string.format("%s %.2f", r, w[r] or 0) end
+    local sq = type(band) == "string" and band:match("^ace:(.+)$")     -- (a squadron's own roles: P9)
+    log(string.format("roles: round %d (%s%s: %s): %d of %d aircraft: %s%s%s", D.round,
+        (band == "ace" and "an ace round's mix")
+            or (sq and string.format("the %s squadron's roles", tostring(type(CFG.aces[sq]) == "table" and CFG.aces[sq].squadron or sq)))
+            or (band and ("the mix from round " .. band)) or "no mix band: duelists",
+        habits and ", weighed by your habits" or "", table.concat(wt, ", "), got, nWant, table.concat(parts, ", "),
+        #short > 0 and ("; short: " .. table.concat(short, ", ")) or "", fill))
+    return shuffled(out), got
+end
+
+-- The round's jammer may lead flight `unit` (its EA-18G on object 0: CFG.roles.jammer's roles, so it never takes a Wolf
+-- bait's drag set or a Lancer's; the critic's gap fill). Any flight with roles off.
+function ROLE.jammerOk(unit)
+    local r = ROLE.flight(unit)
+    if not (ROLE.live and r) then return true end
+    for _, x in ipairs(CFG.roles.jammer or {}) do if x == r then return true end end
+    return false
+end
+
+-- Flight `unit` flies a role set of its own (a Lancer, Wolf or Skirmisher flight). A skill tier's no_provoke and moves
+-- (CFG.aces.flight; from round 28 every ordinary flight is Reaper tier, TIER.pick) leave it alone (ACE.hunt,
+-- ACE.movesTick; U5's review), and so do the squad director's cover turn and P4's push (sv_director.lua coverer):
+-- no_provoke keeps a plane out of its Provoke slot (no LA_SV_LancerBreak, no LA_SV_WolfDrag, no Skirmisher defence), and
+-- a reversal (RE_SV_AceTurn_NN, LastTGT on every plane of the flight) turns a Lancer with you and a held Wolf trap onto
+-- you. An ace squadron's role flight is its role's own too, unless its tier has those levers (moves, or hunt with
+-- no_provoke, as ACE.movesTick / ACE.hunt read them: Harvest's): then the tier's win (F1's review: the director turned
+-- Bounty's Lancers, which "never turn with you", P9). False for duelists and roles off. tier: the plane's (p.tier),
+-- else its flight's (D.flightTier).
+function ROLE.ownSet(unit, tier)
+    local r = unit and ROLE.flight(unit)
+    if r == nil or r == "duelist" then return false end
+    if not (D and D.aceSquad and D.aceSquad[unit]) then return true end
+    if type(tier) ~= "table" then
+        local ti = D.flightTier and D.flightTier[unit]
+        tier = ti and CFG.tiers.list[ti]
+    end
+    -- ((0.73.78, plan G4) a squadron standing in at a higher tier's skill, CFG.aces.rotation: its own squadron's levers,
+    -- so Bounty's Lancers and Valkyrie's Wolf pairs keep their own set in a Reaper round too)
+    local sq = D.flightSquad and D.flightSquad[unit]
+    local fl = (sq and CFG.aces.flight and CFG.aces.flight[sq])
+        or (type(tier) == "table" and tier.name and CFG.aces.flight and CFG.aces.flight[tier.name:lower()])
+    return not (type(fl) == "table" and (fl.moves or (fl.hunt and fl.no_provoke)))
+end
+
+-- A role flight is up (spawnFlight, inside roundsTick: n planes): a Wolf flight's trap is held once its orders are in
+-- (WOLF). An ace squadron in a role flight doesn't hold, but one whose opener is the trap (P9's ace personalities:
+-- Valkyrie's pack, ace.opener from sv_ai.lua ACE.pickOpener) holds it as any Wolf flight does, and ACE.squadTick springs
+-- it after first contact: its hold_max_s runs from that contact (WOLF.contact), held till then for up to
+-- CFG.aces.personality.openers.trap hold_max_s (U10's review: flights meet you minutes after they're up, and the trap
+-- freed at 60 s left Valkyrie's opener nothing to spring)
+function ROLE.spawned(unit, role, n, ace)
+    if ace then
+        if role == "wolf" and ace.opener == "trap" then
+            local pc = CFG.aces.personality
+            local t = type(pc) == "table" and type(pc.openers) == "table" and pc.openers.trap
+            WOLF.spawned(unit, n, D.now, type(t) == "table" and t.hold_max_s or nil)
+        end
+        return
+    end
+    if role == "wolf" then WOLF.spawned(unit, n, D.now) end
+end
+end
+
+-- The Wolf trap (CFG.roles.wolf, P1; the critic's gap fill: "per-object engagement hold, using the stock by-object
+-- form"). A Wolf flight is bait and trap pairs: its even planes (the bait, NLID_SV_WolfLead) attack and drag you when
+-- tailed; its odd planes (the trap, ROLE.wolfHeld, NLID_SV_WolfWing) are held at engagement None (RE_SV_WolfHold_<NN><L>,
+-- one object each: tools/survival_events.py build_wolf) hold_after_s after their flight's orders are seen in (SV_Up_NN:
+-- the appearance's own orders come 2 s after it spawns and would undo an earlier hold, hard rule 26), and fly with their
+-- formation [I]. Freed (RE_SV_WolfFree_<NN><L>: their appearance's orders on that object) when: hold_max_s pass, one is
+-- hit by you (free_on_hit, that one), its own bait (the plane before it, k - 1: free_on_bait_down) goes down (that one;
+-- the lead, object 0, frees them all), or the squad director springs it (P2: WOLF.free(unit, why, true) adds
+-- RE_SV_WolfTurn_<NN><L>, LastTGT onto the player). A held plane shot down is just dropped. Your DECOY stands the whole
+-- flight down (RE_SV_Decoy_NN) until its end: nothing is freed or turned inside it (a WolfFree would send that plane back
+-- in early, and to the joiners' copies; the reasons still stand after it, so those releases come then), and its end
+-- (RE_SV_DecoyEnd_NN, a unit-wide order) frees them all: the ones still held are held again rehold_s later (U5's
+-- review). Hunts (ALLY.tick's, co-op's) and escort duty leave a holding flight alone (WOLF.holding). The host's (or solo):
+-- WOLF.tick runs in roundsTick; the holds and frees are forwarded to co-op joiners (their copies hold too), the turn isn't
+-- (LastTGT steers to the host). Untested in game: a per-object engagement order on a pool plane, what a later unit-wide
+-- order does to a per-object None (BEHAVIOUR_NATIVE_LOGIC 8.5: every engagement order rewrites the permission bytes).
+WOLF = {}
+do
+local function cfg() return (CFG.roles and CFG.roles.wolf) or {} end
+local function evName(kind, unit, k) return string.format("RE_SV_Wolf%s_%02d%s", kind, poolIndex(unit), string.char(65 + k)) end
+local function fire(name)
+    local r = type(SV_Event) == "function" and SV_Event(name) or -5
+    return r == 1, r
+end
+local function keyList(t)
+    local ks = {}
+    for k in pairs(t) do ks[#ks + 1] = k end
+    table.sort(ks)
+    return ks
+end
+-- the time your DECOY on flight `unit` ends, while it stands the flight down (sv_tactical.lua TAC.decoyed), else nil
+local function decoyEnd(unit, now)
+    if not (TAC and TAC.decoyed and TAC.decoyed(unit, now)) then return nil end
+    return D.decoyed and D.decoyed[unit] or now
+end
+
+-- flight `unit` (n planes) is up: its trap's objects, to hold once its orders are in. untilContact (s > 0; P9's ace trap
+-- opener, ROLE.spawned): hold_max_s runs from the flight's first contact (WOLF.contact), not from the hold, and the trap
+-- is let go untilContact s after the hold when nobody's met it by then (its other releases stand: a hit, its bait down)
+function WOLF.spawned(unit, n, now, untilContact)
+    D.wolf = D.wolf or {}
+    D.wolf[unit] = nil
+    local c = cfg()
+    if not (c.hold and poolIndex(unit) and now) then return end
+    local keys = {}
+    for k = 0, (n or 0) - 1 do if ROLE.wolfHeld(k) then keys[#keys + 1] = k end end
+    if #keys == 0 then return end
+    untilContact = tonumber(untilContact)
+    D.wolf[unit] = { at = now, keys = keys, held = {}, state = "pending",
+                     untilContact = (untilContact and untilContact > 0) and untilContact or nil }
+end
+
+-- Flight `unit` met a player (sv_ai.lua ACE.squadTick, a trap opener's first contact): its hold_max_s runs from now.
+function WOLF.contact(unit, now)
+    local w = D and D.wolf and D.wolf[unit]
+    if not (w and w.untilContact and now) then return end
+    w.untilContact, w.maxFrom = nil, now
+end
+
+-- Whether any of flight `unit`'s trap is held (or about to be): hunts and escort duty leave it alone.
+function WOLF.holding(unit)
+    local w = D and D.wolf and D.wolf[unit]
+    return w ~= nil and (w.state == "pending" or next(w.held) ~= nil)
+end
+
+local function hold(unit, w, keys, why)
+    local fired, failed = {}, {}
+    for _, k in ipairs(keys) do
+        local ev = evName("Hold", unit, k)
+        local ok, r = fire(ev)
+        if ok then w.held[k] = true; fired[#fired + 1] = string.char(65 + k)
+        else failed[#failed + 1] = ev .. " " .. (SV_ERR[r] or tostring(r)) end
+    end
+    log(string.format("roles: %s (wolf) trap %s: %s%s", unit, why,
+        #fired > 0 and ("held " .. table.concat(fired, ", ")) or "none held",
+        #failed > 0 and (" (not fired: " .. table.concat(failed, ", ") .. ")") or ""))
+end
+
+-- Frees flight `unit`'s held trap (only: that object alone) and, with turn, sends each onto the player (LastTGT): the
+-- squad director's spring (P2) calls it with turn. Returns how many were freed: 0 while your DECOY stands the flight
+-- down (nothing fired, the trap stays held: call again after; its end frees the flight and the trap is held again).
+-- now: the round clock (D.now when nil).
+function WOLF.free(unit, why, turn, only, now)
+    local w = D and D.wolf and D.wolf[unit]
+    if not w then return 0 end
+    now = now or D.now
+    local dec = decoyEnd(unit, now)
+    if dec then
+        if w.decoyNote ~= dec then                       -- (once a decoy)
+            w.decoyNote = dec
+            log(string.format("roles: %s (wolf) trap kept (%s): your decoy stands its flight down for %.0f s more%s", unit,
+                tostring(why), math.max(0, dec - (now or dec)), turn and "; not sprung" or ""))
+        end
+        return 0
+    end
+    local done = {}
+    for _, k in ipairs(keyList(w.held)) do
+        if only == nil or only == k then
+            fire(evName("Free", unit, k))
+            if turn then fire(evName("Turn", unit, k)) end
+            w.held[k] = nil
+            done[#done + 1] = string.char(65 + k)
+        end
+    end
+    if #done > 0 then
+        log(string.format("roles: %s (wolf) trap freed (%s): %s%s", unit, why, table.concat(done, ", "),
+            turn and ", turned onto the player" or ""))
+    end
+    if not next(w.held) and w.state == "held" then w.state = "free" end
+    return #done
+end
+
+-- Every 250 ms from roundsTick: the holds come in, the releases (once a second).
+function WOLF.tick(now)
+    local W = D and D.wolf
+    if not (W and next(W) and now) then return end
+    local c = cfg()
+    local flags
+    for unit, w in pairs(W) do
+        -- ((0.73.79, the lag audit's item 7) the runtime asked whether it's up every tick only while its hold is pending
+        -- (0.75 ms an ask on a tester's PC, every Wolf flight every tick); once a second while held, as its own checks
+        -- run; a free trap (nothing held, for good: a re-hold needs one held) dropped, as nothing reads it)
+        local ask = w.state == "pending" or now >= (w.aliveAt or 0)
+        if ask then w.aliveAt = now + 1 end
+        if w.state == "free" then
+            W[unit] = nil
+        elseif ask and ALIVE.ask(unit, now) <= 0 then
+            W[unit] = nil                                   -- (down, or its spawn didn't come: it's recycled next time)
+        elseif w.state == "pending" then
+            if not w.upAt then
+                flags = flags or svFlags() or {}
+                if (flags[string.format("SV_Up_%02d", poolIndex(unit))] or 0) >= 1 then w.upAt = now end
+            end
+            -- (its 30 s for its orders count while you fly: down at the airfield they wait for your takeoff, ordersTick;
+            -- U5's review: a rearm of over 30 s lost a flight its trap. The hold itself waits for your takeoff only when
+            -- no other co-op player flies, as the spawns do (othersFlying): F5's review, a flight up during a host's
+            -- landing was held at its takeoff, mid-fight with a joiner, and its co-op hunt waited out the landing)
+            local down = playerOnAirfield()
+            local flying = down and othersFlying() or 0
+            if not w.upAt then
+                if not down then w.waited = (w.waited or 0) + (now - (w.waitAt or w.at)) end
+                w.waitAt = now
+            end
+            if w.upAt and now >= w.upAt + (tonumber(c.hold_after_s) or 3) and not (down and flying == 0) then
+                w.state, w.heldAt = "held", now
+                hold(unit, w, w.keys, string.format("%.0f s after its orders%s", now - w.upAt, down and
+                    string.format(", you down at the airfield (%d other player%s flying)", flying, flying == 1 and "" or "s") or ""))
+                if not next(w.held) then W[unit] = nil end   -- (no event fired: an older container)
+            elseif not w.upAt and (w.waited or 0) > 30 then
+                log(string.format("roles: %s (wolf) never got its orders (%.0f s since it came up, your time down at the "
+                    .. "airfield not counted); its trap isn't held", unit, w.waited))
+                W[unit] = nil
+            end
+        elseif w.state == "held" and next(w.held) and now >= (w.checkAt or 0) then
+            w.checkAt = now + 1
+            -- this spawn's planes by index (a recycled flight's earlier planes stay on the list, down, until the round's
+            -- end: born before this spawn); a held one shot down is dropped (nothing to free); the held ones hit
+            local mine, hits, gone = {}, {}, {}
+            for _, p in ipairs(planes) do
+                if p.unit == unit and p.k and (p.born == nil or p.born >= w.at) then
+                    mine[p.k] = p
+                    if w.held[p.k] then
+                        if p.down then w.held[p.k] = nil; gone[#gone + 1] = string.char(65 + p.k)
+                        -- (you, or in co-op a joiner: the host's KILL.side calls a stand-in's damage "wingmate")
+                        elseif p.dmg and (p.dmg.you or 0) + (p.dmg.wingmate or 0) > 0 then hits[#hits + 1] = p.k end
+                    end
+                end
+            end
+            if #gone > 0 then log(string.format("roles: %s (wolf) trap: %s down while held", unit, table.concat(gone, ", "))) end
+            if not next(w.held) then
+                w.state = "free"
+            elseif not decoyEnd(unit, now) then               -- (your decoy: nothing released inside it; after it, then)
+                -- (hold_max_s from the hold, or from an ace trap's first contact; no contact yet: its own cap)
+                local from = math.max(w.heldAt, w.maxFrom or 0)
+                if now - from >= (w.untilContact or tonumber(c.hold_max_s) or 60) then
+                    WOLF.free(unit, string.format("held %.0f s%s", now - w.heldAt, w.untilContact and ", nobody met it" or
+                        (w.maxFrom and string.format(", %.0f s since it met you", now - w.maxFrom) or "")), false, nil, now)
+                elseif c.free_on_bait_down and mine[0] and mine[0].down then
+                    WOLF.free(unit, "its lead, bait A, is down", false, nil, now)     -- (the flight's lead: all of them)
+                else
+                    if c.free_on_bait_down then                -- (each held plane's own bait: the plane before it)
+                        for _, k in ipairs(keyList(w.held)) do
+                            local b = mine[k - 1]
+                            if b and b.down then WOLF.free(unit, "its bait " .. string.char(64 + k) .. " is down", false, k, now) end
+                        end
+                    end
+                    if c.free_on_hit then
+                        for _, k in ipairs(hits) do if w.held[k] then WOLF.free(unit, "you hit it", false, k, now) end end
+                    end
+                end
+                -- a unit-wide order after the hold (your DECOY's end fires its flight's orders): held again
+                local dec = D.decoyed and D.decoyed[unit]
+                if dec and dec ~= w.decoySeen and dec > w.heldAt and now >= dec + (tonumber(c.rehold_s) or 1) and next(w.held) then
+                    w.decoySeen = dec
+                    hold(unit, w, keyList(w.held), "again after your decoy")
+                end
+            end
+        end
+    end
+end
 end
 
 -- A round's flights: those that have flown before come first (the spawner recycles them, which keeps the game's unit
@@ -339,37 +1058,133 @@ function specialOn(kind)
     return SPC.kinds[kind] ~= nil and not (type(c) == "table" and c.enabled == false)
 end
 
+-- (0.73.80, the 31-round test of 0.73.79: R30_FINDINGS specials 1; rounds 7-13 rolled no special, 4 of the 8 kinds never
+-- came, two failed shuttles went unseen) The random specials' pacing, CFG.specials:
+--   * the chance grows by chance_step for each round rolled with no special since the last one (RUN.specialGap; an ace
+--     round, which takes a round with no special, and a round nothing could come in count as neither), and after max_gap
+--     of them (/ the menu's SPECIAL ROUNDS x) the next round rolled is one for sure;
+--   * the kind comes from a shuffle bag over the rotation's kinds switched on (RUN.specialBag, `bag`): each once before
+--     any comes again; when none of the bag's can come now (cooling down, its from_round), any that can;
+--   * a pick that can't start (specialSwap: sv_rounds.lua startRound's checks) swaps to another that can (`swap`).
+-- Every roll is logged (`specials: round N's roll: ...`); the early window, never two in a row, the cooldown, the ace
+-- rounds and VALKA's disguise as before.
+-- the rotation's kinds switched on, shuffled: the bag's next fill
+-- (review of 0.73.80) a kind whose own ready() says it can't come now (the Spaceport without its turrets' rows) is
+-- never put in the bag nor drawn: it would be drawn first each time, fail to start, and go back in
+-- ((0.74.0) round: the round it's asked for, when it's known (VALKA's gate through the day-night arc, GONE FISHIN' once a
+-- run); the bag's fill asks with none)
+local function kindReady(k, round)
+    local rk = SPC and SPC.kinds and SPC.kinds[k]
+    if not (rk and rk.ready) then return true end
+    local okR, r = pcall(rk.ready, round)
+    return not okR or r ~= false and r ~= nil
+end
+local function bagFill(sp)
+    local t = {}
+    for _, k in ipairs(sp.rotation or {}) do if specialOn(k) and kindReady(k) then t[#t + 1] = k end end
+    for i = #t, 2, -1 do local j = math.random(i); t[i], t[j] = t[j], t[i] end
+    return t
+end
+-- a kind for the round from the bag (RUN.specialBag) among those can(k) allows: the kind and where it came from
+local function bagDraw(sp, can)
+    if sp.bag == false then                          -- (no bag: an even draw, as before 0.73.80)
+        local choices = {}
+        for _, k in ipairs(sp.rotation) do if can(k) then choices[#choices + 1] = k end end
+        if #choices == 0 then return nil end
+        return choices[math.random(#choices)], "an even draw"
+    end
+    RUN.specialBag = type(RUN.specialBag) == "table" and RUN.specialBag or {}
+    if #RUN.specialBag == 0 then RUN.specialBag = bagFill(sp) end
+    for i, k in ipairs(RUN.specialBag) do
+        if can(k) then table.remove(RUN.specialBag, i); return k, "the bag" end
+    end
+    local choices = {}                               -- (none of the bag's can come now: any that can, the bag kept)
+    for _, k in ipairs(sp.rotation) do if can(k) then choices[#choices + 1] = k end end
+    if #choices == 0 then return nil end
+    return choices[math.random(#choices)], "outside the bag (none of its can come now)"
+end
+local function bagText()
+    local b = type(RUN.specialBag) == "table" and RUN.specialBag or {}
+    return #b > 0 and table.concat(b, ", ") or "empty"
+end
+-- whether `round` would be an ace round with no special (sv_config.lua aceRound): it doesn't count in the gap
+local function aceTakes(round)
+    if type(aceRound) ~= "function" then return false end
+    local okA, ti = pcall(aceRound, round, nil)
+    return okA and ti ~= nil
+end
+-- can special k come in `round` (switched on, its from_round, its cooldown: CFG.specials cooldown_rounds), not the last
+-- one again (unless it's the rotation's only one)
+local function specialReady(sp, k, round)
+    local last = RUN.specialAt and RUN.specialAt[k]
+    local from = type(sp[k]) == "table" and tonumber(sp[k].from_round) or 0   -- (a special's first round)
+    return specialOn(k) and round >= from and (not last or round - last >= (sp.cooldown_rounds or 0))
+        and (k ~= RUN.lastSpecial or #sp.rotation == 1) and kindReady(k, round)
+        and not (ESC and ESC.anomalyOk and ESC.anomalyOk(k) == false)   -- ((2026-11-07) an Anomaly waits for CHARLENE)
+end
+
 -- The special round `round` is (CFG.specials), or nil for a normal round.
 function specialFor(round)
     local sp = CFG.specials
+    -- the round after a captured spaceport is its retake (sv_spaceport.lua; CFG.specials.spaceport.retake)
+    local spr = sp.spaceport
+    if RUN.sport and RUN.sport.retakeRound == round and not (spr and (spr.enabled == false or (spr.retake and spr.retake.enabled == false))) then
+        return "retake"
+    end
+    -- ((0.74.0) THE FESTIVAL: never drawn, it's the round its day-night arc puts round_after rounds after GONE FISHIN'
+    -- (sv_festival.lua FEST.roundIs); the Spaceport can't come the round before it, so no retake falls on it)
+    if FEST and FEST.roundIs and FEST.roundIs(round) and specialOn("festival") then return "festival" end
+    local sx = SETUP and SETUP.specialsX and SETUP.specialsX() or 1   -- (the menu's SPECIAL ROUNDS, sv_menu.lua: 0 = off)
+    if sx <= 0 then return nil end
     if sp.enabled and sp.random and #sp.rotation > 0 then
         RUN.specialPick = RUN.specialPick or {}
         local pick = RUN.specialPick
         if pick[round] == nil then
             local kind, early = false, sp.early
+            local lastWas, gap = RUN.lastSpecial, math.max(0, math.floor(tonumber(RUN.specialGap) or 0))
             -- each special at most once in cooldown_rounds (user, 2026-10-23: "Each Special Round can only Spawn Once
             -- Every 10 rounds"): one that started in round r can't come again before r + cooldown_rounds
-            local function ready(k)
-                local last = RUN.specialAt and RUN.specialAt[k]
-                return specialOn(k) and (not last or round - last >= (sp.cooldown_rounds or 0))
-            end
+            local function can(k) return specialReady(sp, k, round) end
             -- (in the early window only the early special comes: user, 2026-10-23, "between 2 and 6 ... I only
             -- wanted the Shuttle Launch to ever do"; the others start after it)
             local inEarly = early and early.kind and round >= (early.from or 0) and round <= (early.to or -1)
+            local roll, from = nil, nil                  -- (from: where the kind came from, "the bag" or not)
             if inEarly then
-                if not pick[round - 1] and RUN.lastSpecial ~= early.kind and ready(early.kind) and math.random() < (early.chance or 0) then
-                    kind = early.kind
-                    RUN.lastSpecial = kind
+                if not pick[round - 1] and can(early.kind) then
+                    local chance = math.min(0.9, (early.chance or 0) * sx)
+                    roll = math.random()
+                    if roll < chance then kind = early.kind end
+                    log(string.format("specials: round %d's roll (the early window: the %s only): %.2f %s chance %.2f", round,
+                        tostring(early.kind), roll, kind and "<" or ">=", chance))
                 end
-            elseif round >= sp.first and not pick[round - 1] and math.random() < sp.chance then
-                local choices = {}
-                for _, k in ipairs(sp.rotation) do
-                    if (k ~= RUN.lastSpecial or #sp.rotation == 1) and ready(k) then choices[#choices + 1] = k end
+            elseif round >= sp.first and not pick[round - 1] then
+                local any = false
+                for _, k in ipairs(sp.rotation) do if can(k) then any = true end end
+                if any then
+                    local step = math.max(0, tonumber(sp.chance_step) or 0)
+                    local chance = math.min(0.9, ((tonumber(sp.chance) or 0) + step * gap) * sx)
+                    local mg = math.floor(tonumber(sp.max_gap) or 0)
+                    local sure = mg > 0 and gap >= math.ceil(mg / sx)
+                    roll = math.random()
+                    if sure or roll < chance then kind, from = bagDraw(sp, can); kind = kind or false end
+                    local ace = not kind and aceTakes(round)
+                    log(string.format("specials: round %d's roll: %.2f %s chance %.2f (%d round%s since the last special%s)%s; "
+                        .. "the bag: %s", round, roll, roll < chance and "<" or ">=", chance, gap, gap == 1 and "" or "s",
+                        sure and string.format(", %d or more: one for sure", math.ceil(mg / sx)) or "",
+                        kind and string.format(": the %s, from %s", kind, from)
+                            or (ace and ": no special (an ace round takes it, not counted)" or ": no special"), bagText()))
+                    if kind then RUN.specialGap = 0 elseif not ace then RUN.specialGap = gap + 1 end
+                else
+                    log(string.format("specials: round %d: no special can come (each cooling down or not yet in), not counted",
+                        round))
                 end
-                if #choices > 0 then                       -- (every one cooling down: a normal round)
-                    kind = choices[math.random(#choices)]
-                    RUN.lastSpecial = kind
-                end
+            end
+            if kind then
+                RUN.lastSpecial = kind
+                -- (what specialSwap needs to undo this pick: the last special before it, the gap, where it came from)
+                -- ((review of 0.73.80) fromBag: only a kind that took a bag slot goes back in if it never comes)
+                RUN.specialRoll = { round = round, kind = kind, lastWas = lastWas, gapWas = gap, early = inEarly or nil,
+                                    fromBag = (from == "the bag") or nil, tried = { [kind] = true } }
             end
             pick[round] = kind
             if kind then log(string.format("specials: round %d will be %s", round, kind)) end
@@ -382,20 +1197,95 @@ function specialFor(round)
     return specialOn(kind) and kind or nil
 end
 
+-- (0.73.80) The dice's special for `round` (`failed`) can't start (why): another one that can (ready(k): its own checks,
+-- sv_rounds.lua startRound's), or nil (a normal round, the round counted in the gap again). Not for a forced special, the
+-- retake or the early window's (only the early kind comes then), nor with CFG.specials.swap off. The failed kind goes
+-- back in the bag at its end, its turn not used, when it was drawn from the bag (not an outside draw, nor the early
+-- window's); the run's last special is the one before it again.
+function specialSwap(round, failed, why, ready)
+    local sp, roll = CFG.specials, RUN.specialRoll
+    if not (roll and roll.round == round and roll.kind == failed) then return nil end
+    RUN.lastSpecial = roll.lastWas
+    if sp.bag ~= false and type(RUN.specialBag) == "table" and specialOn(failed) and roll.fromBag then
+        table.insert(RUN.specialBag, failed)
+    end
+    local k, from = nil, nil
+    if sp.swap ~= false and not roll.early then
+        k, from = bagDraw(sp, function(x)
+            if roll.tried[x] or not specialReady(sp, x, round) then return false end
+            roll.tried[x] = true                        -- (asked once: one that can't start isn't drawn again)
+            return ready == nil or ready(x) == true
+        end)
+    end
+    RUN.specialPick = RUN.specialPick or {}
+    if k then
+        if sp.bag ~= false and type(RUN.specialBag) == "table" then   -- (an outside draw left the bag as it was)
+            for i, x in ipairs(RUN.specialBag) do if x == k then table.remove(RUN.specialBag, i); break end end
+        end
+        RUN.lastSpecial, RUN.specialPick[round], roll.kind = k, k, k
+        roll.fromBag = (from == "the bag") or nil
+        log(string.format("specials: round %d: the %s can't start (%s): the %s instead (from %s); the bag: %s", round, failed,
+            tostring(why), k, from, bagText()))
+    else
+        RUN.specialPick[round] = false
+        RUN.specialGap = (roll.gapWas or 0) + 1
+        RUN.specialRoll = nil
+        log(string.format("specials: round %d: the %s can't start (%s)%s: a normal round (%d round%s since the last special); "
+            .. "the bag: %s", round, failed, tostring(why), (sp.swap == false and " and [specials] swap is off")
+                or (roll.early and " in the early window (only it comes then)") or " and no other special can",
+            RUN.specialGap, RUN.specialGap == 1 and "" or "s", bagText()))
+    end
+    return k
+end
+-- (0.73.80) The round's special didn't come after all (sv_rounds.lua SPC.unplan: the shuttle's spawn refused twice):
+-- the dice's bookkeeping undone (back in the bag at its end, the run's last special, the gap); the cooldown is
+-- sv_rounds.lua's.
+function specialUndo(round, kind)
+    local sp, roll = CFG.specials, RUN.specialRoll
+    RUN.specialPick = RUN.specialPick or {}
+    RUN.specialPick[round] = false
+    if not (roll and roll.round == round and roll.kind == kind) then return false end
+    RUN.lastSpecial = roll.lastWas
+    if sp.bag ~= false and type(RUN.specialBag) == "table" and specialOn(kind) and roll.fromBag then
+        table.insert(RUN.specialBag, kind)
+    end
+    if not roll.early then RUN.specialGap = (roll.gapWas or 0) + 1 end
+    RUN.specialRoll = nil
+    return true
+end
+
 -- A pool flight's index in tools/survival_events.py POOL (its SV_Up_NN flag and its RE_SV_*_NN events), or nil.
 function poolIndex(unit)
     local n, k = tostring(unit):match("^ERA_Unit_(%d+)_Dep_Air(%d)$")
     return n and (tonumber(n) - 1) * 3 + tonumber(k) + 1
 end
+-- ((0.73.78) the other way: pool flight i's unit, ERA_Unit_NN_Dep_AirK, or nil for an index past the pool)
+function poolUnit(i)
+    i = tonumber(i)
+    if not (i and i >= 1 and i == math.floor(i)) then return nil end
+    local u = string.format("ERA_Unit_%02d_Dep_Air%d", (i - 1) // 3 + 1, (i - 1) % 3)
+    for _, x in ipairs(CFG.pool or {}) do if x == u then return u end end
+    return nil
+end
 
 -- Comona Defense: the pad (once a run: its guns and SAMs stay up between specials) and the shuttle, both where the
 -- world data puts them (SV_Spawn without a position). The shuttle's appearance starts the event package's countdown.
+-- The pad's objects as SV_Spawn makes them (SHUTTLE.pad[unit], LiveAIGroundDummy included: a LiveAIGameObject):
+-- SPC.shuttleTakeOff hides exactly these. Its sweep 1.5 km round the shuttle missed the control centre, its 3 dummies and
+-- a SAM site, 1.6-2.0 km out (user, 2026-10-30: "spaceport did not despawn after shuttle round"; every log: 16 hidden)
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
+    local l = SHUTTLE.padSpawning and SHUTTLE.pad and SHUTTLE.pad[SHUTTLE.padSpawning]
+    if l and #l < 100 then l[#l + 1] = o end
+end)
 function spawnShuttle()
     local c = CFG.specials.shuttle
     pcall(SPC.shuttlePadBack)                             -- (the pad hidden after the last one: its units are still up)
     for _, u in ipairs({ c.dummies, c.pad_allies and c.pad or nil }) do
         if u and SV_UnitAlive(u) <= 0 then
+            SHUTTLE.pad = SHUTTLE.pad or {}
+            SHUTTLE.pad[u], SHUTTLE.padSpawning = {}, u
             local p = SV_Spawn(u)
+            SHUTTLE.padSpawning = nil
             log("special: pad " .. u .. ": " .. (p > 0 and (p .. " objects up") or ("not spawned (" .. (SV_ERR[p] or tostring(p)) .. ")")))
         end
     end
@@ -403,8 +1293,31 @@ function spawnShuttle()
     spawningUnit = c.unit
     local r = SV_Spawn(c.unit)
     spawningUnit = nil
+    ALIVE.spawned(c.unit, r)
     log("special: shuttle " .. c.unit .. ": " .. (r > 0 and "on the pad" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
-    if r <= 0 then D.special = nil; return r end            -- a normal round, then
+    -- ((0.73.80, R30_FINDINGS specials 0) -3, its last one still on the spawner's list (the round's plan takes it off,
+    -- sv_rounds.lua SPC.canStart; something kept it up since): taken off it (SV_Recycle(unit, 1)) and spawned once more)
+    if r == -3 and type(SV_Recycle) == "function" then
+        crumb("special: shuttle SV_Recycle " .. c.unit .. " (its spawn refused)")
+        local okR, x = pcall(SV_Recycle, c.unit, 1)
+        spawningUnit = c.unit
+        r = SV_Spawn(c.unit)
+        spawningUnit = nil
+        ALIVE.spawned(c.unit, r)
+        log(string.format("special: shuttle %s: its last one taken off the spawner's list (SV_Recycle %s), spawned again: %s", c.unit,
+            okR and tostring(x) or ("error " .. tostring(x)), r > 0 and "on the pad" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+    end
+    -- (still none: a normal round from the start, its strike flights replaced by fighters, its pick and cooldown given
+    -- back, the pad hidden again: sv_rounds.lua SPC.unplan; before 0.73.80 its strike flew on as a plain bomber raid)
+    if r <= 0 then
+        local okU, errU = true, nil
+        if SPC.unplan then okU, errU = pcall(SPC.unplan, "shuttle", D.now, "its spawn refused: " .. (SV_ERR[r] or tostring(r))) end
+        if not (SPC.unplan and okU) then
+            if not okU then log("special: unplan error " .. tostring(errU)) end
+            D.special = nil
+        end
+        return r
+    end
     D.special.state, D.special.at = "countdown", D.now
     D.shuttleClock = { cd = 0, fired = 0, at = D.now, s = D.special }
     return r
@@ -412,7 +1325,7 @@ end
 
 -- The shuttle's health in % (its actor's HealthInternal is health x 10), or nil when it can't be read.
 function shuttleHealth()                  -- the local declared with SHUTTLE
-    if not valid(SHUTTLE.obj) then
+    if not liveObj(SHUTTLE.obj) then            -- ((0.73.84) liveObj: kept between ticks)
         SHUTTLE.obj = nil
         if D and D.special and D.now and (SHUTTLE.lookAt or -100) + 2 <= D.now then
             SHUTTLE.lookAt = D.now

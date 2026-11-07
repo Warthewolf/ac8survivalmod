@@ -2,7 +2,7 @@
 # build.sh : VALKA's X-02S (tools/x02s/README.md) -> build/x02s/out/SurvivalMode_Valka_P.utoc / .ucas / .pak
 #   0. UModel (AC7's)     x02s_Anim -> build/x02s/umodel/.../x02s_Anim.psa (the swing wings' motion)
 #   1. prepare.py         AC7's UModel glTF export -> a skinned, life-size glTF, the sweep keys, the textures
-#   2. ue_import.py       in UE 5.4 (E:/UE_5.4, project ue/Live): textures, the material instance, the skinned mesh
+#   2. ue_import.py       in UE 5.4 (UE in .env, project ue/Live): textures, the material instance, the skinned mesh
 #                         with its sockets, the sweep animation (ue_check.py samples it: build/x02s/ue_check.log)
 #   3. cook               Windows, versioned (see the cook), loose packages (ue/Live/Saved/Cooked/Windows/Live/Content)
 #   4. retoc to-zen       only /Game/Mods/SurvivalMode/Valka (never the stubs of AC8's materials) -> the container
@@ -10,14 +10,15 @@
 # tools/build_all.sh stages the container next to SurvivalMode_P when build/x02s/out has one (no UE needed there).
 set -e
 cd "$(dirname "$0")/../.."
+. tools/env.sh                     # (UE, UMODEL and AC7 from .env: .env.example)
+sv_need UE "Unreal Engine 5.4's folder"
+sv_need UMODEL "AC7's UModel exe"
+sv_need AC7 "AC7's exported assets"
 ROOT=$(pwd -W 2>/dev/null || pwd)
-UE=${UE:-E:/UE_5.4}
 CMD="$UE/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
 PROJ="$ROOT/ue/Live/Live.uproject"
 OUT=build/x02s/out
 export MSYS_NO_PATHCONV=1
-UMODEL=${UMODEL:-"D:/Ace Combat PAKS/AC7UMODELnew/umodel_ace_combat_7_PC.exe"}
-AC7=${AC7:-"E:/Ace Combat 7 Exports"}
 "$UMODEL" -path="$AC7" -export -out="$ROOT/build/x02s/umodel" Game/Vehicles/Aircraft/x02s/x02s_Anim.uasset > build/x02s/umodel.log 2>&1
 python -I tools/x02s/prepare.py
 python -I -m py_compile tools/x02s/ue_import.py

@@ -1,0 +1,33 @@
+AC8 Survival Mode COOP2MP 0.73.83 (0.73.83-coop2mp.84) - change log
+====================================================================
+Since 0.73.82 (CHANGELOG_0.73.82.txt). Patch over a 0.73.78 COOP2MP install (with or without the 0.73.79 - 0.73.82
+patches); everyone in a co-op session needs 0.73.83.
+
+Co-op
+- A player who leaves and comes back: their old plane's radar blip is gone now, not only the plane. Any teammate's
+  plane hidden on your screen (they left, they're DOWN, they're not in the mission) is off your radar too, and back on
+  it when they're back.
+- After the Alicorn round, new enemies sometimes weren't linked between the games: joiners saw extra enemies that
+  couldn't be shot down, copies were torn down as "strays", and every joiner resynced every few minutes to the end of
+  the run (Rapt0r's "desync" in the 32-round run). Fixed.
+- VOID WATCHER 1 going home no longer leaves a frozen copy flying on the joiners' screens for minutes.
+- "ROUND N KILLS / YOU N": each player now sees their own kills, not the host's.
+- Host page: when CO-OP ENEMIES isn't the default (+15% each), the row says so and START RUN reads "UNRANKED": the co-op
+  leaderboard only takes runs on the default room rules (Shazzy's 0.73.82 run wasn't sent for that, with no warning).
+
+Lag late in long runs
+- Survival asked the game "is this unit still alive?" far more often than it needed to, and each ask got slower with
+  every unit spawned in the run (about 7 ms an ask by round 25). The allies, the HUD, the director and the "left the
+  mission" check now reuse recent answers.
+- A special's units (the Spaceport's 27 ships and its landing-craft waves, the amphibious craft, a boss that's down)
+  are taken off the game's unit list once the round's over, so every later ask stays cheap. They come off one every
+  half second, starting 15 s after the round, so nothing piles up.
+- An airfield defence or allied ship lost is now noticed within about 4 s (it was 2 s).
+
+Leaderboard
+- VALKA wins now count on the server (the board scored runs with her 2,250 - 4,500 below what the game showed). Needs
+  the Worker redeployed; runs already stored keep their score.
+
+Still waiting on the next full build (runtime 0.32.24): the native log's lag fix and other players' weapon stand-ins.
+Still being looked at (from the logs of 2026-11-04): ammo not readable on Casual, SECOND CHANCE's floor in solo after
+an airfield stop, a restart's fake "round 1 clear", enemies chasing a player who left.

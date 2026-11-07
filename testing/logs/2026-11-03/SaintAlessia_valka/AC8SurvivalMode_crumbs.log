@@ -1,0 +1,18 @@
+13:16:38.009 t28208 lua bridge: all registered
+13:16:38.013 t28208 lua bridge: all registered
+13:16:48.286 t31456 lua: tick lost: queued again
+13:16:58.374 t31456 lua: tick lost: queued again
+13:21:00.449 t31456 lua: tick lost: queued again
+13:21:27.546 t31480 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+13:22:27.843 t31480 lua: spawn SV_Unit_ValkaEml at a pose: 1
+13:22:35.920 t31480 lua: spawn SV_Unit_Valka at a pose: 5
+13:22:39.899 t31480 lua: event RE_SV_ValkaEmlRemove: 1
+13:22:39.937 t31480 lua: special clean-up SV_Unit_ValkaEml: 1 killed, 0 off (4 s after its shot)
+13:25:14.982 t31480 teardown gate closed: world 37A10AB00 it is being destroyed; 0 deferred destroys dropped
+13:25:14.983 t31480 lua: level gate closed: objects dropped
+13:25:37.995 t31456 lua: tick lost: queued again
+13:25:48.027 t31456 lua: tick lost: queued again
+13:25:58.139 t31456 lua: tick lost: queued again
+13:26:08.150 t31456 lua: tick lost: queued again
+13:26:18.273 t31456 lua: tick lost: queued again
+13:26:28.382 t31456 lua: tick lost: queued again

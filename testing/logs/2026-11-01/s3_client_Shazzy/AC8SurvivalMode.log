@@ -1,0 +1,253 @@
+11:38:30 AC8 Survival Mode runtime 0.32.18
+11:38:30 leaderboard: the game started: build hash b10898ab6902390cdb1efcce30bd50d85377a981528f5d5161ca9c255de199e4 (30 scripts, 12 behaviour scripts, the ini, main.dll and the container: 46 files, 3666 KB, 31 ms)
+11:38:31 UE4SS calls mod slot 3
+11:38:31 UE4SS calls mod slot 15
+11:38:31 UE4SS calls mod slot 13
+11:38:42 UE4SS calls mod slot 2
+11:38:42 UE4SS calls mod slot 4
+11:38:42 UE4SS calls mod slot 5
+11:38:42 UE4SS calls mod slot 7
+11:38:42 UE4SS calls mod slot 6
+11:38:42 UE4SS: Lua mod AC8SurvivalMode started (mod slot 6)
+11:38:42 Lua bridge: SV_Version, SV_MenuChoice, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Crumb, SV_Ammo, SV_SetAmmo, SV_AmmoMax, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_MusicHold, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_PlayerTarget, SV_SetText, SV_ShopRequest, SV_MenuSetting, SV_MenuPages, SV_MenuClass, SV_MenuSlot, SV_MenuQuick, SV_BGMNames, SV_CoopOpen, SV_CoopClose, SV_CoopInfo, SV_CoopSend, SV_CoopRecv, SV_CoopMe, SV_CoopPeer, SV_CoopTrack, SV_CoopBind, SV_CoopPeerAt, SV_CoopReset, SV_CoopSpawnPP, SV_CoopKillPP, SV_CoopFollow, SV_CoopPPRole, SV_CoopFeed, SV_CoopPPFx, SV_CoopFire, SV_CoopShots, SV_CoopPPShot, SV_CoopPeerIds, SV_CoopSwapPP, SV_ObjChain, SV_CoopLoadout, SV_SpawnCam, SV_StickNow, SV_PPName, SV_CoopPaint, SV_InputNow, SV_Down, SV_Respawn, SV_MemMB, SV_SndLoad, SV_SndPlay, SV_SndSet, SV_SndStop, SV_SndMaster, SV_Post, SV_PostResult, SV_PostReply, SV_SteamName, SV_BuildHash registered
+11:38:42 UE4SS calls mod slot 8
+11:38:42 UE4SS: Lua mod AC8SurvivalMode started (mod slot 8)
+11:38:42 Lua bridge: SV_Version, SV_MenuChoice, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Crumb, SV_Ammo, SV_SetAmmo, SV_AmmoMax, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_MusicHold, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_PlayerTarget, SV_SetText, SV_ShopRequest, SV_MenuSetting, SV_MenuPages, SV_MenuClass, SV_MenuSlot, SV_MenuQuick, SV_BGMNames, SV_CoopOpen, SV_CoopClose, SV_CoopInfo, SV_CoopSend, SV_CoopRecv, SV_CoopMe, SV_CoopPeer, SV_CoopTrack, SV_CoopBind, SV_CoopPeerAt, SV_CoopReset, SV_CoopSpawnPP, SV_CoopKillPP, SV_CoopFollow, SV_CoopPPRole, SV_CoopFeed, SV_CoopPPFx, SV_CoopFire, SV_CoopShots, SV_CoopPPShot, SV_CoopPeerIds, SV_CoopSwapPP, SV_ObjChain, SV_CoopLoadout, SV_SpawnCam, SV_StickNow, SV_PPName, SV_CoopPaint, SV_InputNow, SV_Down, SV_Respawn, SV_MemMB, SV_SndLoad, SV_SndPlay, SV_SndSet, SV_SndStop, SV_SndMaster, SV_Post, SV_PostResult, SV_PostReply, SV_SteamName, SV_BuildHash registered
+11:38:43 UE4SS calls mod slot 1
+11:38:43 game functions (13437 ms): base 147A8B180, main decide 147B4FF50, difficulty decide 147B10E20, next 146ECA6E0, goto 147A88410, set difficulty 147B91AC0, transition 147A88370, text 1473B1750
+11:38:43 spawn functions: spawn unit 147E119D0, unregister unit 147E1DAC0, unit check 147E1DE00, destroy actor 143FE0160
+11:38:43 ammo functions: node execute 147403FB0, flare lambda 14741F3E0, weapons lambda 147404460, free restock 147405BC0
+11:38:43 game Lua: GetGameLuaState 144ED8940
+11:38:43 music and events: BGM node 1473DF1F0, remote-event node 1473F86B0, pause list 147B575D0, landing menu decide 147B02960
+11:38:43 music player: track clock tick 147B28560, next track 147B3A230
+11:38:43 flight input: BuildFlightInput 147D689B0
+11:38:43 coop: AI plane teleport 147D1E390, inner 147D1E560
+11:38:43 coop: player plane: spawn 1471E5500, world spawn 14465A120, teleport 147D4F6B0, inner 147D4F6F0; remote spawn sites: possess 1471CC614, network object 1471CC63B, role 1471CC778, dummy class 1471CC56D, loadout 1471CC8F7, loadout bytes 1471CC9A3, finish 1471CCF8A
+11:38:43 flight: one-shot fire 147C8FE20 (LiveFireOneShotWeapon's Execute 1473ED1E0), AI takeoff afterburner 147CCF3F0, player plane respawn 147D6D440, remote update 147D6F0C0, surface update 147D32B00, player plane damage 147D5A430
+11:38:43 coop2mp: weapons fired 147D71060, remote plane fire 147D71EA0, launch weapon 147F7A880, flares 147F61D90, network manager 147EE02E0, select special 147D71E20, arm special 147D62AB0, gear site 1474DCBD4
+11:38:43 guard: AI unit effect update 147CB2850, a second unit update 147CB86C0, target entry check 147443690; coop2mp: plane electronic update 147D27D50
+11:38:43 text lookup: hooked at 1473B1750
+11:38:43 pause menu list: hooked at 147B575D0
+11:38:44 landing menu decide: hooked at 147B02960
+11:38:44 music player clock: hooked at 147B28560
+11:38:44 music player next track: hooked at 147B3A230
+11:38:44 flight input: hooked at 147D689B0
+11:38:44 remote player plane update: hooked at 147D6F0C0
+11:38:44 guard: GUObjectArray chunks at 14DC60CE0, count at 14DC60CF4 (47064 objects), GC flag at 14DC49620 (now 2)
+11:38:44 guard: AI unit effect update: vtable slot 14C51E7C8, next 147CB2850
+11:38:44 guard: second AI unit update (+0x42c0): vtable slot 14C51CCF8, next 147CB86C0
+11:38:44 guard: the target search's fault catcher in; the world getter 143FC1CA0
+11:38:44 guard: target entry check: vtable slot 14C69FAE0, next 147466940
+11:38:44 guard: target entry check: vtable slot 14CB55D48, next 147449300
+11:38:44 guard: target entry check: vtable slot 14CB5F2C0, next 147452F60
+11:38:44 guard: target entry check: vtable slot 14CB5F3F8, next 14743BB00
+11:38:44 guard: target entry check: vtable slot 14CB77740, next 14745D670
+11:38:44 guard: target entry check: vtable slot 14CB77AE8, next 147457740
+11:38:44 guard: target entry check: vtable slot 14CB77B50, next 147456600
+11:38:44 guard: target entry check: vtable slot 14CB77DC0, next 147454050
+11:38:44 guard: target entry check: vtable slot 14CB77E28, next 1474515A0
+11:38:44 guard: target entry check: vtable slot 14CB77FC8, next 14744CB80
+11:38:44 guard: target entry check: vtable slot 14CB78030, next 1474481D0
+11:38:44 guard: target entry check: vtable slot 14CB78098, next 147448160
+11:38:44 guard: target entry check: vtable slot 14CB78100, next 147448160
+11:38:44 guard: target entry check (class with game object): vtable slot 14CB783D8, next 147443690
+11:38:44 guard: target entry check: vtable slot 14CB78780, next 14743D2B0
+11:38:44 guard: target entry check: vtable slot 14CB787E8, next 147439690
+11:38:44 guard: target entry check: vtable slot 14CB7A408, next 14744E0D0
+11:38:44 guard: target entry check: vtable slot 14CB7A818, next 14743A4C0
+11:38:44 guard: 18 target entry classes guarded (the first 1, a weak actor unchecked 3, the world unchecked 14; 151 vtables of the family, 133 left alone)
+11:38:44 plane electronic update: hooked at 147D27D50
+11:38:44 player plane surface update: hooked at 147D32B00
+11:38:44 player plane damage: hooked at 147D5A430
+11:38:44 player plane weapons fired: hooked at 147D71060
+11:38:45 launch weapon: hooked at 147F7A880
+11:38:45 fire flares: hooked at 147F61D90
+11:38:45 menu tables: main menu 14C82CF38, difficulty page 14C7F5C20
+11:38:45 menu transition: hooked at 147A88370
+11:38:45 main menu decide: vtable slot 14C82D6A8, next 147B4FF50
+11:38:45 difficulty decide: vtable slot 14C7F6390, next 147B10E20
+11:38:45 difficulty next menu: vtable slot 14C7F64A8, next 146ECA6E0
+11:38:45 menu hooks installed (mission 9101, hangar menu F)
+11:38:51 game Lua: Lua 5.3 API from the game's exports (pcallk 144E6D450), context slot 14DD0AE20
+11:39:00 main menu: Survival's pages open through CampaignTraining's page (entry 40, list at manager+118)
+11:39:00 main menu: Survival's pages open through InitialSetting_DualSence's page (entry 38, list at manager+118)
+11:39:00 main menu: Survival's pages open through InitialSetting_Accessibility's page (entry 37, list at manager+118)
+11:39:00 main menu: Survival's pages are in the game's page list
+11:39:37 main menu: Survival's page row 'SurvivalMenu': Survival's pages
+11:39:39 main menu: Survival's page row 'SV_Mode_Join': Co-op: Join, opening the difficulty select to start
+11:39:40 coop: open: Steam P2P, joiner, up to 24 players, partner "auto", port 27777, interpolation 120 ms, mod 0.73.70-coop2mp.71; teleport functions 147D1E390 / 147D1E560
+11:39:40 coop: looking for players: 1 Steam friend(s) to try
+11:39:41 menu transition 7 while Survival is chosen, but no difficulty page was found; passed on
+11:39:42 difficulty page: next menu asked while Survival is chosen: going to the hangar instead of Free Mission
+11:39:42 start: keeping the difficulty the game's page applied (fallback reading would be Casual)
+11:39:42 start (next menu): difficulty set by the game (unchanged), context mode 0 -> 0, mission -1 -> 9101
+11:39:43 start: going to the hangar (menu F)
+11:39:44 coop: paired with Saint Alessia (host, mod 0.73.70-coop2mp.71) as player 1
+11:39:44 coop: you are player 2
+11:39:44 coop: player 1: link up
+11:39:44 ammo layout: owner fn 147EDCD00, weapons +16A8, slots +2E8 (data +28, count +30, current +C, max +8, A0 bytes each), flares +2E0 (count +C4, max +27C, notify +B8, free restock +164), set fn 147F62B00, flare fn 147F77050
+11:40:40 coop: you are player 2; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+11:40:40 coop:   player 1 Saint Alessia: linked, rtt 257 ms; sent 56 packets (6 KB), got 4 (0 KB), 0 resent; their plane 0 moves
+11:41:40 coop: you are player 2; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+11:41:40 coop:   player 1 Saint Alessia: linked, rtt 271 ms; sent 115 packets (13 KB), got 4 (0 KB), 0 resent; their plane 0 moves
+11:42:40 coop: you are player 2; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+11:42:40 coop:   player 1 Saint Alessia: linked, rtt 254 ms; sent 174 packets (20 KB), got 4 (0 KB), 0 resent; their plane 0 moves
+11:43:40 coop: you are player 2; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+11:43:40 coop:   player 1 Saint Alessia: linked, rtt 249 ms; sent 233 packets (26 KB), got 4 (0 KB), 0 resent; their plane 0 moves
+11:44:40 coop: you are player 2; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+11:44:40 coop:   player 1 Saint Alessia: linked, rtt 259 ms; sent 292 packets (33 KB), got 4 (0 KB), 0 resent; their plane 0 moves
+11:45:40 coop: you are player 2; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+11:45:40 coop:   player 1 Saint Alessia: linked, rtt 295 ms; sent 351 packets (40 KB), got 4 (0 KB), 0 resent; their plane 0 moves
+11:46:02 coop: player 1: link lost (nothing for 6 s)
+11:46:11 spawner layout: unit desc B0 bytes (UniqueID +0, Name +4, AI list +18, point +58, rotation +70), AI desc 130 bytes (point +38, rotation +50, NPC id +14), phase world data +0, phase units +178/+180, unit id interface +2A0 slot +20, vector 24 bytes, LivePhase.ManipulableObjects +178
+11:46:11 spawner: LiveUnitSpawner 671167120, global phase 671167468, world data 66D8104C0
+11:46:11 spawner 671167120: no world yet (the level is still loading); spawns wait
+11:46:11 coop: player 1: link up
+11:46:23 music layout: game instance +1D8 (class fn 146E428D0), BGM manager +908 (flag +1D5), controller +170, play 1478BDAD0; controller ids +138 / +128, status +148
+11:46:23 coop: offsets: RootComponent +1A0, RelativeLocation +128, RelativeRotation +140, HealthInternal +DA8, MaxHealth +3B4
+11:46:26 events layout: event vtable 14CB68CE0 (type 4F, check slot +48), manager fn 1470D2460, dispatch 147421660, GMalloc 14E426090 (free +48)
+11:46:26 coop: second player plane: dummy controller class 40476600 (by name)
+11:46:26 coop: second player plane: their loadout given (15 and 0 entries, bytes 24 27)
+11:46:26 coop: second player plane: their paint given (skin 18601001, emblem flags 255, 8 emblems)
+11:46:26 coop: second player plane 112B79670 (class 6C3ADEB00, another airframe: no loadout of yours) spawned, controller 173B71E400, possessed (slot +798, Possess 144354890), network object 15F422D300 (+ED0), role byte +ED8 = 2 (yours 1)
+11:46:26 coop: second player plane: loadout 1709EB0000 (+1328; yours 0: 15 and 0 entries), bytes +FA0 +FA1 = 24 27, spawn finished: yes, weapons 53A34600 (+16A8), their owner 112B79670
+11:46:26 coop: player 1's real plane is 112B79670
+11:46:26 coop: player plane 112B79670's callsign (under ALLY) set: Saint Alessia; its aircraft: FA36
+11:46:26 coop: player 1's plane is 112B79670 (a real player plane: its own update flies it, fed from their stream)
+11:46:26 coop2mp: the other players' ESM / ECM fields count on this game (1 real planes looked at as local for each plane's electronic update)
+11:46:26 coop2mp: player 1's real plane 112B79670 fed from their stream: speed 166 m/s, flight block yes, State 0
+11:46:30 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (25465, 14084) m, 2708 m high, heading 243
+11:46:33 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (25107, -21259) m, 4057 m high, heading 118
+11:46:40 coop: you are player 2; 4 enemy streams bound (5422 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 34 ms); the last minute's 5422 enemy moves: 206 past their newest state, 0 held
+11:46:40 coop:   player 1 Saint Alessia: linked, rtt 84 ms; sent 875 packets (80 KB), got 540 (35 KB), 0 resent; their plane 0 moves
+11:46:40 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 1 120/34 ms 0/0
+11:47:23 coop2mp: player 1's real plane: 4396 frames fed, 0 not (no stream yet / no message) this minute; at most 67 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+11:47:23 coop2mp: player 1's real plane 112B79670 fed from their stream: speed 122 m/s, flight block yes, State 0
+11:47:39 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+11:47:39 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (25107, -21259) m, 4057 m high, heading 118
+11:47:40 coop: you are player 2; 2 enemy streams bound (198 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 25 ms); the last minute's 198 enemy moves: 0 past their newest state, 0 held
+11:47:40 coop:   player 1 Saint Alessia: linked, rtt 66 ms; sent 2544 packets (204 KB), got 2437 (176 KB), 0 resent; their plane 0 moves
+11:47:40 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 1 120/25 ms 0/0
+11:48:23 coop2mp: player 1's real plane: 4655 frames fed, 0 not (no stream yet / no message) this minute; at most 35 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+11:48:23 coop2mp: T4b this minute: your launches sent 3 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+11:48:23 coop2mp: player 1's real plane 112B79670 fed from their stream: speed 43 m/s, flight block yes, State 30
+11:48:40 coop: you are player 2; 2 enemy streams bound (17242 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 16 ms); the last minute's 17044 enemy moves: 820 past their newest state, 0 held
+11:48:40 coop:   player 1 Saint Alessia: linked, rtt 62 ms; sent 4238 packets (330 KB), got 4339 (289 KB), 0 resent; their plane 0 moves
+11:48:40 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 1 120/16 ms 0/0
+11:49:14 coop2mp: T4b: player 1's shot (weapon 1, slot 0, lock-ons 1) on their real plane 112B79670 here: launched (1694500DC0), target 172DD46AC0
+11:49:23 coop2mp: player 1's real plane: 4623 frames fed, 0 not (no stream yet / no message) this minute; at most 15 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+11:49:23 coop2mp: T4b this minute: your launches sent 0 (0 dropped); theirs 1 queued here, 0 refused, 1 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+11:49:23 coop2mp: player 1's real plane 112B79670 fed from their stream: speed 58 m/s, flight block yes, State 40
+11:49:40 coop: you are player 2; 2 enemy streams bound (32086 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 19 ms); the last minute's 14844 enemy moves: 740 past their newest state, 0 held
+11:49:40 coop:   player 1 Saint Alessia: linked, rtt 53 ms; sent 5895 packets (454 KB), got 6219 (401 KB), 0 resent; their plane 0 moves
+11:49:40 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 1 120/19 ms 0/0
+11:50:23 coop2mp: player 1's real plane: 2770 frames fed, 0 not (no stream yet / no message) this minute; at most 2178 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+11:50:40 coop: you are player 2; 2 enemy streams bound (49394 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 18 ms); the last minute's 17308 enemy moves: 770 past their newest state, 0 held
+11:50:40 coop:   player 1 Saint Alessia: linked, rtt 53 ms; sent 7642 packets (584 KB), got 8092 (513 KB), 0 resent; their plane 0 moves
+11:50:54 pause menu: the music player row shown, restart checkpoint and select difficulty hidden (Survival's mission)
+11:51:40 coop: you are player 2; 2 enemy streams bound (64634 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 22 ms); the last minute's 15240 enemy moves: 622 past their newest state, 0 held
+11:51:40 coop:   player 1 Saint Alessia: linked, rtt 73 ms; sent 9401 packets (716 KB), got 10024 (628 KB), 0 resent; their plane 0 moves
+11:51:59 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+11:51:59 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (25107, -21259) m, 4057 m high, heading 118
+11:52:23 coop2mp: T4b this minute: your launches sent 8 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+11:52:28 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+11:52:28 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (12063, 20223) m, 2670 m high, heading 279
+11:52:31 spawn ERA_Unit_03_Dep_Air0: up, 2 aircraft, at (-3537, -3928) m, 6401 m high, heading 358
+11:52:34 spawn ERA_Unit_05_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+11:52:34 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (29505, 10676) m, 3523 m high, heading 228
+11:52:40 coop: you are player 2; 6 enemy streams bound (8244 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 21 ms); the last minute's 8244 enemy moves: 482 past their newest state, 0 held
+11:52:40 coop:   player 1 Saint Alessia: linked, rtt 47 ms; sent 11139 packets (844 KB), got 11611 (729 KB), 0 resent; their plane 0 moves
+11:53:23 coop2mp: T4b this minute: your launches sent 3 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+11:53:40 coop: you are player 2; 3 enemy streams bound (33237 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 22 ms); the last minute's 29577 enemy moves: 1425 past their newest state, 0 held
+11:53:40 coop:   player 1 Saint Alessia: linked, rtt 56 ms; sent 12905 packets (976 KB), got 13495 (881 KB), 0 resent; their plane 0 moves
+11:54:23 coop2mp: T4b this minute: your launches sent 12 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+11:54:29 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (5163, -22575) m, 4211 m high, heading 59
+11:54:32 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+11:54:32 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (-2806, -14573) m, 3351 m high, heading 28
+11:54:35 spawn EA_Unit_01_Air1: up, 6 aircraft, at (1906, -33430) m, 2726 m high, heading 64
+11:54:38 spawn EA_Unit_01_Air0: up, 2 aircraft, at (9382, -32079) m, 517 m high, heading 76
+11:54:40 coop: you are player 2; 8 enemy streams bound (8158 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 19 ms); the last minute's 8158 enemy moves: 448 past their newest state, 0 held
+11:54:40 coop:   player 1 Saint Alessia: linked, rtt 47 ms; sent 14650 packets (1104 KB), got 15182 (988 KB), 0 resent; their plane 0 moves
+11:55:40 coop: you are player 2; 7 enemy streams bound (75871 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 23 ms); the last minute's 68516 enemy moves: 3255 past their newest state, 0 held
+11:55:40 coop:   player 1 Saint Alessia: linked, rtt 54 ms; sent 16403 packets (1234 KB), got 17079 (1187 KB), 0 resent; their plane 0 moves
+11:56:18 landing menu: decide on 1942E34180, row '21'
+11:56:19 landing menu: decide on 16D4790200, row 'SV_Buy_Revive'
+11:56:19 shop: SV_Buy_Revive picked on the landing menu
+11:56:20 coop: player 1's plane is 112B79670 (a real player plane: its own update flies it, fed from their stream)
+11:56:20 coop2mp: player 1's real plane 112B79670 fed from their stream: speed 189 m/s, flight block yes, State 0
+11:56:21 landing menu: decide on 16D4790200, row '22'
+11:56:22 landing menu: decide on 196E2C8100, row '20'
+11:56:23 coop2mp: player 1's real plane: 184 frames fed, 0 not (no stream yet / no message) this minute; at most 12006 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+11:56:23 coop2mp: T4b this minute: your launches sent 4 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+11:56:23 coop2mp: player 1's real plane 112B79670 fed from their stream: speed 189 m/s, flight block yes, State 0
+11:56:23 landing menu: decide on 196EB35160, row 'SV_Buy_Rearm'
+11:56:23 shop: SV_Buy_Rearm picked on the landing menu
+11:56:24 landing menu: decide on 196EB35160, row 'SV_Buy_Missiles'
+11:56:24 shop: SV_Buy_Missiles picked on the landing menu
+11:56:24 landing menu: decide on 196EB35160, row 'SV_Buy_Missiles'
+11:56:24 shop: SV_Buy_Missiles picked on the landing menu
+11:56:25 landing menu: decide on 196EB35160, row '-1'
+11:56:40 coop: you are player 2; 4 enemy streams bound (72622 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 34 ms); the last minute's 27492 enemy moves: 1412 past their newest state, 0 held
+11:56:40 coop:   player 1 Saint Alessia: linked, rtt 60 ms; sent 17988 packets (1351 KB), got 18937 (1335 KB), 0 resent; their plane 0 moves
+11:56:40 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 1 120/34 ms 0/0
+11:56:46 coop2mp: T4b: player 1's shot (weapon 1, slot 0, lock-ons 1) on their real plane 112B79670 here: launched (168D6F8D40), target 68B8E6AC0
+11:56:47 coop2mp: T4b: player 1's shot (weapon 1, slot 1, lock-ons 1) on their real plane 112B79670 here: launched (170B068D40), target 68B8E6AC0
+11:56:49 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+11:56:49 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (-2806, -14573) m, 3351 m high, heading 28
+11:56:49 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+11:56:49 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (5163, -22575) m, 4211 m high, heading 59
+11:56:59 coop2mp: T4b: player 1's shot (weapon 2, slot 0, lock-ons 0) on their real plane 112B79670 here: launched (1709F64D80), target 1740EDB560
+11:57:04 coop2mp: T4b: player 1's shot (weapon 2, slot 1, lock-ons 0) on their real plane 112B79670 here: launched (1434D31A80), target 1740EDB560
+11:57:23 coop2mp: player 1's real plane: 4496 frames fed, 0 not (no stream yet / no message) this minute; at most 98 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+11:57:23 coop2mp: T4b this minute: your launches sent 5 (0 dropped); theirs 4 queued here, 0 refused, 4 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+11:57:23 coop2mp: player 1's real plane 112B79670 fed from their stream: speed 461 m/s, flight block yes, State 0
+11:57:29 spawn SV_Unit_LadonMishka: up, 25 aircraft, at (-9000, 2000) m, 0 m high, heading 0
+11:57:29 spawn SV_Unit_LadonKot: up, 25 aircraft, at (-9000, 2000) m, 0 m high, heading 0
+11:57:40 coop: you are player 2; 2 enemy streams bound (3350 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 42 ms); the last minute's 3350 enemy moves: 436 past their newest state, 0 held
+11:57:40 coop:   player 1 Saint Alessia: linked, rtt 70 ms; sent 19745 packets (1481 KB), got 20572 (1441 KB), 0 resent; their plane 0 moves
+11:57:40 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 1 120/42 ms 0/0
+11:58:23 coop2mp: player 1's real plane: 4707 frames fed, 0 not (no stream yet / no message) this minute; at most 115 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+11:58:23 coop2mp: player 1's real plane 112B79670 fed from their stream: speed 762 m/s, flight block yes, State 8
+11:58:40 coop: you are player 2; 2 enemy streams bound (21364 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 30 ms); the last minute's 18014 enemy moves: 2718 past their newest state, 0 held
+11:58:40 coop:   player 1 Saint Alessia: linked, rtt 68 ms; sent 21365 packets (1602 KB), got 22214 (1539 KB), 0 resent; their plane 0 moves
+11:58:40 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 1 120/30 ms 0/0
+11:59:06 coop2mp: a hit on player 1's real plane here: 100 damage (x10), from 17B6DE5580 (refused here: their own game takes their hits; counted once a minute)
+11:59:23 coop2mp: player 1's real plane: 3994 frames fed, 0 not (no stream yet / no message) this minute; at most 131 m off where it was sent; 1 hits on it here (refused: their own game takes its hits)
+11:59:23 coop2mp: player 1's real plane 112B79670 fed from their stream: speed 713 m/s, flight block yes, State 8
+11:59:40 coop: you are player 2; 2 enemy streams bound (37536 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 29 ms); the last minute's 16172 enemy moves: 2650 past their newest state, 0 held
+11:59:40 coop:   player 1 Saint Alessia: linked, rtt 60 ms; sent 22873 packets (1714 KB), got 23700 (1627 KB), 0 resent; their plane 0 moves
+11:59:40 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 1 120/29 ms 0/0
+12:00:23 coop2mp: player 1's real plane: 4382 frames fed, 0 not (no stream yet / no message) this minute; at most 143 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+12:00:23 coop2mp: player 1's real plane 112B79670 fed from their stream: speed 522 m/s, flight block yes, State 0
+12:00:40 coop: you are player 2; 2 enemy streams bound (55292 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 37 ms); the last minute's 17756 enemy moves: 2788 past their newest state, 0 held
+12:00:40 coop:   player 1 Saint Alessia: linked, rtt 63 ms; sent 24459 packets (1832 KB), got 25211 (1717 KB), 0 resent; their plane 0 moves
+12:00:40 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 1 120/37 ms 0/0
+12:01:23 coop2mp: player 1's real plane: 4511 frames fed, 0 not (no stream yet / no message) this minute; at most 141 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+12:01:23 coop2mp: player 1's real plane 112B79670 fed from their stream: speed 169 m/s, flight block yes, State 0
+12:01:40 coop: you are player 2; 2 enemy streams bound (73452 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 36 ms); the last minute's 18160 enemy moves: 2866 past their newest state, 0 held
+12:01:40 coop:   player 1 Saint Alessia: linked, rtt 81 ms; sent 26077 packets (1952 KB), got 26749 (1808 KB), 0 resent; their plane 0 moves
+12:01:40 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 1 120/36 ms 0/0
+12:02:23 coop2mp: player 1's real plane: 4700 frames fed, 0 not (no stream yet / no message) this minute; at most 99 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+12:02:23 coop2mp: player 1's real plane 112B79670 fed from their stream: speed 554 m/s, flight block yes, State 0
+12:02:40 coop: you are player 2; 2 enemy streams bound (91992 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 34 ms); the last minute's 18540 enemy moves: 2752 past their newest state, 0 held
+12:02:40 coop:   player 1 Saint Alessia: linked, rtt 64 ms; sent 27736 packets (2076 KB), got 28311 (1901 KB), 0 resent; their plane 0 moves
+12:02:40 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 1 120/34 ms 0/0
+12:03:23 coop2mp: player 1's real plane: 4260 frames fed, 0 not (no stream yet / no message) this minute; at most 71 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+12:03:23 coop2mp: player 1's real plane 112B79670 fed from their stream: speed 166 m/s, flight block yes, State 0
+12:03:40 coop: you are player 2; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 36 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+12:03:40 coop:   player 1 Saint Alessia: linked, rtt 111 ms; sent 29269 packets (2190 KB), got 29861 (1991 KB), 0 resent; their plane 0 moves
+12:03:40 coop: planes here (player drawn-behind/lateness ms past/moves, the last minute): 1 120/36 ms 0/0
+12:03:57 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:03:57 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (28571, -22835) m, 2411 m high, heading 124
+12:04:01 spawn ERA_Unit_03_Dep_Air0: its last flight was shot down; took it off the phase's list and removed its unit actor
+12:04:01 spawn ERA_Unit_03_Dep_Air0: up, 2 aircraft, at (12721, -22653) m, 6070 m high, heading 79
+12:04:23 coop2mp: player 1's real plane: 2978 frames fed, 0 not (no stream yet / no message) this minute; at most 19617 m off where it was sent; 0 hits on it here (refused: their own game takes its hits)
+12:04:40 coop: you are player 2; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 34 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+12:04:40 coop:   player 1 Saint Alessia: linked, rtt 248 ms; sent 30924 packets (2313 KB), got 30253 (2015 KB), 0 resent; their plane 0 moves
+12:04:45 spawner: this level's LiveUnitSpawner is gone (the level is ending): no search until the next run
+12:04:46 main menu: Survival's pages open through CampaignTraining's page (entry 40, list at manager+118)
+12:04:46 main menu: Survival's pages open through InitialSetting_DualSence's page (entry 38, list at manager+118)
+12:04:46 main menu: Survival's pages open through InitialSetting_Accessibility's page (entry 37, list at manager+118)
+12:04:54 main menu: Survival's page row 'SurvivalMenu': Survival's pages
+12:05:25 main menu: Survival's page row 'SV_Back': no mode
+12:05:27 coop: closed

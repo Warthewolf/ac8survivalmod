@@ -1,0 +1,26 @@
+11:46:11.849 t2380 lua: coop: player 2 asked for the whole picture: sent (rs)
+11:46:12.399 t2380 lua: coop: player 2 asked for the whole picture: sent (rs)
+11:46:29.610 t2380 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+11:46:32.874 t2380 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+11:47:39.336 t2380 lua: coop: player 2 asked for the whole picture: sent (rs)
+11:51:58.946 t2380 lua: coop: player 2 asked for the whole picture: sent (rs)
+11:52:27.767 t2380 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor 13C687D6F0
+11:52:27.768 t2380 recycle ERA_Unit_01_Dep_Air0: done
+11:52:27.777 t2380 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+11:52:30.941 t2380 lua: spawn ERA_Unit_03_Dep_Air0 at a pose: 2
+11:52:33.976 t2380 recycle ERA_Unit_05_Dep_Air0: unregistering and destroying its unit actor 1352AF7BB0
+11:52:33.976 t2380 recycle ERA_Unit_05_Dep_Air0: done
+11:52:33.990 t2380 lua: spawn ERA_Unit_05_Dep_Air0 at a pose: 2
+11:54:11.360 t2380 lua: coop: player 2 asked for the whole picture: sent (rs)
+11:54:28.916 t2380 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+11:54:31.966 t2380 recycle ERA_Unit_01_Dep_Air0: unregistering and destroying its unit actor D7AF78DF0
+11:54:31.966 t2380 recycle ERA_Unit_01_Dep_Air0: done
+11:54:31.978 t2380 lua: spawn ERA_Unit_01_Dep_Air0 at a pose: 2
+11:54:35.028 t2380 lua: spawn EA_Unit_01_Air1 at a pose: 6
+11:54:38.301 t2380 lua: spawn EA_Unit_01_Air0 at a pose: 2
+11:56:49.160 t2380 lua: coop: player 2 asked for the whole picture: sent (rs)
+11:57:29.204 t2380 lua: spawn SV_Unit_LadonKot: 25
+11:57:29.221 t2380 lua: spawn SV_Unit_LadonMishka: 25
+12:03:57.388 t2380 lua: spawn ERA_Unit_02_Dep_Air0 at a pose: 2
+12:04:00.938 t2380 lua: spawn ERA_Unit_03_Dep_Air0 at a pose: 2
+12:04:17.192 t2380 lua: coop: player 2 asked for the whole picture: sent (rs)

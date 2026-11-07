@@ -325,12 +325,62 @@ function searchSetup()
             r.MagazineCapacity = 999
         end, "ECM pod (MINDRIPPER's, AB.L..IN's): always up (no rest, 15 s on, every 14 s, from 20 km)", "x")
     end
+    -- AB.L..IN's own with its phases (CFG.specials.glitch.phases ecm_row; P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 9): its
+    -- pod is held up by RE_SV_GlitchEcm every ecm_every_s (hard rule 40) until its phase 3 drops it, so its own row fires
+    -- a pod by itself at most once a minute (anomEcm's values, 60 s between and 60 s rest), else the 14 s refire of
+    -- anomEcm would keep the ECM up whatever the phase (rows _SVE; MINDRIPPER keeps anomEcm). Off by default (code review
+    -- of unit 9): "up all fight" was confirmed with anomEcm's row and the event together, so phase 3 drops the ECM by
+    -- ecm_pods_off alone until a test shows the event holds it up under this row
+    local function glitchEcm(src)
+        return copy(fcs, src, function(r)
+            r.CaptureDistance, r.ActivationTime = 20000, 0.5
+            r.TriggeringTime, r.ShotIntervalTime, r.RestingTime = 15.0, 60.0, 60.0
+            r.MagazineCapacity = 999
+        end, "ECM pod (AB.L..IN's, its phases): by its events, the row's own at most once a minute (60 s between, 60 s rest)", "e")
+    end
+    local GPH = CFG.specials.glitch.phases
     local function anomGun(src)
         local g = withLevel(CFG.guns, spikeCfg(#SPIKE_SUFFIX).guns)
         local reach, acc = AN.gun_reach_x or 1, AN.gun_accuracy_x or 1
         return gunRow(src, { range = g.range_m * 1.5 * reach, angle = math.min(180, g.angle_deg * 1.5), aim = g.aim_s / AGG,
                              burst = math.min(200, g.burst * AGG), rest = g.rest_s / AGG, damage_x = g.damage_x * 2,
-                             spread = g.spread_deg / 2 / acc, life_x = reach, lead = AN.gun_lead_s }, "MINDRIPPER's ", "x")
+                             spread = g.spread_deg / 2 / acc, life_x = AN.gun_life_x or reach, lead = AN.gun_lead_s }, "MINDRIPPER's ", "x")
+    end
+    -- The fighter roles' fire control (CFG.roles, P1; made only with roles on at the main menu, as the rows are made
+    -- once a session): the Wolf airframes' gun leads you by wolf.gun_lead_s ("guns lead on" can't be switched live:
+    -- PredictionOffsetTime is on the row; rows _SV<level>_WOLF; every plane of those airframes, bait and trap, so it
+    -- holds only while no other role flies them: the Skirmishers' fallback in rounds 1-3 does), and the Skirmishers'
+    -- special slot a copy of the LAAM's that reaches skirm.laam_m and never fires inside skirm.laam_min_m (row
+    -- NPC_FCS_PlaneLAAM000_SV_SKIRM; the stock one: 1.5-4 km, as Survival's own missiles already reach)
+    local RC = CFG.roles
+    local rolesOn = RC and RC.enabled
+    local function wolfGun(src, level)
+        local lead = tonumber(RC.wolf and RC.wolf.gun_lead_s) or 0
+        if lead <= 0 then return nil end
+        local g = withLevel(CFG.guns, spikeCfg(level).guns)
+        return gunRow(src, { range = g.range_m, angle = g.angle_deg, aim = g.aim_s, burst = g.burst, rest = g.rest_s,
+                             damage_x = g.damage_x, spread = g.spread_deg, lead = lead },
+                      "the Wolf airframes' ", SPIKE_SUFFIX[level] .. "_wolf")
+    end
+    local function skirmLaam()
+        local s = RC.skirm or {}
+        if not s.laam then return nil end
+        return copy(fcs, "NPC_FCS_PlaneLAAM000", function(r)
+            r.CaptureDistance, r.CaptureMinDistance, r.CaptureAngleRange = s.laam_m, s.laam_min_m, s.laam_angle_deg
+            r.TriggeringTime, r.ShotIntervalTime, r.RestingTime = s.laam_lock_s, s.laam_interval_s, s.laam_rest_s
+        end, string.format("the Skirmishers' LAAM: lock within %.0f m / %.0f deg, never inside %.0f m, lock %.1f s, %.1f s between, rest %.1f s",
+            s.laam_m, s.laam_angle_deg, s.laam_min_m, s.laam_lock_s, s.laam_interval_s, s.laam_rest_s), "_skirm")
+    end
+    -- The AI's flares (CFG.flares; P6's missile counter, the critic's lever): the saved profile had you missile-heavy at
+    -- the main menu (sv_stats.lua PROF.menu, before this; PROF.flareWant): every fighter's flare slot (stock
+    -- NPC_FCS_PlaneFlr000: 10 in the magazine, 25 s to reload) onto a copy that holds more and reloads sooner (row
+    -- NPC_FCS_PlaneFlr000_SV_FLR, one for every level); the specials' own keep theirs. nil: the stock row
+    local flr = PROF and PROF.flareWant
+    local function aiFlares(src)
+        if type(flr) ~= "table" then return nil end
+        return copy(fcs, src, function(r) r.MagazineCapacity, r.ReloadTime = flr.magazine, flr.reload_s end,
+            string.format("the AI's flares, against your missiles: %d in the magazine, %.1f s to reload", flr.magazine,
+            flr.reload_s), "_flr")
     end
     -- AB.L..IN's (CFG.specials.glitch gun_*): long bursts, no rest, accurate rounds (rows _SVG)
     local function glitchGun(src)
@@ -350,7 +400,7 @@ function searchSetup()
         r.bEnableLostTargetInClouds = false
     end)
     log(string.format("special: the Anomaly's guards search %d m (%s)", AN.guard_search_m, okG and guardModule or "module NOT made"))
-    SR.module, SR.npcRow, SR.tables = SEARCH_MODULE.row, {}, { npc = npc }
+    SR.module, SR.npcRow, SR.tables = SEARCH_MODULE.row, {}, { npc = npc, mission = mission }
     local n, list = 0, { BEHAVIOUR_AIRCRAFT }
     local inList = { [BEHAVIOUR_AIRCRAFT] = true }
     local function add(a) if a and not inList[a] then inList[a] = true; list[#list + 1] = a end end
@@ -450,7 +500,8 @@ function searchSetup()
                     end
                     local ft = a:match("^sv_ace_(%a+)_")                    -- a tier's squadron: CFG.aces.flight
                     local fl = ft and CFG.aces.flight and CFG.aces.flight[ft]
-                    if fl then
+                    -- (only a tier that flies beyond stock: P9 gave every squadron an entry, its roles and openers)
+                    if type(fl) == "table" and type(fl.turn_add) == "table" then
                         local okF, errF = pcall(function()
                             r.PitchSpeedDifference = (r.PitchSpeedDifference or 0) + fl.turn_add.pitch
                             r.RollSpeedDifference = (r.RollSpeedDifference or 0) + fl.turn_add.roll
@@ -480,6 +531,7 @@ function searchSetup()
                             end
                         end)
                     end
+                    local acRole = rolesOn and ROLE.ofAircraft(a) or nil     -- (a fighter role's airframe: CFG.roles)
                     if fcs then                      -- its weapon slots onto Survival's fire control for this level
                         local free, frees = nil, {}
                         for i = 0, 5 do
@@ -492,14 +544,31 @@ function searchSetup()
                                     new = anomFcs(id)
                                 elseif id:find("^NPC_FCS_PlaneGun") and CFG.guns.enabled then
                                     new = ((mind or valka) and anomGun(id)) or (glitch and glitchGun(id))
-                                        or (SR.aceTier and SR.aceTier[a] and aceGun(id, level, SR.aceTier[a])) or svGun(id, level)
-                                elseif glitch and id:find("ECM", 1, true) then
-                                    new = anomEcm(id)                                -- its pod always up
+                                        or (SR.aceTier and SR.aceTier[a] and aceGun(id, level, SR.aceTier[a]))
+                                        or (acRole == "wolf" and wolfGun(id, level)) or svGun(id, level)
+                                elseif glitch and id:find("ECM", 1, true) then        -- its pod always up (to its phase 3)
+                                    new = (type(GPH) == "table" and GPH.enabled and GPH.ecm_row and glitchEcm(id)) or anomEcm(id)
+                                elseif flr and id:find("^NPC_FCS_PlaneFlr") and not (mind or glitch or valka) then
+                                    new = aiFlares(id)                               -- (P6: your missile habit)
                                 elseif (id == "None" or id == "") and i >= 3 then free = free or i; frees[#frees + 1] = i end
                                 if new then r["NpcFCSId" .. i] = FName(new) end
                             end)
                         end
                         local fcsList = CFG.special.fcs
+                        -- the jammer's ECM pod (CFG.jammer): its row, the campaign's plain EA-18G (OP1010_e18g_01), has
+                        -- none (only the named aces' do), so RE_SV_JamEcm_NN's WN_WEAPON_4 (slot 3, tools/
+                        -- survival_events.py JAM_ECM_SLOT) fired the random special weapon put there (the user,
+                        -- 2026-10-29: "the EA-18G never activated it's ECM"). The pod first, held up as MINDRIPPER's
+                        local jam = CFG.jammer and CFG.jammer.enabled ~= false and a == CFG.jammer.aircraft
+                        if jam and free then
+                            local pod = anomEcm("NPC_FCS_ECM000") or "NPC_FCS_ECM000"
+                            r["NpcFCSId" .. free] = FName(pod)
+                            if level == 0 then
+                                log(string.format("weapons: %s (the jammer) carries its ECM pod %s (slot %d%s)", svNpc, pod, free,
+                                    free == 3 and "" or ": NOT slot 3, the one RE_SV_JamEcm fires"))
+                            end
+                            free = frees[2]
+                        end
                         if mind then                    -- its own (CFG.specials.anomaly.weapons: specials and the ECM pod)
                             local got = {}
                             for k, slot in ipairs(frees) do
@@ -512,6 +581,8 @@ function searchSetup()
                             free = nil
                         end
                         if CFG.special.enabled and free and #fcsList > 0 then
+                            -- (a Skirmisher airframe: its long-range LAAM copy, CFG.roles.skirm, not a random one)
+                            if not spw and acRole == "skirm" then spw = skirmLaam() end
                             spw = spw or fcsList[math.random(#fcsList)]
                             r["NpcFCSId" .. free] = FName(spw)
                             if level == 0 then log("weapons: " .. svNpc .. " carries " .. spw .. " (slot " .. free .. ")") end
@@ -519,9 +590,41 @@ function searchSetup()
                     end
                     local set = CFG.search.luaset
                     if set and CFG.behaviour_sets[set] and not BS.ready[set] then set = CFG.search.fallback_luaset end
+                    -- the Anomaly's guards (its wing row, every level: the world data names the level-0 one and the
+                    -- behaviour is built from it at level load, hard rule 20) fly its pack's set (CFG.specials.anomaly
+                    -- .pack guard_luaset, P7: the Wolf trap's close gunfighter; never NLID_0400_CP, hard rule 22)
+                    local pk = AN.pack
+                    local gs = a == ACE.row("anomaly", "f04e", "w") and type(pk) == "table" and pk.enabled
+                        and type(pk.guard_luaset) == "string" and pk.guard_luaset ~= "" and pk.guard_luaset or nil
+                    if gs and CFG.behaviour_sets[gs] and BS.ready[gs] then set = gs
+                    elseif gs and level == 0 then
+                        log("special: the Anomaly's guards keep " .. tostring(set) .. " (their set " .. gs .. " isn't in)")
+                    end
+                    if gs and set == gs and level == 0 then log("special: the Anomaly's guards (" .. svNpc .. ") fly " .. gs .. " (its pack)") end
                     if set then r.LuaSetId = FName(set) end
                 end)
                 if not okR then error(svNpc .. ": " .. tostring(whyR)) end
+                pcall(function()                  -- its first missile slot (the squad director's salvo fires slot 2)
+                    local _, rr = dtCall(npc, "FindRow", svNpc)
+                    local slot = nil
+                    for i = 0, 5 do
+                        if slot == nil and tostring(rr["NpcFCSId" .. i]:ToString()):find("^NPC_FCS_PlaneMsl") then slot = i end
+                    end
+                    SR.mslSlot = SR.mslSlot or {}
+                    SR.mslSlot[mname] = slot
+                    -- its special weapon's slot and fire control (sv_spweapons.lua fires slot 3's): the first slot from 3
+                    -- that isn't a pod, flares, a gun or a standard missile
+                    local sp, sid = nil, nil
+                    for i = 3, 5 do
+                        local id = tostring(rr["NpcFCSId" .. i]:ToString())
+                        if sp == nil and id ~= "None" and id ~= "" and not id:find("ECM", 1, true) and not id:find("ESM", 1, true)
+                            and not id:find("Flr", 1, true) and not id:find("Gun", 1, true) and not id:find("^NPC_FCS_PlaneMsl") then
+                            sp, sid = i, id
+                        end
+                    end
+                    SR.spSlot, SR.spWeapon = SR.spSlot or {}, SR.spWeapon or {}
+                    SR.spSlot[mname], SR.spWeapon[mname] = sp, sid
+                end)
                 if level == 0 then
                     SR.ready[a], SR.npcRow[a], n = mname, svNpc, n + 1
                 else
@@ -546,10 +649,82 @@ function searchSetup()
     local nl = 0
     for _, t in pairs(SR.levels) do nl = nl + #t end
     log(string.format("spikes: %d difficulty-spike rows made (%d levels)", nl, nLevels))
+    do                                  -- the specials fired (sv_spweapons.lua: slot 3, WN_WEAPON_4): the rows that carry one there
+        local want, ok, other = SPW and SPW.FCS_SLOT or 3, 0, {}
+        for row, slot in pairs(SR.spSlot or {}) do
+            if slot == want then ok = ok + 1 elseif not row:find("_sv%a$") then other[#other + 1] = row .. " " .. tostring(slot) end
+        end
+        table.sort(other)
+        log(string.format("specials: %d rows carry a special in fire-control slot %d (WN_WEAPON_%d: fired at you)%s", ok, want,
+            want + 1, #other > 0 and ("; elsewhere: " .. table.concat(other, ", ")) or ""))
+    end
+    do                                  -- the squad director's bracket salvo (P2) fires WN_WEAPON_3: the rows that carry it
+        local want, ok, other = DIR and DIR.SALVO_FCS_SLOT or 2, 0, {}
+        for row, slot in pairs(SR.mslSlot or {}) do
+            if slot == want then ok = ok + 1 elseif not row:find("_sv%a$") then other[#other + 1] = row .. " " .. tostring(slot) end
+        end
+        table.sort(other)
+        log(string.format("director: %d rows carry their missiles in fire-control slot %d (WN_WEAPON_%d: the salvo)%s", ok, want,
+            want + 1, #other > 0 and ("; not: " .. table.concat(other, ", ")) or ""))
+    end
     if not SR.ready[BEHAVIOUR_AIRCRAFT] then
         log("search: WARNING the fighters' behaviour row " .. BEHAVIOUR_AIRCRAFT .. "_sv has no DT_NPC row; don't start a run")
     end
     SR.done = true
+end
+
+-- The fighter roles' behaviour rows (CFG.roles, behaviour roadmap P1; tools/re/BEHAVIOUR_DIRECTOR.md unit 5; the
+-- brief's recipe (b)): the world data has each role group's AI objects name a DT_SV_NpcMission row (ROLE.ROWS, built:
+-- tools/build_survival.py NPC_EXTRA) whose NpcId is a DT_NPC row made here, before the level loads (hard rule 20), as
+-- a copy of the fighters' (f16c_common's) with Survival's search module and the role's behaviour set (ROLE.SETS). Made
+-- in Lua, not baked into DT_SV_NpcRows, so a set that couldn't be made falls back to the fighters' set (or
+-- CFG.search.fallback_luaset) instead of naming a LuaSet row that isn't there. With CFG.roles off they name the
+-- fighters' set: every flight flies today's behaviour. RS.ready[key] = { row, npc, set, want } once made; sv_main.lua
+-- keeps what was in at level load (ROLE.levelLoad, sv_spawn.lua). Once a session (cloneRow keeps an existing row).
+RS = { done = false, ready = {} }
+function rolesSetup()
+    if RS.done or not (SR.done and BS.done) then return end
+    RS.done = true
+    local npc, mission = SR.tables and SR.tables.npc, SR.tables and SR.tables.mission
+    if not (npc and mission and SR.module) then
+        log("roles: no behaviour rows (the search rows weren't made); every role flight sits out")
+        return
+    end
+    local on = CFG.roles and CFG.roles.enabled
+    local _, base = dtCall(mission, "FindRow", BEHAVIOUR_AIRCRAFT)
+    local src = base ~= nil and base.NpcId:ToString() or nil
+    local parts = {}
+    for _, key in ipairs({ "lancer", "wolf", "wolf_wing", "skirm" }) do
+        local mrow = ROLE.ROWS[key]
+        local ok, err = pcall(function()
+            if not src then error("no mission row " .. BEHAVIOUR_AIRCRAFT .. " to copy") end
+            local _, mr = dtCall(mission, "FindRow", mrow)
+            if mr == nil then error("no mission row " .. mrow .. " in DT_SV_NpcMission (a container from before roles)") end
+            local npcRow = mr.NpcId:ToString()
+            local want = on and ROLE.SETS[key] or CFG.search.luaset
+            local set = want
+            if set and CFG.behaviour_sets[set] and not BS.ready[set] then
+                set = (BS.ready[CFG.search.luaset] and CFG.search.luaset) or CFG.search.fallback_luaset
+            end
+            local okR, whyR = cloneRow(npc, src, npcRow, function(r)
+                r.NpcAIModuleId = FName(SR.module)
+                if set then r.LuaSetId = FName(set) end
+            end)
+            if not okR then error(npcRow .. ": " .. tostring(whyR)) end
+            local check = "?"
+            pcall(function() local _, r = dtCall(npc, "FindRow", npcRow); check = r.LuaSetId:ToString() end)
+            RS.ready[key] = { row = mrow, npc = npcRow, set = check ~= "?" and check or set, want = want }
+            parts[#parts + 1] = string.format("%s %s -> %s flies %s%s", key, mrow, npcRow, check,
+                set ~= want and string.format(" (wanted %s: not made)", tostring(want)) or "")
+        end)
+        if not ok then parts[#parts + 1] = key .. " NOT made (" .. tostring(err) .. ")" end
+    end
+    log("roles: behaviour rows " .. (on and "" or "(roles off: the fighters' set) ") .. table.concat(parts, "; "))
+    for _, key in ipairs({ "lancer", "wolf", "wolf_wing", "skirm" }) do       -- (as searchSetup's for the fighters' row)
+        if not RS.ready[key] then
+            log("roles: WARNING " .. key .. "'s behaviour row wasn't made: its flights sit out every level of this session")
+        end
+    end
 end
 
 -- Comona Defense's shuttle row: DT_SV_NpcRows' OP0057_sstb_01_SV (Mission 22's shuttle with Survival's name key,
@@ -580,36 +755,120 @@ function specialSetup()
         c.name, named and "set" or "not set (no text slot)"))
 end
 
--- The mission row to fly for aircraft `a`: its _sv row when that was ready before this level loaded.
--- A difficulty spike's pursuit on an enemy (CFG.spikes: provoke_cone_deg / provoke_time_s / surround_m), once.
-enemySpike = nil
+-- The live provoke on an enemy (a harder tailed plane, P5 of tools/re/BEHAVIOUR_DIRECTOR.md; CFG.ai tier_provoke,
+-- provoke_stricter, provoke_cone_deg / provoke_time_s): how soon a tailed plane notices you (ProvokeConditionConeAngle
+-- deg, ProvokeDeterminationTime s: you inside that cone of its six for that long puts it in Provoke) and how close its
+-- pursuit sits (SurroundPursuitMin/MaxRange, cm), from the round's difficulty spike (CFG.spikes) and the plane's skill
+-- tier (CFG.tiers.list), or a special's own values (MINDRIPPER's unit, from sv_main.lua's planeSweep).
+--   provokeWant(round, tier[, level])  what a plane should fly: { cone, time, surround = { min m, max m }, level, src }
+--                                      or nil (nothing to write: the game's own row). level: the spike level to use
+--                                      (default levelFor(round): the spike's, or the intensity director's
+--                                      under it), so a later part can ask for another.
+--   enemyProvoke(p, want)              writes want on plane p, only the fields that differ from the last write
+--                                      (p.provokeSet; p.provokeWant = want): fields written, before / after texts.
+--                                      A field's value before its first write is kept (p.provokeStock: the game's own)
+--   provokeStockWant(p[, level])       those kept values as a want for enemyProvoke, or nil (none written yet): the
+--                                      intensity director's ease to a level with nothing to write puts them back
+--   enemySpike(p, round, tier)         once per plane when it appears (p.spiked): provokeWant + enemyProvoke, a
+--                                      "provoke:" line once per spike level and tier.
+-- Later parts (the intensity director, P4) change a live plane's values with enemyProvoke(p, provokeWant(...)).
+-- Writes read back (0.70.2's log); whether the game's provoke decision uses them is untested.
+provokeWant, enemyProvoke, enemySpike, provokeStockWant = nil, nil, nil, nil
 do
-local spikeSaid = {}
+local provokeSaid = {}
+local FIELDS = { { "ProvokeConditionConeAngle", "cone" }, { "ProvokeDeterminationTime", "time" },
+                 { "SurroundPursuitMinRange", "smin" }, { "SurroundPursuitMaxRange", "smax" } }
+local function isTier(t) return type(t) == "table" and t.name ~= nil and t.rank ~= nil end   -- (a CFG.tiers.list entry)
+local function stricter(a, b) if a == nil then return b elseif b == nil then return a end return math.min(a, b) end
+local function said(x)                             -- "60 deg / 1.5 s / 40-100 m"
+    local t = {}
+    if x.cone then t[#t + 1] = string.format("%g deg", x.cone) end
+    if x.time then t[#t + 1] = string.format("%g s", x.time) end
+    if x.surround then t[#t + 1] = string.format("%g-%g m", x.surround[1], x.surround[2]) end
+    return table.concat(t, " / ")
+end
+function provokeWant(round, tier, level)
+    local ai = CFG.ai or {}
+    level = level or levelFor(round)
+    local sk = spikeCfg(level)
+    local s = { cone = sk.provoke_cone_deg, time = sk.provoke_time_s, surround = sk.surround_m }
+    local t, test = nil, false
+    if tier and (not isTier(tier) or ai.tier_provoke ~= false) then          -- (a special's own: whatever the switch)
+        t = { cone = tier.provoke_cone_deg, time = tier.provoke_time_s, surround = tier.surround_m }
+        if isTier(tier) and (t.cone or t.time) then                           -- the A/B test values: every tier with its own
+            if (ai.provoke_cone_deg or 0) > 0 then t.cone, test = ai.provoke_cone_deg, true end
+            if (ai.provoke_time_s or 0) > 0 then t.time, test = ai.provoke_time_s, true end
+        end
+        if not (t.cone or t.time or t.surround) then t = nil end
+    end
+    local hasS = s.cone or s.time or s.surround
+    if not (t or hasS) then return nil end
+    local w, strict = { level = level }, ai.provoke_stricter ~= false
+    if t and strict then
+        w.cone, w.time = stricter(s.cone, t.cone), stricter(s.time, t.time)
+        if s.surround and t.surround then
+            w.surround = { math.min(s.surround[1], t.surround[1]), math.min(s.surround[2], t.surround[2]) }
+        else
+            w.surround = t.surround or s.surround
+        end
+    else                                               -- (the tier's, field by field, over the spike's: as before P5)
+        w.cone, w.time, w.surround = (t and t.cone) or s.cone, (t and t.time) or s.time, (t and t.surround) or s.surround
+    end
+    local from = {}
+    if t then from[#from + 1] = (isTier(tier) and tier.name or "special") .. " " .. said(t) .. (test and " (CFG.ai test values)" or "") end
+    if hasS then from[#from + 1] = "spike " .. level .. " " .. said(s) end
+    w.src = table.concat(from, ", ") .. ((t and hasS) and (strict and ": the stricter" or ": the tier's over the spike's") or "")
+    return w
+end
+function enemyProvoke(p, want)
+    if not (p and want and valid(p.obj)) then return 0, "", "", {} end
+    local set, stock = p.provokeSet or {}, p.provokeStock or {}
+    local sr = want.surround
+    local value = { cone = want.cone, time = want.time, smin = sr and sr[1] * 100 or nil, smax = sr and sr[2] * 100 or nil }
+    local before, writes, fields, n = {}, {}, {}, 0
+    for _, f in ipairs(FIELDS) do
+        local field, key = f[1], f[2]
+        local v = value[key]
+        if v ~= nil and set[key] ~= v then
+            local okR, old = pcall(function() return p.obj[field] end)
+            if set[key] == nil and stock[key] == nil and okR and type(old) == "number" then stock[key] = old end
+            before[#before + 1] = field .. " " .. (okR and tostring(old) or "?")
+            local okW, e = pcall(function() p.obj[field] = v end)
+            if okW then set[key], n = v, n + 1; fields[#fields + 1] = field end
+            writes[#writes + 1] = okW and (field .. " " .. tostring(v)) or (field .. " FAILED: " .. tostring(e))
+        end
+    end
+    p.provokeSet, p.provokeWant, p.provokeStock = set, want, stock
+    return n, table.concat(before, ", "), table.concat(writes, ", "), fields
+end
+function provokeStockWant(p, level)
+    local st = p and p.provokeStock
+    if not (st and next(st)) then return nil end
+    return { level = level, cone = st.cone, time = st.time, src = "the game's own",
+             surround = (st.smin and st.smax) and { st.smin / 100, st.smax / 100 } or nil }
+end
 function enemySpike(p, round, tier)
     if p.spiked ~= nil or not round then return end
-    local level = spikeLevel(round)
-    p.spiked = level
-    local sk = withLevel(spikeCfg(level), tier and { provoke_cone_deg = tier.provoke_cone_deg,
-        provoke_time_s = tier.provoke_time_s, surround_m = tier.surround_m } or nil)
-    if level == 0 and not (tier and tier.provoke_cone_deg) then return end
-    local before, writes = {}, {}
-    local function set(field, value)
-        if value == nil then return end
-        local okR, v = pcall(function() return p.obj[field] end)
-        before[#before + 1] = field .. " " .. (okR and tostring(v) or "?")
-        local okW, e = pcall(function() p.obj[field] = value end)
-        writes[#writes + 1] = okW and (field .. " " .. tostring(value)) or (field .. " FAILED: " .. tostring(e))
+    local w = provokeWant(round, tier)
+    p.spiked = w and w.level or levelFor(round)
+    if not w then return end
+    local n, before, writes, fields = enemyProvoke(p, w)
+    local who = isTier(tier) and tier.name or (tier and "special" or "no tier")
+    local key = w.level .. "|" .. who
+    if provokeSaid[key] and not writes:find("FAILED", 1, true) then return end
+    provokeSaid[key] = true
+    local back = {}
+    for _, field in ipairs(fields) do
+        local okB, v = pcall(function() return p.obj[field] end)
+        back[#back + 1] = okB and tostring(v) or "?"
     end
-    set("ProvokeConditionConeAngle", sk.provoke_cone_deg)
-    set("ProvokeDeterminationTime", sk.provoke_time_s)
-    if sk.surround_m then set("SurroundPursuitMinRange", sk.surround_m[1] * 100); set("SurroundPursuitMaxRange", sk.surround_m[2] * 100) end
-    if not spikeSaid[level] then
-        spikeSaid[level] = true
-        log(string.format("spikes: level %d on %s: was %s; now %s", level, p.name, table.concat(before, ", "), table.concat(writes, ", ")))
-    end
+    log(string.format("provoke: round %d, spike level %d, %s (%s): was %s; now %s; reads back %s (%s)", round, w.level, who,
+        p.name, before ~= "" and before or "-", writes ~= "" and writes or "-", #back > 0 and table.concat(back, ", ") or "-",
+        w.src))
 end
 end
 
+-- The mission row to fly for aircraft `a`: its _sv row when that was ready before this level loaded.
 function searchAircraft(a, level)
     local sv = SR.usable[a]
     if not (sv and SR.tables) then return a end

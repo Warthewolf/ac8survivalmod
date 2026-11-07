@@ -1,0 +1,16 @@
+AC8 Survival Mode COOP2MP 0.73.81 (0.73.81-coop2mp.82) - change log
+====================================================================
+Since 0.73.80 (CHANGELOG_0.73.80.txt). Patch over a 0.73.78 COOP2MP install (with or without the 0.73.79 / 0.73.80
+patches); everyone in a co-op session needs 0.73.81.
+
+- Spaceport Assault: every WASP you sink sends 4 TU-160s at the airfield 6 s later ("TU-160S INBOUND / FROM THE NORTH"
+  or "SOUTH": the groups come from the north and the south in turn). They fly in over the runway and bomb it, show on
+  the minimap and pay as heavy bombers, and the round ends only once they're down too. The game has one 4-bomber flight,
+  so if another Wasp goes down while 4 Tu-160s are still up, the next 4 come as soon as those are shot down. None in the
+  retake or once the spaceport is captured (and a capture sends the ones up home with the fighters). Settings:
+  [specials.spaceport.tu160] in survival.ini (group size, delay, directions).
+- Heavy bombers (any bomber raid): when a Tu-95 / Tu-160 flight's lead is shot down first, the next one now takes over
+  its bombing route every time (it could be lost right after the flight appeared, and the rest never bombed).
+
+Still with the next full build (runtime 0.32.24): the native log's lag fix and other players' weapon stand-ins.
+4 Tu-160s for EVERY Wasp at once (up to 16 in the air) needs three more 4-bomber flights in the game files: a full build.

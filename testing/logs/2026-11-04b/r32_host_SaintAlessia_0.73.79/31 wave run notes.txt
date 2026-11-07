@@ -1,0 +1,5 @@
+around wave 20ish, some clients mentioned desync of some description
+
+i noticed fps from around wave 22ish and onwards
+
+other than that, nothing really of note, things are looking really good at least on the host side

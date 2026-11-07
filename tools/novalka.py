@@ -1,12 +1,15 @@
 """novalka.py <stage mod folder> : makes a staged build one without VALKA (tools/package_release.sh with NOVALKA=1;
 user, 2026-10-25: "Do Not Include VALKA" in a build for a friend). On the staged copies only, never the sources:
-  - Scripts/sv_config.lua: CFG.specials.valka.enabled = false, "valka" out of CFG.specials.rotation
+  - Scripts/sv_config.lua (the part or its next pieces: tools/lua_parts.py): CFG.specials.valka.enabled = false,
+    "valka" out of CFG.specials.rotation
   - config/survival.default.ini: valka out of the rotation and its note, the [specials.valka] section gone
 Her AC7 assets (the X-02S container, the railgun sounds) are removed by package_release.sh; this checks they're gone.
 """
 import os
 import re
 import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lua_parts
 
 
 def sub(s, old, new, what):
@@ -15,16 +18,16 @@ def sub(s, old, new, what):
 
 
 def main(mod):
-    p = os.path.join(mod, 'Scripts', 'sv_config.lua')
-    s = open(p, encoding='utf-8', newline='').read()
-    s = sub(s, 'valka    = { enabled = true,', 'valka    = { enabled = false,', 'sv_config valka')
-    s = sub(s, '"glitch", "valka" }', '"glitch" }', 'sv_config rotation')
-    open(p, 'w', encoding='utf-8', newline='').write(s)
+    scripts = os.path.join(mod, 'Scripts')
+    lua_parts.sub(scripts, 'sv_config', 'valka    = { enabled = true,', 'valka    = { enabled = false,', 'sv_config valka')
+    # (the rotation's literal grows with new specials (2026-11-06: escort): "valka" taken out wherever it sits)
+    n = lua_parts.subn(scripts, 'sv_config', r'(rotation\s*=\s*\{[^}]*?), "valka"', r'\1')
+    assert n == 1, f'sv_config: {n} rotations with valka'
     p = os.path.join(mod, 'config', 'survival.default.ini')
     s = open(p, encoding='utf-8', newline='').read()
-    s = sub(s, ';rotation = shuttle, anomaly, amphibious, ladon, alicorn, glitch, valka',
-            ';rotation = shuttle, anomaly, amphibious, ladon, alicorn, glitch', 'ini rotation')
-    s = sub(s, ' glitch (AB.L..IN), valka (VALKA); leave one out to', ' glitch (AB.L..IN); leave one out to', 'ini note')
+    s, n = re.subn(r'(;rotation = [^\n]*?), valka\b', r'\1', s)
+    assert n == 1, f'ini: {n} rotations with valka'
+    s = sub(s, ' glitch (AB.L..IN), valka (VALKA), spaceport', ' glitch (AB.L..IN), spaceport', 'ini note')
     m = re.search(r'\[specials\.valka\][^\[]*', s)
     assert m, 'ini: no [specials.valka]'
     s = s[:m.start()] + s[m.end():]
@@ -37,8 +40,8 @@ def main(mod):
             if 'Valka' in f or f.lower().endswith('.wav'):
                 bad.append(os.path.join(d, f))
     assert not bad, f'VALKA files still staged: {bad}'
-    lua = open(os.path.join(mod, 'Scripts', 'sv_config.lua'), encoding='utf-8').read()
-    assert 'rotation = { "shuttle", "anomaly", "amphibious", "ladon", "alicorn", "glitch" }' in lua
+    lua = lua_parts.read(scripts, 'sv_config')
+    assert not re.search(r'rotation\s*=\s*\{[^}]*"valka"', lua), 'sv_config: valka still in the rotation'
     print(f'novalka: VALKA switched off and out of the rotation in {mod}; no X-02S container or AC7 sounds staged')
 
 

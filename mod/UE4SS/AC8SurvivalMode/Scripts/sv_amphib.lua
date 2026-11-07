@@ -10,6 +10,9 @@
 -- taken.
 do
 local function amph() RUN.amph = RUN.amph or { count = 0, troops = {}, capture = 0 }; return RUN.amph end
+-- ((review of 0.73.80) co-op: what's taken off without a kill goes down as nobody's on the host, not a kill of the
+-- player who once hit it: sv_coop.lua COOP.takenOff, before each removal event)
+local function takenOff(unit) if COOP and COOP.takenOff then pcall(COOP.takenOff, unit) end end
 
 local function tierPay(base) return (TIER.pay(base * TIER.specialX(), D and D.round and TIER.index(D.round))) end
 
@@ -82,6 +85,7 @@ function AMPH.spawn(now)
         if n >= want then break end
         local unit = "SV_Unit_Lcac" .. l
         if SV_UnitAlive(unit) > 0 then           -- still afloat from last time: off now, it comes again next time
+            takenOff(unit)
             local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacRemove" .. l) or "n/a"
             log(string.format("special: lane %s's craft were still up; taken off (%s)", l, tostring(r)))
         else
@@ -109,7 +113,9 @@ function AMPH.tick(now, s)
         local alive = lane.removed and 0 or (aliveOf(unit) or lane.alive)
         if alive < lane.alive and not lane.removed then
             local pay = tierPay(c.craft_pay) * (lane.alive - alive)
-            addCredits(pay, string.format("landing craft down (lane %s)", l))
+            -- ((0.73.77, the plan's I2: S3) "sunk", not "down (": sv_coop.lua's addCredits doesn't send the joiners a
+            -- pay whose reason has " down (" (a plane kill, each game's own), so they were never paid for a craft)
+            addCredits(pay, string.format("landing craft sunk (lane %s)", l))
             LB.stat("ground", lane.alive - alive)
             log(string.format("special: lane %s: %d landing craft left", l, alive))
         end
@@ -139,6 +145,7 @@ function AMPH.tick(now, s)
         end
         if lane.firstLanded and not lane.removed and now - lane.firstLanded >= c.remove_after_s then
             lane.removed = true                        -- (no pay for these: they got away)
+            takenOff("SV_Unit_Lcac" .. l)
             local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacRemove" .. l) or "n/a"
             log(string.format("special: lane %s's craft are away; taken off (%s)", l, tostring(r)))
         end
@@ -152,6 +159,7 @@ function AMPH.roundOver(now, s)
     for l, lane in pairs(s.lanes or {}) do
         if not lane.removed and SV_UnitAlive("SV_Unit_Lcac" .. l) > 0 then
             lane.removed = true
+            takenOff("SV_Unit_Lcac" .. l)
             local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacRemove" .. l) or "n/a"
             log(string.format("special: lane %s's craft taken off at the round's end (%s)", l, tostring(r)))
         end
@@ -165,7 +173,7 @@ function AMPH.roundOver(now, s)
     if not s.captured then
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, "landing repelled")
-        hudCallout(t.repelled, string.format(t.repelled_sub, pay))
+        hudCallout(t.repelled, string.format(t.repelled_sub, specialPay(pay)))   -- ((0.73.78) C3: each player's share)
         log(string.format("special: round %d, the landing was repelled", D.round))
     end
 end
@@ -177,6 +185,7 @@ local function free(why, removeLeft)
         for _, tr in ipairs(amph().troops) do
             if tr.alive > 0 then
                 tr.alive, tr.removed = 0, true
+                takenOff(tr.unit)
                 local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacTroopsRemove" .. tr.lane .. tr.craft) or "n/a"
                 log(string.format("special: troops %s taken off (%s)", tr.unit, tostring(r)))
             end
@@ -197,7 +206,8 @@ function AMPH.runTick(now)
         if tr.alive > 0 then
             local n = aliveOf(tr.unit) or tr.alive
             if n < tr.alive then
-                addCredits(tierPay(c.troop_pay) * (tr.alive - n), "troop vehicle down (" .. tr.unit .. ")")
+                -- ((0.73.77, I2: S3) not "down (", the co-op filter's plane kills: the joiners are paid it too)
+                addCredits(tierPay(c.troop_pay) * (tr.alive - n), "troop vehicle destroyed (" .. tr.unit .. ")")
                 LB.stat("ground", tr.alive - n)
                 log(string.format("special: troops %s: %d left", tr.unit, n))
             end
@@ -211,7 +221,8 @@ function AMPH.runTick(now)
             if (f["SV_LcacRunway" .. tr.lane .. tr.craft] or 0) >= 1 then
                 tr.reached = true
                 if not RUN.captured then
-                    A.capture = math.min(100, (A.capture or 0) + c.capture_per_troop)
+                    -- ((0.73.77) a whole share: a fraction in the ini stopped the rounds at the %d below, as the Spaceport's S11)
+                    A.capture = math.min(100, (A.capture or 0) + math.floor((tonumber(c.capture_per_troop) or 0) + 0.5))
                     RUN.dirty = true
                     hudCallout(t.on_runway, string.format(t.on_runway_sub, A.capture))
                     log(string.format("special: troops %s reached the runway; airfield %d%% captured", tr.unit, A.capture))
@@ -248,6 +259,7 @@ function AMPH.runTick(now)
             if why then
                 local n = tr.alive
                 tr.alive, tr.removed = 0, true
+                takenOff(tr.unit)
                 local r = type(SV_Event) == "function" and SV_Event("RE_SV_LcacTroopsRemove" .. tr.lane .. tr.craft) or "n/a"
                 hudCallout(t.troops_stuck, string.format(t.troops_stuck_sub, n))
                 log(string.format("special: troops %s stuck (%s): taken off (%s)", tr.unit, why, tostring(r)))

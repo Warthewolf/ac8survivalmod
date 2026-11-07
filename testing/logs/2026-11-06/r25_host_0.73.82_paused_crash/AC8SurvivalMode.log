@@ -1,0 +1,1321 @@
+14:32:40 AC8 Survival Mode runtime 0.32.23
+14:32:40 UE4SS calls mod slot 3
+14:32:40 UE4SS calls mod slot 15
+14:32:41 UE4SS calls mod slot 13
+14:32:42 leaderboard: the game started: build hash c387fb3581f705f7f52f3480b5318cad42d0cd9f559870049bfe5e927962afe3 (30 scripts, 12 behaviour scripts, the ini, main.dll and the container: 46 files, 4283 KB, 1422 ms)
+14:33:18 UE4SS calls mod slot 2
+14:33:18 UE4SS calls mod slot 4
+14:33:18 UE4SS calls mod slot 5
+14:33:18 UE4SS calls mod slot 7
+14:33:18 UE4SS calls mod slot 6
+14:33:18 UE4SS: Lua mod AC8SurvivalMode started (mod slot 6)
+14:33:18 Lua bridge: registering 79 functions
+14:33:18 Lua bridge: SV_Version, SV_MenuChoice, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Crumb, SV_LevelGone, SV_Recycle, SV_RecycleWait, SV_Ammo, SV_SetAmmo, SV_AmmoMax, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_MusicHold, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_PlayerTarget, SV_SetText, SV_ShopRequest, SV_MenuSetting, SV_MenuPages, SV_MenuClass, SV_MenuSlot, SV_MenuQuick, SV_BGMNames, SV_CoopOpen, SV_CoopClose, SV_CoopInfo, SV_CoopSend, SV_CoopRecv, SV_CoopMe, SV_CoopPeer, SV_CoopTrack, SV_CoopBind, SV_CoopPeerAt, SV_CoopReset, SV_CoopSpawnPP, SV_CoopKillPP, SV_CoopFollow, SV_CoopPPRole, SV_CoopFeed, SV_CoopPPFx, SV_CoopFire, SV_CoopShots, SV_CoopPPShot, SV_CoopPeerIds, SV_CoopSwapPP, SV_ObjChain, SV_StoreKeepAI, SV_GcBusy, SV_CoopLoadout, SV_SpawnCam, SV_StickNow, SV_PPName, SV_CoopPaint, SV_InputNow, SV_Down, SV_Respawn, SV_MemMB, SV_SndLoad, SV_SndPlay, SV_SndSet, SV_SndStop, SV_SndMaster, SV_Post, SV_PostResult, SV_Pos
+14:33:18 UE4SS calls mod slot 8
+14:33:18 UE4SS: Lua mod AC8SurvivalMode started (mod slot 8)
+14:33:18 Lua bridge: registering 79 functions
+14:33:18 Lua bridge: SV_Version, SV_MenuChoice, SV_Spawn, SV_SetAircraft, SV_UnitAlive, SV_LogUnits, SV_Reset, SV_Crumb, SV_LevelGone, SV_Recycle, SV_RecycleWait, SV_Ammo, SV_SetAmmo, SV_AmmoMax, SV_FreeRestock, SV_GameLua, SV_GameLuaState, SV_PlayBGM, SV_BGM, SV_Event, SV_MusicPlayer, SV_MusicClock, SV_MusicHold, SV_SetLevel, SV_PlaneLevel, SV_Invert, SV_PlayerTarget, SV_SetText, SV_ShopRequest, SV_MenuSetting, SV_MenuPages, SV_MenuClass, SV_MenuSlot, SV_MenuQuick, SV_BGMNames, SV_CoopOpen, SV_CoopClose, SV_CoopInfo, SV_CoopSend, SV_CoopRecv, SV_CoopMe, SV_CoopPeer, SV_CoopTrack, SV_CoopBind, SV_CoopPeerAt, SV_CoopReset, SV_CoopSpawnPP, SV_CoopKillPP, SV_CoopFollow, SV_CoopPPRole, SV_CoopFeed, SV_CoopPPFx, SV_CoopFire, SV_CoopShots, SV_CoopPPShot, SV_CoopPeerIds, SV_CoopSwapPP, SV_ObjChain, SV_StoreKeepAI, SV_GcBusy, SV_CoopLoadout, SV_SpawnCam, SV_StickNow, SV_PPName, SV_CoopPaint, SV_InputNow, SV_Down, SV_Respawn, SV_MemMB, SV_SndLoad, SV_SndPlay, SV_SndSet, SV_SndStop, SV_SndMaster, SV_Post, SV_PostResult, SV_Pos
+14:33:18 UE4SS calls mod slot 1
+14:33:26 game functions (45688 ms): base 147A79A30, main decide 147B3FA10, difficulty decide 147B00A90, next 146EB70A0, goto 147A76CC0, set difficulty 147B817C0, transition 147A76C20, text 0
+14:33:26 spawn functions: spawn unit 147E00680, unregister unit 147E0C770, unit check 147E0CAB0, destroy actor 143FD38E0
+14:33:26 ammo functions: node execute 1473F03F0, flare lambda 14740B6C0, weapons lambda 1473F08A0, free restock 1473F2000
+14:33:26 game Lua: GetGameLuaState 144EC9FF0
+14:33:26 music and events: BGM node 1473CB720, remote-event node 1473E4B40, pause list 147B470D0, landing menu decide 147AF2030
+14:33:26 music player: track clock tick 147B182A0, next track 147B2A010
+14:33:26 flight input: BuildFlightInput 147D582D0
+14:33:26 coop: AI plane teleport 147D0DD90, inner 147D0DF60
+14:33:26 coop: player plane: spawn 1471D15E0, world spawn 14464D330, teleport 147D3EFB0, inner 147D3EFF0; remote spawn sites: possess 1471B8674, network object 1471B869B, role 1471B87D8, dummy class 1471B85CD, loadout 1471B8957, loadout bytes 1471B8A03, finish 1471B8FEA
+14:33:26 flight: one-shot fire 147C7F910 (LiveFireOneShotWeapon's Execute 1473D9710), AI takeoff afterburner 147CBEF60, player plane respawn 147D5CD60, remote update 147D5E9E0, surface update 147D224E0, player plane damage 0
+14:33:26 coop2mp: weapons fired 147D60980, remote plane fire 147D617C0, launch weapon 147F68E50, flares 147F504B0, network manager 147ECE910, select special 147D61740, arm special 147D523B0, gear site 1474C8BD4
+14:33:26 guard: AI unit effect update 147CA23C0, a second unit update 147CA8230, target entry check 14742F9A0; coop2mp: plane electronic update 147D177B0
+14:33:26 text lookup not found; the menu entry shows its text key instead of its name
+14:33:26 pause menu list: hooked at 147B470D0
+14:33:26 landing menu decide: hooked at 147AF2030
+14:33:26 music player clock: hooked at 147B182A0
+14:33:26 music player next track: hooked at 147B2A010
+14:33:26 flight input: hooked at 147D582D0
+14:33:26 remote player plane update: hooked at 147D5E9E0
+14:33:26 guard: GUObjectArray chunks at 14DC4ACE0, count at 14DC4ACF4 (59170 objects), GC flag at 14DC33620 (now 1)
+14:33:26 guard: the engine's purge flags: purge required at 14E41BAE0 (now 0), incremental purge in progress at 14E41BAE8 (now 0), from IncrementalPurgeGarbage 1419C8590: SV_GcBusy
+14:33:26 guard: AI unit effect update: vtable slot 14C509EC8, next 147CA23C0
+14:33:26 guard: second AI unit update (+0x42c0): vtable slot 14C5080C8, next 147CA8230
+14:33:26 guard: the target search's fault catcher in; the world getter 143FB5420
+14:33:26 guard: the event family: 152 vtables share its 3 base slots, 151 of them its +0x50 too, 151 answer an event type (151 distinct): those 151 looked at, 1 not
+14:33:26 guard: 37 target entry classes guarded in 38 vtable slots (the first 1, a weak actor unchecked 3, the world unchecked 13, event objects checked 23; 17 through the fault catcher, 20 called straight on; 151 event vtables, 119 functions, 82 left alone)
+14:33:26 guard: the event types whose objects are checked (type +offsets): 166 +0x18, 167 +0x18, 120 +0x20, 119 +0x28, 118 +0x20, 15 +0x18 +0x20, 52 +0x18, 27 +0x18 +0x20, 22 +0x18, 16 +0x18, 10 +0x18, 175 +0x20, 174 +0x20, 104 +0x18, 100 +0x20 +0x28, 94 +0x20, 70 +0x18 +0x20, 66 +0x20, 63 +0x20, 179 +0x18, 144 +0x18, 143 +0x18, 139 +0x18
+14:33:26 guard: AI path tracking guarded (tick 147DD5120, thunk 147DE3EF0 -> body 147DD53F0; trackers with freed objects left out, faults caught: the fault catcher in)
+14:33:27 minigame AI deactivation: hooked at 1478EB7B0
+14:33:27 minigame AI restore: hooked at 1478EB640
+14:33:27 plane electronic update: hooked at 147D177B0
+14:33:27 player plane surface update: hooked at 147D224E0
+14:33:27 player plane damage not found; hits on a fed plane aren't logged (COOP2MP)
+14:33:27 player plane weapons fired: hooked at 147D60980
+14:33:27 launch weapon: hooked at 147F68E50
+14:33:27 fire flares: hooked at 147F504B0
+14:33:27 menu tables: main menu 14C816720, difficulty page 14C7DDDE0
+14:33:27 menu transition: hooked at 147A76C20
+14:33:27 main menu decide: vtable slot 14C816E90, next 147B3FA10
+14:33:27 difficulty decide: vtable slot 14C7DE550, next 147B00A90
+14:33:27 difficulty next menu: vtable slot 14C7DE668, next 146EB70A0
+14:33:27 menu hooks installed (mission 9101, hangar menu F)
+14:33:29 game Lua: Lua 5.3 API from the game's exports (pcallk 144E5EC60), context slot 14DCF4E20
+14:33:41 main menu: Survival's pages open through CampaignTraining's page (entry 40, list at manager+118)
+14:33:41 main menu: Survival's pages open through InitialSetting_DualSence's page (entry 38, list at manager+118)
+14:33:41 main menu: Survival's pages open through InitialSetting_Accessibility's page (entry 37, list at manager+118)
+14:33:41 main menu: Survival's pages are in the game's page list
+14:34:22 main menu: Survival's page row 'SurvivalMenu': Survival's pages
+14:34:29 main menu: Survival's page row 'SV_Mode_Host': Co-op: Host
+14:34:29 coop: open: Steam P2P, host, up to 24 players, partner "auto", port 27777, interpolation 120 ms, mod 0.73.82-coop2mp.83; teleport functions 147D0DD90 / 147D0DF60
+14:34:29 ammo layout: owner fn 147ECB330, weapons +16A8, slots +2E8 (data +28, count +30, current +C, max +8, A0 bytes each), flares +2E0 (count +C4, max +27C, notify +B8, free restock +164), set fn 147F51220, flare fn 147F65620
+14:34:29 coop: looking for players: 0 Steam friend(s) to try
+14:34:33 main menu: setting SV_Set_Zollars picked
+14:34:33 main menu: setting SV_Set_Zollars picked
+14:34:34 main menu: setting SV_Set_Zollars picked
+14:34:35 main menu: Survival's page row 'SV_Go_Host': Co-op: Host, opening the difficulty select to start
+14:34:37 menu transition 7 while Survival is chosen, but no difficulty page was found; passed on
+14:34:38 difficulty page: next menu asked while Survival is chosen: going to the hangar instead of Free Mission
+14:34:38 start: keeping the difficulty the game's page applied (fallback reading would be Casual)
+14:34:38 start (next menu): difficulty set by the game (unchanged), context mode 0 -> 0, mission -1 -> 9101
+14:34:38 start: going to the hangar (menu F)
+14:35:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:36:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:37:03 spawner layout: unit desc B0 bytes (UniqueID +0, Name +4, AI list +18, point +58, rotation +70), AI desc 130 bytes (point +38, rotation +50, NPC id +14), phase world data +0, phase units +178/+180, unit id interface +2A0 slot +20, vector 24 bytes, LivePhase.ManipulableObjects +178
+14:37:03 spawner: LiveUnitSpawner 1607B36140, global phase 1607B36488, world data 1529764340
+14:37:03 spawner 1607B36140: no world yet (the level is still loading); spawns wait
+14:37:08 teardown gate: watching world 75D8CAE0 (spawner 1607B36140)
+14:37:09 music layout: game instance +1D8 (class fn 146E2F590), BGM manager +908 (flag +1D5), controller +170, play 1478AB8B0; controller ids +138 / +128, status +148
+14:37:13 events layout: event vtable 14CB54008 (type 4F, check slot +48), manager fn 1470BDEF0, dispatch 14740D940, GMalloc 14E410280 (free +48)
+14:37:21 pause menu: the music player row shown, restart checkpoint and select difficulty hidden (Survival's mission)
+14:37:29 music player clock: ticking (controller 195B876580, its Outer 1500D8F280 is the manager)
+14:37:29 music player clock: Survival's mission (game instance 73F173C0, sound channels 14A95C8040, BGM playing)
+14:37:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:37:33 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (-642, 12925) m, 3573 m high, heading 314
+14:37:36 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (10962, 15786) m, 5973 m high, heading 284
+14:37:49 coop: offsets: RootComponent +1A0, RelativeLocation +128, RelativeRotation +140, HealthInternal +DA8, MaxHealth +3B4
+14:38:09 coop2mp: T4b this minute: your launches sent 4 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:38:22 music player: BGM paused, track clock held at 52557 of 260812 ms
+14:38:22 music player: BGM playing again, track clock running at 52557 of 260812 ms
+14:38:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:38:39 spawn SV_Unit_PadDummies: up, 9 aircraft, at (-13253, 615) m, 64 m high, heading 0
+14:38:39 spawn AA_Unit_01_Ground0: up, 11 aircraft, at (-13253, 615) m, 64 m high, heading 0
+14:38:39 spawn SV_Unit_Shuttle: up, 1 aircraft, at (-13253, 615) m, 64 m high, heading 0
+14:38:42 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (88, 14420) m, 2605 m high, heading 310
+14:38:45 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 14F47BE4A0 destroyed 30 s on (1 waiting)
+14:38:45 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (28386, -20222) m, 3714 m high, heading 127
+14:38:48 spawn EA_Unit_01_Air0: up, 2 aircraft, at (-16075, -19745) m, 555 m high, heading 25
+14:39:09 coop2mp: T4b this minute: your launches sent 7 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:39:15 recycle ERA_Unit_01_Dep_Air0: its old unit actor 14F47BE4A0 destroyed, 30 s after it was taken off the phase's list (1 so far, 0 gone before, 0 waiting)
+14:39:30 coop: you are player 1; 4 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:40:09 coop2mp: T4b this minute: your launches sent 9 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:40:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:41:01 minigame: type 8 deactivated the world's AI: 33 objects; lists 0 / hidden 0 / 23
+14:41:02 music player: BGM held by Survival, track clock held at 212467 of 260812 ms
+14:41:05 landing menu: decide on 1ABAFAD850, row '20'
+14:41:08 landing menu: decide on 1607B37910, row '23'
+14:41:09 coop2mp: T4b this minute: your launches sent 4 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:41:11 landing menu: decide on 1A3599A8B0, row 'SV_Buy_UpBays'
+14:41:11 shop: SV_Buy_UpBays picked on the landing menu
+14:41:11 landing menu: decide on 1A3599A8B0, row 'SV_Buy_UpBays'
+14:41:11 shop: SV_Buy_UpBays picked on the landing menu
+14:41:12 landing menu: decide on 1A3599A8B0, row 'SV_Buy_UpBays'
+14:41:12 shop: SV_Buy_UpBays picked on the landing menu
+14:41:13 landing menu: decide on 1A3599A8B0, row 'SV_Buy_UpBays'
+14:41:13 shop: SV_Buy_UpBays picked on the landing menu
+14:41:13 landing menu: decide on 1A3599A8B0, row 'SV_Buy_UpAirframe'
+14:41:13 shop: SV_Buy_UpAirframe picked on the landing menu
+14:41:14 landing menu: decide on 1A3599A8B0, row 'SV_Buy_UpAirframe'
+14:41:14 shop: SV_Buy_UpAirframe picked on the landing menu
+14:41:14 landing menu: decide on 1A3599A8B0, row 'SV_Buy_UpAirframe'
+14:41:14 shop: SV_Buy_UpAirframe picked on the landing menu
+14:41:15 landing menu: decide on 1A3599A8B0, row 'SV_Buy_UpGun'
+14:41:15 shop: SV_Buy_UpGun picked on the landing menu
+14:41:15 landing menu: decide on 1A3599A8B0, row 'SV_Buy_UpGun'
+14:41:15 shop: SV_Buy_UpGun picked on the landing menu
+14:41:15 landing menu: decide on 1A3599A8B0, row 'SV_Buy_UpGun'
+14:41:15 shop: SV_Buy_UpGun picked on the landing menu
+14:41:15 landing menu: decide on 1A3599A8B0, row 'SV_Buy_UpGun'
+14:41:15 shop: SV_Buy_UpGun picked on the landing menu
+14:41:16 landing menu: decide on 1A3599A8B0, row 'SV_Buy_UpGun'
+14:41:16 shop: SV_Buy_UpGun picked on the landing menu
+14:41:17 landing menu: decide on 1A3599A8B0, row '24'
+14:41:19 landing menu: decide on 1A35536930, row '21'
+14:41:21 landing menu: decide on 17B8AA5950, row '-1'
+14:41:23 music player: BGM playing again, track clock running at 212467 of 260812 ms
+14:41:24 minigame: type 7 ends: restore of 33 AI objects; lists were 0 / hidden 0 / 23 (co-op keep 0)
+14:41:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:42:09 guard: the guarded event checks, the last 5 minutes: about 6599104 calls (21997 a second; the busiest class 17, event type 27, about 5784064, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+14:42:09 guard: AI path tracking, the last 5 minutes: about 802240 tracker updates (2674 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+14:42:11 music player: next track (caller 1426342B0 = exe+26342B0; clock 260817 of 260812 ms; clock held 21317 ms during this track)
+14:42:20 music player: BGM paused, track clock held at 8837 of 260812 ms
+14:42:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:42:30 music player: BGM playing again, track clock running at 8837 of 260812 ms
+14:42:33 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1985B14980 destroyed 30 s on (1 waiting)
+14:42:33 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (12682, 16697) m, 5185 m high, heading 279
+14:42:36 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1588D9CDD0 destroyed 30 s on (2 waiting)
+14:42:36 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (22891, -24149) m, 2933 m high, heading 108
+14:42:40 spawn EA_Unit_01_Air0: its last flight was shot down; took it off the phase's list, its unit actor 14F47BD260 destroyed 30 s on (3 waiting)
+14:42:40 spawn EA_Unit_01_Air0: up, 2 aircraft, at (9904, -33717) m, 567 m high, heading 78
+14:42:43 spawn EA_Unit_01_Air1: up, 6 aircraft, at (15273, -35673) m, 2540 m high, heading 88
+14:43:03 recycle ERA_Unit_04_Dep_Air0: its old unit actor 1985B14980 destroyed, 30 s after it was taken off the phase's list (2 so far, 0 gone before, 2 waiting)
+14:43:07 recycle ERA_Unit_01_Dep_Air0: its old unit actor 1588D9CDD0 destroyed, 30 s after it was taken off the phase's list (3 so far, 0 gone before, 1 waiting)
+14:43:09 coop2mp: T4b this minute: your launches sent 3 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:43:10 recycle EA_Unit_01_Air0: its old unit actor 14F47BD260 destroyed, 30 s after it was taken off the phase's list (4 so far, 0 gone before, 0 waiting)
+14:43:30 coop: you are player 1; 6 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:44:09 coop2mp: T4b this minute: your launches sent 9 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:44:30 coop: you are player 1; 1 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:45:04 minigame: type 8 deactivated the world's AI: 39 objects; lists 0 / hidden 1 / 23
+14:45:05 music player: BGM held by Survival, track clock held at 154728 of 155801 ms
+14:45:07 landing menu: decide on 19C70B4180, row '23'
+14:45:09 coop2mp: T4b this minute: your launches sent 3 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:45:09 landing menu: decide on 1ABB0D6930, row 'SV_Buy_UpBays'
+14:45:09 shop: SV_Buy_UpBays picked on the landing menu
+14:45:10 landing menu: decide on 1ABB0D6930, row 'SV_Buy_UpBays'
+14:45:10 shop: SV_Buy_UpBays picked on the landing menu
+14:45:15 landing menu: decide on 1A91B58100, row '20'
+14:45:16 landing menu: decide on 1A9188E830, row 'SV_Buy_Rearm'
+14:45:16 shop: SV_Buy_Rearm picked on the landing menu
+14:45:18 landing menu: decide on 1A9188E830, row 'SV_Buy_Special'
+14:45:18 shop: SV_Buy_Special picked on the landing menu
+14:45:18 spawn SV_Unit_Shuttle: its last flight was taken down (forced, aircraft still counted alive); took it off the phase's list, its unit actor 175A799280 destroyed 30 s on (1 waiting)
+14:45:18 recycle SV_Unit_Shuttle (SV_Recycle, force 1): taken off the phase's list (1)
+14:45:19 landing menu: decide on 1A9188E830, row 'SV_Buy_Missiles'
+14:45:19 shop: SV_Buy_Missiles picked on the landing menu
+14:45:20 landing menu: decide on 1A9188E830, row 'SV_Buy_Missiles'
+14:45:20 shop: SV_Buy_Missiles picked on the landing menu
+14:45:20 landing menu: decide on 1A9188E830, row 'SV_Buy_Missiles'
+14:45:20 shop: SV_Buy_Missiles picked on the landing menu
+14:45:20 landing menu: decide on 1A9188E830, row 'SV_Buy_Missiles'
+14:45:20 shop: SV_Buy_Missiles picked on the landing menu
+14:45:21 landing menu: decide on 1A9188E830, row 'SV_Buy_Missiles'
+14:45:21 shop: SV_Buy_Missiles picked on the landing menu
+14:45:22 landing menu: decide on 1A9188E830, row 'SV_Buy_Special'
+14:45:22 shop: SV_Buy_Special picked on the landing menu
+14:45:22 landing menu: decide on 1A9188E830, row 'SV_Buy_Special'
+14:45:22 shop: SV_Buy_Special picked on the landing menu
+14:45:22 landing menu: decide on 1A9188E830, row 'SV_Buy_Special'
+14:45:22 shop: SV_Buy_Special picked on the landing menu
+14:45:22 landing menu: decide on 1A9188E830, row 'SV_Buy_Special'
+14:45:22 shop: SV_Buy_Special picked on the landing menu
+14:45:23 landing menu: decide on 1A9188E830, row 'SV_Buy_Missiles'
+14:45:23 shop: SV_Buy_Missiles picked on the landing menu
+14:45:23 landing menu: decide on 1A9188E830, row 'SV_Buy_Missiles'
+14:45:23 shop: SV_Buy_Missiles picked on the landing menu
+14:45:24 landing menu: decide on 1A9188E830, row 'SV_Buy_Missiles'
+14:45:24 shop: SV_Buy_Missiles picked on the landing menu
+14:45:24 landing menu: decide on 1A9188E830, row 'SV_Buy_Missiles'
+14:45:24 shop: SV_Buy_Missiles picked on the landing menu
+14:45:24 landing menu: decide on 1A9188E830, row 'SV_Buy_Missiles'
+14:45:24 shop: SV_Buy_Missiles picked on the landing menu
+14:45:24 landing menu: decide on 1A9188E830, row 'SV_Buy_Missiles'
+14:45:24 shop: SV_Buy_Missiles picked on the landing menu
+14:45:24 landing menu: decide on 1A9188E830, row 'SV_Buy_Missiles'
+14:45:24 shop: SV_Buy_Missiles picked on the landing menu
+14:45:26 landing menu: decide on 1A9188E830, row '-1'
+14:45:29 minigame: type 7 ends: restore of 38 AI objects; lists were 0 / hidden 1 / 23 (co-op keep 0)
+14:45:29 music player: BGM playing again, track clock running at 154728 of 155801 ms
+14:45:30 music player: next track (caller 1426342B0 = exe+26342B0; clock 155804 of 155801 ms; clock held 32815 ms during this track)
+14:45:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:45:42 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 173007F250 destroyed 30 s on (2 waiting)
+14:45:42 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (-5324, 489) m, 5035 m high, heading 347
+14:45:45 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (-6112, -4905) m, 3303 m high, heading 1
+14:45:48 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 56546050 destroyed 30 s on (3 waiting)
+14:45:48 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (23665, -25713) m, 4372 m high, heading 109
+14:45:48 recycle SV_Unit_Shuttle: its old unit actor 175A799280 destroyed, 30 s after it was taken off the phase's list (5 so far, 0 gone before, 2 waiting)
+14:45:51 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 198BFAE010 destroyed 30 s on (3 waiting)
+14:45:51 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (7605, 14137) m, 2321 m high, heading 294
+14:46:09 coop2mp: T4b this minute: your launches sent 4 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:46:12 recycle ERA_Unit_04_Dep_Air0: its old unit actor 173007F250 destroyed, 30 s after it was taken off the phase's list (6 so far, 0 gone before, 2 waiting)
+14:46:18 recycle ERA_Unit_01_Dep_Air0: its old unit actor 56546050 destroyed, 30 s after it was taken off the phase's list (7 so far, 0 gone before, 1 waiting)
+14:46:21 recycle ERA_Unit_06_Dep_Air0: its old unit actor 198BFAE010 destroyed, 30 s after it was taken off the phase's list (8 so far, 0 gone before, 0 waiting)
+14:46:30 coop: you are player 1; 5 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:47:09 guard: the guarded event checks, the last 5 minutes: about 13655872 calls (45519 a second; the busiest class 17, event type 27, about 11954176, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+14:47:09 guard: AI path tracking, the last 5 minutes: about 836928 tracker updates (2789 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+14:47:09 coop2mp: T4b this minute: your launches sent 16 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:47:30 coop: you are player 1; 1 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:47:37 music player: BGM paused, track clock held at 127797 of 155801 ms
+14:47:40 music player: BGM playing again, track clock running at 127797 of 155801 ms
+14:47:59 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 78BD84D0 destroyed 30 s on (1 waiting)
+14:47:59 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (-718, 8632) m, 3951 m high, heading 322
+14:48:02 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1758F2B700 destroyed 30 s on (2 waiting)
+14:48:02 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (1103, -21370) m, 4043 m high, heading 48
+14:48:05 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 14EBF20E30 destroyed 30 s on (3 waiting)
+14:48:05 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (-368, 12786) m, 3564 m high, heading 313
+14:48:08 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (3137, -25474) m, 2121 m high, heading 58
+14:48:09 coop2mp: T4b this minute: your launches sent 8 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:48:11 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1A185FCDD0 destroyed 30 s on (4 waiting)
+14:48:11 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (2332, 7254) m, 5361 m high, heading 319
+14:48:29 recycle ERA_Unit_06_Dep_Air0: its old unit actor 78BD84D0 destroyed, 30 s after it was taken off the phase's list (9 so far, 0 gone before, 3 waiting)
+14:48:30 coop: you are player 1; 9 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:48:32 recycle ERA_Unit_01_Dep_Air0: its old unit actor 1758F2B700 destroyed, 30 s after it was taken off the phase's list (10 so far, 0 gone before, 2 waiting)
+14:48:35 recycle ERA_Unit_01_Dep_Air1: its old unit actor 14EBF20E30 destroyed, 30 s after it was taken off the phase's list (11 so far, 0 gone before, 1 waiting)
+14:48:41 recycle ERA_Unit_04_Dep_Air0: its old unit actor 1A185FCDD0 destroyed, 30 s after it was taken off the phase's list (12 so far, 0 gone before, 0 waiting)
+14:49:09 coop2mp: T4b this minute: your launches sent 13 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:49:30 coop: you are player 1; 7 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:50:09 coop2mp: T4b this minute: your launches sent 21 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:50:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:50:46 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 763252A0 destroyed 30 s on (1 waiting)
+14:50:46 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (15194, -24326) m, 2551 m high, heading 87
+14:50:49 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 51ED4980 destroyed 30 s on (2 waiting)
+14:50:49 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (-2017, -7257) m, 3023 m high, heading 9
+14:50:53 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 75FFE4A0 destroyed 30 s on (3 waiting)
+14:50:53 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (774, 10994) m, 4196 m high, heading 314
+14:50:56 spawn EA_Unit_01_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1A906BC940 destroyed 30 s on (4 waiting)
+14:50:56 spawn EA_Unit_01_Air1: up, 6 aircraft, at (-9500, 18682) m, 1772 m high, heading 318
+14:50:59 spawn ERB_Unit_01_Air2: up, 4 aircraft, at (-6029, 17103) m, 769 m high, heading 315
+14:51:02 spawn EA_Unit_01_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1755BF3BD0 destroyed 30 s on (5 waiting)
+14:51:02 spawn EA_Unit_01_Air0: up, 2 aircraft, at (-7619, 17072) m, 825 m high, heading 317
+14:51:09 coop2mp: T4b this minute: your launches sent 6 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:51:16 recycle ERA_Unit_07_Dep_Air0: its old unit actor 763252A0 destroyed, 30 s after it was taken off the phase's list (13 so far, 0 gone before, 4 waiting)
+14:51:19 recycle ERA_Unit_01_Dep_Air0: its old unit actor 51ED4980 destroyed, 30 s after it was taken off the phase's list (14 so far, 0 gone before, 3 waiting)
+14:51:23 recycle ERA_Unit_06_Dep_Air0: its old unit actor 75FFE4A0 destroyed, 30 s after it was taken off the phase's list (15 so far, 0 gone before, 2 waiting)
+14:51:26 recycle EA_Unit_01_Air1: its old unit actor 1A906BC940 destroyed, 30 s after it was taken off the phase's list (16 so far, 0 gone before, 1 waiting)
+14:51:30 coop: you are player 1; 10 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:51:32 recycle EA_Unit_01_Air0: its old unit actor 1755BF3BD0 destroyed, 30 s after it was taken off the phase's list (17 so far, 0 gone before, 0 waiting)
+14:52:09 guard: the guarded event checks, the last 5 minutes: about 25014720 calls (83382 a second; the busiest class 17, event type 27, about 19510528, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+14:52:09 guard: AI path tracking, the last 5 minutes: about 859584 tracker updates (2865 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+14:52:09 coop2mp: T4b this minute: your launches sent 16 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:52:30 coop: you are player 1; 2 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:52:45 music player: BGM paused, track clock held at 127797 of 155801 ms
+14:52:52 music player: BGM playing again, track clock running at 127797 of 155801 ms
+14:53:07 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 564E1BE0 destroyed 30 s on (1 waiting)
+14:53:07 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (17308, -26425) m, 2392 m high, heading 93
+14:53:09 coop2mp: T4b this minute: your launches sent 8 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:53:10 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 16EB4E10 destroyed 30 s on (2 waiting)
+14:53:10 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (-3686, -12953) m, 4264 m high, heading 23
+14:53:25 minigame: type 8 deactivated the world's AI: 48 objects; lists 6 / hidden 0 / 22
+14:53:25 minigame:   deactivated[0] 19A25C6AC0: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+14:53:25 minigame:   deactivated[1] 19C7CA6AC0: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+14:53:25 minigame:   deactivated[2] 1A356EB560: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+14:53:25 music player: BGM held by Survival, track clock held at 33089 of 361487 ms
+14:53:29 landing menu: decide on 1716576930, row '23'
+14:53:30 coop: you are player 1; 6 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:53:30 landing menu: decide on 1ABB0DA8B0, row 'SV_Buy_UpBays'
+14:53:30 shop: SV_Buy_UpBays picked on the landing menu
+14:53:33 landing menu: decide on 1ABB0DA8B0, row 'SV_Buy_UpAirframe'
+14:53:33 shop: SV_Buy_UpAirframe picked on the landing menu
+14:53:35 landing menu: decide on 1ABB0DA8B0, row '-1'
+14:53:37 recycle ERA_Unit_01_Dep_Air1: its old unit actor 564E1BE0 destroyed, 30 s after it was taken off the phase's list (18 so far, 0 gone before, 1 waiting)
+14:53:38 music player: BGM playing again, track clock running at 33089 of 361487 ms
+14:53:38 minigame: type 7 ends: restore of 48 AI objects; lists were 6 / hidden 0 / 22 (co-op keep 0)
+14:53:38 minigame:   listed[0] 19A25C6AC0: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+14:53:38 minigame:   listed[1] 19C7CA6AC0: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+14:53:38 minigame:   listed[2] 1A356EB560: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+14:53:40 recycle ERA_Unit_01_Dep_Air0: its old unit actor 16EB4E10 destroyed, 30 s after it was taken off the phase's list (19 so far, 0 gone before, 0 waiting)
+14:53:52 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1575603BD0 destroyed 30 s on (1 waiting)
+14:53:52 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (16104, -24642) m, 2404 m high, heading 90
+14:53:55 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (-2204, -17562) m, 2728 m high, heading 35
+14:53:58 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 7836CDD0 destroyed 30 s on (2 waiting)
+14:53:58 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (19597, -26144) m, 5406 m high, heading 99
+14:54:01 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 76E66050 destroyed 30 s on (3 waiting)
+14:54:01 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (130, 9476) m, 2432 m high, heading 319
+14:54:04 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (18723, -25420) m, 4192 m high, heading 97
+14:54:09 coop2mp: T4b this minute: your launches sent 3 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:54:22 recycle ERA_Unit_06_Dep_Air0: its old unit actor 1575603BD0 destroyed, 30 s after it was taken off the phase's list (20 so far, 0 gone before, 2 waiting)
+14:54:28 recycle ERA_Unit_04_Dep_Air0: its old unit actor 7836CDD0 destroyed, 30 s after it was taken off the phase's list (21 so far, 0 gone before, 1 waiting)
+14:54:30 coop: you are player 1; 13 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:54:31 recycle ERA_Unit_07_Dep_Air0: its old unit actor 76E66050 destroyed, 30 s after it was taken off the phase's list (22 so far, 0 gone before, 0 waiting)
+14:55:09 coop2mp: T4b this minute: your launches sent 17 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:55:30 coop: you are player 1; 10 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:56:09 coop2mp: T4b this minute: your launches sent 12 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:56:19 music player: BGM paused, track clock held at 195019 of 361487 ms
+14:56:23 music player: BGM playing again, track clock running at 195019 of 361487 ms
+14:56:30 coop: you are player 1; 5 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:57:09 guard: the guarded event checks, the last 5 minutes: about 36835072 calls (122783 a second; the busiest class 17, event type 27, about 25002816, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+14:57:09 guard: AI path tracking, the last 5 minutes: about 889920 tracker updates (2966 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+14:57:09 coop2mp: T4b this minute: your launches sent 12 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:57:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:57:48 minigame: type 8 deactivated the world's AI: 52 objects; lists 0 / hidden 0 / 22
+14:57:50 music player: BGM held by Survival, track clock held at 281852 of 361487 ms
+14:57:52 landing menu: decide on 1A9199D850, row '20'
+14:57:58 landing menu: decide on 1A8FDAD850, row '23'
+14:58:01 landing menu: decide on 1A9169A8B0, row 'SV_Buy_UpAirframe'
+14:58:01 shop: SV_Buy_UpAirframe picked on the landing menu
+14:58:05 landing menu: decide on 1A9169A8B0, row '24'
+14:58:09 landing menu: decide on 1C14E830, row '-1'
+14:58:09 coop2mp: T4b this minute: your launches sent 5 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:58:11 music player: BGM playing again, track clock running at 281852 of 361487 ms
+14:58:11 minigame: type 7 ends: restore of 52 AI objects; lists were 0 / hidden 0 / 22 (co-op keep 0)
+14:58:25 spawn SV_Unit_Alicorn: up, 226 aircraft, at (-27700, -4400) m, 0 m high, heading 0
+14:58:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:58:51 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1A9120EDC0 destroyed 30 s on (1 waiting)
+14:58:51 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (-26093, -4635) m, 1221 m high, heading 351
+14:59:09 coop2mp: T4b this minute: your launches sent 3 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+14:59:21 recycle ERA_Unit_08_Dep_Air0: its old unit actor 1A9120EDC0 destroyed, 30 s after it was taken off the phase's list (23 so far, 0 gone before, 0 waiting)
+14:59:26 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 79B02990 destroyed 30 s on (1 waiting)
+14:59:26 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (-24915, -4806) m, 1221 m high, heading 351
+14:59:30 coop: you are player 1; 2 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+14:59:31 music player: next track (caller 1426342B0 = exe+26342B0; clock 361498 of 361487 ms; clock held 45112 ms during this track)
+14:59:57 recycle ERA_Unit_07_Dep_Air0: its old unit actor 79B02990 destroyed, 30 s after it was taken off the phase's list (24 so far, 0 gone before, 0 waiting)
+15:00:02 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 5245E010 destroyed 30 s on (1 waiting)
+15:00:02 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (-23727, -4983) m, 1221 m high, heading 351
+15:00:09 coop2mp: T4b this minute: your launches sent 20 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:00:30 coop: you are player 1; 2 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:00:33 recycle ERA_Unit_08_Dep_Air0: its old unit actor 5245E010 destroyed, 30 s after it was taken off the phase's list (25 so far, 0 gone before, 0 waiting)
+15:01:09 coop2mp: T4b this minute: your launches sent 2 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:01:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:02:09 guard: the guarded event checks, the last 5 minutes: about 22829184 calls (76097 a second; the busiest class 9, event type 14, about 13697536, through the fault catcher); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+15:02:09 guard: AI path tracking, the last 5 minutes: about 3364416 tracker updates (11214 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+15:02:09 coop2mp: T4b this minute: your launches sent 1 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:02:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:03:18 minigame: type 8 deactivated the world's AI: 278 objects; lists 1 / hidden 7 / 59
+15:03:18 minigame:   deactivated[0] 14FD026670: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:03:20 music player: BGM held by Survival, track clock held at 229886 of 361487 ms
+15:03:23 landing menu: decide on 1A23E36140, row '20'
+15:03:24 landing menu: decide on 1A8311C870, row 'SV_Buy_Missiles'
+15:03:24 shop: SV_Buy_Missiles picked on the landing menu
+15:03:25 landing menu: decide on 1A8311C870, row 'SV_Buy_Special'
+15:03:25 shop: SV_Buy_Special picked on the landing menu
+15:03:26 landing menu: decide on 1A8311C870, row 'SV_Buy_Missiles'
+15:03:26 shop: SV_Buy_Missiles picked on the landing menu
+15:03:27 landing menu: decide on 1A8311C870, row 'SV_Buy_Special'
+15:03:27 shop: SV_Buy_Special picked on the landing menu
+15:03:28 landing menu: decide on 1A8311C870, row 'SV_Buy_Missiles'
+15:03:28 shop: SV_Buy_Missiles picked on the landing menu
+15:03:28 landing menu: decide on 1A8311C870, row 'SV_Buy_Special'
+15:03:28 shop: SV_Buy_Special picked on the landing menu
+15:03:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:03:31 landing menu: decide on 1A8311C870, row '23'
+15:03:32 landing menu: decide on 1ABA783990, row '24'
+15:03:34 landing menu: decide on 1A8FDB3990, row 'SV_Buy_Insurance'
+15:03:34 shop: SV_Buy_Insurance picked on the landing menu
+15:03:35 landing menu: decide on 1A8FDB3990, row 'SV_Buy_Insurance'
+15:03:35 shop: SV_Buy_Insurance picked on the landing menu
+15:03:36 landing menu: decide on 1A8FDB3990, row '21'
+15:03:37 landing menu: decide on 1A829529B0, row 'SV_Buy_RepairAircraft'
+15:03:37 shop: SV_Buy_RepairAircraft picked on the landing menu
+15:03:39 landing menu: decide on 1A829529B0, row 'SV_Buy_RepairAirfield'
+15:03:39 shop: SV_Buy_RepairAirfield picked on the landing menu
+15:03:41 landing menu: decide on 1A829529B0, row '-1'
+15:03:43 music player: BGM playing again, track clock running at 229886 of 361487 ms
+15:03:45 minigame: type 7 ends: restore of 278 AI objects; lists were 1 / hidden 7 / 59 (co-op keep 0)
+15:03:45 minigame:   listed[0] 14FD026670: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:04:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:05:10 coop2mp: T4b this minute: your launches sent 12 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:05:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:05:55 music player: next track (caller 1426342B0 = exe+26342B0; clock 361506 of 361487 ms; clock held 22256 ms during this track)
+15:06:10 coop2mp: T4b this minute: your launches sent 26 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:06:17 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1A26970 destroyed 30 s on (1 waiting)
+15:06:17 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (23123, -24228) m, 4188 m high, heading 109
+15:06:18 spawn SV_Unit_Alicorn: its last flight was taken down (forced, aircraft still counted alive); took it off the phase's list, its unit actor 1A264E0 destroyed 30 s on (2 waiting)
+15:06:18 recycle SV_Unit_Alicorn (SV_Recycle, force 1): taken off the phase's list (1)
+15:06:20 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1537303740 destroyed 30 s on (3 waiting)
+15:06:20 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (4781, -22971) m, 2654 m high, heading 58
+15:06:23 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 524532B0 destroyed 30 s on (4 waiting)
+15:06:23 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (28902, 16119) m, 4047 m high, heading 237
+15:06:26 spawn ERA_Unit_05_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1563084060 destroyed 30 s on (5 waiting)
+15:06:26 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (24857, -27375) m, 2811 m high, heading 110
+15:06:29 spawn EA_Unit_01_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1A71BCB270 destroyed 30 s on (6 waiting)
+15:06:29 spawn EA_Unit_01_Air0: up, 2 aircraft, at (6510, -36816) m, 892 m high, heading 73
+15:06:30 coop: you are player 1; 12 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:06:47 recycle ERA_Unit_04_Dep_Air0: its old unit actor 1A26970 destroyed, 30 s after it was taken off the phase's list (26 so far, 0 gone before, 5 waiting)
+15:06:48 minigame: type 8 deactivated the world's AI: 52 objects; lists 12 / hidden 0 / 22
+15:06:48 minigame:   deactivated[0] 19C8C86AC0: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:06:48 minigame:   deactivated[1] 1607D22020: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:06:48 minigame:   deactivated[2] 78D12020: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:06:48 music player: BGM held by Survival, track clock held at 53318 of 361487 ms
+15:06:49 recycle SV_Unit_Alicorn: its old unit actor 1A264E0 destroyed, 30 s after it was taken off the phase's list (27 so far, 0 gone before, 4 waiting)
+15:06:50 recycle ERA_Unit_01_Dep_Air1: its old unit actor 1537303740 destroyed, 30 s after it was taken off the phase's list (28 so far, 0 gone before, 3 waiting)
+15:06:52 landing menu: decide on 1ABB1CB890, row '23'
+15:06:53 recycle ERA_Unit_01_Dep_Air0: its old unit actor 524532B0 destroyed, 30 s after it was taken off the phase's list (29 so far, 0 gone before, 2 waiting)
+15:06:53 landing menu: decide on 1A9191E830, row 'SV_Buy_UpBays'
+15:06:53 shop: SV_Buy_UpBays picked on the landing menu
+15:06:54 landing menu: decide on 1A9191E830, row 'SV_Buy_UpGun'
+15:06:54 shop: SV_Buy_UpGun picked on the landing menu
+15:06:56 landing menu: decide on 1A9191E830, row 'SV_Buy_UpAirframe'
+15:06:56 shop: SV_Buy_UpAirframe picked on the landing menu
+15:06:56 recycle ERA_Unit_05_Dep_Air0: its old unit actor 1563084060 destroyed, 30 s after it was taken off the phase's list (30 so far, 0 gone before, 1 waiting)
+15:06:59 landing menu: decide on 1A9191E830, row '24'
+15:06:59 recycle EA_Unit_01_Air0: its old unit actor 1A71BCB270 destroyed, 30 s after it was taken off the phase's list (31 so far, 0 gone before, 0 waiting)
+15:07:00 landing menu: decide on 1A83093990, row 'SV_Buy_Insurance'
+15:07:00 shop: SV_Buy_Insurance picked on the landing menu
+15:07:01 landing menu: decide on 1A83093990, row '21'
+15:07:04 landing menu: decide on 1A91B54970, row '22'
+15:07:06 landing menu: decide on 1ABAE14970, row '20'
+15:07:08 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Rearm'
+15:07:08 shop: SV_Buy_Rearm picked on the landing menu
+15:07:09 guard: the guarded event checks, the last 5 minutes: about 8101376 calls (27004 a second; the busiest class 9, event type 14, about 4444352, through the fault catcher); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+15:07:09 guard: AI path tracking, the last 5 minutes: about 3581312 tracker updates (11937 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+15:07:09 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Missiles'
+15:07:09 shop: SV_Buy_Missiles picked on the landing menu
+15:07:10 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Missiles'
+15:07:10 shop: SV_Buy_Missiles picked on the landing menu
+15:07:10 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Missiles'
+15:07:10 shop: SV_Buy_Missiles picked on the landing menu
+15:07:10 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Missiles'
+15:07:10 shop: SV_Buy_Missiles picked on the landing menu
+15:07:10 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Missiles'
+15:07:10 shop: SV_Buy_Missiles picked on the landing menu
+15:07:11 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Missiles'
+15:07:11 shop: SV_Buy_Missiles picked on the landing menu
+15:07:11 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Missiles'
+15:07:11 shop: SV_Buy_Missiles picked on the landing menu
+15:07:11 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Missiles'
+15:07:11 shop: SV_Buy_Missiles picked on the landing menu
+15:07:11 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Missiles'
+15:07:11 shop: SV_Buy_Missiles picked on the landing menu
+15:07:11 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Missiles'
+15:07:11 shop: SV_Buy_Missiles picked on the landing menu
+15:07:12 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Special'
+15:07:12 shop: SV_Buy_Special picked on the landing menu
+15:07:12 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Special'
+15:07:12 shop: SV_Buy_Special picked on the landing menu
+15:07:13 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Special'
+15:07:13 shop: SV_Buy_Special picked on the landing menu
+15:07:13 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Special'
+15:07:13 shop: SV_Buy_Special picked on the landing menu
+15:07:13 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Special'
+15:07:13 shop: SV_Buy_Special picked on the landing menu
+15:07:13 landing menu: decide on 1ABB2D98D0, row 'SV_Buy_Special'
+15:07:13 shop: SV_Buy_Special picked on the landing menu
+15:07:14 landing menu: decide on 1ABB2D98D0, row '-1'
+15:07:17 music player: BGM playing again, track clock running at 53318 of 361487 ms
+15:07:18 minigame: type 7 ends: restore of 52 AI objects; lists were 12 / hidden 0 / 22 (co-op keep 0)
+15:07:18 minigame:   listed[0] 19C8C86AC0: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:07:18 minigame:   listed[1] 1607D22020: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:07:18 minigame:   listed[2] 78D12020: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:07:30 coop: you are player 1; 12 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:07:31 spawn EA_Unit_01_Air1: its last flight was shot down; took it off the phase's list, its unit actor 175B5E2500 destroyed 30 s on (1 waiting)
+15:07:31 spawn EA_Unit_01_Air1: up, 6 aircraft, at (11310, -35501) m, 1900 m high, heading 81
+15:07:34 spawn ERB_Unit_01_Air2: its last flight was shot down; took it off the phase's list, its unit actor 19D14484D0 destroyed 30 s on (2 waiting)
+15:07:34 spawn ERB_Unit_01_Air2: up, 4 aircraft, at (6108, -36653) m, 681 m high, heading 72
+15:07:37 spawn EA_Unit_01_Air2: up, 16 aircraft, at (1328, -36130) m, 1765 m high, heading 65
+15:08:01 recycle EA_Unit_01_Air1: its old unit actor 175B5E2500 destroyed, 30 s after it was taken off the phase's list (32 so far, 0 gone before, 1 waiting)
+15:08:04 recycle ERB_Unit_01_Air2: its old unit actor 19D14484D0 destroyed, 30 s after it was taken off the phase's list (33 so far, 0 gone before, 0 waiting)
+15:08:10 coop2mp: T4b this minute: your launches sent 6 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:08:30 coop: you are player 1; 17 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:09:10 coop2mp: T4b this minute: your launches sent 17 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:09:30 coop: you are player 1; 11 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:10:10 coop2mp: T4b this minute: your launches sent 18 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:10:30 coop: you are player 1; 6 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:11:10 coop2mp: T4b this minute: your launches sent 16 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:11:30 coop: you are player 1; 3 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:12:09 guard: the guarded event checks, the last 5 minutes: about 45706176 calls (152353 a second; the busiest class 17, event type 27, about 30267328, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+15:12:09 guard: AI path tracking, the last 5 minutes: about 1718464 tracker updates (5728 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+15:12:10 coop2mp: T4b this minute: your launches sent 13 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:12:25 music player: next track (caller 1426342B0 = exe+26342B0; clock 361494 of 361487 ms; clock held 28126 ms during this track)
+15:12:30 coop: you are player 1; 1 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:13:08 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1A27BB0 destroyed 30 s on (1 waiting)
+15:13:08 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (27058, -19443) m, 3169 m high, heading 126
+15:13:10 coop2mp: T4b this minute: your launches sent 17 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:13:11 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 79B01BE0 destroyed 30 s on (2 waiting)
+15:13:11 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (13325, 14584) m, 4020 m high, heading 278
+15:13:14 spawn ERA_Unit_05_Dep_Air1: up, 4 aircraft, at (27271, -19626) m, 2230 m high, heading 126
+15:13:17 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19C8DA6970 destroyed 30 s on (3 waiting)
+15:13:17 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (17970, 18149) m, 2757 m high, heading 265
+15:13:20 spawn ERA_Unit_05_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 51ED6970 destroyed 30 s on (4 waiting)
+15:13:20 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (29154, -17635) m, 3741 m high, heading 134
+15:13:23 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (15944, 14473) m, 2840 m high, heading 270
+15:13:26 spawn ERA_Unit_03_Dep_Air0: up, 2 aircraft, at (29818, -21586) m, 5798 m high, heading 128
+15:13:29 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 56549BA0 destroyed 30 s on (5 waiting)
+15:13:29 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (16360, 15582) m, 2912 m high, heading 269
+15:13:30 coop: you are player 1; 14 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:13:32 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 762F9280 destroyed 30 s on (6 waiting)
+15:13:32 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (26643, -19514) m, 3938 m high, heading 124
+15:13:38 recycle ERA_Unit_01_Dep_Air1: its old unit actor 1A27BB0 destroyed, 30 s after it was taken off the phase's list (34 so far, 0 gone before, 5 waiting)
+15:13:41 recycle ERA_Unit_07_Dep_Air0: its old unit actor 79B01BE0 destroyed, 30 s after it was taken off the phase's list (35 so far, 0 gone before, 4 waiting)
+15:13:47 recycle ERA_Unit_08_Dep_Air0: its old unit actor 19C8DA6970 destroyed, 30 s after it was taken off the phase's list (36 so far, 0 gone before, 3 waiting)
+15:13:50 recycle ERA_Unit_05_Dep_Air0: its old unit actor 51ED6970 destroyed, 30 s after it was taken off the phase's list (37 so far, 0 gone before, 2 waiting)
+15:13:59 recycle ERA_Unit_01_Dep_Air0: its old unit actor 56549BA0 destroyed, 30 s after it was taken off the phase's list (38 so far, 0 gone before, 1 waiting)
+15:14:02 recycle ERA_Unit_06_Dep_Air0: its old unit actor 762F9280 destroyed, 30 s after it was taken off the phase's list (39 so far, 0 gone before, 0 waiting)
+15:14:10 coop2mp: T4b this minute: your launches sent 19 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:14:30 coop: you are player 1; 11 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:15:10 coop2mp: T4b this minute: your launches sent 13 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:15:30 coop: you are player 1; 9 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:16:10 coop2mp: T4b this minute: your launches sent 4 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:16:30 coop: you are player 1; 5 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:16:47 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1774C74060 destroyed 30 s on (1 waiting)
+15:16:47 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (-4578, -6878) m, 4007 m high, heading 6
+15:17:09 guard: the guarded event checks, the last 5 minutes: about 51600192 calls (172000 a second; the busiest class 17, event type 27, about 33141312, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+15:17:09 guard: AI path tracking, the last 5 minutes: about 1806336 tracker updates (6021 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+15:17:10 coop2mp: T4b this minute: your launches sent 4 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:17:17 recycle ERA_Unit_04_Dep_Air0: its old unit actor 1774C74060 destroyed, 30 s after it was taken off the phase's list (40 so far, 0 gone before, 0 waiting)
+15:17:30 coop: you are player 1; 3 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:18:10 coop2mp: T4b this minute: your launches sent 3 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:18:26 music player: next track (caller 1426342B0 = exe+26342B0; clock 361500 of 361487 ms; clock held 0 ms during this track)
+15:18:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:18:50 minigame: type 8 deactivated the world's AI: 76 objects; lists 0 / hidden 0 / 22
+15:18:51 music player: BGM held by Survival, track clock held at 24773 of 361487 ms
+15:18:54 landing menu: decide on 1A917B88F0, row '20'
+15:18:55 landing menu: decide on 1A82CD98D0, row 'SV_Buy_Rearm'
+15:18:55 shop: SV_Buy_Rearm picked on the landing menu
+15:18:58 landing menu: decide on 1A82CD98D0, row '23'
+15:19:02 landing menu: decide on 16565950, row '21'
+15:19:03 landing menu: decide on 1A6EE188F0, row 'SV_Buy_RepairAircraft'
+15:19:03 shop: SV_Buy_RepairAircraft picked on the landing menu
+15:19:05 landing menu: decide on 1A6EE188F0, row '-1'
+15:19:07 music player: BGM playing again, track clock running at 24773 of 361487 ms
+15:19:10 minigame: type 7 ends: restore of 76 AI objects; lists were 0 / hidden 0 / 22 (co-op keep 0)
+15:19:24 spawn SV_Unit_Glitch: up, 1 aircraft, at (14026, -10327) m, 4376 m high, heading 80
+15:19:30 coop: you are player 1; 1 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:20:10 coop2mp: T4b this minute: your launches sent 4 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:20:30 coop: you are player 1; 1 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:21:10 coop2mp: T4b this minute: your launches sent 4 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:21:30 coop: you are player 1; 1 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:22:09 guard: the guarded event checks, the last 5 minutes: about 19713856 calls (65712 a second; the busiest class 17, event type 27, about 15245120, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+15:22:09 guard: AI path tracking, the last 5 minutes: about 1824384 tracker updates (6081 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+15:22:10 coop2mp: T4b this minute: your launches sent 4 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:22:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:22:45 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19CC53C4B0 destroyed 30 s on (1 waiting)
+15:22:45 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (22009, 18836) m, 2858 m high, heading 255
+15:22:47 music player: BGM paused, track clock held at 244821 of 361487 ms
+15:22:52 music player: BGM playing again, track clock running at 244821 of 361487 ms
+15:22:52 teardown gate: closed (Survival's level is going: its world 75D8CAE0: it is being destroyed): Lua holds its level work and drops its object lists, the runtime touches no level object until the next Survival level (SV_Reset); 1 deferred unit destroys dropped (the level destroys them)
+15:22:53 teardown gate: an address from Lua refused (1AEBD4680: not a live object; 1 so far)
+15:22:53 main menu: Survival's pages open through CampaignTraining's page (entry 40, list at manager+118)
+15:22:53 main menu: Survival's pages open through InitialSetting_DualSence's page (entry 38, list at manager+118)
+15:22:53 main menu: Survival's pages open through InitialSetting_Accessibility's page (entry 37, list at manager+118)
+15:23:30 coop: you are player 1; 0 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+15:23:38 main menu: Survival's page row 'SurvivalMenu': Survival's pages
+15:23:45 main menu: Survival's page row 'SV_Mode_Offline': SP Offline
+15:23:45 coop: closed
+15:23:48 main menu: setting SV_Set_Zollars picked
+15:23:48 main menu: setting SV_Set_Zollars picked
+15:23:48 main menu: setting SV_Set_Zollars picked
+15:23:50 main menu: Survival's page row 'SV_Go_Offline': SP Offline, opening the difficulty select to start
+15:23:53 menu transition 7 while Survival is chosen, but no difficulty page was found; passed on
+15:23:54 difficulty page: next menu asked while Survival is chosen: going to the hangar instead of Free Mission
+15:23:54 start: keeping the difficulty the game's page applied (fallback reading would be none)
+15:23:54 start (next menu): difficulty set by the game (unchanged), context mode 0 -> 0, mission 9101 -> 9101
+15:23:54 start: going to the hangar (menu F)
+15:23:56 teardown gate: an address from Lua refused (79372700: not a live object; 2 so far)
+15:23:57 teardown gate: an address from Lua refused (79372700: not a live object; 3 so far)
+15:23:58 teardown gate: an address from Lua refused (79372700: not a live object; 4 so far)
+15:24:37 teardown gate: open (a new Survival level: SV_Reset)
+15:24:42 coop2mp: T4b this minute: your launches sent 3 (0 dropped); theirs 0 queued here, 0 refused, 0 launched, 0 not, 0 specials, 0 stale, 0 with their plane gone, 0 with no network manager, 0 not a weapon of their plane here
+15:24:42 spawner: LiveUnitSpawner 1A92217910, global phase 1A92217C58, world data 192CCFE980
+15:24:42 teardown gate: watching world 15A4A0EAC0 (spawner 1A92217910)
+15:24:59 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (-3784, -3530) m, 4529 m high, heading 357
+15:25:06 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (24172, -25431) m, 3339 m high, heading 110
+15:25:27 spawner: LiveUnitSpawner 1A92217910, global phase 1A92217C58, world data 192CCFE980
+15:25:27 teardown gate: watching world 15A4A0EAC0 (spawner 1A92217910)
+15:25:34 teardown gate: closed (Survival's level is going: its world 15A4A0EAC0: it was freed): Lua holds its level work and drops its object lists, the runtime touches no level object until the next Survival level (SV_Reset); 0 deferred unit destroys dropped (the level destroys them)
+15:25:35 main menu: Survival's pages open through CampaignTraining's page (entry 40, list at manager+118)
+15:25:35 main menu: Survival's pages open through InitialSetting_DualSence's page (entry 38, list at manager+118)
+15:25:35 main menu: Survival's pages open through InitialSetting_Accessibility's page (entry 37, list at manager+118)
+15:25:43 main menu: Survival's page row 'SurvivalMenu': Survival's pages
+15:25:46 main menu: Survival's page row 'SV_Mode_Offline': SP Offline
+15:25:48 main menu: Survival's page row 'SV_Go_Offline': SP Offline, opening the difficulty select to start
+15:25:53 main menu: Survival's page row 'SurvivalMenu': Survival's pages
+15:25:55 main menu: Survival's page row 'SV_Mode_Offline': SP Offline
+15:25:57 main menu: setting SV_Set_Zollars picked
+15:25:57 main menu: setting SV_Set_Zollars picked
+15:25:58 main menu: setting SV_Set_Zollars picked
+15:25:58 main menu: setting SV_Set_Zollars picked
+15:25:58 main menu: Survival's page row 'SV_Go_Offline': SP Offline, opening the difficulty select to start
+15:26:00 menu transition 7 while Survival is chosen, but no difficulty page was found; passed on
+15:26:01 difficulty page: next menu asked while Survival is chosen: going to the hangar instead of Free Mission
+15:26:01 start: keeping the difficulty the game's page applied (fallback reading would be Casual)
+15:26:01 start (next menu): difficulty set by the game (unchanged), context mode 0 -> 0, mission 9101 -> 9101
+15:26:01 start: going to the hangar (menu F)
+15:26:29 teardown gate: open (a new Survival level: SV_Reset)
+15:26:34 spawner: LiveUnitSpawner 17221C0, global phase 1722508, world data 1ABAB32040
+15:26:34 teardown gate: watching world 1A242FD580 (spawner 17221C0)
+15:26:50 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (18946, 15508) m, 2809 m high, heading 261
+15:26:53 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (-3826, -12663) m, 4030 m high, heading 22
+15:27:09 guard: the guarded event checks, the last 5 minutes: about 1797568 calls (5991 a second; the busiest class 17, event type 27, about 1421888, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+15:27:09 guard: AI path tracking, the last 5 minutes: about 419264 tracker updates (1397 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+15:27:47 spawn SV_Unit_PadDummies: up, 9 aircraft, at (-13253, 615) m, 64 m high, heading 0
+15:27:47 spawn AA_Unit_01_Ground0: up, 11 aircraft, at (-13253, 615) m, 64 m high, heading 0
+15:27:47 spawn SV_Unit_Shuttle: up, 1 aircraft, at (-13253, 615) m, 64 m high, heading 0
+15:27:50 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19C88252A0 destroyed 30 s on (1 waiting)
+15:27:50 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (24314, 12513) m, 3714 m high, heading 244
+15:28:01 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1758F2F6E0 destroyed 30 s on (2 waiting)
+15:28:01 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (-1270, 7612) m, 4207 m high, heading 325
+15:28:05 spawn EA_Unit_01_Air0: up, 2 aircraft, at (-8684, -21857) m, 632 m high, heading 35
+15:28:20 recycle ERA_Unit_02_Dep_Air0: its old unit actor 19C88252A0 destroyed, 30 s after it was taken off the phase's list (41 so far, 0 gone before, 1 waiting)
+15:28:32 recycle ERA_Unit_04_Dep_Air0: its old unit actor 1758F2F6E0 destroyed, 30 s after it was taken off the phase's list (42 so far, 0 gone before, 0 waiting)
+15:30:46 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (14832, -23032) m, 2311 m high, heading 86
+15:30:49 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1831FAC020 destroyed 30 s on (1 waiting)
+15:30:49 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (11585, -24951) m, 4319 m high, heading 77
+15:30:53 spawn EA_Unit_01_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1A906BD260 destroyed 30 s on (2 waiting)
+15:30:53 spawn EA_Unit_01_Air0: up, 2 aircraft, at (-9336, 10325) m, 772 m high, heading 329
+15:30:56 spawn EA_Unit_01_Air1: up, 8 aircraft, at (-19756, -2910) m, 2491 m high, heading 357
+15:31:20 recycle ERA_Unit_02_Dep_Air0: its old unit actor 1831FAC020 destroyed, 30 s after it was taken off the phase's list (43 so far, 0 gone before, 1 waiting)
+15:31:23 recycle EA_Unit_01_Air0: its old unit actor 1A906BD260 destroyed, 30 s after it was taken off the phase's list (44 so far, 0 gone before, 0 waiting)
+15:32:03 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 198D942500 destroyed 30 s on (1 waiting)
+15:32:03 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (16721, -22764) m, 2927 m high, heading 91
+15:32:06 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 7604E010 destroyed 30 s on (2 waiting)
+15:32:06 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (11776, 13886) m, 4480 m high, heading 283
+15:32:09 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (-7173, -2431) m, 3418 m high, heading 355
+15:32:09 guard: the guarded event checks, the last 5 minutes: about 4906048 calls (16353 a second; the busiest class 17, event type 27, about 4429184, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+15:32:09 guard: AI path tracking, the last 5 minutes: about 831104 tracker updates (2770 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+15:32:12 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (3586, -24131) m, 2840 m high, heading 57
+15:32:15 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 15383E1750 destroyed 30 s on (3 waiting)
+15:32:15 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (2669, -17604) m, 4591 m high, heading 44
+15:32:33 recycle ERA_Unit_01_Dep_Air0: its old unit actor 198D942500 destroyed, 30 s after it was taken off the phase's list (45 so far, 0 gone before, 2 waiting)
+15:32:36 recycle ERA_Unit_02_Dep_Air0: its old unit actor 7604E010 destroyed, 30 s after it was taken off the phase's list (46 so far, 0 gone before, 1 waiting)
+15:32:45 recycle ERA_Unit_04_Dep_Air0: its old unit actor 15383E1750 destroyed, 30 s after it was taken off the phase's list (47 so far, 0 gone before, 0 waiting)
+15:33:10 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 18598A1BE0 destroyed 30 s on (1 waiting)
+15:33:10 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (17099, -28689) m, 2918 m high, heading 92
+15:33:14 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 5654B700 destroyed 30 s on (2 waiting)
+15:33:14 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (29253, -18692) m, 3654 m high, heading 132
+15:33:17 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1831FDD260 destroyed 30 s on (3 waiting)
+15:33:17 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (1081, -18209) m, 4273 m high, heading 42
+15:33:20 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1A36F9D260 destroyed 30 s on (4 waiting)
+15:33:20 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (10918, -26597) m, 6042 m high, heading 76
+15:33:23 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 51EE84D0 destroyed 30 s on (5 waiting)
+15:33:23 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (-753, 11786) m, 3063 m high, heading 316
+15:33:26 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (2998, 15410) m, 2486 m high, heading 303
+15:33:31 spawn SV_Unit_Shuttle: its last flight was taken down (forced, aircraft still counted alive); took it off the phase's list, its unit actor 196E353740 destroyed 30 s on (6 waiting)
+15:33:31 recycle SV_Unit_Shuttle (SV_Recycle, force 1): taken off the phase's list (1)
+15:33:34 music player: next track (caller 1426342B0 = exe+26342B0; clock 332745 of 332728 ms; clock held 20182 ms during this track)
+15:33:41 recycle ERA_Unit_06_Dep_Air0: its old unit actor 18598A1BE0 destroyed, 30 s after it was taken off the phase's list (48 so far, 0 gone before, 5 waiting)
+15:33:44 recycle ERA_Unit_02_Dep_Air0: its old unit actor 5654B700 destroyed, 30 s after it was taken off the phase's list (49 so far, 0 gone before, 4 waiting)
+15:33:47 recycle ERA_Unit_07_Dep_Air0: its old unit actor 1831FDD260 destroyed, 30 s after it was taken off the phase's list (50 so far, 0 gone before, 3 waiting)
+15:33:50 recycle ERA_Unit_04_Dep_Air0: its old unit actor 1A36F9D260 destroyed, 30 s after it was taken off the phase's list (51 so far, 0 gone before, 2 waiting)
+15:33:53 recycle ERA_Unit_01_Dep_Air0: its old unit actor 51EE84D0 destroyed, 30 s after it was taken off the phase's list (52 so far, 0 gone before, 1 waiting)
+15:34:01 recycle SV_Unit_Shuttle: its old unit actor 196E353740 destroyed, 30 s after it was taken off the phase's list (53 so far, 0 gone before, 0 waiting)
+15:34:17 music player: BGM paused, track clock held at 43528 of 332728 ms
+15:34:43 music player: BGM playing again, track clock running at 43528 of 332728 ms
+15:34:49 music player: BGM paused, track clock held at 43528 of 332728 ms
+15:34:55 music player: BGM playing again, track clock running at 43528 of 332728 ms
+15:35:02 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 175B5E2500 destroyed 30 s on (1 waiting)
+15:35:02 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (227, -19855) m, 6229 m high, heading 44
+15:35:05 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 16F31AB270 destroyed 30 s on (2 waiting)
+15:35:05 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (6466, -24270) m, 3611 m high, heading 64
+15:35:08 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19D3DC2500 destroyed 30 s on (3 waiting)
+15:35:08 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (12327, 14967) m, 2047 m high, heading 281
+15:35:12 spawn EA_Unit_01_Air1: its last flight was shot down; took it off the phase's list, its unit actor 5631A4C0 destroyed 30 s on (4 waiting)
+15:35:12 spawn EA_Unit_01_Air1: up, 6 aircraft, at (24732, 26095) m, 1704 m high, heading 254
+15:35:15 spawn EA_Unit_01_Air0: its last flight was shot down; took it off the phase's list, its unit actor 6BD54E10 destroyed 30 s on (5 waiting)
+15:35:15 spawn EA_Unit_01_Air0: up, 2 aircraft, at (18397, 29412) m, 851 m high, heading 266
+15:35:18 spawn EA_Unit_01_Air2: up, 16 aircraft, at (12020, 26058) m, 1602 m high, heading 277
+15:35:32 recycle ERA_Unit_04_Dep_Air0: its old unit actor 175B5E2500 destroyed, 30 s after it was taken off the phase's list (54 so far, 0 gone before, 4 waiting)
+15:35:34 music player: BGM paused, track clock held at 39171 of 458710 ms
+15:35:36 recycle ERA_Unit_01_Dep_Air0: its old unit actor 16F31AB270 destroyed, 30 s after it was taken off the phase's list (55 so far, 0 gone before, 3 waiting)
+15:35:38 music player: BGM playing again, track clock running at 39171 of 458710 ms
+15:35:39 recycle ERA_Unit_06_Dep_Air0: its old unit actor 19D3DC2500 destroyed, 30 s after it was taken off the phase's list (56 so far, 0 gone before, 2 waiting)
+15:35:42 recycle EA_Unit_01_Air1: its old unit actor 5631A4C0 destroyed, 30 s after it was taken off the phase's list (57 so far, 0 gone before, 1 waiting)
+15:35:45 recycle EA_Unit_01_Air0: its old unit actor 6BD54E10 destroyed, 30 s after it was taken off the phase's list (58 so far, 0 gone before, 0 waiting)
+15:36:32 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1500D2F250 destroyed 30 s on (1 waiting)
+15:36:32 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (-6093, -4008) m, 3135 m high, heading 25
+15:36:35 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 158C27B700 destroyed 30 s on (2 waiting)
+15:36:35 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (15710, -8571) m, 3381 m high, heading 125
+15:36:38 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19D14484D0 destroyed 30 s on (3 waiting)
+15:36:38 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (-4642, -6240) m, 4043 m high, heading 31
+15:36:41 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1754785730 destroyed 30 s on (4 waiting)
+15:36:41 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (11964, -10869) m, 2745 m high, heading 122
+15:36:44 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (-9925, -3694) m, 3764 m high, heading 16
+15:36:47 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (12996, -16642) m, 3466 m high, heading 121
+15:36:50 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1935464E10 destroyed 30 s on (5 waiting)
+15:36:50 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (-7339, -6653) m, 5507 m high, heading 16
+15:37:02 recycle ERA_Unit_08_Dep_Air0: its old unit actor 1500D2F250 destroyed, 30 s after it was taken off the phase's list (59 so far, 0 gone before, 4 waiting)
+15:37:05 recycle ERA_Unit_07_Dep_Air0: its old unit actor 158C27B700 destroyed, 30 s after it was taken off the phase's list (60 so far, 0 gone before, 3 waiting)
+15:37:08 recycle ERA_Unit_06_Dep_Air0: its old unit actor 19D14484D0 destroyed, 30 s after it was taken off the phase's list (61 so far, 0 gone before, 2 waiting)
+15:37:09 guard: the guarded event checks, the last 5 minutes: about 8067520 calls (26891 a second; the busiest class 17, event type 27, about 6760896, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+15:37:09 guard: AI path tracking, the last 5 minutes: about 1004032 tracker updates (3346 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+15:37:11 recycle ERA_Unit_02_Dep_Air0: its old unit actor 1754785730 destroyed, 30 s after it was taken off the phase's list (62 so far, 0 gone before, 1 waiting)
+15:37:21 recycle ERA_Unit_04_Dep_Air0: its old unit actor 1935464E10 destroyed, 30 s after it was taken off the phase's list (63 so far, 0 gone before, 0 waiting)
+15:37:35 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 7836D6F0 destroyed 30 s on (1 waiting)
+15:37:35 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (12908, -18696) m, 3147 m high, heading 124
+15:37:38 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1758F22990 destroyed 30 s on (2 waiting)
+15:37:38 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (10929, 7765) m, 5178 m high, heading 248
+15:37:41 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 7D74CDD0 destroyed 30 s on (3 waiting)
+15:37:41 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (14889, -16542) m, 4322 m high, heading 125
+15:37:44 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1A706D4980 destroyed 30 s on (4 waiting)
+15:37:44 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (15767, 3987) m, 4160 m high, heading 239
+15:37:47 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 14EE81C940 destroyed 30 s on (5 waiting)
+15:37:47 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (19068, -21468) m, 3143 m high, heading 131
+15:37:50 spawn ERA_Unit_05_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 196D75B700 destroyed 30 s on (6 waiting)
+15:37:50 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (17630, -273) m, 2006 m high, heading 239
+15:37:53 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19A20AE4A0 destroyed 30 s on (7 waiting)
+15:37:53 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (19070, -21333) m, 3308 m high, heading 121
+15:37:56 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 6B53E010 destroyed 30 s on (8 waiting)
+15:37:56 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (21143, 6476) m, 4425 m high, heading 235
+15:37:59 spawn EA_Unit_01_Air0: its last flight was shot down; took it off the phase's list, its unit actor 175B5E8960 destroyed 30 s on (9 waiting)
+15:37:59 spawn EA_Unit_01_Air0: up, 2 aircraft, at (24976, -34625) m, 858 m high, heading 106
+15:38:05 recycle ERA_Unit_06_Dep_Air0: its old unit actor 7836D6F0 destroyed, 30 s after it was taken off the phase's list (64 so far, 0 gone before, 8 waiting)
+15:38:08 recycle ERA_Unit_04_Dep_Air0: its old unit actor 1758F22990 destroyed, 30 s after it was taken off the phase's list (65 so far, 0 gone before, 7 waiting)
+15:38:11 recycle ERA_Unit_01_Dep_Air1: its old unit actor 7D74CDD0 destroyed, 30 s after it was taken off the phase's list (66 so far, 0 gone before, 6 waiting)
+15:38:14 recycle ERA_Unit_02_Dep_Air0: its old unit actor 1A706D4980 destroyed, 30 s after it was taken off the phase's list (67 so far, 0 gone before, 5 waiting)
+15:38:17 recycle ERA_Unit_01_Dep_Air0: its old unit actor 14EE81C940 destroyed, 30 s after it was taken off the phase's list (68 so far, 0 gone before, 4 waiting)
+15:38:20 recycle ERA_Unit_05_Dep_Air0: its old unit actor 196D75B700 destroyed, 30 s after it was taken off the phase's list (69 so far, 0 gone before, 3 waiting)
+15:38:23 recycle ERA_Unit_08_Dep_Air0: its old unit actor 19A20AE4A0 destroyed, 30 s after it was taken off the phase's list (70 so far, 0 gone before, 2 waiting)
+15:38:26 recycle ERA_Unit_07_Dep_Air0: its old unit actor 6B53E010 destroyed, 30 s after it was taken off the phase's list (71 so far, 0 gone before, 1 waiting)
+15:38:30 recycle EA_Unit_01_Air0: its old unit actor 175B5E8960 destroyed, 30 s after it was taken off the phase's list (72 so far, 0 gone before, 0 waiting)
+15:38:54 sound: XAudio2 2.9 up (stereo mastering voice)
+15:38:54 sound: d:\launchers\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\Sounds\valka\Void.wav: 44100 Hz, 2 ch, 11389376 frames
+15:38:54 sound: d:\launchers\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\Sounds\valka\whoosh_1.wav: 48000 Hz, 1 ch, 166464 frames
+15:38:55 sound: d:\launchers\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\Sounds\valka\whoosh_2.wav: 48000 Hz, 2 ch, 117696 frames
+15:38:55 sound: d:\launchers\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\Sounds\valka\whoosh_3.wav: 48000 Hz, 2 ch, 118720 frames
+15:38:55 sound: d:\launchers\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\Sounds\valka\whoosh_4.wav: 48000 Hz, 2 ch, 149888 frames
+15:38:55 sound: d:\launchers\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\Sounds\valka\shot_main.wav: 48000 Hz, 2 ch, 311808 frames
+15:38:56 sound: d:\launchers\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\Sounds\valka\shot_eml_1.wav: 44100 Hz, 1 ch, 307776 frames
+15:38:56 sound: d:\launchers\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\Sounds\valka\shot_eml_2.wav: 48000 Hz, 1 ch, 68864 frames
+15:38:56 sound: d:\launchers\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\Sounds\valka\shot_eml_3.wav: 48000 Hz, 1 ch, 391040 frames
+15:38:56 sound: d:\launchers\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\Sounds\valka\shot_far.wav: 44100 Hz, 2 ch, 90624 frames
+15:38:57 sound: d:\launchers\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\Sounds\valka\charge_start.wav: 44100 Hz, 2 ch, 194304 frames
+15:38:57 sound: d:\launchers\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\Sounds\valka\charge_loop.wav: 44100 Hz, 2 ch, 1387520 frames, a loop
+15:38:57 sound: d:\launchers\steam\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\Sounds\valka\charge_end.wav: 44100 Hz, 2 ch, 193344 frames
+15:39:00 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 52017BB0 destroyed 30 s on (1 waiting)
+15:39:00 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (27157, 11475) m, 4144 m high, heading 235
+15:39:03 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 56318040 destroyed 30 s on (2 waiting)
+15:39:03 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (-2623, -7445) m, 4248 m high, heading 9
+15:39:06 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 7D74D260 destroyed 30 s on (3 waiting)
+15:39:07 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (4547, -18550) m, 2859 m high, heading 50
+15:39:30 recycle ERA_Unit_02_Dep_Air0: its old unit actor 52017BB0 destroyed, 30 s after it was taken off the phase's list (73 so far, 0 gone before, 2 waiting)
+15:39:34 recycle ERA_Unit_01_Dep_Air0: its old unit actor 56318040 destroyed, 30 s after it was taken off the phase's list (74 so far, 0 gone before, 1 waiting)
+15:39:34 music: AKE_System_BGM_Mute_On posted (playing id 43476)
+15:39:37 recycle ERA_Unit_08_Dep_Air0: its old unit actor 7D74D260 destroyed, 30 s after it was taken off the phase's list (75 so far, 0 gone before, 0 waiting)
+15:39:38 spawn SV_Unit_ValkaEml: up, 1 aircraft, at (-3078, -6566) m, 3844 m high, heading 0
+15:39:42 music player: BGM paused, track clock held at 283870 of 458710 ms
+15:39:47 music player: BGM playing again, track clock running at 283870 of 458710 ms
+15:39:49 spawn SV_Unit_Valka: up, 5 aircraft, at (-3078, -6566) m, 3844 m high, heading 0
+15:40:34 music player: BGM paused, track clock held at 331377 of 458710 ms
+15:40:35 music player: BGM playing again, track clock running at 331377 of 458710 ms
+15:42:09 guard: the guarded event checks, the last 5 minutes: about 15040448 calls (50134 a second; the busiest class 17, event type 27, about 11456704, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+15:42:09 guard: AI path tracking, the last 5 minutes: about 1685824 tracker updates (5619 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+15:42:42 music: AKE_System_BGM_Mute_Off posted (playing id 53184)
+15:42:42 music player: next track (caller 1426342B0 = exe+26342B0; clock 458713 of 458710 ms; clock held 39550 ms during this track)
+15:42:58 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 56310E30 destroyed 30 s on (1 waiting)
+15:42:58 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (22144, -10195) m, 4833 m high, heading 170
+15:43:01 spawn ERA_Unit_03_Dep_Air1: up, 4 aircraft, at (7741, 10792) m, 4119 m high, heading 273
+15:43:04 music player: BGM paused, track clock held at 21455 of 458710 ms
+15:43:08 music player: BGM playing again, track clock running at 21455 of 458710 ms
+15:43:08 spawn ERA_Unit_05_Dep_Air1: up, 4 aircraft, at (23509, -9761) m, 2114 m high, heading 161
+15:43:11 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 14D8C2B270 destroyed 30 s on (2 waiting)
+15:43:11 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (9676, 10418) m, 4199 m high, heading 283
+15:43:14 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19C89F4060 destroyed 30 s on (3 waiting)
+15:43:14 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (29439, -9390) m, 2422 m high, heading 169
+15:43:17 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 75FF7BB0 destroyed 30 s on (4 waiting)
+15:43:17 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (16039, 5619) m, 3983 m high, heading 279
+15:43:21 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1749072070 destroyed 30 s on (5 waiting)
+15:43:21 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (-5209, -3697) m, 2083 m high, heading 358
+15:43:28 recycle ERA_Unit_04_Dep_Air0: its old unit actor 56310E30 destroyed, 30 s after it was taken off the phase's list (76 so far, 0 gone before, 4 waiting)
+15:43:41 recycle ERA_Unit_01_Dep_Air1: its old unit actor 14D8C2B270 destroyed, 30 s after it was taken off the phase's list (77 so far, 0 gone before, 3 waiting)
+15:43:44 recycle ERA_Unit_01_Dep_Air0: its old unit actor 19C89F4060 destroyed, 30 s after it was taken off the phase's list (78 so far, 0 gone before, 2 waiting)
+15:43:45 spawn ERA_Unit_07_Dep_Air1: up, 4 aircraft, at (15479, 13858) m, 3424 m high, heading 271
+15:43:48 recycle ERA_Unit_08_Dep_Air0: its old unit actor 75FF7BB0 destroyed, 30 s after it was taken off the phase's list (79 so far, 0 gone before, 1 waiting)
+15:43:51 recycle ERA_Unit_06_Dep_Air0: its old unit actor 1749072070 destroyed, 30 s after it was taken off the phase's list (80 so far, 0 gone before, 0 waiting)
+15:44:11 minigame: type 8 deactivated the world's AI: 84 objects; lists 6 / hidden 5 / 13
+15:44:11 minigame:   deactivated[0] 7944B560: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:44:11 minigame:   deactivated[1] 15A9002020: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:44:11 minigame:   deactivated[2] 1507F22020: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:44:14 landing menu: decide on 191C864970, row '20'
+15:44:16 landing menu: decide on 19384B29B0, row '23'
+15:44:17 landing menu: decide on 1A91E031A0, row 'SV_Buy_UpAirframe'
+15:44:17 shop: SV_Buy_UpAirframe picked on the landing menu
+15:44:18 landing menu: decide on 1A91E031A0, row 'SV_Buy_UpBays'
+15:44:18 shop: SV_Buy_UpBays picked on the landing menu
+15:44:18 landing menu: decide on 1A91E031A0, row 'SV_Buy_UpGun'
+15:44:18 shop: SV_Buy_UpGun picked on the landing menu
+15:44:19 landing menu: decide on 1A91E031A0, row 'SV_Buy_UpGun'
+15:44:19 shop: SV_Buy_UpGun picked on the landing menu
+15:44:20 landing menu: decide on 1A91E031A0, row 'SV_Buy_UpAirframe'
+15:44:20 shop: SV_Buy_UpAirframe picked on the landing menu
+15:44:21 landing menu: decide on 1A91E031A0, row 'SV_Buy_UpBays'
+15:44:21 shop: SV_Buy_UpBays picked on the landing menu
+15:44:21 landing menu: decide on 1A91E031A0, row 'SV_Buy_UpGun'
+15:44:21 shop: SV_Buy_UpGun picked on the landing menu
+15:44:23 landing menu: decide on 1A91E031A0, row 'SV_Buy_UpAirframe'
+15:44:23 shop: SV_Buy_UpAirframe picked on the landing menu
+15:44:23 landing menu: decide on 1A91E031A0, row 'SV_Buy_UpBays'
+15:44:23 shop: SV_Buy_UpBays picked on the landing menu
+15:44:24 landing menu: decide on 1A91E031A0, row 'SV_Buy_UpGun'
+15:44:24 shop: SV_Buy_UpGun picked on the landing menu
+15:44:25 landing menu: decide on 1A91E031A0, row '-1'
+15:44:29 minigame: type 7 ends: restore of 84 AI objects; lists were 6 / hidden 5 / 13 (co-op keep 0)
+15:44:29 minigame:   listed[0] 7944B560: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:44:29 minigame:   listed[1] 15A9002020: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:44:29 minigame:   listed[2] 1507F22020: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:45:14 spawn SV_Unit_Alicorn: up, 226 aircraft, at (-27700, -4400) m, 0 m high, heading 0
+15:45:39 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 74164E0 destroyed 30 s on (1 waiting)
+15:45:39 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (-26119, -4632) m, 1221 m high, heading 351
+15:46:09 recycle ERA_Unit_08_Dep_Air0: its old unit actor 74164E0 destroyed, 30 s after it was taken off the phase's list (81 so far, 0 gone before, 0 waiting)
+15:46:15 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1796442E20 destroyed 30 s on (1 waiting)
+15:46:15 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (-24933, -4804) m, 1221 m high, heading 351
+15:46:45 recycle ERA_Unit_07_Dep_Air0: its old unit actor 1796442E20 destroyed, 30 s after it was taken off the phase's list (82 so far, 0 gone before, 0 waiting)
+15:46:51 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1959E29710 destroyed 30 s on (1 waiting)
+15:46:51 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (-23753, -4979) m, 1221 m high, heading 351
+15:47:09 guard: the guarded event checks, the last 5 minutes: about 13141440 calls (43804 a second; the busiest class 17, event type 27, about 7843008, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+15:47:09 guard: AI path tracking, the last 5 minutes: about 2687552 tracker updates (8958 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+15:47:21 recycle ERA_Unit_08_Dep_Air0: its old unit actor 1959E29710 destroyed, 30 s after it was taken off the phase's list (83 so far, 0 gone before, 0 waiting)
+15:48:22 music player: BGM paused, track clock held at 21455 of 458710 ms
+15:48:36 music player: BGM playing again, track clock running at 21455 of 458710 ms
+15:48:59 minigame: type 8 deactivated the world's AI: 310 objects; lists 1 / hidden 21 / 37
+15:48:59 minigame:   deactivated[0] 19864E6670: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:49:04 landing menu: decide on 191D34B890, row '24'
+15:49:06 landing menu: decide on 196BE64970, row 'SV_Buy_Insurance'
+15:49:06 shop: SV_Buy_Insurance picked on the landing menu
+15:49:07 landing menu: decide on 196BE64970, row '21'
+15:49:08 landing menu: decide on 1917045950, row 'SV_Buy_RepairAircraft'
+15:49:08 shop: SV_Buy_RepairAircraft picked on the landing menu
+15:49:11 landing menu: decide on 1917045950, row '22'
+15:49:14 landing menu: decide on 196BE619D0, row 'SV_Buy_ShipAegis'
+15:49:14 shop: SV_Buy_ShipAegis picked on the landing menu
+15:49:14 landing menu: decide on 196BE619D0, row 'SV_Buy_Moonchild'
+15:49:14 shop: SV_Buy_Moonchild picked on the landing menu
+15:49:15 landing menu: decide on 196BE619D0, row 'SV_Buy_Moonchild'
+15:49:15 shop: SV_Buy_Moonchild picked on the landing menu
+15:49:17 landing menu: decide on 196BE619D0, row '20'
+15:49:19 landing menu: decide on 1A918919D0, row 'SV_Buy_Rearm'
+15:49:19 shop: SV_Buy_Rearm picked on the landing menu
+15:49:21 landing menu: decide on 1A918919D0, row '-1'
+15:49:24 minigame: type 7 ends: restore of 310 AI objects; lists were 1 / hidden 21 / 37 (co-op keep 0)
+15:49:24 minigame:   listed[0] 19864E6670: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+15:50:48 spawn ERA_Unit_03_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 152902BB90 destroyed 30 s on (1 waiting)
+15:50:48 spawn ERA_Unit_03_Dep_Air1: up, 4 aircraft, at (24577, -21442) m, 5286 m high, heading 116
+15:50:49 spawn SV_Unit_Alicorn: its last flight was taken down (forced, aircraft still counted alive); took it off the phase's list, its unit actor 14FD363BD0 destroyed 30 s on (2 waiting)
+15:50:49 recycle SV_Unit_Alicorn (SV_Recycle, force 1): taken off the phase's list (1)
+15:50:51 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1938A212C0 destroyed 30 s on (3 waiting)
+15:50:51 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (22808, -27705) m, 4286 m high, heading 106
+15:50:54 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1719455730 destroyed 30 s on (4 waiting)
+15:50:54 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (-3292, -13608) m, 3484 m high, heading 25
+15:50:57 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 152102B700 destroyed 30 s on (5 waiting)
+15:50:57 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (4107, -24673) m, 2216 m high, heading 59
+15:51:00 spawn EA_Unit_01_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1831FD8040 destroyed 30 s on (6 waiting)
+15:51:00 spawn EA_Unit_01_Air1: up, 8 aircraft, at (-18390, -308) m, 2120 m high, heading 353
+15:51:03 spawn EA_Unit_01_Air2: its last flight was shot down; took it off the phase's list, its unit actor 15498F7290 destroyed 30 s on (7 waiting)
+15:51:03 spawn EA_Unit_01_Air2: up, 16 aircraft, at (-15472, -4955) m, 2882 m high, heading 1
+15:51:06 spawn EB_Unit_01_Air0: up, 6 aircraft, at (-10591, 15078) m, 803 m high, heading 323
+15:51:18 recycle ERA_Unit_03_Dep_Air1: its old unit actor 152902BB90 destroyed, 30 s after it was taken off the phase's list (84 so far, 0 gone before, 6 waiting)
+15:51:20 recycle SV_Unit_Alicorn: its old unit actor 14FD363BD0 destroyed, 30 s after it was taken off the phase's list (85 so far, 0 gone before, 5 waiting)
+15:51:21 recycle ERA_Unit_01_Dep_Air0: its old unit actor 1938A212C0 destroyed, 30 s after it was taken off the phase's list (86 so far, 0 gone before, 4 waiting)
+15:51:24 recycle ERA_Unit_08_Dep_Air0: its old unit actor 1719455730 destroyed, 30 s after it was taken off the phase's list (87 so far, 0 gone before, 3 waiting)
+15:51:27 recycle ERA_Unit_07_Dep_Air0: its old unit actor 152102B700 destroyed, 30 s after it was taken off the phase's list (88 so far, 0 gone before, 2 waiting)
+15:51:30 recycle EA_Unit_01_Air1: its old unit actor 1831FD8040 destroyed, 30 s after it was taken off the phase's list (89 so far, 0 gone before, 1 waiting)
+15:51:33 recycle EA_Unit_01_Air2: its old unit actor 15498F7290 destroyed, 30 s after it was taken off the phase's list (90 so far, 0 gone before, 0 waiting)
+15:52:00 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 152102A950 destroyed 30 s on (1 waiting)
+15:52:00 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (8515, 16335) m, 3003 m high, heading 290
+15:52:03 spawn ERA_Unit_05_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 196D75BB90 destroyed 30 s on (2 waiting)
+15:52:03 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (28281, 13318) m, 4141 m high, heading 235
+15:52:06 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 15CDD312C0 destroyed 30 s on (3 waiting)
+15:52:06 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (-3075, -3724) m, 2271 m high, heading 358
+15:52:09 guard: the guarded event checks, the last 5 minutes: about 6256128 calls (20853 a second; the busiest class 17, event type 27, about 5603520, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+15:52:09 guard: AI path tracking, the last 5 minutes: about 3449792 tracker updates (11499 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+15:52:30 recycle ERA_Unit_06_Dep_Air0: its old unit actor 152102A950 destroyed, 30 s after it was taken off the phase's list (91 so far, 0 gone before, 2 waiting)
+15:52:34 recycle ERA_Unit_05_Dep_Air0: its old unit actor 196D75BB90 destroyed, 30 s after it was taken off the phase's list (92 so far, 0 gone before, 1 waiting)
+15:52:37 recycle ERA_Unit_02_Dep_Air0: its old unit actor 15CDD312C0 destroyed, 30 s after it was taken off the phase's list (93 so far, 0 gone before, 0 waiting)
+15:53:03 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 564FC4B0 destroyed 30 s on (1 waiting)
+15:53:03 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (3154, -12570) m, 3096 m high, heading 46
+15:53:06 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19A1B4BB90 destroyed 30 s on (2 waiting)
+15:53:06 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (28029, -7305) m, 3813 m high, heading 165
+15:53:09 spawn ERA_Unit_03_Dep_Air0: up, 2 aircraft, at (61, -12767) m, 4564 m high, heading 30
+15:53:12 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 75A8E010 destroyed 30 s on (3 waiting)
+15:53:12 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (28424, -7442) m, 6121 m high, heading 169
+15:53:15 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 78366970 destroyed 30 s on (4 waiting)
+15:53:15 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (-1247, -15670) m, 3528 m high, heading 36
+15:53:18 spawn ERA_Unit_05_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1987E832B0 destroyed 30 s on (5 waiting)
+15:53:18 spawn ERA_Unit_05_Dep_Air1: up, 4 aircraft, at (23265, -10624) m, 2487 m high, heading 164
+15:53:21 spawn ERA_Unit_03_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1A71853BD0 destroyed 30 s on (6 waiting)
+15:53:21 spawn ERA_Unit_03_Dep_Air1: up, 4 aircraft, at (-5541, -17214) m, 4528 m high, heading 32
+15:53:24 spawn EA_Unit_01_Air0: its last flight was shot down; took it off the phase's list, its unit actor 762F3740 destroyed 30 s on (7 waiting)
+15:53:24 spawn EA_Unit_01_Air0: up, 2 aircraft, at (23825, -31887) m, 809 m high, heading 105
+15:53:33 recycle ERA_Unit_07_Dep_Air0: its old unit actor 564FC4B0 destroyed, 30 s after it was taken off the phase's list (94 so far, 0 gone before, 6 waiting)
+15:53:36 recycle ERA_Unit_08_Dep_Air0: its old unit actor 19A1B4BB90 destroyed, 30 s after it was taken off the phase's list (95 so far, 0 gone before, 5 waiting)
+15:53:42 recycle ERA_Unit_04_Dep_Air0: its old unit actor 75A8E010 destroyed, 30 s after it was taken off the phase's list (96 so far, 0 gone before, 4 waiting)
+15:53:45 recycle ERA_Unit_02_Dep_Air0: its old unit actor 78366970 destroyed, 30 s after it was taken off the phase's list (97 so far, 0 gone before, 3 waiting)
+15:53:48 recycle ERA_Unit_05_Dep_Air1: its old unit actor 1987E832B0 destroyed, 30 s after it was taken off the phase's list (98 so far, 0 gone before, 2 waiting)
+15:53:51 recycle ERA_Unit_03_Dep_Air1: its old unit actor 1A71853BD0 destroyed, 30 s after it was taken off the phase's list (99 so far, 0 gone before, 1 waiting)
+15:53:54 recycle EA_Unit_01_Air0: its old unit actor 762F3740 destroyed, 30 s after it was taken off the phase's list (100 so far, 0 gone before, 0 waiting)
+15:54:00 spawn ERA_Unit_02_Dep_Air2: up, 6 aircraft, at (-6540, 96) m, 3771 m high, heading 348
+15:54:03 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 17583F4060 destroyed 30 s on (1 waiting)
+15:54:03 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (26700, 17335) m, 4473 m high, heading 243
+15:54:06 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 15558E5730 destroyed 30 s on (2 waiting)
+15:54:06 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (-923, 6631) m, 2697 m high, heading 327
+15:54:33 recycle ERA_Unit_01_Dep_Air0: its old unit actor 17583F4060 destroyed, 30 s after it was taken off the phase's list (101 so far, 0 gone before, 1 waiting)
+15:54:36 recycle ERA_Unit_06_Dep_Air0: its old unit actor 15558E5730 destroyed, 30 s after it was taken off the phase's list (102 so far, 0 gone before, 0 waiting)
+15:55:16 spawn SV_Unit_LcacC: up, 4 aircraft, at (12024, -12354) m, 0 m high, heading 61
+15:55:16 spawn SV_Unit_LcacB: up, 4 aircraft, at (11817, -9399) m, 0 m high, heading 63
+15:55:16 spawn SV_Unit_LcacD: up, 4 aircraft, at (14727, -14178) m, 0 m high, heading 71
+15:55:16 spawn SV_Unit_LcacA: up, 4 aircraft, at (11245, 6018) m, 0 m high, heading -89
+15:55:19 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1347BB0 destroyed 30 s on (1 waiting)
+15:55:19 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (13980, 14745) m, 2936 m high, heading 276
+15:55:22 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1E380E930 destroyed 30 s on (2 waiting)
+15:55:22 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (18193, -27108) m, 3282 m high, heading 95
+15:55:25 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 14FD3652A0 destroyed 30 s on (3 waiting)
+15:55:25 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (21599, -22257) m, 4806 m high, heading 107
+15:55:28 spawn ERA_Unit_03_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 14FD363BD0 destroyed 30 s on (4 waiting)
+15:55:28 spawn ERA_Unit_03_Dep_Air1: up, 4 aircraft, at (11068, -23643) m, 5868 m high, heading 75
+15:55:31 spawn ERA_Unit_07_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1A706D4980 destroyed 30 s on (5 waiting)
+15:55:31 spawn ERA_Unit_07_Dep_Air1: up, 4 aircraft, at (2095, -21593) m, 4057 m high, heading 50
+15:55:34 spawn ERA_Unit_03_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 14FD360E30 destroyed 30 s on (6 waiting)
+15:55:34 spawn ERA_Unit_03_Dep_Air0: up, 2 aircraft, at (-2251, 4629) m, 5864 m high, heading 333
+15:55:37 spawn ERA_Unit_05_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 14FD364060 destroyed 30 s on (7 waiting)
+15:55:37 spawn ERA_Unit_05_Dep_Air1: up, 4 aircraft, at (21523, 17290) m, 2384 m high, heading 255
+15:55:40 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 14FD360080 destroyed 30 s on (8 waiting)
+15:55:40 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (1457, 7312) m, 3765 m high, heading 321
+15:55:49 recycle ERA_Unit_07_Dep_Air0: its old unit actor 1347BB0 destroyed, 30 s after it was taken off the phase's list (103 so far, 0 gone before, 7 waiting)
+15:55:52 recycle ERA_Unit_01_Dep_Air0: its old unit actor 1E380E930 destroyed, 30 s after it was taken off the phase's list (104 so far, 0 gone before, 6 waiting)
+15:55:55 recycle ERA_Unit_04_Dep_Air0: its old unit actor 14FD3652A0 destroyed, 30 s after it was taken off the phase's list (105 so far, 0 gone before, 5 waiting)
+15:55:58 recycle ERA_Unit_03_Dep_Air1: its old unit actor 14FD363BD0 destroyed, 30 s after it was taken off the phase's list (106 so far, 0 gone before, 4 waiting)
+15:56:01 recycle ERA_Unit_07_Dep_Air1: its old unit actor 1A706D4980 destroyed, 30 s after it was taken off the phase's list (107 so far, 0 gone before, 3 waiting)
+15:56:04 recycle ERA_Unit_03_Dep_Air0: its old unit actor 14FD360E30 destroyed, 30 s after it was taken off the phase's list (108 so far, 0 gone before, 2 waiting)
+15:56:07 recycle ERA_Unit_05_Dep_Air1: its old unit actor 14FD364060 destroyed, 30 s after it was taken off the phase's list (109 so far, 0 gone before, 1 waiting)
+15:56:10 recycle ERA_Unit_02_Dep_Air0: its old unit actor 14FD360080 destroyed, 30 s after it was taken off the phase's list (110 so far, 0 gone before, 0 waiting)
+15:56:30 spawn ERA_Unit_02_Dep_Air2: its last flight was shot down; took it off the phase's list, its unit actor 1E3801BE0 destroyed 30 s on (1 waiting)
+15:56:30 spawn ERA_Unit_02_Dep_Air2: up, 6 aircraft, at (11677, 18390) m, 4426 m high, heading 267
+15:56:33 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 7413BD0 destroyed 30 s on (2 waiting)
+15:56:33 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (506, -14309) m, 4040 m high, heading 54
+15:57:00 recycle ERA_Unit_02_Dep_Air2: its old unit actor 1E3801BE0 destroyed, 30 s after it was taken off the phase's list (111 so far, 0 gone before, 1 waiting)
+15:57:03 recycle ERA_Unit_06_Dep_Air0: its old unit actor 7413BD0 destroyed, 30 s after it was taken off the phase's list (112 so far, 0 gone before, 0 waiting)
+15:57:08 music player: BGM paused, track clock held at 21455 of 458710 ms
+15:58:46 guard: the guarded event checks, the last 5 minutes: about 12935296 calls (43117 a second; the busiest class 17, event type 27, about 10362752, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+15:58:46 guard: AI path tracking, the last 5 minutes: about 1943808 tracker updates (6479 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+15:58:46 music player: BGM playing again, track clock running at 21455 of 458710 ms
+15:59:18 minigame: type 8 deactivated the world's AI: 116 objects; lists 0 / hidden 17 / 13
+15:59:22 landing menu: decide on 15C34698D0, row '23'
+15:59:23 landing menu: decide on 192EF97910, row 'SV_Buy_UpBays'
+15:59:23 shop: SV_Buy_UpBays picked on the landing menu
+15:59:24 landing menu: decide on 192EF97910, row 'SV_Buy_UpAirframe'
+15:59:24 shop: SV_Buy_UpAirframe picked on the landing menu
+15:59:25 landing menu: decide on 192EF97910, row 'SV_Buy_UpGun'
+15:59:25 shop: SV_Buy_UpGun picked on the landing menu
+15:59:26 landing menu: decide on 192EF97910, row 'SV_Buy_UpGun'
+15:59:26 shop: SV_Buy_UpGun picked on the landing menu
+15:59:28 landing menu: decide on 192EF97910, row '24'
+15:59:30 landing menu: decide on 19597C3990, row 'SV_Buy_Insurance'
+15:59:30 shop: SV_Buy_Insurance picked on the landing menu
+15:59:34 landing menu: decide on 19597C3990, row 'SV_Buy_Airstrike'
+15:59:34 shop: SV_Buy_Airstrike picked on the landing menu
+15:59:35 landing menu: decide on 19597C3990, row 'SV_Buy_Ecm'
+15:59:35 shop: SV_Buy_Ecm picked on the landing menu
+15:59:35 landing menu: decide on 19597C3990, row 'SV_Buy_Decoy'
+15:59:35 shop: SV_Buy_Decoy picked on the landing menu
+15:59:37 landing menu: decide on 19597C3990, row '-1'
+15:59:39 minigame: type 7 ends: restore of 116 AI objects; lists were 0 / hidden 17 / 13 (co-op keep 0)
+15:59:57 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 134ADE0 destroyed 30 s on (1 waiting)
+15:59:57 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (9244, 14937) m, 3355 m high, heading 289
+16:00:00 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 18982A2500 destroyed 30 s on (2 waiting)
+16:00:00 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (-4031, 2929) m, 2489 m high, heading 340
+16:00:03 spawn ERA_Unit_03_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 741A030 destroyed 30 s on (3 waiting)
+16:00:03 spawn ERA_Unit_03_Dep_Air1: up, 4 aircraft, at (2572, 11724) m, 5476 m high, heading 310
+16:00:07 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1349BA0 destroyed 30 s on (4 waiting)
+16:00:07 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (28557, -20028) m, 4470 m high, heading 128
+16:00:10 spawn EA_Unit_01_Air1: its last flight was shot down; took it off the phase's list, its unit actor 17774E10 destroyed 30 s on (5 waiting)
+16:00:10 spawn EA_Unit_01_Air1: up, 6 aircraft, at (7706, 23876) m, 2109 m high, heading 286
+16:00:13 spawn EA_Unit_01_Air2: its last flight was shot down; took it off the phase's list, its unit actor 19156A9710 destroyed 30 s on (6 waiting)
+16:00:13 spawn EA_Unit_01_Air2: up, 16 aircraft, at (8200, 22771) m, 2322 m high, heading 286
+16:00:16 spawn EB_Unit_01_Air0: its last flight was shot down; took it off the phase's list, its unit actor 7416E00 destroyed 30 s on (7 waiting)
+16:00:16 spawn EB_Unit_01_Air0: up, 6 aircraft, at (-1132, 19335) m, 586 m high, heading 306
+16:00:27 recycle ERA_Unit_08_Dep_Air0: its old unit actor 134ADE0 destroyed, 30 s after it was taken off the phase's list (113 so far, 0 gone before, 6 waiting)
+16:00:30 recycle ERA_Unit_01_Dep_Air0: its old unit actor 18982A2500 destroyed, 30 s after it was taken off the phase's list (114 so far, 0 gone before, 5 waiting)
+16:00:34 recycle ERA_Unit_03_Dep_Air1: its old unit actor 741A030 destroyed, 30 s after it was taken off the phase's list (115 so far, 0 gone before, 4 waiting)
+16:00:37 recycle ERA_Unit_04_Dep_Air0: its old unit actor 1349BA0 destroyed, 30 s after it was taken off the phase's list (116 so far, 0 gone before, 3 waiting)
+16:00:40 recycle EA_Unit_01_Air1: its old unit actor 17774E10 destroyed, 30 s after it was taken off the phase's list (117 so far, 0 gone before, 2 waiting)
+16:00:42 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19355BA950 destroyed 30 s on (3 waiting)
+16:00:42 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (-3020, 2502) m, 4187 m high, heading 42
+16:00:43 recycle EA_Unit_01_Air2: its old unit actor 19156A9710 destroyed, 30 s after it was taken off the phase's list (118 so far, 0 gone before, 2 waiting)
+16:00:45 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1938A252A0 destroyed 30 s on (3 waiting)
+16:00:45 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (25573, 6183) m, 3841 m high, heading 164
+16:00:46 recycle EB_Unit_01_Air0: its old unit actor 7416E00 destroyed, 30 s after it was taken off the phase's list (119 so far, 0 gone before, 2 waiting)
+16:00:48 spawn ERA_Unit_05_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 78368040 destroyed 30 s on (3 waiting)
+16:00:48 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (-4181, 1377) m, 3862 m high, heading 37
+16:01:12 recycle ERA_Unit_06_Dep_Air0: its old unit actor 19355BA950 destroyed, 30 s after it was taken off the phase's list (120 so far, 0 gone before, 2 waiting)
+16:01:15 recycle ERA_Unit_01_Dep_Air1: its old unit actor 1938A252A0 destroyed, 30 s after it was taken off the phase's list (121 so far, 0 gone before, 1 waiting)
+16:01:19 recycle ERA_Unit_05_Dep_Air0: its old unit actor 78368040 destroyed, 30 s after it was taken off the phase's list (122 so far, 0 gone before, 0 waiting)
+16:01:51 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19A1B4BB90 destroyed 30 s on (1 waiting)
+16:01:51 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (-5434, -14159) m, 6085 m high, heading 24
+16:01:55 spawn ERA_Unit_03_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1987E809A0 destroyed 30 s on (2 waiting)
+16:01:55 spawn ERA_Unit_03_Dep_Air1: up, 4 aircraft, at (7567, -25835) m, 4986 m high, heading 68
+16:02:21 recycle ERA_Unit_04_Dep_Air0: its old unit actor 19A1B4BB90 destroyed, 30 s after it was taken off the phase's list (123 so far, 0 gone before, 1 waiting)
+16:02:24 spawn ERA_Unit_03_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1A7218A030 destroyed 30 s on (2 waiting)
+16:02:24 spawn ERA_Unit_03_Dep_Air0: up, 2 aircraft, at (-4573, -3848) m, 4347 m high, heading 358
+16:02:25 recycle ERA_Unit_03_Dep_Air1: its old unit actor 1987E809A0 destroyed, 30 s after it was taken off the phase's list (124 so far, 0 gone before, 1 waiting)
+16:02:28 spawn ERA_Unit_04_Dep_Air1: up, 4 aircraft, at (22714, 14510) m, 4980 m high, heading 250
+16:02:54 recycle ERA_Unit_03_Dep_Air0: its old unit actor 1A7218A030 destroyed, 30 s after it was taken off the phase's list (125 so far, 0 gone before, 0 waiting)
+16:03:24 spawn SV_Unit_Anomaly: up, 1 aircraft, at (10518, -23127) m, 3220 m high, heading 73
+16:03:24 spawn SV_Unit_AnomalyGuards: up, 4 aircraft, at (11318, -22327) m, 3220 m high, heading 73
+16:03:46 guard: the guarded event checks, the last 5 minutes: about 7722688 calls (25742 a second; the busiest class 17, event type 27, about 6505920, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+16:03:46 guard: AI path tracking, the last 5 minutes: about 2376896 tracker updates (7922 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+16:06:22 music player: BGM paused, track clock held at 21455 of 458710 ms
+16:06:45 music player: BGM playing again, track clock running at 21455 of 458710 ms
+16:06:51 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1876322E20 destroyed 30 s on (1 waiting)
+16:06:51 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (-8386, -1242) m, 3104 m high, heading 352
+16:06:54 spawn ERA_Unit_03_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 12358040 destroyed 30 s on (2 waiting)
+16:06:54 spawn ERA_Unit_03_Dep_Air0: up, 2 aircraft, at (-1596, -7739) m, 4537 m high, heading 10
+16:06:58 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1959E26970 destroyed 30 s on (3 waiting)
+16:06:58 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (18535, 16154) m, 3768 m high, heading 263
+16:07:01 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 175B24F250 destroyed 30 s on (4 waiting)
+16:07:01 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (3501, -18677) m, 4425 m high, heading 48
+16:07:04 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1987DEC940 destroyed 30 s on (5 waiting)
+16:07:04 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (14459, 19645) m, 4348 m high, heading 273
+16:07:07 spawn EA_Unit_01_Air2: its last flight was shot down; took it off the phase's list, its unit actor 15498FDB80 destroyed 30 s on (6 waiting)
+16:07:07 spawn EA_Unit_01_Air2: up, 16 aircraft, at (-4139, -29468) m, 2260 m high, heading 51
+16:07:10 spawn EA_Unit_01_Air1: its last flight was shot down; took it off the phase's list, its unit actor 19A1B49280 destroyed 30 s on (7 waiting)
+16:07:10 spawn EA_Unit_01_Air1: up, 6 aircraft, at (-4903, -23304) m, 2855 m high, heading 42
+16:07:13 spawn EA_Unit_01_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1831FDC940 destroyed 30 s on (8 waiting)
+16:07:13 spawn EA_Unit_01_Air0: up, 2 aircraft, at (4323, -34726) m, 546 m high, heading 68
+16:07:16 spawn ERB_Unit_01_Air2: up, 4 aircraft, at (-3017, -32152) m, 764 m high, heading 55
+16:07:21 recycle ERA_Unit_01_Dep_Air0: its old unit actor 1876322E20 destroyed, 30 s after it was taken off the phase's list (126 so far, 0 gone before, 7 waiting)
+16:07:25 recycle ERA_Unit_03_Dep_Air0: its old unit actor 12358040 destroyed, 30 s after it was taken off the phase's list (127 so far, 0 gone before, 6 waiting)
+16:07:28 recycle ERA_Unit_07_Dep_Air0: its old unit actor 1959E26970 destroyed, 30 s after it was taken off the phase's list (128 so far, 0 gone before, 5 waiting)
+16:07:31 recycle ERA_Unit_02_Dep_Air0: its old unit actor 175B24F250 destroyed, 30 s after it was taken off the phase's list (129 so far, 0 gone before, 4 waiting)
+16:07:34 recycle ERA_Unit_06_Dep_Air0: its old unit actor 1987DEC940 destroyed, 30 s after it was taken off the phase's list (130 so far, 0 gone before, 3 waiting)
+16:07:37 recycle EA_Unit_01_Air2: its old unit actor 15498FDB80 destroyed, 30 s after it was taken off the phase's list (131 so far, 0 gone before, 2 waiting)
+16:07:40 recycle EA_Unit_01_Air1: its old unit actor 19A1B49280 destroyed, 30 s after it was taken off the phase's list (132 so far, 0 gone before, 1 waiting)
+16:07:43 recycle EA_Unit_01_Air0: its old unit actor 1831FDC940 destroyed, 30 s after it was taken off the phase's list (133 so far, 0 gone before, 0 waiting)
+16:07:45 spawn ERA_Unit_05_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 19156A2500 destroyed 30 s on (1 waiting)
+16:07:45 spawn ERA_Unit_05_Dep_Air1: up, 4 aircraft, at (13416, -15254) m, 3934 m high, heading 212
+16:07:48 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1687E6E00 destroyed 30 s on (2 waiting)
+16:07:48 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (-4359, -6434) m, 5862 m high, heading 301
+16:07:51 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1A20E9B270 destroyed 30 s on (3 waiting)
+16:07:51 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (19932, -13572) m, 3699 m high, heading 198
+16:08:15 recycle ERA_Unit_05_Dep_Air1: its old unit actor 19156A2500 destroyed, 30 s after it was taken off the phase's list (134 so far, 0 gone before, 2 waiting)
+16:08:18 recycle ERA_Unit_04_Dep_Air0: its old unit actor 1687E6E00 destroyed, 30 s after it was taken off the phase's list (135 so far, 0 gone before, 1 waiting)
+16:08:21 recycle ERA_Unit_08_Dep_Air0: its old unit actor 1A20E9B270 destroyed, 30 s after it was taken off the phase's list (136 so far, 0 gone before, 0 waiting)
+16:08:46 guard: the guarded event checks, the last 5 minutes: about 17501824 calls (58339 a second; the busiest class 17, event type 27, about 12041728, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+16:08:46 guard: AI path tracking, the last 5 minutes: about 2299456 tracker updates (7664 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+16:09:03 spawn ERA_Unit_02_Dep_Air2: its last flight was shot down; took it off the phase's list, its unit actor 14D8C2B270 destroyed 30 s on (1 waiting)
+16:09:03 spawn ERA_Unit_02_Dep_Air2: up, 6 aircraft, at (12914, -24413) m, 2267 m high, heading 80
+16:09:33 recycle ERA_Unit_02_Dep_Air2: its old unit actor 14D8C2B270 destroyed, 30 s after it was taken off the phase's list (137 so far, 0 gone before, 0 waiting)
+16:09:39 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1A20FDCDD0 destroyed 30 s on (1 waiting)
+16:09:39 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (26016, -21162) m, 2304 m high, heading 120
+16:09:51 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 155C708040 destroyed 30 s on (2 waiting)
+16:09:51 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (-2306, -10421) m, 3723 m high, heading 18
+16:10:09 recycle ERA_Unit_01_Dep_Air0: its old unit actor 1A20FDCDD0 destroyed, 30 s after it was taken off the phase's list (138 so far, 0 gone before, 1 waiting)
+16:10:20 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1521029BA0 destroyed 30 s on (2 waiting)
+16:10:20 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (5555, 10645) m, 3255 m high, heading 305
+16:10:21 recycle ERA_Unit_01_Dep_Air1: its old unit actor 155C708040 destroyed, 30 s after it was taken off the phase's list (139 so far, 0 gone before, 1 waiting)
+16:10:50 recycle ERA_Unit_02_Dep_Air0: its old unit actor 1521029BA0 destroyed, 30 s after it was taken off the phase's list (140 so far, 0 gone before, 0 waiting)
+16:11:07 spawn ERA_Unit_05_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1A729AC4B0 destroyed 30 s on (1 waiting)
+16:11:07 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (3886, -21189) m, 3491 m high, heading 54
+16:11:10 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 6BD54E10 destroyed 30 s on (2 waiting)
+16:11:10 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (381, -13791) m, 5815 m high, heading 30
+16:11:13 spawn ERA_Unit_02_Dep_Air2: its last flight was shot down; took it off the phase's list, its unit actor 7417720 destroyed 30 s on (3 waiting)
+16:11:13 spawn ERA_Unit_02_Dep_Air2: up, 6 aircraft, at (10763, -26706) m, 3683 m high, heading 76
+16:11:16 spawn ERA_Unit_05_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 17583FEDC0 destroyed 30 s on (4 waiting)
+16:11:16 spawn ERA_Unit_05_Dep_Air1: up, 4 aircraft, at (6883, -20800) m, 2885 m high, heading 60
+16:11:19 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19156A9280 destroyed 30 s on (5 waiting)
+16:11:19 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (-7252, 1636) m, 2524 m high, heading 345
+16:11:22 spawn ERA_Unit_07_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 172AA684D0 destroyed 30 s on (6 waiting)
+16:11:22 spawn ERA_Unit_07_Dep_Air1: up, 4 aircraft, at (13040, 14104) m, 4448 m high, heading 279
+16:11:25 spawn ERA_Unit_03_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19826FADE0 destroyed 30 s on (7 waiting)
+16:11:25 spawn ERA_Unit_03_Dep_Air0: up, 2 aircraft, at (26896, 12937) m, 6464 m high, heading 238
+16:11:37 recycle ERA_Unit_05_Dep_Air0: its old unit actor 1A729AC4B0 destroyed, 30 s after it was taken off the phase's list (141 so far, 0 gone before, 6 waiting)
+16:11:40 recycle ERA_Unit_04_Dep_Air0: its old unit actor 6BD54E10 destroyed, 30 s after it was taken off the phase's list (142 so far, 0 gone before, 5 waiting)
+16:11:43 recycle ERA_Unit_02_Dep_Air2: its old unit actor 7417720 destroyed, 30 s after it was taken off the phase's list (143 so far, 0 gone before, 4 waiting)
+16:11:46 recycle ERA_Unit_05_Dep_Air1: its old unit actor 17583FEDC0 destroyed, 30 s after it was taken off the phase's list (144 so far, 0 gone before, 3 waiting)
+16:11:49 recycle ERA_Unit_07_Dep_Air0: its old unit actor 19156A9280 destroyed, 30 s after it was taken off the phase's list (145 so far, 0 gone before, 2 waiting)
+16:11:52 recycle ERA_Unit_07_Dep_Air1: its old unit actor 172AA684D0 destroyed, 30 s after it was taken off the phase's list (146 so far, 0 gone before, 1 waiting)
+16:11:55 recycle ERA_Unit_03_Dep_Air0: its old unit actor 19826FADE0 destroyed, 30 s after it was taken off the phase's list (147 so far, 0 gone before, 0 waiting)
+16:12:04 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1570154060 destroyed 30 s on (1 waiting)
+16:12:04 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (19264, -1222) m, 2130 m high, heading 185
+16:12:07 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1987DED260 destroyed 30 s on (2 waiting)
+16:12:07 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (756, 14093) m, 4099 m high, heading 298
+16:12:10 spawn ERA_Unit_04_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1A7145FB70 destroyed 30 s on (3 waiting)
+16:12:10 spawn ERA_Unit_04_Dep_Air1: up, 4 aircraft, at (27542, 3890) m, 5330 m high, heading 194
+16:12:34 recycle ERA_Unit_02_Dep_Air0: its old unit actor 1570154060 destroyed, 30 s after it was taken off the phase's list (148 so far, 0 gone before, 2 waiting)
+16:12:37 recycle ERA_Unit_01_Dep_Air0: its old unit actor 1987DED260 destroyed, 30 s after it was taken off the phase's list (149 so far, 0 gone before, 1 waiting)
+16:12:40 recycle ERA_Unit_04_Dep_Air1: its old unit actor 1A7145FB70 destroyed, 30 s after it was taken off the phase's list (150 so far, 0 gone before, 0 waiting)
+16:12:57 spawn ERA_Unit_03_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1546A3C020 destroyed 30 s on (1 waiting)
+16:12:57 spawn ERA_Unit_03_Dep_Air0: up, 2 aircraft, at (24533, -20997) m, 4276 m high, heading 116
+16:13:00 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1A18504060 destroyed 30 s on (2 waiting)
+16:13:00 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (3961, -20398) m, 2647 m high, heading 52
+16:13:03 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 2934E10 destroyed 30 s on (3 waiting)
+16:13:03 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (24780, -26782) m, 3104 m high, heading 111
+16:13:06 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 17583F6050 destroyed 30 s on (4 waiting)
+16:13:06 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (4584, -23414) m, 3152 m high, heading 58
+16:13:09 spawn ERA_Unit_05_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1A20FDCDD0 destroyed 30 s on (5 waiting)
+16:13:09 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (28475, -25072) m, 3871 m high, heading 120
+16:13:13 spawn EB_Unit_01_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1755BF4060 destroyed 30 s on (6 waiting)
+16:13:13 spawn EB_Unit_01_Air0: up, 6 aircraft, at (-18612, -6505) m, 579 m high, heading 3
+16:13:16 spawn EA_Unit_01_Air0: its last flight was shot down; took it off the phase's list, its unit actor 18A6DC09A0 destroyed 30 s on (7 waiting)
+16:13:16 spawn EA_Unit_01_Air0: up, 2 aircraft, at (-14340, -21186) m, 556 m high, heading 28
+16:13:27 recycle ERA_Unit_03_Dep_Air0: its old unit actor 1546A3C020 destroyed, 30 s after it was taken off the phase's list (151 so far, 0 gone before, 6 waiting)
+16:13:30 recycle ERA_Unit_07_Dep_Air0: its old unit actor 1A18504060 destroyed, 30 s after it was taken off the phase's list (152 so far, 0 gone before, 5 waiting)
+16:13:32 minigame: type 8 deactivated the world's AI: 127 objects; lists 18 / hidden 17 / 13
+16:13:32 minigame:   deactivated[0] 15FE55B560: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+16:13:32 minigame:   deactivated[1] 1987C6B560: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+16:13:32 minigame:   deactivated[2] 176CC3B560: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+16:13:33 recycle ERA_Unit_02_Dep_Air0: its old unit actor 2934E10 destroyed, 30 s after it was taken off the phase's list (153 so far, 0 gone before, 4 waiting)
+16:13:35 landing menu: decide on 19385A5950, row '23'
+16:13:36 recycle ERA_Unit_01_Dep_Air0: its old unit actor 17583F6050 destroyed, 30 s after it was taken off the phase's list (154 so far, 0 gone before, 3 waiting)
+16:13:37 landing menu: decide on 19193598D0, row '24'
+16:13:39 landing menu: decide on 190E8E98D0, row '21'
+16:13:40 recycle ERA_Unit_05_Dep_Air0: its old unit actor 1A20FDCDD0 destroyed, 30 s after it was taken off the phase's list (155 so far, 0 gone before, 2 waiting)
+16:13:41 landing menu: decide on 1ABB3E7120, row '25'
+16:13:43 recycle EB_Unit_01_Air0: its old unit actor 1755BF4060 destroyed, 30 s after it was taken off the phase's list (156 so far, 0 gone before, 1 waiting)
+16:13:43 landing menu: decide on 19531488F0, row 'SV_Buy_VoidWatcher'
+16:13:43 shop: SV_Buy_VoidWatcher picked on the landing menu
+16:13:44 landing menu: decide on 19531488F0, row 'SV_Buy_Ciws'
+16:13:44 shop: SV_Buy_Ciws picked on the landing menu
+16:13:44 spawn SV_Unit_Ciws_A: up, 1 aircraft, at (15353, -4314) m, 5 m high, heading 0
+16:13:44 landing menu: decide on 19531488F0, row 'SV_Buy_Ciws'
+16:13:44 shop: SV_Buy_Ciws picked on the landing menu
+16:13:44 landing menu: decide on 19531488F0, row 'SV_Buy_Ciws'
+16:13:44 shop: SV_Buy_Ciws picked on the landing menu
+16:13:44 spawn SV_Unit_Ciws_B: up, 1 aircraft, at (15503, -3834) m, 5 m high, heading 0
+16:13:45 landing menu: decide on 19531488F0, row 'SV_Buy_Ciws'
+16:13:45 shop: SV_Buy_Ciws picked on the landing menu
+16:13:45 spawn SV_Unit_Ciws_C: up, 1 aircraft, at (16765, -4826) m, 5 m high, heading 0
+16:13:45 landing menu: decide on 19531488F0, row 'SV_Buy_SAM'
+16:13:45 shop: SV_Buy_SAM picked on the landing menu
+16:13:45 spawn SV_Unit_SAM_A: up, 1 aircraft, at (16096, -4363) m, 5 m high, heading 0
+16:13:45 landing menu: decide on 19531488F0, row 'SV_Buy_SAM'
+16:13:45 shop: SV_Buy_SAM picked on the landing menu
+16:13:45 landing menu: decide on 19531488F0, row 'SV_Buy_SAM'
+16:13:45 shop: SV_Buy_SAM picked on the landing menu
+16:13:46 spawn SV_Unit_SAM_B: up, 1 aircraft, at (16096, -4363) m, 5 m high, heading 0
+16:13:46 recycle EA_Unit_01_Air0: its old unit actor 18A6DC09A0 destroyed, 30 s after it was taken off the phase's list (157 so far, 0 gone before, 0 waiting)
+16:13:46 landing menu: decide on 19531488F0, row 'SV_Buy_SAM'
+16:13:46 shop: SV_Buy_SAM picked on the landing menu
+16:13:46 landing menu: decide on 19531488F0, row 'SV_Buy_SAM'
+16:13:46 shop: SV_Buy_SAM picked on the landing menu
+16:13:46 guard: the guarded event checks, the last 5 minutes: about 8595712 calls (28652 a second; the busiest class 17, event type 27, about 7400960, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+16:13:46 guard: AI path tracking, the last 5 minutes: about 2394816 tracker updates (7982 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+16:13:46 landing menu: decide on 19531488F0, row 'SV_Buy_AAGun'
+16:13:46 shop: SV_Buy_AAGun picked on the landing menu
+16:13:46 spawn SV_Unit_AAGun_A: up, 1 aircraft, at (16096, -4363) m, 5 m high, heading 0
+16:13:46 landing menu: decide on 19531488F0, row 'SV_Buy_AAGun'
+16:13:46 shop: SV_Buy_AAGun picked on the landing menu
+16:13:47 spawn SV_Unit_AAGun_B: up, 1 aircraft, at (16096, -4363) m, 5 m high, heading 0
+16:13:47 landing menu: decide on 19531488F0, row 'SV_Buy_AAGun'
+16:13:47 shop: SV_Buy_AAGun picked on the landing menu
+16:13:47 spawn SV_Unit_AAGun_C: up, 1 aircraft, at (16096, -4363) m, 5 m high, heading 0
+16:13:48 landing menu: decide on 19531488F0, row 'SV_Buy_Ciws'
+16:13:48 shop: SV_Buy_Ciws picked on the landing menu
+16:13:48 spawn SV_Unit_Ciws_D: up, 1 aircraft, at (16956, -4505) m, 5 m high, heading 0
+16:13:48 landing menu: decide on 19531488F0, row 'SV_Buy_Ciws'
+16:13:48 shop: SV_Buy_Ciws picked on the landing menu
+16:13:48 landing menu: decide on 19531488F0, row 'SV_Buy_Ciws'
+16:13:48 shop: SV_Buy_Ciws picked on the landing menu
+16:13:48 landing menu: decide on 19531488F0, row 'SV_Buy_Ciws'
+16:13:48 shop: SV_Buy_Ciws picked on the landing menu
+16:13:49 landing menu: decide on 19531488F0, row 'SV_Buy_Ciws'
+16:13:49 shop: SV_Buy_Ciws picked on the landing menu
+16:13:49 landing menu: decide on 19531488F0, row 'SV_Buy_Ciws'
+16:13:49 shop: SV_Buy_Ciws picked on the landing menu
+16:13:49 landing menu: decide on 19531488F0, row 'SV_Buy_SAM'
+16:13:49 shop: SV_Buy_SAM picked on the landing menu
+16:13:49 landing menu: decide on 19531488F0, row 'SV_Buy_SAM'
+16:13:49 shop: SV_Buy_SAM picked on the landing menu
+16:13:50 landing menu: decide on 19531488F0, row 'SV_Buy_SAM'
+16:13:50 shop: SV_Buy_SAM picked on the landing menu
+16:13:50 landing menu: decide on 19531488F0, row 'SV_Buy_SAM'
+16:13:50 shop: SV_Buy_SAM picked on the landing menu
+16:13:50 landing menu: decide on 19531488F0, row 'SV_Buy_SAM'
+16:13:50 shop: SV_Buy_SAM picked on the landing menu
+16:13:50 landing menu: decide on 19531488F0, row 'SV_Buy_AAGun'
+16:13:50 shop: SV_Buy_AAGun picked on the landing menu
+16:13:50 spawn SV_Unit_AAGun_D: up, 1 aircraft, at (16096, -4363) m, 5 m high, heading 0
+16:13:51 landing menu: decide on 19531488F0, row 'SV_Buy_AAGun'
+16:13:51 shop: SV_Buy_AAGun picked on the landing menu
+16:13:51 spawn SV_Unit_AAGun_E: up, 1 aircraft, at (16096, -4363) m, 5 m high, heading 0
+16:13:51 landing menu: decide on 19531488F0, row 'SV_Buy_AAGun'
+16:13:51 shop: SV_Buy_AAGun picked on the landing menu
+16:13:52 landing menu: decide on 19531488F0, row 'SV_Buy_AAGun'
+16:13:52 shop: SV_Buy_AAGun picked on the landing menu
+16:13:52 landing menu: decide on 19531488F0, row 'SV_Buy_AAGun'
+16:13:52 shop: SV_Buy_AAGun picked on the landing menu
+16:13:52 landing menu: decide on 19531488F0, row 'SV_Buy_AAGun'
+16:13:52 shop: SV_Buy_AAGun picked on the landing menu
+16:14:16 landing menu: decide on 19531488F0, row '-1'
+16:14:18 minigame: type 7 ends: restore of 138 AI objects; lists were 18 / hidden 17 / 13 (co-op keep 0)
+16:14:18 minigame:   listed[0] 15FE55B560: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+16:14:18 minigame:   listed[1] 1987C6B560: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+16:14:18 minigame:   listed[2] 176CC3B560: active +0x3f4 = 0, cinematic +0xdf8 = 1, tick off +0x25d9 = 1
+16:14:36 spawn SV_Unit_VoidWatcher: up, 3 aircraft, at (16096, -4363) m, 1500 m high, heading -33
+16:14:36 spawn ERB_Unit_01_Air2: its last flight was shot down; took it off the phase's list, its unit actor 1876324060 destroyed 30 s on (1 waiting)
+16:14:36 spawn ERB_Unit_01_Air2: up, 4 aircraft, at (-8737, -22161) m, 535 m high, heading 35
+16:15:00 music player: BGM paused, track clock held at 21455 of 458710 ms
+16:15:06 recycle ERB_Unit_01_Air2: its old unit actor 1876324060 destroyed, 30 s after it was taken off the phase's list (158 so far, 0 gone before, 0 waiting)
+16:15:09 music player: BGM playing again, track clock running at 21455 of 458710 ms
+16:15:26 spawn ERA_Unit_05_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 13529C940 destroyed 30 s on (1 waiting)
+16:15:26 spawn ERA_Unit_05_Dep_Air1: up, 4 aircraft, at (18537, 14631) m, 2442 m high, heading 262
+16:15:29 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 152902A950 destroyed 30 s on (2 waiting)
+16:15:29 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (15652, 15990) m, 3331 m high, heading 271
+16:15:32 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1796442500 destroyed 30 s on (3 waiting)
+16:15:32 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (4450, 11468) m, 4210 m high, heading 306
+16:15:56 recycle ERA_Unit_05_Dep_Air1: its old unit actor 13529C940 destroyed, 30 s after it was taken off the phase's list (159 so far, 0 gone before, 2 waiting)
+16:15:59 recycle ERA_Unit_08_Dep_Air0: its old unit actor 152902A950 destroyed, 30 s after it was taken off the phase's list (160 so far, 0 gone before, 1 waiting)
+16:16:02 recycle ERA_Unit_04_Dep_Air0: its old unit actor 1796442500 destroyed, 30 s after it was taken off the phase's list (161 so far, 0 gone before, 0 waiting)
+16:16:26 spawn ERA_Unit_02_Dep_Air2: its last flight was shot down; took it off the phase's list, its unit actor 19D14484D0 destroyed 30 s on (1 waiting)
+16:16:26 spawn ERA_Unit_02_Dep_Air2: up, 6 aircraft, at (23013, 17790) m, 3690 m high, heading 252
+16:16:48 spawn ERA_Unit_02_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19826F09A0 destroyed 30 s on (2 waiting)
+16:16:48 spawn ERA_Unit_02_Dep_Air0: up, 2 aircraft, at (-3037, -14095) m, 3307 m high, heading 26
+16:16:52 spawn ERA_Unit_02_Dep_Air1: up, 4 aircraft, at (1440, 15797) m, 3224 m high, heading 306
+16:16:56 recycle ERA_Unit_02_Dep_Air2: its old unit actor 19D14484D0 destroyed, 30 s after it was taken off the phase's list (162 so far, 0 gone before, 1 waiting)
+16:17:18 recycle ERA_Unit_02_Dep_Air0: its old unit actor 19826F09A0 destroyed, 30 s after it was taken off the phase's list (163 so far, 0 gone before, 0 waiting)
+16:17:34 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1687E6E00 destroyed 30 s on (1 waiting)
+16:17:34 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (3086, -23185) m, 3906 m high, heading 55
+16:18:04 recycle ERA_Unit_01_Dep_Air1: its old unit actor 1687E6E00 destroyed, 30 s after it was taken off the phase's list (164 so far, 0 gone before, 0 waiting)
+16:18:32 spawn ERA_Unit_07_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 154D5A7290 destroyed 30 s on (1 waiting)
+16:18:32 spawn ERA_Unit_07_Dep_Air1: up, 4 aircraft, at (7696, 16775) m, 2577 m high, heading 291
+16:18:35 spawn ERA_Unit_03_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 155C7009A0 destroyed 30 s on (2 waiting)
+16:18:35 spawn ERA_Unit_03_Dep_Air1: up, 4 aircraft, at (22225, -25549) m, 4391 m high, heading 106
+16:18:38 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 13529C4B0 destroyed 30 s on (3 waiting)
+16:18:38 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (26445, 15709) m, 2398 m high, heading 242
+16:18:41 spawn ERA_Unit_05_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 18982AE010 destroyed 30 s on (4 waiting)
+16:18:41 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (16272, 16238) m, 2141 m high, heading 269
+16:18:44 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 18A8001BE0 destroyed 30 s on (5 waiting)
+16:18:44 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (7264, -22424) m, 4043 m high, heading 63
+16:18:46 guard: the guarded event checks, the last 5 minutes: about 16921536 calls (56405 a second; the busiest class 17, event type 27, about 11585792, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+16:18:46 guard: AI path tracking, the last 5 minutes: about 2268288 tracker updates (7560 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+16:18:47 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 198271ADE0 destroyed 30 s on (6 waiting)
+16:18:47 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (-8413, -4873) m, 4111 m high, heading 1
+16:18:51 spawn ERA_Unit_02_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1938A23BD0 destroyed 30 s on (7 waiting)
+16:18:51 spawn ERA_Unit_02_Dep_Air1: up, 4 aircraft, at (-4189, -3084) m, 3854 m high, heading 356
+16:18:54 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 6B53C4B0 destroyed 30 s on (8 waiting)
+16:18:54 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (29856, 15815) m, 4410 m high, heading 235
+16:19:02 recycle ERA_Unit_07_Dep_Air1: its old unit actor 154D5A7290 destroyed, 30 s after it was taken off the phase's list (165 so far, 0 gone before, 7 waiting)
+16:19:05 recycle ERA_Unit_03_Dep_Air1: its old unit actor 155C7009A0 destroyed, 30 s after it was taken off the phase's list (166 so far, 0 gone before, 6 waiting)
+16:19:08 recycle ERA_Unit_06_Dep_Air0: its old unit actor 13529C4B0 destroyed, 30 s after it was taken off the phase's list (167 so far, 0 gone before, 5 waiting)
+16:19:11 recycle ERA_Unit_05_Dep_Air0: its old unit actor 18982AE010 destroyed, 30 s after it was taken off the phase's list (168 so far, 0 gone before, 4 waiting)
+16:19:14 recycle ERA_Unit_04_Dep_Air0: its old unit actor 18A8001BE0 destroyed, 30 s after it was taken off the phase's list (169 so far, 0 gone before, 3 waiting)
+16:19:18 recycle ERA_Unit_01_Dep_Air0: its old unit actor 198271ADE0 destroyed, 30 s after it was taken off the phase's list (170 so far, 0 gone before, 2 waiting)
+16:19:21 recycle ERA_Unit_02_Dep_Air1: its old unit actor 1938A23BD0 destroyed, 30 s after it was taken off the phase's list (171 so far, 0 gone before, 1 waiting)
+16:19:24 recycle ERA_Unit_07_Dep_Air0: its old unit actor 6B53C4B0 destroyed, 30 s after it was taken off the phase's list (172 so far, 0 gone before, 0 waiting)
+16:19:43 spawn ERA_Unit_01_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1E38009A0 destroyed 30 s on (1 waiting)
+16:19:43 spawn ERA_Unit_01_Dep_Air1: up, 4 aircraft, at (25415, -10590) m, 2924 m high, heading 156
+16:19:46 spawn ERA_Unit_05_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 1986C71750 destroyed 30 s on (2 waiting)
+16:19:46 spawn ERA_Unit_05_Dep_Air1: up, 4 aircraft, at (5810, 7910) m, 3368 m high, heading 299
+16:20:13 recycle ERA_Unit_01_Dep_Air1: its old unit actor 1E38009A0 destroyed, 30 s after it was taken off the phase's list (173 so far, 0 gone before, 1 waiting)
+16:20:16 recycle ERA_Unit_05_Dep_Air1: its old unit actor 1986C71750 destroyed, 30 s after it was taken off the phase's list (174 so far, 0 gone before, 0 waiting)
+16:20:39 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19A1B41750 destroyed 30 s on (1 waiting)
+16:20:39 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (7143, 14156) m, 5597 m high, heading 295
+16:20:42 spawn ERA_Unit_08_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 171ACA52A0 destroyed 30 s on (2 waiting)
+16:20:42 spawn ERA_Unit_08_Dep_Air0: up, 2 aircraft, at (16891, 14565) m, 3624 m high, heading 267
+16:20:45 spawn ERA_Unit_02_Dep_Air1: its last flight was shot down; took it off the phase's list, its unit actor 18A8001750 destroyed 30 s on (3 waiting)
+16:20:45 spawn ERA_Unit_02_Dep_Air1: up, 4 aircraft, at (16924, -27246) m, 4482 m high, heading 92
+16:20:48 spawn ERA_Unit_03_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 14FD369BA0 destroyed 30 s on (4 waiting)
+16:20:48 spawn ERA_Unit_03_Dep_Air0: up, 2 aircraft, at (27582, 15974) m, 5963 m high, heading 240
+16:20:51 spawn EA_Unit_01_Air1: its last flight was shot down; took it off the phase's list, its unit actor 135294980 destroyed 30 s on (5 waiting)
+16:20:51 spawn EA_Unit_01_Air1: up, 6 aircraft, at (-6627, 21355) m, 2453 m high, heading 311
+16:20:55 spawn EA_Unit_01_Air2: its last flight was shot down; took it off the phase's list, its unit actor 18982A6050 destroyed 30 s on (6 waiting)
+16:20:55 spawn EA_Unit_01_Air2: up, 12 aircraft, at (3823, 23673) m, 2932 m high, heading 293
+16:20:58 spawn EA_Unit_01_Air0: its last flight was shot down; took it off the phase's list, its unit actor 154D5A9710 destroyed 30 s on (7 waiting)
+16:20:58 spawn EA_Unit_01_Air0: up, 2 aircraft, at (-10659, 16172) m, 576 m high, heading 322
+16:21:01 spawn ERB_Unit_01_Air2: its last flight was shot down; took it off the phase's list, its unit actor 18A6DCD6F0 destroyed 30 s on (8 waiting)
+16:21:01 spawn ERB_Unit_01_Air2: up, 4 aircraft, at (8270, 30650) m, 581 m high, heading 282
+16:21:09 recycle ERA_Unit_04_Dep_Air0: its old unit actor 19A1B41750 destroyed, 30 s after it was taken off the phase's list (175 so far, 0 gone before, 7 waiting)
+16:21:12 recycle ERA_Unit_08_Dep_Air0: its old unit actor 171ACA52A0 destroyed, 30 s after it was taken off the phase's list (176 so far, 0 gone before, 6 waiting)
+16:21:15 recycle ERA_Unit_02_Dep_Air1: its old unit actor 18A8001750 destroyed, 30 s after it was taken off the phase's list (177 so far, 0 gone before, 5 waiting)
+16:21:18 recycle ERA_Unit_03_Dep_Air0: its old unit actor 14FD369BA0 destroyed, 30 s after it was taken off the phase's list (178 so far, 0 gone before, 4 waiting)
+16:21:22 recycle EA_Unit_01_Air1: its old unit actor 135294980 destroyed, 30 s after it was taken off the phase's list (179 so far, 0 gone before, 3 waiting)
+16:21:25 recycle EA_Unit_01_Air2: its old unit actor 18982A6050 destroyed, 30 s after it was taken off the phase's list (180 so far, 0 gone before, 2 waiting)
+16:21:28 recycle EA_Unit_01_Air0: its old unit actor 154D5A9710 destroyed, 30 s after it was taken off the phase's list (181 so far, 0 gone before, 1 waiting)
+16:21:31 recycle ERB_Unit_01_Air2: its old unit actor 18A6DCD6F0 destroyed, 30 s after it was taken off the phase's list (182 so far, 0 gone before, 0 waiting)
+16:22:05 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 18A8007720 destroyed 30 s on (1 waiting)
+16:22:05 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (20216, -23417) m, 3986 m high, heading 102
+16:22:08 spawn ERA_Unit_05_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 75A83BD0 destroyed 30 s on (2 waiting)
+16:22:08 spawn ERA_Unit_05_Dep_Air0: up, 2 aircraft, at (7333, 14355) m, 4266 m high, heading 295
+16:22:11 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 18A80009A0 destroyed 30 s on (3 waiting)
+16:22:11 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (17996, -28513) m, 2375 m high, heading 94
+16:22:14 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1774B34E10 destroyed 30 s on (4 waiting)
+16:22:15 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (21340, -22211) m, 2506 m high, heading 106
+16:22:35 recycle ERA_Unit_06_Dep_Air0: its old unit actor 18A8007720 destroyed, 30 s after it was taken off the phase's list (183 so far, 0 gone before, 3 waiting)
+16:22:38 recycle ERA_Unit_05_Dep_Air0: its old unit actor 75A83BD0 destroyed, 30 s after it was taken off the phase's list (184 so far, 0 gone before, 2 waiting)
+16:22:42 recycle ERA_Unit_01_Dep_Air0: its old unit actor 18A80009A0 destroyed, 30 s after it was taken off the phase's list (185 so far, 0 gone before, 1 waiting)
+16:22:45 recycle ERA_Unit_07_Dep_Air0: its old unit actor 1774B34E10 destroyed, 30 s after it was taken off the phase's list (186 so far, 0 gone before, 0 waiting)
+16:23:25 spawn SV_Unit_Glitch: up, 1 aircraft, at (4845, 3472) m, 4470 m high, heading 354
+16:23:28 spawn ERA_Unit_06_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 19A1B40E30 destroyed 30 s on (1 waiting)
+16:23:28 spawn ERA_Unit_06_Dep_Air0: up, 2 aircraft, at (3288, 14565) m, 3011 m high, heading 304
+16:23:31 spawn ERA_Unit_04_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 15CDD364E0 destroyed 30 s on (2 waiting)
+16:23:31 spawn ERA_Unit_04_Dep_Air0: up, 2 aircraft, at (17352, -26494) m, 5388 m high, heading 93
+16:23:34 spawn ERA_Unit_07_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 1537A12500 destroyed 30 s on (3 waiting)
+16:23:34 spawn ERA_Unit_07_Dep_Air0: up, 2 aircraft, at (6492, 12237) m, 3479 m high, heading 300
+16:23:37 spawn ERA_Unit_01_Dep_Air0: its last flight was shot down; took it off the phase's list, its unit actor 172AA64980 destroyed 30 s on (4 waiting)
+16:23:37 spawn ERA_Unit_01_Dep_Air0: up, 2 aircraft, at (-5043, -14925) m, 3958 m high, heading 26
+16:23:46 guard: the guarded event checks, the last 5 minutes: about 20760064 calls (69200 a second; the busiest class 17, event type 27, about 13853312, called straight on); so far events not matched for a freed object 0, gone units' entries skipped 0, faults caught 0
+16:23:46 guard: AI path tracking, the last 5 minutes: about 2372544 tracker updates (7908 a second); so far left out 0 (freed), faults caught 0, trackers left out for the level 0
+16:23:58 recycle ERA_Unit_06_Dep_Air0: its old unit actor 19A1B40E30 destroyed, 30 s after it was taken off the phase's list (187 so far, 0 gone before, 3 waiting)
+16:24:01 recycle ERA_Unit_04_Dep_Air0: its old unit actor 15CDD364E0 destroyed, 30 s after it was taken off the phase's list (188 so far, 0 gone before, 2 waiting)
+16:24:04 recycle ERA_Unit_07_Dep_Air0: its old unit actor 1537A12500 destroyed, 30 s after it was taken off the phase's list (189 so far, 0 gone before, 1 waiting)
+16:24:07 recycle ERA_Unit_01_Dep_Air0: its old unit actor 172AA64980 destroyed, 30 s after it was taken off the phase's list (190 so far, 0 gone before, 0 waiting)
+16:24:26 music player: BGM paused, track clock held at 21455 of 458710 ms
+16:24:27 music player: BGM playing again, track clock running at 21455 of 458710 ms
+16:24:43 spawn SV_Unit_VoidWatcher: its last flight was taken down (forced, aircraft still counted alive); took it off the phase's list, its unit actor 1A21676E00 destroyed 30 s on (1 waiting)
+16:24:43 recycle SV_Unit_VoidWatcher (SV_Recycle, force 1): taken off the phase's list (1)
+16:24:46 music player: BGM paused, track clock held at 21455 of 458710 ms
+16:25:13 recycle SV_Unit_VoidWatcher: its old unit actor 1A21676E00 destroyed, 30 s after it was taken off the phase's list (191 so far, 0 gone before, 0 waiting)

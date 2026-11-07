@@ -1,6 +1,8 @@
 """ini_check.py [survival.default.ini] [sv_config.lua] : every setting in survival.default.ini is one Scripts/sv_config.lua's
 CFG has, with a value of its kind (there's no Lua on the build machine, so CFG's table literal is read here as
 Scripts/sv_config.lua's loadIni reads the ini: sections through INI_ALIAS and "shop." -> "shop.items.", keys any case).
+sv_config.lua is read with its next pieces (tools/lua_split_part.py, tools/lua_parts.py): CFG's `CFG = { ... }` and
+its fields set after it as statements of their own (`CFG.specials = { ... }`, sv_config_specials.lua).
 A switched-off line (";key = value") is checked as if it were on. Exit 1 on the first problem list.
 """
 import os
@@ -8,6 +10,8 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, '..'))
+import lua_parts
 SCRIPTS = os.path.join(HERE, '..', '..', 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts')
 INI = os.path.join(HERE, '..', '..', 'mod', 'UE4SS', 'AC8SurvivalMode', 'config', 'survival.default.ini')
 
@@ -65,10 +69,14 @@ class Parser:
 
 
 def cfg_table(path):
-    src = open(path, encoding='utf-8').read()
+    src = lua_parts.read(os.path.dirname(os.path.abspath(path)), os.path.basename(path))
     start = src.index('\nCFG = {') + len('\nCFG = ')
     p = Parser(tokens(src[start:]))
-    return p.table(), src
+    cfg = p.table()
+    # (CFG's fields set as statements after it: `CFG.<key> = { ... }` at a line's start)
+    for m in re.finditer(r'\nCFG\.(\w+) = (?=\{)', src):
+        cfg['keyed'][m.group(1)] = Parser(tokens(src[m.end():])).table()
+    return cfg, src
 
 
 def find(t, name):

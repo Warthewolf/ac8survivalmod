@@ -1,0 +1,18 @@
+13:34:34.111 t17456 lua bridge: all registered
+13:34:34.114 t17456 lua bridge: all registered
+13:34:44.398 t28948 lua: tick lost: queued again
+13:34:54.477 t28948 lua: tick lost: queued again
+13:47:07.816 t28948 lua: tick lost: queued again
+13:47:23.878 t21468 lua: spawn SV_Unit_Alicorn: 226
+13:47:56.161 t21468 lua: spawn ERA_Unit_08_Dep_Air0 at a pose: 2
+13:48:33.672 t21468 lua: spawn ERA_Unit_07_Dep_Air0 at a pose: 2
+13:51:37.728 t21468 lua: event RE_SV_AlcnRemove: 1
+13:51:43.151 t21468 lua: special clean-up SV_Unit_Alicorn: 0 killed, 23 off (at the end of its alicorn fight)
+13:51:45.153 t21468 lua: special clean-up: SV_Recycle SV_Unit_Alicorn
+13:51:45.153 t21468 recycle SV_Unit_Alicorn: unregistering its unit actor 1393F8FB70 (204 alive), its destroy deferred
+13:51:45.193 t21468 recycle SV_Unit_Alicorn: done
+13:52:09.058 t21468 teardown gate closed: world 12E7CBB5A0 it was freed; 1 deferred destroys dropped
+13:52:09.058 t21468 lua: level gate closed: objects dropped
+13:52:35.770 t28948 lua: tick lost: queued again
+13:52:45.854 t28948 lua: tick lost: queued again
+13:52:55.976 t28948 lua: tick lost: queued again

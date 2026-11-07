@@ -1,3 +1,5 @@
+-- (sv_anomalies.lua is the first of 3 pieces, split by tools/lua_split_part.py: sv_anomalies_valka.lua,
+-- sv_anomalies_dev.lua go on from where it ends, run by main.lua right after it, in that order.)
 -- sv_anomalies.lua: the specials' Lua: MINDRIPPER, AB.L..IN, VALKA and the kinds table (SPC, ANOM).
 -- Part of AC8 Survival Mode's runtime, run by main.lua in order (sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies, sv_rounds, sv_ladon, sv_leaderboard, sv_alicorn, sv_amphib, sv_flights, sv_shop, sv_allies, sv_tactical, sv_main); a name
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
@@ -21,9 +23,21 @@ local function pickFx(c)
     for _ = 1, n do fx[table.remove(pool, math.random(#pool))] = true end
     return fx
 end
-local function setField(on, s)
+-- ((0.73.77) plan A10) you're DOWN (co-op's revives, sv_down.lua): no control scrambling then, MINDRIPPER's field nor
+-- VALKA's (SV_Invert scrambled the host's spectator camera in Saint Alessia's run of 2026-11-03), and no callout of it
+function downNow()
+    local ok, d = pcall(function() return DOWN ~= nil and DOWN.me ~= nil and DOWN.me() == true end)
+    return ok and d == true
+end
+ANOM.downNow = downNow
+function setField(on, s)
     if ANOM.on == on then return end
+    if on and downNow() then
+        if not ANOM.downSaid then ANOM.downSaid = true; log("special: anomaly field held off: you're DOWN (no SV_Invert, no callout)") end
+        return
+    end
     ANOM.on = on
+    if on then ANOM.downSaid = nil end
     local c, t = CFG.specials.anomaly, CFG.hud.text
     local fx = on and pickFx(c) or {}
     if on then
@@ -142,14 +156,14 @@ end
 
 -- The portal's Niagara systems (CFG.specials.anomaly.portal), attached to actor `o` (offset: cm in its frame; scale:
 -- the portal's by default; life: seconds until it's switched off); how many came up.
-local function portalFx(list, o, offset, scale, life)
+function portalFx(list, o, offset, scale, life)
     local pc = CFG.specials.anomaly.portal
     local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
     if not (valid(lib) and valid(o)) then return 0 end
     local n, sc = 0, scale or pc.scale
     for _, path in ipairs(list) do
         local name = path:match("[^/]+$")
-        local sys = loadObject(path .. "." .. name)
+        local sys = SPC.V.asset(path)                   -- ((0.73.80) kept once loaded: no /Game/ find a call)
         local ok, err = pcall(function()
             local comp = lib:SpawnSystemAttached(sys, o:K2_GetRootComponent(), FName("None"), offset or { X = 0, Y = 0, Z = 0 },
                 { Pitch = 0, Yaw = 0, Roll = 0 }, 0, true, true, 0, true)
@@ -163,7 +177,7 @@ local function portalFx(list, o, offset, scale, life)
 end
 
 -- One lightning strike on `o` at a random point within strike_m (cm offsets in its frame).
-local function strike(o)
+function strike(o)
     local pc = CFG.specials.anomaly.portal
     local r = pc.strike_m * 100
     return portalFx({ pc.strike }, o, { X = (math.random() * 2 - 1) * r, Y = (math.random() * 2 - 1) * r,
@@ -172,14 +186,13 @@ end
 
 -- The same systems at a world location (where MINDRIPPER was shot down; AB.L..IN's smoke), switched off after `life`
 -- seconds (the portal's death_fx_s by default); how many came up.
-local function fxAt(list, at, scale, life)
+function fxAt(list, at, scale, life)
     local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
     if not (valid(lib) and valid(survivalPC) and at) then return 0 end
     local n = 0
     for _, path in ipairs(list) do
-        local name = path:match("[^/]+$")
-        local sys = loadObject(path .. "." .. name)
-        if sys and pcall(function()
+        local sys = SPC.V.asset(path)                   -- ((0.73.80) kept once loaded: VALKA's flash at her opener's shot
+        if sys and pcall(function()                     -- scanned every object 4 times (its layers), her smoke each blink)
             local comp = lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 },
                 { X = scale, Y = scale, Z = scale }, true, true, 0, true)
             keepFx(comp, life or CFG.specials.anomaly.portal.death_fx_s)
@@ -200,7 +213,7 @@ local function anomalyActors(c)
 end
 
 -- The portal: hidden on arrival, the opening crackle on MINDRIPPER, then the burst and they appear.
-local function portalTick(now, s, c)
+function portalTick(now, s, c)
     local pc, lead = c.portal, nil
     for _, q in ipairs(anomalyActors(c)) do
         local a = addrOf(q.obj)
@@ -248,12 +261,12 @@ end
 -- AB.L..IN (CFG.specials.glitch; tools/survival_events.py GLITCH_*): its actor (just created ones too), where an actor
 -- is, and the ground under a point (a straight-down trace: it finds terrain only near the player, hard rule 27, which
 -- is where it blinks).
-local function glitchActor(c)
+function glitchActor(c)
     for _, list in ipairs({ planes, pending }) do
         for _, q in ipairs(list) do if q.unit == c.unit and valid(q.obj) then return q.obj end end
     end
 end
-local function where(o)
+function where(o)
     local ok, v = pcall(function() local l = o:K2_GetActorLocation(); return { X = l.X, Y = l.Y, Z = l.Z } end)
     return ok and v or nil
 end
@@ -277,7 +290,7 @@ end
 -- gone (hidden, no collision, no target box, can't be locked or targeted, can't be hurt) or back; the first time, the
 -- log says which of those took (code review of 2026-10-23: hidden alone left its TGT box and lock up)
 local glitchFlagsSaid = false
-local function setGone(o, gone)
+function setGone(o, gone)
     local r = {}
     r[#r + 1] = pcall(function() o:SetActorHiddenInGame(gone) end) and "hidden" or "hidden FAILED"
     r[#r + 1] = pcall(function() o:SetActorEnableCollision(not gone) end) and "collision" or "collision FAILED"
@@ -293,6 +306,13 @@ local function glitchSmoke(s, at)
         s.smokeSaid = true
         log("special: AB.L..IN's smoke " .. c.smoke .. " didn't spawn")
     end
+end
+-- (for the ace squadrons' blinks, P9: sv_ai.lua ACE.squadTick) the ground's height under a point (nil: no hit), and
+-- AB.L..IN's smoke at a point (how many systems came up)
+ANOM.groundAt = groundAt
+function ANOM.smokeAt(at)
+    local c = CFG.specials.glitch
+    return fxAt({ c.smoke }, at, c.smoke_scale, c.smoke_s)
 end
 
 -- Its dead look (user, 2026-10-23: "I want the aircraft to look spooky like its the dead flying"): its own airframe
@@ -383,12 +403,20 @@ end
 -- their height, nose on them: the flight model undoes a Lua move). Anywhere round the player, but at least
 -- blink_turn_deg round from the last one (user, 2026-10-23: "it teleports but only to one spot on me": behind its own
 -- flight path it kept the same side, as it flies at the player), and never one under ground_clear_m above the ground
--- (less when the player flies lower than that).
--- Returns its event, the point, its distance (cm), the ground and its bearing, or nil.
+-- (less when the player flies lower than that). Its phase 2 (CFG.specials.glitch.phases, P7): behind_share of the
+-- blinks at the spot nearest the player's six instead (their heading, SPC.V.heading: world degrees, 0 = +X, the
+-- spots' own; the nearest 30-degree spot, at most 15 off dead six, either ring, the last one's bearing no bar).
+-- Returns its event, the point, its distance (cm), the ground, its bearing and whether it was a behind pick (and the
+-- heading it was behind), or nil.
 local function blinkSpot(c, s, you)
     local bl = c.blinks
     local want = math.random() * 360
     if s.lastDeg then want = s.lastDeg + c.blink_turn_deg + math.random() * (360 - 2 * c.blink_turn_deg) end
+    local ph, behind, head = c.phases, false, nil
+    if s.phase == 2 and ph and ph.enabled and math.random() < (tonumber(ph.behind_share) or 0) and SPC.V and SPC.V.heading then
+        head = SPC.V.heading()
+        if head then want, behind = (head + 180) % 360, true end
+    end
     local spots = {}
     for ring, m in ipairs(bl.rings_m) do
         for k = 0, math.floor(360 / bl.step_deg) - 1 do
@@ -396,8 +424,8 @@ local function blinkSpot(c, s, you)
             local off = math.abs((deg - want + 180) % 360 - 180)
             local fromLast = s.lastDeg and math.abs((deg - s.lastDeg + 180) % 360 - 180) or 360
             spots[#spots + 1] = { ev = "RE_SV_GlitchBlink_" .. string.char(64 + ring) .. string.char(65 + k), deg = deg, d = m * 100,
-                                  off = off + math.random() * bl.step_deg            -- (either ring, near the bearing wanted)
-                                        + (fromLast < c.blink_turn_deg and 1000 or 0) }   -- (last resort: near the last)
+                                  off = off + (behind and 0 or math.random() * bl.step_deg)   -- (either ring, near the bearing wanted)
+                                        + ((not behind and fromLast < c.blink_turn_deg) and 1000 or 0) }   -- (last resort: near the last)
         end
     end
     table.sort(spots, function(p, q) return p.off < q.off end)
@@ -409,9 +437,126 @@ local function blinkSpot(c, s, you)
     for _, p in ipairs(spots) do
         local to = { X = you.X + p.d * math.cos(math.rad(p.deg)), Y = you.Y + p.d * math.sin(math.rad(p.deg)), Z = you.Z }
         local ground = groundAt(to.X, to.Y)
-        if not ground or to.Z >= ground + clear then return p.ev, to, p.d, ground, p.deg end
+        if not ground or to.Z >= ground + clear then return p.ev, to, p.d, ground, p.deg, behind, head end
     end
     return nil
+end
+
+-- AB.L..IN's phases (CFG.specials.glitch.phases; behaviour roadmap P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 9): 1 as it
+-- always was (a frenzy of blinks round you each time it's hit); 2 once behind_after frenzies are over (its blinks
+-- behind you: blinkSpot); 3 at allout_hp of its health as it appeared (no more frenzies, its ECM down, its gun at you
+-- whenever you're close in front of it, LastTGT onto you). Each change logged and told first ("glitch_six": the host's,
+-- the blinks are round the host; "glitch_allout": every player).
+local function glitchPhase(c, s, n, now, why)
+    if s.phase == n then return end
+    local was = s.phase or 1
+    s.phase = n
+    local ph = c.phases
+    if n == 3 then
+        if s.frenzyUntil then s.frenzyUntil = math.min(s.frenzyUntil, now) end    -- (back from a blink, then it's over)
+        s.ecmFireAt, s.podsAt = nil, now                    -- (no more ECM events; the pods up off: glitchPodsOff)
+        s.turnAt = now + 1
+    end
+    if TELL then pcall(TELL.say, n == 3 and "glitch_allout" or "glitch_six", n == 3 and TELL.ALL or nil) end   -- (sure tells)
+    local ecm = {}                                       -- (how its ECM goes down: its pods switched off, its row)
+    if ph.ecm_pods_off then ecm[#ecm + 1] = string.format("its pods switched off every %.0f s", math.max(1, tonumber(ph.ecm_check_s) or 3)) end
+    if ph.ecm_row then ecm[#ecm + 1] = "its pod's own row once a minute at most" end
+    if #ecm == 0 then ecm[1] = "neither ecm_pods_off nor ecm_row: its pod's row keeps it up" end
+    log(string.format("special: %s phase %d (from %d): %s; %s", c.name, n, was, why, n == 2
+        and string.format("%.0f %% of its blinks behind you", (tonumber(ph.behind_share) or 0) * 100)
+        or string.format("no more frenzies, its ECM down (%s), its gun at you within %.1f km and %.0f deg of its nose every %.1f s, LastTGT every %.0f s",
+            table.concat(ecm, ", "), ph.allout_range_km, ph.allout_cone_deg, ph.allout_gun_s, ph.allout_turn_s)))
+end
+
+-- Its ECM pods switched off (phase 3, ecm_pods_off; untested in game: a live write to the pod weapon's fields,
+-- tools/re/MINIMAP_MARKERS.md 3: LiveElectronicSupportMeasures bJammingEnable / bSupportEnable). Never destroyed (a
+-- weapon actor destroyed from Lua crashed the game: sv_ladon.lua). Its pods: BP_wp_ecm_a0 actors whose owner (or
+-- instigator) is AB.L..IN; the first time, the log says what each read before and after (and once when none of the
+-- pods up is its own: a tester greps "ECM pods off" either way; code review of 2026-10-29).
+function glitchPodsOff(c, s, o)
+    local mine = addrOf(o)
+    local found, off, said, pods = 0, 0, {}, 0
+    for _, w in ipairs(FindAllOf("BP_wp_ecm_a0_C") or {}) do
+        pods = pods + 1
+        local okO, own = pcall(function() return w:GetOwner() end)
+        local okI, ins = pcall(function() return w:GetInstigator() end)
+        local ours = (okO and valid(own) and addrOf(own) == mine) or (okI and valid(ins) and addrOf(ins) == mine)
+        if valid(w) and ours then
+            found = found + 1
+            local okB, before = pcall(function() return tostring(w.bJammingEnable) .. "/" .. tostring(w.bSupportEnable) end)
+            local okW = pcall(function() w.bJammingEnable = false; w.bSupportEnable = false end)
+            local okA, after = pcall(function() return tostring(w.bJammingEnable) .. "/" .. tostring(w.bSupportEnable) end)
+            if okW then off = off + 1 end
+            said[#said + 1] = string.format("%s -> %s", okB and before or "?", okA and after or "?")
+        end
+    end
+    if not s.podsSaid and found > 0 then
+        s.podsSaid = true
+        log(string.format("special: %s's ECM pods off: %d of %d (jamming/support %s)", c.name, off, found, table.concat(said, ", ")))
+    elseif not s.podsSaid and not s.podsNoneSaid and found == 0 then
+        s.podsNoneSaid = true
+        log(string.format("special: %s's ECM pods off: none of its own found (%d BP_wp_ecm_a0 up, none its own by "
+            .. "owner or instigator); looked for again every ecm_check_s", c.name, pods))
+    end
+    return found, off
+end
+
+-- A frenzy's blinks (each hit outside one starts one, phases 1 and 2): every blink_every_s it vanishes in a puff and
+-- comes back the next tick at a blink spot round you (blinkSpot), until frenzy_s are up; the first three blinks
+-- checked a tick on (where it really is)
+local function glitchFrenzy(c, s, o, at, you, now)
+    if s.check and at and you then                      -- the last blink, a tick on: where it really is
+        local k, to = s.check.n, s.check.to
+        local okV, v = pcall(function() local q = o:GetVelocity(); return { X = q.X, Y = q.Y, Z = q.Z } end)
+        local speed = okV and v and math.sqrt(v.X ^ 2 + v.Y ^ 2 + v.Z ^ 2) or 0
+        local off = -1                                    -- the angle between its flight path and the player
+        if speed > 0 then
+            local ax, ay, az = you.X - at.X, you.Y - at.Y, you.Z - at.Z
+            local n = math.sqrt(ax * ax + ay * ay + az * az)
+            off = math.deg(math.acos(math.max(-1, math.min(1, (ax * v.X + ay * v.Y + az * v.Z) / (n * speed)))))
+        end
+        log(string.format("special: %s blink %d (%s): a tick on it's %.0f m from the spot, %.0f m from you, %.0f m/s, flight path %.0f deg off you",
+            c.name, k, s.check.ev, math.sqrt((at.X - to.X) ^ 2 + (at.Y - to.Y) ^ 2 + (at.Z - to.Z) ^ 2) / 100,
+            math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100, speed / 100, off))
+        s.check = nil
+    end
+    if s.vanished then                                  -- back, around the player at their height, nose on them
+        local ev, to, d, ground, deg, behind, head
+        if you then ev, to, d, ground, deg, behind, head = blinkSpot(c, s, you) end
+        if ev then
+            s.lastDeg = deg
+            local r = type(SV_Event) == "function" and SV_Event(ev) or -5
+            s.blinks = (s.blinks or 0) + 1
+            if r ~= 1 then log(string.format("special: %s blink %s not fired: %s", c.name, ev, SV_ERR[r] or tostring(r))) end
+            if behind then                              -- (phase 2: at your six; the first few, and every 10th, logged)
+                s.behindBlinks = (s.behindBlinks or 0) + 1
+                if s.behindBlinks <= 3 or s.behindBlinks % 10 == 0 then
+                    log(string.format("special: %s blink %d behind you (%d behind so far): your heading %.0f -> spot %d (%s, %.0f m)",
+                        c.name, s.blinks, s.behindBlinks, head or -1, deg, ev, d / 100))
+                end
+            end
+            if s.blinks <= 3 or (behind and s.behindBlinks == 1) then
+                s.check = { n = s.blinks, ev = ev, to = to }
+                log(string.format("special: %s blink %d: %s, %.0f m from you, ground %s", c.name, s.blinks, ev, d / 100,
+                    ground and string.format("%.0f m", ground / 100) or "?"))
+            end
+            glitchSmoke(s, to)
+        end
+        setGone(o, false)
+        s.vanished, s.nextBlink = false, now + c.blink_every_s
+    elseif now >= s.frenzyUntil then                    -- the frenzy's over: it flies on as it was
+        s.frenzyUntil = nil
+        log(string.format("special: %s's frenzy %d over (%d blinks, %d gun orders so far)", c.name, s.frenzies or 0,
+            s.blinks or 0, s.shots or 0))
+        local ph = c.phases                             -- (behind_after frenzies over: phase 2, P7)
+        if ph and ph.enabled and (s.phase or 1) == 1 and (s.frenzies or 0) >= (tonumber(ph.behind_after) or math.huge) then
+            glitchPhase(c, s, 2, now, string.format("%d frenzies over", s.frenzies))
+        end
+    elseif now >= s.nextBlink then                      -- gone in a puff (back next tick)
+        glitchSmoke(s, at)
+        setGone(o, true)
+        s.vanished = true
+    end
 end
 
 -- Every tick of AB.L..IN's round: its arrival in smoke, its frenzies (a hit starts one: it blinks around the player,
@@ -447,6 +592,7 @@ function ANOM.glitchTick(now, s)
         if c.dead_look then pcall(glitchDeadLook, c, o) end
         glitchSmoke(s, where(o))
         s.state = "hunt"
+        s.phase, s.hp0 = 1, (okN and type(hn) == "number" and hn > 0) and hn or nil   -- (its phases: their health mark)
         hudCallout(c.name, c.squadron)
         log(string.format("special: %s (%s) appears in smoke, health x%.2f (%s)", c.name, c.squadron, hx, tostring(okH and h0)))
         return
@@ -459,9 +605,10 @@ function ANOM.glitchTick(now, s)
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, c.name .. " down")
         LB.special("glitch", true, now - s.at)
-        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, pay))
-        log(string.format("special: round %d, %s shot down %.0f s after it appeared (%d frenzies, %d blinks)", D.round, c.name,
-            now - s.at, s.frenzies or 0, s.blinks or 0))
+        -- ((0.73.78, economy C3) each player's share in co-op: specialPay, sv_ai.lua)
+        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, specialPay(pay)))
+        log(string.format("special: round %d, %s shot down %.0f s after it appeared (%d frenzies, %d blinks; phase %d, %d blinks behind you, %d LastTGT)",
+            D.round, c.name, now - s.at, s.frenzies or 0, s.blinks or 0, s.phase or 1, s.behindBlinks or 0, s.turns or 0))
         return
     end
     if not o then return end
@@ -470,7 +617,12 @@ function ANOM.glitchTick(now, s)
     if at and you then s.dist = math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100000 end
     local okH, h = pcall(function() return o.HealthInternal end)
     h = okH and type(h) == "number" and h or nil
-    if h and s.lastHp and h < s.lastHp - 0.5 and not s.frenzyUntil then      -- hit: a frenzy
+    local ph = c.phases
+    local phased = ph and ph.enabled
+    if phased and h and s.hp0 and s.phase ~= 3 and h <= s.hp0 * (tonumber(ph.allout_hp) or 0) then   -- (phase 3: P7)
+        glitchPhase(c, s, 3, now, string.format("at %.0f %% of its health (%.0f of %.0f)", h / s.hp0 * 100, h, s.hp0))
+    end
+    if h and s.lastHp and h < s.lastHp - 0.5 and not s.frenzyUntil and s.phase ~= 3 then      -- hit: a frenzy
         s.frenzyUntil, s.nextBlink = now + c.frenzy_s, now
         s.frenzies = (s.frenzies or 0) + 1
         local okD, dmg = pcall(function() return o:GetDamagePercentage() end)
@@ -478,10 +630,33 @@ function ANOM.glitchTick(now, s)
             okD and string.format("%.0f", dmg) or "?", s.frenzies, c.frenzy_s))
     end
     s.lastHp = h or s.lastHp
-    if now >= (s.ecmFireAt or 0) then                   -- its ECM pod up (fired by event: hard to keep up by its FCS)
+    if s.phase ~= 3 and now >= (s.ecmFireAt or 0) then  -- its ECM pod up (fired by event: hard to keep up by its FCS)
         s.ecmFireAt = now + c.ecm_every_s
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_GlitchEcm") or -5
         if r ~= 1 and not s.ecmSaid then s.ecmSaid = true; log("special: RE_SV_GlitchEcm not fired: " .. (SV_ERR[r] or tostring(r))) end
+    end
+    local offNose = nil                                 -- (phase 3: you off its nose, degrees, as VALKA's)
+    if s.phase == 3 and at and you then
+        local okF, f = pcall(function() local q = o:GetActorForwardVector(); return { X = q.X, Y = q.Y, Z = q.Z } end)
+        local tx, ty, tz = you.X - at.X, you.Y - at.Y, you.Z - at.Z
+        local n = math.sqrt(tx * tx + ty * ty + tz * tz)
+        if okF and n > 0 then offNose = math.deg(math.acos(math.max(-1, math.min(1, (f.X * tx + f.Y * ty + f.Z * tz) / n)))) end
+        if ph.ecm_pods_off and now >= (s.podsAt or 0) then           -- (its pods up switched off, every ecm_check_s)
+            s.podsAt = now + math.max(1, tonumber(ph.ecm_check_s) or 3)
+            pcall(glitchPodsOff, c, s, o)
+        end
+        -- LastTGT onto you every allout_turn_s, and at once (allout_behind_s apart) when you're behind it (VALKA's; not
+        -- straight into a post-stall)
+        local behind = offNose and offNose > 110 and s.dist and s.dist <= (tonumber(ph.allout_behind_km) or 3)
+        if type(SV_Event) == "function" and (now >= (s.turnAt or 0) or (behind and now >= (s.behindAt or 0))) then
+            s.turnAt, s.behindAt, s.turns = now + ph.allout_turn_s, now + ph.allout_behind_s, (s.turns or 0) + 1
+            s.psAt, s.psGapAt = math.max(s.psAt or 0, now + 3), math.max(s.psGapAt or 0, now + 3)
+            local r = SV_Event("RE_SV_GlitchTurn")
+            if s.turns <= 5 or s.turns % 10 == 0 then
+                log(string.format("special: %s LastTGT %d (%s)%s, %.1f km from you", c.name, s.turns, tostring(r),
+                    behind and ", you behind it" or "", s.dist or -1))
+            end
+        end
     end
     if c.post_stall and not s.frenzyUntil and at and you and s.dist and s.dist <= c.post_stall_range_km then
         if not s.psOn then                              -- its own cobra / kulbit too, whatever the round's spike
@@ -506,50 +681,18 @@ function ANOM.glitchTick(now, s)
             end
         end
     end
-    if not s.frenzyUntil then return end
-    if s.check and at and you then                      -- the last blink, a tick on: where it really is
-        local k, to = s.check.n, s.check.to
-        local okV, v = pcall(function() local q = o:GetVelocity(); return { X = q.X, Y = q.Y, Z = q.Z } end)
-        local speed = okV and v and math.sqrt(v.X ^ 2 + v.Y ^ 2 + v.Z ^ 2) or 0
-        local off = -1                                    -- the angle between its flight path and the player
-        if speed > 0 then
-            local ax, ay, az = you.X - at.X, you.Y - at.Y, you.Z - at.Z
-            local n = math.sqrt(ax * ax + ay * ay + az * az)
-            off = math.deg(math.acos(math.max(-1, math.min(1, (ax * v.X + ay * v.Y + az * v.Z) / (n * speed)))))
-        end
-        log(string.format("special: %s blink %d (%s): a tick on it's %.0f m from the spot, %.0f m from you, %.0f m/s, flight path %.0f deg off you",
-            c.name, k, s.check.ev, math.sqrt((at.X - to.X) ^ 2 + (at.Y - to.Y) ^ 2 + (at.Z - to.Z) ^ 2) / 100,
-            math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100, speed / 100, off))
-        s.check = nil
+    if s.frenzyUntil then glitchFrenzy(c, s, o, at, you, now) end
+    -- its gun at where you'll be, every tick of a frenzy, and in phase 3 whenever you're within allout_range_km and
+    -- allout_cone_deg of its nose (P7: "goes all-out guns"; its gun's own row aims as before)
+    local hot3 = s.phase == 3 and not s.vanished and s.dist and s.dist <= ph.allout_range_km and offNose
+        and offNose <= ph.allout_cone_deg
+    local gunsHot = (s.frenzyUntil and not s.vanished) or hot3
+    if hot3 and not s.hotSaid then
+        s.hotSaid = true
+        log(string.format("special: %s's guns all out: you %.1f km off its nose (%.0f deg)", c.name, s.dist, offNose))
     end
-    if s.vanished then                                  -- back, around the player at their height, nose on them
-        local ev, to, d, ground, deg
-        if you then ev, to, d, ground, deg = blinkSpot(c, s, you) end
-        if ev then
-            s.lastDeg = deg
-            local r = type(SV_Event) == "function" and SV_Event(ev) or -5
-            s.blinks = (s.blinks or 0) + 1
-            if r ~= 1 then log(string.format("special: %s blink %s not fired: %s", c.name, ev, SV_ERR[r] or tostring(r))) end
-            if s.blinks <= 3 then
-                s.check = { n = s.blinks, ev = ev, to = to }
-                log(string.format("special: %s blink %d: %s, %.0f m from you, ground %s", c.name, s.blinks, ev, d / 100,
-                    ground and string.format("%.0f m", ground / 100) or "?"))
-            end
-            glitchSmoke(s, to)
-        end
-        setGone(o, false)
-        s.vanished, s.nextBlink = false, now + c.blink_every_s
-    elseif now >= s.frenzyUntil then                    -- the frenzy's over: it flies on as it was
-        s.frenzyUntil = nil
-        log(string.format("special: %s's frenzy %d over (%d blinks, %d gun orders so far)", c.name, s.frenzies or 0,
-            s.blinks or 0, s.shots or 0))
-    elseif now >= s.nextBlink then                      -- gone in a puff (back next tick)
-        glitchSmoke(s, at)
-        setGone(o, true)
-        s.vanished = true
-    end
-    local led = false                                   -- its gun at where you'll be, every tick of the frenzy
-    if s.frenzyUntil and not s.vanished and you and (c.gun_lead_s or 0) > 0 and not s.leadFail then
+    local led = false
+    if gunsHot and you and (c.gun_lead_s or 0) > 0 and not s.leadFail then
         local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
         local okV, v = pcall(function() local q = pawn:GetVelocity(); return { X = q.X, Y = q.Y, Z = q.Z } end)
         if okV and v then
@@ -566,15 +709,28 @@ function ANOM.glitchTick(now, s)
             end
             if led and not s.leadSaid then
                 s.leadSaid = true
-                log(string.format("special: %s's frenzy gun leads you %.1f s (%.0f m ahead), %d shots a tick%s", c.name, L,
+                log(string.format("special: %s's gun leads you %.1f s (%.0f m ahead), %d shots a tick%s", c.name, L,
                     math.sqrt(v.X ^ 2 + v.Y ^ 2 + v.Z ^ 2) * L / 100, c.gun_lead_shots or 1,
                     c.gun_lead_event and ", the event's too" or ""))
             end
         end
     end
-    if s.frenzyUntil and not s.vanished and (not led or c.gun_lead_event) and now >= (s.gunAt or 0) then
-        s.gunAt = now + c.gun_every_s                   -- (the event: 5 shots 0.1 s apart, at you)
-        local r = type(SV_Event) == "function" and SV_Event("RE_SV_GlitchGun") or -5
+    if gunsHot and (not led or c.gun_lead_event) and now >= (s.gunAt or 0) then
+        -- (the event: 5 shots 0.1 s apart, at you; phase 3 outside a frenzy every allout_gun_s, and a co-op host's then
+        -- on its own game alone: hot3 is the host's geometry, and forwarded it fired each joiner's copy at that joiner;
+        -- code review of 2026-10-29. A frenzy's are forwarded as before)
+        local allout = hot3 and not s.frenzyUntil
+        s.gunAt = now + (allout and ph.allout_gun_s or c.gun_every_s)
+        local r
+        if allout and COOP and COOP.host() and COOP.eventHere then
+            r = COOP.eventHere("RE_SV_GlitchGun")
+            if not s.gunHereSaid then
+                s.gunHereSaid = true
+                log(string.format("special: %s's phase-3 gun events on the host alone (its joiners' copies fire their own)", c.name))
+            end
+        else
+            r = type(SV_Event) == "function" and SV_Event("RE_SV_GlitchGun") or -5
+        end
         s.shots = (s.shots or 0) + 1
         if r ~= 1 and not s.gunSaid then s.gunSaid = true; log("special: RE_SV_GlitchGun not fired: " .. (SV_ERR[r] or tostring(r))) end
     end
@@ -627,12 +783,175 @@ function SPC.V.blinkSpot(c, s, you)
         end
     end
 end
+-- ((0.73.80) the 31-round co-op run of 2026-11-03, testing/logs/2026-11-04/R30_FINDINGS.json specials 2 / perf 6: on the
+-- host ~0.74 s at her opener, ~0.7 s at her reveal, and 30 walks for her rounds that found none. singleShot, emlWeapon and
+-- radar each walked every object for her railguns' modules (35-50 ms a walk, 6-7 in one tick at her opener, its shot and
+-- her reveal), and SPC.V.rounds walked for her rounds every tick for 3-3.5 s after each shot: "BP_wp_eml_ldbs01_C 30x
+-- 1155 ms (0 found)".) Her railguns' modules are kept as the game makes them, not walked for: every
+-- LiveFCSModule_LauncherTripleRailCannon (only hers and her opener's are in Survival: what the walk found), and the
+-- projectile modules made while SV_Spawn spawns her or her opener (spawningUnit) or within MOD_REC_S of it, by
+-- NotifyOnNewObject (the callbacks only keep the object: it's still being built). Each is checked live (liveObj) before
+-- it's read and dropped the first time it's gone. A walk only when the hook couldn't be registered, or when none is kept
+-- by the time she needs them (once a tick at most, logged); radarOff never walks for them with the hook in.
+SPC.V.EML_MODULES = { "LiveFCSModule_ProjectileCommon", "LiveFCSModule_ProjectileMulti", "LiveFCSModule_ProjectileWeapon" }
+SPC.V.MOD_REC_S = 3
+SPC.V.MOD = { L = {}, P = {}, rec = {}, recUntil = nil, hookL = false, hookP = 0, walkKey = nil, walkL = nil,
+              walkPKey = nil, walkP = nil, pWalked = {}, walks = 0, offBy = {}, seq = 0, mark = {}, forceWalk = false }
+do
+    local V = SPC.V
+    local MAX_L, MAX_P = 64, 256
+    local function hers(u)
+        local c = CFG and CFG.specials and CFG.specials.valka
+        return u ~= nil and type(c) == "table" and (u == c.unit or u == c.eml_unit)
+    end
+    if type(NotifyOnNewObject) == "function" then
+        local okL = pcall(NotifyOnNewObject, "/Script/Live.LiveFCSModule_LauncherTripleRailCannon", function(o)
+            local M = V.MOD
+            M.seq = M.seq + 1
+            if #M.L < MAX_L then M.L[#M.L + 1] = { obj = o, seq = M.seq } end
+            local u = spawningUnit
+            if hers(u) then M.rec[u] = (M.rec[u] or 0) + 1 end
+        end)
+        V.MOD.hookL = okL == true
+        for _, cn in ipairs(V.EML_MODULES) do
+            local okP = pcall(NotifyOnNewObject, "/Script/Live." .. cn, function(o)
+                local M = V.MOD
+                if #M.P < MAX_P and (hers(spawningUnit) or (M.recUntil ~= nil and os.clock() < M.recUntil)) then
+                    M.P[#M.P + 1] = { obj = o }
+                end
+            end)
+            if okP then V.MOD.hookP = V.MOD.hookP + 1 end
+        end
+    end
+    log(string.format("special: VALKA's railgun modules kept as the game makes them (NotifyOnNewObject: launchers %s, "
+        .. "projectile modules %d of %d); a walk only without", V.MOD.hookL and "yes" or "NO", V.MOD.hookP, #V.EML_MODULES))
+    -- (the teardown gate's drop, sv_core.lua levelDrop: the modules kept forgotten with the level, none of them touched)
+    if type(LEVEL_DROPS) == "table" then
+        LEVEL_DROPS["VALKA's railgun modules"] = function()
+            local M = V.MOD
+            M.L, M.P, M.rec, M.recUntil, M.pWalked, M.offBy, M.mark, M.forceWalk = {}, {}, {}, nil, {}, {}, {}, false
+            M.walkKey, M.walkL, M.walkPKey, M.walkP = nil, nil, nil, nil
+        end
+    end
+end
+-- (a tick's key, for "once a tick": the round clock, a joiner's too)
+local function tickKey() return (D and D.now) or os.clock() end
+-- her round's start: the projectile modules and counts of the last one forgotten, the dead launchers dropped
+function SPC.V.modReset()
+    local M = SPC.V.MOD
+    M.P, M.rec, M.recUntil, M.pWalked, M.offBy, M.mark, M.forceWalk = {}, {}, nil, {}, {}, {}, false
+    M.walkKey, M.walkL, M.walkPKey, M.walkP, M.walks = nil, nil, nil, nil, 0
+    SPC.V.keptLaunchers()
+end
+-- just before her (or her opener's) SV_Spawn: the launchers kept from here on are that unit's (modMark), and once it's
+-- done projectile modules made in the next MOD_REC_S are kept too (made late: modRecord)
+function SPC.V.modMark(unit)
+    SPC.V.MOD.mark[unit] = SPC.V.MOD.seq
+end
+function SPC.V.modRecord()
+    SPC.V.MOD.recUntil = os.clock() + SPC.V.MOD_REC_S
+end
+-- what was kept as `unit` spawned, for the log. None kept since it spawned with the hook in (the game made its launchers
+-- some way NotifyOnNewObject doesn't see: her opener's walked for would otherwise stand in for hers): the next ask walks
+-- for them, once.
+function SPC.V.modSaid(c, unit, who)
+    local M = SPC.V.MOD
+    local list = SPC.V.keptLaunchers()
+    local fresh = 0
+    for _, e in ipairs(M.L) do if (e.seq or 0) > (M.mark[unit] or 0) then fresh = fresh + 1 end end
+    if M.hookL and fresh == 0 then M.forceWalk = true end
+    log(string.format("special: %s's railgun modules: %d launcher(s) made as %s spawned (%d of them kept, %d up in all), %d "
+        .. "projectile modules kept (NotifyOnNewObject%s)", c.name, M.rec[unit] or 0, who, fresh, #list, #M.P,
+        not M.hookL and ": NOT registered, walks instead" or fresh == 0 and ": none of this spawn's, one walk for them" or "; no walk"))
+end
+-- the launcher modules kept that are still up (live instances); the gone ones dropped, and the templates the hook sees as
+-- a class loads (a class default's or an archetype's: RF_ClassDefaultObject | RF_ArchetypeObject, 0x30, or a name
+-- under Default__), which the walk never found and which must never be changed (the campaign's x40a). No walk.
+local function template(o)
+    local okF, f = pcall(function() return o:HasAnyFlags(0x30) end)
+    if okF and f == true then return true end
+    local n = nameOf(o)
+    return n:find("Default__", 1, true) ~= nil or n:find("_GEN_VARIABLE", 1, true) ~= nil
+end
+function SPC.V.keptLaunchers()
+    local M, out, keep = SPC.V.MOD, {}, {}
+    for _, e in ipairs(M.L) do
+        if liveObj(e.obj) then
+            if e.tpl == nil then e.tpl = template(e.obj) end
+            if not e.tpl then keep[#keep + 1] = e; out[#out + 1] = e.obj end
+        end
+    end
+    M.L = keep
+    return out
+end
+-- her railguns' launcher modules up now. need: walk for them when none is kept (or with no hook), once a tick at most;
+-- else (radarOff) only with no hook. Returns them and how ("kept", "walked", "held").
+function SPC.V.launchers(need)
+    local M = SPC.V.MOD
+    local out = SPC.V.keptLaunchers()
+    if M.hookL and not (need and M.forceWalk) and (#out > 0 or not need) then return out, "kept" end
+    if walkHold and walkHold() then return out, "held" end      -- (no object walk while a level comes or goes)
+    local key = tickKey()
+    if M.walkKey ~= key then
+        M.walkKey, M.walkL = key, {}
+        M.walks = (M.walks or 0) + 1
+        local ok, list = pcall(FindAllOf, "LiveFCSModule_LauncherTripleRailCannon")
+        local have = {}
+        for _, e in ipairs(M.L) do local a = addrOf(e.obj); if a then have[a] = true end end
+        for _, m in ipairs(ok and list or {}) do
+            M.walkL[#M.walkL + 1] = m
+            local a = addrOf(m)
+            if M.hookL and #M.L < 64 and not (a and have[a]) then M.L[#M.L + 1] = { obj = m } end   -- (kept from now on)
+        end
+        log(string.format("special: VALKA's railgun launcher modules: %s; one walk instead: %d found",
+            M.hookL and "none kept as the game made them" or "no NotifyOnNewObject for them", #M.walkL))
+    end
+    M.forceWalk = false                                 -- (this tick's walk answers it)
+    return M.walkL or {}, "walked"
+end
+-- the projectile modules beside the launchers whose outers are `outers` ({ [address] = true }): the kept ones, and for a
+-- launcher with none kept beside it one walk of the three classes (once a tick; each outer once until her next round)
+function SPC.V.projBeside(outers)
+    local M, out, seen, have, keep = SPC.V.MOD, {}, {}, {}, {}
+    local function take(p, kept)
+        local a = addrOf(p)
+        local okO, o = pcall(function() return p:GetOuter() end)
+        local oa = okO and liveObj(o) and addrOf(o)
+        if a and oa and outers[oa] and not seen[a] then
+            seen[a], have[oa] = true, true
+            out[#out + 1] = p
+            if not kept and #M.P < 256 then M.P[#M.P + 1] = { obj = p } end
+        end
+    end
+    for _, e in ipairs(M.P) do
+        if liveObj(e.obj) then keep[#keep + 1] = e; take(e.obj, true) end
+    end
+    M.P = keep
+    local missing = 0
+    for oa in pairs(outers) do if not have[oa] and not M.pWalked[oa] then missing = missing + 1 end end
+    if missing == 0 and M.hookP > 0 then return out, "kept" end
+    if walkHold and walkHold() then return out, "held" end
+    for oa in pairs(outers) do if not have[oa] then M.pWalked[oa] = true end end
+    local key = tickKey()
+    if M.walkPKey ~= key then
+        M.walkPKey, M.walkP = key, {}
+        M.walks = (M.walks or 0) + 1
+        for _, cn in ipairs(SPC.V.EML_MODULES) do
+            local okP, ps = pcall(FindAllOf, cn)
+            for _, p in ipairs(okP and ps or {}) do M.walkP[#M.walkP + 1] = p end
+        end
+        log(string.format("special: VALKA's railgun projectile modules: %d launcher(s) with none kept beside them%s; one walk "
+            .. "of the %d classes instead: %d modules", missing, M.hookP > 0 and "" or " (no NotifyOnNewObject for them)",
+            #SPC.V.EML_MODULES, #M.walkP))
+    end
+    for _, p in ipairs(M.walkP or {}) do if liveObj(p) then take(p, false) end end
+    return out, "walked"
+end
 -- her railgun parts fire one round a shot (user, 2026-10-24: "I only want single shot"; Mission 26's fire 3): the x40a
 -- railguns' launcher modules (only hers are in Survival) get TriggerCount / MagazineCapacity single_shot. Returns how many.
 function SPC.V.singleShot(c)
     local n, why = 0, nil
-    local ok, list = pcall(FindAllOf, "LiveFCSModule_LauncherTripleRailCannon")
-    for _, m in ipairs(ok and list or {}) do
+    for _, m in ipairs((SPC.V.launchers(true))) do
         local okS, err = pcall(function()
             m.FireControl.TriggerCount = c.single_shot
             m.Performance.MagazineCapacity = c.single_shot
@@ -641,90 +960,219 @@ function SPC.V.singleShot(c)
     end
     return n, why
 end
+-- ((0.73.80) her railgun's round class and its class default, kept once found (liveObj): one find a level, not two
+-- StaticFindObject scans of /Game/ paths a call ("finds: worst 42 ms (.../Default__BP_wp_eml_ldbs01_C)"). Class, CDO
+-- (nil if it can't be found), or nil and why.
+SPC.V.RC = { path = nil, cls = nil, cdo = nil, was = nil, wasAddr = nil, mode = nil }
+function SPC.V.roundClass(c)
+    local R = SPC.V.RC
+    local path = c.eml_weapon
+    if not path or path == "" then return nil, nil, "off" end
+    if R.path == path and R.cls ~= nil and liveObj(R.cls) and (R.cdo == nil or liveObj(R.cdo)) then return R.cls, R.cdo end
+    local nm = path:match("[^/]+$")
+    local cls, why = SPC.V.asset(path, nm .. "_C")
+    if not cls then R.path, R.cls, R.cdo = nil, nil, nil; return nil, nil, why end
+    local cdo = nil
+    local okC, d = pcall(function() return cls:GetCDO() end)
+    if okC and d ~= nil and liveObj(d) then cdo = d
+    else
+        d = StaticFindObject(path .. ".Default__" .. nm .. "_C")
+        if d ~= nil and liveObj(d) then cdo = d end
+    end
+    R.path, R.cls, R.cdo = path, cls, cdo
+    return cls, cdo
+end
 -- her railguns fire the land battleship's round (c.eml_weapon; user, 2026-10-24: "try putting a land battleship
 -- railgun weapon on her EML"): each projectile module that sits beside an x40a railgun's launcher module (the same
 -- outer) gets its class and class default. Instances only (her railguns and the opener's, the only ones in Survival):
 -- the stock x40a and the land battleship keep theirs. Returns how many changed, and a note.
-SPC.V.EML_MODULES = { "LiveFCSModule_ProjectileCommon", "LiveFCSModule_ProjectileMulti", "LiveFCSModule_ProjectileWeapon" }
 function SPC.V.emlWeapon(c)
     if not c.eml_weapon or c.eml_weapon == "" then return 0, "off" end
     local nm = c.eml_weapon:match("[^/]+$")
-    local cls, why = loadObject(c.eml_weapon .. "." .. nm .. "_C")
-    if not valid(cls) then return 0, nm .. " not loaded (" .. tostring(why) .. ")" end
-    local cdo = StaticFindObject(c.eml_weapon .. ".Default__" .. nm .. "_C")
+    local cls, cdo, why = SPC.V.roundClass(c)
+    if not cls then return 0, nm .. " not loaded (" .. tostring(why) .. ")" end
     local outers, nL = {}, 0
-    local okL, list = pcall(FindAllOf, "LiveFCSModule_LauncherTripleRailCannon")
-    for _, m in ipairs(okL and list or {}) do
+    local list, howL = SPC.V.launchers(true)
+    for _, m in ipairs(list) do
         local okO, out = pcall(function() return m:GetOuter() end)
-        if okO and valid(out) then outers[addrOf(out)] = true; nL = nL + 1 end
+        local oa = okO and liveObj(out) and addrOf(out)
+        if oa then outers[oa] = true; nL = nL + 1 end
     end
-    local n, nP, was, seen = 0, 0, {}, {}
-    for _, cn in ipairs(SPC.V.EML_MODULES) do
-        local okP, ps = pcall(FindAllOf, cn)
-        for _, p in ipairs(okP and ps or {}) do
-            local a = addrOf(p)
-            local okO, out = pcall(function() return p:GetOuter() end)
-            if a and not seen[a] and okO and valid(out) and outers[addrOf(out)] then
-                seen[a], nP = true, nP + 1
-                local okW, w = pcall(function() return p.WeaponClass:GetFName():ToString() end)
-                if okW and w == nm .. "_C" then n = n + 1
-                elseif pcall(function() p.WeaponClass = cls; if valid(cdo) then p.WeaponCDO = cdo end end) then
-                    n = n + 1
-                    was[#was + 1] = okW and w or "?"
-                end
-            end
+    local mods, howP = SPC.V.projBeside(outers)
+    local n, nP, was = 0, 0, {}
+    for _, p in ipairs(mods) do
+        nP = nP + 1
+        local okW, w = pcall(function() return p.WeaponClass:GetFName():ToString() end)
+        if okW and w == nm .. "_C" then n = n + 1
+        elseif pcall(function() p.WeaponClass = cls; if cdo then p.WeaponCDO = cdo end end) then
+            n = n + 1
+            was[#was + 1] = okW and w or "?"
         end
     end
     local okT, life = pcall(function() return cdo.LifeTime end)
-    return n, string.format("%d launchers, %d projectile modules beside them; was %s; %s life %s s", nL, nP,
-        #was > 0 and table.concat(was, ", ") or "-", nm, okT and tostring(life) or "?")
+    return n, string.format("%d launchers, %d projectile modules beside them (%s, %s); was %s; %s life %s s", nL, nP, howL,
+        howP, #was > 0 and table.concat(was, ", ") or "-", nm, okT and tostring(life) or "?")
 end
--- her railgun's rounds now in the level (c.eml_weapon's): one at a time (ROUND_ONE: no burst, no donut spread; the
--- land battleship's fires a ring of them), each lives at least eml_life_s (its class default's or
--- longer), and does no damage while `harmless` (the opener's shot) or its class default's otherwise. Instances only:
--- the rounds are pooled, so this runs around every shot. Returns how many, and their life.
+-- Her railgun's rounds (c.eml_weapon's): one at a time (ROUND_ONE: no burst, no donut spread; the land battleship's fires
+-- a ring of them), each living eml_life_s, and none doing damage from her opener's charge until she spawns (the
+-- opener's shot). ((0.73.80) on the round class's default, not on rounds: a walk for them every tick found none in the
+-- 31-round run (30 walks, 0 found), so none of it reached a round; a round takes these as it's made, and only hers are
+-- made of this class in Survival.) mode: "opener" (the opener's: life, bursts off, damage 0), "hers" (the same, her
+-- damage back: called just before she spawns, so rounds made for her own railguns hurt) or "off" (everything as it
+-- was: her end, a run over). The class default's own values are kept the first time (per class default), so "off" puts
+-- back the stock ones. True if it changed it.
 SPC.V.ROUND_ONE = { { "bBurstShot", false }, { "BurstShotCount", 1 }, { "bFireAllInOneShot", false },
                     { "bDonutsShot", false }, { "bMultipleLockOn", false } }
-function SPC.V.rounds(c, harmless)
-    if not c.eml_weapon or c.eml_weapon == "" then return 0 end
+SPC.V.ROUND_KEEP = { "LifeTime", "EffectiveTime", "damage", "bBurstShot", "BurstShotCount", "bFireAllInOneShot",
+                     "bDonutsShot", "bMultipleLockOn" }
+function SPC.V.roundDefaults(c, mode)
+    local R = SPC.V.RC
+    if not c or not c.eml_weapon or c.eml_weapon == "" then return false end
     local nm = c.eml_weapon:match("[^/]+$")
-    local cdo = StaticFindObject(c.eml_weapon .. ".Default__" .. nm .. "_C")
-    local okD, d0 = pcall(function() return cdo.damage end)
-    local okL, l0 = pcall(function() return cdo.LifeTime end)
-    local life = math.max(c.eml_life_s or 0, (okL and type(l0) == "number") and l0 or 0)
-    if not SPC.V.roundSaid and valid(cdo) then         -- (test of 2026-10-24, 0.67.1: "it fires multiple bursts at you")
-        SPC.V.roundSaid = true
+    local cdo
+    if mode == "off" then
+        if not R.mode then return false end
+        -- (never loaded or looked for at the end: the one kept, if it's still live (liveObj: GUObjectArray). Put back even
+        -- as the level goes: a class default isn't the level's (its package is the round's, kept loaded by the preload),
+        -- and left as hers the land battleship's railgun in a campaign mission after a quit would fire her rounds)
+        cdo = R.cdo ~= nil and liveObj(R.cdo) and R.cdo or nil
+        if not cdo then R.mode = nil; return false end
+    else
+        local _, d, why = SPC.V.roundClass(c)
+        if not d then
+            if not R.noCdoSaid then
+                R.noCdoSaid = true
+                log(string.format("special: VALKA's round %s: no class default (%s); her rounds as they come", nm, tostring(why or "not found")))
+            end
+            return false
+        end
+        cdo = d
+    end
+    local a = addrOf(cdo)
+    if R.wasAddr ~= a or not R.was then              -- (its own values, once a class default: what "off" puts back)
+        R.was, R.wasAddr = {}, a
+        for _, f in ipairs(SPC.V.ROUND_KEEP) do
+            local okF, v = pcall(function() return cdo[f] end)
+            if okF and v ~= nil then R.was[f] = v end
+        end
         local said = {}
-        for _, f in ipairs(SPC.V.ROUND_ONE) do
-            local okF, v = pcall(function() return cdo[f[1]] end)
-            said[#said + 1] = f[1] .. " " .. (okF and tostring(v) or "?")
-        end
-        log("special: VALKA's round " .. nm .. " (class default): " .. table.concat(said, ", "))
+        for _, f in ipairs(SPC.V.ROUND_ONE) do said[#said + 1] = f[1] .. " " .. tostring(R.was[f[1]] == nil and "?" or R.was[f[1]]) end
+        log("special: VALKA's round " .. nm .. " (class default): " .. table.concat(said, ", "))   -- (test of 2026-10-24, 0.67.1: "it fires multiple bursts at you")
     end
-    local n = 0
-    local ok, list = pcall(FindAllOf, nm .. "_C")
-    for _, r in ipairs(ok and list or {}) do
-        if valid(r) and not nameOf(r):find("Default__", 1, true) then
-            n = n + 1
-            for _, f in ipairs(SPC.V.ROUND_ONE) do pcall(function() r[f[1]] = f[2] end) end
-            pcall(function() if (r.LifeTime or 0) < life then r.LifeTime = life end end)
-            pcall(function() if (r.EffectiveTime or 0) > 0 and r.EffectiveTime < life then r.EffectiveTime = life end end)
-            pcall(function() r.damage = harmless and 0 or (okD and d0 or r.damage) end)
+    local W = R.was
+    local want = {}
+    if mode == "off" then
+        for f, v in pairs(W) do want[f] = v end
+    else
+        local life = tonumber(c.eml_life_s) or (type(W.LifeTime) == "number" and W.LifeTime) or 10   -- ((0.73.76) eml_life_s itself)
+        for _, f in ipairs(SPC.V.ROUND_ONE) do want[f[1]] = f[2] end
+        want.LifeTime = life
+        if type(W.EffectiveTime) == "number" and W.EffectiveTime > 0 then want.EffectiveTime = math.min(W.EffectiveTime, life) end
+        if W.damage ~= nil then want.damage = (mode == "opener") and 0 or W.damage end
+    end
+    local changed = {}
+    for _, f in ipairs(SPC.V.ROUND_KEEP) do
+        local v = want[f]
+        if v ~= nil then
+            local okR, cur = pcall(function() return cdo[f] end)
+            if not (okR and cur == v) and pcall(function() cdo[f] = v end) then
+                changed[#changed + 1] = string.format("%s %s -> %s", f, okR and tostring(cur) or "?", tostring(v))
+            end
         end
     end
-    return n, life
+    R.mode = mode ~= "off" and mode or nil
+    local what = mode == "opener" and "for her opener's shot (no damage until she spawns)"
+        or mode == "hers" and "for her own railguns (her damage back before she spawns)" or "put back as it was"
+    log(string.format("special: VALKA's railgun round %s's class default %s: %s (0.73.80: no walk for its rounds)", nm, what,
+        #changed > 0 and table.concat(changed, ", ") or "as it was already"))
+    if mode ~= "off" then pcall(SPC.V.roundHook, c) end
+    return #changed > 0
 end
--- her railguns on the minimap: each x40a railgun launcher's radar display on, forced, in radar_hud's style
+-- ((review of 0.73.80) her rounds are pooled: one made while the class default was the opener's (damage 0) keeps that
+-- when it's fired again for her. Each round of the class is kept as the game makes it (NotifyOnNewObject on the round's
+-- class, hooked once its class is loaded: roundDefaults), at most RK_MAX, dropped the first time it's gone (liveObj),
+-- and SPC.V.roundsHarm puts her damage (the class default's own) back on each at her charges: 0.73.79's rounds walk
+-- did that for the pool, a FindAllOf each time.)
+SPC.V.RK = { list = {}, hooked = nil, failSaid = nil }
+local RK_MAX = 64
+function SPC.V.roundHook(c)
+    local K = SPC.V.RK
+    local path = c and c.eml_weapon
+    if not path or path == "" or K.hooked == path then return end
+    local nm = path:match("[^/]+$")
+    local okH, err = pcall(NotifyOnNewObject, path .. "." .. nm .. "_C", function(o)
+        local L = SPC.V.RK.list
+        if #L < RK_MAX then L[#L + 1] = o end
+    end)
+    if okH then
+        K.hooked = path
+        log("special: VALKA's railgun rounds (" .. nm .. ") kept as the game makes them (their damage put back at her charges)")
+    elseif not K.failSaid then
+        K.failSaid = true
+        log("special: VALKA's railgun rounds (" .. nm .. ") can't be watched (" .. tostring(err) .. "): a round pooled from her "
+            .. "opener's shot may stay harmless")
+    end
+end
+-- her damage (the class default's own, kept by roundDefaults) on every kept round of hers: how many changed
+function SPC.V.roundsHarm(c)
+    local K, W = SPC.V.RK, SPC.V.RC.was
+    if not (W and W.damage ~= nil) then return 0 end
+    local keep, n = {}, 0
+    for _, r in ipairs(K.list) do
+        if liveObj(r) then
+            keep[#keep + 1] = r
+            local okD, d = pcall(function() return r.damage end)
+            if not (okD and d == W.damage) and pcall(function() r.damage = W.damage end) then n = n + 1 end
+        end
+    end
+    K.list = keep
+    if n > 0 then
+        log(string.format("special: %s's railgun rounds: her damage (%s) back on %d of the %d kept (made for her opener's shot)",
+            tostring(c and c.name or "VALKA"), tostring(W.damage), n, #keep))
+    end
+    return n
+end
+if type(LEVEL_DROPS) == "table" then
+    LEVEL_DROPS["VALKA's railgun rounds"] = function() SPC.V.RK.list = {} end   -- (the level's objects: forgotten, not touched)
+end
+-- her railguns on the minimap: each x40a railgun launcher's radar display on, forced, in radar_hud's style. ((0.73.80) not
+-- one radarOff took off with its actor, her removed opener's: a walk found it still in memory and every charge of hers
+-- put it back on the minimap, where D4 had taken it off)
 function SPC.V.radar(c)
-    local n = 0
-    local ok, list = pcall(FindAllOf, "LiveFCSModule_LauncherTripleRailCannon")
-    for _, m in ipairs(ok and list or {}) do
-        if pcall(function()
+    local n, off = 0, SPC.V.MOD.offBy
+    for _, m in ipairs((SPC.V.launchers(true))) do
+        local a = addrOf(m)
+        if not (a and off[a]) and pcall(function()
             m.IsDispRadarMap = true
             m.ForceAlertDisp = true
             m.HUDControl = c.radar_hud or 1
         end) then n = n + 1 end
     end
+    return n
+end
+-- ((0.73.77) D4) and off again: every launcher's (her death, the host's VALKA over on a joiner) or, with owner (an
+-- actor's address), only that actor's (her opener railgun's, as it's removed: her own stay on). How many went off.
+function SPC.V.radarOff(owner)
+    if walkHold and walkHold() then return 0 end           -- (no object walk while a level comes or goes)
+    local n = 0
+    for _, m in ipairs((SPC.V.launchers(false))) do        -- ((0.73.80) the kept ones: a walk only with no hook)
+        local mine = owner == nil
+        if not mine and liveObj(m) then
+            local o = m
+            for _ = 1, 4 do                                   -- (the module's outers up to its actor)
+                local okO, out = pcall(function() return o:GetOuter() end)
+                if not (okO and liveObj(out)) then break end
+                if addrOf(out) == owner then mine = true; break end
+                o = out
+            end
+        end
+        if mine and pcall(function() m.IsDispRadarMap = false; m.ForceAlertDisp = false end) then
+            n = n + 1
+            local a = owner and addrOf(m)
+            if a then SPC.V.MOD.offBy[a] = true end         -- ((0.73.80) left off: SPC.V.radar)
+        end
+    end
+    log(string.format("special: VALKA's railgun minimap display off on %d launchers%s", n, owner and " (her opener's)" or ""))
     return n
 end
 -- a plain actor spawned at `at` with a MaterialBillboardComponent (her flare's and portal's); actor, component, or nil
@@ -763,23 +1211,28 @@ function SPC.V.flareStart(c, s, at, now)
     if not a then log("special: VALKA's flare: " .. tostring(whyB)); return 0 end
     local fl = { actor = a, comp = comp, mids = {}, from = now, life = f.life_s }
     local said = {}
+    -- ((0.73.77) D5: each element's screen share x flash_size_x, [specials.valka]; 1 = AC7's own sizes)
+    local kx = tonumber(c.flash_size_x) or 1
+    if not (kx > 0 and kx <= 4) then kx = 1 end
     for _, e in ipairs(f.elements) do
         local p = f.path .. e[1]
-        local mi, why = loadObject(p .. "." .. p:match("[^/]+$"))
+        local mi, why = SPC.V.asset(p)                  -- ((0.73.80) kept from the break's preload: no load, no find here)
+        local size = e[2] * kx
         local okM, mid = false, nil                     -- (not `valid(mi) and pcall(...)`: `and` keeps only pcall's first value)
         if valid(mi) then okM, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, mi, FName("None"), 0) end) end
-        if okM and valid(mid) and pcall(function() comp:AddElement(mid, nil, true, e[2], e[2], nil) end) then
+        if okM and valid(mid) and pcall(function() comp:AddElement(mid, nil, true, size, size, nil) end) then
             local okB, b = pcall(function() return mid:K2_GetScalarParameterValue(FName("Emissive_Intensity")) end)
             fl.mids[#fl.mids + 1] = { mid = mid, base = (okB and type(b) == "number" and b > 0) and b or 1 }
-            said[#said + 1] = string.format("%s %.1f (base %.3g)", e[1], e[2], fl.mids[#fl.mids].base)
+            said[#said + 1] = string.format("%s %.2f (base %.3g)", e[1], size, fl.mids[#fl.mids].base)
         else
             said[#said + 1] = e[1] .. " NOT up (" .. tostring(valid(mi) and mid or why) .. ")"
         end
     end
     s.flare = fl
     SPC.V.flareTick(c, s, now)
-    log(string.format("special: VALKA's flare (AC7 M18 lens flash): %d of %d elements, %.0f s: %s", #fl.mids, #f.elements,
-        f.life_s, table.concat(said, ", ")))
+    log(string.format("special: VALKA's flare (AC7 M18 lens flash): %d of %d elements, %.0f s, sizes x%.2f (flash_size_x; her "
+        .. "shot's burst flash_scale %.1f): %s", #fl.mids, #f.elements, f.life_s, kx, tonumber(c.flash_scale) or 0,
+        table.concat(said, ", ")))
     if #fl.mids == 0 then SPC.V.flareStop(s) end
     return #fl.mids
 end
@@ -801,114 +1254,9 @@ end
 function SPC.V.flareStop(s)
     if s.flare then
         local a = s.flare.actor
-        if valid(a) then pcall(function() a:K2_DestroyActor() end) end
+        -- ((0.73.77, plan F1b) not while the level is torn down, levelTorn: it goes with the level, and valid() reads it)
+        if not (levelTorn and levelTorn()) and liveObj(a) then pcall(function() a:K2_DestroyActor() end) end   -- ((0.73.84) liveObj)
         s.flare = nil
-    end
-end
--- Her portal (user, 2026-10-24: "an event horizon black hole that Valka will spawn out of"; CFG.specials.valka.portal):
--- one billboard of world-space elements on AC8's own effect materials, our textures on them (tools/x02s prepare.py
--- portal_textures): the barrier's refraction (the lensing), the accretion glow and the photon ring on the additive
--- flare, the event horizon on M_Smoke01 made black. It opens over open_s, holds, collapses over close_s.
-SPC.V.PORTAL_MAT = {
-    lens = "/Game/VFX/Vehicles/Weapon/UAV/Barrier/M_VFX_UAVBarrierSpriteRefraction",
-    disc = "/Game/VFX/Vehicles/Weapon/Impact/Materials/M_Smoke01",
-    flare = "/Game/VFX/Mission/Mission023/MI_ms23FarExp_Flare",
-}
-local function portalMid(kml, kind)
-    local p = SPC.V.PORTAL_MAT[kind]
-    local m, why = loadObject(p .. "." .. p:match("[^/]+$"))
-    if not valid(m) then return nil, why end
-    local ok, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, m, FName("None"), 0) end)
-    if ok and valid(mid) then return mid end
-    return nil, tostring(mid)
-end
-local function portalTex(p, name)
-    return loadObject(p.textures .. name .. "." .. name)
-end
-function SPC.V.portalStart(c, s, at, now)
-    local p = c.portal
-    SPC.V.portalStop(s)
-    if not p or not p.enabled or not at then return 0 end
-    local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
-    if not valid(kml) then return 0 end
-    local a, comp, whyB = SPC.V.billboard(at)
-    if not a then log("special: VALKA's portal: " .. tostring(whyB)); return 0 end
-    -- at least min_deg wide where you are (14 km out, 120 m was half a degree: test of 2026-10-25, unseen)
-    local d = math.max(p.diameter_m, (at.km or 0) * 1000 * math.tan(math.rad(p.min_deg or 0))) * 100
-    local po = { actor = a, comp = comp, from = now, glow = {}, said = {}, up = 0 }
-    local function add(name, mid, size)
-        if mid and pcall(function() comp:AddElement(mid, nil, false, size, size, nil) end) then
-            po.said[#po.said + 1] = name
-            po.up = po.up + 1
-            return true
-        end
-        po.said[#po.said + 1] = name .. " NOT up"
-    end
-    local lens = portalMid(kml, "lens")                -- the lensing: the barrier's refraction, stronger
-    if lens then
-        pcall(function()
-            local b = lens:K2_GetScalarParameterValue(FName("RefractionIntensity"))
-            lens:SetScalarParameterValue(FName("RefractionIntensity"), ((type(b) == "number" and b ~= 0) and b or 1) * p.lens_x)
-        end)
-        add("lens", lens, d * p.lens_size)
-    end
-    for _, e in ipairs({ { "glow", "T_SV_Portal_Glow", p.glow_size, p.glow_x }, { "ring", "T_SV_Portal_Ring", p.ring_size, p.ring_x } }) do
-        local mid, tex = portalMid(kml, "flare"), portalTex(p, e[2])
-        if mid and valid(tex) then
-            local base = 1
-            pcall(function()
-                mid:SetTextureParameterValue(FName("EmissiveMap"), tex)
-                mid:SetTextureParameterValue(FName("MaskMap"), tex)
-                local b = mid:K2_GetScalarParameterValue(FName("Emissive_Intensity"))
-                if type(b) == "number" and b > 0 then base = b end
-            end)
-            if add(e[1], mid, d * e[3]) then po.glow[#po.glow + 1] = { mid = mid, base = base * e[4] } end
-        else
-            po.said[#po.said + 1] = e[1] .. " NOT up (" .. (mid and ("no texture " .. e[2]) or "no material") .. ")"
-        end
-    end
-    local disc, tex = portalMid(kml, "disc"), portalTex(p, "T_SV_Portal_Disc")   -- the event horizon: black
-    if disc and valid(tex) then
-        pcall(function()
-            disc:SetTextureParameterValue(FName("BaseTexture"), tex)
-            disc:SetVectorParameterValue(FName("LerpColor1"), { R = 0, G = 0, B = 0, A = 1 })
-            disc:SetVectorParameterValue(FName("LerpColor2"), { R = 0, G = 0, B = 0, A = 1 })
-            disc:SetScalarParameterValue(FName("BrightnessIntensity"), 0)
-        end)
-        add("horizon", disc, d)
-    else
-        po.said[#po.said + 1] = "horizon NOT up"
-    end
-    s.portal = po
-    SPC.V.portalTick(c, s, now)
-    log(string.format("special: VALKA's portal at %.0f, %.0f, %.0f (%.0f m): %s", at.X / 100, at.Y / 100, at.Z / 100,
-        d / 100, table.concat(po.said, ", ")))
-    if po.up == 0 then SPC.V.portalStop(s) end
-    return po.up
-end
--- every tick: open, hold, close (its size and glow); gone after
-function SPC.V.portalTick(c, s, now)
-    local po, p = s.portal, c.portal
-    if not po then return end
-    local t = now - po.from
-    local k
-    if t < p.open_s then k = t / p.open_s
-    elseif t < p.open_s + p.hold_s then k = 1
-    elseif t < p.open_s + p.hold_s + p.close_s then k = 1 - (t - p.open_s - p.hold_s) / p.close_s
-    else SPC.V.portalStop(s); return end
-    k = math.max(0.02, k * k * (3 - 2 * k))             -- (eased)
-    if not valid(po.actor) then SPC.V.portalStop(s); return end
-    pcall(function() po.comp:SetWorldScale3D({ X = k, Y = k, Z = k }) end)
-    local pulse = 1 + 0.25 * math.sin(t * 9)
-    for _, g in ipairs(po.glow) do
-        pcall(function() g.mid:SetScalarParameterValue(FName("Emissive_Intensity"), g.base * k * pulse) end)
-    end
-end
-function SPC.V.portalStop(s)
-    if s.portal then
-        local a = s.portal.actor
-        if valid(a) then pcall(function() a:K2_DestroyActor() end) end
-        s.portal = nil
     end
 end
 -- her railgun's sounds (CFG.sound.valka, sv_sound.lua): the charge at `at` (a location, or a function giving hers),
@@ -932,10 +1280,11 @@ end
 -- code review of 2026-10-25: they were only cleared when she was shot down, so the loop played on into the next run)
 function SPC.V.cleanup(s)
     if type(s) ~= "table" then return end
+    if s.redOn or s.moodOn then SPC.V.moodOff(nil, s) end  -- (0.73.76) never left red or playing (the run over, the level left)
     SPC.V.sndStop(s)
     SPC.V.flareStop(s)
-    SPC.V.portalStop(s)
     s.passAt = nil
+    if SPC.V.RC.mode then pcall(SPC.V.roundDefaults, CFG.specials.valka, "off") end   -- ((0.73.80) her round's class default back)
 end
 function SPC.V.sndShot(s, at, now)
     local cs = CFG.sound.valka
@@ -1041,6 +1390,11 @@ end
 -- the scrambled controls on (random_min..random_max of random_fx, as MINDRIPPER's field) or off
 function SPC.V.invert(c, s, on, now)
     local t = CFG.hud.text
+    if on and downNow() then                            -- ((0.73.77) A10: you're DOWN: left alone, no scramble or callout)
+        s.invertUntil = nil
+        log(string.format("special: %s's scramble skipped: you're DOWN (SV_Invert not called)", c.name))
+        return
+    end
     local fx = on and pickFx(c) or {}
     if on then
         local names = {}
@@ -1053,861 +1407,8 @@ function SPC.V.invert(c, s, on, now)
     local function b(k) return fx[k] and 1 or 0 end
     local r = type(SV_Invert) == "function" and SV_Invert(b("pitch"), b("roll"), c.fade_s, pawn and addrOf(pawn) or 0,
         b("yaw"), b("swap"), b("throttle")) or "no runtime"
-    hudCallout(on and t.anomaly_field or t.anomaly_clear, on and s.fxText or nil)
+    if not downNow() then hudCallout(on and t.anomaly_field or t.anomaly_clear, on and s.fxText or nil) end
     log(string.format("special: %s scrambles your controls: %s (SV_Invert %s)", c.name, on and s.fxText or "back",
         tostring(r)))
 end
-
--- her components of class `cls` (a /Script path), from her component tree (RootComponent and AttachChildren down, as
--- SPC.V.parts walks it; test of 2026-10-24: K2_GetComponentsByClass's array gave nothing from Lua), hers only
-function SPC.V.comps(o, cls)
-    local out, queue, i, me = {}, {}, 1, addrOf(o)
-    local class = StaticFindObject(cls)
-    pcall(function() queue[1] = o.RootComponent end)
-    while queue[i] and i <= 400 do
-        local comp = queue[i]
-        i = i + 1
-        pcall(function()
-            local owner = comp:GetOwner()
-            if valid(owner) and addrOf(owner) == me then
-                if comp:IsA(class) then out[#out + 1] = comp end
-                comp.AttachChildren:ForEach(function(_, e) queue[#queue + 1] = e:get() end)
-            end
-        end)
-    end
-    return out
-end
-
--- Her X-02S (AC7's, user, 2026-10-24: "full port as the X-02S is swing winged"; tools/x02s, cooked in UE 5.4 into
--- its own container SurvivalMode_Valka_P): her airframe's body mesh component gets SK_X02S_Valka (AC7's skeleton, its
--- sockets, so what hangs on burner_01 / _02, her afterburners, moves to the X-02S's nozzles) and plays
--- A_X02S_Valka_Sweep, the swing wings alone (AC7's x02s_Anim frames 50-100): unswept below sweep_kmh[1], swept above
--- sweep_kmh[2] (AC7's VwgMin / VwgMax), a full travel taking sweep_s. Her other meshes are hidden (again every 2 s)
--- and her parts gone (not lockable); her flight model and railguns stay the x40a's. Off (the x40a as it is) when
--- `model` is "" or doesn't load. True if on.
-SPC.V.BODY_PROPS = { "PlaneBodySkelMeshComponent", "PlaneBodyMeshComponent", "PlaneBodyStaticMeshComponent", "PlaneBodyMesh" }
--- Her paint (test of 2026-10-24, 0.66.2: "her paint was all blackened out"). MI_X02S_Valka sets only Basecolor /
--- Normalmap / Livemap on AC8's MP_PP0032_f18e_Decal, the rest stays at the parent's defaults, which every stock skin
--- overrides (weathering, wet, dirt, smoke, paint regions...), and its Livemap (AC8's _MRX: metallic / roughness / ?)
--- is all black. At her reveal her MI_X02S_Valka slots get dynamic instances; a variant (CFG.specials.valka.paint, or
--- cycled by the test key Ctrl+9) sets on them:
---   1 raw     as built (what 0.66.2 showed)
---   2 stock   the stock F/A-18E skin's scalar / vector values (MI_PP0032_f18e_001_Decal) and no dirt mask (black)
---   3 stock + white Livemap   4 stock + the parent's own dirt mask   5 stock + white Livemap and the parent's dirt
--- and, as 2 stayed black (test of 2026-10-24, 0.67.1: "she was still coated black", "her mesh was missing pieces"),
--- three that tell where it goes wrong:
---   6 stock + the F/A-18E's own Livemap (if it's ours that's wrong)   7 the F/A-18E's three textures (wrongly mapped,
---   but lit if the material works on her)   8 the engine's grid material on every slot (the mesh and its lighting alone)
-SPC.V.PAINT_STOCK = "/Game/Vehicles/Aircraft/PP/PP0032_f18e/Materials/001/MI_PP0032_f18e_001_Decal"
-SPC.V.PAINT_TEX = { black = "/Engine/EngineResources/Black", white = "/Engine/EngineResources/WhiteSquareTexture",
-    f18_c = "/Game/Vehicles/Aircraft/PP/PP0032_f18e/Textures/001/T_PP0032_f18e_001_C", f18_mrx = "/Game/Vehicles/Aircraft/PP/PP0032_f18e/Textures/001/T_PP0032_f18e_001_MRX", f18_no = "/Game/Vehicles/Aircraft/PP/PP0032_f18e/Textures/001/T_PP0032_f18e_001_NO" }
-SPC.V.PAINTS = {
-    { name = "RAW" },
-    { name = "STOCK", stock = true, dirt = "black" },
-    { name = "STOCK + WHITE LIVEMAP", stock = true, dirt = "black", livemap = "white" },
-    { name = "STOCK + PARENT DIRT", stock = true },
-    { name = "STOCK + WHITE LIVEMAP + PARENT DIRT", stock = true, livemap = "white" },
-    { name = "STOCK + F-18 LIVEMAP", stock = true, dirt = "black", livemap = "f18_mrx" },
-    { name = "F-18 TEXTURES", stock = true, dirt = "black", livemap = "f18_mrx", basecolor = "f18_c", normal = "f18_no" },
-    { name = "ENGINE GRID", material = "/Engine/EngineMaterials/WorldGridMaterial" },
-    -- AC8's aircraft master (MP_Live_Vehicle_Base_UDIM, 1-7) samples virtual textures only (tools/re/AIRCRAFT_MATERIALS.md):
-    -- with ordinary ones it draws black. These are AC8's general masters with ordinary samplers and skinned-mesh shaders:
-    -- a dynamic instance of one, her colour and normal maps in it (not with `flat_normal`), its own Livemap default
-    -- unless `livemap` says otherwise. 9 and 10 have no texture parameters at all (their packages name none): plain
-    -- white (test of 2026-10-25). 11 showed her grey paint with odd shading: its Livemap default is black.
-    { name = "LIVE BASE", parent = "/Game/Base/Material/MP/MP_Live_Base_CameraDitherFade" },
-    { name = "LIVE BASE WPO", parent = "/Game/Base/Material/MP/MP_Live_Base_WPO" },
-    { name = "CHARACTER BASE", parent = "/Game/Base/Material/Character/M_Live_Cha_Base" },
-    { name = "CHARACTER + WHITE LIVEMAP", parent = "/Game/Base/Material/Character/M_Live_Cha_Base", livemap = "white" },
-    { name = "CHARACTER, FLAT NORMAL", parent = "/Game/Base/Material/Character/M_Live_Cha_Base", flat_normal = true },
-    { name = "CHARACTER + WHITE LIVEMAP, FLAT NORMAL", parent = "/Game/Base/Material/Character/M_Live_Cha_Base",
-      livemap = "white", flat_normal = true },
-}
--- her own textures, for the `parent` variants
-SPC.V.PAINT_OWN = { Basecolor = "/Game/Mods/SurvivalMode/Valka/Textures/T_X02S_Valka_C",
-                    Normalmap = "/Game/Mods/SurvivalMode/Valka/Textures/T_X02S_Valka_NO" }
--- the parent values logged once (what a stock skin changes, for the real fix)
-SPC.V.PAINT_SAY = { "WeatheringWeight", "Wet_Darkness", "Wet_Range", "AO_amoumt", "MetallicMapWeight",
-    "Metallic_Remap_Target_Low", "Metallic_Remap_Target_High", "Roughness_Remap", "Roughness_Contrast", "Ctrl_B_Smoke",
-    "Ctrl_G_OilDirt", "Ctrl_R_ColorUnevenness", "B_Color_Weight", "G_Color_Weight", "R_ColorFade_Weight", "NormalIntencity" }
-local function paintTex(k)
-    local p = SPC.V.PAINT_TEX[k]
-    return p and loadObject(p .. "." .. p:match("[^/]+$"))
-end
--- name -> value of a material instance's own scalar / vector overrides
-local function paintValues(mi)
-    local sc, ve = {}, {}
-    pcall(function()
-        mi.ScalarParameterValues:ForEach(function(_, e)
-            local v = e:get()
-            sc[v.ParameterInfo.Name:ToString()] = v.ParameterValue
-        end)
-    end)
-    pcall(function()
-        mi.VectorParameterValues:ForEach(function(_, e)
-            local v = e:get()
-            local q = v.ParameterValue
-            ve[v.ParameterInfo.Name:ToString()] = { R = q.R, G = q.G, B = q.B, A = q.A }
-        end)
-    end)
-    return sc, ve
-end
--- variant k on her body (fresh dynamic instances each time, so one variant never carries into the next); its name
-function SPC.V.paint(c, s, body, k)
-    local V = SPC.V
-    k = ((k - 1) % #V.PAINTS) + 1
-    local pv = V.PAINTS[k]
-    s.paintK = k
-    if not s.paintSlots then                            -- her MI_X02S_Valka slots and that material
-        s.paintSlots = {}
-        pcall(function()
-            for i = 0, body:GetNumMaterials() - 1 do
-                local m = body:GetMaterial(i)
-                if valid(m) and nameOf(m):find("MI_X02S_Valka", 1, true) then
-                    s.paintSlots[#s.paintSlots + 1] = i
-                    s.paintMI = s.paintMI or m
-                end
-            end
-        end)
-    end
-    if not s.paintMI then
-        log(string.format("special: %s's paint: no MI_X02S_Valka slot on %s", c.name, nameOf(body)))
-        return pv.name
-    end
-    if not s.paintOrig then                             -- every slot's own material (the canopy's too), to go back to
-        s.paintOrig, s.paintN = {}, 0
-        pcall(function()
-            s.paintN = body:GetNumMaterials()
-            for i = 0, s.paintN - 1 do s.paintOrig[i] = body:GetMaterial(i) end
-        end)
-    end
-    for i = 0, (s.paintN or 0) - 1 do                   -- (the grid variant changes every slot)
-        if valid(s.paintOrig[i]) then pcall(function() body:SetMaterial(i, s.paintOrig[i]) end) end
-    end
-    if pv.parent then                                   -- another AC8 master, her textures on it
-        local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
-        local parent, why = loadObject(pv.parent .. "." .. pv.parent:match("[^/]+$"))
-        local okM, mid = false, nil                     -- (not `valid(parent) and pcall(...)`: `and` keeps one value)
-        if valid(parent) and valid(kml) then
-            okM, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, parent, FName("None"), 0) end)
-        end
-        if not (okM and valid(mid)) then
-            log(string.format("special: %s's paint %d %s: no instance of %s (%s)", c.name, k, pv.name, pv.parent,
-                tostring(valid(parent) and mid or why)))
-            return pv.name
-        end
-        local set = {}
-        for slot, path in pairs(V.PAINT_OWN) do
-            if not (pv.flat_normal and slot == "Normalmap") then
-                local t = loadObject(path .. "." .. path:match("[^/]+$"))
-                local ok = valid(t) and pcall(function() mid:SetTextureParameterValue(FName(slot), t) end)
-                set[#set + 1] = slot .. (ok and "" or " NOT set")
-            end
-        end
-        if pv.flat_normal then set[#set + 1] = "its own flat normal" end
-        local live = pv.livemap and paintTex(pv.livemap)
-        if live then pcall(function() mid:SetTextureParameterValue(FName("Livemap"), live) end) end
-        local n = 0
-        for _, i in ipairs(s.paintSlots) do
-            if pcall(function() body:SetMaterial(i, mid) end) then n = n + 1 end
-        end
-        log(string.format("special: %s's paint %d %s: %d slots on %s, %s%s", c.name, k, pv.name, n, pv.parent:match("[^/]+$"),
-            table.concat(set, ", "), pv.livemap and (", Livemap " .. pv.livemap .. (live and "" or " NOT loaded")) or ", its own Livemap"))
-        return pv.name
-    end
-    if pv.material then
-        local m, why = loadObject(pv.material .. "." .. pv.material:match("[^/]+$"))
-        local n = 0
-        for i = 0, (s.paintN or 0) - 1 do
-            if valid(m) and pcall(function() body:SetMaterial(i, m) end) then n = n + 1 end
-        end
-        log(string.format("special: %s's paint %d %s: %d of %d slots%s", c.name, k, pv.name, n, s.paintN or 0,
-            valid(m) and "" or (" (" .. pv.material .. " not loaded: " .. tostring(why) .. ")")))
-        return pv.name
-    end
-    local sc, ve, nStock = {}, {}, 0
-    if pv.stock then
-        local stock, why = loadObject(V.PAINT_STOCK .. "." .. V.PAINT_STOCK:match("[^/]+$"))
-        if valid(stock) then sc, ve = paintValues(stock) else
-            log(string.format("special: %s's paint: %s not loaded (%s)", c.name, V.PAINT_STOCK, tostring(why)))
-        end
-    end
-    local dirt, live = pv.dirt and paintTex(pv.dirt), pv.livemap and paintTex(pv.livemap)
-    local base, nrm = pv.basecolor and paintTex(pv.basecolor), pv.normal and paintTex(pv.normal)
-    local said, made = {}, 0
-    for _, i in ipairs(s.paintSlots) do
-        local okM, mid = pcall(function() return body:CreateDynamicMaterialInstance(i, s.paintMI, FName("None")) end)
-        if okM and valid(mid) then
-            made = made + 1
-            if not s.paintSaid then                      -- the parent's values, once
-                s.paintSaid = true
-                for _, n in ipairs(V.PAINT_SAY) do
-                    local okV, v = pcall(function() return mid:K2_GetScalarParameterValue(FName(n)) end)
-                    said[#said + 1] = string.format("%s %s", n, okV and string.format("%.3g", v) or "?")
-                end
-            end
-            nStock = 0
-            for n, v in pairs(sc) do
-                if pcall(function() mid:SetScalarParameterValue(FName(n), v) end) then nStock = nStock + 1 end
-            end
-            for n, v in pairs(ve) do
-                if pcall(function() mid:SetVectorParameterValue(FName(n), v) end) then nStock = nStock + 1 end
-            end
-            if dirt then pcall(function() mid:SetTextureParameterValue(FName("DirtMask"), dirt) end) end
-            if live then pcall(function() mid:SetTextureParameterValue(FName("Livemap"), live) end) end
-            if base then pcall(function() mid:SetTextureParameterValue(FName("Basecolor"), base) end) end
-            if nrm then pcall(function() mid:SetTextureParameterValue(FName("Normalmap"), nrm) end) end
-        end
-    end
-    if made == 0 then                                   -- (no instances: the slots back as built)
-        for _, i in ipairs(s.paintSlots) do pcall(function() body:SetMaterial(i, s.paintMI) end) end
-    end
-    if #said > 0 then log(string.format("special: %s's paint: the parent's values: %s", c.name, table.concat(said, ", "))) end
-    log(string.format("special: %s's paint %d %s: %d slots, %d stock values%s%s", c.name, k, pv.name, made, nStock,
-        pv.dirt and (", dirt mask " .. pv.dirt .. (dirt and "" or " NOT loaded")) or "",
-        pv.livemap and (", Livemap " .. pv.livemap .. (live and "" or " NOT loaded")) or "") ..
-        (pv.basecolor and (", Basecolor " .. pv.basecolor .. (base and "" or " NOT loaded")) or "") ..
-        (pv.normal and (", Normalmap " .. pv.normal .. (nrm and "" or " NOT loaded")) or ""))
-    return pv.name
-end
--- no skeletal body of her own (the x40a's isn't one: test of 2026-10-24, 0.66.0, only the wreck meshes were skeletal
--- and 3 other meshes got hidden): a skeletal mesh component of ours added to her (AActor::AddComponentByClass, on her
--- root), no collision (her own spheres still take the hits), placed where her body mesh is (any PlaneBody* one) and
--- turned model_yaw more. Returns it and how it was placed, or nil and why not.
-function SPC.V.addBody(c, o)
-    local cls = StaticFindObject("/Script/Engine.SkeletalMeshComponent")
-    if not valid(cls) then return nil, "no SkeletalMeshComponent class" end
-    local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
-    local ok, comp = pcall(function() return o:AddComponentByClass(cls, false, t, false) end)
-    if not ok or not comp or not valid(comp) then
-        return nil, "AddComponentByClass " .. (ok and "gave nothing" or tostring(comp))
-    end
-    pcall(function() comp:SetCollisionEnabled(0) end)      -- (ECollisionEnabled NoCollision)
-    local yaw = c.model_yaw or 0
-    local ref, by = nil, "her root"
-    for _, n in ipairs(SPC.V.BODY_PROPS) do
-        local okP, p = pcall(function() return o[n] end)
-        if okP and p and valid(p) and addrOf(p) ~= addrOf(comp) then ref, by = p, n; break end
-    end
-    local placed
-    if ref then
-        placed = pcall(function()
-            local l, r = ref:K2_GetComponentLocation(), ref:K2_GetComponentRotation()
-            comp:K2_SetWorldLocationAndRotation({ X = l.X, Y = l.Y, Z = l.Z },
-                { Pitch = r.Pitch, Yaw = r.Yaw + yaw, Roll = r.Roll }, false, {}, true)
-        end)
-    else
-        placed = pcall(function()
-            comp:K2_SetRelativeLocationAndRotation({ X = 0, Y = 0, Z = 0 }, { Pitch = 0, Yaw = yaw, Roll = 0 }, false, {}, true)
-        end)
-    end
-    return comp, string.format("placed by %s%s, yaw +%d", by, placed and "" or " (NOT placed)", yaw)
-end
-function SPC.V.model(c, s, o)
-    if not c.model or c.model == "" or s.modelComp then return s.modelComp ~= nil end
-    local function load(path) return loadObject(path .. "." .. path:match("[^/]+$")) end
-    local sk, why = load(c.model)
-    local anim, whyAnim = nil, "no sweep_anim"
-    if c.sweep_anim and c.sweep_anim ~= "" then anim, whyAnim = load(c.sweep_anim) end
-    if not valid(sk) then
-        log(string.format("special: %s's X-02S %s not loaded (%s); the x40a shows", c.name, c.model, tostring(why)))
-        return false
-    end
-    -- her body: the plane's own body mesh (its PlaneBody* property, as glitchDeadLook finds it), else the biggest
-    -- skeletal mesh in her tree that isn't a wreck mesh (test of 2026-10-24, 0.66.0: the tree held only
-    -- DamagedMainBodyMesh / DamagedPartsMesh, the X-02S went on the wreck one, which never draws: hard rule 41)
-    local body, best, names = nil, -1, {}
-    local skel = StaticFindObject("/Script/Engine.SkeletalMeshComponent")
-    for _, n in ipairs(SPC.V.BODY_PROPS) do
-        local ok, comp = pcall(function() return o[n] end)
-        if ok and comp and valid(comp) then
-            local okC, cls = pcall(function() return comp:GetClass():GetFName():ToString() end)
-            local isSkel = pcall(function() assert(comp:IsA(skel)) end)
-            names[#names + 1] = string.format("%s=%s%s", n, okC and cls or "?", isSkel and "" or " (not skeletal)")
-            if isSkel and not body then body, best = comp, 1e12 end
-        end
-    end
-    for _, comp in ipairs(SPC.V.comps(o, "/Script/Engine.SkeletalMeshComponent")) do
-        local nm = nameOf(comp):match("([%w_]+)$") or "?"
-        names[#names + 1] = nm
-        local okB, r = pcall(function() return comp.Bounds.SphereRadius end)
-        local size = (okB and type(r) == "number" and r) or 0
-        if not nm:find("^Damaged") and size > best then body, best = comp, size end
-    end
-    local added, whyAdd = false, nil
-    if not valid(body) then
-        body, whyAdd = SPC.V.addBody(c, o)
-        added = valid(body)
-    end
-    if not valid(body) then
-        local all = {}
-        for _, comp in ipairs(SPC.V.comps(o, "/Script/Engine.ActorComponent")) do
-            all[#all + 1] = (nameOf(comp):match("([%w_]+)$") or "?") .. ":" .. (pcall(function() return comp:GetClass():GetFName():ToString() end) and comp:GetClass():GetFName():ToString() or "?")
-        end
-        log(string.format("special: %s has no skeletal mesh component and none could be added (%s); her tree: %s; the x40a shows",
-            c.name, tostring(whyAdd), #all > 0 and table.concat(all, ", ") or "nothing (no RootComponent?)"))
-        return false
-    end
-    local okM = pcall(function() body:SetSkeletalMeshAsset(sk) end) or pcall(function() body:SetSkeletalMesh(sk, true) end)
-    if not okM then
-        log(string.format("special: %s's X-02S mesh not set on %s; the x40a shows", c.name, nameOf(body)))
-        return false
-    end
-    SPC.V.cur = s
-    SPC.V.paint(c, s, body, c.paint or 2)
-    local k = (c.model_length_m or 19.6) / 19.6
-    if k ~= 1 then pcall(function() local v = body.RelativeScale3D; body:SetRelativeScale3D({ X = v.X * k, Y = v.Y * k, Z = v.Z * k }) end) end
-    local okA, errA = false, "not loaded: " .. tostring(whyAnim)
-    if valid(anim) then
-        okA, errA = pcall(function()
-            body:SetAnimationMode(1, true)                                  -- (EAnimationMode AnimationSingleNode)
-            body:SetAnimation(anim)
-            body:SetPlayRate(0)
-            body:Play(false)
-            body:SetPosition(0, false)
-        end)
-    end
-    s.modelComp, s.sweepPos = body, 0
-    s.sweepLen = okA and (pcall(function() return anim:GetPlayLength() end) and anim:GetPlayLength() or 1) or nil
-    local hid = SPC.V.modelHide(s, o)
-    SPC.V.partsGone(c, s, o, true)
-    log(string.format("special: %s's railguns moved onto her: %d parts", c.name, SPC.V.partsPlace(c, s, o)))
-    -- her hit spheres from the x40a's size to the X-02S's (hit_radius_m), each logged once
-    local spheres = {}
-    for _, sc in ipairs(SPC.V.comps(o, "/Script/Engine.SphereComponent")) do
-        local nm = nameOf(sc):match("([%w_]+)$") or "?"
-        if not nm:find("^Damaged") then                 -- (DamagedCollision is her wreck's: 0.66.0 shrank it)
-            local okR, r = pcall(function() return sc:GetUnscaledSphereRadius() end)
-            if valid(sc) and okR and type(r) == "number" and c.hit_radius_m and r > c.hit_radius_m * 100 then
-                pcall(function() sc:SetSphereRadius(c.hit_radius_m * 100, true) end)
-                spheres[#spheres + 1] = string.format("%s %.0f -> %.0f m", nm, r / 100, c.hit_radius_m)
-            elseif valid(sc) and okR then
-                spheres[#spheres + 1] = string.format("%s %.0f m (kept)", nm, (r or 0) / 100)
-            end
-        end
-    end
-    log(string.format("special: %s's hit spheres: %s", c.name, #spheres > 0 and table.concat(spheres, ", ") or "none found"))
-    s.modelOwner = o
-    log(string.format("special: %s flies the X-02S (%s on %s%s of %s; sweep %s%s): %d other meshes hidden, %d parts gone",
-        c.name, c.model:match("[^/]+$"), nameOf(body):match("([%w_]+)$") or "?",
-        added and (" (added; " .. tostring(whyAdd) .. ")") or "", #names > 0 and table.concat(names, ", ") or "none",
-        okA and "on" or "OFF",
-        okA and string.format(" %.0f-%.0f km/h", c.sweep_kmh[1], c.sweep_kmh[2]) or (" (" .. tostring(errA) .. ")"),
-        hid, #(s.parts or {})))
-    return true
-end
--- her other meshes (the x40a's, not the X-02S's body) hidden; how many it hid this time. (Her named body / pilot
--- meshes too: they needn't be in the tree SPC.V.comps walks.)
-function SPC.V.modelHide(s, o)
-    local n, me, seen = 0, addrOf(s.modelComp), {}
-    local function hide(comp)
-        local a = valid(comp) and addrOf(comp)
-        if not a or a == me or seen[a] then return end
-        seen[a] = true
-        local okV, vis = pcall(function() return comp:IsVisible() end)
-        if okV and vis and pcall(function() comp:SetVisibility(false, false) end) then n = n + 1 end
-    end
-    for _, cls in ipairs({ "/Script/Engine.StaticMeshComponent", "/Script/Engine.SkeletalMeshComponent" }) do
-        for _, comp in ipairs(SPC.V.comps(o, cls)) do hide(comp) end
-    end
-    for _, k in ipairs({ "PilotMeshComponent", table.unpack(SPC.V.BODY_PROPS) }) do
-        local ok, comp = pcall(function() return o[k] end)
-        if ok and comp then hide(comp) end
-    end
-    return n
-end
--- every tick: the wings towards their sweep for her speed (played, so it's smooth between ticks); every 2 s the
--- x40a's meshes hidden again
-function SPC.V.modelTick(s, o, now)
-    local c, body = CFG.specials.valka, s.modelComp
-    if not valid(body) then return end
-    if s.sweepLen then
-        local okV, v = pcall(function() local q = o:GetVelocity(); return math.sqrt(q.X ^ 2 + q.Y ^ 2 + q.Z ^ 2) * 0.036 end)
-        local lo, hi = c.sweep_kmh[1], c.sweep_kmh[2]
-        local want = okV and math.max(0, math.min(1, (v - lo) / math.max(1, hi - lo))) * s.sweepLen or 0
-        pcall(function()
-            local cur = body:GetPosition()
-            local d = want - cur
-            if math.abs(d) < 0.02 * s.sweepLen then
-                body:SetPlayRate(0)
-            else
-                body:SetPlayRate((d > 0 and 1 or -1) / math.max(0.1, c.sweep_s))
-                if not body:IsPlaying() then body:Play(false) end
-            end
-            s.sweepPos = cur / s.sweepLen
-        end)
-    end
-    if now < (s.modelAt or 0) then return end
-    s.modelAt = now + 2
-    SPC.V.partsPlace(c, s, o)
-    local n = SPC.V.modelHide(s, o)
-    if n > 0 and not s.modelSaid then
-        s.modelSaid = true
-        log("special: VALKA: " .. n .. " of the x40a's meshes came back on and were hidden again")
-    end
-end
-
--- The opener's dummy railgun (AC7's ms18_dummy_eml_p1; tools/survival_events.py VALKA_EML_*): spawned once on the
--- horizon ahead of you (user, 2026-10-24: "always spawns on the horizon, not up in the sky or anything weird"): along
--- your heading, level with you (your pitch left out), at least opener_min_alt_m up, facing you, and fixed there; it
--- never follows you. opener_km is its distance at the shot: it spawns further out by what you'll fly towards it
--- through the charge (your level speed along your heading x (charge_s + 1 s for the spawn), at most opener_max_km;
--- test of 2026-10-24: spawned 9 km out, the player was 4.8 km from it at the shot), and nearer when the combat zone's
--- edge comes first (still straight ahead). Its actor comes through the LiveAIGameObject hook (SPC.V.emlActor).
--- Returns the point and its yaw, or nil.
-function SPC.V.emlSpawn(c)
-    local pawn = valid(survivalPC) and survivalPC.Pawn
-    local you = playerLocation()
-    local h = SPC.V.heading()
-    if not pawn or not you or not h or type(SV_Spawn) ~= "function" then return nil end
-    local f = { X = math.cos(math.rad(h)), Y = math.sin(math.rad(h)) }
-    if c.opener_bearing then                            -- a fixed compass bearing (north -Y, east +X: Mission 22's
-        local b = math.rad(c.opener_bearing)            -- dummyN0 / dummyS0 sit at Y -650 / +650 km)
-        f = { X = math.sin(b), Y = -math.cos(b) }
-        h = math.deg(math.atan(f.Y, f.X))
-    end
-    local okV, v = pcall(function() local q = pawn:GetVelocity(); return { X = q.X, Y = q.Y } end)
-    local closing = okV and math.max(0, v.X * f.X + v.Y * f.Y) or 0                 -- cm/s towards it
-    local want = math.min(c.opener_km * 100000 + closing * (c.charge_s + 1), (c.opener_max_km or 30) * 100000)
-    local edge = ZONE.HALF * 0.95                        -- (the zone's edge first: nearer, still on its bearing)
-    local function room(dir)
-        local d = want
-        for _, k in ipairs({ "X", "Y" }) do
-            local lim = dir[k] > 0.001 and (ZONE[k] + edge - you[k]) / dir[k] or dir[k] < -0.001 and (ZONE[k] - edge - you[k]) / dir[k]
-            if lim then d = math.min(d, math.max(0, lim)) end
-        end
-        return d
-    end
-    local d = room(f)
-    if d < want * 0.5 then                               -- (near the zone's edge that way: code review of 2026-10-25,
-        local best, bestD = f, d                        -- it spawned ~1 km from you) the bearing with the most room
-        for deg = 0, 315, 45 do
-            local g = { X = math.sin(math.rad(deg)), Y = -math.cos(math.rad(deg)) }
-            local gd = room(g)
-            if gd > bestD then best, bestD = g, gd end
-        end
-        if best ~= f then
-            log(string.format("special: %s's opener: only %.1f km of room on its bearing; one with %.1f km instead", c.name,
-                d / 100000, bestD / 100000))
-        end
-        f, d = best, bestD
-        h = math.deg(math.atan(f.Y, f.X))
-    end
-    local at = { X = you.X + f.X * d, Y = you.Y + f.Y * d, Z = math.max(you.Z, c.opener_min_alt_m * 100) }
-    local yaw = (h + 180) % 360
-    SPC.V.emlActor = nil
-    spawningUnit = c.eml_unit
-    local r = SV_Spawn(c.eml_unit, at.X, at.Y, at.Z, yaw)
-    spawningUnit = nil
-    at.km = math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100000
-    log(string.format("special: %s's railgun %s %.1f km out on the horizon (%s, world yaw %.0f, %.1f km up, you closing at %.0f km/h)",
-        c.name, r > 0 and "up" or ("NOT up (" .. (SV_ERR[r] or tostring(r)) .. ")"), at.km,
-        c.opener_bearing and string.format("compass bearing %.0f", c.opener_bearing) or "ahead of you", h, at.Z / 100000,
-        closing * 0.036))
-    if r <= 0 then return nil end
-    return at, yaw
-end
-
--- Her round's start (the spawn queue's "@valka"): disguised, she waits ("lurk") for the round's decoy fighters to go
--- down (SPC.valkaTick starts her opener then); else the opener starts now. False if she can't come.
-function SPC.valkaSpawn(now)
-    local c = CFG.specials.valka
-    if not SR.usable[ACE.row("valka", "x40a", "l")] then
-        log("special: VALKA's row wasn't in before this level loaded; a normal round instead")
-        return false
-    end
-    D.special.state, D.special.at = "lurk", now
-    -- the WARNING from her round's start until she's down (user, 2026-10-24: "the warning stays on for that entire
-    -- round until VALKA is killed"; her attack's events set it again, SV_ValkaDown / RE_SV_ValkaEnd switch it off)
-    SPC.V.event("RE_SV_ValkaWarnOn")
-    if c.disguise then
-        log(string.format("special: round %d is VALKA's, called out as a normal round; she attacks once its fighters are down",
-            D.round))
-    else
-        D.special.clearAt = now                         -- (no decoys: her opener straight away)
-    end
-    return true
-end
-
--- VALKA on her ace row (the x40a and its railguns) at the top fire-control level, at `at` ({ X, Y, Z } cm: where
--- her railgun fired from) facing `yaw`, or spawn_km from you when there's no opener; shown at once (her reveal). False
--- if she can't come.
-function SPC.valkaArrive(now, at, yaw)
-    local c = CFG.specials.valka
-    local row = ACE.row("valka", "x40a", "l")
-    local x, y, _, bearing = spawnPoint()
-    local px, py, pb, pd = ANOM.nearPlayer(c.spawn_km)
-    if px then x, y, bearing = px, py, pb end
-    local alt = CFG.altitude_m[1] + math.random() * (CFG.altitude_m[2] - CFG.altitude_m[1])
-    local z, heading = alt * 100, (bearing + 180) % 360
-    if at then x, y, z, heading, pd = at.X, at.Y, at.Z, yaw, at.km end
-    local set = SV_SetAircraft(c.unit, searchAircraft(row, #SPIKE_SUFFIX))
-    if type(SV_SetLevel) == "function" then SV_SetLevel(c.unit, c.ai_level * 100) end
-    spawningUnit = c.unit
-    local r = SV_Spawn(c.unit, x, y, z, heading)
-    spawningUnit = nil
-    log(string.format("special: VALKA as %s (%s set), %s, heading %.0f, %.1f km up: %s", row, tostring(set),
-        pd and string.format("%.1f km from you", pd) or "at a spawn point", heading or -1, z / 100000,
-        r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
-    if r <= 0 then return false end
-    D.flightTier = D.flightTier or {}
-    D.up[c.unit], D.flown[c.unit], D.flightTier[c.unit] = true, true, #CFG.tiers.list
-    D.special.state, D.special.at = "fired", now
-    return true
-end
-
--- Every tick of VALKA's round.
-function SPC.valkaTick(now, s)
-    local c, t, V = CFG.specials.valka, CFG.hud.text, SPC.V
-    V.flareTick(c, s, now)
-    V.portalTick(c, s, now)
-    if s.roundsUntil then                               -- after a shot: its rounds live long (the opener's harmless)
-        local harmless = s.harmUntil and now < s.harmUntil
-        local n, life = SPC.V.rounds(c, harmless)
-        if n > 0 and not s.roundsSaid then
-            s.roundsSaid = true
-            log(string.format("special: %s's railgun rounds: %d in flight, life %s s%s", c.name, n, tostring(life), harmless and ", harmless" or ""))
-        end
-        if now >= s.roundsUntil then s.roundsUntil, s.harmUntil = nil, nil; SPC.V.rounds(c, false) end
-    end
-    if s.alertOffAt and now >= s.alertOffAt then        -- the railgun alert off again after a shot
-        s.alertOffAt = nil
-        if not s.chargeAt then V.event("RE_SV_ValkaAlertOff") end
-    end
-    if s.passAt and now >= s.passAt then                -- her round passing you (its sound)
-        s.passAt = nil
-        SND.event(CFG.sound.valka.pass, nil)
-    end
-    if s.emlRemoveAt and now >= s.emlRemoveAt then      -- her railgun's gone eml_remove_s after its shot
-        s.emlRemoveAt = nil
-        V.event("RE_SV_ValkaEmlRemove")
-    end
-    if s.state == "lurk" then                           -- the decoys first: lurk_s after the last is down, the opener
-        if D.state ~= "fighting" then return end
-        if c.disguise then
-            for u in pairs(D.up) do if SV_UnitAlive(u) > 0 then s.clearAt = nil; return end end
-            s.clearAt = s.clearAt or now + c.lurk_s
-        end
-        if now < (s.clearAt or now) then return end
-        s.emlAt, s.emlYaw = V.emlSpawn(c)
-        if not s.emlAt then                             -- no railgun: she comes as she is, the reveal without the shot
-            log(string.format("special: %s's railgun couldn't spawn; she comes without the opener", c.name))
-            V.event("RE_SV_ValkaWarnOn")
-            if not SPC.valkaArrive(now) then
-                s.state = "done"
-                V.event("RE_SV_ValkaEnd")               -- (the WARNING off)
-                log(string.format("special: %s couldn't spawn; the round ends", c.name))
-            end
-            return
-        end
-        s.state, s.openAt, s.chargeAt = "opener", now, nil
-        return
-    end
-    local you = playerLocation()
-    if s.state == "opener" then                         -- the railgun found and hidden, the flash, the charge, the shot
-        local e = V.emlActor
-        if not s.chargeAt then
-            if not valid(e) then
-                if now - s.openAt < c.arrive_s + 3 then return end
-                log(string.format("special: %s's railgun actor not found %.0f s after it spawned; the opener goes on unseen",
-                    c.name, now - s.openAt))
-            else
-                setGone(e, true)
-                SPC.V.mark(c, e)
-            end
-            local n, why = V.singleShot(c)
-            log(string.format("special: %s's railguns single-shot: %d launcher modules%s", c.name, n, why and (" (" .. why .. ")") or ""))
-            local nW, whyW = V.emlWeapon(c)
-            log(string.format("special: %s's railgun rounds: %d on %s (%s)", c.name, nW, tostring(c.eml_weapon), whyW))
-            log(string.format("special: %s's railguns on the minimap: %d launchers (style %d)", c.name, V.radar(c), c.radar_hud or 1))
-            V.event("RE_SV_ValkaAlertOn")
-            s.chargeAt = now + c.charge_s
-            V.event("RE_SV_ValkaWarnOn")                -- WARNING until she's down (no banner of ours: no tells)
-            V.event("RE_SV_ValkaEmlChargeOn")
-            V.sndCharge(s, s.emlAt, now)
-            local fx = V.flareStart(c, s, s.emlAt, now)      -- AC7 M18's lens flash; Mission 23's flash if it can't
-            if fx == 0 then
-                local flashes = {}
-                for i = 1, c.flash_layers or 1 do flashes[i] = c.flash end
-                fx = fxAt(flashes, s.emlAt, c.flash_scale, c.flash_s)
-            end
-            log(string.format("special: %s's opener: railgun charging %.1f km from you for %.1f s (flash: %d)", c.name,
-                s.emlAt.km, c.charge_s, fx))
-            return
-        end
-        if valid(e) then setGone(e, true); SPC.V.mark(c, e) end
-        V.sndRise(s, now, c.charge_s)
-        if c.portal and c.portal.enabled and not s.portalAt and now >= s.chargeAt - (c.portal.lead_s or 1) then
-            s.portalAt = now
-            V.portalStart(c, s, s.emlAt, now)
-        end
-        if now < s.chargeAt then return end
-        V.singleShot(c)                                 -- (in case its module came late)
-        V.emlWeapon(c)
-        V.radar(c)
-        V.rounds(c, true)
-        V.event("RE_SV_ValkaEmlShot")
-        V.event("RE_SV_ValkaEmlChargeOff")
-        V.sndShot(s, s.emlAt, now)
-        s.harmUntil, s.roundsUntil = now + c.reveal_s + 3, now + c.reveal_s + 3     -- its rounds: long, harmless
-        s.alertOffAt = now + (c.alert_off_s or 3)
-        do
-            local flashes = {}
-            for i = 1, c.flash_layers or 1 do flashes[i] = c.flash end
-            fxAt(flashes, s.emlAt, c.flash_scale, c.flash_s)
-        end
-        local d = you and math.sqrt((s.emlAt.X - you.X) ^ 2 + (s.emlAt.Y - you.Y) ^ 2 + (s.emlAt.Z - you.Z) ^ 2) / 100000
-        log(string.format("special: %s's opener shot from %s km", c.name, d and string.format("%.1f", d) or "?"))
-        s.chargeAt, s.shots, s.state = nil, 1, "shot"
-        s.shotAt, s.revealAt, s.emlRemoveAt = now, now + c.reveal_s, now + c.eml_remove_s
-        return
-    end
-    if s.state == "shot" then                           -- reveal_s after the shot she's there, where it came from
-        if now < s.revealAt then return end
-        if not SPC.valkaArrive(now, s.emlAt, s.emlYaw) then
-            s.state = "done"
-            V.event("RE_SV_ValkaEnd")                   -- (the WARNING off)
-            log(string.format("special: %s couldn't spawn after her shot; the round ends", c.name))
-        end
-        return
-    end
-    local o = glitchActor(c)
-    if s.state == "fired" then                          -- shown: her health, the camera on her, her name
-        if not o then
-            if now - s.at >= c.arrive_s + 3 then
-                s.state = "hunt"
-                log(string.format("special: %s's actor not found %.0f s after she spawned; no reveal", c.name, now - s.at))
-            end
-            return
-        end
-        local hx = math.min(c.health_max_x or 1, 1 + (c.health_per_round or 0) * math.max(0, D.round - CFG.specials.first))
-        local hp = c.health * hx
-        local okH = pcall(function() o.MaxHealth = hp; o.HealthInternal = math.floor(hp * 10 + 0.5) end)
-        local okB = pcall(function() o.bShowHUDBox = true end)               -- (her desc's tgt too: build_survival.py)
-        V.model(c, s, o)                                                     -- her X-02S
-        if (s.singleN or 0) == 0 then s.singleN = V.singleShot(c) end     -- her own railguns
-        V.radar(c)
-        do
-            local nW, whyW = V.emlWeapon(c)
-            log(string.format("special: %s's own railgun rounds: %d on %s (%s)", c.name, nW, tostring(c.eml_weapon), whyW))
-        end
-        local cam = 1
-        for k, n in ipairs(ANOMALY_CAMERAS) do if n == c.camera then cam = k end end
-        V.event("RE_SV_ValkaCam_" .. string.char(64 + cam))
-        V.event("RE_SV_ValkaReveal")
-        s.state, s.revealedAt = "hunt", now
-        s.railAt, s.turnAt, s.psAt, s.invertAt = now + c.railgun_every_s, now + c.turn_every_s, now + c.post_stall_every_s,
-            now + c.invert_every_s
-        hudCallout(c.anomaly_line or t.valka_sub, nil)   -- what's happening, then her name big
-        hudCallout(c.name:upper(), nil, c.big_x)
-        log(string.format("special: %s shows, %.0f HP (x%.2f)%s, target box %s; camera %s", c.name, hp, hx,
-            okH and "" or " (health NOT set)", okB and "on" or "NOT set", ANOMALY_CAMERAS[cam]))
-        return
-    end
-    if s.state == "done" and s.wreckUntil and now < s.wreckUntil and valid(s.modelOwner) then
-        V.modelHide(s, s.modelOwner)                    -- her X-02S falls, not the x40a's wreck
-        return
-    end
-    if s.state ~= "hunt" then return end
-    s.railAt, s.turnAt = s.railAt or now + c.railgun_every_s, s.turnAt or now + c.turn_every_s   -- (no opener: no reveal)
-    s.psAt, s.invertAt = s.psAt or now + c.post_stall_every_s, s.invertAt or now + c.invert_every_s
-    if SV_UnitAlive(c.unit) <= 0 then
-        s.state = "done"
-        if s.modelComp then s.wreckUntil = now + (c.wreck_s or 15) end
-        V.event("RE_SV_ValkaEnd")                       -- the WARNING off (as SV_ValkaDown, in case it's missed)
-        if s.invertUntil then V.invert(c, s, false, now) end
-        if s.chargeAt then V.event("RE_SV_ValkaChargeOff") end
-        V.event("RE_SV_ValkaAlertOff")
-        V.flareStop(s)
-        V.portalStop(s)
-        V.sndStop(s)
-        ANOM.cleanFx(now, true)
-        local pay = c.reward + (c.reward_per_round or 0) * D.round
-        addCredits(pay, c.name .. " down")
-        LB.special("valka", true, now - s.at)
-        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, pay))
-        log(string.format("special: round %d, %s shot down %.0f s after she showed (%d railgun shots, %d blinks, %d turns, %d scrambles)",
-            D.round, c.name, now - (s.revealedAt or s.at), s.shots or 0, s.blinks or 0, s.turns or 0, s.scrambles or 0))
-        return
-    end
-    if not o then return end
-    V.modelTick(s, o, now)
-    if now >= (s.holdAt or 0) then                       -- her parts held (EvadeOnly), again every hold_s
-        s.holdAt = now + (c.hold_s or 5)
-        V.event("RE_SV_ValkaHold")
-    end
-    if now >= (s.engageAt or 0) then                     -- her orders again (the player only), every engage_every_s
-        s.engageAt = now + (c.engage_every_s or 5)
-        V.event("RE_SV_ValkaEngage")
-    end
-    local at = where(o)
-    if at and you then s.dist = math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100000 end
-    -- the angle between her nose and you (for LastTGT when you're behind her, and her railgun's cone)
-    local offNose = nil
-    if at and you then
-        local okF, f = pcall(function() local q = o:GetActorForwardVector(); return { X = q.X, Y = q.Y, Z = q.Z } end)
-        local tx, ty, tz = you.X - at.X, you.Y - at.Y, you.Z - at.Z
-        local n = math.sqrt(tx * tx + ty * ty + tz * tz)
-        if okF and n > 0 then offNose = math.deg(math.acos(math.max(-1, math.min(1, (f.X * tx + f.Y * ty + f.Z * tz) / n)))) end
-    end
-    -- the scrambled controls: a chance every invert_every_s, for invert_s
-    if s.invertUntil and now >= s.invertUntil then V.invert(c, s, false, now) end
-    if not s.invertUntil and now >= s.invertAt then
-        s.invertAt = now + c.invert_every_s
-        if math.random() < c.invert_chance then s.scrambles = (s.scrambles or 0) + 1; V.invert(c, s, true, now) end
-    end
-    -- blinks: a hit outside a spell (and its cooldown) starts blink_s of them
-    local okH, hpNow = pcall(function() return o.HealthInternal end)
-    hpNow = okH and type(hpNow) == "number" and hpNow or nil
-    if hpNow and s.lastHp and hpNow < s.lastHp - 0.5 and not s.blinkUntil and now >= (s.blinkCool or 0) then
-        s.blinkUntil, s.nextBlink = now + c.blink_s, now
-        log(string.format("special: %s hit (%.0f -> %.0f): blinking for %.0f s", c.name, s.lastHp, hpNow, c.blink_s))
-    end
-    s.lastHp = hpNow or s.lastHp
-    if s.vanished then                                  -- back, round you, nose on you
-        local ev, to, deg
-        if you then ev, to, deg = V.blinkSpot(c, s, you) end
-        if ev then
-            s.lastDeg, s.blinks = deg, (s.blinks or 0) + 1
-            V.event(ev)
-            if to and fxAt({ c.smoke }, to, c.smoke_scale, c.smoke_s) == 0 and not s.smokeSaid then
-                s.smokeSaid = true; log("special: VALKA's smoke " .. c.smoke .. " didn't spawn")
-            end
-        end
-        setGone(o, false); V.partsGone(c, s, o, false)
-        s.vanished, s.nextBlink = false, now + c.blink_every_s
-    elseif s.blinkUntil and now >= s.blinkUntil then
-        s.blinkUntil, s.blinkCool = nil, now + c.blink_cooldown_s
-    elseif s.blinkUntil and now >= s.nextBlink and not s.chargeAt then   -- gone in a puff (back next tick)
-        if at then fxAt({ c.smoke }, at, c.smoke_scale, c.smoke_s) end
-        setGone(o, true); V.partsGone(c, s, o, true, true)
-        s.vanished = true
-        return
-    end
-    -- her railgun: warning and charge, then one shot (when you're in front of her, near enough)
-    if s.chargeAt then V.sndRise(s, now, c.railgun_charge_s) end
-    if s.chargeAt and now >= s.chargeAt then
-        V.event("RE_SV_ValkaRailgun")
-        V.event("RE_SV_ValkaChargeOff")
-        V.sndShot(s, at, now)
-        s.chargeAt, s.shots, s.railAt = nil, (s.shots or 0) + 1, now + c.railgun_every_s
-        s.roundsUntil, s.harmUntil = now + 3, nil
-        s.alertOffAt = now + (c.alert_off_s or 3)
-        log(string.format("special: %s railgun shot %d, %.1f km from you, %.0f deg off her nose", c.name, s.shots,
-            s.dist or -1, offNose or -1))
-    elseif not s.chargeAt and now >= s.railAt and s.dist and s.dist <= c.railgun_range_km and offNose
-        and offNose <= c.railgun_cone_deg then
-        s.chargeAt = now + c.railgun_charge_s
-        V.event("RE_SV_ValkaChargeOn")
-        V.event("RE_SV_ValkaAlertOn")
-        V.radar(c)
-        V.rounds(c, false)                              -- (pooled rounds from the opener: their damage back)
-        V.sndCharge(s, function() return valid(o) and where(o) or nil end, now)
-        hudCallout(t.valka_charge, t.valka_charge_sub)
-    end
-    -- LastTGT: every turn_every_s, and at once (behind_gap_s apart) when you're behind her within behind_km
-    local behind = offNose and offNose > 110 and s.dist and s.dist <= c.behind_km
-    if (now >= s.turnAt) or (behind and now >= (s.behindAt or 0)) then
-        s.turnAt, s.behindAt, s.turns = now + c.turn_every_s, now + c.behind_gap_s, (s.turns or 0) + 1
-        s.psAt = math.max(s.psAt, now + 3)                -- (not straight into a post-stall)
-        V.event("RE_SV_ValkaTurn")
-        if s.turns <= 5 or s.turns % 10 == 0 then
-            log(string.format("special: %s LastTGT %d%s, %.1f km from you", c.name, s.turns, behind and " (you behind her)" or "",
-                s.dist or -1))
-        end
-    elseif c.post_stall and now >= s.psAt and s.dist and s.dist <= c.post_stall_range_km then
-        s.psAt = now + c.post_stall_every_s
-        if not s.psOn then
-            s.psOn = true
-            pcall(function() o.bCanManeuverPugachevsCobra = true; o.bCanManeuverKulbit = true end)
-        end
-        local moves = c.post_stall_moves or {}
-        if #moves > 0 then V.event("RE_SV_Valka" .. moves[math.random(#moves)]) end
-    end
-end
-
--- The special rounds by kind (CFG.specials.rotation; code review of 2026-10-23: each new one meant a branch in eight
--- places): `sub` its callout's second line (a CFG.hud.text key, or a function of the texts), `alone` whether its round
--- has no fighters of its own (a value or a function), `aircraft` how many of the round's aircraft it counts for,
--- `spawn(now)` its arrival from the spawn queue ("@<kind>"; false: it can't come, a normal round instead) and
--- `tick(now, s)` its every tick (the shuttle's countdown is specialTick's own).
-SPC.kinds = {
-    shuttle    = { sub = function(t) return string.format(t.shuttle_sub, CFG.specials.shuttle.name:upper()) end,
-                   spawn = function() spawnShuttle(); return true end },
-    anomaly    = { sub = "anomaly_sub", alone = function() return CFG.specials.anomaly.only end,
-                   aircraft = function() return 1 + CFG.specials.anomaly.guards end,
-                   spawn = function(now)
-                       if not ANOM.spawn() then return false end
-                       D.special.state, D.special.at = CFG.specials.anomaly.portal.enabled and "portal" or "hunt", now
-                       return true
-                   end,
-                   tick = function(now, s) return ANOM.tick(now, s) end },
-    amphibious = { sub = "amphib_sub", spawn = function(now) return AMPH.spawn(now) end,
-                   tick = function(now, s) return AMPH.tick(now, s) end },
-    ladon      = { sub = "ladon_sub", alone = true, aircraft = 2, spawn = function(now) return SPC.ladonSpawn(now) end,
-                   tick = function(now, s) return SPC.ladonTick(now, s) end },
-    alicorn    = { sub = "alicorn_sub", alone = true, aircraft = 1, spawn = function(now) return SPC.alicornSpawn(now) end,
-                   tick = function(now, s) return SPC.alicornTick(now, s) end },
-    glitch     = { sub = "glitch_sub", alone = true, aircraft = 1, spawn = function(now) return ANOM.glitchSpawn(now) end,
-                   tick = function(now, s) return ANOM.glitchTick(now, s) end },
-    -- (disguise: a normal round's callout and budget(budget) decoy fighters, VALKA after them: CFG.specials.valka)
-    valka      = { sub = "valka_sub", disguise = function() return CFG.specials.valka.disguise end,
-                   alone = function() return not CFG.specials.valka.disguise end,
-                   budget = function(budget)
-                       local c = CFG.specials.valka
-                       if not c.disguise then return 0 end
-                       local n = math.floor(budget * c.decoy_share / 2 + 0.5) * 2         -- (whole 2-ships)
-                       return math.max(c.decoy_min, math.min(c.decoy_max, n, budget))
-                   end,
-                   spawn = function(now) return SPC.valkaSpawn(now) end,
-                   tick = function(now, s) return SPC.valkaTick(now, s) end },
-}
--- a kind's field that may be a function (alone, aircraft, sub)
-function SPC.kindValue(v, ...) if type(v) == "function" then return v(...) end return v end
-
--- Every tick of a running Anomaly: its distance (the field) and its end.
-function ANOM.tick(now, s)
-    local c, t = CFG.specials.anomaly, CFG.hud.text
-    if s.state == "portal" then return portalTick(now, s, c) end
-    if s.state ~= "hunt" then return end
-    if SV_UnitAlive(c.unit) <= 0 then
-        s.state = "done"
-        setField(false, s)
-        if type(SV_Event) == "function" then SV_Event("RE_SV_AnomalyEnd") end
-        local live = #ANOM.fx
-        ANOM.cleanFx(now, true)                                               -- every system on it off now
-        log(string.format("special: %s down: its %d lightning systems switched off", c.name, live))
-        local nb = fxAt(c.portal.burst, s.lastAt, c.portal.scale)             -- the lightning again where it fell
-        log(string.format("special: %s's last burst (%d systems)", c.name, nb))
-        local pay = c.reward + (c.reward_per_round or 0) * D.round
-        addCredits(pay, c.name .. " down")
-        LB.special("anomaly", true, now - s.at)
-        hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, pay))
-        log(string.format("special: round %d, %s shot down %.0f s after it appeared", D.round, c.name, now - s.at))
-        return
-    end
-    local p
-    for _, q in ipairs(planes) do if q.unit == c.unit and valid(q.obj) then p = q end end
-    if p and not s.healthDone then                 -- its health for its round (economy review of 2026-10-25)
-        s.healthDone = true
-        local hx = math.min(c.health_max_x or 1, 1 + (c.health_per_round or 0) * math.max(0, D.round - CFG.specials.first))
-        local h0, h1 = scaleHealth(p.obj, hx)
-        log(string.format("special: %s's health x%.2f for round %d (%s -> %s)", c.name, hx, D.round, tostring(h0), tostring(h1)))
-    end
-    local you = playerLocation()
-    if not (p and you) then return end
-    local ok, l = pcall(function() local v = p.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
-    if not ok then return end
-    s.dist, s.lastAt = km(l, you), l
-    if c.portal.enabled and now >= (s.nextAura or 0) then                  -- it crackles while it's up
-        s.nextAura = now + c.portal.aura_every_s
-        portalFx({ c.portal.aura }, p.obj, nil, c.portal.aura_scale)
-        if math.random() < 0.35 then strike(p.obj) end
-    end
-    local pawn = valid(survivalPC) and survivalPC.Pawn
-    local a = pawn and addrOf(pawn)
-    if a and a ~= ANOM.pawn then ANOM.pawn = a; if ANOM.on then ANOM.on = nil end end   -- a new plane: switch again
-    if ANOM.on ~= true and s.dist < c.field_km then setField(true, s)
-    elseif ANOM.on ~= false and s.dist > c.field_km + 0.3 then setField(false, s) end      -- (0.3 km: no flicker)
-end
-end
+end  -- (sv_anomalies.lua's do block goes on in sv_anomalies_valka.lua)

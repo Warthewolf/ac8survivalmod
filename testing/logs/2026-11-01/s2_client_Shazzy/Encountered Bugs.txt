@@ -1,0 +1,14 @@
+2nd play test of 0.73.70: Bugs encountered on this run
+
+1: host bought void catcher, Void on my POV did a takeoff roll then refused to raise gear and stayed at takeoff pitch and became a space shuttle
+
+2: Moonchild and assumingly viper as well, takeoff (?) and go submerissible and fly off map, once despawned from out of bounds they return and repeat the cycle untill host games has them killed.
+
+3: Ladon round, Reletivly synced untill first ladon was called, Both died at the same time on my screen when host still had one alive.
+
+4: Minor bug most likely caused by desync, Host landed and thier aircraft was doing a wheelie on the ground until they took off again.
+
+5: crashed on quit
+
+6(?) Unknown if caused by the accidental Alt-F4 but I beleive it was prior, Round said it was restarted and once that happened missiles were unable to lock and fire onto any aircraft. prior to the usual aircraft
+staying in place on host quit.

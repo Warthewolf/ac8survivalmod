@@ -1,0 +1,166 @@
+diff --git a/mod/UE4SS/AC8SurvivalMode/Scripts/sv_config.lua b/mod/UE4SS/AC8SurvivalMode/Scripts/sv_config.lua
+index d1bfc32..68246f2 100644
+--- a/mod/UE4SS/AC8SurvivalMode/Scripts/sv_config.lua
++++ b/mod/UE4SS/AC8SurvivalMode/Scripts/sv_config.lua
+@@ -892,7 +892,7 @@ CFG = {
+                          -- airfield space"): put on its orbit (RE_SV_AwacsOrbit) when its climb-out hasn't ended
+                          -- climb_s after takeoff, and again when it's lost_km or more from the airfield (checked every
+                          -- check_s, at most every again_s)
+-                         orbit = { event = "RE_SV_AwacsOrbit", climb_s = 60, lost_km = 18, check_s = 20, again_s = 60 },
++                         orbit = { event = "RE_SV_AwacsOrbit", climb_s = 60, lost_km = 12, check_s = 20, again_s = 60 },
+                          scale = { rank_add = 0, rank_min = 3, ai_level_min = 3, health_x = 3.0, health_per_round = 0.08,
+                                    health_max_x = 6.0 } },
+         ships        = {
+diff --git a/mod/UE4SS/AC8SurvivalMode/Scripts/sv_coop.lua b/mod/UE4SS/AC8SurvivalMode/Scripts/sv_coop.lua
+index 2514a51..6e0f6dc 100644
+--- a/mod/UE4SS/AC8SurvivalMode/Scripts/sv_coop.lua
++++ b/mod/UE4SS/AC8SurvivalMode/Scripts/sv_coop.lua
+@@ -692,7 +692,9 @@ local function killCopy(id, o, torn)
+ end
+ 
+ local function bindCopy(id, o, unit)
+-    if M.dead[id] then killCopy(id, o); return end
++    -- (a copy spawned for a plane the host had already lost: torn, not this player's kill. The co-op runs of 2026-11-01
++    -- paid +100 "by you" for each, "up 0 s", after every resync)
++    if M.dead[id] then killCopy(id, o, true); return end
+     local a = addrOf(o)
+     local r = (type(SV_CoopBind) == "function" and a) and SV_CoopBind(id, a) or -9
+     if r ~= 1 then once("bind" .. tostring(r), "coop: a copy couldn't be bound (" .. tostring(r) .. "): it flies on its own") end
+@@ -780,7 +782,7 @@ local function killAllCopies(why)
+             if a and not seen[a] then seen[a] = true; killCopy(0, o, true); loose = loose + 1 end
+         end
+     end
+-    M.copies, M.cunits, M.spawnQ, M.dead, M.holdQ = {}, {}, {}, {}, nil
++    M.copies, M.cunits, M.spawnQ, M.dead, M.holdQ, M.softRs = {}, {}, {}, {}, nil, nil
+     if n + loose > 0 then
+         log(string.format("coop: %d copies taken down (%s)%s", n + loose, why,
+             loose > 0 and string.format(", %d of them never bound to the host's", loose) or ""))
+@@ -1052,7 +1054,35 @@ local function strayTick(now)
+     end
+ end
+ 
++-- (a joiner) SOFT_RS_S after a soft resync, its spawns done: every flight here the host's answer didn't name (or named in
++-- another generation, which doSpawn has replaced) taken down, torn
++local SOFT_RS_S = 8
++local function softResyncTick(now)
++    local r = M.softRs
++    if not r or now - r.at < SOFT_RS_S or #M.spawnQ > 0 then return end
++    M.softRs = nil
++    local n, units = 0, 0
++    for unit, cu in pairs(M.cunits) do
++        if r.seen[unit] ~= cu.gen then
++            units = units + 1
++            for ord, o in pairs(cu.planes or {}) do
++                local id = cu.binds and cu.binds[ord]
++                killCopy(id or 0, o, true); n = n + 1
++                if id then M.copies[id] = nil end
++            end
++            for key, o in pairs(cu.gobjs or {}) do
++                local id = cu.gbinds and cu.gbinds[key]
++                killCopy(id or 0, o, true); n = n + 1
++                if id then M.copies[id] = nil end
++            end
++            M.cunits[unit] = nil
++        end
++    end
++    log(string.format("coop: soft resync done: %d flights the host no longer has taken down here (%d copies)", units, n))
++end
++
+ local function clientTick()
++    pcall(softResyncTick, os.clock())
+     pcall(strayTick, os.clock())
+     pcall(M.buildTick, os.clock())
+     -- the copies' hits: what each lost since last time goes to the host, less what another player's stand-in did to it
+@@ -2950,6 +2980,7 @@ local function onJoinerMessage(f)
+             end
+         end
+         M.spawnQ[#M.spawnQ + 1] = { unit = unit, pose = pose, ops = ops, level = tonumber(f[5]), gen = tonumber(f[6]) or 0 }
++        if M.softRs then M.softRs.seen[unit] = tonumber(f[6]) or 0 end
+     elseif k == "bd" then
+         local unit, gen, ord, id = f[2], tonumber(f[3]), tonumber(f[4]), tonumber(f[5])
+         if not M.bdLast or (M.bdLastN or 0) > 512 then M.bdLast, M.bdLastN = {}, 0 end   -- (the last generation's
+@@ -3026,6 +3057,19 @@ local function onJoinerMessage(f)
+         end
+     elseif k == "rs" then
+         M.cnt.rsGot = M.cnt.rsGot + 1
++        -- the answer to this game's own "jn" in the same level: the host's picture again, not a new run. Its copies stay
++        -- and are bound again by the "sp" / "bd" that follow (doSpawn keeps a flight already up in the same generation);
++        -- what the host no longer sends is taken down by softResyncTick. Until 0.73.70 every copy was taken down and
++        -- spawned again: the specials and allies couldn't come back ("its last flight is still up") and flew on by their
++        -- own AI (VOID WATCHER stuck at take-off pitch, MOONCHILD under the sea), KOT went down with MISHKA on the
++        -- joiner's game, a DOWN player was revived with their weapons still off, and the weapons' target lists kept the
++        -- freed copies (Crash1, 2026-11-01: 65536 faults caught in a second, then the crash). Co-op runs of 2026-11-01.
++        if M.jnAt ~= nil and os.clock() - M.jnAt < 15 and D and levelReady() then
++            M.softRs = { at = os.clock(), seen = {} }
++            M.cnt.softRs = (M.cnt.softRs or 0) + 1
++            log("coop: the host's whole picture (the answer to our jn): copies kept, bound again; flights it no longer has taken down")
++            return
++        end
+         M.evQ, M.dvQ, M.holdQ = nil, nil, nil
+         killAllCopies("the host's run started over")
+         if DOWN and DOWN.reset then pcall(DOWN.reset, "the host's run started over") end    -- (down: back, no revives)
+diff --git a/mod/UE4SS/AC8SurvivalMode/Scripts/sv_down.lua b/mod/UE4SS/AC8SurvivalMode/Scripts/sv_down.lua
+index d210b1b..3ed45ea 100644
+--- a/mod/UE4SS/AC8SurvivalMode/Scripts/sv_down.lua
++++ b/mod/UE4SS/AC8SurvivalMode/Scripts/sv_down.lua
+@@ -434,6 +434,11 @@ local function backInFight(pawn, s)
+     for f, v in pairs(s and s.attackers or {}) do              -- (unless something set its own meanwhile: a pressure preset)
+         pcall(function() if pawn[f] == 0 then pawn[f] = v end end)
+     end
++    -- (and whatever was saved, the weapons on: DOWN's own values never stay. The co-op run of 2026-11-01: revived by a
++    -- resync, on the ground, SV_Respawn after, and no missile would lock or fire for the rest of the run)
++    for _, iv in ipairs(INPUTS) do
++        pcall(function() if pawn[iv[1]] == iv[2] then pawn[iv[1]] = not iv[2] end end)
++    end
+ end
+ local function loiter(pawn)
+     if type(SV_Down) ~= "function" then return "no SV_Down (runtime 0.28.5 or later)" end
+@@ -825,6 +830,11 @@ function DOWN.tick()
+         local want, at = St.respawnAt, playerLocation()
+         St.respawnAt = nil
+         if at then log(string.format("revive: respawn d=%.0f m", km(at, want) * 1000)) end
++        if not St.down and valid(pawn) then                 -- (the respawn may set the plane up again: weapons on once more)
++            backInFight(pawn, nil)
++            local okW, off = pcall(function() return pawn.bIsWeaponSystemDisabled end)
++            log("revive: weapons after the respawn: " .. ((okW and off == false) and "on" or ("NOT on (" .. tostring(off) .. ")")))
++        end
+     end
+     if St.restore and valid(pawn) then                      -- (a restart while you were down)
+         local okR, errR = pcall(restoreAfter, pawn)
+diff --git a/mod/UE4SS/AC8SurvivalMode/Scripts/sv_shop.lua b/mod/UE4SS/AC8SurvivalMode/Scripts/sv_shop.lua
+index 3b45341..8cbc4b2 100644
+--- a/mod/UE4SS/AC8SurvivalMode/Scripts/sv_shop.lua
++++ b/mod/UE4SS/AC8SurvivalMode/Scripts/sv_shop.lua
+@@ -415,19 +415,30 @@ function shopTexts()
+     if type(SV_SetText) ~= "function" then return end
+     RUN.offerShown = RUN.offerShown or {}
+     SH.labels = SH.labels or {}
+-    local changed, nChanged = {}, 0
++    local changed, nChanged, shared = {}, 0, {}
+     for name in pairs(CFG.shop.items) do
+         local o = offer(name)
+         RUN.offerShown[name] = o.role
+         local label = o.label .. (o.price and string.format("   %d Z", o.price) or "")
+         local was = SH.labels[name]
+-        if was and was ~= label then changed[rowKey(was)], nChanged = label, nChanged + 1 end
++        if was and was ~= label then
++            local k = rowKey(was)
++            if changed[k] ~= nil and changed[k] ~= label then shared[k] = true end   -- (two rows had that text)
++            changed[k], nChanged = label, nChanged + 1
++        end
+         SH.labels[name] = label
+         local help = shopClosed() and (RUN.captured and CFG.hud.text.shop_captured or CFG.hud.text.shop_closed) or o.help
+         help = string.format("ZOLLARS %d. %s%s", RUN.credits, RUN.msg[name] and (RUN.msg[name] .. " ") or "", help)
+         SV_SetText("SV_Shop_" .. name, label)
+         SV_SetText("SV_Shop_" .. name .. "_Help", help)
+     end
++    -- relabel() finds a row on screen by its old text, so a text two items share can't say which row it is. The old
++    -- fourth row (Airfield, not on the STORE's pages but worked out with the rest) offers the next defence under the
++    -- DEFENCES row's own text ("BUILD AA GUN   4000 Z"); when its turn moved on to the SAM site, every TextBlock showing
++    -- the AA text was rewritten, the real AA row too: two BUILD SAM SITE rows, the first still buying an AA gun
++    -- (co-op run of 2026-11-01, "the Buy AA was another Buy SAM site"). Such a text is left for the page's next opening.
++    for _, lab in pairs(SH.labels) do local k = rowKey(lab); if changed[k] ~= nil then shared[k] = true end end
++    for k in pairs(shared) do if changed[k] ~= nil then changed[k], nChanged = nil, nChanged - 1 end end
+     if nChanged > 0 and playerOnAirfield() then              -- (the landing menu is only up down there)
+         relabelQueue(changed)
+         SHOP.relabelFlush(SH.pressAt ~= nil and os.clock() - SH.pressAt < 1)

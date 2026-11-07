@@ -1,0 +1,108 @@
+SURVIVAL MODE 0.73.78 - CO-OP FIX TEST (TESTER BUILD)
+Your build: AC8SurvivalMode_COOP2MP_0.73.78_TESTER_Online_COOP.zip  (test keys in: for you only, please don't pass it on)
+Your joiners: the normal AC8SurvivalMode_COOP2MP_0.73.78_Online_COOP.zip (same version: you link fine)
+Tester: Saint Alessia (host) + at least two joiners (Shazzy, and a third player who joins LATE, see 5)
+
+This build is the fix list from your last sessions. Each question checks one fix. Write your answers under each
+question; rough clock times are a big help (the logs are by the clock).
+
+TEST KEYS (yours only, as HOST, during a run; the joiners follow your round). Any of them makes that run unranked.
+  Ctrl+1  next round: the shuttle (COMONA DEFENSE)      Ctrl+2  next round: MINDRIPPER (THE ANOMALY)
+  Ctrl+3  next round: the amphibious assault            Ctrl+4  next round: the Ladons
+  Ctrl+5  next round: the Alicorn                       Ctrl+7  next round: AB.L..IN
+  Ctrl+8  next round: VALKA                             Ctrl+END / Ctrl+INS  next round: Spaceport Assault / Retake
+  Ctrl+6  a top-tier ace flight right now               Ctrl+F9  +5,000 zollars
+  Ctrl+F11  the round-3 bomber raid's spawn pattern, 20 times (a crash test: see 8)
+  (In the break between rounds a forced special starts 3 s after the key.)
+
+BEFORE YOU START
+- Your Falken mod: other players' games have no Falken, so it shows them an AI F-16. For this test please fly a stock
+  aircraft, and keep other gameplay mods (AC8TLSHoming and the like) off if you can, so the games agree.
+- After the session, EVERY player zips and sends from ...\Win64\ue4ss\Mods\AC8SurvivalMode\:
+    AC8SurvivalMode_lua.log, AC8SurvivalMode.log, AC8SurvivalMode_crumbs.log, AC8SurvivalMode_crumbs.prev.log
+  and ...\Win64\ue4ss\UE4SS.log. After a crash, also the newest UECC-Windows-... folder in
+  %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\  (copy the logs before restarting the game).
+
+
+1. Invisible enemies (the big one). Play to round 10 or later. Use Ctrl+F9 for money and buy an AEGIS and some airfield
+   defences by round 8, so allied ships are shooting near the joiners.
+   Joiners: any enemy you could see a target box for but couldn't see or hit? Any round the host had to finish alone?
+   Note the time.
+
+
+
+2. Kill money. Joiners: are you paid in full only for your own kills now? A teammate's kill should pay a share
+   (half with 2-3 players). Does anyone get paid for planes that just vanish?
+
+
+
+3. Bosses leaving things behind. Force VALKA (Ctrl+8):
+   - after her opening railgun shot, does that railgun stay up and keep shooting at the base in later rounds?
+   - when she's shot down, does a white square stay on the minimap where she fell?
+   - does the red sky and her song show for EVERY player, and go away for everyone after she's down?
+   Force MINDRIPPER (Ctrl+2): after he's down, does anyone still get reversed controls near where he died?
+   Force the Ladons (Ctrl+4) and the Alicorn (Ctrl+5): after they're down, does anything of them keep firing in later rounds?
+
+
+
+4. One-shots. Did anyone die in one hit from full health (it was F/A-18Es' missiles last time)?
+
+
+
+5. The late joiner (from your round with scaraboy13). Mid-fight, have a third player join. If everyone else goes down
+   while they're still loading in, the run should now WAIT for them (they can fly to the airfield and revive you).
+   Did it wait? Did everyone, the late player too, see the same run-over at the end?
+
+
+
+6. Rejoin in another aircraft. One joiner leaves the mission, comes back in a DIFFERENT aircraft. Do the others see the
+   new aircraft within a few seconds (last time they kept seeing the old one)?
+
+
+
+7. Quit Mission (this crashed Shazzy and cressendo). Try it several times: from flight, from the STORE, and while
+   shot down and watching another player. Host once, joiners once. Any crash?
+
+
+
+8. The bomber raid (crashed Shazzy twice in round 3). Did round 3's raid crash anyone? Then, with the joiners in and
+   flying, press Ctrl+F11 once as host (it runs the raid's spawns 20 times, about a minute). Any crash, on any game?
+
+
+
+9. Upgrades. Buy an AIRFRAME upgrade, land at the airfield. Does your health stay at the upgraded amount
+   (it used to drop for a second and look like the upgrade didn't work)?
+
+
+
+10. Revives. Get a joiner shot down; revive them from the STORE. The price now grows with the round. After they're
+    back, can they lock on and fire?
+
+
+
+11. VOID WATCHER 1 (STORE > DEFENCES). It should serve 3 rounds and then fly home, with a smaller ESM field than before.
+    Did it leave after 3 rounds? Does an enemy flight go after it? Does its price go up for everyone after a purchase?
+
+
+
+12. Ace rounds. Smaller now (12-24 planes, 6-10 at once), less health, and they break off after 6 minutes.
+    Press Ctrl+6 a few times to see top-tier aces. Too tanky? Did "... BREAKS OFF" come in a long ace round?
+
+
+
+13. The Spaceport. Force the Assault (Ctrl+END). Is each ship paid once when it sinks? Do joiners get money for landing
+    craft? If the spaceport is captured, does the Retake come next round (or force it with Ctrl+INS)? Do the rockets
+    launch, and does everything end so the round can finish?
+
+
+
+14. Stutter. Did the game get choppy as the run went on? From about which round, and for whom?
+
+
+
+15. The co-op leaderboard. A run where you pressed a test key isn't sent. If you can, play one short run with NO test
+    keys: when it ends, does it show up in #survival-runs with everyone's names?
+
+
+
+16. Anything else weird (stuck rounds, missing target boxes, a plane doing something odd):

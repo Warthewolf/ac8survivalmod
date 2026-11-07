@@ -7,6 +7,7 @@
 function SHOP.storeCheck()
     if SH.store ~= nil then return SH.store end
     if not SH.menuOk then SH.store = false; return false end
+    if walkHold() then return nil end                 -- (0.73.73: a held walk finds no manager; not a try)
     SH.storeTries = (SH.storeTries or 0) + 1
     local ok, got = pcall(function()
         local m = FindFirstOf("LiveMenuManager")
@@ -42,6 +43,7 @@ end
 do
 local texCache = {}
 local function texture(path)
+    if texCache[path] and not liveObj(texCache[path]) then texCache[path] = nil end   -- (0.73.73: kept: a freed one dropped)
     if texCache[path] == nil then
         local name = path:match("[^/]+$")
         texCache[path] = loadObject(path .. "." .. name) or false
@@ -66,12 +68,38 @@ local function argsOf(list, k)
     local ok, a = pcall(function() return list.CommandDatas[k].StringArgs:ToString() end)
     return ok and a or nil
 end
+-- ((0.73.80, findings perf4 / specials8) a press on a STORE row ("SV_Buy_<item>", SV_ShopRequest's): its page is among the
+-- landing menu's kept windows when one on screen lists that row; else they're walked for again at once (sv_core.lua
+-- landingWindowsRefresh), so the labels changed by the press go onto that page's rows (relabel's SHOP.windowsKey) and its
+-- icons on. Logged the first time it walks; each visit's line counts them. true: found among them.)
+function SHOP.pressPage(args)
+    local tick = SH.tick or 0
+    for _, win in ipairs(landingWindows(tick)) do
+        if landingVisible(win) and liveObj(win) then
+            local list = child(win, "WBP_Menu_Pause_List_000")
+            for k = 1, 6 do if list and argsOf(list, k) == args then return true end end
+        end
+    end
+    landingWindowsRefresh("press")
+    local n = #landingWindows(tick)
+    if not SH.pressPageSaid then
+        SH.pressPageSaid = true
+        log(string.format("shop: %s pressed on a landing menu page not among the windows kept: walked for them again (%d "
+            .. "now; 0.73.80)", tostring(args), n))
+    end
+    return false
+end
 function SHOP.decorTick(tick)
     if not CFG.shop.enabled or tick % 2 ~= 0 or not playerOnAirfield() then return end
     local imgClass = StaticFindObject("/Script/UMG.Image")
     if not valid(imgClass) then return end
-    for _, win in ipairs(FindAllOf("WBP_Menu_IngameHangar_Common_000_C") or {}) do
-        if liveWidget(win) then
+    -- ((0.73.77, Workstream B2) the icons of rows gone with their pages off the list every 16 s down there: each page
+    -- opened makes new rows, so it only grew through a level)
+    if tick % 64 == 0 then
+        for a, d in pairs(SH.decor) do if not liveObj(d.img) then SH.decor[a] = nil end end
+    end
+    for _, win in ipairs(landingWindows(tick)) do
+        if liveObj(win) then        -- ((review of 0.73.80) the kept list may hold a page freed since its look: hotfix 2's lesson)
             local list = child(win, "WBP_Menu_Pause_List_000")
             for k = 1, 6 do
                 local row = list and child(list, string.format("WBP_Menu_Text_Focus_000_%02d", k))
@@ -80,7 +108,7 @@ function SHOP.decorTick(tick)
                 local a = row and addrOf(row)
                 if a and item then
                     local d = SH.decor[a]
-                    if not d or not valid(d.img) then
+                    if not d or not liveObj(d.img) then                  -- (0.73.73: liveObj, kept between ticks)
                         local ok, err = pcall(function()
                             local canvas = child(row, "CanvasPanel_79")
                             if not canvas then error("no CanvasPanel_79 in the row") end
@@ -94,18 +122,18 @@ function SHOP.decorTick(tick)
                         end)
                         if not ok and not SH.decorSaid then SH.decorSaid = true; log("shop: row icons failed: " .. tostring(err)) end
                     end
-                    if d and d.item ~= item and valid(d.img) then
+                    if d and d.item ~= item and liveObj(d.img) then
                         local own = item == "RepairAircraft" or item == "UpAirframe" or item == "Insurance"
                         local tex = (own and planeIcon()) or texture(SHOP.icons[item] or SHOP.icons.Airfield)
                         if tex then pcall(function() d.img:SetBrushFromTexture(tex, false) end) end
                         d.item = item
                         if not SH.decorDone then SH.decorDone = true; log("shop: row icons on the landing menu") end
                     end
-                elseif a and SH.decor[a] and valid(SH.decor[a].img) then     -- a stock row now: no icon
+                elseif a and SH.decor[a] and liveObj(SH.decor[a].img) then   -- a stock row now: no icon
                     pcall(function() SH.decor[a].img:SetVisibility(1) end)
                     SH.decor[a].item, SH.decor[a].hidden = nil, true
                 end
-                if a and item and SH.decor[a] and SH.decor[a].hidden then
+                if a and item and SH.decor[a] and SH.decor[a].hidden and liveObj(SH.decor[a].img) then
                     pcall(function() SH.decor[a].img:SetVisibility(4) end); SH.decor[a].hidden = nil
                 end
             end
@@ -116,10 +144,20 @@ end
 
 local shopTexts, shopBuy             -- (the shop's helpers stay inside the block: the 200-local limit)
 do
+-- ((0.73.78, economy C4 / C5) + price_per_round x the round: sv_ai.lua itemPrice / priceRound. The row's label, the NOT
+-- ENOUGH ZOLLARS check, the charge, a joiner's "ab" ask and its refund all take this one price)
 local function shopPrice(name)
     local it = CFG.shop.items[name]
-    return math.floor(it.price * it.raise ^ (RUN.bought[name] or 0) / 10 + 0.5) * 10
+    return itemPrice(it.price, it.price_per_round, it.raise, RUN.bought[name] or 0)
 end
+
+-- ((0.73.78, plan G6) the airstrikes bought this round (RUN.strikeBuys: { round = priceRound(), n }) and whether
+-- another may be: CFG.tactical.airstrike.per_round a round, bought or called (sv_tactical.lua TAC.use: called)
+function SHOP.strikesBought()
+    local b = RUN.strikeBuys
+    return (b and b.round == priceRound()) and b.n or 0
+end
+local function strikeLimit() return math.floor(tonumber(CFG.tactical.airstrike.per_round) or 0) end
 
 -- The shop is closed after a lost special (CFG.specials.shuttle.shop_closed_rounds): through round RUN.shopClosedUntil,
 -- including the break before it, and open again in the break after it.
@@ -129,6 +167,13 @@ local function shopClosed()
     return u ~= nil and D ~= nil and (D.round < u or (D.round == u and D.state ~= "wait"))
 end
 
+-- The airfield defences' kinds (CFG.shop.items.Airfield.defences: AA guns, SAM sites and, from 0.72.1, the CIWS), in
+-- the order the STORE, the HUD's ALLIES row and sv_allies.lua's watch list them.
+DEF_KINDS = { "aa", "sam", "ciws" }
+
+-- A defence of `kind` the STORE can't build in this game: the CIWS while its DT_NPC row isn't in (ALLY.setup)
+local function defenceMissing(kind) return kind == "ciws" and ALLY.ciwsReady == false end
+
 -- The airfield row's offer once the airfield is whole: the next defence to build ({ kind, unit, def, price }), or nil
 -- when every one is up.
 local function defenceOffer()
@@ -136,10 +181,13 @@ local function defenceOffer()
     if not d or not D or not nativeReady() then return nil end
     RUN.defences = RUN.defences or { built = 0, bought = {} }
     local function free(kind)
+        if defenceMissing(kind) then return nil end
         for _, u in ipairs(d[kind].units) do if SV_UnitAlive(u) <= 0 then return u end end
     end
     local first = d.order[RUN.defences.built % #d.order + 1]
-    for _, kind in ipairs({ first, first == "aa" and "sam" or "aa" }) do
+    local kinds = { first }                          -- (its turn's kind first, then the others)
+    for _, k in ipairs(DEF_KINDS) do if k ~= first then kinds[#kinds + 1] = k end end
+    for _, kind in ipairs(kinds) do
         local u = d[kind] and d[kind].units and free(kind)
         if u then
             local def = d[kind]
@@ -151,7 +199,7 @@ local function defenceOffer()
 end
 
 local function airfieldNeedsRepair()
-    return not AF.hp or AF.down or AF.hp < CFG.airfield.hp
+    return not AF.hp or AF.down or AF.hp < (AF.max or CFG.airfield.hp)
 end
 
 -- The player's aircraft health in % (its HealthInternal is health x 10), the last one read when it can't be now.
@@ -189,7 +237,7 @@ end
 local function defenceFor(kind)
     local d = CFG.shop.items.Airfield.defences
     local def = d and d[kind]
-    if not (def and D and nativeReady()) then return nil end
+    if not (def and D and nativeReady()) or defenceMissing(kind) then return nil end
     RUN.defences = RUN.defences or { built = 0, bought = {} }
     for _, u in ipairs(def.units) do
         if SV_UnitAlive(u) <= 0 then
@@ -226,7 +274,9 @@ local UP_HELP = {
     flares   = "Carry %d more flares for the rest of the run (tier %d of %d). Buy them after.",
 }
 local TAC_HELP = {
-    airstrike = "Destroys the biggest enemy flight within %d km of you (Ctrl+F1, or by itself when %d are near). Kills pay half. You carry %d.",
+    -- ((0.73.78, plan G6) only by its key, at most max_hit of the flight, never an ace squadron's, per_round a round;
+    -- its kills pay airstrike_x (C4))
+    airstrike = "Destroys up to %d aircraft of the biggest enemy flight within %d km of you, never an ace squadron's (Ctrl+F1). %s Kills pay %d%%. You carry %d.",
     ecm       = "Breaks every enemy missile lock on you for %d seconds (Ctrl+F2, or by itself when %d missiles close in). You carry %d.",
     decoy     = "The nearest enemy flight breaks off for %d seconds (Ctrl+F3, or by itself when a flight of %d+ is close). You carry %d.",
 }
@@ -234,8 +284,15 @@ local TAC_HELP = {
 -- What item `name`'s row offers now: { role, label, help, price (nil: nothing to buy now), why (when there isn't),
 -- plus the defence's unit for aa / sam }. The texts, the purchases and the STORE's checks all go through it.
 local function offer(name)
-    local it = CFG.shop.items[name]
-    local o = { role = it.kind and "ammo" or it.role }
+    -- ((2026-11-06) a row another item shares while it has nothing to sell itself: the ZFA-44 carrier on the revive row
+    -- once it's unlocked, sv_escort.lua ESC.rowItem; o.item: the item it sells, the row's name stays `name`)
+    local item = name
+    if ESC and ESC.rowItem then
+        local okR, alt = pcall(ESC.rowItem, name)
+        if okR and type(alt) == "string" and CFG.shop.items[alt] then item = alt end
+    end
+    local it = CFG.shop.items[item]
+    local o = { role = it.kind and "ammo" or it.role, item = item }
     if o.role == "combined" then                     -- the old fourth row: aircraft, then airfield, then defences
         o.role = aircraftRepairPrice(aircraftHealth()) and "aircraft" or (airfieldNeedsRepair() and "airfield" or "defence")
     end
@@ -278,10 +335,25 @@ local function offer(name)
     elseif o.role == "tactical" then
         local c, have = CFG.tactical[it.tac], RUN.items and RUN.items[it.tac] or 0
         o.label = string.format("%s (%d/%d)", it.label, have, it.max or 1)
-        local a = it.tac == "airstrike" and c.range_km or it.tac == "ecm" and c.ecm_s or c.decoy_s
-        local b = it.tac == "airstrike" and c.auto_near or it.tac == "ecm" and c.auto_missiles or c.auto_size
-        o.help = string.format(TAC_HELP[it.tac], a, b, have)
-        if have >= (it.max or 1) then o.why = "YOU CARRY AS MANY AS YOU CAN." else o.price = shopPrice(name) end
+        local lim = it.tac == "airstrike" and strikeLimit() or 0
+        if it.tac == "airstrike" then
+            local hits = math.floor(tonumber(c.max_hit) or 0)
+            local once = lim <= 0 and "" or (lim == 1 and "One a round, bought or called." or string.format("%d a round, bought or called.", lim))
+            o.help = string.format(TAC_HELP.airstrike, hits > 0 and hits or 99, c.range_km, once,
+                math.floor((CFG.credits.airstrike_x or 1) * 100 + 0.5), have)
+            if hits <= 0 then o.help = o.help:gsub("up to 99 aircraft of ", "") end
+        else
+            o.help = string.format(TAC_HELP[it.tac], it.tac == "ecm" and c.ecm_s or c.decoy_s,
+                it.tac == "ecm" and c.auto_missiles or c.auto_size, have)
+        end
+        if have >= (it.max or 1) then o.why = "YOU CARRY AS MANY AS YOU CAN."
+        elseif lim > 0 and SHOP.strikesBought() >= lim then
+            -- ((0.73.78, plan G6) the round's airstrike bought: the row says so, no price on it)
+            local r = priceRound()
+            o.label = string.format("%s (%d/%d): %s", it.label, have, it.max or 1, lim == 1 and "ONE A ROUND" or (lim .. " A ROUND"))
+            o.why = string.format("%s A ROUND: THE NEXT AFTER ROUND %d.", lim == 1 and "ONE" or tostring(lim), r)
+            o.help = o.help .. string.format(" Bought for round %d: the next once it's over.", r)
+        else o.price = shopPrice(name) end
     elseif o.role == "insurance" then
         o.label = it.label .. (RUN.insured and ": HELD" or "")
         o.help = "Survive one shoot-down: at the brink your aircraft is repaired and shielded for a moment. One at a time; not a crash into the ground."
@@ -292,6 +364,9 @@ local function offer(name)
         o.label = string.format("%s: %s", it.label, now:upper())
         o.help = "Press for the next order: HUNT (anywhere), COVER (stay with you), DEFEND (the airfield). Ctrl+F4 in flight. Free."
         o.price = 0
+    elseif o.role == "revive" then                   -- co-op: a player who's down bought back (sv_down.lua DOWN.offer)
+        local r = (DOWN and DOWN.offer) and DOWN.offer() or { label = it.label, why = "CO-OP ONLY." }
+        o.label, o.help, o.price, o.why, o.slot = r.label or it.label, r.help or "", r.price, r.why, r.slot
     elseif o.role == "aircraft" then
         local hp = aircraftHealth()
         o.label, o.price = CFG.shop.items.RepairAircraft.label, aircraftRepairPrice(hp)
@@ -300,10 +375,27 @@ local function offer(name)
     elseif o.role == "airfield" then
         o.label = string.format("%s +%d", CFG.shop.items.RepairAirfield.label, it.repair)
         o.help = string.format("Repairs the airfield by %d (now %s of %d).", it.repair,
-            AF.down and "down" or tostring(AF.hp or "?"), CFG.airfield.hp)
+            AF.down and "down" or tostring(AF.hp or "?"), AF.max or CFG.airfield.hp)
         if not AF.hp or AF.down then o.why = "THE AIRFIELD IS DOWN."
-        elseif AF.hp >= CFG.airfield.hp then o.why = "THE AIRFIELD IS NOT DAMAGED."
+        elseif AF.hp >= (AF.max or CFG.airfield.hp) then o.why = "THE AIRFIELD IS NOT DAMAGED."
         else o.price = shopPrice(name) end
+    elseif o.role == "ally_carrier" then                                -- the ZFA-44 carriers (sv_escort.lua)
+        local r = (ESC and ESC.offer) and ESC.offer(item ~= name) or { why = "NOT AVAILABLE." }
+        o.label, o.help, o.why = r.label or it.label, r.help or "", r.why
+        if not o.why then o.price = shopPrice(item) end
+    elseif o.role == "ally_awacs" then                                  -- VOID WATCHER 1 (CFG.allies.awacs)
+        local aw = CFG.allies.awacs
+        local up, free = ALLY.status({ aw.unit })
+        o.label = it.label
+        -- ((0.73.78, plan G5) its rounds of service, its ESM's reach and the strike flight after it, from CFG)
+        local rounds = aw.service and tonumber(aw.service.rounds) or 0
+        o.help = string.format("%s, an E-767 AWACS: it takes off from the airfield once you're airborne, orbits it and pulses its "
+            .. "ESM over the airfield (%d km)%s. It never fights; %s", aw.name, math.floor(aw.esm.range_m / 1000),
+            rounds > 0 and string.format(" for %d rounds, then goes home", rounds) or "",
+            (aw.strike and aw.strike.enabled) and "a strike flight goes after it each round." or "enemies may hunt it.")
+        if not (CFG.allies.enabled and aw.enabled and ALLY.awacsReady) then o.why = "NOT AVAILABLE."
+        elseif up > 0 or not free then o.why = aw.name .. " IS UP."
+        else o.price, o.unit = shopPrice(name), free end
     elseif o.role == "ally_air" or o.role == "ally_ship" then          -- CFG.allies
         local c = CFG.allies
         local units = o.role == "ally_air" and c.aircraft.units or c.ships[it.ship].units
@@ -322,16 +414,21 @@ local function offer(name)
         if not c.enabled or not ALLY.ready or (it.ally == "wingmen" and not ALLY.wingmenReady) then o.why = "NOT AVAILABLE."
         elseif not free then o.why = o.role == "ally_air" and "BOTH ALLIED FLIGHTS ARE UP." or string.format("ALL %d ARE AT SEA.", #units)
         else o.price, o.unit = shopPrice(name), free end
-    else                                             -- a defence: aa / sam, or the old row's next one in turn
+    else                                             -- a defence: aa / sam / ciws, or the old row's next one in turn
         local aa, aaMax = defencesUp("aa")
         local sam, samMax = defencesUp("sam")
-        local up = string.format(" (AA guns %d of %d, SAM sites %d of %d up)", aa, aaMax, sam, samMax)
+        local ciws, ciwsMax = defencesUp("ciws")
+        local up = string.format(" (AA guns %d of %d, SAM sites %d of %d, CIWS %d of %d up)", aa, aaMax, sam, samMax, ciws, ciwsMax)
         local f = (o.role == "defence") and defenceOffer() or defenceFor(o.role)
         local def = CFG.shop.items.Airfield.defences[o.role] or (f and f.def)
         o.label = f and ("BUILD " .. f.def.label) or ((o.role == "defence" and "AIRFIELD DEFENCES" or ("BUILD " .. def.label)) .. ": ALL BUILT")
-        o.help = f and string.format("Builds %s at the airfield for the rest of the run%s.", f.def.what, up)
+        o.help = f and string.format("Builds %s %s for the rest of the run%s.", f.def.what,
+                                     f.kind == "ciws" and "by the runway" or "at the airfield", up)
             or ("Every one is up" .. up .. ".")
-        if f then o.price, o.unit, o.kind, o.def = f.price, f.unit, f.kind, f.def else o.why = "ALL BUILT." end
+        if f then o.price, o.unit, o.kind, o.def = f.price, f.unit, f.kind, f.def
+        elseif defenceMissing(o.role) then
+            o.label, o.why, o.help = "BUILD " .. def.label, "NOT AVAILABLE.", "Not in this game's tables" .. up .. "."
+        else o.why = "ALL BUILT." end
     end
     return o
 end
@@ -340,39 +437,150 @@ end
 -- AIRFIELD_SHOP_UI.md), so after a purchase it kept the old one (a run of 2026-10-25: "AIRFRAME 1/10 5000 Z" after
 -- tier 1 was bought; the player pressed again and again, WEAPON BAYS tier 1 -> 4 in a second). The help line is read on
 -- every move, so it was right. Each changed label's TextBlock (a live one showing the old text) gets the new one.
+-- Only the STORE rows' own TextBlocks are read (under a WBP_Menu_Text_Focus row, by their full names): every live
+-- TextBlock's text was read each time a label changed, and in co-op another player's kill changes them (the perf lines
+-- of the co-op run of 2026-10-30, "shop" up to 195 ms a tick). None found that way: every TextBlock, as before, logged.
 local function rowKey(t) return (tostring(t):upper():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
+-- ((0.73.77, Workstream B4) the landing menu's windows now, as one key: their addresses (a STORE page opened or closed
+-- changes it). ((0.73.80) The kept ones every part shares (sv_core.lua landingWindows): no walk of its own; a new page's
+-- window comes in when the last one closes, or after a press on it, SHOP.pressPage.)
+-- ((0.73.77) the teardown gate's drop, sv_core.lua levelDrop: the STORE's kept widgets forgotten, none of them touched;
+-- (0.73.80) the landing menu's kept windows too)
+if type(LEVEL_DROPS) == "table" then
+    LEVEL_DROPS.store = function()
+        SH.rowTexts, SH.panels, SH.slotCache, SH.tbNames, SH.decor = nil, nil, nil, nil, {}
+        if type(landingWindowsForget) == "function" then landingWindowsForget() end
+    end
+end
+function SHOP.windowsKey(tick)
+    local t = {}
+    for _, w in ipairs(landingWindows(tick or SH.tick or 0)) do t[#t + 1] = tostring(addrOf(w)) end
+    table.sort(t)
+    return table.concat(t, ",")
+end
 local function relabel(changed)
-    local n = 0
-    for _, t in ipairs(FindAllOf("TextBlock") or {}) do
-        if liveWidget(t) then
+    if walkHold() then return nil end                  -- (0.73.73: a held walk finds no row: not "none under a row")
+    local n, rows, all = 0, 0, SH.relabelAll
+    -- ((0.73.77, Workstream B4) the STORE rows' TextBlocks kept while the landing menu's windows stay the same (their
+    -- key), each checked live before it's read: every TextBlock's full name was read on every relabel, the "shop" part's
+    -- worst ticks (mobi118's host of 2026-11-02: 12.5 ms a tick on average, 488 ms at worst). Walked again when a page
+    -- opens or closes, or one kept is gone.)
+    local key = (not all) and SHOP.windowsKey(SH.tick) or nil
+    local kept = SH.rowTexts
+    if kept and (all or kept.key ~= key or key == "") then kept = nil end
+    if kept then
+        for _, t in ipairs(kept.list) do if not liveObj(t) then kept = nil; break end end
+    end
+    local list = kept and kept.list or nil
+    if not list then
+        list = {}
+        for _, t in ipairs(FindAllOf("TextBlock") or {}) do
+            local nm = valid(t) and nameOf(t) or ""
+            if nm:find("/Engine/Transient", 1, true) and (all or nm:find("WBP_Menu_Text_Focus", 1, true)) then list[#list + 1] = t end
+        end
+        SH.rowTexts = (not all and key ~= "" and #list > 0) and { key = key, list = list } or nil
+        SH.rowWalks = (SH.rowWalks or 0) + 1
+    else
+        SH.rowKept = (SH.rowKept or 0) + 1
+        if SH.rowKept == 1 then log(string.format("shop: the STORE rows' %d TextBlocks kept for its labels while its pages stay (0.73.77)", #list)) end
+    end
+    for _, t in ipairs(list) do
+        if kept or valid(t) then
+            rows = rows + 1
             local ok, v = pcall(function() return t:GetText():ToString() end)
             local new = ok and type(v) == "string" and changed[rowKey(v)]
             if new and pcall(function() t:SetText(toText(new)) end) then n = n + 1 end
         end
     end
+    if rows == 0 and not all then
+        SH.relabelAll = true
+        log("shop: no STORE row TextBlock under a WBP_Menu_Text_Focus row; row labels are looked for in every TextBlock")
+        return relabel(changed)
+    end
     return n
 end
 
+-- The changed labels wait (merged: a label changed twice goes straight to its newest) and go on screen at once after a
+-- press of yours, else at most every 2 s; left behind when you leave the airfield (the pages read their labels anew)
+function SHOP.relabelFlush(force)
+    if not (SH.relabelQ and next(SH.relabelQ)) then return end
+    if not playerOnAirfield() then SH.relabelQ = nil; return end
+    local now = os.clock()
+    if not force and now < (SH.relabelAt or 0) then return end
+    if walkHold() then return end                    -- (0.73.73: the walks held, walkHold: the labels wait, kept)
+    local q = SH.relabelQ
+    SH.relabelQ, SH.relabelAt = nil, now + 2
+    local okR, n = pcall(relabel, q)
+    if okR and n == nil then SH.relabelQ = q                 -- (held after all: back in the queue)
+    elseif okR and n > 0 then log(string.format("shop: %d row label(s) updated on screen", n)) end
+end
+local function relabelQueue(changed)
+    local q = SH.relabelQ or {}
+    for oldK, new in pairs(changed) do
+        for k, v in pairs(q) do if rowKey(v) == oldK then q[k] = new end end
+        if q[oldK] == nil then q[oldK] = new end
+    end
+    SH.relabelQ = q
+end
+
+-- ((0.73.77, Workstream B4) a text sent to the runtime only when it changed: SV_SetText keeps each in its table for the
+-- session; SH.textSent is emptied at every level load. Sent and skipped counted for the perf line's "shop/texts".)
+local function setText(k, v)
+    SH.textSent = SH.textSent or {}
+    if SH.textSent[k] == v then SH.textSkip = (SH.textSkip or 0) + 1; return end
+    if SV_SetText(k, v) == 1 then SH.textSent[k] = v end
+end
+-- ((0.73.77, Workstream B4) the rows' offers ask SV_UnitAlive once a unit while they're worked out: the three defence rows
+-- asked for every defence unit three times over and the allies' rows for each of theirs, about 70 asks of the spawner's
+-- whole unit list each time the texts were made. Nothing is spawned while the offers are worked out (offer() only reads),
+-- so one answer a unit holds for all of them; the native's own function is put back however the offers end.)
+local textsNow
 function shopTexts()
     if type(SV_SetText) ~= "function" then return end
+    local raw = SV_UnitAlive
+    if type(raw) ~= "function" then return textsNow() end
+    local memo, asked = {}, 0
+    SV_UnitAlive = function(u)
+        local v = memo[u]
+        if v == nil then v = raw(u); memo[u] = v; asked = asked + 1 end
+        return v
+    end
+    local ok, err = pcall(textsNow)
+    SV_UnitAlive = raw
+    SH.textAsks = (SH.textAsks or 0) + asked
+    if not ok then error(err, 0) end
+end
+textsNow = function()
     RUN.offerShown = RUN.offerShown or {}
     SH.labels = SH.labels or {}
-    local changed, nChanged = {}, 0
+    local changed, nChanged, shared = {}, 0, {}
     for name in pairs(CFG.shop.items) do
         local o = offer(name)
         RUN.offerShown[name] = o.role
         local label = o.label .. (o.price and string.format("   %d Z", o.price) or "")
         local was = SH.labels[name]
-        if was and was ~= label then changed[rowKey(was)], nChanged = label, nChanged + 1 end
+        if was and was ~= label then
+            local k = rowKey(was)
+            if changed[k] ~= nil and changed[k] ~= label then shared[k] = true end   -- ((0.73.77) two rows had that text)
+            changed[k], nChanged = label, nChanged + 1
+        end
         SH.labels[name] = label
         local help = shopClosed() and (RUN.captured and CFG.hud.text.shop_captured or CFG.hud.text.shop_closed) or o.help
         help = string.format("ZOLLARS %d. %s%s", RUN.credits, RUN.msg[name] and (RUN.msg[name] .. " ") or "", help)
-        SV_SetText("SV_Shop_" .. name, label)
-        SV_SetText("SV_Shop_" .. name .. "_Help", help)
+        setText("SV_Shop_" .. name, label)
+        setText("SV_Shop_" .. name .. "_Help", help)
     end
+    -- ((0.73.77, from claude/coop-fixes 57dce73) relabel() finds a row on screen by its old text, so a text two items
+    -- share can't say which row it is. The old fourth row (Airfield, not on the STORE's pages but worked out with the
+    -- rest) offers the next defence under the DEFENCES row's own text ("BUILD AA GUN   4000 Z"); when its turn moved on to
+    -- the SAM site, every TextBlock showing the AA text was rewritten, the real AA row too: two BUILD SAM SITE rows, the
+    -- first still buying an AA gun (co-op run of 2026-11-01, "the Buy AA was another Buy SAM site"). Such a text is left
+    -- for the page's next opening.)
+    for _, lab in pairs(SH.labels) do local k = rowKey(lab); if changed[k] ~= nil then shared[k] = true end end
+    for k in pairs(shared) do if changed[k] ~= nil then changed[k], nChanged = nil, nChanged - 1 end end
     if nChanged > 0 and playerOnAirfield() then              -- (the landing menu is only up down there)
-        local okR, n = pcall(relabel, changed)
-        if okR and n > 0 then log(string.format("shop: %d row label(s) updated on screen", n)) end
+        relabelQueue(changed)
+        SHOP.relabelFlush(SH.pressAt ~= nil and os.clock() - SH.pressAt < 1)
     end
     -- the STORE's own texts: its rows on the landing page (one per page it opens on), its page titles and the rows
     -- between its pages (tools/build_survival.py STORE_PAGES / STORE_ROWS)
@@ -385,19 +593,85 @@ function shopTexts()
         { key = "Tactical", title = "SV_Store_TitleTactical", landing = "SV_Shop_StoreTac", name = "TACTICAL",
           what = "Airstrikes, ECM bursts, decoys and the SECOND CHANCE." },
         { key = "Airfield", title = "SV_Store_TitleAirfield", landing = "SV_Shop_StoreAf", name = "AIRFIELD",
-          what = "Aircraft and airfield repairs, AA guns and SAM sites." },
+          what = "Aircraft and airfield repairs, and the airfield's defences." },
+        { key = "Defences", title = "SV_Store_TitleDefences", name = "DEFENCES",
+          what = "AA guns, SAM sites and CIWS around the runway." },
         { key = "Docks", title = "SV_Store_TitleDocks", name = "ALLIES",
           what = "Allied fighters and ships, and the allies' orders." },
     }
     for _, p in ipairs(PAGES) do
-        SV_SetText(p.title, "AIRFIELD STORE: " .. p.name .. "   " .. z)
-        SV_SetText("SV_Store_To" .. p.key, p.name .. " >")
-        SV_SetText("SV_Store_To" .. p.key .. "_Help", z .. ". " .. p.what)
+        setText(p.title, "AIRFIELD STORE: " .. p.name .. "   " .. z)
+        setText("SV_Store_To" .. p.key, p.name .. " >")
+        setText("SV_Store_To" .. p.key .. "_Help", z .. ". " .. p.what)
         if p.landing then
-            SV_SetText(p.landing, "STORE: " .. p.name .. (p.key == "Airfield" and " & ALLIES" or "") .. " >")
-            SV_SetText(p.landing .. "_Help", z .. ". " .. p.what)
+            setText(p.landing, "STORE: " .. p.name .. (p.key == "Airfield" and " & ALLIES" or "") .. " >")
+            setText(p.landing .. "_Help", z .. ". " .. p.what)
         end
     end
+end
+
+-- (co-op host) joiner `slot`'s purchase of item `name` (an allied flight or ship, or a defence of `kind`) for `price`,
+-- which they pay on their own game: built here (its spawn goes to every game, sv_coop.lua's SV_Spawn); true and the
+-- row's message, or false and why not. Nothing is charged here.
+-- ((0.73.78, plan G5) asked: a joiner's purchase (sv_coop.lua "ab"), not a host by migration building the old room's
+-- again (free). VOID WATCHER 1's price is the room's: a joiner's ask under this game's price is refused (refunded on
+-- their game), one built is counted here (RUN.bought, which "rnd" sends to every joiner's STORE: sv_coop.lua).)
+function shopBuildFor(slot, name, price, kind, asked)
+    local it = CFG.shop.items[name]
+    if not (it and D and nativeReady()) then return false, "NOT AVAILABLE RIGHT NOW." end
+    local role = it.kind and "ammo" or it.role
+    if role == "ally_carrier" then                    -- ((2026-11-06) a ZFA-44 carrier: the room's price and count, as the allies')
+        local o = offer(name)
+        if not o.price then return false, o.why or "NOT AVAILABLE RIGHT NOW." end
+        if asked and (tonumber(price) or 0) < o.price then
+            log(string.format("shop: player %s's %s at %d refused: the room's price is %d (bought %d times this run)",
+                slot and tostring(slot + 1) or "?", name, tonumber(price) or 0, o.price, RUN.bought[name] or 0))
+            return false, string.format("THE PRICE IS NOW %d", o.price)
+        end
+        local ok, msg = ESC.buyCarrier(slot, price)
+        if ok and asked then RUN.bought[name], RUN.dirty = (RUN.bought[name] or 0) + 1, true end
+        return ok, msg
+    end
+    if role == "ally_air" or role == "ally_ship" or role == "ally_awacs" then
+        local o = offer(name)
+        if not o.unit then return false, o.why or "NOT AVAILABLE RIGHT NOW." end
+        -- ((0.73.78) every ally's price is the room's, as VOID WATCHER 1's (user, 2026-11-03: "you have it right"): a
+        -- joiner's ask is checked at the host's price and counted here, and the count goes to every joiner ("rnd" f14)
+        local room = asked and true or false
+        if room and o.price and (tonumber(price) or 0) < o.price then
+            log(string.format("shop: player %s's %s at %d refused: the room's price is %d (bought %d times this run)",
+                slot and tostring(slot + 1) or "?", name, tonumber(price) or 0, o.price, RUN.bought[name] or 0))
+            return false, string.format("THE PRICE IS NOW %d", o.price)
+        end
+        local ok, msg = ALLY.buy(o.role, o.unit, it.ship or it.ally, price, slot)
+        if ok and room then RUN.bought[name], RUN.dirty = (RUN.bought[name] or 0) + 1, true end
+        return ok, msg
+    end
+    local d = CFG.shop.items.Airfield.defences
+    if not (kind and type(d[kind]) == "table" and d[kind].units) then
+        kind = (type(d[role]) == "table" and d[role].units) and role or nil
+    end
+    if not kind then return false, "NOT AVAILABLE IN CO-OP." end
+    local f = defenceFor(kind)
+    if not f then return false, "ALL BUILT." end
+    -- ((0.73.78) a defence's price is the room's too: a joiner's ask below it refused, a built one counted here)
+    RUN.defences = RUN.defences or { built = 0, bought = {} }
+    RUN.defences.bought = RUN.defences.bought or {}
+    local dk = d[kind]
+    local rp = math.floor((tonumber(dk.price) or 0) * (tonumber(dk.raise) or 1) ^ (RUN.defences.bought[kind] or 0) / 10 + 0.5) * 10
+    if asked and (tonumber(price) or 0) < rp then
+        log(string.format("shop: player %s's %s at %d refused: the room's price is %d (built %d times this run)",
+            slot and tostring(slot + 1) or "?", kind, tonumber(price) or 0, rp, RUN.defences.bought[kind] or 0))
+        return false, string.format("THE PRICE IS NOW %d", rp)
+    end
+    local r = SV_Spawn(f.unit)
+    if ALLY.forgetAlive then ALLY.forgetAlive(f.unit) end    -- ((0.73.77) the allies' kept count of it asked afresh: B3)
+    if r <= 0 then return false, "COULD NOT BUILD IT (" .. (SV_ERR[r] or tostring(r)) .. ")." end
+    if asked then RUN.defences.bought[kind], RUN.dirty = (RUN.defences.bought[kind] or 0) + 1, true end
+    -- (slot nil: a host by migration building the old room's again, its own or a buyer's who's gone)
+    log(string.format("shop: %s built for %s (%s, %d paid on their game)", f.def.label, slot and ("player " .. (slot + 1)) or "the room",
+        f.unit, price))
+    return true, string.format("%s BUILT for %d (%s).", f.def.label, price, f.unit)
 end
 
 -- One purchase; the result goes into the item's help line and the log.
@@ -436,7 +710,7 @@ function shopBuy(name)
         RUN.ups[it.up] = nxt
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         RUN.bought[name] = (RUN.bought[name] or 0) + 1
-        local okU, errU = pcall(UP.apply, survivalPC and valid(survivalPC) and survivalPC.Pawn)
+        local okU, errU = pcall(UP.apply, survivalPC and liveObj(survivalPC) and survivalPC.Pawn)
         if not okU then log("upgrades: error " .. tostring(errU)) end
         return done(string.format("%s TIER %d for %d.", it.label, nxt, price))
     elseif o.role == "tactical" then
@@ -444,12 +718,20 @@ function shopBuy(name)
         RUN.items[it.tac] = (RUN.items[it.tac] or 0) + 1
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         RUN.bought[name] = (RUN.bought[name] or 0) + 1
-        return done(string.format("%s READY (%d carried) for %d.", it.label, RUN.items[it.tac], price))
+        if it.tac == "airstrike" then                -- ((0.73.78, plan G6) counted for its round: SHOP.strikesBought)
+            RUN.strikeBuys = { round = priceRound(), n = SHOP.strikesBought() + 1 }
+        end
+        return done(string.format("%s READY (%d carried) for %d (round %d's price).", it.label, RUN.items[it.tac], price, priceRound()))
     elseif o.role == "insurance" then
         RUN.insured = true
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         RUN.bought[name] = (RUN.bought[name] or 0) + 1
         return done(string.format("SECOND CHANCE HELD for %d.", price))
+    elseif o.role == "revive" then                   -- co-op: the host's say (a joiner's refunded on a refusal)
+        local ok, msg = DOWN.buy(price)
+        if not ok then return done(msg) end
+        RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
+        return done(msg)
     elseif o.role == "aircraft" then
         -- the stock repair (RE_SV_RepairAircraft: health and armour pool) and the health written straight onto the
         -- aircraft, then read back: paid only once it reads full (test of 2026-10-23: the event alone left it at 63%
@@ -458,7 +740,8 @@ function shopBuy(name)
         local r = type(SV_Event) == "function" and SV_Event("RE_SV_RepairAircraft") or -5
         local okW, errW = pcall(function()
             local pawn = survivalPC.Pawn
-            pawn.HealthInternal = math.floor(pawn.MaxHealth * 10 + 0.5)
+            if UP and UP.healthGuard then pcall(UP.healthGuard, pawn, "the STORE's repair") end   -- ((0.73.77) G2: the
+            pawn.HealthInternal = math.floor(pawn.MaxHealth * 10 + 0.5)                              -- AIRFRAME's full)
         end)
         RUN.acHp = nil
         local after = aircraftHealth()
@@ -467,7 +750,31 @@ function shopBuy(name)
         if not (after and after >= 99) then return done("COULD NOT REPAIR IT (NOTHING CHARGED).") end
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         return done(string.format("AIRCRAFT REPAIRED (%s%% -> %d%%) for %d.", tostring(before), after, price))
-    elseif o.role == "ally_air" or o.role == "ally_ship" then
+    elseif o.role == "ally_carrier" then             -- ((2026-11-06) a ZFA-44 carrier, sv_escort.lua: a joiner's built by the host)
+        local item = o.item or name
+        if COOP and COOP.client and COOP.client() then
+            local ok, msg = COOP.askBuild(item, price, nil)
+            if not ok then return done(msg) end
+            RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
+            return done(msg)
+        end
+        local ok, msg = ESC.buyCarrier(nil, price)
+        if not ok then return done(msg) end
+        LB.stat("allies", 1)
+        RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
+        RUN.bought[item] = (RUN.bought[item] or 0) + 1
+        return done(string.format("%s for %d.", msg, price))
+    elseif COOP and COOP.client and COOP.client() and (o.role == "ally_air" or o.role == "ally_ship" or o.role == "ally_awacs"
+        or (o.unit and o.kind)) then
+        -- co-op: the allies and the airfield's defences are the host's (one airfield, one sky for everyone): the host
+        -- builds it in its game, which sends it to every game, and you pay now (refunded on a refusal or no answer;
+        -- sv_coop.lua "ab" / "ak" / "ax"). The co-op run of 2026-10-30: wingmen, MOONCHILD, AEGIS, AA guns, SAM sites
+        -- and CIWS bought by joiners were only ever in their own game ("none of it was syncing")
+        local ok, msg = COOP.askBuild(name, price, o.kind)
+        if not ok then return done(msg) end
+        RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
+        return done(msg)
+    elseif o.role == "ally_air" or o.role == "ally_ship" or o.role == "ally_awacs" then
         local ok, msg = ALLY.buy(o.role, o.unit, it.ship or it.ally, price)
         if not ok then return done(msg) end
         LB.stat("allies", 1)
@@ -476,6 +783,7 @@ function shopBuy(name)
         return done(string.format("%s for %d.", msg, price))
     elseif o.unit then                               -- a defence
         local r = SV_Spawn(o.unit)
+        if ALLY.forgetAlive then ALLY.forgetAlive(o.unit) end    -- ((0.73.77) the allies' kept count of it asked afresh: B3)
         if r <= 0 then return done("COULD NOT BUILD IT (" .. (SV_ERR[r] or tostring(r)) .. ").") end
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         RUN.defences.built = RUN.defences.built + 1
@@ -510,9 +818,9 @@ function shopBuy(name)
             end
         end
     else                                             -- the airfield
-        AF.full, AF.base, AF.bombBase = math.min(CFG.airfield.hp, AF.hp + it.repair), AF.hits, AF.bomb
+        AF.full, AF.base, AF.bombBase = math.min(AF.max or CFG.airfield.hp, AF.hp + it.repair), AF.hits, AF.bomb
         AF.hp = AF.full                             -- airfieldTick works health out from these from now on
-        pcall(ALLY.repairDefences)                  -- (its AA guns and SAM sites with it: economy review, "repair them
+        pcall(ALLY.repairDefences)                  -- (its AA guns, SAM sites and CIWS with it: economy review, "repair them
                                                     -- with the airfield")
     end
     RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
@@ -526,21 +834,27 @@ function SHOP.sound(name)
     local ok, err = pcall(function()
         local lib = StaticFindObject("/Script/Live.Default__LiveSoundBlueprintLibrary")
         if not valid(lib) then error("LiveSoundBlueprintLibrary not found") end
-        lib:PostEventByName(valid(survivalPC) and survivalPC or FindFirstOf("PlayerController"), FName(name))
+        lib:PostEventByName(liveObj(survivalPC) and survivalPC or FindFirstOf("PlayerController"), FName(name))
     end)
     if not ok and not SH.soundSaid then SH.soundSaid = true; log("shop: menu sound " .. name .. " failed: " .. tostring(err)) end
 end
 
+-- ((0.73.77, Workstream B1) the shop part's shares in the perf line, "shop/<share>": sv_main.lua's PERF)
+local function pa(name, t0) if PERF and PERF.add then PERF.add(name, t0) end end
+local function nKeys(t) local n = 0; for _ in pairs(t or {}) do n = n + 1 end; return n end
 function shopTick(tick)
     if not CFG.shop.enabled or not D then return end
+    SH.tick = tick                                   -- ((0.73.77) the landing windows' walk of this tick: SHOP.windowsKey)
+    local t0 = os.clock()
     if type(SV_ShopRequest) == "function" then
         -- every press waiting (the landing menu's hook queues them), and the texts straight after: taking one press
         -- per tick and updating the texts once a second left ~1 s with no change on screen, so purchases seemed not to
         -- register and players pressed again (user, 2026-10-22: "a good few presses to get it to register")
         local seen = {}
-        for _ = 1, 8 do
+        for i = 1, 8 do
             local r = SV_ShopRequest()
             if not r or r == "" then break end
+            if i == 1 then pcall(SHOP.pressPage, r) end      -- ((0.73.80) its page among the kept windows, else walked for)
             local item = r:gsub("^SV_Buy_", "")
             local it = CFG.shop.items[item]
             local last = SH.upAt and SH.upAt[item]
@@ -551,7 +865,7 @@ function shopTick(tick)
                 log("shop: " .. item .. " pressed again within 1 s of a tier bought; not bought twice")
             else
                 if it and it.role == "upgrade" then SH.upAt = SH.upAt or {}; SH.upAt[item] = os.clock() end
-                seen[item] = true
+                seen[item], SH.pressAt = true, os.clock()
                 local spent = RUN.spent
                 local ok, err = pcall(shopBuy, item)
                 if not ok then log("shop: error " .. tostring(err)) end
@@ -562,12 +876,26 @@ function shopTick(tick)
         end
     end
     if tick % 4 == 3 then pcall(SHOP.healthCheck) end
-    -- the texts when something changed: at once down at the airfield (where they're read), at most every 5 s in flight
-    -- (every kill changed them, and all 21 rows' offers were worked out each time: economy review of 2026-10-25,
-    -- "frame-time cost grows with round size")
-    if RUN.dirty and (playerOnAirfield() or tick >= (SH.textTick or 0)) then
-        RUN.dirty, SH.textTick = false, tick + 20
+    pa("shop/presses", t0)
+    t0 = os.clock()
+    -- the texts when something changed: down at the airfield (where they're read) at once after a press of yours, else
+    -- every 0.5 s at most (in co-op every player's kill changes them: the co-op run of 2026-10-30 worked out all the rows'
+    -- offers nearly every tick down there). ((0.73.77, Workstream B4) Never in flight: they're read only by the landing
+    -- menu, and RUN.dirty waits, so the first tick down at the airfield makes them; in flight every kill had them all
+    -- worked out every 5 s, all 21 rows' offers and ~70 asks of the spawner. Logged once a level.)
+    local pressed = SH.pressAt ~= nil and os.clock() - SH.pressAt < 0.3
+    if RUN.dirty and playerOnAirfield() and (pressed or tick >= (SH.groundTick or 0)) then
+        RUN.dirty, SH.groundTick = false, tick + 2
         local ok, err = pcall(shopTexts)
         if not ok then log("shop: text error " .. tostring(err)) end
+        if not SH.textSaid then
+            SH.textSaid = true
+            log(string.format("shop: the STORE's texts made down at the airfield only, a text sent when it changes (0.73.77; "
+                .. "%d sent, %d unchanged, %d units asked)", nKeys(SH.textSent), SH.textSkip or 0, SH.textAsks or 0))
+        end
     end
+    pa("shop/texts", t0)
+    t0 = os.clock()
+    SHOP.relabelFlush(false)
+    pa("shop/labels", t0)
 end
