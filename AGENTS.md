@@ -16,6 +16,10 @@ A round-based survival mode mod for Ace Combat 8 (PC).
 - Survival Mode is built only from stock game files; nothing from Stonehenge Returns is used or shipped.
   One exception, at the user's request (2026-10-24): the VALKA special may use Ace Combat 7 assets (the X-02S model,
   Mihaly's railgun effects and sounds). Never AC7 voice lines. See tools/re/VALKA.md.
+  A second, at the user's request (2026-11-07: "I want the entire weapon from ACE7 to be ported over"): AC7's
+  LaserInterceptor (wp_LaserInterceptor: its values, its swing curve CUR_LaserInterceptorSwingRate, its beam effects
+  FX_UAV_TLS_Muzzleflash01/02 with their meshes, materials and textures, and its sounds) for the ZFA-44s' anti-missile
+  laser, on AC8's native ALiveLaserInterceptor. Never AC7 voice lines. See tools/re/LASER_INTERCEPTOR.md.
 - No other mod's files, assets, tables, values or text go into Survival's build, mod/, tools/, this repo (docs and
   commit messages included) or a release zip, and nothing here names or credits another mod as the source of an enemy
   change (user, 2026-11-06). Survival's enemy changes are its own: designed from AC8's tables and tuned in Survival's

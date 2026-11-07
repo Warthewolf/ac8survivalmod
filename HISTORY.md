@@ -1698,3 +1698,29 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   `zfa laser: <plane>'s laser with nothing handed to it: handed / hidden ...`. escort_test.
 - 52 suites pass (coop_test not run). Built and packaged: dev / TESTER 255a3bbae140..., friends' bca30ee3a009...
   (0.74.16-coop2mp.108), all registered. INSTALLED 2026-11-07 (backup of 0.74.15: build/backup/install_before_0.74.16).
+
+## 0.74.17 (2026-11-08, runtime 0.32.26; not yet run in game)
+- AC7's LaserInterceptor on the ZFA-44s (the user: "I want the entire weapon from ACE7 to be ported over"; AGENTS.md's
+  second AC7 exception): tools/laser7 rebuilds AC7's wp_LaserInterceptor in UE 5.4 on AC8's own ALiveLaserInterceptor
+  (its swing curve, its two Cascade effects, the beam's meshes, 4 materials, texture; container SurvivalMode_Laser7_P,
+  staged with ZFA=1). The materials' SM6 shaders cooked INTO their packages (bShareMaterialShaderCode off for that cook:
+  the template project's shared archive never ships). tools/re/LASER_INTERCEPTOR.md 9 (AC8's native class, RE) and 10.
+  - Runtime 0.32.26 (runtime/laser.c): the class's tick hooked inline (an ownerless laser not ticked; a swing whose
+    missile is gone, pooled or fired again by another shooter given up), SV_LaserBegin / SV_LaserState /
+    SV_LaserKills / SV_Intercept (the game's own interceptor kill).
+  - The hosts fly gun-less twins (SV_Zfa_AllyLI, SV_Zfa_DroneLI: no gun, no AC8 laser arm). Scripts/sv_escort_li.lua:
+    one laser a ZFA-44 at its gun, AC7's fire control (6 s volley when an enemy missile is within 1.2 km, 8 s rest),
+    one beam a missile, the class's own swing and kill, SV_Intercept as the backstop, AC7's end flash. Ctrl+[ (test):
+    a volley now. `zfa li: ...`. escort_test.
+- Mission 9's night (the user at F+9: "waaay to dark", the sea glowing, no stars; research: tools/re/NIGHT_SKY.md and
+  NIGHT_SEA_LIGHTS.md): the sea mirrored Mission 4's DAY sky-light cubemaps (x0.1: 20,000-45,000x a stock night) and the
+  exposure was held at EV 10.5+ to hide it. Now Mission 9's whole night: exposure 0.5 / 9 / +1 with the sky light x4e-6
+  (log-blended with the exposure), the moonlight's specular 0.01 (no glint), its stars (the star catalog and moon texture
+  put on the sky actor: Mission 4's had neither, so nothing was ever drawn) and moon (phase 0.143, brightness 1e-5), its
+  night sky's multiple scattering 3, the glow 10000 and the effects' EV -2 (the airfield's ~2,000 runway / approach / apron
+  lights and the town show), r.MinScreenRadiusForLights 0.008 (far small lights), the cockpit's MFD / gauges dimmed
+  (MPC_MEC_EmissiveControl), the planes' navigation / anti-collision / formation lights on, the cockpit view's own exposure
+  (BP_PostProcessMisssionBase's CockpitViewPostProcess, min 11) down with the rest. All put back at the arc's end. A sky
+  param that can't be read isn't written. sky_test, arc_rounds_test.
+- Built and packaged: friends' 70e3ea05bf73..., TESTER 1659204e2d12... (0.74.17-coop2mp.109), both registered. INSTALLED
+  2026-11-08 from the TESTER zip (backup of 0.74.16: build/backup/install_before_0.74.17).

@@ -297,6 +297,11 @@ ZFA_TLS_FCS_ROW, ZFA_TLS_FCS_ROW_SOURCE = 'SV_FCS_ZfaTLS', 'NPC_FCS_VesselCIWS00
 # ((0.74.12) the user: "swap the guns out for the Laser Interceptor") its slot is the gun's, NpcFCSId1 (NPC_FCS_PlaneGun000
 # on the Su-47): no gun; WN_WEAPON_2 (hard rule 40). Lua fires it too (Scripts/sv_escort_laser.lua ZLAS.drive)
 ZFA_TLS_NPC, ZFA_TLS_SLOT, ZFA_TLS_GUN = 'SV_Zfa_AllyTLS', 1, 'NPC_FCS_PlaneGun000'
+# ((2026-11-07) the user: "I want the entire weapon from ACE7 to be ported over") AC7's LaserInterceptor (tools/laser7,
+# runtime laser.c, Scripts/sv_escort_li.lua) is spawned by Lua onto each ZFA-44: its hosts fly these twins, the gun's slot
+# EMPTY (no gun, and no arm of AC8's laser firing on its own beside AC7's)
+ZFA_LI_NPC, ZFA_DRONE_LI_NPC = 'SV_Zfa_AllyLI', 'SV_Zfa_DroneLI'
+ZFA_LI_CLASS = '/Game/Mods/SurvivalMode/Laser7/BP_SV_LaserInterceptor'
 ZFA_TLS_EVENT, ZFA_TLS_FLAG = 'SV_ZfaTLSHit', 'SV_ZfaTLSHits'
 
 

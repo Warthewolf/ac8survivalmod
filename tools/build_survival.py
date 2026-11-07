@@ -714,6 +714,13 @@ def build_npc_rows():
             set_prop(tls[2], sidx(slot), slot, ('name', survival_events.ZFA_TLS_FCS_ROW, 0))
             assert survival_events.fname(zfa_twin[1])[2] == 0
             out.append(((zfa_twin[1], 0), tls))
+            # ((2026-11-07) AC7's LaserInterceptor, spawned by Lua: the gun's slot empty, nothing else changed)
+            li_name = {survival_events.ZFA_NPC: survival_events.ZFA_LI_NPC,
+                       survival_events.ZFA_DRONE_NPC: survival_events.ZFA_DRONE_LI_NPC}[npc]
+            li = copy.deepcopy(row)
+            li[2][:] = [q for q in li[2] if q[1] != slot]
+            assert survival_events.fname(li_name)[2] == 0
+            out.append(((li_name, 0), li))
     print('  escort / decoy DT_NPC rows (Lua adds them at the main menu): '
           + ', '.join(f'{r[0]} ({r[1]}' + (f' on {r[2]}' if r[2] else '') + (', unarmed' if r[4] else '') + ')'
                       for r in survival_events.ESCORT_DECOY_NPC_ROWS) + f'; their behaviour set {ally_set[1]}; '
@@ -1100,6 +1107,10 @@ def check_zfa_laser_build():
         a, b = npc[host], npc[twin]
         assert b.get(slot) == ('name', se.ZFA_TLS_FCS_ROW, 0) and a.get(slot) == ('name', se.ZFA_TLS_GUN, 0), (host, a.get(slot), b.get(slot))
         assert {f: v for f, v in a.items() if f != slot} == {f: v for f, v in b.items() if f != slot}, (host, 'the twin differs')
+    for host, li in ((se.ZFA_NPC, se.ZFA_LI_NPC), (se.ZFA_DRONE_NPC, se.ZFA_DRONE_LI_NPC)):   # (AC7's LaserInterceptor's)
+        a, c = npc[host], npc[li]
+        assert c.get(slot) is None and {f: v for f, v in a.items() if f != slot} == {f: v for f, v in c.items() if f != slot}, \
+            (host, li, 'not the host without its gun')
     # the interception count
     ze = load(MI + 'EP_SurvivalMode_global')
     _, _, _, T, E, _ = ep_dump.load_bytes(ze)
@@ -1116,6 +1127,8 @@ def check_zfa_laser_build():
     for want in (f'dt_npc = "{se.ZFA_NPC}"', f'laser_row = "{se.ZFA_TLS_NPC}"', f'laser_fcs_row = "{se.ZFA_TLS_FCS_ROW}"',
                  f'dt_npc_drone = "{se.ZFA_DRONE_NPC}"', f'laser_row_drone = "{se.ZFA_DRONE_TLS_NPC}"',
                  f'model_drone = "{se.ZFA_DRONE_MODEL_SV}"',
+                 f'li_row = "{se.ZFA_LI_NPC}"', f'li_row_drone = "{se.ZFA_DRONE_LI_NPC}"',
+                 f'li_class = "{se.ZFA_LI_CLASS}.{se.ZFA_LI_CLASS.rsplit("/", 1)[1]}_C"',
                  f'laser_slot = {se.ZFA_TLS_SLOT},',
                  f'laser_fcs_table = "{se.ZFA_TLS_FCS_TABLE}.{se.ZFA_TLS_FCS_TABLE.rsplit("/", 1)[1]}"',
                  f'laser_flag = "{se.ZFA_TLS_FLAG}"'):

@@ -1408,15 +1408,33 @@ CFG.specials = {
 -- constantly instead of going down": the old path swept 142 -> -105 (113 deg round the sky) while it sank 18 deg, 6 deg
 -- down for 60 sideways by F+3) The sun sinks where it is: the stock sun's bearing (142) drifting 18 deg as it sets,
 -- a real sunset's slant; it rises in the east after the night as before.
+-- ((2026-11-08) the user, at round F+9: "this night is waaay to dark, but we need a way to make is so the sea doesn't
+-- glow so badly, also theres no visible stars"; "research how the night map at Retaking of Theve II works": Mission 9,
+-- tools/re/NIGHT_SKY.md) The night is Mission 9's whole night, not part of it: its exposure (0.5 / 9, one stop brighter
+-- than its +0.5: Comona has no night city) together with its night ambient (the sky light at Mission 9's night cubemaps'
+-- level: x skylight_x of Mission 4's day ones, 0.1 was 20,000-45,000 times too bright: the sea mirrored it), the
+-- light's specular spec (0.01: no moon glint on the sea), its stars (Mission 9's, for its exposure; the catalog and the
+-- moon's texture put on the sky actor, which Mission 4's lacked: stars.catalog, night.moon_texture), its moon (phase,
+-- phase angle, brightness moon_frac), its night sky's multiple scattering (ms, ms_ap: navy, not black), the cockpit's
+-- screens and gauges dimmed (mfd, meter, ice: MPC_MEC_EmissiveControl, mpc_mec), the city's and the airfield's glow up
+-- (emissive 10000), the effects' EV down (vfx_ev -2), far small lights drawn (light_radius: r.MinScreenRadiusForLights),
+-- and the planes' own lights on (nav_lights: their navigation, anti-collision and formation lights; 0 in every stock
+-- mission). The cockpit view's own exposure (min 11) comes down with it.
 CFG.sky = { enabled = true, readback_s = 5,
             mpc_env = "/Game/Base/Material/MPC/MPC_Env_Control.MPC_Env_Control",
             mpc_vfx = "/Game/Base/Material/MPC/MPC_VFX_Control.MPC_VFX_Control",
+            mpc_mec = "/Game/Base/Material/MPC/MPC_MEC_EmissiveControl.MPC_MEC_EmissiveControl",
             test_sun = { -2.0, -105.0 }, test_copies = { 4.0, -120.0 },
-            night = { sun_el = 35.0, sun_az = -130.0, factor = 0.5, rgb = { 0.89, 0.96, 1.0 }, sun_disc = 0.57,
-                      moon_el = 35.0, moon_az = -130.0, exposure = { 10.5, 14.0, -1.5 },
-                      skylight_x = 0.1, skylight_rgb = { 0.55, 0.65, 1.0 }, emissive = 100.0, vfx_ev = 7.0 },
-            stars = { intensity = 7.0, background = 22.0, radius = 2.5, fraction = 0.73, rotation = { 2.578, 0.0, 0.0 },
-                      mask_start = 0.263 },
+            night = { sun_el = 35.0, sun_az = -130.0, factor = 0.5, rgb = { 0.888, 0.965, 1.0 }, sun_disc = 0.5683,
+                      moon_el = 35.08, moon_az = -130.03, moon_phase = 0.143, moon_phase_angle = 3.415, moon_frac = 1.0e-5,
+                      moon_texture = "/Cloudly/Textures/StarsBackground/NasaCGIMoonKitLow.NasaCGIMoonKitLow",
+                      exposure = { 0.5, 9.0, 1.0 }, skylight_x = 4.0e-6, skylight_rgb = { 0.85, 1.0, 1.0 }, spec = 0.01,
+                      emissive = 10000.0, vfx_ev = -2.0, ms = 3.0, ms_ap = 3.0, mfd = 1.0e-4, meter = 0.002, ice = 1.0e-4,
+                      nav_lights = 1.0, light_radius = 0.008 },
+            stars = { catalog = "/Cloudly/StarCalalogs/ASCIIYaleBrightStarCatalog5.ASCIIYaleBrightStarCatalog5",
+                      intensity = 2.26, background = 0.55, radius = 4.45, fraction = 0.5, rotation = { 0.0, 0.0, 0.0 },
+                      mask_on = true, mask_start = 0.110, mask_len = 0.716, fade = 14.77, scint = 0.85,
+                      moon_on = true, moon_angle = 0.0, moon_len = 0.235 },
             arc = { enabled = true, path = "asset", apply_s = 2.0, blend_s = 5.0, round_s = 240, within_x = 0.75,
                     swap_within_x = 0.45, dark_factor = 0.25, night_rounds = 3, sunrise_rounds = 4, sunrise_light_x = 2, valka_gate = true,
                     sink_el = { 12.5, 10.0, 7.5, 5.0, 3.0 }, sink_az = { 145.0, 148.0, 151.0, 154.0, 157.0 },

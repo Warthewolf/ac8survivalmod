@@ -296,3 +296,364 @@ In-game test checklist:
 8. laser = false: the plain host, no arm in slot 3.
 If it never fires on its own: Lua could fire slot 3 with LiveFireOneShotWeapon WN_WEAPON_4 (no target) when an enemy
 missile is within 3 km.
+
+## 9. AC8's native ALiveLaserInterceptor (reverse engineered 2026-11-07)
+Read-only RE of the installed AceCombat8.exe (as of 2026-11-07). Nothing built, nothing installed, no game run. AC7's exe was
+not touched. Scratch: `build/re/laser/` in the worktree (`scripts/` cls.py, ctor.py, vt.py, props.py, dis.py; the
+disassembly dumps `li_*.txt`, `tm_*.txt`, `wm_*.txt`, `proj_module.txt`, `ciws_module.txt`; `vtables.txt`; `sigs.txt`).
+Method: class registry -> StaticClass -> InternalConstructor -> real constructor -> vtable (the constructors run through
+protector thunks in `.sbss`, e.g. 0x146e905c0 -> 0x15990dfc0, but every function below is plain `.text`); property
+offsets from the compiled-in FPropertyParams; slots compared against the parent vtables.
+Verdict: **the class is complete, working native code** (search, swing, kill, beam parameters, online replication),
+not a stub. No stock content is known to use it [I], and it has bugs and missing guards that matter for a port
+(9.4). It needs values that its defaults don't have.
+
+### 9.1 Class, constructor, vtable [D]
+| what | address |
+|---|---|
+| StaticClass / Z_Construct / ClassParams | 0x146e8e170 / 0x146e8e280 / 0x14c78d1d0 |
+| class flags | 0x8000a4 (Native, Config, MatchedSerializers, HasInstancedReference): **not Abstract**, spawnable; 2 functions, 14 properties |
+| constructor | 0x147ef5870 (InternalConstructor 0x146e905c0 -> thunk 0x15990dfc0) |
+| vtable | **0x14c78d230**, 279 slots: 0-227 AActor's, 228-278 ALiveWeaponBase's own virtuals |
+| parents' vtables | ALiveAttachedWeapon 0x14c5acc10, ALiveWeaponBase 0x14cae2170, AActor 0x14bbe1040 |
+| siblings | ALiveTLSSwing 0x14ca85330, ALiveTLSSwingforMissile 0x14ca868e8, ALiveTLSSwingforPlane 0x14ca86020, ALiveMissile 0x14c84e670 |
+
+Field offsets (reflection, and the constructor for the unreflected ones):
+- ALiveWeaponBase: RootComponent +0x1a0, bInUse +0x290 (set only by the weapon pool), WeaponID +0x2b1 (u8),
+  OwningGameObject +0x368, OwnerWeapon +0x370, StaticMesh +0x380, WeaponMovement +0x3a0, TargetToHome +0x3f0,
+  bCollided +0x418, LifeTime +0x420, LoadTime +0x424, bDestroyed +0x65a, lifespan timer +0x6d8.
+- ALiveAttachedWeapon: bIsBaseAttached +0x738 (byte), AttachedComponent +0x740, AttachedSocketName +0x748.
+- ALiveLaserInterceptor: RayDistance +0x750, RayRadius +0x754, InterceptAngle +0x758, SearchInterval +0x75c,
+  InterceptTime +0x760, bInertia +0x764, InertiaTime +0x768, SwingRateCurve +0x770, MainLaser +0x778, EndLaser +0x780,
+  EndLaserTimer +0x788, EndLaserMaxTime +0x78c, LaserScale +0x790, **state +0x794** (int, unreflected: 0 search,
+  1 swing), MissileToIntercept +0x798, **timer +0x7a0** (unreflected), **swing start point +0x7a8/+0x7b0/+0x7b8**
+  (FVector, doubles, unreflected).
+
+Constructor defaults: InterceptAngle 180, SearchInterval 0.5, InterceptTime 1.0, InertiaTime 1.0; **RayDistance 0,
+RayRadius 0, LifeTime 0, bIsBaseAttached false, WeaponID 0 (WID_NONE; WID_AI_laser_interceptor is 158)**, curve null.
+MainLaser and EndLaser are CreateDefaultSubobject<UParticleSystemComponent> ("MainLaser", "EndLaser"), both
+SetupAttachment(RootComponent), so they always exist. bCanEverTick comes from ALiveWeaponBase's constructor, and
+bStartWithTickEnabled from AActor's (AActor::InitializeDefaults 0x143fb4930).
+
+Slots it overrides (vs ALiveAttachedWeapon):
+| slot (offset) | function | what |
+|---|---|---|
+| 0 | 0x146e8e2b0 | destructor |
+| 228 (0x720) | **0x147ef5ce0** | WeaponTick(dt): the whole interceptor (9.2) |
+| 229 (0x728) | 0x147ef3f60 | `jmp` ALiveWeaponBase's 0x147f5e9b0 (WeaponBeginPlay): no change |
+| 230 (0x730) | **0x147ef61e0** | Activate(owner): base 0x147f5ead0, then the AC7 blueprint's OnCreateWeaponEnd work, now native: EndLaser.SetActive(false), MainLaser.SetActive(true, reset) + SetVisibility(true), timer = 0, EndLaserTimer = EndLaserMaxTime = 0.2, LaserScale = 1, ProcessEvent(OnCreateWeaponEnd) |
+| 233 (0x748) | 0x147ef62d0 | OnLifeTimeExpired: DestroyWeapon (slot 237) or Deactivate (slot 247), ProcessEvent(OnLifeTimeExpired), EndLaser.SetActive(true, reset) + SetVisibility(true) |
+| 235 (0x758) | 0x1417558e0 | returns 4 (the TLS family's value; the base returns 1) |
+
+How the virtuals are reached (ALiveWeaponBase's AActor overrides) [D]:
+- Tick, slot 159 = 0x147396280: AActor::Tick (0x143fb6ff0), then `jmp [vt+0x720]` (slot 228).
+- BeginPlay, slot 114 = 0x147f5e990: AActor::BeginPlay, then slot 229.
+- SetOwner, slot 156 = 0x147f5fd70: AActor::SetOwner, then **OwningGameObject = the owner if it IsA
+  ALiveGameObject** (else the owner weapon's OwningGameObject). The UFUNCTION AActor.SetOwner and SpawnActor's Owner
+  both land here.
+- SetLifeSpan, slot 127 = 0x147f5fe70 (its own timer at +0x6d8). LifeSpanExpired, slot 149 = 0x147f601b0: it calls
+  slot 233 instead of Destroy.
+
+The other ALiveWeaponBase virtuals named here:
+| slot | function | what |
+|---|---|---|
+| 231 | 0x147f5f000 | post-spawn params |
+| 237 | 0x147f63230 | DestroyWeapon |
+| 239 | 0x147f61b40 | Collide(hitActor, &loc, &rot, ELivePhysicalMaterialType): a no-op once bCollided is set |
+| 247 | 0x147f5f640 | Deactivate / back to the pool: SetLifeSpan(0), hide, SetActorTickEnabled(false), pool release when bInUse. ALiveAttachedWeapon's 0x147eee7c0 detaches first |
+| 266 | 0x147f602e0 | Launch: SetLifeSpan(LifeTime), OnInitialized |
+
+### 9.2 The per-tick logic [D]
+WeaponTick 0x147ef5ce0:
+1. It runs ALiveAttachedWeapon's tick (0x147eee640: the base tick 0x147f5f8b0). When bIsBaseAttached and bInUse are set
+   and the owner is dead, that tick calls LifeSpanExpired.
+2. It sets the beam parameters, with **no null check on either component**:
+   - MainLaser: SetFloatParameter("BeamLifeTime", LifeTime + EndLaserMaxTime) and ("LightLifeTime", LifeTime - 0.5);
+   - **EndLaser** (not MainLaser, as AC7's blueprint did): SetVectorParameter("BeamLength", (RayDistance, LaserScale,
+     LaserScale)).
+3. Once bDestroyed or bCollided is set: EndLaserTimer -= dt, and LaserScale = clamp(EndLaserTimer / EndLaserMaxTime, 0, 1).
+4. timer += dt, then state 0 -> Search, state 1 -> Swing.
+
+**Search** 0x147ef64a0(this). It does nothing until timer >= SearchInterval, then sets timer = 0.
+- The list: every registered missile, from WeaponManager = 0x147208fc0(world)+0x1a8, via 0x14728b230(mgr, &TArray).
+  TLSSwingforMissile and the CIWS AI module use the same list.
+- Each missile m must pass, in this order:
+  - m != null and m->IsActorTickEnabled() (slot 145);
+  - not bDestroyed and not bCollided;
+  - **IsEnemy(m.OwningGameObject, this.OwningGameObject)** (0x147d0ba00 -> ALiveGameObject slot 283 = 0x147d0ba90:
+    team byte +0x3b2, the game state's alliance table, special cases for players);
+  - |m - this root| <= RayDistance;
+  - **the angle between the OWNER's root forward** (the carrier's nose, 0x144270df0) and the direction to m <=
+    InterceptAngle (acos of the clamped dot, x 57.2958).
+- **The first missile that passes is taken, in list order, not the nearest.** The "best distance" local is never
+  updated. When online it sends net message 0x63 (0x14783c8b0, only if 0x14783c830 says online), then calls
+  **BeginIntercept** 0x147ef6350(this, m, dist): state = 1, start = this location + this root's forward x dist,
+  MissileToIntercept = m, timer = 0.
+
+**Swing** (state 1, in the tick). m = MissileToIntercept, read with **no null or IsValid check**.
+- If m is bDestroyed or bCollided, state = 0.
+- Otherwise alpha = SwingRateCurve ? FloatCurve.Eval(timer, 0) (0x144361d30, **timer in seconds, not
+  timer / InterceptTime**) : timer / InterceptTime. **A null curve is checked and safe: the swing is then linear.**
+  alpha = min(alpha, 1).
+- P = start + (m's location - start) x alpha. The weapon's root is turned onto P: MoveComponent(zero delta,
+  (P - location).Rotation(), bSweep) (0x1442c11a0, 0x1417cce00).
+- When timer > InterceptTime: state = 0, **Intercepted(m) 0x147f5f500**, timer = 0.
+
+There's **no ray, sweep or overlap test**. RayRadius, bInertia and InertiaTime are never read by the class's code (only
+the constructor writes them). RayDistance is only the search range and the beam particle's length. Once a swing starts,
+the kill is certain if the missile is still alive after InterceptTime: no chance roll, no range re-check, no
+line-of-sight test. That's one missile per InterceptTime + up to SearchInterval (about 1-1.5 s), from any direction
+the cone allows.
+
+What it does NOT do:
+- **No WeaponIntercept trigger / OnObjectInterceptWeapon.** The intercept event's constructor (0x147415660) is called
+  only by TLSSwingforMissile, and its dispatch (0x147f1c5c0) only by the CIWS, the TLS and two other interceptors
+  (0x147f01896, 0x147f03c0c). Survival's SV_ZfaTLSHit count will not see its kills.
+- No sound call at all.
+
+The online half: message 0x63's receiver is 0x147845b94. At 0x147846206 it checks IsA LiveLaserInterceptor, looks the
+missile up by net id (0x147838d30), and calls BeginIntercept, passing **null** if the missile isn't found (online only).
+
+### 9.3 The clean missile kill (for a native SV_ call) [D]
+`void ALiveWeaponBase::Intercepted(ALiveWeaponBase* w)` = **0x147f5f500**, MS x64: rcx = the missile (any
+ALiveWeaponBase), no other argument, no return value. kSigWeaponIntercepted, unique, no wildcards:
+`48 89 5C 24 08 57 48 81 EC C0 00 00 00 48 8B 81 A0 01 00 00 48 8B D9 48 85 C0` (`build/re/laser/sigs.txt`).
+
+What it does:
+1. loc = w's root location.
+2. A replication message (0x147847ed0(world) -> 0x14786bfa0; it sends only when online).
+3. w->Collide(null, &loc, &FRotator::ZeroRotator, ELivePhysicalMaterialType::Intercepted = 102) (slot 239). That
+   function returns at once if bCollided is already set, so a second call is harmless. Otherwise it sets bCollided,
+   spawns the "Intercepted" collision effect (slot 240) and ends in DestroyWeapon (slot 237), which hands the missile
+   back to its pool.
+4. A transform record (slot 278, 0x147f653f0).
+
+It is the same function every interceptor uses:
+- ALiveLaserInterceptor (0x147ef6194);
+- TLSSwingforMissile (0x147efde91);
+- the CIWS ALiveAttachedInterceptorWeapon (0x147eede41);
+- 7 other call sites.
+
+TLSSwingforMissile's path, for comparison:
+- Its search 0x147efd3d0 (its state is at +0x9b8) checks a lot more than the LI's: it null-checks **both owners**,
+  skips its IgnoneMissiles set (+0x968), compares the distance squared with InterceptDistanceSquared (+0x9fc) and the
+  angle with InterceptAngle (+0x9f8), and rolls InterceptPercentage (+0xa00, rand() & 0x7fff / 32768). On a pick it
+  increments missile+0xb70 and calls SetState(1, m) 0x147efc500.
+- Its state-1 handler 0x147efd8f0 checks **IsValid(MissileToIntercept +0x960)** (null and RF_MirroredGarbage, bit 30
+  of ObjectFlags at +0x8), then that the missile is still alive, then the distance from its beam end (+0x9c0) to the
+  missile.
+- Then it **raises WeaponIntercept** before the kill:
+  - the event object: constructor 0x147415660, vtable 0x14cb632f8, trigger type 0x65;
+  - its fields: +0x18 own WeaponID (u8), +0x20 own OwningGameObject (only if IsA ALiveAIGameObject),
+    +0x28 the missile's WeaponID, +0x30 the missile's OwningGameObject;
+  - the dispatch: 0x147f1c5c0(0x1470bdef0(world), &event, 0);
+  - then Intercepted(m), then the event's destructor 0x14710e6b0.
+- The CIWS (0x147eedd49) runs the same sequence. Signatures for the event's constructor and destructor are in sigs.txt.
+  0x147f1c5c0 has no unique signature: take it from the CIWS call site.
+
+Guards for an SV_ call, all on the game thread:
+- w != null, and IsA ALiveWeaponBase (ALiveMissile);
+- `(*(u32*)(w+8) & 0x40000000) == 0`;
+- bInUse (+0x290) == 1, bCollided (+0x418) == 0 and bDestroyed (+0x65a) == 0.
+Then call it, and raise the event first if Survival should count the kill through a trigger.
+
+### 9.4 What it needs, and what crashes it
+A missing value doesn't crash, it disables:
+- RayDistance 0 means it never finds a missile;
+- LifeTime 0 means SetLifeSpan(0): an FCS-fired one never expires;
+- bIsBaseAttached false means the FCS attach (0x147eee800) is skipped: it stays where it was spawned while the plane
+  flies on (the search measures from **its own** root). The owner-death auto-expiry is also off then;
+- WeaponID 0 only labels it.
+
+Null or dangling pointers crash it [D unless tagged]:
+1. **OwningGameObject null.** In IsEnemy the interceptor's owner is dereferenced (`mov rax,[rdi]`), so the game
+   crashes on the first search with any live missile in the world. Then `owner->RootComponent` is dereferenced too.
+   Set it with the Owner at spawn or with SetOwner (9.1).
+2. **A missile with a null OwningGameObject.** GetWorld(null) inside 0x147d0ba00 crashes. TLSSwingforMissile skips such
+   missiles, the LI doesn't. Whether live missiles without an owner exist in Survival is [T].
+3. **MissileToIntercept null or freed while state = 1.** Read every tick with no check. A missile actor destroyed
+   mid-swing (GC nulls the UPROPERTY, or the pointer dangles) crashes it. Missiles are pooled, so this is mostly a
+   level-teardown risk [I]. **Never write nil into MissileToIntercept from Lua during a swing.** A valid missile written
+   during a swing does retarget it: it kills whatever +0x798 holds when the swing ends, with **no team check in state
+   1**. Writing it while state = 0 does nothing (the search overwrites it).
+4. **The pool reuse bug.** Neither Activate (slot 230) nor OnLifeTimeExpired resets state (+0x794) or MissileToIntercept.
+   An LI that expires mid-swing goes back to the pool still in state 1 with the old pointer. When the FCS reuses it, its
+   first tick resumes that swing and kills the old pointer's missile, which may by then be a recycled missile of either
+   team, or a freed one (a crash). This only happens through the FCS pool, route (a).
+5. **The carrier destroyed before the LI** (a Lua-spawned LI). The pool's owner-death expiry needs bInUse (+0x290),
+   which only the pool sets, so the LI outlives its plane. Its OwningGameObject is then nulled by GC or dangles,
+   which is case 1.
+
+These don't need guarding [D]:
+- WeaponManager (0x147208fc0(world)) is non-null in a mission world;
+- MainLaser and EndLaser with no Cascade template: SetFloatParameter / SetVectorParameter / SetActive on an empty
+  UParticleSystemComponent are safe [I], and the components always exist;
+- a null RootComponent is handled (the zero vector, MoveComponent skipped).
+
+**Route (a): an FCS arm whose ProjectileCommon WeaponClass is /Script/Live.LiveLaserInterceptor.**
+- Mechanically it works:
+  - ProjectileCommon::Initialize (slot 87, 0x147bee3a0) only checks IsChildOf(ALiveWeaponBase) and caches the CDO
+    (+0x60);
+  - the class's script import exists (hash 0x4924eb83c12a0e05, CDO 0x673669ad763cd056, section 5);
+  - the arm's other imports (the TLS blueprint's subobject templates) would be dropped [I].
+- **With the native defaults it does nothing useful:** no kills, an LI leaked on every shot, and none attached.
+- It needs the values either from **a blueprint subclass** (cooked VERSIONED in ue/Live, hard rule 42, parent
+  /Script/Live.LiveLaserInterceptor: RayDistance, InterceptAngle, InterceptTime, SearchInterval, LifeTime 6,
+  bIsBaseAttached true, WeaponID 158; no graph needed, the C++ does the AC7 blueprint's work), or from a run-time edit
+  of `Default__LiveLaserInterceptor` before the level loads. No stock content uses the class: no package by name, and
+  its StaticClass is referenced only by its registration and the net handler.
+- It also carries bug 4.
+
+**Route (b): spawned from UE4SS Lua.** GameplayStatics.BeginDeferredActorSpawnFromClass(class, transform,
+AlwaysSpawn, **Owner = the ZFA-44 plane**), then the instance's values, then FinishSpawningActor.
+- The values to set on the instance: RayDistance, InterceptAngle, SearchInterval, InterceptTime, WeaponID 158,
+  bIsBaseAttached true, LifeTime left 0.
+- Then attach it: K2_AttachToComponent(the plane's body, "SOC_Gun_01", SnapToTarget), or the native
+  AttachTo 0x147eee800(w, comp, socket), which needs bIsBaseAttached.
+- It ticks from BeginPlay [I: bStartWithTickEnabled default, nothing in WeaponBeginPlay disables it], and SpawnActor's
+  Owner sets OwningGameObject [I: through PostSpawnInitialize's SetOwner]. Call AActor.SetOwner(plane) after
+  FinishSpawningActor as well, and read OwningGameObject back before trusting it. It already searches and kills with no
+  Activate call.
+- Activate (vt+0x730, rdx = owner) is optional: it only turns MainLaser on (there's no template) and fires
+  OnCreateWeaponEnd.
+- No pool, so no bug 4. But Lua owns its lifetime: destroy it (K2_DestroyActor) before or with its plane, on a plane
+  recycle, at the run's end and before teardown (case 5). It's a permanent shield unless Lua rests it (e.g. RayDistance 0).
+- **Route (b) is the viable and safer one.** It needs no package, no CDO edit and no pool, and every value is on
+  Survival's own instance.
+
+### 9.5 How AC8's FCS spawns an attached weapon [D]
+The whole chain:
+1. ProjectileWeapon::Fire (slot 92) 0x147bed3a0:
+   - the launcher component's socket transform (component vfunc 0x4d0);
+   - &WeaponClass (slot 99 = 0x1416f81e0, `lea rax,[rcx+0x50]`);
+   - the owner, only if it IsA ALiveAIGameObject;
+   - the spawn params 0x147bf4600, with +0x48 = the launcher component and +0x50 = the socket.
+2. SpawnWeapon 0x147bf47a0 -> WeaponManager::Spawn 0x147393cf0 -> the local spawn 0x147394b10. It reuses a pooled
+   weapon of that class that isn't in use, or calls **0x14464d110** (UWorld::SpawnActor [I]: world, class, &loc,
+   &rot, params; not deferred, so BeginPlay runs inside).
+3. weapon+0x2b0 = a flag; **Activate(owner)** (slot 230); slot 231 (the post-spawn params); bInUse = 1.
+4. 0x147bf5290:
+   - an ALiveAttachedWeapon gets **AttachTo(launcher component, socket)** 0x147eee800. This only works with
+     bIsBaseAttached: it sets AttachedComponent / AttachedSocketName and calls root vfunc 0x4b8 with the snap rules;
+   - then 0x147f60360, then **Launch** (slot 266): SetLifeSpan(LifeTime).
+5. The lifespan ends -> slot 149 -> OnLifeTimeExpired (slot 233) -> Deactivate -> back to the pool.
+
+**The AIControlCIWS target never reaches the weapon.** The module (vtable 0x14c6e7608, functions 0x147be2260-0x147be4400)
+reads the same missile list (0x14728b230 at 0x147be2317 / 0x147be2514) only to decide when to fire. It never writes a
+weapon's MissileToIntercept: each weapon searches on its own.
+
+So the arm package can point its weapon import at the native class, but only with the values from 9.4 route (a). For
+the ZFA-44s, route (b) or the existing TLS arm (section 8) is simpler.
+
+### 9.6 Curve, effects, sound [D unless tagged]
+- **AC8 does not ship CUR_LaserInterceptorSwingRate, nor AC7's Cascade FX_UAV_TLS_Muzzleflash01 / 02.**
+  `build/scan/pkgs.txt` (all 88k stock packages) has no LaserInterceptor, SwingRate or FX_UAV package.
+- A null SwingRateCurve is safe: the swing is then linear (9.2). No stock 0-1 curve was checked as a stand-in.
+  A smoothstep needs Survival's own UCurveFloat asset [I]: Lua can't add keys to one.
+- What AC8 does have of the TLS:
+  - Niagara beams `/Game/VFX/Vehicles/Weapon/TLS/NS_UAVTLS_Muzzleflash01`, `NS_UAVTLS_EndLaser001` and
+    `NS_NPC_TLS_Muzleflash01` (User.BeamLength), plus NS_TLS_* for the player and wingmen;
+  - leftover Cascade materials and meshes in `/Game/VFX/Vehicles/Weapon/TLS/Cascade/` (m_TLS_01_Beam,
+    MI_UAVTLSBeamWire, SM_UAVTLSBullet_IE01, ...), but no Cascade ParticleSystem for them;
+  - the sounds `SPWP_OTH_TLS_HIT`, `_PASS`, `_PASS_Stop` (AC8's own Wwise events).
+- MainLaser / EndLaser are Cascade components, so they can't take a Niagara template.
+- For a beam: attach a Niagara component (one of AC8's TLS systems) to the LI's root. **The root itself swings onto
+  the missile**, so a beam along +X follows the swing with no extra code [I]. Set User.BeamLength from Lua.
+- AC7's own Cascade look needs AC7 assets: that's a **new AC7-asset exception only the user can grant** (AGENTS.md
+  records VALKA's only).
+- The class plays no sound (9.2).
+
+### 9.7 Recommended route and in-game test
+1. **Native support in runtime/survival_rt_lua.c.** Find 0x147f5f500 (kSigWeaponIntercepted) and BeginIntercept
+   0x147ef6350 (kSigLaserBeginIntercept). Read the LI vtable from its CDO (`*(void**)CDO`). Add:
+   - `SV_Intercept(missile)`: 9.3's guards, then Intercepted. It's a clean, guaranteed kill, useful to the existing TLS
+     path too;
+   - **vtable guards on the LI's own vtable**, which only Survival's instances use, chaining as main.dll does for the
+     menu:
+     - slot 228 at 0x14c78d950: skip the tick if OwningGameObject is null or garbage. In state 1, if
+       MissileToIntercept is null, garbage or bCollided, set state 0 and skip the original;
+     - optionally, run the search in the detour with the TLS's null checks: give the instance SearchInterval 1e9 so
+       the native search never runs, then call BeginIntercept itself. That also closes crash 2;
+     - slot 230 at 0x14c78d960: zero +0x794 / +0x798 / +0x7a0 before the original. That closes bug 4 if route (a) is
+       ever used;
+     - count kills in the detour (a state 1 -> 0 change with the kill call), as WeaponIntercept doesn't fire.
+2. **Lua** (sv_escort_laser.lua, CFG.allies.carrier.zfa): route (b), as in 9.4, per ZFA-44 after its dress.
+   - Values: RayDistance 124000 (AC7's 1.24 km in AC8's cm) or 300000 (the TLS's 3 km), InterceptAngle 180,
+     InterceptTime 1.0, SearchInterval 0.5, WeaponID 158, bIsBaseAttached true.
+   - Remove it before the plane: on its death, a recycle, the run's end, and before teardown.
+   - The beam: a Niagara TLS beam attached to its root, with the TLS_HIT sound on each kill.
+   - A dev test key first (TEST ONLY).
+3. Test [T]:
+   - it spawns, attaches and ticks with no crash;
+   - enemy missiles near a ZFA-44 die 1-1.5 s after it picks them;
+   - never the player's or allies' missiles;
+   - no crash when a ZFA-44 is shot down or recycled, at the run's end, or at Quit Mission;
+   - the log counts kills;
+   - in co-op, each game runs its own (the online message path stays off).
+
+Risks:
+- crashes 1-3 without the guards;
+- balance: a sure kill of any enemy missile in range, about one a second per ZFA-44;
+- no WeaponIntercept event;
+- no visible beam or sound unless Survival adds them;
+- AC7's exact look needs the user's asset exception.
+
+## 10. The port built (2026-11-07, Lua 0.74.17, runtime 0.32.26; not yet run in game)
+The user: "I want the entire weapon from ACE7 to be ported over" (AGENTS.md's exception). Route (b) of 9.4, on AC7's own
+weapon rebuilt by tools/laser7 (BP_SV_LaserInterceptor on ALiveLaserInterceptor, in SurvivalMode_Laser7_P, staged with
+ZFA=1):
+- The assets (tools/laser7/README.md): AC7's swing curve, its two Cascade effects (9 emitters, AC7's numbers), the beam's
+  3 meshes, 4 rebuilt materials (their SM6 shaders inside their packages: the template project's shared shader archive
+  never ships) and its texture; the blueprint with AC7's values in AC8's units (RayDistance 124000, LifeTime 6,
+  InterceptTime 1, InterceptAngle 180, SearchInterval 0.5, the curve), MainLaser / EndLaser on AC7's effects at AC7's
+  place, scaled x10.
+- The rows (tools/survival_events_escort.py ZFA_LI_*, build_survival.py): SV_Zfa_AllyLI / SV_Zfa_DroneLI, the ZFA-44
+  hosts without the gun's slot (NpcFCSId1 gone): no gun, and no arm of AC8's swing laser firing beside AC7's. Lua
+  (sv_escort_li.lua ZLI.rows) adds them under the hosts' names at the main menu when AC7's laser is on (CFG ...zfa.li,
+  the runtime's SV_LaserBegin, the class loaded); else AC8's laser as before (section 8).
+- The runtime (runtime/laser.c, sigs.h kSigLaserTick / kSigLaserBeginIntercept / kSigWeaponIntercepted):
+  - the class's WeaponTick hooked inline (16-byte prologue): a laser whose OwningGameObject is NULL or not live isn't
+    ticked (crashes 1 and 5); in a swing, a missile that's NULL, freed, back in its pool, collided, without a shooter,
+    not the one handed over or fired again by another shooter (+0x368 changed since the hand-over) gives the swing up
+    (state 0, timer 0) before the game reads it (crash 3, and a recycled missile of our own side); a swing's end with
+    its missile collided counts a kill;
+  - SV_LaserBegin(li, missile): the class's BeginIntercept(li, m, |m - li| as float) after the checks (a laser by its
+    vtable's slot 228; its owner live; the missile in flight with a shooter); the hand-over remembered (laser, missile,
+    shooter);
+  - SV_LaserState(li [, 0]): 0 / 1 / -1; 0 gives a swing up (MissileToIntercept itself never cleared, 9.4);
+  - SV_LaserKills(); SV_Intercept(missile): ALiveWeaponBase::Intercepted after 9.3's checks (and its Collide slot in the
+    game's code), the backstop.
+  The missile owner crash (9.4 case 2) is the existing guard on 0x147d0ba00 (runtime 0.32.25, flight_guards.c); the
+  native search never runs anyway (SearchInterval 1e9 on each instance).
+- Lua (Scripts/sv_escort_li.lua, CFG.allies.carrier.zfa li_*), every game, the ZFA-44s up (not parked):
+  - one laser a plane: BeginDeferredActorSpawnFromClass(class, at the plane, AlwaysSpawn, owner the plane), its values on
+    the instance (SearchInterval 1e9, InterceptTime li_intercept_s, InterceptAngle, RayDistance li_range_m x 100,
+    LifeTime li_volley_s, bIsBaseAttached), MainLaser / EndLaser not auto-activated, FinishSpawningActor, SetOwner,
+    K2_AttachToComponent(PlaneBodyMesh, SOC_Gun_01, snap, snap, keep world scale); OwningGameObject read back (logged);
+  - AC7's fire control: an enemy missile within li_activation_m 1200 of the plane starts a volley of li_volley_s 6
+    (the root turned back to the gun's line, EndLaser off, MainLaser's BeamLength (li_range_m x 10, 1, 1) in AC7's
+    units, MainLaser shown and SetActive(true, reset): AC7's charge-up, flash and beam); li_rest_s 8 after its end;
+  - each li_search_s 0.5 of a volley, the laser in state 0 takes the nearest enemy missile (sv_escort_laser.lua's enemy
+    test) within li_range_m 1240 in li_angle of the plane's nose that no other laser is on: SV_LaserBegin. The class
+    swings onto it (AC7's curve over li_intercept_s 1) and kills it (the game's "Intercepted" effect); Lua plays the
+    TLS hit sound and logs it; one still up li_sure_s 0.6 after its swing's end, by the same shooter: SV_Intercept;
+  - the volley's end: a swing on given up (SV_LaserState(li, 0)), EndLaser shown and SetActive(true, reset) (AC7's end
+    flash), BeamLength's Y / Z 0.5, then 0 and MainLaser off li_end_s 0.2 on (AC7's LaserScale thinning);
+  - its plane gone: K2_DestroyActor; the run's end: every laser removed; the level going: forgotten, nothing called.
+  - A missile shot down and fired again from its pool (bCollided false again) is a new one (its faction asked again).
+  - Logs: `zfa li: <plane> (<unit>) carries AC7's LaserInterceptor: owner its plane, search every 1e9 s (off), at
+    SOC_Gun_01`, `... fires a volley (<missile> d m off; n so far)`, `... swings onto <missile> d m off (from <shooter>)`,
+    `...'s laser shot down <missile> (...)`, `<missile> still up ... SV_Intercept -> 1`, the round's summary `AC7's
+    lasers: v volleys, s swings, k missiles shot down ...`; runtime `laser: ... begins its swing on ...`,
+    `laser: ... given up: ...`, crumbs `laser: ... shot down ...`.
+  - Test key (TEST ONLY): Ctrl+[ (OEM_FOUR) a volley now on every ZFA-44's laser, their state logged; Ctrl+DEL sends a
+    carrier (ESC.testCarrier).
+- Tests: escort_test (the rows, the spawn's values and attach, the volley, the hand-over, one swing at a time, the kill
+  and its sound, SV_Intercept, never one out of reach or an ally's, AC8's route quiet, the end flash and thinning, the
+  rest, the next volley, removal).
+
+In game [T]: the laser spawns and attaches with no crash; its beam draws (AC7's Cascade look: red beam, charge-up
+sparks, the flash, the end flash); the swing follows the missile; the missile dies about li_intercept_s after its hand-
+over; never the player's or allies' missiles; no crash when a ZFA-44 is shot down, at the run's end or at Quit Mission.
+Balance and reach: AC7's 1.24 km reach and 1.2 km activation are short next to AC8's missiles (the ZFA-44s escort the
+player within 3 km): li_range_m / li_activation_m raise both (the beam's length follows li_range_m).

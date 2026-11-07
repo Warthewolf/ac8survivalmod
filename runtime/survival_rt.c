@@ -26,8 +26,8 @@
 #include "sigs.h"
 #include "uobj.h"                /* (0.32.22: up here for the teardown gate; flight.c's include is then a no-op) */
 
-#define RT_VERSION           L"0.32.25"
-#define RT_VERSION_A         "0.32.25"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.26"
+#define RT_VERSION_A         "0.32.26"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -981,6 +981,7 @@ static void RegisterLua(void* lua)
         { "SV_CoopSpawnPP", L_CoopSpawnPP }, { "SV_CoopKillPP", L_CoopKillPP }, { "SV_CoopFollow", L_CoopFollow },
         { "SV_CoopPPRole", L_CoopPPRole }, { "SV_CoopFeed", L_CoopFeed }, { "SV_CoopPPFx", L_CoopPPFx },
         { "SV_CoopFire", L_CoopFire }, { "SV_CoopShots", L_CoopShots }, { "SV_CoopPPShot", L_CoopPPShot }, { "SV_PPWeapons", L_PPWeapons }, { "SV_CoopPeerIds", L_CoopPeerIds }, { "SV_CoopSwapPP", L_CoopSwapPP }, { "SV_ObjChain", L_ObjChain }, { "SV_StoreKeepAI", L_StoreKeepAI }, { "SV_GcBusy", L_GcBusy },
+        { "SV_LaserBegin", L_LaserBegin }, { "SV_LaserState", L_LaserState }, { "SV_LaserKills", L_LaserKills }, { "SV_Intercept", L_Intercept },
         { "SV_CoopLoadout", L_CoopLoadout }, { "SV_SpawnCam", L_SpawnCam }, { "SV_StickNow", L_StickNow }, { "SV_PPName", L_PPName }, { "SV_CoopPaint", L_CoopPaint }, { "SV_InputNow", L_InputNow }, { "SV_Down", L_Down }, { "SV_Respawn", L_Respawn },
         { "SV_MemMB", L_MemMB }, { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
 #ifndef SV_OFFLINE
@@ -1130,6 +1131,9 @@ static void FindFunctions(void)
         { kSigPurgeGarbage,     kSigPurgeGarbageMask, sizeof(kSigPurgeGarbage), NULL, 0 },
         { kSigPathTrackTick,    kSigPathTrackTickMask, sizeof(kSigPathTrackTick), NULL, 0 },
         { kSigOwnerHostile,     kSigOwnerHostileMask, sizeof(kSigOwnerHostile), NULL, 0 },
+        { kSigLaserTick,        NULL,              sizeof(kSigLaserTick), NULL, 0 },
+        { kSigLaserBeginIntercept, NULL,           sizeof(kSigLaserBeginIntercept), NULL, 0 },
+        { kSigWeaponIntercepted, NULL,             sizeof(kSigWeaponIntercepted), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -1195,6 +1199,9 @@ static void FindFunctions(void)
     g_fPurgeGarbage     = p[64].hit;                    /* (runtime 0.32.21: SV_GcBusy, flight.c) */
     g_fPathTrackTick    = p[65].hit;                    /* (runtime 0.32.22: the path tracker guard, flight.c) */
     g_fOwnerHostile     = p[66].hit;                    /* (runtime 0.32.25: the Spear rod's owner guard, flight.c) */
+    g_fLaserTick        = p[67].hit;                    /* (runtime 0.32.26: AC7's LaserInterceptor, laser.c) */
+    g_fLaserBegin       = p[68].hit;
+    g_fIntercepted      = p[69].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -1249,6 +1256,7 @@ static int Install(void)
     TgtInstall();                                          /* (the target search guard: flight.c) */
     PtInstall();                                           /* (0.32.22: the AI path tracking guard: flight.c) */
     OhInstall();                                           /* (0.32.25: a Spear rod's owner gone: flight.c) */
+    LiInstall();                                           /* (0.32.26: AC7's LaserInterceptor's guard: laser.c) */
     MgInstall();                                           /* (the STORE freeze: flight.c) */
     if (g_fPlaneEw && HookInline(g_fPlaneEw, 15, (void*)OnPlaneEw, (void**)&g_nextPlaneEw, L"plane electronic update")) {}
     else Log(L"coop2mp: the plane electronic update wasn't found: other players' ESM / ECM fields help no one here");

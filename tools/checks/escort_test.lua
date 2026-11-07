@@ -1473,6 +1473,143 @@ do
     check(ZLAUNCH.risen(C, { route = "pose", unit = "SV_Unit_ZfaA", at = 0 }, 1) == false, "a pose flight: not watched")
     ESC.planes[U2] = nil
 end
+---------------------------------------------------------------------------------------------------- AC7's LaserInterceptor
+-- ((2026-11-07) the user: "I want the entire weapon from ACE7 to be ported over") sv_escort_li.lua: the hosts' gun-less rows;
+-- each ZFA-44 up gets AC7's weapon at its gun (its owner the plane, AC7's values, its own search off); AC7's fire control:
+-- a volley when an enemy missile is within 1.2 km, the nearest in reach handed over each search (one beam a missile, never
+-- an ally's, never one out of reach), the class's own kill, SV_Intercept for one still up after its swing, the end flash
+-- and the beam thinned at the volley's end, the rest; its plane gone: removed
+print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
+;(function()
+    local ZC = CFG.allies.carrier.zfa
+    local LS, begun, intercepted, stops, byAddr = {}, {}, {}, {}, {}      -- (the runtime's laser.c, stubbed)
+    function SV_LaserBegin(la, ma) local m = byAddr[ma]; if not m or m.bCollided then return 0 end; LS[la] = 1; begun[#begun + 1] = { li = la, m = ma }; return 1 end
+    function SV_LaserState(la, v) local s = LS[la] or 0; if v == 0 and s == 1 then LS[la] = 0; stops[#stops + 1] = la end; return s end
+    function SV_Intercept(ma) local m = byAddr[ma]; intercepted[#intercepted + 1] = ma; if m and not m.bCollided then m.bCollided = true; return 1 end; return 0 end
+    function SV_LaserKills() return 0 end
+    local cls, wb = { full = "BP_SV_LaserInterceptor_C", addr = addr() }, { full = "LiveWeaponBase", addr = addr() }
+    statics[ZC.li_class], statics["/Script/Live.LiveWeaponBase"] = cls, wb
+    local spawnedL = {}
+    local function comp(name)
+        local c = { name = name, params = {}, active = false, visible = true, bAutoActivate = true }
+        function c:SetVectorParameter(n, v) self.params[tostring(n)] = v end
+        function c:SetActive(on, reset) self.active, self.reset = on, reset end
+        function c:SetVisibility(v) self.visible = v end
+        function c:Deactivate() self.active = false end
+        return c
+    end
+    local GS = { full = "GameplayStatics", addr = addr() }
+    function GS:BeginDeferredActorSpawnFromClass(pc, c, t, how, owner)
+        local a = { full = "BP_SV_LaserInterceptor_C li", addr = addr(), cls = c, how = how, owner = owner,
+                    MainLaser = comp("MainLaser"), EndLaser = comp("EndLaser"), root = {} }
+        function a.root:K2_SetRelativeRotation(r) self.rot = r end
+        function a:K2_GetRootComponent() return self.root end
+        function a:SetOwner(o) self.OwningGameObject = o end
+        function a:K2_AttachToComponent(p, s, l, r, sc) self.attach = { p = p, s = tostring(s), l = l, r = r, sc = sc }; return true end
+        function a:K2_DestroyActor() self.gone = true end
+        spawnedL[#spawnedL + 1] = a
+        return a
+    end
+    function GS:FinishSpawningActor(x) x.finished, x.autoAtFinish = true, x.MainLaser.bAutoActivate; return x end
+    local keepGS = statics["/Script/Engine.Default__GameplayStatics"]
+    statics["/Script/Engine.Default__GameplayStatics"] = GS
+    local hits = {}
+    local AK = StaticFindObject("/Script/AkAudio.Default__AkGameplayStatics")   -- (the one the game hands out: kept, its call patched)
+    local keepPost = AK.PostEventAtLocation
+    AK.PostEventAtLocation = function(_, ev) hits[#hits + 1] = ev.full end
+    -- the rows: AC7's laser on (the runtime's functions there, its class loaded): the gun-less twins
+    local n3 = dt("DT_NPC", {})
+    local m3 = dt("DT_SV_NpcRows", { SV_Esc_Su57 = { r = 1 }, SV_Esc_Su33 = { r = 2 }, SV_Esc_Su35 = { r = 3 }, SV_Zfa_Ally = { r = 4 },
+                                     SV_Zfa_AllyTLS = { r = 5 }, SV_Zfa_Drone = { r = 6 }, SV_Zfa_DroneTLS = { r = 7 },
+                                     SV_Zfa_AllyLI = { r = 8 }, SV_Zfa_DroneLI = { r = 9 } })
+    ESC.setupDone, ESC.setupTries, Z.laser = nil, 0, true
+    statics[PROBE_TABLES[2].path], statics[CFG.specials.shuttle.npc_rows] = n3, m3
+    local from = #logs + 1
+    ESC.setup()
+    local said3 = line("escort: the escorts' and the ZFA-44's rows", from)
+    check(n3.rows.SV_Zfa_Ally and n3.rows.SV_Zfa_Ally.r == 8 and n3.rows.SV_Zfa_Drone and n3.rows.SV_Zfa_Drone.r == 9 and ZLI.mode == "ac7"
+          and ZLI.on() and has(said3, "AC7's LaserInterceptor at its gun: SV_Zfa_AllyLI's struct, no gun")
+          and has(line("zfa li: AC7's LaserInterceptor on the ZFA-44s", from), "BP_SV_LaserInterceptor_C"),
+          "AC7's laser on: both hosts' gun-less rows (SV_Zfa_AllyLI, SV_Zfa_DroneLI), logged")
+    -- a ZFA-44 up and the missiles near it
+    local zU = K.launchers[1][1].unit
+    local z1 = plane(zU, 2000000, 0, 300000, 0, 600)
+    z1.PlaneBodyMesh = { full = "PlaneBodyMesh", addr = addr() }
+    ESC.planes[zU] = { { obj = z1, addr = z1.addr, name = z1.full, at = 0 } }
+    local function gobj(full, fac) return setmetatable({ full = full, addr = addr(), GetFaction = function() return fac end }, PM) end
+    local enemyJet, allyJet = gobj("BP_Su30_C enemy", 2), gobj("BP_F18_C ally", 1)
+    local function missile(name, x, shooter)
+        local m = setmetatable({ full = "BP_" .. name .. "_C " .. name, addr = addr(), OwningGameObject = shooter, bCollided = false }, PM)
+        m.GetOwner = function() return shooter end
+        m.IsDestroyed = function() return false end
+        m.IsA = function(_, c) return c == wb end
+        pose(m, x, 0, 300000, 0, 0)
+        byAddr[m.addr] = m
+        return m
+    end
+    local mA, mB = missile("wp_msl_a", 2000000 + 100000, enemyJet), missile("wp_msl_b", 2000000 - 110000, enemyJet)   -- 1 / 1.1 km
+    local mFar, mOurs = missile("wp_msl_far", 2000000 + 150000, enemyJet), missile("wp_msl_ours", 2000000 + 50000, allyJet)
+    HIT = HIT or { msl = {} }
+    local keepMsl = HIT.msl
+    HIT.msl = { { obj = mA, name = "BP_wp_msl_a", born = 0, from = "BP_Su30" }, { obj = mB, name = "BP_wp_msl_b", born = 0 },
+                { obj = mFar, name = "BP_wp_msl_far", born = 0 }, { obj = mOurs, name = "BP_wp_msl_ours", born = 0 } }
+    D = D or {}
+    local ev0 = #events
+    from = #logs + 1
+    local t0 = clock
+    ZLAS.tick()
+    local li = spawnedL[1]
+    check(li and li.owner == z1 and li.cls == cls and li.how == 1 and li.finished and li.SearchInterval == 1.0e9 and li.InterceptTime == 1.0
+          and li.InterceptAngle == 180 and li.RayDistance == 124000 and li.LifeTime == 6.0 and li.bIsBaseAttached == true
+          and li.autoAtFinish == false and li.OwningGameObject == z1,
+          "AC7's laser spawned for the ZFA-44: its owner the plane, AC7's values, its own search off, its beam waiting for a volley")
+    check(li and li.attach and li.attach.p == z1.PlaneBodyMesh and li.attach.s == "SOC_Gun_01" and li.attach.l == 2 and li.attach.r == 2
+          and li.attach.sc == 1 and has(line("zfa li: ", from) and line("carries AC7's LaserInterceptor", from), "owner its plane"),
+          "... attached at its gun (SOC_Gun_01, snapped), logged: " .. tostring(line("carries AC7's LaserInterceptor", from)))
+    check(li and li.MainLaser.active and li.MainLaser.reset and li.MainLaser.visible and li.MainLaser.params.BeamLength
+          and near(li.MainLaser.params.BeamLength.X, 12400) and li.MainLaser.params.BeamLength.Y == 1 and li.EndLaser.active == false
+          and li.root.rot and li.root.rot.Yaw == 0 and has(line("zfa li: ", from), "fires a volley (BP_wp_msl_a 1000 m off"),
+          "an enemy missile 1 km off (AC7's 1.2 km): a volley, the beam from its start, 1.24 km long in AC7's units")
+    check(#begun == 0, "no swing before its first search (li_search_s)")
+    clock = t0 + 0.5; ZLAS.tick()
+    check(#begun == 1 and begun[1].li == li.addr and begun[1].m == mA.addr and has(line("zfa li: ", from), "swings onto BP_wp_msl_a@"),
+          "its first search: the nearest enemy missile handed over (SV_LaserBegin)")
+    clock = t0 + 1.0; ZLAS.tick()
+    check(#begun == 1, "one swing at a time")
+    mA.bCollided, LS[li.addr] = true, 0                   -- (the class's own kill at its swing's end: the missile in its pool)
+    clock = t0 + 1.5; ZLAS.tick()
+    check(has(line("zfa li: ", from) and line("shot down BP_wp_msl_a@", from), "(from BP_Su30; 1 so far)") and #hits >= 1
+          and hits[#hits]:find("SPWP_OTH_TLS_HIT", 1, true), "shot down at its swing's end: logged, the TLS's hit sound")
+    check(#begun == 2 and begun[2].m == mB.addr, "the next search: the other enemy missile in reach")
+    clock = t0 + 3.2; ZLAS.tick()                          -- (mB's swing over at 2.5 s, still up at 3.1)
+    check(intercepted[1] == mB.addr and mB.bCollided == true and has(line("SV_Intercept -> 1", from), "still up"),
+          "a missile still up li_sure_s after its swing: made sure (SV_Intercept)")
+    for _, b in ipairs(begun) do
+        check(b.m ~= mFar.addr and b.m ~= mOurs.addr, "never the missile 1.5 km off (out of its reach), never an ally's")
+    end
+    check(#events == ev0 and not line("zfa laser: ", from), "AC8's laser route quiet: no record fired, no beam of its own")
+    -- the volley's end (6 s): a swing on given up, AC7's end flash, the beam thinned; then the rest (8 s)
+    LS[li.addr] = 1
+    clock = t0 + 6.0; ZLAS.tick()
+    check(stops[1] == li.addr and li.EndLaser.active and li.EndLaser.reset and li.EndLaser.visible and li.MainLaser.params.BeamLength.Y == 0.5,
+          "the volley's end: its swing given up, AC7's end flash (EndLaser), the beam thinning")
+    clock = t0 + 6.25; ZLAS.tick()
+    check(li.MainLaser.params.BeamLength.Y == 0 and li.MainLaser.active == false and li.MainLaser.visible == false, "the beam gone li_end_s on")
+    local mC = missile("wp_msl_c", 2000000 + 80000, enemyJet)
+    HIT.msl[#HIT.msl + 1] = { obj = mC, name = "BP_wp_msl_c", born = 0 }
+    clock = t0 + 10; ZLAS.tick()
+    check(li.MainLaser.active == false, "no volley in its rest (li_rest_s)")
+    clock = t0 + 14.3; ZLAS.tick()
+    check(li.MainLaser.active == true and has(line("fires a volley", from), "BP_wp_msl_c 800 m off"), "the next volley once rested")
+    -- its plane gone: removed
+    ESC.planes[zU] = nil
+    clock = t0 + 15; ZLAS.tick()
+    check(li.gone == true and has(line("zfa li: ", from), "removed (its plane is gone)"), "its plane gone: the laser removed")
+    -- put back for the rest of the test
+    ZLI.mode, HIT.msl = "tls", keepMsl
+    statics["/Script/Engine.Default__GameplayStatics"], AK.PostEventAtLocation = keepGS, keepPost
+    SV_LaserBegin, SV_LaserState, SV_Intercept, SV_LaserKills = nil, nil, nil, nil
+end)()
 ---------------------------------------------------------------------------------------------------- the dressing
 print("the ZFA-44 dressing (sv_zfa44.lua)")
 part("sv_zfa44.lua")                                -- (its real ZFA.dress again)

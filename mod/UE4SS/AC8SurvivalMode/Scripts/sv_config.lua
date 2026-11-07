@@ -1100,7 +1100,25 @@ CFG = {
                                  laser_timeout = true, laser_sound = true, laser_log_n = 40,
                                  laser_beam_fx = "/Game/VFX/Vehicles/Weapon/TLS/NS_NPC_TLS_Muzleflash01",
                                  laser_kill_fx = "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_S",
-                                 laser_fire_sound = "", laser_hit_sound = "/Game/WwiseAssets/Events/SFX/SPWP_OTH_TLS_HIT" },
+                                 laser_fire_sound = "", laser_hit_sound = "/Game/WwiseAssets/Events/SFX/SPWP_OTH_TLS_HIT",
+                                 -- ((2026-11-07) the user: "I want the entire weapon from ACE7 to be ported over") li: AC7's
+                                 -- LaserInterceptor in place of the laser above (Scripts/sv_escort_li.lua; tools/laser7,
+                                 -- runtime laser.c, tools/re/LASER_INTERCEPTOR.md 9-10): li_class spawned at each ZFA-44's
+                                 -- gun (li_mesh's li_socket), its hosts the gun-less li_row / li_row_drone (the build's
+                                 -- ZFA_LI_*). AC7's wp_LaserInterceptor and its fire control: a volley of li_volley_s when an
+                                 -- enemy missile comes within li_activation_m, li_rest_s between; each li_search_s it takes
+                                 -- the nearest enemy missile within li_range_m in li_angle of the nose (one beam a missile),
+                                 -- swings onto it over li_intercept_s (AC7's curve) and the game's interceptor kill ends it;
+                                 -- li_sure: one still up li_sure_s after its swing, SV_Intercept. li_beam_x: the beam's length
+                                 -- in AC7's units (0.1 m; 0: li_range_m's). Off (li = false) or not there (no runtime 0.32.26,
+                                 -- no SurvivalMode_Laser7_P): the laser above.
+                                 li = true, li_row = "SV_Zfa_AllyLI", li_row_drone = "SV_Zfa_DroneLI",
+                                 li_class = "/Game/Mods/SurvivalMode/Laser7/BP_SV_LaserInterceptor.BP_SV_LaserInterceptor_C",
+                                 li_mesh = "PlaneBodyMesh", li_socket = "SOC_Gun_01",
+                                 li_range_m = 1240, li_activation_m = 1200, li_angle = 180, li_search_s = 0.5,
+                                 li_intercept_s = 1.0, li_volley_s = 6.0, li_rest_s = 8.0, li_end_s = 0.2, li_beam_x = 0,
+                                 li_sure = true, li_sure_s = 0.6, li_log_n = 60,
+                                 li_hit_sound = "/Game/WwiseAssets/Events/SFX/SPWP_OTH_TLS_HIT" },
                          text = { on_station = "%s ON STATION", on_station_sub = "ITS ZFA-44S LAUNCH IN %d S",
                                   launch = "ZFA-44S LAUNCHED", launch_sub = "FROM %s",
                                   leaving = "%s LEAVING", leaving_sub = "%d ROUNDS SERVED: THE STORE CAN CALL ANOTHER",

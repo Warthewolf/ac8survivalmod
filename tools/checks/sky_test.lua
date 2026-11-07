@@ -73,7 +73,10 @@ local function params()
              MoonPhaseAngle = 0, MoonDiskAngleInDegrees = 0.5683, MoonDiskBrightness = -4, MoonFractionOfSunIntensity = 2.5e-06,
              StarsParams = { EnableStars = true, StarsIntensity = 4, StarsBackgroundIntensity = 0, StarsRadius = 2,
                              StarsTextureScreenFraction = 0.5, StarsGlobalRotation = { X = 0, Y = 0, Z = 0 },
-                             StarsElevationMaskStart = 0.05 } }
+                             StarsElevationMaskStart = 0.05, StarsElevationMaskEnable = false, StarsElevationMaskLength = 0.5,
+                             StarsFadePower = 1, StarsScintillationsPower = 0.3, StarsMoonMaskEnable = false, StarsMoonMaskAngle = 0,
+                             StarsMoonMaskLength = 0.1 },
+             MultipleScatteringScale = 1.446, MultipleScatteringScaleAP = 1 }
 end
 local ASSET_PATH = "/Game/Cloudly/CloudlySkyParams/Ingame/Mission004/CSP_ms04_20251218b.CSP_ms04_20251218b"
 local asset = obj("CloudlySkyParams " .. ASSET_PATH, { Data = params() })
@@ -82,6 +85,8 @@ local our, ro = params(), params()
 local rend = obj("/Engine/Transient.CloudlyRenderer_0", { Data = { SkyRendererMainThread = { OurSkyParams = arr({ our }) }, SkyParamsRO = arr({ ro }) } })
 local sun = obj(L .. "LiveCloudlyActor_1.SunLight", { Intensity = 120000, LightColor = { R = 255, G = 255, B = 255 }, rot = { Pitch = -15, Yaw = -128, Roll = 0 } })
 function sun:SetIntensity(v) self.Intensity = v end
+sun.SpecularScale = 1                                  -- ((2026-11-08) Mission 9's night: its moonlight's specular 0.01)
+function sun:SetSpecularScale(v) self.SpecularScale = v end
 function sun:SetLightColor(c, srgb)
     assert(srgb == false, "the sun's colour as bytes (bSRGB false)")
     self.LightColor = { R = math.floor(c.R * 255.999), G = math.floor(c.G * 255.999), B = math.floor(c.B * 255.999) }
@@ -90,7 +95,10 @@ function sun:K2_GetComponentRotation() return { Pitch = self.rot.Pitch, Yaw = se
 function sun:K2_SetWorldRotation(r) self.rot = { Pitch = r.Pitch, Yaw = r.Yaw, Roll = r.Roll } end
 local cskyl = obj(L .. "LiveCloudlyActor_1.SkyLight", { Intensity = 1 })
 local actor = obj(L .. "LiveCloudlyActor_1", { SunLight = sun, SkyLight = cskyl, CloudlySkyParamsAsset = asset,
-    CloudlyInterpolatedSkyParamsAsset = interp, bUseSunLight = true, bUseSkyLight = false, bUseHeightFog = false })
+    CloudlyInterpolatedSkyParamsAsset = interp, bUseSunLight = true, bUseSkyLight = false, bUseHeightFog = false,
+    CloudlyResources = {} })                            -- (Mission 4's: no star catalog, no moon texture)
+local catalog, moonTex = obj(C.stars.catalog), obj(C.night.moon_texture)
+statics[C.stars.catalog], statics[C.night.moon_texture] = catalog, moonTex
 local function enc(x) if x <= 0.0031308 then return x * 12.92 end return 1.055 * x ^ (1 / 2.4) - 0.055 end
 local main = obj(L .. "BP_SkyLightController_C_1.MainSkyLight", { Intensity = 2.0, LightColor = { R = 200, G = 210, B = 230 } })
 function main:SetIntensity(v) self.Intensity = v end
@@ -102,9 +110,21 @@ local function ppv(n, on)
 end
 local ppv1, ppv2 = ppv("PostProcessVolume_1", true), ppv("PostProcessVolume_2", false)
 all.CloudlyRenderer, all.BP_SkyLightController_C, all.PostProcessVolume = { rend }, { ctrl }, { ppv1, ppv2 }
+-- (the cockpit view's own post-process component: min 11, priority 1000; not a PostProcessVolume)
+local cockpitPP = obj(L .. "BP_PostProcessMisssionBase_C_0.CockpitViewPostProcess", { Settings = { AutoExposureMinBrightness = 11,
+    bOverride_AutoExposureMinBrightness = true, AutoExposureMaxBrightness = 20, bOverride_AutoExposureMaxBrightness = false } })
+all.BP_PostProcessMisssionBase_C = { obj(L .. "BP_PostProcessMisssionBase_C_0", { CockpitViewPostProcess = cockpitPP }) }
+local cvars = { ["r.MinScreenRadiusForLights"] = 0.03 }
+statics["/Script/Engine.Default__KismetSystemLibrary"] = obj("/Script/Engine.Default__KismetSystemLibrary", {
+    GetConsoleVariableFloatValue = function(_, n) return cvars[n] end,
+    ExecuteConsoleCommand = function(_, wc, cmd) local n, v = cmd:match("^(%S+) (%S+)$"); cvars[n] = tonumber(v) end })
 local env, vfx = obj("/Game/Base/Material/MPC/MPC_Env_Control.MPC_Env_Control"), obj("/Game/Base/Material/MPC/MPC_VFX_Control.MPC_VFX_Control")
-statics[C.mpc_env], statics[C.mpc_vfx], statics[ASSET_PATH] = env, vfx, asset
-local mpcv = { [env.addr .. "Ctrl_Scene_EmissiveScale"] = 1, [vfx.addr .. "VFXEmissiveEV"] = 11, [vfx.addr .. "VFXCloudlySkyAmbientLight"] = 1 }
+local mec = obj("/Game/Base/Material/MPC/MPC_MEC_EmissiveControl.MPC_MEC_EmissiveControl")
+statics[C.mpc_env], statics[C.mpc_vfx], statics[C.mpc_mec], statics[ASSET_PATH] = env, vfx, mec, asset
+local mpcv = { [env.addr .. "Ctrl_Scene_EmissiveScale"] = 1, [vfx.addr .. "VFXEmissiveEV"] = 11, [vfx.addr .. "VFXCloudlySkyAmbientLight"] = 1,
+               [mec.addr .. "Cockpit_MFD_EmissiveIntensity"] = 1, [mec.addr .. "Cockpit_Meter_EmissiveIntensity"] = 1,
+               [mec.addr .. "Ice_Emissive_Intensity"] = 1, [mec.addr .. "Navigation_Emissive_Intensity"] = 0,
+               [mec.addr .. "AntiCollision_Emissive_Intensity"] = 0, [mec.addr .. "FormationEmissive_Intensity"] = 0 }
 statics["/Script/Engine.Default__KismetMaterialLibrary"] = obj("/Script/Engine.Default__KismetMaterialLibrary", {
     GetScalarParameterValue = function(_, wc, coll, n) return mpcv[coll.addr .. tostring(n)] or 0 end,
     SetScalarParameterValue = function(_, wc, coll, n, v) mpcv[coll.addr .. tostring(n)] = v end })
@@ -161,15 +181,17 @@ local function same(a, b)
 end
 local function state() return { asset = deep(asset.Data), our = deep(our), ro = deep(ro), interp = deep(interp.Data), sunI = sun.Intensity, sunC = deep(sun.LightColor),
     rot = deep(sun.rot), mainI = main.Intensity, mainC = deep(main.LightColor), p1 = deep(ppv1.Settings), p2 = deep(ppv2.Settings),
-    mpc = deep(mpcv), custom = { custom.sun, custom.moon } } end
+    mpc = deep(mpcv), custom = { custom.sun, custom.moon }, spec = sun.SpecularScale, cockpit = deep(cockpitPP.Settings),
+    cvars = deep(cvars), res = { actor.CloudlyResources.StarCatalog, actor.CloudlyResources.MoonTexture } } end
 local assetBefore = deep(asset.Data)
 
 print("read")
 survivalPC = pc
 D = { now = 10, round = 3, state = "fighting", up = {} }
 local V = SKY.view()
-check(V.actor == actor and V.actorBy == "GetCachedCloudlyActor" and V.interpOk == true and #V.rend == 1 and #V.ctrl == 1 and #V.ppv == 2,
-    "the view: the actor by GetCachedCloudlyActor, the run-time interpolated params, a renderer, a sky light, two volumes")
+check(V.actor == actor and V.actorBy == "GetCachedCloudlyActor" and V.interpOk == true and #V.rend == 1 and #V.ctrl == 1 and #V.ppv == 3
+    and V.ppv[3].obj == cockpitPP and V.ppv[3].cap == true,
+    "the view: the actor by GetCachedCloudlyActor, the run-time interpolated params, a renderer, a sky light, two volumes and the cockpit's")
 local snap = SKY.read(V)
 local want = { "asset|sun_el", "interp|sun_el", "copy|CloudlyRenderer_0|Our|1|sun_el", "copy|CloudlyRenderer_0|RO|1|stars_mask", "light|pitch",
                "light|r", "cskyl|int", "skyl|BP_SkyLightController_C_1|int", "ppv|PostProcessVolume_1|bias", "mpc|vfx|VFXEmissiveEV", "custom|sun" }
@@ -327,11 +349,11 @@ check(l3 and l3:find("copy|CloudlyRenderer_0|RO|1|sun_az -120 -> -105", 1, true)
 check(l3 and l3:find("light|yaw -30 -> -15", 1, true), "the light undone from the asset too (as in game)")
 regame = true
 press("F6")
-check(mpcv[env.addr .. "Ctrl_Scene_EmissiveScale"] == 100 and custom.sun == true and ppv1.Settings.AutoExposureMaxBrightness == 14
+check(mpcv[env.addr .. "Ctrl_Scene_EmissiveScale"] == 10000 and custom.sun == true and ppv1.Settings.AutoExposureMaxBrightness == 9
     and asset.Data.SunIntensity.Factor == 0.5, "step 4: the night set, the sky asset too")
 tick(C.readback_s)
 local l4 = found("sky test: step 4 read back 5 s on:")
-check(l4 and l4:find("the MPC values the game put back: mpc|vfx|VFXEmissiveEV 7 -> 11", 1, true), "step 4's read-back names the MPC the game put back: " .. tostring(l4))
+check(l4 and l4:find("the MPC values the game put back: mpc|vfx|VFXEmissiveEV -2 -> 11", 1, true), "step 4's read-back names the MPC the game put back: " .. tostring(l4))
 regame = false
 press("F6")
 tick(C.readback_s)
@@ -357,10 +379,13 @@ check(a1.el == 12.5 and a1.az == 145 and a1.stars == 1 and a5.el == 3 and a5.az 
 check(near(a5.ex_min, 11) and near(a5.ex_bias, -0.5) and near(a1.ex_min, 12.6), "the exposure to dusk's 11 / 14 / -0.5 by F+5")
 local a6, a7, a8 = SKY.arcAnchor(6, base0), SKY.arcAnchor(7, base0), SKY.arcAnchor(8, base0)
 check(a6.el == 1 and a6.az == 160 and a6.set_el == -3 and a6.sl_x == 0.5 and a6.mode == "sun", "F+6 (THE FESTIVAL): sunset, 1 sinking to -3 / 160")
-check(a7.mode == "moon" and a7.el == 35 and a7.az == -130 and a7.factor == 0.5 and a7.moon == 1 and a7.em == 100 and a7.vfx == 7
-    and near(a7.ex_min, 10.5) and a7.disc == 0.57, "F+7: night, the light at the moon (35 / -130, 0.5), the moon on, the exposure held near the day's (10.5), the glow 100")
+check(a7.mode == "moon" and a7.el == 35 and a7.az == -130 and a7.factor == 0.5 and a7.moon == 1 and a7.em == 10000 and a7.vfx == -2
+    and near(a7.ex_min, 0.5) and near(a7.ex_max, 9) and near(a7.ex_bias, 1) and a7.disc == 0.5683 and near(a7.sl_x, 4e-6, 1e-12) and a7.spec == 0.01
+    and near(a7.mfd, 1e-4, 1e-12) and near(a7.meter, 0.002, 1e-9) and a7.nav == 1,
+    "F+7: Mission 9's night: the light at the moon (35 / -130, 0.5), the moon on, its exposure 0.5 / 9 / +1 with its night ambient (sky light x4e-6), "
+    .. "the glow 10000, the effects' EV -2, no moon glint (specular 0.01), the cockpit dimmed, the planes' own lights on")
 local a9, a10 = SKY.arcAnchor(9, base0), SKY.arcAnchor(10, base0)
-check(a8.mode == "moon" and a9.mode == "moon" and a8.el == 35 and a9.factor == 0.5 and near(a9.ex_min, 10.5),
+check(a8.mode == "moon" and a9.mode == "moon" and a8.el == 35 and a9.factor == 0.5 and near(a9.ex_min, 0.5),
     "F+7 .. F+9: three rounds of night (night_rounds 3), the same sky")
 check(near(a10.el, -4) and near(a10.az, 105) and near(a10.factor, 120000, 1e-3) and a10.mode == "sun", "F+10: dawn in the east (-4 / 105)")
 local a11, a14, a30 = SKY.arcAnchor(11, base0), SKY.arcAnchor(14, base0), SKY.arcAnchor(30, base0)
@@ -382,10 +407,10 @@ local s45 = SKY.arcAt(6, 0.45, base0)
 check(near(s45.el, -3) and near(s45.factor, 120000, 1e-3) and near(s45.ex_min, 9.5), "the fight's end (u 0.45): the sun at set_el -3, its light still held")
 local s475 = SKY.arcAt(6, 0.475, base0)
 check(s475.mode == "sun" and near(s475.el, -3) and near(s475.factor, 10 ^ ((math.log(120000, 10) + math.log(0.25, 10)) / 2), 1e-3)
-    and s475.ex_min > 9.5 and s475.ex_min < 10.5,
-    string.format("the break's first half: the last light going in log space (%.1f), the night's exposure begun (%.2f)", s475.factor, s475.ex_min))
+    and s475.ex_min < 9.5 and s475.ex_min > 0.5 and s475.sl_x < 0.5 and s475.sl_x > 4e-6,
+    string.format("the break's first half: the last light going in log space (%.1f), the night's exposure and ambient begun together (%.2f)", s475.factor, s475.ex_min))
 local n20 = SKY.arcAt(7, 0.2, base0)
-check(n20.mode == "moon" and near(n20.factor, 0.5) and near(n20.ex_min, 10.5), "the night's fight: the moon's light and the night's exposure held")
+check(n20.mode == "moon" and near(n20.factor, 0.5) and near(n20.ex_min, 0.5), "the night's fight: the moon's light and the night's exposure held")
 local s50, s99 = SKY.arcAt(6, 0.5, base0), SKY.arcAt(6, 1, base0)
 check(s50.mode == "moon" and near(s50.factor, 0.25) and s50.el == 35 and s99.factor == 0.5, "the swap for the moon at the darkest point (0.25), then night's 0.5")
 local h75 = SKY.arcAt(7, 0.75, base0)
@@ -442,10 +467,23 @@ for _ = 1, 3 do atick(2) end
 check(ARC.last.mode == "moon" and found("the sun swapped for the moon at the break's darkest point"), "the break's middle: the moon")
 for _ = 1, 5 do atick(2) end
 frame()                                          -- (the drawn sky and the light follow the asset a frame on)
-check(ro.EnableMoon == true and near(sun.Intensity, 0.5, 1e-6) and sun.LightColor.R == 227 and near(ro.SunElevationAngleInDegrees, 35, 1e-6),
+check(ro.EnableMoon == true and near(sun.Intensity, 0.5, 1e-6) and sun.LightColor.R == 226 and near(ro.SunElevationAngleInDegrees, 35, 1e-6),
     "night (F+7): the light at the moon, 0.5, bluish; the moon on (drawn)")
-check(near(ppv1.Settings.AutoExposureMinBrightness, 10.5, 1e-6) and ppv2.Settings.AutoExposureMinBrightness == 13 and ro.StarsParams.StarsIntensity == 7,
-    "night's exposure on the volume with its override, the stars at their maximum")
+check(near(ppv1.Settings.AutoExposureMinBrightness, 0.5, 1e-6) and ppv2.Settings.AutoExposureMinBrightness == 13 and near(ro.StarsParams.StarsIntensity, 2.26, 1e-6),
+    "night's exposure on the volume with its override, the stars at Mission 9's")
+-- ((2026-11-08) the rest of Mission 9's night (tools/re/NIGHT_SKY.md 5)
+check(sun.SpecularScale == 0.01 and near(cockpitPP.Settings.AutoExposureMinBrightness, 0.5, 1e-6) and cockpitPP.Settings.AutoExposureMaxBrightness == 20,
+    "night: no moon glint on the sea (the light's specular 0.01), the cockpit view's exposure down with the rest (its max untouched)")
+check(near(mpcv[mec.addr .. "Cockpit_MFD_EmissiveIntensity"], 1e-4, 1e-9) and near(mpcv[mec.addr .. "Cockpit_Meter_EmissiveIntensity"], 0.002, 1e-9)
+    and mpcv[mec.addr .. "Navigation_Emissive_Intensity"] == 1 and mpcv[mec.addr .. "AntiCollision_Emissive_Intensity"] == 1
+    and near(cvars["r.MinScreenRadiusForLights"], 0.008, 1e-9),
+    "night: the cockpit's screens and gauges dimmed, the planes' own lights on, far small lights drawn (r.MinScreenRadiusForLights 0.008)")
+check(actor.CloudlyResources.StarCatalog == catalog and actor.CloudlyResources.MoonTexture == moonTex
+    and found("the stars and the moon on the sky actor"),
+    "the star catalog and the moon's texture put on the sky actor (Mission 4's had neither), logged")
+check(ro.StarsParams.StarsElevationMaskEnable == true and near(ro.StarsParams.StarsFadePower, 14.77, 1e-6) and ro.StarsParams.StarsMoonMaskEnable == true
+    and near(ro.MultipleScatteringScale, 3, 1e-6) and near(ro.MoonPhase, 0.143, 1e-6) and near(ro.MoonFractionOfSunIntensity, 1e-5, 1e-12),
+    "Mission 9's stars (masks, fade), its night sky's multiple scattering, its moon's phase and brightness")
 -- VALKA's red sky over the arc: the colours left to it
 RED = { want = true, k = 0.3 }
 asset.Data.SunIntensity.RGB = { X = 1, Y = 60 / 255, Z = 40 / 255 }    -- (her red: sv_hud.lua writes the asset's sun colour)
@@ -454,7 +492,7 @@ for _ = 1, 3 do atick(2) end
 check(sun.LightColor.G == 60 and near(sun.Intensity, 0.5, 0.02), "VALKA's red sky on: the arc leaves the colours to it, the rest goes on")
 RED = { want = false, k = 0 }
 for _ = 1, 2 do atick(2) end
-check(sun.LightColor.R == 227, "her sky gone: the arc's colours again")
+check(sun.LightColor.R == 226, "her sky gone: the arc's colours again")
 -- midday, held
 D.round = 21
 for _ = 1, 3 do atick(2) end

@@ -96,8 +96,12 @@ function ZLAS.zfaRow(npc, mine, addRow, row)
     local z = zc()
     local okM, why = ZLAS.zfaModel()                       -- (its models before its rows: the rows name them)
     if not okM then return false, " (its model row " .. tostring(why) .. ": no ZFA-44 host)" end
-    local in1, note1, a1 = hostRow(npc, mine, addRow, row, z.laser_row)
     local dr = ((CFG.allies or {}).carrier or {}).dt_npc_drone
+    if ZLI and ZLI.rows then                               -- ((2026-11-07) AC7's LaserInterceptor: sv_escort_li.lua)
+        local inL, noteL = ZLI.rows(npc, mine, addRow, row, dr)
+        if inL ~= nil then return inL, noteL end
+    end
+    local in1, note1, a1 = hostRow(npc, mine, addRow, row, z.laser_row)
     if type(dr) ~= "string" or dr == "" then ZLAS.armed = a1 == true; return in1, note1 end
     local in2, note2, a2 = hostRow(npc, mine, addRow, dr, z.laser_row_drone)
     ZLAS.armed = (a1 or a2) == true
@@ -149,6 +153,10 @@ function ZLAS.tick()
     if ZLAS.drive then                                     -- ((0.74.12) the laser made sure: below, every game, armed or not)
         local okD, errD = pcall(ZLAS.drive)
         if not okD then logOnce("zfa laser drive", "zfa laser: error " .. tostring(errD)) end
+    end
+    if ZLI and ZLI.tick then                               -- ((2026-11-07) AC7's LaserInterceptor: sv_escort_li.lua)
+        local okL, errL = pcall(ZLI.tick)
+        if not okL then logOnce("zfa li", "zfa li: error " .. tostring(errL)) end
     end
     if D and ZLAS.summary and ZLAS.lastRound ~= D.round then
         local line = ZLAS.lastRound and ZLAS.summary() or nil
@@ -317,6 +325,7 @@ local function gone(o)
     local ok, d = pcall(function() return o:IsDestroyed() end)
     return ok and d == true
 end
+ZLAS.enemyOf, ZLAS.sound = enemy, sound                 -- ((2026-11-07) AC7's LaserInterceptor's too: sv_escort_li.lua)
 -- shot down: harmless now whatever else happens (the ECM's way), its life cut, the burst where it is
 local function kill(c, s, why)
     local o, where = c.m.obj, c.m.zAt
@@ -543,10 +552,11 @@ function ZLAS.beamOn(s, p, m)
 end
 function ZLAS.drive(now)
     local z = zc()
-    if z.laser == false or z.laser_drive == false or not D then return end
-    if (levelTorn and levelTorn()) or not liveObj(survivalPC) then return end
+    if not D or (levelTorn and levelTorn()) or not liveObj(survivalPC) then return end
+    fxTick(false)                                          -- (the launch smoke's too, whichever laser)
+    if z.laser == false or z.laser_drive == false then return end
+    if ZLI and ZLI.on and ZLI.on() then return end         -- ((2026-11-07) AC7's LaserInterceptor instead: sv_escort_li.lua)
     local s = st()
-    fxTick(false)
     ownLasers(s)
     hiddenTick(s)
     -- the ZFA-44s alive
@@ -695,6 +705,7 @@ end
 
 -- the run's total, at the end of each round (sv_escort.lua's round end calls nothing: ZLAS.tick logs it when it changes)
 function ZLAS.summary()
+    if ZLI and ZLI.on and ZLI.on() and ZLI.summary then return ZLI.summary() end   -- (AC7's LaserInterceptor's: sv_escort_li.lua)
     local s = D_()
     if not s or (s.shots == 0 and s.own == 0) then return nil end
     return string.format("the ZFA-44s' lasers: %d shots of Survival's, %d of their own fire control, %d missiles shot down",

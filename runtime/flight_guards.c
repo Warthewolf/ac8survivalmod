@@ -722,3 +722,5 @@ static int L_StoreKeepAI(void* lua)
     }
     return Ret(lua, old);
 }
+
+#include "laser.c"                                  /* (0.32.26) AC7's LaserInterceptor on AC8's class: its guard, SV_Laser* */

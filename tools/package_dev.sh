@@ -46,7 +46,7 @@ if [ "$ZFA" = 1 ]; then
     fi
     echo "ZFA=1: the ZFA-44's container staged (Ctrl+9 in a run: test T0)"
 else
-    rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ZFA44_P.*
+    rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ZFA44_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Laser7_P.*
 fi
 # NOSPACEPORT=1: without the Spaceport Assault and its Retake (tools/nospaceport.py, as NOSPACEPORT=1 package_release.sh)
 if [ "$NOSPACEPORT" = 1 ]; then python -X utf8 -I tools/nospaceport.py "$mod" > /dev/null; fi

@@ -54,11 +54,22 @@ local SP = {
     { "stars_frac", "StarsParams.StarsTextureScreenFraction" }, { "stars_rx", "StarsParams.StarsGlobalRotation.X" },
     { "stars_ry", "StarsParams.StarsGlobalRotation.Y" }, { "stars_rz", "StarsParams.StarsGlobalRotation.Z" },
     { "stars_mask", "StarsParams.StarsElevationMaskStart" },
+    -- ((2026-11-08) Mission 9's night, tools/re/NIGHT_SKY.md 2 / 5: its stars' masks, fade and twinkle, and its night sky's
+    -- multiple scattering (a navy sky, not black))
+    { "stars_mask_on", "StarsParams.StarsElevationMaskEnable" }, { "stars_mask_len", "StarsParams.StarsElevationMaskLength" },
+    { "stars_fade", "StarsParams.StarsFadePower" }, { "stars_scint", "StarsParams.StarsScintillationsPower" },
+    { "stars_moon_on", "StarsParams.StarsMoonMaskEnable" }, { "stars_moon_angle", "StarsParams.StarsMoonMaskAngle" },
+    { "stars_moon_len", "StarsParams.StarsMoonMaskLength" },
+    { "ms", "MultipleScatteringScale" }, { "ms_ap", "MultipleScatteringScaleAP" },
 }
 local SP_PATH = {}
 for _, f in ipairs(SP) do SP_PATH[f[1]] = f[2] end
 SKY.SP = SP
-local MPC_NAMES = { { "env", "Ctrl_Scene_EmissiveScale" }, { "vfx", "VFXEmissiveEV" }, { "vfx", "VFXCloudlySkyAmbientLight" } }
+local MPC_NAMES = { { "env", "Ctrl_Scene_EmissiveScale" }, { "vfx", "VFXEmissiveEV" }, { "vfx", "VFXCloudlySkyAmbientLight" },
+                    -- ((2026-11-08) the cockpit's screens and gauges, and the planes' own lights: MPC_MEC_EmissiveControl)
+                    { "mec", "Cockpit_MFD_EmissiveIntensity" }, { "mec", "Cockpit_Meter_EmissiveIntensity" },
+                    { "mec", "Ice_Emissive_Intensity" }, { "mec", "Navigation_Emissive_Intensity" },
+                    { "mec", "AntiCollision_Emissive_Intensity" }, { "mec", "FormationEmissive_Intensity" } }
 
 local function short(o) return (nameOf(o):match("([^%.:]+)$")) or "?" end
 local function getPath(st, path)
@@ -134,11 +145,22 @@ function SKY.view()
     for _, p in ipairs(FindAllOf("PostProcessVolume") or {}) do
         if live(p) and not nameOf(p):find("Default__", 1, true) then V.ppv[#V.ppv + 1] = { obj = p, name = short(p) } end
     end
+    -- ((2026-11-08) tools/re/NIGHT_SKY.md 1: the cockpit view's own post-process component, priority 1000, exposure min 11:
+    -- not a PostProcessVolume, so it held the night at EV 11 in cockpit view; written at most down from its own (cap))
+    for _, b in ipairs(FindAllOf("BP_PostProcessMisssionBase_C") or {}) do
+        local okC, cp = pcall(function() return b.CockpitViewPostProcess end)
+        if live(b) and okC and live(cp) and not nameOf(b):find("Default__", 1, true) then
+            V.ppv[#V.ppv + 1] = { obj = cp, name = short(b) .. "_Cockpit", cap = true }
+        end
+    end
     local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
     if kml ~= nil and live(kml) then V.kml = kml end
+    local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    if ks ~= nil and live(ks) then V.ks = ks end
     local c = CFG.sky or {}
     if type(c.mpc_env) == "string" then V.env = loadObject(c.mpc_env) end
     if type(c.mpc_vfx) == "string" then V.vfx = loadObject(c.mpc_vfx) end
+    if type(c.mpc_mec) == "string" then V.mec = loadObject(c.mpc_mec) end
     return V
 end
 
@@ -192,6 +214,9 @@ local function slot(V, key)
         elseif f == "int" then
             return function() return pget(function() return l.Intensity end) end,
                    function(v) return pcall(function() l:SetIntensity(v) end) end
+        elseif f == "spec" then                          -- ((2026-11-08) Mission 9's moonlight: 0.01, no glint on the sea)
+            return function() return pget(function() return l.SpecularScale end) end,
+                   function(v) return pcall(function() l:SetSpecularScale(v) end) end
         elseif f == "r" or f == "g" or f == "b" then
             local F = f:upper()
             -- (FColor bytes; written back with bSRGB false: byte / 255 truncates back to the same byte)
@@ -238,11 +263,16 @@ local function slot(V, key)
         return function() return pget(function() return o.Settings[F] end) end,
                function(v) return pcall(function() o.Settings[F] = v end) end
     elseif kind == "mpc" then
-        local coll = p[2] == "env" and V.env or V.vfx
+        local coll = ({ env = V.env, vfx = V.vfx, mec = V.mec })[p[2]]
         local name = p[3]
         if not (coll and V.kml and V.pc and name) then return nil end
         return function() return pget(function() return V.kml:GetScalarParameterValue(V.pc, coll, FName(name)) end) end,
                function(v) return pcall(function() V.kml:SetScalarParameterValue(V.pc, coll, FName(name), v) end) end
+    elseif kind == "cvar" then                           -- ((2026-11-08) a console variable: Mission 9's r.MinScreenRadiusForLights)
+        local name = p[2]
+        if not (V.ks and V.pc and name and name:match("^[%w%._]+$")) then return nil end
+        return function() return pget(function() return V.ks:GetConsoleVariableFloatValue(name) end) end,
+               function(v) return pcall(function() V.ks:ExecuteConsoleCommand(V.pc, string.format("%s %.6g", name, v), V.pc) end) end
     elseif kind == "custom" then
         if not (V.cdo and V.pc) then return nil end
         local G, S = p[2] == "moon" and "GetUseCustomMoon" or "GetUseCustomSun", p[2] == "moon" and "SetUseCustomMoon" or "SetUseCustomSun"
@@ -266,7 +296,7 @@ local function keysOf(V)
             for i = 1, n do sp(string.format("copy|%s|%s|%d|", r.name, arr, i)) end
         end
     end
-    if V.sun then for _, f in ipairs({ "pitch", "yaw", "roll", "int", "r", "g", "b" }) do out[#out + 1] = "light|" .. f end end
+    if V.sun then for _, f in ipairs({ "pitch", "yaw", "roll", "int", "spec", "r", "g", "b" }) do out[#out + 1] = "light|" .. f end end
     if V.cskyl then out[#out + 1] = "cskyl|int" end
     for _, c in ipairs(V.ctrl) do for _, f in ipairs({ "int", "r", "g", "b" }) do out[#out + 1] = "skyl|" .. c.name .. "|" .. f end end
     for _, v in ipairs(V.ppv) do for _, f in ipairs({ "min", "max", "bias" }) do out[#out + 1] = "ppv|" .. v.name .. "|" .. f end end
@@ -323,10 +353,13 @@ local function wanted(V, v)
     f.sun_el, f.sun_az, f.sun_factor, f.sun_disc = s.el, s.az, s.factor, s.disc
     if type(s.rgb) == "table" then f.sun_r, f.sun_g, f.sun_b = s.rgb[1], s.rgb[2], s.rgb[3] end
     f.moon_on, f.moon_el, f.moon_az, f.moon_phase, f.moon_phase_angle = m.enable, m.el, m.az, m.phase, m.phase_angle
-    f.moon_disc, f.moon_bright = m.disc, m.brightness
+    f.moon_disc, f.moon_bright, f.moon_frac = m.disc, m.brightness, m.frac
     f.stars_on, f.stars_int, f.stars_bg, f.stars_radius, f.stars_frac = st.enable, st.intensity, st.background, st.radius, st.fraction
     if type(st.rotation) == "table" then f.stars_rx, f.stars_ry, f.stars_rz = st.rotation[1], st.rotation[2], st.rotation[3] end
     f.stars_mask = st.mask_start
+    f.stars_mask_on, f.stars_mask_len, f.stars_fade, f.stars_scint = st.mask_on, st.mask_len, st.fade, st.scint
+    f.stars_moon_on, f.stars_moon_angle, f.stars_moon_len = st.moon_on, st.moon_angle, st.moon_len
+    f.ms, f.ms_ap = v.ms, v.ms_ap
     if v.copies ~= false then
         for _, k in ipairs(keysOf(V)) do
             local kind, field = k:match("^(%a+)|"), k:match("|([%w_]+)$")
@@ -344,6 +377,8 @@ local function wanted(V, v)
             for i, F in ipairs({ "r", "g", "b" }) do want["light|" .. F] = math.max(0, math.min(255, math.floor((s.rgb[i] or 1) * 255 + 0.5))) end
         end
     end
+    -- (the light's specular: Cloudly doesn't drive it, so written whichever path the sun takes)
+    if v.spec ~= nil and V.sun then want["light|spec"] = v.spec end
     local sl = v.skylight
     if type(sl) == "table" then
         for _, c in ipairs(V.ctrl) do
@@ -366,7 +401,15 @@ local function wanted(V, v)
             for _, e in ipairs({ { "min", "AutoExposureMinBrightness" }, { "max", "AutoExposureMaxBrightness" }, { "bias", "AutoExposureBias" } }) do
                 local on = false
                 pcall(function() on = p.obj.Settings["bOverride_" .. e[2]] == true end)
-                if on and ex[e[1]] ~= nil then want["ppv|" .. p.name .. "|" .. e[1]] = ex[e[1]] end
+                if on and ex[e[1]] ~= nil then
+                    local k, val = "ppv|" .. p.name .. "|" .. e[1], ex[e[1]]
+                    if p.cap and e[1] == "min" then          -- (the cockpit's: never above its own, only down at night)
+                        local o = SKY.orig[k]
+                        if o == nil then local get = slot(V, k); o = get and get() end
+                        if type(o) == "number" then val = math.min(val, o) end
+                    end
+                    want[k] = val
+                end
             end
         end
     end
@@ -375,6 +418,17 @@ local function wanted(V, v)
         if mp.emissive ~= nil then want["mpc|env|Ctrl_Scene_EmissiveScale"] = mp.emissive end
         if mp.vfx_ev ~= nil then want["mpc|vfx|VFXEmissiveEV"] = mp.vfx_ev end
         if mp.vfx_amb ~= nil then want["mpc|vfx|VFXCloudlySkyAmbientLight"] = mp.vfx_amb end
+        if mp.mfd ~= nil then want["mpc|mec|Cockpit_MFD_EmissiveIntensity"] = mp.mfd end
+        if mp.meter ~= nil then want["mpc|mec|Cockpit_Meter_EmissiveIntensity"] = mp.meter end
+        if mp.ice ~= nil then want["mpc|mec|Ice_Emissive_Intensity"] = mp.ice end
+        if mp.nav ~= nil then
+            for _, nm in ipairs({ "Navigation_Emissive_Intensity", "AntiCollision_Emissive_Intensity", "FormationEmissive_Intensity" }) do
+                want["mpc|mec|" .. nm] = mp.nav
+            end
+        end
+    end
+    if type(v.cvar) == "table" then
+        for name, val in pairs(v.cvar) do if type(val) == "number" then want["cvar|" .. name] = val end end
     end
     return want
 end
@@ -395,6 +449,8 @@ local function writeKey(V, k, value)
     local get, set = slot(V, k)
     if not (get and set) then return nil, false end
     local old = get()
+    -- ((2026-11-08) a sky param whose value can't be read isn't written: it could never be put back)
+    if old == nil and SKY.orig[k] == nil and (k:find("^asset|") or k:find("^interp|") or k:find("^copy|")) then return nil, false end
     if SKY.orig[k] == nil and old ~= nil then SKY.orig[k] = old; SKY.order[#SKY.order + 1] = k; noteAsset(V, k) end
     local ok = set(value) == true
     return old, ok
@@ -643,7 +699,7 @@ local VC = { V = nil, at = -1e9 }
 local function live(o) return o ~= nil and liveObj(o) end
 local function viewLive(V)
     if not (V and V.actor and live(V.actor)) then return false end
-    for _, k in ipairs({ "sun", "asset", "interp", "cskyl", "pc", "env", "vfx" }) do
+    for _, k in ipairs({ "sun", "asset", "interp", "cskyl", "pc", "env", "vfx", "mec" }) do
         if V[k] ~= nil and not live(V[k]) then return false end
     end
     for _, list in ipairs({ V.rend, V.ctrl, V.ppv }) do
@@ -700,11 +756,13 @@ end
 --   SKY.arcReset(why)      put back now and forgotten (a restart, the run's end)
 ARC = { on = false, base = nil, last = nil, roundAt = {}, said = {} }
 do
+-- ((2026-11-08) Mission 9's night, tools/re/NIGHT_SKY.md 5: spec the light's specular, ms / msap the night sky's
+-- multiple scattering, mfd / meter / ice the cockpit's glow, nav the planes' own lights, lrad r.MinScreenRadiusForLights)
 local FIELDS = { "el", "az", "factor", "r", "g", "b", "disc", "moon", "mel", "maz", "stars", "ex_min", "ex_max", "ex_bias",
-                 "sl_x", "sl_r", "sl_g", "sl_b", "em", "vfx" }
-local LOG_FIELDS = { factor = true, em = true }        -- (brightness: log space)
+                 "sl_x", "sl_r", "sl_g", "sl_b", "em", "vfx", "spec", "ms", "msap", "mfd", "meter", "ice", "nav", "lrad" }
+local LOG_FIELDS = { factor = true, em = true, sl_x = true, mfd = true, meter = true, ice = true, lrad = true }   -- (brightness: log space)
 local MODE_FIELDS = { el = true, az = true, factor = true, r = true, g = true, b = true, disc = true, moon = true,
-                      mel = true, maz = true }
+                      mel = true, maz = true, spec = true }
 local function acfg() return (CFG.sky or {}).arc or {} end
 local function n(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
 local function lerp(a, b, t) return a + (b - a) * t end
@@ -787,7 +845,8 @@ function SKY.arcBase(V)
     local st = acfg().stock or {}
     local b = { el = n(st.el, 15), az = n(st.az, 142), factor = n(st.factor, 120000), r = 1, g = 1, b = 1, disc = n(st.disc, 0.5),
                 moon = 0, mel = n(st.el, 15), maz = n(st.az, 142), stars = 0, sl_x = 1, sl_r = 1, sl_g = 1, sl_b = 1,
-                em = n(st.emissive, 1), vfx = n(st.vfx_ev, 11), from = "CFG.sky.arc.stock" }
+                em = n(st.emissive, 1), vfx = n(st.vfx_ev, 11), spec = 1, mfd = 1, meter = 1, ice = 1, nav = 0,
+                from = "CFG.sky.arc.stock" }
     b.ex_min, b.ex_max, b.ex_bias = trip(st.exposure, { 13, 14, 0 })
     if not V then return b end
     SKY.assetShipped(V)
@@ -808,11 +867,18 @@ function SKY.arcBase(V)
         take("moon", "asset|moon_on"); take("mel", "asset|moon_el"); take("maz", "asset|moon_az")
         b.stars_on = rd("asset|stars_on")
         b.st = {}
-        for _, f in ipairs({ "stars_int", "stars_bg", "stars_radius", "stars_frac", "stars_rx", "stars_ry", "stars_rz", "stars_mask" }) do
+        for _, f in ipairs({ "stars_int", "stars_bg", "stars_radius", "stars_frac", "stars_rx", "stars_ry", "stars_rz", "stars_mask",
+                             "stars_mask_len", "stars_fade", "stars_scint", "stars_moon_angle", "stars_moon_len", "stars_mask_on",
+                             "stars_moon_on" }) do
             local v = rd("asset|" .. f)
-            if type(v) == "number" then b.st[f] = v end
+            if type(v) == "number" or type(v) == "boolean" then b.st[f] = v end
         end
+        take("ms", "asset|ms"); take("msap", "asset|ms_ap")
     end
+    take("spec", "light|spec")
+    take("lrad", "cvar|r.MinScreenRadiusForLights")
+    take("mfd", "mpc|mec|Cockpit_MFD_EmissiveIntensity"); take("meter", "mpc|mec|Cockpit_Meter_EmissiveIntensity")
+    take("ice", "mpc|mec|Ice_Emissive_Intensity"); take("nav", "mpc|mec|Navigation_Emissive_Intensity")
     local c1 = V.ctrl and V.ctrl[1]
     if c1 then
         local function byte(v) return math.max(0, math.min(1, v / 255)) end
@@ -856,9 +922,15 @@ function SKY.arcAnchor(k, base)
         a.r, a.g, a.b = trip(ng.rgb, { 0.89, 0.96, 1 })
         a.disc, a.moon, a.mel, a.maz = n(ng.sun_disc, 0.57), 1, n(ng.moon_el, 35), n(ng.moon_az, -130)
         exp(ng.exposure)
-        a.sl_x = n(ng.skylight_x, 0.1)
-        a.sl_r, a.sl_g, a.sl_b = trip(ng.skylight_rgb, { 0.55, 0.65, 1 })
+        a.sl_x = n(ng.skylight_x, 4e-6)
+        a.sl_r, a.sl_g, a.sl_b = trip(ng.skylight_rgb, { 0.85, 1, 1 })
         a.em, a.vfx, a.stars = n(ng.emissive, 10000), n(ng.vfx_ev, -2), 1
+        -- ((2026-11-08) the rest of Mission 9's night: tools/re/NIGHT_SKY.md 5)
+        a.spec = n(ng.spec, 0.01)
+        if base.ms then a.ms = n(ng.ms, 3) end
+        if base.msap then a.msap = n(ng.ms_ap, 3) end
+        a.mfd, a.meter, a.ice, a.nav = n(ng.mfd, 1e-4), n(ng.meter, 0.002), n(ng.ice, 1e-4), n(ng.nav_lights, base.nav or 0)
+        if base.lrad then a.lrad = n(ng.light_radius, 0.008) end
     else
         local dawn = copy(base)
         dawn.el, dawn.az = n(c.dawn_el, -4), n(c.dawn_az, 105)
@@ -946,23 +1018,43 @@ end
 local function asV(s, base, red)
     local c = acfg()
     local st, mx = base.st or {}, (CFG.sky or {}).stars or {}
+    local ng = (CFG.sky or {}).night or {}
     local v = { sun = { el = s.el, az = s.az, factor = s.factor, disc = s.disc } }
     if not red then v.sun.rgb = { s.r, s.g, s.b } end
-    v.moon = { enable = s.moon >= 0.5, el = s.mel, az = s.maz }
+    -- ((2026-11-08) Mission 9's moon: its phase and brightness written, so a phase another write left (the custom moon API
+    -- left 0) can't hide it)
+    v.moon = { enable = s.moon >= 0.5, el = s.mel, az = s.maz, phase = tonumber(ng.moon_phase), phase_angle = tonumber(ng.moon_phase_angle),
+               frac = tonumber(ng.moon_frac) }
     if s.stars > 0 or base.stars_on ~= nil then
-        local function sv(f, m) local b0 = st[f]; if b0 == nil then return s.stars >= 0.5 and m or nil end; return lerp(b0, m, s.stars) end
-        local rot = type(mx.rotation) == "table" and mx.rotation or { 2.578, 0, 0 }
+        local function sv(f, m)
+            local b0 = st[f]
+            if type(b0) ~= "number" then return s.stars >= 0.5 and m or nil end
+            if type(m) ~= "number" then return nil end
+            return lerp(b0, m, s.stars)
+        end
+        local function sb(f, m)                          -- (a switch: the night's from half way)
+            if m == nil then return nil end
+            if s.stars >= 0.5 then return m == true end
+            if type(st[f]) == "boolean" then return st[f] end
+            return nil
+        end
+        local rot = type(mx.rotation) == "table" and mx.rotation or { 0, 0, 0 }
         v.stars = { enable = (s.stars > 0) or (base.stars_on == true) or nil,
-                    intensity = sv("stars_int", n(mx.intensity, 7)), background = sv("stars_bg", n(mx.background, 22)),
-                    radius = sv("stars_radius", n(mx.radius, 2.5)), fraction = sv("stars_frac", n(mx.fraction, 0.73)),
-                    rotation = { sv("stars_rx", n(rot[1], 2.578)), sv("stars_ry", n(rot[2], 0)), sv("stars_rz", n(rot[3], 0)) },
-                    mask_start = sv("stars_mask", n(mx.mask_start, 0.263)) }
+                    intensity = sv("stars_int", n(mx.intensity, 2.26)), background = sv("stars_bg", n(mx.background, 0.55)),
+                    radius = sv("stars_radius", n(mx.radius, 4.45)), fraction = sv("stars_frac", n(mx.fraction, 0.5)),
+                    rotation = { sv("stars_rx", n(rot[1], 0)), sv("stars_ry", n(rot[2], 0)), sv("stars_rz", n(rot[3], 0)) },
+                    mask_start = sv("stars_mask", n(mx.mask_start, 0.11)), mask_len = sv("stars_mask_len", tonumber(mx.mask_len)),
+                    fade = sv("stars_fade", tonumber(mx.fade)), scint = sv("stars_scint", tonumber(mx.scint)),
+                    moon_angle = sv("stars_moon_angle", tonumber(mx.moon_angle)), moon_len = sv("stars_moon_len", tonumber(mx.moon_len)),
+                    mask_on = sb("stars_mask_on", mx.mask_on), moon_on = sb("stars_moon_on", mx.moon_on) }
         if s.stars <= 0 and base.stars_on ~= nil then v.stars.enable = base.stars_on end
     end
+    v.spec, v.ms, v.ms_ap = s.spec, s.ms, s.msap
+    if type(s.lrad) == "number" then v.cvar = { ["r.MinScreenRadiusForLights"] = s.lrad } end
     v.exposure = { min = s.ex_min, max = s.ex_max, bias = s.ex_bias }
     v.skylight = { x = s.sl_x }
     if not red then v.skylight.rgb = { s.sl_r, s.sl_g, s.sl_b } end
-    v.mpc = { emissive = s.em, vfx_ev = s.vfx }
+    v.mpc = { emissive = s.em, vfx_ev = s.vfx, mfd = s.mfd, meter = s.meter, ice = s.ice, nav = s.nav }
     -- path (CFG.sky.arc.path): "asset" (the default since the user's sky test of 2026-11-07: the level's sky asset, which
     -- Cloudly draws and lights by, nothing else of the sun's); "copies" (the renderer's copies and the light: undone
     -- every frame); "custom" (those and Cloudly's custom sun API, which moves the asset's sun)
@@ -1001,7 +1093,11 @@ local function arcPlace(now, F)
     return k, cap * math.min(1, math.max(0, now - ARC.roundAt[r]) / math.max(1, n(c.round_s, 240))), "the fight"
 end
 
-local MPC_KEYS = { em = "mpc|env|Ctrl_Scene_EmissiveScale", vfx = "mpc|vfx|VFXEmissiveEV" }
+local MPC_KEYS = { { "em", "mpc|env|Ctrl_Scene_EmissiveScale" }, { "vfx", "mpc|vfx|VFXEmissiveEV" },
+                   -- ((2026-11-08) the cockpit's glow and the planes' own lights: MPC_MEC_EmissiveControl)
+                   { "mfd", "mpc|mec|Cockpit_MFD_EmissiveIntensity" }, { "meter", "mpc|mec|Cockpit_Meter_EmissiveIntensity" },
+                   { "ice", "mpc|mec|Ice_Emissive_Intensity" }, { "nav", "mpc|mec|Navigation_Emissive_Intensity" },
+                   { "nav", "mpc|mec|AntiCollision_Emissive_Intensity" }, { "nav", "mpc|mec|FormationEmissive_Intensity" } }
 local mpcV = { }
 -- the MPC values written now (every tick: the game may put them back), on a small view of their own (no walks)
 local function mpcWrite(s)
@@ -1011,15 +1107,69 @@ local function mpcWrite(s)
     if not (kml and liveObj(kml)) then return 0 end
     if not (mpcV.env and liveObj(mpcV.env)) and type(c.mpc_env) == "string" then mpcV.env = loadObject(c.mpc_env) end
     if not (mpcV.vfx and liveObj(mpcV.vfx)) and type(c.mpc_vfx) == "string" then mpcV.vfx = loadObject(c.mpc_vfx) end
-    local V = { kml = kml, pc = survivalPC, env = mpcV.env, vfx = mpcV.vfx }
+    if not (mpcV.mec and liveObj(mpcV.mec)) and type(c.mpc_mec) == "string" then mpcV.mec = loadObject(c.mpc_mec) end
+    local V = { kml = kml, pc = survivalPC, env = mpcV.env, vfx = mpcV.vfx, mec = mpcV.mec }
     local nW = 0
-    for f, k in pairs(MPC_KEYS) do
-        if type(s[f]) == "number" then
-            local _, ok = SKY.writeKey(V, k, s[f])
+    for _, fk in ipairs(MPC_KEYS) do
+        if type(s[fk[1]]) == "number" then
+            local _, ok = SKY.writeKey(V, fk[2], s[fk[1]])
             if ok then nW = nW + 1 end
         end
     end
     return nW
+end
+
+-- ((2026-11-08) tools/re/NIGHT_SKY.md 4: Mission 4's sky actor has no star catalog and no moon texture, so Cloudly drew
+-- neither, however the stars and the moon were set) Mission 9's (stock Cloudly assets: CFG.sky.stars.catalog,
+-- CFG.sky.night.moon_texture) put on the level's sky actor (an instance: gone with the level) once the arc's stars are on;
+-- read back, and SetResourcesIncludingStars (the same two, natively) if a write doesn't hold; on = false: taken off
+-- again (the run's end). Logged.
+local RES = { star = { "StarCatalog", function() return ((CFG.sky or {}).stars or {}).catalog end },
+              moon = { "MoonTexture", function() return ((CFG.sky or {}).night or {}).moon_texture end } }
+function SKY.nightRes(V, on, why)
+    local a = V and V.actor
+    if not (a and liveObj(a)) then return 0 end
+    local aA = addrOf(a)
+    ARC.res = ARC.res and ARC.res.actor == aA and ARC.res or { actor = aA, set = {} }
+    local R, n = ARC.res, 0
+    local function cur(field) local ok, o = pcall(function() return a.CloudlyResources[field] end); return ok and o or nil end
+    if not on then
+        for key in pairs(R.set) do
+            if pcall(function() a.CloudlyResources[RES[key][1]] = nil end) then n = n + 1 end
+        end
+        if n > 0 then log(string.format("sky: arc: the stars' catalog and the moon's texture taken off the sky actor (%s)", tostring(why))) end
+        R.set = {}
+        return n
+    end
+    if R.done then return 0 end
+    R.done = true
+    local said, fallback = {}, false
+    for key, rs in pairs(RES) do
+        local have = cur(rs[1])
+        if have ~= nil and valid(have) then
+            said[#said + 1] = string.format("%s %s (the level's)", rs[1], nameOf(have))
+        else
+            local path = rs[2]()
+            local o, whyL = nil, "no path"
+            if type(path) == "string" and path ~= "" then o, whyL = loadObject(path) end
+            if o ~= nil then
+                pcall(function() a.CloudlyResources[rs[1]] = o end)
+                local now = cur(rs[1])
+                if now ~= nil and addrOf(now) == addrOf(o) then R.set[key] = true; n = n + 1; said[#said + 1] = rs[1] .. " " .. nameOf(o)
+                else fallback = true; said[#said + 1] = rs[1] .. " NOT held (" .. tostring(now and nameOf(now)) .. ")" end
+            else
+                said[#said + 1] = string.format("%s NOT loaded (%s: %s)", rs[1], tostring(path), tostring(whyL))
+            end
+        end
+    end
+    if fallback then
+        local okS = pcall(function() a:SetResourcesIncludingStars() end)
+        said[#said + 1] = "SetResourcesIncludingStars " .. (okS and "called" or "failed") .. ": StarCatalog " .. tostring(cur("StarCatalog") and nameOf(cur("StarCatalog")))
+            .. ", MoonTexture " .. tostring(cur("MoonTexture") and nameOf(cur("MoonTexture")))
+        if okS then R.set.star, R.set.moon = true, true end
+    end
+    log(string.format("sky: arc: the stars and the moon on the sky actor (%s): %s", tostring(why), table.concat(said, "; ")))
+    return n
 end
 
 local function fmt1(v) return type(v) == "number" and string.format("%.1f", v) or tostring(v) end
@@ -1074,7 +1224,11 @@ function SKY.arcReset(why)
     ARC.on, ARC.base, ARC.last, ARC.roundAt, ARC.brk, ARC.blendFrom, ARC.blendAt, ARC.nextApply = false, nil, nil, {}, nil, nil, nil, nil
     ARC.lastK, ARC.mode = nil, nil
     ARC.wrote, ARC.followSaid, ARC.misses, ARC.noFollow = nil, nil, nil, nil
-    mpcV.env, mpcV.vfx = nil, nil
+    mpcV.env, mpcV.vfx, mpcV.mec = nil, nil, nil
+    if ARC.res and next(ARC.res.set) and not (levelTorn and levelTorn()) then
+        pcall(SKY.nightRes, SKY.viewCached(os.clock()), false, tostring(why))
+    end
+    ARC.res = nil
     if was and #SKY.order > 0 then
         local okR, put = pcall(SKY.restore, "the arc's over (" .. tostring(why) .. ")")
         log(string.format("sky: arc: over (%s): %s", tostring(why), okR and (tostring(put) .. " values put back") or ("restore error " .. tostring(put))))
@@ -1156,6 +1310,7 @@ function SKY.arcTick(now)
     pcall(followCheck, V)
     local okA, nW, failed = pcall(SKY.apply, asV(s, ARC.base, red), "arc", { V = V, quiet = true, shadows = shadows })
     if not okA then logOnce("sky arc apply", "sky: arc: write error " .. tostring(nW)); return end
+    if s.stars > 0 then pcall(SKY.nightRes, V, true, string.format("round %d, F+%d", D.round or 0, k)) end
     ARC.wrote = { el = s.el, factor = s.factor }
     if ARC.lastK ~= k or now >= (ARC.logAt or 0) then
         ARC.logAt = now + 60
@@ -1172,7 +1327,7 @@ if type(LEVEL_DROPS) == "table" then
         ARC.on, ARC.base, ARC.last, ARC.brk, ARC.blendFrom, ARC.blendAt, ARC.mode, ARC.lastK = false, nil, nil, nil, nil, nil, nil, nil
         ARC.wrote, ARC.followSaid, ARC.misses, ARC.noFollow = nil, nil, nil, nil
         ARC.roundAt = {}
-        mpcV.env, mpcV.vfx = nil, nil
+        mpcV.env, mpcV.vfx, mpcV.mec, ARC.res = nil, nil, nil, nil
     end
 end
 end

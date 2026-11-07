@@ -60,6 +60,14 @@ if [ "$ZFA" = 1 ]; then
     [ -f build/zfa44/out/SurvivalMode_ZFA44_P.utoc ] || { echo "ZFA=1: no ZFA-44 container (sh tools/zfa44/build.sh)"; exit 1; }
     cp build/zfa44/out/SurvivalMode_ZFA44_P.utoc build/zfa44/out/SurvivalMode_ZFA44_P.ucas build/install/SurvivalMode/
     echo "staged the ZFA-44 (build/zfa44/out/SurvivalMode_ZFA44_P; dev only)"
+    # (2026-11-07) AC7's LaserInterceptor, the ZFA-44's weapon (tools/laser7: the user's AC7 exception of 2026-11-07)
+    L7="E:/ACE8 Survival Mode/build/laser7/out"
+    if [ -f "$L7/SurvivalMode_Laser7_P.utoc" ]; then
+        cp "$L7/SurvivalMode_Laser7_P.utoc" "$L7/SurvivalMode_Laser7_P.ucas" build/install/SurvivalMode/
+        echo "staged AC7's LaserInterceptor ($L7/SurvivalMode_Laser7_P)"
+    else
+        echo "no LaserInterceptor container (sh tools/laser7/build.sh): the ZFA-44s keep AC8's swing laser"
+    fi
 fi
 cp -r mod/UE4SS/AC8SurvivalMode build/install/
 mkdir -p build/install/AC8SurvivalMode/dlls && cp build/runtime/main.dll build/install/AC8SurvivalMode/dlls/
