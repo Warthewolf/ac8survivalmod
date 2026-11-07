@@ -1768,3 +1768,20 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   fishing_test. Not a priority speaker; War stays offstage.
 - Packaged: friends' 58ddf990b3f4..., TESTER 06ea8ec0bd40... (0.74.20-coop2mp.112), both registered. INSTALLED
   2026-11-08 from the TESTER zip (backup of 0.74.19: build/backup/install_before_0.74.20).
+
+## 0.74.21 (2026-11-08, runtime 0.32.26; not yet run in game)
+- The special rounds' schedule (the user: "Round 2 always Shuttle Launch. Round 6 always Charlene's Escort Mission. Round 9
+  Always Gone Fishin. Then the festival at its usual round ... everything else is free game for the special rounds after
+  the festival they can come in any order and in any way"): CFG.specials.schedule ([specials.schedule] in the ini),
+  sv_spawn.lua specialFor. Its rounds' kinds for sure (one switched off or not in the build: a normal round, logged), no
+  other special before THE FESTIVAL's round (GONE FISHIN''s round + round_after: 15), the dice after it, the scheduled
+  kinds never drawn again (fixed_again false). `specials: round N is the schedule's <kind>`, `specials: round N: no special
+  (the schedule's part of the run, to round 15)`. rounds_test (its dice tests with the schedule off), coop_rejoin_test.
+- The repo cleanup (the user: "clean up the github and delete things we aren't using anymore and organise shit a bit
+  better"): main is the working branch (COOP2MP's line fast-forwarded into it); testing/logs (players' Steam IDs) and
+  testing/builds (old zips, TESTER ones with the test keys) out of git and ignored, kept on disk; BUILD_PLAN.md and
+  TEST_RESULT_2026-10-20.md deleted (finished); archive/* tags for the unmerged branches; the duplicate `github` remote
+  gone; a bundle of every ref first (build/backup/repo_before_cleanup_2026-11-08.bundle). The worktrees' build folders
+  kept in build/old_worktrees. README's features and the player guide's special rounds brought up to date.
+- Packaged: friends' 2dac1757088b..., TESTER 01db8800f1da... (0.74.21-coop2mp.113), both registered. INSTALLED
+  2026-11-08 from the TESTER zip (backup of 0.74.20: build/backup/install_before_0.74.21). Built in the main tree.

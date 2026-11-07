@@ -79,6 +79,7 @@ svLevelOn = true
 local FLAGS = {}
 function svFlags() return FLAGS end
 part("sv_config.lua")
+CFG.specials.schedule.enabled = false                -- ((2026-11-08) the dice tested here; the schedule: its own section)
 part("sv_rows.lua"); part("sv_ai.lua")
 function hudCallout(text, sub, big) callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
 part("sv_spawn.lua"); part("sv_anomalies.lua")
@@ -464,6 +465,51 @@ for r = 9, 60 do rolls = { 0.0 }; local k = specialFor(r); if k then seen[k] = (
 check(not seen.spaceport and not table.concat(RUN.specialBag or {}, ","):find("spaceport"),
       "a kind that can't come (ready() false): never drawn nor in the bag")
 ALLY.fleetReady = true
+-- ((2026-11-08) the user's plan: "Round 2 always Shuttle Launch. Round 6 always Charlene's Escort Mission. Round 9 Always
+-- Gone Fishin. Then the festival at its usual round ... everything else is free game for the special rounds after the
+-- festival") CFG.specials.schedule: its rounds for sure, nothing else before THE FESTIVAL's (F + 6), the dice after it,
+-- the scheduled kinds not drawn again (fixed_again false); one switched off: a normal round
+print("specialFor: the schedule (round 2 the Shuttle Launch, 6 THE ESCORT, 9 GONE FISHIN', THE FESTIVAL, then the dice)")
+do
+    local SC = CFG.specials.schedule
+    SC.enabled = true
+    newRun()
+    local keepR, keepE, keepF = SPC.kinds.escort and SPC.kinds.escort.ready, nil, nil
+    local keepEsc, keepFest = SPC.kinds.escort, FEST                -- (no sv_escort / sv_festival here: stand-ins)
+    SPC.kinds.escort = SPC.kinds.escort or { sub = "escort_sub", spawn = function() return true end }
+    FEST = FEST or {}
+    local keepRoundIs = FEST.roundIs
+    FEST.roundIs = function(r) return RUN.arcF ~= nil and r == RUN.arcF + 6 end
+    if SPC.kinds.escort then SPC.kinds.escort.ready = function() return true end end
+    if SPC.kinds.fishing then keepF = SPC.kinds.fishing.ready; SPC.kinds.fishing.ready = function() return true end end
+    local got = {}
+    for r = 1, 15 do got[r] = specialFor(r) or "-" end
+    check(got[2] == "shuttle" and got[6] == "escort" and got[9] == "fishing",
+          "rounds 2, 6, 9: the Shuttle Launch, THE ESCORT, GONE FISHIN' (" .. table.concat(got, " ", 1, 9) .. ")")
+    local others = 0
+    for r = 1, 14 do if r ~= 2 and r ~= 6 and r ~= 9 and got[r] ~= "-" then others = others + 1 end end
+    check(others == 0 and got[15] == "-", "no other special before THE FESTIVAL's round (15: GONE FISHIN''s 9 + 6)")
+    RUN.arcF = 9                                       -- (GONE FISHIN' came: THE FESTIVAL's round its arc's)
+    check(specialFor(15) == "festival", "round 15: THE FESTIVAL (its arc's F + 6)")
+    rolls = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }
+    local after = {}
+    for r = 16, 40 do local k = specialFor(r); if k then after[#after + 1] = k end end
+    local fixedAgain = false
+    for _, k in ipairs(after) do if k == "shuttle" or k == "escort" or k == "fishing" then fixedAgain = true end end
+    check(#after >= 3 and not fixedAgain, "after it: the dice's specials (" .. table.concat(after, ", ") .. "), never the scheduled kinds again")
+    newRun()
+    CFG.specials.shuttle.enabled = false
+    check(specialFor(2) == nil and since(1, "round 2 is the schedule's shuttle %(switched off or not in this build: a normal round%)") >= 1,
+          "a scheduled kind switched off: a normal round, logged")
+    CFG.specials.shuttle.enabled = true
+    SC.enabled = false
+    if SPC.kinds.escort then SPC.kinds.escort.ready = keepR end
+    if SPC.kinds.fishing then SPC.kinds.fishing.ready = keepF end
+    RUN.arcF = nil
+    SPC.kinds.escort, FEST = keepEsc, keepFest
+    if FEST then FEST.roundIs = keepRoundIs end
+end
+
 math.random = rawRandom
 
 logFile:close()

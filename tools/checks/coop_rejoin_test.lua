@@ -535,6 +535,7 @@ check(specialFor(9) == nil, "a field that isn't a word: none")
 COOP.reopen("host", "test")
 D.round = 12
 CFG.specials.enabled, CFG.specials.random = true, true
+CFG.specials.schedule.enabled = false                -- (2026-11-08: the dice, not the fixed schedule)
 RUN.specialPick = { [12] = "ladon" }
 local s9 = #sent
 M.nextRnd = 0

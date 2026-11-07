@@ -2,7 +2,7 @@ AC8 Survival Mode - {EDITION} edition, test build {DATE} (Lua {LUA}, runtime {RT
 ======================================================================
 
 A round-based survival mode for Ace Combat 8 (PC, game version 1.1.2.0). Waves of enemy fighters get bigger and
-sharper every round, bombers raid Comona Airport every 3rd round, and every 5th round is a special round. Land at
+sharper every round, bombers raid Comona Airport every 3rd round, and special rounds bring bosses and set pieces. Land at
 Comona Airport between rounds to spend the zollars you earn on missiles, special weapons, flares, airfield repairs,
 and AA guns / SAM sites around the airport.
 
@@ -103,11 +103,17 @@ Named aces (ace rounds: 16, 19, 22, ... - only ace squadrons, no bomber raids; t
 for the Reapers, an ADFX-02. Their leaders are named aces (Ledger, Sigrun, Mephisto, Specter, Grim, Oblivion, ...);
 an "ACE INBOUND" callout names each one the first time it shows up.
 
-Special rounds: in rounds 2-6 only Comona Defense can come (about 1 in 3 each); from round 7 on, any round can be
-any special (about 1 in 3, never two in a row). Each special comes at most once every 10 rounds. They get harder
-the later they come, and from round 12 the Ladons, the Alicorn and AB.L..IN bring escorts.
-- COMONA DEFENSE: the EMBDIR Shuttle - CORRIS on the spaceport pad, with its AA guns and SAMs. Protect it through
-  the ~2.5 minute countdown. If it's destroyed the shop is closed through the next round.
+Special rounds: round 2 is always the Shuttle Launch, round 6 THE ESCORT, round 9 GONE FISHIN' and round 15 THE
+FESTIVAL. After the festival any round can be any of the others (about 1 in 3, never two in a row), each at most once
+every 10 rounds. They get harder the later they come, and from round 12 the Ladons, the Alicorn and AB.L..IN bring
+escorts. ([specials.schedule] enabled = false in survival.ini: random specials from round 4 instead.)
+- SHUTTLE LAUNCH: the EMBDIR Shuttle - CORRIS on the spaceport pad, with its AA guns and SAMs. Protect it through
+  the ~2.5 minute countdown while War's jets attack. If it's destroyed the shop is closed through the next round.
+- THE ESCORT: CHARLENE's B-1B and her four KMG escorts fly in under attack; bring them to Comona and see them land.
+- GONE FISHIN': SAL needs fish for the island's festival. Shoot the shoals; the weigh-in pays for the haul. The sun
+  starts to set: three rounds of night follow the festival, then the sun rises again.
+- THE FESTIVAL: at sunset, Tu-160s and their fighters raid the airfield's festival with cruise missiles. It's saved
+  only once every bomber, missile and enemy aircraft is down.
 - THE ANOMALY: the ace MINDRIPPER comes through a lightning portal in an F-4E, hovering in place, with four PHANTASM
   guards. Within 3 km of it your pitch and roll invert. Nothing else flies in its round.
 - AMPHIBIOUS ASSAULT: 16 landing craft head for the beaches by the airport; every one that lands puts a BTR ashore,
@@ -119,6 +125,8 @@ the later they come, and from round 12 the Ladons, the Alicorn and AB.L..IN brin
   Destroy its four ballast tanks to open its core, then the core.
 - AB.L..IN (IFF: FATAL ERROR): a lone EA-18G with its jammer always on. Every time you hit it, it vanishes in
   smoke and blinks around you for 6 seconds, nose on you, gun firing. Before round 12 nothing else flies with it.
+- VALKA, the SPACEPORT ASSAULT (and its retake if you lose the spaceport) and THE DECOY (a recon drone luring you into
+  the Tonitrus Spear) come after the festival too.
 
 ONLINE ONLY BEGIN
 Leaderboard (Discord)

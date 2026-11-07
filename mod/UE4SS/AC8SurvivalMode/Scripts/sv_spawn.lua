@@ -1115,12 +1115,41 @@ local function aceTakes(round)
 end
 -- can special k come in `round` (switched on, its from_round, its cooldown: CFG.specials cooldown_rounds), not the last
 -- one again (unless it's the rotation's only one)
+-- ((2026-11-08) CFG.specials.schedule: on, and its kinds by round)
+local function schedule(sp)
+    local sc = sp.schedule
+    if type(sc) ~= "table" or sc.enabled == false or type(sc.rounds) ~= "table" then return nil end
+    return sc
+end
+local function scheduledKind(sc, k)
+    for _, x in pairs(sc.rounds) do if x == k then return true end end
+    return false
+end
+-- the last round of the schedule's part of the run: THE FESTIVAL's (GONE FISHIN''s round, as it came or as scheduled, +
+-- festival.round_after), else its last fixed round
+local function scheduleEnd(sp, sc)
+    local fishAt = SKY and SKY.arcF and SKY.arcF() or nil
+    local last = 0
+    for r, k in pairs(sc.rounds) do
+        r = tonumber(r)
+        if r then
+            last = math.max(last, r)
+            if not fishAt and k == "fishing" then fishAt = r end
+        end
+    end
+    if fishAt then return math.max(last, fishAt + math.floor(tonumber((sp.festival or {}).round_after) or 6)) end
+    return last
+end
+SPECIAL_SCHEDULE = { on = function() return schedule(CFG.specials) ~= nil end,
+                     endRound = function() local sc = schedule(CFG.specials); return sc and scheduleEnd(CFG.specials, sc) or 0 end }
 local function specialReady(sp, k, round)
     local last = RUN.specialAt and RUN.specialAt[k]
     local from = type(sp[k]) == "table" and tonumber(sp[k].from_round) or 0   -- (a special's first round)
+    local sc = schedule(sp)
     return specialOn(k) and round >= from and (not last or round - last >= (sp.cooldown_rounds or 0))
         and (k ~= RUN.lastSpecial or #sp.rotation == 1) and kindReady(k, round)
         and not (ESC and ESC.anomalyOk and ESC.anomalyOk(k) == false)   -- ((2026-11-07) an Anomaly waits for CHARLENE)
+        and not (sc and sc.fixed_again == false and scheduledKind(sc, k))   -- ((2026-11-08) its fixed rounds' kinds had theirs)
 end
 
 -- The special round `round` is (CFG.specials), or nil for a normal round.
@@ -1136,6 +1165,37 @@ function specialFor(round)
     if FEST and FEST.roundIs and FEST.roundIs(round) and specialOn("festival") then return "festival" end
     local sx = SETUP and SETUP.specialsX and SETUP.specialsX() or 1   -- (the menu's SPECIAL ROUNDS, sv_menu.lua: 0 = off)
     if sx <= 0 then return nil end
+    -- ((2026-11-08) the user's plan, CFG.specials.schedule: round 2 the Shuttle Launch, 6 THE ESCORT, 9 GONE FISHIN', THE
+    -- FESTIVAL at its round (above), nothing else before it; the dice after it)
+    local sc = sp.enabled and schedule(sp) or nil
+    if sc then
+        RUN.specialPick = RUN.specialPick or {}
+        local pick = RUN.specialPick
+        local fixed = sc.rounds[round]
+        if fixed then
+            if pick[round] == nil then
+                local ok = specialOn(fixed) and kindReady(fixed, round)
+                pick[round] = ok and fixed or false
+                if ok then
+                    -- (as the early window's: one that can't start isn't swapped for another, SPC.unplan undoes it)
+                    RUN.specialRoll = { round = round, kind = fixed, lastWas = RUN.lastSpecial, gapWas = RUN.specialGap or 0,
+                                        early = true, tried = { [fixed] = true } }
+                    RUN.lastSpecial = fixed
+                end
+                log(string.format("specials: round %d is the schedule's %s%s", round, fixed,
+                    ok and "" or " (switched off or not in this build: a normal round)"))
+            end
+            return pick[round] or nil
+        end
+        local last = scheduleEnd(sp, sc)
+        if round <= last then
+            if pick[round] == nil then
+                pick[round] = false
+                log(string.format("specials: round %d: no special (the schedule's part of the run, to round %d)", round, last))
+            end
+            return nil
+        end
+    end
     if sp.enabled and sp.random and #sp.rotation > 0 then
         RUN.specialPick = RUN.specialPick or {}
         local pick = RUN.specialPick

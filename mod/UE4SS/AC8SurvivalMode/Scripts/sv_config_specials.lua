@@ -20,6 +20,14 @@ CFG.specials = {
     -- specials in a row, not the same one twice running), and no other special comes in those rounds: the
     -- random picks above start after `to` (user: only the Shuttle Launch may come between 2 and 6).
     early    = { kind = "shuttle", from = 2, to = 6, chance = 0.35 },
+    -- ((2026-11-08) the user's plan: "Round 2 always Shuttle Launch. Round 6 always Charlene's Escort Mission. Round 9
+    -- Always Gone Fishin. Then the festival at its usual round ... everything else is free game for the special rounds
+    -- after the festival they can come in any order and in any way") schedule: its rounds' specials for sure (one that
+    -- can't come, switched off or not in the build: a normal round), no other special before THE FESTIVAL's round
+    -- (GONE FISHIN''s + festival.round_after: round 15), the dice above after it (`early` unused); fixed_again: whether
+    -- the scheduled kinds can be drawn after it too (the Shuttle Launch: THE ESCORT and GONE FISHIN' are once a run).
+    -- enabled = false: the dice from `first`, the early window, as before.
+    schedule = { enabled = true, rounds = { [2] = "shuttle", [6] = "escort", [9] = "fishing" }, fixed_again = false },
     -- each special comes at most once in this many rounds (user, 2026-10-23): Comona Defense in round 2 can come
     -- again from round 12; the others keep their chance meanwhile. 0: no cooldown.
     cooldown_rounds = 10,
