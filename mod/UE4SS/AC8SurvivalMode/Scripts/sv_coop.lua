@@ -886,10 +886,13 @@ function hostTick()
         elseif not okS then once("spx", "coop: the Spaceport's state not sent: " .. tostring(code)) end
     end
     if AF and now >= M.nextAf then
-        local key = tostring(AF.hp) .. "/" .. tostring(AF.full) .. "/" .. tostring(AF.down)
+        -- ((2026-11-07) players: the airfield "at 250 health with the health bar at halfway": a joiner's bar divided the
+        -- host's health by the joiner's OWN maximum (its own setup's AIRFIELD HEALTH, 200% = 500). The host's maximum
+        -- goes as field 5, and the joiner's bar is out of that)
+        local key = tostring(AF.hp) .. "/" .. tostring(AF.full) .. "/" .. tostring(AF.down) .. "/" .. tostring(AF.max)
         if key ~= M.afKey or now >= M.nextAf + 10 then
             M.afKey, M.nextAf = key, now + 2
-            send(true, "af", AF.hp or 0, AF.full or 0, AF.down and 1 or 0)
+            send(true, "af", AF.hp or 0, AF.full or 0, AF.down and 1 or 0, AF.max or 0)
         end
     end
     -- the hunt orders waiting

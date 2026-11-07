@@ -669,4 +669,22 @@ static const uint8_t kSigPathTrackTickMask[161] = {
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1,
 };
 
+/* (runtime 0.32.25) A game object check 0x147d0ba00 (game object, other) -> bool: it calls AActor::GetWorld (0x143fb5420)
+ * on the game object with no null check. ALiveMeteoriteImpact::Tick (0x147f40500: the Tonitrus Spear's rod) calls it
+ * with its owner (+0x368, ALiveWeaponBase::OwningGameObject, 0x147f419ec) as is: a joiner's crash of 2026-11-07 13:00:07
+ * (UECC 9139164E, reading 0x8 at 0x143fb5424) with the rod's owner NULL. flight.c OnOwnerHostile. Its prologue: 15 bytes,
+ * no RIP-relative operand. mksig.py: unique in 37 bytes, its call wildcarded. */
+static const uint8_t kSigOwnerHostile[37] = {
+    0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0x48,
+    0x83, 0xEC, 0x20, 0x48, 0x8B, 0xF2, 0x48, 0x8B, 0xF9, 0xE8, 0x06, 0x9A,
+    0x2A, 0xFC, 0x48, 0x8B, 0xD8, 0x48, 0x83, 0xB8, 0x58, 0x01, 0x00, 0x00,
+    0x00,
+};
+static const uint8_t kSigOwnerHostileMask[37] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0,
+    0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1,
+};
+
 #endif

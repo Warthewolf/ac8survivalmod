@@ -32,6 +32,10 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   one, a little wider: Scripts/sv_decoy.lua's clouds). Read only, from the user's upload; none of its files ship.
 - Release zips always go to the main tree's build/release, `E:\ACE8 Survival Mode\build\release`, from any worktree
   (user, 2026-11-07): tools/package_release.sh and package_test.sh find it through tools/release_dir.sh.
+- The runtime's leaderboard address and key come from the main tree's leaderboard/submit.local from any worktree
+  (runtime/build.sh: .env's SV_LB_LOCAL, this checkout's, else the main tree's). Every 0.74.0-0.74.8 build was made in a
+  worktree without it and could send no run; package_release.sh online and package_dev.sh now refuse a runtime without
+  it (build/runtime/submit_cfg.h). A build's log must say "leaderboard: runs go to ...".
 - Survival's own build: `tools/build_all.sh` (see tools/README.md). Packages are generated into `mod/Content`
   by `tools/build_survival.py`. Edit that script, not the binaries. The container is `SurvivalMode_P`, packages live under `/Game/Mods/SurvivalMode/`.
 - Survival Mode is its own mod: never repoint or override Stonehenge Returns' (or any other mod's) files or mission slot.

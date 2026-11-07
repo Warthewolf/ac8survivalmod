@@ -12,7 +12,7 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
 local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
@@ -190,6 +190,30 @@ jam(1)
 from = #logs + 1
 JAM.tick()
 check(evs("JamEcm") == "" and since(from, "isn't its flight's lead") == 1, "not its flight's lead: no pod, logged")
+-- ((2026-11-07) the user: "The Enemy EA-18G Growlers are not using ECM against the players": a first look before the
+-- sweep had read its position dropped the jammer for the round, its pod never on)
+do
+    local j = jam(0)
+    j.at = nil                                         -- (logPlane's new plane: no position yet)
+    local near = plane(CFG.pool[2] or POOL1, 0, "f18e")
+    near.rankSet = 2
+    near.obj.PilotRank = 2
+    near.at = { X = AIRFIELD.X + 2000000 + 50000, Y = AIRFIELD.Y, Z = 200000 }
+    JAM.tick()
+    check(D.jammer ~= nil and j.at ~= nil and evs("JamEcm") == string.format("RE_SV_JamEcm_%02d", idx),
+          "found before the sweep read its position: its position read, its pod on, the jammer kept")
+    check(near.jammed == true and near.obj.PilotRank == math.min(5, 2 + CFG.jammer.rank_add), "... and the enemy beside it sharpened")
+    local j2 = jam(0)
+    j2.at = nil
+    function j2.obj:K2_GetActorLocation() error("not readable") end
+    JAM.tick()
+    check(D.jammer ~= nil and evs("JamEcm") ~= "", "its position not readable: kept, its pod on anyway")
+    D.now = 100 + CFG.jammer.ecm_every_s
+    j2.at = { X = 0, Y = 0, Z = 200000 }
+    j2.down = true
+    JAM.tick()
+    check(D.jammer == nil, "down: dropped")
+end
 
 ---------------------------------------------------------------------------------------------------- the raid's minimap pings
 -- (user, 2026-10-31: "an alert that pings the aircraft via the minimap that are attacking the airfield")

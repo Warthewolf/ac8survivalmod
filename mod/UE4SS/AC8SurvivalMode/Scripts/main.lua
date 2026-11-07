@@ -4,7 +4,7 @@
 -- state (UE4SS gives each Lua mod its own): a name one part shares with the others is a global of that state, each
 -- part's own helpers stay local to it. A part that fails to load stops the rest, as one file used to.
 -- (Hard rule 23 counts locals per part now: python tools/checks/lua_check.py Scripts/*.lua checks them all.)
-VERSION = "0.74.5"
+VERSION = "0.74.9"
 
 local MODULES = {
     "sv_core",
@@ -40,6 +40,8 @@ local MODULES = {
     "sv_tells",                    -- P3's tells (before sv_coop: it keeps SV_Event as it was unwrapped)
     "sv_director",                 -- P2's squad director (calls SV_Event by name at run time: sv_coop wraps it)
     "sv_escort",                   -- THE ESCORT and the ZFA-44 carriers (tools/re/ESCORT.md; before sv_coop: its logPlane wrap)
+    "sv_escort_subs",              -- what CHARLENE, her KMG escorts and Comona say; the Anomalies' wait for her (2026-11-07)
+    "sv_escort_laser",             -- the ZFA-44 carriers' anti-missile laser: its rows, its arm in the log, its kills (2026-11-07)
     "sv_menu",
     "sv_coop",
     "sv_coop_joiner",              -- (sv_coop.lua's next piece: tools/lua_split_part.py)

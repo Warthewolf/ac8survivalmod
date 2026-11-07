@@ -262,23 +262,29 @@ local alive, queued, removedObj, paid, lbs = {}, {}, {}, {}, {}
 planes = {}
 local bombers = {}
 local lights = {}
+local town = nil                                   -- ((2026-11-07) the town's boxes: SV_Unit_FestTown's 15 dummies)
+local texts = {}
+function SV_SetText(k, v) texts[k] = v; return 1 end
 function SV_Spawn(...)
     local unit, x, y, z, yaw = ...
     spawns[#spawns + 1] = { unit = unit, x = x, y = y, z = z, yaw = yaw, su = spawningUnit, n = select("#", ...), at = clock }
     local made = {}
     local g = unit:match("^SV_Unit_Fest([NWS])$")
-    local nObj = (g and 4) or (unit:find("^SV_Unit_FestLight") and 2) or 4
+    local isTown = unit == "SV_Unit_FestTown"
+    local nObj = (g and 4) or (unit:find("^SV_Unit_FestLight") and 2) or (isTown and 15) or 4
     for i = 1, nObj do
         local o = obj("/Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel." .. unit .. "_" .. i,
             { HealthInternal = 250, loc = { X = (x or 0) + (i - 1) * 6000, Y = y or 0, Z = z or 230000 }, hits = {} })
         function o:K2_GetActorLocation() return self.loc end
         function o:TurnOff() self.off = true end
+        function o:SetIsInvincible(b) self.inv = b end
         made[#made + 1] = o
         for _, fn in ipairs(notifies["/Script/Live.LiveAIGameObject"] or {}) do fn(o) end
-        if not unit:find("^SV_Unit_FestLight") then planes[#planes + 1] = { obj = o, addr = o.addr, unit = unit, name = o.full } end
+        if not unit:find("^SV_Unit_FestLight") and not isTown then planes[#planes + 1] = { obj = o, addr = o.addr, unit = unit, name = o.full } end
     end
     if g then bombers[g] = made end
     if unit:find("^SV_Unit_FestLight") then lights[unit] = made; SPC.CLEAN_OBJ[unit] = made end
+    if isTown then town = made; SPC.CLEAN_OBJ[unit] = made end
     alive[unit] = #made
     return #made
 end
@@ -293,27 +299,100 @@ local holds = {}                                   -- ((code review of 2026-11-0
 COOP.payHold = function(o, on) holds[o] = on and true or false; return true end
 CFG.airfield.enabled = true
 AF = { bomb = 0, down = false }
-RUN = { arcF = 7, fishKg = 712 }
+-- ((2026-11-07) KMG at the festival: CHARLENE landed in THE ESCORT earlier this run, ROCK shot down in it)
+RUN = { arcF = 7, fishKg = 712, escort = { flown = 9, arrived = 9, down = { ROCK = true } } }
 D = { now = 3000, round = 13, state = "spawning", up = {}, special = { kind = "festival", state = "pending" } }
 clock = 3000
 local s = D.special
 check(FEST.roundSpawn(3000) == true and s.state == "talk", "THE FESTIVAL: the talk first")
+-- ((2026-11-07) the user: "Add some Allied Target Boxes in the town next to the airfield", VALKA and AUDREY, the concert,
+-- market stalls, food trucks; "invincible dummies") the town's boxes up with the talk, their names set, invincible
+do
+    local sp = nil
+    for _, x in ipairs(spawns) do if x.unit == "SV_Unit_FestTown" then sp = x end end
+    local allInv = town ~= nil
+    for _, o in ipairs(town or {}) do if not (o.inv == true and o.bIsInvincible == true) then allInv = false end end
+    check(sp and sp.n == 1 and town and #town == 15 and allInv and found("festival: the town's boxes 15 up") ~= nil,
+          "the town's boxes up with the talk (SV_Spawn(unit) alone: the build's spots), all 15 invincible, logged")
+    local names = 0
+    for k, v in pairs(C.text.town) do if texts[k] == v then names = names + 1 end end
+    check(names == 12 and texts.SV_FestBox_Valka == "VALKA" and texts.SV_FestBox_Audrey == "AUDREY"
+          and texts.SV_FestBox_Concert == "CONCERT" and texts.SV_FestBox_Market == "MARKET STALL" and texts.SV_FestBox_FoodTruck == "FOOD TRUCK",
+          "their 12 names on their boxes (VALKA, AUDREY, CONCERT, MARKET STALL, FOOD TRUCK, ...)")
+    local se = readAll(MOD .. "/../../../tools/survival_events_festival.py")
+    local keys = {}
+    for k in se:gmatch("%('(SV_FestBox_%w+)',") do keys[k] = true end
+    local nk, missing = 0, {}
+    for k in pairs(keys) do nk = nk + 1; if not C.text.town[k] then missing[#missing + 1] = k end end
+    check(nk == 12 and #missing == 0, "every callsign key the build gives its boxes has its name here (" .. table.concat(missing, ", ") .. ")")
+    local vx, vy = se:match("'SV_FestBox_Valka', ([%-%d%.]+), ([%-%d%.]+)")
+    local ax, ay = se:match("'SV_FestBox_Audrey', ([%-%d%.]+), ([%-%d%.]+)")
+    local d = vx and ax and math.sqrt((tonumber(vx) - tonumber(ax)) ^ 2 + (tonumber(vy) - tonumber(ay)) ^ 2) or -1
+    check(d > 0 and d <= 15, string.format("VALKA and AUDREY side by side (%.0f m apart)", d))
+end
+-- ((2026-11-07) more lines: talk is one of its exchanges, each said whole; the single lines lists)
+local function flat(l, out)
+    out = out or {}
+    if type(l) == "string" then out[#out + 1] = l
+    elseif type(l) == "table" then for _, x in ipairs(l) do flat(x, out) end end
+    return out
+end
+local function oneOf(key, text, vals)
+    for _, x in ipairs(flat(C.text[key])) do local _, t = FISH.line(x, vals); if t == text then return true end end
+    return false
+end
+local talkWhole, talkN = false, 0
+for _, ex in ipairs(C.text.talk) do
+    local ok = #SUB.q >= #ex
+    for i, x in ipairs(ex) do
+        local who, t = FISH.line(x, { kg = "712" })
+        ok = ok and SUB.q[i] and SUB.q[i].who == who and SUB.q[i].text == t
+    end
+    if ok then talkWhole, talkN = true, #ex end
+end
 local talk = {}
 for _, l in ipairs(SUB.q) do talk[#talk + 1] = l.who .. ": " .. l.text end
-check(#SUB.q == #C.text.talk and table.concat(talk, " | "):find("712 kilos you caught for us", 1, true), "the pilots thanked, GONE FISHIN''s 712 kg named")
+check(talkWhole and table.concat(talk, " | "):find("712 kilos", 1, true), "the pilots thanked, one talk whole, GONE FISHIN''s 712 kg named")
+do                                                  -- ((2026-11-07) then KMG's: the one exchange without ROCK, shot down)
+    local kmg = {}
+    for i = talkN + 1, #SUB.q do kmg[#kmg + 1] = SUB.q[i] end
+    local ex = C.text.kmg_talk[2]
+    local ok = #kmg == #ex
+    for i, x in ipairs(ex) do local who, t = FISH.line(x); ok = ok and kmg[i] and kmg[i].who == who and kmg[i].text == t end
+    check(ok, "then KMG's (CHARLENE landed this run): the exchange without ROCK, who was shot down in THE ESCORT")
+end
 check(s.talkEnd - 3000 >= 25, string.format("about 30 s of it (%.0f s)", s.talkEnd - 3000))
 local longest = 0
-for _, k in ipairs({ "talk", "impact", "all_down", "timeout" }) do
-    for _, x in ipairs(C.text[k]) do local _, t = FISH.line(x, { kg = "9,999" }); longest = math.max(longest, #t) end
-end
-for _, k in ipairs({ "talk_nokg", "launch", "launch_again", "shot_first", "formation_down" }) do
-    local _, t = FISH.line(C.text[k], { dir = "north" }); longest = math.max(longest, #t)
+local noColour = {}
+for _, k in ipairs({ "talk", "impact", "all_down", "timeout", "talk_nokg", "launch", "launch_again", "shot_first", "formation_down",
+                     "raid_town", "chatter", "saved_town", "kmg_talk", "kmg_raid", "kmg_chatter", "kmg_saved" }) do
+    for _, x in ipairs(flat(C.text[k])) do
+        local who, t = FISH.line(x, { kg = "9,999", dir = "north" })
+        longest = math.max(longest, #t)
+        if not CFG.hud.subs.colors[who] then noColour[#noColour + 1] = who end
+    end
 end
 check(longest <= 70, "the festival's lines under 70 characters (" .. longest .. ")")
+check(#noColour == 0, "every festival speaker its colour (VALKA, AUDREY, CONCERT MC, FOOD TRUCK, MARKET STALL ...) " .. table.concat(noColour, ", "))
+do
+    local who = select(1, FISH.line("MC|x"))
+    check(who == "CONCERT MC" and select(1, FISH.line("VALKA|x")) == "VALKA" and select(1, FISH.line("S|x")) == "SAL"
+          and select(1, FISH.line("T|x")) == "COMONA TOWER", "a longer speaker code: its name from CFG.hud.subs.speakers, or itself")
+end
 local function ftick(dt) clock = clock + dt; D.now = clock; FEST.roundTick(clock, s); SUB.hudTick(clock, true, false) end
 posts, stops, spawns = {}, {}, {}
 ftick(s.talkEnd - clock + 0.1)
 check(s.state == "raid" and posts[1] and posts[1].name == C.siren, "the raid: the air raid siren at the airfield")
+-- (the town's lines on the strip: sv_subs.lua's log, "subs: WHO: text (n s)")
+local function saidOf(key, vals)
+    local n = 0
+    for _, l in ipairs(logs) do
+        local who, text = l:match("^subs: (.-): (.*) %(%d+%.%d s%)$")
+        if who then for _, x in ipairs(flat(C.text[key])) do local w, t = FISH.line(x, vals); if w == who and t == text then n = n + 1 end end end
+    end
+    return n
+end
+check(saidOf("raid_town") >= 2, "as the siren starts: the town's exchange (VALKA and AUDREY, the MC or the food truck)")
 local formations = {}
 for _, sp in ipairs(spawns) do if sp.unit:match("^SV_Unit_Fest[NWS]$") then formations[#formations + 1] = sp end end
 check(#formations == 3 and formations[1].n == 1 and formations[1].x == nil, "three formations spawned with no pose (SV_Spawn(unit) alone)")
@@ -328,9 +407,9 @@ ftick(0.5)
 check(spawns[1] and spawns[1].unit == "SV_Unit_FestCM_N1" and spawns[1].x == nx and spawns[1].y == ny and spawns[1].z == 200000 and spawns[1].yaw == 90,
     "over its launch point: SV_Unit_FestCM_N1 there, 2 km up, yaw 90")
 check(#s.salvos == 1 and #s.salvos[1].ms == 4, "its four missiles recorded")
-local launchLine = false
-for _, l in ipairs(SUB.q) do if l.text:find("Missile launch from the north", 1, true) then launchLine = true end end
-check(launchLine or (SUB.cur and SUB.cur.text:find("north", 1, true)), "CONTROL calls the launch")
+local launchLine = SUB.cur ~= nil and oneOf("launch", SUB.cur.text, { dir = "north" })
+for _, l in ipairs(SUB.q) do if oneOf("launch", l.text, { dir = "north" }) then launchLine = true end end
+check(launchLine, "the launch called (from the north)")
 ftick(0.5)
 check(events[1] == "RE_SV_FestCM_N1", "its flight record 0.5 s on")
 ftick(0.5)
@@ -371,9 +450,8 @@ check(not heldP[3].down and not heldP[3].cleaned and not heldP[4].down and holds
 sl.ms[3].obj.HealthInternal = 0
 ftick(0.5)
 check(s.missilesDown == 1, "one shot down counted")
-local shotLine = false
-for _, l in ipairs(SUB.q) do if l.text:find("grill is safe", 1, true) then shotLine = true end end
-if SUB.cur and SUB.cur.text:find("grill is safe", 1, true) then shotLine = true end
+local shotLine = SUB.cur ~= nil and oneOf("shot_first", SUB.cur.text)
+for _, l in ipairs(SUB.q) do if oneOf("shot_first", l.text) then shotLine = true end end
 check(shotLine, "SAL cheers the first one")
 check(s.bombers == 12 and s.inAir == 1, "the row's numbers: 12 bombers, 1 missile still up (" .. tostring(s.bombers) .. ", " .. tostring(s.inAir) .. ")")
 check(FEST.row(s, CFG.hud.text) == "THE FESTIVAL  BOMBERS: 12  MISSILES IN THE AIR: 1", "the NEXT row: " .. tostring(FEST.row(s, CFG.hud.text)))
@@ -433,6 +511,16 @@ local want = C.reward + C.reward_per_round * 13
 check(paid[#paid] and paid[#paid].n == want and paid[#paid].why == "the festival saved", "the reward (" .. want .. ")")
 check(#stops > nStops and FEST.sirenActor == nil, "the siren stopped")
 check(lights.SV_Unit_FestLight_2[1].off == true, "the searchlights turned off")
+check(saidOf("chatter") >= 1, "the town's chatter during the raid (" .. saidOf("chatter") .. " lines)")
+check(saidOf("saved_town") >= 2, "saved: the town's exchange after all_down")
+check(saidOf("kmg_raid") >= 2 and saidOf("kmg_saved") >= 1, "KMG as the siren starts and when it's saved")
+do
+    local rock = 0
+    for _, l in ipairs(logs) do if l:match("^subs: ROCK: ") then rock = rock + 1 end end
+    check(rock == 0, "ROCK, shot down in THE ESCORT, says nothing at the festival (" .. rock .. ")")
+end
+check(town[1].bShowHUDBox == false and town[15].bIsInvincible == true and found("festival: the town's 15 boxes switched off here") ~= nil,
+      "the town's boxes switched off at its end (hidden, no box), logged")
 check(lbs[#lbs].k == "festival" and lbs[#lbs].won == true, "the leaderboard's special: festival, won")
 check(found("formation is down") ~= nil, "each formation's end called")
 
@@ -466,6 +554,7 @@ lights.SV_Unit_FestLight_1[1].off = nil
 FEST.restart("the run starts over")
 check(FEST.sirenActor == nil and #stops > nS0 and lights.SV_Unit_FestLight_1[1].off == true
       and found("festival: the run starts over: the siren off"), "FEST.restart: the siren stopped and its actor gone, the searchlights off, logged")
+check(town[1].bShowHUDBox == false, "... and the town's boxes")
 do
     local mainSrc = readAll(MOD .. "/Scripts/sv_main.lua")
     local a = mainSrc:find("if levelTick == -1 then", 1, true)

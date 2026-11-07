@@ -220,7 +220,40 @@ inbox[#inbox + 1] = "0|sp|" .. U1 .. "|-|-|-1|1"
 COOP.tick(0)
 roundsTick(101)
 check(units() == U1, "a joiner: the host's spawn comes as \"sp\", whatever the host's airfield (its own level ready)")
+-- ((2026-11-07) players: the airfield "at 250 health with the health bar at halfway despite the health being set to 250":
+-- the joiner's bar divided the host's health by its own setup's maximum) the host's "af" carries its maximum as field 5
+do
+    local savedAF = AF
+    AF = { max = 500, full = 500, hp = 500, down = false, pending = {} }
+    local fromAf = #logs + 1
+    inbox[#inbox + 1] = "0|af|250|250|0|250"
+    COOP.tick(0)
+    check(AF.max == 250 and AF.hp == 250 and AF.full == 250,
+          string.format("a joiner (its own setup 500): the host's \"af\" with its maximum 250: AF %s/%s, max %s",
+                        tostring(AF.hp), tostring(AF.full), tostring(AF.max)))
+    check(line("coop: the host's airfield maximum 250 here (this game's own setup had 500)", fromAf) ~= nil, "... logged")
+    AF.max = 500
+    inbox[#inbox + 1] = "0|af|240|250|0"
+    COOP.tick(0)
+    check(AF.max == 500 and AF.hp == 240, "an older host's \"af\" (no field 5): the health taken, this game's maximum kept")
+    AF = savedAF
+end
 room(false)
+-- the host sends its maximum
+do
+    local savedAF = AF
+    AF = { max = 250, full = 250, hp = 180, down = false, pending = {} }
+    room(true)
+    M.afKey, M.nextAf = nil, 0
+    sent = {}
+    clock = clock + 0.25
+    COOP.tick(0)
+    local afSent = false
+    for _, s in ipairs(sent) do if s:find("af|180|250|0|250", 1, true) then afSent = true end end
+    check(afSent, "the host's \"af\": health 180, full 250, up, maximum 250 (" .. table.concat(sent, " "):sub(1, 200) .. ")")
+    AF = savedAF
+    room(false)
+end
 
 ---------------------------------------------------------------------------------------------------- orders
 print("ordersTick while you're down at the airfield")

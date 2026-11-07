@@ -403,6 +403,39 @@ def festival_units(units, used_ids, z, top_number, v):
         z.nb.add(se.FEST_BEAM_ROW)
     print(f'  festival: {len(se.FEST_LIGHTS)} searchlights ({se.FEST_LIGHT_ROW} + its {se.FEST_LIGHT_PART} on '
           f'{se.FEST_BEAM_ROW}), allied: ' + ', '.join(f'{u} ({p[0]:.0f}, {p[1]:.0f})' for u, _, p, _ in se.fest_lights()))
+    festival_town(units, used_ids, z, top_number)
+
+
+FEST_TOWN_SAFE = ('bIsInvincible', 'bIsInvincibleFromAI', 'bIsInvincibleFromWingman', 'bIsAttackTargetsException')
+
+
+def festival_town(units, used_ids, z, top_number):
+    """(2026-11-07) THE FESTIVAL in the town (survival_events.FEST_TOWN_*): Mission 22's invisible dummy (Unit_dummyN0 on
+    dummy_common, THE DECOY's marks' source) ported with an object per box, allied, invincible (from AI and wingmen too)
+    and out of every attack, each object its own target box and callsign key shown for an ally, 8 m up (bIsLanding
+    cleared: placed, not set down)."""
+    se = survival_events
+    msrc = unit_named(units, se.DECOY_MARK_SOURCE)
+    assert [field_of(ob, 'MissionNpcID')[1] for ob in objects_of(msrc)] == [se.DECOY_MARK_ROW], 'Unit_dummyN0 changed'
+    spots = se.fest_town()
+    names = port_unit(units, used_ids, z, msrc, se.FEST_TOWN_UNIT, se.FEST_TOWN_OBJ, se.DECOY_MARK_ROW, [p for _, p in spots],
+                      0.0, top_number, clone_first=True)
+    assert names == [f'{se.FEST_TOWN_OBJ}_{k}' for k in range(len(spots))], names
+    u = unit_named(units, se.FEST_TOWN_UNIT)
+    put(u[2], 'LiveUnitDesc', 'Faction', ('enum', 'ELiveFaction', ('raw', 'Byte', b'\x01')))   # (written where the dummy has none)
+    set_bools(u, FEST_TOWN_SAFE)
+    clear_flags(u, ('bIsLanding',))
+    cx, cy = sum(p[0] for _, p in spots) / len(spots), sum(p[1] for _, p in spots) / len(spots)
+    place(u, (round(cx, 1), round(cy, 1), se.FEST_TOWN_Z_CM), 0.0, [p for _, p in spots])
+    for ob, (key, _) in zip(objects_of(u), spots):
+        put(ob[2], 'LiveAIObjectDesc', 'bShowHUDBox', ('raw', 'Bool', b'\x01'))
+        put(ob[2], 'LiveAIObjectDesc', 'bShowCallSignForAlly', ('raw', 'Bool', b'\x01'))
+        put(ob[2], 'LiveAIObjectDesc', 'GameObjectDisplayNameID02', ('name', key, 0))
+        z.nb.add(key)
+    assert not field_of(objects_of(u)[0], 'TargetMarkType'), 'a festival box with a TGT mark'
+    gap = min(math.dist(a[:2], b[:2]) for i, (_, a) in enumerate(spots) for _, b in spots[i + 1:]) / 100.0
+    print(f'  festival: the town ({se.FEST_TOWN_UNIT}: {len(spots)} invisible, invincible allied boxes on {se.DECOY_MARK_ROW}, '
+          f'{len(se.FEST_TOWN_KEYS)} names) round ({cx:.0f}, {cy:.0f}), {gap:.0f} m apart at least')
 
 
 # ---------------------------------------------------------------- THE ESCORT and THE DECOY (2026-11-06)
@@ -855,3 +888,141 @@ def build_ep(part, ef=False):
         assert {survival_events.fname(n) for n in g.flags} <= declared, g.flags - set(survival_events.INT_FLAGS)
         print(f'  events: {len(T)} triggers, {len(E)} execs')
     save(z, new)
+
+
+# ---------------------------------------------------------------- the ZFA-44s' anti-missile laser (2026-11-07)
+# (survival_events.ZFA_TLS_*; tools/re/LASER_INTERCEPTOR.md "Built") The CIWS arm's weapon imports onto BP_SwingTLS_ForMSL's
+# public exports by role (each export's name in its own package). None: the CIWS weapon's ParticleUpdateHandler, which the
+# laser hasn't and nothing in the arm's package references (no dependency, no property value: build_zfa_laser checks),
+# made a null import (as stock packages carry) and its hash dropped, so the arm imports exactly the laser's 7 public
+# exports, as the Nightmare UAV's blueprint does.
+ZFA_TLS_ROLES = {'BP_wp_ciws_vessel_C': 'BP_SwingTLS_ForMSL_C', 'Default__BP_wp_ciws_vessel_C': 'Default__BP_SwingTLS_ForMSL_C',
+                 'WeaponCollisionEffectModule': 'WeaponCollisionEffectModule', 'BulletVFX NS': 'MainLaser Niagara',
+                 'BulletVFX CS': 'EndLaser Niagara', 'DefaultSceneRoot_GEN_VARIABLE': 'DefaultSceneRoot_GEN_VARIABLE',
+                 'Static Mesh': 'Static Mesh', 'ParticleUpdateHandler': None}
+ZFA_TLS_MESH = 'PlaneBodyMesh'          # the host's body: the Su-47's own gun arm's (slot sockets GUN: its SOC_Gun_01)
+# the Nightmare UAV's TLSforMSL launcher's numbers (BP_OP0024_uavn_CP), all round (no turret here: 180 deg, not 30)
+ZFA_TLS_PERFORMANCE = {'FireRate': 8, 'MagazineCapacity': 1, 'ReloadTime': 1.0}
+ZFA_TLS_FIRE_CONTROL = {'CaptureDistance': 300000.0, 'CaptureAngleRange': 180.0, 'ActivationTime': 0.1,
+                        'TriggeringTime': 8.0, 'TriggerCount': 1, 'ShotIntervalTime': 8.0, 'RestingTime': 1.0}
+ZFA_TLS_SEARCH_CM = (300000.0, 330000.0)   # its AIControlCIWS's lock / loss radius (cm): the laser's 3 km reach
+# its fire-control row (DT_SV_NpcFCS, metres / seconds / degrees): NPC_FCS_VesselCIWS000's with these values; no weapon row
+# (the laser has none: Online Mode's NFID_Vessel_CIWS_00 names none either) and no AI module row (the arm's own search)
+ZFA_TLS_ROW_VALUES = {'FireRate': 8, 'MagazineCapacity': 1, 'ReloadTime': 1.0, 'SlotNum': 1, 'CaptureDistance': 3000.0,
+                      'CaptureAngleRange': 180.0, 'ActivationTime': 0.1, 'TriggeringTime': 8.0, 'TriggerCount': 1,
+                      'ShotIntervalTime': 8.0, 'RestingTime': 1.0, 'YawSpeed': 360.0, 'YawAngleMin': -180.0,
+                      'YawAngleMax': 180.0, 'PitchSpeed': 360.0, 'PitchAngleMin': -90.0, 'PitchAngleMax': 90.0}
+ZFA_TLS_ROW_CLEAR = ('NpcAIModuleId', 'NpcWeaponId', 'PredictionOffsetTime', 'ActivationRandomTimeMin', 'ActivationRandomTimeMax')
+NULL_IMPORT = 0xFFFFFFFFFFFFFFFF
+
+
+def zfa_tls_u64(e, at):
+    return struct.unpack_from('<Q', e, at)[0]
+
+
+def zfa_tls_value(sname, field, x):
+    """A value for `sname`'s property `field`, typed as the usmap has it (Int / Float / Double / Bool)."""
+    t = {n: tt for k, (n, tt) in uprop.U.schema(sname).items()}[field][0]
+    if t == 'Int': return ('raw', 'Int', struct.pack('<i', int(x)))
+    if t == 'Float': return ('raw', 'Float', struct.pack('<f', float(x)))
+    if t == 'Double': return ('raw', 'Double', struct.pack('<d', float(x)))
+    if t == 'Bool': return ('raw', 'Bool', b'\x01' if x else b'\x00')
+    raise TypeError((sname, field, t))
+
+
+def zfa_tls_set(props, sname, field, value=None, zero=False):
+    """props (a struct's or row's (idx, name, zero, value) list): `field` set (value) or zeroed (zero), in index order."""
+    idx = {n: k for k, (n, t) in uprop.U.schema(sname).items()}[field]
+    props[:] = sorted([q for q in props if q[0] != idx] + [(idx, field, zero, None if zero else value)], key=lambda q: q[0])
+
+
+def build_zfa_laser():
+    """The ZFA-44s' anti-missile laser (survival_events.ZFA_TLS_*): its fire-control arm BP_FCS_SV_ZfaTLS, a copy of the
+    ships' CIWS arm BP_FCS_Vessel_CIWS_00 under Survival's path (its objects keep their names: a zen package's export
+    hashes are package-relative, as the menu pages' copies), its weapon AC8's BP_SwingTLS_ForMSL (stock, unchanged), its
+    launcher a LauncherCommon on the host's body at its gun socket (the bone control the CIWS turns its turret with needs
+    bones a fighter hasn't), its AIControlCIWS missiles only within 3 km; and its fire-control row SV_FCS_ZfaTLS in
+    DT_SV_NpcFCS, which Lua adds to DT_NPC_FCS at the main menu (Scripts/sv_escort_laser.lua). DT_SV_NpcRows' laser twin
+    of the ZFA-44 host (build_npc_rows) names that row in its slot 3."""
+    se = survival_events
+    z = ZenPkg(stock(se.ZFA_TLS_FCS_SOURCE))
+    old_w, new_w, ecm = (ZenPkg(stock(p)) for p in (se.ZFA_TLS_OLD_WEAPON, se.ZFA_TLS_WEAPON, se.ZFA_TLS_LAUNCHER_SOURCE))
+    pub = lambda zz: {zfa_tls_u64(e, 56): zz.export_name(i) for i, e in enumerate(zz.exports) if zfa_tls_u64(e, 56)}
+    old_pub, new_pub = pub(old_w), {n: h for h, n in pub(new_w).items()}
+    assert sorted(old_pub.values()) == sorted(ZFA_TLS_ROLES), ('the CIWS weapon changed', sorted(old_pub.values()))
+    assert sorted(new_pub) == sorted(r for r in ZFA_TLS_ROLES.values() if r), ('the laser changed', sorted(new_pub))
+    assert z.imp_pkgs == [se.ZFA_TLS_OLD_WEAPON], z.imp_pkgs
+    # 1. the weapon: each import of the CIWS's onto the laser's export of its role; the one with none a null import
+    k = z.imp_pkgs.index(se.ZFA_TLS_OLD_WEAPON)
+    mine = [i for i, x in enumerate(z.imports) if x >> 62 == 2 and (x >> 32) & 0x3fffffff == k]
+    role = {i: old_pub[z.imp_hashes[z.imports[i] & 0xffffffff]] for i in mine}
+    assert sorted(role.values()) == sorted(ZFA_TLS_ROLES), role
+    drop = [i for i in mine if ZFA_TLS_ROLES[role[i]] is None]
+    deps = {struct.unpack_from('<i', z.dep_ent, o)[0] for o in range(0, len(z.dep_ent), 4)}
+    for i in drop:          # referenced nowhere: no dependency, no property value (its index, -(i+1), in no payload)
+        assert -(i + 1) not in deps and all(struct.pack('<i', -(i + 1)) not in bytes(p) for p in z.payloads), (i, role[i])
+    for i in mine:
+        if i not in drop: z.imp_hashes[z.imports[i] & 0xffffffff] = new_pub[ZFA_TLS_ROLES[role[i]]]
+    for i in sorted(drop, key=lambda i: z.imports[i] & 0xffffffff, reverse=True):
+        h = z.imports[i] & 0xffffffff
+        assert sum(1 for x in z.imports if x >> 62 == 2 and x & 0xffffffff == h) == 1, (i, h)
+        z.imports[i] = NULL_IMPORT
+        del z.imp_hashes[h]
+        z.imports = [x - 1 if x >> 62 == 2 and x & 0xffffffff > h else x for x in z.imports]
+    z.set_imported_package(se.ZFA_TLS_OLD_WEAPON, se.ZFA_TLS_WEAPON)
+    # 2. the launcher: LauncherBoneControl -> LauncherCommon (BP_FCS_ECM_00's class and template ids, in the import map in
+    #    place of the bone control's), on the host's body at its gun socket, the Nightmare UAV's numbers
+    li = z.export_index('LiveFCSModule_LauncherBoneControl_0')
+    el = ecm.export_index('LiveFCSModule_LauncherCommon_0')
+    c0, t0 = zfa_tls_u64(z.exports[li], 32), zfa_tls_u64(z.exports[li], 48)
+    c1, t1 = zfa_tls_u64(ecm.exports[el], 32), zfa_tls_u64(ecm.exports[el], 48)
+    assert c1 in ecm.imports and t1 in ecm.imports and z.imports.count(c0) == 1 and z.imports.count(t0) == 1, 'launcher ids'
+    assert [i for i, e in enumerate(z.exports) if zfa_tls_u64(e, 32) == c0] == [li], 'one bone control'
+    z.imports = [c1 if x == c0 else t1 if x == t0 else x for x in z.imports]
+    struct.pack_into('<Q', z.exports[li], 32, c1)
+    struct.pack_into('<Q', z.exports[li], 48, t1)
+    bone, rest = props_of(z, li, 'LiveFCSModule_LauncherBoneControl')
+    have = {q[1]: q[3] for q in bone[2] if not q[2]}
+    perf, fc = copy.deepcopy(have['Performance']), copy.deepcopy(have['FireControl'])
+    for f, x in ZFA_TLS_PERFORMANCE.items():
+        zfa_tls_set(perf[2], perf[1], f, zfa_tls_value(perf[1], f, x))
+    for f, x in ZFA_TLS_FIRE_CONTROL.items():
+        zfa_tls_set(fc[2], fc[1], f, zfa_tls_value(fc[1], f, x))
+    z.nb.add(ZFA_TLS_MESH)
+    lc = ('struct', 'LiveFCSModule_LauncherCommon', [])
+    zfa_tls_set(lc[2], lc[1], 'MeshComponentName', ('name', ZFA_TLS_MESH, 0))
+    zfa_tls_set(lc[2], lc[1], 'Performance', perf)
+    zfa_tls_set(lc[2], lc[1], 'FireControl', fc)
+    z.payloads[li] = bytearray(write_props(z, lc) + rest)
+    # 3. its AI: missiles only, within the laser's reach
+    ai = z.export_index('LiveFCSModule_AIControlCIWS_0')
+    v, rest = props_of(z, ai, 'LiveFCSModule_AIControlCIWS')
+    zfa_tls_set(v[2], v[1], 'bSearchMissileOnly', ('raw', 'Bool', b'\x01'))
+    for f, r in zip(('EnemySearchLockAreaBounds', 'EnemySearchLossAreaBounds'), ZFA_TLS_SEARCH_CM):
+        b = copy.deepcopy([q[3] for q in v[2] if q[1] == f][0])
+        zfa_tls_set(b[2], b[1], 'Radius', zfa_tls_value(b[1], 'Radius', r))
+        zfa_tls_set(v[2], v[1], f, b)
+    z.payloads[ai] = bytearray(write_props(z, v) + rest)
+    # 4. under Survival's path
+    z.rename(se.ZFA_TLS_FCS_SOURCE, se.ZFA_TLS_FCS_PKG)
+    assert se.ZFA_TLS_FCS_PKG in z.names and se.ZFA_TLS_FCS_SOURCE not in z.names
+    for i, sn in ((li, 'LiveFCSModule_LauncherCommon'), (ai, 'LiveFCSModule_AIControlCIWS')):
+        props_of(z, i, sn)                                  # (each reads back and round-trips)
+    save(z, se.ZFA_TLS_FCS_PKG)
+    cls = z.export_name(0)
+    assert cls == se.ZFA_TLS_FCS_SOURCE.rsplit('/', 1)[1] + '_C', cls
+
+    # its fire-control row
+    def edit(props):
+        zfa_tls_set(props, 'LiveNpcFCSDataTable', 'FCSBlueprintClass',
+                    ('soft', ('name', se.ZFA_TLS_FCS_PKG, 0), ('name', cls, 0), ''))
+        for f in ZFA_TLS_ROW_CLEAR:
+            zfa_tls_set(props, 'LiveNpcFCSDataTable', f, zero=True)
+        for f, x in ZFA_TLS_ROW_VALUES.items():
+            zfa_tls_set(props, 'LiveNpcFCSDataTable', f, zfa_tls_value('LiveNpcFCSDataTable', f, x))
+    build_rows_table('/Game/Datatables/AI/NPC/FCS/DT_NPC_FCS', se.ZFA_TLS_FCS_TABLE, 'LiveNpcFCSDataTable',
+                     se.ZFA_TLS_FCS_ROW_SOURCE, se.ZFA_TLS_FCS_ROW, edit)
+    print(f'  zfa laser: {se.ZFA_TLS_FCS_PKG} ({cls}: {se.ZFA_TLS_FCS_SOURCE.rsplit("/", 1)[1]} with '
+          f'{se.ZFA_TLS_WEAPON.rsplit("/", 1)[1]}, LauncherCommon on {ZFA_TLS_MESH} GUN, missiles only within '
+          f'{ZFA_TLS_SEARCH_CM[0] / 100000:g} km; {len(drop)} import made null), its row {se.ZFA_TLS_FCS_ROW} in '
+          f'{se.ZFA_TLS_FCS_TABLE.rsplit("/", 1)[1]}; {se.ZFA_TLS_NPC} carries it in slot {se.ZFA_TLS_SLOT}')

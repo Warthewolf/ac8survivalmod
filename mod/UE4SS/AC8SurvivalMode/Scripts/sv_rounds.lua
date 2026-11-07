@@ -246,6 +246,8 @@ do                                       -- ((0.74.0) the allies those rounds br
     local sp = CFG.specials or {}
     if type(sp.fishing) == "table" and str(sp.fishing.boat_unit) then watched[sp.fishing.boat_unit] = true end
     for _, x in ipairs(type(sp.festival) == "table" and sp.festival.lights or {}) do if str(x) then watched[x] = true end end
+    local town = type(sp.festival) == "table" and type(sp.festival.town) == "table" and sp.festival.town.unit   -- ((2026-11-07) its boxes)
+    if str(town) then watched[town] = true end
 end
 SPC.cleanWatch = watched           -- (a later part's units recorded too: THE DECOY's, sv_decoy.lua)
 -- every object made while SV_Spawn spawns a special's unit (the host's, a joiner's copies: sv_coop.lua sets spawningUnit
@@ -1722,6 +1724,12 @@ function roundsTick(now)
             D.state, D.at, D.announced = "wait", now + gap, false
             hudCallout(string.format(CFG.hud.text.complete, D.round),
                        string.format(CFG.hud.text.complete_sub, gap))
+            -- ((2026-11-07) "the round before an Anomaly Round appears, a Subtitle from Charlene": the next round's special
+            -- drawn now, her warning for an Anomaly; sv_escort_subs.lua)
+            if ESUB and ESUB.warnNext then
+                local okWn, errWn = pcall(ESUB.warnNext, D.round + 1, now)
+                if not okWn then log("escort subs: warning error " .. tostring(errWn)) end
+            end
             -- who shot down what (CFG.allies.kills; economy review of 2026-10-25: "show what allies do"), when anyone but
             -- you did
             local k = RUN.roundKills

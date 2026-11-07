@@ -335,16 +335,33 @@ check(#spawns == 1 and spawns[1].unit == "SV_Unit_SalBoat" and spawns[1].yaw == 
 check(#SUB.q == #CFG.specials.fishing.text.intro and SUB.q[1].who == "COMONA CONTROL" and SUB.q[2].who == "SAL",
     "the intro on the strip (" .. #SUB.q .. " lines, CONTROL then SAL)")
 check(s.introEnd >= 2000 + 7 * 4 - 0.01, "the shoals after the intro (" .. (s.introEnd - 2000) .. " s)")
-local longest = 0
+-- ((2026-11-07) more lines: a key's list may hold exchanges, warn's entries lists) every line under a key, flattened
+local function flat(l, out)
+    out = out or {}
+    if type(l) == "string" then out[#out + 1] = l
+    elseif type(l) == "table" then for _, x in ipairs(l) do flat(x, out) end end
+    return out
+end
+-- whether a text said is one of the key's lines (vals filled in)
+local function oneOf(key, text, vals)
+    for _, x in ipairs(flat(CFG.specials.fishing.text[key])) do
+        local _, t = FISH.line(x, vals)
+        if t == text then return true end
+    end
+    return false
+end
+local longest, speakers = 0, {}
 for _, k in ipairs({ "intro", "start", "none", "junk", "sardine", "mackerel", "tuna", "swordfish", "bigone", "first", "empties",
                      "gun", "ally", "quiet", "landed", "cleared", "boat", "warn", "weigh", "grade_s", "grade_a", "grade_b",
-                     "grade_c", "grade_d", "signoff" }) do
-    local l = CFG.specials.fishing.text[k]
-    for _, x in ipairs(type(l) == "table" and l or { l }) do
-        local _, t = FISH.line(x, { kg = "999", fish = "X" })
+                     "grade_c", "grade_d", "signoff", "time_up" }) do
+    for _, x in ipairs(flat(CFG.specials.fishing.text[k])) do
+        local who, t = FISH.line(x, { kg = "999", fish = "X" })
         longest = math.max(longest, #t)
+        speakers[who] = true
     end
 end
+check(speakers.SAL and speakers["COMONA CONTROL"] and speakers["COMONA TOWER"] and speakers["CREW CHIEF"],
+      "SAL, COMONA CONTROL, COMONA TOWER and the CREW CHIEF all have lines (T| and G|)")
 check(longest <= 70, "SAL's lines under 70 characters (the longest " .. longest .. ")")
 -- ((2026-11-07) the strip's box grown to its wrapped lines: SUB.lineCount, whole words by their width at the font's em)
 local WRAP, EMU = CFG.hud.subs.w - 80, CFG.hud.subs.em_units
@@ -370,8 +387,7 @@ do                                                  -- (SAL's and CONTROL's line
     for _, k in ipairs({ "intro", "start", "none", "junk", "sardine", "mackerel", "tuna", "swordfish", "bigone", "first",
                          "empties", "gun", "ally", "quiet", "landed", "cleared", "boat", "warn", "weigh", "grade_s", "grade_a",
                          "grade_b", "grade_c", "grade_d", "signoff" }) do
-        local l = CFG.specials.fishing.text[k]
-        for _, x in ipairs(type(l) == "table" and l or { l }) do
+        for _, x in ipairs(flat(CFG.specials.fishing.text[k])) do
             local _, t = FISH.line(x, { kg = "999", fish = "X" })
             local c = SUB.lineCount(t, WRAP, EMU)
             n, most = n + 1, math.max(most, c)
@@ -426,16 +442,27 @@ rtick(0.5)
 check(sh1.down and s.haul[0] and s.haul[0].hits == 1 and s.haul[0].best == "tuna" and s.haul[0].kg >= 40, "your tuna: credited to you")
 check(callouts[#callouts]:match("^%+%d+ KG YELLOWFIN TUNA / nil$") ~= nil, "its callout: " .. callouts[#callouts])
 check(#splashes == nSplash + 1 and splashes[#splashes].at.Z == 350, "its splash at the sea's height")
-local firstLine = false
-for _, l in ipairs(SUB.q) do if l.text:find("grandfather", 1, true) then firstLine = true end end
-check(firstLine or (SUB.cur and SUB.cur.text:find("grandfather", 1, true)), "SAL's first-catch line")
+local function strip() local o = {}; if SUB.cur then o[1] = SUB.cur.text end; for _, l in ipairs(SUB.q) do o[#o + 1] = l.text end; return o end
+local function saidOf(key) local n = 0; for _, t in ipairs(strip()) do if oneOf(key, t) then n = n + 1 end end; return n end
+check(saidOf("first") == 1, "SAL's first-catch line")
 -- three empties (none, junk, none): his complaint
 for i = 2, 4 do s.shoals[i].obj.hits = { { pawn, 100 } }; s.shoals[i].obj.HealthInternal = 0 end
 SUB.clear("test")
 rtick(0.5)
 local said = {}
 for _, l in ipairs(SUB.q) do said[#said + 1] = l.text end
-check(table.concat(said, " | "):find("aim where the fish are", 1, true) ~= nil, "three empties in a row: SAL's complaint (" .. table.concat(said, " | ") .. ")")
+do                                                  -- (one whole exchange of empties', in order)
+    local whole = false
+    for _, ex in ipairs(CFG.specials.fishing.text.empties) do
+        local seq = type(ex) == "table" and ex or { ex }
+        local at = nil
+        for i, t in ipairs(said) do if t == select(2, FISH.line(seq[1])) then at = i end end
+        local ok = at ~= nil
+        for j = 2, #seq do ok = ok and said[at + j - 1] == select(2, FISH.line(seq[j])) end
+        if ok then whole = true end
+    end
+    check(whole, "three empties in a row: one of SAL's complaints, whole (" .. table.concat(said, " | ") .. ")")
+end
 check(s.haul[0].empty == 2 and s.haul[0].junk == 1 and s.haul[0].hits == 4, "the empties and the junk counted")
 check(callouts[#callouts - 2]:find("^NOTHING") and callouts[#callouts - 1]:find("^JUNK"), "NOTHING / JUNK callouts")
 -- a gun kill (yours, once)
@@ -443,8 +470,7 @@ geomWpn = "gun"
 s.shoals[5].obj.hits = { { pawn, 100 } }; s.shoals[5].obj.HealthInternal = 0
 SUB.clear("test")
 rtick(0.5)
-local function strip() local o = {}; if SUB.cur then o[1] = SUB.cur.text end; for _, l in ipairs(SUB.q) do o[#o + 1] = l.text end; return o end
-check(strip()[1] and strip()[1]:find("little gun", 1, true), "a gun kill: SAL's spear fisherman line")
+check(strip()[1] and oneOf("gun", strip()[1]), "a gun kill: SAL's gun line (" .. tostring(strip()[1]) .. ")")
 geomWpn = "msl"
 -- an ally's kill (solo: still yours) with The Big One
 s.shoals[6].obj.hits = { { obj("BP_Ally"), 100 } }; s.shoals[6].obj.HealthInternal = 0
@@ -456,18 +482,13 @@ check(splashes[#splashes].sc.X == CFG.specials.fishing.splash_scale * CFG.specia
 -- quiet: no catch for quiet_s
 SUB.clear("test")
 for _ = 1, 62 do rtick(0.5) end
-local quiet = false
-for _, l in ipairs(SUB.q) do if l.text:find("sightseeing", 1, true) or l.text:find("explode themselves", 1, true) then quiet = true end end
-if SUB.cur and (SUB.cur.text:find("sightseeing", 1, true) or SUB.cur.text:find("explode", 1, true)) then quiet = true end
-check(quiet, "30 s with no catch: SAL's nudge")
+check(saidOf("quiet") >= 1, "30 s with no catch: the nudge")
 -- you land: his coffee line, once
 onAirfield = true
 SUB.clear("test")
 rtick(0.5); rtick(0.5)
-local coffee = 0
-for _, l in ipairs(SUB.q) do if l.text:find("coffee", 1, true) then coffee = coffee + 1 end end
-if SUB.cur and SUB.cur.text:find("coffee", 1, true) then coffee = coffee + 1 end
-check(coffee == 1, "you landed: the coffee line once (" .. coffee .. ")")
+local coffee = saidOf("landed")
+check(coffee == 1, "you landed: a landed line once (" .. coffee .. ")")
 onAirfield = false
 -- ((code review of 2026-11-07, finding 17) another ally's catch, solo: still yours, and SAL's "your friend" line (it went
 -- by the slot, -1 only in co-op, so solo it never played)
@@ -475,8 +496,7 @@ check(not s.said.ally, "(The Big One's own lines came first: SAL's ally line not
 s.shoals[7].obj.hits = { { obj("BP_Ally3"), 100 } }; s.shoals[7].obj.HealthInternal = 0
 SUB.clear("test")
 rtick(0.5)
-local friend = false
-for _, t in ipairs(strip()) do if t:find("Your friend is good too", 1, true) then friend = true end end
+local friend = saidOf("ally") >= 1
 check(friend and s.said.ally and s.haul[0].hits == 7, "solo: an ally's catch still yours, SAL's 'your friend' line said ("
     .. table.concat(strip(), " | ") .. ")")
 -- the boat: a hit here costs you 25 kg (not twice in boat_hit_gap_s)

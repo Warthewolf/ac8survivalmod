@@ -1223,7 +1223,8 @@ end
 -- The flags that count things (SV_Beat, the heartbeat, every 10 s; kills; airfield and shuttle hits): the third value,
 -- the line's key for the log, leaves them and the flights up out (sv_main.lua probeTick: the line again for them only
 -- with [log] verbose)
-local FLAG_COUNTERS = { SV_Alive = true, SV_Kills = true, SV_AirHits = true, SV_Beat = true, SV_ShuttleHits = true }
+local FLAG_COUNTERS = { SV_Alive = true, SV_Kills = true, SV_AirHits = true, SV_Beat = true, SV_ShuttleHits = true,
+                        SV_ZfaTLSHits = true }      -- ((2026-11-07) the ZFA-44s' lasers' kills: sv_escort_laser.lua logs them)
 function flagLine()
     local t = svFlags()
     if not t then return nil end

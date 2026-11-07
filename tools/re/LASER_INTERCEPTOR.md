@@ -244,3 +244,55 @@ SPWP_OTH_TLS_PASS_Stop. The player TLS uses SPWP_OTH_TLS_SHOOT / _Stop. Extracte
 - Whether any AC8 package uses ALiveLaserInterceptor. Scan the import maps for 0x4924eb83c12a0e05 to find out; the
   package names show none.
 - The colour of NS_NPC_TLS_Muzleflash01, and AC8's own SPWP_OTH_TLS_* sounds (not compared with AC7's).
+
+## 8. Built (2026-11-07): route 2 on the VAMPIRES' ZFA-44s (built and checked, NOT yet run in game)
+The ZFA-44 carriers' planes (the Su-47 host, DT_NPC SV_Zfa_Ally) carry AC8's own BP_SwingTLS_ForMSL (stock, unchanged)
+in fire-control slot 3 (the Su-47's AllArms: Flare, Gun, Msl, then 3-5 free). No AC7 asset. Names:
+tools/survival_events_escort.py ZFA_TLS_*.
+- **The arm**, `/Game/Mods/SurvivalMode/Weapons/BP_FCS_SV_ZfaTLS` (tools/build_survival_world.py build_zfa_laser): a copy
+  of BP_FCS_Vessel_CIWS_00. Its objects keep their names (class BP_FCS_Vessel_CIWS_00_C), as the menu pages' copies do.
+  - Its 8 imports of BP_wp_ciws_vessel point at BP_SwingTLS_ForMSL's 7 public exports by role: the class, the CDO,
+    WeaponCollisionEffectModule, BulletVFX NS / CS -> MainLaser / EndLaser Niagara, DefaultSceneRoot_GEN_VARIABLE and
+    Static Mesh. The CIWS's ParticleUpdateHandler is a null import with its hash dropped: no dependency and no property
+    value refers to it (the build checks), and the Nightmare UAV imports these same 7.
+  - Its launcher is a LauncherCommon (BP_FCS_ECM_00's class ids) on PlaneBodyMesh, slot sockets GUN (the Su-47's
+    SOC_Gun_01, as its own gun arm). It takes the UAVN's numbers (FireRate 8, reload 1 s, 3 km, 0.1 / 8 / 8 / 1 s), but
+    with CaptureAngleRange 180 (no turret).
+  - Its AIControlCIWS has bSearchMissileOnly, lock / loss radius 3 / 3.3 km.
+- **Rows.** DT_SV_NpcFCS has SV_FCS_ZfaTLS: NPC_FCS_VesselCIWS000's row with FCSBlueprintClass the arm, no weapon or AI
+  module row, 3000 m, 180 deg, 8 / 1 / 0.1 / 8 / 8 / 1, yaw and pitch all round. DT_SV_NpcRows has SV_Zfa_AllyTLS,
+  SV_Zfa_Ally with NpcFCSId3 = SV_FCS_ZfaTLS (build_survival.py build_npc_rows).
+- **Lua**: Scripts/sv_escort_laser.lua (ZLAS; sv_escort's family). The setting is CFG.allies.carrier.zfa.laser (true;
+  survival.default.ini [allies.carrier.zfa] laser; read at the main menu). ESC.setup adds SV_FCS_ZfaTLS to DT_NPC_FCS
+  (FindRow + AddRow from DT_SV_NpcFCS, never read: hard rule 29), then DT_NPC's SV_Zfa_Ally from SV_Zfa_AllyTLS's struct.
+  If either can't be done, or the laser is off, the plain SV_Zfa_Ally goes in.
+- **The count**: trigger SV_ZfaTLSHit (Mission 29's WeaponIntercept_UAV_TLS without its 'uav' tag: WID_tls, NoneSelect,
+  NoneSelect, NoneSelect, true, Mission 27's CIWS shape) -> SV_ZfaTLSHits + 1. Only the ZFA-44s fire a WID_tls intercept
+  in Survival.
+- **Checks**: build_survival.py check_zfa_laser_build covers the package, the rows, the trigger and the Lua names.
+  tools/checks/escort_test.lua covers the row choice (on, off, no row, no DT_NPC_FCS; the FCS row passed on unread), the
+  arms line and the count.
+
+Log lines (AC8SurvivalMode_lua.log):
+- `escort: the escorts' and the ZFA-44's rows: ..., SV_Zfa_Ally in DT_NPC (with the anti-missile laser: SV_Zfa_AllyTLS's
+  struct, its slot 3 SV_FCS_ZfaTLS, that row in DT_NPC_FCS)`. Otherwise `(laser off: the plain host)`,
+  `(no laser: <why>)` or `(laser error: ...)`.
+- `zfa laser: <unit> plane <addr> fire control: 0 <system> <weapon>; ...; 3 BP_FCS_CIWS BP_SwingTLS_ForMSL (Survival's
+  arm) -> the laser in slot 3`. This comes once a plane, at most CFG...zfa.laser_arms_log (40) a run, settle_s after the
+  plane is seen. It ends `-> NO laser arm` when armed and the arm wasn't there, or reads `no fire control read`.
+- `carrier: the ZFA-44s' lasers have shot down N missiles (+d)`.
+
+In-game test checklist:
+1. The main menu's row line says "with the anti-missile laser".
+2. With a carrier's ZFA-44s up, their `zfa laser:` lines show slot 3 as Survival's arm with BP_SwingTLS_ForMSL. If not,
+   the row didn't take; next try K2_DynamicSystemOverride(3, the arm's class) at the dress.
+3. No crash at their spawn: the arm loads by its soft path, null import and all.
+4. Enemy missiles near the ZFA-44s: is there a beam (NS_NPC_TLS_Muzleflash01, from the gun socket)? Are missiles shot
+   down, and does the count line go up? Does it take missiles aimed at others and from behind (a fixed launcher, the
+   TLS's own 45 deg InterceptAngle, its ±90 sweep, a 30 % chance a shot)?
+5. Never at you or your missiles. Does its beam (damage 3) hurt enemy planes?
+6. Is Normal engagement enough? (Mission 29 orders TransitAttackOnly for its intercept mode.)
+7. Co-op: a joiner's own ZFA-44s too, each game counting its own.
+8. laser = false: the plain host, no arm in slot 3.
+If it never fires on its own: Lua could fire slot 3 with LiveFireOneShotWeapon WN_WEAPON_4 (no target) when an enemy
+missile is within 3 km.

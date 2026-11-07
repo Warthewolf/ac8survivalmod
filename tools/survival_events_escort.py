@@ -245,6 +245,23 @@ ZFA_ORDERS_S = (6.0, 10.0)                   # after a launch: the launched unit
 # spawns it above its ship, MOONCHILD's lead's desc
 ZFA_FALLBACK = [('A', 'SV_Unit_ZfaA', 'SV_Obj_ZfaA', 1), ('B', 'SV_Unit_ZfaB', 'SV_Obj_ZfaB', 2)]
 ZFA_FALLBACK_N, ZFA_FALLBACK_UP_CM, ZFA_GAP_CM = 4, 30000.0, 6000.0
+# (2026-11-07) the ZFA-44s' anti-missile laser (tools/re/LASER_INTERCEPTOR.md "Built"): AC8's own BP_SwingTLS_ForMSL (the
+# Nightmare UAV's TLSforMSL arm's weapon) on a fire-control arm of Survival's, ZFA_TLS_FCS_PKG (build_survival.py
+# build_zfa_laser: a copy of the ships' CIWS arm ZFA_TLS_FCS_SOURCE, its launcher a LauncherCommon at the host's gun
+# socket, its AIControlCIWS missiles only), named by fire-control row ZFA_TLS_FCS_ROW (DT_SV_NpcFCS, a copy of
+# NPC_FCS_VesselCIWS000) in slot ZFA_TLS_SLOT of ZFA_TLS_NPC (DT_SV_NpcRows: ZFA_NPC with that slot filled; the Su-47's
+# AllArms has slots 3-5 free). Lua (Scripts/sv_escort_laser.lua) adds the FCS row to DT_NPC_FCS at the main menu and,
+# with it in, ZFA_NPC's DT_NPC row from ZFA_TLS_NPC's struct. Each interception: Mission 29's WeaponIntercept_UAV_TLS
+# trigger (WID_tls; any object, no tag: Mission 27's CIWS shape) adds 1 to ZFA_TLS_FLAG.
+ZFA_TLS_FCS_SOURCE = '/Game/Blueprints/Weapons/BP_FCS/CP/BP_FCS_Vessel_CIWS_00'
+ZFA_TLS_FCS_PKG = '/Game/Mods/SurvivalMode/Weapons/BP_FCS_SV_ZfaTLS'
+ZFA_TLS_OLD_WEAPON = '/Game/Blueprints/Weapons/CIWS/Vessel/BP_wp_ciws_vessel'       # the CIWS arm's weapon
+ZFA_TLS_WEAPON = '/Game/Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForMSL'      # ours (stock, unchanged)
+ZFA_TLS_LAUNCHER_SOURCE = '/Game/Blueprints/Weapons/BP_FCS/CP/BP_FCS_ECM_00'       # its LauncherCommon's class ids
+ZFA_TLS_FCS_TABLE = '/Game/Mods/SurvivalMode/Data/DT_SV_NpcFCS'
+ZFA_TLS_FCS_ROW, ZFA_TLS_FCS_ROW_SOURCE = 'SV_FCS_ZfaTLS', 'NPC_FCS_VesselCIWS000'
+ZFA_TLS_NPC, ZFA_TLS_SLOT = 'SV_Zfa_AllyTLS', 3
+ZFA_TLS_EVENT, ZFA_TLS_FLAG = 'SV_ZfaTLSHit', 'SV_ZfaTLSHits'
 
 
 def cargo_ship(s):
@@ -320,6 +337,7 @@ ESCORT_DECOY_NPC_ROWS = (
     + [(ZFA_NPC, ZFA_NPC_SOURCE, ZFA_MODEL, True, False, ZFA_NAME_KEY, True),
        (DECOY_UAV_NPC, DECOY_UAV_NPC_SOURCE, None, False, True, None, False)])
 INT_FLAGS += ([a['leg'] for a in esc_aircraft()] + [a['slot'] for a in esc_aircraft()] + ['SV_EscortSlots', DECOY_HIT_FLAG])
+INT_FLAGS += [ZFA_TLS_FLAG]                    # (the ZFA-44s' laser's interceptions: build_escort)
 
 
 def build_escort(g, flag, stock_ep):
@@ -336,13 +354,14 @@ def build_escort(g, flag, stock_ep):
     are read as the PathFinish fires, hard rule 26). The cargo ships: their engagement as they appear (the hull Normal, the
     Stinger Normal / Default), RE_SV_CargoLaunch_<s>_<n> (Mission 17's LiveFireOneShotWeapon on ship s's launcher, arm n,
     then the launched two-ship's orders), RE_SV_CargoRemove_<s>; the ZFA-44 units' orders as they appear; the fallback
-    4-ships' RE_SV_ZfaGo<A|B>."""
+    4-ships' RE_SV_ZfaGo<A|B>; the ZFA-44s' laser's interceptions (ZFA_TLS_EVENT -> ZFA_TLS_FLAG + 1)."""
     d = os.path.dirname(os.path.dirname(stock_ep))
     m06 = os.path.join(d, 'MIssion006', 'EP_Mission006_global.uasset')
     m14 = os.path.join(d, 'Mission014', 'EP_Mission014_global.uasset')
     m16 = os.path.join(d, 'Mission016', 'EP_Mission016_global.uasset')
     m17 = os.path.join(d, 'Mission017', 'EP_Mission017_global.uasset')
     m26 = os.path.join(d, 'Mission026', 'EP_Mission026_global.uasset')
+    m29 = os.path.join(d, 'Mission029', 'EP_Mission029_global.uasset')
     c130, lead = 'Air_obj_c130_0', 'AB_Obj_01_Air1_f18e_0'
     t_path = g.foreign_template(m16, 'LiveAIPathExecution', 'PathFinish_Ladon0_0', lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0')
     t_final = g.foreign_template(m14, 'LiveAIPathExecution', 'Default_PathPointReceive_25', lambda a, e: a[0] == c130)
@@ -539,6 +558,14 @@ def build_escort(g, flag, stock_ep):
             if ev.startswith('RE_'): remote(ev)
             else: g.trigger('01_E_AreaA_ReinforcementAppearance_0', ev, arg_changes={0: unit})
             zfa_orders(ev, unit, objs, 0.5)
+    # the ZFA-44s' laser's interceptions: Mission 29's count of its Nightmare UAVs' TLS interceptions (args: the
+    # intercepting weapon's ID, its object, its object's tag, the intercepted weapon's kind, a bool), its tag 'uav' let go
+    # (Mission 27's CIWS count has no object and no tag): every WID_tls interception in the level (only the ZFA-44s fire
+    # one in Survival) adds 1 to ZFA_TLS_FLAG
+    t_tls = g.foreign_trig_template(m29, 'WeaponIntercept_UAV_TLS')
+    assert v(t_tls) == ['WID_tls', 'NoneSelect', 'uav', 'NoneSelect', 'true'], v(t_tls)
+    g.trigger(None, ZFA_TLS_EVENT, arg_changes={2: 'NoneSelect'}, template=t_tls)
+    flag(ZFA_TLS_EVENT, ZFA_TLS_FLAG, 'Add', 1)
     print(f'  escort: CHARLENE + {len(ESC_ESCORTS)} escorts ({sum(len(x) for x in ESC_EVENTS.values())} remote events, '
           f'legs SV_CharLeg / SV_EscLeg<Name>, {len(ESC_SLOTS)} parking slots by landing order), {len(CARGO_SHIPS)} cargo ships '
           f'({sum(len(x) for x in CARGO_ARMS.values())} launches RE_SV_CargoLaunch_<s>_<n>), {len(ZFA_FALLBACK)} fallback '

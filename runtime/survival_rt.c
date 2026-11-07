@@ -26,8 +26,8 @@
 #include "sigs.h"
 #include "uobj.h"                /* (0.32.22: up here for the teardown gate; flight.c's include is then a no-op) */
 
-#define RT_VERSION           L"0.32.24"
-#define RT_VERSION_A         "0.32.24"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.25"
+#define RT_VERSION_A         "0.32.25"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -1129,6 +1129,7 @@ static void FindFunctions(void)
         { kSigMgRestore,        kSigMgRestoreMask, sizeof(kSigMgRestore), NULL, 0 },
         { kSigPurgeGarbage,     kSigPurgeGarbageMask, sizeof(kSigPurgeGarbage), NULL, 0 },
         { kSigPathTrackTick,    kSigPathTrackTickMask, sizeof(kSigPathTrackTick), NULL, 0 },
+        { kSigOwnerHostile,     kSigOwnerHostileMask, sizeof(kSigOwnerHostile), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -1193,6 +1194,7 @@ static void FindFunctions(void)
     g_fMgRestore        = p[63].hit;
     g_fPurgeGarbage     = p[64].hit;                    /* (runtime 0.32.21: SV_GcBusy, flight.c) */
     g_fPathTrackTick    = p[65].hit;                    /* (runtime 0.32.22: the path tracker guard, flight.c) */
+    g_fOwnerHostile     = p[66].hit;                    /* (runtime 0.32.25: the Spear rod's owner guard, flight.c) */
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -1246,6 +1248,7 @@ static int Install(void)
     Ufx2Install();                                         /* (its second update's, +0x42c0: flight.c) */
     TgtInstall();                                          /* (the target search guard: flight.c) */
     PtInstall();                                           /* (0.32.22: the AI path tracking guard: flight.c) */
+    OhInstall();                                           /* (0.32.25: a Spear rod's owner gone: flight.c) */
     MgInstall();                                           /* (the STORE freeze: flight.c) */
     if (g_fPlaneEw && HookInline(g_fPlaneEw, 15, (void*)OnPlaneEw, (void**)&g_nextPlaneEw, L"plane electronic update")) {}
     else Log(L"coop2mp: the plane electronic update wasn't found: other players' ESM / ECM fields help no one here");

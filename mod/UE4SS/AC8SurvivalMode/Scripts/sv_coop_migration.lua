@@ -470,6 +470,11 @@ local function onJoinerMessage(f)
     elseif k == "af" and AF then
         local down = f[4] == "1"
         AF.hp, AF.full, RUN.dirty = tonumber(f[2]) or AF.hp, tonumber(f[3]) or AF.full, true
+        local mx = tonumber(f[5])                         -- (the host's maximum: the bar is out of it, not this game's own)
+        if mx and mx > 0 and mx ~= AF.max then
+            log(string.format("coop: the host's airfield maximum %d here (this game's own setup had %s)", mx, tostring(AF.max)))
+            AF.max = mx
+        end
         if down ~= (AF.down or false) then
             AF.down = down
             if type(SV_Event) == "function" then SV_Event(down and "RE_SV_AirfieldClose" or "RE_SV_AirfieldOpen") end

@@ -33,6 +33,7 @@ tools/get_stock.sh \
   Maps/Ingame/Mission018/EP_Mission018_global.uasset \
   Maps/Ingame/MIssion006/EP_Mission006_global.uasset \
   Maps/Ingame/Training001/EP_Training001_global.uasset \
+  Blueprints/Weapons/BP_FCS/CP/BP_FCS_Vessel_CIWS_00.uasset Blueprints/Weapons/BP_FCS/CP/BP_FCS_ECM_00.uasset Blueprints/Weapons/CIWS/Vessel/BP_wp_ciws_vessel.uasset Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForMSL.uasset Maps/Ingame/Mission029/EP_Mission029_global.uasset Datatables/AI/NPC/FCS/DT_NPC_FCS.uasset \
   OnlineMode/DataTables/AI/NPC/DT_NPC_Model_ON.uasset \
   Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands.uasset   Datatables/UI/Menu/IngameMenu/IngameHangar/DA_LiveMenuIngameHangarSettings.uasset   Datatables/UI/Menu/IngameMenu/DT_IngameMenuSettingData.uasset   Blueprints/UI/Menu/Ingame/IngameHangar/WBP_Menu_IngameHangar_Confirmation_000.uasset
 python -X utf8 -I tools/menu_stock.py   # Survival's menu pages: the stock main-menu page, its settings, the page tables
