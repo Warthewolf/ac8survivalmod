@@ -586,12 +586,13 @@ def cargo_arms(component):
     return out
 
 
-def cargo_units(units, used_ids, z, top_number):
+def cargo_units(units, used_ids, z, top_number, v):
     """The ZFA-44 cargo ships (survival_events.CARGO_* / ZFA_*): Mission 17's container ship, hull, its two container
     launchers and its Stinger mount (their classes imported: retag_parts, hard rule 7), allied, its callsign; for each arm of
     the launcher the ship fires, a unit of exactly the name the arm spawns (Mission 17's drone unit desc, allied, its
-    ZFA_PER_ARM objects on the ZFA-44 host's row, parked under the sea as Mission 17's drones are); and the pose-spawn
-    fallback 4-ships (MOONCHILD's desc) above each ship."""
+    ZFA_PER_ARM objects on the ZFA-44 drone host's row ZFA_DRONE_ROW, parked under the sea as Mission 17's drones are),
+    each object index's climb-out path off each ship (zfa_climb_points: Mission 16's Ladon path's shape, smooth); and
+    the pose-spawn fallback 4-ships (MOONCHILD's desc, the Su-47 host) above each ship."""
     se = survival_events
     m17z = ZenPkg(stock(se.CARGO_SOURCE_WD))
     m17, _ = props_of(m17z, m17z.export_index(se.CARGO_SOURCE_WD.rsplit('/', 1)[1]), 'LiveWorldData')
@@ -624,7 +625,7 @@ def cargo_units(units, used_ids, z, top_number):
             base = f'SV_Obj_ZfaShip{s}Arm{chr(64 + n)}'
             park = (spot[0], spot[1], se.ZFA_PARK_Z)
             pts = [(spot[0] + (k - (se.ZFA_PER_ARM - 1) / 2.0) * se.ZFA_GAP_CM, spot[1], se.ZFA_PARK_Z) for k in range(se.ZFA_PER_ARM)]
-            dn = port_unit(units, used_ids, z, drone, dunit, base, se.ZFA_ROW, pts, yaw, top_number, unit_digits=True)
+            dn = port_unit(units, used_ids, z, drone, dunit, base, se.ZFA_DRONE_ROW, pts, yaw, top_number, unit_digits=True)
             assert dn == [f'{base}_{k}' for k in range(se.ZFA_PER_ARM)], dn
             du = unit_named(units, dunit)
             set_faction(du, 1)
@@ -632,6 +633,11 @@ def cargo_units(units, used_ids, z, top_number):
             unit_area(du, se.ZFA_AREA_M, se.ZFA_ALT_M)
             place(du, park, yaw, pts)
             se.CARGO_ARMS[s].append((n, dunit, dn))
+    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
+    tpl_air = desc_named(stock_wd(M16 + 'WD_Mission016_global'), 'AIPathDescList', se.LADON_SOURCE_PATH)
+    for c in se.CARGO_SHIPS:
+        for k in range(se.ZFA_PER_ARM):
+            paths.append(make_path(z, used_ids, tpl_air, se.zfa_climb_path(c[0], k), se.zfa_climb_points(c[0], k), smooth=True))
     msrc = unit_named(units, se.ALLY_AIR_SOURCE)
     for L, unit, obj, s in se.ZFA_FALLBACK:
         spot = se.cargo_ship(s)[6]
@@ -647,7 +653,8 @@ def cargo_units(units, used_ids, z, top_number):
         assert [field_of(ob, 'bGroupLead') == ('raw', 'Bool', b'\x01') for ob in objects_of(u)] == [True] + [False] * (se.ZFA_FALLBACK_N - 1)
     print(f'  cargo ships: ' + '; '.join(f'{c[1]} ({c[3]} -> {c[4]}) at ({c[6][0]:.0f}, {c[6][1]:.0f}), fires {c[8]}: '
           + ', '.join(f'WN_WEAPON_{n} {u_}' for n, u_, _ in se.CARGO_ARMS[c[0]]) for c in se.CARGO_SHIPS)
-          + f'; {se.ZFA_PER_ARM} ZFA-44s ({se.ZFA_ROW}) an arm; fallback {", ".join(f[1] for f in se.ZFA_FALLBACK)} of {se.ZFA_FALLBACK_N}')
+          + f'; {se.ZFA_PER_ARM} ZFA-44s ({se.ZFA_DRONE_ROW}) an arm, a climb-out path each off each ship; fallback '
+          + f'{", ".join(f[1] for f in se.ZFA_FALLBACK)} of {se.ZFA_FALLBACK_N} ({se.ZFA_ROW})')
 
 
 def decoy_units(units, used_ids, z, top_number):
@@ -800,7 +807,7 @@ def build_wd_global():
     fishing_units(units, used_ids, z, top_number)          # GONE FISHIN' (survival_events.FISH_* / SAL_BOAT_*)
     festival_units(units, used_ids, z, top_number, v)      # THE FESTIVAL (survival_events.FEST_*)
     escort_units(units, used_ids, z, top_number, v)        # THE ESCORT (survival_events.ESC_*)
-    cargo_units(units, used_ids, z, top_number)            # its unlock: the ZFA-44 cargo ships (CARGO_* / ZFA_*)
+    cargo_units(units, used_ids, z, top_number, v)         # its unlock: the ZFA-44 cargo ships (CARGO_* / ZFA_*)
     decoy_units(units, used_ids, z, top_number)            # THE DECOY (survival_events.DECOY_*)
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names

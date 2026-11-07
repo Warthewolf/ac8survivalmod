@@ -31,38 +31,42 @@ end
 -- ((2026-11-07) the user: the ZFA-44s' boxes read "SU-47") the host's own model row first (CFG.allies.carrier.zfa.model,
 -- the allied Su-47's but its name: "ZFA-44"), from Survival's DT_SV_ModelRows into the game's DT_NPC_Model, as the shoal's
 -- (sv_fishing.lua FISH.setup): the host row names it. -> in, why not
+-- ((2026-11-07) the launched ZFA-44s on Mission 16's allied container drone: its model row too, model_drone)
 function ZLAS.zfaModel()
-    local m = zc().model
-    if type(m) ~= "string" or m == "" then return true, "no model of its own" end
-    local mt, w1 = loadObject(ACE.model_table)
-    local mr, w2 = loadObject(ACE.model_rows)
-    if not (mt and mr) then return false, "the model tables didn't load (" .. tostring(w1 or w2) .. ")" end
-    for _, t in ipairs({ mt, mr }) do pin(t, nameOf(t)) end
-    local _, have = dtCall(mt, "FindRow", m)
-    if have == nil then
-        local _, r = dtCall(mr, "FindRow", m)
-        if r == nil then return false, m .. " not in " .. nameOf(mr) end
-        dtCall(mt, "AddRow", m, r)
-        _, have = dtCall(mt, "FindRow", m)
+    local z, done = zc(), {}
+    for _, m in ipairs({ z.model, z.model_drone }) do
+        if type(m) == "string" and m ~= "" then
+            local mt, w1 = loadObject(ACE.model_table)
+            local mr, w2 = loadObject(ACE.model_rows)
+            if not (mt and mr) then return false, "the model tables didn't load (" .. tostring(w1 or w2) .. ")" end
+            for _, t in ipairs({ mt, mr }) do pin(t, nameOf(t)) end
+            local _, have = dtCall(mt, "FindRow", m)
+            if have == nil then
+                local _, r = dtCall(mr, "FindRow", m)
+                if r == nil then return false, m .. " not in " .. nameOf(mr) end
+                dtCall(mt, "AddRow", m, r)
+                _, have = dtCall(mt, "FindRow", m)
+            end
+            if have == nil then return false, m .. " NOT added to DT_NPC_Model" end
+            done[#done + 1] = m
+        end
     end
-    if have == nil then return false, m .. " NOT added to DT_NPC_Model" end
-    return true, m .. " in DT_NPC_Model"
+    if #done == 0 then return true, "no model of its own" end
+    return true, table.concat(done, " and ") .. " in DT_NPC_Model"
 end
 
-function ZLAS.zfaRow(npc, mine, addRow, row)
-    ZLAS.armed = false
+-- one host row (row, its laser twin lr): in, its note, whether its laser went in
+local function hostRow(npc, mine, addRow, row, lr)
     local z = zc()
-    local okM, why = ZLAS.zfaModel()                       -- (its model before its row: the row names it)
-    if not okM then return false, " (its model row " .. tostring(why) .. ": no ZFA-44 host)" end
-    if z.laser == false then return addRow(row), " (laser off: the plain host)" end
-    local function plain(why) return addRow(row), " (no laser: " .. why .. ")" end
-    local fr, lr = tostring(z.laser_fcs_row), tostring(z.laser_row)
+    if z.laser == false then return addRow(row), " (laser off: the plain host)", false end
+    local function plain(why) return addRow(row), " (no laser: " .. why .. ")", false end
+    local fr = tostring(z.laser_fcs_row)
+    lr = tostring(lr)
     local _, have = dtCall(npc, "FindRow", row)
     if have ~= nil then                                    -- (in already: which one, by its laser slot, laser_slot)
         local cur, key = nil, "NpcFCSId" .. tostring(math.floor(tonumber(z.laser_slot) or 1))
         pcall(function() cur = have[key]:ToString() end)
-        ZLAS.armed = cur == fr
-        return true, ZLAS.armed and " (already in, with the laser)" or " (already in, no laser)"
+        return true, cur == fr and " (already in, with the laser)" or " (already in, no laser)", cur == fr
     end
     local fcsT, why1 = loadObject(FCS_TABLE)
     if not fcsT then return plain("DT_NPC_FCS not loaded: " .. tostring(why1)) end
@@ -82,9 +86,22 @@ function ZLAS.zfaRow(npc, mine, addRow, row)
     dtCall(npc, "AddRow", row, tr)
     local _, got = dtCall(npc, "FindRow", row)
     if got == nil then return plain(row .. " from " .. lr .. " NOT added") end
-    ZLAS.armed = true
     return true, string.format(" (with the anti-missile laser: %s's struct, its slot %s %s in place of the gun, that row in DT_NPC_FCS)", lr,
-        tostring(z.laser_slot or 1), fr)
+        tostring(z.laser_slot or 1), fr), true
+end
+-- the ZFA-44 host rows: the Su-47's (row, its twin laser_row; the pose flights) and the container drone's
+-- (carrier.dt_npc_drone, its twin laser_row_drone; the arms' planes): -> in (both), the note
+function ZLAS.zfaRow(npc, mine, addRow, row)
+    ZLAS.armed = false
+    local z = zc()
+    local okM, why = ZLAS.zfaModel()                       -- (its models before its rows: the rows name them)
+    if not okM then return false, " (its model row " .. tostring(why) .. ": no ZFA-44 host)" end
+    local in1, note1, a1 = hostRow(npc, mine, addRow, row, z.laser_row)
+    local dr = ((CFG.allies or {}).carrier or {}).dt_npc_drone
+    if type(dr) ~= "string" or dr == "" then ZLAS.armed = a1 == true; return in1, note1 end
+    local in2, note2, a2 = hostRow(npc, mine, addRow, dr, z.laser_row_drone)
+    ZLAS.armed = (a1 or a2) == true
+    return in1 and in2, string.format("%s; %s%s%s", note1, dr, in2 and " in DT_NPC" or " NOT added", note2)
 end
 
 function ZLAS.arms(o, unit)
@@ -386,7 +403,8 @@ function ZLAS.drive(now)
                     local okH, h = pcall(function() return e.obj.HealthInternal end)
                     if not (okH and type(h) == "number" and h <= 0) then
                         local p = at(e.obj)
-                        if p then ps[#ps + 1] = { o = e.obj, a = e.addr, at = p, unit = u } end
+                        local riseZ = num(((CFG.allies or {}).carrier or {}).rise_m, -50) * 100
+                        if p and p.Z > riseZ then ps[#ps + 1] = { o = e.obj, a = e.addr, at = p, unit = u } end   -- (never parked)
                     end
                 end
             end
@@ -470,5 +488,72 @@ function ZLAS.summary()
 end
 if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS.zfa_laser = function() ZLAS.d, ZLAS.newL, ZLAS.fx = nil, {}, {} end   -- (nothing of the old level touched)
+end
+end
+
+---------------------------------------------------------------------------------------------------- the launch watch
+-- ((2026-11-07) the launched ZFA-44s on Mission 16's allied container drone, parked in their ship until their arm fires:
+-- tools/survival_events_escort.py ZFA_DRONE_* / ZFA_OPEN_S / zfa_climb_*) ZLAUNCH.risen(C, F, now), each tick of a
+-- container launch not yet seen (sv_escort.lua's flight watch): every plane of the carriers' ZFA-44 units (ESC.planes)
+-- within capture_km of C's ship, marked parked when seen below parked_m; one above rise_m that was parked, or new since
+-- the record fired, is out of the container: the first time, the arm's climb record fires (each its own climb-out path,
+-- then their orders) `carrier: <ship>: N ZFA-44s out of its container (<unit>): RE_SV_ZfaClimb_<s>_<n> fired`.
+-- ZLAUNCH.late(C, F, now) (launch_wait_s and none seen out): any of the arm's planes alive, the climb fired anyway (from
+-- where they are) -> true; none alive: false (by pose, as before).
+ZLAUNCH = {}
+do
+local function cc() return (CFG.allies or {}).carrier or {} end
+local function num(v, d) v = tonumber(v); if v == nil then return d end; return v end
+local function climbOf(F)
+    for _, arms in ipairs(cc().launchers or {}) do
+        for _, arm in ipairs(arms) do if arm.record == F.record then return arm.climb end end
+    end
+    return nil
+end
+local function fireClimb(C, F, why)
+    F.climbed = true
+    local ev = climbOf(F)
+    local r = ev and type(SV_Event) == "function" and SV_Event(ev) or nil
+    log(string.format("carrier: %s: %s: %s %s", tostring(C.name), why, tostring(ev or "no climb record"),
+        r == 1 and "fired" or ("NOT fired (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")")))
+end
+function ZLAUNCH.risen(C, F, now)
+    if F.route ~= "container" then return false end
+    if F.climbed then return true end
+    local c = cc()
+    local hull = ESC.hullPose and ESC.hullPose(C)
+    local cap = num(c.capture_km, 4) * 100000
+    local riseZ, parkZ = num(c.rise_m, -50) * 100, num(c.parked_m, -100) * 100
+    local out = 0
+    for u, l in pairs(ESC.planes or {}) do
+        if ESC.kindOf(u) == "zfa" then
+            for _, e in ipairs(l) do
+                if liveAddr(e.obj) == e.addr then
+                    local ok, p = pcall(function() local v = e.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+                    if ok and p then
+                        local nearShip = not hull or math.sqrt((p.X - hull.X) ^ 2 + (p.Y - hull.Y) ^ 2) <= cap
+                        if p.Z < parkZ then e.parked = true
+                        elseif p.Z > riseZ and nearShip and not e.out and (e.parked or (e.at or 0) >= F.at - 1) then
+                            e.out = true
+                            out = out + 1
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if out == 0 then return false end
+    fireClimb(C, F, string.format("%d ZFA-44%s out of its container (%s, %.0f s after its launch record)", out, out == 1 and "" or "s",
+        tostring(F.unit), now - (F.at or now)))
+    return true
+end
+function ZLAUNCH.late(C, F, now)
+    if F.route ~= "container" or F.climbed then return false end
+    local ok, n = pcall(SV_UnitAlive, F.unit)
+    if not (ok and type(n) == "number" and n > 0) then return false end
+    fireClimb(C, F, string.format("none of %s seen out of its container in %.0f s, %d alive: their climb-out from where they are",
+        tostring(F.unit), now - (F.at or now), n))
+    F.up = true
+    return true
 end
 end

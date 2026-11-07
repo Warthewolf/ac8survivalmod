@@ -243,6 +243,26 @@ ZFA_NAME_KEY = 'SV_Zfa44'
 # (Lua's text: CFG.allies.carrier.zfa.sub, "VAMPIRE")
 ZFA_SUB_KEY = 'SV_ZfaSub'
 ZFA_MODEL_SV = 'SV_Model_Zfa'
+# ((2026-11-07) the user: "why not just swap the drone model that launches originally with the ZFA-44 model", "i know for
+# a fact that there was some launch smoke and VFX ... when the drones launched from the Cargo Ship", "the drones seem to
+# just fly the same path together") the launched ZFA-44s fly Mission 16's allied container drone (OP0018_uavc_Ally,
+# BP_OP0018_uavc_Base: the container launcher's mounted-actor interface, its own launch smoke NS_UAVLaunch001 and
+# wing-opening animation), dressed as the ZFA-44 as before: DT_NPC row ZFA_DRONE_NPC (a copy of ZFA_DRONE_NPC_SOURCE,
+# MOONCHILD's behaviour set) on ZFA_DRONE_MODEL_SV (its model row named "ZFA-44", ZFA_DRONE_HEALTH: the Su-47's 60, not
+# the drone's 6), mission row ZFA_DRONE_ROW; its laser twin ZFA_DRONE_TLS_NPC (the gun's slot, as the Su-47's). The pose
+# fallback keeps the Su-47 host (ZFA_ROW).
+ZFA_DRONE_ROW, ZFA_DRONE_NPC, ZFA_DRONE_NPC_SOURCE = 'sv_zfa_drone', 'SV_Zfa_Drone', 'OP0018_uavc_Ally_01'
+ZFA_DRONE_MODEL, ZFA_DRONE_MODEL_SV, ZFA_DRONE_HEALTH = 'OP0018_uavc_Ally', 'SV_Model_ZfaDrone', 60.0
+ZFA_DRONE_TLS_NPC = 'SV_Zfa_DroneTLS'
+# the launch in Mission 17's order (RemoteEvent_SpinUpWeapan's ToOpen, the container's fire, ToClose 2 s after it):
+# RE_SV_CargoLaunch_<s>_<n> opens ship s's container, fires arm n ZFA_OPEN_S on and closes it ZFA_CLOSE_S after; the
+# arm's planes wait parked until then (no orders at their appearance: ordered, they flew off their parking as one flight
+# and the container had nothing left to launch). Lua sees them come out of the container and fires RE_SV_ZfaClimb_<s>_<n>:
+# each object its own climb-out path SV_Path_ZfaClimb_<s>_<k> (fanned ZFA_CLIMB_FAN_DEG apart off the ship's bow,
+# ZFA_CLIMB_KM out and ZFA_CLIMB_UP_M up) at Mission 17's 1200 km/h, their orders ZFA_CLIMB_ORDERS_S on
+ZFA_OPEN_S, ZFA_CLOSE_S = 2.0, 3.0
+ZFA_CLIMB_KM, ZFA_CLIMB_UP_M, ZFA_CLIMB_FAN_DEG = 3.0, 800.0, 30.0
+ZFA_CLIMB_ORDERS_S = (8.0, 12.0)
 ZFA_DRONE_SOURCE = 'E_Unit_01_drone_5_0'     # Mission 17's drone unit desc the launch units are copies of
 ZFA_PER_ARM = 2                              # a two-ship a firing (the arm's magazine holds 5)
 ZFA_PARK_Z = -24483.9                        # Mission 17's drones' height until launched (under the sea)
@@ -279,6 +299,24 @@ def cargo_ship(s):
 
 def cargo_launch_event(s, n):
     return f'RE_SV_CargoLaunch_{s}_{n}'
+
+
+def zfa_climb_event(s, n):
+    return f'RE_SV_ZfaClimb_{s}_{n}'
+
+
+def zfa_climb_path(s, k):
+    return f'SV_Path_ZfaClimb_{s}_{k}'
+
+
+def zfa_climb_points(s, k):
+    """Object k's climb-out path off ship s (cm): from 150 m off its bow, ZFA_CLIMB_FAN_DEG apart, up to ZFA_CLIMB_UP_M."""
+    import math
+    c = cargo_ship(s)
+    x, y = c[6][0], c[6][1]
+    h = math.radians(c[7] + (k - (ZFA_PER_ARM - 1) / 2.0) * ZFA_CLIMB_FAN_DEG)
+    return [(x + math.cos(h) * d * 100000.0, y + math.sin(h) * d * 100000.0, up * 100.0)
+            for d, up in ((0.15, 60.0), (1.0, 300.0), (2.0, 600.0), (ZFA_CLIMB_KM, ZFA_CLIMB_UP_M))]
 
 
 # THE DECOY: the bait (Mission 30's Marker UAV with its laser pod, more health, far north), its laser's mark at the
@@ -333,17 +371,18 @@ def decoy_radio():
 ESCORT_DECOY_MISSION_ROWS = (
     [(ESC_CHAR_ROW, None, ESC_CHAR_ROW_TEMPLATE, ESC_CHAR_NPC, ESC_CHAR_HEALTH_ADD)]
     + [(row, None, ESC_ROW_TEMPLATE, npc, None) for row, (npc, _, _) in ESC_ROWS.items()]
-    + [(ZFA_ROW, None, ESC_ROW_TEMPLATE, ZFA_NPC, None)]
+    + [(ZFA_ROW, None, ESC_ROW_TEMPLATE, ZFA_NPC, None), (ZFA_DRONE_ROW, None, ESC_ROW_TEMPLATE, ZFA_DRONE_NPC, None)]
     + [(c[3], CARGO_MISSION_TABLE, c[4], None, None) for c in CARGO_SHIPS]
     + [(DECOY_BAIT_ROW, DECOY_MISSION_TABLE, DECOY_MISSION_SOURCE, None, DECOY_BAIT_HEALTH_ADD),
        (DECOY_UAV_ROW, DECOY_MISSION_TABLE, DECOY_MISSION_SOURCE, DECOY_UAV_NPC, None),
        (DECOY_SPEAR_ROW, DECOY_SPEAR_TABLE, DECOY_SPEAR_SOURCE_ROW, None, None)])
-ESCORT_ALLIED_ROWS = {ESC_CHAR_ROW, ZFA_ROW, *ESC_ROWS, *(c[3] for c in CARGO_SHIPS)}
+ESCORT_ALLIED_ROWS = {ESC_CHAR_ROW, ZFA_ROW, ZFA_DRONE_ROW, *ESC_ROWS, *(c[3] for c in CARGO_SHIPS)}
 # the DT_NPC rows (DT_SV_NpcRows; build_survival.py build_npc_rows), which Lua adds to DT_NPC at the main menu:
 # (row, its stock DT_NPC source, the model or None (the source's), fly MOONCHILD's set, drop its weapons, name key, full speed)
 ESCORT_DECOY_NPC_ROWS = (
     [(npc, src, model, True, False, None, False) for npc, src, model in ESC_ROWS.values()]
     + [(ZFA_NPC, ZFA_NPC_SOURCE, ZFA_MODEL, True, False, ZFA_NAME_KEY, True),
+       (ZFA_DRONE_NPC, ZFA_DRONE_NPC_SOURCE, ZFA_DRONE_MODEL, True, False, ZFA_NAME_KEY, True),
        (DECOY_UAV_NPC, DECOY_UAV_NPC_SOURCE, None, False, True, None, False)])
 INT_FLAGS += ([a['leg'] for a in esc_aircraft()] + [a['slot'] for a in esc_aircraft()] + ['SV_EscortSlots', DECOY_HIT_FLAG])
 INT_FLAGS += [ZFA_TLS_FLAG]                    # (the ZFA-44s' laser's interceptions: build_escort)
@@ -390,6 +429,9 @@ def build_escort(g, flag, stock_ep):
     t_off = g.exec_template('LiveSetActiveGameObjectExecution', None, lambda a, e: a[0] != 'NoneSelect' and a[3] == 'false')
     t_seng = g.exec_template('LiveAIEngagementOrder', 'UnitDamage_Enemy_Ship_Last1', lambda a, e: a[0].startswith('AC_Obj_01_Ship1'))
     t_launch = g.foreign_template(m17, 'LiveFireOneShotWeapon', 'Default_PreRadioEvent_49', lambda a, e: a[1].endswith('_cntus_03_CP'))
+    t_open = g.foreign_template(m17, 'LiveUniqueStateMachineTransitionEvent', 'RemoteEvent_SpinUpWeapan',
+                                lambda a, e: a[0].endswith('_cntus_01_CP'))
+    t_climb = g.foreign_template(m17, 'LiveAIPathExecution', 'RemoteEvent_FireWeapon_12', lambda a, e: a[4] == '1200.0')
     v = arg_values
     assert v(t_path)[9] == 'false' and v(t_final)[9] == 'false' and v(t_touch)[9] == 'false', (v(t_path), v(t_final), v(t_touch))
     assert (float(v(t_final)[4]), float(v(t_final)[5])) == (225.0, 30.0), v(t_final)
@@ -400,6 +442,8 @@ def build_escort(g, flag, stock_ep):
     assert v(t_eng_none)[3] == 'None' and v(t_eng_air)[3] == 'Normal' and v(t_seng)[3] == 'Normal', (v(t_eng_none), v(t_eng_air))
     assert v(t_gear_dn)[3] == 'true' and v(t_gear_up)[3] == 'false'
     assert v(t_launch)[0] == 'WN_WEAPON_1' and v(t_launch)[2:4] == ['NoneSelect', 'NoneSelect'], v(t_launch)
+    assert v(t_open)[1:3] == ['ToOpen', 'false'], v(t_open)
+    assert v(t_climb)[1] == 'NoneSelect' and v(t_climb)[3:8] == ['NoneSelect', '1200.0', '300.0', '90.0', 'NotSnap'], v(t_climb)
     finish = '01_A_Air1_f18e_PathFinish'                   # PathFinish trigger template: {0 object, 2 path}
     remote = lambda ev: g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
     n_trig, n_ex = len(g.trig), len(g.ex)
@@ -552,15 +596,22 @@ def build_escort(g, flag, stock_ep):
         rm = f'RE_SV_CargoRemove_{s}'
         remote(rm)
         g.execute(t_off, rm, {0: 'NoneSelect', 1: unit, 2: 'NoneSelect', 3: 'false'})
+        cont = f'{obj}_{launcher}'
         for n, zunit, zobjs in CARGO_ARMS[s]:
+            # ((2026-11-07) Mission 17's launch: the container opened, arm n fired, closed again; nothing ordered at
+            # the planes' appearance, so they wait parked for it; their climb-out and orders once Lua sees them out)
             ev = cargo_launch_event(s, n)
             remote(ev)
-            g.execute(t_launch, ev, {0: f'WN_WEAPON_{n}', 1: f'{obj}_{launcher}'})
-            for dl in ZFA_ORDERS_S:
-                zfa_orders(ev, zunit, zobjs, dl)
-            zup = f'SV_ZfaUp{s}{chr(64 + n)}'
-            g.trigger('01_E_AreaA_ReinforcementAppearance_0', zup, arg_changes={0: zunit})
-            zfa_orders(zup, zunit, zobjs, 1.0)
+            g.execute(t_open, ev, {0: cont, 1: 'ToOpen'})
+            g.execute(t_launch, ev, {0: f'WN_WEAPON_{n}', 1: cont}, delay=ZFA_OPEN_S)
+            g.execute(t_open, ev, {0: cont, 1: 'ToClose'}, delay=ZFA_OPEN_S + ZFA_CLOSE_S)
+            cl = zfa_climb_event(s, n)
+            remote(cl)
+            assert len(zobjs) == ZFA_PER_ARM, (zunit, zobjs)
+            for k, ob in enumerate(zobjs):
+                g.execute(t_climb, cl, {0: ob, 2: zfa_climb_path(s, k)})
+            for dl in ZFA_CLIMB_ORDERS_S:
+                zfa_orders(cl, zunit, zobjs, dl)
     for L, unit, obj, s in ZFA_FALLBACK:
         objs = [f'{obj}_{k}' for k in range(ZFA_FALLBACK_N)]
         for ev in (f'SV_ZfaUp{L}', f'RE_SV_ZfaGo{L}'):
@@ -577,7 +628,8 @@ def build_escort(g, flag, stock_ep):
     flag(ZFA_TLS_EVENT, ZFA_TLS_FLAG, 'Add', 1)
     print(f'  escort: CHARLENE + {len(ESC_ESCORTS)} escorts ({sum(len(x) for x in ESC_EVENTS.values())} remote events, '
           f'legs SV_CharLeg / SV_EscLeg<Name>, {len(ESC_SLOTS)} parking slots by landing order), {len(CARGO_SHIPS)} cargo ships '
-          f'({sum(len(x) for x in CARGO_ARMS.values())} launches RE_SV_CargoLaunch_<s>_<n>), {len(ZFA_FALLBACK)} fallback '
+          f'({sum(len(x) for x in CARGO_ARMS.values())} launches RE_SV_CargoLaunch_<s>_<n>: open, fire, close; their '
+          f'climb-outs RE_SV_ZfaClimb_<s>_<n>, a path each), {len(ZFA_FALLBACK)} fallback '
           f'ZFA-44 4-ships: {len(g.trig) - n_trig} triggers, {len(g.ex) - n_ex} execs')
 
 

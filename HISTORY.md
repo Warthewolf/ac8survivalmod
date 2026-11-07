@@ -1608,3 +1608,37 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   b30a111878f2..., the friends' zip AC8SurvivalMode_COOP2MP_0.74.12_Online_COOP_ZFA44.zip 8aebfa37b5b5...
   (0.74.12-coop2mp.104). Not installed yet (AC8 running). The carriers' real container launch (Mission 17's allied drone
   dressed as the ZFA-44, its own launch smoke and sound; the research of 2026-11-07 in tools/re/ESCORT.md) is the next build.
+
+## 0.74.13 (2026-11-07, runtime 0.32.25; the carriers' real container launch; not yet run in game)
+- The ZFA-44 carriers launch from their containers, Mission 17's way (the user: "i did not see any aircraft launch out
+  from the Cargo Ship", "why not just swap the drone model that launches originally with the ZFA-44 model", "i know for a
+  fact that there was some launch smoke and VFX, possibly event sound effects", "the drones seem to just fly the same path
+  together"). The research (2026-11-07, scratchpad dumps): Mission 17's drones (OP0019_uavcs_01) sit parked under the sea
+  until their arm fires; the container's RemoteEvent_SpinUpWeapan sends ToOpen, FireOneShot fires WN_WEAPON_n, each drone
+  object gets its own path at 1200 km/h NotSnap on the container's fire trigger, ToClose 2 s on. The smoke, the wing
+  opening and the take-off come from the drone's blueprint (ILiveFCSMountedActorInterface NotifyTakeOff,
+  NS_UAVLaunch001, A_OP0018_uavc_Open), which a Su-47 hasn't; the hatch and launch sounds from the container. Survival
+  gave the arms' planes orders at their appearance (SV_ZfaUp<s><n>), so they took off from their parking as one flight
+  and the container had nothing left to launch.
+  - The arms' planes fly Mission 16's allied container drone (survival_events_escort.py ZFA_DRONE_*): DT_NPC SV_Zfa_Drone
+    (OP0018_uavc_Ally_01, MOONCHILD's set NLID_0003_CP, its gun's slot the laser in its twin SV_Zfa_DroneTLS) on model
+    SV_Model_ZfaDrone (OP0018_uavc_Ally named SV_Zfa44, 60 HP: the Su-47's, not the drone's 6), mission row sv_zfa_drone.
+    The drone is faster (3000 max) and nimbler than the Su-47. The pose fallback keeps the Su-47 (sv_zfa_ally).
+  - RE_SV_CargoLaunch_<s>_<n>: ToOpen on the ship's container (Mission 17's LiveUniqueStateMachineTransitionEvent), the
+    arm fired ZFA_OPEN_S 2 s on, ToClose 3 s after; no orders at the planes' appearance (SV_ZfaUp<s><n> gone).
+  - RE_SV_ZfaClimb_<s>_<n> (new, one an arm): each object its own climb-out path SV_Path_ZfaClimb_<s>_<k> (k 0-1: off the
+    ship's bow 30 deg apart, 150 m -> 3 km out, 60 -> 800 m up; smooth, Mission 16's Ladon path's shape) at Mission 17's
+    1200 km/h, their orders 8 / 12 s on.
+  - Lua (sv_escort_laser.lua ZLAUNCH, hooked into sv_escort.lua's flight watch; CFG.allies.carrier rise_m -50,
+    parked_m -100, launch_wait_s 15, each launcher's `climb`): a ZFA-44 plane within capture_km of the ship that was
+    parked (below parked_m) or is new since the record, seen above rise_m: out of the container, the arm's climb record
+    fired once (`carrier: <ship>: N ZFA-44s out of its container (<unit>, s after its launch record): RE_SV_ZfaClimb_..
+    fired`); none out in launch_wait_s with the arm's planes alive: the climb-out anyway, from where they are (`none of
+    <unit> seen out of its container ...`); none alive: by pose as before.
+  - Both hosts' rows and models in at the main menu (ZLAS.zfaRow / zfaModel; the row line names SV_Zfa_Drone); the
+    lasers skip a parked plane. The build checks the rows, models, twins, paths and the open / close records.
+  - [T] The ZFA-44 dressed on the drone (its body a skeletal mesh: placed as on VALKA's x40a); the drone's flight with
+    MOONCHILD's set; the container launching it with its smoke; co-op joiners' copies (both records are forwarded).
+- 52 suites pass (coop_test not run). Built and packaged: dev / TESTER 93bea0e256d1..., friends'
+  AC8SurvivalMode_COOP2MP_0.74.13_Online_COOP_ZFA44.zip b814c569a10a... (0.74.13-coop2mp.105), all registered.
+  INSTALLED 2026-11-07 (backup of 0.74.10 with its logs: build/backup/install_before_0.74.13; 79 files compared equal).

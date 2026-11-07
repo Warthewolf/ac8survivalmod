@@ -700,18 +700,20 @@ def build_npc_rows():
             for q in [q for q in row[2] if q[1].endswith('Coefficient') and q[1] != 'SphereCollisionRadiusCoefficient']:
                 set_prop(row[2], q[0], q[1], ('raw', 'Float', struct.pack('<f', 1.0)))
         assert survival_events.fname(npc)[2] == 0, npc
-        if npc == survival_events.ZFA_NPC:     # ((2026-11-07) its box: "ZFA-44" over ZFA_SUB_KEY's, never the Su-47's name:
-            # the name is the model row's (GameObjectDisplayName01): Survival's copy of the allied Su-47's, ZFA_MODEL_SV)
-            set_prop(row[2], model_idx, 'ModelId', ('name', survival_events.ZFA_MODEL_SV, 0))
+        zfa_twin = {survival_events.ZFA_NPC: (survival_events.ZFA_MODEL_SV, survival_events.ZFA_TLS_NPC),
+                    survival_events.ZFA_DRONE_NPC: (survival_events.ZFA_DRONE_MODEL_SV, survival_events.ZFA_DRONE_TLS_NPC)}.get(npc)
+        if zfa_twin:                            # ((2026-11-07) its box: "ZFA-44" over ZFA_SUB_KEY's, never its host's name:
+            # the name is the model row's (GameObjectDisplayName01): Survival's copy of its host's, ZFA_MODEL_SV / _DRONE_)
+            set_prop(row[2], model_idx, 'ModelId', ('name', zfa_twin[0], 0))
             set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(survival_events.ZFA_SUB_KEY))
         out.append(((npc, 0), row))
-        if npc == survival_events.ZFA_NPC:     # (2026-11-07) ... and its twin with the anti-missile laser in the gun's slot
+        if zfa_twin:                            # (2026-11-07) ... and its twin with the anti-missile laser in the gun's slot
             slot = f'NpcFCSId{survival_events.ZFA_TLS_SLOT}'   # ((0.74.12) the user: "swap the guns out for the Laser Interceptor")
             assert [q[3] for q in row[2] if q[1] == slot] == [('name', survival_events.ZFA_TLS_GUN, 0)], (npc, slot, 'not the gun')
             tls = copy.deepcopy(row)
             set_prop(tls[2], sidx(slot), slot, ('name', survival_events.ZFA_TLS_FCS_ROW, 0))
-            assert survival_events.fname(survival_events.ZFA_TLS_NPC)[2] == 0
-            out.append(((survival_events.ZFA_TLS_NPC, 0), tls))
+            assert survival_events.fname(zfa_twin[1])[2] == 0
+            out.append(((zfa_twin[1], 0), tls))
     print('  escort / decoy DT_NPC rows (Lua adds them at the main menu): '
           + ', '.join(f'{r[0]} ({r[1]}' + (f' on {r[2]}' if r[2] else '') + (', unarmed' if r[4] else '') + ')'
                       for r in survival_events.ESCORT_DECOY_NPC_ROWS) + f'; their behaviour set {ally_set[1]}; '
@@ -918,7 +920,7 @@ def check_escort_decoy_build():
                                                    'BP_VE021_ctslf_cntus_03_CP', 'BP_VE021_stgr_Base')
                             if c in (launcher, 'BP_VE021_stgr_Base', 'BP_VE021_ctslf_cntus_02_CP'))))
         for n, dunit, dobjs in se.CARGO_ARMS[s_]:
-            want.append((dunit, dobjs, se.ZFA_ROW, 1, se.ZFA_NAME_KEY, []))
+            want.append((dunit, dobjs, se.ZFA_DRONE_ROW, 1, se.ZFA_NAME_KEY, []))
     for L, unit, obj, _ in se.ZFA_FALLBACK:
         want.append((unit, [f'{obj}_{k}' for k in range(se.ZFA_FALLBACK_N)], se.ZFA_ROW, 1, se.ZFA_NAME_KEY, []))
     want.append((se.DECOY_BAIT_UNIT, [se.DECOY_BAIT_OBJ], se.DECOY_BAIT_ROW, 2, None, [f'{se.DECOY_BAIT_OBJ}_{se.DECOY_POD}']))
@@ -947,6 +949,7 @@ def check_escort_decoy_build():
     ct = field_of(paths[se.AWACS_ARC_A], 'ControlType')
     want_paths = [se.ESC_PATH_ROUTE, se.ESC_PATH_FINAL, se.ESC_PATH_CIRCUIT] + [a['route'] for a in se.esc_aircraft()[1:]]
     want_paths += [f'SV_Path_{k}Slot{S}' for S, _ in se.ESC_SLOTS for k in ('Taxi', 'Stop')]
+    want_paths += [se.zfa_climb_path(c[0], k) for c in se.CARGO_SHIPS for k in range(se.ZFA_PER_ARM)]
     for name in want_paths:
         assert name in paths and field_of(paths[name], 'ControlType') == ct, (name, ct)
     # the records
@@ -956,6 +959,7 @@ def check_escort_decoy_build():
     trig = [show(ep_dump.fields(t)['EventName']) for t in T]
     events = [ev for evs in se.ESC_EVENTS.values() for ev in evs] + ['RE_SV_EscortReset']
     events += [se.cargo_launch_event(s_, n) for s_ in se.CARGO_ARMS for n, _, _ in se.CARGO_ARMS[s_]]
+    events += [se.zfa_climb_event(s_, n) for s_ in se.CARGO_ARMS for n, _, _ in se.CARGO_ARMS[s_]]
     events += [f'RE_SV_CargoRemove_{c[0]}' for c in se.CARGO_SHIPS] + [f'RE_SV_ZfaGo{f[0]}' for f in se.ZFA_FALLBACK]
     events += ['RE_SV_DecoyBaitLaser', 'RE_SV_DecoyBaitLaserOff', 'RE_SV_DecoyBaitPing', 'RE_SV_DecoyKill', 'SV_DecoySpearImpact']
     events += [f'RE_SV_DecoySpear_{k + 1}' for k in range(len(se.DECOY_SPEARS))]
@@ -1007,6 +1011,8 @@ def check_escort_decoy_build():
             assert se.fname(args[0]) in flags, (ev, args)
         elif cls == 'LiveRadioPlayExecution':
             assert args[0] in radio, (ev, args)
+        elif cls == 'LiveUniqueStateMachineTransitionEvent':  # (a carrier's container opened / closed: Mission 17's)
+            assert args[0] in objs and args[1] in ('ToOpen', 'ToClose'), (ev, args)
         else:
             assert cls == 'LiveDestroyPlayerPlaneExecution' and not args, (ev, cls, args)
     impact = [t for t in T if show(ep_dump.fields(t)['EventName']) == 'SV_DecoySpearImpact'][0]
@@ -1024,7 +1030,7 @@ def check_escort_decoy_build():
         assert hp is None or struct.unpack('<f', mission[row]['MaxHealthDifference'][2])[0] == hp, (row, hp)
     for row, src, model, fly_ally, unarmed, key, full in se.ESCORT_DECOY_NPC_ROWS:
         r = npc[row]
-        want_model = se.ZFA_MODEL_SV if row == se.ZFA_NPC else model     # ((2026-11-07) its own model row: its name)
+        want_model = {se.ZFA_NPC: se.ZFA_MODEL_SV, se.ZFA_DRONE_NPC: se.ZFA_DRONE_MODEL_SV}.get(row, model)  # (its own: its name)
         assert model is None or plain(r['ModelId']) == want_model, (row, r['ModelId'])
         assert not fly_ally or plain(r['LuaSetId']) == 'NLID_0003_CP', (row, r['LuaSetId'])
         assert not unarmed or not any(k.startswith('NpcFCSId') and v for k, v in r.items()), row
@@ -1033,9 +1039,14 @@ def check_escort_decoy_build():
     # ZFA_SUB_KEY under it)
     zm = table(DATA + 'DT_SV_ModelRows', 'LiveModelDataTable')
     assert se.ZFA_MODEL_SV in zm and zm[se.ZFA_MODEL_SV]['GameObjectDisplayName01'] == s(se.ZFA_NAME_KEY), zm.get(se.ZFA_MODEL_SV)
-    for zr in (se.ZFA_NPC, se.ZFA_TLS_NPC):
-        assert plain(npc[zr]['ModelId']) == se.ZFA_MODEL_SV and npc[zr]['GameObjectDisplayName02'] == s(se.ZFA_SUB_KEY), \
+    for zr, zmod in ((se.ZFA_NPC, se.ZFA_MODEL_SV), (se.ZFA_TLS_NPC, se.ZFA_MODEL_SV), (se.ZFA_DRONE_NPC, se.ZFA_DRONE_MODEL_SV),
+                     (se.ZFA_DRONE_TLS_NPC, se.ZFA_DRONE_MODEL_SV)):
+        assert plain(npc[zr]['ModelId']) == zmod and npc[zr]['GameObjectDisplayName02'] == s(se.ZFA_SUB_KEY), \
             (zr, npc[zr].get('ModelId'), npc[zr].get('GameObjectDisplayName02'))
+    # ((2026-11-07) the launched ZFA-44s on the allied container drone: its model row named ZFA-44, the Su-47's health)
+    dm = zm.get(se.ZFA_DRONE_MODEL_SV) or {}
+    assert dm.get('GameObjectDisplayName01') == s(se.ZFA_NAME_KEY) and struct.unpack('<f', dm['MaxHealth'][2])[0] == se.ZFA_DRONE_HEALTH \
+        and dm['BlueprintClass'][2][1] == 'BP_OP0018_uavc_CP_Ally_C', dm
     print(f'  escort / decoy: {len(want)} units, {len(want_paths)} paths, {len(events)} events ({n_ex} execs: '
           + ', '.join(f'{c} {n}' for c, n in sorted(classes.items())) + ') and their rows read back from the packages: all there')
 
@@ -1082,9 +1093,11 @@ def check_zfa_laser_build():
     assert r['NpcWeaponId'] is None and r['NpcAIModuleId'] is None, r
     assert [struct.unpack('<f', r[f][2])[0] for f in ('CaptureDistance', 'CaptureAngleRange')] == [3000.0, 180.0], r
     npc = table(DATA + 'DT_SV_NpcRows', 'LiveNpcDataTable')
-    a, b, slot = npc[se.ZFA_NPC], npc[se.ZFA_TLS_NPC], f'NpcFCSId{se.ZFA_TLS_SLOT}'
-    assert b.get(slot) == ('name', se.ZFA_TLS_FCS_ROW, 0) and a.get(slot) == ('name', se.ZFA_TLS_GUN, 0), (a.get(slot), b.get(slot))
-    assert {f: v for f, v in a.items() if f != slot} == {f: v for f, v in b.items() if f != slot}, 'the twin differs'
+    slot = f'NpcFCSId{se.ZFA_TLS_SLOT}'
+    for host, twin in ((se.ZFA_NPC, se.ZFA_TLS_NPC), (se.ZFA_DRONE_NPC, se.ZFA_DRONE_TLS_NPC)):
+        a, b = npc[host], npc[twin]
+        assert b.get(slot) == ('name', se.ZFA_TLS_FCS_ROW, 0) and a.get(slot) == ('name', se.ZFA_TLS_GUN, 0), (host, a.get(slot), b.get(slot))
+        assert {f: v for f, v in a.items() if f != slot} == {f: v for f, v in b.items() if f != slot}, (host, 'the twin differs')
     # the interception count
     ze = load(MI + 'EP_SurvivalMode_global')
     _, _, _, T, E, _ = ep_dump.load_bytes(ze)
@@ -1099,6 +1112,8 @@ def check_zfa_laser_build():
     # Lua's names for them (Scripts/sv_config.lua CFG.allies.carrier.zfa)
     lua = survival_events.runtime_lua()
     for want in (f'dt_npc = "{se.ZFA_NPC}"', f'laser_row = "{se.ZFA_TLS_NPC}"', f'laser_fcs_row = "{se.ZFA_TLS_FCS_ROW}"',
+                 f'dt_npc_drone = "{se.ZFA_DRONE_NPC}"', f'laser_row_drone = "{se.ZFA_DRONE_TLS_NPC}"',
+                 f'model_drone = "{se.ZFA_DRONE_MODEL_SV}"',
                  f'laser_slot = {se.ZFA_TLS_SLOT},',
                  f'laser_fcs_table = "{se.ZFA_TLS_FCS_TABLE}.{se.ZFA_TLS_FCS_TABLE.rsplit("/", 1)[1]}"',
                  f'laser_flag = "{se.ZFA_TLS_FLAG}"'):

@@ -1385,6 +1385,7 @@ local function hullPose(C)
     local at = { X = sp[1], Y = sp[2], Z = 0 }
     return at, (bearing(at, AIRFIELD) - 90) % 360
 end
+ESC.hullPose = hullPose                                  -- (the launch watch: sv_escort_laser.lua ZLAUNCH)
 local function launch(C, now)
     local c = cc()
     local arms = (c.launchers or {})[C.idx] or {}
@@ -1563,10 +1564,10 @@ local function carrierTick(C, now)
     local F = C.flight
     if F then
         if not F.up then                                 -- (planes up before it fired aren't its launch: F.before)
-            if #planesOf(F.unit, F.at - 1) > 0 or aliveOf(F.unit) > (F.before or 0) then
+            if (ZLAUNCH and ZLAUNCH.risen(C, F, now)) or #planesOf(F.unit, F.at - 1) > 0 or aliveOf(F.unit) > (F.before or 0) then
                 F.up = true
                 log(string.format("carrier: %s's ZFA-44s are up (%s, %d planes seen)", C.name, F.unit, #planesOf(F.unit, F.at - 1)))
-            elseif now - F.at >= num(c.launch_wait_s, 10) then
+            elseif now - F.at >= num(c.launch_wait_s, 10) and not (ZLAUNCH and ZLAUNCH.late(C, F, now)) then
                 log(string.format("carrier: %s: %s fired %.0f s ago and no plane of %s came: launched by pose from now on", C.name,
                     tostring(F.record), now - F.at, F.unit))
                 C.route, C.flight, C.nextLaunchAt = "pose", nil, now

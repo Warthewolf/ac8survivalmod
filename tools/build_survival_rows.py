@@ -277,6 +277,17 @@ def build_model_rows():
     set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.ZFA_NAME_KEY))
     assert survival_events.fname(survival_events.ZFA_MODEL_SV)[2] == 0
     out.append(((survival_events.ZFA_MODEL_SV, 0), row))
+    # ((2026-11-07) the launched ZFA-44s on Mission 16's allied container drone) its model row: the drone's whole but its name
+    # (ZFA_NAME_KEY) and its health (ZFA_DRONE_HEALTH, the Su-47's, not the drone's 6)
+    f = survival_events.fname(survival_events.ZFA_DRONE_MODEL)
+    assert (f[1], f[2]) in crow, survival_events.ZFA_DRONE_MODEL
+    row = copy.deepcopy(crow[(f[1], f[2])])
+    names = dict((q[1], q[3]) for q in row[2])
+    assert names['BlueprintClass'][2][1] == 'BP_OP0018_uavc_CP_Ally_C', names['BlueprintClass']
+    set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.ZFA_NAME_KEY))
+    set_prop(row[2], idx['MaxHealth'], 'MaxHealth', ('raw', 'Float', struct.pack('<f', survival_events.ZFA_DRONE_HEALTH)))
+    assert survival_events.fname(survival_events.ZFA_DRONE_MODEL_SV)[2] == 0
+    out.append(((survival_events.ZFA_DRONE_MODEL_SV, 0), row))
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
     dt['rows'] = out

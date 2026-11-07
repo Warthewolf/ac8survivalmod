@@ -1017,26 +1017,35 @@ CFG = {
         -- tools/survival_events.py build_valka reads as VALKA's).
         -- (2026-11-07, the build's names: tools/re/ESCORT.md "Build names") launchers: ship 1 fires only its launcher
         -- BP_VE021_ctslf_cntus_01_CP, ship 2 only its _03, arm n (WN_WEAPON_n) by RE_SV_CargoLaunch_<s>_<n>, which spawns
-        -- the world-data unit that arm names (2 ZFA-44s on sv_zfa_ally; an arm fired again only once its unit is off the
+        -- the world-data unit that arm names (2 ZFA-44s on sv_zfa_drone; an arm fired again only once its unit is off the
         -- spawner's list: hard rule 16); pose_go: each pose flight's orders after its SV_Spawn (gear up, Normal, air
         -- search: its appearance's, which a spawn in the landing menu never fires). dt_npc: the ZFA-44 host's DT_NPC row
         -- (DT_SV_NpcRows' Su-47 copy, added at the main menu by ESC.setup): without it no carrier is sold
+        -- ((2026-11-07) the user: "why not just swap the drone model that launches originally with the ZFA-44 model", "i
+        -- know for a fact that there was some launch smoke and VFX", "the drones seem to just fly the same path together")
+        -- the arms' planes fly Mission 16's allied container drone (dt_npc_drone: its launch smoke and wing animation, the
+        -- ZFA-44 dressed on it; the pose flights keep dt_npc's Su-47), parked in the ship until their arm's record opens the
+        -- container, fires it and closes it (Mission 17's way). A plane of theirs seen out of it (above rise_m, within
+        -- capture_km of the ship, parked below parked_m before or new since the record) fires its arm's `climb` record:
+        -- each its own climb-out path, then their orders (Scripts/sv_escort_laser.lua ZLAUNCH). None out in launch_wait_s:
+        -- the climb-out fired anyway while any of the arm's planes is alive, else by pose
         carrier      = { enabled = true, name = "ZFA-44 CARRIER", name_key = "SV_Cargo", max_up = 2,
-                         units = { "SV_Unit_Cargo1", "SV_Unit_Cargo2" }, dt_npc = "SV_Zfa_Ally",
-                         launch = "container", first_s = 20, relaunch_s = 30, launch_wait_s = 10, capture_km = 4,
+                         units = { "SV_Unit_Cargo1", "SV_Unit_Cargo2" }, dt_npc = "SV_Zfa_Ally", dt_npc_drone = "SV_Zfa_Drone",
+                         launch = "container", first_s = 20, relaunch_s = 30, launch_wait_s = 15, capture_km = 4,
+                         rise_m = -50, parked_m = -100,
                          launchers = {
-                             { { record = "RE_SV_CargoLaunch_1_1", unit = "E_Unit_01_drone_5_0" },
-                               { record = "RE_SV_CargoLaunch_1_2", unit = "E_Unit_01_drone_4_0" },
-                               { record = "RE_SV_CargoLaunch_1_3", unit = "E_Unit_01_drone_0_0" },
-                               { record = "RE_SV_CargoLaunch_1_4", unit = "E_Unit_01_drone_1_0" },
-                               { record = "RE_SV_CargoLaunch_1_5", unit = "E_Unit_01_drone_7_0" },
-                               { record = "RE_SV_CargoLaunch_1_6", unit = "E_Unit_01_drone_8_0" } },
-                             { { record = "RE_SV_CargoLaunch_2_1", unit = "E_Unit_01_drone_3_1" },
-                               { record = "RE_SV_CargoLaunch_2_2", unit = "E_Unit_01_drone_4_1" },
-                               { record = "RE_SV_CargoLaunch_2_3", unit = "E_Unit_01_drone_1_1" },
-                               { record = "RE_SV_CargoLaunch_2_4", unit = "E_Unit_01_drone_2_1" },
-                               { record = "RE_SV_CargoLaunch_2_5", unit = "E_Unit_01_drone_6_1" },
-                               { record = "RE_SV_CargoLaunch_2_6", unit = "E_Unit_01_drone_7_1" } },
+                             { { record = "RE_SV_CargoLaunch_1_1", climb = "RE_SV_ZfaClimb_1_1", unit = "E_Unit_01_drone_5_0" },
+                               { record = "RE_SV_CargoLaunch_1_2", climb = "RE_SV_ZfaClimb_1_2", unit = "E_Unit_01_drone_4_0" },
+                               { record = "RE_SV_CargoLaunch_1_3", climb = "RE_SV_ZfaClimb_1_3", unit = "E_Unit_01_drone_0_0" },
+                               { record = "RE_SV_CargoLaunch_1_4", climb = "RE_SV_ZfaClimb_1_4", unit = "E_Unit_01_drone_1_0" },
+                               { record = "RE_SV_CargoLaunch_1_5", climb = "RE_SV_ZfaClimb_1_5", unit = "E_Unit_01_drone_7_0" },
+                               { record = "RE_SV_CargoLaunch_1_6", climb = "RE_SV_ZfaClimb_1_6", unit = "E_Unit_01_drone_8_0" } },
+                             { { record = "RE_SV_CargoLaunch_2_1", climb = "RE_SV_ZfaClimb_2_1", unit = "E_Unit_01_drone_3_1" },
+                               { record = "RE_SV_CargoLaunch_2_2", climb = "RE_SV_ZfaClimb_2_2", unit = "E_Unit_01_drone_4_1" },
+                               { record = "RE_SV_CargoLaunch_2_3", climb = "RE_SV_ZfaClimb_2_3", unit = "E_Unit_01_drone_1_1" },
+                               { record = "RE_SV_CargoLaunch_2_4", climb = "RE_SV_ZfaClimb_2_4", unit = "E_Unit_01_drone_2_1" },
+                               { record = "RE_SV_CargoLaunch_2_5", climb = "RE_SV_ZfaClimb_2_5", unit = "E_Unit_01_drone_6_1" },
+                               { record = "RE_SV_CargoLaunch_2_6", climb = "RE_SV_ZfaClimb_2_6", unit = "E_Unit_01_drone_7_1" } },
                          },
                          pose_units = { "SV_Unit_ZfaA", "SV_Unit_ZfaB" }, pose_go = { "RE_SV_ZfaGoA", "RE_SV_ZfaGoB" },
                          pose = { ahead_m = 300, alt_m = 1100 },
@@ -1054,6 +1063,7 @@ CFG = {
                          -- ((2026-11-07) its box: name (name_key) over sub (sub_key), the host row's both: the build's)
                          zfa = { name = "ZFA-44", name_key = "SV_Zfa44", sub = "VAMPIRE", sub_key = "SV_ZfaSub",
                                  model = "SV_Model_Zfa",       -- (the host row's model: the build's ZFA_MODEL_SV)
+                                 model_drone = "SV_Model_ZfaDrone", laser_row_drone = "SV_Zfa_DroneTLS",   -- (the drone's: _DRONE_)
                                  dress = true, paint = 3, hide_s = 3, settle_s = 1.5,
                                  per_tick = 1, preload = true,
                                  laser = true, laser_row = "SV_Zfa_AllyTLS", laser_fcs_row = "SV_FCS_ZfaTLS",

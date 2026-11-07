@@ -177,16 +177,19 @@ local function dt(name, rows)
     return t
 end
 local npcT = dt("DT_NPC", {})
-local mineT = dt("DT_SV_NpcRows", { SV_Esc_Su57 = { r = 1 }, SV_Esc_Su33 = { r = 2 }, SV_Esc_Su35 = { r = 3 }, SV_Zfa_Ally = { r = 4 } })
+local mineT = dt("DT_SV_NpcRows", { SV_Esc_Su57 = { r = 1 }, SV_Esc_Su33 = { r = 2 }, SV_Esc_Su35 = { r = 3 }, SV_Zfa_Ally = { r = 4 },
+                                    SV_Zfa_Drone = { r = 6 } })
 statics[PROBE_TABLES[2].path], statics[CFG.specials.shuttle.npc_rows] = npcT, mineT
 -- ((2026-11-07) the ZFA-44 host's own model row (its name "ZFA-44", not the Su-47's), into DT_NPC_Model first)
-local modelT, mineModelT = dt("DT_NPC_Model", {}), dt("DT_SV_ModelRows", { SV_Model_Zfa = { m = 1 } })
+local modelT, mineModelT = dt("DT_NPC_Model", {}), dt("DT_SV_ModelRows", { SV_Model_Zfa = { m = 1 }, SV_Model_ZfaDrone = { m = 2 } })
 statics[ACE.model_table], statics[ACE.model_rows] = modelT, mineModelT
 ESC.setup()
 check(npcT.rows.SV_Esc_Su57 and npcT.rows.SV_Esc_Su33 and npcT.rows.SV_Esc_Su35 and npcT.rows.SV_Zfa_Ally and ESC.rowsOk == true
       and ESC.zfaRowOk == true and has(line("escort: the escorts' and the ZFA-44's rows"), "SV_Zfa_Ally in DT_NPC"),
       "the escorts' and the ZFA-44 host's rows from DT_SV_NpcRows into DT_NPC at the main menu, logged")
-check(modelT.rows.SV_Model_Zfa ~= nil, "... the ZFA-44 host's own model row (named ZFA-44) into DT_NPC_Model before it")
+check(modelT.rows.SV_Model_Zfa ~= nil and modelT.rows.SV_Model_ZfaDrone ~= nil and npcT.rows.SV_Zfa_Drone ~= nil
+      and has(line("escort: the escorts' and the ZFA-44's rows"), "SV_Zfa_Drone in DT_NPC"),
+      "... both ZFA-44 hosts' own model rows (named ZFA-44) into DT_NPC_Model before them, the container drone's row too")
 do                                                  -- (without its model row: no ZFA-44 host, said)
     local keepM = statics[ACE.model_rows]
     statics[ACE.model_rows] = dt("DT_SV_ModelRows", {})
@@ -211,7 +214,8 @@ local function laserSetup(on, fcsRows, mineFcsRows)
     ESC.setupDone, ESC.setupTries, Z.laser = nil, 0, on
     local n2 = dt("DT_NPC", {})
     local m2 = dt("DT_SV_NpcRows", { SV_Esc_Su57 = { r = 1 }, SV_Esc_Su33 = { r = 2 }, SV_Esc_Su35 = { r = 3 },
-                                     SV_Zfa_Ally = { r = 4 }, SV_Zfa_AllyTLS = { r = 5 } })
+                                     SV_Zfa_Ally = { r = 4 }, SV_Zfa_AllyTLS = { r = 5 }, SV_Zfa_Drone = { r = 6 },
+                                     SV_Zfa_DroneTLS = { r = 7 } })
     local f2 = fcsRows and dt("DT_NPC_FCS", fcsRows) or nil
     statics[PROBE_TABLES[2].path], statics[CFG.specials.shuttle.npc_rows] = n2, m2
     statics[FCS_TABLE], statics[Z.laser_fcs_table] = f2, mineFcsRows and dt("DT_SV_NpcFCS", mineFcsRows) or nil
@@ -222,6 +226,7 @@ end
 local fcsRow = setmetatable({}, { __index = function(_, k) error("the FCS row's " .. tostring(k) .. " was read") end })
 local n2, f2, said = laserSetup(true, {}, { SV_FCS_ZfaTLS = fcsRow })
 check(n2.rows.SV_Zfa_Ally and n2.rows.SV_Zfa_Ally.r == 5 and n2.rows.SV_Zfa_AllyTLS == nil and rawequal(f2.rows.SV_FCS_ZfaTLS, fcsRow)
+      and n2.rows.SV_Zfa_Drone and n2.rows.SV_Zfa_Drone.r == 7 and has(said, "SV_Zfa_Drone in DT_NPC (with the anti-missile laser: SV_Zfa_DroneTLS")
       and ZLAS.armed == true and ESC.zfaRowOk == true and has(said, "SV_Zfa_Ally in DT_NPC (with the anti-missile laser"),
       "the laser on: SV_FCS_ZfaTLS into DT_NPC_FCS whole, SV_Zfa_Ally made from SV_Zfa_AllyTLS's struct, logged")
 n2, f2, said = laserSetup(false, {}, { SV_FCS_ZfaTLS = fcsRow })
@@ -903,6 +908,7 @@ check(ESC.hulls.SV_Unit_Cargo1 ~= nil and has(line("carrier: SV_Unit_Cargo1's hu
 
 ---------------------------------------------------------------------------------------------------- launches
 print("launches")
+K.launch_wait_s = 10                                -- (this section's timings: the 0.74.11 wait)
 local dressed = {}
 ZFA.dress = function(o, opts) dressed[#dressed + 1] = { o = o, paint = opts.paint }; return true, "dressed" end
 local A1 = K.launchers[1][1].unit
@@ -976,9 +982,11 @@ for i = nr + 1, #recycled do if recycled[i] == A3 .. ":1" then recA3 = true end 
 check(evFired("RE_SV_CargoLaunch_1_3") and not recA3
       and has(line("carrier: ZFA-44 CARRIER 1: " .. A3 .. " has 2 up that this carrier never launched"), "fired as it is"),
       "the next arm in turn, its unit with 2 up this carrier never launched: fired as it is (never skipped, never taken off)")
-check(line("carrier: ZFA-44 CARRIER 1's ZFA-44s are up (" .. A3, fromA3) == nil
-      and has(line("carrier: ZFA-44 CARRIER 1: RE_SV_CargoLaunch_1_3 fired", fromA3), "launched by pose from now on"),
-      "... its 2 planes up before it fired aren't its launch: no new one in launch_wait_s, by pose from then on")
+-- ((2026-11-07) the container drone: its 2 parked planes alive and none seen out in launch_wait_s: their climb-out
+-- fired anyway, never the pose flight)
+check(has(line("carrier: ZFA-44 CARRIER 1: none of " .. A3 .. " seen out of its container", fromA3), "RE_SV_ZfaClimb_1_3 fired")
+      and evFired("RE_SV_ZfaClimb_1_3") and line("carrier: ZFA-44 CARRIER 1: RE_SV_CargoLaunch_1_3 fired", fromA3) == nil,
+      "... its 2 planes alive but none seen out of the container in launch_wait_s: their climb-out anyway, not by pose")
 alive[A3], alive[A4] = nil, nil
 
 ---------------------------------------------------------------------------------------------------- service
@@ -1328,6 +1336,37 @@ do
     ESC.planes[zU] = nil
 end
 
+---------------------------------------------------------------------------------------------------- the launch watch
+-- ((2026-11-07) the launched ZFA-44s on Mission 16's allied container drone: parked in the ship until their arm fires;
+-- one seen out of the container fires the arm's climb-out record, once; none out in launch_wait_s: the climb-out anyway
+-- while any is alive, else pose)
+print("the launch watch (sv_escort_laser.lua ZLAUNCH)")
+do
+    local U2 = K.launchers[1][2].unit
+    check(K.launchers[1][2].climb == "RE_SV_ZfaClimb_1_2" and K.dt_npc_drone == "SV_Zfa_Drone", "the build's climb records and the drone's row")
+    local sx, sy = K.ship_at[1][1], K.ship_at[1][2]
+    local C = { name = "ZFA-44 CARRIER 1", unit = "SV_Unit_NoHull", idx = 1 }
+    local F = { route = "container", record = "RE_SV_CargoLaunch_1_2", unit = U2, at = 500 }
+    local p1 = plane(nil, sx + 10000, sy, -24484, 0, 0)
+    local far = plane(nil, sx + 900000, sy, 3000, 0, 300)      -- (9 km off: another's)
+    ESC.planes[U2] = { { obj = p1, addr = p1.addr, name = p1.full, at = 0 }, { obj = far, addr = far.addr, name = far.full, at = 0 } }
+    events = {}
+    check(ZLAUNCH.risen(C, F, 501) == false and evCount("RE_SV_ZfaClimb_1_2") == 0, "parked under the sea: not out yet")
+    p1.Z = 2500
+    local from = #logs + 1
+    check(ZLAUNCH.risen(C, F, 503) == true and evCount("RE_SV_ZfaClimb_1_2") == 1 and F.climbed == true, "out of its container: its climb-out fired")
+    check(has(line("carrier: ZFA-44 CARRIER 1: 1 ZFA-44 out of its container", from), "RE_SV_ZfaClimb_1_2 fired"), "logged")
+    check(ZLAUNCH.risen(C, F, 504) == true and evCount("RE_SV_ZfaClimb_1_2") == 1, "once")
+    local F2 = { route = "container", record = "RE_SV_CargoLaunch_1_3", unit = K.launchers[1][3].unit, at = 600 }
+    alive[F2.unit] = 2
+    check(ZLAUNCH.late(C, F2, 615) == true and F2.up == true and evCount("RE_SV_ZfaClimb_1_3") == 1,
+          "none seen out in launch_wait_s, 2 alive: the climb-out anyway")
+    local F3 = { route = "container", record = "RE_SV_CargoLaunch_1_4", unit = K.launchers[1][4].unit, at = 600 }
+    alive[F3.unit] = 0
+    check(ZLAUNCH.late(C, F3, 615) == false and evCount("RE_SV_ZfaClimb_1_4") == 0, "none alive: by pose (false)")
+    check(ZLAUNCH.risen(C, { route = "pose", unit = "SV_Unit_ZfaA", at = 0 }, 1) == false, "a pose flight: not watched")
+    ESC.planes[U2] = nil
+end
 ---------------------------------------------------------------------------------------------------- the dressing
 print("the ZFA-44 dressing (sv_zfa44.lua)")
 part("sv_zfa44.lua")                                -- (its real ZFA.dress again)
