@@ -311,8 +311,8 @@ tools/re/MENU_PAGES.md has the design and log lines. Lua tests: tools/checks/men
 the build's: tools/checks/menu_pages_test.py (build_all.sh runs it).
 
 ## Survival COOP (Lua 0.70.6-coop.11, runtime 0.26.0, 2026-10-26; played up to coop.4: hard rules 48-51)
-Up to 24 players (protocol 3), host-authoritative (after Double Trigger, the AC7 co-op mod), on branch
-`feature/survival-coop`. tools/re/COOP.md has the RE (AC8's AI plane teleport: vtable slot 315, called every frame on a
+Up to 24 players (protocol 3), host-authoritative (after Double Trigger, the AC7 co-op mod), first built on branch
+`feature/survival-coop` (merged; the branch deleted in the cleanup of 2026-11-08). tools/re/COOP.md has the RE (AC8's AI plane teleport: vtable slot 315, called every frame on a
 puppet; Steam P2P without callbacks; a real second player plane, section 6), the protocol and the test checklist.
 Native half runtime/coop.c (SV_Coop*), Lua half Scripts/sv_coop.lua, world-data units SV_Unit_CoopPeerA-X (each other
 player's stand-in, an allied AI plane of their airframe: CFG.coop.airframes), name keys SV_CoopName_A-X.
@@ -447,6 +447,8 @@ COOP2MP's T1-T4 and every build since, through the newest. It isn't loaded into 
 ~190 KB): grep it for a version, a feature or a log line, and read only the entry you need. Each feature's design,
 reverse engineering, log lines and test checklist are in tools/re/*.md (COOP.md, COOP2MP.md, BEHAVIOUR_DIRECTOR.md,
 ESCORT.md, FISHING.md, DECOY.md, SPACEPORT_ASSAULT.md, ZFA44.md, THUNDER.md, VALKA.md, ...).
+- (Git, 2026-11-08 cleanup) `main` is the working branch: it holds everything through 0.74.20; the old branches are
+  merged or kept as `archive/*` tags. COOP2MP is the build line's name (COOP_TAG, BUILD_NAME), no longer a branch.
 - COOP2MP is the working main since 2026-10-30: the other players fly as real player planes (ALivePlayerPlane fed from
   their stream, their weapons replayed from their own plane), the AI stand-ins only as a fallback. VERSION 0.7x.y with
   COOP_TAG -coop2mp.N (tools/coop_edition.py); friends' zips: BUILD_NAME=COOP2MP COOP=1 sh tools/package_release.sh online

@@ -38,3 +38,8 @@ parked/
 
 # your machine's settings for the tools (copy .env.example to .env: tools/env.sh, tools/env.py)
 .env
+
+# (2026-11-08 repo cleanup) game logs and build zips stay on your own disk, never in git: the logs carry players' Steam IDs,
+# the TESTER zips the test keys (release zips go to build/release and GitHub Releases)
+testing/logs/
+testing/builds/
