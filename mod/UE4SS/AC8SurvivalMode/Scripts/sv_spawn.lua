@@ -1340,6 +1340,14 @@ end)
 function spawnShuttle()
     local c = CFG.specials.shuttle
     pcall(SPC.shuttlePadBack)                             -- (the pad hidden after the last one: its units are still up)
+    -- ((0.74.22) the host: the pad brought back so, announced to the joiners again (its last take-off took its copies off
+    -- their games: sv_rounds.lua SPC.shuttleTakeOff)
+    for _, u in ipairs({ c.dummies, c.pad_allies and c.pad or nil }) do
+        if u and COOP and COOP.hostBack and SHUTTLE.pad and SHUTTLE.pad[u] and SV_UnitAlive(u) > 0 then
+            local okB, errB = pcall(COOP.hostBack, u, SHUTTLE.pad[u])
+            if not okB then log("special: pad " .. u .. " to the joiners again: error " .. tostring(errB)) end
+        end
+    end
     for _, u in ipairs({ c.dummies, c.pad_allies and c.pad or nil }) do
         if u and SV_UnitAlive(u) <= 0 then
             SHUTTLE.pad = SHUTTLE.pad or {}

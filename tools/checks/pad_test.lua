@@ -272,6 +272,38 @@ check(since(from, "^round 2: no shuttle after all %(its spawn refused: ") == 1
       and since(from, "its cooldown given back") == 1, "logged: " .. tostring(lastLog("no shuttle after all")))
 SV_Spawn, SV_Recycle = rawSpawnStub, nil
 
+---------------------------------------------------------------------------------------------------- (0.74.22) co-op
+-- (the user's co-op run of 2026-11-08, a joiner's log: "this space centre hasn't despawned": a joiner who came in at
+-- round 4 got the host's hidden pad, up and shown) the host takes the pad's copies off the joiners' games at each
+-- take-off (COOP.removeNow), and announces them again when the next shuttle round brings the pad back (COOP.hostBack)
+print("(0.74.22) co-op host: the pad's copies off the joiners' games at its take-off, announced again when it's back")
+local removed, announced = {}, {}
+COOP = { host = function() return false end, client = function() return false end,
+         removeNow = function(u) removed[#removed + 1] = u; return 1 end,
+         hostBack = function(u, objs) announced[#announced + 1] = u .. ":" .. #objs; return #objs end }
+round()
+spawnShuttle()                                  -- (the pad hidden since the last take-off: back, its units still up)
+check(#announced == 2 and announced[1] == "SV_Unit_PadDummies:9" and announced[2] == "AA_Unit_01_Ground0:11"
+      and count(pad2, back) == 20, "the pad back here and announced again, each unit with its objects (" .. table.concat(announced, ", ") .. ")")
+SHUTTLE.obj = SHUTTLE_ACTOR
+from = #logs + 1
+SPC.shuttleTakeOff()
+check(#removed == 2 and removed[1] == "SV_Unit_PadDummies" and removed[2] == "AA_Unit_01_Ground0" and count(pad2, gone) == 20,
+      "its take-off: hidden here, both units' copies off the joiners' games (" .. table.concat(removed, ", ") .. ")")
+removed = {}
+SPC.shuttleTakeOff(true)
+check(#removed == 2, "the pad-only take-off too (a shuttle round whose shuttle never came)")
+COOP.removeNow = function() error("no link") end
+SPC.shuttleTakeOff()
+check(since(from, "special: the pad's copies off the joiners' games: error") == 2 and count(pad2, gone) == 20,
+      "an error there logged, the pad hidden all the same")
+for _, o in ipairs(world) do o.gone = true end
+alive, announced = {}, {}
+round()
+spawnShuttle()
+check(#announced == 0 and #padObjs() == 20, "a new run: the pad spawned afresh, nothing announced by hand (the spawn's own mirror does it)")
+COOP = nil
+
 logFile:close()
 print(fails == 0 and "pad_test: all passed" or ("pad_test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

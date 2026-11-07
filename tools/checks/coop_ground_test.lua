@@ -188,6 +188,33 @@ if ROLE == "host" then
         check(#msgs("dn") == dn0 + 1, "host: ... not again when its health reaches 0")
         SPC = spcWas
     end
+    -- ((0.74.22) the user's co-op run of 2026-11-08: "this space centre hasn't despawned") the shuttle's pad, hidden and
+    -- kept up between shuttle rounds: taken off the joiners' games and the host's picture (COOP.removeNow, the prune),
+    -- announced again when it's back (COOP.hostBack: "sp" with a new generation, a "gd" a live object, keys as a spawn's)
+    do
+        local PU = "AA_Unit_01_Ground0"
+        local objs = { obj("BP_GR002_gepa_CP", 6000), obj("BP_GR002_gepa_CP", 6000), obj("BP_GR005_ctrl_CP", 9000) }
+        local sp0, gd0 = #msgs("sp"), #msgs("gd")
+        local n1 = COOP.hostBack(PU, objs)
+        local gen1 = M.units[PU] and M.units[PU].gen
+        check(n1 == 3 and #msgs("sp") == sp0 + 1 and msgs("sp")[#msgs("sp")]:find("sp|" .. PU .. "|", 1, true) and #msgs("gd") == gd0 + 3,
+              "host: (0.74.22) a unit not in the picture announced: its spawn and an id for each of its 3 objects")
+        local k1 = byKey()
+        check(k1[PU .. "/BP_GR002_gepa_CP_C#1"] and k1[PU .. "/BP_GR002_gepa_CP_C#2"] and k1[PU .. "/BP_GR005_ctrl_CP_C#1"],
+              "host: ... keyed as a spawn's (class and order)")
+        check(COOP.hostBack(PU, objs) == 0 and #msgs("sp") == sp0 + 1, "host: ... not again while it's in the picture")
+        local dn0 = #msgs("dn")
+        check(COOP.removeNow(PU) == 3 and #msgs("dn") == dn0 + 3, "host: taken off: its 3 copies down on the joiners, unpaid")
+        tick()
+        check(M.units[PU] == nil, "host: ... and out of the picture a joiner who comes in later is sent (the prune)")
+        objs[3].gone = true
+        local n2 = COOP.hostBack(PU, objs)
+        local k2 = byKey()
+        check(n2 == 2 and M.units[PU] and M.units[PU].gen > gen1 and k2[PU .. "/BP_GR002_gepa_CP_C#1"] ~= k1[PU .. "/BP_GR002_gepa_CP_C#1"],
+              "host: back: announced again, a new generation and new ids, its gone object left out (" .. tostring(n2) .. ")")
+        COOP.removeNow(PU)
+        tick()
+    end
     -- ((0.73.83) the round's kills are each game's own: the host's callout isn't sent to the joiners, an ordinary one is)
     do
         local co0, c0 = #msgs("co"), #CALLOUTS

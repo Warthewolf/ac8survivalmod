@@ -143,6 +143,21 @@ function SPC.shuttleTakeOff(padOnly)
     log(string.format("special: shuttle and pad off: the shuttle %s; %d objects hidden (%d of them the pad's own, as spawned)%s%s",
         killed, hidden, rec, failed > 0 and string.format(", %d only partly", failed) or "",
         (at or rec > 0) and "" or " (the pad's spot unknown: the shuttle only)"))
+    -- ((0.74.22) the user's co-op run of 2026-11-08, a joiner's log: "this space centre hasn't despawned") the pad is only
+    -- hidden here, its units kept up for the next shuttle round, so the host's picture still held them: a joiner who came
+    -- in at round 4 got the whole pad, up and shown (9 + 11 objects bound to the host's ids, 08:55:53), and one there for
+    -- the round kept its copies shown too (nothing on a joiner's game hides them). The host: the pad's copies off on every game (COOP.removeNow: an ally's copy
+    -- is switched off there, not finished off, and its unit taken off that game's spawner list) and out of the picture
+    -- the host sends a joiner; spawnShuttle announces them again when the pad comes back (COOP.hostBack)
+    local sc = CFG.specials and CFG.specials.shuttle or {}
+    if COOP and COOP.removeNow then
+        for _, u in ipairs({ sc.dummies or false, sc.pad or false }) do
+            if type(u) == "string" and u ~= "" then
+                local okR, errR = pcall(COOP.removeNow, u)
+                if not okR then log("special: the pad's copies off the joiners' games: error " .. tostring(errR)) end
+            end
+        end
+    end
 end
 -- the pad's objects back as they were (the next shuttle round)
 function SPC.shuttlePadBack()

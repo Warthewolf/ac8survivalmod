@@ -1791,3 +1791,19 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   the archive/* tags pushed, the rewritten tags force-pushed, 18 old branches deleted on GitHub; the old worktrees removed
   (their build folders kept in build/old_worktrees). GitHub's pull request #1 (refs/pull/1/head, read-only) still pins the
   old commits: a GitHub Support request ("remove sensitive data": the PR's refs and cached views) finishes the purge.
+
+## 0.74.22 (2026-11-08, runtime 0.32.26; not yet run in game)
+- The shuttle's pad left up on a joiner's game (the user, a joiner in a host's run on 0.74.21: "check my logs, this space
+  centre hasn't despawned"; she came in at round 4, and at 08:55:53 her log bound the host's SV_Unit_PadDummies (9 of 9)
+  and AA_Unit_01_Ground0 (11 of 11)). After a shuttle round the host only hides its pad (SPC.shuttleTakeOff; its units
+  kept up for the next shuttle round, spawnShuttle -> shuttlePadBack), so the host's picture (M.units) still held them:
+  the picture sent to a joiner who came in later spawned the whole pad there, shown, and nothing on a joiner's game ever
+  hid its copies (RE_SV_ShuttleRemove switches nothing off; SPC.clientClean takes off the shuttle only). Now the host,
+  at each take-off (the pad-only one too), takes the pad's copies off every game (COOP.removeNow on the dummies and the
+  pad: an ally's copy is switched off there, not finished off, its unit off that game's spawner list 2 s on) and out of
+  its picture (the prune); when the next shuttle round brings the pad back, COOP.hostBack (new, sv_coop.lua) announces
+  it again as a spawn would ("sp" with a new generation, a "gd" for each live object in spawn order: keys as a spawn's).
+  `coop: <unit> brought back here: announced to the joiners again (gen N), n of its m objects given ids`. pad_test,
+  coop_ground_test. A host on an older build still sends the pad to a joiner on this one: the host needs 0.74.22.
+- Packaged: friends' 943dca894d83..., TESTER 3294d5d380da... (0.74.22-coop2mp.114), both registered. Built in the
+  main tree. Not installed yet (AC8 was open).

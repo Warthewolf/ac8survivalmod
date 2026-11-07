@@ -738,6 +738,29 @@ function COOP.removeNow(unit)
     if n > 0 then log(string.format("coop: %s taken off here: its %d copies on the joiners taken down first (unpaid)", unit, n)) end
     return n
 end
+-- ((0.74.22) the user's co-op run of 2026-11-08: "this space centre hasn't despawned") (the host) unit brought back as
+-- it was, never spawned again (the shuttle's pad: hidden after a shuttle round, its units kept up, shown again at the
+-- next one: sv_spawn.lua spawnShuttle) once COOP.removeNow took it off the joiners' games: announced to them afresh, as
+-- a spawn of it would be ("sp" with a new generation, then a "gd" for each of objs, its objects in their spawn order:
+-- each joiner spawns its own and binds them by key). Only while nothing of it is in the host's picture. How many ids.
+function COOP.hostBack(unit, objs)
+    if not (COOP.open and COOP.host() and type(unit) == "string" and type(objs) == "table") then return 0 end
+    local u = M.units[unit]
+    if u then
+        for _, pl in pairs(u.planes) do if not pl.dead then return 0 end end
+        for _, g in pairs(u.ground) do if not g.dead then return 0 end end
+    end
+    local up = {}
+    -- (the objects groundTick gives ids, in its order: the joiners' keys count the same ones)
+    for _, o in ipairs(objs) do if live(o) and inSurvival(o) and not isPlane(o) then up[#up + 1] = o end end
+    if #up == 0 then return 0 end
+    COOP.hostSpawned(unit, nil, nil, nil)
+    local n = 0
+    for _, o in ipairs(up) do if hostGround(o, unit) then n = n + 1 end end
+    log(string.format("coop: %s brought back here: announced to the joiners again (gen %s), %d of its %d objects given ids",
+        unit, tostring(M.units[unit] and M.units[unit].gen), n, #up))
+    return n
+end
 -- ((review of 27097b9, finding 3) A flight the host took off with no despawn event a joiner sees (the Spaceport's Tu-160s
 -- at a capture: bomber flights, no RE_SV_FlightOff_NN): "wd|<unit>". Each joiner marks its copies down and withdrawn
 -- (sv_rounds.lua flightWithdrawn), as hostEvent does for RE_SV_FlightOff_NN, so the host's later "dn" with no player (a
