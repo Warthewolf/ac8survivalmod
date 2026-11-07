@@ -1,0 +1,2 @@
+# shell scripts keep Unix line ends on every checkout (Git Bash's sh stops at a CR); everything else as before
+*.sh text eol=lf
