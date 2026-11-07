@@ -138,6 +138,10 @@ function ZLAS.arms(o, unit)
 end
 
 function ZLAS.tick()
+    if ZLAUNCH and ZLAUNCH.tick then                       -- ((0.74.14) the launched ZFA-44s followed: below)
+        local okW, errW = pcall(ZLAUNCH.tick)
+        if not okW then logOnce("zfa launch watch", "carrier: launch watch error " .. tostring(errW)) end
+    end
     if ZLAS.drive then                                     -- ((0.74.12) the laser made sure: below, every game, armed or not)
         local okD, errD = pcall(ZLAS.drive)
         if not okD then logOnce("zfa laser drive", "zfa laser: error " .. tostring(errD)) end
@@ -268,6 +272,8 @@ local function fx(path, where, rot, len, life)
     if not ok then logOnce("zfa laser fx", "zfa laser: an effect failed (" .. tostring(path) .. "): " .. tostring(err)) end
     return ok
 end
+-- (the launch watch's too: ZLAUNCH's smoke, switched off `life` seconds on)
+function ZLAS.keepFx(comp, life) ZLAS.fx[#ZLAS.fx + 1] = { comp = comp, offAt = os.clock() + (life or 1) } end
 local function fxTick(all)
     local keep = {}
     for _, e in ipairs(ZLAS.fx) do
@@ -500,10 +506,63 @@ end
 -- then their orders) `carrier: <ship>: N ZFA-44s out of its container (<unit>): RE_SV_ZfaClimb_<s>_<n> fired`.
 -- ZLAUNCH.late(C, F, now) (launch_wait_s and none seen out): any of the arm's planes alive, the climb fired anyway (from
 -- where they are) -> true; none alive: false (by pose, as before).
-ZLAUNCH = {}
+-- ((2026-11-07, the user's first container launch, 0.74.13: "there was no launch smoke and the ZFA-44's stuck together")
+-- Each ZFA-44 seen out of its container gets the drone's own launch smoke (launch_fx: NS_UAVLaunch001, attached for
+-- launch_fx_s), and the launched ones are followed watch_s: where each is, its speed and heading, and how far apart
+-- (`carrier: launched ZFA-44s +Ns: ...; apart d m`) at each of watch_at's seconds.
+ZLAUNCH = { watch = {} }
 do
 local function cc() return (CFG.allies or {}).carrier or {} end
 local function num(v, d) v = tonumber(v); if v == nil then return d end; return v end
+local function smoke(o)
+    local c = cc()
+    if c.launch_fx == false or type(c.launch_fx) ~= "string" or c.launch_fx == "" then return false end
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    local sys = loadObject(c.launch_fx .. "." .. c.launch_fx:match("[^/]+$"))
+    if not (valid(lib) and sys and valid(sys)) then
+        logOnce("zfa launch fx", "carrier: the launch smoke " .. tostring(c.launch_fx) .. " didn't load")
+        return false
+    end
+    local ok, err = pcall(function()
+        local comp = lib:SpawnSystemAttached(sys, o:K2_GetRootComponent(), FName("None"), { X = 0, Y = 0, Z = 0 },
+            { Pitch = 0, Yaw = 0, Roll = 0 }, 0, true, true, 0, true)
+        if comp and comp:IsValid() and ZLAS.keepFx then ZLAS.keepFx(comp, num(c.launch_fx_s, 4)) end
+    end)
+    if not ok then logOnce("zfa launch fx err", "carrier: the launch smoke failed: " .. tostring(err)) end
+    return ok
+end
+-- (every tick: the launched ones followed, logged at watch_at's seconds)
+function ZLAUNCH.tick()
+    local w = ZLAUNCH.watch
+    if not w or not w.list then return end
+    local t = os.clock() - w.at
+    local marks = cc().watch_at or { 1, 3, 6, 10, 15 }
+    local k = w.next or 1
+    if not marks[k] or t < marks[k] then return end
+    w.next = k + 1
+    local parts, pos = {}, {}
+    for _, e in ipairs(w.list) do
+        if liveAddr(e.obj) == e.addr then
+            local okP, p, v, r = pcall(function()
+                local a, b, c = e.obj:K2_GetActorLocation(), e.obj:GetVelocity(), e.obj:K2_GetActorRotation()
+                return { X = a.X, Y = a.Y, Z = a.Z }, { X = b.X, Y = b.Y, Z = b.Z }, c.Yaw
+            end)
+            if okP and p then
+                pos[#pos + 1] = p
+                parts[#parts + 1] = string.format("%s (%.1f, %.1f) km %.0f m, %.0f km/h, yaw %.0f", (nameOf(e.obj):match("_C_(%d+)$") or "?"),
+                    p.X / 100000, p.Y / 100000, p.Z / 100, math.sqrt(v.X ^ 2 + v.Y ^ 2 + v.Z ^ 2) * 0.036, r or 0)
+            end
+        else
+            parts[#parts + 1] = "one gone"
+        end
+    end
+    local apart = ""
+    if #pos >= 2 then
+        apart = string.format("; apart %.0f m", math.sqrt((pos[1].X - pos[2].X) ^ 2 + (pos[1].Y - pos[2].Y) ^ 2 + (pos[1].Z - pos[2].Z) ^ 2) / 100)
+    end
+    log(string.format("carrier: launched ZFA-44s +%.0f s: %s%s", t, table.concat(parts, "; "), apart))
+    if not marks[k + 1] then ZLAUNCH.watch = {} end
+end
 local function climbOf(F)
     for _, arms in ipairs(cc().launchers or {}) do
         for _, arm in ipairs(arms) do if arm.record == F.record then return arm.climb end end
@@ -536,6 +595,11 @@ function ZLAUNCH.risen(C, F, now)
                         elseif p.Z > riseZ and nearShip and not e.out and (e.parked or (e.at or 0) >= F.at - 1) then
                             e.out = true
                             out = out + 1
+                            local fx = smoke(e.obj)
+                            if out == 1 then ZLAUNCH.watch = { at = os.clock(), list = {}, fx = 0 } end
+                            local w = ZLAUNCH.watch
+                            if w.list and #w.list < 4 then w.list[#w.list + 1] = { obj = e.obj, addr = e.addr } end
+                            if fx and w.list then w.fx = (w.fx or 0) + 1 end
                         end
                     end
                 end
@@ -543,8 +607,8 @@ function ZLAUNCH.risen(C, F, now)
         end
     end
     if out == 0 then return false end
-    fireClimb(C, F, string.format("%d ZFA-44%s out of its container (%s, %.0f s after its launch record)", out, out == 1 and "" or "s",
-        tostring(F.unit), now - (F.at or now)))
+    fireClimb(C, F, string.format("%d ZFA-44%s out of its container (%s, %.0f s after its launch record; launch smoke on %d)", out,
+        out == 1 and "" or "s", tostring(F.unit), now - (F.at or now), (ZLAUNCH.watch or {}).fx or 0))
     return true
 end
 function ZLAUNCH.late(C, F, now)

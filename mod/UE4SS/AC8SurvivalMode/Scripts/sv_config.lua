@@ -1033,6 +1033,9 @@ CFG = {
                          units = { "SV_Unit_Cargo1", "SV_Unit_Cargo2" }, dt_npc = "SV_Zfa_Ally", dt_npc_drone = "SV_Zfa_Drone",
                          launch = "container", first_s = 20, relaunch_s = 30, launch_wait_s = 15, capture_km = 4,
                          rise_m = -50, parked_m = -100,
+                         -- ((2026-11-07) "there was no launch smoke": the drone's own, put on each one out of its container)
+                         launch_fx = "/Game/VFX/Vehicles/Aircraft/OP/OP0018/NS_UAVLaunch001", launch_fx_s = 4,
+                         watch_at = { 1, 3, 6, 10, 15 },
                          launchers = {
                              { { record = "RE_SV_CargoLaunch_1_1", climb = "RE_SV_ZfaClimb_1_1", unit = "E_Unit_01_drone_5_0" },
                                { record = "RE_SV_CargoLaunch_1_2", climb = "RE_SV_ZfaClimb_1_2", unit = "E_Unit_01_drone_4_0" },

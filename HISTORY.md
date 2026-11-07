@@ -1642,3 +1642,19 @@ lightning,festival} hold the dumps and scripts (git-ignored).
 - 52 suites pass (coop_test not run). Built and packaged: dev / TESTER 93bea0e256d1..., friends'
   AC8SurvivalMode_COOP2MP_0.74.13_Online_COOP_ZFA44.zip b814c569a10a... (0.74.13-coop2mp.105), all registered.
   INSTALLED 2026-11-07 (backup of 0.74.10 with its logs: build/backup/install_before_0.74.13; 79 files compared equal).
+
+## 0.74.14 (2026-11-07, runtime 0.32.25; after the first container launch; not yet run in game)
+- The first container launch (0.74.13, the user's run of 22:25-22:29, Ctrl+DEL): the container opened, fired and the
+  drones came out (`carrier: ZFA-44 CARRIER 1: 2 ZFA-44s out of its container (E_Unit_01_drone_5_0, 2 s after its launch
+  record): RE_SV_ZfaClimb_1_1 fired`); all 12 parked drones dressed on PlaneBodySkelMeshComponent (the dress log names the
+  first 4 and every 20th), each with the laser in slot 1 (`0 -; 1 BP_FCS_CIWS BP_SwingTLS_ForMSL (Survival's arm); 2
+  BP_FCS_MSL`); their boxes ZFA-44. The user: "there was no launch smoke and the ZFA-44's stuck together".
+- The launch smoke: each ZFA-44 seen out of its container gets the drone's own NS_UAVLaunch001 (CFG.allies.carrier
+  launch_fx), attached to it for launch_fx_s 4 (ZLAUNCH smoke; the line says `launch smoke on N`).
+- Apart: the climb-outs 90 deg apart (ZFA_CLIMB_FAN_DEG; each 45 deg off the bow, the first point 400 m out: 565 m
+  apart), each drone its own Normal (t_eng_air by object, ZFA_CLIMB_STAGGER_S 4 s apart, at 8 and 14 s) instead of the
+  unit's orders at one moment; the unit's air search at 8 s.
+- Followed: the launched ones' place, speed, heading and how far apart at +1, 3, 6, 10, 15 s (`carrier: launched ZFA-44s
+  +N s: ...; apart d m`; watch_at). escort_test.
+- 52 suites pass (coop_test not run). Built and packaged: dev / TESTER 236939561d23..., friends' b7a282e58da2...
+  (0.74.14-coop2mp.106), all registered. INSTALLED 2026-11-07 (backup of 0.74.13: build/backup/install_before_0.74.14).

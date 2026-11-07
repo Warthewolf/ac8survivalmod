@@ -1350,12 +1350,26 @@ do
     local p1 = plane(nil, sx + 10000, sy, -24484, 0, 0)
     local far = plane(nil, sx + 900000, sy, 3000, 0, 300)      -- (9 km off: another's)
     ESC.planes[U2] = { { obj = p1, addr = p1.addr, name = p1.full, at = 0 }, { obj = far, addr = far.addr, name = far.full, at = 0 } }
+    -- ((2026-11-07) "there was no launch smoke": the drone's own put on each one out of its container; followed watch_s)
+    local smokes = {}
+    local NL2 = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")   -- (the library the game hands out: kept)
+    function NL2:SpawnSystemAttached(sys, root) local c = { IsValid = function() return true end, Deactivate = function() end }
+        smokes[#smokes + 1] = { sys = sys, root = root }; return c end
+    local lf = K.launch_fx .. "." .. K.launch_fx:match("[^/]+$")
+    statics[lf] = { full = lf, addr = addr() }
+    function p1:K2_GetRootComponent() return { full = "root", owner = self } end
     events = {}
     check(ZLAUNCH.risen(C, F, 501) == false and evCount("RE_SV_ZfaClimb_1_2") == 0, "parked under the sea: not out yet")
     p1.Z = 2500
     local from = #logs + 1
     check(ZLAUNCH.risen(C, F, 503) == true and evCount("RE_SV_ZfaClimb_1_2") == 1 and F.climbed == true, "out of its container: its climb-out fired")
     check(has(line("carrier: ZFA-44 CARRIER 1: 1 ZFA-44 out of its container", from), "RE_SV_ZfaClimb_1_2 fired"), "logged")
+    check(#smokes == 1 and smokes[1].sys.full == lf and smokes[1].root.owner == p1 and has(line("carrier: ZFA-44 CARRIER 1: 1 ZFA-44 out", from), "launch smoke on 1"),
+          "the drone's launch smoke (NS_UAVLaunch001) attached to the one out, logged")
+    clock = clock + 1.1
+    ZLAS.tick()
+    check(has(line("carrier: launched ZFA-44s +1 s:", from), "km/h, yaw"), "followed: where it is, its speed and heading, at +1 s")
+    NL2.SpawnSystemAttached = nil
     check(ZLAUNCH.risen(C, F, 504) == true and evCount("RE_SV_ZfaClimb_1_2") == 1, "once")
     local F2 = { route = "container", record = "RE_SV_CargoLaunch_1_3", unit = K.launchers[1][3].unit, at = 600 }
     alive[F2.unit] = 2

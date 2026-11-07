@@ -261,8 +261,11 @@ ZFA_DRONE_TLS_NPC = 'SV_Zfa_DroneTLS'
 # each object its own climb-out path SV_Path_ZfaClimb_<s>_<k> (fanned ZFA_CLIMB_FAN_DEG apart off the ship's bow,
 # ZFA_CLIMB_KM out and ZFA_CLIMB_UP_M up) at Mission 17's 1200 km/h, their orders ZFA_CLIMB_ORDERS_S on
 ZFA_OPEN_S, ZFA_CLOSE_S = 2.0, 3.0
-ZFA_CLIMB_KM, ZFA_CLIMB_UP_M, ZFA_CLIMB_FAN_DEG = 3.0, 800.0, 30.0
-ZFA_CLIMB_ORDERS_S = (8.0, 12.0)
+# ((2026-11-07, the user's first container launch, 0.74.13: "the ZFA-44's stuck together": both leave the one container at
+# once, their paths 30 deg apart were 80 m apart at their first point, and both took the unit's orders at the same
+# moment) 90 deg apart (each 45 off the bow, 565 m apart 400 m out), each its own orders, ZFA_CLIMB_STAGGER_S apart
+ZFA_CLIMB_KM, ZFA_CLIMB_UP_M, ZFA_CLIMB_FAN_DEG = 3.2, 800.0, 90.0
+ZFA_CLIMB_ORDERS_S, ZFA_CLIMB_STAGGER_S = (8.0, 14.0), 4.0
 ZFA_DRONE_SOURCE = 'E_Unit_01_drone_5_0'     # Mission 17's drone unit desc the launch units are copies of
 ZFA_PER_ARM = 2                              # a two-ship a firing (the arm's magazine holds 5)
 ZFA_PARK_Z = -24483.9                        # Mission 17's drones' height until launched (under the sea)
@@ -316,7 +319,7 @@ def zfa_climb_points(s, k):
     x, y = c[6][0], c[6][1]
     h = math.radians(c[7] + (k - (ZFA_PER_ARM - 1) / 2.0) * ZFA_CLIMB_FAN_DEG)
     return [(x + math.cos(h) * d * 100000.0, y + math.sin(h) * d * 100000.0, up * 100.0)
-            for d, up in ((0.15, 60.0), (1.0, 300.0), (2.0, 600.0), (ZFA_CLIMB_KM, ZFA_CLIMB_UP_M))]
+            for d, up in ((0.4, 80.0), (1.2, 300.0), (2.2, 600.0), (ZFA_CLIMB_KM, ZFA_CLIMB_UP_M))]
 
 
 # THE DECOY: the bait (Mission 30's Marker UAV with its laser pod, more health, far north), its laser's mark at the
@@ -610,8 +613,10 @@ def build_escort(g, flag, stock_ep):
             assert len(zobjs) == ZFA_PER_ARM, (zunit, zobjs)
             for k, ob in enumerate(zobjs):
                 g.execute(t_climb, cl, {0: ob, 2: zfa_climb_path(s, k)})
-            for dl in ZFA_CLIMB_ORDERS_S:
-                zfa_orders(cl, zunit, zobjs, dl)
+                g.execute(t_gear_up, cl, {0: ob}, delay=1.0)
+                for dl in ZFA_CLIMB_ORDERS_S:                 # (each its own Normal, ZFA_CLIMB_STAGGER_S apart)
+                    g.execute(t_eng_air, cl, {0: ob}, delay=dl + k * ZFA_CLIMB_STAGGER_S)
+            g.execute(t_search, cl, {1: zunit}, delay=ZFA_CLIMB_ORDERS_S[0])
     for L, unit, obj, s in ZFA_FALLBACK:
         objs = [f'{obj}_{k}' for k in range(ZFA_FALLBACK_N)]
         for ev in (f'SV_ZfaUp{L}', f'RE_SV_ZfaGo{L}'):
