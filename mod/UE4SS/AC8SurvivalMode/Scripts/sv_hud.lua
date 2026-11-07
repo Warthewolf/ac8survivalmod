@@ -560,7 +560,9 @@ function hudTick(now, paused, pc)
         if H.airBarShown ~= shown then H.airBar:SetVisibility(shown and VIS.HitTestInvisible or VIS.Collapsed); H.airBarShown = shown end
         if H.airHp ~= AF.hp then
             H.airHp = AF.hp
-            H.airFillSlot:SetSize({ X = math.max(0, H.airFillW * AF.hp / (AF.max or CFG.airfield.hp)), Y = H.airFillH })
+            -- (never out of less than the health shown: a bar can't run past its frame)
+            local afMax = math.max(AF.max or CFG.airfield.hp, AF.hp or 0, 1)
+            H.airFillSlot:SetSize({ X = math.max(0, H.airFillW * AF.hp / afMax), Y = H.airFillH })
             local c = AF.hp <= CFG.hud.warn_hp and CFG.hud.warn_color or CFG.hud.color
             H.airFill:SetColorAndOpacity({ R = c[1], G = c[2], B = c[3], A = 1 })
         end

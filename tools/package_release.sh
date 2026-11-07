@@ -26,6 +26,17 @@ rt=$(grep -m1 '^#define RT_VERSION' runtime/survival_rt.c | sed 's/.*L"\(.*\)".*
 ver=${2:-$lua}
 st=build/release/stage_$ed
 mod=$st/ue4ss/Mods/AC8SurvivalMode
+# ((2026-11-07) every 0.74.x zip shipped a runtime with no leaderboard address: runtime/build.sh found no submit.local
+# in the worktree it ran in) an Online build only with the address in its runtime: build/runtime/submit_cfg.h is written
+# only by a build that found it, and the staged main.dll must be that build's
+if [ "$ed" = online ]; then
+    [ -f build/runtime/submit_cfg.h ] && cmp -s build/runtime/main.dll build/install/AC8SurvivalMode/dlls/main.dll || {
+        echo "package_release.sh online: the runtime has no leaderboard address (build/runtime/submit_cfg.h missing, or the staged"
+        echo "  main.dll isn't build/runtime's): its runs could never be sent. Run tools/build_all.sh where runtime/build.sh finds"
+        echo "  leaderboard/submit.local (this checkout's, the main tree's, or .env's SV_LB_LOCAL)."
+        exit 1
+    }
+fi
 rm -rf "$st" && mkdir -p "$st/ue4ss/Mods/IoStoreLoaderMod"
 cp -r build/install/AC8SurvivalMode "$st/ue4ss/Mods/"
 cp -r build/install/SurvivalMode "$st/ue4ss/Mods/IoStoreLoaderMod/"

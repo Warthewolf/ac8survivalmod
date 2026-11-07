@@ -950,7 +950,16 @@ function JAM.tick()
         end
         if not j.p then return end
     end
-    local on = not j.p.down and j.p.at
+    -- ((2026-11-07) the user: "The Enemy EA-18G Growlers are not using ECM against the players". A plane logPlane has
+    -- just added has no position until the sweep's 1-in-8 slot reads it (sv_main.lua planeSweep), and a first look
+    -- before that dropped the jammer for the round (`on` nil, then D.jammer = nil): 11 of 17 jammer rounds in the logs
+    -- of 2026-11-04 logged "is up", "0 enemies sharpened" and nothing more, never its ECM. Its position read here when
+    -- it has none; it's dropped only when it's down or gone, and its pod fires without a position)
+    if not j.p.at and not j.p.down then
+        pcall(function() local v = j.p.obj:K2_GetActorLocation(); j.p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
+    end
+    local gone = j.p.down or not valid(j.p.obj)
+    local on = not gone and j.p.at ~= nil
     local n = 0
     for _, p in ipairs(planes) do
         if p ~= j.p and not p.down and valid(p.obj) then
@@ -968,7 +977,7 @@ function JAM.tick()
     if n ~= j.n then j.n = n; log(string.format("jammer: %d enemies sharpened near it", n)) end
     -- its ECM pod (CFG.jammer.ecm), the flight's lead's (RE_SV_JamEcm_NN fires object 0's slot 4): once it's up, then
     -- every ecm_every_s; the first answer and any that isn't 1 logged
-    local idx = on and c.ecm and type(SV_Event) == "function" and D.now and poolIndex(j.unit)
+    local idx = not gone and c.ecm and type(SV_Event) == "function" and D.now and poolIndex(j.unit)
     if idx and (j.p.k or 0) == 0 and D.now >= (j.ecmAt or 0) then         -- (k unknown: the jammer leads)
         j.ecmAt = D.now + math.max(2, tonumber(c.ecm_every_s) or 14)
         local ev = string.format("RE_SV_JamEcm_%02d", idx)
@@ -978,11 +987,11 @@ function JAM.tick()
             log(string.format("jammer: its ECM pod on (%s %s), again every %d s", ev, r == 1 and "fired" or ("not fired: "
                 .. (SV_ERR[r] or tostring(r))), math.max(2, tonumber(c.ecm_every_s) or 14)))
         end
-    elseif on and c.ecm and (j.p.k or 0) ~= 0 and not j.ecmSaid then
+    elseif not gone and c.ecm and (j.p.k or 0) ~= 0 and not j.ecmSaid then
         j.ecmSaid = true
         log("jammer: " .. j.p.name .. " isn't its flight's lead (object " .. tostring(j.p.k) .. "): no ECM pod (RE_SV_JamEcm fires object 0's)")
     end
-    if not on then D.jammer = nil end
+    if gone then D.jammer = nil end                  -- (its sharpened enemies were put back above: `on` false)
 end
 
 ZONE = { X = -707336.0, Y = -261895.0, HALF = 3700000.0 }   -- Mission 22's combat zone (80 km), 3 km margin

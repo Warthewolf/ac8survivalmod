@@ -159,14 +159,42 @@ local function fire(ev)
     local r = type(SV_Event) == "function" and SV_Event(ev) or -5
     return r == 1, r == 1 and "fired" or ("NOT fired: " .. tostring(SV_ERR and SV_ERR[r] or r))
 end
-local function say(line, vals)
+-- a line, or one of a list of them ((2026-11-07) more of SAL's and Comona's staff's lines: FISH.pick, never the same
+-- twice running under `key`)
+local function say(line, vals, key)
+    if type(line) == "table" then line = FISH.pick(line, "fest." .. tostring(key or line[1])) end
+    if type(line) ~= "string" then return false end
     local who, text = FISH.line(line, vals)
     return SUB.say(who, text)
 end
+-- every line of text[key], in order: a list of lines, or one of a list of such lists (FISH.seq)
 local function sayList(key, vals)
-    local l = tx()[key]
-    if type(l) == "string" then l = { l } end
-    for _, x in ipairs(type(l) == "table" and l or {}) do say(x, vals) end
+    for _, x in ipairs(FISH.seq(tx()[key], "fest." .. key)) do say(x, vals) end
+end
+-- ((2026-11-07) the user: "add other Characters like Yorke, Rock, Ali, Danielle into this as well") KMG's lines of
+-- text[key], only once CHARLENE has landed at Comona this run (RUN.escort.arrived), an exchange only when nobody in it was
+-- shot down in THE ESCORT (RUN.escort.down); nil: none
+local function kmgList(key)
+    local e = RUN and RUN.escort
+    if not (type(e) == "table" and e.arrived) then return nil end
+    local down = type(e.down) == "table" and e.down or {}
+    local function ok(l) local who = tostring(l):match("^([^|]+)|"); return not (who and down[who]) end
+    local out = {}
+    for _, x in ipairs(tx()[key] or {}) do
+        if type(x) == "table" then
+            local all = #x > 0
+            for _, l in ipairs(x) do if not ok(l) then all = false end end
+            if all then out[#out + 1] = x end
+        elseif type(x) == "string" and ok(x) then out[#out + 1] = x end
+    end
+    return #out > 0 and out or nil
+end
+local function sayKmg(key)
+    local l = kmgList(key)
+    if not l then return 0 end
+    local n = 0
+    for _, x in ipairs(FISH.seq(l, "fest." .. key)) do if say(x) then n = n + 1 end end
+    return n
 end
 local function dirOf(g) return ((tx().dirs or {})[g]) or g end
 
@@ -222,11 +250,13 @@ function FEST.roundSpawn(now)
     if not FEST.ready(D.round, true) then log("festival: no festival (" .. (c.enabled == false and "off" or "no native spawner") .. ")"); return false end
     s.state, s.at, s.groups, s.salvos, s.missilesDown, s.impacts, s.said = "talk", now, {}, {}, 0, 0, {}
     local kg = RUN and RUN.fishKg
-    for _, line in ipairs(tx().talk or {}) do
-        if line:find("{kg}", 1, true) and not (kg and kg > 0) then say(tx().talk_nokg or line, { kg = 0 })
+    for _, line in ipairs(FISH.seq(tx().talk, "fest.talk")) do      -- (one of the talks: FISH.seq)
+        if line:find("{kg}", 1, true) and not (kg and kg > 0) then say(tx().talk_nokg or line, { kg = 0 }, "talk_nokg")
         else say(line, { kg = kg and FEST.money(kg) or 0 }) end
     end
+    sayKmg("kmg_talk")                                       -- (KMG at the festival, once CHARLENE's landed this run)
     s.talkEnd = now + math.max(5, SUB.left(now))
+    pcall(FEST.townUp, "the festival's talk")                -- (the town's boxes: up for the whole festival)
     log(string.format("festival: round %d, THE FESTIVAL at sunset: the pilots thanked (%.0f s; GONE FISHIN''s haul %s kg)",
         D.round, s.talkEnd - now, tostring(kg or "?")))
     return true
@@ -261,6 +291,9 @@ local function raidStart(now, s)
         said[#said + 1] = string.format("%s %s", g, r > 0 and (r .. " up") or ("NOT spawned (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")"))
     end
     hudCallout(t.raid_go or "AIR RAID", t.raid_go_sub)
+    sayList("raid_town")                                    -- ((2026-11-07) the town as the siren starts)
+    sayKmg("kmg_raid")
+    s.chatAt = now + n(c.chatter_s, 35)
     log(string.format("festival: the raid: Tu-160s %s; searchlights %s", table.concat(said, ", "), table.concat(lights, ", ")))
 end
 
@@ -441,6 +474,8 @@ local function raidEnd(now, s, why, saved)
         local pay = math.floor(n(c.reward, 0) + n(c.reward_per_round, 0) * (D.round or 0))
         if pay > 0 then addCredits(pay, "the festival saved") end
         sayList("all_down")
+        sayList("saved_town")                               -- ((2026-11-07) the town, saved)
+        sayKmg("kmg_saved")
         hudCallout(t.saved or "THE FESTIVAL IS SAVED", string.format(t.saved_sub or "+%d ZOLLARS", specialPay and specialPay(pay) or pay))
     else
         sayList("timeout")
@@ -450,7 +485,7 @@ local function raidEnd(now, s, why, saved)
     log(string.format("festival: round %d: the raid over (%s) %.0f s in: %d missiles shot down, %d on the runway; the siren off (%s, %d); %d searchlights off",
         D.round, why, now - (s.raidAt or now), s.missilesDown or 0, s.impacts or 0, tostring(wS), nS or 0, lightsOff))
 end
--- the searchlights here switched off (TurnOff, hidden: allies, never finished off)
+-- the searchlights here switched off (TurnOff, hidden: allies, never finished off); the town's boxes with them
 function FEST.lightsOff(why)
     local nOff = 0
     for _, u in ipairs(cfg().lights or {}) do
@@ -462,6 +497,52 @@ function FEST.lightsOff(why)
             end
         end
     end
+    if FEST.townOff then pcall(FEST.townOff, why) end
+    return nOff
+end
+
+-- ((2026-11-07) the user: "Add some Allied Target Boxes in the town next to the airfield", VALKA and AUDREY side by side,
+-- the concert, market stalls, food trucks and the rest; "they can just be invincible dummies") the build's unit of
+-- invisible, invincible allied dummies in the town (cfg().town; tools/survival_events.py FEST_TOWN_*), each box its own
+-- callsign key: their names (tx().town) set, up with the festival's talk, off at its end with the searchlights
+local function townCfg() local t = cfg().town; return type(t) == "table" and t.enabled ~= false and type(t.unit) == "string" and t or nil end
+function FEST.townNames()
+    if type(SV_SetText) ~= "function" then return 0 end
+    local n = 0
+    for key, text in pairs(tx().town or {}) do
+        if type(key) == "string" and type(text) == "string" and SV_SetText(key, text) == 1 then n = n + 1 end
+    end
+    return n
+end
+function FEST.townUp(why)
+    local t = townCfg()
+    if not t then return nil end
+    local nN = FEST.townNames()
+    if FISH and FISH.clearUnit then FISH.clearUnit(t.unit, "the festival's town") end
+    local r = FEST.spawn(t.unit)
+    if ALIVE and ALIVE.spawned then pcall(ALIVE.spawned, t.unit, r) end
+    local inv = 0
+    for _, o in ipairs(FEST.actors[t.unit] or {}) do      -- (the build's invincible already; the run's say so too)
+        if liveObj(o) then
+            pcall(function() o.bIsInvincible = true end)
+            if pcall(function() o:SetIsInvincible(true) end) then inv = inv + 1 end
+        end
+    end
+    log(string.format("festival: the town's boxes %s (%s; %d names set, %d made invincible here)",
+        r > 0 and (r .. " up") or ("NOT up (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")"), tostring(why), nN, inv))
+    return r
+end
+function FEST.townOff(why)
+    local t = townCfg()
+    if not t then return 0 end
+    local nOff = 0
+    for _, o in ipairs((SPC and SPC.CLEAN_OBJ and SPC.CLEAN_OBJ[t.unit]) or {}) do
+        if liveObj(o) then
+            if FISH and FISH.hide then FISH.hide(o) end
+            nOff = nOff + 1
+        end
+    end
+    if nOff > 0 then log(string.format("festival: the town's %d boxes switched off here (%s)", nOff, tostring(why))) end
     return nOff
 end
 
@@ -513,6 +594,19 @@ function FEST.roundTick(now, s)
             end
         end
         s.bombers = bombers
+        -- ((2026-11-07) the town now and then: a line of chatter every chatter_s, when the strip has room)
+        if now >= (s.chatAt or 0) and SUB.left(now) <= 4 then
+            s.chatAt = now + n(c.chatter_s, 35)
+            local pool = tx().chatter
+            local k = kmgList("kmg_chatter")                -- (KMG's among them, once CHARLENE's landed this run)
+            if k and type(pool) == "table" then
+                local all = {}
+                for _, x in ipairs(pool) do all[#all + 1] = x end
+                for _, x in ipairs(k) do all[#all + 1] = x end
+                pool = all
+            end
+            say(pool, nil, "chatter")
+        end
         local inAir = salvosTick(now, s)
         local started = false
         for _, g in ipairs(GROUPS) do if s.groups[g] and s.groups[g].up then started = true end end
@@ -562,6 +656,7 @@ function FEST.clientTick(now)
         log("festival: the host's raid is over: the siren off here (" .. tostring(wS) .. ", " .. tostring(nS) .. ")")
     end
     local on = hs and hs.kind == "festival" and hs.state ~= "done"
+    if on and not CL.on then pcall(FEST.townNames) end     -- (the town's box names here too, as the host's festival starts)
     if on then CL.on = true
     elseif CL.on then
         CL.on = false

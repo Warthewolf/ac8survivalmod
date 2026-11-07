@@ -676,6 +676,39 @@ static void MgInstall(void)
     else Log(L"minigame: the AI restore wasn't found: not logged");
 }
 
+/* ---- a game bug guarded: a Spear rod's owner gone under it (runtime 0.32.25) ---------------------------------------
+ * sigs.h kSigOwnerHostile: the game object check 0x147d0ba00 (game object, other) -> bool calls AActor::GetWorld on its
+ * game object with no null check, and ALiveMeteoriteImpact::Tick (the Tonitrus Spear's rod, BP_RodsFromGod, a pooled
+ * object) passes its owner (+0x368) as is. A joiner's game of 2026-11-07 (13:00:07, UECC 9139164E) crashed there reading
+ * 0x8: THE DECOY's trap over, the round's clean-up took its Spear launchers off while a rod still ticked, the rod's owner
+ * NULL. The guard answers "no" (0) for a NULL or freed game object (UObjAllocated: one being destroyed still goes to the
+ * game), which skips the rod's damage step; every other call goes on unchanged. No VirtualQuery: a hot path. */
+typedef uint8_t (*OwnerHostileFn)(uint8_t* obj, uint8_t* other);
+static uint8_t*          g_fOwnerHostile;                   /* found by FindFunctions */
+static OwnerHostileFn    g_nextOwnerHostile;
+static volatile uint32_t g_ohCaught;
+
+static uint8_t OnOwnerHostile(uint8_t* obj, uint8_t* other)
+{
+    int bad = !obj ? 1 : (UObjAllocated(obj) == 0 ? 2 : 0);
+    if (bad) {
+        uint32_t n = __atomic_add_fetch(&g_ohCaught, 1, __ATOMIC_RELAXED);
+        if (n <= 64) Crumb(L"guard: a game object check on %s %p (with %p): answered no", bad == 1 ? L"NULL" : L"a freed object", obj, other);
+        if (n <= 8)
+            Log(L"guard: a game object check (a Spear rod's owner) on %s %p (with %p): answered no, not called (%u so far)",
+                bad == 1 ? L"NULL" : L"a freed object", obj, other, n);
+        return 0;
+    }
+    return g_nextOwnerHostile(obj, other);
+}
+
+static void OhInstall(void)
+{
+    if (!g_fOwnerHostile) { Log(L"guard: the game object check (a Spear rod's owner) wasn't found (another game build?): not guarded"); return; }
+    if (!HookInline(g_fOwnerHostile, 15, (void*)OnOwnerHostile, (void**)&g_nextOwnerHostile, L"guard: game object check (a Spear rod's owner)"))
+        Log(L"guard: the game object check %p couldn't be hooked: not guarded", g_fOwnerHostile);
+}
+
 /* SV_StoreKeepAI(on) -> the old value (0 / 1), SV_ERR_NO_GAME when the deactivation isn't hooked; no argument: ask */
 static int L_StoreKeepAI(void* lua)
 {

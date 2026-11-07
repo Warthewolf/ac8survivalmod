@@ -1407,3 +1407,104 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   whether UE4SS reads the enum property as its number (a name with "wid_mgp" is matched too).
 - Dev eb6cd357...dd63009, friends 1f13af90...5420e65 (AC8SurvivalMode_COOP2MP_0.74.5_Online_COOP_ZFA44.zip), both
   registered by the packaging; build_all.sh's counts as 0.74.4's (1732 triggers, 3759 execs). Not installed.
+
+## 0.74.6 (2026-11-07, runtime 0.32.25; the 7 Nov co-op game's reports and the user's requests after 0.74.5; not yet run in game)
+- In co-op the game no longer pauses on a lost focus while others are linked (in 0.74.5's commit, not its zip: alt-tab
+  restarted Talos's music). COOP.focusPause, sv_coop_migration.lua.
+- The airfield bar on joiners (players: "the airbase was at 250 health with the health bar at halfway despite the health
+  being set to 250"): a joiner divided the host's health by its own setup's AIRFIELD HEALTH (500 at 200%). The host's
+  "af" carries its maximum as field 5; a joiner takes it (logged `coop: the host's airfield maximum ...`); the bar is out
+  of max(AF.max, AF.hp). coop_landing_test.
+- The EA-18G jammer's ECM (the user: "The Enemy EA-18G Growlers are not using ECM against the players"): JAM.tick's first
+  look at a plane logPlane had just added found no position (the sweep's 1-in-8 slot fills it), `on` came out nil and
+  `D.jammer = nil` dropped the jammer for the round: 11 of 17 jammer rounds in the logs of 2026-11-04 logged "is up",
+  "0 enemies sharpened" and nothing more. Its position read at once; dropped only when it's down or gone; its pod fires
+  without a position. heavy_test.
+- Crash A of 2026-11-07 (a joiner, 13:00:07, UECC 9139164E: access violation reading 0x8 in AActor::GetWorld from
+  ALiveMeteoriteImpact::Tick, THE DECOY's trap over and its Spear launchers taken off while a rod still ticked): runtime
+  0.32.25's guard on the game object check 0x147d0ba00 (sigs.h kSigOwnerHostile, flight_guards.c OnOwnerHostile) answers
+  "no" for a NULL or freed game object; log `guard: a game object check (a Spear rod's owner) on NULL ...`. Crash B
+  (13:36:50, UECC 713C071F) was a GPU crash (no DRED data) on a 16 GB PC with ~30 GB committed: nothing ties it to
+  Survival.
+- THE ESCORT's people (the user: "Charlene, Yorke, Rock, Ali, Danielle all should have their own unique Subtitles";
+  "Give Charlene Unique Lines for Landing, Being Attacked, Being Defended. Charlene is a Wealthy CEO who owns one of the
+  worlds largest plane collections, she is from the KOKODA MERCENARY GROUP, based out of Aurelia"; the four escorts KMG
+  too, "they should each have a squadron tag KMG"): Scripts/sv_escort_subs.lua (new part, after sv_escort), 124 lines in
+  CFG.specials.escort.text.say; their boxes `[KMG] CHARLENE` ... (tag / tag_format); her thanks on the subtitle strip
+  (no callouts), then Comona's line on the ZFA-44s; COMONA TOWER and a CREW CHIEF beside COMONA CONTROL.
+  tools/re/ESCORT.md's last section.
+- The Anomalies wait for CHARLENE (the user: "Anomaly Rounds shouldn't start until Charlene arrives at the airbase btw,
+  That Includes, Valka, Mindripper, Abelcain" and the lightning Anomaly; "the round before an Anomaly Round appears, a
+  Subtitle from Charlene ... (she will not be able to warn players about VALKA though)"): CFG.specials.anomaly_gate,
+  ESC.anomalyOk in sv_spawn.lua specialReady (after_lost: they come anyway once she's shot down; no wait without THE
+  ESCORT); ESUB.warnNext at each round's end draws the next round's special then and she warns of MINDRIPPER or AB.L..IN.
+- SAL and Comona's staff (the user: "Give SAL and the Comona Airbase Staff some more unique lines"): ~40 more lines in
+  GONE FISHIN' and THE FESTIVAL; "T|" COMONA TOWER, "G|" CREW CHIEF; exchanges with alternatives (FISH.pick / FISH.seq).
+- THE FESTIVAL's town (the user: "Add some Allied Target Boxes in the town next to the airfield", "Valka" "Audrey" side by
+  side, "Concert" "Market Stall" "Food Truck" and the like; "invincible dummies"): SV_Unit_FestTown, 15 objects of
+  Mission 22's invisible dummy (Unit_dummyN0 on dummy_common) made allied, invincible and out of every attack, each its
+  own callsign key (SV_FestBox_*; names in CFG.specials.festival.text.town), 2.2 km along the runway past its WSW end
+  and 0.3 km south (the town's densest houses), VALKA and AUDREY 12 m apart; up with the festival's talk, off with its
+  searchlights. The town talks (the user: "there should be some subtitles for the Festival as well"): raid_town as the
+  siren starts, chatter every chatter_s during the raid, saved_town after all_down (VALKA, AUDREY, CONCERT MC, FOOD TRUCK,
+  MARKET STALL; a longer speaker code, CFG.hud.subs.speakers). festival_test, the build's read-back check.
+- Tests: 45 Lua suites pass (escort_test's wave check now against the wave before it, not an older one: it failed at
+  random once the subtitles drew more random numbers), the C checks, the size check and the full build.
+- The town's couple (the user: "Audrey is the Dominant one in the relationship with Valka"): AUDREY leads, VALKA follows
+  in raid_town, chatter and saved_town.
+- Crash C of 2026-11-07 (08:35:52 UTC, UECC AC971586, iiBlu's PC: RTX 4060 Laptop, NVIDIA 621.14, a driver UE's
+  denylist flags; 86 s after launch, 0.74.1's main.dll): a GPU crash with a DRED page fault, the same handler path as
+  crash B; nothing ties it to Survival (no game log came with it: its DRED lines would name the resource). Both dumps
+  show ~30 GiB committed even at 86 s in, so that's this setup's baseline, not a leak.
+
+## 0.74.7 (2026-11-07, runtime 0.32.25; the lore and the subtitles after 0.74.6's zip; not yet run in game)
+- The town's couple (the user: "Audrey is an Ex-grey man who worked for Grunder Industries. Valka is Audreys girlfriend,
+  Valka is a bit of an airhead but she's extremely powerful because she's actually an Anomaly herself, she's what they call
+  a Void Watcher, she looks after all the dead who have passed on, however Valka resides on earth with Audrey, the players
+  will only be able to loosely connect the dots"): hints only in chatter and saved_town (AUDREY's old maintenance logs,
+  Grunder's guidance, counting exits, "the old men in grey"; VALKA looking after the bomber crews, "nobody's ever really
+  gone", the crowded sky, VOID WATCHER the radar plane "cute").
+- More of the couple (the user: "Valka is prone to being captured and sometimes she has outbursts where she becomes the
+  full anomaly version of herself (the X-02S anomaly). Her sister is a girl named War, who they all believe is evil,
+  because she actually is evil"): hints in chatter (a lab, the buzzing, "no flying off this time", her sister) and a
+  saved_town exchange ("I stayed me the whole time").
+- KMG (the user: "Yorke is the Team Leader of their Squadron, Rock is his 2nd in command, Ali and Danielle are dating"; "add
+  other Characters like Yorke, Rock, Ali, Danielle into this as well"): THE ESCORT's check-ins and kills say so; each
+  escort's loss answered by its partner or its lead (crew.<NAME>.mourn: ROCK takes the lead when YORKE's down, ALI and
+  DANIELLE for each other), the loss kept in RUN.escort.down; at THE FESTIVAL, once CHARLENE has landed this run, KMG's
+  kmg_talk / kmg_raid / kmg_chatter / kmg_saved, never one shot down in the escort (sv_festival.lua kmgList).
+- VALKA's round talks (the user, on AUDREY breaking in: "ADD IT THIS IS GOOD STUFF OMG"): CFG.specials.valka.text.say
+  (sv_anomalies_valka.lua SPC.V.subs / subsHealth): COMONA CONTROL at her reveal (CHARLENE too once she's at Comona: she
+  can't see VALKA coming), AUDREY under 60% ("Valka? Valka, it's me. Come back to me.") and under 30%, AUDREY taking her
+  home at her death. bosses_test (which lines when; ESUB.say stubbed), escort_test (every line's length and colour).
+- Dev 8cc0e46a...b16d18c (stage_dev_0.74.7), friends 1695e3d8...4b01a7b554 (AC8SurvivalMode_COOP2MP_0.74.7_Online_COOP_ZFA44.zip),
+  both registered by the packaging. 0.74.6 (dev c7f75c5f, friends afbbff90) superseded before it was installed.
+
+## 0.74.8 (2026-11-07, runtime 0.32.25; the ZFA-44 carriers' anti-missile laser; not yet run in game)
+- The ZFA-44 carriers' anti-missile laser (2026-11-07; the user's option 1; tools/re/LASER_INTERCEPTOR.md 8):
+  - BP_FCS_SV_ZfaTLS: the ships' CIWS arm with AC8's BP_SwingTLS_ForMSL, a LauncherCommon at the gun socket, missiles
+    only.
+  - Rows: DT_SV_NpcFCS SV_FCS_ZfaTLS, and DT_SV_NpcRows SV_Zfa_AllyTLS (slot 3).
+  - Lua, Scripts/sv_escort_laser.lua: ESC.setup's row choice, the `zfa laser:` fire-control line, and the kill count
+    SV_ZfaTLSHits from Mission 29's WeaponIntercept trigger. Setting CFG.allies.carrier.zfa.laser (true).
+  - build_all.sh passes, check_zfa_laser_build included, and every Lua suite but coop_test passes.
+  - Not yet run in game; not versioned, packaged or committed.
+- Dev bc2ebae7...1f934a42ff (stage_dev_0.74.8), friends c6c4ccdf...a8b01add26e8e (AC8SurvivalMode_COOP2MP_0.74.8_Online_COOP_ZFA44.zip),
+  both registered by the packaging. Not installed (the user was playing 0.74.7, installed 2026-11-07 ~19:55; its backup of 0.74.1:
+  build/backup/install_before_0.74.7).
+
+## 0.74.9 (2026-11-07, runtime 0.32.25; the leaderboard address back in the runtime; not yet run in game)
+- The user: "leaderboards on the new builds aren't being added for some reason, players are playing ranked but nothing is
+  coming through". Every 0.74.x build (from the 0.74.0 night build on: the first built in the E:\ACE8 SM decoy worktree)
+  shipped a main.dll with no leaderboard address or submit key: runtime/build.sh read ../leaderboard/submit.local, which
+  only the main tree has (it's git-ignored), printed "no leaderboard/submit.local; the runtime can't submit runs" and
+  built on. Checked in the DLLs: the 0.73.78 install has the Worker's address; the 0.74.0 (.91 / .92), 0.74.1 and
+  0.74.7 installs and every 0.74.1-0.74.8 friends' zip don't. A ranked run on those builds went into the player's
+  config/pending_runs.txt ("not sent now (this build has no leaderboard address); kept for later") and is sent at the
+  next game start of a build that has it (LB.queueTick), its build hash the one it was played on (registered).
+- runtime/build.sh finds the file as .env's SV_LB_LOCAL, else this checkout's, else the main tree's (`git worktree
+  list`). package_release.sh online and package_dev.sh refuse a runtime without it (build/runtime/submit_cfg.h, written
+  only by a build that found it, and the staged main.dll that build's; LB_OPTIONAL=1 for a dev stage without).
+- Dev 5e1d897c...f4702418f (stage_dev_0.74.9), friends 036313b5...49208e575 (AC8SurvivalMode_COOP2MP_0.74.9_Online_COOP_ZFA44.zip),
+  both registered by the packaging, both main.dll checked to carry the Worker's address. Everything of 0.74.8 (the
+  ZFA-44's laser) in it too. 0.74.8's zips superseded (no address).

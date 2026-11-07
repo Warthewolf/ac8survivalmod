@@ -565,6 +565,7 @@ local function wavesTick(S, now)
     local sec = opts[math.random(#opts)]
     local base = (A.r.hdg + (sec - 1) * 45) % 360                     -- (the compass bearing from her to the wave)
     S.reinf.n, S.reinf.sector, S.reinf.at = S.reinf.n + 1, sec, now + num(w.every_s, 45)
+    S.reinf.dir = COMPASS[math.floor(((base + 22.5) % 360) / 45) + 1]   -- (its subtitle's {dir}: sv_escort_subs.lua)
     local nUp, said = 0, {}
     for i, u in ipairs(list) do
         local b = math.rad(base + (i - (#list + 1) / 2) * num(w.spread_deg, 12))
@@ -666,6 +667,7 @@ local function landed(S, A, how)
         for _, B in ipairs(S.ac) do if B.escort and B.st ~= "landed" and B.st ~= "lost" then left = left + 1 end end
         local t = ec().text
         hudCallout(t.landed, string.format(t.landed_sub, left))
+        if RUN.escort then RUN.escort.arrived, RUN.dirty = D.round, true end   -- (the Anomalies may come: ESC.anomalyOk)
     end
 end
 -- the build's backstops (each path's PathFinish starts the next step while its leg flag says Lua hasn't: hard rules 1,
@@ -1010,6 +1012,8 @@ local function finish(S, now, won, why)
     if not won then
         LB.special("escort", false, secs)
         hudCallout(t.lost, t.lost_sub)
+        if RUN.escort then RUN.escort.lost, RUN.dirty = D.round, true end
+        if ESUB and ESUB.finish then pcall(ESUB.finish, S, now, false) end      -- (her last lines: sv_escort_subs.lua)
         log(string.format("escort: round %d, the escort FAILED: %s (%d of %d landed, %d lost, %.0f s in)", D.round, why, landedN, total, lostN, secs))
         return
     end
@@ -1019,14 +1023,19 @@ local function finish(S, now, won, why)
     RUN.zfa = { unlocked = true, round = D.round }
     RUN.dirty = true
     hudCallout(t.won, string.format(t.won_sub, specialPay(pay)))
-    -- her line (the big callout; the subtitle strip may take c.subtitle whole), cut at words to subtitle_chars a callout
+    -- her line on the subtitle strip, then Comona's (sv_escort_subs.lua ESUB.finish; 2026-11-07); with the strip off,
+    -- callouts as before, cut at words to subtitle_chars a callout
     local line, parts, cur = tostring(c.subtitle or ""), {}, ""
-    for w in line:gmatch("%S+") do
-        if #cur > 0 and #cur + 1 + #w > num(c.subtitle_chars, 90) then parts[#parts + 1] = cur; cur = w
-        else cur = (#cur > 0 and (cur .. " ") or "") .. w end
+    local okSub, onStrip = false, false
+    if ESUB and ESUB.finish then okSub, onStrip = pcall(ESUB.finish, S, now, true, line) end
+    if not (okSub and onStrip == true) then
+        for w in line:gmatch("%S+") do
+            if #cur > 0 and #cur + 1 + #w > num(c.subtitle_chars, 90) then parts[#parts + 1] = cur; cur = w
+            else cur = (#cur > 0 and (cur .. " ") or "") .. w end
+        end
+        if #cur > 0 then parts[#parts + 1] = cur end
+        for i = 1, math.min(#parts, 3) do hudCallout(c.name, parts[i]) end
     end
-    if #cur > 0 then parts[#parts + 1] = cur end
-    for i = 1, math.min(#parts, 3) do hudCallout(c.name, parts[i]) end
     log(string.format("escort: round %d, the escort WON: %d of %d landed (%d lost), %.0f s; +%d zollars; CHARLENE: \"%s\"; the ZFA-44 carriers unlocked in the STORE",
         D.round, landedN, total, lostN, secs, pay, line))
 end
@@ -1044,6 +1053,7 @@ function ESC.step(S, now)
         if not okA and not B.errSaid then B.errSaid = true; log("escort: " .. B.name .. "'s step error " .. tostring(errA)) end
     end
     if S.test then testLog(S, now) end
+    if ESUB and ESUB.tick and not S.test then pcall(ESUB.tick, S, now) end    -- (what they say: sv_escort_subs.lua)
     if A.st == "lost" then return finish(S, now, false, "CHARLENE is down") end
     if not S.test then pcall(escortsTick, S) end
     if A.st == "final" and S.state == "route" then
@@ -1165,6 +1175,12 @@ function ESC.ready()
     end
     return unitsThere()
 end
+-- whether THE ESCORT can still come in this session (on, its rows not refused, its units not missing): the Anomalies
+-- wait for her only then (sv_escort_subs.lua ESC.anomalyOk)
+function ESC.possible()
+    local c = ec()
+    return type(c) == "table" and c.enabled ~= false and ESC.rowsOk ~= false and unitsOk ~= false
+end
 -- (before an operation's spawns) every leg and slot flag back to 0 (RE_SV_EscortReset): the last escort's (or test's)
 -- flags never move this one on, and its parking slots count from A again
 local function reset(S)
@@ -1234,6 +1250,7 @@ local function hpPct(S)
     if not (okH and type(h) == "number" and type(mh) == "number" and mh > 0) then return nil end
     return math.max(0, math.min(100, math.floor(h / (mh * 10) * 100 + 0.5)))
 end
+ESC.hpPct = hpPct                                        -- (her lines when she's hit: sv_escort_subs.lua)
 function ESC.row(s, t)
     local S = ESC.S
     if not (S and S.special == s) then return nil end
@@ -1742,8 +1759,11 @@ local function names()
     if ESC.namesSet or type(SV_SetText) ~= "function" then return end
     ESC.namesSet = true
     local c, k, n = ec(), cc(), 0
-    local list = { { c.name_key, c.name } }
-    for _, e in ipairs(c.escorts or {}) do list[#list + 1] = { e.name_key, e.name } end
+    -- ((2026-11-07) the user: CHARLENE and her escorts "should each have a squadron tag KMG": c.tag in c.tag_format)
+    local tag = type(c.tag) == "string" and c.tag ~= "" and c.tag or nil
+    local function tagged(nm) return (tag and type(nm) == "string") and string.format(c.tag_format or "[%s] %s", tag, nm) or nm end
+    local list = { { c.name_key, tagged(c.name) } }
+    for _, e in ipairs(c.escorts or {}) do list[#list + 1] = { e.name_key, tagged(e.name) } end
     list[#list + 1] = { k.name_key, k.name }
     list[#list + 1] = { k.zfa and k.zfa.name_key, k.zfa and k.zfa.name }
     for _, x in ipairs(list) do
@@ -1783,9 +1803,10 @@ function ESC.setup()
         parts[#parts + 1] = row .. (got and " in DT_NPC" or " NOT added")
     end
     ESC.rowsOk = ok
-    local zr = cc().dt_npc
-    ESC.zfaRowOk = type(zr) ~= "string" or addRow(zr)
-    if type(zr) == "string" then parts[#parts + 1] = zr .. (ESC.zfaRowOk and " in DT_NPC" or " NOT added") end
+    local zr, okZ, zIn, zNote = cc().dt_npc, false, nil, ""      -- ((2026-11-07) its laser twin or it: sv_escort_laser.lua)
+    if type(zr) == "string" and ZLAS and ZLAS.zfaRow then okZ, zIn, zNote = pcall(ZLAS.zfaRow, npc, mine, addRow, zr) end
+    if okZ then ESC.zfaRowOk = zIn else ESC.zfaRowOk, zNote = type(zr) ~= "string" or addRow(zr), zIn and (" (laser error: " .. tostring(zIn) .. ")") end
+    if type(zr) == "string" then parts[#parts + 1] = zr .. (ESC.zfaRowOk and " in DT_NPC" or " NOT added") .. (zNote or "") end
     log(string.format("escort: the escorts' and the ZFA-44's rows: %s%s%s", table.concat(parts, ", "),
         ok and "" or "; no ESCORT round this session", ESC.zfaRowOk and "" or "; no ZFA-44 carriers this session"))
     names()
@@ -1802,6 +1823,7 @@ local function dressTick()
         local e = table.remove(q, 1)
         if liveAddr(e.obj) == e.addr then
             done = done + 1
+            if ZLAS and ZLAS.arms then pcall(ZLAS.arms, e.obj, e.unit) end      -- (its fire control, once: sv_escort_laser.lua)
             if z.dress ~= false and ZFA and ZFA.dress then
                 local okD, did, why = pcall(ZFA.dress, e.obj, { paint = z.paint, label = e.unit, hide_s = z.hide_s })
                 if not okD then logOnce("zfa dress", "carrier: ZFA-44 dressing error " .. tostring(did)) end
@@ -1842,6 +1864,7 @@ function ESC.tick(now)
         if not okP then logOnce("zfa preload", "carrier: ZFA-44 preload error " .. tostring(errP)) end
     end
     dressTick()
+    if ZLAS and ZLAS.tick then pcall(ZLAS.tick) end              -- (the lasers' interceptions: sv_escort_laser.lua)
     if ZFA and ZFA.prodTick then
         local okZ, errZ = pcall(ZFA.prodTick)
         if not okZ then logOnce("zfa prod", "carrier: ZFA-44 tick error " .. tostring(errZ)) end

@@ -677,6 +677,35 @@ function SPC.V.moodOff(c, s, now)
     s.moodOn = false
 end
 
+-- ((2026-11-07) her round's subtitles, CFG.specials.valka.text.say: the user, Valka "has outbursts where she becomes the
+-- full anomaly version of herself (the X-02S anomaly)"; AUDREY breaking in on the radio partway through) what's under
+-- `key` said (sv_escort_subs.lua ESUB.say: one exchange, whole); `charlene`: only once CHARLENE's at Comona this run
+function SPC.V.subs(c, key, charlene)
+    local say = c.text and c.text.say
+    if not (type(say) == "table" and say[key] and ESUB and ESUB.say) then return false end
+    if charlene and not (RUN and type(RUN.escort) == "table" and RUN.escort.arrived) then return false end
+    local ok, said = pcall(ESUB.say, nil, "valka." .. key, nil, { list = say[key], force = true })
+    if ok and said then log("special: " .. c.name .. "'s round: " .. key .. " said (subtitles)") end
+    return ok and said == true
+end
+-- AUDREY at her health under each hurt_at mark (once each a round)
+function SPC.V.subsHealth(c, s, o)
+    local say = c.text and c.text.say
+    if not (type(say) == "table" and type(say.hurt_at) == "table") then return end
+    local okH, h, mh = pcall(function() return o.HealthInternal, o.MaxHealth end)
+    if not (okH and type(h) == "number" and type(mh) == "number" and mh > 0) then return end
+    local pct = h / (mh * 10) * 100
+    s.subsMark = s.subsMark or {}
+    for _, m in ipairs(say.hurt_at) do
+        m = math.floor(tonumber(m) or 0)
+        if pct <= m and not s.subsMark[m] then
+            s.subsMark[m] = true
+            SPC.V.subs(c, "audrey_" .. m)
+            return                                       -- (one mark a tick: a big hit past two says the first)
+        end
+    end
+end
+
 -- Every tick of VALKA's round.
 function SPC.valkaTick(now, s)
     local c, t, V = CFG.specials.valka, CFG.hud.text, SPC.V
@@ -832,6 +861,8 @@ function SPC.valkaTick(now, s)
             now + c.invert_every_s
         hudCallout(c.anomaly_line or t.valka_sub, nil)   -- what's happening, then her name big
         hudCallout(c.name:upper(), nil, c.big_x)
+        V.subs(c, "reveal")                             -- ((2026-11-07) Comona can't see where she came from;
+        V.subs(c, "reveal_charlene", true)              -- nor can CHARLENE)
         log(string.format("special: %s shows, %.0f HP (x%.2f)%s, target box %s; camera %s", c.name, hp, hx,
             okH and "" or " (health NOT set)", okB and "on" or "NOT set", ANOMALY_CAMERAS[cam]))
         return
@@ -873,12 +904,15 @@ function SPC.valkaTick(now, s)
         addCredits(pay, c.name .. " down")
         LB.special("valka", true, now - s.at)
         hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, specialPay(pay)))   -- ((0.73.78) C3)
+        V.subs(c, "down")                               -- ((2026-11-07) AUDREY takes her home)
+        V.subs(c, "down_charlene", true)
         log(string.format("special: round %d, %s shot down %.0f s after she showed (%d railgun shots, %d blinks, %d turns, %d scrambles)",
             D.round, c.name, now - (s.revealedAt or s.at), s.shots or 0, s.blinks or 0, s.turns or 0, s.scrambles or 0))
         return
     end
     if not o then return end
     V.modelTick(s, o, now)
+    pcall(V.subsHealth, c, s, o)                         -- ((2026-11-07) AUDREY breaks in as her health falls)
     if now >= (s.holdAt or 0) then                       -- her parts held (EvadeOnly), again every hold_s
         s.holdAt = now + (c.hold_s or 5)
         V.event("RE_SV_ValkaHold")

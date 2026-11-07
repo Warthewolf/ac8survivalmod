@@ -701,9 +701,18 @@ def build_npc_rows():
                 set_prop(row[2], q[0], q[1], ('raw', 'Float', struct.pack('<f', 1.0)))
         assert survival_events.fname(npc)[2] == 0, npc
         out.append(((npc, 0), row))
+        if npc == survival_events.ZFA_NPC:     # (2026-11-07) ... and its twin with the anti-missile laser in a free slot
+            slot = f'NpcFCSId{survival_events.ZFA_TLS_SLOT}'
+            assert not [q for q in row[2] if q[1] == slot and q[3] is not None], (npc, slot, 'not free')
+            tls = copy.deepcopy(row)
+            set_prop(tls[2], sidx(slot), slot, ('name', survival_events.ZFA_TLS_FCS_ROW, 0))
+            assert survival_events.fname(survival_events.ZFA_TLS_NPC)[2] == 0
+            out.append(((survival_events.ZFA_TLS_NPC, 0), tls))
     print('  escort / decoy DT_NPC rows (Lua adds them at the main menu): '
           + ', '.join(f'{r[0]} ({r[1]}' + (f' on {r[2]}' if r[2] else '') + (', unarmed' if r[4] else '') + ')'
-                      for r in survival_events.ESCORT_DECOY_NPC_ROWS) + f'; their behaviour set {ally_set[1]}')
+                      for r in survival_events.ESCORT_DECOY_NPC_ROWS) + f'; their behaviour set {ally_set[1]}; '
+          + f'{survival_events.ZFA_TLS_NPC} ({survival_events.ZFA_NPC} with {survival_events.ZFA_TLS_FCS_ROW} in slot '
+          + f'{survival_events.ZFA_TLS_SLOT})')
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
     dt['rows'] = out
@@ -805,6 +814,7 @@ def check_fishing_build():
     want += [(F['unit'], F['objs'], se.FEST_BOMBER_ROW, 2) for F in se.fest_bombers()]
     want += [(M['unit'], M['objs'], se.FEST_CM_ROW, 2) for M in se.fest_missiles()]
     want += [(unit, [obj], se.FEST_LIGHT_ROW, 1) for unit, obj, _, _ in se.fest_lights()]
+    want.append((se.FEST_TOWN_UNIT, [f'{se.FEST_TOWN_OBJ}_{k}' for k in range(len(se.FEST_TOWN_BOXES))], se.DECOY_MARK_ROW, 1))
     for unit, names, row, side in want:
         assert unit in units, f'{unit} not in the world data'
         u = units[unit]
@@ -815,6 +825,13 @@ def check_fishing_build():
         assert faction(u) == side and not field_of(u, 'bIsSpawnFromStart'), unit
         uz = spot_of(u)[2]
         assert all(abs(spot_of(ob)[2] - uz) < 0.5 for ob in objects_of(u)), (unit, 'an object off its unit height')
+    # ((2026-11-07) the town's boxes: each object its own callsign key, at its spot, invincible, out of every attack)
+    town = objects_of(units[se.FEST_TOWN_UNIT])
+    for ob, (key, pt) in zip(town, se.fest_town()):
+        assert field_of(ob, 'GameObjectDisplayNameID02') == ('name', key, 0), (key, field_of(ob, 'GameObjectDisplayNameID02'))
+        assert all(field_of(ob, f) == ('raw', 'Bool', b'\x01') for f in ('bShowHUDBox', 'bShowCallSignForAlly', 'bIsInvincible',
+                   'bIsInvincibleFromAI', 'bIsInvincibleFromWingman', 'bIsAttackTargetsException')), key
+        assert math.dist(spot_of(ob), pt) < 1.0 and not field_of(ob, 'bIsLanding') and not field_of(ob, 'TargetMarkType'), key
     beams = [ch for unit, obj, _, _ in se.fest_lights() for ch in field_of(objects_of(units[unit])[0], 'ChildAIObjectDescs')[1]]
     assert len(beams) == len(se.FEST_LIGHTS) and all(
         field_of(field_of(ch, 'Data'), 'MissionNpcID') == ('name', se.FEST_BEAM_ROW, 0) for ch in beams), 'searchlight parts'
@@ -1009,6 +1026,73 @@ def check_escort_decoy_build():
         assert plain(r['LuaSetId']) != 'NLID_0400_CP', row
     print(f'  escort / decoy: {len(want)} units, {len(want_paths)} paths, {len(events)} events ({n_ex} execs: '
           + ', '.join(f'{c} {n}' for c, n in sorted(classes.items())) + ') and their rows read back from the packages: all there')
+
+
+def check_zfa_laser_build():
+    """(2026-11-07) The ZFA-44s' anti-missile laser read back from the packages this build saved: its arm
+    BP_FCS_SV_ZfaTLS (named for its path; it imports exactly BP_SwingTLS_ForMSL's 7 public exports and its weapon class
+    is that one; its launcher a LauncherCommon on the host's body at the gun socket, all round; its AIControlCIWS missiles
+    only), its fire-control row in DT_SV_NpcFCS, DT_SV_NpcRows' laser twin of the ZFA-44 host (slot 3 that row, the rest
+    the host's), the interception trigger and its count, and the names Lua uses (Scripts/sv_config.lua's carrier.zfa)."""
+    se = survival_events
+    plain = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    load = lambda path: ZenPkg(data=open(os.path.join(OUT, path[len('/Game/'):]) + '.uasset', 'rb').read())
+    u64 = lambda e, at: struct.unpack_from('<Q', e, at)[0]
+    z = load(se.ZFA_TLS_FCS_PKG)
+    tls, ecm = ZenPkg(stock(se.ZFA_TLS_WEAPON)), ZenPkg(stock(se.ZFA_TLS_LAUNCHER_SOURCE))
+    tls_pub = sorted(u64(e, 56) for e in tls.exports if u64(e, 56))
+    assert z.names[z.name_idx] == se.ZFA_TLS_FCS_PKG and z.imp_pkgs == [se.ZFA_TLS_WEAPON], (z.names[z.name_idx], z.imp_pkgs)
+    got = sorted(z.imp_hashes[x & 0xffffffff] for x in z.imports if x >> 62 == 2)
+    assert got == tls_pub and len(z.imp_hashes) == len(tls_pub), ('the laser imports', [hex(h) for h in got])
+    wc = dict((q[1], q[3]) for q in props_of(z, z.export_index('LiveFCSModule_ProjectileCommon_0'), 'LiveFCSModule_ProjectileCommon')[0][2])
+    w = z.imports[-wc['WeaponClass'][1] - 1]
+    assert w >> 62 == 2 and z.imp_hashes[w & 0xffffffff] == export_hash(se.ZFA_TLS_WEAPON.rsplit('/', 1)[1] + '_C'), wc
+    li = z.export_index('LiveFCSModule_LauncherBoneControl_0')
+    el = ecm.export_index('LiveFCSModule_LauncherCommon_0')
+    assert (u64(z.exports[li], 32), u64(z.exports[li], 48)) == (u64(ecm.exports[el], 32), u64(ecm.exports[el], 48)), 'launcher class'
+    lc = dict((q[1], q[3]) for q in props_of(z, li, 'LiveFCSModule_LauncherCommon')[0][2] if not q[2])
+    perf, fc = (dict((q[1], q) for q in lc[f][2]) for f in ('Performance', 'FireControl'))
+    assert lc['MeshComponentName'] == ('name', ZFA_TLS_MESH, 0) and ('SlotSocketPrefix' not in perf or perf['SlotSocketPrefix'][2]), lc
+    assert fc['LauncherDirection'][3][2] == ('raw', 'Byte', b'\x01'), fc['LauncherDirection']        # SlotSocket
+    assert struct.unpack('<f', fc['CaptureAngleRange'][3][2])[0] == 180.0, fc['CaptureAngleRange']
+    ai = dict((q[1], q[3]) for q in props_of(z, z.export_index('LiveFCSModule_AIControlCIWS_0'), 'LiveFCSModule_AIControlCIWS')[0][2])
+    assert ai['bSearchMissileOnly'] == ('raw', 'Bool', b'\x01'), ai
+    cls = z.export_name(0)
+
+    def table(path, st):
+        zt = load(path)
+        dt, _ = dtx.parse(uprop.Ctx(bytes(zt.payloads[0]), zt.names), 0, st)
+        return {plain(('name',) + k): dict((q[1], q[3]) for q in r[2]) for k, r in dt['rows']}
+    fcs = table(se.ZFA_TLS_FCS_TABLE, 'LiveNpcFCSDataTable')
+    assert list(fcs) == [se.ZFA_TLS_FCS_ROW], list(fcs)
+    r = fcs[se.ZFA_TLS_FCS_ROW]
+    assert r['FCSBlueprintClass'] == ('soft', ('name', se.ZFA_TLS_FCS_PKG, 0), ('name', cls, 0), ''), r['FCSBlueprintClass']
+    assert r['NpcWeaponId'] is None and r['NpcAIModuleId'] is None, r
+    assert [struct.unpack('<f', r[f][2])[0] for f in ('CaptureDistance', 'CaptureAngleRange')] == [3000.0, 180.0], r
+    npc = table(DATA + 'DT_SV_NpcRows', 'LiveNpcDataTable')
+    a, b, slot = npc[se.ZFA_NPC], npc[se.ZFA_TLS_NPC], f'NpcFCSId{se.ZFA_TLS_SLOT}'
+    assert b.get(slot) == ('name', se.ZFA_TLS_FCS_ROW, 0) and a.get(slot) is None, (a.get(slot), b.get(slot))
+    assert {f: v for f, v in a.items() if f != slot} == {f: v for f, v in b.items() if f != slot}, 'the twin differs'
+    # the interception count
+    ze = load(MI + 'EP_SurvivalMode_global')
+    _, _, _, T, E, _ = ep_dump.load_bytes(ze)
+    show = lambda v: ep_dump.show(v, ze)
+    trig = [t for t in T if show(ep_dump.fields(t)['EventName']) == se.ZFA_TLS_EVENT]
+    assert len(trig) == 1 and show(ep_dump.fields(trig[0])['EventType']) == '65', len(trig)
+    vals = [show(ep_dump.fields(x)['Value']) for x in ep_dump.fields(trig[0])['ArgsInfo'][1]]
+    assert vals == ['WID_tls', 'NoneSelect', 'NoneSelect', 'NoneSelect', 'true'], vals
+    ex = [e for e in E if show(ep_dump.fields(e)['ConnectionEventName']) == se.ZFA_TLS_EVENT]
+    assert [(show(ep_dump.fields(e)['ExecutionClass']), [show(ep_dump.fields(x)['Value']) for x in ep_dump.fields(e)['ArgsInfo'][1]])
+            for e in ex] == [('LiveFlagOperation_IntExecution', [se.ZFA_TLS_FLAG, 'Add', '1'])], ex
+    # Lua's names for them (Scripts/sv_config.lua CFG.allies.carrier.zfa)
+    lua = survival_events.runtime_lua()
+    for want in (f'dt_npc = "{se.ZFA_NPC}"', f'laser_row = "{se.ZFA_TLS_NPC}"', f'laser_fcs_row = "{se.ZFA_TLS_FCS_ROW}"',
+                 f'laser_fcs_table = "{se.ZFA_TLS_FCS_TABLE}.{se.ZFA_TLS_FCS_TABLE.rsplit("/", 1)[1]}"',
+                 f'laser_flag = "{se.ZFA_TLS_FLAG}"'):
+        assert want in lua, f'Scripts/sv_config.lua: no {want}'
+    print(f'  zfa laser: {se.ZFA_TLS_FCS_PKG} (imports the 7 of {se.ZFA_TLS_WEAPON.rsplit("/", 1)[1]}, LauncherCommon on '
+          f'{ZFA_TLS_MESH}, missiles only), {se.ZFA_TLS_FCS_ROW}, {se.ZFA_TLS_NPC} slot {se.ZFA_TLS_SLOT} and '
+          f'{se.ZFA_TLS_EVENT} -> {se.ZFA_TLS_FLAG} read back from the packages: all there')
 
 
 # ---------------------------------------------------------------- NPC mission table
@@ -1357,6 +1441,7 @@ if __name__ == '__main__':
     build_npc_table()
     build_shop_rows()
     build_rows()
+    build_zfa_laser()                    # (2026-11-07: the ZFA-44s' anti-missile laser's arm and its fire-control row)
     check_no_certain_kill()              # (0.73.77, G1: after the NPC tables it reads are saved)
     try:
         build_menu_pages()
@@ -1374,4 +1459,5 @@ if __name__ == '__main__':
     build_ep('phase02')
     check_fishing_build()                # (2026-11-06: GONE FISHIN' and THE FESTIVAL read back from the saved packages)
     check_escort_decoy_build()           # (2026-11-06: THE ESCORT, its cargo ships and THE DECOY read back the same way)
+    check_zfa_laser_build()              # (2026-11-07: the ZFA-44s' laser: its arm, rows and interception count)
     print('player start', tuple(round(x) for x in START), 'yaw', RUNWAY_YAW)

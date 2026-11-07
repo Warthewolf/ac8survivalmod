@@ -1120,6 +1120,7 @@ local function specialReady(sp, k, round)
     local from = type(sp[k]) == "table" and tonumber(sp[k].from_round) or 0   -- (a special's first round)
     return specialOn(k) and round >= from and (not last or round - last >= (sp.cooldown_rounds or 0))
         and (k ~= RUN.lastSpecial or #sp.rotation == 1) and kindReady(k, round)
+        and not (ESC and ESC.anomalyOk and ESC.anomalyOk(k) == false)   -- ((2026-11-07) an Anomaly waits for CHARLENE)
 end
 
 -- The special round `round` is (CFG.specials), or nil for a normal round.

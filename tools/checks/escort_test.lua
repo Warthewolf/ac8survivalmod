@@ -26,11 +26,17 @@
 --     each escort released onto the landing circuit with its start ahead (none lined up: hold_max_s, started anyway); the
 --     parking slots A-E by landing order; the build's leg and slot flags taken (legSync, stale ones before the reset's
 --     2 s not); the allies' take-offs held while she lands; the six launcher arms a ship, an arm whose flight is up
---     skipped, a unit on the spawner's list taken off first, a downed flight's unit recycled; the pose flight's RE_SV_ZfaGo.
+--     skipped, a unit on the spawner's list taken off first, a downed flight's unit recycled; the pose flight's RE_SV_ZfaGo;
+--   (2026-11-07, sv_escort_subs.lua, sv_subs.lua's strip) the KMG tag on their boxes; what they say: the check-in, the
+--     first enemies at her, the waves ({dir}), her hits and hurt marks, an enemy near her shot down by her escorts or you,
+--     her final (COMONA TOWER), touchdown and landing, each escort's own landing line, ROCK's last words and the reply,
+--     nobody quoting him after, her thanks whole on the strip (no callout) then Comona's, her loss; the Anomalies' wait
+--     for her (ESC.anomalyOk, after_lost, no wait without THE ESCORT) and her warning the round before (not VALKA's);
+--     every line at most 70 characters, each speaker its colour.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
 local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and tostring(s):find(part, 1, true) ~= nil end
@@ -121,11 +127,38 @@ function spawnFlight(u, ml, pose)                   -- (the round's spawner: rec
     D.up[u] = true
     return flightSize(u)
 end
+part("sv_subs.lua")                                  -- ((2026-11-07) the subtitle strip: what they say)
 part("sv_escort.lua")
+part("sv_escort_subs.lua")
 part("sv_zfa44.lua")
 local function line(pat, from)
     for i = #logs, from or 1, -1 do if logs[i]:find(pat, 1, true) then return logs[i] end end
     return nil
+end
+-- the subtitle lines said since log line `from` ("WHO: text", sv_subs.lua's log), and whether one of them is a line of
+-- the list l (flattened; vals filled in) by who
+local function subsSince(from)
+    local out = {}
+    for i = from or 1, #logs do
+        local who, text = logs[i]:match("^subs: (.-): (.*) %(%d+%.%d s%)$")
+        if who then out[#out + 1] = { who = who, text = text } end
+    end
+    return out
+end
+local function flatL(l, out)
+    out = out or {}
+    if type(l) == "string" then out[#out + 1] = l elseif type(l) == "table" then for _, x in ipairs(l) do flatL(x, out) end end
+    return out
+end
+local function saidFrom(l, from, vals)
+    local n = 0
+    for _, s in ipairs(subsSince(from)) do
+        for _, x in ipairs(flatL(l)) do
+            local who, text = ESUB.line(x, vals)
+            if s.who == who and s.text == text then n = n + 1 end
+        end
+    end
+    return n
 end
 local C, K = CFG.specials.escort, CFG.allies.carrier
 local shopTicks = 0
@@ -150,9 +183,69 @@ ESC.setup()
 check(npcT.rows.SV_Esc_Su57 and npcT.rows.SV_Esc_Su33 and npcT.rows.SV_Esc_Su35 and npcT.rows.SV_Zfa_Ally and ESC.rowsOk == true
       and ESC.zfaRowOk == true and has(line("escort: the escorts' and the ZFA-44's rows"), "SV_Zfa_Ally in DT_NPC"),
       "the escorts' and the ZFA-44 host's rows from DT_SV_NpcRows into DT_NPC at the main menu, logged")
-check(texts.SV_CharleneCall == "CHARLENE" and texts.SV_Yorke == "YORKE" and texts.SV_Rock == "ROCK" and texts.SV_Ali == "ALI"
-      and texts.SV_Danielle == "DANIELLE" and texts.SV_Cargo == K.name and texts.SV_Zfa44 == "ZFA-44",
-      "the seven names on their boxes set there (SV_SetText)")
+-- ((2026-11-07) the user: they "should each have a squadron tag KMG, as well as Charlene")
+check(texts.SV_CharleneCall == "[KMG] CHARLENE" and texts.SV_Yorke == "[KMG] YORKE" and texts.SV_Rock == "[KMG] ROCK"
+      and texts.SV_Ali == "[KMG] ALI" and texts.SV_Danielle == "[KMG] DANIELLE" and texts.SV_Cargo == K.name
+      and texts.SV_Zfa44 == "ZFA-44",
+      "the seven names on their boxes set there (SV_SetText), CHARLENE's and her escorts' with the KMG tag")
+-- ((2026-11-07) the ZFA-44s' anti-missile laser, sv_escort_laser.lua) the host's row made from its laser twin's struct when
+-- the laser's on and its fire-control row went into DT_NPC_FCS (that row passed on whole, never read: hard rule 29); the
+-- plain row when it's off, when Survival's FCS table hasn't the row, when DT_NPC_FCS doesn't load
+local Z = K.zfa
+local function laserSetup(on, fcsRows, mineFcsRows)
+    ESC.setupDone, ESC.setupTries, Z.laser = nil, 0, on
+    local n2 = dt("DT_NPC", {})
+    local m2 = dt("DT_SV_NpcRows", { SV_Esc_Su57 = { r = 1 }, SV_Esc_Su33 = { r = 2 }, SV_Esc_Su35 = { r = 3 },
+                                     SV_Zfa_Ally = { r = 4 }, SV_Zfa_AllyTLS = { r = 5 } })
+    local f2 = fcsRows and dt("DT_NPC_FCS", fcsRows) or nil
+    statics[PROBE_TABLES[2].path], statics[CFG.specials.shuttle.npc_rows] = n2, m2
+    statics[FCS_TABLE], statics[Z.laser_fcs_table] = f2, mineFcsRows and dt("DT_SV_NpcFCS", mineFcsRows) or nil
+    local from = #logs + 1
+    ESC.setup()
+    return n2, f2, line("escort: the escorts' and the ZFA-44's rows", from)
+end
+local fcsRow = setmetatable({}, { __index = function(_, k) error("the FCS row's " .. tostring(k) .. " was read") end })
+local n2, f2, said = laserSetup(true, {}, { SV_FCS_ZfaTLS = fcsRow })
+check(n2.rows.SV_Zfa_Ally and n2.rows.SV_Zfa_Ally.r == 5 and n2.rows.SV_Zfa_AllyTLS == nil and rawequal(f2.rows.SV_FCS_ZfaTLS, fcsRow)
+      and ZLAS.armed == true and ESC.zfaRowOk == true and has(said, "SV_Zfa_Ally in DT_NPC (with the anti-missile laser"),
+      "the laser on: SV_FCS_ZfaTLS into DT_NPC_FCS whole, SV_Zfa_Ally made from SV_Zfa_AllyTLS's struct, logged")
+n2, f2, said = laserSetup(false, {}, { SV_FCS_ZfaTLS = fcsRow })
+check(n2.rows.SV_Zfa_Ally and n2.rows.SV_Zfa_Ally.r == 4 and f2.rows.SV_FCS_ZfaTLS == nil and ZLAS.armed == false
+      and ESC.zfaRowOk == true and has(said, "SV_Zfa_Ally in DT_NPC (laser off"), "laser = false: the plain host, nothing in DT_NPC_FCS")
+n2, f2, said = laserSetup(true, {}, {})
+check(n2.rows.SV_Zfa_Ally and n2.rows.SV_Zfa_Ally.r == 4 and ZLAS.armed == false and ESC.zfaRowOk == true
+      and has(said, "(no laser: SV_FCS_ZfaTLS not in DT_SV_NpcFCS"), "no fire-control row in Survival's table: the plain host, said")
+n2, f2, said = laserSetup(true, nil, { SV_FCS_ZfaTLS = fcsRow })
+check(n2.rows.SV_Zfa_Ally and n2.rows.SV_Zfa_Ally.r == 4 and ZLAS.armed == false and ESC.zfaRowOk == true
+      and has(said, "(no laser: DT_NPC_FCS not loaded"), "DT_NPC_FCS not loaded: the plain host, said")
+n2, f2, said = laserSetup(true, {}, { SV_FCS_ZfaTLS = fcsRow })          -- (on again, for the rest of the test)
+-- its fire control in the log, once a plane (slot 3 Survival's arm with the laser); its interceptions from the build's flag
+local function obj(full, t) t = t or {}; t.full = full; t.IsValid = function() return true end; t.GetFullName = function() return full end; return t end
+local armList = { obj("x", { SystemName = FName("Flr") }), obj("x", { SystemName = FName("Gun") }), false,
+                  obj("x", { SystemName = FName("BP_FCS_CIWS"),
+                             ProjectileModule = obj("pm", { WeaponClass = obj("BlueprintGeneratedClass /Game/Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForMSL.BP_SwingTLS_ForMSL_C") }),
+                             GetClass = function() return obj("BlueprintGeneratedClass /Game/Mods/SurvivalMode/Weapons/BP_FCS_SV_ZfaTLS.BP_FCS_Vessel_CIWS_00_C") end }) }
+local fcsC = obj("fcs", { AllArms = { ForEach = function(_, fn) for i = 1, 4 do fn(i, { get = function() return armList[i] or nil end }) end end } })
+local laserPlane = obj("BP_OP1026_su47_CP_Ally_C plane", { addr = 4242, GetAddress = function() return 4242 end, FireControlSystemComponent = fcsC })
+local D0 = D
+D = D or {}
+local from = #logs + 1
+ZLAS.arms(laserPlane, "E_Unit_01_drone_5_0"); ZLAS.arms(laserPlane, "E_Unit_01_drone_5_0")
+local armLine = line("zfa laser: E_Unit_01_drone_5_0 plane 4242 fire control:", from)
+local armLines = 0
+for i = from, #logs do if logs[i]:find("zfa laser: ", 1, true) then armLines = armLines + 1 end end
+check(armLines == 1 and has(armLine, "0 Flr; 1 Gun; 2 -; 3 BP_FCS_CIWS BP_SwingTLS_ForMSL (Survival's arm)")
+      and has(armLine, "-> the laser in slot 3"), "a ZFA-44's fire control in the log once, the laser's arm in slot 3")
+local rawFlags, hits = svFlags, 0
+svFlags = function() return { SV_ZfaTLSHits = hits } end   -- luacheck: ignore
+from = #logs + 1
+ZLAS.tick(); hits = 2; ZLAS.tick(); hits = 3; ZLAS.tick(); ZLAS.tick()
+local hitLines = {}
+for i = from, #logs do if logs[i]:find("lasers have shot down", 1, true) then hitLines[#hitLines + 1] = logs[i] end end
+check(#hitLines == 2 and hitLines[1] == "carrier: the ZFA-44s' lasers have shot down 2 missiles (+2)"
+      and hitLines[2] == "carrier: the ZFA-44s' lasers have shot down 3 missiles (+1)",
+      "the lasers' interceptions (SV_ZfaTLSHits) logged as the count goes up, once each")
+svFlags, D = rawFlags, D0                                   -- luacheck: ignore
 
 -- planes
 local orders = {}
@@ -199,6 +292,7 @@ local function run(secs, each)
         if each then each() end
         if D.special and SPC.kinds[D.special.kind] then SPC.kinds[D.special.kind].tick(now, D.special) end
         ESC.tick(now)
+        SUB.hudTick(now, true, false)                -- (the strip's queue moving, as the HUD's tick moves it)
     end
 end
 
@@ -313,6 +407,17 @@ check(evCount("RE_SV_EscYorkeGuard") > g0, "... given again every record_every_s
 local again = 0
 for _, o in ipairs(orders) do if o.target == P.SV_Unit_Charlene then again = again + 1 end end
 check(again >= 2, "the order given again every again_s")
+do                                                  -- ((2026-11-07) what they say as she spawns: one check-in, whole)
+    local whole = false
+    for _, ex in ipairs(C.text.say.go) do
+        if saidFrom(ex, 1) == #ex then whole = true end
+    end
+    local who = {}
+    for _, s in ipairs(subsSince(1)) do who[s.who] = true end
+    check(whole and who["COMONA CONTROL"] and who.CHARLENE and who.YORKE and who.ROCK and who.ALI and who.DANIELLE,
+          "the check-in on the subtitle strip: COMONA CONTROL, CHARLENE and each of her escorts, one exchange whole")
+    check(saidFrom(C.text.say.first_attack, 1) == 0, "the first enemies sent at her: her line waits for the check-ins")
+end
 do
     CFG.specials.escort.ahead.share = 1.0
     local p = DIR.spawnAt(E1)
@@ -367,6 +472,64 @@ do                                                  -- (her start is at the comb
     check(out == 0, "no wave's flight put on the combat zone's edge (" .. out .. ")")
 end
 check(okGap, "every_s apart")
+check(saidFrom(C.text.say.first_attack, 1) == 1, "... then said, once")
+do                                                  -- (each wave sent at her: a line naming where it's from, room allowing)
+    local n = 0
+    for _, dir in ipairs({ "north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west" }) do
+        n = n + saidFrom(C.text.say.wave, 1, { dir = dir })
+    end
+    check(n >= 1 and n <= #ws and has(line("escort: wave"), "from the"), string.format("a wave's line with its direction (%d of %d waves)", n, #ws))
+end
+-- ((2026-11-07) "Being Attacked, Being Defended") her health down 10 points: her hit line; under 75%: hurt_75; an enemy
+-- near her shot down by her escorts: theirs; by you: hers
+do
+    SUB.clear("test")
+    local HPo = P.SV_Unit_Charlene
+    local full = HPo.HealthInternal
+    local from = #logs + 1
+    HPo.HealthInternal = math.floor(full * 0.88)
+    run(1)
+    check(saidFrom(C.text.say.hit, from) == 1, "hit (100% -> 88%): her hit line")
+    SUB.clear("test")
+    HPo.HealthInternal = math.floor(full * 0.80)
+    run(1)
+    check(saidFrom(C.text.say.hit, from) == 1, "... not again within hit_gap_s")
+    HPo.HealthInternal = math.floor(full * 0.70)
+    run(1)
+    check(saidFrom(C.text.say.hurt_75, from) >= 1 and has(line("escort subs: CHARLENE under 75%"), "70%"), "under 75%: her hurt_75 exchange")
+    HPo.HealthInternal = full
+    SUB.clear("test")
+    run(C.text.say.defended_gap_s + 1)
+    local function foe(name, by)
+        local o = plane("ERA_Unit_09_Dep_Air0", HPo.X + 100000, HPo.Y, HPo.Z, 0, 700)
+        local p = { obj = o, unit = "ERA_Unit_09_Dep_Air0", name = name, addr = o.addr, at = { X = HPo.X + 100000, Y = HPo.Y, Z = HPo.Z },
+                    dmg = { [by] = 50 } }
+        planes[#planes + 1] = p
+        return p
+    end
+    local f1 = foe("BP_Def1", "allies")
+    run(0.5)
+    f1.down = true
+    from = #logs + 1
+    run(0.5)
+    check(saidFrom(C.text.say.defended_ally, from) == 1 and has(line("escort subs: BP_Def1 shot down near CHARLENE"), "by allies"),
+          "an enemy 1 km from her shot down by her escorts: their line (or hers for them)")
+    SUB.clear("test")
+    run(C.text.say.defended_gap_s + 1)
+    local f2 = foe("BP_Def2", "you")
+    run(0.5)
+    f2.down = true
+    from = #logs + 1
+    run(0.5)
+    check(saidFrom(C.text.say.defended_you, from) == 1, "... by you: her thanks to the pilot")
+    local f3 = foe("BP_Def3", "you")
+    run(0.5)
+    f3.down = true
+    from = #logs + 1
+    run(0.5)
+    check(saidFrom(C.text.say.defended_you, from) == 0, "... not again within defended_gap_s")
+    SUB.clear("test")
+end
 do                                                  -- (a wave's flights together, km out from her, facing her)
     local w = ws[#ws]
     local f1, f2 = w.flights[1].pose, w.flights[#w.flights].pose
@@ -392,15 +555,17 @@ do                                                  -- (at the zone's corner, he
     pose(HP, st.x, st.y, 300000, 55, 600)
     ESC.S.reinf.at = 0
     run(0.25)
-    local w = wavesOf()[#wavesOf()]
+    local all = wavesOf()
+    local w, prev = all[#all], all[#all - 1]            -- (2026-11-07: against the wave just before it, not an older one)
     local mid = w.flights[math.floor((#w.flights + 1) / 2)].pose
     local m = ZONE.HALF - 300000
-    check(math.abs(mid.x - ZONE.X) < m - 1 and math.abs(mid.y - ZONE.Y) < m - 1 and w.sec ~= ws[#ws].sec,
+    check(math.abs(mid.x - ZONE.X) < m - 1 and math.abs(mid.y - ZONE.Y) < m - 1 and w.sec ~= prev.sec,
           "at her start (the combat zone's corner) a wave from a direction inside the zone")
 end
 
 ---------------------------------------------------------------------------------------------------- her landing
 print("her landing")
+local fromLand = #logs + 1
 local H = P.SV_Unit_Charlene
 pose(H, before(g.iaf, 55, 1500, g.iaf[3], 450))
 run(0.5)
@@ -413,6 +578,8 @@ check(evFired("RE_SV_EscYorkeOrbit") and evFired("RE_SV_EscRockOrbit") and evFir
       "the escorts hold over her as she's on final (their Orbit records: area on her, no path)")
 check(not evFired("RE_SV_AirfieldClose") and not S.closed and callout(C.text.final),
       "her final called out; the players' landing still open with her 16 km out (close_km)")
+check(saidFrom(C.text.say.final, fromLand) >= 3 and subsSince(fromLand)[1].who == "COMONA TOWER",
+      "her final on the strip: COMONA TOWER clears her to land, her reply, her escorts told to hold")
 check(ESC.runwayBusy() == true and ALLY.escortHold("MOONCHILD") == true and has(line("allies: MOONCHILD's take-off held"), "THE ESCORT is landing"),
       "the allies' take-offs held while she lands (the runway busy)")
 local Y = P.SV_Unit_EscYorke
@@ -451,6 +618,9 @@ run(0.5)
 check(evFired("RE_SV_CharTaxi") and S.ac[1].st == "landed" and S.ac[1].how == "taxi" and S.ac[1].slotN == 1 and callout(C.text.landed)
       and has(line("escort: CHARLENE landed"), "on the ground, taxiing to its slot") and not evFired("RE_SV_CharStop"),
       "her taxi near the rollout's end: landed as she taxis to the first slot (A), called out; her stop the build's path end's")
+check(saidFrom(C.text.say.touchdown, fromLand) == 1 and saidFrom(C.text.say.her_landed, fromLand) >= 2,
+      "her touchdown line, then her landing exchange")
+check(RUN.escort.arrived == 9, "she's at Comona: RUN.escort.arrived (the Anomalies may come now)")
 local herLanded = S.t
 do                                                  -- (on the ground: no more waves, even with one due)
     local n0 = #wavesOf()
@@ -489,10 +659,16 @@ run(0.5)
 check(evFired("RE_SV_EscYorkeRoll") and evFired("RE_SV_EscYorkeTaxi") and not evFired("RE_SV_EscYorkeStop") and S.ac[2].st == "landed"
       and S.ac[2].how == "taxi" and S.ac[2].slotN == 2 and evFired("RE_SV_EscYorkeFinalShort"),
       "YORKE: its final slower once it's low near the runway, rollout, landed as it taxis to the second slot (B)")
+check(saidFrom(C.text.say.crew.YORKE.landed, fromLand) == 1, "YORKE's own landing line")
+local fromRock = #logs + 1
 P.SV_Unit_EscRock.HealthInternal = 0
 alive.SV_Unit_EscRock = 0
 run(0.5)
 check(S.ac[3].st == "lost" and callout("ROCK IS DOWN"), "ROCK shot down: out, called out")
+check(saidFrom(C.text.say.crew.ROCK.down, fromRock) == 1 and saidFrom(C.text.say.crew.ROCK.mourn, fromRock) == 1
+      and saidFrom(C.text.say.escort_down, fromRock, { name = "Rock" }) == 0,
+      "ROCK's own last words, then his lead YORKE's answer (crew.ROCK.mourn, in place of escort_down)")
+check(RUN.escort.down and RUN.escort.down.ROCK == true, "... ROCK marked down for the run (THE FESTIVAL's KMG lines leave him out)")
 local relAt = #logs
 local A = P.SV_Unit_EscAli
 pose(A, before(CS, 250, 2500, CS[3], 500))
@@ -515,6 +691,12 @@ check(not evFired("RE_SV_EscDanielleFinalSlow"), "no slow-down on its downwind (
 pose(Dn, before(g.touchdown, 67, 50, 750 + 500, 250)); run(0.5)
 pose(Dn, before(g.roll_end, 67, 50, 750, 50)); run(0.5)
 check(S.ac[5].st == "landed" and S.ac[5].how == "taxi" and S.ac[5].slotN == 3, "DANIELLE landed as it taxis to the third slot (C)")
+check(saidFrom(C.text.say.crew.DANIELLE.landed, fromLand) == 1, "DANIELLE's own landing line")
+do                                                  -- (nobody quotes ROCK once he's down)
+    local rock = 0
+    for _, s in ipairs(subsSince(fromRock)) do if s.who == "ROCK" then rock = rock + 1 end end
+    check(rock == 1, "ROCK, shot down, says nothing past his last words (" .. rock .. " of his lines)")
+end
 pose(A, before(g.iaf, 247, 5000, 90000, 500))      -- (ALI never comes down: circling the fix)
 local credits0 = RUN.credits
 check(S.state ~= "done" and k.busy(D.special) == true, "the round held while ALI's still up")
@@ -533,13 +715,23 @@ check(RUN.credits - credits0 == pay and lbs[#lbs].k == "escort" and lbs[#lbs].wo
       string.format("+%d zollars, the leaderboard's special won", pay))
 check(ESC.unlocked() and RUN.zfa.round == 9, "the ZFA-44 carriers unlocked for the run")
 do
-    local parts = {}
+    -- ((2026-11-07) the user: "the Lines about unlocking the ZFA-44 and Charlene Thanking the players also should be
+    -- subtitles too") her thanks on the strip, the user's exact text whole, cut after its commas; no callout of it
+    local cParts, sParts, at = {}, {}, nil
     for _, c in ipairs(callouts) do
         local t, sub = c:match("^(.-) / (.*)$")
-        if t == C.name then parts[#parts + 1] = sub end
+        if t == C.name then cParts[#cParts + 1] = sub end
     end
-    check(table.concat(parts, " ") == C.subtitle and #parts >= 2,
-          string.format("her subtitle whole, the user's exact text, in %d callouts", #parts))
+    for i, s in ipairs(subsSince(1)) do
+        if s.who == "CHARLENE" and C.subtitle:find(s.text, 1, true) and #s.text >= 30 then sParts[#sParts + 1] = s.text; at = at or i end
+    end
+    check(table.concat(sParts, " ") == C.subtitle and #sParts >= 2 and #cParts == 0,
+          string.format("her thanks whole on the subtitle strip, the user's exact text, in %d lines (%s); no callout of it",
+              #sParts, table.concat(sParts, " / ")))
+    local okLen = true
+    for _, p in ipairs(sParts) do if #p > C.thanks_chars then okLen = false end end
+    check(okLen and sParts[1] and sParts[1]:sub(-1) == ",", "each line at most thanks_chars, cut after a comma")
+    check(saidFrom(C.text.say.won, 1) >= 2, "then Comona's line on the ZFA-44s (VAMPIRES in the STORE), and an escort's")
 end
 check(callout(C.text.won) and evFired("RE_SV_AirfieldOpen") and not S.closed, "ESCORT COMPLETE called out, landing open again")
 check(has(k.row(D.special, CFG.hud.text), "LANDED 4/5"), "its NEXT row: " .. tostring(k.row(D.special, CFG.hud.text)))
@@ -569,12 +761,111 @@ run(6)
 check(ESC.holds(E1), "an enemy after her")
 P2.SV_Unit_Charlene.HealthInternal = 0
 alive.SV_Unit_Charlene = 0
+local fromLost = #logs + 1
 run(0.5)
 local S2 = ESC.S
 check(S2.state == "done" and S2.lost and not ESC.unlocked() and RUN.credits == cr0 and lbs[#lbs].won == false
       and callout(C.text.lost) and not ESC.holds(E1) and k.busy(D.special) == false,
       "her death: the special failed (no pay, no unlock), the attackers let go, the round may end")
+check(saidFrom(C.text.say.lost, fromLost) >= 2 and RUN.escort.lost == 9 and not RUN.escort.arrived,
+      "her loss on the strip (her last words, then Comona or YORKE); RUN.escort.lost")
 k.over(now, D.special)
+
+---------------------------------------------------------------------------------------------------- the Anomalies wait
+-- ((2026-11-07) the user: "Anomaly Rounds shouldn't start until Charlene arrives at the airbase btw, That Includes,
+-- Valka, Mindripper, Abelcain"; "the round before an Anomaly Round appears, a Subtitle from Charlene ... (she will not be
+-- able to warn players about VALKA though)")
+print("the Anomalies wait for her")
+do
+    local G = CFG.specials.anomaly_gate
+    RUN.escort = nil
+    check(ESC.anomalyOk("anomaly") == false and ESC.anomalyOk("glitch") == false and ESC.anomalyOk("valka") == false
+          and has(line("specials: the anomaly waits for CHARLENE to land at Comona"), "hasn't come yet"),
+          "before THE ESCORT: MINDRIPPER, AB.L..IN and VALKA wait (logged)")
+    check(ESC.anomalyOk("shuttle") == true and ESC.anomalyOk("ladon") == true and ESC.anomalyOk("escort") == true,
+          "the other specials don't")
+    RUN.escort = { flown = 9 }
+    check(ESC.anomalyOk("anomaly") == false, "THE ESCORT on, she's not down yet: still waiting")
+    RUN.escort.arrived = 9
+    check(ESC.anomalyOk("anomaly") == true and ESC.anomalyOk("valka") == true, "she's landed at Comona: they may come")
+    RUN.escort = { flown = 9, lost = 9 }
+    check(ESC.anomalyOk("glitch") == true, "she was shot down (after_lost): they come anyway")
+    G.after_lost = false
+    check(ESC.anomalyOk("glitch") == false, "after_lost false: not in that run")
+    G.after_lost = true
+    RUN.escort = nil
+    CFG.specials.escort.enabled = false
+    check(ESC.anomalyOk("anomaly") == true, "THE ESCORT switched off: no wait")
+    CFG.specials.escort.enabled = true
+    ESC.rowsOk = false
+    check(ESC.anomalyOk("anomaly") == true, "its rows not in (no ESCORT round this session): no wait")
+    ESC.rowsOk = true
+    local rot = CFG.specials.rotation
+    CFG.specials.rotation = { "shuttle", "anomaly" }
+    check(ESC.anomalyOk("anomaly") == true, "THE ESCORT out of the rotation: no wait")
+    CFG.specials.rotation = rot
+    G.enabled = false
+    check(ESC.anomalyOk("anomaly") == true, "the gate off: no wait")
+    G.enabled = true
+    CFG.specials.shuttle.wait_for_charlene = true
+    check(ESC.anomalyOk("shuttle") == false, "a special whose own settings say wait_for_charlene waits too")
+    CFG.specials.shuttle.wait_for_charlene = nil
+    -- specialReady (sv_spawn.lua) asks it: the dice never draw a waiting Anomaly
+    local src = readAll(MOD .. "/Scripts/sv_spawn.lua")
+    check(src:find("ESC.anomalyOk(k) == false", 1, true) ~= nil, "sv_spawn.lua's specialReady asks ESC.anomalyOk")
+    -- her warning at the round's end, for the next round's Anomaly
+    local rawFor = specialFor
+    local nextKind = "anomaly"
+    specialFor = function() return nextKind end
+    RUN.escort = { flown = 9, arrived = 9 }
+    SUB.clear("test")
+    local from = #logs + 1
+    check(ESUB.warnNext(12, now) == true and saidFrom(C.text.say.warn_anomaly, from) >= 2
+          and has(line("escort subs: round 12 will be the anomaly"), "said"),
+          "round 12 will be MINDRIPPER's: her warning at round 11's end")
+    nextKind = "glitch"
+    from = #logs + 1
+    check(ESUB.warnNext(12, now) == true and saidFrom(C.text.say.warn_glitch, from) >= 2, "... AB.L..IN's: hers")
+    nextKind = "valka"
+    from = #logs + 1
+    check(ESUB.warnNext(12, now) == false and #subsSince(from) == 0, "... VALKA's: none (she can't see VALKA coming)")
+    nextKind = "shuttle"
+    check(ESUB.warnNext(12, now) == false, "... a shuttle round: none")
+    nextKind = "anomaly"
+    RUN.escort = { flown = 9, lost = 9 }
+    check(ESUB.warnNext(12, now) == false, "she was shot down: no warning")
+    RUN.escort = { flown = 9, arrived = 9 }
+    D.forceSpecial = "anomaly"
+    check(ESUB.warnNext(12, now) == false, "a test key's forced round: not drawn, not warned")
+    D.forceSpecial = nil
+    specialFor = rawFor
+    -- (the round's end calls it: sv_rounds.lua, after "round n clear")
+    local rs = readAll(MOD .. "/Scripts/sv_rounds.lua")
+    check(rs:find("pcall(ESUB.warnNext, D.round + 1, now)", 1, true) ~= nil, "sv_rounds.lua's round end asks ESUB.warnNext")
+    RUN.escort = nil
+end
+do                                                  -- (every line theirs: at most 70 characters, two lines on the strip)
+    local longest, most, n, bad = 0, 0, 0, {}
+    local WRAP, EMU = CFG.hud.subs.w - 80, CFG.hud.subs.em_units
+    local function each(l)
+        for _, x in ipairs(flatL(l)) do
+            local who, text = ESUB.line(x, { dir = "south-west", name = "Danielle" })
+            n = n + 1
+            longest = math.max(longest, #text)
+            if #text > 70 then bad[#bad + 1] = text end
+            if SUB.lineCount then most = math.max(most, SUB.lineCount(text, WRAP, EMU)) end
+            if not (CFG.hud.subs.colors[who]) then bad[#bad + 1] = "no colour for " .. who end
+        end
+    end
+    for k2, v in pairs(C.text.say) do
+        if type(v) == "table" and k2 ~= "staff" and k2 ~= "hurt_at" and k2 ~= "crew" then each(v) end
+    end
+    for _, c in pairs(C.text.say.crew) do each(c.down); each(c.landed); each(c.mourn) end
+    for k2, v in pairs(CFG.specials.valka.text.say) do if k2 ~= "hurt_at" then each(v) end end   -- (VALKA's round's too)
+    check(#bad == 0 and most <= 2 and n > 80,
+          string.format("%d lines of theirs: the longest %d characters, at most %d strip lines, each speaker its colour (%s)",
+              n, longest, most, table.concat(bad, "; ")))
+end
 
 ---------------------------------------------------------------------------------------------------- the STORE
 print("the STORE")

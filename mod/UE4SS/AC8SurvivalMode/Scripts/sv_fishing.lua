@@ -210,33 +210,49 @@ local function nameOfSlot(slot)
     return "PILOT " .. tostring((slot or 0) + 1)
 end
 
--- a line "S|text" / "C|text": its speaker and its text with {kg}, {fish}, {grade}, {pay} filled in
+-- a line "S|text" / "C|text" / "T|text" / "G|text": its speaker (SAL, COMONA CONTROL, COMONA TOWER, the CREW CHIEF:
+-- 2026-11-07, "Give SAL and the Comona Airbase Staff some more unique lines") and its text with {kg}, {fish}, {grade},
+-- {pay} filled in
 function FISH.line(line, vals)
     local t = tx()
-    local code, text = tostring(line or ""):match("^(%a)|(.*)$")
+    local code, text = tostring(line or ""):match("^([%w _']+)|(.*)$")
     if not code then code, text = "S", tostring(line or "") end
-    local who = (code == "C" and (t.control or "COMONA CONTROL")) or (t.sal or "SAL")
+    -- ((2026-11-07) THE FESTIVAL's town: a longer code is a speaker's own, its name CFG.hud.subs.speakers[code] or itself)
+    local who = (#code > 1 and ((((CFG.hud or {}).subs or {}).speakers or {})[code] or code))
+        or (code == "C" and (t.control or "COMONA CONTROL")) or (code == "T" and (t.tower or "COMONA TOWER"))
+        or (code == "G" and (t.crew or "CREW CHIEF")) or (t.sal or "SAL")
     text = text:gsub("{(%w+)}", function(k) local v = vals and vals[k]; if v == nil then return "{" .. k .. "}" end return tostring(v) end)
     return who, text
 end
--- one of text[key]'s lines (a list or a string) said, never the one said last for that key; here: this game only
+-- one entry of a list (a string: itself), at random, never the one picked last under `key`
 local lastPick = {}
-function FISH.say(key, vals, here, secs)
-    local l = tx()[key]
-    if type(l) == "string" then l = { l } end
-    if type(l) ~= "table" or #l == 0 then return false end
+function FISH.pick(l, key)
+    if type(l) ~= "table" then return l end
+    if #l == 0 then return nil end
     local i = math.random(#l)
     if #l > 1 and lastPick[key] == i then i = i % #l + 1 end
     lastPick[key] = i
-    local who, text = FISH.line(l[i], vals)
+    return l[i]
+end
+-- the lines said whole: a list of lines as is, or one of a list of such lists (FISH.pick); a string: itself alone
+function FISH.seq(l, key)
+    if type(l) == "string" then return { l } end
+    if type(l) ~= "table" then return {} end
+    if type(l[1]) == "table" then return FISH.pick(l, key) or {} end
+    return l
+end
+-- one of text[key]'s lines (a list or a string) said, never the one said last for that key; here: this game only
+function FISH.say(key, vals, here, secs)
+    local x = FISH.pick(tx()[key], "fish." .. tostring(key))
+    if type(x) == "table" then x = x[1] end
+    if type(x) ~= "string" then return false end
+    local who, text = FISH.line(x, vals)
     if here then return SUB.sayHere(who, text, secs) end
     return SUB.say(who, text, secs)
 end
--- every line of text[key], in order
+-- every line of text[key] (one exchange of them: FISH.seq), in order
 function FISH.sayAll(key, vals, here)
-    local l = tx()[key]
-    if type(l) == "string" then l = { l } end
-    for _, x in ipairs(type(l) == "table" and l or {}) do
+    for _, x in ipairs(FISH.seq(tx()[key], "fish." .. tostring(key))) do
         local who, text = FISH.line(x, vals)
         if here then SUB.sayHere(who, text) else SUB.say(who, text) end
     end
@@ -670,8 +686,8 @@ function FISH.roundTick(now, s)
             for i, w in ipairs(c.warn_s or {}) do
                 if left <= n(w, 0) and not s.warned[i] and left > 0 then
                     s.warned[i] = true
-                    local wl = (tx().warn or {})[i]
-                    if wl then local who, line = FISH.line(wl); SUB.say(who, line) end
+                    local wl = FISH.pick((tx().warn or {})[i], "fish.warn" .. i)   -- (a line, or one of a list)
+                    if type(wl) == "string" then local who, line = FISH.line(wl); SUB.say(who, line) end
                     log(string.format("fishing: %d s left (%d shoals up)", math.floor(n(w, 0)), up))
                 end
             end

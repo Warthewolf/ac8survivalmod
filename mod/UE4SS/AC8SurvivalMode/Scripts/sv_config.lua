@@ -1046,8 +1046,16 @@ CFG = {
                          -- ((2026-11-07) settle_s: a plane dressed only that long after it's seen; per_tick: at most that many
                          -- a tick (was 2); preload: its mesh and textures loaded and kept from the carriers' unlock, one a
                          -- tick (three joiners dropped as a carrier came on station, one mid-dress))
+                         -- ((2026-11-07) laser: their planes carry AC8's anti-missile laser (the Nightmare UAV's
+                         -- BP_SwingTLS_ForMSL) in fire-control slot 3 (Scripts/sv_escort_laser.lua, tools/re/
+                         -- LASER_INTERCEPTOR.md "Built"): at the main menu, with laser_fcs_row from laser_fcs_table in the
+                         -- game's DT_NPC_FCS, dt_npc's DT_NPC row is made from laser_row's; laser_flag counts its kills.
+                         -- The names are the build's (tools/survival_events_escort.py ZFA_TLS_*); a change takes a restart)
                          zfa = { name = "ZFA-44", name_key = "SV_Zfa44", dress = true, paint = 3, hide_s = 3, settle_s = 1.5,
-                                 per_tick = 1, preload = true },
+                                 per_tick = 1, preload = true,
+                                 laser = true, laser_row = "SV_Zfa_AllyTLS", laser_fcs_row = "SV_FCS_ZfaTLS",
+                                 laser_fcs_table = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcFCS.DT_SV_NpcFCS",
+                                 laser_flag = "SV_ZfaTLSHits", laser_arms_log = 40 },
                          text = { on_station = "%s ON STATION", on_station_sub = "ITS ZFA-44S LAUNCH IN %d S",
                                   launch = "ZFA-44S LAUNCHED", launch_sub = "FROM %s",
                                   leaving = "%s LEAVING", leaving_sub = "%d ROUNDS SERVED: THE STORE CAN CALL ANOTHER",

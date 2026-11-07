@@ -9,6 +9,16 @@ cd "$(dirname "$0")/.."
 name=${1:-dev}
 st=build/release/stage_dev_$name
 mod=$st/ue4ss/Mods/AC8SurvivalMode
+# ((2026-11-07) the dev installs had no leaderboard address either, and the user hosts ranked co-op runs, which only the
+# host sends) the same check as package_release.sh's Online one; LB_OPTIONAL=1 stages it without
+if [ "$LB_OPTIONAL" != 1 ]; then
+    [ -f build/runtime/submit_cfg.h ] && cmp -s build/runtime/main.dll build/install/AC8SurvivalMode/dlls/main.dll || {
+        echo "package_dev.sh: the runtime has no leaderboard address (build/runtime/submit_cfg.h missing, or the staged main.dll"
+        echo "  isn't build/runtime's): your hosted runs could never be sent. Run tools/build_all.sh where runtime/build.sh finds"
+        echo "  leaderboard/submit.local (this checkout's, the main tree's, or .env's SV_LB_LOCAL); LB_OPTIONAL=1 to stage anyway."
+        exit 1
+    }
+fi
 rm -rf "$st"
 mkdir -p "$st/ue4ss/Mods/IoStoreLoaderMod"
 cp -r build/install/AC8SurvivalMode "$st/ue4ss/Mods/"

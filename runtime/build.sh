@@ -24,17 +24,28 @@ done
 # Without the file the runtime is built without them (SV_Post answers "no server").
 CFG="$OUT/submit_cfg.h"
 rm -f "$CFG"
+# ((2026-11-07) every 0.74.x runtime was built in a git worktree with no leaderboard/submit.local of its own, so not one
+#  of them could send a run: players' ranked runs sat in pending_runs.txt) the file: .env's SV_LB_LOCAL, else this
+#  checkout's leaderboard/submit.local, else the main working tree's (the first `git worktree list` entry). The package
+#  scripts refuse an Online build without it (build/runtime/submit_cfg.h).
+LBF=
+if [ -n "$SV_LB_LOCAL" ] && [ -f "$SV_LB_LOCAL" ]; then LBF=$SV_LB_LOCAL
+elif [ -f ../leaderboard/submit.local ]; then LBF=../leaderboard/submit.local
+else
+    MAIN=$(git worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')
+    [ -n "$MAIN" ] && [ -f "$MAIN/leaderboard/submit.local" ] && LBF="$MAIN/leaderboard/submit.local"
+fi
 if [ "$OFFLINE" = 1 ]; then
     echo "leaderboard: Offline edition, no leaderboard code"
-elif [ -f ../leaderboard/submit.local ]; then
-    URL=$(sed -n 's/^URL=//p' ../leaderboard/submit.local | tr -d '\r')
-    KEY=$(sed -n 's/^KEY=//p' ../leaderboard/submit.local | tr -d '\r')
+elif [ -n "$LBF" ]; then
+    URL=$(sed -n 's/^URL=//p' "$LBF" | tr -d '\r')
+    KEY=$(sed -n 's/^KEY=//p' "$LBF" | tr -d '\r')
     HOST=$(echo "$URL" | sed -e 's#^https://##' -e 's#/.*##')
     PATHPART=/$(echo "$URL" | sed -e 's#^https://[^/]*/\{0,1\}##')
     printf '#define SV_SUBMIT_HOST L"%s"\n#define SV_SUBMIT_PATH L"%s"\n#define SV_SUBMIT_KEY "%s"\n' "$HOST" "$PATHPART" "$KEY" > "$CFG"
     echo "leaderboard: runs go to $HOST$PATHPART"
 else
-    echo "leaderboard: no leaderboard/submit.local; the runtime can't submit runs"
+    echo "leaderboard: no leaderboard/submit.local (here, the main tree's or .env's SV_LB_LOCAL); the runtime can't submit runs"
 fi
 
 clang --target=x86_64-pc-windows-msvc -O2 -ffreestanding -fno-builtin -nostdlibinc \

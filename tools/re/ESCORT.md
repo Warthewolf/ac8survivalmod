@@ -420,3 +420,39 @@ escort_test (each below), copy_floor_test (the co-op side), leaderboard_test's r
   dropped before the score): redeploy it.
 - Open: the joiners' own ZFA-44s still fight the enemy copies there (for the look; nothing of it counts), and a forwarded
   destroy record that takes a copy before the host's "dn" arrives can still be paid there by the raw rule (not new).
+
+## Who they are, what they say, and the Anomalies' wait (2026-11-07, Lua 0.74.6; nothing run in game)
+The user: CHARLENE "is a Wealthy CEO who owns one of the worlds largest plane collections, she is from the KOKODA
+MERCENARY GROUP, based out of Aurelia"; YORKE, ROCK, ALI and DANIELLE are KMG too, "they should each have a squadron tag
+KMG". Their boxes read `[KMG] CHARLENE`, `[KMG] YORKE`, ... (CFG.specials.escort.tag / tag_format, set with SV_SetText
+at the main menu).
+
+Subtitles (Scripts/sv_escort_subs.lua, lines in CFG.specials.escort.text.say; the user: "Charlene, Yorke, Rock, Ali,
+Danielle all should have their own unique Subtitles", "Give Charlene Unique Lines for Landing, Being Attacked, Being
+Defended"). Speakers: the five by name, Comona's staff `C|` COMONA CONTROL, `T|` COMONA TOWER, `G|` CREW CHIEF (each its
+colour, CFG.hud.subs.colors). ESUB.tick (each escort tick, from ESC.step) says what changed:
+- her spawn: one of three check-ins (CONTROL, CHARLENE twice, each escort once);
+- the first enemies sent at her (first_attack, once the check-in is through), each wave sent at her (`wave`, {dir}: the
+  compass point it comes from, S.reinf.dir), her health down hit_drop points in hit_window_s (`hit`), under 75 / 50 / 25%
+  (`hurt_<n>`);
+- an enemy within defended_km of her shot down (KILL.by): her escorts' / an ally's (`defended_ally`), a player's
+  (`defended_you`), Comona's guns (`defended_staff`), once in defended_gap_s;
+- her final (TOWER clears her), touchdown, landing; each escort's own landing line (not a timeout's) and its own last
+  words when shot down, then the reply naming it; nobody speaks for one who's down;
+- the win: her thanks (the user's exact `subtitle`) on the strip, cut after its commas into lines of at most
+  thanks_chars, then Comona's line on the ZFA-44s (VAMPIRES in the STORE); no callout of her thanks any more (the strip
+  off: callouts as before). The ESCORT COMPLETE banner with the pay stays a callout, as every special's;
+- her loss: her last words, then CONTROL or YORKE.
+Pool lines (waves, hits, defended, first_attack) are said only while the strip has room (busy_s); exchanges always.
+A co-op host's lines go to the joiners as every SUB.say does ("sb").
+
+The Anomalies wait for her (CFG.specials.anomaly_gate; the user: "Anomaly Rounds shouldn't start until Charlene arrives
+at the airbase btw, That Includes, Valka, Mindripper, Abelcain" and the lightning Anomaly): specialReady (sv_spawn.lua)
+asks ESC.anomalyOk, false for MINDRIPPER, AB.L..IN and VALKA (and a special whose settings say wait_for_charlene) until
+RUN.escort.arrived (her landed()). No wait when THE ESCORT can't come (off, out of the rotation, its rows or units not
+in); after_lost (default true): once she's shot down they come anyway. A test key's forced round never waits.
+Her warning (the user: "the round before an Anomaly Round appears, a Subtitle from Charlene ... (she will not be able to
+warn players about VALKA though)"): at each round's end (sv_rounds.lua, after "round n clear") ESUB.warnNext draws the
+next round's special then (specialFor keeps its pick for that round: the break's announcement and startRound read the
+same), and for MINDRIPPER or AB.L..IN (warn_kinds; the lightning Anomaly's own charlene_warn) she warns, only once she's
+at Comona. Log lines: `escort subs: ...`, `specials: the <kind> waits for CHARLENE to land at Comona (...)`.

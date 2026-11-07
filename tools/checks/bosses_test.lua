@@ -52,7 +52,7 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
 local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
@@ -1699,6 +1699,9 @@ local function valkaNoWalks()                              -- (a function of its
     you, events, callouts = KM(0, 0), {}, {}
     walks, finds, loads = {}, {}, {}
     local function tickV(t) D.now = t; SPC.valkaTick(t, s) end
+    -- ((2026-11-07) her round's subtitles, SPC.V.subs: which ones, when (ESUB.say's own lines: escort_test))
+    local rawESUB, subsSaid, keepEsc = ESUB, {}, RUN.escort
+    ESUB, RUN.escort = { say = function(_, key) subsSaid[key] = (subsSaid[key] or 0) + 1; return true end }, nil
     f = #logs + 1
     check(SPC.valkaSpawn(100) == true and s.state == "lurk" and #loads == 0, "her round starts (lurk), nothing to load")
     tickV(100); tickV(104)
@@ -1765,8 +1768,21 @@ local function valkaNoWalks()                              -- (a function of its
     check(count("^RE_SV_ValkaRailgun$") == 1 and herL[1].FireControl.TriggerCount == 1,
           "her railgun: charged and fired, single-shot again right before it")
     check(emlL.IsDispRadarMap == false and herL[1].IsDispRadarMap == true, "her opener removed: its launcher off the minimap, hers on")
+    check(subsSaid["valka.reveal"] == 1 and subsSaid["valka.reveal_charlene"] == nil and subsSaid["valka.audrey_60"] == nil,
+          "her reveal's subtitles: COMONA CONTROL's (CHARLENE's only once she's at Comona), no AUDREY at full health")
+    do
+        local o = glitchActor(VA)
+        RUN.escort = { arrived = 9 }
+        o.HealthInternal = math.floor(o.MaxHealth * 10 * 0.55); tickV(130.25)
+        o.HealthInternal = math.floor(o.MaxHealth * 10 * 0.50); tickV(130.5)
+        check(subsSaid["valka.audrey_60"] == 1 and subsSaid["valka.audrey_30"] == nil, "under 60%: AUDREY breaks in, once")
+        o.HealthInternal = math.floor(o.MaxHealth * 10 * 0.20); tickV(130.75)
+        check(subsSaid["valka.audrey_30"] == 1, "under 30%: AUDREY again")
+    end
     alive[VA.unit] = 0
     tickV(131)
+    check(subsSaid["valka.down"] == 1 and subsSaid["valka.down_charlene"] == 1, "her death: AUDREY takes her home (CHARLENE's too, at Comona)")
+    ESUB, RUN.escort = rawESUB, keepEsc
     check(s.state == "done" and herL[2].IsDispRadarMap == false, "her death: her railguns off the minimap")
     check(cdo.LifeTime == 10.0 and cdo.damage == 40 and cdo.BurstShotCount == 0 and SPC.V.RC.mode == nil,
           "... her round's class default put back as it was")

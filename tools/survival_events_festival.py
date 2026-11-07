@@ -157,6 +157,50 @@ FEST_LIGHTS = [  # (unit, object, km along the runway from its centre (+ ENE), k
 ]
 
 
+# (2026-11-07, the user: "Add some Allied Target Boxes in the town next to the airfield. "Valka" "Audrey" (these two allies
+# should be next to each other as they are Girlfriends). Add other allied target box's like "Concert" "Market Stall"
+# "Food Truck" and other things a Festival Might have"; "The units that the festival spawn can just be invincible dummies
+# again") the festival in the town: one unit of Mission 22's invisible dummy (Unit_dummyN0 on dummy_common, as THE
+# DECOY's marks) made allied, invincible and out of every attack, an object per box, each with its own callsign key
+# (GameObjectDisplayNameID02, shown for an ally with bShowCallSignForAlly; the text set by Lua with SV_SetText:
+# CFG.specials.festival.town), round FEST_TOWN_CENTRE, the town's densest houses just past the runway's WSW end
+# (build/research's airport buildings, 2.2 km along it and 0.3 km south of its centre line on LCAC_RUNWAY's frame)
+FEST_TOWN_UNIT, FEST_TOWN_OBJ = 'SV_Unit_FestTown', 'SV_Obj_FestTown'
+FEST_TOWN_CENTRE = (-2.15, +0.30)             # km along / across the runway from its centre (LCAC_RUNWAY's frame)
+FEST_TOWN_Z_CM = 800.0                         # 8 m up (the town's ground 3-5 m: its houses' footings), bIsLanding cleared
+FEST_TOWN_BOXES = [  # (callsign key, metres along / across the runway from FEST_TOWN_CENTRE): the texts are Lua's
+    ('SV_FestBox_Concert', 0.0, 0.0),
+    ('SV_FestBox_Valka', -6.0, 45.0),          # VALKA and AUDREY side by side, 12 m apart, in front of the stage
+    ('SV_FestBox_Audrey', 6.0, 45.0),
+    ('SV_FestBox_Dance', 0.0, 95.0),
+    ('SV_FestBox_Market', 70.0, -30.0),
+    ('SV_FestBox_Market', 92.0, -30.0),
+    ('SV_FestBox_Market', 114.0, -30.0),
+    ('SV_FestBox_FoodTruck', -80.0, -40.0),
+    ('SV_FestBox_FoodTruck', -105.0, -40.0),
+    ('SV_FestBox_FishGrill', 60.0, 75.0),
+    ('SV_FestBox_Dessert', -70.0, 65.0),
+    ('SV_FestBox_Lanterns', 145.0, 20.0),
+    ('SV_FestBox_RingToss', 40.0, -105.0),
+    ('SV_FestBox_Soup', -145.0, 10.0),
+    ('SV_FestBox_Fireworks', -40.0, -155.0),
+]
+FEST_TOWN_KEYS = sorted({k for k, _, _ in FEST_TOWN_BOXES})
+
+
+def fest_town():
+    """[(callsign key, (x, y, z) cm)]: FEST_TOWN_BOXES on the runway frame round FEST_TOWN_CENTRE, in order (the unit's
+    objects SV_Obj_FestTown_0 ..)."""
+    import math
+    (rx, ry), ryaw = LCAC_RUNWAY
+    ux, uy = math.cos(math.radians(ryaw)), math.sin(math.radians(ryaw))
+    out = []
+    for key, al_m, ac_m in FEST_TOWN_BOXES:
+        al, ac = FEST_TOWN_CENTRE[0] + al_m / 1000.0, FEST_TOWN_CENTRE[1] + ac_m / 1000.0
+        out.append((key, (round(rx + (al * ux - ac * uy) * 1e5, 1), round(ry + (al * uy + ac * ux) * 1e5, 1), FEST_TOWN_Z_CM)))
+    return out
+
+
 def fest_lights():
     """[(unit, object, (x, y, z) cm, yaw deg)]: FEST_LIGHTS on Mission 22's runway frame (as defence_ciws), along it."""
     import math
