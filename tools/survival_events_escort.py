@@ -266,6 +266,10 @@ ZFA_OPEN_S, ZFA_CLOSE_S = 2.0, 3.0
 # moment) 90 deg apart (each 45 off the bow, 565 m apart 400 m out), each its own orders, ZFA_CLIMB_STAGGER_S apart
 ZFA_CLIMB_KM, ZFA_CLIMB_UP_M, ZFA_CLIMB_FAN_DEG = 3.2, 800.0, 90.0
 ZFA_CLIMB_ORDERS_S, ZFA_CLIMB_STAGGER_S = (8.0, 14.0), 4.0
+# ((2026-11-07) the user: "need to make the Vampires Escort the Nearest Player too them") each VAMPIRES flight's cover
+# record (Lua fires it for the flight whose nearest player is this game's own: sv_escort_laser.lua ZLAUNCH.coverTick):
+# its area moved near that plane (Mission 6's NearPlayer move, as the STORE allies' Cover), ZFA_COVER_RADIUS_M round it
+ZFA_COVER_RADIUS_M = 3000.0
 ZFA_DRONE_SOURCE = 'E_Unit_01_drone_5_0'     # Mission 17's drone unit desc the launch units are copies of
 ZFA_PER_ARM = 2                              # a two-ship a firing (the arm's magazine holds 5)
 ZFA_PARK_Z = -24483.9                        # Mission 17's drones' height until launched (under the sea)
@@ -313,6 +317,11 @@ def zfa_climb_path(s, k):
     # the record names the path by string, which the engine splits ("..._1_0" -> "..._1", 1: hard rule 17), and the desc's
     # name was stored whole, so the game never found it (make_path refuses a number tail now)
     return f'SV_Path_ZfaClimb{s}{chr(65 + k)}'
+
+
+def zfa_cover_event(s, n=None):
+    """RE_SV_ZfaCover_<s>_<n> (ship s's arm n unit) or RE_SV_ZfaCover<L> (pose flight L)."""
+    return f'RE_SV_ZfaCover_{s}_{n}' if n is not None else f'RE_SV_ZfaCover{s}'
 
 
 def zfa_tls_event(s, n=None):
@@ -439,6 +448,8 @@ def build_escort(g, flag, stock_ep):
     t_exit = g.exec_template('LiveAIPathExitExecution', 'Default_CompositeEvent_19', lambda a, e: a[0] != 'NoneSelect')
     t_move = g.exec_template('LiveUnitMoveActor', '01_E_AreaA_ReinforcementAppearance_0')
     t_radius = g.foreign_template(m06, 'LiveChangeUnitRadius', 'PhaseStart_Phase02_2')
+    t_near = g.foreign_template(m06, 'LiveUnitMoveActor', 'CE_ReinforceAppear_Phase01_2')
+    assert arg_values(t_near)[12] == 'NearPlayer', arg_values(t_near)
     t_off = g.exec_template('LiveSetActiveGameObjectExecution', None, lambda a, e: a[0] != 'NoneSelect' and a[3] == 'false')
     t_seng = g.exec_template('LiveAIEngagementOrder', 'UnitDamage_Enemy_Ship_Last1', lambda a, e: a[0].startswith('AC_Obj_01_Ship1'))
     t_launch = g.foreign_template(m17, 'LiveFireOneShotWeapon', 'Default_PreRadioEvent_49', lambda a, e: a[1].endswith('_cntus_03_CP'))
@@ -627,12 +638,20 @@ def build_escort(g, flag, stock_ep):
                 for dl in ZFA_CLIMB_ORDERS_S:                 # (each its own Normal, ZFA_CLIMB_STAGGER_S apart)
                     g.execute(t_eng_air, cl, {0: ob}, delay=dl + k * ZFA_CLIMB_STAGGER_S)
             g.execute(t_search, cl, {1: zunit}, delay=ZFA_CLIMB_ORDERS_S[0])
+            cov = zfa_cover_event(s, n)                       # (its escort of this game's player: Lua picks when)
+            remote(cov)
+            g.execute(t_near, cov, {0: zunit})
+            g.execute(t_radius, cov, {0: zunit, 1: 'NoneSelect', 2: f'{ZFA_COVER_RADIUS_M:.1f}'})
             tls = zfa_tls_event(s, n)                         # (its laser on command: Lua picks the missile)
             remote(tls)
             for ob in zobjs:
                 g.execute(t_launch, tls, {0: f'WN_WEAPON_{ZFA_TLS_SLOT + 1}', 1: ob})
     for L, unit, obj, s in ZFA_FALLBACK:
         objs = [f'{obj}_{k}' for k in range(ZFA_FALLBACK_N)]
+        cov = zfa_cover_event(L)
+        remote(cov)
+        g.execute(t_near, cov, {0: unit})
+        g.execute(t_radius, cov, {0: unit, 1: 'NoneSelect', 2: f'{ZFA_COVER_RADIUS_M:.1f}'})
         tls = zfa_tls_event(L)
         remote(tls)
         for ob in objs:

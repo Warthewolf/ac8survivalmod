@@ -142,6 +142,10 @@ function ZLAS.tick()
         local okW, errW = pcall(ZLAUNCH.tick)
         if not okW then logOnce("zfa launch watch", "carrier: launch watch error " .. tostring(errW)) end
     end
+    if ZLAUNCH and ZLAUNCH.coverTick then                  -- ((0.74.16) the VAMPIRES escort the player nearest them)
+        local okV, errV = pcall(ZLAUNCH.coverTick)
+        if not okV then logOnce("zfa escort", "carrier: escort error " .. tostring(errV)) end
+    end
     if ZLAS.drive then                                     -- ((0.74.12) the laser made sure: below, every game, armed or not)
         local okD, errD = pcall(ZLAS.drive)
         if not okD then logOnce("zfa laser drive", "zfa laser: error " .. tostring(errD)) end
@@ -364,9 +368,20 @@ local function ownLasers(s)
                 local wa = w and addrOf(w)
                 local want = wa and s.want and s.want[wa]      -- ((2026-11-07) fired on command: its missile handed to it)
                 if wa then s.stockSeen = s.stockSeen or {}; s.stockSeen[wa] = os.clock() end
+                if want and (os.clock() - want.at > num(z.laser_stock_wait_s, 0.75) + 0.5 or want.m.zDone) then   -- (stale)
+                    s.want[wa], want = nil, nil
+                end
                 if want and liveAddr(want.m.obj) then
                     handed = pcall(function() o.MissileToIntercept = want.m.obj end)
                     s.want[wa] = nil
+                end
+                -- ((2026-11-07) "they're firing Multiple Beams at once": its flight's record fires every plane's laser, its own
+                -- fire control one now and then: one with nothing handed to it is sorted once the missiles are read, sortLasers)
+                s.tlsOf = s.tlsOf or {}
+                if wa then s.tlsOf[wa] = { o = o, at = os.clock(), idle = not handed } end
+                if not handed and wa then
+                    s.unwanted = s.unwanted or {}
+                    s.unwanted[#s.unwanted + 1] = { o = o, wa = wa, w = w }
                 end
                 pcall(function() local t = o.MissileToIntercept; if t and liveAddr(t) then tgt = t end end)
                 s.ownL = s.ownL or {}
@@ -377,6 +392,84 @@ local function ownLasers(s)
                         num(z.laser_chance, 1.0), num(z.laser_angle, 180), num(z.laser_range_m, 3000),
                         tgt and (", on " .. short(tgt) .. (handed and " (handed to it)" or "")) or ""))
                 end
+            end
+        end
+    end
+end
+-- a laser hidden (no beam at nothing), shown again laser_hide_s on (a pooled one mustn't stay hidden) or when it's handed one
+local function hideLaser(s, o)
+    if not pcall(function() o:SetActorHiddenInGame(true) end) then return false end
+    s.hiddenL = s.hiddenL or {}
+    s.hiddenL[#s.hiddenL + 1] = { o = o, a = addrOf(o), at = os.clock() }
+    s.hiddenN = (s.hiddenN or 0) + 1
+    return true
+end
+local function showLaser(o) pcall(function() o:SetActorHiddenInGame(false) end) end
+local function hiddenTick(s)
+    local keep, life = {}, num(zc().laser_hide_s, 9)
+    for _, h in ipairs(s.hiddenL or {}) do
+        if os.clock() - h.at >= life then
+            if liveAddr(h.o) == h.a then showLaser(h.o) end
+        else keep[#keep + 1] = h end
+    end
+    s.hiddenL = keep
+end
+-- the lasers that came with nothing handed to them (ownLasers' s.unwanted), once the enemy missiles near are read (ms): its
+-- own fire control's on a missile no other laser of theirs is on keeps it; one on a missile another's on, or on none, is
+-- handed the nearest enemy missile within reach of its plane nobody's on (claimed), else hidden (`idle` in s.tlsOf: a shot
+-- of its plane within the second hands it one and shows it). Logged the first few times.
+local function sortLasers(s, ms, clock)
+    local q = s.unwanted or {}
+    if #q == 0 then return end
+    s.unwanted = {}
+    local z = zc()
+    local range = num(z.laser_range_m, 3000) * 100
+    for _, u in ipairs(q) do
+        if liveAddr(u.o) then
+            local tgt = nil
+            pcall(function() local t = u.o.MissileToIntercept; if t and liveAddr(t) then tgt = t end end)
+            local ta = tgt and addrOf(tgt)
+            local taken = ta and s.claims[ta] and s.claims[ta].laser ~= u.o
+            local what
+            if tgt and not taken then
+                what = "kept on its own missile"
+                if not s.claims[ta] then
+                    for _, m in ipairs(ms) do
+                        if addrOf(m.obj) == ta then
+                            m.zClaimed = true
+                            s.claims[ta] = { m = m, name = (m.name or short(tgt)) .. "@" .. tostring(ta), laser = u.o, own = true,
+                                             due = clock + num(z.laser_stock_swing_s, 2.5) }
+                        end
+                    end
+                end
+            else
+                local from = u.w and liveAddr(u.w) and at(u.w)
+                local best, bd = nil, range
+                if from then
+                    for _, m in ipairs(ms) do
+                        local ma = addrOf(m.obj)
+                        if not m.zClaimed and not (ma and s.claims[ma]) and m.zAt then
+                            local d = dist(from, m.zAt)
+                            if d <= bd then best, bd = m, d end
+                        end
+                    end
+                end
+                if best then
+                    local ma = addrOf(best.obj)
+                    pcall(function() u.o.MissileToIntercept = best.obj end)
+                    best.zClaimed = true
+                    s.claims[ma] = { m = best, name = (best.name or short(best.obj)) .. "@" .. tostring(ma), laser = u.o, own = true,
+                                     due = clock + num(z.laser_stock_swing_s, 2.5) }
+                    if s.tlsOf and s.tlsOf[u.wa] then s.tlsOf[u.wa].idle = false end
+                    what = string.format("handed %s %.0f m off", short(best.obj), bd / 100)
+                else
+                    hideLaser(s, u.o)
+                    what = taken and "hidden (another laser's on its missile)" or "hidden (nothing in reach)"
+                end
+            end
+            s.sortN = (s.sortN or 0) + 1
+            if s.sortN <= 8 or s.sortN % 25 == 0 then
+                log(string.format("zfa laser: %s's laser with nothing handed to it: %s (%d so far)", u.w and short(u.w) or "?", what, s.sortN))
             end
         end
     end
@@ -455,6 +548,7 @@ function ZLAS.drive(now)
     local s = st()
     fxTick(false)
     ownLasers(s)
+    hiddenTick(s)
     -- the ZFA-44s alive
     local ps = {}
     for u, l in pairs(ESC.planes or {}) do
@@ -500,6 +594,7 @@ function ZLAS.drive(now)
             table.remove(s.waitStock, i)
         elseif clock - w.at >= num(z.laser_stock_wait_s, 0.75) then
             table.remove(s.waitStock, i)
+            if s.want then s.want[w.p.a] = nil end         -- (its laser never came: no later one handed this)
             if not w.m.zDone and liveAddr(w.p.o) == w.p.a then
                 ZLAS.beamOn(s, w.p, w.m)
                 if not s.noStockSaid then
@@ -533,6 +628,7 @@ function ZLAS.drive(now)
             end
         end
     end
+    sortLasers(s, ms, clock)                             -- ((2026-11-07) a laser that came with nothing to shoot)
     if #ms == 0 then return end
     local shot = num(z.laser_shot_s, 1.0)
     for _, p in ipairs(ps) do
@@ -554,6 +650,16 @@ function ZLAS.drive(now)
                 -- ((2026-11-07) its own laser on command first: it swings, from the plane; the missile handed to it as it comes)
                 local ev = z.laser_stock ~= false and ZLAS.tlsEventOf(p) or nil
                 local fired, how = false, "Survival's beam"
+                local idle = s.tlsOf and s.tlsOf[p.a]
+                if z.laser_stock ~= false and idle and idle.idle and clock - idle.at < 1.5 and liveAddr(idle.o) then
+                    pcall(function() idle.o.MissileToIntercept = best.obj end)   -- (its laser up with nothing: handed this one)
+                    showLaser(idle.o)
+                    idle.idle = false
+                    s.claims[ma].laser = idle.o
+                    s.stockSeen = s.stockSeen or {}
+                    s.stockSeen[p.a] = clock
+                    fired, how, ev = true, "its own laser, up already: handed this one", nil
+                end
                 if ev and type(SV_Event) == "function" then
                     s.evBusy = s.evBusy or {}
                     if clock >= (s.evBusy[ev] or 0) then
@@ -562,7 +668,7 @@ function ZLAS.drive(now)
                         s.evBusy[ev] = clock + shot
                         how = fired and (ev .. " (its own laser)") or (ev .. " NOT fired (" .. tostring(okE and r or "error") .. "): Survival's beam")
                     else
-                        fired, how = true, ev .. " (its flight's laser, fired this second)"
+                        fired, how = true, ev .. " (its flight's laser, fired this second: handed one as it comes)"
                     end
                 end
                 s.want = s.want or {}
@@ -713,6 +819,91 @@ function ZLAUNCH.risen(C, F, now)
     fireClimb(C, F, string.format("%d ZFA-44%s out of its container (%s, %.0f s after its launch record; launch smoke on %d)", out,
         out == 1 and "" or "s", tostring(F.unit), now - (F.at or now), (ZLAUNCH.watch or {}).fx or 0))
     return true
+end
+-- ((2026-11-07) the user: "need to make the Vampires Escort the Nearest Player too them") ZLAUNCH.coverTick (every tick,
+-- ZLAS.tick; the host's or solo): every escort_s each VAMPIRES flight up (a launched arm's planes, seen out of their
+-- container: e.armUnit; a pose flight's) covers the player nearest it, alive and not at the airfield: this game's own by
+-- its `cover` record (its area near that plane, 3 km round it), another player's by its planes onto the enemies nearest
+-- them (COOP.coverFor). Logged when a flight's player changes: `carrier: VAMPIRES <unit> escort <who> (d km)`.
+local function players()
+    if COOP and COOP.players then
+        local ok, l = pcall(COOP.players)
+        if ok and type(l) == "table" and #l > 0 then return l end
+    end
+    local pawn = survivalPC and liveObj(survivalPC) and survivalPC.Pawn
+    if not (pawn and valid(pawn)) then return {} end
+    local ok, v = pcall(function() local l = pawn:K2_GetActorLocation(); return { X = l.X, Y = l.Y, Z = l.Z } end)
+    return ok and v and { { slot = 0, obj = pawn, at = v, isMe = true } } or {}
+end
+function ZLAUNCH.coverTick()
+    local c = cc()
+    if c.escort == false or not D then return end
+    if COOP and COOP.client and COOP.client() then return end
+    local clock = os.clock()
+    ZLAUNCH.coverAt = ZLAUNCH.coverAt or 0
+    if clock < ZLAUNCH.coverAt then return end
+    ZLAUNCH.coverAt = clock + num(c.escort_s, 6)
+    -- the flights up: unit -> { cover record, planes, centre }
+    local fl = {}
+    local riseZ = num(c.rise_m, -50) * 100
+    for u, l in pairs(ESC.planes or {}) do
+        if ESC.kindOf(u) == "zfa" then
+            for _, e in ipairs(l) do
+                local unit, ev = e.armUnit, nil
+                if unit then
+                    for _, arms in ipairs(c.launchers or {}) do
+                        for _, arm in ipairs(arms) do if arm.unit == unit then ev = arm.cover end end
+                    end
+                else
+                    for i, pu in ipairs(c.pose_units or {}) do if pu == u then unit, ev = u, (c.pose_cover or {})[i] end end
+                end
+                if unit and liveAddr(e.obj) == e.addr then
+                    local okH, h = pcall(function() return e.obj.HealthInternal end)
+                    local ok, p = pcall(function() local v = e.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+                    if ok and p and p.Z > riseZ and not (okH and type(h) == "number" and h <= 0) then
+                        local f = fl[unit] or { ev = ev, objs = {}, x = 0, y = 0, z = 0 }
+                        fl[unit] = f
+                        f.objs[#f.objs + 1] = e.obj
+                        f.x, f.y, f.z = f.x + p.X, f.y + p.Y, f.z + p.Z
+                    end
+                end
+            end
+        end
+    end
+    if next(fl) == nil then return end
+    local ps = players()
+    ZLAUNCH.escorting = ZLAUNCH.escorting or {}
+    for unit, f in pairs(fl) do
+        local n = #f.objs
+        local cx, cy, cz = f.x / n, f.y / n, f.z / n
+        local best, bd = nil, math.huge
+        for _, pl in ipairs(ps) do
+            if pl.at and not pl.down and not pl.onAirfield and pl.alive ~= false then
+                local d = math.sqrt((pl.at.X - cx) ^ 2 + (pl.at.Y - cy) ^ 2 + (pl.at.Z - cz) ^ 2)
+                if d < bd then best, bd = pl, d end
+            end
+        end
+        if best then
+            local mine = best.isMe or (COOP and best.slot == COOP.slot) or not (COOP and COOP.open)
+            local who, r
+            if mine then
+                who = "you"
+                r = f.ev and type(SV_Event) == "function" and SV_Event(f.ev) or nil
+            else
+                who = (COOP and COOP.name and COOP.name(best.slot)) or ("player " .. tostring((best.slot or 0) + 1))
+                local okC, k = false, 0
+                if COOP and COOP.coverFor then okC, k = pcall(COOP.coverFor, best.slot, f.objs) end
+                r = okC and k or "error"
+            end
+            local key = tostring(best.slot) .. (mine and "me" or "")
+            if ZLAUNCH.escorting[unit] ~= key then
+                ZLAUNCH.escorting[unit] = key
+                log(string.format("carrier: VAMPIRES %s (%d plane%s) escort %s (%.1f km off): %s", unit, n, n == 1 and "" or "s", who, bd / 100000,
+                    mine and string.format("%s %s", tostring(f.ev), r == 1 and "fired" or ("NOT fired (" .. tostring(r) .. ")"))
+                    or string.format("onto the enemies nearest them (%s planes ordered)", tostring(r))))
+            end
+        end
+    end
 end
 function ZLAUNCH.late(C, F, now)
     if F.route ~= "container" or F.climbed then return false end

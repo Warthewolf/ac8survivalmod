@@ -1370,6 +1370,52 @@ do
     ZLAS.tick()
     check(#fxs == nfx + 1 and fxs[#fxs].attached and fxs[#fxs].sys.full:find("NS_NPC_TLS_Muzleflash01", 1, true),
           "its own laser didn't come in laser_stock_wait_s: Survival's beam, attached to it")
+    ;(function()                                       -- (its own function: the main chunk is at its 200 locals)
+    -- ((2026-11-07) "they're firing Multiple Beams at once") a laser that comes with nothing handed to it (its flight's record
+    -- fired every plane's): handed the nearest missile nobody's on; with none, hidden, and handed the next one its plane shoots
+    clock = clock + 3
+    ZLAS.tick()
+    local m8 = missile("wp_msl_r8", 1000000 + 90000, 0, 300000, enemyJet, z1)
+    HIT.msl[#HIT.msl + 1] = { obj = m8, name = "BP_wp_msl_r8", born = 0 }
+    ZC.laser_drive = false                              -- (only the game's own lasers sorted: Survival fires none here)
+    ZC.laser_drive = true
+    local own3 = setmetatable({ full = "BP_SwingTLS_ForMSL_C /Game/Maps/PL_SurvivalMode.x:BP_SwingTLS_ForMSL_C_3", addr = addr(),
+                                InterceptPercentage = 0.3, InterceptAngle = 45, InterceptDistanceSquared = 9e10 }, PM)
+    own3.GetOwner = function() return z1 end
+    made("/Script/Live.LiveTLSSwingforMissile", own3)
+    local from3 = #logs + 1
+    ZLAS.tick()
+    check(own3.MissileToIntercept == m8 and own3.hidden ~= true and has(line("zfa laser: ", from3) or "", ""),
+          "a laser with nothing handed to it: handed the nearest missile nobody's on (" .. tostring(line("laser with nothing handed", from3)) .. ")")
+    clock = clock + ZC.laser_stock_swing_s + 0.1
+    ZLAS.tick()
+    local own4 = setmetatable({ full = "BP_SwingTLS_ForMSL_C /Game/Maps/PL_SurvivalMode.x:BP_SwingTLS_ForMSL_C_4", addr = addr(),
+                                InterceptPercentage = 0.3, InterceptAngle = 45, InterceptDistanceSquared = 9e10 }, PM)
+    own4.GetOwner = function() return z1 end
+    made("/Script/Live.LiveTLSSwingforMissile", own4)
+    local from4 = #logs + 1
+    ZLAS.tick()
+    check(own4.hidden == true and own4.MissileToIntercept == nil and has(line("laser with nothing handed", from4), "hidden (nothing in reach)"),
+          "... with none in reach: hidden (no beam at nothing)")
+    local m9 = missile("wp_msl_r9", 1000000 + 70000, 0, 300000, enemyJet, z1)
+    HIT.msl[#HIT.msl + 1] = { obj = m9, name = "BP_wp_msl_r9", born = 0 }
+    events = {}
+    clock = clock + 0.3
+    ZLAS.tick()
+    check(own4.MissileToIntercept == m9 and own4.hidden == false and evCount("RE_SV_ZfaTLS_1_1") == 0,
+          "its plane's next shot within the second: that idle laser handed it and shown, no record fired again")
+    -- ((2026-11-07) the user: "need to make the Vampires Escort the Nearest Player too them") solo: its cover record
+    pose(pawn, 1000000 + 400000, 0, 300000, 0, 0)
+    events = {}
+    ZLAUNCH.coverAt, ZLAUNCH.escorting = 0, nil
+    local fromC = #logs + 1
+    ZLAS.tick()
+    check(evFired("RE_SV_ZfaCover_1_1") and has(line("carrier: VAMPIRES " .. zU, fromC), "escort you (4.0 km off): RE_SV_ZfaCover_1_1 fired"),
+          "the VAMPIRES flight covers the player nearest it (you): its cover record (" .. tostring(line("carrier: VAMPIRES", fromC)) .. ")")
+    events = {}
+    ZLAS.tick()
+    check(not evFired("RE_SV_ZfaCover_1_1"), "not again within escort_s")
+    end)()
     ESC.planes[zU][1].armUnit = nil
     -- laser_drive = false: the game's own only
     ZC.laser_drive = false

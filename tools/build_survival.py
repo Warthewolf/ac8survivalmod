@@ -961,6 +961,7 @@ def check_escort_decoy_build():
     events += [se.cargo_launch_event(s_, n) for s_ in se.CARGO_ARMS for n, _, _ in se.CARGO_ARMS[s_]]
     events += [se.zfa_climb_event(s_, n) for s_ in se.CARGO_ARMS for n, _, _ in se.CARGO_ARMS[s_]]
     events += [se.zfa_tls_event(s_, n) for s_ in se.CARGO_ARMS for n, _, _ in se.CARGO_ARMS[s_]] + [se.zfa_tls_event(f[0]) for f in se.ZFA_FALLBACK]
+    events += [se.zfa_cover_event(s_, n) for s_ in se.CARGO_ARMS for n, _, _ in se.CARGO_ARMS[s_]] + [se.zfa_cover_event(f[0]) for f in se.ZFA_FALLBACK]
     events += [f'RE_SV_CargoRemove_{c[0]}' for c in se.CARGO_SHIPS] + [f'RE_SV_ZfaGo{f[0]}' for f in se.ZFA_FALLBACK]
     events += ['RE_SV_DecoyBaitLaser', 'RE_SV_DecoyBaitLaserOff', 'RE_SV_DecoyBaitPing', 'RE_SV_DecoyKill', 'SV_DecoySpearImpact']
     events += [f'RE_SV_DecoySpear_{k + 1}' for k in range(len(se.DECOY_SPEARS))]
@@ -1005,7 +1006,7 @@ def check_escort_decoy_build():
         elif cls in ('LiveAIEngagementOrder', 'LiveAIChangeEnemySearchType'):
             assert args[0] in objs or args[1] in units, (ev, cls, args[:3])
         elif cls in ('LiveUnitMoveActor', 'LiveChangeUnitRadius'):
-            assert args[0] in units and (cls != 'LiveUnitMoveActor' or args[1] in objs), (ev, cls, args[:3])
+            assert args[0] in units and (cls != 'LiveUnitMoveActor' or args[1] in objs or args[12] == 'NearPlayer'), (ev, cls, args[:3])
         elif cls in ('LiveSetActiveGameObjectExecution', 'LiveBattleNavigationExecution'):
             assert args[1] in units, (ev, cls, args[:3])
         elif cls == 'LiveFlagOperation_IntExecution':

@@ -1682,3 +1682,19 @@ lightning,festival} hold the dumps and scripts (git-ignored).
     <plane>'s own laser fired (..., Survival's record): ... on <missile> (handed to it)`. escort_test.
 - 52 suites pass (coop_test not run). Built and packaged: dev / TESTER cb03676665f5..., friends' 2c0062958dc2...
   (0.74.15-coop2mp.107), all registered. INSTALLED 2026-11-07 (backup of 0.74.14: build/backup/install_before_0.74.15).
+
+## 0.74.16 (2026-11-07, runtime 0.32.25; the user's 0.74.15 run of 22:50-22:56; not yet run in game)
+- 0.74.15 worked: the launched pair split on their climb-outs (97 m apart at +1 s, 1 km at +3, 5 km at +15), the ZFA-44s'
+  own laser fired on command and was handed its missile, and those missiles were gone (real intercepts).
+- Escort (the user: "need to make the Vampires Escort the Nearest Player too them"): RE_SV_ZfaCover_<s>_<n> /
+  RE_SV_ZfaCover<A|B> (Mission 6's NearPlayer unit move + a 3 km radius, the STORE allies' Cover); ZLAUNCH.coverTick
+  every escort_s 6 (the host's or solo): each flight up covers the player nearest it, this game's own by its cover
+  record, another's by COOP.coverFor (its planes onto the enemies nearest them). `carrier: VAMPIRES <unit> escort ...`.
+- One beam a missile (the user: "they're firing Multiple Beams at once": a flight's record fires every plane's laser, and
+  the one that wasn't handed a missile swung at nothing): a laser that comes with nothing handed to it is handed the
+  nearest enemy missile within reach that no other laser is on, else hidden (SetActorHiddenInGame, shown again
+  laser_hide_s 9 on); one on a missile another laser's on is hidden; its plane's next shot within the second hands that
+  idle laser the missile instead of firing again; a wanted missile goes stale once the backstop beam takes over.
+  `zfa laser: <plane>'s laser with nothing handed to it: handed / hidden ...`. escort_test.
+- 52 suites pass (coop_test not run). Built and packaged: dev / TESTER 255a3bbae140..., friends' bca30ee3a009...
+  (0.74.16-coop2mp.108), all registered. INSTALLED 2026-11-07 (backup of 0.74.15: build/backup/install_before_0.74.16).
