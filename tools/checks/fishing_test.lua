@@ -50,7 +50,7 @@ ModifierKey = { CONTROL = "CTRL" }
 function RegisterKeyBind(key, mods, fn) binds[key] = fn end
 function ExecuteInGameThread(f) f() end
 
-local function part(dir, name, chunk) assert(load(readAll(dir .. "/Scripts/" .. name), chunk or ("=" .. name)))() end
+local function part(dir, name, chunk) dofile("parts.lua")(dir, readAll).load(name, chunk) end   -- (the part and its pieces)
 part(MOD, "sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 function log(s) logs[#logs + 1] = s end
@@ -110,7 +110,7 @@ local function sphere()
 end
 local function thing(cls, i, x, y, z, hp, mx, mn)
     local o = obj("/Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel." .. cls .. "_" .. i,
-        { HealthInternal = hp, MaxHealth = mx, MinHealth = mn, hits = {}, loc = { X = x + i * 20000, Y = y, Z = z } })
+        { HealthInternal = hp, MaxHealth = mx, MinHealth = mn, hits = {}, loc = { X = x + i * 9000, Y = y, Z = z } })
     o.DamageHistoryMap = hitMap(o)
     function o:K2_GetActorLocation() return self.loc end
     function o:AddComponentByClass(cls2) self.added = cls2; self.sphere = sphere(); return self.sphere end
@@ -178,7 +178,7 @@ print("the first press: spawned")
 press("F10")
 check(#spawns == 2, "two spawns (" .. #spawns .. ")")
 local s1, s2 = spawns[1], spawns[2]
-check(s1.unit == "SV_Unit_FishA" and s1.x == 1803753 and s1.y == -1160858 and s1.z == 700, "SV_Unit_FishA at ground A, 700 cm up")
+check(s1.unit == "SV_Unit_FishA" and s1.x == 1687842 and s1.y == -1191916 and s1.z == 700, "SV_Unit_FishA round SAL's boat, 700 cm up")
 check(type(s1.yaw) == "number" and s1.yaw >= 0 and s1.yaw < 360, "a random yaw (" .. tostring(s1.yaw) .. ")")
 check(s1.su == "SV_Unit_FishA" and s2.su == C.boat_unit and spawningUnit == nil, "spawningUnit set around each spawn, cleared after")
 check(s2.unit == "SV_Unit_SalBoat" and s2.x == 1687842 and s2.y == -1191916 and s2.z == 300, "SAL's boat at its spot, 300 cm up")
@@ -346,6 +346,40 @@ for _, k in ipairs({ "intro", "start", "none", "junk", "sardine", "mackerel", "t
     end
 end
 check(longest <= 70, "SAL's lines under 70 characters (the longest " .. longest .. ")")
+-- ((2026-11-07) the strip's box grown to its wrapped lines: SUB.lineCount, whole words by their width at the font's em)
+local WRAP, EMU = CFG.hud.subs.w - 80, CFG.hud.subs.em_units
+check(SUB.lineCount("With the little gun! Like a spear fisherman. Respect.", WRAP, EMU) == 1
+      and SUB.lineCount(string.rep("word ", 30), WRAP, EMU) == 3 and SUB.lineCount("", WRAP, EMU) == 1, "the strip's line count (whole words)")
+-- (the user's screenshot of 2026-11-07: this 63-character line fitted on one line, and got a two-line box)
+check(SUB.lineCount("All aircraft, we have an... unusual request on an open channel.", WRAP, EMU) == 1,
+      "a 63-character line that fits on one counted one")
+do                                                  -- (the four lines measured on screen: the model never short of them)
+    local seen = { { "All aircraft, we have an... unusual request on an open channel.", 1369 },
+                   { "Hello? Air force? It's Sal. The festival is in six days!", 1144 },
+                   { "The whole island comes to eat, and I have no fish. None!", 1240 },
+                   { "Okay, okay. Let me see what the festival gets...", 1033 } }
+    local ok = true
+    for _, l in ipairs(seen) do
+        local est = SUB.ems(l[1]) * EMU
+        if est < l[2] or est > l[2] * 1.06 then ok = false end
+    end
+    check(ok, "each measured line's width estimated at or a little over what the screenshots show")
+end
+do                                                  -- (SAL's and CONTROL's lines: one line each on the strip, two at most)
+    local one, n, most = 0, 0, 0
+    for _, k in ipairs({ "intro", "start", "none", "junk", "sardine", "mackerel", "tuna", "swordfish", "bigone", "first",
+                         "empties", "gun", "ally", "quiet", "landed", "cleared", "boat", "warn", "weigh", "grade_s", "grade_a",
+                         "grade_b", "grade_c", "grade_d", "signoff" }) do
+        local l = CFG.specials.fishing.text[k]
+        for _, x in ipairs(type(l) == "table" and l or { l }) do
+            local _, t = FISH.line(x, { kg = "999", fish = "X" })
+            local c = SUB.lineCount(t, WRAP, EMU)
+            n, most = n + 1, math.max(most, c)
+            if c == 1 then one = one + 1 end
+        end
+    end
+    check(n > 20 and most <= 2, string.format("SAL's and CONTROL's lines: %d of %d on one line, none past two", one, n))
+end
 
 -- a tick of the round on the round clock, the strip's queue moving as the HUD would
 local function rtick(dt)
@@ -355,18 +389,35 @@ local function rtick(dt)
     SUB.hudTick(clock, true, false)
 end
 rtick(s.introEnd - clock + 0.1)
-check(s.state == "fishing" and #spawns == 4, "the time starts: the three grounds spawned")
-check(spawns[2].unit == "SV_Unit_FishA" and spawns[3].unit == "SV_Unit_FishB" and spawns[4].unit == "SV_Unit_FishC"
-    and spawns[3].x == 1866154 and spawns[4].z == 700, "each ground at its spot, 700 cm up")
-check(s.total == 24 and #s.deck == 24, "24 shoals, a 24-catch deck")
+check(s.state == "fishing" and #spawns == 7, "the time starts: the six grounds spawned (" .. #spawns .. ")")
+-- ((2026-11-07) every ground round SAL's boat: the first on it, the five others evenly on a 1.9 km ring round it)
+do
+    local bx, by, ok, angs = 1687842, -1191916, true, {}
+    for i, u in ipairs({ "SV_Unit_FishA", "SV_Unit_FishB", "SV_Unit_FishC", "SV_Unit_FishD", "SV_Unit_FishE", "SV_Unit_FishF" }) do
+        local sp = spawns[i + 1]
+        local d = math.sqrt((sp.x - bx) ^ 2 + (sp.y - by) ^ 2)
+        if sp.unit ~= u or sp.z ~= 700 or (i == 1 and d > 1) or (i > 1 and math.abs(d - 190000) > 1) then ok = false end
+        if i > 1 then angs[#angs + 1] = math.deg(math.atan(sp.y - by, sp.x - bx)) % 360 end
+    end
+    for i = 2, #angs do if math.abs(((angs[i] - angs[i - 1]) % 360) - 72) > 0.01 then ok = false end end
+    check(ok, "the first ground on SAL's boat, the others 1.9 km round it, 72 deg apart, 700 cm up")
+    local a1 = angs[1]
+
+    local g2 = FISH.grounds()
+    local a2 = math.deg(math.atan(g2[2][2] - by, g2[2][1] - bx)) % 360
+    local g3 = FISH.grounds(0)
+    check(math.abs(g3[2][1] - (bx + 190000)) < 1 and math.abs(g3[2][2] - by) < 1 and #g3 == 6, "FISH.grounds(0): the ring's first due east")
+    check(type(a1) == "number" and type(a2) == "number", "the ring turned at random each round")
+end
+check(s.total == 48 and #s.deck == 48, "48 shoals, a 48-catch deck")
 local sphered = 0
 for _, sh in ipairs(s.shoals) do if sh.obj.sphere then sphered = sphered + 1 end end
-check(sphered == 24, "a hit sphere on each shoal (" .. sphered .. ")")
+check(sphered == 48, "a hit sphere on each shoal (" .. sphered .. ")")
 check(found("GONE FISHIN' / 3:00 ON THE CLOCK") or callouts[#callouts]:find("3:00 ON THE CLOCK", 1, true), "the clock's callout: " .. tostring(callouts[#callouts]))
 
 -- a fixed deck from here
 s.deck = { "tuna", "none", "junk", "none", "sardine", "bigone" }
-for i = 7, 24 do s.deck[i] = "mackerel" end
+for i = 7, 48 do s.deck[i] = "mackerel" end
 local sh1 = s.shoals[1]
 sh1.obj.hits = { { pawn, 100 } }
 sh1.obj.HealthInternal = 0
@@ -447,7 +498,7 @@ check(warned == 4, "the four warnings (" .. warned .. ")")
 local cleanBefore = #cleaned
 rtick(1)
 check(s.state == "weigh", "the time's up: the weigh-in")
-check(#cleaned == cleanBefore + 1 and #cleaned[#cleaned].list == 3 and cleaned[#cleaned].n == 17, "the 17 shoals left taken off ("
+check(#cleaned == cleanBefore + 1 and #cleaned[#cleaned].list == 6 and cleaned[#cleaned].n == 41, "the 41 shoals left taken off ("
     .. tostring(cleaned[#cleaned] and cleaned[#cleaned].n) .. ")")
 check(#later >= 3 and later[1] == "SV_Unit_FishA", "their units off the spawner's list after")
 local kgBefore = s.haul[0].kg
@@ -456,7 +507,7 @@ local last = paid[#paid]
 local want = FISH.payFor(kgBefore - 25, 1, 7, true)
 check(last and last.n == want and last.why:find("GONE FISHIN' weigh-in", 1, true) and last.why:find("-25 kg the boat", 1, true),
     string.format("paid %s (%s), want %d", tostring(last and last.n), tostring(last and last.why), want))
-check(SUB.cardUp and SUB.cardUp.title:find("WEIGH%-IN") and SUB.cardUp.lines[1]:find("7 / 24", 1, true)
+check(SUB.cardUp and SUB.cardUp.title:find("WEIGH%-IN") and SUB.cardUp.lines[1]:find("7 / 48", 1, true)
     and SUB.cardUp.lines[2]:find("THE BIG ONE", 1, true) and SUB.cardUp.lines[4]:find("-25 KG", 1, true),
     "the card: " .. (SUB.cardUp and table.concat(SUB.cardUp.lines, " | ") or "none"))
 check(RUN.fishKg == kgBefore - 25, "the haul kept for THE FESTIVAL's thanks (" .. tostring(RUN.fishKg) .. ")")
@@ -492,7 +543,7 @@ s = D.special
 FISH.roundSpawn(5000)
 rtick(s.introEnd - clock + 0.1)
 s.deck = { "swordfish", "tuna" }
-for i = 3, 24 do s.deck[i] = "sardine" end
+for i = 3, 48 do s.deck[i] = "sardine" end
 byJoiner = s.shoals[1].obj
 s.shoals[1].obj.HealthInternal = 0
 rtick(0.5)
@@ -551,10 +602,10 @@ check(#own == 2 and own[2].n == wantJ, "a new run here (the host's restart): its
 -- ((code review of 2026-11-07, finding 9) what the host sends kept in bounds: a haul to every shoal's heaviest catch,
 -- the round to 1000, one weigh-in's pay to FISH.PAY_MAX
 local most = FISH.maxShoals() * FISH.maxKg()
-check(FISH.maxShoals() == 24 and FISH.maxKg() == 400, "the most a round holds: 24 shoals, 400 kg the heaviest catch")
+check(FISH.maxShoals() == 48 and FISH.maxKg() == 400, "the most a round holds: 48 shoals, 400 kg the heaviest catch")
 FISH.fromHost("fw", { "fw", "2", "99999", "999", "999", "bigone", "4000", "1" })
 local w2 = FISH.cl.weigh[2]
-check(w2 and w2.kg == most and w2.hits == 24 and w2.empty == 24 and w2.bestKg == 400,
+check(w2 and w2.kg == most and w2.hits == 48 and w2.empty == 48 and w2.bestKg == 400,
       string.format("fw: the haul clamped (%s kg, %s hits, best %s kg)", tostring(w2 and w2.kg), tostring(w2 and w2.hits), tostring(w2 and w2.bestKg)))
 local fromW = #logs + 1
 FISH.fromHost("fwe", { "fwe", "2", "999999", "999999", "99999", "999" })

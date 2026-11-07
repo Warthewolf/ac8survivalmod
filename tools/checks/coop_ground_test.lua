@@ -9,7 +9,8 @@
 local MOD, WORK, ROLE = arg[1], arg[2], arg[3]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do
     local rawOpen = io.open
@@ -105,9 +106,8 @@ function SV_SetAircraft() return 1 end
 function SV_SetLevel() return 1 end
 
 -- load the real parts (sv_coop with its M exposed)
-dofile(MOD .. "/Scripts/sv_config.lua")
-local src = readAll(MOD .. "/Scripts/sv_coop.lua"):gsub("\nlocal M = {", "\nM = {", 1)
-assert(load(src, "=sv_coop.lua"))()
+PARTS.dofile("sv_config.lua")
+PARTS.load("sv_coop.lua", "=sv_coop.lua", { { "\nlocal M = {", "\nM = {" } })   -- (its pieces too; M exposed)
 local M = _G.M
 CFG.coop.enabled = true
 local function tick(dt) clock = clock + (dt or 0.25); COOP.tick(0); if COOP.client() then roundsTick(clock) end end

@@ -8,7 +8,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do
     local rawOpen = io.open
@@ -24,7 +25,7 @@ function NotifyOnNewObject() end
 function FindAllOf() return {} end
 function FindFirstOf() return nil end
 function StaticFindObject() return nil end
-local function part(name, chunk) assert(load(readAll(MOD .. "/Scripts/" .. name), chunk or ("=" .. name)))() end
+local function part(name, chunk) PARTS.load(name, chunk) end   -- (the part and its pieces)
 part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 function log(s) logs[#logs + 1] = s end

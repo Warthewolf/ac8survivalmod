@@ -391,7 +391,12 @@ function UP.apply(pawn)
                 if cur >= 0 and cur ~= want then
                     local r = SV_AmmoMax(k, want)
                     if type(r) ~= "number" or r < 0 then A.max[k], A.bays[k], b["fail" .. k] = cur, nil, true   -- (the shop sells to cur)
-                    else b["set" .. k] = want end
+                    else
+                        b["set" .. k] = want
+                        -- ((2026-11-07) a full load the game had put back, raised here before ammoTick saw the dip: told
+                        -- to it (A.reset), so what you had goes back in and isn't taken for shots in the air)
+                        if cur < want then A.reset = A.reset or {}; A.reset[k] = true end
+                    end
                     log(string.format("upgrades: weapon bays tier %d: %s full load %d -> %d (stock %d): %s", tier("bays"),
                         ({ "missiles", "special 1", "special 2" })[k], cur, want, base, tostring(r)))
                 end
@@ -408,9 +413,20 @@ function UP.apply(pawn)
         if mf ~= want then
             pcall(function() act.MaxFlareCount = want end)
             log(string.format("upgrades: flare pods tier %d: flares %d -> %d (stock %d)", tier("flares"), mf, want, b.flares))
+            if A and mf < want then A.reset = A.reset or {}; A.reset[4] = true end    -- (the game's reload: ammoTick puts back)
         end
         local okR, now = pcall(function() return act.MaxFlareCount end)              -- (what it took)
-        if A and okR and type(now) == "number" then A.max = A.max or {}; A.max[4] = now end
+        if A and okR and type(now) == "number" then
+            A.max = A.max or {}; A.max[4] = now
+            -- ((2026-11-07) the user: "purchasing flare upgrades from the store didn't seem to work"; Talos's and Happiness's
+            -- logs of 0.74.1: FLARE PODS to 8 / 10, the flares bought up to it, then the game's take-off reload put the
+            -- count and MaxFlareCount back to stock (2 / 6), this raised the max again and nothing put the count back, so
+            -- in the air ammoTick took the rest for shots: "flares 2/8", "6/10", the money gone) FLARE PODS' full load is
+            -- the flares' A.bays[4], as WEAPON BAYS' is theirs: ammoTick sees the game's reload by it and puts back what
+            -- you had (none while the write didn't take: the aircraft's own then)
+            A.bays = A.bays or {}
+            A.bays[4] = (tier("flares") > 0 and now == want) and want or nil
+        end
     end
     -- GUN (CFG.upgrades.gun_experimental)
     if CFG.upgrades.gun_experimental and tier("gun") > 0 then

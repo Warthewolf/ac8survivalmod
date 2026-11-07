@@ -19,7 +19,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 local function near(a, b) return type(a) == "number" and math.abs(a - b) < 1e-6 end
@@ -153,9 +154,7 @@ end
 SETUP = { enemyX = function() return 1 end, specialsX = function() return 1 end, breakS = function() return 20 end,
           skillAdd = function() return 0 end }
 
-local function part(name, chunk)
-    assert(load(readAll(MOD .. "/Scripts/" .. name), chunk or ("=" .. name)))()
-end
+local function part(name, chunk) PARTS.load(name, chunk) end   -- (the part and its pieces)
 part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 local logFile = assert(io.open(WORK .. "/test_lua.log", "wb"))

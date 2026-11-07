@@ -83,13 +83,17 @@ function SUB.build(canvas, mk)
     local c, cc, sm = cfg(), CFG.hud.card or {}, CFG.hud.summary
     local mid = DESIGN_W / 2
     local w, h, y = tonumber(c.w) or 1560, tonumber(c.h) or 150, tonumber(c.y) or 1700
-    H.subPanel = panel(canvas, "SubPanel", mid, y, w, h, c.fill or { 0.02, 0.10, 0.04, 0.7 }, c.edge or sm.edge,
+    H.subPanel, H.subPanelSlot = panel(canvas, "SubPanel", mid, y, w, h, c.fill or { 0.02, 0.10, 0.04, 0.7 }, c.edge or sm.edge,
         tonumber(c.edge_px) or 3, mk.bar)
+    H.subW, H.subH = w, h
     H.subWho = mk.text("SubWho", 1, CFG.hud.banner_letter_spacing)
     slotIn(canvas, H.subWho, { 0, 0 }, { 0, 0 }, { mid, y + (tonumber(c.speaker_dy) or 12), 0, 0 }, { 0.5, 0 }, true)
     H.subText = mk.text("SubText", 1, CFG.hud.letter_spacing)
     slotIn(canvas, H.subText, { 0, 0 }, { 0, 0 }, { mid, y + (tonumber(c.text_dy) or 58), 0, 0 }, { 0.5, 0 }, true)
-    pcall(function() H.subText:SetAutoWrapText(true) end)
+    -- ((2026-11-07) the user's screenshots: with AutoWrapText on an auto-sized slot the text wrapped at the width its
+    -- last line had taken, narrower each time (two or three words a line) and ran out under the box. Now a fixed wrap at
+    -- the box's width less 80, AutoWrapText off, and the box grown to the line count: hudTick)
+    pcall(function() H.subText:SetAutoWrapText(false) end)
     pcall(function() H.subText:SetWrapTextAt(w - 80) end)
     local white = c.text_color or { 1, 1, 1 }
     pcall(function() H.subText:SetColorAndOpacity({ SpecifiedColor = { R = white[1], G = white[2], B = white[3], A = 1 }, ColorUseRule = 0 }) end)
@@ -98,7 +102,8 @@ function SUB.build(canvas, mk)
     local cw, cy, rows = tonumber(cc.w) or 1500, tonumber(cc.y) or 270, math.max(1, math.floor(tonumber(cc.rows) or 9))
     local line = CFG.hud.line
     local ch = (tonumber(cc.top) or 110) + rows * line + (tonumber(cc.bottom) or 40)
-    H.cardPanel = panel(canvas, "CardPanel", mid, cy, cw, ch, sm.fill, sm.edge, sm.edge_px, mk.bar)
+    H.cardPanel, H.cardSlot = panel(canvas, "CardPanel", mid, cy, cw, ch, sm.fill, sm.edge, sm.edge_px, mk.bar)
+    H.cardW = cw
     H.cardTitle = mk.text("CardTitle", 1, CFG.hud.banner_letter_spacing)
     slotIn(canvas, H.cardTitle, { 0, 0 }, { 0, 0 }, { mid, cy + 36, 0, 0 }, { 0.5, 0 }, true)
     H.cardLines = {}
@@ -111,6 +116,35 @@ function SUB.build(canvas, mk)
     H.cardTitle:SetVisibility(VIS.Collapsed)
 end
 
+-- How many lines `text` takes wrapped at `wrap` design units with the font's em at `em` units (whole words, as the
+-- TextBlock wraps them). ((2026-11-07) it counted 60 characters a line, so a 63-character line that fits on one got a
+-- two-line box (the user's screenshot). A proportional font's advance widths in ems (a sans serif's: i / l / . narrow,
+-- m / w / capitals wide); their em fitted to four lines of that session's screenshots, 48.3-49.7 units, so em_units 50
+-- leaves a box at worst a little big, never short.)
+local EM = { [" "] = .278, ["."] = .278, [","] = .278, [":"] = .278, [";"] = .278, ["'"] = .191, ["!"] = .278,
+             ["?"] = .556, ["-"] = .333, i = .222, l = .222, j = .222, f = .278, t = .278, r = .333, m = .833, w = .722,
+             I = .278, M = .833, W = .944 }
+local function ems(s)
+    local t = 0
+    for ch in s:gmatch(".") do
+        t = t + (EM[ch] or (ch:match("%u") and .667) or .556)
+    end
+    return t
+end
+SUB.ems = ems
+function SUB.lineCount(text, wrap, em)
+    wrap = math.max(100, tonumber(wrap) or 1480)
+    em = math.max(1, tonumber(em) or 50)
+    local n, len, space = 1, 0, EM[" "] * em
+    for word in tostring(text or ""):gmatch("%S+") do
+        local w = ems(word) * em
+        if len == 0 then len = w
+        elseif len + space + w <= wrap then len = len + space + w
+        else n, len = n + 1, w end
+        while len > wrap do n, len = n + 1, len - wrap end
+    end
+    return n
+end
 local function colorOf(who)
     local c = cfg()
     local col = type(c.colors) == "table" and c.colors[who] or nil
@@ -136,6 +170,13 @@ function SUB.hudTick(now, shown, wallOpen)
     if on then
         setText(H.subWho, "subWhoStr", cur.who:upper())
         setText(H.subText, "subTextStr", cur.text)
+        if H.subSized ~= cur and H.subPanelSlot then     -- (the box grown to the line's wrapped lines)
+            H.subSized = cur
+            local c = cfg()
+            local n = SUB.lineCount(cur.text, (H.subW or 1560) - 80, c.em_units)
+            local hh = (H.subH or 150) + (n - 1) * (tonumber(c.line_h) or CFG.hud.line or 68)
+            pcall(function() H.subPanelSlot:SetSize({ X = H.subW or 1560, Y = hh }) end)
+        end
         if H.subWhoCol ~= cur.who then
             H.subWhoCol = cur.who
             local col = colorOf(cur.who)
@@ -157,6 +198,12 @@ function SUB.hudTick(now, shown, wallOpen)
     local key = cardOn and cd or false                 -- (a new card while one's up: its rows shown afresh)
     if H.cardOn ~= key then
         H.cardOn = key
+        if cardOn and H.cardSlot then                 -- ((2026-11-07) the card as tall as its rows, not its most)
+            local cc, used = CFG.hud.card or {}, 0
+            for i = 1, #(H.cardLines or {}) do if (cd.lines[i] or "") ~= "" then used = i end end
+            local ch = (tonumber(cc.top) or 110) + math.max(1, used) * CFG.hud.line + (tonumber(cc.bottom) or 40)
+            pcall(function() H.cardSlot:SetSize({ X = H.cardW or 1500, Y = ch }) end)
+        end
         show(H.cardPanel, cardOn); show(H.cardTitle, cardOn)
         for i, t in ipairs(H.cardLines or {}) do show(t, cardOn and (cd.lines[i] or "") ~= "") end
     end

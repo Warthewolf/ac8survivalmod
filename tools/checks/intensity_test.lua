@@ -27,7 +27,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 local function near(a, b, eps) return type(a) == "number" and math.abs(a - b) <= (eps or 0.01) end
@@ -88,15 +89,7 @@ SETUP = { enemyX = function() return 1 end, specialsX = function() return 1 end,
           skillAdd = function() return 0 end }
 
 -- the real parts (sv_core's SCRIPT_DIR and log file in the work folder)
-local function part(name, chunk, edits)
-    local src = readAll(MOD .. "/Scripts/" .. name)
-    for _, e in ipairs(edits or {}) do
-        local n
-        src, n = src:gsub(e[1], e[2], 1)
-        assert(n == 1, name .. ": " .. e[1] .. " not found")
-    end
-    assert(load(src, chunk or ("=" .. name)))()
-end
+local function part(name, chunk, edits) PARTS.load(name, chunk, edits) end   -- (the part and its pieces, each edit in the piece with its text)
 part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 local logFile = assert(io.open(WORK .. "/test_lua.log", "wb"))
@@ -890,7 +883,7 @@ do
     local sp = readAll(MOD .. "/Scripts/sv_spawn.lua")
     check(has(sp, "searchAircraft(ac, levelFor(D.round))") and has(sp, "topSpike or levelFor(D.round), tier.fcs or 0)"),
           "sv_spawn: the bombers' and fighters' fire-control level on levelFor (the tier's fcs the floor)")
-    local co = readAll(MOD .. "/Scripts/sv_coop.lua")
+    local co = PARTS.read("sv_coop.lua")
     check(has(co, 'elseif k == "in" then') and has(co, "D.intLevel = r.level and") and has(co, "D.waves and #D.waves or 0, alive, lv, gp, al,"),
           "sv_coop: the host's \"in\", the level in \"rnd\" and the joiner's D.intLevel")
     local d = readAll(MOD .. "/Scripts/sv_director.lua")
@@ -899,7 +892,7 @@ do
     check(has(d, "DIR.holdOn and DIR.holdOn(now)") and has(d, "DIR.hot and DIR.hot(slot)"), "the squad director: top cover waits for the hold; per-player tactics on DIR.hot")
     check(not d:find("local%s+[%w_,%s]*=%s*SV_Event") and not d:find("local%s+[%w_,%s]*=%s*hudCallout"),
           "sv_director never keeps SV_Event / hudCallout at load (sv_coop wraps them after)")
-    local cf = readAll(MOD .. "/Scripts/sv_config.lua")
+    local cf = PARTS.read("sv_config.lua")
     check(has(cf, "function levelFor(round)") and has(cf, "function TIER.roundBudget(round, level)"), "sv_config: levelFor, TIER.roundBudget's level")
 end
 

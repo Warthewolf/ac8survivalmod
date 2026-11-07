@@ -35,3 +35,6 @@ ue/Live/Binaries/
 
 # parked work (VALKA, 2026-10-25): builds and AC7 assets, never in git
 parked/
+
+# your machine's settings for the tools (copy .env.example to .env: tools/env.sh, tools/env.py)
+.env

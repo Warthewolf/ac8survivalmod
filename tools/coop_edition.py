@@ -1,14 +1,16 @@
 """coop_edition.py <stage folder> <stage mod folder> : makes a staged build the Survival COOP build (tools/package_release.sh
 with COOP=1; user, 2026-10-25: "a new 0.70.6 build called Survival COOP"). On the staged copies only, never the sources:
-  - Scripts/sv_config.lua: CFG.coop.enabled = true
+  - Scripts/sv_config.lua (the part or its next pieces: tools/lua_parts.py): CFG.coop.enabled = true
   - Scripts/main.lua: VERSION gets COOP_TAG (both players' builds must match: sv_coop.lua compares them)
   - config/survival.default.ini: its [coop] note says it's on
   - README.txt: release/README_COOP.txt put in after the first paragraph
 """
 import os
 import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lua_parts
 
-COOP_TAG = '-coop2mp.86'
+COOP_TAG = '-coop2mp.97'
 
 
 def sub(s, old, new, what):
@@ -17,10 +19,8 @@ def sub(s, old, new, what):
 
 
 def main(stage, mod):
-    p = os.path.join(mod, 'Scripts', 'sv_config.lua')
-    s = open(p, encoding='utf-8', newline='').read()
-    s = sub(s, 'coop = { enabled = false,', 'coop = { enabled = true,', 'sv_config coop')
-    open(p, 'w', encoding='utf-8', newline='').write(s)
+    lua_parts.sub(os.path.join(mod, 'Scripts'), 'sv_config', 'coop = { enabled = false,', 'coop = { enabled = true,',
+                  'sv_config coop')
     p = os.path.join(mod, 'Scripts', 'main.lua')
     s = open(p, encoding='utf-8', newline='').read()
     i = s.index('VERSION = "') + len('VERSION = "')

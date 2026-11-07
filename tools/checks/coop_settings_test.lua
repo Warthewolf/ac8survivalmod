@@ -10,6 +10,7 @@ local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
 -- (CRLF checkouts: the sources searched as git stores them, LF)
 local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
     local rawOpen = io.open
@@ -72,10 +73,9 @@ ini = ini:gsub("\n%[coop%.real_paths%]\n", "\n[coop.real_paths]\nmymod_jet = /Ga
 writeAll(WORK .. "/" .. ROLE .. "/config/survival.ini", ini)
 
 -- load the real parts (sv_coop with its M exposed)
-dofile(MOD .. "/Scripts/sv_config.lua")
+PARTS.dofile("sv_config.lua")
 assert(load(readAll(MOD .. "/Scripts/sv_menu.lua"), "=sv_menu.lua"))()
-local src = readAll(MOD .. "/Scripts/sv_coop.lua"):gsub("\nlocal M = {", "\nM = {", 1)
-assert(load(src, "=sv_coop.lua"))()
+PARTS.load("sv_coop.lua", "=sv_coop.lua", { { "\nlocal M = {", "\nM = {" } })   -- (its pieces too; M exposed)
 local M = _G.M
 check(type(M) == "table" and type(M.sendSettings) == "function", "sv_coop.lua loaded, M exposed")
 check(type(CFG_DEFAULTS) == "table" and CFG_DEFAULTS ~= CFG, "CFG_DEFAULTS snapshot")
@@ -167,7 +167,7 @@ elseif ROLE == "join" then
           "join: own settings back (99, 100000, start 5, break 30)")
     check(CFG.waves == waves and CFG.waves.next_at == 4, "join: CFG.waves the same table, own next_at 4")
     -- the saved file reads back the same
-    dofile(MOD .. "/Scripts/sv_config.lua")
+    PARTS.dofile("sv_config.lua")
     check(CFG.setup.host.start_round == 5 and CFG.setup.host.break_s == 30 and CFG.coop.max_players == 2, "join: survival.ini read again: the saved values")
     print2("  (log: " .. #logs .. " lines; last: " .. tostring(logs[#logs]) .. ")")
 else                                             -- guard

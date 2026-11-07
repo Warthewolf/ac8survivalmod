@@ -4,11 +4,13 @@
 -- state (UE4SS gives each Lua mod its own): a name one part shares with the others is a global of that state, each
 -- part's own helpers stay local to it. A part that fails to load stops the rest, as one file used to.
 -- (Hard rule 23 counts locals per part now: python tools/checks/lua_check.py Scripts/*.lua checks them all.)
-VERSION = "0.74.0"
+VERSION = "0.74.5"
 
 local MODULES = {
     "sv_core",
     "sv_config",
+    "sv_config_specials",          -- (sv_config.lua's next piece: tools/lua_split_part.py)
+    "sv_config_ini",               -- (sv_config.lua's next piece: tools/lua_split_part.py)
     "sv_rows",
     "sv_ai",
     "sv_hud",
@@ -17,6 +19,8 @@ local MODULES = {
     "sv_sound",
     "sv_spawn",
     "sv_anomalies",
+    "sv_anomalies_valka",          -- (sv_anomalies.lua's next piece: tools/lua_split_part.py)
+    "sv_anomalies_dev",            -- (sv_anomalies.lua's next piece: tools/lua_split_part.py)
     "sv_rounds",
     "sv_ladon",
     "sv_leaderboard",
@@ -38,6 +42,10 @@ local MODULES = {
     "sv_escort",                   -- THE ESCORT and the ZFA-44 carriers (tools/re/ESCORT.md; before sv_coop: its logPlane wrap)
     "sv_menu",
     "sv_coop",
+    "sv_coop_joiner",              -- (sv_coop.lua's next piece: tools/lua_split_part.py)
+    "sv_coop_planes",              -- (sv_coop.lua's next piece: tools/lua_split_part.py)
+    "sv_coop_sync",                -- (sv_coop.lua's next piece: tools/lua_split_part.py)
+    "sv_coop_migration",           -- (sv_coop.lua's next piece: tools/lua_split_part.py)
     "sv_down",                     -- co-op's revives and the spectator camera (after sv_coop: its messages and players)
     "sv_audit",                    -- the run's audits in the log: targets, pay, sync (after sv_coop: its addCredits wrap)
     "sv_zfa44",                    -- the ZFA-44's test T0 (tools/re/ZFA44.md; test code only: empty in every zip)

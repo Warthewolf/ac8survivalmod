@@ -20,6 +20,7 @@ local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
 -- (CRLF checkouts: the sources searched as git stores them, LF)
 local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
     local rawOpen = io.open
@@ -70,15 +71,7 @@ local ENEMY_X = 1
 SETUP = { enemyX = function() return ENEMY_X end, specialsX = function() return 1 end, breakS = function() return 20 end }
 
 -- the real parts (sv_core's SCRIPT_DIR and log file in the work folder)
-local function run(name, chunk, edits)
-    local src = readAll(MOD .. "/Scripts/" .. name)
-    for _, e in ipairs(edits or {}) do
-        local n
-        src, n = src:gsub(e[1], e[2], 1)
-        assert(n == 1, name .. ": " .. e[1] .. " not found")
-    end
-    assert(load(src, chunk or ("=" .. name)))()
-end
+local function run(name, chunk, edits) PARTS.load(name, chunk, edits) end   -- (the part and its pieces, each edit in the piece with its text)
 run("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 local logFile = assert(io.open(WORK .. "/test_lua.log", "wb"))
@@ -93,8 +86,7 @@ run("sv_ai.lua"); run("sv_spawn.lua")
 run("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" },
                              { "\nlocal function pressureAfterBoss%(now%)", "\nfunction pressureAfterBoss(now)" } })
 run("sv_stats.lua")
-run("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" }, { "\nlocal function hostSync%(to%)", "\nfunction hostSync(to)" },
-                          { "\nlocal function mirroredEvent%(name%)", "\nfunction mirroredEvent(name)" } })
+run("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" } })   -- (mirroredEvent, hostEvent, hostSync: globals of sv_coop's pieces)
 local M = _G.M
 LB.stat = function() end
 local PRESET = "standard"
@@ -556,7 +548,7 @@ check(RUN.credits - before == 280 and has(line("credits: +"), "director trap x1.
 ---------------------------------------------------------------------------------------------------- the hooks, by their place
 print("the hooks in the source")
 local function body(name, from)
-    local src = readAll(MOD .. "/Scripts/" .. name)
+    local src = PARTS.read(name)
     local a = src:find(from)
     if not a then return "" end
     local b = src:find("\nend\n", a, true) or src:find("\nend\r\n", a, true) or #src

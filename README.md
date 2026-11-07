@@ -33,7 +33,7 @@ Loader. `release/README.txt` is the player guide that goes into every zip.
 | `mod/UE4SS/AC8SurvivalMode/Scripts/main.lua` | The mod's runtime: rounds, the STORE, HUD, special rounds, leaderboard |
 | `mod/UE4SS/AC8SurvivalMode/Scripts/ai/` | Survival's enemy behaviour scripts |
 | `mod/UE4SS/AC8SurvivalMode/config/survival.default.ini` | Player settings (copied to `survival.ini` on first run) |
-| `runtime/survival_rt.c` | The native UE4SS mod in plain C (menu hook, spawner, ammo, events, music, leaderboard upload) |
+| `runtime/survival_rt.c` | The native UE4SS mod in plain C (menu hook, spawner, ammo, events, music, leaderboard upload), one translation unit with its parts #included: `survival_rt_game.c`, `coop.c`, `flight.c`, `survival_rt_lua.c` and theirs |
 | `tools/build_survival.py`, `tools/survival_events.py` | Build Survival's game packages and event package from the game's own files |
 | `tools/build_all.sh`, `tools/package_test.sh` | Build everything; make a release zip with test-only code stripped |
 | `tools/re/` | Reverse-engineering notes on the game's systems |
@@ -41,13 +41,16 @@ Loader. `release/README.txt` is the player guide that goes into every zip.
 | `AGENTS.md`, `SURVIVAL_SPEC.md`, `BUILD_PLAN.md`, `MISSION_REFERENCE.md` | Project rules, the agreed design, the plan, the stock-mission reference |
 
 ## Building
-See `tools/README.md`. In short: Python 3.8+, LLVM (clang + lld-link) for the native runtime, retoc and Oodle for
-packing, and your own copy of the game. The build extracts what it needs from your game files into `build/stock/`
-(never committed). Then:
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the whole setup, and `tools/README.md` for each tool. In short: Python
+3.8+, LLVM (clang + lld-link) for the native runtime, retoc and Oodle for packing, and your own copy of the game. Your
+machine's paths and the game's key go in a git-ignored `.env` (from `.env.example`). The build extracts what it needs
+from your game files into `build/stock/` (never committed). Then:
 
 ```sh
-tools/build_all.sh            # build/install/: the mod, ready to copy into the game
-tools/package_test.sh 0.57.1  # build/release/: a release zip
+python -I tools/env.py --init   # .env from .env.example; set AC8_DIR and the AES key in it
+python -I tools/env.py --check  # "ready" when everything is found
+tools/build_all.sh              # build/install/: the mod, ready to copy into the game
+tools/package_test.sh 0.57.1    # build/release/: a release zip
 ```
 
 No game assets are in this repository.

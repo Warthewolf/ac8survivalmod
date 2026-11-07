@@ -1,34 +1,43 @@
 SURVIVAL MODE 0.74.0 - WHAT TO TEST (ALYSSA)
+Build: AC8SurvivalMode_COOP2MP_0.74.0_TESTER_Online_COOP_ZFA44.zip (the keys are in the Key List file)
 Everything here is new and has NOT been in the game yet. Solo first, then co-op. After each session please send the
 whole ue4ss\Mods\AC8SurvivalMode folder's logs (AC8SurvivalMode_lua.log, AC8SurvivalMode.log, the crumbs files) and
 ue4ss\UE4SS.log, plus any crash folder. A note of the time something odd happened helps a lot.
 
 1. FIRST: the quick tests (solo, any round, in the break is easiest)
-   a. Ctrl+F10 (fishing): 8 shoals boxed at the North Shoal, SAL's boat nearby. Can you lock a shoal? Does one
-      missile kill it? The gun? A bomb? A splash when it dies? Press Ctrl+F10 again (spheres off), spawn again
-      (Ctrl+F10 x3 then x1) and try the gun again.
+   a. Ctrl+F10 (fishing TEST: only the shoals and the boat, no story, no subtitles, no clock): 8 shoals boxed round
+      SAL's boat. Can you lock a shoal? Does one missile kill it? The gun? A bomb? A splash when it dies? Press
+      Ctrl+F10 again (spheres off), spawn again (Ctrl+F10 x3 then x1) and try the gun again.
+      (Done in your first test: they spawned, one hit each, the splash played. Thank you!)
    b. Ctrl+F6 five times, a few seconds apart: does the sun move to sunset (2), stay (3), go to night with stars (4),
       and come back to normal (5)? Screenshots of 2 and 4 please.
    c. Ctrl+F12: four cruise missiles from the north: boxed? lockable? one missile each? Does the air raid siren
       play at the airfield and stop after 20 s? Let one reach the runway.
    d. Ctrl+F5: CHARLENE lands? Watch where she touches down, whether she bounces, pulls up, or stops on the runway.
    e. Ctrl+9 on an enemy: is it the ZFA-44 (black and grey, red and white fins)? Right way round? Burners at the back?
-      Ctrl+9 twice more on other enemies for the other paints: which one looks right?
+      Is the laser pod on its back painted (not black, not the body's pattern smeared on it)? Ctrl+9 again on other
+      enemies for paints 2, 3 and 4: which one looks right? (Paint 4 should give the pod a metal shine.)
    f. Ctrl+= (the Spear at you): fly straight once, then turning: does a rod come down? Damage? Ctrl+BACKSPACE: a UAV
       locks you (a laser?), kill it inside 8 s (it should say STRIKE CANCELLED), then again and let it strike.
    g. Ctrl+, (storm): does lightning hit you about every 10 s? The HUD should black out for 2 s, a noise, a shake,
       NO damage. Press again: does the 3 s "stall" do anything to your plane?
 
 2. THE ROUNDS (solo)
-   - GONE FISHIN' (Ctrl+HOME): SAL's subtitles, 3 minutes, catches pop up as you kill shoals, the weigh-in card at
-     the end (grade, pay). Is the pay fair? Does the sky start getting later each round after it?
+   - GONE FISHIN' (Ctrl+HOME: THIS is the real round with SAL's subtitles; press it in the break between rounds):
+     SAL and COMONA CONTROL talk on the subtitle strip, then 48 shoals all round SAL's boat and 3 minutes on the
+     clock, catches pop up as you kill shoals, the weigh-in card at the end (grade, pay). Is the pay fair? Does the
+     sky start getting later each round after it?
    - Ctrl+PAGE_UP then play THE FESTIVAL: the thanks, the siren, searchlights, Tu-160s from three sides, missiles
-     to shoot down. Does it end when the bombers are down? Is it too hard / too easy?
+     to shoot down. Each formation keeps launching salvos until it's shot down. Does it end when the bombers are
+     down? Is it too hard / too easy?
    - Ctrl+PAGE_DOWN a few times: night (can you still see the HUD, the airfield, targets?), then sunrise, midday.
-   - Ctrl+0 THE ESCORT: CHARLENE and her escorts from the far south-west, enemies after her. Do they all land? Does
+   - Ctrl+0 THE ESCORT: CHARLENE and her escorts from the far south-west, enemies after her: a wave of 4-12
+     fighters about every 45 s, each from a different direction, until she touches down. Do they all land? Does
      the round end? Then the STORE's AIRFIELD page: VAMPIRES. Do ZFA-44s come out of the ship's
      containers (or appear above it)? Do they fight?
-   - Ctrl+- THE DECOY: the bait UAV up north, then the trap: UAVs lock you, 8 s to kill each.
+   - Ctrl+- SHOOT DOWN THE RECON DRONE: the recon drone up north, then the trap: UAVs lock you, 8 s to kill
+     each; a Spear strike every 10 s while they're up, some miss; a hit takes half your health (a second one
+     with half or less left shoots you down); the drone's own strike on the airfield costs it 40 HP.
    - Ctrl+. IFF FATAL ERROR: the A-10, its storm blacking out your HUD near it.
 
 3. CO-OP (host + joiners): the same rounds once each. Watch for: every player seeing the same sky; each player's own

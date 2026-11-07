@@ -34,7 +34,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 local function near(a, b, eps) return type(a) == "number" and math.abs(a - b) <= (eps or 0.001) end
@@ -94,15 +95,7 @@ SETUP = { enemyX = function() return 1 end, specialsX = function() return 1 end,
           skillAdd = function() return 0 end }
 
 -- the real parts (sv_core's SCRIPT_DIR and log file in the work folder)
-local function part(name, chunk, edits)
-    local src = readAll(MOD .. "/Scripts/" .. name)
-    for _, e in ipairs(edits or {}) do
-        local n
-        src, n = src:gsub(e[1], e[2], 1)
-        assert(n == 1, name .. ": " .. e[1] .. " not found")
-    end
-    assert(load(src, chunk or ("=" .. name)))()
-end
+local function part(name, chunk, edits) PARTS.load(name, chunk, edits) end   -- (the part and its pieces, each edit in the piece with its text)
 part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 local logFile = assert(io.open(WORK .. "/test_lua.log", "wb"))
@@ -133,7 +126,7 @@ local function line(prefix, from)
 end
 local function deep(t) if type(t) ~= "table" then return t end; local c = {}; for k, v in pairs(t) do c[k] = deep(v) end; return c end
 local function body(file, from)
-    local s = readAll(MOD .. "/Scripts/" .. file)
+    local s = PARTS.read(file)
     local a = s:find(from)
     local b = a and s:find("\nend\r?\n", a + 1)
     return a and s:sub(a, b or #s) or ""
@@ -952,7 +945,7 @@ check(has(body("sv_spawn.lua", "\nfunction ROLE.pickRound%("), "PROF.roleW") and
       "sv_spawn: the role mix and the Lancers' height")
 check(has(readAll(MOD .. "/Scripts/sv_rows.lua"), 'id:find("^NPC_FCS_PlaneFlr") and not (mind or glitch or valka)'),
       "sv_rows: the flare slot (not the specials' own)")
-check(has(readAll(MOD .. "/Scripts/sv_coop.lua"), "profile = true, flares = true"), "sv_coop: [profile] and [flares] PERSONAL (never a host's)")
+check(has(PARTS.read("sv_coop.lua"), "profile = true, flares = true"), "sv_coop: [profile] and [flares] PERSONAL (never a host's)")
 check(has(body("sv_director.lua", "\nfunction DIR.roundStart%("), "D.counter.tail"), "sv_director: DIR.roundStart reads D.counter.tail")
 local pb = st:sub(st:find("P6: the learning layer", 1, true) or #st)
 check(not pb:find("math%.random%(") and not pb:find("FindAllOf") and not pb:find("nameOf%("),

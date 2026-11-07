@@ -30,7 +30,7 @@ const SPECIALS = { shuttle: "Comona Defense", anomaly: "The Anomaly", amphibious
                    spaceport: "Spaceport Assault", retake: "Spaceport Retake",
                    valka: "VALKA",        // (0.73.83: her wins were dropped before the score, 3,000 x the difficulty short)
                    // (0.74.0, code review of 2026-11-07: the new specials, dropped as unknown kinds before)
-                   escort: "The Escort", decoy: "The Decoy", fishing: "Gone Fishin'", festival: "The Festival" };
+                   escort: "The Escort", decoy: "Shoot Down The Recon Drone", fishing: "Gone Fishin'", festival: "The Festival" };
 // The player's aircraft (its blueprint's code, e.g. su57 from BP_PlayerPlane_PP0021_su57) by its in-game name
 const AIRCRAFT = { a10c: "A-10C Thunderbolt II", f02a: "F-2A", f04e: "F-4E Phantom II", f15c: "F-15C Eagle",
   f22a: "F-22A Raptor", f35c: "F-35C Lightning II", f18c: "F/A-18C Hornet", j39e: "Gripen E", su34: "Su-34 Fullback",

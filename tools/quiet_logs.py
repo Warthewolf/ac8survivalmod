@@ -3,12 +3,15 @@ every release stage; the user's dev install keeps them: tools/package_dev.sh doe
 ("choppy" and stuttering in solo play): the enemy weapons log (Scripts/sv_weaponlog.lua) looks at every weapon object in
 the world every 0.5 s, 19 ms of each 250 ms tick in the user's Spaceport rounds (half the tick); the audit
 (Scripts/sv_audit.lua) samples every enemy's target. On the staged copies only, never the sources:
-  - Scripts/sv_config.lua: CFG.log.weapons.enabled and CFG.log.audit.enabled false
+  - Scripts/sv_config.lua (the part or its next pieces: tools/lua_parts.py): CFG.log.weapons.enabled and
+    CFG.log.audit.enabled false
   - config/survival.default.ini: their `;enabled = true` lines say false
 A player's own survival.ini can still turn them on ([log.weapons] / [log.audit] enabled = true).
 """
 import os
 import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lua_parts
 
 
 def sub(s, old, new, what):
@@ -17,11 +20,9 @@ def sub(s, old, new, what):
 
 
 def main(mod):
-    p = os.path.join(mod, 'Scripts', 'sv_config.lua')
-    s = open(p, encoding='utf-8', newline='').read()
-    s = sub(s, 'weapons = { enabled = true, every_s = 0.5,', 'weapons = { enabled = false, every_s = 0.5,', 'sv_config log.weapons')
-    s = sub(s, 'audit = { enabled = true, sample_s = 5,', 'audit = { enabled = false, sample_s = 5,', 'sv_config log.audit')
-    open(p, 'w', encoding='utf-8', newline='').write(s)
+    scripts = os.path.join(mod, 'Scripts')
+    lua_parts.sub(scripts, 'sv_config', 'weapons = { enabled = true, every_s = 0.5,', 'weapons = { enabled = false, every_s = 0.5,', 'sv_config log.weapons')
+    lua_parts.sub(scripts, 'sv_config', 'audit = { enabled = true, sample_s = 5,', 'audit = { enabled = false, sample_s = 5,', 'sv_config log.audit')
     p = os.path.join(mod, 'config', 'survival.default.ini')
     s = open(p, encoding='utf-8', newline='').read()
     for sec in ('[log.weapons]', '[log.audit]'):

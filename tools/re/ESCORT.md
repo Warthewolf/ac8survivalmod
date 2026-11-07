@@ -1,5 +1,8 @@
 # THE ESCORT (CHARLENE) and the ZFA-44 carriers (2026-11-06)
 
+> 0.74.4 (2026-11-07): the landing below is out of date: the escorts now all go onto a ~15 km circuit from her rollout, one every 15 s, landed once taxiing, the round won 210 s after she lands; the carriers launch every arm (no "still up" skip). AGENTS.md's 0.74.4 entry has the details.
+
+
 The user (2026-11-06): an ESCORT special round. CHARLENE, an allied B-1 Lancer, spawns in the map's south-west corner,
 flies to Comona Airport under constant attack and lands. Four escorts (Su-57 YORKE, Su-57 ROCK, Su-33 ALI, Su-35
 DANIELLE) land after her. The round is lost if she dies and completes once all five have landed. Then she says: "Thank
@@ -83,8 +86,13 @@ not yet run in game. None of it is a hard rule until a test confirms it.
   salvo, top cover, regroup), co-op's split hunt (sv_coop.lua) and the allies' hunt and VOID WATCHER 1's strike flight
   (sv_allies.lua). Back on you (PlayerOnlyNoLimit; else RE_SV_FlightOrders_NN) at her touchdown or loss.
 - The round's flights spawn ahead of her (`ahead`: DIR.spawnAt wrapped, `share` of them, km ahead of her heading within
-  side_km), and more come while she flies (`reinforce`: every every_s with fewer than `below` enemies up, a free pool
-  flight of `size` ahead of her at alt_m, at most `max` a round; each always goes after her).
+  side_km), and waves come at her until she touches down (`waves`, 2026-11-07, the user: "Keep spawning Multiple enemy
+  fighters until she lands, have them range from 4 to 12 aircraft spawning per wave in different directions"): every
+  every_s (the first first_s after her spawn) min_n .. max_n aircraft of free pool flights (2-, 4- and 6-ships; one shot
+  down flies again), all from one of eight directions round her (ahead, ahead right, ... ahead left; never the last
+  wave's nor one next to it), km out, spread_deg apart, alt_m up, facing her; held while max_up enemies are up; each
+  always goes after her. Log `escort: wave N: A aircraft (W asked) <side> of CHARLENE, from the <compass>, K km out: ...`,
+  `escort: wave N held: ...`.
 - The escorts (`guard`): every every_s each escort's planes onto an enemy within km of her (EngagementOrderOverride on an
   allied plane onto an enemy: **[test]**, COOP.coverFor's way).
 - Landing (`landing`, `geo`), each step its record `<rec><Final|Roll|Taxi|Stop>`: her final within final_at_m of the IAF

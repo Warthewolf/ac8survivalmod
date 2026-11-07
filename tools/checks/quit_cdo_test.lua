@@ -16,7 +16,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
@@ -55,9 +56,7 @@ function SV_UnitAlive() return 0 end
 local activators = {}
 function FindAllOf(cls) if cls == "LivePlayerWeaponActivator" then return activators end return {} end
 
-local function part(name, chunk)
-    assert(load(readAll(MOD .. "/Scripts/" .. name), chunk or ("=" .. name)))()
-end
+local function part(name, chunk) PARTS.load(name, chunk) end   -- (the part and its pieces)
 part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 function log(s) logs[#logs + 1] = s end
@@ -288,7 +287,7 @@ local ladon = readAll(MOD .. "/Scripts/sv_ladon.lua")
 check(not has(ladon, "valid(HIT.cdo)") and has(ladon, "liveObj(HIT.cdo)"), "sv_ladon: no valid(HIT.cdo), liveObj on every use")
 local reset = ladon:match("function HIT%.reset%(%)(.-)\nend")
 check(reset and has(reset, "HIT.cdo = nil"), "HIT.reset (the level's drop, runLeft) forgets it")
-local an = readAll(MOD .. "/Scripts/sv_anomalies.lua")
+local an = PARTS.read("sv_anomalies.lua")
 local fs = an:match("function SPC%.V%.flareStop%(s%)(.-)\nend")
 check(fs and has(fs, "liveObj(a)") and not has(fs, "valid(a)"), "SPC.V.flareStop: liveObj before its K2_DestroyActor")
 

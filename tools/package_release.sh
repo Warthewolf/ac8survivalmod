@@ -5,6 +5,8 @@
 #     Code for sending the files remains"): dlls/main.dll rebuilt with SV_OFFLINE (runtime/build.sh OFFLINE=1), main.lua,
 #     survival.default.ini and README.txt through tools/edition.py offline; the zip is refused if any of it still holds
 #     network code (WinHTTP, bcrypt, the Worker's address, SV_Post*, SV_SteamName, the run queue or pilot files).
+# Where: the zip and its .buildhash.txt always go to the main tree's build/release (E:\ACE8 Survival Mode\build\release),
+#   from any worktree (tools/release_dir.sh; user, 2026-11-07); RELEASE_DIR=<folder> overrides it.
 # Both: test-only code stripped (tools/strip_test_only.py), no player settings, logs or leaderboard files.
 # Online: the release's build hash (tools/build_hash.py over the staged files, as the game's runtime works it out) is
 #   printed and written next to the zip, <zip>.buildhash.txt: register it on the leaderboard Worker's /admin page
@@ -114,7 +116,16 @@ print('offline check: no network code in', st)
 fi
 # BUILD_NAME=<name>: a build line's own name in the zip's (BUILD_NAME=COOP2MP: tools/re/COOP2MP.md)
 tv=$ver; [ "$TESTER" = 1 ] && tv="${ver}_TESTER"
-out="build/release/AC8SurvivalMode_${BUILD_NAME:+${BUILD_NAME}_}${tv}_$Ed$suffix.zip"
+. tools/release_dir.sh
+out="$REL/AC8SurvivalMode_${BUILD_NAME:+${BUILD_NAME}_}${tv}_$Ed$suffix.zip"
+# ((2026-11-07) the user: "update the version number each time you hand me a new file": three different builds had all
+# been 0.74.0-coop2mp.92) a zip of this name already made: refused, the version bumped first (tools/bump_version.py);
+# REPACK=1 makes it again anyway (the same build, e.g. a lost zip)
+if [ -f "$out" ] && [ "$REPACK" != 1 ]; then
+    echo "package_release.sh: $out already exists: bump the version first (python -I tools/bump_version.py, then"
+    echo "  sh tools/build_all.sh and package as the new version), or REPACK=1 to make the same build's zip again"
+    exit 3
+fi
 python -I -c "
 import os, sys, zipfile
 st, out = sys.argv[1], sys.argv[2]
@@ -137,4 +148,8 @@ if [ "$ed" = online ]; then
         echo "zip $(basename "$out")"
     } > "$out.buildhash.txt"
     echo "build hash: $bh (mod $mv; $out.buildhash.txt)"
+    # ((2026-11-07) the user: "rework the leaderboard so I don't have to continually register a new version everytime
+    # we patch") registered on the Worker here, with the admin key in the main tree's leaderboard/keys.secret
+    # (ADMIN_KEY=...); without it, said, and the zip is registered by hand on /admin as before. SV_LB_REGISTER=0 skips it.
+    python -X utf8 -I tools/lb_register.py "$out.buildhash.txt"
 fi

@@ -17,7 +17,8 @@ local MOD, WORK, ROLE = arg[1], arg[2], arg[3]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
 -- (CRLF checkouts: the sources searched as git stores them, LF)
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 do
     local rawOpen = io.open
@@ -166,9 +167,8 @@ local zfaHere = {}                               -- (this game's own ZFA-44s, by
 ESC = { localZfa = function() return zfaHere end,
         beforeHostEvent = function(name) evOrder[#evOrder + 1] = "before " .. tostring(name) end }
 
-dofile(MOD .. "/Scripts/sv_config.lua")
-local src = readAll(MOD .. "/Scripts/sv_coop.lua"):gsub("\nlocal M = {", "\nM = {", 1)
-assert(load(src, "=sv_coop.lua"))()
+PARTS.dofile("sv_config.lua")
+PARTS.load("sv_coop.lua", "=sv_coop.lua", { { "\nlocal M = {", "\nM = {" } })   -- (its pieces too; M exposed)
 local M = _G.M
 CFG.coop.enabled = true
 local function tick(dt)

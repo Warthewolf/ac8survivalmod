@@ -46,3 +46,9 @@ python -I tools/edition.py online "$mod"/Scripts/*.lua "$mod/config/survival.def
 python -X utf8 tools/checks/lua_check.py "$mod"/Scripts/*.lua | tail -1
 grep -m1 -E '^(local )?VERSION = ' "$mod/Scripts/main.lua"
 echo "staged $st (test keys kept: $(grep -c 'TEST ONLY BEGIN' "$mod"/Scripts/sv_main.lua) test blocks in sv_main.lua)"
+# ((2026-11-07) the installed build's hash registered on the leaderboard by itself: tools/lb_register.py, the admin key
+# in the main tree's leaderboard/keys.secret (ADMIN_KEY=...); SV_LB_REGISTER=0 skips it)
+bh=$(python -X utf8 -I tools/build_hash.py "$st/ue4ss/Mods")
+mv=$(grep -m1 -E '^(local )?VERSION = ' "$mod/Scripts/main.lua" | sed 's/.*"\(.*\)".*/\1/')
+echo "build hash: $bh (mod $mv)"
+python -X utf8 -I tools/lb_register.py --mod "$mv" --build "$bh" --note "dev $(basename "$st")"

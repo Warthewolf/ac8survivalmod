@@ -275,9 +275,13 @@ local function launch(now, s, G, g, why)
         if not busy and (type(SV_UnitAlive) ~= "function" or SV_UnitAlive(FEST.unit(g, k)) <= 0) then free = k; break end
     end
     if not free then
-        log(string.format("festival: the %s formation passes its launch point (%s): no missile unit free (all three still up): no salvo", g, why))
+        if not G.noFreeSaid then                       -- (said once till its next salvo: it's tried again every few seconds)
+            G.noFreeSaid = true
+            log(string.format("festival: the %s formation's next salvo waits (%s): no missile unit free (all three still up)", g, why))
+        end
         return false
     end
+    G.noFreeSaid = nil
     local unit = FEST.unit(g, free)
     local x, y, z = FEST.launchPoint(g)
     local r = FEST.spawn(unit, x, y, z, FEST.launchYaw(g))
@@ -477,7 +481,9 @@ function FEST.roundTick(now, s)
                 local alive = type(SV_UnitAlive) == "function" and SV_UnitAlive(G.unit) or #ps
                 if alive < 0 then alive = #ps end
                 G.alive = alive
-                bombers = bombers + math.max(0, alive)
+                -- ((2026-11-07) the row read 24 with 12 Tu-160s up: SV_UnitAlive counts each plane's parts too; the
+                -- planes themselves, when they're known)
+                bombers = bombers + ((alive <= 0) and 0 or (#ps > 0 and math.min(#ps, alive) or alive))
                 if alive <= 0 and now - s.raidAt >= 5 then
                     if not G.downSaid then
                         G.downSaid = true
@@ -493,13 +499,15 @@ function FEST.roundTick(now, s)
                             if math.sqrt(dx * dx + dy * dy) / 100000 <= n(c.launch_r_km, 3) then near = true end
                         end
                     end
-                    local gap = n(c.launch_gap_s, 120)
-                    if near and now - (G.last or -1e9) >= gap then
-                        launch(now, s, G, g, "over its launch point")
-                        G.due = now + n(c.lap_s, 216) + n(c.late_s, 30)
-                    elseif now >= G.due and now - (G.last or -1e9) >= gap then
-                        launch(now, s, G, g, "its clock (its pass not seen)")
-                        G.due = now + n(c.lap_s, 216)
+                    -- ((2026-11-07) the user: "have the Bombers continually launching Cruise Missiles until the bombers
+                    -- are killed": a salvo every salvo_every_s while the formation's up (its first over its launch point,
+                    -- or first_launch_<g> on), the next of its three missile units once one is free; none free: again
+                    -- retry_s on)
+                    local first = G.launches == 0
+                    if ((first and near) or now >= G.due) and now - (G.last or -1e9) >= n(c.launch_gap_s, 30) then
+                        local ok = launch(now, s, G, g, (not first and "its next salvo") or (near and "over its launch point")
+                                                        or "its clock (its pass not seen)")
+                        G.due = now + (ok and n(c.salvo_every_s, 30) or n(c.retry_s, 5))
                     end
                 end
             end
@@ -773,12 +781,14 @@ testKey("PAGE_UP", "sv_festival.lua's THE FESTIVAL now", function()
     local target = D.round + 1
     local F = target - math.floor(tonumber(CFG.specials.festival.round_after) or 6)
     RUN.fished = RUN.fished or F
-    if SKY and SKY.arcSet then SKY.arcSet(math.max(1, F), "test key Ctrl+PAGE_UP") end
+    -- ((2026-11-07) an F under 1 was clamped to 1, so an early test round flew at F+1, not the sunset: F may be
+    -- under 1 for a test, its round still F + round_after)
+    if SKY and SKY.arcSet then SKY.arcSet(math.max(-20, F), "test key Ctrl+PAGE_UP") end
     D.forceSpecial = "festival"
     local soon = D.state == "wait"
     if soon then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
     hudCallout("TEST: THE FESTIVAL", soon and "STARTING NOW" or "NEXT ROUND")
-    log(string.format("test: Ctrl+PAGE_UP, round %d is THE FESTIVAL (the arc's F %d; %s)", target, math.max(1, F),
+    log(string.format("test: Ctrl+PAGE_UP, round %d is THE FESTIVAL (the arc's F %d; %s)", target, math.max(-20, F),
         soon and "starting in 3 s" or "after this round"))
 end)
 -- TEST ONLY END

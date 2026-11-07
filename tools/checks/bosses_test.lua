@@ -52,7 +52,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
@@ -116,15 +117,7 @@ local callouts = {}
 function hudCallout(text, sub, big) callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
 
 -- the real parts (sv_core's SCRIPT_DIR and log file in the work folder)
-local function part(name, chunk, edits)
-    local src = readAll(MOD .. "/Scripts/" .. name)
-    for _, e in ipairs(edits or {}) do
-        local n
-        src, n = src:gsub(e[1], e[2], 1)
-        assert(n == 1, name .. ": " .. e[1] .. " not found")
-    end
-    assert(load(src, chunk or ("=" .. name)))()
-end
+local function part(name, chunk, edits) PARTS.load(name, chunk, edits) end   -- (the part and its pieces, each edit in the piece with its text)
 part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 local logFile = assert(io.open(WORK .. "/test_lua.log", "wb"))
@@ -158,7 +151,7 @@ part("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction st
                              { "\nlocal function tailTick%(", "\nfunction tailTick(" } })
 part("sv_ladon.lua"); part("sv_alicorn.lua"); part("sv_stats.lua"); part("sv_tells.lua")
 part("sv_tactical.lua")                                   -- ((0.73.77) G2: UP.healthGuard with HIT.tick)
-part("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" }, { "\nlocal function mirroredEvent%(name%)", "\nfunction mirroredEvent(name)" },
+part("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" },   -- (mirroredEvent, hostEvent, hostSync: globals of sv_coop's pieces)
                            { "\nlocal function onJoinerMessage%(f%)", "\nfunction onJoinerMessage(f)" } })
 function searchAircraft(a) return a end
 function playerOnAirfield() return grounded end          -- (sv_rounds.lua's own reads where you are)
@@ -1902,7 +1895,7 @@ end
 
 print("the hooks, by their place in the source")
 local function body(file, from_)
-    local src = readAll(MOD .. "/Scripts/" .. file)
+    local src = PARTS.read(file)
     local a = src:find(from_)
     local b = a and src:find("\nend\r?\n", a + 1)
     return a and src:sub(a, b or #src) or ""
@@ -1912,10 +1905,10 @@ check(has(body("sv_ai.lua", "\nfunction ACE%.hunt%("), "ANOM.packHeld(p)"), "ACE
 check(has(body("sv_alicorn.lua", "\nfunction SPC%.alicornTick%("), "pcall(SPC.alicornDeck, now, s, c)"), "alicornTick: the deck each second")
 check(has(body("sv_ladon.lua", "\nfunction SPC%.ladonTick%("), "pcall(SPC.ladonRage, now, s, k)"), "ladonTick: the rage at a kill")
 check(has(readAll(MOD .. "/Scripts/sv_hud.lua"), "t.glitch_row_allout"), "the HUD row: AB.L..IN's phase 3")
-check(has(readAll(MOD .. "/Scripts/sv_coop.lua"), '"^RE_SV_AnomalyPack",'), "KEEP_EVENTS: ^RE_SV_AnomalyPack")
-check(has(readAll(MOD .. "/Scripts/sv_coop.lua"), 'alive, lv, gp, al,'), "the host's \"rnd\": AB.L..IN's phase")   -- ((0.73.77) the round's special after it)
-check(has(body("sv_coop.lua", "\nlocal function clientRounds%("), "D.glitchPhase = r.glitchPhase")
-      and has(body("sv_coop.lua", "\nlocal function clientRounds%("), "pcall(ANOM.clientGlitch, now)"), "clientRounds: the phase kept, the copy's pods")
+check(has(PARTS.read("sv_coop.lua"), '"^RE_SV_AnomalyPack",'), "KEEP_EVENTS: ^RE_SV_AnomalyPack")
+check(has(PARTS.read("sv_coop.lua"), 'alive, lv, gp, al,'), "the host's \"rnd\": AB.L..IN's phase")   -- ((0.73.77) the round's special after it)
+check(has(body("sv_coop.lua", "\nfunction clientRounds%("), "D.glitchPhase = r.glitchPhase")
+      and has(body("sv_coop.lua", "\nfunction clientRounds%("), "pcall(ANOM.clientGlitch, now)"), "clientRounds: the phase kept, the copy's pods")
 check(has(body("sv_rounds.lua", "\nlocal function startRound%("), "D.taken = taken"), "startRound: the round's own flights for the deck")
 -- (0.73.77)
 check(has(body("sv_rounds.lua", "\nlocal function specialTick%("), "pcall(SPC.endTick, now, D.special)")
@@ -1924,10 +1917,10 @@ check(has(body("sv_rounds.lua", "\nlocal function startRound%("), "\"the next ro
 check(has(body("sv_rounds.lua", "\nfunction roundsTick%("), "pcall(tailTick, now, alive)")
       and has(body("sv_rounds.lua", "\nfunction roundsTick%("), "pcall(SPC.endTick, now, D.special, \"its round clear\")"),
       "roundsTick: the tail while fighting, the clean-up's backstop at the round clear")
-check(has(readAll(MOD .. "/Scripts/sv_anomalies.lua"), "pcall(SPC.cleanUp, { c.eml_unit }"), "valkaTick: her opener railgun cleaned up at its removal")
-check(has(readAll(MOD .. "/Scripts/sv_anomalies.lua"), "pcall(SPC.cleanUp, { c.unit, c.eml_unit }, \"her death\""), "valkaTick: her unit at her death")
-check(has(body("sv_coop.lua", "\nlocal function clientRounds%("), "D.hostSpecial = r.hostSpecial")
-      and has(body("sv_coop.lua", "\nlocal function clientRounds%("), "pcall(SPC.clientClean, now)"), "clientRounds: the host's special kept, its copies' clean-up")
+check(has(PARTS.read("sv_anomalies.lua"), "pcall(SPC.cleanUp, { c.eml_unit }"), "valkaTick: her opener railgun cleaned up at its removal")
+check(has(PARTS.read("sv_anomalies.lua"), "pcall(SPC.cleanUp, { c.unit, c.eml_unit }, \"her death\""), "valkaTick: her unit at her death")
+check(has(body("sv_coop.lua", "\nfunction clientRounds%("), "D.hostSpecial = r.hostSpecial")
+      and has(body("sv_coop.lua", "\nfunction clientRounds%("), "pcall(SPC.clientClean, now)"), "clientRounds: the host's special kept, its copies' clean-up")
 check(has(readAll(MOD .. "/Scripts/sv_ladon.lua"), "pcall(UP.healthGuard, pawn)"), "HIT.tick: the AIRFRAME upgrade before the health is read")
 
 logFile:close()
