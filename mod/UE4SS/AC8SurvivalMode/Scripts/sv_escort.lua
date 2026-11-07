@@ -1642,7 +1642,7 @@ function ESC.localOff(i, why)
     local n = ownZfaOff(i, nil)
     local q = 0
     for _, arm in ipairs((cc().launchers or {})[i] or {}) do
-        if type(arm.unit) == "string" and aliveOf(arm.unit) >= 0 then
+        if type(arm.unit) == "string" and aliveOf(arm.unit) == 0 then   -- ((2026-11-07) nothing up only)
             ESC.recycleQ[#ESC.recycleQ + 1] = { unit = arm.unit, at = os.clock() + 2, why = tostring(why) }
             q = q + 1
         end
@@ -1665,10 +1665,12 @@ function ESC.beforeHostEvent(name)
     if not (arm and type(arm.unit) == "string" and arm.record == name) then return nil end
     local nOff = ownZfaOff(s, now0() + 0.001)
     local n0, rec = aliveOf(arm.unit), "not on the list"
-    if n0 >= 0 and type(SV_Recycle) == "function" then
+    if n0 == 0 and type(SV_Recycle) == "function" then
         crumb("carrier (joiner) SV_Recycle " .. arm.unit)
         local okR, r = pcall(SV_Recycle, arm.unit, 1)
-        rec = string.format("%d alive, SV_Recycle %s", n0, okR and tostring(r) or ("error " .. tostring(r)))
+        rec = string.format("nothing up, SV_Recycle %s", okR and tostring(r) or ("error " .. tostring(r)))
+    elseif n0 > 0 then                                    -- ((2026-11-07) as the host's launch(): never with planes up)
+        rec = string.format("%d up: left as they are, never taken off with planes up", n0)
     end
     log(string.format("carrier: the host's %s here: %s first (%s); %d of this game's ZFA-44s of ship %d before it switched off",
         name, arm.unit, rec, nOff, s))
@@ -1770,6 +1772,7 @@ local function names()
     for _, e in ipairs(c.escorts or {}) do list[#list + 1] = { e.name_key, tagged(e.name) } end
     list[#list + 1] = { k.name_key, k.name }
     list[#list + 1] = { k.zfa and k.zfa.name_key, k.zfa and k.zfa.name }
+    list[#list + 1] = { k.zfa and k.zfa.sub_key, k.zfa and k.zfa.sub }   -- ((2026-11-07) its box's second line)
     for _, x in ipairs(list) do
         if type(x[1]) == "string" and type(x[2]) == "string" and SV_SetText(x[1], x[2]) == 1 then n = n + 1 end
     end
@@ -1846,7 +1849,21 @@ local function recycleTick()
         local e = q[i]
         if os.clock() >= e.at then
             table.remove(q, i)
-            if type(SV_Recycle) == "function" and aliveOf(e.unit) ~= -2 then
+            -- ((2026-11-07: AC8 crashed on a carrier arm's unit taken off with its planes up) a ZFA-44 unit with planes
+            -- still up isn't taken off by force: looked at again 5 s on, 6 times at most, then left on the list)
+            local up = aliveOf(e.unit)
+            if KIND[e.unit] == "zfa" and up > 0 then
+                e.tries = (e.tries or 0) + 1
+                if e.tries < 6 then
+                    e.at = os.clock() + 5
+                    q[#q + 1] = e
+                else
+                    log(string.format("escort: %s (%s) still has %d up after 30 s: left on the spawner's list, never taken off with planes up",
+                        e.unit, tostring(e.why), up))
+                end
+                return
+            end
+            if type(SV_Recycle) == "function" and up ~= -2 then
                 crumb("escort SV_Recycle " .. e.unit)
                 local okR, r = pcall(SV_Recycle, e.unit, 1)
                 log(string.format("escort: %s off the spawner's list (%s): SV_Recycle %s", e.unit, tostring(e.why), okR and tostring(r) or ("error " .. tostring(r))))

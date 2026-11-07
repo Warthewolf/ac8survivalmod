@@ -26,7 +26,7 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
 local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
@@ -272,6 +272,24 @@ check(me.down == true and me.alive == false, "COOP.players(): you down, not aliv
 check(survivalPC.view == P1 and #P1.comps == 1 and P1.comps[1].loc.X == -3000 and P1.comps[1].loc.Z == 800,
       "watching player 2: a camera 30 m behind and 8 m above their plane, the view on it")
 check(DOWN.hudLine() == "DOWN: WATCHING B  [O] NEXT", "the NEXT row: " .. tostring(DOWN.hudLine()))
+-- ((2026-11-07) the user: "enemies are attacking my downed aircraft") the host down: never a flight put on you (huntHost),
+-- the round's fighter flights sent after a living player's real plane instead (huntReal), every 5 s
+do
+    local rawReal, rawAny, rawOn, rawHunt, rawUp = COOP.huntReal, COOP.anyReal, COOP.realOn, COOP.huntReal, D and D.up
+    check(COOP.huntHost("ERA_Unit_01_Dep_Air0") == 0, "down: COOP.huntHost puts nothing on your plane (0)")
+    local hunted = {}
+    COOP.realOn, COOP.anyReal = function() return true end, function() return true end
+    COOP.huntReal = function(u) hunted[#hunted + 1] = u; return true, 1, 2 end
+    D = D or {}
+    D.up = { ERA_Unit_01_Dep_Air0 = true, ERA_Unit_02_Dep_Air0 = true }
+    local f2 = #logs + 1
+    COOP.M.downHuntAt = 0
+    tick()
+    check(#hunted == 2 and has(line("^coop: you're down: 2 flights %(4 planes%) sent after the other players instead", f2), "sent after"),
+          "down: the round's 2 fighter flights sent after a living player's real plane (huntReal), logged")
+    COOP.huntReal, COOP.anyReal, COOP.realOn = rawHunt, rawAny, rawOn
+    if D then D.up = rawUp end
+end
 check(P1.ownCam.active == false and P1.comps[1].active == true and line("^spectate: SV_Peer1's own cameras: CockpitCamera %(on%); 1 switched off", from) ~= nil,
       "their plane's own camera switched off while you watch it, ours on (the ADFX-02's view was its cockpit), logged")
 DOWN.nextView("key")

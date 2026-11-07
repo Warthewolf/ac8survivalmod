@@ -1524,3 +1524,41 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   stock), dressed as the ZFA-44 (a setting, CFG.allies.carrier.zfa host su47 / drone).
 - Dev / TESTER 7010ab71..., friends 5c8a94a4... (AC8SurvivalMode_COOP2MP_0.74.10_[TESTER_]Online_COOP_ZFA44.zip), all
   registered; INSTALLED (backup of 0.74.9 with the crash's logs: build/backup/install_before_0.74.10).
+
+## 0.74.11 (2026-11-07, runtime 0.32.25; a joiner's freeze after the host's crash; not yet run in game)
+- The user, with a joiner's logs (logs15.zip, 0.74.9): "menu bugged out at the airfield and would not open". That joiner
+  was down at the airfield in the user's game when the host crashed (its 18:44:08 = the host's 21:14:08). The host's
+  forwarded RE_SV_CargoLaunch_1_1 had made it take E_Unit_01_drone_5_0 off its list by force with 2 up as well (it
+  didn't crash there); its STORE was open in co-op's no-freeze mode when the link went (18:44:19: the mode back to stock
+  mid-STORE, then a stock restore of 33 AI objects never frozen, 18:44:37); host migration made it the host (18:45:05),
+  which built the ZFA-44 carrier again: its cargo ship spawned with the old one's ZFA-44s still in that game, and a second
+  later its game thread stopped (the last line 18:45:11; the Lua tick watchdog's "tick lost: queued again" at 18:45:22 and
+  18:45:42 from UE4SS's async thread): a freeze, the airfield menu the last thing on screen.
+- Never with planes up, anywhere: a joiner's ESC.beforeHostEvent leaves an arm's unit with planes up as it is (only
+  nothing up: off the list first); ESC.localOff queues only arms' units with nothing up; recycleTick doesn't force a
+  ZFA-44 unit with planes up off the list (looked at again 5 s on, 6 times, then left on it). Host migration doesn't build
+  the ZFA-44 carrier again (log `coop: migration: ZfaCarrier NOT built again ...`). escort_test, coop_migration_test.
+- The ZFA-44's box (the user's screenshot: "SU-47" over "ZFA-44": "remove that and change its aircraft name to
+  ZFA-44"): the box's first line is the MODEL row's name (DT_NPC_Model GameObjectDisplayName01; the NPC table has only 02),
+  so the host rows (SV_Zfa_Ally and its laser twin) are on SV_Model_Zfa, Survival's copy of the allied Su-47's model row
+  named SV_Zfa44 ("ZFA-44"), which Lua adds to DT_NPC_Model at the main menu before the host row (ZLAS.zfaModel, as the
+  shoal's); the rows' 02 SV_ZfaSub ("VAMPIRE", CFG.allies.carrier.zfa sub / sub_key). The build's read-back checks them.
+- Enemies on a downed host (the user: "enemies are attacking my downed aircraft"; 0.74.10 log: down 21:25:34 with
+  nobody else in the mission yet, the hunt's fallback COOP.huntHost put flights back on the host's plane): COOP.huntHost
+  puts nothing on you while you're down, and a pass every 5 s while you're down sends the round's fighter flights after a
+  living player's real plane (`coop: you're down: N flights (P planes) sent after the other players instead`); with no
+  other player flying, left as they are (logged once). coop_revive_test.
+- The carriers' launch, as the user saw it in 0.74.10: the container fired with arm 1's parked planes up launched nothing
+  new, so 10 s on the pose fallback spawned a 4-ship 300 m off the bow, 1100 m up: no launch smoke, one flight flying
+  together. Mission 17's launch = the container fire + RemoteEvent_FireWeapon_N 1 s later (each drone object's own launch
+  path along a PathTube camera path, its TGT box): not in Survival's records yet; under research (the user's idea: the
+  stock MARTYR drone dressed as the ZFA-44).
+- Crash D (cressendo, a joiner, 0.74.10, the user's 21:28:58; UECC 9810BB5D): access violation reading 0xdb8 in
+  ULiveFCSModule_ProjectileSpawnerFromWorldData's launch (vtable +0x2e0, 0x147bf1390: a NULL game object in its weak list
+  of units to launch) on the host's forwarded RE_SV_CargoLaunch_1_1, right after this joiner's ESC.beforeHostEvent took
+  E_Unit_01_drone_5_0 off its list by force with 2 up: the joiner path 0.74.11 removes. (A native guard on that slot,
+  skipping an entry that resolves to NULL, would be the backstop if a recycle ever slips through again: not built.)
+- Built 2026-11-07 (build_all exit 0, "leaderboard: runs go to ac8-survival-leaderboard...", every read-back "all there";
+  45 suites passed before it). Registered: dev stage_dev_0.74.11 and the TESTER zip d7fb39a4b4f8..., the friends' zip
+  AC8SurvivalMode_COOP2MP_0.74.11_Online_COOP_ZFA44.zip b689fab62ec3... (0.74.11-coop2mp.103, runtime 0.32.25). Not
+  installed yet (AC8 was running when the build finished).

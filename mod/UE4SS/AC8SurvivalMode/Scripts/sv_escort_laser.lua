@@ -28,9 +28,32 @@ local function short(o)                                   -- "BP_SwingTLS_ForMSL
     return (n:gsub("_C_%d+$", ""):gsub("_C$", ""))
 end
 
+-- ((2026-11-07) the user: the ZFA-44s' boxes read "SU-47") the host's own model row first (CFG.allies.carrier.zfa.model,
+-- the allied Su-47's but its name: "ZFA-44"), from Survival's DT_SV_ModelRows into the game's DT_NPC_Model, as the shoal's
+-- (sv_fishing.lua FISH.setup): the host row names it. -> in, why not
+function ZLAS.zfaModel()
+    local m = zc().model
+    if type(m) ~= "string" or m == "" then return true, "no model of its own" end
+    local mt, w1 = loadObject(ACE.model_table)
+    local mr, w2 = loadObject(ACE.model_rows)
+    if not (mt and mr) then return false, "the model tables didn't load (" .. tostring(w1 or w2) .. ")" end
+    for _, t in ipairs({ mt, mr }) do pin(t, nameOf(t)) end
+    local _, have = dtCall(mt, "FindRow", m)
+    if have == nil then
+        local _, r = dtCall(mr, "FindRow", m)
+        if r == nil then return false, m .. " not in " .. nameOf(mr) end
+        dtCall(mt, "AddRow", m, r)
+        _, have = dtCall(mt, "FindRow", m)
+    end
+    if have == nil then return false, m .. " NOT added to DT_NPC_Model" end
+    return true, m .. " in DT_NPC_Model"
+end
+
 function ZLAS.zfaRow(npc, mine, addRow, row)
     ZLAS.armed = false
     local z = zc()
+    local okM, why = ZLAS.zfaModel()                       -- (its model before its row: the row names it)
+    if not okM then return false, " (its model row " .. tostring(why) .. ": no ZFA-44 host)" end
     if z.laser == false then return addRow(row), " (laser off: the plain host)" end
     local function plain(why) return addRow(row), " (no laser: " .. why .. ")" end
     local fr, lr = tostring(z.laser_fcs_row), tostring(z.laser_row)

@@ -1051,7 +1051,10 @@ CFG = {
                          -- LASER_INTERCEPTOR.md "Built"): at the main menu, with laser_fcs_row from laser_fcs_table in the
                          -- game's DT_NPC_FCS, dt_npc's DT_NPC row is made from laser_row's; laser_flag counts its kills.
                          -- The names are the build's (tools/survival_events_escort.py ZFA_TLS_*); a change takes a restart)
-                         zfa = { name = "ZFA-44", name_key = "SV_Zfa44", dress = true, paint = 3, hide_s = 3, settle_s = 1.5,
+                         -- ((2026-11-07) its box: name (name_key) over sub (sub_key), the host row's both: the build's)
+                         zfa = { name = "ZFA-44", name_key = "SV_Zfa44", sub = "VAMPIRE", sub_key = "SV_ZfaSub",
+                                 model = "SV_Model_Zfa",       -- (the host row's model: the build's ZFA_MODEL_SV)
+                                 dress = true, paint = 3, hide_s = 3, settle_s = 1.5,
                                  per_tick = 1, preload = true,
                                  laser = true, laser_row = "SV_Zfa_AllyTLS", laser_fcs_row = "SV_FCS_ZfaTLS",
                                  laser_fcs_table = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcFCS.DT_SV_NpcFCS",

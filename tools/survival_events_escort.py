@@ -236,6 +236,13 @@ CARGO_AREA_M, CARGO_ALT_M = ALLY_SHIP_AREA_M, ALLY_SHIP_ALT_M
 # its hit spheres x1.25) and the one AC7 flew the ZFA-44EL's flight table on (the False Mihaly Su-47's boost table)
 ZFA_ROW, ZFA_NPC, ZFA_NPC_SOURCE, ZFA_MODEL = 'sv_zfa_ally', 'SV_Zfa_Ally', 'OP1026_su47_01', 'OP1026_su47_Ally'
 ZFA_NAME_KEY = 'SV_Zfa44'
+# ((2026-11-07) the user's screenshot: the boxes read "SU-47" over "ZFA-44": "remove that and change its aircraft name to
+# ZFA-44") the box's first line is the model row's name (DT_NPC_Model GameObjectDisplayName01): the host row on
+# ZFA_MODEL_SV, Survival's copy of ZFA_MODEL with ZFA_NAME_KEY for it (DT_SV_ModelRows; Lua adds it to DT_NPC_Model at the
+# main menu before the host row, as the shoal's); its second line the host row's GameObjectDisplayName02, ZFA_SUB_KEY
+# (Lua's text: CFG.allies.carrier.zfa.sub, "VAMPIRE")
+ZFA_SUB_KEY = 'SV_ZfaSub'
+ZFA_MODEL_SV = 'SV_Model_Zfa'
 ZFA_DRONE_SOURCE = 'E_Unit_01_drone_5_0'     # Mission 17's drone unit desc the launch units are copies of
 ZFA_PER_ARM = 2                              # a two-ship a firing (the arm's magazine holds 5)
 ZFA_PARK_Z = -24483.9                        # Mission 17's drones' height until launched (under the sea)

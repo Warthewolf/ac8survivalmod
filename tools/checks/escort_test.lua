@@ -179,15 +179,30 @@ end
 local npcT = dt("DT_NPC", {})
 local mineT = dt("DT_SV_NpcRows", { SV_Esc_Su57 = { r = 1 }, SV_Esc_Su33 = { r = 2 }, SV_Esc_Su35 = { r = 3 }, SV_Zfa_Ally = { r = 4 } })
 statics[PROBE_TABLES[2].path], statics[CFG.specials.shuttle.npc_rows] = npcT, mineT
+-- ((2026-11-07) the ZFA-44 host's own model row (its name "ZFA-44", not the Su-47's), into DT_NPC_Model first)
+local modelT, mineModelT = dt("DT_NPC_Model", {}), dt("DT_SV_ModelRows", { SV_Model_Zfa = { m = 1 } })
+statics[ACE.model_table], statics[ACE.model_rows] = modelT, mineModelT
 ESC.setup()
 check(npcT.rows.SV_Esc_Su57 and npcT.rows.SV_Esc_Su33 and npcT.rows.SV_Esc_Su35 and npcT.rows.SV_Zfa_Ally and ESC.rowsOk == true
       and ESC.zfaRowOk == true and has(line("escort: the escorts' and the ZFA-44's rows"), "SV_Zfa_Ally in DT_NPC"),
       "the escorts' and the ZFA-44 host's rows from DT_SV_NpcRows into DT_NPC at the main menu, logged")
+check(modelT.rows.SV_Model_Zfa ~= nil, "... the ZFA-44 host's own model row (named ZFA-44) into DT_NPC_Model before it")
+do                                                  -- (without its model row: no ZFA-44 host, said)
+    local keepM = statics[ACE.model_rows]
+    statics[ACE.model_rows] = dt("DT_SV_ModelRows", {})
+    local okM, why = ZLAS.zfaModel()
+    modelT.rows.SV_Model_Zfa = nil
+    okM, why = ZLAS.zfaModel()
+    check(okM == false and has(why, "SV_Model_Zfa not in"), "its model row missing from Survival's table: no host, said (" .. tostring(why) .. ")")
+    statics[ACE.model_rows] = keepM
+    ZLAS.zfaModel()
+end
 -- ((2026-11-07) the user: they "should each have a squadron tag KMG, as well as Charlene")
 check(texts.SV_CharleneCall == "[KMG] CHARLENE" and texts.SV_Yorke == "[KMG] YORKE" and texts.SV_Rock == "[KMG] ROCK"
       and texts.SV_Ali == "[KMG] ALI" and texts.SV_Danielle == "[KMG] DANIELLE" and texts.SV_Cargo == K.name
-      and texts.SV_Zfa44 == "ZFA-44",
-      "the seven names on their boxes set there (SV_SetText), CHARLENE's and her escorts' with the KMG tag")
+      and texts.SV_Zfa44 == "ZFA-44" and texts.SV_ZfaSub == "VAMPIRE",
+      "the eight names on their boxes set there (SV_SetText), CHARLENE's and her escorts' with the KMG tag, the ZFA-44's "
+      .. "ZFA-44 over VAMPIRE (2026-11-07: it read SU-47)")
 -- ((2026-11-07) the ZFA-44s' anti-missile laser, sv_escort_laser.lua) the host's row made from its laser twin's struct when
 -- the laser's on and its fire-control row went into DT_NPC_FCS (that row passed on whole, never read: hard rule 29); the
 -- plain row when it's off, when Survival's FCS table hasn't the row, when DT_NPC_FCS doesn't load
@@ -1069,9 +1084,17 @@ do
     local got = ESC.beforeHostEvent(arm2.record)
     local rec = false
     for i = nr + 1, #recycled do if recycled[i] == arm2.unit .. ":1" then rec = true end end
-    check(got == arm2.unit and rec and zA.active == false and zA.hidden == true
-          and has(line("carrier: the host's " .. arm2.record .. " here: " .. arm2.unit .. " first"), "of this game's ZFA-44s of ship 1 before it switched off"),
-          "a joiner: before the host's " .. arm2.record .. " fires here: " .. arm2.unit .. " off this game's list (force 1), ship 1's last flight here switched off")
+    -- ((2026-11-07) never with planes up: the host's crash came the moment such a unit was taken off and its arm fired)
+    check(got == arm2.unit and not rec and zA.active == false and zA.hidden == true
+          and has(line("carrier: the host's " .. arm2.record .. " here: " .. arm2.unit .. " first"), "2 up: left as they are, never taken off with planes up"),
+          "a joiner: before the host's " .. arm2.record .. " fires here: " .. arm2.unit .. " with 2 up left as it is (NOT taken off), ship 1's last flight here switched off")
+    alive[arm2.unit] = 0
+    nr = #recycled
+    ESC.beforeHostEvent(arm2.record)
+    rec = false
+    for i = nr + 1, #recycled do if recycled[i] == arm2.unit .. ":1" then rec = true end end
+    check(rec and has(line("carrier: the host's " .. arm2.record .. " here: " .. arm2.unit .. " first"), "nothing up, SV_Recycle"),
+          "... with nothing of it up: off this game's list first (force 1)")
     check(ESC.beforeHostEvent("RE_SV_ValkaShot") == nil and ESC.beforeHostEvent("RE_SV_CargoLaunch_1_9") == nil, "... any other event: nothing")
     alive[arm2.unit] = nil
     -- ship 1 gone on the host (left or sunk): this game's own ZFA-44s of it off
@@ -1080,9 +1103,9 @@ do
     alive[armU] = 2
     local q0 = #ESC.recycleQ
     ESC.onHost({ "es", "", "0", "0", "-1", "0", "1", "1", "0", "2" })
-    check(zB.active == false and zB.hidden == true and #ESC.recycleQ > q0
-          and has(line("carrier: the host's ZFA-44 CARRIER 1 is gone"), "of this game's own ZFA-44s of it switched off"),
-          "a joiner: ship 1 no longer up on the host's game (field 10): its own ZFA-44s of it off, its arms' units queued off the list")
+    check(zB.active == false and zB.hidden == true and #ESC.recycleQ == q0
+          and has(line("carrier: the host's ZFA-44 CARRIER 1 is gone"), "of this game's own ZFA-44s of it switched off, 0 of its arms' units"),
+          "a joiner: ship 1 no longer up on the host's game (field 10): its own ZFA-44s of it off; an arm's unit with planes up NOT queued off the list")
     alive[armU] = nil
     ESC.recycleQ = {}
     ESC.onHost({ "es", "route", "1", "5", "80", "23.4", "1", "1", "0" })   -- (an older host: no field 10, nothing more taken off)

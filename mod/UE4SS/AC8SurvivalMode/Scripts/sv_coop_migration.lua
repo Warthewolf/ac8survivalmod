@@ -236,9 +236,16 @@ local function afterTakeover(now)
             local it = CFG.shop and CFG.shop.items and CFG.shop.items[a.item]
             local kind = it and (it.role == "aa" or it.role == "sam" or it.role == "ciws") and it.role or nil
             local okB, ok, msg = false, false, "NOT AVAILABLE"
-            if type(shopBuildFor) == "function" then okB, ok, msg = pcall(shopBuildFor, buyer, a.item, 0, kind) end
+            -- ((2026-11-07) a joiner that took over froze a second after building the ZFA-44 carrier again: its cargo
+            -- ship spawned again with the old host's ship's ZFA-44s still in this game. A carrier isn't built again)
+            local skip = a.item == "ZfaCarrier"
+            if not skip and type(shopBuildFor) == "function" then okB, ok, msg = pcall(shopBuildFor, buyer, a.item, 0, kind) end
             a.tries = a.tries + 1
-            if okB and ok then
+            if skip then
+                table.remove(mg.rebuild, i)
+                log("coop: migration: ZfaCarrier NOT built again (its cargo ship spawned again with the old one's ZFA-44s still "
+                    .. "here froze a new host's game, 2026-11-07); the STORE can call another")
+            elseif okB and ok then
                 table.remove(mg.rebuild, i)
                 log(string.format("coop: migration: %s built again%s: %s", a.item, buyer and (" for player " .. (buyer + 1)) or "", tostring(msg)))
             elseif a.tries >= 10 then

@@ -269,6 +269,14 @@ def build_model_rows():
     set_prop(row[2], idx['MaxHealth'], 'MaxHealth', ('raw', 'Float', struct.pack('<f', survival_events.FISH_HEALTH)))
     set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.FISH_NAME_KEY))
     out.append(((survival_events.FISH_MODEL, 0), row))
+    # ((2026-11-07) the user: the ZFA-44s' boxes read "SU-47") the ZFA-44 host's model: the allied Su-47's (ZFA_MODEL) whole
+    # but its name, ZFA_NAME_KEY ("ZFA-44", Lua's text)
+    f = survival_events.fname(survival_events.ZFA_MODEL)
+    assert (f[1], f[2]) in crow, survival_events.ZFA_MODEL
+    row = copy.deepcopy(crow[(f[1], f[2])])
+    set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.ZFA_NAME_KEY))
+    assert survival_events.fname(survival_events.ZFA_MODEL_SV)[2] == 0
+    out.append(((survival_events.ZFA_MODEL_SV, 0), row))
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
     dt['rows'] = out

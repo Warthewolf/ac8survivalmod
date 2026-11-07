@@ -700,6 +700,10 @@ def build_npc_rows():
             for q in [q for q in row[2] if q[1].endswith('Coefficient') and q[1] != 'SphereCollisionRadiusCoefficient']:
                 set_prop(row[2], q[0], q[1], ('raw', 'Float', struct.pack('<f', 1.0)))
         assert survival_events.fname(npc)[2] == 0, npc
+        if npc == survival_events.ZFA_NPC:     # ((2026-11-07) its box: "ZFA-44" over ZFA_SUB_KEY's, never the Su-47's name:
+            # the name is the model row's (GameObjectDisplayName01): Survival's copy of the allied Su-47's, ZFA_MODEL_SV)
+            set_prop(row[2], model_idx, 'ModelId', ('name', survival_events.ZFA_MODEL_SV, 0))
+            set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(survival_events.ZFA_SUB_KEY))
         out.append(((npc, 0), row))
         if npc == survival_events.ZFA_NPC:     # (2026-11-07) ... and its twin with the anti-missile laser in a free slot
             slot = f'NpcFCSId{survival_events.ZFA_TLS_SLOT}'
@@ -1020,10 +1024,18 @@ def check_escort_decoy_build():
         assert hp is None or struct.unpack('<f', mission[row]['MaxHealthDifference'][2])[0] == hp, (row, hp)
     for row, src, model, fly_ally, unarmed, key, full in se.ESCORT_DECOY_NPC_ROWS:
         r = npc[row]
-        assert model is None or plain(r['ModelId']) == model, (row, r['ModelId'])
+        want_model = se.ZFA_MODEL_SV if row == se.ZFA_NPC else model     # ((2026-11-07) its own model row: its name)
+        assert model is None or plain(r['ModelId']) == want_model, (row, r['ModelId'])
         assert not fly_ally or plain(r['LuaSetId']) == 'NLID_0003_CP', (row, r['LuaSetId'])
         assert not unarmed or not any(k.startswith('NpcFCSId') and v for k, v in r.items()), row
         assert plain(r['LuaSetId']) != 'NLID_0400_CP', row
+    # ((2026-11-07) "ZFA-44" on its box, never "SU-47": both host rows on SV_Model_Zfa, named ZFA_NAME_KEY there, and
+    # ZFA_SUB_KEY under it)
+    zm = table(DATA + 'DT_SV_ModelRows', 'LiveModelDataTable')
+    assert se.ZFA_MODEL_SV in zm and zm[se.ZFA_MODEL_SV]['GameObjectDisplayName01'] == s(se.ZFA_NAME_KEY), zm.get(se.ZFA_MODEL_SV)
+    for zr in (se.ZFA_NPC, se.ZFA_TLS_NPC):
+        assert plain(npc[zr]['ModelId']) == se.ZFA_MODEL_SV and npc[zr]['GameObjectDisplayName02'] == s(se.ZFA_SUB_KEY), \
+            (zr, npc[zr].get('ModelId'), npc[zr].get('GameObjectDisplayName02'))
     print(f'  escort / decoy: {len(want)} units, {len(want_paths)} paths, {len(events)} events ({n_ex} execs: '
           + ', '.join(f'{c} {n}' for c, n in sorted(classes.items())) + ') and their rows read back from the packages: all there')
 

@@ -1295,6 +1295,7 @@ end
 function COOP.huntHost(unit)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if M.huntOn then M.huntOn[unit] = nil end
+    if DOWN and DOWN.me and DOWN.me() == true then return 0 end   -- ((2026-11-07) never onto your plane while you're down)
     return valid(pawn) and orderFlight(unit, pawn, PRIO_PLAYER_ONLY_NO_LIMIT) or 0
 end
 function COOP.watchable()

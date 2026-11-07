@@ -951,6 +951,32 @@ function hostTick()
             end
         end
     end
+    -- ((2026-11-07) the user: "enemies are attacking my downed aircraft": the host DOWN (sv_down.lua), the round's fighter
+    -- flights still on it (their appearance's orders name the host's plane) onto a living player's real plane, every 5 s;
+    -- none alive: left as they are (COOP.huntHost never puts them on you while you're down))
+    local imDown = DOWN ~= nil and DOWN.me ~= nil and DOWN.me() == true
+    if imDown and D and D.up and now >= (M.downHuntAt or 0) then
+        M.downHuntAt = now + 5
+        if COOP.realOn() and COOP.anyReal() then
+            local moved, planesN = 0, 0
+            for unit in pairs(D.up) do
+                if not (M.huntOn and M.huntOn[unit]) and poolIndex(unit) and not (BOMBER_UNIT and BOMBER_UNIT[unit])
+                    and not (ESC and ESC.holds and ESC.holds(unit)) then
+                    local ok, _, n = COOP.huntReal(unit)
+                    if ok then moved, planesN = moved + 1, planesN + (n or 0) end
+                end
+            end
+            if moved > 0 then
+                log(string.format("coop: you're down: %d flight%s (%d planes) sent after the other players instead", moved,
+                    moved == 1 and "" or "s", planesN))
+            end
+        elseif not M.downHuntSaid then
+            M.downHuntSaid = true
+            log("coop: you're down and no other player is flying: the enemies' orders left as they are (never put on you)")
+        end
+    elseif not imDown then
+        M.downHuntSaid = nil
+    end
 end
 
 -- a joiner asked for the whole picture (it loaded in, or its link came back): every flight with anything alive.

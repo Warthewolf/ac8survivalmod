@@ -13,7 +13,7 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
 local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 do
@@ -147,13 +147,13 @@ local function asJoiner(me, slot)
         if s ~= slot then M.peers[s] = { obj = obj("plane" .. s), sid = sid, real = true, shown = true } end
     end
     inbox[#inbox + 1] = "0|sq|" .. SID.host .. "|2:" .. SID.b .. ",1:" .. SID.a .. ",3:" .. SID.c
-    inbox[#inbox + 1] = "0|al|AAGun:0,Wingmen:" .. SID.c
+    inbox[#inbox + 1] = "0|al|AAGun:0,Wingmen:" .. SID.c .. ",ZfaCarrier:" .. SID.a   -- ((2026-11-07) a carrier too)
     D = { round = 5, state = "fighting", now = 500, startRound = 1 }
     tick()
 end
 asJoiner(SID.b, 2)
 check(M.succ and #M.succ == 3 and M.succ[1].sid == SID.b and M.hostSid == SID.host, "the host's line kept (3, you first)")
-check(M.allyList and #M.allyList == 2 and M.allyList[2].sid == SID.c, "the allies kept (2)")
+check(M.allyList and #M.allyList == 3 and M.allyList[2].sid == SID.c, "the allies kept (3, a ZFA-44 carrier among them)")
 local copy = obj("copy")
 copy.HealthInternal = 5000
 function copy:SetMinHealth() end
@@ -181,6 +181,13 @@ local names = COOP.joinWaiting(0)
 check(names and #names == 2, "the round held for the 2 others (" .. table.concat(names or {}, ", ") .. ")")
 tick(5)
 check(#built == 2 and built[1].price == 0, "5 s on: the allies and defences built again, at no cost (" .. #built .. ")")
+do       -- ((2026-11-07) a new host froze a second after building a carrier again: its ship spawned with the old one's ZFA-44s)
+    local zb = false
+    for _, b in ipairs(built) do if b.name == "ZfaCarrier" then zb = true end end
+    local said = false
+    for _, l in ipairs(logs) do if l:find("coop: migration: ZfaCarrier NOT built again", 1, true) then said = true end end
+    check(not zb and said, "... but not the ZFA-44 carrier (its ship spawned again froze a new host's game), logged")
+end
 local wb = nil
 for _, b in ipairs(built) do if b.name == "Wingmen" then wb = b end end
 check(wb and wb.slot == nil, "Cid's WINGMEN while Cid isn't back: the room's")
