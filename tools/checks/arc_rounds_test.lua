@@ -125,8 +125,8 @@ RUN.arcF = 7
 check(specialFor(13) == "festival", "round 13 (F + 6) is THE FESTIVAL")
 check(RUN.specialPick[13] == nil, "never rolled: no dice for it")
 check(SPC.kinds.spaceport.ready(12) == false, "no Spaceport the round before THE FESTIVAL")
-check(SPC.kinds.valka.ready(10) == false and SPC.kinds.valka.ready(18) == false and SPC.kinds.valka.ready(19) == true,
-    "VALKA's gate: none from 7 to 18, she can come from 19")
+check(SPC.kinds.valka.ready(10) == false and SPC.kinds.valka.ready(20) == false and SPC.kinds.valka.ready(21) == true,
+    "VALKA's gate: none from 7 to 20 (3 rounds of night), she can come from 21")
 check(SPC.kinds.valka.ready(nil) == true, "the bag's fill (no round): she stays in the bag")
 D.round = 10
 local okV, whyV = SPC.canStart("valka")
@@ -157,7 +157,10 @@ check(D.special and D.special.kind == "fishing" and D.waves and #D.waves == 1 an
 RUN.arcF = 7
 newD(12)
 startRound()
-check(D.special and D.special.kind == "festival" and D.waves[1][1] == "@festival" and #D.waves[1] == 1, "round 13: THE FESTIVAL, alone")
+local fwN = 0
+for _, w in ipairs(D.waves or {}) do for _, u in ipairs(w) do if u ~= "@festival" then fwN = fwN + 1 end end end
+check(D.special and D.special.kind == "festival" and D.waves[1][1] == "@festival" and fwN > 0,
+    "round 13: THE FESTIVAL, with fighters (\"Include more Enemy Aircraft in the Festival Mission\": " .. fwN .. " flights)")
 -- roundsTick's generic busy / over hold the round while the special runs
 D.state, D.at, D.queue, D.waves, D.wave = "fighting", 0, {}, { {} }, 1
 D.special.state = "raid"

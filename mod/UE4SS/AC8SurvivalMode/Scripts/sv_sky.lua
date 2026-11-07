@@ -677,8 +677,9 @@ end
 ---------------------------------------------------------------------------------------------------- the day-night arc
 -- (0.74.0; FISHING_ROUND_PLAN.md 0, tools/re/FISHING.md 5) GONE FISHIN' (round F, RUN.arcF) starts the run's sunset:
 --   k = round - F   0 the stock sky; 1-5 the sun sinks a step a round (sink_el / sink_az); 6 sunset (THE FESTIVAL);
---                   7 night (the light at the moon's spot, the moon on); 8 dawn in the east, rising over
---                   sunrise_rounds rounds; from 8 + sunrise_rounds midday, held for the rest of the run
+--                   7 .. 6 + night_rounds night (the light at the moon's spot, the moon on; 3 rounds: the user,
+--                   2026-11-07, "have the night time last for 3 rounds before the sun rises again"); 7 + night_rounds
+--                   dawn in the east, rising over sunrise_rounds rounds; then midday, held for the rest of the run
 -- A round drifts from its own sky toward the next one's (within_x of the step over round_s of its fight; a step that
 -- swaps the sun for the moon or back only swap_within_x, so the swap comes at its darkest point in the break, the light
 -- at dark_factor then), and the break finishes the step by the next round's start. Brightness (the light's factor, the
@@ -726,7 +727,8 @@ function SKY.arcF()
     if type(F) == "number" and F >= -20 and F == math.floor(F) then return F end   -- (under 1: a test key's early festival)
     return nil
 end
-function SKY.arcEnd() return 8 + math.max(1, math.floor(n(acfg().sunrise_rounds, 4))) - 1 end
+local function nightRounds() return math.max(1, math.floor(n(acfg().night_rounds, 3))) end
+function SKY.arcEnd() return 7 + nightRounds() + math.max(1, math.floor(n(acfg().sunrise_rounds, 4))) - 1 end
 function SKY.arcSet(F, why)
     F = tonumber(F)
     if not (RUN and F and F >= -20) then return false end
@@ -845,10 +847,10 @@ function SKY.arcAnchor(k, base)
         a.ex_min, a.ex_max, a.ex_bias = lerp(base.ex_min, dx1, t), lerp(base.ex_max, dx2, t), lerp(base.ex_bias, dx3, t)
         a.stars = 1
     elseif k == 6 then
-        a.el, a.az, a.set_el = n(c.sunset_el, 1), n(c.sunset_az, -105), n(c.set_el, -3)
+        a.el, a.az, a.set_el = n(c.sunset_el, 1), n(c.sunset_az, 160), n(c.set_el, -3)
         exp(c.sunset_exposure)
         a.sl_x, a.em, a.vfx, a.stars = n(c.sunset_skylight, 0.5), n(c.sunset_emissive, 100), n(c.sunset_vfx_ev, 8), 1
-    elseif k == 7 then
+    elseif k <= 6 + nightRounds() then              -- (the night: the same sky each of its rounds)
         a.mode = "moon"
         a.el, a.az, a.factor = n(ng.sun_el, 35), n(ng.sun_az, -130), n(ng.factor, 0.5)
         a.r, a.g, a.b = trip(ng.rgb, { 0.89, 0.96, 1 })
@@ -865,11 +867,16 @@ function SKY.arcAnchor(k, base)
         local mid = copy(base)
         mid.el, mid.az = n(c.midday_el, 52.9), n(c.midday_az, 180)
         mid.ex_min, mid.ex_max, mid.ex_bias = trip(c.day_exposure, { 13, 14, 0 })
-        local t = math.min(1, (k - 8) / R)
+        local t = math.min(1, (k - 7 - nightRounds()) / R)
+        -- ((2026-11-07) the user at round F+9: "sun is currently up in the sky but it's not back to normal brightness
+        -- yet") the light (exposure, sky light, glow, the effects' EV) back to the day's sunrise_light_x times as fast as
+        -- the sun climbs: by the sunrise's middle with 2
+        local tl = math.min(1, t * math.max(1, n(c.sunrise_light_x, 2)))
         for _, f in ipairs(FIELDS) do
             local x, y = dawn[f], mid[f]
             if type(x) == "number" and type(y) == "number" then
-                if f == "az" then a[f] = lerpAz(x, y, t) elseif LOG_FIELDS[f] then a[f] = lerpLog(x, y, t) else a[f] = lerp(x, y, t) end
+                local tf = MODE_FIELDS[f] and t or tl
+                if f == "az" then a[f] = lerpAz(x, y, tf) elseif LOG_FIELDS[f] then a[f] = lerpLog(x, y, tf) else a[f] = lerp(x, y, tf) end
             end
         end
         a.stars = t < 1 and 1 or 0                    -- (the stars at their stock again with midday: unseen by day)

@@ -267,7 +267,9 @@ ZFA_TLS_WEAPON = '/Game/Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForMSL'   
 ZFA_TLS_LAUNCHER_SOURCE = '/Game/Blueprints/Weapons/BP_FCS/CP/BP_FCS_ECM_00'       # its LauncherCommon's class ids
 ZFA_TLS_FCS_TABLE = '/Game/Mods/SurvivalMode/Data/DT_SV_NpcFCS'
 ZFA_TLS_FCS_ROW, ZFA_TLS_FCS_ROW_SOURCE = 'SV_FCS_ZfaTLS', 'NPC_FCS_VesselCIWS000'
-ZFA_TLS_NPC, ZFA_TLS_SLOT = 'SV_Zfa_AllyTLS', 3
+# ((0.74.12) the user: "swap the guns out for the Laser Interceptor") its slot is the gun's, NpcFCSId1 (NPC_FCS_PlaneGun000
+# on the Su-47): no gun; WN_WEAPON_2 (hard rule 40). Lua fires it too (Scripts/sv_escort_laser.lua ZLAS.drive)
+ZFA_TLS_NPC, ZFA_TLS_SLOT, ZFA_TLS_GUN = 'SV_Zfa_AllyTLS', 1, 'NPC_FCS_PlaneGun000'
 ZFA_TLS_EVENT, ZFA_TLS_FLAG = 'SV_ZfaTLSHit', 'SV_ZfaTLSHits'
 
 

@@ -1178,6 +1178,11 @@ CFG.specials = {
                  first_launch_n = 43, first_launch_w = 168, first_launch_s = 60, salvo_every_s = 30, retry_s = 5,
                  missile_s = 200, recycle_after_s = 3, impact_damage = 8,
                  pay_missile = 150, pay_bomber = 400, reward = 4000, reward_per_round = 150, time_limit_s = 900,
+                 -- ((2026-11-07) the user: "Include more Enemy Aircraft in the Festival Mission and have the ending timer
+                 -- for the next round last 60 seconds") fighters with the raid: fighters_share of the round's aircraft (whole
+                 -- 2-ships, fighters_min .. fighters_max; 0: none); break_after_s: the break after its round (at least that,
+                 -- the menu's BREAK BETWEEN ROUNDS if longer)
+                 fighters_share = 0.7, fighters_min = 6, fighters_max = 16, break_after_s = 60,
                  -- ((2026-11-07) the user: "Add some Allied Target Boxes in the town next to the airfield", VALKA and
                  -- AUDREY side by side, "Concert" "Market Stall" "Food Truck" and the like) the town's boxes: the build's
                  -- unit of invisible, invincible allied dummies just past the runway's WSW end (tools/survival_events.py
@@ -1380,7 +1385,8 @@ CFG.specials = {
 -- (emissive) up, the effects' EV down), with the stars at the stock maximum (stars: Mission 22's dawn).
 -- arc: the day-night arc GONE FISHIN' starts (FISHING_ROUND_PLAN.md 0; F its round): the sun sinks a step a round over
 -- F+1 .. F+5 (sink_el / sink_az, exposure to dusk_exposure), sets at F+6 (sunset: from sunset_el to set_el, sky light x
--- sunset_skylight, city glow sunset_emissive, effects' EV sunset_vfx_ev, sunset_exposure), night at F+7 (`night`), then
+-- sunset_skylight, city glow sunset_emissive, effects' EV sunset_vfx_ev, sunset_exposure), night from F+7 (`night`) for
+-- night_rounds rounds (3: the user, 2026-11-07), then
 -- rises in the east over sunrise_rounds rounds from dawn (dawn_el / dawn_az, dawn_exposure, dawn_skylight,
 -- dawn_emissive, dawn_vfx_ev) to midday (midday_el / midday_az, day_exposure), held for the rest of the run. Each round
 -- drifts toward the next round's sky (within_x of the step over round_s of the fight; swap_within_x for a step that
@@ -1393,23 +1399,32 @@ CFG.specials = {
 -- the sky asset's values as shipped (CSP_ms04_20251218b, read in game 2026-11-07), put back when a run finds them
 -- changed (an earlier run or test left them so).
 -- valka_gate: VALKA doesn't come from GONE FISHIN' to the arc's midday (the user, 2026-11-06).
+-- ((2026-11-07, 0.74.10) the user's screenshots of round F+7: the ground and the planes white and noisy under a black
+-- sky, "everything was working perfectly though until the sun disappeared": Mission 9's night exposure (min 0.5) let
+-- the camera brighten the scene ~5,000 times, lit by the day's sky light x0.1, and its city glow x10,000 blew out
+-- what has any glow. Night and dawn now take the sunset's way, which looked right: the exposure held near the day's
+-- (night 10.5 / 14 / -1.5, dawn 10 / 14 / -1), the glow 100, the effects' EV 7 / 8.)
+-- ((2026-11-07, 0.74.10) the user: "the sun does not seem to be setting, it seems to be just moving to the right
+-- constantly instead of going down": the old path swept 142 -> -105 (113 deg round the sky) while it sank 18 deg, 6 deg
+-- down for 60 sideways by F+3) The sun sinks where it is: the stock sun's bearing (142) drifting 18 deg as it sets,
+-- a real sunset's slant; it rises in the east after the night as before.
 CFG.sky = { enabled = true, readback_s = 5,
             mpc_env = "/Game/Base/Material/MPC/MPC_Env_Control.MPC_Env_Control",
             mpc_vfx = "/Game/Base/Material/MPC/MPC_VFX_Control.MPC_VFX_Control",
             test_sun = { -2.0, -105.0 }, test_copies = { 4.0, -120.0 },
             night = { sun_el = 35.0, sun_az = -130.0, factor = 0.5, rgb = { 0.89, 0.96, 1.0 }, sun_disc = 0.57,
-                      moon_el = 35.0, moon_az = -130.0, exposure = { 0.5, 9.0, 0.5 },
-                      skylight_x = 0.1, skylight_rgb = { 0.55, 0.65, 1.0 }, emissive = 10000.0, vfx_ev = -2.0 },
+                      moon_el = 35.0, moon_az = -130.0, exposure = { 10.5, 14.0, -1.5 },
+                      skylight_x = 0.1, skylight_rgb = { 0.55, 0.65, 1.0 }, emissive = 100.0, vfx_ev = 7.0 },
             stars = { intensity = 7.0, background = 22.0, radius = 2.5, fraction = 0.73, rotation = { 2.578, 0.0, 0.0 },
                       mask_start = 0.263 },
             arc = { enabled = true, path = "asset", apply_s = 2.0, blend_s = 5.0, round_s = 240, within_x = 0.75,
-                    swap_within_x = 0.45, dark_factor = 0.25, sunrise_rounds = 4, valka_gate = true,
-                    sink_el = { 14.0, 12.0, 10.0, 7.0, 4.0 }, sink_az = { 160.0, 180.0, -160.0, -140.0, -120.0 },
+                    swap_within_x = 0.45, dark_factor = 0.25, night_rounds = 3, sunrise_rounds = 4, sunrise_light_x = 2, valka_gate = true,
+                    sink_el = { 12.5, 10.0, 7.5, 5.0, 3.0 }, sink_az = { 145.0, 148.0, 151.0, 154.0, 157.0 },
                     dusk_exposure = { 11.0, 14.0, -0.5 },
-                    sunset_el = 1.0, set_el = -3.0, sunset_az = -105.0, sunset_exposure = { 9.5, 14.0, -1.0 },
+                    sunset_el = 1.0, set_el = -3.0, sunset_az = 160.0, sunset_exposure = { 9.5, 14.0, -1.0 },
                     sunset_skylight = 0.5, sunset_emissive = 100.0, sunset_vfx_ev = 8.0,
-                    dawn_el = -4.0, dawn_az = 105.0, dawn_exposure = { 4.0, 14.0, -2.0 }, dawn_skylight = 0.3,
-                    dawn_emissive = 10000.0, dawn_vfx_ev = 5.0,
+                    dawn_el = -4.0, dawn_az = 105.0, dawn_exposure = { 10.0, 14.0, -1.0 }, dawn_skylight = 0.3,
+                    dawn_emissive = 100.0, dawn_vfx_ev = 8.0,
                     midday_el = 52.9, midday_az = 180.0, day_exposure = { 13.0, 14.0, 0.0 },
                     stock = { el = 15.0, az = 142.0, factor = 120000.0, emissive = 1.0, vfx_ev = 11.0, disc = 1.2783,
                               exposure = { 13.0, 14.0, 0.0 },

@@ -705,9 +705,9 @@ def build_npc_rows():
             set_prop(row[2], model_idx, 'ModelId', ('name', survival_events.ZFA_MODEL_SV, 0))
             set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(survival_events.ZFA_SUB_KEY))
         out.append(((npc, 0), row))
-        if npc == survival_events.ZFA_NPC:     # (2026-11-07) ... and its twin with the anti-missile laser in a free slot
-            slot = f'NpcFCSId{survival_events.ZFA_TLS_SLOT}'
-            assert not [q for q in row[2] if q[1] == slot and q[3] is not None], (npc, slot, 'not free')
+        if npc == survival_events.ZFA_NPC:     # (2026-11-07) ... and its twin with the anti-missile laser in the gun's slot
+            slot = f'NpcFCSId{survival_events.ZFA_TLS_SLOT}'   # ((0.74.12) the user: "swap the guns out for the Laser Interceptor")
+            assert [q[3] for q in row[2] if q[1] == slot] == [('name', survival_events.ZFA_TLS_GUN, 0)], (npc, slot, 'not the gun')
             tls = copy.deepcopy(row)
             set_prop(tls[2], sidx(slot), slot, ('name', survival_events.ZFA_TLS_FCS_ROW, 0))
             assert survival_events.fname(survival_events.ZFA_TLS_NPC)[2] == 0
@@ -1044,7 +1044,7 @@ def check_zfa_laser_build():
     """(2026-11-07) The ZFA-44s' anti-missile laser read back from the packages this build saved: its arm
     BP_FCS_SV_ZfaTLS (named for its path; it imports exactly BP_SwingTLS_ForMSL's 7 public exports and its weapon class
     is that one; its launcher a LauncherCommon on the host's body at the gun socket, all round; its AIControlCIWS missiles
-    only), its fire-control row in DT_SV_NpcFCS, DT_SV_NpcRows' laser twin of the ZFA-44 host (slot 3 that row, the rest
+    only), its fire-control row in DT_SV_NpcFCS, DT_SV_NpcRows' laser twin of the ZFA-44 host (its gun's slot that row, the rest
     the host's), the interception trigger and its count, and the names Lua uses (Scripts/sv_config.lua's carrier.zfa)."""
     se = survival_events
     plain = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
@@ -1083,7 +1083,7 @@ def check_zfa_laser_build():
     assert [struct.unpack('<f', r[f][2])[0] for f in ('CaptureDistance', 'CaptureAngleRange')] == [3000.0, 180.0], r
     npc = table(DATA + 'DT_SV_NpcRows', 'LiveNpcDataTable')
     a, b, slot = npc[se.ZFA_NPC], npc[se.ZFA_TLS_NPC], f'NpcFCSId{se.ZFA_TLS_SLOT}'
-    assert b.get(slot) == ('name', se.ZFA_TLS_FCS_ROW, 0) and a.get(slot) is None, (a.get(slot), b.get(slot))
+    assert b.get(slot) == ('name', se.ZFA_TLS_FCS_ROW, 0) and a.get(slot) == ('name', se.ZFA_TLS_GUN, 0), (a.get(slot), b.get(slot))
     assert {f: v for f, v in a.items() if f != slot} == {f: v for f, v in b.items() if f != slot}, 'the twin differs'
     # the interception count
     ze = load(MI + 'EP_SurvivalMode_global')
@@ -1099,6 +1099,7 @@ def check_zfa_laser_build():
     # Lua's names for them (Scripts/sv_config.lua CFG.allies.carrier.zfa)
     lua = survival_events.runtime_lua()
     for want in (f'dt_npc = "{se.ZFA_NPC}"', f'laser_row = "{se.ZFA_TLS_NPC}"', f'laser_fcs_row = "{se.ZFA_TLS_FCS_ROW}"',
+                 f'laser_slot = {se.ZFA_TLS_SLOT},',
                  f'laser_fcs_table = "{se.ZFA_TLS_FCS_TABLE}.{se.ZFA_TLS_FCS_TABLE.rsplit("/", 1)[1]}"',
                  f'laser_flag = "{se.ZFA_TLS_FLAG}"'):
         assert want in lua, f'Scripts/sv_config.lua: no {want}'

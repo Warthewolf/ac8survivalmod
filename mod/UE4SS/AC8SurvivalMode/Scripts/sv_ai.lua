@@ -936,7 +936,57 @@ end
 -- The jammer (CFG.jammer): its plane, found as it's seen up (its flight D.jammer.unit, an EA-18G), sharpens every enemy
 -- within radius_km (PilotRank + rank_add, at most 5) while it flies; each goes back to its own rank when it's out of
 -- range or the jammer is down. Run every 2 s.
-JAM = {}
+JAM = { pods = {} }
+-- ((0.74.12) the user, after 0.74.10's fix: "enemy EA-18G that spawned in just then still doesn't use ECM"; its log had
+-- RE_SV_JamEcm fired and nothing to say whether the pod jammed) Every ECM pod the game makes (LiveElectronicSupportMeasures:
+-- BP_wp_ecm_a0 and the like, kept as they come); ecm_check_s after each firing the jammer's own (its owner or instigator)
+-- is made to jam: bJammingEnable on, its jamming time at least ecm_every_s + 2 (on until the next firing), its reach
+-- x ecm_range_x; the first time logged with what it read (`jammer: its ECM pod <name>: jamming false -> true, ...`), or
+-- that none of its own was up (`jammer: no ECM pod of its own up ...`)
+pcall(NotifyOnNewObject, "/Script/Live.LiveElectronicSupportMeasures", function(o)
+    if #JAM.pods < 48 then JAM.pods[#JAM.pods + 1] = o end
+end)
+local function jamPods(j, c)
+    local mine = addrOf(j.p.obj)
+    if not mine then return end
+    local found, said = 0, {}
+    local keep = {}
+    for _, w in ipairs(JAM.pods) do
+        if liveAddr(w) and not nameOf(w):find("Default__", 1, true) then
+            keep[#keep + 1] = w
+            local okO, own = pcall(function() return w:GetOwner() end)
+            local okI, ins = pcall(function() return w:GetInstigator() end)
+            if (okO and own and addrOf(own) == mine) or (okI and ins and addrOf(ins) == mine) then
+                found = found + 1
+                local before = "?"
+                pcall(function() before = string.format("jamming %s, %.0f m, %.0f s", tostring(w.bJammingEnable),
+                    w.JammingEffectRangeMeter, w.JammingTimeCampaign) end)
+                pcall(function() w.bJammingEnable = true end)
+                local hold = math.max(2, tonumber(c.ecm_every_s) or 14) + 2
+                pcall(function() if w.JammingTimeCampaign < hold then w.JammingTimeCampaign = hold end end)
+                local x = tonumber(c.ecm_range_x) or 1
+                if x ~= 1 and not j.podsScaled then
+                    pcall(function() w.JammingEffectRangeMeter = w.JammingEffectRangeMeter * x end)
+                    pcall(function() w.EffectRangeMeter = w.EffectRangeMeter * x end)
+                end
+                local after = "?"
+                pcall(function() after = string.format("jamming %s, %.0f m, %.0f s", tostring(w.bJammingEnable),
+                    w.JammingEffectRangeMeter, w.JammingTimeCampaign) end)
+                said[#said + 1] = string.format("%s: %s -> %s", (nameOf(w):match("([%w_]+)$") or "?"), before, after)
+            end
+        end
+    end
+    JAM.pods = keep
+    if found > 0 then j.podsScaled = true end
+    if found > 0 and not j.podSaid then
+        j.podSaid = true
+        log("jammer: its ECM pod made to jam: " .. table.concat(said, "; "))
+    elseif found == 0 and not j.podNoneSaid then
+        j.podNoneSaid = true
+        log(string.format("jammer: no ECM pod of its own up %.1f s after its firing (%d pods kept from the game; its pod: slot 3 "
+            .. "of its row, WN_WEAPON_4)", tonumber(c.ecm_check_s) or 1.5, #keep))
+    end
+end
 function JAM.tick()
     local j = D and D.jammer
     if not j then return end
@@ -982,6 +1032,7 @@ function JAM.tick()
         j.ecmAt = D.now + math.max(2, tonumber(c.ecm_every_s) or 14)
         local ev = string.format("RE_SV_JamEcm_%02d", idx)
         local r = SV_Event(ev)
+        if r == 1 then j.podAt = D.now + (tonumber(c.ecm_check_s) or 1.5) end
         if not j.ecmSaid or r ~= 1 then
             j.ecmSaid = true
             log(string.format("jammer: its ECM pod on (%s %s), again every %d s", ev, r == 1 and "fired" or ("not fired: "
@@ -990,6 +1041,11 @@ function JAM.tick()
     elseif not gone and c.ecm and (j.p.k or 0) ~= 0 and not j.ecmSaid then
         j.ecmSaid = true
         log("jammer: " .. j.p.name .. " isn't its flight's lead (object " .. tostring(j.p.k) .. "): no ECM pod (RE_SV_JamEcm fires object 0's)")
+    end
+    if not gone and j.podAt and D.now and D.now >= j.podAt then
+        j.podAt = nil
+        local okP, errP = pcall(jamPods, j, c)
+        if not okP then logOnce("jammer pods", "jammer: its ECM pod check error " .. tostring(errP)) end
     end
     if gone then D.jammer = nil end                  -- (its sharpened enemies were put back above: `on` false)
 end

@@ -1099,7 +1099,9 @@ SPC.kinds = {
                    spawn = function(now) return FISH.roundSpawn(now) end, tick = function(now, s) return FISH.roundTick(now, s) end,
                    busy = function(s) return FISH.busy(s) end, over = function(now, s) return FISH.roundOver(now, s) end,
                    row = function(s, t) return FISH.row(s, t) end },
-    festival   = { sub = "festival_sub", alone = true, aircraft = 12,
+    -- ((2026-11-07) "Include more Enemy Aircraft in the Festival Mission": fighters with the raid, FEST.fighters)
+    festival   = { sub = "festival_sub", alone = false, aircraft = 12,
+                   budget = function(budget) return FEST.fighters(budget) end,
                    ready = function(round, forced) return FEST.ready(round, forced) end,
                    spawn = function(now) return FEST.roundSpawn(now) end, tick = function(now, s) return FEST.roundTick(now, s) end,
                    busy = function(s) return FEST.busy(s) end, over = function(now, s) return FEST.roundOver(now, s) end,

@@ -943,7 +943,7 @@ def build_zfa_laser():
     launcher a LauncherCommon on the host's body at its gun socket (the bone control the CIWS turns its turret with needs
     bones a fighter hasn't), its AIControlCIWS missiles only within 3 km; and its fire-control row SV_FCS_ZfaTLS in
     DT_SV_NpcFCS, which Lua adds to DT_NPC_FCS at the main menu (Scripts/sv_escort_laser.lua). DT_SV_NpcRows' laser twin
-    of the ZFA-44 host (build_npc_rows) names that row in its slot 3."""
+    of the ZFA-44 host (build_npc_rows) names that row in its gun's slot (ZFA_TLS_SLOT)."""
     se = survival_events
     z = ZenPkg(stock(se.ZFA_TLS_FCS_SOURCE))
     old_w, new_w, ecm = (ZenPkg(stock(p)) for p in (se.ZFA_TLS_OLD_WEAPON, se.ZFA_TLS_WEAPON, se.ZFA_TLS_LAUNCHER_SOURCE))

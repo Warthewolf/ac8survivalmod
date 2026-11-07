@@ -209,6 +209,16 @@ function FEST.lightsReady()
     if type(fr) ~= "table" then return false end
     return #fr.lost == 0 and fr.have >= #(cfg().rows or {})
 end
+-- ((2026-11-07) the user: "Include more Enemy Aircraft in the Festival Mission") fighters with the raid (its kind's budget,
+-- sv_anomalies_valka.lua SPC.kinds.festival): fighters_share of the round's aircraft in whole 2-ships, fighters_min ..
+-- fighters_max; 0: the bombers alone, as before
+function FEST.fighters(budget)
+    local c = cfg()
+    local share = n(c.fighters_share, 0.7)
+    if share <= 0 or not budget then return 0 end
+    local k = math.floor(budget * share / 2 + 0.5) * 2
+    return math.max(math.floor(n(c.fighters_min, 6)), math.min(math.floor(n(c.fighters_max, 16)), k))
+end
 function FEST.ready(round, forced)
     local c = cfg()
     if c.enabled == false or not nativeReady() then return false end

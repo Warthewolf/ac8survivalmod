@@ -1058,7 +1058,21 @@ CFG = {
                                  per_tick = 1, preload = true,
                                  laser = true, laser_row = "SV_Zfa_AllyTLS", laser_fcs_row = "SV_FCS_ZfaTLS",
                                  laser_fcs_table = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcFCS.DT_SV_NpcFCS",
-                                 laser_flag = "SV_ZfaTLSHits", laser_arms_log = 40 },
+                                 laser_flag = "SV_ZfaTLSHits", laser_arms_log = 40,
+                                 -- ((0.74.12) the user: "swap the guns out for the Laser Interceptor", "HAS to work, no
+                                 -- exceptions") laser_slot: its fire-control slot (the build's ZFA_TLS_SLOT: the gun's).
+                                 -- laser_drive: Survival fires it too (sv_escort_laser.lua ZLAS.drive): each ZFA-44 at the
+                                 -- nearest enemy missile within laser_range_m, one every laser_shot_s, shot down
+                                 -- laser_swing_s after the beam (laser_beam_s on screen); the game's own shots hit at
+                                 -- laser_chance in a laser_angle cone; laser_timeout: a shot-down missile's life cut short;
+                                 -- the beam, the burst and the hit sound are the TLS's own (laser_*_fx, laser_hit_sound;
+                                 -- laser_fire_sound none: the TLS's fire sound loops until its stop)
+                                 laser_slot = 1, laser_drive = true, laser_range_m = 3000, laser_shot_s = 1.0,
+                                 laser_swing_s = 0.35, laser_beam_s = 0.6, laser_chance = 1.0, laser_angle = 180,
+                                 laser_timeout = true, laser_sound = true, laser_log_n = 40,
+                                 laser_beam_fx = "/Game/VFX/Vehicles/Weapon/TLS/NS_NPC_TLS_Muzleflash01",
+                                 laser_kill_fx = "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_S",
+                                 laser_fire_sound = "", laser_hit_sound = "/Game/WwiseAssets/Events/SFX/SPWP_OTH_TLS_HIT" },
                          text = { on_station = "%s ON STATION", on_station_sub = "ITS ZFA-44S LAUNCH IN %d S",
                                   launch = "ZFA-44S LAUNCHED", launch_sub = "FROM %s",
                                   leaving = "%s LEAVING", leaving_sub = "%d ROUNDS SERVED: THE STORE CAN CALL ANOTHER",
@@ -1240,7 +1254,10 @@ CFG = {
     -- it's ECM"; AB.L..IN's needed RE_SV_GlitchEcm too, hard rule 40), so JAM.tick fires RE_SV_JamEcm_NN (its slot 4,
     -- tools/survival_events.py build_jammer) every ecm_every_s while it's up and leads its flight.
     jammer = { enabled = true, from_round = 8, chance = 0.5, aircraft = "e18g_common", radius_km = 6, rank_add = 1, pay_x = 3,
-               ecm = true, ecm_every_s = 14 },
+               ecm = true, ecm_every_s = 14,
+               -- ((0.74.12) "still doesn't use ECM") ecm_check_s after each firing its pod is made to jam (sv_ai.lua
+               -- jamPods): jamming on, on until the next firing, its reach x ecm_range_x
+               ecm_check_s = 1.5, ecm_range_x = 1.5 },
     -- Escorts (economy review: "escorts that stay with the bombers"): in a bomber raid escort_share of the fighter
     -- flights hold over the airfield the bombers are making for (RE_SV_Escort_NN: their area on the airfield, any target
     -- that comes) instead of hunting you across the map.

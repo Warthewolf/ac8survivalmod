@@ -1717,6 +1717,8 @@ function roundsTick(now)
             end
             if D.special then pcall(SPC.endTick, now, D.special, "its round clear") end   -- ((0.73.77) D4: the backstop)
             local gap = SETUP.breakS()                 -- (the menu's BREAK BETWEEN ROUNDS, sv_menu.lua)
+            local fb = D.special and D.special.kind == "festival" and tonumber((CFG.specials.festival or {}).break_after_s)
+            if fb and fb > gap then gap = math.floor(fb) end   -- ((2026-11-07) "the ending timer for the next round last 60 seconds")
             log(string.format("round %d clear; round %d in %d s", D.round, D.round + 1, gap))
             addCredits(CFG.credits.round_bonus * D.round, "round " .. D.round .. " cleared")
             if logVerbose() and type(SV_LogUnits) == "function" then SV_LogUnits("round " .. D.round .. " clear") end

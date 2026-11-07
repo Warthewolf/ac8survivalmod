@@ -1229,6 +1229,105 @@ check(ESC.S == nil and ESC.R == nil and allOff and evFired("RE_SV_AirfieldOpen")
       .. tostring(line("escort: test restart:")) .. ")")
 D.special = nil
 
+---------------------------------------------------------------------------------------------------- the laser made sure
+-- ((0.74.12) the user: "The Laser Interceptor HAS to work, no exceptions") ZLAS.drive: each ZFA-44 fires at the nearest
+-- enemy missile within 3 km (never ours, never one out of reach), the beam from it, the missile shot down at the swing's
+-- end (no lock, no damage, its life cut, the burst); the game's own laser shots hit every time
+print("the ZFA-44s' laser made sure (sv_escort_laser.lua ZLAS.drive)")
+do
+    local fxs, comps = {}, {}
+    local NL = { full = "NiagaraFunctionLibrary", addr = addr() }
+    function NL:SpawnSystemAtLocation(pc, sys, at, rot)
+        local c = { full = "NiagaraComponent", addr = addr(), vars = {} }
+        function c:IsValid() return not self.dead end
+        function c:SetVariableFloat(n, v) self.vars[tostring(n)] = v end
+        function c:Deactivate() self.off = true end
+        fxs[#fxs + 1] = { sys = sys, at = at, rot = rot, comp = c }
+        comps[#comps + 1] = c
+        return c
+    end
+    statics["/Script/Niagara.Default__NiagaraFunctionLibrary"] = NL
+    local ZC = CFG.allies.carrier.zfa
+    for _, p in ipairs({ ZC.laser_beam_fx, ZC.laser_kill_fx, ZC.laser_hit_sound }) do
+        local full = p .. "." .. p:match("[^/]+$")
+        statics[full] = { full = full, addr = addr() }
+    end
+    local sounds = {}
+    statics["/Script/AkAudio.Default__AkGameplayStatics"] = { full = "AkGameplayStatics", addr = addr(),
+        PostEventAtLocation = function(_, ev, at) sounds[#sounds + 1] = { ev = ev.full, at = at } end }
+    local function gobj(full, fac) return setmetatable({ full = full, addr = addr(), GetFaction = function() return fac end }, PM) end
+    local enemyJet, allyJet = gobj("BP_Su30_C enemy", 2), gobj("BP_F18_C ally", 1)
+    local function missile(name, x, y, z, shooter, target)
+        local m = setmetatable({ full = "BP_" .. name .. "_C " .. name, addr = addr(), damage = 40, bIsHoming = true, LifeTime = 30,
+                                 TargetToHome = target }, PM)
+        m.GetOwner = function() return shooter end
+        m.IsDestroyed = function(self) return self.gone == true end
+        pose(m, x, y, z, 0, 0)
+        return m
+    end
+    local zU = K.launchers[1][1].unit
+    local z1 = plane(zU, 1000000, 0, 300000, 0, 600)
+    ESC.planes[zU] = { { obj = z1, addr = z1.addr, name = z1.full, at = 0 } }
+    local mNear = missile("wp_msl_r0", 1000000 + 200000, 0, 300000, enemyJet, z1)        -- 2 km off: the enemy's
+    local far = missile("wp_msl_r1", 1000000 + 450000, 0, 300000, enemyJet, z1)         -- 4.5 km off
+    local ours = missile("wp_msl_r2", 1000000 + 100000, 0, 300000, allyJet, enemyJet)   -- 1 km off, an ally's
+    HIT = HIT or { msl = {} }                          -- (sv_ladon.lua's missile list: not loaded here)
+    local rawMsl = HIT.msl
+    HIT.msl = { { obj = mNear, name = "BP_wp_msl_r0", born = 0, from = "BP_Su30" }, { obj = far, name = "BP_wp_msl_r1", born = 0 },
+                { obj = ours, name = "BP_wp_msl_r2", born = 0 } }
+    D = D or {}
+    local armed0 = ZLAS.armed
+    ZLAS.armed = false                                  -- (the flag count is tested above)
+    local from = #logs + 1
+    for _ = 1, 5 do ZLAS.tick(); clock = clock + 0.05 end      -- (the assets loaded, a tick each, before the first shot)
+    local fire = line("zfa laser: ", from)
+    check(has(fire, " fires at BP_wp_msl_r0@") and has(fire, "2000 m off")
+          and has(fire, "from BP_Su30"), "a ZFA-44 fires at the enemy missile 2 km off: " .. tostring(fire))
+    local beam = fxs[1]
+    check(beam and beam.sys.full:find("NS_NPC_TLS_Muzleflash01", 1, true) and near(beam.comp.vars["User.BeamLength"], 200000, 1)
+          and near(beam.rot.Yaw, 0, 0.01) and near(beam.at.X, 1000000), "the TLS's own beam from the ZFA-44, 2 km long, at the missile")
+    check(mNear.damage == 40 and mNear.bIsHoming == true, "not shot down before the swing's end")
+    clock = clock + 0.4
+    ZLAS.tick()
+    check(mNear.damage == 0 and mNear.bIsHoming == false and mNear.LifeTime == 0.05, "at the swing's end: no lock, no damage, its life cut")
+    check(has(line("zfa laser: BP_wp_msl_r0@", from), "shot down (by "), "logged: " .. tostring(line("zfa laser: BP_wp_msl_r0@", from)))
+    local burst = fxs[#fxs]
+    check(burst and burst.sys.full:find("NS_airExplosionA_S", 1, true) and near(burst.at.X, 1200000), "the air burst where the missile was")
+    check(#sounds >= 1 and sounds[#sounds].ev:find("SPWP_OTH_TLS_HIT", 1, true), "the TLS's hit sound there")
+    check(far.damage == 40 and ours.damage == 40 and ours.bIsHoming == true, "never the missile 4.5 km off, never an ally's")
+    clock = clock + 2
+    ZLAS.tick()
+    check(comps[1].off == true, "the beam switched off after laser_beam_s")
+    -- one shot a laser_shot_s: two enemy missiles in reach, the second taken a second on
+    local m2 = missile("wp_msl_r3", 1000000 - 150000, 0, 300000, enemyJet, z1)
+    local m3 = missile("wp_msl_r4", 1000000, 250000, 300000, enemyJet, z1)
+    HIT.msl[#HIT.msl + 1] = { obj = m2, name = "BP_wp_msl_r3", born = 0 }
+    HIT.msl[#HIT.msl + 1] = { obj = m3, name = "BP_wp_msl_r4", born = 0 }
+    ZLAS.tick(); clock = clock + 0.5; ZLAS.tick()
+    check(m2.damage == 0 and m3.damage == 40, "the nearer first, one shot a second (" .. tostring(m2.damage) .. ", " .. tostring(m3.damage) .. ")")
+    clock = clock + 0.6; ZLAS.tick(); clock = clock + 0.5; ZLAS.tick()
+    check(m3.damage == 0, "the next a second on")
+    -- the game's own laser: made to hit every time, on its instance
+    local own = setmetatable({ full = "BP_SwingTLS_ForMSL_C /Game/Maps/PL_SurvivalMode.x:BP_SwingTLS_ForMSL_C_1", addr = addr(),
+                               InterceptPercentage = 0.3, InterceptAngle = 45, InterceptDistanceSquared = 9e10 }, PM)
+    own.GetOwner = function() return z1 end
+    z1.GetFaction = function() return 1 end
+    made("/Script/Live.LiveTLSSwingforMissile", own)
+    ZLAS.tick()
+    check(own.InterceptPercentage == 1.0 and own.InterceptAngle == 180 and own.InterceptDistanceSquared == 300000 * 300000
+          and has(line("zfa laser: ", from + 1), "") and has(table.concat(logs, "\n", from), "own fire control fired its laser"),
+          "the game's own laser shot: chance 0.3 -> 1, its cone and reach")
+    -- laser_drive = false: the game's own only
+    ZC.laser_drive = false
+    local m4 = missile("wp_msl_r5", 1000000 + 50000, 0, 300000, enemyJet, z1)
+    HIT.msl[#HIT.msl + 1] = { obj = m4, name = "BP_wp_msl_r5", born = 0 }
+    clock = clock + 2; ZLAS.tick(); clock = clock + 1; ZLAS.tick()
+    check(m4.damage == 40, "laser_drive = false: Survival fires none")
+    ZC.laser_drive = true
+    HIT.msl, ZLAS.armed = rawMsl, armed0
+    ESC.planes[zU] = nil
+end
+
 ---------------------------------------------------------------------------------------------------- the dressing
 print("the ZFA-44 dressing (sv_zfa44.lua)")
 part("sv_zfa44.lua")                                -- (its real ZFA.dress again)

@@ -1562,3 +1562,49 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   45 suites passed before it). Registered: dev stage_dev_0.74.11 and the TESTER zip d7fb39a4b4f8..., the friends' zip
   AC8SurvivalMode_COOP2MP_0.74.11_Online_COOP_ZFA44.zip b689fab62ec3... (0.74.11-coop2mp.103, runtime 0.32.25). Not
   installed yet (AC8 was running when the build finished).
+
+## 0.74.12 (2026-11-07, runtime 0.32.25; the user's 0.74.10 game of 21:21-22:05; not yet run in game)
+- The ZFA-44s' laser (the user: "Make sure that you swap the guns out for the Laser Interceptor. The Laser Interceptor HAS
+  to work, no exceptions"; 0.74.10: the arm on every ZFA-44 in slot 3, nothing ever shot down):
+  - the arm in the gun's slot (survival_events_escort.py ZFA_TLS_SLOT 1, ZFA_TLS_GUN: SV_Zfa_AllyTLS has no gun; the
+    build checks the twin replaced NPC_FCS_PlaneGun000); CFG...zfa.laser_slot for Lua's row check.
+  - Survival fires it too (sv_escort_laser.lua ZLAS.drive, every game): each ZFA-44 alive (ESC.planes, kind zfa) at the
+    nearest enemy missile (HIT.msl; enemy: its shooter's faction isn't Alpha, else it homes on one of ours) within
+    laser_range_m 3000, one every laser_shot_s 1: the TLS's own beam NS_NPC_TLS_Muzleflash01 (User.BeamLength) from the
+    plane at the missile; laser_swing_s 0.35 on the missile is shot down: no lock, no damage (the STORE ECM's way, never
+    destroyed from Lua), its LifeTime cut to 0.05 (logged whether that ends it), the TLS's air burst NS_airExplosionA_S
+    and hit sound SPWP_OTH_TLS_HIT there (Wwise PostEventAtLocation, two signatures tried, logged once if neither works).
+    Logs `zfa laser: <plane> (<unit>) fires at <missile> d m off (from <shooter>, at <target>)`, `zfa laser: <missile>
+    shot down (by <plane>; N so far)`, and the round's total `carrier: round N: the ZFA-44s' lasers: ...`.
+  - The game's own shots (every LiveTLSSwingforMissile of an ally's, NotifyOnNewObject): InterceptPercentage 0.3 ->
+    laser_chance 1, InterceptAngle laser_angle 180, its reach 3 km, on the instance only; the missile it's on claimed and
+    made harmless at its swing's end. `zfa laser: <plane>'s own fire control fired its laser ...`.
+  - laser_drive = false: the game's own only. escort_test (9 new checks: beam, kill, the burst, never an ally's or one out
+    of reach, one shot a second, the game's own made sure, drive off).
+- The sunset (the user: "the sun does not seem to be setting, it seems to be just moving to the right constantly instead
+  of going down"; 0.74.10's log: 15 -> 8.8 deg in 3 rounds while its bearing swung 142 -> -152): it sinks where it is,
+  sink_el 12.5 .. 3, sink_az 145 .. 157, the sunset at 1 -> -3 deg, bearing 160 (a real sunset's slant).
+- The night (the user's screenshots of round F+7: ground and planes white and noisy under a black sky, "everything was
+  working perfectly though until the sun disappeared"): Mission 9's night exposure (min 0.5) let the camera brighten the
+  scene ~5,000x, lit by the day's sky light x0.1, and the city glow x10,000 blew out anything with glow. Night and dawn
+  take the sunset's way: night exposure 10.5 / 14 / -1.5, glow 100, effects' EV 7; dawn 10 / 14 / -1, glow 100, EV 8.
+- The night lasts 3 rounds (the user: "have the night time last for 3 rounds before the sun rises again"):
+  CFG.sky.arc.night_rounds 3 (F+7 .. F+9), dawn at F+10, midday from F+14; VALKA's gate to F+13.
+- The sunrise's light (the user at F+9: "sun is currently up in the sky but it's not back to normal brightness yet"):
+  exposure, sky light, glow and EV back to the day's sunrise_light_x 2 times as fast as the sun climbs (by the sunrise's
+  middle). sky_test, arc_rounds_test.
+- THE FESTIVAL (the user: "Include more Enemy Aircraft in the Festival Mission and have the ending timer for the next
+  round last 60 seconds"): fighters with the raid (SPC.kinds.festival alone false, budget FEST.fighters: fighters_share
+  0.7 of the round's aircraft in whole 2-ships, 6 .. 16; round 8's 18 -> 12); the break after its round at least
+  break_after_s 60 (sv_rounds.lua). festival_test, arc_rounds_test.
+- The EA-18G jammer's ECM (the user: "enemy EA-18G that spawned in just then still doesn't use ECM"; the log had
+  RE_SV_JamEcm_20 fired at 22:04:15 and nothing more; that jammer was shot down 31 s on, 14 km from the user):
+  ecm_check_s 1.5 after each firing its own ECM pod (LiveElectronicSupportMeasures, kept from NotifyOnNewObject, its owner
+  or instigator the jammer) is made to jam: bJammingEnable on, JammingTimeCampaign at least ecm_every_s + 2, its reach x
+  ecm_range_x 1.5 (once). Logs `jammer: its ECM pod made to jam: <pod>: jamming false, 2000 m, 5 s -> ...` or `jammer: no
+  ECM pod of its own up ...`. heavy_test.
+- Built 2026-11-07 (build_all exit 0, "leaderboard: runs go to ac8-survival-leaderboard...", every read-back "all
+  there"; 52 suites pass, coop_test not run while the user played). Registered: dev stage_dev_0.74.12 and the TESTER zip
+  b30a111878f2..., the friends' zip AC8SurvivalMode_COOP2MP_0.74.12_Online_COOP_ZFA44.zip 8aebfa37b5b5...
+  (0.74.12-coop2mp.104). Not installed yet (AC8 running). The carriers' real container launch (Mission 17's allied drone
+  dressed as the ZFA-44, its own launch smoke and sound; the research of 2026-11-07 in tools/re/ESCORT.md) is the next build.

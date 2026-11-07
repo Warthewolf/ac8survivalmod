@@ -214,6 +214,49 @@ do
     JAM.tick()
     check(D.jammer == nil, "down: dropped")
 end
+-- ((0.74.12) the user: "enemy EA-18G that spawned in just then still doesn't use ECM": RE_SV_JamEcm fired, nothing said
+-- whether its pod jammed) ecm_check_s after each firing its own pod is made to jam (on, on until the next firing, its
+-- reach x ecm_range_x once), logged once; another plane's pod untouched; none of its own up: said once
+do
+    local j = jam(0)
+    j.obj.GetAddress = function() return 4100 end
+    local function pod(n, owner)
+        local w = { full = "BP_wp_ecm_a0_C /Game/Maps/PL_SurvivalMode.x:BP_wp_ecm_a0_C_" .. n, bJammingEnable = false,
+                    JammingEffectRangeMeter = 2000, EffectRangeMeter = 2000, JammingTimeCampaign = 5 }
+        w.GetAddress = function() return 4200 + n end
+        w.GetOwner = function() return owner end
+        w.GetInstigator = function() return nil end
+        return w
+    end
+    local otherPlane = { full = "y", GetAddress = function() return 4300 end }
+    local mine, theirs = pod(1, j.obj), pod(2, otherPlane)
+    JAM.pods = { mine, theirs }
+    from = #logs + 1
+    JAM.tick()
+    check(evs("JamEcm") ~= "" and mine.bJammingEnable == false, "fired; its pod not touched before ecm_check_s")
+    D.now = D.now + CFG.jammer.ecm_check_s + 0.1
+    JAM.tick()
+    check(mine.bJammingEnable == true and mine.JammingTimeCampaign == CFG.jammer.ecm_every_s + 2
+          and mine.JammingEffectRangeMeter == 2000 * CFG.jammer.ecm_range_x and theirs.bJammingEnable == false
+          and theirs.JammingEffectRangeMeter == 2000, "its own pod made to jam (on, held to the next firing, its reach scaled), another's untouched")
+    check(since(from, "its ECM pod made to jam: BP_wp_ecm_a0_C_1: jamming false, 2000 m, 5 s %-> jamming true, 3000 m, 16 s") == 1,
+          "logged with what it read")
+    D.now = D.now + CFG.jammer.ecm_every_s
+    JAM.tick()
+    D.now = D.now + CFG.jammer.ecm_check_s + 0.1
+    mine.bJammingEnable = false
+    JAM.tick()
+    check(mine.bJammingEnable == true and mine.JammingEffectRangeMeter == 2000 * CFG.jammer.ecm_range_x and since(from, "made to jam") == 1,
+          "the next firing: on again, its reach scaled once only, not logged again")
+    local j2 = jam(0)
+    j2.obj.GetAddress = function() return 4400 end
+    JAM.pods = { theirs }
+    from = #logs + 1
+    JAM.tick()
+    D.now = D.now + CFG.jammer.ecm_check_s + 0.1
+    JAM.tick()
+    check(since(from, "no ECM pod of its own up") == 1 and theirs.bJammingEnable == false, "none of its own up: said, nothing touched")
+end
 
 ---------------------------------------------------------------------------------------------------- the raid's minimap pings
 -- (user, 2026-10-31: "an alert that pings the aircraft via the minimap that are attacking the airfield")

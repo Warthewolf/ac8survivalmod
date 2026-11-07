@@ -256,6 +256,14 @@ local fk, fb = FEST.killPay("SV_Unit_FestW")
 local mk, mb = FEST.killPay("SV_Unit_FestCM_S3")
 check(fk == "heavy" and fb == 400 and mk == "cruise missile" and mb == 150 and FEST.killPay("ERA_Unit_01_Dep_Air0") == nil,
     "a Tu-160 pays pay_bomber, a cruise missile pay_missile, others their own")
+-- ((2026-11-07) "Include more Enemy Aircraft in the Festival Mission") fighters with the raid: 0.7 of the round's in
+-- whole 2-ships, 6 .. 16; 0: none
+check(FEST.fighters(18) == 12 and FEST.fighters(4) == 6 and FEST.fighters(40) == 16, string.format(
+    "fighters with the raid: round 8's 18 -> %d, a small round -> %d, a big one -> %d", FEST.fighters(18), FEST.fighters(4), FEST.fighters(40)))
+C.fighters_share = 0
+check(FEST.fighters(18) == 0, "fighters_share 0: the bombers alone")
+C.fighters_share = 0.7
+check(C.break_after_s == 60, "a minute's break after it (break_after_s, sv_rounds.lua)")
 
 print("the round: the talk, the raid")
 local alive, queued, removedObj, paid, lbs = {}, {}, {}, {}, {}
