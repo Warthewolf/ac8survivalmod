@@ -1392,23 +1392,27 @@ local function launch(C, now)
         -- ((2026-11-07, the user: "ZFA-44's did not launch from the Cargo Ships": in War's co-op game every try read each
         -- arm's unit alive and logged "every launcher arm's flight is still up", 322 times, and none launched. A ship comes
         -- with planes of its arms' units of its own, near it from its first second, that this carrier never launched.)
-        -- The next arm in turn, whatever its unit has on the spawner's list (planes this carrier never launched, or an
-        -- earlier flight's) taken off it first (force), or the arm spawns nothing (hard rule 16). launch() runs only with
-        -- none of this carrier's flights up, so none of its own is taken off.
+        -- The next arm in turn: its unit on the spawner's list with nothing up taken off it first, as any flight's (hard
+        -- rule 16). ((2026-11-07, the user's test of 0.74.9: AC8 crashed at 21:14:08 the moment an arm's unit with 2 planes
+        -- up, the ship's own, was taken off by force and its arm fired) never with planes up: the arm fired as it is, its
+        -- record's orders reaching the planes there; only planes that weren't up before count as its launch (F.before),
+        -- and none in launch_wait_s: by pose (below).
         C.armI = C.armI % #arms + 1
         local arm = arms[C.armI]
         local n = aliveOf(arm.unit)
-        if n >= 0 and type(SV_Recycle) == "function" then
+        if n == 0 and type(SV_Recycle) == "function" then
             crumb("carrier SV_Recycle " .. arm.unit)
             local okR, rr = pcall(SV_Recycle, arm.unit, 1)
-            log(string.format("carrier: %s: %s %s: taken off the spawner's list first (SV_Recycle %s)", C.name, arm.unit,
-                n > 0 and string.format("had %d up that this carrier never launched (the ship's own, or an earlier flight's)", n)
-                    or "launched before", okR and tostring(rr) or ("error " .. tostring(rr))))
+            log(string.format("carrier: %s: %s launched before, nothing of it up: taken off the spawner's list first (SV_Recycle %s)",
+                C.name, arm.unit, okR and tostring(rr) or ("error " .. tostring(rr))))
+        elseif n > 0 then
+            log(string.format("carrier: %s: %s has %d up that this carrier never launched (the ship's own): fired as it is, "
+                .. "never taken off with planes up", C.name, arm.unit, n))
         end
         C.used[arm.unit] = true
         local ok, r = fire(arm.record, C.name)
         if ok then
-            C.flight = { unit = arm.unit, record = arm.record, at = now, route = "container" }
+            C.flight = { unit = arm.unit, record = arm.record, at = now, route = "container", before = math.max(0, n) }
             C.launches = (C.launches or 0) + 1
             if C.launches == 1 then hudCallout(c.text.launch, string.format(c.text.launch_sub, C.name)) end
             log(string.format("carrier: %s launches its ZFA-44s: %s fired (container arm %d, %s)", C.name, arm.record, C.armI, arm.unit))
@@ -1558,8 +1562,8 @@ local function carrierTick(C, now)
     -- its flight: launched, seen, down, launched again
     local F = C.flight
     if F then
-        if not F.up then
-            if #planesOf(F.unit, F.at - 1) > 0 or aliveOf(F.unit) > 0 then
+        if not F.up then                                 -- (planes up before it fired aren't its launch: F.before)
+            if #planesOf(F.unit, F.at - 1) > 0 or aliveOf(F.unit) > (F.before or 0) then
                 F.up = true
                 log(string.format("carrier: %s's ZFA-44s are up (%s, %d planes seen)", C.name, F.unit, #planesOf(F.unit, F.at - 1)))
             elseif now - F.at >= num(c.launch_wait_s, 10) then

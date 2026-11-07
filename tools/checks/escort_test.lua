@@ -901,11 +901,13 @@ run(K.first_s + 0.5)
 SV_Recycle = rawRecycle
 check(evFired("RE_SV_CargoLaunch_1_1") and evFired("RE_SV_CargoLaunch_2_1"), "each ship's first container launch first_s on")
 do
+    -- ((2026-11-07, the user's test of 0.74.9: AC8 crashed the moment such an arm's unit was taken off by force with its
+    -- 2 planes up and the arm fired) never taken off with planes up: fired as it is
     local recL = false
     for i = nrL + 1, #recycled do if recycled[i] == A1 .. ":1" then recL = true end end
-    check(recL and has(line("carrier: ZFA-44 CARRIER 1: " .. A1 .. " had 2 up that this carrier never launched"), "taken off the spawner's list first")
+    check(not recL and has(line("carrier: ZFA-44 CARRIER 1: " .. A1 .. " has 2 up that this carrier never launched"), "fired as it is, never taken off with planes up")
           and not line("every launcher arm's flight is still up"),
-          "an arm whose unit has planes up the carrier never launched (the ship's own): taken off the list first, then launched")
+          "an arm whose unit has planes up the carrier never launched (the ship's own): fired as it is, NOT taken off the list (it crashed AC8)")
 end
 check(A1 == "E_Unit_01_drone_5_0" and K.launchers[2][1].unit == "E_Unit_01_drone_3_1" and #K.launchers[1] == 6 and #K.launchers[2] == 6
       and K.launchers[1][6].record == "RE_SV_CargoLaunch_1_6" and K.launchers[2][6].unit == "E_Unit_01_drone_7_1",
@@ -947,16 +949,21 @@ check(ESC.planes[A2] and #ESC.planes[A2] == 1, "its plane taken as that arm's fl
 run(3)
 z2.HealthInternal = 0
 alive[A2] = 0
--- (arm 3's unit with planes up this carrier never launched: taken off the list first and launched, never skipped)
+-- (arm 3's unit with planes up this carrier never launched: fired as it is, never skipped, never taken off; the planes
+-- up before it fired aren't its launch, so with no new one in launch_wait_s it's launched by pose)
 local A3, A4 = K.launchers[1][3].unit, K.launchers[1][4].unit
 alive[A3], alive[A4] = 2, 0
 local nr = #recycled
+local fromA3 = #logs + 1
 run(20 + K.relaunch_s)
 local recA3 = false
 for i = nr + 1, #recycled do if recycled[i] == A3 .. ":1" then recA3 = true end end
-check(evFired("RE_SV_CargoLaunch_1_3") and recA3
-      and has(line("carrier: ZFA-44 CARRIER 1: " .. A3 .. " had 2 up that this carrier never launched"), "taken off the spawner's list first"),
-      "the next arm in turn, its unit with 2 up this carrier never launched: taken off the spawner's list, then launched (never skipped)")
+check(evFired("RE_SV_CargoLaunch_1_3") and not recA3
+      and has(line("carrier: ZFA-44 CARRIER 1: " .. A3 .. " has 2 up that this carrier never launched"), "fired as it is"),
+      "the next arm in turn, its unit with 2 up this carrier never launched: fired as it is (never skipped, never taken off)")
+check(line("carrier: ZFA-44 CARRIER 1's ZFA-44s are up (" .. A3, fromA3) == nil
+      and has(line("carrier: ZFA-44 CARRIER 1: RE_SV_CargoLaunch_1_3 fired", fromA3), "launched by pose from now on"),
+      "... its 2 planes up before it fired aren't its launch: no new one in launch_wait_s, by pose from then on")
 alive[A3], alive[A4] = nil, nil
 
 ---------------------------------------------------------------------------------------------------- service

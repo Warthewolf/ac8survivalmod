@@ -1508,3 +1508,19 @@ lightning,festival} hold the dumps and scripts (git-ignored).
 - Dev 5e1d897c...f4702418f (stage_dev_0.74.9), friends 036313b5...49208e575 (AC8SurvivalMode_COOP2MP_0.74.9_Online_COOP_ZFA44.zip),
   both registered by the packaging, both main.dll checked to carry the Worker's address. Everything of 0.74.8 (the
   ZFA-44's laser) in it too. 0.74.8's zips superseded (no address).
+
+## 0.74.10 (2026-11-07, runtime 0.32.25; the carrier launch crash; not yet run in game)
+- The user's test of 0.74.9 (21:14:08, Ctrl+DEL): AC8 crashed the moment ZFA-44 CARRIER 1 launched. Its first arm's
+  unit (E_Unit_01_drone_5_0) had 2 planes up from the ship's spawn (Mission 17's drones wait parked under the sea until a
+  container fires them; 14 "planes of no unit near a carrier ship" were dressed at 21:13:49), 0.74.4's launch took that
+  unit off the spawner's list by force (SV_Recycle 1, "its destroy deferred (2 alive)") and fired the arm at once; the
+  user: "i did not see any aircraft launch out from the Cargo Ship". No UECC report was written.
+- launch(): an arm's unit is taken off the list only with nothing of it up; with planes up the arm is fired as it is
+  (log "... has N up that this carrier never launched (the ship's own): fired as it is, never taken off with planes up"),
+  its record's orders reaching those planes. The flight's watch counts only planes that weren't up before it fired
+  (F.before): none new in launch_wait_s -> by pose, as before. escort_test.
+- The user asked "why not just swap the drone model that launches originally with the ZFA-44 model": the next step if
+  the container launch still shows nothing: Mission 17's own drone row back on the arm units (the launch exactly
+  stock), dressed as the ZFA-44 (a setting, CFG.allies.carrier.zfa host su47 / drone).
+- Dev / TESTER 7010ab71..., friends 5c8a94a4... (AC8SurvivalMode_COOP2MP_0.74.10_[TESTER_]Online_COOP_ZFA44.zip), all
+  registered; INSTALLED (backup of 0.74.9 with the crash's logs: build/backup/install_before_0.74.10).
