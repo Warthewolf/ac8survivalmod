@@ -224,13 +224,19 @@ function FISH.line(line, vals)
     text = text:gsub("{(%w+)}", function(k) local v = vals and vals[k]; if v == nil then return "{" .. k .. "}" end return tostring(v) end)
     return who, text
 end
--- one entry of a list (a string: itself), at random, never the one picked last under `key`
+-- one entry of a list (a string: itself), at random, never the one picked last under `key`; ((2026-11-08) the user:
+-- AUDREY's and VALKA's lines "can't be reused") only among the entries with none of theirs said this run (SUB.fresh):
+-- nil once there's none
 local lastPick = {}
 function FISH.pick(l, key)
     if type(l) ~= "table" then return l end
     if #l == 0 then return nil end
-    local i = math.random(#l)
-    if #l > 1 and lastPick[key] == i then i = i % #l + 1 end
+    local ok = {}
+    for i = 1, #l do if not SUB.fresh or SUB.fresh(l[i]) then ok[#ok + 1] = i end end
+    if #ok == 0 then return nil end
+    local j = math.random(#ok)
+    if #ok > 1 and lastPick[key] == ok[j] then j = j % #ok + 1 end
+    local i = ok[j]
     lastPick[key] = i
     return l[i]
 end

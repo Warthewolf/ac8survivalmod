@@ -11,6 +11,11 @@
 --   SUB.clear(why)                    the line up and every line waiting dropped
 --   SUB.busy()                        a line up or waiting
 --   SUB.left(now)                     seconds until the last line waiting is done (0: nothing to say)
+--   SUB.prio(who), SUB.fresh(line)    (2026-11-08) CFG.hud.subs.priority's speakers (AUDREY, VALKA): their lines go
+--                                     before everyone else's (in the order said, an exchange with one of theirs whole),
+--                                     another's line up gives way, a full queue never drops theirs. Every speaker's line
+--                                     said once a run (once_a_run; repeat_ok: speakers who may repeat). SUB.fresh: whether
+--                                     a raw line / exchange has none of its lines said yet (the pickers choose those)
 --   SUB.card(title, lines, secs)      the results card (a title and up to CFG.hud.card.rows lines, centred, on a panel
 --                                     like the run's summary) for `secs`; SUB.cardOff() takes it down
 -- The strip is on screen only while a line is up (the user asked for fewer HUD warnings in 0.72.1): the speaker's name in
@@ -24,17 +29,92 @@ local function lineS(secs)
     local s = tonumber(secs) or tonumber(cfg().line_s) or 4
     return math.max(1, math.min(20, s))
 end
+-- ((2026-11-08) the user: "all of the Audrey and Valka subtitles must play One After Other, and they can't be reused, and
+-- they take priority over everyone elses subtitles") CFG.hud.subs.priority's speakers: SUB.prio(who)
+local function prioOf(who)
+    local l = cfg().priority
+    if type(l) ~= "table" then return false end
+    local w = tostring(who or ""):upper()
+    for _, p in ipairs(l) do if tostring(p):upper() == w then return true end end
+    return false
+end
+SUB.prio = prioOf
+-- their lines said this run (RUN's: a new run says them afresh)
+local function usedLines()
+    if type(RUN) == "table" then RUN.subsUsed = RUN.subsUsed or {}; return RUN.subsUsed end
+    SUB.usedNoRun = SUB.usedNoRun or {}
+    return SUB.usedNoRun
+end
+-- ((2026-11-08) the user, then: "do this for all characters actually have it so none of the characters repeat lines")
+-- every speaker's line once a run (once_a_run), but a speaker in CFG.hud.subs.repeat_ok; a line with values in it
+-- ({kg}, {dir}) is a repeat only word for word
+local function onceOf(who)
+    if cfg().once_a_run == false then return false end
+    local w = tostring(who or ""):upper()
+    for _, p in ipairs(cfg().repeat_ok or {}) do if tostring(p):upper() == w then return false end end
+    return true
+end
+-- SUB.fresh(x): whether a raw line ("CODE|text"), or a list (an exchange, or lists of them), has none of its lines said
+-- this run: the pickers (FISH.pick, sv_escort_subs.lua's) choose among the fresh ones only
+function SUB.fresh(x)
+    if cfg().once_a_run == false then return true end
+    local u = usedLines()
+    for _, s in ipairs(type(x) == "table" and x or { x }) do
+        if type(s) == "table" then
+            if not SUB.fresh(s) then return false end
+        elseif type(s) == "string" then
+            local code, text = s:match("^([%w _']+)|(.*)$")
+            if not code then text = s end
+            local who = code and ((cfg().speakers or {})[code] or code) or nil
+            if u[text] and (who == nil or onceOf(who)) then return false end
+        end
+    end
+    return true
+end
 local function add(speaker, text, secs, here)
     if cfg().enabled == false then return false end
     speaker, text = tostring(speaker or ""):sub(1, 32), tostring(text or ""):sub(1, 160)
     if text == "" then return false end
+    local prio = prioOf(speaker)
+    if onceOf(speaker) then                              -- (each line once a run)
+        local u = usedLines()
+        if u[text] then
+            log(string.format("subs: %s's line was said already this run: not again: %s", speaker, text))
+            return false
+        end
+        u[text] = true
+    end
     local q = SUB.q
     if #q >= (tonumber(cfg().max_queue) or 16) then
-        SUB.dropped = SUB.dropped + 1
-        log(string.format("subs: the queue is full (%d waiting): dropped %s: %s", #q, speaker, text))
-        return false
+        local drop = nil                                  -- (a full queue: another's last line waiting makes room for theirs)
+        if prio then for i = #q, 1, -1 do if not q[i].prio then drop = i; break end end end
+        if drop then
+            local d = table.remove(q, drop)
+            SUB.dropped = SUB.dropped + 1
+            log(string.format("subs: the queue is full: %s's line dropped for %s's: %s", d.who, speaker, d.text))
+        elseif not prio then
+            SUB.dropped = SUB.dropped + 1
+            log(string.format("subs: the queue is full (%d waiting): dropped %s: %s", #q, speaker, text))
+            return false
+        end                                               -- (theirs alone waiting: theirs over the limit, never dropped)
     end
-    q[#q + 1] = { who = speaker, text = text, secs = lineS(secs) }
+    -- the priority lane: lines said together (in one tick: an exchange) stay together in their order, so an exchange with
+    -- one of theirs in it goes ahead whole (the MC's line before AUDREY's reply with it), after the lane's lines waiting
+    local batch = SUB.batch or 0
+    local entry = { who = speaker, text = text, secs = lineS(secs), batch = batch }
+    if prio or SUB.prioBatch == batch then
+        local moved = {}
+        if SUB.prioBatch ~= batch then                    -- (its batch's lines said before it, waiting at the back: with it)
+            SUB.prioBatch = batch
+            while q[#q] and q[#q].batch == batch and not q[#q].prio do table.insert(moved, 1, table.remove(q)) end
+        end
+        moved[#moved + 1] = entry
+        local at = 1
+        while q[at] and q[at].prio do at = at + 1 end
+        for _, m in ipairs(moved) do m.prio = true; table.insert(q, at, m); at = at + 1 end
+    else
+        q[#q + 1] = entry
+    end
     SUB.said = SUB.said + 1
     log(string.format("subs: %s%s: %s (%.1f s)", speaker, here and " (this game only)" or "", text, lineS(secs)))
     return true
@@ -157,10 +237,18 @@ end
 -- they've something and the HUD's up (shown); the card not over the run's summary or the info wall (wallOpen)
 function SUB.hudTick(now, shown, wallOpen)
     local cur = SUB.cur
+    SUB.batch = (SUB.batch or 0) + 1                     -- (lines said before the next tick: one batch, kept together)
     if cur and cur.till and now >= cur.till then SUB.cur, cur = nil, nil end
+    -- ((2026-11-08) another speaker's line on the strip gives way to a priority speaker's waiting, once it's been up
+    -- prio_min_s: dropped, not shown again)
+    local head = SUB.q[1]
+    if cur and not cur.prio and head and head.prio and cur.from and now - cur.from >= (tonumber(cfg().prio_min_s) or 1) then
+        log(string.format("subs: %s's line gave way to %s's: %s", cur.who, head.who, cur.text))
+        SUB.cur, cur = nil, nil
+    end
     if not cur and #SUB.q > 0 and shown then
         cur = table.remove(SUB.q, 1)
-        cur.till = now + cur.secs
+        cur.till, cur.from = now + cur.secs, now
         SUB.cur = cur
         local blip = cfg().blip
         if type(blip) == "string" and blip ~= "" and SHOP and SHOP.sound then pcall(SHOP.sound, blip) end

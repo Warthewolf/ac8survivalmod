@@ -60,7 +60,8 @@ local function pick(S, key, l, force)
     local n, start = #l, math.random(#l)
     for j = 0, n - 1 do
         local i = (start + j - 1) % n + 1
-        if (n == 1 or last[key] ~= i) and (force or okLines(S, l[i])) then last[key] = i; return l[i] end
+        -- ((2026-11-08) AUDREY's and VALKA's lines once a run: SUB.fresh)
+        if (n == 1 or last[key] ~= i) and (force or okLines(S, l[i])) and (not SUB.fresh or SUB.fresh(l[i])) then last[key] = i; return l[i] end
     end
     return nil
 end

@@ -1521,7 +1521,18 @@ CFG.hud = {
                                     ["CONCERT MC"] = { 0.98, 0.58, 0.30 }, ["FOOD TRUCK"] = { 0.70, 0.95, 0.50 },
                                     ["MARKET STALL"] = { 0.90, 0.80, 0.60 } },
                          -- a line's speaker code ("MC|...") to the name on the strip; a code not here is the name
-                         speakers = { MC = "CONCERT MC", FOOD = "FOOD TRUCK", MARKET = "MARKET STALL" } },
+                         speakers = { MC = "CONCERT MC", FOOD = "FOOD TRUCK", MARKET = "MARKET STALL" },
+                         -- ((2026-11-08) the user: "all of the Audrey and Valka subtitles must play One After Other, and
+                         -- they can't be reused, and they take priority over everyone elses subtitles") priority: their
+                         -- lines go before every other speaker's waiting line (after theirs already waiting: in the order
+                         -- said, an exchange whole), a full queue drops another's line for them, never theirs, and
+                         -- another's line on the strip gives way to them once it's been up prio_min_s (an exchange with
+                         -- one of theirs goes ahead whole, in its order). Then: "do this for all characters actually have
+                         -- it so none of the characters repeat lines": once_a_run, every speaker's line said at most once a
+                         -- run (one said already is refused; the pickers choose among the ones not said yet, and say
+                         -- nothing once all are; a line with values in it is a repeat only word for word); repeat_ok:
+                         -- speakers allowed to repeat (none)
+                         priority = { "AUDREY", "VALKA" }, prio_min_s = 1.0, once_a_run = true, repeat_ok = {} },
     -- (0.74.0) the results card (SUB.card: GONE FISHIN''s weigh-in): w wide from y, a title and `rows` lines (top: the
     -- first line's offset; bottom: the space under the last), on the summary's fill and edge
     card             = { y = 270, w = 1500, rows = 10, top = 110, bottom = 40 },

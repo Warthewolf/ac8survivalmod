@@ -652,6 +652,53 @@ press("HOME")
 check(D.forceSpecial == nil, "a joiner: nothing (the host starts the rounds)")
 COOP.client = function() return false end
 
+-- ((2026-11-08) the user: "all of the Audrey and Valka subtitles must play One After Other, and they can't be reused, and
+-- they take priority over everyone elses subtitles") sv_subs.lua: theirs before everyone else's waiting (in the order
+-- said), another's line up gives way after prio_min_s, each of theirs once a run, the pickers only offer fresh ones, a
+-- full queue drops another's for theirs, a new run says them afresh
+print("the strip: AUDREY's and VALKA's lines first, one after another, once a run")
+do
+    local keepRun, SC = RUN, CFG.hud.subs
+    RUN = { credits = 0 }
+    SUB.clear("test")
+    SUB.say("SAL", "one")
+    SUB.say("COMONA CONTROL", "two")
+    SUB.hudTick(clock, true, false)
+    check(SUB.cur and SUB.cur.text == "one", "another speaker's line up")
+    SUB.say("VALKA", "Audrey? Is that... an air raid siren?")
+    SUB.say("AUDREY", "It is. Under the stage, Valka. Now.")
+    check(SUB.q[1].who == "VALKA" and SUB.q[2].who == "AUDREY" and SUB.q[3].text == "two",
+        "theirs before everyone else's waiting, in the order said")
+    clock = clock + SC.prio_min_s * 0.5; SUB.hudTick(clock, true, false)
+    check(SUB.cur.text == "one", "another's line up stays prio_min_s")
+    clock = clock + SC.prio_min_s; SUB.hudTick(clock, true, false)
+    check(SUB.cur.who == "VALKA" and found("subs: SAL's line gave way to VALKA's"), "then gives way to VALKA's, logged")
+    clock = clock + SC.line_s + 0.1; SUB.hudTick(clock, true, false)
+    check(SUB.cur.who == "AUDREY", "AUDREY's straight after hers: one after the other")
+    clock = clock + SC.line_s + 0.1; SUB.hudTick(clock, true, false)
+    check(SUB.cur.text == "two", "then everyone else's")
+    check(SUB.say("AUDREY", "It is. Under the stage, Valka. Now.") == false and found("was said already this run: not again"),
+        "one of theirs said already: never again this run")
+    check(SUB.say("SAL", "one") == false, "(then: \"none of the characters repeat lines\") nor anyone else's")
+    check(SUB.fresh("S|Fresh for SAL.") and not SUB.fresh({ "S|one" }), "SUB.fresh: any speaker's line said already isn't fresh")
+    local ex = { { "VALKA|Audrey? Is that... an air raid siren?", "AUDREY|It is. Under the stage, Valka. Now." },
+                 { "VALKA|A line not said yet.", "AUDREY|Nor this one." } }
+    local only = true
+    for _ = 1, 20 do if FISH.pick(ex, "subs.test") ~= ex[2] then only = false end end
+    check(only and SUB.fresh(ex[2]) and not SUB.fresh(ex[1]), "the pickers: only an exchange none of whose lines were said")
+    check(FISH.pick({ ex[1] }, "subs.test1") == nil, "... and nothing once all of theirs were said")
+    SUB.clear("test")
+    for i = 1, SC.max_queue do SUB.say("SAL", "filler " .. i) end
+    SUB.hudTick(clock, false, false)                  -- (a tick on, the strip hidden: theirs said apart from the fillers)
+    check(SUB.say("AUDREY", "A line for a full queue.") == true and SUB.q[1].who == "AUDREY" and #SUB.q == SC.max_queue
+        and SUB.q[#SUB.q].text == "filler " .. (SC.max_queue - 1), "a full queue: another's last line dropped for theirs, theirs first")
+    check(SUB.say("SAL", "one too many") == false, "... another's still dropped when full")
+    RUN = { credits = 0 }
+    check(SUB.say("AUDREY", "It is. Under the stage, Valka. Now.") == true, "a new run: their lines said afresh")
+    SUB.clear("test")
+    RUN = keepRun
+end
+
 print("a release's copy")
 FISH, testKey, TEST_TICKS, TEST_KEYS = nil, nil, nil, nil
 local src = readAll(STRIPPED .. "/Scripts/sv_fishing.lua")

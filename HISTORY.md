@@ -1724,3 +1724,16 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   param that can't be read isn't written. sky_test, arc_rounds_test.
 - Built and packaged: friends' 70e3ea05bf73..., TESTER 1659204e2d12... (0.74.17-coop2mp.109), both registered. INSTALLED
   2026-11-08 from the TESTER zip (backup of 0.74.16: build/backup/install_before_0.74.17).
+
+## 0.74.18 (2026-11-08, runtime 0.32.26; built and packaged, not installed: 0.74.19 follows)
+- Subtitles (the user: "all of the Audrey and Valka subtitles must play One After Other, and they can't be reused, and
+  they take priority over everyone elses subtitles"; then "do this for all characters actually have it so none of the
+  characters repeat lines"): sv_subs.lua. AUDREY's and VALKA's lines (CFG.hud.subs.priority) go before every other
+  speaker's waiting line, after theirs already waiting; lines said in one tick (an exchange) stay together in their order,
+  so an exchange with one of theirs goes ahead whole; another's line on the strip gives way after prio_min_s 1; a full
+  queue drops another's last line for theirs, never theirs. Every speaker's line once a run (once_a_run; repeat_ok none;
+  RUN.subsUsed): one said already is refused, the pickers (FISH.pick, sv_escort_subs.lua's) choose only exchanges with
+  none of their lines said (SUB.fresh) and say nothing once all are; a line with values in it repeats only word for word.
+  fishing_test.
+- The default ini documents 0.74.17's night, stars and AC7 laser settings.
+- Packaged: friends' 8eb7ded6dc27..., TESTER ca64c2555843... (0.74.18-coop2mp.110), both registered.
