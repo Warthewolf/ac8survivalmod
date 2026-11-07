@@ -2,6 +2,7 @@
 # package_test.sh [name] : a test-release zip of the staged build (run tools/build_all.sh first).
 #   build/release/AC8SurvivalMode_<name>.zip = README.txt (release/README.txt, versions filled in)
 #                                             + ue4ss/Mods/AC8SurvivalMode + ue4ss/Mods/IoStoreLoaderMod/SurvivalMode
+# The zip goes to the main tree's build/release from any worktree (tools/release_dir.sh; user, 2026-11-07).
 # Only the default settings ship (config/survival.default.ini); a player's survival.ini is made on their first run.
 # The ZFA-44 as package_release.sh has it (code review of 2026-11-07): without ZFA=1 its container out and its part
 # (Scripts/sv_zfa44.lua) cut to its first line; ZFA=1 keeps both (the container from build/install, else build/zfa44/out).
@@ -42,7 +43,8 @@ python -X utf8 -I tools/checks/lua_check.py "$mod"/Scripts/*.lua
 sed "s/{DATE}/$(date +%Y-%m-%d)/; s/{LUA}/$lua/; s/{RT}/$rt/" release/README.txt > "$st/README.txt"
 suffix=""
 [ "$ZFA" = 1 ] && suffix=_ZFA44
-out="build/release/AC8SurvivalMode_$name$suffix.zip"
+. tools/release_dir.sh
+out="$REL/AC8SurvivalMode_$name$suffix.zip"
 python -I -c "
 import os, sys, zipfile
 st, out = sys.argv[1], sys.argv[2]

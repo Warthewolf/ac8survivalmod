@@ -39,7 +39,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
@@ -94,15 +95,7 @@ SETUP = { enemyX = function() return 1 end, specialsX = function() return 1 end,
           skillAdd = function() return 0 end }
 
 -- the real parts (sv_core's SCRIPT_DIR and log file in the work folder)
-local function part(name, chunk, edits)
-    local src = readAll(MOD .. "/Scripts/" .. name)
-    for _, e in ipairs(edits or {}) do
-        local n
-        src, n = src:gsub(e[1], e[2], 1)
-        assert(n == 1, name .. ": " .. e[1] .. " not found")
-    end
-    assert(load(src, chunk or ("=" .. name)))()
-end
+local function part(name, chunk, edits) PARTS.load(name, chunk, edits) end   -- (the part and its pieces, each edit in the piece with its text)
 part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 local logFile = assert(io.open(WORK .. "/test_lua.log", "wb"))
@@ -115,7 +108,7 @@ local cfgLine = nil
 for _, l in ipairs(logs) do if l:find("^config: survival%.ini") then cfgLine = l end end
 part("sv_rows.lua"); part("sv_ai.lua"); part("sv_hud.lua"); part("sv_spawn.lua"); part("sv_rounds.lua")
 part("sv_tactical.lua"); part("sv_stats.lua"); part("sv_tells.lua"); part("sv_director.lua")
-part("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" }, { "\nlocal function mirroredEvent%(name%)", "\nfunction mirroredEvent(name)" } })
+part("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" } })   -- (mirroredEvent, hostEvent, hostSync: globals of sv_coop's pieces)
 local M = _G.M
 function playerOnAirfield() return grounded end      -- (sv_rounds.lua's own reads the pawn)
 LB.stat, LB.special = function() end, function() end

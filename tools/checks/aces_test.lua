@@ -34,7 +34,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
@@ -93,15 +94,7 @@ local callouts = {}
 function hudCallout(text, sub, big) callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
 
 -- the real parts (sv_core's SCRIPT_DIR and log file in the work folder)
-local function part(name, chunk, edits)
-    local src = readAll(MOD .. "/Scripts/" .. name)
-    for _, e in ipairs(edits or {}) do
-        local n
-        src, n = src:gsub(e[1], e[2], 1)
-        assert(n == 1, name .. ": " .. e[1] .. " not found")
-    end
-    assert(load(src, chunk or ("=" .. name)))()
-end
+local function part(name, chunk, edits) PARTS.load(name, chunk, edits) end   -- (the part and its pieces, each edit in the piece with its text)
 part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 local logFile = assert(io.open(WORK .. "/test_lua.log", "wb"))
@@ -121,8 +114,7 @@ part("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction st
     -- ((0.73.78) the ace rounds' record, recycle and break-off, as globals here)
     { "\nlocal aceFlown, aceGoneRecycle, aceBreakTick", "\naceFlown, aceGoneRecycle, aceBreakTick = nil, nil, nil" } })
 part("sv_tactical.lua"); part("sv_stats.lua"); part("sv_tells.lua"); part("sv_director.lua")
-part("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" }, { "\nlocal function mirroredEvent%(name%)", "\nfunction mirroredEvent(name)" },
-    { "\nlocal function hostEvent%(name%)", "\nfunction hostEvent(name)" } })
+part("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" } })   -- (mirroredEvent, hostEvent, hostSync: globals of sv_coop's pieces)
 local M = _G.M
 function searchAircraft(a) return a end
 function playerOnAirfield() return grounded end          -- (sv_rounds.lua's own reads where you are)
@@ -1071,7 +1063,7 @@ check(s1 and s2 and s3 and s4 and s1 < s2 and s2 < s4 and s4 < s3, "sv_spawn.lua
 check(has(spawnSrc, 'if role == "wolf" and ace.opener == "trap" then') and has(spawnSrc, 'WOLF.spawned(unit, n, D.now, type(t) == "table" and t.hold_max_s or nil)'),
       "ROLE.spawned: a trap squadron holds its trap until first contact")
 check(has(roundsSrc, "ROLE.pickRound(nWant, pick, aceKey or D.roundTier ~= nil)"), "sv_rounds.lua: an ace round draws by its tier's key")
-check(has(readAll(MOD .. "/Scripts/main.lua"), 'VERSION = "0.74.0"'), "main.lua VERSION 0.74.0")
+check(readAll(MOD .. "/Scripts/main.lua"):match('\nVERSION = "0%.74%.%d+"') ~= nil, "main.lua VERSION 0.74.x (tools/bump_version.py)")
 
 logFile:close()
 print(fails == 0 and "aces test: all passed" or ("aces test: " .. fails .. " FAILED"))

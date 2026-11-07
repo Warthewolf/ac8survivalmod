@@ -48,6 +48,9 @@ function FISH.setup()
     local names = {}
     if type(SV_SetText) == "function" then
         names[#names + 1] = c.shoal_name_key .. " " .. (SV_SetText(c.shoal_name_key, c.shoal_name) == 1 and "set" or "NOT set")
+        if c.shoal_sub_key then                           -- ((2026-11-07) the box's second line: SHOAL showed twice)
+            names[#names + 1] = c.shoal_sub_key .. " " .. (SV_SetText(c.shoal_sub_key, c.shoal_sub or "") == 1 and "set" or "NOT set")
+        end
         names[#names + 1] = c.boat_name_key .. " " .. (SV_SetText(c.boat_name_key, c.boat_name) == 1 and "set" or "NOT set")
     end
     log(string.format("fishing: the shoal's rows: %s %s, %s %s; names: %s", c.shoal_row, row and "in DT_NPC" or "NOT added",
@@ -82,12 +85,15 @@ function FISH.objs(unit)
 end
 -- (a spawn whose objects the new-object feed didn't catch) the live objects of class `cls` within 2 km of (x, y): a walk
 FISH.SHOAL_CLASS, FISH.BOAT_CLASS = "BP_GR000_dummy_CP_C", "VE028_boat2_CP_C"   -- (the stock blueprints the rows name)
-function FISH.findNear(cls, x, y)
+function FISH.findNear(cls, x, y, r)
     local out = {}
+    r = r or 200000                                     -- (cm; a ground's own shoals: within 900 m, the next ground 1.9 km off)
     for _, o in ipairs(FindAllOf(cls) or {}) do
         if liveObj(o) and inSurvival(o) then
             local okL, l = pcall(function() return o:K2_GetActorLocation() end)
-            if okL and l and math.abs(l.X - x) < 200000 and math.abs(l.Y - y) < 200000 then out[#out + 1] = o end
+            if okL and l and math.abs(l.X - x) < r and math.abs(l.Y - y) < r and (l.X - x) ^ 2 + (l.Y - y) ^ 2 < r * r then
+                out[#out + 1] = o
+            end
         end
     end
     return out
@@ -296,6 +302,24 @@ end
 -- most PAY_MAX (sv_coop.lua's CREDITS_MAX)
 FISH.PER_GROUND, FISH.PAY_MAX = 8, 1000000
 function FISH.maxShoals() return math.max(1, #(cfg().units or {})) * FISH.PER_GROUND end
+-- ((2026-11-07) the user, after Alyssa's test: "the shoals need to be more numerous and spread around the boat") each
+-- unit's ground, all round SAL's boat (boat_at): the first on the boat itself (its shoals 300-800 m out: the build's
+-- FISH_INNER_MIN_M), the others evenly on a ring of ring_m round it from a bearing new each round (yaw: the ring's turn,
+-- radians; a random one by default). [{ x, y }] cm, one a unit of `units`
+function FISH.grounds(turn)
+    local c = cfg()
+    local b, us, out = c.boat_at or { 0, 0 }, c.units or {}, {}
+    local ring, a0 = n(c.ring_m, 1900) * 100, turn or (math.random() * 2 * math.pi)
+    for i = 1, #us do
+        if i == 1 then
+            out[i] = { b[1], b[2] }
+        else
+            local a = a0 + 2 * math.pi * (i - 2) / math.max(1, #us - 1)
+            out[i] = { b[1] + ring * math.cos(a), b[2] + ring * math.sin(a) }
+        end
+    end
+    return out
+end
 function FISH.maxKg()
     local m = 0
     for _, r in pairs(cfg().kg or {}) do
@@ -378,9 +402,10 @@ end
 local function spawnShoals(now, s)
     local c = cfg()
     pcall(SV_SetText, c.shoal_name_key, c.shoal_name)
+    if c.shoal_sub_key then pcall(SV_SetText, c.shoal_sub_key, c.shoal_sub or "") end
     FISH.splashAsset()
     s.shoals, s.total = {}, 0
-    local grounds = { c.ground_a, c.ground_b, c.ground_c }
+    local grounds = FISH.grounds()
     local said = {}
     for gi, unit in ipairs(c.units or {}) do
         local g = grounds[gi]
@@ -389,7 +414,7 @@ local function spawnShoals(now, s)
             if ALIVE and ALIVE.spawned then pcall(ALIVE.spawned, unit, r) end
             local objs = FISH.objs(unit)
             if #objs == 0 and r > 0 then                  -- (the new-object feed missed them: by their class round the ground)
-                objs = FISH.findNear(FISH.SHOAL_CLASS, g[1], g[2])
+                objs = FISH.findNear(FISH.SHOAL_CLASS, g[1], g[2], 90000)
                 FISH.actors[unit] = { open = false, table.unpack(objs) }
             end
             local sph = 0
@@ -410,7 +435,7 @@ local function spawnShoals(now, s)
     for _, x in ipairs(s.deck) do counts[x] = (counts[x] or 0) + 1 end
     local dk = {}
     for _, x in ipairs(CATCHES) do if counts[x] then dk[#dk + 1] = x .. " " .. counts[x] end end
-    log(string.format("fishing: round %d: %d shoals on the grounds: %s; the deck: %s", D.round, s.total, table.concat(said, "; "),
+    log(string.format("fishing: round %d: %d shoals round SAL's boat: %s; the deck: %s", D.round, s.total, table.concat(said, "; "),
         table.concat(dk, ", ")))
 end
 
@@ -800,7 +825,7 @@ end
 
 -- TEST ONLY BEGIN
 -- Ctrl+F10 in a run (the host's or solo): the shoals and SAL's boat (tools/re/FISHING.md 7, tests 1-2). Each press:
---   1 SV_Unit_FishA's 8 shoals at ground A (SV_Spawn(unit, x, y, shoal_z, a random yaw)) and SAL's boat at boat_at, a hit
+--   1 SV_Unit_FishA's 8 shoals round SAL's boat (SV_Spawn(unit, x, y, shoal_z, a random yaw)) and the boat at boat_at, a hit
 --     sphere on each shoal (`with sphere`, the first time), the names set; then once a second a line with each shoal's
 --     health (HealthInternal / MaxHealth) and who its DamageHistoryMap names, and the boat's health and MinHealth (the
 --     field written back up to boat_min_health when it's lower: never SetMinHealth). A shoal's death: who killed it
@@ -824,19 +849,20 @@ local function spawnAll(now)
     if not FISH.rowsReady then log("fishing test: the shoal's rows aren't in (FISH.setup at the main menu): spawning anyway") end
     if type(SV_SetText) == "function" then
         pcall(SV_SetText, cf.shoal_name_key, cf.shoal_name); pcall(SV_SetText, cf.boat_name_key, cf.boat_name)
+        if cf.shoal_sub_key then pcall(SV_SetText, cf.shoal_sub_key, cf.shoal_sub or "") end
     end
     FISH.splashAsset()                                    -- (loaded now, not at the first kill)
-    local unit, g = cf.units[1], cf.ground_a
+    local unit, g = cf.units[1], FISH.grounds()[1]
     local yaw = math.random() * 360
     local r = FISH.spawn(unit, g[1], g[2], cf.shoal_z, yaw)
     local objs = FISH.objs(unit)
     local seen = #objs .. " objects seen as they were made"
     if #objs == 0 and r > 0 then
-        objs = findNear(SHOAL_CLASS, g[1], g[2])
+        objs = findNear(SHOAL_CLASS, g[1], g[2], 90000)
         FISH.actors[unit] = { open = false, table.unpack(objs) }
         seen = "none seen as they were made; " .. #objs .. " " .. SHOAL_CLASS .. " found near it"
     end
-    log(string.format("fishing test: %s at ground A (%d, %d), %d cm up, yaw %.0f: %s; %s", unit, g[1], g[2], cf.shoal_z,
+    log(string.format("fishing test: %s round SAL's boat (%d, %d), %d cm up, yaw %.0f: %s; %s", unit, g[1], g[2], cf.shoal_z,
         yaw, r > 0 and (r .. " up") or ("not spawned (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")"), seen))
     T.shoals = {}
     for i, o in ipairs(objs) do

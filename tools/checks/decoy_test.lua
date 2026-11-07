@@ -20,7 +20,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do
     local rawOpen = io.open
@@ -39,7 +40,7 @@ function FindAllOf() return {} end
 function FindFirstOf() return nil end
 local statics = {}
 function StaticFindObject(p) return statics[p] end
-local function part(name, chunk) assert(load(readAll(MOD .. "/Scripts/" .. name), chunk or ("=" .. name)))() end
+local function part(name, chunk) PARTS.load(name, chunk) end   -- (the part and its pieces)
 part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 function log(s) logs[#logs + 1] = s end
@@ -176,7 +177,7 @@ end
 local function fresh(round)
     events, credits, callouts, specials, recycles, logs = {}, {}, {}, {}, {}, {}
     world, HITS, ON_AF, ATTACH_WORKS, MOVE_WORKS = {}, 0, false, true, true
-    me.HealthInternal, me.at, me.vel, me.gone = 1000, { X = 1610476, Y = -3436142, Z = 300000 }, { X = 0, Y = 0, Z = 0 }, nil
+    me.HealthInternal, me.MaxHealth, me.at, me.vel, me.gone = 1000, 100, { X = 1610476, Y = -3436142, Z = 300000 }, { X = 0, Y = 0, Z = 0 }, nil
     SPC.CLEAN_OBJ, SPC.seenUnits = {}, {}
     for _, f in pairs(LEVEL_DROPS) do pcall(f) end
     D = { round = round or 12, now = 0, special = { kind = "decoy", state = "pending" } }
@@ -197,7 +198,10 @@ for _, k in ipairs(CFG.specials.rotation) do if k == "decoy" then inRot = true e
 local inDef = false
 for _, k in ipairs(CFG_DEFAULTS.specials.rotation) do if k == "decoy" then inDef = true end end
 check(inRot and inDef and C.from_round == 10 and C.once_per_run == true, "in the rotation (a shipped default) from round 10, once a run")
-check(K.budget(20) == 6 and K.budget(9) == 2, "its fighters: fighter_share of the round's, whole 2-ships (" .. K.budget(20) .. ")")
+check(K.budget(20) == 0 and K.budget(9) == 0, "no normal aircraft in the round by default (fighter_share 0: " .. K.budget(20) .. ")")
+C.fighter_share = 0.3
+check(K.budget(20) == 6 and K.budget(9) == 2, "fighter_share set: that share of the round's, whole 2-ships (" .. K.budget(20) .. ")")
+C.fighter_share = 0
 DECOY.rowOk = false
 check(K.ready() == false and logged("no DECOY round: its UAVs' DT_NPC row SV_DecoyUav isn't in %(not added"), "not ready without its UAVs' row in DT_NPC, logged")
 DECOY.rowOk = true
@@ -230,7 +234,7 @@ check(podB.SearchPhaseTime == C.lock_delay_s and podB.DesignatePhaseTime == C.ba
     "its pod's phases on the instance: its laser held through its whole wait (" .. tostring(podB.DesignatePhaseTime) .. " s)")
 step(13)
 check(evs("^RE_SV_DecoyBaitPing$") == 2, "pinged again ping_every_s on")
-check(K.busy(s) and K.row(s, CFG.hud.text):find("MARKER UAV", 1, true), "busy, its NEXT row")
+check(K.busy(s) and K.row(s, CFG.hud.text):find("RECON DRONE", 1, true), "busy, its NEXT row")
 bodyOf(C.bait_unit).HealthInternal = 0
 step(0.5)
 check(s.state == "trap" and #credits == 1 and credits[1].n == C.pay.bait + C.pay.bait_per_round * 12, "shot down: paid ("
@@ -346,7 +350,7 @@ check(rod.PredictionTime == C.lead.fall_s, "a rod from the feed led by the fall:
 check(evs("^RE_SV_DecoySpear_1$") == 1 and r.state == "struck", "the Spear called at 8 s: RE_SV_DecoySpear_1")
 check(evs("^RE_SV_DecoyRadio_Incoming$") == 1, "the radio's incoming")
 local sl = logged("the Spear called on you")
-check(sl and sl:find("250 m/s", 1, true) and sl:find("750 m ahead", 1, true), "the call's line: your speed and the led point (" .. tostring(sl) .. ")")
+check(sl and sl:find("250 m/s", 1, true) and sl:find("400 m ahead", 1, true), "the call's line: your speed and the led point, 1.6 s (" .. tostring(sl) .. ")")
 check(evs("^RE_SV_DecoyKill$") == 0, "no sure kill (sure_kill off)")
 step(3)
 HITS, me.HealthInternal = 1, 700
@@ -394,7 +398,13 @@ check(world[DECOY.uav(1)].objs[2].hidden == true and mk.hidden == true, "its pod
 step(5)
 local k2 = nil
 for k, rr in pairs(DECOY.R) do if rr.state == "count" then k2 = k end end
-if not k2 then step(8); for k, rr in pairs(DECOY.R) do if rr.state == "count" then k2 = k end end end
+-- ((2026-11-07) one lock on you at a time, lock_gap_s after the last, a UAV relock_s after its own strike: the next
+-- may take a while)
+for _ = 1, 30 do
+    if k2 then break end
+    step(1)
+    for k, rr in pairs(DECOY.R) do if rr.state == "count" then k2 = k end end
+end
 check(k2 ~= nil, "the next UAV locks you")
 if k2 then
     spears = evs("^RE_SV_DecoySpear_")
@@ -503,6 +513,150 @@ step(2, false)
 check(#recycles == 3, "the rest one a gap (" .. #recycles .. ")")
 
 ---------------------------------------------------------------------------------------------------- co-op: the host
+print("two locks on you at a time, the hit judged, the fall learnt (2026-11-07, Alyssa's test)")
+fresh()
+s = D.special
+C.max_up, C.per_player_max = 3, 3
+K.spawn(0)
+step(0.25)
+bodyOf(C.bait_unit).HealthInternal = 0
+local most, ups = 0, 0
+local callAt, spears0 = {}, evs("^RE_SV_DecoySpear_")
+for _ = 1, 160 do
+    step(0.25)
+    if evs("^RE_SV_DecoySpear_") > spears0 + #callAt then callAt[#callAt + 1] = now end
+    local n = 0
+    for _, rr in pairs(DECOY.R) do if rr.state == "count" then n = n + 1 end end
+    if n > most then most = n end
+    local u = 0
+    for _, U in pairs(s.u or {}) do if U.state == "up" then u = u + 1 end end
+    if u > ups then ups = u end
+end
+check(ups >= 3 and most >= 1 and most <= C.locks_per_player,
+    string.format("at most locks_per_player locks on you at a time (%d) with %d UAVs up", most, ups))
+local gapMin, gapMax = 999, 0
+for i = 2, #callAt do gapMin = math.min(gapMin, callAt[i] - callAt[i - 1]); gapMax = math.max(gapMax, callAt[i] - callAt[i - 1]) end
+check(#callAt >= 2 and gapMin >= C.lock_gap_s - 0.2, string.format("their strikes at least lock_gap_s apart (%d calls, %.2f s the closest)",
+    #callAt, gapMin))
+-- ((2026-11-07) the user: "have the strikes come every 10 seconds with the UAVs")
+check(#callAt >= 3 and gapMax <= C.lock_gap_s + 0.6, string.format("a strike every lock_gap_s (%.1f) while they're up (%.2f s the longest)",
+    C.lock_gap_s, gapMax))
+
+fresh()
+s = D.special
+C.max_up, C.per_player_max = 1, 1
+K.spawn(0)
+step(0.25)
+bodyOf(C.bait_unit).HealthInternal = 0
+step(1.5)
+step(C.lock_after_s + 0.5)
+local rj = DECOY.R[1]
+check(rj and rj.state == "count", "a lock")
+step(rj.strikeAt - now + 0.2)
+check(rj.state == "struck", "its Spear called")
+step(1.75)
+C.hit.chance = 1.0                                  -- (a sure roll for the flow; the odds checked below)
+HITS = 1
+step(0.5)
+-- ((2026-11-07) the user: a hit is "heavy damage", not a kill)
+check(evs("^RE_SV_DecoyKill$") == 0 and me.HealthInternal == 500 and logged("the Spear hits you %(judged: 0 m off.-a 100%% chance.-%-50 HP %(50%% of your 100%), 50 HP left"),
+    "your line held, no health lost to the rod: the hit judged, half your health (no kill)")
+local rk
+for _ = 1, 120 do
+    step(0.25)
+    for _, rr in pairs(DECOY.R) do if rr.state == "count" then rk = rr end end
+    if rk then break end
+end
+check(rk ~= nil, "the next lock")
+if rk then
+    step(rk.strikeAt - now + 0.2)
+    me.at = { X = me.at.X + 60000, Y = me.at.Y, Z = me.at.Z }  -- (600 m off the line: you broke away)
+    step(1.75)
+    HITS = 2
+    step(0.5)
+    check(evs("^RE_SV_DecoyKill$") == 0 and me.HealthInternal == 500 and logged("the Spear missed you %(judged: 600 m off.-a 0%% chance"),
+        "600 m off your line: it missed (no damage)")
+end
+C.hit.chance = 0.6
+do                                                  -- (heavy damage: lethal only with half or less left; can_kill; 100 %)
+    local k0 = evs("^RE_SV_DecoyKill$")
+    me.HealthInternal = 400
+    local what = DECOY.hurtMe(C)
+    check(evs("^RE_SV_DecoyKill$") == k0 + 1 and what:find("lethal", 1, true), "a hit with half or less left: the kill (" .. what .. ")")
+    C.hit.can_kill = false
+    me.HealthInternal = 400
+    what = DECOY.hurtMe(C)
+    check(evs("^RE_SV_DecoyKill$") == k0 + 1 and me.HealthInternal == 10, "can_kill = false: 1 HP left (" .. what .. ")")
+    C.hit.can_kill = true
+    C.hit.damage_pct = 100
+    me.HealthInternal = 1000
+    what = DECOY.hurtMe(C)
+    check(evs("^RE_SV_DecoyKill$") == k0 + 2, "damage_pct 100: every hit a kill, as before")
+    C.hit.damage_pct = 50
+    me.HealthInternal = 1000
+end
+check(math.abs(DECOY.hitChance(0) - 0.6) < 1e-9 and math.abs(DECOY.hitChance(100) - 0.3) < 1e-9 and DECOY.hitChance(200) == 0
+      and DECOY.hitChance(500) == 0 and DECOY.hitChance(nil) == 0, "the odds: 60% on your line, 30% at 100 m off it, none from 200 m")
+math.randomseed(7)
+local hitsN = 0
+for _ = 1, 2000 do if math.random() < DECOY.hitChance(0) then hitsN = hitsN + 1 end end
+check(hitsN > 1100 and hitsN < 1300, "flying straight on, about 60 of 100 strikes hit (" .. hitsN .. " of 2000)")
+check(#DECOY.falls == 2 and math.abs(DECOY.fallS() - 2.0) < 0.3, "the fall learnt from the impacts: " .. string.format("%.2f", DECOY.fallS()) .. " s")
+DECOY.falls = { 0.1, 0.1, 0.1 }
+check(DECOY.fallS() == C.lead.min_s, "the learnt fall kept within min_s .. max_s")
+DECOY.falls = {}
+check(DECOY.fallS() == C.lead.fall_s, "fall_s until two impacts are seen")
+
+print("the bait's Spear on the airfield (2026-11-07: it did no damage)")
+fresh()
+s = D.special
+C.max_up, C.per_player_max = 1, 1
+AF = { bomb = 0, down = false }
+K.spawn(0)
+step(0.25)
+local oldRod = obj("BP_RodsFromGod", 1, { X = 0, Y = 0, Z = 0 })              -- (a pooled rod made before: never the airfield's)
+for _, fn in ipairs(notify["/Script/Live.LiveMeteoriteImpact"] or {}) do fn(oldRod) end
+step(0.25)
+bodyOf(C.bait_unit).HealthInternal = 0
+step(0.5)
+check(DECOY.bs ~= nil and logged("the bait's Spear on the airfield watched"), "the bait down: its Spear on the airfield watched")
+local mk0 = DECOY.bs and DECOY.bs.mark
+local rodA = obj("BP_RodsFromGod", 1, { X = mk0.X, Y = mk0.Y, Z = 5800000 })
+for _, fn in ipairs(notify["/Script/Live.LiveMeteoriteImpact"] or {}) do fn(rodA) end
+step(0.25)
+rodA.at = { X = mk0.X + 30000, Y = mk0.Y, Z = 600 }                        -- (it came down 300 m from the mark)
+step(0.125)
+check(AF.bomb == 0, "not counted on the tick it moved")
+step(0.25)
+check(AF.bomb == C.bait_strike.damage and DECOY.bs == nil and logged("the bait's Spear landed on the airfield %(a rod stopped there%)")
+      , string.format("landed 300 m from the mark: -%d airfield (AF.bomb %s)", C.bait_strike.damage, tostring(AF.bomb)))
+check(oldRod.at.Z == 0 and AF.bomb == 40, "the rod made before the bait's end never counted")
+-- none seen landing: the damage at the mark wait_s after a new rod showed
+fresh()
+s = D.special
+AF = { bomb = 0, down = false }
+K.spawn(0)
+step(0.25)
+bodyOf(C.bait_unit).HealthInternal = 0
+step(0.5)
+local rodB = obj("BP_RodsFromGod", 1, { X = 0, Y = 0, Z = 5800000 })
+for _, fn in ipairs(notify["/Script/Live.LiveMeteoriteImpact"] or {}) do fn(rodB) end
+step(0.25)
+rodB.gone = true
+step(C.bait_strike.wait_s + 0.5)
+check(AF.bomb == C.bait_strike.damage and logged("none seen landing: at its mark"), "a rod seen, none landing: at the mark wait_s on")
+COOP = { host = function() return false end, client = function() return true end, open = true, slot = 1 }
+AF = { bomb = 0, down = false }
+DECOY.baitStrikeStart(now)
+local rodC = obj("BP_RodsFromGod", 1, { X = 0, Y = 0, Z = 5800000 })
+for _, fn in ipairs(notify["/Script/Live.LiveMeteoriteImpact"] or {}) do fn(rodC) end
+step(0.25, false)
+rodC.gone = true
+step(C.bait_strike.wait_s + 0.5, false)
+check(AF.bomb == 0 and logged("the host's airfield takes the damage"), "a joiner: the blast only (the host's airfield takes the damage)")
+COOP = nil
+AF = nil
+
 print("co-op: the host")
 local sent = {}
 local function coop(role, slot, list)
@@ -597,7 +751,7 @@ COOP = nil
 
 ---------------------------------------------------------------------------------------------------- KEEP_EVENTS
 print("co-op: the Spear never forwarded")
-local src = readAll(MOD .. "/Scripts/sv_coop.lua")
+local src = PARTS.read("sv_coop.lua")
 local keepSrc = src:match("local KEEP_EVENTS = (%b{})")
 local KEEP = assert(load("return " .. keepSrc))()
 local function kept(name) for _, p in ipairs(KEEP) do if name:match(p) then return true end end return false end

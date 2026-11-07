@@ -25,7 +25,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 do
     local rawOpen = io.open
@@ -125,7 +126,7 @@ function SV_MenuSetting() return "" end
 local menu = 0
 function SV_MenuChoice() return menu end
 
-dofile(MOD .. "/Scripts/sv_config.lua")
+PARTS.dofile("sv_config.lua")
 do                                                -- (sv_spawn.lua's own specialOn / specialFor, before sv_coop wraps it)
     local sp = readAll(MOD .. "/Scripts/sv_spawn.lua")
     local a1 = sp:find("function specialOn(kind)", 1, true)
@@ -134,8 +135,7 @@ do                                                -- (sv_spawn.lua's own special
     assert(a1 and a2, "sv_spawn.lua: specialOn / specialFor not found")
     assert(load(sp:sub(a1, a2 + #tail - 1), "=sv_spawn specialFor"))()
 end
-local src = readAll(MOD .. "/Scripts/sv_coop.lua"):gsub("\nlocal M = {", "\nM = {", 1)
-assert(load(src, "=sv_coop.lua"))()
+PARTS.load("sv_coop.lua", "=sv_coop.lua", { { "\nlocal M = {", "\nM = {" } })   -- (its pieces too; M exposed)
 local M = _G.M
 CFG.coop.enabled = true
 local function tick(dt) clock = clock + (dt or 0.25); M.nextInfo = 0; COOP.tick(0) end
@@ -386,7 +386,7 @@ print("D: VALKA's mood on every joiner (the host)")
 CFG.coop.real_planes = true
 SPC = { V = {} }
 do                                                -- (sv_anomalies.lua's own mood functions)
-    local an = readAll(MOD .. "/Scripts/sv_anomalies.lua")
+    local an = PARTS.read("sv_anomalies.lua")
     local a1 = an:find("function SPC.V.mood(c, s)", 1, true)
     local tail = "\n    s.moodOn = false\nend\n"
     local a2 = a1 and an:find(tail, a1, true)
@@ -706,12 +706,12 @@ end
 ---------------------------------------------------------------------------------------------------- the hooks
 print("the hooks, by their place in the source")
 do
-    local an = readAll(MOD .. "/Scripts/sv_anomalies.lua")
+    local an = PARTS.read("sv_anomalies.lua")
     check(has(an, "V.mood(c, s)                                    -- (0.73.76) the flyers down (or none): red and her song")
           and has(an, "V.mood(c, s)                                        -- (0.73.76) red and her song, if her round had no lurk")
           and has(an, "V.moodOff(c, s, now)                            -- (0.73.76) the red and her song fade away after she dies"),
           "sv_anomalies: her lurk and hunt call SPC.V.mood, her death SPC.V.moodOff")
-    local cs = readAll(MOD .. "/Scripts/sv_coop.lua")
+    local cs = PARTS.read("sv_coop.lua")
     check(has(cs, "local okVw, errVw = pcall(M.valkaWatch)"), "sv_coop: the host's watch every co-op tick")
     check(has(cs, "if M.vmood then sendTo(to, true, \"vm\", 1) end"), "sv_coop: hostSync resends her mood")
     check(has(cs, "local okF, whyF = M.nativeFree(slot)"), "sv_coop: spawnReal frees the slot first")

@@ -2,21 +2,28 @@
 -- Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order; a name another part uses is a global of this
 -- mod's Lua state, its own helpers stay local.
 --
--- The stock sky asset (the level's CloudlySkyParamsAsset, Mission 4's CSP_ms04...) is never written: Mission 4's campaign
--- would inherit what's left in it. Survival writes the renderer's working copies of its params (CloudlyRenderer .Data
--- .SkyRendererMainThread.OurSkyParams / .SkyParamsRO), the interpolated params only when they're a run-time object, the
--- sun light (its rotation: pitch -elevation, yaw azimuth + 90; intensity the sun's factor; colour), the level's sky light
--- (BP_SkyLightController's MainSkyLight), the post-process volumes' exposure, two material parameter collections
--- (CFG.sky.mpc_env / mpc_vfx, through KismetMaterialLibrary: the world's instance) and Cloudly's custom sun / moon (its
--- static API on /Script/Cloudly.Default__CloudlyActor). Each value's original is kept the first time it's touched and put
--- back exactly (SKY.restore: a run's end, sv_main.lua runLeft); the level's objects are found afresh for each apply or
--- restore (liveObj on each), never kept between ticks. The level torn down (sv_core.lua levelGate) drops the originals
--- untouched; a custom sun left on then is put back in the next level (SKY.pending, SKY.idleTick from sv_main.lua).
+-- ((2026-11-07) the user's sky test, in a run where the arc's sun "isn't moving at all" and its night "looks over exposed")
+-- Cloudly draws the sky, and drives its sun light, from the level's CloudlySkyParamsAsset (Mission 4's CSP_ms04...): every
+-- frame it copies that asset into the renderer's drawn copy (CloudlyRenderer .Data.SkyParamsRO and two of OurSkyParams)
+-- and onto the sun light (rotation, intensity, colour), so a write to those is undone at once; its custom sun API writes
+-- into the asset itself. The day-night arc writes the asset (v.asset). The asset outlives the level and Mission 4's
+-- campaign reads it too, so every value of it is put back exactly: at a run's end (SKY.restore, sv_main.lua runLeft), after
+-- a level torn down with it changed in the next tick that can (SKY.pending, SKY.idleTick: the asset found again by its
+-- path), and one an earlier run left changed is put back to its shipped values (CFG.sky.arc.stock.asset, SKY.assetShipped).
+-- Survival also writes the renderer's working copies (OurSkyParams / SkyParamsRO: the sky test's; undone by the next frame),
+-- the interpolated params only when they're a run-time object, the sun light (its rotation: pitch -elevation, yaw azimuth
+-- + 90; intensity the sun's factor; colour), the level's sky light (BP_SkyLightController's MainSkyLight), the
+-- post-process volumes' exposure, two material parameter collections (CFG.sky.mpc_env / mpc_vfx, through
+-- KismetMaterialLibrary: the world's instance) and Cloudly's custom sun / moon (its static API on
+-- /Script/Cloudly.Default__CloudlyActor). Each value's original is kept the first time it's touched and put back exactly;
+-- the level's objects are checked live (liveObj) before each use. The level torn down (sv_core.lua levelGate) drops the
+-- level's originals untouched; a custom sun left on, and the sky asset's, are put back in the next tick that can.
 --
 --   SKY.apply(v, why, opts)  writes sky values v (each field optional), returns how many were written (opts.V: a view
 --                        to write on, else found afresh; opts.quiet: no line a value, only what failed and why):
 --       v.sun = { el =, az =, factor =, rgb = { r, g, b }, disc = }   elevation, azimuth (a compass bearing, east 90)
 --       v.custom = true      the sun (and v.moon's spot) through the custom sun API too; false: the custom sun off
+--       v.asset = true       into the level's sky asset itself (what Cloudly draws and lights by: the arc's path)
 --       v.copies = false     not into the renderer's working copies (default: in)
 --       v.light = false      not onto the sun light (default: rotation from el / az, intensity factor, colour rgb)
 --       v.moon = { enable =, el =, az =, phase =, phase_angle =, disc =, brightness = }
@@ -148,7 +155,9 @@ local function slot(V, key)
         if not (o and path) then return nil end
         local get = function() return pget(function() return getPath(o.Data, path) end) end
         local set = nil
-        if kind == "interp" and V.interpOk then
+        -- (the asset: written only when an apply asks for it (v.asset), its originals always put back; the interpolated
+        -- params only when they're a run-time object, never the stock asset)
+        if kind == "asset" or V.interpOk then
             set = function(v) return pcall(function() setPath(o.Data, path, v) end) end
         end
         return get, set
@@ -324,6 +333,9 @@ local function wanted(V, v)
             if (kind == "copy" or (kind == "interp" and V.interpOk)) and f[field] ~= nil then want[k] = f[field] end
         end
     end
+    if v.asset == true and V.asset then
+        for _, fd in ipairs(SP) do if f[fd[1]] ~= nil then want["asset|" .. fd[1]] = f[fd[1]] end end
+    end
     if v.light ~= false and V.sun then
         if s.el then want["light|pitch"] = -s.el end
         if s.az then local y = (s.az + 90) % 360; if y > 180 then y = y - 360 end; want["light|yaw"] = y end
@@ -368,16 +380,34 @@ local function wanted(V, v)
 end
 SKY.wanted = wanted
 
+-- an object's path for StaticFindObject (its full name without the class: "CloudlySkyParams /Game/..." -> "/Game/...")
+local function objPath(o)
+    local s = nameOf(o)
+    return s:match("^[^/%s]+%s+(/.+)$") or s
+end
+-- the sky asset's path noted with its first original (put back by it after a level's torn down: SKY.idleTick)
+local function noteAsset(V, k)
+    if V.asset and k:find("^asset|") and not SKY.assetPath then SKY.assetPath = objPath(V.asset) end
+end
+SKY.noteAsset = noteAsset
 -- one value written on view V, its original kept the first time; the value it had and whether the write went
 local function writeKey(V, k, value)
     local get, set = slot(V, k)
     if not (get and set) then return nil, false end
     local old = get()
-    if SKY.orig[k] == nil and old ~= nil then SKY.orig[k] = old; SKY.order[#SKY.order + 1] = k end
+    if SKY.orig[k] == nil and old ~= nil then SKY.orig[k] = old; SKY.order[#SKY.order + 1] = k; noteAsset(V, k) end
     local ok = set(value) == true
     return old, ok
 end
 SKY.writeKey = writeKey
+-- a value's original kept without writing it: one the game changes for us (the custom sun API writes the asset)
+local function keepOrig(V, k)
+    if SKY.orig[k] ~= nil then return end
+    local get = slot(V, k)
+    local v = get and get()
+    if v ~= nil then SKY.orig[k] = v; SKY.order[#SKY.order + 1] = k; noteAsset(V, k) end
+end
+SKY.keepOrig = keepOrig
 
 function SKY.apply(v, why, opts)
     why = tostring(why or "?")
@@ -406,6 +436,10 @@ function SKY.apply(v, why, opts)
     local s, m = v.sun or {}, v.moon or {}
     if v.custom == true and s.el and s.az and V.cdo and V.pc then
         writeKey(V, "custom|sun", true)                      -- (the original kept; the position call sets it anyway)
+        -- (the API writes the sky asset's sun and moon (the sky test of 2026-11-07: the asset read -2 / -105 after it; the
+        -- moon's call left it on, at 35 / -130, phase 0.15 -> 0): their originals kept, so they're put back with the rest)
+        for _, f in ipairs({ "sun_el", "sun_az" }) do keepOrig(V, "asset|" .. f) end
+        if m.el and m.az then for _, f in ipairs({ "moon_on", "moon_el", "moon_az", "moon_phase" }) do keepOrig(V, "asset|" .. f) end end
         local okC, errC = pcall(function() V.cdo:SetCustomSunPosition(V.pc, s.el, s.az, true) end)
         if not (opts.quiet and okC) then
             log(string.format("sky: %s: SetCustomSunPosition(%s, %s, true): %s", why, fmt(s.el), fmt(s.az), okC and "called" or ("failed: " .. tostring(errC))))
@@ -442,13 +476,21 @@ function SKY.apply(v, why, opts)
     return done, failed
 end
 
--- the originals' custom flags, for a level torn down with them changed: put back in the next one (SKY.idleTick)
+-- the originals of what outlives a level torn down with it changed, put back in the next tick that can (SKY.idleTick):
+-- the custom sun's flags, and the sky asset's values (with its path, to find it again)
 local function pendingFrom()
     local p = nil
-    for _, k in ipairs({ "custom|sun", "custom|moon" }) do
-        if SKY.orig[k] ~= nil then p = p or {}; p[k] = SKY.orig[k] end
+    for _, k in ipairs(SKY.order) do
+        if (k == "custom|sun" or k == "custom|moon" or k:find("^asset|")) and SKY.orig[k] ~= nil then p = p or {}; p[k] = SKY.orig[k] end
     end
+    if p then p.assetPath = SKY.assetPath end
     return p
+end
+local function pendingAsset(P)
+    local keys = {}
+    for k in pairs(P or {}) do if type(k) == "string" and k:find("^asset|") then keys[#keys + 1] = k end end
+    table.sort(keys)
+    return keys
 end
 
 -- opts (the retry's): V a view to use (else found afresh), quiet (logged only when something was put back)
@@ -458,9 +500,11 @@ function SKY.restore(why, opts)
     if #SKY.order == 0 then SKY.retry = nil; return 0, 0 end
     if levelTorn and levelTorn() then
         SKY.pending = pendingFrom()
-        log(string.format("sky: %s: the level's torn down: its %d changed values go with it, none put back%s", why, #SKY.order,
-            SKY.pending and " (the custom sun's put back in the next level)" or ""))
-        SKY.orig, SKY.order, SKY.retry = {}, {}, nil
+        local nA = #pendingAsset(SKY.pending)
+        log(string.format("sky: %s: the level's torn down: its %d changed values go with it, none put back now%s", why, #SKY.order,
+            SKY.pending and string.format(" (%s put back in the next tick that can)", nA > 0 and string.format("the sky asset's %d and the custom sun's", nA)
+                or "the custom sun's") or ""))
+        SKY.orig, SKY.order, SKY.retry, SKY.assetPath = {}, {}, nil, nil
         return 0, 0
     end
     local V = opts.V or SKY.view()
@@ -500,6 +544,7 @@ function SKY.restore(why, opts)
             #keepK > 0 and string.format("; %d kept to be tried again every tick", #keepK) or ""))
     end
     SKY.orig, SKY.order = keepO, keepK
+    if next(keepO) == nil then SKY.assetPath = nil end
     if #keepK > 0 then
         SKY.retry = SKY.retry or { why = why, tries = 0, freshAt = os.clock() + 10 }
     else
@@ -532,8 +577,10 @@ function SKY.retryTick()
     SKY.restore(R.why, { V = V, quiet = true })
 end
 
--- (sv_main.lua probeTick, while SKY.pending) a custom sun or moon a torn-down level left changed: put back as it was in
--- the next level that has a player controller (every 5 s, 12 tries)
+-- (sv_main.lua probeTick, while SKY.pending) what a torn-down level left changed and outlives it, put back as it was
+-- (every 5 s, 12 tries): a custom sun or moon in the next level that has a player controller; the sky asset's values
+-- the moment it's found loaded (StaticFindObject on its path: no walk), and when it isn't loaded any more (12 tries) it's
+-- read from its package again, as shipped, when it's next needed
 function SKY.idleTick()
     local P = SKY.pending
     if not P then return end
@@ -541,25 +588,50 @@ function SKY.idleTick()
     if now < (SKY.idleAt or 0) or (levelTorn and levelTorn()) or (walkHold and walkHold()) then return end
     SKY.idleAt = now + 5
     SKY.idleTries = (SKY.idleTries or 0) + 1
-    local pc = liveObj(survivalPC) and survivalPC or FindFirstOf("PlayerController")
-    local cdo = StaticFindObject("/Script/Cloudly.Default__CloudlyActor")
-    local done = {}
-    if pc ~= nil and liveObj(pc) and cdo ~= nil and liveObj(cdo) then
-        if P["custom|sun"] ~= nil and pcall(function() cdo:SetUseCustomSun(pc, P["custom|sun"] == true) end) then done[#done + 1] = "sun " .. fmt(P["custom|sun"]) end
-        if P["custom|moon"] ~= nil and pcall(function() cdo:SetUseCustomMoon(pc, P["custom|moon"] == true) end) then done[#done + 1] = "moon " .. fmt(P["custom|moon"]) end
+    local last = SKY.idleTries >= 12
+    if (P["custom|sun"] ~= nil or P["custom|moon"] ~= nil) and not P.customDone then
+        local pc = liveObj(survivalPC) and survivalPC or FindFirstOf("PlayerController")
+        local cdo = StaticFindObject("/Script/Cloudly.Default__CloudlyActor")
+        local done = {}
+        if pc ~= nil and liveObj(pc) and cdo ~= nil and liveObj(cdo) then
+            if P["custom|sun"] ~= nil and pcall(function() cdo:SetUseCustomSun(pc, P["custom|sun"] == true) end) then done[#done + 1] = "sun " .. fmt(P["custom|sun"]) end
+            if P["custom|moon"] ~= nil and pcall(function() cdo:SetUseCustomMoon(pc, P["custom|moon"] == true) end) then done[#done + 1] = "moon " .. fmt(P["custom|moon"]) end
+        end
+        if #done > 0 or last then
+            log(string.format("sky: the custom sun a torn-down level left changed: %s", #done > 0 and ("put back (" .. table.concat(done, ", ") .. ")")
+                or "NOT put back (no player controller or Cloudly in 12 tries)"))
+            P.customDone = true
+        end
+    else
+        P.customDone = true
     end
-    if #done > 0 or SKY.idleTries >= 12 then
-        log(string.format("sky: the custom sun a torn-down level left changed: %s", #done > 0 and ("put back (" .. table.concat(done, ", ") .. ")")
-            or "NOT put back (no player controller or Cloudly in 12 tries)"))
-        SKY.pending, SKY.idleTries = nil, 0
+    local aKeys = pendingAsset(P)
+    if #aKeys > 0 and not P.assetDone then
+        local o = P.assetPath and StaticFindObject(P.assetPath) or nil
+        if o ~= nil and liveObj(o) then
+            local n = 0
+            for _, k in ipairs(aKeys) do
+                local path = SP_PATH[k:match("^asset|(.+)$")]
+                if path and pcall(function() setPath(o.Data, path, P[k]) end) then n = n + 1 end
+            end
+            log(string.format("sky: the sky asset a torn-down level left changed: %d of %d values put back (%s)", n, #aKeys, tostring(P.assetPath)))
+            P.assetDone = true
+        elseif last then
+            log(string.format("sky: the sky asset a torn-down level left changed (%d values): not loaded now (%s): read from its "
+                .. "package again, as shipped, when it's next needed", #aKeys, tostring(P.assetPath)))
+            P.assetDone = true
+        end
+    else
+        P.assetDone = true
     end
+    if P.customDone and P.assetDone then SKY.pending, SKY.idleTries = nil, 0 end
 end
 
 -- (the teardown gate's drop, sv_core.lua levelDrop: the originals are the level's, forgotten untouched)
 if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["the sky"] = function()
         if #SKY.order > 0 then SKY.pending = pendingFrom() end
-        SKY.orig, SKY.order, SKY.retry = {}, {}, nil
+        SKY.orig, SKY.order, SKY.retry, SKY.assetPath = {}, {}, nil, nil
     end
 end
 end
@@ -651,13 +723,13 @@ local function trip(t, d) t = type(t) == "table" and t or d; return n(t[1], d[1]
 
 function SKY.arcF()
     local F = RUN and RUN.arcF
-    if type(F) == "number" and F >= 1 and F == math.floor(F) then return F end
+    if type(F) == "number" and F >= -20 and F == math.floor(F) then return F end   -- (under 1: a test key's early festival)
     return nil
 end
 function SKY.arcEnd() return 8 + math.max(1, math.floor(n(acfg().sunrise_rounds, 4))) - 1 end
 function SKY.arcSet(F, why)
     F = tonumber(F)
-    if not (RUN and F and F >= 1) then return false end
+    if not (RUN and F and F >= -20) then return false end
     F = math.floor(F)
     if RUN.arcF == F then return false end
     local was = RUN.arcF
@@ -679,8 +751,36 @@ function SKY.arcHoldsValka(round)
     return round >= F and round <= F + last
 end
 
--- The stock sky's numbers: the level's own (the stock asset's params, never written; the light, the sky lights, the
--- exposure and the MPCs as they were before Survival changed them: SKY.orig), else CFG.sky.arc.stock (Mission 4's)
+-- ((2026-11-07) the sky test's custom sun left the user's asset at 35 / -130 with the moon on, and a run that ends
+-- without its restore (a crash) leaves the arc's) The sky asset's values an earlier run left changed: their shipped
+-- values (CFG.sky.arc.stock.asset, Mission 4's as read in game) taken as their originals, so the arc starts from the
+-- shipped sky and puts it back; each logged once. How many differed.
+function SKY.assetShipped(V)
+    local ship = (acfg().stock or {}).asset
+    if not (V and V.asset and type(ship) == "table") then return 0 end
+    local diff = {}
+    for _, fd in ipairs(SKY.SP) do
+        local f, k = fd[1], "asset|" .. fd[1]
+        if ship[f] ~= nil and SKY.orig[k] == nil then
+            local get = SKY.slot(V, k)
+            local v = get and get()
+            if v ~= nil and not SKY.same(v, ship[f]) then
+                SKY.orig[k] = ship[f]
+                SKY.order[#SKY.order + 1] = k
+                diff[#diff + 1] = string.format("%s %s (shipped %s)", f, SKY.fmt(v), SKY.fmt(ship[f]))
+            end
+        end
+    end
+    if #diff > 0 then
+        SKY.noteAsset(V, "asset|sun_el")                 -- (its path, for a restore after a level torn down)
+        log(string.format("sky: arc: the sky asset was left changed by an earlier run or test (%d values: %s): the shipped "
+            .. "values used, and put back at the end", #diff, table.concat(diff, ", ")))
+    end
+    return #diff
+end
+
+-- The stock sky's numbers: the level's own (the sky asset's params as shipped, the light, the sky lights, the exposure
+-- and the MPCs as they were before Survival changed them: SKY.orig), else CFG.sky.arc.stock (Mission 4's)
 function SKY.arcBase(V)
     local st = acfg().stock or {}
     local b = { el = n(st.el, 15), az = n(st.az, 142), factor = n(st.factor, 120000), r = 1, g = 1, b = 1, disc = n(st.disc, 0.5),
@@ -688,6 +788,7 @@ function SKY.arcBase(V)
                 em = n(st.emissive, 1), vfx = n(st.vfx_ev, 11), from = "CFG.sky.arc.stock" }
     b.ex_min, b.ex_max, b.ex_bias = trip(st.exposure, { 13, 14, 0 })
     if not V then return b end
+    SKY.assetShipped(V)
     local function rd(k)
         if SKY.orig[k] ~= nil then return SKY.orig[k] end
         local get = SKY.slot(V, k)
@@ -789,12 +890,33 @@ function SKY.arcAt(k, u, base)
         end
     end
     if A.mode ~= B.mode then
-        local dark = math.max(1e-3, n(acfg().dark_factor, 0.25))
+        -- ((2026-11-07) the user's screenshot of the sun at -2 / -105 at full strength: "very nice", "slowly get it to
+        -- transition to that sunset") A step that swaps the sun for the moon (or back) holds its own sky through the fight
+        -- (u up to hold = swap_within_x): only the sunset's sun moves, sinking to set_el at full strength. From hold to the
+        -- swap at u 0.5 (the break's first half) its light fades to dark_factor; the rest (exposure, sky light, glow, EV,
+        -- stars) moves on to the next round's from hold to the break's end. (Before, the light faded from the fight's
+        -- start: ~7 at -2 deg, where the user's 120000 looked right.)
+        local c = acfg()
+        local dark = math.max(1e-3, n(c.dark_factor, 0.25))
+        local hold = math.max(0, math.min(0.49, n(c.swap_within_x, 0.45)))
+        local v = math.max(0, (u - hold) / (1 - hold))
+        for _, f in ipairs(FIELDS) do
+            local x, y = A[f], B[f]
+            if not MODE_FIELDS[f] and type(x) == "number" and type(y) == "number" then
+                if LOG_FIELDS[f] then s[f] = lerpLog(x, y, v) else s[f] = lerp(x, y, v) end
+            end
+        end
         local from, to, t
         if u < 0.5 then
-            from, to, t = A, copy(A), u / 0.5
-            to.factor = dark
-            if A.set_el then to.el = A.set_el end
+            from, to = copy(A), copy(A)
+            if u <= hold then
+                t = hold > 0 and u / hold or 1
+                if A.set_el then to.el = A.set_el end    -- (the sunset's sun sinks, its light held)
+            else
+                t = (u - hold) / (0.5 - hold)
+                if A.set_el then from.el, to.el = A.set_el, A.set_el end
+                to.factor = dark                          -- (then the last light goes, before the moon)
+            end
             s.mode = A.mode
         else
             from, to, t = copy(B), B, (u - 0.5) / 0.5
@@ -834,7 +956,11 @@ local function asV(s, base, red)
     v.skylight = { x = s.sl_x }
     if not red then v.skylight.rgb = { s.sl_r, s.sl_g, s.sl_b } end
     v.mpc = { emissive = s.em, vfx_ev = s.vfx }
-    if c.path == "custom" then v.custom = true end
+    -- path (CFG.sky.arc.path): "asset" (the default since the user's sky test of 2026-11-07: the level's sky asset, which
+    -- Cloudly draws and lights by, nothing else of the sun's); "copies" (the renderer's copies and the light: undone
+    -- every frame); "custom" (those and Cloudly's custom sun API, which moves the asset's sun)
+    if c.path == "custom" then v.custom = true
+    elseif c.path ~= "copies" then v.asset, v.copies, v.light = true, false, false end
     return v
 end
 SKY.arcV = asV
@@ -896,10 +1022,51 @@ local function arcLine(s, why)
         fmt1(s.ex_min), fmt1(s.ex_max), fmt1(s.ex_bias), s.sl_x, string.format("%.4g", s.em), fmt1(s.vfx), s.stars)
 end
 
+-- ((2026-11-07) the arc wrote the renderer's copies for a whole run and nothing of the sun showed) Whether what the arc
+-- writes is what's drawn: the drawn copy's sun (the renderer's SkyParamsRO, which Cloudly fills from the asset every frame)
+-- and the sun light's intensity, read a write on, once the written sky is off the stock one (1 deg, or the light's
+-- strength by a third). Followed: logged once. Not followed 3 checks running: logged, and from then on the exposure, the
+-- sky light and the glow stay at the day's (SKY.arcTick), so a sky that doesn't darken can't glare either.
+local function followCheck(V)
+    local w, b = ARC.wrote, ARC.base
+    if not (w and b) or ARC.followSaid then return end
+    local function off(x, y)
+        if x > 0 and y > 0 then return math.abs(math.log(x, 10) - math.log(y, 10)) end
+        return math.abs(x - y)
+    end
+    if math.abs(w.el - b.el) < 1 and off(w.factor, b.factor) < 0.12 then return end     -- (still the stock sky: nothing to tell)
+    local r1 = V.rend and V.rend[1]
+    local gE = r1 and SKY.slot(V, "copy|" .. r1.name .. "|RO|1|sun_el")
+    local gI = SKY.slot(V, "light|int")
+    local el, li = gE and gE(), gI and gI()
+    if type(el) ~= "number" and type(li) ~= "number" then
+        ARC.followSaid = true
+        log("sky: arc: the drawn sky and the sun light can't be read: whether they follow the arc is NOT checked")
+        return
+    end
+    local okE = type(el) ~= "number" or math.abs(el - w.el) <= 0.5
+    local okI = type(li) ~= "number" or off(li, w.factor) <= 0.2
+    local line = string.format("the drawn sun at %s (written %.2f), the sun light %s (written %s)",
+        type(el) == "number" and string.format("%.2f", el) or "not read", w.el,
+        type(li) == "number" and string.format("%.4g", li) or "not read", string.format("%.4g", w.factor))
+    if okE and okI then
+        ARC.followSaid, ARC.misses = true, 0
+        log("sky: arc: the drawn sky follows the arc: " .. line)
+    else
+        ARC.misses = (ARC.misses or 0) + 1
+        if ARC.misses >= 3 then
+            ARC.followSaid, ARC.noFollow = true, true
+            log("sky: arc: the drawn sky does NOT follow the arc (3 checks running): " .. line .. "; the exposure, the sky light "
+                .. "and the glow kept at the day's from now on (no glare)")
+        end
+    end
+end
+
 function SKY.arcReset(why)
     local was = ARC.on
     ARC.on, ARC.base, ARC.last, ARC.roundAt, ARC.brk, ARC.blendFrom, ARC.blendAt, ARC.nextApply = false, nil, nil, {}, nil, nil, nil, nil
     ARC.lastK, ARC.mode = nil, nil
+    ARC.wrote, ARC.followSaid, ARC.misses, ARC.noFollow = nil, nil, nil, nil
     mpcV.env, mpcV.vfx = nil, nil
     if was and #SKY.order > 0 then
         local okR, put = pcall(SKY.restore, "the arc's over (" .. tostring(why) .. ")")
@@ -936,7 +1103,8 @@ function SKY.arcTick(now)
             .. "written through %s", ARC.base.from, fmt1(ARC.base.el), fmt1(ARC.base.az), string.format("%.4g", ARC.base.factor),
             fmt1(ARC.base.ex_min), fmt1(ARC.base.ex_max), fmt1(ARC.base.ex_bias), string.format("%.4g", ARC.base.em),
             fmt1(ARC.base.vfx), c.path == "custom" and "Cloudly's custom sun and the renderer's copies"
-                or "the renderer's copies and the light's rotation"))
+                or c.path == "copies" and "the renderer's copies and the light's rotation"
+                or "the level's sky asset (Cloudly draws the sky and its sun light from it)"))
         if first then ARC.blendFrom, ARC.blendAt = copy(ARC.base), nil end
     end
     local k, u, why = arcPlace(now, F)
@@ -958,6 +1126,12 @@ function SKY.arcTick(now)
             why = why .. string.format(", blending in %.0f%%", t * 100)
         end
     end
+    if ARC.noFollow then                                  -- (the drawn sky doesn't follow: nothing else darkens either)
+        local b = ARC.base
+        s.ex_min, s.ex_max, s.ex_bias, s.em, s.vfx = b.ex_min, b.ex_max, b.ex_bias, b.em, b.vfx
+        s.sl_x, s.sl_r, s.sl_g, s.sl_b = 1, b.sl_r, b.sl_g, b.sl_b
+        why = why .. ", the day's exposure (the drawn sky doesn't follow)"
+    end
     ARC.last = s
     pcall(mpcWrite, s)                                    -- (every tick)
     if ARC.mode ~= s.mode then
@@ -972,8 +1146,10 @@ function SKY.arcTick(now)
     local red = RED and (RED.want or (tonumber(RED.k) or 0) > 0) or false
     local shadows = not (ARC.shEl and math.abs(ARC.shEl - s.el) < 0.05 and math.abs(((ARC.shAz - s.az + 180) % 360) - 180) < 0.05)
     if shadows then ARC.shEl, ARC.shAz = s.el, s.az end
+    pcall(followCheck, V)
     local okA, nW, failed = pcall(SKY.apply, asV(s, ARC.base, red), "arc", { V = V, quiet = true, shadows = shadows })
     if not okA then logOnce("sky arc apply", "sky: arc: write error " .. tostring(nW)); return end
+    ARC.wrote = { el = s.el, factor = s.factor }
     if ARC.lastK ~= k or now >= (ARC.logAt or 0) then
         ARC.logAt = now + 60
         log(string.format("sky: arc: round %d (F+%d): %s; %d values written%s%s", D.round or 0, k, arcLine(s, why), nW or 0,
@@ -987,6 +1163,7 @@ end
 if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["the sky's arc"] = function()
         ARC.on, ARC.base, ARC.last, ARC.brk, ARC.blendFrom, ARC.blendAt, ARC.mode, ARC.lastK = false, nil, nil, nil, nil, nil, nil, nil
+        ARC.wrote, ARC.followSaid, ARC.misses, ARC.noFollow = nil, nil, nil, nil
         ARC.roundAt = {}
         mpcV.env, mpcV.vfx = nil, nil
     end
@@ -1000,7 +1177,7 @@ end
 --     the sky lights, the volumes' exposure and their overrides, the MPCs, the custom sun), again 5 s on (what moves alone)
 --   2 the custom sun at test_sun (SetCustomSunPosition(-2, -105, true)): do the copies and the light follow?
 --   3 the custom sun off, the sun at test_copies through the copies and the light's rotation alone: kept or overwritten?
---   4 the night set (CFG.sky.night, stars): which values hold, which the game puts back (the MPCs)
+--   4 the night set (CFG.sky.night, stars), the sky asset too (the arc's path): which values hold, which the game puts back
 --   5 everything put back: `sky test: put back: N of N values match the originals` (against step 1's read)
 -- Not while VALKA's red sky is on, nor before the last step's read-back.
 do
@@ -1110,7 +1287,7 @@ local function step4(now)
     local ng, st = c().night or {}, c().stars or {}
     local ex = ng.exposure or {}
     local v = { sun = { el = ng.sun_el, az = ng.sun_az, factor = ng.factor, rgb = ng.rgb, disc = ng.sun_disc },
-                custom = true, copies = true, light = true,
+                custom = true, copies = true, light = true, asset = true,
                 moon = { enable = true, el = ng.moon_el, az = ng.moon_az },
                 stars = { enable = true, intensity = st.intensity, background = st.background, radius = st.radius,
                           fraction = st.fraction, rotation = st.rotation, mask_start = st.mask_start },
@@ -1161,20 +1338,32 @@ local function readBack()
     elseif w == 2 then
         local keys = sunKeys(snap)
         logSnap(string.format("sky test: step 2: %d s on:", secs), snap, keys)
-        local e, cf, inf = T.expect or {}, {}, {}
+        -- ((2026-11-07) the drawn copy (SkyParamsRO) and the sky asset apart from the other copies: in game the asset and
+        -- the drawn copy followed, two working copies of the seven too, the rest and the interpolated params not)
+        local e, af, rf, cf, inf = T.expect or {}, {}, {}, {}, {}
         for _, k in ipairs(keys) do
             local want = k:find("sun_el$") and e.el or e.az
-            if k:find("^copy|") then cf[#cf + 1] = SKY.same(snap.val[k], want)
+            if k:find("^asset|") then af[#af + 1] = SKY.same(snap.val[k], want)
+            elseif k:find("^copy|[^|]+|RO|") then rf[#rf + 1] = SKY.same(snap.val[k], want)
+            elseif k:find("^copy|") then cf[#cf + 1] = SKY.same(snap.val[k], want)
             elseif k:find("^interp|") then inf[#inf + 1] = SKY.same(snap.val[k], want) end
         end
         local yaw = e.az and ((e.az + 90) % 360) or nil
         if yaw and yaw > 180 then yaw = yaw - 360 end
         local lp, ly = snap.val["light|pitch"], snap.val["light|yaw"]
         local function all(t) if #t == 0 then return "nothing to read" end for _, x in ipairs(t) do if not x then return "NO" end end return "yes" end
-        log(string.format("sky test: step 2: the renderer's copies follow the custom sun (%s / %s): %s; the interpolated params: %s; "
-            .. "the light (pitch %s, yaw %s): %s; custom sun %s", SKY.fmt(e.el), SKY.fmt(e.az), all(cf), all(inf), SKY.fmt(lp), SKY.fmt(ly),
-            (lp and ly and e.el) and ((SKY.same(lp, -e.el) and SKY.same(ly, yaw)) and "follows" or "does NOT follow") or "not read",
-            SKY.fmt(snap.val["custom|sun"])))
+        local function some(t)
+            local y = 0
+            for _, x in ipairs(t) do if x then y = y + 1 end end
+            if #t == 0 then return "nothing to read" end
+            return y == #t and "yes" or y == 0 and "NO" or string.format("%d of %d", y, #t)
+        end
+        -- (the light's pitch reads nil in game: its yaw alone then)
+        local lightFollows = (ly and e.el) and (SKY.same(ly, yaw) and (lp == nil or SKY.same(lp, -e.el))) or nil
+        log(string.format("sky test: step 2: the custom sun (%s / %s): the sky asset follows: %s; the drawn copy (SkyParamsRO): %s; "
+            .. "the other copies: %s; the interpolated params: %s; the light (pitch %s, yaw %s): %s; custom sun %s", SKY.fmt(e.el),
+            SKY.fmt(e.az), all(af), all(rf), some(cf), all(inf), SKY.fmt(lp), SKY.fmt(ly),
+            lightFollows == nil and "not read" or lightFollows and "follows" or "does NOT follow", SKY.fmt(snap.val["custom|sun"])))
     elseif w == 3 or w == 4 then
         local keys = {}
         for k in pairs(T.wrote or {}) do keys[#keys + 1] = k end

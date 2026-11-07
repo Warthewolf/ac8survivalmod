@@ -5,28 +5,33 @@
 --     once a run; its spawn (CHARLENE at CFG start, the escorts beside her at their offsets), the route records, her
 --     health; the enemy flights sent after her (EngagementOrderOverride TargetFirst, again, ESC.holds), the round's
 --     spawns ahead of her (DIR.spawnAt), more enemies ahead of her, the escorts on her attackers;
---   the landing by distance: her final (gear, the escorts' orbit, landing closed), rollout (invincible, the attackers
---     back on you), taxi, stop, landed; the escorts one at a time once the runway's clear, each its own records; one
---     shot down (out), one stuck on final (the safety timeout: counted landed, switched off); the win (the pay, the
---     unlock, her subtitle whole, landing open again), the round's end (each switched off, its unit recycled);
+--   the landing by distance: her final (gear, the escorts holding over her, her final at 450 a second on: CruiseSlow
+--   again), landing closed within close_km on the final leg, rollout (invincible, the attackers back on you), landed as
+--     she taxis; a landed one flying again switched off; (2026-11-07, "takes WAY TOO long") the escorts' landings from her
+--     rollout, one every release_gap_s, the lined-up one first, else started anyway (hold_max_s 0), each its own records;
+--     an escort high over the runway on its way to the circuit not slowed; one shot down (out), one never down (counted
+--     landed after_her_s after her, switched off); the win (the pay, the unlock, her subtitle whole, landing open again),
+--     the round's end (each switched off, its unit recycled);
 --   her loss (no pay, no unlock, the attackers let go, the run on);
 --   the STORE: the carrier locked, then on the revive row and its own item, two at most, the price; each ship's
---     container launch, a plane near it taken as its flight's (dressed), a ship with no plane in 10 s on the pose
---     fallback, the flight down and the next arm, an arm launched before recycled first, the 3 rounds' service and
---     leaving, a sunk ship;
+--     container launch (an arm whose unit has planes up the carrier never launched: taken off the list first, then
+--     launched: 2026-11-07, none had launched), a plane near it taken as its flight's (dressed settle_s on, not in its
+--     first second), a ship with no plane in 10 s on the pose fallback, the flight down and the next arm, an arm launched
+--     before recycled first, the 3 rounds' service and leaving, a sunk ship;
 --   co-op: the host's "es", a joiner's copy of it (the unlock, the room's count, its NEXT row, landing closed / open),
 --     a joiner's purchase asked of the host, the host's check at the room's price;
 --   sv_zfa44.lua's production dressing without the ZFA-44 installed (said once, not tried again for a minute);
 --   (2026-11-07, the build's names) the main menu's rows and names (ESC.setup), no round without them; RE_SV_EscortReset
 --     before each operation; the escorts' cover records (<rec>Guard), her CruiseSlow, the finals' FinalSlow / FinalShort;
---     each escort released at its wait orbit's touching point heading 067 (none there: orbit_max_s, then inbound); the
+--     each escort released onto the landing circuit with its start ahead (none lined up: hold_max_s, started anyway); the
 --     parking slots A-E by landing order; the build's leg and slot flags taken (legSync, stale ones before the reset's
 --     2 s not); the allies' take-offs held while she lands; the six launcher arms a ship, an arm whose flight is up
 --     skipped, a unit on the spawner's list taken off first, a downed flight's unit recycled; the pose flight's RE_SV_ZfaGo.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and tostring(s):find(part, 1, true) ~= nil end
 local function near(a, b, tol) return type(a) == "number" and math.abs(a - b) <= (tol or 1e-6) end
@@ -88,9 +93,7 @@ function SV_ShopRequest(probe) if probe then return 1 end return table.remove(pr
 SETUP = { enemyX = function() return 1 end, specialsX = function() return 1 end, breakS = function() return 20 end,
           skillAdd = function() return 0 end }
 
-local function part(name, chunk)
-    assert(load(readAll(MOD .. "/Scripts/" .. name), chunk or ("=" .. name)))()
-end
+local function part(name, chunk) PARTS.load(name, chunk) end   -- (the part and its pieces)
 part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 local logFile = assert(io.open(WORK .. "/test_lua.log", "wb"))
@@ -114,9 +117,9 @@ local rawSpawnAt = 0
 DIR = { spawnAt = function() rawSpawnAt = rawSpawnAt + 1; return nil end }
 local spawned = {}
 function spawnFlight(u, ml, pose)                   -- (the round's spawner: recorded, its flight up)
-    spawned[#spawned + 1] = { u = u, pose = pose }
+    spawned[#spawned + 1] = { u = u, pose = pose, at = clock }
     D.up[u] = true
-    return 2
+    return flightSize(u)
 end
 part("sv_escort.lua")
 part("sv_zfa44.lua")
@@ -147,7 +150,7 @@ ESC.setup()
 check(npcT.rows.SV_Esc_Su57 and npcT.rows.SV_Esc_Su33 and npcT.rows.SV_Esc_Su35 and npcT.rows.SV_Zfa_Ally and ESC.rowsOk == true
       and ESC.zfaRowOk == true and has(line("escort: the escorts' and the ZFA-44's rows"), "SV_Zfa_Ally in DT_NPC"),
       "the escorts' and the ZFA-44 host's rows from DT_SV_NpcRows into DT_NPC at the main menu, logged")
-check(texts.SV_Charlene == "CHARLENE" and texts.SV_Yorke == "YORKE" and texts.SV_Rock == "ROCK" and texts.SV_Ali == "ALI"
+check(texts.SV_CharleneCall == "CHARLENE" and texts.SV_Yorke == "YORKE" and texts.SV_Rock == "ROCK" and texts.SV_Ali == "ALI"
       and texts.SV_Danielle == "DANIELLE" and texts.SV_Cargo == K.name and texts.SV_Zfa44 == "ZFA-44",
       "the seven names on their boxes set there (SV_SetText)")
 
@@ -318,11 +321,83 @@ do
     check(p and has(p.centre, "CHARLENE") and d and d > 8 and d < 17 and rawSpawnAt == 0,
           string.format("a round flight's spawn point ahead of her (%.1f km), not the director's", d or -1))
 end
--- more enemies while few are up
+-- ((2026-11-07) the user: "Keep spawning Multiple enemy fighters until she lands, have them range from 4 to 12 aircraft
+-- spawning per wave in different directions") a wave every every_s while she flies, min_n .. max_n each, all of it from
+-- one direction round her, never the last wave's nor one next to it
+local SECI = {}
+for i, nm in ipairs(ESC.SECTOR) do SECI[nm] = i end
+local function wavesOf()
+    local ws = {}
+    for _, sp in ipairs(spawned) do
+        local n = sp.pose and sp.pose.why and tonumber(sp.pose.why:match("^CHARLENE's wave (%d+)"))
+        if n then
+            ws[n] = ws[n] or { n = 0, flights = {}, sec = SECI[sp.pose.why:match("%((.-) of her%)")], at = sp.at }
+            ws[n].n = ws[n].n + flightSize(sp.u)
+            table.insert(ws[n].flights, sp)
+        end
+    end
+    return ws
+end
 planes[2].down = true
+local HP = P.SV_Unit_Charlene
+pose(HP, ZONE.X, ZONE.Y, 300000, 55, 600)          -- (her start's at the combat zone's corner: in its middle here)
 run(41)
-check(#spawned >= 1 and spawned[1].pose and spawned[1].pose.why == "ahead of CHARLENE" and has(line("escort: more enemies:"), "ahead of CHARLENE"),
-      "more enemies ahead of her while few are up")
+run(C.waves.every_s * 2 + 1)
+local ws = wavesOf()
+check(#ws >= 3 and has(line("escort: wave 3:"), "of CHARLENE, from the"), "a wave every every_s while she flies (" .. #ws .. " waves)")
+local okN, okDir, okGap, sizes = true, true, true, {}
+for i, w in ipairs(ws) do
+    sizes[#sizes + 1] = tostring(w.n)
+    if w.n < C.waves.min_n or w.n > C.waves.max_n then okN = false end
+    if i > 1 then
+        local dd = math.min((w.sec - ws[i - 1].sec) % 8, (ws[i - 1].sec - w.sec) % 8)
+        if not w.sec or dd <= 1 then okDir = false end
+        if math.abs(w.at - ws[i - 1].at - C.waves.every_s) > 0.6 then okGap = false end
+    end
+end
+check(okN, "each wave min_n .. max_n aircraft (" .. table.concat(sizes, ", ") .. ")")
+check(okDir, "each from a new direction round her, never the last one's nor next to it")
+do                                                  -- (her start is at the combat zone's corner: every wave's spot inside it)
+    local m, out = ZONE.HALF - 300000, 0
+    for _, w in ipairs(ws) do
+        for _, f in ipairs(w.flights) do
+            if math.abs(f.pose.x - ZONE.X) >= m - 1 or math.abs(f.pose.y - ZONE.Y) >= m - 1 then out = out + 1 end
+        end
+    end
+    check(out == 0, "no wave's flight put on the combat zone's edge (" .. out .. ")")
+end
+check(okGap, "every_s apart")
+do                                                  -- (a wave's flights together, km out from her, facing her)
+    local w = ws[#ws]
+    local f1, f2 = w.flights[1].pose, w.flights[#w.flights].pose
+    local apart = math.sqrt((f1.x - f2.x) ^ 2 + (f1.y - f2.y) ^ 2) / 100000
+    check((#w.flights == 1 or apart >= 1.0) and apart <= 16 * math.rad(C.waves.spread_deg) * (#w.flights - 1) + 0.01
+          and f1.z >= 250000 and f1.z <= 400000,
+          string.format("a wave's flights side by side (%.1f km apart for %d flights), alt_m up", apart, #w.flights))
+end
+-- max_up enemy aircraft up: the next wave held
+do
+    local keep = planes
+    local full = {}
+    for i = 1, C.waves.max_up do full[i] = { unit = "x" .. i } end
+    planes = full
+    local n0 = #wavesOf()
+    run(C.waves.every_s + 1)
+    check(#wavesOf() == n0 and has(line("escort: wave " .. (n0 + 1) .. " held:"), "max_up"), "held while max_up enemy aircraft are up")
+    planes = keep
+    run(6)
+    check(#wavesOf() == n0 + 1, "... and sent once there's room")
+end
+do                                                  -- (at the zone's corner, her start: from a direction inside it)
+    pose(HP, st.x, st.y, 300000, 55, 600)
+    ESC.S.reinf.at = 0
+    run(0.25)
+    local w = wavesOf()[#wavesOf()]
+    local mid = w.flights[math.floor((#w.flights + 1) / 2)].pose
+    local m = ZONE.HALF - 300000
+    check(math.abs(mid.x - ZONE.X) < m - 1 and math.abs(mid.y - ZONE.Y) < m - 1 and w.sec ~= ws[#ws].sec,
+          "at her start (the combat zone's corner) a wave from a direction inside the zone")
+end
 
 ---------------------------------------------------------------------------------------------------- her landing
 print("her landing")
@@ -335,15 +410,27 @@ check(evFired("RE_SV_CharCruiseSlow") and has(line("her route at 450 km/h"), "RE
 check(evFired("RE_SV_CharFinal") and H.gear == true and S.state == "landing" and D.special.state == "landing",
       "her final 1.5 km before the approach fix: RE_SV_CharFinal, gear down, the round landing")
 check(evFired("RE_SV_EscYorkeOrbit") and evFired("RE_SV_EscRockOrbit") and evFired("RE_SV_EscAliOrbit") and evFired("RE_SV_EscDanielleOrbit"),
-      "the escorts' orbit as she's on final")
-check(evFired("RE_SV_AirfieldClose") and S.closed and callout(C.text.final), "landing closed to the players, her final called out")
+      "the escorts hold over her as she's on final (their Orbit records: area on her, no path)")
+check(not evFired("RE_SV_AirfieldClose") and not S.closed and callout(C.text.final),
+      "her final called out; the players' landing still open with her 16 km out (close_km)")
 check(ESC.runwayBusy() == true and ALLY.escortHold("MOONCHILD") == true and has(line("allies: MOONCHILD's take-off held"), "THE ESCORT is landing"),
       "the allies' take-offs held while she lands (the runway busy)")
 local Y = P.SV_Unit_EscYorke
-local OT = g.orbit_touch
-pose(Y, OT[1], OT[2], OT[3], 67, 500)                -- (YORKE coming by its orbit's touching point, heading 067)
+local function nFired(ev) local n = 0; for _, e in ipairs(events) do if e == ev then n = n + 1 end end; return n end
+pose(H, before(g.touchdown, 67, 9000, 750 + 47000, 320)); run(0.5)
+pose(H, before(g.touchdown, 160, 10500, 750 + 47000, 320)); run(0.5)    -- (heading off south, 1.5 km farther out)
+check(nFired("RE_SV_CharFinal") == 2 and has(line("escort: CHARLENE off her approach"), "her path given again (1 of 3)"),
+      "off her approach (1.5 km farther out than her closest): her path given again")
+run(1)
+check(nFired("RE_SV_CharFinal") == 2, "... not again within recover_gap_s")
+check(nFired("RE_SV_CharCruiseSlow") == 2 and has(line("escort: CHARLENE's final at 450 km/h"), "RE_SV_CharCruiseSlow fired"),
+      "her final at 450 a second after her Final record (her route given again at its 450: final_fast), the gear down")
+local CS = g.circuit_start
+pose(Y, before(CS, 247, 3000, CS[3], 500))         -- (YORKE holding, the circuit's start 3 km ahead, heading 247)
 pose(H, before(g.touchdown, 67, 2500, 750 + 15000, 300))
 run(0.5)
+check(evFired("RE_SV_AirfieldClose") and S.closed, "landing closed to the players with her within close_km on the final leg")
+check(has(line("escort: track: "), "CHARLENE final") and has(line("escort: track: "), "YORKE orbit"), "everyone's place logged every track_s")
 check(H.avoid == false, "her obstacle avoidance off within avoid_off_km of the touchdown")
 check(evFired("RE_SV_CharFinalSlow") and not evFired("RE_SV_CharFinalShort"), "her final at 280 within final_slow_km (RE_SV_CharFinalSlow)")
 orders = {}
@@ -353,25 +440,45 @@ local back = 0
 for _, o in ipairs(orders) do if o.target == pawn and o.prio == 8 then back = back + 1 end end
 check(evFired("RE_SV_CharRoll") and H.inv == true and not ESC.holds(E1) and back >= 1,
       "her rollout at the touchdown point: invincible, her attackers back on you")
-check(not evFired("RE_SV_EscYorkeFinal") and ESC.S.released == 0, "no escort released while she rolls out (YORKE at its touching point)")
+-- ((2026-11-07, the user: "The Landing for Yorke, Charlene, Rock, Ali and Danielle takes WAY TOO long") the escorts'
+-- landings begin at her rollout (release_at "roll"), the one lined up with the circuit's start first
+check(ESC.S.released == 1 and has(line("escort: YORKE released"), "the circuit's start 3.0 km ahead") and evFired("RE_SV_EscYorkeFinal")
+      and has(line("escort: the escorts' landings begin"), "CHARLENE roll"),
+      "the escorts' landings begin at her rollout: YORKE, lined up with the circuit's start, onto it at once")
 check(evFired("RE_SV_CharFinalShort"), "her final at 260 within final_short_km (RE_SV_CharFinalShort)")
 pose(H, before(g.roll_end, 67, 100, 750, 60))
 run(0.5)
-check(evFired("RE_SV_CharTaxi"), "her taxi near the rollout's end")
-run(0.5)
-check(ESC.S.released == 1 and has(line("escort: YORKE released"), "at its orbit's touching point") and evFired("RE_SV_EscYorkeFinal"),
-      "the first escort released once the runway's clear, at its orbit's touching point: its final at once")
+check(evFired("RE_SV_CharTaxi") and S.ac[1].st == "landed" and S.ac[1].how == "taxi" and S.ac[1].slotN == 1 and callout(C.text.landed)
+      and has(line("escort: CHARLENE landed"), "on the ground, taxiing to its slot") and not evFired("RE_SV_CharStop"),
+      "her taxi near the rollout's end: landed as she taxis to the first slot (A), called out; her stop the build's path end's")
+local herLanded = S.t
+do                                                  -- (on the ground: no more waves, even with one due)
+    local n0 = #wavesOf()
+    ESC.S.reinf.at = 0
+    run(0.25)
+    check(#wavesOf() == n0, "no wave once she's touched down")
+end
 local slot = function(i) return ESC.rwPoint(g.slots[i][1], g.slots[i][2]) end
 pose(H, slot(1).X, slot(1).Y, 750, 160, 10)
 run(0.5)
-check(evFired("RE_SV_CharStop") and S.ac[1].slotN == 1, "her stop at the first parking slot (A: the first to land)")
-pose(H, slot(1).X, slot(1).Y, 750, 160, 0)
-run(3)
-check(S.ac[1].st == "landed" and S.ac[1].how == "stopped" and callout(C.text.landed), "landed once stopped, called out")
+check(not H.hidden, "taxiing to her slot: left as she is")
+pose(H, slot(1).X, slot(1).Y, 750 + 92500, 208, 599)        -- (2026-11-07: she climbed away from her taxi, 925 m up)
+run(0.5)
+check(H.hidden == true and has(line("escort: CHARLENE flying again after it landed"), "planes switched off"),
+      "landed and flying again (925 m up, 599 km/h): switched off, logged")
+run(C.landing.reopen_s)                             -- (reopen_s since her rollout ended)
+check(evFired("RE_SV_AirfieldOpen") and not S.closed and has(line("landing open again"), "nobody on short final or the runway"),
+      "the players' landing open again reopen_s after nobody's on short final or the runway (YORKE on its downwind)")
 check(k.busy(D.special) == true, "the round held while the escorts are up")
 
 ---------------------------------------------------------------------------------------------------- the escorts
 print("the escorts")
+-- (2026-11-07, War's game: YORKE crossed the runway's centre line 2.9 km up on its way to the circuit, its 260 fired
+-- there and it flew the whole circuit at 260)
+pose(Y, before(g.touchdown, 67, 700, 750 + 290000, 1300))
+run(0.5)
+check(not evFired("RE_SV_EscYorkeFinalShort") and not evFired("RE_SV_EscYorkeFinalSlow"),
+      "YORKE over the runway 2.9 km up on its way to the circuit: no slow-down (escort_short_up_m / escort_slow_up_m)")
 pose(Y, before(g.iaf, 67, 10000, 90000, 500))
 run(0.5)
 check(evFired("RE_SV_EscYorkeFinal") and Y.gear == true, "YORKE on its final, gear down")
@@ -379,43 +486,44 @@ pose(Y, before(g.touchdown, 67, 50, 750 + 500, 250))
 run(0.5)
 pose(Y, before(g.roll_end, 67, 50, 750, 50))
 run(0.5)
-local ys = slot(2)
-pose(Y, ys.X, ys.Y, 750, 160, 5)
-run(0.5)
-pose(Y, ys.X, ys.Y, 750, 160, 0)
-run(3)
-check(evFired("RE_SV_EscYorkeRoll") and evFired("RE_SV_EscYorkeTaxi") and evFired("RE_SV_EscYorkeStop") and S.ac[2].st == "landed"
-      and S.ac[2].slotN == 2 and evFired("RE_SV_EscYorkeFinalShort"),
-      "YORKE: its final slower near the runway, rollout, taxi, the second parking slot (B), landed")
+check(evFired("RE_SV_EscYorkeRoll") and evFired("RE_SV_EscYorkeTaxi") and not evFired("RE_SV_EscYorkeStop") and S.ac[2].st == "landed"
+      and S.ac[2].how == "taxi" and S.ac[2].slotN == 2 and evFired("RE_SV_EscYorkeFinalShort"),
+      "YORKE: its final slower once it's low near the runway, rollout, landed as it taxis to the second slot (B)")
 P.SV_Unit_EscRock.HealthInternal = 0
 alive.SV_Unit_EscRock = 0
 run(0.5)
 check(S.ac[3].st == "lost" and callout("ROCK IS DOWN"), "ROCK shot down: out, called out")
 local relAt = #logs
 local A = P.SV_Unit_EscAli
-pose(A, OT[1], OT[2], OT[3], 70, 500)
-run(46)
-check(S.released == 2 and has(line("escort: ALI released", relAt), "2 of 4"), "the next escort (ALI) release_gap_s after the last, ROCK skipped")
-check(evFired("RE_SV_EscAliFinal"), "ALI's final at its orbit's touching point")
-pose(A, before(g.iaf, 247, 5000, 90000, 500))      -- (it never comes down: circling the fix)
-run(C.landing.land_timeout_s + 1)
-check(S.ac[4].st == "landed" and S.ac[4].how == "timeout" and A.hidden == true and has(line("escort: ALI landed"), "taken off"),
-      "ALI stuck on final: the safety timeout counts it landed, switched off as it's still flying")
+pose(A, before(CS, 250, 2500, CS[3], 500))
 local Dn = P.SV_Unit_EscDanielle
-pose(Dn, OT[1], OT[2] - 1200000, OT[3], 247, 500)   -- (the far side of its orbit, heading away from the approach fix)
-run(1)
-check(S.released == 2, "DANIELLE not released away from its orbit's touching point")
-run(C.landing.orbit_max_s + 1)
-check(S.released == 3 and S.ac[5].st == "inbound" and has(line("escort: DANIELLE released"), "none by its orbit's touching point"),
-      "DANIELLE released after orbit_max_s with none by the touching point: inbound (its final once the approach fix is ahead)")
-pose(Dn, before(g.iaf, 67, 8000, 90000, 500)); run(0.5)
-check(S.ac[5].st == "final" and has(line("escort: DANIELLE final"), "the approach fix ahead"), "... its final once it is")
+pose(Dn, before(CS, 247, -20000, CS[3], 500))       -- (20 km past the circuit's start, heading away from it)
+local tYorke, spin = S.lastRelease, 0
+while S.released < 2 and spin < 120 do run(0.25); spin = spin + 1 end
+check(S.released == 2 and has(line("escort: ALI released", relAt), "2 of 4") and has(line("escort: ALI released", relAt), "lined up")
+      and near(S.lastRelease - tYorke, C.landing.release_gap_s, 0.6),
+      string.format("the next one release_gap_s after the last (%.1f s): ALI, lined up with the circuit's start (ROCK out, DANIELLE not lined up)",
+          S.lastRelease - tYorke))
+check(evFired("RE_SV_EscAliFinal"), "ALI's circuit with its start ahead")
+local tAli = S.lastRelease
+while S.released < 3 and spin < 240 do run(0.25); spin = spin + 1 end
+check(S.released == 3 and S.ac[5].st == "final" and has(line("escort: DANIELLE released"), "started anyway")
+      and evFired("RE_SV_EscDanielleFinal") and near(S.lastRelease - tAli, C.landing.release_gap_s, 0.6),
+      "DANIELLE, never lined up: its circuit started anyway release_gap_s after ALI (hold_max_s 0)")
+pose(Dn, before(CS, 247, -3000, CS[3], 450)); run(0.5)
+check(not evFired("RE_SV_EscDanielleFinalSlow"), "no slow-down on its downwind (2 km off the runway, not on the final leg)")
 pose(Dn, before(g.touchdown, 67, 50, 750 + 500, 250)); run(0.5)
 pose(Dn, before(g.roll_end, 67, 50, 750, 50)); run(0.5)
-local ds = slot(3)
+check(S.ac[5].st == "landed" and S.ac[5].how == "taxi" and S.ac[5].slotN == 3, "DANIELLE landed as it taxis to the third slot (C)")
+pose(A, before(g.iaf, 247, 5000, 90000, 500))      -- (ALI never comes down: circling the fix)
 local credits0 = RUN.credits
-pose(Dn, ds.X, ds.Y, 750, 160, 5); run(0.5)
-pose(Dn, ds.X, ds.Y, 750, 160, 0); run(3)
+check(S.state ~= "done" and k.busy(D.special) == true, "the round held while ALI's still up")
+while S.state ~= "done" and spin < 2000 do run(0.5); spin = spin + 1 end
+check(S.state == "done" and near(S.t - herLanded, C.landing.after_her_s, 0.6) and S.ac[4].st == "landed" and S.ac[4].how == "timeout"
+      and A.hidden == true and has(line("escort: ALI landed"), "taken off")
+      and has(line("escort: round 9, the escort WON"), "4 of 5 landed"),
+      string.format("after_her_s (%d s) after she landed: ALI, never down, counted landed and switched off; the escort won",
+          C.landing.after_her_s))
 
 ---------------------------------------------------------------------------------------------------- the win
 print("the win")
@@ -491,9 +599,23 @@ check(ESC.hulls.SV_Unit_Cargo1 ~= nil and has(line("carrier: SV_Unit_Cargo1's hu
 print("launches")
 local dressed = {}
 ZFA.dress = function(o, opts) dressed[#dressed + 1] = { o = o, paint = opts.paint }; return true, "dressed" end
-run(K.first_s + 0.5)
-check(evFired("RE_SV_CargoLaunch_1_1") and evFired("RE_SV_CargoLaunch_2_1"), "each ship's first container launch first_s on")
 local A1 = K.launchers[1][1].unit
+-- ((2026-11-07, the user: "ZFA-44's did not launch from the Cargo Ships": every try read each arm's unit alive, "every
+-- launcher arm's flight is still up", 322 times) ship 1's first arm with 2 planes of its own up from the ship's spawn
+local rawRecycle = SV_Recycle
+SV_Recycle = function(u, f) if u == A1 and f == 1 then alive[u] = nil end return rawRecycle(u, f) end
+alive[A1] = 2
+local nrL = #recycled
+run(K.first_s + 0.5)
+SV_Recycle = rawRecycle
+check(evFired("RE_SV_CargoLaunch_1_1") and evFired("RE_SV_CargoLaunch_2_1"), "each ship's first container launch first_s on")
+do
+    local recL = false
+    for i = nrL + 1, #recycled do if recycled[i] == A1 .. ":1" then recL = true end end
+    check(recL and has(line("carrier: ZFA-44 CARRIER 1: " .. A1 .. " had 2 up that this carrier never launched"), "taken off the spawner's list first")
+          and not line("every launcher arm's flight is still up"),
+          "an arm whose unit has planes up the carrier never launched (the ship's own): taken off the list first, then launched")
+end
 check(A1 == "E_Unit_01_drone_5_0" and K.launchers[2][1].unit == "E_Unit_01_drone_3_1" and #K.launchers[1] == 6 and #K.launchers[2] == 6
       and K.launchers[1][6].record == "RE_SV_CargoLaunch_1_6" and K.launchers[2][6].unit == "E_Unit_01_drone_7_1",
       "the build's launcher arms: ship 1's E_Unit_01_drone_5_0 .. 8_0, ship 2's 3_1 .. 7_1, six each")
@@ -501,6 +623,8 @@ local z1 = plane(nil, 1610476 + 20000, 249000, 5000, 90, 300)
 z1.full = "BP_OP_drone_C /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.Z1"
 logPlane(z1, nil, nil)
 run(0.5)
+check(#dressed == 0, "not dressed in its first second (settle_s)")
+run(1.5)
 local inA = false
 for _, p in ipairs(ALLY.state().planes) do if p.obj == z1 and p.unit == A1 then inA = true end end
 check(inA and ESC.planes[A1] and #ESC.planes[A1] == 1, "a plane with no unit near ship 1: its flight's (" .. A1 .. "), an ally")
@@ -532,17 +656,17 @@ check(ESC.planes[A2] and #ESC.planes[A2] == 1, "its plane taken as that arm's fl
 run(3)
 z2.HealthInternal = 0
 alive[A2] = 0
--- (arm 3's unit with a flight still up: skipped; arm 4's still on the spawner's list, from an earlier carrier: taken off first)
+-- (arm 3's unit with planes up this carrier never launched: taken off the list first and launched, never skipped)
 local A3, A4 = K.launchers[1][3].unit, K.launchers[1][4].unit
 alive[A3], alive[A4] = 2, 0
 local nr = #recycled
 run(20 + K.relaunch_s)
-local recA4 = false
-for i = nr + 1, #recycled do if recycled[i] == A4 .. ":1" then recA4 = true end end
-check(not evFired("RE_SV_CargoLaunch_1_3") and evFired("RE_SV_CargoLaunch_1_4") and recA4
-      and has(line("carrier: ZFA-44 CARRIER 1: " .. A4 .. " launched before"), "taken off the spawner's list first"),
-      "an arm whose flight is still up skipped; the next one's unit, still on the spawner's list, taken off it before its launch")
-alive[A3] = nil
+local recA3 = false
+for i = nr + 1, #recycled do if recycled[i] == A3 .. ":1" then recA3 = true end end
+check(evFired("RE_SV_CargoLaunch_1_3") and recA3
+      and has(line("carrier: ZFA-44 CARRIER 1: " .. A3 .. " had 2 up that this carrier never launched"), "taken off the spawner's list first"),
+      "the next arm in turn, its unit with 2 up this carrier never launched: taken off the spawner's list, then launched (never skipped)")
+alive[A3], alive[A4] = nil, nil
 
 ---------------------------------------------------------------------------------------------------- service
 print("service")
@@ -703,10 +827,13 @@ check(T and T.test == "t0" and s0 and s0.u == "SV_Unit_Charlene" and near(s0.x, 
 local h0 = plane("SV_Unit_Charlene", s0.x, s0.y, s0.z, 67, 300)
 logPlane(h0, "SV_Unit_Charlene", nil)
 run(1.5)
-check(evFired("RE_SV_CharFinal") and not evFired("RE_SV_CharGo") and h0.gear == true and h0.inv == true and h0.HealthInternal == 1300,
-      "her final at once (no route), gear down, invincible, her health as it is")
+check(evFired("RE_SV_CharT0Final") and not evFired("RE_SV_CharFinal") and not evFired("RE_SV_CharGo") and h0.gear == true
+      and h0.inv == true and h0.HealthInternal == 1300,
+      "her T0 final at once (RE_SV_CharT0Final: SV_Path_CharFinal, not her route), gear down, invincible, her health as it is")
 check(has(line("escort: T0 +"), "gear") and D.at >= now + 2.5, "her place, height, speed and gear logged; the break held")
 pose(h0, before(g.touchdown, 67, 100, 750 + 600, 250)); run(0.5)
+check(evFired("RE_SV_CharT0Roll") and evFired("RE_SV_CharT0FinalShort") and not evFired("RE_SV_CharRoll"),
+      "T0's slow-downs and rollout on its own records (RE_SV_CharT0*)")
 pose(h0, before(g.roll_end, 67, 100, 750, 50)); run(0.5)
 pose(h0, slot(1).X, slot(1).Y, 750, 160, 5); run(0.5)
 pose(h0, slot(1).X, slot(1).Y, 750, 160, 0); run(3)

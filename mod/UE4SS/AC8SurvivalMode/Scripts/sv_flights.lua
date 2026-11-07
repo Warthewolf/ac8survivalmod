@@ -255,12 +255,43 @@ local function ammoLine()
     return table.concat(parts, ", ")
 end
 
-local function applyAmmoCaps()
+-- ((2026-11-07) a player: "I was given 28 machine gun pod bullets total"; the user: "the Special Weapon Machine Gun Pods
+-- should be an exception") A special that fires rounds keeps its stock load: the presets' special count is a missile
+-- count. Each slot's special is the plane's PlaneSpWeaponID1 / PlaneSpWeaponID2 (ELiveWeaponID, build/liveproject:
+-- WID_mgp 20, the machine gun pod; WID_pgun 35); CFG.ammo.uncapped_specials names the ones left uncapped. A slot left
+-- uncapped has no A.caps entry: every reader already takes that as "no cap" (the STORE, FULL REARM, the ammo panel).
+local WID = { mgp = 20, pgun = 35 }
+local function spWeapon(pawn, slot)
+    local v
+    pcall(function() if slot == 1 then v = pawn.PlaneSpWeaponID1 else v = pawn.PlaneSpWeaponID2 end end)
+    return v
+end
+function ammoUncapped(pawn, slot)
+    local id = pawn and spWeapon(pawn, slot)
+    if id == nil then return false, nil end
+    local n = tonumber(id)
+    for _, nm in ipairs(CFG.ammo.uncapped_specials or {}) do
+        local key = tostring(nm):lower()
+        local w = WID[key] or tonumber(nm)
+        if (n and w and n == w) or (not n and tostring(id):lower():find("wid_" .. key, 1, true)) then return true, id end
+    end
+    return false, id
+end
+
+local function applyAmmoCaps(pawn)
     local probe = SV_Ammo(1)
     if probe < 0 and probe ~= -7 then return false, probe end                  -- not ready yet (or no game code)
     local pname, diff = presetName()
     local p = CFG.ammo.presets[pname] or CFG.ammo.presets.standard
     local want = { [1] = p.missiles, [2] = p.special, [3] = p.special, [4] = p.flares }
+    local free = {}
+    for slot = 1, 2 do
+        local u, id = ammoUncapped(pawn, slot)
+        if u then
+            want[slot + 1] = nil
+            free[#free + 1] = string.format("special %d (weapon %s)", slot, tostring(id))
+        end
+    end
     local before = ammoLine()
     for k = 1, 4 do
         if want[k] and SV_Ammo(k) >= 0 then SV_SetAmmo(k, want[k]) end
@@ -269,8 +300,9 @@ local function applyAmmoCaps()
     RUN.dirty = true                                -- the shop's help lines show the caps
     if CFG.ammo.gun_unlimited then SV_SetAmmo(0, -1) end
     local restock = type(SV_FreeRestock) == "function" and SV_FreeRestock(CFG.ammo.free_restock and 1 or 0) or "n/a"
-    log(string.format("ammo: preset %s (difficulty %s): %s -> %s; free restock was %s, now %s", pname, tostring(diff),
-        before, ammoLine(), tostring(restock), CFG.ammo.free_restock and "on" or "off"))
+    log(string.format("ammo: preset %s (difficulty %s): %s -> %s; free restock was %s, now %s%s", pname, tostring(diff),
+        before, ammoLine(), tostring(restock), CFG.ammo.free_restock and "on" or "off",
+        #free > 0 and ("; its stock load kept (rounds, not missiles): " .. table.concat(free, ", ")) or ""))
     return true
 end
 
@@ -287,7 +319,7 @@ function ammoTick(tick, pc)
     if not A or A.pawn ~= pname then A = { pawn = pname, seenAt = tick, applied = false, tries = 0 } end
     if not A.applied and tick - A.seenAt >= 8 and (tick - A.seenAt) % 8 == 0 and A.tries < 10 then   -- 2 s in, retried
         A.tries = A.tries + 1
-        local ok, r, code = pcall(applyAmmoCaps)
+        local ok, r, code = pcall(applyAmmoCaps, pawn)
         if not ok then log("ammo: error " .. tostring(r))
         elseif not r and A.tries == 10 then log("ammo: the player's weapons could not be read (" .. tostring(code) .. "); no ammo cap") end
         A.applied = ok and r
@@ -311,6 +343,9 @@ function ammoTick(tick, pc)
         -- With WEAPON BAYS the game's reload also puts the stock full load back (the bays' is A.bays[k]): until UP.apply
         -- has raised it again (at once, here) a count under what you had is that reload, not shots; then what you had
         -- goes back in (a run of 2026-10-24: 36/36 specials bought, 24/36 after take-off, the rest gone).
+        -- ((2026-11-07) FLARE PODS the same, kind 4: its full load is A.bays[4] (sv_tactical.lua UP.apply); before, only
+        -- kinds 1-3 were seen, so the take-off reload's stock flares were taken for shots in the air and the flares bought
+        -- past the stock load lost: the user, "purchasing flare upgrades from the store didn't seem to work")
         local over, ground, back = {}, playerOnAirfield(), {}
         -- the gun's shots for the measurements (STATS.fired, kind 0): what it lost since the last count it had (the 2 s
         -- refill below sets that to full, so a refill is never taken for shots)
@@ -318,7 +353,7 @@ function ammoTick(tick, pc)
             if A.gunLast and s[0] < A.gunLast and not ground then pcall(STATS.fired, 0, A.gunLast - s[0]) end
             A.gunLast = s[0]
         end
-        for k = 1, 3 do
+        for k = 1, 4 do
             local m, want = SV_Ammo(k, 1), A.bays and A.bays[k]
             if want and m >= 0 and m < want and not (A.reload and A.reload[k] and tick - A.reload[k] > 40) then
                 if not (A.reload and A.reload[k]) then          -- (10 s at most: a full load that won't go up is the aircraft's)
@@ -327,8 +362,10 @@ function ammoTick(tick, pc)
                     local okU, errU = pcall(UP.apply, pawn)
                     if not okU and not A.upErr then A.upErr = true; log("upgrades: error " .. tostring(errU)) end
                 end
-            elseif A.reload and A.reload[k] and m >= 0 then
-                A.reload[k] = nil
+            elseif ((A.reload and A.reload[k]) or (A.reset and A.reset[k])) and m >= 0 then
+                -- (the dip seen here, or UP.apply's own 2 s pass raised the full load back first: A.reset)
+                if A.reload then A.reload[k] = nil end
+                if A.reset then A.reset[k] = nil end
                 local cap = A.caps and A.caps[k]
                 local to = cap and math.min(cap, m)             -- (another special picked down there: its own load)
                 if to and s[k] >= 0 and s[k] < to then
@@ -348,7 +385,7 @@ function ammoTick(tick, pc)
             -- not the dip in the full load was seen above (UP.apply's own 2 s pass raises it back first a quarter of the
             -- time: a run of 2026-10-25, REARMED to 18/18 and 27/27, 12/18 and 18/27 after take-off, twice). Once the
             -- bays' full load is back, what you had goes in.
-            local m = (ground and k <= 3 and A.bays and A.bays[k] and cap and s[k] >= 0 and s[k] < cap) and SV_Ammo(k, 1) or -1
+            local m = (ground and A.bays and A.bays[k] and cap and s[k] >= 0 and s[k] < cap) and SV_Ammo(k, 1) or -1
             if A.reload and A.reload[k] then                 -- (the bays' full load not back yet: nothing to read)
             elseif m >= 0 and s[k] < math.min(cap, m) then
                 local to = math.min(cap, m)                  -- (another special picked down there: its own load)
@@ -364,7 +401,7 @@ function ammoTick(tick, pc)
                 RUN.dirty = true                    -- the shop's help lines show the counts
             end
         end
-        if #back > 0 then log("ammo: reloaded by the game to its stock load, put back what you had (weapon bays): " .. table.concat(back, ", ")) end
+        if #back > 0 then log("ammo: reloaded by the game to its stock load, put back what you had (weapon bays / flare pods): " .. table.concat(back, ", ")) end
         if #over > 0 then
             if type(SV_FreeRestock) == "function" and not CFG.ammo.free_restock then SV_FreeRestock(0) end
             log("ammo: refilled by the game, put back to what you had (" .. A.preset .. "): " .. table.concat(over, ", "))

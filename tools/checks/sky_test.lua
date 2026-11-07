@@ -2,12 +2,18 @@
 -- (Scripts/sv_sky.lua; tools/re/FISHING.md 5) and its test key on the real sv_core, sv_config and sv_sky, the game stubbed
 -- (a Cloudly actor, its stock sky asset, a renderer's working copies, the sun light, a sky light controller, two
 -- post-process volumes, the two MPCs, Cloudly's custom sun):
---   SKY.read: every value it can see, the stock asset's read only;
---   SKY.apply: the renderer's copies, the light (pitch -elevation, yaw azimuth + 90, intensity, colour bytes), the sky light
---     (x its original: never compounded), the exposure only on volumes whose override is on, the MPCs, the custom sun
---     through its API; the stock asset never written, the interpolated params only when they're a run-time object;
+--   the game as the user's sky test of 2026-11-07 read it: Cloudly copies the level's sky asset into the drawn copy
+--     (SkyParamsRO) and onto the sun light every frame, and its custom sun API writes the asset;
+--   SKY.read: every value it can see, Cloudly's sky light read only;
+--   SKY.apply: the sky asset only when asked (v.asset, the arc's path), the renderer's copies, the light (pitch
+--     -elevation, yaw azimuth + 90, intensity, colour bytes), the sky light (x its original: never compounded), the
+--     exposure only on volumes whose override is on, the MPCs, the custom sun through its API (the asset's sun and moon it
+--     moves kept to be put back); the interpolated params only when they're a run-time object;
 --   SKY.restore: every original back exactly (colour bytes too), the custom sun's flag first; nothing kept after;
---   the level torn down: originals dropped untouched, a custom sun left on put back in the next level (SKY.idleTick);
+--   the level torn down: originals dropped untouched, a custom sun left on and the sky asset's values put back in the next
+--     tick that can (SKY.idleTick: the asset found by its path);
+--   the arc: on the asset, the drawn sky and the light following it, checked (`the drawn sky follows the arc`); one that
+--     doesn't follow: the day's exposure kept; an asset an earlier run left changed: its shipped values first;
 --   the test key (Ctrl+F6): five steps a press each with a read-back readback_s on (kept / overwritten by the game, the MPC
 --     values the game puts back), `sky test: put back: N of N values match the originals`; it waits while VALKA's red
 --     sky is on and while a read-back is due;
@@ -47,7 +53,7 @@ Key = { F6 = "F6", F10 = "F10", F11 = "F11", F12 = "F12", PAGE_DOWN = "PAGE_DOWN
 ModifierKey = { CONTROL = "CTRL" }
 function RegisterKeyBind(key, mods, fn) binds[key] = fn end
 function ExecuteInGameThread(f) f() end
-local function part(dir, name, chunk) assert(load(readAll(dir .. "/Scripts/" .. name), chunk or ("=" .. name)))() end
+local function part(dir, name, chunk) dofile("parts.lua")(dir, readAll).load(name, chunk) end   -- (the part and its pieces)
 part(MOD, "sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 function log(s) logs[#logs + 1] = s end
@@ -59,20 +65,22 @@ local C = CFG.sky
 
 -- the sky: Mission 4's (sun 15 / 142, factor 120000), the renderer's two copies of it, the light, the sky light
 local L = "/Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel."
+-- (Mission 4's CSP_ms04_20251218b as the sky test read it in game, 2026-11-07: CFG.sky.arc.stock.asset)
 local function params()
     return { SunElevationAngleInDegrees = 15, SunAzimuthAngleInDegrees = 142, bUseUnrealSunData = false,
-             SunIntensity = { Factor = 120000, RGB = { X = 1, Y = 1, Z = 1 } }, SunDiskAngleInDegrees = 0.53,
-             EnableMoon = false, MoonElevationAngleInDegrees = 10, MoonAzimuthAngleInDegrees = 0, MoonPhase = 0.5,
-             MoonPhaseAngle = 0, MoonDiskAngleInDegrees = 0.5, MoonDiskBrightness = 1, MoonFractionOfSunIntensity = 0.01,
-             StarsParams = { EnableStars = true, StarsIntensity = 1, StarsBackgroundIntensity = 1, StarsRadius = 1,
+             SunIntensity = { Factor = 120000, RGB = { X = 1, Y = 1, Z = 1 } }, SunDiskAngleInDegrees = 1.2783,
+             EnableMoon = false, MoonElevationAngleInDegrees = 10, MoonAzimuthAngleInDegrees = 135, MoonPhase = 0.15,
+             MoonPhaseAngle = 0, MoonDiskAngleInDegrees = 0.5683, MoonDiskBrightness = -4, MoonFractionOfSunIntensity = 2.5e-06,
+             StarsParams = { EnableStars = true, StarsIntensity = 4, StarsBackgroundIntensity = 0, StarsRadius = 2,
                              StarsTextureScreenFraction = 0.5, StarsGlobalRotation = { X = 0, Y = 0, Z = 0 },
-                             StarsElevationMaskStart = 0.1 } }
+                             StarsElevationMaskStart = 0.05 } }
 end
-local asset = obj("/Game/Environments/Sky/CSP_ms04_20251218b.CSP_ms04_20251218b", { Data = params() })
+local ASSET_PATH = "/Game/Cloudly/CloudlySkyParams/Ingame/Mission004/CSP_ms04_20251218b.CSP_ms04_20251218b"
+local asset = obj("CloudlySkyParams " .. ASSET_PATH, { Data = params() })
 local interp = obj("/Engine/Transient.CloudlySkyParams_0", { Data = params() })
 local our, ro = params(), params()
 local rend = obj("/Engine/Transient.CloudlyRenderer_0", { Data = { SkyRendererMainThread = { OurSkyParams = arr({ our }) }, SkyParamsRO = arr({ ro }) } })
-local sun = obj(L .. "LiveCloudlyActor_1.SunLight", { Intensity = 120000, LightColor = { R = 255, G = 250, B = 240 }, rot = { Pitch = -15, Yaw = -128, Roll = 0 } })
+local sun = obj(L .. "LiveCloudlyActor_1.SunLight", { Intensity = 120000, LightColor = { R = 255, G = 255, B = 255 }, rot = { Pitch = -15, Yaw = -128, Roll = 0 } })
 function sun:SetIntensity(v) self.Intensity = v end
 function sun:SetLightColor(c, srgb)
     assert(srgb == false, "the sun's colour as bytes (bSRGB false)")
@@ -95,7 +103,7 @@ end
 local ppv1, ppv2 = ppv("PostProcessVolume_1", true), ppv("PostProcessVolume_2", false)
 all.CloudlyRenderer, all.BP_SkyLightController_C, all.PostProcessVolume = { rend }, { ctrl }, { ppv1, ppv2 }
 local env, vfx = obj("/Game/Base/Material/MPC/MPC_Env_Control.MPC_Env_Control"), obj("/Game/Base/Material/MPC/MPC_VFX_Control.MPC_VFX_Control")
-statics[C.mpc_env], statics[C.mpc_vfx] = env, vfx
+statics[C.mpc_env], statics[C.mpc_vfx], statics[ASSET_PATH] = env, vfx, asset
 local mpcv = { [env.addr .. "Ctrl_Scene_EmissiveScale"] = 1, [vfx.addr .. "VFXEmissiveEV"] = 11, [vfx.addr .. "VFXCloudlySkyAmbientLight"] = 1 }
 statics["/Script/Engine.Default__KismetMaterialLibrary"] = obj("/Script/Engine.Default__KismetMaterialLibrary", {
     GetScalarParameterValue = function(_, wc, coll, n) return mpcv[coll.addr .. tostring(n)] or 0 end,
@@ -106,17 +114,36 @@ statics["/Script/Cloudly.Default__CloudlyActor"] = obj("/Script/Cloudly.Default_
     GetCachedCloudlyActor = function(_, ctx) return ctx and actor or nil end,
     GetUseCustomSun = function() return custom.sun end, SetUseCustomSun = function(_, ctx, v) custom.sun = v; custom.calls[#custom.calls + 1] = "sun " .. tostring(v) end,
     GetUseCustomMoon = function() return custom.moon end, SetUseCustomMoon = function(_, ctx, v) custom.moon = v end,
-    SetCustomSunPosition = function(_, ctx, el, az, force) custom.sun, custom.el, custom.az = force, el, az; custom.calls[#custom.calls + 1] = "pos " .. el .. " " .. az end,
-    SetCustomMoonPosition = function(_, ctx, el, az, force) custom.moon, custom.mel, custom.maz = force, el, az end,
+    -- (the API writes the sky asset, as in game: its sun, and the moon on at its spot, phase 0)
+    SetCustomSunPosition = function(_, ctx, el, az, force)
+        custom.sun, custom.el, custom.az = force, el, az; custom.calls[#custom.calls + 1] = "pos " .. el .. " " .. az
+        asset.Data.SunElevationAngleInDegrees, asset.Data.SunAzimuthAngleInDegrees = el, az
+    end,
+    SetCustomMoonPosition = function(_, ctx, el, az, force)
+        custom.moon, custom.mel, custom.maz = force, el, az
+        asset.Data.EnableMoon, asset.Data.MoonElevationAngleInDegrees, asset.Data.MoonAzimuthAngleInDegrees, asset.Data.MoonPhase = true, el, az, 0
+    end,
     ForceUpdateShadows = function() custom.shadows = (custom.shadows or 0) + 1 end })
--- the game's frame: the copies follow the custom sun while it's on (overwrite: from the asset, when set), the VFX EV put
--- back to its stock 11 (regame)
-local overwrite, regame = false, false
+-- the game's frame, as the sky test read it in game (2026-11-07): Cloudly copies its sky asset into the drawn copy (ro)
+-- and onto the sun light (rotation, intensity, colour bytes) every frame; the working copy `our` is left alone; the VFX
+-- EV put back to its stock 11 (regame). drawnFrom: a game whose drawn copy doesn't follow the asset (a frozen sky)
+local regame, drawnFrom = false, nil
 local function frame()
-    for _, p in ipairs({ our, ro }) do
-        if custom.sun then p.SunElevationAngleInDegrees, p.SunAzimuthAngleInDegrees = custom.el, custom.az
-        elseif overwrite then p.SunElevationAngleInDegrees, p.SunAzimuthAngleInDegrees = asset.Data.SunElevationAngleInDegrees, asset.Data.SunAzimuthAngleInDegrees end
+    local src = drawnFrom or asset.Data
+    for k, v in pairs(src) do
+        if type(v) == "table" then
+            ro[k] = ro[k] or {}
+            for k2, v2 in pairs(v) do
+                if type(v2) == "table" then ro[k][k2] = { X = v2.X, Y = v2.Y, Z = v2.Z } else ro[k][k2] = v2 end
+            end
+        else ro[k] = v end
     end
+    local y = (src.SunAzimuthAngleInDegrees + 90) % 360
+    if y > 180 then y = y - 360 end
+    sun.rot = { Pitch = -src.SunElevationAngleInDegrees, Yaw = y, Roll = 0 }
+    sun.Intensity = src.SunIntensity.Factor
+    local c = src.SunIntensity.RGB
+    sun.LightColor = { R = math.floor(c.X * 255 + 0.5), G = math.floor(c.Y * 255 + 0.5), B = math.floor(c.Z * 255 + 0.5) }
     if regame then mpcv[vfx.addr .. "VFXEmissiveEV"] = 11 end
 end
 
@@ -132,7 +159,7 @@ local function same(a, b)
     for k in pairs(b) do if a[k] == nil then return false end end
     return true
 end
-local function state() return { our = deep(our), ro = deep(ro), interp = deep(interp.Data), sunI = sun.Intensity, sunC = deep(sun.LightColor),
+local function state() return { asset = deep(asset.Data), our = deep(our), ro = deep(ro), interp = deep(interp.Data), sunI = sun.Intensity, sunC = deep(sun.LightColor),
     rot = deep(sun.rot), mainI = main.Intensity, mainC = deep(main.LightColor), p1 = deep(ppv1.Settings), p2 = deep(ppv2.Settings),
     mpc = deep(mpcv), custom = { custom.sun, custom.moon } } end
 local assetBefore = deep(asset.Data)
@@ -149,7 +176,8 @@ local want = { "asset|sun_el", "interp|sun_el", "copy|CloudlyRenderer_0|Our|1|su
 local okKeys = true
 for _, k in ipairs(want) do if snap.val[k] == nil then okKeys = false; print("    missing " .. k) end end
 check(okKeys, "every kind of value read (" .. #snap.keys .. ")")
-check(snap.ro["asset|sun_el"] and snap.ro["cskyl|int"] and not snap.ro["interp|sun_el"] and not snap.ro["light|pitch"], "the stock asset read only")
+check(snap.ro["cskyl|int"] and not snap.ro["asset|sun_el"] and not snap.ro["interp|sun_el"] and not snap.ro["light|pitch"],
+    "the sky asset writable (written only when asked: v.asset), Cloudly's sky light read only")
 
 print("apply")
 local before = state()
@@ -157,7 +185,8 @@ local n = SKY.apply({ sun = { el = 35, az = -130, factor = 0.5, rgb = { 0.89, 0.
     moon = { enable = true, el = 35, az = -130 }, stars = { enable = true, intensity = 7, background = 22, radius = 2.5, fraction = 0.73,
     rotation = { 2.578, 0, 0 }, mask_start = 0.263 }, exposure = { min = 0.5, max = 9, bias = 0.5 }, skylight = { x = 0.1, rgb = { 0.55, 0.65, 1 } },
     mpc = { emissive = 10000, vfx_ev = -2 } }, "night")
-check(same(asset.Data, assetBefore), "the stock asset never written")
+check(asset.Data.SunIntensity.Factor == 120000 and asset.Data.StarsParams.StarsIntensity == 4 and asset.Data.SunElevationAngleInDegrees == 35
+    and asset.Data.EnableMoon == true, "v.asset not asked: the asset's own values untouched, but the sun and moon the custom sun API moved")
 check(our.SunElevationAngleInDegrees == 35 and ro.SunAzimuthAngleInDegrees == -130 and our.StarsParams.StarsIntensity == 7
     and our.StarsParams.StarsGlobalRotation.X == 2.578 and our.SunIntensity.RGB.Y == 0.96 and our.EnableMoon == true, "the copies written")
 check(interp.Data.SunElevationAngleInDegrees == 35, "the run-time interpolated params written")
@@ -181,8 +210,25 @@ check(same(after.rot, before.rot) and after.sunI == before.sunI and same(after.s
 check(after.mainI == before.mainI and same(after.mainC, before.mainC), "the sky light as it was (" .. main.LightColor.R .. " " .. main.LightColor.G .. " " .. main.LightColor.B .. ")")
 check(same(after.p1, before.p1) and same(after.mpc, before.mpc), "the exposure and the MPCs as they were")
 check(custom.sun == false and custom.moon == false and custom.calls[#custom.calls] == "sun false", "the custom sun off again")
+check(same(asset.Data, assetBefore), "the sky asset as shipped again (the custom sun's and moon's moves put back: 35 / -130, the moon on, phase 0)")
 check(put == rb and put > 40 and #SKY.order == 0 and next(SKY.orig) == nil, "every value put back and read back as it was (" .. put .. "), nothing kept")
 check(found("sky: test: put back " .. put .. " of " .. put .. " changed values, " .. put .. " read back as they were") ~= nil, "logged")
+
+-- ((2026-11-07) the arc's path: the asset itself, which Cloudly draws the sky and its light from every frame)
+print("the sky asset (v.asset)")
+local nA = SKY.apply({ sun = { el = 4, az = -120, factor = 1000, rgb = { 1, 0.5, 0.25 } }, moon = { enable = true, el = 30, az = 60 },
+    stars = { intensity = 7 }, asset = true, copies = false, light = false }, "asset")
+check(asset.Data.SunElevationAngleInDegrees == 4 and asset.Data.SunAzimuthAngleInDegrees == -120 and asset.Data.SunIntensity.Factor == 1000
+    and asset.Data.SunIntensity.RGB.Y == 0.5 and asset.Data.EnableMoon == true and asset.Data.MoonAzimuthAngleInDegrees == 60
+    and asset.Data.StarsParams.StarsIntensity == 7, "the asset written (" .. nA .. " values)")
+check(our.SunElevationAngleInDegrees == 15 and ro.SunElevationAngleInDegrees == 15 and sun.Intensity == 120000, "nothing else written")
+check(SKY.assetPath == ASSET_PATH, "its path noted, without the class: " .. tostring(SKY.assetPath))
+frame()
+check(ro.SunElevationAngleInDegrees == 4 and ro.SunIntensity.Factor == 1000 and sun.rot.Pitch == -4 and sun.rot.Yaw == -30
+    and sun.Intensity == 1000 and sun.LightColor.G == 128, "a frame on: the drawn copy and the sun light follow it (the game's own copy)")
+SKY.restore("test")
+check(same(asset.Data, assetBefore) and #SKY.order == 0 and SKY.assetPath == nil, "put back exactly, nothing kept")
+frame()
 
 print("the interpolated params a stock asset")
 actor.CloudlyInterpolatedSkyParamsAsset = asset
@@ -201,6 +247,9 @@ LEAVE.gone = false
 SKY.idleTick()
 check(custom.sun == false and SKY.pending == nil and found("sky: the custom sun a torn-down level left changed: put back (sun false") ~= nil,
     "put back in the next level")
+check(asset.Data.SunElevationAngleInDegrees == 15 and asset.Data.SunAzimuthAngleInDegrees == 142
+    and found("sky: the sky asset a torn-down level left changed: 2 of 2 values put back (" .. ASSET_PATH .. ")") ~= nil,
+    "and the sky asset's sun the custom sun moved (the asset outlives the level), found by its path")
 SKY.apply({ sun = { el = -2, az = -105 }, custom = true, copies = false, light = false }, "custom")
 LEVEL_DROPS["the sky"]("test")
 check(SKY.pending and #SKY.order == 0, "the gate's drop: the same")
@@ -208,7 +257,15 @@ SKY.idleTick()
 check(SKY.pending ~= nil, "not again within 5 s")
 clock = clock + 6
 SKY.idleTick()
-check(custom.sun == false and SKY.pending == nil, "then put back")
+check(custom.sun == false and SKY.pending == nil and asset.Data.SunElevationAngleInDegrees == 15, "then put back, the asset too")
+-- an asset not loaded any more: read again as shipped when it's needed (12 tries, then given up, logged)
+SKY.apply({ sun = { el = 9 }, asset = true, copies = false, light = false }, "asset")
+LEVEL_DROPS["the sky"]("test")
+statics[ASSET_PATH] = nil
+for _ = 1, 12 do clock = clock + 6; SKY.idleTick() end
+check(SKY.pending == nil and found("not loaded now (" .. ASSET_PATH .. ")") ~= nil, "the asset not loaded in 12 tries: given up, logged")
+statics[ASSET_PATH] = asset
+asset.Data.SunElevationAngleInDegrees = 15
 frame()
 for _, p in ipairs({ our, ro }) do p.SunElevationAngleInDegrees, p.SunAzimuthAngleInDegrees = 15, 142 end
 
@@ -255,25 +312,27 @@ RED = { want = false, k = 0 }
 press("F6")
 check(custom.calls[#custom.calls] == "pos -2.0 -105.0" or custom.calls[#custom.calls] == "pos -2 -105", "step 2: the custom sun at test_sun (" .. tostring(custom.calls[#custom.calls]) .. ")")
 tick(C.readback_s)
-check(found("sky test: step 2: the renderer's copies follow the custom sun (-2 / -105): yes; the interpolated params: NO") ~= nil,
-    "step 2's read-back: the copies follow, the interpolated params don't (as stubbed)")
-check(found("the light (pitch -15, yaw -128): does NOT follow") ~= nil, "and the light doesn't (as stubbed)")
-overwrite = true
+local l2 = found("sky test: step 2: the custom sun (-2 / -105): ")
+check(l2 and l2:find("the sky asset follows: yes; the drawn copy (SkyParamsRO): yes; the other copies: NO; the interpolated params: NO", 1, true),
+    "step 2's read-back: the asset and the drawn copy follow, the rest don't (as in game): " .. tostring(l2))
+check(l2 and l2:find("the light (pitch 2, yaw -15): follows", 1, true), "and the light follows")
 press("F6")
 check(custom.sun == false and our.SunElevationAngleInDegrees == 4 and sun.rot.Pitch == -4, "step 3: the custom sun off, the copies and the light written")
 local a3 = found("sky test: step 3 at once: ")
 check(a3 and a3:find("^sky test: step 3 at once: (%d+) of %1 values read back as written$"), "step 3: every write read back at once: " .. tostring(a3))
 tick(C.readback_s)
 local l3 = found("sky test: step 3 read back 5 s on:")
-check(l3 and l3:find("overwritten (written -> now): copy|CloudlyRenderer_0|Our|1|sun_az -120 -> 142", 1, true), "step 3's read-back: the copies overwritten: " .. tostring(l3))
-check(l3 and not l3:find("light|pitch", 1, true), "the light kept")
+check(l3 and l3:find("copy|CloudlyRenderer_0|RO|1|sun_az -120 -> -105", 1, true) and not l3:find("Our|1|sun_az", 1, true),
+    "step 3's read-back: the drawn copy undone from the asset (the custom sun's -2 / -105 left in it), the working copy kept: " .. tostring(l3))
+check(l3 and l3:find("light|yaw -30 -> -15", 1, true), "the light undone from the asset too (as in game)")
 regame = true
 press("F6")
-check(mpcv[env.addr .. "Ctrl_Scene_EmissiveScale"] == 10000 and custom.sun == true and ppv1.Settings.AutoExposureMaxBrightness == 9, "step 4: the night set")
+check(mpcv[env.addr .. "Ctrl_Scene_EmissiveScale"] == 10000 and custom.sun == true and ppv1.Settings.AutoExposureMaxBrightness == 9
+    and asset.Data.SunIntensity.Factor == 0.5, "step 4: the night set, the sky asset too")
 tick(C.readback_s)
 local l4 = found("sky test: step 4 read back 5 s on:")
 check(l4 and l4:find("the MPC values the game put back: mpc|vfx|VFXEmissiveEV -2 -> 11", 1, true), "step 4's read-back names the MPC the game put back: " .. tostring(l4))
-regame, overwrite = false, false
+regame = false
 press("F6")
 tick(C.readback_s)
 local l5 = found("sky test: put back: ")
@@ -307,9 +366,20 @@ check(a12.el == 52.9 and a12.az == 180 and a12.stars == 0 and near(a12.ex_min, 1
 check(SKY.arcEnd() == 11, "the arc's last round F+11 (sunrise over 4)")
 local m2 = SKY.arcAt(2, 0.5, base0)
 check(near(m2.el, 11) and near(m2.az, -170), string.format("F+2 half way to F+3: 11 / -170 the short way round (%.1f / %.1f)", m2.el, m2.az))
+-- ((2026-11-07) the user's -2 / -105 at full strength: the sunset round holds its light, exposure and sky light through
+-- the fight (u up to swap_within_x 0.45) while the sun sinks to set_el; the last light goes in the break, before the moon)
 local s25 = SKY.arcAt(6, 0.25, base0)
-check(s25.mode == "sun" and near(s25.el, -1) and near(s25.factor, 10 ^ ((math.log(120000, 10) + math.log(0.25, 10)) / 2), 1e-3),
-    string.format("sunset to night, a quarter way: the sun sinking (%.1f), its light down in log space (%.1f)", s25.el, s25.factor))
+check(s25.mode == "sun" and near(s25.el, 1 - 4 * 0.25 / 0.45) and near(s25.factor, 120000, 1e-3) and near(s25.ex_min, 9.5)
+    and near(s25.sl_x, 0.5) and near(s25.em, 100),
+    string.format("sunset, a quarter way: the sun sinking (%.2f) at full strength (%.0f), the sunset's exposure, sky light and glow held", s25.el, s25.factor))
+local s45 = SKY.arcAt(6, 0.45, base0)
+check(near(s45.el, -3) and near(s45.factor, 120000, 1e-3) and near(s45.ex_min, 9.5), "the fight's end (u 0.45): the sun at set_el -3, its light still held")
+local s475 = SKY.arcAt(6, 0.475, base0)
+check(s475.mode == "sun" and near(s475.el, -3) and near(s475.factor, 10 ^ ((math.log(120000, 10) + math.log(0.25, 10)) / 2), 1e-3)
+    and s475.ex_min < 9.5 and s475.ex_min > 9,
+    string.format("the break's first half: the last light going in log space (%.1f), the night's exposure begun (%.2f)", s475.factor, s475.ex_min))
+local n20 = SKY.arcAt(7, 0.2, base0)
+check(n20.mode == "moon" and near(n20.factor, 0.5) and near(n20.ex_min, 0.5), "the night's fight: the moon's light and the night's exposure held")
 local s50, s99 = SKY.arcAt(6, 0.5, base0), SKY.arcAt(6, 1, base0)
 check(s50.mode == "moon" and near(s50.factor, 0.25) and s50.el == 35 and s99.factor == 0.5, "the swap for the moon at the darkest point (0.25), then night's 0.5")
 local d75 = SKY.arcAt(7, 0.75, base0)
@@ -334,21 +404,24 @@ clock = 2000
 local function atick(dt) clock = clock + (dt or 0); D.now = clock; frame(); SKY.arcTick(clock) end
 atick(0)
 check(ARC.on and ARC.base and ARC.base.from:find("the level's", 1, true), "the stock sky read from the level: " .. tostring(ARC.base and ARC.base.from))
-check(found("sky: arc: the stock sky from the level's") and found("written through the renderer's copies and the light's rotation"), "logged, with the write path")
+check(found("sky: arc: the stock sky from the level's") and found("written through the level's sky asset"), "logged, with the write path (the asset)")
+check(not found("the sky asset was left changed"), "the asset as shipped: nothing to put right")
 for _ = 1, 4 do atick(2) end
 check(not ARC.blendFrom, "blended in over blend_s")
 for _ = 1, 120 do atick(2) end
-check(near(our.SunElevationAngleInDegrees, 10.5, 0.05) and near(ro.SunAzimuthAngleInDegrees, -165, 0.1) and near(sun.rot.Pitch, -10.5, 0.05),
-    string.format("F+2, 240 s in: three quarters of the way to F+3 (%.2f / %.2f, the light's pitch %.2f)", our.SunElevationAngleInDegrees,
+check(near(asset.Data.SunElevationAngleInDegrees, 10.5, 0.05) and near(ro.SunAzimuthAngleInDegrees, -165, 0.1) and near(sun.rot.Pitch, -10.5, 0.05),
+    string.format("F+2, 240 s in: three quarters of the way to F+3 (%.2f / %.2f, the light's pitch %.2f)", asset.Data.SunElevationAngleInDegrees,
         ro.SunAzimuthAngleInDegrees, sun.rot.Pitch))
-check(asset.Data.SunElevationAngleInDegrees == 15, "the stock asset never written")
+check(our.SunElevationAngleInDegrees == 15, "the working copy not written (the asset is the path)")
+local fl = found("sky: arc: the drawn sky follows the arc: ")
+check(fl ~= nil and not ARC.noFollow, "checked once off the stock sky: " .. tostring(fl))
 mpcv[vfx.addr .. "VFXEmissiveEV"] = 99
 atick(0.25)
 check(mpcv[vfx.addr .. "VFXEmissiveEV"] == 11, "the MPCs written again the next tick (the game put one back)")
 D.state, D.at = "wait", clock + 20
 atick(0)
 for _ = 1, 10 do atick(2) end
-check(near(our.SunElevationAngleInDegrees, 10, 0.01) and near(our.SunAzimuthAngleInDegrees, -160, 0.01), "the break finishes the step: F+3's 10 / -160")
+check(near(asset.Data.SunElevationAngleInDegrees, 10, 0.01) and near(asset.Data.SunAzimuthAngleInDegrees, -160, 0.01), "the break finishes the step: F+3's 10 / -160")
 -- the festival's round (F+6) into the night (F+7): the swap at the break's darkest point
 D.round, D.state = 13, "fighting"
 for _ = 1, 200 do atick(2) end
@@ -360,13 +433,14 @@ check(ARC.last.mode == "sun", "the break's start: still the sun, darkening")
 for _ = 1, 3 do atick(2) end
 check(ARC.last.mode == "moon" and found("the sun swapped for the moon at the break's darkest point"), "the break's middle: the moon")
 for _ = 1, 5 do atick(2) end
-check(our.EnableMoon == true and near(sun.Intensity, 0.5, 1e-6) and sun.LightColor.R == 227 and near(our.SunElevationAngleInDegrees, 35, 1e-6),
-    "night (F+7): the light at the moon, 0.5, bluish; the moon on")
-check(near(ppv1.Settings.AutoExposureMinBrightness, 0.5, 1e-6) and ppv2.Settings.AutoExposureMinBrightness == 13 and our.StarsParams.StarsIntensity == 7,
+frame()                                          -- (the drawn sky and the light follow the asset a frame on)
+check(ro.EnableMoon == true and near(sun.Intensity, 0.5, 1e-6) and sun.LightColor.R == 227 and near(ro.SunElevationAngleInDegrees, 35, 1e-6),
+    "night (F+7): the light at the moon, 0.5, bluish; the moon on (drawn)")
+check(near(ppv1.Settings.AutoExposureMinBrightness, 0.5, 1e-6) and ppv2.Settings.AutoExposureMinBrightness == 13 and ro.StarsParams.StarsIntensity == 7,
     "night's exposure on the volume with its override, the stars at their maximum")
 -- VALKA's red sky over the arc: the colours left to it
 RED = { want = true, k = 0.3 }
-sun.LightColor = { R = 255, G = 60, B = 40 }
+asset.Data.SunIntensity.RGB = { X = 1, Y = 60 / 255, Z = 40 / 255 }    -- (her red: sv_hud.lua writes the asset's sun colour)
 D.round, D.state = 14, "fighting"
 for _ = 1, 3 do atick(2) end
 check(sun.LightColor.G == 60 and near(sun.Intensity, 0.5, 0.02), "VALKA's red sky on: the arc leaves the colours to it, the rest goes on")
@@ -376,27 +450,29 @@ check(sun.LightColor.R == 227, "her sky gone: the arc's colours again")
 -- midday, held
 D.round = 19
 for _ = 1, 3 do atick(2) end
-check(near(our.SunElevationAngleInDegrees, 52.9, 1e-6) and near(our.SunAzimuthAngleInDegrees, 180, 1e-6) and our.EnableMoon == false,
+check(near(ro.SunElevationAngleInDegrees, 52.9, 1e-6) and near(ro.SunAzimuthAngleInDegrees, 180, 1e-6) and ro.EnableMoon == false,
     "F+12 on: midday 52.9 / 180, the moon off")
 D.round = 40
 atick(2)
-check(near(our.SunElevationAngleInDegrees, 52.9, 1e-6), "held for the rest of the run")
+check(near(asset.Data.SunElevationAngleInDegrees, 52.9, 1e-6), "held for the rest of the run")
 -- a new run with no GONE FISHIN': everything put back
 RUN = {}
 atick(2)
-check(not ARC.on and same(state(), base), "the run has no F: everything the arc changed put back exactly")
+frame()                                          -- (the game's next frame copies the asset back into the drawn sky)
+check(not ARC.on and same(state(), base), "the run has no F: everything the arc changed put back exactly (the asset too)")
 
 print("the day-night arc: a late joiner, the custom sun, a restart")
 RUN = { arcF = 3 }
 D = { now = 3000, round = 10, state = "fighting", up = {} }
 clock = 3000
 atick(0)
-local el0 = our.SunElevationAngleInDegrees
+local el0 = asset.Data.SunElevationAngleInDegrees
 atick(2)
 check(el0 > 14 and ARC.blendFrom ~= nil, string.format("joining at F+7: blending in from the stock sky (%.1f)", el0))
 for _ = 1, 3 do atick(2) end
-check(near(our.SunElevationAngleInDegrees, 35, 0.5), "5 s on: the night's sky")
+check(near(asset.Data.SunElevationAngleInDegrees, 35, 0.5), "5 s on: the night's sky")
 SKY.arcReset("test: a restart")
+frame()
 check(not ARC.on and same(state(), base), "SKY.arcReset: put back now")
 A.path = "custom"
 RUN = { arcF = 8 }
@@ -407,13 +483,50 @@ for _ = 1, 4 do atick(2) end
 check(custom.calls[#custom.calls] and custom.calls[#custom.calls]:find("^pos 1[34]") and found("written through Cloudly's custom sun"),
     "path custom: Cloudly's custom sun API too (" .. tostring(custom.calls[#custom.calls]) .. ")")
 SKY.arcReset("test")
-A.path = "copies"
-check(custom.sun == false and same(state(), base), "the custom sun off again with the rest")
+A.path = "asset"
+frame()
+check(custom.sun == false and same(state(), base), "the custom sun off again with the rest (the asset's sun it moved too)")
 -- the co-op host's F to a joiner: SKY.arcSet
 RUN = {}
 check(SKY.arcSet(12, "the host's") == true and RUN.arcF == 12 and SKY.arcSet(12, "again") == false, "SKY.arcSet: F kept in RUN once")
 LEVEL_DROPS["the sky's arc"]("test")
 check(not ARC.on and ARC.base == nil, "the level torn down: the arc forgotten untouched")
+
+-- ((2026-11-07) the user's game: the sky test's custom sun left the asset at 35 / -130 with the moon on)
+print("the day-night arc: a sky asset an earlier run left changed")
+LEVEL_DROPS["the sky's view"]("test")
+asset.Data.SunElevationAngleInDegrees, asset.Data.SunAzimuthAngleInDegrees, asset.Data.EnableMoon, asset.Data.MoonPhase = 35, -130, true, 0
+frame()
+RUN = { arcF = 9 }
+D = { now = 7000, round = 9, state = "fighting", up = {} }
+clock = 7000
+atick(0)
+local dl = found("sky: arc: the sky asset was left changed by an earlier run or test (4 values: ")
+check(dl ~= nil and dl:find("sun_el 35 (shipped 15)", 1, true) and dl:find("moon_on true (shipped false)", 1, true), "found and logged: " .. tostring(dl))
+check(ARC.base.el == 15 and ARC.base.az == 142 and ARC.base.moon == 0, "the arc starts from the shipped sky")
+for _ = 1, 4 do atick(2) end
+check(near(asset.Data.SunElevationAngleInDegrees, 15, 0.1) and near(asset.Data.SunAzimuthAngleInDegrees, 142, 1) and asset.Data.EnableMoon == false,
+    string.format("F: the shipped sky written (%.3f / %.2f, 8 s of drift toward F+1; no moon)", asset.Data.SunElevationAngleInDegrees, asset.Data.SunAzimuthAngleInDegrees))
+SKY.arcReset("test")
+check(same(asset.Data, assetBefore), "put back as shipped at the end")
+frame()
+
+-- a game whose drawn sky doesn't follow the asset: found in 3 checks; no glare (the day's exposure kept)
+print("the day-night arc: a drawn sky that doesn't follow")
+drawnFrom = params()
+LEVEL_DROPS["the sky's view"]("test")
+RUN = { arcF = 3 }
+D = { now = 8000, round = 10, state = "fighting", up = {} }
+clock = 8000
+for _ = 1, 10 do atick(2) end
+check(ARC.noFollow == true and found("sky: arc: the drawn sky does NOT follow the arc (3 checks running): the drawn sun at 15.00") ~= nil,
+    "found after 3 checks, logged")
+check(near(ppv1.Settings.AutoExposureMinBrightness, 13, 1e-6) and near(main.Intensity, 2.0, 1e-9) and mpcv[env.addr .. "Ctrl_Scene_EmissiveScale"] == 1,
+    "the night's exposure, sky light and glow not applied: the day's kept (no glare)")
+SKY.arcReset("test")
+drawnFrom = nil
+frame()
+check(same(state(), base) and not ARC.noFollow, "put back; the check starts afresh")
 
 -- ((code review of 2026-11-07, finding 4) the arc's view kept while every object of it is live, however old (it walked
 -- 3-5 FindAllOf every 30 s), found afresh when one goes, and with no sky actor looked for at most every 10 s (each tick
@@ -450,6 +563,7 @@ SKY.arcReset("test")
 LEVEL_DROPS["the sky's arc"]("test")
 LEVEL_DROPS["the sky's view"]("test")
 for _, p in ipairs({ our, ro }) do p.SunElevationAngleInDegrees, p.SunAzimuthAngleInDegrees = 15, 142 end
+check(same(asset.Data, assetBefore), "the sky asset as shipped after every run of the arc")
 
 print("the day-night arc: the step key (Ctrl+PAGE_DOWN)")
 check(binds.PAGE_DOWN ~= nil, "Ctrl+PAGE_DOWN bound")

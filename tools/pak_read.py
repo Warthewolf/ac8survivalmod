@@ -4,7 +4,7 @@ for research only. Reads, never writes the game's files.
     python -I tools/pak_read.py list  [regex]               list the files (path, size, compressed size)
     python -I tools/pak_read.py get   <regex> [out dir]     extract matching files (default build/pak)
 
-Pak version 11 (UE 5.4): an AES-256 encrypted index (the key from ACE8AircraftBuilder's settings.json, as
+Pak version 11 (UE 5.4): an AES-256 encrypted index (the key from .env: AC8_AES_KEY or AC8_AES_SETTINGS, as
 tools/get_stock.sh uses it: never in this repo), the full directory index, the encoded entries; file data compressed
 with Oodle (tools/bin/oo2core_9_win64.dll) in blocks, encrypted where the entry says.
 
@@ -21,8 +21,10 @@ import sys
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PAK = 'E:/SteamLibrary/steamapps/common/ACE COMBAT 8/Game/Content/Paks/pakchunk0-Windows.pak'
-KEY = bytes.fromhex(json.load(open('E:/ACE8AircraftBuilder/settings.json'))['aesKey'][2:])
+sys.path.insert(0, HERE)                                 # (python -I leaves the script's folder off sys.path)
+import env                                               # (tools/env.py: the game's folder and key from .env)
+PAK = os.path.join(env.paks(), 'pakchunk0-Windows.pak')
+KEY = bytes.fromhex(env.aes_key()[2:])
 MAGIC = 0x5A6F12E1
 
 

@@ -23,6 +23,7 @@ local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
 local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 
@@ -320,10 +321,8 @@ function playerOnAirfield() return false end
 function hudCallout() end
 function queueEvent() end
 function SV_Event() return 1 end
-local function run(name, chunk)
-    local src = readAll(MOD .. "/Scripts/" .. name)
-    if name == "sv_coop.lua" then src = src:gsub("\nlocal M = {", "\nM = {", 1) end
-    assert(load(src, chunk or ("=" .. name)))()
+local function run(name, chunk)                -- (the part and its pieces: tools/checks/parts.lua)
+    PARTS.load(name, chunk, name == "sv_coop.lua" and { { "\nlocal M = {", "\nM = {" } } or nil)
 end
 run("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}

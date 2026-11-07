@@ -28,7 +28,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 
@@ -200,7 +201,7 @@ for _, n in ipairs(NEW) do T[n] = script(n) end
 check(true, "every role script builds: one root, parents first, unique names, one child per decorator / probability")
 -- every script packed, instrumented and in a set (the build checks the sets' names too)
 local bs = readAll(MOD .. "/../../../tools/build_survival.py")
-local cfgSrc = readAll(MOD .. "/Scripts/sv_config.lua")
+local cfgSrc = PARTS.read("sv_config.lua")
 for _, n in ipairs(NEW) do
     check(has(bs, "'" .. n .. "'") and has(cfgSrc, '"SurvivalMode.AI.' .. n .. '"') and has(cfgSrc, '= "' .. n .. '"'),
           n .. ": in LUA_SCRIPTS, GAME_LUA_STOCK and a behaviour set")
@@ -338,15 +339,7 @@ SETUP = { enemyX = function() return 1 end, specialsX = function() return 1 end,
 local tells = {}
 TELL = { ALL = "all", say = function(id, slot) tells[#tells + 1] = id .. "@" .. tostring(slot); return true end }
 
-local function run(name, chunk, edits)
-    local src = readAll(MOD .. "/Scripts/" .. name)
-    for _, e in ipairs(edits or {}) do
-        local n
-        src, n = src:gsub(e[1], e[2], 1)
-        assert(n == 1, name .. ": " .. e[1] .. " not found")
-    end
-    assert(load(src, chunk or ("=" .. name)))()
-end
+local function run(name, chunk, edits) PARTS.load(name, chunk, edits) end   -- (the part and its pieces, each edit in the piece with its text)
 run("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 local logFile = assert(io.open(WORK .. "/test_lua.log", "wb"))
@@ -360,7 +353,7 @@ for _, l in ipairs(logs) do if l:find("^config: survival%.ini") then cfgLine = l
 run("sv_rows.lua"); run("sv_ai.lua"); run("sv_spawn.lua")
 run("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" } })
 run("sv_stats.lua")
-run("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" }, { "\nlocal function mirroredEvent%(name%)", "\nfunction mirroredEvent(name)" } })
+run("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" } })   -- (mirroredEvent, hostEvent, hostSync: globals of sv_coop's pieces)
 TELL = { ALL = "all", say = function(id, slot) tells[#tells + 1] = id .. "@" .. tostring(slot); return true end }
 function playerOnAirfield() return grounded end      -- (sv_rounds.lua's own reads the pawn: none here)
 LB.stat = function() end
@@ -886,7 +879,7 @@ D.decoyed = nil
 -- co-op: the holds and frees go to the joiners, the turn stays the host's
 check(mirroredEvent("RE_SV_WolfHold_14B") and mirroredEvent("RE_SV_WolfFree_14D") and not mirroredEvent("RE_SV_WolfTurn_14B"),
       "co-op: RE_SV_WolfHold / WolfFree forwarded to joiners, RE_SV_WolfTurn kept (LastTGT steers to the host)")
-local coopSrc, alliesSrc = readAll(MOD .. "/Scripts/sv_coop.lua"), readAll(MOD .. "/Scripts/sv_allies.lua")
+local coopSrc, alliesSrc = PARTS.read("sv_coop.lua"), readAll(MOD .. "/Scripts/sv_allies.lua")
 check(has(coopSrc, "WOLF.holding(h.unit)") and has(alliesSrc, "WOLF.holding(u)"),
       "the co-op host's and the allies' hunts skip a flight holding its trap")
 

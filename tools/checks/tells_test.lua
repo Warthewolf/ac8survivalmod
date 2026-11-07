@@ -24,7 +24,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
     local rawOpen = io.open
@@ -78,15 +79,7 @@ function SV_CoopPeer() return 1 end
 function SV_CoopPeerAt() return "" end
 
 -- the real parts (sv_core's SCRIPT_DIR and log file in the work folder)
-local function run(name, chunk, edits)
-    local src = readAll(MOD .. "/Scripts/" .. name)
-    for _, e in ipairs(edits or {}) do
-        local n
-        src, n = src:gsub(e[1], e[2], 1)
-        assert(n == 1, name .. ": " .. e[1] .. " not found")
-    end
-    assert(load(src, chunk or ("=" .. name)))()
-end
+local function run(name, chunk, edits) PARTS.load(name, chunk, edits) end   -- (the part and its pieces, each edit in the piece with its text)
 run("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 local logFile = assert(io.open(WORK .. "/test_lua.log", "wb"))
@@ -103,7 +96,7 @@ do
 end
 local hudRaw = hudCallout
 run("sv_tells.lua"); run("sv_alicorn.lua"); run("sv_ladon.lua")
-run("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" }, { "\nlocal function mirroredEvent%(name%)", "\nfunction mirroredEvent(name)" } })
+run("sv_coop.lua", nil, { { "\nlocal M = {", "\nM = {" } })   -- (mirroredEvent, hostEvent, hostSync: globals of sv_coop's pieces)
 local M = _G.M
 LB.stat, LB.special = function() end, function() end
 local C = CFG.tells
@@ -497,7 +490,7 @@ do
 
     -- the rest, by their place in the source
     local function body(file, from)
-        local src = readAll(MOD .. "/Scripts/" .. file)
+        local src = PARTS.read(file)
         local a = src:find(from)
         local b = a and src:find("\nend\r?\n", a + 1)
         return a and src:sub(a, b or #src) or ""

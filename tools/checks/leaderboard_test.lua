@@ -22,6 +22,7 @@ local MOD, WORK, MODE = arg[1], arg[2], arg[3] or "plain"
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
 local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
     local rawOpen, rawRemove = io.open, os.remove
@@ -93,14 +94,14 @@ Key = { F8 = 119, F9 = 120 }
 STATS = { runEnd = function() end }                             -- (sv_stats.lua, not loaded here)
 
 local tallyHook = 0
-local function run(name, chunk)
-    local src = readAll(MOD .. "/Scripts/" .. name)
+local function run(name, chunk)                -- (the part and its pieces: tools/checks/parts.lua)
+    local edits
     if name == "sv_coop.lua" then
-        src = src:gsub("\nlocal M = {", "\nM = {", 1)
         -- ((0.73.77) the host's kill named in its "dn" counted for the squad: economy C1's tallyKill, called by hostTick)
-        src, tallyHook = src:gsub("\nlocal function tallyKill%(", "\nfunction tallyKill(", 1)
+        edits = { { "\nlocal M = {", "\nM = {" }, { "\nlocal function tallyKill%(", "\nfunction tallyKill(" } }
     end
-    assert(load(src, chunk or ("=" .. name)))()
+    PARTS.load(name, chunk, edits)             -- (an edit that finds nothing stops the test)
+    if edits then tallyHook = 1 end
 end
 run("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}

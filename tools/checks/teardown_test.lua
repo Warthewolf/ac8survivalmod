@@ -19,6 +19,7 @@ local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
 -- (CRLF checkouts: the sources searched as git stores them, LF)
 local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
@@ -53,10 +54,8 @@ SETUP = { zollars = function() return 0 end, payX = function() return 1 end }
 SND = { stopAll = function() end, setPaused = function() end }
 TAC = { reset = function() end }
 
-local function run(name, chunk)
-    local src = readAll(MOD .. "/Scripts/" .. name)
-    if name == "sv_coop.lua" then src = src:gsub("\nlocal M = {", "\nM = {", 1) end
-    assert(load(src, chunk or ("=" .. name)))()
+local function run(name, chunk)                -- (the part and its pieces: tools/checks/parts.lua)
+    PARTS.load(name, chunk, name == "sv_coop.lua" and { { "\nlocal M = {", "\nM = {" } } or nil)
 end
 run("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}

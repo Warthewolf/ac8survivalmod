@@ -43,7 +43,7 @@ check(sorted({d for _, _, d in b}) == list(range(0, 360, 45)), 'J: 0, 45 ... 315
 check('"RE_SV_WraithBlink%s%s"' in lua and '"^RE_SV_WraithBlink"' in lua, 'the Lua fires them and co-op keeps them (KEEP_EVENTS)')
 check(not any(u in s.PROBE_UNITS.values() for u in units), "none on the probe flights")
 coop = open(sys.argv[1] + '/coop_edition.py', encoding='utf-8').read()
-check("COOP_TAG = '-coop2mp.86'" in coop, "tools/coop_edition.py COOP_TAG -coop2mp.86 (0.74.0: the fishing, sky and festival tests)")
+check(re.search(r"^COOP_TAG = '-coop2mp\.(\d+)'", coop, re.M) is not None and int(re.search(r"^COOP_TAG = '-coop2mp\.(\d+)'", coop, re.M).group(1)) >= 93, "tools/coop_edition.py COOP_TAG -coop2mp.N, N 93 or more (tools/bump_version.py bumps it with VERSION for every build)")
 print('aces build: all passed' if not fails else f'aces build: {fails} FAILED')
 sys.exit(1 if fails else 0)
 PY

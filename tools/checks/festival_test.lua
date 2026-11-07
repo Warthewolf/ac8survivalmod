@@ -47,7 +47,7 @@ Key = { F6 = "F6", F10 = "F10", F11 = "F11", F12 = "F12", PAGE_UP = "PAGE_UP", P
 ModifierKey = { CONTROL = "CTRL" }
 function RegisterKeyBind(key, mods, fn) binds[key] = fn end
 function ExecuteInGameThread(f) f() end
-local function part(dir, name, chunk) assert(load(readAll(dir .. "/Scripts/" .. name), chunk or ("=" .. name)))() end
+local function part(dir, name, chunk) dofile("parts.lua")(dir, readAll).load(name, chunk) end   -- (the part and its pieces)
 part(MOD, "sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 function log(s) logs[#logs + 1] = s end
@@ -264,7 +264,7 @@ local bombers = {}
 local lights = {}
 function SV_Spawn(...)
     local unit, x, y, z, yaw = ...
-    spawns[#spawns + 1] = { unit = unit, x = x, y = y, z = z, yaw = yaw, su = spawningUnit, n = select("#", ...) }
+    spawns[#spawns + 1] = { unit = unit, x = x, y = y, z = z, yaw = yaw, su = spawningUnit, n = select("#", ...), at = clock }
     local made = {}
     local g = unit:match("^SV_Unit_Fest([NWS])$")
     local nObj = (g and 4) or (unit:find("^SV_Unit_FestLight") and 2) or 4
@@ -395,12 +395,34 @@ check(west and west.yaw == 0 and found("its clock (its pass not seen)"), "the we
 local south = nil
 for _, sp in ipairs(spawns) do if sp.unit == "SV_Unit_FestCM_S1" then south = sp end end
 check(south and south.yaw == -90, "the south formation's on its clock too (yaw -90)")
--- the north formation again: its next unit (N2), N1's recycle still to come in this test's spawner
-alive.SV_Unit_FestCM_N1 = 4
-for _, p in ipairs(planes) do if p.unit == "SV_Unit_FestN" then p.at = { X = nx, Y = ny, Z = 230000 } end end
+-- ((2026-11-07) the user: "have the Bombers continually launching Cruise Missiles until the bombers are killed") the north
+-- formation launched on through the west's wait, far from its launch point: N2, N3, then N1 (free again), salvo_every_s
+-- apart, then all three up: it waits, said once, tried again retry_s on
+local nList, nAt = {}, {}
+for _, sp in ipairs(spawns) do
+    if sp.unit:find("^SV_Unit_FestCM_N") then nList[#nList + 1] = sp.unit:sub(-2); nAt[#nAt + 1] = sp.at end
+end
+check(nList[1] == "N2" and nList[2] == "N3" and nList[3] == "N1" and #nList == 3,
+    "salvo after salvo far from its launch point: N2, N3, then N1 (" .. table.concat(nList, " ") .. ")")
+local nGap = 999
+for i = 2, #nAt do nGap = math.min(nGap, nAt[i] - nAt[i - 1]) end
+check(#nAt >= 2 and nGap >= C.salvo_every_s - 0.01 and nGap <= C.salvo_every_s + 0.6,
+    string.format("salvo_every_s apart (%.1f s the closest)", nGap))
+local function count(pat) local k = 0 for _, l in ipairs(logs) do if l:find(pat, 1, true) then k = k + 1 end end return k end
+check(count("the N formation's next salvo waits") == 1, "all three units up: it waits, said once")
+-- N2's salvo down and recycled: the north formation's next salvo from N2 within retry_s
+local slN2 = nil
+for _, x in ipairs(s.salvos) do if x.unit == "SV_Unit_FestCM_N2" then slN2 = x end end
+for _, m in ipairs(slN2 and slN2.ms or {}) do m.obj.HealthInternal = 0 end
+local tFree = nil
 spawns = {}
-while #spawns == 0 and clock < s.raidAt + 600 do ftick(0.5) end
-check(spawns[1] and spawns[1].unit == "SV_Unit_FestCM_N2", "the next pass: the next unit (" .. tostring(spawns[1] and spawns[1].unit) .. ")")
+for _ = 1, 40 do
+    ftick(0.5)
+    if not tFree and slN2 and slN2.freed then tFree = clock; alive.SV_Unit_FestCM_N2 = 0 end
+    if #spawns > 0 then break end
+end
+check(tFree and spawns[1] and spawns[1].unit == "SV_Unit_FestCM_N2" and spawns[1].at - tFree <= C.retry_s + 0.6,
+    "a unit free again: its next salvo within retry_s (" .. tostring(spawns[1] and spawns[1].unit) .. ")")
 -- every bomber down, every missile down: the festival saved
 for u in pairs(alive) do alive[u] = 0 end
 for _, x in ipairs(s.salvos) do for _, m in ipairs(x.ms) do m.obj.HealthInternal = 0 end end

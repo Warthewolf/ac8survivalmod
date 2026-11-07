@@ -7,7 +7,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
     local rawOpen = io.open
@@ -53,10 +54,9 @@ function SV_CoopInfo() return "open=1;state=searching;peers=" end
 writeAll(WORK .. "/config/survival.default.ini", readAll(MOD .. "/config/survival.default.ini"))
 writeAll(WORK .. "/config/survival.ini", readAll(MOD .. "/config/survival.default.ini"))
 
-dofile(MOD .. "/Scripts/sv_config.lua")
+PARTS.dofile("sv_config.lua")
 assert(load(readAll(MOD .. "/Scripts/sv_menu.lua"), "=sv_menu.lua"))()
-local src = readAll(MOD .. "/Scripts/sv_coop.lua"):gsub("\nlocal M = {", "\nM = {", 1)
-assert(load(src, "=sv_coop.lua"))()
+PARTS.load("sv_coop.lua", "=sv_coop.lua", { { "\nlocal M = {", "\nM = {" } })   -- (its pieces too; M exposed)
 local M = _G.M
 check(type(MENU) == "table" and type(SETUP) == "table" and type(MENU.tick) == "function", "sv_menu.lua loaded")
 check(type(CFG.setup) == "table" and CFG.setup.offline and CFG.setup.online and CFG.setup.host, "CFG.setup has the three setups")
@@ -220,7 +220,7 @@ check(texts.SV_Menu_SetRoomTitle == "STARTING ZOLLARS: 1,000", "flat: the label 
 MENU.pages = nil
 
 -- survival.ini read again: the saved setups
-dofile(MOD .. "/Scripts/sv_config.lua")
+PARTS.dofile("sv_config.lua")
 check(CFG.setup.offline.zollars == 2500 and CFG.setup.offline.specials == "off" and CFG.setup.host.zollars == 1000 and CFG.menu.last == "offline",
       "survival.ini read again: the saved setups and last mode")
 check(CFG_DEFAULTS.setup.online.zollars == 0, "the shipped setup stays the shipped one")

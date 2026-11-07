@@ -89,6 +89,18 @@ Checked twice [D]: against every terrain tile's collision mesh and the sea tiles
 COMONA_MAP's 20 m land mask (the clear-to-land column). Hops 14.3 / 13.9 / 9.6 km. East (050-080) and south-west
 (230-260) are land or shallows. The sea near the airport is ~20 m deep everywhere; the reefs are painted only.
 
+**Since 2026-11-07, every shoal is round SAL's boat** (the user, after Alyssa's first test, which ran only Ctrl+F10: "the
+shoals need to be more numerous and spread around the boat"). Six units of 8 (SV_Unit_FishA-F, 48 shoals):
+- A sits on the boat, its shoals 300-800 m out (survival_events.FISH_INNER_MIN_M: clear of the boat at any yaw).
+- B-F sit evenly on a 1.9 km ring round it (FISH_RING_M; CFG ring_m), each spread up to 800 m.
+- So the shoals lie about 0.3-2.7 km from the boat, all open sea (5.7 km to land).
+
+Lua (sv_fishing.lua FISH.grounds) spawns A on the boat and the ring turned to a random bearing each round. The test key
+spawns A there too. North Shoal, Lighthouse Bank and The Deep Hole aren't used any more.
+
+The deck comes off 48. The grades are unchanged: an S (900 kg) takes about two thirds of the shoals, and every shoal
+holds about 1,650 kg (about 12,000 Z at round 7).
+
 ## 5. The day-night arc
 - The level's clock (ALiveWorldSettings ClockHour/Min/Sec, 10:10 written by build_survival.py) doesn't move the sun:
   Mission 4's sun is fixed in CSP_ms04_20251218b (elevation 15, azimuth 142, bUseUnrealSunData off) [D]; probably a
@@ -137,8 +149,19 @@ Drift within a round toward the next round's values, finished in the break (~20 
 sun<->moon swaps only at the darkest point of a break.
 - Co-op: "rnd" field 15 = F (0 = no arc); each game computes the same sky from round, state, seconds and F; a late
   joiner blends in over 5 s; joiners keep F (M.rnd) for a migration.
-- Safety: never write CSP_ms04 itself (Mission 4's campaign would inherit a sunset if the level tears down mid-arc):
-  the renderer copies + the custom-sun override, or a run-time copy pointed to by CloudlySkyParamsAsset [T]. Level
+- The sky test in game (2026-11-07, 0.74.1, the user's co-op run; AGENTS.md hard rule 56) [D]: Cloudly copies
+  CloudlySkyParamsAsset (CSP_ms04) every frame into the drawn copy (SkyParamsRO; Our 2 / 3 of 7 too) and onto the sun
+  light (bUseSunLight true): the copies and the light the arc wrote were undone within a frame (its sun never moved, its
+  night blew out). The interpolated params are /Engine/Transient.InterpolatedSequencerSkyParamsAsset_PL_SurvivalMode
+  (EnableCloudlySequencer true, time 0; Our 1 / 4-7 follow it), drawn by nothing. SetCustomSunPosition wrote the asset
+  (-2 / -105) and gave a real sunset (the user's screenshot, 16:10: "very nice"); SetCustomMoonPosition left it with the
+  moon on at 35 / -130, phase 0. The light's pitch reads nil from Lua (its yaw reads). The asset's shipped values: sun
+  15 / 142, factor 120000, RGB 1, disc 1.2783, moon off at 10 / 135, phase 0.15, disc 0.5683, brightness -4, fraction
+  2.5e-6, stars on 4 / 0 / 2 / 0.5 / (0, 0, 0) / 0.05 (CFG.sky.arc.stock.asset).
+- Safety (0.74.2): the arc writes the asset (it's what's drawn) and puts every value of it back: at the run's end, after
+  a level torn down in the next tick that can (found by its path), and an asset found changed at a run's start goes back
+  to its shipped values first. (Before: never written, so Mission 4's campaign couldn't inherit a sunset; the copies it
+  wrote instead were never drawn.) Level
   objects through liveObj, a LEVEL_DROPS entry; the MPCs restored in runLeft; the airfield STORE (a minigame) may switch
   the graphics row: re-apply the MPC values each tick. Night readability: the HUD shouldn't follow exposure [I]; the
   player's plane lights by Mission 26's LivePlayerEmissiveLight. VALKA can't come during the arc (user), so her red
@@ -305,11 +328,11 @@ test confirms it.
   the siren off and SUB.clear at runLeft; the festival's missiles kept stock (no tier, spike or late health).
 
 ### GONE FISHIN' (once a run, from round 7, in the random rotation)
-intro (SAL's boat spawned, F = this round, ~28 s of lines) -> fishing (the three grounds spawned with spheres, 3:00,
+intro (SAL's boat spawned, F = this round, ~28 s of lines) -> fishing (the six grounds round the boat spawned with spheres, 3:00,
 warnings at 2:00 / 1:00 / 0:30 / 0:10) -> weigh (shoals left taken off: COOP.removeNow, SPC.cleanUp, SV_Recycle 3 s on;
 SAL weighs; each player's own haul graded and paid; the card) -> done (the boat switched off; the round clears).
-- The deck: the weights apportioned to the shoals (24: 7 empty, 2 junk, 5 sardines, 4 mackerel, 3 tuna, 2 swordfish,
-  The Big One), shuffled; a shoal down draws the next. Killer: KILL.by (co-op: the host's attribution, "wingmate" with
+- The deck: the weights apportioned to the shoals (48 since 2026-11-07; 24 were 7 empty, 2 junk, 5 sardines, 4 mackerel,
+  3 tuna, 2 swordfish, The Big One), shuffled; a shoal down draws the next. Killer: KILL.by (co-op: the host's attribution, "wingmate" with
   p.killer = the joiner's slot); an ally's catch is the player's solo, shared out among the players at the co-op weigh-in.
 - Pay: kg x 6 + the grade's bonus (S 2,500, A 1,000, B 400, C 100), + 500 with The Big One, x (1 + 0.04 per round past 7).
   Round 7: A at 770 kg with The Big One 6,120 Z (700 kg without it 5,200), S at 1,000 kg 9,000 Z; round 17 x1.4. Co-op:
@@ -366,7 +389,7 @@ up 1.5 s on: finished off here (logged: the record's i may not be the spawner's 
 
 ### In-game checklist (one build; solo first, then co-op)
 1. Ctrl+HOME in a break: the intro on the strip (readable, clear of the minimap; SAL amber, CONTROL blue), the boat up.
-2. The shoals: boxes on all three grounds; a missile, a gun burst and a bomb each kill one; the catch callout, the splash,
+2. The shoals: boxes all round SAL's boat (48, out to about 2.7 km); a missile, a gun burst and a bomb each kill one; the catch callout, the splash,
    SAL's word; the NEXT row counts down with your haul.
 3. Hit SAL's boat with the gun: -25 kg (the log line), "THAT IS MY BOAT!".
 4. Let the time run out: the weigh-in lines, the card (shoals, best fish, total, grade, the boat, payment), the pay in the

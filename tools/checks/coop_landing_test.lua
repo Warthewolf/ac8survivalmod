@@ -28,6 +28,7 @@ local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
 local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
@@ -82,15 +83,7 @@ SETUP = { enemyX = function() return 1 end, specialsX = function() return 1 end,
           skillAdd = function() return 0 end }
 
 -- the real parts (sv_core's SCRIPT_DIR and log file in the work folder)
-local function part(name, chunk, edits)
-    local src = readAll(MOD .. "/Scripts/" .. name)
-    for _, e in ipairs(edits or {}) do
-        local n
-        src, n = src:gsub(e[1], e[2], 1)
-        assert(n == 1, name .. ": " .. e[1] .. " not found")
-    end
-    assert(load(src, chunk or ("=" .. name)))()
-end
+local function part(name, chunk, edits) PARTS.load(name, chunk, edits) end   -- (the part and its pieces, each edit in the piece with its text)
 part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 local logFile = assert(io.open(WORK .. "/test_lua.log", "wb"))
@@ -644,6 +637,26 @@ do
           "sv_spawn: the Wolf trap's wait for its orders counts your flying only")
     check(has(sp, "local flying = down and othersFlying() or 0") and has(sp, "and not (down and flying == 0) then"),
           "sv_spawn: the Wolf trap's hold asks othersFlying")
+end
+
+-- ((2026-11-07) Talos's music restarted when he alt-tabbed: the engine's pause on a lost focus, undone a tick later by
+-- the online-style pause) while others are linked the engine isn't asked to pause on a lost focus; its value goes back
+print("co-op: no pause on a lost focus while others are linked")
+do
+    local function found(pat) for i = #logs, 1, -1 do if logs[i]:find(pat, 1, true) then return logs[i] end end return nil end
+    local eng = { full = "LiveGameEngine_1", addr = 0x7700, bPauseOnLossOfFocus = true }
+    local rawFFO = FindFirstOf
+    FindFirstOf = function(c) if c == "LiveGameEngine" then return eng end return rawFFO(c) end
+    COOP.focusPause(true, "test")
+    check(eng.bPauseOnLossOfFocus == false and found("coop: the game won't pause when its window loses focus while others are linked") ~= nil,
+          "linked: bPauseOnLossOfFocus true -> false, logged")
+    eng.bPauseOnLossOfFocus = false
+    COOP.focusPause(true, "test again")
+    check(eng.bPauseOnLossOfFocus == false, "asked again: nothing changes")
+    COOP.focusPause(false, "test")
+    check(eng.bPauseOnLossOfFocus == true and found("coop: the game's own pause on a lost focus back (bPauseOnLossOfFocus true") ~= nil,
+          "nobody linked: the engine's own value (true) back, logged")
+    FindFirstOf = rawFFO
 end
 
 print(fails == 0 and "co-op landing test: all passed" or ("co-op landing test: " .. fails .. " FAILED"))

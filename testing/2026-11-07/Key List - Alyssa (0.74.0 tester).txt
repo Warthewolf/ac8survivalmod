@@ -9,7 +9,7 @@ NEW TONIGHT
   Ctrl+PAGE_UP     THE FESTIVAL next round (the sky jumps to the arc's sunset for it)
   Ctrl+PAGE_DOWN   move the day-night sky on by one round (sunset -> night -> sunrise -> midday)
   Ctrl+0           next round: THE ESCORT (CHARLENE, the B-1, and her four escorts)
-  Ctrl+-  (minus)  next round: THE DECOY (the bait UAV in the far north, then the Spear UAVs)
+  Ctrl+-  (minus)  next round: SHOOT DOWN THE RECON DRONE (the recon drone in the far north, then the Spear UAVs)
   Ctrl+.  (period) next round: IFF FATAL ERROR / DI..ANT TH..D..R (the lightning A-10; only this key brings it)
 
   Ctrl+F10   fishing test: one fishing ground's 8 shoals + SAL's boat (press 2: hit spheres on / off for the next

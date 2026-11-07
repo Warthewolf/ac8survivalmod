@@ -21,6 +21,7 @@ local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
 local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
     local rawOpen = io.open
@@ -95,10 +96,8 @@ function SV_CoopPeer() return 1 end
 function SV_CoopPeerAt(s) return peerAt[s] or "" end
 
 -- the real parts (sv_core's SCRIPT_DIR and log file in the work folder)
-local function run(name, chunk)
-    local src = readAll(MOD .. "/Scripts/" .. name)
-    if name == "sv_coop.lua" then src = src:gsub("\nlocal M = {", "\nM = {", 1) end
-    assert(load(src, chunk or ("=" .. name)))()
+local function run(name, chunk)                -- (the part and its pieces: tools/checks/parts.lua)
+    PARTS.load(name, chunk, name == "sv_coop.lua" and { { "\nlocal M = {", "\nM = {" } } or nil)
 end
 run("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}                               -- (sv_core's own log, valid, nameOf and addrOf replaced by the test's)
@@ -449,7 +448,7 @@ STATS.death("saved")
 check(has(line("death: round 9 (saved by SECOND CHANCE)"), "; record: not read"), "no damage record: said so")
 -- the calls left in place (their parts need the whole game to run)
 local function body(file, from)
-    local s = readAll(MOD .. "/Scripts/" .. file)
+    local s = PARTS.read(file)
     local a = s:find(from)
     local b = a and s:find("\nend\r?\n", a + 1)
     return a and s:sub(a, b or #s) or ""
@@ -593,7 +592,7 @@ do
     check(key3 ~= key, "a state flag changes the key")
     svFlags = flagsWas
     local function body(file, from)
-        local src = readAll(MOD .. "/Scripts/" .. file)
+        local src = PARTS.read(file)
         local a = src:find(from)
         local b = a and src:find("\nend\r?\n", a + 1)
         return a and src:sub(a, b or #src) or ""

@@ -3,11 +3,11 @@
     python -I tools/ac7_sfx.py [--events NAME[=role],...] [--out build/ac7/sfx]
 
 Reads only (never writes) the AC7 Wwise data:
-  --xml   wwiser dump of game_se.bnk (HIRC by numeric ID)  default D:/Ace Combat PAKS/bnk's/Windows/game_se.bnk.xml
+  --xml   wwiser dump of game_se.bnk (HIRC by numeric ID)  default AC7_BNK_DIR/game_se.bnk.xml (.env)
   --bnk   game_se.bnk (DIDX/DATA: in-bank media)            default next to the xml
   --pck   game_se.pck (AKPK: streamed media)                default next to the xml
-  --alt   other game_se.bnk builds to compare object bytes  default the "Music Banks and Sound Effects AC7" copy
-  --vgm   vgmstream-cli.exe (decodes .wem to .wav)          default E:/DOWNLOADS/Output/.data/vgmstream-cli.exe
+  --alt   other game_se.bnk builds to compare object bytes  default AC7_SE_BNK (.env)
+  --vgm   vgmstream-cli.exe (decodes .wem to .wav)          default VGMSTREAM (.env)
 
 Writes, under --out (git-ignored build/ac7/sfx):
   <EVENT>/<role>_<wemid>.wav   decoded media, one per distinct source (a looping source also gets a smpl chunk)
@@ -26,9 +26,11 @@ import xml.etree.ElementTree as ET
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-BNKDIR = "D:/Ace Combat PAKS/bnk's/Windows"
-ALT_BNK = "D:/Ace Combat PAKS/Music Banks and Sound Effects AC7/Windows/game_se.bnk"
-VGM = 'E:/DOWNLOADS/Output/.data/vgmstream-cli.exe'
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # (python -I leaves the script's folder off sys.path)
+import env                                               # (tools/env.py: these paths from .env, .env.example)
+BNKDIR = env.get('AC7_BNK_DIR')
+ALT_BNK = env.get('AC7_SE_BNK')
+VGM = env.get('VGMSTREAM')
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'build', 'ac7', 'sfx')
 
 # event name = role (file-name prefix). The first four are what wp_eml names; the rest are related events in the
@@ -524,7 +526,7 @@ def fmt_atten(a):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--xml', default=BNKDIR + '/game_se.bnk.xml')
+    ap.add_argument('--xml', default=BNKDIR and BNKDIR + '/game_se.bnk.xml')
     ap.add_argument('--bnk', default=None)
     ap.add_argument('--pck', default=None)
     ap.add_argument('--alt', default=ALT_BNK)
@@ -532,6 +534,10 @@ def main():
     ap.add_argument('--out', default=OUT)
     ap.add_argument('--events', default=None, help='NAME[=role],... (default: the EML set)')
     args = ap.parse_args()
+    if not args.xml:
+        raise SystemExit("no game_se.bnk.xml: give --xml, or set AC7_BNK_DIR in .env (.env.example)")
+    if not args.vgm:
+        raise SystemExit("no vgmstream-cli.exe: give --vgm, or set VGMSTREAM in .env (.env.example)")
     d = os.path.dirname(args.xml)
     bnk = args.bnk or os.path.join(d, 'game_se.bnk')
     pck = args.pck or os.path.join(d, 'game_se.pck')

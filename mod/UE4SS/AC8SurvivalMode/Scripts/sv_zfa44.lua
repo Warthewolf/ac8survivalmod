@@ -308,7 +308,53 @@ do
     end
     -- (production, every tick on every game: sv_escort.lua ESC.tick) at most two dressed planes a call get their own
     -- meshes hidden again (VALKA's came back on); a gone one is dropped, never read again; one at 0 health left as it is
+    -- ((2026-11-07: three joiners dropped the moment a carrier came on station, one mid-"setting SK_ZFA44": the mesh and
+    -- its textures were loaded right then, with the ship and its planes.) Loaded before any carrier comes: from the
+    -- carriers' unlock (sv_escort.lua ESC.tick, every game), one asset a tick (ZFA.preTick, from ZFA.prodTick), each /Game/
+    -- one kept loaded (pin: GameInstance.ReferencedObjects, as VALKA's). No SK_ZFA44 (no ZFA-44 container): said once,
+    -- nothing more loaded. Log lines `zfa44: the ZFA-44's mesh and textures loading ...`, `zfa44: the ZFA-44's assets
+    -- loaded before any carrier: ...`.
+    ZFA.PRE = { q = nil, done = false, n = 0, total = 0, ms = 0, worst = 0 }
+    function ZFA.preload()
+        local P = ZFA.PRE
+        if P.done or P.q then return false end
+        local C = ZFA.C
+        local q = { C.mesh, C.gear, C.default_normal, C.tex .. "T_ZFA44_LM" }
+        for _, kind in ipairs({ "Body", "Pod", "Fairing" }) do q[#q + 1] = C.tex .. ZFA.SLOT_TEX[kind][1] end
+        P.q, P.n, P.total, P.ms, P.worst, P.worstWhat = q, 0, #q, 0, 0, nil
+        log(string.format("zfa44: the ZFA-44's mesh and textures loading before any carrier comes: %d assets, one a tick", #q))
+        return true
+    end
+    function ZFA.preTick()
+        local P = ZFA.PRE
+        if not P.q then return end
+        if (levelTorn and levelTorn()) or (walkHold and walkHold()) then return end   -- (not while a level comes or goes)
+        local path = table.remove(P.q, 1)
+        if path then
+            local what = path:match("[^/]+$")
+            step("preload " .. what)
+            local t0 = os.clock()
+            local o, why = asset(path)
+            local ms = (os.clock() - t0) * 1000
+            P.ms = P.ms + ms
+            if ms > P.worst then P.worst, P.worstWhat = ms, what end
+            if o then
+                P.n = P.n + 1
+                if path:sub(1, 6) == "/Game/" and type(pin) == "function" then pcall(pin, o, "the ZFA-44's " .. what) end
+            elseif path == ZFA.C.mesh then
+                P.q, P.done = nil, true
+                log("zfa44: the ZFA-44's mesh not loaded before any carrier (" .. tostring(why) .. "): no ZFA-44 in this build, nothing more loaded")
+                return
+            end
+        end
+        if #P.q == 0 then
+            P.q, P.done = nil, true
+            log(string.format("zfa44: the ZFA-44's assets loaded before any carrier: %d of %d, %.0f ms in all, worst %.0f ms (%s)",
+                P.n, P.total, P.ms, P.worst, tostring(P.worstWhat)))
+        end
+    end
     function ZFA.prodTick()
+        if ZFA.PRE.q then ZFA.preTick() end
         local now, n = os.clock(), 0
         for a, s in pairs(ZFA.dressed) do
             if liveAddr(s.host) ~= a then

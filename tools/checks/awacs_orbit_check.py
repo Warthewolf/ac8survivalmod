@@ -25,6 +25,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..'))
 import survival_events as se  # noqa: E402
+import lua_parts  # noqa: E402
 
 bad = []
 o = se.awacs_orbit()
@@ -73,7 +74,7 @@ if b_in > 35.0: bad.append(f'{b_in:.0f} deg of bank on the lead-in at {se.AWACS_
 reach = max(math.hypot(x - c[0], y - c[1]) for x, y, _ in pts + [km(p) for p in o['arc_a'] + o['arc_b']])
 if any(abs(x - zx) >= half - 1.0 or abs(y - zy) >= half - 1.0 for x, y, _ in pts): bad.append('the lead-in leaves the zone')
 if reach > se.AWACS_AREA_M / 1000.0 - 2.0: bad.append(f'the orbit reaches {reach:.1f} km, its area {se.AWACS_AREA_M:.0f} m')
-cfg = open(os.path.join(HERE, '..', '..', 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'sv_config.lua'), encoding='utf-8').read()
+cfg = lua_parts.read(os.path.join(HERE, '..', '..', 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts'), 'sv_config')   # (and its pieces)
 m = re.search(r'orbit = \{ event = "RE_SV_AwacsOrbit", climb_s = \d+, lost_km = (\d+)', cfg)
 if not m: bad.append('CFG.allies.awacs.orbit: no lost_km')
 elif not reach + 2.0 <= float(m.group(1)) <= se.AWACS_AREA_M / 1000.0 + 3.0:

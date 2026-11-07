@@ -10,7 +10,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do
     local rawOpen = io.open
@@ -26,7 +27,7 @@ function NotifyOnNewObject() end
 function FindAllOf() return {} end
 function FindFirstOf() return nil end
 function StaticFindObject() return nil end
-local function part(name, chunk) assert(load(readAll(MOD .. "/Scripts/" .. name), chunk or ("=" .. name)))() end
+local function part(name, chunk) PARTS.load(name, chunk) end   -- (the part and its pieces)
 part("sv_core.lua", "@" .. WORK .. "/Scripts/sv_core.lua")
 local logs = {}
 function log(s) logs[#logs + 1] = s end
@@ -138,9 +139,9 @@ SPW.tick(21)
 check(#events == 0, "enabled = false: none")
 CFG.special.fire.enabled = true
 
-check(readAll(MOD .. "/Scripts/sv_coop.lua"):find("pcall(SPW.noteRows, unit, q.ops)", 1, true) ~= nil,
+check(PARTS.read("sv_coop.lua"):find("pcall(SPW.noteRows, unit, q.ops)", 1, true) ~= nil,
     "sv_coop.lua's doSpawn (a joiner's copy of the host's spawn) tells SPW its rows")
-check(readAll(MOD .. "/Scripts/sv_coop.lua"):find('"^RE_SV_SpecFire_",', 1, true) ~= nil, "the event never forwarded (KEEP_EVENTS)")
+check(PARTS.read("sv_coop.lua"):find('"^RE_SV_SpecFire_",', 1, true) ~= nil, "the event never forwarded (KEEP_EVENTS)")
 
 print("missiles at once (ATK)")
 local pp = { full = "BP_PlayerPlane_C_1", addr = 501, MaxPlaneAttackerMissiles = 2, MaxNonPlaneAttackerMissiles = 2, MaxPursuitAttackers = 3 }

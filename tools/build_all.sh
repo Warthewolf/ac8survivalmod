@@ -1,6 +1,7 @@
 #!/bin/sh
 # build_all.sh : full Survival Mode build.
-#   1. pull the stock packages the builder copies from (needs the game + the AES key in ACE8AircraftBuilder's settings);
+#   0. your machine's settings from .env (tools/env.sh; copy .env.example to .env: the game's folder, its AES key, LLVM)
+#   1. pull the stock packages the builder copies from (the game and its AES key: AC8_DIR, AC8_AES_KEY in .env);
 #      tools/menu_stock.py finds and pulls the main-menu page Survival's own menu pages copy (build/menu/stock.json)
 #   2. build the native runtime (runtime/build.sh, LLVM) and generate mod/Content with build_survival.py
 #   3. pack build/out/SurvivalMode_P.utoc/.ucas
@@ -9,6 +10,7 @@
 #        build/install/AC8SurvivalMode   -> ue4ss\Mods\AC8SurvivalMode   (Lua runtime + dlls\main.dll)
 set -e
 cd "$(dirname "$0")/.."
+. tools/env.sh                      # (.env: LLVM_BIN onto PATH for runtime/build.sh, the game's paths for get_stock.sh)
 export MSYS_NO_PATHCONV=1
 tools/get_stock.sh \
   Maps/Ingame/Mission022/PL_Mission022.umap \
@@ -38,6 +40,7 @@ python -X utf8 -I tools/checks/menu_pages_test.py > /dev/null || { python -X utf
 python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua   # no Lua here: syntax check
 python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/ai/*.lua   # the behaviour scripts (packed)
 python -X utf8 -I tools/checks/ini_check.py   # every survival.default.ini setting is one CFG has
+python -X utf8 -I tools/checks/size_check.py  # no source file over 2,000 lines (CONTRIBUTING.md)
 sh runtime/build.sh   # native runtime: build/runtime/main.dll
 python -X utf8 -I tools/build_survival.py
 python -X utf8 -I tools/pack.py

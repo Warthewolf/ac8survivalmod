@@ -137,6 +137,12 @@ runs). Discord's limits are kept: the CO-OP message's boards lose their last lin
 would pass Discord's 6000 characters a message, and a long squad shows its host and the names that fit, then `+N`.
 
 ## The admin page
+Builds register themselves (2026-11-07): with the Worker's admin key in the main tree's `leaderboard/keys.secret`
+(git-ignored; an `ADMIN_KEY=...` line, beside `SUBMIT_KEY=...`; an `ADMIN=...` line in `leaderboard/submit.local` works
+too), `tools/package_release.sh` (online) and `tools/package_dev.sh` register every build they make (`tools/lb_register.py`: POST /admin/builds/add, the key in the body; one try a build,
+since 5 wrong keys lock the address out for 15 minutes; `SV_LB_REGISTER=0` skips it). Without that line they say so and
+you register by hand as below. A zip made before can be registered with `python -I tools/lb_register.py <zip>.buildhash.txt`.
+
 Open `https://ac8-survival-leaderboard.<you>.workers.dev/admin` (a phone's browser works), type your `ADMIN_KEY` and
 press **Unlock**. Your browser's password manager can keep it. The key goes in each request's body, never in the
 address, so it's in no history or log. Five wrong keys from one address lock that address out for 15 minutes (the

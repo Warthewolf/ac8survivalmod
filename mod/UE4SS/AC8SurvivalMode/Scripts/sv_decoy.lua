@@ -208,6 +208,34 @@ local function myPawn()
     if ok and p ~= nil and liveObj(p) then return p end
     return nil
 end
+-- ((2026-11-07) the user, after a run ended on one 5% hit: "heavy damage") A judged Spear hit takes hit.damage_pct of
+-- your MaxHealth (HealthInternal is x10, written as the STORE's repair does: ModifyHealth does nothing on the player,
+-- tools/re/KILLS_HEALTH_DEATH.md 1); one that would leave nothing is RE_SV_DecoyKill (the game's own death) unless
+-- hit.can_kill is false (then 1 HP left); damage_pct 100 or more: the kill as before. What it did, for the log.
+function DECOY.hurtMe(c)
+    c = c or cfg()
+    local h = type(c.hit) == "table" and c.hit or {}
+    local pct = num(h.damage_pct, 50)
+    local pawn = myPawn()
+    local function kill(why) return why .. ": " .. EV.kill .. " " .. errText(fire(EV.kill)) end
+    if pct >= 100 then return kill("damage_pct " .. pct) end
+    if not pawn then return kill("your plane not found") end
+    local okH, hi = pcall(function() return pawn.HealthInternal end)
+    local okM, mh = pcall(function() return pawn.MaxHealth end)
+    if not (okH and okM and type(hi) == "number" and type(mh) == "number" and mh > 0) then return kill("your health unreadable") end
+    local dmg = math.floor(mh * 10 * math.max(0, pct) / 100 + 0.5)
+    local left = hi - dmg
+    if left <= 0 then
+        if h.can_kill ~= false then
+            return kill(string.format("%.0f%% of your %.0f HP with %.0f HP left: lethal", pct, mh, hi / 10))
+        end
+        left = math.min(hi, 10)                             -- (can_kill false: 1 HP left)
+    end
+    local okW = pcall(function() pawn.HealthInternal = left end)
+    return string.format("-%.0f HP (%.0f%% of your %.0f), %.0f HP left%s", (hi - left) / 10, pct, mh, left / 10,
+        okW and "" or " (NOT written)")
+end
+
 -- every player this game knows of (sv_coop.lua COOP.players: you first; solo or the Offline edition, you alone):
 -- { slot, obj, at, alive, down, onAirfield, fresh, isMe }
 function DECOY.players()
@@ -291,6 +319,14 @@ function DECOY.spawnSpot(you, ups, c, rnd)
         end
     end
     return nil
+end
+-- ((2026-11-07) the user: "Tonitrus spears should also be able to miss the players sometimes") a judged strike's chance
+-- to hit: hit.chance on your held line, falling to 0 at dodge_m off it (a hard break buys odds, never a sure escape)
+function DECOY.hitChance(offM)
+    local h = cfg().hit or {}
+    local ch, dodge = math.max(0, math.min(1, num(h.chance, 0.6))), math.max(1, num(h.dodge_m, 200))
+    if type(offM) ~= "number" then return 0 end
+    return math.max(0, ch * (1 - offM / dodge))
 end
 -- where the Spear should land: at + vel x fall_s (cm, cm/s)
 function DECOY.leadPoint(at, vel, fall)
@@ -534,17 +570,284 @@ pcall(NotifyOnNewObject, "/Script/Live.LiveMeteoriteImpact", function(o)
     local q = DECOY.rodNew
     if #q < 32 then q[#q + 1] = o end
 end)
--- each rod led by the fall (lead: its PredictionTime fall_s on the instance; the stock rod's is 0, no lead); pooled
--- ones again before each strike
-local function leadRod(o)
+-- ((2026-11-07) Alyssa's test of 0.74.0: every rod fell 1.0-2.3 s after its call, not 3 s, so the 3 s lead put it
+-- 1-1.5 km ahead of her; lead.learn: the fall measured at each impact, the median of the last learn_n (min_s .. max_s))
+DECOY.falls = {}
+function DECOY.fallS()
     local ld = cfg().lead or {}
-    if ld.enabled == false or not liveObj(o) then return end
-    local want = num(ld.fall_s, 3)
+    local base = num(ld.fall_s, 1.6)
+    if ld.learn == false or #DECOY.falls < 2 then return base end
+    local t = {}
+    for i, v in ipairs(DECOY.falls) do t[i] = v end
+    table.sort(t)
+    return math.max(num(ld.min_s, 0.8), math.min(num(ld.max_s, 3.0), t[math.floor((#t + 1) / 2)]))
+end
+-- ((2026-11-07) the clouds: each rod opens a "blast" in the sky's clouds as it lands (its BlastEffectInfo, type Impact,
+-- at 115.6 km) with the sky's ExplosionEffect, which Comona's sky leaves unset: the clouds warped back and forth with
+-- every strike (Alyssa's test; the user: "in a previous mod we built, this happened and we were able to fix it"). That
+-- mod's fix (the user's own work: AGENTS.md's exception): the blast at the clouds' height and the sky's
+-- ExplosionEffect set as Mission 30's big one, a little wider, on the level's sky, its blended sky and its time-of-day
+-- key frames, again every every_s while the Spear is about (the blending copies them back); every value put back as it
+-- was once it's quiet (restore_after_s), at a run's start over; never on a level torn down (dropped, LEVEL_DROPS).
+-- clouds.mode "off": no blast at all (Type Disable on each rod); "stock": left alone.
+DECOY.cl = { orig = {}, at = -100 }
+local BLAST_FIELDS = { radius_km = "RadiusInKm", weld_km = "WeldRadiusInKm", fade_km = "FadeDistanceInKm", whirl = "Whirl",
+                       push = "Push", cirrus_fade_km = "CirrusExtraFadeDistanceInKm", expand_s = "ExpansionDuration",
+                       expand_p1 = "ExpansiondParam1", expand_p2 = "ExpansiondParam2", contract_s = "ContractionDuration",
+                       contract_p1 = "ContractionParam1" }
+local function ccfg() return cfg().clouds or {} end
+local function skyActor(now)
+    local okV, V = pcall(function() return SKY and SKY.viewCached and SKY.viewCached(now) end)
+    local a = okV and type(V) == "table" and V.actor or nil
+    return (a and liveObj(a)) and a or nil
+end
+local function skyAssets(a)
+    local list = {}
+    local function add(o, label) if o and liveObj(o) then list[#list + 1] = { o = o, label = label } end end
+    local okS, sky = pcall(function() return a.CloudlySkyParamsAsset end)
+    if okS then add(sky, "sky") end
+    local okB, bl = pcall(function() return a.CloudlyInterpolatedSkyParamsAsset end)
+    if okB then add(bl, "blended sky") end
+    local okQ, seq = pcall(function() return a.CloudlySequencerAsset end)
+    if okQ and seq and liveObj(seq) then
+        pcall(function()
+            seq.KeyFrames:ForEach(function(i, e)
+                local okK, sp = pcall(function() return e:get().SkyParams end)
+                if okK then add(sp, "key frame " .. tostring(i)) end
+            end)
+        end)
+    end
+    return list
+end
+-- the blast's height (m): height_m, else midway between the sky's two lowest cloud layers
+function DECOY.cloudHeightM(a)
+    local c = ccfg()
+    if tonumber(c.height_m) then return tonumber(c.height_m) end
+    if DECOY.cl.heightM then return DECOY.cl.heightM end
+    local hs = {}
+    local okS, sky = pcall(function() return a and a.CloudlySkyParamsAsset end)
+    if okS and sky then
+        for i = 0, 2 do
+            local ok, h, en = pcall(function() local l = sky.Data["CloudLayer" .. i]; return tonumber(l.StartHeightInKm), l.Enable end)
+            if ok and h and (en == nil or en == true or i == 0) then hs[#hs + 1] = h end
+        end
+    end
+    table.sort(hs)
+    if #hs >= 2 then DECOY.cl.heightM = (hs[1] + hs[2]) * 500 elseif #hs == 1 then DECOY.cl.heightM = hs[1] * 1000 + 500 end
+    if DECOY.cl.heightM then
+        said("cloud height", string.format("decoy: the clouds' layers start at %s km: the Spear's blast opens them at %.0f m",
+            table.concat(hs, ", "), DECOY.cl.heightM))
+    end
+    return DECOY.cl.heightM or 2000
+end
+local function rodBlast(o, a)
+    local mode = ccfg().mode or "hole"
+    if mode == "stock" or not liveObj(o) then return end
+    local ok = pcall(function()
+        local b = o.BlastEffectInfo
+        if mode == "off" then
+            if tonumber(b.Type) ~= 0 then b.Type = 0 end
+        else
+            local hm = DECOY.cloudHeightM(a)
+            if tonumber(b.Type) ~= 1 then b.Type = 1 end
+            if math.abs((tonumber(b.HeightInMeter) or -1) - hm) > 0.5 then b.HeightInMeter = hm end
+            if (tonumber(b.HeightLimitMaxInMeters) or 0) < 500000 then b.HeightLimitMaxInMeters = 500000 end
+        end
+    end)
+    local okR, ty, h = pcall(function() return tonumber(o.BlastEffectInfo.Type), tonumber(o.BlastEffectInfo.HeightInMeter) end)
+    said("rod blast " .. mode, string.format("decoy: the Spear's rods' cloud blast %s: %s (reads type %s, at %s m; %s)",
+        mode == "off" and "off" or "at the clouds", ok and "set" or "NOT set", okR and tostring(ty) or "?", okR and tostring(h) or "?",
+        shortName(o)))
+end
+-- the sky's ExplosionEffect as wanted, every original kept once (by the asset's address and the field)
+function DECOY.cloudsApply(now)
+    local c = ccfg()
+    if (c.mode or "hole") ~= "hole" then return 0 end
+    local a = skyActor(now)
+    if not a then said("no sky", "decoy: no sky actor found: the cloud blast not set"); return 0 end
+    DECOY.cl.at = now
+    local good, bad, n = 0, 0, 0
+    for _, it in ipairs(skyAssets(a)) do
+        local okE, st = pcall(function() return it.o.Data.ExplosionEffect end)
+        if okE and st then
+            n = n + 1
+            local ad = addrOf(it.o)
+            local g0, b0 = good, bad
+            for key, field in pairs(BLAST_FIELDS) do
+                local want = tonumber(c[key])
+                if want then
+                    local okR, cur = pcall(function() return st[field] end)
+                    if okR and type(cur) == "number" then
+                        local id = tostring(ad) .. "|" .. field
+                        if DECOY.cl.orig[id] == nil then DECOY.cl.orig[id] = { o = it.o, addr = ad, field = field, v = cur } end
+                        if math.abs(cur - want) > 1e-4 then pcall(function() st[field] = want end) end
+                        local okB, back = pcall(function() return st[field] end)
+                        if okB and type(back) == "number" and math.abs(back - want) < 1e-4 then good = good + 1 else bad = bad + 1 end
+                    end
+                end
+            end
+            said("blast " .. tostring(ad), string.format("decoy: the %s's cloud blast (%s) set for the Spear: %d fields as wanted%s",
+                it.label, shortName(it.o), good - g0, bad > b0 and string.format(", %d would not change", bad - b0) or ""))
+        end
+    end
+    if n == 0 then said("no blast", "decoy: the sky has no ExplosionEffect the Spear's blast could use") end
+    return good
+end
+-- every value the clouds' fix changed put back (only objects still alive: a level torn down drops them, LEVEL_DROPS)
+function DECOY.cloudsRestore(why)
+    local back, gone = 0, 0
+    for id, e in pairs(DECOY.cl.orig) do
+        if e.o and liveObj(e.o) and addrOf(e.o) == e.addr then
+            pcall(function() e.o.Data.ExplosionEffect[e.field] = e.v end)
+            back = back + 1
+        else
+            gone = gone + 1
+        end
+        DECOY.cl.orig[id] = nil
+    end
+    if back + gone > 0 then
+        log(string.format("decoy: the sky's cloud blast put back (%s): %d values%s", tostring(why), back,
+            gone > 0 and string.format(", %d of objects gone", gone) or ""))
+    end
+end
+-- ((2026-11-07) the Spear's blast: Mission 25's cutscene Rods-from-God explosion (the stock Niagara systems
+-- /Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_*, the user's texture list's: "can you add that into the Tonitrus Spear
+-- that we're using in this build"), spawned where a strike lands: blast.air (the explosion and its shock wave) on a
+-- judged strike at the player's height, blast.ground (with the sand smoke and the ring) where a rod lands on the airfield.
+-- Each game's own (visual only), auto-destroyed when done.
+DECOY.bl = { sys = {} }
+local function blastSys(path)
+    local full = path .. "." .. (path:match("[^/]+$") or "")
+    local o = DECOY.bl.sys[full]
+    if o ~= nil and liveObj(o) then return o end
+    local okL, lo, why = pcall(loadObject, full)
+    o = okL and lo or nil
+    DECOY.bl.sys[full] = o
+    if not o then said("blast " .. full, "decoy: the Spear's blast " .. full .. " didn't load: " .. tostring(okL and why or lo)) end
+    return o
+end
+function DECOY.blast(at, kind)
+    local b = cfg().blast or {}
+    if b.enabled == false or not at then return 0 end
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    if not (lib and valid(lib) and liveObj(survivalPC)) then return 0 end
+    local s, n = num(b.scale, 1), 0
+    for _, path in ipairs((kind == "ground" and b.ground) or b.air or {}) do
+        local sys = blastSys(path)
+        if sys and pcall(function()
+            lib:SpawnSystemAtLocation(survivalPC, sys, { X = at.X, Y = at.Y, Z = at.Z }, { Pitch = 0, Yaw = 0, Roll = 0 },
+                { X = s, Y = s, Z = s }, true, true, 0, true)
+        end) then n = n + 1 end
+    end
+    said("blast said " .. tostring(kind), string.format("decoy: the Spear's %s blast (Mission 25's cutscene explosion): %d of %d systems spawned",
+        tostring(kind), n, #((kind == "ground" and b.ground) or b.air or {})))
+    return n
+end
+-- the bait's Spear on the airfield (its laser on the mark there: the game's own strike once it's down), which Survival's
+-- airfield never counted: from the bait's end, every rod made after it is watched; one that stops (lands) within
+-- bait_strike.within_km of the mark, or none seen landing wait_s on after a new rod showed, takes bait_strike.damage off
+-- the airfield (the host's or solo: AF is the host's) and plays the ground blast there (every game)
+function DECOY.baitStrikeStart(now)
+    local c = cfg().bait_strike or {}
+    if c.enabled == false then return end
+    local m = firstOf(cfg().bait_mark)
+    local at = m and locOf(m)
+    local sa = cfg().safe_at or { 1610476, -436142 }
+    local known = {}
+    for _, o in ipairs(DECOY.rods) do if liveObj(o) then known[addrOf(o)] = true end end
+    DECOY.bs = { at = now, mark = at or { X = sa[1], Y = sa[2], Z = 500 }, known = known, seen = {}, untilAt = now + num(c.wait_s, 8) }
+    log(string.format("decoy: the bait's Spear on the airfield watched (its mark at %.1f, %.1f km; %d rods already made)",
+        DECOY.bs.mark.X / 100000, DECOY.bs.mark.Y / 100000, (function() local k = 0; for _ in pairs(known) do k = k + 1 end; return k end)()))
+end
+local function baitStrikeLand(now, at, how)
+    local c = cfg().bait_strike or {}
+    local B = DECOY.bs
+    DECOY.bs = nil
+    local dmg, applied = math.floor(num(c.damage, 40)), false
+    if not isClient() and CFG.airfield.enabled and AF and not AF.down and AF.bomb then
+        AF.bomb = AF.bomb + dmg
+        applied = true
+    end
+    DECOY.blast({ X = at.X, Y = at.Y, Z = math.max(500, at.Z or 500) }, "ground")
+    if applied then hudCallout(CFG.hud.text.dc_af_hit or "THE AIRFIELD IS HIT", CFG.hud.text.dc_af_hit_sub or "A TONITRUS SPEAR STRIKE") end
+    log(string.format("decoy: the bait's Spear landed on the airfield (%s) %.1f s after the bait's end, %.0f m from its mark: %s",
+        how, now - B.at, dist2(at, B.mark.X, B.mark.Y) / 100, applied and string.format("-%d airfield", dmg)
+            or (isClient() and "the host's airfield takes the damage" or "the airfield not damaged (off or down)")))
+end
+local function baitStrikeTick(now)
+    local B = DECOY.bs
+    if not B then return end
+    local c = cfg().bait_strike or {}
+    local within = num(c.within_km, 2.5) * 100000
+    for _, o in ipairs(DECOY.rods) do
+        local a = liveObj(o) and addrOf(o)
+        if a and not B.known[a] then
+            local at = locOf(o)
+            local e = B.seen[a]
+            if at then
+                if not e then
+                    B.seen[a] = { at = at, t = now, moved = false }
+                    B.newAt = B.newAt or now
+                elseif dist3(at, e.at) < 100 then             -- (stopped: landed; its first place not a pooled one's)
+                    if e.moved or at.Z < 500000 then
+                        if dist2(at, B.mark.X, B.mark.Y) <= within then return baitStrikeLand(now, at, "a rod stopped there") end
+                        B.known[a] = true                     -- (it landed elsewhere: not the airfield's)
+                    end
+                else
+                    e.at, e.t, e.moved = at, now, true
+                end
+            end
+        end
+    end
+    if B.newAt and now >= B.newAt + num(c.wait_s, 8) then return baitStrikeLand(now, B.mark, "none seen landing: at its mark") end
+    if now >= B.untilAt + 10 then
+        log("decoy: no Spear on the airfield seen after the bait's end")
+        DECOY.bs = nil
+    end
+end
+-- ((2026-11-07) the height: the stock rod has no HeightLimitAreas, so it ends at sea level whatever its target's height
+-- (her plane at 4-7 km: every rod fell kilometres below her). A rod that has an area gets it at the target's height
+-- (min = max = it) before each strike; an empty array is never grown from Lua (UE4SS can't add an element safely):
+-- then the hit is judged (hit.judge, watchTick)
+local function rodArea(o, zm)
+    if not liveObj(o) then return false, "gone" end
+    local okN, n = pcall(function() return o.HeightLimitAreas:GetArrayNum() end)
+    if not okN then return false, "no HeightLimitAreas" end
+    if (tonumber(n) or 0) < 1 then return false, "empty (the stock rod's)" end
+    pcall(function() local el = o.HeightLimitAreas[1]; el.HeightLimitRangeMinInMeters = zm - 1; el.HeightLimitRangeMaxInMeters = zm + 1 end)
+    local okR, mn, mx = pcall(function()
+        local el = o.HeightLimitAreas[1]
+        return tonumber(el.HeightLimitRangeMinInMeters), tonumber(el.HeightLimitRangeMaxInMeters)
+    end)
+    if okR and mn and mx and math.abs(mn - (zm - 1)) < 0.05 and math.abs(mx - (zm + 1)) < 0.05 then return true end
+    return false, "reads back " .. tostring(mn) .. " / " .. tostring(mx)
+end
+local function readNum(o, k) local ok, v = pcall(function() return o[k] end); return ok and tostring(v) or "?" end
+-- each rod led by the fall (lead: its PredictionTime on the instance, the fall learnt; the stock rod's is 0, no lead),
+-- its cloud blast set, its height area at zm (m) when it has one; pooled ones again before each strike
+local function leadRod(o, zm)
+    if not liveObj(o) then return end
+    rodBlast(o, skyActor(clockNow()))
+    if zm then
+        local okA, why = rodArea(o, zm)
+        said("area " .. tostring(okA), string.format("decoy: the Spear's rod's height area %s (%s)",
+            okA and string.format("set to %.0f m", zm) or ("NOT set: " .. tostring(why) .. "; the hit is judged by Lua"), shortName(o)))
+    end
+    if not DECOY.vlSaid then                           -- (for the next test: where the rods come from, what they hurt)
+        DECOY.vlSaid = true
+        local okL, use, l = pcall(function() return o.bUseVirtualLauncherLocation, o.VirtualLauncherLocation end)
+        log(string.format("decoy: the Spear's rod: virtual launcher %s at %s; damage radius %s, strike %s %%, graze %s %%",
+            okL and tostring(use) or "?", (okL and l) and string.format("(%.1f, %.1f, %.1f) km", (l.X or 0) / 100000, (l.Y or 0) / 100000,
+            (l.Z or 0) / 100000) or "?", readNum(o, "DamageRadius"), readNum(o, "StrikeRadiusPercentage"), readNum(o, "GrazeRadiusPercentage")))
+    end
+    local ld = cfg().lead or {}
+    if ld.enabled == false then return end
+    local want = DECOY.fallS()
     local okR, was = pcall(function() return o.PredictionTime end)
-    if okR and was == want then return end
+    if okR and type(was) == "number" and math.abs(was - want) < 0.01 then return end
     local okW = pcall(function() o.PredictionTime = want end)
-    said("lead", string.format("decoy: the Spear's rods led by the fall: PredictionTime %s -> %s s (%s, an instance)",
-        okR and tostring(was) or "?", okW and tostring(want) or "NOT set", shortName(o)))
+    said("lead " .. string.format("%.1f", want), string.format("decoy: the Spear's rods led by the fall: PredictionTime %s -> %s s (%s, an instance)",
+        okR and tostring(was) or "?", okW and string.format("%.2f", want) or "NOT set", shortName(o)))
 end
 local function rodsTick()
     local q = DECOY.rodNew
@@ -572,11 +875,14 @@ function DECOY.strike(k, r, now, s)
     local c = cfg()
     r.state, r.struckAt = "struck", now
     DECOY.st.struck = DECOY.st.struck + 1
-    for _, o in ipairs(DECOY.rods) do leadRod(o) end
     local players = DECOY.players()
     local me = myEntry(players)
     local pawn = me and me.obj
     local at, vel, hp0 = me and me.at, velOf(pawn), myHealth()
+    local fallS = DECOY.fallS()
+    local zm = at and (at.Z + ((vel and vel.Z) or 0) * fallS) / 100 or nil
+    for _, o in ipairs(DECOY.rods) do leadRod(o, zm) end
+    pcall(DECOY.cloudsApply, now)
     local f = (type(svFlags) == "function" and svFlags()) or {}
     local n0 = tonumber(f[DECOY.HIT_FLAG]) or 0
     local tries, res, ev = {}, -5, nil
@@ -590,17 +896,17 @@ function DECOY.strike(k, r, now, s)
         if res == 1 or s then break end
     end
     local ld = c.lead or {}
-    local aim = (ld.enabled ~= false and at) and DECOY.leadPoint(at, vel, ld.fall_s) or at
+    local aim = (ld.enabled ~= false and at) and DECOY.leadPoint(at, vel, fallS) or at
     local speed = vel and math.sqrt(vel.X ^ 2 + vel.Y ^ 2 + vel.Z ^ 2) / 100 or nil
     log(string.format("decoy: the Spear called on you (%s): %s; you at %s, %s; aimed %s",
         k > 0 and string.format("UAV %d's lock, %.1f s", k, now - (r.at or now)) or "the test key", table.concat(tries, ", "),
         at and string.format("(%.1f, %.1f) km, alt %.1f km", at.X / 100000, at.Y / 100000, at.Z / 100000) or "?",
         speed and string.format("%.0f m/s", speed) or "speed ?",
-        (aim and at and aim ~= at) and string.format("%.0f m ahead of you (the rod's own lead, %.1f s)", dist3(aim, at) / 100, num(ld.fall_s, 3))
+        (aim and at and aim ~= at) and string.format("%.0f m ahead of you (the rod's own lead, %.1f s)", dist3(aim, at) / 100, fallS)
             or "at you (no lead)"))
     if res == 1 then DECOY.say("incoming", now) end
     DECOY.W[#DECOY.W + 1] = { k = k, at = now, n0 = n0, hp0 = hp0, untilAt = now + num(c.impact_wait_s, 8), trace = r.trace,
-                             fired = res == 1 }
+                             fired = res == 1, pos0 = at, vel0 = vel }
     return res
 end
 local function runnersTick(now, players)
@@ -668,9 +974,38 @@ local function watchTick(now)
             DECOY.st.hits = DECOY.st.hits + 1
             log(string.format("decoy: the Spear's impact (%s %d -> %d) %.1f s after the call: your health %s -> %s", DECOY.HIT_FLAG,
                 w.n0, n, now - w.at, w.hp0 and string.format("%.0f", w.hp0 / 10) or "?", w.hpHit and string.format("%.0f", w.hpHit / 10) or "?"))
+            local dt = now - w.at
+            local ld = c.lead or {}
+            if ld.learn ~= false and dt > 0.2 and dt < 6 and n == w.n0 + 1 then   -- (one rod landed: its fall)
+                local F = DECOY.falls
+                F[#F + 1] = dt
+                while #F > math.max(1, math.floor(num(ld.learn_n, 7))) do table.remove(F, 1) end
+            end
             local meDown = DOWN and DOWN.me and DOWN.me() == true
+            local hurt = w.hp0 and w.hpHit and w.hpHit < w.hp0
             if c.sure_kill == true and not meDown and (w.hpHit or 1) > 0 then
                 log("decoy: the Spear's sure kill (" .. EV.kill .. " " .. errText(fire(EV.kill)) .. ")")
+            elseif not hurt and not meDown and (w.hpHit or 1) > 0 and w.pos0 and (c.hit or {}).judge ~= false then
+                -- ((2026-11-07) the hit judged: the stock rod ends at sea level, never at a plane's height, so a strike
+                -- you didn't fly out of hits: where you'd be by now on the line you held at the call, against where you are)
+                local me = myEntry()
+                local cur = me and me.at
+                local pred = DECOY.leadPoint(w.pos0, w.vel0, dt)
+                local off = (cur and pred) and dist3(cur, pred) / 100 or nil
+                local p = (off and not DECOY.inSafe(cur, c)) and DECOY.hitChance(off) or 0
+                local roll = math.random()
+                local how = string.format("%s m off the line you held, a %.0f%% chance, rolled %.0f%%",
+                    off and string.format("%.0f", off) or "?", p * 100, roll * 100)
+                if roll < p then
+                    DECOY.st.judged = (DECOY.st.judged or 0) + 1
+                    DECOY.blast(cur or pred, "air")
+                    log(string.format("decoy: the Spear hits you (judged: %s): %s", how, DECOY.hurtMe(c)))
+                    DECOY.say("hit", now)
+                else
+                    DECOY.blast(pred, "air")                -- (where it came down: on the line you left)
+                    DECOY.st.missed = (DECOY.st.missed or 0) + 1
+                    log(string.format("decoy: the Spear missed you (judged: %s)", how))
+                end
             end
             w.afterAt = now + 1
         end
@@ -887,12 +1222,13 @@ local function baitTick(now, s)
     if not everyoneDown() then s.baitClock = (s.baitClock or 0) + dt end
     if bodyDown(B) then
         local pay = payOf(c.pay and c.pay.bait, c.pay and c.pay.bait_per_round)
-        addCredits(pay, "THE DECOY's bait (the Marker UAV) shot down")
+        addCredits(pay, "THE DECOY's bait (the RECON DRONE) shot down")
         if LB and LB.stat then pcall(LB.stat, "air", 1) end
         hudCallout(t.dc_bait_down, string.format(t.dc_bait_down_sub, specialPay and specialPay(pay) or pay))
         log(string.format("special: THE DECOY's bait shot down %.0f s after it showed: +%d", now - s.baitAt, pay))
         fire(EV.bait_laser_off)
         s.baitDown = true
+        pcall(DECOY.baitStrikeStart, now)
         startTrap(now, s, "the bait shot down")
     elseif not B.bodySeen and now - s.baitAt > 15 and not B.missSaid then
         B.missSaid = true
@@ -913,9 +1249,25 @@ local function baitTick(now, s)
     end
 end
 
+-- ((2026-11-07) Alyssa's test: every UAV kept its own lock and locked again relock_s 6 after each strike, so with four or
+-- five up the Spear fell every 2-4 s, four at once. Now at most locks_per_player locks on a player at a time (the user:
+-- "Only two UAV's can lock onto a player at a time"), each starting lock_gap_s after the last one on them (so their
+-- strikes come that far apart at least; a cancel frees the next sooner), each UAV relock_s after its own strike)
+DECOY.nextLock = {}
+local function locksOn(s, slot, now)
+    local n = 0
+    for _, V in pairs(s.u or {}) do
+        if V.slot == slot and V.strikeAt and now < V.strikeAt + 0.5 then n = n + 1 end
+    end
+    return n
+end
 local function cancelLock(U, why)
     if isHost() and COOP.msg then COOP.msg(nil, "dk", "c", U.k, why) end
     DECOY.applyCancel(U.k, why)
+    if U.slot ~= nil and why ~= "end" then
+        local t = clockNow() + num(cfg().lock_gap_s, 4)
+        if (DECOY.nextLock[U.slot] or 0) > t then DECOY.nextLock[U.slot] = t end
+    end
     U.slot = nil
 end
 local function assignLock(now, s, U, e, d)
@@ -923,7 +1275,8 @@ local function assignLock(now, s, U, e, d)
     s.seq, s.locks = (s.seq or 0) + 1, (s.locks or 0) + 1
     U.slot, U.seq, U.lockAt = e.slot, s.seq, now
     U.strikeAt = now + num(c.lock_delay_s, 1.5) + num(c.lock_s, 8)
-    U.relockAt = U.strikeAt + num(c.relock_s, 6)
+    U.relockAt = U.strikeAt + num(c.relock_s, 15)
+    DECOY.nextLock[e.slot] = now + num(c.lock_gap_s, 4)
     if s.locks <= 6 or s.locks % 10 == 0 then
         log(string.format("decoy: UAV %d locks %s (%.1f km; lock %d this trap)", U.k, whoText(e.slot), (d or 0) / 100000, s.locks))
     end
@@ -946,7 +1299,10 @@ local function lockTick(now, s, U, players)
     end
     if not U.pos or now < U.at + num(c.lock_after_s, 2) or now < (U.relockAt or 0) then return end
     local e, d = DECOY.closest(U.pos, players, c)
-    if e then assignLock(now, s, U, e, d) end
+    if e and locksOn(s, e.slot, now) < math.max(1, math.floor(num(c.locks_per_player, 2)))
+        and now >= (DECOY.nextLock[e.slot] or 0) then
+        assignLock(now, s, U, e, d)
+    end
 end
 local function uavDown(now, s, U)
     local c = cfg()
@@ -1141,6 +1497,7 @@ function DECOY.fromHost(f)
             if m.state == "trap" then
                 DECOY.say("brief", now, true)
                 if DECOY.jb and DECOY.jb.laser then fire(EV.bait_laser_off) end
+                pcall(DECOY.baitStrikeStart, now)          -- ((2026-11-07) the bait's strike's blast here too; its damage the host's)
             end
             if m.state == "done" then
                 for k in pairs(DECOY.G) do dropLock(k, "the host's trap is over", true) end
@@ -1207,6 +1564,9 @@ end
 ---------------------------------------------------------------------------------------------------- every game's tick
 -- this game's run starts over (a new D): its locks and watches forgotten (the marks let go), the radio's clocks too
 local function resetRun()
+    pcall(DECOY.cloudsRestore, "the run starts over")
+    DECOY.bs = nil
+    DECOY.nextLock, DECOY.falls = {}, {}
     for _, g in pairs(DECOY.G) do detach(g) end
     DECOY.G, DECOY.R, DECOY.W, DECOY.cs, DECOY.jb, DECOY.spearI = {}, {}, {}, nil, nil, nil
     DECOY.Q = { by = {}, n = {} }
@@ -1226,9 +1586,20 @@ function DECOY.tick(now)
         runnersTick(now, players)
     end
     watchTick(now)
+    local okB, errB = pcall(baitStrikeTick, now)
+    if not okB then said("bait strike err", "decoy: the bait strike's watch error " .. tostring(errB)) end
     joinerTick(now)
     recycleTick(now)
     if DECOY.testTick then DECOY.testTick(now) end
+    -- the clouds' fix while the Spear is about (a trap on, a strike due, the test), put back once it's quiet
+    local busy = (DECOY.cs and DECOY.cs.state == "trap") or next(DECOY.R) ~= nil or #DECOY.W > 0 or DECOY.test ~= nil
+    if busy then
+        if #DECOY.rods > 0 and now - (DECOY.cl.at or -100) >= math.max(1, num(ccfg().every_s, 5)) then pcall(DECOY.cloudsApply, now) end
+        DECOY.cl.quietAt = nil
+    elseif next(DECOY.cl.orig) ~= nil then
+        DECOY.cl.quietAt = DECOY.cl.quietAt or now
+        if now - DECOY.cl.quietAt >= num(ccfg().restore_after_s, 60) then pcall(DECOY.cloudsRestore, "the Spear quiet") end
+    end
 end
 
 -- (sv_core.lua levelDrop: the level torn down) every object kept here forgotten, none touched
@@ -1238,17 +1609,22 @@ if type(LEVEL_DROPS) == "table" then
         DECOY.cs, DECOY.jb, DECOY.have, DECOY.markMode, DECOY.runD, DECOY.rqAt, DECOY.test = nil, nil, nil, nil, nil, nil, nil
         DECOY.moveHeld = nil
         DECOY.spearI = nil
+        DECOY.cl = { orig = {}, at = -100 }                -- (the sky's objects are the level's: dropped, never put back)
+        DECOY.nextLock, DECOY.vlSaid, DECOY.falls = {}, nil, {}
+        DECOY.bl, DECOY.bs = { sys = {} }, nil
     end
 end
 
 -- the round's kind (sv_anomalies.lua SPC.kinds: its callout's sub, its aircraft, ready, its fighters, spawn, tick, busy,
 -- its end and its NEXT row)
 if type(SPC) == "table" and type(SPC.kinds) == "table" then
+    -- ((2026-11-07) the user: "make sure that in the GONE FISHIN round and THE DECOY that normal aircraft arent
+    -- spawning": fighter_share 0, the bait and the trap's UAVs alone)
     SPC.kinds.decoy = {
         sub = "dc_sub", aircraft = 1,
         ready = function() return DECOY.ready() end,
         budget = function(budget)
-            local x = math.max(0, math.min(1, num(cfg().fighter_share, 0.3)))
+            local x = math.max(0, math.min(1, num(cfg().fighter_share, 0)))
             return math.max(0, math.floor((tonumber(budget) or 0) * x / 2 + 0.5) * 2)
         end,
         spawn = function(now) return DECOY.spawn(now) end,
@@ -1322,7 +1698,7 @@ if type(testKey) == "function" then
         D.forceSpecial, DECOY.forced = "decoy", true
         local soon = D.state == "wait"
         if soon then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
-        hudCallout("TEST: THE DECOY", soon and "STARTING NOW" or "NEXT ROUND")
+        hudCallout("TEST: RECON DRONE", soon and "STARTING NOW" or "NEXT ROUND")
         log(string.format("test: Ctrl+-, round %d is THE DECOY (%s)", D.round + 1, soon and "starting in 3 s" or "after this round"))
     end)
 end
