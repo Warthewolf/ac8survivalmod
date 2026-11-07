@@ -1658,3 +1658,27 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   +N s: ...; apart d m`; watch_at). escort_test.
 - 52 suites pass (coop_test not run). Built and packaged: dev / TESTER 236939561d23..., friends' b7a282e58da2...
   (0.74.14-coop2mp.106), all registered. INSTALLED 2026-11-07 (backup of 0.74.13: build/backup/install_before_0.74.14).
+
+## 0.74.15 (2026-11-07, runtime 0.32.25; the user's 0.74.14 run of 22:35-22:39; not yet run in game)
+- 0.74.14's log: the launch smoke went on both drones (`launch smoke on 2`), but the launched pair flew 3 m apart for all 15
+  s, the same heading and speed, 15-29 m over the sea, neither on its climb-out path. The paths were never found: the
+  climb records name `SV_Path_ZfaClimb_1_0` by string, which the engine splits at its number tail (hard rule 17), and
+  make_path stored the desc's name whole. Now SV_Path_ZfaClimb<s><A|B> (letters); make_path refuses a name with a number tail.
+- The box (the user: "the drones say ZFA-44 Twice, where is VAMPIRE?"): line 2 is the object's callsign, which was
+  SV_Zfa44 too; the arm units' and the pose flights' callsign is SV_ZfaSub ("VAMPIRE") now.
+- The laser (the user: "the Laser Interceptor doesn't swing or go after the missiles, it also isn't attached to the
+  aircraft it spawns in mid air"; the log: the ZFA-44's own fire control fired AC8's laser twice, `on BP_wp_msl_r0`, and
+  that missile was gone; the 6 others were Survival's stand-in beam, spawned where the plane was, pointed where the
+  missile was, left in the air 0.6 s):
+  - The ZFA-44's own laser fired on command: RE_SV_ZfaTLS_<s>_<n> (each arm unit's objects) and RE_SV_ZfaTLS<A|B> (the
+    pose flights') fire the laser's slot (WN_WEAPON_2, no target: Mission 17's container fire template); ZLAS.drive fires
+    the plane's flight's record (a launched plane's arm is recorded as it comes out: ZLAUNCH e.armUnit; a pose plane's by
+    its unit) and the laser that comes (NotifyOnNewObject, its owner the plane) is handed the missile (MissileToIntercept)
+    and made to hit (chance 1, cone 180, 3 km); the missile made sure laser_stock_swing_s 2.5 on.
+  - Survival's beam only when its own laser hasn't come laser_stock_wait_s 0.75 after the record (logged once), or for a
+    plane of no known flight: now attached to the plane (spawned KeepWorldPosition at it, turned at the missile) and
+    aimed at the missile again every tick for laser_beam_s.
+  - Logs: `zfa laser: <plane> (<unit>) fires at <missile> d m off (...): RE_SV_ZfaTLS_1_1 (its own laser)`, `zfa laser:
+    <plane>'s own laser fired (..., Survival's record): ... on <missile> (handed to it)`. escort_test.
+- 52 suites pass (coop_test not run). Built and packaged: dev / TESTER cb03676665f5..., friends' 2c0062958dc2...
+  (0.74.15-coop2mp.107), all registered. INSTALLED 2026-11-07 (backup of 0.74.14: build/backup/install_before_0.74.15).

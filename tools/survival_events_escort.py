@@ -309,7 +309,17 @@ def zfa_climb_event(s, n):
 
 
 def zfa_climb_path(s, k):
-    return f'SV_Path_ZfaClimb_{s}_{k}'
+    # ((2026-11-07, 0.74.14's launch: both drones 3 m apart for 15 s, neither on its path) a letter, never a number tail:
+    # the record names the path by string, which the engine splits ("..._1_0" -> "..._1", 1: hard rule 17), and the desc's
+    # name was stored whole, so the game never found it (make_path refuses a number tail now)
+    return f'SV_Path_ZfaClimb{s}{chr(65 + k)}'
+
+
+def zfa_tls_event(s, n=None):
+    """(2026-11-07) The ZFA-44s' own laser fired on command (the user: "the Laser Interceptor doesn't swing or go after
+    the missiles, it also isn't attached to the aircraft"): RE_SV_ZfaTLS_<s>_<n> fires the laser's slot on every object of
+    ship s's arm n unit, RE_SV_ZfaTLS<L> on pose flight L's (s a letter, n None)."""
+    return f'RE_SV_ZfaTLS_{s}_{n}' if n is not None else f'RE_SV_ZfaTLS{s}'
 
 
 def zfa_climb_points(s, k):
@@ -617,8 +627,16 @@ def build_escort(g, flag, stock_ep):
                 for dl in ZFA_CLIMB_ORDERS_S:                 # (each its own Normal, ZFA_CLIMB_STAGGER_S apart)
                     g.execute(t_eng_air, cl, {0: ob}, delay=dl + k * ZFA_CLIMB_STAGGER_S)
             g.execute(t_search, cl, {1: zunit}, delay=ZFA_CLIMB_ORDERS_S[0])
+            tls = zfa_tls_event(s, n)                         # (its laser on command: Lua picks the missile)
+            remote(tls)
+            for ob in zobjs:
+                g.execute(t_launch, tls, {0: f'WN_WEAPON_{ZFA_TLS_SLOT + 1}', 1: ob})
     for L, unit, obj, s in ZFA_FALLBACK:
         objs = [f'{obj}_{k}' for k in range(ZFA_FALLBACK_N)]
+        tls = zfa_tls_event(L)
+        remote(tls)
+        for ob in objs:
+            g.execute(t_launch, tls, {0: f'WN_WEAPON_{ZFA_TLS_SLOT + 1}', 1: ob})
         for ev in (f'SV_ZfaUp{L}', f'RE_SV_ZfaGo{L}'):
             if ev.startswith('RE_'): remote(ev)
             else: g.trigger('01_E_AreaA_ReinforcementAppearance_0', ev, arg_changes={0: unit})

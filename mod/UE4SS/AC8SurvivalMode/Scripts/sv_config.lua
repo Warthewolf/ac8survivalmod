@@ -1037,20 +1037,21 @@ CFG = {
                          launch_fx = "/Game/VFX/Vehicles/Aircraft/OP/OP0018/NS_UAVLaunch001", launch_fx_s = 4,
                          watch_at = { 1, 3, 6, 10, 15 },
                          launchers = {
-                             { { record = "RE_SV_CargoLaunch_1_1", climb = "RE_SV_ZfaClimb_1_1", unit = "E_Unit_01_drone_5_0" },
-                               { record = "RE_SV_CargoLaunch_1_2", climb = "RE_SV_ZfaClimb_1_2", unit = "E_Unit_01_drone_4_0" },
-                               { record = "RE_SV_CargoLaunch_1_3", climb = "RE_SV_ZfaClimb_1_3", unit = "E_Unit_01_drone_0_0" },
-                               { record = "RE_SV_CargoLaunch_1_4", climb = "RE_SV_ZfaClimb_1_4", unit = "E_Unit_01_drone_1_0" },
-                               { record = "RE_SV_CargoLaunch_1_5", climb = "RE_SV_ZfaClimb_1_5", unit = "E_Unit_01_drone_7_0" },
-                               { record = "RE_SV_CargoLaunch_1_6", climb = "RE_SV_ZfaClimb_1_6", unit = "E_Unit_01_drone_8_0" } },
-                             { { record = "RE_SV_CargoLaunch_2_1", climb = "RE_SV_ZfaClimb_2_1", unit = "E_Unit_01_drone_3_1" },
-                               { record = "RE_SV_CargoLaunch_2_2", climb = "RE_SV_ZfaClimb_2_2", unit = "E_Unit_01_drone_4_1" },
-                               { record = "RE_SV_CargoLaunch_2_3", climb = "RE_SV_ZfaClimb_2_3", unit = "E_Unit_01_drone_1_1" },
-                               { record = "RE_SV_CargoLaunch_2_4", climb = "RE_SV_ZfaClimb_2_4", unit = "E_Unit_01_drone_2_1" },
-                               { record = "RE_SV_CargoLaunch_2_5", climb = "RE_SV_ZfaClimb_2_5", unit = "E_Unit_01_drone_6_1" },
-                               { record = "RE_SV_CargoLaunch_2_6", climb = "RE_SV_ZfaClimb_2_6", unit = "E_Unit_01_drone_7_1" } },
+                             { { record = "RE_SV_CargoLaunch_1_1", climb = "RE_SV_ZfaClimb_1_1", tls = "RE_SV_ZfaTLS_1_1", unit = "E_Unit_01_drone_5_0" },
+                               { record = "RE_SV_CargoLaunch_1_2", climb = "RE_SV_ZfaClimb_1_2", tls = "RE_SV_ZfaTLS_1_2", unit = "E_Unit_01_drone_4_0" },
+                               { record = "RE_SV_CargoLaunch_1_3", climb = "RE_SV_ZfaClimb_1_3", tls = "RE_SV_ZfaTLS_1_3", unit = "E_Unit_01_drone_0_0" },
+                               { record = "RE_SV_CargoLaunch_1_4", climb = "RE_SV_ZfaClimb_1_4", tls = "RE_SV_ZfaTLS_1_4", unit = "E_Unit_01_drone_1_0" },
+                               { record = "RE_SV_CargoLaunch_1_5", climb = "RE_SV_ZfaClimb_1_5", tls = "RE_SV_ZfaTLS_1_5", unit = "E_Unit_01_drone_7_0" },
+                               { record = "RE_SV_CargoLaunch_1_6", climb = "RE_SV_ZfaClimb_1_6", tls = "RE_SV_ZfaTLS_1_6", unit = "E_Unit_01_drone_8_0" } },
+                             { { record = "RE_SV_CargoLaunch_2_1", climb = "RE_SV_ZfaClimb_2_1", tls = "RE_SV_ZfaTLS_2_1", unit = "E_Unit_01_drone_3_1" },
+                               { record = "RE_SV_CargoLaunch_2_2", climb = "RE_SV_ZfaClimb_2_2", tls = "RE_SV_ZfaTLS_2_2", unit = "E_Unit_01_drone_4_1" },
+                               { record = "RE_SV_CargoLaunch_2_3", climb = "RE_SV_ZfaClimb_2_3", tls = "RE_SV_ZfaTLS_2_3", unit = "E_Unit_01_drone_1_1" },
+                               { record = "RE_SV_CargoLaunch_2_4", climb = "RE_SV_ZfaClimb_2_4", tls = "RE_SV_ZfaTLS_2_4", unit = "E_Unit_01_drone_2_1" },
+                               { record = "RE_SV_CargoLaunch_2_5", climb = "RE_SV_ZfaClimb_2_5", tls = "RE_SV_ZfaTLS_2_5", unit = "E_Unit_01_drone_6_1" },
+                               { record = "RE_SV_CargoLaunch_2_6", climb = "RE_SV_ZfaClimb_2_6", tls = "RE_SV_ZfaTLS_2_6", unit = "E_Unit_01_drone_7_1" } },
                          },
                          pose_units = { "SV_Unit_ZfaA", "SV_Unit_ZfaB" }, pose_go = { "RE_SV_ZfaGoA", "RE_SV_ZfaGoB" },
+                         pose_tls = { "RE_SV_ZfaTLSA", "RE_SV_ZfaTLSB" },   -- ((2026-11-07) each flight's laser on command)
                          pose = { ahead_m = 300, alt_m = 1100 },
                          ship_at = { { 1270476, -1096142 }, { 2130476, 103858 } },
                          service = { rounds = 3, min_s = 60 },
@@ -1080,6 +1081,12 @@ CFG = {
                                  -- laser_chance in a laser_angle cone; laser_timeout: a shot-down missile's life cut short;
                                  -- the beam, the burst and the hit sound are the TLS's own (laser_*_fx, laser_hit_sound;
                                  -- laser_fire_sound none: the TLS's fire sound loops until its stop)
+                                 -- ((2026-11-07) the user: "the Laser Interceptor doesn't swing or go after the missiles,
+                                 -- it also isn't attached to the aircraft") laser_stock: the ZFA-44's own laser fired on
+                                 -- command (each launcher's / pose flight's `tls` record), the missile handed to it, made sure
+                                 -- laser_stock_swing_s on; Survival's own beam (attached to the plane, aimed again each tick)
+                                 -- only when its own laser hasn't come laser_stock_wait_s after the record
+                                 laser_stock = true, laser_stock_wait_s = 0.75, laser_stock_swing_s = 2.5,
                                  laser_slot = 1, laser_drive = true, laser_range_m = 3000, laser_shot_s = 1.0,
                                  laser_swing_s = 0.35, laser_beam_s = 0.6, laser_chance = 1.0, laser_angle = 180,
                                  laser_timeout = true, laser_sound = true, laser_log_n = 40,

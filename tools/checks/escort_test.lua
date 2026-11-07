@@ -1254,6 +1254,16 @@ do
         comps[#comps + 1] = c
         return c
     end
+    function NL:SpawnSystemAttached(sys, root, socket, at, rot, how)   -- (Survival's beam: attached, aimed again each tick)
+        local c = { full = "NiagaraComponent", addr = addr(), vars = {} }
+        function c:IsValid() return not self.dead end
+        function c:SetVariableFloat(n, v) self.vars[tostring(n)] = v end
+        function c:K2_SetWorldRotation(r) self.rot = r end
+        function c:Deactivate() self.off = true end
+        fxs[#fxs + 1] = { sys = sys, at = at, rot = rot, comp = c, attached = true, root = root, how = how }
+        comps[#comps + 1] = c
+        return c
+    end
     statics["/Script/Niagara.Default__NiagaraFunctionLibrary"] = NL
     local ZC = CFG.allies.carrier.zfa
     for _, p in ipairs({ ZC.laser_beam_fx, ZC.laser_kill_fx, ZC.laser_hit_sound }) do
@@ -1275,6 +1285,7 @@ do
     end
     local zU = K.launchers[1][1].unit
     local z1 = plane(zU, 1000000, 0, 300000, 0, 600)
+    function z1:K2_GetRootComponent() return { full = "root", owner = self } end
     ESC.planes[zU] = { { obj = z1, addr = z1.addr, name = z1.full, at = 0 } }
     local mNear = missile("wp_msl_r0", 1000000 + 200000, 0, 300000, enemyJet, z1)        -- 2 km off: the enemy's
     local far = missile("wp_msl_r1", 1000000 + 450000, 0, 300000, enemyJet, z1)         -- 4.5 km off
@@ -1293,7 +1304,8 @@ do
           and has(fire, "from BP_Su30"), "a ZFA-44 fires at the enemy missile 2 km off: " .. tostring(fire))
     local beam = fxs[1]
     check(beam and beam.sys.full:find("NS_NPC_TLS_Muzleflash01", 1, true) and near(beam.comp.vars["User.BeamLength"], 200000, 1)
-          and near(beam.rot.Yaw, 0, 0.01) and near(beam.at.X, 1000000), "the TLS's own beam from the ZFA-44, 2 km long, at the missile")
+          and near(beam.rot.Yaw, 0, 0.01) and near(beam.at.X, 1000000) and beam.attached and beam.root.owner == z1 and beam.how == 1,
+          "the TLS's own beam attached to the ZFA-44 (kept where it is: no laser record for a plane of no known arm), 2 km at the missile")
     check(mNear.damage == 40 and mNear.bIsHoming == true, "not shot down before the swing's end")
     clock = clock + 0.4
     ZLAS.tick()
@@ -1323,8 +1335,42 @@ do
     made("/Script/Live.LiveTLSSwingforMissile", own)
     ZLAS.tick()
     check(own.InterceptPercentage == 1.0 and own.InterceptAngle == 180 and own.InterceptDistanceSquared == 300000 * 300000
-          and has(line("zfa laser: ", from + 1), "") and has(table.concat(logs, "\n", from), "own fire control fired its laser"),
+          and has(line("zfa laser: ", from + 1), "") and has(table.concat(logs, "\n", from), "own laser fired"),
           "the game's own laser shot: chance 0.3 -> 1, its cone and reach")
+    -- ((2026-11-07) the user: "the Laser Interceptor doesn't swing or go after the missiles, it also isn't attached to the
+    -- aircraft") a launched ZFA-44 (its arm seen as it came out) fires its own laser by its arm's record; the laser that comes
+    -- is handed the missile and made sure; no beam of Survival's. Its laser not coming: Survival's beam, attached
+    ESC.planes[zU][1].armUnit = zU
+    events = {}
+    local m6 = missile("wp_msl_r6", 1000000 + 150000, 0, 300000, enemyJet, z1)
+    HIT.msl[#HIT.msl + 1] = { obj = m6, name = "BP_wp_msl_r6", born = 0 }
+    clock = clock + 2
+    local nfx = #fxs
+    ZLAS.tick()
+    check(K.launchers[1][1].tls == "RE_SV_ZfaTLS_1_1" and evFired("RE_SV_ZfaTLS_1_1") and #fxs == nfx,
+          "a launched ZFA-44 fires its own laser on command (RE_SV_ZfaTLS_1_1), no beam of Survival's")
+    local own2 = setmetatable({ full = "BP_SwingTLS_ForMSL_C /Game/Maps/PL_SurvivalMode.x:BP_SwingTLS_ForMSL_C_2", addr = addr(),
+                                InterceptPercentage = 0.3, InterceptAngle = 45, InterceptDistanceSquared = 9e10 }, PM)
+    own2.GetOwner = function() return z1 end
+    made("/Script/Live.LiveTLSSwingforMissile", own2)
+    clock = clock + 0.3
+    ZLAS.tick()
+    check(own2.MissileToIntercept == m6 and own2.InterceptPercentage == 1.0 and #fxs == nfx and m6.damage == 40,
+          "its laser handed the missile and made to hit; no beam of Survival's; not shot down before its swing's end")
+    clock = clock + ZC.laser_stock_swing_s
+    ZLAS.tick()
+    check(m6.damage == 0, "made sure at its swing's end (laser_stock_swing_s)")
+    local m7 = missile("wp_msl_r7", 1000000 + 120000, 0, 300000, enemyJet, z1)
+    HIT.msl[#HIT.msl + 1] = { obj = m7, name = "BP_wp_msl_r7", born = 0 }
+    clock = clock + 1.1
+    nfx = #fxs
+    ZLAS.tick()
+    check(evCount("RE_SV_ZfaTLS_1_1") == 2 and #fxs == nfx, "the next: its record again, no beam of Survival's yet")
+    clock = clock + ZC.laser_stock_wait_s + 0.05
+    ZLAS.tick()
+    check(#fxs == nfx + 1 and fxs[#fxs].attached and fxs[#fxs].sys.full:find("NS_NPC_TLS_Muzleflash01", 1, true),
+          "its own laser didn't come in laser_stock_wait_s: Survival's beam, attached to it")
+    ESC.planes[zU][1].armUnit = nil
     -- laser_drive = false: the game's own only
     ZC.laser_drive = false
     local m4 = missile("wp_msl_r5", 1000000 + 50000, 0, 300000, enemyJet, z1)

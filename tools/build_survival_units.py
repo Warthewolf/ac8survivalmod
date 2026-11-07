@@ -421,6 +421,9 @@ def make_path(z, used_ids, template, name, pts, smooth=False, before=None, after
     the turn (up to 50 degrees, with the turn's angle) and the rotation's pitch the climb. `before` / `after`: the
     points just outside `pts` (a circuit's other end, the next path's second point), so the tangent runs on smoothly."""
     import math
+    # ((2026-11-07) a record names a path by string, which the engine splits at a number tail (hard rule 17): a desc named
+    # "..._1_0" is never found. Never one)
+    assert survival_events.fname(name)[2] == 0, f'path {name}: a number tail (records would never find it: hard rule 17)'
     new = copy.deepcopy(template)
     f = {p[1]: p for p in new[2]}
     begin = f['BeginPointDesc'][3]

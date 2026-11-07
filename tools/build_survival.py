@@ -920,9 +920,9 @@ def check_escort_decoy_build():
                                                    'BP_VE021_ctslf_cntus_03_CP', 'BP_VE021_stgr_Base')
                             if c in (launcher, 'BP_VE021_stgr_Base', 'BP_VE021_ctslf_cntus_02_CP'))))
         for n, dunit, dobjs in se.CARGO_ARMS[s_]:
-            want.append((dunit, dobjs, se.ZFA_DRONE_ROW, 1, se.ZFA_NAME_KEY, []))
+            want.append((dunit, dobjs, se.ZFA_DRONE_ROW, 1, se.ZFA_SUB_KEY, []))
     for L, unit, obj, _ in se.ZFA_FALLBACK:
-        want.append((unit, [f'{obj}_{k}' for k in range(se.ZFA_FALLBACK_N)], se.ZFA_ROW, 1, se.ZFA_NAME_KEY, []))
+        want.append((unit, [f'{obj}_{k}' for k in range(se.ZFA_FALLBACK_N)], se.ZFA_ROW, 1, se.ZFA_SUB_KEY, []))
     want.append((se.DECOY_BAIT_UNIT, [se.DECOY_BAIT_OBJ], se.DECOY_BAIT_ROW, 2, None, [f'{se.DECOY_BAIT_OBJ}_{se.DECOY_POD}']))
     want.append((se.DECOY_BAIT_MARK_UNIT, [se.DECOY_BAIT_MARK_OBJ], se.DECOY_MARK_ROW, None, None, []))
     for _, unit, obj, munit, mobj in se.decoy_uavs():
@@ -960,6 +960,7 @@ def check_escort_decoy_build():
     events = [ev for evs in se.ESC_EVENTS.values() for ev in evs] + ['RE_SV_EscortReset']
     events += [se.cargo_launch_event(s_, n) for s_ in se.CARGO_ARMS for n, _, _ in se.CARGO_ARMS[s_]]
     events += [se.zfa_climb_event(s_, n) for s_ in se.CARGO_ARMS for n, _, _ in se.CARGO_ARMS[s_]]
+    events += [se.zfa_tls_event(s_, n) for s_ in se.CARGO_ARMS for n, _, _ in se.CARGO_ARMS[s_]] + [se.zfa_tls_event(f[0]) for f in se.ZFA_FALLBACK]
     events += [f'RE_SV_CargoRemove_{c[0]}' for c in se.CARGO_SHIPS] + [f'RE_SV_ZfaGo{f[0]}' for f in se.ZFA_FALLBACK]
     events += ['RE_SV_DecoyBaitLaser', 'RE_SV_DecoyBaitLaserOff', 'RE_SV_DecoyBaitPing', 'RE_SV_DecoyKill', 'SV_DecoySpearImpact']
     events += [f'RE_SV_DecoySpear_{k + 1}' for k in range(len(se.DECOY_SPEARS))]

@@ -629,7 +629,7 @@ def cargo_units(units, used_ids, z, top_number, v):
             assert dn == [f'{base}_{k}' for k in range(se.ZFA_PER_ARM)], dn
             du = unit_named(units, dunit)
             set_faction(du, 1)
-            callsign(du, se.ZFA_NAME_KEY, z)
+            callsign(du, se.ZFA_SUB_KEY, z)      # ((2026-11-07) "the drones say ZFA-44 Twice, where is VAMPIRE?": line 2)
             unit_area(du, se.ZFA_AREA_M, se.ZFA_ALT_M)
             place(du, park, yaw, pts)
             se.CARGO_ARMS[s].append((n, dunit, dn))
@@ -647,7 +647,7 @@ def cargo_units(units, used_ids, z, top_number, v):
         assert names == [f'{obj}_{k}' for k in range(se.ZFA_FALLBACK_N)], names
         u = unit_named(units, unit)
         clear_flags(u, ('bIsInvincible',))
-        callsign(u, se.ZFA_NAME_KEY, z)
+        callsign(u, se.ZFA_SUB_KEY, z)
         unit_area(u, se.ZFA_AREA_M, se.ZFA_ALT_M)
         place(u, top, se.cargo_ship(s)[7], pts)
         assert [field_of(ob, 'bGroupLead') == ('raw', 'Bool', b'\x01') for ob in objects_of(u)] == [True] + [False] * (se.ZFA_FALLBACK_N - 1)

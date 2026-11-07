@@ -360,14 +360,22 @@ local function ownLasers(s)
                 pcall(function() o.InterceptAngle = num(z.laser_angle, 180) end)
                 pcall(function() o.InterceptDistanceSquared = r * r end)
                 s.own = s.own + 1
-                local tgt = nil
+                local tgt, handed = nil, nil
+                local wa = w and addrOf(w)
+                local want = wa and s.want and s.want[wa]      -- ((2026-11-07) fired on command: its missile handed to it)
+                if wa then s.stockSeen = s.stockSeen or {}; s.stockSeen[wa] = os.clock() end
+                if want and liveAddr(want.m.obj) then
+                    handed = pcall(function() o.MissileToIntercept = want.m.obj end)
+                    s.want[wa] = nil
+                end
                 pcall(function() local t = o.MissileToIntercept; if t and liveAddr(t) then tgt = t end end)
                 s.ownL = s.ownL or {}
                 s.ownL[#s.ownL + 1] = { o = o, due = os.clock() + num(z.laser_swing_s, 0.35) + 2.0, tgt = tgt }
                 if s.own <= 10 or s.own % 25 == 0 then
-                    log(string.format("zfa laser: %s's own fire control fired its laser (%s, %d so far): chance %s -> %.2f, cone %g deg, reach %g m%s",
-                        w and short(w) or "?", short(o), s.own, tostring(was), num(z.laser_chance, 1.0), num(z.laser_angle, 180),
-                        num(z.laser_range_m, 3000), tgt and (", on " .. short(tgt)) or ""))
+                    log(string.format("zfa laser: %s's own laser fired (%s, %d so far; %s): chance %s -> %.2f, cone %g deg, reach %g m%s",
+                        w and short(w) or "?", short(o), s.own, want and "Survival's record" or "its own fire control", tostring(was),
+                        num(z.laser_chance, 1.0), num(z.laser_angle, 180), num(z.laser_range_m, 3000),
+                        tgt and (", on " .. short(tgt) .. (handed and " (handed to it)" or "")) or ""))
                 end
             end
         end
@@ -393,6 +401,53 @@ local function ownClaims(s, now)
     s.ownL = keep
 end
 
+-- the laser record of plane p's flight: a launched one's arm (its unit seen as it came out: ZLAUNCH), a pose flight's own
+function ZLAS.tlsEventOf(p)
+    local c = (CFG.allies or {}).carrier or {}
+    local unit = p.e and p.e.armUnit
+    if unit then
+        for _, arms in ipairs(c.launchers or {}) do
+            for _, arm in ipairs(arms) do if arm.unit == unit then return arm.tls end end
+        end
+        return nil
+    end
+    for i, pu in ipairs(c.pose_units or {}) do if pu == p.unit then return (c.pose_tls or {})[i] end end
+    return nil
+end
+-- Survival's beam on plane p at missile m: attached to the plane (spawned where it is, kept there as it flies) and aimed
+-- at the missile again every tick (ZLAS.aimBeam) for laser_beam_s
+function ZLAS.aimBeam(b)
+    local from = at(b.o)
+    local to = b.m and liveAddr(b.m.obj) and at(b.m.obj) or (b.m and b.m.zAt)
+    if not (from and to) then return end
+    local rot, len = aim(from, to)
+    pcall(function() b.comp:K2_SetWorldRotation(rot, false, {}, false) end)
+    pcall(function() b.comp:SetVariableFloat(FName("User.BeamLength"), len) end)
+    pcall(function() b.comp:SetVariableFloat(FName("BeamLength"), len) end)
+end
+function ZLAS.beamOn(s, p, m)
+    local z = zc()
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    local sys = asset(z.laser_beam_fx)
+    local from = at(p.o) or p.at
+    local to = m.zAt or (liveAddr(m.obj) and at(m.obj))
+    if not (valid(lib) and sys and from and to) then return false end
+    local rot, len = aim(from, to)
+    local ok, comp = pcall(function()                     -- (EAttachLocation 1, KeepWorldPosition: where it is, turned at it)
+        return lib:SpawnSystemAttached(sys, p.o:K2_GetRootComponent(), FName("None"), from, rot, 1, true, true, 0, true)
+    end)
+    if not (ok and comp and comp:IsValid()) then
+        logOnce("zfa laser beam", "zfa laser: Survival's beam failed: " .. tostring(comp))
+        return false
+    end
+    local life = num(z.laser_beam_s, 0.6)
+    local b = { comp = comp, o = p.o, a = p.a, m = m, offAt = os.clock() + life }
+    s.beams = s.beams or {}
+    s.beams[#s.beams + 1] = b
+    ZLAS.aimBeam(b)
+    if ZLAS.keepFx then ZLAS.keepFx(comp, life + 0.05) end
+    return true
+end
 function ZLAS.drive(now)
     local z = zc()
     if z.laser == false or z.laser_drive == false or not D then return end
@@ -410,7 +465,7 @@ function ZLAS.drive(now)
                     if not (okH and type(h) == "number" and h <= 0) then
                         local p = at(e.obj)
                         local riseZ = num(((CFG.allies or {}).carrier or {}).rise_m, -50) * 100
-                        if p and p.Z > riseZ then ps[#ps + 1] = { o = e.obj, a = e.addr, at = p, unit = u } end   -- (never parked)
+                        if p and p.Z > riseZ then ps[#ps + 1] = { o = e.obj, a = e.addr, at = p, unit = u, e = e } end   -- (never parked)
                     end
                 end
             end
@@ -427,6 +482,32 @@ function ZLAS.drive(now)
         if clock >= c.due then
             s.claims[a] = nil
             if not c.m.zDone then kill(c, s, c.own and "the game's own laser's swing over" or ("by " .. c.by)) end
+        end
+    end
+    -- ((2026-11-07) Survival's beams follow their plane (attached) and their missile (aimed again each tick); a laser fired
+    -- on command that hasn't come in laser_stock_wait_s: Survival's beam instead
+    s.beams = s.beams or {}
+    local keepB = {}
+    for _, b in ipairs(s.beams) do
+        if clock < b.offAt and liveAddr(b.o) == b.a then ZLAS.aimBeam(b); keepB[#keepB + 1] = b end
+    end
+    s.beams = keepB
+    s.waitStock = s.waitStock or {}
+    for i = #s.waitStock, 1, -1 do
+        local w = s.waitStock[i]
+        local seen = s.stockSeen and s.stockSeen[w.p.a]
+        if seen and seen >= w.at - 0.05 then
+            table.remove(s.waitStock, i)
+        elseif clock - w.at >= num(z.laser_stock_wait_s, 0.75) then
+            table.remove(s.waitStock, i)
+            if not w.m.zDone and liveAddr(w.p.o) == w.p.a then
+                ZLAS.beamOn(s, w.p, w.m)
+                if not s.noStockSaid then
+                    s.noStockSaid = true
+                    log(string.format("zfa laser: %s's own laser didn't come %.2f s after %s: Survival's beam instead", short(w.p.o),
+                        num(z.laser_stock_wait_s, 0.75), tostring(w.ev)))
+                end
+            end
         end
     end
     -- the missiles gone after their cut: logged (does a cut life end it?)
@@ -470,15 +551,36 @@ function ZLAS.drive(now)
                 s.claims[ma] = { m = best, name = nm, due = clock + num(z.laser_swing_s, 0.35), by = short(p.o) }
                 s.busy[p.a] = clock + shot
                 s.shots = s.shots + 1
-                local rot, len = aim(p.at, best.zAt)
-                fx(z.laser_beam_fx, p.at, rot, len, num(z.laser_beam_s, 0.6))
-                sound(z.laser_fire_sound, p.at)
+                -- ((2026-11-07) its own laser on command first: it swings, from the plane; the missile handed to it as it comes)
+                local ev = z.laser_stock ~= false and ZLAS.tlsEventOf(p) or nil
+                local fired, how = false, "Survival's beam"
+                if ev and type(SV_Event) == "function" then
+                    s.evBusy = s.evBusy or {}
+                    if clock >= (s.evBusy[ev] or 0) then
+                        local okE, r = pcall(SV_Event, ev)
+                        fired = okE and r == 1
+                        s.evBusy[ev] = clock + shot
+                        how = fired and (ev .. " (its own laser)") or (ev .. " NOT fired (" .. tostring(okE and r or "error") .. "): Survival's beam")
+                    else
+                        fired, how = true, ev .. " (its flight's laser, fired this second)"
+                    end
+                end
+                s.want = s.want or {}
+                s.want[p.a] = { m = best, at = clock }
+                if fired then
+                    s.claims[ma].due = clock + num(z.laser_stock_swing_s, 2.5)
+                    s.waitStock = s.waitStock or {}
+                    s.waitStock[#s.waitStock + 1] = { p = p, m = best, at = clock, ev = ev }
+                else
+                    ZLAS.beamOn(s, p, best)
+                    sound(z.laser_fire_sound, p.at)
+                end
                 if s.said < num(z.laser_log_n, 40) then
                     s.said = s.said + 1
                     local tgt = "?"
                     pcall(function() local t = best.obj.TargetToHome; if t and liveAddr(t) then tgt = short(t) end end)
-                    log(string.format("zfa laser: %s (%s) fires at %s %.0f m off (from %s, at %s): beam %.0f m, yaw %.0f pitch %.0f",
-                        short(p.o), p.unit, nm, bd / 100, tostring(best.from or "?"), tgt, len / 100, rot.Yaw, rot.Pitch))
+                    log(string.format("zfa laser: %s (%s) fires at %s %.0f m off (from %s, at %s): %s", short(p.o),
+                        tostring(p.e and p.e.armUnit or p.unit), nm, bd / 100, tostring(best.from or "?"), tgt, how))
                 end
             end
         end
@@ -594,6 +696,7 @@ function ZLAUNCH.risen(C, F, now)
                         if p.Z < parkZ then e.parked = true
                         elseif p.Z > riseZ and nearShip and not e.out and (e.parked or (e.at or 0) >= F.at - 1) then
                             e.out = true
+                            e.armUnit = F.unit                 -- (its laser's record: ZLAS.drive)
                             out = out + 1
                             local fx = smoke(e.obj)
                             if out == 1 then ZLAUNCH.watch = { at = os.clock(), list = {}, fx = 0 } end
