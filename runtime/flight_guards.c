@@ -723,4 +723,79 @@ static int L_StoreKeepAI(void* lua)
     return Ret(lua, old);
 }
 
+/* ---- a game bug guarded: a unit's health bar with no objects left (runtime 0.32.27) --------------------------------
+ * A unit drawn with a health bar (ALiveHUD's unit life list: ULiveUnitLifeList adds a ULiveUnitLifeItem for it, 0x1472919f0,
+ * when the unit begins with its draw-health flag, 0x147db9610) asks the unit for its side every frame the bar ticks
+ * (ULiveUnitLifeItem::NativeTick 0x147291680 -> ILiveHasHealthInterface Execute_GetDisplayFaction). ALiveUnit's answer
+ * (0x147dbe580, sigs.h kSigUnitFaction; ALiveUnit, ALiveAIBotUnit and ALiveWingmanUnit share it, slot 1 of their interface
+ * vtables) reads the first entry of the unit's objects (TArray<TWeakObjectPtr> at the interface + 0x28) without checking
+ * that it has one: a unit with none left (its objects gone while its bar is up) reads address 4 and the game stops.
+ * Saint Alessia's co-op host, 2026-11-07 14:45:02 (0.74.21), the moment ZFA-44 CARRIER 1's container fired: UECC
+ * EXCEPTION_ACCESS_VIOLATION reading 0x4 at 0x141ad95e0 (FWeakObjectPtr::Get) from 0x147dbe58d, rax the interface vtable
+ * 0x14cb0ff60: an ALiveWingmanUnit's bar. The guard answers ELiveFaction None (0) for a unit with no objects or a first one
+ * gone (the bar's health reads 0 for it: GetDisplayHealthRate loops its objects, bounds checked); otherwise the same read
+ * as the game's. Every slot holding the function in the data sections points at it. */
+typedef uint8_t* (*WeakGetFn)(const void* weak);
+static uint8_t*         g_fUnitFaction;                     /* found by FindFunctions */
+static WeakGetFn        g_ufWeakGet;
+static uint32_t         g_ufArrOff, g_ufFacOff;
+static volatile int32_t g_ufEmpty, g_ufGone;
+
+static uint8_t OnUnitFaction(uint8_t* self)
+{
+    uint8_t** data = (uint8_t**)(self + g_ufArrOff);
+    int32_t num = *(int32_t*)(self + g_ufArrOff + 8);
+    if (num <= 0 || !*data) {
+        int32_t n = __atomic_add_fetch(&g_ufEmpty, 1, __ATOMIC_RELAXED);
+        if (n <= 4 || (n & 0xFFF) == 0)
+            Log(L"guard: a unit's health bar asked the side of a unit with no objects (interface %p, %d entries): answered None, "
+                L"not read (%d so far)", self, num, n);
+        return 0;
+    }
+    uint8_t* o = g_ufWeakGet(*data);
+    if (!o) {
+        int32_t n = __atomic_add_fetch(&g_ufGone, 1, __ATOMIC_RELAXED);
+        if (n <= 4 || (n & 0xFFF) == 0)
+            Log(L"guard: a unit's health bar asked the side of a unit whose first object is gone (interface %p, %d entries): "
+                L"answered None (%d so far)", self, num, n);
+        return 0;
+    }
+    return o[g_ufFacOff];
+}
+
+typedef struct { uint64_t want; void** slots[8]; int n; } UfScan;
+static void UfScanRegion(uint8_t* p, size_t n, void* vctx)
+{
+    UfScan* c = (UfScan*)vctx;
+    uint8_t* a = (uint8_t*)(((uintptr_t)p + 7) & ~(uintptr_t)7);
+    for (; a + 8 <= p + n && c->n < 8; a += 8)
+        if (*(uint64_t*)a == c->want) c->slots[c->n++] = (void**)a;
+}
+
+static void UfInstall(void)
+{
+    uint8_t* f = g_fUnitFaction;
+    if (!f) { Log(L"guard: a unit's side for its health bar (GetDisplayFaction) wasn't found (another game build?): not guarded"); return; }
+    /* (its own offsets and its own weak pointer Get, read from it: mov rcx, [rcx+disp8]; call Get; movzx eax, byte [rax+disp32]) */
+    g_ufArrOff = f[7];
+    g_ufFacOff = *(uint32_t*)(f + 16);
+    g_ufWeakGet = (WeakGetFn)Rel32(f + 8);
+    if (!InGame((uint8_t*)g_ufWeakGet) || g_ufArrOff == 0 || g_ufFacOff == 0 || g_ufFacOff > 0x10000) {
+        Log(L"guard: a unit's side for its health bar %p doesn't read as expected (objects +%x, side +%x, Get %p): not guarded", f,
+            g_ufArrOff, g_ufFacOff, (void*)g_ufWeakGet);
+        return;
+    }
+    UfScan c = { (uint64_t)(uintptr_t)f, { 0 }, 0 };
+    for (int s = 0; s < g_nsec && c.n < 8; ++s)
+        if (!(g_sec[s].ch & IMAGE_SCN_MEM_EXECUTE)) ForRegions(g_sec[s].start, g_sec[s].len, UfScanRegion, &c);
+    if (!c.n) { Log(L"guard: a unit's side for its health bar %p is in no vtable: not guarded", f); return; }
+    int hooked = 0;
+    for (int i = 0; i < c.n; ++i) {
+        void* prev = NULL;
+        if (HookSlot(c.slots[i], (void*)OnUnitFaction, &prev, L"guard: a unit's side for its health bar")) ++hooked;
+    }
+    Log(L"guard: a unit's side for its health bar (%p: objects at +%x, side +%x, Get %p): %d of %d vtable slots guarded", f,
+        g_ufArrOff, g_ufFacOff, (void*)g_ufWeakGet, hooked, c.n);
+}
+
 #include "laser.c"                                  /* (0.32.26) AC7's LaserInterceptor on AC8's class: its guard, SV_Laser* */

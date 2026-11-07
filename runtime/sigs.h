@@ -710,5 +710,16 @@ static const uint8_t kSigWeaponIntercepted[20] = {
     0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0x48, 0x81, 0xEC, 0xC0, 0x00, 0x00,
     0x00, 0x48, 0x8B, 0x81, 0xA0, 0x01, 0x00, 0x00,
 };
+/* (0.32.27) ALiveUnit's ILiveHasHealthInterface GetDisplayFaction_Implementation 0x147dbe580 (this: the unit's interface,
+ * unit + 0x298): its objects' first entry's faction, `sub rsp, 28; mov rcx, [rcx+28]; call FWeakObjectPtr::Get;
+ * movzx eax, byte [rax+3b2]; add rsp, 28; ret`, never checking that the unit has an object (flight_guards.c UfInstall).
+ * Unique in the exe of 2026-11-08 (the same shape with other offsets: one more, 0x1477d86d0, not this). */
+static const uint8_t kSigUnitFaction[25] = {
+    0x48, 0x83, 0xEC, 0x28, 0x48, 0x8B, 0x49, 0x28, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x0F, 0xB6, 0x80, 0xB2, 0x03, 0x00, 0x00,
+    0x48, 0x83, 0xC4, 0x28, 0xC3,
+};
+static const uint8_t kSigUnitFactionMask[25] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+};
 
 #endif

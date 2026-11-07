@@ -1806,4 +1806,28 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   `coop: <unit> brought back here: announced to the joiners again (gen N), n of its m objects given ids`. pad_test,
   coop_ground_test. A host on an older build still sends the pad to a joiner on this one: the host needs 0.74.22.
 - Packaged: friends' 943dca894d83..., TESTER 3294d5d380da... (0.74.22-coop2mp.114), both registered. Built in the
-  main tree. Not installed yet (AC8 was open).
+  main tree. Never installed or handed out: 0.74.23 has it too.
+
+## 0.74.23 (2026-11-08, runtime 0.32.27; not yet run in game)
+- The crash at a ZFA-44 carrier's launch (Saint Alessia's co-op host log, 0.74.21, 2026-11-07 14:45:02, round 7, 4
+  players: ZFA-44 CARRIER 1's container fired and the game stopped; UECC EXCEPTION_ACCESS_VIOLATION reading 0x4). The
+  stack, from the minidump and the exe: ULiveUnitLifeItem::NativeTick (0x147291680: a unit's bar in the HUD's unit life
+  list) -> ILiveHasHealthInterface Execute_GetDisplayFaction -> ALiveUnit's GetDisplayFaction_Implementation (0x147dbe580),
+  which reads the first entry of the unit's objects (TArray<TWeakObjectPtr> at its interface + 0x28, the unit + 0x2c0)
+  without checking it has one -> FWeakObjectPtr::Get on a null entry. rax held the interface vtable 0x14cb0ff60:
+  ALiveWingmanUnit's (vtable 0x14cb0f670; ALiveUnit and ALiveAIBotUnit share the function). A unit begins with its bar
+  when its draw-health flag is set (+0x3dc, 0x147db9610 -> ALiveHUD 0x147236e00 -> ULiveUnitLifeList 0x1472919f0). Which
+  wingman unit emptied at the launch isn't known (Survival gives no hangar wingmen; the launched drones are "planes of no
+  unit" to Survival's lookup); 0.74.9's crash at a carrier launch (no UECC report) may have been the same.
+  - Runtime 0.32.27 (flight_guards.c UfInstall, sigs.h kSigUnitFaction, unique in the exe): every vtable slot holding the
+    function (3) points at a guard that answers ELiveFaction None for a unit with no objects or a first one gone, the
+    game's own read otherwise (its offsets and Get read from the function). `guard: a unit's side for its health bar
+    (...): 3 of 3 vtable slots guarded`; when it steps in: `guard: a unit's health bar asked the side of a unit with no
+    objects ...` (the first 4, then every 4096th).
+  - Not fixed, seen in the same log: AC7's laser on the launched ZFA-44s read back wrong from Lua (`owner NOT its plane
+    (-4097), search every TrivialObject: ... s`): its property reads on the spawned actor didn't resolve as numbers /
+    the plane. Its first in-game run; nothing of it is known to work yet (no volley logged before the crash).
+- 0.74.22's pad fix is in it (Saint Alessia was that run's host: her pad was hidden at 14:24:35; the user joined at round 4
+  and got it shown).
+- Packaged: friends' c02e5581a88c..., TESTER 042476c26b46... (0.74.23-coop2mp.115), both registered. Built in the main
+  tree.
