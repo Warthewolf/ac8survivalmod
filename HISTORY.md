@@ -2109,5 +2109,5 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   storm test's own watch skips the pause menu. tools/re/THUNDER.md. thunder_test. Next: the 3-round build-up.
 - festival_test seeded (its chatter's random gaps failed the break's 3-line check 3 runs in 8, the commit before too).
 - 55 suites pass (48 Lua, 7 native; coop_test not run). Packaged: friends' dba1a9b03266..., TESTER 7e6a15776a5e...
-  (0.74.35-coop2mp.127), both registered; patches over 0.74.27-0.74.34 (the TESTER one sent). Not installed yet (AC8 was
-  running).
+  (0.74.35-coop2mp.127), both registered; patches over 0.74.27-0.74.34 (the TESTER one sent). INSTALLED 2026-11-08
+  from the TESTER zip once AC8 was closed (backup of 0.74.34: build/backup/install_before_0.74.35; 87 files equal).
