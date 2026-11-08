@@ -349,7 +349,7 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   SV_CoopName_<slot letter>), set to the player's name with SV_SetText. A co-op row on the HUD lists the players:
   since the code review of 2026-10-29 behind the HUD's info key (I, [hud.info]; untested in game), hidden until it's
   pressed but for a peek_s peek when a player joins, drops or is shot down, open a line a player (FLYING / AT THE
-  AIRFIELD / DOWN / NOT IN THE MISSION, health; tools/re/HUD_LAYOUT.md).
+  AIRFIELD / DOWN / NOT IN THE MISSION, health; docs/re/HUD_LAYOUT.md).
 - Pause: while another player is linked, the pause menu opens but the game is unpaused from Lua's 250 ms tick.
 - The host's landing (user, 2026-10-29: "when the HOST is landed at the airfield that the game isn't paused for the
   other players"; Shazzy's host log of 2026-10-25: spawns held 10-43 s in rounds 3, 4, 6 and 7). Solo, spawns wait while

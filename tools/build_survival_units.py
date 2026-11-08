@@ -266,7 +266,7 @@ def ally_units(units, used_ids, z, top_number, v):
     # Survival COOP: the other players' planes, one per player slot, each one aircraft of MOONCHILD's source
     # (invincible kept: they only show the players). Each shows its player's name on its target box (user, 2026-10-26:
     # "we need to get player names working on the HUD always"): the callsign is the desc's GameObjectDisplayNameID02
-    # (tools/re/MINIMAP_MARKERS.md 1d, 1g), shown for an ally with bShowCallSignForAlly; Survival's key SV_CoopName_<A-X>
+    # (docs/re/MINIMAP_MARKERS.md 1d, 1g), shown for an ally with bShowCallSignForAlly; Survival's key SV_CoopName_<A-X>
     # is set to the player's name at run time (sv_coop.lua, SV_SetText).
     sc = uprop.U.schema('LiveAIObjectDesc')
     ix = {n: k for k, (n, t) in sc.items() if n in ('bShowHUDBox', 'bShowCallSignForAlly', 'GameObjectDisplayNameID02')}
@@ -728,7 +728,7 @@ def alcn_units(units, used_ids, z, top_number, v):
     print(f'  alicorn: {survival_events.ALCN_UNIT}, {parts} parts ({len(dropped)} pools left out: {", ".join(dropped)})')
 
 
-# The Alicorn's rows, all Online Mode's (tools/re/ALICORN.md 3, 5): copies of the rows it needs, into Survival tables
+# The Alicorn's rows, all Online Mode's (docs/re/ALICORN.md 3, 5): copies of the rows it needs, into Survival tables
 # that Scripts/main.lua adds to the campaign tables at the main menu (CFG.specials.alicorn.tables).
 ON_NPC = '/Game/OnlineMode/DataTables/AI/NPC/'
 ALCN_TABLES = [   # (Online table, row struct, Survival's copy, the campaign table main.lua adds the rows to)

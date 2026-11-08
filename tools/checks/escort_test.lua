@@ -1,5 +1,5 @@
 -- escort_test.lua <mod dir> <work dir> (run by tools/checks/escort_test.sh): THE ESCORT and the ZFA-44 carriers
--- (2026-11-06; Scripts/sv_escort.lua, tools/re/ESCORT.md) on the real sv_core, sv_config, sv_rows, sv_ai, sv_hud,
+-- (2026-11-06; Scripts/sv_escort.lua, docs/re/ESCORT.md) on the real sv_core, sv_config, sv_rows, sv_ai, sv_hud,
 -- sv_spawn, sv_rounds, sv_flights, sv_shop, sv_allies, sv_tactical, sv_escort and sv_zfa44, the game stubbed:
 --   the special kind: in the rotation from round 9, ready only with its units in the world data (SV_UnitAlive -2: not),
 --     once a run; its spawn (CHARLENE at CFG start, the escorts beside her at their offsets), the route records, her

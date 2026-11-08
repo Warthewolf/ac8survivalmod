@@ -1,7 +1,7 @@
 -- roles_test.lua <mod dir> <work dir> (run by tools/checks/roles_test.sh): the behaviour roadmap's P1, fighter roles
--- (tools/re/BEHAVIOUR_DIRECTOR.md unit 5), offline:
+-- (docs/re/BEHAVIOUR_DIRECTOR.md unit 5), offline:
 --   1. the role behaviour scripts (Scripts/ai/LA_SV_Lancer*, LA_SV_Wolf*, LA_SV_Skirm*) built as the game builds them
---      and walked through every pick by tailed_test.lua's model of the game's tree runner (tools/re/BEHAVIOUR_NATIVE_LOGIC.md
+--      and walked through every pick by tailed_test.lua's model of the game's tree runner (docs/re/BEHAVIOUR_NATIVE_LOGIC.md
 --      3-6), in every situation: the Lancer's pass never turn-fights and always hands over to its zoom, the zoom climbs
 --      only below its band's top and always extends, the Lancer's and the Wolf bait's provoke picks each fly one move
 --      under the 6 s blackout timer (the bait never breaks hard), the Wolf trap always pursues (the "Super" only at AI

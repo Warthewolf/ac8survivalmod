@@ -12,7 +12,7 @@ build_survival.<name> too. Import build_survival (or run it), not this file.
 from build_survival import *  # noqa: F401,F403 (build_survival's names; it imports this part at its end)
 
 
-# Radio (tools/re/MUSIC_RADIO_CAMERA.md C): the level's radio table (ChronicleWorldSettings.RadioSettings, a hard
+# Radio (docs/re/MUSIC_RADIO_CAMERA.md C): the level's radio table (ChronicleWorldSettings.RadioSettings, a hard
 # import) is Survival's copy of Mission 22's, with only these changes (the voices are in the global AKB_Voice bank, the
 # speakers in the global DT_SpeakerTable):
 RADIO_STOCK = '/Game/Datatables/Radio/DT_Rdo_ST_ms022'

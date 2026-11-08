@@ -167,7 +167,7 @@ end
 function SPC.ladonBusy(s) return s.state == "run" and SPC.ladonsLeft(s) > 0 end
 
 -- Ladon `downKey` shot down: the other one, still up, is enraged (CFG.specials.ladon.rage; behaviour roadmap P7, "after
--- one Ladon dies the other changes route and volleys faster"; tools/re/BEHAVIOUR_DIRECTOR.md unit 9; their round stays
+-- one Ladon dies the other changes route and volleys faster"; docs/re/BEHAVIOUR_DIRECTOR.md unit 9; their round stays
 -- theirs alone, user 2026-10-25): its volleys every rage.volley_every_s, the next rage.first_s on (once you're in
 -- range; its tell first, never in the same second: with the other's gap gone it had come with it, code review of unit
 -- 9), and RE_SV_LadonRage<Key> sets its flag, so from the end of the arc it's on it goes round its circuit faster

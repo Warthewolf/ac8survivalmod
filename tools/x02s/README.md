@@ -20,14 +20,14 @@ the inputs are the user's AC7 exports, the outputs go to `build/x02s/` and the U
    - `SK_X02S_Valka` + skeleton + physics asset; AC7's sockets and the x40a's effect socket names as leaf bones
      (`burner_01` / `_02` at the nozzles, as AC8's aircraft name theirs).
    - `A_X02S_Valka_Sweep`: AC7's frames 50-100 on the `VariableWing_*` bones only (AC7 plays its parts
-     rotation-only), each key turned into UE's bone frame by `ue_quat` ((x, -y, z, w): tools/re/VALKA.md 5); the log
+     rotation-only), each key turned into UE's bone frame by `ue_quat` ((x, -y, z, w): docs/re/VALKA.md 5); the log
      line "frame 0 vs rest |dot|" must read 1.0 for every bone.
    - `MI_SV_ValkaFlare_*`: one instance per lens-flash element on AC8's Mission 23 flare (`MI_ms23FarExp_Flare`,
      stubbed here), the textures as EmissiveMap / MaskMap. The portal's textures go in as they are (Lua puts them on
      AC8's own materials at run time).
    - `VIRTUAL` (top of ue_import.py) makes her paint textures virtual textures, as AC8's aircraft master needs, with
      `r.VirtualTextures` in `ue/Live/Config/DefaultEngine.ini`; off while the 0.69 crash is tested
-     (tools/re/AIRCRAFT_MATERIALS.md 2).
+     (docs/re/AIRCRAFT_MATERIALS.md 2).
    `ue_check.py` samples the sweep (tip sockets, every VariableWing bone) into `build/x02s/ue_check.log`.
 3. Cook (Windows, VERSIONED: hard rule 42), 4. `retoc to-zen` of `/Game/Mods/SurvivalMode/Valka` only, 5. `pad.py`
    (hard rule 8) -> `build/x02s/out/SurvivalMode_Valka_P`. `tools/build_all.sh` stages it next to `SurvivalMode_P`.

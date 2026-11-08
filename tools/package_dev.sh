@@ -3,7 +3,7 @@
 # COOP build without VALKA, as package_release.sh makes it, but with the test keys KEPT (no tools/strip_test_only.py):
 # build/release/stage_dev_<name>/ue4ss/Mods/{AC8SurvivalMode,IoStoreLoaderMod/SurvivalMode}. Never for friends: their
 # zips come from package_release.sh, which strips every TEST ONLY block (user, 2026-10-23: test keys out of releases).
-# (stage_dev was made by hand this way for 0.72.2; COOP2MP's T1 / T2 need it: tools/re/COOP2MP.md)
+# (stage_dev was made by hand this way for 0.72.2; COOP2MP's T1 / T2 need it: docs/re/COOP2MP.md)
 set -e
 cd "$(dirname "$0")/.."
 name=${1:-dev}

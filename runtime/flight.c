@@ -1,5 +1,5 @@
 /* =============================================================================
- *  Flight sync and the DOWN state (runtime 0.28.5; tools/re/COOP.md 8, tools/re/KILLS_HEALTH_DEATH.md 7). Included by
+ *  Flight sync and the DOWN state (runtime 0.28.5; docs/re/COOP.md 8, docs/re/KILLS_HEALTH_DEATH.md 7). Included by
  *  survival_rt.c after coop.c (it uses coop.c's plane checks, pose reader and clock).
  *    SV_CoopFire(shooter, slot, target)  an AI plane fires its fire-control slot `slot` at `target` through the game's
  *                                        own one-shot fire (what LiveFireOneShotWeapon runs): another player's shots

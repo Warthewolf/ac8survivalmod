@@ -68,7 +68,7 @@ VALKA never gets one.
   only where both agree (VariableWing_19) and wrong on VariableWing_03/05/07/09: her wings came apart in game (0.67.1).
   With the conversion every wing bone's frame 0 matches its rest (|dot| 1.0), and a render of the swept glTF pose is
   the proper delta. [V] [T] in game.
-- Paint: tools/re/AIRCRAFT_MATERIALS.md (AC8's aircraft master samples virtual textures only).
+- Paint: docs/re/AIRCRAFT_MATERIALS.md (AC8's aircraft master samples virtual textures only).
 
 ## 6. Mission 18's lens flash (ms18_LensEffect1, decrypted) [V]
 `ms18_LensEffect_VFX` spawns `ms18_LensEffect1` (LensEffectActorClass, life from the event). That actor: a

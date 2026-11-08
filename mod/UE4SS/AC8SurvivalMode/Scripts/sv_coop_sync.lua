@@ -8,7 +8,7 @@ local M = COOP.M                                   -- (sv_coop.lua's M, handed o
 ---------------------------------------------------------------------------------------------------- weapons, gear, afterburner
 -- The other players' planes do what theirs do (user, 2026-10-29, three players on 0.72.0: "can you please work out
 -- aircraft syncing, such as missiles being fired", "when allies land at the airfield, their gear doesn't deploy on my
--- screen, nor do I see their afterburners"; tools/re/COOP.md 8). Each game watches its own plane and tells the others,
+-- screen, nor do I see their afterburners"; docs/re/COOP.md 8). Each game watches its own plane and tells the others,
 -- whose stand-in of it (SV_Unit_CoopPeer<A-X>) does the same there:
 --   missiles     the pawn's FiredExplosiveWeapons (its missiles in flight; pooled objects, so an address that wasn't in
 --                it last tick is a shot, its class the kind, its TargetToHome the target): "fx" to the host, which
@@ -830,7 +830,7 @@ function COOP.syncSetup()
         #ecms > 0 and table.concat(ecms, ", ") or "none"))
 end
 
--- TEST ONLY BEGIN (Ctrl+F5, sv_main.lua: the co-op fire path on an allied plane, solo; tools/re/COOP.md 8)
+-- TEST ONLY BEGIN (Ctrl+F5, sv_main.lua: the co-op fire path on an allied plane, solo; docs/re/COOP.md 8)
 -- Each press the next step on the first allied fighter up (MOONCHILD or VIPER, bought in the STORE), aimed at your
 -- current target (SV_PlayerTarget, or none): 1 its missiles (slot 2) with its fire permission off, 2 the same with it
 -- on, 3 its gun (slot 1), 4 its flares (slot 0), 5 its gear down, 6 its gear up; each "coopfire: test ..."

@@ -898,7 +898,7 @@ def build_ep(part, ef=False):
 
 
 # ---------------------------------------------------------------- the ZFA-44s' anti-missile laser (2026-11-07)
-# (survival_events.ZFA_TLS_*; tools/re/LASER_INTERCEPTOR.md "Built") The CIWS arm's weapon imports onto BP_SwingTLS_ForMSL's
+# (survival_events.ZFA_TLS_*; docs/re/LASER_INTERCEPTOR.md "Built") The CIWS arm's weapon imports onto BP_SwingTLS_ForMSL's
 # public exports by role (each export's name in its own package). None: the CIWS weapon's ParticleUpdateHandler, which the
 # laser hasn't and nothing in the arm's package references (no dependency, no property value: build_zfa_laser checks),
 # made a null import (as stock packages carry) and its hash dropped, so the arm imports exactly the laser's 7 public

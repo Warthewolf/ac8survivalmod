@@ -1,6 +1,6 @@
 #!/bin/sh
 # intensity_test.sh : runs tools/checks/intensity_test.lua (the behaviour roadmap's P4, the intensity director:
-# tools/re/BEHAVIOUR_DIRECTOR.md unit 7; its scores, the hold through the real roundsTick's gate, a push through the
+# docs/re/BEHAVIOUR_DIRECTOR.md unit 7; its scores, the hold through the real roundsTick's gate, a push through the
 # squad director, the spikes as a ceiling, the co-op "in" / "rnd" paths and their guards) on the real parts with
 # build/checks/lua.exe (tools/checks/lua_build.sh makes it).
 set -e

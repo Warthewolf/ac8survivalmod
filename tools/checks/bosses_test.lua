@@ -1,5 +1,5 @@
 -- bosses_test.lua <mod dir> <work dir> (run by tools/checks/bosses_test.sh): the behaviour roadmap's P7, boss phases
--- (tools/re/BEHAVIOUR_DIRECTOR.md unit 9), on the real sv_core, sv_config, sv_rows, sv_ai, sv_spawn, sv_anomalies,
+-- (docs/re/BEHAVIOUR_DIRECTOR.md unit 9), on the real sv_core, sv_config, sv_rows, sv_ai, sv_spawn, sv_anomalies,
 -- sv_rounds (startRound exposed), sv_ladon, sv_alicorn, sv_stats, sv_tells and sv_coop (M and mirroredEvent exposed),
 -- the game stubbed, the bosses stubbed as objects with a position, a heading and health:
 --   survival.ini's new sections ([specials.anomaly.pack], [specials.glitch.phases], [specials.ladon.rage],

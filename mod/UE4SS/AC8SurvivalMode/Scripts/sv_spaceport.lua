@@ -3,7 +3,7 @@
 -- another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 
 ---------------------------------------------------------------------------------------------------- spaceport assault
--- The user's special of 2026-10-31 (tools/re/SPACEPORT_ASSAULT.md; CFG.specials.spaceport; tools/survival_events.py SP_*
+-- The user's special of 2026-10-31 (docs/re/SPACEPORT_ASSAULT.md; CFG.specials.spaceport; tools/survival_events.py SP_*
 -- builds the units, paths and records). An enemy fleet off the spaceport's west shore, one ship a unit: the Ford
 -- SV_Unit_SpFord, the Wasps SV_Unit_SpWasp<g> (groups A-D), Aegis SV_Unit_SpAegis<A-N> (A-H two a group, I-N round
 -- the Ford) and missile boats SV_Unit_SpBoat<A-H> (two a group). Each Wasp afloat sends a wave of two landing craft

@@ -413,7 +413,7 @@ subtitle strip. Checks: fishing_test, festival_test, arc_rounds_test, sky_test, 
 - **A restart mid-raid** (finding 3): the siren is our own actor, not the mission's, so a pause-menu Restart left it
   looping all the next run. sv_main.lua's level-load block now also calls FEST.restart (the siren off, the searchlights
   off, a joiner's raid watch forgotten: `festival: the run starts over: the siren off (...), N searchlights off`),
-  FISH.boatOff, SUB.cardOff and ESC.restart (tools/re/ESCORT.md). THE DECOY lets its locks go with the old D itself.
+  FISH.boatOff, SUB.cardOff and ESC.restart (docs/re/ESCORT.md). THE DECOY lets its locks go with the old D itself.
 - **The arc's view** (finding 4): SKY.viewCached kept a view 30 s, so the arc walked again (3-5 FindAllOf, ~100-350 ms)
   every 30 s with everything live, and every tick half while no sky actor was found. Now the view is kept while every
   object of it is live, however old (maxAge only when a caller asks for one), found afresh the moment one goes, and one
@@ -448,5 +448,5 @@ subtitle strip. Checks: fishing_test, festival_test, arc_rounds_test, sky_test, 
 - **SAL's "your friend" line solo** (finding 17): it went by the slot (-1, the allies', only in co-op), so solo it never
   played. It goes by who it was now (not you nor a teammate); solo the catch is still credited to you (your haul, the
   card and the Big One's bonus unchanged), which was simpler and kinder than moving it to the allies' haul.
-- The rotation's commented ini line and the Worker's SPECIALS (findings 14, 15): tools/re/ESCORT.md.
+- The rotation's commented ini line and the Worker's SPECIALS (findings 14, 15): docs/re/ESCORT.md.
 - rounds_test (failing on the base: 7) stubs FISH: it loads none of 0.74.0's parts and GONE FISHIN' is in the rotation.

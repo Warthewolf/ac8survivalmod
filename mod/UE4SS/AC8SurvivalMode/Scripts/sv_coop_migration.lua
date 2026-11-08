@@ -1201,7 +1201,7 @@ end
 function COOP.ownRoot() return M.ownRoot() end
 
 
--- The STORE freeze (0.73.72, runtime 0.32.20; tools/re/STORE_FREEZE.md): the game's DeactivateForMinigame stops every
+-- The STORE freeze (0.73.72, runtime 0.32.20; docs/re/STORE_FREEZE.md): the game's DeactivateForMinigame stops every
 -- AI plane when a minigame (the airfield STORE) starts. While players are linked the runtime skips it (SV_StoreKeepAI),
 -- so the world keeps flying for the others; solo, or co-op closed, the stock freeze stays. Logged once per change.
 function COOP.storeKeepTick(c)

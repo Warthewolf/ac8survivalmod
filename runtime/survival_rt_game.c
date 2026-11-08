@@ -5,7 +5,7 @@
  *  clock, the flight input hook (the Anomaly's field) and the game's own Lua. */
 
 /* ---- Survival's spawner (Milestone 2) ------------------------------------
- * How the game spawns (tools/re/SPAWN_SYSTEM.md): LiveReinforcementExecution calls SpawnUnitByName(spawner, name,
+ * How the game spawns (docs/re/SPAWN_SYSTEM.md): LiveReinforcementExecution calls SpawnUnitByName(spawner, name,
  * world data). That collects the world data's unit descs with that name, skips every desc whose UniqueID is still on
  * the phase's unit list, spawns the rest (unit actor + one AI object per AIObjectDesc, at the descs' SpawnPoints) and
  * fires their "reinforcement appeared" events. Nothing takes a shot-down flight off that list (only a phase's end
@@ -573,7 +573,7 @@ static int64_t SetAircraft(const wchar_t* name, const wchar_t* npc, int index)
 
 /* Sets the AI level (LiveAIObjectDesc.LevelId, u16 at desc +0x78: 200 = level 2, every Mission 22 object's) of the
  * unit desc's AI objects, read by the planes it spawns as their AILevel (plane +0x1048, the value behaviour trees'
- * InstanceWeightProbabilityAILevel weigh: tools/re/BEHAVIOUR_NATIVE_LOGIC.md 6). Survival's ranks 6-10 use 3-5. */
+ * InstanceWeightProbabilityAILevel weigh: docs/re/BEHAVIOUR_NATIVE_LOGIC.md 6). Survival's ranks 6-10 use 3-5. */
 #define AI_DESC_LEVEL 0x78
 #define PLANE_AI_LEVEL 0x1048
 static int64_t SetLevel(const wchar_t* name, int32_t level)
@@ -626,7 +626,7 @@ static int64_t LogUnits(const wchar_t* why)
     return a->num;
 }
 
-/* ---- player ammo (Milestone 2 ammo cap; tools/re/AMMO.md) --------------------------------------------------
+/* ---- player ammo (Milestone 2 ammo cap; docs/re/AMMO.md) --------------------------------------------------
  * Copied from the stock LiveSetWeaponAmmoCount node: PlayerOwner(world) -> +0x16a8 = the player's weapon object W.
  * Gun / missiles / special 1 / special 2 are W's weapon slots ([W+0x2e8]: data +0x28, count +0x30, 0xa0 bytes each,
  * max +0x8, current +0xc) and are set together by SetWeaponAmmo(W, gun, main, sp1, sp2) (-1 for a missing slot);
@@ -809,7 +809,7 @@ static int64_t AmmoSetMax(int kind, int32_t max)
     return max;
 }
 
-/* ---- music and remote events (tools/re/MUSIC_RADIO_CAMERA.md, HUD_NOTES.md) ------------------------------------
+/* ---- music and remote events (docs/re/MUSIC_RADIO_CAMERA.md, HUD_NOTES.md) ------------------------------------
  * SV_PlayBGM(event [, delay]) does what LivePlayBGMExecution does: the game's BGM controller fades out the track that
  * is playing and posts the new one (a track that is already playing is left alone), so rounds can change the music
  * and the game's pause / mute / supply handling keeps working. SV_Event(name) does what LiveCallRemoteEventExecution
@@ -1010,7 +1010,7 @@ static int64_t FireEvent(const wchar_t* name)
     return 1;
 }
 
-/* ---- the pause menu's music player (tools/re/MUSIC_RADIO_CAMERA.md section B) ----------------------------------
+/* ---- the pause menu's music player (docs/re/MUSIC_RADIO_CAMERA.md section B) ----------------------------------
  * The stock pause list has free flight's Music Player row; outside free flight the game builds it with
  * {"PauseMusicPlayer"} invalid, which hides it. While Survival's mission runs, the hook passes the same list without
  * that entry and with free flight's two (restart checkpoint, select difficulty) instead (a copy: the function only
@@ -1027,7 +1027,7 @@ static int InSurvivalMission(void* obj)
     return ctx && *(int32_t*)(ctx + CTX_MISSION_ID) == SURVIVAL_MISSION_ID;
 }
 
-/* ---- the music player's track clock (tools/re/MUSIC_RADIO_CAMERA.md "Track skips in Survival") -------------------
+/* ---- the music player's track clock (docs/re/MUSIC_RADIO_CAMERA.md "Track skips in Survival") -------------------
  * A ULiveMenuMusicControlObject (the music player's SoundController) times its track itself: its tickable's Tick adds the
  * real frame time to +0x58 and plays the next track once that reaches the track's length +0x5C. The engine ticks it while
  * the game is paused, when the BGM channel (and with it the track) is paused too; free flight re-posts the track at the
@@ -1197,7 +1197,7 @@ static void OnMusicNext(void* manager)
         Log(L"music player: now %s (%d ms)", MusicEventName(co), Ms(*(float*)(co + MPC_LENGTH)));
 }
 
-/* ---- the music player's track list (runtime 0.32.30; tools/re/MUSIC_BANKS.md 5) ------------------------------------
+/* ---- the music player's track list (runtime 0.32.30; docs/re/MUSIC_BANKS.md 5) ------------------------------------
  * The list is the playlist database's (a game instance subsystem), built from DT_SoundMusicPlayerBGM by 0x147b26b50
  * each time a level's ULiveMusicPlayerSoundManager (a world subsystem) starts. A row is listed when its event is in a
  * loaded bank's database and it's unlocked (bIsEnableUnlock false, or its mission cleared); rows Lua adds afterwards
@@ -1272,7 +1272,7 @@ static void OnMusicBuild(void* db)
             known, listed, lists, keep ? L"Survival's rows are in: cut back off" : L"the game's own list: kept", keep ? cut : -1);
 }
 
-/* The Anomaly's field (tools/re/SPECIAL_ROUNDS.md 13): BuildFlightInput(ALivePlayerPlane*, FPlaneInput* out) packs the
+/* The Anomaly's field (docs/re/SPECIAL_ROUNDS.md 13): BuildFlightInput(ALivePlayerPlane*, FPlaneInput* out) packs the
  * plane's controls into the flight engine's input every frame: out+0x0 pitch, +0x4 yaw (right rudder - left), +0x8 roll
  * (each clamped to -1..1), +0xC throttle, +0x10 brake (0..1), +0x14 the high-G turn (from throttle + brake, or brake on
  * the single-button option: left as built), +0x18 flags (disassembly of 2026-10-24). The detour runs it, then, on the
@@ -1365,7 +1365,7 @@ static void OnPauseValidity(void* ctx, TArrayRaw* list, uintptr_t grayout)
     g_nextPauseValidity(ctx, list, grayout);
 }
 
-/* ---- the game's own Lua (behaviour scripts; tools/re/GAME_LUA.md) ----------------------------------------------
+/* ---- the game's own Lua (behaviour scripts; docs/re/GAME_LUA.md) ----------------------------------------------
  * AceCombat8.exe embeds Lua 5.3 for its AI behaviour scripts and exports the whole C API by name (lua_pcallk,
  * luaL_loadbufferx, ...). Its one state lives in the plugin's SingleGameluaContext; GetGameLuaState() returns it
  * (and creates the context if it is missing, so it is never called here: the static slot is decoded and read).

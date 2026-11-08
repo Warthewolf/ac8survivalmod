@@ -6,7 +6,7 @@ self:GenerateBehavior()
 -- (4 km or 4 s), about 8-10 s in all; then the state machine sends it in again from above. The climb is gated on the
 -- unit's altitude band (UnitAltitudeComparison: below its top less 1 km; the Lancer flights' band tops out at 9 km,
 -- tools/build_survival.py LANCER_MAX_ALT_M): near the top the gate fails, the RandomSelect's one pick does nothing and
--- the LaxSequencer goes on to the extend (tools/re/BEHAVIOUR_NATIVE_LOGIC.md 3-6).
+-- the LaxSequencer goes on to the extend (docs/re/BEHAVIOUR_NATIVE_LOGIC.md 3-6).
 self:AddRootComposite("SV_LancerZoom_Root", self:InstanceLaxSequencer())
 self:AddTask("SV_LancerZoom_Root", "LZ_Level", self:InstanceManeuverLevel(1.0, 1.0, "TargetActor", ELiveAIManeuverSpeedType.SpdConstant, 3000.0, 0.3, false))
 self:AddComposite("SV_LancerZoom_Root", "LZ_Climb", self:InstanceRandomSelect())

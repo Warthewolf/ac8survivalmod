@@ -1,8 +1,8 @@
 -- tailed_test.lua <mod dir> <work dir> (run by tools/checks/tailed_test.sh): P5, a harder tailed plane
--- (tools/re/BEHAVIOUR_DIRECTOR.md unit 2), offline:
+-- (docs/re/BEHAVIOUR_DIRECTOR.md unit 2), offline:
 --   1. the behaviour trees. Scripts/ai/LA_SV_ProvokeNear.lua, LA_SV_Escape.lua and LA_SV_TailChase.lua are built as the
 --      game builds them (their Ctor on a recording `self`) and walked by a model of the game's tree runner
---      (tools/re/BEHAVIOUR_NATIVE_LOGIC.md 3-6: the composite stack and child indices, each composite's answer to Failed /
+--      (docs/re/BEHAVIOUR_NATIVE_LOGIC.md 3-6: the composite stack and child indices, each composite's answer to Failed /
 --      Complete / Abort, a RandomSelect's single pick by weight that is never retried, decorators, probabilities). Every
 --      pick of every RandomSelect, in every situation (pilot rank 1-5, AI level 1-5, the pursuer 30 m / 50 m / 500 m /
 --      1.5 km away when the state began, cobra / kulbit allowed or not, a flare ready or not, mid-band / near the top /

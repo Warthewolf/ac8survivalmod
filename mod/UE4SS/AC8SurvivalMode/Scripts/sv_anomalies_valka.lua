@@ -57,7 +57,7 @@ SPC.V.PAINTS = {
     { name = "STOCK + F-18 LIVEMAP", stock = true, dirt = "black", livemap = "f18_mrx" },
     { name = "F-18 TEXTURES", stock = true, dirt = "black", livemap = "f18_mrx", basecolor = "f18_c", normal = "f18_no" },
     { name = "ENGINE GRID", material = "/Engine/EngineMaterials/WorldGridMaterial" },
-    -- AC8's aircraft master (MP_Live_Vehicle_Base_UDIM, 1-7) samples virtual textures only (tools/re/AIRCRAFT_MATERIALS.md):
+    -- AC8's aircraft master (MP_Live_Vehicle_Base_UDIM, 1-7) samples virtual textures only (docs/re/AIRCRAFT_MATERIALS.md):
     -- with ordinary ones it draws black. These are AC8's general masters with ordinary samplers and skinned-mesh shaders:
     -- a dynamic instance of one, her colour and normal maps in it (not with `flat_normal`), its own Livemap default
     -- unless `livemap` says otherwise. 9 and 10 have no texture parameters at all (their packages name none): plain
@@ -69,7 +69,7 @@ SPC.V.PAINTS = {
     { name = "CHARACTER, FLAT NORMAL", parent = "/Game/Base/Material/Character/M_Live_Cha_Base", flat_normal = true },
     { name = "CHARACTER + WHITE LIVEMAP, FLAT NORMAL", parent = "/Game/Base/Material/Character/M_Live_Cha_Base",
       livemap = "white", flat_normal = true },
-    -- (0.73.76) the Falken add-on's way (tools/re/FALKEN_MATERIALS.md: an AC7 aircraft whose paint draws in AC8): an
+    -- (0.73.76) the Falken add-on's way (docs/re/FALKEN_MATERIALS.md: an AC7 aircraft whose paint draws in AC8): an
     -- instance of a stock aircraft's GEAR material (MI_*_Gear -> MP_Gear -> M_Live_Vehicle_Base), which samples
     -- ordinary textures and has skinned-mesh shaders, not the virtual-texture skin master (black, rule 44). The x40a's
     -- own gear instance; her colour (and normal) map, the stock neutral Livemap, the base's emissive, turbine, detail and
@@ -1112,7 +1112,7 @@ SPC.kinds = {
 -- a kind's field that may be a function (alone, aircraft, sub)
 function SPC.kindValue(v, ...) if type(v) == "function" then return v(...) end return v end
 
--- PHANTASM's pack (CFG.specials.anomaly.pack; behaviour roadmap P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 9): the guards
+-- PHANTASM's pack (CFG.specials.anomaly.pack; behaviour roadmap P7, docs/re/BEHAVIOUR_DIRECTOR.md unit 9): the guards
 -- spring while the field scrambles you, spring_delay_s after it comes on (the tell "pack" first: an ambush call and THE
 -- PACK SPRINGS), then are called back round MINDRIPPER once you've been out of the field hold_after_s, at least min_s
 -- after the spring, cooldown_s before the next. Two remote events (tools/survival_events.py build_anomaly):

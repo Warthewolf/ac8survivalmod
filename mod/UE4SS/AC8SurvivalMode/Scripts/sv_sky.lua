@@ -1,4 +1,4 @@
--- sv_sky.lua: the sky Survival changes (CFG.sky; tools/re/FISHING.md 5): the day-night arc's owner (CFG.sky.arc, below).
+-- sv_sky.lua: the sky Survival changes (CFG.sky; docs/re/FISHING.md 5): the day-night arc's owner (CFG.sky.arc, below).
 -- Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order; a name another part uses is a global of this
 -- mod's Lua state, its own helpers stay local.
 --
@@ -54,7 +54,7 @@ local SP = {
     { "stars_frac", "StarsParams.StarsTextureScreenFraction" }, { "stars_rx", "StarsParams.StarsGlobalRotation.X" },
     { "stars_ry", "StarsParams.StarsGlobalRotation.Y" }, { "stars_rz", "StarsParams.StarsGlobalRotation.Z" },
     { "stars_mask", "StarsParams.StarsElevationMaskStart" },
-    -- ((2026-11-08) Mission 9's night, tools/re/NIGHT_SKY.md 2 / 5: its stars' masks, fade and twinkle, and its night sky's
+    -- ((2026-11-08) Mission 9's night, docs/re/NIGHT_SKY.md 2 / 5: its stars' masks, fade and twinkle, and its night sky's
     -- multiple scattering (a navy sky, not black))
     { "stars_mask_on", "StarsParams.StarsElevationMaskEnable" }, { "stars_mask_len", "StarsParams.StarsElevationMaskLength" },
     { "stars_fade", "StarsParams.StarsFadePower" }, { "stars_scint", "StarsParams.StarsScintillationsPower" },
@@ -153,7 +153,7 @@ function SKY.view()
     for _, p in ipairs(FindAllOf("PostProcessVolume") or {}) do
         if live(p) and not nameOf(p):find("Default__", 1, true) then V.ppv[#V.ppv + 1] = { obj = p, name = short(p) } end
     end
-    -- ((2026-11-08) tools/re/NIGHT_SKY.md 1: the cockpit view's own post-process component, priority 1000, exposure min 11:
+    -- ((2026-11-08) docs/re/NIGHT_SKY.md 1: the cockpit view's own post-process component, priority 1000, exposure min 11:
     -- not a PostProcessVolume, so it held the night at EV 11 in cockpit view; written at most down from its own (cap))
     for _, b in ipairs(FindAllOf("BP_PostProcessMisssionBase_C") or {}) do
         local okC, cp = pcall(function() return b.CockpitViewPostProcess end)
@@ -739,7 +739,7 @@ if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the sky's view"] = function() 
 end
 
 ---------------------------------------------------------------------------------------------------- the day-night arc
--- (0.74.0; FISHING_ROUND_PLAN.md 0, tools/re/FISHING.md 5) GONE FISHIN' (round F, RUN.arcF) starts the run's sunset:
+-- (0.74.0; FISHING_ROUND_PLAN.md 0, docs/re/FISHING.md 5) GONE FISHIN' (round F, RUN.arcF) starts the run's sunset:
 --   k = round - F   0 the stock sky; 1-5 the sun sinks a step a round (sink_el / sink_az); 6 sunset (THE FESTIVAL);
 --                   7 .. 6 + night_rounds night (the light at the moon's spot, the moon on; 3 rounds: the user,
 --                   2026-11-07, "have the night time last for 3 rounds before the sun rises again"); 7 + night_rounds
@@ -764,7 +764,7 @@ end
 --   SKY.arcReset(why)      put back now and forgotten (a restart, the run's end)
 ARC = { on = false, base = nil, last = nil, roundAt = {}, said = {} }
 do
--- ((2026-11-08) Mission 9's night, tools/re/NIGHT_SKY.md 5: spec the light's specular, ms / msap the night sky's
+-- ((2026-11-08) Mission 9's night, docs/re/NIGHT_SKY.md 5: spec the light's specular, ms / msap the night sky's
 -- multiple scattering, mfd / meter / ice the cockpit's glow, nav the planes' own lights, lrad r.MinScreenRadiusForLights)
 local FIELDS = { "el", "az", "factor", "r", "g", "b", "disc", "moon", "mel", "maz", "stars", "ex_min", "ex_max", "ex_bias",
                  "sl_x", "sl_r", "sl_g", "sl_b", "em", "vfx", "spec", "ms", "msap", "mfd", "meter", "ice", "nav", "lrad" }
@@ -933,7 +933,7 @@ function SKY.arcAnchor(k, base)
         a.sl_x = n(ng.skylight_x, 4e-6)
         a.sl_r, a.sl_g, a.sl_b = trip(ng.skylight_rgb, { 0.85, 1, 1 })
         a.em, a.vfx, a.stars = n(ng.emissive, 10000), n(ng.vfx_ev, -2), 1
-        -- ((2026-11-08) the rest of Mission 9's night: tools/re/NIGHT_SKY.md 5)
+        -- ((2026-11-08) the rest of Mission 9's night: docs/re/NIGHT_SKY.md 5)
         a.spec = n(ng.spec, 0.01)
         if base.ms then a.ms = n(ng.ms, 3) end
         if base.msap then a.msap = n(ng.ms_ap, 3) end
@@ -1133,7 +1133,7 @@ local function mpcWrite(s)
     return nW
 end
 
--- ((2026-11-08) tools/re/NIGHT_SKY.md 4: Mission 4's sky actor has no star catalog and no moon texture, so Cloudly drew
+-- ((2026-11-08) docs/re/NIGHT_SKY.md 4: Mission 4's sky actor has no star catalog and no moon texture, so Cloudly drew
 -- neither, however the stars and the moon were set) Mission 9's (stock Cloudly assets: CFG.sky.stars.catalog,
 -- CFG.sky.night.moon_texture) put on the level's sky actor (an instance: gone with the level) once the arc's stars are on;
 -- read back, and SetResourcesIncludingStars (the same two, natively) if a write doesn't hold; on = false: taken off
@@ -1349,7 +1349,7 @@ end
 end
 
 -- TEST ONLY BEGIN
--- Ctrl+F6 in a run: the sky test (tools/re/FISHING.md 5), one step a press, each logging every value it writes and a
+-- Ctrl+F6 in a run: the sky test (docs/re/FISHING.md 5), one step a press, each logging every value it writes and a
 -- read-back CFG.sky.readback_s later (`sky test: ...`, and SKY.apply's `sky: sky test step N: wrote ...`):
 --   1 read only: every value Survival can see (the sky actor, the stock asset's params, the renderer's copies, the light,
 --     the sky lights, the volumes' exposure and their overrides, the MPCs, the custom sun), again 5 s on (what moves alone)

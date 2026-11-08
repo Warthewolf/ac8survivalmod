@@ -236,7 +236,7 @@ end
 ---------------------------------------------------------------------------------------------------- ammo cap
 -- The player's ammo counts live in native memory (no reflected property holds them; Lua 0.8.0 found no module
 -- objects), so dlls\main.dll (runtime 0.7.0) reads and sets them the way the stock LiveSetWeaponAmmoCount node does
--- (tools/re/AMMO.md): SV_Ammo(kind [, max]) and SV_SetAmmo(kind, count), kind 0 gun, 1 missiles, 2 special 1,
+-- (docs/re/AMMO.md): SV_Ammo(kind [, max]) and SV_SetAmmo(kind, count), kind 0 gun, 1 missiles, 2 special 1,
 -- 3 special 2, 4 flares; a count above the weapon's maximum is capped at it. Shortly after the player's aircraft
 -- appears the preset's caps are set; the gun is kept full (unlimited); every count is logged every 10 s, which
 -- also shows that missiles no longer restock on their own (SV_FreeRestock, as the stock node Mission 015 uses).

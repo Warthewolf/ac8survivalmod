@@ -5,7 +5,7 @@
 -- The menu (user, 2026-10-27: "when you press Survival Mode, it brings you into another Menu, where you can select
 -- what version you want to play ... SP OFFLINE, SP ONLINE, COOP HOST, COOP JOIN. Each of these, except for COOP JOIN,
 -- would open up another menu ... presets that can be changed for the mission, such as Round Starting Money, Enemy
--- Percentage"; tools/re/MENU_PAGES.md):
+-- Percentage"; docs/re/MENU_PAGES.md):
 --   main menu: SURVIVAL MODE >
 --     SURVIVAL MODE: SP OFFLINE >, SP ONLINE >, COOP HOST >, COOP JOIN (straight to the difficulty), QUICK START
 --       SP OFFLINE / SP ONLINE: START RUN, PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, MORE RULES >
@@ -322,7 +322,7 @@ local function allTexts()
     return t
 end
 
--- A text on screen, in place: the game reads a row's label when its page opens (tools/re/AIRFIELD_SHOP_UI.md, the
+-- A text on screen, in place: the game reads a row's label when its page opens (docs/re/AIRFIELD_SHOP_UI.md, the
 -- STORE's labels), so a changed label's live TextBlock gets the new text
 local function textKey(s) return (tostring(s):upper():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")) end
 -- (0.73.73) Not while the walks over every object are held (walkHold, sv_core.lua: right after a quit the main menu's

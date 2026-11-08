@@ -1,6 +1,6 @@
 #!/bin/sh
 # roles_test.sh : runs tools/checks/roles_test.lua (the behaviour roadmap's P1, fighter roles:
-# tools/re/BEHAVIOUR_DIRECTOR.md unit 5; the role scripts walked through every pick, the rows at the main menu, the draw
+# docs/re/BEHAVIOUR_DIRECTOR.md unit 5; the role scripts walked through every pick, the rows at the main menu, the draw
 # by role mix, each role's airframes, altitude and tells, the Wolf trap, the Skirmishers' health) on the real parts and
 # Scripts/ai with build/checks/lua.exe (tools/checks/lua_build.sh makes it), then the build side's split
 # (tools/survival_events.py: the groups, each Wolf object's row, the Lancers' band).

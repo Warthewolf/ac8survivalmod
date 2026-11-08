@@ -442,7 +442,7 @@ local function blinkSpot(c, s, you)
     return nil
 end
 
--- AB.L..IN's phases (CFG.specials.glitch.phases; behaviour roadmap P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 9): 1 as it
+-- AB.L..IN's phases (CFG.specials.glitch.phases; behaviour roadmap P7, docs/re/BEHAVIOUR_DIRECTOR.md unit 9): 1 as it
 -- always was (a frenzy of blinks round you each time it's hit); 2 once behind_after frenzies are over (its blinks
 -- behind you: blinkSpot); 3 at allout_hp of its health as it appeared (no more frenzies, its ECM down, its gun at you
 -- whenever you're close in front of it, LastTGT onto you). Each change logged and told first ("glitch_six": the host's,
@@ -469,7 +469,7 @@ local function glitchPhase(c, s, n, now, why)
 end
 
 -- Its ECM pods switched off (phase 3, ecm_pods_off; untested in game: a live write to the pod weapon's fields,
--- tools/re/MINIMAP_MARKERS.md 3: LiveElectronicSupportMeasures bJammingEnable / bSupportEnable). Never destroyed (a
+-- docs/re/MINIMAP_MARKERS.md 3: LiveElectronicSupportMeasures bJammingEnable / bSupportEnable). Never destroyed (a
 -- weapon actor destroyed from Lua crashed the game: sv_ladon.lua). Its pods: BP_wp_ecm_a0 actors whose owner (or
 -- instigator) is AB.L..IN; the first time, the log says what each read before and after (and once when none of the
 -- pods up is its own: a tester greps "ECM pods off" either way; code review of 2026-10-29).

@@ -1,5 +1,5 @@
 -- sv_escort.lua: THE ESCORT (the allied B-1B CHARLENE and her four escorts, flown in and landed at Comona airfield) and
--- its reward, the ZFA-44 carriers in the STORE (tools/re/ESCORT.md; user, 2026-11-06; build contract of 2026-11-06).
+-- its reward, the ZFA-44 carriers in the STORE (docs/re/ESCORT.md; user, 2026-11-06; build contract of 2026-11-06).
 -- Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order; a name another part uses is a global of this
 -- mod's Lua state, its own helpers stay local.
 --
@@ -104,7 +104,7 @@ local function d3(a, b) return math.sqrt((a.X - b.X) ^ 2 + (a.Y - b.Y) ^ 2 + (a.
 local function bearing(from, to) return math.deg(math.atan(to.X - from.X, -(to.Y - from.Y))) % 360 end   -- (compass)
 local function angOff(a, b) return math.abs(((a - b + 540) % 360) - 180) end
 local function pt(g) return { X = g[1], Y = g[2], Z = g[3] or 0 } end
--- (the build's flags, tools/re/ESCORT.md "Build names") each aircraft's leg (SV_CharLeg / SV_EscLeg<Name>) and taxi
+-- (the build's flags, docs/re/ESCORT.md "Build names") each aircraft's leg (SV_CharLeg / SV_EscLeg<Name>) and taxi
 -- slot (SV_TaxiSlotChar / SV_TaxiSlot<Name>), named by its record prefix's tail; a leg's number as a step: hers 1 route,
 -- 2 final, 3 roll, 4 taxi, 5 stop; an escort's 1 route, 2 orbit (or its cover, <rec>Guard), 3 final, 4 roll, 5 taxi, 6 stop
 local function whoKey(A) return A.her and "Char" or (tostring(A.rec):match("^RE_SV_Esc(%a+)$") or "") end
@@ -1963,7 +1963,7 @@ if type(LEVEL_DROPS) == "table" then
 end
 
 -- TEST ONLY BEGIN (Ctrl+F5: the landing test T0; Ctrl+DEL: the carriers unlocked and one sent now; sv_main.lua's keys)
--- T0 (tools/re/ESCORT.md): CHARLENE alone before_m short of the approach fix (heading 067: her final's start a little
+-- T0 (docs/re/ESCORT.md): CHARLENE alone before_m short of the approach fix (heading 067: her final's start a little
 -- ahead, hard rule 2), her final, rollout, taxi and stop with no enemies sent at her and no escorts, her place against
 -- the runway, height, speed and gear logged every log_s (`escort: T0 +N s: ...`), the break held while it runs, taken
 -- off end_s after she's down

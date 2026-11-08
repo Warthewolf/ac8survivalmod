@@ -1,4 +1,4 @@
--- sv_escort_laser.lua: the ZFA-44 carriers' anti-missile laser (2026-11-07; tools/re/LASER_INTERCEPTOR.md "Built").
+-- sv_escort_laser.lua: the ZFA-44 carriers' anti-missile laser (2026-11-07; docs/re/LASER_INTERCEPTOR.md "Built").
 -- Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order, right after sv_escort.lua and sv_escort_subs.lua
 -- (sv_escort's family): a name another part uses is a global of this mod's Lua state, its own helpers stay local.
 --

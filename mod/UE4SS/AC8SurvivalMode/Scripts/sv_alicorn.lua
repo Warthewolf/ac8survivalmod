@@ -305,7 +305,7 @@ end
 local function armsDown(s, key) return s.armsDown ~= nil and s.armsDown[key] == true end
 
 -- Its deck (CFG.specials.alicorn.deck; behaviour roadmap P7, "surfaced phase spawns Skirmishers from its deck";
--- tools/re/BEHAVIOUR_DIRECTOR.md unit 9): while it's up (sailing, not dived) a free pool flight of deck.size is launched
+-- docs/re/BEHAVIOUR_DIRECTOR.md unit 9): while it's up (sailing, not dived) a free pool flight of deck.size is launched
 -- off its bow (Survival's spawner with a pose, spawnFlight: ahead_m along its heading, alt_m above the sea; Online
 -- Mode's ALCN_LaunchAir would launch the hull's pooled fighters, which stay put away), the Skirmishers' own flights
 -- with the fighter roles on (CFG.roles; any role's when none is free, any flight with roles off): the round's D.deckLeft
@@ -457,7 +457,7 @@ function SPC.alicornTick(now, s)
     -- the railgun's tell (behaviour roadmap P3; it fired without a warning before): its lead_s (CFG.tells alcn_rail)
     -- before each order the radio call on every game (the first time "the railgun has been activated"), and the
     -- RAILGUN WARNING (rail_alert) from then until alert_s after the order. The order's time is
-    -- as it was (but after a surfacing: above); the railgun then aims ~7 s and preps ~2 s (tools/re/ALICORN.md). Its
+    -- as it was (but after a surfacing: above); the railgun then aims ~7 s and preps ~2 s (docs/re/ALICORN.md). Its
     -- railguns down (ARMS): none of it
     local ra = c.rail_alert or {}
     if s.railOffAt and now >= s.railOffAt then railAlert(s, false) end

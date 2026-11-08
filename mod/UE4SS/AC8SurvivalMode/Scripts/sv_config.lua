@@ -28,7 +28,7 @@ end)
 
 ---------------------------------------------------------------------------------------------------- rounds
 -- Survival's own spawner. The game never spawns a world-data unit again while its shot-down flight is still on the
--- phase's unit list (tools/re/SPAWN_SYSTEM.md), so rounds don't use its reinforcement events: dlls\main.dll
+-- phase's unit list (docs/re/SPAWN_SYSTEM.md), so rounds don't use its reinforcement events: dlls\main.dll
 -- (runtime 0.6.0) registers these globals when this script starts, and the rounds below call them:
 --   SV_Spawn(unit, x, y, z, yaw)   spawns the world-data unit there (cm, degrees); a shot-down flight is recycled first
 --   SV_SetAircraft(unit, npc)      sets the aircraft (NPC table row) of every plane in the flight
@@ -105,7 +105,7 @@ CFG = {
     -- between PursueTarget and ReturnToWorld and never closed in, so rounds 1-2 open with normal fighters again.
     probe = { enabled = true, behaviour = false, runtime = true, kills = true,
               units = { Pkg = "ERA_Unit_08_Dep_Air2", Rt = "ERA_Unit_08_Dep_Air1" } },
-    -- The behaviour roadmap's measurements (Scripts/sv_stats.lua; tools/re/BEHAVIOUR_DIRECTOR.md): the seven numbers the
+    -- The behaviour roadmap's measurements (Scripts/sv_stats.lua; docs/re/BEHAVIOUR_DIRECTOR.md): the seven numbers the
     -- behaviour thesis asks of every test, in the log only (nothing is sent): a "kill-time:" line per enemy down
     -- (kill_lines), a "stats:" line per round and per run, a "death:" line when you're shot down or saved. An enemy
     -- within engage_km is engaged; you're on its tail within tail_km and tail_deg of its six (the aces' reversal test);
@@ -122,7 +122,7 @@ CFG = {
     stats = { enabled = true, kill_lines = true, engage_km = 5.0, tail_km = 3.0, tail_deg = 70, close_km = 1.2,
               bracket_km = 1.5, gun_km = 1.5, death_window_s = 30, ttk_from_round = 7, ttk_to_round = 12,
               pawn_history = true, tail_watch = true, watch_km = 4.5, watch_max = 4, watch_grace_s = 2.0 },
-    -- The learning layer (behaviour roadmap P6, "punish habits": Scripts/sv_stats.lua PROF; tools/re/BEHAVIOUR_DIRECTOR.md
+    -- The learning layer (behaviour roadmap P6, "punish habits": Scripts/sv_stats.lua PROF; docs/re/BEHAVIOUR_DIRECTOR.md
     -- unit 8). Your own kills of fighters (KILL.by "you": a co-op partner's are theirs; a pool flight's fighter, not a
     -- bomber, a Ladon or a special, whose kills would skew the shares) and where you fly (every 2 s of a fight, in the
     -- air) make a profile of five habits, each a share 0-1:
@@ -177,7 +177,7 @@ CFG = {
     -- session, whatever the profile says (a test). Each player's own (PERSONAL). Untested: whether the game uses the
     -- copy (the missile and gun copies are confirmed).
     flares = { enabled = true, always = false, magazine = 20, reload_s = 8.0 },
-    -- Tells (the behaviour roadmap's P3, Scripts/sv_tells.lua; tools/re/BEHAVIOUR_DIRECTOR.md unit 4: "a radio line or
+    -- Tells (the behaviour roadmap's P3, Scripts/sv_tells.lua; docs/re/BEHAVIOUR_DIRECTOR.md unit 4: "a radio line or
     -- HUD callout before each coordinated threat"; radio lines only since the clean up of 2026-10-29, user: "remove the
     -- hud warnings that we added, it's too much, keep the Voice lines though"): a tell is an id of `list`, said by
     -- TELL.say. Its radio line is one of `radio` (RE_SV_Radio<Suffix>: a stock AC8 line cloned into DT_SV_Radio at build
@@ -247,14 +247,14 @@ CFG = {
             six             = { radio = { "RE_SV_RadioSixA", "RE_SV_RadioSixB", "RE_SV_RadioSixC", "RE_SV_RadioSixD" } },
             bracket         = { radio = { "RE_SV_RadioBracketA", "RE_SV_RadioBracketB", "RE_SV_RadioBracketC" } },
             regroup         = { radio = { "RE_SV_RadioRegroupA", "RE_SV_RadioRegroupB" } },
-            -- the bosses' phases (behaviour roadmap P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 9): MINDRIPPER's pack springing
+            -- the bosses' phases (behaviour roadmap P7, docs/re/BEHAVIOUR_DIRECTOR.md unit 9): MINDRIPPER's pack springing
             -- (the host's own: CFG.specials.anomaly.pack), AB.L..IN's phase 2 (behind you: the host's own) and 3 (ECM down,
             -- guns: every player), a Ladon enraged (every player)
             pack            = { radio = { "RE_SV_RadioTrap", "RE_SV_RadioEnTrap" }, sure = true },
             glitch_six      = { radio = { "RE_SV_RadioSixA", "RE_SV_RadioSixB", "RE_SV_RadioSixC", "RE_SV_RadioSixD" }, sure = true },
             glitch_allout   = { radio = { "RE_SV_RadioGlitchEcm" }, sure = true },
             ladon_rage      = { radio = { "RE_SV_RadioLadonRage" } },
-            -- the ace squadrons' (behaviour roadmap P9, CFG.aces.personality: tools/re/BEHAVIOUR_DIRECTOR.md unit 10): a
+            -- the ace squadrons' (behaviour roadmap P9, CFG.aces.personality: docs/re/BEHAVIOUR_DIRECTOR.md unit 10): a
             -- squadron's first contact of a round (sure), its opener the tell's lead_s on; blink: a Wraith (or Harvest)
             -- lead blinking off your six. The lines are other tells' (no new radio rows)
             mercenary_in    = { radio = { "RE_SV_RadioDiveA", "RE_SV_RadioDiveB", "RE_SV_RadioDiveC", "RE_SV_RadioDiveD" }, sure = true },
@@ -272,7 +272,7 @@ CFG = {
     -- pilots fly one tier higher. Survival's behaviour scripts (CFG.behaviour_sets) weigh their moves by the rank
     -- and the AI level these set; ranks 6-10 fly the named aces' squadrons (CFG.aces).
     -- provoke_cone_deg / provoke_time_s / surround_m: written live on the tier's pilots, as CFG.spikes' (CFG.ai
-    -- tier_provoke; a harder tailed plane, P5 of tools/re/BEHAVIOUR_DIRECTOR.md, 2026-10-29: from Veteran up a pilot
+    -- tier_provoke; a harder tailed plane, P5 of docs/re/BEHAVIOUR_DIRECTOR.md, 2026-10-29: from Veteran up a pilot
     -- notices you within 60 deg of its six after 1.5 s, the game's own rows 85 deg / 2.5 s; live write, untested).
     tiers = {
         enabled = true,
@@ -287,7 +287,7 @@ CFG = {
             -- Beyond Ace (user, 2026-10-22: "make more of these pilot ranks"). The game clamps PilotRank to 1-5, so these
             -- stay at 5 and raise the AI level instead (the flight's LevelId, 100 x ai_level, written before it spawns:
             -- dlls/main.dll SV_SetLevel; stock is 2). Survival's behaviours weigh their tight tail chase, cobra / kulbit
-            -- bait and scissors by it (tools/re/BEHAVIOUR_GUIDE.md 6). fcs: fire control at least that difficulty-spike
+            -- bait and scissors by it (docs/re/BEHAVIOUR_GUIDE.md 6). fcs: fire control at least that difficulty-spike
             -- level's; provoke / surround: as CFG.spikes' (react quicker when tailed, sit closer when pursuing).
             { name = "Mercenary", from_round = 16, rank = 5, post_stall = true, ai_level = 3, fcs = 1,
                                   provoke_cone_deg = 60, provoke_time_s = 1.5 },
@@ -335,7 +335,7 @@ CFG = {
         -- post_stall: cobra and kulbit on, whatever the airframe's blueprint says (Grim's Su-57 had both off);
         -- hunt: its target kept on you (the AI's blackboard TargetActor, every 2 s: Grim's stayed on the airfield's
         -- target dummy for the whole of the test of 2026-10-23 while its wingman went for the player); no_provoke: its
-        -- bPermissionToProvoke off (tools/re/BEHAVIOUR_NATIVE_LOGIC.md 8.2: being tailed put it in Provoke, then our
+        -- bPermissionToProvoke off (docs/re/BEHAVIOUR_NATIVE_LOGIC.md 8.2: being tailed put it in Provoke, then our
         -- reactions handed it to EscapeFromPursuer, both above PursueTarget, so a tailed ace defended and never
         -- turned on you; without it the pursuit, and LA_SV_TailChase's AI-level-5 "Super" branch, turn it onto you);
         -- moves: when you get behind one of its aircraft (within 3 km, inside 70 deg of its tail; ACE.movesTick, 4 times
@@ -346,7 +346,7 @@ CFG = {
         -- and pursuit (ROLE.ownSet; CFG.roles), and so does a squadron's role flight on a tier without them (Bounty's
         -- Lancers, Valkyrie's Wolf pairs: never turned by the squad director's cover or push either)
         -- The squadrons' personalities (behaviour roadmap P9, "each named squadron should be recognisable within 10
-        -- seconds"; `personality` below, tools/re/BEHAVIOUR_DIRECTOR.md unit 10), a squadron's only (never its tier's
+        -- seconds"; `personality` below, docs/re/BEHAVIOUR_DIRECTOR.md unit 10), a squadron's only (never its tier's
         -- ordinary flights): roles, its ace round's role mix (as CFG.roles.mix's, in place of CFG.roles.ace_mix; a
         -- squadron flies its role's behaviour set, its own airframes): Bounty the Lancers', Valkyrie the Wolf pairs',
         -- Inferno, Wraith and Harvest the duelists' (LA_SV_TailChase's AI-level-5 "Super" pursuit is only in that set:
@@ -479,11 +479,11 @@ CFG = {
     -- NLID_SV_Fighter: Mission 22's light-fighter set (0012_CP) with LA_SV_MoveAway, a ~1.5 s break after each attack
     -- pass instead of 12.5 s. The pursuit stays the stock one: its closing SetMoveAwayFromTarget is what starts the
     -- next attack run (Lua 0.18.x dropped it and the fighters drifted between runs: test of 2026-10-22).
-    -- NLID_SV_Fighter's pursuit: LA_SV_TailChase (tools/re/BEHAVIOUR_GUIDE.md), the stock fighter pursuit plus a
+    -- NLID_SV_Fighter's pursuit: LA_SV_TailChase (docs/re/BEHAVIOUR_GUIDE.md), the stock fighter pursuit plus a
     -- "sit on the target's tail" branch (PursuerTarget with its own-offset flag: 250 m behind the target, KDS blocked)
     -- that its pilot rank weighs: rank 1 never, 2 10 %, 3 30 %, 4 70 %, 5 always. The skill tiers and difficulty spikes
     -- raise the rank, so the tail chasing grows with the rounds. ai.tail_chase = false keeps the stock pursuit.
-    -- The fighter roles' sets (behaviour roadmap P1, CFG.roles; tools/re/BEHAVIOUR_DIRECTOR.md unit 5), each the
+    -- The fighter roles' sets (behaviour roadmap P1, CFG.roles; docs/re/BEHAVIOUR_DIRECTOR.md unit 5), each the
     -- light-fighter set with the role's slots (a slot left out keeps 0012_CP's stock script):
     --   NLID_SV_Lancer      boom and zoom: one slashing pass (LA_SV_LancerPass), a zoom climb back to height
     --                       (LA_SV_LancerZoom), tailed it runs and reverses (LA_SV_LancerBreak), never turning with you
@@ -519,7 +519,7 @@ CFG = {
     -- scissors), LA_SV_Escape (low ranks the stock 8 s run, higher ranks the aces' 2 s break). false: the stock ones.
     -- (P5, 2026-10-29: every pick of both now moves: the overshoot only within 50 m, else a break; no cobra / kulbit
     -- without post-stall: a break; no flare ready: the break still comes; the sharp escape's altitude-gated move, then
-    -- a turn. tools/re/BEHAVIOUR_DIRECTOR.md unit 2.)
+    -- a turn. docs/re/BEHAVIOUR_DIRECTOR.md unit 2.)
     -- The live provoke (P5): when you sit inside an enemy's cone of its six for its decision time it goes into Provoke
     -- and defends (the reactions above). tier_provoke: each skill tier's provoke_cone_deg / provoke_time_s / surround_m
     -- (CFG.tiers.list: Veteran to Demon 60 deg / 1.5 s, Phantom 50 / 1.0, Reaper 45 / 0.8) are written on its pilots;
@@ -533,7 +533,7 @@ CFG = {
     ai = { tail_chase = true, reactions = true, tier_provoke = true, provoke_stricter = true,
            provoke_cone_deg = 0, provoke_time_s = 0.0 },
     -- Fighter roles (behaviour roadmap P1, "four behaviour sets instead of one": each enemy type asks the player a
-    -- different question; tools/re/BEHAVIOUR_DIRECTOR.md unit 5). The fighter pool is split into role groups at build
+    -- different question; docs/re/BEHAVIOUR_DIRECTOR.md unit 5). The fighter pool is split into role groups at build
     -- time (ROLE_BY_FLIGHT below, tools/survival_events.py POOL_ROLE), each group's world data naming its role's
     -- behaviour row, so the behaviour is in place when the level loads (hard rule 20):
     --   duelist  "can you out-turn me?"      today's fighters (NLID_SV_Fighter)
@@ -582,7 +582,7 @@ CFG = {
         skirm = { laam = true, laam_m = 7000, laam_min_m = 2500, laam_angle_deg = 45, laam_lock_s = 2.0,
                   laam_interval_s = 4.0, laam_rest_s = 8.0 },
     },
-    -- The squad director (behaviour roadmap P2, Scripts/sv_director.lua; tools/re/BEHAVIOUR_DIRECTOR.md unit 6: "one Lua
+    -- The squad director (behaviour roadmap P2, Scripts/sv_director.lua; docs/re/BEHAVIOUR_DIRECTOR.md unit 6: "one Lua
     -- part that watches the whole sky and fires remote events on the right plane"): six tactics, each after its tell
     -- (CFG.tells: the action its lead_s later), each with a cooldown and a budget a round; the host's (co-op joiners get
     -- their own tells and shots, and see the planes move):
@@ -631,7 +631,7 @@ CFG = {
         pincer = { enabled = true, chance = 0.6, sep_deg = { 90, 150 }, spread_deg = 10, ring_km = { 12, 18 }, ahead = true },
         regroup = { enabled = true, min_size = 4, after_s = 10, hold_s = 7 },
     },
-    -- The intensity director (behaviour roadmap P4, Scripts/sv_director.lua; tools/re/BEHAVIOUR_DIRECTOR.md unit 7: "pressure
+    -- The intensity director (behaviour roadmap P4, Scripts/sv_director.lua; docs/re/BEHAVIOUR_DIRECTOR.md unit 7: "pressure
     -- follows the player, not the clock"). Every game scores its own player once a second, 0-100:
     --   intensity  how hard you're pressed (score): the damage you took in the last window_s (full at dmg_full of your
     --              health), enemy missiles homing on you within msl_km (full at msl_full), enemies within near_km (full at
@@ -680,7 +680,7 @@ CFG = {
     maneuvers = { enabled = true, post_stall = { "su33", "su35", "su37", "su47", "su57", "f22a",
                                                  "f04e",              -- (f04e: only the Anomaly's flies one)
                                                  "adfx02", "typn", "rflm" } },   -- (the Reaper squadron's, 2026-10-23)
-    -- Airfield and bombers (Milestone 3; tools/survival_events.py AIRFIELD_* / BOMBERS, tools/re/AIRFIELD_SUPPLY.md).
+    -- Airfield and bombers (Milestone 3; tools/survival_events.py AIRFIELD_* / BOMBERS, docs/re/AIRFIELD_SUPPLY.md).
     -- The airfield starts at `hp`; every enemy weapon that reaches one of its 4 target points (the event package
     -- counts them in SV_AirHits) takes hit_damage. At 0 it is down: landing closes (no rearming) until the end of the
     -- round after, then it reopens at repair_hp. Bomber flights (2 aircraft, Mission 22's airport strike: they only
@@ -788,7 +788,7 @@ CFG = {
             -- them expensive"): Mission 22's airport AA guns and SAM sites, one unit each (tools/survival_events.py
             -- DEFENCES), built in `order`; a destroyed one can be built again. Each kind's price rises `raise` times.
             -- The STORE's own rows (user, 2026-10-23: "a special tab ... for the store items with their own icons";
-            -- tools/re/AIRFIELD_SHOP_UI.md): one per job on its two pages, SUPPLIES (missiles, special weapon, flares,
+            -- docs/re/AIRFIELD_SHOP_UI.md): one per job on its two pages, SUPPLIES (missiles, special weapon, flares,
             -- aircraft repair) and AIRFIELD (airfield repair, AA gun, SAM site; from 0.72.1 the AA gun, SAM site and CIWS
             -- on a DEFENCES page of their own). Without the STORE pages the four rows above stand in, with Airfield
             -- doing three jobs in turn.
@@ -996,7 +996,7 @@ CFG = {
                          orbit = { event = "RE_SV_AwacsOrbit", climb_s = 60, lost_km = 10, check_s = 10, again_s = 60 },
                          scale = { rank_add = 0, rank_min = 3, ai_level_min = 3, health_x = 3.0, health_per_round = 0.08,
                                    health_max_x = 6.0 } },
-        -- The ZFA-44 carriers (Scripts/sv_escort.lua, tools/re/ESCORT.md; user, 2026-11-06), the escort's reward: once
+        -- The ZFA-44 carriers (Scripts/sv_escort.lua, docs/re/ESCORT.md; user, 2026-11-06), the escort's reward: once
         -- CHARLENE and her escorts are down (the room's in co-op, for the rest of the run), the STORE (CFG.shop.items.
         -- ZfaCarrier) sends one of Mission 17's cargo ships (allied: units, one per spot at sea off the airfield), at most
         -- max_up at once, each serving service.rounds rounds (a round counted as it clears with the ship up min_s or more
@@ -1015,7 +1015,7 @@ CFG = {
         -- RE_SV_CargoRemove_<n> too (Mission 22's despawn). ship_at: where each ship is when its hull isn't found (cm: its
         -- world-data spot, tools/survival_events.py CARGO_SHIPS: 7.4 km NW and 7.5 km SE of the runway; not "spots", which
         -- tools/survival_events.py build_valka reads as VALKA's).
-        -- (2026-11-07, the build's names: tools/re/ESCORT.md "Build names") launchers: ship 1 fires only its launcher
+        -- (2026-11-07, the build's names: docs/re/ESCORT.md "Build names") launchers: ship 1 fires only its launcher
         -- BP_VE021_ctslf_cntus_01_CP, ship 2 only its _03, arm n (WN_WEAPON_n) by RE_SV_CargoLaunch_<s>_<n>, which spawns
         -- the world-data unit that arm names (2 ZFA-44s on sv_zfa_drone; an arm fired again only once its unit is off the
         -- spawner's list: hard rule 16); pose_go: each pose flight's orders after its SV_Spawn (gear up, Normal, air
@@ -1119,7 +1119,7 @@ CFG = {
                                  laser_fire_sound = "", laser_hit_sound = "/Game/WwiseAssets/Events/SFX/SPWP_OTH_TLS_HIT",
                                  -- ((2026-11-07) the user: "I want the entire weapon from ACE7 to be ported over") li: AC7's
                                  -- LaserInterceptor in place of the laser above (Scripts/sv_escort_li.lua; tools/laser7,
-                                 -- runtime laser.c, tools/re/LASER_INTERCEPTOR.md 9-10): li_class spawned at each ZFA-44's
+                                 -- runtime laser.c, docs/re/LASER_INTERCEPTOR.md 9-10): li_class spawned at each ZFA-44's
                                  -- gun (li_mesh's li_socket), its hosts the gun-less li_row / li_row_drone (the build's
                                  -- ZFA_LI_*). AC7's wp_LaserInterceptor and its fire control: a volley of li_volley_s when an
                                  -- enemy missile comes within li_activation_m, li_rest_s between; each li_search_s it takes
@@ -1280,7 +1280,7 @@ CFG = {
     -- instead"): from from_round, every enemy aircraft's health x (1 + health_per_round x rounds past it), at most
     -- health_max_x, and the chance a pilot flies one tier up (CFG.tiers.promote_chance) + promote_per_round a round, at
     -- most promote_max. Accuracy keeps climbing with the difficulty spikes and the tiers' fire control.
-    -- Behaviour roadmap P8 ("smarter to round 25, then more planes"; tools/re/BEHAVIOUR_DIRECTOR.md unit 3): health
+    -- Behaviour roadmap P8 ("smarter to round 25, then more planes"; docs/re/BEHAVIOUR_DIRECTOR.md unit 3): health
     -- stops climbing once numbers do, at x1.5 (was x2.0: 60 planes mustn't each become missile sponges); 0.045 a round
     -- (was 0.04) reaches it at round 26, as the numbers start growing (x1.495 at 25). From aircraft_from_round
     -- the round's cap (CFG.max_aircraft) grows aircraft_per_round a round, up to max_aircraft (30 -> 60 by round 35),
@@ -1382,7 +1382,7 @@ CFG = {
         host    = { preset = "auto", zollars = 0, enemies = 100, start_round = 1, break_s = 20, specials = "normal",
                     airfield = 100, pay = 100, skill = 0 },
     },
-    -- Survival COOP (Scripts/sv_coop.lua, the runtime's coop.c, tools/re/COOP.md; user, 2026-10-25: "a new 0.70.6 build
+    -- Survival COOP (Scripts/sv_coop.lua, the runtime's coop.c, docs/re/COOP.md; user, 2026-10-25: "a new 0.70.6 build
     -- called Survival COOP", then "make it so that 4 players can join", 2026-10-26: "allow up to 24"): up to 24 players,
     -- one run. The host's game runs the rounds, the enemies and the specials; the joiner's game mirrors every enemy the
     -- host spawns (moved every frame to where the host's is) and its rounds, callouts, airfield and round bonuses, with
@@ -1405,7 +1405,7 @@ CFG = {
     coop = { enabled = false, role = "auto", transport = "steam", partner = "auto", port = 27777, interp_ms = 120, max_players = 24,
              split_share = 0.5, callouts = true, leaderboard = true,
              -- each other player as their own airframe's player plane, as AC8's Online Mode shows them (COOP2MP T3,
-             -- tools/re/COOP2MP.md); false: an AI stand-in of their airframe, as 0.72 (also the fallback)
+             -- docs/re/COOP2MP.md); false: an AI stand-in of their airframe, as 0.72 (also the fallback)
              real_planes = true,
              -- real_damage: their damage shown on their real plane (its health as their game says, never under 1 HP)
              real_damage = true,
@@ -1437,7 +1437,7 @@ CFG = {
              -- callout; off while it isn't known whether the game's own DESTROYED shows now (each kill is taken down with
              -- your plane as its cause). Each player's own.
              kill_callout = false,
-             -- store_keep_world (0.73.72, the STORE freeze: tools/re/STORE_FREEZE.md): while players are linked, a STORE
+             -- store_keep_world (0.73.72, the STORE freeze: docs/re/STORE_FREEZE.md): while players are linked, a STORE
              -- opening (the airfield's minigame) doesn't stop the world's AI for everyone (runtime SV_StoreKeepAI skips the
              -- game's DeactivateForMinigame); false: the stock freeze. Solo the stock freeze always stays.
              store_keep_world = true,
@@ -1488,7 +1488,7 @@ CFG = {
                            e18g = "e18g_common", a10c = "a10c_common" },
              default = "f16c_common",
              -- each other player's weapons, gear and afterburner shown on their plane here (sv_coop.lua's sync,
-             -- tools/re/COOP.md 8; user, 2026-10-29: "can you please work out aircraft syncing, such as missiles being
+             -- docs/re/COOP.md 8; user, 2026-10-29: "can you please work out aircraft syncing, such as missiles being
              -- fired", "their gear doesn't deploy on my screen, nor do I see their afterburners"): your missiles, gun,
              -- flares, gear and afterburner go to the others, theirs show here. ab_throttle: the throttle input (0-1)
              -- from which you're on afterburner. The stand-ins fly damage-0 copies of their airframes' rows (<row>_svcp),
@@ -1502,7 +1502,7 @@ CFG = {
              -- log's "weapon kinds" lines say whether they agree with the launches seen), not only those seen launched
              sync = { enabled = true, missiles = true, guns = true, flares = true, gear = true, afterburner = true,
                       ab_throttle = 0.9, standins = true, standin_gun_s = 0.5, standin_table = false },
-             -- revives (Scripts/sv_down.lua, tools/re/COOP.md 9; user, 2026-10-29: "if you die, HOST or JOINER, someone
+             -- revives (Scripts/sv_down.lua, docs/re/COOP.md 9; user, 2026-10-29: "if you die, HOST or JOINER, someone
              -- could land at the airfield and buy you back ... you get put into a spectator camera and you can switch
              -- between the players currently active"). Co-op only: your plane is held at floor_hp; there you're DOWN,
              -- flown round the airfield (loiter: alt_m up, radius_m round) and watch another player; any other player at

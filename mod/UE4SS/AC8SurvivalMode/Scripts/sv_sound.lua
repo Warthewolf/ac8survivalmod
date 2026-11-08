@@ -152,7 +152,7 @@ function SND.songStart(sc)
     local said = ""
     if sc.game_music == "mute" and type(SV_PlayBGM) == "function" then
         -- (0.73.76) AC8's system mute, whatever plays (the pause menu's music player too: its jukebox kept playing past
-        -- the _Stop of the controller's last track, which was the hangar's: tools/re/MUSIC_RADIO_CAMERA.md)
+        -- the _Stop of the controller's last track, which was the hangar's: docs/re/MUSIC_RADIO_CAMERA.md)
         local r = SV_PlayBGM("AKE_System_BGM_Mute_On")
         SND.song.muted = true
         SND.unmuteDue = nil                         -- ((0.73.84) this song's end unmutes)

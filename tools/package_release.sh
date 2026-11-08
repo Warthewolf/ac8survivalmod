@@ -125,7 +125,7 @@ if bad:
 print('offline check: no network code in', st)
 " "$st"
 fi
-# BUILD_NAME=<name>: a build line's own name in the zip's (BUILD_NAME=COOP2MP: tools/re/COOP2MP.md)
+# BUILD_NAME=<name>: a build line's own name in the zip's (BUILD_NAME=COOP2MP: docs/re/COOP2MP.md)
 tv=$ver; [ "$TESTER" = 1 ] && tv="${ver}_TESTER"
 . tools/release_dir.sh
 out="$REL/AC8SurvivalMode_${BUILD_NAME:+${BUILD_NAME}_}${tv}_$Ed$suffix.zip"

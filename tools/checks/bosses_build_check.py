@@ -1,4 +1,4 @@
-"""bosses_build_check.py : the boss phases' build half (behaviour roadmap P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 9), without
+"""bosses_build_check.py : the boss phases' build half (behaviour roadmap P7, docs/re/BEHAVIOUR_DIRECTOR.md unit 9), without
 the game (tools/checks/bosses_test.sh runs it; tools/build_all.sh builds and checks it again on the stock files):
   - (0.73.73) the Ladons' circuit (survival_events.ladon_circuit): every new path (the route's end -> arc A, each arc's
     end -> the other) starts 1-4 km ahead of the plane within 15 deg of its way, its own end 10 km or more off (hard rule

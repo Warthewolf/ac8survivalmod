@@ -11,10 +11,10 @@ from survival_events import *  # noqa: F401,F403 (survival_events' names; it imp
 
 
 # ---------------------------------------------------------------- GONE FISHIN' and THE FESTIVAL (2026-11-06)
-# The build data of the build contract of 2026-11-06 (FISHING_ROUND_PLAN.md section 0; the research: tools/re/FISHING.md,
+# The build data of the build contract of 2026-11-06 (FISHING_ROUND_PLAN.md section 0; the research: docs/re/FISHING.md,
 # whose "Build names" section lists everything below). Coordinates UE cm, north = -Y, east = +X. The Lua (rounds, catches,
 # the festival's sequence) spawns and fires all of it; nothing here spawns at the level's start.
-FISH_RWY = (1610476.0, -436142.0)              # the contract's runway centre (tools/re/COMONA_MAP.md, runway.json)
+FISH_RWY = (1610476.0, -436142.0)              # the contract's runway centre (docs/re/COMONA_MAP.md, runway.json)
 # GONE FISHIN': FISH_PER_GROUND shoals a unit, every unit round SAL's boat (user, 2026-11-07, after Alyssa's test: "the
 # shoals need to be more numerous and spread around the boat"; were three grounds of 8 far apart, the boat at one):
 # unit A on the boat itself, its shoals FISH_INNER_MIN_M .. FISH_SPREAD_M out (clear of the boat whatever the yaw), the

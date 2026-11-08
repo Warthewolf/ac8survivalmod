@@ -1,5 +1,5 @@
 -- coop_revive_test.lua <mod dir> <work dir> (run by tools/checks/coop_revive_test.sh): Survival COOP's revives and the
--- spectator camera (sv_down.lua, tools/re/COOP.md 9; the user, 2026-10-29: "is there a revive option we could possibly
+-- spectator camera (sv_down.lua, docs/re/COOP.md 9; the user, 2026-10-29: "is there a revive option we could possibly
 -- add for COOP only? like say if you die, HOST or JOINER, someone could land at the airfield and buy you back ... you
 -- get put into a spectator camera and you can switch between the players currently active"), on the real sv_core,
 -- sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_rounds, sv_tactical, sv_stats, sv_tells, sv_director,

@@ -203,7 +203,7 @@ Runtime classes: `ULivePLGraphicsController` (ApplySettings), `ULiveGraphicsSett
 
 ### 1.8 Event nodes (stock)
 
-There is no "set weather" or "set time" node. `node_catalog.tsv` (349 classes) and the name maps of all 198 stock EPs
+There is no "set weather" or "set time" node. `docs/design/node_catalog.tsv` (349 classes) and the name maps of all 198 stock EPs
 were searched. **[V]** The nodes that matter:
 
 | node | args (record ArgsInfo) | stock use |

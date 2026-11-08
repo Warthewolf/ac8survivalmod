@@ -1,4 +1,4 @@
--- sv_fishing.lua: GONE FISHIN' (CFG.specials.fishing; FISHING_ROUND_PLAN.md; tools/re/FISHING.md 1-4): the shoals and
+-- sv_fishing.lua: GONE FISHIN' (CFG.specials.fishing; FISHING_ROUND_PLAN.md; docs/re/FISHING.md 1-4): the shoals and
 -- SAL's boat. Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order; a name another part uses is a
 -- global of this mod's Lua state, its own helpers stay local.
 -- The rows at the main menu (FISH.setup), what each spawn makes (FISH.actors), the splash, the hit sphere, the round
@@ -846,7 +846,7 @@ end
 end
 
 -- TEST ONLY BEGIN
--- Ctrl+F10 in a run (the host's or solo): the shoals and SAL's boat (tools/re/FISHING.md 7, tests 1-2). Each press:
+-- Ctrl+F10 in a run (the host's or solo): the shoals and SAL's boat (docs/re/FISHING.md 7, tests 1-2). Each press:
 --   1 SV_Unit_FishA's 8 shoals round SAL's boat (SV_Spawn(unit, x, y, shoal_z, a random yaw)) and the boat at boat_at, a hit
 --     sphere on each shoal (`with sphere`, the first time), the names set; then once a second a line with each shoal's
 --     health (HealthInternal / MaxHealth) and who its DamageHistoryMap names, and the boat's health and MinHealth (the

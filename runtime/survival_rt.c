@@ -12,7 +12,7 @@
  *    - SV_* text keys (menu title, help line, mission name) are answered here.
  *
  *  The hooks are the ones AC8 Stonehenge Returns uses (see
- *  tools/re/STONEHENGE_MAIN_DLL.md). Both mods can be installed together:
+ *  docs/re/STONEHENGE_MAIN_DLL.md). Both mods can be installed together:
  *  this one waits until Stonehenge has hooked the game, then chains onto its
  *  hooks instead of replacing them. Every handler here only acts after the
  *  Survival entry was chosen and otherwise calls the next one in the chain.

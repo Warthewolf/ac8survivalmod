@@ -176,7 +176,7 @@ def build_rows_table(stock_path, new_path, row_struct, src_row, new_row, edit, m
 SHOP_TABLE_STOCK = '/Game/Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands'
 SHOP_TABLE = DATA + 'DT_SV_ShopRows'
 SHOP_ITEMS = ['Missiles', 'Special', 'Flares', 'Airfield']          # Scripts/main.lua CFG.shop.items, same names
-# The STORE (user, 2026-10-23: "a special tab in there for the store items"; tools/re/AIRFIELD_SHOP_UI.md): the landing
+# The STORE (user, 2026-10-23: "a special tab in there for the store items"; docs/re/AIRFIELD_SHOP_UI.md): the landing
 # menu's page list is the in-game menu table, and a landing row whose StringArgs is a number opens that menu. Survival
 # adds pages of its own (DT_SV_MenuClassRows -> DT_IngameMenuSettingData at the main menu: indexes 20, 21, 22),
 # copies of the landing page (WBP_SV_Store*, with their own settings asset and command table), and one landing row,
@@ -316,7 +316,7 @@ def build_shop_rows():
 
 
 # Survival's main-menu pages (user, 2026-10-27: "when you press Survival Mode, it brings you into another Menu, where you
-# can select what version you want to play"; Scripts/sv_menu.lua, tools/re/MENU_PAGES.md). Each page is a copy of the
+# can select what version you want to play"; Scripts/sv_menu.lua, docs/re/MENU_PAGES.md). Each page is a copy of the
 # game's own main-menu page (tools/menu_stock.py: the widget blueprint that imports DA_LiveMenuMainTopPageSettings), so
 # its rows' presses reach main.dll's main-menu hook (OnMainDecide, vtable A) as SURVIVAL MODE's always have; its own
 # settings asset (DA_SV_Pg<page>Settings: title, every tab's command table) and command table (DT_SV_Pg<page>Commands:
@@ -1144,7 +1144,7 @@ def check_zfa_laser_build():
 
 # ---------------------------------------------------------------- NPC mission table
 # The spawner caches the aircraft of every row of the world data's NPC table once, when the level starts, and a
-# spawn only looks there (tools/re/EVENTS_AIRCRAFT.md): a row added at run time never spawns. So Survival's world
+# spawn only looks there (docs/re/EVENTS_AIRCRAFT.md): a row added at run time never spawns. So Survival's world
 # data points at its own copy of Mission 22's table, with Survival's rows added here. A row's NpcId (a DT_NPC row)
 # may be one that main.lua adds to DT_NPC at run time, as long as that happens before the level loads.
 NPC_TABLE_STOCK = '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission022'
@@ -1213,7 +1213,7 @@ POOL_EXTRA = [('su47_common', 'su33_common', 'OP1026_su47_01'),
               ('x40a_common', 'f15e_common', 'OP1016_x40a_01'),
               ('mr2k_common', 'f16c_common', 'OP1017_mr2k_01'),
               ('e06b_common', 'f18e_common', 'OP1031_e06b_01')]
-# Survival COOP's stand-ins (Scripts/sv_coop.lua, the weapon sync; tools/re/COOP.md 8): each other player's plane flies
+# Survival COOP's stand-ins (Scripts/sv_coop.lua, the weapon sync; docs/re/COOP.md 8): each other player's plane flies
 # <row>_svcp for its airframe's row (Scripts/sv_config.lua CFG.coop.airframes and default, read from the Lua), whose
 # NpcId <its NpcId>_SVCP is the DT_NPC copy sv_coop.lua COOP.syncSetup makes at the main menu with every weapon on
 # damage-0 rows, so what a stand-in fires on another game only shows (user, 2026-10-29: "work out aircraft syncing,
@@ -1429,7 +1429,7 @@ def build_npc_table():
 
 # ---------------------------------------------------------------- AI behaviour scripts
 # Survival's own enemy behaviour trees (LuaScript assets: Code / ImportPath / LuaInitializePath, see
-# tools/re/AI_BEHAVIOURS.md). Source in mod/UE4SS/AC8SurvivalMode/Scripts/ai/<name>.lua (the Lua runtime reads the
+# docs/re/AI_BEHAVIOURS.md). Source in mod/UE4SS/AC8SurvivalMode/Scripts/ai/<name>.lua (the Lua runtime reads the
 # same file); the package is a copy of a stock LA_ script package with our source and our own module name.
 AI_SRC = os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'ai')
 LUA_TEMPLATE = '/Game/LuaSource/Chronicle/AI/LA_PursueTarget_0011'

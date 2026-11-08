@@ -1,5 +1,5 @@
 #!/bin/sh
-# tailed_test.sh : runs tools/checks/tailed_test.lua (P5, a harder tailed plane: tools/re/BEHAVIOUR_DIRECTOR.md unit 2;
+# tailed_test.sh : runs tools/checks/tailed_test.lua (P5, a harder tailed plane: docs/re/BEHAVIOUR_DIRECTOR.md unit 2;
 # the reaction trees walked through every pick, the live provoke's merge and writes, the tail watch) on the real parts
 # and Scripts/ai with build/checks/lua.exe (tools/checks/lua_build.sh makes it), then tools/checks/stats_report.py on
 # the lines it logged.

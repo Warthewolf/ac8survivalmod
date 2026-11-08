@@ -6,7 +6,7 @@ self:GenerateBehavior()
 -- side, staying a little faster than you (speed relative to the pursuer, as stock EscapeFromPursuer_0000_CP holds it),
 -- 3.5 s at most (6 s in Provoke sets the stock blackout); its escape is the stock 8 s run, so a tailed bait flies a
 -- straight, readable line for ~11 s while the trap (its held odd wingmen, Scripts/sv_spawn.lua WOLF) closes. Every
--- pick moves: no gate (tools/re/BEHAVIOUR_NATIVE_LOGIC.md 3-6).
+-- pick moves: no gate (docs/re/BEHAVIOUR_NATIVE_LOGIC.md 3-6).
 self:AddRootComposite("SV_WolfDrag_Root", self:InstanceLaxSequencer())
 self:AddTask("SV_WolfDrag_Root", "WD_Level", self:InstanceManeuverLevel(1.0, 1.0, "PursuerActor", ELiveAIManeuverSpeedType.SpdRelative, 300.0, 0.5, false, 1500.0))
 self:AddComposite("SV_WolfDrag_Root", "WD_Pick", self:InstanceRandomSelect())

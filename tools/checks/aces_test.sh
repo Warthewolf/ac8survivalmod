@@ -1,5 +1,5 @@
 #!/bin/sh
-# aces_test.sh : runs tools/checks/aces_test.lua (the behaviour roadmap's P9, ace personalities: tools/re/BEHAVIOUR_DIRECTOR.md
+# aces_test.sh : runs tools/checks/aces_test.lua (the behaviour roadmap's P9, ace personalities: docs/re/BEHAVIOUR_DIRECTOR.md
 # unit 10; each squadron's role mix, openers at first contact after its tell, Wraith's and Harvest's blinks, co-op) on the
 # real parts with build/checks/lua.exe (tools/checks/lua_build.sh makes it), then the build side's blink events
 # (tools/survival_events.py WRAITH_BLINK_* and wraith_blinks against the Lua's ACE.BLINK) without the game.

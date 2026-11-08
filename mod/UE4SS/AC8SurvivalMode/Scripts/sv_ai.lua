@@ -261,7 +261,7 @@ end
 ---------------------------------------------------------------------------------------------------- ace personalities
 -- The named squadrons' personalities (behaviour roadmap P9: "Bounty fights as Lancers, Valkyrie as a Wolf pack, Inferno
 -- as Duelists with post-stall, Wraith blinks like a lesser AB.L..IN, Harvest combines all of them. Each squadron should
--- be recognisable within 10 seconds"; tools/re/BEHAVIOUR_DIRECTOR.md unit 10; CFG.aces.personality and CFG.aces.flight
+-- be recognisable within 10 seconds"; docs/re/BEHAVIOUR_DIRECTOR.md unit 10; CFG.aces.personality and CFG.aces.flight
 -- <tier>.roles / openers / blink). The behaviour pipeline's recipe c1: a squadron flies the behaviour set of the role
 -- flights its ace round draws (ROLE.mixFor; a tree is its desc's, hard rule 20), and the rest is what Lua fires on it:
 -- one opener per flight at first contact, after its tell, and a Wraith (or Harvest) lead blinking off your six (Mission
@@ -756,7 +756,7 @@ end
 
 ---------------------------------------------------------------------------------------------------- who shot it down
 -- CFG.allies.kills (economy review of 2026-10-25: "no line records an ally's or a defence's kills"): each enemy's
--- DamageHistoryMap (attacker -> its total damage; tools/re/KILLS_HEALTH_DEATH.md 1) is read while it flies, with its
+-- DamageHistoryMap (attacker -> its total damage; docs/re/KILLS_HEALTH_DEATH.md 1) is read while it flies, with its
 -- position, and once more as it goes down. Attackers by side: your aircraft "you", MOONCHILD's / the WINGMEN's planes
 -- "allies", the Aegis's hull and turrets (BP_VE002_aegs_*) "ships", the AA guns, SAM sites and CIWS (BP_GR002_gepa_*,
 -- BP_GR005_avng_*, BP_GR033_ciws_*: the land Phalanx, no enemy's) "defences". A kill is yours when you hit it at all (or
@@ -1054,7 +1054,7 @@ ZONE = { X = -707336.0, Y = -261895.0, HALF = 3700000.0 }   -- Mission 22's comb
 SV_ERR = { [0] = "the game spawned nothing", [-1] = "not in Survival's level", [-2] = "no such unit or aircraft",
                  [-3] = "its last flight is still up", [-4] = "bad arguments", [-5] = "game functions not found",
                  [-6] = "the level is still loading",
-                 -- (runtime 0.28.5's SV_CoopFire / SV_Down / SV_Respawn: tools/re/COOP.md 2, KILLS_HEALTH_DEATH.md 7)
+                 -- (runtime 0.28.5's SV_CoopFire / SV_Down / SV_Respawn: docs/re/COOP.md 2, KILLS_HEALTH_DEATH.md 7)
                  [-10] = "rate: that shooter's 25 a second used up", [-11] = "the game refused it (inactive, dead or no fire control)",
                  [-12] = "not your own plane", [-13] = "not an AI plane with fire control", [-14] = "a bad target",
                  [-20] = "not fired: the co-op host is down (sv_coop.lua)" }
@@ -1102,7 +1102,7 @@ end
 
 ---------------------------------------------------------------------------------------------------- round HUD
 -- Survival's own HUD layer, built at run time (no widget asset). The game's HUD is laid out on a 3840x2160 canvas
--- (tools/re/HUD_LAYOUT.md), so ours is too: a stock widget blueprint with no script of its own
+-- (docs/re/HUD_LAYOUT.md), so ours is too: a stock widget blueprint with no script of its own
 -- (WBP_HUD_NonGlowMessage_000, its parts collapsed) -> its root canvas -> ScaleBox (scale to fit) -> SizeBox
 -- 3840x2160 -> our canvas. The rows copy the mission info panel (HUD typeface 37, spacing -70, white, opacity 0.55) and
 -- sit under its TIME / SCORE stack; the callout copies the MessageLayerOne banner (text in a frame of 4 px bars).

@@ -1,5 +1,5 @@
 -- festival_test.lua <mod dir> <work dir> <stripped dir> (run by tools/checks/festival_test.sh): THE FESTIVAL's Lua for the
--- first in-game test (Scripts/sv_festival.lua; tools/re/FISHING.md 6, 7) on the real sv_core, sv_config and sv_festival,
+-- first in-game test (Scripts/sv_festival.lua; docs/re/FISHING.md 6, 7) on the real sv_core, sv_config and sv_festival,
 -- the game stubbed:
 --   the geometry: the launch points 25 km north, west and south of the runway, the yaw that faces it from each, the
 --     distance and height to it;

@@ -16,7 +16,7 @@ Related notes: hard rule 27 (from Lua, terrain traces only work near the player,
 [AIRFIELD_SUPPLY.md](AIRFIELD_SUPPLY.md) (Mission 22's airport units, volumes and paths),
 [SPECIAL_ROUNDS.md](SPECIAL_ROUNDS.md) (the shuttle pad, the amphibious beaches),
 [SPACEPORT_ASSAULT.md](SPACEPORT_ASSAULT.md) and `tools/data/spaceport_buildings.json` (building boxes within 5 km of the
-shuttle pad), and `SURVIVAL_SPEC.md` (Comona as Survival's map).
+shuttle pad), and `docs/design/SURVIVAL_SPEC.md` (Comona as Survival's map).
 
 ## 1. In short
 

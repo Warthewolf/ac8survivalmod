@@ -1,5 +1,5 @@
 #!/bin/sh
-# build.sh : the ZFA-44EL (the user's own model from their AC7 mod; tools/re/ZFA44.md "T0 build")
+# build.sh : the ZFA-44EL (the user's own model from their AC7 mod; docs/re/ZFA44.md "T0 build")
 #            -> build/zfa44/out/SurvivalMode_ZFA44_P.utoc / .ucas / .pak
 #   1. prepare.py         build/zfa44's extraction -> one skinned, life-size glTF with its socket bones, the textures
 #   2. ue_import.py       in UE 5.4 (E:/UE_5.4, this tree's ue/Live): textures, MI_ZFA44_* on the x40a's gear instance
@@ -21,7 +21,7 @@ B=build/zfa44
 OUT=$B/out
 PY3=${PY3:-"py -3.12"}
 export MSYS_NO_PATHCONV=1
-[ -f "$B/mesh/uavs_SM.gltf" ] || { echo "zfa44: no extraction in $B (tools/re/ZFA44.md)"; exit 1; }
+[ -f "$B/mesh/uavs_SM.gltf" ] || { echo "zfa44: no extraction in $B (docs/re/ZFA44.md)"; exit 1; }
 $PY3 -I tools/zfa44/prepare.py
 python -I -m py_compile tools/zfa44/ue_import.py
 echo "zfa44: importing in UE 5.4 (log: $B/ue_import.log)"

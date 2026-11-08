@@ -1,4 +1,4 @@
-/* laser.c : AC7's LaserInterceptor on AC8's native ALiveLaserInterceptor (runtime 0.32.26; tools/re/LASER_INTERCEPTOR.md 9).
+/* laser.c : AC7's LaserInterceptor on AC8's native ALiveLaserInterceptor (runtime 0.32.26; docs/re/LASER_INTERCEPTOR.md 9).
  * Part of survival_rt.c's one translation unit: #included at the end of flight_guards.c (uobj.h, ArgObject, HookInline
  * and the guards' helpers above it). Never compiled alone.
  *

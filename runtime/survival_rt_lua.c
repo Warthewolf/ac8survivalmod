@@ -333,7 +333,7 @@ static int L_PlaneLevel(void* lua)
 }
 
 /* SV_PlayerTarget(plane) -> the address of the player plane's current target (the enemy it has selected, the one its
- * missiles go for), 0 for none, SV_ERR_BAD_ARGS for a bad plane. tools/re/UNIQUE_ACTIONS.md: the player tick posts
+ * missiles go for), 0 for none, SV_ERR_BAD_ARGS for a bad plane. docs/re/UNIQUE_ACTIONS.md: the player tick posts
  * EnemyBehind for player+0x1ae8 -> +0x750. Confirmed in game 2026-10-23 (it named the Reaper ace the player had
  * targeted). Not used by Lua at the moment (the flight recorder that used it is gone). */
 #define PLAYER_TARGET_HOLDER 0x1ae8

@@ -1,5 +1,5 @@
 -- coop_fire_test.lua <mod dir> <work dir> (run by tools/checks/coop_fire_test.sh): Survival COOP's weapon, gear and
--- afterburner sync (sv_coop.lua's sync, tools/re/COOP.md 8; the user, 2026-10-29: "can you please work out aircraft
+-- afterburner sync (sv_coop.lua's sync, docs/re/COOP.md 8; the user, 2026-10-29: "can you please work out aircraft
 -- syncing, such as missiles being fired", "their gear doesn't deploy on my screen, nor do I see their afterburners"), on
 -- the real sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn, sv_rounds, sv_tactical, sv_stats, sv_tells,
 -- sv_director and sv_coop (M exposed), the game and the runtime (SV_CoopFire, SV_InputNow, SV_Ammo, ...) stubbed:

@@ -2,7 +2,7 @@
 
 Built from the name tables of every campaign mission's global event (EP_) and world (WD_) files
 in E:\AceComba8EXPORTS\Live\Content\Maps\Ingame (Missions 001–030, 025_2, 028_Opening).
-The full list of event nodes and which missions use them is in node_catalog.tsv (349 node types).
+The full list of event nodes and which missions use them is in docs/design/node_catalog.tsv (349 node types).
 Names only: check the actual node settings in the mission before copying a pattern.
 
 ## Mission file layout (same in every mission)
