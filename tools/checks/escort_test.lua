@@ -1535,6 +1535,8 @@ end
 print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
 ;(function()
     local ZC = CFG.allies.carrier.zfa
+    check(ZC.li_fx == "ac8", "shipped: AC8's own beam (AC7's Cascade beam stopped the game in the renderer)")
+    ZC.li_fx = "ac7"                                      -- (AC7's beam's path first, as it was)
     local LS, begun, intercepted, stops, byAddr = {}, {}, {}, {}, {}      -- (the runtime's laser.c, stubbed)
     function SV_LaserBegin(la, ma) local m = byAddr[ma]; if not m or m.bCollided then return 0 end; LS[la] = 1; begun[#begun + 1] = { li = la, m = ma }; return 1 end
     function SV_LaserState(la, v) local s = LS[la] or 0; if v == 0 and s == 1 then LS[la] = 0; stops[#stops + 1] = la end; return s end
@@ -1671,6 +1673,42 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     check(li.MainLaser.active == false, "no volley in its rest (li_rest_s)")
     clock = t0 + 14.3; ZLAS.tick()
     check(li.MainLaser.active == true and has(line("fires a volley", from), "BP_wp_msl_c 800 m off"), "the next volley once rested")
+    -- ((2026-11-08) li_fx "ac8", the default: AC8's own UAV beam (Niagara) on the laser's root, its end flash; AC7's never lit)
+    ZC.li_fx = "ac8"
+    local NLx = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    local fxs = {}
+    local bp = ZC.li_fx_beam .. "." .. ZC.li_fx_beam:match("[^/]+$")
+    local ep = ZC.li_fx_end .. "." .. ZC.li_fx_end:match("[^/]+$")
+    statics[bp], statics[ep] = { full = bp, addr = addr() }, { full = ep, addr = addr() }
+    local keepSSA = NLx.SpawnSystemAttached
+    function NLx:SpawnSystemAttached(sys, root, sock, loc, rot, how)
+        local c = { full = "NiagaraComponent", addr = addr(), sys = sys, root = root, how = how, vars = {}, active = true }
+        function c:IsValid() return true end
+        function c:SetVariableFloat(n, v) self.vars[tostring(n)] = v end
+        function c:SetVariableVec3(n, v) self.vars[tostring(n)] = v end
+        function c:Deactivate() self.active = false end
+        fxs[#fxs + 1] = c
+        return c
+    end
+    clock = t0 + 20.3; ZLAS.tick()                       -- (the volley begun in AC7's way ends: AC8's end flash)
+    check(#fxs == 1 and fxs[1].sys == statics[ep] and fxs[1].root == li.root, "a volley's end: AC8's end flash on the laser's root")
+    li.MainLaser.active, li.EndLaser.active = false, false
+    clock = t0 + 20.6; ZLAS.tick()
+    local mD = missile("wp_msl_d", 2000000 + 90000, enemyJet)
+    HIT.msl[#HIT.msl + 1] = { obj = mD, name = "BP_wp_msl_d", born = 0 }
+    local from8 = #logs + 1
+    clock = t0 + 29; ZLAS.tick()
+    local fb = fxs[2]
+    check(fb and fb.sys == statics[bp] and fb.root == li.root and fb.how == 0 and fb.vars["User.BeamLifeTime"] == 6.2
+          and fb.vars["User.BeamLength"] and fb.vars["User.BeamLength"].X == 124000 and fb.vars["User.BeamLength"].Y == 1
+          and li.MainLaser.active == false and li.EndLaser.active == false and has(line("fires a volley", from8), "AC8's beam"),
+          "a volley: AC8's beam on the laser's root (it swings with it), 1.24 km long in cm, its life the volley's; AC7's never lit")
+    clock = t0 + 35; ZLAS.tick()
+    check(#fxs == 3 and fxs[3].sys == statics[ep] and fb.vars["User.BeamLength"].Y == 0.5 and li.EndLaser.active == false,
+          "its end: AC8's end flash, the beam thinning")
+    clock = t0 + 35.25; ZLAS.tick()
+    check(fb.active == false and fb.vars["User.BeamLength"].Y == 0, "the beam off li_end_s on")
+    NLx.SpawnSystemAttached = keepSSA
     -- its plane gone: removed
     ESC.planes[zU] = nil
     clock = t0 + 15; ZLAS.tick()

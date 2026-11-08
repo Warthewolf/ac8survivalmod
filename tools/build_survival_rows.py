@@ -309,6 +309,7 @@ MUSIC_TABLE_STOCK = '/Game/Datatables/Sound/DT_SoundMusicPlayerBGM'
 MUSIC_TABLE = DATA + 'DT_SV_MusicRows'
 MUSIC_TEMPLATE_ROW = 'AKE_Bgm_MUSICPLAYER_BGM_TITLE_Play'
 JUKEBOX_TABLE_STOCK = '/Game/OnlineMode/DataTables/Information/JukeBox/DT_JukeBoxMusic'
+MUSIC_DB_STOCK = '/Game/WwiseAssets/Database/DA_SoundDB_'    # + the bank: its events (the build checks each is 2D)
 
 
 def build_music_rows():
@@ -321,6 +322,24 @@ def build_music_rows():
         jrows.append((f['ResourceName'][1], f['TitleText'][1], f['OriginTextID'][1]))
     assert len(jrows) == 77, len(jrows)
     tracks = music_tracks.all_tracks(jrows)
+    # ((2026-11-08) "Music was selected but nothing played": the lobby jukebox's events are 3D, MaxAttenuation 600, and
+    # the music player's game object is far from the listener) every added event in its bank and 2D, as the stock ones
+    from zen import Zen
+    att = {}
+    for db in sorted({t[4] for t in tracks}):
+        path = MUSIC_DB_STOCK + db
+        zd = Zen(stock(path))
+        cd = uprop.Ctx(zd.d, zd.names)
+        main = [e for e in zd.exports if e['name'] == path.rsplit('/', 1)[1]][0]
+        v, _ = uprop.read_struct(cd, zd.header_size + main['off'], 'LiveSoundDatabaseBankAsset')
+        for b in {q[1]: q[3] for q in v[2]}['Banks'][1]:
+            for e in {q[1]: q[3] for q in b[2]}['Events'][1]:
+                ef = {q[1]: q[3] for q in e[2]}
+                ma = ef.get('MaxAttenuation')
+                att[(db, ef['Name'][1])] = struct.unpack('<i', ma[2])[0] if ma else 0
+    for t in tracks:
+        assert (t[4], t[0]) in att, f'{t[0]} is in no event of {t[4]}'
+        assert att[(t[4], t[0])] == 0, f'{t[0]} is a 3D event (MaxAttenuation {att[(t[4], t[0])]}): silent in the music player'
     z = ZenPkg(stock(MUSIC_TABLE_STOCK))
     rename_package(z, MUSIC_TABLE_STOCK, MUSIC_TABLE)
     p = bytes(z.payloads[0])

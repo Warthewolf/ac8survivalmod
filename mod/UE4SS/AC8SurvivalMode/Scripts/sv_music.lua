@@ -31,9 +31,15 @@ MUSIC.mine = "/Game/Mods/SurvivalMode/Data/DT_SV_MusicRows.DT_SV_MusicRows"
 MUSIC.pages = { "WBP_Menu_PauseMusicPlayer_000_C", "WBP_DataViewer_MusicPlayer_000_C", "WBP_DataViewer_MusicPlayer_001_C",
                 "WBP_DataViewer_MusicPlayer_002_C" }
 MUSIC.NO_MISSION = 127                       -- (a hidden row's UnlockMissionID: no mission record has it)
--- player_from's groups: an added row's group from its event's name (tools/music_tracks.py)
+-- player_from's groups: an added row's group from its event's name (tools/music_tracks.py), the first prefix that fits.
+-- ((2026-11-08) Alyssa: "Music was selected but nothing played": the lobby jukebox's own events are 3D (heard within
+-- 6 m of the lobby's jukebox), so "jukebox" is Online Mode's own 2D versions of its songs: AC04, AC5, AC6, AC7, Zero)
 MUSIC.groups = {
-    { name = "jukebox", prefix = "AKE_Bgm_JukeBox_" },
+    { name = "jukebox", prefix = "AKE_Bgm_Online_ACE04_" },
+    { name = "jukebox", prefix = "AKE_Bgm_Online_ACE5_" },
+    { name = "jukebox", prefix = "AKE_Bgm_Online_ACE6_" },
+    { name = "jukebox", prefix = "AKE_Bgm_Online_ACE7_" },
+    { name = "jukebox", prefix = "AKE_Bgm_Online_ACEZ_" },
     { name = "battle", prefix = "AKE_Bgm_Online_ACE" },      -- (the older games' online match tracks)
     { name = "battle", prefix = "AKE_Bgm_Online_Ms_" },
     { name = "online", prefix = "AKE_Bgm_Online_" },          -- (Online Mode's own named tracks)

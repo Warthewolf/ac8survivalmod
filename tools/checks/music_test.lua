@@ -59,7 +59,7 @@ local function row(key, title, okey, oname)
     return { bIsEnableUnlock = false, UnlockMissionID = 1, TitleTextID = S(key), TitleString = S(title),
              OriginTextID = S(okey or "None"), OriginString = S(oname or "") }
 end
-local JB = { "AKE_Bgm_JukeBox_ac04_Comona_Play", "AKE_Bgm_JukeBox_ac5_Wardog_Play", "AKE_Bgm_JukeBox_ac7_Daredevil_Play" }
+local JB = { "AKE_Bgm_Online_ACE04_Comona_Play", "AKE_Bgm_Online_ACE5_Wardog_Play", "AKE_Bgm_Online_ACE7_Daredevil_Play" }
 local MINE = newTable("DataTable /Game/Mods/SurvivalMode/Data/DT_SV_MusicRows.DT_SV_MusicRows", {
     { "AKE_Bgm_Ending01_Play", row("SV_Mus1T", "Ending Ⅰ") },
     { "AKE_Bgm_Online_Op_Play", row("MusicPlayer_SongTitle_Online_OP", "Sky mercenaries") },
@@ -127,7 +127,7 @@ PARTS.dofile("sv_music.lua")
 local tick = 0
 local function runFull() for _ = 1, 8 do tick = tick + 1; MUSIC.tick(tick) end end
 local function ours() local n = 0; for _, r in ipairs(GAME.order) do if MINE.rows[r] then n = n + 1 end end; return n end
-local function jukeboxIn() local l = {}; for _, r in ipairs(GAME.order) do if r:find("JukeBox", 1, true) then l[#l + 1] = r end end; return l end
+local function jukeboxIn() local l = {}; for _, r in ipairs(GAME.order) do if r:find("_ACE04_", 1, true) or r:find("_ACE5_", 1, true) or r:find("_ACE7_", 1, true) then l[#l + 1] = r end end; return l end
 
 print("no runtime functions / no save's lists: nothing changed")
 svLevelOn, containerState = true, true

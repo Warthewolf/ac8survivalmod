@@ -2,21 +2,28 @@
 
 The user: "add all the named music into the music player". AC8's music player lists DT_SoundMusicPlayerBGM, whose rows
 are named after the Wwise event the player posts (AKE_Bgm_MUSICPLAYER_BGM_<id>_Play). These are the game's own events
-for named tracks the stock list leaves out: the campaign's three endings, Online Mode's named tracks, the online lobby's
-jukebox (77, from AC8's DT_JukeBoxMusic) and the online match tracks of the older games that the jukebox doesn't have.
-((2026-11-08) the user, after 0.74.29: "Delete the briefing debriefing cutscene tracks": the cutscenes' pieces and
-Debriefing IV are out; AC8's music player shows 120 tracks at most (its scroll list's limit; more crashed the game), so
-Scripts/sv_music.lua adds a random share of these each run: CFG.music.player_max.) tools/build_survival_rows.py (build_music_rows) turns them into rows of
-Survival's own table DT_SV_MusicRows; Scripts/sv_music.lua adds them to the game's table while Survival's level is on
-and takes them out after. Their four banks are resident from the game's start in every mode (DA_SoundSettings'
-RegidentSoundBanks: tools/re/MUSIC_BANKS.md 2); the game's list build skips a row whose event no loaded bank has.
+for named tracks the stock list leaves out: the campaign's three endings, Online Mode's named tracks, Online Mode's
+versions of the jukebox's songs (AC04, AC5, AC6, AC7 and Zero) and the older games' online match tracks.
+- ((2026-11-08) the user, after 0.74.29: "Delete the briefing debriefing cutscene tracks": the cutscenes' pieces and
+  Debriefing IV are out. AC8's music player shows 120 tracks at most (its scroll list's limit; more crashed the game),
+  so Scripts/sv_music.lua adds a draw of these each run: CFG.music.player_max, player_from.)
+- ((2026-11-08) Alyssa's test of 0.74.30: "Music was selected but nothing played": the online lobby's jukebox events
+  (AKE_Bgm_JukeBox_*, AKB_BGM_Online_Lobby) are 3D, MaxAttenuation 600 (6 m: the lobby's jukebox prop plays them),
+  while the music player posts on the sound subsystem's own game object far from the listener; every other music event
+  here is 2D (0). The jukebox group is now Online Mode's own versions of the same songs (AKE_Bgm_Online_ACE04_* ...
+  ACEZ_*, 2D, AKB_BGM_Online), titled as the jukebox titles them (DT_JukeBoxMusic); the lobby's are out.)
+tools/build_survival_rows.py (build_music_rows) turns them into rows of Survival's own table DT_SV_MusicRows;
+Scripts/sv_music.lua adds a draw of them to the game's table while Survival's level is on and takes them out after.
+Their banks are resident from the game's start in every mode (DA_SoundSettings' RegidentSoundBanks:
+tools/re/MUSIC_BANKS.md 2); the game's list build skips a row whose event no loaded bank has.
 
 A title that has a key in the game's text (CP: MusicPlayer_SongTitle_*) uses it. Every other title is a text of
 Survival's own (SV_Mus<n>T, no numeric tail: hard rule 17), set at run time from the row's TitleString (SV_SetText).
 The DLC tracks (PurpleMagic A-C, NoID010-070) have keys but no event in any bank here, so they aren't in.
 """
+import re
 
-CAMPAIGN, ONLINE, LOBBY = 'AKB_BGM_Campaign', 'AKB_BGM_Online', 'AKB_BGM_Online_Lobby'
+CAMPAIGN, ONLINE = 'AKB_BGM_Campaign', 'AKB_BGM_Online'
 # ELiveSoundMusicFilterTag: the music player's tabs and colour sets (DT_LiveMusicPlayerColorVariationSettings has
 # colours for 1, 2, 3 and 6 only, so a row uses one of them)
 ORCHESTRA, BAND, SYNTH, ENVIRONMENT = 1, 2, 3, 6
@@ -29,7 +36,6 @@ ORIGINS = {
     11: 'ACE COMBAT ZERO: THE BELKAN WAR', 12: 'ACE COMBAT X: Skies of Deception', 13: 'ACE COMBAT X2: Joint Assault',
     14: 'ACE COMBAT 3D: Cross Rumble',
 }
-JUKEBOX_ORIGIN_KEY = 'Online_JukeBox_SouceTitle'   # (sic) DT_JukeBoxMusic's OriginTextID: <key>NN_Name
 
 
 # (event, the game's title key or None, title, origin number or None, bank, filter)
@@ -57,7 +63,29 @@ ONLINE_TRACKS = [
     ('AKE_Bgm_Online_GeneralMVP_Play', 'MusicPlayer_SongTitle_Online_Result_MVP', 'Got the MVP', None, ONLINE, BAND),
 ]
 
-# The online match tracks the jukebox doesn't have (most loop until skipped: Wwise "infinite" events)
+# Online Mode's versions of the jukebox's songs (2D; most loop until moved on: Wwise "infinite" events): the event's
+# game prefix -> (origin, the jukebox's own prefix in DT_JukeBoxMusic's ResourceName), and its songs (the event's part)
+JUKEBOX_GAMES = {'ACE04': (4, 'ac04'), 'ACE5': (5, 'ac5'), 'ACE6': (6, 'ac6'), 'ACE7': (7, 'ac7'), 'ACEZ': (11, 'acz')}
+_JUKEBOX = [
+    ('ACE04', ['Aquila', 'Blockade', 'Comona', 'Deep_Strike', 'Emancipation', 'Escort', 'Farbanti', 'Invincible_Fleet',
+               'Safe_Return', 'Sitting_Duck', 'Whiskey_Corridor']),
+    ('ACE5', ['8492', 'Arcade_Riding_High', 'First_Flight', 'Fortress', 'Four_Horsemen', 'Ice_Cage', 'Naval_Blockade',
+              'Rendezvous', 'Reprisal', 'Wardog']),
+    ('ACE6', ['Bartolomeo_Fortress', 'Fires_of_Liberation', 'Invasion_of_Gracemeria', 'On_Line', 'Selumna_Peak',
+              'Siege_on_Silvat', 'The_Liberation_of_Gracemeria', 'Through_the_Heart_of_a_Nation']),
+    ('ACE7', ['444', 'ADFX_10', 'Archange', 'Awakening', 'Battle_for_Farbanti', 'Dual_Wielder', 'Enchanter_I',
+              'Enchanter_II', 'Hush', 'Lighthouse', 'Long_Day', 'Lost_Kingdom', 'Magic_Spear_I', 'Mimic',
+              'Pipeline_Destruction', 'Roca_Roja', 'Sol_Squadron', 'Two_Pairs', 'Werewolf']),
+    ('ACEZ', ['CONTACT', 'GLACIAL_SKIES', 'JUGGERNAUT', 'MAYHEM', 'MERLON', 'THE_DEMON_OF_THE_ROUND_TABLE',
+              'THE_ROUND_TABLE', 'ZERO']),
+]
+# the songs the jukebox doesn't have (no title there)
+_OWN_TITLES = {('ACE04', 'Aquila'): 'Aquila', ('ACE04', 'Safe_Return'): 'Safe Return',
+               ('ACE04', 'Whiskey_Corridor'): 'Whiskey Corridor', ('ACE5', '8492'): '8492', ('ACE5', 'Fortress'): 'Fortress',
+               ('ACE6', 'Through_the_Heart_of_a_Nation'): 'Through the Heart of a Nation',
+               ('ACE7', 'Pipeline_Destruction'): 'Pipeline Destruction'}
+
+# The older games' online match tracks (loop until moved on)
 _MATCH = [
     (1, 'ACE', [('Get_off_him', 'Get Off Him'), ('Head_first', 'Head First'), ('Like_a_sea_gull', 'Like a Sea Gull'),
                 ('Night_and_Day', 'Night and Day')]),
@@ -69,10 +97,6 @@ _MATCH = [
                  ('Shattered_Stones', 'Shattered Stones'), ('The_Execution', 'The Execution'),
                  ('Transparent_Blue', 'Transparent Blue')]),
     (3, 'Ms_ac3', [('Linkage', 'Linkage')]),
-    (4, 'ACE04', [('Aquila', 'Aquila'), ('Safe_Return', 'Safe Return'), ('Whiskey_Corridor', 'Whiskey Corridor')]),
-    (5, 'ACE5', [('8492', '8492'), ('Fortress', 'Fortress')]),
-    (6, 'ACE6', [('Through_the_Heart_of_a_Nation', 'Through the Heart of a Nation')]),
-    (7, 'ACE7', [('Pipeline_Destruction', 'Pipeline Destruction')]),
     (9, 'ACEAH', [('Beyond_The_Canal', 'Beyond The Canal'), ('Dogfight', 'Dogfight'), ('Fighter', 'Fighter'),
                   ('Keep_Alive', 'Keep Alive'), ('Naval_Warfare', 'Naval Warfare'), ('Rush', 'Rush'),
                   ('Shall_Defend', 'Shall Defend'), ('White_Devil', 'White Devil')]),
@@ -88,37 +112,44 @@ _MATCH = [
 MATCH_TRACKS = [(f'AKE_Bgm_Online_{game}_{ev}_Play', None, title, origin, ONLINE, BAND)
                 for origin, game, songs in _MATCH for ev, title in songs]
 
-
 MENU_WORDS = ('BRIEFING', 'HANGAR')     # (the user: "Delete the briefing debriefing cutscene tracks", "hangars too")
 
 
 def menu_track(event):
-    """A briefing, debriefing or hangar piece (AC5's jukebox has "Briefing 1" and "Hangar 1"), or a cutscene's."""
+    """A briefing, debriefing or hangar piece, or a cutscene's."""
     return '_Cin_' in event or any(w in event.upper() for w in MENU_WORDS)
 
 
+def _key(s): return re.sub(r'[^a-z0-9]', '', s.lower())
+
+
 def jukebox_tracks(rows):
-    """The lobby jukebox's from AC8's DT_JukeBoxMusic (77, its briefing and hangar pieces left out): rows =
-    [(ResourceName, TitleText, OriginTextID)]."""
+    """Online Mode's versions of the jukebox's songs, titled as AC8's DT_JukeBoxMusic titles them: rows =
+    [(ResourceName, TitleText, OriginTextID)] (the jukebox's own, 3D, never added: only their titles)."""
+    titles = {}
+    for res, title, _ in rows:
+        m = re.match(r'AKE_Bgm_JukeBox_(ac\w+?)_(.+)_Play$', res)
+        assert m, res
+        titles[(m.group(1), _key(m.group(2)))] = title
     out = []
-    for ev, title, okey in rows:
-        assert okey.startswith(JUKEBOX_ORIGIN_KEY) and okey.endswith('_Name'), okey
-        origin = int(okey[len(JUKEBOX_ORIGIN_KEY):-len('_Name')])
-        assert origin in ORIGINS, okey
-        if not menu_track(ev):
-            out.append((ev, None, title, origin, LOBBY, BAND))
+    for game, songs in _JUKEBOX:
+        origin, jb = JUKEBOX_GAMES[game]
+        for s in songs:
+            title = titles.get((jb, _key(s))) or _OWN_TITLES.get((game, s))
+            assert title, (game, s)
+            out.append((f'AKE_Bgm_Online_{game}_{s}_Play', None, title, origin, ONLINE, BAND))
     return out
 
 
 def all_tracks(jukebox_rows):
-    """Every added track in the order they're listed: the campaign's endings, Online Mode's, the jukebox's, the other
-    online match tracks. Checked: no event twice, no row of the stock table, no cutscene or menu track."""
+    """Every added track in the order they're listed: the campaign's endings, Online Mode's own, its versions of the
+    jukebox's songs, the older games' match tracks. Checked: no event twice, no cutscene or menu track, none 3D."""
     tracks = CAMPAIGN_TRACKS + ONLINE_TRACKS + jukebox_tracks(jukebox_rows) + MATCH_TRACKS
     evs = [t[0] for t in tracks]
     assert len(evs) == len(set(evs)), [e for e in evs if evs.count(e) > 1]
     for t in tracks:
-        assert t[0].endswith('_Play') and t[4] in (CAMPAIGN, ONLINE, LOBBY) and t[5] in (1, 2, 3, 6), t
-        assert not menu_track(t[0]), t
+        assert t[0].endswith('_Play') and t[4] in (CAMPAIGN, ONLINE) and t[5] in (1, 2, 3, 6), t
+        assert not menu_track(t[0]) and 'JukeBox' not in t[0], t
     return tracks
 
 

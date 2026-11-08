@@ -2001,3 +2001,28 @@ From two logs of one co-op run on 0.74.23 (Saint Alessia's, the host, and a join
   laser containers, unchanged since 0.74.27): AC8SurvivalMode_COOP2MP_0.74.30_Patch.zip and _TESTER_Patch.zip (sent to the
   user for Alyssa). Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.29:
   build/backup/install_before_0.74.30; 88 files compared equal).
+
+## 0.74.31 (2026-11-08, runtime 0.32.30; not yet run in game)
+From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Music was selected but nothing played".
+- AC7's laser spawned at last (0.74.30's pinned class: it had been collected between the main menu and the launch and
+  loaded again, so every BeginDeferredActorSpawnFromClass of 0.74.23-0.74.29 came back empty): both ZFA-44s carried it,
+  owner set (SV_LaserOwner 1), and fired a volley each at 22:06:59; the game stopped at once on the RHI thread
+  (UECC EXCEPTION_ACCESS_VIOLATION reading 0xe0 at AceCombat8.exe+0x34a8d68; GPU breadcrumbs FRDGBuilder_Execute >
+  Scene > Translucency): AC7's Cascade beam's materials (M_SV_TLS_*, new masters compiled in our own UE 5.4, tools/laser7)
+  can't be bound by AC8's renderer. The beam is now AC8's own port of the same UAV beam (Niagara NS_UAVTLS_Muzzleflash01:
+  User.BeamLength (vec3, cm), User.BeamLifeTime, attached to the laser's root so it swings with it; end flash
+  NS_UAVTLS_EndLaser001); AC7's MainLaser / EndLaser are deactivated at the spawn and never lit (CFG zfa li_fx "ac8";
+  "ac7" keeps the old path, which crashes). `zfa li: ... fires a volley (...; AC8's beam; N so far)`. escort_test.
+- The music player's jukebox songs were silent: the lobby jukebox's own events (AKE_Bgm_JukeBox_*, AKB_BGM_Online_Lobby)
+  are 3D, MaxAttenuation 600 (6 m: the lobby's jukebox prop plays them), while the music player posts on the sound
+  subsystem's own game object (ULiveSoundSubsystem, LiveSoundManager+0x1C8), far from the listener; every other music
+  event is 2D (stock music player 81, Online 26 named, battle 110, endings 3: MaxAttenuation 0). The list itself worked
+  (`133 tracks its banks have, 120 listed`, the 116 grants cut). The "jukebox" group is now Online Mode's own versions of
+  the same songs (AKE_Bgm_Online_ACE04/5/6/7/Z_*: 56, 49 titled from DT_JukeBoxMusic, 7 not in the jukebox), the lobby's
+  rows out: DT_SV_MusicRows 119 (endings 3, Online Mode 15, the jukebox's songs 56, the older games 45); every one of
+  them looked up in its bank's database by the build and refused if 3D. They loop (Wwise infinite): each moves on after
+  player_loop_s 240. The draw (room 58 of 120) takes all 56.
+- 54 suites pass (coop_test not run). Packaged: friends' 0f5f71ea5959..., TESTER 3f89a8f7eb68... (0.74.31-coop2mp.123),
+  both registered; patches over 0.74.27-0.74.30 (the big assets unchanged since 0.74.27): _Patch.zip and _TESTER_Patch.zip
+  (the TESTER one sent to the user for Alyssa). INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.30:
+  build/backup/install_before_0.74.31; 88 files compared equal).

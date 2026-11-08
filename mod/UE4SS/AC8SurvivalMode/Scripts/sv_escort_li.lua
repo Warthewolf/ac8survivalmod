@@ -181,7 +181,46 @@ local function beamX()
     if x <= 0 then x = num(z.li_range_m, 1240) * 10 end   -- (AC7's units, ~0.1 m: the components are scaled x10)
     return x
 end
+-- ((2026-11-08) the beam drawn by AC8's own effects (li_fx "ac8"): AC7's Cascade beam stopped the game in the renderer)
+local function ac8fx() return zc().li_fx ~= "ac7" end
+local FXA = {}
+local function fxAsset(path)
+    if type(path) ~= "string" or path == "" then return nil end
+    local full = path .. "." .. path:match("[^/]+$")
+    local o = FXA[full]
+    if o ~= nil and liveObj(o) then return o end
+    o = loadObject(full)
+    if o ~= nil and valid(o) then FXA[full] = o; pin(o, "the ZFA-44 laser's effect " .. full:match("[^/]+$")); return o end
+    return nil
+end
+-- an AC8 effect on the laser's root (it swings with it), or nil
+local function fxOn(r, path, life)
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    local sys = fxAsset(path)
+    if not (valid(lib) and sys and r.li and liveLaser(r)) then return nil end
+    local ok, comp = pcall(function()                     -- (EAttachLocation 0, KeepRelativeOffset: at its root, as AC7's)
+        return lib:SpawnSystemAttached(sys, r.li:K2_GetRootComponent(), FName("None"), { X = 0, Y = 0, Z = 0 },
+            { Pitch = 0, Yaw = 0, Roll = 0 }, 0, true, true, 0, true)
+    end)
+    if not (ok and comp and comp:IsValid()) then
+        say("%s: AC8's beam effect %s failed: %s", r.name, tostring(path), tostring(comp))
+        return nil
+    end
+    if life then
+        pcall(function() comp:SetVariableFloat(FName("User.BeamLifeTime"), life) end)
+        pcall(function() comp:SetVariableFloat(FName("BeamLifeTime"), life) end)
+    end
+    return comp
+end
 local function beam(r, yz)
+    if ac8fx() then
+        local c = r.fxBeam
+        if not (c and liveObj(c)) then return end
+        local len = num(zc().li_range_m, 1240) * 100              -- (AC8's own units: cm)
+        pcall(function() c:SetVariableVec3(FName("User.BeamLength"), { X = len, Y = yz, Z = yz }) end)
+        pcall(function() c:SetVariableVec3(FName("BeamLength"), { X = len, Y = yz, Z = yz }) end)
+        return
+    end
     pcall(function() r.li.MainLaser:SetVectorParameter(FName("BeamLength"), { X = beamX(), Y = yz, Z = yz }) end)
 end
 
@@ -255,6 +294,10 @@ local function spawn(p)
     end
     pcall(function() a.MainLaser:SetVisibility(false, false) end)
     pcall(function() a.EndLaser:SetVisibility(false, false) end)
+    if ac8fx() then                                       -- (AC7's Cascade beam never lit: AC8's renderer can't draw it)
+        pcall(function() a.MainLaser:Deactivate() end)
+        pcall(function() a.EndLaser:Deactivate() end)
+    end
     local own, si
     pcall(function() own = a.OwningGameObject end)
     pcall(function() si = a.SearchInterval end)
@@ -269,27 +312,44 @@ local function volleyOn(s, r, clock, why)
     r.phase, r.from, r.to = "volley", clock, clock + num(z.li_volley_s, 6.0)
     r.nextSearch = clock + num(z.li_search_s, 0.5)       -- (AC7's first search: SearchInterval after the weapon's birth)
     pcall(function() r.li:K2_GetRootComponent():K2_SetRelativeRotation({ Pitch = 0, Yaw = 0, Roll = 0 }, false, {}, false) end)
-    pcall(function() r.li.EndLaser:SetActive(false, false) end)
-    beam(r, 1)
-    pcall(function() r.li.MainLaser:SetVisibility(true, false) end)
-    pcall(function() r.li.MainLaser:SetActive(true, true) end)   -- (AC7's OnCreateWeaponEnd: the beam from its start)
+    local how = "AC7's beam"
+    if ac8fx() then                                       -- (AC8's own beam: AC7's never lit)
+        if r.fxBeam and liveObj(r.fxBeam) then pcall(function() r.fxBeam:Deactivate() end) end
+        r.fxBeam = fxOn(r, z.li_fx_beam, num(z.li_volley_s, 6.0) + num(z.li_end_s, 0.2))
+        how = r.fxBeam and "AC8's beam" or "no beam drawn"
+        beam(r, 1)
+    else
+        pcall(function() r.li.EndLaser:SetActive(false, false) end)
+        beam(r, 1)
+        pcall(function() r.li.MainLaser:SetVisibility(true, false) end)
+        pcall(function() r.li.MainLaser:SetActive(true, true) end)   -- (AC7's OnCreateWeaponEnd: the beam from its start)
+    end
     s.volleys = s.volleys + 1
-    say("%s fires a volley (%s; %d so far)", r.name, why, s.volleys)
+    say("%s fires a volley (%s; %s; %d so far)", r.name, why, how, s.volleys)
 end
 local function volleyOff(s, r, clock)
     pcall(SV_LaserState, r.liA, 0)                        -- (a swing on now is given up: AC7's laser ended with its life)
     for ma, c in pairs(s.claims) do
         if c.r == r then s.claims[ma] = nil; c.m.liClaimed = nil end
     end
-    pcall(function() r.li.EndLaser:SetVisibility(true, false) end)
-    pcall(function() r.li.EndLaser:SetActive(true, true) end)    -- (AC7's OnLifeTimeExpired: the end flash)
+    if ac8fx() then
+        fxOn(r, zc().li_fx_end, nil)                      -- (AC8's end flash: it ends by itself)
+    else
+        pcall(function() r.li.EndLaser:SetVisibility(true, false) end)
+        pcall(function() r.li.EndLaser:SetActive(true, true) end)    -- (AC7's OnLifeTimeExpired: the end flash)
+    end
     beam(r, 0.5)
     r.phase, r.offAt = "ending", clock + num(zc().li_end_s, 0.2)
 end
 local function beamOff(r, clock)
     beam(r, 0)                                            -- (AC7's LaserScale at 0: the beam thinned to nothing)
-    pcall(function() r.li.MainLaser:Deactivate() end)
-    pcall(function() r.li.MainLaser:SetVisibility(false, false) end)
+    if ac8fx() then
+        if r.fxBeam and liveObj(r.fxBeam) then pcall(function() r.fxBeam:Deactivate() end) end
+        r.fxBeam = nil
+    else
+        pcall(function() r.li.MainLaser:Deactivate() end)
+        pcall(function() r.li.MainLaser:SetVisibility(false, false) end)
+    end
     r.phase, r.restUntil = "rest", clock + num(zc().li_rest_s, 8.0)
 end
 

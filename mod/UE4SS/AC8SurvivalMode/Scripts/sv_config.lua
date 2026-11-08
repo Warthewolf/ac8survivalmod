@@ -1118,6 +1118,14 @@ CFG = {
                                  li_range_m = 1240, li_activation_m = 1200, li_angle = 180, li_search_s = 0.5,
                                  li_intercept_s = 1.0, li_volley_s = 6.0, li_rest_s = 8.0, li_end_s = 0.2, li_beam_x = 0,
                                  li_sure = true, li_sure_s = 0.6, li_log_n = 60,
+                                 -- ((2026-11-08) Alyssa's run of 0.74.30: its first volley stopped the game in the
+                                 -- renderer's translucency pass (the RHI thread, UECC AceCombat8.exe+0x34a8d68): AC7's
+                                 -- Cascade beam is drawn with materials compiled in our own UE 5.4, which AC8's renderer
+                                 -- can't bind (hard rule 42's materials). li_fx "ac8": the beam is AC8's own port of the
+                                 -- same UAV beam (Niagara li_fx_beam, User.BeamLength / BeamLifeTime, and the end flash
+                                 -- li_fx_end) on the laser as it swings; AC7's two never lit. "ac7": AC7's (crashes).
+                                 li_fx = "ac8", li_fx_beam = "/Game/VFX/Vehicles/Weapon/TLS/NS_UAVTLS_Muzzleflash01",
+                                 li_fx_end = "/Game/VFX/Vehicles/Weapon/TLS/NS_UAVTLS_EndLaser001",
                                  li_hit_sound = "/Game/WwiseAssets/Events/SFX/SPWP_OTH_TLS_HIT" },
                          text = { on_station = "%s ON STATION", on_station_sub = "ITS ZFA-44S LAUNCH IN %d S",
                                   launch = "ZFA-44S LAUNCHED", launch_sub = "FROM %s",
