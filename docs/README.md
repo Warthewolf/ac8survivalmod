@@ -6,7 +6,6 @@ Where to look. Project rules for the AI agents stay in `../AGENTS.md` (read firs
 | File | Read it to know |
 | --- | --- |
 | `design/SURVIVAL_SPEC.md` | The user's confirmed design (menu flow, map, airfield health, enemy roles). Overrides the design thesis. |
-| `design/BUILD_PLAN.md` | Milestones and the running plan. |
 | `design/MISSION_REFERENCE.md` | Which stock mission already uses the node/event a feature needs. Check before building. |
 | `design/node_catalog.tsv` | All 349 event node types. |
 
@@ -23,5 +22,5 @@ Where to look. Project rules for the AI agents stay in `../AGENTS.md` (read firs
 
 The scripts that produced these notes (`exe.py`, `xrefs.py`, `sigfind.py`, `mksig.py`, ...) stay in `../tools/re/`.
 
-## tests/ — what happened in game
-One dated file per test build (`TEST_RESULT_YYYY-MM-DD.md`). A lesson a test confirms becomes a hard rule in `../AGENTS.md`.
+## Test results and build history
+There is no `tests/` folder: each build's notes and test results are in `../HISTORY.md`. A lesson a test confirms becomes a hard rule in `../AGENTS.md`.
