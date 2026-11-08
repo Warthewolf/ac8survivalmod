@@ -1115,7 +1115,9 @@ CFG = {
                                  li = true, li_row = "SV_Zfa_AllyLI", li_row_drone = "SV_Zfa_DroneLI",
                                  li_class = "/Game/Mods/SurvivalMode/Laser7/BP_SV_LaserInterceptor.BP_SV_LaserInterceptor_C",
                                  li_mesh = "PlaneBodyMesh", li_socket = "SOC_Gun_01",
-                                 li_range_m = 1240, li_activation_m = 1200, li_angle = 180, li_search_s = 0.5,
+                                 -- ((2026-11-08) the user: 2 km, for the reach; was AC7's 1240 / 1200 m: missiles at the
+                                 -- player 1.5-2 km from a ZFA-44 got through in Alyssa's run of 0.74.31)
+                                 li_range_m = 2000, li_activation_m = 2000, li_angle = 180, li_search_s = 0.5,
                                  li_intercept_s = 1.0, li_volley_s = 6.0, li_rest_s = 8.0, li_end_s = 0.2, li_beam_x = 0,
                                  li_sure = true, li_sure_s = 0.6, li_log_n = 60,
                                  -- ((2026-11-08) Alyssa's run of 0.74.30: its first volley stopped the game in the

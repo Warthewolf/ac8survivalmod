@@ -2052,3 +2052,15 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
 - 54 suites pass (coop_test not run). Packaged: friends' 69779eb1d6bf..., TESTER 2f045ce0c2d9... (0.74.32-coop2mp.124),
   both registered; patches over 0.74.27-0.74.31 (_Patch.zip, _TESTER_Patch.zip: the TESTER one sent for Alyssa).
   INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.31: build/backup/install_before_0.74.32; 88 files equal).
+
+## 0.74.33 (2026-11-08, runtime 0.32.31; not yet run in game)
+- The ZFA-44 laser's misses in Alyssa's run of 0.74.31 (the user: "there were a few missiles that it missed"; that round:
+  3 volleys, 5 swings, 4 shot down): (1) swing 4 (a QAAM 705 m off, 23:59:59) began in the volley's last second and was
+  given up at its end; (2) the Su-47's two missiles at the player at 23:59:59 came in the 8 s rest; (3) missiles at the
+  player beyond 1.2 km of a ZFA-44 never started a volley. The user chose: AC7's rhythm kept (6 s on, 8 s off), the reach
+  2 km (li_range_m / li_activation_m 2000, was 1240 / 1200; RayDistance 200000 cm, the beam 2 km long). A swing still on
+  at the volley's end is now finished first (`zfa li: <plane>'s volley held past its 6.0 s: its swing on now is finished
+  first`); the beam's life covers it (BeamLifeTime volley + intercept + end, 7.2 s). escort_test.
+- 54 suites pass (coop_test not run). Packaged: friends' 2dbbf35f5363..., TESTER eae149b1c978... (0.74.33-coop2mp.125),
+  both registered; patches over 0.74.27-0.74.32 (the TESTER one sent for Alyssa). INSTALLED 2026-11-08 from the TESTER
+  zip (backup of 0.74.32: build/backup/install_before_0.74.33; 88 files equal).

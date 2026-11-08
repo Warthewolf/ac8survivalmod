@@ -1619,7 +1619,7 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
         return m
     end
     local mA, mB = missile("wp_msl_a", 2000000 + 100000, enemyJet), missile("wp_msl_b", 2000000 - 110000, enemyJet)   -- 1 / 1.1 km
-    local mFar, mOurs = missile("wp_msl_far", 2000000 + 150000, enemyJet), missile("wp_msl_ours", 2000000 + 50000, allyJet)
+    local mFar, mOurs = missile("wp_msl_far", 2000000 + 250000, enemyJet), missile("wp_msl_ours", 2000000 + 50000, allyJet)   -- (far: 2.5 km, past the 2 km reach)
     HIT = HIT or { msl = {} }
     local keepMsl = HIT.msl
     HIT.msl = { { obj = mA, name = "BP_wp_msl_a", born = 0, from = "BP_Su30" }, { obj = mB, name = "BP_wp_msl_b", born = 0 },
@@ -1631,7 +1631,7 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     ZLAS.tick()
     local li = spawnedL[1]
     check(li and li.owner == z1 and li.cls == cls and li.how == 1 and li.finished and li.SearchInterval == 1.0e9 and li.InterceptTime == 1.0
-          and li.InterceptAngle == 180 and li.RayDistance == 124000 and li.LifeTime == 6.0 and li.bIsBaseAttached == true
+          and li.InterceptAngle == 180 and li.RayDistance == 200000 and li.LifeTime == 6.0 and li.bIsBaseAttached == true
           and li.autoAtFinish == false and li.Owner == z1 and li.ownerAddr == z1.addr,
           "AC7's laser spawned for the ZFA-44: its owner the plane (SV_LaserOwner, AActor's too), AC7's values, its own search off, its beam waiting for a volley")
     check(li and li.attach and li.attach.p == z1.PlaneBodyMesh and li.attach.s == "SOC_Gun_01" and li.attach.l == 2 and li.attach.r == 2
@@ -1639,7 +1639,7 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
           and has(line("carries AC7's LaserInterceptor", from), "FinishSpawningActor answered"),
           "... attached at its gun (SOC_Gun_01, snapped), logged: " .. tostring(line("carries AC7's LaserInterceptor", from)))
     check(li and li.MainLaser.active and li.MainLaser.reset and li.MainLaser.visible and li.MainLaser.params.BeamLength
-          and near(li.MainLaser.params.BeamLength.X, 12400) and li.MainLaser.params.BeamLength.Y == 1 and li.EndLaser.active == false
+          and near(li.MainLaser.params.BeamLength.X, 20000) and li.MainLaser.params.BeamLength.Y == 1 and li.EndLaser.active == false
           and li.root.rot and li.root.rot.Yaw == 0 and has(line("zfa li: ", from), "fires a volley (BP_wp_msl_a 1000 m off"),
           "an enemy missile 1 km off (AC7's 1.2 km): a volley, the beam from its start, 1.24 km long in AC7's units")
     check(#begun == 0, "no swing before its first search (li_search_s)")
@@ -1657,7 +1657,7 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     check(intercepted[1] == mB.addr and mB.bCollided == true and has(line("SV_Intercept -> 1", from), "still up"),
           "a missile still up li_sure_s after its swing: made sure (SV_Intercept)")
     for _, b in ipairs(begun) do
-        check(b.m ~= mFar.addr and b.m ~= mOurs.addr, "never the missile 1.5 km off (out of its reach), never an ally's")
+        check(b.m ~= mFar.addr and b.m ~= mOurs.addr, "never the missile 2.5 km off (out of its reach), never an ally's")
     end
     check(#events == ev0 and not line("zfa laser: ", from), "AC8's laser route quiet: no record fired, no beam of its own")
     -- the volley's end (6 s): a swing on given up, AC7's end flash, the beam thinned; then the rest (8 s)
@@ -1699,8 +1699,8 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     local from8 = #logs + 1
     clock = t0 + 29; ZLAS.tick()
     local fb = fxs[2]
-    check(fb and fb.sys == statics[bp] and fb.root == li.root and fb.how == 0 and fb.vars["User.BeamLifeTime"] == 6.2
-          and fb.vars["User.BeamLength"] and fb.vars["User.BeamLength"].X == 124000 and fb.vars["User.BeamLength"].Y == 1
+    check(fb and fb.sys == statics[bp] and fb.root == li.root and fb.how == 0 and math.abs(fb.vars["User.BeamLifeTime"] - 7.2) < 1e-6
+          and fb.vars["User.BeamLength"] and fb.vars["User.BeamLength"].X == 200000 and fb.vars["User.BeamLength"].Y == 1
           and li.MainLaser.active == false and li.EndLaser.active == false and has(line("fires a volley", from8), "AC8's beam"),
           "a volley: AC8's beam on the laser's root (it swings with it), 1.24 km long in cm, its life the volley's; AC7's never lit")
     clock = t0 + 35; ZLAS.tick()
@@ -1708,6 +1708,23 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
           "its end: AC8's end flash, the beam thinning")
     clock = t0 + 35.25; ZLAS.tick()
     check(fb.active == false and fb.vars["User.BeamLength"].Y == 0, "the beam off li_end_s on")
+    -- ((2026-11-08) Alyssa's run of 0.74.31: a swing begun in a volley's last second was given up at its end, its missile
+    -- let through) the volley holds until that swing is over
+    local mE = missile("wp_msl_e", 2000000 + 60000, enemyJet)
+    HIT.msl[#HIT.msl + 1] = { obj = mE, name = "BP_wp_msl_e", born = 0 }
+    LS[li.addr] = 0
+    clock = t0 + 44; ZLAS.tick()                          -- (rested: a volley, 44 .. 50)
+    local nfx, nb = #fxs, #begun
+    clock = t0 + 49.6; ZLAS.tick()                        -- (its swing begun 0.4 s before the volley's end)
+    check(#begun == nb + 1 and begun[#begun].m == mE.addr, "a swing begun in the volley's last second")
+    local fromH = #logs + 1
+    clock = t0 + 50.1; ZLAS.tick()
+    check(#fxs == nfx and has(line("volley held past", fromH), "its swing on now is finished first"),
+          "the volley's time out with a swing on: held, no end flash yet")
+    mE.bCollided, LS[li.addr] = true, 0                   -- (the class's kill at its swing's end)
+    clock = t0 + 50.7; ZLAS.tick()
+    check(has(line("shot down BP_wp_msl_e@", fromH), "so far)") and #fxs == nfx + 1 and fxs[#fxs].sys == statics[ep],
+          "... the missile shot down, then the volley's end (its end flash)")
     NLx.SpawnSystemAttached = keepSSA
     -- its plane gone: removed
     ESC.planes[zU] = nil

@@ -315,7 +315,7 @@ local function volleyOn(s, r, clock, why)
     local how = "AC7's beam"
     if ac8fx() then                                       -- (AC8's own beam: AC7's never lit)
         if r.fxBeam and liveObj(r.fxBeam) then pcall(function() r.fxBeam:Deactivate() end) end
-        r.fxBeam = fxOn(r, z.li_fx_beam, num(z.li_volley_s, 6.0) + num(z.li_end_s, 0.2))
+        r.fxBeam = fxOn(r, z.li_fx_beam, num(z.li_volley_s, 6.0) + num(z.li_intercept_s, 1.0) + num(z.li_end_s, 0.2))
         how = r.fxBeam and "AC8's beam" or "no beam drawn"
         beam(r, 1)
     else
@@ -521,7 +521,20 @@ function ZLI.tick()
                 end
             end
             if r.phase == "volley" then
+                -- ((2026-11-08) Alyssa's run of 0.74.31: swing 4 began in the volley's last second and was given up at
+                -- its end, its missile let through) a swing still on at the volley's end is finished first
+                local swinging = false
                 if clock >= r.to then
+                    for _, c in pairs(s.claims) do
+                        if c.r == r and clock < (c.due or 0) + 0.25 then swinging = true end
+                    end
+                    if swinging and not r.heldSaid then
+                        r.heldSaid = true
+                        say("%s's volley held past its %.1f s: its swing on now is finished first", r.name, num(z.li_volley_s, 6.0))
+                    end
+                end
+                if clock >= r.to and not swinging then
+                    r.heldSaid = nil
                     volleyOff(s, r, clock)
                 elseif clock >= (r.nextSearch or 0) then
                     r.nextSearch = clock + num(z.li_search_s, 0.5)
