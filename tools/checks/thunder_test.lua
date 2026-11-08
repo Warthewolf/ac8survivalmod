@@ -63,7 +63,7 @@ function SV_ObjChain(a) return LIVE[a] and 1 or 0 end
 function FName(s) return s end
 
 local binds, hooks, notifies, statics, all = {}, {}, {}, {}, {}
-Key = { OEM_COMMA = "OEM_COMMA", OEM_PERIOD = "OEM_PERIOD", F11 = "F11", OEM_SIX = "OEM_SIX", OEM_SEVEN = "OEM_SEVEN", OEM_TWO = "OEM_TWO", OEM_ONE = "OEM_ONE" }
+Key = { OEM_COMMA = "OEM_COMMA", OEM_PERIOD = "OEM_PERIOD", F11 = "F11", OEM_SIX = "OEM_SIX", OEM_SEVEN = "OEM_SEVEN", OEM_TWO = "OEM_TWO", OEM_ONE = "OEM_ONE", OEM_FIVE = "OEM_FIVE" }
 ModifierKey = { CONTROL = "CTRL" }
 function RegisterKeyBind(key, mods, fn) binds[key] = fn end
 function ExecuteInGameThread(f) f() end
@@ -698,6 +698,51 @@ check(found("storm layout: 2 s after (probe 4): 40 components used, 12 textures"
 press("OEM_ONE")
 check(P(actor).CloudlyVolumeComponentsAsset == cvcMine and cl.rem[#cl.rem] == cvcStorm and has(callouts[#callouts], "LAYOUT PROBE 5/5: EVERYTHING BACK"),
     "probe 5: everything back, the textures let go")
+-- ((2026-11-08) "how can we get lightning to play inside the clouds?") Ctrl+\: the cloud lightning probe; the storm's flashes
+print("cloud lightning (Ctrl+backslash, the storm's flashes)")
+local LT = B.lightning
+for _, path in ipairs({ LT.class, "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms012_PodargeDead.BP_CloudLight_Ms012_PodargeDead_C",
+                        "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms022_ShuttleLaunch.BP_CloudLight_Ms022_ShuttleLaunch_C" }) do
+    statics[path] = obj("BlueprintGeneratedClass " .. path)
+end
+local eff = { int = {}, at = nil }
+local effLight = obj("PointLightComponent EffectLight", { Intensity = 1000, AttenuationRadius = 5000,
+    SetWorldLocation = function(self, l) eff.at = l end, SetIntensity = function(self, v) eff.int[#eff.int + 1] = v; P(self).Intensity = v end,
+    SetAttenuationRadius = function(self, v) P(self).AttenuationRadius = v end, SetLightColor = function() end })
+P(actor).EffectLight, P(actor).bUseEffectLight = effLight, false
+P(pawn).GetActorForwardVector = function() return { X = 1, Y = 0, Z = 0 } end
+from = #logs + 1
+local nv, nf, np = #vols, #fxs, #posts
+press("OEM_FIVE")
+local v1 = vols[nv + 1]
+check(v1 and P(v1).spawnCls == statics[LT.class] and P(v1).WorldPosition and P(v1).WorldPosition.X == P(pawn).loc.X + 500000 and P(v1).WorldPosition.Z == 300000
+    and has(callouts[#callouts], "CLOUD LIGHTNING PROBE 1/5 / MISSION 9'S FAR EXPLOSION LIGHT"), "probe 1: Mission 9's cloud light spawned 5 km ahead, 3 km up, its WorldPosition set")
+check(#fxs == nf + 1 and fxs[#fxs] and P(fxs[#fxs]).sc.X == 12, "... with the bolt (x12)")
+check(found("cloud lightning (probe 1: Mission 9's far explosion light): a cloud light (Ms009_FarExplosion", from) and found("its thunder in", from), "... logged with its thunder's delay")
+gtick(1.5); gtick(1.5); gtick(1.5); gtick(1.5)
+check(posts[#posts] == LT.sound, "its thunder after the sound's time (5 km: 6 s at most)")
+press("OEM_FIVE")
+check(found("cloud lightning (probe 2: Mission 12's Podarge light): skipped (the last light still up)", from) == nil and vols[#vols] and P(vols[#vols]).spawnCls
+    == statics["/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms012_PodargeDead.BP_CloudLight_Ms012_PodargeDead_C"], "probe 2: Mission 12's light (the last one taken off first)")
+press("OEM_FIVE")
+check(P(vols[#vols]).spawnCls == statics["/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms022_ShuttleLaunch.BP_CloudLight_Ms022_ShuttleLaunch_C"], "probe 3: Mission 22's light")
+press("OEM_FIVE")
+check(P(actor).bUseEffectLight == true and eff.at and eff.at.X == P(pawn).loc.X + 500000, "probe 4: Cloudly's effect light on, moved to the spot")
+for _ = 1, 6 do gtick(0.25) end
+check(#eff.int >= 5 and eff.int[1] == LT.effect_intensity and eff.int[#eff.int] == 1000 and P(actor).bUseEffectLight == false,
+    "... its intensity in steps, then put back (" .. table.concat(eff.int, ", ") .. ")")
+nv = #vols
+press("OEM_FIVE")
+check(#vols == nv and has(callouts[#callouts], "THE BOLT ALONE"), "probe 5: the bolt alone")
+-- the storm's own flashes from stage 1
+for _, v in ipairs(vols) do if LIVE[rawget(v, "addr")] then free(v) end end
+from = #logs + 1
+press("OEM_SEVEN"); gtick(0.1)
+for _ = 1, 100 do gtick(0.5) end
+check(found("cloud lightning (stage 1): a cloud light (Ms009_FarExplosion", from) and found("the bolt, its thunder in", from),
+    "the storm's stage 1: flashes in its clouds, a cloud light, the bolt and its thunder: " .. tostring(found("cloud lightning (stage 1)", from)))
+THUNDER.buEnd("the test")
+for _ = 1, 8 do gtick(0.25) end
 SKY.viewCached = function() return { asset = mine, actor = true, rend = {}, ctrl = {}, ppv = {} } end
 P(survivalPC).PlayerCameraManager = nil
 THUNDER.buEnd("the test")

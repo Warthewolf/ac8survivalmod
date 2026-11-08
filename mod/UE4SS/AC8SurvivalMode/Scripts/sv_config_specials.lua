@@ -1488,6 +1488,16 @@ CFG.specials = {
                                        roll_s = { { 6, 9 }, { 4, 6.5 }, { 2.5, 4.5 }, { 2, 3.5 } }, chance_x = { 0.6, 0.8, 1.0, 1.0 },
                                        drift_ms = 15, wrap_km = 35, flash_s = { { 6, 10 }, { 3, 6 }, { 2, 4 }, { 1.5, 3 } },
                                        flash_z_m = 2500, flash_scale = 8, thunder_km = 12 },
+                             -- ((2026-11-08) "how can we get lightning to play inside the clouds?": a cloud light
+                             -- (class: the game's, Cloudly's effect light on a timeline; method "effect": Survival's own)
+                             -- with the bolt and its thunder after the sound's time; Ctrl+\ probes the ways)
+                             lightning = { enabled = true, from_stage = 1, method = "bp",
+                                           class = "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms009_FarExplosion.BP_CloudLight_Ms009_FarExplosion_C",
+                                           every_s = { { 14, 24 }, { 7, 12 }, { 4, 7 }, { 2, 4 } },
+                                           dist_km = { { 8, 16 }, { 6, 14 }, { 4, 12 }, { 3, 10 } }, alt_m = { 2500, 6000 },
+                                           cell_share = 0.5, bolt = true, bolt_scale = 12, thunder = true, thunder_s_per_km = 2.9,
+                                           thunder_max_s = 6, sound = "AKE_Environment_Thunder_Play", set_color = false,
+                                           color = { 205, 215, 255 }, effect_intensity = 5.0e7 },
                              turbulence = { from_stage = 2, every_s = { 1.5, 3 }, scale = { 0, 0.5, 0.9, 1.4 },
                                             shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_Turbulence" },
                              rain = { enabled = true, from_stage = 3, brightness = 10 },

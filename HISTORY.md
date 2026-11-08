@@ -2187,3 +2187,17 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   (0.74.41-coop2mp.133), both registered; patches over 0.74.27-0.74.40 (the TESTER one and the friends' one, no Distant
   Thunder in it, sent). INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.40: build/backup/install_before_0.74.41;
   87 files equal).
+
+## 0.74.42 (2026-11-08, runtime 0.32.31; not yet run in game)
+- The layout probe's answer (the user's recording 2026-11-08 22-05-44 of 0.74.41): the cloud layout pointer alone swaps
+  Mission 12's storm clouds in (grey overcast round the plane, cumulonimbus towers at 10 km) and back, with the rule-61 blink
+  at each swap; ForceUpdate / SetResources not needed. Hard rule 62. 0.74.41's stage-2 swap behind the fade stands.
+- Lightning inside the storm's clouds (the user: "how can we get lightning to play inside the clouds?"): from stage 1 a flash
+  every 14-24 s (stage 1) down to 2-4 s (stage 4), at a storm cell or round you, 2.5-6 km up: the game's cloud light
+  (ALiveCloudLight, default Mission 9's far explosion: Cloudly's effect light on its timeline), the bolt (NS_CloudLightning
+  x12), its thunder after the sound's time (2.9 s a km, at most 6 s). The probe, Ctrl+\: Mission 9's, 12's and 22's cloud
+  lights, Survival's own effect-light flash, the bolt alone. tools/re/THUNDER.md. thunder_test.
+- 55 suites pass (48 Lua, 7 native; coop_test not run). Packaged: friends' ccb7b82ddbac..., TESTER cd549177105c...
+  (0.74.42-coop2mp.134), both registered; patches over 0.74.27-0.74.41 (the TESTER one and the friends' one, no Distant
+  Thunder in it, sent). INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.41: build/backup/install_before_0.74.42;
+  87 files equal).

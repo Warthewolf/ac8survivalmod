@@ -1117,6 +1117,145 @@ function THUNDER.probeStep(now)
 end
 THUNDER.probeTick = probeTick
 
+-- ((2026-11-08) the user: "okay but how can we get lightning to play inside the clouds?") lightning in the storm's
+-- clouds: a flash lights them from inside, the game's way (ALiveCloudLight: Mission 9's far explosion, Mission 12's Podarge,
+-- Mission 22's shuttle launch light the clouds through Cloudly's effect light, a timeline each, restoring it after:
+-- lightning.class, spawned at the spot with its WorldPosition) or Survival's own (method "effect": the Cloudly actor's
+-- EffectLight driven in steps), with the game's cloud lightning bolt there (NS_CloudLightning x bolt_scale) and its thunder
+-- after the sound's time (thunder_s_per_km, at most thunder_max_s). From lightning.from_stage, every every_s[stage], at a
+-- storm cell (cell_share of them) or dist_km[stage] round you, alt_m up; one light at a time. Ctrl+\ is its probe: each
+-- press flashes the next way 5 km ahead of you, 3 km up. Log: `cloud lightning: ...`.
+local CL = { q = {} }
+local function lt() return (bc().lightning or {}) end
+local CL_PROBE = {
+    { "Mission 9's far explosion light", "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms009_FarExplosion.BP_CloudLight_Ms009_FarExplosion_C" },
+    { "Mission 12's Podarge light", "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms012_PodargeDead.BP_CloudLight_Ms012_PodargeDead_C" },
+    { "Mission 22's shuttle launch light", "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms022_ShuttleLaunch.BP_CloudLight_Ms022_ShuttleLaunch_C" },
+    { "Survival's own (Cloudly's effect light)", "effect" },
+    { "the bolt alone (NS_CloudLightning)", "bolt" },
+}
+-- a cloud light of class path at `at`: the actor, or nil and why
+local function cloudLightBP(path, at)
+    local cls = CL[path]
+    if not (cls and liveObj(cls)) then cls = loadObject(path); CL[path] = cls end
+    if not cls then return nil, "its class didn't load" end
+    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+    if not (gs and valid(gs) and liveObj(survivalPC)) then return nil, "no GameplayStatics or player controller" end
+    local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = at.X, Y = at.Y, Z = at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+    local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(survivalPC, cls, t, 1, nil, 1) end)
+    if not okB or x == nil or not valid(x) then return nil, "no actor (" .. tostring(x) .. ")" end
+    pcall(function() x.WorldPosition = { X = at.X, Y = at.Y, Z = at.Z } end)
+    local c = lt()
+    if c.set_color and type(c.color) == "table" then pcall(function() x.LightColor = { R = c.color[1], G = c.color[2], B = c.color[3], A = 255 } end) end
+    if tonumber(c.radius_m) then pcall(function() x.AttenuationRadius = c.radius_m * 100 end) end
+    local okF, a = pcall(function() return gs:FinishSpawningActor(x, t, 1) end)
+    if not okF or a == nil or not valid(a) then pcall(function() x:K2_DestroyActor() end); return nil, "its spawn didn't finish" end
+    return a, string.format("brightness %s, radius %s cm", fmt(num(a, "LightBrightness"), "%.0f"), fmt(num(a, "AttenuationRadius"), "%.0f"))
+end
+-- Survival's own: Cloudly's effect light at `at`, its intensity in steps a tick (the originals back after)
+local function effectFlash(at)
+    local V = skyView()
+    local a = V and V.actor
+    if not (a and liveObj(a)) then return false, "no Cloudly actor" end
+    local okL, l = pcall(function() return a.EffectLight end)
+    if not (okL and l ~= nil and liveObj(l)) then return false, "the Cloudly actor has no EffectLight" end
+    local c = lt()
+    CL.eff = CL.eff or { a = a, l = l, use = field(a, "bUseEffectLight"), int = num(l, "Intensity"), rad = num(l, "AttenuationRadius") }
+    pcall(function() a.bUseEffectLight = true end)
+    pcall(function() l:SetWorldLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true) end)
+    pcall(function() l:SetAttenuationRadius((tonumber(c.radius_m) or 6000) * 100) end)
+    if type(c.color) == "table" then pcall(function() l:SetLightColor({ R = c.color[1] / 255, G = c.color[2] / 255, B = c.color[3] / 255, A = 1 }, true) end) end
+    CL.steps, CL.stepI = c.effect_steps or { 1.0, 0.35, 0.8, 0.1, 0 }, 0
+    return true, "Cloudly's effect light (was " .. tostring(CL.eff.use) .. ", intensity " .. fmt(CL.eff.int, "%.0f") .. ")"
+end
+local function effectTick()
+    if not CL.steps then return end
+    local e = CL.eff
+    if not (e and liveObj(e.l)) then CL.steps = nil; return end
+    CL.stepI = CL.stepI + 1
+    local k = CL.steps[CL.stepI]
+    if k == nil then
+        CL.steps = nil
+        pcall(function() e.a.bUseEffectLight = e.use == "true" end)
+        if e.int then pcall(function() e.l:SetIntensity(e.int) end) end
+        if e.rad then pcall(function() e.l:SetAttenuationRadius(e.rad) end) end
+        return
+    end
+    pcall(function() e.l:SetIntensity(k * (tonumber(lt().effect_intensity) or 5.0e7)) end)
+end
+-- one flash at `at` by `how` (a class path, "effect" or "bolt"); what it did
+local function flash(at, how, why)
+    local c = lt()
+    local parts = {}
+    if CL.light and liveObj(CL.light) and how ~= "bolt" then return "skipped (the last light still up)" end
+    if how == "effect" then
+        local ok, w = effectFlash(at)
+        parts[#parts + 1] = (ok and "" or "NO ") .. w
+    elseif how ~= "bolt" then
+        local a, w = cloudLightBP(how, at)
+        CL.light = a
+        parts[#parts + 1] = a and ("a cloud light (" .. (how:match("BP_CloudLight_([%w_]+)%.") or "?") .. ": " .. w .. ")") or ("NO cloud light: " .. tostring(w))
+    end
+    if c.bolt ~= false or how == "bolt" then
+        parts[#parts + 1] = fxAt(at, tonumber(c.bolt_scale) or 12) and "the bolt" or "NO bolt"
+    end
+    local you = playerLocation()
+    if c.thunder ~= false and you then
+        local km_ = math.sqrt((you.X - at.X) ^ 2 + (you.Y - at.Y) ^ 2 + (you.Z - at.Z) ^ 2) / 100000
+        local d = math.min(tonumber(c.thunder_max_s) or 6, km_ * (tonumber(c.thunder_s_per_km) or 2.9))
+        CL.q[#CL.q + 1] = { at = os.clock() + d, name = c.sound or "AKE_Environment_Thunder_Play" }
+        parts[#parts + 1] = string.format("its thunder in %.1f s (%.1f km off)", d, km_)
+    end
+    local line = table.concat(parts, ", ")
+    if (CL.said or 0) < 60 then CL.said = (CL.said or 0) + 1; log(string.format("cloud lightning (%s): %s", why, line)) end
+    return line
+end
+local function clTick(now)
+    effectTick()
+    for i = #CL.q, 1, -1 do
+        if now >= CL.q[i].at then post(CL.q[i].name); table.remove(CL.q, i) end
+    end
+end
+THUNDER.cloudFlash, THUNDER.cloudTick = flash, clTick
+-- (the build-up's tick) a flash due at this stage: at a cell or round you, in the clouds
+local function clStorm(B, now)
+    local c = lt()
+    if c.enabled == false or (B.stage or 0) < (tonumber(c.from_stage) or 1) or B.clearing then return end
+    if now < (B.clAt or 0) then return end
+    B.clAt = now + pick(ofStage(c.every_s, B.stage, { 6, 10 }), 8)
+    if not B.clFirst then B.clFirst = true; return end           -- (the first one a little after the stage begins)
+    local you = playerLocation()
+    if not you then return end
+    local alt = type(c.alt_m) == "table" and c.alt_m or { 2500, 6000 }
+    local z = (alt[1] + (alt[2] - alt[1]) * math.random()) * 100
+    local at
+    if B.cells and #B.cells > 0 and math.random() < (tonumber(c.cell_share) or 0.5) then
+        local cl = B.cells[math.random(#B.cells)]
+        at = { X = cl.at.X + (math.random() * 2 - 1) * cl.r * 0.5, Y = cl.at.Y + (math.random() * 2 - 1) * cl.r * 0.5, Z = z }
+    else
+        local dk = ofStage(c.dist_km, B.stage, { 5, 12 })
+        local d, ang = (dk[1] + (dk[2] - dk[1]) * math.random()) * 100000, math.random() * 2 * math.pi
+        at = { X = you.X + math.cos(ang) * d, Y = you.Y + math.sin(ang) * d, Z = z }
+    end
+    flash(at, c.method == "effect" and "effect" or (c.class or CL_PROBE[1][2]), "stage " .. B.stage)
+end
+-- Ctrl+\: the probe, 5 km ahead of you, 3 km up
+local CLP = { i = 0 }
+function THUNDER.cloudProbe()
+    local pawn = myPlane()
+    local you = playerLocation()
+    if not (pawn and you) then log("cloud lightning: Ctrl+\\: no plane of yours"); return end
+    CLP.i = CLP.i % #CL_PROBE + 1
+    local p = CL_PROBE[CLP.i]
+    local fwd = { X = 1, Y = 0 }
+    pcall(function() local f = pawn:GetActorForwardVector(); local n = math.sqrt(f.X * f.X + f.Y * f.Y); if n > 0 then fwd = { X = f.X / n, Y = f.Y / n } end end)
+    local at = { X = you.X + fwd.X * 500000, Y = you.Y + fwd.Y * 500000, Z = 300000 }
+    if CL.light and liveObj(CL.light) then pcall(function() CL.light:K2_DestroyActor() end); CL.light = nil end
+    local what = flash(at, p[2], "probe " .. CLP.i .. ": " .. p[1])
+    hudCallout(string.format("CLOUD LIGHTNING PROBE %d/%d", CLP.i, #CL_PROBE), string.upper(p[1]))
+    return what
+end
+
 local function hostOrSolo() return not joiner() end
 local function stageOf(B)
     if B.forced then return B.forced end
@@ -1220,6 +1359,8 @@ local function buTick(now)
             end
         end
     end
+    -- the lightning in the clouds
+    clStorm(B, now)
     -- the turbulence inside a cell or the typhoon
     local tb = c.turbulence or {}
     if SK.zone and B.stage >= (tonumber(tb.from_stage) or 2) and now >= (B.turbAt or 0) then
@@ -1590,6 +1731,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "thunder", fn = function(now)
             SK.inside, SK.noiseUntil, SK.upsetUntil, SK.upsetOn, SK.pawn, SK.zone = false, nil, nil, false, nil, nil
             BU, SF.list, SF.ws, SF.rainWas, TR, SF.unsafeAt = nil, nil, nil, nil, nil, nil
             LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LP.i = false, nil, nil, nil, false, 0
+            CL.q, CL.light, CL.eff, CL.steps, CLP.i = {}, nil, nil, nil, 0
         end
         return
     end
@@ -1597,6 +1739,8 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "thunder", fn = function(now)
     fxTick(now, false)
     testTick(now)
     pcall(lyTick, now)
+    local okC, errC = pcall(clTick, now)
+    if not okC then say("cloud lightning", "cloud lightning: error " .. tostring(errC)) end
     local okT, errT = pcall(transitionTick, now)
     if not okT then say("transition", "storm build-up: transition error " .. tostring(errT)) end
     local okP, errP = pcall(probeTick, now)
@@ -1620,6 +1764,7 @@ if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["thunder"] = function()
         BU, SF.list, SF.ws, SF.rainWas, SK.zone, SK.inside, PB.i, PB.w, TR, SF.unsafeAt = nil, nil, nil, nil, nil, false, 0, nil, nil, nil
         LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LP.i = false, nil, nil, nil, false, 0
+        CL.q, CL.light, CL.eff, CL.steps, CLP.i = {}, nil, nil, nil, 0
         THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
         THUNDER.cls, THUNDER.copyHp, THUNDER.mgr = nil, nil, nil
     end
@@ -1647,6 +1792,12 @@ testKey("OEM_SIX", "sv_anomalies.lua's storm build-up", function()
     startBU(N, math.floor(os.time() % 1000003), nil, "Ctrl+]")
     local t = bc().text or {}
     hudCallout(t.start or "WEATHER WARNING", string.format(t.start_sub or "DISTANT THUNDER IN ROUND %d", N))
+end)
+-- Ctrl+\: the cloud lightning probe (any game: this game's own sky)
+testKey("OEM_FIVE", "sv_anomalies.lua's cloud lightning probe", function()
+    install()
+    if not (D and D.now) then log("cloud lightning: Ctrl+\\ outside a Survival run"); return end
+    THUNDER.cloudProbe()
 end)
 -- Ctrl+;: the layout probe (any game: this game's own sky)
 testKey("OEM_ONE", "sv_anomalies.lua's cloud layout probe", function()

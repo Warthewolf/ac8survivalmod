@@ -250,3 +250,20 @@ at 59 s). A black-sky dip (~0.1 s) at every swap, in (10.2, 66.0, 76.5 s) and ba
 SetResources. The actor's NumCloudComponentsUsed / CloudComponentsTexturesCount read 0 throughout (editor statistics, it
 seems). Its interpolated layout is a run-time object, InterpolatedSequencerVolumeComponentsAsset_PL_SurvivalMode (never
 touched). Hard rule 62. 0.74.41's build-up already swaps behind the stage-2 fade (with a ForceUpdate, harmless).
+
+## Lightning inside the clouds (2026-11-08, 0.74.42; not yet run in game)
+The user: "okay but how can we get lightning to play inside the clouds?". AC8 lights its clouds from inside with
+ALiveCloudLight (build/liveproject Live/Public/LiveCloudLight.h: LightBrightness, WorldPosition, LightColor,
+AttenuationRadius, LightFalloffExponent, bUseInverseSquaredFalloff, bRestoreUseEffectLight, OnFinishedTimeline): a BP
+per event (BP_CloudLight_Ms009_FarExplosion, _Ms012_PodargeDead, _Ms022_ShuttleLaunch; BP_CloudLight_Base), each a
+timeline of 3 float curves and a colour curve from BeginPlay, through Cloudly's effect light (the Cloudly actor's
+bUseEffectLight / EffectLight). A level names one in its world settings' CloudLightSettings.CloudLightClass.
+- 0.74.42: buildup.lightning: from stage 1, every 14-24 / 7-12 / 4-7 / 2-4 s, a flash in the clouds (alt 2.5-6 km) at
+  a storm cell (half of them) or 8-16 / 6-14 / 4-12 / 3-10 km round you: a cloud light (lightning.class, default Mission
+  9's far explosion: spawned deferred at the spot, its WorldPosition set; one at a time), the bolt (NS_CloudLightning x12)
+  and its thunder after 2.9 s a km (at most 6 s). Log `cloud lightning (stage N): a cloud light (...), the bolt, its
+  thunder in N s (D km off)`.
+- The probe, Ctrl+\ (OEM_FIVE): each press flashes the next way 5 km ahead, 3 km up: 1 Mission 9's light, 2 Mission 12's,
+  3 Mission 22's, 4 Survival's own (the Cloudly actor's EffectLight on, moved there, intensity 5e7 x 1, 0.35, 0.8, 0.1, 0
+  a tick, then its originals back), 5 the bolt alone. Which lights the clouds best is the test's (and whether the
+  EffectLight exists in Survival's level).
