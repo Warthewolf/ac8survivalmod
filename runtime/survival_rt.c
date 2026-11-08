@@ -26,8 +26,8 @@
 #include "sigs.h"
 #include "uobj.h"                /* (0.32.22: up here for the teardown gate; flight.c's include is then a no-op) */
 
-#define RT_VERSION           L"0.32.28"
-#define RT_VERSION_A         "0.32.28"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.29"
+#define RT_VERSION_A         "0.32.29"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -834,6 +834,7 @@ static TextRow g_text[] = {
     { L"SV_Mission_Subtitle",  L"Comona Island", { 0 } },
     { L"SV_Mission_Number",    L"SURVIVAL", { 0 } },
     { L"SV_Mission_Location",  L"Comona Island", { 0 } },
+    { L"SV_Mission_Date",      L"14.Aug.2015", { 0 } },     /* (2026-11-08, the user: "sometime in 2015"; the game's form) */
     { L"SV_Mission_Objective", L"Survive as many rounds as you can. Protect the airfield.", { 0 } },
     { L"SV_Mission_Briefing",  L"Enemy waves grow every round, with a special attack every fifth. "
                                L"Earn zollars for kills and spend them at Comona Airport between rounds.", { 0 } },

@@ -1927,3 +1927,13 @@ From two logs of one co-op run on 0.74.23 (Saint Alessia's, the host, and a join
   AUDREY's and VALKA's lines rewritten through THE FESTIVAL and VALKA's round (441 lines, was 431; checked: 147 lists, no
   mistakes). The old file kept in build/backup/subtitles/. One line looks cut off: "AUDREY|Valka, don't go wandering
   around. I'm not" (THE FESTIVAL's chatter), left as it came. The next build's zips carry it.
+
+## 0.74.28 (2026-11-08, runtime 0.32.29; not yet run in game)
+- The mission's date (the user: "we need to change the date to sometime in 2015"): Survival's mission row showed Mission
+  22's (Missiondate_Name_ms22, 08.Feb.2030); its MissionDateTextID is now SV_Mission_Date, the runtime's built-in text
+  14.Aug.2015 (the game's own form, CP_en: "08.Feb.2030"); its time stays Mission 22's 0530. tools/build_survival_rows.py,
+  runtime/survival_rt.c.
+- The friend's subtitles (the entry above) in the zips from this build on.
+- 52 suites pass (coop_test not run). Packaged: friends' e7be9c245cf6..., TESTER 613b2edcb079... (0.74.28-coop2mp.120),
+  both registered. Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.27:
+  build/backup/install_before_0.74.28; 87 files compared equal).

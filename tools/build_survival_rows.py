@@ -151,7 +151,10 @@ def edit_mission_row(props):
     for k, v in (('MissionNameID', 'SV_Mission_Name'), ('MissionSubtitleTextID', 'SV_Mission_Subtitle'),
                  ('MissionNumberTextID', 'SV_Mission_Number'), ('MissionNumberOnlyTextID', 'SV_Mission_Number'),
                  ('MapNameID', 'SV_Mission_Location'), ('MissionClearConditionID', 'SV_Mission_Objective'),
-                 ('MissionOperationTextID', 'SV_Mission_Name'), ('MissionObjectiveTextID', 'SV_Mission_Briefing')):
+                 ('MissionOperationTextID', 'SV_Mission_Name'), ('MissionObjectiveTextID', 'SV_Mission_Briefing'),
+                 # ((2026-11-08) the user: "we need to change the date to sometime in 2015": Survival's own date, not
+                 # Mission 22's 08.Feb.2030 (the runtime's SV_Mission_Date, in the game's own form; its time stays 0530)
+                 ('MissionDateTextID', 'SV_Mission_Date')):
         setv(props, k, s(v))
     setv(props, 'MissionClearConditionIDs', ('arr', [s('SV_Mission_Objective'), s('SV_Mission_Objective')]))
     setv(props, 'CheckpointTextIndices', ('arr', []))                         # Mission 22's checkpoints
