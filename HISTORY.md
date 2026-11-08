@@ -1877,4 +1877,5 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   - A joiner fitted none (Shazzy's log: no "carries" line at all though the host's launch ran there): why isn't known
     yet; ZLI.tick now logs `no ZFA-44 up here to fit (a joiner|the host or solo): N seen here, gone, down, still parked`.
 - 52 suites pass (coop_test not run). Packaged: friends' d13412b0a89e..., TESTER e50efa1c7f6f... (0.74.25-coop2mp.117),
-  both registered. Built in the main tree.
+  both registered. Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.24:
+  build/backup/install_before_0.74.25; 87 files compared equal).
