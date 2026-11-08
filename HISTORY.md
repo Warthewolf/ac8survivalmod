@@ -1909,3 +1909,14 @@ From two logs of one co-op run on 0.74.23 (Saint Alessia's, the host, and a join
 - 52 suites pass (coop_test not run). Packaged: friends' 0f7dc5d5b392..., TESTER 2231aa579dca... (0.74.26-coop2mp.118),
   both registered. Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.25:
   build/backup/install_before_0.74.26; 87 files compared equal).
+
+## 0.74.27 (2026-11-08, runtime 0.32.28; not yet run in game)
+- A tester's report: "if you change the coop room # of players and then revert back to 24 it leaves it unranked, even if
+  you reset the settings ingame, you have to delete the actual config to fix". Reproduced on the real parts (sv_config,
+  sv_menu, sv_coop, sv_leaderboard): CO-OP ROOM round to 24 stays ranked (max_players is each host's own), but the host
+  page's co-op rows weren't part of RESET TO DEFAULTS, so CO-OP ENEMIES off its +15% (aircraft_per_player, which counts
+  for a co-op run's ranking) stayed in survival.ini through any reset and a restart: unranked until the file went. A
+  host's RESET now puts CO-OP ROOM and CO-OP ENEMIES back to the shipped values too, saved (the room reopened when it
+  changed), its help says so; `menu: the host setup is back to the defaults (...); the co-op rows too: ...`. menu_test.
+- 52 suites pass (coop_test not run). Packaged: friends' 8e99fe0bcc12..., TESTER 267518039775... (0.74.27-coop2mp.119),
+  both registered. Built in the main tree.

@@ -7,7 +7,7 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
 local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
@@ -170,6 +170,18 @@ do
     h, go = texts.SV_Pg_Host_CoopEnemies_Help or "", texts.SV_Pg_Host_Go
     check(math.abs(CFG.coop.aircraft_per_player - 0.15) < 1e-6 and not h:find("isn't ranked", 1, true) and go == "START RUN",
           "(0.73.83) ... back on its default (+15%): nothing said (" .. tostring(go) .. ")")
+    -- ((0.74.26) a tester: the co-op rows off their defaults stayed so through RESET TO DEFAULTS, so the runs stayed
+    -- unranked until survival.ini was deleted) a host's RESET puts CO-OP ROOM and CO-OP ENEMIES back too, saved
+    press("CoopEnemies")
+    check(CFG.coop.aircraft_per_player == 0.25 and CFG.coop.max_players == 2, "(0.74.26) CO-OP ENEMIES +25%, CO-OP ROOM 2 before the reset")
+    press("Reset")
+    go = texts.SV_Pg_Host_Go
+    local ini = readAll(WORK .. "/config/survival.ini"):gsub("\r\n", "\n")
+    check(math.abs(CFG.coop.aircraft_per_player - 0.15) < 1e-6 and CFG.coop.max_players == 24 and go == "START RUN"
+          and ini:find("\naircraft_per_player = 0.15\n", 1, true) and ini:find("\nmax_players = 24\n", 1, true)
+          and (texts.SV_Pg_Rules_Reset_Help or ""):find("co-op room and co-op enemies too", 1, true),
+          "(0.74.26) the host's RESET TO DEFAULTS: CO-OP ENEMIES +15% and CO-OP ROOM 24 again, saved, ranked (" .. tostring(go) .. ")")
+    press("Room"); press("Zollars")                        -- (back to the room and the zollars the rest of this test expects)
     LB.edited = keepEdited
 end
 pick(6)

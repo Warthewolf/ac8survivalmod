@@ -307,6 +307,7 @@ local function allTexts()
             elseif r == "Lobby" then label, help = lobby()
             elseif r == "Rules" then label, help = "MORE RULES", "Start round, break between rounds, special rounds, airfield health, zollar income, enemy skill."
             elseif r == "Reset" then label, help = "RESET TO DEFAULTS", "Puts every " .. (MODE_NAME[mode] or "") .. " setting back to the defaults."
+                .. (mode == "host" and " The co-op room and co-op enemies too." or "")
             elseif r == "Back" then label, help = "BACK", "Back to " .. (BACK_TO[pg.name] or "the page before") .. "."
             end
             t[key], t[key .. "_Help"] = label or r, help or ""
@@ -374,8 +375,25 @@ local function press(name)
         for k, v in pairs(d) do
             if not same(p[k], v) then p[k] = deepCopy(v); iniSet("setup." .. n, k, v) end
         end
-        log("menu: the " .. n .. " setup is back to the defaults (" .. summary(mode) .. ")")
+        -- ((0.74.26) a tester: "if you change the coop room # of players and then revert back to 24 it leaves it unranked,
+        -- even if you reset the settings ingame, you have to delete the actual config to fix": the host page's co-op rows
+        -- (CO-OP ROOM, CO-OP ENEMIES; CO-OP ENEMIES counts for a co-op run's ranking) weren't reset. A host's RESET puts
+        -- them back too, saved)
+        local reCoop = {}
+        if mode == "host" and type(CFG_DEFAULTS) == "table" and type(CFG_DEFAULTS.coop) == "table" then
+            for _, st in pairs(SET) do
+                local d0 = st.coop and CFG_DEFAULTS.coop[st.coop]
+                if d0 ~= nil and not same(CFG.coop[st.coop], d0) then
+                    CFG.coop[st.coop] = deepCopy(d0)
+                    iniSet("coop", st.coop, d0)
+                    reCoop[#reCoop + 1] = st.coop
+                end
+            end
+        end
+        log("menu: the " .. n .. " setup is back to the defaults (" .. summary(mode) .. ")"
+            .. (#reCoop > 0 and ("; the co-op rows too: " .. table.concat(reCoop, ", ")) or ""))
         MENU.texts(true, "reset")
+        if #reCoop > 0 and COOP and COOP.settingsChanged then pcall(COOP.settingsChanged, "Room") end   -- (a room size back: reopened)
         return
     end
     local flat = MENU.pages == false and FLAT_SET[name or ""]     -- (a flat row on the main menu: sets SOLO's and the host's)
