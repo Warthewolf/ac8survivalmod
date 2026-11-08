@@ -331,6 +331,12 @@ Copy a working stock pattern before inventing a new one.
     greyed the clouds' undersides). The sun, moon, stars and exposure never black it out. Ramp only the safe ones
     (buildup.sky.clouds "safe", sky.unsafe).
 
+62. Cloudly takes another mission's cloud layout mid-level: pointing the level's Cloudly actor's CloudlyVolumeComponentsAsset
+    at Mission 12's CVC_ms12_250708 brought its storm clouds in at once (grey overcast round the plane, cumulonimbus towers
+    at 10 km) and pointing it back took them away, with the ~0.1 s black blink of rule 61 at each swap; ForceUpdate and
+    SetResources weren't needed and blinked nothing. The user's layout-probe recording of 0.74.41 (2026-11-08 22-05-44).
+    Swap it only behind a fade (sv_anomalies_dev.lua), never the sky params pointer (sv_sky.lua writes through it).
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every

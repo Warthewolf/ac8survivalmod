@@ -241,3 +241,12 @@ the game ships one, CloudlySequencer_ms25_TimeLaps).
   alone, 3 ForceUpdate, 4 SetResources, 5 everything back (the textures let go). Which step makes Cloudly draw the storm's
   clouds is the test's (its counts and a recording). The interpolated layout pointer is only logged, never swapped (its
   object may be the level's own: pinning one in the game instance could outlive its level).
+
+## The layout probe's answer (2026-11-08, 0.74.41's test)
+The user's recording 2026-11-08 22-05-44.mp4 (80.7 s; the probe pressed through about two and a half times): the pointer
+alone swaps the clouds (probe 2 at ~10 s: grey overcast all round at 1.5 km where Comona's open sky was at 8 s; at 5 km
+thick dark cloud; at 10.8 km Mission 12's cumulonimbus towers with anvils), and probe 5 takes them away (a flat deck below
+at 59 s). A black-sky dip (~0.1 s) at every swap, in (10.2, 66.0, 76.5 s) and back (56.7, 74.3 s), none at ForceUpdate or
+SetResources. The actor's NumCloudComponentsUsed / CloudComponentsTexturesCount read 0 throughout (editor statistics, it
+seems). Its interpolated layout is a run-time object, InterpolatedSequencerVolumeComponentsAsset_PL_SurvivalMode (never
+touched). Hard rule 62. 0.74.41's build-up already swaps behind the stage-2 fade (with a ForceUpdate, harmless).
