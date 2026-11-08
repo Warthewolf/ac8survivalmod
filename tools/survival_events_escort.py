@@ -57,10 +57,15 @@ ESC_ROWS = {'sv_esc_su57': ('SV_Esc_Su57', 'OP1021_su57_01', 'OP1021_su57_Ally')
 ESC_ROW_TEMPLATE = 'f18e_common'        # (MOONCHILD's mission row's shape)
 # speeds, km/h (ESCORT.md 1.2's table: Mission 14's landing values; the B-1's SpeedMin 300 and the Su-57's 750 are the
 # models', a path's speed overrides them as MOONCHILD's 50 km/h taxi does)
-ESC_SPEED = {'route': '600.0', 'cruise_slow': '450.0', 'circuit': '450.0', 'final': '320.0', 'final_slow': '280.0',
-             'final_short': '260.0', 'roll': '50.0', 'taxi': '30.0'}
+# ((2026-11-08) the user: "Bump Charlene, Yorke, Rock, Danielle, Ali's landing speeds up to 600") every landing speed
+# (her slowed route, the escorts' circuit, the final and its two slow-downs near the runway) at 600 km/h, the route's;
+# was 450 / 450 / 320 / 280 / 260
+ESC_SPEED = {'route': '600.0', 'cruise_slow': '600.0', 'circuit': '600.0', 'final': '600.0', 'final_slow': '600.0',
+             'final_short': '600.0', 'roll': '50.0', 'taxi': '30.0'}
 ESC_FINAL_ACCEL = '30.0'                # Mission 14's descent record (225 km/h, accel 30)
-ESC_ROLL_ACCEL = '2.7'                  # Mission 14's touchdown record (50 km/h, accel 2.7)
+# the touchdown record's braking, m/s^2 (Mission 14's 2.7: DANIELLE's roll of 2026-11-07 lost ~10 km/h a second, 197 ->
+# 50). From 600 km/h at 2.7 the roll is ~5 km and the rollout path (ESC_ROLL_T) 1,040 m: at 16 it's ~860 m, ~9.5 s
+ESC_ROLL_ACCEL = '16.0'
 # (2026-11-07, Alyssa's test: the escorts' wait-circle paths began 8-12 km round the circle from where they were, so
 # they never took them, and flew off; CHARLENE was given a new path for her final mid-route and didn't take it either.)
 # The escorts' wait: a hold over CHARLENE (their unit area onto her at ESC_HOLD_RADIUS_M, no path: the Guard record's

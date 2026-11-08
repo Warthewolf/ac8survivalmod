@@ -741,7 +741,8 @@ local function stepAc(S, A, now)
         return
     end
     if A.st == "route" and A.her and A.goFired then
-        -- (her route at 450 km/h from cruise_slow_km of the touchdown: the route given again, Mission 14's speed control;
+        -- (her route at its slow speed from cruise_slow_km of the touchdown (600 km/h since 2026-11-08: tools/
+        -- survival_events_escort.py ESC_SPEED): the route given again, Mission 14's speed control;
         -- her escorts still on theirs with her)
         local km = num(L.cruise_slow_km, 0)
         if km > 0 and not S.slowFired and d2(r.at, td) <= km * 1000 then
@@ -750,7 +751,7 @@ local function stepAc(S, A, now)
             for _, B in ipairs(S.ac) do
                 if B.escort and B.st == "route" and B.goFired and not B.guardOn and fire(B.rec .. "CruiseSlow", B.name) then n = n + 1 end
             end
-            log(string.format("escort: %s %.1f km from the touchdown: her route at 450 km/h (%sCruiseSlow %s), %d escorts on their routes with her",
+            log(string.format("escort: %s %.1f km from the touchdown: her route at 600 km/h (%sCruiseSlow %s), %d escorts on their routes with her",
                 A.name, d2(r.at, td) / 1000, A.rec, ok and "fired" or "NOT fired", n))
         end
         local passed = prevIaf and A.iafD > prevIaf + 1 and A.iafD <= 4000
@@ -783,7 +784,7 @@ local function stepAc(S, A, now)
         if A.her and A.fastAt and not A.fastDone and not A.finalSlow and S.t >= A.fastAt then
             A.fastDone = true
             local ev = A.rec .. "CruiseSlow"
-            log(string.format("escort: %s's final at 450 km/h until %.1f km from the touchdown (%s %s, gear down)", A.name,
+            log(string.format("escort: %s's final at 600 km/h until %.1f km from the touchdown (%s %s, gear down)", A.name,
                 num(L.final_slow_km, 6), ev, fire(ev, A.name) and "fired" or "NOT fired"))
         end
         -- (its final slower near the runway: 280 km/h from final_slow_km, 260 from final_short_km, the path given again)
@@ -799,12 +800,12 @@ local function stepAc(S, A, now)
         if onLeg and lowH and fh > 0 and not A.finalShort and dtd <= fh * 1000 then
             A.finalShort, A.finalSlow = true, true
             local ev = recFor(S, A, "FinalShort")
-            log(string.format("escort: %s %.1f km from the touchdown: its final at 260 km/h (%s %s)", A.name, dtd / 1000, ev,
+            log(string.format("escort: %s %.1f km from the touchdown: its final at 600 km/h, the last stretch (%s %s)", A.name, dtd / 1000, ev,
                 fire(ev, A.name) and "fired" or "NOT fired"))
         elseif onLeg and lowS and fs > 0 and not A.finalSlow and dtd <= fs * 1000 then
             A.finalSlow = true
             local ev = recFor(S, A, "FinalSlow")
-            log(string.format("escort: %s %.1f km from the touchdown: its final at 280 km/h (%s %s)", A.name, dtd / 1000, ev,
+            log(string.format("escort: %s %.1f km from the touchdown: its final at 600 km/h, near the runway (%s %s)", A.name, dtd / 1000, ev,
                 fire(ev, A.name) and "fired" or "NOT fired"))
         end
         -- ((2026-11-07) her approach watched: farther from the touchdown than she's been by recover_m (and over 2 km out),

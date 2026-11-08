@@ -1831,3 +1831,23 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   and got it shown).
 - Packaged: friends' c02e5581a88c..., TESTER 042476c26b46... (0.74.23-coop2mp.115), both registered. Built in the main
   tree.
+
+## 0.74.24 (2026-11-08, runtime 0.32.27; not yet run in game)
+- The subtitles in one file a person can edit (the user: "Can you please make it so that I can easily edit all these
+  subtitles", "I want my friend to be able to edit all these subtitles easily"): config/subtitles.ini, every subtitle line
+  ("SPEAKER|text": KASKA's channel, THE ESCORT, GONE FISHIN', THE FESTIVAL, VALKA and AUDREY; 147 lists, 431 lines) and the
+  speaker names (hud.subs.speakers, the escort's staff, sal / control / tower / crew, CHARLENE's thanks), each list a
+  [section] named by its CFG path. Scripts/sv_config_subs.lua (new, sv_config's family before sv_config_ini) reads it over
+  CFG's own lines at start, before CFG_DEFAULTS: lines changed, added, taken out, moved; exchanges added (the next number)
+  or taken out (a lone -); names changed, new speaker codes. Only subtitle lines and the names can change (a list is
+  replaced only when every entry it had was a line; `name =` only on a line or a name); mistakes are skipped and logged
+  (`subtitles: line N: ...`). No file: written from CFG's own lines. Not in the build hash: an edited file still sends
+  ranked runs. tools/subtitles.py check / gen / merge / pull / diff (the file made from a release's copy of the parts: no
+  test-only lines); build_all.sh runs its check; tools/checks/subs_test.sh. AGENTS.md "Subtitles file".
+- THE ESCORT's landing speeds (the user: "Bump Charlene, Yorke, Rock, Danielle, Ali's landing speeds up to 600"): her
+  slowed route, the escorts' circuit, the final and its two slow-downs near the runway all 600 km/h (were 450 / 450 / 320
+  / 280 / 260; tools/survival_events_escort.py ESC_SPEED); the touchdown's braking 2.7 -> 16 m/s^2 (ESC_ROLL_ACCEL: from
+  600 km/h at 2.7 the roll is ~5 km, the rollout path 1,040 m; at 16 ~860 m). Untested: whether a B-1 and the Su-57/33/35s
+  touch down and stop on the runway from 600.
+- 52 suites pass (coop_test not run). Packaged: friends' d7213024d37a..., TESTER 99918fdc34a5... (0.74.24-coop2mp.116),
+  both registered. Built in the main tree.

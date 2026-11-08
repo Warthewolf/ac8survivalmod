@@ -590,7 +590,7 @@ local H = P.SV_Unit_Charlene
 pose(H, before(g.iaf, 55, 1500, g.iaf[3], 450))
 run(0.5)
 local S = ESC.S
-check(evFired("RE_SV_CharCruiseSlow") and has(line("her route at 450 km/h"), "RE_SV_CharCruiseSlow fired") and not evFired("RE_SV_EscYorkeCruiseSlow"),
+check(evFired("RE_SV_CharCruiseSlow") and has(line("her route at 600 km/h"), "RE_SV_CharCruiseSlow fired") and not evFired("RE_SV_EscYorkeCruiseSlow"),
       "her route at 450 within cruise_slow_km of the touchdown (her escorts covering her, not on their routes)")
 check(evFired("RE_SV_CharFinal") and H.gear == true and S.state == "landing" and D.special.state == "landing",
       "her final 1.5 km before the approach fix: RE_SV_CharFinal, gear down, the round landing")
@@ -610,7 +610,7 @@ check(nFired("RE_SV_CharFinal") == 2 and has(line("escort: CHARLENE off her appr
       "off her approach (1.5 km farther out than her closest): her path given again")
 run(1)
 check(nFired("RE_SV_CharFinal") == 2, "... not again within recover_gap_s")
-check(nFired("RE_SV_CharCruiseSlow") == 2 and has(line("escort: CHARLENE's final at 450 km/h"), "RE_SV_CharCruiseSlow fired"),
+check(nFired("RE_SV_CharCruiseSlow") == 2 and has(line("escort: CHARLENE's final at 600 km/h"), "RE_SV_CharCruiseSlow fired"),
       "her final at 450 a second after her Final record (her route given again at its 450: final_fast), the gear down")
 local CS = g.circuit_start
 pose(Y, before(CS, 247, 3000, CS[3], 500))         -- (YORKE holding, the circuit's start 3 km ahead, heading 247)

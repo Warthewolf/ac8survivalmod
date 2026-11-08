@@ -4,12 +4,13 @@
 -- state (UE4SS gives each Lua mod its own): a name one part shares with the others is a global of that state, each
 -- part's own helpers stay local to it. A part that fails to load stops the rest, as one file used to.
 -- (Hard rule 23 counts locals per part now: python tools/checks/lua_check.py Scripts/*.lua checks them all.)
-VERSION = "0.74.23"
+VERSION = "0.74.24"
 
 local MODULES = {
     "sv_core",
     "sv_config",
     "sv_config_specials",          -- (sv_config.lua's next piece: tools/lua_split_part.py)
+    "sv_config_subs",              -- (sv_config.lua's next piece: config\subtitles.ini over CFG's lines, before CFG_DEFAULTS)
     "sv_config_ini",               -- (sv_config.lua's next piece: tools/lua_split_part.py)
     "sv_rows",
     "sv_ai",

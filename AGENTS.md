@@ -401,6 +401,16 @@ admin key from the main tree's leaderboard/keys.secret). leaderboard/README.md h
   names above the part's import, and earlier parts' names only. The Lua tests grep the two main modules' text
   (coop_fire, coop_revive, defences, escort, heavy, roles, spaceport, spweapons), so their anchors stay there.
 
+## Subtitles file (0.74.24)
+Every subtitle line ("SPEAKER|text" in CFG.specials.*) and the speaker names live in `config/subtitles.ini`, the file the
+user and her friends edit (user, 2026-11-08: "I want my friend to be able to edit all these subtitles easily").
+Scripts/sv_config_subs.lua reads it over CFG's own lines before CFG_DEFAULTS is taken (no leaderboard or co-op difference;
+not in the build hash) and changes only subtitle lines and the speaker names. The repo's file is what ships and wins over
+the Lua: change a shipped line in the file, not in sv_config_specials.lua. A new list of lines in Lua:
+`python -I tools/subtitles.py merge`. The user's or a friend's edited install: `python -I tools/subtitles.py pull`; run
+`diff` before installing a build over her install, or her edits are lost. build_all.sh runs `tools/subtitles.py check`;
+tools/checks/subs_test.sh tests the part. The file is made from a release's copy of the parts (no test-only lines).
+
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:
