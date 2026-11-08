@@ -168,3 +168,33 @@ sv_anomalies_dev.lua (BU), thunder_test.
   a joiner builds the same cells from the seed; stage 0 ends it.
 - Checks for the first test: the sky's change (and its log's field list), the cells' flashes and thunder, a strike in a
   cell, the turbulence, the rain, the pillar on the A-10, the clearing; perf (the cells' flashes are Niagara spawns).
+
+## The first look at the build-up (2026-11-08, 0.74.36 -> 0.74.37)
+- The user, 0.74.36: "Nothing is happening"; her clip at round 1, stage 1, the sky ~15% of the way: a clear blue sky.
+  The keys worked (`storm build-up: on (Ctrl+])`, the callouts), but at 1/300 of the way a second stage 1 needs 90 s and a
+  hand step to stage 4 five minutes. Her log's 25 fields of Mission 12's storm sky that differ from Mission 4's (Survival's):
+  CloudDensityExtintionBalance 3 -> 1, CloudSkyAmbientLightIntensity 10 -> 1.38, CloudSkyAmbientLightBottomOcclusion 0.91 ->
+  0.83, CloudStartHeightInKm 0 -> -0.02, CloudBandThicknessInKm 30.3 -> 10.8, layer 0 start 0.59 -> 2.73 km, density 0.77 ->
+  0.95, bottom 0.25 -> 0.60, its rain cloud on -> off (Mission 12's storm sky has none), layer 1 start 3.71 -> 2.73 km,
+  density 0.42 -> 0.56, layer 2 density 0.25 -> 1.0, thickness 2.59 -> 0.1 km, ... (the whole list: her log of 21:20:47).
+- 0.74.37: Ctrl+' snaps the sky to the stage's fraction on the next tick; hand stages put cell 1 on you and the others
+  within 35% of from_km round you (a joiner's hand stages centre on its own player: hand stages are a solo look); the
+  cells' flashes x8; and the storm's darkening (sky.dark: exposure bias -1.5 EV, the asset's sun x0.4, the sky light x0.5
+  at full storm, each from its original), by the values the day-night arc proved (hard rule 56), never while the night arc
+  is on (`storm build-up: its darkening on | the night arc owns the light`). Whether the cloud fields themselves change the
+  picture is still the test's.
+
+## The sky blacking out (2026-11-08, 0.74.36 -> 0.74.38)
+- The user's recording of 0.74.36 (21:23:31, 103 s, 60 fps): the whole sky black for 0.1-0.15 s about once a second
+  (68 dips in the top 45% of the frame, brightness ~105 -> ~18, every 1.0-1.05 s while the build-up's sky ramped; none
+  while she looked at the sea), "do you not see how the sky is flashing to black??". The build-up wrote its 25 cloud
+  values once a second. Hard rule 61. Her log the same session: 4 strikes in storm cell 4 at stage 3 (21:22:53-21:23:07,
+  50 -> 2 HP); the sky at 60% of the storm's (21:24:16) showed no storm (bright white clouds); the rain flag on from 21:22:45
+  showed no rain.
+- 0.74.38: the cloud values (sky.clouds) and the rain pillar (sky.rain_pillar) are no longer written; the storm darkens
+  by the exposure, the sun and the sky light only. The sky probe, Ctrl+/: each press puts the group before back and writes
+  the next group of Mission 12's storm sky values 3 times, 1 s apart, its callout `SKY PROBE k/9: <GROUP>`, the log
+  `sky probe: group k of 9 (<name>, n values): write w of 3 at <os.clock>`. Groups: 1 a sun value unchanged (the control:
+  does any write black it out?), 2 the clouds' light, 3 density, 4 heights, 5 thickness, 6 edges, 7 rain clouds, 8 the
+  layers on or off, 9 the rain pillar on you; a press after the last: all back. The test: record while pressing through,
+  then match the black frames to the groups (frame brightness over time, as for her recording).

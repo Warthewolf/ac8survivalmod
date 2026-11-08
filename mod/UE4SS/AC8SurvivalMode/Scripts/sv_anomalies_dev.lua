@@ -386,7 +386,7 @@ local function parkTick()
 end
 
 -- its look: the game's cloud lightning crackling on it (switched off life_s on, destroyed 2 s after)
-local function fxAt(at)
+local function fxAt(at, scale)
     local f = cfg().fx
     local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
     local sys, why = SPC.V.asset(f.system)
@@ -394,7 +394,7 @@ local function fxAt(at)
         say("fx", "thunder: its cloud lightning didn't spawn: " .. tostring(sys and "no Niagara library or player controller" or why))
         return false
     end
-    local sc = tonumber(f.scale) or 1
+    local sc = tonumber(scale) or tonumber(f.scale) or 1
     local ok, comp = pcall(function()
         return lib:SpawnSystemAtLocation(survivalPC, sys, { X = at.X, Y = at.Y, Z = at.Z }, { Pitch = 0, Yaw = 0, Roll = 0 },
             { X = sc, Y = sc, Z = sc }, true, true, 0, true)
@@ -652,8 +652,9 @@ local function ofStage(t, s, d) if type(t) ~= "table" then return t ~= nil and t
 local function lcg(x) return (x * 1103515245 + 12345) % 2147483648 end
 local function fv(v) if type(v) == "number" then return string.format("%.4g", v) end return tostring(v) end
 -- stage s's cells from the seed (the same on every game) and its wind
-local function cellsFor(s, seed)
+local function cellsFor(s, seed, centre, onYou)
     local c = bc().cells or {}
+    centre = centre or AIRFIELD
     local n = math.floor(tonumber(ofStage(c.n, s, 0)) or 0)
     local x = (seed + s * 7919) % 2147483648
     local function r() x = lcg(x); return x / 2147483648 end
@@ -661,9 +662,10 @@ local function cellsFor(s, seed)
     local out = {}
     for i = 1, n do
         local ang, d = r() * 2 * math.pi, (fk[1] + (fk[2] - fk[1]) * r()) * 100000
+        if onYou then d = (i == 1) and 0 or d * 0.35 end   -- (by hand: cell 1 on you, the others close round you)
         out[#out + 1] = { name = string.format("storm cell %d (stage %d)", i, s), i = i,
-                          base = { X = AIRFIELD.X + math.cos(ang) * d, Y = AIRFIELD.Y + math.sin(ang) * d },
-                          at = { X = AIRFIELD.X + math.cos(ang) * d, Y = AIRFIELD.Y + math.sin(ang) * d, Z = 0 },
+                          base = { X = centre.X + math.cos(ang) * d, Y = centre.Y + math.sin(ang) * d },
+                          at = { X = centre.X + math.cos(ang) * d, Y = centre.Y + math.sin(ang) * d, Z = 0 },
                           r = (tonumber(ofStage(c.radius_m, s, 3000)) or 3000) * 100, top = (tonumber(c.top_m) or 7000) * 100,
                           roll = ofStage(c.roll_s, s, { 4, 6 }), x = tonumber(ofStage(c.chance_x, s, 1)) or 1,
                           flashAt = os.clock() + r() * 3 }
@@ -727,19 +729,50 @@ local function skyFields()
         tostring(c.asset):match("[^/]+$") or "?", #said > 0 and table.concat(said, ", ") or "none"))
     return out
 end
--- the sky at fraction f of the way to the storm's (bools at half way); how many written
+-- ((2026-11-08) the user's look at 0.74.36: a clear blue sky at 11%) the storm's darkening, by the values the day-night
+-- arc proved in game (hard rule 56: the asset's sun, the post-process volumes' exposure, the level's sky light): sky.dark's
+-- ev (exposure bias added), sun_x and skylight_x (x) at full storm, each from its original; never while the night arc is
+-- on (it owns them then)
+local function darkApply(V, f)
+    local d = (bc().sky or {}).dark or {}
+    if d.enabled == false then return 0, "off" end
+    if ARC and ARC.on then return 0, "the night arc owns the light" end
+    local n = 0
+    local function put(k, v) local _, ok = SKY.writeKey(V, k, v); if ok then n = n + 1 end end
+    for _, k in ipairs((SKY.keysOf and SKY.keysOf(V)) or {}) do
+        local x
+        if k:match("^ppv|.+|bias$") then x = "ev" elseif k:match("^skyl|.+|int$") then x = "sky" elseif k == "asset|sun_factor" then x = "sun" end
+        if x then
+            local base = SKY.orig[k]
+            if base == nil then local get = SKY.slot(V, k); base = get and get() end
+            if type(base) == "number" then
+                if x == "ev" then put(k, base + (tonumber(d.ev) or -1.5) * f)
+                elseif x == "sky" then put(k, base * (1 + ((tonumber(d.skylight_x) or 0.5) - 1) * f))
+                else put(k, base * (1 + ((tonumber(d.sun_x) or 0.4) - 1) * f)) end
+            end
+        end
+    end
+    return n, "on"
+end
+-- the sky at fraction f of the way to the storm's (bools at half way), and its darkening; how many written
 local function skyApply(f)
     local F = skyFields()
     local V = F and skyView()
     if not (V and V.asset) then return 0 end
     local n = 0
-    for _, e in ipairs(F) do
-        local v
-        if type(e.base) == "number" then v = e.base + (e.target - e.base) * f else v = (f >= 0.5) and e.target or e.base end
-        local _, ok = SKY.writeKey(V, e.key, v)
-        if ok then n = n + 1 end
+    -- ((2026-11-08) the user's recording of 0.74.36: the whole sky black for ~0.1 s at every write of these, once a second
+    -- ("do you not see how the sky is flashing to black??"): off until the sky probe (Ctrl+/) finds which are safe)
+    if (bc().sky or {}).clouds == true then
+        for _, e in ipairs(F) do
+            local v
+            if type(e.base) == "number" then v = e.base + (e.target - e.base) * f else v = (f >= 0.5) and e.target or e.base end
+            local _, ok = SKY.writeKey(V, e.key, v)
+            if ok then n = n + 1 end
+        end
     end
-    return n
+    local nd, why = darkApply(V, f)
+    if why ~= SF.darkWhy then SF.darkWhy = why; log(string.format("storm build-up: its darkening %s (%d values)", why, nd)) end
+    return n + nd
 end
 -- the rain pillar on `at` (world cm; nil: its own values back); what was done
 local function pillar(at)
@@ -788,6 +821,95 @@ local function rain(on)
     if was.b then pcall(function() ws.RainVFXBrightness = was.b end) end
     return "put back (bIsWorldRain " .. tostring(was.rain) .. ")"
 end
+
+-- ((2026-11-08) the user's recording of 0.74.36: the whole sky black for ~0.1 s at every write of the storm's cloud
+-- values; "we need to work that out") Ctrl+/: the sky probe. Each press puts the group before back, then writes the next
+-- group of Mission 12's storm sky values probe.writes times, probe.gap_s apart (one blink is easy to miss), its callout
+-- naming it; after the last, everything back. Group 1 writes a sun value unchanged: if that blacks the sky out, any write
+-- of the asset does. Log: `sky probe: group k of n (<name>, m values): write w of 3 at <clock>`.
+local PROBE = {
+    { "a sun value unchanged (the control)", { "SunIntensity.Factor" }, same = true },
+    { "the clouds' light", { "CloudDensityExtintionBalance", "CloudSkyAmbientLightIntensity", "CloudSkyAmbientLightFadeToGray",
+      "CloudSkyAmbientLightBottomOcclusion", "CloudGroundIrradianceIntensity", "CloudDirectionalLightColorAttenuation",
+      "CloudDirectionalLightColorAttenuationTrThreshold", "CloudPhaseFunctionScale", "AirCraftFogScale", "CloudBlendFactorWithAtm" } },
+    { "the clouds' density", {} }, { "the clouds' heights", { "CloudStartHeightInKm" } }, { "the clouds' thickness", { "CloudBandThicknessInKm" } },
+    { "the clouds' edges", {} }, { "the rain clouds", {} }, { "the layers on or off", { "EnableClouds" } },
+    { "the rain pillar on you", {}, pillar = true },
+}
+for L = 0, 2 do
+    local p = "CloudLayer" .. L .. "."
+    for _, f in ipairs({ "CloudDensity", "CloudDensityBottom", "DensityBoostEnable", "DensityBoostAdd" }) do table.insert(PROBE[3][2], p .. f) end
+    table.insert(PROBE[4][2], p .. "StartHeightInKm")
+    for _, f in ipairs({ "EnableUserThicknessInKm", "UserThicknessInKm" }) do table.insert(PROBE[5][2], p .. f) end
+    for _, f in ipairs({ "CloudEdgeFadeDistance", "CloudEdgeFadeDistanceBottom", "TransitionStart", "TransitionLen",
+                         "TransitionStartDensityBias", "DensityBoostTransitionLengthInKm", "MapSizeMultiplier" }) do table.insert(PROBE[6][2], p .. f) end
+    for _, f in ipairs({ "RainCloudEnable", "RainCloudStretchInKm", "RainCloudWarp", "RainCloudTopDensity", "RainCloudBottomDensity",
+                         "RainCloudSoftTransition" }) do table.insert(PROBE[7][2], p .. f) end
+    table.insert(PROBE[8][2], p .. "Enable")
+end
+for _, k in ipairs({ "on", "x", "y", "ron", "r" }) do table.insert(PROBE[9][2], PILLAR[k]) end
+local PB = { i = 0 }
+THUNDER.probe = PB
+local function probeKey(gi, pi) return "asset|sv_probe_" .. gi .. "_" .. pi end
+local function probeFields()                            -- (registered on first use: SKY may load after this part)
+    if PB.reg or not (SKY and SKY.addField) then return end
+    PB.reg = true
+    for gi, g in ipairs(PROBE) do for pi, path in ipairs(g[2]) do SKY.addField("sv_probe_" .. gi .. "_" .. pi, path) end end
+end
+-- group gi's values: the storm's (the control: as they are; the pillar: on you), or (back) the originals; how many written
+local function probeWrite(gi, back)
+    probeFields()
+    local g = PROBE[gi]
+    local V = skyView()
+    if not (g and V and V.asset) then return 0, "no sky asset in the view" end
+    local storm = loadObject((bc().sky or {}).asset)
+    if not back and not g.same and not g.pillar and not (storm and liveObj(storm)) then return 0, "Mission 12's storm sky not loaded" end
+    local you = playerLocation()
+    local n = 0
+    for pi, path in ipairs(g[2]) do
+        local key = probeKey(gi, pi)
+        local v
+        if back then v = SKY.orig[key]
+        elseif g.same then local get = SKY.slot(V, key); v = get and get()
+        elseif g.pillar then
+            local leaf = path:match("[^%.]+$")
+            v = (leaf == "RainPillarCenterOverride" or leaf == "RainPillarRadiusOverride") and true
+                or (leaf == "X" and you and you.X / 100000) or (leaf == "Y" and you and you.Y / 100000) or (leaf == "RainPillarRadiusInKm" and 6) or nil
+        else v = dataGet(storm, path) end
+        if v ~= nil then local _, ok = SKY.writeKey(V, key, v); if ok then n = n + 1 end end
+    end
+    return n, nil
+end
+local function probeTick(now)
+    local w = PB.w
+    if not w or now < w.at then return end
+    local c = cfg().probe or {}
+    local n, why = probeWrite(w.g, false)
+    log(string.format("sky probe: group %d of %d (%s, %d values): write %d of %d at %.2f%s", w.g, #PROBE, PROBE[w.g][1], n, w.k,
+        w.of, now, why and (" (" .. why .. ")") or ""))
+    w.k = w.k + 1
+    if w.k > w.of then PB.w = nil else w.at = now + (tonumber(c.gap_s) or 1) end
+end
+function THUNDER.probeStep(now)
+    local c = cfg().probe or {}
+    if PB.i > 0 then
+        local n = probeWrite(PB.i, true)
+        log(string.format("sky probe: group %d (%s) put back: %d values at %.2f", PB.i, PROBE[PB.i][1], n, now))
+    end
+    PB.i, PB.w = PB.i + 1, nil
+    if PB.i > #PROBE then
+        PB.i = 0
+        hudCallout("SKY PROBE: ALL BACK", "PRESS AGAIN TO START OVER")
+        log("sky probe: every group back as it was")
+        return
+    end
+    local of = math.max(1, math.floor(tonumber(c.writes) or 3))
+    PB.w = { g = PB.i, k = 1, of = of, at = now }
+    hudCallout(string.format("SKY PROBE %d/%d: %s", PB.i, #PROBE, string.upper(PROBE[PB.i][1])),
+        string.format("WATCH THE SKY: %d WRITES, %.0f S APART", of, tonumber(c.gap_s) or 1))
+    probeTick(now)
+end
+THUNDER.probeTick = probeTick
 
 local function hostOrSolo() return not joiner() end
 local function stageOf(B)
@@ -843,7 +965,8 @@ local function buTick(now)
         local s = stageOf(B)
         if s ~= B.stage then
             B.stage, B.stageAt = s, now
-            B.cells, B.wind = cellsFor(s, B.seed)
+            local you = B.byHand and playerLocation() or nil
+            B.cells, B.wind = cellsFor(s, B.seed, you, you ~= nil)
             local t = c.text or {}
             if t.stage and t.stage[s] then hudCallout(t.stage[s], t.stage_sub and t.stage_sub[s] or nil) end
             if s == 1 and not B.distant then B.distant = true; post((c.sound or {}).distant) end
@@ -876,7 +999,7 @@ local function buTick(now)
             end
             if now >= cl.flashAt then
                 cl.flashAt = now + pick(ofStage(fc.flash_s, B.stage, { 3, 6 }), 4)
-                fxAt({ X = cl.at.X, Y = cl.at.Y, Z = (tonumber(fc.flash_z_m) or 2500) * 100 })
+                fxAt({ X = cl.at.X, Y = cl.at.Y, Z = (tonumber(fc.flash_z_m) or 2500) * 100 }, tonumber(fc.flash_scale) or 8)
                 if you and math.sqrt((you.X - cl.at.X) ^ 2 + (you.Y - cl.at.Y) ^ 2) <= (tonumber(fc.thunder_km) or 12) * 100000 then
                     post((c.sound or {}).clap)
                 end
@@ -897,7 +1020,8 @@ local function buTick(now)
         local want = B.clearing and 0 or (tonumber(ofStage(sk.fraction, B.stage, 1)) or 1)
         local rate = 1 / math.max(1, tonumber(B.clearing and sk.clear_s or sk.ramp_s) or 120)
         local f = B.f or 0
-        if f < want then f = math.min(want, f + rate) elseif f > want then f = math.max(want, f - rate) end
+        if B.snap then f, B.snap = want, false             -- (by hand: the stage's sky at once)
+        elseif f < want then f = math.min(want, f + rate) elseif f > want then f = math.max(want, f - rate) end
         if f ~= B.f or not B.skyOnce then
             B.f, B.skyOnce = f, true
             local n = skyApply(f)
@@ -1257,6 +1381,8 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "thunder", fn = function(now)
     parkTick()
     fxTick(now, false)
     testTick(now)
+    local okP, errP = pcall(probeTick, now)
+    if not okP then say("probe", "sky probe: error " .. tostring(errP)) end
     local okB, errB = pcall(buTick, now)
     if not okB then say("bu", "storm build-up: error " .. tostring(errB)) end
     local okS, errS = pcall(strikeTick)
@@ -1274,7 +1400,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "thunder", fn = function(now)
 end }
 if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["thunder"] = function()
-        BU, SF.list, SF.ws, SF.rainWas, SK.zone, SK.inside = nil, nil, nil, nil, nil, false
+        BU, SF.list, SF.ws, SF.rainWas, SK.zone, SK.inside, PB.i, PB.w = nil, nil, nil, nil, nil, false, 0, nil
         THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
         THUNDER.cls, THUNDER.copyHp, THUNDER.mgr = nil, nil, nil
     end
@@ -1303,6 +1429,12 @@ testKey("OEM_SIX", "sv_anomalies.lua's storm build-up", function()
     local t = bc().text or {}
     hudCallout(t.start or "WEATHER WARNING", string.format(t.start_sub or "DISTANT THUNDER IN ROUND %d", N))
 end)
+-- Ctrl+/: the sky probe (any game: this game's own sky)
+testKey("OEM_TWO", "sv_anomalies.lua's sky probe", function()
+    install()
+    if not (D and D.now) then log("sky probe: Ctrl+/ outside a Survival run"); return end
+    THUNDER.probeStep(os.clock())
+end)
 -- Ctrl+': the build-up's stages by hand (1, 2, 3, 4: the typhoon's look, then the storm clears), any round, the host's or solo
 testKey("OEM_SEVEN", "sv_anomalies.lua's storm stages", function()
     install()
@@ -1311,10 +1443,12 @@ testKey("OEM_SEVEN", "sv_anomalies.lua's storm stages", function()
     if not BU or BU.clearing then
         if BU then endBU("Ctrl+' again") end
         startBU(D.round + 3, math.floor(os.time() % 1000003), 1, "Ctrl+'")
+        BU.byHand, BU.snap, BU.skyAt = true, true, 0
     elseif (BU.forced or BU.stage) >= 4 then
+        BU.snap, BU.skyAt = true, 0
         clearBU(BU, "Ctrl+'")
     else
-        BU.forced = (BU.forced or BU.stage) + 1
+        BU.forced, BU.byHand, BU.snap, BU.skyAt = (BU.forced or BU.stage) + 1, true, true, 0   -- (the sky on the next tick)
     end
     hudCallout(string.format("TEST: STORM %s", BU and BU.clearing and "CLEARING" or ("STAGE " .. tostring(BU and BU.forced))), nil)
 end)

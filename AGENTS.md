@@ -323,6 +323,12 @@ Copy a working stock pattern before inventing a new one.
     check gamePaused before reading anything as the game's own effect. Survival rolls its own strikes and calls the game's
     pieces itself (sv_anomalies_dev.lua: the HUD's BeginHUDDistortionLightning, the shake, the sounds, the damage).
 
+61. Writing the sky asset's cloud values (FSkyParams' cloud fields, its CloudLayer0-2) blacks the whole sky out for a
+    moment, every write: the user's recording of 0.74.36 (2026-11-08) had a black sky for ~0.1 s once a second, exactly the
+    storm build-up's write rate (25 cloud values each second). The sun, moon, stars and the exposure, written the same way
+    by the day-night arc, never did. Don't ramp cloud values every second; the sky probe (Ctrl+/, sv_anomalies_dev.lua)
+    finds which groups are safe.
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every

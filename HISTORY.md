@@ -2129,3 +2129,24 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
 - 55 suites pass (48 Lua, 7 native; coop_test not run). Packaged: friends' 68460b662e97..., TESTER 07040422cfd9...
   (0.74.36-coop2mp.128), both registered; patches over 0.74.27-0.74.35 (the TESTER one sent). INSTALLED 2026-11-08 from
   the TESTER zip (backup of 0.74.35: build/backup/install_before_0.74.36; 87 files equal).
+
+## 0.74.37 (2026-11-08; packaged and registered, never handed out: replaced by 0.74.38)
+- From the user's look at 0.74.36 ("Nothing is happening"; her clip: a clear blue sky at stage 1): Ctrl+' snaps the sky
+  to the stage at once, hand stages put cell 1 on you and the others close round you, the cells' flashes x8, and the
+  storm's darkening (exposure -1.5 EV, the asset's sun x0.4, the sky light x0.5 at full storm; never with the night arc).
+  Both editions registered (build/release/*0.74.37*.buildhash.txt).
+
+## 0.74.38 (2026-11-08, runtime 0.32.31; not yet run in game)
+- The user's recording of 0.74.36: the whole sky black for ~0.1 s once a second ("do you not see how the sky is flashing
+  to black??"): every write of the build-up's 25 cloud values (it wrote them each second). Hard rule 61. The cloud values
+  and the rain pillar are no longer written (sky.clouds / sky.rain_pillar false); the storm darkens by the exposure, the
+  sun and the sky light only (0.74.37's). The user: "we need to work that out": the sky probe, Ctrl+/ (test builds), writes
+  one group of Mission 12's storm sky values 3 times, 1 s apart, a press a group (1 a sun value unchanged: the control;
+  2 light, 3 density, 4 heights, 5 thickness, 6 edges, 7 rain clouds, 8 layers on / off, 9 the rain pillar on you), the
+  group before put back, a callout naming it. Her session of 0.74.36 also showed: 4 strikes in a stage-3 cell (50 -> 2 HP),
+  no storm look at 60% of the cloud values, no rain from the rain flag. tools/re/THUNDER.md. thunder_test.
+- The friends' patch is made from the friends' zip with its notes' TESTER-only items dropped (no Distant Thunder
+  anywhere in it: every file scanned).
+- 55 suites pass (48 Lua, 7 native; coop_test not run). Packaged: friends' e6de31710697..., TESTER 1b961f4e2f30...
+  (0.74.38-coop2mp.130), both registered; patches over 0.74.27-0.74.37 (the TESTER one and the friends' one sent).
+  INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.36: build/backup/install_before_0.74.38; 87 files equal).

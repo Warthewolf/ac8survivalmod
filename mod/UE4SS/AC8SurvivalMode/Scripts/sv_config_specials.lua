@@ -1470,11 +1470,15 @@ CFG.specials = {
                  -- rain.from_stage) and the callouts; stages 1-3 the rounds before Distant Thunder's, 4 its own)
                  buildup = { enabled = true,
                              sky = { asset = "/Game/Cloudly/CloudlySkyParams/Ingame/Mission012/CSP_ms12_260216.CSP_ms12_260216",
-                                     fraction = { 0.3, 0.6, 0.85, 1.0 }, ramp_s = 300, clear_s = 90, rain_pillar = true, pillar_km = 6 },
+                                     -- ((2026-11-08) clouds / rain_pillar off: their writes black the whole sky out for a
+                                     -- moment (the user's recording of 0.74.36); thunder.probe (Ctrl+/) finds which are safe)
+                                     fraction = { 0.3, 0.6, 0.85, 1.0 }, ramp_s = 300, clear_s = 90, clouds = false,
+                                     rain_pillar = false, pillar_km = 6,
+                                     dark = { enabled = true, ev = -1.5, sun_x = 0.4, skylight_x = 0.5 } },
                              cells = { n = { 2, 4, 6, 6 }, radius_m = { 2000, 3000, 4000, 4500 }, top_m = 7000, from_km = { 6, 28 },
                                        roll_s = { { 6, 9 }, { 4, 6.5 }, { 2.5, 4.5 }, { 2, 3.5 } }, chance_x = { 0.6, 0.8, 1.0, 1.0 },
                                        drift_ms = 15, wrap_km = 35, flash_s = { { 6, 10 }, { 3, 6 }, { 2, 4 }, { 1.5, 3 } },
-                                       flash_z_m = 2500, thunder_km = 12 },
+                                       flash_z_m = 2500, flash_scale = 8, thunder_km = 12 },
                              turbulence = { from_stage = 2, every_s = { 1.5, 3 }, scale = { 0, 0.5, 0.9, 1.4 },
                                             shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_Turbulence" },
                              rain = { enabled = true, from_stage = 3, brightness = 10 },
@@ -1485,6 +1489,7 @@ CFG.specials = {
                                       stage_sub = { "A STORM IS GATHERING", "STORM CELLS: STAY CLEAR OF THE LIGHTNING",
                                                     "IT ARRIVES NEXT ROUND", "DI..ANT TH..D..R" },
                                       clear = "THE STORM CLEARS", clear_sub = "SKIES CLEARING" } },
+                 probe = { writes = 3, gap_s = 1.0 },
                  storm = { radius_m = 7000, min_interval_s = 0, max_interval_s = 0, curve = "MS_12", log_strikes = true,
                            class = "/Game/Blueprints/System/Lightning/BP_LightninigVolume_MS12.BP_LightninigVolume_MS12_C",
                            curve_table = "/Game/Blueprints/System/Lightning/CUR_LightningWeight.CUR_LightningWeight" },

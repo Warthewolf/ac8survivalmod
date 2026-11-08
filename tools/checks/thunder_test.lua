@@ -63,7 +63,7 @@ function SV_ObjChain(a) return LIVE[a] and 1 or 0 end
 function FName(s) return s end
 
 local binds, hooks, notifies, statics, all = {}, {}, {}, {}, {}
-Key = { OEM_COMMA = "OEM_COMMA", OEM_PERIOD = "OEM_PERIOD", F11 = "F11", OEM_SIX = "OEM_SIX", OEM_SEVEN = "OEM_SEVEN" }
+Key = { OEM_COMMA = "OEM_COMMA", OEM_PERIOD = "OEM_PERIOD", F11 = "F11", OEM_SIX = "OEM_SIX", OEM_SEVEN = "OEM_SEVEN", OEM_TWO = "OEM_TWO" }
 ModifierKey = { CONTROL = "CTRL" }
 function RegisterKeyBind(key, mods, fn) binds[key] = fn end
 function ExecuteInGameThread(f) f() end
@@ -503,8 +503,11 @@ print("the storm's build-up (Ctrl+], Ctrl+')")
 C.strike.stock = false
 part("sv_sky.lua")
 local B = C.buildup
+-- ((2026-11-08) the user's recording of 0.74.36: every write of the cloud values blacked the whole sky out for a moment)
+check(B.sky.clouds == false and B.sky.rain_pillar == false, "shipped: the cloud values and the rain pillar not written (they black the sky out)")
+B.sky.clouds, B.sky.rain_pillar = true, true             -- (their writes' own checks below; off again after)
 local mine = obj("CloudlySkyParams /Game/Cloudly/CloudlySkyParams/Ingame/Mission004/CSP_ms04_20251218b.CSP_ms04_20251218b", { Data = {
-    CloudDensityExtintionBalance = 1.0, EnableClouds = true,
+    CloudDensityExtintionBalance = 1.0, EnableClouds = true, SunIntensity = { Factor = 10 },
     CloudLayer0 = { CloudDensity = 0.3, RainCloudEnable = false, StartHeightInKm = 1.5, RainPillarCenterOverride = false,
                     RainPillarCenterInKm = { X = 0, Y = 0 }, RainPillarRadiusOverride = false, RainPillarRadiusInKm = 2 },
     CloudLayer1 = { CloudDensity = 0.2 }, CloudLayer2 = { CloudDensity = 0.1 } } })
@@ -578,17 +581,68 @@ check(THUNDER.buildup().clearing and has(callouts[#callouts], "THE STORM CLEARS"
 for _ = 1, 120 do gtick(1) end
 check(THUNDER.buildup() == nil and found("storm build-up: over (cleared)", from) and math.abs(mine.Data.CloudLayer0.CloudDensity - 0.3) < 1e-6
     and mine.Data.CloudLayer0.RainCloudEnable == false and posts[#posts] == B.sound.distant_stop, "cleared: the sky back as it was, the distant thunder stopped")
--- Ctrl+': the stages by hand
+-- Ctrl+': the stages by hand (the user's look at 0.74.36: "Nothing is happening": the sky at once, cell 1 on you)
+check(math.abs(mine.Data.SunIntensity.Factor - 10) < 1e-6, "cleared: the sun's intensity back too")
+P(pawn).loc = { X = A.X + 1234567, Y = A.Y - 765432, Z = 300000 }
 press("OEM_SEVEN"); gtick(0.25)
-check(THUNDER.buildup() and THUNDER.buildup().stage == 1 and THUNDER.buildup().forced == 1, "Ctrl+': stage 1 by hand")
-press("OEM_SEVEN"); gtick(0.25); press("OEM_SEVEN"); gtick(0.25); press("OEM_SEVEN"); gtick(0.25)
-check(THUNDER.buildup().stage == 4, "... 2, 3, 4")
+bu = THUNDER.buildup()
+check(bu and bu.stage == 1 and bu.forced == 1, "Ctrl+': stage 1 by hand")
+check(math.abs(mine.Data.CloudLayer0.CloudDensity - 0.48) < 1e-6 and math.abs(mine.Data.SunIntensity.Factor - 10 * (1 - 0.6 * 0.3)) < 1e-6,
+    string.format("... its sky at once: 30%% (cloud density %.3f), the sun darkened (%.2f)", mine.Data.CloudLayer0.CloudDensity, mine.Data.SunIntensity.Factor))
+check(bu.cells[1].base.X == P(pawn).loc.X and bu.cells[1].base.Y == P(pawn).loc.Y, "... cell 1 on you")
+local near = true
+for i = 2, #bu.cells do
+    local c2 = bu.cells[i]
+    if math.sqrt((c2.base.X - P(pawn).loc.X) ^ 2 + (c2.base.Y - P(pawn).loc.Y) ^ 2) > 28 * 0.35 * 100000 + 1 then near = false end
+end
+check(near, "... the others close round you")
+ARC.on = true
+press("OEM_SEVEN"); gtick(0.25)
+check(math.abs(mine.Data.SunIntensity.Factor - 10 * (1 - 0.6 * 0.3)) < 1e-6 and found("storm build-up: its darkening the night arc owns the light", from),
+    "the night arc on: the darkening left to it")
+ARC.on = false
+press("OEM_SEVEN"); gtick(0.25); press("OEM_SEVEN"); gtick(0.25)
+check(THUNDER.buildup().stage == 4 and math.abs(mine.Data.CloudLayer0.CloudDensity - 0.9) < 1e-6, "... 3, 4: the storm's sky at once")
 press("OEM_SEVEN"); gtick(0.25)
 check(found("storm build-up: the storm clears (Ctrl+')", from) and (THUNDER.buildup() == nil or THUNDER.buildup().clearing), "... then the storm clears")
 for _ = 1, 120 do gtick(1) end
 check(THUNDER.buildup() == nil, "and is over")
+-- the shipped way: the clouds left alone, only the darkening
+B.sky.clouds, B.sky.rain_pillar = false, false
+press("OEM_SEVEN"); gtick(0.25)
+check(math.abs(mine.Data.CloudLayer0.CloudDensity - 0.3) < 1e-6 and math.abs(mine.Data.SunIntensity.Factor - 10 * (1 - 0.6 * 0.3)) < 1e-6,
+    "the shipped way (clouds off): the cloud values left alone, the sun darkened")
+THUNDER.buEnd("the test")
+check(math.abs(mine.Data.SunIntensity.Factor - 10) < 1e-6, "... and put back")
+
+-- Ctrl+/: the sky probe (each group of the storm sky's values written 3 times, then put back as the next is written)
+print("the sky probe (Ctrl+/)")
+from = #logs + 1
+press("OEM_TWO")
+check(has(callouts[#callouts], "SKY PROBE 1/9: A SUN VALUE UNCHANGED (THE CONTROL) / WATCH THE SKY: 3 WRITES, 1 S APART")
+    and math.abs(mine.Data.SunIntensity.Factor - 10) < 1e-6 and found("sky probe: group 1 of 9 (a sun value unchanged (the control), 1 values): write 1 of 3", from),
+    "group 1, the control: a sun value written as it is")
+gtick(1.05); gtick(1.05)
+check(found("write 3 of 3", from) and not found("write 4", from), "... 3 writes, a second apart")
+press("OEM_TWO"); press("OEM_TWO")
+check(math.abs(mine.Data.CloudLayer0.CloudDensity - 0.9) < 1e-6 and math.abs(mine.Data.CloudLayer2.CloudDensity - 0.5) < 1e-6
+    and has(callouts[#callouts], "SKY PROBE 3/9: THE CLOUDS' DENSITY"), "group 3: the storm's cloud densities")
+press("OEM_TWO")
+check(math.abs(mine.Data.CloudLayer0.CloudDensity - 0.3) < 1e-6 and math.abs(mine.Data.CloudLayer0.StartHeightInKm - 0.8) < 1e-6
+    and found("sky probe: group 3 (the clouds' density) put back", from), "group 4: the heights; group 3 put back first")
+for _ = 1, 5 do press("OEM_TWO") end
+local you = P(pawn).loc
+check(mine.Data.CloudLayer0.RainPillarCenterOverride == true and math.abs(mine.Data.CloudLayer0.RainPillarCenterInKm.X - you.X / 100000) < 1e-6
+    and math.abs(mine.Data.CloudLayer0.StartHeightInKm - 1.5) < 1e-6, "group 9: the rain pillar on you; the rest back")
+press("OEM_TWO")
+check(mine.Data.CloudLayer0.RainPillarCenterOverride == false and has(callouts[#callouts], "SKY PROBE: ALL BACK") and found("sky probe: every group back as it was", from),
+    "a press after the last: everything back")
+
 -- a co-op joiner builds the same cells from the host's seed
-local hostCells = select(1, (function() press("OEM_SEVEN"); gtick(0.25); press("OEM_SEVEN"); gtick(0.25); return THUNDER.buildup().cells end)())
+D0(20, "wait")
+press("OEM_SIX"); D0(22, "fighting"); gtick(0.25)
+check(THUNDER.buildup().stage == 2 and not THUNDER.buildup().byHand, "a host's build-up at stage 2 (round 22 of N 24)")
+local hostCells = THUNDER.buildup().cells
 local seed = THUNDER.buildup().seed
 local hx, hy = hostCells[1].base.X, hostCells[1].base.Y
 THUNDER.buEnd("the test")
