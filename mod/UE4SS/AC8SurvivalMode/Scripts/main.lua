@@ -4,7 +4,7 @@
 -- state (UE4SS gives each Lua mod its own): a name one part shares with the others is a global of that state, each
 -- part's own helpers stay local to it. A part that fails to load stops the rest, as one file used to.
 -- (Hard rule 23 counts locals per part now: python tools/checks/lua_check.py Scripts/*.lua checks them all.)
-VERSION = "0.74.28"
+VERSION = "0.74.29"
 
 local MODULES = {
     "sv_core",
@@ -33,6 +33,7 @@ local MODULES = {
     "sv_decoy",                    -- THE DECOY: the bait, the Spear UAVs' locks and the Tonitrus Spear (tools/re/DECOY.md)
     "sv_flights",
     "sv_shop",
+    "sv_music",                    -- the music player in Survival: every track unlocked, the game's other named ones added
     "sv_allies",
     "sv_tactical",
     "sv_stats",                    -- the behaviour roadmap's measurements and P6's learning layer (BEHAVIOUR_DIRECTOR.md)

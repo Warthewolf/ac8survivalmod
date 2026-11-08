@@ -722,4 +722,20 @@ static const uint8_t kSigUnitFactionMask[25] = {
     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 };
 
+/* (runtime 0.32.30) The music player's track list (tools/re/MUSIC_BANKS.md 5). The playlist database's build 0x147b26b50
+ * (rcx = ULiveMusicPlayerPlaylistDatabase): 16-byte prologue push rbp; push rbx; push rsi; push rdi; push r12; push r15;
+ * mov rbp, rsp; sub rsp, 0x78 (no RIP-relative code), then mov esi, [rcx+0x38]. Unique in the game build. */
+static const uint8_t kSigMusicBuild[19] = {
+    0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41, 0x57, 0x48, 0x8B, 0xEC, 0x48, 0x83, 0xEC, 0x78, 0x8B, 0x71, 0x38,
+};
+/* ULiveMusicPlayerSoundManager's rebuild 0x147b296f0 (rcx = the manager): the database got, built, the manager's first
+ * playlist set (+0xE0). Its Initialize's call, made again by Survival (SV_MusicBuild). Masked: the getter's call. */
+static const uint8_t kSigMusicRebuild[26] = {
+    0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0x48, 0x83, 0xEC, 0x30, 0x48, 0x8B, 0xF9, 0xE8, 0x00, 0x00, 0x00, 0x00,
+    0x48, 0x8B, 0xD8, 0x48, 0x85, 0xC0, 0x74, 0x5D,
+};
+static const uint8_t kSigMusicRebuildMask[26] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+
 #endif

@@ -301,7 +301,69 @@ def build_model_rows():
     save(z, DATA + 'DT_SV_ModelRows')
 
 
+# The music player's added tracks (tools/music_tracks.py; user, 2026-11-08: "add all the named music into the music
+# player"): Survival's own table of rows for the game's DT_SoundMusicPlayerBGM, which Scripts/sv_music.lua adds while
+# Survival's level is on (each only when its bank is loaded) and takes out after. A row is a copy of the stock Title row
+# (no unlock, no origin, its camera set) with the track's title key, title, origin and tab.
+MUSIC_TABLE_STOCK = '/Game/Datatables/Sound/DT_SoundMusicPlayerBGM'
+MUSIC_TABLE = DATA + 'DT_SV_MusicRows'
+MUSIC_TEMPLATE_ROW = 'AKE_Bgm_MUSICPLAYER_BGM_TITLE_Play'
+JUKEBOX_TABLE_STOCK = '/Game/OnlineMode/DataTables/Information/JukeBox/DT_JukeBoxMusic'
+
+
+def build_music_rows():
+    import music_tracks
+    zj = ZenPkg(stock(JUKEBOX_TABLE_STOCK))
+    dj, _ = dtx.parse(uprop.Ctx(bytes(zj.payloads[0]), zj.names), 0, 'LiveJukeBoxMusicDataTable')
+    jrows = []
+    for key, row in dj['rows']:
+        f = {q[1]: q[3] for q in row[2]}
+        jrows.append((f['ResourceName'][1], f['TitleText'][1], f['OriginTextID'][1]))
+    assert len(jrows) == 77, len(jrows)
+    tracks = music_tracks.all_tracks(jrows)
+    z = ZenPkg(stock(MUSIC_TABLE_STOCK))
+    rename_package(z, MUSIC_TABLE_STOCK, MUSIC_TABLE)
+    p = bytes(z.payloads[0])
+    dt, o = dtx.parse(uprop.Ctx(p, z.names), 0, 'LiveSoundMusicInfoRow')
+    assert o == len(p), (o, len(p))
+    rows = dict(dt['rows'])
+    stock_keys = {k[0] for k in rows}
+    idx = {n: k for k, (n, t) in uprop.U.schema('LiveSoundMusicInfoRow').items()}
+    tmpl = rows[(MUSIC_TEMPLATE_ROW, 0)]
+    have = {q[1]: q for q in tmpl[2]}
+    assert have['bIsEnableUnlock'][2] and have['OriginTextID'][2], 'the template row has no unlock and no origin'
+
+    def tag(v): return ('enum', 'ELiveSoundMusicFilterTag', ('raw', 'Byte', bytes([v])))
+    out = []
+    for i, t in enumerate(tracks, 1):
+        ev, _, title, origin, bank, filt = t
+        assert ev not in stock_keys, ev
+        assert survival_events.fname(ev)[2] == 0, ev
+        row = copy.deepcopy(tmpl)
+        key = music_tracks.title_key(i, t)
+        assert t[1] or survival_events.fname(key)[2] == 0, key    # (Survival's keys: no numeric tail, hard rule 17)
+        set_prop(row[2], idx['TitleTextID'], 'TitleTextID', survival_events.fname(key))   # (split as the game does)
+        set_prop(row[2], idx['TitleString'], 'TitleString', s(title))
+        if origin:
+            set_prop(row[2], idx['OriginTextID'], 'OriginTextID', ('name', music_tracks.origin_key(origin), 0))
+            set_prop(row[2], idx['OriginString'], 'OriginString', s(music_tracks.ORIGINS[origin]))
+        for n in ('Filter1', 'Filter2', 'Filter3', 'ColorSetType'):
+            set_prop(row[2], idx[n], n, tag(filt))
+        out.append(((ev, 0), row))
+    for k, row in out:
+        for n in names_in(row) + [k[0]]: z.nb.add(n)
+    dt['rows'] = out
+    z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
+    chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveSoundMusicInfoRow')
+    assert chk['rows'] == dt['rows']
+    banks = {}
+    for t in tracks: banks[t[4]] = banks.get(t[4], 0) + 1
+    print(f'  DT_SV_MusicRows: {len(out)} tracks (' + ', '.join(f'{b} {n}' for b, n in banks.items()) + ')')
+    save(z, MUSIC_TABLE)
+
+
 def build_rows():
+    build_music_rows()
     build_rows_table('/Game/Datatables/Information/DT_LiveMissionTable', DATA + 'DT_SV_MissionRows',
                      'LiveLevelTable', 'Mission022', 'SurvivalMode', edit_mission_row)
     build_npc_rows()

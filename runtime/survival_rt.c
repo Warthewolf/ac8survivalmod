@@ -26,8 +26,8 @@
 #include "sigs.h"
 #include "uobj.h"                /* (0.32.22: up here for the teardown gate; flight.c's include is then a no-op) */
 
-#define RT_VERSION           L"0.32.29"
-#define RT_VERSION_A         "0.32.29"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.30"
+#define RT_VERSION_A         "0.32.30"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -850,7 +850,7 @@ static void InitText(void)
 
 /* Texts Lua sets at run time (SV_SetText: the shop's rows and prices, the shuttle's and the aces' names). Fixed
  * buffers, rewritten in place on the game thread, so an FString the game was handed never points at freed memory. */
-#define DYN_TEXTS 320          /* used (0.70.0): the STORE ~65 (21 items, its 5 pages, 4 landing rows), shuttle 1, aces and squadrons ~23, allies 4; co-op names 24 (0.24.0); Survival's pages 65 (0.27.0) */
+#define DYN_TEXTS 640          /* used (0.70.0): the STORE ~65 (21 items, its 5 pages, 4 landing rows), shuttle 1, aces and squadrons ~23, allies 4; co-op names 24 (0.24.0); Survival's pages 65 (0.27.0); the music player's titles ~150 (0.32.30) */
 #define DYN_KEY   48
 #define DYN_CAP   256
 static struct { wchar_t key[DYN_KEY]; wchar_t text[DYN_CAP]; FString fs; } g_dyn[DYN_TEXTS];
@@ -973,7 +973,8 @@ static void RegisterLua(void* lua)
         { "SV_LevelGone", L_LevelGone }, { "SV_Recycle", L_Recycle }, { "SV_RecycleWait", L_RecycleWait },   /* (0.32.22) */
         { "SV_Ammo", L_Ammo }, { "SV_SetAmmo", L_SetAmmo }, { "SV_AmmoMax", L_AmmoMax }, { "SV_FreeRestock", L_SetFreeRestock },
         { "SV_GameLua", L_GameLua }, { "SV_GameLuaState", L_GameLuaState },
-        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
+        { "SV_PlayBGM", L_PlayBGM }, { "SV_BGM", L_BGM }, { "SV_Event", L_Event }, { "SV_MusicPlayer", L_MusicPlayer }, { "SV_MusicClock", L_MusicClock }, { "SV_MusicHold", L_MusicHold },
+        { "SV_MusicBuild", L_MusicBuild }, { "SV_MusicSave", L_MusicSave }, { "SV_MusicLoop", L_MusicLoop }, { "SV_SetLevel", L_SetLevel }, { "SV_PlaneLevel", L_PlaneLevel }, { "SV_Invert", L_SetControlInvert }, { "SV_PlayerTarget", L_PlayerTarget },
         { "SV_SetText", L_SetText }, { "SV_ShopRequest", L_ShopRequest }, { "SV_MenuSetting", L_MenuSetting },
         { "SV_MenuPages", L_MenuPages }, { "SV_MenuClass", L_MenuClass }, { "SV_MenuSlot", L_MenuSlot }, { "SV_MenuQuick", L_MenuQuick }, { "SV_BGMNames", L_BGMNames },
         { "SV_CoopOpen", L_CoopOpen }, { "SV_CoopClose", L_CoopClose }, { "SV_CoopInfo", L_CoopInfo }, { "SV_CoopSend", L_CoopSend },
@@ -1136,6 +1137,8 @@ static void FindFunctions(void)
         { kSigLaserBeginIntercept, NULL,           sizeof(kSigLaserBeginIntercept), NULL, 0 },
         { kSigWeaponIntercepted, NULL,             sizeof(kSigWeaponIntercepted), NULL, 0 },
         { kSigUnitFaction,      kSigUnitFactionMask, sizeof(kSigUnitFaction), NULL, 0 },
+        { kSigMusicBuild,       NULL,              sizeof(kSigMusicBuild), NULL, 0 },
+        { kSigMusicRebuild,     kSigMusicRebuildMask, sizeof(kSigMusicRebuild), NULL, 0 },
     };
     uint64_t t0 = GetTickCount64();
     ScanCode(p, (int)(sizeof(p) / sizeof(p[0])));
@@ -1205,6 +1208,8 @@ static void FindFunctions(void)
     g_fLaserBegin       = p[68].hit;
     g_fIntercepted      = p[69].hit;
     g_fUnitFaction      = p[70].hit;                    /* (runtime 0.32.27: a unit's health bar with no objects, flight.c) */
+    g_fMusicBuild       = p[71].hit;                    /* (runtime 0.32.30: the music player's track list) */
+    g_fMusicRebuild     = p[72].hit;
     Log(L"game functions (%d ms): base %p, main decide %p, difficulty decide %p, next %p, goto %p, set difficulty %p, transition %p, text %p",
         (int32_t)(GetTickCount64() - t0), g_fBase, g_fMainDecide, g_fDiffDecide, g_fDiffNext,
         (void*)g_gotoMenu, (void*)g_setDifficulty, g_fTransition, g_fText);
@@ -1214,7 +1219,8 @@ static void FindFunctions(void)
     Log(L"game Lua: GetGameLuaState %p", g_fGameLuaState);
     Log(L"music and events: BGM node %p, remote-event node %p, pause list %p, landing menu decide %p", g_fBgmPlay, g_fRemoteEvent,
         g_fPauseValidity, g_fHangarDecide);
-    Log(L"music player: track clock tick %p, next track %p", g_fMusicTick, g_fMusicNext);
+    Log(L"music player: track clock tick %p, next track %p, track list build %p, rebuild %p", g_fMusicTick, g_fMusicNext,
+        g_fMusicBuild, g_fMusicRebuild);
     Log(L"flight input: BuildFlightInput %p", g_fBuildInput);
     Log(L"coop: AI plane teleport %p, inner %p", g_fAITeleportTo, g_fAITeleportInner);
     Log(L"coop: player plane: spawn %p, world spawn %p, teleport %p, inner %p; remote spawn sites: possess %p, network object %p, role %p, dummy class %p, loadout %p, loadout bytes %p, finish %p",
@@ -1248,6 +1254,8 @@ static int Install(void)
     else Log(L"music player clock not found; its tracks can still end early after a pause");
     if (g_fMusicNext && HookInline(g_fMusicNext, 16, (void*)OnMusicNext, (void**)&g_nextMusicNext, L"music player next track")) {}
     else Log(L"music player next track not found (log only)");
+    if (g_fMusicBuild && HookInline(g_fMusicBuild, 16, (void*)OnMusicBuild, (void**)&g_nextMusicBuild, L"music player track list")) {}
+    else Log(L"music player track list build not found; Survival adds no tracks to the music player");
     if (g_fBuildInput && HookInline(g_fBuildInput, 16, (void*)OnBuildInput, (void**)&g_nextBuildInput, L"flight input")) {}
     else Log(L"flight input not found; the Anomaly's field can't invert the controls");
     if (g_fRemoteUpdate && HookInline(g_fRemoteUpdate, 18, (void*)OnRemoteUpdate, (void**)&g_nextRemoteUpdate, L"remote player plane update")) {}

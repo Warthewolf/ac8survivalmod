@@ -1550,6 +1550,10 @@ CFG.music = {
     enabled      = false,
     pause_player = true,
     hold_clock   = true,
+    -- ((2026-11-08) the user: "add all the named music into the music player") Survival's music player: every stock track
+    -- unlocked and the game's other named tracks added (sv_music.lua; never written to the save)
+    player_all    = true,
+    player_loop_s = 240,      -- a track that loops for ever (most online match tracks) moves on after this; 0 = never
     start_track  = "AKE_Bgm_Ms08A_Play",
     restart_s    = 15,
     tracks  = { "AKE_Bgm_Ms02A_Play", "AKE_Bgm_Ms04A_Play", "AKE_Bgm_Ms05a_Play", "AKE_Bgm_Ms07A_Play",

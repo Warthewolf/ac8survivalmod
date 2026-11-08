@@ -547,6 +547,52 @@ static int L_MusicHold(void* lua)
     return Ret(lua, old);
 }
 
+/* (runtime 0.32.30) SV_MusicBuild(manager) -> 1 rebuilt, 0 not now (a music player track is playing: the rebuild
+ * replaces the list it plays from), SV_ERR_BAD_ARGS (not a live object), SV_ERR_NO_GAME (not found / not hooked).
+ * manager: the level's ULiveMusicPlayerSoundManager (Lua: FindFirstOf, its world Survival's). Game thread only. */
+static int L_MusicBuild(void* lua)
+{
+    uint8_t* mgr = ArgObject(lua);
+    if (!g_fMusicRebuild || !g_nextMusicBuild) return Ret(lua, SV_ERR_NO_GAME);
+    if (!mgr || ((uintptr_t)mgr & 7) || !Readable(mgr, MPM_CONTROLLER + 8)) return Ret(lua, SV_ERR_BAD_ARGS);
+    int live = UObjLive(mgr);
+    if (live < 0) live = LiveObject(mgr);
+    if (live != 1) return Ret(lua, SV_ERR_BAD_ARGS);
+    uint8_t* co = PtrAt(mgr, MPM_CONTROLLER);
+    if (co && Readable(co + MPC_EVENT, 0x20) && *(int32_t*)(co + MPC_EVENT + 8) > 1 && !co[MPC_STOPPED]) return Ret(lua, 0);
+    ((MusicBuildFn)g_fMusicRebuild)(mgr);
+    return Ret(lua, 1);
+}
+
+/* SV_MusicSave(save, owned, newly) -> 1 named (each track list build's grants to those two arrays are cut back off),
+ * 0 off (save 0), SV_ERR_BAD_ARGS (not a live save with those arrays in it: off), SV_ERR_NO_GAME (no build hook).
+ * save: the LiveCampaignSaveGame; owned / newly: its CampaignSaveData.MusicPlayer.OwnedMusicList / NewlyOwnedMusicList
+ * (TArray:GetArrayAddress()). */
+static int L_MusicSave(void* lua)
+{
+    double s = 0, a = 0, b = 0;
+    ArgNumber(lua, &s); ArgNumber(lua, &a); ArgNumber(lua, &b);
+    if (!g_nextMusicBuild) return Ret(lua, SV_ERR_NO_GAME);
+    if (s <= 0) { g_msSave = NULL; return Ret(lua, 0); }
+    g_msArr[0] = (uint8_t*)(uintptr_t)(uint64_t)a;
+    g_msArr[1] = (uint8_t*)(uintptr_t)(uint64_t)b;
+    g_msSave = (uint8_t*)(uintptr_t)(uint64_t)s;
+    if (MsSaveOk()) return Ret(lua, 1);
+    g_msSave = NULL;
+    return Ret(lua, SV_ERR_BAD_ARGS);
+}
+
+/* SV_MusicLoop(ms) -> the old length; ms 0 = a track that loops for ever plays until skipped (SV_ERR_NO_GAME: no clock hook) */
+static int L_MusicLoop(void* lua)
+{
+    double ms = -1;
+    ArgNumber(lua, &ms);
+    if (!g_nextMusicTick) return Ret(lua, SV_ERR_NO_GAME);
+    int64_t old = g_musicLoopMs;
+    if (ms >= 0) g_musicLoopMs = ms > 3600000 ? 3600000 : (int32_t)ms;
+    return Ret(lua, old);
+}
+
 static int L_MusicClock(void* lua)
 {
     double on = -1;

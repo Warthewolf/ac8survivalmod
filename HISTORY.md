@@ -1937,3 +1937,31 @@ From two logs of one co-op run on 0.74.23 (Saint Alessia's, the host, and a join
 - 52 suites pass (coop_test not run). Packaged: friends' e7be9c245cf6..., TESTER 613b2edcb079... (0.74.28-coop2mp.120),
   both registered. Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.27:
   build/backup/install_before_0.74.28; 87 files compared equal).
+
+## 0.74.29 (2026-11-08, runtime 0.32.30; not yet run in game)
+- The music player (the user: "add more music from the game into the music player", "Theres music that is only
+  available in the online mode too", "If you can add all the named music into the music player do so"). In Survival's
+  level (Scripts/sv_music.lua, [music] player_all = true):
+  - every stock track is unlocked (bIsEnableUnlock false on the game's rows, put back when the level goes);
+  - 160 of the game's other named tracks are added from Survival's own DT_SV_MusicRows (tools/music_tracks.py, built by
+    build_survival_rows.build_music_rows): the campaign bank's 4 (Debriefing IV, Ending I-III), the cutscenes' 12 named
+    pieces, Online Mode's 15 named tracks, the online jukebox's 77 (titles from AC8's DT_JukeBoxMusic) and 52 online
+    match tracks of the older games the jukebox lacks (AC1, AC2, AC3, AC3D, AC X, X2, AH, INFINITY, and AC04-7's extras);
+  - titles: the game's own keys where it has one (MusicPlayer_SongTitle_*), else Survival's SV_Mus<n>T / SV_MusO<n>T
+    texts set from the rows (the runtime's Lua text table 320 -> 640);
+  - the DLC titles (PurpleMagic A-C, NoID010-070) have keys but no event in any bank, so they aren't in.
+- Research (tools/re/MUSIC_BANKS.md, a research agent's static read): all four music banks are resident from the start in
+  every mode (DA_SoundSettings RegidentSoundBanks), so nothing is loaded. The list is the playlist database's, built only
+  when a level's ULiveMusicPlayerSoundManager (a world subsystem) starts, so the runtime builds it again
+  (SV_MusicBuild: 0x147b296f0, not while a music page is open or a track plays). Each build grants what it lists to the
+  save's OwnedMusicList / NewlyOwnedMusicList; a hook on the build (0x147b26b50) cuts those grants back off while
+  Survival's rows are in (SV_MusicSave), so the player's save never changes. Without the save's two lists found, nothing
+  is unlocked or added. Leaving: the rows out, the stock locks back, the next level's list built again, then the save let go.
+- Most online match tracks are Wwise "infinite" events (length -1: the player's clock never ends them); in Survival they
+  move on after [music] player_loop_s = 240 (SV_MusicLoop). The runtime logs each build ("track list built: N tracks its
+  banks have, M listed"), each loop capped, and "music player: now <event>" at each track change, for the test.
+- Not known until a test: whether the pages show a listed track that isn't in OwnedMusicList (the build's lists say yes),
+  whether the infinite cutscene pieces (Ms130010, Ms140010, Ms140030_40, Ms200010_2) play more than their first section.
+- 54 suites pass (coop_test not run; new: music_test). Packaged: friends' cd8909fbedff..., TESTER d9b09914083e...
+  (0.74.29-coop2mp.121), both registered. Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip (backup of
+  0.74.28: build/backup/install_before_0.74.29; 88 files compared equal).

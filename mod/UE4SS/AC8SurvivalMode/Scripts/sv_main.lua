@@ -495,9 +495,12 @@ local function probeTick(tick)
             log("music: music player track clock " .. (old < 0 and "not hooked (tracks may end early after a pause)"
                 or (CFG.music.hold_clock and "held while the BGM is paused" or "stock")))
         end
+        pcall(MUSIC.levelLoad)                          -- (the music player's tracks that loop for ever: sv_music.lua)
     end
     local okSR, errSR = timed("shop rows", shopRowsTick, tick)
     if not okSR then log("shop: rows error " .. tostring(errSR)) end
+    local okMu, errMu = timed("music player", MUSIC.tick, tick)
+    if not okMu then log("music player: error " .. tostring(errMu)) end
     if tick % 4 == 0 and containerState then                 -- search and behaviour probe rows, from the main menu on
         local tSu = os.clock()                               -- ((0.73.77) "setup" in the perf line: B1)
         local okG, errG = pcall(gameLuaTick, tick, (levelTick and levelTick >= 0) and (tick - levelTick) or nil)

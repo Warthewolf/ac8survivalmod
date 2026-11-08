@@ -1080,6 +1080,33 @@ static uint8_t* MusicSurvivalGi(void)
 
 static void CoopFrame(int fromMusic);            /* coop.c: Survival COOP's per-frame work */
 
+/* (runtime 0.32.30) A track's event FString (+0x48) as text for the log, or "?" */
+#define MPC_EVENT         0x48
+#define MPC_STOPPED       0x64
+static const wchar_t* MusicEventName(uint8_t* co)
+{
+    if (!co || !Readable(co + MPC_EVENT, 0x10)) return L"?";
+    const wchar_t* s = *(const wchar_t**)(co + MPC_EVENT);
+    int32_t n = *(int32_t*)(co + MPC_EVENT + 8);
+    if (!s || n <= 1 || n > 256 || !Readable(s, (size_t)n * 2) || s[n - 1]) return L"?";
+    return s;
+}
+
+/* (runtime 0.32.30; user, 2026-11-08: "add all the named music into the music player") Most of the online match tracks
+ * Survival adds are Wwise "infinite" events: Play gives them the length -1 and the clock never ends them (Tick ends a
+ * track only at a length >= 0: 0x147b285cc), so the player would stay on one for ever. In Survival's mission the music
+ * player's own track (its manager's SoundController, not the ambience) gets SV_MusicLoop's length instead. */
+static volatile int32_t g_musicLoopMs;             /* SV_MusicLoop(ms): 0 = off */
+static void MusicLoopCap(uint8_t* co)
+{
+    if (g_musicLoopMs <= 0 || !Readable(co + MPC_CLOCK, 0x10) || *(float*)(co + MPC_LENGTH) >= 0) return;
+    uint8_t* outer = PtrAt(co, UOBJ_OUTER);
+    if (PtrAt(outer, MPM_CONTROLLER) != co || !MusicSurvivalGi()) return;
+    *(float*)(co + MPC_LENGTH) = (float)g_musicLoopMs / 1000.0f;
+    static uint32_t said;
+    if (said++ < 24) Log(L"music player: %s loops for ever; it moves on after %d s", MusicEventName(co), g_musicLoopMs / 1000);
+}
+
 static void OnMusicTick(void* tickable, float dt)
 {
     CoopFrame(1);
@@ -1118,6 +1145,7 @@ static void OnMusicTick(void* tickable, float dt)
             return;
         }
     }
+    MusicLoopCap((uint8_t*)tickable - 0x28);
     g_nextMusicTick(tickable, dt);
 }
 
@@ -1132,6 +1160,84 @@ static void OnMusicNext(void* manager)
         ret, (uint32_t)(ret - g_exe), clock, length, g_musicHeldMs);
     g_musicHeldMs = 0;
     g_nextMusicNext(manager);
+    co = PtrAt((uint8_t*)manager, MPM_CONTROLLER);           /* (0.32.30) what plays now, for the added tracks' test */
+    if (co && Readable(co + MPC_CLOCK, 0x10))
+        Log(L"music player: now %s (%d ms)", MusicEventName(co), Ms(*(float*)(co + MPC_LENGTH)));
+}
+
+/* ---- the music player's track list (runtime 0.32.30; tools/re/MUSIC_BANKS.md 5) ------------------------------------
+ * The list is the playlist database's (a game instance subsystem), built from DT_SoundMusicPlayerBGM by 0x147b26b50
+ * each time a level's ULiveMusicPlayerSoundManager (a world subsystem) starts. A row is listed when its event is in a
+ * loaded bank's database and it's unlocked (bIsEnableUnlock false, or its mission cleared); rows Lua adds afterwards
+ * show only after a rebuild (SV_MusicBuild: 0x147b296f0(manager), the manager's own Initialize call). Each build also
+ * grants every row it lists to the save's OwnedMusicList / NewlyOwnedMusicList, appending the names it doesn't have
+ * (0x147b26f09-0x147b26f81). While Lua says Survival's rows are in (SV_MusicSave: the save object and those two arrays,
+ * from reflection), the hook cuts each build's appends back off: the list shows them, the player's save never gets
+ * Survival's track names or the stock tracks Survival unlocked (user's rule of 2026-10-24: nothing stock stays changed). */
+typedef void (*MusicBuildFn)(void* obj);
+typedef struct { uint8_t* data; int32_t num, max; } MsArray;
+static uint8_t*      g_fMusicBuild;
+static uint8_t*      g_fMusicRebuild;
+static MusicBuildFn  g_nextMusicBuild;
+static uint8_t* volatile g_msSave;                 /* LiveCampaignSaveGame Lua named, or NULL (off) */
+static uint8_t* volatile g_msArr[2];               /* its OwnedMusicList, NewlyOwnedMusicList */
+static int32_t       g_msBuilds, g_msCut;
+
+static int MsArrayOk(const uint8_t* a)
+{
+    if (!a || ((uintptr_t)a & 7) || !Readable(a, sizeof(MsArray))) return 0;
+    const MsArray* r = (const MsArray*)a;
+    return r->num >= 0 && r->num <= r->max && r->max <= (1 << 16) && (r->num == 0 || Readable(r->data, (size_t)r->num * 8));
+}
+
+/* the arrays Lua named, still inside a live save object (a save loaded again makes a new one) */
+static int MsSaveOk(void)
+{
+    uint8_t* s = g_msSave;
+    if (!s) return 0;
+    int live = UObjLive(s);
+    if (live < 0) live = LiveObject(s);
+    if (live != 1) return 0;
+    for (int i = 0; i < 2; ++i) {
+        uint8_t* a = g_msArr[i];
+        if (!a || a < s + 0x28 || a >= s + 0x4000 || !MsArrayOk(a)) return 0;
+    }
+    return 1;
+}
+
+static void OnMusicBuild(void* db)
+{
+    int keep = MsSaveOk();
+    int32_t before[2] = { 0, 0 };
+    if (keep) for (int i = 0; i < 2; ++i) before[i] = ((MsArray*)g_msArr[i])->num;
+    g_nextMusicBuild(db);
+    ++g_msBuilds;
+    int32_t cut = 0;
+    if (keep && MsSaveOk()) {
+        for (int i = 0; i < 2; ++i) {
+            MsArray* r = (MsArray*)g_msArr[i];
+            if (r->num > before[i]) { cut += r->num - before[i]; r->num = before[i]; }   /* (FNames: nothing to free) */
+        }
+        g_msCut += cut;
+    }
+    /* SoundList (+0x40): every row whose event a loaded bank has, 0x20 each at +0x28 (count +0x30); the database's own
+     * playlists (+0x30, 0x20 each: key, then a TArray of those entries at +8, its count +0x10): the rows it listed */
+    uint8_t* list = PtrAt((uint8_t*)db, 0x40);
+    int32_t known = list && Readable(list + 0x30, 4) ? *(int32_t*)(list + 0x30) : -1;
+    int32_t lists = -1, listed = 0;
+    if (Readable((uint8_t*)db + 0x30, 0x10)) {
+        uint8_t* ga = *(uint8_t**)((uint8_t*)db + 0x30);
+        lists = *(int32_t*)((uint8_t*)db + 0x38);
+        if (lists < 0 || lists > 64 || (lists && !Readable(ga, (size_t)lists * 0x20))) lists = -1;
+        else for (int i = 0; i < lists; ++i) {
+            int32_t n = *(int32_t*)(ga + (size_t)i * 0x20 + 0x10);
+            if (n > 0 && n < 4096) listed += n;
+        }
+    }
+    static uint32_t said;
+    if (said++ < 24)
+        Log(L"music player: track list built: %d tracks its banks have, %d listed (%d lists); %s %d names it granted to the save",
+            known, listed, lists, keep ? L"Survival's rows are in: cut back off" : L"the game's own list: kept", keep ? cut : -1);
 }
 
 /* The Anomaly's field (tools/re/SPECIAL_ROUNDS.md 13): BuildFlightInput(ALivePlayerPlane*, FPlaneInput* out) packs the
