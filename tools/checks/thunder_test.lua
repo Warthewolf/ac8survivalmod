@@ -619,6 +619,40 @@ B.sky.clouds = false
 press("OEM_SEVEN"); gtick(0.25)
 check(math.abs(mine.Data.CloudLayer0.CloudDensity - 0.48) < 1e-6, "clouds false: the cloud values left where they were")
 B.sky.clouds = "safe"
+-- ((2026-11-08) the user: "how about a cutscene transition?", "Fade to black") the heights and rain clouds only under a fade
+check(found("storm build-up: transition (stage 1): NOT made (no camera manager)", from) and math.abs(mine.Data.CloudLayer0.StartHeightInKm - 1.5) < 1e-6,
+    "no camera fade: the heights never written")
+THUNDER.buEnd("the test")
+local fades = {}
+P(survivalPC).PlayerCameraManager = obj("PlayerCameraManager", { StartCameraFade = function(self, a, b, d, col, au, hold)
+    fades[#fades + 1] = { from = a, to = b, dur = d, hold = hold } end })
+from = #logs + 1
+local nPost = #posts
+press("OEM_SEVEN"); gtick(0.1)
+check(fades[1] and fades[1].from == 0 and fades[1].to == 1 and fades[1].dur == 0.5 and fades[1].hold == true
+    and math.abs(mine.Data.CloudLayer0.StartHeightInKm - 1.5) < 1e-6, "a stage change: the fade to black first, the heights not yet")
+gtick(0.5)
+check(math.abs(mine.Data.CloudLayer0.StartHeightInKm - (1.5 + (0.8 - 1.5) * 0.3)) < 1e-6 and mine.Data.CloudLayer0.RainCloudEnable == false
+    and #fades == 1, "... in the dark: the heights at the stage's 30% (a bool not yet half way)")
+local clap = false
+for i = nPost + 1, #posts do if posts[i] == B.sky.transition.sound then clap = true end end
+check(clap, "... a thunder clap")
+gtick(0.65)
+check(fades[2] and fades[2].from == 1 and fades[2].to == 0 and fades[2].dur == 0.7 and fades[2].hold == false
+    and found("storm build-up: transition (stage 1): faded out, 2 of the heights and rain clouds written at 30% of the storm's, faded back in", from),
+    "... then back in over 0.7 s, logged: " .. tostring(found("transition (stage 1)", from)))
+gtick(0.8)
+press("OEM_SEVEN"); press("OEM_SEVEN"); press("OEM_SEVEN"); gtick(0.1); gtick(0.5)
+check(math.abs(mine.Data.CloudLayer0.StartHeightInKm - 0.8) < 1e-6 and mine.Data.CloudLayer0.RainCloudEnable == true,
+    "stage 4 by hand (three quick presses): one fade, the latest stage's values (100%)")
+for _ = 1, 8 do gtick(0.25) end
+press("OEM_SEVEN"); gtick(0.1); gtick(0.5)
+local backNow = math.abs(mine.Data.CloudLayer0.StartHeightInKm - 1.5) < 1e-6 and mine.Data.CloudLayer0.RainCloudEnable == false
+gtick(0.65)
+check(backNow and found("transition (the storm", from) and found("written at 0% of the storm's, faded back in", from),
+    "as it clears: under a fade, the heights and rain clouds back")
+for _ = 1, 8 do gtick(0.25) end
+P(survivalPC).PlayerCameraManager = nil
 THUNDER.buEnd("the test")
 check(math.abs(mine.Data.SunIntensity.Factor - 10) < 1e-6, "... and put back")
 

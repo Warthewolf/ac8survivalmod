@@ -2162,3 +2162,15 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   (0.74.39-coop2mp.131), both registered; patches over 0.74.27-0.74.38 (the TESTER one and the friends' one, no Distant
   Thunder in it, sent). INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.38: build/backup/install_before_0.74.39;
   87 files equal).
+
+## 0.74.40 (2026-11-08, runtime 0.32.31; not yet run in game)
+- The storm's clouds behind a fade to black (the user: "how about a cutscene transition?", "Fade to black", "maybe
+  cheating with using a cutscene to load the storm clouds in is this way"): the cloud values that black the sky out when
+  they change (the heights and rain clouds: hard rule 61) jump to each stage's share of the storm's only while the screen
+  is dark (the camera manager's StartCameraFade: out 0.5 s, a thunder clap and the write, held 0.6 s, back in 0.7 s), at
+  each stage change, as the storm clears and when it ends early; never without the fade. The safe ones ramp as in 0.74.39.
+  tools/re/THUNDER.md. thunder_test.
+- 55 suites pass (48 Lua, 7 native; coop_test not run). Packaged: friends' 668cae2ad156..., TESTER 4271cad61726...
+  (0.74.40-coop2mp.132), both registered; patches over 0.74.27-0.74.39 (the TESTER one and the friends' one, no Distant
+  Thunder in it, sent). INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.39: build/backup/install_before_0.74.40;
+  87 files equal).

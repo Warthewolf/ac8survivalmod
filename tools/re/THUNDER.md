@@ -210,3 +210,14 @@ sv_anomalies_dev.lua (BU), thunder_test.
 - 0.74.39: the build-up ramps every differing cloud value but the unsafe ones (sky.clouds "safe", sky.unsafe:
   StartHeightInKm, RainCloud, RainPillar), with the darkening; logged `storm build-up: the clouds ramped: N of them, never
   these (they black the sky out when they change): ...`. The rain pillar stays off.
+
+## The fade to black (2026-11-08, 0.74.40; not yet run in game)
+The user: "how about a cutscene transition?", "Fade to black", "maybe cheating with using a cutscene to load the storm
+clouds in is this way". The unsafe cloud values (sky.unsafe: heights, rain clouds) jump to a stage's share of the storm's
+only under a fade to black (sky.transition): the player camera manager's StartCameraFade(0, 1, out_s 0.5, black, false,
+hold), when dark they're written and `AKE_Environment_Thunder_Play` posted, held hold_s 0.6, StartCameraFade(1, 0, in_s
+0.7). At each stage change (several in one fade: the latest stage's values), as the storm clears and when it ends early
+(back to the originals). No camera manager or a failed fade: never written (`transition (...): NOT made (...)`). The safe
+values ramp as before. Log `storm build-up: transition (<why>): faded out, N of the heights and rain clouds written at P%
+of the storm's, faded back in`. Not yet seen: whether StartCameraFade covers the whole picture in AC8 (the HUD is its own
+render target: it may stay up), and whether 0.6 s in the dark covers the blink.

@@ -839,6 +839,76 @@ local function rain(on)
     return "put back (bIsWorldRain " .. tostring(was.rain) .. ")"
 end
 
+-- ((2026-11-08) the user: "how about a cutscene transition?", then "Fade to black") the cloud values that black the sky
+-- out when they change (sky.unsafe: heights, rain clouds; hard rule 61) jump to a stage's share of the storm's only under a
+-- fade to black: the camera fades out over transition.out_s, they're written (a thunder clap), held black hold_s, then it
+-- fades back in over in_s. At each stage change, as the storm clears (back to the originals) and when it ends early.
+-- Without the camera fade they're never written. Log: `storm build-up: transition (<why>): ...`.
+local TR = nil
+local function unsafeFields()
+    local sk = bc().sky or {}
+    local out = {}
+    if sk.clouds ~= "safe" then return out end
+    for _, e in ipairs(SF.list or {}) do
+        for _, u in ipairs(type(sk.unsafe) == "table" and sk.unsafe or {}) do
+            if e.path:find(u, 1, true) then out[#out + 1] = e; break end
+        end
+    end
+    return out
+end
+local function unsafeApply(fr)
+    local V = skyView()
+    if not (V and V.asset) then return 0 end
+    local n = 0
+    for _, e in ipairs(unsafeFields()) do
+        local v
+        if type(e.base) == "number" then v = e.base + (e.target - e.base) * fr else v = (fr >= 0.5) and e.target or e.base end
+        local _, ok = SKY.writeKey(V, e.key, v)
+        if ok then n = n + 1 end
+    end
+    SF.unsafeAt = fr
+    return n
+end
+local function camFade(from, to, dur, hold)
+    local pcm = nil
+    pcall(function() pcm = survivalPC.PlayerCameraManager end)
+    if not (pcm ~= nil and liveObj(pcm)) then return false, "no camera manager" end
+    local ok, err = pcall(function() pcm:StartCameraFade(from, to, dur, { R = 0, G = 0, B = 0, A = 1 }, false, hold) end)
+    return ok, ok and nil or tostring(err)
+end
+-- a transition to fraction fr (a function: read when it's dark, so the latest stage wins) of the storm's unsafe values
+local function transition(fr, why)
+    local c = (bc().sky or {}).transition or {}
+    if c.enabled == false or #unsafeFields() == 0 then return false end
+    if TR then TR.fr, TR.why = fr, why; return true end     -- (one under way: it writes the latest when it's dark)
+    local ok, err = camFade(0, 1, tonumber(c.out_s) or 0.5, true)
+    if not ok then
+        log(string.format("storm build-up: transition (%s): NOT made (%s): the heights and rain clouds left as they are", why, tostring(err)))
+        return false
+    end
+    TR = { fr = fr, why = why, phase = "out", at = os.clock() + (tonumber(c.out_s) or 0.5) }
+    return true
+end
+local function transitionTick(now)
+    local t = TR
+    if not t or now < t.at then return end
+    local c = (bc().sky or {}).transition or {}
+    if t.phase == "out" then
+        local fr = type(t.fr) == "function" and t.fr() or t.fr
+        local n = unsafeApply(tonumber(fr) or 0)
+        post(c.sound)
+        t.phase, t.at, t.n, t.frDone = "hold", now + (tonumber(c.hold_s) or 0.6), n, fr
+    elseif t.phase == "hold" then
+        local ok, err = camFade(1, 0, tonumber(c.in_s) or 0.7, false)
+        t.phase, t.at = "in", now + (tonumber(c.in_s) or 0.7)
+        log(string.format("storm build-up: transition (%s): faded out, %d of the heights and rain clouds written at %.0f%% of the storm's, faded back in%s",
+            t.why, t.n or 0, 100 * (tonumber(t.frDone) or 0), ok and "" or (" (NOT: " .. tostring(err) .. ")")))
+    else
+        TR = nil
+    end
+end
+THUNDER.transitionTick = transitionTick
+
 -- ((2026-11-08) the user's recording of 0.74.36: the whole sky black for ~0.1 s at every write of the storm's cloud
 -- values; "we need to work that out") Ctrl+/: the sky probe. Each press puts the group before back, then writes the next
 -- group of Mission 12's storm sky values probe.writes times, probe.gap_s apart (one blink is easy to miss), its callout
@@ -949,6 +1019,7 @@ end
 local function clearBU(B, why)
     if B.clearing then return end
     B.clearing, B.clearAt = true, os.clock()
+    if (SF.unsafeAt or 0) > 0 then transition(0, "the storm clears") end
     THUNDER.strikesOff("the storm clears")
     local t = bc().text or {}
     if t.clear then hudCallout(t.clear, t.clear_sub) end
@@ -961,6 +1032,7 @@ local function endBU(why)
     if not B then return end
     BU = nil
     if B.f and B.f > 0 then skyApply(0) end
+    if (SF.unsafeAt or 0) > 0 and not torn() then transition(0, "the storm's over") end
     pillar(nil)
     local r = rain(false)
     if B.distant then post((bc().sound or {}).distant_stop) end
@@ -987,6 +1059,9 @@ local function buTick(now)
             local t = c.text or {}
             if t.stage and t.stage[s] then hudCallout(t.stage[s], t.stage_sub and t.stage_sub[s] or nil) end
             if s == 1 and not B.distant then B.distant = true; post((c.sound or {}).distant) end
+            skyFields()
+            transition(function() return BU and not BU.clearing and (tonumber(ofStage((c.sky or {}).fraction, BU.stage, 1)) or 1) or 0 end,
+                "stage " .. s)
             local rn = (s >= (tonumber((c.rain or {}).from_stage) or 3)) and rain(true) or "not yet"
             log(string.format("storm build-up: stage %d%s: %d storm cells (%.1f km round, %s s between rolls, chance x%.2f), the sky to %.0f%% of the storm's; rain %s",
                 s, s == 4 and " (the typhoon)" or "", #B.cells, (B.cells[1] and B.cells[1].r or 0) / 100000, rollsText(B.cells[1] and B.cells[1].roll or "-"),
@@ -1391,13 +1466,15 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "thunder", fn = function(now)
             log("thunder: the level is going: its storms and the storm test forgotten, not touched")
             THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
             SK.inside, SK.noiseUntil, SK.upsetUntil, SK.upsetOn, SK.pawn, SK.zone = false, nil, nil, false, nil, nil
-            BU, SF.list, SF.ws, SF.rainWas = nil, nil, nil, nil
+            BU, SF.list, SF.ws, SF.rainWas, TR, SF.unsafeAt = nil, nil, nil, nil, nil, nil
         end
         return
     end
     parkTick()
     fxTick(now, false)
     testTick(now)
+    local okT, errT = pcall(transitionTick, now)
+    if not okT then say("transition", "storm build-up: transition error " .. tostring(errT)) end
     local okP, errP = pcall(probeTick, now)
     if not okP then say("probe", "sky probe: error " .. tostring(errP)) end
     local okB, errB = pcall(buTick, now)
@@ -1417,7 +1494,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "thunder", fn = function(now)
 end }
 if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["thunder"] = function()
-        BU, SF.list, SF.ws, SF.rainWas, SK.zone, SK.inside, PB.i, PB.w = nil, nil, nil, nil, nil, false, 0, nil
+        BU, SF.list, SF.ws, SF.rainWas, SK.zone, SK.inside, PB.i, PB.w, TR, SF.unsafeAt = nil, nil, nil, nil, nil, false, 0, nil, nil, nil
         THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
         THUNDER.cls, THUNDER.copyHp, THUNDER.mgr = nil, nil, nil
     end
