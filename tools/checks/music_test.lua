@@ -1,13 +1,17 @@
--- music_test.lua <mod dir> (run by tools/checks/music_test.sh): Survival's music player (sv_music.lua; user,
--- 2026-11-08: "add all the named music into the music player"), the part alone with the game stubbed:
+-- music_test.lua <mod dir> (run by tools/checks/music_test.sh): Survival's music player (sv_music.lua; the user,
+-- 2026-11-08: "add all the named music into the music player", then, AC8's player showing 120 at most: "Make room: hide
+-- menu tracks", "Delete the briefing debriefing cutscene tracks", "hangars too", "Have it draw from the jukebox"), the
+-- part alone with the game stubbed:
 --   nothing changed without the runtime's functions or without the save's two music lists (SV_MusicSave);
---   in Survival's level: the save's lists named, every locked stock track unlocked (the open ones left), Survival's rows
---     added after the stock ones, their SV_ titles set (the game's own keys left), Survival's level's list built again
---     (its manager, not another level's), once; a page open or a track playing (0) waits and builds again later;
---   a restart (a new manager in Survival's level): built again;
---   leaving (another level): Survival's rows out, the stock tracks locked again as they were, the next level's list
---     built again, and only then the save's lists let go (SV_MusicSave(0));
---   [music] player_all = false in Survival's level: the same, Survival's own list built again without them;
+--   in Survival's level: the save's lists named; player_hide's stock rows locked to no mission (bIsEnableUnlock true,
+--     UnlockMissionID 127), the other locked stock rows unlocked; the room left to player_max filled with a random draw
+--     from player_from's groups only (the jukebox), in the table's order; SV_ titles set; Survival's level's list built
+--     (its manager, not another level's), once; the whole pass once a level (no FindRow every 2 s);
+--   a page open or a track playing (0) waits; a restart (a new manager) built again, the same draw;
+--   leaving: the draw out, every stock row back as it was (unlock and mission), the next level's list built, then the
+--     save's lists let go; the next run a new draw;
+--   [music] player_all = false in Survival's level: the same, Survival's own list built again;
+--   a hide that doesn't take: that row counts as shown, the room one smaller (never over the limit);
 --   the loop length to the runtime in ms.
 local MOD = arg[1]
 local fails = 0
@@ -18,11 +22,12 @@ local PARTS = dofile("parts.lua")(MOD, readAll)
 local logs = {}
 function log(s) logs[#logs + 1] = s end
 local function lastLog(pat) for i = #logs, 1, -1 do if logs[i]:find(pat) then return logs[i] end end end
+local function count(pat) local n = 0; for _, l in ipairs(logs) do if l:find(pat) then n = n + 1 end end; return n end
 
--- a DataTable: rows by name, in order
+local finds = 0
 local function newTable(full, rows)
     local t = { full = full, order = {}, rows = {}, addr = math.random(1000, 9000) * 16 }
-    function t:FindRow(n) return self.rows[n] end
+    function t:FindRow(n) finds = finds + 1; return self.rows[n] end
     function t:AddRow(n, src)
         if self.rows[n] then return end
         local c = {}
@@ -42,20 +47,26 @@ end
 local STR = { __index = { ToString = function(self) return self.s end } }
 local function S(s) return setmetatable({ s = s }, STR) end
 
+local TITLE, BRIEF, M01A, M30D = "AKE_Bgm_MUSICPLAYER_BGM_TITLE_Play", "AKE_Bgm_MUSICPLAYER_BGM_BRIEFING01_Play",
+    "AKE_Bgm_MUSICPLAYER_BGM_M01A_Play", "AKE_Bgm_MUSICPLAYER_BGM_M30D_Play"
 local GAME = newTable("DataTable /Game/Datatables/Sound/DT_SoundMusicPlayerBGM.DT_SoundMusicPlayerBGM", {
-    { "AKE_Bgm_MUSICPLAYER_BGM_TITLE_Play", { bIsEnableUnlock = false, TitleTextID = S("MusicPlayer_SongTitle_Title") } },
-    { "AKE_Bgm_MUSICPLAYER_BGM_M01A_Play", { bIsEnableUnlock = true, TitleTextID = S("MusicPlayer_SongTitle_M01A") } },
-    { "AKE_Bgm_MUSICPLAYER_BGM_M30D_Play", { bIsEnableUnlock = true, TitleTextID = S("MusicPlayer_SongTitle_M30D") } },
+    { TITLE, { bIsEnableUnlock = false, UnlockMissionID = 1, TitleTextID = S("MusicPlayer_SongTitle_Title") } },
+    { BRIEF, { bIsEnableUnlock = true, UnlockMissionID = 5, TitleTextID = S("MusicPlayer_SongTitle_Briefing01") } },
+    { M01A, { bIsEnableUnlock = true, UnlockMissionID = 1, TitleTextID = S("MusicPlayer_SongTitle_M01A") } },
+    { M30D, { bIsEnableUnlock = true, UnlockMissionID = 31, TitleTextID = S("MusicPlayer_SongTitle_M30D") } },
 })
+local function row(key, title, okey, oname)
+    return { bIsEnableUnlock = false, UnlockMissionID = 1, TitleTextID = S(key), TitleString = S(title),
+             OriginTextID = S(okey or "None"), OriginString = S(oname or "") }
+end
+local JB = { "AKE_Bgm_JukeBox_ac04_Comona_Play", "AKE_Bgm_JukeBox_ac5_Wardog_Play", "AKE_Bgm_JukeBox_ac7_Daredevil_Play" }
 local MINE = newTable("DataTable /Game/Mods/SurvivalMode/Data/DT_SV_MusicRows.DT_SV_MusicRows", {
-    { "AKE_Bgm_Ending01_Play", { bIsEnableUnlock = false, TitleTextID = S("SV_Mus2T"), TitleString = S("Ending Ⅰ"),
-                                 OriginTextID = S("None"), OriginString = S("") } },
-    { "AKE_Bgm_Cin_Ms030010_Play", { bIsEnableUnlock = false, TitleTextID = S("MusicPlayer_SongTitle_Cin_Ms030010"),
-                                     TitleString = S("Jet Stream/Grim Reaper"), OriginTextID = S("None"), OriginString = S("") } },
-    { "AKE_Bgm_JukeBox_ac04_Comona_Play", { bIsEnableUnlock = false, TitleTextID = S("SV_Mus40T"), TitleString = S("Comona"),
-                                            OriginTextID = S("SV_MusO4T"), OriginString = S("ACE COMBAT 04: Shattered Skies") } },
-    { "AKE_Bgm_Online_ACE2_Aim_Hight_Play", { bIsEnableUnlock = false, TitleTextID = S("SV_Mus99T"), TitleString = S("Aim High"),
-                                              OriginTextID = S("SV_MusO2T"), OriginString = S("ACE COMBAT 2") } },
+    { "AKE_Bgm_Ending01_Play", row("SV_Mus1T", "Ending Ⅰ") },
+    { "AKE_Bgm_Online_Op_Play", row("MusicPlayer_SongTitle_Online_OP", "Sky mercenaries") },
+    { JB[1], row("SV_Mus20T", "Comona", "SV_MusO4T", "ACE COMBAT 04: Shattered Skies") },
+    { JB[2], row("SV_Mus30T", "Wardog", "SV_MusO5T", "ACE COMBAT 5: THE UNSUNG WAR") },
+    { JB[3], row("SV_Mus40T", "Daredevil", "SV_MusO7T", "ACE COMBAT 7: SKIES UNKNOWN") },
+    { "AKE_Bgm_Online_ACE2_Aim_Hight_Play", row("SV_Mus99T", "Aim High", "SV_MusO2T", "ACE COMBAT 2") },
 })
 local function obj(full, addr) return { full = full, addr = addr, GetAddress = function(self) return self.addr end } end
 local SURV_MGR = obj("LiveMusicPlayerSoundManager /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:LiveMusicPlayerSoundManager_0", 0x5000)
@@ -67,10 +78,11 @@ SAVE.CampaignSaveData = { MusicPlayer = {
 local SAVEMGR = obj("LiveSaveDataManager /Engine/Transient.LiveSaveDataManager_0", 0x8000)
 SAVEMGR.CampaignSaveGame = SAVE
 
--- the world
 local objects = { managers = { SURV_MGR }, saveMgr = nil, pages = {} }
+local walks = 0
 function FindFirstOf(c) if c == "LiveSaveDataManager" then return objects.saveMgr end return nil end
 function FindAllOf(c)
+    walks = walks + 1
     if c == "LiveMusicPlayerSoundManager" then return objects.managers end
     return objects.pages[c]
 end
@@ -93,9 +105,7 @@ function dtCall(dt, m, ...)
     return ok, r
 end
 function rowList(dt) return dt:GetRowNames() end
-CFG = { music = { player_all = true, player_loop_s = 240 } }
 
--- the runtime
 local calls = { save = {}, build = {}, texts = {}, loop = nil }
 local buildAnswer = 1
 local function natives()
@@ -105,46 +115,58 @@ local function natives()
     function SV_SetText(k, t) calls.texts[k] = t; return 1 end
 end
 
+-- the shipped settings (sv_config_specials.lua's CFG.music), the limit made small for the test
+CFG = {}
+PARTS.load("sv_config_specials.lua", nil, {})
+local shippedHide = CFG.music and CFG.music.player_hide or {}
+check(#shippedHide == 13 and CFG.music.player_from == "jukebox" and CFG.music.player_max == 120,
+      "shipped: 13 menu tracks hidden, the draw from the jukebox, the limit 120")
+CFG = { music = { player_all = true, player_loop_s = 240, player_from = "jukebox", player_max = 4, player_hide = { TITLE, BRIEF } } }
+
 PARTS.dofile("sv_music.lua")
 local tick = 0
-local function run(n) for _ = 1, n or 1 do tick = tick + 1; MUSIC.tick(tick) end end
-local function runFull() for _ = 1, 8 do tick = tick + 1; MUSIC.tick(tick) end end    -- (it looks every 8th tick)
+local function runFull() for _ = 1, 8 do tick = tick + 1; MUSIC.tick(tick) end end
+local function ours() local n = 0; for _, r in ipairs(GAME.order) do if MINE.rows[r] then n = n + 1 end end; return n end
+local function jukeboxIn() local l = {}; for _, r in ipairs(GAME.order) do if r:find("JukeBox", 1, true) then l[#l + 1] = r end end; return l end
 
----------------------------------------------------------------------------------------------------- nothing without the runtime
-print("no runtime functions: nothing changed")
+print("no runtime functions / no save's lists: nothing changed")
 svLevelOn, containerState = true, true
 runFull()
-check(#GAME.order == 3 and GAME.rows["AKE_Bgm_MUSICPLAYER_BGM_M01A_Play"].bIsEnableUnlock == true, "the stock list as it was")
-check(lastLog("no SV_MusicBuild") ~= nil, "said why")
-
-print("no save's lists: nothing changed")
+check(#GAME.order == 4 and GAME.rows[M01A].bIsEnableUnlock == true and lastLog("no SV_MusicBuild") ~= nil, "no runtime: as it was")
 natives()
 runFull()
-check(#GAME.order == 3 and GAME.rows["AKE_Bgm_MUSICPLAYER_BGM_M01A_Play"].bIsEnableUnlock == true, "the stock list as it was")
-check(#calls.build == 0 and lastLog("weren't found") ~= nil, "no list built; said why")
+check(#GAME.order == 4 and GAME.rows[BRIEF].UnlockMissionID == 5 and #calls.build == 0 and lastLog("weren't found") ~= nil,
+      "no save's lists: as it was")
 
----------------------------------------------------------------------------------------------------- in Survival
-print("in Survival's level: unlocked, added, built")
+print("in Survival's level: hidden, unlocked, drawn, built")
 objects.saveMgr = SAVEMGR
-objects.managers = { MENU_MGR, SURV_MGR }                -- (the last level's manager still about)
+objects.managers = { MENU_MGR, SURV_MGR }
 runFull()
 check(#calls.save == 1 and calls.save[1][1] == 0x7000 and calls.save[1][2] == 0x7650 and calls.save[1][3] == 0x7660,
       "the save and its two lists named first")
-check(GAME.rows["AKE_Bgm_MUSICPLAYER_BGM_M01A_Play"].bIsEnableUnlock == false and
-      GAME.rows["AKE_Bgm_MUSICPLAYER_BGM_M30D_Play"].bIsEnableUnlock == false, "the locked stock tracks unlocked")
-check(#GAME.order == 7 and GAME.order[4] == "AKE_Bgm_Ending01_Play" and GAME.order[7] == "AKE_Bgm_Online_ACE2_Aim_Hight_Play",
-      "Survival's 4 rows added after the stock ones, in order")
-check(calls.texts.SV_Mus2T == "Ending Ⅰ" and calls.texts.SV_Mus40T == "Comona" and calls.texts.SV_MusO4T == "ACE COMBAT 04: Shattered Skies"
-      and calls.texts.MusicPlayer_SongTitle_Cin_Ms030010 == nil, "Survival's titles and game names set, the game's own keys left")
-check(#calls.build == 1 and calls.build[1] == 0x5000, "Survival's level's list built (its manager, not the main menu's)")
-runFull(); runFull()
-check(#calls.build == 1 and #calls.save == 1, "once")
+check(GAME.rows[TITLE].bIsEnableUnlock == true and GAME.rows[TITLE].UnlockMissionID == 127 and
+      GAME.rows[BRIEF].bIsEnableUnlock == true and GAME.rows[BRIEF].UnlockMissionID == 127, "the menu tracks locked to no mission")
+check(GAME.rows[M01A].bIsEnableUnlock == false and GAME.rows[M30D].bIsEnableUnlock == false, "the other stock tracks unlocked")
+local jb = jukeboxIn()
+check(ours() == 2 and #jb == 2, "the room (4 less 2 shown) filled: 2 of Survival's (" .. ours() .. ")")
+local order = {}
+for i, r in ipairs(JB) do order[r] = i end
+check(#jb == 2 and order[jb[1]] < order[jb[2]], "all from the jukebox, in the table's order")
+check(GAME.rows["AKE_Bgm_Online_Op_Play"] == nil and GAME.rows["AKE_Bgm_Ending01_Play"] == nil, "nothing from the other groups")
+check(calls.texts.SV_Mus20T == "Comona" and calls.texts.SV_MusO7T == "ACE COMBAT 7: SKIES UNKNOWN" and
+      calls.texts["MusicPlayer_SongTitle_Online_OP"] == nil, "Survival's titles set, the game's own keys left")
+check(#calls.build == 1 and calls.build[1] == 0x5000, "Survival's level's list built (its manager)")
+local f0, w0 = finds, walks
+runFull(); runFull(); runFull()
+check(#calls.build == 1 and #calls.save == 1 and finds == f0 and walks == w0, "then left: no FindRow, no walk every 2 s")
+check(count("stock tracks shown") == 1, "the pass once")
 
-print("a restart: a new manager in Survival's level, built again; a page open waits")
+print("a restart: a new manager, built again, the same draw; a page open waits")
+local drawn = table.concat(jukeboxIn(), ",")
 local SURV2 = obj("LiveMusicPlayerSoundManager /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:LiveMusicPlayerSoundManager_1", 0x5100)
 objects.managers = { SURV2 }
-local page = { IsVisible = function() return true end }
-objects.pages.WBP_Menu_PauseMusicPlayer_000_C = { page }
+MUSIC.levelLoad()
+objects.pages.WBP_Menu_PauseMusicPlayer_000_C = { { IsVisible = function() return true end } }
 runFull()
 check(#calls.build == 1 and lastLog("is open") ~= nil, "not built while the music player's page is open")
 objects.pages.WBP_Menu_PauseMusicPlayer_000_C = nil
@@ -153,36 +175,56 @@ runFull()
 check(#calls.build == 2 and calls.build[2] == 0x5100, "tried when it closed")
 buildAnswer = 1
 runFull()
-check(#calls.build == 3 and calls.build[3] == 0x5100, "a track playing (0): built again 2 s later")
-runFull()
-check(#calls.build == 3, "then left")
+check(#calls.build == 3 and calls.build[3] == 0x5100 and table.concat(jukeboxIn(), ",") == drawn, "built 2 s later, the same draw")
 
----------------------------------------------------------------------------------------------------- leaving
 print("leaving Survival's level")
 svLevelOn = false
-objects.managers = { SURV2 }                             -- (the next level's manager not up yet)
+objects.managers = { SURV2 }
 runFull()
-check(#GAME.order == 3 and GAME.rows["AKE_Bgm_Ending01_Play"] == nil, "Survival's rows taken out")
-check(GAME.rows["AKE_Bgm_MUSICPLAYER_BGM_M01A_Play"].bIsEnableUnlock == true and
-      GAME.rows["AKE_Bgm_MUSICPLAYER_BGM_TITLE_Play"].bIsEnableUnlock == false, "the stock tracks locked again as they were")
+check(#GAME.order == 4 and ours() == 0, "Survival's rows taken out")
+check(GAME.rows[TITLE].bIsEnableUnlock == false and GAME.rows[TITLE].UnlockMissionID == 1 and
+      GAME.rows[BRIEF].bIsEnableUnlock == true and GAME.rows[BRIEF].UnlockMissionID == 5 and
+      GAME.rows[M01A].bIsEnableUnlock == true and GAME.rows[M30D].bIsEnableUnlock == true, "every stock row as it was")
 check(#calls.save == 1, "the save's lists still named (the next level's own build may list Survival's rows)")
 objects.managers = { SURV2, MENU_MGR }
 runFull()
-check(#calls.build == 4 and calls.build[4] == 0x6000, "the next level's list built again without them")
-check(#calls.save == 2 and calls.save[2][1] == 0, "then the save's lists let go")
-runFull(); runFull()
-check(#calls.build == 4 and #calls.save == 2, "once")
+check(#calls.build == 4 and calls.build[4] == 0x6000 and #calls.save == 2 and calls.save[2][1] == 0,
+      "the next level's list built again without them, then the save's lists let go")
 
----------------------------------------------------------------------------------------------------- [music] off
-print("[music] player_all = false in Survival's level")
-svLevelOn = true
-objects.managers = { SURV_MGR }
+print("the next run: a new draw; [music] player_all = false")
+local seen = { [drawn] = true }
+local newDraw = false
+for _ = 1, 12 do
+    svLevelOn = true; objects.managers = { SURV_MGR }
+    runFull()
+    local d = table.concat(jukeboxIn(), ",")
+    if not seen[d] then newDraw = true end
+    svLevelOn = false; objects.managers = { MENU_MGR }
+    runFull(); runFull()
+end
+check(newDraw, "another draw in a later run")
+svLevelOn = true; objects.managers = { SURV_MGR }
 runFull()
-check(#GAME.order == 7 and #calls.build == 5, "back in a run: added and built again")
+local b0 = #calls.build
 CFG.music.player_all = false
 runFull()
-check(#GAME.order == 3 and #calls.build == 6 and calls.build[6] == 0x5000, "taken out; Survival's own list built again")
-check(calls.save[#calls.save][1] == 0, "the save's lists let go")
+check(ours() == 0 and #calls.build == b0 + 1 and calls.build[#calls.build] == 0x5000 and calls.save[#calls.save][1] == 0,
+      "off: taken out, Survival's own list built again, the save let go")
+
+print("a hide that doesn't take: never over the limit")
+CFG.music.player_all = true
+svLevelOn = false; runFull(); runFull()
+local stuck = setmetatable({}, { __index = GAME.rows[TITLE], __newindex = function(t, k, v)
+    if k == "UnlockMissionID" then return end                -- (its write doesn't take)
+    rawset(GAME.rows[TITLE], k, v)
+end })
+local realTitle = GAME.rows[TITLE]
+GAME.rows[TITLE] = stuck
+svLevelOn = true; objects.managers = { SURV_MGR }
+runFull()
+check(ours() == 1 and lastLog("1 NOT hidden") ~= nil, "TITLE counted as shown: room 1 (" .. ours() .. ")")
+check(realTitle.bIsEnableUnlock == false, "and left as it was")
+GAME.rows[TITLE] = realTitle
 
 print("the loop length")
 MUSIC.levelLoad()

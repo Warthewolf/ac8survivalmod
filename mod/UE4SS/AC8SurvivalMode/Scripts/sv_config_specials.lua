@@ -1550,10 +1550,21 @@ CFG.music = {
     enabled      = false,
     pause_player = true,
     hold_clock   = true,
-    -- ((2026-11-08) the user: "add all the named music into the music player") Survival's music player: every stock track
-    -- unlocked and the game's other named tracks added (sv_music.lua; never written to the save)
+    -- ((2026-11-08) the user: "add all the named music into the music player") Survival's music player (sv_music.lua; never
+    -- written to the save): the menu tracks hidden, every other stock track unlocked, the room left to player_max filled
+    -- with a random draw from player_from's groups (jukebox, online, battle, endings), new each time a run starts
     player_all    = true,
-    player_loop_s = 240,      -- a track that loops for ever (most online match tracks) moves on after this; 0 = never
+    player_max    = 120,      -- the music player's limit (its list shows 120; more crashed the game)
+    player_from   = "jukebox",
+    player_loop_s = 240,      -- a track that loops for ever (the online match tracks) moves on after this; 0 = never
+    -- the stock tracks hidden in Survival (the user: "Delete the briefing debriefing cutscene tracks", "hangars too")
+    player_hide   = { "AKE_Bgm_MUSICPLAYER_BGM_TITLE_Play", "AKE_Bgm_MUSICPLAYER_BGM_MAINMENU_Play",
+                      "AKE_Bgm_MUSICPLAYER_BGM_BRIEFING01_Play", "AKE_Bgm_MUSICPLAYER_BGM_BRIEFING02_Play",
+                      "AKE_Bgm_MUSICPLAYER_BGM_BRIEFING03_Play", "AKE_Bgm_MUSICPLAYER_BGM_BRIEFING04_Play",
+                      "AKE_Bgm_MUSICPLAYER_BGM_HANGAR01_Play", "AKE_Bgm_MUSICPLAYER_BGM_HANGAR02_Play",
+                      "AKE_Bgm_MUSICPLAYER_BGM_HANGAR03_Play", "AKE_Bgm_MUSICPLAYER_BGM_DEBRIEFING01_Play",
+                      "AKE_Bgm_MUSICPLAYER_BGM_DEBRIEFING02_Play", "AKE_Bgm_MUSICPLAYER_BGM_DEBRIEFING03_Play",
+                      "AKE_Bgm_MUSICPLAYER_BGM_MISSIONFAILED_Play" },
     start_track  = "AKE_Bgm_Ms08A_Play",
     restart_s    = 15,
     tracks  = { "AKE_Bgm_Ms02A_Play", "AKE_Bgm_Ms04A_Play", "AKE_Bgm_Ms05a_Play", "AKE_Bgm_Ms07A_Play",

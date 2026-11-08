@@ -1492,11 +1492,23 @@ do
     statics[lf] = { full = lf, addr = addr() }
     function p1:K2_GetRootComponent() return { full = "root", owner = self } end
     events = {}
+    -- ((2026-11-08) "ZFA-44s dont mark themselves at all on subsequent purchases": switched off by the last carrier's leaving)
+    local calls1 = {}
+    p1.bShowHUDBox, p1.bIsNotLockonTarget, p1.bIsNotFCSTargets, p1.bIsInvincible = false, true, true, true
+    function p1:SetActorHiddenInGame(b) calls1.hidden = b end
+    function p1:SetActorEnableCollision(b) calls1.collision = b end
+    function p1:SetActorTickEnabled(b) calls1.tick = b end
+    function p1:SetActive(b) calls1.active = b end
     check(ZLAUNCH.risen(C, F, 501) == false and evCount("RE_SV_ZfaClimb_1_2") == 0, "parked under the sea: not out yet")
     p1.Z = 2500
     local from = #logs + 1
     check(ZLAUNCH.risen(C, F, 503) == true and evCount("RE_SV_ZfaClimb_1_2") == 1 and F.climbed == true, "out of its container: its climb-out fired")
     check(has(line("carrier: ZFA-44 CARRIER 1: 1 ZFA-44 out of its container", from), "RE_SV_ZfaClimb_1_2 fired"), "logged")
+    check(p1.bShowHUDBox == true and p1.bIsNotLockonTarget == false and p1.bIsNotFCSTargets == false and p1.bIsInvincible == false
+          and calls1.hidden == false and calls1.collision == true and calls1.tick == true and calls1.active == true,
+          "one switched off by a carrier leaving: on again out of its container (box, lock-on, damage, shown)")
+    check(has(line("carrier: ZFA-44 CARRIER 1: 1 ZFA-44 out of its container", from), "1 had been switched off by a carrier leaving"),
+          "logged")
     check(#smokes == 1 and smokes[1].sys.full == lf and smokes[1].root.owner == p1 and has(line("carrier: ZFA-44 CARRIER 1: 1 ZFA-44 out", from), "launch smoke on 1"),
           "the drone's launch smoke (NS_UAVLaunch001) attached to the one out, logged")
     clock = clock + 1.1

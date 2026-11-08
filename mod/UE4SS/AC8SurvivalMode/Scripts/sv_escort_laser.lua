@@ -782,6 +782,22 @@ function ZLAUNCH.tick()
     log(string.format("carrier: launched ZFA-44s +%.0f s: %s%s", t, table.concat(parts, "; "), apart))
     if not marks[k + 1] then ZLAUNCH.watch = {} end
 end
+-- ((2026-11-08) Saint Alessia's host log of 0.74.27: "ZFA-44s dont mark themselves at all on subsequent purchases"; the
+-- user: "ZFA-44's showed up but with no hud boxes") A carrier leaving switches off every ZFA-44 taken as its flight's
+-- (sv_escort.lua flightOff / offObj: no box, no lock-on, invincible, hidden; at the first launch all 12 parked ones
+-- were taken as its flight's) and finishes off only those under parked_m, so the next carrier's launch flew the others
+-- as they were left. A ZFA-44 seen out of its container is switched on again: true when it had been off.
+local function onObj(o)
+    local okB, box = pcall(function() return o.bShowHUDBox end)
+    for f, v in pairs({ bShowHUDBox = true, bIsNotLockonTarget = false, bIsNotFCSTargets = false, bIsInvincible = false }) do
+        pcall(function() o[f] = v end)
+    end
+    pcall(function() o:SetActive(true, false, false) end)
+    pcall(function() o:SetActorHiddenInGame(false) end)
+    pcall(function() o:SetActorEnableCollision(true) end)
+    pcall(function() o:SetActorTickEnabled(true) end)
+    return okB and box == false
+end
 local function climbOf(F)
     for _, arms in ipairs(cc().launchers or {}) do
         for _, arm in ipairs(arms) do if arm.record == F.record then return arm.climb end end
@@ -802,7 +818,7 @@ function ZLAUNCH.risen(C, F, now)
     local hull = ESC.hullPose and ESC.hullPose(C)
     local cap = num(c.capture_km, 4) * 100000
     local riseZ, parkZ = num(c.rise_m, -50) * 100, num(c.parked_m, -100) * 100
-    local out = 0
+    local out, back = 0, 0
     for u, l in pairs(ESC.planes or {}) do
         if ESC.kindOf(u) == "zfa" then
             for _, e in ipairs(l) do
@@ -815,6 +831,7 @@ function ZLAUNCH.risen(C, F, now)
                             e.out = true
                             e.armUnit = F.unit                 -- (its laser's record: ZLAS.drive)
                             out = out + 1
+                            if onObj(e.obj) then back = back + 1 end
                             local fx = smoke(e.obj)
                             if out == 1 then ZLAUNCH.watch = { at = os.clock(), list = {}, fx = 0 } end
                             local w = ZLAUNCH.watch
@@ -827,8 +844,9 @@ function ZLAUNCH.risen(C, F, now)
         end
     end
     if out == 0 then return false end
-    fireClimb(C, F, string.format("%d ZFA-44%s out of its container (%s, %.0f s after its launch record; launch smoke on %d)", out,
-        out == 1 and "" or "s", tostring(F.unit), now - (F.at or now), (ZLAUNCH.watch or {}).fx or 0))
+    fireClimb(C, F, string.format("%d ZFA-44%s out of its container (%s, %.0f s after its launch record; launch smoke on %d%s)", out,
+        out == 1 and "" or "s", tostring(F.unit), now - (F.at or now), (ZLAUNCH.watch or {}).fx or 0,
+        back > 0 and string.format("; %d had been switched off by a carrier leaving: on again, box and all", back) or ""))
     return true
 end
 -- ((2026-11-07) the user: "need to make the Vampires Escort the Nearest Player too them") ZLAUNCH.coverTick (every tick,

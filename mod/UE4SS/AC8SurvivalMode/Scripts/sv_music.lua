@@ -1,41 +1,50 @@
 -- sv_music.lua : the pause menu's music player in Survival (2026-11-08)
 -- The user: "add more music into the music player function", "Theres music that is only available in the online mode
 -- too", "If you can add all the named music into the music player do so". While Survival's level is on:
---  * every stock track of the music player is unlocked (bIsEnableUnlock false on the game's own rows, as its Title and
---    Main Menu rows have; each put back when the level goes);
---  * the game's other named tracks are added (Survival's DT_SV_MusicRows, tools/music_tracks.py: the campaign bank's
---    four, the cutscenes', Online Mode's, the online jukebox's 77 and the older games' online match tracks: every one
---    of their banks is resident from the game's start, tools/re/MUSIC_BANKS.md 2), and taken out again when it goes;
+--  * AC8's music player shows 120 tracks at most (its scroll list's limit, ULiveMenuScrollCommandListWidget +0x434 =
+--    120: past it the cursor runs on over rows that aren't there and a press there crashed the game, the user's run of
+--    0.74.29 at the 232nd of 235). So, as the user chose ("Make room: hide menu tracks"; "Delete the briefing debriefing
+--    cutscene tracks", "hangars too", "Have it draw from the jukebox"):
+--  * the stock menu tracks are hidden (CFG.music.player_hide: Title, Main Menu, the briefings, hangars, debriefings and
+--    Mission Failed: locked to a mission there is none of, put back when the level goes), every other stock track
+--    unlocked (bIsEnableUnlock false, as the Title row has; put back too);
+--  * the room left (player_max 120, less the stock tracks shown) is filled with a random draw, new each level, from
+--    Survival's DT_SV_MusicRows (tools/music_tracks.py) rows of the groups in player_from (default the online lobby's
+--    jukebox: AC04, 5, 6, 7 and Zero), listed in the table's order; taken out again when the level goes. Their banks are
+--    resident from the game's start (tools/re/MUSIC_BANKS.md 2);
 --  * the level's music player list is built again with them (runtime SV_MusicBuild): the game builds it only as a
 --    level starts (tools/re/MUSIC_BANKS.md 5), and once more in the next level after they're out;
 --  * the player's save is never changed: each build grants what it lists to the save's OwnedMusicList /
 --    NewlyOwnedMusicList, and while Survival's rows are in the runtime cuts those grants back off (SV_MusicSave). Without
---    the save's two lists found, nothing is unlocked or added (hard rule of 2026-10-24: nothing stock stays changed);
---  * their titles (and the older games' names) are Survival's texts (SV_Mus<n>T, SV_MusO<n>T) set from the rows;
---  * a track that loops for ever (most online match tracks: a Wwise "infinite" event the player's clock never ends)
---    moves on after CFG.music.player_loop_s (runtime SV_MusicLoop).
--- [music] player_all = false keeps the stock list.
+--    the save's two lists found, nothing is changed (hard rule of 2026-10-24: nothing stock stays changed);
+--  * their titles (and their games' names) are Survival's texts (SV_Mus<n>T, SV_MusO<n>T) set from the rows;
+--  * a track that loops for ever (the online match tracks: a Wwise "infinite" event the player's clock never ends)
+--    moves on after player_loop_s (runtime SV_MusicLoop).
+-- The whole pass runs once a level (0.74.29's ran every 2 s: 4 ms a tick in the user's log); [music] player_all = false
+-- keeps the stock list.
 
 MUSIC = {}
-local MU = { addr = nil, added = {}, unlocked = {}, texts = false, said = {}, built = nil, cleanFor = nil, cleanTries = 0,
-             save = nil }
+local MU = { addr = nil, added = {}, changed = {}, texts = false, said = {}, built = nil, done = false, cleanFor = nil,
+             cleanTries = 0, save = nil, saveMgr = nil, mgr = nil }
 MUSIC.game = "/Game/Datatables/Sound/DT_SoundMusicPlayerBGM.DT_SoundMusicPlayerBGM"
 MUSIC.mine = "/Game/Mods/SurvivalMode/Data/DT_SV_MusicRows.DT_SV_MusicRows"
 MUSIC.pages = { "WBP_Menu_PauseMusicPlayer_000_C", "WBP_DataViewer_MusicPlayer_000_C", "WBP_DataViewer_MusicPlayer_001_C",
                 "WBP_DataViewer_MusicPlayer_002_C" }
--- a row's bank from its event's name (tools/music_tracks.py: every row of a bank has its prefix), for the log
-MUSIC.banks = {
-    { prefix = "AKE_Bgm_JukeBox_", bank = "AKB_BGM_Online_Lobby" },
-    { prefix = "AKE_Bgm_Online_", bank = "AKB_BGM_Online" },
-    { prefix = "AKE_Bgm_Cin_", bank = "AKB_BGM_Cinema" },
+MUSIC.NO_MISSION = 127                       -- (a hidden row's UnlockMissionID: no mission record has it)
+-- player_from's groups: an added row's group from its event's name (tools/music_tracks.py)
+MUSIC.groups = {
+    { name = "jukebox", prefix = "AKE_Bgm_JukeBox_" },
+    { name = "battle", prefix = "AKE_Bgm_Online_ACE" },      -- (the older games' online match tracks)
+    { name = "battle", prefix = "AKE_Bgm_Online_Ms_" },
+    { name = "online", prefix = "AKE_Bgm_Online_" },          -- (Online Mode's own named tracks)
+    { name = "endings", prefix = "AKE_Bgm_Ending" },
 }
-MUSIC.campaign = "AKB_BGM_Campaign"
 
-function MUSIC.bankOf(event)
-    for _, b in ipairs(MUSIC.banks) do
-        if event:sub(1, #b.prefix) == b.prefix then return b.bank end
+function MUSIC.groupOf(event)
+    for _, g in ipairs(MUSIC.groups) do
+        if event:sub(1, #g.prefix) == g.prefix then return g.name end
     end
-    return MUSIC.campaign
+    return "other"
 end
 
 local function str(v)                                   -- an FName / FString field as a Lua string ("" if unread)
@@ -44,18 +53,21 @@ local function str(v)                                   -- an FName / FString fi
     local ok, s = pcall(function() return v:ToString() end)
     return (ok and type(s) == "string") and s or ""
 end
-
 local function hx(v)
     local ok, t = pcall(string.format, "%X", v)
     return ok and t or tostring(v)
 end
-
 local function wanted()
     return CFG.music.player_all ~= false and svLevelOn == true and containerState == true
 end
-
 local function nativeOk()
     return type(SV_MusicBuild) == "function" and type(SV_MusicSave) == "function"
+end
+local function fromSet()
+    local s, any = {}, false
+    for w in tostring(CFG.music.player_from or "jukebox"):lower():gmatch("[%a]+") do s[w] = true; any = true end
+    if not any then s.jukebox = true end
+    return s
 end
 
 -- the save's two music lists to the runtime (1 = named): the save game, from the save manager
@@ -125,24 +137,33 @@ local function setTexts(mine, names)
         full and " (the runtime's text table is full: some show their key)" or ""))
 end
 
--- every stock row unlocked (the ones changed kept, to put back)
-local function unlockStock(game, names)
-    local n = 0
-    for _, r in ipairs(names) do
-        if not MU.added[r] and MU.unlocked[r] == nil then
-            local _, row = dtCall(game, "FindRow", r)
-            if row ~= nil then
-                local ok, was = pcall(function() return row.bIsEnableUnlock end)
-                if ok and was == true and pcall(function() row.bIsEnableUnlock = false end) then
-                    MU.unlocked[r] = true; n = n + 1
-                end
-            end
+-- a stock row hidden (locked to no mission) or unlocked; its old values kept to put back. true when it's as wanted
+local function setStock(game, r, hide)
+    local _, row = dtCall(game, "FindRow", r)
+    if row == nil then return false end
+    local okU, unl = pcall(function() return row.bIsEnableUnlock end)
+    local okM, mis = pcall(function() return row.UnlockMissionID end)
+    if not okU then return false end
+    local was = MU.changed[r] or { unlock = unl, mission = okM and mis or nil }
+    if hide then
+        if not okM then return false end
+        local ok = pcall(function() row.UnlockMissionID = MUSIC.NO_MISSION; row.bIsEnableUnlock = true end)
+        local okR, back = pcall(function() return row.UnlockMissionID end)
+        if not (ok and okR and back == MUSIC.NO_MISSION) then
+            pcall(function() row.bIsEnableUnlock = was.unlock; if was.mission ~= nil then row.UnlockMissionID = was.mission end end)
+            return false
         end
+        MU.changed[r] = was
+        return true
     end
-    return n
+    if unl == true then
+        if not pcall(function() row.bIsEnableUnlock = false end) then return false end
+        MU.changed[r] = was
+    end
+    return true
 end
 
--- Survival's rows out, the stock rows locked as they were; the next level's list is built again (MU.cleanFor)
+-- Survival's rows out, the stock rows as they were; the next level's list is built again (MU.cleanFor)
 local function putBack(why)
     local game = StaticFindObject(MUSIC.game)
     local nr, nu = 0, 0
@@ -152,14 +173,16 @@ local function putBack(why)
             local _, still = dtCall(game, "FindRow", r)
             if still == nil then nr = nr + 1 end
         end
-        for r in pairs(MU.unlocked) do
+        for r, was in pairs(MU.changed) do
             local _, row = dtCall(game, "FindRow", r)
-            if row ~= nil and pcall(function() row.bIsEnableUnlock = true end) then nu = nu + 1 end
+            if row ~= nil and pcall(function()
+                if was.mission ~= nil then row.UnlockMissionID = was.mission end
+                row.bIsEnableUnlock = was.unlock
+            end) then nu = nu + 1 end
         end
     end
-    log(string.format("music player: %d of Survival's tracks taken out, %d stock tracks locked again as they were (%s)",
-        nr, nu, why))
-    MU.addr, MU.added, MU.unlocked, MU.built = nil, {}, {}, nil
+    log(string.format("music player: %d of Survival's tracks taken out, %d stock tracks back as they were (%s)", nr, nu, why))
+    MU.addr, MU.added, MU.changed, MU.built, MU.done, MU.mgr = nil, {}, {}, nil, false, nil
     MU.cleanFor, MU.cleanTries = "pending", 0
 end
 
@@ -178,6 +201,56 @@ local function cleanTick()
     end
 end
 
+-- the whole pass (once a level): stock rows hidden / unlocked, the draw added; true when done
+local function pass(game, mine)
+    local stock, ours = rowList(game), rowList(mine)
+    if not stock or not ours then return false end
+    local mineSet = {}
+    for _, r in ipairs(ours) do mineSet[r] = true end
+    local hideSet = {}
+    for _, r in ipairs(CFG.music.player_hide or {}) do hideSet[r] = true end
+    local shown, hidden, unlocked, failed = 0, 0, 0, 0
+    for _, r in ipairs(stock) do
+        if not mineSet[r] then                           -- (a stock row: Survival's own aren't in yet)
+            if hideSet[r] then
+                if setStock(game, r, true) then hidden = hidden + 1 else shown = shown + 1; failed = failed + 1 end
+            else
+                if MU.changed[r] == nil then
+                    local _, row = dtCall(game, "FindRow", r)
+                    local okU, unl = pcall(function() return row.bIsEnableUnlock end)
+                    if okU and unl == true then unlocked = unlocked + 1 end
+                end
+                setStock(game, r, false)
+                shown = shown + 1
+            end
+        end
+    end
+    setTexts(mine, ours)
+    -- the draw: room = the limit less the stock tracks shown; from the groups in player_from, at random, kept in order
+    local room = math.max(0, math.floor(tonumber(CFG.music.player_max) or 120) - shown)
+    local from, pool = fromSet(), {}
+    for i, r in ipairs(ours) do
+        if from[MUSIC.groupOf(r)] then pool[#pool + 1] = i end
+    end
+    for i = #pool, 2, -1 do local j = math.random(i); pool[i], pool[j] = pool[j], pool[i] end
+    local pick = {}
+    for k = 1, math.min(room, #pool) do pick[#pick + 1] = pool[k] end
+    table.sort(pick)
+    local nNew = 0
+    for _, i in ipairs(pick) do
+        local r = ours[i]
+        local _, src = dtCall(mine, "FindRow", r)
+        if src ~= nil then dtCall(game, "AddRow", r, src) end
+        local _, now = dtCall(game, "FindRow", r)
+        if now ~= nil then MU.added[r] = true; nNew = nNew + 1 end
+    end
+    log(string.format("music player: %d stock tracks shown (%d unlocked for Survival), %d hidden%s; %d of Survival's %d "
+        .. "drawn from %s (%d in it; room %d of %d): %d tracks in all", shown, unlocked, hidden,
+        failed > 0 and string.format(" (%d NOT hidden: their unlock didn't take)", failed) or "", nNew, #ours,
+        tostring(CFG.music.player_from or "jukebox"), #pool, room, math.floor(tonumber(CFG.music.player_max) or 120), shown + nNew))
+    return true
+end
+
 function MUSIC.tick(tick)
     if tick % 8 ~= 5 then return end                     -- (every 2 s)
     if not nativeOk() then
@@ -193,73 +266,51 @@ function MUSIC.tick(tick)
     local okS, why = nameSave()
     if okS ~= 1 then
         if not MU.said.save then MU.said.save = true; log("music player: the save's music lists weren't found (" .. tostring(why)
-            .. "); nothing unlocked or added, the stock list") end
+            .. "); nothing changed, the stock list") end
         return
     end
     local game = StaticFindObject(MUSIC.game)
     if not valid(game) then game = loadObject(MUSIC.game) end
     if not valid(game) then
-        if not MU.said.game then MU.said.game = true; log("music player: the music player's table isn't loaded; nothing added") end
+        if not MU.said.game then MU.said.game = true; log("music player: the music player's table isn't loaded; nothing changed") end
         return
     end
     local a = addrOf(game)
-    if MU.addr ~= a then
-        MU.addr, MU.added, MU.unlocked, MU.built = a, {}, {}, nil
+    if MU.addr ~= a then                                 -- (a new level's pass, or the table loaded again)
+        MU.addr, MU.added, MU.changed, MU.built, MU.done = a, {}, {}, nil, false
         pin(game, nameOf(game))
     end
-    local mine = loadObject(MUSIC.mine)
-    if not valid(mine) then
-        if not MU.said.mine then MU.said.mine = true; log("music player: could not load DT_SV_MusicRows; the stock list only") end
-        return
-    end
-    pin(mine, nameOf(mine))
-    local stock, ours = rowList(game), rowList(mine)
-    if not stock or not ours then return end
     MU.cleanFor = nil                                    -- (back in Survival before the last level's clean: rows in again)
-    local nUnlocked = unlockStock(game, stock)
-    setTexts(mine, ours)
-    local have = {}
-    for _, r in ipairs(stock) do have[r] = true end
-    local nNew, byBank = 0, {}
-    for _, r in ipairs(ours) do
-        local bank = MUSIC.bankOf(r)
-        byBank[bank] = byBank[bank] or 0
-        if not have[r] then
-            local _, src = dtCall(mine, "FindRow", r)
-            if src ~= nil then dtCall(game, "AddRow", r, src) end
-            local _, now = dtCall(game, "FindRow", r)
-            if now ~= nil then MU.added[r] = true; have[r] = true; nNew = nNew + 1 end
+    if not MU.done then
+        local mine = loadObject(MUSIC.mine)
+        if not valid(mine) then
+            if not MU.said.mine then MU.said.mine = true; log("music player: could not load DT_SV_MusicRows; the stock list only") end
+            return
         end
-        if MU.added[r] then byBank[bank] = byBank[bank] + 1 end
+        pin(mine, nameOf(mine))
+        if not pass(game, mine) then return end
+        MU.done, MU.built = true, nil
     end
-    if nNew > 0 or nUnlocked > 0 then
-        local parts = {}
-        for _, b in ipairs({ MUSIC.campaign, "AKB_BGM_Cinema", "AKB_BGM_Online", "AKB_BGM_Online_Lobby" }) do
-            if byBank[b] then parts[#parts + 1] = b .. " " .. byBank[b] end
-        end
-        log(string.format("music player: %d stock tracks unlocked for Survival, %d of Survival's %d added (%s)", nUnlocked,
-            nNew, #ours, table.concat(parts, ", ")))
-        MU.built = nil                                   -- (the list built again with them)
-    end
-    -- this level's list built with them: once per level's manager (a restart makes a new one)
-    local m = manager(true)
-    if m and MU.built ~= addrOf(m) then
-        local open = pageOpen()
-        local r = open and 0 or SV_MusicBuild(addrOf(m))
-        if r == 1 then
-            MU.built = addrOf(m)
-            log("music player: Survival's list built (the stock tracks unlocked, Survival's added)")
-        elseif not MU.said.busy then
-            MU.said.busy = true
-            log("music player: the list not built yet (" .. (open and (open .. " is open") or ("SV_MusicBuild " .. tostring(r)))
-                .. "); again in 2 s")
-        end
+    -- this level's list built with them, once (a restart makes a new manager: MUSIC.levelLoad looks again)
+    if MU.built then return end
+    local m = MU.mgr
+    if not (m and liveObj(m)) then m = manager(true); MU.mgr = m end
+    if not m then return end
+    local open = pageOpen()
+    local r = open and 0 or SV_MusicBuild(addrOf(m))
+    if r == 1 then
+        MU.built = addrOf(m)
+        log("music player: Survival's list built (the menu tracks hidden, the stock tracks unlocked, the draw added)")
+    elseif not MU.said.busy then
+        MU.said.busy = true
+        log("music player: the list not built yet (" .. (open and (open .. " is open") or ("SV_MusicBuild " .. tostring(r)))
+            .. "); again in 2 s")
     end
 end
 
--- (a new level of Survival) the loop length to the runtime
+-- (a new level of Survival) the loop length to the runtime; this level's list to build again (a restart's new manager)
 function MUSIC.levelLoad()
-    MU.said.busy = nil
+    MU.said.busy, MU.built, MU.mgr = nil, nil, nil
     if type(SV_MusicLoop) == "function" then
         local s = tonumber(CFG.music.player_loop_s) or 0
         local old = SV_MusicLoop(math.floor(math.max(0, s) * 1000))

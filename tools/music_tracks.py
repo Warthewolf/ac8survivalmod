@@ -2,9 +2,11 @@
 
 The user: "add all the named music into the music player". AC8's music player lists DT_SoundMusicPlayerBGM, whose rows
 are named after the Wwise event the player posts (AKE_Bgm_MUSICPLAYER_BGM_<id>_Play). These are the game's own events
-for named tracks the stock list leaves out: four from the campaign bank, the campaign cutscenes' named pieces, Online
-Mode's named tracks, the online lobby's jukebox (77, from AC8's DT_JukeBoxMusic) and the online match tracks of the
-older games that the jukebox doesn't have. tools/build_survival_rows.py (build_music_rows) turns them into rows of
+for named tracks the stock list leaves out: the campaign's three endings, Online Mode's named tracks, the online lobby's
+jukebox (77, from AC8's DT_JukeBoxMusic) and the online match tracks of the older games that the jukebox doesn't have.
+((2026-11-08) the user, after 0.74.29: "Delete the briefing debriefing cutscene tracks": the cutscenes' pieces and
+Debriefing IV are out; AC8's music player shows 120 tracks at most (its scroll list's limit; more crashed the game), so
+Scripts/sv_music.lua adds a random share of these each run: CFG.music.player_max.) tools/build_survival_rows.py (build_music_rows) turns them into rows of
 Survival's own table DT_SV_MusicRows; Scripts/sv_music.lua adds them to the game's table while Survival's level is on
 and takes them out after. Their four banks are resident from the game's start in every mode (DA_SoundSettings'
 RegidentSoundBanks: tools/re/MUSIC_BANKS.md 2); the game's list build skips a row whose event no loaded bank has.
@@ -14,7 +16,7 @@ Survival's own (SV_Mus<n>T, no numeric tail: hard rule 17), set at run time from
 The DLC tracks (PurpleMagic A-C, NoID010-070) have keys but no event in any bank here, so they aren't in.
 """
 
-CAMPAIGN, CINEMA, ONLINE, LOBBY = 'AKB_BGM_Campaign', 'AKB_BGM_Cinema', 'AKB_BGM_Online', 'AKB_BGM_Online_Lobby'
+CAMPAIGN, ONLINE, LOBBY = 'AKB_BGM_Campaign', 'AKB_BGM_Online', 'AKB_BGM_Online_Lobby'
 # ELiveSoundMusicFilterTag: the music player's tabs and colour sets (DT_LiveMusicPlayerColorVariationSettings has
 # colours for 1, 2, 3 and 6 only, so a row uses one of them)
 ORCHESTRA, BAND, SYNTH, ENVIRONMENT = 1, 2, 3, 6
@@ -32,26 +34,9 @@ JUKEBOX_ORIGIN_KEY = 'Online_JukeBox_SouceTitle'   # (sic) DT_JukeBoxMusic's Ori
 
 # (event, the game's title key or None, title, origin number or None, bank, filter)
 CAMPAIGN_TRACKS = [
-    ('AKE_Bgm_MUSICPLAYER_BGM_DEBRIEFING04_Play', 'MusicPlayer_SongTitle_Debriefing04', 'Debriefing Ⅳ', None, CAMPAIGN, ENVIRONMENT),
     ('AKE_Bgm_Ending01_Play', None, 'Ending Ⅰ', None, CAMPAIGN, ORCHESTRA),
     ('AKE_Bgm_Ending02_Play', None, 'Ending Ⅱ', None, CAMPAIGN, ORCHESTRA),
     ('AKE_Bgm_Ending03_Play', None, 'Ending Ⅲ', None, CAMPAIGN, ORCHESTRA),
-]
-
-CINEMA_TRACKS = [
-    ('AKE_Bgm_Cin_Ms030010_Play', 'MusicPlayer_SongTitle_Cin_Ms030010', 'Jet Stream/Grim Reaper', None, CINEMA, ORCHESTRA),
-    ('AKE_Bgm_Cin_Ms060020_Play', 'MusicPlayer_SongTitle_Cin_Ms060020', 'Begin Assembly', None, CINEMA, ORCHESTRA),
-    ('AKE_Bgm_Cin_ms130010_Play', 'MusicPlayer_SongTitle_Cin_Ms130010', 'Basement of The Fort Grays', None, CINEMA, ORCHESTRA),
-    ('AKE_Bgm_Cin_Ms130020_Play', 'MusicPlayer_SongTitle_Cin_Ms130020', 'Loss of Credibility', None, CINEMA, ORCHESTRA),
-    ('AKE_Bgm_Cin_Ms140010_Play', 'MusicPlayer_SongTitle_Cin_Ms140010', 'Burned Wings', None, CINEMA, ORCHESTRA),
-    ('AKE_Bgm_Cin_Ms140030_40_Play', 'MusicPlayer_SongTitle_Cin_Ms140030-140040', 'Nomad', None, CINEMA, ORCHESTRA),
-    ('AKE_Bgm_Cin_Ms200010_1_Play', 'MusicPlayer_SongTitle_Cin_Ms200010_1', 'Discovery/One Step to The Left', None, CINEMA, ORCHESTRA),
-    ('AKE_Bgm_Cin_Ms200010_2_Play', 'MusicPlayer_SongTitle_Cin_Ms200010_2',
-     'Condition Green/DAO (decentralized autonomous organization)', None, CINEMA, ORCHESTRA),
-    ('AKE_Bgm_Cin_Ms200040_Play', 'MusicPlayer_SongTitle_Cin_Ms200040', 'Planning Division 303', None, CINEMA, ORCHESTRA),
-    ('AKE_Bgm_Cin_Ms210010_Play', 'MusicPlayer_SongTitle_Cin_Ms210010', 'Song of Wings', None, CINEMA, ORCHESTRA),
-    ('AKE_Bgm_Cin_Ms290010_Play', 'MusicPlayer_SongTitle_Cin_Ms290010', 'The Last One', None, CINEMA, ORCHESTRA),
-    ('AKE_Bgm_Cin_Ms300010_Play', 'MusicPlayer_SongTitle_Cin_Ms300010', 'The Next Move', None, CINEMA, ORCHESTRA),
 ]
 
 ONLINE_TRACKS = [
@@ -104,25 +89,36 @@ MATCH_TRACKS = [(f'AKE_Bgm_Online_{game}_{ev}_Play', None, title, origin, ONLINE
                 for origin, game, songs in _MATCH for ev, title in songs]
 
 
+MENU_WORDS = ('BRIEFING', 'HANGAR')     # (the user: "Delete the briefing debriefing cutscene tracks", "hangars too")
+
+
+def menu_track(event):
+    """A briefing, debriefing or hangar piece (AC5's jukebox has "Briefing 1" and "Hangar 1"), or a cutscene's."""
+    return '_Cin_' in event or any(w in event.upper() for w in MENU_WORDS)
+
+
 def jukebox_tracks(rows):
-    """The lobby jukebox's 77 from AC8's DT_JukeBoxMusic: rows = [(ResourceName, TitleText, OriginTextID)]."""
+    """The lobby jukebox's from AC8's DT_JukeBoxMusic (77, its briefing and hangar pieces left out): rows =
+    [(ResourceName, TitleText, OriginTextID)]."""
     out = []
     for ev, title, okey in rows:
         assert okey.startswith(JUKEBOX_ORIGIN_KEY) and okey.endswith('_Name'), okey
         origin = int(okey[len(JUKEBOX_ORIGIN_KEY):-len('_Name')])
         assert origin in ORIGINS, okey
-        out.append((ev, None, title, origin, LOBBY, BAND))
+        if not menu_track(ev):
+            out.append((ev, None, title, origin, LOBBY, BAND))
     return out
 
 
 def all_tracks(jukebox_rows):
-    """Every added track in the order they're listed: the campaign's, the cutscenes', Online Mode's, the jukebox's,
-    the other online match tracks. Checked: no event twice, no row of the stock table."""
-    tracks = CAMPAIGN_TRACKS + CINEMA_TRACKS + ONLINE_TRACKS + jukebox_tracks(jukebox_rows) + MATCH_TRACKS
+    """Every added track in the order they're listed: the campaign's endings, Online Mode's, the jukebox's, the other
+    online match tracks. Checked: no event twice, no row of the stock table, no cutscene or menu track."""
+    tracks = CAMPAIGN_TRACKS + ONLINE_TRACKS + jukebox_tracks(jukebox_rows) + MATCH_TRACKS
     evs = [t[0] for t in tracks]
     assert len(evs) == len(set(evs)), [e for e in evs if evs.count(e) > 1]
     for t in tracks:
-        assert t[0].endswith('_Play') and t[4] in (CAMPAIGN, CINEMA, ONLINE, LOBBY) and t[5] in (1, 2, 3, 6), t
+        assert t[0].endswith('_Play') and t[4] in (CAMPAIGN, ONLINE, LOBBY) and t[5] in (1, 2, 3, 6), t
+        assert not menu_track(t[0]), t
     return tracks
 
 

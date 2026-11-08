@@ -1965,3 +1965,39 @@ From two logs of one co-op run on 0.74.23 (Saint Alessia's, the host, and a join
 - 54 suites pass (coop_test not run; new: music_test). Packaged: friends' cd8909fbedff..., TESTER d9b09914083e...
   (0.74.29-coop2mp.121), both registered. Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip (backup of
   0.74.28: build/backup/install_before_0.74.29; 88 files compared equal).
+
+## 0.74.30 (2026-11-08, runtime 0.32.30; not yet run in game)
+- 0.74.29's music player crashed the user's game: AC8's music player list shows 120 tracks at most (the scroll list's
+  limit; ULiveMenuScrollCommandListWidget +0x434 = 120 in its setup 0x147a88250); with 235 the cursor ran on over rows
+  that aren't there ("the game refuses to scroll down more", "Megalith was the last track i saw": row 120) and a press
+  there read past the 120-row array (UECC: AceCombat8.exe+0x7a8dc81, row 231, the array's allocation ending before it).
+  The user chose ("Make room: hide menu tracks", "Delete the briefing debriefing cutscene tracks", "hangars too", "Have
+  it draw from the jukebox"):
+  - in Survival the 13 stock menu tracks (Title, Main Menu, Briefing I-IV, Hangar I-III, Debriefing I-III, Mission
+    Failed) are hidden (CFG.music.player_hide: bIsEnableUnlock true, UnlockMissionID 127, no mission record has it;
+    put back when the level goes); the other 62 unlocked;
+  - the room left to player_max (120) is a random draw, new each run, from player_from's groups (default "jukebox": the
+    online lobby's 75, AC5's Briefing 1 and Hangar 1 left out); listed in the table's order. A hide that doesn't take
+    counts as shown (never over the limit). `music player: N stock tracks shown (...), 13 hidden; 58 of Survival's 145
+    drawn from jukebox (75 in it; room 58 of 120): 120 tracks in all`.
+  - DT_SV_MusicRows: 145 (the cutscene pieces and Debriefing IV out: tools/music_tracks.py menu_track); the other
+    groups (online, battle, endings) only by survival.ini [music] player_from.
+  - The pass runs once a level (0.74.29's ran every 2 s: "music player 4.2/47 ms a tick, 62%" and a walk over every
+    object for the manager each time, in the user's log).
+- ZFA-44s of a later carrier had no HUD boxes (Saint Alessia: "ZFA-44s dont mark themselves at all on subsequent
+  purchases"; the user's screenshot): a carrier leaving switches off every ZFA-44 taken as its flight's (all 12 parked
+  ones at the first launch: no box, no lock-on, invincible, hidden) and finishes off only those under parked_m, so the
+  next carrier's arm launched the others (2147417694 / 2147417680 in her log) as they were. sv_escort_laser.lua
+  ZLAUNCH.risen: one seen out of its container is switched on (box, lock-on, damage, shown, collision, tick): `...; N had
+  been switched off by a carrier leaving: on again, box and all`. escort_test.
+- AC7's laser on the ZFA-44s still never spawns (every try of 0.74.23 on: BeginDeferredActorSpawnFromClass answers no
+  actor with and without an owner; 0.74.21's did spawn; nothing laser-side changed between them, the 0.32.27 guard
+  answers as the game does and guards unit classes only, the festival siren's spawn through the same player controller
+  works): the class is now pinned (loaded at the main menu, held by nothing till a launch), a third try spawns in the
+  plane's world, and when all fail the log says once why: `zfa li: AC7's laser refused (...): its default object ...;
+  a LiveLaserInterceptor: ...; live: ...; AC8's own class spawned there: yes|NO`.
+- 54 suites pass (coop_test not run). Packaged: friends' b2e610ace98a..., TESTER ef4fd0a138dc... (0.74.30-coop2mp.122),
+  both registered; patches for a 0.74.27-0.74.29 install (the full zips less VALKA's sounds and the VALKA, ZFA-44 and
+  laser containers, unchanged since 0.74.27): AC8SurvivalMode_COOP2MP_0.74.30_Patch.zip and _TESTER_Patch.zip (sent to the
+  user for Alyssa). Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.29:
+  build/backup/install_before_0.74.30; 88 files compared equal).

@@ -56,8 +56,33 @@ local function class()
     local path = zc().li_class
     if type(path) ~= "string" or path == "" then return nil, "no li_class" end
     local o, why = loadObject(path)
-    if o ~= nil and valid(o) then CLS = o; return o end
+    -- ((2026-11-08) pinned: loaded at the main menu and held by nothing until a carrier's launch, the class could be
+    -- collected on the way to Survival's level and loaded again; every spawn from 0.74.23 on came back empty)
+    if o ~= nil and valid(o) then CLS = o; pin(o, "AC7's LaserInterceptor class"); return o end
     return nil, tostring(why)
+end
+
+-- ((2026-11-08) once a level, when every spawn came back empty) the class's state and a spawn of AC8's own
+-- LaserInterceptor class at the same spot (destroyed at once): which of the two the game refuses
+local probed
+local function probe(gs, cls, t, why)
+    if probed == D then return end
+    probed = D
+    local parts = {}
+    local okC, cdo = pcall(function() return cls:GetCDO() end)
+    parts[#parts + 1] = "its default object " .. ((okC and cdo and valid(cdo)) and (nameOf(cdo):match("([^%.:]+)$") or "?") or "MISSING")
+    local native = StaticFindObject("/Script/Live.LiveLaserInterceptor")
+    local okI, isA = pcall(function() return cls:IsChildOf(native) end)
+    parts[#parts + 1] = "a LiveLaserInterceptor: " .. tostring(okI and isA or ("unread: " .. tostring(isA)))
+    parts[#parts + 1] = "live: " .. tostring(liveObj(cls))
+    if valid(native) then
+        local okN, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(survivalPC, native, t, 1, nil, 1) end)
+        local ok2, a = pcall(function() return x:GetAddress() end)
+        local got = okN and ok2 and type(a) == "number" and a ~= 0
+        parts[#parts + 1] = "AC8's own class spawned there: " .. (got and "yes" or ("NO (" .. tostring(okN and a or x) .. ")"))
+        if got then pcall(function() x:K2_DestroyActor() end) end
+    end
+    say("AC7's laser refused (%s): %s", tostring(why), table.concat(parts, "; "))
 end
 
 -- AC7's laser on? (decided at the main menu by ZLI.rows: "ac7", else ZLAS's laser)
@@ -171,8 +196,8 @@ local function spawn(p)
     -- (AlwaysSpawn; its owner the plane) ((0.74.25) Saint Alessia's host log of 0.74.23: "its laser NOT spawned (not
     -- spawned (UObject: ...))", 5 tries on each ZFA-44, where 0.74.21's had spawned: again with no owner at the spawn
     -- (SV_LaserOwner gives it its plane after), and what came back logged)
-    local function deferred(owner)
-        local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(survivalPC, cls, t, 1, owner, 1) end)
+    local function deferred(owner, ctx)
+        local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(ctx or survivalPC, cls, t, 1, owner, 1) end)
         if okB and x and valid(x) then return x end
         if not okB then return nil, "error " .. tostring(x) end
         local okA, ad = pcall(function() return x:GetAddress() end)
@@ -180,10 +205,18 @@ local function spawn(p)
     end
     local x, why1 = deferred(p.o)
     if not x then
-        local why2
+        local why2, why3, how
         x, why2 = deferred(nil)
-        if not x then return nil, string.format("not spawned (with its plane as owner: %s; with none: %s)", tostring(why1), tostring(why2)) end
-        say("%s: its laser spawned only with no owner at the spawn (with its plane: %s)", short(p.o) .. "@" .. tostring(p.a), tostring(why1))
+        how = "with no owner at the spawn"
+        -- ((2026-11-08) the plane's own world, not the player controller's: a third try)
+        if not x then x, why3 = deferred(p.o, p.o); how = "in the plane's world" end
+        if not x then
+            local why = string.format("with its plane as owner: %s; with none: %s; in the plane's world: %s", tostring(why1),
+                tostring(why2), tostring(why3))
+            probe(gs, cls, t, why)
+            return nil, "not spawned (" .. why .. ")"
+        end
+        say("%s: its laser spawned only %s (with its plane as owner: %s)", short(p.o) .. "@" .. tostring(p.a), how, tostring(why1))
     end
     -- its values before it begins (this laser's only, never the class's): AC7's; its own search off (SearchInterval: a
     -- search never due); LifeTime the volley (the beam's particle lives, the class's tick: LifeTime + 0.2 / - 0.5)
