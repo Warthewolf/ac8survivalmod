@@ -925,4 +925,76 @@ function ZLAUNCH.late(C, F, now)
     F.up = true
     return true
 end
+
+-- ((0.74.25) Saint Alessia's host log of 0.74.23, "ZFA-44 didn't seem to spawn again after their first use?": ZFA-44 CARRIER
+-- 1 left at 16:25:51 with its parked ZFA-44s only switched off, so its arms' units stayed up; the next carrier (16:37:48)
+-- had none in its launchers, fired arm 1 again, whose unit still had the first carrier's two up, and nothing came out.)
+local function alive(u) local ok, n = pcall(SV_UnitAlive, u); return (ok and type(n) == "number") and n or -5 end
+local function outSet()                                 -- the arms' units fired this run whose flight may still be up
+    if not (ZLAUNCH.out and ZLAUNCH.out.D == D) then ZLAUNCH.out = { D = D, set = {} } end
+    return ZLAUNCH.out.set
+end
+-- (sv_escort.lua launch) the arm a carrier fires next: the next in turn whose last launch isn't still up; every one still
+-- up: the next as before. Its unit counted out from now (until nothing of it is up)
+function ZLAUNCH.pickArm(C, arms)
+    local out = outSet()
+    for step = 1, #arms do
+        local j = (C.armI + step - 1) % #arms + 1
+        local u = arms[j].unit
+        if out[u] then
+            local n = alive(u)
+            if n == 0 or n == -7 or n == -2 then out[u] = nil end
+        end
+        if not out[u] then
+            out[u] = true
+            if step > 1 then
+                log(string.format("carrier: %s: arm %d of %d next (%d arms' last ZFA-44s still up, skipped)", tostring(C.name), j, #arms, step - 1))
+            end
+            return j
+        end
+    end
+    local j = C.armI % #arms + 1
+    log(string.format("carrier: %s: every launcher arm's last ZFA-44s are still up: arm %d as it comes", tostring(C.name), j))
+    return j
+end
+-- (a carrier leaving or sunk, the host's or a joiner's own) ship i's parked ZFA-44s (under parked_m, never launched)
+-- finished off where they are, under the sea, unpaid, and its arms' units (but keep's: its flight up) off the spawner's
+-- list once nothing of them is up (sv_escort.lua recycleTick: never with planes up), so its next ship's launchers have
+-- their own again. How many finished off
+function ZLAUNCH.parkedOff(i, keep, why)
+    local c = cc()
+    local arms = (c.launchers or {})[i] or {}
+    local parkZ = num(c.parked_m, -100) * 100
+    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+    local mine, n = {}, 0
+    for _, arm in ipairs(arms) do if type(arm.unit) == "string" then mine[arm.unit] = true end end
+    for u, l in pairs((ESC and ESC.planes) or {}) do
+        if mine[u] then
+            for _, e in ipairs(l) do
+                if liveAddr(e.obj) == e.addr then
+                    local okL, z = pcall(function() return e.obj:K2_GetActorLocation().Z end)
+                    if okL and type(z) == "number" and z < parkZ then
+                        if COOP and COOP.removeObj then pcall(COOP.removeObj, e.obj) end
+                        pcall(function() e.obj:SetIsInvincible(false) end)
+                        pcall(function() e.obj.bIsInvincible = false end)
+                        pcall(function() e.obj:SetMinHealth(0.0) end)
+                        if valid(gs) and pcall(function() gs:ApplyDamage(e.obj, 1.0e8, nil, nil, nil) end) then n = n + 1 end
+                    end
+                end
+            end
+        end
+    end
+    local q = 0
+    for u in pairs(mine) do                             -- (only once some were parked: nothing else of theirs to free)
+        if n > 0 and u ~= keep and ESC and ESC.recycleQ then
+            ESC.recycleQ[#ESC.recycleQ + 1] = { unit = u, at = os.clock() + 3, why = tostring(why) .. ": its parked ZFA-44s" }
+            q = q + 1
+        end
+    end
+    if n > 0 then
+        log(string.format("carrier: %s: %d parked ZFA-44s of ship %d finished off under the sea, %d of its arms' units off the list once none is up",
+            tostring(why), n, i, q))
+    end
+    return n
+end
 end

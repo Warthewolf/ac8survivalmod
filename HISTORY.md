@@ -1879,3 +1879,32 @@ lightning,festival} hold the dumps and scripts (git-ignored).
 - 52 suites pass (coop_test not run). Packaged: friends' d13412b0a89e..., TESTER e50efa1c7f6f... (0.74.25-coop2mp.117),
   both registered. Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.24:
   build/backup/install_before_0.74.25; 87 files compared equal).
+
+## 0.74.26 (2026-11-08, runtime 0.32.28; not yet run in game)
+From two logs of one co-op run on 0.74.23 (Saint Alessia's, the host, and a joiner's "logs18"), with their notes:
+- The run's second ZFA-44 carrier brought no ZFA-44s (Saint Alessia: "ZFA-44 didn't seem to spawn again after their first
+  use?"): CARRIER 1 left at 16:25:51 with its parked ZFA-44s only switched off (their arms' units still up), so the next
+  ship (16:37:48, player 3's) had none in its launchers, and its launch fired arm 1 again, whose unit still had the first
+  carrier's two up ("none of E_Unit_01_drone_5_0 seen out of its container in 15 s"). sv_escort_laser.lua:
+  ZLAUNCH.pickArm: the next arm in turn whose last launch isn't still up (`carrier: <ship>: arm j of n next (k arms' last
+  ZFA-44s still up, skipped)`); ZLAUNCH.parkedOff: a carrier leaving or sunk (the host's, or a joiner's own when the
+  host's goes) finishes off its parked ZFA-44s (under parked_m) where they are, under the sea, unpaid, and queues its
+  arms' units (but its flight's) off the list once nothing of them is up (`carrier: ...: N parked ZFA-44s of ship i
+  finished off under the sea, ...`). escort_test.
+- AC7's laser didn't spawn on that host ("its laser NOT spawned (not spawned (UObject: ...))", 5 tries on each ZFA-44;
+  0.74.21's had): BeginDeferredActorSpawnFromClass is tried again with no owner (SV_LaserOwner gives it its plane after,
+  0.74.25), and what came back is logged (`not spawned (with its plane as owner: ...; with none: ...)`). Why it failed
+  isn't known.
+- "A period of pitch blackness" at sunset to night and night to sunrise (Saint Alessia, the joiner, and Shazzy before):
+  the swap's darkest light came under the sunset's (or the dawn's) exposure. Into the night, the night's exposure,
+  ambient and glow are now there by the swap (the break's darkening half); out of it they hold till the swap and move on
+  in the lightening half (sv_sky.lua arcAt). sky_test.
+- "Noticeable lighting tick change" (the joiner): the sky is written every apply_break_s 1.0 s in a break (was apply_s
+  2.0 s throughout; each write ~5 ms, so not every frame).
+- Not changed, the notes' others: "the sea turns into baja blast at night" (0.74.25's night); CHARLENE "giga slow" and
+  her escorts slow to land (0.74.24's 600 km/h; release still at her roll); "sun still vibrating" (nothing in the logs:
+  the arc writes the sun every 2 s, steps of ~0.02 deg); a rejoined client's kills shown late (rtt ~100 ms: a copy is
+  held at 1 HP until the host's kill comes back, ~0.5 s with both Lua ticks); a menu bug pausing between the airfield and
+  the runway (not in the joiner's log: four pauses at 09:15:29-32 only).
+- 52 suites pass (coop_test not run). Packaged: friends' 0f7dc5d5b392..., TESTER 2231aa579dca... (0.74.26-coop2mp.118),
+  both registered. Built in the main tree.

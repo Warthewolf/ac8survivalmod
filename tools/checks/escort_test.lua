@@ -1118,6 +1118,47 @@ do
     ESC.recycleQ = {}
     ESC.onHost({ "es", "route", "1", "5", "80", "23.4", "1", "1", "0" })   -- (an older host: no field 10, nothing more taken off)
 end
+-- ((0.74.25) Saint Alessia's host log of 0.74.23: the run's second carrier fired arm 1 again, whose last ZFA-44s were still
+-- up, and nothing came out; the first had left its parked ZFA-44s only switched off)
+print("(0.74.25) the next carrier's arm: one whose last ZFA-44s aren't up; a leaving ship's parked ZFA-44s finished off")
+;(function()
+    local K = CFG.allies.carrier
+    local arms = K.launchers[1]
+    ZLAUNCH.out = nil
+    for _, a in ipairs(arms) do alive[a.unit] = 2 end             -- (a fresh ship: each arm's two parked)
+    local C = { name = "TEST CARRIER", armI = 0 }
+    local j1 = ZLAUNCH.pickArm(C, arms)
+    check(j1 == 1, "a fresh ship: arm 1 (" .. tostring(j1) .. ")")
+    local from0 = #logs + 1
+    local j2 = ZLAUNCH.pickArm({ name = "TEST CARRIER 2", armI = 0 }, arms)   -- (the run's next: arm 1's two still up)
+    check(j2 == 2 and has(line("carrier: TEST CARRIER 2: arm 2 of", from0), "skipped"),
+          "the next carrier: arm 1's last ZFA-44s still up, arm 2 (" .. tostring(j2) .. ")")
+    alive[arms[1].unit] = 0
+    local j3 = ZLAUNCH.pickArm({ name = "TEST CARRIER 3", armI = 0 }, arms)
+    check(j3 == 1, "arm 1's flight down: arm 1 again (" .. tostring(j3) .. ")")
+    local GSk = statics["/Script/Engine.Default__GameplayStatics"]
+    local dmg = {}
+    local gsStub = { full = "GameplayStatics", addr = addr(), ApplyDamage = function(_, o) dmg[#dmg + 1] = o end }
+    statics["/Script/Engine.Default__GameplayStatics"] = gsStub
+    local sp = K.ship_at[1]
+    local parked = plane(arms[1].unit, sp[1], sp[2], -24483.9, 0, 0)
+    local flying = plane(arms[1].unit, sp[1], sp[2], 50000, 0, 600)
+    local keepPl = ESC.planes[arms[1].unit]
+    ESC.planes[arms[1].unit] = { { obj = parked, addr = parked.addr, name = parked.full, at = 0 },
+                                 { obj = flying, addr = flying.addr, name = flying.full, at = 0 } }
+    local q0 = #ESC.recycleQ
+    local n = ZLAUNCH.parkedOff(1, arms[1].unit, "TEST CARRIER leaving")
+    check(n == 1 and #dmg == 1 and dmg[1] == parked, "a leaving ship: its parked ZFA-44 finished off under the sea, not the one flying ("
+          .. tostring(n) .. ")")
+    check(#ESC.recycleQ == q0 + #arms - 1, "... its arms' units queued off the list once none is up, but its flight's ("
+          .. (#ESC.recycleQ - q0) .. " of " .. #arms .. ")")
+    ESC.planes[arms[1].unit] = keepPl
+    for i = #ESC.recycleQ, q0 + 1, -1 do table.remove(ESC.recycleQ, i) end
+    for _, a in ipairs(arms) do alive[a.unit] = nil end
+    gsStub.gone = true                                         -- (sv_core.lua keeps a /Script/ object while it's live)
+    statics["/Script/Engine.Default__GameplayStatics"] = GSk
+    ZLAUNCH.out = nil
+end)()
 RUN.credits, RUN.msg = 40000, {}
 RUN.offerShown = nil
 press("Revive")

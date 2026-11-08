@@ -978,7 +978,13 @@ function SKY.arcAt(k, u, base)
         local c = acfg()
         local dark = math.max(1e-3, n(c.dark_factor, 0.25))
         local hold = math.max(0, math.min(0.49, n(c.swap_within_x, 0.45)))
-        local v = math.max(0, (u - hold) / (1 - hold))
+        -- ((0.74.25) three testers' notes on 0.74.23: "a period of pitch blackness" at sunset to night and night to sunrise:
+        -- the light at its darkest under the sunset's exposure (or the dawn's). The night's exposure, ambient and glow hold
+        -- the darkest point both ways: into the night they're there by the swap (the darkening half), out of it they
+        -- stay till the swap and move on in the lightening half)
+        local v
+        if A.mode == "moon" then v = math.max(0, math.min(1, (u - 0.5) / 0.5))
+        else v = math.max(0, math.min(1, (u - hold) / math.max(0.01, 0.5 - hold))) end
         for _, f in ipairs(FIELDS) do
             local x, y = A[f], B[f]
             if not MODE_FIELDS[f] and type(x) == "number" and type(y) == "number" then
@@ -1301,7 +1307,9 @@ function SKY.arcTick(now)
         ARC.mode = s.mode
     end
     if now < (ARC.nextApply or 0) then return end
-    ARC.nextApply = now + math.max(0.25, n(c.apply_s, 2))
+    -- ((0.74.25) a joiner's note on 0.74.23: "noticeable lighting tick change" through the breaks' big steps: apply_break_s
+    -- there, apply_s in a fight)
+    ARC.nextApply = now + math.max(0.25, n((D and D.state == "wait") and c.apply_break_s or c.apply_s, 2))
     local V = SKY.viewCached(now)
     if not V.actor then return end
     local red = RED and (RED.want or (tonumber(RED.k) or 0) > 0) or false

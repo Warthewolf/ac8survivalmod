@@ -168,8 +168,23 @@ local function spawn(p)
     local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
     if not (valid(gs) and liveObj(survivalPC)) then return nil, "no GameplayStatics / player controller" end
     local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = p.at.X, Y = p.at.Y, Z = p.at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
-    local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(survivalPC, cls, t, 1, p.o, 1) end)   -- (AlwaysSpawn; its owner the plane)
-    if not (okB and x and valid(x)) then return nil, "not spawned (" .. tostring(x) .. ")" end
+    -- (AlwaysSpawn; its owner the plane) ((0.74.25) Saint Alessia's host log of 0.74.23: "its laser NOT spawned (not
+    -- spawned (UObject: ...))", 5 tries on each ZFA-44, where 0.74.21's had spawned: again with no owner at the spawn
+    -- (SV_LaserOwner gives it its plane after), and what came back logged)
+    local function deferred(owner)
+        local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(survivalPC, cls, t, 1, owner, 1) end)
+        if okB and x and valid(x) then return x end
+        if not okB then return nil, "error " .. tostring(x) end
+        local okA, ad = pcall(function() return x:GetAddress() end)
+        return nil, string.format("%s, address %s", tostring(x), okA and tostring(ad) or "unread")
+    end
+    local x, why1 = deferred(p.o)
+    if not x then
+        local why2
+        x, why2 = deferred(nil)
+        if not x then return nil, string.format("not spawned (with its plane as owner: %s; with none: %s)", tostring(why1), tostring(why2)) end
+        say("%s: its laser spawned only with no owner at the spawn (with its plane: %s)", short(p.o) .. "@" .. tostring(p.a), tostring(why1))
+    end
     -- its values before it begins (this laser's only, never the class's): AC7's; its own search off (SearchInterval: a
     -- search never due); LifeTime the volley (the beam's particle lives, the class's tick: LifeTime + 0.2 / - 0.5)
     local vals = { SearchInterval = 1.0e9, InterceptTime = num(z.li_intercept_s, 1.0), InterceptAngle = num(z.li_angle, 180),

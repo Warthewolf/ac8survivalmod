@@ -1399,7 +1399,8 @@ local function launch(C, now)
         -- up, the ship's own, was taken off by force and its arm fired) never with planes up: the arm fired as it is, its
         -- record's orders reaching the planes there; only planes that weren't up before count as its launch (F.before),
         -- and none in launch_wait_s: by pose (below).
-        C.armI = C.armI % #arms + 1
+        local okP, jP = pcall(function() return ZLAUNCH.pickArm(C, arms) end)   -- ((0.74.25) an arm whose last flight isn't up
+        C.armI = (okP and type(jP) == "number") and jP or (C.armI % #arms + 1)
         local arm = arms[C.armI]
         local n = aliveOf(arm.unit)
         if n == 0 and type(SV_Recycle) == "function" then
@@ -1517,6 +1518,7 @@ local function carrierTick(C, now)
                 if liveAddr(e.obj) == e.addr and finishObj(e.obj) then nP = nP + 1 end
             end
             C.state, C.removeAt, C.why = "leaving", os.clock() + 1, "sunk: " .. hs
+            if ZLAUNCH and ZLAUNCH.parkedOff then pcall(ZLAUNCH.parkedOff, C.idx, C.flight and C.flight.unit, C.name .. " sunk") end
             RUN.dirty = true
             hudCallout(string.format(t.sunk, C.name), t.sunk_sub)
             log(string.format("carrier: %s sunk %.0f s after it came (%s; %d rounds served): %d of its parts still up finished off, "
@@ -1550,6 +1552,7 @@ local function carrierTick(C, now)
         end
         if C.served >= rounds and D.state == "wait" then
             C.state, C.removeAt, C.why = "leaving", os.clock(), string.format("%d rounds served", C.served)
+            if ZLAUNCH and ZLAUNCH.parkedOff then pcall(ZLAUNCH.parkedOff, C.idx, C.flight and C.flight.unit, C.name .. " leaving") end
             local nf = C.flight and flightOff(C.flight, C.name .. " leaving") or 0
             if COOP and COOP.removeNow then pcall(COOP.removeNow, C.unit) end
             if c.remove_records then fire(string.format("RE_SV_CargoRemove_%d", C.idx), C.name) end
@@ -1641,6 +1644,7 @@ end
 -- game's spawner list 2 s on (one at a time: recycleTick)
 function ESC.localOff(i, why)
     if not client() then return 0 end
+    if ZLAUNCH and ZLAUNCH.parkedOff then pcall(ZLAUNCH.parkedOff, i, nil, "the host's carrier " .. i .. " gone here") end
     local n = ownZfaOff(i, nil)
     local q = 0
     for _, arm in ipairs((cc().launchers or {})[i] or {}) do

@@ -413,6 +413,12 @@ local n20 = SKY.arcAt(7, 0.2, base0)
 check(n20.mode == "moon" and near(n20.factor, 0.5) and near(n20.ex_min, 2.3), "the night's fight: the moon's light and the night's exposure held")
 local s50, s99 = SKY.arcAt(6, 0.5, base0), SKY.arcAt(6, 1, base0)
 check(s50.mode == "moon" and near(s50.factor, 0.25) and s50.el == 35 and s99.factor == 0.5, "the swap for the moon at the darkest point (0.25), then night's 0.5")
+-- ((0.74.25) "a period of pitch blackness" at both swaps: the night's exposure and ambient hold the darkest point both ways)
+local d9a, d9b, d9c = SKY.arcAt(9, 0.25, base0), SKY.arcAt(9, 0.5, base0), SKY.arcAt(9, 0.75, base0)
+check(near(s50.ex_min, 2.3) and near(s50.sl_x, 4e-5, 1e-12) and near(d9a.ex_min, 2.3) and near(d9b.ex_min, 2.3)
+    and d9c.ex_min > 2.3 and d9c.ex_min < 10 and d9c.mode == "sun",
+    string.format("the darkest points under the night's exposure: into the night by the swap (%.2f), out of it held till the swap (%.2f, %.2f), then on to dawn's (%.2f)",
+        s50.ex_min, d9a.ex_min, d9b.ex_min, d9c.ex_min))
 local h75 = SKY.arcAt(7, 0.75, base0)
 check(h75.mode == "moon" and near(h75.factor, 0.5), "the first night's break: still night (the next round's night too)")
 local d75 = SKY.arcAt(9, 0.75, base0)
