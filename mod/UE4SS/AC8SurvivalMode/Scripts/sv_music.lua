@@ -11,9 +11,9 @@
 --  * the room left (player_max 120, less the stock tracks shown) is filled with a random draw, new each level, from
 --    Survival's DT_SV_MusicRows (tools/music_tracks.py) rows of the groups in player_from (default the online lobby's
 --    jukebox: AC04, 5, 6, 7 and Zero), listed in the table's order; taken out again when the level goes. Their banks are
---    resident from the game's start (tools/re/MUSIC_BANKS.md 2);
+--    resident from the game's start (docs/re/MUSIC_BANKS.md 2);
 --  * the level's music player list is built again with them (runtime SV_MusicBuild): the game builds it only as a
---    level starts (tools/re/MUSIC_BANKS.md 5), and once more in the next level after they're out;
+--    level starts (docs/re/MUSIC_BANKS.md 5), and once more in the next level after they're out;
 --  * the player's save is never changed: each build grants what it lists to the save's OwnedMusicList /
 --    NewlyOwnedMusicList, and while Survival's rows are in the runtime cuts those grants back off (SV_MusicSave). Without
 --    the save's two lists found, nothing is changed (hard rule of 2026-10-24: nothing stock stays changed);

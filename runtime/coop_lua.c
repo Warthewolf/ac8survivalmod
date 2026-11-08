@@ -1,6 +1,6 @@
 /* coop_lua.c : part of coop.c (Survival COOP), #included by it in place at its end (one translation unit with
  *  survival_rt.c; tools/checks/coop_test.c and flight_test.c include coop.c and get it too). The transport's Lua
- *  functions (SV_CoopOpen .. SV_CoopReset) and a second player plane (runtime 0.21.0, tools/re/COOP.md 6): its
+ *  functions (SV_CoopOpen .. SV_CoopReset) and a second player plane (runtime 0.21.0, docs/re/COOP.md 6): its
  *  slots swapped, loadout, paint, spawn, role, camera, name, removal, the formation test and SV_CoopFollow. */
 
 /* ---- Lua ------------------------------------------------------------------------------------------------------- */
@@ -265,7 +265,7 @@ static int L_CoopReset(void* lua)
     return Ret(lua, 1);
 }
 
-/* ---- a second player plane (runtime 0.21.0; tools/re/COOP.md 6) ------------------------------------------------
+/* ---- a second player plane (runtime 0.21.0; docs/re/COOP.md 6) ------------------------------------------------
  * Online Mode's remote-player spawn (0x1471cc490, Emergency Call co-op) does, in order: SpawnActor a
  * LiveNetworkDummyController (identity transform, AlwaysSpawn, transient); SpawnActor<ALivePlayerPlane> of the remote
  * player's plane class (the game's helper 0x1471e5500); controller->vtable[+0x798](plane); AController::Possess;
@@ -424,7 +424,7 @@ static void CoXform(double* xf, const double* pos, double yawDeg)         /* FTr
 }
 
 /* SV_CoopSpawnPP(pawn, x, y, z, yaw[, class]) -> the new player plane's address (a plane of pawn's class, or of `class`
- * (a player plane blueprint's class, COOP2MP T2: tools/re/COOP2MP.md), possessed by a network dummy controller, marked
+ * (a player plane blueprint's class, COOP2MP T2: docs/re/COOP2MP.md), possessed by a network dummy controller, marked
  * as another player's), or < 0: -1 bad args, -2 game code not found, -3 no dummy controller class, -4 the controller
  * didn't spawn, -5 the plane didn't spawn (a class that isn't a player plane's too), -6 its spawn didn't finish. One at
  * a time: a second call removes the first. Another class gets no loadout of yours (your weapon ids are your plane's):

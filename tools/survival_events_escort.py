@@ -13,11 +13,11 @@ from survival_events import *  # noqa: F401,F403 (survival_events' names; it imp
 
 # ---------------------------------------------------------------- THE ESCORT (CHARLENE) and THE DECOY (2026-11-06)
 # The build contracts of 2026-11-06 (THE ESCORT: CHARLENE, her four escorts and the ZFA-44 cargo ships; THE DECOY: the
-# Tonitrus Spear trap). Research: build/research/escort/ESCORT.md, build/research/decoy/DECOY.md. tools/re/ESCORT.md and
-# tools/re/DECOY.md "Build names" list everything below. Coordinates UE cm, north = -Y, east = +X. The Lua (sv_escort.lua,
+# Tonitrus Spear trap). Research: build/research/escort/ESCORT.md, build/research/decoy/DECOY.md. docs/re/ESCORT.md and
+# docs/re/DECOY.md "Build names" list everything below. Coordinates UE cm, north = -Y, east = +X. The Lua (sv_escort.lua,
 # sv_decoy.lua) spawns every unit and fires every remote event; nothing here spawns at the level's start.
 #
-# THE ESCORT. Runway 07/25 in tools/re/COMONA_MAP.md 6's frame: t m along it from the paved mesh's origin (+ ENE, runway
+# THE ESCORT. Runway 07/25 in docs/re/COMONA_MAP.md 6's frame: t m along it from the paved mesh's origin (+ ENE, runway
 # 07's landing direction), s m across it (+ SSE, the parallel taxiway's side). Everything lands on runway 07 (heading 067).
 ESC_RWY_O = (1609740.0, -435830.0)
 ESC_RWY_U = (0.92050, -0.39073)
@@ -284,7 +284,7 @@ ZFA_ORDERS_S = (6.0, 10.0)                   # after a launch: the launched unit
 # spawns it above its ship, MOONCHILD's lead's desc
 ZFA_FALLBACK = [('A', 'SV_Unit_ZfaA', 'SV_Obj_ZfaA', 1), ('B', 'SV_Unit_ZfaB', 'SV_Obj_ZfaB', 2)]
 ZFA_FALLBACK_N, ZFA_FALLBACK_UP_CM, ZFA_GAP_CM = 4, 30000.0, 6000.0
-# (2026-11-07) the ZFA-44s' anti-missile laser (tools/re/LASER_INTERCEPTOR.md "Built"): AC8's own BP_SwingTLS_ForMSL (the
+# (2026-11-07) the ZFA-44s' anti-missile laser (docs/re/LASER_INTERCEPTOR.md "Built"): AC8's own BP_SwingTLS_ForMSL (the
 # Nightmare UAV's TLSforMSL arm's weapon) on a fire-control arm of Survival's, ZFA_TLS_FCS_PKG (build_survival.py
 # build_zfa_laser: a copy of the ships' CIWS arm ZFA_TLS_FCS_SOURCE, its launcher a LauncherCommon at the host's gun
 # socket, its AIControlCIWS missiles only), named by fire-control row ZFA_TLS_FCS_ROW (DT_SV_NpcFCS, a copy of

@@ -1,6 +1,6 @@
 #!/bin/sh
 # thunder_test.sh : runs tools/checks/thunder_test.lua (the lightning Anomaly IFF FATAL ERROR / DI..ANT TH..D..R and the
-# storm test, Scripts/sv_anomalies.lua THUNDER, test builds only: tools/re/THUNDER.md) on the real parts with
+# storm test, Scripts/sv_anomalies.lua THUNDER, test builds only: docs/re/THUNDER.md) on the real parts with
 # build/checks/lua.exe (tools/checks/lua_build.sh makes it), then a copy of the parts as a release has them
 # (tools/strip_test_only.py): no trace of it or its keys left in any part, and every part still loads (lua_load_test.sh).
 set -e

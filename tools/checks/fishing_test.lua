@@ -1,5 +1,5 @@
 -- fishing_test.lua <mod dir> <work dir> <stripped dir> (run by tools/checks/fishing_test.sh): GONE FISHIN''s Lua for the
--- first in-game test (Scripts/sv_fishing.lua; tools/re/FISHING.md 1-4, 7) on the real sv_core, sv_config and sv_fishing,
+-- first in-game test (Scripts/sv_fishing.lua; docs/re/FISHING.md 1-4, 7) on the real sv_core, sv_config and sv_fishing,
 -- the game stubbed:
 --   the main menu: the shoal's DT_NPC row and its model row added from Survival's tables (the model first), its names set;
 --   the test key (Ctrl+F10, through sv_core.lua's testKey and KEYQ): nothing outside a run or on a joiner; the first press

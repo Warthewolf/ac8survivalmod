@@ -1,5 +1,5 @@
 """tex_info.py <zen package> ... : what a cooked texture or material package is, for AC8's texture questions
-(tools/re/AIRCRAFT_MATERIALS.md).
+(docs/re/AIRCRAFT_MATERIALS.md).
 
   texture:  size, pixel format, virtual or ordinary; virtual: layers, blocks (UDIM tiles), VT tile size and border
   material: which vertex factories its shader map covers (Local = static meshes / billboards, GPUSkin = skeletal

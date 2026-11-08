@@ -14,7 +14,7 @@ from survival_events import *  # noqa: F401,F403 (survival_events' names; it imp
 
 
 # The tells' radio lines (behaviour roadmap P3; Scripts/sv_config.lua CFG.tells, Scripts/sv_tells.lua,
-# tools/re/BEHAVIOUR_DIRECTOR.md unit 4): (group, TextID, SpeakerID, options), all stock AC8 lines (never AC7 voice).
+# docs/re/BEHAVIOUR_DIRECTOR.md unit 4): (group, TextID, SpeakerID, options), all stock AC8 lines (never AC7 voice).
 # build_survival.py build_radio adds each as a one-row group of DT_SV_Radio, a clone of Mission 22's AWACS row 382 with
 # this line (its voice the global AKB_Voice bank's <TextID>_Play, its subtitle the TextID's text: hard rule 33; the
 # build checks every _Play is there), LimitPlayCount 0; build_tells a remote event RE_SV_Radio<Suffix> (tell_event)
@@ -146,7 +146,7 @@ def build_review(g, stock_ep, t_search, t_engage, t_bmove):
 
 
 def build_ace_moves(g, flag, stock_ep):
-    """Ace moves (2026-10-23, "a proper fix for the cannon fodder"; tools/re/UNIQUE_ACTIONS.md): remote events that
+    """Ace moves (2026-10-23, "a proper fix for the cannon fodder"; docs/re/UNIQUE_ACTIONS.md): remote events that
     Scripts/main.lua fires on a pool flight flying a top tier (CFG.aces.flight <tier>.moves) when the player gets
     behind one of its aircraft: RE_SV_AceTurn_NN = the campaign aces' LastTGT (a hard 600 km/h turn onto the player,
     then 10 s 200 m behind it, twice), RE_SV_AceKulbit_NN = the Shadow squadron's kulbit (0.5 s straight, a kulbit firing
@@ -164,7 +164,7 @@ def build_ace_moves(g, flag, stock_ep):
 
 
 def build_wolf(g, stock_ep, t_search, t_engage):
-    """The Wolf trap (behaviour roadmap P1; the critic's gap fill, tools/re/BEHAVIOUR_DIRECTOR.md unit 5): per-object
+    """The Wolf trap (behaviour roadmap P1; the critic's gap fill, docs/re/BEHAVIOUR_DIRECTOR.md unit 5): per-object
     remote events on each Wolf flight's trap objects (wolf_held: the odd ones; POOL_OBJS, the names after sizing),
     NN its pool index and L the object's letter (A = object 0; letters, hard rule 17), all fired by Scripts/sv_spawn.lua:
     RE_SV_WolfHold_<NN><L>  engagement None on that object alone (Mission 22's MOONCHILD hold, RE_Wave01_Start, the
@@ -215,7 +215,7 @@ def build_wolf(g, stock_ep, t_search, t_engage):
 
 
 def build_director(g, stock_ep, t_search, t_engage):
-    """The squad director's events (behaviour roadmap P2; tools/re/BEHAVIOUR_DIRECTOR.md unit 6), all fired by
+    """The squad director's events (behaviour roadmap P2; docs/re/BEHAVIOUR_DIRECTOR.md unit 6), all fired by
     Scripts/sv_director.lua:
     RE_SV_Salvo_<NN><L>  one object's missile at the player (SALVO_SLOT; NN its flight's pool index, L the object's
                          letter, A = object 0: hard rule 17), on every usable pool flight's objects (POOL_OBJS, after
@@ -344,7 +344,7 @@ def build_awacs(g, stock_ep):
           f'(RE_SV_AwacsHome, RE_SV_AwacsRemove; 0.73.78)')
 
 
-# The ace squadrons' blinks (behaviour roadmap P9: "Wraith blinks like a lesser AB.L..IN"; tools/re/BEHAVIOUR_DIRECTOR.md
+# The ace squadrons' blinks (behaviour roadmap P9: "Wraith blinks like a lesser AB.L..IN"; docs/re/BEHAVIOUR_DIRECTOR.md
 # unit 10): AB.L..IN's teleport (Mission 22's LiveActorTeleportExecution: the object onto the player plus a world offset,
 # facing back at them; hard rule 39) for the lead (object 0) of each pool flight of WRAITH_BLINK_ROLE's group (the
 # squadrons that blink fly those flights: Scripts/sv_config.lua CFG.aces.flight <tier>.roles), to a spot every

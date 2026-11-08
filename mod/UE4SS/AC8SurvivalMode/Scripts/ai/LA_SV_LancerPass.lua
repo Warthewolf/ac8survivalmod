@@ -2,7 +2,7 @@ local LA_SV_LancerPass = Inherit(CppObjectBase)
 function LA_SV_LancerPass:Ctor()
 self:GenerateBehavior()
 -- The Lancer's attack (behaviour roadmap P1, boom and zoom: "can you dodge from above?"; NLID_SV_Lancer's PursueTarget,
--- tools/re/BEHAVIOUR_DIRECTOR.md unit 5). One slashing pass and through: it dives in leading the target (a4 true, the
+-- docs/re/BEHAVIOUR_DIRECTOR.md unit 5). One slashing pass and through: it dives in leading the target (a4 true, the
 -- campaign aces' head-on lead pass), gives up the moment you turn out of its nose cone for 2 s (a7, the stock
 -- "extend when behind" switch: it never turns with you) and breaks off a head-on merge within 2.4 km (a11-a13), KDS
 -- blocked (a14). Then it blows through for 2 s at full speed and hands over to its zoom climb (LA_SV_LancerZoom, the

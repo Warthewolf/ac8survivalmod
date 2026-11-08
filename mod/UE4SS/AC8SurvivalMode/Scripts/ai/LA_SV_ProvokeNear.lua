@@ -4,9 +4,9 @@ self:GenerateBehavior()
 self:AddRootComposite("LaxSequencer", self:InstanceLaxSequencer())
 -- When the player sits within 1.5 km of its tail (the Provoke dispatcher's near band) the plane picks ONE defensive move,
 -- weighted by its pilot rank and AI level. A RandomSelect never retries a pick that fails, so every pick here always
--- moves (P5, a harder tailed plane, 2026-10-29; tools/re/BEHAVIOUR_DIRECTOR.md unit 2): a gate that can fail sits under a
+-- moves (P5, a harder tailed plane, 2026-10-29; docs/re/BEHAVIOUR_DIRECTOR.md unit 2): a gate that can fail sits under a
 -- LaxSelector with its opposite gate over the fallback. Each pick stays under 5 s: 6 s in Provoke sets the stock
--- blackout (10 s of level flight). How a tree runs: tools/re/BEHAVIOUR_NATIVE_LOGIC.md 3-6; tools/checks/tailed_test.lua
+-- blackout (10 s of level flight). How a tree runs: docs/re/BEHAVIOUR_NATIVE_LOGIC.md 3-6; tools/checks/tailed_test.lua
 -- walks every pick.
 self:AddComposite("LaxSequencer", "Reaction", self:InstanceRandomSelect())
 -- a hard break turn away from the pursuer, either side (every rank)

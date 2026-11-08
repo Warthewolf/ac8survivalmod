@@ -1,5 +1,5 @@
 -- stats_test.lua <mod dir> <work dir> (run by tools/checks/stats_test.sh): the behaviour roadmap's foundations (unit 1,
--- tools/re/BEHAVIOUR_DIRECTOR.md) on the real sv_core.lua, sv_config.lua, sv_ai.lua, sv_spawn.lua, sv_stats.lua and
+-- docs/re/BEHAVIOUR_DIRECTOR.md) on the real sv_core.lua, sv_config.lua, sv_ai.lua, sv_spawn.lua, sv_stats.lua and
 -- sv_coop.lua (M exposed), the game stubbed:
 --   the spawn index: spawnFlight's planes get p.k 0.. in creation order, the "spawn index:" check names the lead at k 0
 --     (and says so when a spawner made the lead last);

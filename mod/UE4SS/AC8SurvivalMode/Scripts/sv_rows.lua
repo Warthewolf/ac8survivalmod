@@ -314,7 +314,7 @@ function searchSetup()
             m.capture_m * 1.5, math.min(180, m.angle_deg * 1.5), m.arm_s / AGG, m.lock_s / AGG, m.interval_s / AGG,
             m.rest_s / AGG), "x")
     end
-    -- its ECM pod held up (tools/re/MINIMAP_MARKERS.md 3a: the stock row rests 30 s after each 15 s, so the radar ring
+    -- its ECM pod held up (docs/re/MINIMAP_MARKERS.md 3a: the stock row rests 30 s after each 15 s, so the radar ring
     -- comes and goes): no rest, a new pod as the last one's 15 s run out, and up from 20 km so the ring is there first
     -- (user, 2026-10-23: AB.L..IN's "ECM didn't turn on": TriggeringTime was 0.5; the stock row's 15 s matches the
     -- pod's 15 s LifeTime, so it's kept, with the 30 s rest taken out and a new pod every 14 s)
@@ -325,7 +325,7 @@ function searchSetup()
             r.MagazineCapacity = 999
         end, "ECM pod (MINDRIPPER's, AB.L..IN's): always up (no rest, 15 s on, every 14 s, from 20 km)", "x")
     end
-    -- AB.L..IN's own with its phases (CFG.specials.glitch.phases ecm_row; P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 9): its
+    -- AB.L..IN's own with its phases (CFG.specials.glitch.phases ecm_row; P7, docs/re/BEHAVIOUR_DIRECTOR.md unit 9): its
     -- pod is held up by RE_SV_GlitchEcm every ecm_every_s (hard rule 40) until its phase 3 drops it, so its own row fires
     -- a pod by itself at most once a minute (anomEcm's values, 60 s between and 60 s rest), else the 14 s refire of
     -- anomEcm would keep the ECM up whatever the phase (rows _SVE; MINDRIPPER keeps anomEcm). Off by default (code review
@@ -673,7 +673,7 @@ function searchSetup()
     SR.done = true
 end
 
--- The fighter roles' behaviour rows (CFG.roles, behaviour roadmap P1; tools/re/BEHAVIOUR_DIRECTOR.md unit 5; the
+-- The fighter roles' behaviour rows (CFG.roles, behaviour roadmap P1; docs/re/BEHAVIOUR_DIRECTOR.md unit 5; the
 -- brief's recipe (b)): the world data has each role group's AI objects name a DT_SV_NpcMission row (ROLE.ROWS, built:
 -- tools/build_survival.py NPC_EXTRA) whose NpcId is a DT_NPC row made here, before the level loads (hard rule 20), as
 -- a copy of the fighters' (f16c_common's) with Survival's search module and the role's behaviour set (ROLE.SETS). Made
@@ -755,7 +755,7 @@ function specialSetup()
         c.name, named and "set" or "not set (no text slot)"))
 end
 
--- The live provoke on an enemy (a harder tailed plane, P5 of tools/re/BEHAVIOUR_DIRECTOR.md; CFG.ai tier_provoke,
+-- The live provoke on an enemy (a harder tailed plane, P5 of docs/re/BEHAVIOUR_DIRECTOR.md; CFG.ai tier_provoke,
 -- provoke_stricter, provoke_cone_deg / provoke_time_s): how soon a tailed plane notices you (ProvokeConditionConeAngle
 -- deg, ProvokeDeterminationTime s: you inside that cone of its six for that long puts it in Provoke) and how close its
 -- pursuit sits (SurroundPursuitMin/MaxRange, cm), from the round's difficulty spike (CFG.spikes) and the plane's skill

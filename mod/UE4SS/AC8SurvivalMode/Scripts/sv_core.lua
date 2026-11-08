@@ -1089,7 +1089,7 @@ function inSurvival(o) return nameOf(o):find("PL_SurvivalMode", 1, true) ~= nil 
 -- 2026-10-22), and the world data's object names don't follow their flights' names.
 -- spawningIdx (0 before a pool or bomber flight's SV_Spawn, nil otherwise): each plane's index in its flight, p.k, in the
 -- order the spawner makes them, 0 the lead (desc 0: SV_SetAircraft(unit, row, 0) puts an ace or the jammer there).
--- The squad director's per-plane events go by it (tools/re/BEHAVIOUR_DIRECTOR.md, unit 1); creation order = desc order
+-- The squad director's per-plane events go by it (docs/re/BEHAVIOUR_DIRECTOR.md, unit 1); creation order = desc order
 -- is [I] until a test's "spawn index:" line shows the lead's own blueprint at k 0 (a jammer or a Harvest flight).
 spawningUnit, spawningIdx = nil, nil
 pcall(NotifyOnNewObject, "/Script/Live.LiveAIPlane", function(o)

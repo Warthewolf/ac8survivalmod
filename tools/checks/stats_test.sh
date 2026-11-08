@@ -1,5 +1,5 @@
 #!/bin/sh
-# stats_test.sh : runs tools/checks/stats_test.lua (the behaviour roadmap's foundations, tools/re/BEHAVIOUR_DIRECTOR.md
+# stats_test.sh : runs tools/checks/stats_test.lua (the behaviour roadmap's foundations, docs/re/BEHAVIOUR_DIRECTOR.md
 # unit 1: the per-plane spawn index, the measurements' maths and lines, their hooks, COOP.players) on the real parts with
 # build/checks/lua.exe (tools/checks/lua_build.sh makes it), then tools/checks/stats_report.py on the lines it logged.
 set -e

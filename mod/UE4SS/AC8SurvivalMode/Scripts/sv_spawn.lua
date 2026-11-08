@@ -592,7 +592,7 @@ function shuffled(t)
 end
 
 ---------------------------------------------------------------------------------------------------- fighter roles
--- The fighter roles (CFG.roles, behaviour roadmap P1; tools/re/BEHAVIOUR_DIRECTOR.md unit 5; build data ROLE in
+-- The fighter roles (CFG.roles, behaviour roadmap P1; docs/re/BEHAVIOUR_DIRECTOR.md unit 5; build data ROLE in
 -- sv_config.lua): what this level has, the round's draw by role, each role flight's tell and the Wolf trap's hold.
 -- The host's (or solo): a joiner's copies fly the host's picks, and roundsTick (which calls all of this) is the host's.
 do

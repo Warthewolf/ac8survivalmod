@@ -1,5 +1,5 @@
 -- sv_tells.lua: tells, the behaviour roadmap's P3 ("a radio line or HUD callout before each coordinated threat ... turns
--- cheap-feeling deaths into readable ones"; tools/re/BEHAVIOUR_DIRECTOR.md unit 4). Radio lines only since the clean up
+-- cheap-feeling deaths into readable ones"; docs/re/BEHAVIOUR_DIRECTOR.md unit 4). Radio lines only since the clean up
 -- of 2026-10-29 (user: "remove the hud warnings that we added, it's too much, keep the Voice lines though").
 -- Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order; a name another part uses is a global of this
 -- mod's Lua state, its own helpers stay local (tools/lua_split.py).

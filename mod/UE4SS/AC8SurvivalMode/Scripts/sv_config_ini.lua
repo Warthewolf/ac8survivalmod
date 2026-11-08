@@ -272,7 +272,7 @@ function presetName()
 end
 
 ---------------------------------------------------------------------------------------------------- behaviour probe
--- First step towards Survival's own (learning) enemy behaviour (BUILD_PLAN; tools/re/AI_BEHAVIOURS.md). One test,
+-- First step towards Survival's own (learning) enemy behaviour (BUILD_PLAN; docs/re/AI_BEHAVIOURS.md). One test,
 -- three questions (CFG.probe):
 --  1. Does an enemy run our own behaviour script? The first flight of every round flies a copy of Mission 22's MiG-29
 --     whose pursue slot is LA_SV_ProbePursue (barrel roll right, then left, then the stock pursuit, every attack run):
@@ -444,7 +444,7 @@ function TIER.pressure(round)
     end
     return want
 end
--- The fighter roles' build data (behaviour roadmap P1, CFG.roles; tools/re/BEHAVIOUR_DIRECTOR.md unit 5), outside CFG so
+-- The fighter roles' build data (behaviour roadmap P1, CFG.roles; docs/re/BEHAVIOUR_DIRECTOR.md unit 5), outside CFG so
 -- survival.ini and co-op's settings can't change it: ROLE_BY_FLIGHT[NN] is pool flight NN's role (ERA_Unit_NN_Dep_Air0-2,
 -- tools/survival_events.py ROLE_BY_FLIGHT, which its build checks against this), ROLE.ROWS each role's behaviour row
 -- (DT_SV_NpcMission; the Wolf trap's too) and ROLE.SETS its behaviour set (CFG.behaviour_sets), ROLE.LANCER_TOP_M the
@@ -651,7 +651,7 @@ function readScript(file)
 end
 
 ---------------------------------------------------------------------------------------------------- the game's own Lua
--- dlls/main.dll 0.8.0 (tools/re/GAME_LUA.md): SV_GameLua(code, name) runs a chunk in the game's Lua 5.3, the state
+-- dlls/main.dll 0.8.0 (docs/re/GAME_LUA.md): SV_GameLua(code, name) runs a chunk in the game's Lua 5.3, the state
 -- its AI behaviour scripts are built in, and returns "<status>\t<result>"; SV_GameLuaState() its address (0 while
 -- the game has none). The plugin swallows every error in a behaviour script (its log is stripped from the shipping
 -- game), so Survival installs a small helper there (SV_Instrument / SV_Report) that wraps a behaviour class's Ctor:

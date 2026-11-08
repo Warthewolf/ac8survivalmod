@@ -1,5 +1,5 @@
 /* =============================================================================
- *  Survival COOP: the native half of co-op for up to 24 players (runtime 0.24.0; tools/re/COOP.md). Included by
+ *  Survival COOP: the native half of co-op for up to 24 players (runtime 0.24.0; docs/re/COOP.md). Included by
  *  survival_rt.c.
  *
  *  Host-authoritative, after Double Trigger, the AC7 co-op mod (layer10-love/double-trigger, MIT / Unlicense): the
@@ -68,7 +68,7 @@
 #define CO_FLAG_AB        32                /* afterburner: the stand-in's afterburner byte follows it every frame   */
 #define CO_FLAG_GUN       64                /* gun firing                                                           */
 #define CO_FLAG_FLARES    128               /* flares                                                               */
-/* The flight block (protocol 4, COOP2MP's real player planes: tools/re/COOP2MP.md T3): what another game feeds a player's
+/* The flight block (protocol 4, COOP2MP's real player planes: docs/re/COOP2MP.md T3): what another game feeds a player's
  * real plane with (hard rule 53) beyond its pose: [0..5] the stick, int8 x127 (pitch, yaw, roll, throttle, brake,
  * high-G: the last BuildFlightInput), [6] the afterburner amount x255 (plane+0x39d0), [7..8] the speed, m/s x10
  * (plane+0x2318), [9..12] the flight State (plane+0x2b18). flight.c fills it (FlFlightBlock) and feeds it (FlFeeds). */

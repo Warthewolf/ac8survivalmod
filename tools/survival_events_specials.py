@@ -12,7 +12,7 @@ from survival_events import *  # noqa: F401,F403 (survival_events' names; it imp
 import survival_events as _se   # build_survival.py sets ANOMALY_OBJ / GLITCH_OBJ / VALKA_OBJ there: read them there
 
 
-# Special round "Amphibious Assault" (SURVIVAL_SPEC.md 7; tools/re/SPECIAL_ROUNDS.md 12b): Mission 13's enemy LCAC
+# Special round "Amphibious Assault" (docs/design/SURVIVAL_SPEC.md 7; docs/re/SPECIAL_ROUNDS.md 12b): Mission 13's enemy LCAC
 # pattern on Comona. Each lane: a unit of four landing craft (LCAC_CRAFT; a copy of Mission 13's E_Unit02_02_Ship0, NPC row
 # lcac_common) that Scripts/main.lua spawns at the lane's start point at sea; its appearance sends each craft along
 # its own path (side by side, LCAC_GAP_CM apart) onto the beach; at the end of it the craft leaves its path, the
@@ -123,7 +123,7 @@ LADON_CIRCUIT_ALT_KM = (1.25, 2.0)           # over the airfield, on the far sid
 # handover at all until the laps run out (~72 s a lap at 2500: 15 laps ~18 minutes); then arc A / B as before.
 LADON_LAPS = 15
 # The enraged Ladon (behaviour roadmap P7: "after one Ladon dies the other changes route and volleys faster";
-# Scripts/sv_ladon.lua SPC.ladonRage, CFG.specials.ladon.rage; tools/re/BEHAVIOUR_DIRECTOR.md unit 9): Lua fires
+# Scripts/sv_ladon.lua SPC.ladonRage, CFG.specials.ladon.rage; docs/re/BEHAVIOUR_DIRECTOR.md unit 9): Lua fires
 # RE_SV_LadonRage<Key>, which sets SV_LadonRage<Key>, and each arc's end starts the next at LADON_RAGE_SPEED (flag-gated
 # records, no delay: hard rule 26). (0.73.73) The same circle, faster: a tighter circuit of its own would need a new
 # path started off the circle, which is what was never flown.
@@ -217,7 +217,7 @@ def ladons():
 
 
 # Special round "Alicorn" (user, 2026-10-23: "start working on the ALICORN special round ... spawn none of the normal
-# aircraft"; tools/re/ALICORN.md): the submarine carrier exists only in Online Mode, as Emergency Call EB_002's boss
+# aircraft"; docs/re/ALICORN.md): the submarine carrier exists only in Online Mode, as Emergency Call EB_002's boss
 # (unit Boss_0: one AI object with 30 parts, their blueprints Online Mode's). Survival's copy keeps the hull, core,
 # ballast tanks, railguns, rail cannon, ECM, VLS and the 12 weapon hatches, and leaves out the pools of fighters and
 # drones it launches (ALCN_DROP). It sails Mission 22's allied fleet lane in the west sea and back (EB_002's speed,
@@ -257,7 +257,7 @@ def lcac_lane_names():
     return [lane for lane, _, _ in LCAC_LANES]
 
 
-# Special round "The Anomaly" (tools/re/SPECIAL_ROUNDS.md 13; user, 2026-10-22: the ace flies an F-4 and is named
+# Special round "The Anomaly" (docs/re/SPECIAL_ROUNDS.md 13; user, 2026-10-22: the ace flies an F-4 and is named
 # MINDRIPPER; its own HUD warning; the mission-update beep when its round starts; the shuttle's zoom-in camera on it).
 # build_survival.py copies pool flight ANOMALY_SOURCE (Survival's fighter behaviour, 40 km area) into MINDRIPPER's own
 # one-aircraft unit and a guard unit; Scripts/main.lua spawns both, gives MINDRIPPER its NPC row and flies the field
@@ -275,7 +275,7 @@ ANOMALY_GUARD_RADIUS_M = 2000.0             # its guards' unit area, on it: they
 # while MINDRIPPER is up ANOMALY_ATTACK (user, 2026-10-22: "mindripper still wasn't aggressive enough").
 ATTACK_BASE = {'missiles': 4, 'attackers': 6, 'cooldown': (4.0, 8.0, 15.0, 20.0)}
 ANOMALY_ATTACK = {'missiles': 8, 'attackers': 10, 'cooldown': (0.5, 1.0, 3.0, 5.0)}
-# The throttle's presets Lua picks (behaviour roadmap P8 x P4, tools/re/BEHAVIOUR_DIRECTOR.md unit 3): remote events
+# The throttle's presets Lua picks (behaviour roadmap P8 x P4, docs/re/BEHAVIOUR_DIRECTOR.md unit 3): remote events
 # RE_SV_Pressure<letter> (letters: hard rule 17), built in build_anomaly with its attack(). Scripts/sv_rounds.lua fires
 # one by round band (CFG.late.pressure: C from round 26, D from 31, so the attackers at once stay about a third of the
 # most up), never in an Anomaly or VALKA round (their records below set ANOMALY_ATTACK and put ATTACK_BASE back), and
@@ -347,7 +347,7 @@ def glitch_blinks():
 
 # Special round "VALKA" (user, 2026-10-24: "port the Mihaly fight from ACE7 into ACE8 Survival Mode as an Anomaly Boss
 # ... VALKA, who uses an EML"): AC7 Mission 18's opener, then a Super AI with AB.L..IN's blinks and a chance of
-# MINDRIPPER's inverted controls. AC7's opener (ms18_Phase_01, tools/re/VALKA.md): a hidden dummy railgun of its own
+# MINDRIPPER's inverted controls. AC7's opener (ms18_Phase_01, docs/re/VALKA.md): a hidden dummy railgun of its own
 # (ms18_dummy_eml_p1, not Mihaly), placed once ahead of the player along where they're aiming, facing them, charges
 # 6 s (HUD warning, a flash of light at it), then fires at them; Mihaly shows after. Ours: the dummy is the X-40A's
 # RailGun part alone (VALKA_EML_*: DT_NPC OP1016_x40a_RG on its own unit), spawned once by main.lua 9 km along your aim
@@ -623,7 +623,7 @@ def build_anomaly(g, flag, stock_ep, t_search, t_engage, t_move):
     g.execute(t_move, guards, {0: ANOMALY_GUARD_UNIT, 1: ANOMALY_OBJ, 3: 'NoneSelect', 5: f'{ANOMALY_GUARD_RADIUS_M}',
                                10: 'true'}, delay=2.5)
     # PHANTASM's pack (behaviour roadmap P7: "guards fly as a Wolf pack that springs while your controls are scrambled";
-    # Scripts/sv_anomalies.lua ANOM.packTick, CFG.specials.anomaly.pack; tools/re/BEHAVIOUR_DIRECTOR.md unit 9), remote
+    # Scripts/sv_anomalies.lua ANOM.packTick, CFG.specials.anomaly.pack; docs/re/BEHAVIOUR_DIRECTOR.md unit 9), remote
     # events Lua fires, no conditions or flags (hard rule 26):
     #   RE_SV_AnomalyPackSpring  the guards loose (the down records' PlayerOnlyNoLimit and the area over the whole zone)
     #                            and every one of them the campaign aces' LastTGT onto the player (Mission 6's
@@ -712,7 +712,7 @@ def build_glitch(g, t_search, t_engage, stock_ep):
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_GlitchEcm')
     g.execute(t_fire, 'RE_SV_GlitchEcm', {0: GLITCH_ECM_SLOT, 1: GLITCH_OBJ})
     # its post-stalls on command (user, 2026-10-24: "make the EA-18G do post stalls even more"): the campaign's own
-    # unique actions (tools/re/UNIQUE_ACTIONS.md 9), OneShot (they end by themselves), Below_Return (above evading and
+    # unique actions (docs/re/UNIQUE_ACTIONS.md 9), OneShot (they end by themselves), Below_Return (above evading and
     # pursuit), as build_ace_moves; Scripts/main.lua ANOM.glitchTick picks one (CFG.specials.glitch.post_stall_*)
     m06 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'MIssion006', 'EP_Mission006_global.uasset')
     t_req = g.foreign_template(m06, 'LiveAIRequestUniqueAction', 'EnemyBehind_LastTGT')

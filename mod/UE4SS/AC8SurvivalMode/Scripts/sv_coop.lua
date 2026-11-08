@@ -1,7 +1,7 @@
 -- (sv_coop.lua is the first of 5 pieces, split by tools/lua_split_part.py: sv_coop_joiner.lua, sv_coop_planes.lua,
 -- sv_coop_sync.lua, sv_coop_migration.lua go on from where it ends, run by main.lua right after it, in that order.)
 -- AC8 Survival Mode - runtime part sv_coop: Survival COOP (CFG.coop; the native half is dlls\main.dll 0.22.0 coop.c;
--- tools/re/COOP.md). Up to 24 players, one run, host-authoritative after the AC7 co-op mod Double Trigger. Player 1
+-- docs/re/COOP.md). Up to 24 players, one run, host-authoritative after the AC7 co-op mod Double Trigger. Player 1
 -- (slot 0) is the host, players 2-24 (slots 1-23) the joiners, each linked to the host only:
 --   host:    runs everything as in single player. Every flight it spawns (SV_Spawn, with the SV_SetAircraft /
 --            SV_SetLevel calls before it) goes to every joiner, every aircraft of it gets a stream id (its position and

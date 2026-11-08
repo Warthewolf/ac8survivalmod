@@ -69,7 +69,7 @@ local function npcRow(fcs0, extra)                -- a DT_NPC row: NpcFCSId0 (or
     for k, v in pairs(extra or {}) do r[k] = v end
     return r
 end
--- the stock rows' numbers (build/stock: DT_NPC_FCS, DT_NPC_Weapon, DT_NPC_AIModule; tools/re/AIRFIELD_SUPPLY.md 4)
+-- the stock rows' numbers (build/stock: DT_NPC_FCS, DT_NPC_Weapon, DT_NPC_AIModule; docs/re/AIRFIELD_SUPPLY.md 4)
 local FCS_ROWS = {
     { "NPC_FCS_VehicleAAGun000", { NpcAIModuleId = FName("NPC_AIModule_GroundVehicle000"), NpcWeaponId = FName("AAGUN_Ground_000"),
       MagazineCapacity = 10, PredictionOffsetTime = 0.8, CaptureDistance = 2200.0, CaptureAngleRange = 30.0, ActivationTime = 0.5,

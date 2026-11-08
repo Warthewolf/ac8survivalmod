@@ -1,5 +1,5 @@
 -- arc_rounds_test.lua <mod dir> <work dir> (run by tools/checks/arc_rounds_test.sh): GONE FISHIN', the day-night arc and
--- THE FESTIVAL in the real rounds and in co-op (0.74.0; tools/re/FISHING.md 9), on the real sv_core, sv_config, sv_rows,
+-- THE FESTIVAL in the real rounds and in co-op (0.74.0; docs/re/FISHING.md 9), on the real sv_core, sv_config, sv_rows,
 -- sv_ai, sv_hud, sv_subs, sv_sky, sv_spawn, sv_anomalies, sv_rounds (startRound exposed), sv_amphib, sv_spaceport,
 -- sv_fishing, sv_festival, sv_tactical, sv_stats, sv_tells, sv_director and sv_coop (M exposed), the game stubbed:
 --   the specials' dice: GONE FISHIN' in the rotation from from_round, once a run (out of the bag and never drawn again once

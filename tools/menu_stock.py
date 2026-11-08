@@ -1,5 +1,5 @@
 """menu_stock.py : finds the stock packages Survival's main-menu pages are made from (run by tools/build_all.sh before
-tools/build_survival.py; tools/re/MENU_PAGES.md). Writes build/menu/stock.json, which build_survival.py reads:
+tools/build_survival.py; docs/re/MENU_PAGES.md). Writes build/menu/stock.json, which build_survival.py reads:
   class_tables  the game's table(s) of main-menu pages (row struct LiveMenuClassTable: MenuID -> widget class), the
                 ones that list the free-mission difficulty page (CampaignFreeMissionDifficulty, the page Survival's
                 SURVIVAL MODE row has always opened); the in-game one, DT_IngameMenuSettingData, is the STORE's

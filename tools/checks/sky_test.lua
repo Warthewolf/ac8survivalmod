@@ -1,5 +1,5 @@
 -- sky_test.lua <mod dir> <work dir> <stripped dir> (run by tools/checks/sky_test.sh): the sky Survival changes
--- (Scripts/sv_sky.lua; tools/re/FISHING.md 5) and its test key on the real sv_core, sv_config and sv_sky, the game stubbed
+-- (Scripts/sv_sky.lua; docs/re/FISHING.md 5) and its test key on the real sv_core, sv_config and sv_sky, the game stubbed
 -- (a Cloudly actor, its stock sky asset, a renderer's working copies, the sun light, a sky light controller, two
 -- post-process volumes, the two MPCs, Cloudly's custom sun):
 --   the game as the user's sky test of 2026-11-07 read it: Cloudly copies the level's sky asset into the drawn copy
@@ -477,7 +477,7 @@ check(ro.EnableMoon == true and near(sun.Intensity, 0.5, 1e-6) and sun.LightColo
     "night (F+7): the light at the moon, 0.5, bluish; the moon on (drawn)")
 check(near(ppv1.Settings.AutoExposureMinBrightness, 2.3, 1e-6) and ppv2.Settings.AutoExposureMinBrightness == 13 and near(ro.StarsParams.StarsIntensity, 2.26, 1e-6),
     "night's exposure on the volume with its override, the stars at Mission 9's")
--- ((2026-11-08) the rest of Mission 9's night (tools/re/NIGHT_SKY.md 5)
+-- ((2026-11-08) the rest of Mission 9's night (docs/re/NIGHT_SKY.md 5)
 check(sun.SpecularScale == 0.01 and near(cockpitPP.Settings.AutoExposureMinBrightness, 2.3, 1e-6) and cockpitPP.Settings.AutoExposureMaxBrightness == 20,
     "night: no moon glint on the sea (the light's specular 0.01), the cockpit view's exposure down with the rest (its max untouched)")
 check(near(mpcv[mec.addr .. "Cockpit_MFD_EmissiveIntensity"], 6e-4, 1e-9) and near(mpcv[mec.addr .. "Cockpit_Meter_EmissiveIntensity"], 0.007, 1e-9)

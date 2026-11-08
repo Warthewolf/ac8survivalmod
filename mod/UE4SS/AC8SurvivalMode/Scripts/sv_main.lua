@@ -1206,7 +1206,7 @@ if type(RegisterKeyBind) == "function" and Key then
             end)
         end)
     end
-    -- Ctrl+9 in a run: the ZFA-44's test T0 (sv_zfa44.lua, tools/re/ZFA44.md "T0 build"): VALKA's x40a when she's up,
+    -- Ctrl+9 in a run: the ZFA-44's test T0 (sv_zfa44.lua, docs/re/ZFA44.md "T0 build"): VALKA's x40a when she's up,
     -- else the nearest live enemy aircraft, dressed as the ZFA-44 (its container SurvivalMode_ZFA44_P: the user's dev
     -- builds with ZFA=1 only), each dressing on the next paint variant; pressed again: undone
     if Key.NINE then
@@ -1219,7 +1219,7 @@ if type(RegisterKeyBind) == "function" and Key then
             end)
         end)
     end
-    -- Ctrl+F5 in a run: THE ESCORT's landing test T0 (sv_escort.lua ESC.testT0, tools/re/ESCORT.md): CHARLENE alone short
+    -- Ctrl+F5 in a run: THE ESCORT's landing test T0 (sv_escort.lua ESC.testT0, docs/re/ESCORT.md): CHARLENE alone short
     -- of the approach fix, her final, rollout, taxi and stop logged every 0.5 s; Ctrl+DEL: the ZFA-44 carriers unlocked and
     -- one sent now (ESC.testCarrier). (Were Ctrl+F1 / F2, the tactical items' airstrike and ECM burst keys: sv_tactical.lua)
     for _, tk in ipairs({ { "F5", "testT0" }, { "DEL", "testCarrier" } }) do
@@ -1250,7 +1250,7 @@ end
 
 log("loaded, version " .. VERSION)
 
--- AC8's texture and virtual-texture settings (tools/re/AIRCRAFT_MATERIALS.md: its aircraft skins are virtual textures),
+-- AC8's texture and virtual-texture settings (docs/re/AIRCRAFT_MATERIALS.md: its aircraft skins are virtual textures),
 -- read through KismetSystemLibrary and logged once (at the first level load): read only, changes nothing
 local RENDER_CVARS = {
     { "r.VirtualTextures", "i" }, { "r.VT.TileSize", "i" }, { "r.VT.TileBorderSize", "i" }, { "r.VT.EnableFeedback", "i" },

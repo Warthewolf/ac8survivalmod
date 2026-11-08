@@ -306,7 +306,7 @@ end
 -- Each tier of RUN.ups on the player's aircraft, checked every 2 s (a new aircraft gets them again): AIRFRAME its
 -- MaxHealth (its health raised by the same share), WEAPON BAYS its missile and special weapon maxima (the native
 -- runtime's SV_AmmoMax, 0.19.0), FLARE PODS its weapon activator's MaxFlareCount (LivePlayerWeaponActivator +0x27c, the
--- count the flare code caps at: tools/re/AMMO.md), GUN its gun class's default damage (MachineGunClass; restored by
+-- count the flare code caps at: docs/re/AMMO.md), GUN its gun class's default damage (MachineGunClass; restored by
 -- TAC.reset). Each one's stock value is read from the aircraft once, before Survival changes it.
 do
 local function activator(pawn)

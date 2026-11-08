@@ -439,7 +439,7 @@ WP_L_1..6 = hatchL_01..06, WP_R_1..6 = hatchR_01..06. (The NPC row says `airs0`,
   28 s (dives 3-4) after the dive trigger.
 - Actions: `LiveAIActionEventExecution {01 Boss_0_ALCN_0} {.. <DT_AIActionEvent row>}` (1.4).
   VLS shots: `LiveFireOneShotWeapon {WN_WEAPON_1} {Boss_0_ALCN_0_vls_<L|R>_<1|2>} {<target unit>}`.
-- No campaign mission uses these exec classes (node_catalog.tsv has no `LiveSubmarineOperation` /
+- No campaign mission uses these exec classes (docs/design/node_catalog.tsv has no `LiveSubmarineOperation` /
   `LiveAIActionEventExecution`). So `survival_events.foreign_template(EP_EB_002, cls, event)` is the only source of
   templates, and the EP needs their script-class imports.
 

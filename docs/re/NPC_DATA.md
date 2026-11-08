@@ -5,7 +5,7 @@ BUILD_PLAN research backlog item 2. All tables pulled with `tools/get_stock.sh` 
 `dt_npc.tsv` (all 1379 DT_NPC rows: LuaSet, rank, provoke, KDS, AI module, FCS, boss, score, display name, tweaks),
 `aircraft.tsv` (333 aircraft rows joined with their model: HP, pitch/roll speed, max speed, accel, blueprint, stealth),
 `mission_npc.tsv` (all 1723 rows of the 43 campaign mission tables, joined to DT_NPC), `dt_npc_on.tsv` (online).
-Behaviour sets (LuaSet / LA_* scripts / pilot rank) are in `tools/re/AI_BEHAVIOURS.md`.
+Behaviour sets (LuaSet / LA_* scripts / pilot rank) are in `docs/re/AI_BEHAVIOURS.md`.
 
 ## The lookup chain
 ```

@@ -16,7 +16,7 @@ local MODULES = {
     "sv_ai",
     "sv_hud",
     "sv_subs",                     -- the subtitle strip and the results card: SUB.say (GONE FISHIN', THE FESTIVAL)
-    "sv_sky",                      -- the sky Survival changes, the day-night arc's owner (tools/re/FISHING.md 5)
+    "sv_sky",                      -- the sky Survival changes, the day-night arc's owner (docs/re/FISHING.md 5)
     "sv_sound",
     "sv_spawn",
     "sv_anomalies",
@@ -27,10 +27,10 @@ local MODULES = {
     "sv_leaderboard",
     "sv_alicorn",
     "sv_amphib",
-    "sv_spaceport",                -- the Spaceport Assault and its retake (tools/re/SPACEPORT_ASSAULT.md)
-    "sv_fishing",                  -- GONE FISHIN': the shoals and SAL's boat (tools/re/FISHING.md 1-4)
-    "sv_festival",                 -- THE FESTIVAL: the cruise missiles and the siren (tools/re/FISHING.md 6)
-    "sv_decoy",                    -- THE DECOY: the bait, the Spear UAVs' locks and the Tonitrus Spear (tools/re/DECOY.md)
+    "sv_spaceport",                -- the Spaceport Assault and its retake (docs/re/SPACEPORT_ASSAULT.md)
+    "sv_fishing",                  -- GONE FISHIN': the shoals and SAL's boat (docs/re/FISHING.md 1-4)
+    "sv_festival",                 -- THE FESTIVAL: the cruise missiles and the siren (docs/re/FISHING.md 6)
+    "sv_decoy",                    -- THE DECOY: the bait, the Spear UAVs' locks and the Tonitrus Spear (docs/re/DECOY.md)
     "sv_flights",
     "sv_shop",
     "sv_music",                    -- the music player in Survival: every track unlocked, the game's other named ones added
@@ -41,7 +41,7 @@ local MODULES = {
     "sv_spweapons",                -- the enemies' special weapons fired (CFG.special.fire)
     "sv_tells",                    -- P3's tells (before sv_coop: it keeps SV_Event as it was unwrapped)
     "sv_director",                 -- P2's squad director (calls SV_Event by name at run time: sv_coop wraps it)
-    "sv_escort",                   -- THE ESCORT and the ZFA-44 carriers (tools/re/ESCORT.md; before sv_coop: its logPlane wrap)
+    "sv_escort",                   -- THE ESCORT and the ZFA-44 carriers (docs/re/ESCORT.md; before sv_coop: its logPlane wrap)
     "sv_escort_subs",              -- what CHARLENE, her KMG escorts and Comona say; the Anomalies' wait for her (2026-11-07)
     "sv_escort_laser",             -- the ZFA-44 carriers' anti-missile laser: its rows, its arm in the log, its kills (2026-11-07)
     "sv_escort_li",                -- AC7's LaserInterceptor on the ZFA-44s (runtime laser.c, tools/laser7; 2026-11-07)
@@ -55,7 +55,7 @@ local MODULES = {
     "sv_coop_migration",           -- (sv_coop.lua's next piece: tools/lua_split_part.py)
     "sv_down",                     -- co-op's revives and the spectator camera (after sv_coop: its messages and players)
     "sv_audit",                    -- the run's audits in the log: targets, pay, sync (after sv_coop: its addCredits wrap)
-    "sv_zfa44",                    -- the ZFA-44's test T0 (tools/re/ZFA44.md; test code only: empty in every zip)
+    "sv_zfa44",                    -- the ZFA-44's test T0 (docs/re/ZFA44.md; test code only: empty in every zip)
     "sv_main",
 }
 

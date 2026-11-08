@@ -1,5 +1,5 @@
 -- spaceport_test.lua <mod dir> <work dir> (run by tools/checks/spaceport_test.sh): the Spaceport Assault and its retake
--- (Scripts/sv_spaceport.lua; tools/re/SPACEPORT_ASSAULT.md), on the real sv_core, sv_config, sv_rows, sv_ai, sv_spawn,
+-- (Scripts/sv_spaceport.lua; docs/re/SPACEPORT_ASSAULT.md), on the real sv_core, sv_config, sv_rows, sv_ai, sv_spawn,
 -- sv_anomalies, sv_rounds (startRound exposed), sv_amphib, sv_spaceport, sv_stats and sv_tells, the game stubbed:
 --   SPORT.fleet: the build's 27 ships in its order (tools/survival_events.py sp_fleet: the Ford, each group's Wasp, Aegis
 --     pair and boat pair, the Ford's ring), 14 Aegis;

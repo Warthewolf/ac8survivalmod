@@ -1,9 +1,9 @@
-"""prepare.py : the ZFA-44EL (the user's edited CFA-44 from their AC7 mod Alicorn Special Raid IV; tools/re/ZFA44.md)
+"""prepare.py : the ZFA-44EL (the user's edited CFA-44 from their AC7 mod Alicorn Special Raid IV; docs/re/ZFA44.md)
 made ready for UE 5.4's glTF import, as tools/x02s/prepare.py did VALKA's X-02S.
 
 AGENTS.md (Toolchain) records the user's exception (2026-11-06): their ZFA-44's model and paint and the AC7 stock
 assets they use, for a Survival special. Nothing read or written here is ever committed: the inputs are the extraction
-in build/zfa44 (tools/re/ZFA44.md: UModel's glTF of the mod's uavs_SM, its sockets, the textures as PNG), the outputs
+in build/zfa44 (docs/re/ZFA44.md: UModel's glTF of the mod's uavs_SM, its sockets, the textures as PNG), the outputs
 go to build/zfa44/prep.
 
 The mesh (uavs_SM: a UE 4.18 STATIC mesh, 10 sections) becomes ONE SKELETAL mesh (a static mesh of ours added at run

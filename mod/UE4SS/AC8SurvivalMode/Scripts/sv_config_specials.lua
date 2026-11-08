@@ -58,7 +58,7 @@ CFG.specials = {
     -- CFG.specials.escort.text.say.warn_<kind> (or the special's own charlene_warn)
     anomaly_gate = { enabled = true, kinds = { "anomaly", "glitch", "valka" }, after_lost = true,
                      warn = true, warn_kinds = { "anomaly", "glitch" } },
-    -- "alicorn" = the ALICORN (tools/survival_events.py ALCN_*; tools/re/ALICORN.md; user, 2026-10-23: "start
+    -- "alicorn" = the ALICORN (tools/survival_events.py ALCN_*; docs/re/ALICORN.md; user, 2026-10-23: "start
     -- working on the ALICORN special round ... spawn none of the normal aircraft"): Online Mode's submarine
     -- carrier, without the fighters and drones it launches there, sailing the west sea. It dives every
     -- dive_every_s for dive_for_s, and while surfaced fires its railgun every railgun_every_s and a VLS volley at
@@ -76,14 +76,14 @@ CFG.specials = {
     -- (health_per_round 0.05, health_max_x 1.4: were 0.03 / 1.0, economy review of 2026-10-25)
     -- It counts as surfaced once it's back within surfaced_m of where it sailed (the order sent again every
     -- resurface_s while it isn't rising, resurface_tries times at most; up anyway after up_wait_s).
-    -- rail_alert (behaviour roadmap P3/P7, tools/re/BEHAVIOUR_DIRECTOR.md unit 4): Mission 18's RAILGUN WARNING on
+    -- rail_alert (behaviour roadmap P3/P7, docs/re/BEHAVIOUR_DIRECTOR.md unit 4): Mission 18's RAILGUN WARNING on
     -- every game (RE_SV_AlcnAlertOn, forwarded) with the railgun's tell (CFG.tells alcn_rail, its lead_s before the
-    -- order), off alert_s after the order (it aims ~7 s and preps ~2 s: tools/re/ALICORN.md), at a dive and when it
+    -- order), off alert_s after the order (it aims ~7 s and preps ~2 s: docs/re/ALICORN.md), at a dive and when it
     -- sinks (hard rule 45); false: no warning (the tell still comes with tells on). After a surfacing the warning
     -- comes no sooner than radio_gap_s after "submarine has surfaced" (the order its lead after it). Once you've
     -- destroyed both railguns: the warning off, no more warnings, tells or orders; every VLS: no more VLS calls or
     -- volleys (code review of 2026-10-29)
-    -- deck (behaviour roadmap P7, "surfaced phase spawns Skirmishers from its deck"; tools/re/BEHAVIOUR_DIRECTOR.md
+    -- deck (behaviour roadmap P7, "surfaced phase spawns Skirmishers from its deck"; docs/re/BEHAVIOUR_DIRECTOR.md
     -- unit 9): while it's up it launches fighters: a free pool flight of `size` (the Skirmishers' own with the fighter
     -- roles on, CFG.roles; else any) spawned alt_m above it, ahead_m off its bow, along its heading (Survival's spawner
     -- with a pose, not Online Mode's launches, whose pooled fighters stay put away; never one of the round's own
@@ -172,7 +172,7 @@ CFG.specials = {
                  post_stall = true, post_stall_every_s = 6, post_stall_gap_s = 3, post_stall_range_km = 3,
                  post_stall_behind_km = 1.5, post_stall_moves = { "Kulbit", "KulbitB", "Cobra" },
                  -- its phases (behaviour roadmap P7: "after two frenzies it starts blinking behind you, not just
-                 -- around you; a third phase drops ECM and goes all-out guns"; tools/re/BEHAVIOUR_DIRECTOR.md unit 9).
+                 -- around you; a third phase drops ECM and goes all-out guns"; docs/re/BEHAVIOUR_DIRECTOR.md unit 9).
                  -- Phase 2 once behind_after frenzies are over: behind_share of its blinks at the spot nearest your
                  -- six (your heading, at your height; the tell "glitch_six" first). Phase 3 at allout_hp of its health
                  -- (as it appeared): no more frenzies or blinks, its ECM pod down (no RE_SV_GlitchEcm; ecm_pods_off:
@@ -357,7 +357,7 @@ CFG.specials = {
     -- Health: user, 2026-10-24 "lower their health dramatically": 400 HP (was 900), x1.21 by round 12 (was x1.32).
     -- (health_per_round 0.05, health_max_x 2.5: were 0.03 / 2.0, economy review of 2026-10-25)
     -- rage (behaviour roadmap P7: "after one Ladon dies the other changes route and volleys faster"; their round
-    -- stays theirs alone, user 2026-10-25, so no escorts; tools/re/BEHAVIOUR_DIRECTOR.md unit 9): one shot down, the
+    -- stays theirs alone, user 2026-10-25, so no escorts; docs/re/BEHAVIOUR_DIRECTOR.md unit 9): one shot down, the
     -- other is enraged: its volleys every rage.volley_every_s (the first first_s on, rage.volley_warn_s in range),
     -- and from the end of the arc it's on it goes round its circuit at the build's faster speed
     -- (tools/survival_events.py LADON_RAGE_SPEED: RE_SV_LadonRage<Key> sets its flag, the PathFinish records pick the
@@ -387,7 +387,7 @@ CFG.specials = {
               missile_damage = 10, missile_homing_x = 0.85, missile_turn_x = 0.5,
               reward = 6000, reward_per_round = 200,
               npc_rows = "/Game/Mods/SurvivalMode/Data/DT_SV_NpcRows.DT_SV_NpcRows" },
-    -- "amphibious" = Amphibious Assault (SURVIVAL_SPEC.md 7; tools/survival_events.py LCAC_*): landing craft on
+    -- "amphibious" = Amphibious Assault (docs/design/SURVIVAL_SPEC.md 7; tools/survival_events.py LCAC_*): landing craft on
     -- `lanes` (from the user's marks; `craft` craft each, side by side) cross to Comona's beaches by the airport,
     -- lanes_first of them the first time, lanes_more more each time after; each craft that reaches the beach puts a
     -- BTR-90 ashore, which drives to the runway. Each one that gets there adds capture_per_troop % to the airfield's
@@ -410,7 +410,7 @@ CFG.specials = {
                    -- stuck_s is taken off (no pay, no capture); without its actor to watch, after troop_timeout_s.
                    -- runway_cm: where they drive to (survival_events.LCAC_RUNWAY), for the log's distances.
                    stuck_m = 50, stuck_s = 60, troop_timeout_s = 540, runway_cm = { 1609574, -435747 } },
-    -- "spaceport" = the Spaceport Assault (tools/re/SPACEPORT_ASSAULT.md, tools/survival_events.py SP_*; the user's
+    -- "spaceport" = the Spaceport Assault (docs/re/SPACEPORT_ASSAULT.md, tools/survival_events.py SP_*; the user's
     -- special of 2026-10-31; Scripts/sv_spaceport.lua): an enemy fleet west of the spaceport, `ships` of each kind
     -- (the build has 1 Ford, 4 Wasps, 14 Aegis and 8 missile boats; fewer leaves the last of a kind out),
     -- spawn_per_tick of them every 0.5 s. Each Wasp afloat sends 2 landing craft every wave_every_s (the first
@@ -495,7 +495,7 @@ CFG.specials = {
                                          escape_penalty = 5000, debris = true, debris_tgt_s = 3, debris_next_s = 2.8,
                                          debris_pay = 400, debris_timeout_s = 120,
                                          timeout_s = 240, escape_min_m = 15000, split_wait_s = 10 } } },
-    -- "decoy" = THE DECOY (Scripts/sv_decoy.lua, tools/re/DECOY.md; user, 2026-11-06): a Marker UAV far north (the
+    -- "decoy" = THE DECOY (Scripts/sv_decoy.lua, docs/re/DECOY.md; user, 2026-11-06): a Marker UAV far north (the
     -- bait: its Tonitrus Spear guidance laser painting the airfield, pinged on the minimap) the players must shoot down;
     -- then the trap: up to max_total UAVs come round the players (spawn_km from one, any bearing, alt_m of their
     -- height, never inside safe_km of the runway, gap_km from another, at most per_player_max within near_km of a
@@ -576,7 +576,7 @@ CFG.specials = {
                  -- Spear incoming!" as one's called, `hit` "took a direct Spear hit!" when it hurt you, `brief` "projectiles
                  -- will hit locations marked by the laser" as the trap springs; gap_s between any two, each its cooldown
                  radio = { enabled = true, gap_s = 2.5, lock_s = 10, imminent_s = 6, incoming_s = 6, hit_s = 10 } },
-    -- "escort" = THE ESCORT (Scripts/sv_escort.lua, tools/re/ESCORT.md; user, 2026-11-06): the allied B-1B CHARLENE
+    -- "escort" = THE ESCORT (Scripts/sv_escort.lua, docs/re/ESCORT.md; user, 2026-11-06): the allied B-1B CHARLENE
     -- and her four escorts (YORKE and ROCK, Su-57s; ALI, a Su-33; DANIELLE, a Su-35) fly in from the map's south-west
     -- corner (start, 3 km up) to Comona airfield under the round's waves and land: her route (RE_SV_CharGo), then by
     -- distance her final (RE_SV_CharFinal, gear down), rollout, taxi and stop; the escorts hold their wait orbits
@@ -693,7 +693,7 @@ CFG.specials = {
                            final_fast = true, landed_at_taxi = true, release_at = "roll", release_first_s = 0,
                            after_her_s = 210, escort_slow_up_m = 450, escort_short_up_m = 250,
                            climb_off_m = 60, climb_off_kmh = 150 },
-               -- the build's points (cm; tools/survival_events.py ESC_*, tools/re/ESCORT.md "Build names"): the approach
+               -- the build's points (cm; tools/survival_events.py ESC_*, docs/re/ESCORT.md "Build names"): the approach
                -- fix (IAF: her final's start), touchdown, the rollout's end, runway 07's thresholds and heading;
                -- circuit_start / circuit_heading: the escorts' landing circuit's first point (600 m up, 2 km north of the
                -- runway, 0.7 km past its east threshold: the ~14 km circuit of 2026-11-07, tools/survival_events.py
@@ -971,7 +971,7 @@ CFG.specials = {
                  -- when you come near (test of 2026-10-22: with the 40 km search they left it for you and the airfield)
                  guard_search_m = 5000,
                  -- its pack (behaviour roadmap P7: "PHANTASM guards fly as a Wolf pack that springs while your controls
-                 -- are scrambled"; tools/re/BEHAVIOUR_DIRECTOR.md unit 9): spring_delay_s after its field scrambles
+                 -- are scrambled"; docs/re/BEHAVIOUR_DIRECTOR.md unit 9): spring_delay_s after its field scrambles
                  -- you, its tell first ("pack"), the guards are let loose (RE_SV_AnomalyPackSpring: you only, anywhere,
                  -- and every one of them the campaign aces' LastTGT onto you); once you've been out of the field
                  -- hold_after_s, and at least min_s after the spring, they're called back round it
@@ -1026,7 +1026,7 @@ CFG.specials = {
                             burst = { "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricDischargeM001",
                                       "/Game/VFX/Mission/Mission023/NS_ms23FarFlash",
                                       "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma" } } },
-    -- "fishing" = GONE FISHIN' (FISHING_ROUND_PLAN.md; tools/re/FISHING.md; Scripts/sv_fishing.lua): SAL, a Comona
+    -- "fishing" = GONE FISHIN' (FISHING_ROUND_PLAN.md; docs/re/FISHING.md; Scripts/sv_fishing.lua): SAL, a Comona
     -- fisherman, needs fish for the island's festival and enlists the air force. Once a run (`once`), from from_round,
     -- in the random rotation; no enemies, nothing attacks the airfield. SAL and COMONA CONTROL talk it in on the
     -- subtitle strip (text.intro), then the shoals spawn and a time_s countdown runs (warnings at warn_s left). A shoal
@@ -1204,7 +1204,7 @@ CFG.specials = {
                          card_total = "TOTAL HAUL  %d KG      GRADE  %s", card_boat = "SAL'S BOAT  -%d KG",
                          card_pay = "PAYMENT  +%s Z", card_team = "TEAM HAUL  %s KG FROM %d PILOTS",
                          card_player = "%s  %d KG  %s" } },
-    -- "festival" = THE FESTIVAL (FISHING_ROUND_PLAN.md 0; tools/re/FISHING.md 6; Scripts/sv_festival.lua): never drawn,
+    -- "festival" = THE FESTIVAL (FISHING_ROUND_PLAN.md 0; docs/re/FISHING.md 6; Scripts/sv_festival.lua): never drawn,
     -- it's round F + round_after of the day-night arc (F: GONE FISHIN''s round), at sunset, at the airfield. Lines
     -- thanking the pilots (text.talk), then the air raid siren loops at the airfield (`siren`, a Wwise event of the game's
     -- SE bank, siren_up_m over the runway, every game), the four searchlights (`lights`, allied; their rows ride in the
@@ -1412,7 +1412,7 @@ CFG.specials = {
                                         "ALI|First time I've seen Comona dance. I could get used to it.",
                                         "DANIELLE|Somebody save me a seat by the stage. I'm landing hungry.",
                                         "ROCK|Tell the band to play something loud. We're coming in." } } },
-    -- TEST ONLY BEGIN (the lightning Anomaly and the storm test: test builds only, tools/re/THUNDER.md)
+    -- TEST ONLY BEGIN (the lightning Anomaly and the storm test: test builds only, docs/re/THUNDER.md)
     -- "thunder" = IFF FATAL ERROR / DI..ANT TH..D..R (user, 2026-11-06: "another Anomaly, one that uses Lightning Against
     -- you", "The Aircraft is an A-10", "Strikes should only black out and disorient you", "it can only be spawned with
     -- the test key"): never in `rotation`; Ctrl+. (period) makes the next round its (sv_anomalies.lua THUNDER). Its A-10 flies
@@ -1522,7 +1522,7 @@ CFG.specials = {
                           storm_stall_sub = "LS_STALLTIME ON YOUR PLANE", storm_off = "TEST: STORM OFF" } },
     -- TEST ONLY END
 }
--- The sky (Scripts/sv_sky.lua; tools/re/FISHING.md 5): the day-night arc's owner. It never writes the stock sky asset
+-- The sky (Scripts/sv_sky.lua; docs/re/FISHING.md 5): the day-night arc's owner. It never writes the stock sky asset
 -- (Mission 4's CSP_ms04...), only the renderer's working copies of its params, the sun light, the sky light, the
 -- post-process volumes' exposure, two material parameter collections (mpc_env, mpc_vfx) and Cloudly's custom sun, each
 -- value's original kept and put back (at a run's end; a level torn down drops them).
@@ -1558,7 +1558,7 @@ CFG.specials = {
 -- a real sunset's slant; it rises in the east after the night as before.
 -- ((2026-11-08) the user, at round F+9: "this night is waaay to dark, but we need a way to make is so the sea doesn't
 -- glow so badly, also theres no visible stars"; "research how the night map at Retaking of Theve II works": Mission 9,
--- tools/re/NIGHT_SKY.md) The night is Mission 9's whole night, not part of it: its exposure (0.5 / 9, one stop brighter
+-- docs/re/NIGHT_SKY.md) The night is Mission 9's whole night, not part of it: its exposure (0.5 / 9, one stop brighter
 -- than its +0.5: Comona has no night city) together with its night ambient (the sky light at Mission 9's night cubemaps'
 -- level: x skylight_x of Mission 4's day ones, 0.1 was 20,000-45,000 times too bright: the sea mirrored it), the
 -- light's specular spec (0.01: no moon glint on the sea), its stars (Mission 9's, for its exposure; the catalog and the
@@ -1610,14 +1610,14 @@ CFG.sky = { enabled = true, readback_s = 5,
 -- keeps the mission-start track (start_track, posted by the event package); from round 2 each round starts the next
 -- track of a shuffled list, every 5th round one from `special`. A track is posted again when nothing has played
 -- for restart_s (user, 2026-10-21: the music stopped around round 5). All are looping campaign tracks of the BGM
--- bank Survival's level loads (tools/re/MUSIC_RADIO_CAMERA.md); a name the game doesn't have is dropped.
+-- bank Survival's level loads (docs/re/MUSIC_RADIO_CAMERA.md); a name the game doesn't have is dropped.
 -- pause_player: free flight's Music Player row in Survival's pause menu; once the player opens it, Survival stops
 -- changing the music for the rest of the run.
 -- enabled = false (user, 2026-10-22): no round music at all, the Music Player is the only music (the mission-start
 -- track played over it; tools/survival_events.py MUSIC is None too). true brings the round rotation back.
 -- hold_clock: the Music Player ends each track by its own clock, which ran on through pauses, so every pause cut the
 -- track short (user, 2026-10-22: "music skipped on round change"); dlls/main.dll 0.12.0 holds it while the BGM is
--- paused (SV_MusicClock, tools/re/MUSIC_RADIO_CAMERA.md "Track skips in Survival").
+-- paused (SV_MusicClock, docs/re/MUSIC_RADIO_CAMERA.md "Track skips in Survival").
 CFG.music = {
     enabled      = false,
     pause_player = true,
@@ -1646,7 +1646,7 @@ CFG.music = {
     special = { "AKE_Bgm_Ms09B_Play", "AKE_Bgm_Ms20D_Play", "AKE_Bgm_Ms23B_Play", "AKE_Bgm_Ms27A_Play",
                 "AKE_Bgm_Ms28C_Play", "AKE_Bgm_Ms30A_Play" },
 }
--- Round HUD. Positions are on the game's HUD design canvas (3840x2160, scaled to the screen; tools/re/HUD_LAYOUT.md).
+-- Round HUD. Positions are on the game's HUD design canvas (3840x2160, scaled to the screen; docs/re/HUD_LAYOUT.md).
 CFG.hud = {
     enabled          = true,
     x                = 190,                 -- left edge, lined up with the game's TIME / SCORE stack

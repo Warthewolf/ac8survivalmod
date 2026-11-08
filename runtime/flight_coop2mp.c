@@ -1,9 +1,9 @@
 /* flight_coop2mp.c : part of flight.c, #included by it in place (one translation unit with survival_rt.c; never
- *  compiled on its own). COOP2MP (tools/re/COOP2MP.md): a remote player plane fed (T1c), the other players' real
+ *  compiled on its own). COOP2MP (docs/re/COOP2MP.md): a remote player plane fed (T1c), the other players' real
  *  planes (T3), your weapons on your real plane elsewhere (T4), the other players' weapons by kind (fwkind.h),
  *  your launches out and another player's launches here (T4b), and their ESM / ECM fields counted on this game. */
 
-/* ---- COOP2MP: a remote player plane fed (runtime 0.29.1; tools/re/COOP2MP.md T1c) ------------------------------------
+/* ---- COOP2MP: a remote player plane fed (runtime 0.29.1; docs/re/COOP2MP.md T1c) ------------------------------------
  * A role-2 (another player's) player plane flies itself: its FrameUpdate calls RemoteUpdate(plane, dt) (hooked here,
  * sigs.h kSigRemoteUpdate), which sets the plane's second flight state from its network object's (plane +
  * NetworkObject) FLiveMessageFlightEnginePhysics (*(N+0x98)) and its input from *(N+0x170), blends the plane's own flight
@@ -108,7 +108,7 @@ static void FdFeed(uint8_t* plane)
     }
 }
 
-/* ---- COOP2MP T3: the other players' real planes (runtime 0.30.0; tools/re/COOP2MP.md T3) ---------------------------
+/* ---- COOP2MP T3: the other players' real planes (runtime 0.30.0; docs/re/COOP2MP.md T3) ---------------------------
  * A player slot's bound puppet (SV_CoopPeer) that is a player plane (sv_coop.lua spawns one of their airframe with
  * SV_CoopSpawnPP's slot) isn't teleported (coop.c CoDrive asks FlFeeds): its own update flies it, as T1e's copy, fed
  * just before its RemoteUpdate from their stream: the pose where CoDrive would have put it (their snapshots a delay ago,
@@ -1104,7 +1104,7 @@ static int L_CoopPPFx(void* lua)
  * after, so the stock rules (range, team, the field's own time) apply; the plane updated keeps its own role (a real
  * plane's HUD and sounds for a jam or support starting stay a remote plane's). Inside the function the role is read only
  * by that gate and by the role-3 filter of Online Mode's sender (still false). Game thread only, as plane updates are.
- * (tools/re/COOP2MP.md "ESM / ECM effects".) */
+ * (docs/re/COOP2MP.md "ESM / ECM effects".) */
 #include "uobj.h"                                          /* (UObjLive; included again below, guarded) */
 typedef uint64_t (*PlaneEwFn)(uint8_t* plane, float dt, void* a, void* b);
 static uint8_t*  g_fPlaneEw;                               /* found by FindFunctions */

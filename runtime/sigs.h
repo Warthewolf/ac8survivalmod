@@ -1,5 +1,5 @@
 /* Byte signatures in AceCombat8.exe (game build of 2026-09-29), the same ones AC8 Stonehenge Returns uses.
- * Generated from Stonehenge's main.dll by hand-run script; see tools/re/STONEHENGE_MAIN_DLL.md. */
+ * Generated from Stonehenge's main.dll by hand-run script; see docs/re/STONEHENGE_MAIN_DLL.md. */
 #ifndef SIGS_H
 #define SIGS_H
 #include <stdint.h>
@@ -74,7 +74,7 @@ static const uint8_t kSigTextTail[24] = {
     0xF1, 0x41, 0x8B, 0x46, 0x34, 0x41, 0x39, 0x46, 0x08, 0x0F, 0x84, 0x15,
 };
 
-/* ---- unit spawning (Milestone 2; found with tools/re/mksig.py, see tools/re/SPAWN_SYSTEM.md) ---------------- */
+/* ---- unit spawning (Milestone 2; found with tools/re/mksig.py, see docs/re/SPAWN_SYSTEM.md) ---------------- */
 /* ALiveUnit* SpawnUnitByName(ALiveUnitSpawner*, const FName* unitName, ULiveWorldData*): what
  * LiveReinforcementExecution runs for one unit. Spawns that world data's unit desc and fires its
  * "reinforcement appeared" event; refuses a desc whose UniqueID is still in the phase's unit list.  */
@@ -102,7 +102,7 @@ static const uint8_t kSigUnitIdSpawned[35] = {
     0x83, 0xEC, 0x20, 0x48, 0x8B, 0x99, 0x78, 0x01, 0x00, 0x00, 0x8B, 0xF2,
     0x48, 0x63, 0x81, 0x80, 0x01, 0x00, 0x00, 0x48, 0x8D, 0x3C, 0xC3,
 };
-/* ---- player ammo (found with tools/re/mksig.py from the stock LiveSetWeaponAmmoCount node, see tools/re/AMMO.md) ---- */
+/* ---- player ammo (found with tools/re/mksig.py from the stock LiveSetWeaponAmmoCount node, see docs/re/AMMO.md) ---- */
 /* ULiveSetWeaponAmmoCount::Execute (vtable slot 87). Read, not called: +0x52 call PlayerOwner(world), +0x60
  * mov rax,[rax+disp32] = the owner's weapon object (+0x16a8).                                                   */
 static const uint8_t kSigAmmoExecute[28] = {
@@ -164,7 +164,7 @@ static const uint8_t kSigDestroyActor[25] = {
 };
 
 /* ULivePlayBGMExecution::Execute (0x1473df1f0): GetWorld -> game instance (class-checked) -> +0x908 BGM manager ->
- * +0x170 BGM controller; Play(controller, &playingId, &node->EventName, node->Delay). tools/re/MUSIC_RADIO_CAMERA.md */
+ * +0x170 BGM controller; Play(controller, &playingId, &node->EventName, node->Delay). docs/re/MUSIC_RADIO_CAMERA.md */
 static const uint8_t kSigBgmPlay[37] = {
     0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0x48, 0x83, 0xEC, 0x30, 0x48, 0x8B,
     0xF9, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x48, 0x8B, 0x07, 0x48, 0x8B, 0xCF,
@@ -177,7 +177,7 @@ static const uint8_t kSigBgmPlayMask[37] = {
 };
 
 /* ULiveCallRemoteEventExecution::Execute (0x1473f86b0): builds an event {vtable, TArray<uint8> {0x4F}, FName} on
- * the stack and dispatches it to the world's event manager (tools/re/HUD_NOTES.md). */
+ * the stack and dispatches it to the world's event manager (docs/re/HUD_NOTES.md). */
 static const uint8_t kSigRemoteEvent[19] = {
     0x40, 0x53, 0x48, 0x83, 0xEC, 0x40, 0x48, 0x8B, 0xD9, 0xE8, 0x00, 0x00,
     0x00, 0x00, 0x48, 0x83, 0x7B, 0x58, 0x00,
@@ -208,7 +208,7 @@ static const uint8_t kSigHangarDecide[39] = {
 
 /* The music player's track clock: ULiveMenuMusicControlObject's tickable Tick (0x147b28560, this = object + 0x28,
  * xmm1 = delta). Prologue: push rbx; sub rsp, 0x20; movss xmm2, [rcx+0x38]; lea rbx, [rcx-0x28] (15 bytes, no
- * RIP-relative operands), then movaps xmm0, xmm2 (tools/re/MUSIC_RADIO_CAMERA.md "Track skips"). */
+ * RIP-relative operands), then movaps xmm0, xmm2 (docs/re/MUSIC_RADIO_CAMERA.md "Track skips"). */
 static const uint8_t kSigMusicTick[18] = {
     0x40, 0x53, 0x48, 0x83, 0xEC, 0x20, 0xF3, 0x0F, 0x10, 0x51, 0x38, 0x48, 0x8D, 0x59, 0xD8, 0x0F, 0x28, 0xC2,
 };
@@ -219,7 +219,7 @@ static const uint8_t kSigMusicNext[16] = {
     0x40, 0x53, 0x48, 0x83, 0xEC, 0x70, 0x80, 0xB9, 0x44, 0x01, 0x00, 0x00, 0x00, 0x48, 0x8B, 0xD9,
 };
 
-/* BuildFlightInput(ALivePlayerPlane*, FPlaneInput* out) 0x147d689b0 (tools/re/SPECIAL_ROUNDS.md 13): the player's stick
+/* BuildFlightInput(ALivePlayerPlane*, FPlaneInput* out) 0x147d689b0 (docs/re/SPECIAL_ROUNDS.md 13): the player's stick
  * into the flight engine's input. 16-byte prologue: push rbx; sub rsp, 0x20; cmp byte [rcx+0x58DC], 0; mov r11, rdx (no
  * RIP-relative code), then the bytes after it (to find it again under another mod's hook). Unique in the game build. */
 static const uint8_t kSigBuildInput[32] = {
@@ -227,7 +227,7 @@ static const uint8_t kSigBuildInput[32] = {
     0x48, 0x8B, 0xD9, 0x74, 0x17, 0x33, 0xC0, 0x48, 0x89, 0x02, 0x48, 0x89, 0x42, 0x08, 0x48, 0x89,
 };
 
-/* ---- Survival COOP (runtime 0.20.0; tools/re/COOP.md) ------------------------------------------------------------
+/* ---- Survival COOP (runtime 0.20.0; docs/re/COOP.md) ------------------------------------------------------------
  * ALiveAIPlane::TeleportTo (vtable slot 186, +0x5d0), what Mission 22's LiveActorTeleportExecution calls per target
  * (its worker 0x1473eb970 ends in `call [rax+0x5d0]` with (actor, &FVector, &FRotator, false, false)). It records a
  * replay teleport, then calls slot 315 (+0x9d8), below. Read, not hooked: a puppet's vtable must hold both.        */
@@ -256,7 +256,7 @@ static const uint8_t kSigAITeleportInnerMask[76] = {
     1, 1, 1, 1,
 };
 
-/* ---- a second player plane (runtime 0.21.0; tools/re/COOP.md 6): Online Mode's remote-player spawn (0x1471cc490) ---- */
+/* ---- a second player plane (runtime 0.21.0; docs/re/COOP.md 6): Online Mode's remote-player spawn (0x1471cc490) ---- */
 /* SpawnActor<ALivePlayerPlane>(world, class, FTransform*, -, -, u8): the game's own helper (UWorld::SpawnActor + IsA). */
 static const uint8_t kSigSpawnPlayerPlane[37] = {
     0x4C, 0x8B, 0xDC, 0x53, 0x48, 0x81, 0xEC, 0xB0, 0x00, 0x00, 0x00, 0x48,
@@ -334,7 +334,7 @@ static const uint8_t kSigRemoteFinish[21] = {
     0xCE, 0xE8,
 };
 
-/* ---- flight sync and the DOWN state (runtime 0.28.5; tools/re/COOP.md 8, KILLS_HEALTH_DEATH.md 7) --------------- */
+/* ---- flight sync and the DOWN state (runtime 0.28.5; docs/re/COOP.md 8, KILLS_HEALTH_DEATH.md 7) --------------- */
 /* bool FireOne(AActor* shooter, u8 weaponNumber, AActor* target, const FVector* offset, u64 arg5) 0x147c8fe20: the
  * game's one-shot fire, what LiveFireOneShotWeapon's Execute calls at +0x363 (with the node's ELiveWeaponNumber =
  * fire-control slot, its target, a zero offset and the node's +0x70). It checks the shooter (+0x28 its active byte
@@ -384,7 +384,7 @@ static const uint8_t kSigPPRespawn[40] = {
 
 /* ALivePlayerPlane's remote update 0x147d6f0c0: (plane, float dt), called from its FrameUpdate (0x147d646dc) for a
  * plane of network role 2 (another player's). It reads the network object's (plane + NetworkObject) physics message
- * (N+0x98) and input (N+0x170) into the plane's second flight state and blends its own toward it (tools/re/COOP2MP.md
+ * (N+0x98) and input (N+0x170) into the plane's second flight state and blends its own toward it (docs/re/COOP2MP.md
  * T1c). Its first 18 bytes (push rbp; push rbx; lea rbp,[rsp-0x128]; sub rsp,0x228) are hooked. Unique 49 bytes; the
  * stack cookie's address wildcarded. */
 static const uint8_t kSigRemoteUpdate[49] = {
@@ -401,7 +401,7 @@ static const uint8_t kSigRemoteUpdateMask[49] = {
  * when component+0x188 (its player plane) is set. It sets the afterburner's alpha (component+0x2a4; the
  * "Afterburner_Alpha" / "AfterBurnerSize" / "AfterBurnerLightSize" parameters, 0x147d33dcc) from the plane's afterburner
  * amount plane+0x39d0 (0 when dead). Its first 18 bytes (mov rax,rsp; movss [rax+0x10],xmm1; push rbx; push rsi; push
- * rdi; sub rsp,0x90) are hooked (COOP2MP's fed plane: tools/re/COOP2MP.md). Unique 57 bytes. */
+ * rdi; sub rsp,0x90) are hooked (COOP2MP's fed plane: docs/re/COOP2MP.md). Unique 57 bytes. */
 static const uint8_t kSigSurfacePP[57] = {
     0x48, 0x8B, 0xC4, 0xF3, 0x0F, 0x11, 0x48, 0x10, 0x53, 0x56, 0x57, 0x48, 0x81, 0xEC, 0x90, 0x00, 0x00, 0x00, 0x0F,
     0x29, 0x70, 0xD8, 0x48, 0x8B, 0xD9, 0x0F, 0x29, 0x78, 0xC8, 0x33, 0xFF, 0xF3, 0x0F, 0x10, 0x3D, 0xD5, 0x5E, 0x57,
@@ -420,7 +420,7 @@ static const uint8_t kSigPPDamage[48] = {
     0x70, 0x4D, 0x8B, 0xF0, 0x0F, 0x28, 0xF9, 0x48, 0x8B, 0xF9,
 };
 
-/* COOP2MP T4 (tools/re/COOP2MP.md T4; research of 2026-10-30, checked in the code): PlaneWeaponsFired 0x147d71060
+/* COOP2MP T4 (docs/re/COOP2MP.md T4; research of 2026-10-30, checked in the code): PlaneWeaponsFired 0x147d71060
  * (plane, TArray<AActor*>* projectiles), called by the weapon system after each launch (hooked: 15 bytes); the remote
  * plane fire 0x147d71ea0 (plane, &{ExplosiveWeaponFire*, ctrl}): Online Mode's receive side, launching the same weapon
  * from that plane's own weapon system (called); LaunchWeapon 0x147f7a880 (hooked: 21 bytes, its target for our
@@ -596,7 +596,7 @@ static const uint8_t kSigPurgeGarbageMask[68] = {
     0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
 };
 
-/* (runtime 0.32.20) The STORE freeze (tools/re/STORE_FREEZE.md): DeactivateForMinigame(ULiveMiniGameManager* mgr,
+/* (runtime 0.32.20) The STORE freeze (docs/re/STORE_FREEZE.md): DeactivateForMinigame(ULiveMiniGameManager* mgr,
  * TArray<ALiveAIGameObject*>* objs) (0x1478eb7b0 in the 2026-11-02 build), called once, from StartMinigameInternal, when a
  * minigame (the airfield STORE) starts: every AI object goes into cinematic mode (+0xdf8) and, when active and alive, is
  * deactivated (SetActiveGameObject false: +0x3f4 0, AI tick off) into DeactivatedList (+0x68) / DeactivatedList2 (+0x88),
@@ -687,7 +687,7 @@ static const uint8_t kSigOwnerHostileMask[37] = {
     1,
 };
 
-/* (runtime 0.32.26) AC7's LaserInterceptor on AC8's native ALiveLaserInterceptor (laser.c; tools/re/LASER_INTERCEPTOR.md
+/* (runtime 0.32.26) AC7's LaserInterceptor on AC8's native ALiveLaserInterceptor (laser.c; docs/re/LASER_INTERCEPTOR.md
  * 9; the game build of 2026-11-02). Each unique with no wildcards (the RE of 2026-11-07, build/re/laser/sigs.txt).
  * ALiveLaserInterceptor's WeaponTick (vtable slot 228, 0x147ef5ce0): its prologue's first 16 bytes are whole instructions
  * with no RIP-relative operand (mov rax,rsp; 3 x mov [rax+n],reg; push rbp), hooked inline. */
@@ -722,7 +722,7 @@ static const uint8_t kSigUnitFactionMask[25] = {
     1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 };
 
-/* (runtime 0.32.30) The music player's track list (tools/re/MUSIC_BANKS.md 5). The playlist database's build 0x147b26b50
+/* (runtime 0.32.30) The music player's track list (docs/re/MUSIC_BANKS.md 5). The playlist database's build 0x147b26b50
  * (rcx = ULiveMusicPlayerPlaylistDatabase): 16-byte prologue push rbp; push rbx; push rsi; push rdi; push r12; push r15;
  * mov rbp, rsp; sub rsp, 0x78 (no RIP-relative code), then mov esi, [rcx+0x38]. Unique in the game build. */
 static const uint8_t kSigMusicBuild[19] = {

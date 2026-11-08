@@ -1,6 +1,6 @@
 #!/bin/sh
 # sky_test.sh : runs tools/checks/sky_test.lua (the sky Survival changes, Scripts/sv_sky.lua, and its test key: the five
-# steps of tools/re/FISHING.md 5) on the real parts with build/checks/lua.exe (tools/checks/lua_build.sh makes it), and on a copy of the parts
+# steps of docs/re/FISHING.md 5) on the real parts with build/checks/lua.exe (tools/checks/lua_build.sh makes it), and on a copy of the parts
 # as a release has them (tools/strip_test_only.py first).
 set -e
 cd "$(dirname "$0")"

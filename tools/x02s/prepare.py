@@ -1,4 +1,4 @@
-"""prepare.py : VALKA's X-02S (AC7's, tools/re/VALKA.md, tools/x02s/README.md) made ready for UE 5.4's glTF import.
+"""prepare.py : VALKA's X-02S (AC7's, docs/re/VALKA.md, tools/x02s/README.md) made ready for UE 5.4's glTF import.
 
 AC7's UModel export (E:/Ace Combat 7 Exports/Game/Vehicles/Aircraft/x02s) is a skinned mesh (58 bones: swing wings,
 canards, flaps, nozzles, bay doors) at AC7's model scale (2.19 m long; AC8's aircraft are life-size: its F/A-18E is

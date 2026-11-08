@@ -1,4 +1,4 @@
--- sv_down.lua: Survival COOP's revives and the spectator camera (CFG.coop.revive; tools/re/COOP.md 9).
+-- sv_down.lua: Survival COOP's revives and the spectator camera (CFG.coop.revive; docs/re/COOP.md 9).
 -- Part of AC8 Survival Mode's runtime, run by main.lua in order (after sv_coop, whose messages, players and stand-ins it
 -- uses); a name another part uses is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
 --

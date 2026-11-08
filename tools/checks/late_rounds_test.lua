@@ -1,5 +1,5 @@
 -- late_rounds_test.lua <mod dir> <work dir> (run by tools/checks/late_rounds_test.sh): the behaviour roadmap's P8, late
--- rounds (tools/re/BEHAVIOUR_DIRECTOR.md unit 3), on the real sv_core.lua, sv_config.lua, sv_ai.lua, sv_spawn.lua,
+-- rounds (docs/re/BEHAVIOUR_DIRECTOR.md unit 3), on the real sv_core.lua, sv_config.lua, sv_ai.lua, sv_spawn.lua,
 -- sv_rounds.lua, sv_stats.lua and sv_coop.lua (startRound, hostSync and mirroredEvent exposed) and sv_main.lua's
 -- creditKill, the game stubbed:
 --   the thesis' P8 table from TIER's helpers (rounds 25 / 28 / 31 / 35: the round's aircraft, the most up at once per

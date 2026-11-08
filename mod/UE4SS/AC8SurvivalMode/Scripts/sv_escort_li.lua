@@ -1,4 +1,4 @@
--- sv_escort_li.lua: AC7's LaserInterceptor on the ZFA-44s (2026-11-07; tools/re/LASER_INTERCEPTOR.md 9-10, tools/laser7,
+-- sv_escort_li.lua: AC7's LaserInterceptor on the ZFA-44s (2026-11-07; docs/re/LASER_INTERCEPTOR.md 9-10, tools/laser7,
 -- runtime laser.c). Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order, right after
 -- sv_escort_laser.lua (sv_escort's family): a name another part uses is a global of this mod's Lua state, its own helpers
 -- stay local.

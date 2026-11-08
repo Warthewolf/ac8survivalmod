@@ -1,7 +1,7 @@
 -- sv_zfa44.lua : the ZFA-44's look on an AI plane (ZFA.dress / ZFA.undress: the escort's carriers' flights, sv_escort.lua) and its test T0 (Ctrl+9, test code); cut to this line in every zip (no ZFA-44 container there: the carriers' planes fly as their host airframe).
 -- The ZFA-44EL is the user's own edited CFA-44 from their AC7 mod Alicorn Special Raid IV (AGENTS.md's exception of
 -- 2026-11-06), cooked for AC8 by tools/zfa44 into its own container SurvivalMode_ZFA44_P, which only the user's dev
--- builds carry (ZFA=1 sh tools/package_dev.sh). tools/re/ZFA44.md "T0 build"; tools/re/ESCORT.md for the carriers.
+-- builds carry (ZFA=1 sh tools/package_dev.sh). docs/re/ZFA44.md "T0 build"; docs/re/ESCORT.md for the carriers.
 --
 -- The dressing (production, outside the test block; every game dresses its own planes and copies): ZFA.dress(plane,
 -- { paint = k, label = text }) puts the ZFA-44 on an AI plane the way SPC.V.model dresses VALKA (hard rule 46): a
@@ -41,7 +41,7 @@ ZFA.SLOT_TEX = { Body = { "T_ZFA44_C", "T_ZFA44_N", "T_ZFA44_LM_MREC" },
 ZFA.SCALARS = { Ctrl_All_Emissive = 0, Turbine_speed = 0, DNormal_Strength = 0, DamegedNormal_Intencity = 0,
                 PlayerPlane_Damage = 0 }
 -- (3, the gear instance with a flat normal, is the route proven to draw: the Falken's exactly, VALKA's paint 16, SOLG
--- T0b's; 1, the cooked instances, was never tried: tools/re/ZFA44.md 8.6)
+-- T0b's; 1, the cooked instances, was never tried: docs/re/ZFA44.md 8.6)
 ZFA.PAINTS = {
     { name = "COOKED" },                                        -- MI_ZFA44_* as built, on the game's own gear instance
     { name = "GEAR, ITS NORMALS", mids = true },                -- the same at run time (VALKA's paint 15, SOLG T0b's way)

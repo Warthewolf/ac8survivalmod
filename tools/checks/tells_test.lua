@@ -1,5 +1,5 @@
 -- tells_test.lua <mod dir> <work dir> (run by tools/checks/tells_test.sh): the behaviour roadmap's P3, tells
--- (tools/re/BEHAVIOUR_DIRECTOR.md unit 4; radio lines only since the clean up of 2026-10-29), on the real sv_core.lua,
+-- (docs/re/BEHAVIOUR_DIRECTOR.md unit 4; radio lines only since the clean up of 2026-10-29), on the real sv_core.lua,
 -- sv_config.lua, sv_ai.lua, sv_hud.lua, sv_spawn.lua, sv_stats.lua, sv_tells.lua, sv_alicorn.lua, sv_ladon.lua and
 -- sv_coop.lua (M and mirroredEvent exposed), the game stubbed:
 --   the catalog (CFG.tells: every tell's lines are RE_SV_Radio<letters>, no HUD keys left, its keys known);

@@ -20,7 +20,7 @@ container, no AC7 railgun sounds, VALKA switched off and out of the rotation: to
 
 Mechanisms to confirm:
 - AIRFRAME writes the player's `MaxHealth` (AI planes took it: AB.L..IN), FLARE PODS the reflected
-  `LivePlayerWeaponActivator.MaxFlareCount` (+0x27c, the native ammo code's flare max: tools/re/AMMO.md).
+  `LivePlayerWeaponActivator.MaxFlareCount` (+0x27c, the native ammo code's flare max: docs/re/AMMO.md).
 - WEAPON BAYS: runtime 0.19.0 `SV_AmmoMax(kind, max)` writes the weapon slot's max (the int before its current count).
   Does the HUD's missile count and the hangar's panel cope with a count above the stock load?
 - GUN: `MachineGunClass:GetCDO().damage`. Player weapons are their own classes (`BP_plwp_*`), so enemies shouldn't feel

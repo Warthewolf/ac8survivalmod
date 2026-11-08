@@ -1,6 +1,6 @@
 #!/bin/sh
 # director_test.sh : runs tools/checks/director_test.lua (the behaviour roadmap's P2, the squad director:
-# tools/re/BEHAVIOUR_DIRECTOR.md unit 6; its six tactics' triggers on stubbed planes: geometry, cooldowns, budgets, tells
+# docs/re/BEHAVIOUR_DIRECTOR.md unit 6; its six tactics' triggers on stubbed planes: geometry, cooldowns, budgets, tells
 # first, the co-op paths and "dv" guards) on the real parts with build/checks/lua.exe (tools/checks/lua_build.sh makes
 # it), then the build side's names (tools/survival_events.py SALVO_SLOT against the Lua's).
 set -e

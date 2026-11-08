@@ -14,7 +14,7 @@ JSON = os.path.join(ROOT, 'build', 'ac7', 'laser', 'json')
 OUT = os.path.join(ROOT, 'build', 'laser7')
 DEST = '/Game/Mods/SurvivalMode/Laser7'
 AC7_TO_AC8 = 10.0                                   # (AC7's world units ~0.1 m; AC8's 1 cm)
-# AC7's wp_LaserInterceptor CDO (tools/re/LASER_INTERCEPTOR.md 1a; the user's own copy the same, 2026-11-07)
+# AC7's wp_LaserInterceptor CDO (docs/re/LASER_INTERCEPTOR.md 1a; the user's own copy the same, 2026-11-07)
 AC7 = {'RayDistance': 12400.0, 'RayRadius': 150.0, 'LifeTime': 6.0, 'Damage': 10.0}
 ASSETS = {'m_TLS_01': 'M_SV_TLS_01', 'm_TLS_01_wire': 'M_SV_TLS_01_wire', 'm_TLS_02': 'M_SV_TLS_02',
           'm_TLS_03': 'M_SV_TLS_03', 'SM_TLS_01': 'SM_SV_TLS_01', 'SM_TLS_projectile_root': 'SM_SV_TLS_projectile_root',
@@ -36,7 +36,7 @@ def build():
         systems.append(s)
     # the beam's components: where AC7's blueprint put them (X -30 of its units), x10 into AC8's world, so their
     # emitters keep AC7's numbers; their particle parameters (BeamLength = RayDistance / 10, LaserScale) are set each
-    # tick by Survival's Lua (AC7's blueprint graph: its ubergraph, tools/re/LASER_INTERCEPTOR.md 1d)
+    # tick by Survival's Lua (AC7's blueprint graph: its ubergraph, docs/re/LASER_INTERCEPTOR.md 1d)
     comp = lambda fx: {'Template': ref('ParticleSystem', FX[fx]), 'RelativeLocation': '(X=%g,Y=0,Z=0)' % (-30 * AC7_TO_AC8),
                        'RelativeScale3D': '(X=%g,Y=%g,Z=%g)' % ((AC7_TO_AC8,) * 3)}
     # AC7's blueprint kept its beam's particle parameters on MainLaser (and set them again each tick, the same values):

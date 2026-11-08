@@ -212,7 +212,7 @@ EMLBulletDamage.
 **Laser Interceptor** (`wp_LaserInterceptor`): AC7's values unchanged, only both beam particles moved from (-30, 0, 0)
 to the pod's lens (30.92, 0, 16.86): ray 12400 (1.24 km), radius 150, damage 10, life 6 s, FCS 180 deg, 0.1 s, volley
 6 s, interval 6 s, rest 8 s, foresight 0.09, within 12000 (1.2 km), swing curve CUR_LaserInterceptorSwingRate (0 -> 1
-over 1 s), beam FX_UAV_TLS_Muzzleflash01 / 02. What it does and AC8's options: tools/re/LASER_INTERCEPTOR.md (not
+over 1 s), beam FX_UAV_TLS_Muzzleflash01 / 02. What it does and AC8's options: docs/re/LASER_INTERCEPTOR.md (not
 repeated here). The ZFA-44 exception covers "its weapons, with the AC7 stock assets they use", which includes this
 weapon's AC7 assets (LASER_INTERCEPTOR.md said a second exception would be needed) [inferred from AGENTS.md's text].
 
@@ -386,7 +386,7 @@ makes the run unranked); the part is in MODULES before sv_main and is one TEST O
   Falken's cockpit and VALKA's textures do.
 
 ## 9. The production dressing (2026-11-06, branch feature/zfa44; not yet run in game)
-`Scripts/sv_zfa44.lua` now has the dressing outside its test block, for the escort's carriers (tools/re/ESCORT.md):
+`Scripts/sv_zfa44.lua` now has the dressing outside its test block, for the escort's carriers (docs/re/ESCORT.md):
 `ZFA.dress(plane, { paint = k, label = text, hide_s = s })` (true and what it did, or false and why; each plane once, by
 its address), `ZFA.undress(plane)`, `ZFA.prodTick()` (from sv_escort.lua's tick: at most two dressed planes a tick get the
 host's meshes hidden again every hide_s; a gone one dropped), `ZFA.build` / `ZFA.strip` (the component, mesh, place and
@@ -402,7 +402,7 @@ dressing out with it: a zip that ships the container needs package_release.sh to
 - **Co-op** (finding 1): a joiner's copy of a carrier launches ZFA-44s of its own from the host's forwarded launch
   records; they're kept for the look and their fight is nobody's: sv_escort.lua ESC.localZfa() puts them in sv_coop.lua's
   stand-in set (their hits on an enemy copy never sent as that player's), each forwarded launch takes its arm's unit off
-  the joiner's list first, and a carrier the host no longer has ("es" field 10) takes them off there. tools/re/ESCORT.md's
+  the joiner's list first, and a carrier the host no longer has ("es" field 10) takes them off there. docs/re/ESCORT.md's
   "Code review of 2026-11-07" has the log lines.
 - **Packaging** (finding 16): tools/package_test.sh now has package_release.sh's ZFA block (without ZFA=1 the container
   out and Scripts/sv_zfa44.lua cut to its first line; ZFA=1 keeps both and names the zip ..._ZFA44), strips the default

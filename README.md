@@ -46,7 +46,7 @@ Loader. `release/README.txt` is the player guide that goes into every zip.
 | `tools/build_all.sh`, `tools/package_test.sh` | Build everything; make a release zip with test-only code stripped |
 | `tools/re/` | Reverse-engineering notes on the game's systems |
 | `leaderboard/` | The Discord leaderboard (Cloudflare Worker + D1) |
-| `AGENTS.md`, `SURVIVAL_SPEC.md`, `MISSION_REFERENCE.md`, `HISTORY.md` | Project rules, the agreed design, the stock-mission reference, every build's notes |
+| `AGENTS.md`, `docs/design/SURVIVAL_SPEC.md`, `docs/design/MISSION_REFERENCE.md`, `HISTORY.md` | Project rules, the agreed design, the stock-mission reference, every build's notes |
 
 ## Building
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the whole setup, and `tools/README.md` for each tool. In short: Python

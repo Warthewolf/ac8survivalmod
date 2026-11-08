@@ -15,11 +15,11 @@ A round-based survival mode mod for Ace Combat 8 (PC).
 - Config file: wave tables, prices, special rotation, intermission length. Players must be able to edit these without rebuilding.
 - Survival Mode is built only from stock game files; nothing from Stonehenge Returns is used or shipped.
   One exception, at the user's request (2026-10-24): the VALKA special may use Ace Combat 7 assets (the X-02S model,
-  Mihaly's railgun effects and sounds). Never AC7 voice lines. See tools/re/VALKA.md.
+  Mihaly's railgun effects and sounds). Never AC7 voice lines. See docs/re/VALKA.md.
   A second, at the user's request (2026-11-07: "I want the entire weapon from ACE7 to be ported over"): AC7's
   LaserInterceptor (wp_LaserInterceptor: its values, its swing curve CUR_LaserInterceptorSwingRate, its beam effects
   FX_UAV_TLS_Muzzleflash01/02 with their meshes, materials and textures, and its sounds) for the ZFA-44s' anti-missile
-  laser, on AC8's native ALiveLaserInterceptor. Never AC7 voice lines. See tools/re/LASER_INTERCEPTOR.md.
+  laser, on AC8's native ALiveLaserInterceptor. Never AC7 voice lines. See docs/re/LASER_INTERCEPTOR.md.
 - No other mod's files, assets, tables, values or text go into Survival's build, mod/, tools/, this repo (docs and
   commit messages included) or a release zip, and nothing here names or credits another mod as the source of an enemy
   change (user, 2026-11-06). Survival's enemy changes are its own: designed from AC8's tables and tuned in Survival's
@@ -46,15 +46,15 @@ A round-based survival mode mod for Ace Combat 8 (PC).
 - Shared stock tables (DT_LiveMissionTable, DT_LiveMenuMainTopCommands, ...) are never overridden: Survival's rows live in
   its own tables (`/Game/Mods/SurvivalMode/Data/DT_SV_*`) and the Lua runtime adds them with AddRow at run time.
 - Native runtime: `runtime/survival_rt.c` (UE4SS C++ mod, plain C + LLVM). It hooks the menu like Stonehenge's main.dll
-  (`tools/re/STONEHENGE_MAIN_DLL.md`) and must keep chaining onto Stonehenge's hooks, never replacing them.
+  (`docs/re/STONEHENGE_MAIN_DLL.md`) and must keep chaining onto Stonehenge's hooks, never replacing them.
 
 ## Agreed spec
-SURVIVAL_SPEC.md holds the user's confirmed design (menu flow, Comona map, Mission 16 sky, airfield health, enemy roles). It overrides the design thesis where they differ.
+docs/design/SURVIVAL_SPEC.md holds the user's confirmed design (menu flow, Comona map, Mission 16 sky, airfield health, enemy roles). It overrides the design thesis where they differ.
 
 ## Stock mission reference
-Before building any feature, check MISSION_REFERENCE.md. It maps each Survival Mode feature to the stock
+Before building any feature, check docs/design/MISSION_REFERENCE.md. It maps each Survival Mode feature to the stock
 event nodes and the mission that already uses them (e.g. LiveSetWeaponAmmoCount in M015 for rearming,
-the Supply event in M022 for the shop, M006's wave chain for rounds). node_catalog.tsv lists all 349 node types.
+the Supply event in M022 for the shop, M006's wave chain for rounds). docs/design/node_catalog.tsv lists all 349 node types.
 Copy a working stock pattern before inventing a new one.
 
 ## Hard rules (learned building Stonehenge Returns)
@@ -86,13 +86,13 @@ Copy a working stock pattern before inventing a new one.
 17. Event records name flags (and events) by string, which the game turns into an FName that splits a numeric tail
     ("SV_Up_19" = SV_Up, number 20). Store the flag asset's keys the same way (survival_events.fname), as stock tables
     do, or the flag never matches. Test 11: flights 10-24 were never flagged, so never chased; fixed, confirmed by test 12.
-18. Survival's HUD is built at run time in Lua (tools/re/HUD_LAYOUT.md). UUserWidget is Abstract: create the base with
+18. Survival's HUD is built at run time in Lua (docs/re/HUD_LAYOUT.md). UUserWidget is Abstract: create the base with
     WidgetBlueprintLibrary.Create on a stock widget blueprint, then StaticConstructObject concrete widgets (TextBlock,
     Image, CanvasPanel, ScaleBox, SizeBox) in its WidgetTree. The game's own HUD is not in the viewport (drawn to a
     render texture), and GetCachedGeometry reads back 0x0 from Lua, so place things from the static layout.
     Confirmed by test 13 (2026-10-22).
 19. The player's ammo counts are native (the reflected FCS module AmmoCount is only the weapon definition): read and
-    set them with SV_Ammo / SV_SetAmmo (runtime 0.7.0, copied from LiveSetWeaponAmmoCount, tools/re/AMMO.md), and turn
+    set them with SV_Ammo / SV_SetAmmo (runtime 0.7.0, copied from LiveSetWeaponAmmoCount, docs/re/AMMO.md), and turn
     free restock off with SV_FreeRestock(0). The airfield rearm reloads the stock full count, so caps must be
     re-enforced after it, not set once. Confirmed by test 16 (2026-10-22).
 20. An AI aircraft's behaviour trees are built when the level loads, one set per world-data AI object desc, from the
@@ -179,7 +179,7 @@ Copy a working stock pattern before inventing a new one.
 37. LiveAIRequestUniqueAction works on any AI plane, by unit (every plane of it): every unique action's tree is built
     at level start; OneShot ends by itself; Below_Return outranks evading, provoke and pursuit. The stock EnemyBehind
     trigger only fires for the player's selected target and re-fires every frame, so Survival detects "behind" in Lua
-    and fires RE_SV_AceTurn / AceKulbit (tools/re/UNIQUE_ACTIONS.md). Confirmed 2026-10-23: the Reaper F-22 went into
+    and fires RE_SV_AceTurn / AceKulbit (docs/re/UNIQUE_ACTIONS.md). Confirmed 2026-10-23: the Reaper F-22 went into
     UniqueAction after each and fought ~2 min (26 s before). The player's current target is player+0x1ae8 -> +0x750
     (SV_PlayerTarget, confirmed the same day).
 
@@ -214,7 +214,7 @@ Copy a working stock pattern before inventing a new one.
     and crashed AC8 on VALKA's first sound (test of 2026-10-24); after the fix the same path ran clean.
 
 44. AC8's aircraft skins (master /Game/Base/Material/Vechicle/MP/MP_Live_Vehicle_Base_UDIM) sample Basecolor / Normalmap
-    / Livemap as virtual textures (every stock skin texture is a UDIM VT: tools/re/AIRCRAFT_MATERIALS.md,
+    / Livemap as virtual textures (every stock skin texture is a UDIM VT: docs/re/AIRCRAFT_MATERIALS.md,
     tools/checks/tex_info.py). An ordinary texture there draws pure black whatever the instance's values: VALKA's X-02S,
     tests of 2026-10-24 (paint variants 2-5 all black). AC8's general masters (MP_Live_Base_CameraDitherFade, _WPO,
     M_Live_Cha_Base) take ordinary textures on skinned meshes (from their shader maps; not yet seen in game). Don't ship
@@ -249,7 +249,7 @@ Copy a working stock pattern before inventing a new one.
     restart forgotten): three friends set role = join and still hosted (coop.2). Make co-op need no setting: role auto
     (look for a host, host after 20-40 s, step back on meeting one) linked all three at once (coop.3 and coop.4).
 
-51. A second ALivePlayerPlane (Online Mode's remote-player spawn, tools/re/COOP.md 6) is spawned DEFERRED: give it a
+51. A second ALivePlayerPlane (Online Mode's remote-player spawn, docs/re/COOP.md 6) is spawned DEFERRED: give it a
     loadout and call AActor::FinishSpawning, or its weapons have no owner and the first teleport crashes. With role 2
     (another player's) and no network data its own tick holds it at the map's centre; with its actor tick off and moved
     on EVERY input-build call (2-3 a frame, not the first only) it flies solid and smooth beside you, ALLY-tagged.
@@ -271,7 +271,7 @@ Copy a working stock pattern before inventing a new one.
     afterburner glow is plane+0x39d0, reset every frame on a remote plane, so it's written just before the surface
     update (0x147d32b00) reads it. Enemies attack one only when an order names it (Survival's name "Player": your plane),
     and hits on it reach the player plane's damage (0x147d5a430) but are never applied. Confirmed by T1c-T1e
-    (tools/re/COOP2MP.md, 2026-10-30).
+    (docs/re/COOP2MP.md, 2026-10-30).
 
 54. A fast AI plane (the Ladons at 2500 km/h) doesn't take a new path handed over at its last path's PathFinish, even
     one started 2.5 km ahead along its way: it holds the old path's end tangent (0.73.73, the user's test of 2026-11-02
@@ -302,7 +302,7 @@ Copy a working stock pattern before inventing a new one.
     saw "Megalith" (row 120) last and crashed at row 231 (UECC AceCombat8.exe+0x7a8dc81), 2026-11-08. The list is also
     built only as a level starts (a world subsystem's Initialize), and each build writes what it lists into the save's
     OwnedMusicList. Survival rebuilds it (SV_MusicBuild) and keeps every list within player_max = 120 (sv_music.lua). The
-    runtime cuts those save grants back off (SV_MusicSave). tools/re/MUSIC_BANKS.md.
+    runtime cuts those save grants back off (SV_MusicSave). docs/re/MUSIC_BANKS.md.
     Only 2D events can be heard through it: the lobby jukebox's AKE_Bgm_JukeBox_* are 3D (MaxAttenuation 600, 6 m from the
     lobby's prop) and were silent in Alyssa's run of 0.74.30. Online Mode's versions (AKE_Bgm_Online_ACE7_* ...) played in
     0.74.31; build_music_rows refuses a 3D event. A looping event is given 60 s, not -1 (0.74.31: "Hush just abruptly ends").
@@ -347,12 +347,12 @@ back when any other main-menu entry is picked). Scripts/sv_menu.lua keeps one ru
 survival.ini [setup.*]) that the rounds, store and leaderboard read through SETUP.*. Without the pages ([menu] pages =
 false) the main menu has the flat rows. Confirmed 2026-10-29: the pages open, settings step in place and save, BACK
 works all the way out. Not yet: B / Esc on the pages (no cancel), a whole run started from a setup page with its rules.
-tools/re/MENU_PAGES.md has the design and log lines. Lua tests: tools/checks/menu_test.sh (and coop_settings_test.sh),
+docs/re/MENU_PAGES.md has the design and log lines. Lua tests: tools/checks/menu_test.sh (and coop_settings_test.sh),
 the build's: tools/checks/menu_pages_test.py (build_all.sh runs it).
 
 ## Survival COOP (Lua 0.70.6-coop.11, runtime 0.26.0, 2026-10-26; played up to coop.4: hard rules 48-51)
 Up to 24 players (protocol 3), host-authoritative (after Double Trigger, the AC7 co-op mod), first built on branch
-`feature/survival-coop` (merged; the branch deleted in the cleanup of 2026-11-08). tools/re/COOP.md has the RE (AC8's AI plane teleport: vtable slot 315, called every frame on a
+`feature/survival-coop` (merged; the branch deleted in the cleanup of 2026-11-08). docs/re/COOP.md has the RE (AC8's AI plane teleport: vtable slot 315, called every frame on a
 puppet; Steam P2P without callbacks; a real second player plane, section 6), the protocol and the test checklist.
 Native half runtime/coop.c (SV_Coop*), Lua half Scripts/sv_coop.lua, world-data units SV_Unit_CoopPeerA-X (each other
 player's stand-in, an allied AI plane of their airframe: CFG.coop.airframes), name keys SV_CoopName_A-X.
@@ -380,7 +380,7 @@ is down, not counted as tries), the wave clock runs, the ALICORN's deck launches
 and the shuttle's countdown runs, the shuttle not invulnerable then (user, 2026-10-29: "Keep it running while others
 are flying"); solo, or with nobody else flying, all held until the takeoff as before (user's question of 2026-10-29:
 Shazzy's host log had 10-43 s holds). The CO-OP row is behind the HUD's info key (I), with a line a player when open
-(tools/re/COOP.md section 7, tools/re/HUD_LAYOUT.md).
+(docs/re/COOP.md section 7, docs/re/HUD_LAYOUT.md).
 
 ## Leaderboard
 leaderboard/README.md has the deploy steps (paste src/index.js; the Worker makes its new tables itself). The Worker takes
@@ -455,7 +455,7 @@ tools/checks/subs_test.sh tests the part. The file is made from a release's copy
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:
   the game never spawns a desc again while its shot-down flight is still on the phase's unit list
-  (tools/re/SPAWN_SYSTEM.md has the whole pipeline, offsets and signatures).
+  (docs/re/SPAWN_SYSTEM.md has the whole pipeline, offsets and signatures).
 - Round settings live in CFG (Scripts/sv_config.lua). Players edit `config/survival.ini` (made from `config/survival.default.ini` on the
   first run; main.lua's INI_ALIAS maps its sections onto CFG). An optional `Scripts/survival_config.lua` returning a table
   of CFG overrides is loaded after it, for advanced changes.
@@ -504,4 +504,4 @@ ESCORT.md, FISHING.md, DECOY.md, SPACEPORT_ASSAULT.md, ZFA44.md, THUNDER.md, VAL
   COOP_TAG -coop2mp.N (tools/coop_edition.py); friends' zips: BUILD_NAME=COOP2MP COOP=1 sh tools/package_release.sh online
   <version> (ZFA=1, SONG=1 as the build has them); the user's own install: VALKA=1 ZFA=1 sh tools/package_dev.sh <version>.
 - The enemy behaviour layer: fighter roles, the squad director, tells, intensity, learning, boss phases, late rounds
-  (tools/re/BEHAVIOUR_DIRECTOR.md); each mechanism has its own `enabled` in survival.ini.
+  (docs/re/BEHAVIOUR_DIRECTOR.md); each mechanism has its own `enabled` in survival.ini.

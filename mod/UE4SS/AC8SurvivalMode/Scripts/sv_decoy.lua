@@ -1,4 +1,4 @@
--- sv_decoy.lua: THE DECOY, a special round (user, 2026-11-06; tools/re/DECOY.md has the research, the build and the test
+-- sv_decoy.lua: THE DECOY, a special round (user, 2026-11-06; docs/re/DECOY.md has the research, the build and the test
 -- checklist).
 -- Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order (after sv_spaceport); a name another part uses
 -- is a global of this mod's Lua state, its own helpers stay local (tools/lua_split.py).
@@ -75,7 +75,7 @@ local function evLaserOff(k) return string.format("RE_SV_DecoyLaserOff_%02d", k)
 local function evSpear(s) return "RE_SV_DecoySpear_" .. tostring(s) end
 -- (the build's fallback for a mark that neither attaches nor moves: Mission 22's teleport onto this game's player)
 local function evMarkOnMe(k) return string.format("RE_SV_DecoyMarkOnMe_%02d", k) end
--- (bait_ping and bait_laser_off aren't in the build contract of 2026-11-06: tools/re/DECOY.md "names Lua asks for";
+-- (bait_ping and bait_laser_off aren't in the build contract of 2026-11-06: docs/re/DECOY.md "names Lua asks for";
 -- a build without them answers "no such unit" and the round goes on without the ping)
 DECOY.EV = { bait_laser = "RE_SV_DecoyBaitLaser", bait_laser_off = "RE_SV_DecoyBaitLaserOff",
              bait_ping = "RE_SV_DecoyBaitPing", kill = "RE_SV_DecoyKill" }
@@ -235,7 +235,7 @@ local function myPawn()
 end
 -- ((2026-11-07) the user, after a run ended on one 5% hit: "heavy damage") A judged Spear hit takes hit.damage_pct of
 -- your MaxHealth (HealthInternal is x10, written as the STORE's repair does: ModifyHealth does nothing on the player,
--- tools/re/KILLS_HEALTH_DEATH.md 1); one that would leave nothing is RE_SV_DecoyKill (the game's own death) unless
+-- docs/re/KILLS_HEALTH_DEATH.md 1); one that would leave nothing is RE_SV_DecoyKill (the game's own death) unless
 -- hit.can_kill is false (then 1 HP left); damage_pct 100 or more: the kill as before. What it did, for the log.
 function DECOY.hurtMe(c)
     c = c or cfg()
@@ -318,7 +318,7 @@ function DECOY.nearCount(at, ups, c)
     for _, q in ipairs(ups or {}) do if dist3(at, q) <= r then n = n + 1 end end
     return n
 end
--- Survival's combat zone (Mission 22's: 80 x 80 km round (-707336, -261895); tools/re/COMONA_MAP.md)
+-- Survival's combat zone (Mission 22's: 80 x 80 km round (-707336, -261895); docs/re/COMONA_MAP.md)
 local ZONE = { X = -707336, Y = -261895, half = 4000000 }
 -- a spot for a new UAV round player position `you`: spawn_km from it at any bearing, within alt_m of its height
 -- (min_alt_m to max_alt_m), out of the safe circle, edge_km inside the zone, gap_km from every UAV up (ups); its yaw

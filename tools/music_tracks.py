@@ -15,7 +15,7 @@ versions of the jukebox's songs (AC04, AC5, AC6, AC7 and Zero) and the older gam
 tools/build_survival_rows.py (build_music_rows) turns them into rows of Survival's own table DT_SV_MusicRows;
 Scripts/sv_music.lua adds a draw of them to the game's table while Survival's level is on and takes them out after.
 Their banks are resident from the game's start in every mode (DA_SoundSettings' RegidentSoundBanks:
-tools/re/MUSIC_BANKS.md 2); the game's list build skips a row whose event no loaded bank has.
+docs/re/MUSIC_BANKS.md 2); the game's list build skips a row whose event no loaded bank has.
 
 A title that has a key in the game's text (CP: MusicPlayer_SongTitle_*) uses it. Every other title is a text of
 Survival's own (SV_Mus<n>T, no numeric tail: hard rule 17), set at run time from the row's TitleString (SV_SetText).

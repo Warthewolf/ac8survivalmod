@@ -38,7 +38,7 @@ function SHOP.storeCheck()
 end
 
 -- Icons on the landing menu's rows (any page of it: the landing page, the STORE pages): an Image in each row's own
--- canvas, its label moved over (tools/re/AIRFIELD_SHOP_UI.md rank 2). Rows are reused, so each row's icon follows the
+-- canvas, its label moved over (docs/re/AIRFIELD_SHOP_UI.md rank 2). Rows are reused, so each row's icon follows the
 -- StringArgs of the command it shows now.
 do
 local texCache = {}
@@ -829,7 +829,7 @@ function shopBuy(name)
 end
 end
 
--- A menu sound by its Wwise event name (the game-SE bank, always loaded; tools/re/MUSIC_RADIO_CAMERA.md).
+-- A menu sound by its Wwise event name (the game-SE bank, always loaded; docs/re/MUSIC_RADIO_CAMERA.md).
 function SHOP.sound(name)
     local ok, err = pcall(function()
         local lib = StaticFindObject("/Script/Live.Default__LiveSoundBlueprintLibrary")

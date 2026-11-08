@@ -1,4 +1,4 @@
--- sv_stats.lua: the behaviour roadmap's measurements (CFG.stats; tools/re/BEHAVIOUR_DIRECTOR.md, unit 1).
+-- sv_stats.lua: the behaviour roadmap's measurements (CFG.stats; docs/re/BEHAVIOUR_DIRECTOR.md, unit 1).
 -- Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order; a name another part uses is a global of this
 -- mod's Lua state, its own helpers stay local (tools/lua_split.py).
 --
@@ -753,7 +753,7 @@ STATS.median, STATS.classify = median, classify
 -- The thesis' P6 ("punish habits": the kill log has each kill's aspect and your weapons; the enemies drift towards
 -- countering what this player keeps doing; across runs the profile is saved and picks the next run's role mix; the
 -- metrics brief's steps 11-13, the critic's flare row and squad-director hook; CFG.profile, CFG.flares;
--- tools/re/BEHAVIOUR_DIRECTOR.md unit 8):
+-- docs/re/BEHAVIOUR_DIRECTOR.md unit 8):
 --   PROF.kill(p, g, by)      STATS.down, every game (a co-op joiner learns from its own kills): yours only (by "you"),
 --                            the shares from your kills of fighters only (Kf: not a bomber's, a Ladon's or a special's)
 --   PROF.sample(now, you)    STATS.sample, every 2 s: a fight's time in the air (high, near the airfield, on a tail)

@@ -25,7 +25,7 @@ settings: the rage circuit off, Ladon rounds and VOID WATCHER off (tests turn th
 
 ## Open problems
 1. **Enemies freeze for everyone while the co-op host is in the landing STORE.** Reverse engineered 2026-11-02
-   (tools/re/STORE_FREEZE.md): the minigame's DeactivateForMinigame puts every AI object into cinematic mode AND deactivates
+   (docs/re/STORE_FREEZE.md): the minigame's DeactivateForMinigame puts every AI object into cinematic mode AND deactivates
    it; either lock freezes it. 0.73.72 (runtime 0.32.20) skips that call while co-op players are linked (SV_StoreKeepAI,
    [coop] store_keep_world); not yet run in game. (The probes were removed in 0.73.67.) What the tests of 2026-11-01 showed:
    - The moment the host's STORE opens, the world subsystem LiveMiniGameManager puts every AI plane (and the airfield's

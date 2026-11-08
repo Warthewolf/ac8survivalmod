@@ -210,7 +210,7 @@ static void Ufx2Install(void)
  * (FLive*Event: slot 1 answers the event type, a trigger's EventType) and slot +0x60 is their Match(event, trigger, a, b):
  * the event processor (0x147420eb0 in the 2026-11-02 build) runs a ParallelFor over the triggers of the event's type,
  * and the per-trigger check (0x1474210c0, 0x147435060 before the update: active, LifeCount, MonitorEvents, priority)
- * calls the event's Match (at 0x1474211cc); tools/re/UNIQUE_ACTIONS.md 7. The co-op host's crash of 2026-11-01 10:24
+ * calls the event's Match (at 0x1474211cc); docs/re/UNIQUE_ACTIONS.md 7. The co-op host's crash of 2026-11-01 10:24
  * (0.73.70, the testers' session S1) was EnemyBehind's Match (type 0x1b; vtable 0x14cb62be8, Match 0x14742ced0 in the
  * 2026-11-02 build, 0x147440b60 before) at +0xc7, just after `call [rax+0xcb0]`: its victim (+0x18) a co-op player's
  * real plane, its chaser (+0x20) an AI game object already freed (IsA LiveAIGameObject still true, its first 8 bytes a
@@ -606,7 +606,7 @@ static void PtLog(void)
         g_ptBadN < PT_BAD_MAX ? g_ptBadN : PT_BAD_MAX);
 }
 
-/* ---- The STORE freeze (runtime 0.32.20; tools/re/STORE_FREEZE.md) ----------------------------------------------------
+/* ---- The STORE freeze (runtime 0.32.20; docs/re/STORE_FREEZE.md) ----------------------------------------------------
  * A minigame's start (the airfield STORE) calls DeactivateForMinigame(mgr, &ActorManager->CachedAIGameObjects), which
  * puts every AI object into cinematic mode and deactivates the live ones: the world's planes stop for every player while
  * the co-op host shops (tests of 2026-11-01). While SV_StoreKeepAI(1) (Lua: co-op linked) the call is skipped, so nothing

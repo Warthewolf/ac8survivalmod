@@ -10,7 +10,7 @@ local M = COOP.M                                   -- (sv_coop.lua's M, handed o
 local AF_CODE = "BP_PlayerPlane_PP%d+_(%w+)"
 -- Every player plane's blueprint folder and name by its code (AC8's 35, build/research/ui/paths.txt: the ADFX-02's has a
 -- variant suffix, so a path built from the code alone missed it in COOP2MP's T2, 2026-10-30): COOP.planeClassPath(code)
--- -> the blueprint class's path, for real player planes in place of the AI stand-ins (tools/re/COOP2MP.md)
+-- -> the blueprint class's path, for real player planes in place of the AI stand-ins (docs/re/COOP2MP.md)
 local PP_BP = { a10c = "PP0001_a10c", f02a = "PP0002_f02a", f04e = "PP0003_f04e", f15c = "PP0004_f15c", f22a = "PP0005_f22a",
                 f35c = "PP0006_f35c", f18c = "PP0007_f18c", j39e = "PP0008_j39e", su34 = "PP0009_su34", e18g = "PP0010_e18g",
                 typn = "PP0011_typn", f15j = "PP0012_f15j", a06e = "PP0013_a06e", rflm = "PP0014_rflm", su25 = "PP0015_su25",
@@ -53,7 +53,7 @@ function COOP.peerPlane(o, slot)
         r == 1 and "moved every frame" or ("NOT moved: " .. tostring(r))))
 end
 
--- COOP2MP T3 (tools/re/COOP2MP.md, hard rule 53): each other player as their own airframe's player plane, as AC8's
+-- COOP2MP T3 (docs/re/COOP2MP.md, hard rule 53): each other player as their own airframe's player plane, as AC8's
 -- Online Mode shows them (CFG.coop.real_planes), not an AI stand-in: SV_CoopSpawnPP with their slot (a network dummy
 -- controller, role 2) where their stream says they are, bound with SV_CoopPeer; the runtime feeds its own update from
 -- their stream (flight.c FlNetFeed: pose, stick, afterburner, flight State). Their airframe's code comes in their "hi"
@@ -1019,7 +1019,7 @@ end
 
 ---------------------------------------------------------------------------------------------------- the players, for other parts
 -- COOP.players(): every player this game knows the whereabouts of, for the behaviour director (it picks a player slot
--- to aim a tactic at; tools/re/BEHAVIOUR_DIRECTOR.md): a list of { slot, obj, addr, at, hpPct, alive, onAirfield, fresh }
+-- to aim a tactic at; docs/re/BEHAVIOUR_DIRECTOR.md): a list of { slot, obj, addr, at, hpPct, alive, onAirfield, fresh }
 -- (another player's has rot too: pitch, yaw, roll from their game, and age (ms) and inLevel; yours isMe). down: shot down
 -- and waiting for a revive (sv_down.lua; alive false then).
 -- The local player comes first (your pawn: its position read once a tick, shared with ACE.movesTick through COOP.me();

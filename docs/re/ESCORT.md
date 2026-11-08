@@ -8,7 +8,7 @@ flies to Comona Airport under constant attack and lands. Four escorts (Su-57 YOR
 DANIELLE) land after her. The round is lost if she dies and completes once all five have landed. Then she says: "Thank
 You Pilot, I've sent word to HQ and they've sent two Cargo Vessels into the Area with the Special ZFA-44 Airframes, you can
 call for their support from the STORE". The reward: Mission 17's cargo ship (allied) in the STORE, launching ZFA-44s
-(tools/re/ZFA44.md) and staying 3 rounds (VOID WATCHER 1's service model).
+(docs/re/ZFA44.md) and staying 3 rounds (VOID WATCHER 1's service model).
 
 Tags: **[data]** confirmed in data, **[inferred]**, **[test]** needs an in-game test. Sections 1-5 are the research's
 essentials (the full research, its dumps and route.json: `build/research/escort/` on the build machine, git-ignored).
@@ -158,7 +158,7 @@ know "escort" yet and drops it before the score (add `escort: "The Escort"` and 
 - **Ctrl+DEL**: the ZFA-44 carriers unlocked and one sent now (free).
 - (Were Ctrl+F1 / F2 until 2026-11-07: the tactical items' airstrike and ECM burst keys, so both ran on a press. Every
   Ctrl key: tools/README.md "Ctrl keys".)
-- (Ctrl+9 stays the ZFA-44's T0 dressing of the nearest enemy, tools/re/ZFA44.md 8.)
+- (Ctrl+9 stays the ZFA-44's T0 dressing of the nearest enemy, docs/re/ZFA44.md 8.)
 
 ## 8. Log lines (AC8SurvivalMode_lua.log)
 - `escort: round N, THE ESCORT: CHARLENE and 4 escorts from (-41.1, 31.4) km to the airfield (67.5 km)`,

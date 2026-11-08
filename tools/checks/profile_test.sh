@@ -1,6 +1,6 @@
 #!/bin/sh
 # profile_test.sh : runs tools/checks/profile_test.lua (the behaviour roadmap's P6, the learning layer:
-# tools/re/BEHAVIOUR_DIRECTOR.md unit 8; your habits from your kills and flying, the counters they turn and where each
+# docs/re/BEHAVIOUR_DIRECTOR.md unit 8; your habits from your kills and flying, the counters they turn and where each
 # acts, the AI's flare row from the saved profile, config/survival_profile.ini written and read back, a checkpoint learnt
 # from after a crash, broken files, min_samples, the real sweep's samples; the code review of 2026-10-29: each kill
 # share on its own count, a co-op joiner's head start, the file never lost) on the real parts with build/checks/lua.exe

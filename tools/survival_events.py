@@ -3,9 +3,9 @@
 Every trigger / exec here is a deep copy of a stock Mission 22 record of the same node class, with only its names,
 unit/flag arguments, delays and conditions changed, so the node classes, argument layouts and TipsHashes are the
 game's own. EP_SurvivalMode_global is a copy of EP_Mission022_global, so its import and name tables already hold every
-node class and most names these records use. Record format: tools/re/EVENT_NOTES.md.
+node class and most names these records use. Record format: docs/re/EVENT_NOTES.md.
 
-Rounds are run by Survival's own spawner (Scripts/main.lua + the native runtime, tools/re/SPAWN_SYSTEM.md), not
+Rounds are run by Survival's own spawner (Scripts/main.lua + the native runtime, docs/re/SPAWN_SYSTEM.md), not
 by events: the game never spawns a desc again while its shot-down flight is still on the phase's unit list. The events:
   MissionStart        the mission clock paused and hidden (Mission 22's own pair): Survival is endless (no music: the
                       pause menu's Music Player is the only music)
@@ -35,10 +35,10 @@ by events: the game never spawns a desc again while its shot-down flight is stil
   RE_SV_FestCM_<g><k> / RE_SV_FestCMHit_<g><k>_<i>  a cruise missile salvo's paths to the runway (Mission 30's records)
                       and missile i's impact (LiveDestroyUnitExecution), fired by the festival's Lua
   RE_SV_Char<Step> / RE_SV_Esc<Name><Step>  THE ESCORT: CHARLENE's and her escorts' route, wait, final, rollout, taxi to
-                      a parking slot and stop (build_escort; tools/re/ESCORT.md "Build names"); RE_SV_CargoLaunch_<s>_<n>
+                      a parking slot and stop (build_escort; docs/re/ESCORT.md "Build names"); RE_SV_CargoLaunch_<s>_<n>
                       a ZFA-44 two-ship from cargo ship s's container launcher arm n
   RE_SV_Decoy*        THE DECOY: the bait's and the trap UAVs' lasers, the marks, the Spear, its impact counter
-                      SV_DecoySpearHit, the sure kill and the radio (build_decoy; tools/re/DECOY.md "Build names")
+                      SV_DecoySpearHit, the sure kill and the radio (build_decoy; docs/re/DECOY.md "Build names")
 
 The parts (2026-11-07: no source file over 2,000 lines, tools/checks/size_check.py). This file keeps the shared names
 (the units, rows, slots and flags that build_survival.py, tools/checks and Scripts/*.lua read), the record helpers and
@@ -72,7 +72,7 @@ POOL = [f'ERA_Unit_{n:02d}_Dep_Air{k}' for n in range(1, 9) for k in range(3)]
 # fights to fly to the moved area; it is in git history.)
 AREA_RADIUS_M = 40000.0                      # pool flights' RadiusInMeter (None: Mission 22's own 6000)
 # Milestone 3 (user, 2026-10-22: bombers that only attack the airfield). Mission 22's own Comona Airport strike
-# (tools/re/AIRFIELD_SUPPLY.md 2b): its Su-34s get the airport unit as their engagement target with a ground-only search
+# (docs/re/AIRFIELD_SUPPLY.md 2b): its Su-34s get the airport unit as their engagement target with a ground-only search
 # and fire at its invincible dummies; a MissedWeapon trigger on each dummy counts what reaches it. The target is
 # AB_Unit_01_Ground2 (the 4 dummies alone, Mission 22's landing-time target), spawned at mission start. The bomber
 # flights are Mission 22's strike desc and its four idle enemy fighter descs, sized by BOMBER_SIZES in
@@ -91,7 +91,7 @@ BOMBERS = list(BOMBER_SIZES)
 # heavies and fires the flight's bomb run over the airfield, then applies the damage itself.
 BOMB_COUNT = 6
 BOMB_GAP_S = 0.4
-# Special round "Comona Defense" (Milestone 6, tools/re/SPECIAL_ROUNDS.md 12a): Mission 22's shuttle on its pad, a
+# Special round "Comona Defense" (Milestone 6, docs/re/SPECIAL_ROUNDS.md 12a): Mission 22's shuttle on its pad, a
 # countdown, liftoff. Mission 22's pad stays as it is (PAD_UNIT: near-miss dummies, 6 AA guns, 4 SAMs, the control
 # tower; user, 2026-10-22: "you can leave the AA guns in", "SAMs too and tower"), spawned at the first special and kept;
 # build_survival.py moves the shuttle into a unit of its own (SHUTTLE_UNIT, spawned every special: a unit with
@@ -281,7 +281,7 @@ AWACS_OUT_B = 'SV_Path_VoidWatcherOutB'      # from arc B's end
 AWACS_OUT_KM = 24.0                          # the exit's length from the arc's end
 AWACS_OUT_STEP_KM = 3.0                      # its points every N km (its first a step of the arc ahead)
 AWACS_HOME_AREA_M = 40000.0                  # its unit area round the airport on the way out (AREA_RADIUS_M's)
-# Survival COOP (runtime 0.20.0; Scripts/sv_coop.lua, tools/re/COOP.md): the other player's plane in this game, a one-plane
+# Survival COOP (runtime 0.20.0; Scripts/sv_coop.lua, docs/re/COOP.md): the other player's plane in this game, a one-plane
 # copy of MOONCHILD's source (allied, and invincible as Mission 22 parks it). Lua sets its airframe to the other player's,
 # turns its fire, engagement and flares off, and the runtime moves it every frame to where the other player is
 # (coop.c: the AI plane's own teleport). Its appearance: gear up, no engagement (its fire stays off from Lua too).
@@ -371,7 +371,7 @@ def flight_size(unit):
     return None
 
 
-# Fighter roles (behaviour roadmap P1; tools/re/BEHAVIOUR_DIRECTOR.md unit 5): the pool is split into role groups by
+# Fighter roles (behaviour roadmap P1; docs/re/BEHAVIOUR_DIRECTOR.md unit 5): the pool is split into role groups by
 # flight number NN, each with its 2 / 4 / 6-ship trio (CFG.squadrons: every role can field a 2-ship from round 1). A
 # role's flights name its behaviour row in the world data, so they build its behaviour set when the level loads (hard
 # rule 20); the spawner (Scripts/sv_rounds.lua, sv_spawn.lua) draws flights by the round's role mix and gives each its
@@ -904,7 +904,7 @@ def build_heavy(g, stock_ep):
           f'RE_SV_HeavyRoute_<NN><S> / HeavyLoop_<NN><L><S>, {HEAVY_SPEED} km/h)')
 
 
-# The Spaceport Assault's map (tools/re/SPACEPORT_ASSAULT.md): the user's marks of 2026-10-31 (tools/re/spaceport/
+# The Spaceport Assault's map (docs/re/SPACEPORT_ASSAULT.md): the user's marks of 2026-10-31 (tools/re/spaceport/
 # spaceport_marks.txt / spaceport_rings.txt: Ctrl+HOME beaches, Ctrl+PAGE_UP sea, Ctrl+PAGE_DOWN the troops' spots; hard
 # rule 27), cm. The beaches' rings read sea (4 m) west and north of each, land (5 m) east and south: the craft come in
 # from the west. Spaceport spots 3 and 4 were one double press (50 m apart): one kept.
@@ -913,7 +913,7 @@ SPACEPORT_SEA = [(-2810707, 432930), (-2785643, 238488), (-2769543, 113592), (-2
 SPACEPORT_TROOP_SPOTS = [(-1490317, 157461, 500), (-1484219, 75102, 500), (-1419829, -21557, 500)]
 SPACEPORT_PAD = (-1325196, 59778)                # Mission 19's rocket 1 / Mission 22's shuttle pad
 
-# Special round "Spaceport Assault" (tools/re/SPACEPORT_ASSAULT.md; user, 2026-10-31): an enemy fleet off the spaceport's
+# Special round "Spaceport Assault" (docs/re/SPACEPORT_ASSAULT.md; user, 2026-10-31): an enemy fleet off the spaceport's
 # west shore. Four amphibious groups on the first four sea marks (north to south), each a Wasp (Mission 28's
 # AUnit01_Sea_0), two Aegis (Survival's copy of Mission 22's AC_Unit_01_Ship1) ahead of it either side of its lane and
 # two missile boats (Training006's EA_UNIT_2_1) further in; and the carrier group on the fifth mark, the Gerald R. Ford
@@ -946,7 +946,7 @@ SP_LCAC_SPEED = '220.0'                          # km/h (Mission 13's 180: ~12 k
 SP_TROOP_SPREAD_CM = 4000.0                      # the troops' spots: each arrival this far from the next
 SP_GARRISON = 'ABC'                              # the retake's garrison units, one a SPACEPORT_TROOP_SPOTS spot
 SP_GARRISON_N = 4
-# The retake's rockets (tools/re/SPACEPORT_ASSAULT.md "Mission 19's rockets"; user, 2026-10-31: "can you please build the
+# The retake's rockets (docs/re/SPACEPORT_ASSAULT.md "Mission 19's rockets"; user, 2026-10-31: "can you please build the
 # rockets this time?"): Mission 19's two rockets (E_Unit_05_Rocket_0: one on each pad, the second the shuttle's) as
 # Survival's unit SV_Unit_SpRockets (objects SV_Obj_SpRocket_0 / _1, on the pads, invincible until launched), each on a
 # whole copy of its Mission 19 climb (900 m up to 20.2 km: SV_Path_SpRocketA / B). Mission 19's split: the rocket's
@@ -1351,7 +1351,7 @@ def survival_fname_plain(name):
 
 def build_repair(g, stock_ep):
     """RE_SV_RepairAircraft: the player's aircraft back to full health (LiveRestorePlayerPlaneExecution, Training001's
-    node: SetHealth(Max) and the armour pool refilled; tools/re/KILLS_HEALTH_DEATH.md). The airfield shop fires it."""
+    node: SetHealth(Max) and the armour pool refilled; docs/re/KILLS_HEALTH_DEATH.md). The airfield shop fires it."""
     tr = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Training001', 'EP_Training001_global.uasset')
     t_restore = g.foreign_template(tr, 'LiveRestorePlayerPlaneExecution')
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_RepairAircraft')
@@ -1361,7 +1361,7 @@ def build_repair(g, stock_ep):
 def build_run_over(g, stock_ep):
     """RE_SV_RunOver: a co-op run's end (Scripts/sv_down.lua: every player down, the host's "ro"; each game fires its
     own, Scripts/sv_coop.lua KEEP_EVENTS): Mission 15's LiveMissionFinishExecution MissionFailed, false, true (the retry
-    menu, no debriefing, no save: tools/re/KILLS_HEALTH_DEATH.md 3, 4). A remote event Lua fires, no conditions."""
+    menu, no debriefing, no save: docs/re/KILLS_HEALTH_DEATH.md 3, 4). A remote event Lua fires, no conditions."""
     m15 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission015', 'EP_Mission015_global.uasset')
     t_fail = g.foreign_template(m15, 'LiveMissionFinishExecution', pred=lambda a, e: a[0] == 'MissionFailed')
     assert arg_values(t_fail) == ['MissionFailed', 'false', 'true'], arg_values(t_fail)

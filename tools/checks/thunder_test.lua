@@ -1,5 +1,5 @@
 -- thunder_test.lua <mod dir> <work dir> (run by tools/checks/thunder_test.sh): the lightning Anomaly IFF FATAL ERROR /
--- DI..ANT TH..D..R and the storm test (Scripts/sv_anomalies.lua THUNDER, test builds only; tools/re/THUNDER.md) on the real
+-- DI..ANT TH..D..R and the storm test (Scripts/sv_anomalies.lua THUNDER, test builds only; docs/re/THUNDER.md) on the real
 -- sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_sound, sv_spawn, sv_anomalies and sv_rounds, the game stubbed (a freed
 -- object counts each read or write of it as the crash it would be):
 --   the settings: CFG.specials.thunder from survival.ini's [thunder] / [thunder.storm] (INI_ALIAS), never in the rotation;

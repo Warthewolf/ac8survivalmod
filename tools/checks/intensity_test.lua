@@ -1,5 +1,5 @@
 -- intensity_test.lua <mod dir> <work dir> (run by tools/checks/intensity_test.sh): the behaviour roadmap's P4, the
--- intensity director (tools/re/BEHAVIOUR_DIRECTOR.md unit 7), on the real sv_core, sv_config, sv_rows, sv_ai, sv_hud,
+-- intensity director (docs/re/BEHAVIOUR_DIRECTOR.md unit 7), on the real sv_core, sv_config, sv_rows, sv_ai, sv_hud,
 -- sv_spawn, sv_rounds, sv_tactical, sv_stats, sv_tells, sv_director and sv_coop (M exposed), the game stubbed (HIT's
 -- health and missiles as tables, planes as objects with a position and a heading):
 --   survival.ini's [intensity] sections; every lever's switch on as shipped;

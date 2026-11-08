@@ -1,5 +1,5 @@
 /* =============================================================================
- *  The DOWN loiter autopilot's maths (runtime 0.28.5; tools/re/KILLS_HEALTH_DEATH.md 7). Pure: no game memory, no
+ *  The DOWN loiter autopilot's maths (runtime 0.28.5; docs/re/KILLS_HEALTH_DEATH.md 7). Pure: no game memory, no
  *  Windows, so tools/checks/flight_test.c flies it against model planes. Included by flight.c (and that test); needs
  *  memset / memcpy, Sin, Cos (survival_rt.c), CoAtan2, CoSqrt, CoAbs and CO_PI (coop.c).
  *

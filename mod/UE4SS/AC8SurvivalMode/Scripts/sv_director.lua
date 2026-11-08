@@ -1,5 +1,5 @@
 -- sv_director.lua: the squad director, the behaviour roadmap's P2 ("one Lua part that watches the whole sky and fires
--- remote events on the right plane"; tools/re/BEHAVIOUR_DIRECTOR.md unit 6), and the intensity director, P4 (its own
+-- remote events on the right plane"; docs/re/BEHAVIOUR_DIRECTOR.md unit 6), and the intensity director, P4 (its own
 -- block at the end, CFG.intensity: "pressure follows the player, not the clock"; unit 7).
 -- Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order; a name another part uses is a global of this
 -- mod's Lua state, its own helpers stay local (tools/lua_split.py).
@@ -1065,7 +1065,7 @@ end
 -- When comfort is high and intensity low for 20 s, the director spends a tactic or releases a held flight. When
 -- intensity stays above 80, it holds the next wave and the top cover back for 15-20 s. Tiers stay as the floor; spikes
 -- become the director's ceiling." (runtime-ai steps 7-9, coop-perf step 6; CFG.intensity says what each setting does;
--- tools/re/BEHAVIOUR_DIRECTOR.md unit 7.)
+-- docs/re/BEHAVIOUR_DIRECTOR.md unit 7.)
 --   Every game, every tick: your health's drops (HIT.h, HP x10). Once a second on the round clock (not in a pause):
 --     your scores from what's kept already: the drops of the last window_s, HIT.msl's missiles within msl_km homing on
 --     your pawn (TargetToHome; one within MSL_NEAR_M whose target can't be read counts), the sweep's p.dist (2 s old at

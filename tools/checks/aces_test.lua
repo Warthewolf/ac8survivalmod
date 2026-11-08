@@ -1,5 +1,5 @@
 -- aces_test.lua <mod dir> <work dir> (run by tools/checks/aces_test.sh): the behaviour roadmap's P9, ace personalities
--- (tools/re/BEHAVIOUR_DIRECTOR.md unit 10), on the real sv_core, sv_config, sv_rows, sv_ai, sv_spawn, sv_anomalies,
+-- (docs/re/BEHAVIOUR_DIRECTOR.md unit 10), on the real sv_core, sv_config, sv_rows, sv_ai, sv_spawn, sv_anomalies,
 -- sv_rounds (startRound exposed), sv_stats, sv_tells, sv_director and sv_coop (M and mirroredEvent exposed), the game
 -- stubbed, the planes stubbed as objects with a position and a forward vector:
 --   survival.ini's new sections ([aces.personality], [aces.personality.openers.*], [aces.flight.<tier>], its roles and

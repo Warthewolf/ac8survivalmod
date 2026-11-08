@@ -2,7 +2,7 @@
 
 The user, 2026-11-07: "I want the entire weapon from ACE7 to be ported over" (AGENTS.md's second AC7 exception: the
 LaserInterceptor's values, swing curve, beam effects with their meshes, materials and textures, and sounds; never voice
-lines). Research: tools/re/LASER_INTERCEPTOR.md (1: AC7's weapon; 9: AC8's native ALiveLaserInterceptor). Nothing of
+lines). Research: docs/re/LASER_INTERCEPTOR.md (1: AC7's weapon; 9: AC8's native ALiveLaserInterceptor). Nothing of
 AC7's is committed: only these scripts. Outputs go to the main tree's `build/laser7/`.
 
 `sh tools/laser7/build.sh` (needs UE 5.4, AC7's UModel and AC7's exports from .env; the AC8 template project
@@ -37,11 +37,11 @@ AC7's is committed: only these scripts. Outputs go to the main tree's `build/las
 
 `tools/build_all.sh` stages the container with ZFA=1 (it's the ZFA-44s' weapon); `package_*.sh` drop it without ZFA=1.
 
-AC7's blueprint also ran a little script (tools/re/LASER_INTERCEPTOR.md 1d): on the beam's creation the main beam on and
+AC7's blueprint also ran a little script (docs/re/LASER_INTERCEPTOR.md 1d): on the beam's creation the main beam on and
 the end flash off; each tick the beam's parameters; when the weapon's destroyed the beam thinning to nothing over 0.2 s;
 when its life runs out the end flash. AC8's class carries the same fields natively (EndLaserTimer, EndLaserMaxTime,
 LaserScale) and the two events (OnCreateWeaponEnd, OnLifeTimeExpired); Survival's Lua does that part
 (Scripts/sv_escort_li.lua: the volley's beam on, its BeamLength, the end flash, the beam thinned), with AC7's fire control
 (a volley of 6 s when an enemy missile is within 1.2 km, 8 s rest). The class's own search is off; Lua picks each
 missile and the runtime hands it over (runtime/laser.c SV_LaserBegin: the class's BeginIntercept), the class swings and
-kills (tools/re/LASER_INTERCEPTOR.md 9-10).
+kills (docs/re/LASER_INTERCEPTOR.md 9-10).

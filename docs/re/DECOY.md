@@ -252,6 +252,6 @@ Int flag: `SV_DecoySpearHit` (starts at 0; Lua reads its rises). 155 triggers, 2
 ## Code review of 2026-11-07 (branch feature/decoy; nothing run in game)
 - A pause-menu restart (finding 3): THE DECOY needs nothing more. DECOY.tick sees the new run's D and lets every lock and
   runner go (resetRun: detach); its units go with the mission's reload or the next round's clean-up. (THE FESTIVAL's
-  siren, SAL's boat, the card and THE ESCORT now have their own: tools/re/FISHING.md 10, ESCORT.md.)
+  siren, SAL's boat, the card and THE ESCORT now have their own: docs/re/FISHING.md 10, ESCORT.md.)
 - The rotation's commented ini line lists decoy last, as CFG's append puts it (finding 14), and the leaderboard Worker
-  knows "decoy" (finding 15: redeploy it). tools/re/ESCORT.md's "Code review of 2026-11-07" has both.
+  knows "decoy" (finding 15: redeploy it). docs/re/ESCORT.md's "Code review of 2026-11-07" has both.

@@ -1,4 +1,4 @@
--- sv_festival.lua: THE FESTIVAL (CFG.specials.festival; FISHING_ROUND_PLAN.md 0; tools/re/FISHING.md 6): the cruise
+-- sv_festival.lua: THE FESTIVAL (CFG.specials.festival; FISHING_ROUND_PLAN.md 0; docs/re/FISHING.md 6): the cruise
 -- missiles and the air raid siren. Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order; a name another
 -- part uses is a global of this mod's Lua state, its own helpers stay local.
 -- Its geometry, what each spawn makes (FEST.actors), the siren, the round itself (below: "the round") and the test keys
@@ -745,7 +745,7 @@ end
 end
 
 -- TEST ONLY BEGIN
--- Ctrl+F12 in a run (the host's or solo): one cruise missile salvo and the siren (tools/re/FISHING.md 7, test 4).
+-- Ctrl+F12 in a run (the host's or solo): one cruise missile salvo and the siren (docs/re/FISHING.md 7, test 4).
 --   1st press: SV_Unit_FestCM_N1 at the north launch point (launch_z up, facing the runway), RE_SV_FestCM_N1 0.5 s on, the
 --     air raid siren posted on an actor over the runway and stopped siren_s later; once a second a line with each
 --     missile's distance to the runway, height and speed; within impact_m the host fires its impact record

@@ -1,5 +1,5 @@
 -- director_test.lua <mod dir> <work dir> (run by tools/checks/director_test.sh): the behaviour roadmap's P2, the squad
--- director (tools/re/BEHAVIOUR_DIRECTOR.md unit 6), on the real sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn,
+-- director (docs/re/BEHAVIOUR_DIRECTOR.md unit 6), on the real sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn,
 -- sv_rounds, sv_tactical, sv_stats, sv_tells, sv_director and sv_coop (M and mirroredEvent exposed), the game stubbed,
 -- planes stubbed as objects with a position and a heading:
 --   survival.ini's [director] sections; the budgets by round band and the habit counter's factor;

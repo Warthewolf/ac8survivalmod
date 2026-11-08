@@ -53,7 +53,7 @@ end
 
 -- The info key (CFG.hud.info): the info wall open or not (the key flips it, hudTick applies it; each level starts with
 -- start_open). The corner's stack (NEXT, ALLIES, ITEMS, CO-OP, from y 516) ends above the game's minimap (top 1108:
--- tools/re/HUD_LAYOUT.md); the wall has a row for every player: up to 24, in two columns (header, 12 rows, a gap, the
+-- docs/re/HUD_LAYOUT.md); the wall has a row for every player: up to 24, in two columns (header, 12 rows, a gap, the
 -- allies, the items and the kills: 17 of WALL_ROWS).
 local info = { open = CFG.hud.info.start_open == true }
 local WALL_ROWS = 20

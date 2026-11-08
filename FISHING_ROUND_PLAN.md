@@ -121,7 +121,7 @@ Big One bonus: +1000. The end card shows: shoals hit / 24, empty shoals, best fi
 Also optional: record the kg to the leaderboard (`sv_leaderboard.lua`) as a separate "best haul" stat.
 
 ---------------------------------------------------------------------------------------------------------------------
-## 3. How it gets built (copy stock or existing Survival patterns first, as MISSION_REFERENCE.md says)
+## 3. How it gets built (copy stock or existing Survival patterns first, as docs/design/MISSION_REFERENCE.md says)
 
 ### 3.1 The targets: invisible, killable, boxed
 Static targets don't need paths, which avoids most of the hard rules around paths (1, 2, 35). Pick one of the
@@ -203,8 +203,8 @@ Test key: add one next to the other specials' test keys (SURVIVAL_SPEC 10).
 | `config/survival.default.ini` + INI_ALIAS | `[fishing]` | Codex |
 | `tools/build_survival.py` | `SV_Unit_Fish1..3` descs (dummy or ported LCAC), boxes, health | Claude |
 | `tools/survival_events.py` | max-health / splash VFX records, `RE_SV_Fish_*` | Claude |
-| `tools/re/FISHING.md` (new) | what was found and confirmed | Claude |
-| `SURVIVAL_SPEC.md` | section 11 once the user confirms the design | — |
+| `docs/re/FISHING.md` (new) | what was found and confirmed | Claude |
+| `docs/design/SURVIVAL_SPEC.md` | section 11 once the user confirms the design | — |
 
 Checks after each edit: `python -X utf8 tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua`
 (200 locals per part, 15-char native names, the `a and pcall()` pattern) and `tools/checks/ini_check.py`.

@@ -1,5 +1,5 @@
 -- profile_test.lua <mod dir> <work dir> (run by tools/checks/profile_test.sh): the behaviour roadmap's P6, the learning
--- layer (tools/re/BEHAVIOUR_DIRECTOR.md unit 8), on the real sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn,
+-- layer (docs/re/BEHAVIOUR_DIRECTOR.md unit 8), on the real sv_core, sv_config, sv_rows, sv_ai, sv_hud, sv_spawn,
 -- sv_rounds (startRound exposed), sv_leaderboard, sv_tactical, sv_stats, sv_tells, sv_director and sv_coop (M exposed),
 -- the game stubbed:
 --   survival.ini's [profile] sections and [flares]; every switch on as shipped;

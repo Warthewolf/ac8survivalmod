@@ -5,7 +5,7 @@
 -- helpers stay local.
 
 -- TEST ONLY BEGIN (the lightning Anomaly and the storm test: test builds only; tools/strip_test_only.py takes all of it
--- out of a release with CFG.specials.thunder; tools/re/THUNDER.md)
+-- out of a release with CFG.specials.thunder; docs/re/THUNDER.md)
 -- IFF FATAL ERROR / DI..ANT TH..D..R (user, 2026-11-06: "another Anomaly, one that uses Lightning Against you", "The
 -- Aircraft is an A-10", "Strikes should only black out and disorient you", "it can only be spawned with the test key"):
 -- the special kind "thunder", never in CFG.specials.rotation, brought only by Ctrl+. (the next round, as Ctrl+1-8 do).
