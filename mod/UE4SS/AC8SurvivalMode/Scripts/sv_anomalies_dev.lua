@@ -202,6 +202,7 @@ end
 -- FOLLOW_S later what changed (the stall flag's upset: your speed and pitch; your health must not move; an AI plane's
 -- health that moved). label: the log's ("storm test", "thunder")
 local function watch(st, now, label, pawn)
+    if gamePaused and gamePaused(survivalPC) then return {} end   -- ((2026-11-08) the pause menu hid the HUD: not a strike)
     local s = sense(st)
     if not st.base then
         st.base = { vis = s.vis, op = s.op, show = s.show }
@@ -283,6 +284,15 @@ function THUNDER.stormUp(owner, at, radiusM)
     local c = cfg().storm
     if THUNDER.storm then return nil, "a storm is up already (" .. tostring(THUNDER.storm.owner) .. "'s)" end
     if torn() then return nil, "the level is going" end
+    if (cfg().strike or {}).stock ~= true then           -- ((2026-11-08) the stock volume never struck: Survival's own strikes)
+        local st = { owner = owner, at = os.clock(), radius = radiusM * 100, center = at, n = 0, flashes = 0, strikes = {}, moves = 0,
+                     own = true }
+        THUNDER.storm = st
+        log(string.format("thunder: storm up for the %s at (%.0f, %.0f, %.0f), %.1f km round it: Survival's own strikes (no stock volume)",
+            owner, at.X, at.Y, at.Z, radiusM / 1000))
+        crumb("thunder: storm up for the " .. owner)
+        return st
+    end
     local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
     if not (gs and valid(gs)) then return nil, "GameplayStatics not found" end
     if not liveObj(survivalPC) then return nil, "no player controller" end
@@ -316,6 +326,7 @@ function THUNDER.stormUp(owner, at, radiusM)
     return st
 end
 function THUNDER.stormMove(st, at)
+    if st and at and st.own then st.center, st.moves = at, st.moves + 1; return true end
     if not (st and at and liveObj(st.vol)) then return false end
     local ok = pcall(function() st.vol:K2_SetActorLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true) end)
     if ok then st.center, st.moves = at, st.moves + 1 end
@@ -328,6 +339,12 @@ function THUNDER.stormDown(why)
     THUNDER.storm = nil
     if not st then return false end
     local up = os.clock() - st.at
+    if THUNDER.strikesOff then THUNDER.strikesOff("its storm is off") end
+    if st.own then
+        log(string.format("thunder: the %s's storm off (%s) after %.0f s: %d strikes on you", st.owner, tostring(why), up, (THUNDER.sk and THUNDER.sk.n) or 0))
+        crumb("thunder: storm off (" .. st.owner .. ")")
+        return true
+    end
     if torn() then
         log(string.format("thunder: the %s's storm forgotten with the level (%s), not touched", st.owner, tostring(why)))
         return true
@@ -421,6 +438,177 @@ local function post(name)                                -- (a Wwise event of th
     end)
     return ok and "posted" or ("NOT posted: " .. tostring(err))
 end
+local function postAt(name, actor)                      -- (a Wwise event on an actor: your plane's own sounds)
+    if type(name) ~= "string" or name == "" then return "none" end
+    if not actor then return post(name) end
+    local ok, err = pcall(function()
+        local lib = StaticFindObject("/Script/Live.Default__LiveSoundBlueprintLibrary")
+        if not valid(lib) then error("LiveSoundBlueprintLibrary not found") end
+        lib:PostEventAtActorByName(FName(name), actor)
+    end)
+    return ok and "posted" or ("NOT posted: " .. tostring(err))
+end
+
+---------------------------------------------------------------------------------------------------- Survival's own strikes
+-- ((2026-11-08) the user's storm test of 0.74.34: the stock volume never struck: "I saw nothing happen to my aircraft with
+-- the storm", "my hud was not effected either" (the one "strike" the test saw was the pause menu hiding the HUD); then:
+-- "this storm needs to be insanely violent for the player", a bigger storm, faster strikes, longer effects, 10% of your
+-- health a strike) Survival rolls the strikes on your plane itself while you're inside the storm (THUNDER.storm: its
+-- centre and radius), every roll_s of the game clock (never while paused), at chance[k] (k: the rolls since the last
+-- strike), and makes each one with the game's own pieces: the HUD's lightning blackout and static
+-- (BeginHUDDistortionLightning: blackout_s hidden, static_s of noise, the distortion), the struck and noise sounds, the
+-- lightning camera shake, the electric discharge on your plane, damage_pct of your MaxHealth (THE DECOY's hurt: a lethal
+-- one is the game's own death), your controls upset upset_s (SV_Invert: roll inverted, throttle and brake swapped, in
+-- place of the stock stall flag, which only the game's own strike sets). A miss: the evasion bolt ahead of you and the
+-- voltage sparks on your plane. Each game strikes its own player (co-op: nothing synced). Log lines `lightning: ...`.
+local SK = { inside = false, k = 0, n = 0, rolls = 0 }
+THUNDER.sk = SK
+local function sc() return cfg().strike or {} end
+local function pick(v, d)                               -- a number, or a random one of { lo, hi }
+    if type(v) == "table" then
+        local lo, hi = tonumber(v[1]) or d, tonumber(v[2]) or tonumber(v[1]) or d
+        return lo + (hi - lo) * math.random()
+    end
+    return tonumber(v) or d
+end
+local function strikeFx(path, pawn, offset)
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    local sys = SPC and SPC.V and SPC.V.asset and SPC.V.asset(path)
+    if not (lib and valid(lib) and sys and pawn) then return false end
+    local ok, comp = pcall(function()
+        return lib:SpawnSystemAttached(sys, pawn:K2_GetRootComponent(), FName("None"), offset or { X = 0, Y = 0, Z = 0 },
+            { Pitch = 0, Yaw = 0, Roll = 0 }, 0, true, true, 0, true)
+    end)
+    if ok and comp ~= nil and liveObj(comp) then
+        THUNDER.fx[#THUNDER.fx + 1] = { comp = comp, offAt = os.clock() + 3 }
+        return true
+    end
+    return false
+end
+local function shakeOn(path, scale)
+    if type(path) ~= "string" or path == "" or not liveObj(survivalPC) then return false end
+    local cls = SK.shakeCls
+    if not (cls and liveObj(cls)) then
+        cls = loadObject(path .. "." .. path:match("[^/]+$") .. "_C")
+        SK.shakeCls = cls
+    end
+    if not cls then return false end
+    local rot = { Pitch = 0, Yaw = 0, Roll = 0 }
+    if pcall(function() survivalPC:ClientStartCameraShake(cls, scale, 0, rot) end) then return true end
+    return pcall(function() survivalPC.PlayerCameraManager:StartCameraShake(cls, scale, 0, rot) end)
+end
+local function upset(on, pawn)
+    local c = sc()
+    if type(SV_Invert) ~= "function" then return "no SV_Invert" end
+    local s = D and D.special
+    if s and s.kind == "anomaly" then return "skipped (MINDRIPPER's field)" end   -- (never over the Anomaly's own)
+    if on then
+        SK.upsetOn = true
+        SV_Invert(0, c.upset_roll == false and 0 or 1, tonumber(c.upset_fade_s) or 0.2, addrOf(pawn) or 0, 0, 0,
+            c.upset_throttle == false and 0 or 1)
+        return "on"
+    end
+    SK.upsetOn = false
+    SV_Invert(0, 0, tonumber(c.upset_fade_s) or 0.2, 0)
+    return "off"
+end
+local function noiseOff(why)
+    local c = sc()
+    SK.noiseUntil = nil
+    local hud = hudOf()
+    local ok = hud and pcall(function() hud:EndHUDDistortionLightning() end)
+    postAt(c.sound_noise_stop, nil)
+    log(string.format("lightning: the static over (%s)%s", why, ok and "" or ": EndHUDDistortionLightning NOT called"))
+end
+-- one strike on your plane now (t: the game clock)
+local function strike(t, pawn)
+    local c = sc()
+    SK.n, SK.k, SK.lastAt = SK.n + 1, 0, t
+    local parts = {}
+    local hud = hudOf()
+    local static = pick(c.static_s, 12)
+    local d = type(c.distortion) == "table" and c.distortion or { 0, 0 }
+    local info = { NeedUpdateDistortion = (tonumber(d[2]) or 0) > 0, MinDistortionScale = tonumber(d[1]) or 0,
+                   MaxDistortionScale = tonumber(d[2]) or 0, HideContainerTime = 0, ShowContainerTime = 0, UseHideHUD = true,
+                   BeginHideHUDTime = 0, HideHUDTime = tonumber(c.blackout_s) or 3.5, DistortionMask = 0 }
+    local okH, errH = false, "no HUD"
+    if hud then okH, errH = pcall(function() hud:BeginHUDDistortionLightning(static, info) end) end
+    parts[#parts + 1] = okH and string.format("HUD out %.1f s, static %.0f s", info.HideHUDTime, static)
+        or ("HUD NOT hit (" .. tostring(errH) .. ")")
+    if okH then
+        if not SK.noiseUntil then postAt(c.sound_noise, nil) end
+        SK.noiseUntil = math.max(SK.noiseUntil or 0, t + static)
+    end
+    postAt(c.sound_strike, pawn)
+    postAt(c.sound_damage, pawn)
+    parts[#parts + 1] = "shake " .. (shakeOn(c.shake, tonumber(c.shake_scale) or 1.5) and "on" or "NOT on")
+    parts[#parts + 1] = "bolt " .. (strikeFx(c.fx_strike, pawn) and "on you" or "NOT shown")
+    local pct = tonumber(c.damage_pct) or 0
+    if pct > 0 and DECOY and DECOY.hurtMe then
+        local okD, what = pcall(DECOY.hurtMe, { hit = { damage_pct = pct, can_kill = c.can_kill ~= false } })
+        parts[#parts + 1] = okD and tostring(what) or ("damage error " .. tostring(what))
+    end
+    local up = tonumber(c.upset_s) or 0
+    if up > 0 then
+        parts[#parts + 1] = "upset " .. upset(true, pawn)
+        SK.upsetUntil = t + up
+    end
+    log(string.format("lightning: strike %d on you (%s's storm, roll %d): %s", SK.n, tostring(THUNDER.storm and THUNDER.storm.owner),
+        SK.rolls, table.concat(parts, "; ")))
+end
+local function miss(t, pawn)
+    local c = sc()
+    if c.near_miss_fx == false then return end
+    local f = pick(c.miss_ahead_m, 450) * 100
+    strikeFx(c.fx_miss, pawn, { X = f, Y = (math.random() * 2 - 1) * 12000, Z = -2000 })
+    strikeFx(c.fx_sign, pawn)
+end
+function THUNDER.strikesOff(why)
+    if SK.inside then
+        postAt(sc().sound_inside_stop, SK.pawn)
+        SK.inside = false
+    end
+    if SK.noiseUntil then noiseOff(why) end
+    if SK.upsetOn then upset(false) end
+    SK.upsetUntil, SK.pawn, SK.k = nil, nil, 0
+end
+-- every tick: your plane inside the storm (not DOWN, not paused): its rolls; the static and the upset ended on time
+local function strikeTick()
+    local c = sc()
+    local st = THUNDER.storm
+    local pawn = myPlane()
+    local t = gameClock and gameClock(survivalPC)
+    if not t or (gamePaused and gamePaused(survivalPC)) then return end      -- (the game's clock: never while paused)
+    if SK.noiseUntil and t >= SK.noiseUntil then noiseOff(string.format("%.0f s on", t - (SK.lastAt or t))) end
+    if SK.upsetUntil and t >= SK.upsetUntil then SK.upsetUntil = nil; upset(false) end
+    local down = DOWN and DOWN.me and DOWN.me()
+    if c.enabled == false or not (st and st.center and pawn) or down then
+        if SK.inside then THUNDER.strikesOff(down and "you're DOWN" or "no storm") end
+        return
+    end
+    local at = where(pawn)
+    local inside = at ~= nil and math.sqrt((at.X - st.center.X) ^ 2 + (at.Y - st.center.Y) ^ 2 + (at.Z - st.center.Z) ^ 2) <= st.radius
+    if inside ~= SK.inside then
+        SK.inside, SK.pawn = inside, pawn
+        if inside then
+            SK.k, SK.rollAt = 0, t + pick(c.roll_s, 2)
+            postAt(c.sound_inside, pawn)
+            log(string.format("lightning: you're inside %s's storm (%.1f km round it): a roll every %s s", tostring(st.owner),
+                st.radius / 100000, type(c.roll_s) == "table" and string.format("%.1f-%.1f", c.roll_s[1], c.roll_s[2]) or tostring(c.roll_s)))
+        else
+            postAt(c.sound_inside_stop, pawn)
+            log(string.format("lightning: you're out of %s's storm (%d strikes so far)", tostring(st.owner), SK.n))
+        end
+    end
+    if not inside or t < (SK.rollAt or 0) then return end
+    SK.rollAt = t + pick(c.roll_s, 2)
+    SK.k, SK.rolls = SK.k + 1, SK.rolls + 1
+    local ch = type(c.chance) == "table" and c.chance or { 0.5 }
+    local p = tonumber(ch[math.min(SK.k, #ch)]) or 0.5
+    postAt(c.sound_roll, pawn)
+    if math.random() < p then strike(t, pawn) else miss(t, pawn) end
+end
+THUNDER.strikeTick = strikeTick
 
 ---------------------------------------------------------------------------------------------------- the Anomaly
 -- its health for this round (HP) and the round's x
@@ -741,12 +929,15 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "thunder", fn = function(now)
         if THUNDER.storm or #THUNDER.parked > 0 or THUNDER.test then
             log("thunder: the level is going: its storms and the storm test forgotten, not touched")
             THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
+            SK.inside, SK.noiseUntil, SK.upsetUntil, SK.upsetOn, SK.pawn = false, nil, nil, false, nil
         end
         return
     end
     parkTick()
     fxTick(now, false)
     testTick(now)
+    local okS, errS = pcall(strikeTick)
+    if not okS then say("strike", "lightning: strike error " .. tostring(errS)) end
     if joiner() then
         clientTick(now)
     else

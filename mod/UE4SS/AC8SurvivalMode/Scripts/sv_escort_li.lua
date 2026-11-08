@@ -154,7 +154,7 @@ end
 -- the ZFA-44s up: { [plane address] = { o, a, at, unit } } (alive, out of their container: never parked)
 -- ((0.74.25) and what was seen: a joiner's log of 0.74.23 had the host's carrier launch here and no laser fitted, with no
 -- line saying why: { seen, gone, down, parked })
-local function planes()
+local function planes(fitted)
     local ps, why = {}, { seen = 0, gone = 0, down = 0, parked = 0 }
     local riseZ = num(((CFG.allies or {}).carrier or {}).rise_m, -50) * 100
     for u, l in pairs((ESC and ESC.planes) or {}) do
@@ -165,7 +165,10 @@ local function planes()
                     local okH, h = pcall(function() return e.obj.HealthInternal end)
                     if not (okH and type(h) == "number" and h <= 0) then
                         local p = at(e.obj)
-                        if p and p.Z > riseZ then ps[e.addr] = { o = e.obj, a = e.addr, at = p, unit = u, e = e }
+                        if p and p.Z > riseZ then
+                            -- ((2026-11-08) an Su-47 at a dead ZFA-44's address was fitted: ESC.same, sv_escort_laser.lua)
+                            if ESC.same(e, (fitted and fitted[e.addr]) and 1 or nil) then ps[e.addr] = { o = e.obj, a = e.addr, at = p, unit = u, e = e }
+                            else why.gone = why.gone + 1 end
                         else why.parked = why.parked + 1 end
                     else why.down = why.down + 1 end
                 else why.gone = why.gone + 1 end
@@ -471,7 +474,7 @@ function ZLI.tick()
     local s = st()
     local z = zc()
     local clock = os.clock()
-    local ps, why = planes()
+    local ps, why = planes(s.L)
     -- the lasers of planes gone
     for a, r in pairs(s.L) do
         if not ps[a] then remove(r, "its plane is gone"); s.L[a] = nil end

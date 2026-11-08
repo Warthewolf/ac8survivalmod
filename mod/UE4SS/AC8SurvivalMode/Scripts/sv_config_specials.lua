@@ -1442,12 +1442,34 @@ CFG.specials = {
                  ai_level = 5, spawn_km = { 8, 12 }, camera = "LookAt_Event_Camera_ms22-01",
                  start_sound = "AKE_GEN_ENV_AMB_ThunderCloud_Outside_DistantThunder_Play",
                  stop_sound = "AKE_GEN_ENV_AMB_ThunderCloud_Outside_DistantThunder_Stop",
-                 storm = { radius_m = 3000, min_interval_s = 0, max_interval_s = 0, curve = "MS_12", log_strikes = true,
+                 -- ((2026-11-08) `strike`: Survival's own strikes on you inside its storm (sv_anomalies_dev.lua: the stock
+                 -- volume never struck in the user's test of 0.74.34; stock = true spawns it too): a roll every roll_s
+                 -- (a random time between the two, game time), chance[k] for the k-th roll since the last strike; a
+                 -- strike: the HUD out blackout_s, static_s of noise with the HUD's distortion (min, max), damage_pct of
+                 -- your MaxHealth (can_kill: a lethal one is your death), your controls upset upset_s (roll inverted,
+                 -- throttle and brake swapped: upset_roll / upset_throttle), the camera shake x shake_scale, the
+                 -- discharge on your plane; a miss: the evasion bolt miss_ahead_m ahead and the sparks on you)
+                 strike = { enabled = true, stock = false, roll_s = { 1.5, 2.5 }, chance = { 0.35, 0.5, 0.65, 0.8 },
+                            damage_pct = 10, can_kill = true, blackout_s = 3.5, static_s = { 10, 16 }, distortion = { 0.3, 1.0 },
+                            upset_s = 1.5, upset_roll = true, upset_throttle = true, upset_fade_s = 0.2, shake_scale = 1.5,
+                            near_miss_fx = true, miss_ahead_m = { 400, 550 },
+                            shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_Lightning",
+                            fx_strike = "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricDischargeM001",
+                            fx_miss = "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricEvasion001",
+                            fx_sign = "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricSign001",
+                            sound_strike = "AKE_GEN_PLAYER_EXP_Damaged_StruckByThunder_Play",
+                            sound_damage = "AKE_Player_Damage_Lightning_Play",
+                            sound_roll = "AKE_GEN_ENV_AMB_ThunderCloud_Inside_Lightning_Play",
+                            sound_noise = "AKE_Ms12_UI_HUD_Thunder_ElectronicNoise_Play",
+                            sound_noise_stop = "AKE_Ms12_UI_HUD_Thunder_ElectronicNoise_Stop",
+                            sound_inside = "AKE_GEN_ENV_AMB_ThunderCloud_Inside_Ambience_Play",
+                            sound_inside_stop = "AKE_GEN_ENV_AMB_ThunderCloud_Inside_Ambience_Stop" },
+                 storm = { radius_m = 7000, min_interval_s = 0, max_interval_s = 0, curve = "MS_12", log_strikes = true,
                            class = "/Game/Blueprints/System/Lightning/BP_LightninigVolume_MS12.BP_LightninigVolume_MS12_C",
                            curve_table = "/Game/Blueprints/System/Lightning/CUR_LightningWeight.CUR_LightningWeight" },
                  fx = { enabled = true, every_s = 2.5, scale = 4.0, life_s = 3.0,
                         system = "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning" },
-                 test = { radius_m = 3000, seconds = 60, stall_s = 3.0 },
+                 test = { radius_m = 7000, seconds = 60, stall_s = 3.0 },
                  text = { warn = "WARNING: %s", warn_sub = "%s: ITS STORM BLINDS YOU", down = "%s DOWN",
                           down_sub = "+%d ZOLLARS", row = "%s: %.1f KM", row_storm = "%s: IN ITS STORM",
                           key = "TEST: %s", key_now = "STARTING NOW", key_next = "NEXT ROUND",

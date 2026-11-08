@@ -2088,3 +2088,26 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
 - 55 suites pass (48 Lua, 7 native; coop_test not run). Packaged: friends' d81d8c2e9353..., TESTER 0a6af695acaf...
   (0.74.34-coop2mp.126), both registered; patches over 0.74.27-0.74.33 (_Patch.zip, _TESTER_Patch.zip). INSTALLED
   2026-11-08 from the TESTER zip (backup of 0.74.33: build/backup/install_before_0.74.34; 87 files equal).
+
+## 0.74.35 (2026-11-08, runtime 0.32.31; not yet run in game)
+- From the user's test of 0.74.34 the same evening: the Helios dive worked ("helios worked": round 4, both ZFA-44s dived,
+  one blast on its target, 3 Su-47s down and paid; the other was still diving when she died, finished off with the run).
+  "i just saw an SU-47 using a LaserInterceptor weapon": a special's F-15E (20:27:29) and Su-47 (20:28:26) took dead
+  ZFA-44s' addresses (the game reuses them) and sv_escort_li.lua, checking the address alone, fitted them with AC7's
+  laser (the Su-47's shot down its own wingmen's missiles). ESC.same (sv_escort_laser.lua): an ESC.planes entry is its
+  plane only while its name is the captured one (read fresh before anything is done to it: a laser fitted, a launch
+  switched on, a parked one or a diving one finished off; at most 1 s old for the aiming and the escort's cover); the
+  dive's enemy records the same. Hard rule 59. dive_test, escort_test.
+- Distant Thunder's storm (TESTER builds only): the storm test of 0.74.34 never struck (about 50 s inside; the one
+  "strike" logged was the pause menu hiding the HUD: hard rule 60). The user's design the same night: the storm gathers
+  over 3 rounds into a typhoon, strikes every build-up round, a bigger storm, faster strikes, longer effects, 10% of your
+  health a strike, test key only. This build: Survival rolls the strikes itself ([thunder.strike]; the stock volume only
+  with stock = true): a roll every 1.5-2.5 s of game time while you're inside (7 km now), chances 0.35 / 0.5 / 0.65 / 0.8;
+  a strike: the HUD's own lightning blackout (3.5 s) and static (10-16 s, with the distortion), the struck, damage and
+  noise sounds, the lightning shake x1.5, the discharge on your plane, 10% of your health (DECOY.hurtMe), your controls
+  upset 1.5 s (roll inverted, throttle and brake swapped); a miss: the evasion bolt ahead and the sparks on you. The
+  storm test's own watch skips the pause menu. tools/re/THUNDER.md. thunder_test. Next: the 3-round build-up.
+- festival_test seeded (its chatter's random gaps failed the break's 3-line check 3 runs in 8, the commit before too).
+- 55 suites pass (48 Lua, 7 native; coop_test not run). Packaged: friends' dba1a9b03266..., TESTER 7e6a15776a5e...
+  (0.74.35-coop2mp.127), both registered; patches over 0.74.27-0.74.34 (the TESTER one sent). Not installed yet (AC8 was
+  running).

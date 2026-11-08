@@ -31,7 +31,7 @@ local INI_ALIAS = { rounds = "", zollars = "credits", bombers = "airfield.bomber
                     ["fishing.catch"] = "specials.fishing.catch", ["fishing.kg"] = "specials.fishing.kg",
                     -- TEST ONLY BEGIN (the lightning Anomaly's sections: sv_anomalies.lua THUNDER, test builds only)
                     thunder = "specials.thunder", ["thunder.storm"] = "specials.thunder.storm",
-                    ["thunder.fx"] = "specials.thunder.fx", ["thunder.test"] = "specials.thunder.test",
+                    ["thunder.fx"] = "specials.thunder.fx", ["thunder.test"] = "specials.thunder.test", ["thunder.strike"] = "specials.thunder.strike",
                     -- TEST ONLY END
                     -- (0.35.3's name for the aircraft repair, still in the survival.ini files it extended)
                     ["shop.airfield.aircraft"] = "shop.items.RepairAircraft" }

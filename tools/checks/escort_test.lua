@@ -1730,6 +1730,17 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     ESC.planes[zU] = nil
     clock = t0 + 15; ZLAS.tick()
     check(li.gone == true and has(line("zfa li: ", from), "removed (its plane is gone)"), "its plane gone: the laser removed")
+    -- ((2026-11-08) the user's test of 0.74.34: "i just saw an SU-47 using a LaserInterceptor weapon") an enemy's new plane
+    -- at a dead ZFA-44's address (the game reuses them) is never fitted: ESC.same reads its name
+    local nL = #spawnedL
+    local su = plane("ERA_Unit_04_Dep_Air0", 2000000, 0, 300000, 0, 600)
+    su.full = "BP_OP1026_su47_CP_C enemy"
+    ESC.planes[zU] = { { obj = su, addr = su.addr, name = "BP_OP0018_uavc_CP_Ally_C dead", at = 0 } }
+    local fromR = #logs + 1
+    clock = t0 + 60; ZLAS.tick()
+    check(#spawnedL == nL and has(line("a ZFA-44's address is another object's now", fromR), "BP_OP1026_su47_CP_C enemy"),
+          "an Su-47 at a dead ZFA-44's address: never fitted with the laser (ESC.same), logged")
+    ESC.planes[zU] = nil
     -- put back for the rest of the test
     ZLI.mode, HIT.msl = "tls", keepMsl
     statics["/Script/Engine.Default__GameplayStatics"], AK.PostEventAtLocation = keepGS, keepPost

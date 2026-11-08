@@ -31,7 +31,13 @@ local function hp(o)
     return (ok and type(h) == "number") and h or nil
 end
 local function dist(a, b) return math.sqrt((a.X - b.X) ^ 2 + (a.Y - b.Y) ^ 2 + (a.Z - b.Z) ^ 2) end   -- (cm)
-local function up(e) return liveAddr(e.obj) == e.addr and (hp(e.obj) or 1) > 0 end
+-- (its own plane still: ESC.same, sv_escort_laser.lua: a freed plane's address is reused, and the address alone took an
+-- enemy's new plane as a ZFA-44 in the user's test of 0.74.34) maxAge as ESC.same's
+local function same(e, maxAge)
+    if ESC and ESC.same then return ESC.same(e, maxAge) end
+    return liveAddr(e.obj) == e.addr
+end
+local function up(e) return same(e, 0.5) and (hp(e.obj) or 1) > 0 end
 -- this run's state: held = { { obj, addr, unit, ship, round, target, due, ... } }, local = a joiner's own
 local function st()
     local s = ZDIVE.d
@@ -65,7 +71,17 @@ local function outright(p)
     if DECOY and DECOY.isUnit and DECOY.isUnit(u) then return true end
     return u:find("^SV_Unit_FestCM_") ~= nil
 end
-local function enemyUp(p) return p and not p.down and liveObj(p.obj) and (hp(p.obj) or 1) > 0 end
+-- an enemy record of `planes` still its plane (its short name the one logged; fresh: read now, else at most every 0.5 s)
+local function enemyUp(p, fresh)
+    if not (p and not p.down and liveObj(p.obj) and (hp(p.obj) or 1) > 0) then return false end
+    if not p.name then return true end
+    local c = os.clock()
+    if fresh or c >= (p.zdNameAt or 0) then
+        p.zdNameAt = c + 0.5
+        p.zdSame = (nameOf(p.obj):match("([^%.:]+)$") or "") == p.name
+    end
+    return p.zdSame
+end
 local function fighting() return D and (D.state == "spawning" or D.state == "wave" or D.state == "fighting") end
 
 -- the effects where a blast is, on this game (its own Helios: the Niagara burst, the sound, the camera shake near you)
@@ -121,7 +137,7 @@ end
 -- a held ZFA-44 finished off where it is, unpaid (ZLAUNCH.parkedOff's way): whether it went
 function ZDIVE.finish(e, why)
     e.gone = true
-    if liveAddr(e.obj) ~= e.addr then return false end
+    if not same(e) then return false end                 -- (read now: never another's plane at its address)
     if COOP and COOP.removeObj and not isClient() then pcall(COOP.removeObj, e.obj) end
     pcall(function() e.obj:SetIsInvincible(false) end)
     pcall(function() e.obj.bIsInvincible = false end)
@@ -145,8 +161,8 @@ local function planesOfShip(i)
         if shipOf(u) == i then
             for _, e in ipairs(l) do
                 local p = up(e) and at(e.obj)
-                if p and p.Z > riseZ and not (isClient() and COOP and COOP.copyAt and COOP.copyAt(e.addr)) then
-                    out[#out + 1] = { obj = e.obj, addr = e.addr, unit = u }
+                if p and p.Z > riseZ and same(e) and not (isClient() and COOP and COOP.copyAt and COOP.copyAt(e.addr)) then
+                    out[#out + 1] = { obj = e.obj, addr = e.addr, unit = u, name = e.name }
                 end
             end
         end
@@ -212,9 +228,9 @@ local function blast(where, why)
     local pawn = survivalPC and liveObj(survivalPC) and survivalPC.Pawn or nil
     local down, hurt = 0, 0
     for _, q in ipairs(planes or {}) do
-        if enemyUp(q) then
-            local qa = q.at
-            if qa and dist(qa, where) <= r + 300000 then qa = at(q.obj) or qa end      -- (a stale spot read again)
+        local qa = q.at
+        if qa and dist(qa, where) <= r + 300000 and enemyUp(q, true) then
+            qa = at(q.obj) or qa                         -- (a stale spot read again)
             if qa and dist(qa, where) <= r then
                 if outright(q) then
                     if pcall(function() q.obj:ModifyHealth(-1000000.0, pawn, true) end) then down = down + 1 end

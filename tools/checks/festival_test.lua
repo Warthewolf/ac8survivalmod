@@ -24,6 +24,7 @@ end
 writeAll(WORK .. "/config/survival.default.ini", readAll(MOD .. "/config/survival.default.ini"))
 local clock = 1000
 os.clock = function() return clock end           -- luacheck: ignore
+math.randomseed(7)                               -- ((2026-11-08) its chatter's gaps are random: one draw every run (3 of 8 failed the break's 3 lines))
 VERSION = "0.74.0-festival.test"
 local FNm = { __index = { ToString = function(self) return self.s end }, __tostring = function(self) return self.s end }
 function FName(s) return setmetatable({ s = tostring(s) }, FNm) end

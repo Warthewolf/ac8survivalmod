@@ -22,7 +22,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+
 local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
@@ -115,6 +116,10 @@ end
 SV_ERR = SV_ERR or { [0] = "the game spawned nothing" }
 
 local C = CFG.specials.thunder
+-- (the sections up to "Survival's own strikes" test the game's own lightning volume, as built on 2026-11-06: stock on,
+-- Survival's own strikes off, the test's storm 3 km)
+local SHIP = { stock = C.strike.stock, enabled = C.strike.enabled, test_r = C.test.radius_m, storm_r = C.storm.radius_m }
+C.strike.stock, C.strike.enabled, C.test.radius_m = true, false, 3000
 local function found(pat, from) for i = #logs, from or 1, -1 do if has(logs[i], pat) then return logs[i] end end return nil end
 local function press(k) assert(binds[k], "no bind for " .. k)(); KEYQ.drain() end
 local TT
@@ -400,6 +405,97 @@ P(vc).InsideGameObjects.n = 0; tick(0.25); tick(0.25)
 check(P(vc).destroyed, "and destroyed once empty")
 D.hostSpecial = nil
 COOP, DOWN = nil, nil
+
+---------------------------------------------------------------------------------------------------- Survival's own strikes
+-- ((2026-11-08) the user's test of 0.74.34: the stock volume never struck, "this storm needs to be insanely violent")
+print("Survival's own strikes (the shipped settings)")
+check(SHIP.stock == false and SHIP.enabled == true and SHIP.test_r == 7000 and C.strike.damage_pct == 10, "shipped: no stock volume, "
+    .. "Survival's own strikes on, the test's storm 7 km, 10% of your health a strike")
+C.strike.stock, C.strike.enabled, C.test.radius_m = SHIP.stock, SHIP.enabled, SHIP.test_r
+local GSo = P(statics["/Script/Engine.Default__GameplayStatics"])
+local paused, gameT = false, 500
+GSo.GetTimeSeconds = function() return gameT end
+GSo.IsGamePaused = function() return paused end
+local function gtick(sec) clock = clock + sec; if not paused then gameT = gameT + sec end; TT.fn(clock) end
+local hudCalls, inv, hurts, shakesOn, attached, atPosts = {}, {}, {}, {}, {}, {}
+P(hud).BeginHUDDistortionLightning = function(self, t, info) hudCalls[#hudCalls + 1] = { t = t, info = info } end
+P(hud).EndHUDDistortionLightning = function(self) hudCalls[#hudCalls + 1] = { ended = true } end
+P(survivalPC).ClientStartCameraShake = function(self, c, sc) shakesOn[#shakesOn + 1] = { cls = c, sc = sc } end
+P(statics["/Script/Niagara.Default__NiagaraFunctionLibrary"]).SpawnSystemAttached = function(self, sys, comp, sock, off)
+    local c = obj("NiagaraComponent", { sys = sys, off = 0, Deactivate = function(s2) P(s2).off = P(s2).off + 1 end,
+                                        K2_DestroyComponent = function(s2) free(s2) end })
+    attached[#attached + 1] = { sys = sys, off = off }
+    return c
+end
+P(statics["/Script/Live.Default__LiveSoundBlueprintLibrary"]).PostEventAtActorByName = function(self, name, actor) atPosts[#atPosts + 1] = name end
+P(pawn).K2_GetRootComponent = function() return obj("SceneComponent root") end
+for _, k in ipairs({ "fx_strike", "fx_miss", "fx_sign" }) do
+    local path = C.strike[k]
+    statics[path .. "." .. path:match("[^/]+$")] = obj("NiagaraSystem " .. path)
+end
+statics[C.strike.shake .. "." .. C.strike.shake:match("[^/]+$") .. "_C"] = obj("BlueprintGeneratedClass BP_CamShake_Lightning_C")
+function SV_Invert(pp, r, f, a, y, sw, t) inv[#inv + 1] = { p = pp, r = r, a = a, t = t }; return 100 end
+DECOY = { hurtMe = function(c) hurts[#hurts + 1] = c; return "-15 HP (10% of your 150), 135 HP left" end }
+local keepChance = C.strike.chance
+D = { round = 7, now = 100, state = "fighting", up = {}, flown = {}, queue = {} }
+P(pawn).loc = { X = A.X, Y = A.Y, Z = 300000 }
+from = #logs + 1
+local nVols = #vols
+press("OEM_COMMA")
+check(THUNDER.storm and THUNDER.storm.own and #vols == nVols and found("Survival's own strikes (no stock volume)", from),
+    "the test's storm: Survival's own, no stock volume spawned: " .. tostring(found("thunder: storm up", from)))
+gtick(0.25)
+check(found("lightning: you're inside test's storm (7.0 km round it)", from) and atPosts[#atPosts] == C.strike.sound_inside,
+    "inside it: logged, the inside ambience on your plane")
+C.strike.chance = { 1.0 }
+gtick(3)
+local hc = hudCalls[1]
+check(hc and hc.t >= 10 and hc.t <= 16 and hc.info.UseHideHUD == true and hc.info.HideHUDTime == 3.5 and hc.info.NeedUpdateDistortion == true
+    and hc.info.MaxDistortionScale == 1.0, "a strike: the HUD's own lightning (out 3.5 s, static 10-16 s, its distortion)")
+check(hurts[1] and hurts[1].hit.damage_pct == 10 and hurts[1].hit.can_kill == true, "10% of your health (THE DECOY's hurt: a lethal one your death)")
+check(shakesOn[1] and has(nameOf(shakesOn[1].cls), "BP_CamShake_Lightning_C") and shakesOn[1].sc == 1.5, "the lightning camera shake x1.5")
+check(attached[1] and has(nameOf(attached[1].sys), "NS_ElectricDischargeM001"), "the discharge on your plane")
+check(inv[1] and inv[1].r == 1 and inv[1].t == 1 and inv[1].a == addrOf(pawn), "your controls upset: roll inverted, throttle and brake swapped")
+local hasStruck = false
+for _, n in ipairs(atPosts) do if n == C.strike.sound_strike then hasStruck = true end end
+check(hasStruck and posts[#posts] == C.strike.sound_noise, "the struck sound on your plane, the static's noise")
+check(found("lightning: strike 1 on you (test's storm, roll 1): HUD out 3.5 s", from), "logged: " .. tostring(found("lightning: strike 1", from)))
+C.strike.chance = { 0 }                                   -- (no second strike: its roll may come within the next 1.75 s)
+gtick(1.75)
+check(inv[#inv].r == 0 and inv[#inv].t == nil, "the upset over 1.5 s on")
+C.strike.chance = { 0 }
+paused = true
+local nHud, nHurt = #hudCalls, #hurts
+for _ = 1, 40 do gtick(0.5) end
+check(#hudCalls == nHud and #hurts == nHurt, "paused 20 s: no roll, the static not ended (the game's clock stopped)")
+paused = false
+for _ = 1, 40 do gtick(0.5) end
+check(hudCalls[#hudCalls].ended == true and posts[#posts] == C.strike.sound_noise_stop and found("lightning: the static over", from),
+    "the static over on time (the HUD's End, the noise stopped)")
+local miss, sign = nil, nil
+for _, a in ipairs(attached) do
+    if has(nameOf(a.sys), "NS_ElectricEvasion001") then miss = a end
+    if has(nameOf(a.sys), "NS_ElectricSign001") then sign = a end
+end
+check(miss and miss.off.X >= 40000 and miss.off.X <= 55000 and sign, "a miss: the evasion bolt 400-550 m ahead, the sparks on you")
+check(#hurts == nHurt, "no damage from a miss")
+P(pawn).loc = { X = A.X + 900000, Y = A.Y, Z = 300000 }
+local keepMove = THUNDER.stormMove
+THUNDER.stormMove = function() return true end           -- (the storm left where it was: you fly out of it)
+gtick(0.25)
+check(found("lightning: you're out of test's storm (1 strikes so far)", from) and atPosts[#atPosts] == C.strike.sound_inside_stop,
+    "out of it: logged, the inside ambience stopped")
+THUNDER.stormMove = keepMove
+DOWN = { me = function() return true end }
+P(pawn).loc = { X = A.X, Y = A.Y, Z = 300000 }
+C.strike.chance = { 1.0 }
+nHurt = #hurts
+for _ = 1, 20 do gtick(0.5) end
+check(#hurts == nHurt, "DOWN: no strikes")
+DOWN = nil
+press("OEM_COMMA"); press("OEM_COMMA")
+check(THUNDER.storm == nil and found("the test's storm off (Ctrl+,)", from), "Ctrl+, twice more: the storm off")
+C.strike.chance, C.strike.stock = keepChance, true      -- (the stock volume again for the test below)
 
 ---------------------------------------------------------------------------------------------------- the level torn down
 print("the level torn down")

@@ -198,6 +198,28 @@ end
 --   * a missile the game's own laser is on is left to it, then made harmless the same way at the swing's end
 -- laser_drive = false: only the game's own fire control (and its own 30 %).
 ZLAS.newL, ZLAS.fx = {}, {}
+-- ((2026-11-08) the user, testing 0.74.34: "i just saw an SU-47 using a LaserInterceptor weapon") an ESC.planes entry is
+-- still its own plane only while it has the name it was captured with: the game reuses a freed plane's address, and the
+-- address alone passed a special's F-15E (20:27:29) and Su-47 (20:28:26) as ZFA-44s of E_Unit_01_drone_5_0, each fitted
+-- with AC7's laser (which shot down its own wingmen's missiles). maxAge: the name read again at most that often (nil:
+-- read now, before anything is done to the plane); once reused, never its plane again
+function ESC.same(e, maxAge)
+    if not e or e.reused or liveAddr(e.obj) ~= e.addr then return false end
+    if not e.name then return true end
+    local c = os.clock()
+    if maxAge and e.sameOk ~= nil and c < (e.sameAt or 0) then return e.sameOk end
+    local ok = nameOf(e.obj) == e.name
+    e.sameAt, e.sameOk = c + (maxAge or 0), ok
+    if not ok then
+        e.reused = true
+        if (ZLAS.reusedSaid or 0) < 12 then
+            ZLAS.reusedSaid = (ZLAS.reusedSaid or 0) + 1
+            log(string.format("carrier: a ZFA-44's address is another object's now (%s, was %s): no longer taken as a ZFA-44",
+                tostring(nameOf(e.obj)):match("([^%.:]+)$") or "?", tostring(e.name):match("([^%.:]+)$") or "?"))
+        end
+    end
+    return ok
+end
 pcall(NotifyOnNewObject, "/Script/Live.LiveTLSSwingforMissile", function(o)
     if #ZLAS.newL < 32 then ZLAS.newL[#ZLAS.newL + 1] = o end
 end)
@@ -568,7 +590,7 @@ function ZLAS.drive(now)
     for u, l in pairs(ESC.planes or {}) do
         if ESC.kindOf(u) == "zfa" then
             for _, e in ipairs(l) do
-                if liveAddr(e.obj) == e.addr then
+                if ESC.same(e, 1) then                         -- (its own plane still: an address reused isn't)
                     local okH, h = pcall(function() return e.obj.HealthInternal end)
                     if not (okH and type(h) == "number" and h <= 0) then
                         local p = at(e.obj)
@@ -826,12 +848,12 @@ function ZLAUNCH.risen(C, F, now)
     for u, l in pairs(ESC.planes or {}) do
         if ESC.kindOf(u) == "zfa" then
             for _, e in ipairs(l) do
-                if liveAddr(e.obj) == e.addr then
+                if ESC.same(e, 1) then
                     local ok, p = pcall(function() local v = e.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
                     if ok and p then
                         local nearShip = not hull or math.sqrt((p.X - hull.X) ^ 2 + (p.Y - hull.Y) ^ 2) <= cap
                         if p.Z < parkZ then e.parked = true
-                        elseif p.Z > riseZ and nearShip and not e.out and (e.parked or (e.at or 0) >= F.at - 1) then
+                        elseif p.Z > riseZ and nearShip and not e.out and (e.parked or (e.at or 0) >= F.at - 1) and ESC.same(e) then
                             e.out = true
                             e.armUnit = F.unit                 -- (its laser's record: ZLAS.drive)
                             out = out + 1
@@ -890,7 +912,7 @@ function ZLAUNCH.coverTick()
                 else
                     for i, pu in ipairs(c.pose_units or {}) do if pu == u then unit, ev = u, (c.pose_cover or {})[i] end end
                 end
-                if unit and liveAddr(e.obj) == e.addr and not (ZDIVE and ZDIVE.diving and ZDIVE.diving(e.addr)) then   -- (a diving one: its target)
+                if unit and ESC.same(e, 1) and not (ZDIVE and ZDIVE.diving and ZDIVE.diving(e.addr)) then   -- (a diving one: its target)
                     local okH, h = pcall(function() return e.obj.HealthInternal end)
                     local ok, p = pcall(function() local v = e.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
                     if ok and p and p.Z > riseZ and not (okH and type(h) == "number" and h <= 0) then
@@ -995,7 +1017,7 @@ function ZLAUNCH.parkedOff(i, keep, why)
             for _, e in ipairs(l) do
                 if liveAddr(e.obj) == e.addr then
                     local okL, z = pcall(function() return e.obj:K2_GetActorLocation().Z end)
-                    if okL and type(z) == "number" and z < parkZ then
+                    if okL and type(z) == "number" and z < parkZ and ESC.same(e) then   -- (its own plane: never another's at its address)
                         if COOP and COOP.removeObj then pcall(COOP.removeObj, e.obj) end
                         pcall(function() e.obj:SetIsInvincible(false) end)
                         pcall(function() e.obj.bIsInvincible = false end)

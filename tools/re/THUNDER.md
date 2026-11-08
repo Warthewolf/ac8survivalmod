@@ -110,3 +110,30 @@ first test finds out.
 7. Quit Mission with a storm up: no crash; `thunder: the level is going ...` or the level gate's drop.
 
 Checks without the game: `sh tools/checks/thunder_test.sh` (its Lua on the real parts, and a release's copy: no trace, loads).
+
+## The first test, and Survival's own strikes (2026-11-08, 0.74.34 -> 0.74.35)
+- The user's storm test of 0.74.34 (Ctrl+, twice, about 50 s inside a 3 km storm on her plane): **no strike**. "I saw nothing
+  happen to my aircraft with the storm", "my hud was not effected either". The one "strike" the test logged (20:28:53, the
+  HUD's opacity 0 for 11.5 s, the speed frozen) was the pause menu (`hud: hidden (paused)`, the BGM paused, the same
+  seconds). Why the stock volume doesn't strike here isn't known: no observer in this level (Missions 12 / 16 name a
+  LightningVolumeClass in their world settings, Survival's level doesn't), or the spawned volume never takes the player in.
+  Hard rule 60.
+- The user's design the same day: the storm gathers over 3 rounds into a typhoon; strikes every build-up round, small and
+  rare cells first; the typhoon's storm bigger (7 km), faster strikes, longer effects, 10% of your health a strike; test
+  key only for now.
+- **0.74.35: Survival rolls the strikes itself** (`[thunder.strike]`, CFG.specials.thunder.strike): no stock volume
+  (stock = false; true spawns it as before). While your plane is inside the storm's sphere (THUNDER.storm: centre, radius;
+  not DOWN, never while paused: the game clock), a roll every roll_s (1.5-2.5 s), chance[k] for the k-th roll since the
+  last strike (0.35, 0.5, 0.65, 0.8). A strike: the HUD's own `BeginHUDDistortionLightning(static_s, info)` (HideHUDTime
+  blackout_s 3.5, the distortion 0.3-1.0, static_s 10-16 s, then `EndHUDDistortionLightning`), the struck and lightning
+  damage sounds on your plane, the static's noise (`AKE_Ms12_UI_HUD_Thunder_ElectronicNoise_Play` / `_Stop`), the lightning
+  camera shake (BP_CamShake_Lightning x shake_scale 1.5), the electric discharge on your plane (NS_ElectricDischargeM001),
+  damage_pct 10 of your MaxHealth (DECOY.hurtMe: HealthInternal written; a lethal one THE DECOY's kill record), your
+  controls upset upset_s 1.5 (SV_Invert: roll inverted, throttle and brake swapped; in place of the stall flag, which only
+  the game's own strike sets; never over MINDRIPPER's field). A miss: NS_ElectricEvasion001 400-550 m ahead and
+  NS_ElectricSign001 on you. Inside: `AKE_GEN_ENV_AMB_ThunderCloud_Inside_Ambience_Play` / `_Stop`, each roll's
+  `..._Inside_Lightning_Play`. Each game strikes its own player (co-op). Log: `lightning: you're inside <owner>'s storm`,
+  `lightning: strike N on you (...): HUD out 3.5 s, static N s; shake on; bolt on you; -N HP ...; upset on`,
+  `lightning: the static over`, `lightning: you're out of <owner>'s storm`. thunder_test.
+- Next: the 3-round build-up (the sky toward CSP_ms12_260216, distant thunder, flashes closing in, small cells with
+  strikes from N-3, rain and the air-current volumes if they work), its own test key.

@@ -85,17 +85,28 @@ ESC = { planes = {}, recycleQ = {} }
 planes = {}
 local function enemy(unit, x, y, z, h)
     local o = plane(x, y, z, h)
-    local rec = { obj = o, unit = unit, addr = o.addr, at = { X = x, Y = y, Z = z } }
+    o.fullName = "BP_OP1026_su47_CP_C /Game/PL:PersistentLevel.BP_OP1026_su47_CP_C_" .. o.addr
+    local rec = { obj = o, unit = unit, addr = o.addr, at = { X = x, Y = y, Z = z }, name = "BP_OP1026_su47_CP_C_" .. o.addr }
     planes[#planes + 1] = rec
     return rec
 end
 local function zfa(unit, x, y, z)
     local o = plane(x, y, z, 50)
     ESC.planes[unit] = ESC.planes[unit] or {}
-    table.insert(ESC.planes[unit], { obj = o, addr = o.addr, name = "ex_uavs_C_" .. o.addr, at = clock })
+    table.insert(ESC.planes[unit], { obj = o, addr = o.addr, name = nameOf(o), at = clock })
     return o
 end
 
+-- names as the game gives them; ESC.same as sv_escort_laser.lua has it (its own text, loaded alone)
+function nameOf(o) return type(o) == "table" and (o.fullName or ("BP_OP0018_uavc_CP_Ally_C /Game/PL:PersistentLevel.BP_OP0018_uavc_CP_Ally_C_" .. tostring(o.addr))) or "?" end
+ZLAS = {}
+do
+    local las = readAll(MOD .. "/Scripts/sv_escort_laser.lua")
+    local a = las:find("function ESC.same(e, maxAge)", 1, true)
+    local b = a and las:find("\nend\n", a, true)
+    assert(a and b, "no ESC.same in sv_escort_laser.lua")
+    assert(load(las:sub(a, b + 4), "=ESC.same"))()
+end
 PARTS.dofile("sv_escort_dive.lua")
 check(type(ZDIVE) == "table" and LEVEL_DROPS["the ZFA-44s' dive"] ~= nil, "the part loads (ZDIVE, its level drop)")
 
@@ -195,6 +206,32 @@ check(ZDIVE.take(C) == 1, "kept")
 D = { round = 1, state = "wait" }
 ZDIVE.tick()
 check(Z4.finished == 1 and lastLog("held ZFA-44s of the last run finished off") ~= nil, "finished off with the run")
+
+section("an address reused (the user's test of 0.74.34: an Su-47 at a dead ZFA-44's address)")
+D = { round = 3, state = "wait" }
+local ZR = zfa("SV_Unit_ZfaPose1", 0, 0, 110000)
+ZR.fullName = "BP_OP1026_su47_CP_C /Game/PL:PersistentLevel.BP_OP1026_su47_CP_C_9999"     -- (another plane there now)
+local ZK = zfa("SV_Unit_ZfaPose1", 1000, 0, 110000)
+check(ZDIVE.take(C) == 1 and not ZDIVE.diving(ZR.addr) and ZDIVE.diving(ZK.addr), "the reused one isn't held (its name isn't the ZFA-44's)")
+check(lastLog("a ZFA-44's address is another object's now") ~= nil, "logged once by ESC.same")
+ZK.fullName = "BP_OP1025_f15e_CP_C /Game/PL:PersistentLevel.BP_OP1025_f15e_CP_C_8888"     -- (taken over while held)
+ZDIVE.d.held[1].sameAt = 0
+D = { round = 1, state = "wait" }
+ZDIVE.tick()
+check(ZK.finished == nil and #ZK.hits == 0, "a held one taken over by another plane is never finished off")
+D = { round = 3, state = "wait" }
+local ZB = zfa("SV_Unit_ZfaPose2", 0, 0, 110000)
+check(ZDIVE.take({ idx = 2, name = "ZFA-44 CARRIER 2" }) == 1, "kept")
+local T1 = enemy("SV_Unit_Pool06", 300000, 0, 110000)
+local AL = enemy("SV_Unit_Pool07", 350000, 0, 110000)
+AL.obj.fullName = "BP_OP1001_a10c_Ally_C /Game/PL:PersistentLevel.BP_OP1001_a10c_Ally_C_7777"   -- (an ally at an enemy's old address)
+D.round, D.state = 4, "fighting"
+ZDIVE.tick()
+ZB.loc = { X = 300000, Y = 0, Z = 110000 }
+ZDIVE.tick()
+check(T1.obj.HealthInternal == 0 and AL.obj.HealthInternal == 100 and #AL.obj.hits == 0, "the blast: its target down, never a plane at an enemy's old address")
+T1.down, AL.down = true, true
+ZDIVE.tick()
 
 section("co-op: the host tells the joiners")
 D = { round = 3, state = "wait" }

@@ -313,6 +313,16 @@ Copy a working stock pattern before inventing a new one.
     effects and materials instead: 0.74.31 used AC8's NS_UAVTLS_Muzzleflash01 for the same beam, and it fired and
     intercepted with no crash (2026-11-08). Hard rule 42's parent-on-a-stub route keeps AC8's shaders and stays safe.
 
+59. The game reuses a freed object's address, and liveAddr (SV_ObjChain) passes for whatever lives there now. In the user's
+    test of 0.74.34 (2026-11-08) a special's F-15E and Su-47 took dead ZFA-44s' addresses and were fitted with AC7's laser
+    (sv_escort_li.lua checked the address alone). An object kept between ticks must still have the name it was captured
+    with (ESC.same, sv_escort_laser.lua) before anything is done to it, above all before it's damaged or finished off.
+
+60. A LiveLightningVolume spawned from Lua never struck the player in Survival's level: about 50 s inside one in the user's
+    test of 0.74.34 (2026-11-08), nothing on the plane or the HUD. The pause menu hides the HUD, which Lua took for a strike:
+    check gamePaused before reading anything as the game's own effect. Survival rolls its own strikes and calls the game's
+    pieces itself (sv_anomalies_dev.lua: the HUD's BeginHUDDistortionLightning, the shake, the sounds, the damage).
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
