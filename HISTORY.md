@@ -1907,4 +1907,5 @@ From two logs of one co-op run on 0.74.23 (Saint Alessia's, the host, and a join
   held at 1 HP until the host's kill comes back, ~0.5 s with both Lua ticks); a menu bug pausing between the airfield and
   the runway (not in the joiner's log: four pauses at 09:15:29-32 only).
 - 52 suites pass (coop_test not run). Packaged: friends' 0f7dc5d5b392..., TESTER 2231aa579dca... (0.74.26-coop2mp.118),
-  both registered. Built in the main tree.
+  both registered. Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.25:
+  build/backup/install_before_0.74.26; 87 files compared equal).
