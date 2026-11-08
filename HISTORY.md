@@ -1921,3 +1921,9 @@ From two logs of one co-op run on 0.74.23 (Saint Alessia's, the host, and a join
 - 52 suites pass (coop_test not run). Packaged: friends' 8e99fe0bcc12..., TESTER 267518039775... (0.74.27-coop2mp.119),
   both registered. Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.26:
   build/backup/install_before_0.74.27; 87 files compared equal).
+
+## Subtitles (2026-11-08, after 0.74.27; no new build)
+- A friend's edited config/subtitles.ini (the user's E:\DOWNLOADS\subtitles.ini) pulled into the repo and installed:
+  AUDREY's and VALKA's lines rewritten through THE FESTIVAL and VALKA's round (441 lines, was 431; checked: 147 lists, no
+  mistakes). The old file kept in build/backup/subtitles/. One line looks cut off: "AUDREY|Valka, don't go wandering
+  around. I'm not" (THE FESTIVAL's chatter), left as it came. The next build's zips carry it.
