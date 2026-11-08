@@ -1479,6 +1479,10 @@ CFG.specials = {
                                      -- ((2026-11-08) the user: "how about a cutscene transition?": the unsafe ones change only
                                      -- under a fade to black at each stage change and as it clears)
                                      transition = { enabled = true, out_s = 0.5, hold_s = 0.6, in_s = 0.7, sound = "AKE_Environment_Thunder_Play" },
+                                     -- ((2026-11-08) the user: "we need to bring in the storm cloud layer from another map")
+                                     -- Mission 12's cloud layout behind the fade from stage from_stage (Ctrl+; probes it)
+                                     layout = { enabled = true, from_stage = 2, force = true, set_resources = false,
+                                                asset = "/Game/Cloudly/CloudlySkyParams/Ingame/Mission012/CVC_ms12_250708.CVC_ms12_250708" },
                                      dark = { enabled = true, ev = -1.5, sun_x = 0.4, skylight_x = 0.5 } },
                              cells = { n = { 2, 4, 6, 6 }, radius_m = { 2000, 3000, 4000, 4500 }, top_m = 7000, from_km = { 6, 28 },
                                        roll_s = { { 6, 9 }, { 4, 6.5 }, { 2.5, 4.5 }, { 2, 3.5 } }, chance_x = { 0.6, 0.8, 1.0, 1.0 },

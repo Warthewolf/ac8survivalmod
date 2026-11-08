@@ -63,7 +63,7 @@ function SV_ObjChain(a) return LIVE[a] and 1 or 0 end
 function FName(s) return s end
 
 local binds, hooks, notifies, statics, all = {}, {}, {}, {}, {}
-Key = { OEM_COMMA = "OEM_COMMA", OEM_PERIOD = "OEM_PERIOD", F11 = "F11", OEM_SIX = "OEM_SIX", OEM_SEVEN = "OEM_SEVEN", OEM_TWO = "OEM_TWO" }
+Key = { OEM_COMMA = "OEM_COMMA", OEM_PERIOD = "OEM_PERIOD", F11 = "F11", OEM_SIX = "OEM_SIX", OEM_SEVEN = "OEM_SEVEN", OEM_TWO = "OEM_TWO", OEM_ONE = "OEM_ONE" }
 ModifierKey = { CONTROL = "CTRL" }
 function RegisterKeyBind(key, mods, fn) binds[key] = fn end
 function ExecuteInGameThread(f) f() end
@@ -652,6 +652,53 @@ gtick(0.65)
 check(backNow and found("transition (the storm", from) and found("written at 0% of the storm's, faded back in", from),
     "as it clears: under a fade, the heights and rain clouds back")
 for _ = 1, 8 do gtick(0.25) end
+-- ((2026-11-08) the user: "we need to bring in the storm cloud layer from another map") Mission 12's cloud layout behind the fade
+print("the storm's cloud layout (Mission 12's, behind the fade; Ctrl+; probes it)")
+local cvcMine = obj("CloudlyVolumeComponents /Game/Cloudly/CloudlySkyParams/Ingame/Mission004/CVC_ms04_20251216.CVC_ms04_20251216")
+local cvcStorm = obj("CloudlyVolumeComponents " .. B.sky.layout.asset)
+statics[B.sky.layout.asset] = cvcStorm
+local cl = { pre = {}, rem = {}, force = 0, res = 0 }
+local actor = obj("LiveCloudlyActor /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.LiveCloudlyActor_0", {
+    CloudlyVolumeComponentsAsset = cvcMine, CloudlyInterpolatedVolumeComponentsAsset = nil, NumCloudComponentsUsed = 40,
+    CloudComponentsTexturesCount = 12, CloudlySkyParamsAsset = mine, SetResources = function() cl.res = cl.res + 1 end })
+statics["/Script/Cloudly.Default__CloudlyActor"] = obj("Default__CloudlyActor", {
+    AddPreloadedCloudTextures = function(self, o) cl.pre[#cl.pre + 1] = o end,
+    RemovePreloadedCloudTextures = function(self, o) cl.rem[#cl.rem + 1] = o end,
+    ForceUpdate = function(self, opt) cl.force = cl.force + 1; cl.opt = opt end })
+SKY.viewCached = function() return { asset = mine, actor = actor, rend = {}, ctrl = {}, ppv = {} } end
+from = #logs + 1
+press("OEM_SEVEN"); gtick(0.1)
+check(cl.pre[1] == cvcStorm and found("storm layout: loaded (", from) and P(actor).CloudlyVolumeComponentsAsset == cvcMine,
+    "stage 1: the storm's layout loaded and its textures preloaded, not swapped yet")
+for _ = 1, 8 do gtick(0.25) end
+press("OEM_SEVEN"); gtick(0.1)
+check(P(actor).CloudlyVolumeComponentsAsset == cvcMine, "stage 2: not before the dark")
+gtick(0.5)
+check(P(actor).CloudlyVolumeComponentsAsset == cvcStorm and cl.force >= 1 and cl.opt and cl.opt.bClearReprojectionHistory == true and cl.res == 0
+    and found("storm layout: the storm's (stage 2): the layout CVC_ms04_20251216 -> CVC_ms12_250708; ForceUpdate called", from),
+    "stage 2 in the dark: the layout pointed at Mission 12's, ForceUpdate (" .. tostring(found("storm layout: the storm's", from)) .. ")")
+check(P(actor).CloudlySkyParamsAsset == mine, "... the sky params pointer left alone (Survival's own asset still the one written)")
+for _ = 1, 8 do gtick(0.25) end
+press("OEM_SEVEN"); press("OEM_SEVEN"); press("OEM_SEVEN"); gtick(0.1); gtick(0.5)
+check(P(actor).CloudlyVolumeComponentsAsset == cvcMine and found("storm layout: back (", from), "as it clears: the layout back, in the dark")
+for _ = 1, 8 do gtick(0.25) end
+-- Ctrl+; its five steps
+local f0, r0 = cl.force, cl.res
+press("OEM_ONE")
+check(found("storm layout: probe 1:", from) and found("the actor's layout CVC_ms04_20251216, its interpolated layout none", from)
+    and has(callouts[#callouts], "LAYOUT PROBE 1/5: LOAD THE STORM'S LAYOUT"), "probe 1: loaded, both pointers logged")
+press("OEM_ONE")
+check(P(actor).CloudlyVolumeComponentsAsset == cvcStorm and cl.force == f0, "probe 2: the pointer alone")
+press("OEM_ONE")
+check(cl.force == f0 + 1, "probe 3: ForceUpdate")
+press("OEM_ONE")
+check(cl.res == r0 + 1, "probe 4: SetResources")
+gtick(2.1)
+check(found("storm layout: 2 s after (probe 4): 40 components used, 12 textures", from), "the counts 2 s on")
+press("OEM_ONE")
+check(P(actor).CloudlyVolumeComponentsAsset == cvcMine and cl.rem[#cl.rem] == cvcStorm and has(callouts[#callouts], "LAYOUT PROBE 5/5: EVERYTHING BACK"),
+    "probe 5: everything back, the textures let go")
+SKY.viewCached = function() return { asset = mine, actor = true, rend = {}, ctrl = {}, ppv = {} } end
 P(survivalPC).PlayerCameraManager = nil
 THUNDER.buEnd("the test")
 check(math.abs(mine.Data.SunIntensity.Factor - 10) < 1e-6, "... and put back")

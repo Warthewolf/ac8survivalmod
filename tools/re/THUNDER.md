@@ -221,3 +221,23 @@ hold), when dark they're written and `AKE_Environment_Thunder_Play` posted, held
 values ramp as before. Log `storm build-up: transition (<why>): faded out, N of the heights and rain clouds written at P%
 of the storm's, faded back in`. Not yet seen: whether StartCameraFade covers the whole picture in AC8 (the HUD is its own
 render target: it may stay up), and whether 0.6 s in the dark covers the blink.
+
+## The storm's cloud layout from Mission 12 (2026-11-08, 0.74.41; not yet run in game)
+The user: "needs way more clouds why can't we swap cloud layers around to another stormy weather system", "we need to
+bring in the storm cloud layer from another map". Cloudly's actor (LiveCloudlyActor_0) has two asset pointers: the sky
+params (CloudlySkyParamsAsset, Mission 4's CSP: sv_sky.lua finds the asset it writes through it, so it is never swapped)
+and the cloud layout (CloudlyVolumeComponentsAsset, Mission 4's CVC_ms04_20251216: the cloud masses). Storm layouts in
+the game: CVC_ms12_250708 (Mission 12's storm, 32 KB), CVC_ms16_251122, CVC_ms13_20250716 (rain), CVC_ms29_250805,
+CVC_ms30_251216. Cloudly's API (build/liveproject/Source/Cloudly/Public/CloudlyActor.h): AddPreloadedCloudTextures /
+RemovePreloadedCloudTextures (a layout's textures), ForceUpdate(FForceUpdateOptions: shadows, AO, FrameCount, recapture,
+clear reprojection history), SetResources, GenerateAll (not used: an editor-time generation), and a native sequencer
+(UCloudlySequencer: keyframes of sky params + volume components, blend modes; EnableCloudlySequencer, SetSequencerTime;
+the game ships one, CloudlySequencer_ms25_TimeLaps).
+- 0.74.41: buildup.sky.layout: from stage 1 the storm layout is loaded and its textures preloaded; at stage 2's fade the
+  layout pointer is set to it (Survival's own layout pinned first) and ForceUpdate called; back in the dark as the storm
+  clears. `storm layout: the storm's (stage 2): the layout CVC_ms04_20251216 -> CVC_ms12_250708; ForceUpdate called;
+  before: N components used, M textures, now: ...`, and 2 s on.
+- The layout probe, Ctrl+;: 1 load and preload (the actor's layout and its interpolated layout logged), 2 the pointer
+  alone, 3 ForceUpdate, 4 SetResources, 5 everything back (the textures let go). Which step makes Cloudly draw the storm's
+  clouds is the test's (its counts and a recording). The interpolated layout pointer is only logged, never swapped (its
+  object may be the level's own: pinning one in the game instance could outlive its level).

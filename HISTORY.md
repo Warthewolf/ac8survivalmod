@@ -2174,3 +2174,16 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   (0.74.40-coop2mp.132), both registered; patches over 0.74.27-0.74.39 (the TESTER one and the friends' one, no Distant
   Thunder in it, sent). INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.39: build/backup/install_before_0.74.40;
   87 files equal).
+
+## 0.74.41 (2026-11-08, runtime 0.32.31; not yet run in game)
+- The storm's own clouds (the user: "needs way more clouds why can't we swap cloud layers around to another stormy weather
+  system", "we need to bring in the storm cloud layer from another map"): the Cloudly actor's cloud layout
+  (CloudlyVolumeComponentsAsset) pointed at Mission 12's CVC_ms12_250708 behind the stage-2 fade (its textures preloaded
+  from stage 1, Survival's own layout pinned, ForceUpdate), back in the dark as the storm clears; the sky params pointer
+  never swapped (sv_sky.lua writes the asset it finds there). The layout probe, Ctrl+; (load, pointer, ForceUpdate,
+  SetResources, back; the component counts logged). Whether Cloudly draws a layout swapped mid-level is the test's.
+  tools/re/THUNDER.md. thunder_test.
+- 55 suites pass (48 Lua, 7 native; coop_test not run). Packaged: friends' ebe5f594e9df..., TESTER 1b20c6a6676f...
+  (0.74.41-coop2mp.133), both registered; patches over 0.74.27-0.74.40 (the TESTER one and the friends' one, no Distant
+  Thunder in it, sent). INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.40: build/backup/install_before_0.74.41;
+  87 files equal).

@@ -839,6 +839,120 @@ local function rain(on)
     return "put back (bIsWorldRain " .. tostring(was.rain) .. ")"
 end
 
+-- ((2026-11-08) the user: "needs way more clouds why can't we swap cloud layers around to another stormy weather system",
+-- "we need to bring in the storm cloud layer from another map") the storm's cloud layout: Mission 12's CVC
+-- (sky.layout.asset), the Cloudly actor's CloudlyVolumeComponentsAsset pointed at it behind the fade from layout.from_stage,
+-- back as the storm clears. Only that pointer: the sky params pointer stays (sv_sky.lua finds the asset it writes through
+-- it: never Mission 12's stock asset). Its textures preloaded first (Default__CloudlyActor AddPreloadedCloudTextures), the
+-- original layout pinned (kept loaded while it's swapped out), then layout.force (ForceUpdate) and layout.set_resources
+-- (the actor's SetResources). Whether Cloudly takes a new layout mid-level is the layout probe's (Ctrl+;). The actor's
+-- NumCloudComponentsUsed / CloudComponentsTexturesCount logged before, after and 2 s on. Log: `storm layout: ...`.
+local LY = { on = false }
+local function lc() return (bc().sky or {}).layout or {} end
+local function lyCdo() local o = StaticFindObject("/Script/Cloudly.Default__CloudlyActor"); return (o ~= nil and valid(o)) and o or nil end
+local function lyAsset()
+    if LY.cvc ~= nil and liveObj(LY.cvc) then return LY.cvc end
+    local o, why = loadObject(lc().asset)
+    LY.cvc = (o ~= nil and liveObj(o)) and o or nil
+    return LY.cvc, why
+end
+local function lyCounts(a)
+    return string.format("%s components used, %s textures", fmt(num(a, "NumCloudComponentsUsed"), "%.0f"), fmt(num(a, "CloudComponentsTexturesCount"), "%.0f"))
+end
+local function lyName(o) return (o ~= nil and liveObj(o)) and ((nameOf(o):match("([^%.:/ ]+)$")) or "?") or "none" end
+-- the storm's layout loaded and its textures preloaded (once); what it did
+local function lyPreload()
+    if LY.preloaded then return "preloaded already" end
+    local o, why = lyAsset()
+    if not o then return "NOT loaded (" .. tostring(why) .. ")" end
+    pcall(pin, o, "the storm's cloud layout")
+    local cdo = lyCdo()
+    local ok, err = false, "no Default__CloudlyActor"
+    if cdo then ok, err = pcall(function() cdo:AddPreloadedCloudTextures(o) end) end
+    LY.preloaded = ok
+    return ok and ("loaded (" .. lyName(o) .. "), its textures preloaded") or ("loaded, its textures NOT preloaded (" .. tostring(err) .. ")")
+end
+local function lyForce()
+    local cdo = lyCdo()
+    if not cdo then return "no Default__CloudlyActor" end
+    local ok, err = pcall(function()
+        cdo:ForceUpdate({ bForceUpdateShadows = true, bForceUpdateAO = true, FrameCount = 8, bRecaptureSkyLight = false,
+                          bClearReprojectionHistory = true })
+    end)
+    return ok and "ForceUpdate called" or ("ForceUpdate failed: " .. tostring(err))
+end
+local function lyResources(a)
+    local ok, err = pcall(function() a:SetResources() end)
+    return ok and "SetResources called" or ("SetResources failed: " .. tostring(err))
+end
+-- the actor's layout to the storm's (on) or back; steps: { force = bool, resources = bool }; what it did
+local function lySet(on, why, steps)
+    steps = steps or { force = lc().force ~= false, resources = lc().set_resources == true }
+    local V = skyView()
+    local a = V and V.actor
+    if not (a and liveObj(a)) then return "no Cloudly actor" end
+    local parts = {}
+    local before = lyCounts(a)
+    if on then
+        local o = lyAsset()
+        if not o then return "the storm's layout not loaded" end
+        if not LY.was then
+            local okW, w = pcall(function() return a.CloudlyVolumeComponentsAsset end)
+            LY.was = okW and w or nil
+            if LY.was ~= nil and liveObj(LY.was) then pcall(pin, LY.was, "Survival's own cloud layout (swapped out)") end
+        end
+        local ok, err = pcall(function() a.CloudlyVolumeComponentsAsset = o end)
+        parts[#parts + 1] = ok and ("the layout " .. lyName(LY.was) .. " -> " .. lyName(o)) or ("the layout NOT set: " .. tostring(err))
+        LY.on = ok
+    else
+        if not LY.was then return "never swapped" end
+        local ok, err = pcall(function() a.CloudlyVolumeComponentsAsset = LY.was end)
+        parts[#parts + 1] = ok and ("the layout back to " .. lyName(LY.was)) or ("the layout NOT put back: " .. tostring(err))
+        if ok then LY.on = false end
+    end
+    if steps.force then parts[#parts + 1] = lyForce() end
+    if steps.resources then parts[#parts + 1] = lyResources(a) end
+    LY.checkAt, LY.checkWhy, LY.actor = os.clock() + 2, why, a
+    log(string.format("storm layout: %s (%s): %s; before: %s, now: %s", on and "the storm's" or "back", why, table.concat(parts, "; "),
+        before, lyCounts(a)))
+    return table.concat(parts, "; ")
+end
+local function lyTick(now)
+    if LY.checkAt and now >= LY.checkAt then
+        LY.checkAt = nil
+        if LY.actor and liveObj(LY.actor) then log(string.format("storm layout: 2 s after (%s): %s", tostring(LY.checkWhy), lyCounts(LY.actor))) end
+    end
+end
+-- Ctrl+; the layout probe: 1 load and preload (both pointers logged), 2 the main pointer, 3 ForceUpdate, 4 SetResources,
+-- 5 everything back
+local LP = { i = 0 }
+local LP_STEPS = { "load the storm's layout", "point the layout at it", "ForceUpdate", "SetResources", "everything back" }
+function THUNDER.layoutStep()
+    LP.i = LP.i % #LP_STEPS + 1
+    local V = skyView()
+    local a = V and V.actor
+    local what
+    if LP.i == 1 then
+        local interp = "?"
+        if a and liveObj(a) then local ok, x = pcall(function() return a.CloudlyInterpolatedVolumeComponentsAsset end); interp = ok and lyName(x) or "unreadable" end
+        local main = "?"
+        if a and liveObj(a) then local ok, x = pcall(function() return a.CloudlyVolumeComponentsAsset end); main = ok and lyName(x) or "unreadable" end
+        what = lyPreload() .. string.format("; the actor's layout %s, its interpolated layout %s; %s", main, interp, a and lyCounts(a) or "no actor")
+        log("storm layout: probe 1: " .. what)
+    elseif LP.i == 2 then what = lySet(true, "probe 2", { force = false, resources = false })
+    elseif LP.i == 3 then what = lyForce(); LY.checkAt, LY.checkWhy, LY.actor = os.clock() + 2, "probe 3", a; log("storm layout: probe 3: " .. what .. "; " .. (a and lyCounts(a) or ""))
+    elseif LP.i == 4 then what = a and lyResources(a) or "no actor"; LY.checkAt, LY.checkWhy, LY.actor = os.clock() + 2, "probe 4", a; log("storm layout: probe 4: " .. what .. "; " .. (a and lyCounts(a) or ""))
+    else
+        what = lySet(false, "probe 5", { force = true, resources = true })
+        local cdo, o = lyCdo(), LY.cvc
+        if cdo and o and liveObj(o) then pcall(function() cdo:RemovePreloadedCloudTextures(o) end) end
+        LY.preloaded = false
+    end
+    hudCallout(string.format("LAYOUT PROBE %d/%d: %s", LP.i, #LP_STEPS, string.upper(LP_STEPS[LP.i])), nil)
+end
+THUNDER.layoutTick = lyTick
+THUNDER.layout = LY
+
 -- ((2026-11-08) the user: "how about a cutscene transition?", then "Fade to black") the cloud values that black the sky
 -- out when they change (sky.unsafe: heights, rain clouds; hard rule 61) jump to a stage's share of the storm's only under a
 -- fade to black: the camera fades out over transition.out_s, they're written (a thunder clap), held black hold_s, then it
@@ -877,9 +991,13 @@ local function camFade(from, to, dur, hold)
     return ok, ok and nil or tostring(err)
 end
 -- a transition to fraction fr (a function: read when it's dark, so the latest stage wins) of the storm's unsafe values
+local function lyWanted()
+    local l = lc()
+    return l.enabled ~= false and BU ~= nil and not BU.clearing and (BU.stage or 0) >= (tonumber(l.from_stage) or 2)
+end
 local function transition(fr, why)
     local c = (bc().sky or {}).transition or {}
-    if c.enabled == false or #unsafeFields() == 0 then return false end
+    if c.enabled == false or (#unsafeFields() == 0 and lyWanted() == LY.on) then return false end
     if TR then TR.fr, TR.why = fr, why; return true end     -- (one under way: it writes the latest when it's dark)
     local ok, err = camFade(0, 1, tonumber(c.out_s) or 0.5, true)
     if not ok then
@@ -896,6 +1014,7 @@ local function transitionTick(now)
     if t.phase == "out" then
         local fr = type(t.fr) == "function" and t.fr() or t.fr
         local n = unsafeApply(tonumber(fr) or 0)
+        if lyWanted() ~= LY.on then lySet(lyWanted(), t.why) end    -- (the storm's cloud layout in, or back, in the dark)
         post(c.sound)
         t.phase, t.at, t.n, t.frDone = "hold", now + (tonumber(c.hold_s) or 0.6), n, fr
     elseif t.phase == "hold" then
@@ -1019,7 +1138,7 @@ end
 local function clearBU(B, why)
     if B.clearing then return end
     B.clearing, B.clearAt = true, os.clock()
-    if (SF.unsafeAt or 0) > 0 then transition(0, "the storm clears") end
+    if (SF.unsafeAt or 0) > 0 or LY.on then transition(0, "the storm clears") end
     THUNDER.strikesOff("the storm clears")
     local t = bc().text or {}
     if t.clear then hudCallout(t.clear, t.clear_sub) end
@@ -1032,7 +1151,7 @@ local function endBU(why)
     if not B then return end
     BU = nil
     if B.f and B.f > 0 then skyApply(0) end
-    if (SF.unsafeAt or 0) > 0 and not torn() then transition(0, "the storm's over") end
+    if ((SF.unsafeAt or 0) > 0 or LY.on) and not torn() then transition(0, "the storm's over") end
     pillar(nil)
     local r = rain(false)
     if B.distant then post((bc().sound or {}).distant_stop) end
@@ -1059,6 +1178,9 @@ local function buTick(now)
             local t = c.text or {}
             if t.stage and t.stage[s] then hudCallout(t.stage[s], t.stage_sub and t.stage_sub[s] or nil) end
             if s == 1 and not B.distant then B.distant = true; post((c.sound or {}).distant) end
+            if lc().enabled ~= false and not LY.preloaded and s >= (tonumber(lc().from_stage) or 2) - 1 then
+                log("storm layout: " .. lyPreload())
+            end
             skyFields()
             transition(function() return BU and not BU.clearing and (tonumber(ofStage((c.sky or {}).fraction, BU.stage, 1)) or 1) or 0 end,
                 "stage " .. s)
@@ -1467,12 +1589,14 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "thunder", fn = function(now)
             THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
             SK.inside, SK.noiseUntil, SK.upsetUntil, SK.upsetOn, SK.pawn, SK.zone = false, nil, nil, false, nil, nil
             BU, SF.list, SF.ws, SF.rainWas, TR, SF.unsafeAt = nil, nil, nil, nil, nil, nil
+            LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LP.i = false, nil, nil, nil, false, 0
         end
         return
     end
     parkTick()
     fxTick(now, false)
     testTick(now)
+    pcall(lyTick, now)
     local okT, errT = pcall(transitionTick, now)
     if not okT then say("transition", "storm build-up: transition error " .. tostring(errT)) end
     local okP, errP = pcall(probeTick, now)
@@ -1495,6 +1619,7 @@ end }
 if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["thunder"] = function()
         BU, SF.list, SF.ws, SF.rainWas, SK.zone, SK.inside, PB.i, PB.w, TR, SF.unsafeAt = nil, nil, nil, nil, nil, false, 0, nil, nil, nil
+        LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LP.i = false, nil, nil, nil, false, 0
         THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
         THUNDER.cls, THUNDER.copyHp, THUNDER.mgr = nil, nil, nil
     end
@@ -1522,6 +1647,12 @@ testKey("OEM_SIX", "sv_anomalies.lua's storm build-up", function()
     startBU(N, math.floor(os.time() % 1000003), nil, "Ctrl+]")
     local t = bc().text or {}
     hudCallout(t.start or "WEATHER WARNING", string.format(t.start_sub or "DISTANT THUNDER IN ROUND %d", N))
+end)
+-- Ctrl+;: the layout probe (any game: this game's own sky)
+testKey("OEM_ONE", "sv_anomalies.lua's cloud layout probe", function()
+    install()
+    if not (D and D.now) then log("storm layout: Ctrl+; outside a Survival run"); return end
+    THUNDER.layoutStep()
 end)
 -- Ctrl+/: the sky probe (any game: this game's own sky)
 testKey("OEM_TWO", "sv_anomalies.lua's sky probe", function()
