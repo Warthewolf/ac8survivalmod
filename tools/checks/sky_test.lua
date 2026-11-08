@@ -349,11 +349,11 @@ check(l3 and l3:find("copy|CloudlyRenderer_0|RO|1|sun_az -120 -> -105", 1, true)
 check(l3 and l3:find("light|yaw -30 -> -15", 1, true), "the light undone from the asset too (as in game)")
 regame = true
 press("F6")
-check(mpcv[env.addr .. "Ctrl_Scene_EmissiveScale"] == 10000 and custom.sun == true and ppv1.Settings.AutoExposureMaxBrightness == 9
+check(mpcv[env.addr .. "Ctrl_Scene_EmissiveScale"] == 4000 and custom.sun == true and ppv1.Settings.AutoExposureMaxBrightness == 10
     and asset.Data.SunIntensity.Factor == 0.5, "step 4: the night set, the sky asset too")
 tick(C.readback_s)
 local l4 = found("sky test: step 4 read back 5 s on:")
-check(l4 and l4:find("the MPC values the game put back: mpc|vfx|VFXEmissiveEV -2 -> 11", 1, true), "step 4's read-back names the MPC the game put back: " .. tostring(l4))
+check(l4 and l4:find("the MPC values the game put back: mpc|vfx|VFXEmissiveEV 0 -> 11", 1, true), "step 4's read-back names the MPC the game put back: " .. tostring(l4))
 regame = false
 press("F6")
 tick(C.readback_s)
@@ -379,13 +379,13 @@ check(a1.el == 12.5 and a1.az == 145 and a1.stars == 1 and a5.el == 3 and a5.az 
 check(near(a5.ex_min, 11) and near(a5.ex_bias, -0.5) and near(a1.ex_min, 12.6), "the exposure to dusk's 11 / 14 / -0.5 by F+5")
 local a6, a7, a8 = SKY.arcAnchor(6, base0), SKY.arcAnchor(7, base0), SKY.arcAnchor(8, base0)
 check(a6.el == 1 and a6.az == 160 and a6.set_el == -3 and a6.sl_x == 0.5 and a6.mode == "sun", "F+6 (THE FESTIVAL): sunset, 1 sinking to -3 / 160")
-check(a7.mode == "moon" and a7.el == 35 and a7.az == -130 and a7.factor == 0.5 and a7.moon == 1 and a7.em == 10000 and a7.vfx == -2
-    and near(a7.ex_min, 0.5) and near(a7.ex_max, 9) and near(a7.ex_bias, 1) and a7.disc == 0.5683 and near(a7.sl_x, 4e-6, 1e-12) and a7.spec == 0.01
-    and near(a7.mfd, 1e-4, 1e-12) and near(a7.meter, 0.002, 1e-9) and a7.nav == 1,
-    "F+7: Mission 9's night: the light at the moon (35 / -130, 0.5), the moon on, its exposure 0.5 / 9 / +1 with its night ambient (sky light x4e-6), "
-    .. "the glow 10000, the effects' EV -2, no moon glint (specular 0.01), the cockpit dimmed, the planes' own lights on")
+check(a7.mode == "moon" and a7.el == 35 and a7.az == -130 and a7.factor == 0.5 and a7.moon == 1 and a7.em == 4000 and a7.vfx == 0
+    and near(a7.ex_min, 2.3) and near(a7.ex_max, 10) and near(a7.ex_bias, 0.6) and a7.disc == 0.5683 and near(a7.sl_x, 4e-5, 1e-12) and a7.spec == 0.01
+    and near(a7.mfd, 6e-4, 1e-12) and near(a7.meter, 0.007, 1e-9) and a7.nav == 1,
+    "F+7: the night (0.74.25: the blend's last seconds' look): the light at the moon (35 / -130, 0.5), the moon on, exposure 2.3 / 10 / +0.6 "
+    .. "with sky light x4e-5, the glow 4000, the effects' EV 0, no moon glint (specular 0.01), the cockpit dimmed, the planes' own lights on")
 local a9, a10 = SKY.arcAnchor(9, base0), SKY.arcAnchor(10, base0)
-check(a8.mode == "moon" and a9.mode == "moon" and a8.el == 35 and a9.factor == 0.5 and near(a9.ex_min, 0.5),
+check(a8.mode == "moon" and a9.mode == "moon" and a8.el == 35 and a9.factor == 0.5 and near(a9.ex_min, 2.3),
     "F+7 .. F+9: three rounds of night (night_rounds 3), the same sky")
 check(near(a10.el, -4) and near(a10.az, 105) and near(a10.factor, 120000, 1e-3) and a10.mode == "sun", "F+10: dawn in the east (-4 / 105)")
 local a11, a14, a30 = SKY.arcAnchor(11, base0), SKY.arcAnchor(14, base0), SKY.arcAnchor(30, base0)
@@ -407,10 +407,10 @@ local s45 = SKY.arcAt(6, 0.45, base0)
 check(near(s45.el, -3) and near(s45.factor, 120000, 1e-3) and near(s45.ex_min, 9.5), "the fight's end (u 0.45): the sun at set_el -3, its light still held")
 local s475 = SKY.arcAt(6, 0.475, base0)
 check(s475.mode == "sun" and near(s475.el, -3) and near(s475.factor, 10 ^ ((math.log(120000, 10) + math.log(0.25, 10)) / 2), 1e-3)
-    and s475.ex_min < 9.5 and s475.ex_min > 0.5 and s475.sl_x < 0.5 and s475.sl_x > 4e-6,
+    and s475.ex_min < 9.5 and s475.ex_min > 2.3 and s475.sl_x < 0.5 and s475.sl_x > 4e-5,
     string.format("the break's first half: the last light going in log space (%.1f), the night's exposure and ambient begun together (%.2f)", s475.factor, s475.ex_min))
 local n20 = SKY.arcAt(7, 0.2, base0)
-check(n20.mode == "moon" and near(n20.factor, 0.5) and near(n20.ex_min, 0.5), "the night's fight: the moon's light and the night's exposure held")
+check(n20.mode == "moon" and near(n20.factor, 0.5) and near(n20.ex_min, 2.3), "the night's fight: the moon's light and the night's exposure held")
 local s50, s99 = SKY.arcAt(6, 0.5, base0), SKY.arcAt(6, 1, base0)
 check(s50.mode == "moon" and near(s50.factor, 0.25) and s50.el == 35 and s99.factor == 0.5, "the swap for the moon at the darkest point (0.25), then night's 0.5")
 local h75 = SKY.arcAt(7, 0.75, base0)
@@ -469,20 +469,20 @@ for _ = 1, 5 do atick(2) end
 frame()                                          -- (the drawn sky and the light follow the asset a frame on)
 check(ro.EnableMoon == true and near(sun.Intensity, 0.5, 1e-6) and sun.LightColor.R == 226 and near(ro.SunElevationAngleInDegrees, 35, 1e-6),
     "night (F+7): the light at the moon, 0.5, bluish; the moon on (drawn)")
-check(near(ppv1.Settings.AutoExposureMinBrightness, 0.5, 1e-6) and ppv2.Settings.AutoExposureMinBrightness == 13 and near(ro.StarsParams.StarsIntensity, 2.26, 1e-6),
+check(near(ppv1.Settings.AutoExposureMinBrightness, 2.3, 1e-6) and ppv2.Settings.AutoExposureMinBrightness == 13 and near(ro.StarsParams.StarsIntensity, 2.26, 1e-6),
     "night's exposure on the volume with its override, the stars at Mission 9's")
 -- ((2026-11-08) the rest of Mission 9's night (tools/re/NIGHT_SKY.md 5)
-check(sun.SpecularScale == 0.01 and near(cockpitPP.Settings.AutoExposureMinBrightness, 0.5, 1e-6) and cockpitPP.Settings.AutoExposureMaxBrightness == 20,
+check(sun.SpecularScale == 0.01 and near(cockpitPP.Settings.AutoExposureMinBrightness, 2.3, 1e-6) and cockpitPP.Settings.AutoExposureMaxBrightness == 20,
     "night: no moon glint on the sea (the light's specular 0.01), the cockpit view's exposure down with the rest (its max untouched)")
-check(near(mpcv[mec.addr .. "Cockpit_MFD_EmissiveIntensity"], 1e-4, 1e-9) and near(mpcv[mec.addr .. "Cockpit_Meter_EmissiveIntensity"], 0.002, 1e-9)
+check(near(mpcv[mec.addr .. "Cockpit_MFD_EmissiveIntensity"], 6e-4, 1e-9) and near(mpcv[mec.addr .. "Cockpit_Meter_EmissiveIntensity"], 0.007, 1e-9)
     and mpcv[mec.addr .. "Navigation_Emissive_Intensity"] == 1 and mpcv[mec.addr .. "AntiCollision_Emissive_Intensity"] == 1
-    and near(cvars["r.MinScreenRadiusForLights"], 0.008, 1e-9),
-    "night: the cockpit's screens and gauges dimmed, the planes' own lights on, far small lights drawn (r.MinScreenRadiusForLights 0.008)")
+    and near(cvars["r.MinScreenRadiusForLights"], 0.01, 1e-9),
+    "night: the cockpit's screens and gauges dimmed, the planes' own lights on, far small lights drawn (r.MinScreenRadiusForLights 0.01)")
 check(actor.CloudlyResources.StarCatalog == catalog and actor.CloudlyResources.MoonTexture == moonTex
     and found("the stars and the moon on the sky actor"),
     "the star catalog and the moon's texture put on the sky actor (Mission 4's had neither), logged")
 check(ro.StarsParams.StarsElevationMaskEnable == true and near(ro.StarsParams.StarsFadePower, 14.77, 1e-6) and ro.StarsParams.StarsMoonMaskEnable == true
-    and near(ro.MultipleScatteringScale, 3, 1e-6) and near(ro.MoonPhase, 0.143, 1e-6) and near(ro.MoonFractionOfSunIntensity, 1e-5, 1e-12),
+    and near(ro.MultipleScatteringScale, 2.7, 1e-6) and near(ro.MoonPhase, 0.143, 1e-6) and near(ro.MoonFractionOfSunIntensity, 1e-5, 1e-12),
     "Mission 9's stars (masks, fade), its night sky's multiple scattering, its moon's phase and brightness")
 -- VALKA's red sky over the arc: the colours left to it
 RED = { want = true, k = 0.3 }

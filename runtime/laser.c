@@ -171,6 +171,22 @@ static int L_LaserState(void* lua)
     return Ret(lua, st);
 }
 
+/* (0.32.28) SV_LaserOwner(li, plane) -> 1 its OwningGameObject is that plane now, 0 the plane isn't a live object,
+ * SV_ERR_BAD_ARGS (not a laser). A laser Lua spawns has none (the game sets it when a plane's fire control fires one), so
+ * the tick guard held it and every SV_LaserBegin was refused: the hosts' logs of 0.74.21 and 0.74.23, "owner NOT its plane",
+ * and the user: "the ZFA-44's did not fire their laser". One aligned store, on the game thread (Lua's call). */
+static int L_LaserOwner(void* lua)
+{
+    uint8_t* li = ArgObject(lua);
+    uint8_t* own = ArgObject(lua);
+    if (!LiIsLaser(li)) return Ret(lua, SV_ERR_BAD_ARGS);
+    if (!own || ((uintptr_t)own & 7) || !Readable(own, 0x30) || UObjLive(own) == 0) return Ret(lua, 0);
+    __atomic_store_n((uint8_t**)(li + WB_OWNER), own, __ATOMIC_SEQ_CST);
+    static uint32_t said;
+    if (said++ < 8) Log(L"laser: %p's owner set to %p", li, own);
+    return Ret(lua, 1);
+}
+
 static int L_LaserKills(void* lua)
 {
     return Ret(lua, g_nextLaserTick ? (int64_t)g_liKills : -1);

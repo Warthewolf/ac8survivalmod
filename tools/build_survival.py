@@ -715,10 +715,13 @@ def build_npc_rows():
             assert survival_events.fname(zfa_twin[1])[2] == 0
             out.append(((zfa_twin[1], 0), tls))
             # ((2026-11-07) AC7's LaserInterceptor, spawned by Lua: the gun's slot empty, nothing else changed)
+            # ((0.74.25) written empty, as a stock row's empty slot is (zero, None), not left out: left out, the drones kept
+            # their gun (the user: "the ZFA-44's ... were seen using guns"; the logs: "1 Arms BP_wp_gun_BaseClass")
             li_name = {survival_events.ZFA_NPC: survival_events.ZFA_LI_NPC,
                        survival_events.ZFA_DRONE_NPC: survival_events.ZFA_DRONE_LI_NPC}[npc]
             li = copy.deepcopy(row)
-            li[2][:] = [q for q in li[2] if q[1] != slot]
+            li[2][:] = [(q[0], q[1], True, None) if q[1] == slot else q for q in li[2]]
+            assert [(q[2], q[3]) for q in li[2] if q[1] == slot] == [(True, None)], (li_name, slot, 'its gun slot not written empty')
             assert survival_events.fname(li_name)[2] == 0
             out.append(((li_name, 0), li))
     print('  escort / decoy DT_NPC rows (Lua adds them at the main menu): '

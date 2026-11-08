@@ -1487,9 +1487,21 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     function SV_LaserState(la, v) local s = LS[la] or 0; if v == 0 and s == 1 then LS[la] = 0; stops[#stops + 1] = la end; return s end
     function SV_Intercept(ma) local m = byAddr[ma]; intercepted[#intercepted + 1] = ma; if m and not m.bCollided then m.bCollided = true; return 1 end; return 0 end
     function SV_LaserKills() return 0 end
+    local spawnedL = {}
+    -- ((0.74.25) the runtime's owner store: SetOwner is AActor's Owner only, as in the game; the laser's OwningGameObject
+    -- only through SV_LaserOwner)
+    function SV_LaserOwner(la, pa)
+        for _, x in ipairs(spawnedL) do
+            if x.addr == la then
+                x.ownerAddr = pa
+                x.OwningGameObject = { addr = pa, GetAddress = function() return pa end }
+                return 1
+            end
+        end
+        return -4
+    end
     local cls, wb = { full = "BP_SV_LaserInterceptor_C", addr = addr() }, { full = "LiveWeaponBase", addr = addr() }
     statics[ZC.li_class], statics["/Script/Live.LiveWeaponBase"] = cls, wb
-    local spawnedL = {}
     local function comp(name)
         local c = { name = name, params = {}, active = false, visible = true, bAutoActivate = true }
         function c:SetVectorParameter(n, v) self.params[tostring(n)] = v end
@@ -1504,13 +1516,17 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
                     MainLaser = comp("MainLaser"), EndLaser = comp("EndLaser"), root = {} }
         function a.root:K2_SetRelativeRotation(r) self.rot = r end
         function a:K2_GetRootComponent() return self.root end
-        function a:SetOwner(o) self.OwningGameObject = o end
+        function a:SetOwner(o) self.Owner = o end
         function a:K2_AttachToComponent(p, s, l, r, sc) self.attach = { p = p, s = tostring(s), l = l, r = r, sc = sc }; return true end
         function a:K2_DestroyActor() self.gone = true end
         spawnedL[#spawnedL + 1] = a
         return a
     end
-    function GS:FinishSpawningActor(x) x.finished, x.autoAtFinish = true, x.MainLaser.bAutoActivate; return x end
+    -- ((0.74.25) the hosts' logs: what it hands back isn't the laser (its reads came back wrong): a stand-in here)
+    function GS:FinishSpawningActor(x)
+        x.finished, x.autoAtFinish = true, x.MainLaser.bAutoActivate
+        return { full = "TrivialObject", addr = addr() }
+    end
     local keepGS = statics["/Script/Engine.Default__GameplayStatics"]
     statics["/Script/Engine.Default__GameplayStatics"] = GS
     local hits = {}
@@ -1561,10 +1577,11 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     local li = spawnedL[1]
     check(li and li.owner == z1 and li.cls == cls and li.how == 1 and li.finished and li.SearchInterval == 1.0e9 and li.InterceptTime == 1.0
           and li.InterceptAngle == 180 and li.RayDistance == 124000 and li.LifeTime == 6.0 and li.bIsBaseAttached == true
-          and li.autoAtFinish == false and li.OwningGameObject == z1,
-          "AC7's laser spawned for the ZFA-44: its owner the plane, AC7's values, its own search off, its beam waiting for a volley")
+          and li.autoAtFinish == false and li.Owner == z1 and li.ownerAddr == z1.addr,
+          "AC7's laser spawned for the ZFA-44: its owner the plane (SV_LaserOwner, AActor's too), AC7's values, its own search off, its beam waiting for a volley")
     check(li and li.attach and li.attach.p == z1.PlaneBodyMesh and li.attach.s == "SOC_Gun_01" and li.attach.l == 2 and li.attach.r == 2
-          and li.attach.sc == 1 and has(line("zfa li: ", from) and line("carries AC7's LaserInterceptor", from), "owner its plane"),
+          and li.attach.sc == 1 and has(line("zfa li: ", from) and line("carries AC7's LaserInterceptor", from), "owner its plane (SV_LaserOwner 1)")
+          and has(line("carries AC7's LaserInterceptor", from), "FinishSpawningActor answered"),
           "... attached at its gun (SOC_Gun_01, snapped), logged: " .. tostring(line("carries AC7's LaserInterceptor", from)))
     check(li and li.MainLaser.active and li.MainLaser.reset and li.MainLaser.visible and li.MainLaser.params.BeamLength
           and near(li.MainLaser.params.BeamLength.X, 12400) and li.MainLaser.params.BeamLength.Y == 1 and li.EndLaser.active == false

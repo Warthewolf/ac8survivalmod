@@ -1496,6 +1496,12 @@ CFG.specials = {
 -- (emissive 10000), the effects' EV down (vfx_ev -2), far small lights drawn (light_radius: r.MinScreenRadiusForLights),
 -- and the planes' own lights on (nav_lights: their navigation, anti-collision and formation lights; 0 in every stock
 -- mission). The cockpit view's own exposure (min 11) comes down with it.
+-- ((2026-11-08, 0.74.25) the user's screenshots of rounds 15 and 16: "it transitions to night well but on the final tick,
+-- the sea becomes green"; a joiner's log (0.74.23): the round-15 break blended into the night by round 16's start, so the
+-- full night itself is what turns the sea a bright teal. The night is now the look of the break's last seconds, the frame
+-- the user's first screenshot shows (about 80% of the way from the sunset to Mission 9's night): exposure 2.3 / 10 / +0.6
+-- (Mission 9's 0.5 / 9 / +1 let the camera open ~5 times more, and the sea mirrors the drawn night sky), sky light x4e-5,
+-- glow 4000, the effects' EV 0, the night sky's glow 2.7 / 2.6, the cockpit 6e-4 / 0.007 / 6e-4, light_radius 0.01)
 CFG.sky = { enabled = true, readback_s = 5,
             mpc_env = "/Game/Base/Material/MPC/MPC_Env_Control.MPC_Env_Control",
             mpc_vfx = "/Game/Base/Material/MPC/MPC_VFX_Control.MPC_VFX_Control",
@@ -1504,9 +1510,9 @@ CFG.sky = { enabled = true, readback_s = 5,
             night = { sun_el = 35.0, sun_az = -130.0, factor = 0.5, rgb = { 0.888, 0.965, 1.0 }, sun_disc = 0.5683,
                       moon_el = 35.08, moon_az = -130.03, moon_phase = 0.143, moon_phase_angle = 3.415, moon_frac = 1.0e-5,
                       moon_texture = "/Cloudly/Textures/StarsBackground/NasaCGIMoonKitLow.NasaCGIMoonKitLow",
-                      exposure = { 0.5, 9.0, 1.0 }, skylight_x = 4.0e-6, skylight_rgb = { 0.85, 1.0, 1.0 }, spec = 0.01,
-                      emissive = 10000.0, vfx_ev = -2.0, ms = 3.0, ms_ap = 3.0, mfd = 1.0e-4, meter = 0.002, ice = 1.0e-4,
-                      nav_lights = 1.0, light_radius = 0.008 },
+                      exposure = { 2.3, 10.0, 0.6 }, skylight_x = 4.0e-5, skylight_rgb = { 0.88, 1.0, 1.0 }, spec = 0.01,
+                      emissive = 4000.0, vfx_ev = 0.0, ms = 2.7, ms_ap = 2.6, mfd = 6.0e-4, meter = 0.007, ice = 6.0e-4,
+                      nav_lights = 1.0, light_radius = 0.01 },
             stars = { catalog = "/Cloudly/StarCalalogs/ASCIIYaleBrightStarCatalog5.ASCIIYaleBrightStarCatalog5",
                       intensity = 2.26, background = 0.55, radius = 4.45, fraction = 0.5, rotation = { 0.0, 0.0, 0.0 },
                       mask_on = true, mask_start = 0.110, mask_len = 0.716, fade = 14.77, scint = 0.85,

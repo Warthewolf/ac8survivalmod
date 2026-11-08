@@ -1852,3 +1852,29 @@ lightning,festival} hold the dumps and scripts (git-ignored).
 - 52 suites pass (coop_test not run). Packaged: friends' d7213024d37a..., TESTER 99918fdc34a5... (0.74.24-coop2mp.116),
   both registered. Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip over 0.74.21 (0.74.22 and 0.74.23 never
   installed; backup: build/backup/install_before_0.74.24; 87 files compared equal).
+
+## 0.74.25 (2026-11-08, runtime 0.32.28; not yet run in game)
+- The night's green sea (the user's screenshots of rounds 15 and 16: "it transitions to night well but on the final tick,
+  the sea becomes green"; Shazzy's log of 0.74.23, a joiner: the round-15 break blended into the night by round 16's start,
+  16:53:24 the swap, 16:53:56 k 7 u 0 at exposure 0.5 / 9 / +1, sky light x4e-6, glow 1e4, EV -2). The full night was the
+  fault, not a jump: CFG.sky.night is now the look of the blend's last seconds, the frame of the user's first screenshot
+  (~80% of the way from the sunset to Mission 9's night): exposure 2.3 / 10 / +0.6, sky light x4e-5 (0.88, 1, 1), glow
+  4000, the effects' EV 0, ms 2.7 / ms_ap 2.6, the cockpit 6e-4 / 0.007 / 6e-4, light_radius 0.01 (moon, stars, specular
+  0.01 and the planes' lights as they were). sky_test. Shazzy's note "Sky went really dark for a few ticks when it turned
+  into night" is the swap's darkest point (the sunset's exposure still on): left as it is.
+- AC7's laser on the ZFA-44s never fired (the user: "the ZFA-44's did not fire their laser, but they were seen using guns
+  and missiles"; Saint Alessia's host log of 0.74.21 and Shazzy's of 0.74.23):
+  - The drones kept their gun: the gun-less twin rows (SV_Zfa_AllyLI / SV_Zfa_DroneLI) left NpcFCSId1 out, and a left-out
+    property came back as the gun (the logs: "1 Arms BP_wp_gun_BaseClass"); a stock row's empty slot is written zero
+    (OP0018_uavc_Ally_01's NpcFCSId0: zero, None), so the twin's is now too (build_survival.py, asserted).
+  - The lasers had no owner: the hosts' line "owner NOT its plane (-4097), search every TrivialObject" read
+    FinishSpawningActor's answer, which isn't the laser; SetOwner only sets AActor's Owner, the game sets OwningGameObject
+    only when a plane's fire control fires one, so the tick guard held every laser and SV_LaserBegin refused every swing.
+    sv_escort_li.lua uses the spawned actor itself and sets its owner with the runtime's new SV_LaserOwner(li, plane)
+    (runtime 0.32.28, laser.c: one aligned store, the plane a live object), else UE4SS's write. Logged:
+    `carries AC7's LaserInterceptor: owner its plane (SV_LaserOwner 1), ...; FinishSpawningActor answered <addr>, not the
+    laser`. escort_test (the stand-ins as the game: SetOwner Owner only, FinishSpawningActor not the laser).
+  - A joiner fitted none (Shazzy's log: no "carries" line at all though the host's launch ran there): why isn't known
+    yet; ZLI.tick now logs `no ZFA-44 up here to fit (a joiner|the host or solo): N seen here, gone, down, still parked`.
+- 52 suites pass (coop_test not run). Packaged: friends' d13412b0a89e..., TESTER e50efa1c7f6f... (0.74.25-coop2mp.117),
+  both registered. Built in the main tree.

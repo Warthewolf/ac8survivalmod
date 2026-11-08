@@ -127,23 +127,27 @@ local function clear(s, torn)
 end
 
 -- the ZFA-44s up: { [plane address] = { o, a, at, unit } } (alive, out of their container: never parked)
+-- ((0.74.25) and what was seen: a joiner's log of 0.74.23 had the host's carrier launch here and no laser fitted, with no
+-- line saying why: { seen, gone, down, parked })
 local function planes()
-    local ps = {}
+    local ps, why = {}, { seen = 0, gone = 0, down = 0, parked = 0 }
     local riseZ = num(((CFG.allies or {}).carrier or {}).rise_m, -50) * 100
     for u, l in pairs((ESC and ESC.planes) or {}) do
         if ESC.kindOf(u) == "zfa" then
             for _, e in ipairs(l) do
+                why.seen = why.seen + 1
                 if liveAddr(e.obj) == e.addr then
                     local okH, h = pcall(function() return e.obj.HealthInternal end)
                     if not (okH and type(h) == "number" and h <= 0) then
                         local p = at(e.obj)
-                        if p and p.Z > riseZ then ps[e.addr] = { o = e.obj, a = e.addr, at = p, unit = u, e = e } end
-                    end
-                end
+                        if p and p.Z > riseZ then ps[e.addr] = { o = e.obj, a = e.addr, at = p, unit = u, e = e }
+                        else why.parked = why.parked + 1 end
+                    else why.down = why.down + 1 end
+                else why.gone = why.gone + 1 end
             end
         end
     end
-    return ps
+    return ps, why
 end
 
 local function beamX()
@@ -173,12 +177,27 @@ local function spawn(p)
     for k, v in pairs(vals) do pcall(function() x[k] = v end) end
     pcall(function() x.MainLaser.bAutoActivate = false end)   -- (the beam waits for a volley)
     pcall(function() x.EndLaser.bAutoActivate = false end)
-    local okF, a = pcall(function() return gs:FinishSpawningActor(x, t, 1) end)
-    if not (okF and a and valid(a)) then
+    local okF, fin = pcall(function() return gs:FinishSpawningActor(x, t, 1) end)
+    if not (okF and valid(x)) then
         pcall(function() x:K2_DestroyActor() end)
-        return nil, "not finished (" .. tostring(a) .. ")"
+        return nil, "not finished (" .. tostring(fin) .. ")"
     end
-    pcall(function() a:SetOwner(p.o) end)                 -- (its OwningGameObject: the class reads it every tick)
+    -- ((0.74.25) the hosts' logs of 0.74.21 and 0.74.23 read FinishSpawningActor's answer as no laser: its owner -4097, its
+    -- SearchInterval an object, not a number. The laser is x, the actor the deferred spawn made: used from here on.)
+    local a = x
+    pcall(function() a:SetOwner(p.o) end)
+    -- its OwningGameObject, which the class reads every tick and the game sets only when a plane's fire control fires one:
+    -- none, the runtime's tick guard held the laser and refused every swing (the user: "the ZFA-44's did not fire their
+    -- laser"). The runtime's store (SV_LaserOwner, 0.32.28), else UE4SS's.
+    local ownHow = "not set"
+    if type(SV_LaserOwner) == "function" then
+        local okO, r = pcall(SV_LaserOwner, addrOf(a), p.a)
+        ownHow = "SV_LaserOwner " .. tostring(okO and r or ("error " .. tostring(r)))
+    end
+    if not ownHow:find(" 1$") then
+        local okW = pcall(function() a.OwningGameObject = p.o end)
+        ownHow = ownHow .. (okW and "; written by UE4SS" or "; UE4SS's write failed")
+    end
     local body
     pcall(function() body = p.o[z.li_mesh or "PlaneBodyMesh"] end)
     if not valid(body) then pcall(function() body = p.o:K2_GetRootComponent() end) end
@@ -192,8 +211,9 @@ local function spawn(p)
     pcall(function() own = a.OwningGameObject end)
     pcall(function() si = a.SearchInterval end)
     local ownA = own ~= nil and addrOf(own) or nil
-    return a, string.format("owner %s, search every %s s (off), %s", ownA == p.a and "its plane" or ("NOT its plane (" .. tostring(ownA) .. ")"),
-        tostring(si), attached and ("at " .. tostring(z.li_socket or "SOC_Gun_01")) or "NOT attached")
+    return a, string.format("owner %s (%s), search every %s s (off), %s%s", ownA == p.a and "its plane" or ("NOT its plane (" .. tostring(ownA) .. ")"),
+        ownHow, tostring(si), attached and ("at " .. tostring(z.li_socket or "SOC_Gun_01")) or "NOT attached",
+        (fin ~= nil and addrOf(fin) ~= addrOf(a)) and string.format("; FinishSpawningActor answered %s, not the laser", tostring(addrOf(fin))) or "")
 end
 
 local function volleyOn(s, r, clock, why)
@@ -343,12 +363,21 @@ function ZLI.tick()
     local s = st()
     local z = zc()
     local clock = os.clock()
-    local ps = planes()
+    local ps, why = planes()
     -- the lasers of planes gone
     for a, r in pairs(s.L) do
         if not ps[a] then remove(r, "its plane is gone"); s.L[a] = nil end
     end
-    if next(ps) == nil then return end
+    if next(ps) == nil then
+        -- ((0.74.25) once a run, and again once something changed: none up to fit, of how many seen here)
+        local key = string.format("%d/%d/%d/%d", why.seen, why.gone, why.down, why.parked)
+        if why.seen > 0 and s.noneSaid ~= key and clock >= (s.noneAt or 0) then
+            s.noneSaid, s.noneAt = key, clock + 30
+            say("no ZFA-44 up here to fit (%s): %d seen here, %d gone, %d down, %d still parked (under rise_m)",
+                (COOP and COOP.client and COOP.client()) and "a joiner" or "the host or solo", why.seen, why.gone, why.down, why.parked)
+        end
+        return
+    end
     local ms = missiles()
     claimsTick(s, clock)
     local act = num(z.li_activation_m, 1200) * 100
