@@ -1919,4 +1919,5 @@ From two logs of one co-op run on 0.74.23 (Saint Alessia's, the host, and a join
   host's RESET now puts CO-OP ROOM and CO-OP ENEMIES back to the shipped values too, saved (the room reopened when it
   changed), its help says so; `menu: the host setup is back to the defaults (...); the co-op rows too: ...`. menu_test.
 - 52 suites pass (coop_test not run). Packaged: friends' 8e99fe0bcc12..., TESTER 267518039775... (0.74.27-coop2mp.119),
-  both registered. Built in the main tree.
+  both registered. Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.26:
+  build/backup/install_before_0.74.27; 87 files compared equal).
