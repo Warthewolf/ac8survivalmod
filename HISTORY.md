@@ -1850,4 +1850,5 @@ lightning,festival} hold the dumps and scripts (git-ignored).
   600 km/h at 2.7 the roll is ~5 km, the rollout path 1,040 m; at 16 ~860 m). Untested: whether a B-1 and the Su-57/33/35s
   touch down and stop on the runway from 600.
 - 52 suites pass (coop_test not run). Packaged: friends' d7213024d37a..., TESTER 99918fdc34a5... (0.74.24-coop2mp.116),
-  both registered. Built in the main tree.
+  both registered. Built in the main tree. INSTALLED 2026-11-08 from the TESTER zip over 0.74.21 (0.74.22 and 0.74.23 never
+  installed; backup: build/backup/install_before_0.74.24; 87 files compared equal).
