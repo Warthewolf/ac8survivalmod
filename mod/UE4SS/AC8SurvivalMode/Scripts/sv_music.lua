@@ -207,48 +207,89 @@ local function cleanTick()
     end
 end
 
--- ((2026-11-08) Alyssa's test of 0.74.31: "Hush just abruptly ends and the next track plays") a looping Online Mode track
--- moves on after its song's own length: the lobby jukebox's recording of the same song (its database's DurationMax,
--- AKE_Bgm_JukeBox_<ac7>_<Hush>_Play for AKE_Bgm_Online_<ACE7>_<Hush>_Play), else player_loop_s (runtime SV_MusicLen)
-MUSIC.lobbyDb = "/Game/WwiseAssets/Database/DA_SoundDB_AKB_BGM_Online_Lobby.DA_SoundDB_AKB_BGM_Online_Lobby"
-MUSIC.gameOf = { ACE04 = "ac04", ACE5 = "ac5", ACE6 = "ac6", ACE7 = "ac7", ACEZ = "acz" }
-local function songKey(s) return (s:lower():gsub("[^%w]", "")) end
-local LEN
-local function lobbyLengths()
-    if LEN then return LEN end
-    local db = StaticFindObject(MUSIC.lobbyDb)
-    if not valid(db) then db = loadObject(MUSIC.lobbyDb) end
-    if not valid(db) then return nil end
-    local t, n = {}, 0
-    pcall(function()
-        db.Banks:ForEach(function(_, b)
-            b:get().Events:ForEach(function(_, e)
-                local ev = e:get()
-                local name = str(ev.Name)
-                local game, song = name:match("^AKE_Bgm_JukeBox_(ac%w-)_(.+)_Play$")
-                local okM, mx = pcall(function() return ev.DurationMax end)
-                if game and okM and type(mx) == "number" and mx > 1 then
-                    t[game .. "|" .. songKey(song)] = math.floor(mx * 1000); n = n + 1
-                end
-            end)
-        end)
-    end)
-    if n == 0 then return nil end
-    LEN = t
-    return t
-end
+-- ((2026-11-08) Alyssa's test of 0.74.31: "Hush just abruptly ends and the next track plays"; Saint Alessia's of 0.74.32:
+-- "hush still ended abruptly") a looping Online Mode track moves on after one pass of its own recording, else after
+-- player_loop_s (runtime SV_MusicLen). Each is one looping Sound whose loop is in its .wem (Hush: 0 - 312.6 s, then from
+-- 38.3 s again); 0.74.32 used the lobby jukebox's recording of the song (332 s: 19 s into Hush's second pass). The
+-- lengths are the .wems' loop ends, written here by tools/music_lengths.py (build_music_rows fails on one missing).
+-- BEGIN SONG LENGTHS (tools/music_lengths.py write: one pass of each looping Online Mode track, its .wem's loop end; ms)
+MUSIC.passMs = {
+    AKE_Bgm_Online_ACE04_Aquila_Play = 187756, AKE_Bgm_Online_ACE04_Blockade_Play = 271000,
+    AKE_Bgm_Online_ACE04_Comona_Play = 150217, AKE_Bgm_Online_ACE04_Deep_Strike_Play = 164000,
+    AKE_Bgm_Online_ACE04_Emancipation_Play = 275555, AKE_Bgm_Online_ACE04_Escort_Play = 240357,
+    AKE_Bgm_Online_ACE04_Farbanti_Play = 167275, AKE_Bgm_Online_ACE04_Invincible_Fleet_Play = 265832,
+    AKE_Bgm_Online_ACE04_Safe_Return_Play = 396140, AKE_Bgm_Online_ACE04_Sitting_Duck_Play = 181271,
+    AKE_Bgm_Online_ACE04_Whiskey_Corridor_Play = 250435, AKE_Bgm_Online_ACE2_Aim_Hight_Play = 134036,
+    AKE_Bgm_Online_ACE2_Dynapolis_Play = 141643, AKE_Bgm_Online_ACE2_El_Dorado_Play = 318850,
+    AKE_Bgm_Online_ACE2_Elemental_Particle_Play = 335286, AKE_Bgm_Online_ACE2_Fire_Away_Play = 245494,
+    AKE_Bgm_Online_ACE2_Fire_Youngman_Play = 255088, AKE_Bgm_Online_ACE2_Night_And_Day_Play = 153742,
+    AKE_Bgm_Online_ACE2_Rising_High_Play = 141375, AKE_Bgm_Online_ACE2_Sunset_Glow_Play = 295847,
+    AKE_Bgm_Online_ACE3D_Fighter_s_Honor_Flying_Remix_Play = 115068,
+    AKE_Bgm_Online_ACE3D_Gravity_Play = 168288, AKE_Bgm_Online_ACE3D_Heartbeat_Play = 131402,
+    AKE_Bgm_Online_ACE3D_If_The_Sky_Is_Burnin_Out_2011_Play = 87474,
+    AKE_Bgm_Online_ACE3D_On_The_Verge_Play = 130800, AKE_Bgm_Online_ACE3_Code_of_Honor_Play = 172781,
+    AKE_Bgm_Online_ACE3_Frozen_Soul_Play = 145790, AKE_Bgm_Online_ACE3_Gordian_Knot_Play = 165735,
+    AKE_Bgm_Online_ACE3_Mind_Flow_Play = 136088, AKE_Bgm_Online_ACE3_Physical_Layer_Play = 153201,
+    AKE_Bgm_Online_ACE3_Revelation_Play = 181021, AKE_Bgm_Online_ACE3_Shattered_Stones_Play = 147729,
+    AKE_Bgm_Online_ACE3_The_Execution_Play = 155288, AKE_Bgm_Online_ACE3_Transparent_Blue_Play = 169155,
+    AKE_Bgm_Online_ACE5_8492_Play = 182658, AKE_Bgm_Online_ACE5_Arcade_Riding_High_Play = 141950,
+    AKE_Bgm_Online_ACE5_First_Flight_Play = 150469, AKE_Bgm_Online_ACE5_Fortress_Play = 179100,
+    AKE_Bgm_Online_ACE5_Four_Horsemen_Play = 228065, AKE_Bgm_Online_ACE5_Ice_Cage_Play = 140372,
+    AKE_Bgm_Online_ACE5_Naval_Blockade_Play = 161976, AKE_Bgm_Online_ACE5_Rendezvous_Play = 136400,
+    AKE_Bgm_Online_ACE5_Reprisal_Play = 293708, AKE_Bgm_Online_ACE5_Wardog_Play = 240357,
+    AKE_Bgm_Online_ACE6_Bartolomeo_Fortress_Play = 205384,
+    AKE_Bgm_Online_ACE6_Fires_of_Liberation_Play = 130471,
+    AKE_Bgm_Online_ACE6_Invasion_of_Gracemeria_Play = 302609, AKE_Bgm_Online_ACE6_On_Line_Play = 168846,
+    AKE_Bgm_Online_ACE6_Selumna_Peak_Play = 304348, AKE_Bgm_Online_ACE6_Siege_on_Silvat_Play = 300000,
+    AKE_Bgm_Online_ACE6_The_Liberation_of_Gracemeria_Play = 369982,
+    AKE_Bgm_Online_ACE6_Through_the_Heart_of_a_Nation_Play = 143673,
+    AKE_Bgm_Online_ACE7_444_Play = 256157, AKE_Bgm_Online_ACE7_ADFX_10_Play = 192540,
+    AKE_Bgm_Online_ACE7_Archange_Play = 249291, AKE_Bgm_Online_ACE7_Awakening_Play = 225453,
+    AKE_Bgm_Online_ACE7_Battle_for_Farbanti_Play = 245890,
+    AKE_Bgm_Online_ACE7_Dual_Wielder_Play = 188609, AKE_Bgm_Online_ACE7_Enchanter_II_Play = 214811,
+    AKE_Bgm_Online_ACE7_Enchanter_I_Play = 294615, AKE_Bgm_Online_ACE7_Hush_Play = 312608,
+    AKE_Bgm_Online_ACE7_Lighthouse_Play = 296731, AKE_Bgm_Online_ACE7_Long_Day_Play = 264172,
+    AKE_Bgm_Online_ACE7_Lost_Kingdom_Play = 560725, AKE_Bgm_Online_ACE7_Magic_Spear_I_Play = 236562,
+    AKE_Bgm_Online_ACE7_Mimic_Play = 288659, AKE_Bgm_Online_ACE7_Pipeline_Destruction_Play = 228012,
+    AKE_Bgm_Online_ACE7_Roca_Roja_Play = 208540, AKE_Bgm_Online_ACE7_Sol_Squadron_Play = 208778,
+    AKE_Bgm_Online_ACE7_Two_Pairs_Play = 190011, AKE_Bgm_Online_ACE7_Werewolf_Play = 518755,
+    AKE_Bgm_Online_ACEAH_Beyond_The_Canal_Play = 371575, AKE_Bgm_Online_ACEAH_Dogfight_Play = 102322,
+    AKE_Bgm_Online_ACEAH_Fighter_Play = 226668, AKE_Bgm_Online_ACEAH_Keep_Alive_Play = 333099,
+    AKE_Bgm_Online_ACEAH_Naval_Warfare_Play = 244386, AKE_Bgm_Online_ACEAH_Rush_Play = 266461,
+    AKE_Bgm_Online_ACEAH_Shall_Defend_Play = 264186, AKE_Bgm_Online_ACEAH_White_Devil_Play = 238710,
+    AKE_Bgm_Online_ACEINF_Blue_Skies_INFINITY_Remix_Play = 361412,
+    AKE_Bgm_Online_ACEINF_Invincible_Fleet_INFINITY_Remix_Play = 300113,
+    AKE_Bgm_Online_ACEX2_Metropolitan_Play = 181731,
+    AKE_Bgm_Online_ACEX2_War_Torn_Radiance_Play = 174902, AKE_Bgm_Online_ACEX_Blitz_Play = 164163,
+    AKE_Bgm_Online_ACEX_End_of_Deception_Play = 129510, AKE_Bgm_Online_ACEX_Gaiuss_Tower_Play = 199439,
+    AKE_Bgm_Online_ACEX_Operation_X_Play = 236310, AKE_Bgm_Online_ACEX_Prelude_Play = 195501,
+    AKE_Bgm_Online_ACEZ_CONTACT_Play = 213615, AKE_Bgm_Online_ACEZ_GLACIAL_SKIES_Play = 173100,
+    AKE_Bgm_Online_ACEZ_JUGGERNAUT_Play = 226500, AKE_Bgm_Online_ACEZ_MAYHEM_Play = 182286,
+    AKE_Bgm_Online_ACEZ_MERLON_Play = 323493,
+    AKE_Bgm_Online_ACEZ_THE_DEMON_OF_THE_ROUND_TABLE_Play = 127770,
+    AKE_Bgm_Online_ACEZ_THE_ROUND_TABLE_Play = 223064, AKE_Bgm_Online_ACEZ_ZERO_Play = 245020,
+    AKE_Bgm_Online_ACE_Get_off_him_Play = 201061, AKE_Bgm_Online_ACE_Head_first_Play = 105068,
+    AKE_Bgm_Online_ACE_Like_a_sea_gull_Play = 145607, AKE_Bgm_Online_ACE_Night_and_Day_Play = 154880,
+    AKE_Bgm_Online_EB003_Play = 227987, AKE_Bgm_Online_EmergencyPhase_01_Play = 120577,
+    AKE_Bgm_Online_EmergencyPhase_02_Play = 133902, AKE_Bgm_Online_EmergencyPhase_03_Play = 151998,
+    AKE_Bgm_Online_EmergencyPhase_04_Play = 117237, AKE_Bgm_Online_EmergencyPhase_05_Play = 123736,
+    AKE_Bgm_Online_EmergencyPhase_06_Play = 161037, AKE_Bgm_Online_FreeFlight_Play = 116509,
+    AKE_Bgm_Online_GeneralMVP_Play = 208094, AKE_Bgm_Online_Matching_Play = 308085,
+    AKE_Bgm_Online_Ms_ac3_Linkage_Play = 111342, AKE_Bgm_Online_Op_Play = 103304,
+    AKE_Bgm_Online_Result_Draw_Play = 93520, AKE_Bgm_Online_Result_Lose_Play = 60588,
+    AKE_Bgm_Online_Result_Victory_Play = 12047, AKE_Bgm_Online_Tutorial_Play = 70996,
+}
+-- END SONG LENGTHS
 local function setLengths(added)
     if type(SV_MusicLen) ~= "function" then return end
     SV_MusicLen("", 0)
-    local t = lobbyLengths()
     local own, rest = 0, 0
     for r in pairs(added) do
-        local g, song = r:match("^AKE_Bgm_Online_(ACE%w-)_(.+)_Play$")
-        local ms = t and g and MUSIC.gameOf[g] and t[MUSIC.gameOf[g] .. "|" .. songKey(song)]
-        if ms then SV_MusicLen(r, ms); own = own + 1 else rest = rest + 1 end
+        local ms = MUSIC.passMs and MUSIC.passMs[r]
+        if ms then SV_MusicLen(r, ms); own = own + 1 elseif r:find("^AKE_Bgm_Online_") then rest = rest + 1 end
     end
-    log(string.format("music player: %d looping songs move on after their own length (the lobby jukebox's recordings%s), "
-        .. "%d after %d s", own, t and "" or ": its database NOT read", rest, math.floor(tonumber(CFG.music.player_loop_s) or 0)))
+    log(string.format("music player: %d looping songs move on after one pass of their own recording (its loop's end), "
+        .. "%d after %d s", own, rest, math.floor(tonumber(CFG.music.player_loop_s) or 0)))
 end
 
 -- the whole pass (once a level): stock rows hidden / unlocked, the draw added; true when done

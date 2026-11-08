@@ -661,6 +661,11 @@ local function onJoinerMessage(f)
             local okDk, errDk = pcall(DECOY.fromHost, f)
             if not okDk then once("dk", "coop: the host's DECOY message not read: " .. tostring(errDk)) end
         end
+    elseif k == "zd" and COOP.client() then              -- ((2026-11-08) the VAMPIRES' final dive: sv_escort_dive.lua)
+        if ZDIVE and ZDIVE.fromHost then
+            local okZd, errZd = pcall(ZDIVE.fromHost, f)
+            if not okZd then once("zd", "coop: the host's dive message not read: " .. tostring(errZd)) end
+        end
     elseif k == "sb" and COOP.client() then              -- ((0.74.0) a subtitle line of the host's round: SUB.say)
         local secs = tonumber(f[4])
         if SUB and SUB.sayHere and f[3] and f[3] ~= "" and (secs == nil or finite(secs, 60)) and levelReady() then

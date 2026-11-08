@@ -2064,3 +2064,27 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
 - 54 suites pass (coop_test not run). Packaged: friends' 2dbbf35f5363..., TESTER eae149b1c978... (0.74.33-coop2mp.125),
   both registered; patches over 0.74.27-0.74.32 (the TESTER one sent for Alyssa). INSTALLED 2026-11-08 from the TESTER
   zip (backup of 0.74.32: build/backup/install_before_0.74.33; 88 files equal).
+
+## 0.74.34 (2026-11-08, runtime 0.32.31; not yet run in game)
+- From Saint Alessia's run of 0.74.32 (co-op host; "ZFAs worked flawlessly, music needs work"): no ZFA-44 fault in her
+  log. "hush still ended abruptly": the Online Mode versions loop inside their .wem (smpl chunk: Hush plays 0 - 312.6 s,
+  then from 38.3 s again), and 0.74.32 moved on after the lobby jukebox's recording of the song (332 s: 19 s into Hush's
+  second pass; Sol Squadron 223.8 s for a 208.8 s pass). "next track didn't seem to end": Werewolf's Online Mode mix is
+  518.8 s a pass (8:39). Each looping Online Mode track now moves on after one pass, its .wem's loop end:
+  tools/music_lengths.py (new) follows each event to its Sound and media in the game's paks (AKB_BGM_Online.bnk in
+  pakchunk0, the .wems in pakchunk10, only their first block: tools/pak_read.py read(head=)) and writes sv_music.lua's
+  SONG LENGTHS (116 tracks); build_music_rows fails on a track without one; the lobby database is no longer read
+  (`music player: N looping songs move on after one pass of their own recording (its loop's end), M after 240 s`).
+  tools/re/MUSIC_BANKS.md 6. music_test.
+- The VAMPIRES' final dive (the user: "these ZFA-44's will last 3 rounds before they fly towards the nearest enemy
+  aircraft and explode on the aircraft they were targetting with an Helios Explosion"; her answers: the start of the 4th
+  round, the target and the enemies near it, players and allies untouched): Scripts/sv_escort_dive.lua (new, ZDIVE,
+  CFG.allies.carrier.dive). A carrier leaving after its service keeps its ZFA-44s up through the break; as the next
+  round's enemy aircraft come, each is ordered onto the nearest (one each), and within 800 m (or 40 s on, where it is)
+  the Helios blast: every enemy aircraft within 1 km down as yours (the airstrike's way), an ace's or a special's 30% of
+  its health, the ZFA-44 finished off unpaid; Online Mode's Helios burst, its sound and camera shake. No enemy aircraft
+  that round: they leave at the next. Co-op: "zd" h / v / b / e; a joiner's own ZFA-44s of that ship kept and dived with
+  the host's, one finished off at each blast. tools/re/ZFA44.md 11. dive_test (new).
+- 55 suites pass (48 Lua, 7 native; coop_test not run). Packaged: friends' d81d8c2e9353..., TESTER 0a6af695acaf...
+  (0.74.34-coop2mp.126), both registered; patches over 0.74.27-0.74.33 (_Patch.zip, _TESTER_Patch.zip). INSTALLED
+  2026-11-08 from the TESTER zip (backup of 0.74.33: build/backup/install_before_0.74.34; 87 files equal).

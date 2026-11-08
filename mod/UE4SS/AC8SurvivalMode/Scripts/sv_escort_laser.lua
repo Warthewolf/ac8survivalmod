@@ -158,6 +158,10 @@ function ZLAS.tick()
         local okL, errL = pcall(ZLI.tick)
         if not okL then logOnce("zfa li", "zfa li: error " .. tostring(errL)) end
     end
+    if ZDIVE and ZDIVE.tick then                           -- ((2026-11-08) their final dive: sv_escort_dive.lua)
+        local okZ, errZ = pcall(ZDIVE.tick)
+        if not okZ then logOnce("zfa dive", "dive: error " .. tostring(errZ)) end
+    end
     if D and ZLAS.summary and ZLAS.lastRound ~= D.round then
         local line = ZLAS.lastRound and ZLAS.summary() or nil
         if line then log(string.format("carrier: round %s: %s", tostring(ZLAS.lastRound), line)) end
@@ -886,7 +890,7 @@ function ZLAUNCH.coverTick()
                 else
                     for i, pu in ipairs(c.pose_units or {}) do if pu == u then unit, ev = u, (c.pose_cover or {})[i] end end
                 end
-                if unit and liveAddr(e.obj) == e.addr then
+                if unit and liveAddr(e.obj) == e.addr and not (ZDIVE and ZDIVE.diving and ZDIVE.diving(e.addr)) then   -- (a diving one: its target)
                     local okH, h = pcall(function() return e.obj.HealthInternal end)
                     local ok, p = pcall(function() local v = e.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
                     if ok and p and p.Z > riseZ and not (okH and type(h) == "number" and h <= 0) then

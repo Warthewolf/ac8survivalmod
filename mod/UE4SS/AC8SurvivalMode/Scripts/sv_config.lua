@@ -1060,6 +1060,22 @@ CFG = {
                          pose = { ahead_m = 300, alt_m = 1100 },
                          ship_at = { { 1270476, -1096142 }, { 2130476, 103858 } },
                          service = { rounds = 3, min_s = 60 },
+                         -- ((2026-11-08) the user: "these ZFA-44's will last 3 rounds before they fly towards the nearest
+                         -- enemy aircraft and explode on the aircraft they were targetting with an Helios Explosion")
+                         -- (sv_escort_dive.lua) their carrier's service over, its launched ZFA-44s stay up through the
+                         -- break; as the next round's enemies come, each dives at the nearest enemy aircraft (one each
+                         -- while there are enough) and, within detonate_m of it (or dive_s on, where it is), explodes: the
+                         -- Helios blast (fx, sound, the camera shake within shake_km) kills every enemy aircraft within
+                         -- blast_m (yours: you're paid as for an airstrike's), an ace's or a special's takes boss_pct of its
+                         -- health instead; players and allies take nothing. No enemy aircraft in that round: they leave at
+                         -- the next. enabled = false: switched off as they leave, as before
+                         dive = { enabled = true, detonate_m = 800, blast_m = 1000, dive_s = 40, reorder_s = 2, boss_pct = 0.3,
+                                  fx = "/Game/OnlineMode/VFX/Vehicles/Boss/BA001_aias/Niagara/NS_ms17supsExplosion01_ON",
+                                  fx_scale = 1.0, sound = "/Game/WwiseAssets/OBJ_M09_CLOUDBOMB_EXP",
+                                  shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios",
+                                  shake_km = 6.0,
+                                  text = { dive = "VAMPIRES: FINAL DIVE", dive_sub = "%d ZFA-44S ON THE NEAREST ENEMIES",
+                                           blast = "HELIOS IMPACT", blast_sub = "%d ENEMIES DOWN" } },
                          store_row = "Revive", remove_records = false,
                          -- ((2026-11-07) settle_s: a plane dressed only that long after it's seen; per_tick: at most that many
                          -- a tick (was 2); preload: its mesh and textures loaded and kept from the carriers' unlock, one a

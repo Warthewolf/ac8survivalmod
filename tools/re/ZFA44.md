@@ -407,3 +407,35 @@ dressing out with it: a zip that ships the container needs package_release.sh to
 - **Packaging** (finding 16): tools/package_test.sh now has package_release.sh's ZFA block (without ZFA=1 the container
   out and Scripts/sv_zfa44.lua cut to its first line; ZFA=1 keeps both and names the zip ..._ZFA44), strips the default
   ini's test-only sections with the Scripts, and leaves out flights_*.csv.
+
+## 11. The final dive (2026-11-08, 0.74.34; not yet run in game)
+The user: "these ZFA-44's will last 3 rounds before they fly towards the nearest enemy aircraft and explode on the
+aircraft they were targetting with an Helios Explosion"; her answers: at the start of the 4th round, the target and the
+enemies near it, players and allies untouched. Scripts/sv_escort_dive.lua (ZDIVE), CFG.allies.carrier.dive.
+- A carrier leaving after its service (sv_escort.lua, the host's or solo): ZDIVE.take(C) keeps its ZFA-44s up (out of
+  their container, alive) instead of flightOff (switched off); parkedOff still finishes the parked ones. None up, or
+  dive.enabled false: flightOff as before.
+- Through the break nothing; as the next round's enemy aircraft come (D.round > the leaving round, spawning / wave /
+  fighting), each held plane is ordered onto the nearest enemy aircraft (EngagementOrderOverride Normal, TargetFirst,
+  again every reorder_s), one each while there are enough. Within detonate_m (800 m) of it: the blast centred on the
+  target; dive_s (40 s, extended to 2.5x on a retarget) on: centred where the ZFA-44 is.
+- The blast (host or solo): every enemy aircraft of `planes` within blast_m (1 km) down by ModifyHealth(-1e6, your
+  pawn, true), as the airstrike's hits (you're paid); an ace squadron's or a special's (not pool, bomber, DECOY UAV or
+  FESTIVAL missile) takes boss_pct (30%) of its health. Players and allies aren't in `planes`: untouched. The ZFA-44
+  finished off unpaid (GameplayStatics ApplyDamage, no instigator: parkedOff's way). Effects on every game: Online
+  Mode's Helios burst NS_ms17supsExplosion01_ON (BA001_aias), OBJ_M09_CLOUDBOMB_EXP, BP_CamShake_BombImpactHelios within
+  shake_km (6 km, scaled by distance, 0.2 at least). The asset paths are from the stock files; not yet seen in game.
+- A round with no enemy aircraft: at the next round's start they're finished off unpaid, no blast. A new run (another D):
+  the old run's held ones finished off.
+- Co-op: the host sends "zd" h <ship> <round> (before the "es" mask drops the ship), v <count>, b <x> <y> <z> <down so
+  far>, e. A joiner's own ZFA-44s of that ship (the container launch spawns each game's own) are kept at ESC.localOff
+  instead of switched off (ZDIVE.holdLocal, only after "zd h"), ordered onto the nearest enemy copy at "v", and at each
+  "b" the one nearest the blast is finished off with the effects there (no kill of its own: the host's come as "dn");
+  "e" the rest. Bound copies of the host's pose flight go with the host's kills.
+- Log: `carrier: <name> leaving: N ZFA-44s stay up for their final dive as round R's enemies come`, `dive: round R's
+  enemies up: N held ZFA-44s dive at the nearest enemy aircraft`, `dive: Helios blast k (on its target | its dive's
+  time up) at (x, y) km z m: N enemy aircraft down, M aces' or specials' hurt (T down so far)`, `dive: over: ...`;
+  a joiner's `dive: the host's carrier i left for its final dive: N of this game's own ZFA-44s of it kept up with it`.
+- Checks for the first test: the burst and its size (fx_scale), the sound, the shake; the ZFA-44s really closing to
+  800 m (AI pursuit may hold off: then the 40 s blast where it is still reaches 1 km); the kills paid; a joiner's view.
+  tools/checks/dive_test.sh.

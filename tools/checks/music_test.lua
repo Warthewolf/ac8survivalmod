@@ -86,17 +86,8 @@ function FindAllOf(c)
     if c == "LiveMusicPlayerSoundManager" then return objects.managers end
     return objects.pages[c]
 end
--- the lobby jukebox's database: its recordings' lengths (DurationMax, s)
-local function arr(list)
-    return { ForEach = function(self, f) for i, v in ipairs(list) do f(i, { get = function() return v end }) end end }
-end
-local LOBBY = { full = "LiveSoundDatabaseBankAsset /Game/WwiseAssets/Database/DA_SoundDB_AKB_BGM_Online_Lobby", addr = 0x9900,
-    Banks = arr({ { Events = arr({ { Name = S("AKE_Bgm_JukeBox_ac04_Comona_Play"), DurationMax = 200.5 },
-                                   { Name = S("AKE_Bgm_JukeBox_ac7_Daredevil_Play"), DurationMax = 321.9 },
-                                   { Name = S("AKE_Bgm_JukeBox_All_Stop"), DurationMax = 0 } }) } }) }
 function StaticFindObject(p)
     if p:find("DT_SoundMusicPlayerBGM", 1, true) then return GAME end
-    if p:find("DA_SoundDB_AKB_BGM_Online_Lobby", 1, true) then return LOBBY end
     return nil
 end
 function loadObject(p)
@@ -170,14 +161,17 @@ check(GAME.rows["AKE_Bgm_Online_Op_Play"] == nil and GAME.rows["AKE_Bgm_Ending01
 check(calls.texts.SV_Mus20T == "Comona" and calls.texts.SV_MusO7T == "ACE COMBAT 7: SKIES UNKNOWN" and
       calls.texts["MusicPlayer_SongTitle_Online_OP"] == nil, "Survival's titles set, the game's own keys left")
 check(#calls.build == 1 and calls.build[1] == 0x5000, "Survival's level's list built (its manager)")
--- ((2026-11-08) "Hush just abruptly ends") a drawn song's own length from the lobby jukebox's recording, to the runtime
-local lens = 0
+-- ((2026-11-08) "Hush just abruptly ends") a drawn song's one pass (its .wem's loop end: sv_music.lua's SONG LENGTHS,
+-- tools/music_lengths.py) to the runtime; a song with none: SV_MusicLoop's
+local lens, bad = 0, {}
 for _, r in ipairs(jb) do
-    local want = (r == JB[1] and 200500) or (r == JB[3] and 321900) or nil
-    if calls.len[r] ~= want then lens = -99 elseif want then lens = lens + 1 end
+    local want = MUSIC.passMs[r]
+    if calls.len[r] ~= want then bad[#bad + 1] = r elseif want then lens = lens + 1 end
 end
-check(lens >= 1 and lastLog("looping songs move on after their own length") ~= nil,
-      "each drawn song's own length (the lobby's recording), the others SV_MusicLoop's (" .. lens .. ")")
+check(#bad == 0 and lens >= 1 and lastLog("looping songs move on after one pass of their own recording") ~= nil,
+      "each drawn song's one pass, the others SV_MusicLoop's (" .. lens .. "; wrong: " .. table.concat(bad, ", ") .. ")")
+check(MUSIC.passMs["AKE_Bgm_Online_ACE7_Hush_Play"] == 312608 and MUSIC.passMs["AKE_Bgm_Online_ACE7_Daredevil_Play"] == nil,
+      "Hush's pass is its loop's end, 312.6 s (not the lobby's 332 s); Daredevil has none (not in Online Mode)")
 local f0, w0 = finds, walks
 runFull(); runFull(); runFull()
 check(#calls.build == 1 and #calls.save == 1 and finds == f0 and walks == w0, "then left: no FindRow, no walk every 2 s")

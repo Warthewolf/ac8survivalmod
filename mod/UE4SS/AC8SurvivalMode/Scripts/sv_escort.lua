@@ -1553,14 +1553,14 @@ local function carrierTick(C, now)
         if C.served >= rounds and D.state == "wait" then
             C.state, C.removeAt, C.why = "leaving", os.clock(), string.format("%d rounds served", C.served)
             if ZLAUNCH and ZLAUNCH.parkedOff then pcall(ZLAUNCH.parkedOff, C.idx, C.flight and C.flight.unit, C.name .. " leaving") end
-            local nf = C.flight and flightOff(C.flight, C.name .. " leaving") or 0
+            local nf = (ZDIVE and ZDIVE.take and ZDIVE.take(C)) or (C.flight and flightOff(C.flight, C.name .. " leaving")) or 0   -- (dive: sv_escort_dive.lua)
             if COOP and COOP.removeNow then pcall(COOP.removeNow, C.unit) end
             if c.remove_records then fire(string.format("RE_SV_CargoRemove_%d", C.idx), C.name) end
             local n = 0
             for _, e in ipairs((ESC.shipObjs or {})[C.unit] or {}) do if liveAddr(e.obj) == e.addr and offObj(e.obj) then n = n + 1 end end
             RUN.dirty = true
             hudCallout(string.format(t.leaving, C.name), string.format(t.leaving_sub, C.served))
-            log(string.format("carrier: %s leaving after %d rounds: %d of its objects and %d ZFA-44s switched off", C.name, C.served, n, nf))
+            log(string.format("carrier: %s leaving after %d rounds: %d of its objects and %d ZFA-44s %s", C.name, C.served, n, nf, ZDIVE and ZDIVE.d and ZDIVE.d.D == D and #ZDIVE.d.held > 0 and "kept for their dive or switched off" or "switched off"))
             return
         end
     end
@@ -1645,7 +1645,7 @@ end
 function ESC.localOff(i, why)
     if not client() then return 0 end
     if ZLAUNCH and ZLAUNCH.parkedOff then pcall(ZLAUNCH.parkedOff, i, nil, "the host's carrier " .. i .. " gone here") end
-    local n = ownZfaOff(i, nil)
+    local n = (ZDIVE and ZDIVE.holdLocal and ZDIVE.holdLocal(i)) or ownZfaOff(i, nil)   -- (kept for the host's final dive: sv_escort_dive.lua)
     local q = 0
     for _, arm in ipairs((cc().launchers or {})[i] or {}) do
         if type(arm.unit) == "string" and aliveOf(arm.unit) == 0 then   -- ((2026-11-07) nothing up only)

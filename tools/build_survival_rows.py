@@ -312,7 +312,8 @@ JUKEBOX_TABLE_STOCK = '/Game/OnlineMode/DataTables/Information/JukeBox/DT_JukeBo
 MUSIC_DB_STOCK = '/Game/WwiseAssets/Database/DA_SoundDB_'    # + the bank: its events (the build checks each is 2D)
 
 
-def build_music_rows():
+def music_track_list():
+    """every track Survival adds (tools/music_tracks.py all_tracks over the stock jukebox's rows; music_lengths.py's too)"""
     import music_tracks
     zj = ZenPkg(stock(JUKEBOX_TABLE_STOCK))
     dj, _ = dtx.parse(uprop.Ctx(bytes(zj.payloads[0]), zj.names), 0, 'LiveJukeBoxMusicDataTable')
@@ -321,7 +322,12 @@ def build_music_rows():
         f = {q[1]: q[3] for q in row[2]}
         jrows.append((f['ResourceName'][1], f['TitleText'][1], f['OriginTextID'][1]))
     assert len(jrows) == 77, len(jrows)
-    tracks = music_tracks.all_tracks(jrows)
+    return music_tracks.all_tracks(jrows)
+
+
+def build_music_rows():
+    import music_tracks
+    tracks = music_track_list()
     # ((2026-11-08) "Music was selected but nothing played": the lobby jukebox's events are 3D, MaxAttenuation 600, and
     # the music player's game object is far from the listener) every added event in its bank and 2D, as the stock ones
     from zen import Zen
@@ -340,6 +346,12 @@ def build_music_rows():
     for t in tracks:
         assert (t[4], t[0]) in att, f'{t[0]} is in no event of {t[4]}'
         assert att[(t[4], t[0])] == 0, f'{t[0]} is a 3D event (MaxAttenuation {att[(t[4], t[0])]}): silent in the music player'
+    # ((2026-11-08) Saint Alessia's run of 0.74.32: "hush still ended abruptly") every looping Online Mode track has its one
+    # pass in sv_music.lua's SONG LENGTHS (tools/music_lengths.py write: the .wem's loop end)
+    lua = open(os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'sv_music.lua'), encoding='utf-8').read()
+    lens = dict(re.findall(r'(AKE_Bgm_Online_\w+_Play) = (\d+),', lua[lua.index('-- BEGIN SONG LENGTHS'):lua.index('-- END SONG LENGTHS')]))
+    missing = [t[0] for t in tracks if t[0].startswith('AKE_Bgm_Online_') and t[0] not in lens]
+    assert not missing, f'no SONG LENGTHS in sv_music.lua for {missing}: run tools/music_lengths.py write'
     z = ZenPkg(stock(MUSIC_TABLE_STOCK))
     rename_package(z, MUSIC_TABLE_STOCK, MUSIC_TABLE)
     p = bytes(z.payloads[0])

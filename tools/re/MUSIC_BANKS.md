@@ -149,6 +149,17 @@ asynchronous for the caller. Poll the sub+0x148 map (under the lock) for state 2
   stay there after the mod is removed. They'd name rows that don't exist then; what the game does with an unknown name
   is untested. [T]
 
+## 6. How long a looping Online Mode track is (2026-11-08, 0.74.34) [D]
+Saint Alessia's run of 0.74.32: "hush still ended abruptly". Each AKE_Bgm_Online_* event (AKB_BGM_Online.bnk, bank
+version 154, in pakchunk0) is one play action (0x0403) on one Sound (HIRC type 0x02: AkBankSourceData plugin 0x00040001
+Vorbis, stream type 1, then the media id) whose .wem streams from pakchunk10 (WwiseAudio/Media/<id>.wem). The database
+gives these no length (DA_SoundDB_AKB_BGM_Online: DurationType 2, no DurationMin / Max), and the loop is in the .wem:
+its smpl chunk's first loop (Hush: 48 kHz, 15,738,843 samples = 327.9 s, loop 1,838,678 - 15,005,181 = 38.3 - 312.6 s).
+Wwise plays to the loop's end and goes back to its start, so one pass is the loop's end (the tail after it is never
+heard). 0.74.32 used the lobby jukebox's recording of the same song (332.1 s, DurationMin = DurationMax): 19 s into
+Hush's second pass. Werewolf's Online Mode mix is 518.8 s a pass (8:39, two of the album's runs). tools/music_lengths.py
+reads them (only each .wem's first pak block) and writes sv_music.lua's SONG LENGTHS (116 tracks).
+
 ## Open
 - The readers of BGMBankList's copy (sub+0x410) and of the bank assets' StreamCookedData weren't found in clear code.
 - Code in the protected .sbss section (e.g. 0x15c316e8e, 0x157165ae9, 0x1572b127c) can't be scanned and might queue or

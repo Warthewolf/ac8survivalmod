@@ -122,13 +122,16 @@ class Pak:
             n += 4 + 16 * len(e['blocks'])
         return n
 
-    def read(self, path):
+    def read(self, path, head=None):
+        """the file's bytes; with head, only its first blocks (at least head bytes: a header, tools/music_lengths.py)"""
         e = self.entry(self.files[path])
         pos = e['offset'] + self.header_size(e)
         if not e['method']:
-            return self.read_at(pos, e['usize'], e['encrypted'])
+            return self.read_at(pos, min(e['usize'], head or e['usize']), e['encrypted'])
         out = bytearray()
         for k, cs in enumerate(e['blocks']):
+            if head and len(out) >= head:
+                break
             span = (cs + 15) & ~15 if e['encrypted'] else cs
             self.f.seek(pos)
             blk = self.f.read(span)
