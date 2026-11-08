@@ -137,3 +137,34 @@ Checks without the game: `sh tools/checks/thunder_test.sh` (its Lua on the real 
   `lightning: the static over`, `lightning: you're out of <owner>'s storm`. thunder_test.
 - Next: the 3-round build-up (the sky toward CSP_ms12_260216, distant thunder, flashes closing in, small cells with
   strikes from N-3, rain and the air-current volumes if they work), its own test key.
+
+## The storm's build-up (2026-11-08, 0.74.36; not yet run in game)
+The user's design: "have the storm gather for 3 rounds slowly building up until it's literally a typhoon to deal with
+inside"; strikes every build-up round, small and rare cells first; test key only. CFG.specials.thunder.buildup,
+sv_anomalies_dev.lua (BU), thunder_test.
+- **Keys:** Ctrl+] (host or solo) starts it: Distant Thunder at round N = the next round + 3 (in a break) or this one + 3
+  (in a fight); stages 1-3 are rounds N-3 .. N-1 (stage 1 at once), 4 is round N (`D.forceSpecial = "thunder"` from round
+  N-1). Pressed again: the storm clears. Ctrl+' steps the stages by hand (1, 2, 3, 4, then clear) in any round.
+- **Sky:** Survival's sky asset (Mission 4's CSP) blended toward Mission 12's storm sky (CSP_ms12_260216, loaded at run
+  time): every candidate cloud field (13 of FSkyParams', 21 of each of the 3 cloud layers') the two differ in, read from
+  both and logged (`storm build-up: N of 76 sky fields differ from Mission 12's storm sky (...): <path> a -> b, ...`);
+  fraction 0.3 / 0.6 / 0.85 / 1.0 of the way, at most 1/300 of the way a second; bools at half way. Written through
+  SKY.writeKey (SKY.addField registers each as asset|sv_storm_<i>): each original kept and put back at the run's end
+  (hard rule 56); the clearing writes the base back over 90 s. Not yet seen in game: which fields make it look stormy.
+- **Rain pillar (stage 4):** CloudLayer0.RainPillarCenterOverride / RainPillarCenterInKm (the A-10's storm centre, world
+  cm / 100000) / RainPillarRadiusOverride / RainPillarRadiusInKm 6, every second; put back as it clears. Whether Cloudly's
+  km are world km (and the pillar draws at all) is the test's.
+- **Cells:** 2 / 4 / 6 / 6 of 2 / 3 / 4 / 4.5 km, columns up to 7 km, 6-28 km from the airfield, from the seed (the same on
+  every game), drifting with one wind at 15 m/s, blown back in past 35 km; each flashes NS_CloudLightning at 2.5 km up every
+  6-10 / 3-6 / 2-4 / 1.5-3 s, `AKE_Environment_Thunder_Play` within 12 km. Inside one, [thunder.strike]'s strikes at
+  6-9 / 4-6.5 / 2.5-4.5 / 2-3.5 s rolls, chance x0.6 / 0.8 / 1 / 1 (`lightning: you're inside storm cell k (stage s)`);
+  the typhoon (the A-10's 7 km storm) first where both.
+- **Turbulence:** inside a cell or the typhoon from stage 2, BP_CamShake_Turbulence every 1.5-3 s x 0.5 / 0.9 / 1.4.
+- **Rain (stage 3):** the world settings' (ChronicleWorldSettings, found by a walk) bIsWorldRain true, RainVFXBrightness
+  10 (Mission 13's), put back as it clears: `rain bIsWorldRain written (read back ...)`. Whether the rain shows when set
+  after the level's start is the test's.
+- **Sound:** `AKE_Ms12_ENV_AMB_DistantThunder_Play` from stage 1, `_Stop` once cleared. Callouts at each stage.
+- **Co-op:** the host's "tb" (stage, seed, clearing) on a change and every 10 s (sv_coop_migration.lua, test builds only);
+  a joiner builds the same cells from the seed; stage 0 ends it.
+- Checks for the first test: the sky's change (and its log's field list), the cells' flashes and thunder, a strike in a
+  cell, the turbulence, the rain, the pillar on the A-10, the clearing; perf (the cells' flashes are Niagara spawns).

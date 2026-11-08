@@ -65,6 +65,14 @@ local SP = {
 local SP_PATH = {}
 for _, f in ipairs(SP) do SP_PATH[f[1]] = f[2] end
 SKY.SP = SP
+-- ((2026-11-08) a test build's storm, sv_anomalies_dev.lua) another FSkyParams field as a key
+-- "asset|<short>" (written through SKY.writeKey, its original kept and put back with the rest); whether it's new
+function SKY.addField(short, path)
+    if type(short) ~= "string" or type(path) ~= "string" or SP_PATH[short] then return false end
+    SP[#SP + 1] = { short, path }
+    SP_PATH[short] = path
+    return true
+end
 local MPC_NAMES = { { "env", "Ctrl_Scene_EmissiveScale" }, { "vfx", "VFXEmissiveEV" }, { "vfx", "VFXCloudlySkyAmbientLight" },
                     -- ((2026-11-08) the cockpit's screens and gauges, and the planes' own lights: MPC_MEC_EmissiveControl)
                     { "mec", "Cockpit_MFD_EmissiveIntensity" }, { "mec", "Cockpit_Meter_EmissiveIntensity" },

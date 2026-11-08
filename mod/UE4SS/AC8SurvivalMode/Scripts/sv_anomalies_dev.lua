@@ -487,10 +487,11 @@ local function strikeFx(path, pawn, offset)
 end
 local function shakeOn(path, scale)
     if type(path) ~= "string" or path == "" or not liveObj(survivalPC) then return false end
-    local cls = SK.shakeCls
+    SK.shakeCls = SK.shakeCls or {}
+    local cls = SK.shakeCls[path]
     if not (cls and liveObj(cls)) then
         cls = loadObject(path .. "." .. path:match("[^/]+$") .. "_C")
-        SK.shakeCls = cls
+        SK.shakeCls[path] = cls
     end
     if not cls then return false end
     local rot = { Pitch = 0, Yaw = 0, Roll = 0 }
@@ -553,8 +554,7 @@ local function strike(t, pawn)
         parts[#parts + 1] = "upset " .. upset(true, pawn)
         SK.upsetUntil = t + up
     end
-    log(string.format("lightning: strike %d on you (%s's storm, roll %d): %s", SK.n, tostring(THUNDER.storm and THUNDER.storm.owner),
-        SK.rolls, table.concat(parts, "; ")))
+    log(string.format("lightning: strike %d on you (%s, roll %d): %s", SK.n, tostring(SK.zoneName), SK.rolls, table.concat(parts, "; ")))
 end
 local function miss(t, pawn)
     local c = sc()
@@ -568,47 +568,367 @@ function THUNDER.strikesOff(why)
         postAt(sc().sound_inside_stop, SK.pawn)
         SK.inside = false
     end
+    SK.zone, SK.zoneName = nil, nil
     if SK.noiseUntil then noiseOff(why) end
     if SK.upsetOn then upset(false) end
     SK.upsetUntil, SK.pawn, SK.k = nil, nil, 0
 end
--- every tick: your plane inside the storm (not DOWN, not paused): its rolls; the static and the upset ended on time
+-- the storm zone your plane is in: the storm (a sphere: the test's, the Anomaly's typhoon) first, else a build-up cell (a
+-- column up to its top: THUNDER.cells); { key, owner, r, roll, x }, or nil
+local function zoneAt(at)
+    local c, st = sc(), THUNDER.storm
+    if st and st.center and math.sqrt((at.X - st.center.X) ^ 2 + (at.Y - st.center.Y) ^ 2 + (at.Z - st.center.Z) ^ 2) <= st.radius then
+        return { key = st, owner = tostring(st.owner) .. "'s storm", r = st.radius, roll = c.roll_s, x = 1 }
+    end
+    for _, cl in ipairs((THUNDER.cells and THUNDER.cells()) or {}) do
+        local dx, dy = at.X - cl.at.X, at.Y - cl.at.Y
+        if dx * dx + dy * dy <= cl.r * cl.r and at.Z <= cl.top then
+            return { key = cl, owner = cl.name, r = cl.r, roll = cl.roll, x = cl.x }
+        end
+    end
+    return nil
+end
+local function rollsText(r) return type(r) == "table" and string.format("%.1f-%.1f", r[1], r[2] or r[1]) or tostring(r) end
+-- every tick: your plane inside a storm zone (not DOWN, not paused): its rolls; the static and the upset ended on time
 local function strikeTick()
     local c = sc()
-    local st = THUNDER.storm
     local pawn = myPlane()
     local t = gameClock and gameClock(survivalPC)
     if not t or (gamePaused and gamePaused(survivalPC)) then return end      -- (the game's clock: never while paused)
     if SK.noiseUntil and t >= SK.noiseUntil then noiseOff(string.format("%.0f s on", t - (SK.lastAt or t))) end
     if SK.upsetUntil and t >= SK.upsetUntil then SK.upsetUntil = nil; upset(false) end
     local down = DOWN and DOWN.me and DOWN.me()
-    if c.enabled == false or not (st and st.center and pawn) or down then
-        if SK.inside then THUNDER.strikesOff(down and "you're DOWN" or "no storm") end
+    if c.enabled == false or not pawn or down then
+        if SK.inside then THUNDER.strikesOff(down and "you're DOWN" or "no plane") end
         return
     end
     local at = where(pawn)
-    local inside = at ~= nil and math.sqrt((at.X - st.center.X) ^ 2 + (at.Y - st.center.Y) ^ 2 + (at.Z - st.center.Z) ^ 2) <= st.radius
-    if inside ~= SK.inside then
-        SK.inside, SK.pawn = inside, pawn
-        if inside then
-            SK.k, SK.rollAt = 0, t + pick(c.roll_s, 2)
+    local z = at and zoneAt(at)
+    local key = z and z.key or nil
+    if key ~= SK.zone then
+        if SK.zone then
+            postAt(c.sound_inside_stop, SK.pawn)
+            log(string.format("lightning: you're out of %s (%d strikes so far)", tostring(SK.zoneName), SK.n))
+        end
+        SK.zone, SK.zoneName, SK.inside, SK.pawn = key, z and z.owner or nil, key ~= nil, pawn
+        if key then
+            SK.k, SK.rollAt = 0, t + pick(z.roll, 2)
             postAt(c.sound_inside, pawn)
-            log(string.format("lightning: you're inside %s's storm (%.1f km round it): a roll every %s s", tostring(st.owner),
-                st.radius / 100000, type(c.roll_s) == "table" and string.format("%.1f-%.1f", c.roll_s[1], c.roll_s[2]) or tostring(c.roll_s)))
-        else
-            postAt(c.sound_inside_stop, pawn)
-            log(string.format("lightning: you're out of %s's storm (%d strikes so far)", tostring(st.owner), SK.n))
+            log(string.format("lightning: you're inside %s (%.1f km round it): a roll every %s s, chance x%.2f", z.owner, z.r / 100000,
+                rollsText(z.roll), z.x or 1))
         end
     end
-    if not inside or t < (SK.rollAt or 0) then return end
-    SK.rollAt = t + pick(c.roll_s, 2)
+    if not key or t < (SK.rollAt or 0) then return end
+    SK.rollAt = t + pick(z.roll, 2)
     SK.k, SK.rolls = SK.k + 1, SK.rolls + 1
     local ch = type(c.chance) == "table" and c.chance or { 0.5 }
-    local p = tonumber(ch[math.min(SK.k, #ch)]) or 0.5
+    local p = (tonumber(ch[math.min(SK.k, #ch)]) or 0.5) * (z.x or 1)
     postAt(c.sound_roll, pawn)
     if math.random() < p then strike(t, pawn) else miss(t, pawn) end
 end
 THUNDER.strikeTick = strikeTick
+
+---------------------------------------------------------------------------------------------------- the storm's build-up
+-- ((2026-11-08) the user: "have the storm gather for 3 rounds slowly building up until it's literally a typhoon to deal
+-- with inside, this storm needs to be insanely violent for the player"; strikes every build-up round, small and rare
+-- cells first; test key only) Ctrl+] (host or solo): Distant Thunder in 3 rounds (round N; the rounds before it, N-3 ..
+-- N-1, are stages 1-3; N is stage 4, the typhoon: the Anomaly's own storm on the A-10, with the cells), pressed again: the
+-- storm clears; Ctrl+' steps the stages by hand (1, 2, 3, 4, clear) for a look without the rounds. Each stage:
+--   the sky: Survival's sky asset blended toward Mission 12's storm sky (sky.asset: every cloud field the two differ in,
+--     read from both at run time and logged; sky.fraction of the way, at most 1 / sky.ramp_s of it a second), back over
+--     sky.clear_s when it clears (SKY.writeKey: each original kept, put back with the rest at the run's end); in stage 4
+--     a rain pillar on the A-10 (sky.rain_pillar: Cloudly's own, its first cloud layer's; not yet seen in game)
+--   storm cells: cells.n of them, cells.radius_m round (columns up to top_m), from_km from the airfield, drifting with one
+--     wind (drift_ms), each flashing in the clouds every flash_s (the game's cloud lightning; its thunder within
+--     thunder_km); inside one, [thunder.strike]'s strikes at the stage's roll_s and chance x chance_x
+--   the turbulence: inside a cell or the typhoon from turbulence.from_stage, the game's turbulence shake every every_s,
+--     x scale[stage]; the rain from rain.from_stage (the world's bIsWorldRain and RainVFXBrightness, Mission 13's; put
+--     back; not yet seen in game); the distant thunder (sound.distant) from stage 1 to the clearing's end; a callout a stage
+-- Co-op: the host's "tb" (stage, seed, clearing) every 10 s and on a change; every game builds the same cells from the
+-- seed (THUNDER.buFromHost). Log lines `storm build-up: ...`.
+local BU = nil
+local function bc() return cfg().buildup or {} end
+local function ofStage(t, s, d) if type(t) ~= "table" then return t ~= nil and t or d end; local v = t[s]; if v == nil then v = t[#t] end; if v == nil then return d end; return v end
+local function lcg(x) return (x * 1103515245 + 12345) % 2147483648 end
+local function fv(v) if type(v) == "number" then return string.format("%.4g", v) end return tostring(v) end
+-- stage s's cells from the seed (the same on every game) and its wind
+local function cellsFor(s, seed)
+    local c = bc().cells or {}
+    local n = math.floor(tonumber(ofStage(c.n, s, 0)) or 0)
+    local x = (seed + s * 7919) % 2147483648
+    local function r() x = lcg(x); return x / 2147483648 end
+    local fk = type(c.from_km) == "table" and c.from_km or { 6, 28 }
+    local out = {}
+    for i = 1, n do
+        local ang, d = r() * 2 * math.pi, (fk[1] + (fk[2] - fk[1]) * r()) * 100000
+        out[#out + 1] = { name = string.format("storm cell %d (stage %d)", i, s), i = i,
+                          base = { X = AIRFIELD.X + math.cos(ang) * d, Y = AIRFIELD.Y + math.sin(ang) * d },
+                          at = { X = AIRFIELD.X + math.cos(ang) * d, Y = AIRFIELD.Y + math.sin(ang) * d, Z = 0 },
+                          r = (tonumber(ofStage(c.radius_m, s, 3000)) or 3000) * 100, top = (tonumber(c.top_m) or 7000) * 100,
+                          roll = ofStage(c.roll_s, s, { 4, 6 }), x = tonumber(ofStage(c.chance_x, s, 1)) or 1,
+                          flashAt = os.clock() + r() * 3 }
+    end
+    local wa = r() * 2 * math.pi
+    return out, { X = math.cos(wa), Y = math.sin(wa) }
+end
+function THUNDER.cells() return BU and not BU.clearing and BU.cells or nil end
+function THUNDER.buildup() return BU end
+
+-- the sky's fields: every candidate of Survival's sky asset that Mission 12's storm sky has otherwise (read once a level)
+local SKY_PATHS = { "CloudDensityExtintionBalance", "CloudSkyAmbientLightIntensity", "CloudSkyAmbientLightFadeToGray",
+    "CloudSkyAmbientLightBottomOcclusion", "CloudGroundIrradianceIntensity", "CloudDirectionalLightColorAttenuation",
+    "CloudDirectionalLightColorAttenuationTrThreshold", "CloudPhaseFunctionScale", "AirCraftFogScale", "CloudStartHeightInKm",
+    "CloudBandThicknessInKm", "CloudBlendFactorWithAtm", "EnableClouds" }
+for L = 0, 2 do
+    for _, f in ipairs({ "Enable", "StartHeightInKm", "EnableUserThicknessInKm", "UserThicknessInKm", "CloudDensity",
+                         "CloudDensityBottom", "CloudEdgeFadeDistance", "CloudEdgeFadeDistanceBottom", "TransitionStart",
+                         "TransitionLen", "TransitionStartDensityBias", "DensityBoostEnable", "DensityBoostAdd",
+                         "DensityBoostTransitionLengthInKm", "RainCloudEnable", "RainCloudStretchInKm", "RainCloudWarp",
+                         "RainCloudTopDensity", "RainCloudBottomDensity", "RainCloudSoftTransition", "MapSizeMultiplier" }) do
+        SKY_PATHS[#SKY_PATHS + 1] = "CloudLayer" .. L .. "." .. f
+    end
+end
+local PILLAR = { on = "CloudLayer0.RainPillarCenterOverride", x = "CloudLayer0.RainPillarCenterInKm.X",
+                 y = "CloudLayer0.RainPillarCenterInKm.Y", ron = "CloudLayer0.RainPillarRadiusOverride", r = "CloudLayer0.RainPillarRadiusInKm" }
+local SF = { level = nil }
+local function dataGet(o, path)
+    local ok, v = pcall(function() local x = o.Data; for p in path:gmatch("[^%.]+") do x = x[p] end; return x end)
+    if ok then return v end
+    return nil
+end
+local function skyView() return SKY and SKY.viewCached and SKY.viewCached(os.clock(), nil) or nil end
+local function skyFields()
+    if SF.list then return SF.list end
+    if os.clock() < (SF.retryAt or 0) then return nil end
+    SF.retryAt = os.clock() + 10
+    local c = bc().sky or {}
+    local V = skyView()
+    local mine = V and V.asset
+    local storm, why = loadObject(c.asset)
+    if not (mine and liveObj(mine)) then say("bu sky", "storm build-up: no sky asset in the level's view: the sky stays"); return nil end
+    if not (storm and liveObj(storm)) then say("bu storm", "storm build-up: Mission 12's storm sky NOT loaded (" .. tostring(why) .. "): the sky stays"); return nil end
+    local out, said = {}, {}
+    for i, path in ipairs(SKY_PATHS) do
+        local short = "sv_storm_" .. i
+        SKY.addField(short, path)
+        local key = "asset|" .. short
+        local b = SKY.orig[key]
+        if b == nil then b = dataGet(mine, path) end
+        local t = dataGet(storm, path)
+        if (type(b) == "number" and type(t) == "number" and math.abs(b - t) > 1e-4 * math.max(1, math.abs(b)))
+            or (type(b) == "boolean" and type(t) == "boolean" and b ~= t) then
+            out[#out + 1] = { key = key, path = path, base = b, target = t }
+            said[#said + 1] = path .. " " .. fv(b) .. " -> " .. fv(t)
+        end
+    end
+    for k, path in pairs(PILLAR) do SKY.addField("sv_pillar_" .. k, path) end
+    SF.list = out
+    log(string.format("storm build-up: %d of %d sky fields differ from Mission 12's storm sky (%s): %s", #out, #SKY_PATHS,
+        tostring(c.asset):match("[^/]+$") or "?", #said > 0 and table.concat(said, ", ") or "none"))
+    return out
+end
+-- the sky at fraction f of the way to the storm's (bools at half way); how many written
+local function skyApply(f)
+    local F = skyFields()
+    local V = F and skyView()
+    if not (V and V.asset) then return 0 end
+    local n = 0
+    for _, e in ipairs(F) do
+        local v
+        if type(e.base) == "number" then v = e.base + (e.target - e.base) * f else v = (f >= 0.5) and e.target or e.base end
+        local _, ok = SKY.writeKey(V, e.key, v)
+        if ok then n = n + 1 end
+    end
+    return n
+end
+-- the rain pillar on `at` (world cm; nil: its own values back); what was done
+local function pillar(at)
+    local c = bc().sky or {}
+    local V = SF.list and skyView()
+    if not (V and V.asset) or c.rain_pillar == false then return "off" end
+    local function w(k, v) local _, ok = SKY.writeKey(V, "asset|sv_pillar_" .. k, v); return ok end
+    if at then
+        local ok = w("on", true) and w("x", at.X / 100000) and w("y", at.Y / 100000)
+        w("ron", true); w("r", (tonumber(c.pillar_km) or 6))
+        return ok and string.format("on the A-10 at (%.1f, %.1f) km", at.X / 100000, at.Y / 100000) or "NOT written"
+    end
+    for _, k in ipairs({ "on", "x", "y", "ron", "r" }) do
+        local key = "asset|sv_pillar_" .. k
+        if SKY.orig[key] ~= nil then SKY.writeKey(V, key, SKY.orig[key]) end
+    end
+    return "back"
+end
+-- the world's rain (Mission 13's way): on (its originals kept) or back
+local function worldSettings()
+    if SF.ws and liveObj(SF.ws) then return SF.ws end
+    if walkHold and walkHold() then return nil end
+    for _, cn in ipairs({ "ChronicleWorldSettings", "LiveWorldSettings", "WorldSettings" }) do
+        for _, o in ipairs(FindAllOf(cn) or {}) do
+            if liveObj(o) and not nameOf(o):find("Default__", 1, true) and inSurvival(o) then SF.ws = o; return o end
+        end
+    end
+    return nil
+end
+local function rain(on)
+    local c = bc().rain or {}
+    if c.enabled == false then return "off" end
+    local ws = worldSettings()
+    if not ws then return "no world settings found" end
+    if on then
+        if SF.rainWas == nil then SF.rainWas = { rain = field(ws, "bIsWorldRain"), vol = field(ws, "bIsRainVolume"), b = num(ws, "RainVFXBrightness") } end
+        local ok1 = pcall(function() ws.bIsWorldRain = true end)
+        local ok2 = pcall(function() ws.RainVFXBrightness = tonumber(c.brightness) or 10 end)
+        return string.format("bIsWorldRain %s (read back %s), RainVFXBrightness %s (read back %s)", ok1 and "written" or "NOT written",
+            field(ws, "bIsWorldRain"), ok2 and "written" or "NOT written", fmt(num(ws, "RainVFXBrightness"), "%.1f"))
+    end
+    local was = SF.rainWas
+    SF.rainWas = nil
+    if not was then return "never on" end
+    pcall(function() ws.bIsWorldRain = was.rain == "true" end)
+    if was.b then pcall(function() ws.RainVFXBrightness = was.b end) end
+    return "put back (bIsWorldRain " .. tostring(was.rain) .. ")"
+end
+
+local function hostOrSolo() return not joiner() end
+local function stageOf(B)
+    if B.forced then return B.forced end
+    local r = D and D.round or 0
+    return math.max(1, math.min(4, r - (B.N - 4)))
+end
+local function sendBU(B)
+    if not (hostOrSolo() and COOP and COOP.open and COOP.msg) then return end
+    pcall(COOP.msg, nil, "tb", string.format("%d", B.stage or 0), string.format("%d", B.seed), B.clearing and "1" or "0")
+    B.sentAt = os.clock()
+end
+local function startBU(N, seed, forced, why)
+    local B = { D = D, N = N, seed = seed, forced = forced, stage = 0, f = 0, at = os.clock(), why = why }
+    BU = B
+    log(string.format("storm build-up: on (%s): %s, seed %d", why, forced and ("stage " .. forced .. " by hand")
+        or string.format("Distant Thunder at round %d, stages 1-3 in rounds %d-%d", N, N - 3, N - 1), seed))
+    return B
+end
+local function clearBU(B, why)
+    if B.clearing then return end
+    B.clearing, B.clearAt = true, os.clock()
+    THUNDER.strikesOff("the storm clears")
+    local t = bc().text or {}
+    if t.clear then hudCallout(t.clear, t.clear_sub) end
+    log(string.format("storm build-up: the storm clears (%s): the sky back over %d s; rain %s; the rain pillar %s", why,
+        math.floor(tonumber((bc().sky or {}).clear_s) or 90), rain(false), pillar(nil)))
+    sendBU(B)
+end
+local function endBU(why)
+    local B = BU
+    if not B then return end
+    BU = nil
+    if B.f and B.f > 0 then skyApply(0) end
+    pillar(nil)
+    local r = rain(false)
+    if B.distant then post((bc().sound or {}).distant_stop) end
+    THUNDER.strikesOff("the storm's over")
+    log(string.format("storm build-up: over (%s); rain %s", why, r))
+end
+THUNDER.buEnd = endBU
+-- every tick, every game
+local function buTick(now)
+    local B = BU
+    if not B then return end
+    local c = bc()
+    if B.D ~= D then endBU("a new run"); return end
+    if not B.joiner and not B.forced and not B.clearing and D and B.stage >= 4 and (D.round > B.N or (D.round == B.N and D.state == "wait")) then
+        clearBU(B, "round " .. B.N .. " is over")
+    end
+    -- the stage
+    if not B.clearing then
+        local s = stageOf(B)
+        if s ~= B.stage then
+            B.stage, B.stageAt = s, now
+            B.cells, B.wind = cellsFor(s, B.seed)
+            local t = c.text or {}
+            if t.stage and t.stage[s] then hudCallout(t.stage[s], t.stage_sub and t.stage_sub[s] or nil) end
+            if s == 1 and not B.distant then B.distant = true; post((c.sound or {}).distant) end
+            local rn = (s >= (tonumber((c.rain or {}).from_stage) or 3)) and rain(true) or "not yet"
+            log(string.format("storm build-up: stage %d%s: %d storm cells (%.1f km round, %s s between rolls, chance x%.2f), the sky to %.0f%% of the storm's; rain %s",
+                s, s == 4 and " (the typhoon)" or "", #B.cells, (B.cells[1] and B.cells[1].r or 0) / 100000, rollsText(B.cells[1] and B.cells[1].roll or "-"),
+                B.cells[1] and B.cells[1].x or 0, 100 * (tonumber(ofStage((c.sky or {}).fraction, s, 1)) or 1), rn))
+            sendBU(B)
+        end
+        -- Distant Thunder itself at round N (the host's or solo)
+        if not B.joiner and not B.forced and not B.forcedSpecial and D and D.round >= B.N - 1 then
+            B.forcedSpecial = true
+            D.forceSpecial = "thunder"
+            log(string.format("storm build-up: round %d is Distant Thunder's (D.forceSpecial)", B.N))
+        end
+    end
+    if B.joiner == nil and hostOrSolo() and now - (B.sentAt or 0) >= 10 then sendBU(B) end
+    -- the cells drift and flash
+    local fc = c.cells or {}
+    if B.cells and not B.clearing then
+        local age = now - (B.stageAt or now)
+        local wrap = (tonumber(fc.wrap_km) or 35) * 100000
+        local you = playerLocation()
+        for _, cl in ipairs(B.cells) do
+            local v = (tonumber(fc.drift_ms) or 15) * 100 * age
+            cl.at.X, cl.at.Y = cl.base.X + B.wind.X * v, cl.base.Y + B.wind.Y * v
+            local dx, dy = cl.at.X - AIRFIELD.X, cl.at.Y - AIRFIELD.Y
+            if dx * dx + dy * dy > wrap * wrap then                     -- (blown out of the arena: back in on the far side)
+                cl.base = { X = AIRFIELD.X - dx * 0.9 - B.wind.X * v, Y = AIRFIELD.Y - dy * 0.9 - B.wind.Y * v }
+            end
+            if now >= cl.flashAt then
+                cl.flashAt = now + pick(ofStage(fc.flash_s, B.stage, { 3, 6 }), 4)
+                fxAt({ X = cl.at.X, Y = cl.at.Y, Z = (tonumber(fc.flash_z_m) or 2500) * 100 })
+                if you and math.sqrt((you.X - cl.at.X) ^ 2 + (you.Y - cl.at.Y) ^ 2) <= (tonumber(fc.thunder_km) or 12) * 100000 then
+                    post((c.sound or {}).clap)
+                end
+            end
+        end
+    end
+    -- the turbulence inside a cell or the typhoon
+    local tb = c.turbulence or {}
+    if SK.zone and B.stage >= (tonumber(tb.from_stage) or 2) and now >= (B.turbAt or 0) then
+        B.turbAt = now + pick(tb.every_s, 2)
+        local sc_ = tonumber(ofStage(tb.scale, B.stage, 1)) or 1
+        if sc_ > 0 then shakeOn(tb.shake, sc_) end
+    end
+    -- the sky, once a second: toward the stage's fraction (clearing: 0)
+    if now >= (B.skyAt or 0) then
+        B.skyAt = now + 1
+        local sk = c.sky or {}
+        local want = B.clearing and 0 or (tonumber(ofStage(sk.fraction, B.stage, 1)) or 1)
+        local rate = 1 / math.max(1, tonumber(B.clearing and sk.clear_s or sk.ramp_s) or 120)
+        local f = B.f or 0
+        if f < want then f = math.min(want, f + rate) elseif f > want then f = math.max(want, f - rate) end
+        if f ~= B.f or not B.skyOnce then
+            B.f, B.skyOnce = f, true
+            local n = skyApply(f)
+            if not B.skySaid or math.abs(f - (B.skySaid or 0)) >= 0.1 or f == want then
+                if B.skySaid ~= f then log(string.format("storm build-up: the sky %.0f%% of the way to the storm's (%d values written)", 100 * f, n)) end
+                B.skySaid = f
+            end
+        end
+        -- the rain pillar on the typhoon (stage 4, the A-10's storm up)
+        local st = THUNDER.storm
+        if B.stage >= 4 and not B.clearing and st and st.owner ~= "test" and st.center then
+            local p = pillar(st.center)
+            if not B.pillarSaid then B.pillarSaid = true; log("storm build-up: the rain pillar " .. p) end
+        end
+        if B.clearing and f <= 0 then endBU("cleared") end
+    end
+end
+THUNDER.buTick = buTick
+-- (a joiner, sv_coop_migration.lua: the host's "tb") its numbers checked first
+function THUNDER.buFromHost(f)
+    if not (D and joiner()) then return end
+    local s, seed, cl = math.floor(tonumber(f[2]) or -1), math.floor(tonumber(f[3]) or -1), f[4] == "1"
+    if s < 0 or s > 4 or seed < 0 or seed >= 2147483648 then return end
+    if s == 0 then if BU then endBU("the host's is over") end return end
+    if not (BU and BU.seed == seed and BU.D == D) then
+        BU = startBU(0, seed, s, "the host's")
+        BU.joiner = true
+    end
+    BU.forced = s
+    if cl then clearBU(BU, "the host's clears") end
+end
 
 ---------------------------------------------------------------------------------------------------- the Anomaly
 -- its health for this round (HP) and the round's x
@@ -929,13 +1249,16 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "thunder", fn = function(now)
         if THUNDER.storm or #THUNDER.parked > 0 or THUNDER.test then
             log("thunder: the level is going: its storms and the storm test forgotten, not touched")
             THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
-            SK.inside, SK.noiseUntil, SK.upsetUntil, SK.upsetOn, SK.pawn = false, nil, nil, false, nil
+            SK.inside, SK.noiseUntil, SK.upsetUntil, SK.upsetOn, SK.pawn, SK.zone = false, nil, nil, false, nil, nil
+            BU, SF.list, SF.ws, SF.rainWas = nil, nil, nil, nil
         end
         return
     end
     parkTick()
     fxTick(now, false)
     testTick(now)
+    local okB, errB = pcall(buTick, now)
+    if not okB then say("bu", "storm build-up: error " .. tostring(errB)) end
     local okS, errS = pcall(strikeTick)
     if not okS then say("strike", "lightning: strike error " .. tostring(errS)) end
     if joiner() then
@@ -951,6 +1274,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "thunder", fn = function(now)
 end }
 if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["thunder"] = function()
+        BU, SF.list, SF.ws, SF.rainWas, SK.zone, SK.inside = nil, nil, nil, nil, nil, false
         THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
         THUNDER.cls, THUNDER.copyHp, THUNDER.mgr = nil, nil, nil
     end
@@ -965,6 +1289,34 @@ testKey("OEM_COMMA", "sv_anomalies.lua's storm test", function()
     if not T then testStart(now)
     elseif not T.stalled then testStall(now, T)
     else THUNDER.testEnd(now, "Ctrl+,") end
+end)
+-- Ctrl+]: the storm's build-up (Distant Thunder in 3 rounds), the host's or solo; pressed again: the storm clears
+testKey("OEM_SIX", "sv_anomalies.lua's storm build-up", function()
+    install()
+    if not (D and D.now) then log("storm build-up: Ctrl+] outside a Survival run"); return end
+    if joiner() then log("storm build-up: Ctrl+]: the host brings it (you're a joiner)"); return end
+    if bc().enabled == false then log("storm build-up: Ctrl+]: switched off ([thunder] buildup.enabled = false)"); return end
+    if BU and not BU.clearing then clearBU(BU, "Ctrl+]"); return end
+    if BU then endBU("Ctrl+] again") end
+    local N = (D.state == "wait") and (D.round + 4) or (D.round + 3)
+    startBU(N, math.floor(os.time() % 1000003), nil, "Ctrl+]")
+    local t = bc().text or {}
+    hudCallout(t.start or "WEATHER WARNING", string.format(t.start_sub or "DISTANT THUNDER IN ROUND %d", N))
+end)
+-- Ctrl+': the build-up's stages by hand (1, 2, 3, 4: the typhoon's look, then the storm clears), any round, the host's or solo
+testKey("OEM_SEVEN", "sv_anomalies.lua's storm stages", function()
+    install()
+    if not (D and D.now) then log("storm build-up: Ctrl+' outside a Survival run"); return end
+    if joiner() then log("storm build-up: Ctrl+': the host's (you're a joiner)"); return end
+    if not BU or BU.clearing then
+        if BU then endBU("Ctrl+' again") end
+        startBU(D.round + 3, math.floor(os.time() % 1000003), 1, "Ctrl+'")
+    elseif (BU.forced or BU.stage) >= 4 then
+        clearBU(BU, "Ctrl+'")
+    else
+        BU.forced = (BU.forced or BU.stage) + 1
+    end
+    hudCallout(string.format("TEST: STORM %s", BU and BU.clearing and "CLEARING" or ("STAGE " .. tostring(BU and BU.forced))), nil)
 end)
 -- Ctrl+.: the next round is IFF FATAL ERROR's (in the break: it starts in 3 s), the host's or solo
 testKey("OEM_PERIOD", "sv_anomalies.lua's IFF FATAL ERROR", function()

@@ -2111,3 +2111,21 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
 - 55 suites pass (48 Lua, 7 native; coop_test not run). Packaged: friends' dba1a9b03266..., TESTER 7e6a15776a5e...
   (0.74.35-coop2mp.127), both registered; patches over 0.74.27-0.74.34 (the TESTER one sent). INSTALLED 2026-11-08
   from the TESTER zip once AC8 was closed (backup of 0.74.34: build/backup/install_before_0.74.35; 87 files equal).
+
+## 0.74.36 (2026-11-08, runtime 0.32.31; not yet run in game)
+- Distant Thunder's storm build-up (TESTER builds only; the user: "have the storm gather for 3 rounds slowly building up
+  until it's literally a typhoon to deal with inside"; strikes every build-up round, small and rare cells first): Ctrl+]
+  starts it (Distant Thunder at round N, 3 rounds on; stages 1-3 the rounds before, 4 its own; D.forceSpecial from round
+  N-1), pressed again it clears; Ctrl+' steps the stages by hand. Each stage: Survival's sky asset blended toward Mission
+  12's storm sky (CSP_ms12_260216 loaded at run time, every cloud field the two differ in, logged; 30 / 60 / 85 / 100% of
+  the way, SKY.writeKey with SKY.addField, so put back with the rest), 2 / 4 / 6 / 6 storm cells (2-4.5 km columns from
+  the seed, drifting, flashing in the clouds with thunder near you; inside one, [thunder.strike]'s strikes at the stage's
+  rate), turbulence inside a cell or the typhoon from stage 2, the world's rain from stage 3 (Mission 13's flags), the
+  distant thunder from stage 1, a callout a stage; in stage 4 a rain pillar on the A-10's 7 km storm. The storm clears
+  after round N (the sky back over 90 s, the rain and the pillar put back). Co-op: the host's "tb" (test builds only), the
+  same cells on every game from the seed. The strikes now go by zone (the storm first, else a cell). tools/re/THUNDER.md.
+  thunder_test.
+- festival_test seeded after sv_config (sv_config_ini.lua seeds from os.time() as it loads: the earlier seed did nothing).
+- 55 suites pass (48 Lua, 7 native; coop_test not run). Packaged: friends' 68460b662e97..., TESTER 07040422cfd9...
+  (0.74.36-coop2mp.128), both registered; patches over 0.74.27-0.74.35 (the TESTER one sent). INSTALLED 2026-11-08 from
+  the TESTER zip (backup of 0.74.35: build/backup/install_before_0.74.36; 87 files equal).

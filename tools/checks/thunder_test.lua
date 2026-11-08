@@ -63,7 +63,7 @@ function SV_ObjChain(a) return LIVE[a] and 1 or 0 end
 function FName(s) return s end
 
 local binds, hooks, notifies, statics, all = {}, {}, {}, {}, {}
-Key = { OEM_COMMA = "OEM_COMMA", OEM_PERIOD = "OEM_PERIOD", F11 = "F11" }
+Key = { OEM_COMMA = "OEM_COMMA", OEM_PERIOD = "OEM_PERIOD", F11 = "F11", OEM_SIX = "OEM_SIX", OEM_SEVEN = "OEM_SEVEN" }
 ModifierKey = { CONTROL = "CTRL" }
 function RegisterKeyBind(key, mods, fn) binds[key] = fn end
 function ExecuteInGameThread(f) f() end
@@ -496,6 +496,115 @@ DOWN = nil
 press("OEM_COMMA"); press("OEM_COMMA")
 check(THUNDER.storm == nil and found("the test's storm off (Ctrl+,)", from), "Ctrl+, twice more: the storm off")
 C.strike.chance, C.strike.stock = keepChance, true      -- (the stock volume again for the test below)
+
+---------------------------------------------------------------------------------------------------- the storm's build-up
+-- ((2026-11-08) the user: "have the storm gather for 3 rounds slowly building up until it's literally a typhoon")
+print("the storm's build-up (Ctrl+], Ctrl+')")
+C.strike.stock = false
+part("sv_sky.lua")
+local B = C.buildup
+local mine = obj("CloudlySkyParams /Game/Cloudly/CloudlySkyParams/Ingame/Mission004/CSP_ms04_20251218b.CSP_ms04_20251218b", { Data = {
+    CloudDensityExtintionBalance = 1.0, EnableClouds = true,
+    CloudLayer0 = { CloudDensity = 0.3, RainCloudEnable = false, StartHeightInKm = 1.5, RainPillarCenterOverride = false,
+                    RainPillarCenterInKm = { X = 0, Y = 0 }, RainPillarRadiusOverride = false, RainPillarRadiusInKm = 2 },
+    CloudLayer1 = { CloudDensity = 0.2 }, CloudLayer2 = { CloudDensity = 0.1 } } })
+statics[B.sky.asset] = obj("CloudlySkyParams " .. B.sky.asset, { Data = {
+    CloudDensityExtintionBalance = 1.0, EnableClouds = true,
+    CloudLayer0 = { CloudDensity = 0.9, RainCloudEnable = true, StartHeightInKm = 0.8 },
+    CloudLayer1 = { CloudDensity = 0.2 }, CloudLayer2 = { CloudDensity = 0.5 } } })
+SKY.viewCached = function() return { asset = mine, actor = true, rend = {}, ctrl = {}, ppv = {} } end
+statics[B.turbulence.shake .. "." .. B.turbulence.shake:match("[^/]+$") .. "_C"] = obj("BlueprintGeneratedClass BP_CamShake_Turbulence_C")
+local ws = obj("ChronicleWorldSettings /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.ChronicleWorldSettings_0",
+    { bIsWorldRain = false, bIsRainVolume = false, RainVFXBrightness = 1.0 })
+all.ChronicleWorldSettings = { ws }
+local function D0(r, st) D.round, D.state = r, st end
+D = { round = 6, now = 100, state = "wait", up = {}, flown = {}, queue = {} }
+P(pawn).loc = { X = A.X, Y = A.Y + 9000000, Z = 300000 }        -- (far off every cell to start)
+C.strike.chance = { 0 }
+from = #logs + 1
+local nPosts = #posts
+press("OEM_SIX")
+check(found("storm build-up: on (Ctrl+]): Distant Thunder at round 10, stages 1-3 in rounds 7-9", from), "Ctrl+] in a break: Distant Thunder at round 10")
+check(has(callouts[#callouts], "WEATHER WARNING / DISTANT THUNDER IN ROUND 10"), "its callout: " .. tostring(callouts[#callouts]))
+gtick(0.25)
+local bu = THUNDER.buildup()
+check(bu and bu.stage == 1 and #bu.cells == 2 and bu.cells[1].r == 200000 and found("storm build-up: stage 1: 2 storm cells (2.0 km round", from),
+    "stage 1 at once: 2 cells of 2 km: " .. tostring(found("storm build-up: stage 1", from)))
+local distant = false
+for i = nPosts + 1, #posts do if posts[i] == B.sound.distant then distant = true end end
+check(distant, "the distant thunder from stage 1")
+check(found("storm build-up: 4 of", from) and found("CloudLayer0.CloudDensity 0.3 -> 0.9", from) and found("CloudLayer0.RainCloudEnable false -> true", from),
+    "the sky fields that differ from Mission 12's, logged: " .. tostring(found("sky fields differ", from)))
+for _ = 1, 100 do gtick(1) end
+local d0 = mine.Data.CloudLayer0.CloudDensity
+check(math.abs(d0 - (0.3 + 0.6 * 0.3)) < 1e-6 and mine.Data.CloudLayer0.RainCloudEnable == false and math.abs(mine.Data.CloudLayer2.CloudDensity - 0.22) < 1e-6,
+    string.format("the sky 30%% of the way after its ramp (cloud density %.3f), a bool not yet switched", d0))
+D0(7, "fighting"); gtick(0.25)
+check(THUNDER.buildup().stage == 1, "round 7 (N-3): stage 1")
+D0(8, "fighting"); gtick(0.25)
+bu = THUNDER.buildup()
+check(bu.stage == 2 and #bu.cells == 4 and bu.cells[1].r == 300000, "round 8 (N-2): stage 2, 4 cells of 3 km")
+check(D.forceSpecial == nil, "no forced round yet")
+D0(9, "fighting"); gtick(0.25)
+bu = THUNDER.buildup()
+check(bu.stage == 3 and #bu.cells == 6 and P(ws).bIsWorldRain == true and P(ws).RainVFXBrightness == 10, "round 9 (N-1): stage 3, 6 cells, the rain on")
+check(D.forceSpecial == "thunder" and found("storm build-up: round 10 is Distant Thunder's", from), "round 10 forced to be Distant Thunder's")
+-- a strike in a cell, its turbulence
+local cl = bu.cells[1]
+P(pawn).loc = { X = cl.at.X, Y = cl.at.Y, Z = 300000 }
+C.strike.chance = { 1.0 }
+local nH, nS = #hurts, #shakesOn
+for _ = 1, 30 do gtick(0.25) end
+check(found("lightning: you're inside storm cell 1 (stage 3) (4.0 km round it): a roll every 2.5-4.5 s, chance x1.00", from), "inside a cell: logged")
+check(#hurts > nH and found("lightning: strike", from) and found("(storm cell 1 (stage 3), roll", from), "a cell's strike: 10% of your health, logged by its cell")
+local turb = false
+for i = nS + 1, #shakesOn do if has(nameOf(shakesOn[i].cls), "BP_CamShake_Turbulence_C") and math.abs(shakesOn[i].sc - 0.9) < 1e-6 then turb = true end end
+check(turb, "the turbulence inside it (x0.9 at stage 3)")
+C.strike.chance = { 0 }
+P(pawn).loc = { X = A.X, Y = A.Y + 9000000, Z = 300000 }
+gtick(0.25)
+-- round 10: the typhoon, the rain pillar on the A-10
+D0(10, "fighting")
+local okT = THUNDER.stormUp("boss", { X = A.X + 500000, Y = A.Y - 300000, Z = 300000 }, 7000)
+gtick(1.1)
+bu = THUNDER.buildup()
+local L0 = mine.Data.CloudLayer0
+check(okT and bu.stage == 4 and L0.RainPillarCenterOverride == true and math.abs(L0.RainPillarCenterInKm.X - (A.X + 500000) / 100000) < 1e-6
+    and L0.RainPillarRadiusInKm == 6, "round 10: the typhoon, the rain pillar on the A-10 (" .. tostring(found("the rain pillar", from)) .. ")")
+THUNDER.stormDown("its round is over")
+D0(10, "wait"); gtick(0.25)
+check(THUNDER.buildup().clearing and has(callouts[#callouts], "THE STORM CLEARS") and P(ws).bIsWorldRain == false and P(ws).RainVFXBrightness == 1.0
+    and L0.RainPillarCenterOverride == false, "round 10 over: the storm clears (the rain and the pillar back)")
+for _ = 1, 120 do gtick(1) end
+check(THUNDER.buildup() == nil and found("storm build-up: over (cleared)", from) and math.abs(mine.Data.CloudLayer0.CloudDensity - 0.3) < 1e-6
+    and mine.Data.CloudLayer0.RainCloudEnable == false and posts[#posts] == B.sound.distant_stop, "cleared: the sky back as it was, the distant thunder stopped")
+-- Ctrl+': the stages by hand
+press("OEM_SEVEN"); gtick(0.25)
+check(THUNDER.buildup() and THUNDER.buildup().stage == 1 and THUNDER.buildup().forced == 1, "Ctrl+': stage 1 by hand")
+press("OEM_SEVEN"); gtick(0.25); press("OEM_SEVEN"); gtick(0.25); press("OEM_SEVEN"); gtick(0.25)
+check(THUNDER.buildup().stage == 4, "... 2, 3, 4")
+press("OEM_SEVEN"); gtick(0.25)
+check(found("storm build-up: the storm clears (Ctrl+')", from) and (THUNDER.buildup() == nil or THUNDER.buildup().clearing), "... then the storm clears")
+for _ = 1, 120 do gtick(1) end
+check(THUNDER.buildup() == nil, "and is over")
+-- a co-op joiner builds the same cells from the host's seed
+local hostCells = select(1, (function() press("OEM_SEVEN"); gtick(0.25); press("OEM_SEVEN"); gtick(0.25); return THUNDER.buildup().cells end)())
+local seed = THUNDER.buildup().seed
+local hx, hy = hostCells[1].base.X, hostCells[1].base.Y
+THUNDER.buEnd("the test")
+COOP = { client = function() return true end }
+THUNDER.buFromHost({ "tb", "nan", "5", "0" }); THUNDER.buFromHost({ "tb", "9", "5", "0" }); THUNDER.buFromHost({ "tb", "2", "-4", "0" })
+check(THUNDER.buildup() == nil, "a joiner: bad numbers dropped")
+THUNDER.buFromHost({ "tb", "2", tostring(seed), "0" })
+gtick(0.25)
+local jb = THUNDER.buildup()
+check(jb and jb.joiner and jb.stage == 2 and #jb.cells == 4 and jb.cells[1].base.X == hx and jb.cells[1].base.Y == hy, "a joiner: the host's stage 2, the same cells from its seed")
+press("OEM_SIX")
+check(found("storm build-up: Ctrl+]: the host brings it (you're a joiner)"), "a joiner's Ctrl+] refused")
+THUNDER.buFromHost({ "tb", "0", tostring(seed), "0" })
+check(THUNDER.buildup() == nil, "the host's over: the joiner's too")
+COOP = nil
+C.strike.stock = true
 
 ---------------------------------------------------------------------------------------------------- the level torn down
 print("the level torn down")

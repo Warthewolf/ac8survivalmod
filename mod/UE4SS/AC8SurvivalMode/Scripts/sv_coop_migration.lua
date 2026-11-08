@@ -661,6 +661,13 @@ local function onJoinerMessage(f)
             local okDk, errDk = pcall(DECOY.fromHost, f)
             if not okDk then once("dk", "coop: the host's DECOY message not read: " .. tostring(errDk)) end
         end
+    -- TEST ONLY BEGIN (the lightning Anomaly's storm build-up: test builds only, sv_anomalies_dev.lua)
+    elseif k == "tb" and COOP.client() then              -- ((2026-11-08) Distant Thunder's storm build-up: THUNDER)
+        if THUNDER and THUNDER.buFromHost then
+            local okTb, errTb = pcall(THUNDER.buFromHost, f)
+            if not okTb then once("tb", "coop: the host's storm build-up message not read: " .. tostring(errTb)) end
+        end
+    -- TEST ONLY END
     elseif k == "zd" and COOP.client() then              -- ((2026-11-08) the VAMPIRES' final dive: sv_escort_dive.lua)
         if ZDIVE and ZDIVE.fromHost then
             local okZd, errZd = pcall(ZDIVE.fromHost, f)
