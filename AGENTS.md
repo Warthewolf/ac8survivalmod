@@ -297,6 +297,13 @@ Copy a working stock pattern before inventing a new one.
     real sunset in the screenshot; a whole run of the arc on the copies showed no sun move at all and a blown-out night).
     Write the asset (sv_sky.lua v.asset) and put back every value of it: it outlives the level, and the campaign reads it.
 
+57. AC8's music player list shows 120 tracks at most (its scroll list's row limit). With more, the cursor runs on over rows
+    that aren't drawn, and a press there reads past the list and crashes the game. The user's run of 0.74.29 (235 tracks)
+    saw "Megalith" (row 120) last and crashed at row 231 (UECC AceCombat8.exe+0x7a8dc81), 2026-11-08. The list is also
+    built only as a level starts (a world subsystem's Initialize), and each build writes what it lists into the save's
+    OwnedMusicList. Survival rebuilds it (SV_MusicBuild) and keeps every list within player_max = 120 (sv_music.lua). The
+    runtime cuts those save grants back off (SV_MusicSave). tools/re/MUSIC_BANKS.md.
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
