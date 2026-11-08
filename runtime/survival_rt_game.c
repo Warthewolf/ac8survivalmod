@@ -1097,14 +1097,46 @@ static const wchar_t* MusicEventName(uint8_t* co)
  * track only at a length >= 0: 0x147b285cc), so the player would stay on one for ever. In Survival's mission the music
  * player's own track (its manager's SoundController, not the ambience) gets SV_MusicLoop's length instead. */
 static volatile int32_t g_musicLoopMs;             /* SV_MusicLoop(ms): 0 = off */
+/* (runtime 0.32.31; Alyssa's test of 0.74.31: "Hush just abruptly ends and the next track plays") Play gives a looping
+ * event 60 s, not -1 (the duration entry's flag at +0xC: 0x147b2836b), so the cap above never came on and every looping
+ * track moved on at 60 s. Now an Online Mode track (Survival's: AKE_Bgm_Online_*) at 60 s or -1 gets its song's own length
+ * (SV_MusicLen: Lua's, the lobby jukebox's recording of the same song), else SV_MusicLoop's (0: plays until skipped). */
+#define MLEN_MAX 128
+static struct { char name[72]; int32_t ms; } g_mlen[MLEN_MAX];
+static volatile int32_t g_nmlen;
+static int32_t MusicLenFor(const wchar_t* ev)
+{
+    for (int i = 0; i < g_nmlen; ++i) {
+        const char* a = g_mlen[i].name;
+        const wchar_t* b = ev;
+        while (*a && *b && (wchar_t)(unsigned char)*a == *b) { ++a; ++b; }
+        if (!*a && !*b) return g_mlen[i].ms;
+    }
+    return 0;
+}
+static int MusicIsOnline(const wchar_t* ev)
+{
+    static const wchar_t p[] = L"AKE_Bgm_Online_";
+    for (int i = 0; p[i]; ++i) if (ev[i] != p[i]) return 0;
+    return 1;
+}
 static void MusicLoopCap(uint8_t* co)
 {
-    if (g_musicLoopMs <= 0 || !Readable(co + MPC_CLOCK, 0x10) || *(float*)(co + MPC_LENGTH) >= 0) return;
+    if (!Readable(co + MPC_CLOCK, 0x10)) return;
+    float len = *(float*)(co + MPC_LENGTH);
+    if (len >= 0 && len != 60.0f) return;
     uint8_t* outer = PtrAt(co, UOBJ_OUTER);
     if (PtrAt(outer, MPM_CONTROLLER) != co || !MusicSurvivalGi()) return;
-    *(float*)(co + MPC_LENGTH) = (float)g_musicLoopMs / 1000.0f;
+    const wchar_t* ev = MusicEventName(co);
+    if (!MusicIsOnline(ev)) return;                       /* (the game's own tracks as they are) */
+    int32_t ms = MusicLenFor(ev);
+    int own = ms > 0;
+    if (!own) ms = g_musicLoopMs;
+    if (ms <= 0) { if (len >= 0) *(float*)(co + MPC_LENGTH) = -1.0f; return; }   /* (0: plays until skipped) */
+    *(float*)(co + MPC_LENGTH) = (float)ms / 1000.0f;
     static uint32_t said;
-    if (said++ < 24) Log(L"music player: %s loops for ever; it moves on after %d s", MusicEventName(co), g_musicLoopMs / 1000);
+    if (said++ < 24) Log(L"music player: %s loops (%d ms given): it moves on after %d s (%s)", ev, Ms(len), ms / 1000,
+                         own ? L"its song's own length" : L"SV_MusicLoop's");
 }
 
 static void OnMusicTick(void* tickable, float dt)

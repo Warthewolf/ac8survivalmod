@@ -975,12 +975,13 @@ def check_escort_decoy_build():
     events += [f'RE_SV_CargoRemove_{c[0]}' for c in se.CARGO_SHIPS] + [f'RE_SV_ZfaGo{f[0]}' for f in se.ZFA_FALLBACK]
     events += ['RE_SV_DecoyBaitLaser', 'RE_SV_DecoyBaitLaserOff', 'RE_SV_DecoyBaitPing', 'RE_SV_DecoyKill', 'SV_DecoySpearImpact']
     events += [f'RE_SV_DecoySpear_{k + 1}' for k in range(len(se.DECOY_SPEARS))]
-    events += [f'RE_SV_Decoy{x}_{nn:02d}' for nn, *_ in se.decoy_uavs() for x in ('LaserOn', 'LaserOff', 'MarkOnMe')]
+    events += [f'RE_SV_Decoy{x}_{nn:02d}' for nn, *_ in se.decoy_uavs() for x in ('LaserOn', 'LaserOff', 'MarkOnMe', 'Ping')]
     events += [ev for _, ev, _, _, _ in se.decoy_radio()]
     contract = (['RE_SV_CharGo', 'RE_SV_CharFinal', 'RE_SV_CharRoll', 'RE_SV_CharTaxi', 'RE_SV_CharStop']
                 + [f'RE_SV_Esc{n}{x}' for n, _, _, _ in se.ESC_ESCORTS for x in ('Go', 'Orbit', 'Final', 'Roll', 'Taxi', 'Stop')]
-                + ['RE_SV_DecoyBaitLaser', 'RE_SV_DecoyKill'] + [f'RE_SV_DecoyLaserOn_{k:02d}' for k in range(1, 36)]
-                + [f'RE_SV_DecoyLaserOff_{k:02d}' for k in range(1, 36)] + [f'RE_SV_DecoySpear_{k}' for k in range(1, 5)]
+                + ['RE_SV_DecoyBaitLaser', 'RE_SV_DecoyKill'] + [f'RE_SV_DecoyLaserOn_{k:02d}' for k in range(1, se.DECOY_N + 1)]
+                + [f'RE_SV_DecoyLaserOff_{k:02d}' for k in range(1, se.DECOY_N + 1)]
+                + [f'RE_SV_DecoyPing_{k:02d}' for k in range(1, se.DECOY_N + 1)] + [f'RE_SV_DecoySpear_{k}' for k in range(1, 5)]
                 + [f'RE_SV_DecoyRadio_{x}' for x in ('Lock', 'Incoming', 'Imminent', 'Hit', 'Brief')])
     assert set(contract) <= set(events), sorted(set(contract) - set(events))
     for ev in events:

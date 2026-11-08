@@ -2026,3 +2026,29 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   both registered; patches over 0.74.27-0.74.30 (the big assets unchanged since 0.74.27): _Patch.zip and _TESTER_Patch.zip
   (the TESTER one sent to the user for Alyssa). INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.30:
   build/backup/install_before_0.74.31; 88 files compared equal).
+
+## 0.74.32 (2026-11-08, runtime 0.32.31; not yet run in game)
+- From Alyssa's TESTER run of 0.74.31 (co-op host, "music less borked"): the ZFA-44s fired AC8's beam and intercepted
+  missiles, no crash ("ZFA-44s intercept missiles, im jealous of the blue TLS"): 0.74.31's beam fix confirmed (hard rule
+  58). The jukebox songs played (Online Mode's versions), but "Hush just abruptly ends and the next track plays": Play
+  gives a looping event 60 s (`track clock held at 4291 of 60000 ms`), not -1, so 0.74.30's 240 s cap never came on.
+  Runtime 0.32.31: an Online Mode track (AKE_Bgm_Online_*) at 60 s or -1 gets its song's own length (SV_MusicLen, new:
+  Lua's, read from the lobby jukebox database's DurationMax of the same song, e.g. Hush 332 s), else player_loop_s
+  (`music player: <event> loops (60000 ms given): it moves on after N s (its song's own length)`; Lua's `music player:
+  N looping songs move on after their own length ...`). "daredevil and Archange missing": Archange is in (its row after
+  ADFX-10); Daredevil, and 25 more of the lobby jukebox's songs (Megalith, AC6's main theme, Zero's Excalibur, ...), are
+  only the lobby's 3D recordings: not in. music_test.
+- THE DECOY by players (the user: "the tonitrus spear round could use some adjustments based on how many players are in
+  a run", then "Total UAV's in solo 12 and in Coop +4 per player with a max of 40"): the round's total is total_solo 12 +
+  total_per_player 4 for each other player of the room (DECOY.players()), max_total 40, never lower within a round
+  (`decoy: N players now: up to M Spear UAVs this round`); a joiner takes the host's from dk|s. The build's trap UAVs
+  35 -> 40 (DECOY_N: SV_Unit_DecoyUav_36-40, their marks and records).
+- A "Ring on the UAV locking you" on the minimap (the user's pick; Jeff's note: "it's unclear whether or not you are being
+  locked on by a UAV"): while a UAV's lock on you counts down, its minimap ping (Mission 22's LiveBattleNavigationExecution
+  on its unit, the bait ping's: RE_SV_DecoyPing_01-40, new) every ping_lock_s 2.0 on your own game
+  (`decoy: UAV k has you: its minimap ring every 2.0 s ...`; a build without the records stays quiet). A steady circle on
+  a moving unit has no proven route yet (tools/re/MINIMAP_MARKERS.md: the ECM ring jams, cylinder volumes untested,
+  a Lua overlay needs the minimap's projection). decoy_test.
+- 54 suites pass (coop_test not run). Packaged: friends' 69779eb1d6bf..., TESTER 2f045ce0c2d9... (0.74.32-coop2mp.124),
+  both registered; patches over 0.74.27-0.74.31 (_Patch.zip, _TESTER_Patch.zip: the TESTER one sent for Alyssa).
+  INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.31: build/backup/install_before_0.74.32; 88 files equal).

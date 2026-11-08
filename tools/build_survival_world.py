@@ -658,8 +658,8 @@ def cargo_units(units, used_ids, z, top_number, v):
 
 
 def decoy_units(units, used_ids, z, top_number):
-    """THE DECOY (survival_events.DECOY_*): the bait and the 35 trap UAVs (Mission 30's Marker UAV desc with its laser pod,
-    its class imported: retag_parts; a box and the TGT mark), the bait's mark and the 35 marks (Mission 22's dummy desc,
+    """THE DECOY (survival_events.DECOY_*): the bait and the DECOY_N trap UAVs (Mission 30's Marker UAV desc with its laser pod,
+    its class imported: retag_parts; a box and the TGT mark), the bait's mark and the DECOY_N marks (Mission 22's dummy desc,
     invincible, attack-target exceptions, no box), the four Spear shooters (Mission 19's God desc with its targeting dummy,
     invincible, attack-target exceptions, 30 km up)."""
     se = survival_events

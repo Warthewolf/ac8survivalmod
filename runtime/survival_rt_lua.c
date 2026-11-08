@@ -582,6 +582,32 @@ static int L_MusicSave(void* lua)
     return Ret(lua, SV_ERR_BAD_ARGS);
 }
 
+/* (runtime 0.32.31) SV_MusicLen(event, ms) -> how many songs have a length; event "" clears them. A looping Online Mode
+ * track (MusicLoopCap) moves on after its song's own length instead of SV_MusicLoop's. */
+static int L_MusicLen(void* lua)
+{
+    char name[72];
+    size_t n = 0;
+    double ms = 0;
+    if (!ArgBytes(lua, name, sizeof(name), &n)) return Ret(lua, SV_ERR_BAD_ARGS);
+    ArgNumber(lua, &ms);
+    if (n == 0) { g_nmlen = 0; return Ret(lua, 0); }
+    int i = 0;
+    for (; i < g_nmlen; ++i) {                            /* (no C library here: compared by hand) */
+        const char* x = g_mlen[i].name;
+        size_t j = 0;
+        while (j < n && x[j] == name[j]) ++j;
+        if (j == n && x[n] == 0) break;
+    }
+    if (i == g_nmlen) {
+        if (g_nmlen >= MLEN_MAX) return Ret(lua, SV_ERR_BAD_ARGS);
+        memcpy(g_mlen[i].name, name, n + 1);
+        ++g_nmlen;
+    }
+    g_mlen[i].ms = ms < 0 ? 0 : ms > 3600000 ? 3600000 : (int32_t)ms;
+    return Ret(lua, g_nmlen);
+}
+
 /* SV_MusicLoop(ms) -> the old length; ms 0 = a track that loops for ever plays until skipped (SV_ERR_NO_GAME: no clock hook) */
 static int L_MusicLoop(void* lua)
 {

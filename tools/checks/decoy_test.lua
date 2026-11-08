@@ -20,7 +20,7 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
 local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do
@@ -212,9 +212,9 @@ DECOY.forced = true
 check(K.ready() == true, "the test key's force goes past once a run")
 DECOY.forced, RUN.specialAt.decoy = nil, nil
 for _, f in pairs(LEVEL_DROPS) do pcall(f) end
-MISSING_UNIT[DECOY.uav(35)] = true
-check(K.ready() == false and logged("world data has no SV_Unit_DecoyUav_35"), "a build without its units: never")
-MISSING_UNIT[DECOY.uav(35)] = nil
+MISSING_UNIT[DECOY.uav(40)] = true                 -- ((2026-11-08) 40: the user's "max of 40")
+check(K.ready() == false and logged("world data has no SV_Unit_DecoyUav_40"), "a build without its units: never")
+MISSING_UNIT[DECOY.uav(40)] = nil
 for _, f in pairs(LEVEL_DROPS) do pcall(f) end
 C.enabled = false
 check(K.ready() == false, "enabled = false: never")
@@ -341,6 +341,11 @@ step(0.5)
 check(DECOY.markMode == "attach" and logged("attached %(K2_AttachToActor held"), "the attach held: logged")
 step(r.strikeAt - now - 0.3)
 check(evs("^RE_SV_DecoySpear_") == 0 and evs("^RE_SV_DecoyRadio_Imminent$") == 1, "no Spear before the 8 s; the imminent call before it")
+-- ((2026-11-08) the user: a "Ring on the UAV locking you") its minimap ping every ping_lock_s while the lock counts down
+local pings = evs("^RE_SV_DecoyPing_01$")
+check(pings >= math.floor((C.lock_delay_s + C.lock_s - 1) / C.ping_lock_s) and pings <= math.ceil((C.lock_delay_s + C.lock_s) / C.ping_lock_s) + 1
+      and evs("^RE_SV_DecoyPing_0[2-9]$") == 0 and logged("UAV 1 has you: its minimap ring every 2.0 s"),
+      "the UAV locking you rings on the minimap every ping_lock_s (" .. pings .. "), no other one")
 me.vel = { X = 25000, Y = 0, Z = 0 }
 local rod = obj("BP_RodsFromGod", 1, { X = 0, Y = 0, Z = 5800000 })
 rod.PredictionTime = 0
@@ -657,6 +662,14 @@ check(AF.bomb == 0 and logged("the host's airfield takes the damage"), "a joiner
 COOP = nil
 AF = nil
 
+print("the round's total by players")
+-- ((2026-11-08) the user: "Total UAV's in solo 12 and in Coop +4 per player with a max of 40")
+fresh()
+C.max_total = 40
+K.spawn(0); step(0.25); bodyOf(C.bait_unit).HealthInternal = 0
+step(2)
+check(DECOY.total.n == 12, "solo: 12 UAVs in all (" .. tostring(DECOY.total.n) .. ")")
+
 print("co-op: the host")
 local sent = {}
 local function coop(role, slot, list)
@@ -695,6 +708,18 @@ step(0.5)
 check(#sentOf("^%-1>dk|c|1|down$") == 1, "its kill to every joiner: dk|c|1|down")
 DECOY.syncTo(5)
 check(#sentOf("^5>dk|s|trap|") == 1, "a joiner asking for the picture gets the round's state (dk|s to it alone)")
+local function lastMax() local m = sentOf("^%-1>dk|s|"); local last = m[#m]; return last and tonumber(last:match("|(%d+)$")) end
+check(DECOY.total.n == 16 and lastMax() == 16, "two players: up to 16 (12 + 4), the joiners told (" .. tostring(lastMax()) .. ")")
+plist[3] = { slot = 4, obj = joiner, at = joiner.at, alive = true, fresh = true }
+step(0.5)
+check(DECOY.total.n == 20 and logged("3 players now: up to 20 Spear UAVs"), "a third player: 20")
+plist[3] = nil
+step(0.5)
+check(DECOY.total.n == 20, "a player leaving takes none away")
+for k = 3, 10 do plist[k] = { slot = k + 2, obj = joiner, at = joiner.at, alive = true, fresh = true } end
+step(0.5)
+check(DECOY.total.n == 40, "ten players: 40 at most (" .. tostring(DECOY.total.n) .. ")")
+for k = 3, 10 do plist[k] = nil end
 
 ---------------------------------------------------------------------------------------------------- co-op: a joiner
 print("co-op: a joiner")

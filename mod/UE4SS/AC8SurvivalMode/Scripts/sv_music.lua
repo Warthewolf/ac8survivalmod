@@ -207,6 +207,50 @@ local function cleanTick()
     end
 end
 
+-- ((2026-11-08) Alyssa's test of 0.74.31: "Hush just abruptly ends and the next track plays") a looping Online Mode track
+-- moves on after its song's own length: the lobby jukebox's recording of the same song (its database's DurationMax,
+-- AKE_Bgm_JukeBox_<ac7>_<Hush>_Play for AKE_Bgm_Online_<ACE7>_<Hush>_Play), else player_loop_s (runtime SV_MusicLen)
+MUSIC.lobbyDb = "/Game/WwiseAssets/Database/DA_SoundDB_AKB_BGM_Online_Lobby.DA_SoundDB_AKB_BGM_Online_Lobby"
+MUSIC.gameOf = { ACE04 = "ac04", ACE5 = "ac5", ACE6 = "ac6", ACE7 = "ac7", ACEZ = "acz" }
+local function songKey(s) return (s:lower():gsub("[^%w]", "")) end
+local LEN
+local function lobbyLengths()
+    if LEN then return LEN end
+    local db = StaticFindObject(MUSIC.lobbyDb)
+    if not valid(db) then db = loadObject(MUSIC.lobbyDb) end
+    if not valid(db) then return nil end
+    local t, n = {}, 0
+    pcall(function()
+        db.Banks:ForEach(function(_, b)
+            b:get().Events:ForEach(function(_, e)
+                local ev = e:get()
+                local name = str(ev.Name)
+                local game, song = name:match("^AKE_Bgm_JukeBox_(ac%w-)_(.+)_Play$")
+                local okM, mx = pcall(function() return ev.DurationMax end)
+                if game and okM and type(mx) == "number" and mx > 1 then
+                    t[game .. "|" .. songKey(song)] = math.floor(mx * 1000); n = n + 1
+                end
+            end)
+        end)
+    end)
+    if n == 0 then return nil end
+    LEN = t
+    return t
+end
+local function setLengths(added)
+    if type(SV_MusicLen) ~= "function" then return end
+    SV_MusicLen("", 0)
+    local t = lobbyLengths()
+    local own, rest = 0, 0
+    for r in pairs(added) do
+        local g, song = r:match("^AKE_Bgm_Online_(ACE%w-)_(.+)_Play$")
+        local ms = t and g and MUSIC.gameOf[g] and t[MUSIC.gameOf[g] .. "|" .. songKey(song)]
+        if ms then SV_MusicLen(r, ms); own = own + 1 else rest = rest + 1 end
+    end
+    log(string.format("music player: %d looping songs move on after their own length (the lobby jukebox's recordings%s), "
+        .. "%d after %d s", own, t and "" or ": its database NOT read", rest, math.floor(tonumber(CFG.music.player_loop_s) or 0)))
+end
+
 -- the whole pass (once a level): stock rows hidden / unlocked, the draw added; true when done
 local function pass(game, mine)
     local stock, ours = rowList(game), rowList(mine)
@@ -250,6 +294,7 @@ local function pass(game, mine)
         local _, now = dtCall(game, "FindRow", r)
         if now ~= nil then MU.added[r] = true; nNew = nNew + 1 end
     end
+    pcall(setLengths, MU.added)
     log(string.format("music player: %d stock tracks shown (%d unlocked for Survival), %d hidden%s; %d of Survival's %d "
         .. "drawn from %s (%d in it; room %d of %d): %d tracks in all", shown, unlocked, hidden,
         failed > 0 and string.format(" (%d NOT hidden: their unlock didn't take)", failed) or "", nNew, #ours,

@@ -517,9 +517,11 @@ CFG.specials = {
     decoy    = { enabled = true, from_round = 10, once_per_run = true, name = "SHOOT DOWN THE RECON DRONE", fighter_share = 0,
                  dt_npc = "SV_DecoyUav",
                  bait_unit = "SV_Unit_DecoyBait", bait_mark = "SV_Unit_DecoyBaitMark", bait_timeout_s = 240,
-                 ping_every_s = 12, uav_prefix = "SV_Unit_DecoyUav_", mark_prefix = "SV_Unit_DecoyMark_", uavs = 35,
+                 ping_every_s = 12, uav_prefix = "SV_Unit_DecoyUav_", mark_prefix = "SV_Unit_DecoyMark_", uavs = 40,
                  spear_prefix = "SV_Unit_DecoySpear_", spears = 4,
-                 max_total = 35, max_up = 12, per_player_max = 4, near_km = 8.0, spawn_every_s = 4.0,
+                 -- ((2026-11-08) the user: "Total UAV's in solo 12 and in Coop +4 per player with a max of 40")
+                 total_solo = 12, total_per_player = 4,
+                 max_total = 40, max_up = 12, per_player_max = 4, near_km = 8.0, spawn_every_s = 4.0,
                  spawn_km = { 2.5, 5.0 }, alt_m = 1000, min_alt_m = 600, max_alt_m = 9000, gap_km = 1.5,
                  safe_at = { 1610476, -436142 }, safe_km = 5.0, edge_km = 2.0,
                  -- ((2026-11-07) Alyssa's test: the Spear every 2-4 s) at most locks_per_player locks on a player at
@@ -527,6 +529,9 @@ CFG.specials = {
                  -- one on them (their strikes that far apart: 10, the user: "have the strikes come every 10 seconds
                  -- with the UAVs"), a UAV relock_s after its own strike
                  lock_after_s = 2.0, lock_delay_s = 1.5, lock_s = 8.0, relock_s = 1.0, imminent_s = 3.0,
+                 -- ((2026-11-08) the user: a "Ring on the UAV locking you" on the minimap) its ping every ping_lock_s
+                 -- while its lock on you counts down (RE_SV_DecoyPing_NN; 0: never)
+                 ping_lock_s = 2.0,
                  locks_per_player = 2, lock_gap_s = 10.0,
                  designate_s = 40.0, arm_wait_s = 10.0,
                  trap_s = 300, safe_hold_s = 5.0, safe_after_s = 30,

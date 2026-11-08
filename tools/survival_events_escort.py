@@ -363,7 +363,7 @@ DECOY_BAIT_HEALTH_ADD = 114.0                # 6 + 114 = 120 HP (the mission row
 DECOY_BAIT_AREA_M = 4000.0
 DECOY_BAIT_MARK_UNIT, DECOY_BAIT_MARK_OBJ = 'SV_Unit_DecoyBaitMark', 'SV_Obj_DecoyBaitMark'
 DECOY_BAIT_MARK_SPOT = (1610476.0, -436142.0, 600.0)                       # the runway's centre, 1 m over it
-DECOY_N = 35
+DECOY_N = 40          # ((2026-11-08) the user: "+4 per player with a max of 40": CFG.specials.decoy.uavs
 DECOY_UAV_ROW, DECOY_UAV_NPC, DECOY_UAV_NPC_SOURCE = 'sv_decoy_uav', 'SV_DecoyUav', 'OP0033_uavst_01'
 DECOY_UAV_AREA_M, DECOY_UAV_ALT_M = 2500.0, (100.0, 12000.0)                # they circle where they're spawned
 DECOY_MISSION_TABLE = '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission030'
@@ -387,7 +387,7 @@ DECOY_RADIO_SPEAKER = 'LIVE_AWACS'
 
 
 def decoy_uavs():
-    """[(nn, unit, object, mark unit, mark object)] for the 35 trap UAVs: SV_Unit_DecoyUav_01 .. _35 (stored as the engine
+    """[(nn, unit, object, mark unit, mark object)] for the DECOY_N trap UAVs: SV_Unit_DecoyUav_01 .. (stored as the engine
     splits them: hard rule 17), their objects SV_Obj_DecoyUav01 .. (no split tail), marks SV_Unit_DecoyMark_01 .. ."""
     return [(k, f'SV_Unit_DecoyUav_{k:02d}', f'SV_Obj_DecoyUav{k:02d}', f'SV_Unit_DecoyMark_{k:02d}', f'SV_Obj_DecoyMark{k:02d}')
             for k in range(1, DECOY_N + 1)]
@@ -751,6 +751,11 @@ def build_decoy(g, flag, stock_ep):
         g.execute(t_stop, off, {0: obj})
         remote(me)
         g.execute(t_tp, me, {1: mobj, 4: '0.0', 5: '0.0', 6: '0.0', 9: '0.0', 10: '0.0', 11: '0.0'})
+        # ((2026-11-08) the user: a "Ring on the UAV locking you"): its minimap ping, as the bait's (Lua fires it on the
+        # locked player's own game while the lock counts down: sv_decoy.lua DECOY.pingLock)
+        ping = f'RE_SV_DecoyPing_{nn:02d}'
+        remote(ping)
+        g.execute(t_nav, ping, {1: unit})
     for k, (unit, obj) in enumerate(DECOY_SPEARS):
         ev = f'RE_SV_DecoySpear_{k + 1}'
         remote(ev)
@@ -763,6 +768,6 @@ def build_decoy(g, flag, stock_ep):
         assert survival_fname_plain(grp) and survival_fname_plain(ev), grp
         remote(ev)
         g.execute(t_radio, ev, {0: grp})
-    print(f'  decoy: the bait, {DECOY_N} trap UAVs (RE_SV_DecoyLaserOn_<nn> / Off_<nn> / MarkOnMe_<nn>), {len(DECOY_SPEARS)} Spear '
+    print(f'  decoy: the bait, {DECOY_N} trap UAVs (RE_SV_DecoyLaserOn_<nn> / Off_<nn> / MarkOnMe_<nn> / Ping_<nn>), {len(DECOY_SPEARS)} Spear '
           f'shooters (RE_SV_DecoySpear_<s>, tag {DECOY_SPEAR_TAG} -> {DECOY_HIT_FLAG}), RE_SV_DecoyKill, {len(DECOY_RADIO)} radio '
           f'lines: {len(g.trig) - n_trig} triggers, {len(g.ex) - n_ex} execs')

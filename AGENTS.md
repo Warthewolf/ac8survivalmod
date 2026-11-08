@@ -303,6 +303,15 @@ Copy a working stock pattern before inventing a new one.
     built only as a level starts (a world subsystem's Initialize), and each build writes what it lists into the save's
     OwnedMusicList. Survival rebuilds it (SV_MusicBuild) and keeps every list within player_max = 120 (sv_music.lua). The
     runtime cuts those save grants back off (SV_MusicSave). tools/re/MUSIC_BANKS.md.
+    Only 2D events can be heard through it: the lobby jukebox's AKE_Bgm_JukeBox_* are 3D (MaxAttenuation 600, 6 m from the
+    lobby's prop) and were silent in Alyssa's run of 0.74.30. Online Mode's versions (AKE_Bgm_Online_ACE7_* ...) played in
+    0.74.31; build_music_rows refuses a 3D event. A looping event is given 60 s, not -1 (0.74.31: "Hush just abruptly ends").
+
+58. Materials we compile in our own UE 5.4 as new masters (tools/laser7's M_SV_TLS_*: AC7's Cascade beam) stop AC8's renderer
+    when drawn: Alyssa's run of 0.74.30 crashed at the ZFA-44s' first volley, on the RHI thread in the Translucency pass
+    (UECC AceCombat8.exe+0x34a8d68). AC8 runs Bandai's own 5.4 build, and our shaders don't bind there. Draw with AC8's own
+    effects and materials instead: 0.74.31 used AC8's NS_UAVTLS_Muzzleflash01 for the same beam, and it fired and
+    intercepted with no crash (2026-11-08). Hard rule 42's parent-on-a-stub route keeps AC8's shaders and stays safe.
 
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,

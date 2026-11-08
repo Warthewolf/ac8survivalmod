@@ -37,8 +37,33 @@ local function said(key, msg) if not DECOY.said[key] then DECOY.said[key] = true
 local function errText(r) return r == 1 and "fired" or ("not fired: " .. tostring((SV_ERR and SV_ERR[r]) or r)) end
 local function dist3(a, b) local dx, dy, dz = a.X - b.X, a.Y - b.Y, a.Z - b.Z; return math.sqrt(dx * dx + dy * dy + dz * dz) end
 local function dist2(a, x, y) local dx, dy = a.X - x, a.Y - y; return math.sqrt(dx * dx + dy * dy) end
-local function maxUavs() return math.max(1, math.min(99, math.floor(num(cfg().uavs, 35)))) end
-local function maxTotal() return math.max(0, math.min(maxUavs(), math.floor(num(cfg().max_total, 35)))) end
+local function maxUavs() return math.max(1, math.min(99, math.floor(num(cfg().uavs, 40)))) end
+-- ((2026-11-08) the user: "Total UAV's in solo 12 and in Coop +4 per player with a max of 40") the round's total: total_solo,
+-- total_per_player more for each player past the first (DECOY.players(): you and every other player of the room),
+-- max_total at most; never lower within a round (a player leaving doesn't take UAVs away: DECOY.total)
+DECOY.total = { D = nil, n = 0 }
+local function totalFor(n)
+    local c = cfg()
+    local t = math.floor(num(c.total_solo, 12) + num(c.total_per_player, 4) * math.max(0, n - 1))
+    return math.max(0, math.min(maxUavs(), math.floor(num(c.max_total, 40)), t))
+end
+local function maxTotal()
+    local T = DECOY.total
+    if T.D ~= D then T.D, T.n, T.players = D, 0, 0 end
+    if not isClient() then
+        local n = 1
+        if DECOY.players then
+            local ok, l = pcall(DECOY.players)
+            if ok and type(l) == "table" then n = math.max(1, #l) end
+        end
+        local t = totalFor(n)
+        if t > T.n then
+            if T.n > 0 then log(string.format("decoy: %d players now: up to %d Spear UAVs this round (was %d)", n, t, T.n)) end
+            T.n, T.players = t, n
+        end
+    elseif (T.host or 0) > T.n then T.n = T.host end      -- (a joiner: the host's, from its "dk|s")
+    return T.n > 0 and T.n or totalFor(1)
+end
 
 ---------------------------------------------------------------------------------------------------- names
 -- (tools/survival_events.py builds them; names ending in digits are stored split there, hard rule 17)
@@ -909,6 +934,26 @@ function DECOY.strike(k, r, now, s)
                              fired = res == 1, pos0 = at, vel0 = vel }
     return res
 end
+-- ((2026-11-08) the user: a "Ring on the UAV locking you" on the minimap; Jeff's note of 2026-11-08: "it's unclear whether
+-- or not you are being locked on by a UAV") while a UAV's lock on you counts down, its minimap ping (Mission 22's "look
+-- here" ring on its unit, RE_SV_DecoyPing_NN, as the bait's) every ping_lock_s: this game's own (the records are each
+-- game's: never sent), on the UAV that has you; a build without the record (an older container) stays quiet
+function DECOY.pingLock(k, r, now)
+    local c = cfg()
+    local every = num(c.ping_lock_s, 2.0)
+    if every <= 0 or DECOY.pingOff then return end
+    if r.pingAt and now < r.pingAt then return end
+    r.pingAt = now + every
+    local res = fire(string.format("RE_SV_DecoyPing_%02d", k))
+    if res ~= 1 then
+        DECOY.pingOff = true
+        log(string.format("decoy: the minimap ring on a locking UAV isn't in this build (RE_SV_DecoyPing_%02d %s): none shown", k,
+            errText(res)))
+    elseif not r.pinged then
+        r.pinged = true
+        log(string.format("decoy: UAV %d has you: its minimap ring every %.1f s while its lock counts down", k, every))
+    end
+end
 local function runnersTick(now, players)
     local c = cfg()
     local soonest = nil
@@ -937,8 +982,9 @@ local function runnersTick(now, players)
                 else
                     DECOY.strike(k, r, now)
                 end
-            elseif not soonest or r.strikeAt < soonest.strikeAt then
-                soonest = r
+            else
+                if not soonest or r.strikeAt < soonest.strikeAt then soonest = r end
+                DECOY.pingLock(k, r, now)
             end
         end
         if r.state ~= "count" and now - (r.struckAt or r.at) > 30 then DECOY.R[k] = nil end
@@ -1490,6 +1536,8 @@ function DECOY.fromHost(f)
     if m.kind == "s" then
         local was = DECOY.cs and DECOY.cs.state
         DECOY.cs = { state = m.state, spawned = m.spawned, down = m.down, up = m.up, max = m.max, got = os.clock() }
+        if DECOY.total.D ~= D then DECOY.total = { D = D, n = 0 } end
+        DECOY.total.host = math.min(m.max, maxUavs())          -- (the host's total for its room: maxTotal())
         if m.state ~= was then
             log(string.format("decoy: the host's DECOY round: %s (%d of %d UAVs came, %d down, %d up)", m.state, m.spawned, m.max,
                 m.down, m.up))
