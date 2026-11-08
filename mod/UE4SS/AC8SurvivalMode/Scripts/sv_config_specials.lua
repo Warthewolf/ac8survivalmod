@@ -1470,10 +1470,12 @@ CFG.specials = {
                  -- rain.from_stage) and the callouts; stages 1-3 the rounds before Distant Thunder's, 4 its own)
                  buildup = { enabled = true,
                              sky = { asset = "/Game/Cloudly/CloudlySkyParams/Ingame/Mission012/CSP_ms12_260216.CSP_ms12_260216",
-                                     -- ((2026-11-08) clouds / rain_pillar off: their writes black the whole sky out for a
-                                     -- moment (the user's recording of 0.74.36); thunder.probe (Ctrl+/) finds which are safe)
-                                     fraction = { 0.3, 0.6, 0.85, 1.0 }, ramp_s = 300, clear_s = 90, clouds = false,
-                                     rain_pillar = false, pillar_km = 6,
+                                     -- ((2026-11-08) a change of the clouds' heights, rain clouds or rain pillar blacks the
+                                     -- whole sky out for a moment (hard rule 61: the user's recordings of 0.74.36 and the sky
+                                     -- probe's of 0.74.38); clouds "safe": every other cloud value ramped, never those in
+                                     -- `unsafe`; the rain pillar off)
+                                     fraction = { 0.3, 0.6, 0.85, 1.0 }, ramp_s = 300, clear_s = 90, clouds = "safe",
+                                     unsafe = { "StartHeightInKm", "RainCloud", "RainPillar" }, rain_pillar = false, pillar_km = 6,
                                      dark = { enabled = true, ev = -1.5, sun_x = 0.4, skylight_x = 0.5 } },
                              cells = { n = { 2, 4, 6, 6 }, radius_m = { 2000, 3000, 4000, 4500 }, top_m = 7000, from_km = { 6, 28 },
                                        roll_s = { { 6, 9 }, { 4, 6.5 }, { 2.5, 4.5 }, { 2, 3.5 } }, chance_x = { 0.6, 0.8, 1.0, 1.0 },

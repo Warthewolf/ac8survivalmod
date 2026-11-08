@@ -323,11 +323,13 @@ Copy a working stock pattern before inventing a new one.
     check gamePaused before reading anything as the game's own effect. Survival rolls its own strikes and calls the game's
     pieces itself (sv_anomalies_dev.lua: the HUD's BeginHUDDistortionLightning, the shake, the sounds, the damage).
 
-61. Writing the sky asset's cloud values (FSkyParams' cloud fields, its CloudLayer0-2) blacks the whole sky out for a
-    moment, every write: the user's recording of 0.74.36 (2026-11-08) had a black sky for ~0.1 s once a second, exactly the
-    storm build-up's write rate (25 cloud values each second). The sun, moon, stars and the exposure, written the same way
-    by the day-night arc, never did. Don't ramp cloud values every second; the sky probe (Ctrl+/, sv_anomalies_dev.lua)
-    finds which groups are safe.
+61. A CHANGE of the sky asset's cloud heights (CloudStartHeightInKm, CloudLayer0-2 StartHeightInKm), rain clouds
+    (CloudLayer*.RainCloud*) or rain pillar (RainPillar*) blacks the whole sky out for ~0.1 s. The user's recording of
+    0.74.36 (2026-11-08) had a black sky once a second at the storm build-up's writes; the sky probe's recording of 0.74.38
+    (21:40:11, Ctrl+/, each group written 3 times) dipped only at the first write of those groups and at their put-back,
+    never when the same values were written again, and never for the clouds' light, density, thickness or edges (the light
+    greyed the clouds' undersides). The sun, moon, stars and exposure never black it out. Ramp only the safe ones
+    (buildup.sky.clouds "safe", sky.unsafe).
 
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,

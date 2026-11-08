@@ -198,3 +198,15 @@ sv_anomalies_dev.lua (BU), thunder_test.
   does any write black it out?), 2 the clouds' light, 3 density, 4 heights, 5 thickness, 6 edges, 7 rain clouds, 8 the
   layers on or off, 9 the rain pillar on you; a press after the last: all back. The test: record while pressing through,
   then match the black frames to the groups (frame brightness over time, as for her recording).
+
+## The sky probe's answer (2026-11-08, 0.74.38's test -> 0.74.39)
+- The user's recording of the probe's second pass (2026-11-08 21-40-11.mp4, 64.6 s; the log's os.clock = video time +
+  219.24 s, found by aligning the dips with the writes): 9 black dips in the sky (brightness ~105 -> ~18 for 0.1 s):
+  group 4 (heights) write 1 and its put-back, group 7 (rain clouds) write 1 and its put-back (the dip at group 8's write 1:
+  no value of group 8 differs between the two skies), group 9 (the pillar on you, its centre moving with the plane) all 3
+  writes and its put-back, and the first pass's pillar put-back at 2.3 s. Never: group 1 (control), 2 (light), 3 (density),
+  5 (thickness: its write fell on group 4's put-back, its own put-back clean), 6 (edges); never a write 2 or 3 (the same
+  values again). Frames: the clouds' light (CloudSkyAmbientLightIntensity 10 -> 1.38 ...) greyed their undersides.
+- 0.74.39: the build-up ramps every differing cloud value but the unsafe ones (sky.clouds "safe", sky.unsafe:
+  StartHeightInKm, RainCloud, RainPillar), with the darkening; logged `storm build-up: the clouds ramped: N of them, never
+  these (they black the sky out when they change): ...`. The rain pillar stays off.

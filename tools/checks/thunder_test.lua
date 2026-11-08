@@ -504,7 +504,8 @@ C.strike.stock = false
 part("sv_sky.lua")
 local B = C.buildup
 -- ((2026-11-08) the user's recording of 0.74.36: every write of the cloud values blacked the whole sky out for a moment)
-check(B.sky.clouds == false and B.sky.rain_pillar == false, "shipped: the cloud values and the rain pillar not written (they black the sky out)")
+check(B.sky.clouds == "safe" and B.sky.rain_pillar == false and #B.sky.unsafe == 3,
+    "shipped: only the safe cloud values ramped (never heights, rain clouds), no rain pillar (they black the sky out)")
 B.sky.clouds, B.sky.rain_pillar = true, true             -- (their writes' own checks below; off again after)
 local mine = obj("CloudlySkyParams /Game/Cloudly/CloudlySkyParams/Ingame/Mission004/CSP_ms04_20251218b.CSP_ms04_20251218b", { Data = {
     CloudDensityExtintionBalance = 1.0, EnableClouds = true, SunIntensity = { Factor = 10 },
@@ -607,11 +608,17 @@ press("OEM_SEVEN"); gtick(0.25)
 check(found("storm build-up: the storm clears (Ctrl+')", from) and (THUNDER.buildup() == nil or THUNDER.buildup().clearing), "... then the storm clears")
 for _ = 1, 120 do gtick(1) end
 check(THUNDER.buildup() == nil, "and is over")
--- the shipped way: the clouds left alone, only the darkening
-B.sky.clouds, B.sky.rain_pillar = false, false
+-- the shipped way: the safe cloud values ramped, never the heights or rain clouds (the sky probe's recording of 0.74.38)
+B.sky.clouds, B.sky.rain_pillar = "safe", false
+from = #logs + 1
 press("OEM_SEVEN"); gtick(0.25)
-check(math.abs(mine.Data.CloudLayer0.CloudDensity - 0.3) < 1e-6 and math.abs(mine.Data.SunIntensity.Factor - 10 * (1 - 0.6 * 0.3)) < 1e-6,
-    "the shipped way (clouds off): the cloud values left alone, the sun darkened")
+check(math.abs(mine.Data.CloudLayer0.CloudDensity - 0.48) < 1e-6 and math.abs(mine.Data.CloudLayer0.StartHeightInKm - 1.5) < 1e-6
+    and mine.Data.CloudLayer0.RainCloudEnable == false and math.abs(mine.Data.SunIntensity.Factor - 10 * (1 - 0.6 * 0.3)) < 1e-6,
+    "the shipped way: the cloud density ramped, the heights and rain clouds untouched, the sun darkened")
+B.sky.clouds = false
+press("OEM_SEVEN"); gtick(0.25)
+check(math.abs(mine.Data.CloudLayer0.CloudDensity - 0.48) < 1e-6, "clouds false: the cloud values left where they were")
+B.sky.clouds = "safe"
 THUNDER.buEnd("the test")
 check(math.abs(mine.Data.SunIntensity.Factor - 10) < 1e-6, "... and put back")
 

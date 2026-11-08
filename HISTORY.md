@@ -2150,3 +2150,15 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
 - 55 suites pass (48 Lua, 7 native; coop_test not run). Packaged: friends' e6de31710697..., TESTER 1b961f4e2f30...
   (0.74.38-coop2mp.130), both registered; patches over 0.74.27-0.74.37 (the TESTER one and the friends' one sent).
   INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.36: build/backup/install_before_0.74.38; 87 files equal).
+
+## 0.74.39 (2026-11-08, runtime 0.32.31; not yet run in game)
+- The sky probe's answer (the user's recording 2026-11-08 21-40-11.mp4 of 0.74.38, matched to the log's writes by the
+  sky's brightness frame by frame): only a CHANGE of the clouds' heights, rain clouds or rain pillar blacks the whole sky
+  out (~0.1 s); the clouds' light, density, thickness and edges never did, nor a value written again unchanged; the light
+  greyed the clouds' undersides. Hard rule 61 (refined). The storm build-up ramps every differing cloud value but those
+  (sky.clouds "safe", sky.unsafe: StartHeightInKm, RainCloud, RainPillar), with the darkening; the rain pillar stays off.
+  tools/re/THUNDER.md. thunder_test.
+- 55 suites pass (48 Lua, 7 native; coop_test not run). Packaged: friends' c95c5edf246a..., TESTER 61a9312e4712...
+  (0.74.39-coop2mp.131), both registered; patches over 0.74.27-0.74.38 (the TESTER one and the friends' one, no Distant
+  Thunder in it, sent). INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.38: build/backup/install_before_0.74.39;
+  87 files equal).

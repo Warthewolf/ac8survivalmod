@@ -727,6 +727,14 @@ local function skyFields()
     SF.list = out
     log(string.format("storm build-up: %d of %d sky fields differ from Mission 12's storm sky (%s): %s", #out, #SKY_PATHS,
         tostring(c.asset):match("[^/]+$") or "?", #said > 0 and table.concat(said, ", ") or "none"))
+    local skip = {}
+    if c.clouds ~= true then
+        for _, e in ipairs(out) do
+            for _, u in ipairs(type(c.unsafe) == "table" and c.unsafe or {}) do if e.path:find(u, 1, true) then skip[#skip + 1] = e.path; break end end
+        end
+    end
+    log(string.format("storm build-up: the clouds %s%s", c.clouds == false and "left alone (sky.clouds false)" or ("ramped: " .. (#out - #skip) .. " of them"),
+        #skip > 0 and c.clouds ~= false and (", never these (they black the sky out when they change): " .. table.concat(skip, ", ")) or ""))
     return out
 end
 -- ((2026-11-08) the user's look at 0.74.36: a clear blue sky at 11%) the storm's darkening, by the values the day-night
@@ -761,14 +769,23 @@ local function skyApply(f)
     if not (V and V.asset) then return 0 end
     local n = 0
     -- ((2026-11-08) the user's recording of 0.74.36: the whole sky black for ~0.1 s at every write of these, once a second
-    -- ("do you not see how the sky is flashing to black??"): off until the sky probe (Ctrl+/) finds which are safe)
-    if (bc().sky or {}).clouds == true then
-        for _, e in ipairs(F) do
+    -- ("do you not see how the sky is flashing to black??"); the sky probe's recording (0.74.38, 21:40:11): only a CHANGE of
+    -- the clouds' heights, rain clouds or rain pillar blacks it out; their light, density, thickness and edges never did.
+    -- sky.clouds: "safe" (every field but those whose path has one of sky.unsafe), true (all), false (none))
+    local sk = bc().sky or {}
+    local unsafe = type(sk.unsafe) == "table" and sk.unsafe or {}
+    local function safe(path)
+        if sk.clouds == true then return true end
+        for _, u in ipairs(unsafe) do if path:find(u, 1, true) then return false end end
+        return true
+    end
+    if sk.clouds == true or sk.clouds == "safe" then
+        for _, e in ipairs(F) do if safe(e.path) then
             local v
             if type(e.base) == "number" then v = e.base + (e.target - e.base) * f else v = (f >= 0.5) and e.target or e.base end
             local _, ok = SKY.writeKey(V, e.key, v)
             if ok then n = n + 1 end
-        end
+        end end
     end
     local nd, why = darkApply(V, f)
     if why ~= SF.darkWhy then SF.darkWhy = why; log(string.format("storm build-up: its darkening %s (%d values)", why, nd)) end
