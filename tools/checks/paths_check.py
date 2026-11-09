@@ -17,7 +17,7 @@ import os, re, subprocess, sys
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 SCAN = ('tools/', 'runtime/', 'mod/', 'docs/')
 SKIP_TOP = {'HISTORY.md'}                           # (the build archive: old notes, left as they were)
-EXEMPT = {'.env.example'}
+EXEMPT = {'.env.example', 'tools/checks/paths_check.py'}   # (this file: its docstring and pattern describe paths)
 MARKER = 'paths_check: ok'
 HIT = re.compile(r'(?<![A-Za-z0-9])[A-Za-z]:[\\/]|/Users/|/home/')
 
