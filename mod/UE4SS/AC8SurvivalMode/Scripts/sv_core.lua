@@ -58,6 +58,13 @@ end
 -- teardowns), so a crash shows what came just before it. Nothing with an older runtime.
 function crumb(s) if type(SV_Crumb) == "function" then pcall(SV_Crumb, tostring(s):sub(1, 230)) end end
 
+-- The log bundle (runtime 0.32.32): lines for logs\session.txt, which goes into the zip of this session's logs (the
+-- version and the co-op role; "key=value", the native SV_Session). Nothing with an older runtime.
+if SV_Session then
+    pcall(SV_Session, "mod=" .. tostring(VERSION))
+    pcall(SV_Session, "role=solo")
+end
+
 -- A line logged once a session for its key (a hook that fails every tick logs one line, not one a tick).
 -- hookErr(what, pcall(f, ...)): a hook's pcall with its first error logged ("<what> error ..."), its results passed
 -- on. The behaviour branch's hooks between parts (code review of 2026-10-29: a bare pcall made a hook that failed read

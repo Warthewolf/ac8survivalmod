@@ -1020,6 +1020,7 @@ function COOP.reopen(role, why, partner)
     local r = SV_CoopOpen(c.transport or "steam", role, partner or c.partner or "auto", c.port or 27777, c.interp_ms or 120, VERSION,
                           maxPlayers())
     COOP.open, COOP.role, COOP.slot = r == 1, role, role == "host" and 0 or nil
+    COOP.noteRole()
     M.state, M.roster = nil, {}
     if role == "host" then M.restoreMine() end          -- (you host: your own settings)
     M.autoAt = os.clock() + AUTO_WAIT + math.random() * AUTO_WAIT
@@ -1086,6 +1087,7 @@ end
 local function closeCoop(why)
     if type(SV_CoopClose) == "function" then SV_CoopClose() end
     COOP.open, COOP.role, COOP.slot = false, nil, nil
+    COOP.noteRole()
     M.state, M.roster, M.linkedOnce, M.wasLost = nil, {}, false, nil
     M.restoreMine()
     pcall(COOP.focusPause, false, "co-op closed")

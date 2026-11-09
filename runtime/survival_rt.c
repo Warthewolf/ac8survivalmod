@@ -26,8 +26,8 @@
 #include "sigs.h"
 #include "uobj.h"                /* (0.32.22: up here for the teardown gate; flight.c's include is then a no-op) */
 
-#define RT_VERSION           L"0.32.31"
-#define RT_VERSION_A         "0.32.31"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.32"
+#define RT_VERSION_A         "0.32.32"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -118,11 +118,14 @@ static void Log(const wchar_t* fmt, ...)
     __sync_lock_release(&g_logLock);
 }
 
-static void OpenLog(void)
+/* g_modRoot (the mod's folder) and g_modsDir (ue4ss\Mods), once: start_mod needs them before OpenLog (the log bundle's
+ * stash of the previous session, runtime 0.32.32). 1 when they're set. */
+static int g_pathsDone;
+static int ModPaths(void)
 {
-    wchar_t path[PATH_CAP];
+    if (g_pathsDone) return 1;
     DWORD n = GetModuleFileNameW(g_hModule, g_modRoot, PATH_CAP);
-    if (!n || n >= PATH_CAP) return;
+    if (!n || n >= PATH_CAP) return 0;
     /* ...\Mods\AC8SurvivalMode\dlls\main.dll -> ...\Mods\AC8SurvivalMode */
     for (int cut = 0; cut < 2; ++cut) {
         wchar_t* s = g_modRoot + WLen(g_modRoot);
@@ -135,6 +138,17 @@ static void OpenLog(void)
         while (s > g_modsDir && *s != L'\\' && *s != L'/') --s;
         *s = 0;
     }
+    g_pathsDone = 1;
+    return 1;
+}
+
+/* (runtime 0.32.32) the log bundle: logbundle.c, #included below; start_mod calls it */
+static void LbSessionAdd(const char* key, const char* value);
+
+static void OpenLog(void)
+{
+    wchar_t path[PATH_CAP];
+    if (!ModPaths()) return;
     size_t k = WLen(g_modRoot);
     if (k + 24 >= PATH_CAP) return;
     memcpy(path, g_modRoot, k * 2);
@@ -964,6 +978,7 @@ static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 #include "flight.c"                                 /* flight sync and DOWN (runtime 0.28.5) */
 
 #include "survival_rt_lua.c"                        /* sound, the SV_* Lua functions, the leaderboard */
+#include "logbundle.c"                               /* the log bundle: a zip of the previous session's logs (runtime 0.32.32) */
 
 static void RegisterLua(void* lua)
 {
@@ -985,7 +1000,7 @@ static void RegisterLua(void* lua)
         { "SV_CoopFire", L_CoopFire }, { "SV_CoopShots", L_CoopShots }, { "SV_CoopPPShot", L_CoopPPShot }, { "SV_PPWeapons", L_PPWeapons }, { "SV_CoopPeerIds", L_CoopPeerIds }, { "SV_CoopSwapPP", L_CoopSwapPP }, { "SV_ObjChain", L_ObjChain }, { "SV_StoreKeepAI", L_StoreKeepAI }, { "SV_GcBusy", L_GcBusy },
         { "SV_LaserBegin", L_LaserBegin }, { "SV_LaserState", L_LaserState }, { "SV_LaserKills", L_LaserKills }, { "SV_Intercept", L_Intercept }, { "SV_LaserOwner", L_LaserOwner },
         { "SV_CoopLoadout", L_CoopLoadout }, { "SV_SpawnCam", L_SpawnCam }, { "SV_StickNow", L_StickNow }, { "SV_PPName", L_PPName }, { "SV_CoopPaint", L_CoopPaint }, { "SV_InputNow", L_InputNow }, { "SV_Down", L_Down }, { "SV_Respawn", L_Respawn },
-        { "SV_MemMB", L_MemMB }, { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
+        { "SV_Session", L_Session }, { "SV_MemMB", L_MemMB }, { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
 #ifndef SV_OFFLINE
         { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply }, { "SV_SteamName", L_SteamName },
         { "SV_BuildHash", L_BuildHash },
@@ -1374,9 +1389,17 @@ EXPORT void* start_mod(void)
     SetWString((MsvcWString*)(mod + 0x60), L"Survival Mode: main menu entry, texts and spawner");
     SetWString((MsvcWString*)(mod + 0x80), L"voidcallsreaper");
     if (g_instances++ == 0) {
+        ModPaths();
+        LbStashPrevious();                    /* the previous session's logs go to logs\prev before OpenLog truncates them */
         OpenLog();
         OpenCrumbs();
         Log(L"AC8 Survival Mode runtime %s", RT_VERSION);
+        LbReport();
+        LbSessionBegin();
+        HANDLE lz = CreateThread(NULL, 0, LbZipThread, NULL, 0, NULL);
+        if (lz) CloseHandle(lz); else Log(L"logs: could not start the zip thread");
+        HANDLE lu = CreateThread(NULL, 0, LbUe4ssThread, NULL, 0, NULL);
+        if (lu) CloseHandle(lu); else Log(L"logs: could not start the UE4SS.log copy thread");
         HANDLE th = CreateThread(NULL, 0, Worker, NULL, 0, NULL);
         if (th) CloseHandle(th); else Log(L"could not start the install thread");
 #ifndef SV_OFFLINE
