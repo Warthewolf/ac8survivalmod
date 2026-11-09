@@ -1,0 +1,50 @@
+{
+ "part": "Tani_T5",
+ "scale": 1.9,
+ "heading_deg": 0.5513777662365493,
+ "bones": {
+  "Body": [
+   0,
+   0,
+   0
+  ],
+  "turret_yaw": [
+   0,
+   0,
+   0
+  ],
+  "turret_pitch": [
+   147.507,
+   2.597,
+   414.776
+  ]
+ },
+ "sockets": [
+  {
+   "name": "SOC_Gun_01",
+   "bone": "turret_pitch",
+   "loc": [
+    859.6479999999999,
+    -203.678,
+    0.8000000000000114
+   ]
+  },
+  {
+   "name": "SOC_Gun_02",
+   "bone": "turret_pitch",
+   "loc": [
+    859.6469999999999,
+    203.684,
+    0.8000000000000114
+   ]
+  }
+ ],
+ "slots": [
+  {
+   "slot": 0,
+   "source": "usn_mk28_tx.jpg",
+   "basecolor": "T_SV_Tani_T5_0_D"
+  }
+ ],
+ "triangles": 346
+}

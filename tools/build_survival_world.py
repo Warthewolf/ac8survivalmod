@@ -278,6 +278,20 @@ def field_of(d, name):
     return q[0][3] if q else None
 
 
+def tanicorn_units(units, used_ids, z, top_number):
+    """THE TANICORN's milestone 0 (survival_events.TANI_*; docs/re/TANICORN.md): one object of Mission 13's scored dummy
+    unit, as a shoal (box, TGT mark, bIsLanding cleared), on TANI_ROW: Scripts/sv_tanicorn.lua spawns it where it wants."""
+    se = survival_events
+    src = desc_named(stock_wd(se.FISH_SOURCE[0]), 'UnitDescList', se.FISH_SOURCE[1])
+    names = port_unit(units, used_ids, z, src, se.TANI_UNIT, se.TANI_OBJ, se.TANI_ROW, [(0.0, 0.0, se.FISH_Z_CM)], 0.0,
+                      top_number, tgt=True)
+    assert names == [se.TANI_OBJ], names
+    u = unit_named(units, se.TANI_UNIT)
+    clear_flags(u, ('bIsLanding',))
+    place(u, (0.0, 0.0, se.FISH_Z_CM), 0.0)
+    print(f'  {se.TANI_UNIT}: {names[0]} on {se.TANI_ROW} (the Tanicorn test mount)')
+
+
 def fishing_units(units, used_ids, z, top_number):
     """GONE FISHIN' (survival_events.FISH_* / SAL_BOAT_*): units of FISH_PER_GROUND shoals round SAL's boat (one on it),
     from Mission 13's scored dummy unit (faction 2, a box and the TGT mark: hard rules 31, 32), each unit's origin on its
@@ -805,6 +819,7 @@ def build_wd_global():
     valka_unit(units, used_ids, z, top_number)
     valka_eml_unit(units, used_ids, z, top_number)
     fishing_units(units, used_ids, z, top_number)          # GONE FISHIN' (survival_events.FISH_* / SAL_BOAT_*)
+    tanicorn_units(units, used_ids, z, top_number)         # THE TANICORN's test mount (survival_events.TANI_*)
     festival_units(units, used_ids, z, top_number, v)      # THE FESTIVAL (survival_events.FEST_*)
     escort_units(units, used_ids, z, top_number, v)        # THE ESCORT (survival_events.ESC_*)
     cargo_units(units, used_ids, z, top_number, v)         # its unlock: the ZFA-44 cargo ships (CARGO_* / ZFA_*)

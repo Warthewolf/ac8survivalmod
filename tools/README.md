@@ -77,6 +77,8 @@ test build: a key bound twice logs `test: Ctrl+<key> is bound twice`, a key name
 | Ctrl+PAGE_DOWN | the day-night arc one round on (test) | sv_sky.lua |
 | Ctrl+, (`OEM_COMMA`) | the storm test: AC8's lightning on you 60 s; again: the stall flag 3 s; again: off (test) | sv_anomalies.lua |
 | Ctrl+. (`OEM_PERIOD`) | the next round is IFF FATAL ERROR / DI..ANT TH..D..R, the lightning Anomaly (test; never drawn) | sv_anomalies.lua |
+| Ctrl+[ (`OEM_FOUR`) | AC7's laser volley test (test; ZFA=1 builds) | sv_escort_li.lua |
+| Ctrl+T | THE TANICORN's test mount 3 km ahead (test; TANI=1 builds; Ctrl+` was the game console's key) | sv_tanicorn.lua |
 
 THE ESCORT's T0 and carrier keys were Ctrl+F1 / F2 (the tactical items' keys: both ran on a press) and THE DECOY's were
 Ctrl+PAGE_UP / PAGE_DOWN / HOME, now THE FESTIVAL's, the arc's step and GONE FISHIN''s; the lightning Anomaly's

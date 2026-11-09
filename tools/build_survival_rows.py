@@ -272,6 +272,17 @@ def build_model_rows():
     set_prop(row[2], idx['MaxHealth'], 'MaxHealth', ('raw', 'Float', struct.pack('<f', survival_events.FISH_HEALTH)))
     set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.FISH_NAME_KEY))
     out.append(((survival_events.FISH_MODEL, 0), row))
+    # THE TANICORN's milestone 0 mount (survival_events.TANI_MODEL; docs/re/TANICORN.md): GR000_dummy's model row again,
+    # its blueprint Survival's own BP_SV_Tani_T5 (tools/tanicorn; its container ships with TANI=1 only), TANI_HEALTH
+    f = survival_events.fname(survival_events.FISH_MODEL_SOURCE)
+    row = copy.deepcopy(crow[(f[1], f[2])])
+    bpq = [q for q in row[2] if q[1] == 'BlueprintClass'][0]
+    assert bpq[3][0] == 'soft' and bpq[3][2][1] == 'BP_GR000_dummy_CP_C', bpq
+    row[2][:] = [(q[0], q[1], q[2], ('soft', ('name', survival_events.TANI_BP, 0), ('name', survival_events.TANI_BP_CLASS, 0), ''))
+                 if q[1] == 'BlueprintClass' else q for q in row[2]]
+    set_prop(row[2], idx['MaxHealth'], 'MaxHealth', ('raw', 'Float', struct.pack('<f', survival_events.TANI_HEALTH)))
+    set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.TANI_NAME_KEY))
+    out.append(((survival_events.TANI_MODEL, 0), row))
     # ((2026-11-07) the user: the ZFA-44s' boxes read "SU-47") the ZFA-44 host's model: the allied Su-47's (ZFA_MODEL) whole
     # but its name, ZFA_NAME_KEY ("ZFA-44", Lua's text)
     f = survival_events.fname(survival_events.ZFA_MODEL)
@@ -291,6 +302,7 @@ def build_model_rows():
     set_prop(row[2], idx['MaxHealth'], 'MaxHealth', ('raw', 'Float', struct.pack('<f', survival_events.ZFA_DRONE_HEALTH)))
     assert survival_events.fname(survival_events.ZFA_DRONE_MODEL_SV)[2] == 0
     out.append(((survival_events.ZFA_DRONE_MODEL_SV, 0), row))
+    for n in (survival_events.TANI_BP, survival_events.TANI_BP_CLASS): z.nb.add(n)
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
     dt['rows'] = out

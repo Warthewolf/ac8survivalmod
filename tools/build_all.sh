@@ -71,6 +71,13 @@ if [ "$ZFA" = 1 ]; then
         echo "no LaserInterceptor container (sh tools/laser7/build.sh): the ZFA-44s keep AC8's swing laser"
     fi
 fi
+# THE TANICORN's parts (tools/tanicorn: Survival's own blueprints on the Tanager stand-in, Sea Power's Iowa: the user's
+# install only, 2026-11-09): staged with TANI=1 only (package_dev.sh keeps it with TANI=1; package_release.sh never ships it)
+if [ "$TANI" = 1 ]; then
+    [ -f build/tanicorn/out/SurvivalMode_Tani_P.utoc ] || { echo "TANI=1: no Tanicorn container (sh tools/tanicorn/build.sh)"; exit 1; }
+    cp build/tanicorn/out/SurvivalMode_Tani_P.utoc build/tanicorn/out/SurvivalMode_Tani_P.ucas build/install/SurvivalMode/
+    echo "staged the Tanicorn's parts (build/tanicorn/out/SurvivalMode_Tani_P; dev only)"
+fi
 cp -r mod/UE4SS/AC8SurvivalMode build/install/
 mkdir -p build/install/AC8SurvivalMode/dlls && cp build/runtime/main.dll build/install/AC8SurvivalMode/dlls/
 # what the build found of the stock main-menu page (build_survival.py; Scripts/sv_menu.lua reads it): only with pages
