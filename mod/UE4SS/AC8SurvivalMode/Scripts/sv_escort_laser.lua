@@ -1001,6 +1001,26 @@ function ZLAUNCH.pickArm(C, arms)
     log(string.format("carrier: %s: every launcher arm's last ZFA-44s are still up: arm %d as it comes", tostring(C.name), j))
     return j
 end
+-- ((2026-11-09) Shazzy's solo host log of 0.74.36: AC8 crashed at the STORE's close (an access violation reading 0x3d9
+-- under the stock AI restore) 26 s after CARRIER 1's hull unit was destroyed with 10 parked ZFA-44s of its launchers
+-- still up ("still has 2 up after 30 s" for 5 arms). A carrier's hull unit never goes off the spawner's list while a
+-- ZFA-44 of its launcher arms is up, as an arm's own unit never does: true while ship i's is held (`who` logged once,
+-- t.heldSaid), looked at again by the caller (sv_escort.lua's leaving carrier and recycleTick)
+function ZLAUNCH.holdHull(i, t, who, why)
+    local up = 0
+    for _, arm in ipairs((cc().launchers or {})[i] or {}) do
+        if type(arm.unit) == "string" then
+            local ok, a = pcall(SV_UnitAlive, arm.unit)
+            if ok and type(a) == "number" and a > 0 then up = up + a end
+        end
+    end
+    if up > 0 and not t.heldSaid then
+        t.heldSaid = true
+        log(string.format("carrier: %s (%s): its hull held on the spawner's list, switched off: %d ZFA-44s of its launchers "
+            .. "still up (never taken off with them up; looked at again every 5 s)", tostring(who), tostring(why), up))
+    end
+    return up > 0
+end
 -- (a carrier leaving or sunk, the host's or a joiner's own) ship i's parked ZFA-44s (under parked_m, never launched)
 -- finished off where they are, under the sea, unpaid, and its arms' units (but keep's: its flight up) off the spawner's
 -- list once nothing of them is up (sv_escort.lua recycleTick: never with planes up), so its next ship's launchers have
@@ -1022,6 +1042,10 @@ function ZLAUNCH.parkedOff(i, keep, why)
                         pcall(function() e.obj:SetIsInvincible(false) end)
                         pcall(function() e.obj.bIsInvincible = false end)
                         pcall(function() e.obj:SetMinHealth(0.0) end)
+                        -- ((2026-11-09) Shazzy's log of 0.74.36: 10 "finished off" and every arm still 2 up 30 s on:
+                        -- a carrier leaving had switched them off (offObj: SetActive false), and an inactive object
+                        -- takes no damage (inferred). Switched on again first, under the sea, then the blow)
+                        pcall(function() e.obj:SetActive(true, false, false) end)
                         if valid(gs) and pcall(function() gs:ApplyDamage(e.obj, 1.0e8, nil, nil, nil) end) then n = n + 1 end
                     end
                 end

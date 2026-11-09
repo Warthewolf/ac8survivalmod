@@ -2240,3 +2240,27 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   menu: ...`); when the spawner still makes none, our class spawned straight 300 m off (BeginDeferredActorSpawnFromClass
   as AC7's laser: `tanicorn: straight spawn of our class ...`). 55 suites pass. package_dev.sh (VALKA=1 ZFA=1 TANI=1),
   build ad178d75bdfb... registered. INSTALLED 2026-11-10 (backup: build/backup/install_before_0.74.46).
+
+## 0.74.48 (2026-11-09; Lua only, the runtime unchanged; not built or run in game: built on Linux, no package)
+- Shazzy's crash on 0.74.36 (solo, hosting co-op with nobody joined; "everything worked fine until round 10, went to buy ammo
+  and allies and the game crashed"): UECC, an access violation reading 0x3d9 on the game thread at the STORE's close, right
+  after `minigame: type 7 ends: restore of 114 AI objects` (stack 0x147dbbf5e <- 0x147db9583 <- 0x147c95197, the AI
+  object -> unit code). ZFA-44 CARRIER 1 had left at round 9's clear (19:19:16): `10 parked ZFA-44s of ship 1 finished off
+  under the sea`, yet `E_Unit_01_drone_{8,4,7,1,0}_0 still has 2 up after 30 s` at 19:19:45, and its hull unit
+  SV_Unit_Cargo1 went off the spawner's list anyway (SV_Recycle 1, "4 alive"), its actor destroyed at 19:19:48, 2 s into
+  the STORE. The STORE's freeze (19:19:46) had touched every AI object with the hull still up; its restore at 19:20:14
+  was the first pass over them with the hull gone, its parked ZFA-44s still in the world. (Every STORE before it, with the
+  hull up or with other units destroyed meanwhile, closed clean: the escorts' units recycled with 1-2 alive at 19:06.)
+  Which object the restore crashed on isn't known (the dump has no symbols); the hull destroyed under live ZFA-44s of its
+  launchers is the one thing new in that STORE.
+- A carrier's hull unit is never taken off the spawner's list while any ZFA-44 of its launcher arms is up, as an arm's own
+  unit never is (0.74.11): ZLAUNCH.holdHull (sv_escort_laser.lua), from the leaving carrier (its slot held as well, so no
+  other ship of that unit is bought meanwhile; looked at again every 5 s) and from recycleTick (a restart's hull). Log
+  `carrier: <ship> (<why>): its hull held on the spawner's list, switched off: N ZFA-44s of its launchers still up ...`.
+  If the parked ones never die the ship stays held for the run (the STORE says the carriers are busy for that ship).
+- ZLAUNCH.parkedOff switches a parked ZFA-44 back on (SetActive true) before the blow: a leaving carrier's offObj had
+  switched them off, and an inactive object seems to take no damage (inferred from the log: 10 "finished off", none down).
+- escort_test: the hull held while 2 ZFA-44s of an arm are up, then recycled. lua_check, size_check (sv_escort.lua at
+  2,000 lines: the next addition there needs a split; lua_split_part.py's cuts all turn 20+ of its locals global), escort,
+  dive, coop_migration, resync and lua_load tests pass. To see in game: a carrier's 3 rounds served, then the STORE: no
+  crash; the "hull held" line or `N parked ZFA-44s ... finished off` followed by the arms' units off the list.

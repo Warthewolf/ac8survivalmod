@@ -1491,6 +1491,7 @@ local function carrierTick(C, now)
     local R = run()
     if C.state == "leaving" then
         if os.clock() >= (C.removeAt or 0) + 2 then
+            if ZLAUNCH and ZLAUNCH.holdHull(C.idx, C, C.name, C.why) then C.removeAt = os.clock() + 3; return end   -- (0.74.48)
             local rec = "no SV_Recycle in this runtime"
             if type(SV_Recycle) == "function" then
                 crumb("carrier SV_Recycle " .. C.unit)
@@ -1858,6 +1859,7 @@ local function recycleTick()
             -- ((2026-11-07: AC8 crashed on a carrier arm's unit taken off with its planes up) a ZFA-44 unit with planes
             -- still up isn't taken off by force: looked at again 5 s on, 6 times at most, then left on the list)
             local up = aliveOf(e.unit)
+            if KIND[e.unit] == "cargo" and ZLAUNCH and ZLAUNCH.holdHull(CARGO_I[e.unit], e, e.unit, e.why) then e.at = os.clock() + 5; q[#q + 1] = e; return end
             if KIND[e.unit] == "zfa" and up > 0 then
                 e.tries = (e.tries or 0) + 1
                 if e.tries < 6 then

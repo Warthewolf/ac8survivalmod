@@ -1001,6 +1001,19 @@ for r = 10, 12 do
 end
 check(c1.served == 3 and c1.state == "leaving" and callout("ZFA-44 CARRIER 1 LEAVING"),
       "3 rounds served: leaving in the break, called out")
+do
+    -- ((2026-11-09) Shazzy's crash of 0.74.36: the hull's unit destroyed with its arms' parked ZFA-44s still up) held
+    local armU = K.launchers[1][2].unit
+    alive[armU] = 2
+    local nRec = #recycled
+    run(8)
+    local heldGone = false
+    for i = nRec + 1, #recycled do if recycled[i] == "SV_Unit_Cargo1:1" then heldGone = true end end
+    check(not heldGone and R.carriers[1] ~= nil and has(line("carrier: ZFA-44 CARRIER 1 (3 rounds served): its hull held"), "2 ZFA-44s of its launchers still up"),
+          "... its hull held on the spawner's list (its slot too) while 2 ZFA-44s of its arms are up")
+    alive[armU] = nil
+    run(3)                                                     -- (looked at again 5 s on)
+end
 run(3)
 local gone = false
 for _, x in ipairs(recycled) do if x == "SV_Unit_Cargo1:1" then gone = true end end
