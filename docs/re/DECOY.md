@@ -10,7 +10,7 @@ tools/survival_events.py (the build agent's, from the contract of 2026-11-06). U
 Nothing here is confirmed in game: every **[T]** below is the checklist's.
 
 Tags: **[D]** confirmed in data, **[I]** inferred, **[T]** needs an in-game test. The research's scratch (property dumps,
-the stock packages it read) is in `E:\ACE8 Survival Mode\build\research\decoy\` (git-ignored); its DECOY.md is the full
+the stock packages it read) is in `build\research\decoy\` (the main tree) (git-ignored); its DECOY.md is the full
 version of section 1.
 
 ## 1. The research's essentials

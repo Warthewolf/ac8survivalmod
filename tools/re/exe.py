@@ -14,12 +14,21 @@ import bisect, os, pickle, re, struct, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OBJDUMP = os.path.join(HERE, '..', 'llvm', 'LLVM', 'bin', 'llvm-objdump.exe')
-DEFAULT_EXE = r'E:\SteamLibrary\steamapps\common\ACE COMBAT 8\Game\Binaries\Win64\AceCombat8.exe'
+sys.path.insert(0, os.path.join(HERE, '..'))     # (tools/env.py)
+import env
+
+
+def default_exe():
+    """AC8_DIR/Game/Binaries/Win64/AceCombat8.exe (AC8_DIR from .env), or stops with a clear message."""
+    return os.path.join(env.need('AC8_DIR', "ACE COMBAT 8's install folder, for AceCombat8.exe"),
+                        'Game', 'Binaries', 'Win64', 'AceCombat8.exe')
+
 CACHE = os.environ.get("EXE_CACHE") or os.path.join(HERE, "..", "..", "build", "re", "exe_cache.pkl")
 
 
 class Exe:
-    def __init__(self, path=DEFAULT_EXE):
+    def __init__(self, path=None):
+        path = path or default_exe()
         self.path = path
         self.d = open(path, 'rb').read()
         d = self.d
@@ -157,7 +166,7 @@ class Exe:
 
 
 if __name__ == '__main__':
-    x = Exe(DEFAULT_EXE)
+    x = Exe()
     cmd = sys.argv[1]
     if cmd == 'wstr':
         print([hex(a) for a in x.wstr_addrs(sys.argv[2])])

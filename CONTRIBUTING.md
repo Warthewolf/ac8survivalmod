@@ -17,7 +17,8 @@ that every change, by a person or an AI agent, must keep.
 | The game's AES key | Reading its paks | Ask the maintainer, or ACE8AircraftBuilder's `settings.json`; never commit it |
 
 Optional, for the maintainer's VALKA build only: Unreal Engine 5.4, AC7's UModel and exported assets
-(`tools/x02s/README.md`). Nobody else needs them.
+(`tools/x02s/README.md`), and for AC7's LaserInterceptor the AC8 template project (`AC8_LIVE_PROJECT` in `.env`,
+`tools/laser7/README.md`), and for THE TANICORN Blender 3.3 (`BLENDER`, `tools/tanicorn/README.md`). Nobody else needs them.
 
 ## Set up your machine
 

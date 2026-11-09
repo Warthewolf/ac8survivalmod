@@ -8,13 +8,13 @@ Also `build/install/AC8SurvivalMode` (the UE4SS runtime: `Scripts/main.lua` from
 
 ## Setup (once)
 - Python 3.8+ (no extra packages).
-- `tools/bin/retoc.exe` and `tools/bin/oo2core_9_win64.dll`: copy them from `E:\ACE8AircraftBuilder\` (not in git).
+- `tools/bin/retoc.exe` and `tools/bin/oo2core_9_win64.dll`: copy them from your ACE8AircraftBuilder folder (not in git).
 - LLVM for `runtime/build.sh` (not in git): `tools/llvm/LLVM/bin`, unpacked without admin rights from the winget-downloaded
   installer with `msiexec /a LLVM-<ver>-win64.msi /qn TARGETDIR=<repo>\tools\llvm`, or any LLVM on PATH.
 - Your machine's settings in `.env` at the repo root (`python -I tools/env.py --init` copies `.env.example`; `--check`
   shows what's found): `AC8_DIR` (the game's install folder), the game's AES key (`AC8_AES_KEY`, or `AC8_AES_SETTINGS`
   naming a JSON file with an "aesKey", such as ACE8AircraftBuilder's `settings.json`), and optionally `LLVM_BIN`,
-  `RELEASE_DIR`, `UE` / `UMODEL` / `AC7` (VALKA's X-02S) and `AC7_BNK_DIR` / `AC7_SE_BNK` / `VGMSTREAM` (AC7 sounds).
+  `RELEASE_DIR`, `UE` / `UMODEL` / `AC7` (VALKA's X-02S), `AC8_LIVE_PROJECT` (the AC8 template project, tools/laser7), `BLENDER` (tools/tanicorn) and `AC7_BNK_DIR` / `AC7_SE_BNK` / `VGMSTREAM` (AC7 sounds).
   `tools/env.sh` and `tools/env.py` load it; `.env` is git-ignored. Never commit the key. CONTRIBUTING.md has the
   whole setup.
 
@@ -22,7 +22,7 @@ Also `build/install/AC8SurvivalMode` (the UE4SS runtime: `Scripts/main.lua` from
 | Script | What it does |
 | --- | --- |
 | `build_all.sh` | get_stock -> runtime/build.sh -> build_survival -> pack -> stage `build/install/` |
-| `package_release.sh online\|offline [version]` | After build_all: a Nexus release zip of one edition, `build/release/AC8SurvivalMode_<version>_Online.zip` / `_Offline.zip`, always in the MAIN tree's `build/release` (`E:\ACE8 Survival Mode\build\release`) from any worktree (`release_dir.sh`; user, 2026-11-07; `RELEASE_DIR=<folder>` overrides it). Offline: `main.dll` rebuilt with SV_OFFLINE (`OFFLINE=1 runtime/build.sh`), `main.lua` / ini / readme through `edition.py offline` (the `ONLINE ONLY BEGIN/END` blocks go, `OFFLINE:` lines come in), and the zip is refused if any network code is left |
+| `package_release.sh online\|offline [version]` | After build_all: a Nexus release zip of one edition, `build/release/AC8SurvivalMode_<version>_Online.zip` / `_Offline.zip`, always in the MAIN tree's `build/release` from any worktree (`release_dir.sh`; user, 2026-11-07; `RELEASE_DIR=<folder>` overrides it). Offline: `main.dll` rebuilt with SV_OFFLINE (`OFFLINE=1 runtime/build.sh`), `main.lua` / ini / readme through `edition.py offline` (the `ONLINE ONLY BEGIN/END` blocks go, `OFFLINE:` lines come in), and the zip is refused if any network code is left |
 | `build_hash.py <Mods folder> [--list]` | The leaderboard's build hash of a staged release (or an installed one), as the game's runtime works it out (`runtime/build_hash.c`): SHA-256 over Survival's scripts, `survival.default.ini`, `main.dll` and the `SurvivalMode_P` container. `package_release.sh online` runs it and writes `<zip>.buildhash.txt`, which the user registers on the Worker's `/admin` page (leaderboard/README.md) |
 | `package_test.sh [name]` | After build_all: test-release zip `build/release/AC8SurvivalMode_<name>.zip`, in the main tree's `build/release` as `package_release.sh`'s (the staged mod + `release/README.txt` with the versions filled in; no player settings or logs; test-only code stripped from the Scripts and the default ini; the ZFA-44 as `package_release.sh`: its container out and `sv_zfa44.lua` cut unless `ZFA=1`, then named `..._ZFA44`) |
 | `../runtime/build.sh` | Native runtime `survival_rt.c` (one translation unit: it #includes `survival_rt_game.c`, `coop.c` + `coop_lua.c`, `flight.c` + `flight_coop2mp.c` + `flight_guards.c`, `survival_rt_lua.c`) -> `build/runtime/main.dll` (clang + lld-link, no SDK/CRT) |

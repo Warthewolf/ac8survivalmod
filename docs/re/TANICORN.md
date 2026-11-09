@@ -7,9 +7,9 @@ must move in game, and its weapons must be selectable per mount: VLS everywhere,
 shells. The Tanager stand-in is Sea Power's Iowa model: **dev install only**, never in a zip (user, 2026-11-09).
 
 Concept art and Blender work: build/research/anomaly_tanager (Leviathan_rev4.blend, Leviathan_animated.blend).
-Tags: [V] read in a file (path given), [I] inferred. Reader: `E:/ACE8AircraftBuilder/ACE8AircraftBuilder.exe dev
+Tags: [V] read in a file (path given), [I] inferred. Reader: `<ACE8AircraftBuilder folder>/ACE8AircraftBuilder.exe dev
 dump|obj|sockets|skeleton|mesh` with a usmap (the builder source embeds one: embed/mappings.usmap.gz), headers in
-build/liveproject/Source/Live/Public (= E:/AC8LiveProject).
+build/liveproject/Source/Live/Public (= $AC8_LIVE_PROJECT).
 
 ## 0. Decisions (user, 2026-11-09)
 - Hull: AC8's **submarine** class. In the final round it hides under an aircraft carrier and, when the carrier is
@@ -93,7 +93,7 @@ build/liveproject/Source/Live/Public (= E:/AC8LiveProject).
   blueprint or a static mesh with sockets of ours loading in AC8.** That is the first thing to prove.
 
 ## Open questions
-- Partly answered: tools/laser7's `LaserFx` commandlet (the SurvivalFx editor module in E:/AC8LiveProject) already
+- Partly answered: tools/laser7's `LaserFx` commandlet (the SurvivalFx editor module in $AC8_LIVE_PROJECT) already
   builds a blueprint of a native class (`BP_SV_LaserInterceptor` on ALiveLaserInterceptor, CDO + component values
   from a JSON spec), cooked versioned; it spawned, fired and intercepted in game (0.74.31, hard rule 58). Still
   untested: a BP with instanced FCS subobjects (arms / launcher / projectile modules), our own skeletal mesh on a

@@ -2,7 +2,7 @@
 # build.sh : the ZFA-44EL (the user's own model from their AC7 mod; docs/re/ZFA44.md "T0 build")
 #            -> build/zfa44/out/SurvivalMode_ZFA44_P.utoc / .ucas / .pak
 #   1. prepare.py         build/zfa44's extraction -> one skinned, life-size glTF with its socket bones, the textures
-#   2. ue_import.py       in UE 5.4 (E:/UE_5.4, this tree's ue/Live): textures, MI_ZFA44_* on the x40a's gear instance
+#   2. ue_import.py       in UE 5.4 ($UE, this tree's ue/Live): textures, MI_ZFA44_* on the x40a's gear instance
 #                         (stubbed), SK_ZFA44 (+ skeleton, physics asset); build/zfa44/ue_import.log
 #   3. cook               Windows, VERSIONED (hard rule 42), loose packages (ue/Live/Saved/Cooked/Windows/Live/Content);
 #                         checked: every package versioned, no texture virtual, no shader map of ours
@@ -13,8 +13,9 @@
 # content are git-ignored).
 set -e
 cd "$(dirname "$0")/../.."
+. tools/env.sh                     # (UE from .env: .env.example)
+sv_need UE "Unreal Engine 5.4's folder"
 ROOT=$(pwd -W 2>/dev/null || pwd)
-UE=${UE:-E:/UE_5.4}
 CMD="$UE/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
 PROJ="$ROOT/ue/Live/Live.uproject"
 B=build/zfa44

@@ -9,7 +9,7 @@ Tags: **[D]** read from the data (stock packages, the exe, the user's logs), **[
 test. Values are UE units (cm, EV100, lux) unless stated. Read-only research; nothing in Lua, the generators or the
 runtime was changed.
 
-Scratch scripts and dumps: `E:\ACE8 Survival Mode\build\research\night\sky\` (zd.py: export dumper with Vector3f;
+Scratch scripts and dumps: `build\research\night\sky\` (the main tree) (zd.py: export dumper with Vector3f;
 csp_diff.py: CSP side by side; lit_scan.py: all 46 stock lighting sublevels; gfx_dt.py: graphics tables; bc6h.py: a
 BC6H decoder that measures the sky-light cubemaps; natfn.py / dis.py: exe thunks and disassembly; *.txt: the outputs).
 

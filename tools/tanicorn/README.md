@@ -4,7 +4,7 @@ The user's Anomaly boss, built from Survival's own assets: research, decisions a
 The Tanager stand-in is Sea Power's Iowa (the user, 2026-11-09: "my install only"): its inputs and every output live in
 `build/tanicorn` (git-ignored), and its container ships with TANI=1 dev builds only.
 
-`sh tools/tanicorn/build.sh` (UE 5.4, Blender 3.3, E:/AC8LiveProject):
+`sh tools/tanicorn/build.sh` (UE 5.4 = `$UE`, Blender 3.3 = `$BLENDER`, `$AC8_LIVE_PROJECT`):
 0. `bl_import.py` (once, by hand): the Alicorn's GLBs (ACE8 Aircraft Builder `dev mesh`) and the Iowa OBJ into
    `build/tanicorn/src.blend` (turrets split into housing and guns, each with its pivot).
 1. `prepare_part.py`: each part in `build/tanicorn/parts.json` -> skinned glTF (Body > turret_yaw > turret_pitch,
