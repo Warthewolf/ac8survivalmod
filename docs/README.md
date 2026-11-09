@@ -6,6 +6,7 @@ Where to look. Project rules for the AI agents stay in `../AGENTS.md` (read firs
 | File | Read it to know |
 | --- | --- |
 | `design/SURVIVAL_SPEC.md` | The user's confirmed design (menu flow, map, airfield health, enemy roles). Overrides the design thesis. |
+| `design/INVINCIBLE_FLEET.md` | The Invincible Fleet special's plan (2026-11-09): the TANICORN finished, the Ford's damage model and the Tanicorn's breach out of it, the fleet and its weapons; questions for the user. |
 | `design/MISSION_REFERENCE.md` | Which stock mission already uses the node/event a feature needs. Check before building. |
 | `design/node_catalog.tsv` | All 349 event node types. |
 
