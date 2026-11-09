@@ -2240,3 +2240,23 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   menu: ...`); when the spawner still makes none, our class spawned straight 300 m off (BeginDeferredActorSpawnFromClass
   as AC7's laser: `tanicorn: straight spawn of our class ...`). 55 suites pass. package_dev.sh (VALKA=1 ZFA=1 TANI=1),
   build ad178d75bdfb... registered. INSTALLED 2026-11-10 (backup: build/backup/install_before_0.74.46).
+
+## 0.74.48 (2026-11-10, runtime 0.32.32; not yet run in game)
+- The log bundle: at every game start the runtime zips the PREVIOUS session's logs into one dated zip, so a player sends one
+  file when something goes wrong: <mod>\logs\AC8Survival_<start>_<mod version>.zip, the 10 newest kept (no size cap).
+  The game thread only moves files aside (LbStashPrevious: AC8SurvivalMode.log, AC8SurvivalMode_lua.log, logs\UE4SS.session.log,
+  logs\session.txt, logs\*.csv into logs\prev; AC8SurvivalMode_crumbs.log COPIED, OpenCrumbs keeps its .prev rotation) before
+  OpenLog and the Lua log truncate them; a background thread (LbZipThread) zips logs\prev, the game's Saved\Logs\*.log and
+  Saved\Crashes\UECC-* files newer than the previous session's start, and a bundle.txt (what went in, what was skipped and
+  why), under a .tmp name, renamed when whole; the stash is deleted only after that. A stash that was never zipped is zipped
+  at the next start first. A stored zip with CRC-32, no ZIP64 (runtime/logzip.h; runtime/logbundle.c).
+- logs\session.txt (this session, key=value, a later line wins): start, start_ft, rt, main_dll_ts (main.dll's PE timestamp, for
+  build/runtime/main_<v>_<ts>.map), pid, build_hash, and from Lua through the new SV_Session("key=value"): mod, role (solo /
+  host / join; COOP.noteRole in sv_coop.lua, called by COOP.reopen and closeCoop).
+- logs\UE4SS.session.log: a thread copies what UE4SS.log gained every 10 s (UE4SS empties it at its own start).
+- tools/checks/logbundle_test.sh (zip + prune against Python's zipfile; needs clang). runtime/main.dll's new kernel32 imports:
+  CreateDirectoryW, RemoveDirectoryW, DeleteFileW, MoveFileExW, CopyFileW, GetEnvironmentVariableW, GetSystemTimeAsFileTime,
+  FileTimeToLocalFileTime, FileTimeToSystemTime, SetFilePointerEx.
+- Test in game: quit normally, relaunch -> one zip; kill AceCombat8.exe in Task Manager, relaunch -> the zip has the logs,
+  UE4SS.session.log and the UECC folder if any; 11 launches -> 10 zips; a co-op session -> role=host / role=join in
+  session.txt; the start isn't slower (the log's "logs: previous session's files set aside ... (N ms)" line).

@@ -21,7 +21,17 @@
 -- unreliable), fx and dw (either: a player's shots,
 -- a player down; the host relays them; sv_down.lua has the revives').
 -- SV_CoopRecv hands them over as "<sender's slot>|<message>".
-COOP = { open = false, role = nil, slot = nil }
+COOP = { open = false, role = nil, slot = nil, noted = "solo" }
+
+-- The role for logs\session.txt (runtime 0.32.32, the log bundle): "host", "join" or "solo", written when it changes.
+-- Called wherever COOP.open / COOP.role are set or cleared (COOP.reopen, closeCoop).
+function COOP.noteRole()
+    local r = COOP.open and COOP.role or "solo"
+    if r ~= "host" and r ~= "join" then r = "solo" end
+    if COOP.noted == r then return end
+    COOP.noted = r
+    if SV_Session then pcall(SV_Session, "role=" .. r) end
+end
 
 do
 -- one stand-in plane per player slot, A-X (tools/survival_events.py COOP_PEER_SLOTS; user, 2026-10-26: "allow up to
