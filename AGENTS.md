@@ -2,6 +2,37 @@
 
 Both AI agents read this file before working. Keep it up to date.
 
+## How to work (every task, both agents; user, 2026-11-09)
+Start every task with these steps, in this order, instead of starting wherever the task seems to be.
+1. **Branch.** `dev` is the working branch. Every task starts from an up-to-date `dev`, on a branch of its own:
+   `git switch dev`, then `git switch -c <kind>/<topic>` (kind: `feature`, `fix`, `docs`, `tools`, `re`; topic short,
+   kebab-case: `feature/log-bundle`, `tools/env-paths`). One topic per branch.
+   - Never work on `main`: it only takes `dev` when the user says a build is good.
+   - Never work directly on `dev`, except for a small fix the user asks for there.
+   - Don't branch off another topic branch unless the work needs it; then say so in the branch's first commit message.
+   - A finished branch is merged back into `dev` (when the user asks), then deleted. A worktree per branch is fine,
+     named after the branch.
+2. **Read** before changing anything: `git status` and the last commits of the branch; this file; the task's plan in
+   `docs/design/`; `docs/design/MISSION_REFERENCE.md` for a game feature; the matching `docs/re/*.md`; HISTORY.md only
+   through grep.
+3. **Plan first.** A task of more than one step gets a plan in `docs/design/<TOPIC>_PLAN.md` (write it if there is none),
+   proposed to the user before any code, and kept up to date as the user decides things. Plans are local working notes
+   (git-ignored): never commit one, and never cite one from code, docs or HISTORY.md. Stay inside the task: a problem
+   found on the way goes into the plan or a note for the user, not into a silent fix.
+4. **No machine path in the repo.** A path that differs from one machine to another (the game, UE, AC7's exports, a
+   work folder, a tool's exe, the main tree) is never written into a tool, a script, a doc or this file:
+   - tools read it from `.env` (from `.env.example`; shell: `. tools/env.sh` then `sv_need NAME "what it is"`; Python:
+     `env.need('NAME', 'what it is')`), with no fallback to anyone's drive;
+   - paths inside the repo come from git (this checkout: `git rev-parse --show-toplevel`; the main tree:
+     `git rev-parse --git-common-dir`, as `tools/release_dir.sh`);
+   - a new setting goes into `.env.example` (commented, with what it is) and `tools/env.py --check`;
+   - docs write `build/...`, `<repo>`, or the `.env` name (`$UE`, `$AC7`, `$AC8_DIR`).
+   `tools/checks/paths_check.py` (run by `build_all.sh`) fails the build on one.
+5. **Check:** `lua_check.py` after every Lua edit, `build_all.sh` (it runs the checks), and the `tools/checks/` tests
+   for what changed. Report what passed, what failed and what couldn't be run.
+6. **Hand over:** a new version for every build the user gets, the build's notes at the end of HISTORY.md, a lesson a
+   test confirms as a hard rule here (see "How the two agents share the work").
+
 ## Project
 A round-based survival mode mod for Ace Combat 8 (PC).
 - Waves escalate each round. Every 5th round is a special-enemy round: ace squadron, Ladon bomber, Podarge / Land Aegis drop, ECM towers, stealth wing.
@@ -28,14 +59,15 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   within the files of the Alicorn Special Raid as the Model inside is edited"): the ZFA-44 from the user's AC7 mod
   Alicorn Special Raid IV may be used for a Survival special round: its edited model (the mod's
   Vehicles/Aircraft/uavs/uavs_SM, a CFA-44-based static mesh), its paint (fa44_00_D, fa44_00xMREC, fa44_00_Inst), its
-  actor ex_uavs and its weapons, with the AC7 stock assets they use. Source: the user's work folder
-  D:\Ace Combat PAKS\unrealpak\Engine\Binaries\Win64\Alicorn_Special_Raid_IV (unencrypted). Never AC7 voice lines.
+  actor ex_uavs and its weapons, with the AC7 stock assets they use. Source: the user's work folder of
+  that mod, Alicorn_Special_Raid_IV (unencrypted; on the user's machine, not in this repo). Never AC7 voice lines.
   The same exception (2026-11-07: "Check this mod out, we fixed the Clouds in this one", "in a previous mod we built,
   this happened and we were able to fix it"): the user's own AC8 mod Orbital Tonitrus Spear Strike (RoGLaser) and its
   cloud fix for the Spear's rods (each rod's blast at the clouds' height, the sky's ExplosionEffect as Mission 30's big
   one, a little wider: Scripts/sv_decoy.lua's clouds). Read only, from the user's upload; none of its files ship.
-- Release zips always go to the main tree's build/release, `E:\ACE8 Survival Mode\build\release`, from any worktree
-  (user, 2026-11-07): tools/package_release.sh and package_test.sh find it through tools/release_dir.sh.
+- Release zips always go to the main tree's build/release (git's main working tree), from any worktree (user,
+  2026-11-07): tools/package_release.sh and package_test.sh find it through tools/release_dir.sh (`RELEASE_DIR` in
+  `.env` overrides it).
 - The runtime's leaderboard address and key come from the main tree's leaderboard/submit.local from any worktree
   (runtime/build.sh: .env's SV_LB_LOCAL, this checkout's, else the main tree's). Every 0.74.0-0.74.8 build was made in a
   worktree without it and could send no run; package_release.sh online and package_dev.sh now refuse a runtime without
@@ -488,17 +520,18 @@ tools/checks/subs_test.sh tests the part. The file is made from a release's copy
   how-tos, because every session loads it whole. A lesson a test confirms goes here as a hard rule.
 - No source file over 2,000 lines (tools/checks/size_check.py, run by build_all.sh): split a growing file at a topic
   boundary (Runtime layout, below).
-- Your machine's paths and keys are in .env (from .env.example; tools/env.sh, tools/env.py), never in a tool or in git.
-  CONTRIBUTING.md has the whole setup.
+- Your machine's paths and keys are in .env (from .env.example; tools/env.sh, tools/env.py), never in a tool, a doc or
+  git ("How to work", step 4). CONTRIBUTING.md has the whole setup.
 
 ## Build history and feature notes
 Every build's notes are in HISTORY.md, oldest first: the economy review (0.70), the enemy behaviour layer (0.72),
 COOP2MP's T1-T4 and every build since, through the newest. It isn't loaded into sessions (it was most of this file's
 ~190 KB): grep it for a version, a feature or a log line, and read only the entry you need. Each feature's design,
-reverse engineering, log lines and test checklist are in tools/re/*.md (COOP.md, COOP2MP.md, BEHAVIOUR_DIRECTOR.md,
+reverse engineering, log lines and test checklist are in docs/re/*.md (COOP.md, COOP2MP.md, BEHAVIOUR_DIRECTOR.md,
 ESCORT.md, FISHING.md, DECOY.md, SPACEPORT_ASSAULT.md, ZFA44.md, THUNDER.md, VALKA.md, ...).
-- (Git, 2026-11-08 cleanup) `main` is the working branch: it holds everything through 0.74.20; the old branches are
-  merged or kept as `archive/*` tags. COOP2MP is the build line's name (COOP_TAG, BUILD_NAME), no longer a branch.
+- (Git) From 2026-11-09 `dev` is the working branch and every task gets its own branch from it ("How to work", step 1);
+  `main` takes `dev` when the user says a build is good. The 2026-11-08 cleanup merged the old branches or kept them as
+  `archive/*` tags. COOP2MP is the build line's name (COOP_TAG, BUILD_NAME), no longer a branch.
 - COOP2MP is the working main since 2026-10-30: the other players fly as real player planes (ALivePlayerPlane fed from
   their stream, their weapons replayed from their own plane), the AI stand-ins only as a fallback. VERSION 0.7x.y with
   COOP_TAG -coop2mp.N (tools/coop_edition.py); friends' zips: BUILD_NAME=COOP2MP COOP=1 sh tools/package_release.sh online
