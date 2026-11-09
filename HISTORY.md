@@ -2201,3 +2201,42 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   (0.74.42-coop2mp.134), both registered; patches over 0.74.27-0.74.41 (the TESTER one and the friends' one, no Distant
   Thunder in it, sent). INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.41: build/backup/install_before_0.74.42;
   87 files equal).
+
+## 0.74.43 (2026-11-09, runtime 0.32.31; not yet run in game)
+- THE TANICORN, milestone 0 (tools/re/TANICORN.md; the user's Anomaly boss: one ship fused from the Alicorn and the
+  Tanager, Sea Power's Iowa standing in, "my install only"): one gun mount entirely of Survival's own, to prove AC8 runs
+  a blueprint we cook. tools/tanicorn: prepare_part.py (Blender: the Iowa's 5-inch twin mount at the Leviathan's 1.9,
+  rigged Body > turret_yaw > turret_pitch with identity bones, as the Alicorn's turret rigs), ue_import.py (E:/AC8LiveProject:
+  the rigged mesh, its wreck, textures, instances on AC8's gear material through stubs), spec.py + the TaniBuild
+  commandlet (tools/laser7/cpp/SurvivalFx: real muzzle sockets SOC_Gun_01..02, the stock AA shell by a stub at its path,
+  BP_SV_Tani_T5 straight on AC8's native ALiveAIGroundVehicleObject laid out as the Aegis Mk45: PoseableMesh, wreck,
+  hit sphere, the native fire control's arm (AIControlCommon + LauncherBoneControl + ProjectileCommon) and destroy
+  system), cooked VERSIONED, container SurvivalMode_Tani_P (TANI=1 dev builds only; package_release.sh drops it).
+  Rows as GONE FISHIN''s shoal: SV_Unit_TaniTest (Mission 13's dummy unit) on sv_tani_mount -> SV_Npc_TaniMount ->
+  SV_Model_TaniMount, whose blueprint is ours. Scripts/sv_tanicorn.lua (test only): Ctrl+` in a run spawns it 3 km ahead on
+  the sea and logs `tanicorn: ...` (its health and its aim bones every 2 s). To see: it appears, turns to you, fires.
+- 55 suites pass (coop_test not run). Packaged with package_dev.sh (VALKA=1 ZFA=1 TANI=1), build e03d18142b2b...
+  registered. INSTALLED 2026-11-09 (backup of 0.74.42: build/backup/install_before_0.74.43; 0 files differ).
+
+## 0.74.44-0.74.45 (2026-11-10; not yet run in game)
+- The user's first run of 0.74.43 (06:12): the test key worked (the backtick, Ctrl+`, is also the game console's key: the
+  user saw it as taken), the rows went in and SV_Spawn answered "1 up" four times, but no BP_SV_Tani_T5_C appeared in 33
+  walks and nothing showed. The container mounted (AC8IoStoreLoader.log: SurvivalMode_Tani_P OK, 9 packages new). The
+  watcher's walk cost 680 ms over those 33 walks.
+- 0.74.44: the key moved to Ctrl+T (packaged and registered, never installed). 0.74.45: the test tells where it breaks:
+  `tanicorn: class ...` (our class loaded by itself: AC8 took the cooked blueprint or not, and its defaults' fire control
+  arms / launcher mesh / damage state), `tanicorn: the spawn made ...` (the shoals' spawn capture, FISH.spawn: every AI
+  object the spawner makes, with its class), `tanicorn: +1 s / +4 s: ...` (SV_UnitAlive, our class's count, stock dummies
+  near the spot); the 2 s watcher only for 60 s after a spawn. 55 suites pass. Packaged with package_dev.sh (VALKA=1 ZFA=1
+  TANI=1), build 586c41eb2af7... registered. INSTALLED 2026-11-10 (backup: build/backup/install_before_0.74.45; 0 differ).
+
+## 0.74.46 (2026-11-10; not yet run in game)
+- The user's run of 0.74.45 (06:21): `tanicorn: class loaded BlueprintGeneratedClass ... BP_SV_Tani_T5_C; defaults: fire
+  control arms 1, launcher mesh TurretPoseableMesh, damage state true`: AC8 loads a blueprint we cooked, its instanced fire
+  control whole. The spawn made no object: the runtime's `spawn SV_Unit_TaniTest: up, 0 aircraft` (the unit actor, none of
+  its AI objects), SV_UnitAlive 0 at +1 s and +4 s. The shoals' rows go in at the main menu (FISH.setup: "a row naming a
+  model the game hasn't can't spawn"); the test added its rows at the key press, with the level up.
+- 0.74.46: the rows at the main menu (TANI.setup in sv_main.lua's setup pass, test only: `tanicorn: rows at the main
+  menu: ...`); when the spawner still makes none, our class spawned straight 300 m off (BeginDeferredActorSpawnFromClass
+  as AC7's laser: `tanicorn: straight spawn of our class ...`). 55 suites pass. package_dev.sh (VALKA=1 ZFA=1 TANI=1),
+  build ad178d75bdfb... registered. INSTALLED 2026-11-10 (backup: build/backup/install_before_0.74.46).

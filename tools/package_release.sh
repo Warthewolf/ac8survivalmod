@@ -56,6 +56,7 @@ if [ "$ZFA" = 1 ]; then
     echo "ZFA=1: the ZFA-44 kept (its container and Scripts/sv_zfa44.lua)"
 else
 rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ZFA44_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Laser7_P.*   # (and its weapon, AC7's LaserInterceptor)
+rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*   # THE TANICORN's parts: the user's install only, never shipped
 if [ -f "$mod/Scripts/sv_zfa44.lua" ]; then
     head -n 1 "$mod/Scripts/sv_zfa44.lua" > "$mod/Scripts/sv_zfa44.lua.tmp" && mv "$mod/Scripts/sv_zfa44.lua.tmp" "$mod/Scripts/sv_zfa44.lua"
 fi

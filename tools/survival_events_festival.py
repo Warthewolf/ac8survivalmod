@@ -43,6 +43,21 @@ FISH_HEALTH = 10.0
 FISH_NAME_KEY = 'SV_Shoal_Name'                # its text (SHOAL) set by Lua (SV_SetText): the box's name
 FISH_SUB_KEY = 'SV_Shoal_Sub'                  # the box's second line (the NPC row's name 02; 2026-11-07: it was the name
                                                # key too, SHOAL twice), its text set empty by Lua
+
+# THE TANICORN's milestone 0 (docs/re/TANICORN.md, test builds only: Scripts/sv_tanicorn.lua Ctrl+T): one gun mount of
+# Survival's own (BP_SV_Tani_T5, built by tools/tanicorn, its container staged with TANI=1 only) spawned as the shoal is:
+# Mission 13's scored dummy unit ported (faction 2, box and TGT mark), its own mission row, DT_NPC row and model row, the
+# model row's blueprint ours. Names with no numeric tail (hard rule 17). Nothing names the Tanicorn's blueprint but the
+# model row (a soft path): without its container the row names a class the game hasn't and the unit doesn't spawn.
+TANI_UNIT = 'SV_Unit_TaniTest'
+TANI_OBJ = 'SV_Obj_TaniTest'
+TANI_ROW = 'sv_tani_mount'                     # DT_SV_NpcMission (Mission 22's dummy_common) -> NpcId TANI_NPC
+TANI_NPC = 'SV_Npc_TaniMount'                  # DT_SV_NpcRows: GR000_dummy's row on TANI_MODEL, the boats' durability rows
+TANI_MODEL = 'SV_Model_TaniMount'              # DT_SV_ModelRows: GR000_dummy's model row, our blueprint, TANI_HEALTH
+TANI_BP = '/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5'
+TANI_BP_CLASS = 'BP_SV_Tani_T5_C'
+TANI_HEALTH = 40.0
+TANI_NAME_KEY = 'SV_TaniMount_Name'
 # SAL's boat (FISHING.md 3; user: "SAL boat can just be an ally, dont worry about it too much"): Mission 28's allied Wasp
 # desc (faction 1, box, callsign, attack-target exception) on the stock fishing boat VE027_boat2_01, not invincible but
 # from AI and wingmen, MinHealth 1 on its mission row (as the stock allied ships'), its callsign as VOID WATCHER's
@@ -364,3 +379,18 @@ def build_festival(g, flag, stock_ep):
     print(f'  festival: {len(FEST_GROUPS)} Tu-160 formations (RE_SV_FestUp_<g> / SV_FestUp<g>, {FEST_BOMBER_SPEED} km/h, '
           f'{FEST_LAPS} laps a path), {len(fest_missiles())} cruise missile salvos of {FEST_CM_PER} (RE_SV_FestCM_<g><k>, '
           f'RE_SV_FestCMHit_<g><k>_<i>, {FEST_CM_SPEED} km/h): {len(g.trig) - n_trig} triggers, {len(g.ex) - n_ex} execs')
+
+
+def build_tanicorn(g, stock_ep):
+    """THE TANICORN's test mount (TANI_*; docs/re/TANICORN.md): as it appears, Mission 16's Normal / PlayerFirst
+    engagement order on its object (the Ladon's CIWS order, the Spaceport turrets' (build_spaceport): a turret engages only
+    when ordered: the user's run of 0.74.46 had it up, hit and killed, never firing)."""
+    m16 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission016', 'EP_Mission016_global.uasset')
+    t_part = g.foreign_template(m16, 'LiveAIEngagementOrder', 'Default_RemoteEvent_20',
+                                lambda a, e: a[0] == 'B_Obj_01_Air0_Ladon0_LCIWS')
+    assert arg_values(t_part)[3] == 'Normal' and arg_values(t_part)[6] == 'PlayerFirst', arg_values(t_part)
+    up = 'SV_TaniUp'
+    g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: TANI_UNIT})
+    g.execute(t_part, up, {0: TANI_OBJ}, delay=1.0)
+    print(f'  tanicorn: {TANI_OBJ} ordered as it appears ({up}: Normal, PlayerFirst)')
+

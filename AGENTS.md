@@ -34,6 +34,9 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   this happened and we were able to fix it"): the user's own AC8 mod Orbital Tonitrus Spear Strike (RoGLaser) and its
   cloud fix for the Spear's rods (each rod's blast at the clouds' height, the sky's ExplosionEffect as Mission 30's big
   one, a little wider: Scripts/sv_decoy.lua's clouds). Read only, from the user's upload; none of its files ship.
+- THE TANICORN (docs/re/TANICORN.md): the user's Anomaly boss fused from AC8's Alicorn and Sea Power's Iowa (standing in
+  for the Tanager). Its model and art are in art/tanicorn at the user's request (2026-11-10: "you are allowed to push the
+  model"); its cooked container still ships in TANI=1 dev builds only (package_release.sh drops it).
 - Release zips always go to the main tree's build/release, `E:\ACE8 Survival Mode\build\release`, from any worktree
   (user, 2026-11-07): tools/package_release.sh and package_test.sh find it through tools/release_dir.sh.
 - The runtime's leaderboard address and key come from the main tree's leaderboard/submit.local from any worktree

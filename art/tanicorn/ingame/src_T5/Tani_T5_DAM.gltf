@@ -1,0 +1,104 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "Survival tanicorn/prepare_part.py"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "Tani_T5_DAM",
+   "mesh": 0
+  }
+ ],
+ "meshes": [
+  {
+   "name": "Tani_T5_DAM",
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1,
+      "TEXCOORD_0": 2
+     },
+     "material": 0
+    }
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "name": "M_SV_Tani_T5_0",
+   "pbrMetallicRoughness": {
+    "baseColorFactor": [
+     0.058,
+     0.059,
+     0.062,
+     1.0
+    ]
+   }
+  }
+ ],
+ "buffers": [
+  {
+   "uri": "Tani_T5_DAM.bin",
+   "byteLength": 33216
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 12456,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 12456,
+   "byteLength": 12456,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 24912,
+   "byteLength": 8304,
+   "target": 34962
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 1038,
+   "type": "VEC3",
+   "min": [
+    -4.779283046722412,
+    0.0,
+    -4.985367774963379
+   ],
+   "max": [
+    10.071552276611328,
+    6.293612003326416,
+    5.037304878234863
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 1038,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5126,
+   "count": 1038,
+   "type": "VEC2"
+  }
+ ]
+}

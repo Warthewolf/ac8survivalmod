@@ -1,0 +1,17 @@
+# THE TANICORN: model and art
+
+The Anomaly boss: one ship fused from AC8's Alicorn and the battleship Tanager (Sea Power's USS Iowa stands in for the
+Tanager). Design, research and build plan: docs/re/TANICORN.md; the build pipeline: tools/tanicorn.
+
+- `design/Leviathan_rev4.blend`: the chosen design (Leviathan, revision 4): the Iowa at the Alicorn's 650 m, hull in the
+  Alicorn's texture, upper works Alicorn grey, the Alicorn's railcannon flush in the bow in its own teal bay, the
+  Alicorn's sponsons faired to the hull. Collections for the railcannon stowed and raised.
+- `design/Leviathan_animated.blend`: the same rigged: railcannon pitch and barrel split, sub-railgun hatches / lift /
+  train / elevate, the 16-inch, 5-inch and CIWS mounts training and elevating (12 s, 30 fps). Blender 3.3.
+- `renders/concepts/design_1..7.png`: the seven fusion concepts; `renders/leviathan/`: revision 4; `video/`: the animation.
+- `ingame/src.blend`: both source ships prepared for the pipeline (tools/tanicorn/bl_import.py); `ingame/src_T5/`: the
+  5-inch mount as prepared (glTF, textures, bones / sockets); `ingame/container/SurvivalMode_Tani_P`: milestone 0's cooked
+  container (BP_SV_Tani_T5 and its assets), 0.74.47's.
+
+Sources: the Alicorn is AC8's (exported with ACE8 Aircraft Builder's `dev mesh`); the Iowa is Sea Power's model.
+Pushed to this repository at the user's request (2026-11-10).

@@ -43,3 +43,7 @@ parked/
 # the TESTER zips the test keys (release zips go to build/release and GitHub Releases)
 testing/logs/
 testing/builds/
+
+# THE TANICORN model (user, 2026-11-10: "you are allowed to push the model"): its cooked container is kept
+!art/tanicorn/**/*.utoc
+!art/tanicorn/**/*.ucas

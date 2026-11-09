@@ -863,6 +863,7 @@ def build_events(stock_ep):
     build_festival(g, flag, stock_ep)
     build_escort(g, flag, stock_ep)          # THE ESCORT and the ZFA-44 cargo ships (ESC_* / CARGO_* / ZFA_*)
     build_decoy(g, flag, stock_ep)           # THE DECOY (DECOY_*)
+    build_tanicorn(g, stock_ep)              # THE TANICORN's test mount's engagement order (TANI_*)
     return g
 
 
