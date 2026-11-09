@@ -11,10 +11,14 @@ Mk45 (BP_VE002_aegs_mk45_Base over BP_AITurret_Pawn, read with ACE8 Aircraft Bui
   CDO      AutoPossessAI, GameObjectId 1000 / Category_CarrierBattery (the Mk45's), PursuitPointOffset, bIsSea
 Values that aren't set inherit the game's own native defaults (only differences are saved).
 """
-import json, os
+import json, os, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BUILD = os.path.normpath(os.path.join(HERE, '..', '..', 'build', 'tanicorn'))
+sys.path.insert(0, os.path.join(HERE, '..'))   # (python -I: tools/env.py)
+import env
+# build outputs live in the main tree's build/: SV_ROOT (build.sh sets it), else the main git tree, else this checkout
+_root, _main = env.roots()
+BUILD = os.path.join(os.environ.get('SV_ROOT') or _main or _root, 'build', 'tanicorn')
 DEST = '/Game/Mods/SurvivalMode/Tanicorn'
 AA_SHELL = '/Game/Blueprints/Weapons/AAGUN/BP_wp_aagun_vessel'          # LiveBulletEmitter (its emitter base's class)
 

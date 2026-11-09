@@ -1,6 +1,6 @@
 """prepare.py : VALKA's X-02S (AC7's, docs/re/VALKA.md, tools/x02s/README.md) made ready for UE 5.4's glTF import.
 
-AC7's UModel export (E:/Ace Combat 7 Exports/Game/Vehicles/Aircraft/x02s) is a skinned mesh (58 bones: swing wings,
+AC7's UModel export ($AC7/Game/Vehicles/Aircraft/x02s) is a skinned mesh (58 bones: swing wings,
 canards, flaps, nozzles, bay doors) at AC7's model scale (2.19 m long; AC8's aircraft are life-size: its F/A-18E is
 18.28 m). Written to build/x02s/:
   x02s_skel.gltf / .bin   the skinned mesh at LENGTH_M: positions, bind matrices and bone positions scaled
@@ -16,10 +16,13 @@ canards, flaps, nozzles, bay doors) at AC7's model scale (2.19 m long; AC8's air
                           (all zero is AC8's own neutral one, T_Livemap_Flat), big enough to be a virtual texture
 python -I tools/x02s/prepare.py   (needs the .psa: tools/x02s/build.sh exports it with UModel first)
 """
-import json, math, os, shutil, struct
+import json, math, os, shutil, struct, sys
 
-SRC = r'E:/Ace Combat 7 Exports/Game/Vehicles/Aircraft/x02s'
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, '..'))     # (python -I leaves the script's folder off sys.path: tools/env.py)
+import env
+AC7_ROOT = env.need('AC7', "AC7's exported assets (the folder that holds Game/)")
+SRC = os.path.join(AC7_ROOT, 'Game', 'Vehicles', 'Aircraft', 'x02s')
 OUT = os.path.join(HERE, '..', '..', 'build', 'x02s')
 PSA = os.path.join(OUT, 'umodel', 'Game', 'Vehicles', 'Aircraft', 'x02s', 'x02s_Anim.psa')
 LENGTH_M = 19.6            # the X-02S's length (main.lua CFG.specials.valka.model_length_m scales it at run time)
@@ -72,7 +75,6 @@ def skinned_gltf():
 PARTS = ('x02s_GearOff_SM', 'x02s_RefuelOff_SM', 'x02s_SWP3')
 # AC7 Mission 18's lens flash before Mihaly's first shot (ms18_LensEffect1: a screen-space billboard, M_LensBokeh1,
 # and planes with M_LensFlare1 / M_LensFlare2 / M_LensRing1): its textures, for VALKA's opener light
-AC7_ROOT = 'E:/Ace Combat 7 Exports'
 FLARE_TEX = (('Game/VFX/Common/Textures/Misc/Ace_SunGlareVR.tga', 'T_SV_ValkaFlare_Glare'),
              ('Game/VFX/Environment/ms18LensEffect/T_EML_shine01.tga', 'T_SV_ValkaFlare_Shine'),
              ('Game/VFX/Environment/ms18LensEffect/T_EML_LensFlare01.tga', 'T_SV_ValkaFlare_Ring'),

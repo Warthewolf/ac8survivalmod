@@ -658,7 +658,7 @@ do
     check(line("coop: player 8's falken: its own blueprint is installed here (" .. FALKEN_BP .. "): the real thing", fromK) ~= nil
           and line("coop: player 8's plane is their real falken (a player plane", fromK) ~= nil, "... logged")
     -- a path that isn't /Game/: never loaded
-    CFG.coop.real_paths.mystery = "C:/evil.uasset"
+    CFG.coop.real_paths.mystery = "C:/evil.uasset"  -- paths_check: ok
     check(M.modClassPath("mystery") == nil and M.modClassPath("FALKEN") == FALKEN_BP, "only /Game/ paths; the code any case")
     CFG.coop.real_paths.mystery = nil
     inbox[#inbox + 1] = "7|sys|left"

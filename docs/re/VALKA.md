@@ -7,10 +7,10 @@ Tags: **[V]** verified from data, **[I]** inferred, **[T]** needs an in-game tes
 ## 1. Reading AC7 files
 - AC7 assets carry a per-file XOR layer ("ACE7" header). `tools/ac7_decrypt.py <export root> <out> [regex]` removes it
   (UAssetAPI's AC7Decrypt scheme; key table `build/ac7/AC7Key.bin`, 217 x 1024 bytes, never committed or shipped). [V]
-- Decrypted packages are UE 4.18 (`VER_UE4_18`): `UAssetGUI.exe tojson <in> <out> VER_UE4_18` (E:\DOWNLOADS\uassetgui)
+- Decrypted packages are UE 4.18 (`VER_UE4_18`): `UAssetGUI.exe tojson <in> <out> VER_UE4_18` (<UAssetGUI folder>)
   dumps them, Kismet bytecode included. `build/ac7/kdec.py` prints the bytecode with script offsets (UE 4.18 sizes:
   pointer 8, FName 12), `build/ac7/trace.py` follows a flow from an offset. [V]
-- Sounds: `tools/ac7_sfx.py` (AC7 `game_se.bnk` / `.pck` + the wwiser xml, D:\Ace Combat PAKS\bnk's\Windows) writes
+- Sounds: `tools/ac7_sfx.py` (AC7 `game_se.bnk` / `.pck` + the wwiser xml, $AC7_BNK_DIR) writes
   WAVs, per-event trees and `build/ac7/sfx/NOTES.md` (layers, loops, volumes, attenuation). [V]
 
 ## 2. Mission 18's opener (ms18_Phase_01, ExecuteUbergraph) [V]
@@ -53,7 +53,7 @@ VALKA never gets one.
 - First build (0.63.x) got this wrong: VALKA herself was the dummy, kept 700 m ahead and re-teleported every tick;
   her attached parts showed and she fired QAAMs / missiles / gun from ~470 m (test of 2026-10-24).
 - The editor work (X-02S model, AC7's EML effects) needs UE 5.4: AC8's engine ("Using engine version: 5.4",
-  UE4SS.log). A source build of 5.4.4 is at E:\UE_5.4 (Windows-only dependencies). [V]
+  UE4SS.log). A source build of 5.4.4 is at $UE (Windows-only dependencies). [V]
 
 ## 5. The X-02S in AC8 (tools/x02s)
 - AC7 builds the X-02S from more than `x02s.gltf`: `x02s_GearOff_SM` (closed gear doors), `x02s_RefuelOff_SM` (closed

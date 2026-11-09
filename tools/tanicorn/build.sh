@@ -2,7 +2,7 @@
 # build.sh : THE TANICORN's parts (docs/re/TANICORN.md, README.md here) -> build/tanicorn/out/SurvivalMode_Tani_P.utoc / .ucas
 #   0. bl_import.py     (once) the Alicorn (ACE8 Aircraft Builder GLBs) and the Tanager stand-in into build/tanicorn/src.blend
 #   1. prepare_part.py  Blender 3.3: each mount in build/tanicorn/parts.json -> skinned glTF, wreck glTF, textures, sockets
-#   2. ue_import.py     in the AC8 template project (E:/AC8LiveProject, UE 5.4, AC8's classes compiled): textures, the
+#   2. ue_import.py     in the AC8 template project ($AC8_LIVE_PROJECT, UE 5.4, AC8's classes compiled): textures, the
 #                       instances on AC8's gear material (stubs at AC8's paths), the rigged meshes, the wrecks
 #   3. spec.py          the TaniBuild commandlet's spec; 4. TaniBuild (the SurvivalFx editor module, tools/laser7/cpp):
 #                       muzzle sockets, the stock shot's stub, the blueprints straight on AC8's native classes
@@ -14,10 +14,14 @@ set -e
 cd "$(dirname "$0")/../.."
 . tools/env.sh
 sv_need UE "Unreal Engine 5.4's folder"
-MAIN="E:/ACE8 Survival Mode"
-PROJ=E:/AC8LiveProject
+sv_need AC8_LIVE_PROJECT "the AC8 template project (Live.uproject's folder) for tools/tanicorn"
+sv_need BLENDER "Blender 3.3's blender.exe (tools/tanicorn)"
+PROJ=$AC8_LIVE_PROJECT
+# the main git tree (build outputs live in its build/, as the release zips; as tools/release_dir.sh), else this checkout
+MAIN=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+if [ -n "$MAIN" ]; then MAIN=$(dirname "$MAIN"); else MAIN=$(pwd); fi
+export SV_ROOT="$MAIN"                              # (spec.py and ue_import.py read it)
 CMD="$UE/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
-BLENDER="${BLENDER:-C:/Program Files/Blender Foundation/Blender 3.3/blender.exe}"
 OUT="$MAIN/build/tanicorn"
 export MSYS_NO_PATHCONV=1
 [ -f "$OUT/src.blend" ] || { echo "tanicorn: no $OUT/src.blend (bl_import.py: see README.md)"; exit 1; }

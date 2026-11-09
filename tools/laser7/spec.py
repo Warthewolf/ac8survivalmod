@@ -8,8 +8,12 @@ units (AC7's world is 1 unit ~0.1 m, AC8's 1 unit = 1 cm: distances x10).
 import json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fxspec
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))   # (python -I: tools/env.py)
+import env
 
-ROOT = os.environ.get('SV_ROOT', r'E:\ACE8 Survival Mode')
+# build outputs live in the main tree's build/: SV_ROOT (build.sh sets it), else the main git tree, else this checkout
+_root, _main = env.roots()
+ROOT = os.environ.get('SV_ROOT') or _main or _root
 JSON = os.path.join(ROOT, 'build', 'ac7', 'laser', 'json')
 OUT = os.path.join(ROOT, 'build', 'laser7')
 DEST = '/Game/Mods/SurvivalMode/Laser7'

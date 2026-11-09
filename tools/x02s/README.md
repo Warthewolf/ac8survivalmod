@@ -3,7 +3,7 @@
 AC7 assets are allowed for VALKA only (AGENTS.md, user's exception of 2026-10-24). Nothing here is ever committed:
 the inputs are the user's AC7 exports, the outputs go to `build/x02s/` and the UE project's ignored folders.
 
-`tools/x02s/build.sh` (Git Bash; needs UE 5.4 at `E:/UE_5.4`, AC7's UModel, the AC7 export folder):
+`tools/x02s/build.sh` (Git Bash; needs UE 5.4 at `$UE`, AC7's UModel, the AC7 export folder):
 
 0. AC7's UModel exports `x02s_Anim` as `.psa` (`build/x02s/umodel`).
 1. `prepare.py`: AC7's UModel glTF of the X-02S (skinned, 58 bones), with AC7's other X-02S meshes merged in on its

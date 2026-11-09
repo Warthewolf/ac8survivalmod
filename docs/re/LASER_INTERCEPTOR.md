@@ -8,7 +8,7 @@ Project rule first: Survival ships only AC8's own files. The one AC7 exception i
 effects and sounds, see VALKA.md). Using AC7's beam effects or sounds for this weapon would be a **second exception**, and
 only the user can grant it. AC8 has its own missile-killing laser (section 5), and that route needs no AC7 assets.
 
-Scratch outputs (git-ignored, on the build machine): `E:\ACE8 Survival Mode\build\ac7\laser\`: `dec\` (decrypted AC7
+Scratch outputs (git-ignored, on the build machine): `build\ac7\laser\` (the main tree): `dec\` (decrypted AC7
 packages), `json\` (UAssetGUI dumps, `*.dump.txt` property dumps, `*.k.txt` Kismet, `*.sum.txt` particle summaries),
 `ac8\` (AC8 stock packages pulled with retoc), `sfx\` (AC7 sounds from ac7_sfx.py), `scripts\` (scan.py: in-memory
 search of the encrypted AC7 export; pdump.py, psys.py, dtdump.py, ac7exe.py, ac8cdo.py, ac8imp.py), `scan_*.tsv`.
@@ -54,7 +54,7 @@ There's **no `LevelModifiersDataTable`** on it, while the UAV's attack laser wp_
 So the interceptor most likely isn't scaled by pilot rank [I].
 
 ### 1b. Native properties the blueprint leaves at the C++ defaults
-AC7's exe (F:\Steam\steamapps\common\ACE COMBAT 7\Ace7Game.exe) has readable reflection data. Its code is
+AC7's exe (<AC7 install>\Ace7Game.exe) has readable reflection data. Its code is
 SteamStub-encrypted (a `.bind` section, `.text` disassembles to garbage), so its constructor can't be read [D]. Layout from
 the reflection params (sizeof 0x698) [D]:
 

@@ -1,7 +1,7 @@
-"""ue_import.py : AC7's LaserInterceptor beam parts into the AC8 template project (UE 5.4, E:/AC8LiveProject), under
+"""ue_import.py : AC7's LaserInterceptor beam parts into the AC8 template project (UE 5.4, $AC8_LIVE_PROJECT), under
 /Game/Mods/SurvivalMode/Laser7 (tools/laser7/README.md). Run by tools/laser7/build.sh:
 
-  UnrealEditor-Cmd.exe E:/AC8LiveProject/Live.uproject -run=pythonscript -script=tools/laser7/ue_import.py
+  UnrealEditor-Cmd.exe $AC8_LIVE_PROJECT/Live.uproject -run=pythonscript -script=tools/laser7/ue_import.py
 
 - the beam's meshes from AC7's UModel glTF: SM_SV_TLS_01 (the flash), SM_SV_TLS_projectile_root / _tip (the beam), at
   AC7's own size (the effect's components are scaled x10 into AC8's world, so its emitters keep AC7's numbers)
@@ -15,7 +15,9 @@ Writes build/laser7/ue_import.log; its last line "done" when it all went in.
 import os
 import unreal
 
-ROOT = os.environ.get('SV_ROOT', r'E:\ACE8 Survival Mode')
+ROOT = os.environ.get('SV_ROOT')       # (Unreal's own Python has no tools/env.py: build.sh passes the main tree's folder)
+if not ROOT:
+    raise RuntimeError("SV_ROOT isn't set: run this through tools/laser7/build.sh (it passes the main tree's folder)")
 SRC = os.path.join(ROOT, 'build', 'ac7', 'laser', 'umodel', 'Game')
 OUT = os.path.join(ROOT, 'build', 'laser7')
 DEST = '/Game/Mods/SurvivalMode/Laser7'

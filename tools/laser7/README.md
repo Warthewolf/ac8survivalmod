@@ -6,7 +6,7 @@ lines). Research: docs/re/LASER_INTERCEPTOR.md (1: AC7's weapon; 9: AC8's native
 AC7's is committed: only these scripts. Outputs go to the main tree's `build/laser7/`.
 
 `sh tools/laser7/build.sh` (needs UE 5.4, AC7's UModel and AC7's exports from .env; the AC8 template project
-`E:/AC8LiveProject`, which has AC8's own classes compiled, ALiveLaserInterceptor among them):
+`$AC8_LIVE_PROJECT`, which has AC8's own classes compiled, ALiveLaserInterceptor among them):
 
 0. UModel exports AC7's beam meshes (SM_TLS_01, SM_TLS_projectile_root / _tip) as glTF and m_TLS_03's texture
    (T_rain_drop) to `build/ac7/laser/umodel` (once).
