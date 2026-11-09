@@ -2201,3 +2201,12 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   (0.74.42-coop2mp.134), both registered; patches over 0.74.27-0.74.41 (the TESTER one and the friends' one, no Distant
   Thunder in it, sent). INSTALLED 2026-11-08 from the TESTER zip (backup of 0.74.41: build/backup/install_before_0.74.42;
   87 files equal).
+
+## Unreleased (2026-11-09; not yet run in game)
+- THE ESCORT's enemies scaled by players (the user: "With the enemies in escort charlene, we need to scale the enemies by
+  players"): in the host's room CHARLENE's attackers at once (attack.max) and her waves' min_n, max_n and max_up go through
+  COOP.more like a round's aircraft (aircraft_per_player 0.15: 4 players 6 attackers, waves of 6-17, 30 up, against solo's
+  4, 4-12, 24; max_up within [coop] max_up). CFG.specials.escort.coop_scale = false turns it off. The wave picker moved to
+  the new part sv_escort_waves.lua (with ESC.roomMore) to keep sv_escort.lua under 2,000 lines. escort_test: 4 new checks,
+  all pass; lua_load_test, rounds_test, coop_settings_test pass (leaderboard_test online's 3 and subs_test fail the same
+  without this change). No version bump: no build made.

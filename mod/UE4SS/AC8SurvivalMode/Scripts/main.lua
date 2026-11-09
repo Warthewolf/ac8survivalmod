@@ -46,6 +46,7 @@ local MODULES = {
     "sv_escort_laser",             -- the ZFA-44 carriers' anti-missile laser: its rows, its arm in the log, its kills (2026-11-07)
     "sv_escort_li",                -- AC7's LaserInterceptor on the ZFA-44s (runtime laser.c, tools/laser7; 2026-11-07)
     "sv_escort_dive",              -- the VAMPIRES' final dive: their Helios blast as the next round comes (2026-11-08)
+    "sv_escort_waves",             -- CHARLENE's enemy waves' flights, the escort's enemies scaled for the room (2026-11-09)
     "sv_kaska",                    -- the Shuttle Launch round's intercepted channel: KASKA and his launch controller (2026-11-08)
     "sv_menu",
     "sv_coop",
