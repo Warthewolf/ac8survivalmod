@@ -43,3 +43,7 @@ parked/
 # the TESTER zips the test keys (release zips go to build/release and GitHub Releases)
 testing/logs/
 testing/builds/
+
+# (2026-11-10) task plans are local working notes (AGENTS.md "How to work", step 3); the agents' worktrees
+docs/design/*_PLAN.md
+.claude/worktrees/
