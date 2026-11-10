@@ -22,6 +22,8 @@ doors, a black slot along them, and the starboard pod's fairing stood up to 1.1 
     where the forward turret's barbette begins; the gunwale and the hull's sides go whole), so the opening is square to the ship and centred on its doors;
   - the pods' fairings (CUT_ALC_SPONSON_*) take the hull's move at their roots (the open edges lying on the hull's
     skin), fading out over 14 m, so each root stays in the hull's side as it was cut and the pods stay where they are.
+  - where that cut had gone through the hull's side (the starboard bow, where the askew hull came inside the bay's
+    box), the cut edge goes with the skin like the rest of the side and the hole it left is closed (mend_breach).
 Animation is untouched (only rotations are keyed, and a turn about z before them only changes the z angle, which is
 keyed on the mounts themselves as an absolute heading). Without `save` it only reports. model_tanacorn.py calls
 straighten() on what it loads too, so a design file that has not been through this still gives a straight model.
@@ -70,6 +72,95 @@ def symmetry(points, turn0=0.0, span=math.radians(1.2), shift_span=1.5):
                     best = (e, th, b)
         step_t, step_b = step_t / 5, step_b / 5
     return best[1], best[2], best[0]
+
+
+def bumpy(pts):
+    """how far a ring of points is from flat: the most any lies off the plane through their middle (by Newell's normal)"""
+    c = sum(pts, Vector()) / len(pts)
+    n = Vector()
+    for a, b in zip(pts, pts[1:] + pts[:1]):
+        n += (a - c).cross(b - c)
+    if n.length < 1e-12:
+        return 0.0
+    n.normalize()
+    return max(abs((p - c).dot(n)) for p in pts)
+
+
+def mend_breach(hull, rect, deck, log=print):
+    """Where the hull's side came inside the bay's box when the bay was cut out of the askew hull (the starboard bow:
+    the hull lay 1.6 m to port there), the cut took a wedge out of the skin: a hole under the rail between the last
+    two side VLS blocks (the user's marked render, 2026-11-10: "What the hell is this hole"). On the straightened
+    hull the skin stands clear of the bay, so the hole is simply closed: every closed ring of open edges in the
+    hull's side beside the bay (under the deck, above BAY_Z - 2) gets a face, with its neighbour's material."""
+    import bmesh
+    W, me = hull.matrix_world, hull.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+
+    def beside(v):
+        p = W @ v.co
+        d = deck(p.x)
+        return (rect[0] - 5.0 < p.x < rect[1] + 8.0 and rect[3] - 1.5 < abs(p.y) < rect[3] + 6.0
+                and d is not None and BAY_Z - 2.0 < p.z < d - 0.3)
+    edges = [e for e in bm.edges if len(e.link_faces) == 1 and beside(e.verts[0]) and beside(e.verts[1])]
+    link = {}
+    for e in edges:
+        for v in e.verts:
+            link.setdefault(v, []).append(e)
+    seen, made = set(), 0
+    for e0 in edges:
+        if e0 in seen:
+            continue
+        ring, todo = [], [e0]
+        while todo:
+            e = todo.pop()
+            if e in seen:
+                continue
+            seen.add(e)
+            ring.append(e)
+            for v in e.verts:
+                todo += link[v]
+        verts = {v for e in ring for v in e.verts}
+        if not (3 <= len(ring) <= 16 and len(verts) == len(ring) and all(len(link[v]) == 2 for v in verts)):
+            continue                                                # (an open chain, or not one ring)
+        near = ring[0].link_faces[0]
+        new = bmesh.ops.holes_fill(bm, edges=ring, sides=0)["faces"]
+        c = sum((W @ v.co for v in verts), Vector()) / len(verts)
+        # the side is flat strakes meeting at knuckles: a face over a knuckle is cut along it (the cut that leaves the
+        # two flattest pieces), until every piece is flat to a centimetre, so each lies in its own strake's plane
+        todo, new = list(new), []
+        while todo:
+            f = todo.pop()
+            vs = list(f.verts)
+            if len(vs) == 3 or bumpy([v.co for v in vs]) < 0.01:
+                new.append(f)
+                continue
+            best = None
+            for i in range(len(vs)):
+                for j in range(i + 2, len(vs)):
+                    if i == 0 and j == len(vs) - 1:
+                        continue
+                    a, b = vs[i:j + 1], vs[j:] + vs[:i + 1]
+                    worst = max(bumpy([v.co for v in a]), bumpy([v.co for v in b]))
+                    if best is None or worst < best[0]:
+                        best = (worst, vs[i], vs[j])
+            g = bmesh.utils.face_split(f, best[1], best[2])[0]
+            todo += [f, g]
+        for f in new:
+            f.material_index, f.smooth = near.material_index, near.smooth
+            f.normal_update()
+            out = W.to_3x3() @ f.normal
+            if out.y * c.y < 0.0:                                   # (facing outboard, as the skin round it)
+                f.normal_flip()
+        made += len(new)
+        log("straighten: %s: a hole in the side beside the bay closed (%d edges round (%.1f, %.1f, %.1f) m) with %d flat "
+            "faces: %s" % (hull.name, len(ring), c.x, c.y, c.z, len(new), ", ".join(
+                "%d corners, facing (%.2f, %.2f, %.2f)" % (len(f.verts), *(W.to_3x3() @ f.normal)) for f in new)))
+    if made:
+        bm.to_mesh(me)
+        me.update()
+    bm.free()
+    return made
 
 
 def straighten(colls, log=print, apply=True):
@@ -144,14 +235,37 @@ def straighten(colls, log=print, apply=True):
                 lo, hi = edge.get(k, ((0.0, 0.0), (0.0, 0.0)))
                 edge[k] = ((p.y, p.z) if p.y < lo[0] else lo, (p.y, p.z) if p.y > hi[0] else hi)
 
-    def gunwale(x, port):
-        a = x - 0.5
+        # the deck's height along the bay (it rises to the bow): the height of the flat deck's vertices (every face at
+        # them facing up) within 8 m of the bay's sides, in 5 m bins
+        me0, W0 = hulls[0].data, hulls[0].matrix_world
+        flat = [True] * len(me0.vertices)
+        for poly in me0.polygons:
+            if abs((W0.to_3x3() @ poly.normal).normalized().z) < 0.9:
+                for i in poly.vertices:
+                    flat[i] = False
+        zs = {}
+        for v in me0.vertices:
+            p = W0 @ v.co
+            if flat[v.index] and p.z > BAY_Z and rect[0] - 6.0 < p.x < rect[1] + 6.0 and rect[2] - 8.0 < p.y < rect[3] + 8.0:
+                zs.setdefault(int(math.floor(p.x / 5.0)), []).append(p.z)
+        deck_bins = {k: sorted(v)[len(v) // 10] for k, v in zs.items()}    # (the low tenth: the deck itself, not the
+                                                                             # barbette's or a fitting's flat top)
+
+    def deck(x):
+        a = x / 5.0 - 0.5
         k, f = int(math.floor(a)), a - math.floor(a)
-        g = [edge.get(j) or edge.get(j - 1) or edge.get(j + 1) for j in (k, k + 1)]
-        if not g[0] or not g[1]:
+        z = [deck_bins.get(j, deck_bins.get(j - 1, deck_bins.get(j + 1))) for j in (k, k + 1)]
+        if z[0] is None or z[1] is None:
             return None
-        i = 1 if port else 0
-        return g[0][i][0] * (1 - f) + g[1][i][0] * f, g[0][i][1] * (1 - f) + g[1][i][1] * f
+        return z[0] * (1 - f) + z[1] * f
+
+    def gunwale(x, port):
+        """the deck's edge at x on that side (the widest of this metre and its neighbours)"""
+        k = int(math.floor(x))
+        g = [edge[j] for j in (k - 1, k, k + 1) if j in edge]
+        if not g:
+            return None
+        return max(e[1][0] for e in g) if port else min(e[0][0] for e in g)
 
     def with_hull(p):
         """how much of the hull's move a hull vertex takes: all of it, but for the deck round the bay: none on the
@@ -161,12 +275,11 @@ def straighten(colls, log=print, apply=True):
             return 1.0
         dx = rect[0] - p.x if p.x < rect[0] else p.x - rect[1] if p.x > rect[1] else 0.0
         dy = max(p.y - rect[3], rect[2] - p.y, 0.0)
+        d = deck(p.x)
+        if d is not None and p.z < d - 0.4:                         # under the deck: the hull's side (where the bay's
+            return 1.0                                              # cut reached it too, its cut edge is the skin's)
         g = gunwale(p.x, p.y > 0.0)
-        side = BAY_SIDE
-        if g:
-            if p.z < g[1] - 0.4:                                    # under the deck's edge: the hull's side
-                return 1.0
-            side = min(max(abs(g[0]) - rect[3] - 0.3, 0.5), BAY_WIDE)
+        side = min(max(abs(g) - rect[3] - 0.3, 0.5), BAY_WIDE) if g is not None else BAY_SIDE
         t = min(1.0, math.hypot(dx / (BAY_AFT if p.x < rect[0] else BAY_FWD), dy / side))
         return t * t * (3.0 - 2.0 * t) if side > 3.5 else t         # (eased where there is room for it)
     for hull in hulls:
@@ -195,6 +308,8 @@ def straighten(colls, log=print, apply=True):
             log("straighten: %s: %d deck vertices round the bay stay with it (%s); %d faces turned over (%d passes)"
                 % (hull.name, held, "x %.1f..%.1f, y %.2f..%.2f" % rect if rect else "no bay here", flipped, turn_no + 1))
             assert flipped == 0, "the deck folded over round the bay"
+            if rect:
+                mend_breach(hull, rect, deck, log)
             done.add(hull.data.name)
     mounts = [o for o in objs if o.name.startswith(IOWA) and not (o.parent and o.parent.name.startswith(IOWA))]
 

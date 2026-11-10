@@ -284,6 +284,15 @@ sea powers iowa").
       from the originals (git 6de936a^): rim and gunwale mirror within 2 cm, both roots 0.4-0.5 m in the skin as they
       were cut. **Moving one group of fitted parts against another: measure every joint between them afterwards**
       (the rim against the bay section, a fairing's open edges against the hull's skin), and look straight down at it.
+      **The hole in the starboard bow** (the user's marked render, 2026-11-10: "What the hell is this hole"; it was in
+      rev 4's renders too, and I had taken it for a hawse recess): in the askew design the starboard side came inside
+      the bay's box at the bow, and cutting the bay out took a wedge of the skin with it (x 205.7-210.1, z 7.7-9.0,
+      under the rail between the last two side blocks). straighten.py now takes that cut edge with the skin like the
+      rest of the side (the deck's height along the bay decides what is deck and what is side) and closes the hole
+      (mend_breach: the ring filled, then cut along the knuckle so each piece lies in its own strake's plane: the two
+      new faces face exactly as the port strakes' mirrors). The starboard skin there is now within 2 cm of port's.
+      **A dark shape in a render that the other side doesn't have is a fault until measured: compare port and
+      starboard (ray probes from outside, mirrored) before calling anything a feature.**
     - **decks**: the Alicorn's own deck layout, a plain top-down projection fitted from the source mesh ALC_HULL (SRC
       collection): u = cu - x / 400, v = cv - y / 400, sheet a (cu 0.86617, cv 0.84480) forward of x = -52 m, sheet b
       (-0.12728, 0.81111) aft; only where the Alicorn has flat deck under the spot (its flight deck, 13 m either side
