@@ -23,6 +23,9 @@ plus a SOCKET_Mount_* empty on the hull for every part (`tanacorn_hull_sockets.j
 
     blender -b art/tanicorn/design/Leviathan_animated.blend -P tools/tanicorn/model_tanacorn.py -- build/tanicorn/model [render]
 
+It also removes the Iowa's crew figures, builds the laser as a beam director (the user's photos), gives every VLS lid a
+hinge, and checks every part type's topology (tanacorn_model_check.json: all must pass). Status and the next steps:
+docs/design/INVINCIBLE_FLEET.md WP0 ("WP0 handover").
 It writes `Tanacorn_model.blend` (the design file is never changed) and, with `render`, previews (Cycles on the CPU;
 TANA_SAMPLES, TANA_SHOTS=02_aft_vls,... pick the quality and the views). The previews the user saw are in
 `art/tanicorn/renders/model/`. Next: each part through prepare_part.py's route (a recipe each in build.sh), the hull

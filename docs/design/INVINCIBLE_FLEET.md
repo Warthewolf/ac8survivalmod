@@ -240,13 +240,53 @@ machine), test in game, pass, fallback, unknowns. Do them in this order unless a
 Status lines: update them as work lands.
 
 ### WP0. The TANACORN's model: the Leviathan design (Sea Power's Iowa + AC8's Alicorn)
-Status: started 2026-11-10: `tools/tanicorn/model_tanacorn.py` adds the 4 laser turrets, the 8 deck VLS blocks (aft of
-turret C: x -210 to -264 m, 16 m either side) and the 8 side VLS blocks (the bow's flanks: x +150 to +216 m, 5 m up,
-lids canted 35 deg up and out) to the design, and a socket for every part (36: tanacorn_hull_sockets.json); previews in
-art/tanicorn/renders/model/ for the user. The deck VLS block is the agent's own too: the Alicorn's VLS were merged into
-its hull mesh in src.blend (bl_import.py), so there's no separate Alicorn block to reuse. Next: the user's look at the
-previews, then each part through prepare_part.py's route and the hull with its sockets. Depends on: nothing. Who: the agent (the user, 2026-11-10: "You are building it all"; "You need
+Status (2026-11-10, handed to Fable 5.2 mid-way; see "WP0 handover" right below). Depends on: nothing. Who: the agent (the user, 2026-11-10: "You are building it all"; "You need
 sea powers iowa").
+
+**WP0 handover (2026-11-10; the user: "Continue on fable")**
+- Done, in `tools/tanicorn/model_tanacorn.py` (Blender 3.3; run it on `Leviathan_animated.blend`, see
+  tools/tanicorn/README.md; the design files are never changed, the output goes to the out dir, git-ignored under build/):
+  - **the crew removed** (the user: "remove the people models from the ship"): every face on the Iowa crew texture's
+    material (9,006 faces of LEV_HULL.001) and the vertices left loose. The design files still hold them (not asked).
+  - **the laser interceptor = a beam director** (the user's two photos, 2026-11-10: "Base the laser design off this"):
+    squat turret ring with a flange, octagonal yoke base, two tall arms rounded on top with vent holes down their outer
+    faces and round the top (house: turret_yaw); between the arms a head (gun: turret_pitch, tilting about the arms'
+    axis, LASER_PIVOT z 3.4 m) with its top corners cut, a big octagonal window off to one side (dark glass), two round
+    lenses beside it, a small camera and a sloped chin; matte black (TANA_black), glossy dark glass (TANA_glass); ~5.5 m
+    tall. SOC_Gun_01 at the window's middle. 4 of them at the LEV_LASER_* corners.
+  - **8 deck VLS blocks** (aft deck, x -210..-264 m, y +-16 m, base 0.4 m into the deck) and **8 side VLS blocks**
+    (bow flanks x +150..+216 m, flush with the hull's flare, following its sheer, cells launching 35 deg up and out):
+    all-quad grid bodies with 8 cell wells each; **every lid a hinged object** (TANA_VLS?_*_Hatch_NN, origin on its
+    hinge: deck lids open -100 deg about Y from their aft edge, side lids +115 deg about X from their top edge, 0.5 s;
+    the hinges in tanacorn_hull_sockets.json for the rig). The lids open in the renders only (open_hatches); no
+    animation asset exists yet.
+  - **clean topology, checked**: each part type built once and shared; laser parts united by exact boolean, cut,
+    simplified, split convex, bevelled on outside edges longer than 3x the bevel only, then a sliver pass; VLS bodies
+    grid-built (no booleans). check() writes tanacorn_model_check.json: all six types pass (no non-manifold or open
+    edges, no faces through each other, no degenerate or concave faces, UVs in 0..1). **Keep it that way: run the check
+    after every change and never send the user a part that fails it.** Lessons in the code's comments: a merge pass
+    after a boolean cut ate the bevels; bevelling inside corners or small hole rims makes slivers.
+  - **textures**: smart-UV unwrap, one baked diffuse per part type (textures/T_TANA_*_D.png: paint or black, light
+    grime, its own AO; 8 px padding; ordinary PNGs), checked by eye: clean.
+  - 36 hull sockets (SOCKET_Mount_*, tanacorn_hull_sockets.json, UE cm); SOCKET_Mount_CORE provisional.
+- **Not done yet:**
+  1. **the rev 3 renders**: never made (the run was stopped for the handover). First thing: render all shots
+     (`TANA_SAMPLES=40 ... model_tanacorn.py -- <out> render`, ~7-8 min on 4 cores), look at every image yourself, then
+     send them to the user (SendUserFile, a short caption of what changed). **The user wants every revision sent for
+     review** ("send me each revision so i can review"). Rev 1 was sent; rev 2 was never sent whole (superseded).
+  2. the user's review of rev 3 (the beam director above all), and their changes;
+  3. for UE: each part through prepare_part.py's route (a recipe each in build.sh; the laser's house/gun as the 5-inch
+     was; the VLS bodies with their hatches as a skeletal mesh: a bone per lid at its hinge plus an open animation,
+     0.5 s, or the Alicorn's hatch pattern: docs/re/TANICORN.md 2), the hull as a static mesh with its sockets; then
+     WP1's in-game mount tests on the user's machine.
+- **Getting Blender 3.3 in a cloud session** (the user's version; its file format is the design files'):
+  `curl -sS -o b.tar.xz https://download.blender.org/release/Blender3.3/blender-3.3.21-linux-x64.tar.xz && tar -xJf
+  b.tar.xz` in the scratchpad (~210 MB), then `blender-3.3.21-linux-x64/blender -b <file> --python <script>`. Cycles on
+  the CPU renders; set `image_settings.file_format = "PNG"` before write_still. Never re-save a design file with a newer
+  Blender. Never commit Blender's `.blend1` backups.
+- Also open with the user: whether to rewrite git history to remove their name (their name is out of every current
+  file; a force-push needs their explicit go-ahead), and whether to strip the crew from the design files too.
+
 - Goal: the TANACORN built from the chosen design `art/tanicorn/design/Leviathan_rev4.blend` (rigged:
   `Leviathan_animated.blend`) as it is: **Sea Power's Iowa fused with AC8's Alicorn** at the Alicorn's 650 m (the Iowa's
   hull, superstructure and mounts scaled up; the Alicorn's stern, sponsons, railcannon and sub-railguns; Alicorn-grey
