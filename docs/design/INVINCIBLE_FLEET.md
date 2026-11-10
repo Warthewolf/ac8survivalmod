@@ -166,6 +166,24 @@ The third round of questions, 2026-11-10:
 - **The players' allies sail and fly to engage the fleet:** the STORE's ships (the DDG AEGIS and the rest) head for it,
   the wingmen join the attack.
 
+**The TANACORN's weapons (the user, 2026-11-10: "it only has 2 main guns now"; the rest the agent's proposals the user
+left as they were):**
+
+| weapon | count | where (the Leviathan design) | fires at | phase |
+|---|---|---|---|---|
+| bow railcannon (the Alicorn's) | 1 | its teal bay in the bow, where the Iowa's turret A stood | the airfield: a 30 s charge, again every 90 s while it lives | 2 |
+| 16-inch triple turret, railgun shells | **2** | turret B forward of the bridge, turret C aft | the players, and the airfield from the gun line (WP13) | 1 |
+| 5-inch twin flak mount | 6 | three a side along the superstructure | the players | 1 |
+| close-in mounts | 8: **4 laser interceptors** (0.5 s swing) + **4 CIWS guns** | the superstructure's corners | lasers: the players' missiles; CIWS: the players | 1 |
+| VLS block, 8 cells | 4 (32 cells) | the Alicorn's VLS, two a side | the players | 1 |
+| sub-railgun (the Alicorn's) | 2 | its pop-up hatches, one a side | the players | 1 |
+| SAM launchers | none | | | |
+| launched aircraft / drones | none (GEOFON's deck does the launching) | | | |
+
+Phase 1's weapon parts: 2 + 6 + 8 + 4 + 2 = **22**; phase 2 when `phase2_share` (60 %) of them are down. The design file
+in the repo (Leviathan_rev4.blend) still holds three 16-inch turret objects (one presumably hidden under the bay: the
+renders show two) and **4 CIWS positions** (the Iowa's Phalanx): WP0 adds 4 more close-in positions for the 8.
+
 No question is open (section 6).
 
 ---------------------------------------------------------------------------------------------------------------------
@@ -217,8 +235,9 @@ Status: not started. Depends on: nothing. Who: the agent (the user, 2026-11-10: 
   upper works; the Alicorn's hull colour; the bow railcannon in its teal bay; faired sponsons; pristine: the user
   confirmed this look, 2026-11-10). The Alicorn's parts are AC8 stock and allowed.
 - Deliverables, rigged as tools/tanicorn expects (tools/tanicorn/README.md, prepare_part.py): the hull (static mesh,
-  its mount sockets named as the parts' components will attach), each mount type (16-inch triple, 5-inch twin, CIWS /
-  laser, VLS block, the bow railcannon with its raise and barrel split) as Body > turret_yaw > turret_pitch with
+  its mount sockets named as the parts' components will attach: **2** 16-inch, 6 five-inch, 8 close-in, 4 VLS, 2
+  sub-railgun hatches, the bow railcannon's bay: section 2's table), each mount type (16-inch triple, 5-inch twin, CIWS /
+  laser, VLS block, the sub-railgun with its hatch, the bow railcannon with its raise and barrel split) as Body > turret_yaw > turret_pitch with
   identity bones and muzzle sockets (SOC_Gun_01.. as the stock spelling), each with its wreck; textures ordinary (no
   VT: hard rule 44) on AC8 material instances parented on stubs (hard rules 42, 58).
 - Also: a one-piece skinned version of the whole ship with a root bone for the rise (WP4 route B), and its rise
@@ -554,12 +573,13 @@ Status: not started. Depends on: WP3.
   no animation blueprints (BP script).
 - M4, **three phases (the user)**, fired from Lua (sv_alicorn.lua's pattern: poll part health, fire SV_Event), with
   the boss bar and callouts:
-  1. its guns (16-inch, 5-inch), VLS and lasers fight; the core shielded (invincible / no box);
-  2. once `phase2_share` (e.g. 60 %) of those parts are down, the bow railcannon rises (M3's animation) and charges a
-     shot **at the airfield** (the user): a long charge with the RAILGUN WARNING and a callout (`THE TANACORN IS
-     AIMING AT THE AIRFIELD`); if it fires, `railcannon_damage` (e.g. 100 of the airfield's 250) comes off the airfield
-     (WP13's scripted route: AF.pending, effects on the runway); the railcannon itself is a part that can be killed
-     before it fires, and it charges again `railcannon_every_s` later while it lives;
+  1. its 22 weapon parts fight (section 2's table: two 16-inch triples, six 5-inch, four lasers, four CIWS, four VLS
+     blocks, two sub-railguns); the core shielded (invincible / no box);
+  2. once `phase2_share` (60 %) of those parts are down, the bow railcannon rises (M3's animation) and charges a
+     shot **at the airfield** (the user): a `railcannon_charge_s` (30 s) charge with the RAILGUN WARNING and a callout
+     (`THE TANACORN IS AIMING AT THE AIRFIELD`); if it fires, `railcannon_damage` (e.g. 100 of the airfield's 250) comes
+     off the airfield (WP13's scripted route: AF.pending, effects on the runway); the railcannon itself is a part that
+     can be killed before it fires, and it charges again `railcannon_every_s` (90 s) later while it lives;
   3. once the railcannon is down (or `phase3_share` of everything), its core opens (shield off, box on): sink it.
   Weak points are child objects with their own health and tags (no separate weak-point system).
 - M5, **its death (the user: breaks and sinks, explosions):** secondary explosions along the hull, then it breaks up
