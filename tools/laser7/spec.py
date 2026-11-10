@@ -47,7 +47,9 @@ def build():
               '(Name="LightLifeTime",ParamType=PSPT_Scalar,Scalar=%g))') % (AC7['RayDistance'], AC7['LifeTime'] + 0.2, AC7['LifeTime'] - 0.5)
     spec = {
         'root': DEST,
-        'curve': {'asset': CURVE, 'keys': [{'t': 0.0, 'v': 0.0, 'interp': 'cubic'}, {'t': 1.0, 'v': 1.0, 'interp': 'linear'}]},
+        # ((2026-11-10) the user: "up the swing speed for the laser interceptors": AC7's smoothstep over 0.5 s, not 1 s, to
+        # match li_intercept_s 0.5: the class reads the curve in seconds; sv_escort_li.lua clears a curve that doesn't fit)
+        'curve': {'asset': CURVE, 'keys': [{'t': 0.0, 'v': 0.0, 'interp': 'cubic'}, {'t': 0.5, 'v': 1.0, 'interp': 'linear'}]},
         'systems': systems,
         'blueprint': {
             'asset': BP, 'parent': '/Script/Live.LiveLaserInterceptor',

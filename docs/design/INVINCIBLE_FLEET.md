@@ -107,7 +107,8 @@ The user's answers to the agent's questions, 2026-11-10:
   shelled).
 - **Fleet size:** ~16 ships besides the TANACORN (the draft: every AC04 name once).
 - **Laser interceptors: strong but killable:** most missiles fired at a covered ship are shot down, each laser with a
-  cool-down; kill the laser mounts first or close in with guns and bombs.
+  cool-down; kill the laser mounts first or close in with guns and bombs. **Their swing 0.5 s**, the ZFA-44s' too
+  (one setting, `li_intercept_s`; was AC7's 1.0): built in 0.74.49.
 - **The rise: a short cinematic**: the view leaves the player's plane for an outside shot of the rise, then comes back;
   the player is invulnerable during it. **In co-op every player's view cuts to it at the same moment**, all invulnerable.
 - **Reward:** ~50,000 zollars for the win, on top of each ship's own pay.
@@ -444,7 +445,9 @@ Status: partly there. Depends on: WP7.
   (missile.homing_from, salvo_n 3). Never a scripted sure kill (hard rule 36).
 - **Laser interceptors (the user: strong but killable):** each covers the ships near it and burns down **most**
   missiles fired at them (a cool-down after each kill, setting `cooldown_s`), so players kill the laser mounts first or
-  close in with guns and bombs. AC7's LaserInterceptor on ALiveLaserInterceptor, spawned and
+  close in with guns and bombs. **A 0.5 s swing** (the user, 2026-11-10: "up the swing speed for the laser
+  interceptors"; both the fleet's and the ZFA-44s', one setting): the fleet's lasers take the ZFA-44s' `li_intercept_s`
+  (0.5 since 0.74.49) and the same curve fit (docs/re/LASER_INTERCEPTOR.md 11). AC7's LaserInterceptor on ALiveLaserInterceptor, spawned and
   attached at a ship's socket as on the ZFA-44s (fired and intercepted: 0.74.31) [V], or an AC8 anti-missile arm of
   ours (BP_SwingTLS_ForMSL's values) on the Tanicorn's CIWS mounts. A turn rate / cool-down that leaves skilled missile
   play possible; a callout `LASER DEFENCE ONLINE`; its beam AC8's NS_UAVTLS_Muzzleflash01 (hard rule 58).

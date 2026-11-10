@@ -1134,7 +1134,10 @@ CFG = {
                                  -- ((2026-11-08) the user: 2 km, for the reach; was AC7's 1240 / 1200 m: missiles at the
                                  -- player 1.5-2 km from a ZFA-44 got through in Alyssa's run of 0.74.31)
                                  li_range_m = 2000, li_activation_m = 2000, li_angle = 180, li_search_s = 0.5,
-                                 li_intercept_s = 1.0, li_volley_s = 6.0, li_rest_s = 8.0, li_end_s = 0.2, li_beam_x = 0,
+                                 -- ((2026-11-10) the user: "up the swing speed for the laser interceptors", 0.5 s for
+                                 -- these and round 30's fleet: one swing a missile in half the time; was AC7's 1.0. A swing
+                                 -- curve that isn't at its end by then is cleared at the spawn: sv_escort_li.lua curveFit)
+                                 li_intercept_s = 0.5, li_volley_s = 6.0, li_rest_s = 8.0, li_end_s = 0.2, li_beam_x = 0,
                                  li_sure = true, li_sure_s = 0.6, li_log_n = 60,
                                  -- ((2026-11-08) Alyssa's run of 0.74.30: its first volley stopped the game in the
                                  -- renderer's translucency pass (the RHI thread, UECC AceCombat8.exe+0x34a8d68): AC7's

@@ -227,6 +227,23 @@ local function beam(r, yz)
     pcall(function() r.li.MainLaser:SetVectorParameter(FName("BeamLength"), { X = beamX(), Y = yz, Z = yz }) end)
 end
 
+-- ((2026-11-10) the user: "up the swing speed for the laser interceptors": li_intercept_s 0.5) The class reads its swing
+-- curve in seconds, not as a share of InterceptTime (docs/re/LASER_INTERCEPTOR.md 9: alpha = curve(timer), its kill at
+-- timer > InterceptTime), so with AC7's 1 s curve and a 0.5 s swing the beam was only half way to its missile at the
+-- kill. Laser x's curve kept when it's at its end (0.98 or more) by InterceptTime `it`, else cleared: a null curve is
+-- checked by the class and swings straight over InterceptTime. What was done, for the laser's line
+local function curveFit(x, it)
+    local okC, c = pcall(function() return x.SwingRateCurve end)
+    if not (okC and c ~= nil and valid(c)) then return "no swing curve (a straight swing)" end
+    local okV, v = pcall(function() return c:GetFloatValue(it) end)
+    local at = (okV and type(v) == "number") and string.format("%.2f at %.2f s", v, it) or string.format("unread at %.2f s", it)
+    if okV and type(v) == "number" and v >= 0.98 then return "its swing curve kept (" .. at .. ")" end
+    pcall(function() x.SwingRateCurve = nil end)
+    local okR, c2 = pcall(function() return x.SwingRateCurve end)
+    if okR and (c2 == nil or not valid(c2)) then return "its swing curve cleared (" .. at .. "): a straight swing" end
+    return "its swing curve NOT cleared (" .. at .. "): the beam is short of its missile at the kill"
+end
+
 -- plane p's laser: AC7's weapon spawned at its gun -> the laser, its note; nil and why not
 local function spawn(p)
     local z = zc()
@@ -265,6 +282,7 @@ local function spawn(p)
     local vals = { SearchInterval = 1.0e9, InterceptTime = num(z.li_intercept_s, 1.0), InterceptAngle = num(z.li_angle, 180),
                    RayDistance = num(z.li_range_m, 1240) * 100, LifeTime = num(z.li_volley_s, 6.0), bIsBaseAttached = true }
     for k, v in pairs(vals) do pcall(function() x[k] = v end) end
+    local curveHow = curveFit(x, vals.InterceptTime)
     pcall(function() x.MainLaser.bAutoActivate = false end)   -- (the beam waits for a volley)
     pcall(function() x.EndLaser.bAutoActivate = false end)
     local okF, fin = pcall(function() return gs:FinishSpawningActor(x, t, 1) end)
@@ -305,8 +323,8 @@ local function spawn(p)
     pcall(function() own = a.OwningGameObject end)
     pcall(function() si = a.SearchInterval end)
     local ownA = own ~= nil and addrOf(own) or nil
-    return a, string.format("owner %s (%s), search every %s s (off), %s%s", ownA == p.a and "its plane" or ("NOT its plane (" .. tostring(ownA) .. ")"),
-        ownHow, tostring(si), attached and ("at " .. tostring(z.li_socket or "SOC_Gun_01")) or "NOT attached",
+    return a, string.format("owner %s (%s), search every %s s (off), %s, a swing %.2f s, %s%s", ownA == p.a and "its plane" or ("NOT its plane (" .. tostring(ownA) .. ")"),
+        ownHow, tostring(si), attached and ("at " .. tostring(z.li_socket or "SOC_Gun_01")) or "NOT attached", vals.InterceptTime, curveHow,
         (fin ~= nil and addrOf(fin) ~= addrOf(a)) and string.format("; FinishSpawningActor answered %s, not the laser", tostring(addrOf(fin))) or "")
 end
 

@@ -1580,8 +1580,11 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     end
     local GS = { full = "GameplayStatics", addr = addr() }
     function GS:BeginDeferredActorSpawnFromClass(pc, c, t, how, owner)
+        -- (its class default's swing curve: AC7's smoothstep over 1 s, as 0.74.47's container cooked it)
+        local curve = { full = "CurveFloat CUR_SV_LaserInterceptorSwingRate", addr = addr() }
+        function curve:GetFloatValue(t) t = math.max(0, math.min(1, t)); return 3 * t * t - 2 * t * t * t end
         local a = { full = "BP_SV_LaserInterceptor_C li", addr = addr(), cls = c, how = how, owner = owner,
-                    MainLaser = comp("MainLaser"), EndLaser = comp("EndLaser"), root = {} }
+                    MainLaser = comp("MainLaser"), EndLaser = comp("EndLaser"), root = {}, SwingRateCurve = curve }
         function a.root:K2_SetRelativeRotation(r) self.rot = r end
         function a:K2_GetRootComponent() return self.root end
         function a:SetOwner(o) self.Owner = o end
@@ -1643,10 +1646,13 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     local t0 = clock
     ZLAS.tick()
     local li = spawnedL[1]
-    check(li and li.owner == z1 and li.cls == cls and li.how == 1 and li.finished and li.SearchInterval == 1.0e9 and li.InterceptTime == 1.0
+    check(li and li.owner == z1 and li.cls == cls and li.how == 1 and li.finished and li.SearchInterval == 1.0e9 and li.InterceptTime == 0.5
           and li.InterceptAngle == 180 and li.RayDistance == 200000 and li.LifeTime == 6.0 and li.bIsBaseAttached == true
           and li.autoAtFinish == false and li.Owner == z1 and li.ownerAddr == z1.addr,
-          "AC7's laser spawned for the ZFA-44: its owner the plane (SV_LaserOwner, AActor's too), AC7's values, its own search off, its beam waiting for a volley")
+          "AC7's laser spawned for the ZFA-44: its owner the plane (SV_LaserOwner, AActor's too), AC7's values (a 0.5 s swing), its own search off, its beam waiting for a volley")
+    -- ((2026-11-10) "up the swing speed": a 1 s curve read in seconds is half way at 0.5 s: cleared, a straight swing)
+    check(li and li.SwingRateCurve == nil and has(line("carries AC7's LaserInterceptor", from), "a swing 0.50 s, its swing curve cleared (0.50 at 0.50 s): a straight swing"),
+          "the 1 s swing curve that doesn't fit the 0.5 s swing cleared (the class swings straight over InterceptTime), logged")
     check(li and li.attach and li.attach.p == z1.PlaneBodyMesh and li.attach.s == "SOC_Gun_01" and li.attach.l == 2 and li.attach.r == 2
           and li.attach.sc == 1 and has(line("zfa li: ", from) and line("carries AC7's LaserInterceptor", from), "owner its plane (SV_LaserOwner 1)")
           and has(line("carries AC7's LaserInterceptor", from), "FinishSpawningActor answered"),
@@ -1712,7 +1718,7 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     local from8 = #logs + 1
     clock = t0 + 29; ZLAS.tick()
     local fb = fxs[2]
-    check(fb and fb.sys == statics[bp] and fb.root == li.root and fb.how == 0 and math.abs(fb.vars["User.BeamLifeTime"] - 7.2) < 1e-6
+    check(fb and fb.sys == statics[bp] and fb.root == li.root and fb.how == 0 and math.abs(fb.vars["User.BeamLifeTime"] - 6.7) < 1e-6
           and fb.vars["User.BeamLength"] and fb.vars["User.BeamLength"].X == 200000 and fb.vars["User.BeamLength"].Y == 1
           and li.MainLaser.active == false and li.EndLaser.active == false and has(line("fires a volley", from8), "AC8's beam"),
           "a volley: AC8's beam on the laser's root (it swings with it), 1.24 km long in cm, its life the volley's; AC7's never lit")

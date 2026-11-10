@@ -657,3 +657,23 @@ sparks, the flash, the end flash); the swing follows the missile; the missile di
 over; never the player's or allies' missiles; no crash when a ZFA-44 is shot down, at the run's end or at Quit Mission.
 Balance and reach: AC7's 1.24 km reach and 1.2 km activation are short next to AC8's missiles (the ZFA-44s escort the
 player within 3 km): li_range_m / li_activation_m raise both (the beam's length follows li_range_m).
+
+## 11. A faster swing (0.74.49, 2026-11-10; not yet run in game)
+The user: "We need to up the swing speed for the laser interceptors", 0.5 s for the ZFA-44s' and round 30's fleet's
+alike (one setting). `li_intercept_s` 1.0 -> 0.5 (CFG.allies.carrier.zfa, survival.ini [allies.carrier.zfa]): the
+missile's kill comes at InterceptTime (section 9.2's Swing: timer > InterceptTime), so a laser takes one missile about
+every 0.5-1.0 s (the swing plus up to li_search_s), twice AC7's rate.
+- The catch [D, section 9.2]: the class evaluates SwingRateCurve at the timer **in seconds**, not at timer /
+  InterceptTime. AC7's curve (0 -> 1 over 1 s, a smoothstep: 1c) is only 0.5 at 0.5 s, so with a 0.5 s swing the beam
+  would be half way to its missile at the kill. sv_escort_li.lua `curveFit`: at the spawn, the laser's curve is kept if
+  it reads 0.98 or more at InterceptTime (GetFloatValue), else cleared (SwingRateCurve = nil): the class checks a null
+  curve and swings straight, alpha = timer / InterceptTime (9.2). Any li_intercept_s a player sets lands the beam on its
+  missile that way.
+- tools/laser7/spec.py now cooks AC7's smoothstep over 0.5 s (keys t 0 and 0.5), so after the next laser7 build
+  (`sh tools/laser7/build.sh`, the user's machine) the curve fits 0.5 and is kept: the eased swing back. Until then the
+  installed container's 1 s curve is cleared at each spawn (the straight swing).
+- Log: the `zfa li: ... carries AC7's LaserInterceptor: ...` line ends `a swing 0.50 s, its swing curve kept (1.00 at
+  0.50 s)` / `cleared (0.50 at 0.50 s): a straight swing` / `NOT cleared (...): the beam is short of its missile at the
+  kill` (UE4SS refused the nil write: the kill still comes at 0.5 s).
+- In game [T]: the beam snaps onto each missile in about half a second and stays on it to the kill; more missiles shot
+  down per volley (the `zfa li:` kill counts against 0.74.48's).

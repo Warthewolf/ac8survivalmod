@@ -2264,3 +2264,16 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   2,000 lines: the next addition there needs a split; lua_split_part.py's cuts all turn 20+ of its locals global), escort,
   dive, coop_migration, resync and lua_load tests pass. To see in game: a carrier's 3 rounds served, then the STORE: no
   crash; the "hull held" line or `N parked ZFA-44s ... finished off` followed by the arms' units off the list.
+
+## 0.74.49 (2026-11-10; Lua only, the runtime unchanged; not built or run in game: built on Linux, no package)
+- The laser interceptors swing faster (the user: "We need to up the swing speed for the laser interceptors", 0.5 s,
+  for the VAMPIRES' ZFA-44s and round 30's fleet alike): `li_intercept_s` 1.0 -> 0.5 (sv_config.lua, the ini's
+  comment): one missile about every 0.5-1.0 s a laser, twice AC7's rate.
+- The class reads its swing curve in seconds (docs/re/LASER_INTERCEPTOR.md 9.2), so AC7's 1 s curve would leave the beam
+  half way to its missile at a 0.5 s kill: sv_escort_li.lua `curveFit` keeps a laser's curve only when it reads 0.98 or
+  more at InterceptTime, else clears it (the class's straight swing over InterceptTime). tools/laser7/spec.py cooks the
+  curve over 0.5 s for the next laser7 build (the user's machine), which brings the eased swing back.
+- The plan (docs/design/INVINCIBLE_FLEET.md WP9) gives the fleet's lasers the same setting.
+- Log: the `zfa li: ... carries AC7's LaserInterceptor` line ends `a swing 0.50 s, its swing curve kept / cleared /
+  NOT cleared (...)`. escort_test (the values, the curve cleared, the beam's life 6.7 s), lua_load pass; lua_check.
+- To see in game: the beam snaps onto a missile in half a second and stays on it to the kill; more kills per volley.
