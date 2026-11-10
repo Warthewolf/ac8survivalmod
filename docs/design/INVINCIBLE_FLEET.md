@@ -266,18 +266,27 @@ sea powers iowa").
       of the middle: its sheets hold its rounded shoulders and side skin folded out beyond that, which is where the
       rail, slots and draft marks on this ship's deck came from); the rest of the deck is plain plating, top-down.
       The decks are cut into 5 m cells first so each cell is wholly one or the other.
-    - **the shell** (sides, and everything under the water): one continuous strip of the aft sheet's plain plating
-      a side, along the hull's outline (plan arc length, round the stern to the centreline) and up it (by height above
-      z = -2 m, by girth under it, squeezed 2.5x there); it runs to and fro over one 248 m stretch of plating,
-      mirrored at each turn (x = -80.8 and 166.6 m), the hull cut at the turns. No rail, slots or draft marks: they
-      belong to the Alicorn's outline.
+    - **the sides above the water: the Alicorn's own side skin** (the user, 2026-11-10: "the hull sides must remain
+      as the alicorns"; a first pass had laid them in plain plating): each face takes what ALC_HULL shows on its plain
+      hull side (its x 50..266 m, between its pods' roots and its nose, worn to and fro along this longer hull and
+      mirrored at each turn) at the same distance up the skin from the waterline (the Alicorn's shoulder rolls
+      inboard above its rail, so by arc length, not height). The rail line, the rows of slots and the draft marks run
+      straight along the hull, bow to stern. 4,828 of the 5,163 side faces; the transom and faces looking fore or aft
+      stay on plating.
+    - **the shell under them** (the sides' foot, everything under the water): one continuous strip of the aft sheet's
+      plain plating a side, along the hull's outline (plan arc length, round the stern to the centreline), by girth,
+      squeezed 2.5x; to and fro over one 248 m stretch of plating, mirrored at each turn (x = -80.8 and 166.6 m), the
+      hull cut at the turns.
     - **the rest** (steps, coamings, fittings' sides): box-mapped onto plain plating.
-    Result: 3.1 % of smooth edges still join two mappings, all of them plating against plating or the straight cuts
-    (was 5-45 %). The hull has ~9,700 faces more (the cuts). fix_deck_uvs (the aft deck's dark patches) is gone: the
+    Result: no saw teeth; 6.4 % of smooth edges still join two mappings (the Alicorn's own island joins on its side
+    skin, plating against plating, the straight cuts; was 5-45 % of broken pieces). The hull has ~9,700 faces more (the cuts). fix_deck_uvs (the aft deck's dark patches) is gone: the
     decks are mapped whole. **Check any UV work with flat-lit orthographic renders** (the sheet as emission, top and
-    side, 14 px/m): lit beauty renders hide these faults, which is how they got to the user. Left as they are: the
-    Alicorn's hazard-striped lift outline shows on the deck at x ~ -100 m, half under turret C and the superstructure
-    (its own marking, in its own place); the pods (CUT_ALC_SPONSON_*_FAIR.001) are the Alicorn's own meshes with its
+    side, 14 px/m): lit beauty renders hide these faults, which is how they got to the user. A coloured deck
+    marking that lies partly under the ship's own upper works is taken off (the Alicorn's hazard-striped lift outline
+    at x ~ -100 m, half under turret C and the superstructure: its cells take the deck from further along, so the
+    runway's lines carry on there). If the user still finds the Alicorn's deck wrong on this hull, they allowed
+    another deck that is not the Alicorn's texture ("find an alternative solution that still looks good but doesn't
+    use the texture of the alicorn"); the sides stay the Alicorn's either way. The pods (CUT_ALC_SPONSON_*_FAIR.001) are the Alicorn's own meshes with its
     own UVs and are not touched.
   - **the laser interceptor = a beam director** (the user's two photos, 2026-11-10: "Base the laser design off this"):
     squat turret ring with a flange, octagonal yoke base, two tall arms rounded on top with vent holes down their outer

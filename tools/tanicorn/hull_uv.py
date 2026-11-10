@@ -16,19 +16,24 @@ face is mapped by where it is and which way it faces, one rule per kind of surfa
       hold its rounded shoulders and side skin folded out (the rail, the slots, draft marks), which this wider deck
       used to wear; there the deck is plain plating, laid top-down to and fro like the shell's strip. The decks are
       cut into 5 m cells first, so each cell is wholly one or the other;
-  the shell (sides, and everything under the water): one continuous strip of the aft sheet's plain plating a side,
+  the sides above the water: the Alicorn's own side skin, as the user asked ("the hull sides must remain as the
+      alicorns"): each face takes what the source mesh ALC_HULL shows on its plain hull side (the stretch between its
+      pods' roots and its nose, worn to and fro along this longer hull, mirrored at each turn) as far up its skin
+      from the waterline, so the rail line, the rows of slots and the draft marks run straight along this hull;
+  the shell under them (the sides' foot, everything under the water, and where the Alicorn has no side to give: the
+      transom, past its bow): one continuous strip of the aft sheet's plain plating a side,
       along the hull's outline (its arc length in plan, round the stern to the centreline) and up it; the hull is
       longer than any clean stretch of plating, so the strip runs to and fro over one stretch (mirrored at each turn,
       which joins without a seam), the hull cut at the turns; above the water the strip goes up by height, under it
       by girth (down the side and in under the bottom to the keel), squeezed there;
   the rest (steps, coamings, fittings' sides): each flat-ish group laid square on plain plating (a box mapping).
-The Alicorn's rail, slots and draft marks are not on the sides any more: they belong to its own outline, which this
-hull does not have. model_tanacorn.py calls fix(HULL).
+model_tanacorn.py calls fix(HULL).
 """
 import bpy, bmesh, math
 import numpy as np
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
+from mathutils.interpolate import poly_3d_calc
 
 DENS = 400.0          # m per UV unit: the sheets' own density
 DECK = {"ALC_a": (0.86617, 0.84480), "ALC_b": (-0.12728, 0.81111)}   # the Alicorn's deck layout: (cu, cv) a sheet
@@ -88,6 +93,9 @@ class Sheet:
             self.cache[w, h] = ((best[1] + 8) / self.W, (best[2] + 8) / self.H, best[0] / (w * h))
         return self.cache[w, h]
 
+    def colour(self, u, v):
+        return float(self.sat[int(v % 1 * self.H) % self.H, int(u % 1 * self.W) % self.W])
+
 
 def fix(HULL, log=print):
     me, M = HULL.data, HULL.matrix_world
@@ -95,6 +103,7 @@ def fix(HULL, log=print):
     slots = [s.material.name if s.material else "" for s in HULL.material_slots]
     ia, ib = slots.index("ALC_a"), slots.index("ALC_b")
     plate = Sheet(HULL.material_slots[ib].material)
+    sheets = {ia: Sheet(HULL.material_slots[ia].material), ib: plate}
     bm = bmesh.new()
     bm.from_mesh(me)
     uv = bm.loops.layers.uv.active
@@ -179,7 +188,99 @@ def fix(HULL, log=print):
         rn = ref.matrix_world.to_3x3()
         plan = BVHTree.FromPolygons([ref.matrix_world @ v.co for v in rb.verts],
                                     [[v.index for v in f.verts] for f in rb.faces if (rn @ f.normal).z > 0.9])
-        rb.free()
+        # ... and its side skin: the source triangulated, its UV islands, and the height up its side by arc length
+        bmesh.ops.triangulate(rb, faces=rb.faces)
+        rb.verts.ensure_lookup_table()
+        rb.faces.ensure_lookup_table()
+        ruv = rb.loops.layers.uv["UVMap"] if "UVMap" in rb.loops.layers.uv else rb.loops.layers.uv.active
+        RW = [ref.matrix_world @ v.co for v in rb.verts]
+        rtree = BVHTree.FromPolygons(RW, [[v.index for v in f.verts] for f in rb.faces])
+        rslot = [ia if (sl.material and sl.material.name == "ALC_a") else ib for sl in ref.material_slots]
+        rpar = list(range(len(rb.faces)))
+
+        def rfind(i):
+            while rpar[i] != i:
+                rpar[i] = rpar[rpar[i]]
+                i = rpar[i]
+            return i
+        redge = {}
+        for f in rb.faces:
+            ls = f.loops
+            for i in range(3):
+                a, b = ls[i], ls[(i + 1) % 3]
+                ka = tuple(round(c, 3) for c in RW[a.vert.index])
+                kb = tuple(round(c, 3) for c in RW[b.vert.index])
+                key, ua, ub = ((ka, kb), a[ruv].uv, b[ruv].uv) if ka < kb else ((kb, ka), b[ruv].uv, a[ruv].uv)
+                for g, va, vb in redge.setdefault(key, []):
+                    if rb.faces[g].material_index == f.material_index and (va - ua).length < 0.002 \
+                            and (vb - ub).length < 0.002:
+                        rpar[rfind(f.index)] = rfind(g)
+                redge[key].append((f.index, ua.copy(), ub.copy()))
+        GX, GZ = np.arange(-332.0, 322.01, 2.0), np.arange(0.0, 19.01, 0.25)
+        # the stretch of the Alicorn's side that is plain hull side: forward of where its pods' roots swell out of it
+        # (a second rail starts there) and aft of its rounded nose (the rail hooks round it). This hull's sides wear
+        # that stretch to and fro along their whole length (mirrored at each turn: the rail runs on unbroken)
+        wide = []
+        for x in np.arange(0.0, 316.0, 1.0):
+            h = rtree.ray_cast(Vector((x, 200.0, 4.0)), Vector((0, -1, 0)))
+            wide.append((x, h[0].y if h[0] is not None else 0.0))
+        wide = np.array(wide)
+        mid = float(np.median(wide[(wide[:, 0] > 100) & (wide[:, 0] < 250), 1]))
+        plain = wide[np.abs(wide[:, 1] - mid) < 3.0, 0]
+        run, best = [plain[0]], []
+        for x in plain[1:]:                                              # the longest unbroken run of such stations
+            if x - run[-1] > 1.5:
+                best, run = max(best, run, key=len), []
+            run.append(x)
+        best = max(best, run, key=len)
+        SRC0, SRC1 = float(best[0]) + 4.0, float(best[-1]) - 4.0
+
+        def station(x):
+            m = (x - SRC0) % (2 * (SRC1 - SRC0))
+            return SRC0 + (m if m <= SRC1 - SRC0 else 2 * (SRC1 - SRC0) - m)
+
+        def heights(sgn):
+            """T[i][j]: the height on the Alicorn's side at station GX[i] that lies GZ[j] m up its skin from the
+            waterline (its shoulder rolls inboard above the rail: by height alone the skin would be squeezed there)"""
+            T = np.full((len(GX), len(GZ)), np.nan)
+            for i, x in enumerate(GX):
+                ys = []
+                for z in GZ:
+                    h = rtree.ray_cast(Vector((x, 200.0 * sgn, z)), Vector((0, -sgn, 0)))
+                    if h[0] is None:
+                        break
+                    ys.append(h[0].y)
+                if len(ys) >= 4:
+                    up = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff(GZ[:len(ys)]), np.diff(ys)))))
+                    T[i] = np.interp(GZ, up, GZ[:len(ys)], right=np.nan)
+            return T
+        ZT = {1.0: heights(1.0), -1.0: heights(-1.0)}
+
+        def zeff(x, z, sgn):
+            if z <= 0.0:
+                return z
+            T = ZT[sgn]
+            fi, fj = (x - GX[0]) / 2.0, z / 0.25
+            i, j = int(math.floor(fi)), int(math.floor(fj))
+            if i < 0 or j < 0 or i >= len(GX) - 1 or j >= len(GZ) - 1:
+                return None
+            tx, tz = fi - i, fj - j
+            q = (T[i, j] * (1 - tx) + T[i + 1, j] * tx) * (1 - tz) + (T[i, j + 1] * (1 - tx) + T[i + 1, j + 1] * tx) * tz
+            return None if np.isnan(q) else float(q)
+
+        def skin(p, sgn):
+            """the Alicorn's side skin at a point's station and height: (uv, its island, its sheet) or None"""
+            x = station(p.x)
+            ze = zeff(x, p.z, sgn)
+            if ze is None:
+                return None
+            loc, n, idx, _ = rtree.ray_cast(Vector((x, 200.0 * sgn, ze)), Vector((0, -sgn, 0)))
+            if idx is None or abs(n.y) < 0.2:
+                return None
+            ls = rb.faces[idx].loops
+            w = poly_3d_calc([RW[lp.vert.index] for lp in ls], loc)
+            return (sum((lp[ruv].uv * wi for lp, wi in zip(ls, w)), Vector((0.0, 0.0))), rfind(idx),
+                    rslot[rb.faces[idx].material_index])
     memo = {}
 
     def on_alicorn_deck(p):
@@ -269,6 +370,43 @@ def fix(HULL, log=print):
         "waterline strip's foot z = %.0f m: %d faces more)" % (", ".join("%.1f" % x for x in turns), X_SPLIT, WATER,
                                                                len(bm.faces) - n0))
 
+    # the sides above the water: the Alicorn's own side skin (the user, 2026-11-10: "the hull sides must remain as the
+    # alicorns"): each face takes what the Alicorn's side shows at its station and as far up from the waterline (the
+    # rail line, the rows of slots, the draft marks, straight along this hull as along the Alicorn's). A face whose
+    # corners fall in two of the Alicorn's UV islands takes the island of its middle. Where the Alicorn has no side to
+    # give (past its bow, the transom, a face looking fore or aft) the plating strip stays.
+    worn = 0
+    if ref:
+        for f in hi:
+            if abs(nor[f].y) < 0.5:
+                continue
+            sgn = 1.0 if nor[f].y > 0 else -1.0
+            c = skin(cen[f], sgn)
+            if c is None:
+                continue
+            new = []
+            for lp in f.loops:
+                p = P[lp.vert.index]
+                h = skin(p, sgn)
+                if h is None or h[1] != c[1] or h[2] != c[2]:
+                    h = skin(cen[f] + (p - cen[f]) * 0.9, sgn)
+                    if h is None or h[1] != c[1] or h[2] != c[2]:
+                        new = None
+                        break
+                    new.append(c[0] + (h[0] - c[0]) / 0.9)
+                else:
+                    new.append(h[0])
+            if new is None:
+                continue
+            f.material_index = c[2]
+            for lp, q in zip(f.loops, new):
+                lp[uv].uv = q
+            worn += 1
+        log("hull UVs: the sides above the water: %d of %d shell faces there wear the Alicorn's own side skin (the rail, "
+            "the slots, the draft marks), taken from ALC_HULL's plain hull side (its x %.0f..%.0f m, to and fro along "
+            "this hull) at each face's height up the skin; the rest (the transom, faces looking fore or aft) stay on the "
+            "plating strip" % (worn, len(hi), SRC0, SRC1))
+
     # ---------------------------------------------------------------- 2. the decks: the Alicorn's own top-down layout
     decks = [f for f in F if f not in shell and nor[f].z > 0.75]
     out, off, outer = 0, set(), []
@@ -302,6 +440,49 @@ def fix(HULL, log=print):
         % (len(decks) - out - len(outer), sum(area[f] for f in decks) - sum(area[f] for f in outer), X_SPLIT,
            "; %d off the sheet, laid with the rest" % out if out else "", len(outer), sum(area[f] for f in outer),
            du0, dv0, 100 * dodd))
+
+    # a coloured deck marking that lies partly under the ship's own upper works (the Alicorn's hazard-striped lift
+    # outline, half under turret C's barbette and the superstructure) is taken off: its cells take the deck as it is
+    # some cells further along (the runway's lines run fore and aft, so they carry straight on)
+    moved = 0
+    outside = set(outer)
+    on_layout = [f for f in decks if f not in off and f not in outside]
+
+    def colour_of(f, du=0.0):
+        sh = sheets[f.material_index]
+        pts = [lp[uv].uv for lp in f.loops]
+        c = sum(pts, Vector((0.0, 0.0))) / len(pts)
+        return max(sh.colour(q.x + du, q.y) for q in [c] + [c + (q - c) * t for q in pts for t in (0.5, 0.9)])
+    marked = [f for f in on_layout if colour_of(f) > 0.25]
+    grid = {}
+    for f in marked:
+        grid.setdefault((int(cen[f].x // 12), int(cen[f].y // 12)), []).append(f)
+    seen = set()
+    for f in marked:
+        if f in seen:
+            continue
+        grp, st = [], [f]
+        seen.add(f)
+        while st:
+            g = st.pop()
+            grp.append(g)
+            gx, gy = int(cen[g].x // 12), int(cen[g].y // 12)
+            for h in (h for i in (-1, 0, 1) for j in (-1, 0, 1) for h in grid.get((gx + i, gy + j), [])):
+                if h not in seen and (cen[h] - cen[g]).length < 12.0:
+                    seen.add(h)
+                    st.append(h)
+        if not any(tree.ray_cast(cen[g] + Vector((0, 0, 0.3)), Vector((0, 0, 1)), 80.0)[0] is not None for g in grp):
+            continue                                                     # (open to the sky: a marking to keep)
+        for k in (k for n in range(1, 41) for k in (n, -n)):
+            du = k * CELL / DENS
+            if all(colour_of(g, du) < 0.1 and all(0.0 <= lp[uv].uv.x + du <= 1.0 for lp in g.loops) for g in grp):
+                for g in grp:
+                    for lp in g.loops:
+                        lp[uv].uv.x += du
+                moved += len(grp)
+                break
+    if moved:
+        log("hull UVs: %d deck cells of a coloured marking half under the upper works moved along the deck" % moved)
 
     # ---------------------------------------------------------------- 3. the rest: box-mapped onto plain plating
     rest = [f for f in F if f not in shell and (nor[f].z <= 0.75 or f in off)]
@@ -375,7 +556,7 @@ def fix(HULL, log=print):
     bm.to_mesh(me)
     bm.free()
     me.update()
-    return {"shell_faces": len(shell), "deck_faces_on_the_layout": len(decks) - out - len(outer),
+    return {"shell_faces": len(shell), "side_faces_in_the_alicorns_skin": worn, "deck_marking_cells_moved": moved, "deck_faces_on_the_layout": len(decks) - out - len(outer),
             "deck_faces_on_plating": len(outer), "rest_faces": len(rest),
             "strip_turns_x_m": [round(x, 1) for x in turns],
             "smooth_edges_joining_two_mappings_pct": round(100.0 * broken / max(total, 1), 2)}

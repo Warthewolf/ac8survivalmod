@@ -25,9 +25,10 @@ plus a SOCKET_Mount_* empty on the hull for every part (`tanacorn_hull_sockets.j
 
 It also removes the Iowa's crew figures, builds the laser as a beam director (the user's photos), gives every VLS lid a
 hinge, bends each side VLS block onto the hull's flare (its face 2 cm off the skin), makes the hull's UV map again
-from scratch (`hull_uv.py`: the decks on the Alicorn's own top-down deck layout where it has flat deck and plain
-plating elsewhere, the shell as one continuous strip of plating a side, the rest box-mapped; the copied map it replaces
-was 4,245 islands of saw teeth) and checks every part's topology (tanacorn_model_check.json: all must pass). Status and the next steps:
+from scratch (`hull_uv.py`: the sides in the Alicorn's own side skin taken from the source mesh ALC_HULL, rail, slots
+and draft marks straight along the hull; the decks on the Alicorn's own top-down deck layout where it has flat deck
+and plain plating elsewhere; under the water one continuous strip of plating a side; the rest box-mapped; the copied
+map it replaces was 4,245 islands of saw teeth) and checks every part's topology (tanacorn_model_check.json: all must pass). Status and the next steps:
 docs/design/INVINCIBLE_FLEET.md WP0 ("WP0 handover").
 It writes `Tanacorn_model.blend` (the design file is never changed) and, with `render`, previews (Cycles on the CPU;
 TANA_SAMPLES, TANA_SHOTS=02_aft_vls,... pick the quality and the views). Every VLS hatch is keyed in the .blend's
