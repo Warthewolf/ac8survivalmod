@@ -23,6 +23,9 @@ plus a SOCKET_Mount_* empty on the hull for every part (`tanacorn_hull_sockets.j
 
     blender -b art/tanicorn/design/Leviathan_animated.blend -P tools/tanicorn/model_tanacorn.py -- build/tanicorn/model [render] [anim]
 
+The design files were straightened with `straighten.py` (2026-11-10: everything from the Iowa lay 0.44-0.55 deg askew
+to the Alicorn's parts; it puts the hull's plane of mirror symmetry on y = 0 and the mounts with it; `blender -b <file>
+-P tools/tanicorn/straighten.py -- save`, and model_tanacorn.py runs it on what it loads too).
 It also removes the Iowa's crew figures, builds the laser as a beam director (the user's photos), gives every VLS lid a
 hinge, bends each side VLS block onto the hull's flare (its face 2 cm off the skin), makes the hull's UV map again
 from scratch (`hull_uv.py`: the sides in the Alicorn's own side skin taken from the source mesh ALC_HULL, rail, slots

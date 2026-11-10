@@ -260,12 +260,20 @@ sea powers iowa").
     sides. **Patching fragments made it worse** (the first hull_uv.py: tone patches, saw teeth left where two big
     pieces met; the user: "why is the UV getting even worse"). Now nothing of the copied map is kept; every ALC face
     is mapped by where it is and which way it faces:
-    - **along the hull's own centreline** (the user's marked render, 2026-11-10: "Why is the deck off centre"): in the
-      design file the Iowa's hull, with its turrets and upper works, lies 0.42 deg askew to the world's x axis (its
-      middle y = 0.0073 x: 2.3 m to starboard at the stern, as far to port at the bow) while the Alicorn's source
-      mesh is square to it, so a deck laid by the world's axes sat 1.1 m off centre under turret C. hull_uv.py fits
-      the hull's centreline and works in the hull's frame; model_tanacorn.py places the deck mounts (lasers, deck VLS)
-      either side of that line and turned with it. The hull itself is not straightened (the design file's business).
+    - **the ship straightened** (the user's marked render, 2026-11-10: "Why is the deck off centre", then "I want the
+      model straightened why the hell would you not line it up correctly"): in the design files everything from the
+      Iowa lay askew to the world's x axis and to the Alicorn's parts (the pods, the railcannon, the sub-railguns):
+      the fused hull 0.437 deg (its middle y = 0.0076 x: 2.3 m off at each end), the turrets, guns and CIWS 0.55 deg
+      about their own middles (the Iowa's own turn; the hull's is less because it was scaled more along than across).
+      A deck laid by the world's axes sat 1.1 m off centre under turret C. `tools/tanicorn/straighten.py` finds the
+      hull's plane of mirror symmetry and puts it on y = 0 (the hull's mesh turned; each Iowa mount moved with it and
+      turned back about its own middle, its guns' trunnions too). **Both design files were straightened with it and
+      saved** (Blender 3.3.21): the hull is 0.000 deg askew, the turrets' meshes and gun clusters symmetric about
+      y = 0 to the centimetre. model_tanacorn.py runs it on what it loads as well (a no-op now), and hull_uv.py still
+      fits the hull's centreline and works in its frame. **Lesson**: when a measurement shows the model itself is
+      wrong, fix the model; the first answer here (mapping along the skew and leaving the hull askew) was the wrong
+      one. And a child's matrix_local is stale after its parent's matrix_world is set in a script: work from its
+      matrix_basis (the first straightening put the gun clusters 0.67 m off their turrets that way).
     - **decks**: the Alicorn's own deck layout, a plain top-down projection fitted from the source mesh ALC_HULL (SRC
       collection): u = cu - x / 400, v = cv - y / 400, sheet a (cu 0.86617, cv 0.84480) forward of x = -52 m, sheet b
       (-0.12728, 0.81111) aft; only where the Alicorn has flat deck under the spot (its flight deck, 13 m either side

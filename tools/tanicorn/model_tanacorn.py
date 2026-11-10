@@ -38,6 +38,9 @@ os.makedirs(TEX, exist_ok=True)
 SHIP = bpy.data.objects["LEV_ship"]
 HULL = bpy.data.objects["LEV_HULL.001"]
 COLL = bpy.data.collections["5 LEVIATHAN animated"]
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import straighten                                    # (the design files were straightened with it, 2026-11-10; a file
+STRAIGHT = straighten.straighten(COLL, lambda t: print("model: " + t))   # that was not is straightened here, in memory)
 
 
 def collection(name, parent):
