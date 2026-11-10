@@ -136,7 +136,8 @@ GEOFON's capture (the user's idea, 2026-11-10: "a capture for the geofon, only f
 and take over their aircraft and force land it onto the geofon"), and the answers the same day (WP14):
 - **Co-op only.** A random player is chosen.
 - **A warning and a chance to escape:** a ~10 s CAPTURE LOCK on the chosen player first; it's broken by destroying its
-  source or by getting far enough from GEOFON.
+  source or by getting far enough away. **The source is RAVEN's EW mast** (the user, 2026-11-10: "Use RAVEN's EW mast as
+  the source instead").
 - **The landing: fully scripted**: the plane flown in and set down on GEOFON's moving deck frame by frame (not a fade).
 - **Captured = dead:** once on the deck the player dies and can be revived by co-op's revive (the STORE's REVIVE).
 - **GEOFON sunk with a player being captured:** the captive goes down with it (downed, revivable as any).
@@ -155,8 +156,8 @@ No question is open (section 6).
    missiles fired at the ships they cover; the RAVEN's railguns (RAILGUN WARNING) reach far out; the AEGIR squadron
    (four F-14D aces) launches off GEOFON's deck at once, and the deck goes on launching a mix of carrier jets. The round's own fighters are fewer (the fleet is the threat). Ships paid as sunk, turrets as
    shot off (the Spaceport's pay).
-   In co-op, GEOFON tries to **capture** a player now and then (WP14): a CAPTURE LOCK warning on someone, who escapes
-   by killing its source or running; if not, their plane is taken over and landed on GEOFON's deck, and they die there
+   In co-op, GEOFON tries to **capture** a player now and then (WP14): a CAPTURE LOCK from RAVEN's EW mast on
+   someone, who escapes by killing the mast or running; if not, their plane is taken over and landed on GEOFON's deck, and they die there
    (revivable).
 3. **Phase 2, the carrier falls, only to the players:** as GEOFON is hit, its damage stages show (fires, smoke, a
    list). At 0 it breaks at midships and the halves drift apart. Between them the sea erupts: the TANICORN's bow
@@ -329,7 +330,7 @@ Status: not started. Depends on: nothing for the ships (alongside); WP5 for GEOF
   |---|---|---|---|
   | Tanager (flagship) | THE TANICORN (ours, WP0-WP4) | the boss, rises from GEOFON's wreck | 16-inch railgun shells, 5-inch flak, CIWS / lasers, VLS, the bow railcannon |
   | Geofon (carrier) | GEOFON: the Ford VE004_grfd, WP5 | the centre, deck launches | its four Mk 15s as flak / CIWS, laser interceptors |
-  | Raven (Aegis cruiser) | RAVEN: Aegis VE002_aegs | the carrier's guard, long range | Mk 41 VLS, Mk 45 flak, railguns |
+  | Raven (Aegis cruiser) | RAVEN: Aegis VE002_aegs | the carrier's guard, long range; the capture's source (WP14) | Mk 41 VLS, Mk 45 flak, railguns, its EW mast |
   | Condor, Magpie, Sparrow, Finch | Aegis VE002_aegs | inner ring | Mk 41 VLS, Mk 45 flak, Mk 15 CIWS |
   | Beluga, Fenris, Kolga, Lazuli | Mission 22's enemy fleet hulls (Kirov, Udaloy, Gorshkov, Grigorovich) [?] | outer screen | their SAMs and guns (flak), laser interceptors |
   | Herne, Taisch, Thiassi | Grigorovich class [?] | screen | flak, SAM |
@@ -551,8 +552,8 @@ near Comona, it shells the airfield.
   show, the airfield goes down if ignored, shelling stops while it's down; no shelling before the gun line.
 
 ### WP14. GEOFON's capture (co-op only)
-Status: not started. Depends on: WP5 (GEOFON's own BP, for the lock's source part and the deck's landing marks), WP7
-(GEOFON sailing), co-op (sv_coop*.lua, sv_down.lua). The user's idea and answers: section 2.
+Status: not started. Depends on: WP5 (GEOFON's own BP, for the deck's landing marks), WP7 (GEOFON sailing; RAVEN and
+its EW mast), co-op (sv_coop*.lua, sv_down.lua). The user's idea and answers: section 2.
 - **What it is:** while GEOFON is afloat in round 30 with two or more players linked, now and then the host picks a
   random player who's flying (not down, not at the airfield or in the STORE, not in a capture already); a CAPTURE LOCK
   warns them for `lock_s`; if they don't break it, their plane is taken over, flown to GEOFON and landed on its deck,
@@ -569,15 +570,28 @@ Status: not started. Depends on: WP5 (GEOFON's own BP, for the lock's source par
   - the runtime moving a player plane every frame (coop.c CoTeleport: AActor::TeleportTo + the flight reset; hard rules
     51 and 53: smooth on the second player plane, whose actor tick is off);
   - the HUD's lightning distortion (BeginHUDDistortionLightning, sv_anomalies_dev.lua) for the lock's flicker.
-- **1. The pick** [repo, host]: every `every_s` (first `first_s` after the fleet appears), if GEOFON and the lock's source
+- **The source: RAVEN's EW mast** (the user's choice) [machine: rows / world data; repo: generators]: a part of its own
+  on RAVEN, with its own health and box, named `EW MAST` (its own model row copy: WP7's names route). Routes, in order:
+  1. **the Alicorn's ECM part in one of RAVEN's turret slots**: `BP_BA002_alcn_ecm_Base` (LiveAIGroundVehicleObject,
+     row alcn_ecm_01 -> alcn_ecm, HP 500 / 2250, its jammer BP_wp_ecm_ON; its stock box name "JAMMER") [V: ALICORN.md
+     1.2], in RAVEN's DT_NPC ChildNPCId in place of one of its parts (the Mk 15 CIWS slot on SOC_aegs_mk15, the
+     highest), its class from the Alicorn's world data by import_from: the route the Ladons' CIWS slots took for the
+     Arsenal Bird's pulse pods (hard rule 38, confirmed). [?: the jammer's own effect on players (the HUD's jamming) as
+     a part of a campaign ship: a bonus if it works, switched off if it doesn't fit];
+  2. a RAVEN of our own (BP_SV_aegs_Raven on the native vessel class, the stock Aegis BP's values copied, WP5's route)
+     with a mast component on its radar socket SOC_Radar and a part of ours on it (the agent's model): only if route 1
+     can't be done or looks wrong.
+  No mast (destroyed, or RAVEN sunk): no more captures for the round (callout `RAVEN'S EW MAST DOWN: NO MORE
+  CAPTURES`), and a lock running is broken.
+- **1. The pick** [repo, host]: every `every_s` (first `first_s` after the fleet appears), if GEOFON and RAVEN's EW mast
   are up and no capture is on: a random player from COOP.players() alive, flying, not at the airfield, not the only
   one flying (a capture must never leave nobody up: the run would end), not captured in the last `per_player_s`.
   Message to everyone `cp|<slot>|<seq>` (reliable; sv_coop's guards: slot checked, one capture at a time).
 - **2. The CAPTURE LOCK** [repo]: on the chosen player's game, `lock_s` (10 s): their HUD flickers, a tone, the
-  callout `CAPTURE LOCK` / `GET CLEAR OF GEOFON OR DESTROY ITS EW ARRAY`; on every other game `CAPTURE LOCK ON <NAME>`
-  and the source marked. It's broken when **its source is destroyed** (GEOFON's EW array: a part on its island in
-  BP_SV_grfd, WP5, with its own health and box: no source, no more captures) or the chosen player is more than
-  `escape_km` (12 km) from GEOFON when the lock runs out: `CAPTURE BROKEN`. GEOFON sunk: the lock ends.
+  callout `CAPTURE LOCK` / `GET CLEAR OR DESTROY RAVEN'S EW MAST`; on every other game `CAPTURE LOCK ON <NAME>` and the
+  mast pinged on the minimap (the game's own ping, as the bombers'). It's broken when **RAVEN's EW mast is destroyed**
+  (or RAVEN sunk) or the chosen player is more than `escape_km` (12 km) from RAVEN when the lock runs out (RAVEN sails
+  beside GEOFON, so that's as far from both): `CAPTURE BROKEN`. GEOFON sunk: the lock ends.
 - **3. The takeover** [machine: native; repo: Lua]: a new native mode beside SV_Down's loiter (e.g. `SV_Capture(plane,
   ship, ...)`, at most 15 characters: hard rule 25): from the BuildFlightInput detour, the player's inputs replaced
   every frame (stick, throttle, brake, weapons, flares, as DOWN does); guidance to a gate `gate_km` (3 km) behind
@@ -612,14 +626,15 @@ Status: not started. Depends on: WP5 (GEOFON's own BP, for the lock's source par
 - **Settings:** `CFG.specials.fleet.capture = { enabled = true, coop_only = true, first_s = 120, every_s = 180,
   per_player_s = 300, lock_s = 10, escape_km = 12, gate_km = 3, gate_alt_m = 300, glide_deg = 3.5, die_after_s = 3 }`,
   mirrored in survival.ini [specials.fleet.capture] (gameplay: not in the leaderboard's free lists).
-- **Log lines:** `capture: <name> picked (slot N; GEOFON at d km)`, `capture: lock on <name> broken (<source destroyed |
-  N km clear>)`, `capture: <name> taken over (gate at d km)`, `capture: <name> at the gate; the landing starts`,
+- **Log lines:** `capture: RAVEN's EW mast up (<route>: <class>, health H)`, `capture: <name> picked (slot N; RAVEN at
+  d km)`, `capture: lock on <name> broken (<the mast destroyed | RAVEN sunk | N km clear>)`, `capture: RAVEN's EW mast
+  down: no more captures`, `capture: <name> taken over (gate at d km)`, `capture: <name> at the gate; the landing starts`,
   `capture: <name> trapped on GEOFON's deck`, `capture: <name> captured: DOWN`, `capture: cancelled (<why>)`; native
   `capture: autopilot on plane <p> ...` as DOWN's lines.
 - **Tests:** offline: `tools/checks/capture_test.sh` (the pick and its guards, the lock's escape and source, the
   messages, every end giving the controls back, the DOWN hand-over) and flight_test.sh's moving gate; in game (test
-  build, two games linked, or a test-only key that runs it on your own plane solo): the pin test first, then a capture
-  end to end. Pass: the lock shows and can be broken both ways; a capture flies the plane to the gate, lands it on the
+  build, two games linked, or a test-only key that runs it on your own plane solo): RAVEN with its EW mast up and
+  boxed (route 1's slot swap), the pin test, then a capture end to end. Pass: the mast is up on RAVEN, boxed EW MAST, and can be shot off; the lock shows and can be broken both ways; a capture flies the plane to the gate, lands it on the
   moving deck, kills it, and the revive brings it back; nobody's controls are ever left taken.
 
 ---------------------------------------------------------------------------------------------------------------------
