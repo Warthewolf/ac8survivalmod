@@ -120,7 +120,7 @@ local function bone(o, name) return sock(o, name, false) end
 -- The AA shell is an ALiveBulletEmitter (an ALiveAttachedWeapon): every one within 150 m of a mount, where it is, which
 -- way it points and what it hangs on (its attach parent component and socket), against the muzzle socket's own place
 -- and heading: an emitter on the root (no socket) or one that keeps its first heading while SOC_Gun_01 turns is it.
-local EMITTERS = { "BP_wp_aagun_vessel_C", "LiveBulletEmitter" }
+local EMITTERS = { "BP_wp_aagun_vessel_C", "LiveBulletEmitter", "BP_wp_flakgun_C" }   -- (0.74.53: the T5's flak shells)
 local function emitters(o)
     local ok, ml = pcall(function() return o:K2_GetActorLocation() end)
     if not (ok and ml) then return "?" end

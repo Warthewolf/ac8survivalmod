@@ -22,6 +22,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BUILD = os.environ.get('TANI_BUILD') or os.path.normpath(os.path.join(HERE, '..', '..', 'build', 'tanicorn'))
 DEST = '/Game/Mods/SurvivalMode/Tanicorn'
 AA_SHELL = '/Game/Blueprints/Weapons/AAGUN/BP_wp_aagun_vessel'          # LiveBulletEmitter (its emitter base's class)
+# the ground flak gun's shell (BP_FCS_FlakGun_00's weapon; BP_flakgun_BaseClass on the native LiveFlakGun): one shell a
+# shot from the launcher, not an attached emitter
+FLAK_SHELL = '/Game/Blueprints/Weapons/FlakGun/NPC/BP_wp_flakgun'
 
 
 def obj(path):
@@ -77,12 +80,18 @@ def mount(part, info, fcs):
                     'LauncherModule': {'$new': 'LiveFCSModule_LauncherBoneControl', 'props': {
                         'MeshComponentName': 'TurretPoseableMesh',
                         'ControlBones': bones(fcs['yaw'], fcs['pitch']),
-                        'FireControl': (f'(LauncherDirection=SlotSocket,CaptureDistance={fcs["capture_cm"]},CaptureMinDistance=0,'
-                                        f'CaptureAngleRange={fcs["cone"]},ActivationTime={fcs["activation"]},'
+                        **({'AimingMethod': fcs['aiming']} if fcs.get('aiming') else {}),
+                        'FireControl': (f'(LauncherDirection=SlotSocket,CaptureDistance={fcs["capture_cm"]},'
+                                        f'CaptureMinDistance={fcs.get("min_cm", 0)},'
+                                        + (f'PredictionOffsetTime={fcs["lead_s"]},' if fcs.get('lead_s') else '')
+                                        + f'CaptureAngleRange={fcs["cone"]},ActivationTime={fcs["activation"]},'
                                         f'TriggeringTime={fcs["triggering"]},ShotIntervalTime={fcs["interval"]},'
                                         f'RestingTime={fcs["resting"]},TriggerCount={fcs["trigger_count"]})'),
+                        # (SlotNum: the stock guns leave it at 0, the Mk45 and the flak gun alike; slot_num None = as theirs)
                         'Performance': (f'(FireRate={fcs["fire_rate"]},MagazineCapacity={fcs["magazine"]},'
-                                        f'ReloadTime={fcs["reload"]},SlotNum={slots},SlotSocketPrefix=GUN)'),
+                                        f'ReloadTime={fcs["reload"]},'
+                                        + ('' if fcs.get('slot_num', slots) is None else f'SlotNum={fcs.get("slot_num", slots)},')
+                                        + 'SlotSocketPrefix=GUN)'),
                     }},
                     'ProjectileModule': {'$new': 'LiveFCSModule_ProjectileCommon', 'props': {
                         'WeaponClass': f'{obj(fcs["weapon"])}_C'}},
@@ -107,8 +116,15 @@ T5_FCS = {'search': 'AIR_ONLY', 'yaw': (40, -180, 180), 'pitch': (40, 0, 80), 'c
 # railgun shells, the CIWS and the laser their anti-missile arms): the SAME fire control as the 5-inch, the stock
 # vessel AA shell, only the speeds, the lift and the hit sphere each mount's own. So every mount's rig can be seen
 # to aim and fire from the test key before its real weapon is built; none of these values is a design decision.
+# (0.74.53) the 5-inch's arm as the stock ground flak gun's (BP_FCS_FlakGun_00, dumped from the game: the same
+# TurretPoseableMesh, yaw / pitch bones, SlotSocket and GUN prefix as ours) but our bones' arcs and speeds: its flak shell,
+# its aiming (not while firing), its lead (5 s), its reach (250 m - 15 km), its timings, no SlotNum. On the vessel AA
+# emitter the shells left the mount's foot along its forward, never its barrels (the user's runs of 0.74.50-0.74.52).
+T5_FLAK = {**T5_FCS, 'weapon': FLAK_SHELL, 'aiming': 'DoNotWhileFiring', 'lead_s': 5, 'min_cm': 25000,
+           'capture_cm': 1500000, 'activation': 0.2, 'triggering': 5, 'interval': 5, 'resting': 1, 'trigger_count': 1,
+           'fire_rate': 12, 'magazine': 1, 'reload': 1, 'slot_num': None}
 FCS = {
-    'T5': T5_FCS,
+    'T5': T5_FLAK,
     'T16': {**T5_FCS, 'yaw': (12, -150, 150), 'pitch': (8, -2, 45), 'interval': 2, 'resting': 6, 'fire_rate': 3,
             'magazine': 3, 'reload': 8, 'hit_radius_cm': 1800, 'hit_z_cm': 400},
     'CIWS': {**T5_FCS, 'yaw': (120, -180, 180), 'pitch': (100, -10, 85), 'activation': 1, 'triggering': 2,
@@ -121,7 +137,8 @@ FCS = {
 def main():
     parts = json.load(open(os.path.join(BUILD, 'parts.json')))
     only = [x for x in os.environ.get('TANI_PARTS', '').split(',') if x]
-    spec = {'sockets': [], 'mesh_sockets': [], 'stubs': [{'path': AA_SHELL, 'parent': 'LiveBulletEmitter'}],
+    spec = {'sockets': [], 'mesh_sockets': [], 'stubs': [{'path': AA_SHELL, 'parent': 'LiveBulletEmitter'},
+                                                         {'path': FLAK_SHELL, 'parent': 'LiveFlakGun'}],
             'blueprints': []}
     for p in parts:
         if only and p not in only:

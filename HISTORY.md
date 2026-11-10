@@ -2327,3 +2327,22 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   TANI=1), build 991f6a15213d... registered. INSTALLED 2026-11-10 over 0.74.51 (backup: build/backup/install_before_0.74.52).
 - To see in game: Ctrl+T; the shells leave the barrel tips along the barrels and follow the turret. If they still leave
   the foot: the socket lookup isn't the mesh field (next: one muzzle socket as the stock's, rotated (0, 0, -90), SlotNum 1).
+
+## 0.74.53 (2026-11-10; the Tanicorn container rebuilt: the T5 fires flak)
+- The user's run of 0.74.52 (22:02): "it did the same thing again" (the shells from the mount's foot, southward), so the
+  SkeletalMesh field wasn't it. The stock references, dumped from the game's paks: BP_AITurret_Pawn (the Mk45's parent)
+  is LiveAIGroundVehicleObject with defaults only, no logic; the Mk45's fire control searches GROUND_ONLY (the stock gun
+  never fires its vessel AA emitter at aircraft); BP_wp_aagun_vessel (BP_wp_aagun_emitter_BaseClass, LiveBulletEmitter)
+  is a continuous stream that hangs on what it's given (AttachedComponent / AttachedSocketName / bIsBaseAttached, set in
+  code), and on our mount it hung on the foot. The stock ground flak gun's arm (BP_FCS_FlakGun_00) is ours but for: the
+  weapon BP_wp_flakgun (BP_flakgun_BaseClass on the native LiveFlakGun: a shell a shot), AimingMethod DoNotWhileFiring,
+  PredictionOffsetTime 5, CaptureMinDistance 250 m, 15 km, FireRate 12 / magazine 1 / reload 1, triggering 5, interval 5,
+  rest 1, activation 0.2, and no SlotNum (the Mk45 sets none either).
+- tools/tanicorn/spec.py: the T5's arm is the stock flak gun's (T5_FLAK) on our bones' arcs and speeds; the stub
+  BP_wp_flakgun on LiveFlakGun at its stock path (never packed). T16 / CIWS / LASER unchanged (the AA emitter) until the T5
+  is seen right. sv_tanicorn.lua lists BP_wp_flakgun_C near the mount in its 2 s line (`shells: ...`).
+- build.sh: CHECK ALL OK, 0 warnings, TaniBuild done (0 errors, the flak stub made). build_all.sh (ZFA=1 TANI=1),
+  package_dev.sh (VALKA=1 ZFA=1 TANI=1), build daa759ea1ba2... registered. Installed when the game closed (backup:
+  build/backup/install_before_0.74.53).
+- To see in game: Ctrl+T; flak bursts round you, the shells leaving the barrels. Still from the foot: then it's our mesh /
+  skeleton, not the arm (the arm is now the stock flak gun's).
