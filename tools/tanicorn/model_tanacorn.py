@@ -715,8 +715,13 @@ def cast(origin, d):
 
 
 def deck_z(x, y):
-    h = cast((x, y, 300.0), (0, 0, -1))
-    return h[1].z if h else None
+    """the deck's height here: the middle one of five rays a hand apart. One ray alone, when it runs exactly down an
+    edge between two deck faces, can slip between them and land on the hull's bottom from inside: at x = 194 to
+    starboard that put the side block TANA_VLSS_R3 15 m too low, under the water (found 2026-11-10 in the export's
+    check; her port twin stood right)."""
+    zs = sorted(h[1].z for h in (cast((x + dx, y + dy, 300.0), (0, 0, -1))
+                                 for dx, dy in ((0, 0), (0.07, 0.05), (-0.07, 0.05), (0.07, -0.05), (-0.07, -0.05))) if h)
+    return zs[len(zs) // 2] if zs else None
 
 
 # the hull lies 0.4 deg askew to the world's x axis in the design file (hull_uv.py found its centreline): the mounts on
@@ -870,6 +875,10 @@ for side, s in (("L", 1), ("R", -1)):
             empty("TANA_VLSS_%s%d_SOC_Vls_%02d" % (side, i + 1, k), frame(launch, Vector((0, 0, 1)), at), body, 0.6, coll=ADD)
         hatches[body.name] = ("vlss", hs)
         made["vlss"].append(body)
+for a, b in zip(made["vlss"][:4], made["vlss"][4:]):               # port and starboard stand as a mirrored pair
+    ta, tb = a.matrix_world.translation, b.matrix_world.translation
+    assert abs(ta.x - tb.x) < 0.05 and abs(ta.y + tb.y) < 0.3 and abs(ta.z - tb.z) < 0.3, \
+        "%s at %s and %s at %s are not a mirrored pair" % (a.name, tuple(ta), b.name, tuple(tb))
 
 
 def open_hatches(names, frac):
@@ -884,10 +893,16 @@ def open_hatches(names, frac):
 
 # ---------------------------------------------------------------------------------------------------- hull sockets
 def heading_of(house, guns):
+    """where a mount's guns point at rest. On the straightened ship (straighten.py) every Iowa mount rests dead ahead,
+    astern or abeam, so a heading within 2 deg of a quarter turn IS that quarter turn: measured from the guns'
+    vertices alone it came out 0.2-0.3 deg off (a vertex centroid isn't the mount's middle), and every part exported
+    in its socket's frame (export_tanacorn.py) had its guns that far off its own forward axis."""
     hp = house.matrix_world.translation
     gv = [guns.matrix_world @ v.co for v in guns.data.vertices]
     c = sum(gv, Vector()) / len(gv)
-    return math.atan2(c.y - hp.y, c.x - hp.x)
+    a = math.atan2(c.y - hp.y, c.x - hp.x)
+    q = round(a / (math.pi / 2)) * (math.pi / 2)
+    return q if abs(a - q) < math.radians(2.0) else a
 
 
 def ue_cm(v):
