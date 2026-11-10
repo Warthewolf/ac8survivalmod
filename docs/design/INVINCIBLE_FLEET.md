@@ -180,9 +180,13 @@ left as they were):**
 | SAM launchers | none | | | |
 | launched aircraft / drones | none (GEOFON's deck does the launching) | | | |
 
-Phase 1's weapon parts: 2 + 6 + 8 + 4 + 2 = **22**; phase 2 when `phase2_share` (60 %) of them are down. The design file
-in the repo (Leviathan_rev4.blend) still holds three 16-inch turret objects (one presumably hidden under the bay: the
-renders show two) and **4 CIWS positions** (the Iowa's Phalanx): WP0 adds 4 more close-in positions for the 8.
+Phase 1's weapon parts: 2 + 6 + 8 + 4 + 2 = **22**; phase 2 when `phase2_share` (60 %) of them are down. The design files
+(art/tanicorn/design, checked in Blender 3.3 on 2026-11-10) have exactly that main armament: **two** 16-inch turrets,
+now named `LEV_T16_FWD` (turret B, about +97 m) and `LEV_T16_AFT` (turret C, about -160 to -170 m), their guns
+`LEV_G16_FWD` / `LEV_G16_AFT` in the rigged file; 6 five-inch, **4 CIWS positions** (the Iowa's Phalanx: WP0 adds 4 more
+for the 8 close-in), the 2 sub-railguns and the bow railcannon, and **no VLS blocks placed yet** (WP0 adds the 4). The
+Iowa's own three turrets are only in each file's SRC collection (the sources), now excluded from the view layer, never
+exported; a TANACORN_README text in each file says so.
 
 No question is open (section 6).
 

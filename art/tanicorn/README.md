@@ -6,6 +6,10 @@ Tanager). Design, research and build plan: docs/re/TANICORN.md; the build pipeli
 - `design/Leviathan_rev4.blend`: the chosen design (Leviathan, revision 4): the Iowa at the Alicorn's 650 m, hull in the
   Alicorn's texture, upper works Alicorn grey, the Alicorn's railcannon flush in the bow in its own teal bay, the
   Alicorn's sponsons faired to the hull. Collections for the railcannon stowed and raised.
+- In both design files (2026-11-10, Blender 3.3): the ship's two 16-inch turrets are `LEV_T16_FWD` / `LEV_T16_AFT` (guns
+  `LEV_G16_FWD` / `LEV_G16_AFT`); the SRC collection (the Iowa's and the Alicorn's source parts, the Iowa's original three
+  turrets among them) and REF Alicorn are excluded from the view layer and never exported; each file's TANACORN_README
+  text says what's what.
 - `design/Leviathan_animated.blend`: the same rigged: railcannon pitch and barrel split, sub-railgun hatches / lift /
   train / elevate, the 16-inch, 5-inch and CIWS mounts training and elevating (12 s, 30 fps). Blender 3.3.
 - `renders/concepts/design_1..7.png`: the seven fusion concepts; `renders/leviathan/`: revision 4; `video/`: the animation.
