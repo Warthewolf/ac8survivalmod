@@ -45,7 +45,11 @@ doors, the railcannon, the turrets training and their guns lifting), is `film_ta
 
 It renders an orbit right round the ship over the whole sequence and five close-ups (aft_vls, side_vls, bow, laser,
 aft_turret) to mp4, the sun going round with the camera (TANA_FILM_SAMPLES, TANA_FILM_RES, TANA_FILM_STEP; ~5-8 s a
-frame on 4 cores, about an hour for all of it). The previews the user saw are in
+frame on 4 cores, about an hour for all of it). **The surfacing shot** (the user's reference: a submarine breaching
+against a sunset) is `surface_tanacorn.py`, run the same way: her bow comes up 35 deg nose-up until it stands 120 m
+over the sea with a third of her out, comes down while the rest of her surfaces, and slams; spray from baked particle
+systems (fine drops, not big blobs), foam patches, a low sun behind her; 13.5 s at 24 fps, ~8 s a frame at 960x540.
+The clips the user was sent are in `art/tanicorn/video/`. The previews the user saw are in
 `art/tanicorn/renders/model/`. Next: each part through prepare_part.py's route (a recipe each in build.sh), the hull
 as a static mesh with these sockets.
 
