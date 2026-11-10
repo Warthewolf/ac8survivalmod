@@ -8,8 +8,8 @@ this script adds what the settled armament needs that neither source ship has, a
     TANA_LASER_<pos>_gun (turret_pitch, its origin the pitch pivot), the beam's socket SOC_Gun_01 at the lens;
   - 8 deck VLS blocks on the aft deck behind turret C (TANA_VLSD_1..8): 8 cell wells under 8 hinged hatches each
     (TANA_VLSD_<n>_Hatch_01..08, each object's origin its hinge), sockets SOC_Vls_01..08 straight up;
-  - 8 side VLS blocks on the bow's flanks, 4 a side (TANA_VLSS_L1..4 / R1..4), set flush in the hull's skin, following
-    its flare and sheer: 8 wells under 8 hatches hinged at their top edge, swinging up and out; sockets SOC_Vls_01..08
+  - 8 side VLS blocks on the bow's flanks, 4 a side (TANA_VLSS_L1..4 / R1..4), each bent onto the hull's skin (its
+    flare; wrap_map) and following its sheer: 8 wells under 8 hatches hinged at their top edge, swinging up and out; sockets SOC_Vls_01..08
     along each cell's launch line (out of the hull's side, 35 deg above level);
   - SOCKET_Mount_* empties on the hull for every part, in tanacorn_hull_sockets.json (UE frame: cm, x fwd, y right,
     z up; yaw / pitch degrees, a socket's +X its forward), with each VLS block's hatches (hinge, axis, open angle).
@@ -24,6 +24,7 @@ sequence, HATCH_KEYS), with `render` <out>/renders/*.png (Cycles on the CPU; TAN
 then shutting, from 5 views (ffmpeg; TANA_ANIM_SAMPLES, TANA_ANIM_VIEWS).
 """
 import bpy, bmesh, sys, os, json, math
+import numpy as np
 from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
 
@@ -251,7 +252,10 @@ def fix_deck_uvs():
 
 
 DECK_CREW_FACES = remove_deck_crew()
-DECK_PATCHES = fix_deck_uvs()
+DECK_PATCHES = fix_deck_uvs()                                        # (the aft deck's dark patches, onto plating)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import hull_uv                                                       # (then the whole hull's UV map: hull_uv.py, which
+HULL_UV = hull_uv.fix(HULL, lambda t: print("model: " + t))          # also runs the deck's lines on across those patches)
 DG = bpy.context.evaluated_depsgraph_get()
 SHIP_MESHES = [o for o in COLL.all_objects if o.type == "MESH"]
 CHECK = {}
@@ -726,7 +730,8 @@ def vlsd_hatch():
 
 SIDE_UP = math.radians(35.0)                     # the side cells' launch line: out of the hull, 35 deg above level
 VLSS_CELLS = [(x, z) for z in (1.3, -1.3) for x in (3.9, 1.3, -1.3, -3.9)]
-VLSS_FACE = 0.06
+VLSS_FACE = 0.02                                 # the face stands this far off the hull's skin (z-fight clear)
+VLSS_US, VLSS_WS = [], []                        # the body's grid lines along and up the side (the wrap bends on them)
 
 
 def vlss_body():
@@ -749,6 +754,11 @@ def vlss_body():
             if abs(cx - x) < 1.075 and z + 1.02 < cz < z + 1.22:
                 return ("raise", 0.12, M_PAINT)                          # the hinge's mount above the cell
         return None
+    ys = sorted(ys)
+    for a, b in zip(list(ys), list(ys)[1:]):                             # a line every 0.5 m at most up the side: the
+        n = int(math.ceil((b - a) / 0.5 - 1e-6))                         # block is bent onto the hull's flare on them
+        ys += [a + (b - a) * k / n for k in range(1, n)]
+    VLSS_US[:], VLSS_WS[:] = sorted(xs), sorted(-y for y in ys)
     grid_body(p, sorted(xs), sorted(ys), kind, 0.0, -1.6,
               Matrix.Translation((0, VLSS_FACE, 0)) @ Matrix.Rotation(-math.pi / 2, 4, "X"))
     return p.solid("TANA_VLSS_body", simplify=False)
@@ -858,13 +868,78 @@ for x in (-210.0, -228.0, -246.0, -264.0):                    # behind turret C'
         hatches[body.name] = ("vlsd", hs)
         made["vlsd"].append(body)
 
-LAUNCH_LOCAL = None
+def cast_hull(origin, d):
+    inv = HULL.matrix_world.inverted()
+    ok, loc, _, _ = HULL.ray_cast(inv @ Vector(origin), (inv.to_3x3() @ Vector(d)).normalized(), depsgraph=DG)
+    return HULL.matrix_world @ loc if ok else None
+
+
+def skin(M, us, ws):
+    """the hull's skin over a side block's own plane: its height y at each (us[i], ws[j]) of the frame M"""
+    R, Mi = M.to_3x3(), M.inverted()
+    d = R @ Vector((0, -1, 0))
+    Y = np.full((len(us), len(ws)), np.nan)
+    for i, u in enumerate(us):
+        for j, w in enumerate(ws):
+            h = cast_hull(M @ Vector((u, 30.0, w)), d)
+            if h is not None:
+                Y[i, j] = (Mi @ h).y
+        ok = ~np.isnan(Y[i])
+        Y[i] = np.interp(ws, np.asarray(ws)[ok], Y[i][ok]) if ok.any() else 0.0
+    return Y
+
+
+def bilin(xs, ys, Z, x, y):
+    i = min(max(int(np.searchsorted(xs, x)) - 1, 0), len(xs) - 2)
+    j = min(max(int(np.searchsorted(ys, y)) - 1, 0), len(ys) - 2)
+    tx = min(max((x - xs[i]) / (xs[i + 1] - xs[i]), 0.0), 1.0)
+    ty = min(max((y - ys[j]) / (ys[j + 1] - ys[j]), 0.0), 1.0)
+    return float((Z[i, j] * (1 - tx) + Z[i + 1, j] * tx) * (1 - ty) + (Z[i, j + 1] * (1 - tx) + Z[i + 1, j + 1] * tx) * ty)
+
+
+def fit_frame(M):
+    """the block's frame turned onto the skin's best plane over its whole footprint (one ray's normal is one facet's:
+    on the bow's flare that buried the block's top 0.7 m and stood its foot proud, the user's close-ups of 2026-11-10)"""
+    us, ws = np.linspace(-5.5, 5.5, 12), np.linspace(-2.9, 2.9, 13)
+    U, W = np.meshgrid(us, ws, indexing="ij")
+    A = np.c_[U.ravel(), W.ravel(), np.ones(U.size)]
+    for _ in range(2):
+        (a, b, c), *_ = np.linalg.lstsq(A, skin(M, us, ws).ravel(), rcond=None)
+        R = M.to_3x3()
+        ya = (R @ Vector((-a, 1.0, -b))).normalized()
+        za = (R @ Vector((1, 0, 0))).cross(ya).normalized()
+        xa = ya.cross(za).normalized()
+        M = Matrix.Translation(M @ Vector((0, c, 0))) @ Matrix((xa, ya, za)).transposed().to_4x4()
+    return M
+
+
+def wrap_map(M):
+    """a side block bent onto the hull's skin (the flare curves up to 0.8 m over a block's height; it is straight along
+    it): each of the body's grid lines up the side (VLSS_WS, as arc length from the block's middle) gets its place on
+    the skin's profile (wmap), and each grid point the skin's height there (G), so the face keeps its true lengths (the
+    lids still fit their cells) and lies on the skin. A knuckle of the skin between two lines lifts the whole block by
+    what it would bury (`lift`); `gap` is the most the face then stands off the skin."""
+    du, dw = np.linspace(-6.0, 6.0, 25), np.linspace(-3.6, 3.6, 145)
+    Y = skin(M, du, dw)
+    prof = np.median(Y, axis=0)
+    arc = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff(dw), np.diff(prof)))))
+    arc -= np.interp(0.0, dw, arc)
+    us, ws = np.array(VLSS_US), np.array(VLSS_WS)
+    wmap = np.interp(ws, arc, dw)
+    G = np.array([[bilin(du, dw, Y, u, w) for w in wmap] for u in us])
+    off = [(Y[a, k] - bilin(us, ws, G, u, float(np.interp(w, wmap, ws))))
+           for a, u in enumerate(du) if abs(u) <= 5.5 for k, w in enumerate(dw) if wmap[0] <= w <= wmap[-1]]
+    lift = max(max(off), 0.0)
+    return us, ws, G + lift, wmap, {"bend_m": round(float(prof.max() - prof.min()), 3), "lift_m": round(lift, 3),
+                                    "gap_m": round(lift - min(off), 3)}
+
+
 for side, s in (("L", 1), ("R", -1)):
     for i, x in enumerate((150.0, 172.0, 194.0, 216.0)):
         w = cast((x, 80.0 * s, 5.0), (0, -s, 0))[1]
         edge = deck_z(x, w.y - 1.2 * s)                            # the deck's edge here: the blocks follow the sheer
         hit = cast((x, 80.0 * s, edge - 4.6), (0, -s, 0))
-        nrm = hit[2]                                               # flush with the skin, flare and all
+        nrm = hit[2]
         fwd = Vector((0, 0, 1)).cross(nrm).normalized()
         if fwd.x < 0:
             fwd = -fwd
@@ -872,16 +947,36 @@ for side, s in (("L", 1), ("R", -1)):
         ya = nrm
         za = xa.cross(ya).normalized()
         xa = ya.cross(za).normalized()
-        M = Matrix.Translation(hit[1]) @ Matrix((xa, ya, za)).transposed().to_4x4()
-        body = copy_of("VLSS_body", "TANA_VLSS_%s%d" % (side, i + 1), M, SHIP)
-        level_out = Vector((nrm.x, nrm.y, 0)).normalized()
+        M = fit_frame(Matrix.Translation(hit[1]) @ Matrix((xa, ya, za)).transposed().to_4x4())
+        us, ws, G, wmap, fit = wrap_map(M)
+        name = "TANA_VLSS_%s%d" % (side, i + 1)
+        body = copy_of("VLSS_body", name, M, SHIP)
+        me = TYPES["VLSS_body"][0].copy()                          # this block's own body: the type's, bent onto the skin
+        me.name = name                                             # here (same faces, UVs and texture)
+        for v in me.vertices:
+            v.co = (v.co.x, v.co.y + bilin(us, ws, G, v.co.x, v.co.z), float(np.interp(v.co.z, ws, wmap)))
+        me.update()
+        body.data = me
+        check(me)
+        CHECK[name]["on_the_hull"] = fit
+        print("model: %s on the hull's skin: bent %.2f m over its height, lifted %.3f m, its face at most %.3f m off it"
+              % (name, fit["bend_m"], fit["lift_m"], VLSS_FACE + fit["gap_m"]))
+        ya = M.to_3x3() @ Vector((0, 1, 0))
+        level_out = Vector((ya.x, ya.y, 0)).normalized()
         launch = (level_out * math.cos(SIDE_UP) + Vector((0, 0, 1)) * math.sin(SIDE_UP)).normalized()
         hs = []
         for k, (cx, cz) in enumerate(VLSS_CELLS, 1):
-            hinge = Matrix.Translation((cx, VLSS_FACE + 0.01, cz + 0.98))
+            sh = cz + 0.98                                         # the hinge line; the lid hangs 1.95 m down the face
+            ss = np.linspace(sh - 1.95, sh, 14)
+            pw = np.interp(ss, ws, wmap)
+            py = np.array([max(bilin(us, ws, G, cx + d, t) for d in (-1.05, 0.0, 1.05)) for t in ss]) + VLSS_FACE
+            slope = float(np.polyfit(pw, py, 1)[0])                # the lid lies along its own cell's stretch of the skin,
+            wh = float(np.interp(sh, ws, wmap))                    # 1 cm clear of the face's highest point under it
+            yh = float(np.max(py - slope * (pw - wh))) + 0.01
+            hinge = Matrix.Translation((cx, yh, wh)) @ Matrix.Rotation(-math.atan(slope), 4, "X")
             h = copy_of("VLSS_hatch", "TANA_VLSS_%s%d_Hatch_%02d" % (side, i + 1, k), M @ hinge, body)
             hs.append((h, hinge))
-            at = (M @ Vector((cx, VLSS_FACE - 0.2, cz)))
+            at = M @ Vector((cx, bilin(us, ws, G, cx, cz) + VLSS_FACE - 0.2, float(np.interp(cz, ws, wmap))))
             empty("TANA_VLSS_%s%d_SOC_Vls_%02d" % (side, i + 1, k), frame(launch, Vector((0, 0, 1)), at), body, 0.6, coll=ADD)
         hatches[body.name] = ("vlss", hs)
         made["vlss"].append(body)
@@ -940,7 +1035,8 @@ for o in made["vlsd"] + made["vlss"]:
     kind, hs = hatches[o.name]
     axis, deg = HATCH_OPEN[kind]
     mount(o.name.replace("TANA_", ""), o.matrix_world.copy(), extra={"hatches": [
-        {"hinge_cm": ue_cm(hinge.translation), "axis": axis, "open_deg": deg, "open_s": 0.5} for _, hinge in hs]})
+        {"hinge_cm": ue_cm(hinge.translation), "axis": axis, "open_deg": deg, "open_s": 0.5,
+         "rest_deg": round(math.degrees(hinge.to_euler("XYZ")["XYZ".index(axis)]), 2)} for _, hinge in hs]})
 for side in ("L", "R"):
     mount("RAILGUN_" + side, yaw_at(bpy.data.objects["railgun_%s" % side].matrix_world.translation, 0.0))
 mount("RAILCANNON", yaw_at(bpy.data.objects["railcannon_bay"].matrix_world.translation, 0.0))
@@ -953,7 +1049,7 @@ with open(os.path.join(OUT, "tanacorn_hull_sockets.json"), "w") as f:
     json.dump({"ship": "TANACORN (the Leviathan design + model_tanacorn.py)", "units": "UE cm, yaw / pitch degrees",
                "parts": parts, "sockets": sockets}, f, indent=1)
 with open(os.path.join(OUT, "tanacorn_model_check.json"), "w") as f:
-    json.dump(CHECK, f, indent=1)
+    json.dump({**CHECK, "LEV_HULL uv map": HULL_UV}, f, indent=1)
 print("model: %d hull sockets; parts %s" % (len(sockets), parts))
 print("model: every part clean: %s" % all(r.get("clean") for r in CHECK.values()))
 for o in [h for h, _ in made["laser"]] + made["vlsd"] + made["vlss"]:
@@ -970,8 +1066,9 @@ for b, (kind, hs) in hatches.items():
     for h, hinge in hs:
         h.matrix_basis = hinge.copy()
         h.rotation_mode = "XYZ"
+        rest = h.rotation_euler[i]                 # (a side lid's rest: tilted to its cell's stretch of the hull)
         for f, a in ((HATCH_KEYS[0][0], 0.0), (HATCH_KEYS[0][1], deg), (HATCH_KEYS[1][0], deg), (HATCH_KEYS[1][1], 0.0)):
-            h.rotation_euler[i] = math.radians(a)
+            h.rotation_euler[i] = rest + math.radians(a)
             h.keyframe_insert("rotation_euler", index=i, frame=f)
         h.animation_data.action.name = h.name + "_open"
 print("model: %d hatches keyed: open %d-%d, shut %d-%d (30 fps)" % (sum(len(hs) for _, hs in hatches.values()),
@@ -1065,6 +1162,12 @@ def fill_light(on):
         SKY.sun_rotation = math.pi - SUN_ROT if on else SUN_ROT
 
 
+def close_cam(name, body, out, up, along=0.0, lens=40):
+    """a close-up of one side block: `out` m off its face, `up` m above its middle, `along` m along the hull"""
+    M = body.matrix_world
+    return camera(name, M @ Vector((along, out, 0)) + Vector((0, 0, up)), M.translation, lens)
+
+
 sc = bpy.context.scene
 if RENDER or ANIM:
     sc.render.engine = "CYCLES"
@@ -1086,6 +1189,9 @@ if RENDER or ANIM:
         ("07_parts", camera("CAM_T_parts", (0, 330, 40), (0, 420, 8), 50), []),
         ("08_parts_wire", camera("CAM_T_parts", (0, 330, 40), (0, 420, 8), 50), []),
         ("09_top", camera("CAM_T_top", (0, 0, 1300), (0, 0, 0), 30), []),
+        ("10_side_vls_flush_L", close_cam("CAM_T_flush_L", bpy.data.objects["TANA_VLSS_L4"], 9, 1.5, 17, 35), ["TANA_VLSS_L3"]),
+        ("11_side_vls_flush_L1", close_cam("CAM_T_flush_L1", bpy.data.objects["TANA_VLSS_L1"], 16, 3, -9, 40), []),
+        ("12_side_vls_flush_R", close_cam("CAM_T_flush_R", bpy.data.objects["TANA_VLSS_R4"], 9, 1.5, -17, 35), ["TANA_VLSS_R3"]),
     ]
     only = os.environ.get("TANA_SHOTS") or ("" if RENDER else "none")
     os.makedirs(os.path.join(OUT, "renders"), exist_ok=True)
@@ -1108,13 +1214,6 @@ if RENDER or ANIM:
     open_hatches(list(hatches), 0.0)
 
 
-def close_cam(name, body, out, up, back):
-    """a close-up of one block: from `out` m off its face, `up` m above, `back` m along it"""
-    M = body.matrix_world
-    at = M.translation
-    return camera(name, at + out + Vector((0, 0, up)) + back, at, 40)
-
-
 if ANIM:
     import shutil, subprocess
     sc.render.resolution_x, sc.render.resolution_y = 1280, 720
@@ -1123,9 +1222,10 @@ if ANIM:
     d1, l1 = bpy.data.objects["TANA_VLSD_1"], bpy.data.objects["TANA_VLSS_L1"]
     views = [
         ("aft_deck", camera("CAM_T_aft", (-330, 95, 75), (-236, 0, 8), 55)),
-        ("aft_deck_close", close_cam("CAM_A_deck_close", d1, Vector((14, 16, 0)), 9, Vector())),
+        ("aft_deck_close", camera("CAM_A_deck_close", d1.matrix_world.translation + Vector((14, 16, 9)),
+                                  d1.matrix_world.translation, 40)),
         ("bow_L", camera("CAM_T_bow_side", (265, 95, 22), (183, 18, 5), 50)),
-        ("bow_L_close", close_cam("CAM_A_bow_L_close", l1, Vector((6, 22, 0)), 5, Vector())),
+        ("bow_L_close", close_cam("CAM_A_bow_L_close", l1, 22, 5, 6)),
         ("bow_R", camera("CAM_T_bow_side_R", (265, -95, 22), (183, -16, 5), 50)),
     ]
     want = os.environ.get("TANA_ANIM_VIEWS")

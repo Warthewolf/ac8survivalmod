@@ -265,8 +265,35 @@ sea powers iowa").
     (bow flanks x +150..+216 m, flush with the hull's flare, following its sheer, cells launching 35 deg up and out):
     all-quad grid bodies with 8 cell wells each; **every lid a hinged object** (TANA_VLS?_*_Hatch_NN, origin on its
     hinge: deck lids open -100 deg about Y from their aft edge, side lids +115 deg about X from their top edge, 0.5 s;
-    the hinges in tanacorn_hull_sockets.json for the rig). The lids open in the renders only (open_hatches); no
+    the hinges in tanacorn_hull_sockets.json for the rig). **Every lid is keyed** in Tanacorn_model.blend's 1-360
+    sequence (the user: "animate the hatch opening and closing please on all of them"): open at frames 150-165, shut at
+    290-305 (0.5 s each at 30 fps, eased); `anim` renders the cycle from 5 views to mp4 (renders/anim). No UE
     animation asset exists yet.
+  - **the side VLS blocks lie on the hull's skin** (the user's close-ups, 2026-11-10: "Thats not flush"): the bow's
+    flare curves up to 0.7 m over a block's 5.8 m height (straight along it), and a flat block set by one ray's normal
+    had its top buried and its foot proud. Each block's frame is now fitted to the skin over its whole footprint
+    (fit_frame) and its body BENT onto the skin's profile (wrap_map: the body's grid lines, one every 0.5 m at most
+    up the side, placed at their arc length on the profile, so the face keeps its true lengths and the lids still fit
+    their cells; lifted by what a knuckle of the skin between two lines would bury). The face stands 2 cm off the skin
+    (VLSS_FACE), at most 3-8 cm at a knuckle (tanacorn_model_check.json "on_the_hull"). So the 8 side bodies are 8
+    meshes (TANA_VLSS_L1..R4: the type's faces, UVs and texture, each bent for its place), and each side lid rests
+    tilted to its own cell's stretch of the skin ("rest_deg" beside its hinge in tanacorn_hull_sockets.json; it opens
+    115 deg from there). All 8 pass the check.
+  - **the hull's UV map** (the user, 2026-11-10: "Fix the UV Map on the hull too"): tools/tanicorn/hull_uv.py, called
+    by model_tanacorn.py. The fused hull took the Alicorn's two sheets piecemeal: 4,245 UV islands, a third of the
+    area in islands under 100 m2, 5-45 % of the smooth edges broken (on the bow's sides the Alicorn's deck-edge rail
+    and slots ran across the plating in offset pieces, the teal strips were cut; saw-tooth triangles on the decks;
+    smeared white streaks on the stern). Three passes: (1) the bow's shell sides (x > 60 m) and the stern's shell
+    (x < -288 m) each laid as one continuous strip on a clean stretch of the aft sheet's plain plating (those faces
+    become ALC_b: the same plating; the forward sheet has no clean stretch that long); (2) deck faces outside the
+    deck's own top-down layouts take the layout they touch, and saw teeth between two layouts are straightened (not
+    onto a coloured marking, nor a bright one unless the line runs on from the faces round it); (3) smeared faces that
+    show plating anyway are laid flat on plain plating. Faces showing a coloured or bright detail are never touched.
+    **Still to do there**: small jags where a white deck line crosses a repaired face on the aft deck; the aft-most
+    17 m of the aft deck uses a shifted copy of the deck's lines (the deck is longer than the sheet); tone triangles
+    on the deck amidships under the superstructure (x -150..-50, several layouts meeting); the aft hull sides between
+    the pods and the superstructure were not gone through. Check with flat-lit top / side renders (the texture as
+    emission, orthographic): lit beauty renders hide these.
   - **clean topology, checked**: each part type built once and shared; laser parts united by exact boolean, cut,
     simplified, split convex, bevelled on outside edges longer than 3x the bevel only, then a sliver pass; VLS bodies
     grid-built (no booleans). check() writes tanacorn_model_check.json: all six types pass (no non-manifold or open
@@ -277,11 +304,11 @@ sea powers iowa").
     grime, its own AO; 8 px padding; ordinary PNGs), checked by eye: clean.
   - 36 hull sockets (SOCKET_Mount_*, tanacorn_hull_sockets.json, UE cm); SOCKET_Mount_CORE provisional.
 - **Not done yet:**
-  1. **the rev 3 renders**: never made (the run was stopped for the handover). First thing: render all shots
-     (`TANA_SAMPLES=40 ... model_tanacorn.py -- <out> render`, ~7-8 min on 4 cores), look at every image yourself, then
-     send them to the user (SendUserFile, a short caption of what changed). **The user wants every revision sent for
-     review** ("send me each revision so i can review"). Rev 1 was sent; rev 2 was never sent whole (superseded).
-  2. the user's review of rev 3 (the beam director above all), and their changes;
+  1. **every revision's renders go to the user** ("send me each revision so i can review"): render all shots
+     (`TANA_SAMPLES=40 ... model_tanacorn.py -- <out> render [anim]`), look at every image yourself, then send them
+     (SendUserFile, a short caption of what changed). Rev 3 was sent 2026-11-10 (art/tanicorn/renders/model); rev 4 is
+     the side blocks on the skin, the hull's UV map and the hatch clips.
+  2. the user's review of rev 4, and their changes;
   3. for UE: each part through prepare_part.py's route (a recipe each in build.sh; the laser's house/gun as the 5-inch
      was; the VLS bodies with their hatches as a skeletal mesh: a bone per lid at its hinge plus an open animation,
      0.5 s, or the Alicorn's hatch pattern: docs/re/TANICORN.md 2), the hull as a static mesh with its sockets; then
