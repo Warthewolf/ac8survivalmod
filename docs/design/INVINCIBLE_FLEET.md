@@ -132,6 +132,15 @@ The user's answers to the agent's questions, 2026-11-10:
 - **Airfield down from the shelling:** the usual rule (landing and the STORE close until the round after next; the run
   goes on).
 
+GEOFON's capture (the user's idea, 2026-11-10: "a capture for the geofon, only for coop: it will select a random player
+and take over their aircraft and force land it onto the geofon"), and the answers the same day (WP14):
+- **Co-op only.** A random player is chosen.
+- **A warning and a chance to escape:** a ~10 s CAPTURE LOCK on the chosen player first; it's broken by destroying its
+  source or by getting far enough from GEOFON.
+- **The landing: fully scripted**: the plane flown in and set down on GEOFON's moving deck frame by frame (not a fade).
+- **Captured = dead:** once on the deck the player dies and can be revived by co-op's revive (the STORE's REVIVE).
+- **GEOFON sunk with a player being captured:** the captive goes down with it (downed, revivable as any).
+
 No question is open (section 6).
 
 ---------------------------------------------------------------------------------------------------------------------
@@ -146,6 +155,9 @@ No question is open (section 6).
    missiles fired at the ships they cover; the RAVEN's railguns (RAILGUN WARNING) reach far out; the AEGIR squadron
    (four F-14D aces) launches off GEOFON's deck at once, and the deck goes on launching a mix of carrier jets. The round's own fighters are fewer (the fleet is the threat). Ships paid as sunk, turrets as
    shot off (the Spaceport's pay).
+   In co-op, GEOFON tries to **capture** a player now and then (WP14): a CAPTURE LOCK warning on someone, who escapes
+   by killing its source or running; if not, their plane is taken over and landed on GEOFON's deck, and they die there
+   (revivable).
 3. **Phase 2, the carrier falls, only to the players:** as GEOFON is hit, its damage stages show (fires, smoke, a
    list). At 0 it breaks at midships and the halves drift apart. Between them the sea erupts: the TANICORN's bow
    breaks the surface, the hull climbs bow first into the sky, hangs, and falls back flat onto the waves (spray, a
@@ -262,8 +274,9 @@ Status: not started. Depends on: WP2 (route A) or WP0's one-piece mesh (route B)
      _Side) [V: docs/re/MUSIC_RADIO_CAMERA.md D]. Not in Mission 22's EP: its class import added from Mission 04's record
      (hard rule 7). Played on the TANACORN's unit (or a dummy at the wreck) as the rise starts; trigger type 28 fires
      after it ends. [?: how long it holds, and whether it frames a 650 m ship]
-  2. Lua: a CameraActor spawned beside the wreck and the player controller's SetViewTargetWithBlend onto it, then back
-     to the pawn [?: never tried in Survival].
+  2. Lua: a CameraActor (or a CameraComponent on a dummy) beside the wreck and the player controller's
+     SetViewTargetWithBlend onto it, then back to the pawn: the spectator camera already sets the view target this way
+     (sv_down.lua: a CameraComponent added to another player's plane) [V: code].
   3. The event focus camera (`LiveEventFocusCameraExecution`, Mission 22's RE_ShuttleFocusCamera pair: the view
      swings to it, the player keeps control; hard rule 28) as the fallback.
   A callout with it (`THE TANACORN RISES`).
@@ -537,6 +550,78 @@ near Comona, it shells the airfield.
 - Pass: the shelling begins at the gun line, the airfield's bar falls with each salvo, the callout and warnings
   show, the airfield goes down if ignored, shelling stops while it's down; no shelling before the gun line.
 
+### WP14. GEOFON's capture (co-op only)
+Status: not started. Depends on: WP5 (GEOFON's own BP, for the lock's source part and the deck's landing marks), WP7
+(GEOFON sailing), co-op (sv_coop*.lua, sv_down.lua). The user's idea and answers: section 2.
+- **What it is:** while GEOFON is afloat in round 30 with two or more players linked, now and then the host picks a
+  random player who's flying (not down, not at the airfield or in the STORE, not in a capture already); a CAPTURE LOCK
+  warns them for `lock_s`; if they don't break it, their plane is taken over, flown to GEOFON and landed on its deck,
+  and they die there (DOWN, revivable). Solo: never (`coop_only`).
+- **What already exists to build on:**
+  - the runtime's loiter autopilot (runtime/flight.c SV_Down + down_ctl.c, KILLS_HEALTH_DEATH.md 7): on the local
+    player's own plane, from the BuildFlightInput detour, it replaces pitch, yaw, roll, throttle and brake every frame
+    (the stick does nothing) and flies the plane round a point; input signs learned in its first seconds. Its turn was
+    loose in a test (COOP2MP.md: bank 40 for 90 s with a ~120 deg heading error), so its guidance needs work anyway;
+  - co-op's DOWN and revive (sv_down.lua): the floor, DOWN (invincible, hidden, weapons off, the enemies' attacks held
+    off, the loiter autopilot round the airfield, "dw" to the host), the spectator camera (a CameraComponent on another
+    player's plane and SetViewTargetWithBlend from Lua), the revive bought at the STORE (REVIVE <NAME>), the run over
+    when every player is down;
+  - the runtime moving a player plane every frame (coop.c CoTeleport: AActor::TeleportTo + the flight reset; hard rules
+    51 and 53: smooth on the second player plane, whose actor tick is off);
+  - the HUD's lightning distortion (BeginHUDDistortionLightning, sv_anomalies_dev.lua) for the lock's flicker.
+- **1. The pick** [repo, host]: every `every_s` (first `first_s` after the fleet appears), if GEOFON and the lock's source
+  are up and no capture is on: a random player from COOP.players() alive, flying, not at the airfield, not the only
+  one flying (a capture must never leave nobody up: the run would end), not captured in the last `per_player_s`.
+  Message to everyone `cp|<slot>|<seq>` (reliable; sv_coop's guards: slot checked, one capture at a time).
+- **2. The CAPTURE LOCK** [repo]: on the chosen player's game, `lock_s` (10 s): their HUD flickers, a tone, the
+  callout `CAPTURE LOCK` / `GET CLEAR OF GEOFON OR DESTROY ITS EW ARRAY`; on every other game `CAPTURE LOCK ON <NAME>`
+  and the source marked. It's broken when **its source is destroyed** (GEOFON's EW array: a part on its island in
+  BP_SV_grfd, WP5, with its own health and box: no source, no more captures) or the chosen player is more than
+  `escape_km` (12 km) from GEOFON when the lock runs out: `CAPTURE BROKEN`. GEOFON sunk: the lock ends.
+- **3. The takeover** [machine: native; repo: Lua]: a new native mode beside SV_Down's loiter (e.g. `SV_Capture(plane,
+  ship, ...)`, at most 15 characters: hard rule 25): from the BuildFlightInput detour, the player's inputs replaced
+  every frame (stick, throttle, brake, weapons, flares, as DOWN does); guidance to a gate `gate_km` (3 km) behind
+  GEOFON's stern at `gate_alt_m` (300 m), lined up with its heading, its moving pose read each frame (CoReadPose on
+  the ship's root, as the planes'). The HUD: `AIRCRAFT CAPTURED`, the others' callout `<NAME> IS BEING TAKEN TO
+  GEOFON`. Offline first: tools/checks/flight_test.sh's model planes, a moving gate.
+- **4. The landing, fully scripted (the user's choice)** [machine: native]: from the gate the runtime moves the plane
+  itself every frame (CoTeleport's TeleportTo + flight reset, its velocity set to match): a glide path (3-4 deg) to the
+  deck's touchdown mark, the angled deck's line, a trap (decelerating ~100 m to a stop), then parked on its deck spot,
+  carried with GEOFON each frame (its pose = the ship's transform x the spot). Gear down for the final (the input's gear
+  bit, flight.c's flags). The deck's marks (touchdown, the angled line, the parking spot) as sockets on BP_SV_grfd
+  (WP5) or offsets from GEOFON's root [I]. **First test, before any of it:** a test key that pins your own plane to a
+  point moving at 45 km/h for 30 s (does the local plane's flight model or camera fight a per-frame teleport? the
+  second player plane's smoothness needed its actor tick off: hard rule 51). If it fights: the user decides on a fade
+  at short final (the fallback the user turned down for now).
+- **5. Captured = dead** [repo]: `die_after_s` (3 s) after the trap: `<NAME> CAPTURED` to everyone, an explosion on the
+  deck where the plane is, and the player goes DOWN through sv_down.lua's own path (the floor reached: the plane hidden
+  and set flying round the airfield by the loiter autopilot from a spot high over it, the spectator camera on another
+  player), revived as any DOWN player (the STORE's REVIVE: price x raise for each revive in the run). The captured
+  plane's wreck isn't left on the deck (GEOFON's own deck launches spawn off its bow).
+- **6. GEOFON sunk during a capture (the user: the captive goes down with it):** in the lock it just ends; in the
+  takeover or the landing, or parked before die_after_s, the captive goes DOWN at once (the same path); the rise
+  (WP6) waits for nothing.
+- **Co-op sync:** the host decides (the pick, the lock's end, GEOFON's death); the captured player's own game flies its
+  own plane (the takeover and landing are local to it) on its copy of GEOFON (a joiner's copies are drawn 120 ms behind
+  the host's: COOP2MP); everyone else sees that plane through its stream, as any player's. Messages `cp` (pick), `cb`
+  (broken, why), `cl` (landed), `cx` (cancelled: GEOFON sunk); a joiner that leaves mid-capture: the capture ends. Host
+  migration: a capture in flight is cancelled (the player given back their plane).
+- **Guards:** never solo, never the last player flying, never two at once, never during the TANACORN's cinematic or a
+  STORE freeze, never a player who's down; the player's controls always given back on any end (lock broken, landing
+  cancelled, DOWN, the round's end, a restart, the level gone), checked as DOWN's restoreAfter is.
+- **Settings:** `CFG.specials.fleet.capture = { enabled = true, coop_only = true, first_s = 120, every_s = 180,
+  per_player_s = 300, lock_s = 10, escape_km = 12, gate_km = 3, gate_alt_m = 300, glide_deg = 3.5, die_after_s = 3 }`,
+  mirrored in survival.ini [specials.fleet.capture] (gameplay: not in the leaderboard's free lists).
+- **Log lines:** `capture: <name> picked (slot N; GEOFON at d km)`, `capture: lock on <name> broken (<source destroyed |
+  N km clear>)`, `capture: <name> taken over (gate at d km)`, `capture: <name> at the gate; the landing starts`,
+  `capture: <name> trapped on GEOFON's deck`, `capture: <name> captured: DOWN`, `capture: cancelled (<why>)`; native
+  `capture: autopilot on plane <p> ...` as DOWN's lines.
+- **Tests:** offline: `tools/checks/capture_test.sh` (the pick and its guards, the lock's escape and source, the
+  messages, every end giving the controls back, the DOWN hand-over) and flight_test.sh's moving gate; in game (test
+  build, two games linked, or a test-only key that runs it on your own plane solo): the pin test first, then a capture
+  end to end. Pass: the lock shows and can be broken both ways; a capture flies the plane to the gate, lands it on the
+  moving deck, kills it, and the revive brings it back; nobody's controls are ever left taken.
+
 ---------------------------------------------------------------------------------------------------------------------
 ## 5. Risks
 | risk | what answers it | fallback |
@@ -558,6 +643,9 @@ near Comona, it shells the airfield.
 | a player plane's invulnerability doesn't hold through the cinematic | WP4's test | the player's health floored and put back after |
 | no F-14D ace row / post-stall moves for AEGIR | WP7 | the ace rows Survival has (Su-33s) with F-14D airframes set at spawn |
 | the looped tracks gap or overlap at their restart | WP10's music test | a short fade at the end, or the music player's own loop |
+| the local player plane fights a per-frame teleport (the capture's scripted landing) | WP14's pin test | a fade at short final, if the user agrees |
+| the capture autopilot can't reach the gate reliably (DOWN's turn was loose) | flight_test.sh, then WP14's test | a wider gate, more time; the takeover by teleport to the gate behind a flicker |
+| a player's controls left taken after a capture | capture_test.sh (every end gives them back) | (must not happen) |
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 6. Questions still open for the user
