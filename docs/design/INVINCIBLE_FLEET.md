@@ -240,7 +240,12 @@ machine), test in game, pass, fallback, unknowns. Do them in this order unless a
 Status lines: update them as work lands.
 
 ### WP0. The TANACORN's model: the Leviathan design (Sea Power's Iowa + AC8's Alicorn)
-Status: not started. Depends on: nothing. Who: the agent (the user, 2026-11-10: "You are building it all"; "You need
+Status: started 2026-11-10: `tools/tanicorn/model_tanacorn.py` adds the 4 laser turrets, the 8 deck VLS blocks (aft of
+turret C: x -210 to -264 m, 16 m either side) and the 8 side VLS blocks (the bow's flanks: x +150 to +216 m, 5 m up,
+lids canted 35 deg up and out) to the design, and a socket for every part (36: tanacorn_hull_sockets.json); previews in
+art/tanicorn/renders/model/ for the user. The deck VLS block is the agent's own too: the Alicorn's VLS were merged into
+its hull mesh in src.blend (bl_import.py), so there's no separate Alicorn block to reuse. Next: the user's look at the
+previews, then each part through prepare_part.py's route and the hull with its sockets. Depends on: nothing. Who: the agent (the user, 2026-11-10: "You are building it all"; "You need
 sea powers iowa").
 - Goal: the TANACORN built from the chosen design `art/tanicorn/design/Leviathan_rev4.blend` (rigged:
   `Leviathan_animated.blend`) as it is: **Sea Power's Iowa fused with AC8's Alicorn** at the Alicorn's 650 m (the Iowa's
