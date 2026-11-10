@@ -2363,3 +2363,17 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   muzzle: <owner>: ...`). The mesh is read through the component tree (SPC.V.comps), as the ZFA-44 test reads sockets.
 - build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1), build 1f58bf2ed73a... registered. INSTALLED
   2026-11-10 22:26 (backup: build/backup/install_before_0.74.54).
+
+## 0.74.55 (2026-11-10; Lua only, test-only code: where the T5's shells start)
+- The user's run of 0.74.54 (22:30): still "firing from below the mount". The probe: `our muzzle: mesh TurretPoseableMesh;
+  asset SK_SV_Tani_T5; old field SK_SV_Tani_T5; asset sockets 4; asset finds SOC_Gun_01 true; component has it true; its
+  bone turret_pitch; at (-599, -834, +416) cm from the mesh's origin` = (1007, -201, 416) cm turned by the actor's yaw
+  -114.4: the barrel's tip to the centimetre. The engine places our muzzle right; the launcher doesn't start the shells
+  there. No stock turret mesh with SOC_Gun_01 in the level to compare (ours the only PoseableMeshComponent). Rotators read
+  from Lua (GetSocketRotation, GetBoneRotationByName) still give no Yaw; locations read right.
+- 0.74.55 (sv_tanicorn.lua): every LiveFlakGun the game makes while a mount is watched (NotifyOnNewObject), at the next tick
+  its place and velocity run back to its making: `tanicorn: shell N: started (+x, +y, +z) from the mount, flying yaw Y
+  pitch P at S m/s (seen A s after it was made, now ...); the muzzle (...), the barrel yaw Y pitch P` (the first 12 a
+  spawn); the 2 s line gives the barrel's heading from turret_pitch -> SOC_Gun_01 and the muzzle against the mount.
+- build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1), build 558f72008e20... registered. INSTALLED
+  2026-11-10 22:37 (backup: build/backup/install_before_0.74.55).

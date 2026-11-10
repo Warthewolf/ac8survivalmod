@@ -158,56 +158,68 @@ local function stockProbe(o)
     return string.format("none with %s among %d turret meshes", MUZZLE, n)
 end
 
-local function sock(o, name, where)
-    local ok, r = pcall(function()
-        local m = turretMesh(o)
-        local v = m:GetSocketRotation(FName(name))
-        local s = string.format("%.1f/%.1f", v.Yaw, v.Pitch)
-        if where then
-            local l = m:GetSocketLocation(FName(name))
-            s = string.format("(%.0f, %.0f, %.0f) %s", l.X, l.Y, l.Z, s)
-        end
-        return s
-    end)
-    if ok then return r end
-    T.sockErr = T.sockErr or {}
-    if not T.sockErr[name] then T.sockErr[name] = true; log("tanicorn: reading " .. name .. " failed: " .. tostring(r)) end
-    return "?"
+local function heading(dx, dy, dz)                      -- yaw / pitch (degrees) of a direction
+    return math.deg(math.atan(dy, dx)), math.deg(math.atan(dz, math.sqrt(dx * dx + dy * dy)))
 end
 
-local function bone(o, name) return sock(o, name, false) end
+-- (0.74.55) where the barrels point and where the muzzle is, from positions alone: 0.74.54's probe read socket places
+-- right (SOC_Gun_01 at the barrel's tip) while every rotation read gave no Yaw. The barrel = turret_pitch -> SOC_Gun_01.
+local function aim(o)
+    local ok, r, t = pcall(function()
+        local m = turretMesh(o)
+        local ml = o:K2_GetActorLocation()
+        local p, q = m:GetSocketLocation(FName("turret_pitch")), m:GetSocketLocation(FName(MUZZLE))
+        local y, pt = heading(q.X - p.X, q.Y - p.Y, q.Z - p.Z)
+        return string.format("barrel yaw %.1f pitch %.1f, muzzle (%+.0f, %+.0f, %+.0f) from the mount", y, pt,
+            q.X - ml.X, q.Y - ml.Y, q.Z - ml.Z), { x = q.X - ml.X, y = q.Y - ml.Y, z = q.Z - ml.Z, yaw = y, pitch = pt }
+    end)
+    if ok then return r, t end
+    if not T.aimErr then T.aimErr = true; log("tanicorn: reading the barrel failed: " .. tostring(r)) end
+    return "barrel ?"
+end
 
--- (0.74.51) the user's run of 0.74.50: "the gun turret moved, really well but the gun fire did not move with the Turret".
--- The AA shell is an ALiveBulletEmitter (an ALiveAttachedWeapon): every one within 150 m of a mount, where it is, which
--- way it points and what it hangs on (its attach parent component and socket), against the muzzle socket's own place
--- and heading: an emitter on the root (no socket) or one that keeps its first heading while SOC_Gun_01 turns is it.
-local EMITTERS = { "BP_wp_aagun_vessel_C", "LiveBulletEmitter", "BP_wp_flakgun_C" }   -- (0.74.53: the T5's flak shells)
-local function emitters(o)
-    local ok, ml = pcall(function() return o:K2_GetActorLocation() end)
-    if not (ok and ml) then return "?" end
-    local out, seen = {}, {}
-    for _, cls in ipairs(EMITTERS) do
-        for _, e in ipairs(FindAllOf(cls) or {}) do
-            local id = valid(e) and addrOf(e)
-            if id and not seen[id] and not nameOf(e):find("Default__", 1, true) then
-                seen[id] = true
-                pcall(function()
-                    local l, r = e:K2_GetActorLocation(), e:K2_GetActorRotation()
-                    local dx, dy, dz = l.X - ml.X, l.Y - ml.Y, l.Z - ml.Z
-                    if dx * dx + dy * dy + dz * dz > 15000 * 15000 then return end
-                    local parent, socket = "none", "?"
-                    pcall(function()
-                        local p = e.RootComponent:GetAttachParent()
-                        if valid(p) then parent = p:GetFName():ToString() end
-                    end)
-                    pcall(function() socket = e:GetAttachParentSocketName():ToString() end)
-                    out[#out + 1] = string.format("%s at (%+.0f, %+.0f, %+.0f) from the mount, %.1f/%.1f, on %s / %s",
-                        (nameOf(e):match("([^%.:]+)$")) or "?", dx, dy, dz, r.Yaw, r.Pitch, parent, socket)
-                end)
-            end
+-- (0.74.55) every flak shell the game makes while a mount is watched (NotifyOnNewObject, as ALLY's ESM fields: the actor
+-- at its construction, before it has a place), then at the next tick its place and velocity run back over its age to
+-- where it started, against the mount and its muzzle at that moment. The user's runs of 0.74.50-0.74.54: the fire "from
+-- below the mount" while the engine puts SOC_Gun_01 at the barrel's tip: this is where the game actually starts it.
+local NEWSHELL = {}
+if type(NotifyOnNewObject) == "function" then
+    pcall(NotifyOnNewObject, "/Script/Live.LiveFlakGun", function(o)
+        if (T.until_ or 0) > os.clock() and #NEWSHELL < 32 then NEWSHELL[#NEWSHELL + 1] = { o = o, t = os.clock() } end
+    end)
+end
+
+local function shells(now)
+    if #NEWSHELL == 0 then return end
+    local list = NEWSHELL
+    NEWSHELL = {}
+    local mount
+    for _, o in ipairs(FindAllOf(TANI.class) or {}) do
+        if valid(o) and not nameOf(o):find("Default__", 1, true) then mount = o; break end
+    end
+    if not mount then return end
+    local _, a = aim(mount)
+    local ml
+    pcall(function() ml = mount:K2_GetActorLocation() end)
+    if not ml then return end
+    for _, s in ipairs(list) do
+        T.shells = (T.shells or 0) + 1
+        if T.shells <= 12 then
+            local ok, line = pcall(function()
+                local l, v = s.o:K2_GetActorLocation(), s.o:GetVelocity()
+                local age = now - s.t
+                local sx, sy, sz = l.X - v.X * age - ml.X, l.Y - v.Y * age - ml.Y, l.Z - v.Z * age - ml.Z
+                local y, pt = heading(v.X, v.Y, v.Z)
+                return string.format("shell %d: started (%+.0f, %+.0f, %+.0f) from the mount, flying yaw %.1f pitch %.1f at %.0f m/s " ..
+                    "(seen %.2f s after it was made, now (%+.0f, %+.0f, %+.0f)); the muzzle (%s), the barrel yaw %s pitch %s",
+                    T.shells, sx, sy, sz, y, pt, math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z) / 100, age,
+                    l.X - ml.X, l.Y - ml.Y, l.Z - ml.Z,
+                    type(a) == "table" and string.format("%+.0f, %+.0f, %+.0f", a.x, a.y, a.z) or "?",
+                    type(a) == "table" and string.format("%.1f", a.yaw) or "?", type(a) == "table" and string.format("%.1f", a.pitch) or "?")
+            end)
+            log("tanicorn: " .. (ok and line or ("a shell, not read: " .. tostring(line))))
         end
     end
-    return #out > 0 and table.concat(out, "; ") or "none"
 end
 
 -- (0.74.46) the class spawned straight, as AC7's laser is (sv_escort_li.lua): BeginDeferredActorSpawnFromClass +
@@ -243,6 +255,7 @@ local function watch(now)
         local c = T.checks[i]
         if now >= c.at then table.remove(T.checks, i); look(c.tag, c.made) end
     end
+    shells(now)                                          -- (every tick: the shells made since the last)
     if now > T.until_ or now < T.next then return end
     T.next = now + TANI.every_s
     local parts = {}
@@ -263,9 +276,8 @@ local function watch(now)
             end
             local ay = "?"
             pcall(function() ay = string.format("%.1f", o:K2_GetActorRotation().Yaw) end)
-            parts[#parts + 1] = string.format("%s hp %s/%s actor yaw %s, bones yaw %s pitch %s, muzzle SOC_Gun_01 %s; shells: %s",
-                (nameOf(o):match("([^%.:]+)$")) or "?", tostring(h), tostring(mx), ay, bone(o, "turret_yaw"),
-                bone(o, "turret_pitch"), sock(o, "SOC_Gun_01", true), emitters(o))
+            parts[#parts + 1] = string.format("%s hp %s/%s actor yaw %s, %s",
+                (nameOf(o):match("([^%.:]+)$")) or "?", tostring(h), tostring(mx), ay, (aim(o)))
         end
     end
     if #parts > 0 then log("tanicorn: " .. table.concat(parts, "; ")) end
@@ -305,7 +317,7 @@ testKey("T", "sv_tanicorn.lua's mount test", function()
     local now = os.clock()
     T.checks[#T.checks + 1] = { at = now + 1, tag = "+1 s", made = list }
     T.checks[#T.checks + 1] = { at = now + 4, tag = "+4 s", made = list }
-    T.next, T.until_ = 0, now + TANI.watch_s
+    T.next, T.until_, T.shells = 0, now + TANI.watch_s, 0
 end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn mount watch", fn = watch }
 end
