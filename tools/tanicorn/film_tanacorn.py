@@ -40,6 +40,9 @@ sc.render.image_settings.file_format = "PNG"
 sc.view_layers[0].material_override = None
 SKY = next((n for n in sc.world.node_tree.nodes if n.bl_idname == "ShaderNodeTexSky"), None)
 
+for o in bpy.data.objects:                                     # the part types' line-up on the sea beside her (the
+    if o.name.endswith("_proto"):                              # stills' sheet) is not part of the ship
+        o.hide_render = True
 cam = bpy.data.objects.new("CAM_film", bpy.data.cameras.new("CAM_film"))
 sc.collection.objects.link(cam)
 cam.data.clip_end = 20000.0
@@ -71,7 +74,7 @@ def at(name):
 def orbit(t):
     a = math.radians(55.0 + 330.0 * t)                         # from off the port bow, round the stern, back to the bow
     h = 150.0 - 60.0 * math.sin(math.pi * t)                   # (broadside the whole 650 m just fills the frame)
-    return (390.0 * math.cos(a), 520.0 * math.sin(a), h), (0, 0, 14), 30      # (nearer end-on, where she is short)
+    return (560.0 * math.cos(a), 640.0 * math.sin(a), h), (0, 0, 14), 28      # (the whole 650 m in frame all the way)
 
 
 def aft_vls(t):
