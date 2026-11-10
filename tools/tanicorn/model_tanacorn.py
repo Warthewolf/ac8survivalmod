@@ -98,13 +98,15 @@ M_PAINT = mat("TANA_paint", (0.085, 0.088, 0.092), 0.65, 0.34)          # the de
 M_DARK = mat("TANA_dark", (0.026, 0.027, 0.029), 0.5, 0.48)              # cell wells, the emitter's rings
 M_TEAL = mat("TANA_teal", (0.02, 0.35, 0.32), 0.2, 0.25, (0.05, 0.85, 0.75), 6.0)   # the railcannon bay's teal, lit
 M_TEAL["tana_glow"] = True
+M_BLACK = mat("TANA_black", (0.018, 0.019, 0.021), 0.25, 0.55)           # the laser director's matte black (the user's photos)
+M_GLASS = mat("TANA_glass", (0.010, 0.030, 0.034), 0.9, 0.06)            # its window and lenses: dark, glossy, a little teal
 
 
 # ---------------------------------------------------------------------------------------------------- clean solids
 class Part:
     """primitives (each with a material) united into one closed solid; cutters carved out of it"""
     def __init__(self):
-        self.bm, self.cut, self.mats = bmesh.new(), bmesh.new(), []
+        self.bm, self.cut, self.post, self.mats = bmesh.new(), bmesh.new(), bmesh.new(), []
 
     def _slot(self, m):
         if m not in self.mats:
@@ -116,18 +118,42 @@ class Part:
         for f in {f for v in verts for f in v.link_faces}:
             f.material_index = i
 
-    def box(self, size, at, m=M_PAINT, rot=Matrix(), cut=False):
-        bm = self.cut if cut else self.bm
+    def _bm(self, cut, post):
+        return self.cut if cut else (self.post if post else self.bm)
+
+    def box(self, size, at, m=M_PAINT, rot=Matrix(), cut=False, post=False):
+        bm = self._bm(cut, post)
         r = bmesh.ops.create_cube(bm, size=1.0, matrix=Matrix.Translation(at) @ rot.to_4x4() @ Matrix.Diagonal((*size, 1)))
         self._put(bm, r["verts"], m)
 
-    def cyl(self, r1, r2, depth, at, axis="Z", m=M_PAINT, seg=24):
+    def cyl(self, r1, r2, depth, at, axis="Z", m=M_PAINT, seg=24, cut=False, post=False):
+        bm = self._bm(cut, post)
         R = {"Z": Matrix(), "X": Matrix.Rotation(math.pi / 2, 4, "Y"), "Y": Matrix.Rotation(math.pi / 2, 4, "X")}[axis]
-        r = bmesh.ops.create_cone(self.bm, cap_ends=True, cap_tris=False, segments=seg, radius1=r1, radius2=r2, depth=depth,
+        r = bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=False, segments=seg, radius1=r1, radius2=r2, depth=depth,
                                   matrix=Matrix.Translation(at) @ R)
-        self._put(self.bm, r["verts"], m)
+        self._put(bm, r["verts"], m)
+
+    def prism(self, poly, axis, a0, a1, m=M_PAINT, cut=False, post=False):
+        """a convex polygon (in the plane across `axis`: X -> (y, z), Y -> (x, z), Z -> (x, y)) extruded from a0 to a1;
+        post: added after the cut (glass inside a recess)"""
+        bm = self._bm(cut, post)
+
+        def P(u, v, a):
+            return {"X": (a, u, v), "Y": (u, a, v), "Z": (u, v, a)}[axis]
+        lo = [bm.verts.new(P(u, v, a0)) for u, v in poly]
+        hi = [bm.verts.new(P(u, v, a1)) for u, v in poly]
+        bm.faces.new(lo[::-1])
+        bm.faces.new(hi)
+        n = len(poly)
+        for i in range(n):
+            bm.faces.new((lo[i], lo[(i + 1) % n], hi[(i + 1) % n], hi[i]))
+        bmesh.ops.recalc_face_normals(bm, faces=[f for f in bm.faces if any(v in lo or v in hi for v in f.verts)])
+        self._put(bm, lo + hi, m)
 
     def solid(self, name, bevel=0.03, simplify=True):
+        bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces)      # every shell outward (the boolean needs it)
+        bmesh.ops.recalc_face_normals(self.cut, faces=self.cut.faces)
+        bmesh.ops.recalc_face_normals(self.post, faces=self.post.faces)
         me = bpy.data.meshes.new(name + "_raw")
         self.bm.to_mesh(me)
         self.bm.free()
@@ -151,9 +177,22 @@ class Part:
             d.operation, d.solver, d.object = "DIFFERENCE", "EXACT", cutter
             if hasattr(d, "material_mode"):
                 d.material_mode = "TRANSFER"                       # the wells' walls take the cutter's dark
+        poster = None
+        if self.post.verts:                                          # what goes in after the cut (its own shells)
+            pme = bpy.data.meshes.new(name + "_post")
+            self.post.to_mesh(pme)
+            for m in self.mats:
+                pme.materials.append(m)
+            poster = bpy.data.objects.new(name + "_poster", pme)
+            WORK.objects.link(poster)
+            q = tmp.modifiers.new("post", "BOOLEAN")
+            q.operation, q.solver, q.object = "UNION", "EXACT", poster
+            if hasattr(q, "material_mode"):
+                q.material_mode = "TRANSFER"
+        self.post.free()
         out = applied(tmp, name + "_solid")                          # 1. united and cut
         tmp.modifiers.clear()
-        for o in (dummy, cutter):
+        for o in (dummy, cutter, poster):
             if o:
                 bpy.data.objects.remove(o)
         tmp.data = out
@@ -170,7 +209,8 @@ class Part:
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
         bw = bm.edges.layers.bevel_weight.verify()                   # only outside edges are rounded: inside corners
         for e in bm.edges:                                           # stay crisp (bevels there collide in tight spots)
-            e[bw] = 1.0 if (e.is_manifold and e.is_convex and e.calc_face_angle(0.0) > math.radians(30)) else 0.0
+            e[bw] = 1.0 if (e.is_manifold and e.is_convex and e.calc_face_angle(0.0) > math.radians(30)
+                            and e.calc_length() > 3 * (bevel or 0.03)) else 0.0   # (small holes' rims stay crisp)
         bm.to_mesh(out)
         bm.free()
         if bevel:                                                    # 3. bevelled, and nothing touches it after
@@ -183,9 +223,10 @@ class Part:
             tmp.data = nxt
             bpy.data.meshes.remove(out)
             out = nxt
-            bm = bmesh.new()                                         # 4. the bevel's corner faces split convex
-            bm.from_mesh(out)
+            bm = bmesh.new()                                         # 4. the bevel's corner faces split convex,
+            bm.from_mesh(out)                                        #    and no sliver left
             bmesh.ops.connect_verts_concave(bm, faces=bm.faces)
+            fix_slivers(bm)
             bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
             bm.to_mesh(out)
             bm.free()
@@ -206,6 +247,21 @@ def tidy(me):
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     bm.to_mesh(me)
     bm.free()
+
+
+def fix_slivers(bm):
+    """zero-length edges welded (only their own ends) and zero-area faces gone: each one's straight-through vertex
+    dissolved, what that leaves concave split again; never a merge pass over the whole mesh (it ate the bevels)"""
+    for _ in range(6):
+        short = {v for e in bm.edges if e.calc_length() < 1e-5 for v in e.verts}
+        if short:
+            bmesh.ops.remove_doubles(bm, verts=list(short), dist=1e-5)
+        bad = [f for f in bm.faces if f.calc_area() < 1e-7]
+        if not bad:
+            return
+        flat = {max(f.loops, key=lambda lp: lp.calc_angle()).vert for f in bad}
+        bmesh.ops.dissolve_verts(bm, verts=list(flat))
+        bmesh.ops.connect_verts_concave(bm, faces=bm.faces)
 
 
 def applied(obj, name):
@@ -395,31 +451,61 @@ def grid_body(part, xs, ys, kind, top, base, R=Matrix()):
 
 
 # ---------------------------------------------------------------------------------------------------- the part types
+# The laser director (the user's reference photos, 2026-11-10: a beam director on a turret ring): a squat ring, a
+# U-shaped yoke whose arms are rounded on top with rows of vent holes down their outer faces (the house, turning about
+# Z), and between the arms a head (the gun, tilting about the arms' axis) with a big octagonal window off to one side,
+# two round sensor lenses beside it, a small camera above, and a sloped chin under the window. Matte black, dark glass.
+# About 5.5 m tall on the 650 m ship.
+ARM_Y, ARM_T, ARM_W, ARM_R = 1.85, 0.8, 2.8, 1.4        # the arms' centre, thickness, width (x) and top radius
+LASER_PIVOT = Vector((0.0, 0, 3.4))                     # the head's tilt axis, through the arms' rounded tops
+
+
+def octagon(cu, cv, w, h, c):
+    """an octagon centred (cu, cv), w x h, its corners cut by c (counter-clockwise)"""
+    u0, u1, v0, v1 = cu - w / 2, cu + w / 2, cv - h / 2, cv + h / 2
+    return [(u0 + c, v0), (u1 - c, v0), (u1, v0 + c), (u1, v1 - c), (u1 - c, v1), (u0 + c, v1), (u0, v1 - c), (u0, v0 + c)]
+
+
 def laser_house():
     p = Part()
-    p.cyl(2.7, 2.7, 1.3, Vector((0, 0, 0.25)), m=M_DARK)                           # the turret ring (0.4 m into the deck)
-    p.cyl(2.35, 2.35, 2.2, Vector((0, 0, 1.99)), seg=8)                            # the armoured housing
-    p.cyl(2.35, 1.55, 0.8, Vector((0, 0, 3.49)), seg=8)                            # its chamfered roof
-    p.box((0.9, 0.9, 0.55), Vector((-1.0, 0, 4.12)))                               # the tracker on the roof
-    p.cyl(0.42, 0.42, 0.16, Vector((-1.0, 0.0, 4.46)), m=M_TEAL, seg=16)           # its sensor glass
-    for s in (1, -1):                                                              # the cheeks the emitter rides in
-        p.box((1.9, 0.38, 1.9), Vector((1.0, 1.32 * s, 3.05)))
-    return p.solid("TANA_LASER_house")
+    p.cyl(2.2, 2.2, 1.3, Vector((0, 0, 0.25)), m=M_DARK, seg=32)                   # the ring (0.4 m into the deck)
+    p.cyl(2.45, 2.45, 0.22, Vector((0, 0, 0.98)), m=M_BLACK, seg=32)               # the ring's flange
+    p.prism(octagon(0, 0, 3.2, 4.6, 0.45), "Z", 1.05, 1.75, m=M_BLACK)            # the yoke's base
+    for s_ in (1, -1):
+        y = ARM_Y * s_
+        p.box((ARM_W, ARM_T, LASER_PIVOT.z - 1.6), Vector((0, y, (1.6 + LASER_PIVOT.z) / 2)), m=M_BLACK)   # the arm
+        p.cyl(ARM_R, ARM_R, ARM_T, Vector((0, y, LASER_PIVOT.z)), axis="Y", m=M_BLACK, seg=32)          # its round top
+        face = y + s_ * ARM_T / 2
+        for k in range(6):                                                          # vent holes down the outer face
+            p.cyl(0.075, 0.075, 0.3, Vector((-0.95, face, 1.95 + k * 0.42)), axis="Y", m=M_DARK, seg=12, cut=True)
+        for k in range(5):                                                          # and round the top
+            a_ = math.radians(110 - k * 22)
+            p.cyl(0.075, 0.075, 0.3, Vector((math.cos(a_) * 1.05, face, LASER_PIVOT.z + math.sin(a_) * 1.05)),
+                  axis="Y", m=M_DARK, seg=12, cut=True)
+    return p.solid("TANA_LASER_house", bevel=0.04)
 
 
-LASER_PIVOT = Vector((1.0, 0, 3.05))
-LASER_TIP = 4.85
+HEAD_X0, HEAD_X1 = -1.25, 1.15                         # the head's back and front (from the tilt axis)
+WIN = (-0.3, 0.35, 1.75, 1.45, 0.32)                    # the window: centre (y, z), width, height, corner cut
+LASER_TIP = HEAD_X1 + 0.05                              # the beam leaves the window's middle
 
 
 def laser_gun():
-    p = Part()                                                                     # along +X from the pitch pivot
-    p.cyl(0.62, 0.62, 1.3, Vector((0.1, 0, 0)), axis="X", m=M_DARK, seg=16)        # the trunnion block
-    p.cyl(0.52, 0.42, 4.2, Vector((2.4, 0, 0)), axis="X", seg=16)                  # the barrel
-    for k in (1.6, 2.4, 3.2):                                                      # cooling rings
-        p.cyl(0.62, 0.62, 0.16, Vector((k, 0, 0)), axis="X", m=M_DARK, seg=16)
-    p.cyl(0.72, 0.72, 0.45, Vector((4.55, 0, 0)), axis="X", seg=16)                # the muzzle collar
-    p.cyl(0.42, 0.42, 0.08, Vector((4.81, 0, 0)), axis="X", m=M_TEAL, seg=16)      # the lens
-    return p.solid("TANA_LASER_gun", bevel=0.02)
+    p = Part()                                                                     # x forward from the tilt axis
+    head = [(-1.38, -1.45), (1.38, -1.45), (1.38, 0.95), (0.95, 1.38), (-0.95, 1.38), (-1.38, 0.95)]   # (y, z)
+    p.prism(head, "X", HEAD_X0, HEAD_X1, m=M_BLACK)                                # the head, its top corners cut
+    p.prism([(HEAD_X1 - 0.05, -0.62), (HEAD_X1 + 0.42, -0.62), (HEAD_X1 + 0.12, -0.18), (HEAD_X1 - 0.05, -0.18)],
+            "Y", -1.3, 1.3, m=M_BLACK)                                             # the chin under the window
+    for s_ in (1, -1):
+        p.cyl(0.55, 0.55, 0.2, Vector((0, 1.38 * s_ + 0.08 * s_, 0)), axis="Y", m=M_DARK, seg=24)   # the trunnions
+    wy, wz, ww, wh, wc = WIN
+    p.prism(octagon(wy, wz, ww, wh, wc), "X", HEAD_X1 - 0.16, HEAD_X1 + 0.1, m=M_DARK, cut=True)   # the window's recess
+    p.prism(octagon(wy, wz, ww - 0.1, wh - 0.1, wc - 0.03), "X", HEAD_X1 - 0.13, HEAD_X1 - 0.07, m=M_GLASS, post=True)   # glass
+    for (ly, lz, lr) in ((0.95, 0.78, 0.2), (0.95, 0.12, 0.27)):                   # the two lenses beside it
+        p.cyl(lr + 0.05, lr + 0.05, 0.26, Vector((HEAD_X1, ly, lz)), axis="X", m=M_DARK, seg=24, cut=True)
+        p.cyl(lr, lr, 0.06, Vector((HEAD_X1 - 0.08, ly, lz)), axis="X", m=M_GLASS, seg=24, post=True)
+    p.cyl(0.07, 0.07, 0.2, Vector((HEAD_X1, 0.1, 1.2)), axis="X", m=M_DARK, seg=12, cut=True)   # the camera
+    return p.solid("TANA_LASER_gun", bevel=0.035)
 
 
 VLSD_CELLS = [(x, y) for y in (1.45, -1.45) for x in (3.9, 1.3, -1.3, -3.9)]     # SOC_Vls_01..08: port row fwd -> aft
@@ -574,7 +660,8 @@ for tag, heading in (("FWD_L", 0.0), ("FWD_R", 0.0), ("AFT_L", math.pi), ("AFT_R
     M = Matrix.Translation(at) @ Matrix.Rotation(heading, 4, "Z")
     house = copy_of("LASER_house", "TANA_LASER_%s_house" % tag, M, SHIP)
     gun = copy_of("LASER_gun", "TANA_LASER_%s_gun" % tag, M @ Matrix.Translation(LASER_PIVOT), house)
-    empty("TANA_LASER_%s_SOC_Gun_01" % tag, M @ Matrix.Translation(LASER_PIVOT + Vector((LASER_TIP, 0, 0))), gun, 0.8, coll=ADD)
+    empty("TANA_LASER_%s_SOC_Gun_01" % tag, M @ Matrix.Translation(LASER_PIVOT + Vector((LASER_TIP, WIN[0], WIN[1]))), gun,
+          0.8, coll=ADD)                                                           # (the beam from the window's middle)
     made["laser"].append((house, gun))
 
 n = 0
