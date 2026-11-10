@@ -521,6 +521,166 @@ Status: not started. Depends on: WP0 (the hull), WP1 (its mounts).
 - Pass: the whole ship draws on the sea, every mount on its socket, each part boxed with its own health.
 - Fallback: the hull as a skeletal mesh (VALKA's X-02S route, proven).
 
+#### WP2 step 2: the live parts (plan, 2026-11-11)
+Research only (an agent, the night of 2026-11-10/11): nothing built, nothing changed but this section. "dev obj" is ACE8
+Aircraft Builder's dump of the stock package named, extracted from the game's paks with retoc.
+
+Where it stands [V]: the user's run of 0.74.60 (23:25) spawned the hull through SV_Unit_TaniHull (`spawn SV_Unit_TaniHull:
+up, 1 aircraft`; `tanicorn: hull +8 s: BP_SV_Tani_HULL_C_... facing 162.0: 32 part meshes, 1 static meshes`): step 1
+passes. The T5 is live only as a unit of its own (Ctrl+T: it aims and fires both barrels; hits and its wreck not yet seen).
+
+**What the game does with a ship's parts**
+- [V] Every stock part names its class in the world data. The 242 stock world data packages in build/stock hold 5,105
+  child and grandchild descs: 5,101 import a blueprint package, 4 a native class (Missions 11, 19, 30's TargetingDummy),
+  none leaves Class empty. Their MissionNpcID is often None (EB_002's Alicorn, Mission 16's Ladon); Mission 22's ships
+  set it and the class both.
+- [V] The world data's class wins over the blueprint's. The Ladon blueprint's LCIWS component holds
+  BP_OP0045_ladn_LCIWS_BL_Base_C (dev obj BP_OP0045_ladn_Base export 53, kept by its CP); Survival's world data names the
+  Arsenal Bird's pod there (and the Ladon row's ChildNPCId the pod's row), and the pod came up in game (hard rule 38). So a
+  part of ours needs its class in WD_SurvivalMode_global: a hard import of our blueprint (hard rule 7). Whether the part's
+  row (its model's soft BlueprintClass) or the component's ChildActorClass could stand in for a stock class named there:
+  no stock case [?] (the first test's probe asks).
+- [V log, I rule] The hull's DT_NPC row gives each part its row (ChildNPCId paired with ChildNPCComponentNames), over the
+  child desc's MissionNpcID: 0.73.44's Spaceport turrets flew their stock rows until 0.73.45 named Survival's in the hulls'
+  rows (HISTORY 0.73.44-0.73.45). Set both to the same row and it doesn't matter which wins.
+- [V] A part sits on a socket of the hull's static mesh as an SCS LiveChildActorComponent under that mesh, AttachToName the
+  socket: the Land Aegis (dev obj BP_GR034_ldag_Base: VLSM1 on SOC_VLSM1, CIWS1 on SOC_Ciws01, MainCannon, MUDR, under its
+  body static mesh), the Aegis (BP_VE002_aegs_Base: ChildActorClass and a ChildActorTemplate `<comp>_<class>_CAT`; the CP
+  hull overrides both to its CP turrets). bIsShowHUDBoxChildActor is false or unset on every stock part read (the Aegis's,
+  the Ladon's, the T-14's, the Alicorn N000's btank_Front_L): leave it.
+- [V] Our hull's native class takes children: the T-14 (BP_GR011_t014_CP, on BP_AIGroundVehicle_Pawn =
+  LiveAIGroundVehicleObject) carries its APS in a LiveChildActorComponent, filled from Mission 6's world data
+  (BP_GR011_t014_APS_CP). Children ride on whatever moves the hull: a tank's drive, the Alicorn's dive and surfacing with
+  its 30 parts (Survival's own ALICORN), ships under way [V stock; I for ours].
+- [V] Our classes can be imported: export_hash('BP_SV_Tani_<part>_C') (tools/zenpkg.py) is the class's public export hash
+  in each cooked BP_SV_Tani_* package (the Tani container unpacked: T5, T16, CIWS, LASER, HULL all match; our packages are
+  versioned, which ZenPkg refuses, so the check was a byte search).
+- [V] The release problem: build_all.sh runs build_survival.py once (it reads no environment today) and every packager
+  copies that build/install, so a child desc importing /Game/Mods/SurvivalMode/Tanicorn/... would be in every zip, whose
+  SurvivalMode_Tani_P is dropped. What AC8's loader does with an import of an unmounted package (skip it, the class
+  null?) and what the level then does with a child of no class [?]: no release may find out. Found on the way [V]:
+  package_test.sh drops the ZFA-44's container but not SurvivalMode_Tani_P, so `TANI=1 sh tools/build_all.sh` followed by
+  package_test.sh would ship the Iowa today.
+- [V] Two other stock mechanisms. AttachParentAIObjectName on an AI object desc: 61 stock objects, each in its parent's
+  unit with a world spawn point (Mission 20's AI_Dummy_Ground objects on the land battleship GR037, Mission 25's on the
+  Land Aegis, Mission 25 day 2's on tanks); every user is a dummy class, and day 2's are ALiveAIRelativeLocateDummy
+  (bEnableLocation / bEnableRotation), so the following looks like the dummy's own [I], not a general attach. And
+  ALiveAIGameObject::EngagementOrderOverride(..., PropogateToChild) (the header; sv_allies.lua calls it with false): one
+  order to the hull reaching every child [? untested with true].
+
+**The routes**
+| | (a) children, the stock way | (b) parts as AI objects of their own, attached from Lua | (c) AttachParentAIObjectName |
+|---|---|---|---|
+| health, box / TGT, FCS row, wreck | its own row and model | its own (the T5 test unit's route, proven) | its own |
+| stays on the ship as it sails / rises | the engine's attachment, as on every stock ship | only if K2_AttachToComponent holds on an AI object [?] (sv_escort_li.lua's laser holds on a plane, but it's a weapon actor; sv_decoy's marks untested); unattached they stay where they spawned, moved by Lua they jump every 250 ms | [?] |
+| release | a hard import: TANI=1 builds only | no import (soft rows) | no import |
+| co-op, STORE, 0.74.48, recycle | the Alicorn's and Spaceport's paths (hull and parts by key) | 32 more objects to mirror, recycle, hold; unit areas round the spawn point | as (b) |
+| machine work | TaniBuild (LiveChildActorComponent), cook | none | none |
+| the unknown | our part under our hull | the attach holding; the AI not moving a ground object back | a non-dummy attached at all |
+
+**Recommendation: (a), its world data only in TANI=1 builds.** It is how every stock ship and boss is built and how
+Survival already ports the Alicorn, the Ladons and the Spaceport fleet; the parts follow every motion WP4 and WP10 add
+with no code of ours; the rows pair by name as they already do; and the gate costs nothing for good, because round 30 is
+the user's dev install only (WP12). (b) is the fallback; (c) stays a note.
+
+**Exact changes (route a)**
+1. tools/tanicorn/spec.py: `LIVE = {'T5_1': 'T5', 'T5_2': 'T5'}` (socket -> part: the first test's two). hull_bp writes a
+   live socket as `{'name': 'Part_<s>', 'class': 'LiveChildActorComponent', 'parent': 'HullMesh', 'socket': 'Mount_<s>',
+   'child_class': '<DEST>/BP_SV_Tani_<part>.BP_SV_Tani_<part>_C'}` in place of its PoseableMeshComponent (never both);
+   every other socket stays drawn. The mounts' blueprints are made before the hull's (they are: the hull's comes last).
+2. tools/laser7/cpp/SurvivalFx/Private/TaniBuildCommandlet.cpp (Blueprint(), the SCS loop): a node's `child_class` ->
+   `Cast<UChildActorComponent>(Node->ComponentTemplate)->SetChildActorClass(FindCls(cc))` (#include
+   "Components/ChildActorComponent.h"): UE 5.4 then makes the `<comp>_<class>_CAT` template the stock parts have (an
+   ImportText of ChildActorClass alone makes none). Log `child actor Part_T5_1: <class> (template <name>)`, Bad() on a class
+   that doesn't load; tools/tanicorn/build.sh checks tanibuild.log for one such line per live part.
+3. tools/survival_events_festival.py: `TANI_LIVE = [('T5_1', 'T5', 'ours'), ('T5_2', 'T5', 'probe')]` (socket, part, how its
+   world data names its class); `TANI_PROBE_CLASS`, Mission 22's Mk45 (/Game/Blueprints/Vehicle/AI/Vessels/VE002_aegs/CP/
+   BP_VE002_aegs_mk45_CP, already an import of Survival's world data); a part's object name `SV_Obj_TaniHull_Part_<s>` as
+   event args write it (the FName ('SV_Obj_TaniHull_Part_T5', 2): hard rule 17); `TANI_WD = os.environ.get('TANI') == '1'`
+   (the switch the user already sets for build_all.sh and package_dev.sh). build_tanicorn: the hull's appearance trigger
+   (SV_Unit_TaniHull) and each live part's Normal / PlayerFirst order (t_part) 2.5 s on, as the Spaceport's turrets get
+   theirs; in every build (names only).
+4. tools/build_survival_units.py: `import_class(z, pkg, cls)`, import_from's sibling for a package no stock package
+   imports: the package into z's imported packages (z.ipn), export_hash(cls) into its hashes, the import returned.
+5. tools/build_survival_world.py tanicorn_units: with TANI_WD the hull object's ChildAIObjectDescs (the scored dummy's
+   desc has the property, an empty array [V]) gets one desc per TANI_LIVE entry, a deep copy of Mission 22's
+   AC_Unit_01_Ship1 mk15 child (no grandchildren): Name ('SV_Obj_TaniHull_Part_T5', n), a new UniqueID, WorldDataName
+   ours, Data.MissionNpcID TANI_ROW (sv_tani_mount, whose DT_NPC row the hull's row names too), ComponentFieldName
+   fname('Part_T5_1'), Class import_class(z, TANI_BP, TANI_BP_CLASS) or, for the probe, import_from(z, Mission 22's
+   package, its Mk45 child's Class), TargetMarkType 1, Tags [], GrandChildrens []; every name into z.nb. Print
+   `  SV_Unit_TaniHull: 2 live parts (TANI=1: Part_T5_1 on BP_SV_Tani_T5_C, Part_T5_2 the class probe on
+   BP_VE002_aegs_mk45_CP); the world data imports /Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5`, and without TANI=1
+   `  SV_Unit_TaniHull: no live parts (TANI unset: nothing of the Tanicorn's container imported)`.
+6. tools/build_survival.py: SV_Npc_TaniHull's ChildNPCId [SV_Npc_TaniMount, SV_Npc_TaniMount] and ChildNPCComponentNames
+   [fname('Part_T5_1'), fname('Part_T5_2')] (every build: names only). A read-back `check_tanicorn_build()` over the
+   saved WD_SurvivalMode_global: without TANI_WD no imported package under /Game/Mods/SurvivalMode/Tanicorn (the lock);
+   with it exactly TANI_LIVE's, their component names equal to the hull row's ChildNPCComponentNames and, when
+   build/tanicorn/tani.spec.json is there, to the hull blueprint's LiveChildActorComponent nodes. It writes
+   build/out/tani_wd.txt (the imported Tanicorn packages) with TANI_WD and deletes it without.
+7. tools/build_all.sh: `[ -f build/out/tani_wd.txt ] && cp build/out/tani_wd.txt build/install/` after the staging
+   (outside both mod folders, so never zipped).
+8. tools/package_release.sh and tools/package_test.sh refuse a build with build/install/tani_wd.txt ("this build's world
+   data imports THE TANACORN's parts (TANI=1): run tools/build_all.sh without TANI=1 first"); package_dev.sh refuses it
+   unless TANI=1. package_test.sh also drops SurvivalMode_Tani_P as package_release.sh does (the gap above).
+9. Scripts/sv_tanicorn.lua (test only): hullLook adds the live parts. For each `Part_<s>` LiveChildActorComponent
+   (SPC.V.comps on /Script/Live.LiveChildActorComponent): its ChildActor's class, name and health, its distance from
+   HullMesh's Mount_<s> (GetSocketLocation: locations read right from Lua, 0.74.55), whether the hull's
+   AttachedChildGameObjects holds it; then the probe's verdict. The 2 s mount lines and the shell lines find every
+   BP_SV_Tani_T5_C (FindAllOf), the child's too. Optional: a second key nudges the hull 100 m (K2_SetActorLocation) and
+   logs the parts' socket distances a look on (whether a ground object holds a teleport is itself [?]: inconclusive if
+   the hull snaps back).
+10. Docs once it's built: HISTORY.md's entry, docs/re/TANICORN.md section 1 (the gate), AGENTS.md's TANICORN bullet ("its
+   parts' world data only in TANI=1 builds; the packagers refuse it"), tools/README.md's TANI line.
+
+**The first test** (the smallest: two T5s live, the other 30 parts drawn as now)
+- Machine: `sh tools/tanicorn/build.sh` (tanibuild.log's child actor lines for Part_T5_1 and Part_T5_2; BP_SV_Tani_HULL
+  cooked), `python -I tools/bump_version.py`, `TANI=1 ZFA=1 sh tools/build_all.sh` (the build's live parts line;
+  check_tanicorn_build passes), `VALKA=1 ZFA=1 TANI=1 sh tools/package_dev.sh <version>`. Once without TANI=1 as well:
+  build_all.sh prints "no live parts", package_release.sh packs; after a TANI=1 build it refuses (the lock both ways).
+- In game: a run, Ctrl+Y (the hull 5 km ahead, broadside), fly to it.
+- Lines: AC8SurvivalMode.log `spawn SV_Unit_TaniHull: up, N aircraft` (N 3 if the unit's ChildAIGameObjects counts its
+  parts [I]; no pass by itself); AC8SurvivalMode_lua.log `tanicorn: hull +2 s / +8 s: ... 30 part meshes, 1 static
+  meshes; live parts 2 of 2: Part_T5_1 BP_SV_Tani_T5_C SV_Obj_TaniHull_Part_T5_1 health ..., 0.0 m from Mount_T5_1, a
+  child of the hull: true; Part_T5_2 <class> ...` and `tanicorn: the class probe (Part_T5_2): <class>: <the world data's
+  class decides | the row or the component decides>`; then the 2 s T5 lines for the child (yaw / pitch moving) and
+  `tanicorn: T5 shell N: ... hangs on TurretPoseableMesh (of BP_SV_Tani_T5_C_...) at socket SOC_Gun_01` (and _02).
+- Look: the 5-inch on Mount_T5_1 turns to you and fires flak from both barrels, with its box and TGT; shot, its health
+  falls and it turns to its wreck while the hull and the other parts stay. Then the STORE with the hull up and back (its
+  freeze and restore over a child: 0.74.48), and Ctrl+Y again while the part lives (the hull's unit stays on the list: the
+  spawn answers that it's still up, no crash).
+- Pass: Part_T5_1 is a live child of the hull, 0 m from its socket at both looks, tracking and firing from both barrels
+  on its own row (SV_FCS_TaniT5), boxed with TGT, wrecked when shot, and no crash through the STORE and a second Ctrl+Y.
+  The probe passes either way: it only says whether the gate could ever go (it needn't: WP12).
+
+**After it** (the rest of step 2): all six T5s; then T16 x2, CIWS x4 and LASER x4 once each kind's own test (0.74.61's
+Ctrl+U, TANI_MOUNTS) shows it right, each on its own row in the hull's ChildNPCId; the VLS blocks once they have blueprints
+(WP1); the railcannon and railguns in WP11. The probe socket then goes back to ours. Orders (WP3): each part by name as
+above, or one EngagementOrderOverride(..., PropogateToChild true) on the hull from Lua (to test).
+
+**Risks**
+- A TANI world data in a friends' zip: the three refusals, the marker, check_tanicorn_build's lock, package_test.sh's drop.
+- FName numbers: Part_T5_1 is ('Part_T5', 2) in the blueprint (UE splits it), the hull row, the desc and the EP args alike;
+  make every one through survival_events.fname and assert they match (hard rule 17).
+- The hull's unit off the spawner's list while a part lives (0.74.48, Shazzy's STORE crash): never recycle it before every
+  part is down (the runtime's Recycle refuses while the unit's AliveChildAIGameObjects isn't empty [I: if parts count
+  there], else a hold like ZLAUNCH.holdHull); a round's end finishes the parts off first (ladonPartsDown's pattern).
+- Hits: the hull's mesh (EnemyPawn, QueryOnly) round a part may take the shots meant for it (the T5's sphere is 6 m): seen
+  in the test, else a larger or higher sphere on the part.
+- Load: every live part's blueprint, meshes and textures load with the level (hard imports): TANI builds only.
+- Co-op: the hull mirrored with spawningUnit and its parts linked by key as the Alicorn's are (WP12).
+
+**Fallbacks**
+- No child (live parts 0 of 2, or an actor with no health): UE4SS.log for the loader on our import (a skipped package),
+  the classes loaded (TANI's class check on BP_SV_Tani_T5), the hull row in DT_NPC with its ChildNPCId; then the descs'
+  MissionNpcID None (EB_002's and the Ladon's way); then the hull on LiveAIVessels (as the Aegis) or LiveAIUniqueObject
+  (as the Land Aegis), whose children are proven.
+- A crash at the hull's spawn: the crumbs; then the steps one at a time, the probe socket out first.
+- Route (b), no machine work: the hull's unit with its parts as AI objects of their own (port_unit's rows per object: the
+  scored dummy desc on each part's row, soft classes, release-safe; SV_Spawn's SetPose turns the whole formation with the
+  hull [V runtime]), AttachParentAIObjectName the hull (the stock dummies' pattern; harmless if ignored), then
+  K2_AttachToComponent(HullMesh, Mount_<s>, SnapToTarget) from Lua as sv_escort_li.lua attaches the laser. Its test: the
+  part 0 m from its socket 2 s and 30 s on, aiming and firing; zone-wide unit areas (zone_area) for a ship that sails.
+
 ### WP3. The Tanicorn fights (M2)
 Status: not started. Depends on: WP2.
 - Every part ordered by name a moment after it appears (a hull's order never reaches its turrets: the Spaceport's

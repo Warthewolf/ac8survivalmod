@@ -21,6 +21,10 @@ rm -f "$mod"/config/survival.ini* "$mod"/*.log
 # notes, dumps, the flight recorder's tables)
 rm -f "$mod"/config/pending_runs.txt "$mod"/config/pilot_id.txt "$mod"/config/survival_profile.ini* \
       "$mod"/config/coast_*.txt "$mod"/hud_dump.txt "$mod"/flights_*.csv
+# THE TANICORN's parts (Sea Power's Iowa: the user's install only, never in a TESTER zip either; package_release.sh drops
+# it the same way). (2026-11-11) This script staged build/install whole and never dropped it: a TANI=1 build_all.sh then
+# package_test.sh would have shipped the Iowa.
+rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*
 # the ZFA-44 (tools/zfa44, the user's own model, AGENTS.md's exception of 2026-11-06): package_release.sh's block
 if [ "$ZFA" = 1 ]; then
     zc="$st/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode"
