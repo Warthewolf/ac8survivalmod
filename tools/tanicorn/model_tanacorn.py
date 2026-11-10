@@ -46,6 +46,34 @@ def collection(name, parent):
 ADD = collection("TANACORN additions", COLL)
 SOCK = collection("TANACORN sockets", COLL)
 WORK = collection("TANACORN prototypes", bpy.context.scene.collection)   # each part type once, away from the ship
+
+
+def remove_crew():
+    """the Iowa's crew figures (the user, 2026-11-10: "remove the people models from the ship"): every face on a material
+    whose texture is the Iowa's crew sheet, and the vertices that leaves loose, from every mesh of the ship"""
+    n = 0
+    for o in COLL.all_objects:
+        if o.type != "MESH":
+            continue
+        slots = {i for i, sl in enumerate(o.material_slots) if sl.material and sl.material.use_nodes and any(
+            nd.type == "TEX_IMAGE" and nd.image and "crew" in nd.image.name.lower() for nd in sl.material.node_tree.nodes)}
+        if not slots:
+            continue
+        if o.data.users > 1:
+            o.data = o.data.copy()
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        faces = [f for f in bm.faces if f.material_index in slots]
+        n += len(faces)
+        bmesh.ops.delete(bm, geom=faces, context="FACES")
+        bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+        bm.to_mesh(o.data)
+        bm.free()
+        print("model: crew removed from %s: %d faces" % (o.name, len(faces)))
+    return n
+
+
+CREW_FACES = remove_crew()
 DG = bpy.context.evaluated_depsgraph_get()
 SHIP_MESHES = [o for o in COLL.all_objects if o.type == "MESH"]
 CHECK = {}
@@ -369,7 +397,7 @@ def grid_body(part, xs, ys, kind, top, base, R=Matrix()):
 # ---------------------------------------------------------------------------------------------------- the part types
 def laser_house():
     p = Part()
-    p.cyl(2.7, 2.7, 0.9, Vector((0, 0, 0.45)), m=M_DARK)                           # the turret ring
+    p.cyl(2.7, 2.7, 1.3, Vector((0, 0, 0.25)), m=M_DARK)                           # the turret ring (0.4 m into the deck)
     p.cyl(2.35, 2.35, 2.2, Vector((0, 0, 1.99)), seg=8)                            # the armoured housing
     p.cyl(2.35, 1.55, 0.8, Vector((0, 0, 3.49)), seg=8)                            # its chamfered roof
     p.box((0.9, 0.9, 0.55), Vector((-1.0, 0, 4.12)))                               # the tracker on the roof
@@ -416,7 +444,8 @@ def vlsd_body():
             return ("raise", 0.22, M_PAINT)                              # the uptake between the rows
         return None
     xs.add(-5.3); xs.add(5.3)
-    grid_body(p, sorted(xs), sorted(ys), kind, VLSD_TOP, 0.0)
+    grid_body(p, sorted(xs), sorted(ys), kind, VLSD_TOP, -0.4)           # (its base 0.4 m into the deck: the aft deck's
+                                                                          # camber leaves no gap under an edge)
     return p.solid("TANA_VLSD_body", simplify=False)
 
 
