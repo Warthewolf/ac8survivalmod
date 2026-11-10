@@ -175,16 +175,20 @@ left as they were):**
 | 16-inch triple turret, railgun shells | **2** | turret B forward of the bridge, turret C aft | the players, and the airfield from the gun line (WP13) | 1 |
 | 5-inch twin flak mount | 6 | three a side along the superstructure | the players | 1 |
 | close-in mounts | 8: **4 laser interceptors** (0.5 s swing) + **4 CIWS guns** | the superstructure's corners | lasers: the players' missiles; CIWS: the players | 1 |
-| VLS block, 8 cells | 4 (32 cells) | the Alicorn's VLS, two a side | the players | 1 |
+| VLS block, 8 cells, on the aft deck | **8** (64 cells) | the aft deck between the Alicorn's sponsons, round and behind turret C (the user, 2026-11-10) | the players | 1 |
+| side VLS block, 8 cells, on the bow's hull | **4 a side, 8** (64 cells) | along each bow flank, in the rows of square ports the hull has; cells canted outward: the missiles burst out of the hull's side, then turn onto their target (the user, 2026-11-10) | the players | 1 |
 | sub-railgun (the Alicorn's) | 2 | its pop-up hatches, one a side | the players | 1 |
 | SAM launchers | none | | | |
 | launched aircraft / drones | none (GEOFON's deck does the launching) | | | |
 
-Phase 1's weapon parts: 2 + 6 + 8 + 4 + 2 = **22**; phase 2 when `phase2_share` (60 %) of them are down. The design files
+Phase 1's weapon parts: 2 + 6 + 8 + 16 + 2 = **34** (16 VLS blocks, 128 cells: the user, 2026-11-10: "more VLS that
+sits on the aft", "side VLS on the hull at the bow"); phase 2 when `phase2_share` (60 %) of them are down. 128 cells
+must not fire as one storm: the blocks fire in turns (each its own fire control's timings, staggered: the fleet's
+`salvo_n` 3 per block, its rest between), tuned in WP3's test. The design files
 (art/tanicorn/design, checked in Blender 3.3 on 2026-11-10) have exactly that main armament: **two** 16-inch turrets,
 now named `LEV_T16_FWD` (turret B, about +97 m) and `LEV_T16_AFT` (turret C, about -160 to -170 m), their guns
 `LEV_G16_FWD` / `LEV_G16_AFT` in the rigged file; 6 five-inch, **4 CIWS positions** (the Iowa's Phalanx: WP0 adds 4 more
-for the 8 close-in), the 2 sub-railguns and the bow railcannon, and **no VLS blocks placed yet** (WP0 adds the 4). The
+for the 8 close-in), the 2 sub-railguns and the bow railcannon, and **no VLS blocks placed yet** (WP0 adds the 16: 8 on the aft deck, 4 a side on the bow). The
 Iowa's own three turrets are only in each file's SRC collection (the sources), now excluded from the view layer, never
 exported; a TANACORN_README text in each file says so.
 
@@ -239,9 +243,11 @@ Status: not started. Depends on: nothing. Who: the agent (the user, 2026-11-10: 
   upper works; the Alicorn's hull colour; the bow railcannon in its teal bay; faired sponsons; pristine: the user
   confirmed this look, 2026-11-10). The Alicorn's parts are AC8 stock and allowed.
 - Deliverables, rigged as tools/tanicorn expects (tools/tanicorn/README.md, prepare_part.py): the hull (static mesh,
-  its mount sockets named as the parts' components will attach: **2** 16-inch, 6 five-inch, 8 close-in, 4 VLS, 2
-  sub-railgun hatches, the bow railcannon's bay: section 2's table), each mount type (16-inch triple, 5-inch twin, CIWS /
-  laser, VLS block, the sub-railgun with its hatch, the bow railcannon with its raise and barrel split) as Body > turret_yaw > turret_pitch with
+  its mount sockets named as the parts' components will attach: **2** 16-inch, 6 five-inch, 8 close-in, **16 VLS (8 on
+  the aft deck, 4 on each bow flank)**, 2 sub-railgun hatches, the bow railcannon's bay: section 2's table), each mount
+  type (16-inch triple, 5-inch twin, CIWS / laser, the deck VLS block, the bow's side VLS block (its 8 cells' sockets
+  canted outward, so the missiles leave sideways), the sub-railgun with its hatch, the bow railcannon with its raise and
+  barrel split) as Body > turret_yaw > turret_pitch with
   identity bones and muzzle sockets (SOC_Gun_01.. as the stock spelling), each with its wreck; textures ordinary (no
   VT: hard rule 44) on AC8 material instances parented on stubs (hard rules 42, 58).
 - Also: a one-piece skinned version of the whole ship with a root bone for the rise (WP4 route B), and its rise
@@ -276,7 +282,10 @@ Survival's rows; Ctrl+T in a test build). Not seen: aiming, firing, hits, wreck.
   - **CIWS / laser**: an anti-missile arm of ours with BP_SwingTLS_ForMSL's values, or AC7's LaserInterceptor on
     ALiveLaserInterceptor as the ZFA-44s carry it (proven: hard rule 58, 0.74.31);
   - **VLS**: cells = sockets up to SlotNum (the Alicorn's vls1..vls8, the Aegis Mk 41's SOC_Vls_01..08); the fleet's
-    EXSAM homing (HISTORY 0.73.52-53).
+    EXSAM homing (HISTORY 0.73.52-53). Two block types: the aft deck's (cells straight up) and the bow's side blocks
+    (cells canted outward: a missile leaves along its socket's forward axis [I: as any launcher's], then homes); the
+    side block's test: its missiles come out sideways and still turn onto a player behind or above the ship [?: a short
+    homing delay, `homing_delay_s`, keeps them from flying off sideways].
 - Pass: each mount type aims, fires its stock projectile, takes hits and wrecks, on its own, from a test key.
 
 ### WP2. The Tanicorn's hull (M1)
@@ -577,8 +586,9 @@ Status: not started. Depends on: WP3.
   no animation blueprints (BP script).
 - M4, **three phases (the user)**, fired from Lua (sv_alicorn.lua's pattern: poll part health, fire SV_Event), with
   the boss bar and callouts:
-  1. its 22 weapon parts fight (section 2's table: two 16-inch triples, six 5-inch, four lasers, four CIWS, four VLS
-     blocks, two sub-railguns); the core shielded (invincible / no box);
+  1. its 34 weapon parts fight (section 2's table: two 16-inch triples, six 5-inch, four lasers, four CIWS, eight VLS
+     blocks on the aft deck, eight side VLS blocks on the bow, two sub-railguns); the core shielded (invincible / no
+     box);
   2. once `phase2_share` (60 %) of those parts are down, the bow railcannon rises (M3's animation) and charges a
      shot **at the airfield** (the user): a `railcannon_charge_s` (30 s) charge with the RAILGUN WARNING and a callout
      (`THE TANACORN IS AIMING AT THE AIRFIELD`); if it fires, `railcannon_damage` (e.g. 100 of the airfield's 250) comes
@@ -741,6 +751,8 @@ its EW mast), co-op (sv_coop*.lua, sv_down.lua). The user's idea and answers: se
 | a unit with child objects recycled under them crashes the STORE | 0.74.48's rule | (rule: never) |
 | ship turrets can't fire at the airfield 16-20 km off | WP13 step 1's test | the scripted salvo (step 2), proven for the heavies |
 | `pip install bpy` doesn't fit the cloud session (Python version, disk) | WP0's first step | the script runs on the user's machine |
+| missiles from the bow's side cells fly off sideways instead of turning | WP1's side-block test | a shorter homing delay; cells canted less |
+| 16 VLS blocks (128 cells) firing together swamp the frame rate or the players | WP3's test, the perf line | staggered blocks, fewer cells a salvo |
 | the in-game camera node can't frame the rise, or its length is fixed | WP4's cinematic test | Lua's view target, else the event focus camera |
 | a player plane's invulnerability doesn't hold through the cinematic | WP4's test | the player's health floored and put back after |
 | no F-14D ace row / post-stall moves for AEGIR | WP7 | the ace rows Survival has (Su-33s) with F-14D airframes set at spawn |
