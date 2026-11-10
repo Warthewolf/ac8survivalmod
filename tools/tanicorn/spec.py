@@ -87,11 +87,13 @@ def mount(part, info, fcs):
                                         + f'CaptureAngleRange={fcs["cone"]},ActivationTime={fcs["activation"]},'
                                         f'TriggeringTime={fcs["triggering"]},ShotIntervalTime={fcs["interval"]},'
                                         f'RestingTime={fcs["resting"]},TriggerCount={fcs["trigger_count"]})'),
-                        # (SlotNum: the stock guns leave it at 0, the Mk45 and the flak gun alike; slot_num None = as theirs)
-                        'Performance': (f'(FireRate={fcs["fire_rate"]},MagazineCapacity={fcs["magazine"]},'
-                                        f'ReloadTime={fcs["reload"]},'
-                                        + ('' if fcs.get('slot_num', slots) is None else f'SlotNum={fcs.get("slot_num", slots)},')
-                                        + 'SlotSocketPrefix=GUN)'),
+                        # bDirectEdit: the arm's own Performance (FireRate, MagazineCapacity, ReloadTime, SlotNum) is used
+                        # only with it on; off, it comes from the NPC row's fire control row (NpcFCSId), and ours has none:
+                        # SlotNum 0, no muzzle, the weapon hung on the mesh at socket None, at its origin (0.74.56: ours
+                        # "hangs on TurretPoseableMesh at socket None", the stock Mk45s and Mk15s on rows at SOC_Gun_01)
+                        'Performance': (f'(bDirectEdit=True,FireRate={fcs["fire_rate"]},MagazineCapacity={fcs["magazine"]},'
+                                        f'ReloadTime={fcs["reload"]},SlotNum={fcs.get("slot_num") or slots},'
+                                        'SlotSocketPrefix=GUN)'),
                     }},
                     'ProjectileModule': {'$new': 'LiveFCSModule_ProjectileCommon', 'props': {
                         'WeaponClass': f'{obj(fcs["weapon"])}_C'}},
@@ -122,7 +124,7 @@ T5_FCS = {'search': 'AIR_ONLY', 'yaw': (40, -180, 180), 'pitch': (40, 0, 80), 'c
 # emitter the shells left the mount's foot along its forward, never its barrels (the user's runs of 0.74.50-0.74.52).
 T5_FLAK = {**T5_FCS, 'weapon': FLAK_SHELL, 'aiming': 'DoNotWhileFiring', 'lead_s': 5, 'min_cm': 25000,
            'capture_cm': 1500000, 'activation': 0.2, 'triggering': 5, 'interval': 5, 'resting': 1, 'trigger_count': 1,
-           'fire_rate': 12, 'magazine': 1, 'reload': 1, 'slot_num': None}
+           'fire_rate': 12, 'magazine': 2, 'reload': 1}         # (0.74.57: a shell a barrel, SlotNum 2 with bDirectEdit)
 FCS = {
     'T5': T5_FLAK,
     'T16': {**T5_FCS, 'yaw': (12, -150, 150), 'pitch': (8, -2, 45), 'interval': 2, 'resting': 6, 'fire_rate': 3,

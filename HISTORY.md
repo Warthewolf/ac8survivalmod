@@ -2391,3 +2391,20 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   Ctrl+END (the Spaceport Assault's island GR023 flak guns), side by side.
 - build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1), build a4c7c3edca4b... registered. INSTALLED
   2026-11-10 22:45 (backup: build/backup/install_before_0.74.56).
+
+## 0.74.57 (2026-11-10; the Tanicorn container rebuilt: the mounts' launchers use their own Performance)
+- The user's run of 0.74.56 (22:47-22:49), Ctrl+T and Ctrl+END side by side: ours `hangs on TurretPoseableMesh (of
+  BP_SV_Tani_T5_C_...) at socket None, base attached true`, sitting at the mount's origin; the stock ones (the Spaceport's
+  Aegis Mk45s and the Ford's Mk15s, on Survival's flak fire control rows) `hangs on TurretPoseableMesh ... at socket
+  SOC_Gun_01, base attached true`, sitting at their muzzles (+732, +141, +265 from an Mk45). The same mesh; no socket
+  name for ours.
+- FLiveFCSLauncherPerformance has bDirectEdit (default false): the arm's FireRate / MagazineCapacity / ReloadTime /
+  SlotNum are its own only with it on, else they come from the NPC row's fire control row (DT_NPC_FCS, NpcFCSId: SlotNum
+  among its fields). Every stock arm leaves it off and gets them from its row; ours has no row: SlotNum 0, no slot, the
+  weapon hung at socket None. (0.74.50-0.74.52's SlotNum 2 was ignored the same way.)
+- tools/tanicorn/spec.py: every mount's Performance bDirectEdit=True, SlotNum = its muzzles (T16 3, T5 2, CIWS 1,
+  LASER 1); the T5's magazine 2 (a flak shell a barrel). TaniBuild done (0 errors).
+- build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1), build 664a7e374c57... registered. INSTALLED
+  2026-11-10 22:54 (backup: build/backup/install_before_0.74.57).
+- To see in game: Ctrl+T, the flak from both barrels' tips, following the turret; the log's `shell N: ... hangs on
+  TurretPoseableMesh ... at socket SOC_Gun_01` (or _02).
