@@ -2260,3 +2260,38 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
 - Test in game: quit normally, relaunch -> one zip; kill AceCombat8.exe in Task Manager, relaunch -> the zip has the logs,
   UE4SS.session.log and the UECC folder if any; 11 launches -> 10 zips; a co-op session -> role=host / role=join in
   session.txt; the start isn't slower (the log's "logs: previous session's files set aside ... (N ms)" line).
+
+## runtime 0.32.33 (2026-11-10, branch fix/log-bundle-review; not built, not run in game)
+The log bundle after Copilot's review of feature/log-bundle (four comments, all real), then dated log names (the user,
+2026-11-10: "le AC8SurvivalMode.log et session.txt, il faut leur mettre la date et l'heure de sa création au nom du
+fichier"; "tu met tous dans logs, dater les crumbs").
+- Every file of a session is named with the session's start (local time) and lives in <mod>\logs: AC8SurvivalMode_<stamp>.log,
+  AC8SurvivalMode_lua_<stamp>.log, AC8SurvivalMode_crumbs_<stamp>.log (the .prev rotation is gone), session_<stamp>.txt,
+  UE4SS_<stamp>.log. A stamp is YYYY-MM-DD_HH-MM-SS, a letter b-z after it for a second session in the same second (a
+  letter, so no zip name AC8Survival_<stamp>_<mod>.zip starts like another stamp's). No session overwrites another's, so
+  the stash (logs\prev), its synchronous retry and the logs\kept of the first fix are gone; the start only renames
+  (an older runtime's undated logs, once, into logs\ under the stamp of their last write).
+- The zip thread zips every earlier session with no zip yet (logzip.h LzPick), oldest first; with 10 zips or more, none
+  older than the oldest zip (it would be pruned at once and made again at every start). The game's Saved\Logs and
+  Saved\Crashes files go in by time: from the session's start_ft to the next session's start. Only the files that went
+  in whole (LZ_OK) are deleted after the zip is placed (Copilot's 1st comment); the others, and every file of a zip that
+  failed, stay in logs\ under their dated names, never deleted (Copilot's 2nd: nothing can be overwritten any more).
+  bundle.txt says PARTIAL for a file in the zip as far as it could be read.
+- logzip.h: the second pass has its own CRC of what it wrote. When a file shrank, couldn't be opened again, failed a
+  read or was rewritten between the passes, both headers get that CRC (the central entry in lz_cd, the local header
+  through SetFilePointer, a new kernel32 import), so the zip stays valid; the entry holds what was read (+ zeros) and is
+  reported LZ_CHANGED (before: the first pass's CRC, a bad entry; a same-size rewrite even came back LZ_OK). Copilot's
+  fix (fail the whole zip) was not taken: one changed file would sink every bundle. LZ_BETWEEN_PASSES(path), empty, is
+  the test's hook. LZ_READ now means a first-pass read error only (not in the zip).
+- Lua: SV_LogStamp() (new) gives the stamp; sv_core.lua opens logs\AC8SurvivalMode_lua_<stamp>.log (the mod's folder
+  when logs\ couldn't be made; without the runtime, the old AC8SurvivalMode_lua.log).
+- tools/re/exe.py: EXE_CACHE read through env.get, so a value only in .env is used (Copilot's 4th comment).
+- tools/checks/logbundle_test: a file cut to half and one rewritten at the same size between the passes (code 5,
+  contents, testzip, every local header's CRC equal to its central entry's); the stamps of file and zip names; LzPick on
+  a made-up folder (no zip yet, a zip already, a b stamp next to a zip of the plain one, this session, the 10-zip rule).
+- Player texts (release/README.txt, README_COOP.txt, CONTRIBUTING.md, survival.default.ini, subtitles.ini): send the
+  zip that the next start makes, or a session's dated files when it has none.
+- Test in game (the start and the zip thread don't run outside the game): first start over an old install -> the
+  undated logs move into logs\ ("an older runtime's undated logs moved"), the next start zips them; a normal relaunch ->
+  one zip, logs\ holds only the zips and this session's dated files; a crash -> the next start's zip has the crumbs
+  and the UECC folder; two quick starts -> no file overwritten; Lua's log in logs\ with the same stamp.

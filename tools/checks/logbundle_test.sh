@@ -2,7 +2,9 @@
 # logbundle_test.sh : the log bundle's zip writer and pruning (runtime/logzip.h, runtime 0.32.32) built into a small
 # windowless exe (tools/checks/logbundle_test.c) and checked with Python's zipfile on a made-up tree
 # (tools/checks/logbundle_test.py): testzip, names (a non-ASCII one with the UTF-8 flag), contents byte for byte, an
-# empty file, a 3 MB file, a missing file skipped, an in-memory entry, and prune keeping exactly the newest N.
+# empty file, a 3 MB file, a missing file skipped, an in-memory entry, a file cut and one rewritten between the two
+# passes (LZ_CHANGED, the CRCs patched: runtime 0.32.33), prune keeping exactly the newest N, the session stamps of
+# file and zip names, and which sessions LzPick zips.
 # Output in build/checks/logbundle. Needs clang (tools/llvm) and a Windows SDK / MSVC libs, as build_hash_test.sh.
 set -e
 cd "$(dirname "$0")"

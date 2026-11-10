@@ -142,6 +142,7 @@ IMPORT void   WINAPI GetSystemTimeAsFileTime(uint64_t* ft);
 IMPORT BOOL   WINAPI FileTimeToLocalFileTime(const uint64_t* ft, uint64_t* local);
 IMPORT BOOL   WINAPI FileTimeToSystemTime(const uint64_t* ft, uint16_t st[8]);
 IMPORT BOOL   WINAPI SetFilePointerEx(HANDLE h, int64_t dist, int64_t* newPos, DWORD method);
+IMPORT DWORD  WINAPI SetFilePointer(HANDLE h, long lo, long* hi, DWORD method);   /* (0.32.33, logzip.h: windows.h's LONG is long) */
 #define MOVEFILE_REPLACE_EXISTING 1u
 #define MOVEFILE_COPY_ALLOWED     2u
 typedef struct {                                   /* PROCESS_MEMORY_COUNTERS */
