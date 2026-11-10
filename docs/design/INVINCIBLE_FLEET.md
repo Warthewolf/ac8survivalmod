@@ -171,7 +171,7 @@ left as they were):**
 
 | weapon | count | where (the Leviathan design) | fires at | phase |
 |---|---|---|---|---|
-| bow railcannon (the Alicorn's) | 1 | its teal bay in the bow, where the Iowa's turret A stood | the airfield: a 30 s charge, again every 90 s while it lives | 2 |
+| bow railcannon (the Alicorn's) | 1 | its teal bay in the bow, where the Iowa's turret A stood | the airfield: a 30 s charge, again every 90 s while it lives (the user confirmed the timing, 2026-11-10) | 2 |
 | 16-inch triple turret, railgun shells | **2** | turret B forward of the bridge, turret C aft | the players, and the airfield from the gun line (WP13) | 1 |
 | 5-inch twin flak mount | 6 | three a side along the superstructure | the players | 1 |
 | close-in mounts | 8: **4 CIWS guns** + **4 laser interceptors** (0.5 s swing) (the user, 2026-11-10: "Add 4 more corners for 8") | CIWS: the Iowa's four Phalanx positions amidships (+22 m and -54 m, about 12-14 m off the centreline, ~31 m up); lasers: four new corners, a pair on the main deck forward of the superstructure (+50 m, 14 m off, ~13 m up) and a pair at the superstructure's aft end (-100 m, 14 m off, ~23 m up), covering the bow and stern arcs (empties LEV_LASER_FWD_L/R, LEV_LASER_AFT_L/R in the design files) | lasers: the players' missiles; CIWS: the players | 1 |
@@ -181,7 +181,7 @@ left as they were):**
 | SAM launchers | none | | | |
 | launched aircraft / drones | none (GEOFON's deck does the launching) | | | |
 
-Phase 1's weapon parts: 2 + 6 + 8 + 16 + 2 = **34** (16 VLS blocks, 128 cells: the user, 2026-11-10: "more VLS that
+**The armament is settled** (every row confirmed by the user, 2026-11-10). Phase 1's weapon parts: 2 + 6 + 8 + 16 + 2 = **34** (16 VLS blocks, 128 cells: the user, 2026-11-10: "more VLS that
 sits on the aft", "side VLS on the hull at the bow"); phase 2 when `phase2_share` (60 %) of them are down. 128 cells
 must not fire as one storm: the blocks fire in turns (each its own fire control's timings, staggered: the fleet's
 `salvo_n` 3 per block, its rest between), tuned in WP3's test. The design files
