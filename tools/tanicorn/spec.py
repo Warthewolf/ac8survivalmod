@@ -37,7 +37,7 @@ def bones(yaw, pitch):
         return (f'(BoneName="{bone}",bUseBasisBone=False,Axis={axis},'
                 f'Yaw=(Speed={y[0]},AngleMin={y[1]},AngleMax={y[2]}),pitch=(Speed={p[0]},AngleMin={p[1]},AngleMax={p[2]}),'
                 f'bUseRotationAccel=False,RotationSpeedThreshold=10,bRotationSound=False)')
-    return '(' + one(1, 'turret_yaw', yaw, (45, -45, 45)) + ',' + one(2, 'turret_pitch', (45, -45, 45), pitch) + ')'
+    return '(' + one(1, 'BN_turret_yaw', yaw, (45, -45, 45)) + ',' + one(2, 'BN_turret_pitch', (45, -45, 45), pitch) + ')'   # (0.74.59: the stock names)
 
 
 def mount(part, info, fcs):

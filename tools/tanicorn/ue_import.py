@@ -302,7 +302,7 @@ def part(p, gear, dn):
         else:
             say(f'  WARNING {name}: the import made no animation (the lids\' Open): {kinds}')
     else:
-        skinned(name, info, src, mats, ('Body', 'turret_yaw', 'turret_pitch'))
+        skinned(name, info, src, mats, tuple(info['bones']))          # (0.74.59: BN_Body > BN_turret_yaw > BN_turret_pitch)
     if info.get('wreck', True):
         static(os.path.join(src, name + '_DAM.gltf'), f'{DEST}/Model/SM_SV_{name}_DAM', mats)
 

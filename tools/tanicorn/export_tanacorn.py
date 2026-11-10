@@ -7,8 +7,9 @@ Run on the file model_tanacorn.py saves. For every part type it writes <out dir>
 ue_import.py reads it (the route prepare_part.py proved with the first 5-inch mount), each part in the frame of the hull
 socket it sits on (SOCKET_Mount_<name>: its base at the origin, +X its forward), in metres, glTF Y-up:
   turrets  T16 (the 16-inch triple), T5 (the 5-inch twin), CIWS, LASER (the beam director):
-           Tani_<P>.gltf skinned Body > turret_yaw > turret_pitch, every joint with an identity rotation, the house on
-           turret_yaw, the guns on turret_pitch (its place the guns' trunnion); muzzle sockets SOC_Gun_NN on turret_pitch
+           Tani_<P>.gltf skinned BN_Body > BN_turret_yaw > BN_turret_pitch (the stock turrets' names, 0.74.59), every joint
+           with an identity rotation, the house on BN_turret_yaw, the guns on BN_turret_pitch (its place the guns' trunnion);
+           muzzle sockets SOC_Gun_NN on BN_turret_pitch
   VLS      VLSD (the aft deck's block; one mesh for all 8) and VLSS_L1..L4 / VLSS_R1..R4 (the bow's side blocks, each
            bent onto its own stretch of the hull): Tani_<P>.gltf skinned Body > Hatch_01..08, each lid's joint on its
            hinge, and the animation "Open" (0.5 s: every lid swings open about its hinge); sockets SOC_Vls_01..08 on
@@ -295,6 +296,9 @@ def socket_of(name):
     return D["SOCKET_Mount_" + name].matrix_world.copy()
 
 
+TB_ROOT, TB_YAW, TB_PITCH = "BN_Body", "BN_turret_yaw", "BN_turret_pitch"   # a gun mount's bones (the stock turrets')
+
+
 def turret(part, on, house, guns, pivot, muzzle=None):
     """a gun mount in the frame of its first hull socket: the house on turret_yaw, the guns on turret_pitch"""
     Mi = socket_of(on[0]).inverted()
@@ -313,12 +317,15 @@ def turret(part, on, house, guns, pivot, muzzle=None):
         wide = max(0.5, 0.3 * float(gaps.max())) if len(gaps) else 0.5
         cuts = [0] + [i + 1 for i in range(len(front) - 1) if gaps[i] > wide] + [len(front)]
         tips = [Vector((front[a:b, 0].max(), front[a:b, 1].mean(), front[a:b, 2].mean())) for a, b in zip(cuts, cuts[1:])]
+    # (0.74.59) the stock turrets' bone names (BN_Body > BN_turret_yaw > BN_turret_pitch: the Mk45's, the GR023 flak gun's):
+    # a stock fire control row (NpcFCSId0) puts its own arm on the mount, driving the BN_ bones (0.74.58: ours, named
+    # turret_yaw / turret_pitch, stood still under NPC_FCS_FlakGun000's arm), and only the row's path gives it its muzzle
     info = {"kind": "turret", "on": on,
-            "bones": {"Body": [0, 0, 0], "turret_yaw": [0, 0, 0], "turret_pitch": ue_cm(at)},
-            "sockets": [{"name": "SOC_Gun_%02d" % (i + 1), "bone": "turret_pitch", "loc": ue_cm(t - at), "rot": [0, 0, 0]}
+            "bones": {TB_ROOT: [0, 0, 0], TB_YAW: [0, 0, 0], TB_PITCH: ue_cm(at)},
+            "sockets": [{"name": "SOC_Gun_%02d" % (i + 1), "bone": TB_PITCH, "loc": ue_cm(t - at), "rot": [0, 0, 0]}
                         for i, t in enumerate(tips)],
             "guns_forward_m": [round(float(x), 2) for x in c - np.array(at)]}
-    finish(part, mesh, info, [("Body", -1, (0, 0, 0)), ("turret_yaw", 0, (0, 0, 0)), ("turret_pitch", 1, tuple(at))])
+    finish(part, mesh, info, [(TB_ROOT, -1, (0, 0, 0)), (TB_YAW, 0, (0, 0, 0)), (TB_PITCH, 1, tuple(at))])
 
 
 def vls(part, on, body, axis, deg, tex=None):

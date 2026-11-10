@@ -2423,3 +2423,21 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   2026-11-10 23:01 (backup: build/backup/install_before_0.74.58).
 - To see in game: Ctrl+T; `shell N: ... hangs on TurretPoseableMesh ... at socket SOC_Gun_01`, the flak from the barrel.
   The row may give one muzzle (its SlotNum) and its own arcs and speeds.
+
+## 0.74.59 (2026-11-10; the Tanicorn container rebuilt: the stock turret bone names; the T5's own fire control row)
+- The user's run of 0.74.58 (23:04): "THE GUN FIRED FROM THE BARREL THIS TIME, BUT NO TRACKING IS HAPPENING", "only one
+  barrel was working". The fire control row (NpcFCSId0) is what gives the arm its muzzle, but it puts the row's own arm
+  on the mount (NPC_FCS_FlakGun000's BP_FCS_FlakGun_00: ControlBones BN_turret_yaw / BN_turret_pitch), and ours were named
+  turret_yaw / turret_pitch: the barrel stood at its rest (the 2 s line: yaw -136.0 pitch 0.1 throughout), and the
+  row's SlotNum (the stock flak gun's one barrel) fired SOC_Gun_01 only.
+- The gun mounts' bones are the stock turrets' names, BN_Body > BN_turret_yaw > BN_turret_pitch (export_tanacorn.py
+  TB_*; ue_import.py takes the json's names; check_export.py; spec.py's ControlBones; sv_tanicorn.lua's barrel). The VLS
+  blocks keep Body > Hatch_NN. ue_import: `SK_SV_Tani_T5: bones ['BN_Body', 'BN_turret_yaw', 'BN_turret_pitch']`, every
+  bone within 0.00 cm; CHECK ALL OK; TaniBuild done (0 errors).
+- The T5's fire control row is Survival's own copy: sv_tanicorn.lua (TANI.fcs, test only) clones NPC_FCS_FlakGun000 to
+  SV_FCS_TaniT5 at the main menu with SlotNum 2 and a magazine of at least 2 (`tanicorn: fire control row SV_FCS_TaniT5
+  from NPC_FCS_FlakGun000: in (SlotNum 2, magazine N)`); SV_Npc_TaniMount's NpcFCSId0 names it (survival_events.TANI_FCS).
+- build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1), build 9062bb26ed68... registered. INSTALLED
+  2026-11-10 23:12 (backup: build/backup/install_before_0.74.59).
+- To see in game: Ctrl+T; the turret tracks and the flak leaves both barrels' tips (`hangs on TurretPoseableMesh ... at
+  socket SOC_Gun_01` / `_02`).

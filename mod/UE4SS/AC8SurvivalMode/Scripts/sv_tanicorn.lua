@@ -19,6 +19,7 @@ TANI = { unit = "SV_Unit_TaniTest", npc = "SV_Npc_TaniMount", model = "SV_Model_
          class = "BP_SV_Tani_T5_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5.BP_SV_Tani_T5_C",
          cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5.Default__BP_SV_Tani_T5_C",
          dummy = "BP_GR000_dummy_CP_C", name_key = "SV_TaniMount_Name", name = "TANICORN MOUNT",
+         fcs = "SV_FCS_TaniT5", fcs_src = "NPC_FCS_FlakGun000", fcs_slots = 2,   -- (0.74.59; survival_events.TANI_FCS)
          ahead_cm = 300000, z_cm = 700, every_s = 2.0, watch_s = 60 }
 do
 local T = { rows = nil, next = 0, seen = {}, until_ = 0, checks = {} }
@@ -38,6 +39,24 @@ local function rowsIn()                                  -- the model first: the
             _, have = dtCall(dst, "FindRow", row)
         end
         return have ~= nil
+    end
+    -- (0.74.59) the mount's fire control row (its NPC row's NpcFCSId0, tools/build_survival.py): the stock flak gun's
+    -- NPC_FCS_FlakGun000 with the twin mount's two muzzles. The row path is the one that gives the arm its muzzles
+    -- (0.74.58, the user: "THE GUN FIRED FROM THE BARREL THIS TIME", "only one barrel was working": the row's SlotNum 1)
+    local fcs = loadObject(FCS_TABLE)
+    if fcs then
+        pin(fcs, nameOf(fcs))
+        local okF, whyF = cloneRow(fcs, TANI.fcs_src, TANI.fcs, function(r)
+            r.SlotNum = TANI.fcs_slots
+            if (tonumber(r.MagazineCapacity) or 0) < TANI.fcs_slots then r.MagazineCapacity = TANI.fcs_slots end
+        end)
+        local slots, mag = "?", "?"
+        pcall(function()
+            local _, r = dtCall(fcs, "FindRow", TANI.fcs)
+            slots, mag = tostring(r.SlotNum), tostring(r.MagazineCapacity)
+        end)
+        log(string.format("tanicorn: fire control row %s from %s: %s (SlotNum %s, magazine %s)", TANI.fcs, TANI.fcs_src,
+            okF and "in" or ("NOT made: " .. tostring(whyF)), slots, mag))
     end
     local m = addRow(mt, mr, TANI.model)
     local n = addRow(npc, mine, TANI.npc)
@@ -168,7 +187,7 @@ local function aim(o)
     local ok, r, t = pcall(function()
         local m = turretMesh(o)
         local ml = o:K2_GetActorLocation()
-        local p, q = m:GetSocketLocation(FName("turret_pitch")), m:GetSocketLocation(FName(MUZZLE))
+        local p, q = m:GetSocketLocation(FName("BN_turret_pitch")), m:GetSocketLocation(FName(MUZZLE))
         local y, pt = heading(q.X - p.X, q.Y - p.Y, q.Z - p.Z)
         return string.format("barrel yaw %.1f pitch %.1f, muzzle (%+.0f, %+.0f, %+.0f) from the mount", y, pt,
             q.X - ml.X, q.Y - ml.Y, q.Z - ml.Z), { x = q.X - ml.X, y = q.Y - ml.Y, z = q.Z - ml.Z, yaw = y, pitch = pt }

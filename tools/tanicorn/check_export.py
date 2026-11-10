@@ -64,7 +64,7 @@ for p in parts:
                     ok = ok and abs(swing - abs(info["anim"]["open_deg"])) < 0.5
         say(ok, msg)
     if info["kind"] == "turret":
-        print("CHECK      %-8s pitch pivot %s cm, sockets %s, guns lie %s m from the pivot" % (p, info["bones"]["turret_pitch"], [(s["name"], s["loc"]) for s in info["sockets"]], info["guns_forward_m"]))
+        print("CHECK      %-8s pitch pivot %s cm, sockets %s, guns lie %s m from the pivot" % (p, [v for k, v in info["bones"].items() if k.endswith("turret_pitch")][0], [(s["name"], s["loc"]) for s in info["sockets"]], info["guns_forward_m"]))
     if info["kind"] == "vls":
         print("CHECK      %-8s SOC_Vls_01 %s rot %s ; Hatch_01 %s" % (p, info["sockets"][0]["loc"], info["sockets"][0]["rot"], info["bones"]["Hatch_01"]))
 h = json.load(open(os.path.join(root, "src_HULL", "Tani_HULL.json")))
