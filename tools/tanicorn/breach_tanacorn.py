@@ -233,7 +233,8 @@ def drop_mat(name):
         p = N_(nt, "ShaderNodeBsdfPrincipled", **{"Base Color": (0.9, 0.93, 0.95, 1), "Roughness": 0.2,
                                                   "Specular": 0.7, "Emission": (1.0, 0.95, 0.88, 1),
                                                   "Emission Strength": 0.08})
-        tr, mix = nt.nodes.new("ShaderNodeBsdfTransparent"), N_(nt, "ShaderNodeMixShader", Fac=0.85)
+        tr, mix = nt.nodes.new("ShaderNodeBsdfTransparent"), nt.nodes.new("ShaderNodeMixShader")
+        L_(nt, math_(nt, "MULTIPLY", soft(nt, 0.8), 0.9), mix.inputs[0])
         L_(nt, tr.outputs[0], mix.inputs[1])
         L_(nt, p.outputs[0], mix.inputs[2])
         L_(nt, mix.outputs[0], out.inputs["Surface"])
@@ -252,6 +253,9 @@ def shape(kind):
     bm = bmesh.new()
     if kind.startswith("ico"):
         bmesh.ops.create_icosphere(bm, subdivisions=int(kind[3:]), radius=1.0)
+    elif kind == "strand":                                    # a drop drawn out upright: 0.34 wide, 2.4 tall
+        bmesh.ops.create_icosphere(bm, subdivisions=1, radius=1.0)
+        bmesh.ops.scale(bm, vec=(0.34, 0.34, 2.4), verts=bm.verts)
     elif kind == "cyl":                                       # unit length along +Z from 0 to 1, radius 1
         bmesh.ops.create_cone(bm, cap_ends=False, segments=10, radius1=1.0, radius2=1.0, depth=1.0)
         bmesh.ops.translate(bm, verts=bm.verts, vec=(0, 0, 0.5))
@@ -271,7 +275,7 @@ def slot_obj(o, m):
 
 
 M_DROP = drop_mat("BREACH_drop")
-M_MIST = puff_mat("BREACH_mist", (0.93, 0.95, 0.97), 0.3, glow=0.0, power=2.2)
+M_MIST = puff_mat("BREACH_mist", (0.93, 0.95, 0.97), 0.18, glow=0.0, power=2.4)
 M_HAZE = puff_mat("BREACH_haze", (0.93, 0.95, 0.97), 0.12, power=2.4)
 
 
@@ -283,7 +287,7 @@ def pattern(name, kind, m, col=(1, 1, 1, 1)):
     return o
 
 
-DROP = pattern("BREACH_drop_p", "ico1", M_DROP)
+DROP = pattern("BREACH_drop_p", "strand", M_DROP)
 MIST = pattern("BREACH_mist_p", "ico2", M_MIST)
 HAZE = pattern("BREACH_haze_p", "ico2", M_HAZE)
 
@@ -1009,14 +1013,17 @@ def sea_mat():
                        math_(nt, "ADD", math_(nt, "MULTIPLY", hm.outputs["Color"], hfade.outputs[0]),
                              math_(nt, "MULTIPLY", math_(nt, "POWER", gr.outputs["Fac"], 0.6), bfade.outputs[0])))
         # lace: foam is streaks and holes, not paint
-        vo = N_(nt, "ShaderNodeTexVoronoi", Scale=0.32, Randomness=1.0, _feature="SMOOTH_F1")
-        vo.inputs["Smoothness"].default_value = 0.6
-        L_(nt, tc.outputs["Object"], vo.inputs["Vector"])
-        nz = N_(nt, "ShaderNodeTexNoise", Scale=0.09, Detail=9.0, Roughness=0.62)
-        L_(nt, tc.outputs["Object"], nz.inputs["Vector"])
-        lace = math_(nt, "MULTIPLY", vo.outputs["Distance"], nz.outputs["Fac"])
-        lace = N_(nt, "ShaderNodeMapRange", **{"From Min": 0.06, "From Max": 0.42})
-        L_(nt, math_(nt, "MULTIPLY", vo.outputs["Distance"], nz.outputs["Fac"]), lace.inputs["Value"])
+        st = N_(nt, "ShaderNodeMapping")                          # (drawn out along the swell's run)
+        st.inputs["Rotation"].default_value = (0.0, 0.0, math.radians(115.0))
+        st.inputs["Scale"].default_value = (1.0, 3.0, 1.0)
+        L_(nt, tc.outputs["Object"], st.inputs["Vector"])
+        mg = N_(nt, "ShaderNodeTexMusgrave", _musgrave_type="RIDGED_MULTIFRACTAL", Scale=0.07, Detail=7.0,
+                Dimension=0.55, Lacunarity=2.3, Offset=1.0, Gain=2.2)
+        L_(nt, st.outputs[0], mg.inputs["Vector"])
+        nz = N_(nt, "ShaderNodeTexNoise", Scale=0.05, Detail=6.0, Roughness=0.6)
+        L_(nt, st.outputs[0], nz.inputs["Vector"])
+        lace = N_(nt, "ShaderNodeMapRange", **{"From Min": 0.35, "From Max": 1.6})
+        L_(nt, math_(nt, "MULTIPLY", mg.outputs["Fac"], math_(nt, "ADD", nz.outputs["Fac"], 0.5)), lace.inputs["Value"])
         foam = math_(nt, "MULTIPLY", math_(nt, "SUBTRACT", math_(nt, "MULTIPLY", amount, lace.outputs[0]), 0.1), 2.4, True)
         white = N_(nt, "ShaderNodeMixRGB")
         L_(nt, foam, white.inputs["Fac"])
@@ -1136,13 +1143,13 @@ if SPRAY:
     # where she pierces the sea: a ring of white water, not a burst (speeds of 5-14 m/s: it rises a few to 15 m)
     ring = [(BREACH.x + 28.0 + 44.0 * math.cos(a), 21.0 * math.sin(a), 0.4) for a in (2 * math.pi * k / 40 for k in range(40))]
     E_RING = emitter_band("BREACH_ring", ring)
-    spray(E_RING, "ring_drops", T_BREAK - 0.15, T_UP1 + 0.8, 70000, 6.0, 0.75, 2.6, 0.26, DROP, drag=0.05)
-    spray(E_RING, "ring_lift", T_BREAK - 0.1, T_BREAK + 1.2, 16000, 12.0, 0.5, 3.0, 0.3, DROP, drag=0.04)
-    spray(E_RING, "ring_mist", T_BREAK, T_UP1 + 1.5, 260, 2.0, 0.6, 6.0, 14.0, MIST, drag=0.12, grav=0.0)
-    spray(E_RING, "ring_haze", T_BREAK + 0.3, T_DOWN, 90, 1.5, 0.5, 7.0, 28.0, HAZE, drag=0.2, grav=0.0)
+    spray(E_RING, "ring_drops", T_BREAK - 0.15, T_UP1 + 0.8, 80000, 6.5, 0.8, 2.6, 0.22, DROP, drag=0.05)
+    spray(E_RING, "ring_lift", T_BREAK - 0.1, T_BREAK + 1.2, 26000, 12.0, 0.5, 3.0, 0.24, DROP, drag=0.04)
+    spray(E_RING, "ring_mist", T_BREAK, T_UP1 + 1.5, 110, 2.5, 0.6, 5.0, 9.0, MIST, drag=0.12, grav=0.0)
+    spray(E_RING, "ring_haze", T_BREAK + 0.3, T_DOWN, 30, 1.5, 0.5, 7.0, 24.0, HAZE, drag=0.2, grav=0.0)
     # the sea pouring off her bow and flanks as they come up (it leaves with a little of her speed and falls)
     E_SHED = shed_emitter()
-    spray(E_SHED, "shed_streams", T_BREAK - 0.2, T_UP1 - 1.6, 200000, 1.2, 0.8, 4.8, 0.3, DROP, drag=0.0, follow=0.3,
+    spray(E_SHED, "shed_streams", T_BREAK - 0.2, T_UP1 - 1.6, 330000, 1.2, 0.8, 4.8, 0.22, DROP, drag=0.0, follow=0.3,
           sub=2)
 
     def footprint(x0, x1, n, half_bow=30.0):
@@ -1155,7 +1162,7 @@ if SPRAY:
 
     # she comes down and levels: white water thrown off her sides along her length, no great wall
     E_DOWN = emitter_band("BREACH_down", footprint(-300.0, 320.0, 40), inward=5.0, up=2.0)
-    spray(E_DOWN, "down_drops", T_DOWN - 1.6, T_DOWN + 0.9, 160000, 8.0, 0.6, 2.8, 0.3, DROP, drag=0.05)
+    spray(E_DOWN, "down_drops", T_DOWN - 1.6, T_DOWN + 0.9, 200000, 8.0, 0.6, 2.8, 0.22, DROP, drag=0.05)
     spray(E_DOWN, "down_haze", T_DOWN - 1.0, T_DOWN + 2.5, 120, 1.5, 0.5, 6.0, 26.0, HAZE, drag=0.2, grav=0.0)
 
 for o, t0, t1, rate, size, life in TRAILS:                    # the missiles' smoke trails: puffs left along their way
