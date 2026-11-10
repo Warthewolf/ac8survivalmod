@@ -248,13 +248,37 @@ sea powers iowa").
   tools/tanicorn/README.md; the design files are never changed, the output goes to the out dir, git-ignored under build/):
   - **the crew removed** (the user: "remove the people models from the ship"): every face on the Iowa crew texture's
     material (9,006 faces of LEV_HULL.001) and the vertices left loose. The design files still hold them (not asked).
-  - **the aft deck's hull errors fixed** (the user's marked render, 2026-11-10: "Fix any hull errors as pictured"): the
-    dark arrow-shaped patches were deck faces whose UVs landed outside the Alicorn deck sheet's plating band (v < 0.6:
-    a plain darker band, glossier in the shine map); 58 patches (402 faces) re-mapped (fix_deck_uvs): carried on from
-    the plating round them, or, where that would land on a marking or there's no neighbour, onto the plainest spot of
-    the part of the sheet the deck itself uses. And the Alicorn's own deck crew left standing there (legs, torsos, on
-    the deck material: 1,620 faces, remove_deck_crew; vents and fittings kept, checked by eye). Not shadows: a render
-    with the sun moved left them in place.
+  - **the Alicorn's deck crew removed** (the user's marked render, 2026-11-10: "Fix any hull errors as pictured"): legs
+    and torsos left standing on the aft deck, on the deck material (1,620 faces, remove_deck_crew; vents and fittings
+    kept, checked by eye). The dark arrow-shaped patches marked in the same render were copied UVs: see the next item.
+  - **the hull's UV map, made again from scratch** (the user, 2026-11-10: "Fix the UV Map on the hull too", then "get
+    rid of the saw teeth and sort out the rest of the uv so the texture looks correct"): tools/tanicorn/hull_uv.py,
+    called by model_tanacorn.py. LEV_HULL.001 is the Iowa's hull at the Alicorn's length wearing the Alicorn's two
+    sheets; its shape is nowhere the Alicorn's (under 1 % of its area lies on any Alicorn source mesh, measured), and
+    its UVs had been copied face by face from the nearest Alicorn surface: 4,245 UV islands, 5-45 % of the smooth
+    edges joining two different mappings, saw-tooth triangles on every deck, the rail and slots in offset bits on the
+    sides. **Patching fragments made it worse** (the first hull_uv.py: tone patches, saw teeth left where two big
+    pieces met; the user: "why is the UV getting even worse"). Now nothing of the copied map is kept; every ALC face
+    is mapped by where it is and which way it faces:
+    - **decks**: the Alicorn's own deck layout, a plain top-down projection fitted from the source mesh ALC_HULL (SRC
+      collection): u = cu - x / 400, v = cv - y / 400, sheet a (cu 0.86617, cv 0.84480) forward of x = -52 m, sheet b
+      (-0.12728, 0.81111) aft; only where the Alicorn has flat deck under the spot (its flight deck, 13 m either side
+      of the middle: its sheets hold its rounded shoulders and side skin folded out beyond that, which is where the
+      rail, slots and draft marks on this ship's deck came from); the rest of the deck is plain plating, top-down.
+      The decks are cut into 5 m cells first so each cell is wholly one or the other.
+    - **the shell** (sides, and everything under the water): one continuous strip of the aft sheet's plain plating
+      a side, along the hull's outline (plan arc length, round the stern to the centreline) and up it (by height above
+      z = -2 m, by girth under it, squeezed 2.5x there); it runs to and fro over one 248 m stretch of plating,
+      mirrored at each turn (x = -80.8 and 166.6 m), the hull cut at the turns. No rail, slots or draft marks: they
+      belong to the Alicorn's outline.
+    - **the rest** (steps, coamings, fittings' sides): box-mapped onto plain plating.
+    Result: 3.1 % of smooth edges still join two mappings, all of them plating against plating or the straight cuts
+    (was 5-45 %). The hull has ~9,700 faces more (the cuts). fix_deck_uvs (the aft deck's dark patches) is gone: the
+    decks are mapped whole. **Check any UV work with flat-lit orthographic renders** (the sheet as emission, top and
+    side, 14 px/m): lit beauty renders hide these faults, which is how they got to the user. Left as they are: the
+    Alicorn's hazard-striped lift outline shows on the deck at x ~ -100 m, half under turret C and the superstructure
+    (its own marking, in its own place); the pods (CUT_ALC_SPONSON_*_FAIR.001) are the Alicorn's own meshes with its
+    own UVs and are not touched.
   - **the laser interceptor = a beam director** (the user's two photos, 2026-11-10: "Base the laser design off this"):
     squat turret ring with a flange, octagonal yoke base, two tall arms rounded on top with vent holes down their outer
     faces and round the top (house: turret_yaw); between the arms a head (gun: turret_pitch, tilting about the arms'

@@ -1,33 +1,44 @@
-"""hull_uv.py : the Leviathan hull's UV map put right (the user, 2026-11-10: "Fix the UV Map on the hull too").
+"""hull_uv.py : the Leviathan hull's UV map made again from scratch (the user, 2026-11-10: "get rid of the saw teeth
+and sort out the rest of the uv so the texture looks correct").
 
-The fused hull (LEV_HULL.001) wears the Alicorn's two sheets (ALC_a forward, ALC_b aft), but its faces took their UVs
-piecemeal: 4,245 UV islands, a third of the area in islands under 100 m2, a quarter of the smooth edges broken. On the
-bow's sides the Alicorn's deck-edge rail and slots run across the plating in offset pieces and the teal strips are cut;
-the decks have saw-tooth triangles where neighbours use different parts of a sheet. Three passes, each only ever
-writing plating or the deck's own layout:
+The fused hull (LEV_HULL.001) is the Iowa's hull at the Alicorn's length wearing the Alicorn's two sheets (ALC_a
+forward, ALC_b aft). Its shape is nowhere the Alicorn's (under 1 % of its area lies on any Alicorn source mesh), and
+its UVs were copied over face by face from whatever Alicorn surface lay nearest: 4,245 UV islands, a third of the
+area in islands under 100 m2, saw-tooth triangles wherever two neighbours took different pieces, the deck-edge rail
+and slots running across the sides in offset bits. Patching fragments (the first hull_uv.py) left the saw teeth
+where two big pieces met and changed the tone of what it touched. So nothing of the copied map is kept: every ALC
+face is mapped by where it is and which way it faces, one rule per kind of surface, so neighbours always agree:
 
-  1. the bow's shell sides (forward of X_BOW): one continuous strip a side, along the hull (plan arc length -> u) and
-     up it (z -> v), on one clean stretch of plain plating of the aft sheet (the same plating; the forward sheet has
-     no clean stretch that long), so those faces become ALC_b; and the stern's shell aft of X_STERN the same way,
-     round the transom from beam to beam;
-  2. deck fragments: every sheet's deck is a top-down projection, so the biggest groups of deck faces sharing one
-     mapping are the deck's layout; an uncoloured deck face outside them takes the layout of the group it touches
-     (rejected where that would land on a coloured marking);
-  3. stretched faces (a texel smeared over 4 times longer one way than the other, or no UV area at all) that show
-     plain plating anyway: each patch of them laid flat at the sheets' own density on clean plain plating of the aft
-     sheet. (Small islands that already show plating evenly are left: laying them again only changed their tone.)
-Faces that show a coloured or bright detail are never touched. model_tanacorn.py calls fix(HULL).
+  decks (faces looking up): the Alicorn's own deck layout, which is a plain top-down projection (fitted from the
+      source mesh ALC_HULL in the design file's SRC collection: u = cu - x / 400, v = cv - y / 400, sheet a forward
+      of x = -52 m, sheet b aft of it); the hull is cut along that line so the join is straight. Only where the
+      Alicorn has flat deck under the spot (its flight deck, 13 m either side of the middle): outside that its sheets
+      hold its rounded shoulders and side skin folded out (the rail, the slots, draft marks), which this wider deck
+      used to wear; there the deck is plain plating, laid top-down to and fro like the shell's strip. The decks are
+      cut into 5 m cells first, so each cell is wholly one or the other;
+  the shell (sides, and everything under the water): one continuous strip of the aft sheet's plain plating a side,
+      along the hull's outline (its arc length in plan, round the stern to the centreline) and up it; the hull is
+      longer than any clean stretch of plating, so the strip runs to and fro over one stretch (mirrored at each turn,
+      which joins without a seam), the hull cut at the turns; above the water the strip goes up by height, under it
+      by girth (down the side and in under the bottom to the keel), squeezed there;
+  the rest (steps, coamings, fittings' sides): each flat-ish group laid square on plain plating (a box mapping).
+The Alicorn's rail, slots and draft marks are not on the sides any more: they belong to its own outline, which this
+hull does not have. model_tanacorn.py calls fix(HULL).
 """
-import bmesh, math
+import bpy, bmesh, math
 import numpy as np
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
-DENS = 400.0          # m per UV unit: the sheets' own density on the hull (measured: 390-460)
-X_BOW = 60.0          # the bow's shell forward of here is mapped again as one strip
-X_STERN = -288.0      # and the stern's shell aft of here (behind the pods), round the transom
-WATER = -2.0          # the strip's split: above the water, and the underwater sides (seen when the bow rears up)
-SMALL = 150.0         # m2: a UV island under this is a fragment
+DENS = 400.0          # m per UV unit: the sheets' own density
+DECK = {"ALC_a": (0.86617, 0.84480), "ALC_b": (-0.12728, 0.81111)}   # the Alicorn's deck layout: (cu, cv) a sheet
+X_SPLIT = -52.0       # sheet a's deck forward of here, sheet b's aft (the Alicorn's own split)
+X_STERN = -288.0      # aft of here the shell is followed round the transom
+WATER = -2.0          # the shell's strip splits here: by height above, by girth under
+FOLD = 0.62           # the stretch of plating the strip runs to and fro over, in UV units (248 m)
+DECK_FOLD = 0.05      # the outer deck's plating runs to and fro across the ship too, over this much (20 m)
+CELL = 5.0            # m: the decks are cut into cells this big at most
+SQUEEZE = 2.5         # the under-water strip's squeeze down the girth (plain plating, seldom seen)
 PLATE = (0.21, 0.63)  # the plating's luma and metal on both sheets (measured from the files), rough 0.05-0.16
 
 
@@ -77,318 +88,294 @@ class Sheet:
             self.cache[w, h] = ((best[1] + 8) / self.W, (best[2] + 8) / self.H, best[0] / (w * h))
         return self.cache[w, h]
 
-    def look(self, u, v):
-        x, y = int(u % 1 * self.W) % self.W, int(v % 1 * self.H) % self.H
-        return float(self.luma[y, x]), float(self.sat[y, x]), bool(self.odd[y, x])
-
 
 def fix(HULL, log=print):
     me, M = HULL.data, HULL.matrix_world
-    R3 = M.to_3x3()
+    R3, Mi = M.to_3x3(), M.inverted()
     slots = [s.material.name if s.material else "" for s in HULL.material_slots]
     ia, ib = slots.index("ALC_a"), slots.index("ALC_b")
-    sheet = {ia: Sheet(HULL.material_slots[ia].material), ib: Sheet(HULL.material_slots[ib].material)}
+    plate = Sheet(HULL.material_slots[ib].material)
     bm = bmesh.new()
     bm.from_mesh(me)
-    bm.faces.ensure_lookup_table()
-    bm.verts.ensure_lookup_table()
     uv = bm.loops.layers.uv.active
+
+    def cut(co, no, decks=False):
+        """the ALC faces (or only those looking up) cut along a plane (world), so a join that must be straight is"""
+        fs = [f for f in bm.faces if f.material_index in (ia, ib) and (not decks or (R3 @ f.normal).z > 0.75)]
+        geom = fs + list({e for f in fs for e in f.edges}) + list({v for f in fs for v in f.verts})
+        bmesh.ops.bisect_plane(bm, geom=geom, dist=1e-4, plane_co=Mi @ Vector(co),
+                               plane_no=(R3.transposed() @ Vector(no)).normalized(), clear_inner=False,
+                               clear_outer=False)
+
+    def tree_of():
+        bm.verts.ensure_lookup_table()
+        bm.faces.ensure_lookup_table()
+        bm.verts.index_update()
+        bm.faces.index_update()
+        return BVHTree.FromPolygons([M @ v.co for v in bm.verts], [[v.index for v in f.verts] for f in bm.faces])
+
+    n0 = len(bm.faces)
+    cut((X_SPLIT, 0, 0), (1, 0, 0))
+    cut((0, 0, WATER), (0, 0, 1))
+    # ---------------------------------------------------------------- the hull's outline in plan (port; it is symmetric)
+    tree = tree_of()
+
+    def side_hit(x, z):
+        hit = tree.ray_cast(Vector((x, 200.0, z)), Vector((0, -1, 0)))
+        return hit[0].y if hit[0] is not None else None
+
+    def ring_hit(th, z):
+        d = Vector((math.cos(th), math.sin(th), 0.0))
+        hit = tree.ray_cast(Vector((X_STERN, 0.0, z)) + d * 150.0, -d)
+        return hit[0] if hit[0] is not None else None
+    hx, hy, wy = [], [], []
+    for x in np.arange(X_STERN, 345.0, 1.0):
+        y = side_hit(x, 4.0)
+        if y is not None:
+            hx.append(x)
+            hy.append(y)
+            wy.append(side_hit(x, WATER - 0.05) or 0.0)                   # (the half breadth just under the water)
+    hx, hy, wy = np.array(hx), np.array(hy), np.array(wy)
+    arc = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff(hx), np.diff(hy)))))
+    rt, rxy, rw = [], [], []
+    for deg in np.arange(90.0, 180.01, 1.0):
+        p = ring_hit(math.radians(deg), 6.0)
+        if p is not None:
+            rt.append(math.radians(deg))
+            rxy.append((p.x, p.y))
+            q = ring_hit(math.radians(deg), WATER - 0.05)
+            rw.append(math.hypot(q.x - X_STERN, q.y) if q is not None else 0.0)
+    rt, rxy, rw = np.array(rt), np.array(rxy), np.array(rw)
+    ra = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff(rxy[:, 0]), np.diff(rxy[:, 1])))))
+    s_stern = float(ra[-1])
+    turns = []                                                            # the strip's turns: stations along the hull
+    k = 1
+    while k * FOLD * DENS - s_stern < arc[-1] - 1.0:
+        s = k * FOLD * DENS - s_stern
+        assert s > 1.0, "a turn of the strip falls on the stern: change FOLD"
+        turns.append(float(np.interp(s, arc, hx)))
+        k += 1
+    for x in turns:
+        cut((x, 0, 0), (1, 0, 0))
+    x_aft = min((M @ v.co).x for v in bm.verts)
+    deck_turns = [x_aft + k * FOLD * DENS for k in (1, 2, 3) if x_aft + k * FOLD * DENS < hx[-1]]
+    for x in deck_turns:                                                  # the outer deck's plating: its turns
+        cut((x, 0, 0), (1, 0, 0), decks=True)
+    for y in (0.0, DECK_FOLD * DENS, -DECK_FOLD * DENS, 2 * DECK_FOLD * DENS, -2 * DECK_FOLD * DENS):
+        cut((0, y, 0), (0, 1, 0), decks=True)
+    # the decks cut into cells of CELL m at most: a deck face is the layout's or plating's whole, and some were 20 m
+    # across (the yellow bar at the runway's end lost a corner to one)
+    for x in np.arange(math.ceil(x_aft / CELL) * CELL, hx[-1] + CELL, CELL):
+        cut((float(x), 0, 0), (1, 0, 0), decks=True)
+    for y in np.arange(-40.0, 40.01, CELL):
+        if abs(y) > 0.01:
+            cut((0, float(y), 0), (0, 1, 0), decks=True)
+    ref = bpy.data.objects.get("ALC_HULL")                                # the Alicorn's own decks, in plan
+    plan = None
+    if ref:
+        rb = bmesh.new()
+        rb.from_mesh(ref.data)
+        rb.verts.ensure_lookup_table()
+        rn = ref.matrix_world.to_3x3()
+        plan = BVHTree.FromPolygons([ref.matrix_world @ v.co for v in rb.verts],
+                                    [[v.index for v in f.verts] for f in rb.faces if (rn @ f.normal).z > 0.9])
+        rb.free()
+    memo = {}
+
+    def on_alicorn_deck(p):
+        k = (round(p.x, 1), round(p.y, 1))
+        if k not in memo:
+            memo[k] = plan is None or plan.ray_cast(Vector((p.x, p.y, 500.0)), Vector((0, 0, -1)))[0] is not None
+        return memo[k]
+
+    # ---------------------------------------------------------------- the faces as they are now
+    tree = tree_of()
     P = [M @ v.co for v in bm.verts]
     K = [(round(p.x, 3), round(p.y, 3), round(p.z, 3)) for p in P]
     F = [f for f in bm.faces if f.material_index in (ia, ib)]
+    inF = set(F)
     cen = {f: sum((P[v.index] for v in f.verts), Vector()) / len(f.verts) for f in F}
     nor = {f: (R3 @ f.normal).normalized() for f in F}
-    area = {f: f.calc_area() for f in F}                              # (the hull's own scale is 1)
+    area = {f: f.calc_area() for f in F}
 
     def edges_of(f):
         ls = f.loops
         for i in range(len(ls)):
-            a, b = ls[i], ls[(i + 1) % len(ls)]
-            ka, kb = K[a.vert.index], K[b.vert.index]
-            yield ((ka, kb), a, b) if ka < kb else ((kb, ka), b, a)
+            a, b = K[ls[i].vert.index], K[ls[(i + 1) % len(ls)].vert.index]
+            yield (a, b) if a < b else (b, a)
     E = {}
     for f in F:
-        for k, a, b in edges_of(f):
-            E.setdefault(k, []).append((f, a, b))
-    at = {}
-    for f in F:
-        for v in f.verts:
-            at.setdefault(K[v.index], []).append(f)
+        for k in edges_of(f):
+            E.setdefault(k, []).append(f)
 
-    def stretched(f):
-        ls = f.loops
-        for k in range(len(ls) - 2):
-            p0, e1, e2 = P[ls[0].vert.index], P[ls[k + 1].vert.index], P[ls[k + 2].vert.index]
-            e1, e2 = e1 - p0, e2 - p0
-            n = e1.cross(e2)
-            if n.length < 1e-9:
-                continue
-            ax = e1.normalized()
-            ay = n.normalized().cross(ax)
-            A = np.array([[e1.dot(ax), e1.dot(ay)], [e2.dot(ax), e2.dot(ay)]])
-            u0 = ls[0][uv].uv
-            U = np.array([[ls[k + 1][uv].uv.x - u0.x, ls[k + 1][uv].uv.y - u0.y],
-                          [ls[k + 2][uv].uv.x - u0.x, ls[k + 2][uv].uv.y - u0.y]])
-            if abs(np.linalg.det(U)) < 1e-14:
-                return True
-            s = np.linalg.svd(np.linalg.solve(U, A), compute_uv=False)
-            if s[0] / max(s[1], 1e-9) > 4.0:
-                return True
-        return False
-
-    def looks(f):
-        """the face as it shows now: (lowest luma, highest luma, highest saturation, all plain plating)"""
-        sh = sheet[f.material_index]
-        pts = [lp[uv].uv for lp in f.loops]
-        c = sum(pts, Vector((0, 0))) / len(pts)
-        pts = [c] + [c + (p - c) * 0.6 for p in pts]
-        got = [sh.look(p.x, p.y) for p in pts]
-        return min(g[0] for g in got), max(g[0] for g in got), max(g[1] for g in got), not any(g[2] for g in got)
-
-    def lands_ok(sh, new, bright):
-        """a deck face's new place on the sheet: not on a coloured marking, nor on a bright one (a roundel cut off by
-        the face's edge) unless the layout's faces touching it are bright too (a white line running on across it)"""
-        c = sum(new) / len(new)
-        got = [sh.look(*q) for q in [c] + [c + (q - c) * t for q in new for t in (0.35, 0.7, 0.95)]]
-        return max(g[1] for g in got) <= 0.12 and (max(g[0] for g in got) <= 0.45 or bright)
-
-    def bright_round(f, member, i):
-        return any(looks(g)[1] > 0.45 for v in f.verts for g in at[K[v.index]] if member.get(g) == i)
-
-    # ------------------------------------------------------------------ 1. the bow's shell sides: one strip a side
-    tree = BVHTree.FromPolygons(P, [[v.index for v in f.verts] for f in bm.faces])
-    inF = set(F)
-    seeds, half = [], []
-    for x in np.arange(X_BOW + 2.0, 345.0, 1.0):
+    # ---------------------------------------------------------------- 1. the shell: sides, and all under the water
+    seeds = []
+    for x in np.arange(X_STERN, 345.0, 1.0):
         for side in (1.0, -1.0):
-            for z in (2.0, 4.0, 7.0):
+            for z in (-6.0, 2.0, 4.0, 7.0):
                 hit = tree.ray_cast(Vector((x, 200.0 * side, z)), Vector((0, -side, 0)))
                 if hit[2] is not None and bm.faces[hit[2]] in inF:
                     seeds.append(bm.faces[hit[2]])
-                    if side > 0 and z == 4.0:
-                        half.append((x, hit[0].y))
-    shell, stack = set(seeds), list(seeds)
-    while stack:
-        f = stack.pop()
-        for k, _, _ in edges_of(f):
-            for g, _, _ in E[k]:
-                if (g not in shell and cen[g].x > X_BOW and abs(nor[g].z) < 0.8 and nor[g].dot(nor[f]) > 0.77
-                        and nor[g].y * nor[f].y > -0.2):
-                    shell.add(g)
-                    stack.append(g)
-    hx = np.array([h[0] for h in half])
-    hy = np.array([h[1] for h in half])
-    arc = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff(hx), np.diff(hy)))))
-    xs_ = [P[v.index].x for f in shell for v in f.verts]
-    tip = (max(xs_) - hx[-1]) if max(xs_) > hx[-1] else 0.0             # (the stem, past the last side hit)
-
-    def strips(faces, s_of, length, what):
-        for name, band in (("above the water", [f for f in faces if cen[f].z >= WATER]),
-                           ("under it", [f for f in faces if cen[f].z < WATER])):
-            if not band:
-                continue
-            zs = [P[v.index].z for f in band for v in f.verts]          # (two strips: no clean stretch of plating
-            z0, z1 = min(zs), max(zs)                                   # is tall enough for the side keel to deck)
-            got = None
-            for kv in (1.0, 1.15, 1.3):                                 # (a little squeezed up the side if it must be)
-                w = sheet[ib].window(length / DENS, (z1 - z0) / DENS / kv)
-                if got is None or w[2] < got[1][2] - 1e-6:
-                    got = (kv, w)
-                if w[2] < 0.002:
-                    break
-            kv, (u0, v0, odd) = got
-            for f in band:
-                f.material_index = ib
-                for lp in f.loops:
-                    p = P[lp.vert.index]
-                    lp[uv].uv = (u0 + s_of(p) / DENS, v0 + (p.z - z0) / DENS / kv)
-            log("hull UVs: 1. %s %s: %d faces, %.0f m2, %.0f m along, z %.1f..%.1f m, one strip on plain plating at "
-                "uv (%.3f, %.3f), %.2f %% of it not plain%s"
-                % (what, name, len(band), sum(area[f] for f in band), length, z0, z1, u0, v0, 100 * odd,
-                   "" if kv == 1.0 else ", squeezed %.2f up the side" % kv))
-    strips(shell, lambda p: float(np.interp(p.x, hx, arc)) + max(0.0, p.x - hx[-1]), arc[-1] + tip,
-           "the bow's shell sides (each side)")
-    # the stern's shell, round the transom from beam to beam: its place along the strip is the arc length of the
-    # stern's outline at the angle it is seen at from a point on the centreline
-    ang = lambda p: math.atan2(p.y, p.x - X_STERN) % (2 * math.pi)
-    seeds, ring = [], []
-    for th in np.radians(np.arange(95.0, 265.1, 1.0)):
-        d = Vector((math.cos(th), math.sin(th), 0.0))
+    for deg in np.arange(90.0, 270.01, 1.0):
+        d = Vector((math.cos(math.radians(deg)), math.sin(math.radians(deg)), 0.0))
         for z in (5.0, 6.0, 8.0):
             hit = tree.ray_cast(Vector((X_STERN, 0.0, z)) + d * 150.0, -d)
             if hit[2] is not None and bm.faces[hit[2]] in inF and cen[bm.faces[hit[2]]].x < X_STERN:
                 seeds.append(bm.faces[hit[2]])
-                if z == 6.0:
-                    ring.append((float(th), hit[0].x, hit[0].y))
-    stern, stack = set(seeds), list(seeds)
+    shell, stack = set(seeds), list(seeds)
     while stack:
         f = stack.pop()
-        for k, _, _ in edges_of(f):
-            for g, _, _ in E[k]:
-                if g not in stern and cen[g].x < X_STERN and abs(nor[g].z) < 0.8 and nor[g].dot(nor[f]) > 0.77:
-                    stern.add(g)
+        for k in edges_of(f):
+            for g in E[k]:
+                if g not in shell and nor[g].dot(nor[f]) > 0.77 and (abs(nor[g].z) < 0.8 or cen[g].z < WATER):
+                    shell.add(g)
                     stack.append(g)
-    if stern and len(ring) > 8:
-        rt = np.array([r[0] for r in ring])
-        ra = np.concatenate(([0.0], np.cumsum(np.hypot(np.diff([r[1] for r in ring]), np.diff([r[2] for r in ring])))))
-        strips(stern, lambda p: float(np.interp(ang(p), rt, ra)), float(ra[-1]), "the stern's shell (beam to beam)")
-    shell |= stern
 
-    # ------------------------------------------------------------------ 2. deck fragments onto the deck's own layout
-    rest = [f for f in F if f not in shell]
-    bad = {f for f in rest if stretched(f)}
+    def along(p):
+        """a point's place along the strip: the arc length of the hull's outline from the stern's centreline"""
+        if p.x >= X_STERN:
+            return s_stern + float(np.interp(p.x, hx, arc)) + max(0.0, p.x - hx[-1])
+        th = math.atan2(abs(p.y), p.x - X_STERN)
+        return s_stern - float(np.interp(th, rt, ra))
 
-    def top_affine(fs):
-        A = [(P[lp.vert.index].x, P[lp.vert.index].y, 1.0) for f in fs for lp in f.loops]
-        U = [tuple(lp[uv].uv) for f in fs for lp in f.loops]
-        return np.linalg.lstsq(np.array(A), np.array(U), rcond=None)[0]
-    laid = adopted = teeth = 0
-    for mi in (ia, ib):
-        tops = sorted((f for f in rest if f.material_index == mi and nor[f].z > 0.9 and f not in bad),
-                      key=lambda f: -area[f])
-        refs, member = [], {}                                            # groups of deck faces sharing one mapping
-        RX = np.zeros((len(tops), 3, 2))
-        for f in tops:
-            X = top_affine([f])
-            d = np.abs(RX[:len(refs)] - X)
-            hit = np.nonzero((d[:, :2].max(axis=(1, 2)) < 2e-4) & (d[:, 2].max(axis=1) < 0.02))[0] if refs else []
-            if len(hit):
-                refs[hit[0]][1].append(f)
-                member[f] = int(hit[0])
-            else:
-                member[f] = len(refs)
-                RX[len(refs)] = X
-                refs.append((X, [f]))
-        big = {i for i, (_, fs) in enumerate(refs) if sum(area[f] for f in fs) > 600.0}
-        layout = {i: top_affine(refs[i][1][:400]) for i in big}
-        laid += len(big)
-        sh = sheet[mi]
-        for f in [f for f in rest if f.material_index == mi and nor[f].z > 0.9 and member.get(f) not in big]:
-            if looks(f)[2] > 0.12:                                       # a coloured detail of its own: left alone
-                continue
-            near = {}
-            for v in f.verts:
-                for g in at[K[v.index]]:
-                    if member.get(g) in big and abs(cen[g].z - cen[f].z) < 1.0:
-                        near[member[g]] = near.get(member[g], 0.0) + area[g]
-            if not near:
-                continue
-            to = max(near, key=near.get)
-            X = layout[to]
-            new = [np.array((P[lp.vert.index].x, P[lp.vert.index].y, 1.0)) @ X for lp in f.loops]
-            if not all(0.0 <= q[0] <= 1.0 and 0.0 <= q[1] <= 1.0 for q in new):
-                continue
-            if not lands_ok(sh, new, bright_round(f, member, to)):
-                continue                                                 # (it would land on a marking)
-            for lp, q in zip(f.loops, new):
-                lp[uv].uv = (float(q[0]), float(q[1]))
-            bad.discard(f)
-            member[f] = to
-            adopted += 1
-        # saw teeth: where two layouts meet along a row of triangles the faces alternate between them. A face with
-        # more of its edges on a bigger layout than on its own goes over to it (never back), so the join runs straight
-        size = {i: sum(area[f] for f in refs[i][1]) for i in big}
-        mine = [f for f in rest if f.material_index == mi and nor[f].z > 0.9 and member.get(f) in big]
-        for _ in range(6):
-            moved = 0
-            for f in mine:
-                own, cnt = member[f], {}
-                for k, _, _ in edges_of(f):
-                    for g, _, _ in E[k]:
-                        if g is not f and member.get(g) in big and nor[g].z > 0.9 and abs(cen[g].z - cen[f].z) < 1.0:
-                            cnt[member[g]] = cnt.get(member[g], 0) + 1
-                to = max((i for i in cnt if i != own and size[i] > size[own]), key=lambda i: cnt[i], default=None)
-                if to is None or cnt[to] < 2 or cnt[to] <= cnt.get(own, 0) or looks(f)[2] > 0.12:
-                    continue
-                new = [np.array((P[lp.vert.index].x, P[lp.vert.index].y, 1.0)) @ layout[to] for lp in f.loops]
-                if not all(0.0 <= q[0] <= 1.0 and 0.0 <= q[1] <= 1.0 for q in new):
-                    continue
-                if not lands_ok(sh, new, bright_round(f, member, to)):
-                    continue
-                for lp, q in zip(f.loops, new):
-                    lp[uv].uv = (float(q[0]), float(q[1]))
-                member[f] = to
-                moved += 1
-            teeth += moved
-            if not moved:
-                break
-    log("hull UVs: 2. the decks: %d layouts found; %d deck faces outside them laid on the layout they touch, %d saw "
-        "teeth between two layouts straightened" % (laid, adopted, teeth))
+    def girth(p):
+        """under the water: down the side from the waterline and in under the bottom to the keel"""
+        if p.x >= X_STERN:
+            return (WATER - p.z) + max(0.0, float(np.interp(p.x, hx, wy)) - abs(p.y))
+        th = math.atan2(abs(p.y), p.x - X_STERN)
+        return (WATER - p.z) + max(0.0, float(np.interp(th, rt, rw)) - math.hypot(p.x - X_STERN, p.y))
 
-    # ------------------------------------------------------------------ 3. plating fragments laid flat on plain plating
-    par = {f: f for f in rest}
+    def fold(t):
+        m = t % (2 * FOLD)
+        return m if m <= FOLD else 2 * FOLD - m
+    hi = [f for f in shell if cen[f].z >= WATER]
+    lo = [f for f in shell if cen[f].z < WATER]
+    top_z = max(P[v.index].z for f in hi for v in f.verts)
+    deep = max(girth(P[v.index]) for f in lo for v in f.verts)
+    for band, name, up, height in ((hi, "above the water", lambda p: (p.z - WATER) / DENS, (top_z - WATER) / DENS),
+                                   (lo, "under it", lambda p: girth(p) / DENS / SQUEEZE, deep / DENS / SQUEEZE)):
+        u0, v0, odd = plate.window(FOLD, height)
+        for f in band:
+            f.material_index = ib
+            for lp in f.loops:
+                p = P[lp.vert.index]
+                lp[uv].uv = (u0 + fold(along(p) / DENS), v0 + max(0.0, up(p)))
+        log("hull UVs: the shell %s: %d faces, %.0f m2, one strip a side %.0f m long (%.0f m of it round the stern) and "
+            "%.1f m %s, to and fro over %.0f m of plain plating at uv (%.3f, %.3f), %.2f %% of it not plain"
+            % (name, len(band), sum(area[f] for f in band), s_stern + arc[-1], s_stern,
+               height * DENS * (1.0 if band is hi else SQUEEZE), "up" if band is hi else "of girth", FOLD * DENS, u0, v0,
+               100 * odd))
+    log("hull UVs: the strip turns at x = %s m (the hull is cut there, and at the deck sheets' join x = %.0f m and the "
+        "waterline strip's foot z = %.0f m: %d faces more)" % (", ".join("%.1f" % x for x in turns), X_SPLIT, WATER,
+                                                               len(bm.faces) - n0))
 
-    def find(f):
-        while par[f] is not f:
-            par[f] = par[par[f]]
-            f = par[f]
-        return f
-    for k, lst in E.items():
-        lst = [e for e in lst if e[0] in par]
-        for i in range(len(lst)):
-            for j in range(i + 1, len(lst)):
-                (f, a1, b1), (g, a2, b2) = lst[i], lst[j]
-                if (f.material_index == g.material_index and (a1[uv].uv - a2[uv].uv).length < 0.002
-                        and (b1[uv].uv - b2[uv].uv).length < 0.002):
-                    par[find(f)] = find(g)
-    isl = {}
+    # ---------------------------------------------------------------- 2. the decks: the Alicorn's own top-down layout
+    decks = [f for f in F if f not in shell and nor[f].z > 0.75]
+    out, off, outer = 0, set(), []
+    du0, dv0, dodd = plate.window(FOLD, DECK_FOLD)
+
+    def dfold(t):
+        m = t % (2 * DECK_FOLD)
+        return m if m <= DECK_FOLD else 2 * DECK_FOLD - m
+    for f in decks:
+        if not on_alicorn_deck(cen[f]):                                  # (a cell's middle decides for the cell: past
+            outer.append(f)                                              # the flat deck's edge the sheet is plating
+                                                                         # for 9 m more, then the rail)
+            f.material_index = ib
+            for lp in f.loops:
+                p = P[lp.vert.index]
+                lp[uv].uv = (du0 + fold((p.x - x_aft) / DENS), dv0 + dfold(abs(p.y) / DENS))
+            continue
+        mi = ia if cen[f].x >= X_SPLIT else ib
+        cu, cv = DECK[slots[mi]]
+        new = [(cu - P[lp.vert.index].x / DENS, cv - P[lp.vert.index].y / DENS) for lp in f.loops]
+        if not all(-1e-4 <= q[0] <= 1.0001 and -1e-4 <= q[1] <= 1.0001 for q in new):
+            out += 1
+            off.add(f)
+            continue
+        f.material_index = mi
+        for lp, q in zip(f.loops, new):
+            lp[uv].uv = q
+    log("hull UVs: the decks: %d faces, %.0f m2, on the Alicorn's top-down deck layout (sheet a forward of x = %.0f m, "
+        "sheet b aft)%s; %d faces, %.0f m2, with no Alicorn deck under them on plain plating (top-down, to and fro, at "
+        "uv (%.3f, %.3f), %.2f %% of it not plain)"
+        % (len(decks) - out - len(outer), sum(area[f] for f in decks) - sum(area[f] for f in outer), X_SPLIT,
+           "; %d off the sheet, laid with the rest" % out if out else "", len(outer), sum(area[f] for f in outer),
+           du0, dv0, 100 * dodd))
+
+    # ---------------------------------------------------------------- 3. the rest: box-mapped onto plain plating
+    rest = [f for f in F if f not in shell and (nor[f].z <= 0.75 or f in off)]
+
+    def axis(f):
+        n = nor[f]
+        i = max(range(3), key=lambda k: abs(n[k]))
+        return i, n[i] > 0
+    cls = {f: axis(f) for f in rest}
+    seen, groups = set(), []
     for f in rest:
-        isl.setdefault(find(f), []).append(f)
-    patches = []
-    for fs in isl.values():
-        if sum(area[f] for f in fs) < SMALL and sum(area[f] for f in fs if f in bad) > 0.3 * sum(area[f] for f in fs):
-            patches.append(fs)                                           # a fragment that is mostly smeared: all of it
-        else:                                                            # else only the stretched faces, by themselves
-            seen = set()
-            for f in fs:
-                if f in bad and f not in seen:
-                    grp, st = [], [f]
-                    seen.add(f)
-                    while st:
-                        g = st.pop()
-                        grp.append(g)
-                        for k, _, _ in edges_of(g):
-                            for h, _, _ in E[k]:
-                                if h in bad and h not in seen and find(h) is find(f):
-                                    seen.add(h)
-                                    st.append(h)
-                    patches.append(grp)
-    done = faces = 0
-    shb = sheet[ib]
-    for fs in patches:
-        fs = [f for f in fs if area[f] > 1e-6]
-        if not fs:
+        if f in seen:
             continue
-        see = [looks(f) for f in fs]
-        if not all(s[3] or (f in bad and s[2] < 0.08 and 0.13 < s[0] and s[1] < 0.29) for f, s in zip(fs, see)):
-            continue                                                     # (it shows something other than plating)
-        n = sum((nor[f] * area[f] for f in fs), Vector())
-        if n.length < 1e-9:
-            continue
-        n.normalize()
-        if abs(n.z) > 0.7:
-            a = (Vector((1, 0, 0)) - n * n.x).normalized()
-            b = n.cross(a)
-        else:
-            b = (Vector((0, 0, 1)) - n * n.z).normalized()
-            a = b.cross(n)
-        pts = [(P[lp.vert.index].dot(a), P[lp.vert.index].dot(b)) for f in fs for lp in f.loops]
+        grp, st = [], [f]
+        seen.add(f)
+        while st:
+            g = st.pop()
+            grp.append(g)
+            for k in edges_of(g):
+                for h in E[k]:
+                    if h in cls and h not in seen and cls[h] == cls[f]:
+                        seen.add(h)
+                        st.append(h)
+        groups.append(grp)
+    AX = ((1, 2), (0, 2), (0, 1))                                        # the two world axes a group is laid along
+    laid = split = 0
+
+    def lay(fs, i):
+        a, b = AX[i]
+        pts = [(P[lp.vert.index][a], P[lp.vert.index][b]) for f in fs for lp in f.loops]
         a0, b0 = min(p[0] for p in pts), min(p[1] for p in pts)
         wu, hv = (max(p[0] for p in pts) - a0) / DENS, (max(p[1] for p in pts) - b0) / DENS
-        u0, v0, odd = shb.window(wu, hv)
-        if odd > 0.002 or wu > 0.9 or hv > 0.9:
-            continue
+        if wu > 0.9 or hv > 0.9:
+            return False
+        u0, v0, odd = plate.window(wu, hv)
+        if odd > 0.002:
+            return False
         for f in fs:
             f.material_index = ib
             for lp in f.loops:
                 p = P[lp.vert.index]
-                lp[uv].uv = (u0 + (p.dot(a) - a0) / DENS, v0 + (p.dot(b) - b0) / DENS)
-        done += 1
-        faces += len(fs)
-    log("hull UVs: 3. %d patches of smeared plating (%d faces) laid flat on plain plating" % (done, faces))
-    left = sum(1 for f in rest if stretched(f))
+                lp[uv].uv = (u0 + (p[a] - a0) / DENS, v0 + (p[b] - b0) / DENS)
+        return True
+    for grp in groups:
+        i = cls[grp[0]][0]
+        if lay(grp, i):
+            laid += 1
+        else:                                                            # too big for any clean stretch: face by face
+            split += 1
+            for f in grp:
+                lay([f], i)
+    log("hull UVs: the rest: %d faces, %.0f m2, in %d flat-ish groups laid square on plain plating%s"
+        % (len(rest), sum(area[f] for f in rest), laid + split,
+           " (%d of them too big for one stretch: laid face by face)" % split if split else ""))
+
+    # ---------------------------------------------------------------- what is left: joins between neighbours that differ
+    def uv_at(f):
+        return {K[lp.vert.index]: lp[uv].uv.copy() for lp in f.loops}
+    broken = total = 0.0
+    for k, fs in E.items():
+        if len(fs) != 2 or nor[fs[0]].dot(nor[fs[1]]) < 0.94:
+            continue
+        ln = (Vector(k[0]) - Vector(k[1])).length
+        total += ln
+        a, b = uv_at(fs[0]), uv_at(fs[1])
+        if fs[0].material_index != fs[1].material_index or (a[k[0]] - b[k[0]]).length > 0.002 \
+                or (a[k[1]] - b[k[1]]).length > 0.002:
+            broken += ln
+    log("hull UVs: of %.0f km of smooth edges on the ALC faces, %.1f %% still join two different mappings (the deck "
+        "sheets' join, the strips' feet, plating laid against plating)" % (total / 1000.0, 100.0 * broken / max(total, 1)))
     bm.to_mesh(me)
     bm.free()
     me.update()
-    return {"bow_and_stern_shell_faces": len(shell), "deck_faces_laid": adopted, "deck_saw_teeth": teeth, "smeared_patches": done,
-            "smeared_faces_laid": faces, "stretched_faces_left": left}
+    return {"shell_faces": len(shell), "deck_faces_on_the_layout": len(decks) - out - len(outer),
+            "deck_faces_on_plating": len(outer), "rest_faces": len(rest),
+            "strip_turns_x_m": [round(x, 1) for x in turns],
+            "smooth_edges_joining_two_mappings_pct": round(100.0 * broken / max(total, 1), 2)}
