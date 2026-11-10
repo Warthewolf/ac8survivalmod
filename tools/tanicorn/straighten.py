@@ -3,6 +3,8 @@ model straightened why the hell would you not line it up correctly").
 
   blender -b art/tanicorn/design/<file>.blend -P tools/tanicorn/straighten.py -- [save]
 
+(And sheared: the Iowa was turned and THEN scaled more along than across, so its frames were not square to its keel:
+shear_of, taken out with the turn.)
 In the design files everything that came from the Iowa (the fused hull LEV_HULL*, the 16-inch and 5-inch turrets with
 their guns, the CIWS) lay about 0.4 deg askew to the world's x axis, its middle 2.3 m to starboard at the stern and as
 far to port at the bow, while everything from the Alicorn (the pods, the railcannon, the sub-railguns) was square to
@@ -20,24 +22,30 @@ doors, a black slot along them, and the starboard pod's fairing stood up to 1.1 
   - the deck round the bow's railcannon bay (CUT_ALC_SECTION) stays with the bay: the hull's vertices at deck height
     take none of the hull's move on the bay's outline and all of it at the deck's edge (8 m out at most; 0.6 m aft,
     where the forward turret's barbette begins; the gunwale and the hull's sides go whole), so the opening is square to the ship and centred on its doors;
-  - the pods' fairings (CUT_ALC_SPONSON_*) take the hull's move at their roots (the open edges lying on the hull's
-    skin), fading out over 14 m, so each root stays in the hull's side as it was cut and the pods stay where they are.
+  - the pods' fairings (CUT_ALC_SPONSON_*_FAIR) are made again for the straight hull from the un-faired pods kept in
+    the file (refair: each vertex drawn in to the hull by the mean of what it and its mirror twin were for the askew
+    one), so both come out mirror images with their roots in the hull's sides as they were cut.
   - where that cut had gone through the hull's side (the starboard bow, where the askew hull came inside the bay's
     box), the cut edge goes with the skin like the rest of the side and the hole it left is closed (mend_breach).
+  - the forward turret's barbette, whose front the bay's after end sliced off and left open (the inside of the
+    hull on show under the forward guns, in the design from the start), gets a flat front (cap_cut).
 Animation is untouched (only rotations are keyed, and a turn about z before them only changes the z angle, which is
 keyed on the mounts themselves as an absolute heading). Without `save` it only reports. model_tanacorn.py calls
 straighten() on what it loads too, so a design file that has not been through this still gives a straight model.
 """
-import bpy, sys, math, random
+import bpy, sys, os, math, random
+import numpy as np
 from mathutils import Vector, Matrix
 from mathutils.kdtree import KDTree
+from mathutils.bvhtree import BVHTree
 
 IOWA = ("LEV_T16", "LEV_IOWA_T5", "LEV_IOWA_CIWS", "LEV_G16", "LEV_IOWA_G5", "LEV_IOWA_CG")
 BAY, FAIRING = "CUT_ALC_SECTION", "CUT_ALC_SPONSON"   # the Alicorn's parts cut to fit the hull
 BAY_Z = 8.0                                      # the deck round the bay is above this (the hull's sides are not held)
 BAY_SIDE, BAY_AFT, BAY_FWD = 2.0, 0.6, 2.0       # how far from the bay's outline the deck is back with the hull, m
+PIECE = 40.0                                     # a connected piece smaller than this in plan is a fitting: it moves whole
 BAY_WIDE = 8.0                                   # (to the side: as far as the deck's width allows, up to this)
-ROOT, FAIR_FADE = 0.9, 14.0                      # a fairing's root: open edges this near the hull's skin; its fade, m
+ROOT, FAIR_FADE = 0.9, 6.0                       # a fairing's root: open edges this near the hull's skin; its fade, m
 
 
 def symmetry(points, turn0=0.0, span=math.radians(1.2), shift_span=1.5):
@@ -72,6 +80,33 @@ def symmetry(points, turn0=0.0, span=math.radians(1.2), shift_span=1.5):
                     best = (e, th, b)
         step_t, step_b = step_t / 5, step_b / 5
     return best[1], best[2], best[0]
+
+
+def shear_of(points, span=0.012):
+    """The shear left in a hull already lying along x: k, with x + k y the true place. The Iowa's hull was turned
+    0.55 deg and THEN scaled more along than across (2.40 against 1.90), which leaves it not only askew (0.437 deg)
+    but sheared: its frames no longer square to its keel, every port fitting 2 k |y| ahead of or astern of its
+    starboard twin (0.22 m between the beam 5-inch mounts; the mounts' sockets showed it, 2026-11-10). Found as the
+    turn is: the k at which the points best match their own mirror image."""
+    random.seed(7)
+    pts = points if len(points) <= 6000 else random.sample(points, 6000)
+    full = points if len(points) <= 60000 else random.sample(points, 60000)
+    kd = KDTree(len(full))
+    for i, p in enumerate(full):
+        kd.insert(p, i)
+    kd.balance()
+
+    def miss(k):                                                    # (a point's mirror twin, in the sheared frame)
+        return sum(min(kd.find(Vector((p.x + 2.0 * k * p.y, -p.y, p.z)))[2], 0.5) for p in pts) / len(pts)
+    best, step = (miss(0.0), 0.0), span / 8
+    for _ in range(4):
+        k0 = best[1]
+        for i in range(-8, 9):
+            e = miss(k0 + i * step)
+            if e < best[0]:
+                best = (e, k0 + i * step)
+        step /= 5
+    return best[1], best[0]
 
 
 def bumpy(pts):
@@ -163,6 +198,131 @@ def mend_breach(hull, rect, deck, log=print):
     return made
 
 
+def refair(fairs, log=print):
+    """The pods' fairings made again for the straight hull, from how the design made them. Each fairing is the
+    Alicorn's pod cut off at |y| = 34 (CUT_ALC_SPONSON_L / _R, kept in the file: exact mirror images) with its inner
+    16 m drawn in sideways to the hull, the cut edge all the way and the rest by a falling share. The hull lay askew,
+    so the port pod was drawn in up to 1.8 m further than it would have been and the starboard one as much less: the
+    two fairings differed port to starboard over ~1,200 m2 of their upper faces, by more than a metre in places
+    (audit_tanacorn.py, 2026-11-10; moving their roots with the hull, the first two tries, bent the same wrong shapes
+    further). For a straight hull each vertex is drawn in by the MEAN of what it and its mirror twin were: the hull's
+    side midway between where the askew one stood to port and to starboard, by the design's own shares. Both
+    fairings come out mirror images, their roots as deep in the hull's sides as they were cut. Returns the meshes
+    done, or None when the un-faired pods are not in the file."""
+    by = {}
+    for f in fairs:
+        base = f.name.split("_FAIR")[0]                            # CUT_ALC_SPONSON_L
+        if base[-2:] not in ("_L", "_R") or base not in bpy.data.objects:
+            return None
+        by.setdefault(base[-1], (f, bpy.data.objects[base]))
+    if set(by) != {"L", "R"}:
+        return None
+
+    def coords(me):
+        a = np.empty(len(me.vertices) * 3, np.float64)
+        me.vertices.foreach_get("co", a)
+        return a.reshape(-1, 3)
+    (fl, sl), (fr, sr) = by["L"], by["R"]
+    aL, bL, aR, bR = coords(sl.data), coords(fl.data), coords(sr.data), coords(fr.data)
+    if len(aL) != len(bL) or len(aR) != len(bR):
+        return None
+    m = np.array([1.0, -1.0, 1.0])
+
+    def twins(a, b):                                               # each vertex of a: its mirror twin in b
+        kd = KDTree(len(b))
+        for i, q in enumerate(b):
+            kd.insert(q * m, i)
+        kd.balance()
+        out = np.empty(len(a), np.int64)
+        for i, q in enumerate(a):
+            _, j, dist = kd.find(q)
+            assert dist < 0.05, "the un-faired pods are not mirror images (%.3f m at %s)" % (dist, tuple(q))
+            out[i] = j
+        return out
+    tL, tR = twins(aL, aR), twins(aR, aL)
+    newL = aL + 0.5 * ((bL - aL) + (bR - aR)[tL] * m)
+    newR = newL[tR] * m
+    for f, new, old in ((fl, newL, bL), (fr, newR, bR)):
+        f.data.vertices.foreach_set("co", new.ravel())
+        f.data.update()
+        d = np.abs(new - old)[:, 1]
+        log("straighten: %s: made again from the un-faired pod for a straight hull: %d vertices drawn in differently, "
+            "by up to %.2f m" % (f.name, int((d > 1e-3).sum()), d.max()))
+    return {fl.data.name, fr.data.name}
+
+
+def cap_cut(hull, cut, log=print):
+    """One flat face over the opening a plane cut left in a standing piece: `cut` are the piece's vertices on the cut
+    (the forward barbette's two walls and its roof where the bay's after end sliced it: a 23 x 5 m hole under the
+    forward guns, in the design from the start, seen in the survey's photos 2026-11-10). The face takes the cut
+    vertices that lie on the outline of them all (their convex hull in the cut's plane), faces away from the piece,
+    and has the piece's material."""
+    import bmesh
+    if len(cut) < 3:
+        return 0
+    W, me = hull.matrix_world, hull.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.verts.ensure_lookup_table()
+    P = {i: W @ bm.verts[i].co for i in cut}
+    c = sum(P.values(), Vector()) / len(P)
+    pts = sorted(P, key=lambda i: (round(P[i].y, 3), round(P[i].z, 3)))
+
+    def turn(o, a, b):
+        return (P[a].y - P[o].y) * (P[b].z - P[o].z) - (P[a].z - P[o].z) * (P[b].y - P[o].y)
+    lower, upper = [], []                                          # the corners only (strictly convex)...
+    for i in pts:
+        while len(lower) >= 2 and turn(lower[-2], lower[-1], i) <= 1e-6:
+            lower.pop()
+        lower.append(i)
+    for i in reversed(pts):
+        while len(upper) >= 2 and turn(upper[-2], upper[-1], i) <= 1e-6:
+            upper.pop()
+        upper.append(i)
+    corners = lower[:-1] + upper[:-1]
+    ring, seen = [], set()
+    for a, b in zip(corners, corners[1:] + corners[:1]):           # ...then every cut vertex along each side, in order
+        ab = Vector((P[b].y - P[a].y, P[b].z - P[a].z))
+        on = []
+        for i in pts:
+            ai = Vector((P[i].y - P[a].y, P[i].z - P[a].z))
+            t = ai.dot(ab) / ab.length_squared
+            if -1e-6 <= t < 1.0 - 1e-6 and (ai - ab * t).length < 0.02:
+                on.append((t, i))
+        for _, i in sorted(on):
+            k = (round(P[i].y, 2), round(P[i].z, 2))               # (vertices at one place: the first of them)
+            if k not in seen:
+                seen.add(k)
+                ring.append(i)
+    if len(ring) < 3:
+        bm.free()
+        return 0
+    inner = sum((W @ v.co for v in bm.verts[ring[0]].link_faces[0].verts), Vector()) / len(bm.verts[ring[0]].link_faces[0].verts)
+    near = bm.verts[ring[0]].link_faces[0]
+    f = bm.faces.new([bm.verts[i] for i in ring])
+    f.material_index, f.smooth = near.material_index, False
+    f.normal_update()
+    if (W.to_3x3() @ f.normal).dot(c - inner) < 0.0:                # (facing away from the piece it closes)
+        f.normal_flip()
+    uv = bm.loops.layers.uv.active
+    if uv:
+        for l in f.loops:
+            other = next((o for o in l.vert.link_loops if o.face is not f), None)
+            if other:
+                l[uv].uv = other[uv].uv
+    ys, zs = [P[i].y for i in ring], [P[i].z for i in ring]
+    if os.environ.get("TANA_STRAIGHTEN_DEBUG"):
+        log("straighten:   cut vertices %d; ring %s" % (len(cut), [tuple(round(c, 2) for c in P[i]) for i in ring]))
+        log("straighten:   all cut: %s" % sorted({tuple(round(c, 1) for c in P[i]) for i in cut}))
+    n = W.to_3x3() @ f.normal
+    log("straighten: %s: the opening a cut left in a standing piece closed: one face of %d corners, y %.1f..%.1f, "
+        "z %.1f..%.1f at x %.1f, facing (%.2f, %.2f, %.2f)" % (hull.name, len(ring), min(ys), max(ys), min(zs), max(zs), c.x, *n))
+    bm.to_mesh(me)
+    me.update()
+    bm.free()
+    return 1
+
+
 def straighten(colls, log=print, apply=True):
     """every LEV_HULL* in these collections and the Iowa mounts standing on them; returns what it found"""
     if not isinstance(colls, (list, tuple)):
@@ -176,18 +336,52 @@ def straighten(colls, log=print, apply=True):
     turn, shift, miss = symmetry([W @ v.co for v in hulls[0].data.vertices])
     log("straighten: %s lies %.3f deg askew, its middle y = %.4f x %+.3f m (mirror miss %.3f m)"
         % (hulls[0].name, math.degrees(turn), math.tan(turn), shift, miss))
-    out = {"turn_deg": round(math.degrees(turn), 3), "shift_m": round(shift, 3)}
-    if (abs(math.degrees(turn)) < 0.02 and abs(shift) < 0.02) or not apply:
-        return out
     H = Matrix.Rotation(-turn, 4, "Z") @ Matrix.Translation((0.0, -shift, 0.0))
+    shear, smiss = shear_of([H @ (W @ v.co) for v in hulls[0].data.vertices])
+    log("straighten: %s is sheared by %.5f (%.3f deg: a fitting 25 m off the middle stands %.2f m from square to its "
+        "twin; mirror miss %.3f m)" % (hulls[0].name, shear, math.degrees(math.atan(shear)), abs(shear) * 50.0, smiss))
+    out = {"turn_deg": round(math.degrees(turn), 3), "shift_m": round(shift, 3), "shear": round(shear, 5)}
+    if (abs(math.degrees(turn)) < 0.02 and abs(shift) < 0.02 and abs(shear) < 0.0004) or not apply:
+        return out
+    S = Matrix.Identity(4)
+    S[0][1] = shear                                                 # x + k y
+    H = S @ H
     done = set()
-    # the pods' fairings first (their roots are found on the hull as it lies now)
+    # The pods' fairings first: made again from the un-faired pods kept in the file (refair). Only if those are not
+    # there: the two fairings are one shape mirrored, each cut off where it met the askew hull, so the roots
+    # go with the hull's side (fading out over FAIR_FADE) and every vertex moved is then put back ON the fairing's own
+    # surface: the two fairings' surfaces laid over each other (the other one mirrored), so the starboard root finds
+    # under it the stretch of surface only the port fairing kept. Vertices slide along the surface; the surface stays.
+    # (The first version moved the vertices and left them: the surfaces themselves were shifted, up to 5.6 m apart in
+    # height port against starboard near the roots: audit_tanacorn.py, 2026-11-10.)
     hull0, inv0 = hulls[0], hulls[0].matrix_world.inverted()
-    for f in [o for o in objs if o.type == "MESH" and o.name.startswith(FAIRING)]:
+    fairs = [o for o in objs if o.type == "MESH" and o.name.startswith(FAIRING)]
+    flip = Matrix.Scale(-1.0, 4, Vector((0, 1, 0)))
+
+    def surface(port):
+        """both fairings' faces as one tree on that side (the other side's mirrored)"""
+        vs, ps, seen_me = [], [], set()
+        for f in fairs:
+            if f.data.name in seen_me:
+                continue
+            seen_me.add(f.data.name)
+            W = f.matrix_world
+            c = sum((W @ v.co for v in f.data.vertices), Vector()) / len(f.data.vertices)
+            same = (c.y > 0.0) == port
+            base = len(vs)
+            vs += [(W @ v.co) if same else flip @ (W @ v.co) for v in f.data.vertices]
+            ps += [[base + i for i in (poly.vertices if same else reversed(poly.vertices))] for poly in f.data.polygons]
+        return BVHTree.FromPolygons(vs, ps, all_triangles=False, epsilon=0.0)
+    remade = refair(fairs, log) if fairs else None
+    if remade:
+        done |= remade
+    trees = {True: surface(True), False: surface(False)} if fairs and not remade else {}
+    for f in fairs:
         if f.data.name in done:
             continue
         done.add(f.data.name)
         W, me = f.matrix_world, f.data
+        N = W.to_3x3().inverted().transposed()
         count = {}
         for poly in me.polygons:
             for k in poly.edge_keys:
@@ -206,18 +400,32 @@ def straighten(colls, log=print, apply=True):
         for i, p in enumerate(roots):
             kd.insert(p, i)
         kd.balance()
-        Wi, most = W.inverted(), 0.0
+        port = sum((p.y for p in roots)) > 0.0
+        tree = trees[port]
+        Wi, most, off, slid = W.inverted(), 0.0, 0.0, 0
         for v in me.vertices:
             p = W @ v.co
             t = min(kd.find(p)[2] / FAIR_FADE, 1.0)
             w = 1.0 - t * t * (3.0 - 2.0 * t)
-            if w > 0.0:
-                q = p.lerp(H @ p, w)
-                most = max(most, (q - p).length)
-                v.co = Wi @ q
+            if w <= 0.0:
+                continue
+            q = p.lerp(H @ p, w)
+            n = (N @ v.normal).normalized()
+            best = None                                             # the nearest point of the surface that faces as
+            for loc, nor, _, dist in tree.find_nearest_range(q, 4.0):   # the vertex does (not the skin's other side)
+                if nor.dot(n) > 0.3 and (best is None or dist < best[1]):
+                    best = (loc, dist)
+            if best is None:
+                loc, _, _, dist = tree.find_nearest(q)
+                best = (loc, dist)
+            off = max(off, best[1])
+            most = max(most, (best[0] - p).length)
+            v.co = Wi @ best[0]
+            slid += 1
         me.update()
-        log("straighten: %s: %d root vertices go with the hull's side (at most %.2f m), fading out over %.0f m"
-            % (f.name, len(roots), most, FAIR_FADE))
+        log("straighten: %s: its %d root vertices go with the hull's side (%d vertices slid along the fairing's own "
+            "surface, at most %.2f m, fading out over %.0f m; the farthest any was put back onto it: %.2f m)"
+            % (f.name, len(roots), slid, most, FAIR_FADE, off))
     # the hull: turned and shifted, but for the deck round the bay, which stays on the bay's outline
     bay = next((o for o in objs if o.type == "MESH" and o.name.startswith(BAY)), None)
     rect = None
@@ -288,6 +496,60 @@ def straighten(colls, log=print, apply=True):
             up = [poly.normal.z for poly in me.polygons]
             at = [W @ v.co for v in me.vertices]
             wt = [with_hull(p) for p in at]
+            # Only the deck's own sheet bends. Every other connected piece that reaches the bay's zone (a fitting
+            # standing on the deck, the forward turret's barbette, whose front the bay's cut trimmed) goes as ONE
+            # piece, by the share at its middle: sheared, a barbette's front edge stood 0.8 m off its own ring
+            # (found by comparing every vertex with the original design, 2026-11-10)
+            root = list(range(len(at)))
+
+            def find(i):
+                while root[i] != i:
+                    root[i] = root[root[i]]
+                    i = root[i]
+                return i
+            for e in me.edges:
+                a, b = find(e.vertices[0]), find(e.vertices[1])
+                if a != b:
+                    root[a] = b
+            pieces = {}
+            for i in range(len(at)):
+                pieces.setdefault(find(i), []).append(i)
+            # (pieces that touch are one fitting: a bollard's posts and its base plate go by one share)
+            small = []
+            for idx in pieces.values():
+                lo = Vector((min(at[i].x for i in idx), min(at[i].y for i in idx), min(at[i].z for i in idx)))
+                hi = Vector((max(at[i].x for i in idx), max(at[i].y for i in idx), max(at[i].z for i in idx)))
+                if math.hypot(hi.x - lo.x, hi.y - lo.y) > PIECE or hi.z < BAY_Z or rect is None:
+                    continue                                        # (the deck's sheet; or nothing near the bay)
+                if hi.x < rect[0] - 5.0 or lo.x > rect[1] + 5.0 or lo.y > rect[3] + BAY_WIDE + 3.0 or hi.y < rect[2] - BAY_WIDE - 3.0:
+                    continue
+                small.append((idx, lo, hi))
+            group = list(range(len(small)))
+
+            def gfind(i):
+                while group[i] != i:
+                    group[i] = group[group[i]]
+                    i = group[i]
+                return i
+            for i in range(len(small)):
+                for j in range(i + 1, len(small)):
+                    (_, alo, ahi), (_, blo, bhi) = small[i], small[j]
+                    if all(alo[k] <= bhi[k] + 0.15 and blo[k] <= ahi[k] + 0.15 for k in range(3)):
+                        gi, gj = gfind(i), gfind(j)
+                        if gi != gj:
+                            group[gi] = gj
+            fittings = {}
+            for i, (idx, _, _) in enumerate(small):
+                fittings.setdefault(gfind(i), []).extend(idx)
+            whole = 0
+            for idx in fittings.values():
+                if all(wt[i] >= 1.0 for i in idx):
+                    continue
+                c = sum((at[i] for i in idx), Vector()) / len(idx)
+                m = with_hull(c)
+                for i in idx:
+                    wt[i] = m
+                whole += 1
             for turn_no in range(8):
                 for v, p, w in zip(me.vertices, at, wt):
                     v.co = Wi @ p.lerp(H @ p, w)
@@ -305,11 +567,18 @@ def straighten(colls, log=print, apply=True):
             for poly in over:
                 log("straighten:   turned over: a face of %.4f m2 at %s" % (poly.area, tuple(round(c, 2) for c in W @ poly.center)))
             flipped = len(over)
-            log("straighten: %s: %d deck vertices round the bay stay with it (%s); %d faces turned over (%d passes)"
-                % (hull.name, held, "x %.1f..%.1f, y %.2f..%.2f" % rect if rect else "no bay here", flipped, turn_no + 1))
+            log("straighten: %s: %d deck vertices round the bay stay with it (%s), %d standing pieces there moved whole; "
+                "%d faces turned over (%d passes)" % (hull.name, held, "x %.1f..%.1f, y %.2f..%.2f" % rect if rect
+                                                      else "no bay here", whole, flipped, turn_no + 1))
             assert flipped == 0, "the deck folded over round the bay"
             if rect:
                 mend_breach(hull, rect, deck, log)
+                # a standing piece the bay's after end cut through (the forward turret's barbette: its front sliced
+                # off flat at the bay's end and left open, the inside of the hull on show under the guns)
+                cut = [i for idx, _, _ in small for i in idx
+                       if wt[i] >= 1.0 and abs(at[i].x - rect[0]) < 0.02 and at[i].z > BAY_Z - 0.5
+                       and rect[2] - 0.5 < at[i].y < rect[3] + 0.5]
+                cap_cut(hull, cut, log)
             done.add(hull.data.name)
     mounts = [o for o in objs if o.name.startswith(IOWA) and not (o.parent and o.parent.name.startswith(IOWA))]
 
@@ -350,10 +619,13 @@ def straighten(colls, log=print, apply=True):
                 ch.matrix_basis = ch.matrix_parent_inverse.inverted() @ back @ local
         moved += 1
     bpy.context.view_layer.update()
-    again = symmetry([hulls[0].matrix_world @ v.co for v in hulls[0].data.vertices], span=math.radians(0.3), shift_span=0.3)
-    log("straighten: the hull turned %.3f deg and shifted %+.3f m; %d Iowa mounts moved with it and turned back %.2f deg "
-        "about their own middles (the Iowa's own turn, from %d clean meshes); the hull is now %.3f deg askew, %+.3f m off"
-        % (-math.degrees(turn), -shift, moved, math.degrees(iowa), len(clean), math.degrees(again[0]), again[1]))
+    now = [hulls[0].matrix_world @ v.co for v in hulls[0].data.vertices]
+    again = symmetry(now, span=math.radians(0.3), shift_span=0.3)
+    log("straighten: the hull turned %.3f deg, shifted %+.3f m and unsheared %.5f; %d Iowa mounts moved with it and turned "
+        "back %.2f deg about their own middles (the Iowa's own turn, from %d clean meshes); the hull is now %.3f deg "
+        "askew, %+.3f m off, sheared %.5f"
+        % (-math.degrees(turn), -shift, shear, moved, math.degrees(iowa), len(clean), math.degrees(again[0]), again[1],
+           shear_of(now, span=0.003)[0]))
     out["mounts_turn_deg"] = round(math.degrees(iowa), 3)
     return out
 

@@ -293,6 +293,42 @@ sea powers iowa").
       new faces face exactly as the port strakes' mirrors). The starboard skin there is now within 2 cm of port's.
       **A dark shape in a render that the other side doesn't have is a fault until measured: compare port and
       starboard (ray probes from outside, mirrored) before calling anything a feature.**
+      **The whole-ship audit** (the user, 2026-11-10: "go over the entire model and make sure theres no hidden holes
+      that got messed up when you straightened the ship ... I want to see photos of each area"). Two tools now do
+      it, and both are to be run after ANY change to the design files or to straighten.py:
+      `audit_tanacorn.py` (measured: every mesh in one tree, rays 0.25 m apart from six sides, port against
+      starboard, faces seen from behind; then from 36 directions round her for the inside of closed parts on show)
+      and `survey_tanacorn.py` (photographed: 37 square-on and joint views, port and starboard as mirrored pairs,
+      the underside with the sea taken away; what can be seen THROUGH shows light blue). What they found, all put
+      right in straighten.py and both design files made again from the originals (git 6de936a^):
+      - every vertex of the new files against the originals: all 12 Iowa mounts a rigid move; the hull a pure turn
+        but for the deck round the bay; BUT small pieces standing on that deck (fittings, and the forward
+        barbette, whose front the bay's cut had trimmed) had been sheared by the deck's blend, a barbette's front
+        edge 0.8 m off its own ring. Now only the deck's sheet bends; every other connected piece there goes whole
+        (touching pieces as one fitting).
+      - the pods' fairings were not mirror images, over ~1,200 m2: the design drew each pod's inner 16 m in to the
+        ASKEW hull (CUT_ALC_SPONSON_L / _R, cut at |y| = 34 and exact mirrors, are kept in the file beside the
+        faired ones), the port one up to 1.8 m further than the starboard. Moving their roots with the hull (the
+        first two tries) only bent those shapes further. `refair` makes both again from the un-faired pods: each
+        vertex drawn in by the mean of its own and its mirror twin's draw. Seen from below the port/starboard
+        difference fell from 1,290 m2 to 18 m2, both roots 0.40-0.53 m in the hull's skin as they were cut.
+      - the Iowa's hull was not only askew but SHEARED (turned 0.55 deg, then scaled 2.40 along and 1.90 across:
+        its frames 0.259 deg off square to its keel, each port mount 0.10-0.22 m astern of its starboard twin).
+        `shear_of` measures it as the turn is measured (0.00452, the predicted value) and it is taken out with the
+        turn: every mount pair now stands at the same x.
+      - the forward turret's barbette was open at the front (the bay's after end sliced it off: a 12 x 5 m hole under
+        the forward guns through which the inside of the hull showed, in the design from the start and in every
+        earlier render as a black rectangle). `cap_cut` gives it a flat front. The six square-on views could not
+        see it (the bow's sheer stands in front): that is what the 36 directions are for.
+      - NOT faults, left as the design has them: the Iowa model's own port/starboard differences (the boat crane
+        and boats to starboard abaft the after funnel, deck fittings, the turrets' sighting hoods); its railings,
+        lattices and bulwarks, which are single sheets (seen from behind from inboard); leftover strips of the
+        Iowa's foredeck fittings along the port edge of the bay (cut by the bay; the same in the original design);
+        each pod's inner fairing ending open against the Iowa's narrow stern 5-15 m under the water (the same both
+        sides now; only starboard had it in the design); a 1 cm seam round the bay's doors.
+      - `Object.ray_cast` straight down misses some of the deck's very large faces (it reported a 3.5 m slot at the
+        bay's forward end that the render and the BVH tree both show closed, and earlier let deck_z fall through at
+        x = 194): probe with `BVHTree.FromPolygons` over world-space polygons, as audit_tanacorn.py does.
     - **decks**: the Alicorn's own deck layout, a plain top-down projection fitted from the source mesh ALC_HULL (SRC
       collection): u = cu - x / 400, v = cv - y / 400, sheet a (cu 0.86617, cv 0.84480) forward of x = -52 m, sheet b
       (-0.12728, 0.81111) aft; only where the Alicorn has flat deck under the spot (its flight deck, 13 m either side

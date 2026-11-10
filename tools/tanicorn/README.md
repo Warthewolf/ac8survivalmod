@@ -37,9 +37,10 @@ plus a SOCKET_Mount_* empty on the hull for every part (`tanacorn_hull_sockets.j
     blender -b art/tanicorn/design/Leviathan_animated.blend -P tools/tanicorn/model_tanacorn.py -- build/tanicorn/model [render] [anim]
 
 The design files were straightened with `straighten.py` (2026-11-10: everything from the Iowa lay 0.44-0.55 deg askew
-to the Alicorn's parts; it puts the hull's plane of mirror symmetry on y = 0 and the mounts with it, keeps the deck
-round the bow's bay on the bay's outline and takes the pods' fairings' roots with the hull's side, so the Alicorn's
-parts still fit the hull they were cut to; `blender -b <file> -P tools/tanicorn/straighten.py -- save` on the ORIGINAL
+to the Alicorn's parts, and sheared; it puts the hull's plane of mirror symmetry on y = 0 and the mounts with it,
+takes the shear out, keeps the deck round the bow's bay on the bay's outline (fittings there moved whole), makes the
+pods' fairings again from the un-faired pods so both are mirror images seated in the hull's sides, closes the hole
+the bay's cut left in the starboard bow and the forward barbette's open front; `blender -b <file> -P tools/tanicorn/straighten.py -- save` on the ORIGINAL
 files, and model_tanacorn.py runs it on what it loads too: a no-op on a straight file).
 It also removes the Iowa's crew figures, builds the laser as a beam director (the user's photos), gives every VLS lid a
 hinge, bends each side VLS block onto the hull's flare (its face 2 cm off the skin), makes the hull's UV map again
@@ -64,6 +65,16 @@ frame on 4 cores, about an hour for all of it). **The surfacing shot** (the user
 against a sunset) is `surface_tanacorn.py`, run the same way: her bow comes up 35 deg nose-up until it stands 120 m
 over the sea with a third of her out, comes down while the rest of her surfaces, and slams; spray from baked particle
 systems (fine drops, not big blobs), foam patches, a low sun behind her; 13.5 s at 24 fps, ~8 s a frame at 960x540.
+**Checking her over** (after any change to the design files or straighten.py): `audit_tanacorn.py` on the saved
+model measures her from every side (rays 0.25 m apart from six sides: port against starboard, faces seen from behind;
+then 36 directions round her for the inside of closed parts on show; `audit.json` and a map a view), and
+`survey_tanacorn.py` photographs her area by area (37 pictures: five stretches from above and from each side, both
+ends, the joints as mirrored port / starboard pairs, the underside with the sea taken away; anything seen through shows
+light blue), `label_survey.py <dir>` (plain Python, PIL) writing each picture's name along its foot:
+
+    blender -b build/tanicorn/model/Tanacorn_model.blend -P tools/tanicorn/audit_tanacorn.py -- build/tanicorn/audit
+    blender -b build/tanicorn/model/Tanacorn_model.blend -P tools/tanicorn/survey_tanacorn.py -- build/tanicorn/survey
+
 The clips the user was sent are in `art/tanicorn/video/`. The previews the user saw are in
 `art/tanicorn/renders/model/`. Next: build.sh on the user's machine (above), then WP1's mount tests.
 
