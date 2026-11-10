@@ -75,7 +75,8 @@ light blue), `label_survey.py <dir>` (plain Python, PIL) writing each picture's 
     blender -b build/tanicorn/model/Tanacorn_model.blend -P tools/tanicorn/audit_tanacorn.py -- build/tanicorn/audit
     blender -b build/tanicorn/model/Tanacorn_model.blend -P tools/tanicorn/survey_tanacorn.py -- build/tanicorn/survey
 
-The clips the user was sent are in `art/tanicorn/video/`. The previews the user saw are in
+The survey the user was sent (2026-11-10, after the audit's fixes) is in `art/tanicorn/renders/survey/`.
+The clips the user was sent are in `art/tanicorn/video/` (rendered BEFORE the audit: they still show the faults). The previews the user saw are in
 `art/tanicorn/renders/model/`. Next: build.sh on the user's machine (above), then WP1's mount tests.
 
 In game (test builds): Scripts/sv_tanicorn.lua, Ctrl+T in a run.

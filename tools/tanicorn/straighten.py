@@ -247,9 +247,12 @@ def refair(fairs, log=print):
     newL = aL + 0.5 * ((bL - aL) + (bR - aR)[tL] * m)
     newR = newL[tR] * m
     for f, new, old in ((fl, newL, bL), (fr, newR, bR)):
-        f.data.vertices.foreach_set("co", new.ravel())
-        f.data.update()
         d = np.abs(new - old)[:, 1]
+        # only the vertices that are drawn in differently are written: the rest stay to the last bit what they were
+        # (the pods' roundels are faces lying IN the skin; a rounding's worth of change put one under it)
+        out = np.where((np.abs(new - old).max(axis=1) > 1e-4)[:, None], new, old)
+        f.data.vertices.foreach_set("co", out.ravel())
+        f.data.update()
         log("straighten: %s: made again from the un-faired pod for a straight hull: %d vertices drawn in differently, "
             "by up to %.2f m" % (f.name, int((d > 1e-3).sum()), d.max()))
     return {fl.data.name, fr.data.name}

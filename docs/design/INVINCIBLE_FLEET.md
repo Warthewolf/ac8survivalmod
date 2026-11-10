@@ -320,11 +320,17 @@ sea powers iowa").
         the forward guns through which the inside of the hull showed, in the design from the start and in every
         earlier render as a black rectangle). `cap_cut` gives it a flat front. The six square-on views could not
         see it (the bow's sheer stands in front): that is what the 36 directions are for.
+      - the foredeck's junk (the user's marked survey photo, "What the fuck dude"; I had listed it as the design's
+        own and left it, which was wrong: a leftover of a cut is not a design feature): strips of the Iowa's foredeck
+        fittings lying along the bay's port edge (and slivers to starboard), and half an Alicorn deck fitting
+        standing as a spike on each cut side of the bay's section with its foot in the other sheet's paint, all
+        taken out (`clear_scraps`, `clear_edge_stubs`); and the dark seam down both edges of the doors (the bay's
+        section has no sides and stands 0.3-0.5 m off the deck's height: the bay's inside showed under it) closed
+        with a coaming strip on the opening's outline (`coaming`).
       - NOT faults, left as the design has them: the Iowa model's own port/starboard differences (the boat crane
         and boats to starboard abaft the after funnel, deck fittings, the turrets' sighting hoods); its railings,
-        lattices and bulwarks, which are single sheets (seen from behind from inboard); leftover strips of the
-        Iowa's foredeck fittings along the port edge of the bay (cut by the bay; the same in the original design);
-        each pod's inner fairing ending open against the Iowa's narrow stern 5-15 m under the water (the same both
+        lattices and bulwarks, which are single sheets (seen from behind from inboard); a dark ring where the
+        port pod has a white-and-red roundel (the Alicorn's own paint, the same in the original design); each pod's inner fairing ending open against the Iowa's narrow stern 5-15 m under the water (the same both
         sides now; only starboard had it in the design); a 1 cm seam round the bay's doors.
       - `Object.ray_cast` straight down misses some of the deck's very large faces (it reported a 3.5 m slot at the
         bay's forward end that the render and the BVH tree both show closed, and earlier let deck_z fall through at
