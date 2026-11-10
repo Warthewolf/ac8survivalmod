@@ -1018,6 +1018,53 @@ def wire_mat():
     return m
 
 
+PART_NAMES = {"LASER_house": "laser turret: house (yaw)", "LASER_gun": "laser turret: beam director (pitch)",
+              "VLSD_body": "deck VLS block", "VLSD_hatch": "deck VLS hatch", "VLSS_body": "side VLS block",
+              "VLSS_hatch": "side VLS hatch"}
+FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+
+def part_sheet(path, wire):
+    """every part type in its own close-up, in one 3 x 2 sheet (the six on one line were specks in one frame)"""
+    import subprocess
+    sc = bpy.context.scene
+    res = (sc.render.resolution_x, sc.render.resolution_y)
+    sc.render.resolution_x, sc.render.resolution_y = 800, 600
+    tiles = []
+    for i, (key, (me, proto)) in enumerate(TYPES.items()):
+        bb = [proto.matrix_world @ Vector(c) for c in proto.bound_box]
+        c = sum(bb, Vector()) / 8.0
+        r = max((q - c).length for q in bb)
+        d = Vector((0.8, 1.0, 0.55)) if key.startswith("VLSS") else Vector((0.9, 1.0, 0.75))   # the sun's side (+Y)
+        sc.camera = camera("CAM_T_part", c + d.normalized() * r * 3.6, c, 50)
+        sc.render.filepath = path[:-4] + "_%d.png" % i
+        bpy.ops.render.render(write_still=True)
+        tiles.append(sc.render.filepath)
+    sc.render.resolution_x, sc.render.resolution_y = res
+    ins, flt = [], []
+    for i, (t, key) in enumerate(zip(tiles, TYPES)):
+        ins += ["-i", t]
+        text = "drawtext=fontfile=%s:text='%s':x=24:y=24:fontsize=28:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=8" \
+               % (FONT, PART_NAMES[key].replace(":", "\\:"))
+        flt.append("[%d:v]%s[t%d]" % (i, text if os.path.exists(FONT) else "null", i))
+    flt.append("".join("[t%d]" % i for i in range(len(tiles))) + "xstack=inputs=6:layout=0_0|800_0|1600_0|0_600|800_600|1600_600")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error"] + ins + ["-filter_complex", ";".join(flt), "-frames:v", "1", path],
+                   check=True)
+    for t in tiles:
+        os.remove(t)
+
+
+SKY = next((n for n in bpy.context.scene.world.node_tree.nodes if n.bl_idname == "ShaderNodeTexSky"), None)
+SUN_ROT = SKY.sun_rotation if SKY else 0.0
+
+
+def fill_light(on):
+    """the starboard views: the design's sun (its sky's, to port) mirrored to starboard, or that side renders near black
+    (a second sun lamp only made hot glints on the hull's gloss)"""
+    if SKY:
+        SKY.sun_rotation = math.pi - SUN_ROT if on else SUN_ROT
+
+
 sc = bpy.context.scene
 if RENDER or ANIM:
     sc.render.engine = "CYCLES"
@@ -1050,9 +1097,14 @@ if RENDER or ANIM:
         sc.view_layers[0].material_override = wire_mat() if tag.endswith("_wire") else None
         sc.camera = cam
         sc.render.filepath = os.path.join(OUT, "renders", "tanacorn_%s.png" % tag)
-        bpy.ops.render.render(write_still=True)
-        print("model: rendered", sc.render.filepath)
+        fill_light(tag.endswith("_R"))
+        if "_parts" in tag:
+            part_sheet(sc.render.filepath, tag.endswith("_wire"))
+        else:
+            bpy.ops.render.render(write_still=True)
+        print("model: rendered tanacorn_%s.png" % tag)
     sc.view_layers[0].material_override = None
+    fill_light(False)
     open_hatches(list(hatches), 0.0)
 
 
@@ -1085,6 +1137,7 @@ if ANIM:
         if want and tag not in want.split(","):
             continue
         sc.camera = cam
+        fill_light(tag.endswith("_R"))
         poses = []
         for k in range(STEPS + 1):                         # the open swing's frames; the shut is the same, reversed
             f = k / STEPS
