@@ -53,6 +53,7 @@ Tags as in docs/re: [V] read in a file or seen in game (where), [I] inferred, [?
 | 42, 44, 58 | our cooked assets VERSIONED; no virtual textures of ours; no new master materials or shaders of ours (AC8's or stub-parented instances only) |
 | 47 | `local ok, v = x and pcall(f)` keeps one value |
 | 56, 61 | (if the rise touches the sky) the sky asset rules |
+| 57 | the music: only 2D events are heard (Online Mode's versions), the player's list at most 120 tracks |
 | 59 | an object kept between ticks must still have the name it was captured with before anything is done to it |
 | licence | no other mod's files; AC7 assets only under the user's exceptions (the laser); never AC7 or AC04 voice lines; Sea Power's Iowa: the user's dev install only |
 
@@ -101,28 +102,63 @@ Tags as in docs/re: [V] read in a file or seen in game (where), [I] inferred, [?
   in game and the builds on the machine.
 - The scars: the draft stands (WP8: `level` 0.7, hulls, superstructures and turrets).
 
+The user's answers to the agent's questions, 2026-11-10:
+- **Length:** 15-20 minutes for one player, start to finish (the gun line at ~13 minutes, so a quick team is never
+  shelled).
+- **Fleet size:** ~16 ships besides the TANACORN (the draft: every AC04 name once).
+- **Laser interceptors: strong but killable:** most missiles fired at a covered ship are shot down, each laser with a
+  cool-down; kill the laser mounts first or close in with guns and bombs.
+- **The rise: a short cinematic**: the view leaves the player's plane for an outside shot of the rise, then comes back;
+  the player is invulnerable during it. **In co-op every player's view cuts to it at the same moment**, all invulnerable.
+- **Reward:** ~50,000 zollars for the win, on top of each ship's own pay.
+- **GEOFON's deck launches a mix of every carrier jet**, picked at random each launch: F-14D, F/A-18E/F, F/A-18C, Su-33,
+  F-35C, Rafale M (rows f14d_common, f18e_common, f18c_common, su33_common, f35c_common, rflm_common).
+- **An ace squadron, AEGIR:** a 4-ship of **F-14Ds** (AC04's ace Levy flew one), **off GEOFON's deck at the round's
+  start**.
+- **Sky:** whatever the day-night arc gives (no change).
+- **The TANACORN: 3 phases:** (1) its guns, VLS and lasers; (2) once enough are down, the bow railcannon rises and
+  charges; (3) its core opens: sink it.
+- **Its bow railcannon shoots at the airfield**: a charged shot that takes a big piece of the airfield's health (kill
+  it, or the core, before it fires).
+- **Its death:** secondary explosions along the hull, then it breaks up and goes under (the Alicorn's wreck's way).
+- **Co-op:** +50 % health per extra player (4 players: 2.5x); the fleet's size stays the same.
+- **Music:** AC8's "Invincible Fleet" (Online Mode's AC04 track, `AKE_Bgm_Online_ACE04_Invincible_Fleet_Play`, 265.8 s)
+  on loop from the round's start until the TANACORN rises, then AC8's "Invincible Fleet INFINITY Remix"
+  (`AKE_Bgm_Online_ACEINF_Invincible_Fleet_INFINITY_Remix_Play`, 300.1 s) on loop until it dies. **AC8 tracks only**: the
+  user's first choice, AC7's "Hero of Comberth Harbor" (AC7's Anchorhead Raid DLC), isn't in AC8, and the user chose
+  not to bring AC7 music in (no new AC7 exception).
+- **Radio and subtitle lines:** the agent drafts them in config/subtitles.ini with Survival's own speakers; the user
+  and friends edit them there.
+- **Airfield down from the shelling:** the usual rule (landing and the STORE close until the round after next; the run
+  goes on).
+
 No question is open (section 6).
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 3. The round, as a player sees it (round 30)
 1. **Round 29's break:** callout `INVINCIBLE FLEET` / `THE AEGIR FLEET IS UNDER WAY`, the NEXT row
    `FLEET: n SHIPS  CARRIER: GEOFON  AIRFIELD IN RANGE: mm:ss`. Radio: Survival's own lines in config/subtitles.ini (never AC7 or AC04 voice).
+   The round's music starts: "Invincible Fleet", on loop.
 2. **Phase 1, the fleet:** it appears over the north-west horizon in formation, battle-scarred, each ship named on its
    box, and sails south-east towards Comona's airfield. If it reaches its gun line (~13 minutes, AC04's 15-minute
    limit in another form) it starts **shelling the airfield** and holds station there (WP13). Its screen fires flak
    and VLS missiles; laser interceptors burn down
-   missiles fired at the ships they cover; the RAVEN's railguns (RAILGUN WARNING) reach far out; the carrier's deck
-   launches fighters. The round's own fighters are fewer (the fleet is the threat). Ships paid as sunk, turrets as
+   missiles fired at the ships they cover; the RAVEN's railguns (RAILGUN WARNING) reach far out; the AEGIR squadron
+   (four F-14D aces) launches off GEOFON's deck at once, and the deck goes on launching a mix of carrier jets. The round's own fighters are fewer (the fleet is the threat). Ships paid as sunk, turrets as
    shot off (the Spaceport's pay).
 3. **Phase 2, the carrier falls, only to the players:** as GEOFON is hit, its damage stages show (fires, smoke, a
    list). At 0 it breaks at midships and the halves drift apart. Between them the sea erupts: the TANICORN's bow
    breaks the surface, the hull climbs bow first into the sky, hangs, and falls back flat onto the waves (spray, a
-   shock ring, camera shake). Nothing fires at it and nothing can lock it during the rise.
-4. **Phase 3, the Tanicorn:** it opens fire as it settles, then becomes targetable (boxes, TGT marks, the boss bar:
-   `TANACORN`). Its weapon parts first, its core last (its phases). It sails on towards the airfield's gun line and
-   shells it from there too; the ships still afloat fight on with it.
-5. **The end:** won when **every ship is sunk** (the Tanicorn and the whole fleet, in any order) and the round's
-   aircraft are down: `THE AEGIR FLEET IS DESTROYED`, the big reward. The NEXT row counts what's left
+   shock ring, camera shake), seen in a **short cinematic** (every player's view at once, everyone invulnerable).
+   Nothing fires at it and nothing can lock it during the rise. The music turns to "Invincible Fleet INFINITY
+   Remix", on loop until it dies.
+4. **Phase 3, the TANACORN:** it opens fire as it settles, then becomes targetable (boxes, TGT marks, the boss bar:
+   `TANACORN`). Its own three phases: its guns, VLS and lasers; then its bow railcannon rises and charges a shot **at
+   the airfield** (a big piece of its health: stop it); then its core opens. It sails on towards the airfield's gun line
+   and shells it from there too; the ships still afloat fight on with it. It dies breaking up under secondary
+   explosions.
+5. **The end:** won when **every ship is sunk** (the TANACORN and the whole fleet, in any order) and the round's
+   aircraft are down: `THE AEGIR FLEET IS DESTROYED`, ~50,000 zollars. One player should need 15-20 minutes. The NEXT row counts what's left
    (`FLEET: n AFLOAT`). The players choose when to wake the boss: sink the screen first and the carrier last, or the
    carrier early and the Tanicorn with the fleet still round it.
 
@@ -215,7 +251,22 @@ Status: not started. Depends on: WP2 (route A) or WP0's one-piece mesh (route B)
 - Untargetable -> fire -> targetable: hull and parts switched off as sv_escort.lua's offObj does (no box, no lock-on,
   invincible, hidden) or held under water; at the slam switched on (sv_escort_laser.lua onObj), every part's order
   sent (fire first), then a moment later boxes and TGT marks on. Each step a remote event fired from Lua (hard
-  rule 26). The event focus camera on it for the rise (hard rule 28) and a callout.
+  rule 26).
+- **The short cinematic (the user's choice):** the view leaves the player's plane for an outside shot of the rise
+  (~12 s), then returns; the player's plane invulnerable meanwhile (its invincible flag / a health floor, back after
+  it [?: which holds on a player plane]); in co-op every game cuts at the same moment (the host's start time, as the
+  rise). Routes, in order:
+  1. AC8's in-game camera node, `LivePlayInGameCameraExecution` (camera name, unit): the "impact" outside shots stock
+     missions play on Mission 16's Ladons (ImpactCamera_ms16*) and Mission 19's rocket (ImpactCamera_ms19-01/02), named
+     in /Game/Blueprints/InGameCamera/BP_InGameCameraParameter (generic ImpactCamera_Common / _Random / _Front / _Back /
+     _Side) [V: docs/re/MUSIC_RADIO_CAMERA.md D]. Not in Mission 22's EP: its class import added from Mission 04's record
+     (hard rule 7). Played on the TANACORN's unit (or a dummy at the wreck) as the rise starts; trigger type 28 fires
+     after it ends. [?: how long it holds, and whether it frames a 650 m ship]
+  2. Lua: a CameraActor spawned beside the wreck and the player controller's SetViewTargetWithBlend onto it, then back
+     to the pawn [?: never tried in Survival].
+  3. The event focus camera (`LiveEventFocusCameraExecution`, Mission 22's RE_ShuttleFocusCamera pair: the view
+     swings to it, the player keeps control; hard rule 28) as the fallback.
+  A callout with it (`THE TANACORN RISES`).
 - Pass: the rise looks right from 3-8 km (no culling, no water clipping), nothing can lock it until it's down, it
   fires before it's targetable, no hitch.
 
@@ -239,7 +290,7 @@ Status: not started. Depends on: nothing (alongside WP1-WP4).
     keel line** (bow half forward, stern half back) to a gap of ~150 m (the Tanicorn's beam ~80 m [I: the Iowa's
     33 m at 650 m]), then both go under; AC8's own Niagara and Wwise as AnimNotifies or from Lua;
   - its deck launches stay the Spaceport's (SPORT's deck: a pool flight with a pose off its bow), stopping at its
-    death.
+    death; each launch's airframe picked at random from the carrier jets (WP7);
 - Pass: shot to 66 / 33 % its stages show; at 0 it breaks, the gap opens, both halves sink; no crash in a STORE after
   it (0.74.48's rule: none of its child objects alive under a recycled unit).
 
@@ -299,8 +350,16 @@ Status: not started. Depends on: nothing for the ships (alongside); WP5 for GEOF
   `AIRFIELD IN RANGE`). The Tanicorn, once risen, takes its own path from where it lands along the fleet's course to
   the same station (one path from its landing, at the fleet's speed) [?: a submarine-class hull sailing a path:
   the Alicorn does].
+- **GEOFON's deck (the user: a mix of every carrier jet):** each launch's airframe picked at random from F-14D,
+  F/A-18E/F, F/A-18C, Su-33, F-35C and Rafale M (f14d_common, f18e_common, f18c_common, su33_common, f35c_common,
+  rflm_common: rows CFG already names), set on the pool flight at its spawn (SV_SetAircraft: the airframe and AI
+  module; its behaviour stays its flight's: hard rule 20).
+- **The AEGIR squadron (the user: a 4-ship of F-14D aces off GEOFON's deck at the round's start):** an ace flight as the
+  ace-squadron specials make theirs (sv_ai.lua ACE: an ace row at the top level, its own name on the boxes, its moves:
+  hard rules 37, 22), named AEGIR 1-4 (subtitles.ini), launched off the deck as the fleet appears; paid as aces. Its
+  airframe f14d_common [?: the F-14D's ace row and its post-stall moves: the CFG maneuvers list has no f14d].
 - Pass: the fleet appears NW of the airfield in formation, named, sails SE holding formation, reaches its station and
-  laps it; every turret fires; sinking works and pays; the frame rate and the perf line's Lua tick with the whole
+  laps it; AEGIR launches at once and the deck's mix after it; every turret fires; sinking works and pays; the frame rate and the perf line's Lua tick with the whole
   fleet up.
 
 ### WP8. The fleet's damage textures at all times (not the Tanicorn)
@@ -369,8 +428,9 @@ Status: partly there. Depends on: WP7.
   boosted: HISTORY 0.73.52-53). The Tanicorn's 5-inch mounts on the same.
 - **VLS missiles:** the Aegis Mk 41 and the Ladon / Alicorn VLS with the fleet's EXSAM homing and salvos
   (missile.homing_from, salvo_n 3). Never a scripted sure kill (hard rule 36).
-- **Laser interceptors:** each covers the ships near it and burns down missiles fired at them, so players kill the
-  laser mounts first or close in with guns and bombs. AC7's LaserInterceptor on ALiveLaserInterceptor, spawned and
+- **Laser interceptors (the user: strong but killable):** each covers the ships near it and burns down **most**
+  missiles fired at them (a cool-down after each kill, setting `cooldown_s`), so players kill the laser mounts first or
+  close in with guns and bombs. AC7's LaserInterceptor on ALiveLaserInterceptor, spawned and
   attached at a ship's socket as on the ZFA-44s (fired and intercepted: 0.74.31) [V], or an AC8 anti-missile arm of
   ours (BP_SwingTLS_ForMSL's values) on the Tanicorn's CIWS mounts. A turn rate / cool-down that leaves skilled missile
   play possible; a callout `LASER DEFENCE ONLINE`; its beam AC8's NS_UAVTLS_Muzzleflash01 (hard rule 58).
@@ -389,7 +449,19 @@ Status: not started. Depends on: WP7 (and WP6 for phase 3).
   kind is not in CFG.specials.rotation and never drawn at random (as THE ESCORT and GONE FISHIN' are once a run).
   Round 30 is in the late rounds (P8: +3 aircraft a round from 26), so cut its own fighters (fighter_share).
 - Phases: 1 the fleet (WP7, WP9), 2 GEOFON's fall (WP5, WP6), 3 the Tanicorn (WP3, WP11); won when every ship and the
-  round's aircraft are down. Pay by kind and per turret; the boss's reward. Callouts and radio lines (subtitles.ini).
+  round's aircraft are down. Pay by kind and per turret; the win's `reward` 50,000. Callouts and radio lines: the
+  agent drafts them into config/subtitles.ini with Survival's own speakers (`python -I tools/subtitles.py merge` after
+  adding the Lua lists), the user edits them; never AC7 or AC04 voice.
+- **Pacing:** one player 15-20 minutes start to finish (the user); the fleet's health, the TANACORN's and the gun line
+  (`shell_km`, `speed_kmh`) tuned to that from the tests; co-op +50 % health per extra player (`coop_health_x` 0.5:
+  ships, parts and the TANACORN), the fleet's size the same.
+- **Music (the user):** `AKE_Bgm_Online_ACE04_Invincible_Fleet_Play` on loop from the round's start until the rise,
+  then `AKE_Bgm_Online_ACEINF_Invincible_Fleet_INFINITY_Remix_Play` on loop until the TANACORN dies (then the music
+  player as after any special). Both are Online Mode's 2D versions, heard in Survival (hard rule 57: 0.74.31 played
+  them; the lobby jukebox's 3D ones are silent). Looped by Survival's own music control (sv_music.lua; the track
+  lengths 265,832 / 300,113 ms are in its table: start it again as it ends; hard rule 57's "a looping event is given 60
+  s, not -1" for the music player's own lists). The round holds the music player as the specials do ("BGM held by
+  Survival").
   The NEXT row (`FLEET: n SHIPS  CARRIER: GEOFON`, then `FLEET: n AFLOAT`).
 - The airfield: the clocks wait while you're down with nobody else flying (the Spaceport's I6). Removals by remote
   event; never a unit off the list while its parts are up (0.74.48).
@@ -403,11 +475,20 @@ Status: not started. Depends on: WP3.
 - M3: the bow railcannon's raise and barrel split, the sub-railgun hatches: one AnimSequence each, played natively
   (ULiveAISimpleAnimationComponent + LiveAISimpleAnimationPlayExecution, or hatch parts as the Alicorn's / Grifn's);
   no animation blueprints (BP script).
-- M4: weak points as child objects with their own health and tags (no separate weak-point system), the core shielded
-  until they're down, phases fired from Lua (sv_alicorn.lua's pattern: poll part health, fire SV_Event), the boss
-  bar, callouts.
-- M5: its own destroyed mesh (a skeletal wreck with a sinking sequence: the Alicorn's SK_BA002_alcn_DAM pattern),
-  DamageEffects on sockets, AC8's Niagara and sounds only.
+- M4, **three phases (the user)**, fired from Lua (sv_alicorn.lua's pattern: poll part health, fire SV_Event), with
+  the boss bar and callouts:
+  1. its guns (16-inch, 5-inch), VLS and lasers fight; the core shielded (invincible / no box);
+  2. once `phase2_share` (e.g. 60 %) of those parts are down, the bow railcannon rises (M3's animation) and charges a
+     shot **at the airfield** (the user): a long charge with the RAILGUN WARNING and a callout (`THE TANACORN IS
+     AIMING AT THE AIRFIELD`); if it fires, `railcannon_damage` (e.g. 100 of the airfield's 250) comes off the airfield
+     (WP13's scripted route: AF.pending, effects on the runway); the railcannon itself is a part that can be killed
+     before it fires, and it charges again `railcannon_every_s` later while it lives;
+  3. once the railcannon is down (or `phase3_share` of everything), its core opens (shield off, box on): sink it.
+  Weak points are child objects with their own health and tags (no separate weak-point system).
+- M5, **its death (the user: breaks and sinks, explosions):** secondary explosions along the hull, then it breaks up
+  and goes under: its own destroyed mesh (a skeletal wreck with a break-up and sinking sequence: the Alicorn's
+  SK_BA002_alcn_DAM pattern; made by the agent in WP0's script), DamageEffects on sockets, AC8's Niagara and sounds
+  only. The music stops looping with it.
 
 ### WP12. Co-op, load, the STORE, release
 Status: not started. Depends on: everything above.
@@ -442,6 +523,8 @@ near Comona, it shells the airfield.
      the air (hard rule 45), the shelling ships pinged on the minimap (the bombers' ping), the airfield's bar.
 - Tuned so a team that ignores the fleet loses the airfield in ~3-4 minutes of shelling (250 hp; settings), and one
   that fights it never sees it (the gun line ~13 minutes out).
+- The TANACORN's bow railcannon (WP11 phase 2) hits the airfield from wherever it is, gun line or not: its charged
+  shot is WP13's scripted route with its own damage and warning.
 - While the airfield is down the shelling stops (nothing to shell); after its repair it starts again if the fleet's
   still on station.
 - Co-op: the host shells (AF is the host's); the joiners see the effects from forwarded impact events and the host's
@@ -471,6 +554,10 @@ near Comona, it shells the airfield.
 | a unit with child objects recycled under them crashes the STORE | 0.74.48's rule | (rule: never) |
 | ship turrets can't fire at the airfield 16-20 km off | WP13 step 1's test | the scripted salvo (step 2), proven for the heavies |
 | `pip install bpy` doesn't fit the cloud session (Python version, disk) | WP0's first step | the script runs on the user's machine |
+| the in-game camera node can't frame the rise, or its length is fixed | WP4's cinematic test | Lua's view target, else the event focus camera |
+| a player plane's invulnerability doesn't hold through the cinematic | WP4's test | the player's health floored and put back after |
+| no F-14D ace row / post-stall moves for AEGIR | WP7 | the ace rows Survival has (Su-33s) with F-14D airframes set at spawn |
+| the looped tracks gap or overlap at their restart | WP10's music test | a short fade at the end, or the music player's own loop |
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 6. Questions still open for the user
