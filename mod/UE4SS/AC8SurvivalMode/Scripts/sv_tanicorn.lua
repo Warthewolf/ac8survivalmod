@@ -14,6 +14,11 @@
 --                     angles every 2 s (`tanicorn: ... yaw ... pitch ...`): AC8's fire control turning our bones to you.
 -- (0.74.43, the user's first run: rows in, SV_Spawn "1 up" four times, no BP_SV_Tani_T5_C found in 33 walks)
 -- (0.74.45: our class loads in AC8 with its fire control; the spawn still made no object: the rows were added too late)
+--   Ctrl+U in a run   (0.74.61) the other three gun mounts as the T5 (TANI.mounts: the 16-inch triple, the CIWS, the laser),
+--                     each on its own rows and fire control row (cloned at the main menu: `tanicorn: fire control row
+--                     SV_FCS_Tani<part> from <stock row>: in (SlotNum N, ...)`), spawned 3 km ahead in a row across your
+--                     path, 400 m apart; the same looks, 2 s lines and shell lines as the T5's, each line naming its mount
+--                     (T5, T16, CIWS, LASER).
 -- TEST ONLY BEGIN
 TANI = { unit = "SV_Unit_TaniTest", npc = "SV_Npc_TaniMount", model = "SV_Model_TaniMount",
          class = "BP_SV_Tani_T5_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5.BP_SV_Tani_T5_C",
@@ -29,8 +34,89 @@ TANI = { unit = "SV_Unit_TaniTest", npc = "SV_Npc_TaniMount", model = "SV_Model_
                   class = "BP_SV_Tani_HULL_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_HULL.BP_SV_Tani_HULL_C",
                   name_key = "SV_TaniHull_Name", name = "TANACORN", ahead_cm = 500000, z_cm = 0 },
          ahead_cm = 300000, z_cm = 700, every_s = 2.0, watch_s = 60 }
+TANI.key = "T5"
+-- (0.74.61) the other gun mounts, each as the T5 (the build's survival_events.TANI_MOUNTS: unit, NPC row, model row and name
+-- key; its NPC row's NpcFCSId0 names fcs, cloned here at the main menu from fcs_src). fcs_src is a stock row whose arms
+-- blueprint drives BN_turret_yaw / BN_turret_pitch on TurretPoseableMesh with the GUN prefix, as our mounts are rigged
+-- (0.74.59: the row's arm replaces the blueprint's and gives it its muzzles):
+--   T16    NPC_FCS_VesselArtillery000: BP_FCS_Vessel_Artillery_00, the ships' main gun (BP_wp_artillery_vesselgun, a LiveArtillery
+--          shell), 30 km. The railgun arms the land battleships carry (BP_FCS_StrafingRailgun_00, the GR036 main cannon) drive
+--          PM_Cannon's BN_turret_pitch_01 / _02, which our triple hasn't
+--   CIWS   NPC_FCS_VesselCIWS000: BP_FCS_Vessel_CIWS_00, the Aegis's Mk15 (BP_wp_ciws_vessel, a LiveAttachedInterceptorWeapon), 2.5 km
+--   LASER  NPC_FCS_VesselCIWS000 too, FOR NOW: no stock arms blueprint fires a laser (docs/re/TANICORN.md 3), so the laser mount
+--          fires the CIWS's gun until it has an arm of its own (BP_FCS_Vessel_CIWS_00 with AC8's BP_SwingTLS_ForMSL: the ZFA-44s'
+--          BP_FCS_SV_ZfaTLS is built that way, but on a plane's gun socket, not these bones)
+-- fcs_slots: its muzzles (SOC_Gun_01..N); fcs_speed { yaw, pitch } deg/s and the yaw / pitch arcs: the mount's own
+-- (tools/tanicorn/spec.py FCS), in place of the stock row's (the CIWS's +-60, the artillery's +-110: a ship's side mounts)
+TANI.mounts = {
+    { key = "T16", unit = "SV_Unit_TaniT16Gun", npc = "SV_Npc_TaniT16Gun", model = "SV_Model_TaniT16Gun",
+      class = "BP_SV_Tani_T16_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T16.BP_SV_Tani_T16_C",
+      cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T16.Default__BP_SV_Tani_T16_C",
+      name_key = "SV_TaniT16Gun_Name", name = "TANICORN 16-INCH",
+      fcs = "SV_FCS_TaniT16", fcs_src = "NPC_FCS_VesselArtillery000", fcs_slots = 3, fcs_speed = { 12, 8 },
+      yaw = { -150, 150 }, pitch = { -2, 45 } },
+    { key = "CIWS", unit = "SV_Unit_TaniCIWS", npc = "SV_Npc_TaniCIWS", model = "SV_Model_TaniCIWS",
+      class = "BP_SV_Tani_CIWS_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_CIWS.BP_SV_Tani_CIWS_C",
+      cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_CIWS.Default__BP_SV_Tani_CIWS_C",
+      name_key = "SV_TaniCIWS_Name", name = "TANICORN CIWS",
+      fcs = "SV_FCS_TaniCIWS", fcs_src = "NPC_FCS_VesselCIWS000", fcs_slots = 1, fcs_speed = { 120, 100 },
+      yaw = { -180, 180 }, pitch = { -10, 85 } },
+    { key = "LASER", unit = "SV_Unit_TaniLASER", npc = "SV_Npc_TaniLASER", model = "SV_Model_TaniLASER",
+      class = "BP_SV_Tani_LASER_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_LASER.BP_SV_Tani_LASER_C",
+      cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_LASER.Default__BP_SV_Tani_LASER_C",
+      name_key = "SV_TaniLASER_Name", name = "TANICORN LASER",
+      fcs = "SV_FCS_TaniLASER", fcs_src = "NPC_FCS_VesselCIWS000", fcs_slots = 1, fcs_speed = { 120, 100 },   -- (for now)
+      yaw = { -180, 180 }, pitch = { -10, 85 } },
+}
+TANI.mount_gap_cm = 40000                                -- (Ctrl+U: the three across your path, 400 m apart)
 do
-local T = { rows = nil, next = 0, seen = {}, until_ = 0, checks = {} }
+local T = { rows = nil, next = 0, seen = {}, until_ = 0, checks = {}, shells = {}, stock = {} }
+local KINDS = { TANI }                                   -- every gun mount type (the T5 and TANI.mounts): its key and class
+for _, k in ipairs(TANI.mounts) do KINDS[#KINDS + 1] = k end
+
+local function kindOf(o)                                 -- the mount type of one of our mounts (by its class), or nil
+    local cls = "?"
+    pcall(function() cls = o:GetClass():GetFName():ToString() end)
+    for _, k in ipairs(KINDS) do if k.class == cls then return k end end
+    return nil
+end
+
+local function ours()                                    -- every gun mount of ours in the level: { o, k } (k: its type)
+    local out = {}
+    for _, k in ipairs(KINDS) do
+        for _, o in ipairs(FindAllOf(k.class) or {}) do
+            if valid(o) and not nameOf(o):find("Default__", 1, true) then out[#out + 1] = { o = o, k = k } end
+        end
+    end
+    return out
+end
+
+-- (0.74.59) one mount's fire control row (its NPC row's NpcFCSId0, tools/build_survival.py): spec.fcs cloned from the stock
+-- spec.fcs_src with its muzzles (SlotNum), a magazine of at least that, its turn speeds (fcs_speed: a number, or { yaw,
+-- pitch }) and, when spec has them, its yaw / pitch arcs. The row path is the one that gives the arm its muzzles (0.74.58,
+-- the user: "THE GUN FIRED FROM THE BARREL THIS TIME", "only one barrel was working": the row's SlotNum 1)
+local function fcsRow(fcs, spec)
+    local ys, ps = spec.fcs_speed, spec.fcs_speed
+    if type(spec.fcs_speed) == "table" then ys, ps = spec.fcs_speed[1], spec.fcs_speed[2] end
+    local okF, whyF = cloneRow(fcs, spec.fcs_src, spec.fcs, function(r)
+        r.SlotNum = spec.fcs_slots
+        if (tonumber(r.MagazineCapacity) or 0) < spec.fcs_slots then r.MagazineCapacity = spec.fcs_slots end
+        r.YawSpeed, r.PitchSpeed = ys, ps
+        if spec.yaw then r.YawAngleMin, r.YawAngleMax = spec.yaw[1], spec.yaw[2] end
+        if spec.pitch then r.PitchAngleMin, r.PitchAngleMax = spec.pitch[1], spec.pitch[2] end
+    end)
+    local slots, mag, speed, arcs = "?", "?", "?", "?"
+    pcall(function()
+        local _, r = dtCall(fcs, "FindRow", spec.fcs)
+        slots, mag = tostring(r.SlotNum), tostring(r.MagazineCapacity)
+        speed = tostring(r.YawSpeed) .. "/" .. tostring(r.PitchSpeed)
+        arcs = string.format("yaw %s..%s, pitch %s..%s", tostring(r.YawAngleMin), tostring(r.YawAngleMax),
+            tostring(r.PitchAngleMin), tostring(r.PitchAngleMax))
+    end)
+    log(string.format("tanicorn: fire control row %s from %s: %s (SlotNum %s, magazine %s, yaw / pitch speed %s, %s)",
+        spec.fcs, spec.fcs_src, okF and "in" or ("NOT made: " .. tostring(whyF)), slots, mag, speed, arcs))
+    return okF
+end
 
 local function rowsIn()                                  -- the model first: the row names it (as FISH.setup)
     if T.rows then return true, "in already" end
@@ -48,36 +134,33 @@ local function rowsIn()                                  -- the model first: the
         end
         return have ~= nil
     end
-    -- (0.74.59) the mount's fire control row (its NPC row's NpcFCSId0, tools/build_survival.py): the stock flak gun's
-    -- NPC_FCS_FlakGun000 with the twin mount's two muzzles. The row path is the one that gives the arm its muzzles
-    -- (0.74.58, the user: "THE GUN FIRED FROM THE BARREL THIS TIME", "only one barrel was working": the row's SlotNum 1)
+    -- each mount's fire control row first (its NPC row names it): the T5's (the stock flak gun's NPC_FCS_FlakGun000 with the
+    -- twin mount's two muzzles) and (0.74.61) the other three's (TANI.mounts)
     local fcs = loadObject(FCS_TABLE)
     if fcs then
         pin(fcs, nameOf(fcs))
-        local okF, whyF = cloneRow(fcs, TANI.fcs_src, TANI.fcs, function(r)
-            r.SlotNum = TANI.fcs_slots
-            if (tonumber(r.MagazineCapacity) or 0) < TANI.fcs_slots then r.MagazineCapacity = TANI.fcs_slots end
-            r.YawSpeed, r.PitchSpeed = TANI.fcs_speed, TANI.fcs_speed
-        end)
-        local slots, mag, speed = "?", "?", "?"
-        pcall(function()
-            local _, r = dtCall(fcs, "FindRow", TANI.fcs)
-            slots, mag, speed = tostring(r.SlotNum), tostring(r.MagazineCapacity), tostring(r.YawSpeed) .. "/" .. tostring(r.PitchSpeed)
-        end)
-        log(string.format("tanicorn: fire control row %s from %s: %s (SlotNum %s, magazine %s, yaw / pitch speed %s)",
-            TANI.fcs, TANI.fcs_src, okF and "in" or ("NOT made: " .. tostring(whyF)), slots, mag, speed))
+        for _, k in ipairs(KINDS) do fcsRow(fcs, k) end
     end
     local m = addRow(mt, mr, TANI.model)
     local n = addRow(npc, mine, TANI.npc)
     local hm = addRow(mt, mr, TANI.hull.model)               -- (0.74.60) the hull's
     local hn = addRow(npc, mine, TANI.hull.npc)
+    local more, allIn = {}, true                             -- (0.74.61) the other mounts'
+    for _, k in ipairs(TANI.mounts) do
+        local km = addRow(mt, mr, k.model)
+        local kn = addRow(npc, mine, k.npc)
+        allIn = allIn and km and kn
+        more[#more + 1] = string.format("%s %s, %s %s", k.model, km and "in" or "NOT added", k.npc, kn and "in" or "NOT added")
+    end
     if type(SV_SetText) == "function" then
         pcall(SV_SetText, TANI.name_key, TANI.name)
         pcall(SV_SetText, TANI.hull.name_key, TANI.hull.name)
+        for _, k in ipairs(TANI.mounts) do pcall(SV_SetText, k.name_key, k.name) end
     end
-    T.rows = m and n and hm and hn
-    return T.rows, string.format("%s %s, %s %s; %s %s, %s %s", TANI.model, m and "in DT_NPC_Model" or "NOT added", TANI.npc,
-        n and "in DT_NPC" or "NOT added", TANI.hull.model, hm and "in" or "NOT added", TANI.hull.npc, hn and "in" or "NOT added")
+    T.rows = m and n and hm and hn and allIn
+    return T.rows, string.format("%s %s, %s %s; %s %s, %s %s; %s", TANI.model, m and "in DT_NPC_Model" or "NOT added", TANI.npc,
+        n and "in DT_NPC" or "NOT added", TANI.hull.model, hm and "in" or "NOT added", TANI.hull.npc, hn and "in" or "NOT added",
+        table.concat(more, "; "))
 end
 
 -- (0.74.46) the rows at the main menu, as the shoal's (FISH.setup): 0.74.43-0.74.45 added them at the key press, after
@@ -92,13 +175,13 @@ function TANI.setup()
     end
 end
 
--- our cooked class, loaded by itself: whether AC8 takes it, and what its defaults hold
-local function classCheck()
-    local cls, why = loadObject(TANI.class_path)
+-- our cooked class, loaded by itself: whether AC8 takes it, and what its defaults hold (k: a mount type, KINDS)
+local function classCheck(k)
+    local cls, why = loadObject(k.class_path)
     if not cls then return "NOT loaded: " .. tostring(why) end
-    pin(cls, "tanicorn class")
+    pin(cls, "tanicorn class " .. k.key)
     local parts = { "loaded " .. nameOf(cls) }
-    local cdo = StaticFindObject(TANI.cdo_path)
+    local cdo = StaticFindObject(k.cdo_path)
     if valid(cdo) then
         local arms, mesh, dmg = "?", "?", "?"
         pcall(function() arms = tostring(#cdo.FireControlSystemComponent.AllArms) end)
@@ -219,11 +302,18 @@ end
 -- 12 of each a session: its owner, where it sits against its owner, and where it says it hangs (ALiveAttachedWeapon's
 -- AttachedComponent / AttachedSocketName / bIsBaseAttached). 0.74.55 showed ours sitting at the mount's origin to the
 -- centimetre with no velocity: LiveFlakGun is an ALiveAttachedWeapon, the bursts come from where it hangs.
+-- (0.74.61) and the other mounts' weapons as they're made: the T16's artillery shells (LiveArtillery, a shell in flight, not
+-- attached: its start comes from its place and velocity) and the CIWS / LASER's gun (BP_wp_ciws_vessel, a
+-- LiveAttachedInterceptorWeapon: it hangs where the flak gun does, its socket the line to read)
 local NEWSHELL = {}
+local SHELL_CLASSES = { "/Script/Live.LiveFlakGun", "/Script/Live.LiveArtillery", "/Script/Live.LiveAttachedInterceptorWeapon" }
 if type(NotifyOnNewObject) == "function" then
-    pcall(NotifyOnNewObject, "/Script/Live.LiveFlakGun", function(o)
-        if #NEWSHELL < 32 then NEWSHELL[#NEWSHELL + 1] = { o = o, t = os.clock() } end
-    end)
+    for _, c in ipairs(SHELL_CLASSES) do
+        local short = c:match("Live%.(.+)$")
+        pcall(NotifyOnNewObject, c, function(o)
+            if #NEWSHELL < 32 then NEWSHELL[#NEWSHELL + 1] = { o = o, t = os.clock(), c = short } end
+        end)
+    end
 end
 
 local function hangs(w)                                   -- an attached weapon's own record of where it hangs
@@ -242,6 +332,7 @@ local function hangs(w)                                   -- an attached weapon'
     return string.format("hangs on %s (of %s) at socket %s, base attached %s", comp, owner, sock, base)
 end
 
+-- (0.74.61) the first 12 of each weapon class (s.c) a session that aren't ours
 local function stockShells(list, now)
     for _, s in ipairs(list) do
         pcall(function()
@@ -249,49 +340,66 @@ local function stockShells(list, now)
             if not valid(o) then return end
             local ow = o:GetOwner()
             if valid(ow) and nameOf(ow):find("Tani", 1, true) then return end
-            T.stock = (T.stock or 0) + 1
-            if T.stock > 12 then return end
+            local c = s.c or "?"
+            T.stock[c] = (T.stock[c] or 0) + 1
+            if T.stock[c] > 12 then return end
             local l, ol = o:K2_GetActorLocation(), valid(ow) and ow:K2_GetActorLocation()
-            log(string.format("tanicorn: a stock flak gun %d (%s): at (%+.0f, %+.0f, %+.0f) from its owner %s; %s",
-                T.stock, (nameOf(o):match("([^%.:]+)$")) or "?", ol and l.X - ol.X or 0, ol and l.Y - ol.Y or 0,
+            log(string.format("tanicorn: a stock %s %d (%s): at (%+.0f, %+.0f, %+.0f) from its owner %s; %s",
+                c, T.stock[c], (nameOf(o):match("([^%.:]+)$")) or "?", ol and l.X - ol.X or 0, ol and l.Y - ol.Y or 0,
                 ol and l.Z - ol.Z or 0, valid(ow) and ((nameOf(ow):match("([^%.:]+)$")) or "?") or "none", hangs(o)))
         end)
     end
 end
 
+-- (0.74.61) each of our shells against the mount that made it (its owner; 0.74.55-0.74.60's the first T5 found), the first 12
+-- of each mount type a spawn: `tanicorn: <T5|T16|CIWS|LASER> shell N: ...`
 local function shells(now)
     if #NEWSHELL == 0 then return end
     local list = NEWSHELL
     NEWSHELL = {}
     stockShells(list, now)
-    local mount
-    for _, o in ipairs(FindAllOf(TANI.class) or {}) do
-        if valid(o) and not nameOf(o):find("Default__", 1, true) then mount = o; break end
-    end
-    if not mount then return end
-    local _, a = aim(mount)
-    local ml
-    pcall(function() ml = mount:K2_GetActorLocation() end)
-    if not ml then return end
+    local aims, all = {}, nil
     for _, s in ipairs(list) do
-        local mine = false
-        pcall(function() mine = nameOf(s.o:GetOwner()):find("Tani", 1, true) ~= nil end)
-        if mine then T.shells = (T.shells or 0) + 1 end
-        if mine and T.shells <= 12 then
-            local ok, line = pcall(function()
-                local l, v = s.o:K2_GetActorLocation(), s.o:GetVelocity()
-                local age = now - s.t
-                local sx, sy, sz = l.X - v.X * age - ml.X, l.Y - v.Y * age - ml.Y, l.Z - v.Z * age - ml.Z
-                local y, pt = heading(v.X, v.Y, v.Z)
-                return string.format("shell %d: started (%+.0f, %+.0f, %+.0f) from the mount, flying yaw %.1f pitch %.1f at %.0f m/s " ..
-                    "(seen %.2f s after it was made, now (%+.0f, %+.0f, %+.0f)); the muzzle (%s), the barrel yaw %s pitch %s; %s",
-                    T.shells, sx, sy, sz, y, pt, math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z) / 100, age,
-                    l.X - ml.X, l.Y - ml.Y, l.Z - ml.Z,
-                    type(a) == "table" and string.format("%+.0f, %+.0f, %+.0f", a.x, a.y, a.z) or "?",
-                    type(a) == "table" and string.format("%.1f", a.yaw) or "?", type(a) == "table" and string.format("%.1f", a.pitch) or "?",
-                    hangs(s.o))
-            end)
-            log("tanicorn: " .. (ok and line or ("a shell, not read: " .. tostring(line))))
+        local mount, k
+        pcall(function()
+            local ow = s.o:GetOwner()
+            if valid(ow) and nameOf(ow):find("Tani", 1, true) then mount = ow end
+        end)
+        if mount then
+            k = kindOf(mount)
+            if not k then                                -- (its owner isn't a mount itself: the first of ours, as before)
+                all = all or ours()
+                if all[1] then mount, k = all[1].o, all[1].k else mount = nil end
+            end
+        end
+        if mount and k then
+            T.shells[k.key] = (T.shells[k.key] or 0) + 1
+            local nth = T.shells[k.key]
+            local id = addrOf(mount) or tostring(mount)
+            if nth <= 12 and aims[id] == nil then
+                local _, a = aim(mount)
+                local ml
+                pcall(function() ml = mount:K2_GetActorLocation() end)
+                aims[id] = { a = a, ml = ml }
+            end
+            local here = aims[id]
+            if nth <= 12 and here and here.ml then
+                local a, ml = here.a, here.ml
+                local ok, line = pcall(function()
+                    local l, v = s.o:K2_GetActorLocation(), s.o:GetVelocity()
+                    local age = now - s.t
+                    local sx, sy, sz = l.X - v.X * age - ml.X, l.Y - v.Y * age - ml.Y, l.Z - v.Z * age - ml.Z
+                    local y, pt = heading(v.X, v.Y, v.Z)
+                    return string.format("shell %d (%s): started (%+.0f, %+.0f, %+.0f) from the mount, flying yaw %.1f pitch %.1f at %.0f m/s " ..
+                        "(seen %.2f s after it was made, now (%+.0f, %+.0f, %+.0f)); the muzzle (%s), the barrel yaw %s pitch %s; %s",
+                        nth, s.c or "?", sx, sy, sz, y, pt, math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z) / 100, age,
+                        l.X - ml.X, l.Y - ml.Y, l.Z - ml.Z,
+                        type(a) == "table" and string.format("%+.0f, %+.0f, %+.0f", a.x, a.y, a.z) or "?",
+                        type(a) == "table" and string.format("%.1f", a.yaw) or "?", type(a) == "table" and string.format("%.1f", a.pitch) or "?",
+                        hangs(s.o))
+                end)
+                log("tanicorn: " .. k.key .. " " .. (ok and line or ("a shell, not read: " .. tostring(line))))
+            end
         end
     end
 end
@@ -312,86 +420,150 @@ local function direct(x, y, face)
     return a, "spawned " .. nameOf(a)
 end
 
-local function look(tag, made)
-    local alive = type(SV_UnitAlive) == "function" and SV_UnitAlive(TANI.unit) or "?"
-    local ours = 0
-    for _, o in ipairs(FindAllOf(TANI.class) or {}) do
-        if valid(o) and not nameOf(o):find("Default__", 1, true) then ours = ours + 1 end
+-- a spawn's look 1 s and 4 s on (c: { tag, made, k: its mount type, x, y: its spot })
+local function look(c)
+    local k = c.k or TANI
+    local alive = type(SV_UnitAlive) == "function" and SV_UnitAlive(k.unit) or "?"
+    local n = 0
+    for _, o in ipairs(FindAllOf(k.class) or {}) do
+        if valid(o) and not nameOf(o):find("Default__", 1, true) then n = n + 1 end
     end
     local dummies = 0
-    if FISH and FISH.findNear and T.x then dummies = #FISH.findNear(TANI.dummy, T.x, T.y, 100000) end
-    log(string.format("tanicorn: %s: SV_UnitAlive %s; the spawn's objects: %s; %d of our class in the level, %d stock dummies near the spot",
-        tag, tostring(alive), describe(made), ours, dummies))
+    if FISH and FISH.findNear and c.x then dummies = #FISH.findNear(TANI.dummy, c.x, c.y, 100000) end
+    log(string.format("tanicorn: %s %s: SV_UnitAlive %s; the spawn's objects: %s; %d of our class in the level, %d stock dummies near the spot",
+        k.key, c.tag, tostring(alive), describe(c.made), n, dummies))
+end
+
+-- (0.74.61) a mount's fire control arms: how many, and each one's name and launcher (the row's arm, BP_FCS_..._C, in place of
+-- the blueprint's own LiveFireControlSystemArms when the row took: 0.74.59)
+local function armsOf(o)
+    local n, names = "?", {}
+    pcall(function()
+        local arms = o.FireControlSystemComponent.AllArms
+        n = tostring(#arms)
+        for i = 1, #arms do
+            local a, launcher = arms[i], "?"
+            pcall(function() launcher = a.LauncherModule:GetClass():GetFName():ToString() end)
+            names[#names + 1] = (valid(a) and ((nameOf(a):match("([^%.:]+)$")) or "?") or "none") .. " / " .. launcher
+        end
+    end)
+    return n .. (#names > 0 and (" (" .. table.concat(names, ", ") .. ")") or "")
 end
 
 local function watch(now)
     for i = #T.checks, 1, -1 do                          -- the 1 s and 4 s looks after a spawn
         local c = T.checks[i]
-        if now >= c.at then table.remove(T.checks, i); look(c.tag, c.made) end
+        if now >= c.at then table.remove(T.checks, i); look(c) end
     end
     shells(now)                                          -- (every tick: the shells made since the last)
     if now > T.until_ or now < T.next then return end
     T.next = now + TANI.every_s
-    local parts = {}
-    for _, o in ipairs(FindAllOf(TANI.class) or {}) do
-        if valid(o) and not nameOf(o):find("Default__", 1, true) then
-            local h, mx = "?", "?"
-            pcall(function() h = o.HealthInternal end)
-            pcall(function() mx = o.MaxHealth end)
-            local id = addrOf(o)
-            if not T.seen[id] then
-                T.seen[id] = true
-                local arms = "?"
-                pcall(function() arms = tostring(#o.FireControlSystemComponent.AllArms) end)
-                log(string.format("tanicorn: mount %s up at %s: fire control arms %s, health %s/%s", nameOf(o), at(o), arms,
-                    tostring(h), tostring(mx)))
-                log("tanicorn: our muzzle: " .. muzzleProbe(turretMesh(o)))
+    for _, e in ipairs(ours()) do                        -- (0.74.61) every mount type's, a line each
+        local o, k = e.o, e.k
+        local h, mx = "?", "?"
+        pcall(function() h = o.HealthInternal end)
+        pcall(function() mx = o.MaxHealth end)
+        local id = addrOf(o)
+        if id and not T.seen[id] then
+            T.seen[id] = true
+            log(string.format("tanicorn: %s mount %s up at %s: fire control arms %s, health %s/%s", k.key, nameOf(o), at(o),
+                armsOf(o), tostring(h), tostring(mx)))
+            log("tanicorn: " .. k.key .. " muzzle: " .. muzzleProbe(turretMesh(o)))
+            if not T.stockSaid then                      -- (once a key press: the same for every mount)
+                T.stockSaid = true
                 log("tanicorn: a stock turret's muzzle: " .. stockProbe(o))
             end
-            local ay = "?"
-            pcall(function() ay = string.format("%.1f", o:K2_GetActorRotation().Yaw) end)
-            parts[#parts + 1] = string.format("%s hp %s/%s actor yaw %s, %s",
-                (nameOf(o):match("([^%.:]+)$")) or "?", tostring(h), tostring(mx), ay, (aim(o)))
         end
+        local ay = "?"
+        pcall(function() ay = string.format("%.1f", o:K2_GetActorRotation().Yaw) end)
+        log(string.format("tanicorn: %s %s hp %s/%s actor yaw %s, %s", k.key, (nameOf(o):match("([^%.:]+)$")) or "?",
+            tostring(h), tostring(mx), ay, (aim(o))))
     end
-    if #parts > 0 then log("tanicorn: " .. table.concat(parts, "; ")) end
 end
 
-testKey("T", "sv_tanicorn.lua's mount test", function()
-    if not (D and D.now) or not nativeReady() then log("tanicorn: Ctrl+T outside a Survival run"); return end
-    if COOP and COOP.client and COOP.client() then log("tanicorn: Ctrl+T: the host spawns it (you're a joiner)"); return end
-    log("tanicorn: class " .. classCheck())
-    local ok, why = rowsIn()
-    log("tanicorn: rows: " .. why)
-    local p = playerLocation()
-    if not p then log("tanicorn: no player location"); return end
+-- the yaw you're flying (degrees), 0 when it can't be read
+local function playerYaw()
     local yaw = 0
     pcall(function()
         local pc = liveObj(survivalPC) and survivalPC or FindFirstOf("PlayerController")
         yaw = pc.Pawn:K2_GetActorRotation().Yaw
     end)
+    return yaw
+end
+
+-- one mount (k: a mount type) spawned through Survival's rows at (x, y) on the sea facing `face`, through the shoals' spawn
+-- capture: -> SV_Spawn's result, the objects the spawn made
+local function spawnMount(k, x, y, face)
+    local r
+    if FISH and FISH.spawn then r = FISH.spawn(k.unit, x, y, TANI.z_cm, face) else r = SV_Spawn(k.unit, x, y, TANI.z_cm, face) end
+    local list = {}
+    for _, o in ipairs((FISH and FISH.actors and FISH.actors[k.unit]) or {}) do list[#list + 1] = o end
+    return tonumber(r) or -5, list
+end
+
+testKey("T", "sv_tanicorn.lua's mount test", function()
+    if not (D and D.now) or not nativeReady() then log("tanicorn: Ctrl+T outside a Survival run"); return end
+    if COOP and COOP.client and COOP.client() then log("tanicorn: Ctrl+T: the host spawns it (you're a joiner)"); return end
+    log("tanicorn: class " .. classCheck(TANI))
+    local ok, why = rowsIn()
+    log("tanicorn: rows: " .. why)
+    local p = playerLocation()
+    if not p then log("tanicorn: no player location"); return end
+    local yaw = playerYaw()
     local x = p.X + math.cos(math.rad(yaw)) * TANI.ahead_cm
     local y = p.Y + math.sin(math.rad(yaw)) * TANI.ahead_cm
-    T.x, T.y = x, y
     local face = (yaw + 180) % 360
-    local r
-    if FISH and FISH.spawn then r = FISH.spawn(TANI.unit, x, y, TANI.z_cm, face) else r = SV_Spawn(TANI.unit, x, y, TANI.z_cm, face) end
-    local list = {}
-    for _, o in ipairs((FISH and FISH.actors and FISH.actors[TANI.unit]) or {}) do list[#list + 1] = o end
+    local r, list = spawnMount(TANI, x, y, face)
     local said = r > 0 and (r .. " up") or ("not spawned (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")")
     log(string.format("tanicorn: Ctrl+T, %s at (%.0f, %.0f, %d) facing %.0f: %s%s", TANI.unit, x, y, TANI.z_cm, face,
         said, ok and "" or " (its rows aren't all in)"))
     log("tanicorn: the spawn made " .. describe(list))
     if #list == 0 then                                    -- (the spawner made none: our class straight, beside the spot)
-        local d, why = direct(x + 30000, y, face)
-        log("tanicorn: straight spawn of our class 300 m from the spot: " .. why)
+        local d, whyD = direct(x + 30000, y, face)
+        log("tanicorn: straight spawn of our class 300 m from the spot: " .. whyD)
         if d then list[#list + 1] = d end
     end
     hudCallout("TEST: TANICORN MOUNT", r > 0 and "3 KM AHEAD" or "NOT SPAWNED")
     local now = os.clock()
-    T.checks[#T.checks + 1] = { at = now + 1, tag = "+1 s", made = list }
-    T.checks[#T.checks + 1] = { at = now + 4, tag = "+4 s", made = list }
-    T.next, T.until_, T.shells = 0, now + TANI.watch_s, 0
+    T.checks[#T.checks + 1] = { at = now + 1, tag = "+1 s", made = list, k = TANI, x = x, y = y }
+    T.checks[#T.checks + 1] = { at = now + 4, tag = "+4 s", made = list, k = TANI, x = x, y = y }
+    T.next, T.until_, T.shells[TANI.key], T.stockSaid = 0, now + TANI.watch_s, 0, nil
+end)
+
+-- (0.74.61) Ctrl+U: the other three mounts (TANI.mounts: T16, CIWS, LASER), each on its own rows and fire control row, 3 km
+-- ahead (ahead_cm) in a row across your path, mount_gap_cm apart (the T16 on your left, the LASER on your right), each facing
+-- you. Logged as the T5's, each line naming its mount: `tanicorn: <part> class loaded ...`, `tanicorn: Ctrl+U, <unit> (<part>)
+-- at (x, y, z) facing F: 1 up`, `tanicorn: <part> +1 s / +4 s: ...`, and while they're up (watch_s) `tanicorn: <part> mount
+-- ... up at ...: fire control arms 1 (<the row's arm> / LiveFCSModule_LauncherBoneControl)`, `tanicorn: <part> muzzle: ...`,
+-- the 2 s lines `tanicorn: <part> <name> hp ... barrel yaw ... pitch ...` and `tanicorn: <part> shell N (<class>): ...
+-- hangs on TurretPoseableMesh ... at socket SOC_Gun_0N`
+testKey("U", "sv_tanicorn.lua's mounts test", function()
+    if not (D and D.now) or not nativeReady() then log("tanicorn: Ctrl+U outside a Survival run"); return end
+    if COOP and COOP.client and COOP.client() then log("tanicorn: Ctrl+U: the host spawns them (you're a joiner)"); return end
+    for _, k in ipairs(TANI.mounts) do log("tanicorn: " .. k.key .. " class " .. classCheck(k)) end
+    local ok, why = rowsIn()
+    log("tanicorn: rows: " .. why)
+    local p = playerLocation()
+    if not p then log("tanicorn: no player location"); return end
+    local yaw = playerYaw()
+    local fx, fy = math.cos(math.rad(yaw)), math.sin(math.rad(yaw))
+    local cx, cy = p.X + fx * TANI.ahead_cm, p.Y + fy * TANI.ahead_cm
+    local face = (yaw + 180) % 360
+    local now, up, n = os.clock(), {}, #TANI.mounts
+    for i, k in ipairs(TANI.mounts) do
+        local off = (i - (n + 1) / 2) * TANI.mount_gap_cm    -- (across your path: -gap, 0, +gap; + is your right)
+        local x, y = cx - fy * off, cy + fx * off
+        local r, list = spawnMount(k, x, y, face)
+        local said = r > 0 and (r .. " up") or ("not spawned (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")")
+        log(string.format("tanicorn: Ctrl+U, %s (%s) at (%.0f, %.0f, %d) facing %.0f: %s%s; the spawn made %s", k.unit, k.key,
+            x, y, TANI.z_cm, face, said, ok and "" or " (its rows aren't all in)", describe(list)))
+        if r > 0 then up[#up + 1] = k.key end
+        T.checks[#T.checks + 1] = { at = now + 1, tag = "+1 s", made = list, k = k, x = x, y = y }
+        T.checks[#T.checks + 1] = { at = now + 4, tag = "+4 s", made = list, k = k, x = x, y = y }
+        T.shells[k.key] = 0
+    end
+    hudCallout("TEST: TANICORN MOUNTS", #up > 0 and (table.concat(up, ", ") .. " 3 KM AHEAD") or "NOT SPAWNED")
+    T.next, T.until_, T.stockSaid = 0, now + TANI.watch_s, nil
 end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn mount watch", fn = watch }
 

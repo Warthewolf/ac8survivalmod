@@ -73,6 +73,32 @@ TANI_HULL_BP_CLASS = 'BP_SV_Tani_HULL_C'
 TANI_HULL_HEALTH = 5000.0
 TANI_HULL_NAME_KEY = 'SV_TaniHull_Name'
 TANI_NAME_KEY = 'SV_TaniMount_Name'
+# (0.74.61) the Tanicorn's other gun mounts, each testable as the T5 is (Scripts/sv_tanicorn.lua Ctrl+U spawns the three in a
+# row): one unit each (the scored dummy unit again), its own mission row, DT_NPC row and model row (its blueprint
+# BP_SV_Tani_<part>, its health, its name key), the DT_NPC row's NpcFCSId0 its own fire control row SV_FCS_Tani<part>, which
+# sv_tanicorn.lua (TANI.mounts) clones at the main menu from a stock row whose arms blueprint drives BN_turret_yaw /
+# BN_turret_pitch on TurretPoseableMesh with the GUN prefix (0.74.59: the row's arm replaces the blueprint's and gives it its
+# muzzles; 0.74.58: without a row the weapon hung at socket None):
+#   T16    NPC_FCS_VesselArtillery000 (BP_FCS_Vessel_Artillery_00, the ships' main gun, BP_wp_artillery_vesselgun); the land
+#          battleships' railgun arms (BP_FCS_StrafingRailgun_00, the GR036 main cannon) drive PM_Cannon's BN_turret_pitch_01
+#          / _02, bones and a mesh our triple hasn't
+#   CIWS   NPC_FCS_VesselCIWS000 (BP_FCS_Vessel_CIWS_00, the Aegis's Mk15, BP_wp_ciws_vessel)
+#   LASER  NPC_FCS_VesselCIWS000 too, for now: no stock arms blueprint fires a laser (docs/re/TANICORN.md 3)
+# part: (the tag its names carry, its health). The tag never ends in a digit (build_survival.py's extra rows assert it;
+# hard rule 17), so the 16-inch's is T16Gun.
+TANI_MOUNT_PARTS = {'T16': ('T16Gun', 80.0), 'CIWS': ('CIWS', 30.0), 'LASER': ('LASER', 30.0)}
+
+
+def tani_mount(part):
+    """The names of THE TANICORN's test mount `part` (TANI_MOUNT_PARTS), as the T5's TANI_* are."""
+    tag, health = TANI_MOUNT_PARTS[part]
+    return {'part': part, 'unit': f'SV_Unit_Tani{tag}', 'obj': f'SV_Obj_Tani{tag}', 'row': f'sv_tani_{tag.lower()}',
+            'npc': f'SV_Npc_Tani{tag}', 'model': f'SV_Model_Tani{tag}',
+            'bp': f'/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_{part}', 'bp_class': f'BP_SV_Tani_{part}_C',
+            'fcs': f'SV_FCS_Tani{part}', 'name_key': f'SV_Tani{tag}_Name', 'health': health, 'up': f'SV_TaniUp{tag}'}
+
+
+TANI_MOUNTS = [tani_mount(p) for p in TANI_MOUNT_PARTS]
 # SAL's boat (FISHING.md 3; user: "SAL boat can just be an ally, dont worry about it too much"): Mission 28's allied Wasp
 # desc (faction 1, box, callsign, attack-target exception) on the stock fishing boat VE027_boat2_01, not invincible but
 # from AI and wingmen, MinHealth 1 on its mission row (as the stock allied ships'), its callsign as VOID WATCHER's
@@ -408,4 +434,8 @@ def build_tanicorn(g, stock_ep):
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: TANI_UNIT})
     g.execute(t_part, up, {0: TANI_OBJ}, delay=1.0)
     print(f'  tanicorn: {TANI_OBJ} ordered as it appears ({up}: Normal, PlayerFirst)')
+    for m in TANI_MOUNTS:                    # (0.74.61) the other gun mounts, the same way (TANI_MOUNTS)
+        g.trigger('01_E_AreaA_ReinforcementAppearance_0', m['up'], arg_changes={0: m['unit']})
+        g.execute(t_part, m['up'], {0: m['obj']}, delay=1.0)
+        print(f'  tanicorn: {m["obj"]} ({m["part"]}) ordered as it appears ({m["up"]}: Normal, PlayerFirst)')
 

@@ -15,6 +15,9 @@ THE TANACORN's parts (tools/tanicorn/export_tanacorn.py; docs/design/INVINCIBLE_
 sockets with their rotations (SOC_Gun_NN on turret_pitch, SOC_Vls_NN on Body along each cell's launch line), the hull's
 36 Mount_* sockets on its static mesh (mesh_sockets), and a blueprint for each gun mount on the 5-inch's layout
 (BP_SV_Tani_T5 / _T16 / _CIWS / _LASER; FCS below). The VLS blocks and the hull get their blueprints in WP1 / WP2.
+The deploying Alicorn parts (kinds railcannon and railgun: RAILCANNON, RAILGUN_L, RAILGUN_R, each with its Deploy
+animation) get their SOC_Gun_01 like the others and no blueprint of their own yet (no fire control: WP11); the hull's
+blueprint draws them, stowed, on Mount_RAILCANNON / Mount_RAILGUN_L / _R as it draws every part.
 """
 import json, os
 
@@ -113,7 +116,8 @@ def hull_bp(parts_on):
     the ship on the sea; the parts become live AI parts in the next): BP_SV_Tani_HULL on the native
     ALiveAIGroundVehicleObject (as the test mount: its spawn route through the model row is proven), the hull's static mesh
     (its 36 Mount_* sockets) and, on each part's socket, that part's skeletal mesh as a PoseableMeshComponent at its rest
-    pose (the VLS hatches shut, the guns level). parts_on: [(part, [socket name, ...])]."""
+    pose (the VLS hatches shut, the guns level, the railcannon down in its bay and the sub-railguns 6 m down under their
+    shut hatches: the stowed ship). parts_on: [(part, [socket name, ...])]."""
     def sk(p):
         return obj(f'{DEST}/Model/SK_SV_Tani_{p}')
     scs = [{'name': 'HullMesh', 'class': 'StaticMeshComponent', 'parent': 'RootComponent',
@@ -183,7 +187,7 @@ def main():
             spec['sockets'].append({'skeleton': obj(f'{DEST}/Model/SKEL_SV_Tani_{p}'),
                                     'mesh': obj(f'{DEST}/Model/SK_SV_Tani_{p}'), 'name': s['name'],
                                     'bone': s['bone'], 'loc': s['loc'], 'rot': s.get('rot', [0, 0, 0])})
-        if kind == 'turret' and p in FCS:
+        if kind == 'turret' and p in FCS:              # (the VLS blocks, the railcannon and the sub-railguns: none yet)
             spec['blueprints'].append(mount(p, info, FCS[p]))
     if hull:
         spec['blueprints'].append(hull_bp(parts_on))

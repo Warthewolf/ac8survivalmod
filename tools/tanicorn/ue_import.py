@@ -10,6 +10,10 @@ build/tanicorn/parts.json (TANI_PARTS=T5,HULL picks some), by its json's kind:
                                        (hard rules 42, 58: no master material of ours)
   turret   Model/SK_SV_<part> (+ SKEL_SV_<part>, PA_SV_<part>): bones Body > turret_yaw > turret_pitch
   vls      Model/SK_SV_<part> (+ SKEL, PA): bones Body > Hatch_01..08, and AS_SV_<part>_Open (the lids' swing, 0.5 s)
+  railcannon, railgun (the Alicorn's deploying parts: RAILCANNON, RAILGUN_L / _R)
+           Model/SK_SV_<part> (+ SKEL, PA): the json's bones (railcannon: Body > railcannon_pitch > barrel_n / barrel_p;
+           railgun: Body > lift > BN_turret_yaw > BN_turret_pitch, Body > Hatch_n / Hatch_p), and AS_SV_<part>_Deploy
+           (the design's deploy, rotations and the lift's translation; 3.333 s / 4.0 s)
   hull     Model/SM_SV_Tani_HULL: one static mesh (its 36 Mount_* sockets come from TaniBuild), collision its triangles
   each but the hull: Model/SM_SV_<part>_DAM, the wreck (a static mesh the destroy system shows)
 AC8's materials are stubs at their own paths here; the game loads its own. tools/tanicorn/build.sh packs only
@@ -194,7 +198,9 @@ def soft(fn):
         return f'? ({type(ex).__name__})'
 
 
-TEX = {}                                # textures imported in this run, by name (the side VLS blocks share one set)
+TEX = {}                                # textures imported in this run, by name (the side VLS blocks share one set,
+                                        # the two sub-railguns another)
+DEPLOY = ('railcannon', 'railgun')      # export_tanacorn.py deploying(): a rig and its Deploy
 
 
 def tex_once(src, name, *args, **kw):
@@ -301,6 +307,15 @@ def part(p, gear, dn):
             say(f'AS_SV_{name}_Open: {soft(lambda: round(anim.get_play_length(), 3))} s (export {info["anim"]["length_s"]} s)')
         else:
             say(f'  WARNING {name}: the import made no animation (the lids\' Open): {kinds}')
+    elif kind in DEPLOY:
+        sk, kinds = skinned(name, info, src, mats, tuple(info['bones']))
+        anim = renamed(kinds, 'AnimSequence', f'{DEST}/Model/AS_SV_{name}_Deploy')
+        if anim:
+            EAL.save_loaded_asset(anim)
+            say(f'AS_SV_{name}_Deploy: {soft(lambda: round(anim.get_play_length(), 3))} s (export {info["anim"]["length_s"]} s, '
+                f'the design frames {info["anim"]["design_frames"]})')
+        else:
+            say(f'  WARNING {name}: the import made no animation (its Deploy): {kinds}')
     else:
         skinned(name, info, src, mats, tuple(info['bones']))          # (0.74.59: BN_Body > BN_turret_yaw > BN_turret_pitch)
     if info.get('wreck', True):

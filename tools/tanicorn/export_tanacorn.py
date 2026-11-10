@@ -14,6 +14,13 @@ socket it sits on (SOCKET_Mount_<name>: its base at the origin, +X its forward),
            bent onto its own stretch of the hull): Tani_<P>.gltf skinned Body > Hatch_01..08, each lid's joint on its
            hinge, and the animation "Open" (0.5 s: every lid swings open about its hinge); sockets SOC_Vls_01..08 on
            Body with their launch direction
+  deploying (the Alicorn's moving parts, the design's own rigs and keys; rest = stowed, frame 1; identity rotations):
+           RAILCANNON (kind railcannon): Body (the bay section + RC_body) > railcannon_pitch > barrel_n / barrel_p (the
+           barrel halves, the bow's doors), SOC_Gun_01 at the barrels' mouth on railcannon_pitch;
+           RAILGUN_L / RAILGUN_R (kind railgun): Body > lift > BN_turret_yaw > BN_turret_pitch, Body > Hatch_n / Hatch_p,
+           SOC_Gun_01 at the rails' tip on BN_turret_pitch; each with the animation "Deploy" (the design's sequence
+           sampled every frame from the part's first key until every bone is out: a rotation, and the lift's
+           translation; frames and length in the json's "anim")
   the hull HULL: Tani_HULL.gltf static (the fused hull and the two pods), and every mount's socket in its json
   each     Tani_<P>_DAM.gltf (the same geometry static: the wreck the destroy system swaps in; not the hull), its
            textures as ordinary PNGs (the Iowa's as the Alicorn's grey with their own light and shade: the design's
@@ -21,8 +28,8 @@ socket it sits on (SOCKET_Mount_<name>: its base at the origin, +X its forward),
            side blocks share one set, T_SV_Tani_VLSS_*), a flat normal and a blank livemap, and Tani_<P>.json: kind, bones and sockets in UE cm (y flipped) with UE rotators (pitch,
            yaw, roll), material slots, the hull sockets it sits on
 and <out dir>/parts.json (the list ue_import.py and spec.py go through) and tanacorn_parts.json (the whole manifest).
-Not in it yet (WP11: the moving Alicorn parts): the bow railcannon and its bay doors, the two sub-railguns and their
-hatches; the hull is exported without them.
+The hull is exported without the deploying parts (their sockets' parts close its bay and wells); Mount_CORE has no
+part yet (WP11: the phase-3 core).
 The Iowa's parts are Sea Power's: the user's dev install only, never shipped.
 """
 import bpy, sys, os, json, math, struct
@@ -121,7 +128,8 @@ class Mesh:
 
 def write_gltf(path, name, prims, slots, joints=None, anim=None):
     """joints: [(name, parent index or -1, world place in the part's frame)] with identity rotations; anim: (name,
-    times, [(joint index, [quaternions (x, y, z, w) in the part's Blender frame])])"""
+    times, [(joint index, [quaternions (x, y, z, w) in the part's Blender frame] or None[, [the joint's translations
+    from its parent, Blender frame]])]): a rotation channel, a translation channel, or both"""
     bins = bytearray()
     views, accs = [], []
 
@@ -173,11 +181,16 @@ def write_gltf(path, name, prims, slots, joints=None, anim=None):
             aname, times, chans = anim
             t_acc = add(np.array(times, np.float32).reshape(-1, 1), 5126, "SCALAR", None, True)
             samplers, channels = [], []
-            for j, quats in chans:
-                q = np.array(quats, np.float32)                        # (x, y, z, w) -> glTF axes (x, z, -y, w)
-                q = np.stack([q[:, 0], q[:, 2], -q[:, 1], q[:, 3]], axis=1)
-                samplers.append({"input": t_acc, "output": add(q, 5126, "VEC4"), "interpolation": "LINEAR"})
-                channels.append({"sampler": len(samplers) - 1, "target": {"node": j, "path": "rotation"}})
+            for ch in chans:
+                j, quats, trans = ch[0], ch[1], (ch[2] if len(ch) > 2 else None)
+                if quats is not None:
+                    q = np.array(quats, np.float32)                    # (x, y, z, w) -> glTF axes (x, z, -y, w)
+                    q = np.stack([q[:, 0], q[:, 2], -q[:, 1], q[:, 3]], axis=1)
+                    samplers.append({"input": t_acc, "output": add(q, 5126, "VEC4"), "interpolation": "LINEAR"})
+                    channels.append({"sampler": len(samplers) - 1, "target": {"node": j, "path": "rotation"}})
+                if trans is not None:                                  # (a node's whole translation from its parent)
+                    samplers.append({"input": t_acc, "output": add(gl(np.array(trans)), 5126, "VEC3"), "interpolation": "LINEAR"})
+                    channels.append({"sampler": len(samplers) - 1, "target": {"node": j, "path": "translation"}})
             doc["animations"] = [{"name": aname, "samplers": samplers, "channels": channels}]
     else:
         doc["nodes"], doc["scenes"] = [{"name": name, "mesh": 0}], [{"nodes": [0]}]
@@ -262,7 +275,10 @@ def slots_for(part, folder, mats):
         cut = base_image(mat, "Alpha")
         slots.append({"slot": k, "material": m, "source": img.name if img else None, "basecolor": done[key][0],
                       "normal": done[key][1], **({"cutout": cut.name} if cut else {})})
-    for name, val in (("T_SV_Tani_%s_N" % part, (0.5, 0.5, 1.0)), ("T_SV_Tani_%s_L" % part, (0.0, 0.0, 0.0))):
+    # (0.74.61) the livemap on AC8's gear material (MP_Gear) is metallic / roughness / occlusion (docs/re/FALKEN_MATERIALS.md
+    # 2.4: the Falken's constant (0, 0.75, 1.0)); all black read as a mirror in full shadow: the user's screenshots of 0.74.60,
+    # "the textures look terrible", the whole ship near black on its shaded side
+    for name, val in (("T_SV_Tani_%s_N" % part, (0.5, 0.5, 1.0)), ("T_SV_Tani_%s_L" % part, (0.0, 0.75, 1.0))):
         save_png(np.tile(np.array([*val, 1.0], np.float32), (4, 4, 1)), os.path.join(folder, name + ".png"))
     return slots
 
@@ -287,7 +303,7 @@ def finish(part, mesh, info, joints=None, anim=None, wreck=True, tex=None):
     with open(os.path.join(folder, name + ".json"), "w") as f:
         json.dump(info, f, indent=1)
     MANIFEST[part] = {k: info[k] for k in ("kind", "on", "triangles", "vertices") if k in info}
-    print("export: %-8s %-6s %6d triangles, %6d vertices, %d slots, %d bones, %d sockets, on %s"
+    print("export: %-10s %-10s %6d triangles, %6d vertices, %d slots, %d bones, %d sockets, on %s"
           % (part, info["kind"], info["triangles"], info["vertices"], len(slots), len(info.get("bones", {})),
              len(info.get("sockets", [])), ", ".join(info.get("on", [])) or "-"))
 
@@ -369,6 +385,116 @@ def vls(part, on, body, axis, deg, tex=None):
     finish(part, mesh, info, joints, ("Open", times, [(k, quats) for k in range(1, len(lids) + 1)]), tex=tex)
 
 
+DEPLOY_FPS = 30                        # the design's deploy sequence (frames 1-360)
+
+
+def frame_in(Mi, name):
+    """an empty's place and turn in a part's frame, its scale taken out (the railcannon's bay is the design's at 0.9)"""
+    loc, rot, _ = (Mi @ D[name].matrix_world).decompose()
+    return Matrix.Translation(loc) @ rot.to_matrix().to_4x4()
+
+
+def deploying(part, kind, on, rig, muzzle, tex=None, note=None):
+    """an Alicorn part that deploys (the bow's railcannon, a sub-railgun) in the frame of its hull socket. rig: [(bone,
+    parent index or -1, the design's empty that moves it)], every mesh child of an empty on that empty's bone; muzzle:
+    (the socket's bone index, [bone indices whose meshes make the muzzle], nose m): SOC_Gun_01 at the middle of those
+    meshes' front (the vertices within `nose` m of it), along the socket bone's +X. The rest pose is the stowed one
+    (frame 1) and every joint has an identity rotation (the bones only carry places, as the turrets'); "Deploy" is the
+    design's own keys sampled a frame at a time, from the part's first key to the frame by which every bone is out
+    (each one's second key: out, held, back), a rotation and, where it moves (the railgun's lift), a translation for
+    each moving joint. Played backwards it stows (the design's own stow, keys 3-4, takes the same poses)."""
+    sc = bpy.context.scene
+    Mi = socket_of(on[0]).inverted()
+    sc.frame_set(1)
+    rest = [frame_in(Mi, e) for _, _, e in rig]
+    at = [r.translation.copy() for r in rest]
+    meshes = [(c.name, j) for j, (_, _, e) in enumerate(rig) for c in sorted(D[e].children, key=lambda o: o.name) if c.type == "MESH"]
+    under, todo = set(), [D[rig[0][2]]]                     # everything the design hangs under the part's root
+    while todo:
+        o = todo.pop()
+        for c in o.children:
+            under.add(c)
+            todo.append(c)
+    assert {o.name for o in under if o.type == "MESH"} == {n for n, _ in meshes}, "%s: a mesh not on a bone" % part
+    assert {o.name for o in under if o.type == "EMPTY"} == {e for _, _, e in rig[1:]}, "%s: an empty not in the rig" % part
+    mesh = Mesh()
+    for n, j in meshes:
+        mesh.add(D[n], Mi @ D[n].matrix_world, j)
+    keys = {}
+    for j, (b, _, e) in enumerate(rig):
+        ad = D[e].animation_data
+        if ad and ad.action:
+            ks = sorted({int(round(k.co[0])) for fc in ad.action.fcurves for k in fc.keyframe_points})
+            assert len(ks) == 4, "%s: %s's keys %s (out, held, back: 4 expected)" % (part, e, ks)
+            keys[j] = ks
+    f0, f1 = min(k[0] for k in keys.values()), max(k[1] for k in keys.values())
+
+    def pose(f):                                            # each joint's whole move at frame f, in the part's frame
+        sc.frame_set(f)
+        return [frame_in(Mi, e) @ rest[j].inverted() @ Matrix.Translation(at[j]) for j, (_, _, e) in enumerate(rig)]
+    corners = [(n, j, [Vector(c) for c in D[n].bound_box], Mi @ D[n].matrix_world) for n, j in meshes]
+    times, rot, loc, worst = [], {j: [] for j in keys}, {j: [] for j in keys}, 0.0
+    for f in range(f0, f1 + 1):
+        G = pose(f)
+        times.append((f - f0) / DEPLOY_FPS)
+        for j in keys:
+            p = rig[j][1]
+            t, q, _ = (G[p].inverted() @ G[j]).decompose()
+            if rot[j] and Quaternion(rot[j][-1][3:] + rot[j][-1][:3]).dot(q) < 0:   # (one hemisphere: no flip between samples)
+                q.negate()
+            rot[j].append((q.x, q.y, q.z, q.w))
+            loc[j].append(tuple(t))
+        # every mesh where the design has it at this frame: each must ride its own bone
+        for n, j, cs, M1 in corners:
+            Mf, mine = Mi @ D[n].matrix_world, G[j] @ Matrix.Translation(-at[j]) @ M1
+            worst = max(worst, max(((Mf @ c) - (mine @ c)).length for c in cs))
+    end = pose(f1)
+    sc.frame_set(1)
+    assert worst < 0.005, "%s: the exported deploy ends %.3f m from the model's" % (part, worst)
+    chans = []
+    for j in keys:
+        moves = max((Vector(v) - Vector(loc[j][0])).length for v in loc[j]) > 1e-4
+        turns = max(Quaternion((q[3], q[0], q[1], q[2])).rotation_difference(Quaternion()).angle for q in rot[j]) > 1e-5
+        chans.append((j, rot[j] if turns or not moves else None, *([loc[j]] if moves else [])))
+    # each moving bone at the end: how far it turned and went, where its head and its meshes' box are (Blender m, the
+    # part's frame: check_export.py reads the glTF back, plays it to its end and compares)
+    by = {}
+    for P, _, _, J in (x for parts in mesh.by.values() for x in parts):
+        for j in set(J.tolist()):
+            by.setdefault(j, []).append(P[J == j])
+    out = {}
+    for j in keys:
+        out[rig[j][0]] = {"design": rig[j][2], "keys": keys[j],
+                          "turns_deg": round(math.degrees(end[j].to_quaternion().angle), 3),
+                          "moves_m": round((end[j].translation - at[j]).length, 4),
+                          "end_head_m": [round(float(x), 4) for x in end[j].translation]}
+        if j in by:                                         # (a bone with meshes of its own)
+            E = end[j] @ Matrix.Translation(-at[j])
+            moved = np.concatenate(by[j]) @ np.array(E.to_3x3()).T + np.array(E.translation)
+            out[rig[j][0]]["end_box_m"] = [[round(float(x), 4) for x in moved.min(axis=0)],
+                                           [round(float(x), 4) for x in moved.max(axis=0)]]
+    # the muzzle: the middle of the front of those meshes' vertices, in the socket bone's own axes (its empty's)
+    jm, mj, nose = muzzle
+    E = rest[jm]
+    pts = np.array([E.inverted() @ Mi @ D[n].matrix_world @ v.co for n, j in meshes if j in mj for v in D[n].data.vertices])
+    front = pts[pts[:, 0] > pts[:, 0].max() - nose]
+    tip = E @ Vector((float(pts[:, 0].max()), float(front[:, 1].min() + front[:, 1].max()) / 2,
+                      float(front[:, 2].min() + front[:, 2].max()) / 2))
+    s1, s2 = min(k[2] for k in keys.values()), max(k[3] for k in keys.values())
+    info = {"kind": kind, "on": on,
+            "bones": {b: ue_cm(at[j]) for j, (b, _, _) in enumerate(rig)},
+            "parents": {b: (rig[p][0] if p >= 0 else None) for b, p, _ in rig},
+            "sockets": [{"name": "SOC_Gun_01", "bone": rig[jm][0], "loc": ue_cm(tip - at[jm]), "rot": ue_rot(E)}],
+            "anim": {"name": "Deploy", "length_s": round((f1 - f0) / DEPLOY_FPS, 4), "fps": DEPLOY_FPS,
+                     "design_frames": [f0, f1], "design_stow_frames": [s1, s2], "samples": len(times),
+                     "off_the_model_m": round(worst, 5), "bones": out,
+                     "note": "the design's deploy from its first key to every bone out (rest = stowed = frame 1); played "
+                             "backwards it stows"},
+            **({"note": note} if note else {})}
+    joints = [(b, p, tuple(at[j])) for j, (b, p, _) in enumerate(rig)]
+    finish(part, mesh, info, joints, ("Deploy", times, chans), tex=tex)
+
+
 turret("T16", ["T16_FWD", "T16_AFT"], "LEV_T16_FWD.001", "LEV_G16_FWD.001", D["LEV_G16_FWD_trunnion"].matrix_world.translation)
 turret("T5", ["T5_%d" % k for k in range(1, 7)], "LEV_IOWA_T5_1.001", "LEV_IOWA_G5_1.001",
        D["LEV_IOWA_G5_1_trunnion"].matrix_world.translation)
@@ -381,6 +507,24 @@ vls("VLSD", ["VLSD_%d" % k for k in range(1, 9)], "TANA_VLSD_1", "Y", -100.0)
 for side in "LR":
     for k in range(1, 5):
         vls("VLSS_%s%d" % (side, k), ["VLSS_%s%d" % (side, k)], "TANA_VLSS_%s%d" % (side, k), "X", 115.0, tex="VLSS")
+# the Alicorn's moving parts (the design's own rigs and keys): the bow's railcannon, its bay section (the trough under it,
+# fixed) on Body; its two barrel halves are the bow's "doors": flush with the deck when stowed, they lift with the cannon
+# (12 deg) and part about its long axis (14 deg each)
+deploying("RAILCANNON", "railcannon", ["RAILCANNON"],
+          [("Body", -1, "railcannon_bay"), ("railcannon_pitch", 0, "railcannon_pitch"),
+           ("barrel_n", 1, "railcannon_barrel_n"), ("barrel_p", 1, "railcannon_barrel_p")],
+          (1, (2, 3), 12.0),       # (the nose, 12 m: its cross-section's middle is the bore's line, 3.15 m over the trunnion)
+          note="the bay section and RC_body on Body; the barrel halves (the bow's doors) on barrel_n / barrel_p")
+# the sub-railguns: the same geometry in both sockets' frames (within 1 mm, measured 2026-11-10), but each trains
+# outboard as it deploys (yaw +35 deg port, -35 starboard): a part each, one set of textures
+for side in "LR":
+    deploying("RAILGUN_" + side, "railgun", ["RAILGUN_" + side],
+              [("Body", -1, "railgun_" + side), ("lift", 0, "railgun_%s_lift" % side), (TB_YAW, 1, "railgun_%s_yaw" % side),
+               (TB_PITCH, 2, "railgun_%s_pitch" % side), ("Hatch_n", 0, "hatch_%s_door_n" % side),
+               ("Hatch_p", 0, "hatch_%s_door_p" % side)],
+              (3, (3,), 0.6), tex="RAILGUN",
+              note="pedestal on lift (6 m down when stowed), house on BN_turret_yaw, rails on BN_turret_pitch (the stock "
+                   "turrets' names: a stock fire control row can drive them), the hatch doors on Hatch_n / Hatch_p")
 
 # the hull: the fused hull and the pods, in the ship's own frame (x forward, z up, the waterline at z = 0)
 hull = Mesh()
@@ -390,7 +534,9 @@ mounts = sorted((o for o in D if o.name.startswith("SOCKET_Mount_")), key=lambda
 finish("HULL", hull, {"kind": "hull", "on": [],
                       "sockets": [{"name": o.name[len("SOCKET_"):], "loc": ue_cm(o.matrix_world.translation),
                                    "rot": ue_rot(o.matrix_world)} for o in mounts],
-                      "not_included": ["the bow railcannon, its bay and doors", "the two sub-railguns and their hatches"]},
+                      "not_included": ["the bow railcannon with its bay section and doors: part RAILCANNON on Mount_RAILCANNON",
+                                       "the two sub-railguns with their hatches: parts RAILGUN_L / RAILGUN_R",
+                                       "the phase-3 core: Mount_CORE, no part yet (WP11)"]},
        wreck=False)
 used = sorted(n for p in MANIFEST.values() for n in p.get("on", []))
 free = [o.name[len("SOCKET_Mount_"):] for o in mounts if o.name[len("SOCKET_Mount_"):] not in used]

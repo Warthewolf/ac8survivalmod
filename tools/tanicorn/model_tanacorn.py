@@ -18,12 +18,14 @@ Blender's exact boolean, cell wells cut, bevelled (2 segments, normals hardened)
 (smart UV, no overlaps) and checked (non-manifold / open edges, faces through each other, degenerate faces, UVs out of
 0..1: tanacorn_model_check.json). Its texture is baked once (textures/T_TANA_<part>_D.png: the paint, a light grime
 noise and its own ambient occlusion; ordinary PNGs, hard rule 44).
+The Alicorn's two sheets (ALC_a / ALC_b, packed at 2048 px in the design) are swapped for the game's 4096 px ones from
+<TANI_BUILD>/alcn/tex before the save (alc_full_size; tools/tanicorn/alcn_textures.py makes them).
 Writes <out>/Tanacorn_model.blend (the design file is never changed; every hatch keyed open and shut in its 1-360
 sequence, HATCH_KEYS), with `render` <out>/renders/*.png (Cycles on the CPU; TANA_SAMPLES, TANA_SHOTS), and with `anim`
 <out>/renders/anim/tanacorn_hatches_<view>.mp4 and tanacorn_hatches.mp4: every block's hatches opening in 0.5 s, held,
 then shutting, from 5 views (ffmpeg; TANA_ANIM_SAMPLES, TANA_ANIM_VIEWS).
 """
-import bpy, bmesh, sys, os, json, math
+import bpy, bmesh, sys, os, json, math, struct
 import numpy as np
 from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
@@ -997,6 +999,48 @@ for house, gun in made["laser"]:
 print("model: %d laser turrets keyed: out %d-%d, back %d-%d" % (len(made["laser"]), LASER_KEYS[0][0], LASER_KEYS[0][1],
                                                                LASER_KEYS[1][0], LASER_KEYS[1][1]))
 
+
+def alc_full_size():
+    """the Alicorn's sheets at the game's own size (2026-11-10: the ship looked blurry in game): the design file holds
+    the ALC_a / ALC_b materials' six images packed at 2048 px (the stock textures' mip 1); tools/tanicorn/alcn_textures.py
+    decodes the game's 4096 px mip 0 into <TANI_BUILD>/alcn/tex, and each image datablock takes its file in place (the
+    same name, colour space and nodes), packed again so the model stays whole. Done here, after hull_uv.py picked its
+    plating windows on the 2048 px sheets, so the UV layout is the same as before; the export writes the 4096 px images
+    on as they are. A sheet that isn't there at 4096 keeps the design's copy, and the line says so."""
+    src = os.path.join(os.environ.get("TANI_BUILD") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
+                                                                    "build", "tanicorn"), "alcn", "tex")
+    imgs = []
+    for m in ("ALC_a", "ALC_b"):
+        mat = bpy.data.materials.get(m)
+        for nd in (mat.node_tree.nodes if mat and mat.use_nodes else []):
+            if nd.type == "TEX_IMAGE" and nd.image and nd.image not in imgs:
+                imgs.append(nd.image)
+    done, kept = [], []
+    for img in imgs:
+        name = os.path.basename(img.filepath.replace("\\", "/")) or img.name
+        path = os.path.normpath(os.path.join(src, name))
+        if not os.path.isfile(path):
+            kept.append("%s (no %s)" % (img.name, path))
+            continue
+        with open(path, "rb") as f:
+            head = f.read(24)
+        size = struct.unpack(">II", head[16:24]) if head[:8] == b"\x89PNG\r\n\x1a\n" else (0, 0)   # (its IHDR)
+        if size != (4096, 4096):
+            kept.append("%s (%s is %dx%d)" % (img.name, path, size[0], size[1]))
+            continue
+        cs, was = img.colorspace_settings.name, tuple(img.size)
+        if img.packed_file:
+            img.unpack(method="REMOVE")              # (the packed 2048 px copy dropped; nothing written anywhere)
+        img.filepath = path
+        img.reload()
+        img.colorspace_settings.name = cs
+        img.pack()
+        done.append("%s %dx%d -> %dx%d" % (img.name, was[0], was[1], img.size[0], img.size[1]))
+    print("model: ALC images at full size: %s%s" % (", ".join(done) or "none",
+          "; NOT: %s (python -I tools/tanicorn/alcn_textures.py makes them)" % ", ".join(kept) if kept else ""))
+
+
+alc_full_size()
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, "Tanacorn_model.blend"), compress=False, copy=True)
 for _, hs in hatches.values():                     # the renders below pose the hatches themselves (open_hatches)
     for h, hinge in hs:

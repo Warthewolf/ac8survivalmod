@@ -2460,3 +2460,45 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   (32 part meshes expected).
 - build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1), build 38d0d97ac60a... registered. INSTALLED
   2026-11-10 23:22 (backup: build/backup/install_before_0.74.60).
+
+## 0.74.61 (2026-11-11, overnight; the Tanicorn container rebuilt: textures, the railcannon and sub-railguns, three more test mounts)
+Built and installed while the user slept (her request: "start working on getting everything finished, anything that
+doesn't need me to open the game up to test, you can start building too", "get multiple agents working"). Not yet run in
+game. The work was split by file between agents; the builds ran in sequence in the main session.
+- The user's screenshots of 0.74.60 (Ctrl+Y: the whole ship drawn on the sea, every part on its socket, "TANACORN" on
+  its box): "the textures look terrible" (flat, blurred, near black on the shaded side), "why did the raincannon and
+  railguns not spawn" (they were never exported: WP0's not_included list).
+- The darkness: every part sits on AC8's gear material (MP_Gear through MI_PP0016_x40a_Gear), whose Livemap is metallic /
+  roughness / occlusion (docs/re/FALKEN_MATERIALS.md 2.4); ours was all black: a mirror in full shadow. The flat livemap
+  is now (0, 0.75, 1.0) (export_tanacorn.py), as the Falken's: `livemap (0, 191, 255)`.
+- The blur: the hull's Alicorn sheets (ALC_a / ALC_b) were 2048 px copies; the game's are 4096 px ordinary textures
+  (a_D DXT5, b_D / MREC DXT1, N BC5; the old copies were exactly their mip 1). tools/tanicorn/alcn_textures.py (new)
+  extracts and decodes them (retoc to-legacy, Pillow's BCn decoder) into build/tanicorn/alcn/tex (the 2048 ones kept as
+  *_2048.png); model_tanacorn.py alc_full_size() swaps the design's packed 2048 images for them after hull_uv's fix
+  (`model: ALC images at full size: ... 2048x2048 -> 4096x4096`); hull UVs and sockets unchanged (the check json
+  byte-identical). The container grew from 85 to 243 MB (the new parts also carry their own 4096 copies of the sheets:
+  sharing the hull's would save ~60 MB). The Iowa's own sheets stay as Sea Power has them (1024 and less).
+- The Alicorn's moving parts, exported as rigged parts with their deploy (export_tanacorn.py deploying(), kinds
+  'railcannon' / 'railgun'; check_export, ue_import, build.sh, README): RAILCANNON (Body: the bay's trough CUT_ALC_SECTION +
+  RC_body > railcannon_pitch > barrel_n / barrel_p; SOC_Gun_01 at the barrels' nose; AS_SV_Tani_RAILCANNON_Deploy 3.333 s,
+  the design's frames 40-140: pitch 12 deg, the halves split 14 deg); the bow's "doors" are the barrel halves themselves,
+  flush with the deck when stowed. RAILGUN_L / _R (Body > lift > BN_turret_yaw > BN_turret_pitch, Body > Hatch_n / Hatch_p;
+  SOC_Gun_01 at the rails' tip; AS_SV_Tani_RAILGUN_*_Deploy 4.0 s: lift 6 m, yaw 35 deg outboard, pitch 22, hatches 105;
+  the first translation track through UE's glTF import). Rest pose = stowed. `export: 17 parts; 36 hull sockets, 35 with
+  a part, without one yet: ['CORE']`, CHECK ALL OK; the hull blueprint draws them stowed (Part_RAILCANNON / _RAILGUN_L / _R).
+- Three more test mounts like the T5 (each its own unit, rows, a fire control row cloned at the main menu, an engage order;
+  Ctrl+U spawns all three 3 km ahead, 400 m apart): T16 on NPC_FCS_VesselArtillery000 (BP_FCS_Vessel_Artillery_00, the
+  vessel artillery shell; no stock railgun row drives BN_turret_yaw / _pitch on TurretPoseableMesh: GR036's main cannon has
+  no fire control row, BP_FCS_StrafingRailgun_00 drives PM_Cannon / BN_turret_pitch_01..02), SlotNum 3, 12 / 8 deg/s, yaw
+  +-150, pitch -2..45; CIWS on NPC_FCS_VesselCIWS000 (BP_FCS_Vessel_CIWS_00), SlotNum 1, 120 / 100 deg/s; LASER on the CIWS
+  row too for now (no stock laser arm: its own arms BP with BP_SwingTLS_ForMSL later). Names SV_Unit_TaniT16Gun /
+  TaniCIWS / TaniLASER (a name can't end in a digit for the extra-rows loop and port_unit), SV_FCS_Tani<Type>, boxes
+  "TANICORN 16-INCH" / "CIWS" / "LASER". sv_tanicorn.lua's logging covers all four types (`tanicorn: T16 ...`; the T5's
+  lines now carry "T5").
+- build.sh: CHECK ALL OK, ue_import 0 warnings, TaniBuild done (0 errors). build_all.sh (ZFA=1 TANI=1), package_dev.sh
+  (VALKA=1 ZFA=1 TANI=1), build 2783b868b296... registered. INSTALLED 2026-11-11 00:02 (backup:
+  build/backup/install_before_0.74.61).
+- To see in game: Ctrl+Y: the ship lit as a ship (no near-black side), the hull's Alicorn plating sharper, the bow's
+  railcannon flush in its bay, the two sub-railgun hatches shut on the pods. Ctrl+T: the T5 (40 deg/s). Ctrl+U: the
+  T16, CIWS and LASER aim and fire from their muzzles (`hangs on ... at socket SOC_Gun_0N`); the CIWS / LASER reach is
+  2.5 km (spawned 3 km out: close in).

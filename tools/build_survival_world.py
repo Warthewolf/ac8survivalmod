@@ -298,6 +298,15 @@ def tanicorn_units(units, used_ids, z, top_number):
     clear_flags(u, ('bIsLanding',))
     place(u, (0.0, 0.0, 0.0), 0.0)
     print(f'  {se.TANI_HULL_UNIT}: {names[0]} on {se.TANI_HULL_ROW} (the Tanacorn hull test)')
+    # (0.74.61) the other gun mounts (TANI_MOUNTS: T16, CIWS, LASER), each as the T5: Ctrl+U
+    for m in se.TANI_MOUNTS:
+        names = port_unit(units, used_ids, z, src, m['unit'], m['obj'], m['row'], [(0.0, 0.0, se.FISH_Z_CM)], 0.0,
+                          top_number, tgt=True)
+        assert names == [m['obj']], names
+        u = unit_named(units, m['unit'])
+        clear_flags(u, ('bIsLanding',))
+        place(u, (0.0, 0.0, se.FISH_Z_CM), 0.0)
+        print(f'  {m["unit"]}: {names[0]} on {m["row"]} (the Tanicorn {m["part"]} test mount)')
 
 
 def fishing_units(units, used_ids, z, top_number):

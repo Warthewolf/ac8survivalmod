@@ -1,6 +1,9 @@
-"""re-imports every exported glTF into an empty Blender scene and checks it against its json"""
+"""re-imports every exported glTF into an empty Blender scene and checks it against its json: triangles, slots, bones
+and their places; a VLS block's lids swing as the json says; a deploying part (the railcannon, the sub-railguns) played to
+the end of its Deploy has every bone turned and placed, and every bone's meshes where the export says (its json's anim)"""
 import bpy, sys, os, json, math
 from mathutils import Vector
+DEPLOY = ("railcannon", "railgun")      # export_tanacorn.py deploying()
 root = sys.argv[sys.argv.index("--") + 1]
 parts = json.load(open(os.path.join(root, "parts.json")))
 bad = 0
@@ -20,7 +23,7 @@ for p in parts:
         vs = [o.matrix_world @ v.co for o in meshes for v in o.data.vertices]
         lo = Vector((min(v.x for v in vs), min(v.y for v in vs), min(v.z for v in vs))); hi = Vector((max(v.x for v in vs), max(v.y for v in vs), max(v.z for v in vs)))
         nmat = len({s.material.name for o in meshes for s in o.material_slots if s.material})
-        msg = "%-8s%-4s tris %6d (json %6d) mats %2d (json %2d) bounds x %.1f..%.1f y %.1f..%.1f z %.1f..%.1f m" % (p, suffix, tris, info["triangles"], nmat, len(info["slots"]), lo.x, hi.x, lo.y, hi.y, lo.z, hi.z)
+        msg = "%-10s%-4s tris %6d (json %6d) mats %2d (json %2d) bounds x %.1f..%.1f y %.1f..%.1f z %.1f..%.1f m" % (p, suffix, tris, info["triangles"], nmat, len(info["slots"]), lo.x, hi.x, lo.y, hi.y, lo.z, hi.z)
         ok = tris == info["triangles"] and nmat == len(info["slots"])
         if suffix == "" and info["kind"] != "hull":
             bones = [b.name for b in arms[0].data.bones] if arms else []
@@ -62,13 +65,66 @@ for p in parts:
                     far = max((ev_p - arm.matrix_world @ arm.data.bones["Hatch_01"].head_local).length for ev_p in [lid.matrix_world @ lid.data.vertices[i].co for i in idx])
                     msg += ", swings %.1f deg (json %.1f), lid reaches %.2f m from its hinge, %d verts" % (swing, abs(info["anim"]["open_deg"]), far, len(idx))
                     ok = ok and abs(swing - abs(info["anim"]["open_deg"])) < 0.5
+            elif info["kind"] in DEPLOY:
+                an = info["anim"]
+                acts = list(bpy.data.actions)
+                ok = ok and len(acts) == 1
+                if acts:
+                    a, arm, sc = acts[0], arms[0], bpy.context.scene
+                    arm.animation_data_create(); arm.animation_data.action = a
+                    def go(fr):
+                        sc.frame_set(int(fr), subframe=fr - int(fr))
+                    first, last = a.frame_range
+                    secs = (last - first) / sc.render.fps
+                    go(first)
+                    q0 = {b: arm.pose.bones[b].matrix.to_quaternion() for b in an["bones"]}
+                    go(last)
+                    dg = bpy.context.evaluated_depsgraph_get()
+                    # every vertex on a bone (weight > 0.5) where the played mesh has it at the end
+                    ends = {}
+                    for o in meshes:
+                        gi = {g.index: g.name for g in o.vertex_groups}
+                        idx = {}
+                        for v in o.data.vertices:
+                            for g in v.groups:
+                                if g.weight > 0.5:
+                                    idx.setdefault(gi[g.group], []).append(v.index)
+                        ev = o.evaluated_get(dg)
+                        me = ev.to_mesh()
+                        for b, ii in idx.items():
+                            ends.setdefault(b, []).extend(ev.matrix_world @ me.vertices[i].co for i in ii)
+                        ev.to_mesh_clear()
+                    wt = wh = wb = 0.0
+                    for b, want in an["bones"].items():
+                        pb = arm.pose.bones[b]
+                        sw = math.degrees(q0[b].rotation_difference(pb.matrix.to_quaternion()).angle); sw = min(sw, 360.0 - sw)
+                        wt = max(wt, abs(sw - want["turns_deg"]))
+                        wh = max(wh, ((arm.matrix_world @ pb.head) - Vector(want["end_head_m"])).length)
+                        if "end_box_m" in want:
+                            P = ends.get(b)
+                            if not P:
+                                wb = float("inf")
+                                continue
+                            lo = Vector([min(v[i] for v in P) for i in range(3)]); hi = Vector([max(v[i] for v in P) for i in range(3)])
+                            wb = max(wb, (lo - Vector(want["end_box_m"][0])).length, (hi - Vector(want["end_box_m"][1])).length)
+                    msg += (" | anim '%s' %.3f s (json %.3f; frames %.1f-%.1f at %d fps), at its end every bone within %.2f deg "
+                            "and %.4f m of the export, its meshes' box within %.4f m" % (a.name, secs, an["length_s"], first, last,
+                                                                                        sc.render.fps, wt, wh, wb))
+                    ok = ok and abs(secs - an["length_s"]) < 0.02 and wt < 0.5 and wh < 0.01 and wb < 0.01
         say(ok, msg)
     if info["kind"] == "turret":
         print("CHECK      %-8s pitch pivot %s cm, sockets %s, guns lie %s m from the pivot" % (p, [v for k, v in info["bones"].items() if k.endswith("turret_pitch")][0], [(s["name"], s["loc"]) for s in info["sockets"]], info["guns_forward_m"]))
     if info["kind"] == "vls":
         print("CHECK      %-8s SOC_Vls_01 %s rot %s ; Hatch_01 %s" % (p, info["sockets"][0]["loc"], info["sockets"][0]["rot"], info["bones"]["Hatch_01"]))
+    if info["kind"] in DEPLOY:
+        an, s0 = info["anim"], info["sockets"][0]
+        print("CHECK      %-10s %s on %s at %s cm rot %s; Deploy %.3f s (the design's frames %d-%d; it stows at %d-%d): %s" % (
+            p, s0["name"], s0["bone"], s0["loc"], s0["rot"], an["length_s"], an["design_frames"][0], an["design_frames"][1],
+            an["design_stow_frames"][0], an["design_stow_frames"][1],
+            ", ".join("%s %.1f deg%s" % (b, w["turns_deg"], ", %.2f m" % w["moves_m"] if w["moves_m"] else "") for b, w in an["bones"].items())))
 h = json.load(open(os.path.join(root, "src_HULL", "Tani_HULL.json")))
 for s in h["sockets"]:
-    if s["name"] in ("Mount_T16_FWD", "Mount_T16_AFT", "Mount_CIWS_1", "Mount_VLSD_1", "Mount_VLSS_L4", "Mount_VLSS_R4", "Mount_LASER_AFT_L"):
+    if s["name"] in ("Mount_T16_FWD", "Mount_T16_AFT", "Mount_CIWS_1", "Mount_VLSD_1", "Mount_VLSS_L4", "Mount_VLSS_R4", "Mount_LASER_AFT_L",
+                     "Mount_RAILCANNON", "Mount_RAILGUN_L", "Mount_RAILGUN_R"):
         print("CHECK      hull socket %-18s loc %s cm rot (pitch, yaw, roll) %s" % (s["name"], s["loc"], s["rot"]))
 print("CHECK %s: %d parts, %d failures" % ("ALL OK" if not bad else "FAILED", len(parts), bad))

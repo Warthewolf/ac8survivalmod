@@ -11,22 +11,29 @@ folder; `TANI_PARTS=T5,HULL` for some parts only; `TANI_STOP=export` to stop bef
 2. `export_tanacorn.py`: every part type in the frame of its hull socket -> `build/tanicorn/src_<part>` and
    `parts.json`: the four gun mounts T16, T5, CIWS, LASER (skinned glTF, Body > turret_yaw > turret_pitch, identity
    rotations, muzzle sockets SOC_Gun_NN), the VLS blocks VLSD and VLSS_L1..R4 (Body > Hatch_01..08, the animation
-   Open, launch sockets SOC_Vls_NN), the hull HULL (static, its 36 Mount_* sockets), each part's wreck, textures,
-   `Tani_<part>.json` (kind, bones, sockets in UE cm with UE rotators, slots). `check_export.py` reads every glTF
-   back into Blender and compares it with its json (triangles, slots, bones, each lid's swing): `CHECK ALL OK`.
+   Open, launch sockets SOC_Vls_NN), the Alicorn's deploying parts from the design's own rigs and keys (RAILCANNON,
+   kind railcannon: Body (its bay section) > railcannon_pitch > barrel_n / barrel_p, the barrel halves being the bow's
+   doors; RAILGUN_L / _R, kind railgun: Body > lift > BN_turret_yaw > BN_turret_pitch and Body > Hatch_n / Hatch_p;
+   each SOC_Gun_01 and the animation Deploy, the design's sequence from the first key until every bone is out: 3.333 s
+   / 4.0 s; rest = stowed), the hull HULL (static, its 36 Mount_* sockets; Mount_CORE has no part yet), each part's
+   wreck, textures, `Tani_<part>.json` (kind, bones, sockets in UE cm with UE rotators, slots, anim). `check_export.py`
+   reads every glTF back into Blender and compares it with its json (triangles, slots, bones, each lid's swing, each
+   deploying part played to its end: every bone's turn and place, its meshes' box): `CHECK ALL OK`.
 3. `ue_import.py` in the template project: textures, instances on AC8's gear material (stubs at AC8's paths, never
-   packed), the rigged meshes, the lids' AnimSequences (AS_SV_Tani_<part>_Open), the hull's static mesh, the wrecks.
+   packed), the rigged meshes, the lids' AnimSequences (AS_SV_Tani_<part>_Open) and the deploying parts'
+   (AS_SV_Tani_<part>_Deploy), the hull's static mesh, the wrecks.
    Its log ends with its warnings counted, then `done`.
 4. `spec.py` -> `tani.spec.json`; 5. the `TaniBuild` commandlet (tools/laser7/cpp/SurvivalFx, the shared editor
    module): the skeletons' sockets, the hull's sockets (`mesh_sockets`), stubs for stock shots, the gun mounts'
    blueprints on AC8's native classes (BP_SV_Tani_T5 / _T16 / _CIWS / _LASER: the 5-inch's fire control and the stock
-   AA shell until WP1 gives each its own weapon).
+   AA shell until WP1 gives each its own weapon), and BP_SV_Tani_HULL with every part drawn on its sockets at rest
+   (the railcannon and the sub-railguns stowed; no blueprint or fire control of their own yet).
 6. Cook (VERSIONED, hard rule 42); 7. `retoc to-zen` of `/Game/Mods/SurvivalMode/Tanicorn` only; 8. `pad.py`.
 The first 5-inch mount (milestone 0) came through `prepare_part.py` from `build/tanicorn/src.blend` (`bl_import.py`);
 the export gives the same T5 (the same pivot and muzzles) and build.sh no longer calls them. Logs to read after a
 run, all in `build/tanicorn`: `export_check.log`, `ue_import.log` (each skeleton's `bones within ... cm of the
-export`, `AS_SV_..._Open: 0.5 s`, `SM_SV_Tani_HULL: ... triangles`), `tanibuild.log` (`SM_SV_Tani_HULL: 36 sockets`,
-`done (0 errors)`), `cook.log`.
+export`, `AS_SV_..._Open: 0.5 s`, `AS_SV_Tani_RAILCANNON_Deploy: 3.333 s`, `SM_SV_Tani_HULL: ... triangles`),
+`tanibuild.log` (`SM_SV_Tani_HULL: 36 sockets`, `done (0 errors)`), `cook.log`.
 
 THE TANACORN's whole ship (docs/design/INVINCIBLE_FLEET.md WP0): `model_tanacorn.py` (Blender 3.3) takes the
 Leviathan design (`art/tanicorn/design/Leviathan_animated.blend`: Sea Power's Iowa fused with the Alicorn) and adds the
