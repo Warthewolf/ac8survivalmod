@@ -46,8 +46,11 @@ def mount(part, info, fcs):
         'path': bp,
         'parent': 'LiveAIGroundVehicleObject',
         'scs': [
+            # both mesh fields, as the stock Mk45's template has them: UE 5.4 draws and poses from SkinnedAsset, but with
+            # SkeletalMesh (deprecated, still a property) empty AC8's fire control found no muzzle socket and fired from
+            # the mesh's origin along its forward (0.74.50-0.74.51: the turret tracked, the shells left its foot southward)
             {'name': 'TurretPoseableMesh', 'class': 'PoseableMeshComponent', 'parent': 'RootComponent',
-             'props': {'SkinnedAsset': obj(f'{DEST}/Model/SK_SV_{name}')}},
+             'props': {'SkeletalMesh': obj(f'{DEST}/Model/SK_SV_{name}'), 'SkinnedAsset': obj(f'{DEST}/Model/SK_SV_{name}')}},
             {'name': 'DamagedStaticMesh', 'class': 'StaticMeshComponent', 'parent': 'RootComponent',
              'props': {'StaticMesh': obj(f'{DEST}/Model/SM_SV_{name}_DAM'), 'bVisible': 'False'}},
             {'name': 'DamagedCollision', 'class': 'SphereComponent', 'parent': 'RootComponent',

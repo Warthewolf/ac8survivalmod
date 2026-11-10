@@ -2311,3 +2311,19 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   within 150 m). An emitter on RootComponent / None, or one whose heading stays while SOC_Gun_01's turns, is the fault.
 - package_dev.sh (VALKA=1 ZFA=1 TANI=1), build 909414c5b257... registered. INSTALLED 2026-11-10 over 0.74.50 (backup:
   build/backup/install_before_0.74.51).
+
+## 0.74.52 (2026-11-10; the Tanicorn container rebuilt, the Lua unchanged but its version)
+- The user's run of 0.74.51 (21:51): "I'm seeing the Mount rotate and the gun tubes go up and down tracking me" (the actor's
+  yaw stayed 82.5: the fire control turns our bones), and "when it fires its firing from the bottom of the mount in a
+  southwards direction": the shells left the mesh's origin along its forward (the actor faced 82.5). The level held one
+  BP_wp_aagun_vessel_C, never within 150 m of the mount (perf walks: "1 found"). The muzzle socket wasn't found.
+- The stock Mk45's TurretPoseableMesh template sets BOTH SkeletalMesh (UE 5.4's deprecated property, still serialized)
+  and SkinnedAsset; ours set SkinnedAsset only (UE draws and poses from it, so the turret looked and tracked right).
+  tools/tanicorn/spec.py now sets both on every mount (T5, T16, CIWS, LASER). Inferred, not yet seen: AC8's fire control
+  looks the muzzle up through SkeletalMesh.
+- sv_tanicorn.lua's socket readout through o.TurretPoseableMesh still gave no Yaw (left as it is; SPC.V.comps is the
+  route that reads sockets, as the ZFA-44 test does).
+- build.sh: CHECK ALL OK, 0 warnings, TaniBuild done (0 errors). build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1
+  TANI=1), build 991f6a15213d... registered. INSTALLED 2026-11-10 over 0.74.51 (backup: build/backup/install_before_0.74.52).
+- To see in game: Ctrl+T; the shells leave the barrel tips along the barrels and follow the turret. If they still leave
+  the foot: the socket lookup isn't the mesh field (next: one muzzle socket as the stock's, rotated (0, 0, -90), SlotNum 1).
