@@ -60,7 +60,7 @@ local posts, results, replies = {}, {}, {}
 function SV_Post(body) posts[#posts + 1] = body; return #posts end
 function SV_PostResult(id) return results[id] or 0 end
 function SV_PostReply(id) return replies[id] or "" end
-function SV_SteamName() return "Naish" end
+function SV_SteamName() return "Omega" end
 KILL = { side = function() end }
 function SV_CoopSend() return 1 end
 local texts = {}
@@ -340,7 +340,7 @@ check(#LB.queue == 1 and #keptLines() == 1 and LB.show.state == "queued", "(0.73
 LB.queue, LB.qwait = {}, nil
 os.remove(WORK .. "/config/pending_runs.txt")
 -- a body that says it was edited (never sent: a guard) isn't kept either; the same run refused again is kept once
-LB.jobs[#LB.jobs + 1] = { id = 900, body = '{"v":1,"run_id":"' .. string.rep("e", 32) .. '","pilot":"Naish","round":3,"edited":["x"]}' }
+LB.jobs[#LB.jobs + 1] = { id = 900, body = '{"v":1,"run_id":"' .. string.rep("e", 32) .. '","pilot":"Omega","round":3,"edited":["x"]}' }
 LB.jobs[#LB.jobs + 1] = { id = 901, body = refusedBody }
 results[900], replies[900] = 422, '{"ok":false,"error":"edited or unknown build"}'
 results[901], replies[901] = 422, '{"ok":false,"error":"edited or unknown build"}'
@@ -380,11 +380,11 @@ local function lastPost() return posts[#posts] or "" end
 local SID = { "76561198000000001", "76561198000000002", "76561198000000003", "76561198000000004" }
 check(tallyHook == 1 and type(tallyKill) == "function", "the test reaches sv_coop.lua's tallyKill (the host's named kills)")
 posts, results, replies, LB.jobs = {}, {}, {}, {}
-CFG.leaderboard.pilot = ""                                  -- (the run's pilot: the Steam name, Naish)
+CFG.leaderboard.pilot = ""                                  -- (the run's pilot: the Steam name, Omega)
 COOP.open, COOP.role, COOP.slot, M.linkedPeers = true, "host", 0, 3
-M.roster = { [0] = { name = "Naish", sid = SID[1], code = "f16c" }, [1] = { name = "Wolf", sid = SID[2], code = "su57" },
+M.roster = { [0] = { name = "Omega", sid = SID[1], code = "f16c" }, [1] = { name = "Wolf", sid = SID[2], code = "su57" },
              [2] = { name = "\208\146\208\158\208\155\208\154", sid = SID[3], code = "fa36" },   -- (Cyrillic: no Latin letters)
-             [3] = { name = "NAISH", sid = SID[4], code = "adfx02" } }
+             [3] = { name = "OMEGA", sid = SID[4], code = "adfx02" } }
 players = { { slot = 0, isMe = true }, { slot = 1, inLevel = true }, { slot = 2, inLevel = true }, { slot = 3, inLevel = true } }
 LB.co = nil
 newRun(); RUN.stats.air, RUN.stats.ground = 40, 6           -- (the host's count: every kill its game saw, as solo)
@@ -396,7 +396,7 @@ for _ in pairs(co and co.squad or {}) do n = n + 1 end
 check(co and co.mine and #co.id == 32 and n == 4, "the host's co-op run: its id and 4 in the squad (" .. n .. ")")
 local hostId = co and co.id or "?"
 local w1 = lbWire()
-check(#w1 >= 2 and w1[1].msg:find("^lb|r|" .. hostId .. "|%d+|40|6|") and w1[2].msg:find("^lb|p|" .. hostId .. "|sid" .. SID[1] .. ",0,40,6,0,f16c,Naish"),
+check(#w1 >= 2 and w1[1].msg:find("^lb|r|" .. hostId .. "|%d+|40|6|") and w1[2].msg:find("^lb|p|" .. hostId .. "|sid" .. SID[1] .. ",0,40,6,0,f16c,Omega"),
     "the host tells everyone: lb|r (the run) and lb|p (the players): " .. tostring(w1[2] and w1[2].msg:sub(1, 90)))
 LB.coopMsg(fields("lb|n|" .. hostId .. "|Wolfie"), 1)       -- (player 2's leaderboard name)
 check(logged("player 2 goes on the leaderboard as Wolfie"), "a joiner's leaderboard name taken (lb|n)")
@@ -419,13 +419,13 @@ local migrWire = lbWire(true)                                -- (what a joiner h
 LB.finish("died")
 local b = lastPost()
 local cp = coopPart(b) or ""
-check(#posts == 1 and b:find('"run_id":"' .. hostId .. '"', 1, true) and b:find('"pilot":"Naish"', 1, true)
+check(#posts == 1 and b:find('"run_id":"' .. hostId .. '"', 1, true) and b:find('"pilot":"Omega"', 1, true)
     and b:find('"kills":{"air":40,"ground":6}', 1, true), "the host sends one record: the co-op run's id, its pilot, the squad's kills")
-check(cp == '{"players":4,"squad":[{"pilot":"Naish","aircraft":"f16c","air":33,"ground":4,"revives":1,"host":true},'
+check(cp == '{"players":4,"squad":[{"pilot":"Omega","aircraft":"f16c","air":33,"ground":4,"revives":1,"host":true},'
     .. '{"pilot":"Wolfie","aircraft":"su57","air":5,"ground":0,"revives":1},{"pilot":"Pilot 3","aircraft":"fa36","air":0,"ground":2,"revives":0},'
-    .. '{"pilot":"NAISH 2","aircraft":"adfx02","air":2,"ground":0,"revives":0}]}',
+    .. '{"pilot":"OMEGA 2","aircraft":"adfx02","air":2,"ground":0,"revives":0}]}',
     "its squad: the host first (the run's kills less the joiners'), a joiner's own name, a non-Latin name as Pilot 3, a name "
-    .. "twice ignoring case as NAISH 2, the one who left with their kills: " .. cp)
+    .. "twice ignoring case as OMEGA 2, the one who left with their kills: " .. cp)
 check(sumIn(cp, "air") == 40 and sumIn(cp, "ground") == 6, "the squad's kills add up to the run's exactly")
 check(logged("leaderboard: co-op run " .. hostId:sub(1, 8) .. " over (died): 4 players") and logged("(co-op, 4 players)"),
     "logged: the squad, and the co-op send")
@@ -439,14 +439,14 @@ keep("squad's kills don't add up to the run's", "the same run with its squad's k
 posts, results, replies, LB.jobs = {}, {}, {}, {}
 COOP.role, COOP.slot, LB.co = "join", 1, nil
 CFG.leaderboard.pilot = "Wolfie"
-M.roster = { [0] = { name = "Naish", sid = SID[1], code = "f16c" }, [1] = { name = "Wolf", sid = SID[2], code = "su57" },
+M.roster = { [0] = { name = "Omega", sid = SID[1], code = "f16c" }, [1] = { name = "Wolf", sid = SID[2], code = "su57" },
              [2] = { name = "\208\146\208\158\208\155\208\154", sid = SID[3], code = "fa36" } }
 for _, w in ipairs(migrWire) do LB.coopMsg(fields(w.msg)) end
 co = LB.co
 local mn = 0
 for _ in pairs(co and co.squad or {}) do mn = mn + 1 end
 local hostLine = co and co.squad["sid" .. SID[1]]
-check(co and co.id == hostId and not co.mine and mn == 4 and hostLine and hostLine.air == 33 and hostLine.pilot == "Naish"
+check(co and co.id == hostId and not co.mine and mn == 4 and hostLine and hostLine.air == 33 and hostLine.pilot == "Omega"
     and co.run.air == 40, "a joiner keeps the host's squad (" .. mn .. ") and run (lb|r, lb|p)")
 wire = {}
 LB.poll()
@@ -473,8 +473,8 @@ b = lastPost(); cp = coopPart(b) or ""
 check(#posts == 1 and b:find('"run_id":"' .. hostId .. '"', 1, true) and b:find('"pilot":"Wolfie"', 1, true)
     and b:find('"kills":{"air":41,"ground":6}', 1, true), "the host by migration sends it: the first host's run id, its own pilot")
 check(cp == '{"players":4,"squad":[{"pilot":"Wolfie","aircraft":"su57","air":5,"ground":0,"revives":1,"host":true},'
-    .. '{"pilot":"Naish","aircraft":"f16c","air":33,"ground":4,"revives":1},{"pilot":"Pilot 3","aircraft":"fa36","air":1,"ground":2,"revives":0},'
-    .. '{"pilot":"NAISH 2","aircraft":"adfx02","air":2,"ground":0,"revives":0}]}', "its squad: the new host first, the old one with what they did: " .. cp)
+    .. '{"pilot":"Omega","aircraft":"f16c","air":33,"ground":4,"revives":1},{"pilot":"Pilot 3","aircraft":"fa36","air":1,"ground":2,"revives":0},'
+    .. '{"pilot":"OMEGA 2","aircraft":"adfx02","air":2,"ground":0,"revives":0}]}', "its squad: the new host first, the old one with what they did: " .. cp)
 check(b:match('"time_s":(%d+)') and tonumber(b:match('"time_s":(%d+)')) >= 890, "its time from the first host's start")
 check(b:find('"round":7,', 1, true), "its round the first host's (7), though this game's is 6 till the round starts again")
 keep("ok", "a host by migration's co-op run", b)
@@ -482,7 +482,7 @@ keep("ok", "a host by migration's co-op run", b)
 -- a run its first host sent already: a host by migration doesn't send it again
 posts, results, replies, LB.jobs = {}, {}, {}, {}
 COOP.role, COOP.slot, LB.co = "join", 1, nil
-M.roster = { [0] = { name = "Naish", sid = SID[1] }, [1] = { name = "Wolf", sid = SID[2] } }
+M.roster = { [0] = { name = "Omega", sid = SID[1] }, [1] = { name = "Wolf", sid = SID[2] } }
 for _, w in ipairs(migrWire) do LB.coopMsg(fields(w.msg)) end
 LB.coopMsg(fields("lb|x|" .. hostId))
 LB.coopTakeover()
@@ -494,7 +494,7 @@ check(#posts == 0 and LB.show.state == "host" and logged("its first host sent al
 
 -- a squad of more than 24 (players came and went): the 24 who did the most, the kills still the run's
 posts, results, replies, LB.jobs = {}, {}, {}, {}
-LB.co, M.roster = nil, { [0] = { name = "Naish", sid = SID[1], code = "f16c" } }
+LB.co, M.roster = nil, { [0] = { name = "Omega", sid = SID[1], code = "f16c" } }
 CFG.leaderboard.pilot = ""
 newRun(); RUN.stats.air = 1000
 for i = 1, 30 do
@@ -509,14 +509,14 @@ b = lastPost(); cp = coopPart(b) or ""
 local np = 0
 for _ in cp:gmatch('"pilot":') do np = np + 1 end
 check(cp:find('^{"players":24,') and np == 24 and sumIn(cp, "air") == 1000 and b:find('"kills":{"air":1000,', 1, true)
-    and cp:find('"pilot":"Naish","aircraft":"f16c","air":563,', 1, true) and not cp:find('"pilot":"P7"', 1, true),
+    and cp:find('"pilot":"Omega","aircraft":"f16c","air":563,', 1, true) and not cp:find('"pilot":"P7"', 1, true),
     "31 who flew: 24 sent (the 7 who did least dropped, their kills the host's), the sums the run's")
 keep("ok", "a co-op run trimmed to 24", b)
 
 -- the run's pilot cut to 24 ending in a space (LB.pilot's), a joiner's name with symbols
 posts, results, replies, LB.jobs = {}, {}, {}, {}
 LB.co, CFG.leaderboard.pilot = nil, "Abcdefghijklmnopqrstuvw xyz"
-M.roster = { [0] = { name = "Naish", sid = SID[1] }, [1] = { name = "D@rk|Ace!", sid = SID[2] } }
+M.roster = { [0] = { name = "Omega", sid = SID[1] }, [1] = { name = "D@rk|Ace!", sid = SID[2] } }
 players = { { slot = 1, inLevel = true } }                  -- (and the host's own plane not read: its line all the same)
 newRun(); LB.poll(); LB.finish("restart")
 b = lastPost(); cp = coopPart(b) or ""
@@ -527,7 +527,7 @@ keep("ok", "a co-op run with a 24-letter pilot and a sanitized name", b)
 -- the host alone (nobody else flew): a solo record; co-op off: unchanged
 posts, results, replies, LB.jobs = {}, {}, {}, {}
 LB.co, CFG.leaderboard.pilot = nil, ""
-M.roster = { [0] = { name = "Naish", sid = SID[1] } }
+M.roster = { [0] = { name = "Omega", sid = SID[1] } }
 players = { { slot = 0, isMe = true } }
 newRun(); LB.poll(); LB.finish("died")
 b = lastPost()
@@ -537,7 +537,7 @@ keep("ok", "a co-op host's run nobody else flew in", b)
 COOP.open, COOP.role, COOP.slot, M.linkedPeers, LB.co = false, nil, nil, 0, nil
 newRun(); LB.finish("died")
 b = lastPost()
-check(#posts == 2 and not b:find('"coop"', 1, true) and b:find('"pilot":"Naish"', 1, true) and b:find('"kills":{"air":40,"ground":6}', 1, true),
+check(#posts == 2 and not b:find('"coop"', 1, true) and b:find('"pilot":"Omega"', 1, true) and b:find('"kills":{"air":40,"ground":6}', 1, true),
     "a solo run: as before, no co-op block")
 keep("ok", "a solo run after co-op", b)
 SV_CoopSend, COOP.players, addrOf = rawCoopSend, rawPlayers, rawAddrOf
@@ -551,14 +551,14 @@ local clk = 10000
 os.clock = function() return clk end                          -- luacheck: ignore
 posts, results, replies, LB.jobs = {}, {}, {}, {}
 local kl0 = keptLines() or {}
-local old3 = string.format('{"v":1,"run_id":"%s","pilot":"Naish","round":12,"edited":[]}', string.rep("3", 32))
-local old15 = string.format('{"v":1,"run_id":"%s","pilot":"Naish","round":9,"edited":[]}', string.rep("f", 32))
+local old3 = string.format('{"v":1,"run_id":"%s","pilot":"Omega","round":12,"edited":[]}', string.rep("3", 32))
+local old15 = string.format('{"v":1,"run_id":"%s","pilot":"Omega","round":9,"edited":[]}', string.rep("f", 32))
 writeAll(KEPT, string.format("%d\t2\t%s\n%d\t0\t%s\n%s\n", os.time() - 15 * 86400, old15, os.time() - 3 * 86400, old3, kl0[1] or ""))
 os.remove(WORK .. "/config/pending_runs.txt")               -- (the co-op runs above, never answered: none waiting here)
 LB.kept, LB.loaded, LB.keptAt, LB.queue, LB.qwait = nil, nil, nil, {}, nil      -- (a new game start)
 D, RUN = nil, { stats = nil }
 LB.queueTick()
-check(#kl0 == 1 and LB.kept and #LB.kept == 2 and logged("15 days ago (run ffffffff, round 9, pilot Naish) dropped: kept 14 days at most")
+check(#kl0 == 1 and LB.kept and #LB.kept == 2 and logged("15 days ago (run ffffffff, round 9, pilot Omega) dropped: kept 14 days at most")
     and logged("leaderboard: 2 run(s) refused as an unknown build kept to resend from the main menu (the oldest refused 3 days ago"),
     "a later game start: two kept runs read, the one 15 days old dropped and logged")
 check(#(keptLines() or {}) == 2 and not (keptLines()[1] or ""):find(old15, 1, true), "... and the old one off the file")
@@ -568,7 +568,7 @@ check(#posts == 0, "never in a run")
 D = nil; svLevelOn = true; LB.queueTick()
 check(#posts == 0, "nor while Survival's level is loaded")
 svLevelOn = nil; LB.queueTick()
-check(#posts == 1 and posts[1] == old3 and logged("leaderboard: resending a run refused as an unknown build 3 days ago (run 33333333, round 12, pilot Naish; resent 1 times)"),
+check(#posts == 1 and posts[1] == old3 and logged("leaderboard: resending a run refused as an unknown build 3 days ago (run 33333333, round 12, pilot Omega; resent 1 times)"),
     "at the main menu: the oldest kept run sent again, logged")
 check((keptLines()[1] or ""):find("^%d+\t1\t"), "its resend counted in the file")
 clk = clk + 10; LB.queueTick()
@@ -612,7 +612,7 @@ check(#posts == 5 and #LB.kept == 0 and gone == nil and logged("resent: answered
 if gone then gone:close() end
 -- 22 refused as an unknown build (answered in the order 1 to 22: LB.poll reads its jobs from the last): the newest 20 kept
 for i = 22, 1, -1 do
-    LB.jobs[#LB.jobs + 1] = { id = 1000 + i, body = string.format('{"v":1,"run_id":"%032x","pilot":"Naish","round":%d,"edited":[]}', i, i) }
+    LB.jobs[#LB.jobs + 1] = { id = 1000 + i, body = string.format('{"v":1,"run_id":"%032x","pilot":"Omega","round":%d,"edited":[]}', i, i) }
     results[1000 + i], replies[1000 + i] = 422, '{"ok":false,"error":"edited or unknown build"}'
 end
 LB.poll()

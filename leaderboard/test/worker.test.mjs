@@ -50,7 +50,7 @@ const adminCall = async (action, body, ip = "9.9.9.9") => {
 };
 const count = (sql) => db.prepare(sql).get().n;
 
-const run = { v: 1, run_id: "0123456789abcdef0123", pilot: "Naish", difficulty: "ace", round: 12, mod: "0.47.0", aircraft: "su57",
+const run = { v: 1, run_id: "0123456789abcdef0123", pilot: "Omega", difficulty: "ace", round: 12, mod: "0.47.0", aircraft: "su57",
   kills: { air: 140, ground: 12 }, zollars: { earned: 40000, spent: 30000 }, time_s: 2400, ended: "died",
   specials: [{ kind: "ladon", round: 7, seconds: 212, won: true }, { kind: "amphibious", round: 10, seconds: 300, won: false }] };
 
@@ -109,10 +109,10 @@ check(`runs stored: ${rows}`, rows === 30);
 const sp = db.prepare("SELECT COUNT(*) AS n FROM specials WHERE won = 1").get().n;
 check(`beaten specials stored: ${sp}`, sp === 30);
 db.prepare(`INSERT INTO runs (run_id, pilot, difficulty, round, score, air_kills, ground_kills, earned, spent, time_s, ended,
-  mod_version, submitted, ip_hash, aircraft) VALUES ('lower1', 'naish', 'ace', 50, 99999, 0, 0, 0, 0, 999, 'died', 'x', 0, 'h', 'f22a')`).run();
+  mod_version, submitted, ip_hash, aircraft) VALUES ('lower1', 'omega', 'ace', 50, 99999, 0, 0, 0, 0, 999, 'died', 'x', 0, 'h', 'f22a')`).run();
 const e = await boardEmbeds(env);
 const ace = e[0].fields.find((f) => f.name.toLowerCase().includes("ace")).value;
-check(`'Naish' and 'naish' are one pilot on the boards: ${JSON.stringify(ace)}`, ace.split("\n").length === 1 && ace.includes("round 50"));
+check(`'Omega' and 'omega' are one pilot on the boards: ${JSON.stringify(ace)}`, ace.split("\n").length === 1 && ace.includes("round 50"));
 check(`the boards: ${e.length} embeds (round, score, specials: ${e[2] && e[2].fields.length} of them)`, e.length === 3 && e[2].fields.length === 13);   // (the Spaceport Assault and Retake since 0.73.38, VALKA since 0.73.83, the escort, the decoy, fishing and the festival since 0.74.0)
 const x = await extraEmbeds(env, null, null, Math.floor(Date.now() / 1000));
 check(`the second message: ${x.map((m) => m.title.split(" —")[0]).join(", ")}`, x.length === 3 && x[0].fields.length === 5);
@@ -124,7 +124,7 @@ check(`this week: ${JSON.stringify(x[2].fields[0].value)}`, x[2].fields[0].value
 const newRow = db.prepare("SELECT how, tier, aces, allies, af_down, captured FROM runs WHERE run_id = 'bbbbbbbbbbbbbbbb5'").get();
 check(`0.50.0's fields stored: ${JSON.stringify(newRow)}`, newRow.how === "restart" && newRow.tier === "Elite" && newRow.aces === 5
   && newRow.allies === 1 && newRow.af_down === 2 && newRow.captured === 1);
-const pe = await pilotEmbed(env, "naish");
+const pe = await pilotEmbed(env, "omega");
 const totals = pe.fields.find((f) => f.name === "Totals");
 check(`/pilot totals: ${JSON.stringify(totals && totals.value)}`, totals && totals.value.startsWith("31 runs") && totals.value.includes("ace squadron")
   && totals.value.includes("most flown"));
@@ -228,7 +228,7 @@ check(`an unknown build: refused (${j.error})`, r.status === 422 && j.error === 
 r = await postBuilt(built("b1000000000000000005", { build: OTHER }), OTHER, "3.0.0.2");
 a = await adminCall("status", { key: env.ADMIN_KEY });
 check(`builds seen but not registered: ${JSON.stringify(a.j.status.seen.map((s) => [s.build.slice(0, 4), s.n]))}`,
-  a.j.status.seen.length === 1 && a.j.status.seen[0].build === OTHER && a.j.status.seen[0].n === 2 && a.j.status.seen[0].pilot === "Naish");
+  a.j.status.seen.length === 1 && a.j.status.seen[0].build === OTHER && a.j.status.seen[0].n === 2 && a.j.status.seen[0].pilot === "Omega");
 r = await postBuilt(built("b1000000000000000006", { mod: "0.72.1-coop.19" }), BUILD, "3.0.0.3");
 check("the right hash under another version: unknown build", r.status === 422);
 r = await postBuilt(built("b1000000000000000007", { build: OTHER }), BUILD, "3.0.0.3");
@@ -302,18 +302,18 @@ a = await adminCall("builds/add", { key: env.ADMIN_KEY, mod: C2, build: C2B, not
 check(`a COOP2MP build registered: ${a.j.done}`, a.j.ok);
 const sq = (pilot, aircraft, air, ground, revives, host) =>
   ({ pilot, ...(aircraft ? { aircraft } : {}), air, ground, revives, ...(host === undefined ? {} : { host }) });
-const team = (id, extra = {}) => ({ ...run, run_id: id, mod: C2, build: C2B, edited: [], pilot: "Naish", difficulty: "ace",
+const team = (id, extra = {}) => ({ ...run, run_id: id, mod: C2, build: C2B, edited: [], pilot: "Omega", difficulty: "ace",
   round: 60, time_s: 7200, aircraft: "su57", kills: { air: 400, ground: 60 }, aces: 20, allies: 30, how: "died", tier: "Reaper",
   specials: [{ kind: "ladon", round: 10, seconds: 200, won: true }, { kind: "alicorn", round: 20, seconds: 400, won: true },
              { kind: "glitch", round: 30, seconds: 90, won: true }],
-  coop: { players: 4, squad: [sq("Naish", "su57", 150, 20, 1, true), sq("xX_spagooterpoop_Xx", "fa36", 100, 15, 3),
+  coop: { players: 4, squad: [sq("Omega", "su57", 150, 20, 1, true), sq("xX_spagooterpoop_Xx", "fa36", 100, 15, 3),
                               sq("Kalash", "f22a", 90, 15, 0, false), sq("dukka", null, 60, 10, 2)] }, ...extra });
 {
   const t = team("cc000000000000000000");
   check("a team run passes", checkRun(t) === null && t.coop.squad.length === 4 && t.coop.squad[3].host === false
     && t.coop.squad[3].aircraft === null);
   check("its score: the solo formula on the squad's totals ((60000 + 40000 + 3000 + 9000) x 1.5)", score(t) === 168000);
-  check("the host's name in another case is the same pilot", checkRun(team("cc000000000000000000", { pilot: "NAISH" })) === null);
+  check("the host's name in another case is the same pilot", checkRun(team("cc000000000000000000", { pilot: "OMEGA" })) === null);
   const nr = team("cc000000000000000000"); delete nr.coop.squad[2].revives;
   check("revives left out are 0", checkRun(nr) === null && nr.coop.squad[2].revives === 0);
   const solo = { ...run, coop: null };
@@ -321,7 +321,7 @@ const team = (id, extra = {}) => ({ ...run, run_id: id, mod: C2, build: C2B, edi
 }
 // the limits scale with the players (a squad of n, kills split between them, the host first)
 const small = (air, ground, n, id = "cc000000000000000001") => team(id, { round: 5, time_s: 600, aces: 0, allies: 0, specials: [],
-  kills: { air, ground }, coop: { players: n, squad: Array.from({ length: n }, (_, i) => sq(i ? `Wing ${i}` : "Naish", null,
+  kills: { air, ground }, coop: { players: n, squad: Array.from({ length: n }, (_, i) => sq(i ? `Wing ${i}` : "Omega", null,
     Math.floor(air / n) + (i ? 0 : air % n), Math.floor(ground / n) + (i ? 0 : ground % n), 0, i === 0)) } });
 check("2 players: 700 air kills in 5 rounds pass (5 x 70 x 2)", checkRun(small(700, 0, 2)) === null);
 check("2 players: 701 are too many for its players", checkRun(small(701, 0, 2)) === "too many air kills for the rounds and players");
@@ -343,7 +343,7 @@ bad("the squad's air kills don't add up", (t) => { t.coop.squad[3].air = 59; }, 
 bad("the squad's ground kills don't add up", (t) => { t.kills.ground = 61; }, "squad's kills don't add up to the run's");
 bad("a squad shorter than its players", (t) => { t.coop.squad.pop(); }, "squad doesn't match its players");
 bad("a squad longer than its players", (t) => { t.coop.players = 3; }, "squad doesn't match its players");
-bad("a squad that isn't a list", (t) => { t.coop.squad = "Naish"; }, "squad doesn't match its players");
+bad("a squad that isn't a list", (t) => { t.coop.squad = "Omega"; }, "squad doesn't match its players");
 bad("one player is no squad", (t) => { t.coop.players = 1; t.coop.squad = [t.coop.squad[0]]; }, "bad co-op players");
 bad("25 players", (t) => { t.coop.players = 25; }, "bad co-op players");
 bad("a co-op block that isn't an object", (t) => { t.coop = [4]; }, "bad co-op players");
@@ -372,8 +372,8 @@ bad("a host that isn't the run's pilot", (t) => { t.pilot = "Kalash2"; }, "squad
   j = await r.json();
   check(`a team run taken: ${r.status} ${JSON.stringify(j)}`, r.status === 200 && j.ok && j.score === 168000);
   const row = db.prepare("SELECT pilot, players, squad, crew, air_kills, ground_kills, earned, score, verified FROM runs WHERE run_id = 'cc000000000000000010'").get();
-  check(`stored as one run with its squad: ${JSON.stringify(row)}`, row && row.pilot === "Naish" && row.players === 4
-    && row.squad === "Naish,xX_spagooterpoop_Xx,Kalash,dukka" && row.crew === "dukka,kalash,naish,xx_spagooterpoop_xx"
+  check(`stored as one run with its squad: ${JSON.stringify(row)}`, row && row.pilot === "Omega" && row.players === 4
+    && row.squad === "Omega,xX_spagooterpoop_Xx,Kalash,dukka" && row.crew === "dukka,kalash,omega,xx_spagooterpoop_xx"
     && row.air_kills === 400 && row.ground_kills === 60 && row.earned === 40000 && row.score === 168000 && row.verified === 1);
   const sqRows = db.prepare("SELECT slot, pilot, aircraft, air_kills, ground_kills, revives, host FROM squads WHERE run_id = 'cc000000000000000010' ORDER BY slot").all();
   check(`its squad's rows: ${sqRows.map((p) => `${p.slot}:${p.pilot}:${p.aircraft}:${p.air_kills}/${p.ground_kills}:${p.revives}:${p.host}`).join(" ")}`,
@@ -382,9 +382,9 @@ bad("a host that isn't the run's pilot", (t) => { t.pilot = "Kalash2"; }, "squad
   check("its specials marked with its size", db.prepare("SELECT COUNT(*) AS n FROM specials WHERE run_id = 'cc000000000000000010' AND players = 4").get().n === 3);
   const m = posted.map((b) => JSON.parse(b)).find((p) => p.embeds && p.embeds[0].title.includes("squad of"));
   const em = m && m.embeds[0];
-  check(`its post in #survival-runs: ${em && em.title}`, em && em.title === "Naish's squad of 4 reached round 60 (Ace)");
+  check(`its post in #survival-runs: ${em && em.title}`, em && em.title === "Omega's squad of 4 reached round 60 (Ace)");
   check(`the post lists the squad:\n${em && em.description}`, em && em.description.split("\n").length === 4
-    && em.description.split("\n")[0] === "**Naish** (host) · Su-57 Felon · 150 air, 20 ground · 1 revive given"
+    && em.description.split("\n")[0] === "**Omega** (host) · Su-57 Felon · 150 air, 20 ground · 1 revive given"
     && em.description.includes("**xX\\_spagooterpoop\\_Xx** · FA-36 Game · 100 air, 15 ground · 3 revives given")
     && em.description.split("\n")[2] === "**Kalash** · F-22A Raptor · 90 air, 15 ground"
     && em.description.split("\n")[3] === "**dukka** · 60 air, 10 ground · 2 revives given");
@@ -424,7 +424,7 @@ check(`a solo run from a COOP2MP build: ${r.status} ${JSON.stringify(j)}`, r.sta
   && db.prepare("SELECT players, verified FROM runs WHERE run_id = 'cc000000000000000020'").get().players === null);
 r = await postBuilt(JSON.stringify(team("cc000000000000000030", { pilot: "Kalash", difficulty: "standard", round: 20, time_s: 3000,
   kills: { air: 100, ground: 10 }, aces: 5, allies: 4, specials: [],
-  coop: { players: 2, squad: [sq("Kalash", "f22a", 60, 5, 0, true), sq("Naish", "su57", 40, 5, 1)] } })), C2B, "7.0.0.4");
+  coop: { players: 2, squad: [sq("Kalash", "f22a", 60, 5, 0, true), sq("Omega", "su57", 40, 5, 1)] } })), C2B, "7.0.0.4");
 check("a 2-player run taken", r.status === 200);
 const six = ["Shazzy", "Saint Alessia", "cressendo", "mobi118", "gloom", "Twelve"];
 r = await postBuilt(JSON.stringify(team("cc000000000000000031", { pilot: "Shazzy", difficulty: "standard", round: 25, time_s: 4000,
@@ -433,12 +433,12 @@ r = await postBuilt(JSON.stringify(team("cc000000000000000031", { pilot: "Shazzy
 check("a 6-player run taken", r.status === 200);
 r = await postBuilt(JSON.stringify(team("cc000000000000000032", { pilot: "Kalash", round: 30, time_s: 3600,
   kills: { air: 200, ground: 20 }, specials: [],
-  coop: { players: 4, squad: [sq("Kalash", "f22a", 50, 5, 0, true), sq("dukka", null, 50, 5, 0), sq("Naish", "su57", 50, 5, 0),
+  coop: { players: 4, squad: [sq("Kalash", "f22a", 50, 5, 0, true), sq("dukka", null, 50, 5, 0), sq("Omega", "su57", 50, 5, 0),
                               sq("xX_spagooterpoop_Xx", "fa36", 50, 5, 0)] } })), C2B, "7.0.0.6");
 check("the same four under another host taken", r.status === 200);
 // the CO-OP boards
-check(`a squad on the boards: ${squadText("Naish,xX_spagooterpoop_Xx,Kalash,dukka")}`,
-  squadText("Naish,xX_spagooterpoop_Xx,Kalash,dukka") === "**Naish**, xX\\_spagooterpoop\\_Xx, Kalash +1");
+check(`a squad on the boards: ${squadText("Omega,xX_spagooterpoop_Xx,Kalash,dukka")}`,
+  squadText("Omega,xX_spagooterpoop_Xx,Kalash,dukka") === "**Omega**, xX\\_spagooterpoop\\_Xx, Kalash +1");
 {
   const nowS = Math.floor(Date.now() / 1000);
   const ce = await coopEmbeds(env, null, null, nowS);
@@ -448,9 +448,9 @@ check(`a squad on the boards: ${squadText("Naish,xX_spagooterpoop_Xx,Kalash,dukk
   check(`... by squad size: ${ce[0].fields.map((f) => f.name).join(", ")}`, ce[0].fields.map((f) => f.name).join(",") === "2 players,3-4 players,5+ players"
     && ce[1].fields.length === 3);
   const [two, mid, big] = ce[0].fields.map((f) => f.value);
-  check(`2 players: ${JSON.stringify(two)}`, two === "1. **Kalash**, Naish — round 20 (2 players, Standard)");
+  check(`2 players: ${JSON.stringify(two)}`, two === "1. **Kalash**, Omega — round 20 (2 players, Standard)");
   check(`3-4 players, one line for the four whoever hosted: ${JSON.stringify(mid)}`,
-    mid === "1. **Naish**, xX\\_spagooterpoop\\_Xx, Kalash +1 — round 60 (4 players, Ace)");
+    mid === "1. **Omega**, xX\\_spagooterpoop\\_Xx, Kalash +1 — round 60 (4 players, Ace)");
   check(`5+ players: ${JSON.stringify(big)}`, big === "1. **Shazzy**, Saint Alessia, cressendo +3 — round 25 (6 players, Standard)");
   check(`score, 3-4 players: ${JSON.stringify(ce[1].fields[1].value)}`, ce[1].fields[1].value.includes("— 168,000 (4 players, Ace)"));
   const [longest, specials, revives] = ce[2].fields.map((f) => f.value);
@@ -458,14 +458,14 @@ check(`a squad on the boards: ${squadText("Naish,xX_spagooterpoop_Xx,Kalash,dukk
     && longest.split("\n")[0].endsWith("— 2h 0m 0s (4 players, Ace)") && longest.split("\n").length === 3);
   check(`records, most specials beaten: ${JSON.stringify(specials)}`, specials.split("\n")[0].endsWith("— 3 (4 players, Ace)")
     && specials.split("\n")[1].includes("**Shazzy**") && specials.split("\n").length === 2);
-  check(`records, most revives: ${JSON.stringify(revives)}`, revives === "1. **Naish**, xX\\_spagooterpoop\\_Xx, Kalash +1 — 6 (4 players, Ace)\n"
-    + "2. **Kalash**, Naish — 1 (2 players, Standard)");
+  check(`records, most revives: ${JSON.stringify(revives)}`, revives === "1. **Omega**, xX\\_spagooterpoop\\_Xx, Kalash +1 — 6 (4 players, Ace)\n"
+    + "2. **Kalash**, Omega — 1 (2 players, Standard)");
   check(`this week: ${JSON.stringify(ce[3].fields[0].value.split("\n")[0])}`, ce[3].fields[0].value.split("\n").length === 3
     && ce[3].fields[0].value.split("\n")[0].includes("round 60") && !ce[3].fields[0].value.includes("Soloist"));
   const only5 = await coopEmbeds(env, "5+", null, nowS);
   check("/leaderboard coop 5+: that size's boards only", only5[0].fields.length === 1 && only5[0].fields[0].name === "5+ players"
     && only5[2].title === "Co-op records — top 5 (5+ players)" && only5[2].fields[0].value.includes("Shazzy")
-    && !only5[2].fields[0].value.includes("Naish") && !only5[3].fields[0].value.includes("Naish"));
+    && !only5[2].fields[0].value.includes("Omega") && !only5[3].fields[0].value.includes("Omega"));
   const aceOnly = await coopEmbeds(env, null, "ace", nowS);
   check("... and by difficulty", aceOnly[0].fields[0].value === "no runs yet" && aceOnly[0].fields[1].value.includes("round 60")
     && aceOnly[0].fields[2].value === "no runs yet");
@@ -489,7 +489,7 @@ check(`a squad on the boards: ${squadText("Naish,xX_spagooterpoop_Xx,Kalash,dukk
   let cr = await commandReply(env, { data: { name: "leaderboard", options: [{ name: "board", value: "coop" }] } });
   check("/leaderboard coop: the CO-OP boards", cr.embeds.length === 4 && cr.embeds[0].fields.length === 3);
   cr = await commandReply(env, { data: { name: "leaderboard", options: [{ name: "board", value: "coop" }, { name: "size", value: "2" }] } });
-  check("/leaderboard coop 2", cr.embeds[0].fields.length === 1 && cr.embeds[0].fields[0].value.includes("**Kalash**, Naish"));
+  check("/leaderboard coop 2", cr.embeds[0].fields.length === 1 && cr.embeds[0].fields[0].value.includes("**Kalash**, Omega"));
   cr = await commandReply(env, { data: { name: "leaderboard", options: [{ name: "size", value: "3-4" }] } });
   check("/leaderboard with a size alone: the co-op board", cr.embeds[0].fields.length === 1 && cr.embeds[0].fields[0].name === "3-4 players");
   // /pilot: the co-op runs they flew in, as host or squad member
@@ -500,8 +500,8 @@ check(`a squad on the boards: ${squadText("Naish,xX_spagooterpoop_Xx,Kalash,dukk
       + "their own kills: 200 air / 25 ground");
   const px = await pilotEmbed(env, "XX_SPAGOOTERPOOP_XX");
   check("/pilot of a squad member: their revives given", px.fields.find((f) => f.name === "Co-op").value.endsWith("\n3 revives given"));
-  const pn = await pilotEmbed(env, "naish");
-  const soloRuns = count("SELECT COUNT(*) AS n FROM runs WHERE pilot = 'naish' COLLATE NOCASE AND players IS NULL");
+  const pn = await pilotEmbed(env, "omega");
+  const soloRuns = count("SELECT COUNT(*) AS n FROM runs WHERE pilot = 'omega' COLLATE NOCASE AND players IS NULL");
   check(`/pilot of a pilot with both: solo totals solo only (${soloRuns} runs), co-op apart`,
     pn.fields.find((f) => f.name === "Totals").value.startsWith(`${soloRuns} runs`)
     && pn.fields.find((f) => f.name === "Co-op").value.startsWith("3 runs (hosted 1)")
@@ -577,7 +577,7 @@ check("restore told Discord", posted.some((b) => b.includes("was undone")) && ca
   check(`co-op runs restored with their squads (${a.j.status.coop} co-op runs): ${JSON.stringify(team10)}`,
     a.j.status.coop === coopBefore.runs && count("SELECT COUNT(*) AS n FROM squads") === coopBefore.squads
     && count("SELECT COUNT(*) AS n FROM squads_archive") === 0 && team10 && team10.players === 4
-    && team10.crew === "dukka,kalash,naish,xx_spagooterpoop_xx"
+    && team10.crew === "dukka,kalash,omega,xx_spagooterpoop_xx"
     && count("SELECT COUNT(*) AS n FROM squads WHERE run_id = 'cc000000000000000010' AND host = 1 AND slot = 0") === 1
     && count("SELECT COUNT(*) AS n FROM specials WHERE players IS NOT NULL") === 4);
   const ce = await coopEmbeds(env);
@@ -595,7 +595,7 @@ check("nothing left to undo", a.status === 404 && a.j.status.undo === null);
 {
   const reply = await commandReply(env, { data: { name: "leaderboard", options: [{ name: "board", value: "round" }] } });
   check("/leaderboard round: embeds made", Array.isArray(reply.embeds) && reply.embeds.length > 0);
-  const pilot = await commandReply(env, { data: { name: "pilot", options: [{ name: "name", value: "naish" }] } });
+  const pilot = await commandReply(env, { data: { name: "pilot", options: [{ name: "name", value: "omega" }] } });
   check("/pilot: one embed", Array.isArray(pilot.embeds) && pilot.embeds.length === 1);
   calls.length = 0;
   const seen = [];

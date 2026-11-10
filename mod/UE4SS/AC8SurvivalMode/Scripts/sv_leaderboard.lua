@@ -175,7 +175,7 @@ end
 -- when it's empty (as pending_runs.txt). A run edited by the player (LB.edited) is never sent, so never kept.
 local KEEP_FILE, KEEP_MAX, KEEP_DAYS, KEEP_FIRST_S, KEEP_GAP_S = "refused_runs.txt", 20, 14, 30, 60
 local function unknownBuild(st, err) return st == 422 and type(err) == "string" and err:find("unknown build", 1, true) ~= nil end
-local function runTag(body)                       -- "run 1a2b3c4d, round 31, pilot Naish" (the body's first pilot: the run's)
+local function runTag(body)                       -- "run 1a2b3c4d, round 31, pilot Omega" (the body's first pilot: the run's)
     return string.format("run %s, round %s, pilot %s", tostring(body:match('"run_id":"(%x+)"') or "?"):sub(1, 8),
         body:match('"round":(%d+)') or "?", body:match('"pilot":"([^"]*)"') or "?")
 end
