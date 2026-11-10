@@ -248,6 +248,13 @@ sea powers iowa").
   tools/tanicorn/README.md; the design files are never changed, the output goes to the out dir, git-ignored under build/):
   - **the crew removed** (the user: "remove the people models from the ship"): every face on the Iowa crew texture's
     material (9,006 faces of LEV_HULL.001) and the vertices left loose. The design files still hold them (not asked).
+  - **the aft deck's hull errors fixed** (the user's marked render, 2026-11-10: "Fix any hull errors as pictured"): the
+    dark arrow-shaped patches were deck faces whose UVs landed outside the Alicorn deck sheet's plating band (v < 0.6:
+    a plain darker band, glossier in the shine map); 58 patches (402 faces) re-mapped (fix_deck_uvs): carried on from
+    the plating round them, or, where that would land on a marking or there's no neighbour, onto the plainest spot of
+    the part of the sheet the deck itself uses. And the Alicorn's own deck crew left standing there (legs, torsos, on
+    the deck material: 1,620 faces, remove_deck_crew; vents and fittings kept, checked by eye). Not shadows: a render
+    with the sun moved left them in place.
   - **the laser interceptor = a beam director** (the user's two photos, 2026-11-10: "Base the laser design off this"):
     squat turret ring with a flange, octagonal yoke base, two tall arms rounded on top with vent holes down their outer
     faces and round the top (house: turret_yaw); between the arms a head (gun: turret_pitch, tilting about the arms'

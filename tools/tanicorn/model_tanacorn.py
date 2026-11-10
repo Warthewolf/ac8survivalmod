@@ -74,6 +74,181 @@ def remove_crew():
 
 
 CREW_FACES = remove_crew()
+
+
+def remove_deck_crew():
+    """the Alicorn's own deck crew left on the aft deck (the user's marked render, 2026-11-10: legs and torsos at real
+    size, on the Alicorn's deck material, so the crew-texture pass missed them): every separate piece (the hull's
+    fragments joined where they share a vertex position) under 1.3 m across, 0.5-1.6 m tall, standing at the aft deck's
+    height on the Alicorn's deck; vents, bollards and fittings are larger or elsewhere (checked by eye)"""
+    me = HULL.data
+    M = HULL.matrix_world
+    co = [M @ v.co for v in me.vertices]
+    par = list(range(len(co)))
+
+    def find(a):
+        while par[a] != a:
+            par[a] = par[par[a]]
+            a = par[a]
+        return a
+    seen = {}
+    for i, p in enumerate(co):
+        k = (round(p.x, 3), round(p.y, 3), round(p.z, 3))
+        if k in seen:
+            par[find(i)] = find(seen[k])
+        else:
+            seen[k] = i
+    for e in me.edges:
+        par[find(e.vertices[0])] = find(e.vertices[1])
+    groups = {}
+    for i in range(len(co)):
+        groups.setdefault(find(i), []).append(i)
+    doomed = set()
+    for vs in groups.values():
+        ps = [co[i] for i in vs]
+        lo = Vector((min(p.x for p in ps), min(p.y for p in ps), min(p.z for p in ps)))
+        hi = Vector((max(p.x for p in ps), max(p.y for p in ps), max(p.z for p in ps)))
+        d = hi - lo
+        if max(d.x, d.y) < 1.3 and 0.5 < d.z < 1.6 and 9.9 < lo.z < 11.3 and hi.x < -140:
+            doomed.update(vs)
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.verts.ensure_lookup_table()
+    faces = {f for i in doomed for f in bm.verts[i].link_faces}
+    bmesh.ops.delete(bm, geom=list(faces), context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(me)
+    bm.free()
+    print("model: deck crew removed from %s: %d faces" % (HULL.name, len(faces)))
+    return len(faces)
+
+
+def fix_deck_uvs():
+    """the dark arrow-shaped patches on the aft deck (the user's marked render, 2026-11-10): deck faces whose UVs land on
+    other bands of the Alicorn's deck sheet (v < 0.6: the plain dark band at its bottom, a middle band) while the deck
+    round them uses its plating
+    band (v 0.6-1.0), a leftover of the hull's fusion. Each connected patch of them is mapped again with the mapping
+    most of the good faces bordering it share, so the plating runs on across it"""
+    import numpy as np
+    me = HULL.data
+    M = HULL.matrix_world
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    uv = bm.loops.layers.uv.active
+
+    def alc_b(f):
+        m = HULL.material_slots[f.material_index].material if f.material_index < len(HULL.material_slots) else None
+        return m is not None and m.name == "ALC_b"
+
+    def deck(f):
+        c = M @ f.calc_center_median()
+        return alc_b(f) and (M.to_3x3() @ f.normal).z > 0.97 and c.x < -130 and 8.5 < c.z < 11.0
+    vmean = lambda f: sum(lp[uv].uv.y for lp in f.loops) / len(f.loops)
+    key = lambda v: tuple(round(c, 3) for c in (M @ v.co))
+    bad = [f for f in bm.faces if deck(f) and vmean(f) < 0.6]            # (any part of the sheet but the plating band)
+    good = [f for f in bm.faces if deck(f) and vmean(f) >= 0.6]
+    at = {}
+    for f in good:
+        for v in f.verts:
+            at.setdefault(key(v), []).append(f)
+    badset, patches, done = set(bad), [], set()
+    vbad = {}
+    for f in bad:
+        for v in f.verts:
+            vbad.setdefault(key(v), []).append(f)
+    for f in bad:                                                  # connected patches (by shared vertex positions)
+        if f in done:
+            continue
+        st, grp = [f], []
+        done.add(f)
+        while st:
+            g = st.pop()
+            grp.append(g)
+            for v in g.verts:
+                for h in vbad.get(key(v), []):
+                    if h not in done:
+                        done.add(h)
+                        st.append(h)
+        patches.append(grp)
+
+    def affine(fs):
+        A, U = [], []
+        for f in fs:
+            for lp in f.loops:
+                p = M @ lp.vert.co
+                A.append((p.x, p.y, 1.0))
+                U.append(tuple(lp[uv].uv))
+        X, *_ = np.linalg.lstsq(np.array(A), np.array(U), rcond=None)
+        return X
+    # the deck's own scale and direction: the median of the good faces' own mappings (the linear part)
+    lins = [affine([h])[:2] for h in good[::7] if h.calc_area() > 4.0]
+    L = np.median(np.array(lins), axis=0)
+    # plain plating on the sheet: the most even window at the deck's own brightness, no colour (no markings), inside
+    # the deck's own band (v 0.62-0.95: its shine map matches there; the plain band lower down is glossier and darker)
+    img = [n.image for sl in HULL.material_slots if sl.material and sl.material.name == "ALC_b"
+           for n in sl.material.node_tree.nodes if n.type == "TEX_IMAGE" and n.image and n.image.name.endswith("_D.png")][0]
+    W, H = img.size
+    px = np.array(img.pixels[:]).reshape(H, W, 4)[:, :, :3]
+    luma = px @ np.array([0.2126, 0.7152, 0.0722])
+    sat = px.max(axis=2) - px.min(axis=2)
+    deck_luma = np.median([luma[int((sum(lp[uv].uv.y for lp in h.loops) / len(h.loops)) % 1 * H) % H,
+                                int((sum(lp[uv].uv.x for lp in h.loops) / len(h.loops)) % 1 * W) % W] for h in good[::5]])
+    # the search stays inside the part of the sheet the good deck itself uses most (its UV centres' middle 60 %, by
+    # area): elsewhere in the band the shine map differs and a patch renders dark again
+    cu = np.array([sum(lp[uv].uv.x for lp in h.loops) / len(h.loops) for h in good])
+    cv = np.array([sum(lp[uv].uv.y for lp in h.loops) / len(h.loops) for h in good])
+    u0, u1 = np.percentile(cu, 20), np.percentile(cu, 80)
+    v0, v1 = np.percentile(cv, 20), np.percentile(cv, 80)
+    win, best_t, best_s = max(8, int(0.05 * W)), None, 1e9
+    for cy in range(int(v0 * H) + win // 2, int(v1 * H) - win // 2 + 1, max(1, win // 4)):
+        for cx in range(int(u0 * W) + win // 2, int(u1 * W) - win // 2 + 1, max(1, win // 4)):
+            l = luma[cy - win // 2:cy + win // 2, cx - win // 2:cx + win // 2]
+            c = sat[cy - win // 2:cy + win // 2, cx - win // 2:cx + win // 2]
+            score = l.std() * 4 + abs(l.mean() - deck_luma) + c.mean() * 4 + (c.max() > 0.12) * 1.0 + (l.max() > deck_luma * 1.6) * 1.0
+            if score < best_s:
+                best_s, best_t = score, (cx / W, cy / H)
+    def sample(u, v):
+        return luma[int(v % 1 * H) % H, int(u % 1 * W) % W], sat[int(v % 1 * H) % H, int(u % 1 * W) % W]
+    fixed = cont = 0
+    for grp in patches:
+        cen = sum((M @ v.co for g in grp for v in g.verts), Vector()) / sum(len(g.verts) for g in grp)
+        X = None
+        nb = {h for g in grp for v in g.verts for h in at.get(key(v), [])}
+        if len(nb) >= 2:                                           # 1. the plating round it, carried on across it
+            own = [(h, affine([h])) for h in nb]
+            best, best_w = None, -1.0
+            for h, Xh in own:
+                agree = [h2 for h2, X2 in own if np.abs(X2[:2] - Xh[:2]).max() < 2e-4 and np.abs(X2[2] - Xh[2]).max() < 0.02]
+                w = sum(a_.calc_area() for a_ in agree)
+                if w > best_w:
+                    best, best_w = agree, w
+            X = affine(best)
+            pts = [np.array(((M @ lp.vert.co).x, (M @ lp.vert.co).y, 1.0)) @ X for g in grp for lp in g.loops]
+            pts += [np.array((cen.x, cen.y, 1.0)) @ X]
+            looks = [sample(*q) for q in pts]
+            if max(c for _, c in looks) > 0.12 or min(l_ for l_, _ in looks) < deck_luma * 0.6:
+                X = None                                           # (it would land on a marking or a dark spot)
+        if X is None:                                              # 2. else the plain plating of the deck's band
+            t = np.array(best_t) - np.array((cen.x, cen.y)) @ L
+            X = np.vstack([L, t])
+        else:
+            cont += 1
+        for g in grp:
+            for lp in g.loops:
+                p_ = M @ lp.vert.co
+                lp[uv].uv = tuple(np.array((p_.x, p_.y, 1.0)) @ X)
+        fixed += 1
+    skipped = 0
+    print("model: deck UVs: plain plating found at uv (%.3f, %.3f) (score %.3f, deck luma %.3f)" % (*best_t, best_s, deck_luma))
+    bm.to_mesh(me)
+    bm.free()
+    print("model: deck UVs: %d dark patches (%d faces): %d carried on from the plating round them, %d onto the deck band's "
+          "plain plating" % (fixed, sum(len(p) for p in patches), cont, fixed - cont))
+    return fixed
+
+
+DECK_CREW_FACES = remove_deck_crew()
+DECK_PATCHES = fix_deck_uvs()
 DG = bpy.context.evaluated_depsgraph_get()
 SHIP_MESHES = [o for o in COLL.all_objects if o.type == "MESH"]
 CHECK = {}
