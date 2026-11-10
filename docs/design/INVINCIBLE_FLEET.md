@@ -1,4 +1,4 @@
-# INVINCIBLE FLEET: special round plan (2026-11-09; nothing built yet)
+# INVINCIBLE FLEET: special round plan (2026-11-09, the user's decisions 2026-11-10; nothing built yet)
 
 The user's special (2026-11-09): an enemy fleet after AC04's "Invincible Fleet", with the TANICORN hidden under its
 aircraft carrier. When the carrier is destroyed it breaks up, the Tanicorn bursts out of the sea under it bow first,
@@ -15,6 +15,18 @@ reuses something Survival already runs where it can (the Spaceport Assault's ene
 surface, the ZFA-44s' AC7 laser, the fleet's flak). Read docs/re/TANICORN.md, docs/re/SPACEPORT_ASSAULT.md and
 docs/re/ALICORN.md before building any of it.
 
+## 0. Decisions (user, 2026-11-10)
+- **Round 30**, Survival's own: CFG.specials.schedule.rounds[30] = "fleet" (the schedule's fixed slots, as round 2's
+  shuttle, 6's escort and 9's fishing).
+- **The carrier falls only when the players sink it**: no timer, no escape run.
+- **Every ship must be sunk**: the round is won only with the Tanicorn and the whole fleet down.
+- **The Tanicorn rises between the Ford's two halves**: the Ford's wreck splits in two and they part (4.2).
+- **The ships carry their names** on their target boxes (AC04's: 5.1).
+- **The Tanicorn model goes in first**: before the round reaches friends' builds, the Tanicorn is a model of our own
+  geometry, never the round without it (section 8).
+- **The fleet sails towards Comona from the north-west** (5.2).
+- Still open: section 9.
+
 ## 1. The source: AC04's Aegir Fleet
 - Ace Combat 04 Mission 06 "Invincible Fleet" (Operation Rough Seas, 23 November 2004): ISAF's surprise strike on the
   Erusean **Aegir Fleet**, "the invincible armada", lying at anchor in Comberth Harbor; most of it was sunk at anchor.
@@ -30,29 +42,31 @@ docs/re/ALICORN.md before building any of it.
 - What we take from it: the names, the shape (a carrier group round a flagship), a fleet that's dangerous to approach
   (a "long operation": the airfield and STORE stay open during it), and the Tanager's escape run. The TANICORN is the
   Tanager's "what if": the battleship that didn't sink (docs/re/TANICORN.md).
-- Survival is on Comona, not Comberth: the fleet sails the open sea west of the spaceport island, where the Spaceport
-  Assault's 27 ships already ran (its Ford at (-29.65, -0.26) km, ford_cm) [V: docs/re/SPACEPORT_ASSAULT.md 0.73.39].
+- Survival is on Comona, not Comberth: the fleet sails in from the open sea north-west of the islands (5.2). The
+  Spaceport Assault's 27 ships already ran on the sea west of the spaceport island (its Ford at (-29.65, -0.26) km,
+  ford_cm) [V: docs/re/SPACEPORT_ASSAULT.md 0.73.39].
 
-## 2. The round, as a player sees it
-A first draft for the user to change (section 9's questions):
-1. **Warning (break before the round):** callout `INVINCIBLE FLEET` / `THE AEGIR FLEET IS UNDER WAY`, the NEXT row
+## 2. The round, as a player sees it (round 30)
+1. **Warning (round 29's break):** callout `INVINCIBLE FLEET` / `THE AEGIR FLEET IS UNDER WAY`, the NEXT row
    `FLEET: n SHIPS  CARRIER: GEOFON`. Radio from Survival's own lines (config/subtitles.ini, never AC7 or AC04 voice).
-2. **The fleet (phase 1):** the fleet appears in formation and sails a slow course (section 6). Its screen fires flak
-   and VLS missiles, its laser interceptors shoot down missiles fired at the ships they cover, the Raven's railguns
-   (with the RAILGUN WARNING) reach far out, and the carrier's deck launches fighters. The round's normal fighters
-   are fewer (the fleet is the threat). Ships are paid as sunk, turrets as shot off (the Spaceport's pay).
-3. **The carrier falls (phase 2):** its damage shows as it's hit (fires, smoke, a listing deck). At 0 it breaks in
-   two and goes down. In its wreck, the sea erupts: the TANICORN's bow breaks the surface between the halves, the hull
-   climbs bow first into the sky, hangs, and falls back flat onto the waves (spray, shock ring, camera shake). Nothing
-   fires at it and nothing can lock it during the breach.
+2. **The fleet (phase 1):** the fleet appears over the north-west horizon in formation and sails towards Comona
+   (5.2), each ship's name on its box. Its screen fires flak and VLS missiles, its laser interceptors shoot down
+   missiles fired at the ships they cover, the Raven's railguns (with the RAILGUN WARNING) reach far out, and the
+   carrier's deck launches fighters. The round's normal fighters are fewer (the fleet is the threat). Ships are paid
+   as sunk, turrets as shot off (the Spaceport's pay).
+3. **The carrier falls (phase 2), only to the players:** its damage shows as it's hit (fires, smoke, a listing
+   deck). At 0 it breaks in two and the halves part. Between them the sea erupts: the TANICORN's bow breaks the
+   surface, the hull climbs bow first into the sky, hangs, and falls back flat onto the waves (spray, shock ring,
+   camera shake). Nothing fires at it and nothing can lock it during the breach.
 4. **The Tanicorn (phase 3):** it opens fire the moment it settles, then becomes targetable: boxes, TGT marks, the
    boss health bar. Weak points first (its weapon parts), its core last (TANICORN.md's phases). The fleet left afloat
    fights on with it.
-5. **End:** the Tanicorn sunk (with its own death: section 3, M5) = round won, the big reward. Ships still afloat
-   then: [?] sunk with it ("the fleet scatters"), or they must be sunk too (the user's call).
+5. **End:** the round is won when **every ship is sunk**, the Tanicorn (its own death: section 3, M5) and the whole
+   fleet, whatever order they go down in, and the round's aircraft are down: `THE AEGIR FLEET IS DESTROYED`, the big
+   reward. The NEXT row counts what's left (`FLEET: n AFLOAT`).
 
-When the carrier should fall is the round's pacing lever: only by the players (they choose when to wake the boss), or
-also on a timer (the "escape run": the Tanicorn breaks out anyway after N minutes). Section 9.
+The players choose when to wake the boss: the carrier only falls to them. A team can sink the screen first and take
+the carrier last, or go for the carrier early and fight the Tanicorn with the fleet still round it.
 
 ## 3. Stage 1: the TANICORN fully working
 Where it stands [V: HISTORY 0.74.43-0.74.47, docs/re/TANICORN.md 5]: milestone 0's first own part, the 5-inch twin
@@ -121,9 +135,13 @@ stock package overridden), in Survival's own container:
   breaks, bow and stern lift and go under; AC8's own Niagara (Alicorn / Aegis explosions, smoke, sinking spray) and
   Wwise events placed as AnimNotifies (data, no BP script: AnimNotify_PlayNiagaraEffect and Wwise's AkEvent notify)
   [?: that cooked notifies play in AC8: to test on the T5's wreck first].
-- **The gap for the Tanicorn:** the halves part far enough (~200 m) for a 650 m bow to come up between them, or the
-  Tanicorn breaches just off the Ford's beam (simpler, and works with any wreck). The breach starts at a fixed time
-  into the death sequence.
+- **The gap for the Tanicorn (the user's choice: between the halves):** the Ford (~333 m) breaks at midships and its
+  halves drift apart along its keel line, bow half forward, stern half back, until the gap is wider than the
+  Tanicorn's beam with room to spare (Leviathan's beam ~80 m [I: the Iowa's 33 m at the Alicorn's 650 m]: a gap of
+  ~150 m). The Tanicorn's bow comes up in the gap; it's set across the Ford's keel (yaw 90 deg off the wreck's), so
+  when it falls flat it lies across open water beside the halves, not on them. The halves are under before it lands
+  (their sinking is part of the sequence). The breach starts at a fixed time into the death sequence, once the gap
+  is open.
 - Its deck launches stay the Spaceport's (SPORT's deck: a pool flight with a pose off its bow), stopping at its
   first damage stage or at its death (the user's call).
 
@@ -154,13 +172,15 @@ the game's own. Two routes, tried in this order:
   Tanicorn in at the Ford's keel.)
 - **The camera:** the event focus camera on the Tanicorn for the breach (hard rule 28: it zooms by distance), with
   the HUD's callout `THE TANICORN` / `THE TANAGER RISES` (the user's words to be chosen).
-- **Spawned when:** with the fleet, deep and switched off under the Ford (the Alicorn sits 56 m down without trouble)
-  [I], so nothing big spawns mid-fight; or at the Ford's death (cheaper while the fleet is up, a spawn during the
-  fight). Measure both.
+- **Spawned when:** the fleet is under way (5.2), so a Tanicorn waiting under the Ford would have to follow it at
+  depth (a submarine on the Ford's own path at its speed [?]). Simpler and cheaper: spawned at the Ford's death, deep
+  and switched off at the wreck's spot, with the gap's opening time to load (the Ford's death sequence is ~20 s).
+  Measure how long its spawn takes (its parts) and spawn it early enough; the following route only if the spawn
+  hitches.
 
 ## 5. Stage 3: the fleet
 
-### 5.1 Composition (a first draft; every count a setting, as the Spaceport's)
+### 5.1 Composition (a first draft; every count a setting, as the Spaceport's; every ship named on its box)
 | AC04 ship | Survival's ship (AC8 asset) | role | weapons |
 |---|---|---|---|
 | Tanager (flagship) | THE TANICORN (ours) | the boss, under the carrier | 16-inch railgun shells, 5-inch flak, CIWS / lasers, VLS, the bow railcannon |
@@ -178,8 +198,31 @@ the game's own. Two routes, tried in this order:
   SPECIAL_ROUNDS.md 3, the section 12 positions]. Their parts, rows and whether they've ever spawned in Survival: [?].
 - Size: the Spaceport's 27 ships (~110 objects) came up whole and ran [V: 0.73.39]; this fleet plus a 650 m boss
   with ~20-40 parts must stay near that. Start at ~16 ships plus the Tanicorn, and measure.
+- **Names (user, 2026-11-10):** a box's first line is the MODEL row's GameObjectDisplayName01 (DT_NPC_Model; the NPC
+  row has only 02), as found for the ZFA-44 (HISTORY 0.74.11; sv_escort_laser.lua ZLAS.zfaModel adds Survival's copy
+  of a model row with Survival's name at the main menu, before the NPC rows that name it). So each named ship gets its
+  own model row copy (SV_Model_Fleet_Raven ... on its class's stock model row, only the name changed) and its own NPC
+  row naming it: GEOFON (the Ford), RAVEN, CONDOR, MAGPIE, SPARROW, FINCH (Aegis), BELUGA, FENRIS, KOLGA, LAZULI
+  (cruisers), HERNE, TAISCH, THIASSI (destroyers); the Tanicorn's own name (section 9). The names in
+  config/subtitles.ini with the speaker names, so players can edit them. Unnamed ships (boats, the supply ship) keep
+  their class's name. Parts keep their stock names (their boxes say what they are: VLS, CIWS ...) [?: whether a part's
+  box shows its ship's name].
 
-### 5.2 The weapons
+### 5.2 The course: from the north-west towards Comona (user, 2026-11-10)
+- The combat zone is 80 x 80 km centred on (-707, -262) km (north is -Y, east +X: docs/re/COMONA_MAP.md 1), so its
+  north-west corner is about (-47, -42) km. The fleet appears near it, ~5 km inside the edge, at about (-40, -35) km,
+  and sails south-east (yaw ~53 deg, heading ~143) towards the spaceport island (-13.8, -0.4) km, ~45 km away [I:
+  marks to set in a test flight].
+- Every ship on its own lane, parallel to the Ford's and offset to its formation spot, all at one speed, so the
+  formation holds as they sail (make_path lanes, ControlType 1, smooth; each ship's whole course in the one path started
+  at its appearance: hard rules 2, 35, 54). A sunk ship leaves a hole; the rest sail on.
+- Speed: a fleet at ~30-40 km/h covers 7-10 km in a 15-minute fight, so it's still ~35 km off the spaceport when the
+  fight is usually over [I]. What happens if it gets close (section 9): it holds a station off the coast, or shells
+  the islands, or nothing.
+- The Tanicorn rises where the Ford dies, wherever that is on the course, and doesn't follow the course: it fights from
+  where it lands, turning to bring its guns round [?: on a path of its own or holding its spot].
+
+### 5.3 The weapons
 - **Flak:** done for the fleet's AA mounts: NPC_FCS_VesselAAGun* (the Aegis's Mk 45, the Ford's four) on a clone of
   the ground flak gun's fire control, boosted (HISTORY 0.73.52-0.73.53). The Tanicorn's 5-inch mounts on the same.
 - **VLS missiles:** the Aegis Mk 41 and the Ladon / Alicorn VLS, with the fleet's EXSAM homing and salvos
@@ -203,11 +246,10 @@ the game's own. Two routes, tried in this order:
 - **The ships:** the Spaceport's builder generalised (survival_events.py sp_fleet / build_survival.py spaceport_units:
   one-ship units, Faction 2, no tags, TGT and a box, every part's own order by name, SPORT.shipObjs's hull watch and
   pay). Either a second fleet layout or a shared builder both specials call; keep the Spaceport's names working.
-- **Formation and movement:** the fleet holds a formation round the carrier and sails slowly along make_path lanes
-  (ControlType 1, smooth, hard rules 2, 35; one long path from appearance, hard rule 54 if it's fast), or holds its spot
-  as the Spaceport's did. The Tanicorn stays under the carrier while it sails [?: a submarine following a ship: give
-  both the same path at the same speed, or keep the fleet at anchor as AC04's was].
-- **Rounds:** every 5th round's rotation from a high round (from_round), or THE final boss round (section 9).
+- **Formation and movement:** 5.2 (lanes in formation, one speed, one path each from its appearance).
+- **Rounds:** round 30 (CFG.specials.schedule.rounds[30] = "fleet"; its kind not drawn at random elsewhere unless the
+  user wants it to come back later in a run: section 9). Round 30 is in the late rounds (P8: +3 aircraft a round from
+  26), so the round's own fighters are cut (fighter_share) or the fleet's fight gets crowded.
 - **The STORE and the airfield:** the clocks wait while you're down at the airfield with nobody else flying (the
   Spaceport's I6). Nothing with child objects alive is recycled (0.74.48). Removals by remote event, never a unit off
   the list while its parts are up.
@@ -230,25 +272,27 @@ the game's own. Two routes, tried in this order:
 | units with children recycled under them crash the STORE | 0.74.48's rule | (rule: never) |
 
 ## 8. What can ship
-- The Tanicorn's hull is Sea Power's Iowa (the user: "my install only"); its container ships only in TANI=1 dev builds
-  and package_release.sh drops it. So the Invincible Fleet round needs, for a friends' zip: the round without the
-  Tanicorn (the carrier's death ends phase 2), or **a Tanicorn hull of our own geometry** (modelled from scratch on
-  the Leviathan design, Alicorn parts allowed: AC8 stock). The user's decision; the code makes the boss a setting so
-  the round runs either way.
+- The Tanicorn's hull and its mounts are Sea Power's Iowa (the user: "my install only"); its container ships only in
+  TANI=1 dev builds and package_release.sh drops it. **The user's decision (2026-11-10): the Tanicorn model goes in
+  first**: the round reaches friends' zips only with a Tanicorn of our own geometry (hull and mounts modelled from
+  scratch on the Leviathan rev4 design; the Alicorn's parts allowed: AC8 stock), never without its boss. Until then
+  round 30's fleet is in dev builds only (the edition tools cut it from a release, as the Tanicorn's container).
 - Every other ship is AC8 stock (allowed); the AC7 laser is the user's 2026-11-07 exception (never AC7 voice).
 
 ## 9. Questions for the user
-1. Which round: in the special rotation (every 5th round, from round N), or the run's final boss (TANICORN.md's
-   "final round")? Is there a final round?
-2. Does the carrier fall only to the players, or does the Tanicorn break out on its own after N minutes (the
-   Tanager's escape run)?
-3. When the Tanicorn is sunk, do the ships left afloat sink with it or must they be sunk too?
-4. The breach: between the Ford's two halves (needs the split wreck) or beside it (simpler)? How high into the sky?
-5. Names: the fleet's ships with AC04's names (RAVEN, BELUGA, ...) on their boxes? The Tanicorn's own name on screen?
-6. For friends' builds: the round without the Tanicorn, or a Tanicorn of our own geometry first?
-7. The fleet: at anchor (AC04's harbour) or under way?
+Answered 2026-11-10 (section 0): the round (30), the carrier's fall (players only), the end (every ship sunk), the
+breach (between the halves), the names (on), the model (ours first), the course (from the north-west). Still open:
+1. How high does the Tanicorn climb before it falls? (Draft: 60 deg nose up, its bow ~550 m above the sea.)
+2. What happens if the fleet gets close to Comona: it holds a station off the coast, its railguns and VLS shell the
+   airfield / spaceport, or nothing (it can't get there in a normal fight)?
+3. The Tanicorn's name on its box: TANICORN, TANAGER, or another?
+4. Once a run at round 30 only, or can the fleet come back later in a run (60, 90 ...)?
+5. Who models the Tanicorn's own geometry: the user (Blender, from Leviathan_rev4), or Claude building it from the
+   design in scripted Blender (primitives and the Alicorn's AC8 parts), the user reviewing renders?
 
 ## 10. Order of work
+0. The Tanicorn's own model (section 8; question 5): the hull and every mount type, rigged as the pipeline expects
+   (tools/tanicorn: Body > turret_yaw > turret_pitch, muzzle sockets), so M1 is built on it, not on the Iowa.
 1. M0b: the T5 mount aims, fires, takes hits, wrecks (test build, Ctrl+T). Then the other mount types.
 2. Research: dump BP_VE004_grfd_CP (its death today), the submarine class's surface (curve semantics), Mission 22's
    enemy fleet parts and rows.
@@ -256,9 +300,10 @@ the game's own. Two routes, tried in this order:
 4. The breach test on its own (route A on the M1 hull, else route B), from a test key, no fleet.
 5. The Ford: BP_SV_grfd with its damage stages, then its death sequence and the gap; the breach timed into it.
 6. M3-M5: the Tanicorn's moving parts, phases and death.
-7. The fleet: composition, formation, weapons (lasers and railguns last: the least proven), the round's flow, pay,
-   callouts, the NEXT row; fleet_test.sh.
-8. M6: co-op, the perf line, the STORE; then into the rotation (or the finale) with every value in survival.ini.
+7. The fleet: composition and names, its course from the north-west in formation, weapons (lasers and railguns
+   last: the least proven), the round's flow (every ship sunk), pay, callouts, the NEXT row; fleet_test.sh.
+8. M6: co-op, the perf line, the STORE; then round 30 in the schedule with every value in survival.ini (dev builds
+   until the Tanicorn's own model is in).
 
 Sources (AC04): https://acecombat.wiki.gg/wiki/Aegir_Fleet, https://acecombat.wiki.gg/wiki/Invincible_Fleet,
 https://acecombat.wiki.gg/wiki/Tanager (read 2026-11-09).

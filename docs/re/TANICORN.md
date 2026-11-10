@@ -12,7 +12,7 @@ dump|obj|sockets|skeleton|mesh` with a usmap (the builder source embeds one: emb
 build/liveproject/Source/Live/Public (= E:/AC8LiveProject).
 
 ## 0. Decisions (user, 2026-11-09)
-- Hull: AC8's **submarine** class. In the final round it hides under an aircraft carrier and, when the carrier is
+- Hull: AC8's **submarine** class. In round 30's Invincible Fleet (docs/design/INVINCIBLE_FLEET.md; the user, 2026-11-10) it hides under the fleet's aircraft carrier and, when the carrier is
   killed, rises out of the sea once and attacks; it never dives again. Fallback if ALiveAISubmarine needs
   Alicorn-style data: ALiveAIVessels with a scripted rise.
 - Weapons fire **stock projectiles** (railgun shells, VLS missiles, lasers), as the Alicorn does.
