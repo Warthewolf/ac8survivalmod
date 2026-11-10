@@ -676,10 +676,13 @@ def build_npc_rows():
     out.append(((se.FISH_NPC, 0), row))
     # THE TANICORN's milestone 0 mount (se.TANI_*: docs/re/TANICORN.md): the shoal's row again on TANI_MODEL (its model
     # row's blueprint is Survival's own BP_SV_Tani_T5)
+    # (0.74.58) and a fire control row, as every stock turret has (the GR023 flak gun: its blueprint's own arm AND its row's
+    # NPC_FCS_FlakGun000): only the row path gives the blueprint's arm its muzzle (0.74.56: the stock Mk45s and Mk15s on
+    # rows hung their flak at SOC_Gun_01, ours at socket None; 0.74.57's bDirectEdit + SlotNum alone changed nothing)
     row = copy.deepcopy(rows[(f[1], f[2])])
     for name, value in (('WeaponDurabilityId', ('name', se.FISH_DURABILITY[0], 0)),
                         ('ExplosionDurabilityId', ('name', se.FISH_DURABILITY[1], 0)),
-                        ('ModelId', ('name', se.TANI_MODEL, 0))):
+                        ('ModelId', ('name', se.TANI_MODEL, 0)), ('NpcFCSId0', se.fname(se.TANI_FCS))):
         set_prop(row[2], [k for k, (n, t) in schema.items() if n == name][0], name, value)
     out.append(((se.TANI_NPC, 0), row))
     # THE ESCORT's allied rows and the ZFA-44 host, THE DECOY's weaponless UAV (survival_events.ESCORT_DECOY_NPC_ROWS): copies

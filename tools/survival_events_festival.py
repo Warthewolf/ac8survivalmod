@@ -57,6 +57,7 @@ TANI_MODEL = 'SV_Model_TaniMount'              # DT_SV_ModelRows: GR000_dummy's 
 TANI_BP = '/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5'
 TANI_BP_CLASS = 'BP_SV_Tani_T5_C'
 TANI_HEALTH = 40.0
+TANI_FCS = 'NPC_FCS_FlakGun000'                # (0.74.58) TANI_NPC's NpcFCSId0: the stock ground flak gun's fire control row
 TANI_NAME_KEY = 'SV_TaniMount_Name'
 # SAL's boat (FISHING.md 3; user: "SAL boat can just be an ally, dont worry about it too much"): Mission 28's allied Wasp
 # desc (faction 1, box, callsign, attack-target exception) on the stock fishing boat VE027_boat2_01, not invincible but

@@ -2408,3 +2408,18 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   2026-11-10 22:54 (backup: build/backup/install_before_0.74.57).
 - To see in game: Ctrl+T, the flak from both barrels' tips, following the turret; the log's `shell N: ... hangs on
   TurretPoseableMesh ... at socket SOC_Gun_01` (or _02).
+
+## 0.74.58 (2026-11-10; the Tanicorn container rebuilt and the T5's NPC row: a stock fire control row)
+- The user's run of 0.74.57 (22:56): still `hangs on TurretPoseableMesh ... at socket None`; bDirectEdit + SlotNum in
+  the blueprint's arm didn't give it a muzzle.
+- Every stock turret that hung its flak at SOC_Gun_01 had a blueprint arm AND a fire control row on its NPC row
+  (NpcFCSId0): the stock GR023 flak gun too (BP_GR023_flak_Base: AllArms [arm 0], AIR_ONLY; its rows NPC_FCS_FlakGun000).
+  The row configures the blueprint's arm (DT_NPC_FCS: NpcWeaponId, FCSBlueprintClass, bDirectEdit, FireRate, Magazine,
+  Reload, SlotNum, the fire control's times, the yaw / pitch speeds and arcs); the muzzle comes on that path.
+- SV_Npc_TaniMount (tools/build_survival.py, survival_events.TANI_FCS) gets NpcFCSId0 NPC_FCS_FlakGun000; spec.py's
+  Performance back to bDirectEdit off (stock), SlotNum and the rest still written (the row's win). TaniBuild done
+  (0 errors); DT_SV_NpcRows names NPC_FCS_FlakGun000.
+- build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1), build d6a716e20909... registered. INSTALLED
+  2026-11-10 23:01 (backup: build/backup/install_before_0.74.58).
+- To see in game: Ctrl+T; `shell N: ... hangs on TurretPoseableMesh ... at socket SOC_Gun_01`, the flak from the barrel.
+  The row may give one muzzle (its SlotNum) and its own arcs and speeds.

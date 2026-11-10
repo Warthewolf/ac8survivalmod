@@ -87,11 +87,10 @@ def mount(part, info, fcs):
                                         + f'CaptureAngleRange={fcs["cone"]},ActivationTime={fcs["activation"]},'
                                         f'TriggeringTime={fcs["triggering"]},ShotIntervalTime={fcs["interval"]},'
                                         f'RestingTime={fcs["resting"]},TriggerCount={fcs["trigger_count"]})'),
-                        # bDirectEdit: the arm's own Performance (FireRate, MagazineCapacity, ReloadTime, SlotNum) is used
-                        # only with it on; off, it comes from the NPC row's fire control row (NpcFCSId), and ours has none:
-                        # SlotNum 0, no muzzle, the weapon hung on the mesh at socket None, at its origin (0.74.56: ours
-                        # "hangs on TurretPoseableMesh at socket None", the stock Mk45s and Mk15s on rows at SOC_Gun_01)
-                        'Performance': (f'(bDirectEdit=True,FireRate={fcs["fire_rate"]},MagazineCapacity={fcs["magazine"]},'
+                        # (bDirectEdit left off, as every stock arm: 0.74.57's bDirectEdit + SlotNum didn't give the arm
+                        # its muzzle; the stock arms get it from their NPC row's fire control row, NpcFCSId0, which
+                        # supplies Performance with bDirectEdit off: 0.74.58 gives the T5's row one, the stock flak gun's)
+                        'Performance': (f'(FireRate={fcs["fire_rate"]},MagazineCapacity={fcs["magazine"]},'
                                         f'ReloadTime={fcs["reload"]},SlotNum={fcs.get("slot_num") or slots},'
                                         'SlotSocketPrefix=GUN)'),
                     }},
