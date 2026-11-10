@@ -97,9 +97,70 @@ end
 -- (0.74.51) a bone or socket of the turret mesh in the world: "yaw/pitch" degrees, or "(x, y, z) yaw/pitch" with its
 -- place. GetBoneRotationByName handed back no Yaw in the user's run of 0.74.50 ("yaw ? pitch ?"); a skinned mesh's
 -- GetSocketRotation / GetSocketLocation take a bone name as well as a socket's.
+-- (0.74.54) the turret mesh from the actor's component tree (SPC.V.comps, as the ZFA-44 test reads its sockets):
+-- o.TurretPoseableMesh gave rotators with no Yaw for bones and sockets alike (the user's runs of 0.74.50-0.74.53)
+local function turretMesh(o)
+    local m
+    if SPC and SPC.V and SPC.V.comps then
+        pcall(function() m = SPC.V.comps(o, "/Script/Engine.PoseableMeshComponent")[1] end)
+    end
+    return m or o.TurretPoseableMesh
+end
+
+-- (0.74.54) what the engine sees of a mount's muzzle (0.74.50-0.74.53: every shell, AA stream or flak, left the turret
+-- mesh's origin, under the mount, along its forward: SOC_Gun_01 never found): the mesh, its asset (and the deprecated
+-- SkeletalMesh field), the asset's sockets, whether the component knows SOC_Gun_01, its bone, and where it puts it
+-- against the mesh's origin (at the barrels' tips: ~ +10 m forward, +4 m up; at (0, 0, 0): not found)
+local MUZZLE = "SOC_Gun_01"
+local function muzzleProbe(m)
+    local out = {}
+    local function try(label, f)
+        local ok, v = pcall(f)
+        out[#out + 1] = label .. " " .. (ok and tostring(v) or ("? (" .. tostring(v):sub(1, 80) .. ")"))
+    end
+    try("mesh", function() return nameOf(m):match("([^%.:]+)$") end)
+    try("asset", function() return nameOf(m.SkinnedAsset):match("([^%.]+)$") end)
+    try("old field", function() return valid(m.SkeletalMesh) and nameOf(m.SkeletalMesh):match("([^%.]+)$") or "empty" end)
+    try("asset sockets", function() return m.SkinnedAsset:NumSockets() end)
+    try("asset finds " .. MUZZLE, function() return valid(m.SkinnedAsset:FindSocket(FName(MUZZLE))) end)
+    try("component has it", function() return m:DoesSocketExist(FName(MUZZLE)) end)
+    try("its bone", function() return m:GetSocketBoneName(FName(MUZZLE)):ToString() end)
+    try("at", function()
+        local l, c = m:GetSocketLocation(FName(MUZZLE)), m:K2_GetComponentLocation()
+        return string.format("(%+.0f, %+.0f, %+.0f) cm from the mesh's origin", l.X - c.X, l.Y - c.Y, l.Z - c.Z)
+    end)
+    try("names", function()
+        local t = {}
+        m:GetAllSocketNames():ForEach(function(_, e) t[#t + 1] = e:get():ToString() end)
+        return #t > 0 and table.concat(t, ",") or "none"
+    end)
+    return table.concat(out, "; ")
+end
+
+-- the same of the first stock turret mesh in the level with that muzzle (the airfield's guns), once a spawn: the
+-- difference between ours and a stock one the game fires from
+local function stockProbe(o)
+    local me = addrOf(o)
+    local n = 0
+    for _, m in ipairs(FindAllOf("PoseableMeshComponent") or {}) do
+        n = n + 1
+        if n > 400 then break end
+        local ok, has = pcall(function()
+            local ow = m:GetOwner()
+            return valid(ow) and addrOf(ow) ~= me and not nameOf(ow):find("Tani", 1, true) and m:DoesSocketExist(FName(MUZZLE))
+        end)
+        if ok and has then
+            local owner = "?"
+            pcall(function() owner = nameOf(m:GetOwner()):match("([^%.:]+)$") end)
+            return owner .. ": " .. muzzleProbe(m)
+        end
+    end
+    return string.format("none with %s among %d turret meshes", MUZZLE, n)
+end
+
 local function sock(o, name, where)
     local ok, r = pcall(function()
-        local m = o.TurretPoseableMesh
+        local m = turretMesh(o)
         local v = m:GetSocketRotation(FName(name))
         local s = string.format("%.1f/%.1f", v.Yaw, v.Pitch)
         if where then
@@ -197,6 +258,8 @@ local function watch(now)
                 pcall(function() arms = tostring(#o.FireControlSystemComponent.AllArms) end)
                 log(string.format("tanicorn: mount %s up at %s: fire control arms %s, health %s/%s", nameOf(o), at(o), arms,
                     tostring(h), tostring(mx)))
+                log("tanicorn: our muzzle: " .. muzzleProbe(turretMesh(o)))
+                log("tanicorn: a stock turret's muzzle: " .. stockProbe(o))
             end
             local ay = "?"
             pcall(function() ay = string.format("%.1f", o:K2_GetActorRotation().Yaw) end)

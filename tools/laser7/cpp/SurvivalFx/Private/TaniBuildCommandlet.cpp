@@ -4,6 +4,7 @@
 #include "Engine/BlueprintGeneratedClass.h"
 #include "Engine/SimpleConstructionScript.h"
 #include "Engine/SCS_Node.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/SkeletalMeshSocket.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshSocket.h"
@@ -113,25 +114,55 @@ void ApplyProps(UObject* Obj, const TSharedPtr<FJsonObject>& Props)
 void Sockets(const TArray<TSharedPtr<FJsonValue>>& List)
 {
 	TSet<USkeleton*> Touched;
+	TSet<USkeletalMesh*> TouchedMeshes;
 	for (const TSharedPtr<FJsonValue>& V : List)
 	{
 		const TSharedPtr<FJsonObject> S = V->AsObject();
 		USkeleton* Sk = LoadObject<USkeleton>(nullptr, *S->GetStringField(TEXT("skeleton")));
 		if (!Sk) { Bad(TEXT("no skeleton ") + S->GetStringField(TEXT("skeleton"))); continue; }
 		const FName Name(*S->GetStringField(TEXT("name")));
-		Sk->Sockets.RemoveAll([&](const TObjectPtr<USkeletalMeshSocket>& K) { return K && K->SocketName == Name; });
-		USkeletalMeshSocket* K = NewObject<USkeletalMeshSocket>(Sk, NAME_None, RF_Public | RF_Transactional);
-		K->SocketName = Name;
-		K->BoneName = FName(*S->GetStringField(TEXT("bone")));
+		const FName Bone(*S->GetStringField(TEXT("bone")));
 		const TArray<TSharedPtr<FJsonValue>>& L = S->GetArrayField(TEXT("loc"));
-		K->RelativeLocation = FVector(L[0]->AsNumber(), L[1]->AsNumber(), L[2]->AsNumber());
+		const FVector Loc(L[0]->AsNumber(), L[1]->AsNumber(), L[2]->AsNumber());
+		FRotator Rot(0.0, 0.0, 0.0);
 		const TArray<TSharedPtr<FJsonValue>>* R = nullptr;
-		if (S->TryGetArrayField(TEXT("rot"), R)) K->RelativeRotation = FRotator((*R)[0]->AsNumber(), (*R)[1]->AsNumber(), (*R)[2]->AsNumber());
-		Sk->Sockets.Add(K);
+		if (S->TryGetArrayField(TEXT("rot"), R)) Rot = FRotator((*R)[0]->AsNumber(), (*R)[1]->AsNumber(), (*R)[2]->AsNumber());
+		auto Make = [&](UObject* Outer)
+		{
+			USkeletalMeshSocket* K = NewObject<USkeletalMeshSocket>(Outer, NAME_None, RF_Public | RF_Transactional);
+			K->SocketName = Name;
+			K->BoneName = Bone;
+			K->RelativeLocation = Loc;
+			K->RelativeRotation = Rot;
+			K->RelativeScale = FVector(1.0, 1.0, 1.0);
+			return K;
+		};
+		Sk->Sockets.RemoveAll([&](const TObjectPtr<USkeletalMeshSocket>& K) { return K && K->SocketName == Name; });
+		Sk->Sockets.Add(Make(Sk));
 		Touched.Add(Sk);
-		Say(FString::Printf(TEXT("socket %s on %s.%s at %s"), *Name.ToString(), *Sk->GetName(), *K->BoneName.ToString(), *K->RelativeLocation.ToString()));
+		Say(FString::Printf(TEXT("socket %s on %s.%s at %s"), *Name.ToString(), *Sk->GetName(), *Bone.ToString(), *Loc.ToString()));
+		// (0.74.54) the same socket on the skeletal mesh itself, which the cooked game's socket map reads first: the T5's
+		// muzzles on the skeleton alone were never found (the shells left the mesh's origin, 0.74.50-0.74.53)
+		FString MeshPath;
+		if (S->TryGetStringField(TEXT("mesh"), MeshPath))
+		{
+			USkeletalMesh* SM = LoadObject<USkeletalMesh>(nullptr, *MeshPath);
+			if (!SM) { Bad(TEXT("no skeletal mesh ") + MeshPath); continue; }
+			TArray<TObjectPtr<USkeletalMeshSocket>>& ML = SM->GetMeshOnlySocketList();
+			ML.RemoveAll([&](const TObjectPtr<USkeletalMeshSocket>& K) { return K && K->SocketName == Name; });
+			ML.Add(Make(SM));
+			TouchedMeshes.Add(SM);
+			Say(FString::Printf(TEXT("socket %s on the mesh %s too"), *Name.ToString(), *SM->GetName()));
+		}
 	}
 	for (USkeleton* Sk : Touched) { Sk->Modify(); SavePkg(Sk->GetOutermost(), Sk); }
+	for (USkeletalMesh* SM : TouchedMeshes)
+	{
+		SM->RebuildSocketMap();
+		SM->Modify();
+		Say(FString::Printf(TEXT("%s: %d sockets of its own, %d in all"), *SM->GetName(), SM->GetMeshOnlySocketList().Num(), SM->NumSockets()));
+		SavePkg(SM->GetOutermost(), SM);
+	}
 }
 
 // Sockets on a static mesh (the hull's Mount_<part>): { "mesh", "name", "loc": [x, y, z] cm, "rot": [pitch, yaw, roll] }.

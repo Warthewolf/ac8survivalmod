@@ -152,7 +152,10 @@ def main():
                                              'loc': s['loc'], 'rot': s.get('rot', [0, 0, 0])})
             continue
         for s in info['sockets']:
-            spec['sockets'].append({'skeleton': obj(f'{DEST}/Model/SKEL_SV_Tani_{p}'), 'name': s['name'],
+            # (0.74.54) on the skeleton and on the mesh itself: the cooked socket map reads the mesh's own first, and the
+            # T5's muzzles on the skeleton alone were never found (its shells left the mesh's origin)
+            spec['sockets'].append({'skeleton': obj(f'{DEST}/Model/SKEL_SV_Tani_{p}'),
+                                    'mesh': obj(f'{DEST}/Model/SK_SV_Tani_{p}'), 'name': s['name'],
                                     'bone': s['bone'], 'loc': s['loc'], 'rot': s.get('rot', [0, 0, 0])})
         if kind == 'turret' and p in FCS:
             spec['blueprints'].append(mount(p, info, FCS[p]))

@@ -2346,3 +2346,20 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   build/backup/install_before_0.74.53).
 - To see in game: Ctrl+T; flak bursts round you, the shells leaving the barrels. Still from the foot: then it's our mesh /
   skeleton, not the arm (the arm is now the stock flak gun's).
+
+## 0.74.54 (2026-11-10; the Tanicorn container rebuilt: muzzle sockets on the meshes too; a muzzle probe)
+- The user's run of 0.74.53: "gun fire is still coming from underneath the mount": the flak shells (4 in flight in the
+  perf walks) leave the turret mesh's origin as the AA stream did, with the arm the stock flak gun's but for our bones'
+  arcs. So SOC_Gun_01 isn't found on our mesh; the arm and the weapon aren't it. The game's exe is protected (an obfuscated
+  ~280 MB code section): the SOC_Gun_ / SOC_VLS prefix strings have no plain references, so the launcher's lookup can't be
+  read statically. UE 5.4's cooked socket lookup is USkeletalMesh::SocketMap, built in PostLoad from the mesh's own sockets,
+  then its skeleton's.
+- TaniBuild (tools/laser7/cpp/SurvivalFx) puts each part's sockets on its skeletal mesh as well as its skeleton (a spec
+  socket's "mesh"; GetMeshOnlySocketList + RebuildSocketMap): `SK_SV_Tani_T5: 2 sockets of its own, 4 in all`, done
+  (0 errors). spec.py names each part's SK.
+- sv_tanicorn.lua (test only): at a mount's first sight `tanicorn: our muzzle: mesh ...; asset ...; old field ...; asset
+  sockets N; asset finds SOC_Gun_01 true/false; component has it true/false; its bone ...; at (+x, +y, +z) cm from the
+  mesh's origin; names ...` and the same of the first stock turret mesh in the level with SOC_Gun_01 (`a stock turret's
+  muzzle: <owner>: ...`). The mesh is read through the component tree (SPC.V.comps), as the ZFA-44 test reads sockets.
+- build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1), build 1f58bf2ed73a... registered. INSTALLED
+  2026-11-10 22:26 (backup: build/backup/install_before_0.74.54).
