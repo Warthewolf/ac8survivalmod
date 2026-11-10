@@ -89,8 +89,8 @@ Tags as in docs/re: [V] read in a file or seen in game (where), [I] inferred, [?
 - **The Tanicorn model goes in first**: the TANACORN's model is the first thing built. **It is the Leviathan design:
   Sea Power's Iowa fused with AC8's Alicorn** (the user, 2026-11-10: "You need sea powers iowa"). (An earlier reading of
   this line as "our own geometry instead of the Iowa" was the agent's mistake, corrected the same day.) The Iowa is the
-  user's dev install only (the user, 2026-11-09), so round 30 with its boss stays in dev builds unless the user decides
-  otherwise (section 6).
+  user's dev install only (the user, 2026-11-09), so **round 30 is the user's dev install only** (the user,
+  2026-11-10: "Keep it dev install only"; WP12).
 - **The fleet sails towards Comona from the north-west.**
 - **Every ship shows its damage textures at all times, except the Tanicorn** (a battle-scarred fleet from the moment
   it appears; the Tanicorn pristine).
@@ -617,10 +617,23 @@ Status: not started. Depends on: everything above.
   The scars are local (WP8).
 - The perf line with the whole fleet and the Tanicorn up; the STORE's freeze and restore over every object of theirs
   (docs/re/STORE_FREEZE.md); 0.74.48's rule.
-- Release: the TANACORN is Sea Power's Iowa fused with the Alicorn (WP0), and the Iowa is the user's dev install only
-  (2026-11-09): its container ships in TANI=1 dev builds only (package_release.sh drops it), so round 30 with its boss
-  stays in dev builds unless the user decides otherwise (section 6). Friends' zips are built with
-  `BUILD_NAME=COOP2MP COOP=1 sh tools/package_release.sh online <version>` (registered on the leaderboard).
+- **Release: round 30 is the user's dev install only** (the user, 2026-11-10: "Keep it dev install only"; the TANACORN
+  is Sea Power's Iowa fused with the Alicorn, and the Iowa is the user's dev install only, 2026-11-09). Three locks, so a
+  friends' zip never has any of it:
+  1. the TANACORN's container ships only in `TANI=1` dev builds (`VALKA=1 ZFA=1 TANI=1 sh tools/package_dev.sh
+     <version>`); package_release.sh already drops SurvivalMode_Tani_P;
+  2. round 30's Lua (the schedule's `rounds[30] = "fleet"` and the fleet's parts, sv_fleet*.lua) inside TEST ONLY blocks
+     (or a whole part that is one, as sv_anomalies_dev.lua), which tools/strip_test_only.py takes out of every release
+     zip, TESTER zips included; a check (tools/checks/fleet_test.sh) that a release copy of the parts has no `fleet`
+     kind and no round-30 slot;
+  3. at run time round 30 is the fleet only when the TANACORN's class loads (a dev build without TANI=1: a normal round,
+     logged `fleet: round 30: the TANACORN isn't in this build: a normal round`).
+  The fleet's ships, rows and world data are stock-based and can stay in Survival's own container (unused without
+  the Lua).
+- **Co-op tests:** dev install only means no friend has round 30, and co-op games with different builds refuse to link
+  (coop.c CoSameVer). So GEOFON's capture (WP14, co-op only) and every co-op check of round 30 need two games with the
+  same dev build (two of the user's machines or Steam accounts); WP14's test-only key that runs a capture on your own
+  plane solo carries most of the testing.
 
 ### WP13. The fleet shells the airfield
 Status: not started. Depends on: WP7 (the course and station), WP9 (the railguns, VLS), WP10. The user, 2026-11-10:
@@ -758,7 +771,7 @@ its EW mast), co-op (sv_coop*.lua, sv_down.lua). The user's idea and answers: se
 | SetMaterial on ~16 ships' slots hitches | WP8's per_tick | fewer slots a tick, the hull first |
 | laser interceptors make missiles useless | WP9 balance | fewer, slower, killable first |
 | ~16-20 ships + the boss cost too much frame time | the perf line | fewer ships, parts merged |
-| the Iowa geometry is dev-install only | section 6 | (the user's call: round 30 dev-only, or another rule for friends' builds) |
+| the Iowa geometry is dev-install only | (decided: round 30 dev install only, WP12) | co-op checks need two dev installs |
 | a unit with child objects recycled under them crashes the STORE | 0.74.48's rule | (rule: never) |
 | ship turrets can't fire at the airfield 16-20 km off | WP13 step 1's test | the scripted salvo (step 2), proven for the heavies |
 | `pip install bpy` doesn't fit the cloud session (Python version, disk) | WP0's first step | the script runs on the user's machine |
@@ -774,12 +787,8 @@ its EW mast), co-op (sv_coop*.lua, sv_down.lua). The user's idea and answers: se
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 6. Questions still open for the user
-1. **Friends' builds and the Iowa** (2026-11-10): the TANACORN is Sea Power's Iowa fused with the Alicorn, and the Iowa
-   is the user's dev install only (2026-11-09). So, as things stand, round 30 never reaches friends' zips (without its
-   boss the round can't run). Keep it that way, or does the user want another rule for friends' builds? (The user's
-   call; the build follows whatever is decided, and AGENTS.md records it.)
-
-New questions go here as work raises them, each with the agent's recommended answer.
+None (friends' builds and the Iowa: answered 2026-11-10, round 30 is the user's dev install only: WP12). New questions
+go here as work raises them, each with the agent's recommended answer.
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 7. Reference: AC04's Aegir Fleet
