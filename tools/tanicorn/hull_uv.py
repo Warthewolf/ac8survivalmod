@@ -31,7 +31,7 @@ model_tanacorn.py calls fix(HULL).
 """
 import bpy, bmesh, math
 import numpy as np
-from mathutils import Vector
+from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
 from mathutils.interpolate import poly_3d_calc
 
@@ -42,6 +42,7 @@ X_STERN = -288.0      # aft of here the shell is followed round the transom
 WATER = -2.0          # the shell's strip splits here: by height above, by girth under
 FOLD = 0.62           # the stretch of plating the strip runs to and fro over, in UV units (248 m)
 DECK_FOLD = 0.05      # the outer deck's plating runs to and fro across the ship too, over this much (20 m)
+UNDER = 0.2           # a coloured deck marking with this share of it under the ship's own upper works is taken off
 CELL = 5.0            # m: the decks are cut into cells this big at most
 SQUEEZE = 2.5         # the under-water strip's squeeze down the girth (plain plating, seldom seen)
 PLATE = (0.21, 0.63)  # the plating's luma and metal on both sheets (measured from the files), rough 0.05-0.16
@@ -98,8 +99,25 @@ class Sheet:
 
 
 def fix(HULL, log=print):
-    me, M = HULL.data, HULL.matrix_world
+    me = HULL.data
+    # the hull's own centreline: in the design file the Iowa's hull (with its turrets and upper works) lies 0.4 deg
+    # askew to the world's x axis, its middle 2.3 m to starboard at the stern and as far to port at the bow, while the
+    # Alicorn's source mesh is square to it. Everything here is laid along the hull's own centreline: by the world's
+    # axes the deck's runway sat off centre under the turrets (the user's marked render, 2026-11-10: "Why is the deck
+    # off centre"). M takes the mesh into the hull's frame: x along its centreline, y from it.
+    W0 = HULL.matrix_world
+    pts = np.array([W0 @ v.co for v in me.vertices])
+    sx, sm = [], []
+    for x0 in np.arange(-300.0, 300.1, 10.0):
+        k = (np.abs(pts[:, 0] - x0) < 3.0) & (pts[:, 2] > 5.0) & (pts[:, 2] < 12.0)
+        if k.sum() > 20:
+            sx.append(x0)
+            sm.append((pts[k, 1].min() + pts[k, 1].max()) / 2.0)
+    skew, shift = (float(c) for c in np.polyfit(sx, sm, 1))
+    M = Matrix.Rotation(-math.atan(skew), 4, "Z") @ Matrix.Translation((0.0, -shift, 0.0)) @ W0
     R3, Mi = M.to_3x3(), M.inverted()
+    log("hull UVs: the hull's centreline is y = %.4f x %+.2f m in the design file (%.2f deg askew): everything is laid "
+        "along it" % (skew, shift, math.degrees(math.atan(skew))))
     slots = [s.material.name if s.material else "" for s in HULL.material_slots]
     ia, ib = slots.index("ALC_a"), slots.index("ALC_b")
     plate = Sheet(HULL.material_slots[ib].material)
@@ -416,9 +434,11 @@ def fix(HULL, log=print):
         m = t % (2 * DECK_FOLD)
         return m if m <= DECK_FOLD else 2 * DECK_FOLD - m
     for f in decks:
-        if not on_alicorn_deck(cen[f]):                                  # (a cell's middle decides for the cell: past
-            outer.append(f)                                              # the flat deck's edge the sheet is plating
-                                                                         # for 9 m more, then the rail)
+        mid = Vector(((math.floor(cen[f].x / CELL) + 0.5) * CELL, (math.floor(cen[f].y / CELL) + 0.5) * CELL, 0.0))
+        if not on_alicorn_deck(mid):                                     # (the cell's middle decides for every face in
+            outer.append(f)                                              # the cell, so the two meet along the cuts;
+                                                                         # past the flat deck's edge the sheet is
+                                                                         # plating for 9 m more, then the rail)
             f.material_index = ib
             for lp in f.loops:
                 p = P[lp.vert.index]
@@ -452,8 +472,9 @@ def fix(HULL, log=print):
         sh = sheets[f.material_index]
         pts = [lp[uv].uv for lp in f.loops]
         c = sum(pts, Vector((0.0, 0.0))) / len(pts)
-        return max(sh.colour(q.x + du, q.y) for q in [c] + [c + (q - c) * t for q in pts for t in (0.5, 0.9)])
-    marked = [f for f in on_layout if colour_of(f) > 0.25]
+        mids = [(pts[i] + pts[(i + 1) % len(pts)]) / 2 for i in range(len(pts))]
+        return max(sh.colour(q.x + du, q.y) for q in [c] + [c + (q - c) * t for q in pts + mids for t in (0.5, 0.97)])
+    marked = [f for f in on_layout if colour_of(f) > 0.15]
     grid = {}
     for f in marked:
         grid.setdefault((int(cen[f].x // 12), int(cen[f].y // 12)), []).append(f)
@@ -468,21 +489,35 @@ def fix(HULL, log=print):
             grp.append(g)
             gx, gy = int(cen[g].x // 12), int(cen[g].y // 12)
             for h in (h for i in (-1, 0, 1) for j in (-1, 0, 1) for h in grid.get((gx + i, gy + j), [])):
-                if h not in seen and (cen[h] - cen[g]).length < 12.0:
+                if h not in seen and (cen[h] - cen[g]).length < 12.0 and abs(cen[h].z - cen[g].z) < 1.5:
                     seen.add(h)
                     st.append(h)
-        if not any(tree.ray_cast(cen[g] + Vector((0, 0, 0.3)), Vector((0, 0, 1)), 80.0)[0] is not None for g in grp):
+        under = sum(area[g] for g in grp
+                    if tree.ray_cast(cen[g] + Vector((0, 0, 0.3)), Vector((0, 0, 1)), 80.0)[0] is not None)
+        share = under / sum(area[g] for g in grp)
+        log("hull UVs: a coloured deck marking at x %.0f..%.0f m, y %.0f..%.0f m: %.0f %% of it under the upper works: %s"
+            % (min(cen[g].x for g in grp), max(cen[g].x for g in grp), min(cen[g].y for g in grp),
+               max(cen[g].y for g in grp), 100 * share, "taken off" if share >= UNDER else "kept"))
+        if share < UNDER:
             continue                                                     # (open to the sky: a marking to keep)
-        for k in (k for n in range(1, 41) for k in (n, -n)):
+        # every cell of the deck in the marking's box goes with it, so no corner of it is left behind
+        x0 = math.floor(min(cen[g].x for g in grp) / CELL) * CELL
+        x1 = (math.floor(max(cen[g].x for g in grp) / CELL) + 1) * CELL
+        y0 = math.floor(min(cen[g].y for g in grp) / CELL) * CELL
+        y1 = (math.floor(max(cen[g].y for g in grp) / CELL) + 1) * CELL
+        zm = float(np.median([cen[g].z for g in grp]))                   # (its own deck level only: there are decks
+        box = [g for g in on_layout if x0 <= cen[g].x <= x1 and y0 <= cen[g].y <= y1     # under decks)
+               and abs(cen[g].z - zm) < 1.5 and g.material_index == grp[0].material_index]
+        for k in (k for n in range(1, 61) for k in (n, -n)):
             du = k * CELL / DENS
-            if all(colour_of(g, du) < 0.1 and all(0.0 <= lp[uv].uv.x + du <= 1.0 for lp in g.loops) for g in grp):
-                for g in grp:
+            if all(colour_of(g, du) < 0.1 and all(0.0 <= lp[uv].uv.x + du <= 1.0 for lp in g.loops) for g in box):
+                for g in box:
                     for lp in g.loops:
                         lp[uv].uv.x += du
-                moved += len(grp)
+                moved += len(box)
                 break
     if moved:
-        log("hull UVs: %d deck cells of a coloured marking half under the upper works moved along the deck" % moved)
+        log("hull UVs: %d deck cells round a coloured marking half under the upper works moved along the deck" % moved)
 
     # ---------------------------------------------------------------- 3. the rest: box-mapped onto plain plating
     rest = [f for f in F if f not in shell and (nor[f].z <= 0.75 or f in off)]
@@ -556,7 +591,7 @@ def fix(HULL, log=print):
     bm.to_mesh(me)
     bm.free()
     me.update()
-    return {"shell_faces": len(shell), "side_faces_in_the_alicorns_skin": worn, "deck_marking_cells_moved": moved, "deck_faces_on_the_layout": len(decks) - out - len(outer),
+    return {"centreline": {"skew": round(skew, 5), "shift_m": round(shift, 3)}, "shell_faces": len(shell), "side_faces_in_the_alicorns_skin": worn, "deck_marking_cells_moved": moved, "deck_faces_on_the_layout": len(decks) - out - len(outer),
             "deck_faces_on_plating": len(outer), "rest_faces": len(rest),
             "strip_turns_x_m": [round(x, 1) for x in turns],
             "smooth_edges_joining_two_mappings_pct": round(100.0 * broken / max(total, 1), 2)}

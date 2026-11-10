@@ -716,11 +716,22 @@ def deck_z(x, y):
     return h[1].z if h else None
 
 
+# the hull lies 0.4 deg askew to the world's x axis in the design file (hull_uv.py found its centreline): the mounts on
+# the deck are placed either side of the hull's own centreline and turned with it, not the world's
+SKEW = math.atan(HULL_UV["centreline"]["skew"])
+
+
+def centre_y(x):
+    return HULL_UV["centreline"]["skew"] * x + HULL_UV["centreline"]["shift_m"]
+
+
 made = {"laser": [], "vlsd": [], "vlss": []}
 hatches = {}
 for tag, heading in (("FWD_L", 0.0), ("FWD_R", 0.0), ("AFT_L", math.pi), ("AFT_R", math.pi)):
     at = bpy.data.objects["LEV_LASER_%s" % tag].matrix_world.translation.copy()
-    M = Matrix.Translation(at) @ Matrix.Rotation(heading, 4, "Z")
+    at.y += centre_y(at.x)                                                         # (square to the hull's own centreline)
+    at.z = deck_z(at.x, at.y) if abs(deck_z(at.x, at.y) - at.z) < 1.0 else at.z
+    M = Matrix.Translation(at) @ Matrix.Rotation(heading + SKEW, 4, "Z")
     house = copy_of("LASER_house", "TANA_LASER_%s_house" % tag, M, SHIP)
     gun = copy_of("LASER_gun", "TANA_LASER_%s_gun" % tag, M @ Matrix.Translation(LASER_PIVOT), house)
     empty("TANA_LASER_%s_SOC_Gun_01" % tag, M @ Matrix.Translation(LASER_PIVOT + Vector((LASER_TIP, WIN[0], WIN[1]))), gun,
@@ -731,7 +742,8 @@ n = 0
 for x in (-210.0, -228.0, -246.0, -264.0):                    # behind turret C's barrels' sweep (to x -194)
     for y in (16.0, -16.0):
         n += 1
-        M = Matrix.Translation((x, y, deck_z(x, y)))
+        y += centre_y(x)
+        M = Matrix.Translation((x, y, deck_z(x, y))) @ Matrix.Rotation(SKEW, 4, "Z")
         body = copy_of("VLSD_body", "TANA_VLSD_%d" % n, M, SHIP)
         hs = []
         for k, (cx, cy) in enumerate(VLSD_CELLS, 1):

@@ -260,6 +260,12 @@ sea powers iowa").
     sides. **Patching fragments made it worse** (the first hull_uv.py: tone patches, saw teeth left where two big
     pieces met; the user: "why is the UV getting even worse"). Now nothing of the copied map is kept; every ALC face
     is mapped by where it is and which way it faces:
+    - **along the hull's own centreline** (the user's marked render, 2026-11-10: "Why is the deck off centre"): in the
+      design file the Iowa's hull, with its turrets and upper works, lies 0.42 deg askew to the world's x axis (its
+      middle y = 0.0073 x: 2.3 m to starboard at the stern, as far to port at the bow) while the Alicorn's source
+      mesh is square to it, so a deck laid by the world's axes sat 1.1 m off centre under turret C. hull_uv.py fits
+      the hull's centreline and works in the hull's frame; model_tanacorn.py places the deck mounts (lasers, deck VLS)
+      either side of that line and turned with it. The hull itself is not straightened (the design file's business).
     - **decks**: the Alicorn's own deck layout, a plain top-down projection fitted from the source mesh ALC_HULL (SRC
       collection): u = cu - x / 400, v = cv - y / 400, sheet a (cu 0.86617, cv 0.84480) forward of x = -52 m, sheet b
       (-0.12728, 0.81111) aft; only where the Alicorn has flat deck under the spot (its flight deck, 13 m either side
@@ -282,9 +288,9 @@ sea powers iowa").
     skin, plating against plating, the straight cuts; was 5-45 % of broken pieces). The hull has ~9,700 faces more (the cuts). fix_deck_uvs (the aft deck's dark patches) is gone: the
     decks are mapped whole. **Check any UV work with flat-lit orthographic renders** (the sheet as emission, top and
     side, 14 px/m): lit beauty renders hide these faults, which is how they got to the user. A coloured deck
-    marking that lies partly under the ship's own upper works is taken off (the Alicorn's hazard-striped lift outline
-    at x ~ -100 m, half under turret C and the superstructure: its cells take the deck from further along, so the
-    runway's lines carry on there). If the user still finds the Alicorn's deck wrong on this hull, they allowed
+    marking with 20 % or more of it under the ship's own upper works is taken off (the Alicorn's hazard-striped lift
+    outline at x -148..-125 m, 45 % under the superstructure: every deck cell in its box takes the deck from further
+    along, so the runway's lines carry on there); the yellow bar at the runway's end is open to the sky and stays. If the user still finds the Alicorn's deck wrong on this hull, they allowed
     another deck that is not the Alicorn's texture ("find an alternative solution that still looks good but doesn't
     use the texture of the alicorn"); the sides stay the Alicorn's either way. The pods (CUT_ALC_SPONSON_*_FAIR.001) are the Alicorn's own meshes with its
     own UVs and are not touched.
