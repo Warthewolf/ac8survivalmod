@@ -2277,3 +2277,20 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
 - Log: the `zfa li: ... carries AC7's LaserInterceptor` line ends `a swing 0.50 s, its swing curve kept / cleared /
   NOT cleared (...)`. escort_test (the values, the curve cleared, the beam's life 6.7 s), lua_load pass; lua_check.
 - To see in game: the beam snaps onto a missile in half a second and stays on it to the kill; more kills per volley.
+
+## 0.74.50 (2026-11-10; the first Windows build of 0.74.48-0.74.49's Lua, and THE TANACORN's whole ship in UE 5.4)
+- THE TANACORN's parts built on the user's machine with tools/tanicorn/build.sh (branch claude/new-session-x7bzx8, after
+  the survey commit c900371): model_tanacorn.py "every part clean: True"; export 14 parts (T16, T5, CIWS, LASER, VLSD,
+  VLSS_L1..R4, HULL 125,466 triangles), CHECK ALL OK; ue_import 0 warnings (4 NOTEs: lattice cut-outs on MI_SV_Tani_T16_1
+  and MI_SV_Tani_HULL_1/4/6 draw solid on AC8's gear material), every skeleton's bones within 0.00 cm of the export,
+  the 9 VLS AS_..._Open 0.5 s; TaniBuild "SM_SV_Tani_HULL: 36 sockets", done (0 errors); cooked; SurvivalMode_Tani_P
+  85 MB, 1,442 blocks padded. Hull sockets without a part yet: CORE, RAILCANNON, RAILGUN_L, RAILGUN_R.
+- build.sh's cook check failed on Windows ("Model/SM_SV_Tani_T16_DAM not cooked", though it was): Windows' Python ends
+  its print lines in CR LF and the shell kept the CR on each line's last name. Fixed (`| tr -d '\r'`), commit 52b4e7c.
+- In game the Tanicorn is still Ctrl+T's one test mount (BP_SV_Tani_T5, now the whole-ship export's T5: same pivot and
+  muzzles as milestone 0's). Nothing spawns the hull or the other parts yet (WP1).
+- build_all.sh (ZFA=1 TANI=1) clean, "leaderboard: runs go to ...". package_dev.sh (VALKA=1 ZFA=1 TANI=1), build
+  cda65fd04717... registered. INSTALLED 2026-11-10 over 0.74.46 (backup: build/backup/install_before_0.74.50; every staged
+  file matches the install). The installed subtitles.ini was the repo's (subtitles.py diff).
+- To see in game: Ctrl+T's mount as in 0.74.46; 0.74.48's carrier hull hold (a carrier's 3 rounds, then the STORE: no
+  crash) and 0.74.49's laser interceptors at a 0.5 s swing (the VAMPIRES' ZFA-44s).
