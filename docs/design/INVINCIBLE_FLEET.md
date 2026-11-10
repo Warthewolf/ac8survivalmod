@@ -86,8 +86,11 @@ Tags as in docs/re: [V] read in a file or seen in game (where), [I] inferred, [?
 - **Every ship must be sunk**: the round is won only with the Tanicorn and the whole fleet down.
 - **The Tanicorn rises between the Ford's two halves** (the Ford's wreck breaks in two and the halves part).
 - **Every ship carries its name** on its target box.
-- **The Tanicorn model goes in first**: before the round reaches friends' builds the Tanicorn is a model of our own
-  geometry (not the Iowa); the round never ships without its boss.
+- **The Tanicorn model goes in first**: the TANACORN's model is the first thing built. **It is the Leviathan design:
+  Sea Power's Iowa fused with AC8's Alicorn** (the user, 2026-11-10: "You need sea powers iowa"). (An earlier reading of
+  this line as "our own geometry instead of the Iowa" was the agent's mistake, corrected the same day.) The Iowa is the
+  user's dev install only (the user, 2026-11-09), so round 30 with its boss stays in dev builds unless the user decides
+  otherwise (section 6).
 - **The fleet sails towards Comona from the north-west.**
 - **Every ship shows its damage textures at all times, except the Tanicorn** (a battle-scarred fleet from the moment
   it appears; the Tanicorn pristine).
@@ -236,39 +239,45 @@ Each package: goal, depends on, where, steps ([repo] = a cloud session can do it
 machine), test in game, pass, fallback, unknowns. Do them in this order unless a package says it can run alongside.
 Status lines: update them as work lands.
 
-### WP0. The Tanicorn's own model
-Status: not started. Depends on: nothing. Who: the agent (the user, 2026-11-10: "You are building it all").
-- Goal: the Tanicorn's hull and every mount type in our own geometry (the Iowa's may stay in the user's dev install
-  only), after the chosen design `art/tanicorn/design/Leviathan_rev4.blend` (650 m: the Alicorn's length; Alicorn-grey
-  upper works; the Alicorn's hull colour; the bow railcannon in its teal bay; faired sponsons; pristine: the user
-  confirmed this look, 2026-11-10). The Alicorn's parts are AC8 stock and allowed.
-- Deliverables, rigged as tools/tanicorn expects (tools/tanicorn/README.md, prepare_part.py): the hull (static mesh,
-  its mount sockets named as the parts' components will attach: **2** 16-inch, 6 five-inch, 8 close-in, **16 VLS (8 on
-  the aft deck, 4 on each bow flank)**, 2 sub-railgun hatches, the bow railcannon's bay: section 2's table), each mount
-  type (16-inch triple, 5-inch twin, CIWS / laser, the deck VLS block, the bow's side VLS block (its 8 cells' sockets
-  canted outward, so the missiles leave sideways), the sub-railgun with its hatch, the bow railcannon with its raise and
-  barrel split) as Body > turret_yaw > turret_pitch with
-  identity bones and muzzle sockets (SOC_Gun_01.. as the stock spelling), each with its wreck; textures ordinary (no
-  VT: hard rule 44) on AC8 material instances parented on stubs (hard rules 42, 58).
-- Also: a one-piece skinned version of the whole ship with a root bone for the rise (WP4 route B), and its rise
-  animation (WP4).
-- **How the agent builds it:** scripted Blender (Python), never hand edits it can't repeat: a script under
-  `tools/tanicorn/` (e.g. `model_hull.py`, `model_mounts.py`) that builds the hull from lofted cross-sections and the
-  superstructure, mounts and details from parametric parts, in metres at the Alicorn's 650 m, UV-unwrapped for
-  ordinary textures, and writes the .blend and the glTFs prepare_part.py takes. The Leviathan_rev4 design and its
-  renders (`art/tanicorn/renders/leviathan/`) are the **visual reference only**: no vertex, mesh or texture of the
-  Iowa is copied, traced or imported into the new model (it must be shippable). The Alicorn's parts (railcannon,
-  sponsons, VLS hatches) may be used as AC8 stock exports.
-- **Where Blender runs:** try Blender as a Python module in the cloud session first (`pip install bpy`: Blender's
-  official wheel on PyPI, which the session's network allows; it needs the Python version that wheel is built for,
-  ~400 MB of disk) to build and render there and send the renders to the user (SendUserFile); else the script runs
-  on the user's machine (Blender 3.3: keep the script to the API both versions share) and the user sends the renders.
-- **Texturing:** procedural in the script or baked there (panel lines, AC8 grey, the teal bay), written as ordinary
-  PNGs (no VT: hard rule 44); materials as AC8 instances on stubs (tools/tanicorn ue_import.py's route).
-- Test: renders for the user (the whole ship from four sides and close-ups of each mount type), then WP1's mount test
-  with a mount of the new model.
-- Pass: the user approves the look; tools/tanicorn's pipeline takes the files unchanged; nothing of the Iowa in them
-  (the script's sources are its own code and AC8's exports only).
+### WP0. The TANACORN's model: the Leviathan design (Sea Power's Iowa + AC8's Alicorn)
+Status: not started. Depends on: nothing. Who: the agent (the user, 2026-11-10: "You are building it all"; "You need
+sea powers iowa").
+- Goal: the TANACORN built from the chosen design `art/tanicorn/design/Leviathan_rev4.blend` (rigged:
+  `Leviathan_animated.blend`) as it is: **Sea Power's Iowa fused with AC8's Alicorn** at the Alicorn's 650 m (the Iowa's
+  hull, superstructure and mounts scaled up; the Alicorn's stern, sponsons, railcannon and sub-railguns; Alicorn-grey
+  upper works, the Alicorn's hull colour, the teal railcannon bay; pristine: the user confirmed this look, 2026-11-10),
+  plus the parts the settled armament adds (section 2's table). Sea Power's Iowa: the user's dev install only.
+- The sources, already in the repo: `art/tanicorn/ingame/src.blend` (both source ships prepared by
+  tools/tanicorn/bl_import.py: the Iowa's hull, 16-inch, 5-inch and CIWS mounts split into housing and guns with their
+  pivots; the Alicorn's parts), the design files (the fused hull LEV_HULL, the mounts' places and scale, the railcannon
+  bay, the sub-railguns' hatches, the four laser corners marked LEV_LASER_*), and tools/tanicorn's pipeline, which
+  already made the Iowa's 5-inch twin into AC8's BP_SV_Tani_T5 (milestone 0).
+- Deliverables, rigged as tools/tanicorn expects (tools/tanicorn/README.md, prepare_part.py: Body > turret_yaw >
+  turret_pitch with identity bones, muzzle sockets SOC_Gun_01.. as the stock spelling, each part with its wreck):
+  - **from the Iowa** (prepare_part.py, as the 5-inch was): the 16-inch triple (2 on the ship), the 5-inch twin (6),
+    the CIWS (4);
+  - **from the Alicorn**: the bow railcannon (its raise and barrel split: Leviathan_animated's railcannon_pitch /
+    barrels), the sub-railgun with its hatch (railgun_L / R and the hatch doors), the deck VLS block (the Alicorn's
+    vls parts: 8 on the aft deck round turret C);
+  - **new, the agent's own** (no Iowa or Alicorn part fits): the laser interceptor turret (4, at the LEV_LASER_*
+    corners: a compact turret for AC8's anti-missile laser), and the bow's side VLS block (4 a side along the bow
+    flanks: 8 cells canted outward, so the missiles leave sideways; its hatches flush with the hull's side);
+  - **the hull**: LEV_HULL as one static mesh with every mount's socket (2 + 6 + 8 + 16 + 2 + the railcannon's bay:
+    34 parts and the railcannon), named as the parts' components will attach, the core's place for phase 3, and the
+    deck marks the capture doesn't need (that's GEOFON's);
+  - textures ordinary (no VT: hard rule 44), the Iowa's and the Alicorn's own maps (the Alicorn's are AC8's), on AC8
+    material instances parented on stubs (hard rules 42, 58);
+  - a one-piece skinned version of the whole ship with a root bone for the rise (WP4 route B), and its rise animation.
+- **How the agent builds it:** scripted Blender 3.3 (the user's version; it runs in the cloud session too:
+  download.blender.org's 3.3 LTS Linux build, used on 2026-11-10 to correct the design files), never hand edits it can't
+  repeat: tools/tanicorn's scripts extended (bl_import.py's sources, prepare_part.py for each mount type, a hull step
+  that adds the sockets to LEV_HULL), plus the new parts' modelling script. Renders in the cloud session (Cycles on the
+  CPU) sent to the user for approval; the UE 5.4 import, TaniBuild and the cook on the user's machine
+  (tools/tanicorn/build.sh).
+- Test: renders (the whole ship from four sides, close-ups of each mount type, the new laser turret and side VLS
+  block), then WP1's mount test with each mount.
+- Pass: the user approves the look; tools/tanicorn's pipeline takes every part; each part's sockets and bones as the
+  stock spelling.
 
 ### WP1. The Tanicorn's mounts work (milestone M0b)
 Status: milestone 0 done (0.74.43-0.74.47: the 5-inch BP_SV_Tani_T5 loads with its fire control and spawns from
@@ -608,8 +617,10 @@ Status: not started. Depends on: everything above.
   The scars are local (WP8).
 - The perf line with the whole fleet and the Tanicorn up; the STORE's freeze and restore over every object of theirs
   (docs/re/STORE_FREEZE.md); 0.74.48's rule.
-- Release: round 30's fleet in dev builds only until WP0's own Tanicorn is in (section 2); then into friends' zips
-  (`BUILD_NAME=COOP2MP COOP=1 sh tools/package_release.sh online <version>`, registered on the leaderboard).
+- Release: the TANACORN is Sea Power's Iowa fused with the Alicorn (WP0), and the Iowa is the user's dev install only
+  (2026-11-09): its container ships in TANI=1 dev builds only (package_release.sh drops it), so round 30 with its boss
+  stays in dev builds unless the user decides otherwise (section 6). Friends' zips are built with
+  `BUILD_NAME=COOP2MP COOP=1 sh tools/package_release.sh online <version>` (registered on the leaderboard).
 
 ### WP13. The fleet shells the airfield
 Status: not started. Depends on: WP7 (the course and station), WP9 (the railguns, VLS), WP10. The user, 2026-11-10:
@@ -747,7 +758,7 @@ its EW mast), co-op (sv_coop*.lua, sv_down.lua). The user's idea and answers: se
 | SetMaterial on ~16 ships' slots hitches | WP8's per_tick | fewer slots a tick, the hull first |
 | laser interceptors make missiles useless | WP9 balance | fewer, slower, killable first |
 | ~16-20 ships + the boss cost too much frame time | the perf line | fewer ships, parts merged |
-| the Iowa geometry can't ship | WP0 | (decided: our own model first) |
+| the Iowa geometry is dev-install only | section 6 | (the user's call: round 30 dev-only, or another rule for friends' builds) |
 | a unit with child objects recycled under them crashes the STORE | 0.74.48's rule | (rule: never) |
 | ship turrets can't fire at the airfield 16-20 km off | WP13 step 1's test | the scripted salvo (step 2), proven for the heavies |
 | `pip install bpy` doesn't fit the cloud session (Python version, disk) | WP0's first step | the script runs on the user's machine |
@@ -763,8 +774,12 @@ its EW mast), co-op (sv_coop*.lua, sv_down.lua). The user's idea and answers: se
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 6. Questions still open for the user
-None (the last six answered 2026-11-10: section 2). New questions go here as work raises them, each with the
-agent's recommended answer.
+1. **Friends' builds and the Iowa** (2026-11-10): the TANACORN is Sea Power's Iowa fused with the Alicorn, and the Iowa
+   is the user's dev install only (2026-11-09). So, as things stand, round 30 never reaches friends' zips (without its
+   boss the round can't run). Keep it that way, or does the user want another rule for friends' builds? (The user's
+   call; the build follows whatever is decided, and AGENTS.md records it.)
+
+New questions go here as work raises them, each with the agent's recommended answer.
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 7. Reference: AC04's Aegir Fleet
