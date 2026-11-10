@@ -2377,3 +2377,17 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   spawn); the 2 s line gives the barrel's heading from turret_pitch -> SOC_Gun_01 and the muzzle against the mount.
 - build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1), build 558f72008e20... registered. INSTALLED
   2026-11-10 22:37 (backup: build/backup/install_before_0.74.55).
+
+## 0.74.56 (2026-11-10; Lua only, test-only code: where the flak guns hang, ours against the stock GR023)
+- The user's run of 0.74.55 (22:41): the barrel tracks (yaw through every heading, pitch 9.0-34.5; the muzzle moving with
+  it), but every LiveFlakGun the T5 made sat at the mount's origin to the centimetre with no velocity. LiveFlakGun and
+  LiveBulletEmitter are both ALiveAttachedWeapon (AttachedComponent / AttachedSocketName / bIsBaseAttached): the gun
+  hangs on the mount and its bursts come from where it hangs. The one plain-code use of the "SOC_Gun_01" literal
+  (0x147f2fc20) checks LiveWeaponBase / LiveAttachedWeapon, spawns the weapon and attaches it at SOC_Gun_01 to this+0x388
+  or the RootComponent; 0x388 is OverlapCollision (a sphere) in the class whose reflection names it there
+  (GunHitMeshComponent 0xb58, Unit 0xfa0, FireControlSystemComponent 0xfa8 in the AI object).
+- 0.74.56: every LiveFlakGun the game makes (ours and the stock ones, the first 12 of each a session): its owner, where it
+  sits against its owner, `hangs on <component> (of <owner>) at socket <name>, base attached <bool>`. Test: Ctrl+T and
+  Ctrl+END (the Spaceport Assault's island GR023 flak guns), side by side.
+- build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1), build a4c7c3edca4b... registered. INSTALLED
+  2026-11-10 22:45 (backup: build/backup/install_before_0.74.56).

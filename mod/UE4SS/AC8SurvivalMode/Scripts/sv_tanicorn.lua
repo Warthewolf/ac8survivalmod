@@ -182,17 +182,55 @@ end
 -- at its construction, before it has a place), then at the next tick its place and velocity run back over its age to
 -- where it started, against the mount and its muzzle at that moment. The user's runs of 0.74.50-0.74.54: the fire "from
 -- below the mount" while the engine puts SOC_Gun_01 at the barrel's tip: this is where the game actually starts it.
+-- (0.74.56) every flak gun the game makes, ours or a stock one (the Spaceport island's GR023s: Ctrl+END), for the first
+-- 12 of each a session: its owner, where it sits against its owner, and where it says it hangs (ALiveAttachedWeapon's
+-- AttachedComponent / AttachedSocketName / bIsBaseAttached). 0.74.55 showed ours sitting at the mount's origin to the
+-- centimetre with no velocity: LiveFlakGun is an ALiveAttachedWeapon, the bursts come from where it hangs.
 local NEWSHELL = {}
 if type(NotifyOnNewObject) == "function" then
     pcall(NotifyOnNewObject, "/Script/Live.LiveFlakGun", function(o)
-        if (T.until_ or 0) > os.clock() and #NEWSHELL < 32 then NEWSHELL[#NEWSHELL + 1] = { o = o, t = os.clock() } end
+        if #NEWSHELL < 32 then NEWSHELL[#NEWSHELL + 1] = { o = o, t = os.clock() } end
     end)
+end
+
+local function hangs(w)                                   -- an attached weapon's own record of where it hangs
+    local comp, owner, sock, base = "?", "?", "?", "?"
+    pcall(function()
+        local c = w.AttachedComponent
+        if valid(c) then
+            comp = c:GetFName():ToString()
+            pcall(function() owner = (nameOf(c:GetOwner()):match("([^%.:]+)$")) or "?" end)
+        else
+            comp = "none"
+        end
+    end)
+    pcall(function() sock = w.AttachedSocketName:ToString() end)
+    pcall(function() base = tostring(w.bIsBaseAttached) end)
+    return string.format("hangs on %s (of %s) at socket %s, base attached %s", comp, owner, sock, base)
+end
+
+local function stockShells(list, now)
+    for _, s in ipairs(list) do
+        pcall(function()
+            local o = s.o
+            if not valid(o) then return end
+            local ow = o:GetOwner()
+            if valid(ow) and nameOf(ow):find("Tani", 1, true) then return end
+            T.stock = (T.stock or 0) + 1
+            if T.stock > 12 then return end
+            local l, ol = o:K2_GetActorLocation(), valid(ow) and ow:K2_GetActorLocation()
+            log(string.format("tanicorn: a stock flak gun %d (%s): at (%+.0f, %+.0f, %+.0f) from its owner %s; %s",
+                T.stock, (nameOf(o):match("([^%.:]+)$")) or "?", ol and l.X - ol.X or 0, ol and l.Y - ol.Y or 0,
+                ol and l.Z - ol.Z or 0, valid(ow) and ((nameOf(ow):match("([^%.:]+)$")) or "?") or "none", hangs(o)))
+        end)
+    end
 end
 
 local function shells(now)
     if #NEWSHELL == 0 then return end
     local list = NEWSHELL
     NEWSHELL = {}
+    stockShells(list, now)
     local mount
     for _, o in ipairs(FindAllOf(TANI.class) or {}) do
         if valid(o) and not nameOf(o):find("Default__", 1, true) then mount = o; break end
@@ -203,19 +241,22 @@ local function shells(now)
     pcall(function() ml = mount:K2_GetActorLocation() end)
     if not ml then return end
     for _, s in ipairs(list) do
-        T.shells = (T.shells or 0) + 1
-        if T.shells <= 12 then
+        local mine = false
+        pcall(function() mine = nameOf(s.o:GetOwner()):find("Tani", 1, true) ~= nil end)
+        if mine then T.shells = (T.shells or 0) + 1 end
+        if mine and T.shells <= 12 then
             local ok, line = pcall(function()
                 local l, v = s.o:K2_GetActorLocation(), s.o:GetVelocity()
                 local age = now - s.t
                 local sx, sy, sz = l.X - v.X * age - ml.X, l.Y - v.Y * age - ml.Y, l.Z - v.Z * age - ml.Z
                 local y, pt = heading(v.X, v.Y, v.Z)
                 return string.format("shell %d: started (%+.0f, %+.0f, %+.0f) from the mount, flying yaw %.1f pitch %.1f at %.0f m/s " ..
-                    "(seen %.2f s after it was made, now (%+.0f, %+.0f, %+.0f)); the muzzle (%s), the barrel yaw %s pitch %s",
+                    "(seen %.2f s after it was made, now (%+.0f, %+.0f, %+.0f)); the muzzle (%s), the barrel yaw %s pitch %s; %s",
                     T.shells, sx, sy, sz, y, pt, math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z) / 100, age,
                     l.X - ml.X, l.Y - ml.Y, l.Z - ml.Z,
                     type(a) == "table" and string.format("%+.0f, %+.0f, %+.0f", a.x, a.y, a.z) or "?",
-                    type(a) == "table" and string.format("%.1f", a.yaw) or "?", type(a) == "table" and string.format("%.1f", a.pitch) or "?")
+                    type(a) == "table" and string.format("%.1f", a.yaw) or "?", type(a) == "table" and string.format("%.1f", a.pitch) or "?",
+                    hangs(s.o))
             end)
             log("tanicorn: " .. (ok and line or ("a shell, not read: " .. tostring(line))))
         end
