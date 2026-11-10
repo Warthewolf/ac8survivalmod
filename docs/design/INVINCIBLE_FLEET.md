@@ -174,7 +174,7 @@ left as they were):**
 | bow railcannon (the Alicorn's) | 1 | its teal bay in the bow, where the Iowa's turret A stood | the airfield: a 30 s charge, again every 90 s while it lives | 2 |
 | 16-inch triple turret, railgun shells | **2** | turret B forward of the bridge, turret C aft | the players, and the airfield from the gun line (WP13) | 1 |
 | 5-inch twin flak mount | 6 | three a side along the superstructure | the players | 1 |
-| close-in mounts | 8: **4 laser interceptors** (0.5 s swing) + **4 CIWS guns** | the superstructure's corners | lasers: the players' missiles; CIWS: the players | 1 |
+| close-in mounts | 8: **4 CIWS guns** + **4 laser interceptors** (0.5 s swing) (the user, 2026-11-10: "Add 4 more corners for 8") | CIWS: the Iowa's four Phalanx positions amidships (+22 m and -54 m, about 12-14 m off the centreline, ~31 m up); lasers: four new corners, a pair on the main deck forward of the superstructure (+50 m, 14 m off, ~13 m up) and a pair at the superstructure's aft end (-100 m, 14 m off, ~23 m up), covering the bow and stern arcs (empties LEV_LASER_FWD_L/R, LEV_LASER_AFT_L/R in the design files) | lasers: the players' missiles; CIWS: the players | 1 |
 | VLS block, 8 cells, on the aft deck | **8** (64 cells) | the aft deck between the Alicorn's sponsons, round and behind turret C (the user, 2026-11-10) | the players | 1 |
 | side VLS block, 8 cells, on the bow's hull | **4 a side, 8** (64 cells) | along each bow flank, in the rows of square ports the hull has; cells canted outward: the missiles burst out of the hull's side, then turn onto their target (the user, 2026-11-10) | the players | 1 |
 | sub-railgun (the Alicorn's) | 2 | its pop-up hatches, one a side | the players | 1 |
@@ -187,8 +187,8 @@ must not fire as one storm: the blocks fire in turns (each its own fire control'
 `salvo_n` 3 per block, its rest between), tuned in WP3's test. The design files
 (art/tanicorn/design, checked in Blender 3.3 on 2026-11-10) have exactly that main armament: **two** 16-inch turrets,
 now named `LEV_T16_FWD` (turret B, about +97 m) and `LEV_T16_AFT` (turret C, about -160 to -170 m), their guns
-`LEV_G16_FWD` / `LEV_G16_AFT` in the rigged file; 6 five-inch, **4 CIWS positions** (the Iowa's Phalanx: WP0 adds 4 more
-for the 8 close-in), the 2 sub-railguns and the bow railcannon, and **no VLS blocks placed yet** (WP0 adds the 16: 8 on the aft deck, 4 a side on the bow). The
+`LEV_G16_FWD` / `LEV_G16_AFT` in the rigged file; 6 five-inch, **4 CIWS positions** (the Iowa's Phalanx) and the **4 new laser
+corners marked** by empties (LEV_LASER_*: WP0 builds their mounts), the 2 sub-railguns and the bow railcannon, and **no VLS blocks placed yet** (WP0 adds the 16: 8 on the aft deck, 4 a side on the bow). The
 Iowa's own three turrets are only in each file's SRC collection (the sources), now excluded from the view layer, never
 exported; a TANACORN_README text in each file says so.
 
