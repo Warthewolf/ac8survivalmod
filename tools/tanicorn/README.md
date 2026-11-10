@@ -65,6 +65,22 @@ frame on 4 cores, about an hour for all of it). **The surfacing shot** (the user
 against a sunset) is `surface_tanacorn.py`, run the same way: her bow comes up 35 deg nose-up until it stands 120 m
 over the sea with a third of her out, comes down while the rest of her surfaces, and slams; spray from baked particle
 systems (fine drops, not big blobs), foam patches, a low sun behind her; 13.5 s at 24 fps, ~8 s a frame at 960x540.
+**The breach shot** (2026-11-10, the user: surfacing again "but refine the water particles so they actually look great,
+include sea swell", the camera "firstly viewing the bow of the ship rising up out of the water from the front", "it
+doesn't have to be a massive water explosion", "then do a pass over the ship with its railguns and other guns firing
+including the laser turrets", 20 s) is `breach_tanacorn.py`, run on the saved model like the film:
+
+    blender -b build/tanicorn/model/Tanacorn_model.blend -P tools/tanicorn/breach_tanacorn.py -- build/tanicorn/film
+
+A swell from Blender's ocean simulation (about +-3.7 m, whitecaps, her waterline foam and the foam where she broke
+out in the sea's material); her bow comes up 35 deg to 120 m dead ahead of a low camera with the sea pouring off it in
+streams (particle drops, motion-blurred) and a ring of white water where she pierces the surface, then settles; the
+camera climbs off her bow and passes aft along her port side while she fights to starboard: railcannon, 16-inch rail
+salvos, 5-inch flak, lasers burning down sea-skimmers, CIWS, sub-railguns, an aft VLS launch. Every mount is aimed at
+its target from its own rig (the turret's yaw and pitch, the guns' long axis, its mouths found from the mesh). About
+21 s a frame at 1280x720 and 8 samples on 4 cores; TANA_BREACH_RESUME=1 goes on from the frames already rendered.
+`TANA_BREACH_FRAMES=110,312` renders test stills, `TANA_BREACH_FX=0` leaves the weapons out.
+
 **Checking her over** (after any change to the design files or straighten.py): `audit_tanacorn.py` on the saved
 model measures her from every side (rays 0.25 m apart from six sides: port against starboard, faces seen from behind;
 then 36 directions round her for the inside of closed parts on show; `audit.json` and a map a view), and
