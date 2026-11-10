@@ -143,20 +143,47 @@ and take over their aircraft and force land it onto the geofon"), and the answer
 - **Captured = dead:** once on the deck the player dies and can be revived by co-op's revive (the STORE's REVIVE).
 - **GEOFON sunk with a player being captured:** the captive goes down with it (downed, revivable as any).
 
+The third round of questions, 2026-11-10:
+- **No time limit:** the round lasts until every ship is down (the shelling and the railcannon are the pressure; every
+  player down ends the run as always).
+- **Radio voices:** COMONA CONTROL / TOWER (the friendly side), KASKA (the intercepted enemy channel), CHARLENE and her
+  escorts (YORKE, ROCK, ALI, DANIELLE: when the VAMPIRES / her flight are around, else on the radio from the airfield),
+  AUDREY and VALKA. No new speaker.
+- **The round's own fighters: a few:** about a quarter of a normal round 30's aircraft, besides AEGIR and the deck.
+- **The win also repairs the airfield fully:** its health, its defences and the allies, as well as the 50,000.
+- **The TANACORN's own fight: about 8 minutes** for one player, from the rise to its sinking (~2-3 minutes a phase).
+- **Captures:** the draft stands: first 2 minutes in, then every 3 minutes while RAVEN's mast and GEOFON are up, any
+  player, never the same one twice within 5 minutes.
+- **Difficulty presets: no change**: round 30 is the same on Casual, Standard and Ace (its values are exempt from the
+  preset's multipliers).
+- **RAVEN's EW mast also jams players near RAVEN** (the Alicorn jammer's own effect), one more reason to kill it first.
+- **Ship pay: double the Spaceport's:** GEOFON 6,000, RAVEN and the Aegis 1,600, cruisers 1,400, destroyers 1,000,
+  missile boats 600, the supply ship 1,000 [I: its own], a turret 300.
+- **Formation: rings round GEOFON:** RAVEN beside it, the four Aegis an inner ring, the cruisers and destroyers an outer
+  ring, the missile boats out front as pickets, the supply ship inside the outer ring astern.
+- **The TANACORN's look: the Leviathan design** (rev4): Alicorn-grey upper works, the Alicorn's hull colour, the teal
+  railcannon bay; pristine.
+- **The players' allies sail and fly to engage the fleet:** the STORE's ships (the DDG AEGIS and the rest) head for it,
+  the wingmen join the attack.
+
 No question is open (section 6).
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 3. The round, as a player sees it (round 30)
 1. **Round 29's break:** callout `INVINCIBLE FLEET` / `THE AEGIR FLEET IS UNDER WAY`, the NEXT row
-   `FLEET: n SHIPS  CARRIER: GEOFON  AIRFIELD IN RANGE: mm:ss`. Radio: Survival's own lines in config/subtitles.ini (never AC7 or AC04 voice).
+   `FLEET: n SHIPS  CARRIER: GEOFON  AIRFIELD IN RANGE: mm:ss`. Radio: Survival's own lines in config/subtitles.ini,
+   from COMONA CONTROL / TOWER, KASKA's intercepted channel, CHARLENE and her escorts, AUDREY and VALKA (never AC7 or
+   AC04 voice).
    The round's music starts: "Invincible Fleet", on loop.
 2. **Phase 1, the fleet:** it appears over the north-west horizon in formation, battle-scarred, each ship named on its
    box, and sails south-east towards Comona's airfield. If it reaches its gun line (~13 minutes, AC04's 15-minute
    limit in another form) it starts **shelling the airfield** and holds station there (WP13). Its screen fires flak
    and VLS missiles; laser interceptors burn down
    missiles fired at the ships they cover; the RAVEN's railguns (RAILGUN WARNING) reach far out; the AEGIR squadron
-   (four F-14D aces) launches off GEOFON's deck at once, and the deck goes on launching a mix of carrier jets. The round's own fighters are fewer (the fleet is the threat). Ships paid as sunk, turrets as
-   shot off (the Spaceport's pay).
+   (four F-14D aces) launches off GEOFON's deck at once, and the deck goes on launching a mix of carrier jets. The
+   round's own fighters are a few (a quarter of a normal round 30's). RAVEN's EW mast jams players near it. Ships paid
+   as sunk, turrets as shot off (double the Spaceport's pay). The players' allies (the STORE's ships, the wingmen) sail
+   and fly out to engage it.
    In co-op, GEOFON tries to **capture** a player now and then (WP14): a CAPTURE LOCK from RAVEN's EW mast on
    someone, who escapes by killing the mast or running; if not, their plane is taken over and landed on GEOFON's deck, and they die there
    (revivable).
@@ -172,7 +199,8 @@ No question is open (section 6).
    and shells it from there too; the ships still afloat fight on with it. It dies breaking up under secondary
    explosions.
 5. **The end:** won when **every ship is sunk** (the TANACORN and the whole fleet, in any order) and the round's
-   aircraft are down: `THE AEGIR FLEET IS DESTROYED`, ~50,000 zollars. One player should need 15-20 minutes. The NEXT row counts what's left
+   aircraft are down: `THE AEGIR FLEET IS DESTROYED`, ~50,000 zollars, and the airfield fully repaired (its health,
+   defences and allies). There's no time limit. One player should need 15-20 minutes, about 8 of them on the TANACORN. The NEXT row counts what's left
    (`FLEET: n AFLOAT`). The players choose when to wake the boss: sink the screen first and the carrier last, or the
    carrier early and the Tanicorn with the fleet still round it.
 
@@ -186,7 +214,8 @@ Status lines: update them as work lands.
 Status: not started. Depends on: nothing. Who: the agent (the user, 2026-11-10: "You are building it all").
 - Goal: the Tanicorn's hull and every mount type in our own geometry (the Iowa's may stay in the user's dev install
   only), after the chosen design `art/tanicorn/design/Leviathan_rev4.blend` (650 m: the Alicorn's length; Alicorn-grey
-  upper works; the bow railcannon in its teal bay; faired sponsons). The Alicorn's parts are AC8 stock and allowed.
+  upper works; the Alicorn's hull colour; the bow railcannon in its teal bay; faired sponsons; pristine: the user
+  confirmed this look, 2026-11-10). The Alicorn's parts are AC8 stock and allowed.
 - Deliverables, rigged as tools/tanicorn expects (tools/tanicorn/README.md, prepare_part.py): the hull (static mesh,
   its mount sockets named as the parts' components will attach), each mount type (16-inch triple, 5-inch twin, CIWS /
   laser, VLS block, the bow railcannon with its raise and barrel split) as Body > turret_yaw > turret_pitch with
@@ -342,6 +371,18 @@ Status: not started. Depends on: nothing for the ships (alongside); WP5 for GEOF
   Mission 22's enemy fleet is in Survival's world data already (EA_Unit_01_Ship0..3: udaloy + 2 grigorovich,
   gorshkov + 2 grigorovich, kirov + grigorovich, Faction 2) [V: SPECIAL_ROUNDS.md 3]; their parts, rows and whether
   they've ever spawned in Survival [?]: research first.
+- **Formation (the user: rings round GEOFON):** RAVEN beside GEOFON (~600 m off its beam: it sails with it, so the
+  capture's 12 km escape is from both), the four Aegis an inner ring (~1.5 km), the cruisers and destroyers an outer
+  ring (~3.5 km), the missile boats 5-6 km ahead as pickets, the supply ship inside the outer ring astern. Each ship's
+  spot an offset from GEOFON in GEOFON's frame, its lane GEOFON's course shifted by it (5.2's lanes), so the rings hold
+  as they sail and the station's racetrack keeps them (the racetrack's turns: the outer ring's lanes are longer; give
+  each its speed so they stay abreast, or let the rings loosen on the turns) [I: distances to set from a test].
+- **The players' allies (the user: sail / fly to engage):** at round 30's start the STORE's allied ships (the DDG AEGIS
+  and the rest of sv_allies.lua's ships) are sent towards the fleet on lanes built from their spots to the fleet's
+  course (make_path at build time: one per ally ship spot, started by a remote event; hard rules 2, 35), their
+  engagement order Normal so they fire at the fleet [?: an allied ship's turrets on enemy ships], and the wingmen
+  (the STORE's) ordered onto the fleet's ships and its fighters (their unit area onto the fleet, as the chase moves
+  enemies'). After the round they go back to their stations (their own lanes back) [?: or stay where they are].
 - **Builder:** generalise the Spaceport's (survival_events.py sp_fleet, build_survival.py spaceport_units /
   build_survival_world.py: one-ship units, Faction 2, no tags, TGT and a box, every part's own order by name 2.5 s after
   its ship appears, SPORT.shipObjs's hull watch, pay by kind, parts finished off when the hull sinks) so both specials
@@ -451,6 +492,10 @@ Status: partly there. Depends on: WP7.
   attached at a ship's socket as on the ZFA-44s (fired and intercepted: 0.74.31) [V], or an AC8 anti-missile arm of
   ours (BP_SwingTLS_ForMSL's values) on the Tanicorn's CIWS mounts. A turn rate / cool-down that leaves skilled missile
   play possible; a callout `LASER DEFENCE ONLINE`; its beam AC8's NS_UAVTLS_Muzzleflash01 (hard rule 58).
+- **RAVEN's EW mast jams (the user):** players within its range get the Alicorn jammer's own effect (BP_wp_ecm_ON: the
+  game's HUD jamming, missiles less reliable) while the mast is up [?: the jammer part's effect on players when it's on
+  a campaign ship: ALICORN.md 1.2's `ecm` is a phase-3 weapon of the Alicorn's; test it on RAVEN]. If it doesn't work
+  that way, the mast's own jamming is left out (the capture still works) and noted.
 - **Railguns:** the Tanicorn's 16-inch triples (WP1) and the RAVEN's: the Alicorn's railgun part (ALiveAIRailgun) in
   the ship's ChildNPCId (hard rule 38's Arsenal Bird pods on the Ladon are the precedent) [?], or a mount swapped to a
   railgun fire control as the flak swap does (only where its MeshComponentName and SlotSocketPrefix exist on the part:
@@ -464,13 +509,28 @@ Status: not started. Depends on: WP7 (and WP6 for phase 3).
   with the Spaceport's hooks (ready / busy / over / row, fighter_share), CFG.specials.fleet and survival.ini
   [specials.fleet] for every count, price and timing; `CFG.specials.schedule.rounds[30] = "fleet"`, **once a run**: the
   kind is not in CFG.specials.rotation and never drawn at random (as THE ESCORT and GONE FISHIN' are once a run).
-  Round 30 is in the late rounds (P8: +3 aircraft a round from 26), so cut its own fighters (fighter_share).
+  Round 30 is in the late rounds (P8: +3 aircraft a round from 26): its own fighters are **a few** (the user):
+  `fighter_share` 0.25 of a normal round 30's aircraft, besides AEGIR and the deck.
+- **No time limit** (the user): the round ends only when every ship and its aircraft are down; every player down ends
+  the run as in any round.
+- **Presets: no change** (the user): round 30's health, lasers, shelling and capture values are the same on Casual,
+  Standard and Ace: the fleet's units and the TANACORN exempt from the preset's multipliers (find where TIER / the
+  preset scales enemy health and damage: sv_config_ini.lua's preset, and skip the fleet's units there) [?: which
+  multipliers reach ships].
 - Phases: 1 the fleet (WP7, WP9), 2 GEOFON's fall (WP5, WP6), 3 the Tanicorn (WP3, WP11); won when every ship and the
-  round's aircraft are down. Pay by kind and per turret; the win's `reward` 50,000. Callouts and radio lines: the
-  agent drafts them into config/subtitles.ini with Survival's own speakers (`python -I tools/subtitles.py merge` after
-  adding the Lua lists), the user edits them; never AC7 or AC04 voice.
-- **Pacing:** one player 15-20 minutes start to finish (the user); the fleet's health, the TANACORN's and the gun line
-  (`shell_km`, `speed_kmh`) tuned to that from the tests; co-op +50 % health per extra player (`coop_health_x` 0.5:
+  round's aircraft are down. **Pay (the user: double the Spaceport's):** GEOFON 6,000, RAVEN and the Aegis 1,600, the
+  cruisers 1,400, the destroyers 1,000, the missile boats 600, the supply ship 1,000, a turret 300; the win's
+  `reward` 50,000 **and the airfield fully repaired** (the user): AF back to its full health, its defences and the
+  allies repaired (sv_rounds.lua's between-rounds repair, ALLY.repairAll, at the win), callout `AIRFIELD RESTORED`.
+- **Radio (the user):** the agent drafts the lines into config/subtitles.ini (`python -I tools/subtitles.py merge`
+  after adding the Lua lists), the user edits them; never AC7 or AC04 voice. Speakers: COMONA CONTROL / TOWER (the
+  warning, the gun line, the shelling, the airfield down or restored, the win), KASKA's intercepted channel (the
+  fleet's side: the sailing, GEOFON's fall, the rise), CHARLENE and her escorts YORKE / ROCK / ALI / DANIELLE (their
+  reactions; the VAMPIRES' pilots when up), AUDREY and VALKA (the rise, the TANACORN, the win). Each moment its own
+  list: the warning, the fleet sighted, the gun line, a capture lock / broken / captured, GEOFON at half, GEOFON down,
+  the rise, each TANACORN phase, the railcannon charging / fired / destroyed, the win.
+- **Pacing:** one player 15-20 minutes start to finish, **about 8 of them on the TANACORN** (~2-3 minutes a phase) (the
+  user); the fleet's health, the TANACORN's and the gun line (`shell_km`, `speed_kmh`) tuned to that from the tests; co-op +50 % health per extra player (`coop_health_x` 0.5:
   ships, parts and the TANACORN), the fleet's size the same.
 - **Music (the user):** `AKE_Bgm_Online_ACE04_Invincible_Fleet_Play` on loop from the round's start until the rise,
   then `AKE_Bgm_Online_ACEINF_Invincible_Fleet_INFINITY_Remix_Play` on loop until the TANACORN dies (then the music
