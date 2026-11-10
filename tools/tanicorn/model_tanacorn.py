@@ -18,8 +18,10 @@ Blender's exact boolean, cell wells cut, bevelled (2 segments, normals hardened)
 (smart UV, no overlaps) and checked (non-manifold / open edges, faces through each other, degenerate faces, UVs out of
 0..1: tanacorn_model_check.json). Its texture is baked once (textures/T_TANA_<part>_D.png: the paint, a light grime
 noise and its own ambient occlusion; ordinary PNGs, hard rule 44).
-Writes <out>/Tanacorn_model.blend (the design file is never changed) and, with `render`, <out>/renders/*.png (Cycles
-on the CPU; TANA_SAMPLES, TANA_SHOTS).
+Writes <out>/Tanacorn_model.blend (the design file is never changed; every hatch keyed open and shut in its 1-360
+sequence, HATCH_KEYS), with `render` <out>/renders/*.png (Cycles on the CPU; TANA_SAMPLES, TANA_SHOTS), and with `anim`
+<out>/renders/anim/tanacorn_hatches_<view>.mp4 and tanacorn_hatches.mp4: every block's hatches opening in 0.5 s, held,
+then shutting, from 5 views (ffmpeg; TANA_ANIM_SAMPLES, TANA_ANIM_VIEWS).
 """
 import bpy, bmesh, sys, os, json, math
 from mathutils import Vector, Matrix
@@ -28,6 +30,7 @@ from mathutils.bvhtree import BVHTree
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 OUT = os.path.abspath(argv[0]) if argv else os.path.abspath("build/tanicorn/model")
 RENDER = "render" in argv[1:]
+ANIM = "anim" in argv[1:]
 TEX = os.path.join(OUT, "textures")
 os.makedirs(TEX, exist_ok=True)
 
@@ -957,7 +960,27 @@ for o in [h for h, _ in made["laser"]] + made["vlsd"] + made["vlss"]:
     t = o.matrix_world.translation
     print("model: %-18s at (%.1f, %.1f, %.1f) m" % (o.name, t.x, t.y, t.z))
 
+# every VLS hatch keyed into the design's deploy sequence (30 fps, frames 1-360: the doors and turrets open by ~150): all
+# 128 open together at HATCH_KEYS' first pair (0.5 s, the game's open_s), hold, and shut at the second; Bezier keys, so
+# each swing eases in and out. Each hatch's basis is its hinge (a translation) times one rotation about HATCH_OPEN's axis.
+HATCH_KEYS = ((150, 165), (290, 305))
+for b, (kind, hs) in hatches.items():
+    axis, deg = HATCH_OPEN[kind]
+    i = "XYZ".index(axis)
+    for h, hinge in hs:
+        h.matrix_basis = hinge.copy()
+        h.rotation_mode = "XYZ"
+        for f, a in ((HATCH_KEYS[0][0], 0.0), (HATCH_KEYS[0][1], deg), (HATCH_KEYS[1][0], deg), (HATCH_KEYS[1][1], 0.0)):
+            h.rotation_euler[i] = math.radians(a)
+            h.keyframe_insert("rotation_euler", index=i, frame=f)
+        h.animation_data.action.name = h.name + "_open"
+print("model: %d hatches keyed: open %d-%d, shut %d-%d (30 fps)" % (sum(len(hs) for _, hs in hatches.values()),
+      HATCH_KEYS[0][0], HATCH_KEYS[0][1], HATCH_KEYS[1][0], HATCH_KEYS[1][1]))
+
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, "Tanacorn_model.blend"), compress=False, copy=True)
+for _, hs in hatches.values():                     # the renders below pose the hatches themselves (open_hatches)
+    for h, hinge in hs:
+        h.animation_data_clear()
 print("model: saved", os.path.join(OUT, "Tanacorn_model.blend"))
 
 
@@ -995,8 +1018,8 @@ def wire_mat():
     return m
 
 
-if RENDER:
-    sc = bpy.context.scene
+sc = bpy.context.scene
+if RENDER or ANIM:
     sc.render.engine = "CYCLES"
     sc.cycles.device = "CPU"
     sc.cycles.samples = int(os.environ.get("TANA_SAMPLES", "48"))
@@ -1017,7 +1040,7 @@ if RENDER:
         ("08_parts_wire", camera("CAM_T_parts", (0, 330, 40), (0, 420, 8), 50), []),
         ("09_top", camera("CAM_T_top", (0, 0, 1300), (0, 0, 0), 30), []),
     ]
-    only = os.environ.get("TANA_SHOTS")
+    only = os.environ.get("TANA_SHOTS") or ("" if RENDER else "none")
     os.makedirs(os.path.join(OUT, "renders"), exist_ok=True)
     for tag, cam, opened in shots:
         if only and tag not in only.split(","):
@@ -1030,4 +1053,64 @@ if RENDER:
         bpy.ops.render.render(write_still=True)
         print("model: rendered", sc.render.filepath)
     sc.view_layers[0].material_override = None
+    open_hatches(list(hatches), 0.0)
+
+
+def close_cam(name, body, out, up, back):
+    """a close-up of one block: from `out` m off its face, `up` m above, `back` m along it"""
+    M = body.matrix_world
+    at = M.translation
+    return camera(name, at + out + Vector((0, 0, up)) + back, at, 40)
+
+
+if ANIM:
+    import shutil, subprocess
+    sc.render.resolution_x, sc.render.resolution_y = 1280, 720
+    sc.cycles.samples = int(os.environ.get("TANA_ANIM_SAMPLES", "24"))
+    sc.view_layers[0].material_override = None
+    d1, l1 = bpy.data.objects["TANA_VLSD_1"], bpy.data.objects["TANA_VLSS_L1"]
+    views = [
+        ("aft_deck", camera("CAM_T_aft", (-330, 95, 75), (-236, 0, 8), 55)),
+        ("aft_deck_close", close_cam("CAM_A_deck_close", d1, Vector((14, 16, 0)), 9, Vector())),
+        ("bow_L", camera("CAM_T_bow_side", (265, 95, 22), (183, 18, 5), 50)),
+        ("bow_L_close", close_cam("CAM_A_bow_L_close", l1, Vector((6, 22, 0)), 5, Vector())),
+        ("bow_R", camera("CAM_T_bow_side_R", (265, -95, 22), (183, -16, 5), 50)),
+    ]
+    want = os.environ.get("TANA_ANIM_VIEWS")
+    FR, STEPS = 30, 15                                     # 0.5 s open = 15 frames at 30 fps
+    adir = os.path.join(OUT, "renders", "anim")
+    os.makedirs(adir, exist_ok=True)
+    clips = []
+    for tag, cam in views:
+        if want and tag not in want.split(","):
+            continue
+        sc.camera = cam
+        poses = []
+        for k in range(STEPS + 1):                         # the open swing's frames; the shut is the same, reversed
+            f = k / STEPS
+            open_hatches(list(hatches), f * f * (3 - 2 * f))
+            sc.render.filepath = os.path.join(adir, "%s_%02d.png" % (tag, k))
+            bpy.ops.render.render(write_still=True)
+            poses.append(sc.render.filepath)
+        print("model: animated", tag)
+        seq = [poses[0]] * 15 + poses + [poses[-1]] * 30 + poses[::-1] + [poses[0]] * 15
+        sdir = os.path.join(adir, "seq_" + tag)
+        shutil.rmtree(sdir, ignore_errors=True)
+        os.makedirs(sdir)
+        for i, src in enumerate(seq):
+            shutil.copyfile(src, os.path.join(sdir, "%04d.png" % i))
+        clip = os.path.join(adir, "tanacorn_hatches_%s.mp4" % tag)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(FR), "-i", os.path.join(sdir, "%04d.png"),
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", clip], check=True)
+        shutil.rmtree(sdir)
+        clips.append(clip)
+        print("model: clip", clip)
+    if len(clips) > 1:
+        lst = os.path.join(adir, "clips.txt")
+        with open(lst, "w") as f:
+            f.write("".join("file '%s'\n" % c for c in clips))
+        allc = os.path.join(adir, "tanacorn_hatches.mp4")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", allc],
+                       check=True)
+        print("model: clip", allc)
     open_hatches(list(hatches), 0.0)

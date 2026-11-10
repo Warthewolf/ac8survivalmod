@@ -21,13 +21,16 @@ parts the settled armament needs that neither ship has: 4 laser turrets (house +
 VLS blocks behind turret C and 8 side VLS blocks on the bow's flanks (SOC_Vls_01..08 along each cell's launch line),
 plus a SOCKET_Mount_* empty on the hull for every part (`tanacorn_hull_sockets.json`, UE cm):
 
-    blender -b art/tanicorn/design/Leviathan_animated.blend -P tools/tanicorn/model_tanacorn.py -- build/tanicorn/model [render]
+    blender -b art/tanicorn/design/Leviathan_animated.blend -P tools/tanicorn/model_tanacorn.py -- build/tanicorn/model [render] [anim]
 
 It also removes the Iowa's crew figures, builds the laser as a beam director (the user's photos), gives every VLS lid a
 hinge, and checks every part type's topology (tanacorn_model_check.json: all must pass). Status and the next steps:
 docs/design/INVINCIBLE_FLEET.md WP0 ("WP0 handover").
 It writes `Tanacorn_model.blend` (the design file is never changed) and, with `render`, previews (Cycles on the CPU;
-TANA_SAMPLES, TANA_SHOTS=02_aft_vls,... pick the quality and the views). The previews the user saw are in
+TANA_SAMPLES, TANA_SHOTS=02_aft_vls,... pick the quality and the views). Every VLS hatch is keyed in the .blend's
+1-360 sequence (open at 150-165, shut at 290-305: 0.5 s each at 30 fps). With `anim` (alone or after `render`) it renders
+the hatches opening, held and shutting from 5 views into renders/anim/*.mp4 (ffmpeg; TANA_ANIM_SAMPLES,
+TANA_ANIM_VIEWS=aft_deck,aft_deck_close,bow_L,bow_L_close,bow_R). The previews the user saw are in
 `art/tanicorn/renders/model/`. Next: each part through prepare_part.py's route (a recipe each in build.sh), the hull
 as a static mesh with these sockets.
 
