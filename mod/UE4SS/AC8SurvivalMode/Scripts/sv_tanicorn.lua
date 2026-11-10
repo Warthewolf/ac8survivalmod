@@ -94,14 +94,59 @@ local function describe(list)
     return #out > 0 and table.concat(out, "; ") or "nothing"
 end
 
-local function bone(o, name)                             -- a bone's component-space rotation, "y/p" degrees
+-- (0.74.51) a bone or socket of the turret mesh in the world: "yaw/pitch" degrees, or "(x, y, z) yaw/pitch" with its
+-- place. GetBoneRotationByName handed back no Yaw in the user's run of 0.74.50 ("yaw ? pitch ?"); a skinned mesh's
+-- GetSocketRotation / GetSocketLocation take a bone name as well as a socket's.
+local function sock(o, name, where)
     local ok, r = pcall(function()
-        local v = o.TurretPoseableMesh:GetBoneRotationByName(FName(name), 1)
-        return string.format("%.1f/%.1f", v.Yaw, v.Pitch)
+        local m = o.TurretPoseableMesh
+        local v = m:GetSocketRotation(FName(name))
+        local s = string.format("%.1f/%.1f", v.Yaw, v.Pitch)
+        if where then
+            local l = m:GetSocketLocation(FName(name))
+            s = string.format("(%.0f, %.0f, %.0f) %s", l.X, l.Y, l.Z, s)
+        end
+        return s
     end)
     if ok then return r end
-    if not T.boneErr then T.boneErr = true; log("tanicorn: reading " .. name .. " failed: " .. tostring(r)) end
+    T.sockErr = T.sockErr or {}
+    if not T.sockErr[name] then T.sockErr[name] = true; log("tanicorn: reading " .. name .. " failed: " .. tostring(r)) end
     return "?"
+end
+
+local function bone(o, name) return sock(o, name, false) end
+
+-- (0.74.51) the user's run of 0.74.50: "the gun turret moved, really well but the gun fire did not move with the Turret".
+-- The AA shell is an ALiveBulletEmitter (an ALiveAttachedWeapon): every one within 150 m of a mount, where it is, which
+-- way it points and what it hangs on (its attach parent component and socket), against the muzzle socket's own place
+-- and heading: an emitter on the root (no socket) or one that keeps its first heading while SOC_Gun_01 turns is it.
+local EMITTERS = { "BP_wp_aagun_vessel_C", "LiveBulletEmitter" }
+local function emitters(o)
+    local ok, ml = pcall(function() return o:K2_GetActorLocation() end)
+    if not (ok and ml) then return "?" end
+    local out, seen = {}, {}
+    for _, cls in ipairs(EMITTERS) do
+        for _, e in ipairs(FindAllOf(cls) or {}) do
+            local id = valid(e) and addrOf(e)
+            if id and not seen[id] and not nameOf(e):find("Default__", 1, true) then
+                seen[id] = true
+                pcall(function()
+                    local l, r = e:K2_GetActorLocation(), e:K2_GetActorRotation()
+                    local dx, dy, dz = l.X - ml.X, l.Y - ml.Y, l.Z - ml.Z
+                    if dx * dx + dy * dy + dz * dz > 15000 * 15000 then return end
+                    local parent, socket = "none", "?"
+                    pcall(function()
+                        local p = e.RootComponent:GetAttachParent()
+                        if valid(p) then parent = p:GetFName():ToString() end
+                    end)
+                    pcall(function() socket = e:GetAttachParentSocketName():ToString() end)
+                    out[#out + 1] = string.format("%s at (%+.0f, %+.0f, %+.0f) from the mount, %.1f/%.1f, on %s / %s",
+                        (nameOf(e):match("([^%.:]+)$")) or "?", dx, dy, dz, r.Yaw, r.Pitch, parent, socket)
+                end)
+            end
+        end
+    end
+    return #out > 0 and table.concat(out, "; ") or "none"
 end
 
 -- (0.74.46) the class spawned straight, as AC7's laser is (sv_escort_li.lua): BeginDeferredActorSpawnFromClass +
@@ -153,8 +198,11 @@ local function watch(now)
                 log(string.format("tanicorn: mount %s up at %s: fire control arms %s, health %s/%s", nameOf(o), at(o), arms,
                     tostring(h), tostring(mx)))
             end
-            parts[#parts + 1] = string.format("%s hp %s/%s yaw %s pitch %s", (nameOf(o):match("([^%.:]+)$")) or "?",
-                tostring(h), tostring(mx), bone(o, "turret_yaw"), bone(o, "turret_pitch"))
+            local ay = "?"
+            pcall(function() ay = string.format("%.1f", o:K2_GetActorRotation().Yaw) end)
+            parts[#parts + 1] = string.format("%s hp %s/%s actor yaw %s, bones yaw %s pitch %s, muzzle SOC_Gun_01 %s; shells: %s",
+                (nameOf(o):match("([^%.:]+)$")) or "?", tostring(h), tostring(mx), ay, bone(o, "turret_yaw"),
+                bone(o, "turret_pitch"), sock(o, "SOC_Gun_01", true), emitters(o))
         end
     end
     if #parts > 0 then log("tanicorn: " .. table.concat(parts, "; ")) end

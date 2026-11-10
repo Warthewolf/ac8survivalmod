@@ -2294,3 +2294,20 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   file matches the install). The installed subtitles.ini was the repo's (subtitles.py diff).
 - To see in game: Ctrl+T's mount as in 0.74.46; 0.74.48's carrier hull hold (a carrier's 3 rounds, then the STORE: no
   crash) and 0.74.49's laser interceptors at a 0.5 s swing (the VAMPIRES' ZFA-44s).
+
+## 0.74.51 (2026-11-10; Lua only, test-only code)
+- The user's run of 0.74.50 (21:38, Ctrl+T): the T5 mount spawned through Survival's rows ("1 up", our class), "the gun
+  turret moved, really well but the gun fire did not move with the Turret" (screenshot: the flash at the mount's foot).
+  Health stayed 400 (no hits taken). sv_tanicorn.lua's bone readout failed (GetBoneRotationByName gave no Yaw:
+  `yaw ? pitch ?`).
+- The stock Mk45 (BP_VE002_aegs_mk45_Base, dumped from the game's paks): the same layout as ours (TurretPoseableMesh on
+  the native RootComponent, LauncherBoneControl with LauncherDirection SlotSocket, the same AA emitter BP_wp_aagun_vessel,
+  an ALiveBulletEmitter : ALiveAttachedWeapon); its skeleton has ONE socket, SOC_Gun_01 on BN_turret_pitch at
+  (733.3, 5.8, 0) rotated (0, 0, -90); its Performance names no SlotNum. Ours: two sockets on turret_pitch, rotation 0,
+  SlotNum 2; both present in the cooked SKEL_SV_Tani_T5. Not yet known which difference keeps the fire still.
+- 0.74.51 measures it: every 2 s while a mount is up, `tanicorn: <mount> ... actor yaw A, bones yaw y/p pitch y/p, muzzle
+  SOC_Gun_01 (x, y, z) y/p; shells: <emitter> at (+dx, +dy, +dz) from the mount, yaw/pitch, on <parent component> /
+  <socket>` (GetSocketRotation / GetSocketLocation for bones and sockets; every BP_wp_aagun_vessel_C / LiveBulletEmitter
+  within 150 m). An emitter on RootComponent / None, or one whose heading stays while SOC_Gun_01's turns, is the fault.
+- package_dev.sh (VALKA=1 ZFA=1 TANI=1), build 909414c5b257... registered. INSTALLED 2026-11-10 over 0.74.50 (backup:
+  build/backup/install_before_0.74.51).
