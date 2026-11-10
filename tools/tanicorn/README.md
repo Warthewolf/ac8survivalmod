@@ -34,7 +34,15 @@ It writes `Tanacorn_model.blend` (the design file is never changed) and, with `r
 TANA_SAMPLES, TANA_SHOTS=02_aft_vls,... pick the quality and the views). Every VLS hatch is keyed in the .blend's
 1-360 sequence (open at 150-165, shut at 290-305: 0.5 s each at 30 fps). With `anim` (alone or after `render`) it renders
 the hatches opening, held and shutting from 5 views into renders/anim/*.mp4 (ffmpeg; TANA_ANIM_SAMPLES,
-TANA_ANIM_VIEWS=aft_deck,aft_deck_close,bow_L,bow_L_close,bow_R). The previews the user saw are in
+TANA_ANIM_VIEWS=aft_deck,aft_deck_close,bow_L,bow_L_close,bow_R). The four laser turrets are keyed too (slewing out
+at 60-100, back at 200-240). **The film** of every moving part, the design's own deploy sequence included (the bow's
+doors, the railcannon, the turrets training and their guns lifting), is `film_tanacorn.py`, run on the saved model:
+
+    blender -b build/tanicorn/model/Tanacorn_model.blend -P tools/tanicorn/film_tanacorn.py -- build/tanicorn/film [shot ...]
+
+It renders an orbit right round the ship over the whole sequence and five close-ups (aft_vls, side_vls, bow, laser,
+aft_turret) to mp4, the sun going round with the camera (TANA_FILM_SAMPLES, TANA_FILM_RES, TANA_FILM_STEP; ~5-8 s a
+frame on 4 cores, about an hour for all of it). The previews the user saw are in
 `art/tanicorn/renders/model/`. Next: each part through prepare_part.py's route (a recipe each in build.sh), the hull
 as a static mesh with these sockets.
 

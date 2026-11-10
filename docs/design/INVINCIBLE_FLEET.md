@@ -306,8 +306,11 @@ sea powers iowa").
     hinge: deck lids open -100 deg about Y from their aft edge, side lids +115 deg about X from their top edge, 0.5 s;
     the hinges in tanacorn_hull_sockets.json for the rig). **Every lid is keyed** in Tanacorn_model.blend's 1-360
     sequence (the user: "animate the hatch opening and closing please on all of them"): open at frames 150-165, shut at
-    290-305 (0.5 s each at 30 fps, eased); `anim` renders the cycle from 5 views to mp4 (renders/anim). No UE
-    animation asset exists yet.
+    290-305 (0.5 s each at 30 fps, eased); `anim` renders the cycle from 5 views to mp4 (renders/anim). The four
+    laser turrets are keyed in the same sequence (each house 70 deg outboard, its director up 35 deg, at 60-100; back
+    at 200-240). tools/tanicorn/film_tanacorn.py films every moving part on the saved model (the user: "render a shot
+    of all animations working as the camera tracks around, get some close up shots too"): an orbit over the whole
+    1-360 sequence and five close-ups. No UE animation asset exists yet.
   - **the side VLS blocks lie on the hull's skin** (the user's close-ups, 2026-11-10: "Thats not flush"): the bow's
     flare curves up to 0.7 m over a block's 5.8 m height (straight along it), and a flat block set by one ray's normal
     had its top buried and its foot proud. Each block's frame is now fitted to the skin over its whole footprint

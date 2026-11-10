@@ -961,10 +961,31 @@ for b, (kind, hs) in hatches.items():
 print("model: %d hatches keyed: open %d-%d, shut %d-%d (30 fps)" % (sum(len(hs) for _, hs in hatches.values()),
       HATCH_KEYS[0][0], HATCH_KEYS[0][1], HATCH_KEYS[1][0], HATCH_KEYS[1][1]))
 
+# the laser turrets slew in the same sequence, so the file shows every moving part working (the user, 2026-11-10: "a shot
+# of all animations working"): each house trains 70 deg outboard and its director lifts 35 deg (LASER_KEYS' first
+# pair), holds, and comes back (the second)
+LASER_KEYS = ((60, 100), (200, 240))
+for house, gun in made["laser"]:
+    t = house.matrix_world.translation
+    port = 1.0 if t.y > centre_y(t.x) else -1.0
+    ahead = 1.0 if (house.matrix_world.to_3x3() @ Vector((1, 0, 0))).x > 0 else -1.0
+    for o, i, swing in ((house, 2, math.radians(70.0) * port * ahead), (gun, 1, -math.radians(35.0))):
+        o.rotation_mode = "XYZ"
+        rest = o.rotation_euler[i]
+        for f, a in ((LASER_KEYS[0][0], 0.0), (LASER_KEYS[0][1], swing), (LASER_KEYS[1][0], swing), (LASER_KEYS[1][1], 0.0)):
+            o.rotation_euler[i] = rest + a
+            o.keyframe_insert("rotation_euler", index=i, frame=f)
+        o.animation_data.action.name = o.name + "_slew"
+print("model: %d laser turrets keyed: out %d-%d, back %d-%d" % (len(made["laser"]), LASER_KEYS[0][0], LASER_KEYS[0][1],
+                                                               LASER_KEYS[1][0], LASER_KEYS[1][1]))
+
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, "Tanacorn_model.blend"), compress=False, copy=True)
 for _, hs in hatches.values():                     # the renders below pose the hatches themselves (open_hatches)
     for h, hinge in hs:
         h.animation_data_clear()
+for house, gun in made["laser"]:                   # (and show the lasers at rest)
+    house.animation_data_clear()
+    gun.animation_data_clear()
 print("model: saved", os.path.join(OUT, "Tanacorn_model.blend"))
 
 
