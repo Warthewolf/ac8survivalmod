@@ -5,6 +5,8 @@
 #include "Engine/SimpleConstructionScript.h"
 #include "Engine/SCS_Node.h"
 #include "Engine/SkeletalMeshSocket.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshSocket.h"
 #include "Animation/Skeleton.h"
 #include "Components/SceneComponent.h"
 #include "GameFramework/Actor.h"
@@ -132,6 +134,36 @@ void Sockets(const TArray<TSharedPtr<FJsonValue>>& List)
 	for (USkeleton* Sk : Touched) { Sk->Modify(); SavePkg(Sk->GetOutermost(), Sk); }
 }
 
+// Sockets on a static mesh (the hull's Mount_<part>): { "mesh", "name", "loc": [x, y, z] cm, "rot": [pitch, yaw, roll] }.
+void MeshSockets(const TArray<TSharedPtr<FJsonValue>>& List)
+{
+	TSet<UStaticMesh*> Touched;
+	for (const TSharedPtr<FJsonValue>& V : List)
+	{
+		const TSharedPtr<FJsonObject> S = V->AsObject();
+		UStaticMesh* M = LoadObject<UStaticMesh>(nullptr, *S->GetStringField(TEXT("mesh")));
+		if (!M) { Bad(TEXT("no static mesh ") + S->GetStringField(TEXT("mesh"))); continue; }
+		const FName Name(*S->GetStringField(TEXT("name")));
+		M->Sockets.RemoveAll([&](const TObjectPtr<UStaticMeshSocket>& K) { return K && K->SocketName == Name; });
+		UStaticMeshSocket* K = NewObject<UStaticMeshSocket>(M, NAME_None, RF_Public | RF_Transactional);
+		K->SocketName = Name;
+		const TArray<TSharedPtr<FJsonValue>>& L = S->GetArrayField(TEXT("loc"));
+		K->RelativeLocation = FVector(L[0]->AsNumber(), L[1]->AsNumber(), L[2]->AsNumber());
+		const TArray<TSharedPtr<FJsonValue>>* R = nullptr;
+		if (S->TryGetArrayField(TEXT("rot"), R)) K->RelativeRotation = FRotator((*R)[0]->AsNumber(), (*R)[1]->AsNumber(), (*R)[2]->AsNumber());
+		K->RelativeScale = FVector(1.0, 1.0, 1.0);
+		M->Sockets.Add(K);
+		Touched.Add(M);
+		Say(FString::Printf(TEXT("socket %s on %s at %s rot %s"), *Name.ToString(), *M->GetName(), *K->RelativeLocation.ToString(), *K->RelativeRotation.ToString()));
+	}
+	for (UStaticMesh* M : Touched)
+	{
+		M->Modify();
+		Say(FString::Printf(TEXT("%s: %d sockets"), *M->GetName(), M->Sockets.Num()));
+		SavePkg(M->GetOutermost(), M);
+	}
+}
+
 UBlueprint* MakeBlueprint(const FString& Path, UClass* Parent)
 {
 	const FString Name = FPackageName::GetShortName(Path);
@@ -243,6 +275,7 @@ int32 UTaniBuildCommandlet::Main(const FString& Params)
 	}
 	const TArray<TSharedPtr<FJsonValue>>* L = nullptr;
 	if (Root->TryGetArrayField(TEXT("sockets"), L)) Sockets(*L);
+	if (Root->TryGetArrayField(TEXT("mesh_sockets"), L)) MeshSockets(*L);
 	if (Root->TryGetArrayField(TEXT("stubs"), L)) for (const TSharedPtr<FJsonValue>& V : *L) Stub(V->AsObject());
 	if (Root->TryGetArrayField(TEXT("blueprints"), L)) for (const TSharedPtr<FJsonValue>& V : *L) Blueprint(V->AsObject());
 	Say(FString::Printf(TEXT("%s (%d errors)"), TErrors == 0 ? TEXT("done") : TEXT("done with errors"), TErrors));

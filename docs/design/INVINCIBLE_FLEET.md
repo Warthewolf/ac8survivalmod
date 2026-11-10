@@ -274,6 +274,16 @@ sea powers iowa").
       wrong, fix the model; the first answer here (mapping along the skew and leaving the hull askew) was the wrong
       one. And a child's matrix_local is stale after its parent's matrix_world is set in a script: work from its
       matrix_basis (the first straightening put the gun clusters 0.67 m off their turrets that way).
+      **Second lesson (found the same day, preparing the UE export): the Alicorn's parts had been cut to fit the hull
+      while it lay askew**, so the hull turned as one rigid piece no longer fitted them: the bay's opening in the
+      deck came out 0.8-1.4 m to starboard of its doors (a black slot along them, in the orbit clip the user was
+      sent), the starboard pod's fairing stood 0.5-1.1 m off the hull's side, and one ray down that slot put the side
+      block TANA_VLSS_R3 15 m too low, under the water. straighten.py now keeps the joints: the deck round the bay
+      stays on the bay's outline (the hull's move spread over the deck's width beside it; the gunwale and the sides go
+      whole) and the fairings' roots go with the hull's side, fading out over 14 m. Both design files were made again
+      from the originals (git 6de936a^): rim and gunwale mirror within 2 cm, both roots 0.4-0.5 m in the skin as they
+      were cut. **Moving one group of fitted parts against another: measure every joint between them afterwards**
+      (the rim against the bay section, a fairing's open edges against the hull's skin), and look straight down at it.
     - **decks**: the Alicorn's own deck layout, a plain top-down projection fitted from the source mesh ALC_HULL (SRC
       collection): u = cu - x / 400, v = cv - y / 400, sheet a (cu 0.86617, cv 0.84480) forward of x = -52 m, sheet b
       (-0.12728, 0.81111) aft; only where the Alicorn has flat deck under the spot (its flight deck, 13 m either side
@@ -359,10 +369,32 @@ sea powers iowa").
      (SendUserFile, a short caption of what changed). Rev 3 was sent 2026-11-10 (art/tanicorn/renders/model); rev 4 is
      the side blocks on the skin, the hull's UV map and the hatch clips.
   2. the user's review of rev 4, and their changes;
-  3. for UE: each part through prepare_part.py's route (a recipe each in build.sh; the laser's house/gun as the 5-inch
-     was; the VLS bodies with their hatches as a skeletal mesh: a bone per lid at its hinge plus an open animation,
-     0.5 s, or the Alicorn's hatch pattern: docs/re/TANICORN.md 2), the hull as a static mesh with its sockets; then
-     WP1's in-game mount tests on the user's machine.
+  3. **for UE: prepared 2026-11-10, not yet run on the user's machine** (no UE in a cloud session). The whole route
+     is `sh tools/tanicorn/build.sh` (README.md there):
+     - `export_tanacorn.py` writes every part type out of the model in its hull socket's frame (the same layout
+       prepare_part.py gave the first 5-inch: its T5 comes out with the very pivot and muzzles milestone 0 was built
+       with): T16, T5, CIWS, LASER rigged Body > turret_yaw > turret_pitch with SOC_Gun_NN; VLSD and VLSS_L1..R4 (each
+       side block is bent to its own stretch of hull, so each is its own mesh; one texture set) rigged Body >
+       Hatch_01..08 with the animation Open (0.5 s; asserted against the model's own open lids) and SOC_Vls_01..08
+       along each cell's launch line; HULL static (the fused hull and the pods, 125k triangles, 17 slots) with the
+       36 Mount_* sockets as UE rotators; wrecks; textures (the Iowa's baked to the design's Alicorn grey from their
+       LINEAR brightness, as the _ALCPAINT materials do). `check_export.py` reads every glTF back: all 14 pass
+       (triangles, slots, bones within 0.1 mm, every lid's swing).
+     - `ue_import.py` goes by each json's kind (turret / vls / hull), `spec.py` adds every socket with its rotation,
+       the hull's as `mesh_sockets` (TaniBuild's new MeshSockets: UStaticMeshSocket), and a blueprint for each gun
+       mount on the 5-inch's layout (BP_SV_Tani_T5 / _T16 / _CIWS / _LASER, the stock AA shell for now: WP1 gives each
+       its weapon). The VLS blocks and the hull get their blueprints in WP1 / WP2.
+     - **Untested, to look for in the first run's logs**: UE's glTF import of the lids' animation (ue_import.log
+       `AS_SV_Tani_VLSD_Open: 0.5 s`, or a WARNING that none was made); the hull's import (`SM_SV_Tani_HULL: 125132
+       triangles`; UE may drop a few it counts as degenerate) and its collision flag; `MeshSockets` compiling in the
+       SurvivalFx module (survivalfx_build.log) and tanibuild.log's `SM_SV_Tani_HULL: 36 sockets`; `bones within ...
+       cm of the export` for every skeleton.
+     - **Known, not done**: three of the Iowa's materials are cut-outs in the design (the radar lattices: slots with
+       `cutout` in the json); AC8's gear material has no opacity, so they draw solid (a masked instance later, if AC8
+       has a parent that fits). The bow railcannon with its bay and doors, the sub-railguns with their hatches and the
+       core have sockets but no part yet (WP11). The Alicorn's own sheets on the hull go on the gear material like
+       the rest: AC8's own Alicorn skin material is the better parent if its path and UDIM layout fit (WP2).
+     Then WP1's in-game mount tests on the user's machine.
 - **Getting Blender 3.3 in a cloud session** (the user's version; its file format is the design files'):
   `curl -sS -o b.tar.xz https://download.blender.org/release/Blender3.3/blender-3.3.21-linux-x64.tar.xz && tar -xJf
   b.tar.xz` in the scratchpad (~210 MB), then `blender-3.3.21-linux-x64/blender -b <file> --python <script>`. Cycles on

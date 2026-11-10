@@ -4,16 +4,29 @@ The user's Anomaly boss, built from Survival's own assets: research, decisions a
 The Tanager stand-in is Sea Power's Iowa (the user, 2026-11-09: "my install only"): its inputs and every output live in
 `build/tanicorn` (git-ignored), and its container ships with TANI=1 dev builds only.
 
-`sh tools/tanicorn/build.sh` (UE 5.4, Blender 3.3, E:/AC8LiveProject):
-0. `bl_import.py` (once, by hand): the Alicorn's GLBs (ACE8 Aircraft Builder `dev mesh`) and the Iowa OBJ into
-   `build/tanicorn/src.blend` (turrets split into housing and guns, each with its pivot).
-1. `prepare_part.py`: each part in `build/tanicorn/parts.json` -> skinned glTF (Body > turret_yaw > turret_pitch,
-   identity rotations), its wreck, Alicorn-grey textures, `<part>.json` (bones, muzzle sockets, slots).
-2. `ue_import.py` in the template project: textures, instances on AC8's gear material (stubs at AC8's paths, never
-   packed), the rigged mesh and wreck.
-3. `spec.py` -> `tani.spec.json`; 4. the `TaniBuild` commandlet (tools/laser7/cpp/SurvivalFx, the shared editor module):
-   muzzle sockets, stubs for stock shots, the blueprints on AC8's native classes.
-5. Cook (VERSIONED, hard rule 42); 6. `retoc to-zen` of `/Game/Mods/SurvivalMode/Tanicorn` only; 7. `pad.py`.
+`sh tools/tanicorn/build.sh` (UE 5.4, Blender 3.3, E:/AC8LiveProject; `BLENDER=` if Blender isn't in its default
+folder; `TANI_PARTS=T5,HULL` for some parts only; `TANI_STOP=export` to stop before UE):
+1. `model_tanacorn.py`: the Leviathan design (`art/tanicorn/design`, in the repo) -> `build/tanicorn/model/
+   Tanacorn_model.blend`, made again only when the design or its scripts changed (~2 min).
+2. `export_tanacorn.py`: every part type in the frame of its hull socket -> `build/tanicorn/src_<part>` and
+   `parts.json`: the four gun mounts T16, T5, CIWS, LASER (skinned glTF, Body > turret_yaw > turret_pitch, identity
+   rotations, muzzle sockets SOC_Gun_NN), the VLS blocks VLSD and VLSS_L1..R4 (Body > Hatch_01..08, the animation
+   Open, launch sockets SOC_Vls_NN), the hull HULL (static, its 36 Mount_* sockets), each part's wreck, textures,
+   `Tani_<part>.json` (kind, bones, sockets in UE cm with UE rotators, slots). `check_export.py` reads every glTF
+   back into Blender and compares it with its json (triangles, slots, bones, each lid's swing): `CHECK ALL OK`.
+3. `ue_import.py` in the template project: textures, instances on AC8's gear material (stubs at AC8's paths, never
+   packed), the rigged meshes, the lids' AnimSequences (AS_SV_Tani_<part>_Open), the hull's static mesh, the wrecks.
+   Its log ends with its warnings counted, then `done`.
+4. `spec.py` -> `tani.spec.json`; 5. the `TaniBuild` commandlet (tools/laser7/cpp/SurvivalFx, the shared editor
+   module): the skeletons' sockets, the hull's sockets (`mesh_sockets`), stubs for stock shots, the gun mounts'
+   blueprints on AC8's native classes (BP_SV_Tani_T5 / _T16 / _CIWS / _LASER: the 5-inch's fire control and the stock
+   AA shell until WP1 gives each its own weapon).
+6. Cook (VERSIONED, hard rule 42); 7. `retoc to-zen` of `/Game/Mods/SurvivalMode/Tanicorn` only; 8. `pad.py`.
+The first 5-inch mount (milestone 0) came through `prepare_part.py` from `build/tanicorn/src.blend` (`bl_import.py`);
+the export gives the same T5 (the same pivot and muzzles) and build.sh no longer calls them. Logs to read after a
+run, all in `build/tanicorn`: `export_check.log`, `ue_import.log` (each skeleton's `bones within ... cm of the
+export`, `AS_SV_..._Open: 0.5 s`, `SM_SV_Tani_HULL: ... triangles`), `tanibuild.log` (`SM_SV_Tani_HULL: 36 sockets`,
+`done (0 errors)`), `cook.log`.
 
 THE TANACORN's whole ship (docs/design/INVINCIBLE_FLEET.md WP0): `model_tanacorn.py` (Blender 3.3) takes the
 Leviathan design (`art/tanicorn/design/Leviathan_animated.blend`: Sea Power's Iowa fused with the Alicorn) and adds the
@@ -24,8 +37,10 @@ plus a SOCKET_Mount_* empty on the hull for every part (`tanacorn_hull_sockets.j
     blender -b art/tanicorn/design/Leviathan_animated.blend -P tools/tanicorn/model_tanacorn.py -- build/tanicorn/model [render] [anim]
 
 The design files were straightened with `straighten.py` (2026-11-10: everything from the Iowa lay 0.44-0.55 deg askew
-to the Alicorn's parts; it puts the hull's plane of mirror symmetry on y = 0 and the mounts with it; `blender -b <file>
--P tools/tanicorn/straighten.py -- save`, and model_tanacorn.py runs it on what it loads too).
+to the Alicorn's parts; it puts the hull's plane of mirror symmetry on y = 0 and the mounts with it, keeps the deck
+round the bow's bay on the bay's outline and takes the pods' fairings' roots with the hull's side, so the Alicorn's
+parts still fit the hull they were cut to; `blender -b <file> -P tools/tanicorn/straighten.py -- save` on the ORIGINAL
+files, and model_tanacorn.py runs it on what it loads too: a no-op on a straight file).
 It also removes the Iowa's crew figures, builds the laser as a beam director (the user's photos), gives every VLS lid a
 hinge, bends each side VLS block onto the hull's flare (its face 2 cm off the skin), makes the hull's UV map again
 from scratch (`hull_uv.py`: the sides in the Alicorn's own side skin taken from the source mesh ALC_HULL, rail, slots
@@ -50,7 +65,6 @@ against a sunset) is `surface_tanacorn.py`, run the same way: her bow comes up 3
 over the sea with a third of her out, comes down while the rest of her surfaces, and slams; spray from baked particle
 systems (fine drops, not big blobs), foam patches, a low sun behind her; 13.5 s at 24 fps, ~8 s a frame at 960x540.
 The clips the user was sent are in `art/tanicorn/video/`. The previews the user saw are in
-`art/tanicorn/renders/model/`. Next: each part through prepare_part.py's route (a recipe each in build.sh), the hull
-as a static mesh with these sockets.
+`art/tanicorn/renders/model/`. Next: build.sh on the user's machine (above), then WP1's mount tests.
 
 In game (test builds): Scripts/sv_tanicorn.lua, Ctrl+T in a run.

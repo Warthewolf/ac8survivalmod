@@ -2,6 +2,7 @@
 //   UnrealEditor-Cmd.exe E:/AC8LiveProject/Live.uproject -run=TaniBuild -spec=<tani.spec.json> -log=<out.log>
 // The spec: {
 //   "sockets":    [ { "skeleton": "/Game/...", "name", "bone", "loc": [x, y, z], "rot": [pitch, yaw, roll] } ],
+//   "mesh_sockets": [ { "mesh": "/Game/...", "name", "loc": [x, y, z], "rot": [pitch, yaw, roll] } ]   on a static mesh
 //   "stubs":      [ { "path": "/Game/<stock path>/BP_x", "parent": "<native class>" } ]   stand-ins at stock paths (never
 //                  packed: the cooked blueprint imports them by path and the game loads its own)
 //   "blueprints": [ { "path": "/Game/.../BP_x", "parent": "<native class>",

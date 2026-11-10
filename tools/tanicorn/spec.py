@@ -10,11 +10,16 @@ Mk45 (BP_VE002_aegs_mk45_Base over BP_AITurret_Pawn, read with ACE8 Aircraft Bui
            DamagedStateComponent: ChangeMesh (hide the turret, show the wreck), the native InducedExplosionArrangement
   CDO      AutoPossessAI, GameObjectId 1000 / Category_CarrierBattery (the Mk45's), PursuitPointOffset, bIsSea
 Values that aren't set inherit the game's own native defaults (only differences are saved).
+
+THE TANACORN's parts (tools/tanicorn/export_tanacorn.py; docs/design/INVINCIBLE_FLEET.md WP0 -> WP1): every part's
+sockets with their rotations (SOC_Gun_NN on turret_pitch, SOC_Vls_NN on Body along each cell's launch line), the hull's
+36 Mount_* sockets on its static mesh (mesh_sockets), and a blueprint for each gun mount on the 5-inch's layout
+(BP_SV_Tani_T5 / _T16 / _CIWS / _LASER; FCS below). The VLS blocks and the hull get their blueprints in WP1 / WP2.
 """
 import json, os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BUILD = os.path.normpath(os.path.join(HERE, '..', '..', 'build', 'tanicorn'))
+BUILD = os.environ.get('TANI_BUILD') or os.path.normpath(os.path.join(HERE, '..', '..', 'build', 'tanicorn'))
 DEST = '/Game/Mods/SurvivalMode/Tanicorn'
 AA_SHELL = '/Game/Blueprints/Weapons/AAGUN/BP_wp_aagun_vessel'          # LiveBulletEmitter (its emitter base's class)
 
@@ -95,20 +100,47 @@ T5_FCS = {'search': 'AIR_ONLY', 'yaw': (40, -180, 180), 'pitch': (40, 0, 80), 'c
           'activation': 2, 'triggering': 4, 'interval': 1, 'resting': 2, 'trigger_count': 1,
           'fire_rate': 10, 'magazine': 20, 'reload': 3, 'weapon': AA_SHELL,
           'hit_radius_cm': 600, 'hit_z_cm': 300}
+# The other gun mounts, until WP1 gives each its own weapon (docs/design/INVINCIBLE_FLEET.md WP1: the 16-inch its
+# railgun shells, the CIWS and the laser their anti-missile arms): the SAME fire control as the 5-inch, the stock
+# vessel AA shell, only the speeds, the lift and the hit sphere each mount's own. So every mount's rig can be seen
+# to aim and fire from the test key before its real weapon is built; none of these values is a design decision.
+FCS = {
+    'T5': T5_FCS,
+    'T16': {**T5_FCS, 'yaw': (12, -150, 150), 'pitch': (8, -2, 45), 'interval': 2, 'resting': 6, 'fire_rate': 3,
+            'magazine': 3, 'reload': 8, 'hit_radius_cm': 1800, 'hit_z_cm': 400},
+    'CIWS': {**T5_FCS, 'yaw': (120, -180, 180), 'pitch': (100, -10, 85), 'activation': 1, 'triggering': 2,
+             'interval': 0.1, 'resting': 1, 'fire_rate': 30, 'magazine': 60, 'hit_radius_cm': 350, 'hit_z_cm': 300},
+    'LASER': {**T5_FCS, 'yaw': (120, -180, 180), 'pitch': (100, -10, 85), 'activation': 1, 'triggering': 2,
+              'hit_radius_cm': 350, 'hit_z_cm': 250},
+}
 
 
 def main():
     parts = json.load(open(os.path.join(BUILD, 'parts.json')))
-    spec = {'sockets': [], 'stubs': [{'path': AA_SHELL, 'parent': 'LiveBulletEmitter'}], 'blueprints': []}
+    only = [x for x in os.environ.get('TANI_PARTS', '').split(',') if x]
+    spec = {'sockets': [], 'mesh_sockets': [], 'stubs': [{'path': AA_SHELL, 'parent': 'LiveBulletEmitter'}],
+            'blueprints': []}
     for p in parts:
+        if only and p not in only:
+            continue
         info = json.load(open(os.path.join(BUILD, 'src_' + p, f'Tani_{p}.json')))
+        kind = info.get('kind', 'turret')
+        if kind == 'hull':
+            # the hull's sockets: a Mount_<name> for every part, +X the part's forward (TaniBuild: UStaticMeshSocket)
+            for s in info['sockets']:
+                spec['mesh_sockets'].append({'mesh': obj(f'{DEST}/Model/SM_SV_Tani_{p}'), 'name': s['name'],
+                                             'loc': s['loc'], 'rot': s.get('rot', [0, 0, 0])})
+            continue
         for s in info['sockets']:
             spec['sockets'].append({'skeleton': obj(f'{DEST}/Model/SKEL_SV_Tani_{p}'), 'name': s['name'],
-                                    'bone': s['bone'], 'loc': s['loc'], 'rot': [0, 0, 0]})
-        spec['blueprints'].append(mount(p, info, T5_FCS))
+                                    'bone': s['bone'], 'loc': s['loc'], 'rot': s.get('rot', [0, 0, 0])})
+        if kind == 'turret' and p in FCS:
+            spec['blueprints'].append(mount(p, info, FCS[p]))
     out = os.path.join(BUILD, 'tani.spec.json')
     json.dump(spec, open(out, 'w'), indent=1)
-    print(f'spec.py: {out}: {len(spec["sockets"])} sockets, {len(spec["stubs"])} stubs, {len(spec["blueprints"])} blueprints')
+    print(f'spec.py: {out}: {len(spec["sockets"])} sockets, {len(spec["mesh_sockets"])} hull sockets, '
+          f'{len(spec["stubs"])} stubs, {len(spec["blueprints"])} blueprints '
+          f'({", ".join(b["path"].rsplit("/", 1)[1] for b in spec["blueprints"])})')
 
 
 if __name__ == '__main__':

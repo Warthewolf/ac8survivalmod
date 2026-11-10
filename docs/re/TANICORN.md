@@ -119,3 +119,17 @@ build/liveproject/Source/Live/Public (= E:/AC8LiveProject).
   fly round it is AC8's fire control aiming our bones. Pass: it draws (grey 5-inch mount on the sea), tracks, fires flak,
   takes hits and swaps to its wreck. If it doesn't spawn: the class didn't load (container not mounted, or the blueprint
   refused); if it spawns but never turns: the bone control (names / prefix / sockets).
+
+## 6. The whole ship's parts for UE: prepared 2026-11-10, not yet built on the machine
+- `sh tools/tanicorn/build.sh` now starts from the model (tools/tanicorn/README.md): `export_tanacorn.py` writes T16, T5,
+  CIWS, LASER (turret rigs as milestone 0's), VLSD and VLSS_L1..R4 (Body > Hatch_01..08, AnimSequence Open 0.5 s,
+  SOC_Vls_01..08 with rotations: +X each cell's launch line), and HULL (static mesh, 36 `Mount_<part>` sockets, +X the
+  part's forward). The T5 is milestone 0's to the millimetre (pivot (147.5, 2.6, 414.8) cm, muzzles (859.6, -/+203.7,
+  0.8)), so BP_SV_Tani_T5 and the Ctrl+T test are unchanged.
+- New in the pipeline, each a first: a static mesh with sockets of ours (TaniBuild `mesh_sockets`: section 4's open
+  proof, WP2's first test), UE's glTF import of a joint animation (the lids), a 125k-triangle static mesh with 17
+  slots and complex-as-simple collision, blueprints BP_SV_Tani_T16 / _CIWS / _LASER on the T5's layout (SlotNum 3 / 1 /
+  1; the stock AA shell until WP1).
+- First run: read `build/tanicorn/ue_import.log` (warnings counted before `done`), `tanibuild.log`, `cook.log`; the
+  list of what to look for is in docs/design/INVINCIBLE_FLEET.md, WP0 handover, "for UE".
+

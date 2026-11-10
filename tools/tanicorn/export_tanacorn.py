@@ -15,9 +15,9 @@ socket it sits on (SOCKET_Mount_<name>: its base at the origin, +X its forward),
            Body with their launch direction
   the hull HULL: Tani_HULL.gltf static (the fused hull and the two pods), and every mount's socket in its json
   each     Tani_<P>_DAM.gltf (the same geometry static: the wreck the destroy system swaps in; not the hull), its
-           textures as ordinary PNGs (the Iowa's as the Alicorn's grey with their own light and shade, as
-           prepare_part.py; the model's own baked ones and the Alicorn's two sheets as they are), a flat normal and a
-           blank livemap, and Tani_<P>.json: kind, bones and sockets in UE cm (y flipped) with UE rotators (pitch,
+           textures as ordinary PNGs (the Iowa's as the Alicorn's grey with their own light and shade: the design's
+           _ALCPAINT materials baked in; the model's own baked ones and the Alicorn's two sheets as they are; the eight
+           side blocks share one set, T_SV_Tani_VLSS_*), a flat normal and a blank livemap, and Tani_<P>.json: kind, bones and sockets in UE cm (y flipped) with UE rotators (pitch,
            yaw, roll), material slots, the hull sockets it sits on
 and <out dir>/parts.json (the list ue_import.py and spec.py go through) and tanacorn_parts.json (the whole manifest).
 Not in it yet (WP11: the moving Alicorn parts): the bow railcannon and its bay doors, the two sub-railguns and their
@@ -223,8 +223,13 @@ def save_png(px, path):
     bpy.data.images.remove(im)
 
 
-def grey(px):                          # prepare_part.py's: the Alicorn's grey, the source only as light and shade
-    lum = px[:, :, :3] @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+def grey(px):
+    """the design's _ALCPAINT materials baked into the texture: the Alicorn's grey times the source's light and shade
+    (its brightness, 0.1..0.7 -> 0.75..1.2). The brightness is the LINEAR one, as Blender's RGB to BW node takes it
+    (an image's pixels here are the file's sRGB values)"""
+    c = px[:, :, :3]
+    c = np.where(c <= 0.04045, c / 12.92, np.power((c + 0.055) / 1.055, 2.4))
+    lum = c @ np.array([0.2126, 0.7152, 0.0722], np.float32)
     k = 0.75 + (np.clip(lum, 0.1, 0.7) - 0.1) / 0.6 * 0.45
     lin = k[:, :, None] * np.array(GREY, np.float32)
     out = px.copy()
@@ -234,7 +239,8 @@ def grey(px):                          # prepare_part.py's: the Alicorn's grey, 
 
 def slots_for(part, folder, mats):
     """a material slot per material in use: its base colour written as T_SV_Tani_<part>_<n>_D (one file per source
-    image), the Alicorn's sheets with their normal maps"""
+    image), the Alicorn's sheets with their normal maps. `part` is the textures' owner: the eight side VLS blocks
+    share one set (VLSS)"""
     slots, done = [], {}
     for k, m in enumerate(mats):
         mat = bpy.data.materials.get(m)
@@ -252,8 +258,9 @@ def slots_for(part, folder, mats):
                     nrm = "T_SV_Tani_%s_%d_N" % (part, len(done))
                     save_png(pixels(ni), os.path.join(folder, nrm + ".png"))
             done[key] = (name, nrm)
+        cut = base_image(mat, "Alpha")
         slots.append({"slot": k, "material": m, "source": img.name if img else None, "basecolor": done[key][0],
-                      "normal": done[key][1]})
+                      "normal": done[key][1], **({"cutout": cut.name} if cut else {})})
     for name, val in (("T_SV_Tani_%s_N" % part, (0.5, 0.5, 1.0)), ("T_SV_Tani_%s_L" % part, (0.0, 0.0, 0.0))):
         save_png(np.tile(np.array([*val, 1.0], np.float32), (4, 4, 1)), os.path.join(folder, name + ".png"))
     return slots
@@ -263,12 +270,14 @@ def slots_for(part, folder, mats):
 MANIFEST = {}
 
 
-def finish(part, mesh, info, joints=None, anim=None, wreck=True):
+def finish(part, mesh, info, joints=None, anim=None, wreck=True, tex=None):
     folder = os.path.join(OUT, "src_" + part)
     os.makedirs(folder, exist_ok=True)
     name = "Tani_" + part
     prims = mesh.prims()
-    slots = slots_for(part, folder, [p[0] for p in prims])
+    tex = tex or part
+    slots = slots_for(tex, folder, [p[0] for p in prims])
+    info.update({"flat_normal": "T_SV_Tani_%s_N" % tex, "livemap": "T_SV_Tani_%s_L" % tex})
     write_gltf(os.path.join(folder, name + ".gltf"), name, prims, slots, joints, anim)
     if wreck:
         write_gltf(os.path.join(folder, name + "_DAM.gltf"), name + "_DAM", prims, slots)
@@ -312,7 +321,7 @@ def turret(part, on, house, guns, pivot, muzzle=None):
     finish(part, mesh, info, [("Body", -1, (0, 0, 0)), ("turret_yaw", 0, (0, 0, 0)), ("turret_pitch", 1, tuple(at))])
 
 
-def vls(part, on, body, axis, deg):
+def vls(part, on, body, axis, deg, tex=None):
     """a VLS block in its own frame (its hull socket's): Body, a joint a lid on its hinge, the lids' opening"""
     B = D[body]
     Mi = socket_of(on[0]).inverted()
@@ -350,7 +359,7 @@ def vls(part, on, body, axis, deg):
                          "rot": ue_rot(Mi @ c.matrix_world)} for k, c in enumerate(cells, 1)],
             "anim": {"name": "Open", "length_s": 0.5, "hinge_axis": axis, "open_deg": deg, "off_the_model_m": round(worst, 5),
                      "note": "every Hatch_NN turns about its own %s axis (the part's frame) by open_deg" % axis}}
-    finish(part, mesh, info, joints, ("Open", times, [(k, quats) for k in range(1, len(lids) + 1)]))
+    finish(part, mesh, info, joints, ("Open", times, [(k, quats) for k in range(1, len(lids) + 1)]), tex=tex)
 
 
 turret("T16", ["T16_FWD", "T16_AFT"], "LEV_T16_FWD.001", "LEV_G16_FWD.001", D["LEV_G16_FWD_trunnion"].matrix_world.translation)
@@ -364,7 +373,7 @@ turret("LASER", ["LASER_FWD_L", "LASER_FWD_R", "LASER_AFT_L", "LASER_AFT_R"], "T
 vls("VLSD", ["VLSD_%d" % k for k in range(1, 9)], "TANA_VLSD_1", "Y", -100.0)
 for side in "LR":
     for k in range(1, 5):
-        vls("VLSS_%s%d" % (side, k), ["VLSS_%s%d" % (side, k)], "TANA_VLSS_%s%d" % (side, k), "X", 115.0)
+        vls("VLSS_%s%d" % (side, k), ["VLSS_%s%d" % (side, k)], "TANA_VLSS_%s%d" % (side, k), "X", 115.0, tex="VLSS")
 
 # the hull: the fused hull and the pods, in the ship's own frame (x forward, z up, the waterline at z = 0)
 hull = Mesh()
