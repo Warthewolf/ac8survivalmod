@@ -91,14 +91,26 @@ Tags as in docs/re: [V] read in a file or seen in game (where), [I] inferred, [?
 - **Every ship shows its damage textures at all times, except the Tanicorn** (a battle-scarred fleet from the moment
   it appears; the Tanicorn pristine).
 
-Still open: section 6.
+2026-11-10, the last open questions ("your draft is fine" for the rest):
+- **The rise:** the draft stands: ~60 deg nose up, its bow ~550 m above the sea, then flat onto the waves.
+- **Near Comona the fleet shells the airfield** (WP13).
+- **The boss's name on its box: TANACORN** (the user's spelling; the project's files, code and docs keep the name
+  TANICORN: only the on-screen name is TANACORN).
+- **Once a run, at round 30** (never drawn at random, never again later in the run).
+- **The agent builds all of it**, the Tanicorn's own model included (WP0): no part is left to the user but the tests
+  in game and the builds on the machine.
+- The scars: the draft stands (WP8: `level` 0.7, hulls, superstructures and turrets).
+
+No question is open (section 6).
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 3. The round, as a player sees it (round 30)
 1. **Round 29's break:** callout `INVINCIBLE FLEET` / `THE AEGIR FLEET IS UNDER WAY`, the NEXT row
-   `FLEET: n SHIPS  CARRIER: GEOFON`. Radio: Survival's own lines in config/subtitles.ini (never AC7 or AC04 voice).
+   `FLEET: n SHIPS  CARRIER: GEOFON  AIRFIELD IN RANGE: mm:ss`. Radio: Survival's own lines in config/subtitles.ini (never AC7 or AC04 voice).
 2. **Phase 1, the fleet:** it appears over the north-west horizon in formation, battle-scarred, each ship named on its
-   box, and sails south-east towards Comona. Its screen fires flak and VLS missiles; laser interceptors burn down
+   box, and sails south-east towards Comona's airfield. If it reaches its gun line (~13 minutes, AC04's 15-minute
+   limit in another form) it starts **shelling the airfield** and holds station there (WP13). Its screen fires flak
+   and VLS missiles; laser interceptors burn down
    missiles fired at the ships they cover; the RAVEN's railguns (RAILGUN WARNING) reach far out; the carrier's deck
    launches fighters. The round's own fighters are fewer (the fleet is the threat). Ships paid as sunk, turrets as
    shot off (the Spaceport's pay).
@@ -106,8 +118,9 @@ Still open: section 6.
    list). At 0 it breaks at midships and the halves drift apart. Between them the sea erupts: the TANICORN's bow
    breaks the surface, the hull climbs bow first into the sky, hangs, and falls back flat onto the waves (spray, a
    shock ring, camera shake). Nothing fires at it and nothing can lock it during the rise.
-4. **Phase 3, the Tanicorn:** it opens fire as it settles, then becomes targetable (boxes, TGT marks, the boss bar).
-   Its weapon parts first, its core last (its phases). The ships still afloat fight on with it.
+4. **Phase 3, the Tanicorn:** it opens fire as it settles, then becomes targetable (boxes, TGT marks, the boss bar:
+   `TANACORN`). Its weapon parts first, its core last (its phases). It sails on towards the airfield's gun line and
+   shells it from there too; the ships still afloat fight on with it.
 5. **The end:** won when **every ship is sunk** (the Tanicorn and the whole fleet, in any order) and the round's
    aircraft are down: `THE AEGIR FLEET IS DESTROYED`, the big reward. The NEXT row counts what's left
    (`FLEET: n AFLOAT`). The players choose when to wake the boss: sink the screen first and the carrier last, or the
@@ -120,7 +133,7 @@ machine), test in game, pass, fallback, unknowns. Do them in this order unless a
 Status lines: update them as work lands.
 
 ### WP0. The Tanicorn's own model
-Status: not started. Depends on: nothing. Who models it: section 6, question 5.
+Status: not started. Depends on: nothing. Who: the agent (the user, 2026-11-10: "You are building it all").
 - Goal: the Tanicorn's hull and every mount type in our own geometry (the Iowa's may stay in the user's dev install
   only), after the chosen design `art/tanicorn/design/Leviathan_rev4.blend` (650 m: the Alicorn's length; Alicorn-grey
   upper works; the bow railcannon in its teal bay; faired sponsons). The Alicorn's parts are AC8 stock and allowed.
@@ -131,8 +144,23 @@ Status: not started. Depends on: nothing. Who models it: section 6, question 5.
   VT: hard rule 44) on AC8 material instances parented on stubs (hard rules 42, 58).
 - Also: a one-piece skinned version of the whole ship with a root bone for the rise (WP4 route B), and its rise
   animation (WP4).
-- Test: renders for the user; then WP1's mount test with the new mount.
-- Pass: the user approves the look; tools/tanicorn's pipeline takes the files unchanged.
+- **How the agent builds it:** scripted Blender (Python), never hand edits it can't repeat: a script under
+  `tools/tanicorn/` (e.g. `model_hull.py`, `model_mounts.py`) that builds the hull from lofted cross-sections and the
+  superstructure, mounts and details from parametric parts, in metres at the Alicorn's 650 m, UV-unwrapped for
+  ordinary textures, and writes the .blend and the glTFs prepare_part.py takes. The Leviathan_rev4 design and its
+  renders (`art/tanicorn/renders/leviathan/`) are the **visual reference only**: no vertex, mesh or texture of the
+  Iowa is copied, traced or imported into the new model (it must be shippable). The Alicorn's parts (railcannon,
+  sponsons, VLS hatches) may be used as AC8 stock exports.
+- **Where Blender runs:** try Blender as a Python module in the cloud session first (`pip install bpy`: Blender's
+  official wheel on PyPI, which the session's network allows; it needs the Python version that wheel is built for,
+  ~400 MB of disk) to build and render there and send the renders to the user (SendUserFile); else the script runs
+  on the user's machine (Blender 3.3: keep the script to the API both versions share) and the user sends the renders.
+- **Texturing:** procedural in the script or baked there (panel lines, AC8 grey, the teal bay), written as ordinary
+  PNGs (no VT: hard rule 44); materials as AC8 instances on stubs (tools/tanicorn ue_import.py's route).
+- Test: renders for the user (the whole ship from four sides and close-ups of each mount type), then WP1's mount test
+  with a mount of the new model.
+- Pass: the user approves the look; tools/tanicorn's pipeline takes the files unchanged; nothing of the Iowa in them
+  (the script's sources are its own code and AC8's exports only).
 
 ### WP1. The Tanicorn's mounts work (milestone M0b)
 Status: milestone 0 done (0.74.43-0.74.47: the 5-inch BP_SV_Tani_T5 loads with its fire control and spawns from
@@ -256,19 +284,24 @@ Status: not started. Depends on: nothing for the ships (alongside); WP5 for GEOF
   the NPC row has only 02), found for the ZFA-44 (HISTORY 0.74.11; sv_escort_laser.lua ZLAS.zfaModel adds Survival's
   copy of a model row with its own name at the main menu, before the NPC rows naming it). Each named ship: its own
   model row copy (SV_Model_Fleet_<Name> on its class's stock model row, only the name changed) and its own NPC row:
-  GEOFON, RAVEN, CONDOR, MAGPIE, SPARROW, FINCH, BELUGA, FENRIS, KOLGA, LAZULI, HERNE, TAISCH, THIASSI; the Tanicorn's
-  (section 6). The names also in config/subtitles.ini with the speaker names (players edit them). Unnamed ships keep
+  GEOFON, RAVEN, CONDOR, MAGPIE, SPARROW, FINCH, BELUGA, FENRIS, KOLGA, LAZULI, HERNE, TAISCH, THIASSI, and the boss's
+  **TANACORN** (the user's spelling; on screen only). The names also in config/subtitles.ini with the speaker names (players edit them). Unnamed ships keep
   their class's name. [?: whether a part's box shows its ship's name.]
-- **Course (the user: from the north-west towards Comona):** the combat zone is 80 x 80 km centred on (-707, -262) km
-  (north = -Y, east = +X: COMONA_MAP.md 1), its north-west corner about (-47, -42) km. The fleet appears ~5 km inside
-  it at about (-40, -35) km and sails south-east (UE yaw ~53 deg, heading ~143) towards the spaceport island (pad
-  (-13.25, +0.60) km), ~45 km [I: the marks to set in a test flight]. Every ship on its own lane parallel to GEOFON's,
-  offset to its formation spot, all at one speed so the formation holds (make_path lanes, ControlType 1, smooth, the
-  whole course in the path started at its appearance: hard rules 2, 35, 54). At ~30-40 km/h a 15-minute fight covers
-  7-10 km [I]. Near the coast: section 6, question 2. The Tanicorn doesn't follow the course: it fights from where it
-  lands [?: its own path or holding its spot].
-- Pass: the fleet appears NW in formation, named, sails SE holding formation; every turret fires; sinking works and
-  pays; the frame rate and the perf line's Lua tick with the whole fleet up.
+- **Course (the user: from the north-west towards Comona; near it, it shells the airfield):** north = -Y, east = +X
+  (COMONA_MAP.md 1); the combat zone is 80 x 80 km centred on (-707, -262) km, the airfield's runway centre
+  (1610476, -436143) cm. The fleet appears ~30 km north-west of the airfield, about (-5, -26) km [I: open sea, 20 km
+  north of the island chain: check on the minimap], and sails south-east (UE yaw ~45 deg, heading ~135) towards the
+  airfield. At its gun line, `shell_km` (20 km) from the runway, it starts shelling (WP13) and slows to a station:
+  a slow racetrack `hold_km` (16 km) off the runway, never nearer the coast. Every ship on its own lane parallel to
+  GEOFON's, offset to its formation spot, all at one speed (`speed_kmh` 45) so the formation holds (make_path lanes,
+  ControlType 1, smooth, the whole course and the station's laps in the one path started at its appearance: hard
+  rules 2, 35, 54). 10 km to the gun line at 45 km/h: ~13 minutes [I], the round's soft clock (the NEXT row's
+  `AIRFIELD IN RANGE`). The Tanicorn, once risen, takes its own path from where it lands along the fleet's course to
+  the same station (one path from its landing, at the fleet's speed) [?: a submarine-class hull sailing a path:
+  the Alicorn does].
+- Pass: the fleet appears NW of the airfield in formation, named, sails SE holding formation, reaches its station and
+  laps it; every turret fires; sinking works and pays; the frame rate and the perf line's Lua tick with the whole
+  fleet up.
 
 ### WP8. The fleet's damage textures at all times (not the Tanicorn)
 Status: not started. Depends on: WP7 (its ships); WP5 for GEOFON's own BP (route B there).
@@ -352,8 +385,9 @@ Status: partly there. Depends on: WP7.
 Status: not started. Depends on: WP7 (and WP6 for phase 3).
 - A new SPC.kinds entry `fleet` in a new part `Scripts/sv_fleet.lua` (its own family if it grows past 2,000 lines),
   with the Spaceport's hooks (ready / busy / over / row, fighter_share), CFG.specials.fleet and survival.ini
-  [specials.fleet] for every count, price and timing; `CFG.specials.schedule.rounds[30] = "fleet"`. Round 30 is in the
-  late rounds (P8: +3 aircraft a round from 26), so cut its own fighters (fighter_share).
+  [specials.fleet] for every count, price and timing; `CFG.specials.schedule.rounds[30] = "fleet"`, **once a run**: the
+  kind is not in CFG.specials.rotation and never drawn at random (as THE ESCORT and GONE FISHIN' are once a run).
+  Round 30 is in the late rounds (P8: +3 aircraft a round from 26), so cut its own fighters (fighter_share).
 - Phases: 1 the fleet (WP7, WP9), 2 GEOFON's fall (WP5, WP6), 3 the Tanicorn (WP3, WP11); won when every ship and the
   round's aircraft are down. Pay by kind and per turret; the boss's reward. Callouts and radio lines (subtitles.ini).
   The NEXT row (`FLEET: n SHIPS  CARRIER: GEOFON`, then `FLEET: n AFLOAT`).
@@ -385,6 +419,41 @@ Status: not started. Depends on: everything above.
 - Release: round 30's fleet in dev builds only until WP0's own Tanicorn is in (section 2); then into friends' zips
   (`BUILD_NAME=COOP2MP COOP=1 sh tools/package_release.sh online <version>`, registered on the leaderboard).
 
+### WP13. The fleet shells the airfield
+Status: not started. Depends on: WP7 (the course and station), WP9 (the railguns, VLS), WP10. The user, 2026-11-10:
+near Comona, it shells the airfield.
+- What exists [V: sv_rounds.lua airfieldTick, sv_config.lua CFG.airfield, docs/re/AIRFIELD_SUPPLY.md]: the airfield's
+  health (hp 250) falls by `hit_damage` (3) for every enemy weapon that ends on one of its 4 target points (the event
+  package's int flag SV_AirHits), and by damage Lua adds itself (AF.bomb / AF.pending: the heavies' bomb runs land
+  `damage_delay_s` after the run; the festival's missiles add `impact_damage` on the runway: sv_festival.lua impact).
+  At 0 the airfield is down: landing and the STORE close until the round after next (AirfieldDown, RE_SV_AirfieldClose
+  / Open), reopening at repair_hp. The minimap ping on bombers heading for it (CFG.airfield.bombers.ping).
+- **The shelling** (from the gun line, every ship still afloat with a long-range weapon, and the Tanicorn when it
+  gets there): a salvo every `shell_every_s` (e.g. 20 s) per shelling ship, staggered; each salvo:
+  1. its weapon fired at the airfield where the game's fire control can reach it: the railgun and VLS mounts ordered
+     onto the airfield's target dummies by name (a LiveFireOneShotWeapon or attack-order record targeting the dummy
+     unit, hard rule 40) [?: a ship's turret attacking a ground target 16-20 km off: the stock railgun's 15 km reach
+     says no without our own fire-control values]: its hits count through SV_AirHits by themselves;
+  2. else (or as well) scripted, as the heavies' bombs are: the salvo's damage (`shell_damage`, e.g. 6) put on
+     AF.pending to land `shell_flight_s` (e.g. 6 s) later, with AC8's explosion effects on the runway at random spots
+     at that moment (the festival's impact records' VFX, or Mission 22's airport-strike explosions) and the shake if a
+     player is near;
+  3. the warning: callout `THE FLEET IS SHELLING THE AIRFIELD` once, the RAILGUN WARNING while a railgun salvo is in
+     the air (hard rule 45), the shelling ships pinged on the minimap (the bombers' ping), the airfield's bar.
+- Tuned so a team that ignores the fleet loses the airfield in ~3-4 minutes of shelling (250 hp; settings), and one
+  that fights it never sees it (the gun line ~13 minutes out).
+- While the airfield is down the shelling stops (nothing to shell); after its repair it starts again if the fleet's
+  still on station.
+- Co-op: the host shells (AF is the host's); the joiners see the effects from forwarded impact events and the host's
+  airfield bar, as the heavies' runs.
+- Settings: `CFG.specials.fleet.shell = { enabled = true, shell_km = 20, hold_km = 16, every_s = 20, damage = 6,
+  flight_s = 6, real_fire = true }`.
+- Log lines: `fleet: <ship> at the gun line (<d> km from the runway): shelling`, `fleet: shell salvo <ship>: <real |
+  scripted>, <dmg> on the airfield in <s> s`, `airfield: hit (...)` (the existing line).
+- Test key (test only): the fleet straight to its gun line (it appears 1 km short of it).
+- Pass: the shelling begins at the gun line, the airfield's bar falls with each salvo, the callout and warnings
+  show, the airfield goes down if ignored, shelling stops while it's down; no shelling before the gun line.
+
 ---------------------------------------------------------------------------------------------------------------------
 ## 5. Risks
 | risk | what answers it | fallback |
@@ -400,18 +469,13 @@ Status: not started. Depends on: everything above.
 | ~16-20 ships + the boss cost too much frame time | the perf line | fewer ships, parts merged |
 | the Iowa geometry can't ship | WP0 | (decided: our own model first) |
 | a unit with child objects recycled under them crashes the STORE | 0.74.48's rule | (rule: never) |
+| ship turrets can't fire at the airfield 16-20 km off | WP13 step 1's test | the scripted salvo (step 2), proven for the heavies |
+| `pip install bpy` doesn't fit the cloud session (Python version, disk) | WP0's first step | the script runs on the user's machine |
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 6. Questions still open for the user
-1. How high does the Tanicorn climb before it falls? (Draft: ~60 deg nose up, its bow ~550 m above the sea.)
-2. What happens if the fleet gets close to Comona: it holds a station off the coast, its railguns and VLS shell the
-   airfield / spaceport, or nothing (a normal fight ends ~35 km out)?
-3. The Tanicorn's name on its box: TANICORN, TANAGER, or another?
-4. Once a run at round 30, or does the fleet come back later in a run (60, 90 ...)?
-5. Who models the Tanicorn's own geometry (WP0): the user in Blender from Leviathan_rev4, or the agent building it in
-   scripted Blender from the design and the Alicorn's AC8 parts, the user reviewing renders?
-6. The scars' strength (WP8 `level`): lightly weathered, or heavily burnt? Do the fleet's turrets get them too, or only
-   the hulls?
+None (the last six answered 2026-11-10: section 2). New questions go here as work raises them, each with the
+agent's recommended answer.
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 7. Reference: AC04's Aegir Fleet
