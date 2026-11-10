@@ -29,6 +29,10 @@ doors, a black slot along them, and the starboard pod's fairing stood up to 1.1 
     box), the cut edge goes with the skin like the rest of the side and the hole it left is closed (mend_breach).
   - the forward turret's barbette, whose front the bay's after end sliced off and left open (the inside of the
     hull on show under the forward guns, in the design from the start), gets a flat front (cap_cut).
+  - the scraps the bay's cut left are taken out: strips of the Iowa's foredeck fittings lying along the bay's sides
+    (clear_scraps) and the half fittings standing on the bay section's own cut edges (clear_edge_stubs).
+  - the bay's opening gets a coaming (a strip standing on its outline): the bay's section has nothing down its cut
+    sides and stands up to 0.3 m off the deck's height, and the inside of the bay showed under that step.
 Animation is untouched (only rotations are keyed, and a turn about z before them only changes the z angle, which is
 keyed on the mounts themselves as an absolute heading). Without `save` it only reports. model_tanacorn.py calls
 straighten() on what it loads too, so a design file that has not been through this still gives a straight model.
@@ -323,6 +327,141 @@ def cap_cut(hull, cut, log=print):
     return 1
 
 
+def clear_scraps(hull, verts, count, log=print):
+    """What the bay's cut left of the Iowa's foredeck fittings: flat strips and slivers lying on the deck along the
+    bay's long sides, each sliced off at the bay's outline (a 13 m wedge and a 4 m kinked plate to port, slivers to
+    starboard: a ragged ridge along the doors' edge in every render; the user's marked photo, 2026-11-10: "What the
+    fuck dude"). They are no part of either ship any more: taken out."""
+    import bmesh
+    if not verts:
+        return 0
+    W = hull.matrix_world
+    bm = bmesh.new()
+    bm.from_mesh(hull.data)
+    bm.verts.ensure_lookup_table()
+    P = [W @ bm.verts[i].co for i in verts]
+    bmesh.ops.delete(bm, geom=[bm.verts[i] for i in verts], context="VERTS")
+    bm.to_mesh(hull.data)
+    hull.data.update()
+    bm.free()
+    log("straighten: %s: %d scraps of deck fittings the bay's cut left along its sides taken out (%d vertices, "
+        "x %.1f..%.1f, |y| %.1f..%.1f)" % (hull.name, count, len(verts), min(p.x for p in P), max(p.x for p in P),
+                                           min(abs(p.y) for p in P), max(abs(p.y) for p in P)))
+    return count
+
+
+def clear_edge_stubs(bay, rect, deck, log=print):
+    """The bay's section is a slice of the Alicorn's deck cut off along its two sides, and whatever stood on the
+    Alicorn's deck across a cut was sliced with it: half a cone-shaped fitting left standing on each side's very edge
+    (the two spikes in the user's marked photo). Every loose piece of the section that lies wholly within 0.7 m of a
+    cut side and stands more than 0.3 m above the section's own upper face there is such a stub: taken out."""
+    import bmesh
+    W = bay.matrix_world
+    bm = bmesh.new()
+    bm.from_mesh(bay.data)
+    N = W.to_3x3().inverted().transposed()
+    tops = sorted(((W @ f.calc_center_median()) for f in bm.faces if (N @ f.normal).normalized().z > 0.9
+                   and abs((W @ f.calc_center_median()).y) > rect[3] - 2.5), key=lambda c: c.x)
+
+    def top(x):                                                     # the section's own upper face near its sides at x
+        near = sorted(c.z for c in tops if abs(c.x - x) < 4.0)
+        return near[len(near) // 2] if near else None
+    area = {}
+    for f in bm.faces:
+        if (N @ f.normal).normalized().z > 0.9:
+            area[f.material_index] = area.get(f.material_index, 0.0) + f.calc_area()
+    main = max(area, key=area.get) if area else 0                   # the material of the section's upper face
+    seen, gone, where = set(), [], []
+    for v0 in bm.verts:
+        if v0 in seen:
+            continue
+        piece, todo = [], [v0]
+        seen.add(v0)
+        while todo:
+            v = todo.pop()
+            piece.append(v)
+            for e in v.link_edges:
+                o = e.other_vert(v)
+                if o not in seen:
+                    seen.add(o)
+                    todo.append(o)
+        P = [W @ v.co for v in piece]
+        d = top(sum(p.x for p in P) / len(P))
+        proud = d is not None and min(abs(p.y) for p in P) > rect[3] - 0.7 and max(p.z for p in P) > d + 0.3
+        # (and the same fitting's foot: a patch of another sheet's paint lying in the upper face beside the cut)
+        foot = (d is not None and min(abs(p.y) for p in P) > rect[3] - 1.0 and max(p.z for p in P) < d + 0.3
+                and all(f.material_index != main for v in piece for f in v.link_faces))
+        if proud or foot:
+            gone += piece
+            where.append((round(sum(p.x for p in P) / len(P), 1), round(max(p.z for p in P) - d, 2), P[0].y > 0))
+    if gone:
+        bmesh.ops.delete(bm, geom=gone, context="VERTS")
+        bm.to_mesh(bay.data)
+        bay.data.update()
+        log("straighten: %s: %d stubs of fittings standing on its cut sides taken out (%d vertices): %s"
+            % (bay.name, len(where), len(gone), ", ".join("x %.1f %s, %.2f m proud" % (x, "port" if p else "starboard", h)
+                                                          for x, h, p in sorted(where))))
+    bm.free()
+    return len(where)
+
+
+def coaming(hull, bay, rect, deck, log=print):
+    """A coaming round the bay's opening. The bay's section is a slice of deck with nothing down its cut sides, and
+    its upper face stands up to 0.3 m proud of the hull's deck along the sides (0.15 m under it at the forward end):
+    under that step the inside of the bay showed all the way along, a dark seam down both edges of the doors with
+    the bay's teal paint glinting through (2026-11-10). A standing strip on the opening's outline, from 0.6 m under
+    the lower of the two faces to the higher one, two-sided, in the deck's own paint, closes it."""
+    import bmesh
+    W, Wi = hull.matrix_world, hull.matrix_world.inverted()
+    Wb = bay.matrix_world
+    Nb = Wb.to_3x3().inverted().transposed()
+    tops = [(Wb @ p.center) for p in bay.data.polygons if (Nb @ p.normal).normalized().z > 0.9]
+
+    def door(x, y):                                                 # the section's upper face near this point (the
+        d = deck(x)                                                 # doors lie within 0.6 m of the deck's height; the
+        near = [c.z for c in tops if abs(c.x - x) < 4.0 and abs(c.y - y) < 4.0     # bay's floors inside do not count)
+                and (d is None or abs(c.z - d) < 0.6)]
+        return max(near) if near else None
+    e = 0.005
+    x0, x1, y0, y1 = rect[0] - e, rect[1] + e, rect[2] - e, rect[3] + e
+    path = []                                                       # round the outline, a station every 2.5 m
+    for a, b in (((x0, y1), (x1, y1)), ((x1, y1), (x1, y0)), ((x1, y0), (x0, y0)), ((x0, y0), (x0, y1))):
+        n = max(1, int(math.hypot(b[0] - a[0], b[1] - a[1]) / 2.5))
+        path += [(a[0] + (b[0] - a[0]) * i / n, a[1] + (b[1] - a[1]) * i / n) for i in range(n)]
+    bm = bmesh.new()
+    bm.from_mesh(hull.data)
+    uv = bm.loops.layers.uv.active
+    flat = next((f for f in bm.faces if (W.to_3x3() @ f.normal).z > 0.95 and abs((W @ f.calc_center_median()).x - (x0 + x1) / 2) < 30
+                 and rect[3] + 1.0 < abs((W @ f.calc_center_median()).y) < rect[3] + 6.0
+                 and abs((W @ f.calc_center_median()).z - deck((x0 + x1) / 2)) < 0.5), None)
+    ring, step = [], 0.0
+    for x, y in path:
+        d, h = deck(min(max(x, rect[0]), rect[1])), door(min(max(x, rect[0] + 1), rect[1] - 1), max(min(y, rect[3] - 1), rect[2] + 1))
+        if d is None or h is None:
+            h = d if h is None else h
+            d = h if d is None else d
+        step = max(step, abs(h - d))
+        ring.append((bm.verts.new(Wi @ Vector((x, y, min(d, h) - 0.6))), bm.verts.new(Wi @ Vector((x, y, max(d, h) + 0.01)))))
+    made = 0
+    for (a0, a1), (b0, b1) in zip(ring, ring[1:] + ring[:1]):
+        for order in ((a0, b0, b1, a1), (a1, b1, b0, a0)):          # (both ways round: seen from either side)
+            if order[0] is a1:                                      # (the second face needs its own corners)
+                order = [bm.verts.new(v.co) for v in order]
+            f = bm.faces.new(order)
+            if flat:
+                f.material_index = flat.material_index
+                if uv:
+                    for l in f.loops:
+                        l[uv].uv = flat.loops[0][uv].uv
+            made += 1
+    bm.to_mesh(hull.data)
+    hull.data.update()
+    bm.free()
+    log("straighten: %s: a coaming round the bay's opening (%d faces on %d stations; the doors stand up to %.2f m "
+        "off the deck's height there)" % (hull.name, made, len(ring), step))
+    return made
+
+
 def straighten(colls, log=print, apply=True):
     """every LEV_HULL* in these collections and the Iowa mounts standing on them; returns what it found"""
     if not isinstance(colls, (list, tuple)):
@@ -579,6 +718,15 @@ def straighten(colls, log=print, apply=True):
                        if wt[i] >= 1.0 and abs(at[i].x - rect[0]) < 0.02 and at[i].z > BAY_Z - 0.5
                        and rect[2] - 0.5 < at[i].y < rect[3] + 0.5]
                 cap_cut(hull, cut, log)
+                # last (it renumbers the vertices): the scraps the bay's cut left lying along its long sides
+                scrap = [idx for idx in fittings.values()
+                         if any(abs(abs(at[i].y) - rect[3]) < 0.03 and rect[0] + 1.0 < at[i].x < rect[1] - 1.0 for i in idx)
+                         and max(at[i].z for i in idx) - min(at[i].z for i in idx) < 1.0]
+                clear_scraps(hull, [i for idx in scrap for i in idx], len(scrap), log)
+                if bay.data.name not in done:
+                    done.add(bay.data.name)
+                    clear_edge_stubs(bay, rect, deck, log)
+                coaming(hull, bay, rect, deck, log)
             done.add(hull.data.name)
     mounts = [o for o in objs if o.name.startswith(IOWA) and not (o.parent and o.parent.name.startswith(IOWA))]
 
