@@ -1,22 +1,30 @@
-/* logzip.h : a "stored" (method 0) zip writer and the log-zip pruning, with no Win32 declarations of its own, so the
- * runtime (win32_min.h) and tools/checks/logbundle_test.c (windows.h) both include it. It calls CreateFileW, ReadFile,
- * WriteFile, CloseHandle, WideCharToMultiByte, FindFirstFileW, FindNextFileW, FindClose and DeleteFileW, and uses
- * HANDLE, DWORD, BOOL, WIN32_FIND_DATAW (only dwFileAttributes and cFileName), wchar_t and the stdint types.
+/* logzip.h : a "stored" (method 0) zip writer, the log-zip pruning and the session stamps (runtime 0.32.33), with no
+ * Win32 declarations of its own, so the runtime (win32_min.h) and tools/checks/logbundle_test.c (windows.h) both include it. It calls CreateFileW, ReadFile,
+ * WriteFile, SetFilePointer, CloseHandle, WideCharToMultiByte, FindFirstFileW, FindNextFileW, FindClose and DeleteFileW,
+ * and uses HANDLE, DWORD, BOOL, WIN32_FIND_DATAW (only dwFileAttributes and cFileName), wchar_t and the stdint types.
  *
  * No ZIP64: an entry of 0xFFFFFFFF bytes or more (or one that would push the archive's offsets there) is skipped and
  * reported. Names are UTF-8 (general purpose bit 11). Times are the file's last-write time in UTC (the DOS fields have
  * no zone). Each file is read twice instead of seeking: a first pass for its CRC-32 and size, a second that copies
- * exactly that many bytes (a file that grew keeps its first bytes; one that shrank is padded with zeros and reported
- * LZ_CHANGED, its CRC then wrong). One zip at a time (the buffers are static).                                        */
+ * exactly that many bytes (a file that grew keeps its first bytes; one that shrank, or could not be opened again, is
+ * padded with zeros). The second pass has its own CRC of what it wrote: when it differs from the first's (the file
+ * shrank or was rewritten in between), both headers get the second's (the zip stays valid, the entry holds what was
+ * read) and the file is reported LZ_CHANGED (a read error in the second pass too; LZ_READ is a first-pass one: no
+ * entry). One zip at a time (the buffers are static).
+ * LZ_BETWEEN_PASSES(path) runs between the two passes: empty, for tools/checks/logbundle_test.c to change a file there. */
 #ifndef LOGZIP_H
 #define LOGZIP_H
+
+#ifndef LZ_BETWEEN_PASSES
+#define LZ_BETWEEN_PASSES(path) ((void)0)
+#endif
 
 #define LZ_OK       0
 #define LZ_LOCKED   1      /* could not be opened */
 #define LZ_BIG      2      /* too big for a non-ZIP64 zip */
-#define LZ_READ     3      /* read error */
+#define LZ_READ     3      /* read error (in the first pass: not in the zip) */
 #define LZ_FULL     4      /* the central directory buffer or the entry count is full, or a bad name */
-#define LZ_CHANGED  5      /* shrank while it was copied (padded with zeros) */
+#define LZ_CHANGED  5      /* changed while it was copied: the entry holds what was read (padded with zeros), its CRC right */
 #define LZ_WRITE    6      /* the zip itself could not be written */
 
 typedef struct {
@@ -26,6 +34,8 @@ typedef struct {
     uint32_t cdLen;        /* bytes in lz_cd */
     int      err;
     uint64_t lastSize;     /* the last LzAddFile / LzAddMem entry's size */
+    uint64_t entPos;       /* the last entry's local header (offset in the zip) */
+    uint32_t entCd;        /* the last entry's central entry (offset in lz_cd) */
 } LzZip;
 
 static uint8_t  lz_buf[65536];
@@ -119,6 +129,8 @@ static int LzBeginEntry(LzZip* z, const wchar_t* name, uint32_t crc, uint32_t si
     LzW16(hdr + 26, (uint32_t)nl); LzW16(hdr + 28, 0);
     for (int i = 0; i < nl; ++i) hdr[30 + i] = (uint8_t)u[i];
     uint8_t* c = lz_cd + z->cdLen;
+    z->entPos = z->pos;
+    z->entCd = z->cdLen;
     LzW32(c, 0x02014b50u); LzW16(c + 4, 20); LzW16(c + 6, 20); LzW16(c + 8, 0x0800); LzW16(c + 10, 0);
     LzW16(c + 12, tm); LzW16(c + 14, dt); LzW32(c + 16, crc); LzW32(c + 20, size); LzW32(c + 24, size);
     LzW16(c + 28, (uint32_t)nl); LzW16(c + 30, 0); LzW16(c + 32, 0); LzW16(c + 34, 0); LzW16(c + 36, 0);
@@ -130,14 +142,35 @@ static int LzBeginEntry(LzZip* z, const wchar_t* name, uint32_t crc, uint32_t si
     return LZ_OK;
 }
 
-static void LzPad(LzZip* z, uint64_t n)
+/* n zero bytes; returns the running CRC with them */
+static uint32_t LzPad(LzZip* z, uint64_t n, uint32_t crc)
 {
     for (uint32_t i = 0; i < sizeof(lz_buf); ++i) lz_buf[i] = 0;
     while (n && !z->err) {
         uint32_t k = n > sizeof(lz_buf) ? (uint32_t)sizeof(lz_buf) : (uint32_t)n;
         LzPut(z, lz_buf, k);
+        crc = LzCrc(crc, lz_buf, k);
         n -= k;
     }
+    return crc;
+}
+
+/* absolute seek; offsets stay under 0xFFFFFFF0 (LzBeginEntry's LZ_BIG), so 0xFFFFFFFF is only ever the error */
+static int LzSeek(LzZip* z, uint64_t pos)
+{
+    long hi = (long)(pos >> 32);
+    return SetFilePointer(z->h, (long)(uint32_t)pos, &hi, 0u) != 0xFFFFFFFFu;
+}
+
+/* the last entry's CRC, in its central entry and in its local header (already written) */
+static void LzPatchCrc(LzZip* z, uint32_t crc)
+{
+    uint8_t b[4];
+    DWORD put = 0;
+    LzW32(lz_cd + z->entCd + 16, crc);
+    if (z->err) return;
+    LzW32(b, crc);
+    if (!LzSeek(z, z->entPos + 14u) || !WriteFile(z->h, b, 4, &put, NULL) || put != 4 || !LzSeek(z, z->pos)) z->err = 1;
 }
 
 static int LzAddMem(LzZip* z, const wchar_t* name, const void* data, uint32_t len, uint64_t ft)
@@ -173,18 +206,24 @@ static int LzAddFile(LzZip* z, const wchar_t* name, const wchar_t* path, uint64_
     z->lastSize = size;
     if (size) {
         uint64_t left = size;
+        uint32_t crc2 = 0xFFFFFFFFu;
+        LZ_BETWEEN_PASSES(path);
         h = CreateFileW(path, 0x80000000u, 7u, NULL, 3u, 0x80u, NULL);
-        if (h == INVALID_HANDLE_VALUE) { LzPad(z, left); return z->err ? LZ_WRITE : LZ_CHANGED; }
-        while (left && !z->err) {
-            DWORD want = left > sizeof(lz_buf) ? (DWORD)sizeof(lz_buf) : (DWORD)left;
-            DWORD got = 0;
-            if (!ReadFile(h, lz_buf, want, &got, NULL)) { rc = LZ_READ; break; }
-            if (!got) { rc = LZ_CHANGED; break; }
-            LzPut(z, lz_buf, got);
-            left -= got;
+        if (h != INVALID_HANDLE_VALUE) {
+            while (left && !z->err) {
+                DWORD want = left > sizeof(lz_buf) ? (DWORD)sizeof(lz_buf) : (DWORD)left;
+                DWORD got = 0;
+                if (!ReadFile(h, lz_buf, want, &got, NULL)) { rc = LZ_CHANGED; break; }
+                if (!got) break;
+                crc2 = LzCrc(crc2, lz_buf, got);
+                LzPut(z, lz_buf, got);
+                left -= got;
+            }
+            CloseHandle(h);
         }
-        CloseHandle(h);
-        if (left && !z->err) LzPad(z, left);
+        if (left) { crc2 = LzPad(z, left, crc2); if (rc == LZ_OK) rc = LZ_CHANGED; }
+        crc2 ^= 0xFFFFFFFFu;
+        if (crc2 != crc) { LzPatchCrc(z, crc2); if (rc == LZ_OK) rc = LZ_CHANGED; }
     }
     return z->err ? LZ_WRITE : rc;
 }
@@ -249,6 +288,110 @@ static int LzPrune(const wchar_t* dir, const wchar_t* prefix, int keep)
         if (DeleteFileW(pat)) ++gone;
     }
     return gone;
+}
+
+/* ---- session stamps (runtime 0.32.33) ----------------------------------------------------------------------------
+ * Every file of a session carries its stamp: <prefix>_<stamp>.<ext> (AC8SurvivalMode_2026-11-10_14-02-11.log,
+ * session_2026-11-10_14-02-11.txt ...), its zip AC8Survival_<stamp>_<mod>.zip. A stamp is the session's start in local
+ * time, YYYY-MM-DD_HH-MM-SS, with a letter b-z after it for a second session started in the same second (a letter, not
+ * _2, so that no zip name starts like another stamp's). Stamps sort as text. */
+#define LZ_STAMP 24
+
+static int LzDig(wchar_t c) { return c >= L'0' && c <= L'9'; }
+
+/* the length of the stamp at s: 19, 20 (with its letter), or 0 when s doesn't start with one */
+static int LzStampLen(const wchar_t* s)
+{
+    static const char pat[] = "dddd-dd-dd_dd-dd-dd";
+    for (int i = 0; i < 19; ++i) {                        /* (a shorter s stops at its NUL) */
+        if (pat[i] == 'd') { if (!LzDig(s[i])) return 0; }
+        else if (s[i] != (wchar_t)pat[i]) return 0;
+    }
+    return (s[19] >= L'b' && s[19] <= L'z') ? 20 : 19;
+}
+
+/* a session file <prefix>_<stamp>.<ext> (ext neither zip nor tmp): its stamp into out (LZ_STAMP); 1 when it is one */
+static int LzFileStamp(const wchar_t* name, wchar_t* out)
+{
+    size_t d = LzWLen(name);
+    while (d > 0 && name[d - 1] != L'.') --d;
+    if (!d) return 0;
+    --d;                                                  /* the last '.' */
+    if (!LzWCmp(name + d, L".zip") || !LzWCmp(name + d, L".tmp")) return 0;
+    for (int len = 20; len >= 19; --len) {
+        if (d < (size_t)len + 1) continue;
+        const wchar_t* s = name + d - len;
+        if (s[-1] == L'_' && LzStampLen(s) == len) {
+            for (int i = 0; i < len; ++i) out[i] = s[i];
+            out[len] = 0;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* a zip AC8Survival_<stamp>_<anything>.zip: its stamp into out (LZ_STAMP); 1 when it is one */
+static int LzZipStamp(const wchar_t* name, wchar_t* out)
+{
+    static const wchar_t pre[] = L"AC8Survival_";
+    size_t l = LzWLen(name);
+    if (l < 12 + 19 + 5) return 0;
+    for (int i = 0; i < 12; ++i) if (name[i] != pre[i]) return 0;
+    if (LzWCmp(name + l - 4, L".zip")) return 0;
+    int len = LzStampLen(name + 12);
+    if (!len || name[12 + len] != L'_') return 0;
+    for (int i = 0; i < len; ++i) out[i] = name[12 + i];
+    out[len] = 0;
+    return 1;
+}
+
+/* The sessions of dir to zip now, oldest first, into out (at most max): every stamp of a session file there but cur
+ * that has no zip of its own; and when `keep` zips or more are there, none older than the oldest of them (its zip
+ * would be pruned at once, and made again at every start). Returns how many. */
+static int LzPick(const wchar_t* dir, const wchar_t* cur, int keep, wchar_t (*out)[LZ_STAMP], int max)
+{
+    static wchar_t zs[256][LZ_STAMP];
+    static wchar_t pat[1024];
+    wchar_t st[LZ_STAMP];
+    int nz = 0, nzAll = 0, n = 0;
+    size_t dl = LzWLen(dir);
+    if (!dl || dl + 3 >= 1024 || max <= 0) return 0;
+    for (size_t i = 0; i < dl; ++i) pat[i] = dir[i];
+    pat[dl] = L'\\'; pat[dl + 1] = L'*'; pat[dl + 2] = 0;
+    WIN32_FIND_DATAW fd;
+    HANDLE f = FindFirstFileW(pat, &fd);
+    if (f == INVALID_HANDLE_VALUE) return 0;
+    do {
+        if (fd.dwFileAttributes & 0x10u) continue;
+        if (LzZipStamp(fd.cFileName, st)) {
+            nzAll++;
+            if (nz < 256) { for (int k = 0; k < LZ_STAMP; ++k) zs[nz][k] = st[k]; nz++; }
+            continue;
+        }
+        if (!LzFileStamp(fd.cFileName, st) || (cur && !LzWCmp(st, cur)) || n >= max) continue;
+        int seen = 0;
+        for (int i = 0; i < n && !seen; ++i) seen = !LzWCmp(out[i], st);
+        if (!seen) { for (int k = 0; k < LZ_STAMP; ++k) out[n][k] = st[k]; n++; }
+    } while (FindNextFileW(f, &fd));
+    FindClose(f);
+    const wchar_t* oldest = NULL;
+    for (int i = 0; i < nz; ++i) if (!oldest || LzWCmp(zs[i], oldest) < 0) oldest = zs[i];
+    int k = 0;
+    for (int i = 0; i < n; ++i) {
+        int zipped = 0;
+        for (int j = 0; j < nz && !zipped; ++j) zipped = !LzWCmp(zs[j], out[i]);
+        if (zipped || (nzAll >= keep && oldest && LzWCmp(out[i], oldest) < 0)) continue;
+        if (k != i) for (int c = 0; c < LZ_STAMP; ++c) out[k][c] = out[i][c];
+        k++;
+    }
+    for (int i = 1; i < k; ++i) {                          /* insertion sort, oldest first */
+        wchar_t t[LZ_STAMP];
+        for (int c = 0; c < LZ_STAMP; ++c) t[c] = out[i][c];
+        int j = i - 1;
+        while (j >= 0 && LzWCmp(out[j], t) > 0) { for (int c = 0; c < LZ_STAMP; ++c) out[j + 1][c] = out[j][c]; --j; }
+        for (int c = 0; c < LZ_STAMP; ++c) out[j + 1][c] = t[c];
+    }
+    return k;
 }
 
 #endif /* LOGZIP_H */

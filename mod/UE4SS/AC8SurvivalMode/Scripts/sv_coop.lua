@@ -23,7 +23,7 @@
 -- SV_CoopRecv hands them over as "<sender's slot>|<message>".
 COOP = { open = false, role = nil, slot = nil, noted = "solo" }
 
--- The role for logs\session.txt (runtime 0.32.32, the log bundle): "host", "join" or "solo", written when it changes.
+-- The role for logs\session_<stamp>.txt (runtime 0.32.32, the log bundle): "host", "join" or "solo", written when it changes.
 -- Called wherever COOP.open / COOP.role are set or cleared (COOP.reopen, closeCoop).
 function COOP.noteRole()
     local r = COOP.open and COOP.role or "solo"

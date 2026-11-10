@@ -78,12 +78,15 @@ game's `ue4ss/Mods` folder (`AC8_MODS`). Never change the game's own files.
 
 ## Reporting a bug
 
-Send these files with what happened, the round, the time, and your build's version. The files are in
-`ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\`, plus `ue4ss\UE4SS.log`:
+Send the session's log zip with what happened, the round, the time, and your build's version. Every game's logs
+are in `ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\logs\`, named with the game's start:
 
-- `AC8SurvivalMode_lua.log` and `AC8SurvivalMode.log`.
-- `AC8SurvivalMode_crumbs.log`, and after a crash `AC8SurvivalMode_crumbs.prev.log` too.
-- After a crash, the newest `UECC-Windows-...` folder from
+- Start the game once more (the main menu is enough): the session before is zipped into
+  `logs\AC8Survival_<date>_<version>.zip`, with its UE4SS.log, its crash breadcrumbs and the game's own logs and crash
+  folder of that time. Send that zip.
+- When a session couldn't be zipped, its files stay in `logs\` under their dated names
+  (`AC8SurvivalMode_<date>.log`, `AC8SurvivalMode_lua_<date>.log`, `AC8SurvivalMode_crumbs_<date>.log`,
+  `session_<date>.txt`, `UE4SS_<date>.log`): send those, and after a crash the newest `UECC-Windows-...` folder from
   `%LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\`.
 
 Your PC's RAM and page file size and your rough location help with crashes and lag. Name the archive

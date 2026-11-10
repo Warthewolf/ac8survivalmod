@@ -23,7 +23,7 @@ def default_exe():
     return os.path.join(env.need('AC8_DIR', "ACE COMBAT 8's install folder, for AceCombat8.exe"),
                         'Game', 'Binaries', 'Win64', 'AceCombat8.exe')
 
-CACHE = os.environ.get("EXE_CACHE") or os.path.join(HERE, "..", "..", "build", "re", "exe_cache.pkl")
+CACHE = env.get("EXE_CACHE") or os.path.join(HERE, "..", "..", "build", "re", "exe_cache.pkl")
 
 
 class Exe:

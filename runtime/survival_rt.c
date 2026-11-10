@@ -26,8 +26,8 @@
 #include "sigs.h"
 #include "uobj.h"                /* (0.32.22: up here for the teardown gate; flight.c's include is then a no-op) */
 
-#define RT_VERSION           L"0.32.32"
-#define RT_VERSION_A         "0.32.32"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.33"
+#define RT_VERSION_A         "0.32.33"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */
@@ -75,7 +75,7 @@ static size_t WLen(const wchar_t* s) { size_t n = 0; while (s[n]) ++n; return n;
 
 typedef struct { wchar_t* data; int32_t num; int32_t max; } FString;   /* num counts the NUL */
 
-/* ---- log: <mod folder>\AC8SurvivalMode.log ------------------------------ */
+/* ---- log: <mod folder>\logs\AC8SurvivalMode_<stamp>.log (dated from runtime 0.32.33: logbundle.c) ---- */
 static HANDLE           g_hModule;
 static HANDLE           g_log = INVALID_HANDLE_VALUE;
 static volatile int32_t g_logLock;
@@ -119,7 +119,7 @@ static void Log(const wchar_t* fmt, ...)
 }
 
 /* g_modRoot (the mod's folder) and g_modsDir (ue4ss\Mods), once: start_mod needs them before OpenLog (the log bundle's
- * stash of the previous session, runtime 0.32.32). 1 when they're set. */
+ * LbBegin: the session's stamp and the logs folder). 1 when they're set. */
 static int g_pathsDone;
 static int ModPaths(void)
 {
@@ -144,25 +144,23 @@ static int ModPaths(void)
 
 /* (runtime 0.32.32) the log bundle: logbundle.c, #included below; start_mod calls it */
 static void LbSessionAdd(const char* key, const char* value);
+static int LbPath(wchar_t* out, const wchar_t* prefix, const wchar_t* ext);   /* this session's dated file (0.32.33) */
 
 static void OpenLog(void)
 {
-    wchar_t path[PATH_CAP];
-    if (!ModPaths()) return;
-    size_t k = WLen(g_modRoot);
-    if (k + 24 >= PATH_CAP) return;
-    memcpy(path, g_modRoot, k * 2);
-    memcpy(path + k, L"\\AC8SurvivalMode.log", 21 * 2);
+    static wchar_t path[PATH_CAP];
+    if (!ModPaths() || !LbPath(path, L"AC8SurvivalMode", L".log")) return;
     g_log = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
                         CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 }
 
-/* ---- crash breadcrumbs: <mod folder>\AC8SurvivalMode_crumbs.log (runtime 0.32.13) -----------------------------------
+/* ---- crash breadcrumbs: <mod folder>\logs\AC8SurvivalMode_crumbs_<stamp>.log (runtime 0.32.13; dated 0.32.33) -----------
  * The user, 2026-10-31 (Alyssa's crash could only be traced from its minidump): a short line for each risky thing the
  * runtime and Survival's Lua do (a spawn, a flight recycled and its unit actor destroyed, a player plane destroyed,
  * copies taken down, a removal event, a guard's catch), written to a file of its own at once (WriteFile: the system
- * keeps what was written when the game crashes a moment later), with milliseconds and the thread. The session before is
- * kept as AC8SurvivalMode_crumbs.prev.log (the crashed one, after the restart); CRUMB_MAX lines a session at most. */
+ * keeps what was written when the game crashes a moment later), with milliseconds and the thread. Each session has its
+ * own file, dated like its log (until 0.32.32 the session before was kept as AC8SurvivalMode_crumbs.prev.log);
+ * CRUMB_MAX lines a session at most. */
 #define CRUMB_MAX 20000
 static HANDLE           g_crumb = INVALID_HANDLE_VALUE;
 static volatile int32_t g_crumbLock;
@@ -170,16 +168,8 @@ static int32_t          g_crumbN;
 
 static void OpenCrumbs(void)
 {
-    static wchar_t path[PATH_CAP], prev[PATH_CAP];           /* (once, at load: off the stack, no stack probe) */
-    size_t k = WLen(g_modRoot);
-    if (!k || k + 32 >= PATH_CAP) return;
-    memcpy(path, g_modRoot, k * 2);
-    memcpy(path + k, L"\\AC8SurvivalMode_crumbs.log", 28 * 2);
-    memcpy(prev, g_modRoot, k * 2);
-    memcpy(prev + k, L"\\AC8SurvivalMode_crumbs.prev.log", 33 * 2);
-    BOOL (*moveEx)(const wchar_t*, const wchar_t*, DWORD) =
-        (BOOL (*)(const wchar_t*, const wchar_t*, DWORD))GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "MoveFileExW");
-    if (moveEx) moveEx(path, prev, 1);                    /* (MOVEFILE_REPLACE_EXISTING; none there: nothing) */
+    static wchar_t path[PATH_CAP];                           /* (once, at load: off the stack, no stack probe) */
+    if (!LbPath(path, L"AC8SurvivalMode_crumbs", L".log")) return;
     g_crumb = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 }
 
@@ -978,7 +968,7 @@ static int Ret(void* lua, int64_t v) { U.luaSetInteger(lua, v); return 1; }
 #include "flight.c"                                 /* flight sync and DOWN (runtime 0.28.5) */
 
 #include "survival_rt_lua.c"                        /* sound, the SV_* Lua functions, the leaderboard */
-#include "logbundle.c"                               /* the log bundle: a zip of the previous session's logs (runtime 0.32.32) */
+#include "logbundle.c"                               /* the log bundle: dated logs, a zip of each earlier session (0.32.32-33) */
 
 static void RegisterLua(void* lua)
 {
@@ -1000,7 +990,7 @@ static void RegisterLua(void* lua)
         { "SV_CoopFire", L_CoopFire }, { "SV_CoopShots", L_CoopShots }, { "SV_CoopPPShot", L_CoopPPShot }, { "SV_PPWeapons", L_PPWeapons }, { "SV_CoopPeerIds", L_CoopPeerIds }, { "SV_CoopSwapPP", L_CoopSwapPP }, { "SV_ObjChain", L_ObjChain }, { "SV_StoreKeepAI", L_StoreKeepAI }, { "SV_GcBusy", L_GcBusy },
         { "SV_LaserBegin", L_LaserBegin }, { "SV_LaserState", L_LaserState }, { "SV_LaserKills", L_LaserKills }, { "SV_Intercept", L_Intercept }, { "SV_LaserOwner", L_LaserOwner },
         { "SV_CoopLoadout", L_CoopLoadout }, { "SV_SpawnCam", L_SpawnCam }, { "SV_StickNow", L_StickNow }, { "SV_PPName", L_PPName }, { "SV_CoopPaint", L_CoopPaint }, { "SV_InputNow", L_InputNow }, { "SV_Down", L_Down }, { "SV_Respawn", L_Respawn },
-        { "SV_Session", L_Session }, { "SV_MemMB", L_MemMB }, { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
+        { "SV_Session", L_Session }, { "SV_LogStamp", L_LogStamp }, { "SV_MemMB", L_MemMB }, { "SV_SndLoad", L_SndLoad }, { "SV_SndPlay", L_SndPlay }, { "SV_SndSet", L_SndSet }, { "SV_SndStop", L_SndStop }, { "SV_SndMaster", L_SndMaster },
 #ifndef SV_OFFLINE
         { "SV_Post", L_Post }, { "SV_PostResult", L_PostResult }, { "SV_PostReply", L_PostReply }, { "SV_SteamName", L_SteamName },
         { "SV_BuildHash", L_BuildHash },
@@ -1390,7 +1380,7 @@ EXPORT void* start_mod(void)
     SetWString((MsvcWString*)(mod + 0x80), L"voidcallsreaper");
     if (g_instances++ == 0) {
         ModPaths();
-        LbStashPrevious();                    /* the previous session's logs go to logs\prev before OpenLog truncates them */
+        LbBegin();                            /* the session's stamp and logs\ (dated names: no session overwrites another's) */
         OpenLog();
         OpenCrumbs();
         Log(L"AC8 Survival Mode runtime %s", RT_VERSION);

@@ -1,40 +1,46 @@
-/* logbundle.c : the log bundle (runtime 0.32.32), #included by survival_rt.c after survival_rt_lua.c.
+/* logbundle.c : the log bundle (runtime 0.32.32; dated names 0.32.33), #included by survival_rt.c after survival_rt_lua.c.
  *
- * Why: when something goes wrong a player should send ONE file. At every game start this runtime zips the PREVIOUS
- * session's logs into <mod folder>\logs\AC8Survival_<start>_<mod version>.zip, keeps the 10 newest zips (no size cap),
- * and deletes older ones. The game thread only moves the files aside (LbStashPrevious: a few renames, before OpenLog /
- * the Lua log truncate them); a background thread (LbZipThread) does the zipping.
- *
- *   <mod>\logs\prev\          the previous session's files, moved here at start (the stash)
- *   <mod>\logs\session.txt    this session's key=value lines (LbSessionAdd, Lua's SV_Session): start, start_ft, rt,
- *                             main_dll_ts, pid, build_hash, mod, role ... (a later line with the same key wins)
- *   <mod>\logs\UE4SS.session.log   UE4SS.log copied every 10 s (UE4SS empties UE4SS.log when it starts, before this mod
- *                             loads, so the previous run's copy would be gone otherwise)
- *   <mod>\logs\*.csv          moved into the stash too (reserved for network logs)
- * What the zip holds: every file of logs\prev (flat names; AC8SurvivalMode_crumbs.log is a COPY, OpenCrumbs keeps its own
- * .prev rotation), the game's Saved\Logs\*.log and the files of each Saved\Crashes\UECC-* folder that changed since the
- * previous session started (Saved is %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved, the game's own
- * folder; with no start time, only the newest of each), and a generated bundle.txt listing what went in and what was
- * skipped and why. The zip is written under a .tmp name, renamed when whole, and the stash is deleted only then; a stash
- * that survives (zip never finished) is zipped synchronously at the next start, before the new files are stashed.
- * The zip format is logzip.h's. Every function here is static, buffers are static (no stack probe is linked).        */
+ * Why: when something goes wrong a player should send ONE file. Every file of a session carries the session's start in
+ * its name (logzip.h's stamps) and lives in <mod folder>\logs (the user, 2026-11-10), so no session overwrites another's:
+ *   logs\AC8SurvivalMode_<stamp>.log          the runtime's log (OpenLog)
+ *   logs\AC8SurvivalMode_lua_<stamp>.log      Lua's (sv_core.lua, the stamp from SV_LogStamp)
+ *   logs\AC8SurvivalMode_crumbs_<stamp>.log   the crash breadcrumbs (OpenCrumbs)
+ *   logs\session_<stamp>.txt                  key=value lines (LbSessionAdd, Lua's SV_Session): start, start_ft, rt,
+ *                                             main_dll_ts, pid, build_hash, mod, role ... (a later line with the same key wins)
+ *   logs\UE4SS_<stamp>.log                    UE4SS.log copied every 10 s (UE4SS empties UE4SS.log when it starts)
+ *   logs\AC8Survival_<stamp>_<mod>.zip        a finished session, the 10 newest zips kept (no size cap)
+ * At every start a background thread (LbZipThread) zips each earlier session that has no zip yet (logzip.h's LzPick):
+ * its files, the game's Saved\Logs\*.log and the files of each Saved\Crashes\UECC-* folder written during it (Saved is
+ * %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved, the game's own folder), and a generated bundle.txt
+ * listing what went in and what didn't and why. The zip is written under a .tmp name and renamed when whole; only then
+ * are the session's files that went in whole (LZ_OK) deleted. Everything else (a file that didn't, every file of a zip
+ * that failed) stays in logs\ under its dated name and is never deleted by the runtime (the user, 2026-11-10: "ça se
+ * verra par rapport aux fichiers .zip"). The game thread only takes the stamp at start (LbBegin) and moves the undated
+ * names of runtime 0.32.32 and before into logs\, once. If logs\ can't be made, the dated files go in the mod's folder
+ * and nothing is zipped. The zip format is logzip.h's. Every function here is static, buffers are static (no stack
+ * probe is linked).                                                                                                    */
 #include "logzip.h"
 
 #define LB_KEEP 10
-static wchar_t          g_lbDir[PATH_CAP];       /* <mod>\logs (empty: the bundle is off) */
-static wchar_t          g_lbPrev[PATH_CAP];      /* <mod>\logs\prev */
+#define LB_MAXS 32                               /* sessions zipped at one start at most (the others at the next) */
+static wchar_t          g_lbDir[PATH_CAP];       /* <mod>\logs (empty: nothing is zipped this session) */
+static wchar_t          g_lbBase[PATH_CAP];      /* where this session's files go: logs\, else the mod's folder */
+static wchar_t          g_lbStamp[LZ_STAMP];     /* this session's stamp (empty: none, so no log files) */
+static char             g_lbStampA[LZ_STAMP];
 static HANDLE           g_lbSess = INVALID_HANDLE_VALUE;
 static volatile int32_t g_lbLock;
 static uint64_t         g_lbStartFt;             /* this session's start (FILETIME, UTC) */
-static int              g_lbPrevHas;             /* logs\prev holds files for the zip thread */
 static char             g_lbRep[16384];          /* bundle.txt */
 static size_t           g_lbRepN;
+static int              g_lbOldMoved, g_lbOldFail;   /* undated files of an older runtime moved into logs\ at start */
 
-typedef struct { int files, skipped, kb; wchar_t name[120]; const wchar_t* why; } LbZipRes;
+/* left: the session's files not in the zip whole (they stay in logs\) */
+typedef struct { int files, skipped, kb, left; wchar_t name[120]; const wchar_t* why; } LbZipRes;
 
-/* what the stash did, for LbReport (the log isn't open yet when it runs) */
-static int        g_lbMoved, g_lbMoveFail, g_lbCopied, g_lbStashMs, g_lbSync;   /* g_lbSync: 0 none, 1 zipped, 2 failed */
-static LbZipRes   g_lbSyncRes;
+#define LB_FILES_MAX 128                         /* a session's own files zipped (more stay in logs\) */
+static wchar_t    g_lbFiles[LB_FILES_MAX][260];
+static uint64_t   g_lbFilesFt[LB_FILES_MAX];
+static uint8_t    g_lbFilesOk[LB_FILES_MAX];
 
 static int LbJoin(wchar_t* out, const wchar_t* a, const wchar_t* b)
 {
@@ -80,6 +86,40 @@ static void LbStamp(char* out, const uint16_t* st)
     out[k] = 0;
 }
 
+/* ft (UTC) -> the stamp of its local time (char, LZ_STAMP); 0 when it can't be converted */
+static int LbStampFt(uint64_t ft, char* out)
+{
+    uint64_t lft = 0;
+    uint16_t st[8];
+    if (!ft || !FileTimeToLocalFileTime(&ft, &lft) || !FileTimeToSystemTime(&lft, st)) return 0;
+    LbStamp(out, st);
+    return 1;
+}
+
+static void LbWide(wchar_t* out, const char* a) { size_t i = 0; for (; a[i]; ++i) out[i] = (wchar_t)(uint8_t)a[i]; out[i] = 0; }
+
+static void LbEnt(wchar_t* out, size_t cap, const wchar_t* a, const wchar_t* b, const wchar_t* c)
+{
+    size_t k = 0;
+    for (const wchar_t* s = a; s && *s && k + 1 < cap; ++s) out[k++] = *s;
+    for (const wchar_t* s = b; s && *s && k + 1 < cap; ++s) out[k++] = *s;
+    for (const wchar_t* s = c; s && *s && k + 1 < cap; ++s) out[k++] = *s;
+    out[k] = 0;
+}
+
+/* <base>\<prefix>_<stamp><ext>: a file of this session. 0 when there's no stamp or the path is too long. Called by
+ * OpenLog and OpenCrumbs (survival_rt.c, declared above them) once LbBegin has run. */
+static int LbPath(wchar_t* out, const wchar_t* prefix, const wchar_t* ext)
+{
+    wchar_t t[200];
+    if (!g_lbStamp[0] || !g_lbBase[0]) return 0;
+    LbEnt(t, 160, prefix, L"_", g_lbStamp);
+    size_t k = WLen(t);
+    for (const wchar_t* s = ext; *s && k + 1 < 200; ++s) t[k++] = *s;
+    t[k] = 0;
+    return LbJoin(out, g_lbBase, t);
+}
+
 /* ---- bundle.txt -------------------------------------------------------------- */
 static void LbRepAdd(const char* s) { while (*s && g_lbRepN + 2 < sizeof(g_lbRep)) g_lbRep[g_lbRepN++] = *s++; }
 static void LbRepW(const wchar_t* w) { for (; *w && g_lbRepN + 2 < sizeof(g_lbRep); ++w) g_lbRep[g_lbRepN++] = (*w >= 0x20 && *w < 0x7F) ? (char)*w : '?'; }
@@ -90,27 +130,29 @@ static const char* LbWhy(int rc)
     switch (rc) {
     case LZ_LOCKED:  return "could not be opened (locked or gone)";
     case LZ_BIG:     return "too big for a non-ZIP64 zip";
-    case LZ_READ:    return "read error";
+    case LZ_READ:    return "read error (not in the zip)";
     case LZ_FULL:    return "no room in the zip's directory, or a bad name";
-    case LZ_CHANGED: return "changed while it was zipped (padded with zeros; its CRC is wrong)";
+    case LZ_CHANGED: return "changed while it was zipped (the zip holds what was read, padded with zeros)";
     default:         return "the zip could not be written";
     }
 }
 
-static void LbAddFile(LzZip* z, LbZipRes* r, const wchar_t* entry, const wchar_t* path, uint64_t ft)
+static int LbAddFile(LzZip* z, LbZipRes* r, const wchar_t* entry, const wchar_t* path, uint64_t ft)
 {
     int rc = LzAddFile(z, entry, path, ft);
+    int part = (rc == LZ_CHANGED);                            /* in the zip, as far as it could be read */
     if (rc == LZ_OK) {
         r->files++;
         LbRepAdd("added   "); LbRepW(entry); LbRepAdd(" ("); LbRepNum(z->lastSize); LbRepAdd(" bytes)\n");
     } else {
         r->skipped++;
-        if (rc == LZ_CHANGED) r->files++;
-        LbRepAdd("SKIPPED "); LbRepW(entry); LbRepAdd(": "); LbRepAdd(LbWhy(rc)); LbRepAdd("\n");
+        if (part) r->files++;
+        LbRepAdd(part ? "PARTIAL " : "SKIPPED "); LbRepW(entry); LbRepAdd(": "); LbRepAdd(LbWhy(rc)); LbRepAdd("\n");
     }
+    return rc;
 }
 
-/* ---- session.txt ----------------------------------------------------------------- */
+/* ---- session_<stamp>.txt ------------------------------------------------------------ */
 /* value of the last "key=" line of b[0..n) into out (cap bytes); 1 when found */
 static int LbKey(const char* b, size_t n, const char* key, char* out, size_t cap)
 {
@@ -150,8 +192,8 @@ static void LbSessionAdd(const char* key, const char* value)
     __sync_lock_release(&g_lbLock);
 }
 
-/* SV_Session("key=value"): Lua adds a line to session.txt. key [a-z0-9_]{1,32}, value up to 200 printable ASCII
- * characters; 1 when written, 0 when refused */
+/* SV_Session("key=value"): Lua adds a line to session_<stamp>.txt. key [a-z0-9_]{1,32}, value up to 200 printable
+ * ASCII characters; 1 when written, 0 when refused */
 static int L_Session(void* lua)
 {
     wchar_t w[256];
@@ -172,17 +214,23 @@ static int L_Session(void* lua)
     return Ret(lua, 1);
 }
 
+/* SV_LogStamp() -> this session's stamp ("" when there's none): Lua's log is logs\AC8SurvivalMode_lua_<stamp>.log */
+static int L_LogStamp(void* lua)
+{
+    size_t n = 0;
+    while (g_lbStampA[n]) ++n;
+    U.luaSetString(lua, g_lbStampA, n);
+    return 1;
+}
+
 static void LbSessionBegin(void)
 {
     static wchar_t path[PATH_CAP];
     char v[40];
-    if (!g_lbDir[0] || !LbJoin(path, g_lbDir, L"session.txt")) return;
+    if (!LbPath(path, L"session", L".txt")) return;
     g_lbSess = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (g_lbSess == INVALID_HANDLE_VALUE) return;
-    uint16_t st[8];
-    GetLocalTime(st);
-    LbStamp(v, st);
-    LbSessionAdd("start", v);
+    LbSessionAdd("start", g_lbStampA);
     LbNum(v, g_lbStartFt);
     LbSessionAdd("start_ft", v);
     LbSessionAdd("rt", RT_VERSION_A);
@@ -203,102 +251,131 @@ static void LbSessionBegin(void)
     LbSessionAdd("pid", v);
 }
 
-/* ---- the zip of logs\prev ---------------------------------------------------------- */
-static int LbPrevFiles(void)
+/* ---- the zip of an earlier session ---------------------------------------------------- */
+/* session_<s>.txt: its start_ft (0 when unknown), its mod version (else rt) into mod (cap) when mod is given; *found 1
+ * when the file is there */
+static uint64_t LbSessInfo(const wchar_t* s, char* mod, size_t cap, int* found)
+{
+    static wchar_t p[PATH_CAP];
+    static char sess[4096];
+    wchar_t t[80];
+    char sft[32];
+    size_t sn = 0;
+    if (found) *found = 0;
+    if (mod) mod[0] = 0;
+    LbEnt(t, 80, L"session_", s, L".txt");
+    if (!LbJoin(p, g_lbDir, t)) return 0;
+    HANDLE h = CreateFileW(p, GENERIC_READ, 7u, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    DWORD got = 0;
+    if (ReadFile(h, sess, (DWORD)sizeof(sess) - 1, &got, NULL)) sn = got;
+    CloseHandle(h);
+    if (found) *found = 1;
+    if (mod && !LbKey(sess, sn, "mod", mod, cap)) LbKey(sess, sn, "rt", mod, cap);
+    sft[0] = 0;
+    LbKey(sess, sn, "start_ft", sft, sizeof(sft));
+    return LbParseU64(sft);
+}
+
+/* Where session s ends, for the game's own files: the next session's start (this session's when s is the last one
+ * before it), else (the next session's start is unknown) s's newest file + 10 minutes. The next session is the next
+ * stamp in logs\, from its files or its zip. */
+static uint64_t LbSessEnd(const wchar_t* s, uint64_t newestFt)
 {
     static wchar_t pat[PATH_CAP];
+    wchar_t st[LZ_STAMP], next[LZ_STAMP];
     WIN32_FIND_DATAW fd;
-    int any = 0;
-    if (!g_lbPrev[0] || !LbJoin(pat, g_lbPrev, L"*")) return 0;
-    HANDLE f = FindFirstFileW(pat, &fd);
-    if (f == INVALID_HANDLE_VALUE) return 0;
-    do { if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) any = 1; } while (!any && FindNextFileW(f, &fd));
-    FindClose(f);
-    return any;
-}
-
-static void LbEnt(wchar_t* out, size_t cap, const wchar_t* a, const wchar_t* b, const wchar_t* c)
-{
-    size_t k = 0;
-    for (const wchar_t* s = a; s && *s && k + 1 < cap; ++s) out[k++] = *s;
-    for (const wchar_t* s = b; s && *s && k + 1 < cap; ++s) out[k++] = *s;
-    for (const wchar_t* s = c; s && *s && k + 1 < cap; ++s) out[k++] = *s;
-    out[k] = 0;
-}
-
-/* Zips logs\prev (+ the game's Saved logs and crash folders) into logs\AC8Survival_<start>_<mod>.zip. 1 on success (the
- * stash is then deleted); 0 with r->why. Runs on the zip thread, or on the game thread at start for an old stash. */
-static int LbZipPrev(LbZipRes* r)
-{
-    static wchar_t tmp[PATH_CAP], fin[PATH_CAP], src[PATH_CAP], pat[PATH_CAP], saved[PATH_CAP], dpath[PATH_CAP];
-    static wchar_t ent[300], nm[140];
-    static char sess[4096], start[40], mod[80], sft[32], nmA[140];
-    static LzZip z;
-    WIN32_FIND_DATAW fd, fd2;
-    r->files = r->skipped = r->kb = 0;
-    r->name[0] = 0;
-    r->why = NULL;
-    g_lbRepN = 0;
-    size_t sn = 0;
-    start[0] = mod[0] = sft[0] = 0;
-    if (LbJoin(src, g_lbPrev, L"session.txt")) {
-        HANDLE h = CreateFileW(src, GENERIC_READ, 7u, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-        if (h != INVALID_HANDLE_VALUE) {
-            DWORD got = 0;
-            if (ReadFile(h, sess, (DWORD)sizeof(sess) - 1, &got, NULL)) sn = got;
-            CloseHandle(h);
-        }
-    }
-    LbKey(sess, sn, "start", start, sizeof(start));
-    if (!LbKey(sess, sn, "mod", mod, sizeof(mod))) LbKey(sess, sn, "rt", mod, sizeof(mod));
-    LbKey(sess, sn, "start_ft", sft, sizeof(sft));
-    uint64_t prevStart = LbParseU64(sft);
-    if (!start[0] && LbJoin(src, g_lbPrev, L"AC8SurvivalMode.log")) {   /* no session.txt: the log's last write */
-        HANDLE f = FindFirstFileW(src, &fd);
-        if (f != INVALID_HANDLE_VALUE) {
-            FindClose(f);
-            uint64_t ft = LbFt(&fd), lft = 0;
-            uint16_t st[8];
-            if (FileTimeToLocalFileTime(&ft, &lft) && FileTimeToSystemTime(&lft, st)) LbStamp(start, st);
-        }
-    }
-    for (char* c = start; *c; ++c) if (!((*c >= '0' && *c <= '9') || *c == '-' || *c == '_')) *c = '_';
-    for (char* c = mod; *c; ++c) if (!((*c >= '0' && *c <= '9') || (*c >= 'A' && *c <= 'Z') || (*c >= 'a' && *c <= 'z') || *c == '.' || *c == '-' || *c == '_')) *c = '_';
-    {
-        size_t k = 0;
-        const char* parts[4] = { "AC8Survival_", start[0] ? start : "unknown", "_", mod[0] ? mod : "unknown" };
-        for (int p = 0; p < 4; ++p) for (const char* s = parts[p]; *s && k < 68; ++s) nmA[k++] = *s;
-        nmA[k] = 0;
-        for (size_t i = 0; i <= k; ++i) nm[i] = (wchar_t)nmA[i];                 /* the name without ".zip" */
-    }
-    {
-        wchar_t t[140];
-        LbEnt(t, 140, nm, L".zip.tmp", NULL);
-        if (!LbJoin(tmp, g_lbDir, t)) { r->why = L"path too long"; return 0; }
-    }
-    if (!LzBegin(&z, tmp)) { r->why = L"could not create the zip"; return 0; }
-
-    LbRepAdd("AC8 Survival Mode: logs of the previous session\nbundle: "); LbRepAdd(nmA);
-    LbRepAdd("\nstart="); LbRepAdd(start[0] ? start : "unknown");
-    LbRepAdd("\nstart_ft="); LbRepAdd(sft[0] ? sft : "unknown");
-    LbRepAdd("\nsession.txt: "); LbRepAdd(sn ? "found" : "missing");
-    LbRepAdd("\n(zip entry times are UTC; entries that are not listed as SKIPPED are in the zip)\n\n");
-
-    /* 1. the stash */
-    if (LbJoin(pat, g_lbPrev, L"*")) {
+    next[0] = 0;
+    if (LbJoin(pat, g_lbDir, L"*")) {
         HANDLE f = FindFirstFileW(pat, &fd);
         if (f != INVALID_HANDLE_VALUE) {
             do {
-                if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || !LbJoin(src, g_lbPrev, fd.cFileName)) continue;
-                LbAddFile(&z, r, fd.cFileName, src, LbFt(&fd));
+                if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+                if (!LzFileStamp(fd.cFileName, st) && !LzZipStamp(fd.cFileName, st)) continue;
+                if (LzWCmp(st, s) > 0 && (!next[0] || LzWCmp(st, next) < 0)) memcpy(next, st, sizeof(next));
             } while (FindNextFileW(f, &fd));
             FindClose(f);
         }
     }
+    if (!next[0] || !LzWCmp(next, g_lbStamp)) return g_lbStartFt;
+    uint64_t ft = LbSessInfo(next, NULL, 0, NULL);
+    if (ft) return ft;
+    return newestFt ? newestFt + 6000000000ull : g_lbStartFt;     /* (10 minutes in 100 ns) */
+}
 
-    /* 2. the game's own: Saved\Logs\*.log and Saved\Crashes\UECC-* */
+/* Zips session s (its files in logs\, the game's Saved logs and crash folders of its time) into
+ * logs\AC8Survival_<s>_<mod>.zip. 1 on success (its files that went in whole are then deleted; r->left the others,
+ * left in logs\); 0 with r->why (its files all left as they are). Runs on the zip thread. */
+static int LbZipSession(const wchar_t* s, LbZipRes* r)
+{
+    static wchar_t tmp[PATH_CAP], fin[PATH_CAP], src[PATH_CAP], pat[PATH_CAP], saved[PATH_CAP], dpath[PATH_CAP];
+    static wchar_t ent[300], nm[140];
+    static char mod[80], nmA[140], sA[LZ_STAMP], sft[24];
+    static LzZip z;
+    WIN32_FIND_DATAW fd, fd2;
+    wchar_t st[LZ_STAMP];
+    r->files = r->skipped = r->kb = r->left = 0;
+    r->name[0] = 0;
+    r->why = NULL;
+    g_lbRepN = 0;
+    int found = 0;
+    uint64_t prevStart = LbSessInfo(s, mod, sizeof(mod), &found);
+    for (char* c = mod; *c; ++c) if (!((*c >= '0' && *c <= '9') || (*c >= 'A' && *c <= 'Z') || (*c >= 'a' && *c <= 'z') || *c == '.' || *c == '-' || *c == '_')) *c = '_';
+    {
+        size_t k = 0, i = 0;
+        for (; s[i] && i + 1 < LZ_STAMP; ++i) sA[i] = (char)s[i];
+        sA[i] = 0;
+        const char* parts[4] = { "AC8Survival_", sA, "_", mod[0] ? mod : "unknown" };
+        for (int p = 0; p < 4; ++p) for (const char* c = parts[p]; *c && k < 100; ++c) nmA[k++] = *c;
+        nmA[k] = 0;
+        for (size_t j = 0; j <= k; ++j) nm[j] = (wchar_t)nmA[j];                  /* the name without ".zip" */
+    }
+
+    /* 1. the session's own files: names and times first (logs\ isn't changed while it's listed) */
+    int nf = 0, nbad = 0;
+    uint64_t newestFt = 0;
+    if (LbJoin(pat, g_lbDir, L"*")) {
+        HANDLE f = FindFirstFileW(pat, &fd);
+        if (f != INVALID_HANDLE_VALUE) {
+            do {
+                if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || !LzFileStamp(fd.cFileName, st) || LzWCmp(st, s)) continue;
+                if (nf >= LB_FILES_MAX) { nbad++; continue; }
+                memcpy(g_lbFiles[nf], fd.cFileName, sizeof(g_lbFiles[0]));
+                g_lbFiles[nf][259] = 0;
+                g_lbFilesFt[nf] = LbFt(&fd);
+                if (g_lbFilesFt[nf] > newestFt) newestFt = g_lbFilesFt[nf];
+                g_lbFilesOk[nf] = 0;
+                nf++;
+            } while (FindNextFileW(f, &fd));
+            FindClose(f);
+        }
+    }
+    if (!nf) { r->why = L"no files of that session"; return 0; }
+    uint64_t end = LbSessEnd(s, newestFt);
+    int newest = (end == g_lbStartFt);                    /* no session between it and this one */
+    {
+        wchar_t t[160];
+        LbEnt(t, 160, nm, L".zip.tmp", NULL);
+        if (!LbJoin(tmp, g_lbDir, t)) { r->why = L"path too long"; return 0; }
+    }
+    if (!LzBegin(&z, tmp)) { r->why = L"could not create the zip"; return 0; }
+
+    LbNum(sft, prevStart);
+    LbRepAdd("AC8 Survival Mode: the logs of one session\nbundle: "); LbRepAdd(nmA);
+    LbRepAdd("\nsession: "); LbRepAdd(sA);
+    LbRepAdd("\nstart_ft="); LbRepAdd(prevStart ? sft : "unknown");
+    LbRepAdd("\nsession file: "); LbRepAdd(found ? "found" : "missing");
+    LbRepAdd("\n(zip entry times are UTC; entries that are not listed as SKIPPED are in the zip)\n\n");
+    for (int i = 0; i < nf; ++i) {
+        if (!LbJoin(src, g_lbDir, g_lbFiles[i])) { nbad++; LbRepAdd("SKIPPED "); LbRepW(g_lbFiles[i]); LbRepAdd(": path too long\n"); continue; }
+        if (LbAddFile(&z, r, g_lbFiles[i], src, g_lbFilesFt[i]) == LZ_OK) g_lbFilesOk[i] = 1; else nbad++;
+    }
+
+    /* 2. the game's own, written during the session: Saved\Logs\*.log and Saved\Crashes\UECC-* */
     DWORD en = GetEnvironmentVariableW(L"LOCALAPPDATA", dpath, PATH_CAP - 100);
-    if (en && en < PATH_CAP - 100 && LbJoin(saved, dpath, L"BANDAI NAMCO Entertainment\\ACE COMBAT 8\\Saved")) {
+    if (!prevStart && !newest) {
+        LbRepAdd("the game's Saved folder: this session's start is unknown (no session file) and a later session came after it: nothing taken from it\n");
+    } else if (en && en < PATH_CAP - 100 && LbJoin(saved, dpath, L"BANDAI NAMCO Entertainment\\ACE COMBAT 8\\Saved")) {
         for (int kind = 0; kind < 2; ++kind) {              /* 0: Saved\Logs\*.log, 1: Saved\Crashes\UECC-* folders */
             uint64_t best = 0;
             for (int pass = 0; pass < 2; ++pass) {
@@ -309,11 +386,11 @@ static int LbZipPrev(LbZipRes* r)
                     int isDir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
                     if (isDir != kind) continue;
                     uint64_t ft = LbFt(&fd);
-                    /* a log written since this session began is this session's own (the game is writing it) */
-                    if (!kind && g_lbStartFt && ft >= g_lbStartFt) continue;
+                    /* written after the session ended: a later session's (or this one's: the game is writing it) */
+                    if (end && ft >= end) continue;
                     if (prevStart && ft < prevStart) continue;
                     if (pass == 0) { if (ft > best) best = ft; continue; }
-                    if (!prevStart && ft != best) continue;
+                    if (!prevStart && ft != best) continue;     /* (start unknown: only the newest of each) */
                     if (!kind) {
                         LbEnt(src, PATH_CAP, saved, L"\\Logs\\", fd.cFileName);
                         LbEnt(ent, 300, L"Saved/Logs/", fd.cFileName, NULL);
@@ -345,7 +422,11 @@ static int LbZipPrev(LbZipRes* r)
         LbRepAdd("the game's Saved folder: LOCALAPPDATA not set, nothing taken from it\n");
     }
     LbRepAdd("\nfiles in the zip: "); LbRepNum((uint64_t)r->files);
-    LbRepAdd(", skipped: "); LbRepNum((uint64_t)r->skipped); LbRepAdd("\n");
+    LbRepAdd(", skipped or partial: "); LbRepNum((uint64_t)r->skipped); LbRepAdd("\n");
+    if (nbad) {
+        LbRepAdd("files of this session not in the zip whole: "); LbRepNum((uint64_t)nbad);
+        LbRepAdd(" (not deleted: they stay in logs\\ under their names)\n");
+    }
     if (LzAddMem(&z, L"bundle.txt", g_lbRep, (uint32_t)g_lbRepN, g_lbStartFt) != LZ_OK) { LzAbort(&z); DeleteFileW(tmp); r->why = L"bundle.txt could not be added"; return 0; }
     if (!LzEnd(&z)) { DeleteFileW(tmp); r->why = L"the zip could not be written"; return 0; }
     r->kb = (int)((z.pos + 1023u) / 1024u);
@@ -366,100 +447,121 @@ static int LbZipPrev(LbZipRes* r)
     }
     if (!placed) { DeleteFileW(tmp); r->why = L"could not name the zip"; return 0; }
 
-    /* only now the stash goes */
-    if (LbJoin(pat, g_lbPrev, L"*")) {
-        HANDLE f = FindFirstFileW(pat, &fd);
-        if (f != INVALID_HANDLE_VALUE) {
-            do {
-                if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && LbJoin(src, g_lbPrev, fd.cFileName)) DeleteFileW(src);
-            } while (FindNextFileW(f, &fd));
-            FindClose(f);
-        }
-    }
-    RemoveDirectoryW(g_lbPrev);
+    /* only now: the session's files that went in whole are deleted, the others stay */
+    for (int i = 0; i < nf; ++i) if (g_lbFilesOk[i] && LbJoin(src, g_lbDir, g_lbFiles[i])) DeleteFileW(src);
+    r->left = nbad;
     return 1;
 }
 
 /* ---- at start ------------------------------------------------------------------- */
-/* dir\name -> logs\prev\name. 1 moved, 0 not there, -1 failed */
-static int LbMove(const wchar_t* dir, const wchar_t* name)
+/* dir\old -> logs\<prefix>_<st><ext>, unless that one exists */
+static void LbOldMove(const wchar_t* dir, const wchar_t* old, const wchar_t* prefix, const wchar_t* ext, const wchar_t* st)
 {
     static wchar_t a[PATH_CAP], b[PATH_CAP];
-    if (!LbJoin(a, dir, name) || !LbJoin(b, g_lbPrev, name)) return -1;
-    if (GetFileAttributesW(a) == INVALID_FILE_ATTRIBUTES) return 0;
-    return MoveFileExW(a, b, MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED) ? 1 : -1;
+    wchar_t t[200];
+    if (!LbJoin(a, dir, old) || GetFileAttributesW(a) == INVALID_FILE_ATTRIBUTES) return;
+    LbEnt(t, 160, prefix, L"_", st);
+    size_t k = WLen(t);
+    for (const wchar_t* s = ext; *s && k + 1 < 200; ++s) t[k++] = *s;
+    t[k] = 0;
+    if (LbJoin(b, g_lbDir, t) && MoveFileExW(a, b, MOVEFILE_COPY_ALLOWED)) g_lbOldMoved++; else g_lbOldFail++;
 }
 
-static void LbCount(int rc) { if (rc > 0) g_lbMoved++; else if (rc < 0) g_lbMoveFail++; }
-
-/* Game thread, before OpenLog: sets the previous session's files aside (renames only). An earlier stash that was never
- * zipped is zipped first, synchronously, so nothing is lost. */
-static void LbStashPrevious(void)
+/* dir\name's last write as a stamp into st; 0 when it isn't there */
+static int LbOldStamp(const wchar_t* dir, const wchar_t* name, wchar_t* st)
 {
-    static wchar_t pat[PATH_CAP], sess[PATH_CAP], crumb[PATH_CAP], crumbTo[PATH_CAP];
-    uint64_t t0 = GetTickCount64();
+    static wchar_t p[PATH_CAP];
+    WIN32_FIND_DATAW fd;
+    char sa[LZ_STAMP];
+    if (!LbJoin(p, dir, name)) return 0;
+    HANDLE f = FindFirstFileW(p, &fd);
+    if (f == INVALID_HANDLE_VALUE) return 0;
+    FindClose(f);
+    if (!LbStampFt(LbFt(&fd), sa)) return 0;
+    LbWide(st, sa);
+    return 1;
+}
+
+/* Runtime 0.32.32 and before wrote undated names: AC8SurvivalMode.log, _lua.log, _crumbs.log and _crumbs.prev.log in
+ * the mod's folder (and 0.32.32 logs\session.txt and logs\UE4SS.session.log). They move into logs\ once, as one
+ * session under the stamp of the runtime log's last write (the Lua log's when there's none), the crumbs' .prev (an
+ * older session) under its own; the zip thread then zips them like any session. 0.32.32's logs\prev is left alone. */
+static void LbOldNames(void)
+{
+    wchar_t st[LZ_STAMP];
+    if (LbOldStamp(g_modRoot, L"AC8SurvivalMode.log", st) || LbOldStamp(g_modRoot, L"AC8SurvivalMode_lua.log", st)) {
+        LbOldMove(g_modRoot, L"AC8SurvivalMode.log", L"AC8SurvivalMode", L".log", st);
+        LbOldMove(g_modRoot, L"AC8SurvivalMode_lua.log", L"AC8SurvivalMode_lua", L".log", st);
+        LbOldMove(g_modRoot, L"AC8SurvivalMode_crumbs.log", L"AC8SurvivalMode_crumbs", L".log", st);
+        LbOldMove(g_lbDir, L"session.txt", L"session", L".txt", st);
+        LbOldMove(g_lbDir, L"UE4SS.session.log", L"UE4SS", L".log", st);
+    }
+    if (LbOldStamp(g_modRoot, L"AC8SurvivalMode_crumbs.prev.log", st))
+        LbOldMove(g_modRoot, L"AC8SurvivalMode_crumbs.prev.log", L"AC8SurvivalMode_crumbs", L".log", st);
+}
+
+/* Game thread, at start, before OpenLog: this session's stamp and folder; the old undated names moved into logs\.
+ * Renames only: the zipping is the zip thread's. */
+static void LbBegin(void)
+{
+    static wchar_t probe[PATH_CAP];
+    uint16_t st[8];
     GetSystemTimeAsFileTime(&g_lbStartFt);
     if (!g_modRoot[0]) return;
-    if (!LbJoin(g_lbDir, g_modRoot, L"logs") || !LbJoin(g_lbPrev, g_lbDir, L"prev")) { g_lbDir[0] = 0; g_lbPrev[0] = 0; return; }
-    CreateDirectoryW(g_lbDir, NULL);
-    CreateDirectoryW(g_lbPrev, NULL);
-    if (GetFileAttributesW(g_lbPrev) == INVALID_FILE_ATTRIBUTES) { g_lbDir[0] = 0; g_lbPrev[0] = 0; return; }
-    if (LbJoin(sess, g_lbPrev, L"session.txt") && GetFileAttributesW(sess) != INVALID_FILE_ATTRIBUTES) {
-        g_lbSync = LbZipPrev(&g_lbSyncRes) ? 1 : 2;
-        CreateDirectoryW(g_lbPrev, NULL);
+    if (LbJoin(g_lbDir, g_modRoot, L"logs")) {
+        CreateDirectoryW(g_lbDir, NULL);
+        DWORD a = GetFileAttributesW(g_lbDir);
+        if (a == INVALID_FILE_ATTRIBUTES || !(a & FILE_ATTRIBUTE_DIRECTORY)) g_lbDir[0] = 0;
     }
-    LbCount(LbMove(g_modRoot, L"AC8SurvivalMode.log"));
-    LbCount(LbMove(g_modRoot, L"AC8SurvivalMode_lua.log"));
-    LbCount(LbMove(g_lbDir, L"UE4SS.session.log"));
-    LbCount(LbMove(g_lbDir, L"session.txt"));
-    if (LbJoin(pat, g_lbDir, L"*.csv")) {
-        WIN32_FIND_DATAW fd;
-        HANDLE f = FindFirstFileW(pat, &fd);
-        if (f != INVALID_HANDLE_VALUE) {
-            do { if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) LbCount(LbMove(g_lbDir, fd.cFileName)); } while (FindNextFileW(f, &fd));
-            FindClose(f);
-        }
+    memcpy(g_lbBase, g_lbDir[0] ? g_lbDir : g_modRoot, sizeof(g_lbBase));
+    GetLocalTime(st);
+    LbStamp(g_lbStampA, st);
+    for (int i = 0; i < 26; ++i) {                        /* this second's stamp taken: a letter b ... z after it */
+        if (i) { g_lbStampA[19] = (char)('a' + i); g_lbStampA[20] = 0; }
+        LbWide(g_lbStamp, g_lbStampA);
+        if (!LbPath(probe, L"AC8SurvivalMode", L".log") || GetFileAttributesW(probe) == INVALID_FILE_ATTRIBUTES) break;
     }
-    if (LbJoin(crumb, g_modRoot, L"AC8SurvivalMode_crumbs.log") && LbJoin(crumbTo, g_lbPrev, L"AC8SurvivalMode_crumbs.log") &&
-        GetFileAttributesW(crumb) != INVALID_FILE_ATTRIBUTES) {
-        if (CopyFileW(crumb, crumbTo, 0)) g_lbCopied++; else g_lbMoveFail++;
-    }
-    g_lbPrevHas = LbPrevFiles();
-    g_lbStashMs = (int)(GetTickCount64() - t0);
+    if (g_lbDir[0]) LbOldNames();
 }
 
 static void LbReport(void)
 {
-    if (!g_lbDir[0]) { Log(L"logs: the logs folder could not be made; no log bundle this session"); return; }
-    Log(L"logs: previous session's files set aside: %d moved, %d copied, %d failed (%d ms)", (int32_t)g_lbMoved, (int32_t)g_lbCopied,
-        (int32_t)g_lbMoveFail, (int32_t)g_lbStashMs);
-    if (g_lbSync == 1) Log(L"logs: an earlier stash was zipped first: %s (%d files, %d KB)", g_lbSyncRes.name, (int32_t)g_lbSyncRes.files, (int32_t)g_lbSyncRes.kb);
-    else if (g_lbSync == 2) Log(L"logs: an earlier stash could not be zipped: %s", g_lbSyncRes.why ? g_lbSyncRes.why : L"?");
+    if (!g_lbStamp[0]) return;                            /* (no stamp: no log file either) */
+    Log(L"logs: this session's files are %s\\*_%s.* (the runtime's and Lua's logs, the crumbs, session, UE4SS)",
+        g_lbDir[0] ? L"logs" : L"the mod's folder", g_lbStamp);
+    if (!g_lbDir[0]) Log(L"logs: the logs folder could not be made; nothing is zipped this session");
+    if (g_lbOldMoved || g_lbOldFail)
+        Log(L"logs: an older runtime's undated logs moved into logs\\: %d (%d could not be)", (int32_t)g_lbOldMoved, (int32_t)g_lbOldFail);
 }
 
 static DWORD WINAPI LbZipThread(void* arg)
 {
+    static wchar_t picks[LB_MAXS][LZ_STAMP];
     (void)arg;
     if (!g_lbDir[0]) return 0;
-    if (g_lbPrevHas) {
+    int n = LzPick(g_lbDir, g_lbStamp, LB_KEEP, picks, LB_MAXS);
+    for (int i = 0; i < n; ++i) {
         LbZipRes r;
         uint64_t t0 = GetTickCount64();
-        if (LbZipPrev(&r)) Log(L"logs: previous session zipped: %s (%d files, %d KB, %d skipped, %d ms)", r.name, (int32_t)r.files, (int32_t)r.kb,
-                               (int32_t)r.skipped, (int32_t)(GetTickCount64() - t0));
-        else Log(L"logs: zipping the previous session failed: %s (the files stay in logs\\prev for the next start)", r.why ? r.why : L"?");
+        if (LbZipSession(picks[i], &r)) {
+            Log(L"logs: session %s zipped: %s (%d files, %d KB, %d skipped, %d ms)", picks[i], r.name, (int32_t)r.files, (int32_t)r.kb,
+                (int32_t)r.skipped, (int32_t)(GetTickCount64() - t0));
+            if (r.left) Log(L"logs: %d of its files are not whole in that zip: they stay in logs\\ under their names (never deleted)", (int32_t)r.left);
+        }
+        else Log(L"logs: zipping session %s failed: %s (its files stay in logs\\ under their names)", picks[i], r.why ? r.why : L"?");
     }
     int gone = LzPrune(g_lbDir, L"AC8Survival_", LB_KEEP);
     if (gone) Log(L"logs: %d older zips deleted (%d kept)", (int32_t)gone, (int32_t)LB_KEEP);
     return 0;
 }
 
-/* UE4SS.log -> logs\UE4SS.session.log, what was added since the last copy, every 10 s */
+/* UE4SS.log -> logs\UE4SS_<stamp>.log, what was added since the last copy, every 10 s */
 static DWORD WINAPI LbUe4ssThread(void* arg)
 {
     static wchar_t src[PATH_CAP], dst[PATH_CAP];
     static uint8_t buf[32768];
     (void)arg;
-    if (!g_lbDir[0] || !LbJoin(dst, g_lbDir, L"UE4SS.session.log")) return 0;
+    if (!LbPath(dst, L"UE4SS", L".log")) return 0;
     HANDLE m = GetModuleHandleW(L"UE4SS.dll");
     DWORD n = m ? GetModuleFileNameW(m, src, PATH_CAP) : 0;
     if (!n || n >= PATH_CAP) { Log(L"logs: UE4SS.dll not found; UE4SS.log is not copied"); return 0; }
@@ -472,8 +574,8 @@ static DWORD WINAPI LbUe4ssThread(void* arg)
         memcpy(src, t, (WLen(t) + 1) * 2);
     }
     HANDLE out = CreateFileW(dst, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (out == INVALID_HANDLE_VALUE) { Log(L"logs: UE4SS.session.log could not be created; UE4SS.log is not copied"); return 0; }
-    Log(L"logs: UE4SS.log (%s) is copied to logs\\UE4SS.session.log every 10 s", src);
+    if (out == INVALID_HANDLE_VALUE) { Log(L"logs: %s could not be created; UE4SS.log is not copied", dst); return 0; }
+    Log(L"logs: UE4SS.log (%s) is copied to %s every 10 s", src, dst);
     int64_t off = 0;
     for (;;) {
         HANDLE in = CreateFileW(src, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);

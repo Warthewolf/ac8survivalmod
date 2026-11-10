@@ -48,3 +48,4 @@ GetSystemTimeAsFileTime
 FileTimeToLocalFileTime
 FileTimeToSystemTime
 SetFilePointerEx
+SetFilePointer

@@ -51,11 +51,10 @@ What to tell us after playing: did everyone link, did each of you see the others
 did enemies attack every player, did the specials (the shuttle's countdown and launch, Nagase's radio) play for
 everyone, did the settings rows change when pressed, and did the joiners get the host's settings? Known: enemy missiles aimed at another player aren't shown, and the other players' planes fly in enemy colours.
 
-After playing, EVERYONE sends these three files (from ...\Win64\ue4ss\ and its Mods\AC8SurvivalMode folder), copied
-before starting the game again:
-    UE4SS.log, AC8SurvivalMode.log, AC8SurvivalMode_lua.log
+After playing, EVERYONE starts the game once more (the main menu is enough) and sends the newest
+logs\AC8Survival_<date>_<version>.zip from ...\Win64\ue4ss\Mods\AC8SurvivalMode\: it holds that session's logs, its
+UE4SS.log and, after a crash, the crash breadcrumbs and the game's crash folder. If there's no zip for that time, send
+that session's files from logs\ (named with its date) instead.
 
-After a crash, the player who crashed also sends, before starting the game again: the newest UECC-Windows-... folder
-from %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\ (its UEMinidump.dmp and
-CrashContext.runtime-xml), AC8SurvivalMode_crumbs.log and AC8SurvivalMode_crumbs.prev.log (Mods\AC8SurvivalMode), and a
-line on the round, what they were doing (flying, the STORE, DOWN and spectating, quitting) and who hosted.
+After a crash, the player who crashed also sends a line on the round, what they were doing (flying, the STORE, DOWN
+and spectating, quitting) and who hosted.
