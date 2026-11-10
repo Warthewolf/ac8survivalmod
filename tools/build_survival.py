@@ -685,6 +685,13 @@ def build_npc_rows():
                         ('ModelId', ('name', se.TANI_MODEL, 0)), ('NpcFCSId0', se.fname(se.TANI_FCS))):
         set_prop(row[2], [k for k, (n, t) in schema.items() if n == name][0], name, value)
     out.append(((se.TANI_NPC, 0), row))
+    # (0.74.60) the hull's row (se.TANI_HULL_*): the shoal's row again on TANI_HULL_MODEL, no fire control (its parts draw only)
+    row = copy.deepcopy(rows[(f[1], f[2])])
+    for name, value in (('WeaponDurabilityId', ('name', se.FISH_DURABILITY[0], 0)),
+                        ('ExplosionDurabilityId', ('name', se.FISH_DURABILITY[1], 0)),
+                        ('ModelId', ('name', se.TANI_HULL_MODEL, 0))):
+        set_prop(row[2], [k for k, (n, t) in schema.items() if n == name][0], name, value)
+    out.append(((se.TANI_HULL_NPC, 0), row))
     # THE ESCORT's allied rows and the ZFA-44 host, THE DECOY's weaponless UAV (survival_events.ESCORT_DECOY_NPC_ROWS): copies
     # of the campaign's plain rows; an allied model with no skin row (the model's own look), MOONCHILD's behaviour set
     # (its row's LuaSet: hard rule 22, never NLID_0400_CP), the UAV's weapons emptied (its laser pod is its blueprint's)
@@ -1189,6 +1196,7 @@ NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a 
     (survival_events.VALKA_EML_ROW, 'gepa_common', survival_events.VALKA_EML_NPC),   # VALKA's opener railgun (a turret row)
     (survival_events.FISH_ROW, survival_events.FISH_ROW_TEMPLATE, survival_events.FISH_NPC),   # GONE FISHIN's shoals
     (survival_events.TANI_ROW, survival_events.FISH_ROW_TEMPLATE, survival_events.TANI_NPC),   # THE TANICORN's test mount
+    (survival_events.TANI_HULL_ROW, survival_events.FISH_ROW_TEMPLATE, survival_events.TANI_HULL_NPC),   # and its hull test
 ] + [  # the fighter roles' behaviour rows (survival_events.ROLE_ROW, P1): DT_NPC rows Scripts/sv_rows.lua rolesSetup makes
     (row, 'f16c_common', npc) for row, npc in survival_events.ROLE_NPC.items()]
 # Enemy search (main.lua CFG.search): for each of these rows a copy <row>_sv whose NpcId is <its NpcId>_SV, the DT_NPC

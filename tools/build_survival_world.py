@@ -290,6 +290,14 @@ def tanicorn_units(units, used_ids, z, top_number):
     clear_flags(u, ('bIsLanding',))
     place(u, (0.0, 0.0, se.FISH_Z_CM), 0.0)
     print(f'  {se.TANI_UNIT}: {names[0]} on {se.TANI_ROW} (the Tanicorn test mount)')
+    # (0.74.60) the hull, the same way (TANI_HULL_*): the whole ship drawn, Ctrl+Y
+    names = port_unit(units, used_ids, z, src, se.TANI_HULL_UNIT, se.TANI_HULL_OBJ, se.TANI_HULL_ROW, [(0.0, 0.0, 0.0)], 0.0,
+                      top_number, tgt=True)
+    assert names == [se.TANI_HULL_OBJ], names
+    u = unit_named(units, se.TANI_HULL_UNIT)
+    clear_flags(u, ('bIsLanding',))
+    place(u, (0.0, 0.0, 0.0), 0.0)
+    print(f'  {se.TANI_HULL_UNIT}: {names[0]} on {se.TANI_HULL_ROW} (the Tanacorn hull test)')
 
 
 def fishing_units(units, used_ids, z, top_number):

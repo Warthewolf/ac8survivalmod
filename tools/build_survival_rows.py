@@ -283,6 +283,13 @@ def build_model_rows():
     set_prop(row[2], idx['MaxHealth'], 'MaxHealth', ('raw', 'Float', struct.pack('<f', survival_events.TANI_HEALTH)))
     set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.TANI_NAME_KEY))
     out.append(((survival_events.TANI_MODEL, 0), row))
+    # (0.74.60) the hull's model row (survival_events.TANI_HULL_*): the same, its blueprint BP_SV_Tani_HULL
+    row = copy.deepcopy(crow[(f[1], f[2])])
+    row[2][:] = [(q[0], q[1], q[2], ('soft', ('name', survival_events.TANI_HULL_BP, 0), ('name', survival_events.TANI_HULL_BP_CLASS, 0), ''))
+                 if q[1] == 'BlueprintClass' else q for q in row[2]]
+    set_prop(row[2], idx['MaxHealth'], 'MaxHealth', ('raw', 'Float', struct.pack('<f', survival_events.TANI_HULL_HEALTH)))
+    set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.TANI_HULL_NAME_KEY))
+    out.append(((survival_events.TANI_HULL_MODEL, 0), row))
     # ((2026-11-07) the user: the ZFA-44s' boxes read "SU-47") the ZFA-44 host's model: the allied Su-47's (ZFA_MODEL) whole
     # but its name, ZFA_NAME_KEY ("ZFA-44", Lua's text)
     f = survival_events.fname(survival_events.ZFA_MODEL)
@@ -302,7 +309,8 @@ def build_model_rows():
     set_prop(row[2], idx['MaxHealth'], 'MaxHealth', ('raw', 'Float', struct.pack('<f', survival_events.ZFA_DRONE_HEALTH)))
     assert survival_events.fname(survival_events.ZFA_DRONE_MODEL_SV)[2] == 0
     out.append(((survival_events.ZFA_DRONE_MODEL_SV, 0), row))
-    for n in (survival_events.TANI_BP, survival_events.TANI_BP_CLASS): z.nb.add(n)
+    for n in (survival_events.TANI_BP, survival_events.TANI_BP_CLASS, survival_events.TANI_HULL_BP,
+              survival_events.TANI_HULL_BP_CLASS): z.nb.add(n)
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
     dt['rows'] = out

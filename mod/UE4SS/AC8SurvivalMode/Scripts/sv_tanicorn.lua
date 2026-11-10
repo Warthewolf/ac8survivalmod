@@ -20,6 +20,14 @@ TANI = { unit = "SV_Unit_TaniTest", npc = "SV_Npc_TaniMount", model = "SV_Model_
          cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5.Default__BP_SV_Tani_T5_C",
          dummy = "BP_GR000_dummy_CP_C", name_key = "SV_TaniMount_Name", name = "TANICORN MOUNT",
          fcs = "SV_FCS_TaniT5", fcs_src = "NPC_FCS_FlakGun000", fcs_slots = 2,   -- (0.74.59; survival_events.TANI_FCS)
+         -- (0.74.60) the row's turn speeds: the stock flak gun's 360 deg/s jumped about (the user's run of 0.74.59: "it
+         -- tracks but not as smoothly as it was previously kinda jumps around like the stock flak cannon"); our arm's 40
+         fcs_speed = 40,
+         -- (0.74.60) THE TANACORN's hull with its parts drawn on their sockets (survival_events.TANI_HULL_*), Ctrl+Y:
+         -- broadside to you ahead_cm out, its waterline on the sea
+         hull = { unit = "SV_Unit_TaniHull", npc = "SV_Npc_TaniHull", model = "SV_Model_TaniHull",
+                  class = "BP_SV_Tani_HULL_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_HULL.BP_SV_Tani_HULL_C",
+                  name_key = "SV_TaniHull_Name", name = "TANACORN", ahead_cm = 500000, z_cm = 0 },
          ahead_cm = 300000, z_cm = 700, every_s = 2.0, watch_s = 60 }
 do
 local T = { rows = nil, next = 0, seen = {}, until_ = 0, checks = {} }
@@ -49,21 +57,27 @@ local function rowsIn()                                  -- the model first: the
         local okF, whyF = cloneRow(fcs, TANI.fcs_src, TANI.fcs, function(r)
             r.SlotNum = TANI.fcs_slots
             if (tonumber(r.MagazineCapacity) or 0) < TANI.fcs_slots then r.MagazineCapacity = TANI.fcs_slots end
+            r.YawSpeed, r.PitchSpeed = TANI.fcs_speed, TANI.fcs_speed
         end)
-        local slots, mag = "?", "?"
+        local slots, mag, speed = "?", "?", "?"
         pcall(function()
             local _, r = dtCall(fcs, "FindRow", TANI.fcs)
-            slots, mag = tostring(r.SlotNum), tostring(r.MagazineCapacity)
+            slots, mag, speed = tostring(r.SlotNum), tostring(r.MagazineCapacity), tostring(r.YawSpeed) .. "/" .. tostring(r.PitchSpeed)
         end)
-        log(string.format("tanicorn: fire control row %s from %s: %s (SlotNum %s, magazine %s)", TANI.fcs, TANI.fcs_src,
-            okF and "in" or ("NOT made: " .. tostring(whyF)), slots, mag))
+        log(string.format("tanicorn: fire control row %s from %s: %s (SlotNum %s, magazine %s, yaw / pitch speed %s)",
+            TANI.fcs, TANI.fcs_src, okF and "in" or ("NOT made: " .. tostring(whyF)), slots, mag, speed))
     end
     local m = addRow(mt, mr, TANI.model)
     local n = addRow(npc, mine, TANI.npc)
-    if type(SV_SetText) == "function" then pcall(SV_SetText, TANI.name_key, TANI.name) end
-    T.rows = m and n
-    return T.rows, string.format("%s %s, %s %s", TANI.model, m and "in DT_NPC_Model" or "NOT added", TANI.npc,
-        n and "in DT_NPC" or "NOT added")
+    local hm = addRow(mt, mr, TANI.hull.model)               -- (0.74.60) the hull's
+    local hn = addRow(npc, mine, TANI.hull.npc)
+    if type(SV_SetText) == "function" then
+        pcall(SV_SetText, TANI.name_key, TANI.name)
+        pcall(SV_SetText, TANI.hull.name_key, TANI.hull.name)
+    end
+    T.rows = m and n and hm and hn
+    return T.rows, string.format("%s %s, %s %s; %s %s, %s %s", TANI.model, m and "in DT_NPC_Model" or "NOT added", TANI.npc,
+        n and "in DT_NPC" or "NOT added", TANI.hull.model, hm and "in" or "NOT added", TANI.hull.npc, hn and "in" or "NOT added")
 end
 
 -- (0.74.46) the rows at the main menu, as the shoal's (FISH.setup): 0.74.43-0.74.45 added them at the key press, after
@@ -380,5 +394,64 @@ testKey("T", "sv_tanicorn.lua's mount test", function()
     T.next, T.until_, T.shells = 0, now + TANI.watch_s, 0
 end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn mount watch", fn = watch }
+
+-- (0.74.60) Ctrl+Y: THE TANACORN's hull with every part drawn on its socket (BP_SV_Tani_HULL), broadside to you hull.ahead_cm
+-- out, its waterline on the sea. Logged: our class loaded, the spawn, and 2 s and 8 s on where it is and how many of its
+-- parts' meshes it carries (PoseableMeshComponents: 32 expected, 2 + 6 + 4 + 4 + 16) and its static meshes (the hull's).
+local function hullLook(tag)
+    local H = TANI.hull
+    local found = {}
+    for _, o in ipairs(FindAllOf(H.class) or {}) do
+        if valid(o) and not nameOf(o):find("Default__", 1, true) then found[#found + 1] = o end
+    end
+    if #found == 0 then log(string.format("tanicorn: hull %s: none of our class in the level", tag)); return end
+    for _, o in ipairs(found) do
+        local parts, statics = "?", "?"
+        if SPC and SPC.V and SPC.V.comps then
+            pcall(function() parts = #SPC.V.comps(o, "/Script/Engine.PoseableMeshComponent") end)
+            pcall(function() statics = #SPC.V.comps(o, "/Script/Engine.StaticMeshComponent") end)
+        end
+        local ay = "?"
+        pcall(function() ay = string.format("%.1f", o:K2_GetActorRotation().Yaw) end)
+        log(string.format("tanicorn: hull %s: %s at %s facing %s: %s part meshes, %s static meshes", tag,
+            (nameOf(o):match("([^%.:]+)$")) or "?", at(o), ay, tostring(parts), tostring(statics)))
+    end
+end
+
+testKey("Y", "sv_tanicorn.lua's hull test", function()
+    if not (D and D.now) or not nativeReady() then log("tanicorn: Ctrl+Y outside a Survival run"); return end
+    if COOP and COOP.client and COOP.client() then log("tanicorn: Ctrl+Y: the host spawns it (you're a joiner)"); return end
+    local H = TANI.hull
+    local cls, why = loadObject(H.class_path)
+    log("tanicorn: hull class " .. (cls and ("loaded " .. nameOf(cls)) or ("NOT loaded: " .. tostring(why))))
+    if cls then pin(cls, "tanicorn hull class") end
+    local ok, rows = rowsIn()
+    log("tanicorn: rows: " .. rows)
+    local p = playerLocation()
+    if not p then log("tanicorn: no player location"); return end
+    local yaw = 0
+    pcall(function()
+        local pc = liveObj(survivalPC) and survivalPC or FindFirstOf("PlayerController")
+        yaw = pc.Pawn:K2_GetActorRotation().Yaw
+    end)
+    local x = p.X + math.cos(math.rad(yaw)) * H.ahead_cm
+    local y = p.Y + math.sin(math.rad(yaw)) * H.ahead_cm
+    local face = (yaw + 90) % 360                         -- (broadside to you: her whole length in view)
+    local r
+    if FISH and FISH.spawn then r = FISH.spawn(H.unit, x, y, H.z_cm, face) else r = SV_Spawn(H.unit, x, y, H.z_cm, face) end
+    local said = r > 0 and (r .. " up") or ("not spawned (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")")
+    log(string.format("tanicorn: Ctrl+Y, %s at (%.0f, %.0f, %d) facing %.0f: %s%s", H.unit, x, y, H.z_cm, face, said,
+        ok and "" or " (its rows aren't all in)"))
+    hudCallout("TEST: TANACORN", r > 0 and "5 KM AHEAD" or "NOT SPAWNED")
+    T.hullChecks = { { at = os.clock() + 2, tag = "+2 s" }, { at = os.clock() + 8, tag = "+8 s" } }
+end)
+TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn hull look", fn = function(now)
+    if not T.hullChecks then return end
+    for i = #T.hullChecks, 1, -1 do
+        local c = T.hullChecks[i]
+        if now >= c.at then table.remove(T.hullChecks, i); hullLook(c.tag) end
+    end
+    if #T.hullChecks == 0 then T.hullChecks = nil end
+end }
 end
 -- TEST ONLY END

@@ -2441,3 +2441,22 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   2026-11-10 23:12 (backup: build/backup/install_before_0.74.59).
 - To see in game: Ctrl+T; the turret tracks and the flak leaves both barrels' tips (`hangs on TurretPoseableMesh ... at
   socket SOC_Gun_01` / `_02`).
+
+## 0.74.60 (2026-11-10; THE TANACORN's whole ship in game, drawn: Ctrl+Y; the T5's turn speed)
+- The user's run of 0.74.59: "it tracks but not as smoothly as it was previously kinda jumps around like the stock flak
+  cannon, and yes both flak barrels were firing". The T5 is solved: the stock bone names + its own fire control row
+  (two muzzles). Its jumps are the stock flak arm's (360 deg/s, AimingMethod DoNotWhileFiring): the copy SV_FCS_TaniT5 now
+  turns at 40 deg/s (YawSpeed / PitchSpeed; `tanicorn: fire control row ... yaw / pitch speed 40.0/40.0`). The hold while
+  firing is the stock arm's own (our own arm blueprint, if wanted: WP1 / WP2's live parts).
+- WP2, its first step (docs/design/INVINCIBLE_FLEET.md): BP_SV_Tani_HULL (tools/tanicorn/spec.py hull_bp) on the native
+  ALiveAIGroundVehicleObject, the hull's static mesh (HullMesh: SM_SV_Tani_HULL, QueryOnly on EnemyPawn) and on each of its
+  32 Mount_* sockets that part's skeletal mesh as a PoseableMeshComponent at its rest pose (Part_<socket>: 2 T16, 6 T5, 4
+  CIWS, 4 LASER, 8 VLSD, 8 VLSS); Category_Ship. build.sh checks BP_SV_Tani_HULL cooked. Spawned as the test mount is:
+  SV_Unit_TaniHull (the scored dummy unit again) on sv_tani_hull -> SV_Npc_TaniHull -> SV_Model_TaniHull (our hull
+  blueprint, health 5000, name key SV_TaniHull_Name = "TANACORN"; survival_events.TANI_HULL_*). The parts draw only: they
+  aren't AI objects yet (WP2's next step: each a live part, its own health, box and fire control row).
+- sv_tanicorn.lua (test only): the hull's rows at the main menu with the mount's; Ctrl+Y spawns it 5 km ahead, broadside,
+  its waterline on the sea; `tanicorn: hull +2 s / +8 s: <name> at (x, y, z) facing Y: N part meshes, M static meshes`
+  (32 part meshes expected).
+- build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1), build 38d0d97ac60a... registered. INSTALLED
+  2026-11-10 23:22 (backup: build/backup/install_before_0.74.60).

@@ -108,6 +108,28 @@ def mount(part, info, fcs):
     }
 
 
+def hull_bp(parts_on):
+    """(0.74.60) THE TANACORN whole, its parts drawn on their sockets (docs/design/INVINCIBLE_FLEET.md WP2, the first step:
+    the ship on the sea; the parts become live AI parts in the next): BP_SV_Tani_HULL on the native
+    ALiveAIGroundVehicleObject (as the test mount: its spawn route through the model row is proven), the hull's static mesh
+    (its 36 Mount_* sockets) and, on each part's socket, that part's skeletal mesh as a PoseableMeshComponent at its rest
+    pose (the VLS hatches shut, the guns level). parts_on: [(part, [socket name, ...])]."""
+    def sk(p):
+        return obj(f'{DEST}/Model/SK_SV_Tani_{p}')
+    scs = [{'name': 'HullMesh', 'class': 'StaticMeshComponent', 'parent': 'RootComponent',
+            'props': {'StaticMesh': obj(f'{DEST}/Model/SM_SV_Tani_HULL'),
+                      'BodyInstance': '(CollisionEnabled=QueryOnly,ObjectType=ECC_GameTraceChannel3,'
+                                      'CollisionProfileName="EnemyPawn")'}}]
+    for part, sockets in parts_on:
+        for s in sockets:
+            scs.append({'name': f'Part_{s}', 'class': 'PoseableMeshComponent', 'parent': 'HullMesh', 'socket': f'Mount_{s}',
+                        'props': {'SkeletalMesh': sk(part), 'SkinnedAsset': sk(part)}})
+    return {'path': f'{DEST}/BP_SV_Tani_HULL', 'parent': 'LiveAIGroundVehicleObject', 'scs': scs,
+            'cdo': {'AutoPossessAI': 'PlacedInWorldOrSpawned', 'GameObjectId': '1000', 'GameObjectCategory': 'Category_Ship',
+                    'PursuitPointOffset': '(X=0,Y=0,Z=45000)', 'bKeepOnGround': 'False', 'bIsSea': 'True',
+                    'bShowHUDBox': 'True', 'BriDebriIconType': 'Weapons'}}
+
+
 # milestone 0's mount: the Mk45's fire control, but searching the air (it's to track and fire at the player)
 T5_FCS = {'search': 'AIR_ONLY', 'yaw': (40, -180, 180), 'pitch': (40, 0, 80), 'capture_cm': 600000, 'cone': 180,
           'activation': 2, 'triggering': 4, 'interval': 1, 'resting': 2, 'trigger_count': 1,
@@ -141,6 +163,7 @@ def main():
     spec = {'sockets': [], 'mesh_sockets': [], 'stubs': [{'path': AA_SHELL, 'parent': 'LiveBulletEmitter'},
                                                          {'path': FLAK_SHELL, 'parent': 'LiveFlakGun'}],
             'blueprints': []}
+    parts_on, hull = [], False
     for p in parts:
         if only and p not in only:
             continue
@@ -151,7 +174,9 @@ def main():
             for s in info['sockets']:
                 spec['mesh_sockets'].append({'mesh': obj(f'{DEST}/Model/SM_SV_Tani_{p}'), 'name': s['name'],
                                              'loc': s['loc'], 'rot': s.get('rot', [0, 0, 0])})
+            hull = True
             continue
+        parts_on.append((p, info.get('on', [])))
         for s in info['sockets']:
             # (0.74.54) on the skeleton and on the mesh itself: the cooked socket map reads the mesh's own first, and the
             # T5's muzzles on the skeleton alone were never found (its shells left the mesh's origin)
@@ -160,6 +185,8 @@ def main():
                                     'bone': s['bone'], 'loc': s['loc'], 'rot': s.get('rot', [0, 0, 0])})
         if kind == 'turret' and p in FCS:
             spec['blueprints'].append(mount(p, info, FCS[p]))
+    if hull:
+        spec['blueprints'].append(hull_bp(parts_on))
     out = os.path.join(BUILD, 'tani.spec.json')
     json.dump(spec, open(out, 'w'), indent=1)
     print(f'spec.py: {out}: {len(spec["sockets"])} sockets, {len(spec["mesh_sockets"])} hull sockets, '
