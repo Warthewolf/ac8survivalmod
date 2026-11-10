@@ -5,6 +5,13 @@ to be handed to an implementing agent (Fable 5.2, or any agent) as its brief: it
 on what Survival already runs, how each piece is tested, and what isn't known yet. Keep it up to date as work lands
 (each work package's status line, section 4).
 
+**Read with (2026-11-11):** `docs/design/INVINCIBLE_FLEET_PROGRESS_2026-11-11.md` (every work package's status after the
+0.74.50-0.74.61 builds, the lessons that change them: stock bone names and a fire control row per mount, parts drawn vs
+live, textures; what can be built without the user; the next three sessions) and `docs/design/INVINCIBLE_FLEET_RISE_FORD.md`
+(WP4-WP6 researched: the rise by a rig of ours inside the hull blueprint, GEOFON's "V-break", their tests T1-T5 and three
+questions for the user). WP2's live parts: the "WP2 step 2" subsection below. The status lines in section 4 are older than
+these: where they differ, the progress file is current.
+
 Tags as in docs/re: [V] read in a file or seen in game (where), [I] inferred, [?] not known yet.
 
 ---------------------------------------------------------------------------------------------------------------------
