@@ -403,6 +403,38 @@ function liveObj(o)
     return valid(o)
 end
 
+-- ((2026-11-11) Saint Alessia's 50-round co-op run of 0.74.36: GameplayStatics.ApplyDamage(o, 1e8, nil, nil, nil) runs
+-- on AC8's AI objects without an error and takes no health off: 70 ZFA-44s "finished off" and 70 Helios blasts left all
+-- 24 at full health to round 51, and "the shuttle damage applied" left it 1 alive 5 s on, while sv_rounds.lua's clean-up
+-- (ModifyHealth first) killed in the same run.) Object o of ours finished off with no attacker (nobody's kill, unpaid):
+-- mortal (invincible off, the MinHealth field and SetMinHealth 0), switched on (SetActive, its tick: one switched off
+-- takes no damage, maybe), ModifyHealth(-(h / 10 + 1000), nil, true), read back; still up: the same without the damage
+-- event, then ApplyDamage last, each read back. -> dead (its health read 0), its health after (nil: unread), how
+-- ("damage event", "no damage event", "ApplyDamage"; nil: not down). Its caller checks it's still its own (hard rule 59).
+function finishUnpaid(o)
+    if not liveObj(o) then return false, nil, nil end
+    local function h() local ok, v = pcall(function() return o.HealthInternal end); return (ok and type(v) == "number") and v or nil end
+    local h0 = h()
+    if h0 ~= nil and h0 <= 0 then return true, h0, "already down" end
+    pcall(function() o:SetIsInvincible(false) end)
+    pcall(function() o.bIsInvincible = false end)
+    pcall(function() o.MinHealth = 0.0 end)                 -- (the field: SetMinHealth keeps whole points only)
+    pcall(function() o:SetMinHealth(0.0) end)
+    pcall(function() o:SetActive(true, false, false) end)
+    pcall(function() o:SetActorTickEnabled(true) end)
+    local dmg = -((h0 or 1.0e6) / 10 + 1000)
+    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+    local steps = { { "damage event", function() o:ModifyHealth(dmg, nil, true) end },
+                    { "no damage event", function() o:ModifyHealth(dmg, nil, false) end },
+                    { "ApplyDamage", function() if valid(gs) then gs:ApplyDamage(o, 1.0e8, nil, nil, nil) end end } }
+    for _, s in ipairs(steps) do
+        pcall(s[2])
+        local h1 = h()
+        if h1 ~= nil and h1 <= 0 then return true, h1, s[1] end
+    end
+    return false, h(), nil
+end
+
 ---------------------------------------------------------------------------------------------------- the level going away
 -- (0.73.73, the testers' logs of 0.73.70, 2026-11-01) The moment Survival's level starts going away (Quit Mission, a
 -- quit to the main menu, the next level loading), and the walks over every object held while a level comes or goes:

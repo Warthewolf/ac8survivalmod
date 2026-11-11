@@ -1056,7 +1056,9 @@ CFG = {
                          -- escort_s each flight up covers the player nearest it: yours (or solo) by its `cover` record (its
                          -- area moved near your plane, 3 km round it), another player's by its planes onto the enemies
                          -- nearest them (co-op's coverFor); escort = false: as they are
-                         pose_cover = { "RE_SV_ZfaCoverA", "RE_SV_ZfaCoverB" }, escort = true, escort_s = 6,
+                         -- ((2026-11-11) pos_log_s: every VAMPIRES plane's place logged that often, 0 none: Saint Alessia's
+                         -- run had them all on the zone's east edge, why unknown)
+                         pose_cover = { "RE_SV_ZfaCoverA", "RE_SV_ZfaCoverB" }, escort = true, escort_s = 6, pos_log_s = 30,
                          pose = { ahead_m = 300, alt_m = 1100 },
                          ship_at = { { 1270476, -1096142 }, { 2130476, 103858 } },
                          service = { rounds = 3, min_s = 60 },
@@ -1068,8 +1070,11 @@ CFG = {
                          -- Helios blast (fx, sound, the camera shake within shake_km) kills every enemy aircraft within
                          -- blast_m (yours: you're paid as for an airstrike's), an ace's or a special's takes boss_pct of its
                          -- health instead; players and allies take nothing. No enemy aircraft in that round: they leave at
-                         -- the next. enabled = false: switched off as they leave, as before
+                         -- the next. enabled = false: finished off as they leave. ((2026-11-11) every blast of Saint
+                         -- Alessia's run timed out 15-50 km from the fight) dive_s runs once the target is in its reach
+                         -- (its speed, speed_kmh while it reads slow, x dive_s), or approach_s after its first target
                          dive = { enabled = true, detonate_m = 800, blast_m = 1000, dive_s = 40, reorder_s = 2, boss_pct = 0.3,
+                                  speed_kmh = 1200, approach_s = 120,
                                   fx = "/Game/OnlineMode/VFX/Vehicles/Boss/BA001_aias/Niagara/NS_ms17supsExplosion01_ON",
                                   fx_scale = 1.0, sound = "/Game/WwiseAssets/OBJ_M09_CLOUDBOMB_EXP",
                                   shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios",

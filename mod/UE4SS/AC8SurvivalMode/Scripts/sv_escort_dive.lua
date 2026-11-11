@@ -4,17 +4,27 @@
 -- The user: "these ZFA-44's will last 3 rounds before they fly towards the nearest enemy aircraft and explode on the
 -- aircraft they were targetting with an Helios Explosion"; her answers: at the start of the 4th round, the target and
 -- every enemy near it, players and allies untouched (CFG.allies.carrier.dive).
---   ZDIVE.take(C)        (sv_escort.lua, a carrier leaving after its service; the host's or solo) its ZFA-44s up are kept
---                        (not switched off with their flight): how many, or nil (none, or the dive off: switched off as before)
+--   ZDIVE.take(C)        (sv_escort.lua, a carrier leaving after its service or sunk; the host's or solo) its ZFA-44s up
+--                        are kept as one dive of its own (its id): how many, or nil (none, or the dive off: finished off)
 --   ZDIVE.tick()         (ZLAS.tick, every game) the next round's enemies up: each held ZFA-44 ordered onto the nearest
---                        enemy aircraft (one each while there are enough), within detonate_m of it the Helios blast there
---                        (dive_s on, where the ZFA-44 is): every enemy aircraft within blast_m down (yours, as an airstrike's
---                        hits), an ace's or a special's boss_pct of its health off; the ZFA-44 finished off, unpaid
---   ZDIVE.diving(addr)   (ZLAUNCH.coverTick) a held plane: never sent back to escort a player
+--                        enemy aircraft (one each while there are enough); its dive_s start once that's in its reach
+--                        (its speed x dive_s) or approach_s on; within detonate_m of it the Helios blast there (dive_s on,
+--                        where the ZFA-44 is): every enemy aircraft within blast_m down (yours, as an airstrike's hits),
+--                        an ace's or a special's boss_pct of its health off; the ZFA-44 finished off, unpaid
+--   ZDIVE.waiting(addr)  (ZLAUNCH.coverTick) a held plane before its dive: escorts the player nearest it (toward the fight)
+--   ZDIVE.diving(addr)   (ZLAUNCH.coverTick, parkedOff) a held plane: never sent back to escort a player, never finished
+--                        off by a hull's hold
+--   ZDIVE.holding(i)     (ZLAUNCH.holdHull) a held plane of ship i up: its hull's give-up clock waits
 --   ZDIVE.holdLocal(i)   (a joiner, ESC.localOff) the host's carrier i left for its dive ("zd h"): this game's own
 --                        ZFA-44s of it kept too, ordered at the host's "zd v", one finished off at each of the host's blasts
---   ZDIVE.fromHost(f)    (a joiner, sv_coop_migration.lua) "zd": h (held), v (the dive), b (a blast: x, y, z, down), e (over)
--- Log lines: `carrier: <name> leaving: N ZFA-44s stay up for their final dive`, `dive: ...`.
+--   ZDIVE.fromHost(f)    (a joiner, sv_coop_migration.lua) "zd": h (held: ship, round, dive), v (the dive: count, dive),
+--                        b (a blast: x, y, z, its down, dive), e (over: dive)
+-- ((2026-11-11) Saint Alessia's 50-round co-op run of 0.74.36: 70 Helios blasts and not one ZFA-44 down, the survivors
+-- held again at every leaving, the callout and "zd v" / "zd e" once a run) Each ZFA-44 counts as gone only once its health
+-- reads 0 (ZDIVE.finish: ZLAUNCH.finish's ModifyHealth), its blast once (e.blasted), its finish tried FINISH_TRIES times,
+-- then it's switched off and never escorted or held again; each carrier's dive has its own callout, messages and units'
+-- recycle; the callouts of the blasts in a second (two ships may leave at once) are one.
+-- Log lines: `carrier: <name> leaving: N ZFA-44s stay up for their final dive ... (dive k)`, `dive: ...`.
 ZDIVE = { d = nil }
 do
 local function dc() return (((CFG.allies or {}).carrier or {}).dive) or {} end
@@ -22,6 +32,7 @@ local function cc() return ((CFG.allies or {}).carrier) or {} end
 local function num(v, d) v = tonumber(v); if v == nil or v ~= v then return d end; return v end
 local function isClient() return COOP ~= nil and COOP.client ~= nil and COOP.client() == true end
 local function linked() return COOP ~= nil and COOP.open and COOP.msg ~= nil and not isClient() end
+local FINISH_TRIES, RETRY_S, BATCH_S = 3, 1, 1
 local function at(o)
     local ok, v = pcall(function() local l = o:K2_GetActorLocation(); return { X = l.X, Y = l.Y, Z = l.Z } end)
     return ok and v or nil
@@ -38,16 +49,17 @@ local function same(e, maxAge)
     return liveAddr(e.obj) == e.addr
 end
 local function up(e) return same(e, 0.5) and (hp(e.obj) or 1) > 0 end
--- this run's state: held = { { obj, addr, unit, ship, round, target, due, ... } }, local = a joiner's own
+-- this run's state: held = { { obj, addr, unit, name, src (its ESC.planes entry), ship, round, dive, target, due, ... } },
+-- dives = { [id] = { id, ship, round, units, said, n, blasts, kills, on (a joiner's: the host's "v") } }
 local function st()
     local s = ZDIVE.d
     if not (s and s.D == D) then
         if s and s.held then                             -- (a run over or started again: the old run's never dive)
             local n = 0
-            for _, e in ipairs(s.held) do if not e.gone and ZDIVE.finish(e, "the run is over") then n = n + 1 end end
+            for _, e in ipairs(s.held) do if not e.gone and ZDIVE.finish(e, "the run is over", true) then n = n + 1 end end
             if n > 0 then log(string.format("dive: %d held ZFA-44s of the last run finished off, unpaid", n)) end
         end
-        s = { D = D, held = {}, ships = {}, units = {}, kills = 0, blasts = 0, said = {}, hostHold = {} }
+        s = { D = D, held = {}, dives = {}, nextId = 0, blasts = 0, said = {}, hostHold = {}, pend = {} }
         ZDIVE.d = s
     end
     return s
@@ -133,71 +145,106 @@ local function effects(where)
         if not ok and not s.said.shake then s.said.shake = true; log("dive: the Helios camera shake " .. (cls and "failed" or "NOT loaded")) end
     end
 end
-
--- a held ZFA-44 finished off where it is, unpaid (ZLAUNCH.parkedOff's way): whether it went, its health read 0 after the
--- blow ((2026-11-11) a blow that didn't fail was counted before), and whether the blow went through at all
-function ZDIVE.finish(e, why)
-    e.gone = true
-    if not same(e) then return false end                 -- (read now: never another's plane at its address)
-    if COOP and COOP.removeObj and not isClient() then pcall(COOP.removeObj, e.obj) end
-    pcall(function() e.obj:SetIsInvincible(false) end)
-    pcall(function() e.obj.bIsInvincible = false end)
-    pcall(function() e.obj:SetMinHealth(0.0) end)
-    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
-    local ok = valid(gs) and pcall(function() gs:ApplyDamage(e.obj, 1.0e8, nil, nil, nil) end)
-    if not ok then ok = pcall(function() e.obj:ModifyHealth(-1.0e8, nil, true) end) end
-    if not ok then return false, false end
-    local okH, h = pcall(function() return e.obj.HealthInternal end)
-    return okH and type(h) == "number" and h <= 0, true
+-- ((2026-11-11) Saint Alessia's run: 20 HELIOS IMPACT callouts in one second) the callouts of a second as one: the dives
+-- starting (how many ZFA-44s) and the blasts (how many enemies down), each shown BATCH_S after the first of its kind
+local function queue(s, kind, n)
+    local p = s.pend[kind]
+    if not p then p = { at = os.clock(), n = 0 }; s.pend[kind] = p end
+    p.n = p.n + math.max(0, math.floor(n or 0))
 end
-function ZDIVE.diving(addr)
+local function flush(s)
+    local t, now = dc().text or {}, os.clock()
+    for _, kind in ipairs({ "dive", "blast" }) do
+        local p = s.pend[kind]
+        if p and now - p.at >= BATCH_S then
+            s.pend[kind] = nil
+            if t[kind] then hudCallout(t[kind], string.format(t[kind .. "_sub"] or "%d", math.min(p.n, 9999))) end
+        end
+    end
+end
+
+-- a held ZFA-44 finished off where it is, unpaid (sv_escort_laser.lua ZLAUNCH.finish: its own plane still, ModifyHealth,
+-- read back; final: switched off when it's still up): whether it went, its health after, how. Gone (never held, escorted
+-- or tried again) once it's down, not its plane any more, or final
+function ZDIVE.finish(e, why, final)
+    if e.gone then return e.dead == true, nil, "gone" end
+    local dead, h, how
+    if ZLAUNCH and ZLAUNCH.finish then dead, h, how = ZLAUNCH.finish(e, why, final)
+    elseif not same(e) then dead, how = false, "not its plane"
+    else dead, h, how = finishUnpaid(e.obj) end
+    e.tries = (e.tries or 0) + 1
+    if dead or how == "not its plane" or final then
+        e.gone, e.dead = true, dead == true
+        if e.src and not dead and how ~= "not its plane" then e.src.retired = true end
+    end
+    return dead == true, h, how
+end
+local function heldOf(addr, f)
     local s = ZDIVE.d
     if not (s and s.D == D and addr) then return false end
-    for _, e in ipairs(s.held) do if e.addr == addr and not e.gone then return true end end
+    for _, e in ipairs(s.held) do if e.addr == addr and not e.gone and f(e) then return true end end
     return false
 end
--- the planes of ship i up (out of their container, alive): this game's own on a joiner (not the host's bound copies)
+function ZDIVE.diving(addr) return heldOf(addr, function() return true end) end
+function ZDIVE.waiting(addr) return heldOf(addr, function(e) return not (e.target or e.ending or e.started or e.approach) end) end
+function ZDIVE.holding(i)
+    local s = ZDIVE.d
+    if not (s and s.D == D) then return false end
+    for _, e in ipairs(s.held) do if e.ship == i and not e.gone then return true end end
+    return false
+end
+-- the planes of ship i up (out of their container, alive): this game's own on a joiner (not the host's bound copies), none
+-- a dive took before (held, down or switched off: e.dived) or one that couldn't be finished (e.retired)
 local function planesOfShip(i)
     local out = {}
     local riseZ = num(cc().rise_m, -50) * 100
     for u, l in pairs((ESC and ESC.planes) or {}) do
         if shipOf(u) == i then
             for _, e in ipairs(l) do
-                local p = up(e) and at(e.obj)
+                local p = not (e.dived or e.retired or e.dead) and up(e) and at(e.obj)
                 if p and p.Z > riseZ and same(e) and not (isClient() and COOP and COOP.copyAt and COOP.copyAt(e.addr)) then
-                    out[#out + 1] = { obj = e.obj, addr = e.addr, unit = u, name = e.name }
+                    out[#out + 1] = { obj = e.obj, addr = e.addr, unit = e.armUnit or u, name = e.name, src = e }
                 end
             end
         end
     end
     return out
 end
-local function hold(i, round, why)
+local function hold(i, round, id)
     local s = st()
     local l = planesOfShip(i)
     table.sort(l, function(a, b) return a.addr < b.addr end)   -- (ESC.planes' order is pairs': each pick in one order)
+    if #l == 0 then return 0 end
+    local d = s.dives[id] or { id = id, ship = i, round = round, units = {}, n = 0, blasts = 0, kills = 0 }
+    s.dives[id] = d
     for _, e in ipairs(l) do
-        e.ship, e.round = i, round
+        e.ship, e.round, e.dive = i, round, id
+        e.src.dived = true
         s.held[#s.held + 1] = e
-        s.units[e.unit] = true
+        d.units[e.unit] = true
+        d.n = d.n + 1
     end
     return #l
 end
 function ZDIVE.take(C)
     if dc().enabled == false or isClient() or not (D and C and C.idx) then return nil end
-    local n = hold(C.idx, D.round)
+    local s = st()
+    s.nextId = s.nextId + 1
+    local id = s.nextId
+    local n = hold(C.idx, D.round, id)
     if n == 0 then return nil end
-    log(string.format("carrier: %s leaving: %d ZFA-44%s stay up for their final dive as round %d's enemies come", tostring(C.name), n,
-        n == 1 and "" or "s", D.round + 1))
-    if linked() then pcall(COOP.msg, nil, "zd", "h", string.format("%d", C.idx), string.format("%d", D.round)) end
+    log(string.format("carrier: %s leaving: %d ZFA-44%s stay up for their final dive as round %d's enemies come (dive %d)", tostring(C.name), n,
+        n == 1 and "" or "s", D.round + 1, id))
+    if linked() then pcall(COOP.msg, nil, "zd", "h", string.format("%d", C.idx), string.format("%d", D.round), string.format("%d", id)) end
     return n
 end
 function ZDIVE.holdLocal(i)
     local s = st()
     local h = s.hostHold[i]
     if not (h and os.clock() - h.at < 30) or dc().enabled == false then return nil end
-    local n = hold(i, h.round)
-    log(string.format("dive: the host's carrier %d left for its final dive: %d of this game's own ZFA-44s of it kept up with it", i, n))
+    local n = hold(i, h.round, h.id or -i)              -- (an older host's "h" has no dive: this ship's own key)
+    log(string.format("dive: the host's carrier %d left for its final dive (dive %d): %d of this game's own ZFA-44s of it kept up with it",
+        i, h.id or -i, n))
     return n > 0 and n or nil
 end
 
@@ -224,8 +271,25 @@ local function order(e, q)
     e.orderedAt = os.clock()
     return ok
 end
--- the blast at `where`: on the host (or solo) the kills, then everyone's effects; how many down
-local function blast(where, why)
+-- (cm/s) how fast a ZFA-44 flies: its own speed, or speed_kmh while it reads under half that (a turn) or not at all
+local function speedOf(o)
+    local ok, v = pcall(function() local x = o:GetVelocity(); return math.sqrt(x.X ^ 2 + x.Y ^ 2 + x.Z ^ 2) end)
+    local floor = num(dc().speed_kmh, 1200) / 0.036
+    v = (ok and type(v) == "number" and v == v) and v or 0
+    return v >= floor * 0.5 and v or floor
+end
+-- one try at a held plane's end (e.ending: why), again RETRY_S on, final at the FINISH_TRIES-th: whether it went, its health
+local function endStep(e, now)
+    if e.gone then return e.dead == true, nil end
+    if now < (e.tryAt or 0) then return false, nil end
+    e.tryAt = now + RETRY_S
+    local dead, h = ZDIVE.finish(e, e.ending, (e.tries or 0) + 1 >= FINISH_TRIES)
+    if dead and (e.tries or 0) > 1 then log(string.format("dive: a held ZFA-44 down on try %d (%s)", e.tries, tostring(e.ending))) end
+    return dead, h
+end
+-- the blast at `where` of dive d (its ZFA-44 tried first: down, health h): on the host (or solo) the kills, then
+-- everyone's effects; how many down
+local function blast(where, why, d, dead, h)
     local c, s = dc(), st()
     local r = num(c.blast_m, 1000) * 100
     local pawn = survivalPC and liveObj(survivalPC) and survivalPC.Pawn or nil
@@ -238,73 +302,70 @@ local function blast(where, why)
                 if outright(q) then
                     if pcall(function() q.obj:ModifyHealth(-1000000.0, pawn, true) end) then down = down + 1 end
                 else
-                    local h = hp(q.obj) or 0
-                    if h > 0 and pcall(function() q.obj:ModifyHealth(-(h * num(c.boss_pct, 0.3)), pawn, true) end) then hurt = hurt + 1 end
+                    local hh = hp(q.obj) or 0
+                    if hh > 0 and pcall(function() q.obj:ModifyHealth(-(hh * num(c.boss_pct, 0.3)), pawn, true) end) then hurt = hurt + 1 end
                 end
             end
         end
     end
-    s.kills, s.blasts = s.kills + down, s.blasts + 1
+    s.blasts, d.blasts, d.kills = s.blasts + 1, d.blasts + 1, d.kills + down
     effects(where)
-    local t = c.text or {}
-    if t.blast then hudCallout(t.blast, string.format(t.blast_sub or "%d", s.kills)) end
+    queue(s, "blast", down)
     if linked() then
         pcall(COOP.msg, nil, "zd", "b", string.format("%.0f", where.X), string.format("%.0f", where.Y), string.format("%.0f", where.Z),
-            string.format("%d", s.kills))
+            string.format("%d", down), string.format("%d", d.id))
     end
-    log(string.format("dive: Helios blast %d (%s) at (%.1f, %.1f) km %.0f m: %d enemy aircraft down, %d aces' or specials' hurt (%d down so far)",
-        s.blasts, why, where.X / 100000, where.Y / 100000, where.Z / 100, down, hurt, s.kills))
+    log(string.format("dive: Helios blast %d (%s) at (%.1f, %.1f) km %.0f m: %d enemy aircraft down, %d aces' or specials' hurt "
+        .. "(dive %d: %d down); its ZFA-44 %s", s.blasts, why, where.X / 100000, where.Y / 100000, where.Z / 100, down, hurt, d.id, d.kills,
+        dead and "down" or string.format("NOT down yet (health %s): tried again", tostring(h))))
     return down
 end
 -- (the host or solo) the held planes' dive, every tick
 local function hostTick(s)
-    local c = dc()
-    local live = 0
-    for _, e in ipairs(s.held) do if not e.gone then live = live + 1 end end
-    if live == 0 then
-        if next(s.units) and not s.freed then
-            s.freed = true
-            for u in pairs(s.units) do
-                if COOP and COOP.removeNow then pcall(COOP.removeNow, u) end
-                if ESC and ESC.recycleQ then ESC.recycleQ[#ESC.recycleQ + 1] = { unit = u, at = os.clock() + 3, why = "their final dive over" } end
-            end
-            if linked() then pcall(COOP.msg, nil, "zd", "e") end
-            log(string.format("dive: over: %d blasts, %d enemy aircraft down; the ZFA-44s' units off the list once none is up", s.blasts, s.kills))
-        end
-        return
-    end
-    local now = os.clock()
+    local c, now = dc(), os.clock()
+    local diveS = num(c.dive_s, 40)
     local taken = {}
     for _, e in ipairs(s.held) do
         if not e.gone and e.target and enemyUp(e.target) then taken[e.target.addr or e.target] = true end
     end
     for _, e in ipairs(s.held) do
-        if not e.gone then
-            if not up(e) then
+        local d = s.dives[e.dive]
+        if not e.gone and d then
+            if e.ending then
+                endStep(e, now)
+            elseif not up(e) then
                 e.gone = true                            -- (shot down, or gone: no blast)
                 log("dive: a held ZFA-44 went down before its blast")
             elseif D.round >= e.round + 2 then           -- (a whole round with no enemy aircraft: it leaves)
-                ZDIVE.finish(e, "no enemy aircraft in a round")
+                e.ending = "no enemy aircraft in a round"
                 log("dive: a held ZFA-44 found no enemy aircraft in round " .. tostring(e.round + 1) .. ": finished off, unpaid")
+                endStep(e, now)
             elseif D.round > e.round and fighting() then
                 local p = at(e.obj)
                 if e.target and not enemyUp(e.target) then e.target = nil end
                 if not e.target then
-                    local q = p and nearest(p, taken)
+                    local q, dq
+                    if p then q, dq = nearest(p, taken) end
                     if q then
                         e.target = q
                         taken[q.addr or q] = true
-                        e.started = e.started or now
-                        e.due = math.min(e.started + 2.5 * num(c.dive_s, 40), math.max(e.due or 0, now + num(c.dive_s, 40)))
+                        e.approach = e.approach or now
+                        if e.started then e.due = math.min(e.started + 2.5 * diveS, math.max(e.due or 0, now + diveS)) end
                         order(e, q)
-                        if not s.diveSaid then
-                            s.diveSaid = true
+                        if not e.saidD then
+                            e.saidD = true
+                            local v = speedOf(e.obj)
+                            log(string.format("dive: a ZFA-44 of dive %d onto the nearest enemy aircraft, %.1f km off (about %.0f s at %.0f km/h; %.1f km in its %d s)",
+                                d.id, dq / 100000, dq / v, v * 0.036, v * diveS / 100000, diveS))
+                        end
+                        if not d.said then
+                            d.said = true
                             local n = 0
-                            for _, x in ipairs(s.held) do if not x.gone then n = n + 1 end end
-                            local t = c.text or {}
-                            if t.dive then hudCallout(t.dive, string.format(t.dive_sub or "%d", n)) end
-                            if linked() then pcall(COOP.msg, nil, "zd", "v", string.format("%d", n)) end
-                            log(string.format("dive: round %d's enemies up: %d held ZFA-44s dive at the nearest enemy aircraft", D.round, n))
+                            for _, x in ipairs(s.held) do if x.dive == d.id and not x.gone then n = n + 1 end end
+                            queue(s, "dive", n)
+                            if linked() then pcall(COOP.msg, nil, "zd", "v", string.format("%d", n), string.format("%d", d.id)) end
+                            log(string.format("dive: round %d's enemies up: %d held ZFA-44s dive at the nearest enemy aircraft (dive %d, ship %d)",
+                                D.round, n, d.id, d.ship))
                         end
                     end
                 elseif now - (e.orderedAt or 0) >= num(c.reorder_s, 2) then
@@ -312,35 +373,80 @@ local function hostTick(s)
                 end
                 local q = e.target
                 local qa = q and at(q.obj)
-                if p and qa and dist(p, qa) <= num(c.detonate_m, 800) * 100 then
-                    ZDIVE.finish(e, "its blast")
-                    blast(qa, "on its target")
-                elseif p and e.due and now >= e.due then
-                    ZDIVE.finish(e, "its blast")
-                    blast(p, "its dive's time up")
+                local dd = (p and qa) and dist(p, qa) or nil
+                -- ((2026-11-11) every blast of Saint Alessia's run timed out 15-50 km from the fight) its dive_s once its
+                -- target is in its reach, or approach_s after its first target (flown at it meanwhile)
+                if dd and not e.started and (dd <= speedOf(e.obj) * diveS or now - (e.approach or now) >= num(c.approach_s, 120)) then
+                    e.started, e.due = now, now + diveS
+                    if now - (e.approach or now) >= 1 then
+                        log(string.format("dive: a ZFA-44 of dive %d %.1f km from its target %.0f s after its first: its %d s on", d.id, dd / 100000,
+                            now - e.approach, diveS))
+                    end
+                end
+                local where, why
+                if dd and dd <= num(c.detonate_m, 800) * 100 then where, why = qa, "on its target"
+                elseif p and e.due and now >= e.due then where, why = p, "its dive's time up" end
+                if where and not e.blasted then        -- (once: its finish tried again after, never its blast)
+                    e.blasted, e.ending = true, "its blast"
+                    local dead, h = endStep(e, now)
+                    blast(where, why, d, dead, h)
                 end
             end
+        end
+    end
+    -- each dive over (its planes all gone): its units off the list, the joiners told, its planes forgotten
+    for id, d in pairs(s.dives) do
+        local live = 0
+        for _, e in ipairs(s.held) do if e.dive == id and not e.gone then live = live + 1 end end
+        if live == 0 then
+            s.dives[id] = nil
+            for u in pairs(d.units) do
+                if COOP and COOP.removeNow then pcall(COOP.removeNow, u) end
+                if ESC and ESC.recycleQ then ESC.recycleQ[#ESC.recycleQ + 1] = { unit = u, at = os.clock() + 3, why = "their final dive over" } end
+            end
+            if linked() then pcall(COOP.msg, nil, "zd", "e", string.format("%d", id)) end
+            log(string.format("dive: over (dive %d, ship %d): %d blasts, %d enemy aircraft down; the ZFA-44s' units off the list once none is up",
+                id, d.ship, d.blasts, d.kills))
+            for k = #s.held, 1, -1 do if s.held[k].dive == id then table.remove(s.held, k) end end
         end
     end
 end
 -- (a joiner) this game's own held planes: ordered at the host's dive, one finished off at each of its blasts
 local function clientTick(s)
-    if not s.diveOn then return end
     local now = os.clock()
     for _, e in ipairs(s.held) do
-        if not e.gone and up(e) and now - (e.orderedAt or 0) >= num(dc().reorder_s, 2) then
-            local p = at(e.obj)
-            local q = p and nearest(p, {})
-            if q then order(e, q) else e.orderedAt = now end
+        local d = s.dives[e.dive]
+        if not e.gone then
+            if e.ending then endStep(e, now)
+            elseif not up(e) then e.gone = true
+            elseif D.round >= (e.round or D.round) + 3 then        -- (the host's "b" / "e" never came: its own end)
+                e.ending = "the host's dive never ended here"
+                endStep(e, now)
+            elseif d and d.on and now - (e.orderedAt or 0) >= num(dc().reorder_s, 2) then
+                local p = at(e.obj)
+                local q
+                if p then q = nearest(p, {}) end
+                if q then order(e, q) else e.orderedAt = now end
+            end
+        end
+    end
+    for id, d in pairs(s.dives) do                       -- (a dive of this game's own all gone: forgotten)
+        local live = 0
+        for _, e in ipairs(s.held) do if e.dive == id and not e.gone then live = live + 1 end end
+        if live == 0 then
+            s.dives[id] = nil
+            for k = #s.held, 1, -1 do if s.held[k].dive == id then table.remove(s.held, k) end end
+            if d.on == nil then log(string.format("dive: this game's own ZFA-44s of dive %d all gone", id)) end
         end
     end
 end
 function ZDIVE.tick()
     if not D then return end
     local s = ZDIVE.d
-    if not (s and (s.D ~= D or #s.held > 0)) then return end
+    if not (s and (s.D ~= D or #s.held > 0 or next(s.pend) or next(s.dives))) then return end
     s = st()
     if isClient() then clientTick(s) else hostTick(s) end
+    flush(s)
 end
 
 -- (a joiner) the host's "zd": its numbers checked before anything is done with them
@@ -349,19 +455,34 @@ local function coord(v, lim)
     if not v or v ~= v or math.abs(v) > lim then return nil end
     return v
 end
+local function whole(v, lo, hi)                          -- (a whole number in lo..hi, else nil)
+    v = tonumber(v)
+    if not v or v ~= v or v < lo or v > hi or v % 1 ~= 0 then return nil end
+    return v
+end
+-- the dives "v" / "b" / "e" name (id: that one, if this game has it; none: an older host's, every one)
+local function divesOf(s, id)
+    local out = {}
+    for k, d in pairs(s.dives) do if id == nil or k == id then out[#out + 1] = d end end
+    return out
+end
 function ZDIVE.fromHost(f)
     if not (D and isClient()) then return end
     local s, k = st(), tostring(f[2] or "")
     if k == "h" then
         local i, r = math.floor(num(f[3], 0)), math.floor(num(f[4], -1))
-        if i >= 1 and i <= #(cc().units or {}) and r >= 0 and r <= 999 then s.hostHold[i] = { at = os.clock(), round = r } end
+        if i >= 1 and i <= #(cc().units or {}) and r >= 0 and r <= 999 then s.hostHold[i] = { at = os.clock(), round = r, id = whole(f[5], 1, 99999) } end
     elseif k == "v" then
-        if not s.diveOn then
-            s.diveOn = true
-            local t = dc().text or {}
-            if t.dive then hudCallout(t.dive, string.format(t.dive_sub or "%d", math.floor(math.max(0, math.min(99, num(f[3], 0)))))) end
-            log(string.format("dive: the host's ZFA-44s dive; %d of this game's own with them", #s.held))
+        local id, n = whole(f[4], 1, 99999), math.floor(math.max(0, math.min(99, num(f[3], 0))))
+        if id and s.lastV == id then return end           -- (said already)
+        s.lastV = id
+        local mine = 0
+        for _, d in ipairs(divesOf(s, id)) do
+            d.on = true
+            for _, e in ipairs(s.held) do if e.dive == d.id and not e.gone then mine = mine + 1 end end
         end
+        queue(s, "dive", n)
+        log(string.format("dive: the host's ZFA-44s dive (dive %s); %d of this game's own with them", tostring(id or "?"), mine))
     elseif k == "b" then
         local x, y, z = coord(f[3], 1.0e8), coord(f[4], 1.0e8), coord(f[5], 5.0e6)
         if not (x and y and z) then return end
@@ -369,25 +490,29 @@ function ZDIVE.fromHost(f)
         s.rx = (s.rx and now - s.rx.at < 1) and s.rx or { at = now, n = 0 }
         s.rx.n = s.rx.n + 1
         if s.rx.n > 12 then return end                   -- (more than 12 blasts in a second: the rest not shown)
-        local where = { X = x, Y = y, Z = z }
-        local best, bd = nil, math.huge                  -- (this game's own held plane nearest the blast goes with it)
-        for _, e in ipairs(s.held) do
-            local p = not e.gone and up(e) and at(e.obj)
+        local where, id = { X = x, Y = y, Z = z }, whole(f[7], 1, 99999)
+        local best, bd = nil, math.huge                  -- (this game's own held plane of its dive nearest the blast goes with it;
+        for _, e in ipairs(s.held) do                    -- an older host's, of no dive: any)
+            local p = not e.gone and not e.ending and (id == nil or e.dive == id) and up(e) and at(e.obj)
             if p and dist(p, where) < bd then best, bd = e, dist(p, where) end
         end
-        if best then ZDIVE.finish(best, "the host's blast") end
+        if best then best.ending = "the host's blast"; endStep(best, now) end
         s.blasts = s.blasts + 1
         effects(where)
-        local t = dc().text or {}
-        if t.blast then hudCallout(t.blast, string.format(t.blast_sub or "%d", math.floor(math.max(0, math.min(9999, num(f[6], 0)))))) end
+        queue(s, "blast", math.max(0, math.min(999, num(f[6], 0))))
     elseif k == "e" then
-        local n = 0
-        for _, e in ipairs(s.held) do if not e.gone and ZDIVE.finish(e, "the host's dive over") then n = n + 1 end end
-        for u in pairs(s.units) do
-            if ESC and ESC.recycleQ then ESC.recycleQ[#ESC.recycleQ + 1] = { unit = u, at = os.clock() + 3, why = "the host's dive over" } end
+        local id, n, q = whole(f[3], 1, 99999), 0, 0
+        for _, d in ipairs(divesOf(s, id)) do
+            for _, e in ipairs(s.held) do
+                if e.dive == d.id and not e.gone and not e.ending then e.ending = "the host's dive over"; endStep(e, os.clock()); n = n + 1 end
+            end
+            for u in pairs(d.units) do
+                if ESC and ESC.recycleQ then ESC.recycleQ[#ESC.recycleQ + 1] = { unit = u, at = os.clock() + 3, why = "the host's dive over" }; q = q + 1 end
+            end
+            d.units, d.on = {}, false
         end
-        s.units, s.diveOn = {}, false
-        log(string.format("dive: the host's dive over after %d blasts here; %d of this game's own left finished off", s.blasts, n))
+        log(string.format("dive: the host's dive %s over after %d blasts here; %d of this game's own finished off, %d units off the list once none is up",
+            tostring(id or "?"), s.blasts, n, q))
     end
 end
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the ZFA-44s' dive"] = function() ZDIVE.d = nil end end

@@ -82,8 +82,8 @@ end
 
 -- Taking the shuttle and its pad off (with RE_SV_ShuttleRemove). That event's LiveSetActiveGameObjectExecution switches
 -- nothing off (a run of 2026-10-24: fired, result 1, and the shuttle, the pad's 9 dummies and its guns were still up
--- every round after), so Lua does it: the shuttle is killed (no longer invincible, MinHealth 0, GameplayStatics.
--- ApplyDamage) so its unit is down and SV_Spawn brings a fresh one next time, and it and everything at the pad
+-- every round after), so Lua does it: the shuttle is killed (sv_core.lua finishUnpaid: ModifyHealth, not ApplyDamage
+-- alone) so its unit is down and SV_Spawn brings a fresh one next time, and it and everything at the pad
 -- (the pad units' objects as spawned, SHUTTLE.pad, and anything else within 1.5 km of SHUTTLE.padAt; not aircraft:
 -- the pad reaches 2 km out) is hidden, without collision, target box, lock or targeting, invincible
 -- and not ticking. The pad's objects come back as they were at the next shuttle round (spawnShuttle: their units are
@@ -122,11 +122,10 @@ function SPC.shuttleTakeOff(padOnly)
         killed = "not killed (SV_ShuttleLaunched is 0)"
         if hide(sh, false) then hidden = hidden + 1 else failed = failed + 1 end
     elseif liveObj(sh) then
-        pcall(function() sh:SetIsInvincible(false) end)
-        pcall(function() sh:SetMinHealth(0.0) end)
-        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
-        local ok = valid(gs) and pcall(function() gs:ApplyDamage(sh, 100000000.0, nil, nil, nil) end)
-        killed = ok and "damage applied" or "ApplyDamage failed"
+        -- ((2026-11-11) Saint Alessia's run: "damage applied" and 1 alive 5 s on: ApplyDamage takes nothing off it,
+        -- sv_core.lua finishUnpaid's ModifyHealth does)
+        local dead, h1, how = finishUnpaid(sh)
+        killed = dead and ("killed (" .. tostring(how) .. ")") or ("NOT killed (health " .. tostring(h1) .. " after ModifyHealth and ApplyDamage)")
         if hide(sh, false) then hidden = hidden + 1 else failed = failed + 1 end
     end
     -- the pad's own objects, as SV_Spawn made them (spawnShuttle), then anything else near the pad

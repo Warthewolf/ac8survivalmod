@@ -318,6 +318,7 @@ local function tableSizes()
         lbSpecials = { LB.co and count(LB.co.specials) or 0, 200 }, succ = { #(M.succ or {}), 24 },
         allyList = { #(M.allyList or {}), 40 }, recycleDue = { #(M.recycleDue or {}), 64 },
         downSince = { St and count(St.since) or 0, 24 },
+        zdDives = { ZDIVE and ZDIVE.d and count(ZDIVE.d.dives) or 0, 8 }, zdHeld = { ZDIVE and ZDIVE.d and #(ZDIVE.d.held or {}) or 0, 64 },
     }
 end
 
@@ -450,7 +451,7 @@ local TYPES = {
     { "join", "wd", { "wd", U1 } },
     { "join", "db", { "db", "500", "the escape" } },
     { "join", "dk", { "dk", "s", "bait", "1", "0", "1", "6" } },
-    { "join", "zd", { "zd", "b", "1000", "2000", "30000", "3" } },
+    { "join", "zd", { "zd", "b", "1000", "2000", "30000", "3", "1" } },   -- ((2026-11-11) its own down, its dive's id)
     { "join", "sb", { "sb", "COMONA", "Hold on.", "4" } },
     { "join", "fh", { "fh", "1", "@CATCH", "12", "1000", "2000" } },
     { "join", "fsx", { "fsx", "fishing", "on", "1", "2", "3" } },
@@ -470,7 +471,10 @@ local TYPES = {
     { "join", "lb", { "lb", "x", HEX }, extra = true },
     { "join", "dk", { "dk", "l", "1", "1", "1" }, extra = true },
     { "join", "dk", { "dk", "c", "1", "down" }, extra = true },
-    { "join", "zd", { "zd", "h", "1", "5" }, extra = true },
+    { "join", "zd", { "zd", "h", "1", "5", "1" }, extra = true },
+    { "join", "zd", { "zd", "v", "3", "1" }, extra = true },
+    { "join", "zd", { "zd", "e", "1" }, extra = true },
+    { "join", "zd", { "zd", "h", "1", "5" }, extra = true },              -- (an older host's: no dive id)
     { "join", "zd", { "zd", "v", "3" }, extra = true },
     { "join", "zd", { "zd", "e" }, extra = true },
     { "join", "ev", { "ev", "RE_SV_AlcnOpenCore", U1 }, extra = true },

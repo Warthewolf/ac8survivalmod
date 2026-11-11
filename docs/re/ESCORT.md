@@ -462,3 +462,46 @@ warn players about VALKA though)"): at each round's end (sv_rounds.lua, after "r
 next round's special then (specialFor keeps its pick for that round: the break's announcement and startRound read the
 same), and for MINDRIPPER or AB.L..IN (warn_kinds; the lightning Anomaly's own charlene_warn) she warns, only once she's
 at Comona. Log lines: `escort subs: ...`, `specials: the <kind> waits for CHARLENE to land at Comona (...)`.
+
+## The ZFA-44s' end (2026-11-11: Saint Alessia's 50-round co-op run of 0.74.36; nothing run in game yet)
+What the logs showed (the host's and Delta's, a joiner): not one of the run's 24 ZFA-44s died in 4.5 h. Every scripted end
+hit them with `GameplayStatics.ApplyDamage(o, 1e8, nil, nil, nil)`, which runs on AC8's AI objects without an error and
+takes no health off (70 "finished off" under the sea, 70 Helios blasts, all 24 at full health at round 51; the shuttle's
+"damage applied" left it 1 alive 5 s on). The survivors went back to escorting, were held again at the next leaving (2,
+4 ... 10 a ship), and sat on the combat zone's east edge (every blast at x 29.9-31.7 km; why is unknown).
+- One finish: sv_core.lua `finishUnpaid(o)` (invincible off, the MinHealth field and SetMinHealth 0, switched on, then
+  `ModifyHealth(-(h / 10 + 1000), nil, true)`, read back; still up: without the damage event, then ApplyDamage last), the
+  route sv_rounds.lua's clean-up killed with in the same run. `ZLAUNCH.finish(e, why, final)` (sv_escort_laser.lua) wraps
+  it for a ZFA-44: ESC.same first (hard rule 59), the host's copies down first; not down and final: switched off
+  (ESC.offObj) and retired (never escorted or held again). Every end goes through it: the dive (ZDIVE.finish), parkedOff,
+  offKill, flightOff (a flight finished, no longer only switched off), ESC.restart, a joiner's own (ownZfaOff: when the
+  host's carrier goes, and its last flight before each forwarded launch, never a parked one: Delta's 24 had stayed up
+  switched off, and that launch had switched off the arm's parked pair it then released, hidden), and the shuttle
+  (SPC.shuttleTakeOff, finishUnpaid alone). A plane a new launch brings out flies again. ModifyHealth on an allied plane
+  is the open question: its log lines say.
+- The dive: a plane counts as gone only once its health reads 0; its blast once (e.blasted), its finish tried 3 times a
+  second apart, then switched off. Each carrier leaving (or sunk: its flight no longer flies on) is a dive of its own, with
+  its id in "zd": `h <ship> <round> <dive>`, `v <count> <dive>`, `b <x> <y> <z> <its down> <dive>`, `e <dive>` (an older
+  host's without it: every dive); its own callout, start line, "over" and units' recycle. The dive's clock (dive_s) starts
+  once its target is in its reach (its speed, speed_kmh while it reads slow, x dive_s) or approach_s after its first
+  target; a held plane escorts the player nearest it until it dives. The callouts of a second are one (both ships, 20
+  blasts).
+- holdHull: while it holds a hull, the ship's ZFA-44s (not the dive's) are finished off again every 5 s; 60 s after the
+  dive's last one it gives up, said once: the hull and the ship's STORE slot stay held (nothing frees the slot without
+  SV_Recycle, never with planes up).
+- The cover: only while the plane's carrier is on station (a held one until its dive); never one the dive took or that
+  couldn't be finished. Every pos_log_s (30 s) each plane up is logged where it is, on every game.
+- Log lines: `carrier: a ZFA-44 finished off (<why>): its health read 0 after ModifyHealth (damage event), ...` (the first
+  each level), `carrier: a ZFA-44 <id> (<why>) could not be finished (health N after ModifyHealth and ApplyDamage):
+  switched off`, `carrier: <why>: N parked ZFA-44s of ship i finished off under the sea (N by damage event)[; k could not
+  be (health ...): switched off], ...`, `carrier: <why>: its flight <unit>: N ZFA-44s finished off, k switched off`,
+  `carrier: <ship> sunk ...; N ZFA-44s of its flight kept for their dive or finished off`, `carrier: <who> (<why>): N
+  ZFA-44s of its launchers still up 60 s on, finished off every 5 s: given up; ...`, `carrier: VAMPIRES <unit> <plane> at
+  (x, y) km z m, v km/h, health h (escorting | held for its dive | diving | its carrier gone | this game's own | switched
+  off: it couldn't be finished)`, `dive: a ZFA-44 of dive k onto the nearest enemy aircraft, d km off (about s at v
+  km/h; r km in its 40 s)`, `dive: Helios blast n (...) ...: N enemy aircraft down, M ... hurt (dive k: T down); its ZFA-44
+  down | NOT down yet (health N): tried again`, `dive: over (dive k, ship i): ...`, `dive: the host's dive k over ...`,
+  `special: shuttle and pad off: the shuttle killed (damage event) | NOT killed (health N after ModifyHealth and
+  ApplyDamage); ...`. The per-round `allies: ... at round N's level` lines show whether the 24 are still the same ones.
+- Checks: tools/checks/dive_test.sh, escort_test.sh, pad_test.sh (ApplyDamage stubbed as the no-op it is in game; the old
+  code fails them), coop_guard_test.sh (the "zd" rows with their dive ids).
