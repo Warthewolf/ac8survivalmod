@@ -85,6 +85,7 @@ test build: a key bound twice logs `test: Ctrl+<key> is bound twice`, a key name
 | Ctrl+L | THE TANACORN with her 16 gun mounts live (BP_SV_Tani_HULLLIVE: each a child actor on its own rows, ordered 2.5 s after she appears) 5 km ahead, broadside; a line a part at +2 s and +8 s, its health and aim every 5 s for 2 minutes (test; TANI=1 builds: their world data) | sv_tanicorn.lua |
 | Ctrl+B | GEOFON's V-break look (T1): the Ford 3.5 km ahead, its two meshes posed as a carrier broken in a V, then parting; again: off (test) | sv_fleet.lua |
 | Ctrl+G | GEOFON's stages (T2): the Ford 4 km ahead; again: 20 % of its health off a press, its fires, smoke and list at 66 % and 33 % (test) | sv_fleet.lua |
+| Ctrl+N | INVINCIBLE FLEET's fleet (WP7): its 15 ships at their course start ~30 km north-west of the runway, in formation, sailing in; their lines every 10 s; again: off (test) | sv_fleet.lua |
 
 THE ESCORT's T0 and carrier keys were Ctrl+F1 / F2 (the tactical items' keys: both ran on a press) and THE DECOY's were
 Ctrl+PAGE_UP / PAGE_DOWN / HOME, now THE FESTIVAL's, the arc's step and GONE FISHIN''s; the lightning Anomaly's

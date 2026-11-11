@@ -864,6 +864,7 @@ def build_events(stock_ep):
     build_escort(g, flag, stock_ep)          # THE ESCORT and the ZFA-44 cargo ships (ESC_* / CARGO_* / ZFA_*)
     build_decoy(g, flag, stock_ep)           # THE DECOY (DECOY_*)
     build_tanicorn(g, stock_ep)              # THE TANICORN's test mount's engagement order (TANI_*)
+    build_fleet(g, flag, stock_ep)           # THE INVINCIBLE FLEET's ships: orders and lanes (IF_*)
     return g
 
 
@@ -1388,7 +1389,7 @@ def write_records(g, z, prefix_props_bytes):
 # Each imports every name above (from survival_events import *) and comes back here whole. A part already loaded on its
 # own would come back empty: import survival_events, never a part.
 for _part in ('survival_events_specials', 'survival_events_squads', 'survival_events_festival',
-              'survival_events_escort'):
+              'survival_events_escort', 'survival_events_fleet'):
     assert _part not in sys.modules, f'import survival_events (it loads its parts), not {_part} on its own'
 del _part
 from survival_events_specials import *   # noqa: E402,F401,F403  LCAC, Ladons, Alicorn, Anomaly, AB.L..IN, VALKA
@@ -1417,3 +1418,4 @@ INT_FLAGS += ['SV_SpRocketEscA', 'SV_SpRocketEscB']        # a rocket's climb fi
 from survival_events_squads import *     # noqa: E402,F401,F403  orders, ace moves, Wolf, director, tells, allies, AWACS
 from survival_events_festival import *   # noqa: E402,F401,F403  GONE FISHIN', THE FESTIVAL (adds its flags)
 from survival_events_escort import *     # noqa: E402,F401,F403  THE ESCORT, the cargo ships, THE DECOY (adds its flags)
+from survival_events_fleet import *      # noqa: E402,F401,F403  THE INVINCIBLE FLEET's ships, names, formation, lanes

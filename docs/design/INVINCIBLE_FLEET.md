@@ -772,7 +772,11 @@ Status: not started. Depends on: WP4, WP5.
   wreck, fires, becomes targetable.
 
 ### WP7. The fleet: ships, names, course
-Status: not started. Depends on: nothing for the ships (alongside); WP5 for GEOFON.
+Status (2026-11-12): first steps built, not yet run in game: docs/design/INVINCIBLE_FLEET_WP7.md (the research: which
+classes Survival's world data has, Mission 22's enemy fleet never spawned; the 15 one-ship units SV_Unit_IF<Key>, the 13
+named ships on their own model and hull rows, the rings, the course lanes, Ctrl+N's test and its lines). Still to do: the
+supply ship, GEOFON's deck and AEGIR, the allies, the names in subtitles.ini, the builder shared with the Spaceport's.
+Depends on: nothing for the ships (alongside); WP5 for GEOFON.
 - **Composition** (a first draft; every count a setting, as the Spaceport's; ~16 ships + the Tanicorn to start, and
   measure: the Spaceport's 27 ships / ~110 objects ran [V: 0.73.39]):
 

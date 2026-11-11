@@ -15,8 +15,18 @@
 #     slots on dimmed copies of the _DAM instances), a system that ended spawned again, the 5 s lines, the last press to 0
 #     (SetMinHealth), down, its systems off 30 s on and destroyed; Ctrl+B with it up takes it off first;
 #   the level torn down: forgotten;
-# then a release's copy of the parts (tools/strip_test_only.py): sv_fleet.lua only its header, every part still loading
-# (lua_load_test.sh).
+#   WP7, the fleet (Ctrl+N, 2026-11-12): CFG.specials.fleet's 15 ships; IFLEET.setup at the main menu waiting for the allies'
+#     rows, then the model rows, the turret rows (a weapon on the Spaceport fleet's fire control where it has a clone, else its
+#     stock one; the fleet's search), the Spaceport's rows the fleet names, the hulls, the names and classes, its line, once a
+#     session; a row missing: said, no fleet; Ctrl+N refused outside a run, before the rows are in, on a joiner; the fleet
+#     spawned 3 a step at its units' own spots (no pose) with spawningUnit set, a leftover recycled first, each ship's spawn
+#     and up lines (hull and parts by class, its box), the fleet-up line (km and bearing from the runway and you) and its
+#     callout; the 10 s lines (GEOFON's place, speed, heading; the others' km from GEOFON and m off their spot), the weapons
+#     line (a launch by a part, a shell of a part's, nothing by an object that isn't the fleet's or whose address is
+#     another's now: hard rule 59); a ship not under way 15 s on given its lane again (RE_SV_IFGo<Key>), then under way; a
+#     hull at 0 sunk once; held while paused; again: every ship hidden and recycled (also mid-spawn); the level torn down;
+# then a release's copy of the parts (tools/strip_test_only.py): sv_fleet.lua only its header, no IFLEET in any part,
+# every part still loading (lua_load_test.sh).
 set -e
 cd "$(dirname "$0")"
 HERE=$(pwd)
@@ -231,8 +241,9 @@ check(C ~= nil and C.unit == FORD and #C.stages == 2 and C.look.bow.pitch == 25 
     "CFG.specials.fleet.geofon: the Ford, two stages, the V's angles")
 check(CFG_DEFAULTS.specials.fleet ~= CFG.specials.fleet and same(CFG_DEFAULTS.specials.fleet, CFG.specials.fleet),
     "the same in CFG_DEFAULTS (a copy): shipped, no edit")
-check(type(keys.B) == "function" and type(keys.G) == "function" and #TEST_TICKS == 1 and type(LEVEL_DROPS.fleet) == "function",
-    "Ctrl+B, Ctrl+G, its tick and its level drop")
+check(type(keys.B) == "function" and type(keys.G) == "function" and type(keys.N) == "function" and #TEST_TICKS == 2
+    and TEST_TICKS[2].name == "fleet ships" and type(LEVEL_DROPS.fleet) == "function" and type(LEVEL_DROPS["fleet ships"]) == "function",
+    "Ctrl+B, Ctrl+G, Ctrl+N, their two ticks and level drops")
 local tick = TEST_TICKS[1].fn
 local function run(secs) for _ = 1, math.floor(secs / 0.25 + 0.5) do clock = clock + 0.25; tick(clock) end end
 
@@ -388,6 +399,244 @@ check(find("geofon: Ctrl%+B: GEOFON's stages test taken off first", n0) ~= nil a
 LEVEL_DROPS.fleet("test")
 check(GEO.look == nil and GEO.cur == nil, "forgotten when the level goes")
 
+print("WP7, the fleet: its rows at the main menu (IFLEET.setup)")
+local FC = CFG.specials.fleet
+check(#FC.ships == 15 and FC.ships[1].name == "GEOFON" and FC.ships[1].kind == "ford" and FC.ships[2].name == "RAVEN"
+    and FC.ships[2].right_m == 600 and #FC.turret_rows == 13 and FC.formation.course_yaw == 45,
+    "CFG.specials.fleet: 15 ships (GEOFON first, RAVEN 600 m off its beam), 13 turret rows, the course in")
+-- the game's tables: rows by name; a row's fire-control ids FName-like (ToString), as the game hands them to Lua
+local function fnameV(s) return setmetatable({ v = s }, { __index = { ToString = function(self) return self.v end } }) end
+local function tbl(name) return { name = name, rows = {} } end
+local T = { npc = tbl("DT_NPC"), mine = tbl("DT_SV_NpcRows"), mt = tbl("DT_NPC_Model"), mr = tbl("DT_SV_ModelRows"),
+            fcs = tbl("DT_NPC_FCS"), mods = tbl("DT_NPC_AIModule") }
+local PATHS = { DT_NPC = T.npc, DT_SV_NpcRows = T.mine, DT_NPC_Model = T.mt, DT_SV_ModelRows = T.mr, DT_NPC_FCS = T.fcs,
+                DT_NPC_AIModule = T.mods }
+PROBE_TABLES = { {}, { path = "DT_NPC" } }
+CFG.specials.shuttle = { npc_rows = "DT_SV_NpcRows" }
+ACE = { model_table = "DT_NPC_Model", model_rows = "DT_SV_ModelRows" }
+FCS_TABLE, SEARCH_MODULE = "DT_NPC_FCS", { path = "DT_NPC_AIModule" }
+local loadAsset = loadObject
+for _, t in pairs(T) do PATHS[t.name] = obj("DataTable " .. t.name, t) end
+function loadObject(p) return PATHS[p] or loadAsset(p) end
+local copyRow = function(r) local c = {}; for k, v in pairs(r) do c[k] = v end; return c end
+function dtCall(t, m, a, b)
+    if m == "FindRow" then return true, t.rows[a] end
+    if m == "AddRow" then t.rows[a] = copyRow(b); return true end
+end
+function pin() end
+function gameInstance() return true end
+local texts = {}
+function SV_SetText(k, v) texts[k] = v; return 1 end
+-- Survival's tables as the build makes them: the named ships' model rows, the hulls, Mission 22's turrets (an AA gun on
+-- NPC_FCS_VesselAAGun000, which the Spaceport's fleet has a clone of; a ship gun on NPC_FCS_VesselMS22Artillery000, which it hasn't)
+for _, c in ipairs(FC.ships) do
+    if c.name ~= "" then
+        T.mr.rows["SV_Model_Fleet_" .. c.key] = { GameObjectDisplayName01 = "SV_FleetName_" .. c.key }
+        T.mine.rows["SV_IF_" .. c.key] = { ModelId = fnameV("SV_Model_Fleet_" .. c.key), NpcFCSId0 = fnameV("None") }
+    end
+end
+for _, r in ipairs(FC.turret_rows) do
+    T.mine.rows[r] = { NpcFCSId0 = fnameV(r:find("Art", 1, true) and "NPC_FCS_VesselMS22Artillery000" or "NPC_FCS_VesselAAGun000"),
+                       NpcFCSId1 = fnameV("None") }
+end
+SPORT = { FLEET_ROWS = { "SV_Fleet_Mk15Aegis", "SV_Fleet_FordHull" } }
+T.npc.rows.SV_Fleet_Mk15Aegis = { NpcFCSId0 = fnameV("NPC_FCS_VesselCIWS000_SVA_Fleet") }   -- (in with the allies)
+T.mine.rows.SV_Fleet_FordHull = { NpcFCSId0 = fnameV("None") }                            -- (not: added here)
+T.fcs.rows.NPC_FCS_VesselAAGun000_SVA_Fleet = {}
+T.mods.rows.NPC_AIModule_SV_Fleet = {}
+ALLY, CFG.allies = { setupDone = false }, { enabled = true }
+D = nil
+keys.N()
+check(find("fleet: Ctrl%+N outside a Survival run") ~= nil, "Ctrl+N outside a run: refused")
+D = { now = 5 }
+keys.N()
+check(find("fleet: Ctrl%+N: the fleet's rows aren't in the game's tables %(IFLEET.setup hasn't run") ~= nil and IFLEET.cur == nil,
+    "Ctrl+N before the rows are in: refused")
+IFLEET.setup()
+check(not IFLEET.setupDone and T.npc.rows.SV_IF_Geofon == nil, "the setup waits for the allies' (the Spaceport's turret rows)")
+ALLY.setupDone = true
+n0 = #logs
+IFLEET.setup()
+local rl = find("^fleet: rows at the main menu: ", n0)
+check(rl == "fleet: rows at the main menu: 13 model rows in DT_NPC_Model, 13 hull rows and 13 turret rows in DT_NPC (9 weapons on the "
+    .. "Spaceport fleet's fire control; on their stock one: NPC_FCS_VesselMS22Artillery000; their search NPC_AIModule_SV_Fleet), the "
+    .. "Spaceport's 2 of 2; 20 names and classes set", "its line: " .. tostring(rl))
+check(IFLEET.rowsOk == true and T.mt.rows.SV_Model_Fleet_Geofon ~= nil and T.npc.rows.SV_IF_Raven ~= nil and T.npc.rows.SV_Fleet_FordHull ~= nil
+    and T.mr.rows.SV_Model_Fleet_PicketA == nil, "the models, hulls, turrets and the Spaceport's rows in (no row for an unnamed picket)")
+check(T.npc.rows.SV_IFF_UdalGun.NpcFCSId0 == "NPC_FCS_VesselAAGun000_SVA_Fleet" and T.npc.rows.SV_IFF_UdalArt.NpcFCSId0:ToString() == "NPC_FCS_VesselMS22Artillery000"
+    and T.npc.rows.SV_IFF_UdalGun.NpcAIModuleId == "NPC_AIModule_SV_Fleet" and T.npc.rows.SV_IF_Geofon.NpcAIModuleId == "NPC_AIModule_SV_Fleet",
+    "a turret on the fleet's fire control where it has a clone, else its stock one; the fleet's search on turrets and hulls")
+check(texts.SV_FleetName_Geofon == "GEOFON" and texts.SV_FleetName_Thiassi == "THIASSI" and texts.SV_FleetClass_Ford == "CARRIER"
+    and texts.SV_FleetClass_Krov == "BATTLECRUISER" and texts.SV_FleetName_PicketA == nil, "the names and classes on the boxes")
+local IF0 = IFLEET.setupDone
+IFLEET.setup()
+check(IF0 and count("^fleet: rows at the main menu", n0) == 1, "once a session")
+
+print("WP7, Ctrl+N: the fleet at its course start")
+-- the spawner: each ship at its unit's own spot (GEOFON's course start; the others off it as the build places them), a hull
+-- and its parts by class; a ship sails at 12.5 m/s along the course in once it's on its lane (moving), KOLGA only once its
+-- RE_SV_IFGo comes
+local CLS = { ford = { "BP_VE004_grfd_CP_Ally", "BP_VE004_grfd_mk15_01_CP_Ally", "BP_VE004_grfd_mk15_02_CP_Ally",
+                       "BP_VE004_grfd_mk15_03_CP_Ally", "BP_VE004_grfd_mk15_04_CP_Ally" },
+              aegis = { "BP_VE002_aegs_CP", "BP_VE002_aegs_mk15_01_CP", "BP_VE002_aegs_mk41_CP", "BP_VE002_aegs_mk45_CP", "BP_VE002_artillery_CP" },
+              krov = { "BP_VE005_krov_CP", "BP_VE005_krov_ak130_CP", "BP_VE005_krov_artillery_CP", "BP_VE005_krov_kashtan_07_CP", "BP_VE005_krov_s300fm_CP" },
+              gors = { "BP_VE001_gors_CP", "BP_VE001_gors_3r14_CP", "BP_VE001_gors_a192_CP", "BP_VE001_gors_palma_01_CP", "BP_VE001_gors_palma_02_CP" },
+              udal = { "BP_VE007_udal_CP", "BP_VE007_udal_ak130_01_CP", "BP_VE007_udal_ak130_02_CP" },
+              grig = { "BP_VE015_grig_CP", "BP_VE015_grig_a190_CP", "BP_VE015_grig_ak630_01_CP", "BP_VE015_grig_ak630_02_CP" },
+              boat = { "BP_VE011_mslb_CP", "BP_VE011_mslb_sam_CP" } }
+local G0 = { X = -546200, Y = -2592819 }                -- (GEOFON's spawn: survival_events_fleet.if_fleet)
+local a45 = math.rad(45)
+local SHIPS, fleetSpawns, fleetRecycles, events, alive2, nObj = {}, {}, {}, {}, {}, 0
+local spawnAsset, recycleAsset, aliveAsset = SV_Spawn, SV_Recycle, SV_UnitAlive
+function SV_Spawn(unit, x, ...)
+    local key = unit:match("^SV_Unit_IF(%w+)$")
+    if not key then return spawnAsset(unit, x, ...) end
+    local c
+    for _, s in ipairs(FC.ships) do if s.key == key then c = s end end
+    fleetSpawns[#fleetSpawns + 1] = { unit = unit, x = x, su = spawningUnit }
+    local f, r = c.fwd_m * 100, c.right_m * 100
+    local pos = { X = G0.X + math.cos(a45) * f - math.sin(a45) * r, Y = G0.Y + math.sin(a45) * f + math.cos(a45) * r, Z = 300 }
+    local made = {}
+    for i, cls in ipairs(CLS[c.kind]) do
+        nObj = nObj + 1
+        local o = obj(string.format("%s_C /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.%s_C_%d", cls, cls, nObj),
+            { loc = pos, HealthInternal = i == 1 and 1550 or 200 })
+        o.K2_GetActorLocation = function(self) return { X = self.loc.X, Y = self.loc.Y, Z = self.loc.Z } end
+        o.SetActorHiddenInGame = function(self, v) self.hiddenActor = v end
+        made[#made + 1] = o
+    end
+    for _, o in ipairs(made) do for _, fn in ipairs(notifies["/Script/Live.LiveAIGameObject"] or {}) do fn(o) end end
+    SHIPS[key] = { hull = made[1], parts = { table.unpack(made, 2) }, all = made, moving = key ~= "Kolga", pos = pos, goAt = clock + 2.5 }
+    alive2[unit] = #made
+    return 1
+end
+function SV_UnitAlive(u) if u:find("^SV_Unit_IF") then return alive2[u] or 0 end return aliveAsset(u) end
+function SV_Recycle(u, k)
+    if not u:find("^SV_Unit_IF") then return recycleAsset(u, k) end
+    fleetRecycles[#fleetRecycles + 1] = u
+    alive2[u] = 0
+    return 1
+end
+function SV_Event(name)
+    events[#events + 1] = name
+    if name == "RE_SV_IFGoKolga" then SHIPS.Kolga.moving = true end
+    return 1
+end
+local bullets = {}
+function FindAllOf(cls) if cls == "LiveBullet" then return bullets end return {} end
+local tickN = TEST_TICKS[2].fn
+local function runN(secs)
+    for _ = 1, math.floor(secs / 0.25 + 0.5) do
+        clock = clock + 0.25
+        if not PAUSED then
+            for _, s in pairs(SHIPS) do
+                if s.moving and clock >= s.goAt then s.pos.X, s.pos.Y = s.pos.X + 312.5 * math.cos(a45), s.pos.Y + 312.5 * math.sin(a45) end
+            end
+        end
+        tickN(clock)
+    end
+end
+COOP.client = function() return true end
+keys.N()
+check(find("fleet: Ctrl%+N: the host spawns the fleet") ~= nil and IFLEET.cur == nil, "Ctrl+N on a joiner: refused")
+COOP.client = function() return false end
+alive2.SV_Unit_IFRaven = 5                               -- (a leftover of an earlier test still on the list)
+n0 = #logs
+keys.N()
+check(IFLEET.cur ~= nil and find("^fleet: Ctrl%+N: 15 ships coming up at their course start, 3 every 0.5 s", n0) ~= nil, "Ctrl+N: the fleet comes up")
+runN(0.25)
+check(#fleetSpawns == 3 and fleetSpawns[1].unit == "SV_Unit_IFGeofon" and fleetSpawns[1].x == nil and fleetSpawns[1].su == "SV_Unit_IFGeofon"
+    and fleetSpawns[2].unit == "SV_Unit_IFRaven", "3 a step, GEOFON first, at its unit's own spot (no pose), spawningUnit its unit")
+check(find("^fleet: GEOFON %(SV_Unit_IFGeofon, ford%): 1 up at its course start; 5 objects made$", n0) ~= nil, "its spawn line")
+check(fleetRecycles[1] == "SV_Unit_IFRaven" and find("^fleet: RAVEN %(SV_Unit_IFRaven, aegis%): 1 up at its course start; 5 objects made %(it was "
+    .. "still on the spawner's list, 5 up: SV_Recycle 1 first%)", n0) ~= nil, "a leftover taken off the list first")
+runN(2.5)
+check(#fleetSpawns == 15, "all 15 spawned in 5 steps (" .. #fleetSpawns .. ")")
+local upG = find("^fleet: up: GEOFON ", n0)
+check(upG == "fleet: up: GEOFON (SV_Unit_IFGeofon, ford): hull BP_VE004_grfd_CP_Ally at (-5.46, -25.93) km, health 1550; 4 parts: "
+    .. "BP_VE004_grfd_mk15_01_CP_Ally, BP_VE004_grfd_mk15_02_CP_Ally, BP_VE004_grfd_mk15_03_CP_Ally, BP_VE004_grfd_mk15_04_CP_Ally; its box: GEOFON / CARRIER",
+    "GEOFON's up line: " .. tostring(upG))
+runN(2)
+check(find("^fleet: up: BELUGA %(SV_Unit_IFBeluga, krov%): hull BP_VE005_krov_CP at .* 4 parts: BP_VE005_krov_ak130_CP, BP_VE005_krov_artillery_CP, "
+    .. "BP_VE005_krov_kashtan_07_CP, BP_VE005_krov_s300fm_CP; its box: BELUGA / BATTLECRUISER$", n0) ~= nil
+    and find("^fleet: up: PicketA %(SV_Unit_IFPicketA, boat%): hull BP_VE011_mslb_CP .* 1 part: BP_VE011_mslb_sam_CP; its box: its class's %(unnamed%)", n0) ~= nil,
+    "a cruiser's and a picket's up lines")
+local all = find("^fleet: Ctrl%+N: 15 of 15 ships up", n0)
+check(all and all:find("with 48 parts at their course start %(GEOFON 30%.5 km from the runway, bearing 315 from it%); GEOFON 26%.5 km from "
+    .. "you, bearing 348: fly there$") ~= nil, "the fleet up: " .. tostring(all))
+check(callouts[#callouts] == "TEST: INVINCIBLE FLEET / 15 SHIPS 26 KM, BEARING 348", "its callout: " .. tostring(callouts[#callouts]))
+runN(10)
+local g1 = find("^fleet: %+%d+ s GEOFON: ", n0)
+check(g1 and g1:find("^fleet: %+14 s GEOFON: %(%-5%.%d%d, %-25%.%d%d%) km, 30%.%d km from the runway, 26%.%d km from you, %d+ km/h heading 135, "
+    .. "health 100 %%, 4 of 4 parts up$") ~= nil, "GEOFON's first 10 s line: " .. tostring(g1))
+local r1 = find("^fleet: %+%d+ s RAVEN %(aegis%): ", n0)
+check(r1 and r1:find("0%.60 km from GEOFON, 0 m off its spot, %d+ km/h heading 135, health 100 %%, 4 of 4 parts up$") ~= nil, "RAVEN's: " .. tostring(r1))
+local k1 = find("^fleet: %+%d+ s KOLGA %(udal%): ", n0)
+check(k1 and k1:find("off its spot, 0 km/h heading %-") ~= nil, "KOLGA not moving: " .. tostring(k1))
+check(count("^fleet: %+%d+ s [%w]+ %(%a+%): ", n0) == 14 and find("^fleet: %+%d+ s weapons %(since the last line%): nothing; 0 of 48 parts fired", n0) ~= nil,
+    "a line a ship, the weapons line")
+runN(5)
+check(find("^fleet: %+%d+ s GEOFON under way %(%d+ m from where it came up%)$", n0) ~= nil and SHIPS.Kolga.moving
+    and find("^fleet: %+%d+ s KOLGA not under way 1%d s after its spawn %(0 m%): RE_SV_IFGoKolga fired %(1%)$", n0) ~= nil,
+    "under way 15 s on; KOLGA not: its lane again (RE_SV_IFGoKolga)")
+runN(15.25)
+check(find("^fleet: %+%d+ s KOLGA under way %(%d+ m from where it came up%) after RE_SV_IFGoKolga$", n0) ~= nil, "KOLGA under way after it")
+-- what fired: a launch by RAVEN's VLS (sv_weaponlog.lua's word), a shown shell of GEOFON's Mk 15, one by an object that isn't the
+-- fleet's, and one by an address another object has now (hard rule 59)
+n0 = #logs
+IFLEET.onLaunch(SHIPS.Raven.parts[2].__addr, "BP_wp_vls_mk41")
+IFLEET.onLaunch(SHIPS.Raven.parts[2].__addr, "BP_wp_vls_mk41")
+IFLEET.onLaunch(0x7777, "BP_wp_msl")
+SHIPS.Herne.parts[1].__name = "BP_SomethingElse_C /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_SomethingElse_C_9"
+IFLEET.onLaunch(SHIPS.Herne.parts[1].__addr, "BP_wp_artillery")
+local bl = obj("LiveBullet /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.LiveBullet_1", { bHidden = false, OwningGameObject = SHIPS.Geofon.parts[1] })
+bullets[1] = bl
+runN(10)
+local wl = find("^fleet: %+%d+ s weapons", n0 + 1)
+check(wl and wl:find("GEOFON BP_VE004_grfd_mk15_01_CP_Ally gun; RAVEN BP_VE002_aegs_mk41_CP BP_wp_vls_mk41 x2; 2 of 48 parts fired, you 2%d%.%d km from GEOFON$") ~= nil,
+    "the weapons line: " .. tostring(wl))
+bullets[1] = nil
+-- sunk: a hull at 0, once
+n0 = #logs + 1
+SHIPS.Thiassi.hull.HealthInternal = 0
+runN(1)
+check(find("^fleet: %+%d+ s THIASSI sunk %(its hull at 0%); 3 of its 3 parts still up$", n0) ~= nil, "a hull at 0: sunk")
+runN(10)
+check(count("THIASSI sunk", n0) == 1 and count("^fleet: %+%d+ s THIASSI", n0) == 1, "once, and no more lines for it")
+-- paused: no time passes
+local tBefore = IFLEET.cur.t
+PAUSED = true
+runN(3)
+check(IFLEET.cur.t == tBefore, "held while the game is paused")
+PAUSED = false
+-- again: taken off
+n0 = #logs
+local r0 = #fleetRecycles
+keys.N()
+local off = find("^fleet: Ctrl%+N at %+%d+ s: the fleet taken off: ", n0)
+check(off and off:find("15 units, 62 objects hidden, SV_Recycle 1 x15$") ~= nil and #fleetRecycles == r0 + 15 and IFLEET.cur == nil,
+    "Ctrl+N again: every ship hidden and taken off: " .. tostring(off))
+check(SHIPS.Geofon.hull.hiddenActor == true and SHIPS.Geofon.parts[4].hiddenActor == true and SHIPS.Herne.parts[1].hiddenActor == nil,
+    "hidden, but not an object whose address is another's now")
+-- mid-spawn: taken off with ships not spawned yet; the level torn down
+keys.N()
+runN(0.25)
+n0 = #logs
+keys.N()
+check(find("^fleet: Ctrl%+N at %+%d+ s: the fleet taken off: 3 units %(12 not spawned yet dropped%)", n0) ~= nil, "taken off mid-spawn")
+keys.N()
+LEVEL_DROPS["fleet ships"]("test")
+check(IFLEET.cur == nil, "forgotten when the level goes")
+-- a row missing at the main menu: no Ctrl+N fleet
+IFLEET.setupDone, IFLEET.rowsOk = nil, nil
+T.npc.rows, T.mine.rows.SV_IF_Kolga = {}, nil
+T.mine.rows.SV_Fleet_Mk15Aegis = { NpcFCSId0 = fnameV("NPC_FCS_VesselCIWS000_SVA_Fleet") }
+n0 = #logs
+IFLEET.setup()
+check(IFLEET.rowsOk == false and find("; MISSING: SV_IF_Kolga: no Ctrl%+N fleet$", n0) ~= nil, "a row missing: said, and no fleet")
+keys.N()
+check(IFLEET.cur == nil and find("rows aren't in the game's tables %(the `fleet: rows at the main menu` line says which%)", n0) ~= nil, "Ctrl+N refused")
+
 if fails > 0 then print("fleet test: " .. fails .. " FAILED"); os.exit(1) end
 print("fleet test: all passed")
 EOF
@@ -395,9 +644,13 @@ EOF
 echo "a release's copy (strip_test_only.py)"
 cp -r "$SRC/Scripts" "$SRC/config" "$W/stripped/"
 python -X utf8 -I "$HERE/../strip_test_only.py" "$W"/stripped/Scripts/*.lua "$W"/stripped/config/survival.default.ini > /dev/null
-if grep -n 'GEO = \|testKey(\|CFG.specials.fleet = \|TEST_TICKS\|NotifyOnNewObject' "$W/stripped/Scripts/sv_fleet.lua"; then
+if grep -n 'GEO = \|IFLEET\|testKey(\|CFG.specials.fleet = \|TEST_TICKS\|NotifyOnNewObject' "$W/stripped/Scripts/sv_fleet.lua"; then
     echo "  FAIL code of sv_fleet.lua left in a release's copy (above)"; exit 1
 fi
+if grep -n 'IFLEET' "$W"/stripped/Scripts/*.lua; then
+    echo "  FAIL the Ctrl+N fleet's hooks left in a release's copy (sv_main.lua's setup, sv_weaponlog.lua's launches: above)"; exit 1
+fi
+echo "  ok   no IFLEET in any part of it (sv_main.lua's setup and sv_weaponlog.lua's hook are test-only too)"
 if ! head -1 "$W/stripped/Scripts/sv_fleet.lua" | grep -q '^-- sv_fleet.lua'; then echo "  FAIL its header gone"; exit 1; fi
 echo "  ok   sv_fleet.lua only its header ($(wc -l < "$W/stripped/Scripts/sv_fleet.lua") comment lines)"
 if ! OUT=$(sh lua_load_test.sh "$W/stripped" 2>&1); then echo "$OUT"; echo "  FAIL the release copy doesn't load"; exit 1; fi

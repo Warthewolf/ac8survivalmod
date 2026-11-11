@@ -768,6 +768,7 @@ def build_npc_rows():
                       for r in survival_events.ESCORT_DECOY_NPC_ROWS) + f'; their behaviour set {ally_set[1]}; '
           + f'{survival_events.ZFA_TLS_NPC} ({survival_events.ZFA_NPC} with {survival_events.ZFA_TLS_FCS_ROW} in slot '
           + f'{survival_events.ZFA_TLS_SLOT})')
+    out += fleet_npc_rows(rows, m22)          # (2026-11-12) THE INVINCIBLE FLEET's hulls and turrets (build_survival_fleet)
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)
     dt['rows'] = out
@@ -1515,6 +1516,7 @@ def build_npc_table():
         extra.append((row, hull, npc))
         for t in survival_events.ALLY_TURRETS[key]:
             extra.append(survival_events.ally_turret_rows(t)[:1] + (t,) + survival_events.ally_turret_rows(t)[1:])
+    extra += fleet_mission_rows()             # (2026-11-12) THE INVINCIBLE FLEET's hulls and turrets (build_survival_fleet)
     for new_row, src, npc in extra:
         assert not any(c.isdigit() for c in new_row[-1:] + npc[-1:]), new_row
         row = copy.deepcopy(rows[(src, 0)])
@@ -1625,12 +1627,13 @@ def build_lua_scripts():
 # ---------------------------------------------------------------- the parts (this file's docstring)
 # Each imports every name above (from build_survival import *) and comes back here whole. A part already loaded on its
 # own would come back empty: import build_survival, never a part.
-for _part in ('build_survival_rows', 'build_survival_units', 'build_survival_world'):
+for _part in ('build_survival_rows', 'build_survival_units', 'build_survival_world', 'build_survival_fleet'):
     assert _part not in sys.modules, f'import build_survival (it loads its parts), not {_part} on its own'
 del _part
 from build_survival_rows import *    # noqa: E402,F401,F403  the radio table, the mission / menu rows, the model rows
 from build_survival_units import *   # noqa: E402,F401,F403  the level, MC, phases; unit / path helpers; older specials
 from build_survival_world import *   # noqa: E402,F401,F403  the newer rounds' units; the world data, flags and events
+from build_survival_fleet import *   # noqa: E402,F401,F403  THE INVINCIBLE FLEET's units, lanes and rows (WP7)
 
 
 if __name__ == '__main__':
@@ -1660,4 +1663,5 @@ if __name__ == '__main__':
     check_escort_decoy_build()           # (2026-11-06: THE ESCORT, its cargo ships and THE DECOY read back the same way)
     check_zfa_laser_build()              # (2026-11-07: the ZFA-44s' laser: its arm, rows and interception count)
     check_tanicorn_build()               # (2026-11-11: THE TANACORN's live parts, and the TANI=1 gate on the world data)
+    check_fleet_build()                  # (2026-11-12: THE INVINCIBLE FLEET's ships, lanes, records and rows)
     print('player start', tuple(round(x) for x in START), 'yaw', RUNWAY_YAW)

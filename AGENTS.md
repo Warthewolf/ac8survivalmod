@@ -438,14 +438,16 @@ admin key from the main tree's leaderboard/keys.secret). leaderboard/README.md h
   stdout, the importing checks): tools/survival_events.py keeps the shared names, the record helpers and Graph,
   build_events, write_records and the builders the Lua tests read as text (heavies, jammer, raid pings, Spaceport
   Assault, run-over); its parts survival_events_specials.py (LCAC, Ladons, Alicorn, Anomaly, AB.L..IN, VALKA, shuttle),
-  _squads.py (review orders, ace moves, Wolf, director, tells, Wraith, allies, VOID WATCHER), _festival.py and
-  _escort.py are imported at its end with `from <part> import *`, each starting with `from survival_events import *`.
+  _squads.py (review orders, ace moves, Wolf, director, tells, Wraith, allies, VOID WATCHER), _festival.py,
+  _escort.py and _fleet.py (INVINCIBLE FLEET's ships, 2026-11-12) are imported at its end with `from <part> import *`,
+  each starting with `from survival_events import *`.
   tools/build_survival.py keeps the folders and package helpers, shop rows, menu pages, NPC rows and table, behaviour
   scripts, read-back checks, main and every function reading STOCK / OUT / ROOT / MENU_STOCK* / AI_SRC
-  (menu_pages_test.py sets them on build_survival); its parts build_survival_rows.py, _units.py and _world.py work the
-  same way (run as a script it registers itself as build_survival first). survival_events.X / build_survival.X still
-  name everything: import the main module, never a part (a guard asserts it). A part's functions see the main module's
-  names above the part's import, and earlier parts' names only. The Lua tests grep the two main modules' text
+  (menu_pages_test.py sets them on build_survival); its parts build_survival_rows.py, _units.py, _world.py and _fleet.py
+  work the same way (run as a script it registers itself as build_survival first). survival_events.X / build_survival.X
+  still name everything: import the main module, never a part (a guard asserts it). A part's functions see the main
+  module's names above the part's import, and earlier parts' names only (an earlier part calls a later one's through
+  the main module: `import build_survival` in the function, as build_wd_global calls fleet_units). The Lua tests grep the two main modules' text
   (coop_fire, coop_revive, defences, escort, heavy, roles, spaceport, spweapons), so their anchors stay there.
 
 ## Subtitles file (0.74.24)

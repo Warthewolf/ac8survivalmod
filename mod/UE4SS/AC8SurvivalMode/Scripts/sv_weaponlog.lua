@@ -350,6 +350,9 @@ function WLOG.tick(now)
                             local d = mp and dist(mp, you) or 0
                             R.track[a] = { weapon = weapon, who = who, t0 = now, d0 = d / 1000, minM = d, decoy = false }
                         end
+                        -- TEST ONLY BEGIN ((2026-11-12) sv_fleet.lua's Ctrl+N fleet: what its parts fire)
+                        if IFLEET and IFLEET.onLaunch and oa then pcall(IFLEET.onLaunch, oa, weapon, base) end
+                        -- TEST ONLY END
                         local tr = kind == "other" and SPORT and SPORT.turrets and oa and SPORT.turrets[oa]
                         if tr then
                             tr.shots = (tr.shots or 0) + 1
