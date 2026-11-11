@@ -2,7 +2,9 @@
 -- docs/design/INVINCIBLE_FLEET_RISE_FORD.md). Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order after
 -- sv_spaceport (whose Ford it spawns, SV_Unit_SpFord): a name another part uses is a global of this mod's Lua state, its
 -- own helpers stay local. The whole part is one test-only block, which tools/strip_test_only.py takes out of every
--- release and tester zip (only this header is left there), its settings (CFG.specials.fleet) with it.
+-- release zip, and tools/dev_only.py out of a TESTER zip (package_release.sh TESTER=1, which keeps every other part's test
+-- keys: round 30 is the user's dev install only, AGENTS.md), only this header left there, its settings
+-- (CFG.specials.fleet) with it.
 --
 -- GEOFON is the stock Gerald R. Ford carrier, the Spaceport's SV_Unit_SpFord, spawned here alone (never in a Spaceport
 -- round or with its Ford carried into the retake). Its first two look tests (RISE_FORD.md 5, T1 and T2):
@@ -17,7 +19,7 @@
 --                     every 2 s (for log_s after the move) `geofon: break look +T s: bow (x, y, z) m, stern (x, y, z) m,
 --                     gap G m`: each copy's origin read back in the ship's frame (x along the keel, bow +, y across, z up
 --                     from the ship's origin, its waterline), and G the gap at the waterline between the two flight decks
---                     (deck_m up in each copy) along the keel. A second Ctrl+B takes it off (SV_Recycle).
+--                     (deck_m up in each copy) along the keel. A second Ctrl+B takes it off (OFF.down, below).
 --                     (RISE_FORD.md 1.5's "15 m apart, 215 m parted" are along each copy's own keel: in the ship's frame
 --                     the two decks meet the water ~0 m apart at the break, ~200-220 m once parted 100 m each way and sunk.)
 --   Ctrl+G in a run   T2, GEOFON's stages (RISE_FORD.md 4.2 (a)): the Ford alone 4 km ahead, broadside, its deck off, mortal;
@@ -30,6 +32,27 @@
 --                     spawned again (refire). Logged: `geofon: up: ...`, `geofon: stage N at P % (health H %): F fires, S
 --                     smoke, list R deg over T s, M material slots (<route>)`, every 5 s `geofon: +T s: health ...`, and
 --                     `geofon: down at +T s (<why>)`; its fires off fx_off_s after.
+-- The fleet (WP7's first test, 2026-11-12; docs/design/INVINCIBLE_FLEET_WP7.md): its own units SV_Unit_IF<Key> (never the
+-- Spaceport's), each ship on its lane from its course start ~30 km north-west of the runway (tools/survival_events_fleet.py):
+--   Ctrl+N in a run   the whole fleet (CFG.specials.fleet.ships: GEOFON, RAVEN, the four Aegis, Mission 22's seven cruisers
+--                     and destroyers, two missile-boat pickets) spawned at its course start, 3 every 0.5 s, in formation;
+--                     each ship's spawn and `fleet: up: <NAME> (<unit>, <class>): hull <class> at (x, y) km, health H; N
+--                     parts: ...; its box: <NAME> / <CLASS>`, then `fleet: Ctrl+N: 15 of 15 ships up with N parts at their
+--                     course start (...); GEOFON D km from you, bearing B: fly there`; a ship not under way 15 s on gets its
+--                     lane again (RE_SV_IFGo<Key>); every 10 s a line a ship (GEOFON: its place, km from the runway and you,
+--                     speed, heading, health, parts up; the others: km from GEOFON, m off their formation spot, speed,
+--                     heading, health, parts up) and `fleet: +T s weapons (since the last line): <ship> <part class>
+--                     <weapon> xN; ...; N of M parts fired`; a sunk ship once. Again: the fleet taken off (RE_SV_IFFleetRemove,
+--                     then OFF.down). Its rows go into the game's tables at the main menu (sv_main.lua calls the setup:
+--                     `fleet: rows at the main menu: ...`): with any missing, Ctrl+N refuses. A unit still up from before:
+--                     RE_SV_IFFleetRemove and the fleet held up to clear_s for it, never spawned beside it.
+-- Taking a test's ships off (OFF.down; the review of 8ca3195): never off the spawner's list by force with their objects up
+-- (0.74.11's crash D, 0.74.48's STORE crash: a unit actor destroyed under its living objects), but the way every special's
+-- leftovers go (sv_rounds.lua SPC.cleanUp): each object finished off (else switched off), each unit looked at 2 s on and
+-- taken off the list then, one with nothing of it alive one each 0.5 s (SPC.cleanTick, SPC.recycleLater). A key that would
+-- spawn a unit still being taken off, or still up, refuses (again in a few seconds). The three keys refuse in the landing
+-- STORE (its minigame holds the world's AI: a spawn or a removal there was 0.74.11's and 0.74.48's case), and the fleet's
+-- clock waits there as it does while paused.
 -- Each kept object (the hull, its meshes, its parts, the effects) is checked to be the one captured (its address and its
 -- name, hard rule 59) before anything is done to it; nothing moves while the game is paused (hard rule 60); every call
 -- into the game is in a pcall and a failure is logged (these are look tests: a call the game doesn't take must say so).
@@ -61,11 +84,93 @@ CFG.specials.fleet = {
         },
         test = { ahead_cm = 400000, hit = 0.20, fx_scale = 1, list_step_max = 0.1, refire = true, every_s = 5, fx_off_s = 30 },
     },
+    -- (2026-11-12) WP7, the fleet (Ctrl+N; docs/design/INVINCIBLE_FLEET_WP7.md). The ships as the build makes them
+    -- (tools/survival_events_fleet.py IF_SHIPS, which the build checks this table against): the name on its box ("" an
+    -- unnamed ship, its class's), its Key (unit SV_Unit_IF<Key>, rows SV_IF_<Key> / SV_Model_Fleet_<Key>, its name's key
+    -- SV_FleetName_<Key>, lane SV_Path_IF<Key>, RE_SV_IFGo<Key>), its class, and its spot in GEOFON's frame as the fleet
+    -- sails in (metres ahead, metres to starboard; the lanes keep it in the world's frame: a translation of GEOFON's course)
+    ships = {
+        { name = "GEOFON", key = "Geofon", kind = "ford", fwd_m = 0, right_m = 0 },
+        { name = "RAVEN", key = "Raven", kind = "aegis", fwd_m = 0, right_m = 600 },
+        { name = "CONDOR", key = "Condor", kind = "aegis", fwd_m = 1061, right_m = 1061 },
+        { name = "FINCH", key = "Finch", kind = "aegis", fwd_m = -1061, right_m = 1061 },
+        { name = "SPARROW", key = "Sparrow", kind = "aegis", fwd_m = -1061, right_m = -1061 },
+        { name = "MAGPIE", key = "Magpie", kind = "aegis", fwd_m = 1061, right_m = -1061 },
+        { name = "BELUGA", key = "Beluga", kind = "krov", fwd_m = 3500, right_m = 0 },
+        { name = "KOLGA", key = "Kolga", kind = "udal", fwd_m = 2182, right_m = 2736 },
+        { name = "HERNE", key = "Herne", kind = "grig", fwd_m = -779, right_m = 3412 },
+        { name = "TAISCH", key = "Taisch", kind = "grig", fwd_m = -3153, right_m = 1519 },
+        { name = "THIASSI", key = "Thiassi", kind = "grig", fwd_m = -3153, right_m = -1519 },
+        { name = "LAZULI", key = "Lazuli", kind = "grig", fwd_m = -779, right_m = -3412 },
+        { name = "FENRIS", key = "Fenris", kind = "gors", fwd_m = 2182, right_m = -2736 },
+        { name = "", key = "PicketA", kind = "boat", fwd_m = 5000, right_m = 1000 },
+        { name = "", key = "PicketB", kind = "boat", fwd_m = 5000, right_m = -1000 },
+    },
+    -- each class's second line on the box (its hull row's GameObjectDisplayName02 is SV_FleetClass_<Class>) and the log's
+    classes = { ford = "CARRIER", aegis = "AEGIS", krov = "BATTLECRUISER", gors = "FRIGATE", udal = "DESTROYER",
+                grig = "FRIGATE", boat = "MISSILE BOAT" },
+    -- Mission 22's ships' turrets on Survival's rows (IF_TURRETS' DT_NPC rows, the build checks them; the Ford's and the
+    -- Aegis's fly the Spaceport's, SPORT.FLEET_ROWS): put into DT_NPC at the main menu, each weapon on the Spaceport
+    -- fleet's fire control (<FCS>_SVA_Fleet, sv_allies.lua) where that clone exists, else its stock one (WP9's to make)
+    turret_rows = { "SV_IFF_UdalGun", "SV_IFF_UdalArt", "SV_IFF_GrigArt", "SV_IFF_GrigGunL", "SV_IFF_GrigGunR",
+                    "SV_IFF_GorsVls", "SV_IFF_GorsArt", "SV_IFF_GorsPalmaCiws", "SV_IFF_GorsPalmaGun", "SV_IFF_KrovGun",
+                    "SV_IFF_KrovArt", "SV_IFF_KrovSam", "SV_IFF_KrovVls" },
+    -- Ctrl+N: the ships spawned per_step every gap_s at their course start (their units' own spots, ~30 km north-west of
+    -- the runway: survival_events_fleet.py IF_START_KM), each looked at settle_s after its spawn; a ship not go_s on its
+    -- way moved_m after its spawn gets its lane again (RE_SV_IFGo<Key>); every every_s a line a ship and a weapons line;
+    -- guns_s: how often its parts' shells are looked for (a LiveBullet walk, ~40 ms; 0: never); clear_s: how long the fleet
+    -- waits for ships still up from before to go after RE_SV_IFFleetRemove (the Spaceport's CLEAR_S). course_yaw, runway_cm:
+    -- the course in and the runway's centre (survival_events_fleet.py IF_YAW, IF_RUNWAY), for the lines
+    formation = { per_step = 3, gap_s = 0.5, settle_s = 2, go_s = 15, moved_m = 50, every_s = 10, guns_s = 2, clear_s = 8,
+                  course_yaw = 45, runway_cm = { 1610476, -436143 } },
 }
 -- (set after sv_config_ini.lua took CFG_DEFAULTS: shipped as it is, so no difference the leaderboard's LB.edited or the
 -- co-op settings sync would see)
 if type(CFG_DEFAULTS) == "table" and type(CFG_DEFAULTS.specials) == "table" and type(deepCopy) == "function" then
     CFG_DEFAULTS.specials.fleet = deepCopy(CFG.specials.fleet)
+end
+
+-- The keys' guards and a test's units taken off (the header's "Taking a test's ships off"; GEO's and IFLEET's)
+local OFF = {}
+do
+-- the landing STORE open (sv_coop_sync.lua's inStore: its music held, the STORE's widget shown)
+function OFF.store() return D ~= nil and D.musicHold == 1 and not (LANDW ~= nil and LANDW.wasShown == false) end
+-- SV_UnitAlive in a pcall: the unit's objects alive (0 on an error or with no runtime; -7 is a unit off the list)
+function OFF.alive(unit)
+    if type(SV_UnitAlive) ~= "function" then return 0 end
+    local ok, n = pcall(SV_UnitAlive, unit)
+    return ok and tonumber(n) or 0
+end
+-- in SPC's clean-up checks or its queue off the spawner's list (sv_rounds.lua SPC.cleanQ / SPC.recycleQ)
+function OFF.queued(unit)
+    for _, q in ipairs({ SPC and SPC.cleanQ or {}, SPC and SPC.recycleQ or {} }) do
+        for _, e in ipairs(q) do if type(e) == "table" and e.unit == unit then return true end end
+    end
+    return false
+end
+-- units (names) taken down with their objects objs[unit] = { obj, ... } (each checked by the caller to be the one it
+-- captured: hard rule 59): wake, the living ones switched on first (an inactive object takes no damage: 0.74.48's
+-- ZLAUNCH.parkedOff); each one finished off, else switched off (SPC.cleanUp, mortal: the host's), the units looked at 2 s
+-- on and off the spawner's list then. How many objects it took down, or nil and why
+function OFF.down(units, objs, why, wake)
+    if not (SPC and type(SPC.cleanUp) == "function" and type(SPC.CLEAN_OBJ) == "table") then
+        return nil, "no SPC.cleanUp in this runtime: left as they are"
+    end
+    for _, u in ipairs(units) do
+        local l = { at = os.clock() }
+        for _, o in ipairs(objs[u] or {}) do
+            if wake then
+                local okH, h = pcall(function() return o.HealthInternal end)
+                if not (okH and type(h) == "number" and h <= 0) then pcall(function() o:SetActive(true, false, false) end) end
+            end
+            l[#l + 1] = o
+        end
+        SPC.CLEAN_OBJ[u] = l                              -- (SPC.cleanUp's record of the unit: finished off, no pay)
+    end
+    local ok, n = pcall(SPC.cleanUp, units, why, true, (D and tonumber(D.now)) or 0)
+    if not ok then return nil, "SPC.cleanUp error " .. tostring(n) end
+    return tonumber(n) or 0
+end
 end
 
 -- GEO.look: T1's state, GEO.cur: T2's (each { raw, t, hull, parts, m, ... }); GEO.catching: the objects SV_Spawn is making
@@ -122,18 +227,24 @@ pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
     if l and spawningUnit == FORD and #l < 16 then l[#l + 1] = o end
 end)
 
--- the Ford still on the spawner's list (a test's before, a leftover) taken off before a spawn; what was done, or nil
-local function clearFord(why)
-    local n0 = type(SV_UnitAlive) == "function" and SV_UnitAlive(FORD) or 0
-    if (tonumber(n0) or 0) <= 0 or type(SV_Recycle) ~= "function" then return nil end
-    crumb("geofon: SV_Recycle " .. FORD .. " (" .. why .. ")")
-    local okR, r = pcall(SV_Recycle, FORD, 1)
-    return string.format("%s was still on the spawner's list (%s up): SV_Recycle %s", FORD, tostring(n0),
-        okR and tostring(r) or ("error " .. tostring(r)))
+-- ((the review of 8ca3195, finding 1) until then a Ford still up was forced off the spawner's list here with its objects
+-- up, SV_Recycle(unit, 1), and spawned again beside them) the Ford still being taken off, or still up from before: why
+-- it isn't spawned now, or nil
+local function fordBusy()
+    if OFF.queued(FORD) then return FORD .. " is still being taken off (its clean-up's look, or its turn off the spawner's list)" end
+    local n0 = OFF.alive(FORD)
+    if n0 > 0 then
+        return string.format("%s is still up from before (%d up) and none of its objects are known here: not spawned beside it, "
+            .. "nor forced off the spawner's list with them up (a new run takes it off)", FORD, n0)
+    end
+    return nil
 end
 
--- the Ford spawned alone ahead_cm in front of you, broadside: its state { raw = the objects made, t = 0, ... } or nil, why
+-- the Ford spawned alone ahead_cm in front of you, broadside: its state { raw = the objects made, kept = each one kept
+-- (keep) as SV_Spawn returns, t = 0, ... } or nil, why
 local function spawnFord(ahead, tag)
+    local busy = fordBusy()
+    if busy then return nil, busy .. " (again in a few seconds)" end
     local p = playerLocation()
     if not p then return nil, "no player location" end
     local yaw = 0
@@ -145,21 +256,21 @@ local function spawnFord(ahead, tag)
     local x = p.X + math.cos(math.rad(yaw)) * ahead
     local y = p.Y + math.sin(math.rad(yaw)) * ahead
     local face = (yaw + 90) % 360                         -- (broadside to you: its whole length in view)
-    local cleared = clearFord(tag)
-    if cleared then log("geofon: " .. tag .. ": " .. cleared) end
     GEO.catching = {}
     spawningUnit = FORD
     local ok, r = pcall(SV_Spawn, FORD, x, y, gc().z_cm, face)
     spawningUnit = nil
     local raw = GEO.catching
     GEO.catching = nil
+    local kept = {}                                       -- (each object as it was made: its address and name, hard rule 59)
+    for _, o in ipairs(raw) do local e = keep(o); if e then kept[#kept + 1] = e end end
     r = ok and tonumber(r) or -5
     if ALIVE and ALIVE.spawned then pcall(ALIVE.spawned, FORD, r) end
     local said = r > 0 and (r .. " up") or ("not spawned (" .. tostring((SV_ERR and SV_ERR[r]) or (ok and r) or "error") .. ")")
     log(string.format("geofon: %s, %s at (%.0f, %.0f, %g) facing %.0f (you at yaw %.0f): %s; %d objects made%s; its deck off (the "
         .. "Spaceport round's only)", tag, FORD, x, y, num(gc().z_cm, 50), face, yaw, said, #raw, ok and "" or (": " .. tostring(r))))
     if r <= 0 then return nil, said end
-    return { raw = raw, t = 0, last = os.clock(), tries = 0, x = x, y = y, face = face }
+    return { raw = raw, kept = kept, t = 0, last = os.clock(), tries = 0, x = x, y = y, face = face }
 end
 
 -- (a mesh) its attach parent, or nil
@@ -188,9 +299,8 @@ end
 -- isRoot, onOther }. The `geofon: up` line. True once the hull is found.
 local function capture(G)
     local hull, parts, other = nil, {}, 0
-    for _, o in ipairs(G.raw or {}) do
-        local e = keep(o)
-        if e then
+    for _, e in ipairs(G.kept or {}) do                   -- (as they were made: still each one, hard rule 59)
+        if same(e) then
             local low = e.name:lower()
             if not low:find("grfd", 1, true) then other = other + 1
             elseif low:find("mk15", 1, true) then parts[#parts + 1] = e
@@ -289,23 +399,19 @@ local function fxGone(G, all)
     G.fx = keepFx
 end
 
--- a test's Ford taken off: hidden at once, then off the spawner's list (SV_Recycle: its actors destroyed a moment later)
+-- a test's Ford taken off (OFF.down: every object made at its spawn that's still the one, its switched-off parts on again
+-- first, finished off; the unit off the spawner's list from 2 s on, never by force with them up: the review of 8ca3195,
+-- finding 1, where it was hidden and forced off at once, SV_Recycle(unit, 1)); what was done
 local function takeOff(G, why)
     fxOff(G, 0)
     fxGone(G, true)
-    local hidden, list = 0, { G.hull }
-    for _, e in ipairs(G.parts or {}) do list[#list + 1] = e end
-    for _, e in pairs(list) do
-        if same(e) and pcall(function() e.obj:SetActorHiddenInGame(true) end) then hidden = hidden + 1 end
-    end
+    local l = {}
+    for _, e in ipairs(G.kept or {}) do if same(e) then l[#l + 1] = e.obj end end
     if COOP and COOP.host and COOP.host() and COOP.removeNow then pcall(COOP.removeNow, FORD) end
-    local r = "no SV_Recycle in this runtime"
-    if type(SV_Recycle) == "function" then
-        crumb("geofon: SV_Recycle " .. FORD .. " (" .. why .. ")")
-        local okR, x = pcall(SV_Recycle, FORD, 1)
-        r = "SV_Recycle " .. (okR and tostring(x) or ("error " .. tostring(x)))
-    end
-    return string.format("%d of its objects hidden, %s", hidden, r)
+    crumb("geofon: " .. FORD .. " taken down (" .. why .. ")")
+    local n, err = OFF.down({ FORD }, { [FORD] = l }, "GEOFON's test taken off (" .. why .. ")", true)
+    return n and string.format("%d of its %d objects finished off or switched off (off the spawner's list from 2 s on)", n, #l)
+        or tostring(err)
 end
 
 ---------------------------------------------------------------------------------------------------- T1, the V-break look
@@ -535,13 +641,17 @@ local function lookTick(now)
     local c = gc().look
     if not L.posed then
         local ok = settled(L, "break look")
-        if ok == false then GEO.look = nil end
+        if ok == false then                               -- (given up: what it made taken off, never left up)
+            GEO.look = nil
+            log("geofon: break look given up: " .. takeOff(L, "its capture given up"))
+        end
         if ok then lookSetup(L); L.nextLine = L.t end
         if not L.posed then return end
     end
     if not same(L.hull) then
-        log(string.format("geofon: break look over at +%.0f s: its hull is gone", L.t))
         GEO.look = nil
+        log(string.format("geofon: break look over at +%.0f s: its hull is gone (the rest taken off: %s)", L.t,
+            takeOff(L, "its hull gone")))
         return
     end
     local moveEnd = L.poseT + num(c.move_after_s, 0) + num(c.part_s, 25)
@@ -675,7 +785,7 @@ local function stagesTick(now)
     local t = gc().test
     if not G.ready then
         local ok = settled(G, "stages")
-        if ok == false then GEO.cur = nil; return end
+        if ok == false then GEO.cur = nil; log("geofon: stages given up: " .. takeOff(G, "its capture given up")); return end
         if not ok then return end
         G.ready = true
         hudCallout("TEST: GEOFON", "4 KM AHEAD (CTRL+G: -20 %)")
@@ -780,7 +890,21 @@ local function canRun(key)
     return true
 end
 
+-- (the review of 8ca3195, finding 4) the landing STORE open: refused, a spawn or a removal alike (its minigame holds the
+-- world's AI: an object it never froze, or one taken down under it, was 0.74.11's and 0.74.48's case)
+local function inStore(key)
+    if not OFF.store() then return false end
+    log("geofon: " .. key .. " in the STORE: refused (its minigame holds the world's AI): again once you've taken off")
+    return true
+end
+-- a spawn refused: its callout (the Ford still being taken off: again in a few seconds)
+local function notSpawned(title, key, why)
+    hudCallout(title, tostring(why):find("still being taken off", 1, true) and "STILL GOING: AGAIN IN A FEW SECONDS" or "NOT SPAWNED")
+    log("geofon: " .. key .. ": " .. tostring(why))
+end
+
 testKey("B", "sv_fleet.lua's GEOFON V-break look (T1)", function()
+    if inStore("Ctrl+B") then return end
     if GEO.look then
         local L = GEO.look
         GEO.look = nil
@@ -789,16 +913,17 @@ testKey("B", "sv_fleet.lua's GEOFON V-break look (T1)", function()
         return
     end
     if not canRun("Ctrl+B") then return end
-    if GEO.cur then
+    if GEO.cur then                                       -- (the Ford is busy then: this press only takes it off)
         log(string.format("geofon: Ctrl+B: GEOFON's stages test taken off first (%s)", takeOff(GEO.cur, "Ctrl+B")))
         GEO.cur = nil
     end
     local L, why = spawnFord(num(gc().look.ahead_cm, 350000), "Ctrl+B (the V-break look)")
-    if not L then hudCallout("TEST: GEOFON V-BREAK", "NOT SPAWNED"); log("geofon: Ctrl+B: " .. tostring(why)); return end
+    if not L then notSpawned("TEST: GEOFON V-BREAK", "Ctrl+B", why); return end
     GEO.look = L
 end)
 
 testKey("G", "sv_fleet.lua's GEOFON stages (T2)", function()
+    if inStore("Ctrl+G") then return end
     local G = GEO.cur
     if G and G.ready and not G.down and same(G.hull) then hit(G); return end
     if G and not G.ready then log("geofon: Ctrl+G: GEOFON is still coming up"); return end
@@ -807,9 +932,12 @@ testKey("G", "sv_fleet.lua's GEOFON stages (T2)", function()
         log(string.format("geofon: Ctrl+G: the V-break look taken off first (%s)", takeOff(GEO.look, "Ctrl+G")))
         GEO.look = nil
     end
-    if G then fxOff(G, 0); fxGone(G, true); GEO.cur = nil end   -- (one sunk: a new GEOFON, the old one recycled at its spawn)
+    if G then                                             -- (one sunk: what's left of it taken off; a new one once it's gone)
+        GEO.cur = nil
+        log(string.format("geofon: Ctrl+G: the GEOFON before taken off first (%s)", takeOff(G, "Ctrl+G: a new GEOFON")))
+    end
     local N, why = spawnFord(num(gc().test.ahead_cm, 400000), "Ctrl+G (GEOFON's stages)")
-    if not N then hudCallout("TEST: GEOFON", "NOT SPAWNED"); log("geofon: Ctrl+G: " .. tostring(why)); return end
+    if not N then notSpawned("TEST: GEOFON", "Ctrl+G", why); return end
     N.fx, N.done, N.roll, N.refired = {}, {}, 0, 0
     GEO.cur = N
 end)
@@ -820,6 +948,511 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet", fn = function(now)
 end }
 if type(LEVEL_DROPS) == "table" then                       -- (the level's objects: forgotten, none of them touched)
     LEVEL_DROPS["fleet"] = function() GEO.look, GEO.cur, GEO.catching = nil, nil, nil end
+end
+end
+
+---------------------------------------------------------------------------------------------------- WP7: the fleet (Ctrl+N)
+-- IFLEET.setup (sv_main.lua, at the main menu, as the TANICORN's rows since 0.74.46: the spawner reads the rows as the level
+-- loads): the named ships' model rows into DT_NPC_Model, Mission 22's ships' turret rows and the named hulls into DT_NPC
+-- (from DT_SV_ModelRows / DT_SV_NpcRows; the Spaceport's turret rows too if the allies' setup didn't put them in), the
+-- turrets' weapons on the Spaceport fleet's fire control where it has a clone, the names' and classes' texts.
+-- IFLEET.cur: Ctrl+N's fleet { t, queue (ships not spawned yet), ships = { sh ... }, by = { [address] = { sh, cls, e } },
+-- fired, guns, firedParts (since the last weapons line), left / clearUntil (units still up from before it waits for) };
+-- each sh { raw (the objects caught at its spawn), kept (each kept as SV_Spawn returned), hull, parts, ... }.
+-- IFLEET.onLaunch: sv_weaponlog.lua's word on each launch.
+IFLEET = { cur = nil, rowsOk = nil }
+do
+local TURRET = { "mk15", "mk41", "mk45", "artillery", "_sam", "aagun", "ak130", "ak630", "a190", "a192", "3r14", "palma",
+                 "kashtan", "s300" }
+local function fc() return CFG.specials.fleet end
+local function fm() return CFG.specials.fleet.formation end
+local function joiner() return COOP ~= nil and COOP.client ~= nil and COOP.client() == true end
+local function paused() return type(gamePaused) == "function" and gamePaused(survivalPC) == true end
+local function num(v, d) v = tonumber(v); return v or d end
+local function title(k) return k:sub(1, 1):upper() .. k:sub(2) end
+local function classOf(o) return ((nameOf(o):match("([%w_]+)$") or "?"):gsub("_C_%d+$", ""):gsub("_C$", "")) end
+local function turretClass(cls)
+    local low = cls:lower()
+    for _, k in ipairs(TURRET) do if low:find(k, 1, true) then return true end end
+    return false
+end
+-- a live object kept between ticks: { obj, addr, name, cls } (hard rule 59: same() before every use)
+local function keep(o)
+    local a = o ~= nil and liveAddr(o)
+    if not a then return nil end
+    return { obj = o, addr = a, name = nameOf(o), cls = classOf(o) }
+end
+local function same(e) return e ~= nil and liveAddr(e.obj) == e.addr and nameOf(e.obj) == e.name end
+local function at(e)
+    if not same(e) then return nil end
+    local ok, v = pcall(function() return e.obj:K2_GetActorLocation() end)
+    if ok and v then return { X = num(v.X, 0), Y = num(v.Y, 0), Z = num(v.Z, 0) } end
+    return nil
+end
+local function hp(e)
+    if not same(e) then return nil end
+    local ok, h = pcall(function() return e.obj.HealthInternal end)
+    return (ok and type(h) == "number") and h or nil
+end
+local function d2(a, b) return math.sqrt((a.X - b.X) ^ 2 + (a.Y - b.Y) ^ 2) end
+local function compass(dx, dy) return (math.deg(math.atan(dy, dx)) + 90) % 360 end   -- (heading = 90 + yaw: COMONA_MAP.md 1)
+local function label(sh) return sh.name ~= "" and sh.name or sh.key end
+
+-- a row of `src` in `dst` (in already, or added): the row in dst, or nil
+local function addRow(dst, src, row)
+    local _, have = dtCall(dst, "FindRow", row)
+    if have == nil then
+        local _, r = dtCall(src, "FindRow", row)
+        if r == nil then return nil end
+        dtCall(dst, "AddRow", row, r)
+        _, have = dtCall(dst, "FindRow", row)
+    end
+    return have
+end
+-- a turret row's weapons on the Spaceport fleet's fire control where sv_allies.lua made its clone (<id>_SVA_Fleet), the ids
+-- with none kept in stock{}; its search the fleet's AI module where there is one: how many it put on the fleet's
+local function fleetFcs(have, fcs, module, stock)
+    local on = 0
+    for i = 0, 5 do
+        pcall(function()
+            local id = have["NpcFCSId" .. i]:ToString()
+            if id ~= "None" and id ~= "" and not id:find("_SVA", 1, true) then
+                local _, cl = dtCall(fcs, "FindRow", id .. "_SVA_Fleet")
+                if cl ~= nil then have["NpcFCSId" .. i] = FName(id .. "_SVA_Fleet"); on = on + 1 else stock[id] = true end
+            end
+        end)
+    end
+    if module then pcall(function() have.NpcAIModuleId = FName(module) end) end
+    return on
+end
+function IFLEET.setup()
+    if IFLEET.setupDone or not gameInstance() then return end
+    IFLEET.tries = (IFLEET.tries or 0) + 1
+    -- (after the allies' setup: the Spaceport's turret rows the Ford's and the Aegis's parts fly, and their fire control)
+    local allies = ALLY ~= nil and (ALLY.setupDone or not (CFG.allies and CFG.allies.enabled))
+    if not allies and IFLEET.tries < 40 then return end
+    local npc, mine = loadObject(PROBE_TABLES[2].path), loadObject(CFG.specials.shuttle.npc_rows)
+    local mt, mr, fcs = loadObject(ACE.model_table), loadObject(ACE.model_rows), loadObject(FCS_TABLE)
+    if not (npc and mine and mt and mr and fcs) then
+        if IFLEET.tries >= 40 then
+            IFLEET.setupDone, IFLEET.rowsOk = true, false
+            log("fleet: rows at the main menu: the row tables didn't load: no Ctrl+N fleet this session")
+        end
+        return
+    end
+    IFLEET.setupDone = true
+    for _, t in ipairs({ npc, mine, mt, mr, fcs }) do pin(t, nameOf(t)) end
+    local module, mods = nil, loadObject(SEARCH_MODULE.path)
+    if mods then
+        pin(mods, nameOf(mods))
+        local _, m = dtCall(mods, "FindRow", "NPC_AIModule_SV_Fleet")
+        if m ~= nil then module = "NPC_AIModule_SV_Fleet" end
+    end
+    local missing, stock, nM, nH, nT, nS, onFleet = {}, {}, 0, 0, 0, 0, 0
+    for _, c in ipairs(fc().ships) do                          -- (the models first: the hulls name them)
+        if c.name ~= "" then
+            if addRow(mt, mr, "SV_Model_Fleet_" .. c.key) then nM = nM + 1 else missing[#missing + 1] = "SV_Model_Fleet_" .. c.key end
+        end
+    end
+    for _, row in ipairs(fc().turret_rows) do
+        local have = addRow(npc, mine, row)
+        if have then nT = nT + 1; onFleet = onFleet + fleetFcs(have, fcs, module, stock) else missing[#missing + 1] = row end
+    end
+    local sp = (SPORT and SPORT.FLEET_ROWS) or {}
+    for _, row in ipairs(sp) do                               -- (the Spaceport's: in already with the allies)
+        if addRow(npc, mine, row) then nS = nS + 1 else missing[#missing + 1] = row end
+    end
+    for _, c in ipairs(fc().ships) do                          -- (the hulls last: they name the rows above)
+        if c.name ~= "" then
+            local have = addRow(npc, mine, "SV_IF_" .. c.key)
+            if have then
+                nH = nH + 1
+                if module then pcall(function() have.NpcAIModuleId = FName(module) end) end
+            else missing[#missing + 1] = "SV_IF_" .. c.key end
+        end
+    end
+    local names = 0
+    local function setText(key, text)                         -- (in a pcall, as every call into the game: review finding 5)
+        local okT, r = pcall(SV_SetText, key, text)
+        if okT and r == 1 then names = names + 1 end
+    end
+    if type(SV_SetText) == "function" then
+        for _, c in ipairs(fc().ships) do
+            if c.name ~= "" then setText("SV_FleetName_" .. c.key, c.name) end
+        end
+        for k, text in pairs(fc().classes) do setText("SV_FleetClass_" .. title(k), text) end
+    end
+    local st = {}
+    for id in pairs(stock) do st[#st + 1] = id end
+    table.sort(st)
+    IFLEET.rowsOk = #missing == 0
+    log(string.format("fleet: rows at the main menu: %d model rows in DT_NPC_Model, %d hull rows and %d turret rows in DT_NPC (%d "
+        .. "weapons on the Spaceport fleet's fire control; on their stock one: %s; their search %s), the Spaceport's %d of %d; "
+        .. "%d names and classes set%s", nM, nH, nT, onFleet, #st > 0 and table.concat(st, ", ") or "none", module or "stock", nS,
+        #sp, names, #missing > 0 and ("; MISSING: " .. table.concat(missing, ", ") .. ": no Ctrl+N fleet") or ""))
+end
+
+-- every LiveAIGameObject the spawner makes for the ship being spawned (as SPORT.shipObjs)
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
+    local F = IFLEET.cur
+    local sh = F and F.catching
+    if sh and spawningUnit == sh.unit and #sh.raw < 16 then sh.raw[#sh.raw + 1] = o end
+end)
+
+-- the ships, in the build's order: each one's spot off GEOFON in the world (cm: its lane is GEOFON's course moved by it)
+local function fleetList()
+    local yaw = math.rad(num(fm().course_yaw, 45))
+    local ux, uy, rx, ry = math.cos(yaw), math.sin(yaw), -math.sin(yaw), math.cos(yaw)
+    local out = {}
+    for _, c in ipairs(fc().ships) do
+        local f, r = num(c.fwd_m, 0) * 100, num(c.right_m, 0) * 100
+        out[#out + 1] = { name = c.name, key = c.key, kind = c.kind, unit = "SV_Unit_IF" .. c.key, go = "RE_SV_IFGo" .. c.key,
+                          off = { X = ux * f + rx * r, Y = uy * f + ry * r }, raw = {}, kept = {}, parts = {}, goTries = 0 }
+    end
+    return out
+end
+
+-- ((the review of 8ca3195, finding 1) a unit still up is no longer forced off the spawner's list here and spawned again
+-- beside its objects: Ctrl+N holds the fleet for it, F.left, the tick below)
+local function spawnShip(F, sh)
+    F.catching = sh
+    spawningUnit = sh.unit
+    local ok, r = pcall(SV_Spawn, sh.unit)                              -- (no pose: its unit's own spot, its course start)
+    spawningUnit = nil
+    F.catching = nil
+    for _, o in ipairs(sh.raw) do                       -- (each object as it was made: its address and name, hard rule 59)
+        local e = keep(o)
+        if e then sh.kept[#sh.kept + 1] = e end
+    end
+    local n = ok and num(r, -5) or -5
+    if ALIVE and ALIVE.spawned then pcall(ALIVE.spawned, sh.unit, n) end
+    sh.r, sh.at = n, F.t
+    local said = n > 0 and (n .. " up") or ("not spawned (" .. tostring((SV_ERR and SV_ERR[n]) or (ok and n) or ("error " .. tostring(r))) .. ")")
+    log(string.format("fleet: %s (%s, %s): %s at its course start; %d objects made", label(sh), sh.unit, sh.kind, said, #sh.raw))
+end
+
+-- settle_s after its spawn: its hull (its one object that isn't a turret's class) and parts, its up line
+local function settle(F, sh)
+    sh.settled = true
+    local hulls = {}
+    for _, e in ipairs(sh.kept) do                        -- (as they were made: still each one, hard rule 59)
+        if same(e) then
+            if turretClass(e.cls) then sh.parts[#sh.parts + 1] = e else hulls[#hulls + 1] = e end
+        end
+    end
+    sh.hull = hulls[1]
+    for _, e in ipairs(sh.parts) do F.by[e.addr] = { sh = sh, cls = e.cls, e = e } end
+    if sh.hull then F.by[sh.hull.addr] = { sh = sh, cls = "hull", e = sh.hull } end
+    local p = sh.hull and at(sh.hull)
+    sh.home, sh.lastP, sh.lastT = p, p, F.t
+    sh.max = sh.hull and hp(sh.hull) or nil
+    local cls = {}
+    for _, e in ipairs(sh.parts) do cls[#cls + 1] = e.cls end
+    log(string.format("fleet: up: %s (%s, %s): hull %s%s, health %s; %d part%s: %s%s; its box: %s", label(sh), sh.unit, sh.kind,
+        sh.hull and sh.hull.cls or "NOT found", p and string.format(" at (%.2f, %.2f) km", p.X / 1e5, p.Y / 1e5) or "",
+        sh.max and string.format("%.0f", sh.max) or "?", #sh.parts, #sh.parts == 1 and "" or "s",
+        #cls > 0 and table.concat(cls, ", ") or "none", #hulls > 1 and string.format(" (%d more objects not turrets: %s first)",
+        #hulls - 1, sh.hull.cls) or "", sh.name ~= "" and (sh.name .. " / " .. tostring(fc().classes[sh.kind])) or "its class's (unnamed)"))
+end
+
+local function partsUp(sh)
+    local up = 0
+    for _, e in ipairs(sh.parts) do local x = hp(e); if x and x > 0 then up = up + 1 end end
+    return up
+end
+
+local function allUp(F)
+    F.allSaid = true
+    local up, nParts = 0, 0
+    for _, sh in ipairs(F.ships) do
+        if sh.hull then up = up + 1 end
+        nParts = nParts + #sh.parts
+    end
+    local G = F.ships[1]
+    local g = G.hull and at(G.hull)
+    local you, rw = playerLocation(), fm().runway_cm
+    local km, brg = nil, nil
+    if g and you then km, brg = d2(g, you) / 1e5, compass(g.X - you.X, g.Y - you.Y) end
+    log(string.format("fleet: Ctrl+N: %d of %d ships up with %d parts at their course start%s; %s", up, #F.ships, nParts,
+        g and string.format(" (GEOFON %.1f km from the runway, bearing %03.0f from it)", d2(g, { X = rw[1], Y = rw[2] }) / 1e5,
+            compass(g.X - rw[1], g.Y - rw[2])) or "",
+        km and string.format("GEOFON %.1f km from you, bearing %03.0f: fly there", km, brg) or "GEOFON's place NOT read"))
+    hudCallout("TEST: INVINCIBLE FLEET", km and string.format("%d SHIPS %.0f KM, BEARING %03.0f", up, km, brg) or string.format("%d SHIPS UP", up))
+end
+
+local function sunkTick(F, sh)
+    if sh.sunk or not sh.hull then return end
+    local why
+    if not same(sh.hull) then why = "its hull gone"
+    else
+        local h = hp(sh.hull)
+        if h and h <= 0 then why = "its hull at 0" end
+    end
+    if why then
+        sh.sunk = true
+        log(string.format("fleet: +%.0f s %s sunk (%s); %d of its %d parts still up", F.t, label(sh), why, partsUp(sh), #sh.parts))
+    end
+end
+
+-- under way go_s after its spawn (moved_m from where it settled), else its lane again (RE_SV_IFGo<Key>: the records of its
+-- appearance, which a unit spawned while you're at the airfield's menu may not get), at most twice
+local function goTick(F, sh)
+    if sh.sunk or sh.underway or sh.goDone or not (sh.hull and sh.home) then return end
+    if F.t < sh.at + num(fm().go_s, 15) * (sh.goTries + 1) then return end
+    local p = at(sh.hull)
+    local moved = p and d2(p, sh.home) / 100 or 0
+    if moved >= num(fm().moved_m, 50) then
+        sh.underway = true
+        log(string.format("fleet: +%.0f s %s under way (%.0f m from where it came up)%s", F.t, label(sh), moved,
+            sh.goTries > 0 and (" after " .. sh.go) or ""))
+        return
+    end
+    if sh.goTries >= 2 then
+        sh.goDone = true
+        log(string.format("fleet: +%.0f s %s NOT under way (%.0f m from where it came up) after %s twice: its lane isn't taken", F.t,
+            label(sh), moved, sh.go))
+        return
+    end
+    sh.goTries = sh.goTries + 1
+    local r = "n/a"
+    if type(SV_Event) == "function" then                 -- (in a pcall: an error here would stop every later ship's look)
+        local okE, x = pcall(SV_Event, sh.go)
+        r = okE and tostring(x) or ("error " .. tostring(x))
+    end
+    log(string.format("fleet: +%.0f s %s not under way %.0f s after its spawn (%.0f m): %s fired (%s)", F.t, label(sh), F.t - sh.at,
+        moved, sh.go, r))
+end
+
+-- sv_weaponlog.lua's word: a weapon shown by the object at oa (its owner); one of the fleet's parts: counted
+function IFLEET.onLaunch(oa, weapon)
+    local F = IFLEET.cur
+    local who = F and oa and F.by[oa]
+    if not (who and same(who.e)) then return end
+    local k = string.format("%s %s %s", label(who.sh), who.cls, tostring(weapon))
+    F.fired[k] = (F.fired[k] or 0) + 1
+    F.firedParts[oa] = true
+end
+-- the fleet's guns: a shown LiveBullet one of its parts owns (the Spaceport's turret watch's way; a walk, ~40 ms)
+local function gunsTick(F)
+    local okB, list = pcall(FindAllOf, "LiveBullet")
+    for _, b in ipairs(okB and list or {}) do
+        if liveAddr(b) then
+            local okH, hidden = pcall(function() return b.bHidden end)
+            if okH and hidden == false then
+                local okO, o = pcall(function() return b.OwningGameObject end)
+                local a = okO and liveAddr(o)
+                local who = a and F.by[a]
+                if who and same(who.e) then
+                    F.guns[string.format("%s %s gun", label(who.sh), who.cls)] = true
+                    F.firedParts[a] = true
+                end
+            end
+        end
+    end
+end
+
+local function lines(F)
+    local G = F.ships[1]
+    local g = G.hull and not G.sunk and at(G.hull) or nil
+    local you, rw = playerLocation(), fm().runway_cm
+    for _, sh in ipairs(F.ships) do
+        if sh.settled and not sh.sunk then
+            local p = sh.hull and at(sh.hull)
+            local h = sh.hull and hp(sh.hull)
+            local share = (h and sh.max and sh.max > 0) and string.format("%.0f %%", 100 * h / sh.max) or "?"
+            local speed, hdg = "?", "-"
+            if p and sh.lastP and F.t > sh.lastT then
+                local m = d2(p, sh.lastP)
+                speed = string.format("%.0f km/h", m / 1e5 / ((F.t - sh.lastT) / 3600))
+                if m > 100 then hdg = string.format("%03.0f", compass(p.X - sh.lastP.X, p.Y - sh.lastP.Y)) end
+            end
+            if sh == G then
+                log(string.format("fleet: +%.0f s %s: %s, %s from the runway, %s from you, %s heading %s, health %s, %d of %d parts up",
+                    F.t, label(sh), p and string.format("(%.2f, %.2f) km", p.X / 1e5, p.Y / 1e5) or "its place NOT read",
+                    p and string.format("%.1f km", d2(p, { X = rw[1], Y = rw[2] }) / 1e5) or "?",
+                    (p and you) and string.format("%.1f km", d2(p, you) / 1e5) or "?", speed, hdg, share, partsUp(sh), #sh.parts))
+            else
+                local spot = g and { X = g.X + sh.off.X, Y = g.Y + sh.off.Y }
+                log(string.format("fleet: +%.0f s %s (%s): %s from GEOFON, %s off its spot, %s heading %s, health %s, %d of %d parts up",
+                    F.t, label(sh), sh.kind, (p and g) and string.format("%.2f km", d2(p, g) / 1e5) or "?",
+                    (p and spot) and string.format("%.0f m", d2(p, spot) / 100) or "?", speed, hdg, share, partsUp(sh), #sh.parts))
+            end
+            if p then sh.lastP, sh.lastT = p, F.t end
+        end
+    end
+    local t, nParts, fired = {}, 0, 0
+    for k, n in pairs(F.fired) do t[#t + 1] = string.format("%s x%d", k, n) end
+    for k in pairs(F.guns) do t[#t + 1] = k end
+    table.sort(t)
+    for _, sh in ipairs(F.ships) do
+        if not sh.sunk then
+            for _, e in ipairs(sh.parts) do
+                nParts = nParts + 1
+                if F.firedParts[e.addr] then fired = fired + 1 end
+            end
+        end
+    end
+    log(string.format("fleet: +%.0f s weapons (since the last line): %s; %d of %d parts fired%s", F.t,
+        #t > 0 and table.concat(t, "; ") or "nothing", fired, nParts,
+        (g and you) and string.format(", you %.1f km from GEOFON", d2(g, you) / 1e5) or ""))
+    F.fired, F.guns, F.firedParts = {}, {}, {}
+end
+
+-- RE_SV_IFFleetRemove fired (each unit's LiveDestroyUnitExecution, Mission 22's despawn, as the Spaceport's
+-- RE_SV_SpFleetRemove: a co-op joiner's copies go with it): what it said
+local function removeFire(why)
+    if type(SV_Event) ~= "function" then return "not fired (no SV_Event)" end
+    crumb("fleet: RE_SV_IFFleetRemove (" .. why .. ")")
+    local okE, r = pcall(SV_Event, "RE_SV_IFFleetRemove")
+    return okE and tostring(r) or ("error " .. tostring(r))
+end
+
+-- the fleet taken off: RE_SV_IFFleetRemove, then OFF.down over every spawned ship's objects still the ones made (a ship not
+-- settled yet too). ((the review of 8ca3195, finding 1) until then every ship was hidden and forced off the spawner's list
+-- at once, SV_Recycle(unit, 1): its turrets live under the hidden hull, its unit actor destroyed 30 s on under them, a
+-- third press spawning a second fleet beside the first.) What was done
+local function takeOff(F, why)
+    local units, objs, nObj = {}, {}, 0
+    for _, sh in ipairs(F.ships) do
+        if (sh.r or 0) > 0 then
+            units[#units + 1] = sh.unit
+            if COOP and COOP.host and COOP.host() and COOP.removeNow then pcall(COOP.removeNow, sh.unit) end
+            local l = {}
+            for _, e in ipairs(sh.kept) do if same(e) then l[#l + 1] = e.obj end end
+            objs[sh.unit], nObj = l, nObj + #l
+        end
+    end
+    local dropped = #F.queue > 0 and string.format(" (%d not spawned yet dropped)", #F.queue) or ""
+    if #units == 0 then return "no ship up" .. dropped end
+    local ev = removeFire(why)
+    local n, err = OFF.down(units, objs, "the fleet test taken off (" .. why .. ")")
+    return string.format("%d units%s, RE_SV_IFFleetRemove %s; %s", #units, dropped, ev, n and string.format("%d of their %d "
+        .. "objects still up finished off or switched off (each unit off the spawner's list from 2 s on)", n, nObj) or tostring(err))
+end
+
+-- (Ctrl+N with ships of the fleet still up from before: RE_SV_IFFleetRemove fired at the press) the fleet held up to
+-- clear_s for them to go (the Spaceport's CLEAR_S), looked at every gap_s; one still up then is never spawned beside it
+-- (dropped from this fleet, said). F.left nil once they're gone or dropped.
+local function clearTick(F, c)
+    F.leftAt = F.t + num(c.gap_s, 0.5)
+    local still = {}
+    for u in pairs(F.left) do if OFF.alive(u) > 0 then still[#still + 1] = u end end
+    table.sort(still)
+    if #still == 0 then
+        F.left = nil
+        log(string.format("fleet: +%.0f s the ships up from before are gone: the fleet comes up", F.t))
+    elseif F.t >= F.clearUntil then
+        local drop, q, names = {}, {}, {}
+        for _, u in ipairs(still) do drop[u] = true end
+        for _, sh in ipairs(F.queue) do
+            if drop[sh.unit] then sh.dropped = true; names[#names + 1] = label(sh) else q[#q + 1] = sh end
+        end
+        F.queue, F.left = q, nil
+        log(string.format("fleet: +%.0f s %d ships still up %g s after RE_SV_IFFleetRemove (%s): not spawned beside them, the "
+            .. "fleet comes up without them", F.t, #still, num(c.clear_s, 8), table.concat(names, ", ")))
+    else
+        local keepL = {}
+        for _, u in ipairs(still) do keepL[u] = true end
+        F.left = keepL
+    end
+end
+
+function IFLEET.tick(now)
+    local F = IFLEET.cur
+    if not F then return end
+    local dt = math.min(1, math.max(0, now - (F.last or now)))
+    F.last = now
+    if paused() or OFF.store() then return end           -- (the STORE's time not counted either: review finding 4)
+    F.t = F.t + dt
+    local c = fm()
+    if F.left and F.t >= (F.leftAt or 0) then clearTick(F, c) end
+    if not F.left and #F.queue > 0 and F.t >= F.nextAt then
+        for _ = 1, math.max(1, math.floor(num(c.per_step, 3))) do
+            local sh = table.remove(F.queue, 1)
+            if not sh then break end
+            spawnShip(F, sh)
+        end
+        F.nextAt = F.t + num(c.gap_s, 0.5)
+    end
+    local pending = #F.queue
+    for _, sh in ipairs(F.ships) do
+        if sh.at and not sh.settled and F.t >= sh.at + num(c.settle_s, 2) then settle(F, sh) end
+        if not sh.settled and not sh.dropped then pending = pending + 1 end
+        sunkTick(F, sh)
+        goTick(F, sh)
+    end
+    if pending == 0 and not F.allSaid then
+        allUp(F)
+        F.lineAt = F.t + num(c.every_s, 10)
+    end
+    if not F.allSaid then return end
+    if num(c.guns_s, 2) > 0 and F.t >= (F.gunsAt or 0) then
+        F.gunsAt = F.t + num(c.guns_s, 2)
+        local okG, errG = pcall(gunsTick, F)
+        if not okG then logOnce("fleet guns", "fleet: the guns' look failed: " .. tostring(errG)) end
+    end
+    if F.t >= (F.lineAt or 0) then
+        F.lineAt = F.t + num(c.every_s, 10) - 0.05
+        lines(F)
+    end
+end
+
+local function canRun()
+    if not (D and D.now) or not nativeReady() then log("fleet: Ctrl+N outside a Survival run"); return false end
+    if joiner() then log("fleet: Ctrl+N: the host spawns the fleet (you're a joiner)"); return false end
+    if not IFLEET.rowsOk then
+        log("fleet: Ctrl+N: the fleet's rows aren't in the game's tables (" .. (IFLEET.setupDone and "the `fleet: rows at the main "
+            .. "menu` line says which" or "IFLEET.setup hasn't run: start the game to its main menu with this build") .. "): not spawned")
+        return false
+    end
+    return true
+end
+
+testKey("N", "sv_fleet.lua's INVINCIBLE FLEET formation test (WP7)", function()
+    if OFF.store() then                                   -- (the review of 8ca3195, finding 4: on and off alike)
+        log("fleet: Ctrl+N in the STORE: refused (its minigame holds the world's AI; " .. (IFLEET.cur and "the fleet stays as it is"
+            or "nothing spawned") .. "): again once you've taken off")
+        return
+    end
+    local F = IFLEET.cur
+    if F then
+        IFLEET.cur = nil
+        log(string.format("fleet: Ctrl+N at +%.0f s: the fleet taken off: %s", F.t, takeOff(F, "Ctrl+N")))
+        hudCallout("TEST: INVINCIBLE FLEET", "OFF")
+        return
+    end
+    if not canRun() then return end
+    local ships = fleetList()
+    local busy = {}                                       -- (the fleet before still being taken off: OFF.down's)
+    for _, sh in ipairs(ships) do if OFF.queued(sh.unit) then busy[#busy + 1] = label(sh) end end
+    if #busy > 0 then
+        log(string.format("fleet: Ctrl+N: the fleet before is still being taken off (%d units: %s): not spawned, again in a few seconds",
+            #busy, table.concat(busy, ", ")))
+        hudCallout("TEST: INVINCIBLE FLEET", "STILL GOING: AGAIN IN A FEW SECONDS")
+        return
+    end
+    local q, left, names = {}, {}, {}
+    for _, sh in ipairs(ships) do
+        q[#q + 1] = sh
+        if OFF.alive(sh.unit) > 0 then left[sh.unit] = true; names[#names + 1] = label(sh) end
+    end
+    F = { t = 0, queue = q, ships = ships, by = {}, fired = {}, guns = {}, firedParts = {}, nextAt = 0 }
+    if #names > 0 then                                    -- (still up from before: taken off, the fleet held for them)
+        for u in pairs(left) do if COOP and COOP.takenOff then pcall(COOP.takenOff, u) end end
+        F.left, F.clearUntil = left, num(fm().clear_s, 8)
+        log(string.format("fleet: Ctrl+N: %d of the fleet's ships still up from before (%s): taken off (RE_SV_IFFleetRemove %s); "
+            .. "the fleet waits up to %g s for them, never spawned beside them", #names, table.concat(names, ", "),
+            removeFire("Ctrl+N: still up from before"), F.clearUntil))
+    end
+    IFLEET.cur = F
+    log(string.format("fleet: Ctrl+N: %d ships coming up at their course start, %d every %g s (their lanes in from north-west of "
+        .. "the runway; again: taken off)", #ships, math.floor(num(fm().per_step, 3)), num(fm().gap_s, 0.5)))
+    hudCallout("TEST: INVINCIBLE FLEET", string.format("%d SHIPS COMING UP", #ships))
+end)
+
+TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet ships", fn = function(now) IFLEET.tick(now) end }
+if type(LEVEL_DROPS) == "table" then                       -- (the level's objects: forgotten, none of them touched)
+    LEVEL_DROPS["fleet ships"] = function() IFLEET.cur = nil end
 end
 end
 -- TEST ONLY END

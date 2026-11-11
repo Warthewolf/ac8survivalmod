@@ -327,6 +327,8 @@ def build_model_rows():
     set_prop(row[2], idx['MaxHealth'], 'MaxHealth', ('raw', 'Float', struct.pack('<f', survival_events.ZFA_DRONE_HEALTH)))
     assert survival_events.fname(survival_events.ZFA_DRONE_MODEL_SV)[2] == 0
     out.append(((survival_events.ZFA_DRONE_MODEL_SV, 0), row))
+    import build_survival                    # ((2026-11-12) THE INVINCIBLE FLEET's named ships: a later part's, build_survival_fleet)
+    out += build_survival.fleet_model_rows(crow, idx)
     for n in (survival_events.TANI_BP, survival_events.TANI_BP_CLASS, survival_events.TANI_HULL_BP,
               survival_events.TANI_HULL_BP_CLASS, survival_events.TANI_HULL_LIVE_BP,
               survival_events.TANI_HULL_LIVE_BP_CLASS): z.nb.add(n)

@@ -913,6 +913,8 @@ def build_wd_global():
     escort_units(units, used_ids, z, top_number, v)        # THE ESCORT (survival_events.ESC_*)
     cargo_units(units, used_ids, z, top_number, v)         # its unlock: the ZFA-44 cargo ships (CARGO_* / ZFA_*)
     decoy_units(units, used_ids, z, top_number)            # THE DECOY (survival_events.DECOY_*)
+    import build_survival                                  # (THE INVINCIBLE FLEET, survival_events.IF_*: a later part's)
+    build_survival.fleet_units(units, used_ids, z, top_number, v)
     names = {[p for p in u[2] if p[1] == 'Name'][0][3][1] for u in units}
     assert set(survival_events.KEEP_AT_START) <= names, set(survival_events.KEEP_AT_START) - names
     assert set(survival_events.BOMBERS) <= names, set(survival_events.BOMBERS) - names

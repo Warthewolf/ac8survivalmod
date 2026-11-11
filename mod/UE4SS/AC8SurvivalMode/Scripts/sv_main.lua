@@ -541,6 +541,10 @@ local function probeTick(tick)
             local okTs, errTs = pcall(TANI.setup)
             if not okTs then log("tanicorn: setup error " .. tostring(errTs)); TANI.setupDone = true end
         end
+        if IFLEET and IFLEET.setup then                  -- ((2026-11-12) INVINCIBLE FLEET's ships' rows: sv_fleet.lua, Ctrl+N)
+            local okFl, errFl = pcall(IFLEET.setup)
+            if not okFl then log("fleet: setup error " .. tostring(errFl)); IFLEET.setupDone, IFLEET.rowsOk = true, false end
+        end
         -- TEST ONLY END
         if COOP and COOP.syncSetup then                  -- (the co-op stand-ins' damage-0 rows, sv_coop.lua)
             local okCs, errCs = pcall(COOP.syncSetup)
