@@ -604,3 +604,49 @@ object index -1-63, a whole level, the joiner's spawn queue a unit once and 256 
 dropped at SV_UnitAlive -2, "bd" / "dn" ids whole 1-65535, "ev" names of 64 characters at most, pendKeep 512 units.
 coop_guard_test.lua has no known defect left: a new finding fails it.
 
+
+## 11. The host leaving, a dropped joiner hosting alone, the leaderboard's copies (2026-11-11; not yet run in game)
+From Saint Alessia's 50-round run of 2026-11-10 (host) and Delta's logs (joiner). NotMexi's game, its own link dropped,
+took the run over alone by host migration (third in line: every player ahead is a joiner that never answers) and hosted
+~3 minutes beside her; its copy of the run (round ~35) reached the leaderboard first, and her round-51 copy was answered
+`{"ok":true,"duplicate":true}` and lost (leaderboard/README.md has the D1 query). When she left to the main menu, nobody
+was told: Delta waited 30 s of silence, a link back from her menu restarted that wait and took his 105 copies down for her
+empty picture (ten AA GUN / SAM SITE / CIWS LOST callouts), and a hit in that wait ended his run.
+- **The host's "left" notice** (sv_coop_migration.lua COOP.hostLeaving, from sv_main.lua runLeft): once the host is out
+  of Survival's level (another level on, not while a reload it announced with `hl|<secs>` is on; Survival's level
+  loading again takes it back), every joiner gets `hl|<round>|left` (reliable): `coop: out of Survival's level: every
+  joiner told this game left its run in round <r> (hl|<r>|left; <n> linked)`. A joiner starts its migration at once
+  (`coop: migration: the host (<name>) left its run in round <r> (hl|left)`, callout `<HOST> (HOST) LEFT THE RUN`); a
+  link back from that host keeps the copies and asks no picture (`the copies here kept, no picture asked`); an empty
+  picture from it takes nothing down. A round that isn't a whole 0-9999 is refused (`the host's "left" notice refused`).
+- **No picture without a run**: a host whose D is nil answers a joiner's `jn` with the "left" notice (it left its run) or
+  nothing (its level loading: its run's start sends `rs|n`): `coop: player <n> asked for the whole picture; this game
+  has no run (...): no picture sent`.
+- **A dropped joiner hosting alone**: a migration started by silence looks for the old host's Steam ID too
+  (`the old host looked for too`), so a game whose own link was the one that dropped takes the old host's hellos and
+  joins it again (migStepBack). The old host (runtime/coop.c CoOnHello) answers another host's hello with its own while
+  it has players linked (once a warning, every 10 s), its discovery sending none once its room is full; the sys line
+  carries the other host's name (`sys|samerole|<name>`; the native line ends `(answered with this host's hello: ...)`).
+  On a host in a run with players the callout is `<NAME> HOSTS TOO / THEIR LINK DROPPED: THEIR GAME REJOINS YOU`. After
+  a "left" notice nobody steps back (`another host heard, but the old host left its run: this game stays the host`).
+- **Torn-down copies aren't LOST**: killAllCopies (link back, migration, resync, new run) marks the time (COOP.tornAll);
+  a joiner's defence gone within 20 s of it logs `allies: <label> (<unit>) gone here in round <r> with every copy (<why>):
+  not lost`.
+- **A withdrawn flight** (`RE_SV_FlightOff_NN`, an ace break-off or the Spaceport's capture): a joiner takes its copies
+  down (torn: unpaid; one never bound too) and queues its unit off the spawner list 2 s on (M.recycleDue, once a unit,
+  64 at most): `coop: the host took <unit> off (...): <w> of its copies here off, unpaid; <n> taken down here, its unit
+  off this game's spawner list 2 s on`. Before, its next spawn took 6 tries and a forced recycle (~8 s late), 16 times.
+- **The full reliable queue's line** (coop.c CoQueueDropsSay): the player as every other line numbers them (k + 1) and
+  their name, the drops counted, one line a second: `coop: reliable queue to player <n> (<name>) full (256 messages
+  waiting for their acks): <k> message(s) dropped since the last such line`.
+- **The leaderboard** (sv_leaderboard.lua, leaderboard/src/index.js): every game that ends the run as its host sends its
+  copy (the `co.sent` gate is gone; lb|x is only logged), a takeover nobody joined marked `"takeover":true`
+  (`sent marked as a lone takeover`); the Worker keeps the furthest copy (higher round; at the same round a copy that
+  isn't a lone takeover, else the longer time; the stored host in the new squad; never an unchecked build over a
+  checked one), the shorter one archived as `superseded:<time>`. A duplicate answer to a co-op copy is logged as NOT
+  stored (`co-op run <id> NOT stored: ...`), its summary `NOT ON THE BOARD...`, and from a Worker before 2026-11-11 (no
+  `stored` in its answer) the copy is kept in refused_runs.txt (`<at>\t<tries>\tdup\t<body>`) to send again.
+Tests: coop_migration_test (the notice, its round refused, no step back after it, a link back after it, the host's
+side), coop_guard_test (`hl|51|left`, a `jn` without a run), resync_test (an empty picture after it), aces_test (the
+withdrawn flight), defences_test (no LOST), coop_test (the answer to another host's hello, the queue's lines),
+leaderboard_test and the Worker's (the copies).

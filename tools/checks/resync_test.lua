@@ -386,6 +386,20 @@ else
     check(M.rep and M.rep.done and has(line("coop: the host's picture (1 flights; no end of the host's picture in 10 s", from), "the flights it didn't name kept")
           and M.cunits[U7] and up(world[U7][1]) and bound(111, world[U6][1]),
           "join: 10 s on: settled without it, the flight it didn't name kept, the one it named spawned")
+
+    ------------------------------------------------------------------------------------------------ a host that left its run
+    -- ((2026-11-11) Delta's of 2026-11-10: the host's co-op at its main menu answered with an empty picture, and every copy
+    -- went) an empty picture from a host that said it left its run (hl|<round>|left) takes nothing down here
+    print("join: an empty picture from a host that left its run: the copies kept")
+    from = #logs + 1
+    M.hostLeft = { round = 5, at = clock }
+    inbox[#inbox + 1] = "0|rs|j"
+    inbox[#inbox + 1] = "0|rz|0"
+    run(1)
+    check(M.rep and M.rep.done and M.cunits[U7] and up(world[U7][1]) and M.cunits[U6] and up(world[U6][1])
+          and line("the host's picture is empty and it left its run (round 5): the copies here kept", from),
+          "join: an empty picture (rz|0) from a host that left its run: both flights kept, logged")
+    M.hostLeft = nil
 end
 print(fails == 0 and (ROLE .. ": all passed") or (ROLE .. ": " .. fails .. " FAILED"))
 if fails > 0 then for i = math.max(1, #logs - 25), #logs do print("    log: " .. logs[i]) end end

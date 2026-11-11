@@ -477,20 +477,90 @@ check(cp == '{"players":4,"squad":[{"pilot":"Wolfie","aircraft":"su57","air":5,"
     .. '{"pilot":"OMEGA 2","aircraft":"adfx02","air":2,"ground":0,"revives":0}]}', "its squad: the new host first, the old one with what they did: " .. cp)
 check(b:match('"time_s":(%d+)') and tonumber(b:match('"time_s":(%d+)')) >= 890, "its time from the first host's start")
 check(b:find('"round":7,', 1, true), "its round the first host's (7), though this game's is 6 till the round starts again")
+check(not cp:find('"takeover"', 1, true) and logged("a player joined this game, the host by migration"),
+    "(2026-11-11) a player joined the host by migration: its copy isn't marked a lone takeover")
 keep("ok", "a host by migration's co-op run", b)
 
--- a run its first host sent already: a host by migration doesn't send it again
+-- ((2026-11-11) Saint Alessia's 50-round run: NotMexi's game, its own link dropped, took the run over alone and sent its
+-- copy first; hers was answered duplicate and lost.) A run its first host sent already: a host by migration nobody
+-- joined sends its copy too (the leaderboard keeps the furthest), marked as a lone takeover. (Before: not sent at all.)
 posts, results, replies, LB.jobs = {}, {}, {}, {}
 COOP.role, COOP.slot, LB.co = "join", 1, nil
 M.roster = { [0] = { name = "Omega", sid = SID[1] }, [1] = { name = "Wolf", sid = SID[2] } }
 for _, w in ipairs(migrWire) do LB.coopMsg(fields(w.msg)) end
 LB.coopMsg(fields("lb|x|" .. hostId))
 LB.coopTakeover()
+check(logged("it sends the run too (its first host sent its copy already: the leaderboard keeps the furthest)"),
+    "the takeover of a run its first host sent: it sends its copy too, logged")
 COOP.role, COOP.slot = "host", 0
 M.roster = { [0] = { name = "Wolf", sid = SID[2] } }
 newRun(); LB.poll(); LB.finish("died")
-check(#posts == 0 and LB.show.state == "host" and logged("its first host sent already (before host migration); not sent again"),
-    "a host by migration of a run its first host sent: not sent again")
+b = lastPost(); cp = coopPart(b) or ""
+check(#posts == 1 and b:find('"run_id":"' .. hostId .. '"', 1, true) and logged("this copy sent too")
+    and LB.show.state == "sending", "a host by migration of a run its first host sent: its copy sent too, under the run's id")
+check(cp:find('],"takeover":true}', 1, true) and logged("nobody joined it (its own link may be the one that dropped")
+    and logged("sent marked as a lone takeover"), "nobody joined it: sent marked \"takeover\":true, logged: " .. cp:sub(-40))
+keep("ok", "a lone takeover's co-op run", b)
+-- the leaderboard's answers to a co-op copy: a duplicate from one that keeps the first copy (before 2026-11-11): NOT
+-- stored, said, kept in refused_runs.txt to send again; the summary says so
+local keptBefore = keptLines() or {}
+local takeBody = b
+results[1], replies[1] = 200, '{"ok":true,"duplicate":true}'
+LB.poll()
+local dupLine = nil
+for _, l in ipairs(keptLines() or {}) do if l:find("^%d+\t0\tdup\t") and l:find(takeBody, 1, true) then dupLine = l end end
+local queued = false
+for _, q in ipairs(LB.queue) do if q == takeBody then queued = true end end
+check(LB.show.state == "dup" and LB.show.dup == "old" and not queued and dupLine
+    and logged("leaderboard: co-op run " .. hostId:sub(1, 8) .. " NOT stored: the leaderboard has a copy of it already")
+    and logged("answered as a duplicate by an older leaderboard kept to resend"),
+    "a duplicate from an older leaderboard: NOT stored, kept (\"<at>\\t0\\tdup\\t<body>\"), off pending_runs.txt")
+-- (the summary panel's line, as LB.hud writes it: its widgets stubbed)
+local function hudLine8(sh)
+    local said, w = {}, { SetVisibility = function() end }
+    local rawSet, rawH, rawVis = setText, H, VIS
+    setText = function(_, key, s) said[key] = s end      -- luacheck: ignore
+    H, VIS = { lbTitle = w, lbLines = { w, w, w, w, w, w, w, w }, shown = true }, VIS or { Collapsed = 1, HitTestInvisible = 3 }
+    LB.show, sh.at = sh, os.clock()
+    LB.hud(os.clock())
+    setText, H, VIS = rawSet, rawH, rawVis               -- luacheck: ignore
+    return said.lbLineStr8
+end
+check(hudLine8(LB.show) == "NOT ON THE BOARD YET: ANOTHER COPY WAS FIRST (KEPT)", "its summary: " .. tostring(hudLine8(LB.show)))
+-- a duplicate that says what's stored (the leaderboard of 2026-11-11): final, said, not kept; a replace; a solo duplicate
+local function answer(id, body, st, reply)
+    local sh = { run = { round = 51 }, state = "sending" }
+    LB.jobs[#LB.jobs + 1] = { id = id, body = body, sh = sh }
+    results[id], replies[id] = st, reply
+    LB.poll()
+    return sh
+end
+local finalBody = takeBody:gsub('"round":7,', '"round":6,', 1)
+local sh1 = answer(960, finalBody, 200, '{"ok":true,"duplicate":true,"stored":{"pilot":"Saint Alessia","round":51,"time_s":19883},'
+    .. '"why":"the stored copy is as far or further"}')
+local kn = 0
+for _, l in ipairs(keptLines() or {}) do if l:find(finalBody, 1, true) then kn = kn + 1 end end
+check(sh1.state == "dup" and sh1.dup == "final" and kn == 0
+    and logged("NOT stored: the leaderboard keeps another copy of it, as far or further (its copy from Saint Alessia, round 51: "
+        .. "the stored copy is as far or further); this copy reached round 6"),
+    "a duplicate that says what's stored: NOT stored, said with what's kept, not kept to send again")
+check(hudLine8({ run = LB.show.run, state = "dup", dup = "final" }) == "NOT ON THE BOARD: ITS COPY THERE IS AS FAR", "... its summary says so")
+local sh2 = answer(961, takeBody, 200, '{"ok":true,"score":124200,"replaced":true,"was":{"pilot":"NotMexi","round":35,"time_s":11190,"takeover":true}}')
+check(sh2.state == "sent" and sh2.score == "124200" and logged("stored: it replaced the board's shorter copy of the run (\"pilot\":\"NotMexi\""),
+    "a further copy replacing the board's shorter one: sent, logged")
+local sh4 = answer(963, takeBody, 200, '{"ok":true,"duplicate":true,"stored":{"pilot":"Wolfie","round":7,"time_s":900},'
+    .. '"why":"the stored copy is as far or further","same":true}')
+local kn4 = 0
+for _, l in ipairs(keptLines() or {}) do if l:find("^%d+\t%d+\tdup\t") and l:find(takeBody, 1, true) then kn4 = kn4 + 1 end end
+check(sh4.state == "sent" and kn4 == 1 and logged("is on the board already: this very copy (its first answer was lost)"),
+    "a duplicate that is this very copy (a resend after a lost reply, \"same\"): sent, nothing more kept")
+local soloBody = '{"v":1,"run_id":"' .. string.rep("5", 32) .. '","pilot":"Omega","round":9,"edited":[]}'
+local sh3 = answer(962, soloBody, 200, '{"ok":true,"duplicate":true}')
+check(sh3.state == "sent", "a solo run's duplicate (a resend after a lost reply): sent, as before")
+-- (the kept co-op copy taken off again: the later game starts below count the file's runs)
+writeAll(KEPT, #keptBefore > 0 and (table.concat(keptBefore, "\n") .. "\n") or "")
+if #keptBefore == 0 then os.remove(KEPT) end
+for i = #LB.kept, 1, -1 do if LB.kept[i].why == "dup" then table.remove(LB.kept, i) end end
 
 -- a squad of more than 24 (players came and went): the 24 who did the most, the kills still the run's
 posts, results, replies, LB.jobs = {}, {}, {}, {}
@@ -620,6 +690,39 @@ local all = table.concat(keptLines() or {}, "\n")
 check(#LB.kept == 20 and #keptLines() == 20 and not all:find(string.format("%032x", 1), 1, true) and not all:find(string.format("%032x", 2), 1, true)
     and all:find(string.format("%032x", 3), 1, true) and all:find(string.format("%032x", 22), 1, true)
     and logged("leaderboard: refused_runs.txt keeps 20 runs at most: the oldest"), "20 kept at most: the oldest dropped, logged")
+-- ((2026-11-11) a co-op copy an older leaderboard answered as a duplicate, kept as "dup": sent again at later game starts
+-- the same way; answered duplicate again by an older leaderboard, kept; taken (replacing the board's shorter copy), off)
+print("a co-op copy kept as a duplicate, at a later game start (2026-11-11)")
+os.remove(KEPT)
+local dupBody = string.format('{"v":1,"run_id":"%s","pilot":"Saint Alessia","round":51,"edited":[],"coop":{"players":2,"squad":[]}}',
+    string.rep("2", 32))
+writeAll(KEPT, string.format("%d\t0\tdup\t%s\n", os.time() - 2 * 86400, dupBody))
+posts, results, replies, LB.jobs = {}, {}, {}, {}
+LB.kept, LB.loaded, LB.keptAt, LB.queue, LB.qwait = nil, nil, nil, {}, nil
+D = nil
+LB.queueTick(); clk = clk + 31; LB.queueTick()
+check(#posts == 1 and posts[1] == dupBody and LB.kept[1] and LB.kept[1].why == "dup"
+    and logged("resending a run answered as a duplicate by an older leaderboard 2 days ago"), "a kept duplicate read back as one and sent again")
+results[1], replies[1] = 200, '{"ok":true,"duplicate":true}'
+LB.poll()
+check(#LB.kept == 1 and (keptLines()[1] or ""):find("^%d+\t1\tdup\t{")
+    and logged("a duplicate from a leaderboard that keeps a co-op run's first copy (deploy the one of 2026-11-11), kept"),
+    "answered duplicate again by an older leaderboard: kept for the next game start, still marked dup")
+LB.kept, LB.loaded, LB.keptAt = nil, nil, nil
+LB.queueTick(); clk = clk + 31; LB.queueTick()
+results[2], replies[2] = 200, '{"ok":true,"score":417675,"replaced":true,"was":{"pilot":"NotMexi","round":35,"time_s":11190}}'
+LB.poll()
+local gone2 = io.open(KEPT, "r")
+check(#posts == 2 and #LB.kept == 0 and gone2 == nil and logged("taken (it replaced the board's shorter copy of this co-op run), off refused_runs.txt"),
+    "the leaderboard of 2026-11-11 takes it, replacing the shorter copy: off the file, the file gone")
+if gone2 then gone2:close() end
+writeAll(KEPT, string.format("%d\t0\tdup\t%s\n", os.time() - 86400, dupBody))
+LB.kept, LB.loaded, LB.keptAt = nil, nil, nil
+LB.queueTick(); clk = clk + 31; LB.queueTick()
+results[3], replies[3] = 200, '{"ok":true,"duplicate":true,"stored":{"pilot":"NotMexi","round":52,"time_s":1},"why":"the stored copy is as far or further"}'
+LB.poll()
+check(#posts == 3 and #LB.kept == 0 and logged("NOT stored: the leaderboard keeps another copy of this co-op run, as far or further (its copy from NotMexi, round 52"),
+    "a duplicate that says what's stored: final, off the file")
 os.clock = rawClock                                           -- luacheck: ignore
 os.remove(KEPT)
 
