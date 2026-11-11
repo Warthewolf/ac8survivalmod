@@ -40,7 +40,7 @@ def main(mod):
         s = open(os.path.join(scripts, name), encoding='utf-8').read()
         for m in assign.finditer(s):
             bad.append(f'{name}: {m.group(1)} still defined (line {s.count(chr(10), 0, m.start()) + 1})')
-        if 'CFG.specials.fleet =' in s:
+        if 'CFG.specials.fleet =' in s and 'IFLEET' in GLOBALS:
             bad.append(f'{name}: CFG.specials.fleet still set')
         if name in DEV_ONLY and ('testKey(' in s or 'TEST_TICKS' in s):
             bad.append(f'{name}: a test key or tick left')
@@ -50,6 +50,13 @@ def main(mod):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        sys.exit('usage: dev_only.py <mod folder (holding Scripts/)>')
-    main(sys.argv[1])
+    args = sys.argv[1:]
+    if args[:1] == ['--keep-tani']:
+        # ((2026-11-12) the user: "add the tanacorn and the fleet" to the TESTER zip: package_release.sh TESTER=1 TANI=1)
+        # THE TANICORN's and the fleet's parts kept whole; only the rise director (sv_cine.lua) cut
+        DEV_ONLY, GLOBALS = ('sv_cine.lua',), ('CINE',)
+        args = args[1:]
+        print('dev_only: --keep-tani: sv_tanicorn.lua and sv_fleet.lua kept whole (TESTER=1 TANI=1)')
+    if len(args) != 1:
+        sys.exit('usage: dev_only.py [--keep-tani] <mod folder (holding Scripts/)>')
+    main(args[0])

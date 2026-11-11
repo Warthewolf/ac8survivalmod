@@ -7,6 +7,8 @@
 st=$1
 [ -d "$st" ] || { echo "zip_guard.sh: no stage folder $st"; exit 2; }
 bad=$(find "$st" -type f -iname 'SurvivalMode_Tani_P.*' 2>/dev/null)
+# ((2026-11-12) ZIP_GUARD_TANI=1: package_release.sh TESTER=1 TANI=1, a tester's zip with THE TANACORN, the user's call)
+if [ -n "$bad" ] && [ "$ZIP_GUARD_TANI" = 1 ]; then echo "zip guard: THE TANACORN's container kept (TESTER=1 TANI=1)"; bad=; fi
 if [ -n "$bad" ]; then
     echo "zip_guard.sh: REFUSED: the stage holds the Tanicorn's container (the user's install only, never in a zip):"
     echo "$bad" | sed 's/^/  /'

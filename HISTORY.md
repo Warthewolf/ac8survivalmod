@@ -3007,3 +3007,10 @@ game. The work was split by file between agents; the builds ran in sequence in t
   (the test exe's ANSI stdout), both harness faults on Windows (HANDOFF_2026-11-12.md).
 - build 11391c07dede... registered. INSTALLED 2026-11-12 05:28 (backup: build/backup/install_before_0.74.65). The
   installed subtitles.ini was 0.74.64's shipped copy (no edits of hers), replaced by the merged one.
+- (later, 2026-11-12) TESTER zip WITH THE TANACORN and the fleet (the user: "nah nah add the tanacorn and the fleet"):
+  `TESTER=1 TANI=1 BUILD_NAME=COOP2MP COOP=1 ZFA=1 sh tools/package_release.sh online 0.74.65` on a ZFA=1 TANI=1 build ->
+  AC8SurvivalMode_COOP2MP_0.74.65_TESTER_Online_COOP_ZFA44_TANACORN.zip (87.9 MB, 96 files; SurvivalMode_P, Tani, Valka,
+  ZFA44, Laser7 containers; sv_tanicorn / sv_fleet whole, sv_cine cut to its header; 26 test blocks kept), build
+  c663e490c601... registered. New: package_release.sh TANI=1 (only with TESTER=1; checks the staged container holds
+  every blueprint tani_wd.txt names, here all 14), dev_only.py --keep-tani, zip_guard.sh ZIP_GUARD_TANI. A plain TESTER
+  zip made first (no Tanacorn) was deleted before anyone got it. zip_leak_test passes; TANI=1 without TESTER=1 refused.

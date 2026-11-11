@@ -76,6 +76,10 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   and package_release.sh / package_test.sh refuse it (package_dev.sh takes it with TANI=1 only, and TANI=1 only with it).
   Run tools/tanicorn/build.sh to the end BEFORE `TANI=1 build_all.sh`: build_all stages the container it finds, and a
   world data importing blueprints the container lacks must never be packaged (the reviews of 2026-11-12).
+  One exception, the TESTER zip (user, 2026-11-12: "nah nah add the tanacorn and the fleet"): `TESTER=1 TANI=1
+  package_release.sh` on a TANI=1 build keeps her container, the Tanicorn world data, sv_tanicorn / sv_fleet whole and the
+  DEV ONLY blocks (the rise director sv_cine still cut), only when the staged container holds every blueprint the world
+  data names; the zip is named ..._TANACORN. TANI=1 is refused without TESTER=1: never in a friends' or Nexus zip.
 - Release zips always go to the main tree's build/release (git's main working tree), from any worktree (user,
   2026-11-07): tools/package_release.sh and package_test.sh find it through tools/release_dir.sh (`RELEASE_DIR` in
   `.env` overrides it).

@@ -43,9 +43,28 @@ if [ "$ed" = online ]; then
 fi
 # ((2026-11-11) THE TANACORN's live parts: a TANI=1 build's world data imports the Tanicorn container, the user's dev install
 # only; no friends', TESTER or Nexus zip may carry it, whatever else is set)
-if [ -f build/install/tani_wd.txt ]; then
+# ((2026-11-12) the user: "add the tanacorn and the fleet" to the TESTER zip) TESTER=1 TANI=1: a tester's zip WITH THE TANACORN
+# and the fleet (her container, the Tanicorn world data, sv_tanicorn / sv_fleet whole and the DEV ONLY blocks; the rise
+# director still cut); named ..._TANACORN. Only with TESTER=1, and only on a TANI=1 build whose container holds every
+# blueprint its world data imports (the weapons reviews of 2026-11-12). Never a friends' or Nexus zip.
+TANIZIP=
+if [ "$TANI" = 1 ]; then
+    [ "$TESTER" = 1 ] || { echo "package_release.sh: TANI=1 only with TESTER=1 (a friends' or Nexus zip never carries THE TANACORN)"; exit 1; }
+    [ -f build/install/tani_wd.txt ] || { echo "package_release.sh: TANI=1 needs a TANI=1 build (ZFA=1 TANI=1 sh tools/build_all.sh)"; exit 1; }
+    tc=build/install/SurvivalMode/SurvivalMode_Tani_P.utoc
+    [ -f "$tc" ] || { echo "package_release.sh: TANI=1: no Tanicorn container staged ($tc)"; exit 1; }
+    python -I -c "
+import re, sys
+d = open(sys.argv[1], 'rb').read()
+want = set(re.findall(r'BP_SV_Tani_\w+', open(sys.argv[2], encoding='utf-8', errors='replace').read())) | {'BP_SV_Tani_HULLLIVE'}
+miss = sorted(w for w in want if (w + '.uasset').encode() not in d)
+if miss: sys.exit('package_release.sh: TANI=1: the staged container lacks ' + ', '.join(miss) + ': run sh tools/tanicorn/build.sh, then ZFA=1 TANI=1 sh tools/build_all.sh')
+print('TANI=1: the staged Tanicorn container holds all ' + str(len(want)) + ' blueprints the world data names')
+" "$tc" build/install/tani_wd.txt || exit 1
+    TANIZIP=1
+elif [ -f build/install/tani_wd.txt ]; then
     echo "package_release.sh: this build's world data imports THE TANACORN's parts (TANI=1: build/install/tani_wd.txt):"
-    echo "  run tools/build_all.sh without TANI=1 first"
+    echo "  run tools/build_all.sh without TANI=1 first (or TESTER=1 TANI=1 for a tester's zip with her)"
     exit 1
 fi
 rm -rf "$st" && mkdir -p "$st/ue4ss/Mods/IoStoreLoaderMod"
@@ -74,7 +93,7 @@ fi
 # THE TANICORN's parts (its container: the Tanager stand-in is Sea Power's Iowa, the user's install only; AGENTS.md):
 # never in any zip made here, ZFA=1 and TESTER=1 included. Until 2026-11-11 this line sat in the no-ZFA branch above, so
 # a ZFA=1 zip packed after a TANI=1 build_all.sh would have carried it (tools/checks/zip_leak_test.sh)
-rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*
+[ "$TANIZIP" = 1 ] || rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*
 # TESTER=1: a tester's build (user, 2026-11-03: "give me a tester version for alyssa"): the test keys (force a special,
 # zollars, ...) and the diagnostic loggers KEPT, everything else as the friends' zip; named ..._<version>_TESTER_...
 # Only for the tester the user names: every other zip strips them (user, 2026-10-23: test keys out of releases).
@@ -83,10 +102,12 @@ if [ "$TESTER" = 1 ]; then
     # user's dev install only (AGENTS.md): their parts sv_fleet / sv_tanicorn / sv_cine cut to their headers, as a release
     # has them (tools/dev_only.py; their units and rows are in every build, spawned by nothing then). Until then a TESTER
     # zip kept them whole: Ctrl+N would have spawned the whole fleet in a tester's game.)
-    python -X utf8 -I tools/dev_only.py "$mod"
+    python -X utf8 -I tools/dev_only.py ${TANIZIP:+--keep-tani} "$mod" || exit 1
     echo "TESTER=1: test keys and the diagnostic loggers kept ($(grep -c 'TEST ONLY BEGIN' "$mod"/Scripts/*.lua | awk -F: '{s+=$2} END {print s}') test blocks)"
-    # (DEV ONLY blocks: the user's dev install only, never in a TESTER zip either: THE TANICORN's test, the fleet; user, 2026-11-11)
-    python -I tools/strip_test_only.py --dev-only "$mod"/Scripts/*.lua "$mod"/config/survival.default.ini
+    # (DEV ONLY blocks: the user's dev install only, never in a TESTER zip either: THE TANICORN's test, the fleet; user, 2026-11-11;
+    # kept with TANI=1: they hold only THE TANICORN's and the fleet's setup, user 2026-11-12)
+    if [ "$TANIZIP" = 1 ]; then echo "TANI=1: DEV ONLY blocks kept (THE TANICORN, the fleet)"
+    else python -I tools/strip_test_only.py --dev-only "$mod"/Scripts/*.lua "$mod"/config/survival.default.ini; fi
 else
 # (the default ini too: its test-only sections, the lightning Anomaly's, 2026-11-07; each leaves a lone ";" line)
 python -I tools/strip_test_only.py "$mod"/Scripts/*.lua "$mod"/config/survival.default.ini
@@ -123,7 +144,8 @@ fi
 python -I tools/edition.py "$ed" "$mod"/Scripts/*.lua "$mod/config/survival.default.ini" "$st/README.txt"
 python -X utf8 -I tools/checks/lua_check.py "$mod"/Scripts/*.lua
 # the last look before the zip: nothing of the user's install only (tools/checks/zip_leak_test.sh)
-sh tools/zip_guard.sh "$st"
+ZIP_GUARD_TANI=$TANIZIP sh tools/zip_guard.sh "$st"
+[ "$TANIZIP" = 1 ] && suffix="${suffix}_TANACORN"
 # BUILD_NAME=<name>: a build line's own name in the zip's (BUILD_NAME=COOP2MP: docs/re/COOP2MP.md)
 tv=$ver; [ "$TESTER" = 1 ] && tv="${ver}_TESTER"
 . tools/release_dir.sh
