@@ -382,6 +382,42 @@ do                                                  -- (the four lines measured 
     end
     check(ok, "each measured line's width estimated at or a little over what the screenshots show")
 end
+do                                                  -- ((2026-11-11) the strip's lines broken in Lua: SUB.wrap)
+    -- (the user's screenshots of 0.74.4x: the text didn't wrap in game, one line past both sides of the box; widths
+    -- measured there in layout units)
+    local seen = { { "Let's get going. I don't want to get caught up in the investigation afterwards.", 1730 },
+                   { "Two cargo vessels with ZFA-44s inbound. Call VAMPIRES from the STORE.", 1661 },
+                   { "Thank You Pilot, I've sent word to HQ and they've sent two Cargo Vessels into the Area with the Special ZFA-44 Airframes,", 2726 } }
+    local W = CFG.hud.subs.w - 120
+    local near, fit, two = true, true, true
+    for _, l in ipairs(seen) do
+        local est = SUB.ems(l[1]) * EMU
+        if est < l[2] * 0.96 or est > l[2] * 1.06 then near = false end
+        local text, n = SUB.wrap(l[1], W, EMU)
+        local back = text:gsub("\n", " ")
+        if back ~= l[1] or n ~= 2 then two = false end
+        for ln in text:gmatch("[^\n]+") do
+            -- (the widest a line can be on screen: its estimate over the model's worst under-estimate seen, 2.5 %)
+            if SUB.ems(ln) * EMU / 0.975 > CFG.hud.subs.w - 80 then fit = false end
+        end
+    end
+    check(near, "the width model within 4 % under / 6 % over each line the 2026-11-11 screenshots measured")
+    check(two and fit, "those three lines broken in two at words, every line inside the box at the model's worst")
+    local t1, n1 = SUB.wrap("Short.", W, EMU)
+    local t0, n0 = SUB.wrap("", W, EMU)
+    local tl, nl = SUB.wrap(string.rep("x", 400) .. " end", W, EMU)
+    check(t1 == "Short." and n1 == 1 and t0 == "" and n0 == 1 and nl == 2 and tl:sub(-4) == "\nend",
+          "a short line as it is, nothing as one empty line, a word wider than the box on a line of its own")
+    local same = true
+    for _, s in ipairs({ "With the little gun! Like a spear fisherman. Respect.", string.rep("word ", 30), seen[3][1] }) do
+        local _, n = SUB.wrap(s, W, EMU)
+        if n ~= SUB.lineCount(s, W, EMU) then same = false end
+    end
+    check(same, "SUB.wrap's line count is SUB.lineCount's at the same width")
+    local sv = readAll(MOD .. "/Scripts/sv_subs.lua")
+    check(sv:find("cur.shown, cur.nLines = SUB.wrap(cur.text", 1, true) ~= nil and sv:find('setText(H.subText, "subTextStr", cur.shown)', 1, true) ~= nil,
+          "the strip shows the broken text and sizes its box from it (sv_subs.lua hudTick)")
+end
 do                                                  -- (SAL's and CONTROL's lines: one line each on the strip, two at most)
     local one, n, most = 0, 0, 0
     for _, k in ipairs({ "intro", "start", "none", "junk", "sardine", "mackerel", "tuna", "swordfish", "bigone", "first",

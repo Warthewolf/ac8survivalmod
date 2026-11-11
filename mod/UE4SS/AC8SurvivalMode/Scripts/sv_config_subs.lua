@@ -154,6 +154,12 @@ function SUBT.apply(text, root)
                 cur = { path = path, t = t, parent = parent, idx = idx, parentKind = parentKind, list = {},
                         lines = (k == "lines") or created, dash = false }
             end
+        elseif first == "[" then
+            -- ((2026-11-11) a friend's file had "[specials.fishing.text.grade_b]z": not a section, so its lines went into
+            -- the list above it, grade A's) a [ line that isn't a whole section: it and its lines skipped
+            finish()
+            bad(n, "a broken [section] line (something after its ] or no ]): it and its lines skipped")
+            cur = { path = s, t = nil }
         elseif not cur then
             bad(n, "a line before any [section]: skipped")
         elseif not cur.t then

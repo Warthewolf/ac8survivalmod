@@ -84,6 +84,8 @@ ROUND 6 (THE ESCORT)
    from the touchdown (...)", for each "escort: <name> landed (on the ground, taxiing to its slot); <where>" ("landed
    (stopped)" only in the Ctrl+F5 test), "escort: round 6, the escort WON: <n> of <m> landed ...". FAILURE: "landed (the
    safety timeout: ...)", "escort: <name> flying again after it landed", one off the runway's end.
+   [subtitles, 2026-11-11] At the win CHARLENE's thanks comes in two parts, each broken into lines INSIDE the strip's box
+   (the box as tall as its lines), then COMONA CONTROL's VAMPIRES line on two lines. FAILURE: text past the box's sides.
 BREAK 6
 17. [0.74.26 / 0.74.30] STORE > AIRFIELD > VAMPIRES (a second carrier, rounds 7-9; step 9's guard). Its ZFA-44s come out
    boxed and lockable; maybe "carrier: <ship>: arm <j> of <n> next (...)" or "... out of its container (...; <n> had been
@@ -126,7 +128,7 @@ D. CO-OP: friends need a zip packed from this tree, `BUILD_NAME=COOP2MP COOP=1 Z
 
 KNOWN (not tests): Mission 13's rain doesn't fall in the storm (stage 3 says "rain" on); the rain pillar is off; the swing
 curve is cleared (straight) until laser7 is rebuilt; a carrier whose parked ZFA-44s never die stays held for the run;
-Daredevil and 25 lobby-only songs aren't in the player; one subtitle is cut short ("AUDREY|Valka, don't go wandering ...").
+Daredevil and 25 lobby-only songs aren't in the player.
 
 KEEP (copy them before AC8 starts again): AC8SurvivalMode_lua.log, AC8SurvivalMode.log, AC8SurvivalMode_crumbs.log and
 _crumbs.prev.log (PR #4: its logs\ folder), ue4ss\UE4SS.log, AC8IoStoreLoader.log, any crash folder (UECC report, minidump),

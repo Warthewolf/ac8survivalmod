@@ -2337,3 +2337,18 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
 - testing/2026-11-11: the test sheet and key list for the next session on the dev install (everything unconfirmed
   since 0.74.20 in one solo run's order, each step with its key and the log line that proves it; checked against the
   code by three readers, 27 corrections).
+
+## Subtitles (2026-11-11; Lua changed, for the next build: its version not yet given, see the 0.74.48 question)
+- The user's screenshots (rounds 6, 7 and 23 of a 0.74.4x run): the strip's text never wrapped. Each line ran on one
+  line past both sides of the box, while the box itself had grown to two lines. SetWrapTextAt (0.74.0's fix of
+  2026-11-07, never seen working since) takes no effect in game. The strip now breaks its text into lines in Lua
+  (sv_subs.lua SUB.wrap: whole words, by the same width model as SUB.lineCount, 120 inside the box's 1,560) and sizes
+  the box from those lines. The model against the three lines measured in the screenshots: 2.5 % under to 3 % over
+  (fishing_test). CHARLENE's thanks still comes in two parts (thanks_chars 125); its second part ("you can call for
+  their support from the STORE") was never lost, it follows the first.
+- config/subtitles.ini: the user's edited file (KASKA's countdown and launch lines, AUDREY's festival line finished: "...
+  I'm not traveling halfway across the world to find you again."). It came with "[specials.fishing.text.grade_b]z":
+  not a section, so the reader put GONE FISHIN''s B-grade lines into the A-grade list. The z is taken out here, and the
+  reader (sv_config_subs.lua) now skips a broken [section] line and its lines, logged, instead (subs_test).
+- To see in game: CHARLENE's thanks at THE ESCORT's win and AUDREY's longer lines inside the box on two lines, the box
+  as tall as the lines (the test sheet's step 16).
