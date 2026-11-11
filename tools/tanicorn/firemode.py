@@ -12,10 +12,11 @@ style is our own geometry built here (no other work's model or drawing is used).
 Imported by model_tanacorn.py (TANA_FM_STYLE: the style, DEFAULT_STYLE when unset, 0 for none: the design's Iowa
 mount) and by styles_firemode.py (each style built in turn and rendered for the choice). It REPLACES the Iowa's mount
 on both turrets (LEV_T16_FWD / _AFT): the house object gets the house, the gun object the guns' fixed parts (bloomer
-boots, the barrels' root rings, the glowing core rods), the trunnion moves back to 1.2 m behind the face. The house is
+boots, the barrels' root rings, the core rods), the trunnion moves back to 1.2 m behind the face. The house is
 an armour SHELL over a dark core: thirteen wall slabs and the roof, each mitred to its neighbours with a seam between;
-stowed, a battleship turret with dim running lights. In fire mode the style's slabs move (the bays under them glow) and
-every barrel forward of its root splits into 2-4 pieces round its core rod.
+stowed, a battleship turret with dim running lights. In fire mode the style's slabs move off dark machinery bays and
+every barrel forward of its root splits into 2-4 pieces round its core rod. Nothing inside glows (GLOW): the core rods
+light only as the guns fire.
 
 Pieces are objects TANA_T16_<tag>_<bone>, each carrying its motion (fm_ops, json: translations and turns, each over a
 stretch of the 2.5 s transform), its part (fm_part ARMOR: on turret_yaw, GUNS: on turret_pitch) and bone (fm_bone).
@@ -89,24 +90,26 @@ def smooth(t, a, b):
 
 
 # ---------------------------------------------------------------------------------------------------- materials
+# Nothing inside glows (the user, 2026-11-11: "Don't have the insides glow"): the bays under the armour, the fins under
+# the roof and the barrels' bores are dark machinery. Only the running lights outside glow (dim stowed, brighter in fire
+# mode), and the core rods only while a gun fires (FIRE: glow(t, fire)).
 GLOW = {   # key: (base colour, emission colour, strength stowed, strength in fire mode, its stretch)
-    "fm_bank": ((0.015, 0.11, 0.10), (0.05, 0.90, 0.72), 0.0, 4.0, STAGE_ARMOUR),
-    "fm_rail": ((0.015, 0.09, 0.06), (0.25, 1.00, 0.45), 0.0, 3.0, STAGE_GLOW),
-    "fm_core": ((0.20, 0.17, 0.05), (1.00, 0.85, 0.35), 0.0, 6.0, STAGE_GLOW),
+    "fm_core": ((0.06, 0.055, 0.045), (1.00, 0.85, 0.35), 0.0, 0.0, STAGE_GLOW),
     "fm_slit": ((0.06, 0.40, 0.36), (0.20, 0.95, 0.88), 1.0, 7.0, STAGE_SLIT),
 }
+FIRE = {"fm_core": 8.0}                   # a core rod's glow as its gun fires
 MAT = {}
 for _k, (_base, _emit, _lo, _hi, _st) in GLOW.items():
     MAT[_k] = tanakit.mat("TANA_" + _k, _base, 0.2, 0.3, _emit, _lo)
     MAT[_k]["tana_glow"] = True
 
 
-def glow(t, boost=None):
-    """every glow material's strength at t (the baked parts' copies too: TANA_<part>_fm_*); boost {key: factor}"""
+def glow(t, fire=0.0):
+    """every glow material's strength at t (the baked parts' copies too: TANA_<part>_fm_*); fire 0..1: a shot"""
     for m in bpy.data.materials:
         for k, (_, _, lo, hi, st) in GLOW.items():
             if m.name.endswith(k) and m.use_nodes and m.node_tree.nodes.get("Principled BSDF"):
-                v = (lo + (hi - lo) * smooth(t, *st)) * (boost or {}).get(k, 1.0)
+                v = lo + (hi - lo) * smooth(t, *st) + FIRE.get(k, 0.0) * fire
                 m.node_tree.nodes["Principled BSDF"].inputs["Emission Strength"].default_value = v
 
 
@@ -264,17 +267,21 @@ def slab(part, S, name, region=WHOLE, m=M_PAINT, seam=0.035):
 
 
 def bay(part, S, name):
-    """what's under a wall's armour: a lit panel on the core and dark ribs across it (seen when the armour moves)"""
+    """what's under a wall's armour (seen when the armour moves): dark machinery, unlit: a sunk panel, ribs across it,
+    two pipes along it"""
     O, I, u, v, n = S.wall(name)
     q = shrink([S.at(I, s, w) for s, w in WHOLE], 0.25)
-    hexa(part, [p + n * 0.04 for p in q], [p - n * 0.05 for p in q], MAT["fm_bank"], post=True)
+    hexa(part, [p + n * 0.04 for p in q], [p - n * 0.05 for p in q], M_DARK, post=True)
     L = (q[1] - q[0]).length
     k = 0.7
     while k < L - 0.4:
         f = k / L
         a, b = q[0].lerp(q[1], f), q[3].lerp(q[2], f)
-        box(part, (a + b) / 2.0 + n * 0.12, (u, (b - a).normalized(), n), (0.14, (b - a).length, 0.24), M_DARK, post=True)
+        box(part, (a + b) / 2.0 + n * 0.12, (u, (b - a).normalized(), n), (0.14, (b - a).length, 0.24), M_PAINT, post=True)
         k += 0.85
+    for w in (0.3, 0.68):
+        a, b = q[0].lerp(q[3], w), q[1].lerp(q[2], w)
+        cyl(part, 0.13, 0.13, (b - a).length - 0.3, (a + b) / 2.0 + n * 0.3, b - a, M_DARK, 12, post=True)
 
 
 def roof_slab(part, S, x_lo=None, x_hi=None, side=0, gap=0.04):
@@ -420,7 +427,7 @@ def stays_part():
             cone_x(p, x0, x1, r, r - 0.03, yc, 0.0, M_PAINT, SEG)
         cone_x(p, 2.7, SPLIT + 0.02, 1.12, 1.1, yc, 0.0, M_PAINT, SEG)
         cone_x(p, SPLIT - 0.4, MUZZLE - 0.7, CORE_R, CORE_R, yc, 0.0, MAT["fm_core"], 24)
-        cone_x(p, SPLIT - 0.05, SPLIT + 0.08, BORE + 0.03, BORE + 0.03, yc, 0.0, MAT["fm_rail"], 32, cut=True)
+        cone_x(p, SPLIT - 0.05, SPLIT + 0.08, BORE + 0.03, BORE + 0.03, yc, 0.0, M_DARK, 32, cut=True)
     return p
 
 
@@ -439,7 +446,7 @@ def piece_part(n_split):
         box(p, Vector((L / 2.0, 0, 0)) + nrm * (sgn * W / 2.0), (XYZ[0], r, nrm), (L + 4.0, 2 * W, W), M_DARK, cut=True)
         if n_split == 2:
             break
-    cone_x(p, -1.0, L + 1.0, BORE, BORE, 0.0, 0.0, MAT["fm_rail"], SEG, cut=True)
+    cone_x(p, -1.0, L + 1.0, BORE, BORE, 0.0, 0.0, M_DARK, SEG, cut=True)
     x = 1.2
     while x < L - 1.0:
         arc_tube(p, x, BORE - 0.01, -half + math.radians(9), half - math.radians(9), 0.075, M_PAINT)
@@ -575,12 +582,12 @@ def build(coll, log=print, style=None):
     if not roof_moves:
         roof_slab(h, S)
         roof_details(h, S)
-    else:                                                   # under the roof: a lit floor and heat-sink fins
+    else:                                                   # under the roof: a dark floor and heat-sink fins
         q = offset2d(S.Tc, -0.3)
-        loft(h, q, S.zc - 0.05, q, S.zc + 0.04, MAT["fm_bank"], post=True)
+        loft(h, q, S.zc - 0.05, q, S.zc + 0.04, M_DARK, post=True)
         x = min(p[0] for p in q) + 0.6
         while x < max(p[0] for p in q) - 0.6:
-            abox(h, (x - 0.08, S.y0 - 6.0, S.zc), (x + 0.08, S.y0 + 6.0, S.zc + 0.32), M_DARK, post=True)
+            abox(h, (x - 0.08, S.y0 - 6.0, S.zc), (x + 0.08, S.y0 + 6.0, S.zc + 0.32), M_PAINT, post=True)
             x += 0.6
     for s, sg in (("L", 1.0), ("R", -1.0)):
         if "aside_" + s not in moves:
@@ -664,10 +671,10 @@ def attach(log=print):
     return TURRET
 
 
-def pose(t, boost=None):
+def pose(t, fire=0.0):
     for T in TURRET.values():
         T.pose(t)
-    glow(t, boost)
+    glow(t, fire)
 
 
 def key(log=print):

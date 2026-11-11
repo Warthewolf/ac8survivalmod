@@ -146,9 +146,11 @@ until then.
   the mount from scratch on tanakit.py's clean solids, in place of the Iowa's on both turrets: the design's outline,
   size and yaw pivot, the trunnion moved back to 1.2 m behind the face (house frame (11.42, 0.10, 3.17) m), the muzzles
   where they were. The house is an armour SHELL over a dark core: 13 wall slabs and the roof, each mitred to its
-  neighbours with a seam between; under every slab a style moves, a lit bay (glowing panel, dark ribs; under the roof,
-  heat-sink fins). The guns: bloomer boots in wells in the face, tapered barrels, a glowing core rod in each; forward
-  of its root ring each barrel is 2-4 pieces round the core, its bore lit, bracket rings along it.
+  neighbours with a seam between; under every slab a style moves, a bay of dark machinery (a sunk panel, ribs, pipes;
+  under the roof, heat-sink fins). The guns: bloomer boots in wells in the face, tapered barrels, a core rod in each;
+  forward of its root ring each barrel is 2-4 pieces round the core, bracket rings along its bore. **Nothing inside
+  glows** (the user, 2026-11-11: "Don't have the insides glow"): only the running lights outside (dim stowed, brighter
+  in fire mode) and the core rods while the guns fire (firemode.FIRE).
 - **The styles** (`STYLES`): 1 jaws (left / right) + side armour out on struts; 2 jaws + layered armour (the aft and
   forward side walls and the chamfers in three slanted slabs each, staggered out); 3 top / bottom jaws + struts;
   4 sliding rails (halves apart and 3 m forward) + exploded house (the roof in three blocks lifting apart, the side
@@ -174,7 +176,7 @@ until then.
   a PoseableMesh's bone follows the bone as the fire control turns it (standard UE; not yet seen in AC8).
 - **In game, still to build (WP1 / WP11)**: Lua opens a T16 when its fire control engages (`PlayAnimation(Deploy,
   false)` on both components) and shuts it a while after its last shot (`SetPlayRate(-1)`, play); the glow through the
-  glow slots' material instances (`*_fm_bank`, `*_fm_rail`, `*_fm_core`, `*_fm_slit`; AC8's gear material has
+  glow slots' material instances (`*_fm_slit` the running lights, `*_fm_core` the cores as a gun fires; AC8's gear material has
   `Ctrl_All_Emissive` and a Livemap, its emissive mask [?]); the charge and the shot with AC8's own effects at
   SOC_Charge_NN (the Alicorn's lightning `NS_alcn_LiSpark_*`, the rail cannon's discharge; hard rule 58: never our
   own compiled materials).

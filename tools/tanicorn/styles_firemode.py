@@ -5,9 +5,9 @@
 The model without the mount: model_tanacorn.py with TANA_FM_STYLE=0 (the design's Iowa mount; the style is built here,
 untextured: firemode.BAKE off). At night, as the user's reference stills are (the sun 4 deg under the horizon, a cold
 moon lamp, the glow doing the rest). Turret B (LEV_T16_FWD), three views each like one of the stills:
-  style<N>_1_overhead  from above and behind the turret, its guns lifted 12 deg, transformed and charging
-  style<N>_2_firing    low ahead of it, its guns lifted 30 deg, firing: the cores white-gold, green lightning from the
-                       cores to the open pieces and between them, green rings round the muzzles
+  style<N>_1_overhead  from above and behind the turret, its guns lifted 12 deg, transformed
+  style<N>_2_firing    low ahead of it, its guns lifted 30 deg, firing: the cores lit gold (only now: nothing inside
+                       glows otherwise), green lightning from the cores to the open pieces, green rings at the muzzles
   style<N>_3_side      its port side close up, transformed (the armour off its bays)
   style<N>_4_front     from ahead, above and to port, transformed: the opened guns and the face
   stowed               (with `stowed`) the turret shut, before it transforms (the same for every style)
@@ -56,8 +56,8 @@ if BG:
     BG.inputs["Strength"].default_value = 1.0
 moon = bpy.data.objects.new("PREVIEW_moon", bpy.data.lights.new("PREVIEW_moon", "SUN"))
 sc.collection.objects.link(moon)
-moon.data.energy, moon.data.color, moon.data.angle = 1.1, (0.55, 0.68, 1.0), math.radians(1.0)
-sc.view_settings.exposure = 1.2
+moon.data.energy, moon.data.color, moon.data.angle = 2.0, (0.6, 0.72, 1.0), math.radians(1.0)
+sc.view_settings.exposure = 1.4
 cam = bpy.data.objects.new("CAM_styles", bpy.data.cameras.new("CAM_styles"))
 sc.collection.objects.link(cam)
 cam.data.clip_end = 20000.0
@@ -191,21 +191,21 @@ if STOWED:
     aim(C + Vector((46, 30, 12)), C + Vector((10, 2, 4)), 30)
     render("stowed")
 T.trun.rotation_euler.y = -math.radians(12.0)
-firemode.pose(1.0, {"fm_core": 0.6})
-effects(0.4, 0, 3)
+firemode.pose(1.0)
+effects(0, 0, 3)
 aim(C + Vector((-20, -34, 42)), C + Vector((11, 0, 2)), 26)
 render("style%d_1_overhead" % STYLE)
-firemode.pose(1.0, {"fm_core": 0.6})
-effects(0.4, 0, 5)
+firemode.pose(1.0)
+effects(0, 0, 5)
 aim(C + Vector((62, 30, 26)), C + Vector((17, 0, 6)), 30)
 render("style%d_4_front" % STYLE)
 T.trun.rotation_euler.y = -math.radians(30.0)
-firemode.pose(1.0, {"fm_core": 1.6, "fm_rail": 1.2})
+firemode.pose(1.0, fire=1.0)
 effects(1.0, 1, 7)
 aim(C + Vector((58, 7, 5)), C + Vector((14, 1, 13)), 30)
 render("style%d_2_firing" % STYLE)
 T.trun.rotation_euler.y = -math.radians(10.0)
 firemode.pose(1.0)
-effects(0.3, 0, 11)
+effects(0, 0, 11)
 aim(C + Vector((5, 36, 6)), C + Vector((1, 0, 3.6)), 28)
 render("style%d_3_side" % STYLE)
