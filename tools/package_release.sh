@@ -74,6 +74,11 @@ rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*
 # zollars, ...) and the diagnostic loggers KEPT, everything else as the friends' zip; named ..._<version>_TESTER_...
 # Only for the tester the user names: every other zip strips them (user, 2026-10-23: test keys out of releases).
 if [ "$TESTER" = 1 ]; then
+    # ((2026-11-12, the review of the fleet's first build, finding 2) but round 30's INVINCIBLE FLEET and THE TANICORN, the
+    # user's dev install only (AGENTS.md): their parts sv_fleet / sv_tanicorn / sv_cine cut to their headers, as a release
+    # has them (tools/dev_only.py; their units and rows are in every build, spawned by nothing then). Until then a TESTER
+    # zip kept them whole: Ctrl+N would have spawned the whole fleet in a tester's game.)
+    python -X utf8 -I tools/dev_only.py "$mod"
     echo "TESTER=1: test keys and the diagnostic loggers kept ($(grep -c 'TEST ONLY BEGIN' "$mod"/Scripts/*.lua | awk -F: '{s+=$2} END {print s}') test blocks)"
 else
 # (the default ini too: its test-only sections, the lightning Anomaly's, 2026-11-07; each leaves a lone ";" line)
