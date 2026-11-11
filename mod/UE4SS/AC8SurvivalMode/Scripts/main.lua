@@ -10,6 +10,7 @@ local MODULES = {
     "sv_core",
     "sv_config",
     "sv_config_specials",          -- (sv_config.lua's next piece: tools/lua_split_part.py)
+    "sv_config_arc",               -- (sv_config.lua's next piece: tools/lua_split_part.py)
     "sv_config_subs",              -- (sv_config.lua's next piece: config\subtitles.ini over CFG's lines, before CFG_DEFAULTS)
     "sv_config_ini",               -- (sv_config.lua's next piece: tools/lua_split_part.py)
     "sv_rows",
@@ -46,6 +47,7 @@ local MODULES = {
     "sv_tells",                    -- P3's tells (before sv_coop: it keeps SV_Event as it was unwrapped)
     "sv_director",                 -- P2's squad director (calls SV_Event by name at run time: sv_coop wraps it)
     "sv_escort",                   -- THE ESCORT and the ZFA-44 carriers (docs/re/ESCORT.md; before sv_coop: its logPlane wrap)
+    "sv_escort_carriers",          -- (sv_escort.lua's next piece: tools/lua_split_part.py)
     "sv_escort_subs",              -- what CHARLENE, her KMG escorts and Comona say; the Anomalies' wait for her (2026-11-07)
     "sv_escort_laser",             -- the ZFA-44 carriers' anti-missile laser: its rows, its arm in the log, its kills (2026-11-07)
     "sv_escort_li",                -- AC7's LaserInterceptor on the ZFA-44s (runtime laser.c, tools/laser7; 2026-11-07)
