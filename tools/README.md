@@ -55,10 +55,10 @@ Git Bash rewrites `/Game/...` arguments into Windows paths; `export MSYS_NO_PATH
 
 ## Ctrl keys (every one bound once across Scripts/*.lua; 2026-11-07)
 UE4SS's key binds are keyboard only and don't take the key from the game. Test keys sit in TEST ONLY blocks
-(tools/strip_test_only.py takes them out of every zip but a TESTER=1 one; DEV ONLY blocks, the user's dev install only,
-out of every zip, TESTER=1 included: 2026-11-11), and a press makes the run unranked. Test keys
-bound through sv_core.lua `testKey` or sv_main.lua's test block share `TEST_KEYS`, which the release keys below join in a
-test build: a key bound twice logs `test: Ctrl+<key> is bound twice`, a key name UE4SS hasn't logs `... not bound`.
+(tools/strip_test_only.py takes them out of every zip but a TESTER=1 one, which keeps them all but the dev install's own
+parts: tools/dev_only.py cuts sv_fleet.lua, sv_tanicorn.lua and sv_cine.lua to their headers there), and a press makes the
+run unranked. Test keys bound through sv_core.lua `testKey` or sv_main.lua's test block share `TEST_KEYS`, which the
+release keys below join in a test build: a key bound twice logs `test: Ctrl+<key> is bound twice`, a key name UE4SS hasn't logs `... not bound`.
 
 | Key | What | Where |
 | --- | --- | --- |

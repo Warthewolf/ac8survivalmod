@@ -12,7 +12,7 @@ import sys
 
 DEV_ONLY = ('sv_tanicorn.lua', 'sv_fleet.lua', 'sv_cine.lua')   # (main.lua MODULES: THE TANICORN, the fleet, the rise's cinematic)
 GLOBALS = ('TANI', 'GEO', 'IFLEET', 'CINE')                     # (what they define; other parts only test them for nil)
-BLOCK = re.compile(r'[ \t]*-- TEST ONLY BEGIN.*?-- TEST ONLY END[^\n]*\n', re.S)
+BLOCK = re.compile(r'[ \t]*-- (TEST|DEV) ONLY BEGIN.*?-- \1 ONLY END[^\n]*\n', re.S)   # (DEV ONLY: the cloud line's markers)
 
 
 def main(mod):
@@ -24,7 +24,7 @@ def main(mod):
             bad.append(f'{name}: not in the staged copy (main.lua loads it: a missing part stops the runtime)')
             continue
         s = open(p, encoding='utf-8').read()
-        n = s.count('TEST ONLY BEGIN')
+        n = s.count('TEST ONLY BEGIN') + s.count('DEV ONLY BEGIN')
         if not n:
             bad.append(f'{name}: no TEST ONLY block (the part changed shape: cut it by hand and fix this tool)')
             continue
