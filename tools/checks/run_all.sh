@@ -2,11 +2,12 @@
 # run_all.sh : every check that needs no game files, in one go, with a table at the end: the build's own checks (as
 # tools/build_all.sh runs them), every tools/checks/*_test.sh suite and the leaderboard Worker's tests (node, no install).
 # Each suite's output goes to build/checks/run_all/<name>.txt. Off Windows (Linux, a cloud session) the C suites that need
-# windows.h / Win32 itself are skipped and say so; everything else runs the same there.
+# windows.h / Win32 itself are skipped and say so (flight_test and coop_test build there on tools/checks/win32_posix.h);
+# everything else runs the same there.
 #   sh tools/checks/run_all.sh            all of them
 #   sh tools/checks/run_all.sh escort sky  only the suites whose names hold one of these words
-#   sh tools/checks/run_all.sh coop_test   co-op's transport test, which opens a dozen console windows (Windows only):
-#                                          never run unless named so, whole
+#   sh tools/checks/run_all.sh coop_test   co-op's transport test (a dozen console windows on Windows, ~40 s): never
+#                                          run unless named so, whole
 # Exit code 1 when anything failed (a skip is not a failure).
 cd "$(dirname "$0")/../.."
 ROOT=$(pwd)
@@ -15,7 +16,7 @@ rm -rf "$OUT" && mkdir -p "$OUT"
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) WIN=1 ;; *) WIN=0 ;; esac
 # C suites that need windows.h and Win32 at run time (a vectored exception handler, Winsock / Steam lookups, bcrypt,
 # FindFirstFileW): only on Windows
-WIN_ONLY=" safecall_test pathguard_test flight_test coop_test build_hash_test logbundle_test "   # (logbundle_test: PR #4's, once merged)
+WIN_ONLY=" safecall_test pathguard_test build_hash_test logbundle_test "   # (flight_test, coop_test: Linux too, tools/checks/win32_posix.h)   # (logbundle_test: PR #4's, once merged)
 TO=""
 command -v timeout > /dev/null 2>&1 && TO="timeout 600"
 FILTER="$*"
@@ -68,9 +69,10 @@ for f in tools/checks/*_test.sh; do
     if [ "$WIN" = 0 ]; then
         case "$WIN_ONLY" in *" $name "*) skip "$name" "needs Windows (windows.h, Win32 at run time)"; continue ;; esac
     fi
-    # (coop_test opens a dozen console windows and takes the focus: CONTRIBUTING.md) only when named whole
+    # (coop_test: a dozen console windows that take the focus on Windows (CONTRIBUTING.md), ~40 s, fixed UDP ports, so
+    # never two at once) only when named whole
     if [ "$name" = coop_test ] && ! printf ' %s ' "$FILTER" | grep -q ' coop_test '; then
-        skip coop_test "opens a dozen windows: sh tools/checks/run_all.sh coop_test"; continue
+        skip coop_test "only when named: sh tools/checks/run_all.sh coop_test (~40 s; windows on Windows)"; continue
     fi
     run "$name" sh "$f"
 done

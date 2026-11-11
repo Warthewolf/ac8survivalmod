@@ -2315,3 +2315,25 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   Anomaly (the schedule), so the tip names 16 and 28 only; co-op's "shot down, retry ... not sent to the leaderboard"
   replaced by DOWN / REVIVE and the host's team run ([coop] leaderboard = true by default, sv_down.lua). The STORE
   block, subtitles.ini, the credits line and the co-op 'Known:' list are left for the user.
+- `tools/checks/coop_guard_test.sh` (new): co-op's Lua fed hostile messages, 58 message types on a host and a joiner,
+  148,671 messages. It found defects in shipped co-op Lua (each a KNOWN entry the suite checks every run; none fixed,
+  they change what ships). The two that matter: (1) a joiner can send `sys|slot|25` and set the host's COOP.slot (and
+  fake the runtime's other sys| notices): coop.c's CoInboxPush gives another game's body the same form as the runtime's
+  own sys lines (coop.c 624-635, 751, 1042; sv_coop_migration.lua 748-750, 805-813), so the fix is in coop.c: refuse a
+  network body that starts "sys|"; (2) a host's `rnd|...|1e999` hangs a joiner for good (the waves field unchecked,
+  sv_coop_migration.lua:402-404, filled by sv_coop_joiner.lua:686-687's loop). Then: rnd's round / secs / wave
+  unbounded; af half-applied on a fractional max (a %d error after AF.hp is written, sv_coop_migration.lua:477-489) and
+  unbounded; hl and fwe's %d errors after their state is set; bd / dn ids only through tonumber; three tables a flood
+  grows without a bound (spawnQ while loading, pendBind, the fishing rows). Four more the suite lists are refused by
+  the runtime anyway (sp level / unit, a long ev name) or harmless (sp's index).
+- coop_test and flight_test build and run on Linux (tools/checks/win32_posix.h; the Windows compile lines unchanged).
+  coop_test also fails now when a summary line is missing (a mute run), and each process's real exit code is kept
+  (under set -e a failing one never wrote its .rc: "exit code none"). Its sanitizer pass (SANITIZE=1, Linux) shows one
+  report: CoPushSnap's memcpy over overlapping memory (coop.c:775), undefined behaviour; harmless in the DLL as built
+  (survival_rt.c's own memcpy copies forward, right when the destination is below the source), and a fix needs a
+  memmove of its own (the runtime is freestanding: none exists). flight_test only checks kind 4 flights' altitude
+  floor (flight_test.c:294-295: kinds 0-3 pass at -3,011 m): a test gap, noted. run_all.sh runs flight_test on Linux;
+  coop_test (~40 s) only when named.
+- testing/2026-11-11: the test sheet and key list for the next session on the dev install (everything unconfirmed
+  since 0.74.20 in one solo run's order, each step with its key and the log line that proves it; checked against the
+  code by three readers, 27 corrections).
