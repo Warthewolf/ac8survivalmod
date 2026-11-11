@@ -110,7 +110,8 @@ function checkRun(run) {
   const sp = run.specials || [];
   if (!Array.isArray(sp) || sp.length > run.round) return "too many specials";
   for (const s of sp) {
-    if (typeof s.kind !== "string" || !/^[a-z]{1,16}$/.test(s.kind) || !isInt(s.round, 1, run.round)
+    // (2026-11-11) a null or non-object entry is refused like any bad one: it used to throw here (a 500, not a 422)
+    if (!s || typeof s !== "object" || Array.isArray(s) || typeof s.kind !== "string" || !/^[a-z]{1,16}$/.test(s.kind) || !isInt(s.round, 1, run.round)
         || !isInt(s.seconds, 5, 3600) || typeof s.won !== "boolean")
       return "bad special";
   }

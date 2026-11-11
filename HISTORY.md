@@ -2300,3 +2300,7 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   package_dev.sh installs).
 - Not changed: TESTER=1 zips still keep every TEST ONLY block, sv_tanicorn.lua's Ctrl+T mount test included (a question
   for the user).
+- The leaderboard Worker (leaderboard/src/index.js checkRun) threw on a run whose specials held a null or non-object
+  entry, so a signed run like that got a 500 "server error" instead of a 422 "bad special". It's refused as a bad
+  special now (worker.test.mjs: null, a number, a string, an array). Not deployed: paste src/index.js as
+  leaderboard/README.md says when you next deploy; nothing else in the Worker changed.

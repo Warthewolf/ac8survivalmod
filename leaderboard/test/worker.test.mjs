@@ -70,6 +70,10 @@ check("a sane run passes", checkRun(run) === null);
 { const newer = { ...run, specials: [...run.specials, { kind: "wormhole", round: 11, seconds: 90, won: true }] };
   check("a special this Worker doesn't know is left out, not the run", checkRun(newer) === null && newer.specials.length === 2); }
 check("a bad special kind is refused", checkRun({ ...run, specials: [{ kind: "<x>", round: 3, seconds: 90, won: true }] }) !== null);
+for (const bad of [null, 7, "ladon", [], [{ kind: "ladon" }]]) {   // (2026-11-11: a null entry threw, so a 500)
+  let why; try { why = checkRun({ ...run, specials: [run.specials[0], bad] }); } catch (e) { why = "THREW " + e.message; }
+  check(`a special entry of ${JSON.stringify(bad)} is refused, not thrown (${why})`, why === "bad special");
+}
 check("too many kills is refused", checkRun({ ...run, kills: { air: 9999, ground: 0 } }) !== null);
 check("a too-short run is refused", checkRun({ ...run, time_s: 10 }) !== null);
 check("a bad pilot name is refused", checkRun({ ...run, pilot: "<script>" }) !== null);
