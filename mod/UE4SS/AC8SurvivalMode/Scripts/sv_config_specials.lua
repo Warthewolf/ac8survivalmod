@@ -494,7 +494,27 @@ CFG.specials = {
                              rockets = { enabled = true, launch_a_s = 45, launch_b_s = 110, boost_s = 12, rocket_pay = 3000,
                                          escape_penalty = 5000, debris = true, debris_tgt_s = 3, debris_next_s = 2.8,
                                          debris_pay = 400, debris_timeout_s = 120,
-                                         timeout_s = 240, escape_min_m = 15000, split_wait_s = 10 } } },
+                                         timeout_s = 240, escape_min_m = 15000, split_wait_s = 10,
+                                         -- ((2026-11-11) Saint Alessia's run, both rockets escaped: "10000% need to add the
+                                         -- mission dialogue about stopping the rocket launch, froya didn't even notice";
+                                         -- "Use the Mission 22 radio lines for the rocket warning") at the rockets' spawn,
+                                         -- warn_s before each launch, at its liftoff, halfway up (half_m), its escape and its
+                                         -- kill: a big callout (big_x), Comona Control's line (subs: a list's lines in
+                                         -- turn, one not said yet this run; {rocket}, {s}, {b}, {km} filled in) and Mission
+                                         -- 22's countdown on the radio (radio = false: none); its height on the NEXT row
+                                         warn_s = 15, half_m = 10100, big_x = 1.5, radio = true, log_s = 10,
+                                         subs = {
+            brief = { "CTRL|Two enemy rockets on the pads: rocket A launches in {s} seconds, B in {b}. Shoot them down before orbit!",
+                      "CTRL|They're launching from the pads we lost. First rocket in {s} seconds. Don't let either one reach orbit!" },
+            warn = { "CTRL|Rocket {rocket}'s count is running: liftoff in {s} seconds. Get over the pads!",
+                     "CTRL|Ignition sequence on rocket {rocket}! {s} seconds to liftoff!" },
+            launch = { "CTRL|Liftoff! Rocket {rocket} is climbing. Bring it down before it reaches orbit!",
+                       "CTRL|Rocket {rocket} is away and climbing fast! Get after it!" },
+            half = { "CTRL|Rocket {rocket} is {km} km up, halfway to orbit. Shoot it down now!",
+                     "CTRL|Rocket {rocket}'s halfway up! This is your last chance to stop it!" },
+            escaped = { "CTRL|Rocket {rocket} made it out of the atmosphere. We lost it.",
+                        "CTRL|Too late, rocket {rocket}'s in orbit. That one's going to cost us." },
+            down = { "CTRL|Rocket {rocket} is down! It isn't going anywhere.", "CTRL|Direct hit on rocket {rocket}! Good work!" } } } } },
     -- "decoy" = THE DECOY (Scripts/sv_decoy.lua, docs/re/DECOY.md; user, 2026-11-06): a Marker UAV far north (the
     -- bait: its Tonitrus Spear guidance laser painting the airfield, pinged on the minimap) the players must shoot down;
     -- then the trap: up to max_total UAVs come round the players (spawn_km from one, any bearing, alt_m of their
@@ -1698,7 +1718,8 @@ CFG.hud = {
                          -- a line's speaker code ("MC|...") to the name on the strip; a code not here is the name
                          speakers = { MC = "CONCERT MC", FOOD = "FOOD TRUCK", MARKET = "MARKET STALL",
                                       -- ((2026-11-08) the shuttle round's intercepted channel: Scripts/sv_kaska.lua)
-                                      KASKA = "INTERCEPT: KASKA", EMBDIR = "INTERCEPT: EMBDIR LAUNCH" },
+                                      KASKA = "INTERCEPT: KASKA", EMBDIR = "INTERCEPT: EMBDIR LAUNCH",
+                                      CTRL = "COMONA CONTROL" },                -- ((2026-11-11) the retake's rockets)
                          -- ((2026-11-08) the user: "all of the Audrey and Valka subtitles must play One After Other, and
                          -- they can't be reused, and they take priority over everyone elses subtitles") priority: their
                          -- lines go before every other speaker's waiting line (after theirs already waiting: in the order
@@ -1906,7 +1927,7 @@ CFG.hud = {
         sp_ford_down = "CARRIER SUNK",
         sp_ford_down_sub = "NO MORE FIGHTERS OFF ITS DECK",
         sp_captured  = "SPACEPORT CAPTURED",
-        sp_captured_sub = "RETAKE IT NEXT ROUND",
+        sp_captured_sub = "RETAKE IT NEXT ROUND: STOP THEIR ROCKETS",
         sp_lost      = "SPACEPORT LOST",
         sp_lost_sub  = "%d SHIPS STAY OFFSHORE FOR THE RETAKE",
         sp_held      = "SPACEPORT HELD",
@@ -1914,8 +1935,14 @@ CFG.hud = {
         sp_retake_go = "SPACEPORT RETAKE",
         sp_retake_go_sub = "DESTROY THE GARRISON, THE ISLAND'S DEFENCES AND THE ROCKETS",
         sp_retake_row = "GARRISON: %d  FLEET: %d SHIPS",
-        sp_rocket_launch = "ROCKET LAUNCH",
+        sp_rocket_launch = "ROCKET %s LAUNCHED",
         sp_rocket_launch_sub = "SHOOT IT DOWN BEFORE IT REACHES ORBIT",
+        -- ((2026-11-11) the rockets' warning, halfway, the NEXT row's rockets and the reward withheld: sv_spaceport.lua)
+        sp_rocket_warn = "ROCKET %s: LIFTOFF IN %d S", sp_rocket_warn_sub = "GET TO THE SPACEPORT'S PADS AND STOP IT",
+        sp_rocket_half = "ROCKET %s HALFWAY TO ORBIT", sp_rocket_half_sub = "%.0f KM UP: SHOOT IT DOWN NOW",
+        sp_rk_row = "  ROCKETS: %s", sp_rk_pad = "%s IN %s", sp_rk_up = "%s %.1f KM", sp_rk_climb = "%s CLIMBING",
+        sp_rk_down = "%s DOWN", sp_rk_esc = "%s IN ORBIT", sp_rk_gone = "%s GONE",
+        sp_retaken_esc_sub = "NO REWARD: %d ROCKET(S) REACHED ORBIT",
         sp_rocket_down = "ROCKET DOWN",
         sp_rocket_down_sub = "+%d ZOLLARS",
         sp_rocket_escaped = "ROCKET ESCAPED",

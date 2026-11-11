@@ -40,6 +40,7 @@ local GROUPS = {
     { "specials.fishing", "GONE FISHIN': SAL and Comona (S = SAL, C = control, T = tower, G = crew chief)" },
     { "specials.festival", "THE FESTIVAL: the town, KMG and Comona" },
     { "specials.valka", "VALKA and AUDREY" },
+    { "specials.spaceport", "SPACEPORT RETAKE: the rockets (CTRL = COMONA CONTROL)" },
     { "hud.subs.speakers", "WHO'S WHO: the name shown for each speaker code" },
 }
 -- (quoted lines, not a long string: tools/checks/ini_check.py reads this family's text)

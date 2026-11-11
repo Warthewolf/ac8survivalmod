@@ -346,6 +346,7 @@ end
 local SIDE
 local function scene(side)
     SIDE = side
+    if SPORT then SPORT.rkJoin, SPORT.hostRow = { st = {}, ended = {} }, nil end   -- ((2026-11-11) the host's rockets' word)
     fillT(CFG, CFG0)
     CFG.coop.enabled = true
     M.mine, M.mineIn, M.hostPreset, M.hostDiff, M.hostMax = nil, nil, nil, nil, nil
@@ -458,6 +459,7 @@ local TYPES = {
     { "join", "fw", { "fw", "1", "40", "3", "1", "@CATCH", "12", "0" } },
     { "join", "fwe", { "fwe", "3", "100", "0", "7", "3" } },
     { "join", "spx", { "spx", "a:2:3:40:1;-" } },
+    { "join", "rk", { "rk", "A", "escaped", "20200" } },       -- ((2026-11-11) the host's word on a rocket: sv_spaceport.lua)
     { "join", "es", { "es", "route", "1", "4", "80", "12.5", "0", "1", "0", "1" } },
     { "join", "vm", { "vm", "1" } },
     { "join", "vr", { "vr", "@VALKA" } },
@@ -481,6 +483,12 @@ local TYPES = {
     { "join", "rs", { "rs", "n" }, extra = true },
     { "join", "rs", { "rs", "m" }, extra = true },
     { "join", "spx", { "spx", "r:5:2;12:40:11:Fleet1,Fleet2" }, extra = true },
+    { "join", "spx", { "spx", "r:5:2:p40:u123;12:40:11:AegisA" }, extra = true },   -- ((2026-11-11) and the rockets' tokens)
+    { "join", "rk", { "rk", "B", "pad", "" }, extra = true },
+    { "join", "rk", { "rk", "A", "launched", "760" }, extra = true },
+    { "join", "rk", { "rk", "B", "down", "9000" }, extra = true },
+    { "join", "rk", { "rk", "B", "lost", "" }, extra = true },
+    { "join", "co", { "co", "ROCKET A LAUNCHED", "SHOOT IT DOWN BEFORE IT REACHES ORBIT", "1.5" }, extra = true },
     { "join", "fx", { "fx", "0", "p:11:0:1,2,3" }, extra = true },
 }
 -- the place holders: this build's own values
@@ -668,6 +676,7 @@ local EFFECT = {
     ["join fw"] = function() return FISH.cl.weigh[1] ~= nil end,
     ["join fwe"] = function() return FISH.cl.paidRound == 7 end,
     ["join spx"] = function() return SPORT.hostRow and SPORT.hostRow.kind == "a" end,
+    ["join rk"] = function() return called("SV_Event", "RE_SV_SpRocketEndA") end,
     ["join es"] = function() return ESC.host and ESC.host.state == "route" end,
     ["join vm"] = function() return M.vmHere == true end,
     ["join vr"] = function() return M.vr ~= nil end,
@@ -952,6 +961,42 @@ do
     inbox[#inbox + 1] = "0|af|5000|-3|0|1000"                   -- (over the maximum, under 0: within it)
     tick()
     if not (AF.hp == 1000 and AF.full == 0) then fail(ca, "limits", "af|5000|-3|0|1000", "not clamped: AF.hp " .. tostring(AF.hp) .. ", AF.full " .. tostring(AF.full)) end
+end
+
+-- ((2026-11-11) the Spaceport Retake's rockets) a big callout's scale reaches a joiner as a number (it was sent as "1" and
+-- taken as true, which the banner's SetRenderScale can't use); a host's "rk": a rocket ended here once a retake, only on
+-- escaped or lost, never another letter or state
+do
+    local ck = covOf("join", "co")
+    local rawHC, got = hudCallout, {}
+    hudCallout = function(text, sub, big) got[#got + 1] = { text = text, big = big } end
+    for _, v in ipairs({ { "1.5", 1.5 }, { "2.0", 2.0 }, { "1", 1.5 }, { "0", nil }, { "inf", nil }, { "nan", nil }, { "9", nil }, { "-2", nil } }) do
+        scene("join")
+        got = {}
+        ck.fed = ck.fed + 1
+        inbox[#inbox + 1] = "0|co|ROCKET A LAUNCHED|SHOOT IT DOWN|" .. v[1]
+        tick()
+        if not (got[1] and got[1].big == v[2]) then
+            fail(ck, "limits", "co|...|" .. v[1], "its scale here " .. tostring(got[1] and got[1].big) .. ", not " .. tostring(v[2]))
+        end
+    end
+    hudCallout = rawHC
+    local cr = covOf("join", "rk")
+    local function ends(L) local n = 0; for _, c in ipairs(calls) do if c.name == "SV_Event" and c.args[1] == "RE_SV_SpRocketEnd" .. L then n = n + 1 end end; return n end
+    scene("join")
+    for _, m in ipairs({ "rk|A|escaped|20200", "rk|A|escaped|20200", "rk|A|lost|", "rk|C|escaped|1", "rk|A|boom|1", "rk|B|down|1",
+                         "rk|B|half|nan", "rk|a|escaped|1", "rk|B|escaped|1e999" }) do
+        cr.fed = cr.fed + 1
+        inbox[#inbox + 1] = "0|" .. m
+    end
+    tick(); tick()
+    if ends("A") ~= 1 or ends("B") ~= 1 then
+        fail(cr, "native", "rk sequence", string.format("rocket A ended %d times, B %d (each once: A's escape, B's escape)", ends("A"), ends("B")))
+    end
+    inbox[#inbox + 1] = "2|rk|B|pad|"                             -- (another joiner's: never the host's word)
+    inbox[#inbox + 1] = "2|rk|B|escaped|1"
+    tick(); tick()
+    if ends("B") ~= 1 then fail(cr, "limits", "rk from slot 2", "a joiner's rk ended a rocket here") end
 end
 
 ---------------------------------------------------------------------------------------------------- summary

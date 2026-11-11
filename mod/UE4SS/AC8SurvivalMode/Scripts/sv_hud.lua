@@ -650,7 +650,7 @@ function hudTick(now, paused, pc)
         end)
         H.bannerSlot:SetSize({ X = math.max(390, w + 2 * hc.banner_pad), Y = 69 })
         -- a big one (VALKA's name: CFG.specials.valka.big_x): the banner drawn that many times its size, held longer
-        local sc = c.big or 1
+        local sc = tonumber(c.big) or (c.big and 1.5) or 1         -- ((2026-11-11) a true: 1.5, never a scale of true)
         pcall(function() H.banner:SetRenderScale({ X = sc, Y = sc }) end)
         setText(H.sub, "subStr", c.sub or "")
         H.banner:SetRenderOpacity(1); H.sub:SetRenderOpacity(CFG.hud.opacity)

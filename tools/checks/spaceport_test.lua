@@ -19,7 +19,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+
 local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 do                                    -- (the runtime's paths are Windows ones: SCRIPT_DIR .. "..\\config\\")
@@ -107,6 +108,7 @@ part("sv_rows.lua"); part("sv_ai.lua")
 function hudCallout(text, sub, big) callouts[#callouts + 1] = { text = text, sub = sub, big = big } end
 part("sv_spawn.lua"); part("sv_anomalies.lua")
 part("sv_rounds.lua", nil, { { "\nlocal function startRound%(%)", "\nfunction startRound()" } })
+part("sv_subs.lua")                              -- ((2026-11-11) the subtitle strip: the rockets' lines, once a run each)
 part("sv_amphib.lua"); part("sv_spaceport.lua"); part("sv_stats.lua"); part("sv_tells.lua")
 function playerOnAirfield() return grounded end
 local credits = {}
@@ -133,6 +135,18 @@ end
 local now = 0
 local function run(s, from, to, every)           -- the special's tick every 0.25 s
     for t = from, to, every or 0.25 do now = t; D.now = t; SPORT.tick(t, s) end
+end
+-- ((2026-11-11, lag-4) the retake's spawns and checks are queued, a spawn or two checks a tick: SPORT.retakeSpawn, then
+-- its tick at the same moment until they're through, as the old one-call spawn left them)
+local function retakeNow(t)
+    local r = SPORT.retakeSpawn(t)
+    local sp = D.special
+    for _ = 1, 200 do
+        if not (sp and sp.jobs and #sp.jobs > 0) then break end
+        D.now = t
+        SPORT.retakeTick(t, sp)
+    end
+    return r
 end
 
 ---------------------------------------------------------------------------------------------------- the fleet
@@ -247,7 +261,7 @@ D.round = D.round + 1
 D.special = { kind = "retake", state = "pending" }
 spawns, callouts, credits = {}, {}, {}
 RUN.sport.troops = 9
-check(SPORT.retakeSpawn(now) == true and D.special.state == "retake", "the retake spawned")
+check(retakeNow(now) == true and D.special.state == "retake", "the retake spawned")
 local s2 = D.special
 check(#spawned("^SV_Unit_SpGarrison") == 3, "9 troops in: 3 garrison units (" .. #spawned("^SV_Unit_SpGarrison") .. ")")
 check(SPORT.shipsUp(s2) == 26 and RUN.sport == nil, "the 26 ships carried, RUN.sport used up")
@@ -256,29 +270,29 @@ check(SPORT.retakeBusy(s2), "busy while the garrison and ships are up")
 for u in pairs(alive) do if u:find("^SV_Unit_SpGarrison") then alive[u] = 0 end end
 for u in pairs(rs.ships) do alive[u] = 0 end
 alive.SV_Unit_SpFord = 0
-for _ = 1, 8 do now = now + 0.25; SPORT.retakeTick(now, s2) end
+for _ = 1, 14 do now = now + 0.25; SPORT.retakeTick(now, s2) end   -- ((2026-11-11, lag-2) their counts up to 2.5 s old)
 check(not SPORT.retakeBusy(s2) and paid("garrison") > 0, "all down: not busy, the garrison paid")
 SPORT.retakeOver(now, s2)
 check(paid("spaceport retaken") > 0 and called(T.sp_retaken) ~= nil, "its end: the reward, SPACEPORT RETAKEN")
 fresh(12)
 D.special = { kind = "retake", state = "pending" }
-check(SPORT.retakeSpawn(0) == true and #spawned("^SV_Unit_SpGarrison") == 2, "forced (no RUN.sport): test_troops 8: 2 garrison units")
+check(retakeNow(0) == true and #spawned("^SV_Unit_SpGarrison") == 2, "forced (no RUN.sport): test_troops 8: 2 garrison units")
 SP.retake.rockets.enabled = true
 
 print("the retake's island enemies")
 fresh(12)
 D.special = { kind = "retake", state = "pending" }
 SP.retake.island.enabled, SP.retake.rockets.enabled = true, false
-check(SPORT.retakeSpawn(0) == true and #spawned("^SV_Unit_SpIsl") == 7, "7 island units spawned (" .. #spawned("^SV_Unit_SpIsl") .. ")")
+check(retakeNow(0) == true and #spawned("^SV_Unit_SpIsl") == 7, "7 island units spawned (" .. #spawned("^SV_Unit_SpIsl") .. ")")
 local si = D.special
 for u in pairs(alive) do if u:find("^SV_Unit_SpGarrison") then alive[u] = 0 end end
 for _ = 1, 4 do now = now + 0.5; SPORT.retakeTick(now, si) end
 check(SPORT.retakeBusy(si) and since(1, "the island's defences and armour: Exsam 5 up") >= 1, "busy while the island's enemies are up; logged")
 alive.SV_Unit_SpIslExsam, alive.SV_Unit_SpIslTankA = 2, 1
-now = now + 1; SPORT.retakeTick(now, si)
+for _ = 1, 3 do now = now + 1; SPORT.retakeTick(now, si) end   -- ((2026-11-11, lag-2) their counts up to 2.5 s old)
 check(paid("air defences: one down") > 0 and paid("armour: one down") > 0, "an EXSAM down and a tank down: each paid by its kind")
 for u in pairs(alive) do if u:find("^SV_Unit_SpIsl") then alive[u] = 0 end end
-now = now + 1; SPORT.retakeTick(now, si)
+for _ = 1, 3 do now = now + 1; SPORT.retakeTick(now, si) end
 check(not SPORT.retakeBusy(si), "all down: not busy")
 SPORT.retakeOver(now, si)
 check(evs("^RE_SV_SpIslandRemove$") ~= "", "its end: the island's units taken off")
@@ -294,7 +308,8 @@ local function retakeWithRockets()
     fresh(12)
     D.special = { kind = "retake", state = "pending" }
     RUN.credits = 20000
-    check(SPORT.retakeSpawn(0) == true, "the retake spawned with its rockets")
+    if SUB then SUB.q, SUB.cur = {}, nil end          -- ((2026-11-11) the strip's lines shown: no hud tick here)
+    check(retakeNow(0) == true, "the retake spawned with its rockets")
     local s = D.special
     for u in pairs(alive) do if u:find("^SV_Unit_SpGarrison") then alive[u] = 0 end end
     return s
@@ -306,7 +321,8 @@ rtick(s3, 0, 3)
 check(evs("^RE_SV_SpRocketSplitOff$") ~= "" and evs("^RE_SV_SpRocketLaunch") == "", "the split off at the start; nothing launched yet")
 check(SPORT.retakeBusy(s3), "busy: the rockets on the pads (the garrison down)")
 rtick(s3, 3.5, RK.launch_a_s + 0.5)
-check(evs("^RE_SV_SpRocketLaunch") == "RE_SV_SpRocketLaunchA" and called(T.sp_rocket_launch) ~= nil, "rocket A launched at launch_a_s: ROCKET LAUNCH")
+check(evs("^RE_SV_SpRocketLaunch") == "RE_SV_SpRocketLaunchA" and called(string.format(T.sp_rocket_launch, "A")) ~= nil,
+      "rocket A launched at launch_a_s: ROCKET A LAUNCHED")
 rtick(s3, RK.launch_a_s + 1, RK.launch_a_s + RK.boost_s + 0.5)
 check(evs("^RE_SV_SpRocketBoost") == "RE_SV_SpRocketBoostA", "boosted boost_s on")
 alive.SV_Unit_SpRockets = 1                     -- A shot down
@@ -880,7 +896,7 @@ RUN.sport = { retakeRound = 11, troops = 8, lostRound = 10, fromHost = true,
 check(specialFor(11) == "retake", "a host by migration: specialFor still brings the retake")
 D.special = { kind = "retake", state = "pending" }
 SP.retake.rockets.enabled = false
-check(SPORT.retakeSpawn(0) and #spawned("^SV_Unit_SpAegisC$") == 1 and #spawned("^SV_Unit_SpFord$") == 1 and SPORT.shipsUp(D.special) == 2
+check(retakeNow(0) and #spawned("^SV_Unit_SpAegisC$") == 1 and #spawned("^SV_Unit_SpFord$") == 1 and SPORT.shipsUp(D.special) == 2
       and since(1, "spawned again on this game") >= 1, "its ships spawned again on the new host")
 check(SPORT.coopCode() == "r:8:2;11:8:10:AegisC,Ford", "the retake in play shared (for the next migration): " .. SPORT.coopCode())
 SP.retake.rockets.enabled = true
@@ -1132,6 +1148,244 @@ SPORT.spawn(0)
 check(s.tu == nil, "the airfield off: none planned")
 CFG.airfield.enabled = true
 SV_SetAircraft, HEAVY = rawSetAc, nil
+
+---------------------------------------------------------------------------------------------------- 2026-11-11
+-- (Saint Alessia's co-op run of 0.74.36, round 50: both rockets escaped with a 4 s banner each, Froya the only player
+-- flying; the retake's start held the game thread ~0.75 s; the joiner Delta's rocket B ended 2 minutes before the host's)
+do
+local function idx(name, from)                    -- the first event `name` from index `from`
+    for i = from or 1, #events do if events[i] == name then return i end end
+end
+local function nEv(name) local n = 0; for _, e in ipairs(events) do if e == name then n = n + 1 end end; return n end
+local function subsSince(from, pat)              -- subtitle lines said since log line `from` matching pat
+    local n = 0
+    for i = from, #logs do if logs[i]:find("^subs: COMONA CONTROL: ") and logs[i]:find(pat) then n = n + 1 end end
+    return n
+end
+SP.retake.island.enabled = false
+
+print("(2026-11-11, lag-4) the retake's start: its spawns and checks queued, a spawn or two checks a tick")
+fresh(12)
+SP.retake.island.enabled = true
+D.special = { kind = "retake", state = "pending" }
+RUN.sport = { retakeRound = 12, troops = 12, lostRound = 11, ships = {
+    SV_Unit_SpAegisA = { kind = "aegis", group = "A" }, SV_Unit_SpAegisB = { kind = "aegis", group = "A" },
+    SV_Unit_SpBoatA = { kind = "boat", group = "A" }, SV_Unit_SpWaspA = { kind = "wasp", group = "A" } } }
+for u in pairs(RUN.sport.ships) do alive[u] = 1 end
+local rawSp, rawAl = SV_Spawn, SV_UnitAlive
+local nSp, nAsk, asksOf = 0, 0, {}
+SV_Spawn = function(...) nSp = nSp + 1; return rawSp(...) end
+SV_UnitAlive = function(u) nAsk = nAsk + 1; asksOf[u] = (asksOf[u] or 0) + 1; return rawAl(u) end
+local L0 = #logs + 1
+check(SPORT.retakeSpawn(0) == true and nSp == 0 and nAsk == 0 and called(T.sp_retake_go) ~= nil,
+      string.format("SPORT.retakeSpawn spawns and asks nothing itself, its banner at once (%d spawns, %d asks)", nSp, nAsk))
+local sq = D.special
+check(SPORT.retakeBusy(sq) and SPORT.shipsUp(sq) == 4 and (SPORT.coopCode():find("AegisA", 1, true) ~= nil),
+      "while queued: busy, the ships still to check counted afloat and shared for a host migration (" .. SPORT.coopCode() .. ")")
+local worstSp, worstAsk, ticks, totSp = 0, 0, 0, 0
+for _ = 1, 80 do
+    if not (sq.jobs and #sq.jobs > 0) then break end
+    nSp, nAsk = 0, 0
+    ticks = ticks + 1
+    D.now = 0
+    SPORT.retakeTick(0, sq)
+    worstSp, worstAsk, totSp = math.max(worstSp, nSp), math.max(worstAsk, nAsk), totSp + nSp
+end
+check(sq.jobs == nil and worstSp <= 1 and worstAsk <= 2 and ticks >= 16,
+      string.format("through in %d ticks, at most %d spawn and %d native asks in one (one spawn or two checks a tick)", ticks, worstSp, worstAsk))
+check(totSp == 14 and #spawned("^SV_Unit_SpGarrison") == 3 and #spawned("^SV_Unit_SpIsl") == 7 and #spawned("^SV_Unit_SpDebri") == 3
+      and sq.rk and SPORT.shipsUp(sq) == 4 and since(L0, "the Spaceport Retake: 12 garrison vehicles, 30 island enemies, 4 ships") == 1,
+      "all of it came: the rockets, their 3 debris units, 3 garrison units, 7 island units, the 4 ships checked (" .. totSp .. " spawns)")
+-- (lag-2) the garrison's and the island's counts asked about once UNIT_AGE_S (2.5 s), not every second
+asksOf = {}
+for t = 1, 20, 0.25 do now = t; D.now = t; SPORT.retakeTick(t, sq) end
+check((asksOf.SV_Unit_SpGarrisonA or 0) <= 10 and (asksOf.SV_Unit_SpIslExsam or 0) <= 10 and (asksOf.SV_Unit_SpGarrisonA or 0) >= 4,
+      string.format("20 s of the retake: the garrison A asked %d times, the EXSAM site %d (each at most every 2.5 s; 1 s: ~20)",
+          asksOf.SV_Unit_SpGarrisonA or 0, asksOf.SV_Unit_SpIslExsam or 0))
+SV_Spawn, SV_UnitAlive = rawSp, rawAl
+-- nothing of it came: its reward withheld
+fresh(12)
+D.special = { kind = "retake", state = "pending" }
+SV_Spawn = function() return -3 end
+L0 = #logs + 1
+retakeNow(0)
+SV_Spawn = rawSp
+local se = D.special
+check(se.empty and not SPORT.retakeBusy(se) and since(L0, "no garrison, island enemies, ships or rockets came for the retake") == 1,
+      "every spawn refused: the retake marked empty, not busy")
+SPORT.retakeOver(0, se)
+check(paid("spaceport retaken") == 0 and since(L0, "reward withheld: none of its") == 1, "an empty retake pays no reward")
+SP.retake.island.enabled = false
+
+print("(2026-11-11) the rockets' warnings: big callouts, Comona Control's lines, Mission 22's radio, the host's word")
+local rkSent = {}
+COOP = { host = function() return true end, client = function() return false end, players = function() return {} end,
+         debit = function() end, takenOff = function() return 0 end,
+         rocket = function(L, st, alt) rkSent[#rkSent + 1] = L .. ":" .. st; return true end }
+local function sent(x) for _, v in ipairs(rkSent) do if v == x then return true end end return false end
+L0 = #logs + 1
+local sR = retakeWithRockets()
+check(evs("^RE_SV_SpRadioBrief$") ~= "" and subsSince(L0, "launches in 45 seconds, B in 110") + subsSince(L0, "First rocket in 45 seconds") == 1
+      and sent("A:pad") and sent("B:pad") and evs("^RE_SV_SpRocketHostOn$") ~= "",
+      "the rockets up: Comona Control's brief with their times, Mission 22's countdown start on the radio, the host's mark, \"pad\" to the joiners")
+rtick(sR, 0.5, RK.launch_a_s - RK.warn_s - 1)
+check(called(string.format(T.sp_rocket_warn, "A", RK.warn_s)) == nil and evs("^RE_SV_SpRadioWarn$") == "", "no warning before warn_s")
+L0 = #logs + 1
+rtick(sR, RK.launch_a_s - RK.warn_s - 0.5, RK.launch_a_s - RK.warn_s + 0.5)
+local w = called(string.format(T.sp_rocket_warn, "A", RK.warn_s))
+check(w and w.big == RK.big_x and nEv("RE_SV_SpRadioWarn") == 1 and subsSince(L0, "[Rr]ocket A") == 1,
+      "warn_s before A's launch: a big ROCKET A: LIFTOFF IN 15 S, Comona Control's line on A, Mission 22's ignition (RE_SV_SpRadioWarn)")
+rtick(sR, RK.launch_a_s - RK.warn_s + 1, RK.launch_a_s + 0.5)
+local iCount, iLaunch = idx("RE_SV_SpRadioLaunch"), idx("RE_SV_SpRocketLaunchA")
+local iOn = iCount and idx("RE_SV_SpRocketHostOn", iCount)
+local lc = called(string.format(T.sp_rocket_launch, "A"))
+check(iCount and iLaunch and iOn and iCount < iOn and iOn < iLaunch and lc and lc.big == RK.big_x and sent("A:launched"),
+      "the count's last call on the radio before its launch, the host's mark again, a big ROCKET A LAUNCHED, \"launched\" to the joiners")
+L0 = #logs + 1
+rtick(sR, RK.launch_a_s + 1, RK.launch_b_s - RK.warn_s + 0.5)
+check(called(string.format(T.sp_rocket_warn, "B", RK.warn_s)) and subsSince(L0, "[Rr]ocket B") >= 1 and since(L0, "said already this run") == 0,
+      "rocket B's warning: its own line (A's and B's each their own, never refused as said)")
+-- halfway with no height read (no objects): 55 s after its launch
+rtick(sR, now + 0.5, RK.launch_a_s + 56)
+check(called(string.format(T.sp_rocket_half, "A")) and sent("A:half"), "halfway (55 s on, no height read): ROCKET A HALFWAY TO ORBIT, \"half\"")
+alive.SV_Unit_SpRockets = 1                       -- A shot down (counted by its unit: the one in the air)
+L0 = #logs + 1
+rtick(sR, now + 0.5, now + 1.5)
+check(sR.rk.out.A == "kill" and nEv("RE_SV_SpRadioDown") == 1 and subsSince(L0, "[Rr]ocket A") == 1 and sent("A:down"),
+      "A down: its kill named (the only one up), \"Joker 1, bandit downed!\" on the radio, Comona Control on A, \"down\" to the joiners")
+rtick(sR, now + 0.5, now + 11)
+local nDown = 0
+for _, v in ipairs(rkSent) do if v == "A:down" then nDown = nDown + 1 end end
+check(nDown >= 2, "the host's word again every 10 s (a late joiner): A's down said " .. nDown .. " times")
+-- a second retake in the same run: the lines it said are said no more, the other ones are
+L0 = #logs + 1
+D.special = { kind = "retake", state = "pending" }
+for u in pairs(alive) do alive[u] = 0 end
+retakeNow(now)
+local s2 = D.special
+local briefs = subsSince(L0, "launches in 45 seconds, B in 110") + subsSince(L0, "First rocket in 45 seconds")
+check(briefs == 1 and since(L0, "said already this run") == 0, "a second retake this run: its other brief line")
+D.special = { kind = "retake", state = "pending" }
+for u in pairs(alive) do alive[u] = 0 end
+L0 = #logs + 1
+retakeNow(now)
+check(subsSince(L0, "45 seconds") == 0 and since(L0, "brief %(no callout; line every one said already this run; RE_SV_SpRadioBrief 1%)") == 1,
+      "a third: every brief line said this run, none again (the radio still)")
+s2.state = "done"
+
+print("(2026-11-11) a launch a STORE ate fired again here once it's shut; the climb's speed in the log")
+local rkO = {}
+SV_Spawn = function(unit, ...)
+    local r = rawSp(unit, ...)
+    if unit == "SV_Unit_SpRockets" then
+        rkO = { obj("BP_OP0058_crkt_CP", -1384043, -41261, 76000), obj("BP_OP0058_crkt_CP", -1325196, 59778, 76000) }
+    end
+    return r
+end
+local sS = retakeWithRockets()
+rtick(sS, 0.5, RK.launch_a_s + 0.5)
+check(sS.rk.byObj and nEv("RE_SV_SpRocketLaunchA") == 1, "A launched, its object found")
+D.musicHold = 1                                    -- (this game's landing STORE open: the launch's records never ran)
+L0 = #logs + 1
+rtick(sS, RK.launch_a_s + 1, RK.launch_a_s + 8)
+check(nEv("RE_SV_SpRocketLaunchA") == 1 and since(L0, "rocket A still on its pad after its launch here: fired again once") == 1,
+      "still on its pad 5 s on, the STORE open: waits")
+D.musicHold = 0
+rtick(sS, RK.launch_a_s + 8.5, RK.launch_a_s + 13)
+check(nEv("RE_SV_SpRocketLaunchA") == 2 and since(L0, "rocket A still on its pad 5 s after its launch: launched again here, try 1 of 3") == 1,
+      "the STORE shut: its launch fired again here")
+check(not sS.rk.boosted.A, "its boost counted from the launch that took")
+local t0, z, from = now, 76000, sS.rk.launched.A
+for _ = 1, 30 do                                  -- (180 km/h up, 1,008 once boosted)
+    now = now + 1; D.now = now
+    z = z + (now >= from + RK.boost_s and 28000 or 5000)
+    rkO[1].pos.Z = z
+    SPORT.retakeTick(now, sS)
+end
+check(since(L0, "rocket A left its pad: its launch took here %(fired again 1 time%)") == 1, "off its pad: the launch took")
+check(since(L0, "^special: rocket A: %d+ m up, %d+ km/h, %d+ s after its launch") >= 2
+      and since(L0, "rocket A 8 s after its boost: 1%d%d%d km/h: boosted") == 1,
+      "its height and speed every log_s, its speed after its boost (" .. tostring(now - t0) .. " s)")
+-- the host's mark not set (its event eaten): set again
+FLAGS.SV_SpRocketHost = 0
+sS.rk.lchk.A = now
+L0 = #logs + 1
+local nOn = nEv("RE_SV_SpRocketHostOn")
+rtick(sS, now + 1, now + 1)
+check(nEv("RE_SV_SpRocketHostOn") == nOn + 1 and since(L0, "the host's mark on its climbs not set here %(SV_SpRocketHost 0%): set again") == 1,
+      "SV_SpRocketHost read 0 after a launch: RE_SV_SpRocketHostOn again here")
+FLAGS.SV_SpRocketHost = 1
+rtick(sS, now + 5, now + 6)
+check(sS.rk.lchk.A == nil, "the mark read 1: done")
+-- its escape: big, its line, "escaped"
+rkO[1].pos.Z = 2020000
+FLAGS.SV_SpRocketEscA = 1
+L0 = #logs + 1
+rtick(sS, now + 1, now + 2)
+local ec = called(T.sp_rocket_escaped)
+check(sS.rk.escaped.A and ec and ec.big == RK.big_x and subsSince(L0, "rocket A's in orbit") + subsSince(L0, "Rocket A made it out") == 1
+      and sent("A:escaped"),
+      "A escaped: a big ROCKET ESCAPED, Comona Control on A, \"escaped\" to the joiners")
+check(SPORT.row(sS, T):find(string.format(T.sp_rk_esc, "A"), 1, true) and SPORT.coopCode():find("^r:%d+:%d+:e:p%d+;") ~= nil,
+      "the NEXT row's rockets: A " .. string.format(T.sp_rk_esc, "A") .. ", B on its pad (" .. SPORT.coopCode() .. ")")
+SPORT.retakeOver(now, sS)
+local rt = called(T.sp_retaken)
+check(rt and rt.sub == string.format(T.sp_retaken_esc_sub, 1), "the retake's end says why there's no reward: " .. tostring(rt and rt.sub))
+SV_Spawn, D.musicHold = rawSp, nil
+FLAGS.SV_SpRocketHost, FLAGS.SV_SpRocketEscA = nil, nil
+COOP = nil
+
+print("(2026-11-11) a joiner: its rockets end on the host's word (\"rk\"), the host's rockets on its NEXT row (\"spx\")")
+local readyNow = true
+levelReady = function() return readyNow end
+COOP = { host = function() return false end, client = function() return true end, players = function() return {} end,
+         eventHere = function(n) events[#events + 1] = n; return 1 end }
+events = {}
+SPORT.rkJoin = { st = {}, ended = {} }
+SPORT.rkFromHost({ "rk", "A", "pad", "" })
+SPORT.rkFromHost({ "rk", "B", "pad", "" })
+check(nEv("RE_SV_SpRocketHostOff") == 1, "the host's first word: this game's climbs never end its rockets (RE_SV_SpRocketHostOff once)")
+SPORT.rkFromHost({ "rk", "A", "launched", "760" })
+SPORT.rkFromHost({ "rk", "A", "half", "10200" })
+check(evs("^RE_SV_SpRocketEnd") == "", "launched, half: its copy climbs on")
+SPORT.rkFromHost({ "rk", "A", "escaped", "20200" })
+SPORT.rkFromHost({ "rk", "A", "escaped", "20200" })                    -- (said again 10 s on)
+check(nEv("RE_SV_SpRocketEndA") == 1 and since(1, "coop: the host's rocket A escaped at 20200 m: this game's copy taken off") >= 1,
+      "the host's A escaped: this game's A taken off, once")
+SPORT.rkFromHost({ "rk", "B", "down", "9000" })
+check(nEv("RE_SV_SpRocketEndB") == 0, "the host's B down: its copy goes down by the host's \"dn\", not ended here")
+readyNow = false
+SPORT.rkFromHost({ "rk", "B", "lost", "" })
+check(nEv("RE_SV_SpRocketEndB") == 0, "this level not ready: held")
+readyNow = true
+SPORT.rkFromHost({ "rk", "B", "lost", "" })
+check(nEv("RE_SV_SpRocketEndB") == 1, "the host's word again once it's ready: B taken off")
+for _, bad in ipairs({ { "rk", "C", "escaped", "1" }, { "rk", "A", "boom", "1" }, { "rk", "", "", "" }, { "rk" }, "rk|A|escaped",
+                       { "rk", "AA", "escaped" }, { "rk", "A", "escaped", "nan" }, { "rk", "B", "escaped", "1e999" } }) do
+    local ok = pcall(SPORT.rkFromHost, bad)
+    check(ok, "a bad word refused quietly: " .. (type(bad) == "table" and table.concat(bad, "|") or bad))
+end
+check(nEv("RE_SV_SpRocketEndA") == 1 and nEv("RE_SV_SpRocketEndB") == 1 and SPORT.rkJoin.st.C == nil, "nothing ended by them")
+SPORT.rkFromHost({ "rk", "A", "pad", "" })                             -- (pad, escaped at once: a hostile host's loop)
+SPORT.rkFromHost({ "rk", "A", "escaped", "20100" })
+check(nEv("RE_SV_SpRocketEndA") == 1, "pad and escaped again within 20 s of its end: not ended twice")
+clock = clock + 30
+SPORT.rkFromHost({ "rk", "A", "launched", "760" })
+SPORT.rkFromHost({ "rk", "A", "pad", "" })                             -- (the next retake)
+SPORT.rkFromHost({ "rk", "A", "escaped", "20100" })
+check(nEv("RE_SV_SpRocketEndA") == 2, "a new retake's A (\"pad\" again): ended again on its escape")
+SPORT.fromHost("r:4:2:p40:u123;-")
+local cr = SPORT.clientRow(T)
+check(cr and cr:find(string.format(T.sp_rk_pad, "A", "0:40"), 1, true) and cr:find(string.format(T.sp_rk_up, "B", 12.3), 1, true),
+      "the host's rockets on a joiner's NEXT row: " .. tostring(cr))
+for _, bad in ipairs({ "r:4:2:p99999:u1;-", "r:4:2:q1:u1;-", "r:4:2:p:u1;-", "r:4:2:d5:u1;-", "r:4:2:p40;-" }) do
+    SPORT.fromHost(bad)
+    check(SPORT.hostRow == nil, "a bad rocket token refused: " .. bad)
+end
+SPORT.fromHost("r:4:2;-")
+check(SPORT.clientRow(T) == string.format(T.sp_retake_row, 4, 2), "an older host's row, no rockets: as it was")
+COOP, levelReady = nil, nil
+end
 
 print(fails == 0 and "spaceport test: all passed" or ("spaceport test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)
