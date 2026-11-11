@@ -2304,3 +2304,8 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   entry, so a signed run like that got a 500 "server error" instead of a 422 "bad special". It's refused as a bad
   special now (worker.test.mjs: null, a number, a string, an array). Not deployed: paste src/index.js as
   leaderboard/README.md says when you next deploy; nothing else in the Worker changed.
+- Two more checks, in run_all.sh: `tools/checks/lb_contract_test.sh` (every kind the Lua passes to LB.special, 13 now,
+  is kept and scored by the Worker's checkRun, and VERSION with and without COOP_TAG passes its version check: the
+  misses that dropped VALKA's and the 0.74.0 specials' wins and refused co-op runs, caught before a release) and
+  `tools/checks/rt_format_check.py` (hard rule 43 over runtime/*.c: 351 Log / Crumb / TcAppend calls, 0 problems; it
+  fails on %04x, %ld, %f and on more specifiers than arguments). Neither is in build_all.sh yet.

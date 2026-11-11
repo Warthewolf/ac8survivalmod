@@ -58,6 +58,8 @@ run ini_check      python -X utf8 -I tools/checks/ini_check.py
 run subtitles      python -X utf8 -I tools/subtitles.py check
 run size_check     python -X utf8 -I tools/checks/size_check.py
 run menu_pages     python -X utf8 -I tools/checks/menu_pages_test.py
+# hard rule 43 over the native runtime (not in build_all.sh yet)
+run rt_format      python -X utf8 -I tools/checks/rt_format_check.py
 # the suites
 for f in tools/checks/*_test.sh; do
     name=$(basename "$f" .sh)
