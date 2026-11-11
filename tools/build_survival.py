@@ -701,6 +701,18 @@ def build_npc_rows():
                         ('ModelId', ('name', se.TANI_HULL_MODEL, 0))):
         set_prop(row[2], [k for k, (n, t) in schema.items() if n == name][0], name, value)
     out.append(((se.TANI_HULL_NPC, 0), row))
+    # (2026-11-11, WP2 step 2) the live hull's row (se.TANI_HULL_LIVE_*): the hull's again on its own model row, each live
+    # part's DT_NPC row by its component (ChildNPCId paired with ChildNPCComponentNames, as a stock ship's row; the same rows
+    # its world-data child desc names through its mission row: whichever the game takes). Names only: in every build
+    row = copy.deepcopy(rows[(f[1], f[2])])
+    for name, value in (('WeaponDurabilityId', ('name', se.FISH_DURABILITY[0], 0)),
+                        ('ExplosionDurabilityId', ('name', se.FISH_DURABILITY[1], 0)),
+                        ('ModelId', ('name', se.TANI_HULL_LIVE_MODEL, 0)),
+                        ('ChildNPCId', ('arr', [('name', p['npc'], 0) for p in se.TANI_LIVE])),
+                        ('ChildNPCComponentNames', ('arr', [se.fname(p['comp']) for p in se.TANI_LIVE]))):
+        set_prop(row[2], [k for k, (n, t) in schema.items() if n == name][0], name, value)
+    assert all(se.fname(p['npc'])[2] == 0 for p in se.TANI_LIVE)
+    out.append(((se.TANI_HULL_LIVE_NPC, 0), row))
     # THE ESCORT's allied rows and the ZFA-44 host, THE DECOY's weaponless UAV (survival_events.ESCORT_DECOY_NPC_ROWS): copies
     # of the campaign's plain rows; an allied model with no skin row (the model's own look), MOONCHILD's behaviour set
     # (its row's LuaSet: hard rule 22, never NLID_0400_CP), the UAV's weapons emptied (its laser pod is its blueprint's)
@@ -1169,6 +1181,113 @@ def check_zfa_laser_build():
           f'{se.ZFA_TLS_EVENT} -> {se.ZFA_TLS_FLAG} read back from the packages: all there')
 
 
+TANI_WD_MARKER = os.path.join(ROOT, 'build', 'out', 'tani_wd.txt')
+
+
+def check_tanicorn_build():
+    """(2026-11-11, WP2 step 2, route (a)) THE TANACORN's live parts read back from the packages this build saved, and the
+    gate. Without TANI=1 (survival_events.TANI_WD) the lock: no package under the Tanicorn container's folder imported by
+    the world data, the live hull's unit without parts, and no build/out/tani_wd.txt. With it: the world data imports exactly
+    the live parts' blueprints; one child desc per TANI_LIVE entry (its name and component as fname stores them, its mission
+    row, its class that blueprint's import, a TGT mark, no parts of its own), their components the live hull's DT_NPC row's
+    ChildNPCComponentNames (its ChildNPCId the parts' rows) and, when the Tanicorn build's spec has BP_SV_Tani_HULLLIVE
+    (tools/tanicorn/spec.py: TANI_BUILD or build/tanicorn), the blueprint's LiveChildActorComponent nodes and their classes;
+    build/out/tani_wd.txt written (build_all.sh stages it; the packagers refuse a build with it). In every build: the rows,
+    the hull's appearance trigger and each part's order by name, and Scripts/sv_tanicorn.lua's names for them."""
+    se = survival_events
+    plain = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    load = lambda path: ZenPkg(data=open(os.path.join(OUT, path[len('/Game/'):]) + '.uasset', 'rb').read())
+    zw = load(MI + 'WD_SurvivalMode_global')
+    tani = sorted(p for p in zw.imp_pkgs if p == se.TANI_PKG or p.startswith(se.TANI_PKG + '/'))
+    w, _ = props_of(zw, zw.export_index('WD_SurvivalMode_global'), 'LiveWorldData')
+    hit = [u for u in [p for p in w[2] if p[1] == 'UnitDescList'][0][3][1]
+           if field_of(u, 'Name') == se.fname(se.TANI_HULL_LIVE_UNIT)]
+    assert len(hit) == 1, (se.TANI_HULL_LIVE_UNIT, len(hit))
+    obs = objects_of(hit[0])
+    assert [plain(field_of(ob, 'Name')) for ob in obs] == [se.TANI_HULL_LIVE_OBJ], 'the live hull object'
+    assert field_of(obs[0], 'MissionNpcID') == ('name', se.TANI_HULL_LIVE_ROW, 0), field_of(obs[0], 'MissionNpcID')
+    kids = (field_of(obs[0], 'ChildAIObjectDescs') or ('arr', []))[1]
+    # the rows (every build: names only)
+    def table(path, st):
+        z = load(path)
+        dt, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
+        return {plain(('name',) + k): dict((q[1], q[3]) for q in r[2]) for k, r in dt['rows']}
+    assert plain(table(NPC_TABLE, 'LiveNpcMissionDataTable')[se.TANI_HULL_LIVE_ROW]['NpcId']) == se.TANI_HULL_LIVE_NPC
+    npc = table(DATA + 'DT_SV_NpcRows', 'LiveNpcDataTable')[se.TANI_HULL_LIVE_NPC]
+    row_comps = [plain(c) for c in npc['ChildNPCComponentNames'][1]]
+    assert row_comps == [p['comp'] for p in se.TANI_LIVE], row_comps
+    assert [c for c in npc['ChildNPCComponentNames'][1]] == [se.fname(p['comp']) for p in se.TANI_LIVE], 'hard rule 17'
+    assert [plain(k) for k in npc['ChildNPCId'][1]] == [p['npc'] for p in se.TANI_LIVE], npc['ChildNPCId']
+    assert plain(npc['ModelId']) == se.TANI_HULL_LIVE_MODEL, npc['ModelId']
+    model = table(DATA + 'DT_SV_ModelRows', 'LiveModelDataTable')[se.TANI_HULL_LIVE_MODEL]
+    assert model['BlueprintClass'][1][1] == se.TANI_HULL_LIVE_BP and model['BlueprintClass'][2][1] == se.TANI_HULL_LIVE_BP_CLASS, \
+        model['BlueprintClass']
+    # the appearance trigger and each part's order (every build: names only)
+    ze = load(MI + 'EP_SurvivalMode_global')
+    _, _, _, T, E, _ = ep_dump.load_bytes(ze)
+    show = lambda v: ep_dump.show(v, ze)
+    trig = [t for t in T if show(ep_dump.fields(t)['EventName']) == se.TANI_HULL_LIVE_UP]
+    assert len(trig) == 1, len(trig)
+    assert se.TANI_HULL_LIVE_UNIT in [show(ep_dump.fields(x)['Value']) for x in ep_dump.fields(trig[0])['ArgsInfo'][1]]
+    ex = [ep_dump.fields(e) for e in E if show(ep_dump.fields(e)['ConnectionEventName']) == se.TANI_HULL_LIVE_UP]
+    assert all(show(f['ExecutionClass']) == 'LiveAIEngagementOrder' for f in ex), [show(f['ExecutionClass']) for f in ex]
+    ordered = [show(ep_dump.fields(f['ArgsInfo'][1][0])['Value']) for f in ex]
+    assert sorted(ordered) == sorted(p['obj'] for p in se.TANI_LIVE), ordered
+    assert all(abs(float(show(f['Delay'])) - se.TANI_LIVE_ORDER_S) < 1e-4 for f in ex), 'each order 2.5 s after the hull'
+    # Scripts/sv_tanicorn.lua's names (TANI.live: its rows, its class, its name key, its parts { "<socket>", "<type>" })
+    lua = open(os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'sv_tanicorn.lua'), encoding='utf-8').read()
+    for want in [f'unit = "{se.TANI_HULL_LIVE_UNIT}"', f'npc = "{se.TANI_HULL_LIVE_NPC}"', f'model = "{se.TANI_HULL_LIVE_MODEL}"',
+                 f'class_path = "{se.TANI_HULL_LIVE_BP}.{se.TANI_HULL_LIVE_BP_CLASS}"', f'name_key = "{se.TANI_HULL_LIVE_NAME_KEY}"']:
+        assert want in lua, f'Scripts/sv_tanicorn.lua: no {want}'
+    lua_parts = re.findall(r'\{ "([A-Z0-9_]+)", "(T16|T5|CIWS|LASER)" \}', lua)
+    assert lua_parts == [(p['socket'], p['part']) for p in se.TANI_LIVE], ('Scripts/sv_tanicorn.lua TANI.live.parts', lua_parts)
+    if not se.TANI_WD:                         # the lock
+        assert not tani, f'the world data imports the Tanicorn container without TANI=1: {tani}'
+        assert not kids, f'{se.TANI_HULL_LIVE_OBJ} has {len(kids)} parts without TANI=1'
+        if os.path.exists(TANI_WD_MARKER): os.remove(TANI_WD_MARKER)
+        print(f'  tanicorn: no live parts (TANI unset): the world data imports nothing of {se.TANI_PKG} (the lock holds); '
+              f'{se.TANI_HULL_LIVE_NPC}\'s {len(row_comps)} part rows, {len(ex)} orders and Lua\'s names read back: all there')
+        return
+    want_pkgs = sorted({p['bp'] for p in se.TANI_LIVE})
+    assert tani == want_pkgs, (tani, want_pkgs)
+    assert len(kids) == len(se.TANI_LIVE), len(kids)
+    for ch, p in zip(kids, se.TANI_LIVE):
+        data = field_of(ch, 'Data')
+        assert field_of(ch, 'Name') == se.fname(p['obj']) and field_of(data, 'ComponentFieldName') == se.fname(p['comp']), p['obj']
+        assert field_of(data, 'MissionNpcID') == ('name', p['row'], 0), (p['obj'], field_of(data, 'MissionNpcID'))
+        cls = field_of(data, 'Class')
+        assert cls[0] == 'obj' and cls[1] < 0, (p['obj'], cls)
+        x = zw.imports[-cls[1] - 1]
+        assert x >> 62 == 2 and zw.imp_pkgs[(x >> 32) & 0x3fffffff] == p['bp'], (p['obj'], hex(x))
+        assert zw.imp_hashes[x & 0xffffffff] == export_hash(p['bp_class']), (p['obj'], 'its class hash')
+        assert field_of(data, 'TargetMarkType') == ('enum', 'ELiveTargetMarkType', ('raw', 'Byte', b'\x01')), p['obj']
+        assert field_of(ch, 'GrandChildrens') == ('arr', []) and field_of(ch, 'WorldDataName') == ('name', 'WD_SurvivalMode_global', 0)
+    comps = [plain(field_of(field_of(ch, 'Data'), 'ComponentFieldName')) for ch in kids]
+    assert comps == row_comps, (comps, row_comps)
+    spec_dir = os.environ.get('TANI_BUILD') or os.path.join(ROOT, 'build', 'tanicorn')
+    spec_path = os.path.join(spec_dir, 'tani.spec.json')
+    spec_said = f'not checked against a spec: no {spec_path}'
+    if os.path.exists(spec_path):
+        bps = [b for b in json.load(open(spec_path))['blueprints'] if b['path'] == se.TANI_HULL_LIVE_BP]
+        if not bps:
+            spec_said = (f'not checked against the spec: {spec_path} has no {se.TANI_HULL_LIVE_BP_CLASS[:-2]} '
+                         f'(tools/tanicorn/build.sh not run since its spec.py made it)')
+        else:
+            nodes = {n['name']: n.get('child_class') for n in bps[0]['scs'] if n['class'] == 'LiveChildActorComponent'}
+            assert sorted(nodes) == sorted(comps), (sorted(nodes), sorted(comps))
+            for p in se.TANI_LIVE:
+                assert nodes[p['comp']] == f"{p['bp']}.{p['bp_class']}", (p['comp'], nodes[p['comp']])
+            spec_said = f'and the blueprint\'s {len(nodes)} LiveChildActorComponents in {spec_path}'
+    os.makedirs(os.path.dirname(TANI_WD_MARKER), exist_ok=True)
+    with open(TANI_WD_MARKER, 'w', encoding='utf-8', newline='\n') as f:
+        f.write('THE TANACORN: this build\'s world data imports the Tanicorn container (TANI=1; tools/build_survival.py '
+                'check_tanicorn_build).\nThe user\'s dev install only: package_release.sh and package_test.sh refuse it, '
+                'package_dev.sh takes it with TANI=1 only.\n' + ''.join(f'{p}\n' for p in tani))
+    print(f'  tanicorn: {se.TANI_HULL_LIVE_UNIT}: {len(kids)} live parts (TANI=1) read back: each its own desc and class '
+          f'import, the same components as {se.TANI_HULL_LIVE_NPC}\'s ChildNPCComponentNames {spec_said}; {len(ex)} orders; '
+          f'the world data imports {", ".join(tani)}; marker {TANI_WD_MARKER}')
+
+
 # ---------------------------------------------------------------- NPC mission table
 # The spawner caches the aircraft of every row of the world data's NPC table once, when the level starts, and a
 # spawn only looks there (docs/re/EVENTS_AIRCRAFT.md): a row added at run time never spawns. So Survival's world
@@ -1206,6 +1325,8 @@ NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a 
     (survival_events.FISH_ROW, survival_events.FISH_ROW_TEMPLATE, survival_events.FISH_NPC),   # GONE FISHIN's shoals
     (survival_events.TANI_ROW, survival_events.FISH_ROW_TEMPLATE, survival_events.TANI_NPC),   # THE TANICORN's test mount
     (survival_events.TANI_HULL_ROW, survival_events.FISH_ROW_TEMPLATE, survival_events.TANI_HULL_NPC),   # and its hull test
+    # (2026-11-11) and its hull with the gun mounts live (survival_events.TANI_HULL_LIVE_*: Ctrl+L)
+    (survival_events.TANI_HULL_LIVE_ROW, survival_events.FISH_ROW_TEMPLATE, survival_events.TANI_HULL_LIVE_NPC),
     # (0.74.61) and its other gun mounts (survival_events.TANI_MOUNTS: T16, CIWS, LASER)
     *[(m['row'], survival_events.FISH_ROW_TEMPLATE, m['npc']) for m in survival_events.TANI_MOUNTS],
 ] + [  # the fighter roles' behaviour rows (survival_events.ROLE_ROW, P1): DT_NPC rows Scripts/sv_rows.lua rolesSetup makes
@@ -1538,4 +1659,5 @@ if __name__ == '__main__':
     check_fishing_build()                # (2026-11-06: GONE FISHIN' and THE FESTIVAL read back from the saved packages)
     check_escort_decoy_build()           # (2026-11-06: THE ESCORT, its cargo ships and THE DECOY read back the same way)
     check_zfa_laser_build()              # (2026-11-07: the ZFA-44s' laser: its arm, rows and interception count)
+    check_tanicorn_build()               # (2026-11-11: THE TANACORN's live parts, and the TANI=1 gate on the world data)
     print('player start', tuple(round(x) for x in START), 'yaw', RUNWAY_YAW)

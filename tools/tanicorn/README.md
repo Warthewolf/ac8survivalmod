@@ -30,7 +30,11 @@ folder; `TANI_PARTS=T5,HULL` for some parts only; `TANI_STOP=export` to stop bef
    module): the skeletons' sockets, the hull's sockets (`mesh_sockets`), stubs for stock shots, the gun mounts'
    blueprints on AC8's native classes (BP_SV_Tani_T5 / _T16 / _CIWS / _LASER: the 5-inch's fire control and the stock
    AA shell until WP1 gives each its own weapon), and BP_SV_Tani_HULL with every part drawn on its sockets at rest
-   (the railcannon and the sub-railguns stowed; no blueprint or fire control of their own yet).
+   (the railcannon and the sub-railguns stowed; no blueprint or fire control of their own yet). (2026-11-11, WP2 step 2)
+   BP_SV_Tani_HULLLIVE: the same hull with its 16 gun-mount sockets (T16, T5, CIWS, LASER: spec.py LIVE) carrying
+   LiveChildActorComponents whose child is that mount's blueprint (`child actor Part_<socket>: <class> (template ...)` in
+   tanibuild.log, one a live part: build.sh counts them); the VLS blocks, railcannon and sub-railguns drawn as on HULL. Its
+   world data (each part a child desc importing the mount's blueprint) is in TANI=1 builds only (Ctrl+L in a run).
 6. Cook (VERSIONED, hard rule 42); 7. `retoc to-zen` of `/Game/Mods/SurvivalMode/Tanicorn` only; 8. `pad.py`.
 The first 5-inch mount (milestone 0) came through `prepare_part.py` from `build/tanicorn/src.blend` (`bl_import.py`);
 the export gives the same T5 (the same pivot and muzzles) and build.sh no longer calls them. Logs to read after a

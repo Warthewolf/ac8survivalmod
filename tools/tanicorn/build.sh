@@ -9,7 +9,8 @@
 #                          Open animations, the hull's static mesh, the wrecks
 #   4. spec.py             the TaniBuild commandlet's spec; 5. TaniBuild (the SurvivalFx editor module, tools/laser7/cpp):
 #                          the parts' sockets, the hull's 36 Mount_* sockets, the stock shot's stub, the gun mounts'
-#                          blueprints straight on AC8's native classes
+#                          blueprints straight on AC8's native classes, the hull drawn whole (BP_SV_Tani_HULL) and
+#                          (2026-11-11) with its gun mounts live as child actors (BP_SV_Tani_HULLLIVE: `child actor ...`)
 #   6. cook                Windows, VERSIONED (hard rule 42)
 #   7. retoc to-zen        only /Game/Mods/SurvivalMode/Tanicorn -> the container, 8. pad.py (hard rule 8)
 # TANI_PARTS=T5,HULL builds only those parts (the import, the spec, the cook's checks). TANI_STOP=export stops after
@@ -72,6 +73,17 @@ echo "tanicorn: building the blueprints (log: $OUT/tanibuild.log)"
 "$CMD" "$PROJ/Live.uproject" -run=TaniBuild -spec="$OUT/tani.spec.json" -log="$OUT/tanibuild.log" -unattended -nop4 -nosplash -stdout > "$OUT/tanibuild_stdout.log" 2>&1 \
     || { echo "tanicorn: TaniBuild failed ($OUT/tanibuild.log)"; grep ERROR "$OUT/tanibuild.log" | head; exit 1; }
 grep -q "^done (0 errors)" "$OUT/tanibuild.log" || { echo "tanicorn: TaniBuild had errors ($OUT/tanibuild.log)"; exit 1; }
+# (2026-11-11, WP2 step 2) every live part of BP_SV_Tani_HULLLIVE made a child actor with its template: a `child actor
+# Part_<socket>: <class> (template <name>)` line for each of the spec's child_class nodes
+nlive=$(python -I -c "
+import json, sys
+s = json.load(open(sys.argv[1]))
+print(sum(1 for b in s['blueprints'] for n in b.get('scs', []) if 'child_class' in n))
+" "$OUT/tani.spec.json" | tr -d '\r')
+glive=$(grep -c "^child actor Part_" "$OUT/tanibuild.log" || true)
+[ "$glive" = "$nlive" ] || { echo "tanicorn: TaniBuild made $glive child actors for the spec's $nlive live parts ($OUT/tanibuild.log)"; grep "child actor\|child class" "$OUT/tanibuild.log" | head; exit 1; }
+echo "tanicorn: $glive live parts made child actors (BP_SV_Tani_HULLLIVE):"
+grep "^child actor Part_" "$OUT/tanibuild.log" | sed 's/^/  /'
 # 6. the cook
 echo "tanicorn: cooking (log: $OUT/cook.log)"
 rm -rf "$PROJ/Saved/Cooked"
@@ -88,7 +100,7 @@ for p in json.load(open(os.path.join(out, 'parts.json'))):
     k = json.load(open(os.path.join(out, 'src_' + p, 'Tani_%s.json' % p))).get('kind', 'turret')
     n = 'Tani_' + p
     deploy = ['Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/SM_SV_%s_DAM' % n, 'Model/AS_SV_%s_Deploy' % n]
-    print(' '.join({'hull': ['Model/SM_SV_' + n, 'BP_SV_' + n],
+    print(' '.join({'hull': ['Model/SM_SV_' + n, 'BP_SV_' + n, 'BP_SV_%sLIVE' % n],    # ((2026-11-11) and the live hull)
                     'vls': ['Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/SM_SV_%s_DAM' % n, 'Model/AS_SV_%s_Open' % n],
                     'railcannon': deploy, 'railgun': deploy,       # (no blueprint of their own yet: the hull's draws them)
                     'rig': ['Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/AS_SV_%s_Rise' % n],   # (2026-11-11: the rise rig)

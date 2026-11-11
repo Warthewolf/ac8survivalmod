@@ -19,6 +19,13 @@ if [ "$LB_OPTIONAL" != 1 ]; then
         exit 1
     }
 fi
+# ((2026-11-11) THE TANACORN's live parts: a TANI=1 build's world data imports the Tanicorn container, which must then be
+# staged with it: such a build only with TANI=1)
+if [ -f build/install/tani_wd.txt ] && [ "$TANI" != 1 ]; then
+    echo "package_dev.sh: this build's world data imports THE TANACORN's parts (build/install/tani_wd.txt): package it with"
+    echo "  TANI=1 (its container staged with it), or run tools/build_all.sh without TANI=1 first"
+    exit 1
+fi
 rm -rf "$st"
 mkdir -p "$st/ue4ss/Mods/IoStoreLoaderMod"
 cp -r build/install/AC8SurvivalMode "$st/ue4ss/Mods/"

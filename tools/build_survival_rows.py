@@ -290,6 +290,15 @@ def build_model_rows():
     set_prop(row[2], idx['MaxHealth'], 'MaxHealth', ('raw', 'Float', struct.pack('<f', survival_events.TANI_HULL_HEALTH)))
     set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.TANI_HULL_NAME_KEY))
     out.append(((survival_events.TANI_HULL_MODEL, 0), row))
+    # (2026-11-11, WP2 step 2) the live hull's (survival_events.TANI_HULL_LIVE_*): the same, its blueprint BP_SV_Tani_HULLLIVE
+    # (the gun mounts live on it), its own name key (TANACORN: Lua's text)
+    row = copy.deepcopy(crow[(f[1], f[2])])
+    row[2][:] = [(q[0], q[1], q[2], ('soft', ('name', survival_events.TANI_HULL_LIVE_BP, 0),
+                                     ('name', survival_events.TANI_HULL_LIVE_BP_CLASS, 0), ''))
+                 if q[1] == 'BlueprintClass' else q for q in row[2]]
+    set_prop(row[2], idx['MaxHealth'], 'MaxHealth', ('raw', 'Float', struct.pack('<f', survival_events.TANI_HULL_HEALTH)))
+    set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.TANI_HULL_LIVE_NAME_KEY))
+    out.append(((survival_events.TANI_HULL_LIVE_MODEL, 0), row))
     # (0.74.61) the other gun mounts' model rows (survival_events.TANI_MOUNTS: T16, CIWS, LASER): the same, each its own
     # blueprint BP_SV_Tani_<part>, health and name key
     for m in survival_events.TANI_MOUNTS:
@@ -319,7 +328,8 @@ def build_model_rows():
     assert survival_events.fname(survival_events.ZFA_DRONE_MODEL_SV)[2] == 0
     out.append(((survival_events.ZFA_DRONE_MODEL_SV, 0), row))
     for n in (survival_events.TANI_BP, survival_events.TANI_BP_CLASS, survival_events.TANI_HULL_BP,
-              survival_events.TANI_HULL_BP_CLASS): z.nb.add(n)
+              survival_events.TANI_HULL_BP_CLASS, survival_events.TANI_HULL_LIVE_BP,
+              survival_events.TANI_HULL_LIVE_BP_CLASS): z.nb.add(n)
     for m in survival_events.TANI_MOUNTS:
         for n in (m['bp'], m['bp_class']): z.nb.add(n)
     for k, row in out:

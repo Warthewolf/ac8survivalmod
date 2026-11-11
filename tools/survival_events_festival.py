@@ -99,6 +99,52 @@ def tani_mount(part):
 
 
 TANI_MOUNTS = [tani_mount(p) for p in TANI_MOUNT_PARTS]
+# (2026-11-11, WP2 step 2, route (a): docs/design/INVINCIBLE_FLEET.md "WP2 step 2") THE TANACORN with her gun mounts LIVE,
+# a second hull beside the drawn one (TANI_HULL_*: Ctrl+Y / Ctrl+R, unchanged): BP_SV_Tani_HULLLIVE (tools/tanicorn/spec.py
+# hull_bp, LIVE: the same rise rig and hull mesh) whose 16 gun-mount sockets carry LiveChildActorComponents, Part_<socket>,
+# the mount's own blueprint. In the world data each is a child desc of the hull's object (Mission 22's Aegis mk15 child as
+# the template: tools/build_survival_world.py tanicorn_units) naming its class, a HARD import of the Tanicorn container's
+# blueprint (hard rule 7), so ONLY in TANI=1 builds (TANI_WD: the switch the user sets for build_all.sh and package_dev.sh;
+# the packagers refuse a build whose world data has it: build/install/tani_wd.txt). Each part on the mount's own rows (the
+# test mounts': its mission row in the desc, its DT_NPC row in the hull's ChildNPCId / ChildNPCComponentNames too, so it
+# doesn't matter which the game takes), its own TGT mark, ordered by name TANI_LIVE_ORDER_S after the hull appears (a hull's
+# order never reaches its turrets: the Spaceport's 0.73.40). The orders and the rows are names only: in every build.
+# Scripts/sv_tanicorn.lua's Ctrl+L.
+TANI_WD = os.environ.get('TANI') == '1'
+TANI_HULL_LIVE_UNIT = 'SV_Unit_TaniHullLive'
+TANI_HULL_LIVE_OBJ = 'SV_Obj_TaniHullLive'
+TANI_HULL_LIVE_ROW = 'sv_tani_hull_live'
+TANI_HULL_LIVE_NPC = 'SV_Npc_TaniHullLive'
+TANI_HULL_LIVE_MODEL = 'SV_Model_TaniHullLive'
+TANI_HULL_LIVE_BP = '/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_HULLLIVE'
+TANI_HULL_LIVE_BP_CLASS = 'BP_SV_Tani_HULLLIVE_C'
+TANI_HULL_LIVE_NAME_KEY = 'SV_TaniHullLive_Name'   # (its box: TANACORN, Lua's text)
+TANI_HULL_LIVE_UP = 'SV_TaniUpHullLive'            # (the hull's appearance: each part's order)
+TANI_LIVE_ORDER_S = 2.5
+TANI_PKG = '/Game/Mods/SurvivalMode/Tanicorn'      # (the container's folder: no import under it without TANI_WD)
+# each mount type's sockets on the hull (tools/tanicorn's export: the hull's Mount_<socket>), in its parts.json order
+TANI_LIVE_SOCKETS = {'T16': ['T16_FWD', 'T16_AFT'], 'T5': [f'T5_{k}' for k in range(1, 7)],
+                     'CIWS': [f'CIWS_{k}' for k in range(1, 5)],
+                     'LASER': ['LASER_FWD_L', 'LASER_FWD_R', 'LASER_AFT_L', 'LASER_AFT_R']}
+
+
+def tani_live():
+    """THE TANACORN's live parts, one a socket: its component (Part_<socket>), its object as event args write it
+    (SV_Obj_TaniHullLive_Part_<socket>; the world data stores both through fname: 'Part_T5_1' = ('Part_T5', 2), hard rule
+    17), its mount type's mission row, DT_NPC row and blueprint (the T5's TANI_*, the others' TANI_MOUNTS)."""
+    out = []
+    for part, sockets in TANI_LIVE_SOCKETS.items():
+        m = {'row': TANI_ROW, 'npc': TANI_NPC, 'bp': TANI_BP, 'bp_class': TANI_BP_CLASS} if part == 'T5' else tani_mount(part)
+        for s in sockets:
+            comp, obj = f'Part_{s}', f'{TANI_HULL_LIVE_OBJ}_Part_{s}'
+            assert fname(comp)[2] == fname(obj)[2], (comp, obj)          # (the same split tail: hard rule 17)
+            assert m['bp'].startswith(TANI_PKG + '/') and m['bp_class'] == m['bp'].rsplit('/', 1)[1] + '_C', m
+            out.append({'socket': s, 'part': part, 'comp': comp, 'obj': obj, 'row': m['row'], 'npc': m['npc'],
+                        'bp': m['bp'], 'bp_class': m['bp_class']})
+    return out
+
+
+TANI_LIVE = tani_live()
 # SAL's boat (FISHING.md 3; user: "SAL boat can just be an ally, dont worry about it too much"): Mission 28's allied Wasp
 # desc (faction 1, box, callsign, attack-target exception) on the stock fishing boat VE027_boat2_01, not invincible but
 # from AI and wingmen, MinHealth 1 on its mission row (as the stock allied ships'), its callsign as VOID WATCHER's
@@ -438,4 +484,12 @@ def build_tanicorn(g, stock_ep):
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', m['up'], arg_changes={0: m['unit']})
         g.execute(t_part, m['up'], {0: m['obj']}, delay=1.0)
         print(f'  tanicorn: {m["obj"]} ({m["part"]}) ordered as it appears ({m["up"]}: Normal, PlayerFirst)')
+    # (2026-11-11, WP2 step 2) the live hull's parts (TANI_LIVE): each its own order by name TANI_LIVE_ORDER_S after the hull
+    # appears, as the Spaceport's turrets get theirs (build_spaceport); names only, so in every build
+    g.trigger('01_E_AreaA_ReinforcementAppearance_0', TANI_HULL_LIVE_UP, arg_changes={0: TANI_HULL_LIVE_UNIT})
+    for p in TANI_LIVE:
+        g.execute(t_part, TANI_HULL_LIVE_UP, {0: p['obj']}, delay=TANI_LIVE_ORDER_S)
+    print(f'  tanicorn: {TANI_HULL_LIVE_UNIT}\'s {len(TANI_LIVE)} live parts ordered by name {TANI_LIVE_ORDER_S} s after it '
+          f'appears ({TANI_HULL_LIVE_UP}: Normal, PlayerFirst)'
+          + ('' if TANI_WD else '; names only: this build has no live parts (TANI unset)'))
 

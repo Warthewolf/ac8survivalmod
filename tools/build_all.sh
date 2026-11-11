@@ -72,11 +72,21 @@ if [ "$ZFA" = 1 ]; then
     fi
 fi
 # THE TANICORN's parts (tools/tanicorn: Survival's own blueprints on the Tanager stand-in, Sea Power's Iowa: the user's
-# install only, 2026-11-09): staged with TANI=1 only (package_dev.sh keeps it with TANI=1; package_release.sh never ships it)
+# install only, 2026-11-09): staged with TANI=1 only (package_dev.sh keeps it with TANI=1; package_release.sh never ships it).
+# (2026-11-11) TANI=1 also gives the world data THE TANACORN's live parts (tools/build_survival.py reads TANI: hard imports
+# of this container): such a build is the user's dev install only (build/install/tani_wd.txt below)
 if [ "$TANI" = 1 ]; then
     [ -f build/tanicorn/out/SurvivalMode_Tani_P.utoc ] || { echo "TANI=1: no Tanicorn container (sh tools/tanicorn/build.sh)"; exit 1; }
     cp build/tanicorn/out/SurvivalMode_Tani_P.utoc build/tanicorn/out/SurvivalMode_Tani_P.ucas build/install/SurvivalMode/
     echo "staged the Tanicorn's parts (build/tanicorn/out/SurvivalMode_Tani_P; dev only)"
+fi
+# (2026-11-11, WP2 step 2) a TANI=1 build's world data imports the Tanicorn container's blueprints (THE TANACORN's live parts:
+# tools/build_survival.py check_tanicorn_build writes build/out/tani_wd.txt): its marker staged beside the two mod folders
+# (never zipped), so package_release.sh and package_test.sh refuse this build and package_dev.sh takes it with TANI=1 only
+if [ -f build/out/tani_wd.txt ]; then
+    [ "$TANI" = 1 ] || { echo "build/out/tani_wd.txt without TANI=1: the world data was built with TANI=1 (rerun)"; exit 1; }
+    cp build/out/tani_wd.txt build/install/
+    echo "staged build/install/tani_wd.txt: this build's world data imports THE TANACORN's parts (TANI=1; dev installs only)"
 fi
 cp -r mod/UE4SS/AC8SurvivalMode build/install/
 mkdir -p build/install/AC8SurvivalMode/dlls && cp build/runtime/main.dll build/install/AC8SurvivalMode/dlls/

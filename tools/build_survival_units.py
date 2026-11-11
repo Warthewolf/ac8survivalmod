@@ -513,6 +513,25 @@ def import_from(z, zs, ref):
     return ('obj', -(z.imports.index(new) + 1))
 
 
+def import_class(z, pkg, cls):
+    """(2026-11-11, WP2 step 2) Our import index for class `cls` (its short name, e.g. 'BP_SV_Tani_T5_C') of package `pkg`,
+    a package no stock package imports (import_from's sibling: Survival's own cooked blueprints, the Tanicorn container's):
+    the package into z's imported packages (pack.py puts it in the container header from them: hard rule 7), the class's
+    public export hash (zenpkg.export_hash of its name, as each cooked BP_SV_Tani_* package stores it) into its hashes."""
+    assert pkg.startswith('/Game/') and '.' not in pkg and cls.endswith('_C'), (pkg, cls)
+    if pkg not in z.imp_pkgs:
+        z.ipn.add(pkg)
+        z.imp_pkg_nums.append(0)
+    k = z.imp_pkgs.index(pkg)
+    h = export_hash(cls)
+    if h not in z.imp_hashes:
+        z.imp_hashes.append(h)
+    new = (2 << 62) | (k << 32) | z.imp_hashes.index(h)
+    if new not in z.imports:
+        z.imports.append(new)
+    return ('obj', -(z.imports.index(new) + 1))
+
+
 def retag_parts(children, owner, used_ids, z, zs):
     """A ported aircraft's parts (ChildAIObjectDescs / GrandChildrens): named after their new owner (<owner>_<component>,
     keeping the component's FName number), new UniqueIDs, our world data's name, and their classes imported from the

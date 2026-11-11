@@ -303,6 +303,7 @@ def tanicorn_units(units, used_ids, z, top_number):
         put(ob[2], 'LiveAIObjectDesc', 'bIgnoreMeshOptimize', ('raw', 'Bool', b'\x01'))
         put(ob[2], 'LiveAIObjectDesc', 'bIgnoreSetAutoSkipUpdateTransform', ('raw', 'Bool', b'\x01'))
     print(f'  {se.TANI_HULL_UNIT}: {names[0]} on {se.TANI_HULL_ROW} (the Tanacorn hull test; never skipped far off)')
+    tanicorn_live_unit(units, used_ids, z, top_number, src)
     # (0.74.61) the other gun mounts (TANI_MOUNTS: T16, CIWS, LASER), each as the T5: Ctrl+U
     for m in se.TANI_MOUNTS:
         names = port_unit(units, used_ids, z, src, m['unit'], m['obj'], m['row'], [(0.0, 0.0, se.FISH_Z_CM)], 0.0,
@@ -312,6 +313,71 @@ def tanicorn_units(units, used_ids, z, top_number):
         clear_flags(u, ('bIsLanding',))
         place(u, (0.0, 0.0, se.FISH_Z_CM), 0.0)
         print(f'  {m["unit"]}: {names[0]} on {m["row"]} (the Tanicorn {m["part"]} test mount)')
+
+
+def tanicorn_live_unit(units, used_ids, z, top_number, src):
+    """(2026-11-11, WP2 step 2, route (a): docs/design/INVINCIBLE_FLEET.md "WP2 step 2") THE TANACORN with her gun mounts live
+    (survival_events.TANI_HULL_LIVE_*, Scripts/sv_tanicorn.lua's Ctrl+L): the hull's unit again (the scored dummy, box and
+    TGT, never skipped far off) on its own rows, its blueprint BP_SV_Tani_HULLLIVE. With TANI=1 (TANI_WD) only, its object's
+    ChildAIObjectDescs: one desc per live part (TANI_LIVE), a deep copy of Mission 22's Aegis mk15 child (no grandchildren):
+    its name and component through fname (hard rule 17), a new UniqueID, our world data's name, its mount type's mission
+    row, a TGT mark, no tags, and its Class a hard import of the mount's blueprint in the Tanicorn container (import_class:
+    hard rule 7), the template's own class import dropped (hard rule 34). Without TANI=1 nothing of the container is
+    imported: the unit has no parts (and no release can spawn it: its model row's blueprint is the container's)."""
+    se = survival_events
+    names = port_unit(units, used_ids, z, src, se.TANI_HULL_LIVE_UNIT, se.TANI_HULL_LIVE_OBJ, se.TANI_HULL_LIVE_ROW,
+                      [(0.0, 0.0, 0.0)], 0.0, top_number, tgt=True)
+    assert names == [se.TANI_HULL_LIVE_OBJ], names
+    u = unit_named(units, se.TANI_HULL_LIVE_UNIT)
+    clear_flags(u, ('bIsLanding',))
+    place(u, (0.0, 0.0, 0.0), 0.0)
+    ob = objects_of(u)[0]
+    put(ob[2], 'LiveAIObjectDesc', 'bIgnoreMeshOptimize', ('raw', 'Bool', b'\x01'))
+    put(ob[2], 'LiveAIObjectDesc', 'bIgnoreSetAutoSkipUpdateTransform', ('raw', 'Bool', b'\x01'))
+    assert field_of(ob, 'ChildAIObjectDescs') == ('arr', []), 'the scored dummy desc has parts now'
+    if not se.TANI_WD:
+        print(f'  {se.TANI_HULL_LIVE_UNIT}: no live parts (TANI unset: nothing of the Tanicorn\'s container imported)')
+        return
+    m22 = stock_wd(M22 + 'WD_Mission022_global')
+    aegis = objects_of(desc_named(m22, 'UnitDescList', se.SP_AEGIS_SOURCE))[0]
+    tmpl = [ch for ch in field_of(aegis, 'ChildAIObjectDescs')[1]
+            if field_of(field_of(ch, 'Data'), 'ComponentFieldName') == ('name', 'BP_VE002_aegs_mk15_Base', 0)]
+    assert len(tmpl) == 1 and field_of(tmpl[0], 'GrandChildrens') == ('arr', []), 'Mission 22 Aegis mk15 child changed'
+    kids, classes = [], {}
+    for p in se.TANI_LIVE:
+        ch = copy.deepcopy(tmpl[0])
+        data = field_of(ch, 'Data')[2]
+        cls = import_class(z, p['bp'], p['bp_class'])
+        classes[p['bp']] = cls
+        put(data, 'LiveChildAIObjectData', 'MissionNpcID', ('name', p['row'], 0))
+        put(data, 'LiveChildAIObjectData', 'ComponentFieldName', se.fname(p['comp']))
+        put(data, 'LiveChildAIObjectData', 'Class', cls)
+        put(data, 'LiveChildAIObjectData', 'TargetMarkType', ('enum', 'ELiveTargetMarkType', ('raw', 'Byte', b'\x01')))
+        put(data, 'LiveChildAIObjectData', 'Tags', ('arr', []))
+        uid = new_unique_id(used_ids, f'AC8SurvivalMode:{p["obj"]}')
+        put(ch[2], 'LiveChildAIObjectDesc', 'Name', se.fname(p['obj']))
+        put(ch[2], 'LiveChildAIObjectDesc', 'UniqueID', ('raw', 'UInt32', uid))
+        put(ch[2], 'LiveChildAIObjectDesc', 'WorldDataName', ('name', 'WD_SurvivalMode_global', 0))
+        put(ch[2], 'LiveChildAIObjectDesc', 'GrandChildrens', ('arr', []))
+        bad = [x for x in obj_refs(ch) if x != cls]
+        assert not bad, (p['obj'], 'a foreign object reference kept (hard rule 34)', bad)
+        for n in names_in(ch) + [p['bp'], p['bp_class']]: z.nb.add(n)
+        kids.append(ch)
+    put(ob[2], 'LiveAIObjectDesc', 'ChildAIObjectDescs', ('arr', kids))
+    print(f'  {se.TANI_HULL_LIVE_UNIT}: {len(kids)} live parts (TANI=1: '
+          + ', '.join(f'{p["comp"]} on {p["bp_class"]}' for p in se.TANI_LIVE)
+          + f'); the world data imports {", ".join(sorted(classes))}')
+
+
+def obj_refs(v):
+    """Every object reference ('obj', n) a property value holds."""
+    out = []
+    if isinstance(v, tuple):
+        if len(v) == 2 and v[0] == 'obj' and isinstance(v[1], int): out.append(v)
+        for x in v: out += obj_refs(x)
+    elif isinstance(v, list):
+        for x in v: out += obj_refs(x)
+    return out
 
 
 def fishing_units(units, used_ids, z, top_number):

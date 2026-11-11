@@ -81,7 +81,8 @@ test build: a key bound twice logs `test: Ctrl+<key> is bound twice`, a key name
 | Ctrl+T | THE TANICORN's test mount 3 km ahead (test; TANI=1 builds; Ctrl+` was the game console's key) | sv_tanicorn.lua |
 | Ctrl+U | THE TANICORN's T16, CIWS and LASER test mounts 3 km ahead, in a row across your path (test; TANI=1 builds) | sv_tanicorn.lua |
 | Ctrl+Y | THE TANACORN's whole hull 5 km ahead, broadside, its parts on their sockets (test; TANI=1 builds) | sv_tanicorn.lua |
-| Ctrl+R | THE TANACORN's rise test: the hull rises on its rig with the cinematic (test; TANI=1 builds) | sv_tanicorn.lua |
+| Ctrl+R | THE TANACORN's rise test: the hull rises on its rig with the cinematic; a hull already up (Ctrl+Y's or Ctrl+L's) rises where it is (test; TANI=1 builds) | sv_tanicorn.lua |
+| Ctrl+L | THE TANACORN with her 16 gun mounts live (BP_SV_Tani_HULLLIVE: each a child actor on its own rows, ordered 2.5 s after she appears) 5 km ahead, broadside; a line a part at +2 s and +8 s, its health and aim every 5 s for 2 minutes (test; TANI=1 builds: their world data) | sv_tanicorn.lua |
 | Ctrl+B | GEOFON's V-break look (T1): the Ford 3.5 km ahead, its two meshes posed as a carrier broken in a V, then parting; again: off (test) | sv_fleet.lua |
 | Ctrl+G | GEOFON's stages (T2): the Ford 4 km ahead; again: 20 % of its health off a press, its fires, smoke and list at 66 % and 33 % (test) | sv_fleet.lua |
 

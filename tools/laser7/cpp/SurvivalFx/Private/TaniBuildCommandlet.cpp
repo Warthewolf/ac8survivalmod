@@ -10,6 +10,7 @@
 #include "Engine/StaticMeshSocket.h"
 #include "Animation/Skeleton.h"
 #include "Components/SceneComponent.h"
+#include "Components/ChildActorComponent.h"
 #include "GameFramework/Actor.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Kismet2/BlueprintEditorUtils.h"
@@ -231,6 +232,11 @@ void Blueprint(const TSharedPtr<FJsonObject>& Spec)
 	USimpleConstructionScript* SCS = BP->SimpleConstructionScript;
 	AActor* ParentCDO = Cast<AActor>(Parent->GetDefaultObject());
 	TMap<FString, USCS_Node*> Nodes;
+	// (2026-11-11, WP2 step 2, route (a): docs/design/INVINCIBLE_FLEET.md "WP2 step 2") the live parts: a node's
+	// "child_class" (a blueprint class made earlier in the spec) set on its ChildActorComponent template, which then makes
+	// the <comp>_<class>_CAT child actor template the stock parts have (an ImportText of ChildActorClass alone makes none);
+	// read back after the compile: component name -> the class path asked for
+	TArray<TPair<FString, FString>> Children;
 	const TArray<TSharedPtr<FJsonValue>>* List = nullptr;
 	if (Spec->TryGetArrayField(TEXT("scs"), List))
 	{
@@ -256,12 +262,42 @@ void Blueprint(const TSharedPtr<FJsonObject>& Spec)
 			if (N->TryGetStringField(TEXT("socket"), Sock)) Node->AttachToName = FName(*Sock);
 			const TSharedPtr<FJsonObject>* Props = nullptr;
 			if (N->TryGetObjectField(TEXT("props"), Props)) ApplyProps(Node->ComponentTemplate, *Props);
+			FString ChildClass;
+			if (N->TryGetStringField(TEXT("child_class"), ChildClass))
+			{
+				const FString CompName = N->GetStringField(TEXT("name"));
+				UChildActorComponent* CAC = Cast<UChildActorComponent>(Node->ComponentTemplate);
+				UClass* CC = FindCls(ChildClass);
+				if (!CAC) Bad(FString::Printf(TEXT("%s: a child class on a %s, not a ChildActorComponent"), *CompName, *C->GetName()));
+				else if (!CC) Bad(FString::Printf(TEXT("%s: its child class %s doesn't load (its blueprint made earlier in the spec?)"), *CompName, *ChildClass));
+				else if (!CC->IsChildOf(AActor::StaticClass())) Bad(FString::Printf(TEXT("%s: its child class %s isn't an actor"), *CompName, *ChildClass));
+				else
+				{
+					CAC->SetChildActorClass(CC);
+					Children.Add(TPair<FString, FString>(CompName, ChildClass));
+				}
+			}
 			Nodes.Add(N->GetStringField(TEXT("name")), Node);
 			Say(FString::Printf(TEXT("component %s (%s) on %s%s"), *N->GetStringField(TEXT("name")), *C->GetName(), *P,
 				Native ? TEXT(" (native)") : TEXT("")));
 		}
 	}
 	FKismetEditorUtilities::CompileBlueprint(BP);
+	// (2026-11-11) each live part read back after the compile: its class and its child actor template (tools/tanicorn/build.sh
+	// counts these lines against the spec's live parts)
+	for (const TPair<FString, FString>& Kid : Children)
+	{
+		USCS_Node** Np = Nodes.Find(Kid.Key);
+		UChildActorComponent* CAC = Np ? Cast<UChildActorComponent>((*Np)->ComponentTemplate) : nullptr;
+		UClass* Got = CAC ? CAC->GetChildActorClass().Get() : nullptr;
+		AActor* Tpl = CAC ? CAC->GetChildActorTemplate() : nullptr;
+		if (!Got || Got->GetPathName() != Kid.Value)
+			Bad(FString::Printf(TEXT("%s: its child class is %s after the compile, not %s"), *Kid.Key, Got ? *Got->GetPathName() : TEXT("none"), *Kid.Value));
+		else if (!Tpl)
+			Bad(FString::Printf(TEXT("%s: no child actor template after the compile (class %s)"), *Kid.Key, *Got->GetName()));
+		else
+			Say(FString::Printf(TEXT("child actor %s: %s (template %s)"), *Kid.Key, *Got->GetName(), *Tpl->GetName()));
+	}
 	// the native components' values and the CDO's, after the last compile (a recompile copies the CDO again)
 	UObject* CDO = BP->GeneratedClass->GetDefaultObject();
 	const TSharedPtr<FJsonObject>* P = nullptr;

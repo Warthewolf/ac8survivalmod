@@ -24,6 +24,10 @@
 --                     missiles: fire some at it from inside 2 km. Its CIWS row is only its aim now (no ammo).
 --   Ctrl+Y in a run   (0.74.60) THE TANACORN's whole hull, every part drawn on its socket, 5 km ahead.
 --   Ctrl+R in a run   (2026-11-11) THE TANACORN rises on her rig with the cinematic (TANI.rise; again: everything back).
+--                     The hull already up rises, either kind (Ctrl+Y's drawn one or Ctrl+L's live one).
+--   Ctrl+L in a run   (2026-11-11) THE TANACORN with her 16 gun mounts LIVE (TANI.live: each a child actor, its own health,
+--                     box, fire control and order), 5 km ahead as Ctrl+Y; a line a part at +2 s and +8 s, its health and
+--                     aim every 5 s for 2 minutes, a line when one goes down (TANI=1 builds: the world data has the parts).
 -- TEST ONLY BEGIN
 TANI = { unit = "SV_Unit_TaniTest", npc = "SV_Npc_TaniMount", model = "SV_Model_TaniMount",
          class = "BP_SV_Tani_T5_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5.BP_SV_Tani_T5_C",
@@ -77,6 +81,25 @@ TANI.mounts = {
       li = true, no_gun = true },
 }
 TANI.mount_gap_cm = 40000                                -- (Ctrl+U: the three across your path, 400 m apart)
+-- (2026-11-11, WP2 step 2, route (a): docs/design/INVINCIBLE_FLEET.md "WP2 step 2") THE TANACORN with her gun mounts LIVE,
+-- Ctrl+L (survival_events.TANI_HULL_LIVE_* / TANI_LIVE): BP_SV_Tani_HULLLIVE, the drawn hull's rise rig and hull mesh with
+-- each gun mount's socket a LiveChildActorComponent (Part_<socket>) whose child is that mount's own blueprint, made a live
+-- part of the hull's AI object by the world data (TANI=1 builds only): its own rows (the test mounts'), health, box and
+-- TGT, fire control row, and its order 2.5 s after the hull appears. The VLS blocks, railcannon and sub-railguns drawn as
+-- on BP_SV_Tani_HULL. parts: { socket, mount type } in the build's order (tools/build_survival.py check_tanicorn_build
+-- reads them here); row_health: each type's model row's MaxHealth (TANI_HEALTH, TANI_MOUNT_PARTS), to tell whether the
+-- part took its row
+TANI.live = { unit = "SV_Unit_TaniHullLive", npc = "SV_Npc_TaniHullLive", model = "SV_Model_TaniHullLive",
+              class = "BP_SV_Tani_HULLLIVE_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_HULLLIVE.BP_SV_Tani_HULLLIVE_C",
+              name_key = "SV_TaniHullLive_Name", name = "TANACORN", ahead_cm = 500000, z_cm = 0,
+              comp_class = "/Script/Live.LiveChildActorComponent", looks_s = { 2, 8 }, every_s = 5, watch_s = 120,
+              row_health = { T16 = 80, T5 = 40, CIWS = 30, LASER = 30 },
+              parts = {
+                  { "T16_FWD", "T16" }, { "T16_AFT", "T16" },
+                  { "T5_1", "T5" }, { "T5_2", "T5" }, { "T5_3", "T5" }, { "T5_4", "T5" }, { "T5_5", "T5" }, { "T5_6", "T5" },
+                  { "CIWS_1", "CIWS" }, { "CIWS_2", "CIWS" }, { "CIWS_3", "CIWS" }, { "CIWS_4", "CIWS" },
+                  { "LASER_FWD_L", "LASER" }, { "LASER_FWD_R", "LASER" }, { "LASER_AFT_L", "LASER" }, { "LASER_AFT_R", "LASER" },
+              } }
 do
 local T = { rows = nil, next = 0, seen = {}, until_ = 0, checks = {}, shells = {}, stock = {} }
 local KINDS = { TANI }                                   -- every gun mount type (the T5 and TANI.mounts): its key and class
@@ -155,6 +178,8 @@ local function rowsIn()                                  -- the model first: the
     local n = addRow(npc, mine, TANI.npc)
     local hm = addRow(mt, mr, TANI.hull.model)               -- (0.74.60) the hull's
     local hn = addRow(npc, mine, TANI.hull.npc)
+    local lm = addRow(mt, mr, TANI.live.model)               -- ((2026-11-11) the live hull's: its parts' rows are the mounts')
+    local ln = addRow(npc, mine, TANI.live.npc)
     local more, allIn = {}, true                             -- (0.74.61) the other mounts'
     for _, k in ipairs(TANI.mounts) do
         local km = addRow(mt, mr, k.model)
@@ -165,11 +190,13 @@ local function rowsIn()                                  -- the model first: the
     if type(SV_SetText) == "function" then
         pcall(SV_SetText, TANI.name_key, TANI.name)
         pcall(SV_SetText, TANI.hull.name_key, TANI.hull.name)
+        pcall(SV_SetText, TANI.live.name_key, TANI.live.name)
         for _, k in ipairs(TANI.mounts) do pcall(SV_SetText, k.name_key, k.name) end
     end
-    T.rows = m and n and hm and hn and allIn
-    return T.rows, string.format("%s %s, %s %s; %s %s, %s %s; %s", TANI.model, m and "in DT_NPC_Model" or "NOT added", TANI.npc,
-        n and "in DT_NPC" or "NOT added", TANI.hull.model, hm and "in" or "NOT added", TANI.hull.npc, hn and "in" or "NOT added",
+    T.rows = m and n and hm and hn and lm and ln and allIn
+    return T.rows, string.format("%s %s, %s %s; %s %s, %s %s; %s %s, %s %s; %s", TANI.model, m and "in DT_NPC_Model" or "NOT added",
+        TANI.npc, n and "in DT_NPC" or "NOT added", TANI.hull.model, hm and "in" or "NOT added", TANI.hull.npc,
+        hn and "in" or "NOT added", TANI.live.model, lm and "in" or "NOT added", TANI.live.npc, ln and "in" or "NOT added",
         table.concat(more, "; "))
 end
 
@@ -483,15 +510,15 @@ local function liCarriers()
             T.li[a] = nil                                -- (gone, or another object at its address)
         else
             if not valid(e.body) then e.body = turretMesh(e.o) end
-            out[#out + 1] = { o = e.o, a = a, unit = e.k.unit, body = e.body, socket = MUZZLE, foe = "players" }
+            out[#out + 1] = { o = e.o, a = a, unit = e.unit or e.k.unit, body = e.body, socket = MUZZLE, foe = "players" }
         end
     end
     return out
 end
-local function liCarry(o, k)
+local function liCarry(o, k, unit)            -- (unit: a live part's, its hull's unit and component)
     local a = addrOf(o)
     if not a or T.li[a] then return end
-    T.li[a] = { o = o, name = nameOf(o), k = k, body = turretMesh(o) }
+    T.li[a] = { o = o, name = nameOf(o), k = k, body = turretMesh(o), unit = unit }
     if HIT then HIT.wantMine = true end
     if ZLI then ZLI.extra = liCarriers end
     local on = ZLI and ZLI.on and ZLI.on()
@@ -678,6 +705,261 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn hull look", fn = function(now)
     end
     if #T.hullChecks == 0 then T.hullChecks = nil end
 end }
+
+-- every hull of ours in the level, either kind (Ctrl+Y's drawn BP_SV_Tani_HULL, Ctrl+L's live BP_SV_Tani_HULLLIVE)
+local function ourHulls()
+    local out = {}
+    for _, cls in ipairs({ TANI.hull.class, TANI.live.class }) do
+        for _, o in ipairs(FindAllOf(cls) or {}) do
+            if valid(o) and not nameOf(o):find("Default__", 1, true) then out[#out + 1] = o end
+        end
+    end
+    return out
+end
+
+-- (2026-11-11, WP2 step 2, route (a)) Ctrl+L: THE TANACORN with her gun mounts live (TANI.live), broadside ahead_cm out,
+-- her waterline on the sea, as Ctrl+Y (a live hull already up is looked at again: its unit can't spawn while its flight is
+-- up, hard rule 16). Logged: `tanicorn: live hull class ...`, `tanicorn: the live parts' classes: T5 in memory, ...` (a
+-- TANI=1 world data loads them with the level: its child descs import them), `tanicorn: Ctrl+L, SV_Unit_TaniHullLive at
+-- (x, y, 0) facing F: N up`; at +2 s and +8 s a line a part, `tanicorn: live +2 s: Part_T5_1 (T5): BP_SV_Tani_T5_C <name>,
+-- health H/M (its row's 40), 0.0 m from Mount_T5_1, on Part_T5_1 (attached to the hull true), a child of the hull true (its
+-- AttachedParentGameObject <the hull>)` (on: its root's attach parent; a child: in the hull's AttachedChildGameObjects),
+-- then `tanicorn: live +2 s: N of 16 parts up ...`; the first part of each type its fire control arms and muzzle (as Ctrl+T's / Ctrl+U's mount lines); each LASER part
+-- handed to AC7's LaserInterceptor (liCarry: `tanicorn: LASER mount ... handed to ...`, then sv_escort_li.lua's `zfa li:`);
+-- every every_s for watch_s `tanicorn: live +T s: Part_T5_1 (T5) hp H/M, barrel yaw Y pitch P, muzzle (...) from the mount;
+-- D m from its socket`; `tanicorn: live Part_T5_1 (T5) destroyed at +T s ...` when a part goes down (its health 0, or gone)
+-- while the hull lives; the shells as the mounts' (`tanicorn: T5 shell N: ...`: keyed by their mount's class, so the parts'
+-- too). Each part kept by its address AND the name it was captured with (hard rule 59).
+do
+local LV = nil                                           -- the live hull's watch (Ctrl+L)
+local KIND = {}                                          -- a mount type's key -> its KINDS entry (the T5's: TANI)
+for _, k in ipairs(KINDS) do KIND[k.key] = k end
+local function short(o) return (nameOf(o):match("([^%.:]+)$")) or "?" end
+local function v3of(f) local ok, v = pcall(f); if ok and v and v.X then return { X = v.X, Y = v.Y, Z = v.Z } end return nil end
+local function gap(a, b)
+    if not (a and b) then return nil end
+    local dx, dy, dz = a.X - b.X, a.Y - b.Y, a.Z - b.Z
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+end
+local function same(e) return e and liveAddr(e.o) == e.a and nameOf(e.o) == e.name end   -- (hard rule 59)
+local function healthOf(o)
+    local h, mx
+    pcall(function() h = o.HealthInternal end)
+    pcall(function() mx = o.MaxHealth end)
+    return tonumber(h), tonumber(mx)
+end
+local function hullMesh(W)                               -- the live hull's HullMesh (its Mount_* sockets)
+    if W.mesh and liveObj(W.mesh) then return W.mesh end
+    W.mesh = nil
+    for _, c in ipairs((SPC and SPC.V and SPC.V.comps and SPC.V.comps(W.o, "/Script/Engine.StaticMeshComponent")) or {}) do
+        local okN, n = pcall(function() return c:GetFName():ToString() end)
+        if okN and n == "HullMesh" then W.mesh = c end
+    end
+    return W.mesh
+end
+local function partComps(W)                              -- its LiveChildActorComponents by name (Part_<socket>)
+    local by = {}
+    for _, c in ipairs((SPC and SPC.V and SPC.V.comps and SPC.V.comps(W.o, TANI.live.comp_class)) or {}) do
+        local okN, n = pcall(function() return c:GetFName():ToString() end)
+        if okN and n then by[n] = c end
+    end
+    return by
+end
+local function childOf(c)                                -- a child actor component's actor
+    local ch
+    pcall(function() ch = c.ChildActor end)
+    if not valid(ch) then ch = nil; pcall(function() ch = c:GetChildActor() end) end
+    return valid(ch) and ch or nil
+end
+local function hullKids(W)                               -- the hull's AttachedChildGameObjects: { [address] = true }, count
+    local kids, n = {}, nil
+    pcall(function()
+        local arr, k = W.o.AttachedChildGameObjects, 0
+        local function add(e)
+            local x = e
+            pcall(function() x = e:get() end)
+            local a = addrOf(x)
+            if a then kids[a] = true end
+            k = k + 1
+        end
+        if type(arr) == "table" then for _, e in ipairs(arr) do add(e) end else arr:ForEach(function(_, e) add(e) end) end
+        n = k
+    end)
+    return kids, n
+end
+-- one part as it stands: its line, and its record (W.parts[socket]) made the first time its child is seen
+local function partLine(W, s, key, kids)
+    local C, cn = TANI.live, "Part_" .. s
+    local c = W.comps[cn]
+    if not c then return string.format("%s (%s): no such component on the hull", cn, key), false end
+    local ch = childOf(c)
+    if not ch then
+        local cc = "?"
+        pcall(function() cc = c.ChildActorClass:GetFName():ToString() end)
+        return string.format("%s (%s): no child actor (its ChildActorClass %s)", cn, key, cc), false
+    end
+    local k = KIND[key]
+    local e = W.parts[s]
+    if not (e and same(e)) then
+        e = { o = ch, a = addrOf(ch), name = nameOf(ch), k = k, key = key, alive = true }
+        W.parts[s] = e
+        if k and not W.kinds[key] then                   -- (the first of each type: as the mounts' up and muzzle lines)
+            W.kinds[key] = true
+            log(string.format("tanicorn: live %s %s: fire control arms %s", key, cn, armsOf(ch)))
+            log("tanicorn: live " .. key .. " muzzle: " .. muzzleProbe(turretMesh(ch)))
+        end
+        if k and k.li then liCarry(ch, k, TANI.live.unit .. " " .. cn) end   -- (the LASER: AC7's LaserInterceptor, as Ctrl+U's)
+    end
+    local cls = "?"
+    pcall(function() cls = ch:GetClass():GetFName():ToString() end)
+    local h, mx = healthOf(ch)
+    local mesh = hullMesh(W)
+    local d = gap(mesh and v3of(function() return mesh:GetSocketLocation(FName("Mount_" .. s)) end),
+        v3of(function() return ch:K2_GetActorLocation() end))
+    local att, onComp = "?", "?"
+    pcall(function() local pa = ch:GetAttachParentActor(); att = tostring(valid(pa) and addrOf(pa) == W.a) end)
+    pcall(function() onComp = ch.RootComponent:GetAttachParent():GetFName():ToString() end)
+    local par = "?"
+    pcall(function() local p = ch.AttachedParentGameObject; par = valid(p) and short(p) or "none" end)
+    local want = C.row_health[key]
+    return string.format("%s (%s): %s %s, health %s/%s (its row's %s%s), %s m from Mount_%s, on %s (attached to the hull %s), "
+        .. "a child of the hull %s (its AttachedParentGameObject %s)", cn, key, cls, short(ch), tostring(h), tostring(mx),
+        tostring(want), (want and mx and math.abs(mx - want) > 0.01) and ": NOT its row's" or "", d and string.format("%.1f", d / 100) or "?",
+        s, onComp, att, tostring(kids[e.a] == true), par), true
+end
+local function liveLook(W, tag)
+    W.comps = partComps(W)
+    local kids, nk = hullKids(W)
+    local up = 0
+    for _, pr in ipairs(TANI.live.parts) do
+        local line, ok = partLine(W, pr[1], pr[2], kids)
+        if ok then up = up + 1 end
+        log("tanicorn: live " .. tag .. ": " .. line)
+    end
+    local h, mx = healthOf(W.o)
+    local n = 0
+    for _ in pairs(W.comps) do n = n + 1 end
+    log(string.format("tanicorn: live %s: %d of %d parts up on %s at %s (its %d part components; its AttachedChildGameObjects %s; "
+        .. "its health %s/%s)%s", tag, up, #TANI.live.parts, short(W.o), at(W.o), n, tostring(nk), tostring(h), tostring(mx),
+        up == 0 and ": none live (a world data without them? TANI=1 builds only; the classes line above)" or ""))
+end
+local function liveDowns(W, now)                         -- a line when a part goes down (its health 0, or the actor gone)
+    for _, pr in ipairs(TANI.live.parts) do
+        local e = W.parts[pr[1]]
+        if e and e.alive then
+            local why
+            if not same(e) then why = "gone (its actor no longer there)"
+            else
+                local h = healthOf(e.o)
+                if h and h <= 0 then why = "destroyed (health 0)" end
+            end
+            if why then
+                e.alive = false
+                local hh, hm = healthOf(W.o)
+                log(string.format("tanicorn: live Part_%s (%s) %s at +%.1f s; the hull's health %s/%s", pr[1], e.key, why,
+                    now - W.t0, tostring(hh), tostring(hm)))
+            end
+        end
+    end
+end
+local function liveLines(W, now)                         -- every every_s: each live part's health, aim and socket gap
+    W.comps = partComps(W)
+    local kids = hullKids(W)
+    local mesh = hullMesh(W)
+    for _, pr in ipairs(TANI.live.parts) do
+        local s, key = pr[1], pr[2]
+        local e = W.parts[s]
+        if not (e and same(e)) then                      -- (not seen yet, or another object now: looked for again)
+            local line, ok = partLine(W, s, key, kids)
+            if not ok then log(string.format("tanicorn: live +%.0f s: %s", now - W.t0, line)) end
+            e = W.parts[s]
+        end
+        if e and same(e) and e.alive then
+            local h, mx = healthOf(e.o)
+            local d = gap(mesh and v3of(function() return mesh:GetSocketLocation(FName("Mount_" .. s)) end),
+                v3of(function() return e.o:K2_GetActorLocation() end))
+            log(string.format("tanicorn: live +%.0f s: Part_%s (%s) hp %s/%s, %s; %s m from its socket", now - W.t0, s, key,
+                tostring(h), tostring(mx), (aim(e.o)), d and string.format("%.1f", d / 100) or "?"))
+        end
+    end
+end
+
+testKey("L", "sv_tanicorn.lua's live hull test", function()
+    if not (D and D.now) or not nativeReady() then log("tanicorn: Ctrl+L outside a Survival run"); return end
+    if COOP and COOP.client and COOP.client() then log("tanicorn: Ctrl+L: the host spawns it (you're a joiner)"); return end
+    local C = TANI.live
+    local cls, why = loadObject(C.class_path)
+    log("tanicorn: live hull class " .. (cls and ("loaded " .. nameOf(cls)) or ("NOT loaded: " .. tostring(why))))
+    if cls then pin(cls, "tanicorn live hull class") end
+    local said = {}
+    for _, k in ipairs(KINDS) do                         -- (the parts' classes: a TANI=1 world data's imports load them)
+        said[#said + 1] = k.key .. (valid(StaticFindObject(k.class_path)) and " in memory" or " NOT in memory")
+    end
+    log("tanicorn: the live parts' classes: " .. table.concat(said, ", ")
+        .. " (a TANI=1 build's world data imports them: loaded with the level)")
+    local ok, rows = rowsIn()
+    log("tanicorn: rows: " .. rows)
+    local now = os.clock()
+    local before, up = {}, nil
+    for _, o in ipairs(FindAllOf(C.class) or {}) do
+        before[addrOf(o) or 0] = true
+        if valid(o) and not nameOf(o):find("Default__", 1, true) then up = o end
+    end
+    local W = { t0 = now, before = before, parts = {}, kinds = {}, comps = {}, looks = {} }
+    if up then
+        W.o, W.a, W.name = up, addrOf(up), nameOf(up)
+        log(string.format("tanicorn: Ctrl+L, a live hull already up (its unit can't spawn again while it's up: hard rule 16): "
+            .. "%s at %s, looked at again", short(up), at(up)))
+        hudCallout("TEST: TANACORN LIVE", "THE HULL ALREADY UP")
+    else
+        local p = playerLocation()
+        if not p then log("tanicorn: no player location"); return end
+        local yaw = playerYaw()
+        local x, y = p.X + math.cos(math.rad(yaw)) * C.ahead_cm, p.Y + math.sin(math.rad(yaw)) * C.ahead_cm
+        local face = (yaw + 90) % 360                     -- (broadside to you: her whole length in view)
+        local r
+        if FISH and FISH.spawn then r = FISH.spawn(C.unit, x, y, C.z_cm, face) else r = SV_Spawn(C.unit, x, y, C.z_cm, face) end
+        r = tonumber(r) or -5
+        log(string.format("tanicorn: Ctrl+L, %s at (%.0f, %.0f, %d) facing %.0f: %s%s", C.unit, x, y, C.z_cm, face,
+            r > 0 and (r .. " up") or ("not spawned (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")"),
+            ok and "" or " (its rows aren't all in)"))
+        hudCallout("TEST: TANACORN LIVE", r > 0 and "5 KM AHEAD" or "NOT SPAWNED")
+        if r <= 0 then return end
+    end
+    for _, s in ipairs(C.looks_s) do W.looks[#W.looks + 1] = { at = now + s, tag = "+" .. s .. " s" } end
+    W.next, W.until_ = now + C.looks_s[#C.looks_s] + C.every_s, now + C.watch_s
+    for _, k in ipairs(KINDS) do T.shells[k.key] = 0 end -- (the first 12 shells of each type again: the parts' too)
+    LV = W
+end)
+TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn live hull", fn = function(now)
+    local W = LV
+    if not W then return end
+    if not D or (levelTorn and levelTorn()) then LV = nil; return end
+    if not W.o then                                       -- (the new live hull of ours)
+        for _, o in ipairs(FindAllOf(TANI.live.class) or {}) do
+            if valid(o) and not nameOf(o):find("Default__", 1, true) and not W.before[addrOf(o) or 0] then
+                W.o, W.a, W.name = o, addrOf(o), nameOf(o)
+            end
+        end
+        if not W.o then
+            if now - W.t0 > TANI.live.looks_s[#TANI.live.looks_s] + 2 then
+                log("tanicorn: live: no new live hull of ours found (its class not cooked yet? tools/tanicorn/build.sh)")
+                LV = nil
+            end
+            return
+        end
+    end
+    if not same(W) then
+        log(string.format("tanicorn: live: the hull is gone at +%.1f s", now - W.t0)); LV = nil; return
+    end
+    while W.looks[1] and now >= W.looks[1].at do liveLook(W, table.remove(W.looks, 1).tag) end
+    if now >= (W.downAt or 0) then W.downAt = now + 0.5; liveDowns(W, now) end   -- (twice a second, while the hull lives)
+    if now <= W.until_ and now >= W.next and #W.looks == 0 then
+        W.next = now + TANI.live.every_s
+        liveLines(W, now)
+    end
+end }
+end
 
 -- (2026-11-11) Ctrl+R: THE TANACORN rises on her rig (WP4's route B2: docs/design/INVINCIBLE_FLEET_RISE_FORD.md 2.3, 3 and
 -- 5's T3). The hull as Ctrl+Y spawns it, broadside rise.ahead_cm out; its RiseRig (BP_SV_Tani_HULL's first component: our
@@ -903,10 +1185,11 @@ testKey("R", "sv_tanicorn.lua's rise test", function()
     local ok, rows = rowsIn()
     -- ((0.74.63) a hull of ours already up (Ctrl+Y's) rises where it is: its unit can't spawn again while its flight is up
     -- (hard rule 16; the user's run of 0.74.62, 22:24: every Ctrl+R after a Ctrl+Y "not spawned (its last flight is still up)")
+    -- ((2026-11-11) either kind: Ctrl+Y's drawn hull or Ctrl+L's live one, whose parts ride HullMesh as child actors)
     local before, up = {}, nil
-    for _, o in ipairs(FindAllOf(H.class) or {}) do
+    for _, o in ipairs(ourHulls()) do
         before[addrOf(o) or 0] = true
-        if valid(o) and not nameOf(o):find("Default__", 1, true) then up = o end
+        up = o
     end
     local at0 = up and v3(up, function() return up:K2_GetActorLocation() end)
     if at0 then
@@ -936,14 +1219,15 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
     if not D or (levelTorn and levelTorn()) then riseBack(R, "the run's over"); RISE = nil; return end
     if R.state == "finding" then                          -- (the new hull of ours, then its rig, hull mesh and part)
         if not R.o then                                   -- ((0.74.63) not when it's the hull already up)
-            for _, o in ipairs(FindAllOf(TANI.hull.class) or {}) do
-                if valid(o) and not nameOf(o):find("Default__", 1, true) and not R.before[addrOf(o) or 0] then R.o, R.name = o, nameOf(o) end
+            for _, o in ipairs(ourHulls()) do
+                if not R.before[addrOf(o) or 0] then R.o, R.name = o, nameOf(o) end
             end
         end
         if R.o then
             R.rig = riseComp(R.o, "/Script/Engine.SkeletalMeshComponent", "RiseRig")
             R.hull = riseComp(R.o, "/Script/Engine.StaticMeshComponent", "HullMesh")
-            R.part = riseComp(R.o, "/Script/Engine.PoseableMeshComponent", C.part)
+            -- ((2026-11-11) on the live hull the part is a LiveChildActorComponent, a scene component on the same socket)
+            R.part = riseComp(R.o, "/Script/Engine.PoseableMeshComponent", C.part) or riseComp(R.o, TANI.live.comp_class, C.part)
         end
         if R.o and R.rig and R.hull then
             local steps, len, tick, uro = {}, "?", "?", "?"

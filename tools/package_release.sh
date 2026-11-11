@@ -37,6 +37,13 @@ if [ "$ed" = online ]; then
         exit 1
     }
 fi
+# ((2026-11-11) THE TANACORN's live parts: a TANI=1 build's world data imports the Tanicorn container, the user's dev install
+# only; no friends', TESTER or Nexus zip may carry it, whatever else is set)
+if [ -f build/install/tani_wd.txt ]; then
+    echo "package_release.sh: this build's world data imports THE TANACORN's parts (TANI=1: build/install/tani_wd.txt):"
+    echo "  run tools/build_all.sh without TANI=1 first"
+    exit 1
+fi
 rm -rf "$st" && mkdir -p "$st/ue4ss/Mods/IoStoreLoaderMod"
 cp -r build/install/AC8SurvivalMode "$st/ue4ss/Mods/"
 cp -r build/install/SurvivalMode "$st/ue4ss/Mods/IoStoreLoaderMod/"
@@ -56,11 +63,13 @@ if [ "$ZFA" = 1 ]; then
     echo "ZFA=1: the ZFA-44 kept (its container and Scripts/sv_zfa44.lua)"
 else
 rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ZFA44_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Laser7_P.*   # (and its weapon, AC7's LaserInterceptor)
-rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*   # THE TANICORN's parts: the user's install only, never shipped
 if [ -f "$mod/Scripts/sv_zfa44.lua" ]; then
     head -n 1 "$mod/Scripts/sv_zfa44.lua" > "$mod/Scripts/sv_zfa44.lua.tmp" && mv "$mod/Scripts/sv_zfa44.lua.tmp" "$mod/Scripts/sv_zfa44.lua"
 fi
 fi
+# THE TANICORN's parts: the user's install only, never shipped ((2026-11-11) whatever ZFA is: until now this line sat in the
+# ZFA branch above, so a ZFA=1 zip after a TANI=1 build_all.sh would have carried the Iowa)
+rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*
 # TESTER=1: a tester's build (user, 2026-11-03: "give me a tester version for alyssa"): the test keys (force a special,
 # zollars, ...) and the diagnostic loggers KEPT, everything else as the friends' zip; named ..._<version>_TESTER_...
 # Only for the tester the user names: every other zip strips them (user, 2026-10-23: test keys out of releases).

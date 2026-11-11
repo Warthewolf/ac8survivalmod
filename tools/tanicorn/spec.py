@@ -18,6 +18,8 @@ sockets with their rotations (SOC_Gun_NN on turret_pitch, SOC_Vls_NN on Body alo
 The deploying Alicorn parts (kinds railcannon and railgun: RAILCANNON, RAILGUN_L, RAILGUN_R, each with its Deploy
 animation) get their SOC_Gun_01 like the others and no blueprint of their own yet (no fire control: WP11); the hull's
 blueprint draws them, stowed, on Mount_RAILCANNON / Mount_RAILGUN_L / _R as it draws every part.
+(2026-11-11, WP2 step 2, route (a)) BP_SV_Tani_HULLLIVE: the same hull with the gun mounts LIVE (LIVE: each T16 / T5 / CIWS /
+LASER socket a LiveChildActorComponent whose child is that mount's own blueprint), the rest drawn; BP_SV_Tani_HULL unchanged.
 """
 import json, os
 
@@ -111,7 +113,7 @@ def mount(part, info, fcs):
     }
 
 
-def hull_bp(parts_on, rig=None):
+def hull_bp(parts_on, rig=None, live=None, name='HULL'):
     """(0.74.60) THE TANACORN whole, its parts drawn on their sockets (docs/design/INVINCIBLE_FLEET.md WP2, the first step:
     the ship on the sea; the parts become live AI parts in the next): BP_SV_Tani_HULL on the native
     ALiveAIGroundVehicleObject (as the test mount: its spawn route through the model row is proven), the hull's static mesh
@@ -123,7 +125,13 @@ def hull_bp(parts_on, rig=None):
     on its SOC_Hull, so the whole ship rides the rig's animated bone: AS_SV_Tani_RIG_Rise in single-node mode, not playing,
     its saved position at the animation's END (the rest pose: the hull on the water, Ctrl+Y as before). Lua scrubs it to 0
     and plays it (sv_tanicorn.lua Ctrl+R). An undrawn skinned mesh refreshes its bones (and what hangs on them) only with
-    AlwaysTickPoseAndRefreshBones, and update-rate optimisations off so distance never slows it. No collision of its own."""
+    AlwaysTickPoseAndRefreshBones, and update-rate optimisations off so distance never slows it. No collision of its own.
+    (2026-11-11, WP2 step 2, route (a): docs/design/INVINCIBLE_FLEET.md "WP2 step 2") live: the parts (LIVE) whose sockets
+    carry a LiveChildActorComponent in place of their drawn mesh, never both: Part_<socket> on HullMesh's Mount_<socket>,
+    child_class the mount's own blueprint (made earlier in the same spec: the hull's come last), which TaniBuild sets with
+    UChildActorComponent::SetChildActorClass (it makes the <comp>_<class>_CAT template every stock part has). Each child is a
+    live AI part through the world data's child desc (tools/build_survival_world.py tanicorn_units, TANI=1 builds only).
+    name: the blueprint's (BP_SV_Tani_<name>): HULL drawn whole (live None: byte for byte the 0.74.60-0.74.64 spec), HULLLIVE."""
     def sk(p):
         return obj(f'{DEST}/Model/SK_SV_Tani_{p}')
     hull = {'name': 'HullMesh', 'class': 'StaticMeshComponent', 'parent': 'RootComponent',
@@ -144,9 +152,13 @@ def hull_bp(parts_on, rig=None):
                dict(hull, parent='RiseRig', socket='SOC_Hull')]
     for part, sockets in parts_on:
         for s in sockets:
+            if live and part in live:                  # (a live part: the mount's own blueprint as a child actor)
+                scs.append({'name': f'Part_{s}', 'class': 'LiveChildActorComponent', 'parent': 'HullMesh',
+                            'socket': f'Mount_{s}', 'child_class': f'{obj(f"{DEST}/BP_SV_Tani_{part}")}_C'})
+                continue
             scs.append({'name': f'Part_{s}', 'class': 'PoseableMeshComponent', 'parent': 'HullMesh', 'socket': f'Mount_{s}',
                         'props': {'SkeletalMesh': sk(part), 'SkinnedAsset': sk(part)}})
-    return {'path': f'{DEST}/BP_SV_Tani_HULL', 'parent': 'LiveAIGroundVehicleObject', 'scs': scs,
+    return {'path': f'{DEST}/BP_SV_Tani_{name}', 'parent': 'LiveAIGroundVehicleObject', 'scs': scs,
             'cdo': {'AutoPossessAI': 'PlacedInWorldOrSpawned', 'GameObjectId': '1000', 'GameObjectCategory': 'Category_Ship',
                     'PursuitPointOffset': '(X=0,Y=0,Z=45000)', 'bKeepOnGround': 'False', 'bIsSea': 'True',
                     'bShowHUDBox': 'True', 'BriDebriIconType': 'Weapons',
@@ -180,6 +192,13 @@ FCS = {
     'LASER': {**T5_FCS, 'yaw': (120, -180, 180), 'pitch': (100, -10, 85), 'activation': 1, 'triggering': 2,
               'hit_radius_cm': 350, 'hit_z_cm': 250},
 }
+
+
+# (2026-11-11, WP2 step 2, route (a)) the parts live on BP_SV_Tani_HULLLIVE: every socket of these (the gun mounts, each with
+# its blueprint and fire control row: T16_FWD / _AFT, T5_1-6, CIWS_1-4, LASER_FWD_L / _R, LASER_AFT_L / _R); every other
+# socket (the VLS blocks, the railcannon, the sub-railguns) drawn as on BP_SV_Tani_HULL. tools/survival_events_festival.py
+# TANI_LIVE names the same sockets for the world data (build_survival.py check_tanicorn_build compares them with this spec)
+LIVE = ('T16', 'T5', 'CIWS', 'LASER')
 
 
 def main():
@@ -217,13 +236,23 @@ def main():
                                     'bone': s['bone'], 'loc': s['loc'], 'rot': s.get('rot', [0, 0, 0])})
         if kind == 'turret' and p in FCS:              # (the VLS blocks, the railcannon and the sub-railguns: none yet)
             spec['blueprints'].append(mount(p, info, FCS[p]))
+    live_said = ''
     if hull:
         spec['blueprints'].append(hull_bp(parts_on, rig))
+        # (2026-11-11) and THE TANACORN with her gun mounts live: the same hull, the LIVE parts' sockets child actors
+        made = {b['path'] for b in spec['blueprints']}
+        lb = hull_bp(parts_on, rig, live=LIVE, name='HULLLIVE')
+        kids = [n for n in lb['scs'] if 'child_class' in n]
+        for n in kids:                                 # (each child's blueprint built before the hull's, in this spec)
+            assert n['child_class'].rsplit('.', 1)[0] in made, (n['name'], n['child_class'])
+        spec['blueprints'].append(lb)
+        live_said = (f'; BP_SV_Tani_HULLLIVE: {len(kids)} live parts ({", ".join(n["name"] for n in kids)}), '
+                     f'{len(lb["scs"]) - len(kids) - (2 if rig else 1)} drawn')
     out = os.path.join(BUILD, 'tani.spec.json')
     json.dump(spec, open(out, 'w'), indent=1)
     print(f'spec.py: {out}: {len(spec["sockets"])} sockets, {len(spec["mesh_sockets"])} hull sockets, '
           f'{len(spec["stubs"])} stubs, {len(spec["blueprints"])} blueprints '
-          f'({", ".join(b["path"].rsplit("/", 1)[1] for b in spec["blueprints"])})')
+          f'({", ".join(b["path"].rsplit("/", 1)[1] for b in spec["blueprints"])}){live_said}')
 
 
 if __name__ == '__main__':

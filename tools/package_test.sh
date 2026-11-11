@@ -13,6 +13,12 @@ st=build/release/stage
 mod=$st/ue4ss/Mods/AC8SurvivalMode
 lua=$(grep -m1 -E '^(local )?VERSION = ' build/install/AC8SurvivalMode/Scripts/main.lua | sed 's/.*"\(.*\)".*/\1/')
 rt=$(grep -m1 '^#define RT_VERSION' runtime/survival_rt.c | sed 's/.*L"\(.*\)".*/\1/')
+# ((2026-11-11) THE TANACORN's live parts: a TANI=1 build's world data imports the Tanicorn container: never in a test zip)
+if [ -f build/install/tani_wd.txt ]; then
+    echo "package_test.sh: this build's world data imports THE TANACORN's parts (TANI=1: build/install/tani_wd.txt):"
+    echo "  run tools/build_all.sh without TANI=1 first"
+    exit 1
+fi
 rm -rf "$st" && mkdir -p "$st/ue4ss/Mods/IoStoreLoaderMod"
 cp -r build/install/AC8SurvivalMode "$st/ue4ss/Mods/"
 cp -r build/install/SurvivalMode "$st/ue4ss/Mods/IoStoreLoaderMod/"
