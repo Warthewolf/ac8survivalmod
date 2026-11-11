@@ -845,7 +845,10 @@ end
 -- surface after it its wait (its later ones counted)
 function SPC.alicornHostEvent(name)
     if not (COOP and COOP.client and COOP.client()) then return end
-    local now = os.clock()
+    -- ((review of 2026-11-11, luaperf-1) the round clock SPC.alicornClient compares with (clientRounds' now, D.now): with
+    -- os.clock here, far ahead of it in the game, the wait was always negative, the copy never surfaced here
+    local now = D and tonumber(D.now)
+    if not now then return end
     local st = clientState(now)
     if name == "RE_SV_AlcnDive" then
         st.dived, st.surfaceSent = true, nil

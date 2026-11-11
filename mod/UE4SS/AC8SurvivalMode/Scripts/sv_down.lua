@@ -113,6 +113,9 @@ function DOWN.floor() return (DOWN.active() and not St.noFloor) and num(rc().flo
 function DOWN.me() return St.down == true end
 -- the run ends on the host's "ro" only (sv_leaderboard.lua LB.deathCheck), not on this game's own shoot-down
 function DOWN.holdsRun() return rc().enabled == true and inRoom() end
+-- ((review of 2026-11-11) this run's over here (every player down: DOWN.runOver), until the next run: no host
+-- migration brings it back (sv_coop_migration.lua M.onHostLeft, COOP.hostLeaving)
+function DOWN.ended() return St.ended == true end
 
 -- the other players down now (their state fresh, bit 8), the one down longest first: { slot, since }; each one's since
 -- from their "dw" or the first state seen with it
@@ -704,6 +707,7 @@ function DOWN.reset(why, newLevel)
         log(string.format("revive: player %d's revive refunded (%d): %s", slot + 1, p.price, tostring(why)))
     end
     St.since, St.count, St.per, St.pending, St.reviving, St.cams = {}, 0, {}, {}, {}, {}
+    St.who, St.bySid, St.byName = nil, nil, nil                 -- ((2026-11-11) each slot's player: whoTick)
     St.ended, St.noFloor, St.allDownAt, St.safeUntil, St.respawnAt, St.watch = false, nil, nil, nil, nil, nil
     St.arm = nil                                                -- (0.73.73: no revive's watch over the next run's plane)
     St.wasIn, St.heldFor = nil, nil                             -- ((0.73.77) A8: everyone loads in again)
@@ -896,6 +900,83 @@ local function perTable(v)
     end
     return t
 end
+
+-- ((review of 2026-11-11, down-1) St.per, St.since and St.reviving are keyed by slot, and a slot changes hands: a host
+-- migration (the new host in slot 0, the others relinked in the lowest free slots), a rejoiner in another slot, a
+-- newcomer in a freed one. Each slot's player is followed (the roster's Steam ID, else their name; this game's own
+-- slot: you), and when it changes, that slot's down time and revive guard go. On the host the count of the player who
+-- had the slot is kept (St.bySid / St.byName) and the slot's count is the new player's own: theirs from the slot they had
+-- (the first pass of a host by migration finds every player in the old room's table that way), or kept from before they
+-- left, or 0 for a newcomer; the table then goes to everyone again ("rc"). A joiner takes the host's table and keeps
+-- nothing of its own (its roster can lag the host's "rc"). (St.pending is this game's own asks, keyed by the slot asked
+-- for: the host's "rb" / "rx" or the refund answers it, and is left alone.)
+local function whoOf(slot)
+    if slot == mySlot() then return { me = true } end
+    local r = COOP and COOP.roster and COOP.roster(slot)
+    if type(r) ~= "table" then return nil end
+    local sid = (type(r.sid) == "string" and r.sid ~= "") and r.sid or nil
+    local nm = (type(r.name) == "string" and r.name ~= "") and r.name or nil
+    if not (sid or nm) then return nil end
+    return { sid = sid, name = nm }
+end
+local function samePlayer(a, b)
+    if a == nil or b == nil then return a == b end
+    if a.me or b.me then return a.me == b.me end
+    if a.sid and b.sid then return a.sid == b.sid end
+    return a.name == b.name
+end
+local function whoText(w) return w == nil and "nobody" or (w.me and "you") or tostring(w.name or w.sid) end
+local function keep(w, n)                       -- (the host) a player's count, kept when their slot goes to another
+    if w.sid then St.bySid[w.sid] = math.max(St.bySid[w.sid] or 0, n) end
+    if w.name then
+        local r = St.byName[w.name]
+        local same = r and (r.sid == nil or w.sid == nil or r.sid == w.sid)
+        St.byName[w.name] = { n = same and math.max(r.n, n) or n, sid = w.sid or (same and r.sid) or nil }
+    end
+end
+local function kept(w)
+    local n = (w.sid and St.bySid[w.sid]) or 0
+    local r = w.name and St.byName[w.name]
+    if r and (r.sid == nil or w.sid == nil or r.sid == w.sid) then n = math.max(n, r.n) end
+    return n
+end
+local function whoTick()
+    if not (COOP and COOP.slot ~= nil) then return end      -- (not yet slotted: mySlot() would read 0)
+    local was, now, changed = St.who or {}, {}, {}
+    for slot = 0, 23 do
+        now[slot] = whoOf(slot)
+        if not samePlayer(was[slot], now[slot]) then changed[#changed + 1] = slot end
+    end
+    St.who = now                                            -- (kept up to date: a Steam ID learnt after the name)
+    if #changed == 0 then return end
+    for _, slot in ipairs(changed) do St.since[slot], St.reviving[slot] = nil, nil end
+    if not (COOP.host and COOP.host()) then return end
+    St.bySid, St.byName = St.bySid or {}, St.byName or {}
+    local perWas = {}
+    for slot, n in pairs(St.per) do perWas[slot] = n end
+    for _, slot in ipairs(changed) do                       -- (counts only grow in a run: the most seen is theirs)
+        local o, n = was[slot], perWas[slot] or 0
+        if o and not o.me and n > 0 then keep(o, n) end
+    end
+    local before, said = perText(), {}
+    for _, slot in ipairs(changed) do
+        local w, n = now[slot], 0
+        if w then
+            n = w.me and 0 or kept(w)
+            for t, o in pairs(was) do if t ~= slot and samePlayer(o, w) then n = math.max(n, perWas[t] or 0) end end
+        end
+        St.per[slot] = n > 0 and n or nil
+        if (perWas[slot] or 0) ~= n then
+            said[#said + 1] = string.format("player %d (%s, was %s): %d", slot + 1, whoText(w), whoText(was[slot]), n)
+        end
+    end
+    local after = perText()
+    if after ~= before then
+        log("revive: slots changed hands, each player's own revives follow them: " .. table.concat(said, "; "))
+        COOP.msg(nil, "rc", St.count, after)
+    end
+end
+DOWN.whoTick = whoTick                          -- (the offline test's)
 
 -- (the host) a joiner's "dw" (it's down: told to everyone) or "rv" (it buys a revive)
 function DOWN.onHost(from, f)
@@ -1166,6 +1247,8 @@ function DOWN.tick()
     end
     if now >= (St.listAt or 0) then                         -- (the STORE's REVIVE row follows who's down: once a second)
         St.listAt = now + 1
+        local okW, errW = pcall(whoTick)                    -- ((2026-11-11) each slot's player: their own revives)
+        if not okW then logOnce("whoTick", "revive: the slots' players: error " .. tostring(errW)) end
         local key = {}
         for _, e in ipairs(downList()) do key[#key + 1] = e.slot .. ":" .. theirs(e.slot) end   -- (their revives: the price)
         key = table.concat(key, ",") .. "/" .. St.count .. (St.down and "/me" or "")

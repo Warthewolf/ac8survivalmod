@@ -195,6 +195,9 @@ local GAMEPLAY = {
     { "credits.special_split", function(c) c.credits.special_split = 0 end },
     { "tactical.airstrike.per_round", function(c) c.tactical.airstrike.per_round = 0 end },
     { "tactical.airstrike.max_hit", function(c) c.tactical.airstrike.max_hit = 0 end },
+    -- ((review of 2026-11-11, rockets-1) the rockets' warnings are free, their launches still count)
+    { "specials.spaceport.retake.rockets.launch_a_s", function(c) c.specials.spaceport.retake.rockets.launch_a_s = 90 end },
+    { "tells.radio", function(c) c.tells.radio = not c.tells.radio end },
 }
 for _, g in ipairs(GAMEPLAY) do
     local saved = deepCopy(CFG)
@@ -217,6 +220,11 @@ local FREE = {
     { "display names and callsigns", function(c) c.allies.aircraft.name = "GHOST"; c.aces.demon.f22a = "Abaddon"; c.aces.demon.squadron = "Pit" end },
     { "key bindings", function(c) c.hud.info.key = "K"; c.tactical.keys = false; c.allies.orders.key = false end },
     { "sound names", function(c) c.shop.sounds.bought = "x" end },
+    -- ((review of 2026-11-11, rockets-1) the retake rockets' warnings: on screen, on the radio and in the log only
+    -- (survival.default.ini invites radio = false))
+    { "the rockets' warnings (radio, timing, banner size, log)", function(c)
+        local r = c.specials.spaceport.retake.rockets
+        r.radio = false; r.warn_s = 20; r.half_m = 9000; r.big_x = 1.2; r.log_s = 30 end },
 }
 for _, g in ipairs(FREE) do
     local saved = deepCopy(CFG)

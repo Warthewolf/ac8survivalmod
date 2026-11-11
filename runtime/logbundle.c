@@ -676,7 +676,7 @@ static DWORD WINAPI LbUe4ssThread(void* arg)
                 if (size < off) {                                /* it got smaller: UE4SS started over */
                     static const char mark[] = "\r\n---- UE4SS.log started over ----\r\n";
                     LdRunEnd(&g_ld, LdPutOut, NULL);
-                    g_ld.curN = g_ld.curLen = 0;
+                    g_ld.curN = g_ld.curLen = 0; g_ld.curHash = 1469598103934665603ull;   /* (as LdInit: no stale bytes) */
                     LdPutOut(NULL, mark, sizeof(mark) - 1);
                     off = was = 0;
                 }

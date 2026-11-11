@@ -411,7 +411,9 @@ end
 -- takes no damage, maybe), ModifyHealth(-(h / 10 + 1000), nil, true), read back; still up: the same without the damage
 -- event, then ApplyDamage last, each read back. -> dead (its health read 0), its health after (nil: unread), how
 -- ("damage event", "no damage event", "ApplyDamage"; nil: not down). Its caller checks it's still its own (hard rule 59).
-function finishUnpaid(o)
+-- noEvent: from the "no damage event" step (ModifyHealthInternal still runs CheckDeath): the shuttle's take-off, whose
+-- damage event would set off the event package's ObjectDamage_Shuttle radio lines minutes after a clean liftoff.
+function finishUnpaid(o, noEvent)
     if not liveObj(o) then return false, nil, nil end
     local function h() local ok, v = pcall(function() return o.HealthInternal end); return (ok and type(v) == "number") and v or nil end
     local h0 = h()
@@ -427,8 +429,8 @@ function finishUnpaid(o)
     local steps = { { "damage event", function() o:ModifyHealth(dmg, nil, true) end },
                     { "no damage event", function() o:ModifyHealth(dmg, nil, false) end },
                     { "ApplyDamage", function() if valid(gs) then gs:ApplyDamage(o, 1.0e8, nil, nil, nil) end end } }
-    for _, s in ipairs(steps) do
-        pcall(s[2])
+    for i, s in ipairs(steps) do
+        if not (noEvent and i == 1) then pcall(s[2]) end
         local h1 = h()
         if h1 ~= nil and h1 <= 0 then return true, h1, s[1] end
     end

@@ -476,11 +476,13 @@ was, and The Iron Acorn's copy after his relog was a fresh one at the lane's wes
   callout `ALICORN CORE: n%` as it drops past 75, 50 and 25 % (once each; the lowest crossed only; none at its sink),
   mirrored to the joiners as every host callout.
 - **The core sized by the players flying** (the user, 2026-11-11: "Yes add the alicorns core size"). As it opens, before
-  CORE 100% is taken, its health is set in standard missiles as the tanks' are: `core_missiles` (30) for one player plus
-  `core_missiles_per_player` (10) for each other player flying then (a co-op host: itself while it's up, not DOWN and not
+  CORE 100% is taken, its health is set in standard missiles as the tanks' are: `core_missiles` (10) for one player plus
+  `core_missiles_per_player` (3.3) for each other player flying then (a co-op host: itself while it's up, not DOWN and not
   down at the airfield, plus othersFlying(); solo: just you), x the round's growth as the tanks' (hx / health_x: x3.05 at
-  round 45), split across the core's parts that are up. `special: the Alicorn's core sized: 60 missiles (30 + 10 x 3 other
-  players flying), 87840 health (x3.05: round 45's growth, as the tanks'; 48 damage a missile)`. The missile's damage
+  round 45), split across the core's parts that are up: at round 45 ~30 missiles alone and ~61 for four (the user's
+  agreed numbers, 2026-11-11; it had ~60 whoever flew), linear in the players flying past four. `special: the Alicorn's
+  core sized: 19.9 missiles (10 + 3.3 x 3 other players flying), 29134 health (x3.05: round 45's growth, as the tanks';
+  48 damage a missile)` (health x 10, as HealthInternal: 19.9 x 3.05 = ~61 of those missiles). The missile's damage
   unread (or core_missiles 0): its health as it was, `special: the Alicorn's core keeps its health (your missile's damage
   can't be read): ...`. The joiners' copies take it from the host's next "hp" (a health that changed, within a second).
 - **Logs.** The host: `special: Alicorn core hit: -X (Y left, Z%)` (", its core still shut" before it opens), `the Alicorn's

@@ -1068,7 +1068,12 @@ do
     local hunted = {}
     local rawHR, rawAny, rawOn, rawPlanes, rawW = COOP.huntReal, COOP.anyReal, COOP.realOn, planes, WOLF.holding
     COOP.realOn, COOP.anyReal = function() return true end, function() return true end
-    COOP.huntReal = function(u) hunted[#hunted + 1] = u; M.huntOn = M.huntOn or {}; M.huntOn[u] = { slot = 1, gen = M.units[u].gen }; return true, 1, 1 end
+    -- ((review of 2026-11-11, down-2) the slot it's asked to keep, recorded: "nil" picks a player anew)
+    local huntSlots = {}
+    COOP.huntReal = function(u, slot)
+        hunted[#hunted + 1] = u; huntSlots[#huntSlots + 1] = slot == nil and "nil" or slot
+        M.huntOn = M.huntOn or {}; M.huntOn[u] = { slot = slot or 1, gen = M.units[u].gen }; return true, slot or 1, 1
+    end
     D.up = { [U] = true }
     planes = { e }
     M.huntCheckAt = clock + 1e6                     -- (the hunted players' own check left out: player 2 stays huntable)
@@ -1082,6 +1087,8 @@ do
     check(hunted[1] == U and has(line("^coop: you're down: 1 flight %(1 planes%) sent after the other players instead", from),
           "(1 of them again: 1 plane back on your hidden plane)"),
           "... one of its planes back on your hidden plane: sent after them again (it was never checked again), logged")
+    check(huntSlots[1] == 1, "... after the same player (slot 2 kept: huntReal picks anew only if they can't be hunted), not "
+          .. "a new pick that pulls its other planes off them (" .. tostring(huntSlots[1]) .. ")")
     WOLF.holding = function(u) return u == U end
     hunted, M.downHuntAt = {}, 0
     tick()
@@ -1095,7 +1102,7 @@ do
     check(#hunted == 0, "a flight up 1 s: waits for its arrival order (+2 s, which would undo this one)")
     clock, M.downHuntAt = clock + 3, 0
     tick()
-    check(hunted[1] == U2, "... up 3 s: sent after the other players")
+    check(hunted[1] == U2 and huntSlots[#huntSlots] == "nil", "... up 3 s: sent after the other players (a player picked for it)")
     COOP.huntReal, COOP.anyReal, COOP.realOn = rawHR, rawAny, rawOn
 
     -- the stats and the learning profile: the loiter isn't your flying (flow-4, joiner-8)
@@ -1236,6 +1243,92 @@ do
     tick()
     check(not DOWN.me(), "... and the host's revive then brings you back")
     info = LINKED
+end
+
+---------------------------------------------------------------------------------------------------- slots changing hands
+-- (review of 2026-11-11, down-1) each player's own revives are kept by slot, and a slot changes hands: a player who
+-- leaves (their slot freed), a newcomer in it, a rejoiner in another slot, a host migration (the new host slot 0, the
+-- others relinked in the lowest free slots). The count follows the player, not the slot (DOWN.tick, once a second)
+print("revives: each player's own count follows them when a slot changes hands (review of 2026-11-11, down-1)")
+do
+    local SID = { H = "76561198000000010", B = "76561198000000011", C = "76561198000000012", E = "76561198000000013",
+                  F = "76561198000000014" }
+    local function follow() ticks(1.25) end         -- (DOWN.tick's once-a-second pass)
+    scene("host", 0, { [1] = FLY, [2] = AIRFIELD_F })
+    M.roster = { [0] = { name = "A" }, [1] = { name = "B", sid = SID.B }, [2] = { name = "C", sid = SID.C } }
+    follow()
+    St.per[1], St.per[2], St.count = 2, 5, 7
+    St.since[2], St.reviving[2] = clock, clock
+    sent = {}
+    from = #logs + 1
+    M.roster[2] = nil                               -- (C's game gone: sys|left)
+    follow()
+    check(St.per[2] == nil and St.per[1] == 2 and St.count == 7 and St.since[2] == nil and St.reviving[2] == nil,
+          "C gone: their slot's count, down time and revive guard go with them (B's 2 and the run's 7 kept)")
+    check(msgs("rc") == "-1>rc|7|1:2" and line("^revive: slots changed hands, each player's own revives follow them: player 3 %(nobody, was C%): 0", from) ~= nil,
+          "the table to everyone again, logged (" .. msgs("rc") .. ")")
+    sent = {}
+    M.roster[2] = { name = "E", sid = SID.E }       -- (a newcomer in C's freed slot)
+    follow()
+    check(St.per[2] == nil and msgs("rc") == "", "E in C's freed slot: none of C's revives (the table unchanged, not sent)")
+    check(DOWN.priceFor(DOWN.theirs(2)) == 5000, "E's first revive at 5000, not C's sixth at the cap")
+    M.roster[3] = { name = "C", sid = SID.C }       -- (C back, in the lowest free slot)
+    follow()
+    check(St.per[3] == 5 and msgs("rc") == "-1>rc|7|1:2,3:5", "C back as player 4: their own 5 again (" .. msgs("rc") .. ")")
+    sent = {}
+    M.roster[4] = { name = "B", sid = SID.B }       -- (B back in another slot before their old one's gone)
+    follow()
+    check(St.per[4] == 2, "B in slot 5 while slot 2 still shows them: their 2 with them")
+    M.roster[1] = nil
+    follow()
+    check(St.per[1] == nil and St.per[4] == 2 and St.per[3] == 5 and msgs("rc"):find("-1>rc|7|3:5,4:2", 1, true) ~= nil,
+          "slot 2 empty: nothing left there, B's 2 in slot 5 (" .. msgs("rc") .. ")")
+    sent = {}
+    M.roster[5] = { name = "F" }                    -- (UDP, or a Steam ID not yet known: the name)
+    follow()
+    St.per[5] = 1
+    M.roster[5].sid = SID.F
+    follow()
+    check(St.per[5] == 1 and msgs("rc") == "", "a Steam ID learnt after the name: the same player, their count kept")
+    -- a joiner keeps the host's table: its own roster can lag the host's "rc"
+    scene("join", 2, { [0] = FLY, [1] = FLY })
+    M.roster = { [0] = { name = "H", sid = SID.H }, [1] = { name = "B", sid = SID.B }, [2] = { name = "C", sid = SID.C } }
+    follow()
+    DOWN.onJoiner({ "rc", "7", "0:4,1:3" })
+    M.roster[1] = { name = "E", sid = SID.E }
+    St.since[1] = clock
+    follow()
+    check(St.per[1] == 3 and St.per[0] == 4 and St.since[1] == nil and msgs("rc") == "",
+          "a joiner: slot 2's player changed: its down time goes, the counts stay the host's (3)")
+end
+print("revives: a host migration: the new host prices each player on their own revives (down-1)")
+do
+    local SID = { H = "76561198000000010", B = "76561198000000011", C = "76561198000000012" }
+    local function follow() ticks(1.25) end
+    scene("join", 1, { [0] = FLY, [2] = FLY })
+    M.roster = { [0] = { name = "H", sid = SID.H }, [1] = { name = "A" }, [2] = { name = "B", sid = SID.B },
+                 [3] = { name = "C", sid = SID.C } }
+    follow()
+    DOWN.onJoiner({ "rc", "9", "0:4,1:3,2:1,3:2" })  -- (the old host 4, you 3, B 1, C 2)
+    follow()
+    check(St.per[0] == 4 and St.per[1] == 3 and St.per[3] == 2, "(a joiner: the host's table)")
+    sent = {}
+    from = #logs + 1
+    COOP.reopen("host", "host migration", "auto")   -- (becomeHost: you're slot 0, the roster empty until they link)
+    follow()
+    check(COOP.slot == 0 and St.per[0] == 3 and St.per[1] == nil and St.per[2] == nil and St.per[3] == nil and St.count == 9,
+          "the new host in slot 1: its own 3 (not the old host's 4); the others' slots empty till they're back")
+    check(msgs("rc") == "-1>rc|9|0:3", "the table to everyone again (" .. msgs("rc") .. ")")
+    M.roster[1] = { name = "B", sid = SID.B }       -- (B and C linked again, in the lowest free slots)
+    M.roster[2] = { name = "C" }                    -- (C's Steam ID not known yet: the name)
+    follow()
+    check(St.per[1] == 1 and St.per[2] == 2, "B back as player 2: their 1; C as player 3: their 2 (it was B's slot, 1)")
+    check(DOWN.priceFor(DOWN.theirs(2)) == DOWN.priceFor(2) and DOWN.priceFor(DOWN.theirs(0)) == DOWN.priceFor(3),
+          "the prices: C's third, yours your fourth")
+    M.roster[3] = { name = "H", sid = SID.H }       -- (the old host back as a joiner)
+    follow()
+    check(St.per[3] == 4, "the old host back as player 4: their own 4")
+    COOP.open, COOP.role, COOP.slot = true, "join", 1
 end
 
 ---------------------------------------------------------------------------------------------------- the settings

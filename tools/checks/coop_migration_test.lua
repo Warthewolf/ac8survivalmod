@@ -82,7 +82,13 @@ local M = _G.M
 CFG.coop.enabled = true
 local function tick(dt) clock = clock + (dt or 0.25); M.nextInfo = 0; COOP.tick(0) end
 local function line(part, from) for i = #logs, from or 1, -1 do if has(logs[i], part) then return logs[i] end end end
-local function sentOf(kind, from) local t = {}; for i = from or 1, #sent do if sent[i]:match("^%-?%d+>" .. kind .. "|") then t[#t + 1] = sent[i] end end; return t end
+local function sentOf(kind, from)                         -- (a message with fields, or none: "jn")
+    local t = {}
+    for i = from or 1, #sent do
+        if sent[i]:match("^%-?%d+>" .. kind .. "|") or sent[i]:match("^%-?%d+>" .. kind .. "$") then t[#t + 1] = sent[i] end
+    end
+    return t
+end
 local function obj(name) return { name = name, addr = math.random(1, 1e9), SetActorHiddenInGame = function(self, v) self.hidden = v end,
                                   SetActorEnableCollision = function(self, v) self.coll = v end } end
 
@@ -136,7 +142,7 @@ ALLY = nil
 
 ---------------------------------------------------------------------------------------------------- the first in line
 print("the first in line takes over")
-local function asJoiner(me, slot)
+local function asJoiner(me, slot, noRnd)
     COOP.reopen("join", "test")
     COOP.slot, M.state, info.state, info.me, M.mySidV = slot, "linked", "linked", me, nil
     M.mig, M.migratedFrom, M.hostLostAt, M.hostAwayUntil, M.succ = nil, nil, nil, nil, nil
@@ -148,6 +154,8 @@ local function asJoiner(me, slot)
     end
     inbox[#inbox + 1] = "0|sq|" .. SID.host .. "|2:" .. SID.b .. ",1:" .. SID.a .. ",3:" .. SID.c
     inbox[#inbox + 1] = "0|al|AAGun:0,Wingmen:" .. SID.c .. ",ZfaCarrier:" .. SID.a   -- ((2026-11-07) a carrier too)
+    -- ((review of 2026-11-11, board-1) the host's round state in this run: a "left" notice is for a run they share)
+    if not noRnd then inbox[#inbox + 1] = "0|rnd|5|fighting|10.0|1|1|4" end
     D = { round = 5, state = "fighting", now = 500, startRound = 1 }
     tick()
 end
@@ -337,6 +345,73 @@ for _, bad in ipairs({ "1e999", "-1", "1.5", "abc", "" }) do
     check(M.hostLeft == nil and M.mig == nil and line("left\" notice refused"), "hl|" .. bad .. "|left refused")
 end
 
+-- ((review of 2026-11-11, board-1 / board-2) a "left" notice only for a run this joiner shares with that host: kept with no
+-- run (the main menu, a hangar) or for a run of its own just loaded, it migrated away at the next run's first tick
+print("... a \"left\" notice outside a run shared with the host (review of 2026-11-11, board-1 / board-2)")
+asJoiner(SID.c, 3)
+D = nil                                                  -- (this game's run over, at its main menu)
+tick()
+local oA, fromA = #opens, #logs + 1
+M.hlSkipAt = nil
+inbox[#inbox + 1] = "0|hl|35|left"
+tick()
+check(M.hostLeft == nil and M.hostLostAt == nil and line("left its run in round 35 (hl|left): not taken (no run here)", fromA),
+      "no run here: the notice not taken, no migration clock")
+inbox[#inbox + 1] = "0|sys|up"
+inbox[#inbox + 1] = "0|rnd|1|wait|10.0|0|0|0"
+D = { round = 0, state = "wait", now = 600, startRound = 1 }   -- (the next run with the same host)
+tick(); tick()
+check(#opens == oA and M.mig == nil and not has(callouts[#callouts], "NEW HOST"),
+      "the next run with the same host: no migration at its first tick")
+asJoiner(SID.c, 3, true)                                 -- (a run of its own just loaded: no "rnd" from the host yet)
+local oB, fromB = #opens, #logs + 1
+M.hlSkipAt = nil
+inbox[#inbox + 1] = "0|hl|51|left"                       -- (its "jn" answered by a host still at its hangar)
+tick()
+check(#opens == oB and M.hostLeft == nil and M.mig == nil
+      and line("left its run in round 51 (hl|left): not taken (this run hasn't had the host's round yet)", fromB),
+      "a run here the host's round state hasn't reached: the notice not taken (it waits for the host's rs|n)")
+asJoiner(SID.c, 3)
+oB = #opens
+DOWN = { ended = function() return true end }            -- (this game's run over: every player down)
+M.hlSkipAt = nil
+inbox[#inbox + 1] = "0|hl|51|left"
+tick()
+check(#opens == oB and M.hostLeft == nil and line("not taken (this game's run is over)"),
+      "after this game's run over: not taken (a migration would bring the run back)")
+DOWN = nil
+asJoiner(SID.c, 3)
+CFG.coop.migration.enabled = false
+M.hlSkipAt = nil
+inbox[#inbox + 1] = "0|hl|51|left"
+tick()
+check(M.hostLeft == nil and line("not taken (host migration off)"), "the migration off: not taken")
+local sC = #sent
+inbox[#inbox + 1] = "0|sys|lost"
+tick()
+inbox[#inbox + 1] = "0|sys|up"
+tick()
+local jnC = 0
+for i = sC + 1, #sent do if sent[i]:match("^%-?%d+>jn$") then jnC = jnC + 1 end end
+check(jnC == 1, "... so the host's link back still asks for its picture (jn)")
+CFG.coop.migration.enabled = true
+asJoiner(SID.c, 3)
+M.succ = {}                                              -- (no line to go down: the notice stays)
+inbox[#inbox + 1] = "0|hl|51|left"
+tick()
+check(M.hostLeft ~= nil and M.hostLostAt ~= nil, "(no line: the notice kept, the clock it set)")
+inbox[#inbox + 1] = "0|rs|n"
+tick()
+check(M.hostLeft == nil and M.hostLostAt == nil and line("the host's \"left\" notice (round 51) dropped: the host's run started (rs)"),
+      "the host's next run (rs|n): the notice and the clock it set dropped")
+inbox[#inbox + 1] = "0|hl|51|left"
+tick()
+check(M.hostLeft ~= nil, "(kept again)")
+D = { round = 0, state = "wait", now = 700, startRound = 1 }   -- (this game's new run)
+tick()
+check(M.hostLeft == nil and M.hostLostAt == nil, "a new run here: the notice dropped")
+D = nil
+
 print("... the host: leaving its run, a jn then, another host heard")
 COOP.reopen("host", "test")
 COOP.slot, info.role, info.state = 0, "host", "linked"
@@ -372,6 +447,41 @@ COOP.hostLeaving(51, "test")
 D = { round = 0, state = "wait", now = 950, startRound = 1 }
 tick()
 check(M.leftPending == nil and M.leftRun == nil and line("a run here again: the joiners not told"), "a run here again (a reload): the notice taken back")
+-- ((review of 2026-11-11, board-2) the notice sent, then Survival's level loading again for the next run (no D yet): a
+-- joiner already in it asking (jn) gets nothing, not "left" (it migrated away from a host about to host it)
+D, svLevelOn = nil, false
+COOP.hostLeaving(51, "test")
+tick()
+check(M.leftRun ~= nil, "(the notice sent again: out of the level)")
+svLevelOn = true
+local s9 = #sent
+inbox[#inbox + 1] = "1|jn"
+tick()
+check(M.leftRun == nil and #sentOf("hl", s9 + 1) == 0 and #sentOf("rs", s9 + 1) == 0,
+      "Survival's level loading again: the notice taken back, a jn then answered with nothing (" .. tostring(sentOf("hl", s9 + 1)[1]) .. ")")
+-- ((review of 2026-11-11) a run that ended with every player down: no notice at all (the joiners' runs are over too)
+D = { round = 51, state = "fighting", now = 990, startRound = 1 }
+tick()
+M.ro = { round = 51, at = clock }
+local s10 = #sent
+COOP.hostLeaving(51, "test")
+D, svLevelOn = nil, false
+tick(); tick(130)
+check(#sentOf("hl", s10 + 1) == 0 and M.leftPending == nil and line("after the run over: the joiners not told it left"),
+      "after a run over: the joiners never told it left")
+-- ((review of 2026-11-11) a run-over's reload hold (hl|120) over with the next run here: a quick retry, then a quit,
+-- tells the joiners at once, not when the old 120 s run out
+M.ro = nil
+COOP.hostAway(120)
+D = { round = 0, state = "wait", now = 1000, startRound = 1 }
+svLevelOn = true
+tick()
+check(M.awaySentUntil == nil, "the next run here: the reload's hold over")
+local s11 = #sent
+COOP.hostLeaving(1, "test")
+D, svLevelOn = nil, false
+tick()
+check(sentOf("hl", s11 + 1)[1] == "-1>hl|1|left", "... a quit then tells the joiners at once (" .. tostring(sentOf("hl", s11 + 1)[1]) .. ")")
 D, svLevelOn = nil, nil
 
 print("... off")

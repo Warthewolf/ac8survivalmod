@@ -82,6 +82,7 @@ end
 --         link, your name, your keys and camera);
 --       in any section: texts (a "text" or "sounds" table, labels, display names, ace callsigns: translations), key
 --         bindings (key, keys, ctrl, *_key) and camera settings;
+--       the retake rockets' warnings (specials.spaceport.retake.rockets radio, warn_s, half_m, big_x, log_s, subs);
 --     in a co-op run (sent only with [coop] leaderboard = true) the room's rules count too: the host's setup and
 --     [coop] aircraft_per_player, max_aircraft, max_up, split_share and the revives (but for each player's key and camera).
 --     Counted although co-op leaves them to each player: tells (their lead times hold the enemies' moves), profile and
@@ -97,6 +98,10 @@ local EDIT_FREE_PART = { text = true, sounds = true, camera = true }
 local EDIT_FREE_LEAF = { key = true, keys = true, ctrl = true, label = true, what = true, name = true, squadron = true,
                          title = true, help = true }
 local EDIT_COOP = { aircraft_per_player = true, max_aircraft = true, max_up = true, split_share = true, revive = true }
+-- ((review of 2026-11-11, rockets-1) the retake rockets' warnings: only on screen, on the radio or in the log (the
+-- launches come from launch_a_s / launch_b_s, counted). Tied to their path: tells' radio and the Alicorn deck's warn_s
+-- hold the enemies' moves and are counted.
+local EDIT_FREE_RK = { radio = true, warn_s = true, half_m = true, big_x = true, log_s = true, subs = true }
 local function editFree(p, v, coopRun)
     local top = p[1]
     if top == "coop" then
@@ -108,6 +113,7 @@ local function editFree(p, v, coopRun)
     local leaf = tostring(p[#p])
     if EDIT_FREE_LEAF[leaf] or leaf:match("_key$") or leaf:match("sound") then return true end
     if top == "aces" and #p == 3 and p[2] ~= "flight" and type(v) == "string" then return true end   -- (callsigns)
+    if top == "specials" and p[2] == "spaceport" and p[3] == "retake" and p[4] == "rockets" and EDIT_FREE_RK[p[5]] then return true end
     return false
 end
 local function shown(v)

@@ -4,9 +4,14 @@
  * Her UE4SS.log was 415 MB, 98.3% of it one line of another mod's ("[Lua] [<a mod>] Event work complete; polling
  * stopped", 4.4 million times, in bursts of up to 209 a half second), and the log bundle copied it whole: a ~415 MB copy,
  * a ~415 MB zip at the next start, far past what a player can send. Now a run of lines that are the same after their
- * time stamp ("[HH:MM:SS.fffffff] ") is written once, then one line saying how many more there were and until when; the
- * copy stops taking lines past LD_CAP bytes (counted, a line says so once); the counts and the most repeated line go
- * to the bundle's bundle.txt (logbundle.c). Pure C: the writer is the caller's function. */
+ * time stamp (UE4SS 3.0.1's "[2026-11-10 19:01:46.9542123] "; an undated "[HH:MM:SS.fffffff] " too) is written once,
+ * then one line saying how many more there were and until when; the copy stops taking lines past LD_CAP bytes (counted,
+ * a line says so once); the counts and the most repeated line go to the bundle's bundle.txt (logbundle.c). Pure C: the
+ * writer is the caller's function.
+ * ((2026-11-11, review) the first version knew only the undated stamp, never what UE4SS writes: on her real log it
+ *  collapsed 2 lines of 4.48 million and stopped at 64 MB, 3.5 hours short. Fed the same log now: ~9 MB, nothing
+ *  dropped. And past the cap it still wrote each run's line (~100 bytes a short run, unbounded): now nothing is written
+ *  there but the cap's own line, once, and the line of a run already going when the cap was reached.) */
 #ifndef SV_LOGDEDUP_H
 #define SV_LOGDEDUP_H
 
@@ -43,17 +48,23 @@ static uint64_t LdHash(uint64_t h, const char* p, size_t n)
     return h;
 }
 
-/* the body's start: past a leading "[...] " time stamp of up to LD_STAMP - 2 characters; *stampN its length (0 none) */
+/* the body's start: past a leading "[...] " time stamp of up to LD_STAMP - 2 characters, digits (one at least), '-',
+ * ':', '.' and spaces inside: UE4SS 3.0.1's "[2026-11-10 19:01:46.9542123] ", or "[19:01:46.9542123] "; *stampN its
+ * length (0 none). Not a stamp: "[Lua] ...", "[ ] ...", "[] ...". */
 static size_t LdBody(const char* l, size_t n, size_t* stampN)
 {
     *stampN = 0;
     if (!n || l[0] != '[') return 0;
+    int digits = 0;
     for (size_t i = 1; i < n && i < LD_STAMP - 2; ++i) {
-        if (l[i] == ']') {
+        char c = l[i];
+        if (c == ']') {
+            if (!digits) return 0;
             *stampN = i + 1;
             return (i + 1 < n && l[i + 1] == ' ') ? i + 2 : i + 1;
         }
-        if (!((l[i] >= '0' && l[i] <= '9') || l[i] == ':' || l[i] == '.')) return 0;
+        if (c >= '0' && c <= '9') digits = 1;
+        else if (c != ':' && c != '.' && c != '-' && c != ' ') return 0;
     }
     return 0;
 }
@@ -133,8 +144,11 @@ static void LdLine(LdState* s, LdPutFn put, void* ctx)
     uint64_t h = LdHash(LdHash(1469598103934665603ull, s->cur + b, bodyN), (const char*)&bodyLen, sizeof(bodyLen));
     if (s->curLen > s->curN) h ^= s->curHash;          /* (a line longer than kept: the rest's hash too) */
     s->lines++;
-    if (s->havePrev && h == s->prevHash && bodyLen == s->prevLen && bodyN == s->prevN &&
-        !memcmp(s->cur + b, s->prev, bodyN)) {
+    int same = s->havePrev && h == s->prevHash && bodyLen == s->prevLen && bodyN == s->prevN &&
+               !memcmp(s->cur + b, s->prev, bodyN);
+    /* (a run starts only below LD_CAP, and nothing is written while it goes on: its line, written as it ends, is the only
+     *  one past the cap, once, and it is about a line the copy holds) */
+    if (same && (s->run || s->outBytes < LD_CAP)) {
         char* dst = s->run ? s->runLast : s->runFirst;
         size_t k = stampN < LD_STAMP - 1 ? stampN : LD_STAMP - 1;
         memcpy(dst, s->cur, k); dst[k] = 0;
@@ -145,13 +159,14 @@ static void LdLine(LdState* s, LdPutFn put, void* ctx)
         return;
     }
     LdRunEnd(s, put, ctx);
-    if (s->outBytes >= LD_CAP) {
+    if (s->outBytes >= LD_CAP) {                       /* past the cap: counted (dropped), its line not written */
         if (!s->capSaid) {
             static const char m[] = "---- the copy of UE4SS.log stops here: 64 MB (the lines after are counted in bundle.txt) ----\r\n";
             LdOut(s, put, ctx, m, sizeof(m) - 1);
             s->capSaid = 1;
         }
         s->dropped++;
+        if (same) { LdTop(s); return; }                 /* (a repeat: still counted for the most repeated line) */
     } else {
         LdOut(s, put, ctx, s->cur, s->curN);
         if (s->curLen > s->curN) {
@@ -181,7 +196,8 @@ static void LdFeed(LdState* s, const char* in, size_t n, LdPutFn put, void* ctx)
     }
 }
 
-/* nothing new for a while (the copy's pass): a run's line written now, not lost if the game stops */
+/* nothing new for a while (the copy's pass): a run's line written now, not lost if the game stops (a run only goes on
+ * below LD_CAP: past it, this writes nothing) */
 static void LdIdle(LdState* s, LdPutFn put, void* ctx) { LdRunEnd(s, put, ctx); }
 
 static void LdInit(LdState* s) { memset(s, 0, sizeof(*s)); s->curHash = 1469598103934665603ull; }

@@ -302,8 +302,9 @@ local function blast(where, why, d, dead, h)
                 if outright(q) then
                     if pcall(function() q.obj:ModifyHealth(-1000000.0, pawn, true) end) then down = down + 1 end
                 else
+                    -- (HealthInternal is health x 10; ModifyHealth takes plain health: KILLS_HEALTH_DEATH.md 2)
                     local hh = hp(q.obj) or 0
-                    if hh > 0 and pcall(function() q.obj:ModifyHealth(-(hh * num(c.boss_pct, 0.3)), pawn, true) end) then hurt = hurt + 1 end
+                    if hh > 0 and pcall(function() q.obj:ModifyHealth(-(hh / 10 * num(c.boss_pct, 0.3)), pawn, true) end) then hurt = hurt + 1 end
                 end
             end
         end

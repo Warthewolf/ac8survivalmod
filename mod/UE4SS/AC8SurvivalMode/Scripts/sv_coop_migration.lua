@@ -116,6 +116,14 @@ end
 -- (M.jnNoRun). Survival's level loading again (a reload, a new run) takes the notice back before it goes.
 function COOP.hostLeaving(round, why)
     if not COOP.host() then return end
+    -- ((review of 2026-11-11) a run that ended with every player down: the joiners' runs are over too, and a notice would
+    -- start a migration that brings that run back on a joiner still at its Mission Failed screen)
+    if M.ro or (DOWN and DOWN.ended and DOWN.ended()) then
+        M.leftPending, M.leftRun = nil, nil
+        log(string.format("coop: this game's run is over here in round %d (%s), after the run over: the joiners not told it left",
+            math.max(0, math.floor(tonumber(round) or 0)), tostring(why or "")))
+        return
+    end
     local r = tonumber(round) or 0
     M.leftPending, M.leftRun = { round = math.max(0, math.floor(r)), why = tostring(why or ""), at = os.clock() }, nil
     log(string.format("coop: this game's run is over here in round %d (%s): the joiners are told once it's out of Survival's level",
@@ -123,7 +131,10 @@ function COOP.hostLeaving(round, why)
 end
 -- (COOP.tick, every tick on the host) the "left" notice due
 function M.leftTick()
-    if D and M.leftRun then M.leftRun = nil end           -- (a run here again: a "jn" gets its picture)
+    -- (a run here again, or Survival's level loading again after the notice went (it goes only once out of it): a "jn"
+    -- gets its picture, or nothing until the run's "rs|n"; (review of 2026-11-11, board-2) while it loaded, a joiner
+    -- already in it got "left" and migrated away)
+    if (D or svLevelOn == true) and M.leftRun then M.leftRun = nil end
     local lp = M.leftPending
     if not lp then return end
     if not COOP.host() then M.leftPending = nil; return end
@@ -138,6 +149,7 @@ end
 -- level is still loading (or reloading) sends nothing: its run's start sends "rs|n" to everyone. Never an empty picture:
 -- the joiner took all its copies down for it (Delta's 105 and the airfield's LOST callouts)
 function M.jnNoRun(from)
+    if svLevelOn == true then M.leftRun = nil end         -- ((review of 2026-11-11, board-2) loading again: as M.leftTick
     local lr = M.leftRun
     if lr then sendTo(from, true, "hl", lr.round, "left") end
     M.jnNoRunSaid = M.jnNoRunSaid or {}
@@ -186,13 +198,37 @@ function M.onHostLeft(r)
         return
     end
     if COOP.host() then return end
+    -- ((review of 2026-11-11, board-1 / board-2) only for a run in play here that this host's round state ("rnd", "rs")
+    -- reached: with none (the main menu, a hangar, a run of its own just loaded) it was kept with no end, and the next
+    -- run with the same host migrated away at its first tick; and not with the migration off (nothing ends it then, and
+    -- the host's link back skipped its resync for the rest of the session), nor after this game's run over (the run
+    -- would come back on a new host)
+    local why = (not (mig().enabled and tostring(cfg().transport or "steam") == "steam") and "host migration off")
+        or (not D and "no run here") or (D ~= M.hostRunD and "this run hasn't had the host's round yet")
+        or (DOWN and DOWN.ended and DOWN.ended() and "this game's run is over") or nil
+    if why then
+        if os.clock() >= (M.hlSkipAt or 0) then                -- (a "jn" answered so each time: a line every 30 s)
+            M.hlSkipAt = os.clock() + 30
+            log(string.format("coop: the host (%s) left its run in round %d (hl|left): not taken (%s)", playerName(0), round, why))
+        end
+        return
+    end
     local first = not M.hostLeft
-    M.hostLeft = { round = round, at = os.clock() }
+    M.hostLeft = { round = round, at = os.clock(), setLost = M.hostLostAt == nil or (M.hostLeft and M.hostLeft.setLost) or nil }
     M.hostLostAt, M.hostAwayUntil = M.hostLostAt or os.clock(), nil
     if first then
         log(string.format("coop: migration: the host (%s) left its run in round %d (hl|left): the next host now, not after %d s of silence",
             playerName(0), round, mig().after_s or 30))
     end
+end
+-- ((review of 2026-11-11, board-1) a joiner: the host's "left" notice dropped (the host's next run's "rs", this game's new
+-- run), and the migration's clock with it when only the notice set it
+function M.hostLeftDrop(why)
+    local hl = M.hostLeft
+    if not hl then return end
+    M.hostLeft = nil
+    if hl.setLost then M.hostLostAt = nil end
+    log(string.format("coop: the host's \"left\" notice (round %d) dropped: %s", hl.round, tostring(why)))
 end
 -- a player's plane here set aside, hidden and unbound (a live player plane is never destroyed mid-level). (0.73.77) The
 -- rejoin's M.setAside: tick and collision off, moved up, and a real one moved out of its slot in the runtime: kept there,
@@ -534,6 +570,9 @@ local function onJoinerMessage(f)
                 (table.concat(f, "|", 1, math.min(#f, 7)):gsub("%c", "?")):sub(1, 120)))
             return
         end
+        -- ((review of 2026-11-11, board-1) this run has the host's round: a "left" notice from it is for this run (one kept
+        -- from before goes with the host's next run's "rs", reliable: "rnd" isn't, and may come after the notice)
+        if D then M.hostRunD = D end
         M.rnd = { round = rr, state = rst, secs = rsecs, wave = rw,
                   waves = rws, alive = ral, level = lv, glitchPhase = gp, got = os.clock(),
                   allies = roomAlliesOf(f[10]), special = sk, hostSpecial = hs, alicorn = alcn }
@@ -897,6 +936,10 @@ local function onJoinerMessage(f)
         if M.rep and not M.rep.done then repairDone("rz") end
     elseif k == "rs" then
         M.cnt.rsGot = M.cnt.rsGot + 1
+        if D then M.hostRunD = D end                     -- ((review of 2026-11-11, board-1) as "rnd": the host's in a run
+        -- (its new run, or a new host's level: a "left" notice kept is over; "rs|j", an answer to this game's own "jn",
+        -- leaves it to repairDone, which keeps the copies for an empty picture from a host that left)
+        if M.hostLeft and COOP.client() and f[2] ~= "j" then M.hostLeftDrop("the host's run started (rs)") end
         -- ((0.73.73) "rs|j": the host's answer to this game's own "jn", a repair: nothing torn down, no new run here,
         -- nobody DOWN brought back, the round's records kept)
         if f[2] == "j" then return onResync() end
@@ -1258,6 +1301,7 @@ function COOP.reopen(role, why, partner)
     COOP.noteRole()
     M.state, M.roster = nil, {}
     M.hostLeft, M.leftPending, M.leftRun = nil, nil, nil   -- ((2026-11-11) a new session: the last one's "left" notices go)
+    M.hostRunD = nil
     if role == "host" then M.restoreMine() end          -- (you host: your own settings)
     M.autoAt = os.clock() + AUTO_WAIT + math.random() * AUTO_WAIT
     log(string.format("coop: %s as the %s over %s (partner %s, up to %d players; %s): %s", r == 1 and "open" or "NOT open",
@@ -1325,7 +1369,7 @@ local function closeCoop(why)
     COOP.open, COOP.role, COOP.slot = false, nil, nil
     COOP.noteRole()
     M.state, M.roster, M.linkedOnce, M.wasLost = nil, {}, false, nil
-    M.hostLeft, M.leftPending, M.leftRun = nil, nil, nil  -- ((2026-11-11) "left" notices: the session's)
+    M.hostLeft, M.leftPending, M.leftRun, M.hostRunD = nil, nil, nil, nil  -- ((2026-11-11) "left" notices: the session's)
     M.restoreMine()
     pcall(COOP.focusPause, false, "co-op closed")
     log("coop: closed (" .. why .. ")")
@@ -1578,6 +1622,11 @@ function COOP.tick(tick)
     if D ~= M.lastD then
         M.lastD = D
         if type(SV_CoopReset) == "function" then SV_CoopReset() end
+        -- ((review of 2026-11-11, board-1) a run here anew: the last run's "left" notice over (the host's round state says
+        -- this run's); the host's hold for a run-over reload over (a quick retry, then a quit, sent no notice for the
+        -- old reload's 120 s)
+        if COOP.client() then M.hostLeftDrop(D and "a new run here" or "the run here is over") end
+        if COOP.host() and D then M.awaySentUntil = nil end
         if COOP.client() then killAllCopies("a new run here") end      -- (a restart in the same level keeps the actors)
         for s, P in pairs(M.peers) do                                  -- (kept: bound again by peerTick)
             M.gunOff(P)                                                -- ((review of 0.73.80) its trigger let go: gunOn isn't kept)

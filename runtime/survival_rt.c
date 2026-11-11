@@ -27,8 +27,8 @@
 #include "uobj.h"                /* (0.32.22: up here for the teardown gate; flight.c's include is then a no-op) */
 #include "unittab.h"             /* the spawner's id -> unit table (Saint Alessia's 50-round run, lag-1) */
 
-#define RT_VERSION           L"0.32.34"
-#define RT_VERSION_A         "0.32.34"      /* SV_Version()'s: keep in step with RT_VERSION */
+#define RT_VERSION           L"0.32.35"
+#define RT_VERSION_A         "0.32.35"      /* SV_Version()'s: keep in step with RT_VERSION */
 #define SURVIVAL_MISSION_ID  9101          /* our row in DT_LiveMissionTable (Stonehenge: 9001) */
 #define SURVIVAL_ARGS        L"SurvivalMode" /* StringArgs of our main-menu row               */
 #define SURVIVAL_HOST_ARGS   L"SurvivalHost" /* StringArgs of the SURVIVAL CO-OP: HOST row    */

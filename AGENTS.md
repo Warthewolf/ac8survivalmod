@@ -375,6 +375,18 @@ Copy a working stock pattern before inventing a new one.
     SetResources weren't needed and blinked nothing. The user's layout-probe recording of 0.74.41 (2026-11-08 22-05-44).
     Swap it only behind a fade (sv_anomalies_dev.lua), never the sky params pointer (sv_sky.lua writes through it).
 
+63. GameplayStatics.ApplyDamage does nothing to AC8's Live objects, and its pcall succeeds: Saint Alessia's co-op run of
+    0.74.36 (2026-11-10) "finished off" ZFA-44s 140 times (70 Helios blasts, every carrier leaving) and the same 24 lived
+    to round 51 at full health; the shuttle took it and stayed "1 alive" until SV_Recycle. Finish an object with
+    sv_core.lua finishUnpaid (mortal, MinHealth field 0, ModifyHealth(-(h / 10 + 1000), nil, true), read back): HealthInternal
+    is health x 10, ModifyHealth takes plain health. Never count a kill without reading its health back.
+
+64. A remote event fired while the host's landing minigames run (Landing, Hangar = the STORE, SeamlessOut) runs none of its
+    records, though SV_Event answers 1: Saint Alessia's host of 0.74.36 (2026-11-10), STORE 18:47:27-18:48:06: the
+    shuttle's T-4 and T (SV_ShuttleLaunched never set) and a flight's appearance orders were lost; events after it took
+    with her still on the runway. A one-shot host event that matters is checked by its effect and fired again once the
+    STORE is shut (sv_rounds_shuttle.lua SPC.storeShut: the shuttle's liftoff, its removal, the Spaceport's launch).
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every

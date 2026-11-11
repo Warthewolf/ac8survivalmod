@@ -702,6 +702,10 @@ KILL_SIDE_CODE = { allies = "a", ships = "s", defences = "d" }
 function hostKiller(e)
     if e.killer ~= nil then return e.killer end
     if allyUnit(e.unit) or not live(e.obj) or (health(e.obj) or 1) > 0 then e.killer = false; return false end
+    -- ((review of 2026-11-11) the shuttle: the players' to guard, never a player's kill; shot down on the pad by the
+    -- enemies, their damage reads as no side's, and the fallback below made it the host's ground kill)
+    local sh = CFG.specials and CFG.specials.shuttle
+    if type(sh) == "table" and e.unit ~= nil and e.unit == sh.unit then e.killer = false; return false end
     local me, pa, peerA, dmg, sides = COOP.slot or 0, myAddr(), {}, {}, {}
     for s, P in pairs(M.peers) do if P.addr then peerA[P.addr] = s end end
     pcall(function()
@@ -1060,7 +1064,10 @@ function hostTick()
                             log(string.format("coop: you're down: %s %s: left to it (sent after the other players once it's let go)", unit, holdWhy))
                         end
                     elseif not (u and u.at and now - u.at < 3) then
-                        local ok, _, n = COOP.huntReal(unit)
+                        -- ((review of 2026-11-11, down-2) a flight already after a player sent after the same one again:
+                        -- huntReal keeps that slot while they can be hunted; with none it picked anew, and the whole
+                        -- flight could be pulled off a living player)
+                        local ok, _, n = COOP.huntReal(unit, hunted and hunted.slot or nil)
                         if ok then
                             moved, planesN = moved + 1, planesN + (n or 0)
                             if hunted then again, onYou = again + 1, onYou + onMe[unit] end

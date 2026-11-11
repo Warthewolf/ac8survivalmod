@@ -523,26 +523,30 @@ clock = clock + 200
 M.notePendHp(30000, 100)
 check(M.pendHpN == 1, "... each 120 s at most (" .. tostring(M.pendHpN) .. ")")
 M.pendHp, M.pendHpN = nil, nil
--- its surfacing (alicorn-7)
+-- its surfacing (alicorn-7). ((review of 2026-11-11, luaperf-1) on the round clock, as clientRounds runs it (D.now set
+-- first, then the check with it), well behind os.clock as in the game: the host's orders stamped with os.clock made
+-- every wait negative, and the copy was never surfaced here)
+local SKEW = 800
+local function client(t) t = t or clock; D.now = t - SKEW; SPC.alicornClient(t - SKEW) end
 SPC.CLEAN_OBJ[UNIT] = { at = clock, copyCore }
 copyCore.at = KM(-20, -5.5, -0.00005)                     -- (at the surface: -5 cm)
 onJoinerMessage(rnd("alicorn:sail", "0:62:0"))
 D.hostSpecial = M.rnd.hostSpecial
-for _ = 1, 3 do clock = clock + 1; SPC.alicornClient(clock) end
+for _ = 1, 3 do clock = clock + 1; client() end
 events = {}
 hostEvent("RE_SV_AlcnDive")
 check(events[1] == "RE_SV_AlcnDive" and SPC.alcnCl and SPC.alcnCl.dived and SPC.alcnCl.seaZ == -5, "the host's dive here: fired, its copy's sea level kept")
 copyCore.at.Z = -5600                                      -- (56 m down)
-for _ = 1, 20 do clock = clock + 1; SPC.alicornClient(clock) end
+for _ = 1, 20 do clock = clock + 1; client() end
 hostEvent("RE_SV_AlcnSurface")
 f0 = #logs + 1
 events = {}
-for _ = 1, 9 do clock = clock + 1; SPC.alicornClient(clock) end
+for _ = 1, 9 do clock = clock + 1; client() end
 check(#events == 1 and events[1] == "RE_SV_AlcnSurface" and has(line("special: the Alicorn's copy here is still 56 m down", f0), "not rising: surfaced here (1, fired)"),
       "still 56 m down 8 s after the host's order, not rising: surfaced here (COOP.eventHere), logged")
-for _ = 1, 40 do clock = clock + 1; SPC.alicornClient(clock) end
+for _ = 1, 40 do clock = clock + 1; client() end
 check(#events == 4, "... resurface_tries (4) at most (" .. #events .. ")")
-for _ = 1, 20 do clock = clock + 1; SPC.alicornClient(clock) end
+for _ = 1, 20 do clock = clock + 1; client() end
 check(has(line("special: the Alicorn's copy here still 56 m down", f0), "left as it is") and not SPC.alcnCl.surfaceSent,
       "up_wait_s on: left as it is, logged")
 hostEvent("RE_SV_AlcnSurface")                            -- (the host's again after it: no new wait)
@@ -550,18 +554,18 @@ check(not SPC.alcnCl.surfaceSent, "... a later order of the host's starts no new
 hostEvent("RE_SV_AlcnDive"); hostEvent("RE_SV_AlcnSurface")
 events = {}
 f0 = #logs + 1
-clock = clock + 1; SPC.alicornClient(clock)
+clock = clock + 1; client()
 copyCore.at.Z = -100
-clock = clock + 1; SPC.alicornClient(clock)
+clock = clock + 1; client()
 check(#events == 0 and has(line("special: the Alicorn's copy here surfaced", f0), "after the host's order (1 of its orders, 0 sent here)"),
       "a dive then the host's order and it rises: surfaced, nothing sent here, logged")
 f0 = #logs + 1
-clock = clock + 31; SPC.alicornClient(clock)
+clock = clock + 31; client()
 check(has(line("special: the Alicorn's copy here at (", f0), "(the host's: 0 tanks, core 62%)"), "its place logged every 30 s, the host's word with it: "
       .. tostring(line("special: the Alicorn's copy here at (", f0)))
 onJoinerMessage(rnd("anomaly:hunt", ""))
 D.hostSpecial = M.rnd.hostSpecial
-SPC.alicornClient(clock + 1)
+client(clock + 1)
 check(SPC.alcnCl == nil, "the host's Alicorn over: the check here dropped")
 -- the host's replay waits for its copy
 M.cunits, M.spawnQ, M.evQ = {}, { { unit = UNIT, pose = { -2100000, -540000, 0, 0 }, ops = {}, gen = 9, at = clock + 100 } }, nil

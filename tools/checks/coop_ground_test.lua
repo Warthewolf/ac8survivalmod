@@ -86,6 +86,7 @@ local UNITS = {
     -- ((0.73.80) spawned with no unit named by their callers: the amphibious assault's lane, the shuttle's pad)
     SV_Unit_LcacB = { { "BP_SH010_lcac", 5000 }, { "BP_SH010_lcac", 5000 } },
     SV_Unit_PadDummies = { { "BP_GR099_paddummy", 3000 }, { "BP_GR099_paddummy", 3000 } },
+    SV_Unit_Shuttle = { { "BP_OP0057_sstb_CP", 9300 } },              -- (the shuttle: a ground object here, as in game)
     SV_Unit_Alicorn = { { "BP_BA002_alcn", 90000 }, { "BP_BA002_alcn_btankfl_Base", 18750 }, { "BP_BA002_alcn_btankfr_Base", 18750 },
                         { "BP_BA002_alcn_btankrl_Base", 18750 }, { "BP_BA002_alcn_btankrr_Base", 18750 },
                         { "BP_MP028_dummy_emlmcore_Base", 31250 }, { "BP_FG037_uavm_ON_pool", 100, true } },
@@ -320,6 +321,22 @@ if ROLE == "host" then
           "host: ... its dn names the joiner who did most of its damage (" .. lineA .. ")")
     check(((COOP.killTally()[1] or {}).ground or 0) == tallyA + 1, "host: ... and it's in the joiner's tally ("
           .. tostring(tallyA) .. " -> " .. tostring((COOP.killTally()[1] or {}).ground) .. ")")
+    -- ((review of 2026-11-11) the shuttle shot down on the pad by the enemies (their damage no side's): nobody's kill, not
+    -- the host's ground kill by the fallback; its scripted take-off goes through COOP.removeObj (pad_test)
+    do
+        spawn("SV_Unit_Shuttle")
+        tick(1)
+        local idSh = byKey()["SV_Unit_Shuttle/BP_OP0057_sstb_CP_C#1"]
+        local tallyWas = (COOP.killTally()[0] or {}).ground or 0
+        world.SV_Unit_Shuttle[1].HealthInternal = 0
+        local dn0 = #sent + 1
+        tick(1.1)
+        local line = ""
+        for i = dn0, #sent do if idSh and sent[i]:find("dn|" .. idSh .. "|", 1, true) then line = line .. sent[i] .. " " end end
+        check(idSh and line:find("dn|" .. idSh .. "||", 1, true) and not line:find("dn|" .. idSh .. "||0", 1, true)
+              and ((COOP.killTally()[0] or {}).ground or 0) == tallyWas,
+              "host: the shuttle shot down on the pad: nobody's kill, not the host's tally (" .. line .. ")")
+    end
     -- a joiner's ally / defence bought: built here (sv_shop.lua shopBuildFor), answered "ak" / "ax"
     local built = {}
     shopBuildFor = function(slot, name, price, kind)

@@ -347,11 +347,20 @@ local function afterTick(s, now)
         end
     end
 end
+-- ((review of 2026-11-11, down-3) the player aimed at DOWN now, or landed at their airfield: their plane here is only
+-- hidden (still valid), and the aim kept the flight on it every second, the huntOn pass's order undone each time)
+local function aimGone(a)
+    local P = COOP and COOP.peerInfo and COOP.peerInfo(a.slot)
+    return type(P) == "table" and (P.down == true or P.onAirfield == true)
+end
 local function aimsTick(s, now)
     for unit, a in pairs(s.aims) do
-        if now >= a.untilT or alive(unit) <= 0 or decoyed(unit, now) then   -- (your decoy: it's stood down, the aim's over)
+        local gone = aimGone(a)
+        if now >= a.untilT or alive(unit) <= 0 or decoyed(unit, now) or gone then   -- (your decoy: it's stood down, the aim's over)
             s.aims[unit] = nil
-            if a.restore and alive(unit) > 0 then orders(s, unit, nil, a.why .. ": its aim on player " .. (a.slot + 1) .. " over") end
+            local why = a.why .. ": its aim on player " .. (a.slot + 1) .. " over" .. (gone and " (they're down or landed)" or "")
+            if gone then log(string.format("director: %s: player %d is down or landed: its aim on them ends early", unit, a.slot + 1)) end
+            if a.restore and alive(unit) > 0 then orders(s, unit, nil, why) end
         else
             local n = 0
             for _, p in ipairs(planes) do

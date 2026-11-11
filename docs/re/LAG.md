@@ -6,7 +6,7 @@ into the tick's second half); what grows is the whole run's cost: the Lua tick w
 (16-48) -> 83-99 ms (49-50). Every Lua tick runs on the game thread (sv_main.lua ExecuteInGameThread), so its cost is
 frame time. The fixes below, each with the log line that shows it in the next test.
 
-## lag-1: SV_UnitAlive walked the phase's unit list with system calls (runtime)
+## lag-1: SV_UnitAlive walked the phase's unit list with system calls (runtime 0.32.35)
 `SV_UnitAlive` (and Spawn, Recycle, SetAircraft, SetLevel) ran `SpawnerReady`'s six `VirtualQuery` checks of objects it
 had found already, then `RegisteredUnit`'s walk of the phase's unit list with two `VirtualQuery`s an entry (one on the
 entry's vtable, inside the game's 551 MB image). The list keeps every flight shot down and not spawned again, so the
@@ -23,8 +23,8 @@ Now (runtime/survival_rt_game.c, runtime/unittab.h, runtime/uobj.h `UObjSlotHold
 - the list's ids are in an id -> unit table, rebuilt when the list's data, count or entries (a hash of its pointers)
   change, at the spawner's own changes (`g_unitGen`: Spawn, Recycle, the deferred destroys, SV_Reset) or every 2 s; a hit
   is checked again (still allocated, still that id: hard rule 59) and a failed one rebuilds; the build's walk checks each
-  entry readable (one query per allocator region) and still allocated. tools/checks/unittab_test.sh runs the table
-  against the old walk, 20,000 random list changes included.
+  entry readable (one query per allocator region) and still allocated. tools/checks/unittab_test.sh (run by
+  build_all.sh, with uobj_test.sh) runs the table against the old walk, 20,000 random list changes included.
 
 Log lines:
 - `spawner: LiveUnitSpawner ..., world data ...; checked through GUObjectArray: yes` (no: every check the old query)
@@ -69,17 +69,25 @@ every 3 s), only while VOID WATCHER is airborne here or a field was set in the l
 before it's set again, not every tick; the newest 32 are kept. Log line: `allies: VOID WATCHER 1's ESM fields: the
 newest 32 kept, the oldest let go (lag-5)`; the perf line's `ESM fields` size stays at 32 or less.
 
-## lag-8: the log bundle copied another mod's flood whole (runtime/logbundle.c, runtime/logdedup.h)
+## lag-8: the log bundle copied another mod's flood whole (runtime/logbundle.c, runtime/logdedup.h; runtime 0.32.35)
 Her UE4SS.log was 415 MB, 98.3% one line of another mod's (4.4 million times, in bursts of up to 209 a half second);
 the bundle would have copied and zipped it whole. Now the copy writes a run of lines that are the same after their time
 stamp once, then `[stamp] ---- the line above N more times (from [stamp]) ----`; it stops at 64 MB (said once, the rest
-counted). `logs\UE4SS_stats_<stamp>.txt` holds the counts and the most repeated line, and the bundle's bundle.txt sums
-them up (`UE4SS.log: X MB read, Y MB copied into ...; its most repeated line (N repeats): ...`). The runtime's log says
-`logs: UE4SS.log's copy: X MB read, Y MB written, L lines, C of them repeats collapsed, D past the 64 MB cap; its most
-repeated line N times (lag-8)` once 1,000 repeats are collapsed, then every 10 minutes. Test: logdedup_test.sh (a made-up
-flood fed in chunks that end anywhere: the copy under 2% of it, every line given back by expanding the counts).
+counted). The stamp is UE4SS 3.0.1's dated one, `[2026-11-10 19:01:46.9542123] ` (an undated `[19:01:46.9542123] ` is
+taken too; `[Lua]`, `[ ]` are not stamps). Past the cap nothing more is written but the cap's line, once, and the line of
+a run already going as it was reached: every line after it counts as dropped, its repeats too (they still count for the
+most repeated line). `logs\UE4SS_stats_<stamp>.txt` holds the counts and the most repeated line, and the bundle's
+bundle.txt sums them up (`UE4SS.log: X MB read, Y MB copied into ...; its most repeated line (N repeats): ...`). The
+runtime's log says `logs: UE4SS.log's copy: X MB read, Y MB written, L lines, C of them repeats collapsed, D past the
+64 MB cap; its most repeated line N times (lag-8)` once 1,000 repeats are collapsed, then every 10 minutes. Her own
+UE4SS.log fed through it (in 32 KB reads, as the copy thread reads it): 396 MB in, ~9 MB out, 4,427,860 lines collapsed
+into 12,456 run lines, none dropped; the first version knew only the undated stamp, never what UE4SS writes, and
+collapsed 2 of its 4.48 million lines, stopping at 64 MB 3.5 hours short (the review of 2026-11-11). Test:
+logdedup_test.sh, run by build_all.sh (a made-up flood with UE4SS 3.0.1's stamps fed in chunks that end anywhere: the
+copy under 2% of it, every line given back by expanding the counts; the stamp forms; nothing written past the cap,
+however the lines repeat and the log goes quiet; every line read in the copy, collapsed or dropped).
 
-## joiner-4: no frame time on any game (runtime)
+## joiner-4: no frame time on any game (runtime 0.32.35)
 Neither game's logs had a frame time, so "lag in ace rounds" could only be guessed from a proxy (the other players' real
 planes' frames fed: ~30 fps on the host whatever the round, 16-23 in rounds 47-50; ~50 on Delta's). Now every game logs,
 once a minute while a plane flies, `frames: the last minute: N frames while a plane flew (F fps), A ms on average, 95%

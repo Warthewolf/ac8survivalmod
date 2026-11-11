@@ -123,8 +123,12 @@ function SPC.shuttleTakeOff(padOnly)
         if hide(sh, false) then hidden = hidden + 1 else failed = failed + 1 end
     elseif liveObj(sh) then
         -- ((2026-11-11) Saint Alessia's run: "damage applied" and 1 alive 5 s on: ApplyDamage takes nothing off it,
-        -- sv_core.lua finishUnpaid's ModifyHealth does)
-        local dead, h1, how = finishUnpaid(sh)
+        -- sv_core.lua finishUnpaid's ModifyHealth does) Without the damage event (the event package's ObjectDamage_Shuttle
+        -- would play "hit" and "can't take more" minutes after a clean liftoff), and in co-op taken off every game first as
+        -- a removal ("dn|<id>|r", nobody's kill), as ZLAUNCH.finish does: left to hostTick, its 0 health read as the
+        -- host's ground kill (review of 2026-11-11, zfa-2 / zfa-3)
+        if COOP and COOP.removeObj then pcall(COOP.removeObj, sh) end
+        local dead, h1, how = finishUnpaid(sh, true)
         killed = dead and ("killed (" .. tostring(how) .. ")") or ("NOT killed (health " .. tostring(h1) .. " after ModifyHealth and ApplyDamage)")
         if hide(sh, false) then hidden = hidden + 1 else failed = failed + 1 end
     end

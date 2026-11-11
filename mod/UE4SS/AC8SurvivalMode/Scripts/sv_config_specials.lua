@@ -74,8 +74,9 @@ CFG.specials = {
     -- more for each other player flying then (a co-op host: itself if it's up, not DOWN and not down at the airfield,
     -- and the others flying; solo: just you), more a round as the tanks' (user, 2026-11-11: "Yes add the alicorns core
     -- size"; it had ~60 missiles' health whoever flew). x the round's growth (round 45: x3.05), 10 + 3.3 a player is ~30
-    -- alone and ~61 for four there, the agreed numbers (a full room as before, alone half), and never more than before at
-    -- any round. The missile's damage unread, or core_missiles 0: health_x as before.
+    -- alone and ~61 for four there, the agreed numbers (a full room as before, alone half): never more than before at
+    -- any round for up to four players flying (each one past four adds 3.3 more). The missile's damage unread, or
+    -- core_missiles 0: health_x as before.
     -- Its rows are Online Mode's (DT_SV_Alcn*): `tables` adds them to the campaign tables at the main menu.
     -- Debuffed across the board (user, 2026-10-23: "way too strong"; were 110 / 30 / 25 / 35 / 25, health x0.5,
     -- +0.04 a round, at most x1.5): shorter dives, its first shot later, railgun and volleys less often, less health.

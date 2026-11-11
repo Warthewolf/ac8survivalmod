@@ -389,6 +389,9 @@ local function scene(side)
     LB.co = nil
     if ALLY and ALLY.state then ALLY.state().order = nil end
     tick()                                         -- (the new run here: COOP.tick builds its lists again)
+    -- ((review of 2026-11-11, board-1) a joiner's run the host's round state has reached ("rnd" / "rs"): its "left" notice
+    -- is taken only for such a run)
+    M.hostRunD, M.hlSkipAt = side ~= "host" and D or nil, nil
     if side == "host" then
         LB.co = { id = HEX, mine = true, squad = {}, n = 0, specials = {}, run = {} }   -- (the host's co-op run: "lb|n")
         peer(1); peer(2)
@@ -719,6 +722,18 @@ do
     local ok = M.hostLeft ~= nil and M.hostLeft.round == 51 and M.hostAwayUntil == nil and #r.errs == 0
     if ok then say("  ok   join hl|51|left: the host left its run, round 51 (M.hostLeft)")
     else fail(covOf("join", "hl"), "err", "hl|51|left", "the left notice did nothing (M.hostLeft " .. tostring(M.hostLeft and M.hostLeft.round) .. ")") end
+    -- ((review of 2026-11-11, board-1 / board-2) not for a run the host's round hasn't reached, nor with no run here
+    scene("join")
+    M.hostRunD = nil
+    inbox[#inbox + 1] = "0|hl|51|left"
+    catching = true; tick(); tick(); catching = false
+    local okA = M.hostLeft == nil and M.hostLostAt == nil and M.mig == nil
+    scene("join")
+    D = nil
+    inbox[#inbox + 1] = "0|hl|51|left"
+    catching = true; tick(); tick(); catching = false
+    if okA and M.hostLeft == nil and M.hostLostAt == nil then say("  ok   join hl|51|left outside a run shared with the host: not taken")
+    else fail(covOf("join", "hl"), "err", "hl|51|left unshared", "taken for a run the host's round never reached, or with no run") end
     scene("host")
     D, M.leftRun = nil, { round = 51 }
     inbox[#inbox + 1] = "1|jn"

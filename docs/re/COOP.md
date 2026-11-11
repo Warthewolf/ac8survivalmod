@@ -535,7 +535,14 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
   base is 9,500 and no revive costs more than 28,500. The run's count (St.count) stays for the logs and the messages.
   The host counts a slot's revive as it applies it and sends it in "rb"; a joiner that links gets every player's in
   "rc"; the host's "rx" carries the slot's, so a joiner's price is put right by a refusal. The cap is sv_down.lua
-  priceFor's (sv_ai.lua itemPrice is the STORE's items' too).
+  priceFor's (sv_ai.lua itemPrice is the STORE's items' too). A slot changes hands (a host migration: the new host
+  slot 0, the others relinked in the lowest free slots; a rejoiner in another slot; a newcomer in a freed one): the
+  count follows the player, not the slot (review of 2026-11-11; DOWN.tick's whoTick, once a second: each slot's player
+  by the roster's Steam ID, else their name, this game's own slot you). On a change that slot's down time and revive
+  guard go; the host keeps the old player's count (St.bySid / St.byName), gives the slot the new player's own (from the
+  slot they had, the old room's table on a host by migration's first pass, or kept from before they left; 0 for a
+  newcomer) and sends "rc" to everyone: `revive: slots changed hands, each player's own revives follow them: player 3
+  (E, was C): 0; ...`. A joiner takes the host's table and keeps nothing of its own.
 - **Back**: SV_Down(0), shown, collision on, inputs and attacker limits back (a limit only if still 0), the view on
   your plane, RE_SV_RepairAircraft and HealthInternal written full, safe_s invincible; respawn "loiter" stays where it
   was flown, "native" calls SV_Respawn 4 km out from the runway (1609574, -435747) along its heading (yaw -23), 500 m
@@ -640,6 +647,15 @@ empty picture (ten AA GUN / SAM SITE / CIWS LOST callouts), and a hit in that wa
   (`coop: migration: the host (<name>) left its run in round <r> (hl|left)`, callout `<HOST> (HOST) LEFT THE RUN`); a
   link back from that host keeps the copies and asks no picture (`the copies here kept, no picture asked`); an empty
   picture from it takes nothing down. A round that isn't a whole 0-9999 is refused (`the host's "left" notice refused`).
+  (Review of 2026-11-11.) A joiner takes it only for a run in play that the host's round state has reached (`rnd` or
+  `rs` in this D: M.hostRunD), with the migration on (steam), and not after its own run over (DOWN.ended); else
+  `coop: the host (<name>) left its run in round <r> (hl|left): not taken (no run here | this run hasn't had the host's
+  round yet | host migration off | this game's run is over)`, a line every 30 s at most. Kept with no run, it migrated the
+  next run with the same host away at its first tick. One taken and not acted on (no line to go down) is dropped by the
+  host's next `rs` and by a new run here, the migration's clock with it when only the notice set it (`coop: the host's
+  "left" notice (round <r>) dropped: ...`). The host sends none after a run over (every player down: `...after the run
+  over: the joiners not told it left`), takes a sent one back as Survival's level loads again (a `jn` then gets
+  nothing), and a new run here ends the run-over reload's hold (hl|120), so a quick retry then a quit tells them at once.
 - **No picture without a run**: a host whose D is nil answers a joiner's `jn` with the "left" notice (it left its run) or
   nothing (its level loading: its run's start sends `rs|n`): `coop: player <n> asked for the whole picture; this game
   has no run (...): no picture sent`.
@@ -687,8 +703,12 @@ The user: "the enemy AI followed my corpse plane in its orbit around the base".
   plane (co-op: a living player's), not put back onto you`. None of `aces: ... back onto you` while DOWN.
 - **The down pass** (sv_coop.lua hostTick, every 5 s) also checks a flight it already sent, by its planes' real
   targets (aiWatch's p.aiTargetAddr): one back on your hidden plane (the allies' hunt, a Wolf release, its arrival
-  order: all name "Player") is sent again; a flight holding its Wolf trap or held by the director is left to it; one up
-  under 3 s waits for its arrival order. `coop: you're down: N flights (N planes) sent after the other players instead
+  order: all name "Player") is sent again, after the same player (COOP.huntReal with its slot: a new pick only when they
+  can't be hunted, review of 2026-11-11), so its other planes aren't pulled off a living player; a flight holding its
+  Wolf trap or held by the director is left to it; one up under 3 s waits for its arrival order. A director's aim at a
+  joiner (its TargetActor on their plane every second, aim_s) ends as they go DOWN or land (sv_director.lua aimGone:
+  `director: <unit>: player N is down or landed: its aim on them ends early`), its orders back with a living player's
+  hunt: their plane here is only hidden, and the aim kept the flight on it. `coop: you're down: N flights (N planes) sent after the other players instead
   (K of them again: P planes back on your hidden plane)` (an again-only pass every 30 s at most), `coop: you're down:
   <unit> holds its Wolf trap: left to it ...`.
 - **The allies' hunt** (sv_allies.lua RE_SV_Hunt_NN) waits while you're DOWN (held, not dropped): `allies: you're down:

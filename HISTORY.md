@@ -2591,3 +2591,57 @@ fichier"; "tu met tous dans logs, dater les crumbs").
   has nothing that fires its orders again (sv_spawn.lua spawnBomber gives it no D.orders entry); a joiner's own STORE
   can eat the host's forwarded liftoff (her player 3 was in one at T; their logs would tell); other one-shot host events
   at the same risk (a boss's end, the Spaceport's launch, a Wolf trap's free, the removals). Untested in game.
+
+## 0.74.52-coop2mp.144 (runtime 0.32.35): Saint Alessia's 50-round co-op run (2026-11-11; Lua, runtime, the event package, the Worker)
+- Her run of 0.74.36 (host, 19:00-00:34, round 51, 10 players over the run) and Delta's logs (joiner, player 4). Her report:
+  ZFA-44s piling up on the zone's east edge ("weren't dying after exploding", the user's screenshot: a stack at the SE
+  corner); no warning to stop the Retake's rockets; enemies following her DOWN plane round the airfield; lag in ace waves;
+  the Alicorn "invulnerable" to Delta; the leaderboard refusing her run. Three investigations, each finding checked by a
+  skeptic; six fixes built in worktrees and merged; the user's two balance decisions; a review (6 areas, a skeptic each);
+  its 13 confirmed findings fixed and checked again. Hard rules 63 (ApplyDamage is a no-op) and 64 (a host event in the
+  STORE runs nothing) from her logs. Untested in game: every line below is offline-tested only.
+- **ZFA-44s** (sv_core.lua finishUnpaid, sv_escort*.lua): every scripted end used GameplayStatics.ApplyDamage, a no-op
+  (24 ZFA-44s alive at full health at round 51 after 70 blasts; each new carrier added 2 more). Now one finish
+  (ModifyHealth with and without the damage event, read back, ApplyDamage last, else switched off and logged), used by
+  every end and by the shuttle's take-off (without the damage event, COOP.removeObj first: never the host's kill). The
+  dive: gone only once dead, the blast one-shot, retried then switched off; its state per carrier ('zd' with a dive id);
+  its clock from the target in reach; the Helios 'hurt' a fraction of health (it took 3x); holdHull bounded; a sunk
+  carrier's planes taken; a joiner's own ZFA-44s finished; the cover only while the carrier's up; a 30 s position log.
+- **The Retake's rockets** (sv_spaceport.lua; the generator): Mission 22's radio (the user's choice): brief, warning,
+  launch and shot-down groups copied into DT_SV_Radio (RE_SV_SpRadio*; v0001_0038 for "downed", not confirmed in
+  ms022's table: build_radio asserts it), Comona Control subtitles (drafts, config/subtitles.ini), big banners and
+  repeats, the rockets' row; the host's rocket the truth on every game ('rk'); a launch lost in the host's STORE fired
+  again; the Retake's ~0.75 s start spread over ticks.
+- **The DOWN host** (sv_ai.lua ACE.hunt, sv_coop.lua's down pass, sv_tells, sv_stats, sv_director): Reapers wrote her
+  hidden plane into TargetActor every 2 s (five circled it 25 minutes, round 50 held 15). Never onto a DOWN player's
+  plane; a living player's plane left alone in co-op; the down pass checks real targets and keeps the flight's player;
+  director aims end on a DOWN or landed player; stats and learning skip the DOWN plane. Joiners: the floor kept through
+  a host migration (one hit was Delta's death), a down joiner's run waits for the migration, a revive refused to a game
+  not heard from in 500 ms, a revived real plane moved to its stream first.
+- **The leaderboard** (leaderboard/src/index.js, sv_leaderboard.lua, sv_coop_migration.lua, runtime/coop.c): NotMexi's
+  game, its own link dropped, hosted alone ~3 minutes and sent its partial copy first; hers got duplicate:true and was
+  dropped. The Worker keeps a co-op run's furthest copy (the shorter archived `superseded:<time>`); a duplicate answer
+  is logged as NOT stored and kept; every host by migration sends; the old host answers another host's hello so a
+  dropped joiner rejoins it; the host's `hl|<round>|left` when it leaves (joiners migrate at once, keep their copies,
+  no LOST callouts), bounded to the run it names; a withdrawn flight's copies recycled on joiners. **Redeploy the
+  Worker**; leaderboard/README.md has the D1 query for run 2498a83c.
+- **Lag** (runtime/survival_rt_game.c + unittab.h, sv_spawn.lua ALIVE, sv_allies.lua, logbundle.c + logdedup.h):
+  SV_UnitAlive grew to 6-10 ms a call (40-50% of the tick): no system calls, an id table rebuilt only when the list
+  changes, a per-minute cost line; ALIVE's 4 ms budget a tick; the round clear's repair from kept lists (120-320 ms
+  freezes); VOID WATCHER's ESM fields looped only while recent; the UE4SS.log copy collapses repeated lines with UE4SS's
+  real stamps and a 64 MB cap (her 396 MB -> 9.2 MB, nothing lost; Falken Red Gloss wrote 98% of it). build_all.sh runs
+  the six native C suites.
+- **The Alicorn** (sv_alicorn.lua, sv_coop*.lua, sv_hud.lua; the generator): no sync bug (Delta's copy in step to the
+  second). CORE n% on every player's row and callouts at 75/50/25%; core hits and joiners' hits logged; a joiner's
+  copies take the host's health on bind; a joiner's surfacing re-checked; a rejoiner's Alicorn at the host's hull
+  (RE_SV_AlcnLegOut / Back). The user: the core sized as it opens: core_missiles 10 + core_missiles_per_player 3.3 for
+  each other player flying, x the round's growth (~30 alone, ~61 for four at round 45; never more than before for up to
+  four).
+- **Revives** (sv_down.lua; the user): priced on the revived player's own revives (St.per, following the player when a
+  slot changes hands), raise_max 3 (round 50: 9,500 to 28,500; was up to 138,240); 'rb' / 'rc' / 'rx' carry the counts.
+- Needs: build_all.sh (container: the rockets' radio and events, the Alicorn's legs, the shuttle's removal switch-offs);
+  the Worker redeployed. Tests: run_all 68 passed, 5 skipped (Windows only); the runtime builds both editions.
+- For the user (design choices made by default): the allies' hunt held while the host is DOWN; Reapers still pulled off
+  allies onto players; joiners migrate at once when the host leaves; the furthest co-op copy wins by round; revive
+  freshness 500 ms; the dive's speed_kmh 1200 / approach_s 120; the rockets' subtitle drafts; no radio line for "half
+  way up" or "escaped" (no Mission 22 line fits).

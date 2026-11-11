@@ -469,7 +469,7 @@ hit them with `GameplayStatics.ApplyDamage(o, 1e8, nil, nil, nil)`, which runs o
 takes no health off (70 "finished off" under the sea, 70 Helios blasts, all 24 at full health at round 51; the shuttle's
 "damage applied" left it 1 alive 5 s on). The survivors went back to escorting, were held again at the next leaving (2,
 4 ... 10 a ship), and sat on the combat zone's east edge (every blast at x 29.9-31.7 km; why is unknown).
-- One finish: sv_core.lua `finishUnpaid(o)` (invincible off, the MinHealth field and SetMinHealth 0, switched on, then
+- One finish: sv_core.lua `finishUnpaid(o, noEvent)` (invincible off, the MinHealth field and SetMinHealth 0, switched on, then
   `ModifyHealth(-(h / 10 + 1000), nil, true)`, read back; still up: without the damage event, then ApplyDamage last), the
   route sv_rounds.lua's clean-up killed with in the same run. `ZLAUNCH.finish(e, why, final)` (sv_escort_laser.lua) wraps
   it for a ZFA-44: ESC.same first (hard rule 59), the host's copies down first; not down and final: switched off
@@ -477,7 +477,10 @@ takes no health off (70 "finished off" under the sea, 70 Helios blasts, all 24 a
   offKill, flightOff (a flight finished, no longer only switched off), ESC.restart, a joiner's own (ownZfaOff: when the
   host's carrier goes, and its last flight before each forwarded launch, never a parked one: Delta's 24 had stayed up
   switched off, and that launch had switched off the arm's parked pair it then released, hidden), and the shuttle
-  (SPC.shuttleTakeOff, finishUnpaid alone). A plane a new launch brings out flies again. ModifyHealth on an allied plane
+  (SPC.shuttleTakeOff: finishUnpaid with noEvent, from the "without the damage event" step, so the event package's
+  ObjectDamage_Shuttle "hit" / "can't take more" lines can't play after a clean liftoff; in co-op COOP.removeObj first, so
+  it goes down on every game as a removal, never the host's ground kill; one the enemies shoot down on the pad is nobody's
+  kill too: hostKiller). A plane a new launch brings out flies again. ModifyHealth on an allied plane
   is the open question: its log lines say.
 - The dive: a plane counts as gone only once its health reads 0; its blast once (e.blasted), its finish tried 3 times a
   second apart, then switched off. Each carrier leaving (or sunk: its flight no longer flies on) is a dive of its own, with

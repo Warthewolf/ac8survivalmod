@@ -45,6 +45,27 @@ python -X utf8 -I tools/checks/ini_check.py   # every survival.default.ini setti
 python -X utf8 -I tools/subtitles.py check     # config/subtitles.ini: every line reads (sv_config_subs.lua), no mistake
 python -X utf8 -I tools/checks/size_check.py  # no source file over 2,000 lines (CONTRIBUTING.md)
 python -X utf8 -I tools/checks/paths_check.py  # no machine path in tools, runtime, mod, docs, AGENTS.md (.env instead)
+# the native runtime's C suites that build and run on Windows and Linux alike (tools/llvm's clang, or clang on PATH; on
+# Windows windowless), a few seconds in all: the formatter (hard rule 55), the liveness check, the spawner's unit table
+# (lag-1), the UE4SS.log copy's filter (lag-8), the real planes' weapons, the co-op flag bits and DOWN's autopilot. A
+# failure stops the build, its output shown. They are ordinary C programs: on Windows clang needs the MSVC / Windows SDK
+# libs for them (runtime/build.sh doesn't), so where it can't build one (LLVM alone: CONTRIBUTING.md) they're skipped,
+# said so. Not here: coop_test (~40 s, a dozen windows, fixed UDP ports), and safecall, pathguard, build_hash, logbundle
+# (Windows only): sh tools/checks/run_all.sh runs them.
+mkdir -p build/checks
+t_cc=tools/llvm/LLVM/bin/clang.exe
+[ -x "$t_cc" ] || t_cc=clang
+printf '#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\nint main(void) { char* p = malloc(4); strcpy(p, "ok"); printf("%%s\\n", p); return 0; }\n' \
+    > build/checks/hosted_probe.c
+if "$t_cc" -O1 -o build/checks/hosted_probe.exe build/checks/hosted_probe.c > build/checks/hosted_probe.txt 2>&1; then
+    for t in vfmt uobj unittab logdedup fwkind flight; do
+        t_out=$(sh "tools/checks/${t}_test.sh" 2>&1) || { printf '%s\n' "$t_out"; echo "build_all: tools/checks/${t}_test.sh failed"; exit 1; }
+    done
+    echo "native checks passed: vfmt, uobj, unittab, logdedup, fwkind, flight (tools/checks/*_test.sh)"
+else
+    echo "native checks NOT run: $t_cc can't build an ordinary C program here (no MSVC / Windows SDK libs?" \
+         "$(head -1 build/checks/hosted_probe.txt)); sh tools/checks/run_all.sh where it can"
+fi
 sh runtime/build.sh   # native runtime: build/runtime/main.dll
 python -X utf8 -I tools/build_survival.py
 python -X utf8 -I tools/pack.py

@@ -789,6 +789,24 @@ check(evs("^RE_SV_DirFree") == "" and not DIR.aimed(q)
 tickTo(140, 141)
 check(evs("^RE_SV_DirFree") == "RE_SV_DirFree_05" and has(line("director: ERA_Unit_02_Dep_Air1 back in the fight", from), "after your decoy"),
       "... then at its end (a joiner's copies freed too)")
+-- ((review of 2026-11-11, down-3) the player covered goes DOWN while the aim's on: their plane here only hidden, the aim
+-- ends at once, its orders back (a living player's hunt), not 20 s of TargetActor on the hidden plane
+p, _, _, q = coverScene()
+joiner(KM(50, 0))
+move(p, KM(51, 0), DIRV(1, 0)); move(q, KM(50, 3), DIRV(0, -1))
+for _, x in ipairs(planes) do if x.unit == L or x.unit == E then move(x, KM(-30, 0)) end end
+tickTo(100, 105)
+check(DIR.aimed(q), "(player 2's cover aimed)")
+events = {}
+from = #logs + 1
+M.peers[1].down = true
+q.obj.tgt = nil
+tickTo(105.25, 106.5)
+check(not DIR.aimed(q) and q.obj.tgt == nil and evs("^RE_SV_DirFree") == "RE_SV_DirFree_05"
+      and has(line("director: ERA_Unit_02_Dep_Air1: player 2 is down or landed: its aim on them ends early", from), "ends early")
+      and has(line("director: ERA_Unit_02_Dep_Air1 back in the fight", from), "(they're down or landed)"),
+      "player 2 DOWN while aimed at: the aim over at once (no TargetActor on their hidden plane), its orders back")
+M.peers[1].down = nil
 -- a split-hunt flight held: the hunt waits out the hold, and the hold's end gives it back (COOP.hunted)
 COOP.open, COOP.role, COOP.slot = true, "host", 0
 CFG.coop.enabled = true

@@ -87,6 +87,9 @@ function Obj:SetIsInvincible(b) self.inv = b end
 function Obj:SetMinHealth() end
 function Obj:ModifyHealth(dh, causer, ev)
     self.mods = (self.mods or 0) + 1
+    self.evs = self.evs or {}
+    self.evs[#self.evs + 1] = ev
+    if MODIFY_HOOK then MODIFY_HOOK(self) end
     if self.tough or self.inv or self.HealthInternal == nil then return 0 end
     self.HealthInternal = math.max(math.floor((self.MinHealth or 0) * 10), self.HealthInternal + dh * 10)
 end
@@ -193,10 +196,14 @@ for _, o in ipairs(pad) do
 end
 check(#far5 == 5 and count(far5, gone) == 5, "the 5 beyond 1.5 km (control centre, its dummies, SAM1) too")
 check(gone(SHUTTLE_ACTOR) and SHUTTLE_ACTOR.HealthInternal == 0 and damaged == 0, "the shuttle killed (by ModifyHealth: ApplyDamage takes nothing) and hidden")
+-- ((review of 2026-11-11, zfa-2) without the damage event: ObjectDamage_Shuttle's records ("hit", "can't take more")
+-- are gated only on its hits and health bands, and would play minutes after a clean liftoff)
+check(SHUTTLE_ACTOR.evs and #SHUTTLE_ACTOR.evs >= 1 and (function() for _, e in ipairs(SHUTTLE_ACTOR.evs) do if e ~= false then return false end end return true end)(),
+      "the shuttle's kill without the damage event (ModifyHealth's ev: " .. table.concat((function() local t = {}; for _, e in ipairs(SHUTTLE_ACTOR.evs or {}) do t[#t + 1] = tostring(e) end return t end)(), ", ") .. ")")
 check(gone(near) and not far.hidden and not jet.hidden, "the sweep: a stranger within 1.5 km hidden, not one 2 km out, no aircraft")
 check(#SHUTTLE.gone == 21, "each kept once to bring back (" .. #SHUTTLE.gone .. ")")
 local l = lastLog("shuttle and pad off")
-check(since(from, "shuttle and pad off") == 1 and l and l:find("the shuttle killed (damage event); 22 objects hidden (20 of them the pad's own, as spawned)", 1, true),
+check(since(from, "shuttle and pad off") == 1 and l and l:find("the shuttle killed (no damage event); 22 objects hidden (20 of them the pad's own, as spawned)", 1, true),
       "logged: " .. tostring(l))
 
 ---------------------------------------------------------------------------------------------------- the next shuttle round
@@ -293,8 +300,12 @@ SV_Spawn, SV_Recycle = rawSpawnStub, nil
 -- take-off (COOP.removeNow), and announces them again when the next shuttle round brings the pad back (COOP.hostBack)
 print("(0.74.22) co-op host: the pad's copies off the joiners' games at its take-off, announced again when it's back")
 local removed, announced = {}, {}
+local removedObj = {}
 COOP = { host = function() return false end, client = function() return false end,
          removeNow = function(u) removed[#removed + 1] = u; return 1 end,
+         -- ((review of 2026-11-11, zfa-3) the shuttle's copies down on every game as a removal (nobody's kill), before
+         -- its kill here: hostTick would read its 0 health as the host's ground kill)
+         removeObj = function(o) removedObj[#removedObj + 1] = { obj = o, health = o.HealthInternal, mods = o.mods or 0 }; return true end,
          hostBack = function(u, objs) announced[#announced + 1] = u .. ":" .. #objs; return #objs end }
 round()
 spawnShuttle()                                  -- (the pad hidden since the last take-off: back, its units still up)
@@ -305,6 +316,9 @@ from = #logs + 1
 SPC.shuttleTakeOff()
 check(#removed == 2 and removed[1] == "SV_Unit_PadDummies" and removed[2] == "AA_Unit_01_Ground0" and count(pad2, gone) == 20,
       "its take-off: hidden here, both units' copies off the joiners' games (" .. table.concat(removed, ", ") .. ")")
+check(#removedObj == 1 and removedObj[1].obj == SHUTTLE_ACTOR and removedObj[1].health > 0 and SHUTTLE_ACTOR.HealthInternal == 0
+      and removedObj[1].mods < SHUTTLE_ACTOR.mods,
+      "the shuttle taken off every game as a removal (COOP.removeObj) before its kill here (" .. #removedObj .. ")")
 removed = {}
 SPC.shuttleTakeOff(true)
 check(#removed == 2, "the pad-only take-off too (a shuttle round whose shuttle never came)")

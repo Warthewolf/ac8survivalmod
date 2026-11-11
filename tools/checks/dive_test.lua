@@ -66,7 +66,8 @@ local function plane(x, y, z, h)
     function o:ModifyHealth(dh, inst, ev)
         self.hits[#self.hits + 1] = { dh = dh, inst = inst, ev = ev }
         if self.tough or self.bIsInvincible then return 0 end
-        self.HealthInternal = math.max(math.floor((self.MinHealth or 0) * 10), self.HealthInternal + dh)
+        -- (dh in plain health, HealthInternal x 10, as escort_test's and pad_test's: KILLS_HEALTH_DEATH.md 2)
+        self.HealthInternal = math.max(math.floor((self.MinHealth or 0) * 10), self.HealthInternal + dh * 10)
     end
     function o:SetIsInvincible(v) self.bIsInvincible = v end
     function o:SetMinHealth(v) self.minH = v end
@@ -135,7 +136,7 @@ local function piece(file, from, to)
 end
 ZLAS, ZLAUNCH = {}, {}
 piece("sv_escort_laser.lua", "function ESC.same(e, maxAge)", "\nend\n")
-piece("sv_core.lua", "function finishUnpaid(o)", "\nend\n")
+piece("sv_core.lua", "function finishUnpaid(o, noEvent)", "\nend\n")
 do
     local las = readAll(MOD .. "/Scripts/sv_escort_laser.lua")
     local a = las:find("local function fin()", 1, true)
