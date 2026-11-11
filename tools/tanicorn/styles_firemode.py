@@ -266,15 +266,16 @@ CLIP_FRONT_CAM = ((56.0, -8.0, 1.0), (20.0, -1.0, 8.0), 26)
 if os.environ.get("TANA_CLIP_CAM"):                         # (x y z, look x y z, lens: to frame a shot)
     _c = [float(v) for v in os.environ["TANA_CLIP_CAM"].split(",")]
     CLIP_FRONT_CAM = (tuple(_c[0:3]), tuple(_c[3:6]), _c[6])
-CLIP_SIDE = (0.0, 0.03, 0.15, 0.22, 0.4, 1.0)              # (its 165, 176, 177 the rear halves tipping, 178 the U
-#                                                             starting up, 181, 190: firemode's stages, the rear first)
+CLIP_SIDE = (0.0, 0.03, 0.11, 0.19, 0.47, 1.0)             # (its 165, 176; 177 the rear halves 18 deg over, the lower
+#                                                             panels stepping out; 178 the U starting up; 181 open, 190)
 CLIP_SIDE_CAM = ((-20.0, -24.0, 3.0), (-4.0, 0.0, 4.4), 28)
 # `film`: (frame at 24 fps, t, fire) keys, linear between, frame for frame with the clip's two shots: the front one
 # (its frames 33-92) stowed to 47, the barrels open by 61, the charge 64-70, the storm to 92; the side one (160-198)
-# stowed to 176, the armour open by 183, held
+# stowed to 176, the armour open by 181, held
 FILM_FRONT = ((0, 0.0, 0.0), (14, 0.0, 0.0), (28, 0.75, 0.0), (31, 1.0, 0.0), (37, 1.0, 0.6), (48, 1.0, 1.0),
               (59, 1.0, 1.0))
-FILM_SIDE = ((0, 0.0, 0.0), (16, 0.0, 0.0), (23, 0.47, 0.0), (38, 0.47, 0.0))
+FILM_SIDE = ((0, 0.0, 0.0), (16, 0.0, 0.0), (17, 0.11, 0.0), (18, 0.19, 0.0), (19, 0.36, 0.0), (21, 0.47, 0.0),
+             (38, 0.47, 0.0))                              # (the clip's 176-181: the rear first, the U up by 179)
 if os.environ.get("TANA_CLIP_SIDE_CAM"):
     _c = [float(v) for v in os.environ["TANA_CLIP_SIDE_CAM"].split(",")]
     CLIP_SIDE_CAM = (tuple(_c[0:3]), tuple(_c[3:6]), _c[6])

@@ -178,42 +178,54 @@ approved. (The recording is the user's and stays out of the repository; so do th
   2026-11-11; the frame numbers in firemode.py): each barrel's shell is four quarters, top, bottom, port and starboard,
   their seams an X on a light-grey muzzle rim (shell 0.22 m thick, bore 0.47 m), each cut at mid length (the user's
   "split the barrels in the middle"; the clip's shells are whole, sliding about a third of the barrel back into the
-  turret: with three guns close together that collides, so the halves telescope instead); the quarters step out from
-  the rod together with a pale lemon flash from the seams (firemode.FLASH); the front halves step out further and
-  slide back 6.8 m over the rear ones in two steps, every stave parallel to the rod (the user, 2026-11-11: "Why are
-  these up so high, they should be following the glowing core"; until then they angled up about their roots after
-  "angle themselves upwards", the side quarters 10 deg and the top one 5, their front ends ~2.8 m over the rod:
-  firemode.CLIP "pitch", now 0); the rod, a plain khaki cylinder
-  with a paler rounded tip (r 0.2 m; its own piece, Barrel_<gun>_9), pushes 2 m forward, its tip to 20.7 m (84 % of
-  the barrel), and lights lemon as the gun charges, three cream coil rings at its root and strips along the staves'
-  inner edges with it (CLIP).
+  turret: with three guns close together that collides, so the halves telescope instead); the rear halves step 0.3 m
+  out from the rod and the front halves 0.08 m, with a pale lemon flash from the seams (firemode.FLASH); then the
+  front halves slide 6.6 m back INSIDE the rear ones in two steps, every stave parallel to the rod (the user,
+  2026-11-11: "Why are these up so high, they should be following the glowing core". Until then the staves angled up
+  10 / 5 deg about their roots, their front ends ~2.8 m over the rod, after "angle themselves upwards"; and stepped
+  out 1.05 m to pass over the rear halves, a 4 m cage round a 0.4 m rod, where the clip's pieces only just part);
+  the rod, a plain khaki cylinder with a paler rounded tip (r 0.2 m; its own piece, Barrel_<gun>_9), pushes 2 m
+  forward, its tip to 20.7 m (84 % of the barrel), and lights lemon as the gun charges, three cream coil rings at its
+  root and strips along the staves' inner edges with it (CLIP; the strips on the straight sections only, against the
+  inner flats, clear of the front halves sliding past). The quarters' ends and cut faces are dark, as the armour's
+  seams.
   **Outside, the design's own turret** (the user, 2026-11-11: "I want the turret to maintain its original appearance
   on the outside. Except for the barrel, you can change that"; asked, the armour still opens): closed, style 10 is the
   design's Iowa-style house and gun roots as they were, their own sheets and textures (`orig`; renders match the
-  design's to the pixel but for the barrels). The barrels are rebuilt as the quarters on the design's own octagonal
-  profile (ORIG_GUN: 1.027 m to 4.40, a taper to 0.896, a step to 0.752, the muzzle at 24.53, from the root block's
-  chamfer at 1.545); the root blocks, chamfers and trunnion (0.83 m ahead of the face) stay the design's; the breech's
-  recoil cylinders and cradle end behind the face plate, which leans back above the trunnions. The house's sheets are
-  cut along hidden seams (firemode.cut_design; the survey of 2026-11-11 measured the house, ORIG_*) into the clip's
-  pieces, each side of the centre line (cut on y 0.102, where the design's own centre-line vertices lie):
+  design's but for the barrels: the rear view to 0.00 %, the aft quarter 0.05 % of its pixels). Both turrets carry the
+  forward turret's house (LEV_IOWA_T16_2, turned for the aft one): the design's aft turret is another mesh with other
+  roof fittings, but the game shows the forward one's on both sockets anyway (export_tanacorn.py). The barrels are
+  rebuilt as the quarters on the design's own octagonal profile (ORIG_GUN: 1.027 m to 4.40, a taper to 0.896, a step
+  to 0.752, the muzzle at 24.53, from the root block's chamfer at 1.545); the root blocks, chamfers and trunnion (0.83 m
+  ahead of the face) stay the design's; the breech's recoil cylinders and cradle end behind the face plate, which leans
+  back above the trunnions. The house's sheets are cut along hidden seams (firemode.cut_design; the survey of
+  2026-11-11 measured the house, ORIG_*) into the clip's pieces, each side of the centre line (cut on y 0.102, where the
+  design's own centre-line vertices lie), in the clip's side shot's order (frames 176-181):
   the rear half (the rear wall and the roof strip aft of the roof's x -10.97 edge row, with what stands on it: the
-  rear railing, the aft side railings and the V frame's two beams cut on that row) tips aft 65 deg on the rear wall's
-  own foot (z 2.03 at the centre, 1.57 at the corners), then yaws 6 deg and steps 0.2 m out ("the back left and back
-  right"); then the inverted U (the roof forward of that row, the aft side wall above its stepped seam (x -13.9..-7.5
-  at z 3.39, down to 2.38 at x -1.35, then the foot at x -1.0) with its full-height forward tab, the rangefinder ear,
-  the box on the tab, the other railings and roof fittings) lifts straight up 0.45 H ("the front right and left
-  sides, along with the front section of the roof lift up"); the lower panel steps 0.6 m out and 8 cm up (over the
-  skirt's ring and ledge), then slides 0.47 H forward along its foot under the lifted tab. The rear halves go first, as
-  the clip's side shot does (frames 177-179): the other way round, the ears and the lifted walls pass through the rear
-  strips (the survey's sweep); a collision sweep over the whole transform (51 poses) finds every contact only
-  shrinking from the closed pose. The forward walls, the face and its gun-port collars, the floor, the sloped
-  underside and the skirt stay. Each moving sheet is thickened 0.25 m inward, its inner skin the plate itself (the
-  design's sheet seen from behind, as under an overhang) and its rims the plate's but on the cuts, light grey. Behind
-  them a dark core 0.3 m inside the walls with the gun house's interior where walls open (the training gear's drum,
-  the hoist, shell racks, a doorway through each rear half), built in two passes (the core cut by the hollows, then
-  every interior part united with it at once: in the cut's own union they met each other badly). No strut arms. 30k
-  triangles a turret (the core and interior 21k); the core a clean solid (nothing in the interior meets another face
-  flat on); the design's sheets are open by nature and stay out of the clean check.
+  rear railing, the aft side railings and the V frame's two beams cut on that row, the fittings whose middle is aft
+  of it, each fitting's loose sheets kept together) tips aft 65 deg on the rear wall's own foot (z 2.03 at the
+  centre, 1.57 at the corners), then yaws 6 deg out and steps 0.2 m out ("the back left and back right"); meanwhile
+  the lower panel steps 0.6 m out and 8 cm up (over the skirt's ring and ledge), then slides 0.47 H forward along its
+  foot, outside the U's tab; once the rear halves are 43 deg over, the inverted U (the roof forward of that row, the
+  aft side wall above its stepped seam (x -13.9..-7.5 at z 3.39, down to 2.38 at x -1.35, then the foot at x -1.0)
+  with its full-height forward tab, the rangefinder ear, the box on the tab, the other railings and roof fittings)
+  lifts straight up 0.3 H (the clip's ~27 %; "the front right and left sides, along with the front section of the
+  roof lift up"). The rear halves go before the U: the other way round, the ears and the lifted walls pass through
+  the rear strips (the survey's sweep). Collision sweeps over the whole transform (the armour at 51 poses, every
+  barrel piece at 41) find every contact only shrinking from the closed pose (the rods slide out of their root
+  blocks). The forward walls, the face and its gun-port collars, the floor, the sloped underside and the skirt stay.
+  Each moving sheet is thickened 0.25 m inward, its inner skin the plate itself (the design's sheet seen from behind,
+  as under an overhang) and its rims the plate's but on the cuts, light grey; the forward walls and the face too
+  (seen from inside once the U is up: in the game a one-sided material culls a sheet's back, a slit of sky between
+  them and the core), the floor and the sloped underside 2 cm (an inner side; at 0.25 m their edges stood out of the
+  leaning walls' foot). A rim lying flat on another sheet (the rear wall's top under the roof, the roof's rear edge
+  on the rear wall, the forward walls' tops under the roof) sits 4 mm behind it: they z-fought, a dark band on the
+  closed turret. Behind them a dark core 0.3 m inside the walls with the gun house's interior where walls open (the
+  training gear's drum, the hoist, shell racks, a doorway through each rear half), built in two passes (the core cut
+  by the hollows, then every interior part united with it at once: in the cut's own union they met each other badly).
+  No strut arms. 37k triangles a turret (its house, guns and every piece; the core and interior 21k); the core a clean
+  solid (nothing in the interior meets another face flat on); the design's sheets are open by nature and stay out of
+  the clean check.
 - **Each piece** is an object `TANA_T16_<tag>_<bone>` carrying its motion (`fm_ops`: translations and turns, each over
   a stretch of the 2.5 s transform), part (`fm_part`: ARMOR or GUNS) and bone (`fm_bone`). Keyed into the model's
   timeline: deploy 110-185, stow 226-301.
@@ -226,9 +238,11 @@ approved. (The recording is the user's and stays out of the repository; so do th
   `style_sheet.py` lays them out, with the recording's frames (a folder of frame_NNN.png at 24 fps) beside the clip
   steps (CLIP_PAIRS). The sheets: art/tanicorn/renders/styles (1-8), art/tanicorn/renders/
   style9, art/tanicorn/renders/style10 (the model's side only).
-- **Export** (export_tanacorn.py): `T16` (house on turret_yaw, boots, root rings and core rods on turret_pitch;
-  SOC_Gun_01..03 at the open muzzles; its wreck the house and roots: barrels gone) plus two skinned parts riding its
-  bones, each with the animation `Deploy` sampled from the model's keys (rotation and place a bone, 30 fps):
+- **Export** (export_tanacorn.py): `T16` (house on turret_yaw; on turret_pitch what doesn't move: style 10's the
+  design's root blocks, the coil rings and the breech, the rebuilt styles' boots, root rings and core rods;
+  SOC_Gun_01..03 at the open muzzles; its wreck the house and roots: barrels gone; style 10's rods move, in T16_GUNS)
+  plus two skinned parts riding its bones, each with the animation `Deploy` sampled from the model's keys (rotation
+  and place a bone, 30 fps):
   `T16_ARMOR` (Root at turret_yaw > the style's armour pieces) and `T16_GUNS` (Root at turret_pitch >
   Barrel_<gun>_<piece>; SOC_Charge_01..03 1.5 m ahead of the muzzles, for the charge effects; style 10's shots and
   charges leave the rods' tips, out: each rod's `fm_tip`). check_export.py reads
@@ -247,4 +261,5 @@ approved. (The recording is the user's and stays out of the repository; so do th
 - Before the chosen style is built for the game: its armour pieces checked clean (the layered and exploded styles'
   slabs still have a few boolean slivers at their struts), its glTFs through check_export.
 - The breach film (breach_tanacorn.py) predates the new mount: re-rendered as it is, its 16-inch salvos would leave
-  from the guns' roots (it finds muzzles on LEV_G16_*.001, now only the boots, root rings and cores).
+  from the guns' roots (it finds muzzles on LEV_G16_*.001, now only what doesn't move: style 10's root blocks, coil
+  rings and breech).

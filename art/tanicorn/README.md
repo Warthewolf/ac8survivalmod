@@ -23,8 +23,9 @@ Tanager). Design, research and build plan: docs/re/TANICORN.md; the build pipeli
   round the glowing core; the quarters blown out; the gun house's interior), with its transform step by step.
 - `renders/style10/`: style 10, the default, after the user's screen recording, on the design's own turret (closed it
   looks as it always did but for the barrels; the user, 2026-11-11): barrels in top / bottom / side quarters that step
-  out and slide back along a khaki rod that pushes out and lights; the rear wall and its roof strip tip aft,
-  then the roof's front halves lift with the upper side panels and the lower panels slide forward: its views,
+  out and slide back along a khaki rod that pushes out and lights, the front halves inside the rear ones; the rear
+  wall and its roof strip tip aft and the lower panels step out and slide forward, then the roof's front halves
+  lift with the upper side panels: its views,
   its transform step by step and the recording's two shots as the model does them, stills and a film
   (`video/tanacorn_firemode_style10.mp4`, frame for frame with the recording; the recording itself stays out of the
   repository).
