@@ -515,6 +515,65 @@ local function redTick(now)
     end
 end
 
+-- (2026-11-12) HUD.hold(on, why[, opts]): Survival's HUD off while anything holds it, back when the last one lets go (the
+-- user, 2026-11-11: "look into turning the HUD off during the cinematic too": THE TANACORN's rise and its camera preview,
+-- sv_cine.lua). A holder is its why: holding twice is one hold and letting go twice is nothing, so two holders can't undo
+-- each other. opts.callouts: the callout banner still shows (the preview's "KEY n OF m"): while every holder allows it,
+-- only the rest of it is off (the canvas's other widgets at render opacity 0, each one's own put back after). A hold
+-- belongs to the run it was made in (D): a new run drops it. The run's summary (LB.show) is never held, and callouts
+-- wait while it's all off. -> whether this made a new hold (on) or let one go (off). Logged: `hud: held (<why>)`,
+-- `hud: <why> let go`, `hud: hidden (held: <whys>)`, `hud: <why>'s hold dropped (its run is over)`.
+HUD = { holds = {} }
+function HUD.hold(on, why, opts)
+    why = tostring(why or "?")
+    local had = HUD.holds[why] ~= nil
+    if on then
+        HUD.holds[why] = { run = D, callouts = type(opts) == "table" and opts.callouts == true }
+        if not had then log("hud: held (" .. why .. ")") end
+        return not had
+    end
+    if had then HUD.holds[why] = nil; log("hud: " .. why .. " let go") end
+    return had
+end
+-- nil (not held), "all" (all of it off) or "rows" (the callouts still shown), and the holders' names
+function HUD.state()
+    local all, names = false, {}
+    for why, h in pairs(HUD.holds) do
+        if h.run ~= D then
+            HUD.holds[why] = nil
+            log("hud: " .. why .. "'s hold dropped (its run is over)")
+        else
+            names[#names + 1] = why
+            if not h.callouts then all = true end
+        end
+    end
+    if #names == 0 then return nil, "" end
+    table.sort(names)
+    return all and "all" or "rows", table.concat(names, ", ")
+end
+local function holdRows(on)                      -- (a "rows" hold: everything but the banner at render opacity 0)
+    if (H.rowsHeld == true) == on then return end
+    H.rowsHeld = on
+    H.rowsOp = H.rowsOp or {}
+    local c, n = H.canvas, 0
+    pcall(function() n = c:GetChildrenCount() end)
+    local keep = { [addrOf(H.banner) or "banner"] = true, [addrOf(H.sub) or "sub"] = true }
+    for i = 0, n - 1 do
+        pcall(function()
+            local w = c:GetChildAt(i)
+            local a = addrOf(w)
+            if not a or keep[a] then return end
+            if on then
+                if H.rowsOp[a] == nil then H.rowsOp[a] = w:GetRenderOpacity() end
+                w:SetRenderOpacity(0)
+            elseif H.rowsOp[a] ~= nil then
+                w:SetRenderOpacity(H.rowsOp[a])
+            end
+        end)
+    end
+    if not on then H.rowsOp = {} end
+end
+
 function hudTick(now, paused, pc)
     if hudOff or not CFG.hud.enabled or not D then return end
     if not (H and liveObj(H.widget)) then                     -- (0.73.73: liveObj, kept between ticks)
@@ -535,7 +594,9 @@ function hudTick(now, paused, pc)
     pcall(function() pawnOk = valid(pc.Pawn) end)
     local gameHud = true
     pcall(function() local hud = pc:GetHUD(); if valid(hud) then gameHud = hud.bShowHUD end end)
-    local show = ((not paused) and pawnOk and gameHud) or (LB.show ~= nil)    -- (the run's summary stays up)
+    local hold, holders = HUD.state()                          -- ((2026-11-12) HUD.hold: the rise's cinematic)
+    if LB.show ~= nil then hold = nil end
+    local show = ((not paused) and pawnOk and gameHud and hold ~= "all") or (LB.show ~= nil)    -- (the run's summary stays up)
     pcall(LB.hud, now)
     if SUB and SUB.hudTick then                    -- ((0.74.0) the subtitle strip and the card: sv_subs.lua)
         local okSb, errSb = pcall(SUB.hudTick, now, show, CFG.hud.info.enabled and info.open)
@@ -545,8 +606,10 @@ function hudTick(now, paused, pc)
         H.widget:SetVisibility(show and VIS.HitTestInvisible or VIS.Collapsed)
         H.shown = show
         if show then H.rowsAt = 0 end                  -- (the rows read at once: a peek waiting for it starts now)
-        log("hud: " .. (show and "shown" or ("hidden (" .. (paused and "paused" or (not pawnOk and "no player aircraft") or "game HUD off") .. ")")))
+        log("hud: " .. (show and "shown" or ("hidden (" .. (paused and "paused" or (not pawnOk and "no player aircraft")
+            or (hold == "all" and ("held: " .. holders)) or "game HUD off") .. ")")))
     end
+    pcall(holdRows, show and hold == "rows")
     pcall(hideGameInfo, now)
     local t = CFG.hud.text
     local waves = D.waves and #D.waves > 1 and D.state ~= "wait" and D.wave
@@ -637,7 +700,8 @@ function hudTick(now, paused, pc)
     end
     stackRows()
 
-    if #callouts > 0 and not H.calloutUntil then
+    if hold == "all" then                         -- ((2026-11-12) HUD.hold: all of it off, the callouts wait)
+    elseif #callouts > 0 and not H.calloutUntil then
         local c = table.remove(callouts, 1)
         setText(H.bannerText, "bannerStr", c.text)
         -- box width: the text's own width when the game can lay it out now, else ~32 units a letter (measured on the
