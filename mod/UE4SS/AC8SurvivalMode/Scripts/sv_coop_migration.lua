@@ -4,6 +4,8 @@
 -- another part uses is a global of this mod's Lua state, its own helpers stay local.
 do  -- (sv_coop.lua's do block, continued: this piece's own helpers stay local to it)
 local M = COOP.M                                   -- (sv_coop.lua's M, handed on)
+-- ((2026-11-11) the ranges a host's round state ("rnd") and the runtime's "sys|slot" must be in: tools/checks/coop_guard_test.lua)
+local RND_MAX = { round = 9999, secs = 86400, waves = 256, alive = 100000, players = (MAX_SLOT or 23) + 1 }
 local crumb = crumb or function() end  -- (as in sv_coop.lua)
 
 ---------------------------------------------------------------------------------------------------- host migration
@@ -399,8 +401,21 @@ local function onJoinerMessage(f)
         -- ((0.73.77, D4) the special in play there and its state: two words, or none)
         local hk, hst = tostring(f[12] or ""):match("^(%a+):(%a+)$")
         local hs = (hk and #hk <= 16 and #hst <= 16) and { kind = hk, state = hst } or nil
-        M.rnd = { round = tonumber(f[2]) or 0, state = f[3], secs = tonumber(f[4]) or 0, wave = tonumber(f[5]) or 0,
-                  waves = tonumber(f[6]) or 0, alive = tonumber(f[7]) or 0, level = lv, glitchPhase = gp, got = os.clock(),
+        -- ((2026-11-11) tools/checks/coop_guard_test.lua: the round's numbers were only tonumber'd, and a joiner's clientRounds
+        -- makes one table a wave, so "rnd|6|fighting|30|2|1e999" froze the joiner's game for good and 1e999 / -5 / 1.5 went
+        -- into D.round, D.at, D.wave) the round's numbers whole and in range, its state a word, or the message is refused
+        -- (the last one kept)
+        local rr, rst, rsecs = tonumber(f[2]), tostring(f[3] or ""):match("^%a+$"), tonumber(f[4])
+        local rw, rws, ral = tonumber(f[5]), tonumber(f[6]), tonumber(f[7])
+        local function whole(v, hi) return v ~= nil and v == math.floor(v) and v >= 0 and v <= hi end
+        if not (whole(rr, RND_MAX.round) and rst and #rst <= 16 and rsecs and rsecs >= 0 and rsecs <= RND_MAX.secs
+                and whole(rw, RND_MAX.waves) and whole(rws, RND_MAX.waves) and whole(ral, RND_MAX.alive)) then
+            once("rndbad", string.format("coop: the host's round state refused (a number out of its range or not whole): %s",
+                (table.concat(f, "|", 1, math.min(#f, 7)):gsub("%c", "?")):sub(1, 120)))
+            return
+        end
+        M.rnd = { round = rr, state = rst, secs = rsecs, wave = rw,
+                  waves = rws, alive = ral, level = lv, glitchPhase = gp, got = os.clock(),
                   allies = roomAlliesOf(f[10]), special = sk, hostSpecial = hs }
         -- ((0.73.78, plan G5) the room's VOID WATCHER 1 purchases (the host's count): this game's STORE prices it from it,
         -- as the host checks a joiner's ask)
@@ -746,8 +761,17 @@ local function onSys(from, what, f)
             send(true, "rj", from)
         end
     elseif what == "slot" then
-        COOP.slot = tonumber(f[3])
-        log("coop: you are player " .. tostring((COOP.slot or -1) + 1))
+        -- ((2026-11-11) tools/checks/coop_guard_test.lua: a joiner's own "sys|slot|25" reached here as the runtime's, and
+        -- set the host's slot; runtime/coop.c now refuses another game's "sys|..." (CoNetPush)) the runtime says it on a
+        -- joiner only, as sender 0, a whole slot 0-23: anything else is logged and left
+        local sl = tonumber(f[3])
+        if from == 0 and not COOP.host() and sl and sl == math.floor(sl) and sl >= 0 and sl < RND_MAX.players then
+            COOP.slot = sl
+            log("coop: you are player " .. tostring(sl + 1))
+        else
+            log(string.format("coop: a \"sys|slot\" from player %d refused (%s, this game the %s)", from + 1,
+                tostring(f[3] or ""):gsub("%c", "?"):sub(1, 20), COOP.host() and "host" or "joiner"))
+        end
     elseif what == "lost" then
         M.wasLost = M.wasLost or {}
         M.wasLost[from] = true

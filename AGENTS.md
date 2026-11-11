@@ -368,12 +368,15 @@ for everyone (M.sendSettings: CFG's differences from CFG_DEFAULTS, data only); t
 SV_MenuSetting, iniSet). Build: `COOP=1 NOVALKA=1 sh tools/package_release.sh online <version>` (bump
 tools/coop_edition.py COOP_TAG for every build friends get: from runtime 0.32.6 games with different builds refuse to link (coop.c CoSameVer, both ways); before it they linked with a CO-OP VERSION MISMATCH callout, only a different CO_PROTO refusing: two players on 0.73.26 joined a 0.73.27 host, 2026-10-31).
 Guards on what other games send (security review of 2026-10-26; keep them when adding messages): coop.c drops any
-state with a non-finite or far-off position or a non-unit rotation before it can reach a teleport (CoSaneState);
+state with a non-finite or far-off position or a non-unit rotation before it can reach a teleport (CoSaneState), and
+refuses another game's message shaped like its own notices to Lua, "sys" / "sys|..." (CoNetPush, runtime 0.32.34);
 sv_coop.lua cuts texts, checks slots, zollars, damage and poses, sets only NPC rows this game's DT_SV_NpcMission has
 (knownRow) and stand-in rows of CFG.coop.airframes, and takes a host's settings only where the shipped CFG has that
-setting with a value of the same type and size (fits; build data and each player's own sections never). The main menu:
+setting with a value of the same type and size (fits; build data and each player's own sections never); a host's
+round state ("rnd") only with whole numbers in range (RND_MAX; a huge wave count froze joiners). New messages: give them a
+row in tools/checks/coop_guard_test.lua (hostile values in every field, on a host and a joiner). The main menu:
 any entry but HOST / JOIN closes co-op; picking one again retries a failed open (SV_MenuChoice counts the picks).
-Checks without the game: `sh tools/checks/coop_test.sh` (the transport, 4 and 12 players over lossy UDP),
+Checks without the game: `sh tools/checks/coop_test.sh` (the transport, 4 and 12 players over lossy UDP; Linux too),
 `sh tools/checks/coop_settings_test.sh` (the settings sync, rows and scaling on the real parts) and
 `sh tools/checks/lua_load_test.sh [mod folder]` (every part of main.lua loads). The last two run on a real Lua 5.4.6
 that tools/checks/lua_build.sh builds into build/checks (there's no Lua on the build machine otherwise).

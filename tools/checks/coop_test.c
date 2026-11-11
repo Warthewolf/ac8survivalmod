@@ -161,6 +161,7 @@ int main(int argc, char** argv)
     *(void***)copy = g_vt;
     double t0 = CoNow(), p[3], rot[3];
     int sentRel = 0, order = 1, gotRel = 0, bound = 0, frames = 0, sentUp = 0, fromJoin[CO_MAX_PLAYERS] = { 0 };
+    int spoofed = 0, spoofGot = 0;                        /* (2026-11-11: messages posing as the runtime's own) */
     double eSum[CO_MAX_PLAYERS] = { 0 }, eMax[CO_MAX_PLAYERS] = { 0 }, enSum = 0, enMax = 0;
     int eN[CO_MAX_PLAYERS] = { 0 }, enN = 0;
     while (CoNow() - t0 < runFor) {
@@ -184,6 +185,15 @@ int main(int argc, char** argv)
                 Args(&f); ArgN(&f, 7); ArgN(&f, (double)(uintptr_t)copy); CallI(L_CoopBind, &f);
                 printf("join: I am player %d; bound the other %d and the enemy\n", CO.mySlot + 1, joiners); bound = 1;
             }
+            /* ((2026-11-11) a joiner's message with the form of the runtime's own notices, reliable and not: refused by the
+             * host's runtime (coop.c CoNetPush), never in its Lua inbox; the reliable ones still move the channel on, so
+             * the 40 that follow all arrive) */
+            if (bound && sentUp == 10 && !spoofed) {
+                Args(&f); ArgS(&f, "sys|slot|25"); ArgN(&f, 1); CallI(L_CoopSend, &f);
+                Args(&f); ArgS(&f, "sys|slot|25"); ArgN(&f, 0); CallI(L_CoopSend, &f);
+                Args(&f); ArgS(&f, "sys"); ArgN(&f, 1); CallI(L_CoopSend, &f);
+                spoofed = 1;
+            }
             if (bound && sentUp < 40 && frames % 2 == 0) {     /* (40 messages up to the host) */
                 char m[32]; sprintf(m, "j|%d", ++sentUp);
                 Args(&f); ArgS(&f, m); ArgN(&f, 1); CallI(L_CoopSend, &f);
@@ -198,6 +208,7 @@ int main(int argc, char** argv)
             m = m ? m + 1 : f.retS;
             if (!strncmp(m, "m|", 2)) { int k = atoi(m + 2); ++gotRel; if (k != order) printf("join: OUT OF ORDER: got %d, wanted %d\n", k, order); order = k + 1; }
             else if (!strncmp(m, "j|", 2)) { if (from >= 0 && from < CO_MAX_PLAYERS) ++fromJoin[from]; }
+            else if (!strcmp(m, "sys|slot|25") || !strcmp(m, "sys")) { ++spoofGot; printf("%s: SPOOF REACHED LUA: %s\n", who, f.retS); }
             else { if (!strncmp(m, "sys|badver|", 11)) gotBad = 1; printf("%s: %s\n", who, f.retS); }
         }
         if (!host && bound && t - t0 > 3.0 && CoNow() - CO.players[0].plane.lastRecv < 0.2) {
@@ -228,6 +239,8 @@ int main(int argc, char** argv)
     if (host) {
         int ok = 1;
         for (int k = 1; k < players; ++k) { printf("host: from player %d: %d of 40 messages\n", k + 1, fromJoin[k]); if (fromJoin[k] != 40) ok = 0; }
+        printf("host: sys guard: %d joiner messages posing as the runtime's own reached Lua\n", spoofGot);
+        if (spoofGot) ok = 0;
         return ok ? 0 : 2;
     }
     int ok = gotRel == 120 && order == 121 && enN > 0 && enSum / enN < 5.0;

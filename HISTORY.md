@@ -2352,3 +2352,18 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   reader (sv_config_subs.lua) now skips a broken [section] line and its lines, logged, instead (subs_test).
 - To see in game: CHARLENE's thanks at THE ESCORT's win and AUDREY's longer lines inside the box on two lines, the box
   as tall as the lines (the test sheet's step 16).
+
+## Co-op: two guards (2026-11-11, runtime 0.32.34; Lua for the next build, its version not yet given; not yet run in game)
+- The user asked for the two serious defects coop_guard_test found to be fixed (docs/re/COOP.md 10):
+  - a joiner's "sys|slot|25" moved the host's own slot (and every runtime notice to Lua, "restart", "left", "lost" ...,
+    could be faked for the sender's link): runtime/coop.c CoNetPush refuses another game's "sys" / "sys|..." body on
+    both channels (the reliable sequence still moves on); Lua takes "sys|slot" only from the runtime on a joiner, a
+    whole slot 0-23. RT_VERSION 0.32.31 -> 0.32.34 (PR #4 has 0.32.32 and 0.32.33: no clash whichever comes first).
+  - a host's "rnd" with a huge wave count froze a joiner for good (the old Lua ran the test out of memory here): "rnd"
+    refused whole unless its numbers are whole and in range (sv_coop_migration.lua RND_MAX), the last one kept.
+- Tests: coop_test.c / .sh (each joiner sends the spoof both ways; the host must refuse and log it and still get its
+  40 messages; the old coop.c fails both rooms), coop_guard_test.lua (the three KNOWN entries now checks of the fixes:
+  the host's slot never moved by a joiner, a joiner's only by a whole 0-23 from the runtime, ten bad "rnd" refused with
+  the state kept; huge wave counts fed again). run_all: 63 pass; coop_test passes on Linux.
+- The next build needs its version (bump_version.py) and friends need the same build to link. To see in game: co-op as
+  ever (the guards never fire between two honest games; a refusal line in a log means another game sent one).

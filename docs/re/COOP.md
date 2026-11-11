@@ -580,3 +580,20 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
   MinHealth 0.1 holds against every kind of hit (KILLS_HEALTH_DEATH.md: a crash may pass it; such a plane dies as the
   game does and that player's game ends their run); the game puts MinHealth back on a restore (read back every pass
   anyway); Mission 15's MissionFailed record ends Survival's mission as a failure with the retry menu.
+
+## 10. Messages shaped like the runtime's own (2026-11-11, runtime 0.32.34, Lua for the next build; not yet run in game)
+tools/checks/coop_guard_test.lua (every message type a host or a joiner takes, hostile values in every field) found that
+another game's body reached Lua's inbox in the same form as this runtime's own notices, "<slot>|sys|...", and onMessage
+takes any "sys|..." as the runtime's: a joiner sending "sys|slot|25" set the host's own slot, and "restart", "left",
+"lost", "samerole" ... could be faked for the sender's link. coop.c now refuses a body that is "sys" or starts "sys|"
+from the network, reliable ('L', the sequence still moving on so the channel doesn't stall) and not ('U') alike:
+CoNetPush, logged `coop: player <n> sent a message with the form of this runtime's own (sys|...): refused (<k> so far)`
+(the first three, then every 100th). No Lua part sends one. Lua takes "sys|slot" only from sender 0 on a joiner, a whole
+slot 0-23 (`coop: a "sys|slot" from player <n> refused (...)` otherwise). coop_test.c: each joiner sends "sys|slot|25"
+both ways and "sys" reliably between its messages up; the host must log the refusal, see none of them, and still get
+all 40 (`host: sys guard: 0 joiner messages posing as the runtime's own reached Lua`); the old coop.c lets 8 (4
+players) and 32 (12) through.
+The same suite: a host's "rnd" with waves 1e999 froze a joiner for good (clientRounds made a table a wave), and its round,
+clock, wave and alive count went in unchecked. "rnd" is now refused whole (the last one kept, `coop: the host's round
+state refused (...)` once) unless round 0-9999, a word state, secs 0-86400, wave and waves 0-256, alive 0-100000.
+

@@ -17,7 +17,7 @@ A. BEFORE TAKE-OFF
    tools/package_dev.sh <version>`: "ZFA=1: the ZFA-44's container staged", "TANI=1: ...". It only stages: close AC8, back
    up ue4ss\Mods\AC8SurvivalMode and ue4ss\Mods\IoStoreLoaderMod\SurvivalMode (build/backup/install_before_<version>), copy
    build/release/stage_dev_<version>/ue4ss over the game's ue4ss (config\survival.ini isn't in the stage: it stays).
-2. Start AC8. RUNTIME LOG: "AC8 Survival Mode runtime 0.32.31" and [0.74.23] "guard: a unit's side for its health bar
+2. Start AC8. RUNTIME LOG: "AC8 Survival Mode runtime 0.32.34" and [0.74.23] "guard: a unit's side for its health bar
    (<addr>: objects at +<x>, side +<x>, Get <addr>): 3 of 3 vtable slots guarded". FAILURE: "... not guarded".
 3. LUA LOG at the main menu: "loaded, version <version>-coop2mp.<n>"; [0.74.24] "subtitles: config\subtitles.ini: <n> lists,
    <m> lines, ..." (147 lists), NO "subtitles: line <N>: ..."; [0.74.46] "tanicorn: rows at the main menu:

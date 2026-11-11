@@ -83,6 +83,9 @@ room() {
         if [ $joiners = 3 ]; then [ -f badver.rc ] && [ "$(cat badver.rc)" = 0 ] || { fail=1; why="$why the other build's exit code $(cat badver.rc 2>/dev/null || echo none);"; }; fi
         # (the summary lines: a run that printed nothing must not pass)
         grep -q "^host: guard: bad states dropped, a good one kept" host.txt || { fail=1; why="$why no host guard line;"; }
+        # ((2026-11-11) every joiner's "sys|..." refused by the host's runtime, none in its Lua inbox: coop.c CoNetPush)
+        grep -q "^host: sys guard: 0 joiner messages posing as the runtime's own reached Lua" host.txt || { fail=1; why="$why the host's sys guard line missing or not 0;"; }
+        grep -q "with the form of this runtime's own (sys|...): refused" host.txt || { fail=1; why="$why no 'refused' line from the host's runtime;"; }
         k=2
         while [ $k -le $((joiners + 1)) ]; do
             grep -q "^host: from player $k: 40 of 40 messages" host.txt || { fail=1; why="$why no 'host: from player $k: 40 of 40' line;"; }

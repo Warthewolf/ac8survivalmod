@@ -511,17 +511,10 @@ local VALUES = { "", "abc", "nan", "inf", "-inf", "1e999", "-1e999", "1e308", "-
                  "RE_SV_" .. string.rep("X", 200), "RE_SV_AlcnRemove", "i1e999", "n1e999", "1:1e999", "0:1", "5:-1" }
 local HUGE = { ["inf"] = true, ["1e999"] = true, ["1e308"] = true, ["0x7fffffff"] = true, ["99999999999999999999"] = true,
                ["9007199254740993"] = true }
-local NOHUGE = { ["join rnd"] = { [6] = true } }   -- (rnd's waves: KNOWN rnd-waves; a huge one never returns)
+local NOHUGE = {}   -- ((2026-11-11) rnd's waves were held back here: a huge one froze the joiner; refused now, so fed)
 
 ---------------------------------------------------------------------------------------------------- KNOWN defects
 -- (each found by this suite in shipped code; a check of its own below shows it, and the summary lists it)
-knownDefect("sys-spoof", "sv_coop_migration.lua:805-813 onMessage: a body \"sys|...\" from another game (coop.c CoInboxPush "
-    .. "doesn't tell them apart) is taken as the runtime's own: \"1|sys|slot|25\" sets the host's COOP.slot to 25 (onSys "
-    .. "\"slot\", sv_coop_migration.lua:748-750), \"sys|slot|x\" to nil")
-knownDefect("rnd-waves", "sv_coop_migration.lua:402-404 + sv_coop_joiner.lua:687 clientRounds: rnd's waves (field 6) "
-    .. "unchecked: \"rnd|6|fighting|30|2|1e999\" loops for ever (for i = #D.waves + 1, inf), 200000 makes 200000 tables")
-knownDefect("rnd-round", "sv_coop_migration.lua:402 rnd's round / secs / wave / alive (fields 2, 4, 5, 7): tonumber "
-    .. "only: \"1e999\", -5, 1.5 reach D.round, D.at, D.wave (clientRounds) unchecked")
 knownDefect("af-health", "sv_coop_migration.lua:478-484 \"af\": the airfield's hp / full / max tonumber only: \"1e999\", "
     .. "-5, a hp over the max reach AF")
 knownDefect("sp-index", "sv_coop_migration.lua:531-532 + sv_coop_joiner.lua:521 \"sp\": an op's AI object index "
@@ -623,9 +616,6 @@ end
 -- which KNOWN defect a finding is (by message type and what it says), or nil: a new failure
 local function knownOf(side, kind)
     return function(cat, m)
-        if side == "join" and kind == "rnd" and (m:find("^round ") or m:find("rnd round") or m:find("rnd secs") or m:find("rnd wave")
-            or m:find("rnd alive") or m:find("^round clock") or m:find("^wave ")) then return "rnd-round" end
-        if side == "join" and kind == "rnd" and (m:find("waves") or m:find("rnd waves")) then return "rnd-waves" end
         if side == "join" and kind == "af" and m:find("^airfield") then return "af-health" end
         if side == "join" and kind == "sp" then
             if m:find("index") then return "sp-index" end
@@ -912,32 +902,51 @@ end
 ---------------------------------------------------------------------------------------------------- the KNOWN defects' own checks
 say("the known defects, each shown")
 do
-    -- a joiner's "sys|slot|25" to the host: the runtime's own messages and a game's look the same to onMessage
+    -- ((2026-11-11) fixed: "sys|slot" taken only from the runtime (sender 0) on a joiner, a whole slot 0-23; another game's
+    -- "sys|..." is refused by the runtime itself, coop.c CoNetPush, which coop_test.sh checks)
     local c = covOf("host", "sys")
-    for _, v in ipairs({ "25", "x", "-1", "1e999" }) do
+    for _, v in ipairs({ "25", "x", "-1", "1e999", "3" }) do
         scene("host")
         c.fed = c.fed + 1
         inbox[#inbox + 1] = "1|sys|slot|" .. v
         tick()
-        if COOP.slot ~= 0 then
-            local K = KNOWN["sys-spoof"]; K.hits = K.hits + 1; c.known = c.known + 1
-            K.ex = K.ex or ("1|sys|slot|" .. v .. " -> the host's COOP.slot " .. tostring(COOP.slot))
-        end
+        if COOP.slot ~= 0 then fail(c, "limits", "1|sys|slot|" .. v, "the host's COOP.slot moved to " .. tostring(COOP.slot)) end
+    end
+    local cj = covOf("join", "sys")
+    for _, v in ipairs({ { "3", 3 }, { "25", nil }, { "x", nil }, { "1.5", nil }, { "-1", nil }, { "1e999", nil } }) do
+        scene("join")
+        local before = COOP.slot
+        cj.fed = cj.fed + 1
+        inbox[#inbox + 1] = "0|sys|slot|" .. v[1]
+        tick()
+        local want = v[2] or before
+        if COOP.slot ~= want then fail(cj, "limits", "0|sys|slot|" .. v[1], "the joiner's COOP.slot " .. tostring(COOP.slot) .. ", wanted " .. tostring(want)) end
+        scene("join")
+        before = COOP.slot
+        inbox[#inbox + 1] = "2|sys|slot|3"                -- (from another joiner: never the runtime's)
+        tick()
+        if COOP.slot ~= before then fail(cj, "limits", "2|sys|slot|3", "a joiner's COOP.slot moved by player 3") end
     end
     -- the other runtime messages a joiner can send as its own (each handled, none may take this game's slot)
     for _, v in ipairs({ "joined", "paired", "restart", "up", "lost", "left", "full", "badver|X", "refused|X|Y", "samerole", "protocol", "" }) do
         feed("host", "sys", "sys|" .. v)
         feed("join", "sys", "sys|" .. v)
     end
-    -- rnd's waves: a bounded one, timed (a huge one never returns: not fed)
+    -- rnd's numbers out of range or not whole: the message refused, the round state kept (it froze the joiner, 1e999
+    -- waves, and put inf / -5 / 1.5 into D.round, D.at, D.wave)
     local c2 = covOf("join", "rnd")
-    scene("join")
-    c2.fed = c2.fed + 1
-    inbox[#inbox + 1] = "0|rnd|6|fighting|30|2|200000|4"
-    tick()
-    if D.waves and #D.waves > 1000 then
-        local K = KNOWN["rnd-waves"]; K.hits = K.hits + 1; c2.known = c2.known + 1
-        K.ex = K.ex or ("rnd|6|fighting|30|2|200000 -> #D.waves " .. #D.waves)
+    for _, bad in ipairs({ "0|rnd|6|fighting|30|2|200000|4", "0|rnd|6|fighting|30|2|1e999|4", "0|rnd|1e999|fighting|30|2|3|4",
+                           "0|rnd|-5|fighting|30|2|3|4", "0|rnd|1.5|fighting|30|2|3|4", "0|rnd|6|fighting|inf|2|3|4",
+                           "0|rnd|6|fighting|30|1.5|3|4", "0|rnd|6|fighting|30|2|3|-1", "0|rnd|6|%s%d|30|2|3|4", "0|rnd|6||30|2|3|4" }) do
+        scene("join")
+        inbox[#inbox + 1] = "0|rnd|6|fighting|30|2|3|4"
+        tick()
+        local keep = M.rnd
+        c2.fed = c2.fed + 1
+        inbox[#inbox + 1] = bad
+        tick()
+        if M.rnd ~= keep then fail(c2, "limits", bad, "taken (round " .. tostring(M.rnd and M.rnd.round) .. ")")
+        elseif D.waves and #D.waves > 3 then fail(c2, "tables", bad, "#D.waves " .. #D.waves) end
     end
     -- af's half-applied message: the airfield's health taken, its landing state not
     scene("join")

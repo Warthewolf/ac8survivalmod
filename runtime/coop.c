@@ -634,6 +634,22 @@ static void CoInboxPush(int slot, const char* s, uint32_t n)
     CO.inbox[at] = m; CO.inboxLen[at] = (uint16_t)(n + h); ++CO.inCount;
 }
 static void CoSys(int slot, const char* s) { CoInboxPush(slot, s, (uint32_t)CoLen(s)); }
+/* (2026-11-11) A message from another game, into the Lua inbox. One that starts "sys" ("sys" alone or "sys|...") is
+ * refused: it has the form of this runtime's own notices (CoSys), and Lua's onMessage takes any "sys|..." as one, so a
+ * joiner's "sys|slot|25" moved the host's own slot (tools/checks/coop_guard_test.lua, coop_test.c). No Lua part sends one.
+ * On the reliable channel it still counts as received (its sequence moves on), or the channel would stall behind it. */
+static void CoNetPush(int k, const char* d, uint32_t n)
+{
+    static int32_t refused;
+    if (n >= 3 && d[0] == 's' && d[1] == 'y' && d[2] == 's' && (n == 3 || d[3] == '|')) {
+        ++refused;
+        if (refused <= 3 || refused % 100 == 0)
+            Log(L"coop: player %d sent a message with the form of this runtime's own (sys|...): refused (%d so far)",
+                (int32_t)k + 1, refused);
+        return;
+    }
+    CoInboxPush(k, d, n);
+}
 
 static void CoLinkResetReliable(CoLink* L)
 {
@@ -748,11 +764,11 @@ static void CoOnReliable(int k, uint32_t seq, const char* d, uint16_t n)
         }
         return;
     }
-    CoInboxPush(k, d, n); ++L->recvNext;
+    CoNetPush(k, d, n); ++L->recvNext;
     for (;;) {
         int slot = (int)(L->recvNext % CO_OOO);
         if (!L->ooo[slot] || L->oooSeq[slot] != L->recvNext) break;
-        CoInboxPush(k, L->ooo[slot], L->oooLen[slot]);
+        CoNetPush(k, L->ooo[slot], L->oooLen[slot]);
         free(L->ooo[slot]); L->ooo[slot] = NULL; ++L->recvNext;
     }
 }
@@ -1040,7 +1056,7 @@ static void CoOnPacket(const uint8_t* b, uint32_t n, uint64_t steamId, const CoS
         return;
     case 'U':
         if (n < 6 || 2u + CoGet16(p) > n - 4) { ++CO.badPk; return; }
-        CoInboxPush(k, (const char*)p + 2, CoGet16(p));
+        CoNetPush(k, (const char*)p + 2, CoGet16(p));
         return;
     case 'P': {                                                /* a joiner's own plane (the host knows it by its link) */
         if (CO.role != CO_ROLE_HOST) return;
