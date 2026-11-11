@@ -95,8 +95,10 @@ The styles side by side (a model made with TANA_FM_STYLE=0, then each style buil
     blender -b build/tanicorn/model_base/Tanacorn_model.blend -P tools/tanicorn/styles_firemode.py -- build/tanicorn/styles <1-10> [stowed] [sequence] [clip] [only=<view>]
     python -I tools/tanicorn/style_sheet.py build/tanicorn/styles build/tanicorn/styles/sheets [<the recording's frames>]
 
-`clip` renders the user's recording's two shots step by step (styles_firemode.py CLIP_*; TANA_CLIP_CAM /
-TANA_CLIP_SIDE_CAM "x,y,z,lx,ly,lz,lens" to frame one); given a folder of its frames (frame_001.png ..., 24 fps:
+`clip` renders the user's recording's two shots step by step, `film` the same shots animated at 24 fps frame for frame
+with it (styles_firemode.py CLIP_*, FILM_*; then `ffmpeg -framerate 24 -i <dir>/style10_film_front_%03d.png -pix_fmt
+yuv420p front.mp4`; TANA_CLIP_CAM / TANA_CLIP_SIDE_CAM "x,y,z,lx,ly,lz,lens" to frame one); given a folder of its
+frames (frame_001.png ..., 24 fps:
 `ffmpeg -i <recording> frames/frame_%03d.png`), style_sheet.py lays each beside the frame it stands for. Those sheets
 hold the recording's frames: keep them out of the repository.
 

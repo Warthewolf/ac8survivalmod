@@ -173,35 +173,40 @@ approved. (The recording is the user's and stays out of the repository; so do th
   cabinets forward; each gun's breech, block, recoil cylinders and cradle on the guns). 54k triangles a turret (the
   core assemblies 10k of it). Before export: the house's interior posts leave a few non-manifold edges (9) and the
   core assemblies 15 degenerate faces: to clean.
-  **10** (the clip, read frame by frame by a workflow of analysts, 2026-11-11; its frame numbers in firemode.py): each
-  barrel's shell is four quarters, top, bottom, port and starboard, their seams an X on the muzzle (shell 0.3 m thick,
-  bore 0.58 m), each cut at mid length (the user's words); the quarters step out from the rod together, a yellow flash
-  from the seams as they open (firemode.FLASH), the front halves step out further and slide back over the rear ones in
-  two steps (a small one, then the rest: their ends at 65 % of the barrel), while the whole staves pitch up about their
+  **10** (the clip, read frame by frame by a workflow of analysts and checked against its frames by two more,
+  2026-11-11; the frame numbers in firemode.py): each barrel's shell is four quarters, top, bottom, port and starboard,
+  their seams an X on a light-grey muzzle rim (shell 0.3 m thick, bore 0.58 m), each cut at mid length (the user's
+  "split the barrels in the middle"; the clip's shells are whole, sliding about a third of the barrel back into the
+  turret: with three guns close together that collides, so the halves telescope instead); the quarters step out from
+  the rod together with a pale lemon flash from the seams (firemode.FLASH); each gun's ribbed sleeve drops a band out
+  and down on either side like petals (PETAL; Barrel_<gun>_10 / _11); the front halves step out further and slide
+  back over the rear ones in two steps (their ends at 65 % of the barrel) while the whole staves pitch up about their
   roots ("angle themselves upwards": the side quarters 10 deg, the top one 5, the bottom one level); the rod, a plain
-  khaki cylinder with a rounded tip (r 0.24 m) and its own piece (Barrel_<gun>_9), then pushes 2 m forward to 88 % of
-  the barrel and lights yellow as the gun charges; three coil rings at its root glow gold with it, and strips along
-  the staves' inner edges as it fires (CLIP); the outer guns' ribbed boots each drop an outboard band out and down
-  like a petal as the staves slide (PETAL; Barrel_1_10, Barrel_3_10). The armour as the clip's side shot draws it (frames 171-183): the aft
-  side wall's seam runs level at half height, slopes down and drops to the foot; the L-shaped panel above it (its
-  forward tab full height) lifts straight up 0.42 H, the lower panel slides forward 0.42 H along the foot and 0.1 H
-  out; each rear corner's two facets tip out on their feet into a ramp and fold at 0.4 of their height, the upper
-  halves standing back up leaning in (15 / 25 deg); the roof over the rear rises 0.27 H, a canopy; the roof's front
-  halves, over the front corners, rise 1.6 m and tip up 18 deg like visors (the superfiring turret, frames 38-44:
-  "the front right and left sides, along with the front section of the roof lift up"); the front corners' walls stay.
-  Behind the opened walls
-  the gun house's interior, cut only where walls open (the training gear's big drum, the hoist, shell racks; a doorway
-  through each rear corner). No strut arms. 36k triangles a turret; every part a clean solid (nothing in the interior
-  meets another face flat on: what stands on something sinks a little into it).
+  khaki cylinder with a paler rounded tip (r 0.24 m; its own piece, Barrel_<gun>_9), pushes 2 m forward to 88 % of
+  the barrel and lights lemon as the gun charges, three cream coil rings at its root and strips along the staves'
+  inner edges with it (CLIP). The armour as the clip's side shot draws it (frames 141-183): the aft side wall's seam
+  runs level at about half height to 0.36 of the wall, slopes down to 0.3 H and drops to the foot; the L-shaped
+  panel above it (its forward tab full height) lifts straight up 0.45 H with the roof's front section, in two halves
+  either side of the centre line, each an inverted U ("the front right and left sides, along with the front section
+  of the roof lift up": the far turret, frames 169-171, the superfiring one, 34-45); the lower panel slides forward
+  0.47 H along the foot and 0.1 H out; the rear wall and a strip of the rear roof 0.75 H deep, one rigid L in a half
+  each side of the centre line, tip aft 65 deg on the rear face's foot (yawed 6 deg out, a gap between them): the wall
+  a ramp, the roof strip a leaf standing up, leaning toward the house ("the back left and back right"); the front
+  corners stay. Behind the opened walls the gun house's interior, cut only where walls open (the training gear's big
+  drum, the hoist, shell racks; a doorway through each rear corner). No strut arms. 36k triangles a turret; every part
+  a clean solid (nothing in the interior meets another face flat on: what stands on something sinks a little into it;
+  the slabs sink 0.05 m into the core, style 10's "sink").
 - **Each piece** is an object `TANA_T16_<tag>_<bone>` carrying its motion (`fm_ops`: translations and turns, each over
   a stretch of the 2.5 s transform), part (`fm_part`: ARMOR or GUNS) and bone (`fm_bone`). Keyed into the model's
   timeline: deploy 110-185, stow 226-301.
 - **Choosing**: `styles_firemode.py` builds one style on a model made with `TANA_FM_STYLE=0` (untextured) and renders
   it at night from four sides (from above and behind, from ahead, firing, the side; with an interior, two views into
-  it; with `sequence`, the transform in five steps; with `clip`, the recording's two shots, low ahead of the raised
-  guns and the house's side from the deck, step by step at its frames' moments, at night under a cel look: the glow
-  lights nothing round it); `style_sheet.py` lays them out, with the recording's frames (a folder of frame_NNN.png at
-  24 fps) beside the clip steps (CLIP_PAIRS). The sheets: art/tanicorn/renders/styles (1-8), art/tanicorn/renders/
+  it; with `sequence`, the transform in five steps; with `clip`, the recording's two shots, low just ahead of the
+  near-level guns' muzzles and the house's aft quarter from the deck, step by step at its frames' moments, at night
+  under a cel look: the glow
+  lights nothing round it; with `film`, the same two shots animated frame for frame with the recording, FILM_*);
+  `style_sheet.py` lays them out, with the recording's frames (a folder of frame_NNN.png at 24 fps) beside the clip
+  steps (CLIP_PAIRS). The sheets: art/tanicorn/renders/styles (1-8), art/tanicorn/renders/
   style9, art/tanicorn/renders/style10 (the model's side only).
 - **Export** (export_tanacorn.py): `T16` (house on turret_yaw, boots, root rings and core rods on turret_pitch;
   SOC_Gun_01..03 at the open muzzles; its wreck the house and roots: barrels gone) plus two skinned parts riding its

@@ -63,19 +63,19 @@ STYLES = {
         "barrel": {"split": "Q4", "mid": True}, "armour": "quarters", "interior": True},
     # the user's clip (2026-11-11, an 8 s screen recording: "Watch this frame by frame. I want it to look exactly like
     # this"), with their correction before it: "have the front right and left sides, along with the front section of the
-    # roof lift up". As its frames show it: each barrel's shell is four quarters, top, bottom, port and starboard, the
-    # seams an X on the muzzle (frames 11-41); the quarters step out together, the seams flashing yellow (47-50), and,
-    # cut in the middle, slide back over their rear halves in two steps, angling up (57-59), round a khaki rod that
-    # then pushes out and lights (61-70). The side walls split on a stepped seam, high aft and running down forward
-    # (171-176): the upper panel lifts straight up, the lower one slides forward, the rear corners fold out into ramps
-    # with their upper halves standing back up, the roof over the rear rises (177-183), a big drum inside; the roof's
-    # front halves rise and tip up like visors (38-44): "the front ... sides, along with the front section of the roof
-    # lift up".
-    10: {"name": "The clip: quarters slide back round the rod; panels lift, rear folds out, roof front tips up",
+    # roof lift up". As its frames show it (a workflow of analysts, checked against the frames): each barrel's shell is
+    # four quarters, top, bottom, port and starboard, the seams an X on the muzzle (frames 11-41); the quarters step out
+    # together, the seams flashing lemon (47-50), the sleeve's petals fall out (57-59), and, cut in the middle (the
+    # user's words: the clip's shells are whole, but slid a third back into a three-gun house they collide), slide back
+    # over their rear halves in two steps, angling up (57-59), round a khaki rod that then pushes out and lights
+    # (61-70). The side walls split on a stepped seam (141-176): the upper panels lift straight up with the roof's front
+    # halves, the lower ones slide forward, the rear wall and its roof strip tip aft in two halves, a ramp and a standing
+    # leaf each (177-183; 34-45 and 169-171 on the turrets behind), a big drum inside; the front corners stay.
+    10: {"name": "The clip: quarters slide back round the rod; roof front and side panels lift, the rear folds out",
          "barrel": {"split": "Q4", "mid": True, "clip": True, "shell_t": 0.3, "bore": 0.58, "rim": True, "edges": True,
                     "petals": True},
-         "armour": "clip", "interior": True, "roof_static": (-8.0, 3.4), "rings_glow": True, "rings_to": 7.6,
-         "core": (0.24, 23.8, 2.0), "struts": False},
+         "armour": "clip", "interior": True, "rings_glow": True, "rings_to": 7.6,
+         "core": (0.24, 23.8, 2.0), "struts": False, "sink": 0.05},
 }
 DEFAULT_STYLE = 10
 # style 10's barrel (the clip's frames 47-70, read by the analysis of 2026-11-11): the four quarters step out from the rod
@@ -106,6 +106,7 @@ STAGE_ARMOUR, STAGE_BARREL, STAGE_GLOW, STAGE_SLIT = (0.0, 0.45), (0.3, 0.7), (0
 # rear's middle round to the face's middle, v off the turret's centre line.
 Z0, Z1 = 0.61, 6.52                       # the house's floor and roof
 SHELL = 0.45                              # the armour's thickness over the core
+SINK = 0.06       # how far a slab's inner face sinks into the core (flush faces broke the union); a style's "sink"
 HALF_B = [(-15.05, 0.0), (-14.8, 3.1), (-14.3, 6.6), (-13.75, 9.3), (3.3, 11.75), (12.9, 9.55), (14.4, 8.3), (14.4, 0.0)]
 HALF_T = [(-14.95, 0.0), (-14.7, 2.9), (-14.2, 6.2), (-13.65, 8.75), (3.6, 10.75), (9.55, None), (10.3, None), (10.3, 0.0)]
 FACE_X0, FACE_K = 14.4, 4.1 / 5.91        # the face: x = FACE_X0 - (z - Z0) * FACE_K (35 deg back)
@@ -135,13 +136,14 @@ def smooth(t, a, b):
 # barrels' bores are dark. The running lights outside glow dim stowed, brighter in fire mode; the cores light in fire
 # mode and flare as a gun fires (FIRE: glow(t, fire)).
 GLOW = {   # key: (base colour, emission colour, strength stowed, strength in fire mode, its stretch)
-    "fm_core": ((0.30, 0.28, 0.16), (1.00, 0.76, 0.12), 0.0, 0.25, STAGE_GLOW),  # the clip's khaki rod, lit as it fires
+    "fm_core": ((0.30, 0.28, 0.16), (1.00, 0.95, 0.40), 0.0, 0.25, STAGE_GLOW),  # the clip's khaki rod, lit lemon as it
+    "fm_tip": ((0.45, 0.43, 0.29), (1.00, 0.97, 0.55), 0.0, 0.25, STAGE_GLOW),   # fires; its rounded tip a paler cap
     "fm_slit": ((0.06, 0.40, 0.36), (0.20, 0.95, 0.88), 1.0, 7.0, STAGE_SLIT),
 }
 FLASH = None                              # build() sets it from a style's barrel (style 10: CLIP["flash"])
-FIRE = {"fm_core": 1.5, "fm_ring": 1.5}   # the cores' (and their rings') glow as a gun fires: yellow, not white
-GLOW["fm_ring"] = ((0.07, 0.06, 0.03), (1.00, 0.80, 0.30), 0.0, 1.6, STAGE_GLOW)   # style 10's coil rings, gold
-GLOW["fm_edge"] = ((0.05, 0.045, 0.03), (1.00, 0.82, 0.20), 0.0, 0.0, STAGE_GLOW)  # style 10's stave edges: lit only
+FIRE = {"fm_core": 0.9, "fm_tip": 1.1, "fm_ring": 1.2}   # the cores' (and their rings') glow as a gun fires: yellow, not white
+GLOW["fm_ring"] = ((0.07, 0.06, 0.03), (1.00, 0.93, 0.55), 0.0, 1.6, STAGE_GLOW)   # style 10's coil rings, cream
+GLOW["fm_edge"] = ((0.05, 0.045, 0.03), (1.00, 0.95, 0.45), 0.0, 0.0, STAGE_GLOW)  # style 10's stave edges: lit only
 FIRE["fm_edge"] = 1.6                                                               # as the rod fires (the clip, 69-70)
 M_RIM = tanakit.mat("TANA_rim", (0.30, 0.31, 0.32), 0.5, 0.4)       # style 10's muzzle faces: light grey (the clip)
 MAT = {}
@@ -156,7 +158,7 @@ def glow(t, fire=0.0):
         for k, (_, _, lo, hi, st) in GLOW.items():
             if m.name.endswith(k) and m.use_nodes and m.node_tree.nodes.get("Principled BSDF"):
                 v = lo + (hi - lo) * smooth(t, *st) + FIRE.get(k, 0.0) * fire
-                if k == "fm_core" and FLASH:                # (style 10: the seams' flash as the quarters open)
+                if k in ("fm_core", "fm_tip") and FLASH:    # (style 10: the seams' flash as the quarters open)
                     a, b, peak = FLASH
                     v += peak * math.sin(math.pi * min(1.0, max(0.0, (t - a) / (b - a))))
                 m.node_tree.nodes["Principled BSDF"].inputs["Emission Strength"].default_value = v
@@ -330,7 +332,7 @@ class Shell:
 def slab(part, S, name, region=WHOLE, m=M_PAINT, seam=0.035):
     """a wall's armour (or a stretch of it: region in its (along, up) 0..1), mitred to its neighbours, a seam round it"""
     O, I, u, v, n = S.wall(name)
-    inner = [p - n * 0.06 for p in shrink([S.at(I, s, w) for s, w in region], seam)]   # (sunk into the core: flush
+    inner = [p - n * SINK for p in shrink([S.at(I, s, w) for s, w in region], seam)]   # (sunk into the core: flush
     hexa(part, shrink([S.at(O, s, w) for s, w in region], seam), inner, m)              # faces broke the union)
 
 
@@ -342,7 +344,7 @@ def poly_slab(part, S, name, poly, m=M_PAINT, seam=0.035):
     q = [(a / Ls, b / Lw) for a, b in offset2d([(s * Ls, w * Lw) for s, w in poly], -seam)]
     bm = part._bm(False, False)
     o = [bm.verts.new(S.at(O, s, w)) for s, w in q]
-    i = [bm.verts.new(S.at(I, s, w) - n * 0.06) for s, w in q]
+    i = [bm.verts.new(S.at(I, s, w) - n * SINK) for s, w in q]
     fs = [bm.faces.new(o), bm.faces.new(i[::-1])]
     k = len(q)
     for j in range(k):
@@ -527,39 +529,38 @@ def armour_plan(style, S):
                          [("T", out(c) * 2.6 + Vector((1.0, 0, 0.2)), (0.05, 0.4)),
                           ("R", Vector((0, 0, 1)), bottom(c, WHOLE), -sg * 12.0, (0.12, 0.45))]))
     elif kind == "clip":
-        # as the clip's side shot draws it (frames 171-183, read by the analysis): the aft side wall's seam level at
-        # half height from the rear corner to 0.35 along, sloping down to 0.71, then straight down to the foot at 0.73:
-        # above it an L-shaped panel (its forward tab full height) lifts straight up 0.42 H, no tilt; below it the
-        # lower panel slides forward 0.42 H along the foot (once the tab is clear) and 0.1 H out
-        H = Z1 - Z0
-        upper = [(0, 0.51), (0.35, 0.51), (0.71, 0.39), (0.73, 0), (1, 0), (1, 1), (0, 1)]
-        lower = [(0, 0), (0.73, 0), (0.71, 0.39), (0.35, 0.51), (0, 0.51)]
+        # as the clip's side shot draws it (frames 141-183, read by the analysis and its check): the aft side wall's
+        # seam level at half height from the rear corner to 0.36 along, sloping down to 0.3 H at 0.71, then straight
+        # down to the foot at 0.73: above it an L-shaped panel (its forward tab full height) lifts straight up 0.45 H
+        # with the roof's front, no tilt; below it the lower panel slides forward 0.47 H along the foot (once the tab
+        # is clear) and 0.1 H out
+        H, LIFT = Z1 - Z0, 0.45
+        REAR_X = HALF_T[0][0] + 0.75 * H                      # the rear roof strip's forward edge
+        HINGE = Vector((HALF_B[0][0], S.y0, Z0))              # the rear face's foot, on the centre line
+        upper = [(0, 0.47), (0.36, 0.47), (0.71, 0.3), (0.73, 0), (1, 0), (1, 1), (0, 1)]   # (0.47: the clip's half
+        lower = [(0, 0), (0.73, 0), (0.71, 0.3), (0.36, 0.47), (0, 0.47)]                    # height, clear of the ear)
         for s, sg in (("L", 1.0), ("R", -1.0)):
             flip = (lambda P: P) if s == "L" else (lambda P: [(1 - a, b) for a, b in reversed(P)])   # (starboard walls
             A = "aside_" + s                                                                   # run front to back)
             O, I, u, v, n = S.wall(A)
             fwd = u if s == "L" else -u
-            plan.append(("Armor_%s_up" % A, "wall", A, flip(upper), [("T", Vector((0, 0, 0.42 * H)), (0.03, 0.28))]))
+            plan.append(("Armor_%s_up" % A, "wall", A, flip(upper), [("T", Vector((0, 0, LIFT * H)), (0.03, 0.28))]))
             plan.append(("Armor_%s_low" % A, "wall", A, flip(lower),
-                         [("T", fwd * (0.42 * H) + n * 0.6, (0.2, 0.42))]))
-            # the rear corner: each of its two facets tips out on its foot (62 deg: a ramp) and folds at 0.4 of its
-            # height, its upper part standing back up, leaning in toward the house (the clip's leaves, 15 / 25 deg)
-            for name, lean in (("rear_%s3" % s, 15.0), ("rear_%s2" % s, 25.0)):
-                Ow, Iw, uw, vw, nw = S.wall(name)
-                foot, fold = (Ow[0] + Ow[1]) / 2.0, Shell.at(Ow, 0.5, 0.4)
-                tip = ("R", uw, foot, 62.0, (0.04, 0.32))
-                plan.append(("Armor_%s_low" % name, "wall", name, ((0, 0), (1, 0), (1, 0.4), (0, 0.4)), [tip]))
-                plan.append(("Armor_%s_up" % name, "wall", name, ((0, 0.4), (1, 0.4), (1, 1), (0, 1)),
-                             [tip, ("R", uw, fold, -(62.0 + lean), (0.08, 0.36))]))
-        # the roof over the rear corner rises straight up 0.27 H, a canopy (frames 177-183)
-        plan.append(("Armor_roof_rear", "roof", (-99.0, -8.0, 0), None, [("T", Vector((0, 0, 0.27 * H)), (0.04, 0.3))]))
-        # the roof's front, over the front corners, in two halves that rise and tip up like visors on their rear
-        # edges, a little out (the superfiring turret, frames 38-44): "the front right and left sides, along with
-        # the front section of the roof lift up"; the front corners' walls stay (the side shot: 179-198)
+                         [("T", fwd * (0.47 * H) + n * 0.6, (0.2, 0.42))]))
+            # the rear: its wall and a strip of the rear roof 0.75 H deep, one rigid L in a half each side of the centre
+            # line, tip aft 65 deg on the rear face's foot: the wall a ramp, the roof strip a leaf standing up, leaning
+            # toward the house; each half yawed 6 deg out, a gap between them (the synthesis of 177-183)
+            tip = [("R", Vector((0, 0, 1)), HINGE, sg * 6.0, (0.04, 0.3)), ("R", Vector((0, 1, 0)), HINGE, -65.0, (0.04, 0.3))]
+            for name in ("rear_%s1" % s, "rear_%s2" % s, "rear_%s3" % s):
+                plan.append(("Armor_" + name, "wall", name, None, tip))
+            plan.append(("Armor_roof_rear_" + s, "roof", (-99.0, REAR_X, sg), None, tip))
+        # the roof forward of that strip, the "front section", rises straight up with the side walls' upper panels,
+        # 0.45 H, no tilt, in two halves either side of the centre line, each an inverted U with its side's panel (the
+        # far turret 169-171, the superfiring one 34-45: "the front right and left sides, along with the front section
+        # of the roof lift up"); the front corners stay
         for s, sg in (("L", 1.0), ("R", -1.0)):
-            plan.append(("Armor_roof_front_" + s, "roof", (3.4, 99.0, sg), None,
-                         [("T", Vector((0, sg * 0.35, 1.6)), (0.06, 0.34)),
-                          ("R", Vector((0, 1, 0)), Vector((3.4, S.y0 + sg * 5.0, Z1)), -18.0, (0.12, 0.42))]))
+            plan.append(("Armor_roof_front_" + s, "roof", (REAR_X, 99.0, sg), None,
+                         [("T", Vector((0, 0, LIFT * H)), (0.03, 0.28))]))
     elif kind == "clamshell":
         for s, sg in (("L", 1.0), ("R", -1.0)):
             piv = Vector((0.0, S.y0 + sg * 8.9, Z1))
@@ -572,8 +573,9 @@ def armour_plan(style, S):
 
 
 # ---------------------------------------------------------------------------------------------------- the guns
-def rod_x(part, x0, x1, r, y, z, m, seg=24, cap=6):
-    """the core rod as one solid of revolution: flat at its root, its tip a hemisphere (the clip's rounded rods)"""
+def rod_x(part, x0, x1, r, y, z, m, seg=24, cap=6, m_tip=None):
+    """the core rod as one solid of revolution: flat at its root, its tip a hemisphere (the clip's rounded rods), in
+    m_tip if given (the clip: a paler cap)"""
     bm = part._bm(False, False)
     prof = [(x0, r)] + [(x1 - r + r * math.sin(math.pi / 2 * k / cap), r * math.cos(math.pi / 2 * k / cap))
                         for k in range(cap)]
@@ -590,10 +592,12 @@ def rod_x(part, x0, x1, r, y, z, m, seg=24, cap=6):
         fs.append(bm.faces.new((rings[-1][j], rings[-1][(j + 1) % seg], tip)))
     bmesh.ops.recalc_face_normals(bm, faces=fs)
     part._put(bm, [v for q in rings for v in q] + [tip], m)
+    if m_tip:
+        part._put(bm, [v for q in rings[2:] for v in q] + [tip], m_tip)
 
 
-PETAL = (1.6, 2.65, 0.4, 0.9)     # style 10's boot petals (the clip, 57-59): x from, to; their inboard edge off the
-                                  # gun's axis; their half height. Each outer gun's, outboard; it falls out and down
+PETAL = (1.6, 2.65, 0.4, 0.9)     # style 10's sleeve petals (the clip, 57-59): x from, to; their inner edge off the
+                                  # gun's axis; their half height. Both sides of every gun; each falls out and down
 
 
 def petal_part(sg):
@@ -617,8 +621,7 @@ def stays_part(rings=False, breech=False, ring_mat=None, rings_to=None, rails=Tr
     for b, yc in enumerate(GUN_Y, 1):
         for x0, x1, r in BOOT:
             cone_x(p, x0, x1, r, r - 0.03, yc, 0.0, M_PAINT, SEG)
-        if petals and b != 2:                               # (the outer guns' outboard petals: pieces of their own)
-            sg = 1.0 if yc > 0 else -1.0
+        for sg in ((1.0, -1.0) if petals else ()):          # (each side's petal: a piece of its own)
             a, c = sorted((yc + sg * PETAL[2], yc + sg * 3.0))
             abox(p, (PETAL[0], a, -PETAL[3]), (PETAL[1], c, PETAL[3]), M_DARK, cut=True)
         cone_x(p, 2.7, SPLIT + 0.02, 1.12, 1.1, yc, 0.0, M_PAINT, SEG)
@@ -702,7 +705,8 @@ def interior(h, S, moves=None):
     union breaks on coplanar contact): what stands on something sinks a little into it; nothing pokes past the core"""
     moves = set(NAMES) if moves is None else moves
     y0 = S.y0
-    zf, zt = Z0 + 0.3, Z1 - 0.75                              # (the floor clear of the skirt's top, Z0 + 0.28)
+    zf, zt = Z0 + 0.4, Z1 - SHELL + 0.1                       # (the floor well clear of the skirt's top, Z0 + 0.28; the
+    zr = Z1 - SHELL                                           # hollow open through the core's top: no thin lintel)
     for sg, s in ((1.0, "L"), (-1.0, "R")):
         Y = lambda v: y0 + sg * v
         lo_hi = lambda a, b: (min(Y(a), Y(b)), max(Y(a), Y(b)))
@@ -713,15 +717,15 @@ def interior(h, S, moves=None):
             t = (x - I[0].x) / (I[1].x - I[0].x)
             return abs(I[0].lerp(I[1], t).y - y0)
         bays = ([(-13.6, 2.9)] if "aside_" + s in moves else []) + ([(3.7, 9.6)] if "fside_" + s in moves else [])
-        if "rear_%s2" % s in moves:                           # the doorway through the rear corner
-            a, b = lo_hi(3.6, 9.0)
-            abox(h, (-15.6, a, zf), (-13.4, b, zt), M_DARK, cut=True)
+        if "rear_%s2" % s in moves:                           # the doorway through the rear corner (off the
+            a, b = lo_hi(3.65, 9.0)                           # hollow's planes: cutters meeting flat on break too)
+            abox(h, (-15.6, a, zf + 0.02), (-13.45, b, zt - 0.03), M_DARK, cut=True)
         for x0, x1 in bays:
             a, b = lo_hi(3.6, 15.0)
             abox(h, (x0, a, zf), (x1, b, zt), M_DARK, cut=True)
             reach = lambda x: core(x) - 0.1
             h.prism([(x0 - 0.05, Y(3.55)), (x1 + 0.05, Y(3.55)), (x1 + 0.05, Y(reach(x1))), (x0 - 0.05, Y(reach(x0)))][::int(sg)],
-                    "Z", zf - 0.05, zf + 0.1, M_DARK, post=True)                                   # the floor
+                    "Z", Z0 + 0.2, zf + 0.1, M_DARK, post=True)                                    # the floor
             x = x0 + 0.4
             while x < x1 - 0.3:                                                                   # its grating
                 a, b = lo_hi(3.7, reach(x) - 0.15)
@@ -730,7 +734,7 @@ def interior(h, S, moves=None):
             x = x0 + 0.6
             while x < x1 - 0.3:                                                                   # frames
                 a, b = lo_hi(3.5, 3.9)
-                abox(h, (x - 0.14, a, zf - 0.05), (x + 0.14, b, zt + 0.05), M_PAINT, post=True)
+                abox(h, (x - 0.14, a, zf - 0.05), (x + 0.14, b, zr), M_PAINT, post=True)
                 x += 2.4
             for k, (v, z, r) in enumerate(((4.1, 1.75, 0.14), (4.2, 2.45, 0.1), (4.15, 4.5, 0.16), (4.3, 5.1, 0.1))):
                 cyl(h, r, r, x1 - x0 + 0.1, Vector(((x0 + x1) / 2.0, Y(v), z)), (1, 0, 0), M_DARK, 12, post=True)
@@ -742,10 +746,11 @@ def interior(h, S, moves=None):
                     abox(h, (x - 0.45, a, zf + 0.3), (x + 0.45, b, zf + 2.1), M_DARK, post=True)
                 continue
             # aft: the shell hoist, two racks of shells (inside the core's line), the rammer's rail
-            cyl(h, 0.95, 0.95, zt - zf + 0.1, Vector((-9.6, Y(6.6), (zf + zt) / 2.0)), (0, 0, 1), M_PAINT, 24, post=True)
-            for z in (zf + 0.9, zt - 1.0):
+            cyl(h, 0.95, 0.95, zr - zf + 0.05, Vector((-9.6, Y(6.6), (zf - 0.05 + zr) / 2.0)), (0, 0, 1), M_PAINT, 24,
+                post=True)
+            for z in (zf + 0.9, zr - 1.3):
                 cyl(h, 1.05, 1.05, 0.18, Vector((-9.6, Y(6.6), z)), (0, 0, 1), M_DARK, 24, post=True)
-            for row, z in enumerate((1.4, 2.0)):
+            for row, z in enumerate((1.5, 2.1)):
                 for k in range(4):
                     c = Vector((-13.4 + 0.6 * k, Y(7.6), z))
                     cyl(h, 0.26, 0.26, 1.2, c, (0, sg, 0), M_PAINT, 12, post=True)
@@ -755,7 +760,7 @@ def interior(h, S, moves=None):
             a, b = lo_hi(5.2, 5.6)
             abox(h, (-10.2, a, 2.4), (-6.6, b, 2.7), M_PAINT, post=True)
             # the training gear's big wheel by the outer gun (the clip's round drum), its teeth, its hub
-            gc = Vector((-2.6, Y(8.0), 2.95))
+            gc = Vector((-2.6, Y(8.0), 3.05))
             cyl(h, 1.65, 1.65, 0.45, gc, (0, 1, 0), M_PAINT, 40, post=True)
             cyl(h, 0.55, 0.55, 0.8, gc, (0, 1, 0), M_DARK, 20, post=True)
             for k in range(30):
@@ -895,12 +900,13 @@ def armour_piece(S, st, bone, k, nm, region, ops):
 def build(coll, log=print, style=None):
     """the style's mount on both turrets (their house, gun and trunnion objects changed in place), its moving pieces
     into `coll`; tanakit.WORK and tanakit.TEX set by the caller. Style 0: nothing (the design's Iowa mount stays)"""
-    global FLASH
+    global FLASH, SINK
     n, st = style_of(style)
     if not st:
         log("firemode: style 0, the design's mount kept")
         return TURRET
     FLASH = CLIP["flash"] if st["barrel"].get("clip") else None
+    SINK = st.get("sink", 0.06)                           # (style 10's interior and walls union clean at 0.05 only)
     bpy.context.scene.frame_set(1)
     first = Turret("FWD")
     tl = first.R.inverted() @ first.trun.matrix_basis.translation
@@ -965,7 +971,7 @@ def build(coll, log=print, style=None):
     core, rod_me = st.get("core"), None
     if core and core[2]:                                  # style 10: the rod moves (its tip at core[1] once out)
         rp = Part()
-        rod_x(rp, SPLIT - 0.4, core[1] - core[2], core[0], 0.0, 0.0, MAT["fm_core"])
+        rod_x(rp, SPLIT - 0.4, core[1] - core[2], core[0], 0.0, 0.0, MAT["fm_core"], m_tip=MAT["fm_tip"])
         rod_me = solid("core", rp, 256, bevel=0)
     petal_me = {sg: solid("petal_" + ("L" if sg > 0 else "R"), petal_part(sg), 256, bevel=0)
                 for sg in (1.0, -1.0)} if bs.get("petals") else {}
@@ -1045,10 +1051,9 @@ def build(coll, log=print, style=None):
                     add("Barrel_%d_9" % b, rod_me, T.trun, Matrix.Translation((0.0, yc, 0.0)), "GUNS",
                         [("T", Vector((core[2], 0, 0)), CLIP["stages"]["push"])],
                         {"fm_barrel": b, "fm_rod": True, "fm_tip": core[1]})
-                if petal_me and b != 2:                 # the outer guns' boot petals fall out and down (57-59)
-                    sg = 1.0 if yc > 0 else -1.0
-                    add("Barrel_%d_10" % b, petal_me[sg], T.trun, Matrix.Translation((0.0, yc, 0.0)), "GUNS",
-                        [("R", Vector((1, 0, 0)), Vector((0, sg * PETAL[2], -PETAL[3])), -sg * 50.0,
+                for j, sg in enumerate((1.0, -1.0) if petal_me else ()):   # its sleeve's side petals fall out and
+                    add("Barrel_%d_%d" % (b, 10 + j), petal_me[sg], T.trun, Matrix.Translation((0.0, yc, 0.0)), "GUNS",
+                        [("R", Vector((1, 0, 0)), Vector((0, sg * PETAL[2], -PETAL[3])), -sg * 40.0,   # down (57-59)
                           CLIP["stages"]["petal"])], {"fm_barrel": b, "fm_petal": True})
                 continue
             for k, a in enumerate(angles):

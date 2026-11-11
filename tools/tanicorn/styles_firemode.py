@@ -12,7 +12,9 @@ moon lamp, the glow doing the rest). Turret B (LEV_T16_FWD), three views each li
   style<N>_4_front     from ahead, above and to port, transformed: the opened guns and the face
   style<N>_5_inside, _6_inside_front   (a style with the gun house's interior) into it past the blown-out quarters
   style<N>_seq_1..5    (with `sequence`) the transform at t 0, 0.3, 0.55, 0.75, 1
-  style<N>_clip_front_1..8, _clip_side_1..6   (with `clip`; `only=clip` renders nothing else) the user's clip's two shots (CLIP_*), step by step:
+  style<N>_clip_front_1..8, _clip_side_1..6   (with `clip`; `only=clip` renders nothing else)
+  style<N>_film_front_NNN, _film_side_NNN      (with `film`, `only=film`) the same two shots animated at 24 fps:
+                       ffmpeg -framerate 24 -i <dir>/style10_film_front_%03d.png -pix_fmt yuv420p front.mp4 the user's clip's two shots (CLIP_*), step by step:
                        style_sheet.py lays them beside the clip's frames when given their folder
   stowed               (with `stowed`) the turret shut, before it transforms (the same for every style)
 The lightning, rings and flash are the preview's own (PREVIEW_*); in the game they are AC8's own effects (hard rule 58).
@@ -73,7 +75,7 @@ C = T.house.matrix_world.translation.copy()
 def cel_glow():
     """the cores and their rings glow to the camera but light nothing round them, as in the user's clip (an anime's cel
     look): lit by them, the staves' insides read gold"""
-    for key in ("fm_core", "fm_ring", "fm_edge"):
+    for key in ("fm_core", "fm_tip", "fm_ring", "fm_edge"):
         nt = firemode.MAT[key].node_tree
         out = next(n for n in nt.nodes if n.bl_idname == "ShaderNodeOutputMaterial")
         lp, mix, dk = (nt.nodes.new(k) for k in ("ShaderNodeLightPath", "ShaderNodeMixShader", "ShaderNodeBsdfDiffuse"))
@@ -213,7 +215,8 @@ def effects(level, firing, seed):
         return
     bpy.context.view_layer.update()                         # (the pieces' and guns' world matrices: as just posed)
     rnd = random.Random(seed)
-    ARC_EM.inputs["Strength"].default_value = 2.5 + 2.0 * firing      # (green stays green: brighter goes white)
+    arc = (1.2, 0.6) if CLIP_LIGHT else (2.5, 2.0)          # (green stays green: brighter goes white; the clip's
+    ARC_EM.inputs["Strength"].default_value = arc[0] + arc[1] * firing   # look is dimmer still)
     RING_EM.inputs["Strength"].default_value = 1.6
     pieces = [o for o in T.pieces() if "fm_barrel" in o and "fm_rod" not in o and "fm_petal" not in o]
     L = (CORE[1] if CORE else firemode.MUZZLE) - firemode.SPLIT          # (the arcs stop at the rod's tip)
@@ -240,6 +243,12 @@ def effects(level, firing, seed):
             for k in range(3):                              # rod's front half, sparks off its tip
                 ring(core_point(b, CORE[1] - 7.0 + 3.0 * k), fwd, 2.6 + 1.7 * k, 0.03)
             tip = core_point(b, CORE[1])
+            side = fwd.cross(Vector((0, 0, 1))).normalized()
+            for _ in range(7):                              # (and its storm, 73-92: long bolts off the tips, rod to rod)
+                d = (side * rnd.uniform(-1, 1) + Vector((0, 0, rnd.uniform(-0.6, 1))) + fwd * rnd.uniform(-0.3, 0.6))
+                poly(jag(tip, tip + d.normalized() * rnd.uniform(4.0, 11.0), 0.6, 9, rnd), 0.03, ARC)
+            if b < 3:
+                poly(jag(tip, core_point(b + 1, CORE[1]), 0.5, 8, rnd), 0.03, ARC)
         elif firing:                                        # two rings ahead of the muzzle, a few sparks off it
             for k in range(2):
                 ring(tip + fwd * (1.5 + 3.0 * k), fwd, 1.3 + 0.9 * k, 0.035)
@@ -259,6 +268,12 @@ if os.environ.get("TANA_CLIP_CAM"):                         # (x y z, look x y z
     CLIP_FRONT_CAM = (tuple(_c[0:3]), tuple(_c[3:6]), _c[6])
 CLIP_SIDE = (0.0, 0.03, 0.12, 0.2, 0.45, 1.0)
 CLIP_SIDE_CAM = ((-20.0, -24.0, 3.0), (-4.0, 0.0, 4.4), 28)
+# `film`: (frame at 24 fps, t, fire) keys, linear between, frame for frame with the clip's two shots: the front one
+# (its frames 33-92) stowed to 47, the barrels open by 61, the charge 64-70, the storm to 92; the side one (160-198)
+# stowed to 176, the armour open by 183, held
+FILM_FRONT = ((0, 0.0, 0.0), (14, 0.0, 0.0), (28, 0.75, 0.0), (31, 1.0, 0.0), (37, 1.0, 0.6), (48, 1.0, 1.0),
+              (59, 1.0, 1.0))
+FILM_SIDE = ((0, 0.0, 0.0), (16, 0.0, 0.0), (23, 0.47, 0.0), (38, 0.47, 0.0))
 if os.environ.get("TANA_CLIP_SIDE_CAM"):
     _c = [float(v) for v in os.environ["TANA_CLIP_SIDE_CAM"].split(",")]
     CLIP_SIDE_CAM = (tuple(_c[0:3]), tuple(_c[3:6]), _c[6])
@@ -325,3 +340,17 @@ if "sequence" in argv[2:]:                                 # the transform in fi
         effects(0, 0, 0)
         aim(C + Vector((50, 28, 17)), C + Vector((15, 0, 4)), 30)
         render("style%d_seq_%d" % (STYLE, k + 1))
+if "film" in argv[2:]:                                     # the clip's two shots animated at its 24 fps (FILM_*):
+    if not CLIP_LIGHT:                                     # frames style<N>_film_<shot>_NNN.png, for ffmpeg
+        night_world()
+    for shot, keys, view, elev in (("front", FILM_FRONT, CLIP_FRONT_CAM, CLIP_ELEV), ("side", FILM_SIDE, CLIP_SIDE_CAM, 4.0)):
+        T.trun.rotation_euler.y = -math.radians(elev)
+        for f in range(keys[-1][0] + 1):
+            k = max(i for i, key in enumerate(keys) if key[0] <= f)
+            (f0, t0, c0), (f1, t1, c1) = keys[k], keys[min(k + 1, len(keys) - 1)]
+            u = (f - f0) / float(f1 - f0) if f1 > f0 else 0.0
+            t, fire = t0 + (t1 - t0) * u, c0 + (c1 - c0) * u
+            firemode.pose(t, fire=fire)
+            effects(fire, 1 if fire >= 0.99 else 0, 100 + f // 2)    # (the lightning redrawn every second frame)
+            aim(C + Vector(view[0]), C + Vector(view[1]), view[2])
+            render("style%d_film_%s_%03d" % (STYLE, shot, f))
