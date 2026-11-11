@@ -1506,13 +1506,22 @@ function ALLY.tick(now)
         -- them, and at least `hunters` a round (economy review: "hunter pairs that go for allies")
         if R.huntRound ~= D.round then R.huntRound, R.hunters = D.round, 0 end
         for u in pairs(R.seen) do if not D.up[u] then R.seen[u], R.hunted[u] = nil, nil end end
+        -- ((2026-11-11, Saint Alessia's 50-round run) not while you're DOWN, sv_down.lua: the hunt's order prefers allied
+        -- aircraft, else "Player", your hidden plane, and it came 2-5 s after co-op's down pass had sent the flight after a
+        -- living player (sv_coop.lua). Held, not dropped: a flight still up when you're back has its roll then)
+        local hostDown = DOWN ~= nil and DOWN.me ~= nil and DOWN.me() == true
+        if hostDown ~= (R.huntDownSaid or false) then
+            R.huntDownSaid = hostDown
+            log(hostDown and "allies: you're down: the enemies' hunts for the allied aircraft wait for your revive"
+                or "allies: you're back: the enemies' hunts for the allied aircraft go on")
+        end
         for u in pairs(D.up) do
             local i = poolIndex(u)
             if i then
                 R.seen[u] = R.seen[u] or now
                 -- (not a Wolf flight while its trap is held, CFG.roles.wolf, nor one the squad director holds back,
                 -- CFG.director: the hunt's order would free it)
-                if airborne > 0 and not R.hunted[u] and now - R.seen[u] >= 4 and not TAC.decoyed(u, now)
+                if airborne > 0 and not hostDown and not R.hunted[u] and now - R.seen[u] >= 4 and not TAC.decoyed(u, now)
                     and not (WOLF and WOLF.holding(u)) and not (DIR and DIR.holding and DIR.holding(u))
                     and not (ESC and ESC.holds and ESC.holds(u)) then   -- ((2026-11-06) after CHARLENE: sv_escort.lua)
                     R.hunted[u] = true

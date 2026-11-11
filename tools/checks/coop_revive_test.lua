@@ -895,6 +895,269 @@ pawn.HealthInternal = 0
 LB.deathCheck(survivalPC); LB.deathCheck(survivalPC)
 check(finished[1] == "died", "solo: shot down, the run's over (as ever)")
 
+---------------------------------------------------------------------------------------------------- the 50-round run
+-- (2026-11-11, Saint Alessia's and Delta's logs of her 50-round co-op run; the user: "the enemy AI followed my corpse
+-- plane in its orbit around the base". sv_ai.lua ACE.hunt wrote the host's own plane into every Reaper's TargetActor
+-- every 2 s, DOWN or not, undoing the down pass 3 s after it ran; the down pass never checked a flight it had sent once;
+-- the stats and the learning profile counted the loiter as her flying)
+print("the 50-round run: the enemies never on the DOWN host's hidden plane")
+do
+    scene("host", 0, { [1] = FLY, [2] = FLY })
+    local REAPER = CFG.tiers.list[#CFG.tiers.list]
+    check(REAPER.name == "Reaper" and CFG.aces.flight.reaper.hunt == true, "(the top tier, Reaper, hunts: ACE.hunt)")
+    local U, U2 = "ERA_Unit_05_Dep_Air2", "ERA_Unit_06_Dep_Air0"
+    local function enemy(addr, unit)                -- a Reaper fighter with its blackboard (TargetActor) and orders
+        local bb = { writes = 0 }
+        function bb:GetValueAsObject() return self.tgt end
+        function bb:SetValueAsObject(_, o) self.tgt, self.writes = o, self.writes + 1 end
+        function bb:GetValueAsEnum() return 10 end
+        local o = { full = "BP_OP1032_f18e_CP_C" .. LEVEL .. "E" .. addr, addr = addr, HealthInternal = 1000,
+                    AIStateComponent = { BlackboardComponent = bb } }
+        return { obj = o, unit = unit, name = "BP_OP1032_f18e_" .. addr, tier = REAPER, bb = bb }
+    end
+    local e = enemy(5001, U)
+    M.units[U] = { gen = 3, n = 1, planes = { [1] = { id = 9001 } }, ground = {}, at = clock - 60 }   -- (a plane alive: kept)
+    local Pe = M.peers[1]
+    check(Pe and Pe.obj == P1 and Pe.shown == true and Pe.fresh == true, "(player 2's plane shown here, their state fresh)")
+    local tellN, rawTell = 0, TELL.hunted
+    TELL.hunted = function() tellN = tellN + 1 end
+    -- flying, co-op: a Reaper on another living player's plane stays on it (flow-5: it was pulled back onto the host)
+    e.bb.tgt = P1
+    from = #logs + 1
+    ACE.hunt(e)
+    check(e.bb.tgt == P1 and e.bb.writes == 0 and line("^aces: BP_OP1032_f18e_5001 left on player 2's plane %(co%-op: a living player's%)", from) ~= nil,
+          "co-op, you flying: a Reaper on player 2's plane left on it, logged once")
+    e.bb.tgt = nil
+    ACE.hunt(e)
+    check(e.bb.tgt == pawn and e.bb.writes == 1 and tellN == 2 and has(line("^aces: BP_OP1032_f18e_5001 back onto you", from), "(was none), 1 times"),
+          "... with no target: onto you as ever, the hunt tell asked each time")
+    peer(1, DOWNED); tick()
+    e.bb.tgt, e.bb.writes = P1, 0
+    ACE.hunt(e)
+    check(e.bb.tgt == pawn and e.bb.writes == 1, "player 2 down: their hidden plane isn't a living player's: onto you")
+    peer(1, FLY); tick()
+    -- the host DOWN
+    pawn.HealthInternal = 1
+    tick()
+    check(DOWN.me(), "(the host down)")
+    tellN, e.bb.tgt, e.bb.writes = 0, pawn, 0
+    from = #logs + 1
+    ACE.hunt(e)
+    check(e.bb.tgt == pawn and e.bb.writes == 0 and tellN == 0
+          and has(line("^aces: BP_OP1032_f18e_5001 not put back onto you: you're down", from), "your hidden plane, left as it is"),
+          "down, its flight sent after nobody: never written onto your hidden plane, no hunt tell, logged")
+    e.bb.tgt = nil
+    ACE.hunt(e)
+    check(e.bb.tgt == nil and e.bb.writes == 0, "down, no target: not put onto you either (it was, every 2 s)")
+    -- (player 2's plane a real one: a target the hunts can name) its flight not sent yet: the host puts it on the living
+    -- player the fewest are sent after (COOP.huntPick), as the down pass would within 5 s; not one holding its Wolf trap
+    Pe.real = true
+    e.bb.tgt, e.bb.writes = pawn, 0
+    local rawW0 = WOLF.holding
+    WOLF.holding = function(u) return u == U end
+    ACE.hunt(e)
+    check(e.bb.tgt == pawn and e.bb.writes == 0, "down, its flight holding its Wolf trap: left to the trap, not written")
+    WOLF.holding = rawW0
+    ACE.hunt(e)
+    check(e.bb.tgt == P1 and e.bb.writes == 1
+          and has(line("^aces: BP_OP1032_f18e_5001 onto player 2's plane", from), "you're down: the living player the fewest are sent after"),
+          "down, its flight not sent after anyone yet: onto the living player the fewest are sent after (COOP.huntPick)")
+    local o0, s0 = COOP.huntPick()
+    check(o0 == P1 and s0 == 1, "COOP.huntPick: player 2's real plane")
+    e.bb.tgt, e.bb.writes, e.huntDownN = pawn, 0, nil
+    M.huntOn = { [U] = { slot = 1, gen = 3 } }       -- (the down pass sent its flight after player 2: COOP.huntReal)
+    local o1, s1 = COOP.huntTarget(U)
+    check(o1 == P1 and s1 == 1 and COOP.huntTarget(U2) == nil, "COOP.huntTarget: player 2's real plane for the hunted flight, nothing for another")
+    e.bb.tgt = pawn
+    ACE.hunt(e)
+    check(e.bb.tgt == P1 and e.bb.writes == 1 and has(line("^aces: BP_OP1032_f18e_5001 onto player 2's plane", from), "you're down: its flight's hunt"),
+          "down, its flight sent after player 2: its TargetActor onto player 2's plane, not back onto your hidden one")
+    ACE.hunt(e)
+    check(e.bb.writes == 1, "... on it already: not written again")
+    M.units[U].gen = 4
+    check(COOP.huntTarget(U) == nil, "COOP.huntTarget: a hunt of the flight's last generation names nothing")
+    M.units[U].gen = 3
+    -- the hunt tell itself: nothing said while you're down, said once you're back
+    TELL.hunted = rawTell
+    e.dist, D.tellHunt = 1, nil
+    TELL.hunted(e)
+    check(D.tellHunt == nil, "TELL.hunted: nothing said while you're down (the distance is to your hidden plane)")
+
+    -- the down pass (sv_coop.lua, every 5 s): a flight already sent is checked by its planes' real targets (aiWatch's
+    -- p.aiTargetAddr); Wolf and director holds are left to them; a flight up under 3 s waits for its arrival order
+    local hunted = {}
+    local rawHR, rawAny, rawOn, rawPlanes, rawW = COOP.huntReal, COOP.anyReal, COOP.realOn, planes, WOLF.holding
+    COOP.realOn, COOP.anyReal = function() return true end, function() return true end
+    COOP.huntReal = function(u) hunted[#hunted + 1] = u; M.huntOn = M.huntOn or {}; M.huntOn[u] = { slot = 1, gen = M.units[u].gen }; return true, 1, 1 end
+    D.up = { [U] = true }
+    planes = { e }
+    M.huntCheckAt = clock + 1e6                     -- (the hunted players' own check left out: player 2 stays huntable)
+    e.aiTargetAddr = P1.addr
+    M.downHuntAt, from = 0, #logs + 1
+    tick()
+    check(#hunted == 0, "the down pass: a flight sent after player 2, its plane on them: left alone")
+    e.aiTargetAddr = pawn.addr                      -- (the allies' hunt, a Wolf trap's release, its arrival order: "Player")
+    M.downHuntAt = 0
+    tick()
+    check(hunted[1] == U and has(line("^coop: you're down: 1 flight %(1 planes%) sent after the other players instead", from),
+          "(1 of them again: 1 plane back on your hidden plane)"),
+          "... one of its planes back on your hidden plane: sent after them again (it was never checked again), logged")
+    WOLF.holding = function(u) return u == U end
+    hunted, M.downHuntAt = {}, 0
+    tick()
+    check(#hunted == 0 and line("^coop: you're down: " .. U .. " holds its Wolf trap: left to it", from) ~= nil,
+          "a flight holding its Wolf trap: left to it (the order would free it), said once")
+    WOLF.holding = rawW
+    M.units[U2] = { gen = 5, n = 1, planes = { [1] = { id = 9002 } }, ground = {}, at = clock - 1 }
+    D.up[U2], e.aiTargetAddr = true, P1.addr
+    hunted, M.downHuntAt = {}, 0
+    tick()
+    check(#hunted == 0, "a flight up 1 s: waits for its arrival order (+2 s, which would undo this one)")
+    clock, M.downHuntAt = clock + 3, 0
+    tick()
+    check(hunted[1] == U2, "... up 3 s: sent after the other players")
+    COOP.huntReal, COOP.anyReal, COOP.realOn = rawHR, rawAny, rawOn
+
+    -- the stats and the learning profile: the loiter isn't your flying (flow-4, joiner-8)
+    CFG.stats.enabled = true
+    local s = enemy(5002, U)
+    s.at, s.fwd, s.dist = { X = 100000, Y = 0, Z = 250000 }, { X = 1, Y = 0, Z = 0 }, 1
+    local you = { X = 0, Y = 0, Z = 250000 }         -- (1 km behind it: on its six)
+    D.rs = { tailEscaped = 0 }
+    STATS.track(s, you, 200)
+    check(s.engagedAt == nil and s.tailAt == nil and s.youAt ~= nil and D.rs.tailEscaped == 0,
+          "down: STATS.track counts no engagement or tail of your hidden plane (p.youAt kept)")
+    s.tw = { t0 = 199, last = 199, st = {}, km = 1, off = 0 }
+    planes = { s }
+    from = #logs + 1
+    STATS.tailTick(200)
+    check(s.tw == nil and line("^tailed: you're down: 1 open episode dropped", from) ~= nil, "the tail watch: an open episode dropped, logged")
+    RUN.habit = nil
+    from = #logs + 1
+    STATS.sample(200, you)
+    check(RUN.habit == nil and line("^stats: you're down: your flying isn't measured", from) ~= nil,
+          "STATS.sample: P6's habits not sampled (Saint Alessia's airfield habit went 0.34 -> 0.50 on her loiter), logged")
+    PROF.sample(202, you)
+    check(RUN.habit == nil, "PROF.sample itself: nothing while you're down")
+    planes = rawPlanes
+    -- back: measured again
+    peer(1, AIRFIELD_F); tick()
+    inbox[#inbox + 1] = "1|rv|0|5000"
+    tick()
+    check(not DOWN.me(), "(revived)")
+    planes = { s }
+    STATS.track(s, you, 210)
+    check(s.engagedAt == 210 and s.tailAt == 210, "revived: STATS.track measures you again")
+    STATS.sample(212, you)
+    check(RUN.habit and RUN.habit.S == 1, "... and P6's habits sampled again (" .. tostring(RUN.habit and RUN.habit.S) .. ")")
+    TELL.hunted(e)
+    check(D.tellHunt and D.tellHunt[U] == D.round, "the hunt tell said again once you're back")
+    planes = rawPlanes
+    M.huntOn, M.huntCheckAt, D.rs = nil, nil, nil
+    Pe.real = nil
+end
+
+print("a revive sold only to a game heard from now (board-5: Froya's, 22:19:22, 1 s into her outage)")
+do
+    scene("host", 0, { [1] = FLY, [2] = AIRFIELD_F })
+    peer(1, DOWNED); inbox[#inbox + 1] = "1|dw|1"; tick()
+    peer(1, DOWNED, 800)                             -- (fresh for the round's checks: under a second; not for a revive)
+    tick()
+    sent, from = {}, #logs + 1
+    inbox[#inbox + 1] = "2|rv|1|5000"
+    tick()
+    check(msgs("rx") == "2>rx|1|THEIR LINK IS LAGGING: TRY AGAIN|0" and St.count == 0 and msgs("rb") == ""
+          and has(line("^revive: player 3's revive of player 2 refused", from), "(their last state 800 ms old)"),
+          "their last state 800 ms old: refused (refunded there), nothing counted, logged with the age (" .. msgs("rx") .. ")")
+    peer(1, DOWNED, 100)
+    M.lostAt[1] = { at = clock, from = clock, inMission = true }
+    tick()
+    sent = {}
+    inbox[#inbox + 1] = "2|rv|1|5000"
+    tick()
+    check(msgs("rx") == "2>rx|1|THEIR LINK IS LAGGING: TRY AGAIN|0" and has(line("^revive: player 3's revive of player 2 refused", from), "their link is lost"),
+          "their link lost (sys|lost): refused")
+    M.lostAt[1] = nil
+    sent = {}
+    inbox[#inbox + 1] = "2|rv|1|5000"
+    tick()
+    check(msgs("rb") == "-1>rb|1|1|2" and St.count == 1, "heard from now: revived as ever")
+end
+
+print("a joiner's host lost: the floor and the run held through a host migration (Delta's log, joiner-5; board-5)")
+do
+    local LINKED = info
+    scene("join", 1, { [0] = FLY, [2] = FLY })
+    check(DOWN.floor() == 0.1 and pawn.MinHealth == 0.1, "(linked: the floor 0.1)")
+    M.succ, M.hostSid = { { slot = 1, sid = "76561198000000011" }, { slot = 2, sid = "76561198000000012" } }, "76561198000000010"
+    info, M.nextInfo = "open=1;state=searching;peers=", 0
+    inbox[#inbox + 1] = "0|sys|lost"
+    from = #logs + 1
+    tick()
+    check(COOP.linked() == 0 and COOP.migrating() == true and DOWN.floor() == 0.1 and pawn.MinHealth == 0.1 and DOWN.holdsRun(),
+          "the host's link lost, a host migration's line to go down: the floor (0.1) and the run's hold kept (they went to 0)")
+    tick()
+    check(line("^down: the host's link is gone and a host migration is under way", from) ~= nil, "logged")
+    pawn.HealthInternal = 1
+    tick()
+    check(DOWN.me() and #finished == 0, "a hit to the floor in the migration's wait: DOWN, not dead (Delta: 203 HP at 09:35:11, game over)")
+    ticks(12)
+    check(not St.ended and #finished == 0, "down, the host's link gone 12 s: the run held (it ended at 10 s, PENDING_S)")
+    M.hostLostAt, M.mig = nil, nil                  -- (nextCandidate's end: none of the next hosts answered)
+    tick()
+    check(St.ended and finished[1] == "died" and line("^down: run over in round 5: .*the host migration found no host", from) ~= nil,
+          "the migration found no host: the run's over then (nobody can revive you)")
+    -- no migration (no line from the host): until the runtime lets the host's link go
+    info, M.hostLostAt, M.mig = LINKED, nil, nil      -- (the last block's lost host forgotten: a new link's "paired" does it)
+    scene("join", 1, { [0] = FLY, [2] = FLY })
+    pawn.HealthInternal = 1
+    tick()
+    check(DOWN.me(), "(down, linked)")
+    M.succ = nil
+    info, M.nextInfo = "open=1;state=searching;peers=", 0
+    inbox[#inbox + 1] = "0|sys|lost"
+    from = #logs + 1
+    ticks(30)
+    check(not COOP.migrating() and not St.ended and line("^down: the host's link is gone while you're down: your run waits for it", from) ~= nil,
+          "no migration: down, the host's link gone 30 s: held, logged")
+    inbox[#inbox + 1] = "0|sys|left"
+    tick(); tick()                                  -- (the message in this pass's co-op tick, DOWN's the next)
+    check(St.ended and line("^down: run over in round 5: .*the host's gone %(its link let go", from) ~= nil, "the runtime lets it go (sys|left): over")
+    info, M.hostLostAt, M.mig = LINKED, nil, nil      -- (the last block's lost host forgotten: a new link's "paired" does it)
+    scene("join", 1, { [0] = FLY, [2] = FLY })
+    pawn.HealthInternal = 1
+    tick()
+    M.succ = nil
+    info, M.nextInfo = "open=1;state=searching;peers=", 0
+    inbox[#inbox + 1] = "0|sys|lost"
+    ticks(99)
+    check(not St.ended, "nothing from the host 99 s: still held")
+    ticks(2)
+    check(St.ended and has(line("^down: run over in round 5"), "nothing from it"), "100 s (GONE_S): over")
+    -- linked again in time: still down, waiting for a revive; the floor never off as the link comes back (Delta's was 0
+    -- for 3 s after the host's "up", 09:34:53-56: the migration's clock reset by it, the link count 5 s late)
+    info, M.hostLostAt, M.mig = LINKED, nil, nil      -- (the last block's lost host forgotten: a new link's "paired" does it)
+    scene("join", 1, { [0] = FLY, [2] = FLY })
+    M.succ, M.hostSid = { { slot = 1, sid = "76561198000000011" } }, "76561198000000010"
+    pawn.HealthInternal = 1
+    tick()
+    info = "open=1;state=searching;peers="
+    inbox[#inbox + 1] = "0|sys|lost"
+    ticks(17)
+    info = LINKED                                    -- (the link count refreshed by the "up" itself, not 5 s on)
+    inbox[#inbox + 1] = "0|sys|up"
+    from = #logs + 1
+    local lowest = 1
+    for _ = 1, 24 do tick(); lowest = math.min(lowest, DOWN.floor(), pawn.MinHealth) end
+    check(lowest == 0.1, "the host's link back: the floor 0.1 all the while (" .. lowest .. ")")
+    check(DOWN.me() and not St.ended and line("^down: the host's link back after %d+ s: still down", from) ~= nil,
+          "linked again after 17 s (Froya's outage): still down, the run on, logged")
+    inbox[#inbox + 1] = "0|rb|1|1|0"
+    tick()
+    check(not DOWN.me(), "... and the host's revive then brings you back")
+    info = LINKED
+end
+
 ---------------------------------------------------------------------------------------------------- the settings
 print("the settings: the host's revives, each player's key and camera")
 do

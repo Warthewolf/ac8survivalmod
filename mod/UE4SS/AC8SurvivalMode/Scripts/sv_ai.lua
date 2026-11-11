@@ -162,11 +162,26 @@ local function roleOwn(p)
     return true
 end
 
--- CFG.aces.flight <tier>.hunt: that tier's aircraft keep the player as their target (blackboard TargetActor)
+-- CFG.aces.flight <tier>.hunt: that tier's aircraft keep the player as their target (blackboard TargetActor).
+-- ((2026-11-11) Saint Alessia's 50-round co-op run: "the enemy AI followed my corpse plane in its orbit around the base".
+-- This wrote your plane back every 2 s with no check for you being DOWN (sv_down.lua), so five Reaper fighters circled
+-- her hidden plane for 25 minutes, 3 s after the down pass had sent them after Froya; and in co-op it pulled them off
+-- the other players' planes onto the host's.) Never your plane while you're DOWN: onto the living player its flight was
+-- sent after (COOP.huntTarget, the host's down pass), else (the host, a flight not held) the one the fewest are sent
+-- after (COOP.huntPick), else left alone; in co-op one already on another living player's plane (COOP.isPlayerPlane) is
+-- left on it. Neither the "hunt" tell while you're down.
+local function huntLog(p, key, what, t)                 -- (its 1st, 30th, 60th... write of each kind: p[key] counts)
+    local n = (p[key] or 0) + 1
+    p[key] = n
+    if n == 1 or n % 30 == 0 then
+        log(string.format("aces: %s %s (was %s), %d times", p.name, what, t and (nameOf(t):match("([^%.:]+)$") or "?") or "none", n))
+    end
+end
 function ACE.hunt(p)
     local fl = p.tier and p.tier.name and CFG.aces.flight and CFG.aces.flight[p.tier.name:lower()]   -- (its tier's)
     if not (fl and fl.hunt) or p.leaving then return end     -- ((0.73.78) not one breaking off: sv_rounds.lua aceBreakOff)
-    if TELL and TELL.hunted then pcall(TELL.hunted, p) end    -- (its flight close: the "hunt" tell, CFG.tells hunt_km)
+    local down = DOWN ~= nil and DOWN.me ~= nil and DOWN.me() == true
+    if TELL and TELL.hunted and not down then pcall(TELL.hunted, p) end   -- (its flight close: the "hunt" tell, CFG.tells hunt_km)
     if fl.no_provoke and not roleOwn(p) then    -- (every 2 s: an engagement order sets it again)
         pcall(function() if p.obj.bPermissionToProvoke then p.obj.bPermissionToProvoke = false end end)
         if not p.noProvokeSaid then
@@ -182,13 +197,49 @@ function ACE.hunt(p)
     local bb = aiBlackboard(p)
     if not bb then return end
     local okT, t = pcall(function() return bb:GetValueAsObject(FName("TargetActor")) end)
-    if okT and valid(t) and nameOf(t) == nameOf(pawn) then return end
-    local ok = pcall(function() bb:SetValueAsObject(FName("TargetActor"), pawn) end)
-    p.huntN = (p.huntN or 0) + 1
-    if p.huntN == 1 or p.huntN % 30 == 0 then
-        log(string.format("aces: %s back onto you (was %s)%s, %d times", p.name, okT and valid(t) and (nameOf(t):match("([^%.:]+)$") or "?") or "none",
-            ok and "" or " (write failed)", p.huntN))
+    t = (okT and valid(t)) and t or nil
+    local mine = t ~= nil and (addrOf(t) ~= nil and addrOf(t) == addrOf(pawn) or nameOf(t) == nameOf(pawn))
+    -- (another living player's plane: theirs to fight, by its address; COOP.isPlayerPlane)
+    local theirs = t ~= nil and not mine and COOP and COOP.isPlayerPlane and COOP.isPlayerPlane(t) or nil
+    if down then
+        if theirs then return end                               -- (on a living player already)
+        local o, s, how = nil, nil, "its flight's hunt"
+        if COOP and COOP.huntTarget then o, s = COOP.huntTarget(p.unit) end
+        -- (its flight not sent after anyone yet, on your hidden plane or on nothing: the host puts it on the living player
+        -- the fewest are sent after, as the down pass would within 5 s; not a flight held by its Wolf trap or the director)
+        if not (o and valid(o)) and (mine or t == nil) and COOP and COOP.host and COOP.host() and COOP.huntPick
+            and not (p.unit and WOLF and WOLF.holding and WOLF.holding(p.unit))
+            and not (p.unit and DIR and DIR.holding and DIR.holding(p.unit)) then
+            o, s = COOP.huntPick()
+            how = "the living player the fewest are sent after"
+        end
+        if not (o and valid(o)) then                            -- (none: left alone, never put on your hidden plane)
+            if not p.huntDownSaid then                          -- (once a plane a DOWN; the 1st, 25th, 50th... said)
+                p.huntDownSaid = true
+                ACE.downLeftN = (ACE.downLeftN or 0) + 1
+                if ACE.downLeftN == 1 or ACE.downLeftN % 25 == 0 then
+                    log(string.format("aces: %s not put back onto you: you're down (its target %s, left as it is; %d planes so far)",
+                        p.name, mine and "your hidden plane" or (t and (nameOf(t):match("([^%.:]+)$") or "?") or "none"), ACE.downLeftN))
+                end
+            end
+            return
+        end
+        if t and addrOf(t) ~= nil and addrOf(t) == addrOf(o) then return end   -- (on it already)
+        local ok = pcall(function() bb:SetValueAsObject(FName("TargetActor"), o) end)
+        huntLog(p, "huntDownN", string.format("onto player %d's plane (you're down: %s)%s", (s or 0) + 1, how, ok and "" or " (write failed)"), t)
+        return
     end
+    p.huntDownSaid, ACE.downLeftN = nil, nil
+    if mine then return end
+    if theirs then                                              -- (co-op: left on that player, logged once a player)
+        if p.huntLeftFor ~= theirs then
+            p.huntLeftFor = theirs
+            log(string.format("aces: %s left on player %d's plane (co-op: a living player's), not put back onto you", p.name, theirs + 1))
+        end
+        return
+    end
+    local ok = pcall(function() bb:SetValueAsObject(FName("TargetActor"), pawn) end)
+    huntLog(p, "huntN", "back onto you" .. (ok and "" or " (write failed)"), t)
 end
 
 -- Top-tier reversals (CFG.aces.flight <tier>.moves) and their geometry helpers

@@ -37,6 +37,12 @@
 DOWN = {}
 do
 local RO_CONFIRM_S, PENDING_S, REVIVING_S, MSG_PER_S, PRESENT_MS = 3, 10, 15, 4, 5000
+-- ((2026-11-11, Saint Alessia's 50-round run) a joiner DOWN whose host's link is gone keeps its run while a host migration
+-- can still bring it a host (COOP.migrating), and without one until the runtime lets the link go (its sys|left, CO_DROP_S
+-- 90 s after the last packet) or GONE_S at most: it ended 10 s after the link dropped (PENDING_S), and Froya's 17 s
+-- outage just after her revive (22:19:21-38) failed her mission. And a revive sold only to a game heard from in the last
+-- REVIVE_FRESH_MS (its states come 20-30 times a second) whose link isn't lost: hers was sold 1 s into that outage)
+local GONE_S, REVIVE_FRESH_MS = 100, 500
 -- a DOWN plane slower than GROUND_MS (m/s: no plane flies that slowly) or under the sea for GROUND_S isn't flying: it
 -- crashed into the ground with its floor held, and the loiter can't lift it (the user's co-op run of 2026-10-30: VERDA
 -- crashed, was revived where the plane lay, on the ground). A revive then brings it back the "native" way.
@@ -62,6 +68,12 @@ local function rc() local c = CFG.coop and CFG.coop.revive; return type(c) == "t
 local function pawnOf() return survivalPC and liveObj(survivalPC) and survivalPC.Pawn or nil end
 local function mySlot() return (COOP and COOP.slot) or 0 end
 local function linked() return COOP ~= nil and COOP.open == true and COOP.linked ~= nil and COOP.linked() > 0 end
+-- ((2026-11-11, Delta's log of the 50-round run, joiner-5) a host migration under way (sv_coop_migration.lua
+-- COOP.migrating: the host silent, the line still to go down, or this game the new host waiting for the room): the
+-- floor and the run's hold stay on through it. With the link alone they went off the moment the host's link dropped and
+-- a 203 HP hit in the 30 s wait was Delta's death, not a DOWN (09:35:11)
+local function migrating() return COOP ~= nil and COOP.open == true and COOP.migrating ~= nil and COOP.migrating() == true end
+local function inRoom() return linked() or migrating() end
 local function num(v, d) v = tonumber(v); return (v and v == v and v > -1e12 and v < 1e12) and v or d end
 local function upper(s, max)                    -- a name for the HUD and the STORE: capitals, max characters
     s = string.upper(tostring(s or ""))
@@ -81,13 +93,13 @@ end
 DOWN.priceFor = priceFor                        -- (the offline test's)
 
 -- Revives on: co-op open with another game linked, in a run
-function DOWN.active() return rc().enabled == true and D ~= nil and linked() end
+function DOWN.active() return rc().enabled == true and D ~= nil and inRoom() end
 -- the MinHealth your plane is held at (sv_tactical.lua INS.tick): floor_hp while revives are on, else 0 (solo: as ever)
 function DOWN.floor() return (DOWN.active() and not St.noFloor) and num(rc().floor_hp, 0.1) or 0 end
 -- you're DOWN (shot down, waiting for a revive)
 function DOWN.me() return St.down == true end
 -- the run ends on the host's "ro" only (sv_leaderboard.lua LB.deathCheck), not on this game's own shoot-down
-function DOWN.holdsRun() return rc().enabled == true and linked() end
+function DOWN.holdsRun() return rc().enabled == true and inRoom() end
 
 -- the other players down now (their state fresh, bit 8), the one down longest first: { slot, since }; each one's since
 -- from their "dw" or the first state seen with it
@@ -682,6 +694,7 @@ function DOWN.reset(why, newLevel)
     St.ended, St.noFloor, St.allDownAt, St.safeUntil, St.respawnAt, St.watch = false, nil, nil, nil, nil, nil
     St.arm = nil                                                -- (0.73.73: no revive's watch over the next run's plane)
     St.wasIn, St.heldFor = nil, nil                             -- ((0.73.77) A8: everyone loads in again)
+    St.lostAt, St.migWait, St.lostSaid = nil, nil, nil          -- ((2026-11-11) a joiner's wait for its host)
 end
 -- (0.73.77, plan F1b) the level torn down (sv_core.lua levelGate, the runtime's teardown gate): the level's objects DOWN
 -- keeps are forgotten, none of them touched (the plane watched, the cameras on it switched off, the spectator's camera
@@ -779,12 +792,26 @@ function DOWN.offer()
     return o
 end
 
+-- (the host) whether player slot's game is heard from now: its last state under REVIVE_FRESH_MS old (SV_CoopPeerAt's
+-- age, read now: peerTick's freshness is a second) and its link not lost (sys|lost). true, or false and what was seen
+local function heardNow(slot)
+    if slot == mySlot() then return true end
+    local s = type(SV_CoopPeerAt) == "function" and tostring(SV_CoopPeerAt(slot) or "") or ""
+    local age = tonumber(s:match(",(%-?%d+)$"))
+    if COOP.linkLost and COOP.linkLost(slot) then return false, "their link is lost" end
+    if not (age and age >= 0) then return false, "no state from them" end
+    if age >= REVIVE_FRESH_MS then return false, string.format("their last state %d ms old", age) end
+    return true
+end
 -- (the host) a revive of slot by player `by` at `price`: checked, counted, told to everyone; true, or false and why
 local function hostRevive(slot, by, price)
-    local why = nil
+    local why, seen = nil, nil
+    local heard
+    if COOP.slotOk(slot) then heard, seen = heardNow(slot) end
     if not (COOP.slotOk(slot) and COOP.slotOk(by)) then why = "NO SUCH PLAYER"
     elseif slot == by then why = "NOT YOURSELF"
     elseif not isDown(slot) then why = "NOT DOWN"
+    elseif not heard then why = "THEIR LINK IS LAGGING: TRY AGAIN"   -- ((2026-11-11) nothing charged: Froya, 22:19:22)
     elseif St.reviving[slot] and os.clock() - St.reviving[slot] < REVIVING_S then why = "ALREADY BEING REVIVED"
     -- ((0.73.78, C6) the price by the round: one asked at the last round's price is taken too, the round having changed
     -- on its way here (a joiner's round is the host's "rnd", a moment behind; never ahead)
@@ -792,8 +819,8 @@ local function hostRevive(slot, by, price)
         why = "THE PRICE CHANGED: NOW " .. priceFor(St.count)
     elseif not onAirfield(by) then why = "NOT AT THE AIRFIELD" end
     if why then
-        log(string.format("revive: player %s's revive of player %s refused: %s", tostring((tonumber(by) or -1) + 1),
-            tostring((tonumber(slot) or -1) + 1), why))
+        log(string.format("revive: player %s's revive of player %s refused: %s%s", tostring((tonumber(by) or -1) + 1),
+            tostring((tonumber(slot) or -1) + 1), why, (seen and why == "THEIR LINK IS LAGGING: TRY AGAIN") and (" (" .. seen .. ")") or ""))
         return false, why
     end
     St.count, St.reviving[slot], St.since[slot] = St.count + 1, os.clock(), nil
@@ -1078,12 +1105,20 @@ function DOWN.tick()
         local okO, errO = pcall(orbitTick, now)
         if not okO then logOnce("orbitTick", "spectate: camera controls error " .. tostring(errO)) end
         if not okS then logOnce("spectateTick", "spectate: error " .. tostring(errS)) end
-    elseif valid(pawn) and not St.ended and rc().enabled == true and linked() and D.round and D.round >= 1 then
+    elseif valid(pawn) and not St.ended and rc().enabled == true and inRoom() and D.round and D.round >= 1 then
         local okH, h = pcall(function() return pawn.HealthInternal end)
         local fl = num(rc().floor_hp, 0.1) * 10
         if okH and type(h) == "number" and h > 0 and h <= fl + 0.01 and not RUN.insured then goDown(pawn, h) end
     end
     if not (COOP and COOP.open) then return end
+    -- (the floor held by a host migration alone, no link: said as it starts and ends)
+    local migHold = rc().enabled == true and not linked() and migrating()
+    if migHold ~= (St.migHold or false) then
+        St.migHold = migHold
+        log(migHold and string.format("down: the host's link is gone and a host migration is under way: the revives' floor "
+            .. "(%.1f HP) and the run's hold stay on through it%s", DOWN.floor(), St.down and " (you're down: still waiting for a revive)" or "")
+            or ("down: the host migration's hold over (" .. (linked() and "linked again" or "no link, no migration") .. ")"))
+    end
     if now >= (St.listAt or 0) then                         -- (the STORE's REVIVE row follows who's down: once a second)
         St.listAt = now + 1
         local key = {}
@@ -1092,6 +1127,7 @@ function DOWN.tick()
         if key ~= St.listKey then St.listKey, RUN.dirty = key, true end
     end
     if COOP.host() then
+        St.lostAt, St.migWait, St.lostSaid = nil, nil, nil      -- (a joiner's wait for its host: none as the host)
         for slot, t in pairs(St.reviving) do if now - t >= REVIVING_S then St.reviving[slot] = nil end end
         -- (not only while another game is linked: the last joiner gone with you down ends it too)
         local all, n = false, 0
@@ -1134,10 +1170,28 @@ function DOWN.tick()
         end
     else
         if St.down and not linked() then                   -- (down, the host's link gone: nobody can revive you)
+            -- (not while a host migration may still bring a host: its outcome, a new host or none found; without one,
+            -- once the runtime lets the host's link go, GONE_S at most)
             St.lostAt = St.lostAt or now
-            if now - St.lostAt >= PENDING_S then DOWN.runOver(D.round, "you're down and the host's link is gone") end
+            local leftAt = COOP.hostLeft and COOP.hostLeft() or nil
+            local left = type(leftAt) == "number" and leftAt >= St.lostAt     -- (this link's, not an earlier one's)
+            if migrating() then
+                St.migWait = St.migWait or now
+            elseif St.migWait then
+                DOWN.runOver(D.round, string.format("you're down and the host migration found no host (%.0f s since the host's link went)", now - St.lostAt))
+            elseif left or now - St.lostAt >= GONE_S then
+                DOWN.runOver(D.round, string.format("you're down and the host's gone (%s, %.0f s since its link went)",
+                    left and "its link let go" or "nothing from it", now - St.lostAt))
+            elseif not St.lostSaid then
+                St.lostSaid = true
+                log(string.format("down: the host's link is gone while you're down: your run waits for it (until the runtime lets "
+                    .. "the link go, %d s at most; no host migration here)", GONE_S))
+            end
         else
-            St.lostAt = nil
+            if St.lostAt and St.down and linked() then
+                log(string.format("down: the host's link back after %.0f s: still down, waiting for a revive", now - St.lostAt))
+            end
+            St.lostAt, St.migWait, St.lostSaid = nil, nil, nil
         end
         for slot, p in pairs(St.pending) do                -- (no answer: refunded)
             if now - p.at >= PENDING_S then

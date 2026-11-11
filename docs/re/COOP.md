@@ -542,7 +542,9 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
   "ro" each game: the view back, STATS.death("died"), LB.finish("died"), RE_SV_RunOver (tools/survival_events.py
   build_run_over: Mission 15's LiveMissionFinishExecution MissionFailed, false, true: the retry menu; kept, never "ev").
   No event: the fallback, the loiter off and the plane mortal (MinHealth 0, invincible off, the floor off). A joiner
-  down with the host's link gone 10 s ends its own. sv_leaderboard.lua's death check ends nothing while revives hold
+  down with the host's link gone ends its own only once nobody can bring a host back: while a host migration may
+  (COOP.migrating) it waits for the migration's outcome, else until the runtime lets the link go (sys|left, 90 s) or
+  100 s at most (until 2026-11-11: 10 s; see "The 50-round run's fixes" below). sv_leaderboard.lua's death check ends nothing while revives hold
   the run (co-op, linked): only "ro" does. The host's "rs" (a new run) brings a downed joiner back and refunds an open
   revive; a new level clears everything.
 - **Protocol** (reliable; guards: slots 0-23, whole numbers, text cut to 60 capitals; at most 4 a second from a joiner,
@@ -656,3 +658,46 @@ Tests: coop_migration_test (the notice, its round refused, no step back after it
 side), coop_guard_test (`hl|51|left`, a `jn` without a run), resync_test (an empty picture after it), aces_test (the
 withdrawn flight), defences_test (no LOST), coop_test (the answer to another host's hello, the queue's lines),
 leaderboard_test and the Worker's (the copies).
+
+## 12. The DOWN host's plane, a migration's floor, a revive's freshness (2026-11-11; Saint Alessia's and Delta's logs; untested in game)
+The user: "the enemy AI followed my corpse plane in its orbit around the base".
+- **ACE.hunt** (sv_ai.lua) wrote the host's own plane into every Reaper's TargetActor every 2 s, DOWN or not: 3 s after
+  the down pass sent them after Froya they were back on the hidden loiter (five fighters, 25 minutes, round 50 held open
+  15 minutes). Now, while you're DOWN: onto the living player its flight was sent after (COOP.huntTarget: the down
+  pass's COOP.huntReal, this generation of the flight), else on the host (a flight not held by its Wolf trap or the
+  director, on your plane or on nothing) the living player the fewest are sent after (COOP.huntPick), else left alone
+  (a joiner's copies: left); in co-op a plane on another living player's
+  plane (COOP.isPlayerPlane: shown, fresh, not DOWN, not landed) is left on it, DOWN or not; no hunt tell while DOWN.
+  Log: `aces: <plane> onto player N's plane (you're down: its flight's hunt | the living player the fewest are sent
+  after) (was <target>), N times`, `aces: <plane> not put back onto you: you're down (its target ..., left as it is; N
+  planes so far)` (the 1st, 25th... plane a DOWN), `aces: <plane> left on player N's
+  plane (co-op: a living player's), not put back onto you`. None of `aces: ... back onto you` while DOWN.
+- **The down pass** (sv_coop.lua hostTick, every 5 s) also checks a flight it already sent, by its planes' real
+  targets (aiWatch's p.aiTargetAddr): one back on your hidden plane (the allies' hunt, a Wolf release, its arrival
+  order: all name "Player") is sent again; a flight holding its Wolf trap or held by the director is left to it; one up
+  under 3 s waits for its arrival order. `coop: you're down: N flights (N planes) sent after the other players instead
+  (K of them again: P planes back on your hidden plane)` (an again-only pass every 30 s at most), `coop: you're down:
+  <unit> holds its Wolf trap: left to it ...`.
+- **The allies' hunt** (sv_allies.lua RE_SV_Hunt_NN) waits while you're DOWN (held, not dropped): `allies: you're down:
+  the enemies' hunts for the allied aircraft wait for your revive` / `... you're back: ... go on`.
+- **Stats and learning** (sv_stats.lua) skip a DOWN player's plane: STATS.track's engagement and tail samples (an open
+  episode dropped), the tail watch, STATS.sample's airfield time and PROF.sample (her saved airfield habit went 0.34 ->
+  0.50 on the loiter). `stats: you're down: your flying isn't measured (...) until your revive`, `tailed: you're down: N
+  open episode(s) dropped`.
+- **A migration keeps the floor** (sv_down.lua DOWN.active / floor / holdsRun / going DOWN: linked or
+  COOP.migrating, sv_coop_migration.lua: a joiner whose host went silent while its line can be gone down, or going down
+  it; a host by migration for wait_s). Delta's floor went to 0 at the host's link loss and a 203 HP hit in the 30 s
+  wait was a death. `down: the host's link is gone and a host migration is under way: the revives' floor (0.1 HP) and
+  the run's hold stay on through it` / `down: the host migration's hold over (...)`.
+- **A down joiner's run** waits for the migration's outcome or the host's link let go (COOP.hostLeft) / 100 s:
+  `down: the host's link is gone while you're down: your run waits for it ...`, `down: the host's link back after N s:
+  still down, waiting for a revive`, `down: run over in round N: ... (you're down and the host migration found no host
+  ...)` / `(you're down and the host's gone (its link let go | nothing from it, N s ...))`. Froya's run ended 10 s into
+  a 17 s outage just after her 28,800 Z revive.
+- **A revive** is refused when the target's last state is 500 ms old or more (SV_CoopPeerAt's age, read at the sale)
+  or its link is lost: `revive: player N's revive of player M refused: THEIR LINK IS LAGGING: TRY AGAIN (their last
+  state N ms old | their link is lost)`; the buyer is refunded by the existing "rx".
+- **A real plane shown again** (revived, back in the mission) is moved to its newest streamed state first, still hidden
+  (sv_coop_planes.lua M.toNewest; it isn't fed while hidden: Delta saw revived planes 22-37 km off their stream for a
+  minute): `coop: player N's plane shown; on the radar again (activated); moved to their newest state first (X km from
+  it; read back N m off)`.

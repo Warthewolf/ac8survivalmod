@@ -1030,28 +1030,58 @@ function hostTick()
     -- ((2026-11-07) the user: "enemies are attacking my downed aircraft": the host DOWN (sv_down.lua), the round's fighter
     -- flights still on it (their appearance's orders name the host's plane) onto a living player's real plane, every 5 s;
     -- none alive: left as they are (COOP.huntHost never puts them on you while you're down))
+    -- ((2026-11-11, Saint Alessia's 50-round run) a flight already sent after a player is checked again by what its planes
+    -- are really aimed at (p.aiTargetAddr, the sweep's read of TargetActor, sv_ai.lua aiWatch): one back on your hidden
+    -- plane (the allies' hunt, a Wolf trap's release, its arrival order: all name "Player") is sent after them again; a
+    -- flight whose Wolf trap or squad director's hold is on is left to it (the order would free it), as the other hunts
+    -- do; one up under 3 s waits for its arrival order (+2 s), which would undo this one)
     local imDown = DOWN ~= nil and DOWN.me ~= nil and DOWN.me() == true
     if imDown and D and D.up and now >= (M.downHuntAt or 0) then
         M.downHuntAt = now + 5
         if COOP.realOn() and COOP.anyReal() then
-            local moved, planesN = 0, 0
+            local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+            local mine = valid(pawn) and addrOf(pawn) or nil
+            local onMe = {}
+            for _, p in ipairs(mine and planes or {}) do
+                if not p.down and p.unit and p.aiTargetAddr ~= nil and p.aiTargetAddr == mine then onMe[p.unit] = (onMe[p.unit] or 0) + 1 end
+            end
+            local moved, planesN, again, onYou = 0, 0, 0, 0
+            M.downHeldSaid = M.downHeldSaid or {}
             for unit in pairs(D.up) do
-                if not (M.huntOn and M.huntOn[unit]) and poolIndex(unit) and not (BOMBER_UNIT and BOMBER_UNIT[unit])
+                local hunted = M.huntOn and M.huntOn[unit]
+                local u = M.units[unit]
+                if (not hunted or onMe[unit]) and poolIndex(unit) and not (BOMBER_UNIT and BOMBER_UNIT[unit])
                     and not (ESC and ESC.holds and ESC.holds(unit)) then
-                    local ok, _, n = COOP.huntReal(unit)
-                    if ok then moved, planesN = moved + 1, planesN + (n or 0) end
+                    local holdWhy = (WOLF and WOLF.holding and WOLF.holding(unit) and "holds its Wolf trap")
+                        or (DIR and DIR.holding and DIR.holding(unit) and "is held by the squad director") or nil
+                    if holdWhy then
+                        if not M.downHeldSaid[unit] then
+                            M.downHeldSaid[unit] = true
+                            log(string.format("coop: you're down: %s %s: left to it (sent after the other players once it's let go)", unit, holdWhy))
+                        end
+                    elseif not (u and u.at and now - u.at < 3) then
+                        local ok, _, n = COOP.huntReal(unit)
+                        if ok then
+                            moved, planesN = moved + 1, planesN + (n or 0)
+                            if hunted then again, onYou = again + 1, onYou + onMe[unit] end
+                        end
+                    end
                 end
             end
-            if moved > 0 then
-                log(string.format("coop: you're down: %d flight%s (%d planes) sent after the other players instead", moved,
-                    moved == 1 and "" or "s", planesN))
+            -- (a pass with new flights logged; one that only sends flights again, every 30 s at most: an AI that keeps your
+            -- plane through the order would say so every 5 s)
+            if moved > again or (again > 0 and now >= (M.downAgainAt or 0)) then
+                if again > 0 then M.downAgainAt = now + 30 end
+                log(string.format("coop: you're down: %d flight%s (%d planes) sent after the other players instead%s", moved,
+                    moved == 1 and "" or "s", planesN, again > 0 and string.format(" (%d of them again: %d plane%s back on your hidden plane)",
+                    again, onYou, onYou == 1 and "" or "s") or ""))
             end
         elseif not M.downHuntSaid then
             M.downHuntSaid = true
             log("coop: you're down and no other player is flying: the enemies' orders left as they are (never put on you)")
         end
     elseif not imDown then
-        M.downHuntSaid = nil
+        M.downHuntSaid, M.downHeldSaid, M.downAgainAt = nil, nil, nil
     end
 end
 

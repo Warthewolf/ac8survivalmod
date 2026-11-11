@@ -280,10 +280,13 @@ end
 -- A hunting tier's flight (CFG.aces.flight <tier>.hunt: ACE.hunt keeps its target on you) within hunt_km of you for
 -- the first time this round (p.dist, the 2 s sweep's): "hunt", once a flight a round (its cooldown keeps several
 -- flights to one call; only a gap waits for the next sweep). Not on a co-op joiner: the host's planes hunt the host.
+-- ((2026-11-11) nor while you're DOWN, sv_down.lua: the distance is to your hidden plane, and Saint Alessia's 50-round
+-- run played her the hunt warning on her loiter, 00:06:37)
 function TELL.hunted(p)
     local c = cfg()
     if not (c and c.enabled and D and D.round and p.unit and p.dist) or p.dist > (tonumber(c.hunt_km) or 0) then return end
     if COOP and COOP.client and COOP.client() then return end
+    if DOWN and DOWN.me and DOWN.me() == true then return end
     D.tellHunt = D.tellHunt or {}
     if D.tellHunt[p.unit] == D.round then return end
     local said, _, kind = TELL.say("hunt")

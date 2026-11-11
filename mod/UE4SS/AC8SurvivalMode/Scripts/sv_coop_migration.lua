@@ -399,6 +399,30 @@ function M.migTick(now)
     end
     nextCandidate(now)
 end
+-- ((2026-11-11, Delta's log of Saint Alessia's 50-round run) whether a host migration may still bring this game a host,
+-- for sv_down.lua (the revives' floor and the run's hold stay on through it): a joiner whose host went silent while its
+-- line can still be gone down (after_s, then link_s a candidate, and a margin), or going down it; this game the new host
+-- by migration until wait_s (its room linking again). Delta's floor went to 0 the moment the host's link dropped and a
+-- hit in the 30 s wait ended the run.
+function COOP.migrating()
+    local c = mig()
+    if not (COOP.open and c.enabled) or tostring(cfg().transport or "steam") ~= "steam" then return false end
+    local now, mg = os.clock(), M.mig
+    if mg then
+        if mg.hosting then return now - (mg.hostAt or now) < (c.wait_s or 60) end
+        return COOP.client() == true                     -- (going down the line: each candidate link_s, nextCandidate)
+    end
+    if not (COOP.client() and M.hostLostAt and M.succ) then return false end
+    local n = 0
+    for _, e in ipairs(M.succ) do if e.sid ~= M.hostSid then n = n + 1 end end
+    if n == 0 then return false end
+    local wait = c.after_s or 30
+    if M.hostAwayUntil and M.hostAwayUntil > M.hostLostAt then wait = math.max(wait, M.hostAwayUntil - M.hostLostAt) end
+    return now - M.hostLostAt < wait + (c.link_s or 20) * n + 10
+end
+-- (a joiner) when the runtime let the host's link go (its sys|left, CO_DROP_S after its last packet; os.clock), or nil:
+-- cleared by the next link's sys|paired / up
+function COOP.hostLeft() return COOP.client() == true and M.hostLeftAt or nil end
 end
 
 local function onHostMessage(from, f)
@@ -903,6 +927,17 @@ local function onSys(from, what, f)
         M.lostAt[from] = nil                              -- ((0.73.80) linked again, or gone: no lost link held for them)
         -- ((review of 0.73.80) a rejoin or a game started over: their last states are from before it)
         if what ~= "up" then M.stateAt[from], M.freshAt[from] = nil, nil end
+        -- ((2026-11-11) the host's link let go, for sv_down.lua's wait on a joiner: COOP.hostLeft)
+        if from == 0 then M.hostLeftAt = (what == "left" and COOP.client()) and os.clock() or nil end
+    end
+    -- ((2026-11-11) the links counted again now (COOP.linked, every 5 s otherwise with the rest of the info): Delta's floor
+    -- was 0 for 3 s after the host's link came back (09:34:53-56), the migration's clock reset by the "up", the count not)
+    if (what == "up" or what == "lost" or what == "left") and type(SV_CoopInfo) == "function" then
+        local n = 0
+        for _, st in (tostring(SV_CoopInfo() or ""):match("peers=(.*)$") or ""):gmatch("(%d+)/(%a+)/%-?%d+/%-?%d+/[^,]*") do
+            if st == "linked" then n = n + 1 end
+        end
+        M.linkedPeers = n
     end
     if what == "joined" then                              -- (host) a joiner linked: its "hi" names it
         log("coop: player " .. (from + 1) .. " linked")
