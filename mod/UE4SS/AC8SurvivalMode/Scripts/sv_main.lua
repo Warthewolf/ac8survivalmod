@@ -372,6 +372,8 @@ local function runLeft(why)
     log(string.format("run over: left Survival's level in round %d with %d zollars (%s)", D.round, RUN.credits, tostring(why)))
     local okL, errL = pcall(LB.finish, "left")          -- (its error mustn't stop the reset)
     if not okL then log("leaderboard: error " .. tostring(errL)) end
+    -- ((2026-11-11) a co-op host: its joiners told it left its run once it's out of the level, sv_coop_migration.lua)
+    if COOP and COOP.hostLeaving then pcall(COOP.hostLeaving, D.round, why) end
     if type(SV_MusicHold) == "function" then SV_MusicHold(0) end   -- (never left held)
     if D.special then pcall(SPC.V.cleanup, D.special) end
     if FEST and FEST.sirenOff then pcall(FEST.sirenOff, "the level was left") end   -- ((0.74.0) THE FESTIVAL's siren)

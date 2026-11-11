@@ -1044,10 +1044,28 @@ fresh(28)
 COOP.open, COOP.role, COOP.slot = true, "join", 1
 local cp = { plane(B1, 0, KM(3, 0), nil, RP), plane(B1, 1, KM(3, 0), nil, RP) }
 local other = plane("ERA_Unit_03_Dep_Air0", 0, KM(3, 0), nil, RP)
+-- ((2026-11-11) Delta's of 2026-11-10: the copies only marked down stayed bound and the unit on this game's list, so the
+-- host's next spawn of it took 6 tries and a forced recycle here, 16 times) the copies taken down (torn: unpaid), one
+-- never bound too, the other unit's left, and the unit queued off this game's spawner list 2 s on
+local stray = mkObj("BP_OP1021_su57_C_9001", KM(3, 0), DIRV(-1, 0))
+M.copies = { [41] = { obj = cp[1].obj, addr = cp[1].obj.addr, unit = B1, ord = 1 }, [42] = { obj = cp[2].obj, addr = cp[2].obj.addr, unit = B1, ord = 2 },
+             [43] = { obj = other.obj, addr = other.obj.addr, unit = "ERA_Unit_03_Dep_Air0", ord = 1 } }
+M.cunits = { [B1] = { gen = 3, planes = { [1] = cp[1].obj, [2] = cp[2].obj, [3] = stray } } }
+M.recycleDue = nil
 from_ = #logs + 1
 hostEvent("RE_SV_FlightOff_02")
 check(cp[1].down and cp[1].withdrawn and cp[2].withdrawn and not other.down and has(line("coop: the host took " .. B1, from_), "2 of its copies here off, unpaid"),
       "a joiner: the host's RE_SV_FlightOff_02 takes its 2 copies off unpaid, nothing else")
+local due = M.recycleDue and M.recycleDue[1]
+check(M.copies[41] == nil and M.copies[42] == nil and M.copies[43] ~= nil and next(M.cunits[B1].planes) == nil
+      and cp[1].obj.HealthInternal == 0 and stray.HealthInternal == 0 and other.obj.HealthInternal > 0
+      and has(line("coop: the host took " .. B1, from_), "3 taken down here, its unit off this game's spawner list 2 s on"),
+      "(2026-11-11) ... its copies taken down here (one never bound too), the other unit's kept: " .. tostring(line("coop: the host took " .. B1, from_)))
+check(due and due.unit == B1 and due.at == clock + 2 and due.why == "RE_SV_FlightOff_02" and #M.recycleDue == 1,
+      "(2026-11-11) ... and its unit queued off this game's spawner list 2 s on (M.recycleDue), so the host's next spawn of it spawns first time")
+hostEvent("RE_SV_FlightOff_02")
+check(#M.recycleDue == 1, "(2026-11-11) the same FlightOff again: queued once")
+M.copies, M.cunits, M.recycleDue = {}, {}, nil
 COOP.open, COOP.role, COOP.slot = false, nil, nil
 
 ---------------------------------------------------------------------------------------------------- the hooks

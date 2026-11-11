@@ -505,6 +505,27 @@ check(callouts[1] == "CIWS LOST / " .. CFG.allies.text.def_lost_sub and line("al
 alive = { SV_Unit_AAGun_A = 1 }
 ALLY.tick(210)
 check(ALLY.hudLine():find("AA 1  SAM 0", 1, true) and not has(ALLY.hudLine(), "CIWS"), "none up: no CIWS on the row (" .. ALLY.hudLine() .. ")")
+do  -- ((2026-11-11) Delta's of 2026-11-10: a co-op joiner's link back took every copy down, and ten defences were called
+    -- LOST in 5 s) a joiner's defence gone with every copy here (COOP.tornAll: sv_coop_joiner.lua killAllCopies) isn't
+    -- lost: no callout, logged; one gone otherwise still is
+    local keepC = COOP
+    local torn = "link back"
+    COOP = { client = function() return true end, host = function() return false end, tornAll = function() return torn end }
+    alive = { SV_Unit_AAGun_A = 1, SV_Unit_Ciws_A = 1 }
+    R.alive = {}; ALLY.tick(215)                     -- (the counts asked afresh: ALLY.alive keeps one a few seconds)
+    alive = { SV_Unit_AAGun_A = 1 }
+    callouts, from = {}, #logs + 1
+    R.alive = {}; ALLY.tick(220)
+    check(#callouts == 0 and line("allies: CIWS (SV_Unit_Ciws_A) gone here in round 3 with every copy (link back): not lost", from),
+          "a joiner's CIWS gone with every copy (a link back): no LOST, logged")
+    alive, torn = { SV_Unit_AAGun_A = 1, SV_Unit_Ciws_A = 1 }, nil
+    R.alive = {}; ALLY.tick(225)
+    alive = { SV_Unit_AAGun_A = 1 }
+    callouts = {}
+    R.alive = {}; ALLY.tick(230)
+    check(callouts[1] == "CIWS LOST / " .. CFG.allies.text.def_lost_sub, "... one gone with no teardown: still LOST")
+    COOP = keepC
+end
 local lvl = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel."
 local c1 = { full = "BP_GR033_ciws_CP_Ally_C " .. lvl .. "BP_GR033_ciws_CP_Ally_C_1", addr = addr(), HealthInternal = 200, MaxHealth = 60 }
 local g1 = { full = "BP_GR002_gepa_CP_C " .. lvl .. "BP_GR002_gepa_CP_C_1", addr = addr(), HealthInternal = 600, MaxHealth = 60 }

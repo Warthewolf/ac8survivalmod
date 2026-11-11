@@ -86,6 +86,13 @@ room() {
         # ((2026-11-11) every joiner's "sys|..." refused by the host's runtime, none in its Lua inbox: coop.c CoNetPush)
         grep -q "^host: sys guard: 0 joiner messages posing as the runtime's own reached Lua" host.txt || { fail=1; why="$why the host's sys guard line missing or not 0;"; }
         grep -q "with the form of this runtime's own (sys|...): refused" host.txt || { fail=1; why="$why no 'refused' line from the host's runtime;"; }
+        # ((2026-11-11) another host's hello answered once, with players linked, its name to Lua made safe; a full
+        # reliable queue's drops said by the player's number and name, counted, one line a second)
+        grep -q "^host: samerole: answered once, told Lua once" host.txt || { fail=1; why="$why another host's hello not answered once;"; }
+        grep -q "answered with this host's hello" host.txt || { fail=1; why="$why no 'answered with this host's hello' line;"; }
+        grep -q "^host: queue full: 43 drops waiting .*said in two lines" host.txt || { fail=1; why="$why the full queue's drops not counted as they should;"; }
+        grep -q "reliable queue to player 2 (.*): 1 message(s) dropped since" host.txt && grep -q "reliable queue to player 2 (.*): 43 message(s) dropped since" host.txt \
+            || { fail=1; why="$why the full queue's two lines (player 2 by number and name) missing;"; }
         k=2
         while [ $k -le $((joiners + 1)) ]; do
             grep -q "^host: from player $k: 40 of 40 messages" host.txt || { fail=1; why="$why no 'host: from player $k: 40 of 40' line;"; }

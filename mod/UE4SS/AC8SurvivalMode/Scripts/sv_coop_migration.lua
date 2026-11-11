@@ -102,7 +102,52 @@ local function hostShare(now)
 end
 -- (the host) before its level reloads (a run's end): away for up to secs, the joiners wait that long
 function COOP.hostAway(secs)
-    if COOP.host() then send(true, "hl", string.format("%d", math.floor(secs))) end
+    if COOP.host() then
+        send(true, "hl", string.format("%d", math.floor(secs)))
+        M.awaySentUntil = os.clock() + math.floor(secs)   -- ((2026-11-11) no "left" notice while the joiners wait for it)
+    end
+end
+-- ((2026-11-11) Delta's run of 2026-11-10: Saint Alessia left her level to the main menu with co-op open; the joiners
+-- weren't told, waited 30 s of silence to migrate, a link back from her main menu restarted that wait, her co-op answered
+-- Delta's "jn" with an empty picture (105 copies down, ten LOST callouts) and a hit in that wait ended Delta's run.)
+-- The host's run is over here: its level left (sv_main.lua runLeft). Once this game is out of Survival's level (another
+-- level on: the main menu, a hangar; not while a reload it announced, hl|<secs>, is on), every joiner is told
+-- "hl|<round>|left" (reliable) and starts its host migration at once; a "jn" while this game has no run is answered so
+-- (M.jnNoRun). Survival's level loading again (a reload, a new run) takes the notice back before it goes.
+function COOP.hostLeaving(round, why)
+    if not COOP.host() then return end
+    local r = tonumber(round) or 0
+    M.leftPending, M.leftRun = { round = math.max(0, math.floor(r)), why = tostring(why or ""), at = os.clock() }, nil
+    log(string.format("coop: this game's run is over here in round %d (%s): the joiners are told once it's out of Survival's level",
+        M.leftPending.round, M.leftPending.why))
+end
+-- (COOP.tick, every tick on the host) the "left" notice due
+function M.leftTick()
+    if D and M.leftRun then M.leftRun = nil end           -- (a run here again: a "jn" gets its picture)
+    local lp = M.leftPending
+    if not lp then return end
+    if not COOP.host() then M.leftPending = nil; return end
+    if D then M.leftPending = nil; log("coop: a run here again: the joiners not told this game left"); return end
+    if svLevelOn ~= false or os.clock() < (M.awaySentUntil or 0) then return end
+    M.leftPending, M.leftRun = nil, lp
+    send(true, "hl", lp.round, "left")
+    log(string.format("coop: out of Survival's level: every joiner told this game left its run in round %d (hl|%d|left; %d linked): "
+        .. "their host migration starts now", lp.round, lp.round, M.linkedPeers or 0))
+end
+-- (the host, a joiner's "jn" while this game has no run) a game that left its run says so (the joiner migrates); one whose
+-- level is still loading (or reloading) sends nothing: its run's start sends "rs|n" to everyone. Never an empty picture:
+-- the joiner took all its copies down for it (Delta's 105 and the airfield's LOST callouts)
+function M.jnNoRun(from)
+    local lr = M.leftRun
+    if lr then sendTo(from, true, "hl", lr.round, "left") end
+    M.jnNoRunSaid = M.jnNoRunSaid or {}
+    local now = os.clock()
+    if now >= (M.jnNoRunSaid[from] or 0) then
+        M.jnNoRunSaid[from] = now + 30
+        log(string.format("coop: player %d asked for the whole picture; this game has no run (%s): no picture sent", (from or 0) + 1,
+            lr and string.format("it left its run in round %d: told so again, hl|%d|left", lr.round, lr.round)
+            or (M.leftPending and "it's leaving its level") or "its level is loading: the run's start sends rs|n"))
+    end
 end
 -- (a joiner) the host's line of succession, allies, time away
 function M.onSuccession(f)
@@ -123,11 +168,30 @@ function M.onAllies(f)
     M.allyList = list
 end
 function M.onHostAway(f)
+    if f[3] == "left" then return M.onHostLeft(f[2]) end   -- ((2026-11-11) "hl|<round>|left": COOP.hostLeaving)
     local secs = tonumber(f[2])
     if secs and secs >= 1 and secs <= 300 then
         secs = math.floor(secs)                          -- ((2026-11-11) "hl|1.5" errored in the %d below after the wait was set)
         M.hostAwayUntil = os.clock() + secs
         log(string.format("coop: migration: the host's reloading, waited for up to %d s", secs))
+    end
+end
+-- ((2026-11-11) a joiner) the host left its run (its round: a whole number in range, or the message is refused): its host
+-- migration starts at once (M.migTick, mg.left), no wait for 30 s of silence; a link back from the host meanwhile neither
+-- restarts that nor takes the copies down for a picture it hasn't got (onSys "up")
+function M.onHostLeft(r)
+    local round = tonumber(r)
+    if not (round and round == math.floor(round) and round >= 0 and round <= RND_MAX.round) then
+        once("hlbad", "coop: the host's \"left\" notice refused (its round not a whole number in range): " .. (tostring(r or ""):gsub("%c", "?")):sub(1, 20))
+        return
+    end
+    if COOP.host() then return end
+    local first = not M.hostLeft
+    M.hostLeft = { round = round, at = os.clock() }
+    M.hostLostAt, M.hostAwayUntil = M.hostLostAt or os.clock(), nil
+    if first then
+        log(string.format("coop: migration: the host (%s) left its run in round %d (hl|left): the next host now, not after %d s of silence",
+            playerName(0), round, mig().after_s or 30))
     end
 end
 -- a player's plane here set aside, hidden and unbound (a live player plane is never destroyed mid-level). (0.73.77) The
@@ -208,8 +272,16 @@ becomeHost = function(now)
     for _, e in ipairs(mg.list) do
         if e.sid ~= me then partners[#partners + 1] = e.sid; expect[e.sid] = mg.names[e.sid] or ("PLAYER " .. (e.slot + 1)) end
     end
+    -- ((2026-11-11) NotMexi's of 2026-11-10: a joiner whose own link had dropped took over alone and hosted ~3 minutes
+    -- beside its old host) the old host's Steam ID among the partners when it went silent (not when it said it left its
+    -- run): this game's hellos reach it and its own are taken here, so a game that took over only because its own link
+    -- dropped hears its old host is up ("sys|samerole") and joins it again (M.migStepBack). The old host answers such a
+    -- hello itself while it has players (runtime/coop.c), its discovery sends none once its room is full
+    local back = (not mg.left) and sidOk(mg.oldSid) and mg.oldSid ~= me
+    if back then partners[#partners + 1] = mg.oldSid end
     partners[#partners + 1] = "auto"
-    log(string.format("coop: migration: this game is the next host (%d of %d in line); the others are joining it", mg.i, #mg.list))
+    log(string.format("coop: migration: this game is the next host (%d of %d in line); the others are joining it%s", mg.i, #mg.list,
+        back and "; the old host looked for too (if it's still up, this game's own link dropped: it joins it again)" or ""))
     COOP.reopen("host", "host migration", table.concat(partners, ","))
     mg.hosting, mg.expect, mg.hostAt = true, expect, now
     if LB and LB.coopTakeover then pcall(LB.coopTakeover) end   -- ((0.73.77, plan H2) the co-op run's record goes on here)
@@ -261,12 +333,19 @@ local function afterTakeover(now)
     end
     if not mg.rebuild and now - (mg.hostAt or now) >= (c.wait_s or 60) then
         log(string.format("coop: migration over: %d players with this game as the host", playerCount()))
-        M.migratedFrom, M.mig = mg.oldSid, nil
+        -- ((2026-11-11) after the host said it left its run, no stepping back to it: M.migStepBack)
+        M.migratedFrom, M.mig = (not mg.left) and mg.oldSid or nil, nil
     end
 end
 -- (a host by migration that nobody joined, hearing another host: its own link had dropped and the old host is still
 -- there) it joins it again. Whether it did.
 function M.migStepBack()
+    -- ((2026-11-11) a migration the old host started by leaving its run (hl|left): another host heard is no reason to
+    -- go back; it may be that host's main menu, or its next run)
+    if M.mig and M.mig.left then
+        once("migLeftStay", "coop: migration: another host heard, but the old host left its run: this game stays the host")
+        return false
+    end
     local old = (M.mig and M.mig.hosting and M.mig.oldSid) or M.migratedFrom
     if not old then return false end
     log("coop: migration: nobody joined this game and another host is there: joining it again (this game's link had dropped)")
@@ -300,6 +379,8 @@ function M.migTick(now)
     if not (M.hostLostAt and M.succ and #M.succ > 0) then return end
     local wait = c.after_s or 30
     if M.hostAwayUntil and M.hostAwayUntil > M.hostLostAt then wait = math.max(wait, M.hostAwayUntil - M.hostLostAt) end
+    local left = M.hostLeft                            -- ((2026-11-11) the host said it left its run: no wait)
+    if left then wait = 0 end
     if now - M.hostLostAt < wait then return end
     local list, names = {}, {}
     for _, e in ipairs(M.succ) do
@@ -307,9 +388,15 @@ function M.migTick(now)
     end
     if M.mySid() then names[M.mySid()] = M.myName end
     local oldName = playerName(0)
-    M.mig = { list = list, names = names, i = 0, oldSid = M.hostSid, round = D.round, state = D.state, at = now }
-    log(string.format("coop: migration: the host (%s) silent %.0f s: going down the line of %d", oldName, now - M.hostLostAt, #list))
-    callout("CO-OP: " .. string.upper(oldName) .. " (HOST) IS GONE", "FINDING THE NEXT HOST...")
+    M.mig = { list = list, names = names, i = 0, oldSid = M.hostSid, round = D.round, state = D.state, at = now, left = left ~= nil }
+    M.hostLeft = nil
+    if left then
+        log(string.format("coop: migration: the host (%s) left its run (round %d): going down the line of %d", oldName, left.round, #list))
+        callout("CO-OP: " .. string.upper(oldName) .. " (HOST) LEFT THE RUN", "FINDING THE NEXT HOST...")
+    else
+        log(string.format("coop: migration: the host (%s) silent %.0f s: going down the line of %d", oldName, now - M.hostLostAt, #list))
+        callout("CO-OP: " .. string.upper(oldName) .. " (HOST) IS GONE", "FINDING THE NEXT HOST...")
+    end
     nextCandidate(now)
 end
 end
@@ -354,7 +441,7 @@ local function onHostMessage(from, f)
                 and string.format(" (their plane here stays %s until their next sortie)", P.row) or ""))
         end
         hostRosterSelf()
-    elseif k == "jn" then hostSync(from)
+    elseif k == "jn" then if D then hostSync(from) else M.jnNoRun(from) end   -- ((2026-11-11) no picture without a run)
     elseif k == "ht" then hostHit(from, tonumber(f[2]) or 0, tonumber(f[3]) or 0)
     elseif k == "ab" then onBuildAsk(from, f)            -- a joiner's ally / defence bought: built here, for everyone
     elseif k == "ao" then onOrder(f, false)              -- a joiner changed the allies' orders
@@ -794,7 +881,7 @@ local function onSys(from, what, f)
     if what == "joined" then                              -- (host) a joiner linked: its "hi" names it
         log("coop: player " .. (from + 1) .. " linked")
     elseif what == "paired" or what == "restart" then      -- (joiner) the host; (either) a game started over
-        if from == 0 then M.hostLostAt = nil end          -- (host migration: the host's back, or a new one)
+        if from == 0 then M.hostLostAt, M.hostLeft = nil, nil end   -- (host migration: the host's back, or a new one)
         sendHi()
         if COOP.client() and D then killAllCopies("new link"); M.jnAt = os.clock(); send(true, "jn") end
         if COOP.host() and what == "restart" then
@@ -822,14 +909,20 @@ local function onSys(from, what, f)
         if from == 0 and COOP.client() then M.hostLostAt = M.hostLostAt or os.clock() end   -- (host migration's clock)
         if COOP.host() and from ~= COOP.slot then M.noteLost(from) end   -- ((0.73.80) in the mission or loading: the round's hold)
     elseif what == "up" then
-        if from == 0 then M.hostLostAt = nil end
+        -- ((2026-11-11) a host that said it left its run (hl|left): its link back (its main menu's co-op) neither restarts
+        -- the migration's clock nor takes this game's copies down for a picture it hasn't got)
+        local gone = from == 0 and COOP.client() and M.hostLeft ~= nil
+        if from == 0 and not gone then M.hostLostAt = nil end
         if M.wasLost and M.wasLost[from] then             -- (the first "up" comes right after "paired" / "joined")
             M.wasLost[from] = nil
             callout("CO-OP LINK BACK", string.upper(playerName(from)))
             -- (a joiner says hello again: the host may have dropped it meanwhile, its roster entry gone, and this game
             -- can't tell; the co-op run of 2026-10-31)
             if COOP.client() then sendHi() end
-            if COOP.client() and D then killAllCopies("link back"); M.jnAt = os.clock(); send(true, "jn") end
+            if gone then
+                log(string.format("coop: the host's link back, but it left its run in round %d: the copies here kept, no picture asked; "
+                    .. "the migration goes on", M.hostLeft.round))
+            elseif COOP.client() and D then killAllCopies("link back"); M.jnAt = os.clock(); send(true, "jn") end
         end
     elseif what == "left" then
         callout(string.upper(playerName(from)) .. " LEFT", nil)
@@ -854,6 +947,8 @@ local function onSys(from, what, f)
         log(string.format("coop: %s tried to join with Survival %s (yours %s): refused", tostring(f[3] or "?"), tostring(f[4] or "?"), VERSION))
         callout("REFUSED " .. (nm ~= "" and nm or "A PLAYER"), "THEY HAVE " .. (jv ~= "" and jv or "ANOTHER BUILD") .. ": UPDATE TO " .. upperText(VERSION, 32))
     elseif what == "samerole" then
+        -- ((2026-11-11) the other host's name, from the runtime after 0.32.34: "sys|samerole|<name>")
+        local other = upperText(f[3], 20)
         if COOP.host() and playerCount() <= 1 and M.migStepBack and M.migStepBack() then
             -- (a host by migration that nobody joined hears another host: its own link had dropped, the old host's
             -- still there; it joins it again)
@@ -861,6 +956,15 @@ local function onSys(from, what, f)
             log("coop: another host found; this game was hosting only because it found none (role auto): joining")
             COOP.reopen("join", "another host found")
             callout("CO-OP: ANOTHER HOST FOUND", "JOINING THEM")
+        elseif COOP.host() and D and playerCount() > 1 then
+            -- ((2026-11-11) Saint Alessia's of 2026-11-10: "TWO HOSTS / ONLY ONE OF YOU PICKS HOST" twice, though nobody
+            -- picked HOST: NotMexi's game had taken her run over alone after its own link dropped) this host's run has
+            -- players: most likely a joiner's game that did that; this host answered its hello (runtime/coop.c), and a
+            -- game that took over alone joins its old host again by itself
+            log(string.format("coop: another host (%s) heard while this game hosts a run with %d players: most likely a "
+                .. "joiner's game that took the run over alone after its own link dropped; answered, it joins this one again",
+                other ~= "" and other or "unnamed", playerCount()))
+            callout("CO-OP: " .. (other ~= "" and other or "A PLAYER") .. " HOSTS TOO", "THEIR LINK DROPPED: THEIR GAME REJOINS YOU")
         elseif M.auto then
             callout("CO-OP: TWO HOSTS", "RETRY FROM THE MENU TO JOIN THE OTHER")
         else
@@ -1089,6 +1193,7 @@ function COOP.reopen(role, why, partner)
     COOP.open, COOP.role, COOP.slot = r == 1, role, role == "host" and 0 or nil
     COOP.noteRole()
     M.state, M.roster = nil, {}
+    M.hostLeft, M.leftPending, M.leftRun = nil, nil, nil   -- ((2026-11-11) a new session: the last one's "left" notices go)
     if role == "host" then M.restoreMine() end          -- (you host: your own settings)
     M.autoAt = os.clock() + AUTO_WAIT + math.random() * AUTO_WAIT
     log(string.format("coop: %s as the %s over %s (partner %s, up to %d players; %s): %s", r == 1 and "open" or "NOT open",
@@ -1156,6 +1261,7 @@ local function closeCoop(why)
     COOP.open, COOP.role, COOP.slot = false, nil, nil
     COOP.noteRole()
     M.state, M.roster, M.linkedOnce, M.wasLost = nil, {}, false, nil
+    M.hostLeft, M.leftPending, M.leftRun = nil, nil, nil  -- ((2026-11-11) "left" notices: the session's)
     M.restoreMine()
     pcall(COOP.focusPause, false, "co-op closed")
     log("coop: closed (" .. why .. ")")
@@ -1372,6 +1478,8 @@ function COOP.tick(tick)
         local ok, err = pcall(onMessage, m)
         if not ok then log("coop: message error " .. tostring(err) .. " (" .. m:sub(1, 80) .. ")") end
     end
+    local okL, errL = pcall(M.leftTick)                -- ((2026-11-11) the host's "left" notice, once it's out of its level)
+    if not okL then once("leftTick", "coop: the host's left notice: error " .. tostring(errL)) end
     local now = os.clock()
     if now >= M.nextInfo then
         M.nextInfo = now + 5

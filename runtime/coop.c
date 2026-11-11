@@ -366,6 +366,7 @@ typedef struct {
     CoOut    out[CO_RELIABLE]; int32_t nout;
     char*    ooo[CO_OOO]; uint16_t oooLen[CO_OOO]; uint32_t oooSeq[CO_OOO];
     uint32_t txPk, rxPk, txB, rxB, resent;
+    uint32_t qDrops; double qDropSaid;      /* reliable messages dropped on a full queue since the last line about it */
 } CoLink;
 
 #define CO_Q_REC (49 + CO_FL)               /* a Q record: slot, time, position, int16 quaternion, health, max, flags,
@@ -681,6 +682,20 @@ static void CoEntsReset(void)                             /* the host's enemies'
     }
 }
 
+/* (2026-11-11, the 50-round co-op run of 2026-11-10: 25 lines in 4 s "reliable queue to player 1 full", the link's
+ * index where every other line says index + 1, so Froya's (player 2's) full queue read as the host's own) The drops on
+ * link k's full queue: the player as every other line names them, counted, one line a second at most (and the last
+ * ones said a second on by CoopFrame's link loop, so none goes unsaid). */
+static void CoQueueDropsSay(int k, double now)
+{
+    CoLink* L = &CO.links[k];
+    if (!L->qDrops || now - L->qDropSaid < 1.0) return;
+    wchar_t wn[64]; CoWide(L->name, wn, 64);
+    Log(L"coop: reliable queue to player %d (%s) full (%d messages waiting for their acks): %u message(s) dropped since the last such line",
+        k + 1, wn, (int32_t)CO_RELIABLE, L->qDrops);
+    L->qDrops = 0; L->qDropSaid = now;
+}
+
 static void CoSendLua(int k, const char* s, uint32_t n, int reliable)
 {
     CoLink* L = &CO.links[k];
@@ -692,7 +707,7 @@ static void CoSendLua(int k, const char* s, uint32_t n, int reliable)
         CoSendTo(k, b, (uint32_t)(p - b));
         return;
     }
-    if (L->nout >= CO_RELIABLE) { Log(L"coop: reliable queue to player %d full; a message was dropped", k); return; }
+    if (L->nout >= CO_RELIABLE) { ++L->qDrops; CoQueueDropsSay(k, CoNow()); return; }
     char* d = (char*)malloc(n ? n : 1);
     if (!d) return;
     memcpy(d, s, n);
@@ -924,9 +939,26 @@ static void CoOnHello(const uint8_t* b, uint32_t n, uint64_t steamId, const CoSo
         if (k < 0 && CO.role == CO_ROLE_HOST && now - warned > 10) {
             warned = now;
             wchar_t wn[64]; CoWide(name, wn, 64);
-            Log(L"coop: %s is also the %s; only one of you picks SURVIVAL CO-OP: HOST, the others JOIN", wn,
-                role == CO_ROLE_HOST ? L"host" : L"joiner");
-            CoSys(0, "sys|samerole");
+            /* (2026-11-11, the 50-round co-op run of 2026-11-10: a joiner whose own link had dropped took the run over
+             * alone and hosted for ~3 minutes beside its old host) A host with players linked answers another host's
+             * hello with its own (once a warning, every 10 s at most), so a game that took over alone hears its old host
+             * is up and its Lua joins it again (sv_coop_migration.lua migStepBack): this host's discovery sends that
+             * game no hello once its room is full. Not from a host nobody's linked to (one left at the main menu after
+             * its run): a new host by migration mustn't be pulled back to it. The other host's name goes with the sys
+             * line ("sys|samerole|<name>", no '|' or control characters in it). */
+            int live = 0;
+            for (int s = 1; s < CO_MAX_PLAYERS && !live; ++s) if (CO.links[s].used && CO.links[s].connected) live = 1;
+            Log(L"coop: %s is also the %s; only one of you picks SURVIVAL CO-OP: HOST, the others JOIN%s", wn,
+                role == CO_ROLE_HOST ? L"host" : L"joiner", live ? L" (answered with this host's hello: a game that took "
+                L"over alone after its own link dropped joins this one again)" : L"");
+            if (live) {
+                if (CO.mode == CO_MODE_STEAM && ST.state > 0 && steamId) ST.accept(ST.net, steamId);
+                CoHelloTo(steamId, udp, NULL, CO_SLOT_NONE, now);
+            }
+            char m[96] = "sys|samerole|", *d = m + 13;
+            for (const char* c = name; *c && d < m + sizeof(m) - 1; ++c) *d++ = (*c == '|' || (unsigned char)*c < 0x20) ? '?' : *c;
+            *d = 0;
+            CoSys(0, m);
         }
         return;
     }
@@ -1359,6 +1391,7 @@ static void CoStep(double now, int drive)
             if (CO.mode == CO_MODE_STEAM && ST.state > 0) ST.accept(ST.net, L->steamId);   /* (a restarted game asks again) */
             CoHelloTo(L->steamId, &L->addr, L, CO.role == CO_ROLE_HOST ? (uint8_t)k : CO_SLOT_NONE, now);
         }
+        CoQueueDropsSay(k, now);                              /* (a full queue's last drops said) */
         int up = now - L->lastRecv < CO_LOST_S;
         if (up != L->connected) {
             L->connected = up;

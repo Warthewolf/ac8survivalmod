@@ -349,10 +349,19 @@ function killAllCopies(why)
         end
     end
     M.copies, M.cunits, M.spawnQ, M.dead, M.holdQ, M.rep = {}, {}, {}, {}, nil, nil
+    M.tornAllAt = os.clock()                             -- ((2026-11-11) COOP.tornAll: no defence called LOST for it)
     if n + loose > 0 then
         log(string.format("coop: %d copies taken down (%s)%s", n + loose, why,
             loose > 0 and string.format(", %d of them never bound to the host's", loose) or ""))
     end
+end
+-- ((2026-11-11) Delta's of 2026-11-10: the link back took every copy down, the airfield's defences too, and ten "AA GUN /
+-- SAM SITE / CIWS LOST" callouts followed in 5 s) why every copy here was taken down within the last `within` s
+-- (killAllCopies: a link back, a host migration, the host's resync or new run), else nil: a copy taken down so isn't lost
+function COOP.tornAll(within)
+    local at = M.tornAllAt
+    if at and os.clock() - at <= (within or 20) then return M.tornWhy or "taken down here" end
+    return nil
 end
 
 -- ((0.73.77) plan F1b) The level is being torn down (sv_core.lua levelGate: the runtime's teardown gate, SV_LevelGone): every
@@ -433,6 +442,12 @@ function repairDone(why)
         nPic = nPic + 1
         local cu = M.cunits[unit]
         if not (cu and cu.gen == pu.gen and cu.upAt) then fresh = fresh + 1 end
+    end
+    -- ((2026-11-11) Delta's of 2026-11-10: an empty picture from a host at its main menu) an empty picture from a host that
+    -- said it left its run takes nothing down here: the migration under way decides (the host sends none without a run)
+    if whole and nPic == 0 and M.hostLeft then
+        whole = false
+        log(string.format("coop: the host's picture is empty and it left its run (round %d): the copies here kept", M.hostLeft.round))
     end
     for unit, cu in pairs(M.cunits) do
         local pu = rp.units[unit]
@@ -677,7 +692,34 @@ function hostEvent(name)                          -- (a joiner) one of the host'
     local fo = tonumber(tostring(name):match("^RE_SV_FlightOff_(%d%d)$"))
     local fu = fo and poolUnit and poolUnit(fo)
     if fu and flightWithdrawn then
-        log(string.format("coop: the host took %s off (%s): %d of its copies here off, unpaid", fu, name, flightWithdrawn(fu)))
+        local w = flightWithdrawn(fu)
+        -- ((2026-11-11) Delta's run of 2026-11-10: 16 times the host's next flight of a unit it had withdrawn (an ace
+        -- break-off, the Spaceport's capture) came here ~8 s late, after 6 tries and a forced recycle: its copies had only
+        -- been marked down, still bound, the unit still on this game's spawner list) its copies taken down here (torn:
+        -- unpaid) and the unit off this game's list 2 s on (M.recycleDue: forced while it still reads alive, a carrier's
+        -- hull held), as VOID WATCHER's above, so the host's next spawn of it spawns here first time
+        local n, seen = 0, {}
+        for id, c in pairs(M.copies) do
+            if c.unit == fu then
+                local a = c.addr or live(c.obj)
+                if a then seen[a] = true end
+                killCopy(id, c.obj, true, true); M.copies[id] = nil; n = n + 1
+            end
+        end
+        local cu = M.cunits[fu]
+        if cu then                                       -- (and its copies that never got the host's id, as killAllCopies)
+            for _, o in pairs(cu.planes or {}) do
+                local a = live(o)
+                if a and not seen[a] then seen[a] = true; killCopy(0, o, true, true); n = n + 1 end
+            end
+            cu.planes = {}
+        end
+        M.recycleDue = M.recycleDue or {}
+        local queued = false
+        for _, e in ipairs(M.recycleDue) do if e.unit == fu then queued = true end end
+        if not queued and #M.recycleDue < 64 then M.recycleDue[#M.recycleDue + 1] = { unit = fu, at = os.clock() + 2, why = name } end
+        log(string.format("coop: the host took %s off (%s): %d of its copies here off, unpaid; %d taken down here, its unit off "
+            .. "this game's spawner list 2 s on", fu, name, w, n))
     end
 end
 

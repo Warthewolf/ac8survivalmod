@@ -136,6 +136,39 @@ The admin page's **Reset** and **Restore** cover co-op runs and their squads too
 runs). Discord's limits are kept: the CO-OP message's boards lose their last lines if 24-character names everywhere
 would pass Discord's 6000 characters a message, and a long squad shows its host and the names that fit, then `+N`.
 
+## Updating the Worker: a co-op run's furthest copy is kept (2026-11-11)
+What changed: every game of a co-op room holds the run's id (for host migration), and the Worker kept the first copy
+sent. On 2026-11-10 a joiner's game whose own link had dropped took Saint Alessia's run over alone and sent its
+round-35 copy; her round-51 copy was answered `{"ok":true,"duplicate":true}` and is on the board nowhere. Now:
+- A co-op copy of a co-op run that went **further** replaces the stored one: a higher round; at the same round a copy
+  from a game that didn't take the run over alone beats one that did (`takeover`), else the longer time. Its squad must
+  have the stored copy's host in it, and a copy from an unchecked build never replaces a checked one. The answer is
+  `{"ok":true,"score":N,"replaced":true,"was":{...}}`, its post in #survival-runs says which copy it replaces, and the
+  replaced copy (its run, specials and squad rows) goes to the archive tables under the reset id `superseded:<time>`
+  (no reset of the boards: **Restore** leaves those rows alone).
+- A copy as far or shorter is still a duplicate, and says what's stored: `{"ok":true,"duplicate":true,"stored":
+  {"pilot","round","time_s"},"why":"..."}` (`"same":true` when it's that very copy, a resend after a lost reply, which
+  the game counts as taken; `"archived":true` when a reset took the run off). The game (from the build
+  after 0.74.51) logs it as NOT stored, and keeps its copy to send again only when an older Worker answered (no
+  `stored`), so this Worker takes it once deployed.
+- A co-op run sent by a game that took it over by host migration and that nobody joined says so (`"takeover":true` in
+  its `coop` block; `runs.takeover` 1, its post "carried on alone by host migration").
+
+1. **Deploy this Worker before (or with) the build that sends a lone takeover's flag**: an older Worker drops the flag and
+   keeps the first copy sent. Cloudflare → **Workers & Pages** → `ac8-survival-leaderboard` → **Edit code**, replace
+   everything with `src/index.js` and **Deploy**. Nothing to run in D1: the Worker adds the `takeover` column to
+   `runs` / `runs_archive` itself.
+2. Saint Alessia's run of 2026-11-10 (run id `2498a83c...`): which copy holds its id, in D1's console:
+   ```sql
+   SELECT run_id, pilot, round, score, air_kills, ground_kills, time_s, players, squad, mod_version,
+          datetime(submitted, 'unixepoch') FROM runs WHERE run_id LIKE '2498a83c%';
+   SELECT slot, pilot, air_kills, ground_kills, revives, host FROM squads WHERE run_id LIKE '2498a83c%' ORDER BY slot;
+   SELECT reset_id, pilot, round FROM runs_archive WHERE run_id LIKE '2498a83c%';
+   ```
+   Her own copy's body was deleted from her `pending_runs.txt` at the 200, so it can't be sent again; putting it back
+   is a hand-made row (round 51, 10 players, 1814 air / 141 ground, 13 specials beaten, 5:31:23, Ace: score 417,675),
+   your call.
+
 ## The admin page
 Builds register themselves (2026-11-07): with the Worker's admin key in the main tree's `leaderboard/keys.secret`
 (git-ignored; an `ADMIN_KEY=...` line, beside `SUBMIT_KEY=...`; an `ADMIN=...` line in `leaderboard/submit.local` works
@@ -192,6 +225,6 @@ proof against a determined cheater. A reset or removing that pilot's runs is the
 the checks, the boards, co-op versions, the admin page and its actions, builds, verification, reset and restore, and the
 co-op runs (a team run taken and posted with its squad, refused for too many kills for its players or a mismatched
 squad, duplicates, a solo run from a COOP2MP build, the CO-OP boards and the slash command, `/pilot`, Discord's size
-limits, reset and restore with co-op runs in).
+limits, reset and restore with co-op runs in, and a co-op run's copies: the furthest kept, the shorter archived).
 `sh tools/checks/build_hash_test.sh` checks that the game's runtime and `tools/build_hash.py` work out the same build
 hash and signature; `sh tools/checks/leaderboard_test.sh` the game's edited-run check.

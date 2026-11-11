@@ -1341,11 +1341,16 @@ function ALLY.tick(now)
         -- the airfield's defences: how many are up, and a warning for each one lost (economy review: "warn when one is lost")
         local d = CFG.shop.items.Airfield.defences
         R.defUp, R.defCount = R.defUp or {}, { aa = 0, sam = 0, ciws = 0 }
+        -- ((2026-11-11) Delta's of 2026-11-10: a co-op joiner's copies all taken down at a link back, and ten defences
+        -- called LOST in 5 s) a joiner's defence gone with every copy here (sv_coop_joiner.lua COOP.tornAll) isn't lost
+        local torn = COOP and COOP.client and COOP.client() and COOP.tornAll and COOP.tornAll(20) or nil
         for _, kind in ipairs(DEF_KINDS) do
             for _, u in ipairs(d[kind] and d[kind].units or {}) do
                 local up = ALLY.alive(u, now) > 0        -- ((0.73.77) the share's count: B3)
                 if up then R.defCount[kind] = R.defCount[kind] + 1 end
-                if R.defUp[u] and not up then
+                if R.defUp[u] and not up and torn then
+                    log(string.format("allies: %s (%s) gone here in round %d with every copy (%s): not lost", d[kind].label, u, D.round, torn))
+                elseif R.defUp[u] and not up then
                     hudCallout(string.format(t.def_lost, d[kind].label), t.def_lost_sub)
                     log(string.format("allies: %s (%s) lost in round %d", d[kind].label, u, D.round))
                     RUN.dirty = true

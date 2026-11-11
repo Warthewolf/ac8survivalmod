@@ -371,6 +371,8 @@ local function scene(side)
     M.ints, M.buildRate, M.builds, M.tlAt, M.tlN, M.dvAt, M.dvN = {}, {}, {}, nil, nil, nil, nil
     M.spawnQ, M.dead, M.copies, M.cunits, M.pendBind, M.evQ, M.dvQ, M.holdQ, M.rep, M.cfParts = {}, {}, {}, {}, nil, nil, nil, nil, nil, nil
     M.bdLast, M.killer, M.recycleDue, M.rnd, M.succ, M.allyList = nil, nil, nil, nil, {}, {}
+    -- ((2026-11-11) the host's "left" notice and the migration it starts: each message's own)
+    M.hostLeft, M.hostLostAt, M.hostAwayUntil, M.mig, M.leftPending, M.leftRun = nil, nil, nil, nil, nil, nil
     M.byId, M.units = {}, {}
     if DOWN and DOWN.reset then DOWN.reset("a hostile message's scene", true) end
     if St then St.rate = {}; St.count = 0 end
@@ -468,6 +470,7 @@ local TYPES = {
     { "join", "lb", { "lb", "p", HEX, "sid76561198000000002,1,3,1,0,f16c,Bob;slot2:Cara,2,0,0,1,su33,Cara" }, extra = true },
     { "join", "lb", { "lb", "s", HEX, "1,valka,5,120,1;2,decoy,10,300,0" }, extra = true },
     { "join", "lb", { "lb", "x", HEX }, extra = true },
+    { "join", "hl", { "hl", "51", "left" }, extra = true },        -- ((2026-11-11) the host left its run: COOP.hostLeaving)
     { "join", "dk", { "dk", "l", "1", "1", "1" }, extra = true },
     { "join", "dk", { "dk", "c", "1", "down" }, extra = true },
     { "join", "zd", { "zd", "h", "1", "5" }, extra = true },
@@ -686,6 +689,27 @@ for _, t in ipairs(TYPES) do
     elseif #r.errs + #r.natives == 0 and not r.state and not r.cf then
         say(string.format("  ok   %s %s: valid message, handled", side, kind))
     end
+end
+
+-- ((2026-11-11) the host's "left" notice and a "jn" while the host has no run: Delta's of 2026-11-10)
+do
+    local r = feed("join", "hl", { "hl", "51", "left" })
+    local ok = M.hostLeft ~= nil and M.hostLeft.round == 51 and M.hostAwayUntil == nil and #r.errs == 0
+    if ok then say("  ok   join hl|51|left: the host left its run, round 51 (M.hostLeft)")
+    else fail(covOf("join", "hl"), "err", "hl|51|left", "the left notice did nothing (M.hostLeft " .. tostring(M.hostLeft and M.hostLeft.round) .. ")") end
+    scene("host")
+    D, M.leftRun = nil, { round = 51 }
+    inbox[#inbox + 1] = "1|jn"
+    catching = true; tick(); tick(); catching = false
+    if sentHas("^1>hl|51|left") and not sentHas("^1>rs|") then say("  ok   host jn with no run: no picture, told it left (hl|51|left)")
+    else fail(covOf("host", "jn"), "err", "jn without a run", "an empty picture sent, or no left notice") end
+    M.leftRun = nil
+    scene("host")
+    D = nil
+    inbox[#inbox + 1] = "1|jn"
+    catching = true; tick(); tick(); catching = false
+    if not sentHas("^1>rs|") and not sentHas("^1>hl|") then say("  ok   host jn while its level loads: nothing sent (its run's start sends rs|n)")
+    else fail(covOf("host", "jn"), "err", "jn while loading", "a picture or a notice sent") end
 end
 
 say("hostile messages")
