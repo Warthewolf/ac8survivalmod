@@ -1,0 +1,32 @@
+10:00:00 loaded, version 0.74.52-coop2mp.144
+10:00:01 leaderboard: Steam name 'Heron'
+10:00:02 leaderboard: co-op run feed5678 started: this game hosts it and keeps its squad (it sends the run)
+10:00:10 coop: player 2 is Wrenfield the Brave, Survival 0.74.52-coop2mp.144, runtime 0.32.35, flies (not yet: no plane)
+10:00:11 coop: player 3 is Zoë Ångström-Øvergaard, Survival 0.74.52-coop2mp.144, runtime 0.32.35, flies (not yet: no plane)
+10:00:12 coop: player 4 is Longname Leaver The Third, Survival 0.74.52-coop2mp.144, runtime 0.32.35, flies (not yet: no plane)
+10:01:00 hud: callout 'ROUND 1' / 'HOSTILES INBOUND'
+10:01:02 round 1: 4 aircraft: 4 fighters in 2 squadrons; cap 30, up to 29 at once
+10:02:00 round 1 clear; round 2 in 20 s
+10:02:18 hud: callout 'ROUND 2' / 'HOSTILES INBOUND'
+10:02:20 round 2: 4 aircraft: 4 fighters in 2 squadrons; cap 30, up to 29 at once
+10:03:00 round 2 clear; round 3 in 20 s
+10:03:18 hud: callout 'ROUND 3' / 'HOSTILES INBOUND'
+10:03:20 round 3: 30 aircraft: 30 fighters in 15 squadrons; cap 30, up to 29 at once
+10:04:00 down: player 2 (WRENFIELD THE B) is down
+10:04:00 hud: callout 'WRENFIELD THE B DOWN' / 'LAND AND REVIVE THEM FROM THE STORE'
+10:06:00 down: player 3 (ZOë ÅNGSTRöM-Ø) is down
+10:06:00 hud: callout 'ZOë ÅNGSTRöM-Ø DOWN' / 'LAND AND REVIVE THEM FROM THE STORE'
+10:07:00 down: player 4 (LONGNAME LEAVE) is down
+10:07:00 hud: callout 'LONGNAME LEAVE DOWN' / 'LAND AND REVIVE THEM FROM THE STORE'
+10:08:00 hud: callout 'LONGNAME LEAVER THE THIRD LEFT'
+10:10:00 revive: player 1 revived player 3 for 7000 (the run's revive 1, their 1; round 3's price)
+10:10:02 revive: player 1 revived player 2 for 5000 (the run's revive 2, their 1; round 3's price)
+10:10:02 hud: callout 'ZOë ÅNGSTRöM-Ø BACK' / 'REVIVED BY HERON'
+10:10:03 hud: callout 'WRENFIELD THE B BACK' / 'REVIVED BY HERON'
+10:12:00 round 3 clear; round 4 in 20 s
+10:12:18 hud: callout 'ROUND 4' / 'HOSTILES INBOUND'
+10:12:20 round 4: 4 aircraft: 4 fighters in 2 squadrons; cap 30, up to 29 at once
+10:14:00 round 4 clear; round 5 in 20 s
+10:14:18 hud: callout 'ROUND 5' / 'HOSTILES INBOUND'
+10:14:20 round 5: 1 aircraft: 0 fighters in 0 squadrons, special valka: 1 strike aircraft in 0 squadrons; cap 30, up to 29 at once
+10:16:00 round 5 clear; round 6 in 20 s

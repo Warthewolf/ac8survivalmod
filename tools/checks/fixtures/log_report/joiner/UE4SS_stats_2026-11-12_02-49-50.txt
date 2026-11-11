@@ -1,0 +1,7 @@
+ue4ss_read_bytes=5242880
+ue4ss_copied_bytes=1048576
+ue4ss_lines=5007
+ue4ss_collapsed=5000
+ue4ss_dropped=0
+ue4ss_top_count=5000
+ue4ss_top_line=[Lua] [NoisyMod] Event work complete; polling stopped
