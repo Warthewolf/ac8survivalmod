@@ -111,11 +111,48 @@ for p in parts:
                             "and %.4f m of the export, its meshes' box within %.4f m" % (a.name, secs, an["length_s"], first, last,
                                                                                         sc.render.fps, wt, wh, wb))
                     ok = ok and abs(secs - an["length_s"]) < 0.02 and wt < 0.5 and wh < 0.01 and wb < 0.01
+            elif info["kind"] == "rig":
+                # (2026-11-11, the rise rig: export_tanacorn.py rise_rig) played back: BN_RiseHull's whole move (its pose
+                # against its rest) at every frame, the bow's tip through it; its start under the sea, its end the
+                # identity (the hull on its spot), the bow's top 500-600 m, the length the json's within a frame
+                an = info["anim"]
+                acts = list(bpy.data.actions)
+                ok = ok and len(acts) == 1
+                if acts:
+                    a, arm, sc = acts[0], arms[0], bpy.context.scene
+                    arm.animation_data_create(); arm.animation_data.action = a
+                    first, last = a.frame_range
+                    secs = (last - first) / sc.render.fps
+                    b = arm.data.bones["BN_RiseHull"]
+
+                    def move(fr):
+                        sc.frame_set(int(fr))
+                        pb = arm.pose.bones["BN_RiseHull"]
+                        return arm.matrix_world @ pb.matrix @ b.matrix_local.inverted() @ arm.matrix_world.inverted()
+                    m0, m1 = move(first), move(last)
+                    top, top_t = -1e9, 0.0
+                    for fr in range(int(first), int(last) + 1):
+                        z = (move(fr) @ Vector((an["bow_x_m"], 0.0, 0.0))).z
+                        if z > top:
+                            top, top_t = z, (fr - first) / sc.render.fps
+                    end_off = m1.translation.length
+                    end_turn = math.degrees(m1.to_quaternion().angle)
+                    end_turn = min(end_turn, 360.0 - end_turn)
+                    msg += (" | anim '%s' %.3f s (json %.3f), the hull at the start %.1f m (json %.1f), at the end %.4f m and "
+                            "%.3f deg off its rest, the bow's top %.1f m at %.2f s (json %.1f at %.2f)"
+                            % (a.name, secs, an["length_s"], m0.translation.z, an["start_z_m"], end_off, end_turn, top, top_t,
+                               an["bow_top_m"], an["bow_top_s"]))
+                    ok = (ok and abs(secs - an["length_s"]) < 1.0 / an["fps"] + 1e-3 and m0.translation.z < -100.0
+                          and end_off < 0.01 and end_turn < 0.05 and 500.0 <= top <= 600.0 and abs(top - an["bow_top_m"]) < 1.0)
         say(ok, msg)
     if info["kind"] == "turret":
         print("CHECK      %-8s pitch pivot %s cm, sockets %s, guns lie %s m from the pivot" % (p, [v for k, v in info["bones"].items() if k.endswith("turret_pitch")][0], [(s["name"], s["loc"]) for s in info["sockets"]], info["guns_forward_m"]))
     if info["kind"] == "vls":
         print("CHECK      %-8s SOC_Vls_01 %s rot %s ; Hatch_01 %s" % (p, info["sockets"][0]["loc"], info["sockets"][0]["rot"], info["bones"]["Hatch_01"]))
+    if info["kind"] == "rig":
+        print("CHECK      %-10s sockets %s; Rise %.1f s, %d samples, the hull's keys %s" % (
+            p, [(s["name"], s["bone"]) for s in info["sockets"]], info["anim"]["length_s"], info["anim"]["samples"],
+            [(k[0], k[1], k[2]) for k in info["anim"]["hull_keys"]]))
     if info["kind"] in DEPLOY:
         an, s0 = info["anim"], info["sockets"][0]
         print("CHECK      %-10s %s on %s at %s cm rot %s; Deploy %.3f s (the design's frames %d-%d; it stows at %d-%d): %s" % (

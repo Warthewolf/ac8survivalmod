@@ -664,6 +664,15 @@ function HIT.tick(pc, now)
                 elseif n == LADON_CERTAIN then certain(o); ladonKeep(o, true) end
                 if #HIT.msl >= 60 then table.remove(HIT.msl, 1) end
                 HIT.msl[#HIT.msl + 1] = { obj = o, name = n, born = now }
+            elseif HIT.wantMine and n:find("^BP_plwp_") then
+                -- ((2026-11-11) the players' own missiles, kept by address for an enemy's lasers while something asks
+                -- (HIT.wantMine: the TANACORN's LASER mounts, sv_tanicorn.lua's test block; sv_escort_li.lua reads them):
+                -- a pool's missiles are launched again and again, so never dropped for their age, only once gone)
+                HIT.minePool = HIT.minePool or {}
+                local a = addrOf(o)
+                if a and not HIT.minePool[a] and (HIT.mineN or 0) < 128 then
+                    HIT.minePool[a], HIT.mineN = { obj = o, name = n, from = "a player" }, (HIT.mineN or 0) + 1
+                end
             end
         end
     end

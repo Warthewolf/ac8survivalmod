@@ -237,17 +237,58 @@ def save_png(px, path):
     bpy.data.images.remove(im)
 
 
-def grey(px):
-    """the design's _ALCPAINT materials baked into the texture: the Alicorn's grey times the source's light and shade
-    (its brightness, 0.1..0.7 -> 0.75..1.2). The brightness is the LINEAR one, as Blender's RGB to BW node takes it
-    (an image's pixels here are the file's sRGB values)"""
+def lum_of(px):
+    """an image's LINEAR brightness, as Blender's RGB to BW node takes it (an image's pixels here are the file's sRGB)"""
     c = px[:, :, :3]
     c = np.where(c <= 0.04045, c / 12.92, np.power((c + 0.055) / 1.055, 2.4))
-    lum = c @ np.array([0.2126, 0.7152, 0.0722], np.float32)
-    k = 0.75 + (np.clip(lum, 0.1, 0.7) - 0.1) / 0.6 * 0.45
+    return c @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+
+
+def grey(px):
+    """the design's _ALCPAINT materials baked into the texture: the Alicorn's grey times the source's light and shade.
+    (2026-11-11, docs/re/TANICORN_TEXTURES.md fix 2) The shade is the brightness against the image's own median,
+    sqrt-compressed into 0.5..1.6 and normalised to a mean of 1 (the Alicorn grey's mean kept): the old fixed clamp
+    (0.1..0.7 -> 0.75..1.2) put 30-86 % of the Iowa's texels under its floor, so its sheets came out flat (luminance std
+    1-3 of 255 against the source's 24-36; the user, 2026-11-11: "the textures were still low quality")"""
+    lum = lum_of(px)
+    k = np.clip(np.sqrt(lum / max(float(np.median(lum)), 1e-4)), 0.5, 1.6)
+    k = k / max(float(k.mean()), 1e-4)
     lin = k[:, :, None] * np.array(GREY, np.float32)
     out = px.copy()
     out[:, :, :3] = np.where(lin > 0.0031308, 1.055 * np.power(lin, 1 / 2.4) - 0.055, lin * 12.92)
+    return out
+
+
+IOWA_TEX = os.path.join(OUT, "iowa", "textures")        # (Sea Power's sheets: each <name>_tx.jpg's <name>_spec.jpg)
+
+
+def spec_of(img):
+    """(2026-11-11, docs/re/TANICORN_TEXTURES.md fix 3) the Iowa sheet's spec map beside it (usn_bb_iowa_tx.jpg ->
+    usn_bb_iowa_spec.jpg, trans.jpg -> trans_spec.jpg) as pixels, or None (the flags and the underside have none)"""
+    stem = os.path.splitext(os.path.basename(img.filepath or img.name))[0]
+    stem = stem[:-3] if stem.endswith("_tx") else stem
+    path = os.path.join(IOWA_TEX, stem + "_spec.jpg")
+    if not os.path.isfile(path):
+        return None
+    im = bpy.data.images.load(path, check_existing=True)
+    px = pixels(im)
+    bpy.data.images.remove(im)
+    return px
+
+
+def livemap(px, sp):
+    """the slot's own livemap for AC8's gear material (metallic, roughness, occlusion): R 0 (metallic, as the Ford's),
+    G = 0.85 - 0.5 x spec (Sea Power's spec read as 0..1 grey), B = occlusion clip(sqrt(lum / median), 0.4, 1.0) from
+    the colour sheet's own light and shade; the spec resampled to the sheet's size (nearest)"""
+    h, w = px.shape[:2]
+    if sp.shape[:2] != (h, w):
+        sp = sp[(np.arange(h) * sp.shape[0] // h)[:, None], (np.arange(w) * sp.shape[1] // w)[None, :]]
+    s = sp[:, :, :3].mean(axis=2)
+    lum = lum_of(px)
+    out = np.zeros((h, w, 4), np.float32)
+    out[:, :, 1] = np.clip(0.85 - 0.5 * s, 0.05, 1.0)
+    out[:, :, 2] = np.clip(np.sqrt(lum / max(float(np.median(lum)), 1e-4)), 0.4, 1.0)
+    out[:, :, 3] = 1.0
     return out
 
 
@@ -271,10 +312,16 @@ def slots_for(part, folder, mats):
                 if ni:
                     nrm = "T_SV_Tani_%s_%d_N" % (part, len(done))
                     save_png(pixels(ni), os.path.join(folder, nrm + ".png"))
-            done[key] = (name, nrm)
+            liv = None
+            sp = None if own or not img else spec_of(img)
+            if sp is not None:
+                liv = "T_SV_Tani_%s_%d_L" % (part, len(done))
+                save_png(livemap(px, sp), os.path.join(folder, liv + ".png"))
+            done[key] = (name, nrm, liv)
         cut = base_image(mat, "Alpha")
         slots.append({"slot": k, "material": m, "source": img.name if img else None, "basecolor": done[key][0],
-                      "normal": done[key][1], **({"cutout": cut.name} if cut else {})})
+                      "normal": done[key][1], **({"livemap": done[key][2]} if done[key][2] else {}),
+                      **({"cutout": cut.name} if cut else {})})
     # (0.74.61) the livemap on AC8's gear material (MP_Gear) is metallic / roughness / occlusion (docs/re/FALKEN_MATERIALS.md
     # 2.4: the Falken's constant (0, 0.75, 1.0)); all black read as a mirror in full shadow: the user's screenshots of 0.74.60,
     # "the textures look terrible", the whole ship near black on its shaded side
@@ -525,6 +572,111 @@ for side in "LR":
               (3, (3,), 0.6), tex="RAILGUN",
               note="pedestal on lift (6 m down when stowed), house on BN_turret_yaw, rails on BN_turret_pitch (the stock "
                    "turrets' names: a stock fire control row can drive them), the hatch doors on Hatch_n / Hatch_p")
+
+# ---------------------------------------------------------------------------------------------------- the rise rig
+# (2026-11-11, WP4: docs/design/INVINCIBLE_FLEET_RISE_FORD.md 2.3 / 4.1, route B2) RIG: none of the ship's geometry. Bones
+# BN_RiseRoot > BN_RiseHull and BN_RiseRoot > BN_RiseCam; one 10 cm triangle on BN_RiseHull, 1 m under the waterline at
+# midships, inside the hull (a skeletal mesh needs one); sockets SOC_Hull (BN_RiseHull's origin: the hull blueprint hangs
+# HullMesh there, every part rides on HullMesh) and SOC_Cam (BN_RiseCam: the rise's camera, its +X the view); and the
+# animation "Rise", RISE_HULL and RISE_CAM sampled at RISE_FPS with monotone cubic easing between keys (no overshoot, the
+# ends at rest). Its END is the rest pose (the hull on its spot, its bone the identity), so a hull that never plays it
+# sits on the water as before. In the ship's frame (x forward, z up, the waterline at z = 0); the hull pitches about its
+# midships at the waterline, bow up positive.
+RISE_FPS = 30
+# t s, hull z m, hull pitch deg (bow up): under the sea, the bow out at 3 s, ~60 deg and the bow ~540 m up at 9.5-11 s, the
+# hang, the fall, the slam at 17.6 s (6 m under its waterline), the bounce, at rest at 20 s
+RISE_HULL = [(0.0, -130.0, 0.0), (1.5, -130.0, 8.0), (3.0, -100.0, 22.0), (4.0, -60.0, 35.0), (7.0, 120.0, 55.0),
+             (9.5, 250.0, 60.0), (11.0, 255.0, 61.0), (12.5, 230.0, 58.0), (16.0, 60.0, 25.0), (17.6, -6.0, -1.5),
+             (18.6, 2.0, 0.5), (20.0, 0.0, 0.0)]
+# t s, the camera's x, y, z m in UE's axes (x the ship's forward, y its starboard: y -1900 is off her port beam) and its
+# pitch / yaw deg (UE's: yaw 90 looks to starboard, at her): framing the bow's climb, then the slam
+RISE_CAM = [(0.0, 200.0, -1900.0, 90.0, 2.0, 90.0), (10.0, 150.0, -1800.0, 140.0, 12.0, 90.0),
+            (17.6, 100.0, -1650.0, 110.0, 1.0, 90.0), (20.0, 100.0, -1600.0, 100.0, 0.0, 90.0)]
+
+
+def pchip(keys, col, t):
+    """keys' column `col` at time t: monotone cubic (Fritsch-Carlson), flat at both ends"""
+    ts, vs = [k[0] for k in keys], [k[col] for k in keys]
+    if t <= ts[0]:
+        return vs[0]
+    if t >= ts[-1]:
+        return vs[-1]
+    n = len(ts)
+    h = [ts[i + 1] - ts[i] for i in range(n - 1)]
+    d = [(vs[i + 1] - vs[i]) / h[i] for i in range(n - 1)]
+    m = [0.0] * n
+    for i in range(1, n - 1):
+        if d[i - 1] * d[i] > 0:
+            w1, w2 = 2 * h[i] + h[i - 1], h[i] + 2 * h[i - 1]
+            m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])
+    k = max(i for i in range(n - 1) if ts[i] <= t)
+    s = (t - ts[k]) / h[k]
+    return ((2 * s ** 3 - 3 * s ** 2 + 1) * vs[k] + (s ** 3 - 2 * s ** 2 + s) * h[k] * m[k]
+            + (-2 * s ** 3 + 3 * s ** 2) * vs[k + 1] + (s ** 3 - s ** 2) * h[k] * m[k + 1])
+
+
+def ue_matrix(pitch, yaw):
+    """UE's FRotator (pitch, yaw, roll 0) as a Blender rotation matrix (F U F, ue_rot's inverse)"""
+    p, y = math.radians(pitch), math.radians(yaw)
+    U = np.array([[math.cos(p) * math.cos(y), -math.sin(y), -math.sin(p) * math.cos(y)],
+                  [math.cos(p) * math.sin(y), math.cos(y), -math.sin(p) * math.sin(y)],
+                  [math.sin(p), 0.0, math.cos(p)]])
+    F = np.diag([1.0, -1.0, 1.0])
+    M = Matrix((F @ U @ F).tolist())
+    back = ue_rot(M.to_4x4())
+    assert abs(back[0] - pitch) < 1e-3 and abs(((back[1] - yaw + 180) % 360) - 180) < 1e-3, (pitch, yaw, back)
+    return M
+
+
+class Dot:
+    """the rig's one triangle (10 cm, on joint 1, BN_RiseHull), 1 m under the waterline at midships"""
+    def prims(self):
+        P = np.array([[0.0, 0.0, -1.0], [0.1, 0.0, -1.0], [0.0, 0.1, -1.0]], np.float32)
+        N = np.array([[0.0, 0.0, 1.0]] * 3, np.float32)
+        UV = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], np.float32)
+        return [("RIG_DOT", P, N, UV, np.array([1, 1, 1], np.int32), np.array([0, 1, 2], np.uint32))]
+
+
+def rise_rig():
+    bow_x = max((D["LEV_HULL.001"].matrix_world @ Vector(c)).x for c in D["LEV_HULL.001"].bound_box)
+    length = RISE_HULL[-1][0]
+    assert abs(RISE_CAM[-1][0] - length) < 1e-6 and RISE_HULL[-1][1:] == (0.0, 0.0), "the rise must end at rest"
+    n = int(round(length * RISE_FPS)) + 1
+    times = [i / RISE_FPS for i in range(n)]
+    cam_rest = Vector((RISE_CAM[-1][1], -RISE_CAM[-1][2], RISE_CAM[-1][3]))   # (UE y -> Blender -y)
+    hq, ht, cq, ct = [], [], [], []
+    top = (-1e9, 0.0, 0.0)
+    for t in times:
+        z, p = pchip(RISE_HULL, 1, t), pchip(RISE_HULL, 2, t)
+        q = Quaternion((0.0, 1.0, 0.0), math.radians(-p))            # (about +Y by -p: the bow, +X, up)
+        hq.append((q.x, q.y, q.z, q.w))
+        ht.append((0.0, 0.0, z))
+        bow = (q.to_matrix() @ Vector((bow_x, 0.0, 0.0))).z + z
+        if bow > top[0]:
+            top = (bow, t, p)
+        c = [pchip(RISE_CAM, i, t) for i in range(1, 6)]
+        r = ue_matrix(c[3], c[4]).to_quaternion()
+        if cq and Quaternion(cq[-1][3:] + cq[-1][:3]).dot(r) < 0:     # (one hemisphere: no flip between samples)
+            r.negate()
+        cq.append((r.x, r.y, r.z, r.w))
+        ct.append((c[0], -c[1], c[2]))
+    joints = [("BN_RiseRoot", -1, (0.0, 0.0, 0.0)), ("BN_RiseHull", 0, (0.0, 0.0, 0.0)), ("BN_RiseCam", 0, tuple(cam_rest))]
+    info = {"kind": "rig", "on": [],
+            "bones": {b: ue_cm(Vector(at)) for b, _, at in joints},
+            "parents": {b: (joints[p][0] if p >= 0 else None) for b, p, _ in joints},
+            "sockets": [{"name": "SOC_Hull", "bone": "BN_RiseHull", "loc": [0.0, 0.0, 0.0], "rot": [0.0, 0.0, 0.0]},
+                        {"name": "SOC_Cam", "bone": "BN_RiseCam", "loc": [0.0, 0.0, 0.0], "rot": [0.0, 0.0, 0.0]}],
+            "anim": {"name": "Rise", "length_s": length, "fps": RISE_FPS, "samples": n, "hull_keys": RISE_HULL,
+                     "cam_keys": RISE_CAM, "bow_x_m": round(bow_x, 3), "bow_top_m": round(top[0], 2), "bow_top_s": round(top[1], 3),
+                     "pitch_at_top_deg": round(top[2], 2), "start_z_m": RISE_HULL[0][1],
+                     "note": "BN_RiseHull from the actor (the hull's waterline at midships), BN_RiseCam from it too; the end "
+                             "is the rest pose (the hull bone the identity): docs/design/INVINCIBLE_FLEET_RISE_FORD.md 2.3"}}
+    finish("RIG", Dot(), info, joints, ("Rise", times, [(1, hq, ht), (2, cq, ct)]), wreck=False)
+    print("export: RIG Rise %.1f s, %d samples: the bow's top %.1f m at %.2f s (pitch %.1f), from %.0f m under; the bow at x %.1f m"
+          % (length, n, top[0], top[1], top[2], -RISE_HULL[0][1], bow_x))
+
+
+rise_rig()
 
 # the hull: the fused hull and the pods, in the ship's own frame (x forward, z up, the waterline at z = 0)
 hull = Mesh()

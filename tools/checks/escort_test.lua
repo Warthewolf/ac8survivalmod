@@ -1705,6 +1705,7 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
         function c:IsValid() return true end
         function c:SetVariableFloat(n, v) self.vars[tostring(n)] = v end
         function c:SetVariableVec3(n, v) self.vars[tostring(n)] = v end
+        function c:SetVariableLinearColor(n, v) self.vars[tostring(n)] = v end
         function c:Deactivate() self.active = false end
         fxs[#fxs + 1] = c
         return c
@@ -1722,6 +1723,11 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
           and fb.vars["User.BeamLength"] and fb.vars["User.BeamLength"].X == 200000 and fb.vars["User.BeamLength"].Y == 1
           and li.MainLaser.active == false and li.EndLaser.active == false and has(line("fires a volley", from8), "AC8's beam"),
           "a volley: AC8's beam on the laser's root (it swings with it), 1.24 km long in cm, its life the volley's; AC7's never lit")
+    -- ((2026-11-11) the user: "change the laser color to red") li_color on the beam's User.BeamColor: AC7's hot red, logged
+    local bc = fb and fb.vars["User.BeamColor"]
+    check(bc and bc.R == 100 and bc.G == 21.5 and bc.B == 22.8 and bc.A == 1
+          and has(line("beam colour (100.0, 21.5, 22.8)", from8), "SetVariableLinearColor User.BeamColor"),
+          "... red: li_color (AC7's (100, 21.5, 22.8)) on its User.BeamColor, logged")
     clock = t0 + 35; ZLAS.tick()
     check(#fxs == 3 and fxs[3].sys == statics[ep] and fb.vars["User.BeamLength"].Y == 0.5 and li.EndLaser.active == false,
           "its end: AC8's end flash, the beam thinning")
@@ -1760,6 +1766,46 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     check(#spawnedL == nL and has(line("a ZFA-44's address is another object's now", fromR), "BP_OP1026_su47_CP_C enemy"),
           "an Su-47 at a dead ZFA-44's address: never fitted with the laser (ESC.same), logged")
     ESC.planes[zU] = nil
+    -- ((2026-11-11) the user: "the LASERS have to be Laser Interceptors") another carrier through ZLI.extra: the TANACORN's
+    -- LASER mount (sv_tanicorn.lua), an enemy: its laser at its own mesh and socket, on the PLAYERS' missiles (HIT.minePool,
+    -- sv_ladon.lua) in flight (moving), never the enemies' (HIT.msl), never a pooled one lying still
+    local mount = plane("SV_Unit_TaniLASER", 4000000, 0, 700, 0, 0)
+    mount.full = "BP_SV_Tani_LASER_C /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_SV_Tani_LASER_C_" .. mount.addr
+    local turret = { full = "TurretPoseableMesh", addr = addr() }
+    ZLI.extra = function()
+        return { { o = mount, a = mount.addr, unit = "SV_Unit_TaniLASER", body = turret, socket = "SOC_Gun_01", foe = "players" } }
+    end
+    local playerJet = gobj("BP_PlayerPlane_C you", 1)
+    local function shortOf(o) local n = o.full:match("([%w_]+)$"); return (n:gsub("_C_%d+$", ""):gsub("_C$", "")) end
+    local mP = missile("plwp_msl_p", 4000000 - 150000, playerJet)        -- (yours, 1.5 km off, flying in)
+    local mStill = missile("plwp_msl_still", 4000000 - 50000, playerJet) -- (yours, back in its pool: lying still)
+    local mFoe = missile("wp_msl_foe", 4000000 + 40000, enemyJet)         -- (an enemy's, 400 m off: never the mount's)
+    HIT.msl = { { obj = mFoe, name = "BP_wp_msl_foe", born = 0 } }
+    HIT.minePool = { [mP.addr] = { obj = mP, name = shortOf(mP), from = "a player" },
+                     [mStill.addr] = { obj = mStill, name = shortOf(mStill), from = "a player" } }
+    local nL0, nB0 = #spawnedL, #begun
+    local fromT = #logs + 1
+    local t1 = t0 + 100
+    clock = t1; ZLAS.tick()                              -- (first look: where each is)
+    local ml = spawnedL[nL0 + 1]
+    check(ml and ml.owner == mount and ml.attach and ml.attach.p == turret and ml.attach.s == "SOC_Gun_01"
+          and has(line("carries AC7's LaserInterceptor", fromT), "at SOC_Gun_01"),
+          "the LASER mount (ZLI.extra) carries AC7's laser at its own TurretPoseableMesh's SOC_Gun_01")
+    check(not has(line("fires a volley", fromT), "wp_msl_foe"), "... no volley for an enemy's missile 400 m off it")
+    pose(mP, 4000000 - 140000, 0, 700, 0, 0)
+    clock = t1 + 0.25; ZLAS.tick()                       -- (yours has moved: in flight)
+    check(has(line("fires a volley", fromT), "plwp_msl_p 1400 m off"), "your missile in flight 1.4 km off: a volley")
+    pose(mP, 4000000 - 130000, 0, 700, 0, 0)
+    clock = t1 + 0.8; ZLAS.tick()
+    check(#begun == nB0 + 1 and begun[#begun].li == ml.addr and begun[#begun].m == mP.addr, "its search: your missile handed over")
+    for i = nB0 + 1, #begun do
+        check(begun[i].m ~= mStill.addr and begun[i].m ~= mFoe.addr, "never your pooled missile lying still, never an enemy's")
+    end
+    -- the mount gone (another object at its address: ZLI.extra drops it): its laser removed
+    ZLI.extra = function() return {} end
+    clock = t1 + 1.2; ZLAS.tick()
+    check(ml.gone == true, "the mount gone from ZLI.extra: its laser removed")
+    ZLI.extra, HIT.minePool = nil, nil
     -- put back for the rest of the test
     ZLI.mode, HIT.msl = "tls", keepMsl
     statics["/Script/Engine.Default__GameplayStatics"], AK.PostEventAtLocation = keepGS, keepPost

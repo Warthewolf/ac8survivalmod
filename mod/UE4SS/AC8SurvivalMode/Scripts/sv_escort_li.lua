@@ -22,7 +22,10 @@
 --                     end, fired by the same shooter: SV_Intercept (li_sure). The volley's end: AC7's end flash
 --                     (EndLaser), the beam thinned over li_end_s; a swing on then is given up (AC7's laser ended with its
 --                     life). Its plane gone, the run over or the level going: the laser removed.
---   ZLI.test()        (a test key's, dev builds only: Ctrl+[ through ESC.testLaser) a volley now on every ZFA-44's laser
+--   ZLI.extra()       ((2026-11-11) set by a test part: sv_tanicorn.lua's LASER mounts) more carriers, each with its own
+--                     mesh and socket (TurretPoseableMesh, SOC_Gun_01) and foe "players": an enemy's laser, on the players'
+--                     own missiles (HIT.minePool, sv_ladon.lua, while HIT.wantMine) instead of the enemies'
+--   ZLI.test()       (a test key's, dev builds only: Ctrl+[ through ESC.testLaser) a volley now on every ZFA-44's laser
 --   ZLI.summary()     the run's line for ZLAS.tick's round-end log
 -- Log: `zfa li: ...`
 ZLI = ZLI or {}
@@ -175,6 +178,24 @@ local function planes(fitted)
             end
         end
     end
+    -- ((2026-11-11) other carriers: ZLI.extra(), the TANACORN's LASER mounts (sv_tanicorn.lua's test block, the user: "the
+    -- LASERS have to be Laser Interceptors"): { o, a, unit, body, socket, foe }, each checked by ZLI.extra itself against
+    -- the name it was captured with (hard rule 59); foe "players": they shoot down the players' missiles, not the enemies')
+    if type(ZLI.extra) == "function" then
+        local okX, list = pcall(ZLI.extra)
+        if okX and type(list) == "table" then
+            for _, e in ipairs(list) do
+                why.seen = why.seen + 1
+                if e.o ~= nil and e.a ~= nil and liveAddr(e.o) == e.a then
+                    local okH, h = pcall(function() return e.o.HealthInternal end)
+                    local p = at(e.o)
+                    if okH and type(h) == "number" and h <= 0 then why.down = why.down + 1
+                    elseif p then ps[e.a] = { o = e.o, a = e.a, at = p, unit = e.unit, body = e.body, socket = e.socket, foe = e.foe }
+                    else why.gone = why.gone + 1 end
+                else why.gone = why.gone + 1 end
+            end
+        end
+    end
     return ps, why
 end
 
@@ -214,6 +235,23 @@ local function fxOn(r, path, life)
         pcall(function() comp:SetVariableFloat(FName("BeamLifeTime"), life) end)
     end
     return comp
+end
+-- ((2026-11-11) the user: "change the laser color to red") a beam's colour (li_color: linear HDR { R, G, B }), through
+-- the UAV beam's own User.BeamColor; logged the first time for each laser: what was set and whether it took
+local function tint(r, c)
+    local z = zc()
+    local col = z.li_color
+    if not (c and liveObj(c)) or type(col) ~= "table" or #col < 3 then return end
+    local lc = { R = num(col[1], 1), G = num(col[2], 0), B = num(col[3], 0), A = 1 }
+    local how
+    for _, n in ipairs({ "User.BeamColor", "BeamColor" }) do
+        if pcall(function() c:SetVariableLinearColor(FName(n), lc) end) then how = how or ("SetVariableLinearColor " .. n) end
+    end
+    if not how and pcall(function() c:SetColorParameter(FName("BeamColor"), lc) end) then how = "SetColorParameter BeamColor" end
+    if not r.tintSaid then
+        r.tintSaid = true
+        say("%s's beam colour (%.1f, %.1f, %.1f): %s", r.name, lc.R, lc.G, lc.B, how or "NOT set (no colour call took)")
+    end
 end
 local function beam(r, yz)
     if ac8fx() then
@@ -306,12 +344,13 @@ local function spawn(p)
         local okW = pcall(function() a.OwningGameObject = p.o end)
         ownHow = ownHow .. (okW and "; written by UE4SS" or "; UE4SS's write failed")
     end
-    local body
-    pcall(function() body = p.o[z.li_mesh or "PlaneBodyMesh"] end)
+    local body = p.body                                   -- ((2026-11-11) a carrier's own mesh and socket: ZLI.extra's)
+    if not valid(body) then pcall(function() body = p.o[z.li_mesh or "PlaneBodyMesh"] end) end
     if not valid(body) then pcall(function() body = p.o:K2_GetRootComponent() end) end
+    local sock = p.socket or z.li_socket or "SOC_Gun_01"
     local attached = false
     if valid(body) then                                   -- (at its gun: location and rotation the socket's)
-        attached = pcall(function() a:K2_AttachToComponent(body, FName(z.li_socket or "SOC_Gun_01"), 2, 2, 1, false) end)
+        attached = pcall(function() a:K2_AttachToComponent(body, FName(sock), 2, 2, 1, false) end)
     end
     pcall(function() a.MainLaser:SetVisibility(false, false) end)
     pcall(function() a.EndLaser:SetVisibility(false, false) end)
@@ -324,7 +363,7 @@ local function spawn(p)
     pcall(function() si = a.SearchInterval end)
     local ownA = own ~= nil and addrOf(own) or nil
     return a, string.format("owner %s (%s), search every %s s (off), %s, a swing %.2f s, %s%s", ownA == p.a and "its plane" or ("NOT its plane (" .. tostring(ownA) .. ")"),
-        ownHow, tostring(si), attached and ("at " .. tostring(z.li_socket or "SOC_Gun_01")) or "NOT attached", vals.InterceptTime, curveHow,
+        ownHow, tostring(si), attached and ("at " .. tostring(sock)) or "NOT attached", vals.InterceptTime, curveHow,
         (fin ~= nil and addrOf(fin) ~= addrOf(a)) and string.format("; FinishSpawningActor answered %s, not the laser", tostring(addrOf(fin))) or "")
 end
 
@@ -337,6 +376,7 @@ local function volleyOn(s, r, clock, why)
     if ac8fx() then                                       -- (AC8's own beam: AC7's never lit)
         if r.fxBeam and liveObj(r.fxBeam) then pcall(function() r.fxBeam:Deactivate() end) end
         r.fxBeam = fxOn(r, z.li_fx_beam, num(z.li_volley_s, 6.0) + num(z.li_intercept_s, 1.0) + num(z.li_end_s, 0.2))
+        tint(r, r.fxBeam)                                 -- ((2026-11-11) li_color: red, AC7's)
         how = r.fxBeam and "AC8's beam" or "no beam drawn"
         beam(r, 1)
     else
@@ -395,6 +435,29 @@ local function missiles()
             if not m.liDown and not m.liClaimed and ZLAS.enemyOf and ZLAS.enemyOf(m) and flying(m.obj) then
                 local p = at(m.obj)
                 if p then m.zAt = p; ms[#ms + 1] = m end
+            end
+        end
+    end
+    return ms
+end
+-- ((2026-11-11) the players' own missiles in flight, for an enemy carrier's laser (foe "players": the TANACORN's LASER
+-- mounts): sv_ladon.lua keeps every BP_plwp_* missile the game makes in HIT.minePool while HIT.wantMine (a pool's missiles
+-- launched again and again). In flight: not collided, not destroyed, and moved since the last look (a pooled one lies still)
+local function mine()
+    local ms = {}
+    for a, m in pairs((HIT and HIT.minePool) or {}) do
+        if liveAddr(m.obj) ~= a or short(m.obj) ~= m.name then
+            HIT.minePool[a] = nil                          -- (gone, or another object at its address: hard rule 59)
+            HIT.mineN = math.max(0, (HIT.mineN or 1) - 1)
+        else
+            local p = at(m.obj)
+            local moved = p ~= nil and m.zLast ~= nil and dist(p, m.zLast) > 100
+            m.zLast = p
+            if moved and flying(m.obj) then
+                if m.still then m.still, m.liDown = nil, nil end   -- (launched again from its pool)
+                if not m.liDown and not m.liClaimed then m.zAt = p; ms[#ms + 1] = m end
+            else
+                m.still = true
             end
         end
     end
@@ -507,10 +570,14 @@ function ZLI.tick()
         end
         return
     end
-    local ms = missiles()
+    local ms, mineMs = missiles(), nil
     claimsTick(s, clock)
     local act = num(z.li_activation_m, 1200) * 100
     for a, p in pairs(ps) do
+        if p.foe == "players" then                         -- ((2026-11-11) an enemy's laser: the players' missiles)
+            mineMs = mineMs or mine()
+        end
+        local here = p.foe == "players" and mineMs or ms   -- (each carrier its own side's list)
         local r = s.L[a]
         if not r then
             r = { o = p.o, a = a, name = short(p.o) .. "@" .. tostring(a), unit = p.unit, phase = "rest", restUntil = clock, tries = 0 }
@@ -534,7 +601,7 @@ function ZLI.tick()
         end
         if liveLaser(r) then
             if r.phase == "rest" and clock >= (r.restUntil or 0) then
-                for _, m in ipairs(ms) do                  -- (AC7's FCSActivationDist: an enemy missile that near)
+                for _, m in ipairs(here) do                -- (AC7's FCSActivationDist: an enemy missile that near)
                     if dist(p.at, m.zAt) <= act then
                         volleyOn(s, r, clock, string.format("%s %.0f m off", m.name or short(m.obj), dist(p.at, m.zAt) / 100))
                         break
@@ -559,7 +626,7 @@ function ZLI.tick()
                     volleyOff(s, r, clock)
                 elseif clock >= (r.nextSearch or 0) then
                     r.nextSearch = clock + num(z.li_search_s, 0.5)
-                    search(s, r, p, ms, clock)
+                    search(s, r, p, here, clock)
                 end
             elseif r.phase == "ending" and clock >= (r.offAt or 0) then
                 beamOff(r, clock)
@@ -577,10 +644,19 @@ end
 
 -- TEST ONLY BEGIN
 -- Ctrl+[ (ESC.testLaser): a volley now on every ZFA-44's laser (the beam seen with no missile near), their state logged
+-- ((2026-11-11) the beam's red, to choose by eye: each press the next of these on li_color, logged; User.BeamColor may be
+-- the beam's colour outright or a tint on AC8's own, which only the screen tells)
+local REDS = { { 100, 21.5, 22.8, "AC7's HDR red" }, { 20, 2, 2, "a mid red" }, { 1, 0.08, 0.08, "a plain red" } }
+local redAt = 0
 function ZLI.test()
     if not ZLI.on() then log("test: Ctrl+[: AC7's LaserInterceptor isn't on (mode " .. tostring(ZLI.mode) .. ")"); return end
     local s = st()
     local clock, n = os.clock(), 0
+    redAt = redAt % #REDS + 1
+    local red = REDS[redAt]
+    zc().li_color = { red[1], red[2], red[3] }
+    for _, r in pairs(s.L) do r.tintSaid = nil end
+    log(string.format("test: Ctrl+[: the beam's colour %d of %d, %s (%.1f, %.1f, %.1f)", redAt, #REDS, red[4], red[1], red[2], red[3]))
     for _, r in pairs(s.L) do
         if liveLaser(r) then
             local okS, stNow = pcall(SV_LaserState, r.liA)
@@ -588,7 +664,8 @@ function ZLI.test()
             if r.phase ~= "volley" then volleyOn(s, r, clock, "test key Ctrl+["); n = n + 1 end
         end
     end
-    hudCallout("TEST: AC7 LASERS", n > 0 and string.format("%d VOLLEY%s", n, n == 1 and "" or "S") or "NO ZFA-44 LASER UP (CTRL+DEL: A CARRIER)")
+    hudCallout("TEST: AC7 LASERS", n > 0 and string.format("%d VOLLEY%s, RED %d OF %d", n, n == 1 and "" or "S", redAt, #REDS)
+        or "NO LASER UP (CTRL+DEL: A CARRIER, CTRL+U: THE LASER MOUNT)")
 end
 if ESC then ESC.testLaser = function() ZLI.test() end end
 testKey("OEM_FOUR", "sv_escort_li.lua's AC7 laser volley", function()

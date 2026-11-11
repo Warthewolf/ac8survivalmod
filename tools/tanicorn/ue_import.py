@@ -35,6 +35,17 @@ GEAR_SCALARS = ['Ctrl_All_Emissive', 'Turbine_speed', 'NormalIntencity', 'DNorma
                 'PlayerPlane_Damage']
 SCALARS = {'Ctrl_All_Emissive': 0.0, 'Turbine_speed': 0.0, 'DNormal_Strength': 0.0, 'DamegedNormal_Intencity': 0.0,
            'PlayerPlane_Damage': 0.0}
+# (2026-11-11, docs/re/TANICORN_TEXTURES.md fix 1) the Alicorn's surfaces (the design's ALC_a / ALC_b slots: 78 % of the
+# hull, the railcannon and sub-railguns) on the stock Alicorn's own instances, by path: its MREC, normal maps, wet sheen
+# and sharpness at any Texture Quality, the same streamed 4096 sheets. Stubs here at AC8's paths, never packed (build.sh
+# packs only DEST); their shader map has the Local and GPUSkin vertex factories (the hull and the skinned parts)
+ALC_MI = {'ALC_a': '/Game/OnlineMode/Vehicles/Boss/BA002_alcn/Materials/MI_BA002_alcn_a_Inst',
+          'ALC_b': '/Game/OnlineMode/Vehicles/Boss/BA002_alcn/Materials/MI_BA002_alcn_b_Inst'}
+M_BASIC_DIFFUSE = '/Game/OnlineMode/Materials/Core/M_Basic_Diffuse'
+ALC_TEX = ['Albedo_map', 'MREC_map', 'Normal_map']
+# (fix 4) textures this size or smaller are never streamed: the game's Texture Quality mip bias (2 at Medium: 4096 -> 1024,
+# 1024 -> 256) skips textures that aren't streamed; ~6 MB of VRAM while the ship is loaded
+NEVER_STREAM_PX = 1024
 
 AT = unreal.AssetToolsHelpers.get_asset_tools()
 MEL = unreal.MaterialEditingLibrary
@@ -128,14 +139,22 @@ def texture(src_dir, name, srgb, compression, flat=False):
     tex.set_editor_property('virtual_texture_streaming', False)
     if compression == TCS.TC_DEFAULT:
         tex.set_editor_property('compression_no_alpha', True)
-    if compression == TCS.TC_NORMALMAP:
-        tex.set_editor_property('lod_group', unreal.TextureGroup.TEXTUREGROUP_WORLD_NORMAL_MAP)
+    # (2026-11-11, docs/re/TANICORN_TEXTURES.md fix 5) the stock Alicorn's groups (Character), not World: the caps are the
+    # same, but it rules out AC8 treating the groups apart
+    group = {TCS.TC_DEFAULT: unreal.TextureGroup.TEXTUREGROUP_CHARACTER,
+             TCS.TC_NORMALMAP: unreal.TextureGroup.TEXTUREGROUP_CHARACTER_NORMAL_MAP,
+             TCS.TC_MASKS: unreal.TextureGroup.TEXTUREGROUP_CHARACTER_SPECULAR}.get(compression)
+    if group is not None and not flat:
+        tex.set_editor_property('lod_group', group)
     if flat:
         tex.set_editor_property('mip_gen_settings', unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
         tex.set_editor_property('never_stream', True)
         tex.set_editor_property('filter', unreal.TextureFilter.TF_NEAREST)
+    elif max(tex.blueprint_get_size_x(), tex.blueprint_get_size_y()) <= NEVER_STREAM_PX:
+        tex.set_editor_property('never_stream', True)         # (fix 4: the Texture Quality bias never cuts it)
     EAL.save_loaded_asset(tex)
-    say(f'texture {name}: {tex.blueprint_get_size_x()}x{tex.blueprint_get_size_y()}, srgb {srgb}, {compression}')
+    say(f'texture {name}: {tex.blueprint_get_size_x()}x{tex.blueprint_get_size_y()}, srgb {srgb}, {compression}, '
+        f'group {soft(lambda: tex.get_editor_property("lod_group"))}, never stream {soft(lambda: tex.get_editor_property("never_stream"))}')
     return tex
 
 
@@ -209,15 +228,22 @@ def tex_once(src, name, *args, **kw):
     return TEX[name]
 
 
-def materials(name, info, src, gear, dn):
-    """an instance a slot: its base colour, its own normal map where the export has one (the Alicorn's sheets)"""
+def materials(name, info, src, gear, dn, alc=None):
+    """an instance a slot: its base colour, its own normal map where the export has one (the Alicorn's sheets).
+    (2026-11-11) A slot of the design's ALC_a / ALC_b takes the stock Alicorn's instance (alc, fix 1); an Iowa slot its own
+    livemap (the export's per-slot `livemap` from Sea Power's spec map: fix 3), else the flat one"""
     n = tex_once(src, info.get('flat_normal', f'T_SV_{name}_N'), False, TCS.TC_NORMALMAP)
     lm = tex_once(src, info.get('livemap', f'T_SV_{name}_L'), False, TCS.TC_VECTOR_DISPLACEMENTMAP, flat=True)
     mats = []
     for s in info['slots']:
+        if alc and s['material'] in alc:
+            mats.append(alc[s['material']])
+            say(f'  {name} slot {s["slot"]} ({s["material"]}): the stock {alc[s["material"]].get_name()}')
+            continue
         c = tex_once(src, s['basecolor'], True, TCS.TC_DEFAULT)
         sn = tex_once(src, s['normal'], False, TCS.TC_NORMALMAP) if s.get('normal') else n
-        mats.append(instance(f'MI_SV_{name}_{s["slot"]}', gear, [('Basecolor', c), ('Normalmap', sn), ('Livemap', lm),
+        sl = tex_once(src, s['livemap'], False, TCS.TC_MASKS) if s.get('livemap') else lm
+        mats.append(instance(f'MI_SV_{name}_{s["slot"]}', gear, [('Basecolor', c), ('Normalmap', sn), ('Livemap', sl),
                                                                    ('Detail_Normal', dn), ('Blend_Dameged_Normalmap', dn)]))
         if s.get('cutout'):
             say(f'  NOTE MI_SV_{name}_{s["slot"]}: its source has a cut-out ({s["cutout"]}: a lattice); AC8\'s gear '
@@ -278,12 +304,12 @@ def skinned(name, info, src, mats, need):
     return sk, kinds
 
 
-def part(p, gear, dn):
+def part(p, gear, dn, alc=None):
     src = os.path.join(BUILD, 'src_' + p)
     info = json.load(open(os.path.join(src, f'Tani_{p}.json')))
     name = f'Tani_{p}'
     kind = info.get('kind', 'turret')
-    mats = materials(name, info, src, gear, dn)
+    mats = materials(name, info, src, gear, dn, alc)
     if kind == 'hull':
         # the hull: one static mesh, its sockets added by TaniBuild (mesh_sockets); every triangle its own collision
         sm = static(os.path.join(src, name + '.gltf'), f'{DEST}/Model/SM_SV_{name}', mats)
@@ -316,6 +342,17 @@ def part(p, gear, dn):
                 f'the design frames {info["anim"]["design_frames"]})')
         else:
             say(f'  WARNING {name}: the import made no animation (its Deploy): {kinds}')
+    elif kind == 'rig':
+        # (2026-11-11) the rise rig (export_tanacorn.py rise_rig): BN_RiseRoot > BN_RiseHull / BN_RiseCam, one triangle,
+        # and AS_SV_Tani_RIG_Rise (20 s); no wreck
+        sk, kinds = skinned(name, info, src, mats, tuple(info['bones']))
+        anim = renamed(kinds, 'AnimSequence', f'{DEST}/Model/AS_SV_{name}_Rise')
+        if anim:
+            EAL.save_loaded_asset(anim)
+            say(f'AS_SV_{name}_Rise: {soft(lambda: round(anim.get_play_length(), 3))} s (export {info["anim"]["length_s"]} s, '
+                f'{info["anim"]["samples"]} samples; the bow\'s top {info["anim"]["bow_top_m"]} m at {info["anim"]["bow_top_s"]} s)')
+        else:
+            say(f'  WARNING {name}: the import made no animation (its Rise): {kinds}')
     else:
         skinned(name, info, src, mats, tuple(info['bones']))          # (0.74.59: BN_Body > BN_turret_yaw > BN_turret_pitch)
     if info.get('wreck', True):
@@ -328,11 +365,13 @@ def main():
         EAL.delete_directory(DEST)
     gear = stub_instance(GEAR, stub_material(MP_GEAR, GEAR_TEX, GEAR_SCALARS))
     dn = unreal.load_asset(DEFAULT_NORMAL)
+    basic = stub_material(M_BASIC_DIFFUSE, ALC_TEX)
+    alc = {k: stub_instance(path, basic) for k, path in ALC_MI.items()}     # (fix 1: the stock Alicorn's instances)
     only = [x for x in os.environ.get('TANI_PARTS', '').split(',') if x]
     for p in parts:
         if only and p not in only:
             continue
-        part(p, gear, dn)
+        part(p, gear, dn, alc)
         say(f'part {p} done')
     for a in sorted(x.split('.')[0] for x in EAL.list_assets(DEST, recursive=True)):
         say(f'  {a}: {unreal.load_asset(a).get_class().get_name()}')

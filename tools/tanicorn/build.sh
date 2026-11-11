@@ -91,6 +91,7 @@ for p in json.load(open(os.path.join(out, 'parts.json'))):
     print(' '.join({'hull': ['Model/SM_SV_' + n, 'BP_SV_' + n],
                     'vls': ['Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/SM_SV_%s_DAM' % n, 'Model/AS_SV_%s_Open' % n],
                     'railcannon': deploy, 'railgun': deploy,       # (no blueprint of their own yet: the hull's draws them)
+                    'rig': ['Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/AS_SV_%s_Rise' % n],   # (2026-11-11: the rise rig)
                     'turret': ['BP_SV_' + n, 'Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/SM_SV_%s_DAM' % n]}[k]))
 " | tr -d '\r'); do                 # (Windows' Python ends its lines in CR LF: the CR stuck to each line's last name)
     [ -f "$COOKED/$a.uasset" ] || { echo "tanicorn: $a not cooked ($OUT/cook.log)"; exit 1; }

@@ -19,6 +19,11 @@
 --                     SV_FCS_Tani<part> from <stock row>: in (SlotNum N, ...)`), spawned 3 km ahead in a row across your
 --                     path, 400 m apart; the same looks, 2 s lines and shell lines as the T5's, each line naming its mount
 --                     (T5, T16, CIWS, LASER).
+--                     (2026-11-11) The LASER carries AC7's LaserInterceptor at its muzzle, as the ZFA-44s do (sv_escort_li.lua:
+--                     `tanicorn: LASER mount ... handed to AC7's LaserInterceptor`, then its `zfa li:` lines), on YOUR
+--                     missiles: fire some at it from inside 2 km. Its CIWS row is only its aim now (no ammo).
+--   Ctrl+Y in a run   (0.74.60) THE TANACORN's whole hull, every part drawn on its socket, 5 km ahead.
+--   Ctrl+R in a run   (2026-11-11) THE TANACORN rises on her rig with the cinematic (TANI.rise; again: everything back).
 -- TEST ONLY BEGIN
 TANI = { unit = "SV_Unit_TaniTest", npc = "SV_Npc_TaniMount", model = "SV_Model_TaniMount",
          class = "BP_SV_Tani_T5_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5.BP_SV_Tani_T5_C",
@@ -43,9 +48,8 @@ TANI.key = "T5"
 --          shell), 30 km. The railgun arms the land battleships carry (BP_FCS_StrafingRailgun_00, the GR036 main cannon) drive
 --          PM_Cannon's BN_turret_pitch_01 / _02, which our triple hasn't
 --   CIWS   NPC_FCS_VesselCIWS000: BP_FCS_Vessel_CIWS_00, the Aegis's Mk15 (BP_wp_ciws_vessel, a LiveAttachedInterceptorWeapon), 2.5 km
---   LASER  NPC_FCS_VesselCIWS000 too, FOR NOW: no stock arms blueprint fires a laser (docs/re/TANICORN.md 3), so the laser mount
---          fires the CIWS's gun until it has an arm of its own (BP_FCS_Vessel_CIWS_00 with AC8's BP_SwingTLS_ForMSL: the ZFA-44s'
---          BP_FCS_SV_ZfaTLS is built that way, but on a plane's gun socket, not these bones)
+--   LASER  NPC_FCS_VesselCIWS000 too, for its aim only (no ammo: no_gun): its weapon is AC7's LaserInterceptor at its muzzle
+--          (li; the user, 2026-11-11: "the LASERS have to be Laser Interceptors"), not a stock arm (0.74.61 fired the CIWS's gun)
 -- fcs_slots: its muzzles (SOC_Gun_01..N); fcs_speed { yaw, pitch } deg/s and the yaw / pitch arcs: the mount's own
 -- (tools/tanicorn/spec.py FCS), in place of the stock row's (the CIWS's +-60, the artillery's +-110: a ship's side mounts)
 TANI.mounts = {
@@ -65,8 +69,12 @@ TANI.mounts = {
       class = "BP_SV_Tani_LASER_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_LASER.BP_SV_Tani_LASER_C",
       cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_LASER.Default__BP_SV_Tani_LASER_C",
       name_key = "SV_TaniLASER_Name", name = "TANICORN LASER",
-      fcs = "SV_FCS_TaniLASER", fcs_src = "NPC_FCS_VesselCIWS000", fcs_slots = 1, fcs_speed = { 120, 100 },   -- (for now)
-      yaw = { -180, 180 }, pitch = { -10, 85 } },
+      fcs = "SV_FCS_TaniLASER", fcs_src = "NPC_FCS_VesselCIWS000", fcs_slots = 1, fcs_speed = { 120, 100 },   -- (its aim)
+      yaw = { -180, 180 }, pitch = { -10, 85 },
+      -- (2026-11-11) the user: "the LASERS have to be Laser Interceptors": AC7's LaserInterceptor at its muzzle (li: handed
+      -- to sv_escort_li.lua, as the ZFA-44s carry it), the CIWS row only its aim: no_gun, its gun given no ammo
+      -- (bLimitAmmo, AmmoCount 0)
+      li = true, no_gun = true },
 }
 TANI.mount_gap_cm = 40000                                -- (Ctrl+U: the three across your path, 400 m apart)
 do
@@ -104,17 +112,19 @@ local function fcsRow(fcs, spec)
         r.YawSpeed, r.PitchSpeed = ys, ps
         if spec.yaw then r.YawAngleMin, r.YawAngleMax = spec.yaw[1], spec.yaw[2] end
         if spec.pitch then r.PitchAngleMin, r.PitchAngleMax = spec.pitch[1], spec.pitch[2] end
+        if spec.no_gun then r.bLimitAmmo, r.AmmoCount = true, 0 end   -- ((2026-11-11) the laser's aim only, no gun)
     end)
-    local slots, mag, speed, arcs = "?", "?", "?", "?"
+    local slots, mag, speed, arcs, ammo = "?", "?", "?", "?", ""
     pcall(function()
         local _, r = dtCall(fcs, "FindRow", spec.fcs)
         slots, mag = tostring(r.SlotNum), tostring(r.MagazineCapacity)
         speed = tostring(r.YawSpeed) .. "/" .. tostring(r.PitchSpeed)
         arcs = string.format("yaw %s..%s, pitch %s..%s", tostring(r.YawAngleMin), tostring(r.YawAngleMax),
             tostring(r.PitchAngleMin), tostring(r.PitchAngleMax))
+        if spec.no_gun then ammo = string.format(", ammo limited %s, %s rounds (no gun)", tostring(r.bLimitAmmo), tostring(r.AmmoCount)) end
     end)
-    log(string.format("tanicorn: fire control row %s from %s: %s (SlotNum %s, magazine %s, yaw / pitch speed %s, %s)",
-        spec.fcs, spec.fcs_src, okF and "in" or ("NOT made: " .. tostring(whyF)), slots, mag, speed, arcs))
+    log(string.format("tanicorn: fire control row %s from %s: %s (SlotNum %s, magazine %s, yaw / pitch speed %s, %s%s)",
+        spec.fcs, spec.fcs_src, okF and "in" or ("NOT made: " .. tostring(whyF)), slots, mag, speed, arcs, ammo))
     return okF
 end
 
@@ -246,8 +256,15 @@ local function muzzleProbe(m)
         return string.format("(%+.0f, %+.0f, %+.0f) cm from the mesh's origin", l.X - c.X, l.Y - c.Y, l.Z - c.Z)
     end)
     try("names", function()
-        local t = {}
-        m:GetAllSocketNames():ForEach(function(_, e) t[#t + 1] = e:get():ToString() end)
+        -- ((2026-11-11) a plain Lua table from UE4SS here, not a TArray: the user's run of 0.74.61, ":ForEach" "attempt to call")
+        local t, list = {}, m:GetAllSocketNames()
+        local function add(e)
+            local okS, s = pcall(function() return e:ToString() end)
+            if not okS then okS, s = pcall(function() return e:get():ToString() end) end
+            t[#t + 1] = okS and s or tostring(e)
+        end
+        if type(list) == "table" then for _, e in ipairs(list) do add(e) end
+        else list:ForEach(function(_, e) add(e) end) end
         return #t > 0 and table.concat(t, ",") or "none"
     end)
     return table.concat(out, "; ")
@@ -450,6 +467,41 @@ local function armsOf(o)
     return n .. (#names > 0 and (" (" .. table.concat(names, ", ") .. ")") or "")
 end
 
+-- (2026-11-11) the LASER mounts carry AC7's LaserInterceptor (the user: "the LASERS have to be Laser Interceptors"), as
+-- the ZFA-44s do: handed to sv_escort_li.lua through ZLI.extra, its laser at the mount's muzzle (TurretPoseableMesh's
+-- SOC_Gun_01, where the CIWS gun hung in the user's run of 0.74.61) and on the players' missiles (foe "players": the
+-- missiles sv_ladon.lua keeps in HIT.minePool while HIT.wantMine; on from here, so a pool made early is kept too).
+-- Each kept mount checked against the name it was captured with before it's handed over (hard rule 59).
+-- Logged: `tanicorn: LASER mount <name> handed to AC7's LaserInterceptor ...`, then sv_escort_li.lua's `zfa li: ...`
+-- (`... carries AC7's LaserInterceptor: ... at SOC_Gun_01`, `... fires a volley`, `... swings onto ...`, `... shot down`)
+if HIT then HIT.wantMine = true end
+T.li = {}
+local function liCarriers()
+    local out = {}
+    for a, e in pairs(T.li) do
+        if liveAddr(e.o) ~= a or nameOf(e.o) ~= e.name then
+            T.li[a] = nil                                -- (gone, or another object at its address)
+        else
+            if not valid(e.body) then e.body = turretMesh(e.o) end
+            out[#out + 1] = { o = e.o, a = a, unit = e.k.unit, body = e.body, socket = MUZZLE, foe = "players" }
+        end
+    end
+    return out
+end
+local function liCarry(o, k)
+    local a = addrOf(o)
+    if not a or T.li[a] then return end
+    T.li[a] = { o = o, name = nameOf(o), k = k, body = turretMesh(o) }
+    if HIT then HIT.wantMine = true end
+    if ZLI then ZLI.extra = liCarriers end
+    local on = ZLI and ZLI.on and ZLI.on()
+    local mine = 0
+    for _ in pairs((HIT and HIT.minePool) or {}) do mine = mine + 1 end
+    log(string.format("tanicorn: %s mount %s handed to AC7's LaserInterceptor (sv_escort_li.lua's `zfa li:` lines; your "
+        .. "missiles known so far %d)%s", k.key, (nameOf(o):match("([^%.:]+)$")) or "?", mine,
+        on and "" or string.format(": its laser is NOT on (mode %s: a ZFA=1 build's main menu turns it on)", tostring(ZLI and ZLI.mode))))
+end
+
 local function watch(now)
     for i = #T.checks, 1, -1 do                          -- the 1 s and 4 s looks after a spawn
         local c = T.checks[i]
@@ -469,6 +521,7 @@ local function watch(now)
             log(string.format("tanicorn: %s mount %s up at %s: fire control arms %s, health %s/%s", k.key, nameOf(o), at(o),
                 armsOf(o), tostring(h), tostring(mx)))
             log("tanicorn: " .. k.key .. " muzzle: " .. muzzleProbe(turretMesh(o)))
+            if k.li then liCarry(o, k) end               -- ((2026-11-11) the LASER: AC7's LaserInterceptor)
             if not T.stockSaid then                      -- (once a key press: the same for every mount)
                 T.stockSaid = true
                 log("tanicorn: a stock turret's muzzle: " .. stockProbe(o))
@@ -624,6 +677,270 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn hull look", fn = function(now)
         if now >= c.at then table.remove(T.hullChecks, i); hullLook(c.tag) end
     end
     if #T.hullChecks == 0 then T.hullChecks = nil end
+end }
+
+-- (2026-11-11) Ctrl+R: THE TANACORN rises on her rig (WP4's route B2: docs/design/INVINCIBLE_FLEET_RISE_FORD.md 2.3, 3 and
+-- 5's T3). The hull as Ctrl+Y spawns it, broadside rise.ahead_cm out; its RiseRig (BP_SV_Tani_HULL's first component: our
+-- three-bone SK_SV_Tani_RIG, HullMesh on its SOC_Hull, every part on HullMesh) scrubbed to 0 (the whole ship 130 m under
+-- the sea), after hold_s played at rate: the bow out at 3 s, ~60 deg with the bow ~540 m up at 9.5-11 s, the hang, the fall,
+-- the slam at 17.6 s, the bounce, at rest at 20 s (AS_SV_Tani_RIG_Rise's end: her spot on the water). With cinematic: your
+-- view on a camera actor (SV_SpawnCam) on the rig's SOC_Cam (its keys in the same animation, off her port beam), your plane
+-- invincible, flown round where you are by the runtime's loiter autopilot (SV_Down), the enemies' attack limits on you at
+-- 0; all put back after (and at a second Ctrl+R, the run's end or the hull gone). At breach_s the Alicorn's surfacing plume
+-- and sound at the bow, at slam_s AC8's vessel foam and splashes along her keel line and a shake. The times are the rig's
+-- own position (GetPosition), the clock if it can't be read. Logged: `tanicorn: Ctrl+R, ...`, `tanicorn: rise: RiseRig found
+-- (...)`, every every_s `tanicorn: rise +T s: hull at z Z m, bow socket (x, y, z) m, stern socket (x, y, z) m, pitch P, the
+-- bow's tip ~B m; Part_T16_FWD z m` (positions from her spawn point; the pitch from the two sockets: rotators read no Yaw
+-- from Lua, 0.74.55), `tanicorn: rise cinematic: ...`, `tanicorn: rise over: ...`.
+-- If the hull never moves while the rig plays: its bone doesn't move what hangs on it (the plan's risk 1): the log's
+-- VisibilityBasedAnimTickOption read-back says whether the blueprint's value took.
+TANI.rise = { hold_s = 1.5, rate = 1.0, breach_s = 3.0, slam_s = 17.6, cinematic = true, blend_s = 1.0, cam_fov = 55,
+              autopilot_alt_m = 1500, autopilot_radius_m = 3500, every_s = 0.5, ahead_cm = 500000, find_s = 10, end_pad_s = 1.0,
+              bow_x_m = 324.8,                           -- (the bow's tip from midships: tools/tanicorn's hull export)
+              -- the two hull sockets the pitch is measured between, and their rest angle (deg: the hull's json, UE cm)
+              bow_socket = "Mount_RAILCANNON", stern_socket = "Mount_VLSD_8", rest_pitch = math.deg(math.atan(-691.8 - 991.4, 12590.4 + 26400.0)),
+              part = "Part_T16_FWD",
+              anim = "/Game/Mods/SurvivalMode/Tanicorn/Model/AS_SV_Tani_RIG_Rise",
+              breach_fx = "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_ex03_alcn_surfacing01_ON",
+              breach_sound = "/Game/WwiseAssets/BA002_alcn/AKE_BA002_alcn_Surface_Play",
+              slam_fx = { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsWaveFoamXL001",
+                          "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsWaveSplashL001" },
+              slam_spots = 13, shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios",
+              shake_km = 8 }
+local RISE_ATTACKERS = { "MaxPlaneAttackerMissiles", "MaxPursuitAttackers", "MaxNonPlaneAttackerMissiles" }   -- (sv_down.lua's)
+local RA = {}
+local function riseAsset(path, cls)                      -- an asset by path (a blueprint's class with cls), kept
+    local full = path .. "." .. path:match("[^/]+$") .. (cls and "_C" or "")
+    if RA[full] ~= nil and liveObj(RA[full]) then return RA[full] end
+    local o = loadObject(full)
+    RA[full] = (o ~= nil and valid(o)) and o or nil
+    if RA[full] then pin(RA[full], "the rise's " .. full:match("[^%.]+$")) end
+    return RA[full]
+end
+local function riseFx(path, where, n)                    -- an AC8 effect at a place: whether it went
+    local lib, sys = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary"), riseAsset(path)
+    if not (valid(lib) and sys and liveObj(survivalPC)) then return false end
+    return pcall(function()
+        lib:SpawnSystemAtLocation(survivalPC, sys, where, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = n or 1, Y = n or 1, Z = n or 1 },
+            true, true, 0, true)
+    end)
+end
+local function riseSound(path, where)
+    local ev, ak = riseAsset(path), StaticFindObject("/Script/AkAudio.Default__AkGameplayStatics")
+    if not (ev and valid(ak) and liveObj(survivalPC)) then return false end
+    local rot = { Pitch = 0, Yaw = 0, Roll = 0 }
+    if pcall(function() ak:PostEventAtLocation(ev, where, rot, survivalPC) end) then return true end
+    return pcall(function() ak:PostEventAtLocation(ev, where, rot, "", survivalPC) end)
+end
+local function riseComp(o, cls, name)                    -- her component of that class and name
+    for _, c in ipairs((SPC and SPC.V and SPC.V.comps and SPC.V.comps(o, cls)) or {}) do
+        if nameOf(c):find(name, 1, true) then return c end
+    end
+    return nil
+end
+local function v3(c, f) local ok, v = pcall(f); if ok and v then return { X = v.X, Y = v.Y, Z = v.Z } end return nil end
+local function riseHere(R)                               -- the rig's time: its own position, else the clock's
+    local ok, p = pcall(function() return R.rig:GetPosition() end)
+    if ok and type(p) == "number" and R.playing then return p end
+    return R.playing and (os.clock() - R.t1) * TANI.rise.rate or 0
+end
+local function riseLook(R, t)
+    local C = TANI.rise
+    local bow = v3(R.hull, function() return R.hull:GetSocketLocation(FName(C.bow_socket)) end)
+    local st = v3(R.hull, function() return R.hull:GetSocketLocation(FName(C.stern_socket)) end)
+    local mid = v3(R.hull, function() return R.hull:K2_GetComponentLocation() end)
+    local pt = R.part and v3(R.part, function() return R.part:K2_GetComponentLocation() end)
+    local function rel(v) return v and string.format("(%.0f, %.0f, %.0f) m", (v.X - R.x) / 100, (v.Y - R.y) / 100, (v.Z - R.z) / 100) or "?" end
+    local pitch, tip = "?", "?"
+    if bow and st then
+        local dx, dy = bow.X - st.X, bow.Y - st.Y
+        local p = math.deg(math.atan(bow.Z - st.Z, math.sqrt(dx * dx + dy * dy))) - C.rest_pitch
+        pitch = string.format("%.1f", p)
+        if mid then
+            tip = string.format("%.0f", (mid.Z - R.z) / 100 + C.bow_x_m * math.sin(math.rad(p)))
+            R.top = math.max(R.top or -1e9, (mid.Z - R.z) / 100 + C.bow_x_m * math.sin(math.rad(p)))
+        end
+    end
+    log(string.format("tanicorn: rise +%.1f s: hull at z %s m, bow socket %s, stern socket %s, pitch %s, the bow's tip ~%s m; %s z %s m",
+        t, mid and string.format("%.1f", (mid.Z - R.z) / 100) or "?", rel(bow), rel(st), pitch, tip, C.part,
+        pt and string.format("%.1f", (pt.Z - R.z) / 100) or "?"))
+    return bow, st, mid
+end
+local function riseBack(R, why)                          -- your view, plane and the enemies' limits put back
+    if not R or R.back then return end
+    R.back = true
+    local parts = {}
+    local pawn = liveObj(survivalPC) and survivalPC.Pawn or nil
+    if R.cine then
+        if valid(pawn) then
+            parts[#parts + 1] = pcall(function() survivalPC:SetViewTargetWithBlend(pawn, TANI.rise.blend_s, 0, 0, false) end)
+                and "view back on your plane" or "view back FAILED"
+            pcall(function() pawn:SetIsInvincible(false) end)
+            for f, v in pairs(R.limits or {}) do pcall(function() pawn[f] = v end) end
+        end
+        if type(SV_Down) == "function" then pcall(SV_Down, 0); playerLocationDirty() end
+        parts[#parts + 1] = "autopilot off, invincible off, the attack limits back"
+        if R.cam then pcall(function() R.cam:K2_DestroyActor() end) end
+    end
+    log(string.format("tanicorn: rise over (%s): %s; %d view reverts; the bow's tip highest ~%s m", why,
+        #parts > 0 and table.concat(parts, ", ") or "no cinematic", R.reverts or 0, R.top and string.format("%.0f", R.top) or "?"))
+end
+local function riseCine(R)                               -- the cinematic: autopilot, invincible, limits, the view
+    local C, pawn = TANI.rise, liveObj(survivalPC) and survivalPC.Pawn or nil
+    if not valid(pawn) then log("tanicorn: rise cinematic: no plane of yours"); return end
+    local me = playerLocation()
+    local alt = math.max(C.autopilot_alt_m, me and me.Z / 100 or 0)
+    local okD, rD = false, "no SV_Down"
+    if type(SV_Down) == "function" and me then okD, rD = pcall(SV_Down, addrOf(pawn) or 0, me.X, me.Y, alt, C.autopilot_radius_m) end
+    playerLocationDirty()
+    pcall(function() pawn:SetIsInvincible(true) end)
+    R.limits = {}
+    for _, f in ipairs(RISE_ATTACKERS) do
+        local okR, v = pcall(function() return pawn[f] end)
+        if okR and type(v) == "number" and pcall(function() pawn[f] = 0 end) then R.limits[f] = v end
+    end
+    R.cine = true
+    local cam, why = nil, "no SV_Spawncam (runtime 0.32.1)"
+    if type(SV_SpawnCam) == "function" and me then
+        local ca = SV_SpawnCam(me.X, me.Y, me.Z + 3000)
+        why = "SV_SpawnCam " .. tostring(ca)
+        if type(ca) == "number" and ca > 0 then
+            for _, x in ipairs(FindAllOf("CameraActor") or {}) do if valid(x) and addrOf(x) == ca then cam = x end end
+        end
+    end
+    local att = false
+    if cam then
+        pcall(function() cam.CameraComponent.bConstrainAspectRatio = false end)
+        pcall(function() cam.CameraComponent:SetFieldOfView(C.cam_fov) end)
+        att = pcall(function() cam:K2_AttachToComponent(R.rig, FName("SOC_Cam"), 2, 2, 1, false) end)
+        R.cam = cam
+    end
+    local okV = false
+    if cam then okV = pcall(function() survivalPC:SetViewTargetWithBlend(cam, C.blend_s, 0, 0, false) end) end
+    log(string.format("tanicorn: rise cinematic: %s; your plane invincible, the autopilot round (%.0f, %.0f) at %.0f m: %s; the "
+        .. "attack limits at 0: %d of %d", cam and (att and "the view on the rise camera (SOC_Cam, blend " .. C.blend_s .. " s)" or
+        "the camera NOT attached to SOC_Cam") .. (okV and "" or ", SetViewTargetWithBlend FAILED") or ("no camera (" .. why .. ")"),
+        me and me.X or 0, me and me.Y or 0, alt, okD and tostring(rD) or ("error " .. tostring(rD)), (function()
+            local n = 0; for _ in pairs(R.limits) do n = n + 1 end; return n end)(), #RISE_ATTACKERS))
+end
+local RISE = nil
+testKey("R", "sv_tanicorn.lua's rise test", function()
+    if RISE and not RISE.back then riseBack(RISE, "Ctrl+R again"); RISE = nil; return end
+    if not (D and D.now) or not nativeReady() then log("tanicorn: Ctrl+R outside a Survival run"); return end
+    if COOP and COOP.client and COOP.client() then log("tanicorn: Ctrl+R: the host spawns it (you're a joiner)"); return end
+    local H, C = TANI.hull, TANI.rise
+    local cls, why = loadObject(H.class_path)
+    log("tanicorn: hull class " .. (cls and ("loaded " .. nameOf(cls)) or ("NOT loaded: " .. tostring(why))))
+    if cls then pin(cls, "tanicorn hull class") end
+    local anim = riseAsset(C.anim)
+    local ok, rows = rowsIn()
+    local p = playerLocation()
+    if not p then log("tanicorn: no player location"); return end
+    local yaw = playerYaw()
+    local x, y = p.X + math.cos(math.rad(yaw)) * C.ahead_cm, p.Y + math.sin(math.rad(yaw)) * C.ahead_cm
+    local face = (yaw + 90) % 360                         -- (broadside: the rise camera is off her port beam)
+    local before = {}
+    for _, o in ipairs(FindAllOf(H.class) or {}) do before[addrOf(o) or 0] = true end
+    local r
+    if FISH and FISH.spawn then r = FISH.spawn(H.unit, x, y, H.z_cm, face) else r = SV_Spawn(H.unit, x, y, H.z_cm, face) end
+    log(string.format("tanicorn: Ctrl+R, %s at (%.0f, %.0f, %d) facing %.0f: %s%s; rows: %s; the rise %s", H.unit, x, y, H.z_cm,
+        face, r > 0 and (r .. " up") or ("not spawned (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")"),
+        ok and "" or " (its rows aren't all in)", rows, anim and ("animation " .. nameOf(anim):match("[^%.]+$")) or "animation NOT loaded"))
+    hudCallout("TEST: THE TANACORN RISES", r > 0 and "5 KM AHEAD" or "NOT SPAWNED")
+    if r > 0 then RISE = { x = x, y = y, z = H.z_cm, before = before, anim = anim, at = os.clock(), state = "finding", next = 0 } end
+end)
+TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
+    local R, C = RISE, TANI.rise
+    if not R or R.back then return end
+    if not D or (levelTorn and levelTorn()) then riseBack(R, "the run's over"); RISE = nil; return end
+    if R.state == "finding" then                          -- (the new hull of ours, then its rig, hull mesh and part)
+        for _, o in ipairs(FindAllOf(TANI.hull.class) or {}) do
+            if valid(o) and not nameOf(o):find("Default__", 1, true) and not R.before[addrOf(o) or 0] then R.o, R.name = o, nameOf(o) end
+        end
+        if R.o then
+            R.rig = riseComp(R.o, "/Script/Engine.SkeletalMeshComponent", "RiseRig")
+            R.hull = riseComp(R.o, "/Script/Engine.StaticMeshComponent", "HullMesh")
+            R.part = riseComp(R.o, "/Script/Engine.PoseableMeshComponent", C.part)
+        end
+        if R.o and R.rig and R.hull then
+            local steps, len, tick, uro = {}, "?", "?", "?"
+            local anim = R.anim
+            for _, s in ipairs({ { "SetAnimationMode", function() R.rig:SetAnimationMode(1, true) end },
+                                 { "SetAnimation", function() if anim then R.rig:SetAnimation(anim) end end },
+                                 { "SetPlayRate 0", function() R.rig:SetPlayRate(0) end },
+                                 { "Play", function() R.rig:Play(false) end },
+                                 { "SetPosition 0", function() R.rig:SetPosition(0, false) end } }) do
+                if not pcall(s[2]) then steps[#steps + 1] = s[1] .. " FAILED" end
+            end
+            pcall(function() len = string.format("%.1f s", anim:GetPlayLength()) end)
+            pcall(function() tick = tostring(R.rig.VisibilityBasedAnimTickOption) end)
+            pcall(function() uro = tostring(R.rig.bEnableUpdateRateOptimizations) end)
+            log(string.format("tanicorn: rise: RiseRig found on %s (%s, %s); scrubbed to 0%s; VisibilityBasedAnimTickOption %s, "
+                .. "update-rate optimisations %s; HullMesh on it, %s %s", (R.name:match("([^%.:]+)$")) or "?",
+                anim and (nameOf(anim):match("[^%.]+$") or "?") or "no animation", len,
+                #steps > 0 and (" (" .. table.concat(steps, ", ") .. ")") or "", tick, uro, C.part, R.part and "found" or "NOT found"))
+            R.state, R.t0 = "hold", now
+            riseLook(R, 0)
+            if C.cinematic then riseCine(R) end
+        elseif now - R.at > C.find_s then
+            log(string.format("tanicorn: rise: %s after %d s (an old hull without the rise rig? a build before it)",
+                not R.o and "no new hull of ours found" or ("its " .. (not R.rig and "RiseRig" or "HullMesh") .. " NOT found"), C.find_s))
+            riseBack(R, "nothing to rise"); RISE = nil
+        end
+        return
+    end
+    if liveAddr(R.o) == nil or nameOf(R.o) ~= R.name then riseBack(R, "the hull is gone"); RISE = nil; return end
+    if R.state == "hold" and now - R.t0 >= C.hold_s then
+        local okP = pcall(function() R.rig:SetPlayRate(C.rate) end)
+        if not pcall(function() if not R.rig:IsPlaying() then R.rig:Play(false) end end) then okP = false end
+        R.state, R.t1, R.playing = "rising", now, true
+        log(string.format("tanicorn: rise: playing at rate %.2f%s", C.rate, okP and "" or " (SetPlayRate / Play FAILED)"))
+    end
+    if R.cine and R.cam then                              -- (the game may take the view back: given again)
+        local okT, vt = pcall(function() return survivalPC:GetViewTarget() end)
+        if okT and vt and addrOf(vt) ~= addrOf(R.cam) and not R.back then
+            R.reverts = (R.reverts or 0) + 1
+            pcall(function() survivalPC:SetViewTargetWithBlend(R.cam, 0, 0, 0, false) end)
+        end
+    end
+    local t = riseHere(R)
+    if now >= R.next then R.next = now + C.every_s; R.lastBow, R.lastStern, R.lastMid = riseLook(R, t) end
+    if R.state ~= "rising" then return end
+    if not R.breached and t >= C.breach_s and R.lastBow then
+        R.breached = true
+        local where = { X = R.lastBow.X, Y = R.lastBow.Y, Z = R.z }
+        log(string.format("tanicorn: rise breach at +%.1f s: the plume %s, the sound %s", t, riseFx(C.breach_fx, where) and "up" or "FAILED",
+            riseSound(C.breach_sound, where) and "played" or "FAILED"))
+    end
+    if not R.slammed and t >= C.slam_s and R.lastBow and R.lastStern then
+        R.slammed = true
+        local n, ok = math.max(2, C.slam_spots), 0
+        for i = 0, n - 1 do                                -- (along her keel line, the stern socket's end to the bow's, at sea level)
+            local k = i / (n - 1) * 1.3 - 0.15
+            local where = { X = R.lastStern.X + (R.lastBow.X - R.lastStern.X) * k, Y = R.lastStern.Y + (R.lastBow.Y - R.lastStern.Y) * k, Z = R.z }
+            for _, fx in ipairs(C.slam_fx) do if riseFx(fx, where) then ok = ok + 1 end end
+        end
+        local shook = false
+        local cls = riseAsset(C.shake, true)
+        local you = playerLocation()
+        local km_ = you and math.sqrt((you.X - R.x) ^ 2 + (you.Y - R.y) ^ 2) / 100000 or 99
+        if cls and km_ <= C.shake_km then
+            local sc = math.max(0.2, 1 - km_ / C.shake_km)
+            shook = pcall(function() survivalPC:ClientStartCameraShake(cls, sc, 0, { Pitch = 0, Yaw = 0, Roll = 0 }) end)
+                or pcall(function() survivalPC.PlayerCameraManager:StartCameraShake(cls, sc, 0, { Pitch = 0, Yaw = 0, Roll = 0 }) end)
+        end
+        log(string.format("tanicorn: rise slam at +%.1f s: %d of %d effects up along her keel, the shake %s (%.1f km)", t, ok,
+            n * #C.slam_fx, shook and "on" or (cls and "not on" or "NOT loaded"), km_))
+    end
+    local okI, still = pcall(function() return R.rig:IsPlaying() end)
+    local done = (t >= C.slam_s + 2.4 and okI and still == false)
+        or now - R.t1 >= 20.0 / math.max(0.05, C.rate) + C.end_pad_s
+    if done and not R.ended then
+        R.ended = true
+        R.endAt = now
+        riseLook(R, t)
+    end
+    if R.ended and now - R.endAt >= C.end_pad_s then riseBack(R, "the rise ended"); RISE = nil end
 end }
 end
 -- TEST ONLY END

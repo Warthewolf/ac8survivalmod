@@ -2502,3 +2502,57 @@ game. The work was split by file between agents; the builds ran in sequence in t
   railcannon flush in its bay, the two sub-railgun hatches shut on the pods. Ctrl+T: the T5 (40 deg/s). Ctrl+U: the
   T16, CIWS and LASER aim and fire from their muzzles (`hangs on ... at socket SOC_Gun_0N`); the CIWS / LASER reach is
   2.5 km (spawned 3 km out: close in).
+
+## 0.74.62 (2026-11-11 evening; the rise rig, AC7's LaserInterceptor on the LASER mounts in red, the textures, GEOFON's look tests)
+- The user's run of 0.74.61 (UE4SS.log 2026-11-11 05:36-05:41): Ctrl+Y up with 35 part meshes; Ctrl+U's three mounts
+  spawned, tracked and fired: the T16's LiveArtillery shells at 1111 m/s from its barrels, the CIWS's and the LASER's
+  LiveAttachedInterceptorWeapon hung on TurretPoseableMesh at SOC_Gun_01. No hit on a mount (their health stayed full).
+  The muzzle probe's `names` errored (`sv_tanicorn.lua:250: attempt to call`: GetAllSocketNames hands back a plain Lua
+  table, no ForEach): fixed. The user after it: "the textures were still low quality".
+- THE TANACORN's lasers are AC7's LaserInterceptor (the user: "the LASERS have to be Laser Interceptors"):
+  sv_escort_li.lua takes more carriers through ZLI.extra (sv_tanicorn.lua's test block hands it every LASER mount it sees,
+  checked by name, hard rule 59), each with its own mesh and socket (TurretPoseableMesh, SOC_Gun_01, where 0.74.61's CIWS
+  gun hung) and foe "players": an enemy's laser on the players' own missiles. Those come from HIT.minePool (sv_ladon.lua
+  keeps every BP_plwp_* missile by address while HIT.wantMine; a pool's missiles fly again and again, so in flight = not
+  collided, not destroyed and moved since the last look). The LASER's CIWS row is its aim only: bLimitAmmo, AmmoCount 0
+  (no_gun). runtime laser.c has no side check (SV_LaserBegin takes any live missile with a shooter). escort_test.sh: the
+  mount's laser at its own SOC_Gun_01, a volley for your missile in flight 1.4 km off, never an enemy's or a pooled one
+  lying still, removed with the mount.
+- The beam red (the user: "Are you able to change the laser color to red?"): AC8's NS_UAVTLS_Muzzleflash01 exposes
+  User.BeamColor (its name table: User.BeamColor, User.BeamLength, User.BeamLifeTime; NS_UAVTLS_EndLaser001 has no user
+  colour). li_color (sv_config.lua, every LaserInterceptor: the ZFA-44s' and the LASER mounts') = AC7's own beam's
+  (100, 21.5, 22.8), set with SetVariableLinearColor on each beam as it spawns (`zfa li: <laser>'s beam colour (...):
+  SetVariableLinearColor User.BeamColor`). Whether the parameter is the beam's colour or a tint on AC8's own is unread:
+  Ctrl+[ (dev) fires a volley in the next of three reds each press (AC7's HDR red, (20, 2, 2), (1, 0.08, 0.08)), named
+  on the HUD and in the log.
+- The rise rig (WP4 route B2, docs/design/INVINCIBLE_FLEET_RISE_FORD.md 2.3 / 4.1): part RIG (export_tanacorn.py
+  rise_rig: BN_RiseRoot > BN_RiseHull / BN_RiseCam, one 10 cm triangle inside the hull, SOC_Hull and SOC_Cam, Rise from
+  RISE_HULL / RISE_CAM at 30 fps, monotone cubic between keys; check_export.py plays it back: 20.000 s, the hull 130 m
+  under at the start, its end the identity, the bow's top 539 m at 11 s). BP_SV_Tani_HULL: RiseRig first on the root
+  (single node AS_SV_Tani_RIG_Rise, not playing, saved at 20 s = the rest pose; AlwaysTickPoseAndRefreshBones, URO off,
+  no collision), HullMesh on its SOC_Hull, every part on HullMesh as before; bIgnoreMeshOptimize and
+  bIgnoreSetAutoSkipUpdateTransform on the CDO and on SV_Unit_TaniHull's world-data desc. Ctrl+R (sv_tanicorn.lua
+  TANI.rise): the hull as Ctrl+Y, scrubbed to 0, played after 1.5 s; the cinematic on a camera actor attached to SOC_Cam
+  (your plane invincible, the loiter autopilot round where you are, the attack limits at 0, all put back after or at a
+  second Ctrl+R); the Alicorn's surfacing plume and sound at the breach (3 s), the vessels' foam and splashes along her
+  keel and a shake at the slam (17.6 s); `tanicorn: rise +T s: ...` every 0.5 s.
+- The textures (docs/re/TANICORN_TEXTURES.md, the research of tonight): the Iowa's sheets were flat (grey()'s fixed clamp:
+  luminance std 1-3 of 255 against the source's 24-36), no livemap detail anywhere (one constant), and the user's
+  Texture Quality is Medium since about 2026-10-31 (GameUserSettings sg.TextureQuality=1, PoolSize 1300 in her logs since
+  0.73.0: a mip bias of 2 on every streamed texture, stock ones too). Fixed: the ALC_a / ALC_b slots (78 % of the hull, the
+  railcannon, the sub-railguns) on the stock MI_BA002_alcn_a / _b_Inst by path (stubs at AC8's paths, never packed; the
+  cooked SM_SV_Tani_HULL and SK_SV_Tani_RAILGUN_L import both), the container 243 -> 79 MB; grey() keeps each sheet's
+  contrast against its median; each Iowa slot its own livemap from Sea Power's _spec.jpg (R 0, G roughness, B occlusion;
+  14 in, TC_MASKS); textures of 1024 px and under NeverStream; Character LOD groups. TextureLODType ruled out (no stock
+  ship sets it: AIObjectSmall by default).
+- GEOFON's first look tests (a new test-only part Scripts/sv_fleet.lua, in MODULES after sv_tanicorn; tools/checks/
+  fleet_test.sh, 50 checks): Ctrl+B the V-break look (T1), Ctrl+G its damage stages (T2): RISE_FORD.md 5.
+- The fire control rows for the rest of WP1 (docs/re/TANICORN.md "WP1: the stock fire control rows per mount type"): the
+  railgun shell BP_wp_eml_ldbs01 on GR036's arm BP_GR036_ldbs1_MainCannon_Normal (TripleRailCannon on PM_Cannon,
+  BN_turret_pitch01..03), through a row of ours; the VLS on NPC_FCS_VesselVLSmk41 (TurretMesh, VLS prefix).
+- build/tanicorn: CHECK ALL OK (18 parts), ue_import 0 warnings, TaniBuild done (0 errors). build_all.sh (ZFA=1 TANI=1),
+  package_dev.sh (VALKA=1 ZFA=1 TANI=1), build d98c728c127b... registered. INSTALLED 2026-11-11 22:17 (backup:
+  build/backup/install_before_0.74.62).
+- To see in game: Ctrl+R (the rise and its camera; the log's VisibilityBasedAnimTickOption line if the hull doesn't
+  move); Ctrl+U, then missiles at the LASER mount from inside 2 km (its red beam, `zfa li: ... shot down`); Ctrl+[ near it
+  for the three reds; Ctrl+Y for the textures (once at the highest Texture Quality too); Ctrl+B and Ctrl+G for GEOFON.

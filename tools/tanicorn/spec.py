@@ -111,19 +111,37 @@ def mount(part, info, fcs):
     }
 
 
-def hull_bp(parts_on):
+def hull_bp(parts_on, rig=None):
     """(0.74.60) THE TANACORN whole, its parts drawn on their sockets (docs/design/INVINCIBLE_FLEET.md WP2, the first step:
     the ship on the sea; the parts become live AI parts in the next): BP_SV_Tani_HULL on the native
     ALiveAIGroundVehicleObject (as the test mount: its spawn route through the model row is proven), the hull's static mesh
     (its 36 Mount_* sockets) and, on each part's socket, that part's skeletal mesh as a PoseableMeshComponent at its rest
     pose (the VLS hatches shut, the guns level, the railcannon down in its bay and the sub-railguns 6 m down under their
-    shut hatches: the stowed ship). parts_on: [(part, [socket name, ...])]."""
+    shut hatches: the stowed ship). parts_on: [(part, [socket name, ...])].
+    (2026-11-11, WP4's route B2: docs/design/INVINCIBLE_FLEET_RISE_FORD.md 2.3, 4.1) rig: the rise rig's json (part RIG).
+    Then RiseRig (our SK_SV_Tani_RIG: bones only and one hidden triangle) comes first on the RootComponent, and HullMesh hangs
+    on its SOC_Hull, so the whole ship rides the rig's animated bone: AS_SV_Tani_RIG_Rise in single-node mode, not playing,
+    its saved position at the animation's END (the rest pose: the hull on the water, Ctrl+Y as before). Lua scrubs it to 0
+    and plays it (sv_tanicorn.lua Ctrl+R). An undrawn skinned mesh refreshes its bones (and what hangs on them) only with
+    AlwaysTickPoseAndRefreshBones, and update-rate optimisations off so distance never slows it. No collision of its own."""
     def sk(p):
         return obj(f'{DEST}/Model/SK_SV_Tani_{p}')
-    scs = [{'name': 'HullMesh', 'class': 'StaticMeshComponent', 'parent': 'RootComponent',
+    hull = {'name': 'HullMesh', 'class': 'StaticMeshComponent', 'parent': 'RootComponent',
             'props': {'StaticMesh': obj(f'{DEST}/Model/SM_SV_Tani_HULL'),
                       'BodyInstance': '(CollisionEnabled=QueryOnly,ObjectType=ECC_GameTraceChannel3,'
-                                      'CollisionProfileName="EnemyPawn")'}}]
+                                      'CollisionProfileName="EnemyPawn")'}}
+    scs = [hull]
+    if rig:
+        end = rig['anim']['length_s']
+        scs = [{'name': 'RiseRig', 'class': 'SkeletalMeshComponent', 'parent': 'RootComponent',
+                'props': {'SkeletalMesh': sk('RIG'), 'SkinnedAsset': sk('RIG'),
+                          'AnimationMode': 'AnimationSingleNode',
+                          'AnimationData': (f'(AnimToPlay="{obj(f"{DEST}/Model/AS_SV_Tani_RIG_Rise")}",bSavedLooping=False,'
+                                            f'bSavedPlaying=False,SavedPosition={end:.6f},SavedPlayRate=1.000000)'),
+                          'VisibilityBasedAnimTickOption': 'AlwaysTickPoseAndRefreshBones',
+                          'bEnableUpdateRateOptimizations': 'False',
+                          'BodyInstance': '(CollisionEnabled=NoCollision,CollisionProfileName="NoCollision")'}},
+               dict(hull, parent='RiseRig', socket='SOC_Hull')]
     for part, sockets in parts_on:
         for s in sockets:
             scs.append({'name': f'Part_{s}', 'class': 'PoseableMeshComponent', 'parent': 'HullMesh', 'socket': f'Mount_{s}',
@@ -131,7 +149,10 @@ def hull_bp(parts_on):
     return {'path': f'{DEST}/BP_SV_Tani_HULL', 'parent': 'LiveAIGroundVehicleObject', 'scs': scs,
             'cdo': {'AutoPossessAI': 'PlacedInWorldOrSpawned', 'GameObjectId': '1000', 'GameObjectCategory': 'Category_Ship',
                     'PursuitPointOffset': '(X=0,Y=0,Z=45000)', 'bKeepOnGround': 'False', 'bIsSea': 'True',
-                    'bShowHUDBox': 'True', 'BriDebriIconType': 'Weapons'}}
+                    'bShowHUDBox': 'True', 'BriDebriIconType': 'Weapons',
+                    # (2026-11-11) never skipped far off (the Alicorn's desc has both: docs/re/ALICORN.md; its world-data
+                    # desc too, tools/build_survival_world.py): the rise's transforms must update at any range
+                    'bIgnoreMeshOptimize': 'True', 'bIgnoreSetAutoSkipUpdateTransform': 'True'}}
 
 
 # milestone 0's mount: the Mk45's fire control, but searching the air (it's to track and fire at the player)
@@ -167,12 +188,19 @@ def main():
     spec = {'sockets': [], 'mesh_sockets': [], 'stubs': [{'path': AA_SHELL, 'parent': 'LiveBulletEmitter'},
                                                          {'path': FLAK_SHELL, 'parent': 'LiveFlakGun'}],
             'blueprints': []}
-    parts_on, hull = [], False
+    parts_on, hull, rig = [], False, None
     for p in parts:
         if only and p not in only:
             continue
         info = json.load(open(os.path.join(BUILD, 'src_' + p, f'Tani_{p}.json')))
         kind = info.get('kind', 'turret')
+        if kind == 'rig':                              # (2026-11-11) the rise rig: its sockets, and the hull's RiseRig
+            rig = info
+            for s in info['sockets']:
+                spec['sockets'].append({'skeleton': obj(f'{DEST}/Model/SKEL_SV_Tani_{p}'),
+                                        'mesh': obj(f'{DEST}/Model/SK_SV_Tani_{p}'), 'name': s['name'],
+                                        'bone': s['bone'], 'loc': s['loc'], 'rot': s.get('rot', [0, 0, 0])})
+            continue
         if kind == 'hull':
             # the hull's sockets: a Mount_<name> for every part, +X the part's forward (TaniBuild: UStaticMeshSocket)
             for s in info['sockets']:
@@ -190,7 +218,7 @@ def main():
         if kind == 'turret' and p in FCS:              # (the VLS blocks, the railcannon and the sub-railguns: none yet)
             spec['blueprints'].append(mount(p, info, FCS[p]))
     if hull:
-        spec['blueprints'].append(hull_bp(parts_on))
+        spec['blueprints'].append(hull_bp(parts_on, rig))
     out = os.path.join(BUILD, 'tani.spec.json')
     json.dump(spec, open(out, 'w'), indent=1)
     print(f'spec.py: {out}: {len(spec["sockets"])} sockets, {len(spec["mesh_sockets"])} hull sockets, '

@@ -1147,6 +1147,12 @@ CFG = {
                                  -- li_fx_end) on the laser as it swings; AC7's two never lit. "ac7": AC7's (crashes).
                                  li_fx = "ac8", li_fx_beam = "/Game/VFX/Vehicles/Weapon/TLS/NS_UAVTLS_Muzzleflash01",
                                  li_fx_end = "/Game/VFX/Vehicles/Weapon/TLS/NS_UAVTLS_EndLaser001",
+                                 -- ((2026-11-11) the user: "change the laser color to red") the beam's colour, linear HDR
+                                 -- { R, G, B }: li_fx_beam's own User.BeamColor (the UAV beam's only colour parameter; its
+                                 -- end flash has none), set on each beam as it's spawned. AC7's own beam's colour, a hot
+                                 -- red (docs/re/LASER_INTERCEPTOR.md 4: (100, 21.5, 22.8)); {} keeps AC8's. Every
+                                 -- LaserInterceptor's: the ZFA-44s' and the TANACORN's LASER mounts'
+                                 li_color = { 100, 21.5, 22.8 },
                                  li_hit_sound = "/Game/WwiseAssets/Events/SFX/SPWP_OTH_TLS_HIT" },
                          text = { on_station = "%s ON STATION", on_station_sub = "ITS ZFA-44S LAUNCH IN %d S",
                                   launch = "ZFA-44S LAUNCHED", launch_sub = "FROM %s",

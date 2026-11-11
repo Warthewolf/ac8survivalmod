@@ -15,7 +15,10 @@ folder; `TANI_PARTS=T5,HULL` for some parts only; `TANI_STOP=export` to stop bef
    kind railcannon: Body (its bay section) > railcannon_pitch > barrel_n / barrel_p, the barrel halves being the bow's
    doors; RAILGUN_L / _R, kind railgun: Body > lift > BN_turret_yaw > BN_turret_pitch and Body > Hatch_n / Hatch_p;
    each SOC_Gun_01 and the animation Deploy, the design's sequence from the first key until every bone is out: 3.333 s
-   / 4.0 s; rest = stowed), the hull HULL (static, its 36 Mount_* sockets; Mount_CORE has no part yet), each part's
+   / 4.0 s; rest = stowed), the rise rig RIG (2026-11-11, kind rig: none of the ship's geometry; BN_RiseRoot >
+   BN_RiseHull / BN_RiseCam, one hidden triangle, sockets SOC_Hull and SOC_Cam, the animation Rise from RISE_HULL /
+   RISE_CAM: 20 s, its end the rest pose; the hull blueprint hangs HullMesh on its SOC_Hull: docs/design/
+   INVINCIBLE_FLEET_RISE_FORD.md 2.3), the hull HULL (static, its 36 Mount_* sockets; Mount_CORE has no part yet), each part's
    wreck, textures, `Tani_<part>.json` (kind, bones, sockets in UE cm with UE rotators, slots, anim). `check_export.py`
    reads every glTF back into Blender and compares it with its json (triangles, slots, bones, each lid's swing, each
    deploying part played to its end: every bone's turn and place, its meshes' box): `CHECK ALL OK`.

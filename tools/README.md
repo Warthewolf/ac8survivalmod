@@ -79,6 +79,11 @@ test build: a key bound twice logs `test: Ctrl+<key> is bound twice`, a key name
 | Ctrl+. (`OEM_PERIOD`) | the next round is IFF FATAL ERROR / DI..ANT TH..D..R, the lightning Anomaly (test; never drawn) | sv_anomalies.lua |
 | Ctrl+[ (`OEM_FOUR`) | AC7's laser volley test (test; ZFA=1 builds) | sv_escort_li.lua |
 | Ctrl+T | THE TANICORN's test mount 3 km ahead (test; TANI=1 builds; Ctrl+` was the game console's key) | sv_tanicorn.lua |
+| Ctrl+U | THE TANICORN's T16, CIWS and LASER test mounts 3 km ahead, in a row across your path (test; TANI=1 builds) | sv_tanicorn.lua |
+| Ctrl+Y | THE TANACORN's whole hull 5 km ahead, broadside, its parts on their sockets (test; TANI=1 builds) | sv_tanicorn.lua |
+| Ctrl+R | THE TANACORN's rise test: the hull rises on its rig with the cinematic (test; TANI=1 builds) | sv_tanicorn.lua |
+| Ctrl+B | GEOFON's V-break look (T1): the Ford 3.5 km ahead, its two meshes posed as a carrier broken in a V, then parting; again: off (test) | sv_fleet.lua |
+| Ctrl+G | GEOFON's stages (T2): the Ford 4 km ahead; again: 20 % of its health off a press, its fires, smoke and list at 66 % and 33 % (test) | sv_fleet.lua |
 
 THE ESCORT's T0 and carrier keys were Ctrl+F1 / F2 (the tactical items' keys: both ran on a press) and THE DECOY's were
 Ctrl+PAGE_UP / PAGE_DOWN / HOME, now THE FESTIVAL's, the arc's step and GONE FISHIN''s; the lightning Anomaly's
