@@ -21,9 +21,10 @@ Tanager). Design, research and build plan: docs/re/TANICORN.md; the build pipeli
   styles_firemode.py, style_sheet.py; 2026-11-11): each style from above, ahead, firing and the side, at night.
 - `renders/style9/`: style 9, the user's own spec (four-section barrels split mid-length, sliding back and angled up
   round the glowing core; the quarters blown out; the gun house's interior), with its transform step by step.
-- `renders/style10/`: style 10, the default, after the user's screen recording (barrels in top / bottom / side quarters
-  that step out, slide back and pitch up round a khaki rod that pushes out and lights; the roof's front halves lift
-  with the upper side panels, the lower panels slide forward, the rear wall and its roof strip tip aft): its views,
+- `renders/style10/`: style 10, the default, after the user's screen recording, on the design's own turret (closed it
+  looks as it always did but for the barrels; the user, 2026-11-11): barrels in top / bottom / side quarters that step
+  out, slide back and pitch up round a khaki rod that pushes out and lights; the rear wall and its roof strip tip aft,
+  then the roof's front halves lift with the upper side panels and the lower panels slide forward: its views,
   its transform step by step and the recording's two shots as the model does them, stills and a film
   (`video/tanacorn_firemode_style10.mp4`, frame for frame with the recording; the recording itself stays out of the
   repository).

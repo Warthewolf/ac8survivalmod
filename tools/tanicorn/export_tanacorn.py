@@ -249,6 +249,15 @@ def grey(px):
     return out
 
 
+def flat_colour(mat):
+    """an image-less material's base colour, as the file's sRGB values (rounded: the key one file a colour)"""
+    bsdf = mat and mat.use_nodes and next((n for n in mat.node_tree.nodes if n.bl_idname == "ShaderNodeBsdfPrincipled"),
+                                          None)
+    lin = np.array(bsdf.inputs["Base Color"].default_value[:3] if bsdf else (0.214, 0.214, 0.214), np.float32)
+    srgb = np.where(lin > 0.0031308, 1.055 * np.power(lin, 1 / 2.4) - 0.055, lin * 12.92)
+    return tuple(round(float(c), 3) for c in srgb)
+
+
 def slots_for(part, folder, mats):
     """a material slot per material in use: its base colour written as T_SV_Tani_<part>_<n>_D (one file per source
     image), the Alicorn's sheets with their normal maps. `part` is the textures' owner: the eight side VLS blocks
@@ -258,10 +267,11 @@ def slots_for(part, folder, mats):
         mat = bpy.data.materials.get(m)
         img = base_image(mat)
         own = m.startswith(("TANA_", "ALC_"))
-        key = (img.name if img else None, own)
+        flat = None if img else flat_colour(mat)          # (a material without an image: its own colour, its own
+        key = (img.name if img else flat, own)            # file; firemode's light cut rims were a shared 50% grey)
         if key not in done:
             name = "T_SV_Tani_%s_%d_D" % (part, len(done))
-            px = pixels(img) if img else np.full((4, 4, 4), 0.5, np.float32)
+            px = pixels(img) if img else np.tile(np.array([*flat, 1.0], np.float32), (4, 4, 1))
             save_png(px if own else grey(px), os.path.join(folder, name + ".png"))
             nrm = None
             if m.startswith("ALC_"):

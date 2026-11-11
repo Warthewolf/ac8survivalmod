@@ -87,6 +87,26 @@ class Part:
         bmesh.ops.recalc_face_normals(bm, faces=[f for f in bm.faces if any(v in lo or v in hi for v in f.verts)])
         self._put(bm, lo + hi, m)
 
+    def mesh(self, me):
+        """another mesh's faces (each keeping its material) among the primitives"""
+        n0 = len(self.bm.faces)
+        self.bm.from_mesh(me)
+        self.bm.faces.ensure_lookup_table()
+        idx = [self._slot(m) for m in me.materials]
+        for f in self.bm.faces[n0:]:
+            f.material_index = idx[f.material_index] if f.material_index < len(idx) else 0
+
+    def settle(self):
+        """the cutters dropped and what was to go in after the cut moved among the primitives: one self-union of
+        everything (firemode.py's style 10 core: its interior met itself badly in the post union, cleanly in this)"""
+        me = bpy.data.meshes.new("settle_tmp")
+        self.post.to_mesh(me)
+        self.bm.from_mesh(me)
+        bpy.data.meshes.remove(me)
+        self.post.free()
+        self.cut.free()
+        self.post, self.cut = bmesh.new(), bmesh.new()
+
     def solid(self, name, bevel=0.03, simplify=True):
         bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces)      # every shell outward (the boolean needs it)
         bmesh.ops.recalc_face_normals(self.cut, faces=self.cut.faces)

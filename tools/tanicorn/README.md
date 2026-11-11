@@ -87,8 +87,10 @@ styles to choose from, then their own spec, style 9, then a screen recording to 
 default; docs/re/TANICORN.md 7): `firemode.py`, run by
 model_tanacorn.py, models the 16-inch mount from scratch on `tanakit.py`'s clean solids (the kit split out of
 model_tanacorn.py: Part, unwrap, check, bake) in place of the Iowa's on both turrets, in the style `TANA_FM_STYLE` (1-10,
-default 10; 0 keeps the design's Iowa mount), and keys its transform at 110-185 / 226-301. The export gives it two more
-parts, T16_ARMOR and T16_GUNS, each with its Deploy.
+default 10; 0 keeps the design's Iowa mount), and keys its transform at 110-185 / 226-301. Style 10 keeps the design's
+own house and gun roots outside (the user: "maintain its original appearance on the outside. Except for the barrel"):
+their sheets cut along hidden seams into the moving pieces, a dark core and the interior behind them, the barrels
+rebuilt on the design's profile. The export gives it two more parts, T16_ARMOR and T16_GUNS, each with its Deploy.
 The styles side by side (a model made with TANA_FM_STYLE=0, then each style built untextured and rendered at night):
 
     TANA_FM_STYLE=0 blender -b art/tanicorn/design/Leviathan_animated.blend -P tools/tanicorn/model_tanacorn.py -- build/tanicorn/model_base

@@ -72,10 +72,13 @@ STYLES = {
     # halves, the lower ones slide forward, the rear wall and its roof strip tip aft in two halves, a ramp and a standing
     # leaf each (177-183; 34-45 and 169-171 on the turrets behind), a big drum inside; the front corners stay.
     10: {"name": "The clip: quarters slide back round the rod; roof front and side panels lift, the rear folds out",
-         "barrel": {"split": "Q4", "mid": True, "clip": True, "shell_t": 0.3, "bore": 0.58, "rim": True, "edges": True,
-                    "petals": True},
-         "armour": "clip", "interior": True, "rings_glow": True, "rings_to": 7.6,
-         "core": (0.24, 23.8, 2.0), "struts": False, "sink": 0.05},
+         "barrel": {"split": "Q4", "mid": True, "clip": True, "shell_t": 0.22, "bore": 0.47, "rim": True, "edges": True,
+                    "cut": 12.67},
+         "armour": "clip", "interior": True, "rings_glow": True, "rings_to": 6.0, "core": (0.2, 20.7, 2.0),
+         "struts": False, "sink": 0.05, "orig": True,
+         # (the original gun: the halves step out 0.45, the fronts 0.6 more, slide 6.8 m back: still in the rears'
+         # r 0.89 stretch, (0.89 - 0.53) / cos 45 < 0.6)
+         "clip_tune": {"part": 0.45, "front_out": 0.6, "back": 6.8}},
 }
 DEFAULT_STYLE = 10
 # style 10's barrel (the clip's frames 47-70, read by the analysis of 2026-11-11): the four quarters step out from the rod
@@ -117,6 +120,17 @@ BORE, CORE_R = 0.45, 0.24
 SEG = 40
 BARREL = [(3.0, 3.32, 1.09, 1.09), (3.3, 25.92, 1.02, 0.86), (10.9, 11.15, 1.05, 1.05), (18.4, 18.62, 0.98, 0.98),
           (25.9, 26.52, 0.86, 0.94), (26.5, 26.9, 0.94, 0.91)]
+INNER = None                              # (the original gun's: its bore follows the barrel's steps, BARREL - shell_t)
+REBUILT_GUN = {"split": SPLIT, "muzzle": MUZZLE, "barrel": BARREL, "seg": SEG}
+# the design's own gun (LEV_IOWA_G16, measured 2026-11-11; the trunnion's frame, its pivot 0.83 m ahead of the face
+# plate): its root block (a bloomer, -1.54 to 1.545, up to 1.89 tall, its front chamfered from 1.374 down to the
+# barrel's octagon) stays the design's; its barrel from it, an octagon (corner radii): 1.027 to 4.40, a taper to 0.896
+# at 5.73, on to 12.58, a taper to 0.752 at 12.77, on to the muzzle at 24.53 (sections overlap 0.01: no faces flush;
+# the split on the chamfer's front ring, or the quarters' hollow back end showed in a gap at the port)
+ORIG_GUN = {"split": 1.545, "muzzle": 24.534, "seg": 8,
+            "barrel": [(1.545, 4.407, 1.027, 1.027), (4.397, 5.732, 1.027, 0.896), (5.722, 12.585, 0.896, 0.896),
+                       (12.575, 12.771, 0.896, 0.752), (12.761, 24.534, 0.752, 0.752)]}   # (an octagon: corners at the
+#                                                         top, the sides and the diagonals, its quarters cut on these)
 # the bloomer boot round each gun's root: (x0, x1, r) rings, a fold every 0.42 m, narrowing to the barrel
 BOOT = [(-0.9 + 0.42 * k, -0.9 + 0.42 * k + 0.26, 1.72 - 0.085 * k) for k in range(9)] + \
        [(-0.9 + 0.42 * k + 0.2, -0.9 + 0.42 * k + 0.46, 1.6 - 0.085 * k) for k in range(9)]
@@ -287,7 +301,7 @@ def shrink(quad, d):
 class Shell:
     """the house's outline (13 flat walls and the roof), its core SHELL in, the face's frame, the trunnion"""
 
-    def __init__(self, y0, zt):
+    def __init__(self, y0, zt, xt=None):
         self.y0 = y0
         B, T = [list(p) for p in HALF_B], [list(p) for p in HALF_T]
         P = lambda q, z: Vector((q[0], q[1], z))
@@ -302,7 +316,7 @@ class Shell:
         self.fn = Vector((5.91, 0.0, 4.1)).normalized()           # the face's outward normal, up the face
         self.fup = Vector((-4.1, 0.0, 5.91)).normalized()
         self.f0 = Vector((FACE_X0, y0, Z0))
-        self.trun = Vector((FACE_X0 - (zt - Z0) * FACE_K - BEHIND_FACE, y0, zt))
+        self.trun = Vector((FACE_X0 - (zt - Z0) * FACE_K - BEHIND_FACE if xt is None else xt, y0, zt))
 
     def wall(self, name):
         """a wall's outer and inner quads (bottom a, bottom b, top b, top a), its frame (along, up, out)"""
@@ -613,18 +627,21 @@ def petal_part(sg):
     return p
 
 
-def stays_part(rings=False, breech=False, ring_mat=None, rings_to=None, rails=True, core=None, petals=False):
+def stays_part(rings=False, breech=False, ring_mat=None, rings_to=None, rails=True, core=None, petals=False,
+               boots=True, breech_x=(0.4, 0.6)):
     """what doesn't split: each gun's bloomer boot, its barrel's root ring and its core rod (the guns' frame); rings:
     the core assembly round the rod (coil rings on spokes and hubs, four rails through them: style 9, after the user's
-    manga panels); breech: the breech, its block and recoil cylinders and the cradle inside the house"""
+    manga panels); breech: the breech, its block and recoil cylinders and the cradle inside the house (breech_x:
+    the cylinders' and the cradle's front ends, behind the face plate)"""
     p = Part(overlap=True)
     for b, yc in enumerate(GUN_Y, 1):
-        for x0, x1, r in BOOT:
+        for x0, x1, r in (BOOT if boots else ()):           # (the original mount: its own root blocks instead)
             cone_x(p, x0, x1, r, r - 0.03, yc, 0.0, M_PAINT, SEG)
         for sg in ((1.0, -1.0) if petals else ()):          # (each side's petal: a piece of its own)
             a, c = sorted((yc + sg * PETAL[2], yc + sg * 3.0))
             abox(p, (PETAL[0], a, -PETAL[3]), (PETAL[1], c, PETAL[3]), M_DARK, cut=True)
-        cone_x(p, 2.7, SPLIT + 0.02, 1.12, 1.1, yc, 0.0, M_PAINT, SEG)
+        if boots:
+            cone_x(p, 2.7, SPLIT + 0.02, 1.12, 1.1, yc, 0.0, M_PAINT, SEG)
         if core:                                            # (r, its tip's x when out, its push): style 10's
             if not core[2]:                                 # rod, a piece of its own when it moves (build)
                 rod_x(p, SPLIT - 0.4, core[1], core[0], yc, 0.0, MAT["fm_core"])
@@ -652,9 +669,18 @@ def stays_part(rings=False, breech=False, ring_mat=None, rings_to=None, rails=Tr
             cone_x(p, -6.9, -6.3, 1.38, 1.38, yc, 0.0, M_DARK, 32)
             abox(p, (-7.4, yc - 0.7, -0.8), (-6.8, yc + 0.7, 0.8), M_PAINT)
             for e in (-1.0, 1.0):
-                cone_x(p, -4.2, 0.4, 0.28, 0.28, yc + e * 0.9, 1.0, M_DARK, 16)
-            abox(p, (-5.2, yc - 1.0, -1.55), (0.6, yc + 1.0, -1.1), M_PAINT)
+                cone_x(p, -4.2, breech_x[0], 0.28, 0.28, yc + e * 0.9, 1.0, M_DARK, 16)
+            abox(p, (-5.2, yc - 1.0, -1.55), (breech_x[1], yc + 1.0, -1.1), M_PAINT)
     return p
+
+
+def outer_r(x):
+    """the barrel's outer radius at x (the last of BARREL's sections that holds it)"""
+    r = None
+    for a, b, r0, r1 in BARREL:
+        if a <= x <= b:
+            r = r0 + (r1 - r0) * (x - a) / (b - a)
+    return r if r is not None else (BARREL[0][2] if x < BARREL[0][0] else BARREL[-1][3])
 
 
 def shell_piece_part(seg, cut=X_MID, shell_t=SHELL_T, bore=0.42, rim=False, edges=False):
@@ -665,26 +691,42 @@ def shell_piece_part(seg, cut=X_MID, shell_t=SHELL_T, bore=0.42, rim=False, edge
     p = Part(overlap=True)
     x0, x1 = (SPLIT, cut - 0.02) if seg == "rear" else (cut + 0.02, MUZZLE)
     xr = MUZZLE - 0.05 if rim else MUZZLE + 1.0
-    for a, b, r0, r1 in BARREL:
+    if INNER:                                             # the original gun: each quarter built whole
+        xs = [x for x, _ in barrel_prof(x0, x1)]
+        lip = MUZZLE - 0.6
+        if seg == "front":                                # (the muzzle's lip: the bore narrows to `bore`, a ramp)
+            xs = sorted(set([x for x in xs if not lip - 0.03 < x < lip + 0.05] + [lip, lip + 0.02]
+                            + ([xr] if rim else [])))
+        rin_x = lambda x: (outer_r(x) - shell_t) if seg != "front" or x <= lip else \
+            min(outer_r(x) - shell_t, bore) if x >= lip + 0.02 else outer_r(x) - shell_t
+        quarter_x(p, [x - x0 for x in xs], lambda x: outer_r(x + x0), lambda x: rin_x(x + x0), SEG, M_PAINT, M_DARK,
+                  M_RIM if seg == "front" and rim else None, (xr - x0) if rim else None)
+    for a, b, r0, r1 in (BARREL if not INNER else ()):
         for lo, hi, m in ((max(a, x0), min(b, x1, xr), M_PAINT), (max(a, x0, xr), min(b, x1), M_RIM)):
             if hi - lo > 1e-3:
                 ra = r0 + (r1 - r0) * (lo - a) / (b - a)
                 rb = r0 + (r1 - r0) * (hi - a) / (b - a)
                 cone_x(p, lo - x0, hi - x0, ra, rb, 0.0, 0.0, m, SEG)
-    rin = lambda x: (1.02 - shell_t) + ((0.86 - shell_t) - (1.02 - shell_t)) * (x - SPLIT) / (MUZZLE - SPLIT)
+    if INNER:                                             # the original gun: the bore follows the barrel's steps
+        rin = lambda x: outer_r(x) - shell_t
+    else:
+        rin = lambda x: (1.02 - shell_t) + ((0.86 - shell_t) - (1.02 - shell_t)) * (x - SPLIT) / (MUZZLE - SPLIT)
     if edges:                                             # (clear of the inner wall: each length at its narrow end's
         xe = MUZZLE - 0.7 if seg == "front" else x1       # radius, a little in)
         xa = x0 + 0.3
         while xa < xe - 0.3:
             xb = min(xa + 2.0, xe)
-            rr = rin(xb) - 0.03
+            rr = rin(xb) * (0.92 if INNER else 1.0) - 0.03     # (an octagon's sides fall in toward its corners)
             for th in (math.radians(41.0), -math.radians(41.0)):
                 r = Vector((0, math.cos(th), math.sin(th)))
                 box(p, Vector(((xa + xb) / 2.0 - x0, 0, 0)) + r * rr, (XYZ[0], r, XYZ[0].cross(r)),
                     (xb - xa - 0.04, 0.03, 0.08), MAT["fm_edge"], post=True)
             xa = xb
     end = x1 + 1.0 if seg == "rear" else MUZZLE - 0.45
-    cone_x(p, -1.0, end - x0, rin(x0 - 1.0), rin(end), 0.0, 0.0, M_DARK, SEG, cut=True)
+    if INNER:                                             # (built whole above: bore, lip and cut faces in it)
+        return p
+    else:
+        cone_x(p, -1.0, end - x0, rin(x0 - 1.0), rin(end), 0.0, 0.0, M_DARK, SEG, cut=True)
     if seg == "front":
         cone_x(p, MUZZLE - 0.6 - x0, MUZZLE + 1.0 - x0, bore, bore, 0.0, 0.0, M_DARK, SEG, cut=True)
     L = x1 - x0
@@ -769,6 +811,306 @@ def interior(h, S, moves=None):
                 box(h, gc + r * 1.72, (r, XYZ[1], XYZ[1].cross(r)), (0.18, 0.4, 0.16), M_DARK, post=True)
 
 
+# ---------------------------------------------------------------------------------------------------- the design's house
+# Style 10 keeps the design's own 16-inch gunhouse (LEV_IOWA_T16_2.001: 295 open, zero-thickness sheets with the Iowa's
+# textures; the user, 2026-11-11: "I want the turret to maintain its original appearance on the outside. Except for the
+# barrel"), its armour still opening as the clip's: the sheets are cut along hidden seams into the moving pieces, each
+# thickened inward (the inner skin the plate itself, as the design's sheet seen from behind; light rims on the cuts),
+# and a dark core fills the house behind them. Measured by the survey of 2026-11-11 (the house frame; v off the centre
+# line at y 0.102): the walls' foot and roof edge (rear centre, rear corner, the aft side wall's kink, its forward end,
+# the face's corner, the face's middle); the rear wall stands on a sloped underside (its foot z 2.03 at the centre, 1.57
+# at the corners) aft of the floor's edge at x -10.97; the face is upright to z 1.387, then leans 39 deg back; no
+# chamfer.
+ORIG_B = [(-15.275, 0.0), (-13.901, 9.159), (-10.97, 9.630), (3.776, 11.357), (14.387, 9.185), (14.387, 0.0)]
+ORIG_T = [(-15.275, 0.0), (-13.901, 8.609), (-10.97, 9.041), (3.776, 10.677), (10.226, 9.264), (10.226, 0.0)]
+ORIG_FLOOR = -10.97                       # the floor's aft edge (aft of it the underside rises to the rear wall's foot)
+ORIG_Z1 = 6.516                           # the roof
+ORIG_IN = 0.3                             # the core this far inside the walls
+ORIG_SEAM = [(-13.901, 3.39), (-7.5, 3.39), (-1.35, 2.38), (-1.0, 2.38)]   # the aft side wall's stepped seam (x, z),
+#                                           then straight down to the foot at x -1.0 (the clip's, on the design's wall)
+ORIG_ROOF_X = -10.97                      # the rear roof strip's forward edge (an edge row of the roof already)
+ORIG_Y = 0.102                            # the centre line the roof is cut on
+ORIG_REAR = ((-15.275, 2.028), (-13.901, 9.159, 1.570))   # the rear wall's foot: its centre (x, z), a corner (x, v, z)
+ORIG_THICK = 0.25                         # the moving sheets' thickness (inward): light rims on the cuts
+M_CUT_RIM = tanakit.mat("TANA_cut_rim", (0.32, 0.34, 0.35), 0.4, 0.45)   # (flat: the export gives it its colour)
+
+
+class OrigShell:
+    """the design's gunhouse measured (ORIG_*): its centre line, the trunnion, the dark core's three outlines (the
+    floor's, at the rear wall's foot, under the roof), the aft side walls' core line at the floor"""
+
+    def __init__(self, y0, trun):
+        self.y0, self.trun = y0, trun
+        lerp = lambda a, b, t: (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
+        full = lambda h: [(x, y0 + v) for x, v in h[:-1]] + [(x, y0 - v) for x, v in reversed(h[1:-1])]   # (the
+        #                                                     face's middle left out: in line with its corners)
+        at = lambda z: [lerp(b, t, (z - Z0) / (ORIG_Z1 - Z0)) for b, t in zip(ORIG_B, ORIG_T)]
+        face = lambda z: 14.387 - 0.811 * max(0.0, z - 1.387)
+        F = ORIG_FLOOR
+        self.z = (Z0 + 0.07, 2.3, ORIG_Z1 - ORIG_IN)
+        floor = [(F - 0.15, 0.0), (F, 9.45), (F + 1.0, 9.747), ORIG_B[3], (14.387, 9.185), (14.387, 0.0)]   # (a
+        #                                                     shallow V aft, as the rear wall's: no corner in line)
+        mid = at(self.z[1])
+        mid[4], mid[5] = (face(self.z[1]), mid[4][1]), (face(self.z[1]), 0.0)
+        top = at(self.z[2])
+        top[4], top[5] = (face(self.z[2]), top[4][1]), (face(self.z[2]), 0.0)
+        self.rings = [offset2d(full(r), -ORIG_IN) for r in (floor, mid, top)]
+        self.zc = self.z[2]
+        self.Tc = self.rings[2]
+
+    def core_v(self, x):
+        """|y - y0| of the core's side at the floor at x (the aft side wall forward of the floor's edge, then the
+        forward side wall)"""
+        (xa, va), (xb, vb), (xc, vc) = ORIG_B[2], ORIG_B[3], ORIG_B[4]
+        v = va + (vb - va) * (x - xa) / (xb - xa) if x < xb else vb + (vc - vb) * (x - xb) / (xc - xb)
+        return v - ORIG_IN
+
+
+def loft_rings(part, rings, m):
+    """a closed solid through polygons [(poly, z), ...] with as many corners each (rising z), capped at both ends"""
+    bm = part._bm(False, False)
+    vs = [[bm.verts.new((x, y, z)) for x, y in poly] for poly, z in rings]
+    fs = [bm.faces.new(vs[0][::-1]), bm.faces.new(vs[-1])]
+    k = len(vs[0])
+    for a, b in zip(vs, vs[1:]):
+        for i in range(k):
+            fs.append(bm.faces.new((a[i], a[(i + 1) % k], b[(i + 1) % k], b[i])))
+    bmesh.ops.recalc_face_normals(bm, faces=fs)
+    part._put(bm, [v for q in vs for v in q], m)
+
+
+def interior_orig(h, S):
+    """style 10's gun house inside the design's walls (the core's hollows, as interior() but placed for the design's
+    house: the aft hollow from the floor's edge forward, a doorway through each rear half above the sloped underside,
+    the hoist, racks and rammer rail clear of it); nothing meets another face flat on"""
+    y0 = S.y0
+    zf, zt = Z0 + 0.4, S.zc + 0.1                            # (open through the core's top: no thin lintel)
+    zr = S.zc
+    for sg in (1.0, -1.0):
+        Y = lambda v: y0 + sg * v
+        lo_hi = lambda a, b: (min(Y(a), Y(b)), max(Y(a), Y(b)))
+        x0, x1 = ORIG_FLOOR + 0.45, 2.9                      # (off the core's corner at ORIG_FLOOR + ORIG_IN)
+        a, b = lo_hi(3.65, 15.0)                             # the doorway through the rear half (out through the
+        #                                                      core's side: a wall in it grazed the side, slivers)
+        abox(h, (-15.8, a, 2.3), (x0 + 0.1, b, zt - 0.03), M_DARK, cut=True)
+        a, b = lo_hi(3.6, 15.0)
+        abox(h, (x0, a, zf), (x1, b, zt), M_DARK, cut=True)
+        reach = lambda x: S.core_v(x) - 0.1
+        quad = [(x0 - 0.05, Y(3.55)), (x1 + 0.05, Y(3.55)), (x1 + 0.05, Y(reach(x1))), (x0 - 0.05, Y(reach(x0)))]
+        h.prism(quad[::int(sg)], "Z", Z0 + 0.2, zf + 0.1, M_DARK, post=True)                   # the floor
+        x = x0 + 0.4
+        while x < x1 - 0.3:                                                                   # its grating
+            a, b = lo_hi(3.7, reach(x) - 0.15)
+            abox(h, (x - 0.05, a, zf + 0.08), (x + 0.05, b, zf + 0.18), M_PAINT, post=True)
+            x += 0.6
+        x = x0 + 0.6
+        while x < x1 - 0.3:                                                                   # frames
+            a, b = lo_hi(3.5, 3.9)
+            abox(h, (x - 0.14, a, zf - 0.05), (x + 0.14, b, zr), M_PAINT, post=True)
+            x += 2.4
+        for k, (v, z, r) in enumerate(((4.1, 1.75, 0.14), (4.2, 2.45, 0.1), (4.15, 4.5, 0.16), (4.3, 5.1, 0.1))):
+            cyl(h, r, r, x1 - x0 + 0.1, Vector(((x0 + x1) / 2.0, Y(v), z)), (1, 0, 0), M_DARK, 12, post=True)
+        cyl(h, 0.95, 0.95, zr - zf + 0.05, Vector((-7.0, Y(6.6), (zf - 0.05 + zr) / 2.0)), (0, 0, 1), M_PAINT, 24,
+            post=True)                                                                        # the shell hoist
+        for z in (zf + 0.9, zr - 1.3):
+            cyl(h, 1.05, 1.05, 0.18, Vector((-7.0, Y(6.6), z)), (0, 0, 1), M_DARK, 24, post=True)
+        for row, z in enumerate((1.5, 2.1)):                                                  # racks of shells
+            for k in range(4):
+                c = Vector((-10.0 + 0.6 * k, Y(7.6), z))
+                cyl(h, 0.26, 0.26, 1.2, c, (0, sg, 0), M_PAINT, 12, post=True)
+                cyl(h, 0.26, 0.02, 0.45, c + Vector((0, sg * 0.8, 0)), (0, sg, 0), M_DARK, 12, post=True)
+        a, b = lo_hi(8.3, 8.5)
+        abox(h, (-10.15, a, zf + 0.05), (-7.95, b, 2.4), M_DARK, post=True)
+        a, b = lo_hi(5.2, 5.6)
+        abox(h, (-6.4, a, 2.4), (-3.4, b, 2.7), M_PAINT, post=True)                               # the rammer's rail
+        gc = Vector((-2.6, Y(8.0), 3.05))                     # the training gear's big wheel (the clip's drum)
+        cyl(h, 1.65, 1.65, 0.45, gc, (0, 1, 0), M_PAINT, 40, post=True)
+        cyl(h, 0.55, 0.55, 0.8, gc, (0, 1, 0), M_DARK, 20, post=True)
+        for k in range(30):
+            a = 2 * math.pi * k / 30
+            r = Vector((math.cos(a), 0, math.sin(a)))
+            box(h, gc + r * 1.72, (r, XYZ[1], XYZ[1].cross(r)), (0.18, 0.4, 0.16), M_DARK, post=True)
+
+
+def components(bm):
+    """bm's connected parts, each a list of faces"""
+    bm.faces.index_update()
+    bm.faces.ensure_lookup_table()
+    seen, out = set(), []
+    for f in bm.faces:
+        if f.index in seen:
+            continue
+        comp, stack = [], [f]
+        seen.add(f.index)
+        while stack:
+            g = stack.pop()
+            comp.append(g)
+            for e in g.edges:
+                for h in e.link_faces:
+                    if h.index not in seen:
+                        seen.add(h.index)
+                        stack.append(h)
+        out.append(comp)
+    return out
+
+
+def box_of(faces):
+    vs = {v for f in faces for v in f.verts}
+    return (Vector([min(v.co[k] for v in vs) for k in range(3)]), Vector([max(v.co[k] for v in vs) for k in range(3)]))
+
+
+def cut_design(me, S, log=print):
+    """the design's gunhouse `me` cut along hidden seams (ORIG_*) into style 10's pieces: per side the inverted U (the
+    roof forward of ORIG_ROOF_X, the aft side wall above its stepped seam with its forward tab, the rangefinder ear,
+    the box on the tab, the railings and every roof fitting), the aft side wall's lower panel, and the rear half (the
+    rear wall and the roof strip aft of ORIG_ROOF_X, the rear railing). Returns the static remainder (a mesh, the
+    design's materials) and [(piece, mesh, origin)], the moving sheets thickened ORIG_THICK inward (the inner skin
+    and an original edge's rim their plate's material, M_CUT_RIM on the cuts; the railings' coincident sheets thin)"""
+    y0 = S.y0
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.normal_update()
+    trans = {i for i, m in enumerate(me.materials) if m and m.use_nodes and any(
+        n.bl_idname == "ShaderNodeTexImage" and n.image and "alpha" in n.image.name.lower() for n in m.node_tree.nodes)}
+
+    def find(test):
+        return [c for c in components(bm) if test(*box_of(c), c)]
+    roof = find(lambda lo, hi, c: hi.z - lo.z < 0.01 and abs(lo.z - ORIG_Z1) < 0.01 and hi.x - lo.x > 20.0)
+    walls = find(lambda lo, hi, c: lo.x < -13.8 and 3.7 < hi.x < 3.85 and lo.z < 0.7 and hi.z > 6.4)
+    assert len(roof) == 1 and len(walls) == 2, \
+        "the design's roof / aft side walls not found (%d, %d)" % (len(roof), len(walls))
+
+    def bisect(seed, co, no, keep, dist=1e-5):
+        """cut the part holding the face `seed` by a plane, only across its faces keep(lo, hi) accepts"""
+        part = next(c for c in components(bm) if seed in c)
+        fs = [f for f in part if keep(*box_of([f]))]
+        if fs:
+            geom = list({e for f in fs for e in f.edges}) + list({v for f in fs for v in f.verts}) + fs
+            bmesh.ops.bisect_plane(bm, geom=geom, dist=dist, plane_co=co, plane_no=no)
+    X = ORIG_ROOF_X                                           # (the centre line's own vertices lie at y 0.10191 to
+    bisect(roof[0][0], Vector((0, ORIG_Y, 0)), Vector((0, 1, 0)), lambda lo, hi: True, 5e-4)   # 0.10210: on it)
+    for c in components(bm):                                  # what stands on the rear strip rides the rear half: the
+        lo, hi = box_of(c)                                    # long parts across its edge row (the aft side walls'
+        tr = any(f.material_index in trans for f in c)        # railings, the V frame's two beams) cut on it
+        if (tr or lo.z >= 5.8) and lo.x < X < hi.x and hi.x - lo.x > 2.0 and hi.x - lo.x < 20.0:
+            bisect(c[0], Vector((X, 0, 0)), Vector((1, 0, 0)), lambda lo, hi: True, 5e-4)
+    (xa, za), (xb, zb), (xc, zc), (xd, zd) = ORIG_SEAM
+    slope = Vector((zb - zc, 0.0, xc - xb)).normalized()      # (the plane through both seam corners, y in it)
+
+    def wall_seed(sg):                                        # (found again after each cut: faces are replaced, the
+        bm.normal_update()                                    # parts stay)
+        return next(f for f in bm.faces if f.calc_center_median().x < -12.0 and f.normal.y * sg > 0.9
+                    and (f.calc_center_median().y - y0) * sg > 8.0 and f.calc_center_median().z > 1.0)
+    for sg in (1.0, -1.0):                                    # each leg of the seam across the faces it runs over
+        bisect(wall_seed(sg), Vector((0, 0, za)), Vector((0, 0, 1)), lambda lo, hi: lo.x < xb + 0.01)
+        bisect(wall_seed(sg), Vector((xb, 0, zb)), slope, lambda lo, hi: lo.x < xc + 0.01 and hi.x > xb - 0.01)
+        bisect(wall_seed(sg), Vector((0, 0, zc)), Vector((0, 0, 1)),
+               lambda lo, hi: lo.x < xd + 0.01 and hi.x > xc - 0.01)
+        bisect(wall_seed(sg), Vector((xd, 0, 0)), Vector((1, 0, 0)), lambda lo, hi: lo.z < zd + 0.01)
+
+    def seam_z(x):
+        if x <= xb:
+            return za
+        if x <= xc:
+            return zb + (zc - zb) * (x - xb) / (xc - xb)
+        return zc
+    bm.faces.ensure_lookup_table()
+    roof_ids = {f.index for f in next(c for c in components(bm) if box_of(c)[1].x - box_of(c)[0].x > 20.0 and
+                                      box_of(c)[1].z - box_of(c)[0].z < 0.01 and
+                                      abs(box_of(c)[0].z - ORIG_Z1) < 0.01)}   # (not the floor: as long and flat)
+    wall_parts = [c for c in components(bm) if (lambda lo, hi: lo.x < -13.8 and 3.7 < hi.x < 3.85 and lo.z < 0.7
+                                                              and hi.z > 6.4)(*box_of(c))]
+    wall_ids = {f.index for c in wall_parts for f in c}
+    rear_parts = [c for c in components(bm) if (lambda lo, hi: lo.x < -15.2 and hi.x < -13.8 and 1.5 < lo.z < 2.2 and
+                                                              hi.z > 6.4)(*box_of(c))]   # (their foot: not the rails)
+    rear_ids = {f.index for c in rear_parts for f in c}
+    side = lambda y: "L" if y > y0 else "R"
+    piece = {}                                                # face index -> piece name
+    for c in components(bm):
+        lo, hi = box_of(c)
+        cc = sum((f.calc_center_median() for f in c), Vector()) / len(c)
+        v = max(abs(lo.y - y0), abs(hi.y - y0))
+        for f in c:
+            fc = f.calc_center_median()
+            if f.index in roof_ids:
+                piece[f.index] = ("rear_" if fc.x < ORIG_ROOF_X else "U_") + side(fc.y)
+            elif f.index in wall_ids:
+                upper = fc.x > xd or fc.z > seam_z(fc.x)
+                piece[f.index] = ("U_" if upper else "low_") + side(fc.y)
+            elif f.index in rear_ids:
+                piece[f.index] = "rear_" + side(fc.y)
+            elif f.material_index in trans:                   # railings: aft of the rear strip's edge row with the
+                piece[f.index] = ("rear_" if fc.x < X else "U_") + side(fc.y)   # rear (cut on it, above)
+            elif -13.2 <= lo.x and hi.x <= -8.0 and lo.z >= 3.4 and hi.z <= 6.1 and v >= 9.0:   # rangefinder ears
+                piece[f.index] = "U_" + side(cc.y)
+            elif 2.1 <= lo.x and hi.x <= 3.5 and lo.z >= 2.8 and hi.z <= 3.9 and v >= 10.5:    # the box on the tab
+                piece[f.index] = "U_" + side(cc.y)
+            elif lo.z >= 5.8 and hi.x - lo.x > 2.0 and lo.x < X < hi.x:   # the V frame's beams, cut on the row
+                piece[f.index] = ("rear_" if fc.x < X else "U_") + side(fc.y)
+            elif lo.z >= 5.8:                                 # roof fittings, whole: with the roof under them
+                piece[f.index] = ("rear_" if cc.x < X else "U_") + side(cc.y)
+    names = ["U_L", "U_R", "low_L", "low_R", "rear_L", "rear_R"]
+    panels = roof_ids | wall_ids | rear_ids
+    seam = bm.edges.layers.int.new("sv_seam")                # 1: an edge between two pieces (a cut): its rim shows
+    for e in bm.edges:                                        # light when they part; an original edge's rim takes
+        e[seam] = int(len({piece.get(f.index, "") for f in e.link_faces}) > 1)   # its plate's own material
+
+    def outward(f):
+        """the sheet face's side away from the house's inside (the design's sheets face either way)"""
+        c = f.calc_center_median()
+        return c - Vector((max(-12.5, min(12.0, c.x)), y0, 3.5))
+
+    def take(keep_faces, thick):
+        """a mesh of bm's faces whose index is in keep_faces; those in `thick` thickened inward"""
+        bm.faces.index_update()
+        b2 = bm.copy()
+        b2.faces.index_update()                           # (the copy keeps bm's order: the same indices)
+        b2.faces.ensure_lookup_table()
+        sheet = [f for f in b2.faces if f.index in (thick or ())]
+        bmesh.ops.delete(b2, geom=[f for f in b2.faces if f.index not in keep_faces], context="FACES")
+        bmesh.ops.delete(b2, geom=[v for v in b2.verts if not v.link_faces], context="VERTS")
+        n0 = len(me.materials)
+        if sheet:
+            b2.normal_update()
+            for f in sheet:                               # (solidify grows against the normals: inward)
+                if f.normal.dot(outward(f)) < 0.0:
+                    f.normal_flip()
+            b2.normal_update()
+            olds = set(b2.verts)
+            sk = b2.edges.layers.int.get("sv_seam")
+            bmesh.ops.solidify(b2, geom=sheet, thickness=ORIG_THICK)
+            for f in b2.faces:                            # (the inner skin keeps its plate's material and UVs:
+                if all(v in olds for v in f.verts) or all(v not in olds for v in f.verts):   # the design's sheets
+                    continue                                  # show the same from behind, under an overhang)
+                e = next((e for e in f.edges if all(v in olds for v in e.verts)), None)
+                if e is not None and not e[sk]:               # an original edge: the plate's own
+                    f.material_index = next((g.material_index for g in e.link_faces if g is not f
+                                             and all(v in olds for v in g.verts)), n0)
+                else:
+                    f.material_index = n0                     # a cut: the light rim
+        out = bpy.data.meshes.new("TANA_T16_design")
+        b2.to_mesh(out)
+        b2.free()
+        for m in me.materials:
+            out.materials.append(m)
+        if sheet:
+            out.materials.append(M_CUT_RIM)
+        return out
+    static = take({i for i in range(len(bm.faces)) if i not in piece}, None)
+    static.name = "TANA_T16_design_static"
+    out = []
+    for nm in names:
+        ids = {i for i, p in piece.items() if p == nm}
+        me_p = take(ids, {i for i in ids if i in panels})
+        me_p.name = "TANA_T16_Armor_" + nm
+        J = sum((v.co for v in me_p.vertices), Vector()) / len(me_p.vertices)
+        me_p.transform(Matrix.Translation(-J))
+        out.append((nm, me_p, J))
+        log("firemode: the design's %s: %d faces" % (nm, len(me_p.polygons)))
+    bm.free()
+    return static, out
+
+
 def piece_part(n_split):
     """one barrel piece: the barrel forward of SPLIT inside the sector of 360/n deg round +y (its own frame: x along
     the barrel from the split, on its axis), the bore through it lit, bracket rings along the bore"""
@@ -805,6 +1147,107 @@ def solid(name, part, size, J=None, bevel=0.05):
     proto.hide_render = proto.hide_viewport = True
     PROTO[name] = me
     return me
+
+
+def quarter_x(part, xs, r_out, r_in, seg, m, m_in, m_end=None, end_from=None):
+    """a quarter of a barrel's shell built whole (no booleans: the cut planes through an octagon's corners left the
+    exact solver's faces dangling), centred on +y from -45 to +45 deg, its corners every 360/seg deg; sampled at the
+    x of xs (rising) with outer and inner radii r_out(x) > r_in(x); m outside and on its back end, m_in inside and on
+    its cut faces; m_end (from x end_from) its last band outside and its front end"""
+    bm = part._bm(False, False)
+    th = [math.radians(-45.0 + k * 360.0 / seg) for k in range(seg // 4 + 1)]
+    O = [[bm.verts.new((x, r_out(x) * math.cos(t), r_out(x) * math.sin(t))) for t in th] for x in xs]
+    I = [[bm.verts.new((x, r_in(x) * math.cos(t), r_in(x) * math.sin(t))) for t in th] for x in xs]
+    n, last = len(th), len(xs) - 1
+    groups = {m: [], m_in: [], m_end: []}
+
+    def face(vs, mm):
+        groups[mm].append(bm.faces.new(vs))
+    for i in range(last):
+        mo = m_end if (m_end and end_from is not None and xs[i] >= end_from - 1e-6) else m
+        for k in range(n - 1):
+            face((O[i][k], O[i][k + 1], O[i + 1][k + 1], O[i + 1][k]), mo)
+            face((I[i][k + 1], I[i][k], I[i + 1][k], I[i + 1][k + 1]), m_in)
+        face((O[i][0], O[i + 1][0], I[i + 1][0], I[i][0]), m_in)
+        face((O[i][-1], I[i][-1], I[i + 1][-1], O[i + 1][-1]), m_in)
+    for k in range(n - 1):
+        face((O[0][k + 1], O[0][k], I[0][k], I[0][k + 1]), m)
+        face((O[last][k], O[last][k + 1], I[last][k + 1], I[last][k]), m_end or m)
+    allf = [f for fs in groups.values() for f in fs]
+    bmesh.ops.recalc_face_normals(bm, faces=allf)
+    for mm, fs in groups.items():
+        for f in fs:
+            f.material_index = part._slot(mm)
+
+
+def barrel_prof(x0, x1, dr=0.0):
+    """BARREL's outline from x0 to x1 as (x, r - dr): its section ends between, its radius at both ends"""
+    xs = sorted({x0, x1} | {e for a, b, _, _ in BARREL for e in (a, b) if x0 < e < x1})
+    out = []
+    for x in xs:                                          # (sections overlap 0.01: one point where they meet)
+        if out and x - out[-1][0] < 0.015:
+            continue
+        out.append((x, outer_r(x) - dr))
+    if x1 - out[-1][0] < 0.015:                           # (the end itself, never a ring a hair from it)
+        out.pop()
+    out.append((x1, outer_r(x1) - dr))
+    return out
+
+
+def design_part(me, keep, name):
+    """a copy of the design's mesh `me` holding only its connected parts keep(min corner, max corner) accepts (their
+    faces, UVs and materials as they are)"""
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.verts.ensure_lookup_table()
+    seen, drop = set(), []
+    for v in bm.verts:
+        if v.index in seen:
+            continue
+        comp, stack = [], [v]
+        seen.add(v.index)
+        while stack:
+            a = stack.pop()
+            comp.append(a)
+            for e in a.link_edges:
+                b = e.other_vert(a)
+                if b.index not in seen:
+                    seen.add(b.index)
+                    stack.append(b)
+        lo = Vector([min(q.co[k] for q in comp) for k in range(3)])
+        hi = Vector([max(q.co[k] for q in comp) for k in range(3)])
+        if not keep(lo, hi):
+            drop += comp
+    bmesh.ops.delete(bm, geom=drop, context="VERTS")
+    out = bpy.data.meshes.new(name)
+    bm.to_mesh(out)
+    bm.free()
+    for m in me.materials:
+        out.materials.append(m)
+    return out
+
+
+def joined(name, meshes):
+    """one mesh of several, their materials merged (each face's slot remapped), their UVs (all 'UVMap') kept"""
+    bm, mats = bmesh.new(), []
+    for me in meshes:
+        n0 = len(bm.faces)
+        bm.from_mesh(me)
+        idx = []
+        for m in me.materials:
+            if m not in mats:
+                mats.append(m)
+            idx.append(mats.index(m))
+        bm.faces.ensure_lookup_table()
+        for k in range(n0, len(bm.faces)):
+            f = bm.faces[k]
+            f.material_index = idx[f.material_index] if f.material_index < len(idx) else 0
+    out = bpy.data.meshes.new(name)
+    bm.to_mesh(out)
+    bm.free()
+    for m in mats:
+        out.materials.append(m)
+    return out
 
 
 def turned(me, deg, name):
@@ -897,75 +1340,146 @@ def armour_piece(S, st, bone, k, nm, region, ops):
     return p, J
 
 
+def design_house(S, me, log=print):
+    """style 10's house: the design's gunhouse `me` cut (cut_design), its static remainder joined to the baked dark
+    core (inside its walls: the floor's, the rear wall's foot's and the roof's outlines), the dark floor and fins
+    under the roof and the gun house's interior; its pieces with the clip's motions (the house frame):
+      rear the rear half (wall and roof strip, one rigid L, with the railings and fittings on the strip): first,
+           tipped aft 65 deg on the rear wall's foot, then yawed 6 deg and stepped 0.2 m out (the halves'
+           thickened centre edges overlap at the hinge). The survey's sweep: the U lifting first takes the ears
+           up through the strip, and the strip's forward corners pass out through the lifted walls; tipped
+           first, the strips are aft of the U by 31 deg
+      U    the inverted U, the roof's front half with the side wall's upper panel: straight up 0.45 H, no tilt,
+           once the rear halves are 43 deg over
+      low  the side wall's lower panel: 0.6 m out and 8 cm up (clear of the skirt's ring and ledge), then forward
+           0.47 H along its foot, under the U's lifting tab"""
+    q = offset2d(S.Tc, -0.3)
+    a = Part(overlap=True)                                # 1. the core cut by the interior's hollows, the slab
+    loft_rings(a, list(zip(S.rings, S.z)), M_DARK)        #    under the roof closing them over
+    interior_orig(a, S)
+    a.post.free()
+    a.post = bmesh.new()
+    loft(a, q, S.zc - 0.05, q, S.zc + 0.04, M_DARK, post=True)
+    cut, proto = a.solid("TANA_T16_house_cut", bevel=0.0)
+    tanakit.CHECK.pop(cut.name, None)
+    bpy.data.objects.remove(proto)
+    h = Part(overlap=True)                                # 2. every interior part united with it at once (in the
+    h.mesh(cut)                                           #    cut's post union they met each other badly: hidden
+    bpy.data.meshes.remove(cut)                           #    doubled faces)
+    interior_orig(h, S)
+    x = min(p[0] for p in q) + 0.6
+    while x < max(p[0] for p in q) - 0.6:                 # (under the roof's 6.52: nothing shows through it)
+        abox(h, (x - 0.08, S.y0 - 6.0, S.zc - 0.02), (x + 0.08, S.y0 + 6.0, S.zc + 0.2), M_PAINT, post=True)
+        x += 0.6
+    h.settle()
+    core = solid("house", h, 2048)
+    static, parts = cut_design(me, S, log)
+    house = joined("TANA_T16_house", [static, core])
+    H = Z1 - Z0
+    (xa, va), (xb, vb) = ORIG_B[2], ORIG_B[3]
+    (xc, zc0), (xk, vk, zk) = ORIG_REAR
+    armour = []
+    for nm, me_p, J in parts:
+        sg = 1.0 if nm.endswith("L") else -1.0
+        if nm.startswith("U_"):                           # (once the rear halves' roof strips are aft of it)
+            ops = [("T", Vector((0, 0, 0.45 * H)), (0.17, 0.42))]
+        elif nm.startswith("low_"):                       # (out of the wall's plane first, then under the U's tab)
+            fwd = Vector((xb - xa, sg * (vb - va), 0)).normalized()
+            out = Vector((-fwd.y, fwd.x, 0)) * sg             # (outboard: the foot's normal, either side)
+            ops = [("T", out * 0.6 + Vector((0, 0, 0.08)), (0.17, 0.27)), ("T", fwd * (0.47 * H), (0.28, 0.45))]
+        else:                                             # (first: tipped, then yawed out once clear of the U)
+            C = Vector((xc, ORIG_Y, zc0))
+            axis = (Vector((xk, ORIG_Y + sg * vk, zk)) - C).normalized()
+            ops = [("T", Vector((0, sg * 0.2, 0)), (0.12, 0.3)), ("R", Vector((0, 0, 1)), C, sg * 6.0, (0.12, 0.3)),
+                   ("R", axis, C, -sg * 65.0, (0.03, 0.26))]
+        armour.append(("Armor_" + nm, me_p, J, ops))
+    return house, armour
+
+
 def build(coll, log=print, style=None):
     """the style's mount on both turrets (their house, gun and trunnion objects changed in place), its moving pieces
     into `coll`; tanakit.WORK and tanakit.TEX set by the caller. Style 0: nothing (the design's Iowa mount stays)"""
-    global FLASH, SINK
+    global FLASH, SINK, SPLIT, MUZZLE, BARREL, INNER, SEG
     n, st = style_of(style)
     if not st:
         log("firemode: style 0, the design's mount kept")
         return TURRET
     FLASH = CLIP["flash"] if st["barrel"].get("clip") else None
+    cl = dict(CLIP, **st.get("clip_tune", {}))            # (a style's own amounts: the original gun is slimmer)
     SINK = st.get("sink", 0.06)                           # (style 10's interior and walls union clean at 0.05 only)
+    orig = st.get("orig", False)                          # (the design's own gunhouse and gun roots kept: style 10)
+    gun = ORIG_GUN if orig else REBUILT_GUN
+    SPLIT, MUZZLE, BARREL, INNER, SEG = gun["split"], gun["muzzle"], gun["barrel"], orig, gun["seg"]
     bpy.context.scene.frame_set(1)
     first = Turret("FWD")
     tl = first.R.inverted() @ first.trun.matrix_basis.translation
-    S = Shell(tl.y, tl.z)
-    plan = armour_plan(st, S)
-    moves = {nm for _, k, nm, _, _ in plan if k == "wall"}
-    roof_moves = any(k == "roof" for _, k, _, _, _ in plan)
-    # the house: the core, its skirt, every armour slab that stays, the roof if it stays, the bays under what moves
-    h = Part(overlap=True)
-    loft(h, S.Bc, Z0 - 0.3, S.Tc, S.zc, M_DARK)
-    h.prism(offset2d(S.B, 0.22), "Z", 0.0, Z0 + 0.28)
-    for name in NAMES:
-        if name in moves:
-            if not st.get("interior"):
-                bay(h, S, name)
-        else:
-            slab(h, S, name)
-            if st.get("circuit"):
-                circuit(h, S, name, WHOLE, sum(map(ord, name)))
-    if st.get("roof_static"):                                # part of the roof stays; under the rest, fins
-        lo, hi = st["roof_static"]
-        roof_slab(h, S, x_lo=None if lo < -90 else lo, x_hi=None if hi > 90 else hi)
-        roof_details(h, S, lo, hi)
-        x = hi + 0.5
-        while x < 9.6:
-            abox(h, (x - 0.08, S.y0 - 6.0, S.zc - 0.02), (x + 0.08, S.y0 + 6.0, S.zc + 0.3), M_PAINT, post=True)
-            x += 0.6
-        x = lo - 0.5
-        while x > -13.8:                                      # (and aft, under a rear block that rises)
-            abox(h, (x - 0.08, S.y0 - 5.0, S.zc - 0.02), (x + 0.08, S.y0 + 5.0, S.zc + 0.3), M_PAINT, post=True)
-            x -= 0.6
-    elif not roof_moves:
-        roof_slab(h, S)
-        roof_details(h, S)
-    else:                                                   # under the roof: a dark floor and heat-sink fins
-        q = offset2d(S.Tc, -0.3)
-        loft(h, q, S.zc - 0.05, q, S.zc + 0.04, M_DARK, post=True)
-        x = min(p[0] for p in q) + 0.6
-        while x < max(p[0] for p in q) - 0.6:
-            abox(h, (x - 0.08, S.y0 - 6.0, S.zc), (x + 0.08, S.y0 + 6.0, S.zc + 0.32), M_PAINT, post=True)
-            x += 0.6
-    for s, sg in (("L", 1.0), ("R", -1.0)):
-        if "aside_" + s not in moves:
-            ears(h, S, sg)
-    gun_wells(h, S)
-    face_lights(h, S)
-    if st.get("interior"):
-        interior(h, S, moves)
-    house = solid("house", h, 2048)
-    armour = []
-    for bone, k, nm, region, ops in plan:
-        p, J = armour_piece(S, st, bone, k, nm, region, ops)
-        armour.append((bone, solid(bone, p, 1024, J), J, ops))
+    S = OrigShell(tl.y, Vector(tl)) if orig else Shell(tl.y, tl.z)   # (the design's trunnion kept with its house)
+    orig_house, orig_gun = first.house.data, first.gun.data
+    if orig:                                              # the design's gunhouse, cut into the clip's pieces
+        house, armour = design_house(S, orig_house, log)
+    else:
+        plan = armour_plan(st, S)
+        moves = {nm for _, k, nm, _, _ in plan if k == "wall"}
+        roof_moves = any(k == "roof" for _, k, _, _, _ in plan)
+        # the house: the core, its skirt, every armour slab that stays, the roof if it stays, the bays under what moves
+        h = Part(overlap=True)
+        loft(h, S.Bc, Z0 - 0.3, S.Tc, S.zc, M_DARK)
+        h.prism(offset2d(S.B, 0.22), "Z", 0.0, Z0 + 0.28)
+        for name in NAMES:
+            if name in moves:
+                if not st.get("interior"):
+                    bay(h, S, name)
+            else:
+                slab(h, S, name)
+                if st.get("circuit"):
+                    circuit(h, S, name, WHOLE, sum(map(ord, name)))
+        if st.get("roof_static"):                                # part of the roof stays; under the rest, fins
+            lo, hi = st["roof_static"]
+            roof_slab(h, S, x_lo=None if lo < -90 else lo, x_hi=None if hi > 90 else hi)
+            roof_details(h, S, lo, hi)
+            x = hi + 0.5
+            while x < 9.6:
+                abox(h, (x - 0.08, S.y0 - 6.0, S.zc - 0.02), (x + 0.08, S.y0 + 6.0, S.zc + 0.3), M_PAINT, post=True)
+                x += 0.6
+            x = lo - 0.5
+            while x > -13.8:                                      # (and aft, under a rear block that rises)
+                abox(h, (x - 0.08, S.y0 - 5.0, S.zc - 0.02), (x + 0.08, S.y0 + 5.0, S.zc + 0.3), M_PAINT, post=True)
+                x -= 0.6
+        elif not roof_moves:
+            roof_slab(h, S)
+            roof_details(h, S)
+        else:                                                   # under the roof: a dark floor and heat-sink fins
+            q = offset2d(S.Tc, -0.3)
+            loft(h, q, S.zc - 0.05, q, S.zc + 0.04, M_DARK, post=True)
+            x = min(p[0] for p in q) + 0.6
+            while x < max(p[0] for p in q) - 0.6:
+                abox(h, (x - 0.08, S.y0 - 6.0, S.zc), (x + 0.08, S.y0 + 6.0, S.zc + 0.32), M_PAINT, post=True)
+                x += 0.6
+        for s, sg in (("L", 1.0), ("R", -1.0)):
+            if "aside_" + s not in moves:
+                ears(h, S, sg)
+        gun_wells(h, S)
+        face_lights(h, S)
+        if st.get("interior"):
+            interior(h, S, moves)
+        house = solid("house", h, 2048)
+        armour = []
+        for bone, k, nm, region, ops in plan:
+            p, J = armour_piece(S, st, bone, k, nm, region, ops)
+            armour.append((bone, solid(bone, p, 1024, J), J, ops))
     # the guns: the fixed parts, and one barrel piece turned round to each sector
     bs = st["barrel"]
+    # (the design's face leans back above the trunnions: the breech's cylinders came out through it ahead of x -1.42)
     stays = solid("stays", stays_part(rings=bs.get("mid", False), breech=st.get("interior", False),
                                       ring_mat=MAT["fm_ring"] if st.get("rings_glow") else None,
                                       rings_to=st.get("rings_to"), rails=not st.get("rings_to"),
-                                      core=st.get("core"), petals=bs.get("petals", False)), 1024, bevel=0)
+                                      core=st.get("core"), petals=bs.get("petals", False), boots=not orig,
+                                      breech_x=(-2.0, -0.2) if orig else (0.4, 0.6)),
+                  1024, bevel=0)
+    if orig:                                              # the design's root blocks (bloomers) with the rings and rods
+        stays = joined("TANA_T16_gun", [design_part(orig_gun, lambda lo, hi: hi.x < SPLIT + 0.005,
+                                                     "TANA_T16_roots"),
+                                         stays])
     angles = SPLITS[bs["split"]]
     cut = bs.get("cut", X_MID)
     core, rod_me = st.get("core"), None
@@ -1029,15 +1543,15 @@ def build(coll, log=print, style=None):
                     for k, a in enumerate(angles):
                         d = Vector((0, math.cos(math.radians(a)), math.sin(math.radians(a))))
                         if bs.get("clip"):              # the clip: quarters out, fronts back, staves pitched up
-                            st_ = CLIP["stages"]
-                            up = CLIP["pitch"][0 if abs(d.y) > 0.5 else (1 if d.z > 0 else 2)]
-                            ops = [("T", d * CLIP["part"], st_["part"])]
+                            st_ = cl["stages"]
+                            up = cl["pitch"][0 if abs(d.y) > 0.5 else (1 if d.z > 0 else 2)]
+                            ops = [("T", d * cl["part"], st_["part"])]
                             if seg == "front":          # (its turn about the stave's root: the rear half's back end)
-                                ops += [("T", d * CLIP["front_out"], st_["out"]),
-                                        ("R", Vector((0, 1, 0)), Vector((SPLIT - x0, 0, 0)) - d * CLIP["front_out"],
+                                ops += [("T", d * cl["front_out"], st_["out"]),
+                                        ("R", Vector((0, 1, 0)), Vector((SPLIT - x0, 0, 0)) - d * cl["front_out"],
                                          -up, st_["pitch"]),
-                                        ("T", Vector((-CLIP["back"] * CLIP["back_first"], 0, 0)), st_["back1"]),
-                                        ("T", Vector((-CLIP["back"] * (1 - CLIP["back_first"]), 0, 0)), st_["back2"])]
+                                        ("T", Vector((-cl["back"] * cl["back_first"], 0, 0)), st_["back1"]),
+                                        ("T", Vector((-cl["back"] * (1 - cl["back_first"]), 0, 0)), st_["back2"])]
                             else:
                                 ops.append(("R", Vector((0, 1, 0)), Vector((0, 0, 0)), -up, st_["pitch"]))
                         else:
@@ -1049,12 +1563,12 @@ def build(coll, log=print, style=None):
                             "GUNS", ops, {"fm_dir": a, "fm_barrel": b, "fm_x0": x0, "fm_len": L})
                 if rod_me is not None:                  # the rod, pushed forward once the staves are back
                     add("Barrel_%d_9" % b, rod_me, T.trun, Matrix.Translation((0.0, yc, 0.0)), "GUNS",
-                        [("T", Vector((core[2], 0, 0)), CLIP["stages"]["push"])],
+                        [("T", Vector((core[2], 0, 0)), cl["stages"]["push"])],
                         {"fm_barrel": b, "fm_rod": True, "fm_tip": core[1]})
                 for j, sg in enumerate((1.0, -1.0) if petal_me else ()):   # its sleeve's side petals fall out and
                     add("Barrel_%d_%d" % (b, 10 + j), petal_me[sg], T.trun, Matrix.Translation((0.0, yc, 0.0)), "GUNS",
                         [("R", Vector((1, 0, 0)), Vector((0, sg * PETAL[2], -PETAL[3])), -sg * 40.0,   # down (57-59)
-                          CLIP["stages"]["petal"])], {"fm_barrel": b, "fm_petal": True})
+                          cl["stages"]["petal"])], {"fm_barrel": b, "fm_petal": True})
                 continue
             for k, a in enumerate(angles):
                 d = Vector((0, math.cos(math.radians(a)), math.sin(math.radians(a))))

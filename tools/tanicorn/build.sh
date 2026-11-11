@@ -32,13 +32,16 @@ MODEL="$OUT/model/Tanacorn_model.blend"
 DESIGN=art/tanicorn/design/Leviathan_animated.blend
 stale=0
 [ -f "$MODEL" ] || stale=1
-for f in "$DESIGN" tools/tanicorn/model_tanacorn.py tools/tanicorn/hull_uv.py tools/tanicorn/straighten.py; do
+for f in "$DESIGN" tools/tanicorn/model_tanacorn.py tools/tanicorn/hull_uv.py tools/tanicorn/straighten.py \
+         tools/tanicorn/firemode.py tools/tanicorn/tanakit.py; do
     [ "$stale" = 1 ] || [ "$f" -nt "$MODEL" ] && stale=1
 done
 if [ "$stale" = 1 ]; then
     echo "tanicorn: building the model (log: $OUT/model.log; about 2 minutes)"
     "$BLENDER" -b "$DESIGN" -P tools/tanicorn/model_tanacorn.py -- "$OUT/model" > "$OUT/model.log" 2>&1 || true
     grep -q "^model: every part clean: True" "$OUT/model.log" && grep -q "^model: saved" "$OUT/model.log" \
+        && { ! grep -q "^model: every part clean, the 16-inch" "$OUT/model.log" \
+             || grep -q "^model: every part clean, the 16-inch mount's too: True" "$OUT/model.log"; } \
         || { echo "tanicorn: the model didn't build clean ($OUT/model.log)"; grep -i "error\|assert" "$OUT/model.log" | head; exit 1; }
 fi
 # 2. the parts, and each read back
@@ -89,6 +92,7 @@ for p in json.load(open(os.path.join(out, 'parts.json'))):
     n = 'Tani_' + p
     print(' '.join({'hull': ['Model/SM_SV_' + n],
                     'vls': ['Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/SM_SV_%s_DAM' % n, 'Model/AS_SV_%s_Open' % n],
+                    'deploy': ['Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/AS_SV_%s_Deploy' % n],
                     'turret': ['BP_SV_' + n, 'Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/SM_SV_%s_DAM' % n]}[k]))
 "); do
     [ -f "$COOKED/$a.uasset" ] || { echo "tanicorn: $a not cooked ($OUT/cook.log)"; exit 1; }

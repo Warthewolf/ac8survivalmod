@@ -148,8 +148,9 @@ outwards. Feel free to model an interior of the gun housing.", then "have the fr
 the front section of the roof lift up". Then an 8 s screen recording of an anime battleship's turrets transforming:
 "Watch this frame by frame. I want it to look exactly like this." That is **style 10 (DEFAULT_STYLE)**. Not yet
 approved. (The recording is the user's and stays out of the repository; so do the side-by-side sheets with its frames.)
-- `tools/tanicorn/firemode.py` (run by model_tanacorn.py; `TANA_FM_STYLE` 1-8, 0 for the design's Iowa mount) models
-  the mount from scratch on tanakit.py's clean solids, in place of the Iowa's on both turrets: the design's outline,
+- `tools/tanicorn/firemode.py` (run by model_tanacorn.py; `TANA_FM_STYLE` 1-10, 0 for the design's Iowa mount) models
+  the mount (styles 1-9; style 10 keeps the design's own house and gun roots, below) from scratch on tanakit.py's clean
+  solids, in place of the Iowa's on both turrets: the design's outline,
   size and yaw pivot, the trunnion moved back to 1.2 m behind the face (house frame (11.42, 0.10, 3.17) m), the muzzles
   where they were. The house is an armour SHELL over a dark core: 13 wall slabs and the roof, each mitred to its
   neighbours with a seam between; under every slab a style moves, a bay of dark machinery (a sunk panel, ribs, pipes;
@@ -175,27 +176,42 @@ approved. (The recording is the user's and stays out of the repository; so do th
   core assemblies 15 degenerate faces: to clean.
   **10** (the clip, read frame by frame by a workflow of analysts and checked against its frames by two more,
   2026-11-11; the frame numbers in firemode.py): each barrel's shell is four quarters, top, bottom, port and starboard,
-  their seams an X on a light-grey muzzle rim (shell 0.3 m thick, bore 0.58 m), each cut at mid length (the user's
+  their seams an X on a light-grey muzzle rim (shell 0.22 m thick, bore 0.47 m), each cut at mid length (the user's
   "split the barrels in the middle"; the clip's shells are whole, sliding about a third of the barrel back into the
   turret: with three guns close together that collides, so the halves telescope instead); the quarters step out from
-  the rod together with a pale lemon flash from the seams (firemode.FLASH); each gun's ribbed sleeve drops a band out
-  and down on either side like petals (PETAL; Barrel_<gun>_10 / _11); the front halves step out further and slide
-  back over the rear ones in two steps (their ends at 65 % of the barrel) while the whole staves pitch up about their
-  roots ("angle themselves upwards": the side quarters 10 deg, the top one 5, the bottom one level); the rod, a plain
-  khaki cylinder with a paler rounded tip (r 0.24 m; its own piece, Barrel_<gun>_9), pushes 2 m forward to 88 % of
-  the barrel and lights lemon as the gun charges, three cream coil rings at its root and strips along the staves'
-  inner edges with it (CLIP). The armour as the clip's side shot draws it (frames 141-183): the aft side wall's seam
-  runs level at about half height to 0.36 of the wall, slopes down to 0.3 H and drops to the foot; the L-shaped
-  panel above it (its forward tab full height) lifts straight up 0.45 H with the roof's front section, in two halves
-  either side of the centre line, each an inverted U ("the front right and left sides, along with the front section
-  of the roof lift up": the far turret, frames 169-171, the superfiring one, 34-45); the lower panel slides forward
-  0.47 H along the foot and 0.1 H out; the rear wall and a strip of the rear roof 0.75 H deep, one rigid L in a half
-  each side of the centre line, tip aft 65 deg on the rear face's foot (yawed 6 deg out, a gap between them): the wall
-  a ramp, the roof strip a leaf standing up, leaning toward the house ("the back left and back right"); the front
-  corners stay. Behind the opened walls the gun house's interior, cut only where walls open (the training gear's big
-  drum, the hoist, shell racks; a doorway through each rear corner). No strut arms. 36k triangles a turret; every part
-  a clean solid (nothing in the interior meets another face flat on: what stands on something sinks a little into it;
-  the slabs sink 0.05 m into the core, style 10's "sink").
+  the rod together with a pale lemon flash from the seams (firemode.FLASH); the front halves step out further and
+  slide back 6.8 m over the rear ones in two steps while the whole staves pitch up about their roots ("angle
+  themselves upwards": the side quarters 10 deg, the top one 5, the bottom one level); the rod, a plain khaki cylinder
+  with a paler rounded tip (r 0.2 m; its own piece, Barrel_<gun>_9), pushes 2 m forward, its tip to 20.7 m (84 % of
+  the barrel), and lights lemon as the gun charges, three cream coil rings at its root and strips along the staves'
+  inner edges with it (CLIP).
+  **Outside, the design's own turret** (the user, 2026-11-11: "I want the turret to maintain its original appearance
+  on the outside. Except for the barrel, you can change that"; asked, the armour still opens): closed, style 10 is the
+  design's Iowa-style house and gun roots as they were, their own sheets and textures (`orig`; renders match the
+  design's to the pixel but for the barrels). The barrels are rebuilt as the quarters on the design's own octagonal
+  profile (ORIG_GUN: 1.027 m to 4.40, a taper to 0.896, a step to 0.752, the muzzle at 24.53, from the root block's
+  chamfer at 1.545); the root blocks, chamfers and trunnion (0.83 m ahead of the face) stay the design's; the breech's
+  recoil cylinders and cradle end behind the face plate, which leans back above the trunnions. The house's sheets are
+  cut along hidden seams (firemode.cut_design; the survey of 2026-11-11 measured the house, ORIG_*) into the clip's
+  pieces, each side of the centre line (cut on y 0.102, where the design's own centre-line vertices lie):
+  the rear half (the rear wall and the roof strip aft of the roof's x -10.97 edge row, with what stands on it: the
+  rear railing, the aft side railings and the V frame's two beams cut on that row) tips aft 65 deg on the rear wall's
+  own foot (z 2.03 at the centre, 1.57 at the corners), then yaws 6 deg and steps 0.2 m out ("the back left and back
+  right"); then the inverted U (the roof forward of that row, the aft side wall above its stepped seam (x -13.9..-7.5
+  at z 3.39, down to 2.38 at x -1.35, then the foot at x -1.0) with its full-height forward tab, the rangefinder ear,
+  the box on the tab, the other railings and roof fittings) lifts straight up 0.45 H ("the front right and left
+  sides, along with the front section of the roof lift up"); the lower panel steps 0.6 m out and 8 cm up (over the
+  skirt's ring and ledge), then slides 0.47 H forward along its foot under the lifted tab. The rear halves go first, as
+  the clip's side shot does (frames 177-179): the other way round, the ears and the lifted walls pass through the rear
+  strips (the survey's sweep); a collision sweep over the whole transform (51 poses) finds every contact only
+  shrinking from the closed pose. The forward walls, the face and its gun-port collars, the floor, the sloped
+  underside and the skirt stay. Each moving sheet is thickened 0.25 m inward, its inner skin the plate itself (the
+  design's sheet seen from behind, as under an overhang) and its rims the plate's but on the cuts, light grey. Behind
+  them a dark core 0.3 m inside the walls with the gun house's interior where walls open (the training gear's drum,
+  the hoist, shell racks, a doorway through each rear half), built in two passes (the core cut by the hollows, then
+  every interior part united with it at once: in the cut's own union they met each other badly). No strut arms. 30k
+  triangles a turret (the core and interior 21k); the core a clean solid (nothing in the interior meets another face
+  flat on); the design's sheets are open by nature and stay out of the clean check.
 - **Each piece** is an object `TANA_T16_<tag>_<bone>` carrying its motion (`fm_ops`: translations and turns, each over
   a stretch of the 2.5 s transform), part (`fm_part`: ARMOR or GUNS) and bone (`fm_bone`). Keyed into the model's
   timeline: deploy 110-185, stow 226-301.
