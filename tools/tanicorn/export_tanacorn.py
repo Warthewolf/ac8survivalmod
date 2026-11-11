@@ -583,15 +583,42 @@ for side in "LR":
 # sits on the water as before. In the ship's frame (x forward, z up, the waterline at z = 0); the hull pitches about its
 # midships at the waterline, bow up positive.
 RISE_FPS = 30
-# t s, hull z m, hull pitch deg (bow up): under the sea, the bow out at 3 s, ~60 deg and the bow ~540 m up at 9.5-11 s, the
-# hang, the fall, the slam at 17.6 s (6 m under its waterline), the bounce, at rest at 20 s
-RISE_HULL = [(0.0, -130.0, 0.0), (1.5, -130.0, 8.0), (3.0, -100.0, 22.0), (4.0, -60.0, 35.0), (7.0, 120.0, 55.0),
-             (9.5, 250.0, 60.0), (11.0, 255.0, 61.0), (12.5, 230.0, 58.0), (16.0, 60.0, 25.0), (17.6, -6.0, -1.5),
-             (18.6, 2.0, 0.5), (20.0, 0.0, 0.0)]
-# t s, the camera's x, y, z m in UE's axes (x the ship's forward, y its starboard: y -1900 is off her port beam) and its
-# pitch / yaw deg (UE's: yaw 90 looks to starboard, at her): framing the bow's climb, then the slam
-RISE_CAM = [(0.0, 200.0, -1900.0, 90.0, 2.0, 90.0), (10.0, 150.0, -1800.0, 140.0, 12.0, 90.0),
-            (17.6, 100.0, -1650.0, 110.0, 1.0, 90.0), (20.0, 100.0, -1600.0, 100.0, 0.0, 90.0)]
+# (0.74.64) the motion of the user's own surfacing shot (tools/tanicorn/surface_tanacorn.py pose(), its constants): her bow
+# out along her own axis at 35 deg, fast and slowing, until it stands 120 m over the water with a third of her out; the
+# hang; her bow down about where she stands in the water, faster and faster; the slam at 9 s; the pitching and heaving as
+# she settles. The user on 0.74.63's rise (60 deg, the bow 538 m up, the first plan's keys): "it was waaay to high up", as
+# on the shot's first test ("THATS WAAAY TOO HIGH"). Faded to rest by RISE_END (the shot's 13.5 s left a 5 cm bob).
+SURF_UP0, SURF_UP1, SURF_SLAM, RISE_END = 0.5, 5.0, 9.0, 15.0
+SURF_PITCH, SURF_BOW, SURF_TOP = math.radians(35.0), 325.0, 120.0
+SURF_D0 = -(SURF_BOW + 25.0)                             # the ship's middle along her axis from the surface: the start
+SURF_D1 = SURF_TOP / math.sin(SURF_PITCH) - SURF_BOW     # ... and at the top (-116 m: 209 m of her 650 out)
+
+
+def surf_pose(t):
+    """the hull's origin (its middle at the waterline: x forward, z up, m, from its rest) and its nose-up pitch (deg) at t:
+    surface_tanacorn.py's pose(), and the settle faded out from 13.5 s to RISE_END"""
+    bx = -SURF_D1                                         # where her axis stands in the sea (she ends at the origin)
+    if t <= SURF_UP1:
+        s = min(1.0, max(0.0, (t - SURF_UP0) / (SURF_UP1 - SURF_UP0)))
+        d = SURF_D0 + (SURF_D1 - SURF_D0) * (1.0 - (1.0 - s) ** 1.8)
+        th = SURF_PITCH
+        return bx + math.cos(th) * d, math.sin(th) * d, math.degrees(th)
+    if t <= SURF_SLAM:
+        s = (t - SURF_UP1) / (SURF_SLAM - SURF_UP1)
+        th = SURF_PITCH * math.cos(math.pi / 2 * s ** 1.7)
+        return bx + math.cos(th) * SURF_D1, math.sin(th) * SURF_D1, math.degrees(th)
+    u = t - SURF_SLAM
+    k = math.exp(-0.9 * u)
+    w = 1.0 if t <= 13.5 else max(0.0, (RISE_END - t) / (RISE_END - 13.5))
+    w = w * w * (3 - 2 * w)
+    return 0.0, -3.0 * k * math.cos(2.2 * u) * w, -2.2 * k * math.sin(2.6 * u) * w
+
+
+# t s, the camera's place and the point it looks at, m in UE's axes from her rest (x her forward, y her starboard: y < 0
+# is off her port side): low on the water off her port bow, close as her stem comes up, then further off and wider as
+# her bow comes down and she levels (the surfacing shot's two cameras, as one moving camera)
+RISE_CAM = [(0.0, 700.0, -650.0, 12.0, 300.0, 0.0, 40.0), (5.0, 680.0, -660.0, 14.0, 200.0, 0.0, 70.0),
+            (9.0, 900.0, -1100.0, 25.0, 60.0, 0.0, 15.0), (15.0, 950.0, -1250.0, 30.0, 0.0, 0.0, 10.0)]
 
 
 def pchip(keys, col, t):
@@ -639,23 +666,26 @@ class Dot:
 
 def rise_rig():
     bow_x = max((D["LEV_HULL.001"].matrix_world @ Vector(c)).x for c in D["LEV_HULL.001"].bound_box)
-    length = RISE_HULL[-1][0]
-    assert abs(RISE_CAM[-1][0] - length) < 1e-6 and RISE_HULL[-1][1:] == (0.0, 0.0), "the rise must end at rest"
+    length = RISE_END
+    assert abs(RISE_CAM[-1][0] - length) < 1e-6 and surf_pose(length) == (0.0, 0.0, 0.0), "the rise must end at rest"
     n = int(round(length * RISE_FPS)) + 1
     times = [i / RISE_FPS for i in range(n)]
     cam_rest = Vector((RISE_CAM[-1][1], -RISE_CAM[-1][2], RISE_CAM[-1][3]))   # (UE y -> Blender -y)
     hq, ht, cq, ct = [], [], [], []
-    top = (-1e9, 0.0, 0.0)
+    top, breach = (-1e9, 0.0, 0.0), None
     for t in times:
-        z, p = pchip(RISE_HULL, 1, t), pchip(RISE_HULL, 2, t)
+        x, z, p = surf_pose(t)
         q = Quaternion((0.0, 1.0, 0.0), math.radians(-p))            # (about +Y by -p: the bow, +X, up)
         hq.append((q.x, q.y, q.z, q.w))
-        ht.append((0.0, 0.0, z))
+        ht.append((x, 0.0, z))
         bow = (q.to_matrix() @ Vector((bow_x, 0.0, 0.0))).z + z
         if bow > top[0]:
             top = (bow, t, p)
-        c = [pchip(RISE_CAM, i, t) for i in range(1, 6)]
-        r = ue_matrix(c[3], c[4]).to_quaternion()
+        if breach is None and bow >= 0.0:
+            breach = t
+        c = [pchip(RISE_CAM, i, t) for i in range(1, 7)]
+        dx, dy, dz = c[3] - c[0], c[4] - c[1], c[5] - c[2]               # (UE axes: from the camera to what it looks at)
+        r = ue_matrix(math.degrees(math.atan2(dz, math.hypot(dx, dy))), math.degrees(math.atan2(dy, dx))).to_quaternion()
         if cq and Quaternion(cq[-1][3:] + cq[-1][:3]).dot(r) < 0:     # (one hemisphere: no flip between samples)
             r.negate()
         cq.append((r.x, r.y, r.z, r.w))
@@ -666,14 +696,18 @@ def rise_rig():
             "parents": {b: (joints[p][0] if p >= 0 else None) for b, p, _ in joints},
             "sockets": [{"name": "SOC_Hull", "bone": "BN_RiseHull", "loc": [0.0, 0.0, 0.0], "rot": [0.0, 0.0, 0.0]},
                         {"name": "SOC_Cam", "bone": "BN_RiseCam", "loc": [0.0, 0.0, 0.0], "rot": [0.0, 0.0, 0.0]}],
-            "anim": {"name": "Rise", "length_s": length, "fps": RISE_FPS, "samples": n, "hull_keys": RISE_HULL,
+            "anim": {"name": "Rise", "length_s": length, "fps": RISE_FPS, "samples": n,
+                     "hull_keys": [(t, round(surf_pose(t)[1], 2), round(surf_pose(t)[2], 2)) for t in (0.0, 0.5, 2.0, 5.0, 7.0, 9.0, 10.0, 12.0, 15.0)],
+                     "motion": "surface_tanacorn.py pose(): up 0.5-5 s at 35 deg to the bow 120 m up, the slam at 9 s",
+                     "breach_s": round(breach, 3), "slam_s": SURF_SLAM, "top_range_m": [100.0, 140.0],
                      "cam_keys": RISE_CAM, "bow_x_m": round(bow_x, 3), "bow_top_m": round(top[0], 2), "bow_top_s": round(top[1], 3),
-                     "pitch_at_top_deg": round(top[2], 2), "start_z_m": RISE_HULL[0][1],
+                     "pitch_at_top_deg": round(top[2], 2), "start_z_m": round(surf_pose(0.0)[1], 2),
                      "note": "BN_RiseHull from the actor (the hull's waterline at midships), BN_RiseCam from it too; the end "
                              "is the rest pose (the hull bone the identity): docs/design/INVINCIBLE_FLEET_RISE_FORD.md 2.3"}}
     finish("RIG", Dot(), info, joints, ("Rise", times, [(1, hq, ht), (2, cq, ct)]), wreck=False)
-    print("export: RIG Rise %.1f s, %d samples: the bow's top %.1f m at %.2f s (pitch %.1f), from %.0f m under; the bow at x %.1f m"
-          % (length, n, top[0], top[1], top[2], -RISE_HULL[0][1], bow_x))
+    print("export: RIG Rise %.1f s, %d samples: the bow's top %.1f m at %.2f s (pitch %.1f), from %.0f m under; the bow out "
+          "at %.2f s, the slam at %.1f s; the bow at x %.1f m" % (length, n, top[0], top[1], top[2], -surf_pose(0.0)[1], breach,
+                                                                  SURF_SLAM, bow_x))
 
 
 rise_rig()

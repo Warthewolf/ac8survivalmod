@@ -1706,6 +1706,7 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
         function c:SetVariableFloat(n, v) self.vars[tostring(n)] = v end
         function c:SetVariableVec3(n, v) self.vars[tostring(n)] = v end
         function c:SetVariableLinearColor(n, v) self.vars[tostring(n)] = v end
+        function c:SetVariableVec4(n, v) self.vars[tostring(n)] = v end
         function c:Deactivate() self.active = false end
         fxs[#fxs + 1] = c
         return c
@@ -1723,11 +1724,10 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
           and fb.vars["User.BeamLength"] and fb.vars["User.BeamLength"].X == 200000 and fb.vars["User.BeamLength"].Y == 1
           and li.MainLaser.active == false and li.EndLaser.active == false and has(line("fires a volley", from8), "AC8's beam"),
           "a volley: AC8's beam on the laser's root (it swings with it), 1.24 km long in cm, its life the volley's; AC7's never lit")
-    -- ((2026-11-11) the user: "change the laser color to red") li_color on the beam's User.BeamColor: AC7's hot red, logged
-    local bc = fb and fb.vars["User.BeamColor"]
-    check(bc and bc.R == 100 and bc.G == 21.5 and bc.B == 22.8 and bc.A == 1
-          and has(line("beam colour (100.0, 21.5, 22.8)", from8), "SetVariableLinearColor User.BeamColor"),
-          "... red: li_color (AC7's (100, 21.5, 22.8)) on its User.BeamColor, logged")
+    -- ((0.74.64) the user's A/B of 0.74.63: "only the blue laser showed": a LinearColor write of User.BeamColor hid the
+    -- beam) shipped: no colour written (AC8's own), said once; li_color with li_color_how "v4": a Vec4, nothing else
+    check(fb and fb.vars["User.BeamColor"] == nil and fb.vars["BeamColor"] == nil and has(line("beam colour: AC8's own", from8), "li_color empty"),
+          "... its colour AC8's own: User.BeamColor never written by default (it hid the beam), logged")
     clock = t0 + 35; ZLAS.tick()
     check(#fxs == 3 and fxs[3].sys == statics[ep] and fb.vars["User.BeamLength"].Y == 0.5 and li.EndLaser.active == false,
           "its end: AC8's end flash, the beam thinning")

@@ -682,9 +682,10 @@ end }
 -- (2026-11-11) Ctrl+R: THE TANACORN rises on her rig (WP4's route B2: docs/design/INVINCIBLE_FLEET_RISE_FORD.md 2.3, 3 and
 -- 5's T3). The hull as Ctrl+Y spawns it, broadside rise.ahead_cm out; its RiseRig (BP_SV_Tani_HULL's first component: our
 -- three-bone SK_SV_Tani_RIG, HullMesh on its SOC_Hull, every part on HullMesh) scrubbed to 0 (the whole ship 130 m under
--- the sea), after hold_s played at rate: the bow out at 3 s, ~60 deg with the bow ~540 m up at 9.5-11 s, the hang, the fall,
--- the slam at 17.6 s, the bounce, at rest at 20 s (AS_SV_Tani_RIG_Rise's end: her spot on the water). With cinematic: your
--- view on a camera actor (SV_SpawnCam) on the rig's SOC_Cam (its keys in the same animation, off her port beam), your plane
+-- the sea), after hold_s played at rate (0.74.64: her surfacing shot's motion): the bow out at 0.8 s along her own axis at
+-- 35 deg, standing 120 m over the water at 5 s, the hang, her bow down about where she stands in the water, the slam at 9 s,
+-- the settle, at rest at 15 s (AS_SV_Tani_RIG_Rise's end: her spot on the water). With cinematic: your view on a camera
+-- actor (spawned from Lua, else SV_SpawnCam) on the rig's SOC_Cam (its keys in the same animation, low off her port bow), your plane
 -- invincible, flown round where you are by the runtime's loiter autopilot (SV_Down), the enemies' attack limits on you at
 -- 0; all put back after (and at a second Ctrl+R, the run's end or the hull gone). At breach_s the Alicorn's surfacing plume
 -- and sound at the bow, at slam_s AC8's vessel foam and splashes along her keel line and a shake. The times are the rig's
@@ -694,17 +695,35 @@ end }
 -- from Lua, 0.74.55), `tanicorn: rise cinematic: ...`, `tanicorn: rise over: ...`.
 -- If the hull never moves while the rig plays: its bone doesn't move what hangs on it (the plan's risk 1): the log's
 -- VisibilityBasedAnimTickOption read-back says whether the blueprint's value took.
-TANI.rise = { hold_s = 1.5, rate = 1.0, breach_s = 3.0, slam_s = 17.6, cinematic = true, blend_s = 1.0, cam_fov = 55,
-              autopilot_alt_m = 1500, autopilot_radius_m = 3500, every_s = 0.5, ahead_cm = 500000, find_s = 10, end_pad_s = 1.0,
+-- ((0.74.64) the user on 0.74.63's rise: "the rise worked but it was waaay to high up and there was no VFX's with it": the
+-- rig now plays her surfacing shot's motion (35 deg, the bow 120 m up at 5 s, the slam at 9 s, at rest at 15 s:
+-- export_tanacorn.py surf_pose); the effects spawn with no pre-cull (0.74.63's "26 of 26 up" counted calls: the cull check
+-- at 2.2 km may have handed back nothing) and each one counted only when it came back; the camera spawned from Lua
+-- (SV_SpawnCam answers -1 solo: it needs co-op's own plane))
+TANI.rise = { hold_s = 1.5, rate = 1.0, breach_s = 0.8, slam_s = 9.0, length_s = 15.0, cinematic = true, blend_s = 1.0,
+              cam_fov = 55, autopilot_alt_m = 1500, autopilot_radius_m = 3500, every_s = 0.5, ahead_cm = 500000, find_s = 10,
+              end_pad_s = 1.0,
+              breach_m = 115.8,                          -- (where her axis stands in the sea: from her rest midships, forward)
+              spray_s = 0.5, spray_scale = 1.5,          -- (the sea off her where she stands in the water, rising and falling)
+              fx_scale = 1.5,                            -- (the Ford's effects, for a 333 m ship, on her 650 m)
               bow_x_m = 324.8,                           -- (the bow's tip from midships: tools/tanicorn's hull export)
               -- the two hull sockets the pitch is measured between, and their rest angle (deg: the hull's json, UE cm)
               bow_socket = "Mount_RAILCANNON", stern_socket = "Mount_VLSD_8", rest_pitch = math.deg(math.atan(-691.8 - 991.4, 12590.4 + 26400.0)),
               part = "Part_T16_FWD",
               anim = "/Game/Mods/SurvivalMode/Tanicorn/Model/AS_SV_Tani_RIG_Rise",
-              breach_fx = "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_ex03_alcn_surfacing01_ON",
+              -- (the Alicorn's own four surfacing systems, all at once where she breaks the surface)
+              breach_fx = { "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_ex03_alcn_surfacing01_ON",
+                            "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_ex03_alcn_surfacing02_ON",
+                            "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_ex03_alcn_surfacing03_ON",
+                            "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_ex03_alcn_surfacing04_ON" },
               breach_sound = "/Game/WwiseAssets/BA002_alcn/AKE_BA002_alcn_Surface_Play",
+              spray_fx = "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsWaveSplashL001",
+              foam_fx = "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsWaveFoamXL001",
               slam_fx = { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsWaveFoamXL001",
                           "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsWaveSplashL001" },
+              -- (the Ford's death's water pillars, either side of her forebody at the slam: x forward of midships, y across)
+              pillar_fx = "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsPillarL001",
+              pillars = { { 100, -60 }, { 100, 60 }, { 200, -55 }, { 200, 55 }, { 280, -40 }, { 280, 40 } },
               slam_spots = 13, shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios",
               shake_km = 8 }
 local RISE_ATTACKERS = { "MaxPlaneAttackerMissiles", "MaxPursuitAttackers", "MaxNonPlaneAttackerMissiles" }   -- (sv_down.lua's)
@@ -717,13 +736,18 @@ local function riseAsset(path, cls)                      -- an asset by path (a 
     if RA[full] then pin(RA[full], "the rise's " .. full:match("[^%.]+$")) end
     return RA[full]
 end
-local function riseFx(path, where, n)                    -- an AC8 effect at a place: whether it went
+local function riseFx(path, where, n)                    -- an AC8 effect at a place: whether one came back, live
     local lib, sys = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary"), riseAsset(path)
     if not (valid(lib) and sys and liveObj(survivalPC)) then return false end
-    return pcall(function()
-        lib:SpawnSystemAtLocation(survivalPC, sys, where, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = n or 1, Y = n or 1, Z = n or 1 },
-            true, true, 0, true)
+    -- ((0.74.64) bPreCullCheck false: with it on, the spawn may hand back nothing for a far camera, and 0.74.63 counted
+    -- the calls, not what came back)
+    local ok, c = pcall(function()
+        return lib:SpawnSystemAtLocation(survivalPC, sys, where, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = n or 1, Y = n or 1, Z = n or 1 },
+            true, true, 0, false)
     end)
+    if not (ok and c) then return false end
+    local okV, v = pcall(function() return c:IsValid() end)
+    return okV and v == true
 end
 local function riseSound(path, where)
     local ev, ak = riseAsset(path), StaticFindObject("/Script/AkAudio.Default__AkGameplayStatics")
@@ -801,7 +825,20 @@ local function riseCine(R)                               -- the cinematic: autop
     end
     R.cine = true
     local cam, why = nil, "no SV_Spawncam (runtime 0.32.1)"
-    if type(SV_SpawnCam) == "function" and me then
+    -- ((0.74.64) a CameraActor spawned from Lua first, as sv_escort_li.lua spawns the laser (deferred, then finished):
+    -- SV_SpawnCam answered -1 in the user's solo run of 0.74.63, it finds the world through co-op's own plane)
+    local gs, ccls = StaticFindObject("/Script/Engine.Default__GameplayStatics"), StaticFindObject("/Script/Engine.CameraActor")
+    if valid(gs) and valid(ccls) and me and liveObj(survivalPC) then
+        local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = me.X, Y = me.Y, Z = me.Z + 3000 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+        local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(survivalPC, ccls, t, 1, nil, 1) end)
+        if okB and x and valid(x) then
+            pcall(function() gs:FinishSpawningActor(x, t, 1) end)
+            if valid(x) then cam, why = x, "spawned from Lua" end
+        else
+            why = "the Lua spawn gave nothing (" .. tostring(okB and x or "error") .. ")"
+        end
+    end
+    if not cam and type(SV_SpawnCam) == "function" and me then
         local ca = SV_SpawnCam(me.X, me.Y, me.Z + 3000)
         why = "SV_SpawnCam " .. tostring(ca)
         if type(ca) == "number" and ca > 0 then
@@ -922,20 +959,53 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
     local t = riseHere(R)
     if now >= R.next then R.next = now + C.every_s; R.lastBow, R.lastStern, R.lastMid = riseLook(R, t) end
     if R.state ~= "rising" then return end
-    if not R.breached and t >= C.breach_s and R.lastBow then
-        R.breached = true
-        local where = { X = R.lastBow.X, Y = R.lastBow.Y, Z = R.z }
-        log(string.format("tanicorn: rise breach at +%.1f s: the plume %s, the sound %s", t, riseFx(C.breach_fx, where) and "up" or "FAILED",
-            riseSound(C.breach_sound, where) and "played" or "FAILED"))
+    -- ((0.74.64) the sea round her, in her rest frame: her rest place (R.x, R.y, R.z) and forward (the actor's, as a vector:
+    -- rotators don't read from Lua). Her motion (the surfacing shot's) slides along her own axis through one point on the
+    -- sea, then pivots about it (breach_m forward of her rest midships), so that's where the water stands round her)
+    if not R.fwd then
+        local f = v3(R.o, function() return R.o:GetActorForwardVector() end)
+        local h = f and math.sqrt(f.X * f.X + f.Y * f.Y) or 0
+        R.fwd = h > 1e-6 and { X = f.X / h, Y = f.Y / h } or { X = 1, Y = 0 }
+        R.fx = { up = 0, of = 0 }
     end
-    if not R.slammed and t >= C.slam_s and R.lastBow and R.lastStern then
-        R.slammed = true
-        local n, ok = math.max(2, C.slam_spots), 0
-        for i = 0, n - 1 do                                -- (along her keel line, the stern socket's end to the bow's, at sea level)
-            local k = i / (n - 1) * 1.3 - 0.15
-            local where = { X = R.lastStern.X + (R.lastBow.X - R.lastStern.X) * k, Y = R.lastStern.Y + (R.lastBow.Y - R.lastStern.Y) * k, Z = R.z }
-            for _, fx in ipairs(C.slam_fx) do if riseFx(fx, where) then ok = ok + 1 end end
+    local function spot(along_m, across_m)               -- a place on the sea in her frame (m: forward, starboard)
+        local f = R.fwd
+        return { X = R.x + (f.X * along_m - f.Y * across_m) * 100, Y = R.y + (f.Y * along_m + f.X * across_m) * 100, Z = R.z }
+    end
+    local function fx(path, where, sc)
+        R.fx.of = R.fx.of + 1
+        if riseFx(path, where, sc) then R.fx.up = R.fx.up + 1; return true end
+        return false
+    end
+    if not R.breached and t >= C.breach_s then
+        R.breached = true
+        local where, up = spot(C.breach_m, 0), 0
+        for _, p in ipairs(C.breach_fx) do if fx(p, where, 1) then up = up + 1 end end
+        log(string.format("tanicorn: rise breach at +%.1f s: %d of %d of the Alicorn's surfacing effects up (%.0f m forward of her "
+            .. "rest midships), the sound %s", t, up, #C.breach_fx, C.breach_m, riseSound(C.breach_sound, where) and "played" or "FAILED"))
+    end
+    -- the sea pouring off her where she stands in it, both sides, while she rises and her bow comes down; from her hang on,
+    -- along her hull aft of it too, as the rest of her comes up through the surface
+    if R.breached and t < C.slam_s + 0.5 and now >= (R.sprayAt or 0) then
+        R.sprayAt = now + C.spray_s
+        R.sprays = (R.sprays or 0) + 1
+        local side = (R.sprays % 2 == 0) and 1 or -1
+        fx(C.spray_fx, spot(C.breach_m + math.random(-20, 20), side * 35), C.spray_scale)
+        if R.sprays % 3 == 0 then fx(C.foam_fx, spot(C.breach_m, 0), C.spray_scale) end
+        if t > 5.0 then
+            local back = math.min(300, (t - 5.0) / 4.0 * 300)      -- (5 -> 9 s: from where she stands to 300 m aft of it)
+            fx(C.spray_fx, spot(C.breach_m - back * math.random(), -side * 35), C.spray_scale)
         end
+    end
+    if not R.slammed and t >= C.slam_s then
+        R.slammed = true
+        local n, up, of = math.max(2, C.slam_spots), 0, 0
+        for i = 0, n - 1 do                                -- (along her keel, stern to bow, at sea level)
+            local where = spot(-300 + 600 * i / (n - 1), 0)
+            for _, p in ipairs(C.slam_fx) do of = of + 1; if fx(p, where, C.fx_scale) then up = up + 1 end end
+        end
+        local pu = 0
+        for _, q in ipairs(C.pillars) do if fx(C.pillar_fx, spot(q[1], q[2]), C.fx_scale) then pu = pu + 1 end end
         local shook = false
         local cls = riseAsset(C.shake, true)
         local you = playerLocation()
@@ -945,12 +1015,13 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
             shook = pcall(function() survivalPC:ClientStartCameraShake(cls, sc, 0, { Pitch = 0, Yaw = 0, Roll = 0 }) end)
                 or pcall(function() survivalPC.PlayerCameraManager:StartCameraShake(cls, sc, 0, { Pitch = 0, Yaw = 0, Roll = 0 }) end)
         end
-        log(string.format("tanicorn: rise slam at +%.1f s: %d of %d effects up along her keel, the shake %s (%.1f km)", t, ok,
-            n * #C.slam_fx, shook and "on" or (cls and "not on" or "NOT loaded"), km_))
+        log(string.format("tanicorn: rise slam at +%.1f s: %d of %d foam / splashes along her keel, %d of %d water pillars up; "
+            .. "the shake %s (%.1f km); %d of %d of the rise's effects came back in all (%d sprays)", t, up, of, pu, #C.pillars,
+            shook and "on" or (cls and "not on" or "NOT loaded"), km_, R.fx.up, R.fx.of, R.sprays or 0))
     end
     local okI, still = pcall(function() return R.rig:IsPlaying() end)
     local done = (t >= C.slam_s + 2.4 and okI and still == false)
-        or now - R.t1 >= 20.0 / math.max(0.05, C.rate) + C.end_pad_s
+        or now - R.t1 >= C.length_s / math.max(0.05, C.rate) + C.end_pad_s
     if done and not R.ended then
         R.ended = true
         R.endAt = now

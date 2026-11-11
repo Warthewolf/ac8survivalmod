@@ -143,7 +143,8 @@ for p in parts:
                             % (a.name, secs, an["length_s"], m0.translation.z, an["start_z_m"], end_off, end_turn, top, top_t,
                                an["bow_top_m"], an["bow_top_s"]))
                     ok = (ok and abs(secs - an["length_s"]) < 1.0 / an["fps"] + 1e-3 and m0.translation.z < -100.0
-                          and end_off < 0.01 and end_turn < 0.05 and 500.0 <= top <= 600.0 and abs(top - an["bow_top_m"]) < 1.0)
+                          and end_off < 0.01 and end_turn < 0.05 and abs(top - an["bow_top_m"]) < 1.0
+                          and an.get("top_range_m", [500.0, 600.0])[0] <= top <= an.get("top_range_m", [500.0, 600.0])[1])
         say(ok, msg)
     if info["kind"] == "turret":
         print("CHECK      %-8s pitch pivot %s cm, sockets %s, guns lie %s m from the pivot" % (p, [v for k, v in info["bones"].items() if k.endswith("turret_pitch")][0], [(s["name"], s["loc"]) for s in info["sockets"]], info["guns_forward_m"]))

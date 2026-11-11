@@ -2576,3 +2576,36 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - Not reported yet: the textures (Ctrl+Y) and the V's look.
 - build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1; the Tanicorn container 0.74.62's), build
   70659557f22e... registered. INSTALLED 2026-11-11 22:34 (backup: build/backup/install_before_0.74.63).
+
+## 0.74.64 (2026-11-11 22:50; the rise at the surfacing shot's height with its effects and camera, the beam picker)
+- The user's runs of 0.74.63: "the rise worked but it was waaay to high up and there was no VFX's with it" and "only the
+  blue laser showed".
+  - The rise rig WORKS (22:36:49-22:37:12): the hull already up scrubbed under the sea, played 20 s exactly as keyed
+    (the bow's tip ~538 m at 10.7 s, pitch 60.7, the slam at 17.6 s, back within 0.1 m), every part riding HullMesh on
+    the rig's bone, no revert. VisibilityBasedAnimTickOption read back 0 (the enum's first value as UE4SS reads it) and the
+    bone moved its children anyway: the plan's risk 1 is gone.
+  - Too high: the first plan's keys (RISE_FORD.md 2.3); the user had said the same of the surfacing shot's first test at
+    60 deg ("THATS WAAAY TOO HIGH") and chose 35 deg with the bow 120 m up. The rig now plays that shot's own motion
+    (export_tanacorn.py surf_pose = surface_tanacorn.py pose(): out along her axis at 35 deg from 0.5 s, the bow out of the
+    water at 0.8 s, 120 m up at 5 s, the hang, the bow down about where she stands in the water, the slam at 9 s, the
+    settle faded to rest at 15 s: `export: RIG Rise 15.0 s, 451 samples: the bow's top 119.9 m at 5.00 s (pitch 35.0),
+    from 201 m under`); its camera low on the water off her port bow, keyed as look-at points.
+  - No VFX: the breach plume, its sound and "26 of 26" slam effects were CALLS that didn't error (the spawn's return never
+    checked), with bPreCullCheck on and the player 2.2 km off. Now no pre-cull, each effect counted only when it comes back
+    live; at the breach (0.8 s) all four of the Alicorn's own surfacing systems where her axis stands in the sea (115.8 m
+    forward of her rest midships: the shot's BREACH); every 0.5 s to the slam the vessels' splash (and foam every third)
+    there on alternate sides, from her hang on along her hull aft of it as the rest of her comes up; at the slam foam and
+    splashes along her keel, six NS_VesselsPillarL001 water pillars beside her forebody, the shake (`tanicorn: rise slam:
+    ... N of M of the rise's effects came back in all`).
+  - The camera never came: SV_SpawnCam answered -1 (it finds the world through co-op's own plane: solo has none). A
+    CameraActor is now spawned from Lua (BeginDeferredActorSpawnFromClass + FinishSpawningActor), SV_SpawnCam the fallback.
+  - The laser: every LinearColor write of User.BeamColor (0.74.62's, and 0.74.63's three reds) hid the beam; with nothing
+    written AC8's blue showed. li_color is now {} (off) and written only as li_color_how says ("v4" / "v3"; "lc" hid it).
+    Ctrl+[ is a beam picker, a press each: AC8's UAV beam (its blue), it with BeamColor as a Vec4, as a Vec3, AC8's player
+    TLS beam NS_TLS_Muzzleflash01, the wingmen's, the NPCs' (their colours are their emitters': MI_TLS_01_Beam3 & co. hold
+    only Emissive 40 / 0.8-5, no colour), named on the HUD. escort_test: no BeamColor written by default.
+- build/tanicorn: CHECK ALL OK (18 parts), ue_import 0 warnings (`AS_SV_Tani_RIG_Rise: 15.0 s`), TaniBuild done (0 errors).
+  build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1), build 08ac01a8b201... registered. INSTALLED
+  2026-11-11 22:50 (backup: build/backup/install_before_0.74.64).
+- To see in game: Ctrl+Y then Ctrl+R (lower, with spray, plumes, pillars and the camera low off her bow); Ctrl+U then
+  Ctrl+[ six times near the LASER mount: which beams show, which red.

@@ -246,11 +246,17 @@ local function tint(r, c)
         return
     end
     local lc = { R = num(col[1], 1), G = num(col[2], 0), B = num(col[3], 0), A = 1 }
-    local how
-    for _, n in ipairs({ "User.BeamColor", "BeamColor" }) do
-        if pcall(function() c:SetVariableLinearColor(FName(n), lc) end) then how = how or ("SetVariableLinearColor " .. n) end
+    -- ((0.74.64) only User.BeamColor, in the type li_color_how says: 0.74.62's LinearColor write (and a second, "BeamColor",
+    -- a name the system hasn't) hid the beam: a value of another type than the parameter's is added beside it [I])
+    local how, w = nil, z.li_color_how or "v4"
+    local n = FName("User.BeamColor")
+    if w == "lc" then
+        if pcall(function() c:SetVariableLinearColor(n, lc) end) then how = "SetVariableLinearColor User.BeamColor" end
+    elseif w == "v3" then
+        if pcall(function() c:SetVariableVec3(n, { X = lc.R, Y = lc.G, Z = lc.B }) end) then how = "SetVariableVec3 User.BeamColor" end
+    else
+        if pcall(function() c:SetVariableVec4(n, { X = lc.R, Y = lc.G, Z = lc.B, W = 1 }) end) then how = "SetVariableVec4 User.BeamColor" end
     end
-    if not how and pcall(function() c:SetColorParameter(FName("BeamColor"), lc) end) then how = "SetColorParameter BeamColor" end
     if not r.tintSaid then
         r.tintSaid = true
         say("%s's beam colour (%.1f, %.1f, %.1f): %s", r.name, lc.R, lc.G, lc.B, how or "NOT set (no colour call took)")
@@ -673,21 +679,31 @@ end
 
 -- TEST ONLY BEGIN
 -- Ctrl+[ (ESC.testLaser): a volley now on every ZFA-44's laser (the beam seen with no missile near), their state logged
--- ((2026-11-11) the beam's red, to choose by eye: each press the next of these on li_color, logged; User.BeamColor may be
--- the beam's colour outright or a tint on AC8's own, which only the screen tells)
-local REDS = { { 100, 21.5, 22.8, "AC7's HDR red" }, { 20, 2, 2, "a mid red" }, { 1, 0.08, 0.08, "a plain red" },
-               { nil, nil, nil, "AC8's own colour (no BeamColor set: the blue TLS Alyssa saw)" } }   -- ((0.74.63) the A/B)
-local redAt = 0
+-- ((0.74.64) the user's A/B of 0.74.63: "only the blue laser showed": the LinearColor writes of User.BeamColor hid the
+-- beam) the candidates for a red beam, one a press, each logged and named on the HUD: the UAV beam with its colour written
+-- as a Vec4 or a Vec3, and AC8's other TLS beams (the player's, the wingmen's, the NPCs': each its own colours, the same
+-- User.BeamLength; their colour is in their emitters, not their materials: MI_TLS_01_Beam3 & co. have none), and AC8's
+-- own blue to come back to
+local TLS = "/Game/VFX/Vehicles/Weapon/TLS/"
+local BEAMS = {
+    { label = "AC8's UAV beam, its own blue", fx = TLS .. "NS_UAVTLS_Muzzleflash01", col = {} },
+    { label = "the UAV beam, BeamColor red as a Vec4", fx = TLS .. "NS_UAVTLS_Muzzleflash01", col = { 20, 2, 2 }, how = "v4" },
+    { label = "the UAV beam, BeamColor red as a Vec3", fx = TLS .. "NS_UAVTLS_Muzzleflash01", col = { 20, 2, 2 }, how = "v3" },
+    { label = "the player's TLS beam", fx = TLS .. "NS_TLS_Muzzleflash01", col = {} },
+    { label = "the wingmen's TLS beam", fx = TLS .. "NS_TLS_Muzzleflash01_Wingman", col = {} },
+    { label = "the NPC TLS beam", fx = TLS .. "NS_NPC_TLS_Muzleflash01", col = {} },
+}
+local beamAt = 0
 function ZLI.test()
     if not ZLI.on() then log("test: Ctrl+[: AC7's LaserInterceptor isn't on (mode " .. tostring(ZLI.mode) .. ")"); return end
     local s = st()
     local clock, n = os.clock(), 0
-    redAt = redAt % #REDS + 1
-    local red = REDS[redAt]
-    zc().li_color = red[1] and { red[1], red[2], red[3] } or {}
+    beamAt = beamAt % #BEAMS + 1
+    local b, z = BEAMS[beamAt], zc()
+    z.li_fx_beam, z.li_color, z.li_color_how = b.fx, b.col, b.how or z.li_color_how
     for _, r in pairs(s.L) do r.tintSaid = nil end
-    log(string.format("test: Ctrl+[: the beam's colour %d of %d, %s%s", redAt, #REDS, red[4],
-        red[1] and string.format(" (%.1f, %.1f, %.1f)", red[1], red[2], red[3]) or ""))
+    log(string.format("test: Ctrl+[: beam %d of %d, %s (%s%s)", beamAt, #BEAMS, b.label, b.fx:match("[^/]+$"),
+        #b.col >= 3 and string.format(", User.BeamColor (%.0f, %.0f, %.0f) as %s", b.col[1], b.col[2], b.col[3], b.how) or ""))
     for _, r in pairs(s.L) do
         if liveLaser(r) then
             local okS, stNow = pcall(SV_LaserState, r.liA)
@@ -695,8 +711,7 @@ function ZLI.test()
             if r.phase ~= "volley" then volleyOn(s, r, clock, "test key Ctrl+["); n = n + 1 end
         end
     end
-    hudCallout("TEST: AC7 LASERS", n > 0 and string.format("%d VOLLEY%s, %s", n, n == 1 and "" or "S",
-            red[1] and string.format("RED %d OF %d", redAt, #REDS - 1) or "AC8'S OWN BLUE")
+    hudCallout("TEST: AC7 LASERS", n > 0 and string.format("BEAM %d OF %d: %s", beamAt, #BEAMS, b.label:upper())
         or "NO LASER UP (CTRL+DEL: A CARRIER, CTRL+U: THE LASER MOUNT)")
 end
 if ESC then ESC.testLaser = function() ZLI.test() end end

@@ -1152,7 +1152,11 @@ CFG = {
                                  -- end flash has none), set on each beam as it's spawned. AC7's own beam's colour, a hot
                                  -- red (docs/re/LASER_INTERCEPTOR.md 4: (100, 21.5, 22.8)); {} keeps AC8's. Every
                                  -- LaserInterceptor's: the ZFA-44s' and the TANACORN's LASER mounts'
-                                 li_color = { 100, 21.5, 22.8 },
+                                 -- ((0.74.64) the user's A/B of 0.74.63: "only the blue laser showed": every write of
+                                 -- User.BeamColor as a LinearColor hid the beam, whatever the red. Off ({}) until a way
+                                 -- shows: li_color_how "v4" / "v3" writes it as a Vec4 / Vec3, "lc" as a LinearColor
+                                 -- (0.74.62's, which hides it); Ctrl+[ (dev) cycles the candidates, other beams too)
+                                 li_color = {}, li_color_how = "v4",
                                  li_hit_sound = "/Game/WwiseAssets/Events/SFX/SPWP_OTH_TLS_HIT" },
                          text = { on_station = "%s ON STATION", on_station_sub = "ITS ZFA-44S LAUNCH IN %d S",
                                   launch = "ZFA-44S LAUNCHED", launch_sub = "FROM %s",
