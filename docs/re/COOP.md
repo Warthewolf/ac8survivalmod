@@ -603,4 +603,10 @@ to the maximum), "hl" and "fwe" whole numbers, "fsx" only the fishing and festiv
 object index -1-63, a whole level, the joiner's spawn queue a unit once and 256 at most, a unit this game hasn't
 dropped at SV_UnitAlive -2, "bd" / "dn" ids whole 1-65535, "ev" names of 64 characters at most, pendKeep 512 units.
 coop_guard_test.lua has no known defect left: a new finding fails it.
+(2026-11-11, Saint Alessia's 50-round run, the Alicorn: docs/re/ALICORN.md 6) "rnd" field 16 is the host's Alicorn for the
+joiners' NEXT row, `<0-4>:<s | e | 0-100>:<0 | 1>` (anything else: none; guard rows in coop_guard_test.lua). A joiner keeps
+the host's "hp" for an id it hasn't bound yet (M.pendHp, 4,096 at most) and puts it on that ship's or part's copy as it's
+bound; hostHit tallies each joiner's hits a minute (`coop: the joiners' hits dealt here in the last 60 s ...`, the refusals
+counted there, no longer once a run); a replay for a unit ("ev|<event>|<unit>") waits on a joiner until its copy's up;
+hostSync sends a rejoiner's Alicorn at the host's hull with its leg 2 s on.
 

@@ -575,9 +575,8 @@ function hudTick(now, paused, pc)
         local hp = shuttleHealth()
         local cd = D.shuttleClock and D.shuttleClock.cd or (now - sp.at)
         nextS = string.format(t.launch_row, clock(math.max(0, CFG.specials.shuttle.countdown_s - cd)), hp or 100)
-    elseif D.special and D.special.kind == "alicorn" and D.special.state == "sail" then
-        local sp = D.special
-        nextS = string.format(t.alicorn_row, sp.tanks or 4, sp.coreOpen and "EXPOSED" or "SHUT", sp.dived and "  (DIVED)" or "")
+    elseif SPC.alicornRow and SPC.alicornRow(t) then   -- ((2026-11-11) the host's, or a co-op joiner's from the host's
+        nextS = SPC.alicornRow(t)                      -- "rnd": its core's health once it's open, sv_alicorn.lua)
     elseif D.special and D.special.kind == "ladon" and D.special.state == "run" then
         nextS = string.format(t.ladon_row, SPC.ladonsLeft(D.special), D.special.runs or 0)
     elseif D.special and D.special.kind == "amphibious" and D.special.state == "assault" then

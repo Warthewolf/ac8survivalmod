@@ -1858,6 +1858,8 @@ CFG.hud = {
         alicorn_surface = "THE ALICORN HAS SURFACED",
         alicorn_core = "CORE EXPOSED",
         alicorn_core_sub = "HIT THE ALICORN'S CORE",
+        -- ((2026-11-11) its core's health once it's open: the row's CORE, and the callout as it drops past 75 / 50 / 25 %)
+        alicorn_core_pct = "%d%%", alicorn_core_left = "ALICORN CORE: %d%%", alicorn_core_left_sub = "KEEP HITTING IT",
         alicorn_down = "THE ALICORN IS SINKING",
         alicorn_down_sub = "+%d ZOLLARS",
         ladon_go     = "LADONS FROM THE WEST",
