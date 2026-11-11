@@ -834,13 +834,27 @@ testKey("R", "sv_tanicorn.lua's rise test", function()
     if cls then pin(cls, "tanicorn hull class") end
     local anim = riseAsset(C.anim)
     local ok, rows = rowsIn()
+    -- ((0.74.63) a hull of ours already up (Ctrl+Y's) rises where it is: its unit can't spawn again while its flight is up
+    -- (hard rule 16; the user's run of 0.74.62, 22:24: every Ctrl+R after a Ctrl+Y "not spawned (its last flight is still up)")
+    local before, up = {}, nil
+    for _, o in ipairs(FindAllOf(H.class) or {}) do
+        before[addrOf(o) or 0] = true
+        if valid(o) and not nameOf(o):find("Default__", 1, true) then up = o end
+    end
+    local at0 = up and v3(up, function() return up:K2_GetActorLocation() end)
+    if at0 then
+        log(string.format("tanicorn: Ctrl+R, the hull already up rises where it is: %s at (%.0f, %.0f, %.0f); the rise animation %s",
+            (nameOf(up):match("([^%.:]+)$")) or "?", at0.X, at0.Y, at0.Z, anim and "loaded" or "NOT loaded"))
+        hudCallout("TEST: THE TANACORN RISES", "THE HULL ALREADY UP")
+        RISE = { o = up, name = nameOf(up), x = at0.X, y = at0.Y, z = at0.Z, before = {}, anim = anim, at = os.clock(),
+                 state = "finding", next = 0 }
+        return
+    end
     local p = playerLocation()
     if not p then log("tanicorn: no player location"); return end
     local yaw = playerYaw()
     local x, y = p.X + math.cos(math.rad(yaw)) * C.ahead_cm, p.Y + math.sin(math.rad(yaw)) * C.ahead_cm
     local face = (yaw + 90) % 360                         -- (broadside: the rise camera is off her port beam)
-    local before = {}
-    for _, o in ipairs(FindAllOf(H.class) or {}) do before[addrOf(o) or 0] = true end
     local r
     if FISH and FISH.spawn then r = FISH.spawn(H.unit, x, y, H.z_cm, face) else r = SV_Spawn(H.unit, x, y, H.z_cm, face) end
     log(string.format("tanicorn: Ctrl+R, %s at (%.0f, %.0f, %d) facing %.0f: %s%s; rows: %s; the rise %s", H.unit, x, y, H.z_cm,
@@ -854,8 +868,10 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
     if not R or R.back then return end
     if not D or (levelTorn and levelTorn()) then riseBack(R, "the run's over"); RISE = nil; return end
     if R.state == "finding" then                          -- (the new hull of ours, then its rig, hull mesh and part)
-        for _, o in ipairs(FindAllOf(TANI.hull.class) or {}) do
-            if valid(o) and not nameOf(o):find("Default__", 1, true) and not R.before[addrOf(o) or 0] then R.o, R.name = o, nameOf(o) end
+        if not R.o then                                   -- ((0.74.63) not when it's the hull already up)
+            for _, o in ipairs(FindAllOf(TANI.hull.class) or {}) do
+                if valid(o) and not nameOf(o):find("Default__", 1, true) and not R.before[addrOf(o) or 0] then R.o, R.name = o, nameOf(o) end
+            end
         end
         if R.o then
             R.rig = riseComp(R.o, "/Script/Engine.SkeletalMeshComponent", "RiseRig")

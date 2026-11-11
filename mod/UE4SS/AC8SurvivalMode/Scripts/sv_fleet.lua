@@ -363,6 +363,13 @@ local function inFrame(c, l, yaw)
     local dx, dy = v.X - l.X, v.Y - l.Y
     local p, r
     pcall(function() local w = c:K2_GetComponentRotation(); p, r = tonumber(w.Pitch), tonumber(w.Roll) end)
+    if p == nil then                                      -- ((0.74.63) the user's run of 0.74.62: every pitch "?": rotators
+        pcall(function()                                  -- don't read from Lua (0.74.55); its +X as a vector does
+            local f = c:GetForwardVector()
+            local n = math.sqrt(f.X * f.X + f.Y * f.Y + f.Z * f.Z)
+            if n > 1e-6 then p = math.deg(math.asin(math.max(-1, math.min(1, f.Z / n)))) end
+        end)
+    end
     return { x = (dx * math.cos(a) + dy * math.sin(a)) / 100, y = (-dx * math.sin(a) + dy * math.cos(a)) / 100, z = (v.Z - l.Z) / 100,
              p = p, r = r }
 end

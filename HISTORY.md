@@ -2556,3 +2556,23 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - To see in game: Ctrl+R (the rise and its camera; the log's VisibilityBasedAnimTickOption line if the hull doesn't
   move); Ctrl+U, then missiles at the LASER mount from inside 2 km (its red beam, `zfa li: ... shot down`); Ctrl+[ near it
   for the three reds; Ctrl+Y for the textures (once at the highest Texture Quality too); Ctrl+B and Ctrl+G for GEOFON.
+
+## 0.74.63 (2026-11-11 22:34; Lua only: the laser beam's aim in the log, Ctrl+R on the hull already up, GEOFON's pitch)
+- The user's run of 0.74.62 (22:20-22:29): AC7's LaserInterceptor on the LASER mounts WORKS: three mounts, 5 volleys,
+  7 of her missiles shot down (`zfa li: BP_SV_Tani_LASER@... swings onto BP_plwp_msl_r0@... 1741 m off`, `... shot
+  down`), each from inside 2 km (1.98 km down to 215 m); no CIWS round from the LASER (0 shell lines: the no-ammo row is
+  its aim only); every beam's colour call took (`SetVariableLinearColor User.BeamColor`). But the user: "I never saw a
+  beam from the laser". The same AC8 beam drew on the ZFA-44s in 0.74.31 (Alyssa: "the blue TLS"). Likely: the mount aims
+  at the player and the laser swings onto HER missiles, so its beam points at the camera, seen end on; or the red broke
+  its look. Each volley and kill now logs `the beam points N deg off the line to you (D km away: under ~5 deg it's seen end
+  on), pitch P; the beam active A, visible V` (the root's forward vector: vectors read from Lua, rotators don't), and
+  Ctrl+[ has a 4th step, AC8's own colour (no BeamColor), for the A/B.
+- Ctrl+R never ran: every press after a Ctrl+Y was "not spawned (its last flight is still up)" (hard rule 16). It now
+  rises the hull already up where it is (`tanicorn: Ctrl+R, the hull already up rises where it is: ...`), and spawns one
+  only when none is.
+- Ctrl+B posed the V and parted the halves (25 m each way by +18 s), but every pitch read "?" (K2_GetComponentRotation
+  from Lua): the copies' pitch now comes from their forward vectors, so the gap line reads too. Ctrl+G spawned GEOFON; its
+  stages weren't reached (one press).
+- Not reported yet: the textures (Ctrl+Y) and the V's look.
+- build_all.sh (ZFA=1 TANI=1), package_dev.sh (VALKA=1 ZFA=1 TANI=1; the Tanicorn container 0.74.62's), build
+  70659557f22e... registered. INSTALLED 2026-11-11 22:34 (backup: build/backup/install_before_0.74.63).

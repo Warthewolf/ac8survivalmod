@@ -241,7 +241,10 @@ end
 local function tint(r, c)
     local z = zc()
     local col = z.li_color
-    if not (c and liveObj(c)) or type(col) ~= "table" or #col < 3 then return end
+    if not (c and liveObj(c)) or type(col) ~= "table" or #col < 3 then
+        if c and not r.tintSaid then r.tintSaid = true; say("%s's beam colour: AC8's own (li_color empty)", r.name) end
+        return
+    end
     local lc = { R = num(col[1], 1), G = num(col[2], 0), B = num(col[3], 0), A = 1 }
     local how
     for _, n in ipairs({ "User.BeamColor", "BeamColor" }) do
@@ -252,6 +255,31 @@ local function tint(r, c)
         r.tintSaid = true
         say("%s's beam colour (%.1f, %.1f, %.1f): %s", r.name, lc.R, lc.G, lc.B, how or "NOT set (no colour call took)")
     end
+end
+-- ((0.74.63) the user's run of 0.74.62: "I never saw a beam from the laser" while the LASER mount's volleys shot 7 of her
+-- missiles down, its beam spawned each time) where a laser's beam points against you: its root's forward (a vector:
+-- vectors read from Lua, rotators don't), the angle between it and the line from the laser to you (near 0: the beam points
+-- at you, seen end on), your distance; and whether the beam's component is active and visible
+local function aimNote(r)
+    local okR, root = pcall(function() return r.li:K2_GetRootComponent() end)
+    if not (okR and root) then return "its aim unread" end
+    local okL, o = pcall(function() local v = root:K2_GetComponentLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    local okF, f = pcall(function() local v = root:GetForwardVector(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    local you = playerLocation and playerLocation()
+    local fx = r.fxBeam
+    local act, vis = "?", "?"
+    if fx and liveObj(fx) then
+        pcall(function() act = tostring(fx:IsActive()) end)
+        pcall(function() vis = tostring(fx:IsVisible()) end)
+    end
+    if not (okL and o and okF and f and you) then return string.format("its aim unread; the beam active %s, visible %s", act, vis) end
+    local dx, dy, dz = you.X - o.X, you.Y - o.Y, you.Z - o.Z
+    local d = math.sqrt(dx * dx + dy * dy + dz * dz)
+    local fl = math.sqrt(f.X * f.X + f.Y * f.Y + f.Z * f.Z)
+    if d < 1 or fl < 1e-6 then return "you on top of it" end
+    local c = math.max(-1, math.min(1, (f.X * dx + f.Y * dy + f.Z * dz) / (d * fl)))
+    return string.format("the beam points %.0f deg off the line to you (%.1f km away: under ~5 deg it's seen end on), "
+        .. "pitch %+.0f; the beam active %s, visible %s", math.deg(math.acos(c)), d / 100000, math.deg(math.asin(f.Z / fl)), act, vis)
 end
 local function beam(r, yz)
     if ac8fx() then
@@ -386,7 +414,7 @@ local function volleyOn(s, r, clock, why)
         pcall(function() r.li.MainLaser:SetActive(true, true) end)   -- (AC7's OnCreateWeaponEnd: the beam from its start)
     end
     s.volleys = s.volleys + 1
-    say("%s fires a volley (%s; %s; %d so far)", r.name, why, how, s.volleys)
+    say("%s fires a volley (%s; %s; %d so far); %s", r.name, why, how, s.volleys, aimNote(r))
 end
 local function volleyOff(s, r, clock)
     pcall(SV_LaserState, r.liA, 0)                        -- (a swing on now is given up: AC7's laser ended with its life)
@@ -489,7 +517,8 @@ local function claimsTick(s, clock)
             if clock >= c.due - 0.25 then
                 s.kills = s.kills + 1
                 if ZLAS.sound then ZLAS.sound(z.li_hit_sound or z.laser_hit_sound, m.zAt) end
-                say("%s's laser shot down %s (from %s; %d so far)", c.r.name, c.name, tostring(m.from or "?"), s.kills)
+                say("%s's laser shot down %s (from %s; %d so far); %s", c.r.name, c.name, tostring(m.from or "?"), s.kills,
+                    c.r.li and aimNote(c.r) or "")
             else
                 s.lost = s.lost + 1
                 say("%s went down %.2f s into %s's swing: it hit something first", c.name, clock - c.at, c.r.name)
@@ -646,7 +675,8 @@ end
 -- Ctrl+[ (ESC.testLaser): a volley now on every ZFA-44's laser (the beam seen with no missile near), their state logged
 -- ((2026-11-11) the beam's red, to choose by eye: each press the next of these on li_color, logged; User.BeamColor may be
 -- the beam's colour outright or a tint on AC8's own, which only the screen tells)
-local REDS = { { 100, 21.5, 22.8, "AC7's HDR red" }, { 20, 2, 2, "a mid red" }, { 1, 0.08, 0.08, "a plain red" } }
+local REDS = { { 100, 21.5, 22.8, "AC7's HDR red" }, { 20, 2, 2, "a mid red" }, { 1, 0.08, 0.08, "a plain red" },
+               { nil, nil, nil, "AC8's own colour (no BeamColor set: the blue TLS Alyssa saw)" } }   -- ((0.74.63) the A/B)
 local redAt = 0
 function ZLI.test()
     if not ZLI.on() then log("test: Ctrl+[: AC7's LaserInterceptor isn't on (mode " .. tostring(ZLI.mode) .. ")"); return end
@@ -654,9 +684,10 @@ function ZLI.test()
     local clock, n = os.clock(), 0
     redAt = redAt % #REDS + 1
     local red = REDS[redAt]
-    zc().li_color = { red[1], red[2], red[3] }
+    zc().li_color = red[1] and { red[1], red[2], red[3] } or {}
     for _, r in pairs(s.L) do r.tintSaid = nil end
-    log(string.format("test: Ctrl+[: the beam's colour %d of %d, %s (%.1f, %.1f, %.1f)", redAt, #REDS, red[4], red[1], red[2], red[3]))
+    log(string.format("test: Ctrl+[: the beam's colour %d of %d, %s%s", redAt, #REDS, red[4],
+        red[1] and string.format(" (%.1f, %.1f, %.1f)", red[1], red[2], red[3]) or ""))
     for _, r in pairs(s.L) do
         if liveLaser(r) then
             local okS, stNow = pcall(SV_LaserState, r.liA)
@@ -664,7 +695,8 @@ function ZLI.test()
             if r.phase ~= "volley" then volleyOn(s, r, clock, "test key Ctrl+["); n = n + 1 end
         end
     end
-    hudCallout("TEST: AC7 LASERS", n > 0 and string.format("%d VOLLEY%s, RED %d OF %d", n, n == 1 and "" or "S", redAt, #REDS)
+    hudCallout("TEST: AC7 LASERS", n > 0 and string.format("%d VOLLEY%s, %s", n, n == 1 and "" or "S",
+            red[1] and string.format("RED %d OF %d", redAt, #REDS - 1) or "AC8'S OWN BLUE")
         or "NO LASER UP (CTRL+DEL: A CARRIER, CTRL+U: THE LASER MOUNT)")
 end
 if ESC then ESC.testLaser = function() ZLI.test() end end
