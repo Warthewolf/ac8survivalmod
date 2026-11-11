@@ -13,7 +13,8 @@ Tags as in docs/re: [V] read in a file, a dump or seen in game (where), [I] infe
   two Udaloys, a Gorshkov, a Kirov and six Grigoroviches, Faction 2 already) and the missile boat (Training006's, the
   Spaceport's port). Mission 22's enemy ships have **never spawned in Survival** (nothing names their units). [V]
 - **Built tonight (repo side; no build installed):** 15 one-ship units of THE INVINCIBLE FLEET's own, `SV_Unit_IF<Key>`
-  (the Spaceport's units untouched: a build's read-back compares them), 13 named ships on model and NPC rows of their own
+  (only additions: every build asserts each unit and path desc already in the world data, the Spaceport's among them, is
+  the same after the fleet's, 2.1), 13 named ships on model and NPC rows of their own
   (GEOFON, RAVEN, CONDOR, FINCH, SPARROW, MAGPIE, BELUGA, KOLGA, HERNE, TAISCH, THIASSI, LAZULI, FENRIS) and two unnamed
   missile-boat pickets, the formation (rings round GEOFON), their 15 course lanes (one path each: the run in from 30 km
   north-west of the runway and two laps of the station), each ship's orders and lane as it appears, and **Ctrl+N** (test
@@ -121,7 +122,16 @@ spawn spot 500 m behind its lane's start (hard rule 2). New units even where the
   and the Aegis's parts fly the Spaceport's turret rows (SV_Fleet_Mk15Ford<pos>, SV_Fleet_Mk15Aegis ...), the pickets the
   Spaceport's boat rows (sv_sp_boat -> SV_Fleet_BoatHull).
 - No new imports (471 in the world data before and after: every class the fleet uses was imported already), so no change
-  to the container header (hard rule 7).
+  to the container header (hard rule 7). The build's `invincible fleet: 15 ships ...` line says so every build (`no import
+  added (471)`, else how many).
+- Only additions, a standing guard (the review of 8ca3195, finding 6): fleet_units fingerprints every unit and path desc in
+  the world data before it adds the fleet and asserts each is the same after (`the 381 units and 415 paths there before it
+  unchanged`), the Spaceport's among them; the fleet's rows are deep copies under new keys, and check_fleet_build asserts
+  no key twice in DT_SV_NpcMission, DT_SV_NpcRows or DT_SV_ModelRows.
+- None of Mission 22's identity on the copies (finding 3): the 7 artillery mounts' Data Tags (TAG_Enemy_Ship_Obj) emptied,
+  as every part's own Tags (hard rule 31); BELUGA's, KOLGA's and FENRIS's GameObjectDisplayNameID02 (Mission 22's callsigns
+  ContainerEnemyCallsign_Name_Nonecumene / _Pratum / _Vallis, which could show on the box) and the units' bShowDebugArea
+  (on in Mission 22) written as zeros, as the Spaceport's ports have them. check_fleet_build asserts all three on every ship.
 
 ### 2.2 The course (survival_events_fleet.py if_course)
 - GEOFON starts 30 km north-west of the runway's centre (1610476, -436143): its spawn (-5.46, -25.93) km, its lane from
@@ -150,8 +160,27 @@ spawn spot 500 m behind its lane's start (hard rule 2). New units even where the
   with the allies; added plain if not), the 13 hull rows, the 13 names and the classes' texts. Any missing: Ctrl+N refuses.
 - Ctrl+N (free: tools/README.md's Ctrl keys): the fleet spawned at its course start (my call: each unit's own spot, not
   near the player: a lane is fixed in the world data, so a ship spawned off it would first sail back to its start), 3 ships
-  every 0.5 s with spawningUnit set (co-op mirrors them as every spawn), a leftover recycled first; refused outside a run
-  and on a co-op joiner. See 5 for its lines. Again: every ship hidden and taken off (SV_Recycle, as Ctrl+B's Ford).
+  every 0.5 s with spawningUnit set (co-op mirrors them as every spawn), each object kept as SV_Spawn made it (its address
+  and name, hard rule 59); refused outside a run, on a co-op joiner and in the landing STORE (finding 4: its minigame holds
+  the world's AI; on and off alike, and the fleet's clock waits there as it does while paused). A ship of the fleet still
+  up from before: RE_SV_IFFleetRemove and the fleet held up to `clear_s` (8 s, the Spaceport's CLEAR_S) for it; one still
+  up then is dropped from this fleet, never spawned beside it. See 5 for its lines.
+- Again (finding 1; until then every ship was hidden and forced off the spawner's list at once, SV_Recycle(unit, 1), its
+  turrets live under the hidden hull, 0.74.11's crash D and 0.74.48's STORE crash's pattern): RE_SV_IFFleetRemove (each
+  unit's LiveDestroyUnitExecution, run on the event subsystem's next tick), and every object still the one made (a ship
+  not settled yet too) put in SPC.CLEAN_OBJ and taken down through sv_rounds.lua's SPC.cleanUp (finished off, else switched
+  off: no box, not lockable, no collision), each unit looked at 2 s on by SPC.cleanTick and taken off the spawner's list
+  then (one with nothing alive: SV_Recycle(unit, 0), one every 0.5 s; one still reading up after its objects were taken
+  down: SV_Recycle(unit, 1), as every special's leftovers). A press while any of it is still being taken off is refused
+  (again in a few seconds). GEOFON's Ctrl+B / Ctrl+G take the Ford off the same way (its switched-off parts on again
+  first: an inactive object takes no damage, 0.74.48) and never spawn it beside a Ford still up.
+- Every call into the game in a pcall (finding 5: SV_Event, SV_UnitAlive, SV_SetText; an RE_SV_IFGo that raises is logged
+  and the later ships are still looked at).
+- Round 30 is the user's dev install only (AGENTS.md): sv_fleet.lua is one test-only block, which strip_test_only.py takes
+  out of every release and test zip, and tools/dev_only.py out of a TESTER zip (package_release.sh TESTER=1 keeps every
+  other part's test keys; finding 2: until then a TESTER zip kept sv_fleet.lua whole, so Ctrl+N would have spawned the
+  fleet there). dev_only.py cuts sv_fleet / sv_tanicorn / sv_cine to their headers and refuses the zip if IFLEET, GEO, TANI
+  or CINE is still defined in any part.
 - What fired: sv_weaponlog.lua's launch watch tells the test which object launched (IFLEET.onLaunch: its parts by address,
   checked still the object captured, hard rule 59), and a LiveBullet walk every 2 s finds their guns' shells (the
   Spaceport's turret watch's way, ~40 ms a walk).
@@ -161,11 +190,18 @@ spawn spot 500 m behind its lane's start (hard rule 2). New units even where the
 - `python -I -X utf8 tools/build_survival.py`: clean; `invincible fleet: 15 units, 48 parts, 15 lanes, 31 events (201 execs:
   LiveAIEngagementOrder 126, LiveAIPathExecution 60, LiveDestroyUnitExecution 15) and their rows read back from the
   packages: all there`; every other read-back as before.
-- Against the build before it: the world data's 380 units and 415 paths, every row of DT_SV_NpcRows / ModelRows /
-  NpcMission and the event package's 1825 triggers and 3882 execs unchanged (only additions: 15 units, 15 paths, 26 + 13 +
-  26 rows, 31 triggers, 201 execs); every other package byte for byte the same.
-- spaceport_test.sh, fleet_test.sh (Ctrl+N's part: 35 checks, 84 in all), weaponlog_test.sh, escort_test.sh, defences_test.sh,
-  menu_pages_test.py, ini_check.py, subtitles.py check, lua_check (no new warning), lua_load_test, size_check: pass.
+- Against the build before it, a one-off comparison (the standing guards are 2.1's): first against 7ffa291's build (stage
+  1), then again after the rebase onto 73e3162 (stage 2, 2026-11-12, scratchpad `compare_fleet.py`, both built without
+  TANI): 65 of the 70 packages byte for byte the same; in the other five the world data's 381 units and 415 paths (and its
+  other lists), every row of DT_SV_NpcMission (427), DT_SV_NpcRows (79) and DT_SV_ModelRows (11) and the event package's
+  1826 triggers and 3898 execs unchanged, its 471 imports the same list (only additions: 15 units, 15 paths, 26 + 26 + 13
+  rows, 31 triggers, 201 execs, every exec on the fleet's own events). (DT_SV_NpcMission's new rows sit among the old ones,
+  not after them: a table is read by key.) A TANI=1 world data has 4 imports more, THE TANACORN's, not the fleet's.
+- Stage 2 (the review's six findings, 2026-11-12): build_survival.py clean with every read-back (the fleet's line `the 381
+  units and 415 paths there before it unchanged; no import added (471)`), spaceport_test.sh, fleet_test.sh (Ctrl+N's part:
+  44 checks; the release copy 3, the TESTER copy 6; 106 in all), weaponlog_test.sh, escort_test.sh, defences_test.sh,
+  cine_test.sh, menu_pages_test.py, ini_check.py, subtitles.py check, lua_check (no new warning), lua_load_test, size_check:
+  pass. Stage 1's: the same list (Ctrl+N's part 35 checks, 84 in all).
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 4. Not done tonight, and why
@@ -183,7 +219,11 @@ Log lines (AC8SurvivalMode_lua.log), in order:
 1. At the main menu, once: `fleet: rows at the main menu: 13 model rows in DT_NPC_Model, 13 hull rows and 13 turret rows
    in DT_NPC (N weapons on the Spaceport fleet's fire control; on their stock one: NPC_FCS_..., ...; their search
    NPC_AIModule_SV_Fleet), the Spaceport's 12 of 12; 20 names and classes set` (no `MISSING`).
-2. Ctrl+N: `fleet: Ctrl+N: 15 ships coming up at their course start, 3 every 0.5 s (...)`, then fifteen
+2. Ctrl+N: `fleet: Ctrl+N: 15 ships coming up at their course start, 3 every 0.5 s (...)` (with ships of an earlier
+   fleet still up, first `fleet: Ctrl+N: N of the fleet's ships still up from before (<NAMES>): taken off
+   (RE_SV_IFFleetRemove 1); the fleet waits up to 8 s for them, never spawned beside them`, then `fleet: +T s the ships up
+   from before are gone: the fleet comes up`, or `... N ships still up 8 s after RE_SV_IFFleetRemove (<NAMES>): not spawned
+   beside them, the fleet comes up without them`), then fifteen
    `fleet: <NAME> (SV_Unit_IF<Key>, <class>): 1 up at its course start; N objects made` (GEOFON 5, an Aegis 5, BELUGA and
    FENRIS 5, KOLGA 3, a Grigorovich 4, a picket 2).
 3. Two seconds after each: `fleet: up: GEOFON (SV_Unit_IFGeofon, ford): hull BP_VE004_grfd_CP_Ally at (-5.46, -25.93) km,
@@ -198,7 +238,18 @@ Log lines (AC8SurvivalMode_lua.log), in order:
    135, health 100 %, 4 of 4 parts up`; and `fleet: +T s weapons (since the last line): <SHIP> <part class> <weapon> xN;
    <SHIP> <part class> gun; ...; N of 48 parts fired, you D km from GEOFON`.
 7. A ship sunk: `fleet: +T s <NAME> sunk (its hull at 0); N of its M parts still up`.
-8. Ctrl+N again: `fleet: Ctrl+N at +T s: the fleet taken off: 15 units, N objects hidden, SV_Recycle 1 x15`.
+8. Ctrl+N again: `fleet: Ctrl+N at +T s: the fleet taken off: 15 units, RE_SV_IFFleetRemove 1; N of their M objects still
+   up finished off or switched off (each unit off the spawner's list from 2 s on)` (M ~63, N those still alive), a line a
+   unit `special: SV_Unit_IF<Key> the fleet test taken off (Ctrl+N): A alive, N of its M recorded objects still up: K
+   finished off, F switched off`, 2 s on `special: SV_Unit_IF<Key> removed` (or `... NOT removed (n alive) (SV_Recycle: 1)`),
+   then, for each unit still on the list with nothing of it alive (not one the remove took off it), one every 0.5 s
+   `special: SV_Unit_IF<Key> taken off the spawner's list (its special over, nothing of it up; nothing of it alive):
+   SV_Recycle 1 (N so far)`. Never `SV_Recycle 1 x15` (stage 1's forced take-off). A Ctrl+N in those ~10 s:
+   `fleet: Ctrl+N: the fleet before is still being taken off (15 units: GEOFON, RAVEN, ...): not spawned, again in a few
+   seconds` and the callout `TEST: INVINCIBLE FLEET / STILL GOING: AGAIN IN A FEW SECONDS`; one after: a new fleet, with
+   no `still up from before` line.
+9. Ctrl+N in the landing STORE (either way): `fleet: Ctrl+N in the STORE: refused (its minigame holds the world's AI;
+   nothing spawned)` or `(...; the fleet stays as it is)`; no `+T s` line counts STORE time (T stands still there).
 
 What to look at (fly to the bearing given, ~30 km north-west of the airfield): the rings round GEOFON (RAVEN beside it, the
 four Aegis on the diagonals, the seven of the outer ring, the two pickets ahead), every box's name (GEOFON over CARRIER,
@@ -217,3 +268,5 @@ in formation for the run in.
 | 45 km/h for every class | the path record's speed; a class may have its own top speed [?] | the off-its-spot lines grow: per-class speeds in the records |
 | the turrets firing | Mission 22's on their stock fire control (short ranges); a hull's order doesn't reach them, so each part has its own | the weapons lines say which: WP9's clones |
 | the frame rate | 15 ships, ~63 objects, 15 paths of 63 points | the perf line's Lua tick with the fleet up (the Spaceport's ~110 objects ran) |
+| the take-off (Ctrl+N again) | RE_SV_IFFleetRemove's LiveDestroyUnitExecution runs a tick after SPC.cleanUp finished the ships off: a destroy on objects just killed hasn't been seen (the Spaceport's remove came on live ships or long-sunk ones) | a crash at the second press: take the event out of takeOff (SPC.cleanUp and its 2 s check alone, every special's route) |
+| a Ctrl+N mid-STORE | refused both ways (finding 4); the STORE test (D.musicHold, LANDW) is sv_coop_sync.lua's inStore | a press that isn't refused there: the `in the STORE` line missing |

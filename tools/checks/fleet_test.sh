@@ -8,25 +8,33 @@
 #     posed (DamagedStaticMesh shown, +25 deg and 21 m down; VesselMesh -15 deg and 23 m down, its 3 slots on their _DAM
 #     instances; its 4 parts hidden and switched off, its 2 antennas hidden, the hull invincible), the 2 s lines read back
 #     (gap ~0 m at the break), the halves parted from +10 s in steps of at most 1 m (4 a second), held while paused, ~220 m
-#     apart at the end; again: taken off (SV_Recycle); the bow copy hanging on VesselMesh posed in its frame; the hull's
-#     address taken by another object: nothing more done to it (hard rule 59);
+#     apart at the end; again: taken off (its 5 objects, the parts switched on again, through SPC.cleanUp; never
+#     SV_Recycle with them up: the review of 8ca3195, finding 1), a press while it's being taken off or with a Ford up from
+#     before not spawned beside it, Ctrl+B / Ctrl+G refused in the STORE; the bow copy hanging on VesselMesh posed in its
+#     frame; the hull's address taken by another object: nothing more done to it (hard rule 59), its parts taken off;
 #   T2 (Ctrl+G): GEOFON 4 km ahead, its up line, 20 % a press (ModifyHealth), stage 1 at 66 % (2 fires and 2 smoke on
 #     VesselMesh at their offsets, the sound, the list ramped at most 0.1 deg a tick), stage 2 at 33 % (3 more fires, its
 #     slots on dimmed copies of the _DAM instances), a system that ended spawned again, the 5 s lines, the last press to 0
-#     (SetMinHealth), down, its systems off 30 s on and destroyed; Ctrl+B with it up takes it off first;
+#     (SetMinHealth), down, its systems off 30 s on and destroyed; a press with one sunk takes what's left of it off, a new
+#     one the press after; Ctrl+B with it up takes it off first, then waits for it;
 #   the level torn down: forgotten;
 #   WP7, the fleet (Ctrl+N, 2026-11-12): CFG.specials.fleet's 15 ships; IFLEET.setup at the main menu waiting for the allies'
 #     rows, then the model rows, the turret rows (a weapon on the Spaceport fleet's fire control where it has a clone, else its
 #     stock one; the fleet's search), the Spaceport's rows the fleet names, the hulls, the names and classes, its line, once a
-#     session; a row missing: said, no fleet; Ctrl+N refused outside a run, before the rows are in, on a joiner; the fleet
-#     spawned 3 a step at its units' own spots (no pose) with spawningUnit set, a leftover recycled first, each ship's spawn
-#     and up lines (hull and parts by class, its box), the fleet-up line (km and bearing from the runway and you) and its
-#     callout; the 10 s lines (GEOFON's place, speed, heading; the others' km from GEOFON and m off their spot), the weapons
-#     line (a launch by a part, a shell of a part's, nothing by an object that isn't the fleet's or whose address is
-#     another's now: hard rule 59); a ship not under way 15 s on given its lane again (RE_SV_IFGo<Key>), then under way; a
-#     hull at 0 sunk once; held while paused; again: every ship hidden and recycled (also mid-spawn); the level torn down;
+#     session; a row missing: said, no fleet; a text SV_SetText raises on: the rest set; Ctrl+N refused outside a run, before
+#     the rows are in, on a joiner, in the STORE; a ship up from before: RE_SV_IFFleetRemove and the fleet held until it's
+#     gone (one that stays 8 s: dropped, never spawned beside it); the fleet spawned 3 a step at its units' own spots (no
+#     pose) with spawningUnit set, each ship's spawn and up lines (hull and parts by class, its box), the fleet-up line (km and
+#     bearing from the runway and you) and its callout; the 10 s lines (GEOFON's place, speed, heading; the others' km from
+#     GEOFON and m off their spot), the weapons line (a launch by a part, a shell of a part's, nothing by an object that isn't
+#     the fleet's or whose address is another's now: hard rule 59); a ship not under way 15 s on given its lane again
+#     (RE_SV_IFGo<Key>), then under way; an RE_SV_IFGo that raises: said, the later ships still looked at; a hull at 0 sunk
+#     once; held while paused and in the STORE; again: RE_SV_IFFleetRemove, then every object still up through SPC.cleanUp,
+#     no SV_Recycle (also mid-spawn), a press while it's being taken off refused; the level torn down;
 # then a release's copy of the parts (tools/strip_test_only.py): sv_fleet.lua only its header, no IFLEET in any part,
-# every part still loading (lua_load_test.sh).
+# every part still loading (lua_load_test.sh); and a TESTER zip's copy (tools/dev_only.py, package_release.sh TESTER=1):
+# sv_fleet / sv_tanicorn / sv_cine only their headers, none of their globals or keys anywhere, every other test block kept,
+# every part loading; a part defining IFLEET outside them refused.
 set -e
 cd "$(dirname "$0")"
 HERE=$(pwd)
@@ -143,6 +151,7 @@ end
 -- the spawner: the Ford's hull (root, VesselMesh, DamagedStaticMesh, two antennas) and its four Mk 15s
 local FORD = "SV_Unit_SpFord"
 local notifies, spawns, recycles, alive, nFord = {}, {}, {}, {}, 0
+local alive2 = {}                                    -- (the fleet's units: SV_UnitAlive below)
 local spawnOpts = {}
 local fords = {}
 function NotifyOnNewObject(cls, fn) notifies[cls] = notifies[cls] or {}; table.insert(notifies[cls], fn) end
@@ -189,6 +198,31 @@ end
 SV_ERR = { [0] = "the game spawned nothing" }
 SPC = { V = { comps = function(o) return o.comps or {} end,
               PART_FLAGS = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true } } }
+-- sv_rounds.lua's clean-up (the review of 8ca3195, finding 1: a test's units go its way, never SV_Recycle(unit, 1) with
+-- things up): SPC.cleanUp finishes each recorded object off (health to 0) and queues the unit's look 2 s on; cleanCheck()
+-- is that look (SPC.cleanTick): the unit off the spawner's list, its objects gone
+local cleanups = {}
+SPC.CLEAN_OBJ, SPC.cleanQ, SPC.recycleQ = {}, {}, {}
+function SPC.cleanUp(list, why, mortal, now)
+    local n = 0
+    for _, u in ipairs(list) do
+        local l = SPC.CLEAN_OBJ[u] or {}
+        for _, o in ipairs(l) do
+            if liveObj(o) and (o.HealthInternal == nil or o.HealthInternal > 0) then o.HealthInternal, o.killed = 0, true; n = n + 1 end
+        end
+        cleanups[#cleanups + 1] = { unit = u, why = why, mortal = mortal, objs = l }
+        SPC.cleanQ[#SPC.cleanQ + 1] = { unit = u, at = now + 2, mortal = mortal }
+    end
+    return n
+end
+local function cleanCheck()
+    for _, e in ipairs(SPC.cleanQ) do
+        if e.unit:find("^SV_Unit_IF") then alive2[e.unit] = 0 else alive[e.unit] = 0 end
+        for _, o in ipairs(SPC.CLEAN_OBJ[e.unit] or {}) do free(o) end
+        SPC.CLEAN_OBJ[e.unit] = nil
+    end
+    SPC.cleanQ = {}
+end
 
 -- the engine's libraries: Niagara (the systems attached), materials, Wwise, damage
 local fxs, posts = {}, {}
@@ -311,10 +345,33 @@ local nLines = count("^geofon: break look %+%d+ s: bow", n0)
 check(nLines >= 15 and nLines <= 25, "a line every 2 s (" .. nLines .. ")")
 local r0 = #recycles
 keys.B()
-check(#recycles == r0 + 1 and recycles[#recycles] == FORD and find("geofon: break look off at %+%d+ s %(Ctrl%+B%): 5 of its objects hidden, SV_Recycle 1", n0) ~= nil,
-    "Ctrl+B again: hidden and taken off (SV_Recycle)")
+check(#recycles == r0 and find("geofon: break look off at %+%d+ s %(Ctrl%+B%): 5 of its 5 objects finished off or switched off %(off the "
+    .. "spawner's list from 2 s on%)", n0) ~= nil, "Ctrl+B again: its 5 objects taken down (SPC.cleanUp), never SV_Recycle with them up")
+local cu = cleanups[#cleanups]
+local wokeOk = true
+for _, p in ipairs(F.parts) do if not (p.active == true and p.killed) then wokeOk = false end end
+check(cu and cu.unit == FORD and cu.mortal == true and #cu.objs == 5 and F.hull.killed and wokeOk and SPC.cleanQ[1] and SPC.cleanQ[1].unit == FORD,
+    "the hull and its 4 parts (switched on again first) finished off, the unit's look queued")
 run(1)
 check(GEO.look == nil, "nothing left of it")
+n0 = #logs
+local nSp0 = #spawns
+keys.B()
+check(#spawns == nSp0 and GEO.look == nil and find("geofon: Ctrl%+B: SV_Unit_SpFord is still being taken off .*%(again in a few seconds%)", n0) ~= nil
+    and callouts[#callouts] == "TEST: GEOFON V-BREAK / STILL GOING: AGAIN IN A FEW SECONDS", "Ctrl+B while it's being taken off: not spawned beside it")
+cleanCheck()
+alive[FORD] = 1                                          -- (still up from before, none of it known here)
+n0 = #logs
+keys.G()
+check(#spawns == nSp0 and #recycles == r0 and find("geofon: Ctrl%+G: SV_Unit_SpFord is still up from before %(1 up%) and none of its "
+    .. "objects are known here: not spawned beside it, nor forced off the spawner's list with them up", n0) ~= nil,
+    "a Ford still up from before, unknown: neither spawned beside it nor forced off")
+alive[FORD] = 0
+D.musicHold = 1                                          -- (the landing STORE open)
+n0 = #logs
+keys.B(); keys.G()
+check(#spawns == nSp0 and count("in the STORE: refused", n0) == 2, "Ctrl+B and Ctrl+G refused in the STORE")
+D.musicHold = nil
 
 print("T1, the bow copy hanging on VesselMesh; the hull's address reused")
 spawnOpts.bowOnVessel = true
@@ -332,19 +389,20 @@ run(12)
 local setsBefore = sets
 F.hull.__name = "BP_SomethingElse_C /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.BP_SomethingElse_C_7"
 run(2)
-check(find("address is another object's now", n0) ~= nil and find("geofon: break look over at %+%d+ s: its hull is gone", n0) ~= nil and GEO.look == nil,
-    "its hull's address another object's: the test over")
-check(sets == setsBefore, "and nothing more done to it")
+check(find("address is another object's now", n0) ~= nil and find("geofon: break look over at %+%d+ s: its hull is gone %(the rest taken "
+    .. "off: 4 of its 4 objects finished off", n0) ~= nil and GEO.look == nil, "its hull's address another object's: the test over, its parts taken off")
+check(sets == setsBefore and not F.hull.killed and F.parts[1].killed, "and nothing more done to the hull (another object's now)")
 spawnOpts.bowOnVessel = nil
 
 print("T2, Ctrl+G")
 n0 = #logs
 local nSp = #spawns
 keys.G()
+check(#spawns == nSp and find("geofon: Ctrl%+G: SV_Unit_SpFord is still being taken off", n0) ~= nil, "not while the last one is being taken off")
+cleanCheck()
+keys.G()
 local s2 = spawns[#spawns]
-check(#spawns == nSp + 1 and math.abs(s2.x - 400000) < 1 and s2.yaw == 90 and s2.su == FORD, "GEOFON spawned 4 km ahead, broadside")
-check(find("geofon: Ctrl%+G %(GEOFON's stages%): SV_Unit_SpFord was still on the spawner's list %(1 up%): SV_Recycle 1", n0) ~= nil,
-    "the Ford left up taken off the list first")
+check(#spawns == nSp + 1 and math.abs(s2.x - 400000) < 1 and s2.yaw == 90 and s2.su == FORD, "then GEOFON spawned 4 km ahead, broadside")
 run(1.5)
 F = fords[3]
 vm = F.hull.VesselMesh
@@ -391,11 +449,22 @@ for _, f in ipairs(fxs) do if f.c.destroyed then gone = gone + 1 end end
 check(gone == #fxs, "and destroyed (" .. gone .. " of " .. #fxs .. ")")
 
 print("T2 then T1; the level torn down")
+n0 = #logs
+nSp = #spawns
 keys.G()
+check(#spawns == nSp and GEO.cur == nil and find("geofon: Ctrl%+G: the GEOFON before taken off first %(4 of its 5 objects finished off", n0) ~= nil
+    and fords[3].parts[4].killed, "Ctrl+G with one sunk: what's left of it taken off (its 4 parts; the hull at 0 already), no new one yet")
+cleanCheck()
+keys.G()
+check(#spawns == nSp + 1 and GEO.cur ~= nil, "Ctrl+G again: a new GEOFON")
 run(1.5)
 n0 = #logs
 keys.B()
-check(find("geofon: Ctrl%+B: GEOFON's stages test taken off first", n0) ~= nil and GEO.cur == nil and GEO.look ~= nil, "Ctrl+B takes GEOFON's stages off first")
+check(find("geofon: Ctrl%+B: GEOFON's stages test taken off first", n0) ~= nil and GEO.cur == nil and GEO.look == nil
+    and find("geofon: Ctrl%+B: SV_Unit_SpFord is still being taken off", n0) ~= nil, "Ctrl+B takes GEOFON's stages off first, then waits for it")
+cleanCheck()
+keys.B()
+check(GEO.look ~= nil, "Ctrl+B again: the V-break look")
 LEVEL_DROPS.fleet("test")
 check(GEO.look == nil and GEO.cur == nil, "forgotten when the level goes")
 
@@ -506,7 +575,8 @@ function SV_Spawn(unit, x, ...)
         made[#made + 1] = o
     end
     for _, o in ipairs(made) do for _, fn in ipairs(notifies["/Script/Live.LiveAIGameObject"] or {}) do fn(o) end end
-    SHIPS[key] = { hull = made[1], parts = { table.unpack(made, 2) }, all = made, moving = key ~= "Kolga", pos = pos, goAt = clock + 2.5 }
+    SHIPS[key] = { hull = made[1], parts = { table.unpack(made, 2) }, all = made, moving = key ~= "Kolga" and key ~= "Taisch",
+                   pos = pos, goAt = clock + 2.5 }
     alive2[unit] = #made
     return 1
 end
@@ -517,9 +587,14 @@ function SV_Recycle(u, k)
     alive2[u] = 0
     return 1
 end
+-- the records: RE_SV_IFFleetRemove despawns every fleet unit (but a `stuck` one); KOLGA sails once its RE_SV_IFGo comes;
+-- TAISCH's RE_SV_IFGo raises (the review's finding 5: a call into the game that throws mustn't stop the later ships' looks)
+local stuck = {}
 function SV_Event(name)
     events[#events + 1] = name
     if name == "RE_SV_IFGoKolga" then SHIPS.Kolga.moving = true end
+    if name == "RE_SV_IFGoTaisch" then error("the event table isn't there") end
+    if name == "RE_SV_IFFleetRemove" then for u in pairs(alive2) do if not stuck[u] then alive2[u] = 0 end end end
     return 1
 end
 local bullets = {}
@@ -540,16 +615,26 @@ COOP.client = function() return true end
 keys.N()
 check(find("fleet: Ctrl%+N: the host spawns the fleet") ~= nil and IFLEET.cur == nil, "Ctrl+N on a joiner: refused")
 COOP.client = function() return false end
-alive2.SV_Unit_IFRaven = 5                               -- (a leftover of an earlier test still on the list)
+D.musicHold = 1                                          -- (the landing STORE open)
+n0 = #logs
+keys.N()
+check(IFLEET.cur == nil and find("^fleet: Ctrl%+N in the STORE: refused %(its minigame holds the world's AI; nothing spawned%)", n0) ~= nil,
+    "Ctrl+N in the STORE: refused")
+D.musicHold = nil
+alive2.SV_Unit_IFRaven = 5                               -- (a leftover of an earlier test still up)
 n0 = #logs
 keys.N()
 check(IFLEET.cur ~= nil and find("^fleet: Ctrl%+N: 15 ships coming up at their course start, 3 every 0.5 s", n0) ~= nil, "Ctrl+N: the fleet comes up")
+check(find("^fleet: Ctrl%+N: 1 of the fleet's ships still up from before %(RAVEN%): taken off %(RE_SV_IFFleetRemove 1%); the fleet waits up "
+    .. "to 8 s for them, never spawned beside them$", n0) ~= nil and events[#events] == "RE_SV_IFFleetRemove" and #fleetSpawns == 0,
+    "a leftover: RE_SV_IFFleetRemove, the fleet held for it")
 runN(0.25)
 check(#fleetSpawns == 3 and fleetSpawns[1].unit == "SV_Unit_IFGeofon" and fleetSpawns[1].x == nil and fleetSpawns[1].su == "SV_Unit_IFGeofon"
     and fleetSpawns[2].unit == "SV_Unit_IFRaven", "3 a step, GEOFON first, at its unit's own spot (no pose), spawningUnit its unit")
-check(find("^fleet: GEOFON %(SV_Unit_IFGeofon, ford%): 1 up at its course start; 5 objects made$", n0) ~= nil, "its spawn line")
-check(fleetRecycles[1] == "SV_Unit_IFRaven" and find("^fleet: RAVEN %(SV_Unit_IFRaven, aegis%): 1 up at its course start; 5 objects made %(it was "
-    .. "still on the spawner's list, 5 up: SV_Recycle 1 first%)", n0) ~= nil, "a leftover taken off the list first")
+check(find("^fleet: %+0 s the ships up from before are gone: the fleet comes up$", n0) ~= nil and #fleetRecycles == 0,
+    "once it's gone (never SV_Recycle with it up)")
+check(find("^fleet: GEOFON %(SV_Unit_IFGeofon, ford%): 1 up at its course start; 5 objects made$", n0) ~= nil
+    and find("^fleet: RAVEN %(SV_Unit_IFRaven, aegis%): 1 up at its course start; 5 objects made$", n0) ~= nil, "their spawn lines")
 runN(2.5)
 check(#fleetSpawns == 15, "all 15 spawned in 5 steps (" .. #fleetSpawns .. ")")
 local upG = find("^fleet: up: GEOFON ", n0)
@@ -579,6 +664,9 @@ runN(5)
 check(find("^fleet: %+%d+ s GEOFON under way %(%d+ m from where it came up%)$", n0) ~= nil and SHIPS.Kolga.moving
     and find("^fleet: %+%d+ s KOLGA not under way 1%d s after its spawn %(0 m%): RE_SV_IFGoKolga fired %(1%)$", n0) ~= nil,
     "under way 15 s on; KOLGA not: its lane again (RE_SV_IFGoKolga)")
+check(find("^fleet: %+%d+ s TAISCH not under way 1%d s after its spawn %(0 m%): RE_SV_IFGoTaisch fired %(error .*the event table isn't there%)$", n0) ~= nil
+    and find("^fleet: %+%d+ s LAZULI under way", n0) ~= nil and find("^fleet: %+%d+ s PicketB under way", n0) ~= nil,
+    "TAISCH's RE_SV_IFGo raising: said, and the ships after it still looked at (in a pcall)")
 runN(15.25)
 check(find("^fleet: %+%d+ s KOLGA under way %(%d+ m from where it came up%) after RE_SV_IFGoKolga$", n0) ~= nil, "KOLGA under way after it")
 -- what fired: a launch by RAVEN's VLS (sv_weaponlog.lua's word), a shown shell of GEOFON's Mk 15, one by an object that isn't the
@@ -609,31 +697,72 @@ PAUSED = true
 runN(3)
 check(IFLEET.cur.t == tBefore, "held while the game is paused")
 PAUSED = false
--- again: taken off
+-- the landing STORE open: no time passes, and Ctrl+N leaves the fleet as it is (the review's finding 4)
+D.musicHold = 1
+n0 = #logs
+runN(3)
+keys.N()
+check(IFLEET.cur ~= nil and IFLEET.cur.t == tBefore and find("^fleet: Ctrl%+N in the STORE: refused %(its minigame holds the world's AI; the "
+    .. "fleet stays as it is%)", n0) ~= nil and #SPC.cleanQ == 0, "held in the STORE, and Ctrl+N refused there (nothing taken off)")
+D.musicHold = nil
+-- again: taken off (RE_SV_IFFleetRemove, then SPC.cleanUp; never SV_Recycle(unit, 1) with things up: the review's finding 1)
 n0 = #logs
 local r0 = #fleetRecycles
+local nCu = #cleanups
 keys.N()
 local off = find("^fleet: Ctrl%+N at %+%d+ s: the fleet taken off: ", n0)
-check(off and off:find("15 units, 62 objects hidden, SV_Recycle 1 x15$") ~= nil and #fleetRecycles == r0 + 15 and IFLEET.cur == nil,
-    "Ctrl+N again: every ship hidden and taken off: " .. tostring(off))
-check(SHIPS.Geofon.hull.hiddenActor == true and SHIPS.Geofon.parts[4].hiddenActor == true and SHIPS.Herne.parts[1].hiddenActor == nil,
-    "hidden, but not an object whose address is another's now")
--- mid-spawn: taken off with ships not spawned yet; the level torn down
+check(off and off:find("15 units, RE_SV_IFFleetRemove 1; 61 of their 62 objects still up finished off or switched off %(each unit off the "
+    .. "spawner's list from 2 s on%)$") ~= nil and #fleetRecycles == r0 and IFLEET.cur == nil and events[#events] == "RE_SV_IFFleetRemove",
+    "Ctrl+N again: RE_SV_IFFleetRemove, then every object still up finished off, no SV_Recycle: " .. tostring(off))
+check(#cleanups == nCu + 15 and cleanups[nCu + 1].unit == "SV_Unit_IFGeofon" and cleanups[nCu + 1].mortal == true and #SPC.cleanQ == 15,
+    "each of the 15 units through SPC.cleanUp, its look queued")
+check(SHIPS.Geofon.hull.killed and SHIPS.Geofon.parts[4].killed and SHIPS.Herne.parts[1].killed == nil and SHIPS.Herne.parts[2].killed,
+    "finished off, but not an object whose address is another's now")
+n0 = #logs
+local nSp1 = #fleetSpawns
+keys.N()
+check(IFLEET.cur == nil and #fleetSpawns == nSp1 and find("^fleet: Ctrl%+N: the fleet before is still being taken off %(15 units: GEOFON, RAVEN, ", n0) ~= nil
+    and callouts[#callouts] == "TEST: INVINCIBLE FLEET / STILL GOING: AGAIN IN A FEW SECONDS", "Ctrl+N while it's being taken off: refused")
+cleanCheck()
+-- mid-spawn: taken off with ships not spawned yet
 keys.N()
 runN(0.25)
 n0 = #logs
 keys.N()
-check(find("^fleet: Ctrl%+N at %+%d+ s: the fleet taken off: 3 units %(12 not spawned yet dropped%)", n0) ~= nil, "taken off mid-spawn")
+check(find("^fleet: Ctrl%+N at %+%d+ s: the fleet taken off: 3 units %(12 not spawned yet dropped%), RE_SV_IFFleetRemove 1; 15 of their 15 objects", n0) ~= nil,
+    "taken off mid-spawn (the ships not settled yet too)")
+cleanCheck()
+-- a ship still up from before that doesn't go: never spawned beside it, the fleet comes up without it
+alive2.SV_Unit_IFPicketB, stuck.SV_Unit_IFPicketB = 2, true
+nSp1 = #fleetSpawns
+n0 = #logs
+keys.N()
+runN(4)
+check(#fleetSpawns == nSp1 and find("^fleet: Ctrl%+N: 1 of the fleet's ships still up from before %(PicketB%)", n0) ~= nil, "held for it")
+runN(4.25)
+check(find("^fleet: %+8 s 1 ships still up 8 s after RE_SV_IFFleetRemove %(PicketB%): not spawned beside them, the fleet comes up without them$", n0) ~= nil,
+    "still up 8 s on: dropped from this fleet")
+runN(6)
+local pbSpawned = false
+for i = nSp1 + 1, #fleetSpawns do if fleetSpawns[i].unit == "SV_Unit_IFPicketB" then pbSpawned = true end end
+check(#fleetSpawns == nSp1 + 14 and not pbSpawned and find("^fleet: Ctrl%+N: 14 of 15 ships up", n0) ~= nil and #fleetRecycles == r0,
+    "the other 14 up, PicketB never spawned beside its leftover, nothing forced off the list")
+keys.N()
+cleanCheck()
+alive2.SV_Unit_IFPicketB, stuck.SV_Unit_IFPicketB = 0, nil
+-- the level torn down
 keys.N()
 LEVEL_DROPS["fleet ships"]("test")
 check(IFLEET.cur == nil, "forgotten when the level goes")
--- a row missing at the main menu: no Ctrl+N fleet
+-- a row missing at the main menu: no Ctrl+N fleet; a text the game refuses (SV_SetText raising): the rest set (finding 5)
 IFLEET.setupDone, IFLEET.rowsOk = nil, nil
 T.npc.rows, T.mine.rows.SV_IF_Kolga = {}, nil
 T.mine.rows.SV_Fleet_Mk15Aegis = { NpcFCSId0 = fnameV("NPC_FCS_VesselCIWS000_SVA_Fleet") }
+function SV_SetText(k, v) if k == "SV_FleetName_Raven" then error("no text table") end texts[k] = v; return 1 end
 n0 = #logs
 IFLEET.setup()
-check(IFLEET.rowsOk == false and find("; MISSING: SV_IF_Kolga: no Ctrl%+N fleet$", n0) ~= nil, "a row missing: said, and no fleet")
+check(IFLEET.rowsOk == false and find("; 19 names and classes set; MISSING: SV_IF_Kolga: no Ctrl%+N fleet$", n0) ~= nil,
+    "a row missing: said, and no fleet; a text refused: the other 19 set")
 keys.N()
 check(IFLEET.cur == nil and find("rows aren't in the game's tables %(the `fleet: rows at the main menu` line says which%)", n0) ~= nil, "Ctrl+N refused")
 
@@ -656,3 +785,38 @@ echo "  ok   sv_fleet.lua only its header ($(wc -l < "$W/stripped/Scripts/sv_fle
 if ! OUT=$(sh lua_load_test.sh "$W/stripped" 2>&1); then echo "$OUT"; echo "  FAIL the release copy doesn't load"; exit 1; fi
 echo "  ok   $(echo "$OUT" | tail -1)"
 echo "fleet test (release copy): all passed"
+# (the review of 8ca3195, finding 2) a TESTER zip's copy: package_release.sh TESTER=1 keeps every test-only block but the
+# dev install's parts, which tools/dev_only.py cuts to their headers (round 30's fleet and THE TANICORN: AGENTS.md)
+echo "a TESTER zip's copy (tools/dev_only.py, as package_release.sh TESTER=1)"
+mkdir -p "$W/tester"
+cp -r "$SRC/Scripts" "$SRC/config" "$W/tester/"
+if ! OUT=$(python -X utf8 -I "$HERE/../dev_only.py" "$W/tester" 2>&1); then echo "$OUT"; echo "  FAIL dev_only.py refused the copy"; exit 1; fi
+if grep -n '^IFLEET = \|^GEO = \|^TANI = \|^CINE = \|testKey("N"\|testKey("B"\|testKey("T"\|testKey("D"' "$W"/tester/Scripts/*.lua; then
+    echo "  FAIL the dev install's keys or globals left in a TESTER copy (above)"; exit 1
+fi
+echo "  ok   no IFLEET, GEO, TANI or CINE and none of their keys (Ctrl+N, B, T, D ...) in any part of it"
+for p in sv_fleet sv_tanicorn sv_cine; do
+    if grep -v '^--' "$W/tester/Scripts/$p.lua" | grep -q '[^[:space:]]'; then echo "  FAIL $p.lua: code left"; exit 1; fi
+    if ! head -1 "$W/tester/Scripts/$p.lua" | grep -q "^-- $p.lua"; then echo "  FAIL $p.lua: its header gone"; exit 1; fi
+done
+echo "  ok   sv_fleet.lua, sv_tanicorn.lua and sv_cine.lua only their headers"
+n=$(grep -c 'TEST ONLY BEGIN' "$W"/tester/Scripts/*.lua | awk -F: '{s+=$2} END {print s}')
+if [ "$n" -lt 10 ] || ! grep -q 'testKey("F12"' "$W/tester/Scripts/sv_festival.lua"; then
+    echo "  FAIL a tester's own test keys gone too ($n test blocks left)"; exit 1
+fi
+echo "  ok   every other test-only block kept for the tester ($n, the festival's Ctrl+F12 among them)"
+if ! OUT=$(sh lua_load_test.sh "$W/tester" 2>&1); then echo "$OUT"; echo "  FAIL the TESTER copy doesn't load"; exit 1; fi
+echo "  ok   $(echo "$OUT" | tail -1)"
+# a part that defines one of them outside a test-only block: refused (the zip isn't made)
+mkdir -p "$W/tester_bad"
+cp -r "$SRC/Scripts" "$W/tester_bad/"
+printf '\nIFLEET = {}\n' >> "$W/tester_bad/Scripts/sv_audit.lua"
+if python -X utf8 -I "$HERE/../dev_only.py" "$W/tester_bad" > "$W/tester_bad.txt" 2>&1; then
+    echo "  FAIL dev_only.py let IFLEET through outside the dev parts"; exit 1
+fi
+grep -q 'sv_audit.lua: IFLEET still defined' "$W/tester_bad.txt" || { cat "$W/tester_bad.txt"; echo "  FAIL its refusal doesn't say where"; exit 1; }
+echo "  ok   a part defining IFLEET outside them: refused ($(grep -c 'still defined' "$W/tester_bad.txt") found)"
+sed -n '/^if \[ "\$TESTER" = 1 \]; then/,/^else/p' "$HERE/../package_release.sh" | grep -q '^    python -X utf8 -I tools/dev_only.py "\$mod"$' \
+    || { echo "  FAIL package_release.sh's TESTER branch doesn't run it"; exit 1; }
+echo "  ok   package_release.sh's TESTER=1 runs it"
+echo "fleet test (TESTER copy): all passed"

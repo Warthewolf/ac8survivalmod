@@ -17,6 +17,7 @@ imported before this one (build_survival_rows, build_survival_world) call these 
 build_survival): a part sees only the names above its own import. Import build_survival (or run it), not this file.
 """
 from build_survival import *  # noqa: F401,F403 (build_survival's names; it imports this part at its end)
+import hashlib  # noqa: E402 (fleet_units' guard)
 
 
 def fleet_path(z, used_ids, template, name, pts, before=None, after=None):
@@ -37,19 +38,23 @@ def fleet_path(z, used_ids, template, name, pts, before=None, after=None):
 def fleet_parts(ch_list, prefix, rows, used_ids, z, places):
     """Mission 22's ship parts (ChildAIObjectDescs / GrandChildrens) renamed by place (places: component -> place,
     se.IF_M22_PLACES: their components end in digits), new UniqueIDs, their mission rows Survival's (rows: Mission 22's
-    mission row -> Survival's). Their classes are imports of this package already (the world data is Mission 22's)."""
+    mission row -> Survival's), no tags (hard rule 31: Mission 22's artillery mounts carry TAG_Enemy_Ship_Obj in their
+    Data; the review of 8ca3195, finding 3). Their classes are imports of this package already (the world data is
+    Mission 22's)."""
     for ch in ch_list:
         data = [p for p in ch[2] if p[1] == 'Data'][0][3][2]
         comp = comp_of(ch)
         assert comp in places, (prefix, comp)
         was = [q for q in data if q[1] == 'MissionNpcID'][0][3][1]
         assert was in rows, (prefix, comp, was)
-        data[:] = [(q[0], q[1], False, ('name', rows[was], 0)) if q[1] == 'MissionNpcID' else q for q in data]
+        data[:] = [(q[0], q[1], False, ('name', rows[was], 0)) if q[1] == 'MissionNpcID' else
+                   (q[0], q[1], False, ('arr', [])) if q[1] == 'Tags' and q[3] is not None else q for q in data]
         name = f'{prefix}_{places[comp]}'
         assert survival_events.fname(name)[2] == 0, name                  # (no number tail: hard rule 17)
         uid = new_unique_id(used_ids, 'AC8SurvivalMode:' + name)
         ch[2][:] = [(q[0], q[1], False, ('name', name, 0)) if q[1] == 'Name' else
-                    (q[0], q[1], False, ('raw', 'UInt32', uid)) if q[1] == 'UniqueID' else q for q in ch[2]]
+                    (q[0], q[1], False, ('raw', 'UInt32', uid)) if q[1] == 'UniqueID' else
+                    (q[0], q[1], False, ('arr', [])) if q[1] == 'Tags' and q[3] is not None else q for q in ch[2]]
         for n in (name, rows[was]): z.nb.add(n)
         gc = [p for p in ch[2] if p[1] == 'GrandChildrens']
         if gc and gc[0][3]: fleet_parts(gc[0][3][1], name, rows, used_ids, z, places)
@@ -57,7 +62,11 @@ def fleet_parts(ch_list, prefix, rows, used_ids, z, places):
 
 def fleet_copy_object(units, used_ids, z, src_unit, src_obj, new_unit, obj_name, npc_row, top_number):
     """A one-ship unit `new_unit` of Survival's own world data's unit `src_unit` holding only its object `src_obj` (copy_unit
-    keeps a unit's first objects; Mission 22's enemy units hold two or three ships each), named obj_name, on npc_row."""
+    keeps a unit's first objects; Mission 22's enemy units hold two or three ships each), named obj_name, on npc_row.
+    Mission 22's identity left behind (the review of 8ca3195, finding 3): its object's callsign GameObjectDisplayNameID02
+    (the Kirov's, the Udaloy's and the Gorshkov's carry Mission 22's ContainerEnemyCallsign_Name_*, which could show on
+    the box beside or instead of its name) and the unit's bShowDebugArea (on in Mission 22) written as explicit zeros, as
+    the Spaceport's ports have them."""
     unit_name = lambda u: [p for p in u[2] if p[1] == 'Name'][0][3][1]
     dn = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
     src = [u for u in units if unit_name(u) == src_unit]
@@ -72,12 +81,14 @@ def fleet_copy_object(units, used_ids, z, src_unit, src_obj, new_unit, obj_name,
     uid = new_unique_id(used_ids, f'AC8SurvivalMode:{new_unit}:0')
     hit[0][2][:] = [(q[0], q[1], False, ('name', obj_name, 0)) if q[1] == 'Name' else
                     (q[0], q[1], False, ('name', npc_row, 0)) if q[1] == 'MissionNpcID' else
-                    (q[0], q[1], False, ('raw', 'UInt32', uid)) if q[1] == 'UniqueID' else q for q in hit[0][2]]
+                    (q[0], q[1], False, ('raw', 'UInt32', uid)) if q[1] == 'UniqueID' else
+                    (q[0], q[1], True, None) if q[1] == 'GameObjectDisplayNameID02' else q for q in hit[0][2]]
     top_number[obj_name] = 1
     assert npc_row in NPC_ROWS, npc_row
     uu = new_unique_id(used_ids, f'AC8SurvivalMode:{new_unit}')
     new[2][:] = [(q[0], q[1], False, ('name', new_unit, 0)) if q[1] == 'Name' else
-                 (q[0], q[1], False, ('raw', q[3][1], uu)) if q[1] == 'UniqueID' else q for q in new[2]]
+                 (q[0], q[1], False, ('raw', q[3][1], uu)) if q[1] == 'UniqueID' else
+                 (q[0], q[1], True, None) if q[1] == 'bShowDebugArea' else q for q in new[2]]
     for n in (new_unit, obj_name, npc_row): z.nb.add(n)
     units.append(new)
     return [obj_name]
@@ -87,9 +98,14 @@ def fleet_units(units, used_ids, z, top_number, v):
     """THE INVINCIBLE FLEET's ships (survival_events.if_fleet): each a one-ship unit at its spawn spot (IF_LEAD_M behind its
     lane's start: hard rule 2), facing the course in, an enemy's (Faction 2, no tags, a TGT mark and a box), its area
     IF_AREA_M round it, never at the level's start; its parts named as build_fleet's records name them, on Survival's rows;
-    its lane SV_Path_IF<Key> (fleet_path on Mission 22's ship lane, the Spaceport boats' template: ControlType 1)."""
+    its lane SV_Path_IF<Key> (fleet_path on Mission 22's ship lane, the Spaceport boats' template: ControlType 1).
+    Only additions: every unit and path desc in the world data before it (the Spaceport's too) is asserted the same after."""
     se = survival_events
     paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
+    # ((the review of 8ca3195, finding 6) the fleet only adds: every unit and path already in the world data, the Spaceport's
+    # among them, is the same desc after it, property for property: checked at its end, every build)
+    sig = lambda d: hashlib.sha1(repr(d).encode('utf-8')).hexdigest()
+    was_units, was_paths, was_imports = [sig(u) for u in units], [sig(p) for p in paths], len(z.imports)
     lane_t = desc_named(v, 'AIPathDescList', se.SP_BOAT_PATH_TEMPLATE)
     def load(pkg):
         zs = ZenPkg(stock(pkg))
@@ -172,9 +188,16 @@ def fleet_units(units, used_ids, z, top_number, v):
         paths.append(fleet_path(z, used_ids, lane_t, s['path'], lane, before=s['point'], after=ahead))
     course = se.if_course()
     km = sum(math.dist(a, b) for a, b in zip(course, course[1:])) / 1e5
+    changed = [field_of(u, 'Name') for u, s in zip(units, was_units) if sig(u) != s]
+    changed += [field_of(p, 'Name') for p, s in zip(paths, was_paths) if sig(p) != s]
+    assert not changed, f'the fleet changed descs that were there before it (it may only add): {changed[:5]}'
+    assert len(units) == len(was_units) + len(se.if_fleet()) and len(paths) == len(was_paths) + len(se.if_fleet())
     print(f'  invincible fleet: {len(se.if_fleet())} ships (' + ', '.join(f'{n} {k}' for k, n in count.items())
           + f'), {n_parts} parts; lanes of {len(course)} points, {km:.1f} km (in from {se.IF_START_KM:.0f} km, the station '
-          f'{se.IF_HOLD_KM:.0f}-{se.IF_SHELL_KM:.0f} km out, {se.IF_LAPS} laps) at {se.IF_SPEED} km/h')
+          f'{se.IF_HOLD_KM:.0f}-{se.IF_SHELL_KM:.0f} km out, {se.IF_LAPS} laps) at {se.IF_SPEED} km/h; the '
+          f'{len(was_units)} units and {len(was_paths)} paths there before it unchanged; '
+          + (f'no import added ({was_imports})' if len(z.imports) == was_imports else
+             f'{len(z.imports) - was_imports} imports added ({was_imports} -> {len(z.imports)})'))
 
 
 def fleet_npc_rows(rows, m22):
@@ -246,11 +269,12 @@ def fleet_model_rows(crow, idx):
 
 def check_fleet_build():
     """THE INVINCIBLE FLEET read back from the packages this build saved: every ship's unit by its name (an enemy, not at the
-    level's start, its one object on its row with a box and the TGT mark, facing the course, at its spawn spot), its parts by
-    the names the records give them on the rows their hull's DT_NPC row names; its lane (ControlType 1, its points where
-    if_fleet put them, every Up straight up); every record (each ship's two events once, RE_SV_IFFleetRemove once, every
-    exec's object / unit / path there); the rows (mission -> DT_NPC -> model, the hulls' children all fleet rows, the
-    names' keys)."""
+    level's start, no debug area, its one object on its row with a box and the TGT mark, no other mission's callsign
+    (GameObjectDisplayNameID02) and no tags, facing the course, at its spawn spot), its parts by the names the records give
+    them on the rows their hull's DT_NPC row names, none tagged; its lane (ControlType 1, its points where if_fleet put them,
+    every Up straight up); every record (each ship's two events once, RE_SV_IFFleetRemove once, every exec's object / unit /
+    path there); the rows (mission -> DT_NPC -> model, the hulls' children all fleet rows, the names' keys; no row twice in
+    any of the three tables)."""
     se = survival_events
     plain = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
     load = lambda path: ZenPkg(data=open(os.path.join(OUT, path[len('/Game/'):]) + '.uasset', 'rb').read())
@@ -262,6 +286,8 @@ def check_fleet_build():
     def table(path, st):
         z = load(path)
         dt, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, st)
+        keys = [plain(('name',) + k) for k, _ in dt['rows']]
+        assert len(keys) == len(set(keys)), (path, 'a row twice', sorted({k for k in keys if keys.count(k) > 1})[:5])
         return {plain(('name',) + k): dict((q[1], q[3]) for q in r[2]) for k, r in dt['rows']}
     mission = table(NPC_TABLE, 'LiveNpcMissionDataTable')
     npc = table(DATA + 'DT_SV_NpcRows', 'LiveNpcDataTable')
@@ -273,10 +299,14 @@ def check_fleet_build():
         assert u is not None, f"{s['unit']} not in the world data"
         assert field_of(u, 'Faction')[2][2] == b'\x02' and not field_of(u, 'bIsSpawnFromStart') \
             and not (field_of(u, 'Tags') or ('arr', []))[1], s['unit']
+        assert field_of(u, 'bShowDebugArea') in (None, ('raw', 'Bool', b'\x00')), (s['unit'], 'bShowDebugArea on')
         assert math.dist(spot_of(u), s['point']) < 1.0, (s['unit'], spot_of(u))
         obs = objects_of(u)
         assert [plain(field_of(ob, 'Name')) for ob in obs] == [s['obj']], s['unit']
         ob = obs[0]
+        # (the review of 8ca3195, finding 3) no other mission's callsign, no tags on the ship or its parts
+        assert field_of(ob, 'GameObjectDisplayNameID02') is None, (s['obj'], field_of(ob, 'GameObjectDisplayNameID02'))
+        assert not (field_of(ob, 'Tags') or ('arr', []))[1], (s['obj'], field_of(ob, 'Tags'))
         row = plain(field_of(ob, 'MissionNpcID'))
         assert row == (s['row'] or 'sv_sp_boat'), (s['unit'], row)
         assert field_of(ob, 'TargetMarkType')[2][2] == b'\x01' and field_of(ob, 'bShowHUDBox') == ('raw', 'Bool', b'\x01'), s['unit']
@@ -299,6 +329,8 @@ def check_fleet_build():
                 objs[n] = s['unit']
                 prow = plain(field_of(field_of(ch, 'Data'), 'MissionNpcID'))
                 assert prow in mission, (n, prow)
+                for tags in (field_of(ch, 'Tags'), field_of(field_of(ch, 'Data'), 'Tags')):
+                    assert not (tags or ('arr', []))[1], (n, 'tagged', tags)
                 gc = field_of(ch, 'GrandChildrens')
                 if gc: walk(gc[1])
         walk((field_of(ob, 'ChildAIObjectDescs') or ('arr', []))[1])
