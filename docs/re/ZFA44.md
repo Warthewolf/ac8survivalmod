@@ -439,3 +439,6 @@ enemies near it, players and allies untouched. Scripts/sv_escort_dive.lua (ZDIVE
 - Checks for the first test: the burst and its size (fx_scale), the sound, the shake; the ZFA-44s really closing to
   800 m (AI pursuit may hold off: then the 40 s blast where it is still reaches 1 km); the kills paid; a joiner's view.
   tools/checks/dive_test.sh.
+- (2026-11-11) Saint Alessia's 50-round run: the ZFA-44 "finished off unpaid (GameplayStatics ApplyDamage)" above never
+  died (ApplyDamage takes nothing off AC8's AI planes). Since then every end goes through ModifyHealth, each dive has its
+  own id and callout, and its clock starts once its target is in reach: docs/re/ESCORT.md "The ZFA-44s' end".

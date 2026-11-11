@@ -278,7 +278,11 @@ function PM:EngagementOrderOverride(o, target, prio) orders[#orders + 1] = { pla
 function PM:EnableLandingGear(b) self.gear = b end
 function PM:SetIsInvincible(b) self.inv = b end
 function PM:EnableAvoidObstacle(b) self.avoid = b end
-function PM:SetActive() self.active = false end
+function PM:SetActive(b) self.active = b == true end
+-- ((2026-11-11) as AC8 takes it on an AI object: health off (x10 in HealthInternal), nothing while it's invincible, never
+-- under its MinHealth field; tough: refused, the case still open in game for an allied plane)
+function PM:ModifyHealth(dh) if self.tough or self.inv or self.bIsInvincible then return 0 end
+    self.HealthInternal = math.max(math.floor((self.MinHealth or 0) * 10), self.HealthInternal + dh * 10) end
 function PM:SetActorHiddenInGame(b) self.hidden = b end
 function PM:SetActorEnableCollision() end
 function PM:SetActorTickEnabled() end
@@ -1148,14 +1152,20 @@ do
     -- the host's next launch of ship 1 (arm 2): the arm's unit off this game's list first, the last flight here off
     local arm2 = K.launchers[1][2]
     alive[arm2.unit] = 2
+    local zPk = plane(nil, sp1[1] + 15000, sp1[2], -24484, 0, 0)        -- (a parked one of the ship's: its launch to come)
+    logPlane(zPk, nil, nil)
     local nr = #recycled
     local got = ESC.beforeHostEvent(arm2.record)
+    check(zPk.HealthInternal == 1300 and zPk.hidden ~= true, "... a parked one (its launch to come, maybe this one) left as it is")
+    zPk.gone = true                                                    -- (out of the way for what follows)
     local rec = false
     for i = nr + 1, #recycled do if recycled[i] == arm2.unit .. ":1" then rec = true end end
     -- ((2026-11-07) never with planes up: the host's crash came the moment such a unit was taken off and its arm fired)
-    check(got == arm2.unit and not rec and zA.active == false and zA.hidden == true
-          and has(line("carrier: the host's " .. arm2.record .. " here: " .. arm2.unit .. " first"), "2 up: left as they are, never taken off with planes up"),
-          "a joiner: before the host's " .. arm2.record .. " fires here: " .. arm2.unit .. " with 2 up left as it is (NOT taken off), ship 1's last flight here switched off")
+    -- ((2026-11-11) Delta's log of Saint Alessia's run: switched off, they stayed up for good) finished off, by ModifyHealth
+    check(got == arm2.unit and not rec and zA.HealthInternal == 0
+          and has(line("carrier: the host's " .. arm2.record .. " here: " .. arm2.unit .. " first"), "2 up: left as they are, never taken off with planes up")
+          and (line("carrier: the host's " .. arm2.record .. " here: ") or ""):match("(%d+) of this game's ZFA%-44s of ship 1 before it finished off %((%d+) down%)") ~= nil,
+          "a joiner: before the host's " .. arm2.record .. " fires here: " .. arm2.unit .. " with 2 up left as it is (NOT taken off), ship 1's last flight here finished off")
     alive[arm2.unit] = 0
     nr = #recycled
     ESC.beforeHostEvent(arm2.record)
@@ -1171,9 +1181,25 @@ do
     alive[armU] = 2
     local q0 = #ESC.recycleQ
     ESC.onHost({ "es", "", "0", "0", "-1", "0", "1", "1", "0", "2" })
-    check(zB.active == false and zB.hidden == true and #ESC.recycleQ == q0
-          and has(line("carrier: the host's ZFA-44 CARRIER 1 is gone"), "of this game's own ZFA-44s of it switched off, 0 of its arms' units"),
-          "a joiner: ship 1 no longer up on the host's game (field 10): its own ZFA-44s of it off; an arm's unit with planes up NOT queued off the list")
+    check(zB.HealthInternal == 0 and #ESC.recycleQ == q0
+          and has(line("carrier: the host's ZFA-44 CARRIER 1 is gone"), "1 of this game's own ZFA-44s of it finished off (1 down, the rest switched off), 0 of its arms' units"),
+          "a joiner: ship 1 no longer up on the host's game (field 10): its own ZFA-44s of it finished off; an arm's unit with planes up NOT queued off the list")
+    -- one ModifyHealth can't take down: switched off, kept (ESC.offZfa), tried again before the host's next launch of the ship
+    local zC = plane(nil, sp1[1] - 12000, sp1[2] + 10000, 5000, 90, 300)
+    zC.tough = true
+    logPlane(zC, nil, nil)
+    ESC.onHost({ "es", "", "0", "0", "-1", "0", "1", "2", "0", "3" })
+    ESC.onHost({ "es", "", "0", "0", "-1", "0", "1", "1", "0", "2" })
+    local kept = false
+    for _, e in ipairs((ESC.offZfa or {})[1] or {}) do if e.obj == zC then kept = true end end
+    check(kept and zC.active == false and zC.hidden == true and zC.HealthInternal == 1300 and has(line("carrier: a ZFA-44"), "could not be finished (health 1300"),
+          "one that can't be finished: switched off, kept for another try, said (" .. tostring(line("could not be finished")) .. ")")
+    zC.tough = nil
+    ESC.beforeHostEvent(K.launchers[1][3].record)
+    kept = false
+    for _, e in ipairs((ESC.offZfa or {})[1] or {}) do if e.obj == zC then kept = true end end
+    check(zC.HealthInternal == 0 and not kept and has(line("carrier: " .. K.launchers[1][3].record .. " here"), "1 of this game's switched-off ZFA-44s of ship 1 finished off (1 tried)"),
+          "... finished off before the host's next launch of the ship fires here, off the kept list")
     alive[armU] = nil
     ESC.recycleQ = {}
     ESC.onHost({ "es", "route", "1", "5", "80", "23.4", "1", "1", "0" })   -- (an older host: no field 10, nothing more taken off)
@@ -1199,7 +1225,8 @@ print("(0.74.25) the next carrier's arm: one whose last ZFA-44s aren't up; a lea
     local GSk = statics["/Script/Engine.Default__GameplayStatics"]
     local dmg = {}
     local tough = {}                                           -- (a plane the blow leaves with health: 2026-11-11)
-    local gsStub = { full = "GameplayStatics", addr = addr(), ApplyDamage = function(_, o) dmg[#dmg + 1] = o; if not tough[o] then o.HealthInternal = 0 end end }
+    -- ((2026-11-11) Saint Alessia's 50-round run: ApplyDamage takes nothing off AC8's AI planes; ModifyHealth does (PM)
+    local gsStub = { full = "GameplayStatics", addr = addr(), ApplyDamage = function(_, o) dmg[#dmg + 1] = o end }
     statics["/Script/Engine.Default__GameplayStatics"] = gsStub
     local sp = K.ship_at[1]
     local parked = plane(arms[1].unit, sp[1], sp[2], -24483.9, 0, 0)
@@ -1208,27 +1235,60 @@ print("(0.74.25) the next carrier's arm: one whose last ZFA-44s aren't up; a lea
     ESC.planes[arms[1].unit] = { { obj = parked, addr = parked.addr, name = parked.full, at = 0 },
                                  { obj = flying, addr = flying.addr, name = flying.full, at = 0 } }
     local q0 = #ESC.recycleQ
+    local fromP = #logs + 1
     local n, hitN = ZLAUNCH.parkedOff(1, arms[1].unit, "TEST CARRIER leaving")
-    check(n == 1 and hitN == 1 and #dmg == 1 and dmg[1] == parked, "a leaving ship: its parked ZFA-44 finished off under the sea, not the one flying ("
+    check(n == 1 and hitN == 1 and parked.HealthInternal == 0 and flying.HealthInternal == 1300 and #dmg == 0
+          and has(line("carrier: TEST CARRIER leaving: 1 parked ZFA-44s of ship 1 finished off under the sea (1 by damage event)", fromP), ""),
+          "a leaving ship: its parked ZFA-44 finished off under the sea by ModifyHealth (ApplyDamage takes nothing), not the one flying ("
           .. tostring(n) .. ")")
     check(#ESC.recycleQ == q0 + #arms - 1, "... its arms' units queued off the list once none is up, but its flight's ("
           .. (#ESC.recycleQ - q0) .. " of " .. #arms .. ")")
-    -- ((2026-11-11) counted only when its health reads 0 after the blow: one that keeps health is said, not counted)
+    -- ((2026-11-11) counted only when its health reads 0: one that keeps health is said, switched off, never escorted again)
     local q1 = #ESC.recycleQ
     local parked2 = plane(arms[1].unit, sp[1], sp[2], -24483.9, 0, 0)
-    parked2.HealthInternal = 1300
-    tough[parked2] = true
+    parked2.tough = true
     ESC.planes[arms[1].unit] = { { obj = parked2, addr = parked2.addr, name = parked2.full, at = 0 } }
     local fromT = #logs + 1
     local n2, hit2 = ZLAUNCH.parkedOff(1, nil, "TEST CARRIER leaving again")
-    check(n2 == 0 and hit2 == 1 and has(line("carrier: TEST CARRIER leaving again: 0 parked ZFA-44s", fromT), "1 more took the blow and still have health: 1300"),
-          "a parked ZFA-44 the blow leaves with health: not counted, said with its health")
+    check(n2 == 0 and hit2 == 1 and has(line("carrier: TEST CARRIER leaving again: 0 parked ZFA-44s", fromT), "; 1 could not be (health 1300): switched off")
+          and parked2.hidden == true and ESC.planes[arms[1].unit][1].retired == true,
+          "a parked ZFA-44 ModifyHealth can't take down: not counted, said with its health, switched off and retired")
     -- ((2026-11-11) a restart's: every ZFA-44 of the ship, its flying ones too (all))
     local flying2 = plane(arms[1].unit, sp[1], sp[2], 50000, 0, 600)
     ESC.planes[arms[1].unit] = { { obj = flying2, addr = flying2.addr, name = flying2.full, at = 0 } }
-    local d0 = #dmg
     local n3 = ZLAUNCH.parkedOff(1, nil, "TEST CARRIER (a restart)", true)
-    check(n3 == 1 and dmg[#dmg] == flying2 and #dmg == d0 + 1, "a restart's: a flying ZFA-44 of the ship finished off too (all)")
+    check(n3 == 1 and flying2.HealthInternal == 0, "a restart's: a flying ZFA-44 of the ship finished off too (all)")
+    -- ((2026-11-11) the hull's hold: finished off again every 5 s (never the dive's held ones), given up 60 s on, said once)
+    local client0 = client
+    client = false                                             -- (the host's)
+    for _, a in ipairs(arms) do alive[a.unit] = nil end
+    alive[arms[2].unit] = 2
+    local tough3 = plane(arms[2].unit, sp[1], sp[2], 50000, 0, 600)
+    tough3.tough = true
+    local held3 = plane(arms[2].unit, sp[1] + 1000, sp[2], 60000, 0, 600)
+    ESC.planes[arms[2].unit] = { { obj = tough3, addr = tough3.addr, name = tough3.full, at = 0 } }
+    local t3, fromH = {}, #logs + 1
+    local D0 = D
+    D = { round = 3, state = "wait", now = 0 }
+    check(ZLAUNCH.holdHull(1, t3, "TEST HULL", "a test") == true and has(line("carrier: TEST HULL (a test): its hull held", fromH), "2 ZFA-44s"),
+          "the hull held while 2 ZFA-44s of its arms are up")
+    for _ = 1, 13 do clock = clock + 5; ZLAUNCH.holdHull(1, t3, "TEST HULL", "a test") end
+    local tries, gave = 0, 0
+    for i = fromH, #logs do
+        if logs[i]:find("carrier: TEST HULL held: 0 ZFA-44s of ship 1 finished off", 1, true) then tries = tries + 1 end
+        if logs[i]:find("carrier: TEST HULL (a test): 2 ZFA-44s of its launchers still up 60 s on", 1, true) then gave = gave + 1 end
+    end
+    check(tries >= 10 and tries <= 13 and gave == 1 and ZLAUNCH.holdHull(1, t3, "TEST HULL", "a test") == true,
+          string.format("finished off again every 5 s (%d tries), given up once at 60 s (%d), still held: never taken off with planes up", tries, gave))
+    -- the dive's own: never finished off by the hold, its give-up clock waiting on it
+    ESC.planes[arms[2].unit] = { { obj = held3, addr = held3.addr, name = held3.full, at = 0 } }
+    ZDIVE.d = nil
+    check((ZDIVE.take({ idx = 1, name = "TEST HULL" }) or 0) >= 1 and ZDIVE.holding(1) and ZDIVE.diving(held3.addr), "(a held one for the dive)")
+    local t4 = {}
+    for _ = 1, 20 do clock = clock + 5; ZLAUNCH.holdHull(1, t4, "TEST HULL 2", "a test") end
+    check(held3.HealthInternal == 1300 and not t4.gaveUp, "the dive's held ZFA-44 never finished off by the hold, no give-up while it's held")
+    ZDIVE.d, D, client = nil, D0, client0
+    ESC.planes[arms[2].unit] = nil
     for i = #ESC.recycleQ, q1 + 1, -1 do table.remove(ESC.recycleQ, i) end   -- (only what these two calls added)
     ESC.planes[arms[1].unit] = keepPl
     for i = #ESC.recycleQ, q0 + 1, -1 do table.remove(ESC.recycleQ, i) end
@@ -1537,15 +1597,29 @@ do
           "its plane's next shot within the second: that idle laser handed it and shown, no record fired again")
     -- ((2026-11-07) the user: "need to make the Vampires Escort the Nearest Player too them") solo: its cover record
     pose(pawn, 1000000 + 400000, 0, 300000, 0, 0)
+    -- ((2026-11-11) Saint Alessia's run: a gone carrier's planes were ordered on for hours) only while its carrier's up
+    local R0 = ESC.R
+    ESC.R = { D = D, carriers = {} }
     events = {}
-    ZLAUNCH.coverAt, ZLAUNCH.escorting = 0, nil
+    ZLAUNCH.coverAt, ZLAUNCH.escorting, ZLAUNCH.posAt = 0, nil, 0
+    local fromG = #logs + 1
+    ZLAS.tick()
+    check(not evFired("RE_SV_ZfaCover_1_1") and line("escort you", fromG) == nil, "its carrier gone: no cover orders")
+    local posL = "carrier: VAMPIRES " .. zU .. " " .. z1.addr .. " at "
+    check(has(line(posL, fromG), " at (10.0, 0.0) km 3000 m, ") and has(line(posL, fromG), "health 1300 (its carrier gone)"),
+          "each VAMPIRES plane's place logged every pos_log_s: " .. tostring(line(posL, fromG)))
+    ESC.R = { D = D, carriers = { [1] = { idx = 1, state = "up" } } }
+    events = {}
+    ZLAUNCH.coverAt, ZLAUNCH.escorting, ZLAUNCH.posAt = 0, nil, 0
     local fromC = #logs + 1
     ZLAS.tick()
+    check(has(line(posL, fromC), "(escorting)"), "... (escorting) with its carrier up")
     check(evFired("RE_SV_ZfaCover_1_1") and has(line("carrier: VAMPIRES " .. zU, fromC), "escort you (4.0 km off): RE_SV_ZfaCover_1_1 fired"),
           "the VAMPIRES flight covers the player nearest it (you): its cover record (" .. tostring(line("carrier: VAMPIRES", fromC)) .. ")")
     events = {}
     ZLAS.tick()
     check(not evFired("RE_SV_ZfaCover_1_1"), "not again within escort_s")
+    ESC.R = R0
     end)()
     ESC.planes[zU][1].armUnit = nil
     -- laser_drive = false: the game's own only
