@@ -340,10 +340,14 @@ local function spawnBomber(unit, opts)
     local r = SV_Spawn(unit, x, y, alt * 100, yaw)
     spawningUnit, spawningIdx = nil, nil
     ALIVE.spawned(unit, r)
-    log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f%s, %.1f km up: %s", D.round,
+    -- ((2026-11-11) Saint Alessia's run: SV_ShuttleRound left at 1 sends its appearance's orders onto the shuttle,
+    -- survival_events.py SV_BomberUp_NN; said only then)
+    local sr = r > 0 and tonumber((svFlags() or {}).SV_ShuttleRound) or 0
+    log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f%s, %.1f km up: %s%s", D.round,
         unit, ac, tostring(set), dist, bearing, (compass and not onBearing) and string.format(" (not the %s: the zone's edge)",
             compassName(compass)) or "", alt / 1000,
-        r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+        r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")"),
+        sr >= 1 and string.format(" (SV_ShuttleRound %d: its orders are the shuttle's)", sr) or ""))
     D.heavy = D.heavy or {}
     D.heavy[unit] = HEAVY_UNIT[unit] or nil
     if r > 0 then

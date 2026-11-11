@@ -363,9 +363,11 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   while another player flies (solo, or with nobody else flying, at the host's takeoff: F5's review, round 2). The
   shuttle's countdown runs on too and the shuttle isn't made invulnerable (user, 2026-10-29: "Keep it running while
   others are flying"; `special: shuttle countdown running while you're down at the airfield (1 other player flying) at
-  N s`, logged as it's held or runs, not as the count changes; whether its events take with the landing menu up is
-  unknown: the first not sent then is logged, `special: shuttle countdown event RE_SV_ShuttleT_N not fired (...)
-  while you're down at the airfield`, and the lift-off line says `event package` or `countdown over`); with nobody
+  N s`, logged as it's held or runs, not as the count changes; its events don't take while the host's landing
+  minigames are up (Saint Alessia's run of 2026-11-11: sent, result 1, records never ran), so `countdown over` with the
+  shuttle still up replays the host's own liftoff once its STORE is shut, on the host alone (sv_rounds_shuttle.lua;
+  docs/re/BEHAVIOUR_DIRECTOR.md, the shuttle's round 2 note); the first event not sent is logged, `special: shuttle
+  countdown event RE_SV_ShuttleT_N not fired (...) while you're down at the airfield`); with nobody
   else flying it's held and invulnerable as solo, and can be hit again at another player's takeoff or the host's. A
   joiner's game holds nothing on the host's landing (its copies come as the host's "sp" do; it runs no countdown of
   its own, the host's RE_SV_ShuttleT_* come forwarded). Untested in game (tools/checks/coop_landing_test.sh).

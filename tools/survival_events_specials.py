@@ -946,8 +946,14 @@ def build_shuttle(g, flag):
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_ShuttleRemove')
     for unit in (SHUTTLE_UNIT, PAD_UNIT):
         g.execute(t_off, 'RE_SV_ShuttleRemove', {0: 'NoneSelect', 1: unit, 2: 'NoneSelect', 3: 'false'})
-    # the flags back to 0 once it's taken off (they're set to 0 at its next appearance too)
-    for name in resets:
+    # the flags back to 0 once it's taken off (they're set to 0 at its next appearance too). ((2026-11-11) SV_ShuttleRound
+    # too, kept out of `resets`, which SV_ShuttleUp sets to 0 before its own Set 1: until then only the liftoff at T or a
+    # kill on the pad set it back, and Saint Alessia's co-op host, whose liftoff her STORE ate, sent every raid after it
+    # at the shuttle, SV_BomberUp_NN's shuttle branch. Scripts/sv_rounds.lua SPC.shuttleRemoveCheck reads SV_ShuttleRound
+    # and SV_ShuttleLaunched still up after this event as its being lost, and fires it again)
+    cleared = resets + ['SV_ShuttleRound']
+    assert {'SV_ShuttleRound', 'SV_ShuttleLaunched'} <= set(cleared), cleared
+    for name in cleared:
         flag('RE_SV_ShuttleRemove', name, 'Set', 0)
     # hits: Mission 22's ObjectDamage_Shuttle; its low-health radio (61 / 31 / 16 %) keeps the stock health conditions.
     # Mission 22 also gates each stage on a bool flag of its own (Bool_Shuttle_Damage_Phase0N), which Survival's flag

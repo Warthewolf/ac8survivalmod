@@ -21,6 +21,10 @@
 --     be hit again at their takeoff or yours; it lifts off and is lost with you down; the first of its events not fired
 --     with you down is logged, once a clock (whether they take with the landing menu up isn't known: F5's review of the
 --     change); a joiner runs none of its own;
+--   ((2026-11-11) Saint Alessia's run) its liftoff lost in the host's STORE (an event package that drops what comes in a
+--     minigame): "countdown over" replays this game's liftoff once the STORE has been shut 3 s, fired here alone (the
+--     tail sent on to the others), flag-checked, again from off its pad, 3 tries then given up; the removal lost too:
+--     fired again here with the strike flights' retasks; solo at once; a joiner never;
 --   a joiner's rounds hold nothing on the host's landing;
 --   another player's stand-in waits up to 5 s for their airframe ("players are flying F-16's on my side"), then the default;
 --   the hooks by their place in the source (the ALICORN's deck: bosses_test.sh).
@@ -54,7 +58,8 @@ function playerOnAirfield() return grounded end
 function airfieldTick() end
 function bombTick() end
 local events, eventR = {}, 1
-function SV_Event(name) events[#events + 1] = name; return eventR end
+local evHook                                     -- (the shuttle replay's cases: what the event package does with it)
+function SV_Event(name) events[#events + 1] = name; if evHook then evHook(name) end; return eventR end
 local alive = {}
 function SV_UnitAlive(u) return alive[u] or 0 end
 function SV_SetAircraft() return 1 end
@@ -493,9 +498,18 @@ shuttleScene(true)
 grounded = true
 from = #logs + 1
 ticks(100, 100 + SH.countdown_s + 31)
+-- ((2026-11-11) its events here never set SV_ShuttleLaunched: "countdown over" replays this game's liftoff, which waits
+-- while you're down with no STORE yet; the tail after liftoff goes to player 2 alone, invulnerable meanwhile)
+local function sentN(pat) local n = 0; for _, m in ipairs(sent) do if m:find(pat, 1, true) then n = n + 1 end end; return n end
 check(D.special.state == "done" and not D.special.lost and has(line("special: round 5, the shuttle lifted off", from), "countdown over")
-      and D.shuttleClock == nil and nT() == SH.countdown_s + 30 and invs() == "",
-      "... down all " .. (SH.countdown_s + 30) .. " s with player 2 flying: lifted off, every second's event, the clock ended, never invulnerable")
+      and has(line("special: round 5, the shuttle lifted off", from), "replayed on this game once your STORE is shut")
+      and D.shuttleClock == nil and nT() == SH.countdown_s + 3 and sentN("ev|RE_SV_ShuttleT_" .. (SH.countdown_s + 30)) == 1
+      and invs() == "true" and D.shuttleReplay ~= nil and D.shuttleRemoveAt == nil,
+      "... down all " .. (SH.countdown_s + 30) .. " s with player 2 flying, no liftoff here: \"countdown over\", every "
+      .. "second's event sent (here up to " .. nT() .. "), the clock ended, invulnerable for the replay, no removal yet")
+check(line("special: shuttle liftoff replay waits: you're down at the airfield, your STORE not open yet", from) ~= nil
+      and line("special: shuttle countdown's tail (RE_SV_ShuttleT_154 on) sent to the other players, not fired here: this game's liftoff is replayed", from) ~= nil,
+      "... the replay waits for your STORE (logged), the tail sent on (logged)")
 -- lost while held (solo, you down): the invulnerability off as the clock ends
 shuttleScene(false)
 grounded = true
@@ -538,6 +552,152 @@ local k = D.shuttleClock
 roundsTick(100); roundsTick(110)
 check(k.cd == 0 and nT() == 0 and invs() == "", "a joiner, down at the airfield: no countdown or invulnerability of its own")
 room(false)
+
+---------------------------------------------------------------------------------------------------- the shuttle's liftoff replayed
+-- ((2026-11-11) Saint Alessia's co-op run of 0.74.36: the host down at 122 s with 3 others flying, its Hangar minigame
+-- from 137 to 176 s; RE_SV_ShuttleT_146 / _150 were sent but never ran there; "countdown over" paid and ended the round
+-- with the shuttle on its pad, SV_ShuttleRound still 1) The event package stubbed: an event's records run (146 off the
+-- pad, 150 the climb and its flags, RE_SV_ShuttleRemove the flags back to 0) unless a minigame is up, when they're lost.
+print("the shuttle's liftoff replayed on this game when its STORE ate it")
+do
+    local T = SH.countdown_s
+    local minigame, drop150 = false, 0
+    local function took(name)
+        if minigame then return end
+        if name == "RE_SV_ShuttleT_" .. (T - 4) then shuttle.pos = { X = 30000, Y = 0, Z = 15000 }    -- (onto its path)
+        elseif name == "RE_SV_ShuttleT_" .. T then
+            if drop150 > 0 then drop150 = drop150 - 1; return end
+            FLAGS.SV_ShuttleLaunched, FLAGS.SV_ShuttleRound = 1, 0
+            shuttle.pos = { X = 5000, Y = 0, Z = 80000 }
+        elseif name == "RE_SV_ShuttleRemove" then
+            FLAGS.SV_ShuttleLaunched, FLAGS.SV_ShuttleRound, FLAGS.SV_ShuttleLost = 0, 0, 0
+        end
+    end
+    local rawLoc = shuttle.K2_GetActorLocation
+    function shuttle:K2_GetActorLocation() local p = self.pos or { X = 0, Y = 0, Z = 0 }; return { X = p.X, Y = p.Y, Z = p.Z } end
+    function shuttle:SetActorHiddenInGame() end
+    function shuttle:SetActorEnableCollision() end
+    function shuttle:SetActorTickEnabled() end
+    local function scene(coop)
+        shuttleScene(coop)
+        shuttle.pos, SHUTTLE.padAt, SPC.gate, minigame, drop150, evHook = nil, nil, nil, false, 0, took
+        FLAGS.SV_ShuttleRound, FLAGS.SV_ShuttleLaunched, FLAGS.SV_ShuttleLost = 1, 0, 0     -- (SV_ShuttleUp's)
+    end
+    local function n(name) local c = 0; for _, e in ipairs(events) do if e == name then c = c + 1 end end; return c end
+    local function at(name, from)                                   -- the index of an event in `events` from `from`
+        for i = from or 1, #events do if events[i] == name then return i end end
+        return nil
+    end
+    local function ev(s) return "RE_SV_ShuttleT_" .. s end
+    local function nS() local c = 0; for _, e in ipairs(events) do if e:find("^RE_SV_Shuttle") then c = c + 1 end end; return c end
+    local LIFT = "special: shuttle lifted off here at the replay's try "
+
+    -- her run: down at 122 s, the minigame 137-176 s, the music hold from 1.6 s after its start to 2.5 s after its end,
+    -- off the ground at 187 s; player 2 flying all along
+    scene(true)
+    local from = #logs + 1
+    ticks(100, 221.75)
+    grounded = true
+    ticks(222, 236.75)
+    minigame = true
+    ticks(237, 238.5)
+    D.musicHold = 1
+    ticks(238.75, 275.75)
+    minigame = false
+    ticks(276, 278.25)
+    local e0, s0 = #events, nS()
+    D.musicHold = 0                                                 -- (its last tick held: 278.25)
+    ticks(278.5, 281)
+    check(FLAGS.SV_ShuttleLaunched == 0 and FLAGS.SV_ShuttleRound == 1 and D.special.state == "done"
+          and has(line("special: round 5, the shuttle lifted off", from), "countdown over; ")
+          and has(line("special: round 5, the shuttle lifted off", from), "SV_ShuttleLaunched 0, SV_ShuttleRound 1")
+          and D.shuttleReplay and D.shuttleReplay.tries == 0 and nS() == s0,
+          "her run: 146 and 150 lost in the minigame, \"countdown over\" (its flags in the line), the replay waiting "
+          .. "(nothing fired before the STORE has been shut 3 s)")
+    check(line("special: shuttle liftoff replay waits: your landing STORE is open", from) ~= nil and invs() == "true",
+          "... it waits for the STORE (logged), the shuttle invulnerable meanwhile")
+    ticks(281.25, 285)
+    check(at(ev(T - 14), e0 + 1) and at(ev(T - 4), e0 + 1) and not at(ev(T), e0 + 1)
+          and line("special: shuttle liftoff replayed here, try 1 of 3: onto its path (still on its pad), the climb in 4 s", from) ~= nil,
+          "... 3 s after the hold let go: ignition and onto its path, logged; the climb not yet")
+    grounded = false                                                -- (off the ground at 187 s)
+    ticks(285.25, 289)
+    check(FLAGS.SV_ShuttleLaunched == 1 and FLAGS.SV_ShuttleRound == 0 and line(LIFT .. "1", from) ~= nil
+          and D.shuttleRemoveAt and math.abs(D.shuttleRemoveAt - (288.25 + SH.remove_s)) < 0.01,
+          "... the climb 4 s later: lifted off here (logged), SV_ShuttleRound 0, its removal " .. SH.remove_s .. " s on ("
+          .. tostring(D.shuttleRemoveAt) .. ")")
+    check(sentN("ev|" .. ev(T - 4)) == 1 and sentN("ev|" .. ev(T)) == 1 and sentN("ev|" .. ev(T - 14)) == 1,
+          "... the replay fired here alone: player 2 got each of 136 / 146 / 150 once, on time")
+    ticks(289.25, 316)
+    check(n(ev(T + 7)) == 1 and n(ev(T + 13)) == 1 and n(ev(T + 30)) == 1 and sentN("ev|" .. ev(T + 13)) == 1
+          and D.shuttleReplay == nil and line("special: shuttle liftoff replay done here (events fired 136, 146, 150, 157, 163, 180)", from) ~= nil,
+          "... the tail at its offsets from the climb, once each here (the clock's went to player 2): done (logged)")
+    check(n(ev(T - 20)) == 1 and n(ev(T - 2)) == 1, "... the countdown's radio and focus camera (130, 148) not fired again")
+    check(line("special: shuttle after its countdown, round 5: SV_ShuttleLaunched 0, SV_ShuttleRound 1; the shuttle 0.0 km "
+          .. "from its pad, 0.0 km up; the nearest enemy aircraft none from the pad, 0 within 5 km", from) ~= nil,
+          "... the pad watched after its countdown (the flags, the shuttle, the nearest enemy)")
+
+    -- its removal lost in your STORE too (you landed again): SV_ShuttleLaunched still 1 after it, fired again here once
+    -- it's shut, with the strike flights' retasks; not sent to player 2 again
+    local B = CFG.airfield.bombers.pool[1]
+    D.up[B], alive[B] = true, 2
+    grounded, minigame, D.musicHold = true, true, 1
+    from = #logs + 1
+    ticks(316.25, D.shuttleRemoveAt + 5.5)
+    check(line("special: RE_SV_ShuttleRemove didn't take here (SV_ShuttleRound 0, SV_ShuttleLaunched 1)", from) ~= nil
+          and D.shuttleRemoveAgain and D.shuttleRemoveAgain.tries == 0,
+          "the removal lost in your STORE: SV_ShuttleLaunched still 1 5 s after: to be fired again (logged), not yet")
+    local t1 = D.now
+    minigame, D.musicHold, grounded = false, 0, false
+    ticks(t1 + 0.25, t1 + 7)
+    check(n("RE_SV_ShuttleRemove") == 2 and sentN("ev|RE_SV_ShuttleRemove") == 1 and FLAGS.SV_ShuttleLaunched == 0
+          and n(string.format("RE_SV_BomberRetask_%02d", BOMBER_INDEX[B])) == 2 and D.shuttleRemoveAgain == nil
+          and line("special: RE_SV_ShuttleRemove fired again here, try 1 (1); strike flights back onto the airfield: " .. B, from) ~= nil
+          and line("special: RE_SV_ShuttleRemove fired again here 1 time: it took", from) ~= nil,
+          "... your STORE shut 3 s: fired again here alone with the retasks, it took (logged)")
+    D.up[B], alive[B] = nil, nil
+
+    -- 146 took (the shuttle off its pad), 150 lost: try 2 doesn't put it onto its path again, and lifts off
+    scene(true)
+    from = #logs + 1
+    ticks(100, 246.75)
+    minigame, D.musicHold = true, 1
+    ticks(247, 257)
+    minigame, D.musicHold = false, 0
+    drop150 = 1
+    ticks(257.25, 275)
+    check(line("special: shuttle liftoff replay, try 1: SV_ShuttleLaunched still 0 3 s after the climb: again", from) ~= nil
+          and line("special: shuttle liftoff replayed here, try 1 of 3: not onto its path again (already off its pad), the climb now", from) ~= nil
+          and line("special: shuttle liftoff replayed here, try 2 of 3: not onto its path again (already off its pad), the climb now", from) ~= nil
+          and line(LIFT .. "2", from) ~= nil and FLAGS.SV_ShuttleLaunched == 1 and n(ev(T - 14)) == 2,
+          "146 took, 150 lost (flying): try 1's climb lost too, try 2 from off its pad, the climb at once: lifted off "
+          .. "(ignition once in the replay)")
+
+    -- never takes: 3 tries, then given up plainly, taken off in 30 s
+    scene(true)
+    from = #logs + 1
+    drop150 = 99
+    ticks(100, 270)
+    check(line("special: shuttle liftoff not replayed here: it never left its pad here in 3 tries (events fired 136, 150, 150, 150;", from) ~= nil
+          and D.shuttleReplay == nil and D.shuttleRemoveAt and D.shuttleRemoveAt - D.now <= 30 and n(ev(T)) == 4,
+          "150 never takes: 3 tries (" .. n(ev(T)) - 1 .. " climbs), given up (logged), taken off in 30 s")
+
+    -- solo, flying (its events lost some other way): replayed at once, nothing sent
+    scene(false)
+    from = #logs + 1
+    drop150 = 1
+    ticks(100, 270)
+    check(line(LIFT .. "1", from) ~= nil and #sent == 0
+          and line("special: shuttle countdown's tail (RE_SV_ShuttleT_154 on) not fired: this game's liftoff is replayed", from) ~= nil,
+          "solo, flying, 150 lost: replayed at once, lifted off, nothing sent (the tail logged as not fired)")
+
+    -- a joiner never replays (its shuttle copy flies on the host's events)
+    scene(false)
+    COOP.open, COOP.role, COOP.slot, CFG.coop.enabled = true, "join", 1, true
+    check(SPC.shuttleReplayStart(100) == false and D.shuttleReplay == nil, "a joiner: no replay of its own")
+    room(false)
+    evHook, shuttle.K2_GetActorLocation = nil, rawLoc
+end
 
 ---------------------------------------------------------------------------------------------------- a stand-in's airframe
 -- (the user's co-op run of 2026-10-29: "players are flying F-16's on my side but different aircraft on their side": the

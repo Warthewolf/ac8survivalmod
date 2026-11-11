@@ -2537,3 +2537,44 @@ fichier"; "tu met tous dans logs, dater les crumbs").
   where tools/tanicorn/build.sh writes it from any worktree (as L7 does; before, a worktree build said "no Tanicorn
   container" just after making one); the fleet plan's general rule (1.4) and CONTRIBUTING.md say DEV ONLY for the dev
   install's test keys; tools/README.md's OFFLINE build command the right way round.
+
+## 0.74.51-coop2mp.143: the shuttle's liftoff lost in the host's STORE (2026-11-11; Lua, the event package, tests)
+- Saint Alessia's co-op run of 0.74.36 (4 players, she hosted): "shuttle never launched on my end, enemies still swarmed
+  around it, clients reported it launched for them a couple rounds prior". Her logs: down at the airfield at 122 s with 3
+  others flying (the countdown runs on, the user's rule of 2026-10-29), her Hangar minigame 18:47:27-18:48:06; T-4 and T
+  were sent inside it (SV_Event 1) and their records never ran (SV_ShuttleLaunched, SV_ShuttleRound never changed again);
+  a flight that appeared in it got no orders; the events after it took, she still on the runway. "countdown over" paid,
+  called SHUTTLE LAUNCHED and ended round 2 with the shuttle on its pad until its removal hid it in round 4, and
+  SV_ShuttleRound still 1 put round 3's raid on the shuttle's orders (SV_BomberUp_NN's shuttle branch). Her joiners
+  fired the forwarded events in their own worlds and saw it lift off at the end of round 2.
+- The fix (Scripts/sv_rounds_shuttle.lua, sv_rounds.lua's new next piece; sv_rounds.lua had gone over 2,000 lines):
+  "countdown over" with the shuttle still up replays the host's (or a solo game's) own liftoff once its STORE has been
+  shut 3 s (SPC.storeShut: D.musicHold; down at the airfield with no STORE yet this visit waits too):
+  RE_SV_ShuttleT_136 (ignition) and _146 (only while it's still on its pad), _150 4 s later, fired on this game alone
+  (COOP.eventHere), then _157 / _163 / _180 at their offsets from it; the clock's own tail after T goes to the joiners
+  only meanwhile (the new COOP.eventThere), whose shuttles lifted off on time. It took when SV_ShuttleLaunched reads 1
+  3 s after _150; else again (from off its pad without _146), 3 tries, then logged plainly and taken off in 30 s (also
+  after 300 s of waiting). Nagase's countdown radio and the focus camera aren't fired again; the shuttle is invulnerable
+  from "countdown over" to its removal, which counts from the replayed liftoff. The pay, the callout and the round's
+  end are as before.
+- RE_SV_ShuttleRemove sets SV_ShuttleRound back to 0 too (tools/survival_events_specials.py; not in `resets`, which
+  SV_ShuttleUp uses before its own Set 1): needs the container rebuilt. When SV_ShuttleRound or SV_ShuttleLaunched is
+  still up 2 s after it (lost in a STORE the same way), the host fires it again on its own game once its STORE is shut,
+  with the strike flights' RE_SV_BomberRetask_NN, up to 3 times.
+- Log lines (docs/re/BEHAVIOUR_DIRECTOR.md, the shuttle's round 2 note): the lift-off line now has SV_ShuttleLaunched /
+  SV_ShuttleRound; `special: shuttle liftoff replay waits: ...`, `... replayed here, try N of 3: ...`, `special: shuttle
+  lifted off here at the replay's try N (...)`, `special: shuttle liftoff not replayed here: ...`, `special: shuttle
+  countdown's tail (RE_SV_ShuttleT_154 on) sent to the other players, not fired here ...`, `special:
+  RE_SV_ShuttleRemove didn't take here (...)` / `fired again here ...`; every 30 s from the countdown's end to its
+  removal `special: shuttle after its countdown, round R: SV_ShuttleLaunched L, SV_ShuttleRound S; the shuttle ...; the
+  nearest enemy aircraft ... from the pad, N within 5 km`; a bomber flight's spawn line says `(SV_ShuttleRound N: its
+  orders are the shuttle's)` while it's up.
+- Tests: coop_landing_test.sh (an event package stub that drops what comes in a minigame): her run replayed (waits for
+  the STORE, fired 3 s after it shut, here alone, the tail at its offsets, lifted off, removal 180 s on), the removal
+  lost and fired again with the retasks, 146 took and 150 lost, never taking (3 tries), solo at once, a joiner never;
+  the old "down all the countdown" case now expects the replay. run_all: 64 passed, 5 skipped (Windows only). The
+  generator wasn't run here (no game files): build_all.sh on the user's machine rebuilds the container.
+- Not in this fix (docs/design notes for the user): a bomber or strike flight that appears inside the host's minigame
+  has nothing that fires its orders again (sv_spawn.lua spawnBomber gives it no D.orders entry); a joiner's own STORE
+  can eat the host's forwarded liftoff (her player 3 was in one at T; their logs would tell); other one-shot host events
+  at the same risk (a boss's end, the Spaceport's launch, a Wolf trap's free, the removals). Untested in game.

@@ -505,6 +505,14 @@ function COOP.eventHere(name)
     if hostDownSkips(name) then return -20 end
     return type(fire) == "function" and fire(name) or -5
 end
+-- ((2026-11-11) and the other way round) an event sent to the other players as the host's SV_Event sends it, not fired on
+-- this game: the shuttle countdown's tail while the host's own liftoff is replayed (sv_rounds.lua SPC.shuttleReplayTick).
+-- 1 when it was sent, 0 when it isn't one to send (not the host, or an event each game fires for its own)
+function COOP.eventThere(name)
+    if not (COOP.host() and mirroredEvent(name)) then return 0 end
+    send(true, "ev", name)
+    return 1
+end
 
 ---------------------------------------------------------------------------------------------------- host
 local function opsText(ops)

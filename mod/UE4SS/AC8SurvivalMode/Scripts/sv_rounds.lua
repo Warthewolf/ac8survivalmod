@@ -13,11 +13,12 @@ local function flyingText(n) return n == 1 and "1 other player flying" or (n .. 
 -- countdown_s + 30; it stops when the shuttle is lost. While the countdown is held the shuttle can't be hurt (user,
 -- 2026-10-23: "Make the shuttle invulnerable while the countdown is held"; LiveGameObject.SetIsInvincible): running
 -- again (your takeoff, or another player flying while you're still down), it can be hit again.
-function SPC.shuttleInvincible(on)
+-- (why: what the log says it's for, the countdown's hold by default; SPC.shuttleReplayStart's own)
+function SPC.shuttleInvincible(on, why)
     if not liveObj(SHUTTLE.obj) then shuttleHealth() end         -- (finds the shuttle's actor) ((0.73.84) liveObj: kept)
     if not liveObj(SHUTTLE.obj) then return false end
     local ok = pcall(function() SHUTTLE.obj:SetIsInvincible(on) end)
-    log(string.format("special: shuttle %s%s", on and "invulnerable while the countdown is held" or "can be hit again",
+    log(string.format("special: shuttle %s%s", why or (on and "invulnerable while the countdown is held" or "can be hit again"),
         ok and "" or " (SetIsInvincible failed)"))
     return ok
 end
@@ -40,13 +41,29 @@ function SPC.shuttleClockTick(now)
     end
     local want = (held and not k.s.lost and k.s.state == "countdown") or false   -- (not after liftoff)
     if want ~= (k.inv or false) and SPC.shuttleInvincible(want) then k.inv = want end
-    local last = CFG.specials.shuttle.countdown_s + 30
+    local T = CFG.specials.shuttle.countdown_s
+    local last = T + 30
     while k.fired < math.min(math.floor(k.cd), last) do
         k.fired = k.fired + 1
-        local r = type(SV_Event) == "function" and SV_Event("RE_SV_ShuttleT_" .. k.fired) or -5
-        -- (running with you down, your landing menu may be up: whether its events take there isn't known; the first
-        -- one not fired is logged, once a clock. A 1 says it was sent, not that its records ran: the lift-off line's
-        -- "event package" or "countdown over" tells)
+        local name = "RE_SV_ShuttleT_" .. k.fired
+        local r
+        -- ((2026-11-11) the tail after liftoff while this game's own liftoff is replayed, SPC.shuttleReplayTick: sent
+        -- on to the other players, whose shuttles lifted off on time, and not fired here, where the replay fires its
+        -- own at their offsets from its liftoff; here the climb's second leg would have flown the shuttle off its pad)
+        if D.shuttleReplay and k.fired > T then
+            r = COOP and COOP.eventThere and COOP.eventThere(name) or 0
+            if not k.tailSaid then
+                k.tailSaid = true
+                log(string.format("special: shuttle countdown's tail (%s on) %s: this game's liftoff is replayed", name,
+                    r == 1 and "sent to the other players, not fired here" or "not fired"))
+            end
+            r = 1
+        else
+            r = type(SV_Event) == "function" and SV_Event(name) or -5
+        end
+        -- (running with you down, your landing menu may be up: the first one not fired is logged, once a clock. A 1 says
+        -- it was sent, not that its records ran: the lift-off line's "event package" or "countdown over" tells. They
+        -- don't take there: SPC.shuttleReplayTick)
         if r ~= 1 and D.grounded and not k.downErr then
             k.downErr = true
             log(string.format("special: shuttle countdown event RE_SV_ShuttleT_%d not fired (%s) while you're down at the "
@@ -58,6 +75,8 @@ function SPC.shuttleClockTick(now)
         D.shuttleClock = nil
     end
 end
+-- (its liftoff replayed when the countdown ran out without it, its removal fired again, the pad watched after it:
+-- sv_rounds_shuttle.lua, the next piece)
 
 -- Taking the shuttle and its pad off (with RE_SV_ShuttleRemove). That event's LiveSetActiveGameObjectExecution switches
 -- nothing off (a run of 2026-10-24: fired, result 1, and the shuttle, the pad's 9 dummies and its guns were still up
@@ -567,6 +586,8 @@ end
 -- flag, or nothing of its unit alive before liftoff). Pays the reward or closes the shop.
 local function specialTick(now)
     SPC.shuttleClockTick(now)
+    SPC.shuttleReplayTick(now)                      -- ((2026-11-11) this game's liftoff again, its STORE shut: above)
+    SPC.shuttleWatchTick(now)
     local okE, errE = pcall(SPC.endTick, now, D.special)          -- ((0.73.77) D4: a finished special's leftovers)
     if not okE and tostring(errE) ~= D.cleanErr then D.cleanErr = tostring(errE); log("special: clean-up error " .. D.cleanErr) end
     local okC, errC = pcall(SPC.cleanTick, now)
@@ -575,6 +596,7 @@ local function specialTick(now)
     -- and a shuttle destroyed while it's 0 counts as shot down on the pad (failure radio, SV_ShuttleLost)
     if D.shuttleRemoveAt and now >= D.shuttleRemoveAt then
         D.shuttleRemoveAt, D.shuttleEventAt, D.shuttleCheckAt = nil, now + 3, now + 5
+        D.shuttleReplay = nil                       -- (a replay's tail not fired yet: the shuttle's going)
         if D.shuttleClock and D.shuttleClock.inv then SPC.shuttleInvincible(false); D.shuttleClock.inv = false end
         local okT, errT = pcall(SPC.shuttleTakeOff)
         if not okT then log("special: shuttle and pad off: error " .. tostring(errT)) end
@@ -598,6 +620,7 @@ local function specialTick(now)
     -- SV_Recycle(unit, 1), as SPC.cleanTick does)
     if D.shuttleCheckAt and now >= D.shuttleCheckAt then
         D.shuttleCheckAt = nil
+        SPC.shuttleRemoveCheck(now)                 -- ((2026-11-11) RE_SV_ShuttleRemove lost in your STORE: again, above)
         local u = CFG.specials.shuttle.unit
         local n0 = SV_UnitAlive(u)
         local rec = ""
@@ -611,6 +634,7 @@ local function specialTick(now)
         end
         log(string.format("special: shuttle unit %s: %d alive 5 s after it was taken off (0: a fresh one next time)%s", u, n0, rec))
     end
+    SPC.shuttleRemoveAgainTick(now)
     local s = D.special
     if #ANOM.fx > 0 then ANOM.cleanFx(now) end                     -- (the Anomaly's systems, even after its round)
     AMPH.runTick(now)                                               -- landed troops, the capture (any round)
@@ -661,14 +685,20 @@ local function specialTick(now)
             D.round, cd, f.SV_ShuttleHits or -1, RUN.shopClosedUntil))
     elseif launched or over then
         s.state = "done"
-        D.shuttleRemoveAt = now + c.remove_s            -- it and the pad's allies, once it's well up
+        -- ((2026-11-11) "countdown over" with the shuttle still up: its liftoff never took here (Saint Alessia's STORE
+        -- ate it): replayed on this game once its STORE is shut, its removal counted from that liftoff
+        -- (SPC.shuttleReplayStart, above); the pay, the callout and the round's end as ever, the other players' shuttles
+        -- having lifted off on time)
+        local replay = not launched and SPC.shuttleReplayStart(now) or false
+        if not replay then D.shuttleRemoveAt = now + c.remove_s end   -- it and the pad's allies, once it's well up
         local pay = c.reward + (c.reward_per_round or 0) * D.round
         addCredits(pay, "shuttle launched")
         LB.special("shuttle", true, cd)
         hudCallout(t.launched, string.format(t.launched_sub, specialPay(pay)))   -- ((0.73.78) C3: each player's share)
-        log(string.format("special: round %d, the shuttle lifted off (%s; %d hits, health %s%%)", D.round,
-            launched and "event package" or "countdown over", f.SV_ShuttleHits or -1,
-            tostring(shuttleHealth())))
+        log(string.format("special: round %d, the shuttle lifted off (%s; %d hits, health %s%%; SV_ShuttleLaunched %s, "
+            .. "SV_ShuttleRound %s)%s", D.round, launched and "event package" or "countdown over", f.SV_ShuttleHits or -1,
+            tostring(shuttleHealth()), tostring(f.SV_ShuttleLaunched or "?"), tostring(f.SV_ShuttleRound or "?"),
+            replay and ": not here (its liftoff's events never took): replayed on this game once your STORE is shut" or ""))
     end
 end
 
