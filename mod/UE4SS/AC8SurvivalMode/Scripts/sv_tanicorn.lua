@@ -6,7 +6,8 @@
 -- ALiveAIGroundVehicleObject, built and cooked by tools/tanicorn; its container SurvivalMode_Tani_P is staged with TANI=1
 -- only) spawned through Survival's rows as GONE FISHIN's shoals are: the world-data unit SV_Unit_TaniTest on its mission
 -- row, its DT_NPC row SV_Npc_TaniMount and model row SV_Model_TaniMount (whose blueprint is ours) added from Survival's
--- tables to the game's at the first press. Test builds only: all of it is in the test-only block below.
+-- tables to the game's at the first press. The user's dev install only (TANI=1; never in a TESTER zip: the user,
+-- 2026-11-11): all of it is in the dev-only block below (tools/strip_test_only.py takes it out of every zip).
 --   Ctrl+T in a run   (0.74.43 had Ctrl+`, the game console's key) our class loaded by itself first (`tanicorn: class
 --                     ...`: AC8 took our cooked blueprint or not), then the mount spawned 3 km ahead on the sea through the
 --                     shoals' spawn capture (FISH.spawn: every AI object the spawner makes, `tanicorn: the spawn made ...`),
@@ -34,7 +35,7 @@
 --                     menu), 3 km ahead across your path; logged as Ctrl+U's mounts, their missiles as the shells
 --                     (`tanicorn: VLSD missile N ...`), and their lids (AS_SV_Tani_<part>_Open) opened when a block fires and
 --                     shut again after (`tanicorn: VLS ... lids opening / shutting`).
--- TEST ONLY BEGIN
+-- DEV ONLY BEGIN
 TANI = { unit = "SV_Unit_TaniTest", npc = "SV_Npc_TaniMount", model = "SV_Model_TaniMount",
          class = "BP_SV_Tani_T5_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5.BP_SV_Tani_T5_C",
          cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5.Default__BP_SV_Tani_T5_C",
@@ -1752,4 +1753,4 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
     if R.ended and now - R.endAt >= C.end_pad_s then riseBack(R, "the rise ended"); RISE = nil end
 end }
 end
--- TEST ONLY END
+-- DEV ONLY END

@@ -225,6 +225,30 @@ function SUB.lineCount(text, wrap, em)
     end
     return n
 end
+-- ((2026-11-11) the user's screenshots of 0.74.4x: the strip's text didn't wrap at all, one line running past both sides
+-- of the box (which had grown to two lines): SetWrapTextAt takes no effect in game. So the strip's text is broken into
+-- lines here, at whole words, each at most `wrap` units wide by the same model, and the box grown to that many.)
+-- SUB.wrap(text, wrap, em) -> the text with "\n" between its lines, the line count. A word wider than wrap keeps a line
+-- of its own. Three lines the screenshots measured came out 2.5 % under to 3 % over the model, so the strip breaks
+-- WRAP_PAD (120) inside the box rather than the 80 of its old wrap: a line the model puts at 1,440 is at most ~1,477.
+local WRAP_PAD = 120
+SUB.wrapPad = WRAP_PAD                                -- (the tests measure at the strip's own width)
+function SUB.wrap(text, wrap, em)
+    wrap = math.max(100, tonumber(wrap) or 1440)
+    em = math.max(1, tonumber(em) or 50)
+    local lines, cur, len, space = {}, {}, 0, EM[" "] * em
+    for word in tostring(text or ""):gmatch("%S+") do
+        local w = ems(word) * em
+        if #cur > 0 and len + space + w > wrap then
+            lines[#lines + 1] = table.concat(cur, " ")
+            cur, len = {}, 0
+        end
+        len = (#cur > 0) and (len + space + w) or w
+        cur[#cur + 1] = word
+    end
+    if #cur > 0 or #lines == 0 then lines[#lines + 1] = table.concat(cur, " ") end
+    return table.concat(lines, "\n"), #lines
+end
 local function colorOf(who)
     local c = cfg()
     local col = type(c.colors) == "table" and c.colors[who] or nil
@@ -257,12 +281,14 @@ function SUB.hudTick(now, shown, wallOpen)
     local on = cur ~= nil and shown
     if on then
         setText(H.subWho, "subWhoStr", cur.who:upper())
-        setText(H.subText, "subTextStr", cur.text)
-        if H.subSized ~= cur and H.subPanelSlot then     -- (the box grown to the line's wrapped lines)
+        if not cur.shown then                            -- (its lines broken here once: SUB.wrap)
+            cur.shown, cur.nLines = SUB.wrap(cur.text, (H.subW or 1560) - WRAP_PAD, cfg().em_units)
+        end
+        setText(H.subText, "subTextStr", cur.shown)
+        if H.subSized ~= cur and H.subPanelSlot then     -- (the box grown to the line's lines)
             H.subSized = cur
             local c = cfg()
-            local n = SUB.lineCount(cur.text, (H.subW or 1560) - 80, c.em_units)
-            local hh = (H.subH or 150) + (n - 1) * (tonumber(c.line_h) or CFG.hud.line or 68)
+            local hh = (H.subH or 150) + ((cur.nLines or 1) - 1) * (tonumber(c.line_h) or CFG.hud.line or 68)
             pcall(function() H.subPanelSlot:SetSize({ X = H.subW or 1560, Y = hh }) end)
         end
         if H.subWhoCol ~= cur.who then

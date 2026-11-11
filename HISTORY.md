@@ -2241,7 +2241,62 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   as AC7's laser: `tanicorn: straight spawn of our class ...`). 55 suites pass. package_dev.sh (VALKA=1 ZFA=1 TANI=1),
   build ad178d75bdfb... registered. INSTALLED 2026-11-10 (backup: build/backup/install_before_0.74.46).
 
-## 0.74.48 (2026-11-09; Lua only, the runtime unchanged; not built or run in game: built on Linux, no package)
+## 0.74.48 (2026-11-10, runtime 0.32.32; not yet run in game)
+- The log bundle: at every game start the runtime zips the PREVIOUS session's logs into one dated zip, so a player sends one
+  file when something goes wrong: <mod>\logs\AC8Survival_<start>_<mod version>.zip, the 10 newest kept (no size cap).
+  The game thread only moves files aside (LbStashPrevious: AC8SurvivalMode.log, AC8SurvivalMode_lua.log, logs\UE4SS.session.log,
+  logs\session.txt, logs\*.csv into logs\prev; AC8SurvivalMode_crumbs.log COPIED, OpenCrumbs keeps its .prev rotation) before
+  OpenLog and the Lua log truncate them; a background thread (LbZipThread) zips logs\prev, the game's Saved\Logs\*.log and
+  Saved\Crashes\UECC-* files newer than the previous session's start, and a bundle.txt (what went in, what was skipped and
+  why), under a .tmp name, renamed when whole; the stash is deleted only after that. A stash that was never zipped is zipped
+  at the next start first. A stored zip with CRC-32, no ZIP64 (runtime/logzip.h; runtime/logbundle.c).
+- logs\session.txt (this session, key=value, a later line wins): start, start_ft, rt, main_dll_ts (main.dll's PE timestamp, for
+  build/runtime/main_<v>_<ts>.map), pid, build_hash, and from Lua through the new SV_Session("key=value"): mod, role (solo /
+  host / join; COOP.noteRole in sv_coop.lua, called by COOP.reopen and closeCoop).
+- logs\UE4SS.session.log: a thread copies what UE4SS.log gained every 10 s (UE4SS empties it at its own start).
+- tools/checks/logbundle_test.sh (zip + prune against Python's zipfile; needs clang). runtime/main.dll's new kernel32 imports:
+  CreateDirectoryW, RemoveDirectoryW, DeleteFileW, MoveFileExW, CopyFileW, GetEnvironmentVariableW, GetSystemTimeAsFileTime,
+  FileTimeToLocalFileTime, FileTimeToSystemTime, SetFilePointerEx.
+- Test in game: quit normally, relaunch -> one zip; kill AceCombat8.exe in Task Manager, relaunch -> the zip has the logs,
+  UE4SS.session.log and the UECC folder if any; 11 launches -> 10 zips; a co-op session -> role=host / role=join in
+  session.txt; the start isn't slower (the log's "logs: previous session's files set aside ... (N ms)" line).
+
+## runtime 0.32.33 (2026-11-10, branch fix/log-bundle-review; not built, not run in game)
+The log bundle after Copilot's review of feature/log-bundle (four comments, all real), then dated log names (the user,
+2026-11-10: "le AC8SurvivalMode.log et session.txt, il faut leur mettre la date et l'heure de sa création au nom du
+fichier"; "tu met tous dans logs, dater les crumbs").
+- Every file of a session is named with the session's start (local time) and lives in <mod>\logs: AC8SurvivalMode_<stamp>.log,
+  AC8SurvivalMode_lua_<stamp>.log, AC8SurvivalMode_crumbs_<stamp>.log (the .prev rotation is gone), session_<stamp>.txt,
+  UE4SS_<stamp>.log. A stamp is YYYY-MM-DD_HH-MM-SS, a letter b-z after it for a second session in the same second (a
+  letter, so no zip name AC8Survival_<stamp>_<mod>.zip starts like another stamp's). No session overwrites another's, so
+  the stash (logs\prev), its synchronous retry and the logs\kept of the first fix are gone; the start only renames
+  (an older runtime's undated logs, once, into logs\ under the stamp of their last write).
+- The zip thread zips every earlier session with no zip yet (logzip.h LzPick), oldest first; with 10 zips or more, none
+  older than the oldest zip (it would be pruned at once and made again at every start). The game's Saved\Logs and
+  Saved\Crashes files go in by time: from the session's start_ft to the next session's start. Only the files that went
+  in whole (LZ_OK) are deleted after the zip is placed (Copilot's 1st comment); the others, and every file of a zip that
+  failed, stay in logs\ under their dated names, never deleted (Copilot's 2nd: nothing can be overwritten any more).
+  bundle.txt says PARTIAL for a file in the zip as far as it could be read.
+- logzip.h: the second pass has its own CRC of what it wrote. When a file shrank, couldn't be opened again, failed a
+  read or was rewritten between the passes, both headers get that CRC (the central entry in lz_cd, the local header
+  through SetFilePointer, a new kernel32 import), so the zip stays valid; the entry holds what was read (+ zeros) and is
+  reported LZ_CHANGED (before: the first pass's CRC, a bad entry; a same-size rewrite even came back LZ_OK). Copilot's
+  fix (fail the whole zip) was not taken: one changed file would sink every bundle. LZ_BETWEEN_PASSES(path), empty, is
+  the test's hook. LZ_READ now means a first-pass read error only (not in the zip).
+- Lua: SV_LogStamp() (new) gives the stamp; sv_core.lua opens logs\AC8SurvivalMode_lua_<stamp>.log (the mod's folder
+  when logs\ couldn't be made; without the runtime, the old AC8SurvivalMode_lua.log).
+- tools/re/exe.py: EXE_CACHE read through env.get, so a value only in .env is used (Copilot's 4th comment).
+- tools/checks/logbundle_test: a file cut to half and one rewritten at the same size between the passes (code 5,
+  contents, testzip, every local header's CRC equal to its central entry's); the stamps of file and zip names; LzPick on
+  a made-up folder (no zip yet, a zip already, a b stamp next to a zip of the plain one, this session, the 10-zip rule).
+- Player texts (release/README.txt, README_COOP.txt, CONTRIBUTING.md, survival.default.ini, subtitles.ini): send the
+  zip that the next start makes, or a session's dated files when it has none.
+- Test in game (the start and the zip thread don't run outside the game): first start over an old install -> the
+  undated logs move into logs\ ("an older runtime's undated logs moved"), the next start zips them; a normal relaunch ->
+  one zip, logs\ holds only the zips and this session's dated files; a crash -> the next start's zip has the crumbs
+  and the UECC folder; two quick starts -> no file overwritten; Lua's log in logs\ with the same stamp.
+
+## The STORE crash: a carrier's hull held (2026-11-09; Lua; numbered 0.74.48 on branch claude/affectionate-mayer-8doj90 but never built: PR #4's 0.74.48 went first, so it ships in 0.74.50)
 - Shazzy's crash on 0.74.36 (solo, hosting co-op with nobody joined; "everything worked fine until round 10, went to buy ammo
   and allies and the game crashed"): UECC, an access violation reading 0x3d9 on the game thread at the STORE's close, right
   after `minigame: type 7 ends: restore of 114 AI objects` (stack 0x147dbbf5e <- 0x147db9583 <- 0x147c95197, the AI
@@ -2265,7 +2320,7 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   dive, coop_migration, resync and lua_load tests pass. To see in game: a carrier's 3 rounds served, then the STORE: no
   crash; the "hull held" line or `N parked ZFA-44s ... finished off` followed by the arms' units off the list.
 
-## 0.74.49 (2026-11-10; Lua only, the runtime unchanged; not built or run in game: built on Linux, no package)
+## The lasers swing in 0.5 s (2026-11-10; Lua; numbered 0.74.49 on that branch, never built: ships in 0.74.50)
 - The laser interceptors swing faster (the user: "We need to up the swing speed for the laser interceptors", 0.5 s,
   for the VAMPIRES' ZFA-44s and round 30's fleet alike): `li_intercept_s` 1.0 -> 0.5 (sv_config.lua, the ini's
   comment): one missile about every 0.5-1.0 s a laser, twice AC7's rate.
@@ -2609,3 +2664,327 @@ game. The work was split by file between agents; the builds ran in sequence in t
   2026-11-11 22:50 (backup: build/backup/install_before_0.74.64).
 - To see in game: Ctrl+Y then Ctrl+R (lower, with spray, plumes, pillars and the camera low off her bow); Ctrl+U then
   Ctrl+[ six times near the LASER mount: which beams show, which red.
+## Checks off the home PC (2026-11-11; tools and tests only, no new build: nothing that ships changed)
+- `sh tools/checks/run_all.sh` runs every check that needs no game files (build_all.sh's own, every `*_test.sh`, the
+  Worker's tests) and ends with a table. In a Linux cloud session: 59 pass, 0 fail, 5 skipped (the C suites that need
+  Win32: build_hash, coop, flight, pathguard, safecall). `coop_test` only when named (`run_all.sh coop_test`).
+- What had stopped them off Windows: `lua_build.sh` didn't link libm; `ep_dump.py` loaded the git-ignored
+  `tools/scriptobjs.pkl` at import, so the aces, bosses, defences, director, roles and tells suites' Python halves
+  couldn't import survival_events (it now loads it when a stock package's imports are first shown); `subs_test`
+  expected CRLF in the shipped subtitles.ini (git stores LF, a Windows checkout writes CRLF: it now reads the LF form
+  too, then goes on with CRLF); `uobj_test` / `vfmt_test` used the Win32 CRT and threads (POSIX stand-ins; vfmt_test
+  still fails on the old 0.32.22 PUT macro off Windows).
+- `lua_check.py` reads the runtime's registered functions from RegisterLua's table (runtime/survival_rt.c) instead of a
+  hand-kept list: 20 false warnings gone; it warns if a hand-listed native name is no longer registered. One warning
+  is left and real: `PPTEST` (sv_main.lua:636) is set by nothing any more; the check there is dead code.
+- A leak in the packagers: `package_release.sh` took THE TANICORN's container out only in its no-ZFA branch, so a ZFA=1
+  zip (the friends' and Alyssa's) packed after a TANI=1 build_all.sh would have carried it; `package_test.sh` never took
+  it out, nor the laser's container without ZFA=1. Both now always take it out, and `tools/zip_guard.sh` refuses a
+  stage that still holds it. `tools/checks/zip_leak_test.sh` packs six kinds of zip from a made-up build in a temp folder
+  (no game, nothing registered) and checks each one's containers; on the old scripts it fails 6 checks. No zip given out
+  so far was made after a TANI=1 build with ZFA=1 as far as HISTORY.md shows (the 0.74.43-0.74.46 Tanicorn builds were
+  package_dev.sh installs).
+- Not changed: TESTER=1 zips still keep every TEST ONLY block, sv_tanicorn.lua's Ctrl+T mount test included (a question
+  for the user).
+- The leaderboard Worker (leaderboard/src/index.js checkRun) threw on a run whose specials held a null or non-object
+  entry, so a signed run like that got a 500 "server error" instead of a 422 "bad special". It's refused as a bad
+  special now (worker.test.mjs: null, a number, a string, an array). Not deployed: paste src/index.js as
+  leaderboard/README.md says when you next deploy; nothing else in the Worker changed.
+- Two more checks, in run_all.sh: `tools/checks/lb_contract_test.sh` (every kind the Lua passes to LB.special, 13 now,
+  is kept and scored by the Worker's checkRun, and VERSION with and without COOP_TAG passes its version check: the
+  misses that dropped VALKA's and the 0.74.0 specials' wins and refused co-op runs, caught before a release) and
+  `tools/checks/rt_format_check.py` (hard rule 43 over runtime/*.c: 351 Log / Crumb / TcAppend calls, 0 problems; it
+  fails on %04x, %ld, %f and on more specifiers than arguments). Neither is in build_all.sh yet.
+- The player readmes' wrong facts (release/README.txt, README_COOP.txt; not in the build hash): the Ladons never bring
+  escorts (user, 2026-10-25: "during a ladon round, only the ladon's spawn"), so the two lines saying they do from round
+  12 now say the Alicorn and AB.L..IN do and nothing else flies with the Ladons; `start_round = 10` is no longer the
+  Anomaly (the schedule), so the tip names 16 and 28 only; co-op's "shot down, retry ... not sent to the leaderboard"
+  replaced by DOWN / REVIVE and the host's team run ([coop] leaderboard = true by default, sv_down.lua). The STORE
+  block, subtitles.ini, the credits line and the co-op 'Known:' list are left for the user.
+- `tools/checks/coop_guard_test.sh` (new): co-op's Lua fed hostile messages, 58 message types on a host and a joiner,
+  148,671 messages. It found defects in shipped co-op Lua (each a KNOWN entry the suite checks every run; none fixed,
+  they change what ships). The two that matter: (1) a joiner can send `sys|slot|25` and set the host's COOP.slot (and
+  fake the runtime's other sys| notices): coop.c's CoInboxPush gives another game's body the same form as the runtime's
+  own sys lines (coop.c 624-635, 751, 1042; sv_coop_migration.lua 748-750, 805-813), so the fix is in coop.c: refuse a
+  network body that starts "sys|"; (2) a host's `rnd|...|1e999` hangs a joiner for good (the waves field unchecked,
+  sv_coop_migration.lua:402-404, filled by sv_coop_joiner.lua:686-687's loop). Then: rnd's round / secs / wave
+  unbounded; af half-applied on a fractional max (a %d error after AF.hp is written, sv_coop_migration.lua:477-489) and
+  unbounded; hl and fwe's %d errors after their state is set; bd / dn ids only through tonumber; three tables a flood
+  grows without a bound (spawnQ while loading, pendBind, the fishing rows). Four more the suite lists are refused by
+  the runtime anyway (sp level / unit, a long ev name) or harmless (sp's index).
+- coop_test and flight_test build and run on Linux (tools/checks/win32_posix.h; the Windows compile lines unchanged).
+  coop_test also fails now when a summary line is missing (a mute run), and each process's real exit code is kept
+  (under set -e a failing one never wrote its .rc: "exit code none"). Its sanitizer pass (SANITIZE=1, Linux) shows one
+  report: CoPushSnap's memcpy over overlapping memory (coop.c:775), undefined behaviour; harmless in the DLL as built
+  (survival_rt.c's own memcpy copies forward, right when the destination is below the source), and a fix needs a
+  memmove of its own (the runtime is freestanding: none exists). flight_test only checks kind 4 flights' altitude
+  floor (flight_test.c:294-295: kinds 0-3 pass at -3,011 m): a test gap, noted. run_all.sh runs flight_test on Linux;
+  coop_test (~40 s) only when named.
+- testing/2026-11-11: the test sheet and key list for the next session on the dev install (everything unconfirmed
+  since 0.74.20 in one solo run's order, each step with its key and the log line that proves it; checked against the
+  code by three readers, 27 corrections).
+
+## Subtitles (2026-11-11; Lua changed, for the next build: its version not yet given, see the 0.74.48 question)
+- The user's screenshots (rounds 6, 7 and 23 of a 0.74.4x run): the strip's text never wrapped. Each line ran on one
+  line past both sides of the box, while the box itself had grown to two lines. SetWrapTextAt (0.74.0's fix of
+  2026-11-07, never seen working since) takes no effect in game. The strip now breaks its text into lines in Lua
+  (sv_subs.lua SUB.wrap: whole words, by the same width model as SUB.lineCount, 120 inside the box's 1,560) and sizes
+  the box from those lines. The model against the three lines measured in the screenshots: 2.5 % under to 3 % over
+  (fishing_test). CHARLENE's thanks still comes in two parts (thanks_chars 125); its second part ("you can call for
+  their support from the STORE") was never lost, it follows the first.
+- config/subtitles.ini: the user's edited file (KASKA's countdown and launch lines, AUDREY's festival line finished: "...
+  I'm not traveling halfway across the world to find you again."). It came with "[specials.fishing.text.grade_b]z":
+  not a section, so the reader put GONE FISHIN''s B-grade lines into the A-grade list. The z is taken out here, and the
+  reader (sv_config_subs.lua) now skips a broken [section] line and its lines, logged, instead (subs_test).
+- To see in game: CHARLENE's thanks at THE ESCORT's win and AUDREY's longer lines inside the box on two lines, the box
+  as tall as the lines (the test sheet's step 16).
+
+## Co-op: two guards (2026-11-11, runtime 0.32.34; Lua for the next build, its version not yet given; not yet run in game)
+- The user asked for the two serious defects coop_guard_test found to be fixed (docs/re/COOP.md 10):
+  - a joiner's "sys|slot|25" moved the host's own slot (and every runtime notice to Lua, "restart", "left", "lost" ...,
+    could be faked for the sender's link): runtime/coop.c CoNetPush refuses another game's "sys" / "sys|..." body on
+    both channels (the reliable sequence still moves on); Lua takes "sys|slot" only from the runtime on a joiner, a
+    whole slot 0-23. RT_VERSION 0.32.31 -> 0.32.34 (PR #4 has 0.32.32 and 0.32.33: no clash whichever comes first).
+  - a host's "rnd" with a huge wave count froze a joiner for good (the old Lua ran the test out of memory here): "rnd"
+    refused whole unless its numbers are whole and in range (sv_coop_migration.lua RND_MAX), the last one kept.
+- Tests: coop_test.c / .sh (each joiner sends the spoof both ways; the host must refuse and log it and still get its
+  40 messages; the old coop.c fails both rooms), coop_guard_test.lua (the three KNOWN entries now checks of the fixes:
+  the host's slot never moved by a joiner, a joiner's only by a whole 0-23 from the runtime, ten bad "rnd" refused with
+  the state kept; huge wave counts fed again). run_all: 63 pass; coop_test passes on Linux.
+- The next build needs its version (bump_version.py) and friends need the same build to link. To see in game: co-op as
+  ever (the guards never fire between two honest games; a refusal line in a log means another game sent one).
+
+## Co-op: the rest of the hostile-message findings (2026-11-11; Lua for the next build; not yet run in game)
+- The user: "Do all". Every defect tools/checks/coop_guard_test.lua still listed is fixed, and the suite has no KNOWN
+  entry left (cf-deep, the settings decoder's own refusal, stays as BY DESIGN): any finding fails it again. With the old
+  Lua it reports 208 failures.
+  - "af": every number checked before anything is written (it errored after the health and before the landing state),
+    the maximum whole (0: the host's unknown, kept), the health clamped within it.
+  - "hl": whole seconds (1.5 errored in the log after the wait was set). "fwe": the team's and allies' kg whole (the
+    weigh-in's log errored after the pay). "fsx": only the fishing and festival rows (keyed by any word before).
+  - "sp": a plain unit name; an op's AI object index -1 or 0-63 (SetAircraft looks at a unit's first 64; a 20-digit one
+    reached its (int) cast); the AI level whole 0-65535 or -1; the generation whole; M.spawnQ holds a unit once (its
+    newest spawn takes its place) and at most 256 units while the level loads. doSpawn drops a unit this game doesn't
+    have (SV_UnitAlive -2 / -4) before SV_SetAircraft / SV_SetLevel / SV_Spawn.
+  - "bd" / "dn": stream ids whole 1-65535 (as "gd"'s), the plane's order whole 1-65535. "ev": a name past 64
+    characters refused (the queued path cut it to another name; Survival's longest is 25).
+  - pendKeep: a plain unit name, at most 512 units' binds waiting.
+- The suite's SV_UnitAlive stub answers -2 for a unit this game hasn't (as the runtime), and a call of it with one is
+  no longer a finding: it's the question the joiner asks before anything acts on the unit.
+
+## SECOND CHANCE solo (2026-11-11; Lua for the next build; not yet run in game)
+- INS.tick read the floor back (and set it again when the game had put MinHealth back) only while co-op's revive floor
+  was on: solo, a SECOND CHANCE's floor was set once, and the game's restore at an airfield stop took it off for good, a
+  paid item that did nothing after a landing (sv_tactical.lua, from the survey's review). Now read back whenever a floor
+  is held. coop_revive_test: the solo case (set, put back by the game, set again and logged, gone with the item).
+  To see in game: buy SECOND CHANCE, land, take off, get shot down: it should fire (`insurance: SECOND CHANCE used ...`),
+  after `insurance: your aircraft's floor was put back by the game` at the stop.
+
+## THE ESCORT scaled by players (2026-11-09, branch claude/sleepy-thompson-o8sj3o; merged here 2026-11-11; not yet run in game)
+- THE ESCORT's enemies scaled by players (the user: "With the enemies in escort charlene, we need to scale the enemies by
+  players"): in the host's room CHARLENE's attackers at once (attack.max) and her waves' min_n, max_n and max_up go through
+  COOP.more like a round's aircraft (aircraft_per_player 0.15: 4 players 6 attackers, waves of 6-17, 30 up, against solo's
+  4, 4-12, 24; max_up within [coop] max_up). CFG.specials.escort.coop_scale = false turns it off. The wave picker moved to
+  the new part sv_escort_waves.lua (with ESC.roomMore) to keep sv_escort.lua under 2,000 lines. escort_test: 4 new checks,
+  all pass; lua_load_test, rounds_test, coop_settings_test pass (leaderboard_test online's 3 and subs_test fail the same
+  without this change). No version bump: no build made.
+
+## Carriers: three fixes (2026-11-11; Lua for the next build; not yet run in game)
+- Merged first: claude/sleepy-thompson-o8sj3o's THE ESCORT scaled by players (above), whose sv_escort_waves.lua split
+  left sv_escort.lua room (1,982 lines now). Its new escort_test check failed 3 runs in 20 (the free pool varies run to
+  run: Lua 5.4 seeds table hashing afresh): that step frees the pool first, 0 failures in 30; dive_test checks
+  sv_escort_dive after sv_escort_li, not last.
+- A parked or diving ZFA-44 is counted "finished off" only when its health reads 0 after the blow (sv_escort_laser.lua
+  ZLAUNCH.parkedOff, sv_escort_dive.lua ZDIVE.finish): a blow that didn't fail was counted before, so 0.74.36's "10
+  finished off" with every arm still up said nothing. The log adds "(<n> more took the blow and still have health:
+  <hp> ...)". Arms' units are still queued off the list after any blow (holdHull keeps the hull meanwhile).
+- A co-op joiner's recycle of a unit the host took off holds a carrier's hull while a ZFA-44 of its launchers is up on
+  that game (sv_coop_migration.lua, ESC.hullShip + ZLAUNCH.holdHull, again 5 s on): the host's rule since 0.74.48 (the
+  STORE-close crash), which the joiner's own SV_Recycle(unit, 1) went past. copy_floor_test.
+- A pause-menu restart with a carrier out finishes off its parked ZFA-44s (ESC.restart, as a leaving carrier and a
+  joiner's restart did): left up, they held the hull on the list for the rest of the level. escort_test (2 of 2; the old
+  code 0 of 2). It adds a kill call at a restart in the carrier path: the same one leaving and sunk carriers make.
+- run_all: 63 pass; coop_test passes. The test sheet's step 13 and a RESTART step say what to look for.
+
+## The session's review (2026-11-11; Lua for the next build; not yet run in game)
+- An independent review of every change to shipped code this session (4 reviewers, a skeptic per finding): 7 findings
+  kept, 4 refuted. All 7 fixed, each with a check that fails on the code before it:
+  - A joiner's own spawn of a carrier's hull (the host's next "sp" for it: takeUnitDown's force recycle, or the spawn's
+    own recycle) went past the hull hold. doSpawn now waits, 5 s at a time, while ZLAUNCH.holdHull says a ZFA-44 of its
+    launchers is up there, and first finishes off (once) this game's own switched-off ZFA-44s of that ship, which
+    ownZfaOff now keeps (ESC.offZfa, at most 64 a ship, dropped with the level; ZLAUNCH.offKill: name checked, switched
+    on, the blow, counted by health). copy_floor_test.
+  - A restart with a carrier's flight in the air: its ZFA-44s were only switched off and still counted up, so the hull
+    stayed held. ESC.restart now finishes off every ZFA-44 of the ship's arms (ZLAUNCH.parkedOff's `all`), before
+    flightOff, on live planes: the way the dive's finish already worked in game. escort_test.
+  - 2-3 players: CHARLENE's waves' min_n came out odd (5) and a wave of 2-ships could be one over the room's max_up.
+    min_n is made even. escort_test.
+  - "gd": a key only in the host's groundKey form "<class>#<n>", at most M.BINDS_MAX (4,096) binds a unit, pending or
+    up (any text keyed them, no bound); pendKeep's units counted from the table (M.mapFull), not kept count of (a reset
+    path had missed the counter). coop_guard_test floods field 4 now.
+  - coop_test.sh's SANITIZE pass looked for coop.c:775; CoNetPush moved it, so it said the known overlap was gone while
+    it printed it: matched by function now. The strip-line tests measure at the strip's own width (SUB.wrapPad), and
+    fishing_test checks every line of the shipped subtitles.ini (none past two lines; the thanks' pieces three).
+    escort_test's "but its flight's" check runs straight after its call again (my earlier edit had made it unable to fail).
+- run_all: 63 pass (escort_test 0 failures in 20 runs); coop_test passes; SANITIZE=1 reports only the known overlap.
+
+## 0.74.50 (2026-11-11, runtime 0.32.34; this branch with PR #4 merged; not built or run in game)
+- The user's answers (2026-11-11): PR #4 first; this branch on top of it, so its next build is 0.74.50 / coop2mp.142
+  (PR #4's 0.74.48 and runtime 0.32.33 stand; this branch's two never-built "0.74.48" / "0.74.49" entries above are
+  retitled and ship here); dev is the working branch (PR #4's "How to work" in AGENTS.md is the user's).
+- PR #4 (dadaa2's dev, ed6782f: the log bundle, dated logs in logs\, machine paths from .env, the netcode report)
+  merged into claude/affectionate-mayer-8doj90 here, not on GitHub. Conflicts: AGENTS.md (both: the fleet's dev-only
+  rule and the .env release folder), HISTORY.md (PR #4's entries first), VERSION / COOP_TAG / RT_VERSION (this branch's,
+  then bumped), UNIQUE_ACTIONS.md (PR #4's), tools/tanicorn (this branch's new pipeline, its machine paths moved to
+  .env as PR #4 did the old one's: BLENDER at the start; UE and AC8_LIVE_PROJECT only past the export, so
+  TANI_STOP=export still needs no UE; TANI_BUILD and SV_ROOT for spec.py and ue_import.py). paths_check passes on the
+  merged tree. The runtime builds (both editions); run_all 64 pass (paths_check in; logbundle_test Windows only).
+- The user's .env needs AC8_LIVE_PROJECT and BLENDER before the next laser7 or Tanicorn build (PR #4's change).
+- Not fixed here (PR #4's review, reported 2026-11-11): UE4SS.log's copy every 10 s can miss its last seconds at a crash
+  (the readmes no longer say to send UE4SS.log first); LzPick fills its 32 slots before dropping zipped sessions;
+  release/README.txt's leaderboard paragraph still names AC8SurvivalMode_lua.log; .gitignore's leftover " origin/main".
+
+## TESTER zips: no Tanicorn test (2026-11-11, in 0.74.50; packaging and Lua markers)
+- The user's answer: strip THE TANICORN's Ctrl+T mount test from TESTER zips too. A new block kind, `-- DEV ONLY BEGIN` /
+  `-- DEV ONLY END`: the user's dev install only (package_dev.sh keeps it), out of EVERY zip, TESTER=1 included
+  (tools/strip_test_only.py: by default with the TEST ONLY blocks; `--dev-only` in package_release.sh's TESTER branch,
+  which keeps the TEST ONLY ones). sv_tanicorn.lua's block and sv_main.lua's TANI.setup call are DEV ONLY now; round 30's
+  fleet goes the same way (INVINCIBLE_FLEET.md WP12's lock 2 corrected: TEST ONLY blocks stay in TESTER zips).
+  lua_split / lua_split_part keep DEV ONLY blocks whole. zip_leak_test checks every kind of zip's Lua for DEV ONLY code
+  (the old packager fails the TESTER case). A TESTER copy and a release copy both load (lua_load_test).
+
+## The Offline zip retired (2026-11-11, in 0.74.50; packaging and docs)
+- The user's answer: retire the separate Offline zip (the menu's SP OFFLINE covers playing offline; co-op's Steam code in
+  every main.dll had made its own no-network check refuse it since). package_release.sh makes Online zips only and
+  refuses "offline" with that note; its SV_OFFLINE DLL rebuild and word check are gone; release/README.txt's Offline
+  section is out. edition.py online still takes the sources' OFFLINE: lines and ONLINE ONLY markers out (the Lua's own
+  markers are left: nothing shipped changed). `OFFLINE=1 sh runtime/build.sh` still builds an SV_OFFLINE main.dll
+  (build/runtime/offline), which nothing ships. tools/README.md, docs/re/MENU_PAGES.md say so.
+- The merge and packaging review (2026-11-11, 3 reviewers and a skeptic each: the merge lost nothing of either side; the
+  DEV ONLY strip leaves release zips byte for byte as before and TESTER zips without the Tanicorn test; Online zips are
+  byte for byte unchanged by the Offline retirement). 4 small findings fixed: tools/tanicorn/build.sh's header said again
+  that nothing it builds is committed (the merge took back this branch's correction: milestone 0's container is in
+  art/tanicorn/ingame); build_all.sh and package_dev.sh stage TANI=1's container from the main tree's build/tanicorn/out,
+  where tools/tanicorn/build.sh writes it from any worktree (as L7 does; before, a worktree build said "no Tanicorn
+  container" just after making one); the fleet plan's general rule (1.4) and CONTRIBUTING.md say DEV ONLY for the dev
+  install's test keys; tools/README.md's OFFLINE build command the right way round.
+
+## 0.74.51-coop2mp.143: the shuttle's liftoff lost in the host's STORE (2026-11-11; Lua, the event package, tests)
+- Saint Alessia's co-op run of 0.74.36 (4 players, she hosted): "shuttle never launched on my end, enemies still swarmed
+  around it, clients reported it launched for them a couple rounds prior". Her logs: down at the airfield at 122 s with 3
+  others flying (the countdown runs on, the user's rule of 2026-10-29), her Hangar minigame 18:47:27-18:48:06; T-4 and T
+  were sent inside it (SV_Event 1) and their records never ran (SV_ShuttleLaunched, SV_ShuttleRound never changed again);
+  a flight that appeared in it got no orders; the events after it took, she still on the runway. "countdown over" paid,
+  called SHUTTLE LAUNCHED and ended round 2 with the shuttle on its pad until its removal hid it in round 4, and
+  SV_ShuttleRound still 1 put round 3's raid on the shuttle's orders (SV_BomberUp_NN's shuttle branch). Her joiners
+  fired the forwarded events in their own worlds and saw it lift off at the end of round 2.
+- The fix (Scripts/sv_rounds_shuttle.lua, sv_rounds.lua's new next piece; sv_rounds.lua had gone over 2,000 lines):
+  "countdown over" with the shuttle still up replays the host's (or a solo game's) own liftoff once its STORE has been
+  shut 3 s (SPC.storeShut: D.musicHold; down at the airfield with no STORE yet this visit waits too):
+  RE_SV_ShuttleT_136 (ignition) and _146 (only while it's still on its pad), _150 4 s later, fired on this game alone
+  (COOP.eventHere), then _157 / _163 / _180 at their offsets from it; the clock's own tail after T goes to the joiners
+  only meanwhile (the new COOP.eventThere), whose shuttles lifted off on time. It took when SV_ShuttleLaunched reads 1
+  3 s after _150; else again (from off its pad without _146), 3 tries, then logged plainly and taken off in 30 s (also
+  after 300 s of waiting). Nagase's countdown radio and the focus camera aren't fired again; the shuttle is invulnerable
+  from "countdown over" to its removal, which counts from the replayed liftoff. The pay, the callout and the round's
+  end are as before.
+- RE_SV_ShuttleRemove sets SV_ShuttleRound back to 0 too (tools/survival_events_specials.py; not in `resets`, which
+  SV_ShuttleUp uses before its own Set 1): needs the container rebuilt. When SV_ShuttleRound or SV_ShuttleLaunched is
+  still up 2 s after it (lost in a STORE the same way), the host fires it again on its own game once its STORE is shut,
+  with the strike flights' RE_SV_BomberRetask_NN, up to 3 times.
+- Log lines (docs/re/BEHAVIOUR_DIRECTOR.md, the shuttle's round 2 note): the lift-off line now has SV_ShuttleLaunched /
+  SV_ShuttleRound; `special: shuttle liftoff replay waits: ...`, `... replayed here, try N of 3: ...`, `special: shuttle
+  lifted off here at the replay's try N (...)`, `special: shuttle liftoff not replayed here: ...`, `special: shuttle
+  countdown's tail (RE_SV_ShuttleT_154 on) sent to the other players, not fired here ...`, `special:
+  RE_SV_ShuttleRemove didn't take here (...)` / `fired again here ...`; every 30 s from the countdown's end to its
+  removal `special: shuttle after its countdown, round R: SV_ShuttleLaunched L, SV_ShuttleRound S; the shuttle ...; the
+  nearest enemy aircraft ... from the pad, N within 5 km`; a bomber flight's spawn line says `(SV_ShuttleRound N: its
+  orders are the shuttle's)` while it's up.
+- Tests: coop_landing_test.sh (an event package stub that drops what comes in a minigame): her run replayed (waits for
+  the STORE, fired 3 s after it shut, here alone, the tail at its offsets, lifted off, removal 180 s on), the removal
+  lost and fired again with the retasks, 146 took and 150 lost, never taking (3 tries), solo at once, a joiner never;
+  the old "down all the countdown" case now expects the replay. run_all: 64 passed, 5 skipped (Windows only). The
+  generator wasn't run here (no game files): build_all.sh on the user's machine rebuilds the container.
+- The fix's review (2026-11-11, 5 lenses and a skeptic each; 7 confirmed, all fixed): the clock's tail after T goes to
+  the joiners only for as long as the clock lives (marked on the clock: a clock held past the replay's end fired 157 /
+  163 / 180 on the host again); a replay that gives up, or is cut short by the removal, fires the tail's switch-offs here
+  (T+7 the focus camera, T+30 the boost; never T+13's climb), and RE_SV_ShuttleRemove switches the boost and the
+  ignition loop off too (generator); every raid flight up since the countdown ran out (its appearance read
+  SV_ShuttleRound 1: the shuttle's orders) goes back onto the airfield when the replay lifts off or gives up, the
+  shuttle round's own strike apart; the gate tracks the airfield visit every tick, so a STORE shut just before the
+  countdown ran out counts (it waited for the takeoff); the climb is held while the STORE is back between 146 and 150
+  (no try spent); no replay when the flags can't be read or the shuttle is already well off its pad (> 1 km across or
+  0.5 km up: it flew). Tests: an ordinary liftoff and removal with the new code, the stub's 146 leaving the shuttle on
+  its pad (Mission 22's ~0 speed path), each event's time, the clock held past the replay, the 300 s give-up, the
+  removal's 3 tries, the raids back, the STORE shut just after T, the STORE back mid-replay, unreadable flags, a shuttle
+  that flew without its flags; each of the review's mutations fails one.
+- Not in this fix (docs/design notes for the user): a bomber or strike flight that appears inside the host's minigame
+  has nothing that fires its orders again (sv_spawn.lua spawnBomber gives it no D.orders entry); a joiner's own STORE
+  can eat the host's forwarded liftoff (her player 3 was in one at T; their logs would tell); other one-shot host events
+  at the same risk (a boss's end, the Spaceport's launch, a Wolf trap's free, the removals). Untested in game.
+
+## 0.74.52-coop2mp.144 (runtime 0.32.35): Saint Alessia's 50-round co-op run (2026-11-11; Lua, runtime, the event package, the Worker)
+- Her run of 0.74.36 (host, 19:00-00:34, round 51, 10 players over the run) and Delta's logs (joiner, player 4). Her report:
+  ZFA-44s piling up on the zone's east edge ("weren't dying after exploding", the user's screenshot: a stack at the SE
+  corner); no warning to stop the Retake's rockets; enemies following her DOWN plane round the airfield; lag in ace waves;
+  the Alicorn "invulnerable" to Delta; the leaderboard refusing her run. Three investigations, each finding checked by a
+  skeptic; six fixes built in worktrees and merged; the user's two balance decisions; a review (6 areas, a skeptic each);
+  its 13 confirmed findings fixed and checked again. Hard rules 63 (ApplyDamage is a no-op) and 64 (a host event in the
+  STORE runs nothing) from her logs. Untested in game: every line below is offline-tested only.
+- **ZFA-44s** (sv_core.lua finishUnpaid, sv_escort*.lua): every scripted end used GameplayStatics.ApplyDamage, a no-op
+  (24 ZFA-44s alive at full health at round 51 after 70 blasts; each new carrier added 2 more). Now one finish
+  (ModifyHealth with and without the damage event, read back, ApplyDamage last, else switched off and logged), used by
+  every end and by the shuttle's take-off (without the damage event, COOP.removeObj first: never the host's kill). The
+  dive: gone only once dead, the blast one-shot, retried then switched off; its state per carrier ('zd' with a dive id);
+  its clock from the target in reach; the Helios 'hurt' a fraction of health (it took 3x); holdHull bounded; a sunk
+  carrier's planes taken; a joiner's own ZFA-44s finished; the cover only while the carrier's up; a 30 s position log.
+- **The Retake's rockets** (sv_spaceport.lua; the generator): Mission 22's radio (the user's choice): brief, warning,
+  launch and shot-down groups copied into DT_SV_Radio (RE_SV_SpRadio*; v0001_0038 for "downed", not confirmed in
+  ms022's table: build_radio asserts it), Comona Control subtitles (drafts, config/subtitles.ini), big banners and
+  repeats, the rockets' row; the host's rocket the truth on every game ('rk'); a launch lost in the host's STORE fired
+  again; the Retake's ~0.75 s start spread over ticks.
+- **The DOWN host** (sv_ai.lua ACE.hunt, sv_coop.lua's down pass, sv_tells, sv_stats, sv_director): Reapers wrote her
+  hidden plane into TargetActor every 2 s (five circled it 25 minutes, round 50 held 15). Never onto a DOWN player's
+  plane; a living player's plane left alone in co-op; the down pass checks real targets and keeps the flight's player;
+  director aims end on a DOWN or landed player; stats and learning skip the DOWN plane. Joiners: the floor kept through
+  a host migration (one hit was Delta's death), a down joiner's run waits for the migration, a revive refused to a game
+  not heard from in 500 ms, a revived real plane moved to its stream first.
+- **The leaderboard** (leaderboard/src/index.js, sv_leaderboard.lua, sv_coop_migration.lua, runtime/coop.c): NotMexi's
+  game, its own link dropped, hosted alone ~3 minutes and sent its partial copy first; hers got duplicate:true and was
+  dropped. The Worker keeps a co-op run's furthest copy (the shorter archived `superseded:<time>`); a duplicate answer
+  is logged as NOT stored and kept; every host by migration sends; the old host answers another host's hello so a
+  dropped joiner rejoins it; the host's `hl|<round>|left` when it leaves (joiners migrate at once, keep their copies,
+  no LOST callouts), bounded to the run it names; a withdrawn flight's copies recycled on joiners. **Redeploy the
+  Worker**; leaderboard/README.md has the D1 query for run 2498a83c.
+- **Lag** (runtime/survival_rt_game.c + unittab.h, sv_spawn.lua ALIVE, sv_allies.lua, logbundle.c + logdedup.h):
+  SV_UnitAlive grew to 6-10 ms a call (40-50% of the tick): no system calls, an id table rebuilt only when the list
+  changes, a per-minute cost line; ALIVE's 4 ms budget a tick; the round clear's repair from kept lists (120-320 ms
+  freezes); VOID WATCHER's ESM fields looped only while recent; the UE4SS.log copy collapses repeated lines with UE4SS's
+  real stamps and a 64 MB cap (her 396 MB -> 9.2 MB, nothing lost; Falken Red Gloss wrote 98% of it). build_all.sh runs
+  the six native C suites.
+- **The Alicorn** (sv_alicorn.lua, sv_coop*.lua, sv_hud.lua; the generator): no sync bug (Delta's copy in step to the
+  second). CORE n% on every player's row and callouts at 75/50/25%; core hits and joiners' hits logged; a joiner's
+  copies take the host's health on bind; a joiner's surfacing re-checked; a rejoiner's Alicorn at the host's hull
+  (RE_SV_AlcnLegOut / Back). The user: the core sized as it opens: core_missiles 10 + core_missiles_per_player 3.3 for
+  each other player flying, x the round's growth (~30 alone, ~61 for four at round 45; never more than before for up to
+  four).
+- **Revives** (sv_down.lua; the user): priced on the revived player's own revives (St.per, following the player when a
+  slot changes hands), raise_max 3 (round 50: 9,500 to 28,500; was up to 138,240); 'rb' / 'rc' / 'rx' carry the counts.
+- Needs: build_all.sh (container: the rockets' radio and events, the Alicorn's legs, the shuttle's removal switch-offs);
+  the Worker redeployed. Tests: run_all 68 passed, 5 skipped (Windows only); the runtime builds both editions.
+- For the user (design choices made by default): the allies' hunt held while the host is DOWN; Reapers still pulled off
+  allies onto players; joiners migrate at once when the host leaves; the furthest co-op copy wins by round; revive
+  freshness 500 ms; the dive's speed_kmh 1200 / approach_s 120; the rockets' subtitle drafts; no radio line for "half
+  way up" or "escaped" (no Mission 22 line fits).
+
+## 0.74.52-coop2mp.144: first build and friends' zip (2026-11-12, built on the user's machine)
+- The cloud line's first local build (worktree .claude/worktrees/cloud-0.74.52, build inputs linked from the main tree).
+  build_radio stopped on the Spaceport rockets' rows ("ValueError: 'None' is not in list": DT_SV_Radio's name map has no
+  None); fixed in 4341c71 (z.nb.add('None') before a chain is cut). Radio: 731 rows, 4 rocket groups.
+- run_all: 70 passed, 2 failed, 1 skipped (coop_test). Both failures are the harnesses on Windows, not the code:
+  dive_test's piece() looks for "\nend\n" and a Windows checkout has CRLF (passes on an LF copy); logbundle_test decodes
+  the test exe's stdout as UTF-8 while the exe echoes its "é" argument in the ANSI code page (0 failures with
+  errors='replace').
+- Packaged: BUILD_NAME=COOP2MP COOP=1 ZFA=1 sh tools/package_release.sh online 0.74.52 ->
+  AC8SurvivalMode_COOP2MP_0.74.52_Online_COOP_ZFA44.zip (41.8 MB, 91 files; SurvivalMode_P, Valka, ZFA44 containers; no
+  TEST ONLY block), build hash 94924732eeae..., registered. Not installed on the user's machine (her install: 0.74.64).

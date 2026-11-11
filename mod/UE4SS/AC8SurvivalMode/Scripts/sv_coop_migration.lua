@@ -4,6 +4,9 @@
 -- another part uses is a global of this mod's Lua state, its own helpers stay local.
 do  -- (sv_coop.lua's do block, continued: this piece's own helpers stay local to it)
 local M = COOP.M                                   -- (sv_coop.lua's M, handed on)
+-- ((2026-11-11) the ranges a host's round state ("rnd") and the runtime's "sys|slot" must be in: tools/checks/coop_guard_test.lua)
+local RND_MAX = { round = 9999, secs = 86400, waves = 256, alive = 100000, players = (MAX_SLOT or 23) + 1 }
+local SPAWNQ_MAX = 256                                -- (different units waiting for a joiner's level: "sp"; ~150 units)
 local crumb = crumb or function() end  -- (as in sv_coop.lua)
 
 ---------------------------------------------------------------------------------------------------- host migration
@@ -99,7 +102,64 @@ local function hostShare(now)
 end
 -- (the host) before its level reloads (a run's end): away for up to secs, the joiners wait that long
 function COOP.hostAway(secs)
-    if COOP.host() then send(true, "hl", string.format("%d", math.floor(secs))) end
+    if COOP.host() then
+        send(true, "hl", string.format("%d", math.floor(secs)))
+        M.awaySentUntil = os.clock() + math.floor(secs)   -- ((2026-11-11) no "left" notice while the joiners wait for it)
+    end
+end
+-- ((2026-11-11) Delta's run of 2026-11-10: Saint Alessia left her level to the main menu with co-op open; the joiners
+-- weren't told, waited 30 s of silence to migrate, a link back from her main menu restarted that wait, her co-op answered
+-- Delta's "jn" with an empty picture (105 copies down, ten LOST callouts) and a hit in that wait ended Delta's run.)
+-- The host's run is over here: its level left (sv_main.lua runLeft). Once this game is out of Survival's level (another
+-- level on: the main menu, a hangar; not while a reload it announced, hl|<secs>, is on), every joiner is told
+-- "hl|<round>|left" (reliable) and starts its host migration at once; a "jn" while this game has no run is answered so
+-- (M.jnNoRun). Survival's level loading again (a reload, a new run) takes the notice back before it goes.
+function COOP.hostLeaving(round, why)
+    if not COOP.host() then return end
+    -- ((review of 2026-11-11) a run that ended with every player down: the joiners' runs are over too, and a notice would
+    -- start a migration that brings that run back on a joiner still at its Mission Failed screen)
+    if M.ro or (DOWN and DOWN.ended and DOWN.ended()) then
+        M.leftPending, M.leftRun = nil, nil
+        log(string.format("coop: this game's run is over here in round %d (%s), after the run over: the joiners not told it left",
+            math.max(0, math.floor(tonumber(round) or 0)), tostring(why or "")))
+        return
+    end
+    local r = tonumber(round) or 0
+    M.leftPending, M.leftRun = { round = math.max(0, math.floor(r)), why = tostring(why or ""), at = os.clock() }, nil
+    log(string.format("coop: this game's run is over here in round %d (%s): the joiners are told once it's out of Survival's level",
+        M.leftPending.round, M.leftPending.why))
+end
+-- (COOP.tick, every tick on the host) the "left" notice due
+function M.leftTick()
+    -- (a run here again, or Survival's level loading again after the notice went (it goes only once out of it): a "jn"
+    -- gets its picture, or nothing until the run's "rs|n"; (review of 2026-11-11, board-2) while it loaded, a joiner
+    -- already in it got "left" and migrated away)
+    if (D or svLevelOn == true) and M.leftRun then M.leftRun = nil end
+    local lp = M.leftPending
+    if not lp then return end
+    if not COOP.host() then M.leftPending = nil; return end
+    if D then M.leftPending = nil; log("coop: a run here again: the joiners not told this game left"); return end
+    if svLevelOn ~= false or os.clock() < (M.awaySentUntil or 0) then return end
+    M.leftPending, M.leftRun = nil, lp
+    send(true, "hl", lp.round, "left")
+    log(string.format("coop: out of Survival's level: every joiner told this game left its run in round %d (hl|%d|left; %d linked): "
+        .. "their host migration starts now", lp.round, lp.round, M.linkedPeers or 0))
+end
+-- (the host, a joiner's "jn" while this game has no run) a game that left its run says so (the joiner migrates); one whose
+-- level is still loading (or reloading) sends nothing: its run's start sends "rs|n" to everyone. Never an empty picture:
+-- the joiner took all its copies down for it (Delta's 105 and the airfield's LOST callouts)
+function M.jnNoRun(from)
+    if svLevelOn == true then M.leftRun = nil end         -- ((review of 2026-11-11, board-2) loading again: as M.leftTick
+    local lr = M.leftRun
+    if lr then sendTo(from, true, "hl", lr.round, "left") end
+    M.jnNoRunSaid = M.jnNoRunSaid or {}
+    local now = os.clock()
+    if now >= (M.jnNoRunSaid[from] or 0) then
+        M.jnNoRunSaid[from] = now + 30
+        log(string.format("coop: player %d asked for the whole picture; this game has no run (%s): no picture sent", (from or 0) + 1,
+            lr and string.format("it left its run in round %d: told so again, hl|%d|left", lr.round, lr.round)
+            or (M.leftPending and "it's leaving its level") or "its level is loading: the run's start sends rs|n"))
+    end
 end
 -- (a joiner) the host's line of succession, allies, time away
 function M.onSuccession(f)
@@ -120,11 +180,55 @@ function M.onAllies(f)
     M.allyList = list
 end
 function M.onHostAway(f)
+    if f[3] == "left" then return M.onHostLeft(f[2]) end   -- ((2026-11-11) "hl|<round>|left": COOP.hostLeaving)
     local secs = tonumber(f[2])
-    if secs and secs > 0 and secs <= 300 then
+    if secs and secs >= 1 and secs <= 300 then
+        secs = math.floor(secs)                          -- ((2026-11-11) "hl|1.5" errored in the %d below after the wait was set)
         M.hostAwayUntil = os.clock() + secs
         log(string.format("coop: migration: the host's reloading, waited for up to %d s", secs))
     end
+end
+-- ((2026-11-11) a joiner) the host left its run (its round: a whole number in range, or the message is refused): its host
+-- migration starts at once (M.migTick, mg.left), no wait for 30 s of silence; a link back from the host meanwhile neither
+-- restarts that nor takes the copies down for a picture it hasn't got (onSys "up")
+function M.onHostLeft(r)
+    local round = tonumber(r)
+    if not (round and round == math.floor(round) and round >= 0 and round <= RND_MAX.round) then
+        once("hlbad", "coop: the host's \"left\" notice refused (its round not a whole number in range): " .. (tostring(r or ""):gsub("%c", "?")):sub(1, 20))
+        return
+    end
+    if COOP.host() then return end
+    -- ((review of 2026-11-11, board-1 / board-2) only for a run in play here that this host's round state ("rnd", "rs")
+    -- reached: with none (the main menu, a hangar, a run of its own just loaded) it was kept with no end, and the next
+    -- run with the same host migrated away at its first tick; and not with the migration off (nothing ends it then, and
+    -- the host's link back skipped its resync for the rest of the session), nor after this game's run over (the run
+    -- would come back on a new host)
+    local why = (not (mig().enabled and tostring(cfg().transport or "steam") == "steam") and "host migration off")
+        or (not D and "no run here") or (D ~= M.hostRunD and "this run hasn't had the host's round yet")
+        or (DOWN and DOWN.ended and DOWN.ended() and "this game's run is over") or nil
+    if why then
+        if os.clock() >= (M.hlSkipAt or 0) then                -- (a "jn" answered so each time: a line every 30 s)
+            M.hlSkipAt = os.clock() + 30
+            log(string.format("coop: the host (%s) left its run in round %d (hl|left): not taken (%s)", playerName(0), round, why))
+        end
+        return
+    end
+    local first = not M.hostLeft
+    M.hostLeft = { round = round, at = os.clock(), setLost = M.hostLostAt == nil or (M.hostLeft and M.hostLeft.setLost) or nil }
+    M.hostLostAt, M.hostAwayUntil = M.hostLostAt or os.clock(), nil
+    if first then
+        log(string.format("coop: migration: the host (%s) left its run in round %d (hl|left): the next host now, not after %d s of silence",
+            playerName(0), round, mig().after_s or 30))
+    end
+end
+-- ((review of 2026-11-11, board-1) a joiner: the host's "left" notice dropped (the host's next run's "rs", this game's new
+-- run), and the migration's clock with it when only the notice set it
+function M.hostLeftDrop(why)
+    local hl = M.hostLeft
+    if not hl then return end
+    M.hostLeft = nil
+    if hl.setLost then M.hostLostAt = nil end
+    log(string.format("coop: the host's \"left\" notice (round %d) dropped: %s", hl.round, tostring(why)))
 end
 -- a player's plane here set aside, hidden and unbound (a live player plane is never destroyed mid-level). (0.73.77) The
 -- rejoin's M.setAside: tick and collision off, moved up, and a real one moved out of its slot in the runtime: kept there,
@@ -204,8 +308,16 @@ becomeHost = function(now)
     for _, e in ipairs(mg.list) do
         if e.sid ~= me then partners[#partners + 1] = e.sid; expect[e.sid] = mg.names[e.sid] or ("PLAYER " .. (e.slot + 1)) end
     end
+    -- ((2026-11-11) NotMexi's of 2026-11-10: a joiner whose own link had dropped took over alone and hosted ~3 minutes
+    -- beside its old host) the old host's Steam ID among the partners when it went silent (not when it said it left its
+    -- run): this game's hellos reach it and its own are taken here, so a game that took over only because its own link
+    -- dropped hears its old host is up ("sys|samerole") and joins it again (M.migStepBack). The old host answers such a
+    -- hello itself while it has players (runtime/coop.c), its discovery sends none once its room is full
+    local back = (not mg.left) and sidOk(mg.oldSid) and mg.oldSid ~= me
+    if back then partners[#partners + 1] = mg.oldSid end
     partners[#partners + 1] = "auto"
-    log(string.format("coop: migration: this game is the next host (%d of %d in line); the others are joining it", mg.i, #mg.list))
+    log(string.format("coop: migration: this game is the next host (%d of %d in line); the others are joining it%s", mg.i, #mg.list,
+        back and "; the old host looked for too (if it's still up, this game's own link dropped: it joins it again)" or ""))
     COOP.reopen("host", "host migration", table.concat(partners, ","))
     mg.hosting, mg.expect, mg.hostAt = true, expect, now
     if LB and LB.coopTakeover then pcall(LB.coopTakeover) end   -- ((0.73.77, plan H2) the co-op run's record goes on here)
@@ -257,12 +369,19 @@ local function afterTakeover(now)
     end
     if not mg.rebuild and now - (mg.hostAt or now) >= (c.wait_s or 60) then
         log(string.format("coop: migration over: %d players with this game as the host", playerCount()))
-        M.migratedFrom, M.mig = mg.oldSid, nil
+        -- ((2026-11-11) after the host said it left its run, no stepping back to it: M.migStepBack)
+        M.migratedFrom, M.mig = (not mg.left) and mg.oldSid or nil, nil
     end
 end
 -- (a host by migration that nobody joined, hearing another host: its own link had dropped and the old host is still
 -- there) it joins it again. Whether it did.
 function M.migStepBack()
+    -- ((2026-11-11) a migration the old host started by leaving its run (hl|left): another host heard is no reason to
+    -- go back; it may be that host's main menu, or its next run)
+    if M.mig and M.mig.left then
+        once("migLeftStay", "coop: migration: another host heard, but the old host left its run: this game stays the host")
+        return false
+    end
     local old = (M.mig and M.mig.hosting and M.mig.oldSid) or M.migratedFrom
     if not old then return false end
     log("coop: migration: nobody joined this game and another host is there: joining it again (this game's link had dropped)")
@@ -296,6 +415,8 @@ function M.migTick(now)
     if not (M.hostLostAt and M.succ and #M.succ > 0) then return end
     local wait = c.after_s or 30
     if M.hostAwayUntil and M.hostAwayUntil > M.hostLostAt then wait = math.max(wait, M.hostAwayUntil - M.hostLostAt) end
+    local left = M.hostLeft                            -- ((2026-11-11) the host said it left its run: no wait)
+    if left then wait = 0 end
     if now - M.hostLostAt < wait then return end
     local list, names = {}, {}
     for _, e in ipairs(M.succ) do
@@ -303,11 +424,41 @@ function M.migTick(now)
     end
     if M.mySid() then names[M.mySid()] = M.myName end
     local oldName = playerName(0)
-    M.mig = { list = list, names = names, i = 0, oldSid = M.hostSid, round = D.round, state = D.state, at = now }
-    log(string.format("coop: migration: the host (%s) silent %.0f s: going down the line of %d", oldName, now - M.hostLostAt, #list))
-    callout("CO-OP: " .. string.upper(oldName) .. " (HOST) IS GONE", "FINDING THE NEXT HOST...")
+    M.mig = { list = list, names = names, i = 0, oldSid = M.hostSid, round = D.round, state = D.state, at = now, left = left ~= nil }
+    M.hostLeft = nil
+    if left then
+        log(string.format("coop: migration: the host (%s) left its run (round %d): going down the line of %d", oldName, left.round, #list))
+        callout("CO-OP: " .. string.upper(oldName) .. " (HOST) LEFT THE RUN", "FINDING THE NEXT HOST...")
+    else
+        log(string.format("coop: migration: the host (%s) silent %.0f s: going down the line of %d", oldName, now - M.hostLostAt, #list))
+        callout("CO-OP: " .. string.upper(oldName) .. " (HOST) IS GONE", "FINDING THE NEXT HOST...")
+    end
     nextCandidate(now)
 end
+-- ((2026-11-11, Delta's log of Saint Alessia's 50-round run) whether a host migration may still bring this game a host,
+-- for sv_down.lua (the revives' floor and the run's hold stay on through it): a joiner whose host went silent while its
+-- line can still be gone down (after_s, then link_s a candidate, and a margin), or going down it; this game the new host
+-- by migration until wait_s (its room linking again). Delta's floor went to 0 the moment the host's link dropped and a
+-- hit in the 30 s wait ended the run.
+function COOP.migrating()
+    local c = mig()
+    if not (COOP.open and c.enabled) or tostring(cfg().transport or "steam") ~= "steam" then return false end
+    local now, mg = os.clock(), M.mig
+    if mg then
+        if mg.hosting then return now - (mg.hostAt or now) < (c.wait_s or 60) end
+        return COOP.client() == true                     -- (going down the line: each candidate link_s, nextCandidate)
+    end
+    if not (COOP.client() and M.hostLostAt and M.succ) then return false end
+    local n = 0
+    for _, e in ipairs(M.succ) do if e.sid ~= M.hostSid then n = n + 1 end end
+    if n == 0 then return false end
+    local wait = c.after_s or 30
+    if M.hostAwayUntil and M.hostAwayUntil > M.hostLostAt then wait = math.max(wait, M.hostAwayUntil - M.hostLostAt) end
+    return now - M.hostLostAt < wait + (c.link_s or 20) * n + 10
+end
+-- (a joiner) when the runtime let the host's link go (its sys|left, CO_DROP_S after its last packet; os.clock), or nil:
+-- cleared by the next link's sys|paired / up
+function COOP.hostLeft() return COOP.client() == true and M.hostLeftAt or nil end
 end
 
 local function onHostMessage(from, f)
@@ -350,7 +501,7 @@ local function onHostMessage(from, f)
                 and string.format(" (their plane here stays %s until their next sortie)", P.row) or ""))
         end
         hostRosterSelf()
-    elseif k == "jn" then hostSync(from)
+    elseif k == "jn" then if D then hostSync(from) else M.jnNoRun(from) end   -- ((2026-11-11) no picture without a run)
     elseif k == "ht" then hostHit(from, tonumber(f[2]) or 0, tonumber(f[3]) or 0)
     elseif k == "ab" then onBuildAsk(from, f)            -- a joiner's ally / defence bought: built here, for everyone
     elseif k == "ao" then onOrder(f, false)              -- a joiner changed the allies' orders
@@ -399,9 +550,32 @@ local function onJoinerMessage(f)
         -- ((0.73.77, D4) the special in play there and its state: two words, or none)
         local hk, hst = tostring(f[12] or ""):match("^(%a+):(%a+)$")
         local hs = (hk and #hk <= 16 and #hst <= 16) and { kind = hk, state = hst } or nil
-        M.rnd = { round = tonumber(f[2]) or 0, state = f[3], secs = tonumber(f[4]) or 0, wave = tonumber(f[5]) or 0,
-                  waves = tonumber(f[6]) or 0, alive = tonumber(f[7]) or 0, level = lv, glitchPhase = gp, got = os.clock(),
-                  allies = roomAlliesOf(f[10]), special = sk, hostSpecial = hs }
+        -- ((2026-11-11) field 16: the host's Alicorn for this game's row, SPC.alicornCode's "<tanks>:<core>:<dived>": its
+        -- ballast tanks left 0-4, its core shut (s), open with its health unread (e) or at 0-100 %, dived 0 / 1; else none)
+        local at, ac, ad = tostring(f[16] or ""):sub(1, 16):match("^([0-4]):(%w+):([01])$")
+        local apct = tonumber(ac)
+        local apOk = apct ~= nil and apct == math.floor(apct) and apct >= 0 and apct <= 100
+        local alcn = (at and (ac == "s" or ac == "e" or apOk))
+            and { tanks = tonumber(at), open = ac ~= "s", pct = (ac ~= "s" and ac ~= "e") and apct or nil, dived = ad == "1" } or nil
+        -- ((2026-11-11) tools/checks/coop_guard_test.lua: the round's numbers were only tonumber'd, and a joiner's clientRounds
+        -- makes one table a wave, so "rnd|6|fighting|30|2|1e999" froze the joiner's game for good and 1e999 / -5 / 1.5 went
+        -- into D.round, D.at, D.wave) the round's numbers whole and in range, its state a word, or the message is refused
+        -- (the last one kept)
+        local rr, rst, rsecs = tonumber(f[2]), tostring(f[3] or ""):match("^%a+$"), tonumber(f[4])
+        local rw, rws, ral = tonumber(f[5]), tonumber(f[6]), tonumber(f[7])
+        local function whole(v, hi) return v ~= nil and v == math.floor(v) and v >= 0 and v <= hi end
+        if not (whole(rr, RND_MAX.round) and rst and #rst <= 16 and rsecs and rsecs >= 0 and rsecs <= RND_MAX.secs
+                and whole(rw, RND_MAX.waves) and whole(rws, RND_MAX.waves) and whole(ral, RND_MAX.alive)) then
+            once("rndbad", string.format("coop: the host's round state refused (a number out of its range or not whole): %s",
+                (table.concat(f, "|", 1, math.min(#f, 7)):gsub("%c", "?")):sub(1, 120)))
+            return
+        end
+        -- ((review of 2026-11-11, board-1) this run has the host's round: a "left" notice from it is for this run (one kept
+        -- from before goes with the host's next run's "rs", reliable: "rnd" isn't, and may come after the notice)
+        if D then M.hostRunD = D end
+        M.rnd = { round = rr, state = rst, secs = rsecs, wave = rw,
+                  waves = rws, alive = ral, level = lv, glitchPhase = gp, got = os.clock(),
+                  allies = roomAlliesOf(f[10]), special = sk, hostSpecial = hs, alicorn = alcn }
         -- ((0.73.78, plan G5) the room's VOID WATCHER 1 purchases (the host's count): this game's STORE prices it from it,
         -- as the host checks a joiner's ask)
         local vb = tonumber(f[13])
@@ -476,8 +650,18 @@ local function onJoinerMessage(f)
         if slotOk(s) then M.markLeft(s, "started their game over") end
     elseif k == "af" and AF then
         local down = f[4] == "1"
-        AF.hp, AF.full, RUN.dirty = tonumber(f[2]) or AF.hp, tonumber(f[3]) or AF.full, true
-        local mx = tonumber(f[5])                         -- (the host's maximum: the bar is out of it, not this game's own)
+        -- ((2026-11-11) tools/checks/coop_guard_test.lua: tonumber only, so inf / -5 / a health over the maximum reached AF,
+        -- and a fractional maximum errored in the %d below after the health was written, the landing never closed) every
+        -- number checked first: the maximum whole (0: the host's unknown, this game's kept), the health within it
+        local hp, full, mx = tonumber(f[2]), tonumber(f[3]), tonumber(f[5])
+        local function fin(v) return v ~= nil and v == v and v > -math.huge and v < math.huge end
+        if not (fin(hp) and fin(full) and (mx == nil or (fin(mx) and mx == math.floor(mx) and mx >= 0 and mx <= 1e6))) then
+            once("afbad", "coop: the host's airfield message refused (a number not finite, or its maximum not whole): "
+                .. (table.concat(f, "|", 1, math.min(#f, 5)):gsub("%c", "?")):sub(1, 80))
+            return
+        end
+        local top = (mx and mx > 0) and mx or AF.max or (CFG.airfield and CFG.airfield.hp) or 1e6
+        AF.hp, AF.full, RUN.dirty = math.max(0, math.min(top, hp)), math.max(0, math.min(top, full)), true
         if mx and mx > 0 and mx ~= AF.max then
             log(string.format("coop: the host's airfield maximum %d here (this game's own setup had %s)", mx, tostring(AF.max)))
             AF.max = mx
@@ -488,7 +672,11 @@ local function onJoinerMessage(f)
             log("coop: the host's airfield is " .. (down and "down: landing closed" or "back up: landing open"))
         end
     elseif k == "co" then
-        if cfg().callouts then M.noMirror = true; pcall(hudCallout, short(f[2], 120), f[3] ~= "" and short(f[3], 120) or nil, f[4] == "1"); M.noMirror = false end
+        -- ((2026-11-11) a big one's scale (the host's sends it: 1.1 to 3; "1", an older host's: 1.5), never true here,
+        -- which the banner's SetRenderScale can't take: the joiners' big callouts were drawn at their own size)
+        local b = tonumber(f[4])
+        local big = (b and b > 1 and b <= 3) and b or (f[4] == "1" and 1.5) or nil
+        if cfg().callouts then M.noMirror = true; pcall(hudCallout, short(f[2], 120), f[3] ~= "" and short(f[3], 120) or nil, big); M.noMirror = false end
     elseif k == "tl" then                                -- a tell (sv_tells.lua): an id this game knows, a number
         local id, a = short(f[2], 32), tonumber(f[3])
         local now = os.clock()
@@ -521,6 +709,12 @@ local function onJoinerMessage(f)
         end
     elseif k == "sp" then
         local unit, pose, ops = short(f[2], 96), nil, {}
+        -- ((2026-11-11) coop_guard_test: an empty or odd unit name went on to SV_UnitAlive / SV_SetAircraft / SV_Spawn) a
+        -- unit's name is letters, digits and _ only; one this game doesn't have is refused by doSpawn (SV_UnitAlive -2)
+        if not unit:match("^[%w_]+$") then
+            once("spname", "coop: the host's spawn of a unit with no plain name refused: " .. (unit:gsub("%c", "?")):sub(1, 40))
+            return
+        end
         if f[3] and f[3] ~= "-" then
             local p = {}
             for v in f[3]:gmatch("[^,]+") do p[#p + 1] = tonumber(v) end
@@ -529,14 +723,30 @@ local function onJoinerMessage(f)
         if f[4] and f[4] ~= "-" then
             for op in f[4]:gmatch("[^;]+") do
                 local row, idx = op:match("^(.-)@(-?%d+)$")
-                if row then ops[#ops + 1] = { row = row, idx = tonumber(idx) } end
+                idx = tonumber(idx)
+                -- ((2026-11-11) an index of 20 digits reached SV_SetAircraft, whose (int) cast of it is undefined: likely
+                -- INT_MIN, every AI object of the unit) -1 (every one) or 0-63 (SetAircraft looks at a unit's first 64)
+                if row and idx and idx >= -1 and idx <= 63 and #ops < 64 then ops[#ops + 1] = { row = row, idx = idx } end
             end
         end
         local gen = tonumber(f[6]) or 0
+        if not (gen == math.floor(gen) and gen >= 0 and gen <= 1e9) then gen = 0 end
+        -- (the AI level: SV_SetLevel's whole 0-65535 (an ai_level x 100; the runtime casts it to int); -1 none. inf, 1.5 or
+        -- 1e9 went through as they were)
+        local lvl = tonumber(f[5])
+        if lvl and lvl == lvl and lvl >= -1 and lvl < 65536 then lvl = math.floor(lvl) else lvl = nil end
         local rp = M.rep
         local rep = rp ~= nil and not rp.done                 -- ((0.73.73) part of the host's picture: a repair's)
         if rep then rp.units[unit] = { gen = gen, alive = {}, galive = {} } end
-        M.spawnQ[#M.spawnQ + 1] = { unit = unit, pose = pose, ops = ops, level = tonumber(f[5]), gen = gen, rep = rep }
+        -- ((2026-11-11) coop_guard_test: no bound while this level loads, 1,800 queued in a flood) a unit queued again takes
+        -- its own place (its newest spawn: the older one would only be taken down for it), and past SPAWNQ_MAX different
+        -- units the rest are refused, logged once
+        local q = { unit = unit, pose = pose, ops = ops, level = lvl, gen = gen, rep = rep }
+        local at
+        for i, e in ipairs(M.spawnQ) do if e.unit == unit then at = i; break end end
+        if at then M.spawnQ[at] = q
+        elseif #M.spawnQ < SPAWNQ_MAX then M.spawnQ[#M.spawnQ + 1] = q
+        else once("spawnQfull", string.format("coop: %d of the host's spawns already waiting here: %s's refused", SPAWNQ_MAX, unit)) end
     elseif k == "bd" then
         local unit, gen, ord, id = short(f[2], 96), tonumber(f[3]), tonumber(f[4]), tonumber(f[5])
         if not M.bdLast or (M.bdLastN or 0) > 512 then M.bdLast, M.bdLastN = {}, 0 end   -- (the last generation's
@@ -547,7 +757,10 @@ local function onJoinerMessage(f)
         end
         bl.n = bl.n + 1
         if not (gen and ord and id) then return end
+        -- ((2026-11-11) coop_guard_test: 1.5, -1, 1e999 reached M.dead and SV_CoopBind) whole, in range, as "gd"'s
+        if not (id == math.floor(id) and id >= 1 and id <= 65535 and ord == math.floor(ord) and ord >= 1 and ord <= 65535) then return end
         M.dead[id] = nil                                 -- ((0.73.73) named by the host now: up, until its "dn" says not)
+        M.forgetPendHp(id)                               -- ((2026-11-11) a health kept for its last object: not this one's)
         repNote(unit, gen, id, ord, nil)
         local cu = M.cunits[unit]
         if not cu or cu.gen ~= gen then
@@ -569,11 +782,16 @@ local function onJoinerMessage(f)
     elseif k == "gd" then                                -- a ship's, vehicle's or part's id (hostGround)
         local unit, gen, key, id = short(f[2], 96), tonumber(f[3]), short(f[4], 96), tonumber(f[5])
         if not (gen and id and id >= 1 and id <= 65535 and id == math.floor(id)) then return end
+        -- ((2026-11-11) the session's review: any text keyed a unit's binds, no bound) the host's groundKey form,
+        -- "<class>#<n>", and at most M.BINDS_MAX binds a unit (M.mapFull)
+        if not key:match("^[%w_]+#%d+$") then return end
         M.dead[id] = nil                                 -- ((0.73.73) as a plane's "bd")
+        M.forgetPendHp(id)                               -- ((2026-11-11) as a plane's "bd")
         repNote(unit, gen, id, nil, key)
         local cu = M.cunits[unit]
         if not cu or cu.gen ~= gen then pendKeep(unit, gen, "gbinds", key, id); return end   -- (as a plane's "bd")
         cu.gbinds = cu.gbinds or {}
+        if cu.gbinds[key] == nil and M.mapFull(cu.gbinds, M.BINDS_MAX) then return end
         cu.gbinds[key] = id
         local o = cu.gobjs and cu.gobjs[key]
         if o and live(o) then bindGround(id, o, unit, key) end
@@ -583,6 +801,8 @@ local function onJoinerMessage(f)
         for id, h in (f[2] or ""):gmatch("(%d+):(%-?%d+)") do
             local c = M.copies[tonumber(id)]
             h = tonumber(h)
+            -- ((2026-11-11) an id not bound here yet: the host's health kept for its bind, M.notePendHp)
+            if not c and h and h > 0 and tonumber(id) >= 1 and tonumber(id) <= 65535 then M.notePendHp(tonumber(id), h) end
             -- ((code review of 2026-11-07, finding 6) never onto this game's copy of SAL's boat: an older host sends it)
             if c and FISH and FISH.isBoat and FISH.isBoat(c.unit) then c = nil end
             if c and h and h > 0 and live(c.obj) then
@@ -612,8 +832,9 @@ local function onJoinerMessage(f)
         end
     elseif k == "dn" then
         local id = tonumber(f[2])
-        if id then
+        if id and id == math.floor(id) and id >= 1 and id <= 65535 then   -- ((2026-11-11) whole and in range, as "gd"'s)
             M.dead[id] = true
+            M.forgetPendHp(id)                           -- ((2026-11-11) down: no health of the host's to put on it)
             local rp = M.rep
             local r = rp and not rp.done and rp.ids[id]       -- (the host's picture: down there)
             local pu = r and rp.units[r.unit]
@@ -639,9 +860,17 @@ local function onJoinerMessage(f)
         end
     elseif k == "ev" then
         local unit = (f[3] and f[3] ~= "") and short(f[3], 96) or nil   -- ((0.73.73) a replay for that unit's fresh copy)
-        if mirroredEvent(f[2]) and D and rawEvent and not levelReady() then    -- (held until this level is ready)
+        -- ((2026-11-11) coop_guard_test: a name of 206 characters went to SV_Event (only the queued path cut it, to another
+        -- name): no event of Survival's is that long, so one past 64 is refused)
+        if #tostring(f[2] or "") > 64 then return end
+        -- (held until this level is ready; ((2026-11-11) a replay for a unit's fresh copy, until that copy's up here:
+        -- M.unitPending, the rejoiner's Alicorn)
+        local waits = unit ~= nil and M.unitPending(unit)
+        if mirroredEvent(f[2]) and D and rawEvent and (not levelReady() or waits) then
             M.evQ = M.evQ or {}
-            if #M.evQ < 64 then M.evQ[#M.evQ + 1] = { name = short(f[2], 64), at = os.clock(), unit = unit } end
+            if #M.evQ < 64 then M.evQ[#M.evQ + 1] = { name = f[2], at = os.clock(), unit = unit, waited = waits or nil } end
+            if waits then once("evwait", "coop: the host's " .. tostring(f[2]) .. " for " .. unit
+                .. " waits here: its copy isn't up yet (each one's firing logged)") end
         elseif mirroredEvent(f[2]) and D and rawEvent and not keptThrough(unit, f[2]) then
             hostEvent(f[2])
         end
@@ -688,6 +917,11 @@ local function onJoinerMessage(f)
             local okS, errS = pcall(SPORT.fromHost, short(f[2], 400))
             if not okS then once("spx", "coop: the host's Spaceport state not read: " .. tostring(errS)) end
         end
+    elseif k == "rk" and COOP.client() then              -- ((2026-11-11) the host's word on a rocket: sv_spaceport.lua
+        if SPORT and SPORT.rkFromHost then
+            local okR, errR = pcall(SPORT.rkFromHost, { f[1], short(f[2], 2), short(f[3], 12), short(f[4], 12) })
+            if not okR then once("rk", "coop: the host's rocket state not read: " .. tostring(errR)) end
+        end
     elseif k == "es" and COOP.client() then              -- ((2026-11-06) THE ESCORT's state, the ZFA-44 carriers: sv_escort.lua
         if ESC and ESC.onHost then
             local okE, errE = pcall(ESC.onHost, f)
@@ -702,6 +936,10 @@ local function onJoinerMessage(f)
         if M.rep and not M.rep.done then repairDone("rz") end
     elseif k == "rs" then
         M.cnt.rsGot = M.cnt.rsGot + 1
+        if D then M.hostRunD = D end                     -- ((review of 2026-11-11, board-1) as "rnd": the host's in a run
+        -- (its new run, or a new host's level: a "left" notice kept is over; "rs|j", an answer to this game's own "jn",
+        -- leaves it to repairDone, which keeps the copies for an empty picture from a host that left)
+        if M.hostLeft and COOP.client() and f[2] ~= "j" then M.hostLeftDrop("the host's run started (rs)") end
         -- ((0.73.73) "rs|j": the host's answer to this game's own "jn", a repair: nothing torn down, no new run here,
         -- nobody DOWN brought back, the round's records kept)
         if f[2] == "j" then return onResync() end
@@ -732,11 +970,22 @@ local function onSys(from, what, f)
         M.lostAt[from] = nil                              -- ((0.73.80) linked again, or gone: no lost link held for them)
         -- ((review of 0.73.80) a rejoin or a game started over: their last states are from before it)
         if what ~= "up" then M.stateAt[from], M.freshAt[from] = nil, nil end
+        -- ((2026-11-11) the host's link let go, for sv_down.lua's wait on a joiner: COOP.hostLeft)
+        if from == 0 then M.hostLeftAt = (what == "left" and COOP.client()) and os.clock() or nil end
+    end
+    -- ((2026-11-11) the links counted again now (COOP.linked, every 5 s otherwise with the rest of the info): Delta's floor
+    -- was 0 for 3 s after the host's link came back (09:34:53-56), the migration's clock reset by the "up", the count not)
+    if (what == "up" or what == "lost" or what == "left") and type(SV_CoopInfo) == "function" then
+        local n = 0
+        for _, st in (tostring(SV_CoopInfo() or ""):match("peers=(.*)$") or ""):gmatch("(%d+)/(%a+)/%-?%d+/%-?%d+/[^,]*") do
+            if st == "linked" then n = n + 1 end
+        end
+        M.linkedPeers = n
     end
     if what == "joined" then                              -- (host) a joiner linked: its "hi" names it
         log("coop: player " .. (from + 1) .. " linked")
     elseif what == "paired" or what == "restart" then      -- (joiner) the host; (either) a game started over
-        if from == 0 then M.hostLostAt = nil end          -- (host migration: the host's back, or a new one)
+        if from == 0 then M.hostLostAt, M.hostLeft = nil, nil end   -- (host migration: the host's back, or a new one)
         sendHi()
         if COOP.client() and D then killAllCopies("new link"); M.jnAt = os.clock(); send(true, "jn") end
         if COOP.host() and what == "restart" then
@@ -746,8 +995,17 @@ local function onSys(from, what, f)
             send(true, "rj", from)
         end
     elseif what == "slot" then
-        COOP.slot = tonumber(f[3])
-        log("coop: you are player " .. tostring((COOP.slot or -1) + 1))
+        -- ((2026-11-11) tools/checks/coop_guard_test.lua: a joiner's own "sys|slot|25" reached here as the runtime's, and
+        -- set the host's slot; runtime/coop.c now refuses another game's "sys|..." (CoNetPush)) the runtime says it on a
+        -- joiner only, as sender 0, a whole slot 0-23: anything else is logged and left
+        local sl = tonumber(f[3])
+        if from == 0 and not COOP.host() and sl and sl == math.floor(sl) and sl >= 0 and sl < RND_MAX.players then
+            COOP.slot = sl
+            log("coop: you are player " .. tostring(sl + 1))
+        else
+            log(string.format("coop: a \"sys|slot\" from player %d refused (%s, this game the %s)", from + 1,
+                tostring(f[3] or ""):gsub("%c", "?"):sub(1, 20), COOP.host() and "host" or "joiner"))
+        end
     elseif what == "lost" then
         M.wasLost = M.wasLost or {}
         M.wasLost[from] = true
@@ -755,14 +1013,20 @@ local function onSys(from, what, f)
         if from == 0 and COOP.client() then M.hostLostAt = M.hostLostAt or os.clock() end   -- (host migration's clock)
         if COOP.host() and from ~= COOP.slot then M.noteLost(from) end   -- ((0.73.80) in the mission or loading: the round's hold)
     elseif what == "up" then
-        if from == 0 then M.hostLostAt = nil end
+        -- ((2026-11-11) a host that said it left its run (hl|left): its link back (its main menu's co-op) neither restarts
+        -- the migration's clock nor takes this game's copies down for a picture it hasn't got)
+        local gone = from == 0 and COOP.client() and M.hostLeft ~= nil
+        if from == 0 and not gone then M.hostLostAt = nil end
         if M.wasLost and M.wasLost[from] then             -- (the first "up" comes right after "paired" / "joined")
             M.wasLost[from] = nil
             callout("CO-OP LINK BACK", string.upper(playerName(from)))
             -- (a joiner says hello again: the host may have dropped it meanwhile, its roster entry gone, and this game
             -- can't tell; the co-op run of 2026-10-31)
             if COOP.client() then sendHi() end
-            if COOP.client() and D then killAllCopies("link back"); M.jnAt = os.clock(); send(true, "jn") end
+            if gone then
+                log(string.format("coop: the host's link back, but it left its run in round %d: the copies here kept, no picture asked; "
+                    .. "the migration goes on", M.hostLeft.round))
+            elseif COOP.client() and D then killAllCopies("link back"); M.jnAt = os.clock(); send(true, "jn") end
         end
     elseif what == "left" then
         callout(string.upper(playerName(from)) .. " LEFT", nil)
@@ -787,6 +1051,8 @@ local function onSys(from, what, f)
         log(string.format("coop: %s tried to join with Survival %s (yours %s): refused", tostring(f[3] or "?"), tostring(f[4] or "?"), VERSION))
         callout("REFUSED " .. (nm ~= "" and nm or "A PLAYER"), "THEY HAVE " .. (jv ~= "" and jv or "ANOTHER BUILD") .. ": UPDATE TO " .. upperText(VERSION, 32))
     elseif what == "samerole" then
+        -- ((2026-11-11) the other host's name, from the runtime after 0.32.34: "sys|samerole|<name>")
+        local other = upperText(f[3], 20)
         if COOP.host() and playerCount() <= 1 and M.migStepBack and M.migStepBack() then
             -- (a host by migration that nobody joined hears another host: its own link had dropped, the old host's
             -- still there; it joins it again)
@@ -794,6 +1060,15 @@ local function onSys(from, what, f)
             log("coop: another host found; this game was hosting only because it found none (role auto): joining")
             COOP.reopen("join", "another host found")
             callout("CO-OP: ANOTHER HOST FOUND", "JOINING THEM")
+        elseif COOP.host() and D and playerCount() > 1 then
+            -- ((2026-11-11) Saint Alessia's of 2026-11-10: "TWO HOSTS / ONLY ONE OF YOU PICKS HOST" twice, though nobody
+            -- picked HOST: NotMexi's game had taken her run over alone after its own link dropped) this host's run has
+            -- players: most likely a joiner's game that did that; this host answered its hello (runtime/coop.c), and a
+            -- game that took over alone joins its old host again by itself
+            log(string.format("coop: another host (%s) heard while this game hosts a run with %d players: most likely a "
+                .. "joiner's game that took the run over alone after its own link dropped; answered, it joins this one again",
+                other ~= "" and other or "unnamed", playerCount()))
+            callout("CO-OP: " .. (other ~= "" and other or "A PLAYER") .. " HOSTS TOO", "THEIR LINK DROPPED: THEIR GAME REJOINS YOU")
         elseif M.auto then
             callout("CO-OP: TWO HOSTS", "RETRY FROM THE MENU TO JOIN THE OTHER")
         else
@@ -868,7 +1143,10 @@ end
 local rawCallout = hudCallout
 hudCallout = function(text, sub, big)
     rawCallout(text, sub, big)
-    if COOP.host() and M.mirror > 0 and not M.noMirror and cfg().callouts then send(true, "co", text or "", sub or "", big and 1 or 0) end
+    if COOP.host() and M.mirror > 0 and not M.noMirror and cfg().callouts then
+        local sc = big and math.max(1.1, math.min(3, tonumber(big) or 1.5)) or nil   -- ((2026-11-11) its scale: "co" above
+        send(true, "co", text or "", sub or "", sc and string.format("%.1f", sc) or 0)
+    end
 end
 -- ((0.74.0) a subtitle line of the host's round logic goes to every joiner too, "sb", as a callout's "co"; SUB.sayHere never)
 if SUB and SUB.say then
@@ -1020,7 +1298,10 @@ function COOP.reopen(role, why, partner)
     local r = SV_CoopOpen(c.transport or "steam", role, partner or c.partner or "auto", c.port or 27777, c.interp_ms or 120, VERSION,
                           maxPlayers())
     COOP.open, COOP.role, COOP.slot = r == 1, role, role == "host" and 0 or nil
+    COOP.noteRole()
     M.state, M.roster = nil, {}
+    M.hostLeft, M.leftPending, M.leftRun = nil, nil, nil   -- ((2026-11-11) a new session: the last one's "left" notices go)
+    M.hostRunD = nil
     if role == "host" then M.restoreMine() end          -- (you host: your own settings)
     M.autoAt = os.clock() + AUTO_WAIT + math.random() * AUTO_WAIT
     log(string.format("coop: %s as the %s over %s (partner %s, up to %d players; %s): %s", r == 1 and "open" or "NOT open",
@@ -1086,7 +1367,9 @@ end
 local function closeCoop(why)
     if type(SV_CoopClose) == "function" then SV_CoopClose() end
     COOP.open, COOP.role, COOP.slot = false, nil, nil
+    COOP.noteRole()
     M.state, M.roster, M.linkedOnce, M.wasLost = nil, {}, false, nil
+    M.hostLeft, M.leftPending, M.leftRun, M.hostRunD = nil, nil, nil, nil  -- ((2026-11-11) "left" notices: the session's)
     M.restoreMine()
     pcall(COOP.focusPause, false, "co-op closed")
     log("coop: closed (" .. why .. ")")
@@ -1280,7 +1563,14 @@ function COOP.tick(tick)
             if now0 >= e.at then
                 table.remove(M.recycleDue, i)
                 local n = type(SV_UnitAlive) == "function" and SV_UnitAlive(e.unit) or -5
-                if n >= 0 and n ~= -7 and type(SV_Recycle) == "function" then
+                -- ((2026-11-11) a carrier's hull, never off this game's list while a ZFA-44 of its launchers is up here: the
+                -- host's own rule since 0.74.48 (Shazzy's crash at the STORE's close), which a joiner's recycle went past.
+                -- Looked at again 5 s on, as the host's recycleTick does)
+                local hull = ESC and ESC.hullShip and ESC.hullShip(e.unit)
+                if hull and ZLAUNCH and ZLAUNCH.holdHull and ZLAUNCH.holdHull(hull, e, e.unit, "the host's " .. tostring(e.why)) then
+                    e.at = now0 + 5
+                    M.recycleDue[#M.recycleDue + 1] = e
+                elseif n >= 0 and n ~= -7 and type(SV_Recycle) == "function" then
                     crumb("coop: SV_Recycle " .. e.unit .. " (the host's " .. tostring(e.why) .. ")")
                     local okR, r = pcall(SV_Recycle, e.unit, n > 0 and 1 or 0)
                     log(string.format("coop: %s off this game's spawner list (the host's %s; %d alive here): SV_Recycle %s",
@@ -1296,6 +1586,8 @@ function COOP.tick(tick)
         local ok, err = pcall(onMessage, m)
         if not ok then log("coop: message error " .. tostring(err) .. " (" .. m:sub(1, 80) .. ")") end
     end
+    local okL, errL = pcall(M.leftTick)                -- ((2026-11-11) the host's "left" notice, once it's out of its level)
+    if not okL then once("leftTick", "coop: the host's left notice: error " .. tostring(errL)) end
     local now = os.clock()
     if now >= M.nextInfo then
         M.nextInfo = now + 5
@@ -1330,6 +1622,11 @@ function COOP.tick(tick)
     if D ~= M.lastD then
         M.lastD = D
         if type(SV_CoopReset) == "function" then SV_CoopReset() end
+        -- ((review of 2026-11-11, board-1) a run here anew: the last run's "left" notice over (the host's round state says
+        -- this run's); the host's hold for a run-over reload over (a quick retry, then a quit, sent no notice for the
+        -- old reload's 120 s)
+        if COOP.client() then M.hostLeftDrop(D and "a new run here" or "the run here is over") end
+        if COOP.host() and D then M.awaySentUntil = nil end
         if COOP.client() then killAllCopies("a new run here") end      -- (a restart in the same level keeps the actors)
         for s, P in pairs(M.peers) do                                  -- (kept: bound again by peerTick)
             M.gunOff(P)                                                -- ((review of 0.73.80) its trigger let go: gunOn isn't kept)

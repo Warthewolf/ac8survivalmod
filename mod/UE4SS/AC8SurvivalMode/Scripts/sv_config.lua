@@ -1056,7 +1056,9 @@ CFG = {
                          -- escort_s each flight up covers the player nearest it: yours (or solo) by its `cover` record (its
                          -- area moved near your plane, 3 km round it), another player's by its planes onto the enemies
                          -- nearest them (co-op's coverFor); escort = false: as they are
-                         pose_cover = { "RE_SV_ZfaCoverA", "RE_SV_ZfaCoverB" }, escort = true, escort_s = 6,
+                         -- ((2026-11-11) pos_log_s: every VAMPIRES plane's place logged that often, 0 none: Saint Alessia's
+                         -- run had them all on the zone's east edge, why unknown)
+                         pose_cover = { "RE_SV_ZfaCoverA", "RE_SV_ZfaCoverB" }, escort = true, escort_s = 6, pos_log_s = 30,
                          pose = { ahead_m = 300, alt_m = 1100 },
                          ship_at = { { 1270476, -1096142 }, { 2130476, 103858 } },
                          service = { rounds = 3, min_s = 60 },
@@ -1068,8 +1070,11 @@ CFG = {
                          -- Helios blast (fx, sound, the camera shake within shake_km) kills every enemy aircraft within
                          -- blast_m (yours: you're paid as for an airstrike's), an ace's or a special's takes boss_pct of its
                          -- health instead; players and allies take nothing. No enemy aircraft in that round: they leave at
-                         -- the next. enabled = false: switched off as they leave, as before
+                         -- the next. enabled = false: finished off as they leave. ((2026-11-11) every blast of Saint
+                         -- Alessia's run timed out 15-50 km from the fight) dive_s runs once the target is in its reach
+                         -- (its speed, speed_kmh while it reads slow, x dive_s), or approach_s after its first target
                          dive = { enabled = true, detonate_m = 800, blast_m = 1000, dive_s = 40, reorder_s = 2, boss_pct = 0.3,
+                                  speed_kmh = 1200, approach_s = 120,
                                   fx = "/Game/OnlineMode/VFX/Vehicles/Boss/BA001_aias/Niagara/NS_ms17supsExplosion01_ON",
                                   fx_scale = 1.0, sound = "/Game/WwiseAssets/OBJ_M09_CLOUDBOMB_EXP",
                                   shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios",
@@ -1524,14 +1529,16 @@ CFG = {
              -- flown round the airfield (loiter: alt_m up, radius_m round) and watch another player; any other player at
              -- their airfield buys you back from the STORE's AIRFIELD page for price + price_per_round x the round (the
              -- round in play, in a break the next one; (0.73.78, economy C6, approved 2026-11-03) 2000 + 150 a round:
-             -- 3500 at round 10, 6500 at 30; was 2500 flat), x raise for each revive in the run
-             -- (the host's count), and you're back repaired, safe_s seconds invincible, where the loiter left you
+             -- 3500 at round 10, 6500 at 30; was 2500 flat), x raise for each of THAT player's own revives in the run
+             -- (the host's count), raise_max times at most (0: no cap; the user, 2026-11-11: "readjust the revive costs":
+             -- it was x raise for every revive in the run by anyone, uncapped, 138,240 Z for round 50's 13th; now 9,500
+             -- to 28,500 at round 50), and you're back repaired, safe_s seconds invincible, where the loiter left you
              -- (respawn "loiter"; farther than near_km from the airfield: "native" instead) or 4 km out from the runway at 500 m
              -- ("native"). Everyone down: the run's over.
              -- down_round_bonus: a downed player still gets the round bonuses. key / ctrl: the next player to watch;
              -- camera: back_m behind and up_m above the plane you watch, blend_s to swing over. key, ctrl and camera
              -- are each player's own, the rest the host's.
-             revive = { enabled = true, floor_hp = 0.1, price = 2000, price_per_round = 150, raise = 1.25, safe_s = 5,
+             revive = { enabled = true, floor_hp = 0.1, price = 2000, price_per_round = 150, raise = 1.25, raise_max = 3, safe_s = 5,
                         loiter = { alt_m = 2500, radius_m = 4000 }, respawn = "loiter", near_km = 8, drift_km = 10, key = "O", ctrl = false,
                         camera = { back_m = 30, up_m = 8, blend_s = 0.5 }, down_round_bonus = true,
                         -- (0.73.73) parked_safe: in co-op your plane is invincible while it's on the ground at your

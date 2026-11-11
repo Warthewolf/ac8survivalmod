@@ -3,7 +3,15 @@
  * `while (n) PUT(t[--n])` (a number) never moved on: 0.32.22's 1,031-character "Lua bridge: ... registered" line hung
  * UE4SS's Lua start for good (the user's launches of 2026-11-03). Each case runs on its own thread with a time limit.
  * Build and run: tools/checks/vfmt_test.sh */
+#ifdef _WIN32
 #include <windows.h>
+#else   /* Linux (a cloud session): a pthread stands in for the Win32 thread, cancelled as TerminateThread was */
+#include <pthread.h>
+#include <time.h>
+typedef unsigned long DWORD;
+typedef DWORD (*LPTHREAD_START_ROUTINE)(void*);
+#define WINAPI
+#endif
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -31,6 +39,7 @@ static DWORD WINAPI RunS(void* a) { (void)a; Fmt(g_out, g_cap, g_fmt, g_s); retu
 static DWORD WINAPI RunSD(void* a) { (void)a; Fmt(g_out, g_cap, g_fmt, g_s, g_d); return 0; }
 
 /* runs fn on a thread; 1 when it returned within 2 s */
+#ifdef _WIN32
 static int Returns(LPTHREAD_START_ROUTINE fn)
 {
     HANDLE th = CreateThread(NULL, 0, fn, NULL, 0, NULL);
@@ -40,6 +49,26 @@ static int Returns(LPTHREAD_START_ROUTINE fn)
     CloseHandle(th);
     return 1;
 }
+#else
+static volatile int g_done;
+static void* PtRun(void* a)
+{
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);   /* (a hung formatter loops with no cancellation point) */
+    ((LPTHREAD_START_ROUTINE)a)(NULL);
+    g_done = 1;
+    return NULL;
+}
+static int Returns(LPTHREAD_START_ROUTINE fn)
+{
+    pthread_t th;
+    g_done = 0;
+    if (pthread_create(&th, NULL, PtRun, (void*)fn)) return 0;
+    for (int i = 0; i < 200 && !g_done; ++i) { struct timespec t = { 0, 10 * 1000 * 1000 }; nanosleep(&t, NULL); }
+    if (!g_done) { pthread_cancel(th); pthread_join(th, NULL); return 0; }
+    pthread_join(th, NULL);
+    return 1;
+}
+#endif
 
 int main(void)
 {

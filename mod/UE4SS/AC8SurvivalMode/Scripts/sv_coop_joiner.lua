@@ -4,6 +4,14 @@
 -- another part uses is a global of this mod's Lua state, its own helpers stay local.
 do  -- (sv_coop.lua's do block, continued: this piece's own helpers stay local to it)
 local M = COOP.M                                   -- (sv_coop.lua's M, handed on)
+local PEND_MAX = 512                                 -- (units whose binds wait for their spawn here: pendKeep)
+M.BINDS_MAX = 4096                                   -- (one unit's binds: a unit's own objects are tens; this bounds a flood only)
+-- whether table t has `cap` entries or more (counted: a flood's tables bounded without a count to keep in step)
+function M.mapFull(t, cap)
+    local n = 0
+    for _ in pairs(t or {}) do n = n + 1; if n >= cap then return true end end
+    return false
+end
 local crumb = crumb or function() end  -- (as in sv_coop.lua)
 
 ---------------------------------------------------------------------------------------------------- joiner
@@ -177,6 +185,50 @@ local function deadOnArrival(id, o, unit, ord, key)
     if cu and ord and cu.planes[ord] and addrOf(cu.planes[ord]) == a then cu.planes[ord] = nil end
     if cu and key and cu.gobjs and cu.gobjs[key] and addrOf(cu.gobjs[key]) == a then cu.gobjs[key] = nil end
 end
+-- ((2026-11-11, the 50-round run: Delta's copies of the Alicorn's tanks kept their stock 18,750 against the host's 8,784,
+-- its core 31,250 against 28,594, until the host's next change) the host's "hp" for an id not bound here yet is kept
+-- (M.pendHp, the "hp" handler; at most PEND_HP_MAX ids, each PEND_HP_S at most, an id named anew by "bd" / "gd" or down by
+-- "dn" forgotten) and put on its ship's, vehicle's or part's copy as it's bound (bindGround): the host's health, not the
+-- copy's own. Not on a plane's (bindCopy forgets it): this game scales its planes' copies itself (sv_ai.lua enemyLate,
+-- ACE.setHealth: COOP.copyScaled), which would scale the host's scaled health again. A unit's first such bind logged.
+local PEND_HP_MAX, PEND_HP_S = 4096, 120
+function M.forgetPendHp(id)
+    if M.pendHp and M.pendHp[id] ~= nil then M.pendHp[id] = nil; M.pendHpN = math.max(0, (M.pendHpN or 1) - 1) end
+end
+function M.notePendHp(id, h)
+    local now = os.clock()
+    M.pendHp = M.pendHp or {}
+    if now >= (M.pendHpPruneAt or 0) then                -- (ids never bound here: a unit this game didn't spawn)
+        M.pendHpPruneAt = now + 30
+        for k, e in pairs(M.pendHp) do if now - e.at > PEND_HP_S then M.forgetPendHp(k) end end
+    end
+    if M.pendHp[id] == nil then
+        if (M.pendHpN or 0) >= PEND_HP_MAX then return end
+        M.pendHpN = (M.pendHpN or 0) + 1
+    end
+    M.pendHp[id] = { h = h, at = now }
+end
+function M.applyPendHp(id, unit, key)
+    local e = M.pendHp and M.pendHp[id]
+    if not e then return end
+    M.forgetPendHp(id)
+    if FISH and FISH.isBoat and FISH.isBoat(unit) then return end   -- (never SAL's boat, as the "hp" handler: sv_fishing.lua)
+    local h = e.h
+    local c = M.copies[id]
+    local own = c and live(c.obj) and health(c.obj)
+    if not (own and own > 0) then return end
+    local v = math.min(math.max(h, 1), 2147483647)                 -- (as the "hp" handler writes it)
+    if not pcall(function() c.obj.HealthInternal = v end) then return end
+    c.exp, c.hp = v, v
+    M.cnt.hpBound = (M.cnt.hpBound or 0) + 1
+    local cu = unit and M.cunits[unit]
+    M.hpBindSaid = M.hpBindSaid or {}
+    if v ~= own and cu and M.hpBindSaid[unit] ~= cu.gen then
+        M.hpBindSaid[unit] = cu.gen
+        log(string.format("coop: the host's %s here bound with the host's health, which came first (%s %s -> %s)", tostring(unit),
+            tostring(key), tostring(own), tostring(v)))
+    end
+end
 function bindCopy(id, o, unit, ord)
     if M.dead[id] then deadOnArrival(id, o, unit, ord, nil); return end
     local a = addrOf(o)
@@ -188,6 +240,7 @@ function bindCopy(id, o, unit, ord)
     local h = health(o) or 0
     M.copies[id] = { obj = o, exp = h, addr = a, ally = allyUnit(unit),   -- (ally: the host's allies' copy)
                      unit = unit, ord = ord, mine = mine, hp = h }  -- (0.73.73: its place in its flight here, "dn")
+    M.forgetPendHp(id)                                      -- ((2026-11-11) a plane: its own scaling here, enemyLate)
 end
 
 -- (0.73.73) every object of each of the host's units spawned here, by address (its name too: an address freed and used
@@ -290,6 +343,7 @@ function bindGround(id, o, unit, key)
     local was = M.copies[id]
     M.copies[id] = { obj = o, exp = h, addr = a, ally = allyUnit(unit),  -- (addr: a shot's target, "fx")
                      unit = unit, key = key, mine = was and was.addr == a and was.mine or nil, hp = h }
+    M.applyPendHp(id, unit, key)                            -- ((2026-11-11) the host's health, if it came first)
 end
 clientGround = function(o, unit)
     noteObj(unit, o)                                     -- (0.73.73: tracked here or not)
@@ -341,10 +395,19 @@ function killAllCopies(why)
         end
     end
     M.copies, M.cunits, M.spawnQ, M.dead, M.holdQ, M.rep = {}, {}, {}, {}, nil, nil
+    M.tornAllAt = os.clock()                             -- ((2026-11-11) COOP.tornAll: no defence called LOST for it)
     if n + loose > 0 then
         log(string.format("coop: %d copies taken down (%s)%s", n + loose, why,
             loose > 0 and string.format(", %d of them never bound to the host's", loose) or ""))
     end
+end
+-- ((2026-11-11) Delta's of 2026-11-10: the link back took every copy down, the airfield's defences too, and ten "AA GUN /
+-- SAM SITE / CIWS LOST" callouts followed in 5 s) why every copy here was taken down within the last `within` s
+-- (killAllCopies: a link back, a host migration, the host's resync or new run), else nil: a copy taken down so isn't lost
+function COOP.tornAll(within)
+    local at = M.tornAllAt
+    if at and os.clock() - at <= (within or 20) then return M.tornWhy or "taken down here" end
+    return nil
 end
 
 -- ((0.73.77) plan F1b) The level is being torn down (sv_core.lua levelGate: the runtime's teardown gate, SV_LevelGone): every
@@ -400,7 +463,18 @@ end
 function pendKeep(unit, gen, field, k, id)
     M.pendBind = M.pendBind or {}
     local pb = M.pendBind[unit]
+    if not pb then
+        -- ((2026-11-11) coop_guard_test: keyed by any unit name in "bd" / "gd", 1,800 in a flood) a plain unit name, and at
+        -- most PEND_MAX units waiting for their spawn (counted, not kept count of: nothing to drift); past it the rest are
+        -- dropped, logged once
+        if not tostring(unit or ""):match("^[%w_]+$") then return end
+        if M.mapFull(M.pendBind, PEND_MAX) then
+            once("pendfull", string.format("coop: binds for %d of the host's units already wait here: %s's dropped", PEND_MAX, tostring(unit)))
+            return
+        end
+    end
     if not pb or pb.gen ~= gen then pb = { gen = gen, binds = {}, gbinds = {} }; M.pendBind[unit] = pb end
+    if pb[field][k] == nil and M.mapFull(pb[field], M.BINDS_MAX) then return end   -- ((2026-11-11) review: any key, no bound)
     pb[field][k] = id
 end
 local function upHere(o) return o ~= nil and live(o) ~= nil and (health(o) or 1) > 0 end
@@ -414,6 +488,12 @@ function repairDone(why)
         nPic = nPic + 1
         local cu = M.cunits[unit]
         if not (cu and cu.gen == pu.gen and cu.upAt) then fresh = fresh + 1 end
+    end
+    -- ((2026-11-11) Delta's of 2026-11-10: an empty picture from a host at its main menu) an empty picture from a host that
+    -- said it left its run takes nothing down here: the migration under way decides (the host sends none without a run)
+    if whole and nPic == 0 and M.hostLeft then
+        whole = false
+        log(string.format("coop: the host's picture is empty and it left its run (round %d): the copies here kept", M.hostLeft.round))
     end
     for unit, cu in pairs(M.cunits) do
         local pu = rp.units[unit]
@@ -467,7 +547,23 @@ local function doSpawn(q)
     if had and had.gen == q.gen and not had.respawn and (unitUp(had) or os.clock() - (had.at or 0) < JUDGE_AFTER_S) then
         return true                                      -- (that flight is up here already)
     end
+    -- ((2026-11-11) the session's review) a carrier's hull the host spawns again: never taken off this game's list (the
+    -- force recycle below, or the spawn's own) while a ZFA-44 of its launchers is up here, the host's rule since 0.74.48
+    -- (Shazzy's STORE-close crash). This game's switched-off ZFA-44s of that ship finished off first (once), then it
+    -- waits, 5 s at a time (looked at by ZLAUNCH.holdHull, logged once)
+    local hull = ESC and ESC.hullShip and ESC.hullShip(unit)
+    if hull and ZLAUNCH and ZLAUNCH.holdHull and ZLAUNCH.holdHull(hull, q, unit, "the host's spawn of it") then
+        if not q.offKilled and ZLAUNCH.offKill then q.offKilled = true; pcall(ZLAUNCH.offKill, hull, "the host's " .. unit .. " spawned again") end
+        q.at = os.clock() + 5
+        return false
+    end
     local alive = rawUnitAlive and rawUnitAlive(unit) or 0
+    -- ((2026-11-11) coop_guard_test: a unit this game doesn't have went on to SV_SetAircraft / SV_SetLevel / SV_Spawn, each
+    -- refusing it) SV_UnitAlive's -2 (no unit of that name) or -4 (not a name): the host's spawn is dropped here
+    if alive == -2 or alive == -4 then
+        once("spunit" .. tostring(unit), string.format("coop: the host's %s isn't a unit of this game (SV_UnitAlive %d): its spawn dropped", tostring(unit), alive))
+        return true
+    end
     if type(alive) == "number" and alive > 0 then        -- the copy of its last flight still up: down first
         if not q.downDone then
             -- (0.73.73) whatever of it is up here, whatever its kind, tracked or not (takeUnitDown). 0.73.70's take-down
@@ -535,6 +631,16 @@ local function doSpawn(q)
     spawningUnit, spawningIdx = unit, 0                  -- (each copy's index in its flight, p.k: the host's order too)
     if SPC and unit == SPC.alicornUnit then SPC.alcnPool = nil end   -- ((0.73.83) this copy's pools, not the last one's: as the host's alicornSpawn)
     crumb(string.format("coop: the host's %s spawned here (gen %s)", tostring(unit), tostring(q.gen)))
+    -- ((2026-11-11) the Alicorn: at the host's hull when its "sp" says (a rejoiner's: hostSync), else at its lane's start
+    -- once a spawn at a pose has moved its unit here (SPC.alicornPose, sv_alicorn.lua)
+    -- (kept on q: a retry, its level not ready, spawns it at the same)
+    if SPC and SPC.alicornPose and unit == SPC.alicornUnit and not q.posed then
+        q.posed = true
+        if q.pose then log(string.format("coop: the host's Alicorn to spawn here at its hull, (%.1f, %.1f) km, heading %.0f",
+            q.pose[1] / 100000, q.pose[2] / 100000, q.pose[4] or 0)) end
+        local okP, p = pcall(SPC.alicornPose, q.pose)
+        if okP then q.pose = p end
+    end
     local r
     if q.pose then r = rawSpawn(unit, q.pose[1], q.pose[2], q.pose[3], q.pose[4]) else r = rawSpawn(unit) end
     spawningUnit, spawningIdx = nil, nil
@@ -618,6 +724,11 @@ function hostEvent(name)                          -- (a joiner) one of the host'
     end
     local r = rawEvent(name)
     if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. name .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
+    -- ((2026-11-11, alicorn-7) the Alicorn's dive and surfacing, for this game's check of its copy: sv_alicorn.lua)
+    if SPC and SPC.alicornHostEvent and tostring(name):find("^RE_SV_Alcn") then
+        local okA, errA = pcall(SPC.alicornHostEvent, tostring(name))
+        if not okA then once("alcnev", "coop: the Alicorn's copy check here: error " .. tostring(errA)) end
+    end
     -- ((0.73.78, plan G4) a flight the host despawned (an ace break-off, the Spaceport's withdrawal): its copies here off,
     -- unpaid (sv_rounds.lua flightWithdrawn), fired here or not (the host's "dn" finishes them then); before, this game's
     -- sweep paid the vanished copies as its own kills a second on)
@@ -642,7 +753,34 @@ function hostEvent(name)                          -- (a joiner) one of the host'
     local fo = tonumber(tostring(name):match("^RE_SV_FlightOff_(%d%d)$"))
     local fu = fo and poolUnit and poolUnit(fo)
     if fu and flightWithdrawn then
-        log(string.format("coop: the host took %s off (%s): %d of its copies here off, unpaid", fu, name, flightWithdrawn(fu)))
+        local w = flightWithdrawn(fu)
+        -- ((2026-11-11) Delta's run of 2026-11-10: 16 times the host's next flight of a unit it had withdrawn (an ace
+        -- break-off, the Spaceport's capture) came here ~8 s late, after 6 tries and a forced recycle: its copies had only
+        -- been marked down, still bound, the unit still on this game's spawner list) its copies taken down here (torn:
+        -- unpaid) and the unit off this game's list 2 s on (M.recycleDue: forced while it still reads alive, a carrier's
+        -- hull held), as VOID WATCHER's above, so the host's next spawn of it spawns here first time
+        local n, seen = 0, {}
+        for id, c in pairs(M.copies) do
+            if c.unit == fu then
+                local a = c.addr or live(c.obj)
+                if a then seen[a] = true end
+                killCopy(id, c.obj, true, true); M.copies[id] = nil; n = n + 1
+            end
+        end
+        local cu = M.cunits[fu]
+        if cu then                                       -- (and its copies that never got the host's id, as killAllCopies)
+            for _, o in pairs(cu.planes or {}) do
+                local a = live(o)
+                if a and not seen[a] then seen[a] = true; killCopy(0, o, true, true); n = n + 1 end
+            end
+            cu.planes = {}
+        end
+        M.recycleDue = M.recycleDue or {}
+        local queued = false
+        for _, e in ipairs(M.recycleDue) do if e.unit == fu then queued = true end end
+        if not queued and #M.recycleDue < 64 then M.recycleDue[#M.recycleDue + 1] = { unit = fu, at = os.clock() + 2, why = name } end
+        log(string.format("coop: the host took %s off (%s): %d of its copies here off, unpaid; %d taken down here, its unit off "
+            .. "this game's spawner list 2 s on", fu, name, w, n))
     end
 end
 
@@ -730,6 +868,10 @@ function clientRounds(now)
         local okSc, errSc = pcall(SPC.clientClean, now)
         if not okSc then once("specialClean", "coop: special clean-up error " .. tostring(errSc)) end
     end
+    if SPC and SPC.alicornClient then                    -- ((2026-11-11) the Alicorn's copy here: its surfacing, its place
+        local okAc, errAc = pcall(SPC.alicornClient, now)   -- (sv_alicorn.lua)
+        if not okAc then once("alcnClient", "coop: the Alicorn's copy check here: error " .. tostring(errAc)) end
+    end
     for i = #M.spawnQ, 1, -1 do
         local q = M.spawnQ[i]
         if os.clock() >= (q.at or 0) then
@@ -744,10 +886,39 @@ function clientRounds(now)
     if M.evQ and #M.evQ > 0 and #M.spawnQ == 0 and os.clock() - (M.lastSpawnAt or 0) >= 2 then
         local q = M.evQ
         M.evQ = nil
-        for _, e in ipairs(q) do
-            if os.clock() - e.at < 60 and not keptThrough(e.unit, e.name) then hostEvent(e.name) end   -- (a hold: once its
-        end                                                                                             -- copy's had its orders)
+        for i, e in ipairs(q) do
+            -- ((2026-11-11) a replay for a unit's fresh copy here waits until that copy's up (M.unitPending), it and the
+            -- events after it, M.UNIT_WAIT_S at most, then goes whatever)
+            local age = os.clock() - e.at
+            if e.unit and M.unitPending(e.unit) and age < M.UNIT_WAIT_S then
+                M.evQ = {}
+                for j = i, #q do M.evQ[#M.evQ + 1] = q[j] end
+                break
+            end
+            if (age < 60 or (e.unit and age < M.UNIT_WAIT_S + 1)) and not keptThrough(e.unit, e.name) then   -- (a hold: once
+                hostEvent(e.name)                                                                           -- its copy's
+                if e.waited then                                                                            -- had its orders)
+                    log(string.format("coop: the host's %s for %s fired here %.1f s after it came (its copy up first)", e.name,
+                        tostring(e.unit), age))
+                end
+            end
+        end
     end
+end
+-- ((2026-11-11, the 50-round run: The Iron Acorn's replay, RE_SV_AlcnAdvance / OpenCore, fired as his level came ready,
+-- whether his Alicorn copy was up yet or not) whether the host's unit is still to come up here for a replay of its state
+-- ("ev|<event>|<unit>", hostSync): a spawn of it queued here that will spawn it (not the one up already, kept through a
+-- resync: keptThrough has it), or its copy up less than REPLAY_AFTER_S (its parts placed and bound, its own appearance's
+-- path started first)
+M.UNIT_WAIT_S = 90
+local REPLAY_AFTER_S = 3
+function M.unitPending(unit)
+    if type(unit) ~= "string" then return false end
+    local cu = M.cunits[unit]
+    for _, q in ipairs(M.spawnQ or {}) do
+        if q.unit == unit and not (cu and cu.gen == q.gen and cu.upAt and not cu.respawn) then return true end
+    end
+    return cu ~= nil and cu.upAt ~= nil and os.clock() - cu.upAt < REPLAY_AFTER_S
 end
 
 -- (a joiner, every 5 s) a copy spawned here that's still not bound to the host's plane STRAY_S on: never driven by the

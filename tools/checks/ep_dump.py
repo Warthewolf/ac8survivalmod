@@ -10,7 +10,26 @@ sys.path.insert(0, os.path.join(HERE, '..')); sys.path.insert(0, os.path.join(HE
 from zenpkg import ZenPkg
 import uprop
 
-SO = pickle.load(open(os.path.join(HERE, '..', 'scriptobjs.pkl'), 'rb'))
+SO_PATH = os.path.join(HERE, '..', 'scriptobjs.pkl')
+_SO = None
+
+
+def script_objects():
+    """tools/scriptobjs.pkl (script import index -> name; git-ignored, made from the game by tools/make_scriptobjs.py),
+    loaded the first time a stock package's import is shown: the generators and their checks import this module
+    without the game's files (a cloud session, the Lua tests' Python halves)."""
+    global _SO
+    if _SO is None:
+        if not os.path.exists(SO_PATH):
+            sys.exit(f'ep_dump: {SO_PATH} is missing: make it with tools/make_scriptobjs.py from '
+                     '`retoc print-script-objects` (it comes from the game\'s own files and is not in git)')
+        with open(SO_PATH, 'rb') as f: _SO = pickle.load(f)
+    return _SO
+
+
+def __getattr__(name):            # ep_dump.SO, as before
+    if name == 'SO': return script_objects()
+    raise AttributeError(name)
 
 
 def load(path):
@@ -55,7 +74,7 @@ def show(v, z):
     if k == 'enum': return show(v[2], z)
     if k == 'obj':
         i = v[1]
-        if i < 0 and -i - 1 < len(z.imports): return SO.get(z.imports[-i - 1], f'imp:{z.imports[-i - 1]:x}')
+        if i < 0 and -i - 1 < len(z.imports): return script_objects().get(z.imports[-i - 1], f'imp:{z.imports[-i - 1]:x}')
         return f'obj:{i}'
     if k == 'arr': return '[' + ', '.join(show(x, z) for x in v[1]) + ']'
     if k == 'struct': return '{' + ', '.join(f'{p[1]}={show(p[3], z)}' for p in v[2] if not p[2]) + '}'

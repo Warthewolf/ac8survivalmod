@@ -8,7 +8,12 @@ OUT=../../build/checks
 mkdir -p "$OUT"
 CLANG=../llvm/LLVM/bin/clang.exe
 [ -x "$CLANG" ] || CLANG=clang
-"$CLANG" -O1 -Wall -Wextra -o "$OUT/vfmt_test.exe" vfmt_test.c -Wl,/subsystem:windows -Wl,/entry:mainCRTStartup
+# Windows: a windowless exe; elsewhere (Linux, a cloud session) a plain one
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) LINK="-Wl,/subsystem:windows -Wl,/entry:mainCRTStartup" ;;
+    *) LINK="-lpthread" ;;
+esac
+"$CLANG" -O1 -Wall -Wextra -o "$OUT/vfmt_test.exe" vfmt_test.c $LINK
 cd "$OUT"
 rc=0
 ./vfmt_test.exe > vfmt_test.txt 2>&1 || rc=$?

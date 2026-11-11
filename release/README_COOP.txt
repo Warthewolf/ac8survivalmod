@@ -32,8 +32,10 @@ The host's game runs the rounds and every enemy; the others fight the same enemi
 airfield, and everyone sees everyone else's plane. Each of you earns your own zollars: an enemy you hit at all pays you
 in full, one only your wingmates hit pays half. Each of you lands and shops at your own airfield store; while the host
 is down at the airfield new enemies keep coming as long as someone else is flying (alone, they wait for the host's
-takeoff). If one of you is shot down, retry: you rejoin the same run. If the host retries, the run starts over for
-everyone. Co-op runs are not sent to the leaderboard.
+takeoff). If one of you is shot down you're DOWN: your plane is flown round the airfield out of the fight and you
+watch the others (O: the next player). Anyone who lands can buy you back from their STORE's AIRFIELD page (REVIVE
+<NAME>). When everyone is down, the run's over. The host sends the run to the leaderboard as one team run, with each
+player's kills and revives ([coop] leaderboard = false: not sent).
 
 Optional settings (none are needed), in ...\Win64\ue4ss\Mods\AC8SurvivalMode\config\survival.ini under a [coop] line
 (made the first time Survival Mode runs; edit survival.ini, not survival.default.ini; restart the game after a change):
@@ -51,11 +53,10 @@ What to tell us after playing: did everyone link, did each of you see the others
 did enemies attack every player, did the specials (the shuttle's countdown and launch, Nagase's radio) play for
 everyone, did the settings rows change when pressed, and did the joiners get the host's settings? Known: enemy missiles aimed at another player aren't shown, and the other players' planes fly in enemy colours.
 
-After playing, EVERYONE sends these three files (from ...\Win64\ue4ss\ and its Mods\AC8SurvivalMode folder), copied
-before starting the game again:
-    UE4SS.log, AC8SurvivalMode.log, AC8SurvivalMode_lua.log
+After playing, EVERYONE starts the game once more (the main menu is enough) and sends the newest
+logs\AC8Survival_<date>_<version>.zip from ...\Win64\ue4ss\Mods\AC8SurvivalMode\: it holds that session's logs, its
+UE4SS.log and, after a crash, the crash breadcrumbs and the game's crash folder. If there's no zip for that time, send
+that session's files from logs\ (named with its date) instead.
 
-After a crash, the player who crashed also sends, before starting the game again: the newest UECC-Windows-... folder
-from %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\ (its UEMinidump.dmp and
-CrashContext.runtime-xml), AC8SurvivalMode_crumbs.log and AC8SurvivalMode_crumbs.prev.log (Mods\AC8SurvivalMode), and a
-line on the round, what they were doing (flying, the STORE, DOWN and spectating, quitting) and who hosted.
+After a crash, the player who crashed also sends a line on the round, what they were doing (flying, the STORE, DOWN
+and spectating, quitting) and who hosted.

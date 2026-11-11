@@ -40,6 +40,7 @@ local GROUPS = {
     { "specials.fishing", "GONE FISHIN': SAL and Comona (S = SAL, C = control, T = tower, G = crew chief)" },
     { "specials.festival", "THE FESTIVAL: the town, KMG and Comona" },
     { "specials.valka", "VALKA and AUDREY" },
+    { "specials.spaceport", "SPACEPORT RETAKE: the rockets (CTRL = COMONA CONTROL)" },
     { "hud.subs.speakers", "WHO'S WHO: the name shown for each speaker code" },
 }
 -- (quoted lines, not a long string: tools/checks/ini_check.py reads this family's text)
@@ -60,7 +61,7 @@ local HEADER = table.concat({
     "; name = text   changes one line held under a name, or who a speaker code is (in the name lists).",
     "; Lines starting with ; are notes, skipped.",
     ";",
-    "; Mistakes are skipped, never fatal: the game's log (AC8SurvivalMode_lua.log) lists each one as \"subtitles: line N: ...\".",
+    "; Mistakes are skipped, never fatal: the game's log (logs\\AC8SurvivalMode_lua_<date>.log) lists each one as \"subtitles: line N: ...\".",
     "; Every Survival Mode update brings this file and replaces the one here: send your changes to the mod's author",
     "; (@voidcallsreaper on Discord) before you install a new version. Delete it to get the game's own lines back: the game",
     "; writes it again when it starts.",
@@ -154,6 +155,12 @@ function SUBT.apply(text, root)
                 cur = { path = path, t = t, parent = parent, idx = idx, parentKind = parentKind, list = {},
                         lines = (k == "lines") or created, dash = false }
             end
+        elseif first == "[" then
+            -- ((2026-11-11) a friend's file had "[specials.fishing.text.grade_b]z": not a section, so its lines went into
+            -- the list above it, grade A's) a [ line that isn't a whole section: it and its lines skipped
+            finish()
+            bad(n, "a broken [section] line (something after its ] or no ]): it and its lines skipped")
+            cur = { path = s, t = nil }
         elseif not cur then
             bad(n, "a line before any [section]: skipped")
         elseif not cur.t then

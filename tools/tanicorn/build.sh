@@ -4,7 +4,7 @@
 #                          Tanacorn_model.blend (made again only when the design or the scripts changed; ~2 min)
 #   2. export_tanacorn.py  every part type out of it -> build/tanicorn/src_<part> (glTF, wreck, textures, json) and
 #                          parts.json; check_export.py reads every glTF back and compares it with its json
-#   3. ue_import.py        in the AC8 template project (E:/AC8LiveProject, UE 5.4, AC8's classes compiled): textures, the
+#   3. ue_import.py        in the AC8 template project ($AC8_LIVE_PROJECT, UE 5.4, AC8's classes compiled): textures, the
 #                          instances on AC8's gear material (stubs at AC8's paths), the rigged meshes, the VLS blocks'
 #                          Open animations, the hull's static mesh, the wrecks
 #   4. spec.py             the TaniBuild commandlet's spec; 5. TaniBuild (the SurvivalFx editor module, tools/laser7/cpp):
@@ -18,14 +18,15 @@
 # TANI_PARTS=T5,HULL builds only those parts (the import, the spec, the cook's checks). TANI_STOP=export stops after
 # step 2 (no UE needed: the parts on disk and their check).
 # The Tanager stand-in is Sea Power's Iowa (user, 2026-11-09: "my install only"): nothing built here is
-# shipped. tools/build_all.sh stages the container with TANI=1 only; package_release.sh never ships it.
+# shipped (milestone 0's cooked container is kept in art/tanicorn/ingame at the user's request). tools/build_all.sh stages the container with TANI=1 only; package_release.sh never ships it.
 set -e
 cd "$(dirname "$0")/../.."
 . tools/env.sh
-MAIN="E:/ACE8 Survival Mode"
-PROJ=E:/AC8LiveProject
-CMD="$UE/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
-BLENDER="${BLENDER:-C:/Program Files/Blender Foundation/Blender 3.3/blender.exe}"
+sv_need BLENDER "Blender 3.3's blender.exe (tools/tanicorn)"
+# the main git tree (build outputs live in its build/, as the release zips; as tools/release_dir.sh), else this checkout
+MAIN=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+if [ -n "$MAIN" ]; then MAIN=$(dirname "$MAIN"); else MAIN=$(pwd); fi
+export SV_ROOT="$MAIN"                              # (spec.py and ue_import.py read it, with TANI_BUILD below)
 OUT="$MAIN/build/tanicorn"
 export MSYS_NO_PATHCONV=1
 mkdir -p "$OUT"
@@ -55,6 +56,9 @@ grep -q "^CHECK ALL OK" "$OUT/export_check.log" \
 grep "^CHECK ALL OK" "$OUT/export_check.log"
 [ "$TANI_STOP" = export ] && { echo "tanicorn: stopped after the export (TANI_STOP=export): $OUT/src_*"; exit 0; }
 sv_need UE "Unreal Engine 5.4's folder"
+sv_need AC8_LIVE_PROJECT "the AC8 template project (Live.uproject's folder) for tools/tanicorn"
+PROJ=$AC8_LIVE_PROJECT
+CMD="$UE/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
 # the editor module (both commandlets live in tools/laser7/cpp/SurvivalFx), built when its source changed
 if ! diff -r --strip-trailing-cr tools/laser7/cpp/SurvivalFx "$PROJ/Source/SurvivalFx" > /dev/null 2>&1; then
     rm -rf "$PROJ/Source/SurvivalFx" && cp -r tools/laser7/cpp/SurvivalFx "$PROJ/Source/"

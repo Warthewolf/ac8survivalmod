@@ -372,6 +372,8 @@ local function runLeft(why)
     log(string.format("run over: left Survival's level in round %d with %d zollars (%s)", D.round, RUN.credits, tostring(why)))
     local okL, errL = pcall(LB.finish, "left")          -- (its error mustn't stop the reset)
     if not okL then log("leaderboard: error " .. tostring(errL)) end
+    -- ((2026-11-11) a co-op host: its joiners told it left its run once it's out of the level, sv_coop_migration.lua)
+    if COOP and COOP.hostLeaving then pcall(COOP.hostLeaving, D.round, why) end
     if type(SV_MusicHold) == "function" then SV_MusicHold(0) end   -- (never left held)
     if D.special then pcall(SPC.V.cleanup, D.special) end
     if FEST and FEST.sirenOff then pcall(FEST.sirenOff, "the level was left") end   -- ((0.74.0) THE FESTIVAL's siren)
@@ -536,7 +538,7 @@ local function probeTick(tick)
             local okDs, errDs = pcall(DECOY.setup)
             if not okDs then log("decoy: setup error " .. tostring(errDs)); DECOY.setupDone = true end
         end
-        -- TEST ONLY BEGIN (THE TANICORN's test mount's rows, at the main menu as the shoal's: sv_tanicorn.lua)
+        -- DEV ONLY BEGIN (THE TANICORN's test mount's rows, at the main menu as the shoal's: sv_tanicorn.lua; dev install only)
         if TANI and TANI.setup then
             local okTs, errTs = pcall(TANI.setup)
             if not okTs then log("tanicorn: setup error " .. tostring(errTs)); TANI.setupDone = true end
@@ -545,7 +547,7 @@ local function probeTick(tick)
             local okFl, errFl = pcall(IFLEET.setup)
             if not okFl then log("fleet: setup error " .. tostring(errFl)); IFLEET.setupDone, IFLEET.rowsOk = true, false end
         end
-        -- TEST ONLY END
+        -- DEV ONLY END
         if COOP and COOP.syncSetup then                  -- (the co-op stand-ins' damage-0 rows, sv_coop.lua)
             local okCs, errCs = pcall(COOP.syncSetup)
             if not okCs then log("coopfire: setup error " .. tostring(errCs)) end

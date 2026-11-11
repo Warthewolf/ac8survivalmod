@@ -25,6 +25,10 @@
 -- The waves' and the rockets' clocks wait while you're down at the airfield with nobody else flying. The capture's
 -- share is whole. The pending retake is shared with the joiners (their NEXT row, a host migration). The Ford's deck
 -- flights are held back when the round is planned.
+-- (2026-11-11, Saint Alessia's co-op run; docs/re/SPACEPORT_ASSAULT.md's last section) The rockets warn: big callouts,
+-- Comona Control's lines and Mission 22's countdown on the radio at their spawn, before each launch, at it, halfway up,
+-- at an escape and a kill; their heights on the NEXT row. Only the host's climbs end them: a joiner's copy on the host's
+-- word ("rk"). A launch the host's STORE ate is fired again once it's shut. The retake's start is queued over its ticks.
 SPORT = {}
 do
 local GROUPS, WAVES, CRAFT, GARRISON = { "A", "B", "C", "D" }, { "V", "W", "X", "Y", "Z" }, { "L", "R" }, { "A", "B", "C" }
@@ -58,6 +62,10 @@ end
 local function aliveOf(unit, now, maxAge) return counted(ALIVE.ask(unit, now, maxAge)) end
 local function aliveNow(unit) return counted(ALIVE.fresh(unit)) end
 local HULL_AGE_S = 3                              -- (a ship whose hull is watched: its unit's count only for its turrets)
+-- ((2026-11-11, lag-2) Saint Alessia's rounds 49-50: 41-52 units watched at the 1 s default kept ALIVE at its budget's
+-- cap, ~75 ms a tick in SV_UnitAlive) the landing craft's waves, the garrison and the island's units: their counts pay
+-- and hold the round, never a kill read on a plane, so an answer up to UNIT_AGE_S old does
+local UNIT_AGE_S = 2.5
 local function spawn(unit)
     spawningUnit = unit
     local r = SV_Spawn(unit)
@@ -348,7 +356,7 @@ end
 function SPORT.shipsUp(s)
     local n = 0
     for _, sh in pairs(s and s.ships or {}) do if afloat(sh) then n = n + 1 end end
-    return n + #(s and s.queue or {})
+    return n + #(s and s.queue or {}) + ((s and s.shipJobs) or 0)    -- ((2026-11-11) the retake's ship checks still queued)
 end
 
 -- Landing craft on their way in (not landed, not taken off).
@@ -727,7 +735,7 @@ function SPORT.tick(now, s)
             end
         end
         for w, wv in pairs(L.waves) do
-            local alive = wv.removed and 0 or (aliveOf(wv.unit, now) or wv.alive)
+            local alive = wv.removed and 0 or (aliveOf(wv.unit, now, UNIT_AGE_S) or wv.alive)
             if alive < wv.alive and not wv.removed then
                 wv.shot, s.stat.shot = (wv.shot or 0) + (wv.alive - alive), s.stat.shot + (wv.alive - alive)
                 -- ((0.73.77, I2: S3) "sunk", not "down (": sv_coop.lua's addCredits doesn't send a pay whose reason has
@@ -898,7 +906,9 @@ function SPORT.row(s, t)
     elseif s.state == "retake" then
         local g = 0
         for _, x in pairs(s.garrison or {}) do g = g + math.max(0, x.alive) end
+        local now = D and tonumber(D.now) or 0
         return string.format(t.sp_retake_row, g, SPORT.shipsUp(s))
+            .. (s.rk and SPORT.rkRow(t, SPORT.rkToken(s.rk, "A", now), SPORT.rkToken(s.rk, "B", now)) or "")
     end
 end
 
@@ -961,25 +971,162 @@ SPORT.ISLAND_UNITS = {}                           -- ((0.73.83) sv_rounds.lua SP
 for _, it in ipairs(ISLAND) do SPORT.ISLAND_UNITS[#SPORT.ISLAND_UNITS + 1] = it[1] end
 local function rcfg() return cfg().retake and cfg().retake.rockets or {} end
 
--- The rockets and their debris on the pads (from retakeSpawn); s.rk the round's rockets, or nothing when they're off
+-- ((2026-11-11) Saint Alessia's co-op run of 0.74.36, round 50: both rockets escaped with a 4 s banner each about them,
+-- Froya the only player flying; the user: "10000% need to add the mission dialogue about stopping the rocket launch, froya
+-- didn't even notice", "Use the Mission 22 radio lines for the rocket warning") The rockets' moments: their spawn (the
+-- brief), warn_s before each launch, its count's last call COUNT_S before it, the liftoff, halfway up (half_m), its
+-- escape, its kill. Each: a big callout (big_x; to the joiners as every callout), Comona Control's line (rockets.subs, one
+-- of the moment's lines this run hasn't said, by SUB.say: "sb" to the joiners) and Mission 22's countdown on the radio
+-- (RE_SV_SpRadio<X>, forwarded to every joiner: survival_events.py SP_RADIO; radio = false: none). Log: `special:
+-- rocket <L>: <moment> (callout ...; line ...; radio ...)`.
+local RADIO = { brief = "RE_SV_SpRadioBrief", warn = "RE_SV_SpRadioWarn", launch = "RE_SV_SpRadioLaunch",
+                down = "RE_SV_SpRadioDown" }
+local COUNT_S = 2                              -- (Mission 22's "2 and 1": 2 s before the shuttle's liftoff)
+local HALF_NO_ALT_S = 55                       -- (halfway with no height read: about half a boosted climb)
+local RELAUNCH_CHECK_S, RELAUNCH_TRIES, BOOST_CHECK_S = 5, 3, 8   -- (rocketWatch)
+local function fmt(s, ...)                     -- (a text a player's survival.ini changed may take fewer values)
+    local ok, r = pcall(string.format, tostring(s or ""), ...)
+    if ok then return r end
+    return tostring(s or "")
+end
+-- one of `key`'s lines this run hasn't said, its {values} filled in, said (the strip says each line once a run: SUB.fresh
+-- on the line as it'll read, so rocket A's and B's are each their own); what became of it
+local function rkSay(key, vals)
+    local l = (rcfg().subs or {})[key]
+    if not (SUB and SUB.say) then return "no subtitles here" end
+    if type(l) ~= "table" or #l == 0 then return "none" end
+    local sp = ((CFG.hud or {}).subs or {}).speakers or {}
+    local start, refused = math.random(#l), false
+    for k = 0, #l - 1 do
+        local line = l[(start + k - 1) % #l + 1]
+        if type(line) == "string" then
+            local code, text = line:match("^([%w _']+)|(.*)$")
+            if not code then code, text = "CTRL", line end
+            text = (text:gsub("{(%w+)}", function(n)
+                local v = vals and vals[n]
+                if v == nil then return "{" .. n .. "}" end
+                return tostring(v)
+            end))
+            if not SUB.fresh or SUB.fresh(code .. "|" .. text) then
+                if SUB.say(sp[code] or code, text) then return "said" end
+                refused = true                          -- (the strip's: off, or its queue full)
+            end
+        end
+    end
+    return refused and "not taken by the subtitle strip" or "every one said already this run"
+end
+local function rkRadio(key)
+    if not (key and RADIO[key]) then return "no radio line" end
+    if rcfg().radio == false then return "radio off" end
+    return RADIO[key] .. " " .. fire(RADIO[key])
+end
+-- a moment of rocket L (nil: both): its callout (text nil: none), its line (with L known), its radio line
+local function rkMoment(L, key, text, sub, vals, radio)
+    if text then hudCallout(text, sub, tonumber(rcfg().big_x) or 1.5) end
+    local said = (vals and (L or key == "brief")) and rkSay(key, vals) or "none"
+    log(string.format("special: rocket %s: %s (%s; line %s; %s)", L or "A and B", key,
+        text and ("callout '" .. text .. "'") or "no callout", said, rkRadio(radio)))
+end
+-- (co-op) the host's word on rocket L for the joiners ("rk": COOP.rocket, sv_coop.lua; SPORT.rkFromHost there)
+local function rkSend(rk, L, st)
+    rk.st = rk.st or {}
+    rk.st[L] = st
+    if COOP and COOP.rocket then pcall(COOP.rocket, L, st, rk.alt and rk.alt[L]) end
+end
+-- The NEXT row's rockets (the host's, and a joiner's from "spx"): a rocket's token, "p<s>" on its pad (<s> to its
+-- launch), "u<n>" climbing (<n> its height in 100 m; "u" not read), "d" down, "e" escaped, "x" gone, "-" none
+function SPORT.rkToken(rk, L, now)
+    if type(rk) ~= "table" then return "-" end
+    local o = rk.out and rk.out[L]
+    if o == "kill" then return "d" elseif o == "escaped" then return "e" elseif o == "lost" or rk.done then return "x" end
+    if rk.launched and rk.launched[L] then
+        local a = rk.alt and rk.alt[L]
+        return a and ("u" .. math.max(0, math.min(9999, math.floor(a / 100)))) or "u"
+    end
+    return "p" .. math.max(0, math.min(9999, math.ceil(((rk.launch or {})[L] or now) - now)))
+end
+local function rkText(t, L, tok)
+    if type(tok) ~= "string" then return nil end
+    local c, n = tok:sub(1, 1), tonumber(tok:sub(2))
+    if c == "p" then return fmt(t.sp_rk_pad, L, mmss(n or 0))
+    elseif c == "u" then return n and fmt(t.sp_rk_up, L, n / 10) or fmt(t.sp_rk_climb, L)
+    elseif c == "d" then return fmt(t.sp_rk_down, L)
+    elseif c == "e" then return fmt(t.sp_rk_esc, L)
+    elseif c == "x" then return fmt(t.sp_rk_gone, L) end
+    return nil
+end
+function SPORT.rkRow(t, a, b)
+    local parts = {}
+    for _, x in ipairs({ { "A", a }, { "B", b } }) do
+        local s = rkText(t, x[1], x[2])
+        if s then parts[#parts + 1] = s end
+    end
+    return #parts > 0 and fmt(t.sp_rk_row, table.concat(parts, "  ")) or ""
+end
+-- the joiner's half of the host's word ("rk|<A|B>|<state>|<height m>"): its own copy of a rocket ends only on the host's
+-- escaped or lost (its RE_SV_SpRocketEnd<L>, the climb's end's hide and switch-off, fired here alone; its own climb's
+-- end never does: survival_events.py SV_SpRocketHost, which RE_SV_SpRocketHostOff keeps at 0 here); checked: the rocket
+-- A or B, a state of these, a height finite and in range. Held while this level loads (the host says it again every
+-- 10 s). Log: `coop: the host's rocket <L>: <state> ...`.
+local RK_STATES = { pad = true, launched = true, half = true, escaped = true, lost = true, down = true }
+SPORT.rkJoin = { st = {}, ended = {}, offAt = nil }
+function SPORT.rkFromHost(f)
+    if type(f) ~= "table" then return end
+    local L, st = f[2], f[3]
+    if not ((L == "A" or L == "B") and type(st) == "string" and RK_STATES[st]) then return end
+    local alt = tonumber(f[4])
+    if alt and not (alt == alt and alt >= -10000 and alt <= 1000000) then alt = nil end
+    local J, now = SPORT.rkJoin, os.clock()
+    local here = (COOP and COOP.eventHere) or SV_Event
+    local ready = type(levelReady) ~= "function" or levelReady()
+    local was = J.st[L]
+    J.st[L] = st
+    if was ~= st then
+        log(string.format("coop: the host's rocket %s: %s%s", L, st, alt and string.format(" at %.0f m", alt) or ""))
+    end
+    if st == "pad" and was ~= "pad" and now - (J.ended[L] or -1e9) > 20 then J.ended[L] = nil end   -- (a new retake's)
+    if ready and type(here) == "function" and (J.offAt == nil or (st == "pad" and now - J.offAt > 60)) then
+        J.offAt = now
+        log("coop: this game's rockets end on the host's word alone (RE_SV_SpRocketHostOff " .. tostring(here("RE_SV_SpRocketHostOff")) .. ")")
+    end
+    if (st == "escaped" or st == "lost") and not J.ended[L] and ready and type(here) == "function" then
+        J.ended[L] = now
+        local ev = "RE_SV_SpRocketEnd" .. L
+        log(string.format("coop: the host's rocket %s %s%s: this game's copy taken off (%s %s)", L,
+            st == "escaped" and "escaped" or "was taken off", alt and string.format(" at %.0f m", alt) or "", ev, tostring(here(ev))))
+    end
+end
+
+-- The rockets on the pads (the retake's first job: retakeJobs); s.rk the round's rockets. Their debris units come next,
+-- a job each (debrisSpawn). ((2026-11-11) the host's or a solo game's climbs end them (RE_SV_SpRocketHostOn, set again at
+-- each launch: a joiner's ends on the host's word); the brief; the joiners told they're on their pads.) Whether it came.
 local function rocketsSpawn(now, s)
     local rc = rcfg()
-    if rc.enabled == false then log("special: the retake's rockets are off ([specials.spaceport.retake.rockets] enabled)"); return 0 end
     if (aliveNow(ROCKETS) or 0) > 0 then rocketsOff() end   -- (left up from before: taken off)
     local r = spawn(ROCKETS)
-    if r <= 0 then log("special: the retake's rockets didn't spawn (" .. said(r) .. ")"); return 0 end
-    local deb, counts = {}, {}
-    for _, u in ipairs(DEBRIS) do
-        local rd = spawn(u)
-        counts[u] = rd > 0 and rd or 0                  -- ((0.73.77, I5: S8) each one's count from its spawn)
-        deb[#deb + 1] = u .. " " .. said(rd)
-    end
+    if r <= 0 then log("special: the retake's rockets didn't spawn (" .. said(r) .. ")"); return false end
     s.rk = { n = r, alive = r, at = now, setupAt = now + 2, launch = { A = now + (tonumber(rc.launch_a_s) or 45),
              B = now + (tonumber(rc.launch_b_s) or 110) }, launched = {}, boosted = {}, escaped = {}, kills = 0,
-             escPending = 0, debris = counts, lost = {}, out = {}, alt = {} }
-    log(string.format("special: the retake's rockets on the pads: %s; launches at +%.0f s and +%.0f s; their debris: %s", said(r),
-        s.rk.launch.A - now, s.rk.launch.B - now, table.concat(deb, ", ")))
-    return r
+             escPending = 0, debris = {}, debLeft = #DEBRIS, debSaid = {}, lost = {}, out = {}, alt = {},
+             warned = {}, counted = {}, halfSaid = {}, lchk = {}, relaunched = {}, lwait = {}, st = {}, logAt = {},
+             last = {}, spd = {}, bchk = {}, stAt = now + 10 }
+    log(string.format("special: the retake's rockets on the pads: %s; launches at +%.0f s and +%.0f s; their climbs end them "
+        .. "on this game alone (RE_SV_SpRocketHostOn %s)", said(r), s.rk.launch.A - now, s.rk.launch.B - now,
+        fire("RE_SV_SpRocketHostOn")))
+    rkMoment(nil, "brief", nil, nil, { s = math.floor(s.rk.launch.A - now + 0.5), b = math.floor(s.rk.launch.B - now + 0.5) }, "brief")
+    rkSend(s.rk, "A", "pad")
+    rkSend(s.rk, "B", "pad")
+    return true
+end
+local function debrisSpawn(s, u)
+    local rk = s.rk
+    if not rk then return false end
+    local rd = spawn(u)
+    rk.debris[u] = rd > 0 and rd or 0                  -- ((0.73.77, I5: S8) each one's count from its spawn)
+    rk.debSaid[#rk.debSaid + 1] = u .. " " .. said(rd)
+    rk.debLeft = rk.debLeft - 1
+    if rk.debLeft <= 0 then log("special: the rockets' debris: " .. table.concat(rk.debSaid, ", ")) end
+    return true
 end
 
 local function rocketsEscaped(rk) local n = 0; for _ in pairs(rk.escaped) do n = n + 1 end; return n end
@@ -1007,6 +1154,7 @@ local function mapRockets(rk)
         end
     end
     rk.byObj = rk.n == 2 and rk.obj.A ~= nil and rk.obj.B ~= nil
+    rk.padAt = { A = posOf(rk.obj.A), B = posOf(rk.obj.B) }     -- ((2026-11-11) where each stands: its launch checked by it)
     log(string.format("special: the rockets' objects: %d found%s; %s", #cand, #said2 > 0 and (" (" .. table.concat(said2, ", ") .. ")") or "",
         rk.byObj and "each one's height and kill read from it" or "counted by their unit"))
 end
@@ -1068,33 +1216,145 @@ local function debrisTick(now, rk, rc)
     end
 end
 
+-- ((2026-11-11) HISTORY 0.74.51's "not in this fix": a launch is one of the host's one-shot events its own landing STORE
+-- can eat, as it ate the shuttle's liftoff (sv_rounds_shuttle.lua). RELAUNCH_CHECK_S after a launch, a rocket still on its
+-- pad here (its object within 200 m of where it stood, under 100 m up) has its launch fired again on this game alone once
+-- its STORE is shut (SPC.storeShut), RELAUNCH_TRIES in all, its clocks from then (the joiners' rockets launched on time);
+-- the host's mark on its climbs (SV_SpRocketHost, read back then) set again the same way. The log's watch on a rocket in
+-- the air: its height and speed every log_s, its speed BOOST_CHECK_S after its boost (Mission 19's 1000 km/h or its
+-- launch's 280: the host's rocket B of that run took 225 s, its A and Delta's B ~107 s).
+local function onPad(rk, L)
+    local at, p = rk.padAt and rk.padAt[L], posOf(rk.obj and rk.obj[L])
+    if not (at and p) then return nil end
+    return math.sqrt((p.X - at.X) ^ 2 + (p.Y - at.Y) ^ 2) < 20000 and p.Z - at.Z < 10000
+end
+local function rocketWatch(now, s, rk, L, o)
+    local rc = rcfg()
+    if rk.lchk[L] and now >= rk.lchk[L] and not rk.out[L] then
+        local pad, f = onPad(rk, L), svFlags()
+        local mark = f and f.SV_SpRocketHost                -- (nil: an older event package's, without it)
+        if pad == nil then
+            rk.lchk[L] = nil
+            log(string.format("special: rocket %s: its launch can't be checked here (its object not found)", L))
+        elseif pad == false and mark ~= 0 then
+            rk.lchk[L] = nil
+            log(string.format("special: rocket %s left its pad: its launch took here%s", L, (rk.relaunched[L] or 0) > 0
+                and string.format(" (fired again %d time%s)", rk.relaunched[L], rk.relaunched[L] == 1 and "" or "s") or ""))
+        else
+            local open, why = true, nil
+            if SPC and SPC.storeShut then open, why = SPC.storeShut(now) end
+            local here = (COOP and COOP.eventHere) or SV_Event
+            if not open then
+                if rk.lwait[L] ~= why then
+                    rk.lwait[L] = why
+                    log(string.format("special: rocket %s %s here: fired again once this game's events can take (%s)", L,
+                        pad and "still on its pad after its launch" or "launched, the host's mark on its climb not set",
+                        tostring(why)))
+                end
+            elseif (rk.relaunched[L] or 0) >= RELAUNCH_TRIES or type(here) ~= "function" then
+                rk.lchk[L] = nil
+                log(string.format("special: rocket %s %s after %d tries here: given up (its timeout takes it off)", L,
+                    pad and "never left its pad" or "never got the host's mark", rk.relaunched[L] or 0))
+            else
+                rk.relaunched[L] = (rk.relaunched[L] or 0) + 1
+                local r0 = here("RE_SV_SpRocketHostOn")
+                if pad then
+                    local r = here("RE_SV_SpRocketLaunch" .. L)
+                    rk.launched[L], rk.boosted[L], rk.bchk[L], rk.last[L] = now, false, nil, nil
+                    log(string.format("special: rocket %s still on its pad %d s after its launch: launched again here, try %d of %d "
+                        .. "(RE_SV_SpRocketLaunch%s %s, RE_SV_SpRocketHostOn %s; the joiners' rockets went on time)", L,
+                        RELAUNCH_CHECK_S, rk.relaunched[L], RELAUNCH_TRIES, L, tostring(r), tostring(r0)))
+                else
+                    log(string.format("special: rocket %s: the host's mark on its climbs not set here (SV_SpRocketHost 0): set "
+                        .. "again, try %d of %d (RE_SV_SpRocketHostOn %s)", L, rk.relaunched[L], RELAUNCH_TRIES, tostring(r0)))
+                end
+                rk.lchk[L], rk.lwait[L] = now + RELAUNCH_CHECK_S, nil
+            end
+        end
+    end
+    if rk.launched[L] and not rk.out[L] and o and now >= (rk.logAt[L] or 0) then
+        rk.logAt[L] = now + math.max(2, tonumber(rc.log_s) or 10)
+        log(string.format("special: rocket %s: %s, %.0f km/h, %.0f s after its launch (%s)", L,
+            rk.alt[L] and string.format("%.0f m up", rk.alt[L]) or "its height not read", rk.spd[L] or 0, now - rk.launched[L],
+            rk.boosted[L] and "boosted" or "not boosted yet"))
+    end
+    if rk.bchk[L] and now >= rk.bchk[L] and not rk.out[L] then
+        rk.bchk[L] = nil
+        local v = rk.spd[L]
+        log(string.format("special: rocket %s %d s after its boost: %s (Mission 19's boost 1000 km/h, its launch 280)", L,
+            BOOST_CHECK_S, v and string.format("%.0f km/h: %s", v, v >= 600 and "boosted" or "NOT boosted") or "its speed not read"))
+    end
+end
+
 local function rocketsTick(now, s)
     local rk, rc, t = s.rk, rcfg(), CFG.hud.text
     if not rk or rk.done then return end
-    if rk.setupAt and now >= rk.setupAt then
+    if rk.setupAt and now >= rk.setupAt and (rk.debLeft or 0) <= 0 then   -- (its debris units in first: their MinHealth)
         rk.setupAt = nil
         log("special: the rockets' split off until one is left, their debris held (RE_SV_SpRocketSplitOff " .. fire("RE_SV_SpRocketSplitOff") .. ")")
         local okM, errM = pcall(mapRockets, rk)
         if not okM then log("special: the rockets' objects error " .. tostring(errM)) end
     end
     rk.out, rk.lost, rk.alt = rk.out or {}, rk.lost or {}, rk.alt or {}
+    for _, k in ipairs({ "warned", "counted", "halfSaid", "lchk", "relaunched", "lwait", "logAt", "last", "spd", "bchk" }) do
+        rk[k] = rk[k] or {}
+    end
     local function over() return rk.kills + rocketsEscaped(rk) + rocketsLost(rk) end
+    local warnS, halfM = tonumber(rc.warn_s) or 15, tonumber(rc.half_m) or 10100
     for _, L in ipairs({ "A", "B" }) do
+        local left = rk.launch[L] - now
+        if not rk.launched[L] and over() < rk.n then          -- ((2026-11-11) its warning, then the count's last call
+            if not rk.warned[L] and left <= warnS and left > COUNT_S then
+                rk.warned[L] = true
+                local secs = math.ceil(left)
+                rkMoment(L, "warn", fmt(t.sp_rocket_warn, L, secs), t.sp_rocket_warn_sub, { rocket = L, s = secs }, "warn")
+            end
+            if not rk.counted[L] and left <= COUNT_S then
+                rk.counted[L] = true
+                rkMoment(L, "count", nil, nil, nil, "launch")
+            end
+        end
         if not rk.launched[L] and now >= rk.launch[L] and over() < rk.n then
             rk.launched[L] = now
-            hudCallout(t.sp_rocket_launch, t.sp_rocket_launch_sub)
+            fire("RE_SV_SpRocketHostOn")                       -- ((2026-11-11) again: a STORE may have eaten the first)
             log(string.format("special: rocket %s launched (RE_SV_SpRocketLaunch%s %s)", L, L, fire("RE_SV_SpRocketLaunch" .. L)))
+            rkMoment(L, "launch", fmt(t.sp_rocket_launch, L), t.sp_rocket_launch_sub, { rocket = L })
+            rk.lchk[L] = now + RELAUNCH_CHECK_S
+            rkSend(rk, L, "launched")
         end
         if rk.launched[L] and not rk.boosted[L] and now >= rk.launched[L] + (tonumber(rc.boost_s) or 12) then
             rk.boosted[L] = true
+            if rk.obj and rk.obj[L] then rk.bchk[L] = now + BOOST_CHECK_S end   -- (its speed read from its object)
             log(string.format("special: rocket %s boosted to Mission 19's 1000 km/h (%s)", L, fire("RE_SV_SpRocketBoost" .. L)))
         end
-        -- ((0.73.77) its height, the highest so far (m), from its object)
+        -- ((0.73.77) its height, the highest so far (m), from its object; (2026-11-11) its speed from the last look's spot)
         local o = rk.obj and rk.obj[L]
         if rk.launched[L] and not rk.out[L] and o then
             local p = posOf(o)
-            if p then rk.alt[L] = math.max(rk.alt[L] or -1e9, p.Z / 100) end
+            if p then
+                rk.alt[L] = math.max(rk.alt[L] or -1e9, p.Z / 100)
+                local q = rk.last[L]
+                if q and now > q.at then
+                    rk.spd[L] = math.sqrt((p.X - q.p.X) ^ 2 + (p.Y - q.p.Y) ^ 2 + (p.Z - q.p.Z) ^ 2) / (now - q.at) * 0.036
+                end
+                rk.last[L] = { p = p, at = now }
+            end
         end
+        local okR, errR = pcall(rocketWatch, now, s, rk, L, o)
+        if not okR and tostring(errR) ~= rk.watchErr then rk.watchErr = tostring(errR); log("special: the rockets' watch error " .. rk.watchErr) end
+        if rk.launched[L] and not rk.out[L] and not rk.halfSaid[L] then   -- halfway up: the callout again, big
+            local a, since = rk.alt[L], now - rk.launched[L]
+            if (a and a >= halfM) or (a == nil and not o and since >= HALF_NO_ALT_S) then
+                rk.halfSaid[L] = true
+                local km = (a or halfM) / 1000
+                rkMoment(L, "half", fmt(t.sp_rocket_half, L), fmt(t.sp_rocket_half_sub, km), { rocket = L, km = string.format("%.0f", km) })
+                rkSend(rk, L, "half")
+            end
+        end
+    end
+    if now >= (rk.stAt or 0) then                          -- ((2026-11-11) the host's word again every 10 s: a late joiner)
+        rk.stAt = now + 10
+        for L, st in pairs(rk.st or {}) do rkSend(rk, L, st) end
     end
     local f = svFlags() or {}                           -- escapes first: an escaped rocket's despawn isn't a kill
     local escMin = tonumber(rc.escape_min_m) or 15000
@@ -1107,13 +1367,15 @@ local function rocketsTick(now, s)
                 rk.escaped[L], rk.out[L] = now, "escaped"
                 -- ((0.73.77, I2: S9) off every game's zollars: SPORT.debit sends it to the joiners)
                 local took = SPORT.debit(rc.escape_penalty, "rocket " .. L .. " escaped")
-                hudCallout(t.sp_rocket_escaped, string.format(t.sp_rocket_escaped_sub, took))
                 log(string.format("special: rocket %s escaped (its climb's end%s, %.0f s after its launch): -%d zollars, no retake reward",
                     L, alt and string.format(" at %.0f m", alt) or "", since, took))
+                rkMoment(L, "escaped", t.sp_rocket_escaped, fmt(t.sp_rocket_escaped_sub, took), { rocket = L })
+                rkSend(rk, L, "escaped")
             else
                 rk.lost[L], rk.out[L] = now, "lost"
                 log(string.format("special: rocket %s's climb ended short (%s, %.0f s after its launch; an escape counts from %.0f m): "
                     .. "taken off, no penalty", L, alt and string.format("at %.0f m", alt) or "its height not read", since, escMin))
+                rkSend(rk, L, "lost")
             end
         end
     end
@@ -1133,30 +1395,37 @@ local function rocketsTick(now, s)
             end
             log(string.format("special: rocket %s neither shot down nor escaped %.0f s after its launch (%s): taken off, no penalty", L,
                 now - rk.launched[L], rk.alt[L] and string.format("at %.0f m", rk.alt[L]) or "its height not read"))
+            rkSend(rk, L, "lost")
         end
     end
     if rk.escPending > 0 and now > (rk.escUntil or 0) then rk.escPending = 0 end
     -- the kills: ((0.73.77) from each rocket's object when both were found) else by the unit's count, an escape's
     -- despawn not one
     local alive = aliveOf(ROCKETS, now) or rk.alive
-    local down = 0
+    local down, downL = 0, {}
     if rk.byObj then
         for _, L in ipairs({ "A", "B" }) do
-            if not rk.out[L] and rocketDown(rk.obj[L]) then rk.out[L] = "kill"; down = down + 1 end
+            if not rk.out[L] and rocketDown(rk.obj[L]) then rk.out[L] = "kill"; down = down + 1; downL[#downL + 1] = L end
         end
     elseif alive < rk.alive then
         down = rk.alive - alive
         local esc = math.min(down, rk.escPending)
         rk.escPending, down = rk.escPending - esc, down - esc
+        -- ((2026-11-11) which one, when only one can be: the one rocket in the air (the other on its pad is invincible)
+        local up = {}
+        for _, L in ipairs({ "A", "B" }) do if rk.launched[L] and not rk.out[L] then up[#up + 1] = L end end
+        if down == 1 and #up == 1 then rk.out[up[1]] = "kill"; downL[1] = up[1] end
     end
     if down > 0 then
         rk.kills, rk.lastKill = rk.kills + down, now
         local pay = tierPay(rc.rocket_pay or 0) * down
         addCredits(pay, "a rocket shot down")
         LB.stat("ground", down)
-        hudCallout(t.sp_rocket_down, string.format(t.sp_rocket_down_sub, specialPay(pay)))   -- ((0.73.78) C3)
         log(string.format("special: a rocket shot down (+%d); %d of %d down, %d escaped, %d taken off", pay, rk.kills, rk.n,
             rocketsEscaped(rk), rocketsLost(rk)))
+        local who = #downL > 0 and table.concat(downL, " and ") or nil
+        rkMoment(who, "down", t.sp_rocket_down, string.format(t.sp_rocket_down_sub, specialPay(pay)), { rocket = who }, "down")   -- ((0.73.78) C3)
+        for _, L in ipairs(downL) do rkSend(rk, L, "down") end
     end
     rk.alive = alive
     if over() >= 1 and over() < rk.n and not rk.splitOn then
@@ -1200,62 +1469,115 @@ end
 
 -- The round after a captured spaceport (specialFor: RUN.sport.retakeRound). Ctrl+INS (test only) forces it without a
 -- lost assault: the garrison for retake.test_troops troops, and no ships.
+-- ((2026-11-11, lag-4) Saint Alessia's round 50: the retake's start held the game thread ~0.75 s in one job, 33 fresh
+-- SV_UnitAlive asks and 14 spawns.) Its spawns and checks are queued here (s.jobs) and done by retakeJobs from its tick,
+-- at most one spawn or JOB_CHECKS checks a tick: the rockets first (their clocks and brief), their debris, the garrison
+-- (troops / per_unit units), the island, then each ship carried from the assault (a host by migration's spawned again).
+-- The round is busy until they're through; nothing of it come, its reward is withheld (s.empty).
+local JOB_CHECKS = 2
 function SPORT.retakeSpawn(now)
     local c, t = cfg(), CFG.hud.text
     if not nativeReady() then return false end
     local rs = RUN.sport or { troops = (c.retake and c.retake.test_troops) or 8, ships = {}, forced = true }
     RUN.sport = nil
     local s = D.special
-    s.state, s.at, s.ships, s.garrison, s.queue = "retake", now, {}, {}, {}
+    s.state, s.at, s.ships, s.garrison, s.queue, s.island = "retake", now, {}, {}, {}, {}
     -- ((0.73.77, I7: S12) the retake in play, for the joiners while it's on (SPORT.coopCode): a host migration starts it
     -- again on the new host)
     s.rs = { retakeRound = D.round, troops = rs.troops or 0, lostRound = rs.lostRound or 0 }
-    local again = {}
-    for unit, sh in pairs(rs.ships or {}) do
-        local a = aliveNow(unit) or 0
-        -- ((0.73.77) a host by migration: the old host's ships here were its copies, taken down with them: spawned again)
-        if a <= 0 and rs.fromHost and SHIP[unit] then
-            local r = spawn(unit)
-            a = r > 0 and r or 0
-            again[#again + 1] = unit:sub(#"SV_Unit_Sp" + 1) .. " " .. said(r)
-        end
-        if a > 0 then s.ships[unit] = { kind = sh.kind, group = sh.group, alive = a } end
-    end
-    if #again > 0 then
-        log("special: the retake's ships spawned again on this game (a host migration took the old host's copies down): "
-            .. table.concat(again, ", "))
-    end
+    s.forced = rs.forced
+    local jobs = {}
+    if rcfg().enabled == false then log("special: the retake's rockets are off ([specials.spaceport.retake.rockets] enabled)")
+    else jobs[#jobs + 1] = { k = "rk" } end
     local per = math.max(1, math.floor(tonumber(c.retake and c.retake.per_unit) or 4))
     local need = math.max(1, math.min(#GARRISON, math.ceil((rs.troops or 0) / per)))
-    local n = 0
-    for i = 1, need do
-        local u = "SV_Unit_SpGarrison" .. GARRISON[i]
-        local r = (aliveNow(u) or 1) <= 0 and spawn(u) or -100
-        if r > 0 then s.garrison[u] = { alive = r }; n = n + r end
-        log(string.format("special: the spaceport's garrison %s: %s", u, r == -100 and "still up from before" or said(r)))
-    end
-    local nr = rocketsSpawn(now, s)
-    local ni, isl = 0, {}
+    for i = 1, need do jobs[#jobs + 1] = { k = "gar", unit = "SV_Unit_SpGarrison" .. GARRISON[i] } end
     local ic = c.retake and c.retake.island or {}
-    s.island = {}
     if ic.enabled ~= false then
-        for _, it in ipairs(ISLAND) do
-            local r = (aliveNow(it[1]) or 1) <= 0 and spawn(it[1]) or -100
-            if r > 0 then s.island[it[1]] = { alive = r, kind = it[2] }; ni = ni + r end
-            isl[#isl + 1] = it[1]:sub(#"SV_Unit_SpIsl" + 1) .. " " .. (r == -100 and "still up from before" or said(r))
-        end
-        log("special: the island's defences and armour: " .. table.concat(isl, ", "))
+        for _, it in ipairs(ISLAND) do jobs[#jobs + 1] = { k = "isl", unit = it[1], kind = it[2] } end
     end
-    if n == 0 and ni == 0 and SPORT.shipsUp(s) == 0 and nr == 0 then log("special: no garrison, island enemies, ships or rockets for the retake; a normal round"); return false end
+    local units = {}
+    for unit, sh in pairs(rs.ships or {}) do if type(sh) == "table" then units[#units + 1] = unit end end
+    table.sort(units)
+    for _, unit in ipairs(units) do
+        local sh = rs.ships[unit]
+        jobs[#jobs + 1] = { k = "ship", unit = unit, kind = sh.kind, group = sh.group, again = rs.fromHost and SHIP[unit] ~= nil }
+    end
+    s.jobs, s.shipJobs, s.jl = jobs, #units, { n = 0, ni = 0, isl = {}, again = {}, island = ic.enabled ~= false }
     hudCallout(t.sp_retake_go, t.sp_retake_go_sub)
-    log(string.format("special: round %d, the Spaceport Retake: %d garrison vehicles, %d island enemies, %d ships from the assault%s",
-        D.round, n, ni, SPORT.shipsUp(s), rs.forced and " (forced)" or ""))
+    log(string.format("special: round %d, the Spaceport Retake starts: %d spawns and checks queued (a spawn or %d checks a tick)%s",
+        D.round, #jobs, JOB_CHECKS, rs.forced and " (forced)" or ""))
     return true
 end
 
+-- one queued spawn or check of the retake; whether it spawned (that tick's last)
+local function retakeJob(now, s, j)
+    local jl = s.jl
+    if j.k == "rk" then
+        if rocketsSpawn(now, s) then
+            for i = #DEBRIS, 1, -1 do table.insert(s.jobs, 1, { k = "deb", unit = DEBRIS[i] }) end
+        end
+        return true
+    elseif j.k == "deb" then
+        return debrisSpawn(s, j.unit)
+    elseif j.k == "gar" or j.k == "isl" then
+        local free = (aliveNow(j.unit) or 1) <= 0
+        local r = free and spawn(j.unit) or -100
+        if j.k == "gar" then
+            if r > 0 then s.garrison[j.unit] = { alive = r }; jl.n = jl.n + r end
+            log(string.format("special: the spaceport's garrison %s: %s", j.unit, r == -100 and "still up from before" or said(r)))
+        else
+            if r > 0 then s.island[j.unit] = { alive = r, kind = j.kind }; jl.ni = jl.ni + r end
+            jl.isl[#jl.isl + 1] = j.unit:sub(#"SV_Unit_SpIsl" + 1) .. " " .. (r == -100 and "still up from before" or said(r))
+        end
+        return free
+    elseif j.k == "ship" then
+        s.shipJobs = math.max(0, (s.shipJobs or 1) - 1)
+        local a, spawned = aliveNow(j.unit) or 0, false
+        -- ((0.73.77) a host by migration: the old host's ships here were its copies, taken down with them: spawned again)
+        if a <= 0 and j.again then
+            local r = spawn(j.unit)
+            a, spawned = r > 0 and r or 0, true
+            jl.again[#jl.again + 1] = j.unit:sub(#"SV_Unit_Sp" + 1) .. " " .. said(r)
+        end
+        if a > 0 then s.ships[j.unit] = { kind = j.kind, group = j.group, alive = a } end
+        return spawned
+    end
+    return false
+end
+-- (from the retake's tick, every tick while any are queued) the next of them; once through, what came
+local function retakeJobs(now, s)
+    local checks = 0
+    while s.jobs and s.jobs[1] do
+        local j = table.remove(s.jobs, 1)
+        local okJ, spawned = pcall(retakeJob, now, s, j)
+        if not okJ then log("special: the retake's " .. tostring(j.k) .. " " .. tostring(j.unit or "") .. " error " .. tostring(spawned)) end
+        checks = checks + 1
+        if (okJ and spawned) or checks >= JOB_CHECKS then break end
+    end
+    if s.jobs and #s.jobs == 0 then
+        local jl = s.jl or { n = 0, ni = 0, isl = {}, again = {} }
+        s.jobs, s.shipJobs = nil, 0
+        if #jl.again > 0 then
+            log("special: the retake's ships spawned again on this game (a host migration took the old host's copies down): "
+                .. table.concat(jl.again, ", "))
+        end
+        if jl.island then log("special: the island's defences and armour: " .. table.concat(jl.isl, ", ")) end
+        if jl.n == 0 and jl.ni == 0 and SPORT.shipsUp(s) == 0 and not s.rk then
+            s.empty = true
+            log("special: no garrison, island enemies, ships or rockets came for the retake: its reward is withheld")
+        end
+        log(string.format("special: round %d, the Spaceport Retake: %d garrison vehicles, %d island enemies, %d ships from the "
+            .. "assault%s (its spawns and checks %.1f s after its start)", D.round, jl.n, jl.ni, SPORT.shipsUp(s),
+            s.forced and " (forced)" or "", now - (s.at or now)))
+    end
+end
+
 function SPORT.retakeTick(now, s)
-    if s.state ~= "retake" or now < (s.nextAt or 0) then return end
+    if s.state ~= "retake" then return end
     if levelGoing() then return end                  -- ((0.73.77) no pay while the level goes away)
+    if s.jobs then retakeJobs(now, s) end            -- ((2026-11-11, lag-4) its spawns and checks, every tick)
+    if now < (s.nextAt or 0) then return end
     s.nextAt = now + 1
     ALIVE.tick(now)                                  -- ((0.73.80) roundsTick's own already: the same tick, no second budget)
     local c = cfg()
@@ -1263,7 +1585,7 @@ function SPORT.retakeTick(now, s)
     shipsTick(s, now)
     for unit, x in pairs(s.garrison) do
         if x.alive > 0 then
-            local a = aliveOf(unit, now) or x.alive
+            local a = aliveOf(unit, now, UNIT_AGE_S) or x.alive
             if a < x.alive then
                 addCredits(tierPay(c.retake and c.retake.garrison_pay or 0) * (x.alive - a), "the spaceport's garrison: a vehicle down")
                 LB.stat("ground", x.alive - a)
@@ -1277,7 +1599,7 @@ function SPORT.retakeTick(now, s)
     local ic = c.retake and c.retake.island or {}
     for unit, x in pairs(s.island or {}) do
         if x.alive > 0 then
-            local a = aliveOf(unit, now) or x.alive
+            local a = aliveOf(unit, now, UNIT_AGE_S) or x.alive
             if a < x.alive then
                 addCredits(tierPay((x.kind == "ad" and ic.ad_pay or ic.armour_pay) or 0) * (x.alive - a),
                     x.kind == "ad" and "the island's air defences: one down" or "the island's armour: one down")
@@ -1293,6 +1615,7 @@ end
 
 function SPORT.retakeBusy(s)
     if s.state ~= "retake" then return false end
+    if s.jobs and #s.jobs > 0 then return true end              -- ((2026-11-11) its spawns still queued)
     for _, x in pairs(s.garrison or {}) do if x.alive > 0 then return true end end
     if s.rk and not s.rk.done then return true end                -- (a rocket or its debris still up)
     for _, x in pairs(s.island or {}) do if x.alive > 0 then return true end end
@@ -1318,9 +1641,14 @@ function SPORT.retakeOver(now, s)
         log(string.format("special: the retake's reward withheld: %d rocket%s escaped", esc, esc == 1 and "" or "s"))
         pay = 0
     end
+    if s.empty then                                         -- ((2026-11-11) nothing of it came: retakeJobs)
+        log("special: the retake's reward withheld: none of its garrison, island enemies, ships or rockets came")
+        pay = 0
+    end
     addCredits(pay, "spaceport retaken")
     LB.special("retake", true, now - (s.at or now))
-    hudCallout(t.sp_retaken, string.format(t.sp_retaken_sub, specialPay(pay)))   -- ((0.73.78) C3: each player's share)
+    -- ((0.73.78) C3: each player's share; (2026-11-11) a withheld reward says why: joiner-1)
+    hudCallout(t.sp_retaken, esc > 0 and fmt(t.sp_retaken_esc_sub, esc) or string.format(t.sp_retaken_sub, specialPay(pay)))
     log(string.format("special: round %d, the spaceport was retaken", D.round))
 end
 
@@ -1434,6 +1762,10 @@ function SPORT.coopCode()
         local g = 0
         for _, x in pairs(s.garrison or {}) do g = g + math.max(0, x.alive) end
         row = string.format("r:%d:%d", g, SPORT.shipsUp(s))
+        if s.rk then                                     -- ((2026-11-11) each rocket's token: SPORT.rkToken)
+            local now = D and tonumber(D.now) or 0
+            row = row .. ":" .. SPORT.rkToken(s.rk, "A", now) .. ":" .. SPORT.rkToken(s.rk, "B", now)
+        end
     end
     local rs, ships = RUN.sport, {}
     if rs then
@@ -1441,6 +1773,9 @@ function SPORT.coopCode()
     elseif s and s.kind == "retake" and s.state == "retake" and s.rs then
         rs = s.rs
         for unit, sh in pairs(s.ships or {}) do if afloat(sh) then ships[#ships + 1] = unit:sub(#"SV_Unit_Sp" + 1) end end
+        for _, j in ipairs(s.jobs or {}) do                -- ((2026-11-11) its ship checks still queued)
+            if j.k == "ship" then ships[#ships + 1] = j.unit:sub(#"SV_Unit_Sp" + 1) end
+        end
     end
     local pend = "-"
     if rs then
@@ -1462,8 +1797,21 @@ function SPORT.fromHost(code)
     if a1 and num(a1, 100) and num(a2, 200) and num(a3, 100) and (a4 == "" or num(a4, 24)) then
         h = { kind = "a", a = num(a1, 100), b = num(a2, 200), c = num(a3, 100), d = a4 ~= "" and num(a4, 24) or 0 }
     else
-        local r1, r2 = row:match("^r:(%d+):(%d+)$")
-        if r1 and num(r1, 100) and num(r2, 100) then h = { kind = "r", a = num(r1, 100), b = num(r2, 100) } end
+        -- ((2026-11-11) and each rocket's token, "p<s>" / "u<n>" / "u" / "d" / "e" / "x" / "-": SPORT.rkToken)
+        local r1, r2, t1, t2 = row:match("^r:(%d+):(%d+)$")
+        if not r1 then r1, r2, t1, t2 = row:match("^r:(%d+):(%d+):([pudex%-]%d*):([pudex%-]%d*)$") end
+        local function tok(v)
+            if v == nil then return nil end
+            local c, d = v:sub(1, 1), v:sub(2)
+            if c == "p" or c == "u" then
+                if d == "" then return c == "u" and v or nil end
+                return (#d <= 4 and num(d, 9999)) and v or nil
+            end
+            return d == "" and v or nil
+        end
+        if r1 and num(r1, 100) and num(r2, 100) and (t1 == nil or (tok(t1) and tok(t2))) then
+            h = { kind = "r", a = num(r1, 100), b = num(r2, 100), ra = tok(t1), rb = tok(t2) }
+        end
     end
     if h then h.got = os.clock() end
     SPORT.hostRow = h
@@ -1496,7 +1844,7 @@ function SPORT.clientRow(t)
     if h.kind == "a" then
         return string.format(t.sp_row, h.a, h.b, h.c) .. (((h.d or 0) > 0 and t.sp_row_tu160) and string.format(t.sp_row_tu160, h.d) or "")
     end
-    if h.kind == "r" then return string.format(t.sp_retake_row, h.a, h.b) end
+    if h.kind == "r" then return string.format(t.sp_retake_row, h.a, h.b) .. SPORT.rkRow(t, h.ra, h.rb) end
     return nil
 end
 end

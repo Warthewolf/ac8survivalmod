@@ -1,0 +1,55 @@
+SURVIVAL MODE DEV INSTALL - KEY LIST (FROM 0.74.49)
+Build: VALKA=1 ZFA=1 TANI=1 sh tools/package_dev.sh (test keys kept). [ZFA=1] / [TANI=1] / [VALKA=1]: that part only works
+with it in the build. Every key is Ctrl+ unless said. Any test key makes that run unranked (LUA LOG "leaderboard: test
+key <key> pressed: this run won't be ranked"). In co-op press them as HOST; the joiners follow your round.
+The [ ] \ ; / ' keys are UE4SS's OEM_ names for a US layout (OEM_FOUR [, OEM_SIX ], OEM_FIVE \, OEM_ONE ;, OEM_TWO /,
+OEM_SEVEN '): on another layout it's the key Windows calls that.
+
+TEST KEYS NEW SINCE 0.74.0
+  Ctrl+[   (OEM_FOUR)    AC7's laser: a volley now on every ZFA-44's laser, the beam with no missile near   [ZFA=1]
+  Ctrl+T                 THE TANICORN's test mount 3 km ahead of your nose at 7 m (sea level: point at open sea first),
+                         watched 60 s (Ctrl+` was the console's)   [TANI=1]
+  Ctrl+]   (OEM_SIX)     the storm build-up: Distant Thunder in 3 rounds, stages 1-3 the rounds before; again: it clears
+  Ctrl+'   (OEM_SEVEN)   the storm's stages by hand: 1, 2, 3, 4 (the typhoon), the next press clears it
+  Ctrl+\   (OEM_FIVE)    cloud lightning probe, 5 km ahead and 3 km up, one a press: Mission 9's, 12's, 22's cloud light,
+                         Survival's own effect light, the bolt alone
+  Ctrl+;   (OEM_ONE)     cloud layout probe, a step a press: 1 load, 2 Mission 12's layout in, 3 ForceUpdate,
+                         4 SetResources, 5 back (answered in 0.74.42: the pointer alone swaps it)
+  Ctrl+/   (OEM_TWO)     sky probe: one group of Mission 12's storm sky written 3 times a press (1 the control, 2 light,
+                         3 density, 4 heights, 5 thickness, 6 edges, 7 rain clouds, 8 layers, 9 the rain pillar; answered
+                         in 0.74.39: heights, rain clouds and the pillar black the sky out)
+
+TEST KEYS FROM 0.74.0 (still bound)
+  Ctrl+HOME        GONE FISHIN' now (the fishing round; starts the sunset)
+  Ctrl+PAGE_UP     THE FESTIVAL next round (the sky jumps to the arc's sunset for it)
+  Ctrl+PAGE_DOWN   the day-night sky one round on (sunset -> night -> sunrise -> midday)
+  Ctrl+0           next round: THE ESCORT (CHARLENE, the B-1 and her four escorts)
+  Ctrl+-  (minus)  next round: THE DECOY / SHOOT DOWN THE RECON DRONE (then the Spear UAVs)
+  Ctrl+.  (period) next round: IFF FATAL ERROR / DI..ANT TH..D..R (the lightning A-10; never in the rotation: only this
+                   key, or Ctrl+]'s build-up at its round, brings it)
+  Ctrl+,  (comma)  storm test: a storm on you for 60 s (Survival's own strikes: each takes 10% of your health and can
+                   shoot you down; controls upset 1.5 s); again: the stall made 3 s; again: off
+  Ctrl+F10   fishing test: one fishing ground's 8 shoals + SAL's boat (2nd press: hit spheres on / off for the next
+             spawn, the shoals up keep theirs; 3rd: all off; 4th: spawn again)
+  Ctrl+F12   festival test: one cruise-missile salvo from the north at the runway + the air raid siren for 20 s
+  Ctrl+F6    sky test, a step a press: 1 read, 2 sunset, 3 sun only, 4 night, 5 put everything back
+  Ctrl+F5    escort landing test: CHARLENE alone on final, no enemies (her final, rollout, taxi and stop logged)
+  Ctrl+DEL   VAMPIRES (the ZFA-44 carriers) unlocked + one sent now   (the ZFA-44 look and AC7's laser: [ZFA=1])
+  Ctrl+9     ZFA-44 look test: the nearest enemy (or VALKA) dressed as the ZFA-44, a new paint each time; again: undone
+             [ZFA=1]
+  Ctrl+=     DECOY Spear test: the Tonitrus Spear called on you
+  Ctrl+BACKSPACE   DECOY lock test: one Spear UAV 3 km ahead locks you; kill it inside 8 s, or let it strike
+
+OLDER TEST KEYS
+  Ctrl+1 shuttle (COMONA DEFENSE), Ctrl+2 THE ANOMALY, Ctrl+3 AMPHIBIOUS ASSAULT, Ctrl+4 THE LADONS, Ctrl+5 THE ALICORN,
+  Ctrl+7 AB.L..IN, Ctrl+8 VALKA [VALKA=1], Ctrl+END SPACEPORT ASSAULT, Ctrl+INS SPACEPORT RETAKE   (next round)
+  Ctrl+6 a top-tier ace flight now, Ctrl+F9 +5,000 zollars, Ctrl+F11 the bomber-raid recycle test (again: stop),
+  Ctrl+F8 open the Survival map from the main menu
+  In the break between rounds, a next-round key starts that special 3 s later. During a fight it becomes the next round.
+
+EVERYDAY KEYS (every build)
+  Ctrl+F1 / F2 / F3   use a bought tactical item: airstrike / ECM burst / decoy
+  Ctrl+F4             give your allies their next order
+  I                   show / hide the info wall (the CO-OP row is on it)   ([hud.info] key)
+  O                   while shot down in co-op: watch the next player     ([coop.revive] key)
+  Ctrl+F7             save the live HUD layout to hud_dump.txt (for bug reports)

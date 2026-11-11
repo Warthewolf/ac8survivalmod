@@ -57,7 +57,9 @@ local function json(r)
                 ac and (',"aircraft":' .. jstr(ac)) or "", math.floor(p.air), math.floor(p.ground), math.floor(p.revives),
                 p.host and ',"host":true' or "")
         end
-        co = string.format(',"coop":{"players":%d,"squad":[%s]}', #sq, table.concat(sq, ","))
+        -- ((2026-11-11) "takeover":true: this game took the run over by host migration and nobody joined it, LB.coopRecord)
+        co = string.format(',"coop":{"players":%d,"squad":[%s]%s}', #sq, table.concat(sq, ","),
+            r.coop.takeover and ',"takeover":true' or "")
     end
     return string.format('{"v":1,"run_id":%s,"pilot":%s,"difficulty":%s,"round":%d,"mod":%s,"kills":{"air":%d,"ground":%d},'
         .. '"zollars":{"earned":%d,"spent":%d},"time_s":%d,"ended":%s,"how":%s,"aces":%d,"allies":%d,"af_down":%d,'
@@ -80,6 +82,7 @@ end
 --         link, your name, your keys and camera);
 --       in any section: texts (a "text" or "sounds" table, labels, display names, ace callsigns: translations), key
 --         bindings (key, keys, ctrl, *_key) and camera settings;
+--       the retake rockets' warnings (specials.spaceport.retake.rockets radio, warn_s, half_m, big_x, log_s, subs);
 --     in a co-op run (sent only with [coop] leaderboard = true) the room's rules count too: the host's setup and
 --     [coop] aircraft_per_player, max_aircraft, max_up, split_share and the revives (but for each player's key and camera).
 --     Counted although co-op leaves them to each player: tells (their lead times hold the enemies' moves), profile and
@@ -95,6 +98,10 @@ local EDIT_FREE_PART = { text = true, sounds = true, camera = true }
 local EDIT_FREE_LEAF = { key = true, keys = true, ctrl = true, label = true, what = true, name = true, squadron = true,
                          title = true, help = true }
 local EDIT_COOP = { aircraft_per_player = true, max_aircraft = true, max_up = true, split_share = true, revive = true }
+-- ((review of 2026-11-11, rockets-1) the retake rockets' warnings: only on screen, on the radio or in the log (the
+-- launches come from launch_a_s / launch_b_s, counted). Tied to their path: tells' radio and the Alicorn deck's warn_s
+-- hold the enemies' moves and are counted.
+local EDIT_FREE_RK = { radio = true, warn_s = true, half_m = true, big_x = true, log_s = true, subs = true }
 local function editFree(p, v, coopRun)
     local top = p[1]
     if top == "coop" then
@@ -106,6 +113,7 @@ local function editFree(p, v, coopRun)
     local leaf = tostring(p[#p])
     if EDIT_FREE_LEAF[leaf] or leaf:match("_key$") or leaf:match("sound") then return true end
     if top == "aces" and #p == 3 and p[2] ~= "flight" and type(v) == "string" then return true end   -- (callsigns)
+    if top == "specials" and p[2] == "spaceport" and p[3] == "retake" and p[4] == "rockets" and EDIT_FREE_RK[p[5]] then return true end
     return false
 end
 local function shown(v)
@@ -173,8 +181,33 @@ end
 -- KEEP_DAYS from its first refusal: once its build is registered the Worker takes it (its run_id de-duplicates). It
 -- comes off the file once the server takes it, refuses it for any other reason, or it's KEEP_DAYS old; the file goes
 -- when it's empty (as pending_runs.txt). A run edited by the player (LB.edited) is never sent, so never kept.
+-- ((2026-11-11) Saint Alessia's 50-round co-op run: answered {"ok":true,"duplicate":true} and lost) A co-op run answered
+-- as a duplicate by a leaderboard from before 2026-11-11 (its first copy kept, whatever went further: no "stored" in
+-- the answer) is kept the same way, its line "<at>\t<tries>\tdup\t<body>": the leaderboard of 2026-11-11 keeps a co-op
+-- run's furthest copy, so it's taken once that one's deployed. A duplicate that says what's stored is final.
 local KEEP_FILE, KEEP_MAX, KEEP_DAYS, KEEP_FIRST_S, KEEP_GAP_S = "refused_runs.txt", 20, 14, 30, 60
 local function unknownBuild(st, err) return st == 422 and type(err) == "string" and err:find("unknown build", 1, true) ~= nil end
+local function isCoopBody(body) return type(body) == "string" and body:find('"coop":{', 1, true) ~= nil end
+-- a 200's duplicate: nil (not one), "same" (the copy stored is this one: a resend after a lost reply, taken), "final" (the
+-- leaderboard compared the copies: what it keeps is as far, or a reset took the run off), "old" (a leaderboard from before
+-- 2026-11-11: the first copy kept, a further one never compared)
+local function dupKind(reply)
+    if not reply:find('"duplicate":true', 1, true) then return nil end
+    if reply:find('"same":true', 1, true) then return "same" end
+    if reply:find('"stored":{', 1, true) or reply:find('"archived":true', 1, true) then return "final" end
+    return "old"
+end
+-- a final duplicate's words: what the leaderboard keeps ("pilot X, round N: why"), or that a reset took it off
+local function dupSaid(reply)
+    if reply:find('"archived":true', 1, true) then return "a reset of the boards took this run off; it comes back with the reset's undo" end
+    local pilot = reply:match('"stored":{"pilot":"([^"]*)"') or "?"
+    local round = reply:match('"stored":{[^}]-"round":(%d+)') or "?"
+    local why = reply:match('"why":"([^"]*)"')
+    return string.format("its copy from %s, round %s%s", pilot, round, why and (": " .. why) or "")
+end
+local function keptWhy(k)                         -- (the log's words for why a run is kept)
+    return k.why == "dup" and "answered as a duplicate by an older leaderboard" or "refused as an unknown build"
+end
 local function runTag(body)                       -- "run 1a2b3c4d, round 31, pilot Omega" (the body's first pilot: the run's)
     return string.format("run %s, round %s, pilot %s", tostring(body:match('"run_id":"(%x+)"') or "?"):sub(1, 8),
         body:match('"round":(%d+)') or "?", body:match('"pilot":"([^"]*)"') or "?")
@@ -183,14 +216,16 @@ local function daysAgo(at) return math.max(0, math.floor((os.time() - at) / 8640
 local function saveKept()
     while #LB.kept > KEEP_MAX do
         local k = table.remove(LB.kept, 1)
-        log(string.format("leaderboard: refused_runs.txt keeps %d runs at most: the oldest (%s, refused as an unknown build %d days ago) dropped",
-            KEEP_MAX, runTag(k.body), daysAgo(k.at)))
+        log(string.format("leaderboard: refused_runs.txt keeps %d runs at most: the oldest (%s, %s %d days ago) dropped",
+            KEEP_MAX, runTag(k.body), keptWhy(k), daysAgo(k.at)))
     end
     local path = configDir() .. KEEP_FILE
     if #LB.kept == 0 then os.remove(path); return end
     local f = io.open(path, "w")
     if not f then return end
-    for _, k in ipairs(LB.kept) do f:write(string.format("%d\t%d\t%s\n", k.at, k.tries, k.body)) end
+    for _, k in ipairs(LB.kept) do
+        f:write(string.format("%d\t%d\t%s%s\n", k.at, k.tries, k.why == "dup" and "dup\t" or "", k.body))
+    end
     f:close()
 end
 -- (once a game start) the kept runs, each due to be sent again this start; those KEEP_DAYS old dropped
@@ -202,16 +237,19 @@ local function loadKept()
     local now, old, n = os.time(), 0, 0
     for line in f:lines() do
         local at, tries, body = line:match("^(%d+)\t(%d+)\t({.*})%s*$")
+        local why = nil
+        if not body then at, tries, why, body = line:match("^(%d+)\t(%d+)\t(dup)\t({.*})%s*$") end
         at, tries = tonumber(at), tonumber(tries)
         if at and tries and body then
             n = n + 1
             at = math.min(at, now)                        -- (a clock set back: counted from now)
+            local k = { at = at, tries = tries, body = body, due = true, why = why }
             if now - at > KEEP_DAYS * 86400 then
                 old = old + 1
-                log(string.format("leaderboard: a run refused as an unknown build %d days ago (%s) dropped: kept %d days at most",
-                    daysAgo(at), runTag(body), KEEP_DAYS))
+                log(string.format("leaderboard: a run %s %d days ago (%s) dropped: kept %d days at most",
+                    keptWhy(k), daysAgo(at), runTag(body), KEEP_DAYS))
             else
-                LB.kept[#LB.kept + 1] = { at = at, tries = tries, body = body, due = true }
+                LB.kept[#LB.kept + 1] = k
             end
         end
     end
@@ -224,21 +262,25 @@ local function loadKept()
     end
     return LB.kept
 end
--- (LB.poll) a run just refused as an unknown build: kept (once; a run already kept keeps its first date)
-local function keepRefused(body)
+-- (LB.poll) a run just refused as an unknown build (why nil), or a co-op run an older leaderboard answered as a
+-- duplicate (why "dup"): kept (once; a run already kept keeps its first date)
+local function keepRefused(body, why)
     if not body:find('"edited":[]', 1, true) then return end         -- (an edited run: never sent, never kept)
     local kept, id = loadKept(), body:match('"run_id":"(%x+)"')
+    local new = { at = os.time(), tries = 0, body = body, due = false, why = why }
     for _, k in ipairs(kept) do
         if k.body == body or (id and k.body:match('"run_id":"(%x+)"') == id) then
-            log(string.format("leaderboard: a run refused as an unknown build is kept already (%s, first refused %d days ago)",
+            log(string.format("leaderboard: a run %s is kept already (%s, first kept %d days ago)", keptWhy(new),
                 runTag(body), daysAgo(k.at)))
             return
         end
     end
-    kept[#kept + 1] = { at = os.time(), tries = 0, body = body, due = false }
+    kept[#kept + 1] = new
     saveKept()
-    log(string.format("leaderboard: a run refused as an unknown build kept to resend at later game starts, from the main menu, for %d days "
-        .. "(%s; %d kept in %s; register this build's hash on /admin and it's taken)", KEEP_DAYS, runTag(body), #LB.kept, KEEP_FILE))
+    log(string.format("leaderboard: a run %s kept to resend at later game starts, from the main menu, for %d days "
+        .. "(%s; %d kept in %s; %s)", keptWhy(new), KEEP_DAYS, runTag(body), #LB.kept, KEEP_FILE,
+        why == "dup" and "the leaderboard of 2026-11-11 keeps a co-op run's furthest copy: deployed, it takes this one if it went further"
+        or "register this build's hash on /admin and it's taken"))
 end
 -- ONLINE ONLY END
 local function money(n) return tostring(math.floor(n)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "") end
@@ -316,8 +358,12 @@ end
 -- each joiner answers lb|n with its leaderboard pilot name), so a host by host migration (sv_coop.lua becomeHost ->
 -- LB.coopTakeover) carries the run on and sends it under the same run id, the old host in its squad. A joiner sends
 -- nothing; a run nobody else flew in goes as a solo run. The host sends at its run's end (died, restart, left: a host
--- quitting to the main menu keeps the link, so the others' runs stop there too); a run it sent isn't sent again by a
--- host by migration (the Worker would refuse the run id twice).
+-- quitting to the main menu keeps the link, so the others' runs stop there too). ((2026-11-11) Saint Alessia's 50-round
+-- run: a joiner whose own link had dropped took the run over alone, ended its copy at round 35 and sent it first; her
+-- round-51 copy was answered duplicate and lost.) Every game that ends the run as its host sends its copy, a host by
+-- migration's too after its first host sent (lb|x is only said in the log now): the leaderboard of 2026-11-11 keeps the
+-- furthest copy (leaderboard/src/index.js supersedes). A takeover nobody joined says so ("takeover":true, co.takeover),
+-- and a duplicate answer to a co-op copy is logged as NOT stored (LB.poll).
 LB.co = nil
 do
 local RESEND_S, BATCH_S, MAX_SQUAD, PACK = 30, 2, 24, 800
@@ -437,6 +483,13 @@ end
 local function hostTick(now)
     local co, st = hostRun(now)
     squadNow(co)
+    -- ((2026-11-11) a host by migration: another player joined it, so its copy isn't a lone takeover's)
+    local tk = co.takeover
+    if tk and not tk.joined and type(playerCount) == "function" and playerCount() >= 2 then
+        tk.joined = true
+        log(string.format("leaderboard: co-op run %s: a player joined this game, the host by migration %d s after it took "
+            .. "the run over: its copy isn't a lone takeover's", id8(co), os.time() - (tk.at or os.time())))
+    end
     if now < (co.outAt or 0) then return end
     co.outAt = now + BATCH_S
     local linked = COOP.linked and COOP.linked() or 0
@@ -521,11 +574,15 @@ function LB.coopKill(slot, e)
     LB.coopTally(slot, e.key and "ground" or "air", 1)
 end
 -- (a joiner becoming the host by migration: sv_coop.lua becomeHost) the co-op run it was in goes on here
+-- ((2026-11-11) co.takeover: when, and whether a player joined this game since (hostTick, lb|n): a takeover nobody
+-- joined is sent marked, LB.coopRecord. Never deferred: hostRun needs co.adopt now, or it makes a new run id and a lone
+-- host's run goes as a solo run.)
 function LB.coopTakeover()
     local co = LB.co
     if co and not co.mine then
-        co.adopt = true
-        log("leaderboard: co-op run " .. id8(co) .. ": this game takes it over (host migration); it sends the run")
+        co.adopt, co.takeover = true, { at = os.time(), joined = false }
+        log("leaderboard: co-op run " .. id8(co) .. ": this game takes it over (host migration); it sends the run"
+            .. (co.sent and " too (its first host sent its copy already: the leaderboard keeps the furthest)" or ""))
     end
 end
 -- The leaderboard's messages (sv_coop.lua hands them over): from a joiner (from set) lb|n|<run id>|<pilot>; from the host
@@ -537,6 +594,11 @@ function LB.coopMsg(f, from)
     local co = LB.co
     if from ~= nil then
         if k == "n" and co and co.mine and co.id == id and COOP.slotOk(from) and from ~= mySlot() then
+            if co.takeover and not co.takeover.joined then     -- ((2026-11-11) a player in the run with this host by migration)
+                co.takeover.joined = true
+                log(string.format("leaderboard: co-op run %s: player %d is in it with this game, the host by migration: its "
+                    .. "copy isn't a lone takeover's", id8(co), from + 1))
+            end
             local nm = cleanName(f[4])
             if nm == "" then return end
             co.pnames = co.pnames or {}
@@ -553,7 +615,7 @@ function LB.coopMsg(f, from)
     if COOP.host() then return end                              -- (this game hosts: its own run's word)
     if co and (co.mine or co.adopt) then
         -- (a run this game hosted before it joined; or the same one: a takeover undone, sv_coop.lua migStepBack)
-        if co.id == id then co.mine, co.adopt, co.stats = false, nil, nil else co = nil end
+        if co.id == id then co.mine, co.adopt, co.stats, co.takeover = false, nil, nil, nil else co = nil end
     end
     if not co or co.id ~= id then
         co = { id = id, mine = false, squad = {}, n = 0, specials = {}, run = {} }
@@ -620,8 +682,19 @@ function LB.coopRecord(r, st, how)
     r.run_id, r.kills, r.coop, r.coopSent = co.id, { air = air, ground = ground }, { players = #sq, squad = sq }, co.sent
     log(string.format("leaderboard: co-op run %s over (%s): %d players (air / ground kills / revives given): %s", id8(co),
         tostring(how), #sq, table.concat(said, ", ")))
+    -- ((2026-11-11) a takeover nobody joined: maybe this game's own link was the one that dropped while its first host
+    -- played on (NotMexi's of 2026-11-10). Sent all the same, marked: it may be the run's only copy (its first host
+    -- gone), and the leaderboard keeps the furthest, a first host's further copy over this one.)
+    local tk = co.takeover
+    if tk and not tk.joined then
+        r.coop.takeover = true
+        log(string.format("leaderboard: co-op run %s: this game took it over by host migration %d s ago and nobody joined it "
+            .. "(its own link may be the one that dropped while its first host played on): sent marked as a lone takeover; "
+            .. "the leaderboard keeps the run's furthest copy", id8(co), os.time() - (tk.at or os.time())))
+    end
 end
--- (LB.send, the host's co-op run sent) everyone told, so a host by migration doesn't send it again
+-- (LB.send, the host's co-op run sent) everyone told (lb|x): ((2026-11-11) only said in the log now; a host by
+-- migration sends its own copy all the same, the leaderboard keeping the furthest)
 function LB.coopSent(r)
     local co = LB.co
     if r and r.coop and co and co.mine and r.run_id == co.id then
@@ -687,17 +760,17 @@ local function post(body, sh, kept)
 end
 
 function LB.send(sh)
-    -- ((0.73.77) a co-op run is sent once, by its host, LB.coopRecord: a joiner's never; a host by migration's not again
-    -- when its first host sent it)
+    -- ((0.73.77) a co-op run is sent by its host, LB.coopRecord: a joiner's never. ((2026-11-11) A host by migration's
+    -- too when its first host sent its copy already: the leaderboard keeps the furthest copy of a co-op run, and a copy
+    -- held back here was how a further one could be lost.)
     if sh.run.coopJoiner then
         sh.state = "host"
         log("leaderboard: a co-op run; the host sends it")
         return
     end
     if sh.run.coopSent then
-        sh.state = "host"
-        log("leaderboard: a co-op run its first host sent already (before host migration); not sent again")
-        return
+        log("leaderboard: a co-op run its first host sent a copy of already (before host migration): this copy sent too "
+            .. "(round " .. tostring(sh.run.round) .. "; the leaderboard keeps the furthest)")
     end
     if D and (D.startRound or 1) > 1 then              -- (a head start: START AT ROUND on the menu, or the ini's start_round)
         sh.state = "local"
@@ -742,8 +815,18 @@ local function keptAnswer(k, st, reply, err)
     local idx = nil
     for i, x in ipairs(LB.kept or {}) do if x == k then idx = i; break end end
     local what
-    if st == 200 then
-        what = "taken" .. (reply:find('"duplicate":true', 1, true) and " (it was on the board already)" or "") .. ", off " .. KEEP_FILE
+    local dk = st == 200 and dupKind(reply) or nil
+    if dk == "old" and isCoopBody(k.body) then
+        -- ((2026-11-11) a co-op copy, a leaderboard from before 2026-11-11 still: its first copy kept, this one not compared)
+        k.why = "dup"
+        what = string.format("a duplicate from a leaderboard that keeps a co-op run's first copy (deploy the one of 2026-11-11), kept: "
+            .. "sent again at the next game start (%d days left)", math.max(0, KEEP_DAYS - daysAgo(k.at)))
+    elseif dk == "final" and isCoopBody(k.body) then
+        what = "NOT stored: the leaderboard keeps another copy of this co-op run, as far or further (" .. dupSaid(reply) .. "), off " .. KEEP_FILE
+        if idx then table.remove(LB.kept, idx) end
+    elseif st == 200 then
+        what = "taken" .. (reply:find('"replaced":true', 1, true) and " (it replaced the board's shorter copy of this co-op run)"
+            or dk and " (it was on the board already)" or "") .. ", off " .. KEEP_FILE
         if idx then table.remove(LB.kept, idx) end
     elseif unknownBuild(st, err) then
         what = string.format("still an unknown build (register its hash on /admin), kept: sent again at the next game start (%d days left)",
@@ -760,8 +843,8 @@ local function keptAnswer(k, st, reply, err)
         what = "no answer for good" .. (WHY[st] and (" (" .. WHY[st] .. ")") or "") .. ", kept for the next game start"
     end
     if LB.kept then saveKept() end
-    log(string.format("leaderboard: a kept run (%s; refused as an unknown build %d days ago, resent %d times) resent: answered %d: %s: %s",
-        runTag(k.body), daysAgo(k.at), k.tries, st, what, reply:sub(1, 200)))
+    log(string.format("leaderboard: a kept run (%s; %s %d days ago, resent %d times) resent: answered %d: %s: %s",
+        runTag(k.body), keptWhy(k), daysAgo(k.at), k.tries, st, what, reply:sub(1, 200)))
 end
 
 -- Once a second, at the main menu and in runs: the sends' answers (reading a job's result frees its native slot), and a
@@ -789,9 +872,39 @@ function LB.poll()
                 local okK, errK = pcall(keepRefused, j.body)
                 if not okK then log("leaderboard: the refused run couldn't be kept: " .. tostring(errK)) end
             end
+            -- ((2026-11-11) Saint Alessia's 50-round run: {"ok":true,"duplicate":true} on her co-op run was taken as sent
+            -- and its body deleted, while the board held another game's shorter copy) A co-op copy answered duplicate is
+            -- NOT stored: said so, and kept to send again when the leaderboard answering is one from before 2026-11-11
+            -- (it keeps the first copy sent; the newer one keeps the furthest, and its duplicate says what it keeps).
+            -- A solo run's duplicate is a resend after a lost reply: stored already.
+            local dk = st == 200 and isCoopBody(j.body) and dupKind(reply) or nil
+            if dk == "same" then                         -- (this very copy, sent before and its answer lost: taken)
+                log(string.format("leaderboard: co-op run %s is on the board already: this very copy (its first answer was lost)",
+                    tostring(j.body:match('"run_id":"(%x+)"') or "?"):sub(1, 8)))
+                dk = nil
+            end
+            if dk then
+                local id8b = tostring(j.body:match('"run_id":"(%x+)"') or "?"):sub(1, 8)
+                local round = j.body:match('"round":(%d+)') or "?"
+                if dk == "final" then
+                    log(string.format("leaderboard: co-op run %s NOT stored: the leaderboard keeps another copy of it, as far or further "
+                        .. "(%s); this copy reached round %s", id8b, dupSaid(reply), round))
+                else
+                    log(string.format("leaderboard: co-op run %s NOT stored: the leaderboard has a copy of it already (another game of the "
+                        .. "room sent one first, e.g. a host by migration whose own link had dropped) and this leaderboard keeps the "
+                        .. "first; this copy (round %s) kept in %s to send again: the leaderboard of 2026-11-11 keeps the furthest",
+                        id8b, round, KEEP_FILE))
+                    local okK, errK = pcall(keepRefused, j.body, "dup")
+                    if not okK then log("leaderboard: the co-op copy couldn't be kept: " .. tostring(errK)) end
+                end
+            elseif st == 200 and reply:find('"replaced":true', 1, true) then
+                log(string.format("leaderboard: co-op run %s stored: it replaced the board's shorter copy of the run (%s)",
+                    tostring(j.body:match('"run_id":"(%x+)"') or "?"):sub(1, 8), reply:match('"was":{([^}]*)}') or "?"))
+            end
             if final then unqueue(j.body) else LB.qwait = os.clock() + (st == 429 and 600 or 120) end
             if sh then
-                if st == 200 then sh.state, sh.score = "sent", reply:match('"score":(%d+)')
+                if dk then sh.state, sh.dup = "dup", dk
+                elseif st == 200 then sh.state, sh.score = "sent", reply:match('"score":(%d+)')
                 elseif not final then sh.state = "queued"
                 else sh.state, sh.why = "refused", reply:match('"error":"([^"]+)"') or ("status " .. st) end
             end
@@ -829,6 +942,10 @@ function LB.hud(now)
         or (sh.state == "queued" and t.lb_queued) or (sh.state == "refused" and string.format(t.lb_refused, tostring(sh.why):upper()))
         or (sh.state == "unranked" and string.format(t.lb_unranked or "NOT RANKED: %s", tostring(sh.why):upper():sub(1, 48)))
         or (sh.state == "host" and (t.lb_coop_host or "CO-OP: THE HOST SENDS THE RUN"))     -- ((0.73.77) a co-op joiner's)
+        -- ((2026-11-11) a co-op copy answered duplicate: another copy of the run is on the board, kept here to send again
+        -- when the leaderboard answering keeps the first copy)
+        or (sh.state == "dup" and (sh.dup == "old" and (t.lb_coop_dup_kept or "NOT ON THE BOARD YET: ANOTHER COPY WAS FIRST (KEPT)")
+            or (t.lb_coop_dup or "NOT ON THE BOARD: ITS COPY THERE IS AS FAR")))
         or ""
     setText(H.lbTitle, "lbTitleStr", string.format(t.lb_title, r.pilot ~= "" and r.pilot:upper() or "PILOT"))
     for i, l in ipairs(H.lbLines) do setText(l, "lbLineStr" .. i, lines[i] or "") end
@@ -856,11 +973,11 @@ local function keptTick()
             if id > 0 then
                 k.tries = k.tries + 1
                 saveKept()
-                log(string.format("leaderboard: resending a run refused as an unknown build %d days ago (%s; resent %d times) (job %d)",
-                    daysAgo(k.at), runTag(k.body), k.tries, id))
+                log(string.format("leaderboard: resending a run %s %d days ago (%s; resent %d times) (job %d)",
+                    keptWhy(k), daysAgo(k.at), runTag(k.body), k.tries, id))
             else
-                log(string.format("leaderboard: a run refused as an unknown build (%s) not resent now (%s): kept for the next game start",
-                    runTag(k.body), tostring(id == -8 and "this build has no leaderboard address" or id)))
+                log(string.format("leaderboard: a run %s (%s) not resent now (%s): kept for the next game start",
+                    keptWhy(k), runTag(k.body), tostring(id == -8 and "this build has no leaderboard address" or id)))
                 if id == -8 then LB.keptAt = math.huge end
             end
             return

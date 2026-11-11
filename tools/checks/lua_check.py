@@ -326,6 +326,15 @@ def parse(path):
     return p
 
 
+def runtime_lua_names():
+    """The Lua functions dlls\\main.dll registers: RegisterLua's table in runtime/survival_rt.c ({ "SV_Name", L_Name }),
+    read each run so a new native function is known without a hand-kept list (20 stood as false warnings, 2026-11-11)."""
+    import os, re
+    c = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'runtime', 'survival_rt.c')
+    if not os.path.exists(c): return set()
+    return set(re.findall(r'\{\s*"(SV_\w+)",\s*L_\w+\s*\}', open(c, encoding='utf-8').read()))
+
+
 def check(paths):
     """Each file's syntax and its main chunk's locals (hard rule 23, per file). Files checked together are one Lua
     state's parts (the runtime's Scripts/main.lua + sv_*.lua, tools/lua_split.py): a global one of them sets is known
@@ -336,6 +345,11 @@ def check(paths):
     shared = {}
     for p in parsed.values():
         for n, line in p.globals_set.items(): shared.setdefault(n, line)
+    native = runtime_lua_names()
+    if native:
+        for n in sorted(x for x in KNOWN_GLOBALS if x.startswith('SV_') and x not in native):
+            print(f'  WARNING: {n} is in lua_check\'s list of native functions, but runtime/survival_rt.c no longer registers it')
+    known = KNOWN_GLOBALS | native
     ok = True
     for path, p in parsed.items():
         print(f'{path}: syntax ok (main chunk: at most {p.max_locals} of 200 locals in scope)')
@@ -347,7 +361,7 @@ def check(paths):
                 print(f'  note: global assigned: {n} (line {line})')
         seen = set()
         for n, line in p.used:
-            if n not in KNOWN_GLOBALS and n not in shared and n not in seen:
+            if n not in known and n not in shared and n not in seen:
                 seen.add(n); print(f'  WARNING: unknown global {n} (line {line}): a typo, or a local used before it is declared')
     if len(paths) > 1:
         print(f'{len(paths)} files as one Lua state: {len(shared)} globals shared between them')

@@ -17,7 +17,8 @@ that every change, by a person or an AI agent, must keep.
 | The game's AES key | Reading its paks | Ask the maintainer, or ACE8AircraftBuilder's `settings.json`; never commit it |
 
 Optional, for the maintainer's VALKA build only: Unreal Engine 5.4, AC7's UModel and exported assets
-(`tools/x02s/README.md`). Nobody else needs them.
+(`tools/x02s/README.md`), and for AC7's LaserInterceptor the AC8 template project (`AC8_LIVE_PROJECT` in `.env`,
+`tools/laser7/README.md`), and for THE TANICORN Blender 3.3 (`BLENDER`, `tools/tanicorn/README.md`). Nobody else needs them.
 
 ## Set up your machine
 
@@ -37,7 +38,7 @@ is ever committed.
 ```sh
 sh tools/checks/lua_build.sh                       # once: builds Lua 5.4.6 (UE4SS's) into build/checks for the tests
 python -X utf8 tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua   # after every Lua edit
-for t in tools/checks/*_test.sh; do sh "$t" > /dev/null 2>&1 || echo "FAILED: $t"; done   # the test suites
+sh tools/checks/run_all.sh                         # every check that needs no game files, with a table
 sh tools/build_all.sh                              # the full build: build/install (the mod, ready to install)
 sh tools/package_dev.sh <name>                     # your own test install, test keys kept: build/release/stage_dev_<name>
 ```
@@ -60,7 +61,9 @@ game's `ue4ss/Mods` folder (`AC8_MODS`). Never change the game's own files.
   (`lua_check.py` checks it).
 - **Every build handed to someone gets a new version** (`python -I tools/bump_version.py` before `build_all.sh`).
   Co-op refuses to link games on different builds.
-- **Test keys never ship.** Code between `-- TEST ONLY BEGIN` and `-- TEST ONLY END` is stripped from every release zip.
+- **Test keys never ship.** Code between `-- TEST ONLY BEGIN` and `-- TEST ONLY END` is stripped from every release zip
+  (a tester's zip, TESTER=1, keeps it). Code between `-- DEV ONLY BEGIN` and `-- DEV ONLY END` is the user's own dev
+  install only (package_dev.sh): stripped from every zip, a tester's included (THE TANICORN's test, round 30's fleet).
 - **Commits** say what changed and why, starting with who made them: `[name] what changed`.
 
 ## Where things are
@@ -77,12 +80,15 @@ game's `ue4ss/Mods` folder (`AC8_MODS`). Never change the game's own files.
 
 ## Reporting a bug
 
-Send these files with what happened, the round, the time, and your build's version. The files are in
-`ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\`, plus `ue4ss\UE4SS.log`:
+Send the session's log zip with what happened, the round, the time, and your build's version. Every game's logs
+are in `ACE COMBAT 8\Game\Binaries\Win64\ue4ss\Mods\AC8SurvivalMode\logs\`, named with the game's start:
 
-- `AC8SurvivalMode_lua.log` and `AC8SurvivalMode.log`.
-- `AC8SurvivalMode_crumbs.log`, and after a crash `AC8SurvivalMode_crumbs.prev.log` too.
-- After a crash, the newest `UECC-Windows-...` folder from
+- Start the game once more (the main menu is enough): the session before is zipped into
+  `logs\AC8Survival_<date>_<version>.zip`, with its UE4SS.log, its crash breadcrumbs and the game's own logs and crash
+  folder of that time. Send that zip.
+- When a session couldn't be zipped, its files stay in `logs\` under their dated names
+  (`AC8SurvivalMode_<date>.log`, `AC8SurvivalMode_lua_<date>.log`, `AC8SurvivalMode_crumbs_<date>.log`,
+  `session_<date>.txt`, `UE4SS_<date>.log`): send those, and after a crash the newest `UECC-Windows-...` folder from
   `%LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\`.
 
 Your PC's RAM and page file size and your rough location help with crashes and lag. Name the archive

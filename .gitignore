@@ -47,3 +47,8 @@ testing/builds/
 # THE TANICORN model (user, 2026-11-10: "you are allowed to push the model"): its cooked container is kept
 !art/tanicorn/**/*.utoc
 !art/tanicorn/**/*.ucas
+ origin/main
+
+# (2026-11-10) task plans are local working notes (AGENTS.md "How to work", step 3); the agents' worktrees
+docs/design/*_PLAN.md
+.claude/worktrees/

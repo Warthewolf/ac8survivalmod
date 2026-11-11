@@ -363,9 +363,11 @@ spawned, controller ..., network object ...`, `coop: second player plane: loadou
   while another player flies (solo, or with nobody else flying, at the host's takeoff: F5's review, round 2). The
   shuttle's countdown runs on too and the shuttle isn't made invulnerable (user, 2026-10-29: "Keep it running while
   others are flying"; `special: shuttle countdown running while you're down at the airfield (1 other player flying) at
-  N s`, logged as it's held or runs, not as the count changes; whether its events take with the landing menu up is
-  unknown: the first not sent then is logged, `special: shuttle countdown event RE_SV_ShuttleT_N not fired (...)
-  while you're down at the airfield`, and the lift-off line says `event package` or `countdown over`); with nobody
+  N s`, logged as it's held or runs, not as the count changes; its events don't take while the host's landing
+  minigames are up (Saint Alessia's run of 2026-11-11: sent, result 1, records never ran), so `countdown over` with the
+  shuttle still up replays the host's own liftoff once its STORE is shut, on the host alone (sv_rounds_shuttle.lua;
+  docs/re/BEHAVIOUR_DIRECTOR.md, the shuttle's round 2 note); the first event not sent is logged, `special: shuttle
+  countdown event RE_SV_ShuttleT_N not fired (...) while you're down at the airfield`); with nobody
   else flying it's held and invulnerable as solo, and can be hit again at another player's takeoff or the host's. A
   joiner's game holds nothing on the host's landing (its copies come as the host's "sp" do; it runs no countdown of
   its own, the host's RE_SV_ShuttleT_* come forwarded). Untested in game (tools/checks/coop_landing_test.sh).
@@ -519,12 +521,28 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
   FOR A REVIVE`, else the NEXT row `DOWN: WATCHING <NAME>  [O] NEXT` (sv_hud.lua).
 - **Revive**: the STORE's AIRFIELD page's sixth row, REVIVE (tools/build_survival.py STORE_PAGES; CFG.shop.items.Revive,
   role "revive": sv_shop.lua offer / shopBuy -> DOWN.offer / DOWN.buy): `REVIVE <NAME>` the one down longest, `(+N)`
-  for more, price x raise ^ (the run's revives, the host's count); else `CO-OP ONLY.`, `NOBODY IS DOWN.`, `YOU'RE
+  for more, (price + price_per_round x the round) x min(raise ^ theirs, raise_max), theirs the revived player's own
+  revives in the run (St.per, the host's count); else `CO-OP ONLY.`, `NOBODY IS DOWN.`, `YOU'RE
   DOWN.`, `ASKED: WAITING FOR THE HOST.`. The host buying checks itself; a joiner pays at once, sends "rv" and is
   refunded on "rx" or after 10 s with no answer. The host's checks: both slots real and different, the target down
-  (bit 8 in its fresh state, or the host itself), no revive of it in the last 15 s, the price the count's, the reviver
+  (bit 8 in its fresh state, or the host itself), no revive of it in the last 15 s, the price theirs' (or the last
+  round's, asked as the round changed), the reviver
   on the ground at its airfield (bit 4 in its fresh state; the host: playerOnAirfield). Then "rb" to everyone: the
   downed game comes back, the others call `<NAME> BACK` / `REVIVED BY <NAME>`.
+- **Revive costs per player** (the user, 2026-11-11, after Saint Alessia's 50-round run: "And yeah readjust the revive
+  costs"; round 50's 13th revive cost 138,240 Z, raise ^ every revive in the run by anyone). A price goes by the revived
+  player's own revives (St.per: slot -> n), x raise_max at most (3; 0: no cap; under 1 counts as 1): at round 50 the
+  base is 9,500 and no revive costs more than 28,500. The run's count (St.count) stays for the logs and the messages.
+  The host counts a slot's revive as it applies it and sends it in "rb"; a joiner that links gets every player's in
+  "rc"; the host's "rx" carries the slot's, so a joiner's price is put right by a refusal. The cap is sv_down.lua
+  priceFor's (sv_ai.lua itemPrice is the STORE's items' too). A slot changes hands (a host migration: the new host
+  slot 0, the others relinked in the lowest free slots; a rejoiner in another slot; a newcomer in a freed one): the
+  count follows the player, not the slot (review of 2026-11-11; DOWN.tick's whoTick, once a second: each slot's player
+  by the roster's Steam ID, else their name, this game's own slot you). On a change that slot's down time and revive
+  guard go; the host keeps the old player's count (St.bySid / St.byName), gives the slot the new player's own (from the
+  slot they had, the old room's table on a host by migration's first pass, or kept from before they left; 0 for a
+  newcomer) and sends "rc" to everyone: `revive: slots changed hands, each player's own revives follow them: player 3
+  (E, was C): 0; ...`. A joiner takes the host's table and keeps nothing of its own.
 - **Back**: SV_Down(0), shown, collision on, inputs and attacker limits back (a limit only if still 0), the view on
   your plane, RE_SV_RepairAircraft and HealthInternal written full, safe_s invincible; respawn "loiter" stays where it
   was flown, "native" calls SV_Respawn 4 km out from the runway (1609574, -435747) along its heading (yaw -23), 500 m
@@ -540,14 +558,19 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
   "ro" each game: the view back, STATS.death("died"), LB.finish("died"), RE_SV_RunOver (tools/survival_events.py
   build_run_over: Mission 15's LiveMissionFinishExecution MissionFailed, false, true: the retry menu; kept, never "ev").
   No event: the fallback, the loiter off and the plane mortal (MinHealth 0, invincible off, the floor off). A joiner
-  down with the host's link gone 10 s ends its own. sv_leaderboard.lua's death check ends nothing while revives hold
+  down with the host's link gone ends its own only once nobody can bring a host back: while a host migration may
+  (COOP.migrating) it waits for the migration's outcome, else until the runtime lets the link go (sys|left, 90 s) or
+  100 s at most (until 2026-11-11: 10 s; see "The 50-round run's fixes" below). sv_leaderboard.lua's death check ends nothing while revives hold
   the run (co-op, linked): only "ro" does. The host's "rs" (a new run) brings a downed joiner back and refunds an open
   revive; a new level clears everything.
-- **Protocol** (reliable; guards: slots 0-23, whole numbers, text cut to 60 capitals; at most 4 a second from a joiner,
-  60 from the host): joiner -> host `dw|<slot>` (its own slot only), `rv|<slot>|<price>`; host -> everyone
-  `dw|<slot>|<count>[|q]` (q: a catch-up, no callout), `rb|<slot>|<count>|<by>`, `ro|<round>`; host -> one joiner
-  `rx|<slot>|<why>|<count>`, and as it links (hostSync -> DOWN.syncTo) `rc|<count>` with a `dw ... q` for each one down.
-- **Settings** [coop.revive] (CFG.coop.revive): enabled, floor_hp 0.1, price 2500, raise 1.25 (5000 x 1.5 until 2026-10-30: the user, "lower the cost for reviving"), safe_s 5, respawn loiter |
+- **Protocol** (reliable; guards: slots 0-23, whole numbers, counts 0-100000, text cut to 60 capitals; at most 4 a
+  second from a joiner, 60 from the host): joiner -> host `dw|<slot>` (its own slot only), `rv|<slot>|<price>`; host ->
+  everyone `dw|<slot>|<count>[|q]` (q: a catch-up, no callout), `rb|<slot>|<count>|<by>|<theirs>`, `ro|<round>`; host ->
+  one joiner `rx|<slot>|<why>|<count>|<theirs>`, and as it links (hostSync -> DOWN.syncTo) `rc|<count>|<slot:n,...>`
+  (each player's own revives, none at 0; on a joiner the table is taken whole, only whole slots 0-23 and counts 0-100000
+  in it, one over 240 characters not at all) with a `dw ... q` for each one down. <count> is the run's revives,
+  <theirs> that player's own (an "rb" with a broken one: one more of theirs here).
+- **Settings** [coop.revive] (CFG.coop.revive): enabled, floor_hp 0.1, price 2000 + price_per_round 150 (0.73.78; 2500 flat before), raise 1.25 (5000 x 1.5 until 2026-10-30: the user, "lower the cost for reviving"), raise_max 3 (2026-11-11), safe_s 5, respawn loiter |
   native, key O, ctrl false, down_round_bonus true; [coop.revive.loiter] alt_m 2500, radius_m 4000;
   [coop.revive.camera] back_m 30, up_m 8, blend_s 0.5. [coop] is PERSONAL, but sv_coop.lua's SHARED_IN makes
   coop.revive the host's for everyone except OWN_IN (key, ctrl, camera).
@@ -556,7 +579,8 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
   the airfield / up), <N> m/s; watching <name>` every 5 s (every 30 s after a minute); `down: your plane isn't flying (N
   m/s, N m up, N km from the airfield): a revive brings you back 4 km out from the runway, 500 m up` (once a DOWN); `spectate: view <NAME> (<why>), reverted N
   times`, `spectate: view put back on <NAME> (the game took it back N times)`; `down: player N (<NAME>) is down`;
-  `revive: asked the host to revive player N for P`; `revive: player N revived player M for P (the run's revive K)`
+  `revive: asked the host to revive player N for P`; `revive: player N revived player M for P (the run's revive K, their
+  T; round R's price)` (a joiner's: `revive: player M revived by player N (the run's revive K, their T)`)
   or `... refused: <WHY>`; `revive: back (revived by <NAME>) after N s down: repaired (event fired, health written), 5 s
   invincible, <where>` (`... (your plane wasn't flying: N m/s): done` for a crashed one); `revive: respawn d=<m> m`; `down: every player in the mission is down (N) for 3 s`; `down: run
   over in round N`; `down: the mission's end (RE_SV_RunOver, Mission 15's MissionFailed): fired`.
@@ -580,3 +604,133 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
   MinHealth 0.1 holds against every kind of hit (KILLS_HEALTH_DEATH.md: a crash may pass it; such a plane dies as the
   game does and that player's game ends their run); the game puts MinHealth back on a restore (read back every pass
   anyway); Mission 15's MissionFailed record ends Survival's mission as a failure with the retry menu.
+
+## 10. Messages shaped like the runtime's own (2026-11-11, runtime 0.32.34, Lua for the next build; not yet run in game)
+tools/checks/coop_guard_test.lua (every message type a host or a joiner takes, hostile values in every field) found that
+another game's body reached Lua's inbox in the same form as this runtime's own notices, "<slot>|sys|...", and onMessage
+takes any "sys|..." as the runtime's: a joiner sending "sys|slot|25" set the host's own slot, and "restart", "left",
+"lost", "samerole" ... could be faked for the sender's link. coop.c now refuses a body that is "sys" or starts "sys|"
+from the network, reliable ('L', the sequence still moving on so the channel doesn't stall) and not ('U') alike:
+CoNetPush, logged `coop: player <n> sent a message with the form of this runtime's own (sys|...): refused (<k> so far)`
+(the first three, then every 100th). No Lua part sends one. Lua takes "sys|slot" only from sender 0 on a joiner, a whole
+slot 0-23 (`coop: a "sys|slot" from player <n> refused (...)` otherwise). coop_test.c: each joiner sends "sys|slot|25"
+both ways and "sys" reliably between its messages up; the host must log the refusal, see none of them, and still get
+all 40 (`host: sys guard: 0 joiner messages posing as the runtime's own reached Lua`); the old coop.c lets 8 (4
+players) and 32 (12) through.
+The same suite: a host's "rnd" with waves 1e999 froze a joiner for good (clientRounds made a table a wave), and its round,
+clock, wave and alive count went in unchecked. "rnd" is now refused whole (the last one kept, `coop: the host's round
+state refused (...)` once) unless round 0-9999, a word state, secs 0-86400, wave and waves 0-256, alive 0-100000.
+The rest of the suite's findings, fixed the same day (Lua): "af" checked whole before it's written (the health clamped
+to the maximum), "hl" and "fwe" whole numbers, "fsx" only the fishing and festival rows, "sp" a plain unit name, an AI
+object index -1-63, a whole level, the joiner's spawn queue a unit once and 256 at most, a unit this game hasn't
+dropped at SV_UnitAlive -2, "bd" / "dn" ids whole 1-65535, "ev" names of 64 characters at most, pendKeep 512 units.
+coop_guard_test.lua has no known defect left: a new finding fails it.
+(2026-11-11, Saint Alessia's 50-round run, the Alicorn: docs/re/ALICORN.md 6) "rnd" field 16 is the host's Alicorn for the
+joiners' NEXT row, `<0-4>:<s | e | 0-100>:<0 | 1>` (anything else: none; guard rows in coop_guard_test.lua). A joiner keeps
+the host's "hp" for an id it hasn't bound yet (M.pendHp, 4,096 at most) and puts it on that ship's or part's copy as it's
+bound; hostHit tallies each joiner's hits a minute (`coop: the joiners' hits dealt here in the last 60 s ...`, the refusals
+counted there, no longer once a run); a replay for a unit ("ev|<event>|<unit>") waits on a joiner until its copy's up;
+hostSync sends a rejoiner's Alicorn at the host's hull with its leg 2 s on.
+
+
+## 11. The host leaving, a dropped joiner hosting alone, the leaderboard's copies (2026-11-11; not yet run in game)
+From Saint Alessia's 50-round run of 2026-11-10 (host) and Delta's logs (joiner). NotMexi's game, its own link dropped,
+took the run over alone by host migration (third in line: every player ahead is a joiner that never answers) and hosted
+~3 minutes beside her; its copy of the run (round ~35) reached the leaderboard first, and her round-51 copy was answered
+`{"ok":true,"duplicate":true}` and lost (leaderboard/README.md has the D1 query). When she left to the main menu, nobody
+was told: Delta waited 30 s of silence, a link back from her menu restarted that wait and took his 105 copies down for her
+empty picture (ten AA GUN / SAM SITE / CIWS LOST callouts), and a hit in that wait ended his run.
+- **The host's "left" notice** (sv_coop_migration.lua COOP.hostLeaving, from sv_main.lua runLeft): once the host is out
+  of Survival's level (another level on, not while a reload it announced with `hl|<secs>` is on; Survival's level
+  loading again takes it back), every joiner gets `hl|<round>|left` (reliable): `coop: out of Survival's level: every
+  joiner told this game left its run in round <r> (hl|<r>|left; <n> linked)`. A joiner starts its migration at once
+  (`coop: migration: the host (<name>) left its run in round <r> (hl|left)`, callout `<HOST> (HOST) LEFT THE RUN`); a
+  link back from that host keeps the copies and asks no picture (`the copies here kept, no picture asked`); an empty
+  picture from it takes nothing down. A round that isn't a whole 0-9999 is refused (`the host's "left" notice refused`).
+  (Review of 2026-11-11.) A joiner takes it only for a run in play that the host's round state has reached (`rnd` or
+  `rs` in this D: M.hostRunD), with the migration on (steam), and not after its own run over (DOWN.ended); else
+  `coop: the host (<name>) left its run in round <r> (hl|left): not taken (no run here | this run hasn't had the host's
+  round yet | host migration off | this game's run is over)`, a line every 30 s at most. Kept with no run, it migrated the
+  next run with the same host away at its first tick. One taken and not acted on (no line to go down) is dropped by the
+  host's next `rs` and by a new run here, the migration's clock with it when only the notice set it (`coop: the host's
+  "left" notice (round <r>) dropped: ...`). The host sends none after a run over (every player down: `...after the run
+  over: the joiners not told it left`), takes a sent one back as Survival's level loads again (a `jn` then gets
+  nothing), and a new run here ends the run-over reload's hold (hl|120), so a quick retry then a quit tells them at once.
+- **No picture without a run**: a host whose D is nil answers a joiner's `jn` with the "left" notice (it left its run) or
+  nothing (its level loading: its run's start sends `rs|n`): `coop: player <n> asked for the whole picture; this game
+  has no run (...): no picture sent`.
+- **A dropped joiner hosting alone**: a migration started by silence looks for the old host's Steam ID too
+  (`the old host looked for too`), so a game whose own link was the one that dropped takes the old host's hellos and
+  joins it again (migStepBack). The old host (runtime/coop.c CoOnHello) answers another host's hello with its own while
+  it has players linked (once a warning, every 10 s), its discovery sending none once its room is full; the sys line
+  carries the other host's name (`sys|samerole|<name>`; the native line ends `(answered with this host's hello: ...)`).
+  On a host in a run with players the callout is `<NAME> HOSTS TOO / THEIR LINK DROPPED: THEIR GAME REJOINS YOU`. After
+  a "left" notice nobody steps back (`another host heard, but the old host left its run: this game stays the host`).
+- **Torn-down copies aren't LOST**: killAllCopies (link back, migration, resync, new run) marks the time (COOP.tornAll);
+  a joiner's defence gone within 20 s of it logs `allies: <label> (<unit>) gone here in round <r> with every copy (<why>):
+  not lost`.
+- **A withdrawn flight** (`RE_SV_FlightOff_NN`, an ace break-off or the Spaceport's capture): a joiner takes its copies
+  down (torn: unpaid; one never bound too) and queues its unit off the spawner list 2 s on (M.recycleDue, once a unit,
+  64 at most): `coop: the host took <unit> off (...): <w> of its copies here off, unpaid; <n> taken down here, its unit
+  off this game's spawner list 2 s on`. Before, its next spawn took 6 tries and a forced recycle (~8 s late), 16 times.
+- **The full reliable queue's line** (coop.c CoQueueDropsSay): the player as every other line numbers them (k + 1) and
+  their name, the drops counted, one line a second: `coop: reliable queue to player <n> (<name>) full (256 messages
+  waiting for their acks): <k> message(s) dropped since the last such line`.
+- **The leaderboard** (sv_leaderboard.lua, leaderboard/src/index.js): every game that ends the run as its host sends its
+  copy (the `co.sent` gate is gone; lb|x is only logged), a takeover nobody joined marked `"takeover":true`
+  (`sent marked as a lone takeover`); the Worker keeps the furthest copy (higher round; at the same round a copy that
+  isn't a lone takeover, else the longer time; the stored host in the new squad; never an unchecked build over a
+  checked one), the shorter one archived as `superseded:<time>`. A duplicate answer to a co-op copy is logged as NOT
+  stored (`co-op run <id> NOT stored: ...`), its summary `NOT ON THE BOARD...`, and from a Worker before 2026-11-11 (no
+  `stored` in its answer) the copy is kept in refused_runs.txt (`<at>\t<tries>\tdup\t<body>`) to send again.
+Tests: coop_migration_test (the notice, its round refused, no step back after it, a link back after it, the host's
+side), coop_guard_test (`hl|51|left`, a `jn` without a run), resync_test (an empty picture after it), aces_test (the
+withdrawn flight), defences_test (no LOST), coop_test (the answer to another host's hello, the queue's lines),
+leaderboard_test and the Worker's (the copies).
+
+## 12. The DOWN host's plane, a migration's floor, a revive's freshness (2026-11-11; Saint Alessia's and Delta's logs; untested in game)
+The user: "the enemy AI followed my corpse plane in its orbit around the base".
+- **ACE.hunt** (sv_ai.lua) wrote the host's own plane into every Reaper's TargetActor every 2 s, DOWN or not: 3 s after
+  the down pass sent them after Froya they were back on the hidden loiter (five fighters, 25 minutes, round 50 held open
+  15 minutes). Now, while you're DOWN: onto the living player its flight was sent after (COOP.huntTarget: the down
+  pass's COOP.huntReal, this generation of the flight), else on the host (a flight not held by its Wolf trap or the
+  director, on your plane or on nothing) the living player the fewest are sent after (COOP.huntPick), else left alone
+  (a joiner's copies: left); in co-op a plane on another living player's
+  plane (COOP.isPlayerPlane: shown, fresh, not DOWN, not landed) is left on it, DOWN or not; no hunt tell while DOWN.
+  Log: `aces: <plane> onto player N's plane (you're down: its flight's hunt | the living player the fewest are sent
+  after) (was <target>), N times`, `aces: <plane> not put back onto you: you're down (its target ..., left as it is; N
+  planes so far)` (the 1st, 25th... plane a DOWN), `aces: <plane> left on player N's
+  plane (co-op: a living player's), not put back onto you`. None of `aces: ... back onto you` while DOWN.
+- **The down pass** (sv_coop.lua hostTick, every 5 s) also checks a flight it already sent, by its planes' real
+  targets (aiWatch's p.aiTargetAddr): one back on your hidden plane (the allies' hunt, a Wolf release, its arrival
+  order: all name "Player") is sent again, after the same player (COOP.huntReal with its slot: a new pick only when they
+  can't be hunted, review of 2026-11-11), so its other planes aren't pulled off a living player; a flight holding its
+  Wolf trap or held by the director is left to it; one up under 3 s waits for its arrival order. A director's aim at a
+  joiner (its TargetActor on their plane every second, aim_s) ends as they go DOWN or land (sv_director.lua aimGone:
+  `director: <unit>: player N is down or landed: its aim on them ends early`), its orders back with a living player's
+  hunt: their plane here is only hidden, and the aim kept the flight on it. `coop: you're down: N flights (N planes) sent after the other players instead
+  (K of them again: P planes back on your hidden plane)` (an again-only pass every 30 s at most), `coop: you're down:
+  <unit> holds its Wolf trap: left to it ...`.
+- **The allies' hunt** (sv_allies.lua RE_SV_Hunt_NN) waits while you're DOWN (held, not dropped): `allies: you're down:
+  the enemies' hunts for the allied aircraft wait for your revive` / `... you're back: ... go on`.
+- **Stats and learning** (sv_stats.lua) skip a DOWN player's plane: STATS.track's engagement and tail samples (an open
+  episode dropped), the tail watch, STATS.sample's airfield time and PROF.sample (her saved airfield habit went 0.34 ->
+  0.50 on the loiter). `stats: you're down: your flying isn't measured (...) until your revive`, `tailed: you're down: N
+  open episode(s) dropped`.
+- **A migration keeps the floor** (sv_down.lua DOWN.active / floor / holdsRun / going DOWN: linked or
+  COOP.migrating, sv_coop_migration.lua: a joiner whose host went silent while its line can be gone down, or going down
+  it; a host by migration for wait_s). Delta's floor went to 0 at the host's link loss and a 203 HP hit in the 30 s
+  wait was a death. `down: the host's link is gone and a host migration is under way: the revives' floor (0.1 HP) and
+  the run's hold stay on through it` / `down: the host migration's hold over (...)`.
+- **A down joiner's run** waits for the migration's outcome or the host's link let go (COOP.hostLeft) / 100 s:
+  `down: the host's link is gone while you're down: your run waits for it ...`, `down: the host's link back after N s:
+  still down, waiting for a revive`, `down: run over in round N: ... (you're down and the host migration found no host
+  ...)` / `(you're down and the host's gone (its link let go | nothing from it, N s ...))`. Froya's run ended 10 s into
+  a 17 s outage just after her 28,800 Z revive.
+- **A revive** is refused when the target's last state is 500 ms old or more (SV_CoopPeerAt's age, read at the sale)
+  or its link is lost: `revive: player N's revive of player M refused: THEIR LINK IS LAGGING: TRY AGAIN (their last
+  state N ms old | their link is lost)`; the buyer is refunded by the existing "rx".
+- **A real plane shown again** (revived, back in the mission) is moved to its newest streamed state first, still hidden
+  (sv_coop_planes.lua M.toNewest; it isn't fed while hidden: Delta saw revived planes 22-37 km off their stream for a
+  minute): `coop: player N's plane shown; on the radar again (activated); moved to their newest state first (X km from
+  it; read back N m off)`.

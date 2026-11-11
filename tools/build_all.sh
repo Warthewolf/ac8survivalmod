@@ -44,6 +44,28 @@ python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/ai
 python -X utf8 -I tools/checks/ini_check.py   # every survival.default.ini setting is one CFG has
 python -X utf8 -I tools/subtitles.py check     # config/subtitles.ini: every line reads (sv_config_subs.lua), no mistake
 python -X utf8 -I tools/checks/size_check.py  # no source file over 2,000 lines (CONTRIBUTING.md)
+python -X utf8 -I tools/checks/paths_check.py  # no machine path in tools, runtime, mod, docs, AGENTS.md (.env instead)
+# the native runtime's C suites that build and run on Windows and Linux alike (tools/llvm's clang, or clang on PATH; on
+# Windows windowless), a few seconds in all: the formatter (hard rule 55), the liveness check, the spawner's unit table
+# (lag-1), the UE4SS.log copy's filter (lag-8), the real planes' weapons, the co-op flag bits and DOWN's autopilot. A
+# failure stops the build, its output shown. They are ordinary C programs: on Windows clang needs the MSVC / Windows SDK
+# libs for them (runtime/build.sh doesn't), so where it can't build one (LLVM alone: CONTRIBUTING.md) they're skipped,
+# said so. Not here: coop_test (~40 s, a dozen windows, fixed UDP ports), and safecall, pathguard, build_hash, logbundle
+# (Windows only): sh tools/checks/run_all.sh runs them.
+mkdir -p build/checks
+t_cc=tools/llvm/LLVM/bin/clang.exe
+[ -x "$t_cc" ] || t_cc=clang
+printf '#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\nint main(void) { char* p = malloc(4); strcpy(p, "ok"); printf("%%s\\n", p); return 0; }\n' \
+    > build/checks/hosted_probe.c
+if "$t_cc" -O1 -o build/checks/hosted_probe.exe build/checks/hosted_probe.c > build/checks/hosted_probe.txt 2>&1; then
+    for t in vfmt uobj unittab logdedup fwkind flight; do
+        t_out=$(sh "tools/checks/${t}_test.sh" 2>&1) || { printf '%s\n' "$t_out"; echo "build_all: tools/checks/${t}_test.sh failed"; exit 1; }
+    done
+    echo "native checks passed: vfmt, uobj, unittab, logdedup, fwkind, flight (tools/checks/*_test.sh)"
+else
+    echo "native checks NOT run: $t_cc can't build an ordinary C program here (no MSVC / Windows SDK libs?" \
+         "$(head -1 build/checks/hosted_probe.txt)); sh tools/checks/run_all.sh where it can"
+fi
 sh runtime/build.sh   # native runtime: build/runtime/main.dll
 python -X utf8 -I tools/build_survival.py
 python -X utf8 -I tools/pack.py
@@ -63,7 +85,8 @@ if [ "$ZFA" = 1 ]; then
     cp build/zfa44/out/SurvivalMode_ZFA44_P.utoc build/zfa44/out/SurvivalMode_ZFA44_P.ucas build/install/SurvivalMode/
     echo "staged the ZFA-44 (build/zfa44/out/SurvivalMode_ZFA44_P; dev only)"
     # (2026-11-07) AC7's LaserInterceptor, the ZFA-44's weapon (tools/laser7: the user's AC7 exception of 2026-11-07)
-    L7="E:/ACE8 Survival Mode/build/laser7/out"
+    L7_MAIN=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)   # (the main tree, as release_dir.sh)
+    if [ -n "$L7_MAIN" ]; then L7="$(dirname "$L7_MAIN")/build/laser7/out"; else L7=build/laser7/out; fi
     if [ -f "$L7/SurvivalMode_Laser7_P.utoc" ]; then
         cp "$L7/SurvivalMode_Laser7_P.utoc" "$L7/SurvivalMode_Laser7_P.ucas" build/install/SurvivalMode/
         echo "staged AC7's LaserInterceptor ($L7/SurvivalMode_Laser7_P)"
@@ -76,9 +99,12 @@ fi
 # (2026-11-11) TANI=1 also gives the world data THE TANACORN's live parts (tools/build_survival.py reads TANI: hard imports
 # of this container): such a build is the user's dev install only (build/install/tani_wd.txt below)
 if [ "$TANI" = 1 ]; then
-    [ -f build/tanicorn/out/SurvivalMode_Tani_P.utoc ] || { echo "TANI=1: no Tanicorn container (sh tools/tanicorn/build.sh)"; exit 1; }
-    cp build/tanicorn/out/SurvivalMode_Tani_P.utoc build/tanicorn/out/SurvivalMode_Tani_P.ucas build/install/SurvivalMode/
-    echo "staged the Tanicorn's parts (build/tanicorn/out/SurvivalMode_Tani_P; dev only)"
+    # (the main tree's build/tanicorn/out, where tools/tanicorn/build.sh writes it from any worktree: as L7 above)
+    TA_MAIN=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+    if [ -n "$TA_MAIN" ]; then TA="$(dirname "$TA_MAIN")/build/tanicorn/out"; else TA=build/tanicorn/out; fi
+    [ -f "$TA/SurvivalMode_Tani_P.utoc" ] || { echo "TANI=1: no Tanicorn container in $TA (sh tools/tanicorn/build.sh)"; exit 1; }
+    cp "$TA/SurvivalMode_Tani_P.utoc" "$TA/SurvivalMode_Tani_P.ucas" build/install/SurvivalMode/
+    echo "staged the Tanicorn's parts ($TA/SurvivalMode_Tani_P; dev only)"
 fi
 # (2026-11-11, WP2 step 2) a TANI=1 build's world data imports the Tanicorn container's blueprints (THE TANACORN's live parts:
 # tools/build_survival.py check_tanicorn_build writes build/out/tani_wd.txt): its marker staged beside the two mod folders

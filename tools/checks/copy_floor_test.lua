@@ -17,7 +17,8 @@ local MOD, WORK, ROLE = arg[1], arg[2], arg[3]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
 -- (CRLF checkouts: the sources searched as git stores them, LF)
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
+
 local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 do
@@ -165,7 +166,13 @@ function newRunHere() end
 FISH = { isBoat = function(u) return u == "SV_Unit_SalBoat" end }
 local zfaHere = {}                               -- (this game's own ZFA-44s, by address: ESC.localZfa)
 ESC = { localZfa = function() return zfaHere end,
-        beforeHostEvent = function(name) evOrder[#evOrder + 1] = "before " .. tostring(name) end }
+        beforeHostEvent = function(name) evOrder[#evOrder + 1] = "before " .. tostring(name) end,
+        hullShip = function(u) return u == "SV_Unit_Cargo1" and 1 or nil end }       -- (sv_escort.lua's: ship 1's hull)
+-- (sv_escort_laser.lua's ZLAUNCH.holdHull: whether ship i's hull is held, its ZFA-44s up; escort_test tests the real one)
+local hullHeld, holdAsked = false, {}
+local offKills = {}
+ZLAUNCH = { holdHull = function(i, t, who, why) holdAsked[#holdAsked + 1] = tostring(i) .. " " .. tostring(who); return hullHeld end,
+            offKill = function(i, why) offKills[#offKills + 1] = i; return 0, 0 end }
 
 PARTS.dofile("sv_config.lua")
 PARTS.load("sv_coop.lua", "=sv_coop.lua", { { "\nlocal M = {", "\nM = {" } })   -- (its pieces too; M exposed)
@@ -564,6 +571,39 @@ else
     for _, e in ipairs(M.recycleDue or {}) do if e.unit == "SV_Unit_SalBoat" then due = true end end
     check(due and has(line("coop: the host took an ally off (copy 95", from), "switched off here"),
           "join: ... its unit off this game's list 2 s on (no copy of it left), logged")
+
+    -- ((2026-11-11) a carrier's hull the host took off: never off this game's list while a ZFA-44 of its launchers is up
+    -- here (the host's own rule since 0.74.48, Shazzy's crash), looked at again 5 s on)
+    print("join: a carrier's hull held on this game's list while its ZFA-44s are up")
+    world.SV_Unit_Cargo1 = { obj("cargo_hull", 5000) }
+    M.recycleDue = M.recycleDue or {}
+    M.recycleDue[#M.recycleDue + 1] = { unit = "SV_Unit_Cargo1", at = clock, why = "carrier leaving" }
+    hullHeld = true
+    local r0 = #recycled
+    tick()
+    local held = false
+    for _, e in ipairs(M.recycleDue) do if e.unit == "SV_Unit_Cargo1" and e.at > clock then held = true end end
+    check(#recycled == r0 and held and holdAsked[#holdAsked] == "1 SV_Unit_Cargo1",
+          "join: the hull not recycled while ship 1's ZFA-44s are up here, asked again 5 s on")
+    hullHeld = false
+    tick(5.25)
+    local cargoOff = false
+    for i = r0 + 1, #recycled do if recycled[i]:find("^SV_Unit_Cargo1/") then cargoOff = true end end
+    check(cargoOff, "join: ... and off the list once none is up (" .. tostring(recycled[#recycled]) .. ")")
+
+    -- ((2026-11-11) the session's review) the host's spawn of a held hull waits: never spawned (its own recycle) or forced
+    -- off while a ZFA-44 of its launchers is up here; this game's switched-off ZFA-44s of it finished off first, once
+    print("join: the host's spawn of a carrier's hull waits while its ZFA-44s are up here")
+    world.SV_Unit_Cargo1 = nil
+    hullHeld = true
+    local k0 = #offKills
+    inbox[#inbox + 1] = "0|sp|SV_Unit_Cargo1|-|-|-1|7"
+    tick(); tick(1.5); tick(6)
+    check(world.SV_Unit_Cargo1 == nil and #offKills == k0 + 1 and offKills[#offKills] == 1,
+          "join: not spawned while ship 1's ZFA-44s are up here; its switched-off ones finished off once (" .. (#offKills - k0) .. ")")
+    hullHeld = false
+    tick(5.25)
+    check(world.SV_Unit_Cargo1 ~= nil, "join: ... spawned once none is up")
 
     print("join: A9, the host's run-over while the level loads")
     local d0 = #downs

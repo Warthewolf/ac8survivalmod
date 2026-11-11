@@ -152,21 +152,32 @@ end
 -- The budget: as many asks a second as the units asked for in the last WATCH_S need (one a maxAge each), RATE_MIN to
 -- RATE_MAX, a tick's share each tick (RATE x the time since the last tick, 0.25 to 1 s: 2 to 8 asks at 4 ticks a second).
 -- The round clock (D.now, roundsTick's `now`) is the cache's: it stops while the game's paused, as the world does.
+-- ((2026-11-11) Saint Alessia's 50-round co-op run, lag-2: the budget counted asks, not time, and an answer HARD_S old
+-- was asked again whatever the budget: at rounds 49-50 the Spaceport's 41-52 units kept it at its 32 a second, ~9.5 ms an
+-- ask then (the native lookup's cost, fixed in the runtime: lag-1), 69-71 ms a tick of 'rounds'. Now the tick's native
+-- asks are timed too (os.clock): past BUDGET_S of them in a tick no refresh runs, an answer is used up to HARD_S old once
+-- the tick's count or its time is spent, and past HARD_S it's asked again only while the time lasts, else used up to
+-- CAP_S old (one older asked again a tick: no burst). The asks that always run (a unit never asked, a plane of it seen
+-- down, ALIVE.fresh) count against both. The count's RATE_MAX stays 32: with the native ask in microseconds (lag-1) and
+-- the time budget for the slow case, a lower one only read the Spaceport's kills later (spaceport_test's pays within
+-- 2-3 s failed at 20-28).)
 ALIVE = {}
 do
-local AGE_S, HARD_S, WATCH_S, REFRESH_X = 1.0, 3.0, 3.0, 0.9
+local AGE_S, HARD_S, CAP_S, WATCH_S, REFRESH_X = 1.0, 3.0, 10.0, 3.0, 0.9
 local RATE_MIN, RATE_MAX = 8, 32
+local BUDGET_S = 0.004                           -- (native asks' time a tick, os.clock)
 -- unit -> { n, at (its answer's), every (the shortest maxAge asked for lately, everyAt), want (asked for), downs }
 local C = {}
 local T = { D = nil, at = nil, left = 0, budget = 0, rate = RATE_MIN, downs = nil, downsAt = nil }
 local S = {}                                     -- the round's counts (ALIVE.report)
 local function resetStats()
-    S = { asks = 0, forced = 0, kept = 0, past = 0, worst = 0, worstUnit = nil, rate = 0, budget = 0, watched = 0 }
+    S = { asks = 0, forced = 0, kept = 0, past = 0, worst = 0, worstUnit = nil, rate = 0, budget = 0, watched = 0,
+          held = 0, cut = 0, ms = 0, tickMs = 0 }
 end
 resetStats()
 local function clockOf(now) return tonumber(now) or (D and tonumber(D.now)) or 0 end
 local function forgetAll()                       -- (a new run, D, or the level gone: nothing kept is the game's now)
-    C, T.D, T.at, T.left, T.downs, T.downsAt, T.downsOf = {}, D, nil, 0, nil, nil, nil
+    C, T.D, T.at, T.left, T.downs, T.downsAt, T.downsOf, T.spent = {}, D, nil, 0, nil, nil, nil, 0
     resetStats()
 end
 -- planes of `unit` the sweep has seen down (sv_main.lua sets p.down, in the tick's other half), counted once a tick from
@@ -185,7 +196,11 @@ end
 -- (fromTick: ALIVE.tick's refresh, which keeps the entry's `want`: only a part's ask is "asked for", so a unit nobody
 -- asks about any more is forgotten WATCH_S on, not refreshed for ever)
 local function native(unit, now, every, forced, fromTick)
+    local t0 = os.clock()
     local n = SV_UnitAlive(unit)
+    local took = math.max(0, os.clock() - t0)        -- ((lag-2) the tick's time budget: every native ask counts)
+    T.spent = (T.spent or 0) + took
+    S.ms = S.ms + took * 1000
     local e = C[unit]
     C[unit] = { n = n, at = now, every = math.min((e and e.every) or every, every), everyAt = (e and e.everyAt) or now,
                 want = (fromTick and e and e.want) or now, downs = downsOf(unit, now) }
@@ -218,9 +233,21 @@ function ALIVE.ask(unit, now, maxAge)
             if dn < (e.downs or 0) then e.downs = dn end            -- (down planes pruned off the list since)
             if not ((tonumber(e.n) or 0) > 0 and dn > (e.downs or 0)) then
                 if age < maxAge then return used(unit, e, age) end
-                if T.at == now and (T.left or 0) <= 0 and age < HARD_S then
-                    S.past = S.past + 1
-                    return used(unit, e, age)
+                if T.at == now then
+                    -- ((lag-2) the tick's asks or its time spent: kept up to HARD_S; past it, asked while the time lasts,
+                    -- else kept up to CAP_S)
+                    local timeOut = (T.spent or 0) >= BUDGET_S
+                    if ((T.left or 0) <= 0 or timeOut) and age < HARD_S then
+                        S.past = S.past + 1
+                        return used(unit, e, age)
+                    end
+                    if timeOut then                     -- (past CAP_S: asked again, one such a tick: no burst)
+                        if age < CAP_S or (T.overdue or 0) >= 1 then
+                            S.held = S.held + 1
+                            return used(unit, e, age)
+                        end
+                        T.overdue = (T.overdue or 0) + 1
+                    end
                 end
             else
                 return native(unit, now, maxAge, true)                 -- (a plane of it went down: asked at once)
@@ -255,11 +282,14 @@ function ALIVE.tick(now)
         T.saidFor = D
         log(string.format("alive: (0.73.80) the units' SV_UnitAlive answers kept and asked again in turn: %d to %d asks a "
             .. "second by the units watched (%d to %d a tick), each answer under %.0f s old within the budget (up to %.0f s past "
-            .. "it), a flight with a plane seen down asked at once", RATE_MIN, RATE_MAX, math.ceil(RATE_MIN / 4),
-            math.ceil(RATE_MAX / 4), AGE_S, HARD_S))
+            .. "it), a flight with a plane seen down asked at once; (lag-2) at most %.0f ms of native asks a tick (then answers "
+            .. "kept, up to about %.0f s: one older asked a tick)", RATE_MIN, RATE_MAX, math.ceil(RATE_MIN / 4),
+            math.ceil(RATE_MAX / 4), AGE_S, HARD_S, BUDGET_S * 1000, CAP_S))
     end
     local dt = T.at and (now - T.at) or 0.25
     T.at = now
+    if (T.spent or 0) * 1000 > S.tickMs then S.tickMs = T.spent * 1000 end     -- (the last tick's, all of it)
+    T.spent, T.overdue = 0, 0
     local need, n = 0, 0
     for u, e in pairs(C) do                                      -- (not asked for in WATCH_S: forgotten)
         if now - (e.want or e.at) > WATCH_S then C[u] = nil
@@ -278,14 +308,21 @@ function ALIVE.tick(now)
     end
     if #due == 0 then return end
     table.sort(due, function(a, b) if a.r ~= b.r then return a.r > b.r end return a.u < b.u end)
-    for i = 1, math.min(#due, T.left) do native(due[i].u, now, C[due[i].u].every or AGE_S, false, true) end
+    local k = math.min(#due, T.left)
+    for i = 1, k do
+        if T.spent >= BUDGET_S then S.cut = S.cut + k - i + 1; break end      -- ((lag-2) the tick's time spent)
+        native(due[i].u, now, C[due[i].u].every or AGE_S, false, true)
+    end
 end
 -- The round's line (sv_rounds.lua, at its clear), then its counts start again.
 function ALIVE.report(round)
+    if (T.spent or 0) * 1000 > S.tickMs then S.tickMs = T.spent * 1000 end
     log(string.format("alive: round %s: %d native SV_UnitAlive asks (%d at once: a plane of the flight seen down), %d kept "
         .. "answers used (%d past the tick's budget); the budget up to %d asks a second (%d a tick) for %d units watched; the "
-        .. "oldest answer used %.2f s old%s", tostring(round), S.asks, S.forced, S.kept, S.past, S.rate, S.budget, S.watched,
-        S.worst, S.worstUnit and (" (" .. S.worstUnit .. ")") or ""))
+        .. "oldest answer used %.2f s old%s; (lag-2) the asks took %.1f ms in all, %.1f ms in a tick at most (its budget %.0f "
+        .. "ms): %d refreshes cut by it, %d answers kept past %.0f s", tostring(round), S.asks, S.forced, S.kept,
+        S.past, S.rate, S.budget, S.watched, S.worst, S.worstUnit and (" (" .. S.worstUnit .. ")") or "", S.ms, S.tickMs,
+        BUDGET_S * 1000, S.cut, S.held, HARD_S))
     resetStats()
 end
 -- (the teardown gate's drop, sv_core.lua levelDrop: the answers forgotten with the level)
@@ -340,10 +377,14 @@ local function spawnBomber(unit, opts)
     local r = SV_Spawn(unit, x, y, alt * 100, yaw)
     spawningUnit, spawningIdx = nil, nil
     ALIVE.spawned(unit, r)
-    log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f%s, %.1f km up: %s", D.round,
+    -- ((2026-11-11) Saint Alessia's run: SV_ShuttleRound left at 1 sends its appearance's orders onto the shuttle,
+    -- survival_events.py SV_BomberUp_NN; said only then)
+    local sr = r > 0 and tonumber((svFlags() or {}).SV_ShuttleRound) or 0
+    log(string.format("round %d: bomber flight %s as %s (%s set), %.0f km out at bearing %.0f%s, %.1f km up: %s%s", D.round,
         unit, ac, tostring(set), dist, bearing, (compass and not onBearing) and string.format(" (not the %s: the zone's edge)",
             compassName(compass)) or "", alt / 1000,
-        r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
+        r > 0 and (r .. " aircraft up") or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")"),
+        sr >= 1 and string.format(" (SV_ShuttleRound %d: its orders are the shuttle's)", sr) or ""))
     D.heavy = D.heavy or {}
     D.heavy[unit] = HEAVY_UNIT[unit] or nil
     if r > 0 then

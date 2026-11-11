@@ -381,7 +381,7 @@ CFG.coop.real_paths = {}
 join(7, hi(7, "f16c_common", "falken", LO1, "", "FALKEN"))
 check(native[7] and has(native[7].full, "PP0038_adfx02_L001") and M.roster[7].cls == "" and M.roster[7].base == "", "an older build's hi: no path, no base, [coop.real_fallback]")
 -- invalid paths: never loaded, never kept
-local BAD = { "C:/evil.uasset", "/Game/../Engine/BP_PlayerPlane_PP1_falken.BP_PlayerPlane_PP1_falken_C",
+local BAD = { "C:/evil.uasset", "/Game/../Engine/BP_PlayerPlane_PP1_falken.BP_PlayerPlane_PP1_falken_C",  -- paths_check: ok
               "/Game/" .. string.rep("a", 190) .. "/BP_PlayerPlane_PP9001_falken.BP_PlayerPlane_PP9001_falken_C",
               "/Game/Blueprints/Weapon/BP_wp_x.BP_wp_x_C", "/Game/Mods/Y/BP_PlayerPlane_PP0022_f16c.BP_PlayerPlane_PP0022_f16c_C",
               "/Game/Mods/Z/BP_PlayerPlane_PP9001_falken.BP_PlayerPlane_PP9001_falken_L001_C", "/Game//Mods/BP_PlayerPlane_PP9_falken.BP_PlayerPlane_PP9_falken_C" }
@@ -417,7 +417,7 @@ COOP.reopen("join", "test")
 COOP.slot, M.state = 3, "linked"
 inbox[#inbox + 1] = string.format("0|pi|12|f16c_common|%s|Ann|falken|%s||FALKEN|76561198000000001|%s|ADFX02", VERSION, LO1, FALKEN)
 inbox[#inbox + 1] = string.format("0|pi|13|su47_common|%s|Bee|su47|%s||SU-47|76561198000000002", VERSION, LO1)
-inbox[#inbox + 1] = string.format("0|pi|14|f16c_common|%s|Cid|falken|%s||FALKEN|76561198000000003|C:/evil|adfx02", VERSION, LO1)
+inbox[#inbox + 1] = string.format("0|pi|14|f16c_common|%s|Cid|falken|%s||FALKEN|76561198000000003|C:/evil|adfx02", VERSION, LO1)  -- paths_check: ok
 tick()
 local r12, r13, r14 = M.roster[12], M.roster[13], M.roster[14]
 check(r12 and r12.sid == "76561198000000001" and r12.cls == FALKEN and r12.base == "adfx02" and r12.lo == LO1 and r12.ac == "FALKEN",

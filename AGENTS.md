@@ -2,6 +2,37 @@
 
 Both AI agents read this file before working. Keep it up to date.
 
+## How to work (every task, both agents; user, 2026-11-09)
+Start every task with these steps, in this order, instead of starting wherever the task seems to be.
+1. **Branch.** `dev` is the working branch. Every task starts from an up-to-date `dev`, on a branch of its own:
+   `git switch dev`, then `git switch -c <kind>/<topic>` (kind: `feature`, `fix`, `docs`, `tools`, `re`; topic short,
+   kebab-case: `feature/log-bundle`, `tools/env-paths`). One topic per branch.
+   - Never work on `main`: it only takes `dev` when the user says a build is good.
+   - Never work directly on `dev`, except for a small fix the user asks for there.
+   - Don't branch off another topic branch unless the work needs it; then say so in the branch's first commit message.
+   - A finished branch is merged back into `dev` (when the user asks), then deleted. A worktree per branch is fine,
+     named after the branch.
+2. **Read** before changing anything: `git status` and the last commits of the branch; this file; the task's plan in
+   `docs/design/`; `docs/design/MISSION_REFERENCE.md` for a game feature; the matching `docs/re/*.md`; HISTORY.md only
+   through grep.
+3. **Plan first.** A task of more than one step gets a plan in `docs/design/<TOPIC>_PLAN.md` (write it if there is none),
+   proposed to the user before any code, and kept up to date as the user decides things. Plans are local working notes
+   (git-ignored): never commit one, and never cite one from code, docs or HISTORY.md. Stay inside the task: a problem
+   found on the way goes into the plan or a note for the user, not into a silent fix.
+4. **No machine path in the repo.** A path that differs from one machine to another (the game, UE, AC7's exports, a
+   work folder, a tool's exe, the main tree) is never written into a tool, a script, a doc or this file:
+   - tools read it from `.env` (from `.env.example`; shell: `. tools/env.sh` then `sv_need NAME "what it is"`; Python:
+     `env.need('NAME', 'what it is')`), with no fallback to anyone's drive;
+   - paths inside the repo come from git (this checkout: `git rev-parse --show-toplevel`; the main tree:
+     `git rev-parse --git-common-dir`, as `tools/release_dir.sh`);
+   - a new setting goes into `.env.example` (commented, with what it is) and `tools/env.py --check`;
+   - docs write `build/...`, `<repo>`, or the `.env` name (`$UE`, `$AC7`, `$AC8_DIR`).
+   `tools/checks/paths_check.py` (run by `build_all.sh`) fails the build on one.
+5. **Check:** `lua_check.py` after every Lua edit, `build_all.sh` (it runs the checks), and the `tools/checks/` tests
+   for what changed. Report what passed, what failed and what couldn't be run.
+6. **Hand over:** a new version for every build the user gets, the build's notes at the end of HISTORY.md, a lesson a
+   test confirms as a hard rule here (see "How the two agents share the work").
+
 ## Project
 A round-based survival mode mod for Ace Combat 8 (PC).
 - Waves escalate each round. Every 5th round is a special-enemy round: ace squadron, Ladon bomber, Podarge / Land Aegis drop, ECM towers, stealth wing.
@@ -28,8 +59,8 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   within the files of the Alicorn Special Raid as the Model inside is edited"): the ZFA-44 from the user's AC7 mod
   Alicorn Special Raid IV may be used for a Survival special round: its edited model (the mod's
   Vehicles/Aircraft/uavs/uavs_SM, a CFA-44-based static mesh), its paint (fa44_00_D, fa44_00xMREC, fa44_00_Inst), its
-  actor ex_uavs and its weapons, with the AC7 stock assets they use. Source: the user's work folder
-  D:\Ace Combat PAKS\unrealpak\Engine\Binaries\Win64\Alicorn_Special_Raid_IV (unencrypted). Never AC7 voice lines.
+  actor ex_uavs and its weapons, with the AC7 stock assets they use. Source: the user's work folder of
+  that mod, Alicorn_Special_Raid_IV (unencrypted; on the user's machine, not in this repo). Never AC7 voice lines.
   The same exception (2026-11-07: "Check this mod out, we fixed the Clouds in this one", "in a previous mod we built,
   this happened and we were able to fix it"): the user's own AC8 mod Orbital Tonitrus Spear Strike (RoGLaser) and its
   cloud fix for the Spear's rods (each rod's blast at the clouds' height, the sky's ExplosionEffect as Mission 30's big
@@ -43,6 +74,11 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   and package_release.sh / package_test.sh refuse it (package_dev.sh takes it with TANI=1 only, and TANI=1 only with it).
 - Release zips always go to the main tree's build/release, `E:\ACE8 Survival Mode\build\release`, from any worktree
   (user, 2026-11-07): tools/package_release.sh and package_test.sh find it through tools/release_dir.sh.
+  2026-11-10: "Keep it dev install only"): its Lua in DEV ONLY blocks, never in a release or TESTER zip
+  (tools/strip_test_only.py takes them out of every zip; package_dev.sh keeps them; THE TANICORN's test mount too).
+- Release zips always go to the main tree's build/release (git's main working tree), from any worktree (user,
+  2026-11-07): tools/package_release.sh and package_test.sh find it through tools/release_dir.sh (`RELEASE_DIR` in
+  `.env` overrides it).
 - The runtime's leaderboard address and key come from the main tree's leaderboard/submit.local from any worktree
   (runtime/build.sh: .env's SV_LB_LOCAL, this checkout's, else the main tree's). Every 0.74.0-0.74.8 build was made in a
   worktree without it and could send no run; package_release.sh online and package_dev.sh now refuse a runtime without
@@ -344,6 +380,18 @@ Copy a working stock pattern before inventing a new one.
     SetResources weren't needed and blinked nothing. The user's layout-probe recording of 0.74.41 (2026-11-08 22-05-44).
     Swap it only behind a fade (sv_anomalies_dev.lua), never the sky params pointer (sv_sky.lua writes through it).
 
+63. GameplayStatics.ApplyDamage does nothing to AC8's Live objects, and its pcall succeeds: Saint Alessia's co-op run of
+    0.74.36 (2026-11-10) "finished off" ZFA-44s 140 times (70 Helios blasts, every carrier leaving) and the same 24 lived
+    to round 51 at full health; the shuttle took it and stayed "1 alive" until SV_Recycle. Finish an object with
+    sv_core.lua finishUnpaid (mortal, MinHealth field 0, ModifyHealth(-(h / 10 + 1000), nil, true), read back): HealthInternal
+    is health x 10, ModifyHealth takes plain health. Never count a kill without reading its health back.
+
+64. A remote event fired while the host's landing minigames run (Landing, Hangar = the STORE, SeamlessOut) runs none of its
+    records, though SV_Event answers 1: Saint Alessia's host of 0.74.36 (2026-11-10), STORE 18:47:27-18:48:06: the
+    shuttle's T-4 and T (SV_ShuttleLaunched never set) and a flight's appearance orders were lost; events after it took
+    with her still on the runway. A one-shot host event that matters is checked by its effect and fired again once the
+    STORE is shut (sv_rounds_shuttle.lua SPC.storeShut: the shuttle's liftoff, its removal, the Spaceport's launch).
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
@@ -370,12 +418,15 @@ for everyone (M.sendSettings: CFG's differences from CFG_DEFAULTS, data only); t
 SV_MenuSetting, iniSet). Build: `COOP=1 NOVALKA=1 sh tools/package_release.sh online <version>` (bump
 tools/coop_edition.py COOP_TAG for every build friends get: from runtime 0.32.6 games with different builds refuse to link (coop.c CoSameVer, both ways); before it they linked with a CO-OP VERSION MISMATCH callout, only a different CO_PROTO refusing: two players on 0.73.26 joined a 0.73.27 host, 2026-10-31).
 Guards on what other games send (security review of 2026-10-26; keep them when adding messages): coop.c drops any
-state with a non-finite or far-off position or a non-unit rotation before it can reach a teleport (CoSaneState);
+state with a non-finite or far-off position or a non-unit rotation before it can reach a teleport (CoSaneState), and
+refuses another game's message shaped like its own notices to Lua, "sys" / "sys|..." (CoNetPush, runtime 0.32.34);
 sv_coop.lua cuts texts, checks slots, zollars, damage and poses, sets only NPC rows this game's DT_SV_NpcMission has
 (knownRow) and stand-in rows of CFG.coop.airframes, and takes a host's settings only where the shipped CFG has that
-setting with a value of the same type and size (fits; build data and each player's own sections never). The main menu:
+setting with a value of the same type and size (fits; build data and each player's own sections never); a host's
+round state ("rnd") only with whole numbers in range (RND_MAX; a huge wave count froze joiners). New messages: give them a
+row in tools/checks/coop_guard_test.lua (hostile values in every field, on a host and a joiner). The main menu:
 any entry but HOST / JOIN closes co-op; picking one again retries a failed open (SV_MenuChoice counts the picks).
-Checks without the game: `sh tools/checks/coop_test.sh` (the transport, 4 and 12 players over lossy UDP),
+Checks without the game: `sh tools/checks/coop_test.sh` (the transport, 4 and 12 players over lossy UDP; Linux too),
 `sh tools/checks/coop_settings_test.sh` (the settings sync, rows and scaling on the real parts) and
 `sh tools/checks/lua_load_test.sh [mod folder]` (every part of main.lua loads). The last two run on a real Lua 5.4.6
 that tools/checks/lua_build.sh builds into build/checks (there's no Lua on the build machine otherwise).
@@ -497,17 +548,18 @@ tools/checks/subs_test.sh tests the part. The file is made from a release's copy
   how-tos, because every session loads it whole. A lesson a test confirms goes here as a hard rule.
 - No source file over 2,000 lines (tools/checks/size_check.py, run by build_all.sh): split a growing file at a topic
   boundary (Runtime layout, below).
-- Your machine's paths and keys are in .env (from .env.example; tools/env.sh, tools/env.py), never in a tool or in git.
-  CONTRIBUTING.md has the whole setup.
+- Your machine's paths and keys are in .env (from .env.example; tools/env.sh, tools/env.py), never in a tool, a doc or
+  git ("How to work", step 4). CONTRIBUTING.md has the whole setup.
 
 ## Build history and feature notes
 Every build's notes are in HISTORY.md, oldest first: the economy review (0.70), the enemy behaviour layer (0.72),
 COOP2MP's T1-T4 and every build since, through the newest. It isn't loaded into sessions (it was most of this file's
 ~190 KB): grep it for a version, a feature or a log line, and read only the entry you need. Each feature's design,
-reverse engineering, log lines and test checklist are in tools/re/*.md (COOP.md, COOP2MP.md, BEHAVIOUR_DIRECTOR.md,
+reverse engineering, log lines and test checklist are in docs/re/*.md (COOP.md, COOP2MP.md, BEHAVIOUR_DIRECTOR.md,
 ESCORT.md, FISHING.md, DECOY.md, SPACEPORT_ASSAULT.md, ZFA44.md, THUNDER.md, VALKA.md, ...).
-- (Git, 2026-11-08 cleanup) `main` is the working branch: it holds everything through 0.74.20; the old branches are
-  merged or kept as `archive/*` tags. COOP2MP is the build line's name (COOP_TAG, BUILD_NAME), no longer a branch.
+- (Git) From 2026-11-09 `dev` is the working branch and every task gets its own branch from it ("How to work", step 1);
+  `main` takes `dev` when the user says a build is good. The 2026-11-08 cleanup merged the old branches or kept them as
+  `archive/*` tags. COOP2MP is the build line's name (COOP_TAG, BUILD_NAME), no longer a branch.
 - COOP2MP is the working main since 2026-10-30: the other players fly as real player planes (ALivePlayerPlane fed from
   their stream, their weapons replayed from their own plane), the AI stand-ins only as a fallback. VERSION 0.7x.y with
   COOP_TAG -coop2mp.N (tools/coop_edition.py); friends' zips: BUILD_NAME=COOP2MP COOP=1 sh tools/package_release.sh online

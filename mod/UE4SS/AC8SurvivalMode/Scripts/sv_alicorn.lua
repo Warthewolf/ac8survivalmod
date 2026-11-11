@@ -4,7 +4,8 @@
 
 ---------------------------------------------------------------------------------------------------- alicorn
 -- CFG.specials.alicorn; tools/survival_events.py ALCN_* builds the unit (EB_002's, without its pools), its lane and
--- its remote events (RE_SV_AlcnDive / Surface / Railgun / Volley / OpenCore / Advance / Remove).
+-- its remote events (RE_SV_AlcnDive / Surface / Railgun / Volley / OpenCore / Advance / Remove; RE_SV_AlcnLeg*, a co-op
+-- rejoiner's copy's leg). In co-op: docs/re/ALICORN.md 6.
 do
 local UNIT = "SV_Unit_Alicorn"
 SPC.alicornUnit = UNIT                 -- (sv_coop.lua: a joiner's copy of it taken off whole before the host's fresh one)
@@ -79,7 +80,10 @@ function SPC.alicornSpawn(now)
     end
     SPC.alcnPool = { set = {}, n = 0, at = now + 3 }
     spawningUnit = UNIT
-    local r = SV_Spawn(UNIT)
+    -- ((2026-11-11) at its lane's start if a co-op rejoin here once spawned it at a pose: SPC.alicornPose, below)
+    local p = SPC.alicornPose(nil)
+    local r
+    if p then r = SV_Spawn(UNIT, p[1], p[2], p[3], p[4]) else r = SV_Spawn(UNIT) end
     spawningUnit = nil
     log("special: the Alicorn (" .. UNIT .. "): " .. (r > 0 and "up" or ("not spawned (" .. (SV_ERR[r] or tostring(r)) .. ")")))
     if r <= 0 then return false end
@@ -206,9 +210,9 @@ end
 -- every PART_WALK_S. Every kept object checked live (liveObj) before it's handed out.
 local PART_WALK_S = 10
 -- fresh: a look again (armsLook before a kind counts as down: review of 2026-11-04, F4's): the record and a search now,
--- what's new merged in by address
-local function parts(cls, fresh)
-    local s = D and D.special
+-- what's new merged in by address. st: the state its finds are kept in (D.special; a co-op joiner's SPC.alcnCl)
+local function parts(cls, fresh, st)
+    local s = st or (D and D.special)
     local cache = s and s.partCache
     if s and not cache then cache = {}; s.partCache = cache end
     local e = cache and cache[cls]
@@ -258,6 +262,90 @@ local function partAt(o)
     local okF, f = pcall(function() local q = o:GetActorForwardVector(); return { X = q.X, Y = q.Y } end)
     local n = okF and f and math.sqrt(f.X * f.X + f.Y * f.Y) or 0
     return l, n > 0.1 and { X = f.X / n, Y = f.Y / n } or nil
+end
+
+-- ((2026-11-11) Saint Alessia's 50-round co-op run, round 45: "alicorn desync, was invulnerable to Delta, Acorn relogged,
+-- shot the water a bit on my end, suddenly alicorn destroyed". No sync bug in the logs: the open core took ~60 missiles
+-- with its health on nobody's screen, nothing logged its hits, and The Iron Acorn's copy after his relog was a fresh one
+-- at the lane's west end, the host's 0-16 km off.) The core's health on every game's NEXT row once it's open (CORE n%:
+-- the host's from what it had when it opened, a joiner's from the host's "rnd" field 16, SPC.alicornCode) and called
+-- out at each of CORE_CALLS; the hull's place and leg every POS_LOG_S in the log, and for a co-op rejoiner's copy
+-- (SPC.alicornRejoin: spawned at the host's hull, then the leg from the waypoint just ahead of it).
+local CORE_CALLS = { 75, 50, 25 }
+local POS_LOG_S = 30
+-- Mission 22's fleet lane it sails, west (A) to east (E), km: tools/survival_events_specials.py ALCN_ROUTE, kept in step
+-- (bosses_build_check.py); its legs from each waypoint are RE_SV_AlcnLeg<Out|Back>[<letter>] (alcn_legs there)
+local LANE_KM = { { -27.7, -4.4 }, { -23.0, -5.1 }, { -19.0, -5.8 }, { -15.3, -6.3 }, { -11.5, -6.4 } }
+local LANE_LETTERS = "ABCDE"
+local LEG_AHEAD_CM = 30000                              -- (a leg from the first waypoint 300 m or more ahead: hard rule 2)
+-- its start (the world data's spawn point, the unit desc's yaw 0): a copy spawned at a pose moves the desc, so the next
+-- one with none goes back there (SPC.alicornPose)
+local LANE_START = { -2770000, -440000, 0, 0 }
+-- the submarine itself (LiveAIAlicorn, docs/re/ALICORN.md 1.1), found in its spawn's record (never by a search): its core
+-- stands in when it isn't
+local HULL_NAME = "BP_BA002_alcn_N000_00100_C_"
+local function hullOf(st)
+    if not st then return nil end
+    if st.hullObj and liveObj(st.hullObj) then return st.hullObj end
+    st.hullObj = nil
+    if (st.hullLooks or 0) >= 5 then return nil end
+    st.hullLooks = (st.hullLooks or 0) + 1
+    for _, o in ipairs(SPC.CLEAN_OBJ and SPC.CLEAN_OBJ[UNIT] or {}) do
+        if liveObj(o) and nameOf(o):find(HULL_NAME, 1, true) then st.hullObj = o; return o end
+    end
+    if st.hullLooks == 5 then log("special: the Alicorn's hull isn't in its spawn's record: its core's place stands in for it") end
+    return nil
+end
+-- where it is: its location (cm), its bow (a level unit vector, or nil) and its heading (deg, or nil)
+local function hullPose(st, depth)
+    local at, fwd = partAt(hullOf(st) or depth)
+    if not at then return nil end
+    return at, fwd, fwd and (math.deg(math.atan(fwd.Y, fwd.X)) % 360) or nil
+end
+-- the leg a copy started at x (cm) sails, east (out) or west (back): from the first waypoint LEG_AHEAD_CM or more ahead
+-- (its last: the other way's whole leg, which starts there; past it, the other way's leg from the next); the event, and
+-- what it is for the log
+function SPC.alicornLegOf(x, east)
+    local n = #LANE_KM
+    local function L(k) return LANE_LETTERS:sub(k, k) end
+    if east then
+        for k = 2, n do
+            if LANE_KM[k][1] * 100000 > x + LEG_AHEAD_CM then
+                if k == n then return "RE_SV_AlcnLegBack", "out: to " .. L(n) .. ", then back" end
+                return "RE_SV_AlcnLegOut" .. L(k), "out: from " .. L(k)
+            end
+        end
+        return "RE_SV_AlcnLegBack" .. L(n - 1), "out at the lane's east end: back from " .. L(n - 1)
+    end
+    for k = n - 1, 1, -1 do
+        if LANE_KM[k][1] * 100000 < x - LEG_AHEAD_CM then
+            if k == 1 then return "RE_SV_AlcnLegOut", "back: to " .. L(1) .. ", then out" end
+            return "RE_SV_AlcnLegBack" .. L(k), "back: from " .. L(k)
+        end
+    end
+    return "RE_SV_AlcnLegOut" .. L(2), "back at the lane's west end: out from " .. L(2)
+end
+-- (the host) its place for a co-op rejoiner's copy (hostSync): the spawn pose { x, y, 0, yaw } at its hull, its leg's
+-- event as SPC.alicornLegOf picks it (the way it sails: s.legDir from its moves, else its bow), what that is; nil
+-- when it isn't sailing or can't be read
+function SPC.alicornRejoin()
+    local s = D and D.special
+    if not (s and s.kind == "alicorn" and s.state == "sail") then return nil end
+    local at, fwd, yaw = hullPose(s, s.depthPart)
+    if not at then return nil end
+    local east = s.legDir == "out" or (s.legDir == nil and fwd ~= nil and fwd.X >= 0)
+    local ev, what = SPC.alicornLegOf(at.X, east)
+    return { at.X, at.Y, 0, yaw or 0 }, ev, string.format("(%.1f, %.1f) km, heading %s, %s", at.X / 100000, at.Y / 100000,
+        yaw and string.format("%.0f", yaw) or "?", what)
+end
+-- the pose this game's spawn of it goes at: the host's (a rejoiner's, its "sp"), else its lane's start when a spawn at a
+-- pose here moved its desc (the next one with none would come up there), else none (the world data's point)
+function SPC.alicornPose(pose)
+    if pose then SPC.alcnMoved = true; return pose end
+    if not SPC.alcnMoved then return nil end
+    SPC.alcnMoved = nil
+    log("special: the Alicorn's spawn here at its lane's start again (a spawn at a pose had moved its unit there)")
+    return { LANE_START[1], LANE_START[2], LANE_START[3], LANE_START[4] }
 end
 
 -- Its railguns (LiveAIRailgun, not their hatches: railgun_R's can't be destroyed, ALICORN.md 1.2) and its VLS: once a
@@ -402,6 +490,52 @@ function SPC.alicornDeck(now, s, c)
         log(string.format("special: the Alicorn's deck: %s didn't launch (%s); again in %.0f s, told first", u,
             SV_ERR and SV_ERR[r] or tostring(r), 5 + warn))
     end
+end
+
+-- ((2026-11-11, the user after Saint Alessia's 50-round run: "Yes add the alicorns core size"; its core had the same
+-- ~60 missiles' health whoever was flying, and Delta fought it mostly alone) its core's health as it opens, in your
+-- standard missiles as the tanks': core_missiles for one player and core_missiles_per_player for each other player
+-- flying then (a co-op host: itself while it's up, not DOWN and not down at the airfield, and othersFlying(); solo: just
+-- you), more a round as the tanks' (hx / health_x), split across its core's parts that are up; done before CORE 100% is
+-- taken (s.coreFull), so that's the sized core. The missile's damage unread (or core_missiles 0): its health as it is.
+-- A joiner's copies get it in the host's next "hp" (hostTick: a health that changed, within a second).
+local function playersFlying()
+    if not (COOP and COOP.host and COOP.host()) then return 1 end
+    local down = DOWN ~= nil and type(DOWN.me) == "function" and DOWN.me() == true
+    local okE, e = pcall(function() return COOP.me and COOP.me() end)
+    local up = not down and not playerOnAirfield() and not (okE and type(e) == "table" and e.alive == false)
+    local okO, o = pcall(othersFlying)
+    return (up and 1 or 0) + ((okO and tonumber(o)) or 0)
+end
+local function coreSize(s, c, core, hx)
+    local base, per = tonumber(c.core_missiles) or 0, math.max(0, tonumber(c.core_missiles_per_player) or 0)
+    if base <= 0 then return end                          -- (0: its health x health_x, as before)
+    local up = {}
+    for _, o in ipairs(core) do local h = hp(o); if h and h > 0 then up[#up + 1] = o end end
+    local d, from = s.mslDamage, nil
+    if not d then                                          -- (tank_missiles 0 never read it; a missile in the air now)
+        local okD, v, f = pcall(SPC.playerMissileDamage)
+        if okD and v then d, from = v, f end
+    end
+    local others = math.max(0, playersFlying() - 1)
+    local n = base + per * others
+    local what = string.format("%g missiles (%g + %g x %d other player%s flying)", n, base, per, others, others == 1 and "" or "s")
+    if not d or #up == 0 then
+        log(string.format("special: the Alicorn's core keeps its health (%s): %s", not d and "your missile's damage can't be read"
+            or "none of its parts' health can be read", what))
+        return
+    end
+    local growth = hx / (c.health_x or 1)
+    local each = math.max(1, math.floor(n * d * 10 * growth / #up + 0.5))
+    local bad = 0
+    for _, o in ipairs(up) do
+        if not pcall(function() o.HealthInternal = each end) then bad = bad + 1 end
+        s.scaled[addrOf(o) or nameOf(o)] = true             -- (never scaled again by the round's pass)
+    end
+    s.coreLast = nil                                       -- (its health set, not a hit)
+    log(string.format("special: the Alicorn's core sized: %s, %d health (x%.2f: round %d's growth, as the tanks'; %d damage a "
+        .. "missile%s%s%s)", what, each * #up, growth, D.round, math.floor(d + 0.5), from and (" from " .. tostring(from)) or "",
+        #up > 1 and string.format("; %d parts, %d each", #up, each) or "", bad > 0 and string.format("; %d writes FAILED", bad) or ""))
 end
 
 function SPC.alicornTick(now, s)
@@ -594,6 +728,46 @@ function SPC.alicornTick(now, s)
         fire("RE_SV_AlcnAdvance"); fire("RE_SV_AlcnOpenCore")
         hudCallout(t.alicorn_core, t.alicorn_core_sub)
         log("special: the Alicorn's ballast tanks are gone: its core opens")
+        local okZ, errZ = pcall(coreSize, s, c, core, hx)  -- (before CORE 100% is taken, just below)
+        if not okZ then log("special: the Alicorn's core's size: error " .. tostring(errZ)) end
+    end
+    -- ((2026-11-11) the core's health, as the tanks': each hit on it logged (none was), and once it's open its share of
+    -- what it had then (s.corePct: every game's NEXT row, "rnd" field 16), called out once at each of CORE_CALLS crossed)
+    local coreH, coreRead = 0, false
+    for _, o in ipairs(core) do local h = hp(o); if h then coreH, coreRead = coreH + math.max(0, h), true end end
+    if coreRead then
+        if s.coreOpen and not s.coreFull then
+            s.coreFull = math.max(coreH, 1)
+            log(string.format("special: the Alicorn's core open with %.0f health: CORE 100%% on every player's row", coreH))
+        end
+        local pct = s.coreFull and math.max(coreH > 0 and 1 or 0, math.min(100, math.floor(100 * coreH / s.coreFull + 0.5)))
+        if s.coreLast and coreH < s.coreLast then
+            log(string.format("special: Alicorn core hit: -%.0f (%.0f left%s)", s.coreLast - coreH, coreH,
+                pct and string.format(", %d%%", pct) or ", its core still shut"))
+        end
+        s.coreLast, s.corePct = coreH, pct
+        local call
+        s.coreCalled = s.coreCalled or {}
+        for _, th in ipairs(pct and CORE_CALLS or {}) do
+            if pct <= th and not s.coreCalled[th] then s.coreCalled[th], call = true, th end
+        end
+        if call and coreH > 0 then
+            hudCallout(string.format(t.alicorn_core_left, pct), t.alicorn_core_left_sub)
+            log(string.format("special: the Alicorn's core at %d%% (%.0f of %.0f): called out (under %d%%)", pct, coreH, s.coreFull, call))
+        end
+    end
+    -- ((2026-11-11) its hull: which way it sails (s.legDir, for a co-op rejoiner's copy: SPC.alicornRejoin), and where, in
+    -- the log every POS_LOG_S (the 50-round run's host logged nothing of it after its deck's launches)
+    local hat, _, hyaw = hullPose(s, s.depthPart)
+    if hat then
+        if s.hullX and math.abs(hat.X - s.hullX) > 1000 then s.legDir = hat.X > s.hullX and "out" or "back" end
+        s.hullX = hat.X
+        if now >= (s.posAt or 0) then
+            s.posAt = now + POS_LOG_S
+            log(string.format("special: the Alicorn's hull at (%.1f, %.1f) km, heading %s, its %s leg%s", hat.X / 100000,
+                hat.Y / 100000, hyaw and string.format("%.0f", hyaw) or "?", s.legDir or "first",
+                s.dived and ", dived" or ""))
+        end
     end
     local coreUp = false
     for _, o in ipairs(core) do local h = hp(o); if h == nil or h > 0 then coreUp = true end end
@@ -612,6 +786,122 @@ function SPC.alicornTick(now, s)
     elseif not s.partsSaid and now - s.at > 30 then
         s.partsSaid = true
         log(string.format("special: the Alicorn's parts found: %d ballast tanks, %d core", seen, #core))
+    end
+end
+
+-- ((2026-11-11) the core on every player's screen) (the host) its state for the joiners' rows, "rnd" field 16:
+-- "<tanks>:<core>:<dived>", the ballast tanks left, its core shut (s), open with its health unread (e) or at n %, dived
+-- 0 / 1; "" when it isn't sailing
+function SPC.alicornCode()
+    local s = D and D.special
+    if not (s and s.kind == "alicorn" and s.state == "sail") then return "" end
+    local core = (not s.coreOpen and "s") or (type(s.corePct) == "number" and string.format("%d", s.corePct)) or "e"
+    return string.format("%d:%s:%d", math.max(0, math.min(4, math.floor(tonumber(s.tanks) or 4))), core, s.dived and 1 or 0)
+end
+-- (sv_hud.lua) the NEXT row while it sails: the host's own (D.special), a co-op joiner's from the host's last "rnd" (5 s
+-- old at most: COOP.M.rnd.alicorn); nil when there's none. Its core: SHUT, n % once open (EXPOSED with its health unread)
+function SPC.alicornRow(t)
+    local s, tanks, open, pct, dived = D and D.special, nil, nil, nil, nil
+    if s and s.kind == "alicorn" and s.state == "sail" then
+        tanks, open, pct, dived = s.tanks or 4, s.coreOpen, s.corePct, s.dived
+    else
+        local r = COOP and COOP.client and COOP.client() and COOP.M and COOP.M.rnd
+        local a = r and r.alicorn
+        local hs = r and r.hostSpecial
+        if not (a and hs and hs.kind == "alicorn" and hs.state == "sail" and os.clock() - (r.got or 0) <= 5) then return nil end
+        tanks, open, pct, dived = a.tanks, a.open, a.pct, a.dived
+    end
+    local cs = (not open and "SHUT") or (pct and string.format(t.alicorn_core_pct, pct)) or "EXPOSED"
+    return string.format(t.alicorn_row, tanks, cs, dived and "  (DIVED)" or "")
+end
+
+-- ((2026-11-11, the 50-round run's alicorn-7) A co-op joiner's copy, which no alicornTick looks after (the host's runs
+-- there alone): its surfacing checked as the host checks its own, from the host's RE_SV_AlcnSurface (hostEvent:
+-- SPC.alicornHostEvent): every resurface_s while it's still over surfaced_m down and not rising it's surfaced here too
+-- (COOP.eventHere), resurface_tries times at most, up_wait_s at most; its place in the log every POS_LOG_S. The state
+-- (SPC.alcnCl) is for one copy: the record of a new spawn of it starts it again; none while the host's isn't sailing.
+local function clientState(now)
+    local rec = SPC.CLEAN_OBJ and SPC.CLEAN_OBJ[UNIT]
+    local st = SPC.alcnCl
+    if not st or st.rec ~= rec then st = { rec = rec, at = now }; SPC.alcnCl = st end
+    return st
+end
+-- (its core, else a tank: from the copy's record only, never a search, which the host's parts() may make)
+local function clientDepth(st)
+    if st.depth and liveObj(st.depth) then return st.depth end
+    st.depth = nil
+    local c = CFG.specials.alicorn
+    local want = { c.core_class }
+    for _, cls in ipairs(c.tank_classes) do want[#want + 1] = cls end
+    for _, cls in ipairs(want) do
+        local short = cls:gsub("_C$", "") .. "_C_"
+        for _, o in ipairs(st.rec or {}) do
+            if liveObj(o) and nameOf(o):find(short, 1, true) then st.depth = o; return o end
+        end
+    end
+    return nil
+end
+-- (a joiner's hostEvent, each of the host's RE_SV_Alcn* fired here) a dive starts its check, the host's first order to
+-- surface after it its wait (its later ones counted)
+function SPC.alicornHostEvent(name)
+    if not (COOP and COOP.client and COOP.client()) then return end
+    -- ((review of 2026-11-11, luaperf-1) the round clock SPC.alicornClient compares with (clientRounds' now, D.now): with
+    -- os.clock here, far ahead of it in the game, the wait was always negative, the copy never surfaced here
+    local now = D and tonumber(D.now)
+    if not now then return end
+    local st = clientState(now)
+    if name == "RE_SV_AlcnDive" then
+        st.dived, st.surfaceSent = true, nil
+    elseif name == "RE_SV_AlcnSurface" then
+        st.hostOrders = (st.hostOrders or 0) + 1
+        if not st.surfaceSent and st.dived ~= false then
+            st.surfaceSent, st.tries, st.lastZ, st.lastZAt, st.hostOrders = now, 0, partZ(clientDepth(st)), now, 1
+        end
+    end
+end
+function SPC.alicornClient(now)
+    local hs = D and D.hostSpecial
+    if not (COOP and COOP.client and COOP.client() and hs and hs.kind == "alicorn" and hs.state == "sail") then
+        SPC.alcnCl = nil
+        return
+    end
+    local st = clientState(now)
+    if now < (st.nextAt or 0) then return end
+    st.nextAt = now + 1
+    local c = CFG.specials.alicorn
+    local depth = clientDepth(st)
+    local z = partZ(depth)
+    if not st.dived and not st.surfaceSent and z then st.seaZ = z end
+    if st.surfaceSent then
+        local down = (z and st.seaZ) and (st.seaZ - z) / 100 or nil
+        local waited = now - st.surfaceSent
+        local function done(how)
+            log(string.format("special: the Alicorn's copy here %s %.0f s after the host's order (%d of its orders, %d sent here)",
+                how, waited, st.hostOrders or 1, st.tries or 0))
+            st.dived, st.surfaceSent = false, nil
+        end
+        if not down then done("can't be read (no depth: as the host's, counted up)")
+        elseif down <= (c.surfaced_m or 3) then done("surfaced")
+        elseif waited >= (c.up_wait_s or 60) then done(string.format("still %.0f m down: left as it is", down))
+        elseif now - (st.lastZAt or now) >= (c.resurface_s or 8) then
+            if st.lastZ and z - st.lastZ < 100 and (st.tries or 0) < (c.resurface_tries or 4) then
+                st.tries = (st.tries or 0) + 1
+                local rr = COOP.eventHere and COOP.eventHere("RE_SV_AlcnSurface") or -5
+                log(string.format("special: the Alicorn's copy here is still %.0f m down %.0f s after the host's order, not "
+                    .. "rising: surfaced here (%d, %s)", down, waited, st.tries, rr == 1 and "fired" or (SV_ERR and SV_ERR[rr] or tostring(rr))))
+            end
+            st.lastZ, st.lastZAt = z, now
+        end
+    end
+    if now >= (st.posAt or st.at + 10) then
+        st.posAt = now + POS_LOG_S
+        local at, _, yaw = hullPose(st, depth)
+        local a = COOP.M and COOP.M.rnd and COOP.M.rnd.alicorn
+        if at then
+            log(string.format("special: the Alicorn's copy here at (%.1f, %.1f) km, heading %s%s (the host's: %s)", at.X / 100000,
+                at.Y / 100000, yaw and string.format("%.0f", yaw) or "?", st.dived and ", dived" or "",
+                a and string.format("%d tanks, core %s", a.tanks, (not a.open and "shut") or (a.pct and (a.pct .. "%")) or "open") or "no word"))
+        end
     end
 end
 end

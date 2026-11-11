@@ -36,27 +36,48 @@ local function rowsOf(t)
     return { ROW }
 end
 
--- Every line also goes to AC8SurvivalMode\AC8SurvivalMode_lua.log, written through at once: UE4SS.log loses its last
--- lines when the game crashes (a friend's test of 2026-10-22: it stopped 40 s before the crash on sortie).
--- main.lua's folder (Scripts\): the mod's files are found from it (..\config\, ..\AC8SurvivalMode_lua.log, ai\)
+-- Every line also goes to AC8SurvivalMode\logs\AC8SurvivalMode_lua_<stamp>.log, written through at once: UE4SS.log
+-- loses its last lines when the game crashes (a friend's test of 2026-10-22: it stopped 40 s before the crash on
+-- sortie). The stamp is the session's, from the runtime (SV_LogStamp, runtime 0.32.33: every file of a session is
+-- dated, so no session overwrites another's); in the mod's folder when the runtime couldn't make logs\; without the
+-- runtime, the old undated AC8SurvivalMode\AC8SurvivalMode_lua.log.
+-- main.lua's folder (Scripts\): the mod's files are found from it (..\config\, ..\logs\, ai\)
 SCRIPT_DIR = debug.getinfo(1, "S").source:match("^@(.*[/\\])") or ""
 
 log = nil
 do
     local LOG_FILE = nil
     local dir = SCRIPT_DIR .. "..\\"
-    local ok, f = pcall(io.open, dir .. "AC8SurvivalMode_lua.log", "w")
-    if ok and f then LOG_FILE = f; pcall(function() f:setvbuf("no") end) end
+    local stamp = nil
+    if type(SV_LogStamp) == "function" then
+        local okS, v = pcall(SV_LogStamp)
+        if okS and type(v) == "string" and v:match("^%d%d%d%d%-%d%d%-%d%d_%d%d%-%d%d%-%d%d%l?$") then stamp = v end
+    end
+    local names = stamp and { dir .. "logs\\AC8SurvivalMode_lua_" .. stamp .. ".log", dir .. "AC8SurvivalMode_lua_" .. stamp .. ".log" }
+        or { dir .. "AC8SurvivalMode_lua.log" }
+    for _, name in ipairs(names) do
+        if not LOG_FILE then
+            local ok, f = pcall(io.open, name, "w")
+            if ok and f then LOG_FILE = f; pcall(function() f:setvbuf("no") end) end
+        end
+    end
     function log(s)
         print(TAG .. s .. "\n")
         if LOG_FILE then pcall(function() LOG_FILE:write(os.date("%H:%M:%S ") .. s .. "\n") end) end
     end
 end
 
--- A line in the crash breadcrumbs (the native runtime's AC8SurvivalMode_crumbs.log, from 0.32.13: SV_Crumb, written at
--- once, the session before kept as .prev): the risky things Survival's Lua does (spawns, removals, copies taken down,
+-- A line in the crash breadcrumbs (the native runtime's logs\AC8SurvivalMode_crumbs_<stamp>.log, from 0.32.13: SV_Crumb,
+-- written at once, a file per session): the risky things Survival's Lua does (spawns, removals, copies taken down,
 -- teardowns), so a crash shows what came just before it. Nothing with an older runtime.
 function crumb(s) if type(SV_Crumb) == "function" then pcall(SV_Crumb, tostring(s):sub(1, 230)) end end
+
+-- The log bundle (runtime 0.32.32): lines for logs\session_<stamp>.txt, which goes into the zip of this session's logs (the
+-- version and the co-op role; "key=value", the native SV_Session). Nothing with an older runtime.
+if SV_Session then
+    pcall(SV_Session, "mod=" .. tostring(VERSION))
+    pcall(SV_Session, "role=solo")
+end
 
 -- A line logged once a session for its key (a hook that fails every tick logs one line, not one a tick).
 -- hookErr(what, pcall(f, ...)): a hook's pcall with its first error logged ("<what> error ..."), its results passed
@@ -380,6 +401,40 @@ function liveObj(o)
     if o == nil then return false end
     if type(SV_ObjChain) == "function" then return liveAddr(o) ~= nil end
     return valid(o)
+end
+
+-- ((2026-11-11) Saint Alessia's 50-round co-op run of 0.74.36: GameplayStatics.ApplyDamage(o, 1e8, nil, nil, nil) runs
+-- on AC8's AI objects without an error and takes no health off: 70 ZFA-44s "finished off" and 70 Helios blasts left all
+-- 24 at full health to round 51, and "the shuttle damage applied" left it 1 alive 5 s on, while sv_rounds.lua's clean-up
+-- (ModifyHealth first) killed in the same run.) Object o of ours finished off with no attacker (nobody's kill, unpaid):
+-- mortal (invincible off, the MinHealth field and SetMinHealth 0), switched on (SetActive, its tick: one switched off
+-- takes no damage, maybe), ModifyHealth(-(h / 10 + 1000), nil, true), read back; still up: the same without the damage
+-- event, then ApplyDamage last, each read back. -> dead (its health read 0), its health after (nil: unread), how
+-- ("damage event", "no damage event", "ApplyDamage"; nil: not down). Its caller checks it's still its own (hard rule 59).
+-- noEvent: from the "no damage event" step (ModifyHealthInternal still runs CheckDeath): the shuttle's take-off, whose
+-- damage event would set off the event package's ObjectDamage_Shuttle radio lines minutes after a clean liftoff.
+function finishUnpaid(o, noEvent)
+    if not liveObj(o) then return false, nil, nil end
+    local function h() local ok, v = pcall(function() return o.HealthInternal end); return (ok and type(v) == "number") and v or nil end
+    local h0 = h()
+    if h0 ~= nil and h0 <= 0 then return true, h0, "already down" end
+    pcall(function() o:SetIsInvincible(false) end)
+    pcall(function() o.bIsInvincible = false end)
+    pcall(function() o.MinHealth = 0.0 end)                 -- (the field: SetMinHealth keeps whole points only)
+    pcall(function() o:SetMinHealth(0.0) end)
+    pcall(function() o:SetActive(true, false, false) end)
+    pcall(function() o:SetActorTickEnabled(true) end)
+    local dmg = -((h0 or 1.0e6) / 10 + 1000)
+    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+    local steps = { { "damage event", function() o:ModifyHealth(dmg, nil, true) end },
+                    { "no damage event", function() o:ModifyHealth(dmg, nil, false) end },
+                    { "ApplyDamage", function() if valid(gs) then gs:ApplyDamage(o, 1.0e8, nil, nil, nil) end end } }
+    for i, s in ipairs(steps) do
+        if not (noEvent and i == 1) then pcall(s[2]) end
+        local h1 = h()
+        if h1 ~= nil and h1 <= 0 then return true, h1, s[1] end
+    end
+    return false, h(), nil
 end
 
 ---------------------------------------------------------------------------------------------------- the level going away

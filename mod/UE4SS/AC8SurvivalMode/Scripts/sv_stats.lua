@@ -40,6 +40,9 @@ local MAX_KILLS = 4000                    -- a run's kill records (60 a round fo
 local function on() local c = CFG.stats; return c ~= nil and c.enabled ~= false end
 local function cfg() return CFG.stats or {} end
 local function client() return (COOP and COOP.client and COOP.client()) and true or false end
+-- you're DOWN (co-op's revives, sv_down.lua): your plane hidden on its loiter round the airfield, out of the fight; what's
+-- measured of your flying (the tail and engagement samples, the tail watch, P6's habits) waits for your revive
+local function downNow() return DOWN ~= nil and DOWN.me ~= nil and DOWN.me() == true end
 
 local function median(t)
     local n = #t
@@ -95,6 +98,13 @@ function STATS.track(p, you, now)
     p.born = p.born or now                                 -- (logged before the round clock ran)
     if p.tierI == nil and p.tier then p.tierI = tierIndex(p.tier) or false end
     if p.ace == nil then p.ace = (D and D.aceSquad and p.unit and D.aceSquad[p.unit]) and true or false end
+    -- ((2026-11-11, Saint Alessia's and Delta's logs of the 50-round run) not while you're DOWN (sv_down.lua): `you` is your
+    -- hidden plane on its loiter, and enemies near it counted as engaged and tailed ("6 died, 266 escaped" in a round Delta
+    -- spent 1431 of 1647 s down). An episode open as you went down is dropped, not counted as an escape
+    if downNow() then
+        p.tailAt, p.tailing = nil, false
+        return
+    end
     local d = p.dist or km(p.at, you)
     if not p.engagedAt and d <= (c.engage_km or 5) then p.engagedAt = now end
     if not p.hitAt and p.dmg and (p.dmg.you or 0) > 0 then p.hitAt = now end
@@ -248,6 +258,12 @@ tailCut = function(now, why)
 end
 function STATS.tailTick(now)
     if not (now and D and tw()) or client() then return end
+    if downNow() then                    -- ((2026-11-11) you're DOWN: the episodes open dropped, none opened, until your revive)
+        local n = 0
+        for _, p in ipairs(planes or {}) do if p.tw then p.tw, n = nil, n + 1 end end
+        if n > 0 then log(string.format("tailed: you're down: %d open episode%s dropped (nothing measured until your revive)", n, n == 1 and "" or "s")) end
+        return
+    end
     local c = cfg()
     local me = COOP and COOP.me and COOP.me()
     me = me and me.at
@@ -643,7 +659,15 @@ end
 -- then, once for both (P6's habits sampled every 2 s, not only while an 8th plane is up: the U8 review).
 function STATS.sample(now, you)
     if not you then you = playerLocation() end
-    if PROF.sample then hookErr("learning: PROF.sample", pcall(PROF.sample, now, you)) end   -- (P6's habits: where you fly)
+    -- ((2026-11-11) not while you're DOWN: Saint Alessia's 22 minutes on the loiter, 4 km from the airfield, took her saved
+    -- airfield habit from 0.34 to 0.42 and the run's to 0.50, so later runs would counter camping she never did)
+    local down = downNow()
+    if (STATS.downSaid or false) ~= down then
+        STATS.downSaid = down
+        if down then log("stats: you're down: your flying isn't measured (tails, engagements, P6's habits) until your revive")
+        elseif D then log("stats: you're back in the fight: your flying measured again") end
+    end
+    if PROF.sample and not down then hookErr("learning: PROF.sample", pcall(PROF.sample, now, you)) end   -- (P6's habits: where you fly)
     local rs = D and D.rs
     if not (on() and rs and now) then return end
     if rs.ended then
@@ -652,7 +676,7 @@ function STATS.sample(now, you)
     end
     local dt = rs.sampleAt and math.max(0, math.min(4, now - rs.sampleAt)) or 0
     rs.sampleAt = now
-    if (D.state == "spawning" or D.state == "wave" or D.state == "fighting") and playerOnAirfield(you or nil) then
+    if not down and (D.state == "spawning" or D.state == "wave" or D.state == "fighting") and playerOnAirfield(you or nil) then
         rs.ground = rs.ground + dt
     end
 end
@@ -922,6 +946,7 @@ end
 -- samples before it (the approach). Cached fields only: no reads.
 function PROF.sample(now, you)
     if not (pon() and D and now and you and you.Z) then return end
+    if downNow() then return end                    -- ((2026-11-11) DOWN: your loiter isn't your flying (STATS.sample)
     local h = habit()
     if h.sampleAt and now - h.sampleAt < 1.5 then return end      -- (a pause: the round clock stands still)
     h.sampleAt = now

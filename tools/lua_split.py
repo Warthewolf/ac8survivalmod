@@ -282,7 +282,7 @@ def main():
     for j, (mod, line, _) in enumerate(cuts):
         end = cuts[j + 1][1] if j + 1 < len(cuts) else len(lines) + 1
         body = '\n'.join(lines[line - 1:end - 1])
-        for a, b in (('ONLINE ONLY BEGIN', 'ONLINE ONLY END'), ('TEST ONLY BEGIN', 'TEST ONLY END')):
+        for a, b in (('ONLINE ONLY BEGIN', 'ONLINE ONLY END'), ('TEST ONLY BEGIN', 'TEST ONLY END'), ('DEV ONLY BEGIN', 'DEV ONLY END')):
             if body.count(a) != body.count(b):
                 problems.append(f'{mod}: {a} / {b} unbalanced (a cut falls inside one)')
     for mod, line, i in cuts:

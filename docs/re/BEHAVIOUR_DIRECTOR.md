@@ -972,7 +972,7 @@ for a flight the co-op host had sent after the joiners (COOP.hunted) or one aime
 | holds | `build_director`; sv_director.lua hold / release | RE_SV_DirHold_NN (engagement None by flight) and RE_SV_DirFree_NN for all 24 pool flights. RE_SV_Decoy_NN couldn't be reused: it's each player's own (KEEP_EVENTS), so a joiner's copies would have gone on shooting (the critic) |
 | a hold on a joiner | sv_coop.lua `hostEvent`, `holdDue`, `freeWaiting`, M.holdQ (clientRounds); doSpawn's `cu.upAt` | a forwarded RE_SV_DirHold_NN (or a Wolf trap's RE_SV_WolfHold_<NN><L>) is fired on a joiner only once that flight's copy there has been up HOLD_AFTER_S 3 s (its appearance orders come 2 s after it appears and would undo an earlier hold, hard rule 26); while its copy's spawn is still queued or just up it waits in M.holdQ, the flight's release (RE_SV_DirFree_NN; that plane's RE_SV_WolfFree) drops it, and with no copy up HOLD_MAX_S 30 s on it's dropped. A copy up long since (hostSync's replay 12 s on): at once. The evQ replay after a level load goes the same way. Code review of 2026-10-29 (U6's leftover: a copy spawned late there, doSpawn's retries or a level still loading, got the host's hold first and lost it) |
 | what a hold changes elsewhere | sv_allies.lua ALLY.tick's hunts, sv_coop.lua's split hunts, sv_ai.lua ACE.movesTick | a held flight isn't sent hunting the allies; the co-op host's split hunt waits (every 2 s, as long as the hold lasts, at most top_cover.max_s + 120 s) and goes after the hold, so the hunt doesn't free it; the aces' reversals skip it |
-| aims | sv_director.lua aim / aimsTick; sv_ai.lua ACE.hunt | a flight sent after a joiner: blackboard TargetActor = that player's stand-in, written once a second for aim_s; ACE.hunt leaves an aimed plane's TargetActor alone (DIR.aimed) |
+| aims | sv_director.lua aim / aimsTick; sv_ai.lua ACE.hunt | a flight sent after a joiner: blackboard TargetActor = that player's stand-in, written once a second for aim_s; ACE.hunt leaves an aimed plane's TargetActor alone (DIR.aimed), and (2026-11-11) one on another living player's plane (COOP.isPlayerPlane), and never writes a DOWN player's own plane (COOP.huntTarget: COOP.md 9) |
 | the pincer | sv_spawn.lua spawnPoint (a centre, a 5th value: on the bearing or not), spawnFlight (DIR.spawnAt; the yaw towards the centre); sv_rounds.lua (DIR.wave at startRound's end and in the "wave" branch) | a side over the zone's edge falls back to the normal spawn (logged; that flight isn't part of the pincer); the flights that came up on a side tagged and the tactic counted once all are placed (1.5 s after the last, or 60 s after the first); one side only: no pincer, its budget back |
 | co-op "dv" | sv_coop.lua COOP.dispatch, the joiner's "dv" handler and queue (clientRounds) | host -> one joiner: an event, its flight, a delay. Only `RE_SV_Salvo_<NN><L>`, `RE_SV_Dir<a>_<NN>`, `RE_SV_Wolf<a>_<NN><L>` (NN the flight's own pool index), delay clamped 0-3 s; the joiner drops it while its level loads, when it has no live copy of that plane (by letter; any copy for a flight's event), when the delay isn't finite, past 8 a second; one still queued DV_LATE_S 1 s past its time (its level stopped being ready meanwhile: READY_S again) dropped, not fired seconds late (code review of 2026-10-29, coop-3); "rs" clears it. KEEP_EVENTS += `^RE_SV_Salvo_` (RE_SV_DirHold / DirFree forwarded) |
 | COOP.hunted(unit) | sv_coop.lua | a flight the host sent after the joiners this spawn (its hunt's M.units gen) |
@@ -2466,6 +2466,27 @@ The units' own sections above were corrected in place where behaviour changed ("
   its pad by shuttleTakeOff, `not killed (SV_ShuttleLaunched is 0)`, while a joiner's forwarded copy lifts off).
   coop_landing_test.sh, 66 checks: the logged case fails on ea6d0ad, the flying one (not logged) covers what didn't
   change. tools/README.md's checks row names the shuttle's cases.
+  (2026-11-11, Saint Alessia's co-op run of 0.74.36: answered by the game) They don't take: her Hangar minigame ran
+  18:47:27-18:48:06, T-4 and T were sent inside it (result 1) and SV_ShuttleLaunched / SV_ShuttleRound never changed;
+  a flight that appeared in it got no orders; events after it took, the host still on the runway. `countdown over`
+  paid and ended the round with the shuttle on its pad 3 minutes more, and SV_ShuttleRound still 1 sent round 3's
+  raid onto the shuttle's orders; her joiners saw it lift off. Now (sv_rounds_shuttle.lua) `countdown over` with the
+  shuttle still up replays the host's own liftoff once its STORE has been shut 3 s (D.musicHold; down at the airfield
+  with no STORE yet also waits): RE_SV_ShuttleT_136 (ignition) and _146 (only while still on its pad), _150 4 s later,
+  fired on the host alone (COOP.eventHere; the clock's tail after T goes to the joiners only, COOP.eventThere), then
+  _157 / _163 / _180 at their offsets; it took when SV_ShuttleLaunched reads 1 3 s after _150, else again, 3 tries;
+  the shuttle invulnerable meanwhile, its removal counted from the replayed liftoff (given up: 30 s). RE_SV_ShuttleRemove
+  sets SV_ShuttleRound back to 0 too, and is fired again on the host (with the strike flights' retasks) when
+  SV_ShuttleRound or SV_ShuttleLaunched is still up 2 s after it. Log lines: `special: shuttle liftoff replay waits:
+  ...`, `special: shuttle liftoff replayed here, try N of 3: ...`, `special: shuttle lifted off here at the replay's try
+  N (...)`, `special: shuttle liftoff not replayed here: ...`, `special: RE_SV_ShuttleRemove didn't take here (...)`,
+  `special: shuttle after its countdown, round R: SV_ShuttleLaunched L, SV_ShuttleRound S; the shuttle ...; the nearest
+  enemy aircraft ... from the pad, N within 5 km` (every 30 s to its removal). Its review: a replay that gives up or is
+  cut short fires the tail's switch-offs (T+7, T+30) on the host, RE_SV_ShuttleRemove switches the boost and the
+  ignition loop off too, every raid flight up since the countdown ran out goes back onto the airfield when the replay
+  ends (`special: raid flights up since the shuttle's countdown ran out back onto the airfield (...)`), and no replay
+  starts when the flags can't be read or the shuttle is already well off its pad (`special: shuttle liftoff not
+  replayed: ...`). Untested in game (coop_landing_test.sh).
 
 **F6 the HUD info key** (a4c99b7, 30eb9a4; the user's request of 2026-10-29, a cluttered 3-player co-op HUD)
 - CFG.hud.info ([hud.info]; enabled, key I, ctrl, start_open, peek_s 5; PERSONAL in co-op): the CO-OP, ALLIES and ITEMS

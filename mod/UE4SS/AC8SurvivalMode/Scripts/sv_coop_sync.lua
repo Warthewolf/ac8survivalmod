@@ -537,7 +537,10 @@ local function fireShots(slot, body, extraMs)
                         pay2 = pay
                     end
                     if pay2 then
-                        local okS, r = pcall(SV_CoopPPShot, P.addr, addrOfId(pid) or 0, pay2)
+                        -- ((2026-11-11, the 50-round run's alicorn-3) one whose target isn't here goes unguided: counted)
+                        local ta = addrOfId(pid)
+                        if pid > 0 and not ta then S.n.pUntargeted = (S.n.pUntargeted or 0) + 1 end
+                        local okS, r = pcall(SV_CoopPPShot, P.addr, ta or 0, pay2)
                         if not okS then r = tostring(r) end
                         if r == 1 then S.n.pOk = (S.n.pOk or 0) + 1 else S.n.pBad = (S.n.pBad or 0) + 1 end
                         once("pfirst" .. slot, string.format("coopfire: player %d's first launch on their real plane here: %s", slot + 1,
@@ -695,7 +698,14 @@ function M.syncTick(now, pawn)
             if okL and type(list) == "string" and list ~= "" then
                 for e in list:gmatch("[^;]+") do
                     local pay, t = e:match("^([%-%d,]+),(%d+)$")
-                    if pay then out[#out + 1] = string.format("p:%d:0:%s", idOfAddr(tonumber(t) ~= 0 and tonumber(t) or nil), pay) end
+                    if pay then
+                        local ta = tonumber(t) ~= 0 and tonumber(t) or nil
+                        local tid = idOfAddr(ta)
+                        -- ((2026-11-11, the 50-round run's alicorn-3) at a target here with no co-op id (a copy not bound,
+                        -- not the host's): it goes as p:0, unguided on the other games, and nothing of it reaches them
+                        if ta and tid == 0 then S.n.pNoId = (S.n.pNoId or 0) + 1 end
+                        out[#out + 1] = string.format("p:%d:0:%s", tid, pay)
+                    end
                 end
             end
         end
@@ -714,7 +724,7 @@ function M.syncTick(now, pawn)
     if now >= (S.statAt or now + 60) then                   -- (a minute's tally, when anything happened)
         local n = S.n
         if n.sent + n.got + n.fired + n.failed + n.dropped + (n.bursts or 0) + (n.flares or 0) + (n.pOk or 0) + (n.pBad or 0)
-            + (n.standIn or 0) + (n.standGun or 0) + (n.standNone or 0) > 0 then
+            + (n.standIn or 0) + (n.standGun or 0) + (n.standNone or 0) + (n.pNoId or 0) > 0 then
             -- ((0.73.80) the weapon stand-ins, when any: how many, and each player's numbers as sent -> shown here)
             local si = ""
             if (n.standIn or 0) + (n.standGun or 0) + (n.standNone or 0) > 0 then
@@ -732,9 +742,11 @@ function M.syncTick(now, pawn)
             log(string.format("coopfire: 60 s: %d shots sent, %d received (%d fired here, %d refused, %d dropped, %d with "
                 .. "their target not here, %d with no plane here, %d not shown: you were in the STORE), your gun %d bursts, "
                 .. "your flares %d, your gear flips %d, afterburner flips %d, throttle up to %.3f (ab_throttle %s); real planes' "
-                .. "launches (T4b) %d queued, %d refused%s", n.sent,
+                .. "launches (T4b) %d queued, %d refused, %d unguided (their target not here); your launches at a target with no "
+                .. "co-op id %d%s", n.sent,
                 n.got, n.fired, n.failed, n.dropped, n.untargeted or 0, n.noPlane or 0, n.inStore or 0, n.bursts or 0,
-                n.flares or 0, n.gear, n.ab, (n.thMax or 0) / 1000, tostring(sc().ab_throttle), n.pOk or 0, n.pBad or 0, si))
+                n.flares or 0, n.gear, n.ab, (n.thMax or 0) / 1000, tostring(sc().ab_throttle), n.pOk or 0, n.pBad or 0,
+                n.pUntargeted or 0, n.pNoId or 0, si))
         end
         S.n = { sent = 0, got = 0, fired = 0, failed = 0, dropped = 0, gear = 0, ab = 0 }
         S.statAt = now + 60

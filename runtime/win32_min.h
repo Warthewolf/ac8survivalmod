@@ -131,6 +131,20 @@ IMPORT uint64_t WINAPI GetTickCount64(void);
 IMPORT BOOL   WINAPI QueryPerformanceCounter(int64_t* count);
 IMPORT BOOL   WINAPI QueryPerformanceFrequency(int64_t* freq);
 IMPORT void   WINAPI GetLocalTime(uint16_t st[8]);
+/* (runtime 0.32.32, the log bundle: logbundle.c) times are 64-bit FILETIME values; st is a SYSTEMTIME as 8 words */
+IMPORT BOOL   WINAPI CreateDirectoryW(const wchar_t* path, void* sec);
+IMPORT BOOL   WINAPI RemoveDirectoryW(const wchar_t* path);
+IMPORT BOOL   WINAPI DeleteFileW(const wchar_t* path);
+IMPORT BOOL   WINAPI MoveFileExW(const wchar_t* from, const wchar_t* to, DWORD flags);
+IMPORT BOOL   WINAPI CopyFileW(const wchar_t* from, const wchar_t* to, BOOL failIfExists);
+IMPORT DWORD  WINAPI GetEnvironmentVariableW(const wchar_t* name, wchar_t* buf, DWORD cap);
+IMPORT void   WINAPI GetSystemTimeAsFileTime(uint64_t* ft);
+IMPORT BOOL   WINAPI FileTimeToLocalFileTime(const uint64_t* ft, uint64_t* local);
+IMPORT BOOL   WINAPI FileTimeToSystemTime(const uint64_t* ft, uint16_t st[8]);
+IMPORT BOOL   WINAPI SetFilePointerEx(HANDLE h, int64_t dist, int64_t* newPos, DWORD method);
+IMPORT DWORD  WINAPI SetFilePointer(HANDLE h, long lo, long* hi, DWORD method);   /* (0.32.33, logzip.h: windows.h's LONG is long) */
+#define MOVEFILE_REPLACE_EXISTING 1u
+#define MOVEFILE_COPY_ALLOWED     2u
 typedef struct {                                   /* PROCESS_MEMORY_COUNTERS */
     DWORD  cb, PageFaultCount;
     size_t PeakWorkingSetSize, WorkingSetSize, QuotaPeakPagedPoolUsage, QuotaPagedPoolUsage;

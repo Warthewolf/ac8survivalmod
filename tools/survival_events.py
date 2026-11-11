@@ -970,6 +970,27 @@ SP_DEBRIS = [  # (Mission 19's unit, Survival's unit, its objects' base name (ex
      [('sv_sp_debri_e', 'Rocket_Debri_3_1'), ('sv_sp_debri_f', 'Rocket_Debri_3_2')]),
 ]
 SP_ROCKET_ROWS = [(SP_ROCKET_ROW, 'Rocket')] + [r for d in SP_DEBRIS for r in d[3]]   # (Survival's, DT_NPC_Mission019's)
+# (2026-11-11) The rockets' radio (Saint Alessia's co-op run of 0.74.36: both rockets escaped, "froya didn't even notice";
+# the user: "Use the Mission 22 radio lines for the rocket warning"). Scripts/sv_spaceport.lua fires RE_SV_SpRadio<X>
+# (sp_radio_event) at each moment, forwarded to every joiner; each plays DT_SV_Radio's group SV_Radio_Sp<X>, which
+# build_survival_rows.py build_radio makes from Mission 22's own lines with LimitPlayCount 0 (a stock ms022 row plays once
+# a level, and the shuttle round's countdown has played these by the time a retake comes): 'group' its ms022 rows copied
+# in their order (Baxter's and Tasha's left out, as the shuttle round's; no chain on), 'line' that ms022 line alone on the
+# tells' template row (AWACS). Picked by what each group is in Mission 22's countdown (docs/re/SPECIAL_ROUNDS.md), the
+# lines by their known text (docs/re/RADIO_LOCALISATION.md 2a): the countdown groups' own words aren't in the repo.
+SP_RADIO = [
+    ('SV_Radio_SpBrief', 'group', '01_Wave5_Countdown_Start'),    # the launch countdown starts (the shuttle's, 3 s in)
+    ('SV_Radio_SpWarn', 'group', '01_Countdown_Ignistion'),       # ignition (the shuttle's, 11 s before its liftoff)
+    ('SV_Radio_SpLaunch', 'group', '01_Countdown_Shuttle2and1'),  # the count's last call (the shuttle's, 2 s before it)
+    ('SV_Radio_SpDown', 'line', 'v0001_0038'),                    # "Joker 1, bandit downed!" (AWACS; an ms022 TBD row)
+]
+
+
+def sp_radio_event(group):
+    """The remote event that plays the rockets' radio group SV_Radio_Sp<X>: RE_SV_SpRadio<X> (forwarded to the joiners:
+    not a KEEP_EVENTS name, unlike the tells' RE_SV_Radio<X>)."""
+    assert group.startswith('SV_Radio_Sp'), group
+    return 'RE_SV_SpRadio' + group[len('SV_Radio_Sp'):]
 # The retake's island enemies (user, 2026-10-31: "on the spaceport retake, add more enemies around the island", their
 # picks: air defences, armour, more aircraft, about 30; "do a building check so that no enemies spawn in buildings"):
 # Mission 6's EXSAM site whole (its radar and four launchers in Mission 6's layout), its flak guns, Gecko SAMs and Shilka
@@ -1315,11 +1336,39 @@ def build_spaceport(g, flag, stock_ep):
         boost = f'RE_SV_SpRocketBoost{L}'                                 # (Mission 19's at its first path point)
         g.trigger('RE_SpawnEnemy_kokatu_1st', boost)
         g.execute(t_rboost, boost, {0: obj, 2: path})
-        esc = f'SV_SpRocketOut{L}'                                        # its climb's end: escaped
+        # its climb's end: escaped. ((2026-11-11) Saint Alessia's co-op run, the joiner Delta's log: every game flew its
+        # own rocket, and Delta's B ended ~107 s after its launch, the host's 225 s: the joiner hid its rocket while the
+        # host still counted it climbing. Only the host's (or a solo game's) climb ends it: SV_SpRocketHost, set by Lua's
+        # RE_SV_SpRocketHostOn there alone (a KEEP_EVENTS name, never forwarded; a joiner's RE_SV_SpRocketHostOff sets it
+        # back to 0), checked when the PathFinish fires (hard rule 26); a joiner's copy ends on the host's word ("rk":
+        # Scripts/sv_spaceport.lua SPORT.rkFromHost fires its own RE_SV_SpRocketEnd<L>, the same hide and switch-off)
+        esc = f'SV_SpRocketOut{L}'
+        host = lambda: [g.cond('SV_SpRocketHost', 'Geq', 1)]
         g.trigger(finish, esc, arg_changes={0: obj, 2: path})
-        flag(esc, f'SV_SpRocketEsc{L}', 'Set', 1)
-        g.execute(t_attr, esc, {0: 'NoneSelect', 1: obj, 2: 'NoneSelect', 3: 'false', 4: 'true', 5: 'None'})
-        g.execute(t_off, esc, {0: obj, 1: 'NoneSelect', 2: 'NoneSelect', 3: 'false'}, delay=1.0)
+        flag(esc, f'SV_SpRocketEsc{L}', 'Set', 1, conds=host())
+        g.execute(t_attr, esc, {0: 'NoneSelect', 1: obj, 2: 'NoneSelect', 3: 'false', 4: 'true', 5: 'None'}, conds=host())
+        g.execute(t_off, esc, {0: obj, 1: 'NoneSelect', 2: 'NoneSelect', 3: 'false'}, delay=1.0, conds=host())
+        stop = f'RE_SV_SpRocketEnd{L}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', stop)
+        g.execute(t_attr, stop, {0: 'NoneSelect', 1: obj, 2: 'NoneSelect', 3: 'false', 4: 'true', 5: 'None'})
+        g.execute(t_off, stop, {0: obj, 1: 'NoneSelect', 2: 'NoneSelect', 3: 'false'}, delay=1.0)
+    for ev, v in (('RE_SV_SpRocketHostOn', 1), ('RE_SV_SpRocketHostOff', 0)):
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        flag(ev, 'SV_SpRocketHost', 'Set', v)
+    # the rockets' radio (SP_RADIO: Mission 22's lines in DT_SV_Radio's SV_Radio_Sp<X>, build_radio), a remote event each
+    # that Lua fires; both ways checked, as build_tells does, so the catalog and Lua can't drift
+    import re
+    t_radio = g.exec_template('LiveRadioPlayExecution', 'CompositeEvent_CountDown_1')
+    for grp, _, _ in SP_RADIO:
+        assert grp[len('SV_Radio_Sp'):].isalpha() and grp[len('SV_Radio_Sp'):].isascii() and survival_fname_plain(grp), grp
+        ev = sp_radio_event(grp)
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_radio, ev, {0: grp})
+    built = {sp_radio_event(x[0]) for x in SP_RADIO}
+    used = set(re.findall(r'RE_SV_SpRadio\w+', runtime_lua()))
+    assert used == built, f'Scripts/sv_spaceport.lua fires {sorted(used)}, SP_RADIO builds {sorted(built)}'
+    assert '"^RE_SV_SpRocketHost"' in runtime_lua() and '"^RE_SV_SpRocketEnd"' in runtime_lua(), \
+        'Scripts/sv_coop.lua KEEP_EVENTS must keep RE_SV_SpRocketHost* and RE_SV_SpRocketEnd* each game\'s own'
     for st, (_, unit, obj, _) in enumerate(SP_DEBRIS, 1):                # each stage targetable in turn
         ev = f'RE_SV_SpDebriTgt{st}'
         g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
@@ -1343,7 +1392,8 @@ def build_spaceport(g, flag, stock_ep):
         assert f'"{unit}"' in lua, f'Scripts/sv_spaceport.lua has no {unit}'
     print(f'  spaceport assault: {len(fleet)} ships ({parts} turrets ordered: Normal, PlayerFirst), {len(waves)} landing '
           f'waves of {len(SP_CRAFT)} craft, {len(sp_garrison())} garrison units; the retake: 2 rockets, {len(SP_DEBRIS)} debris '
-          f'stages, {sum(len(u["points"]) for u in sp_island())} island enemies in {len(sp_island())} units')
+          f'stages, {sum(len(u["points"]) for u in sp_island())} island enemies in {len(sp_island())} units; the rockets\' radio: '
+          f'{", ".join(sp_radio_event(x[0]) for x in SP_RADIO)}, their climbs\' end the host\'s alone (SV_SpRocketHost)')
 
 
 def survival_fname_plain(name):
@@ -1414,6 +1464,7 @@ INT_FLAGS += ['SV_AwacsHome', 'SV_AwacsOut']
 # (the Spaceport Assault's: its craft's landing and arrival flags, its rockets' escapes)
 INT_FLAGS += [c['flag'] for c in sp_craft()] + [c['aflag'] for c in sp_craft()]
 INT_FLAGS += ['SV_SpRocketEscA', 'SV_SpRocketEscB']        # a rocket's climb finished: escaped (Scripts/sv_spaceport.lua)
+INT_FLAGS += ['SV_SpRocketHost']      # (2026-11-11) 1 on the host or solo: its rockets' climbs end them (build_spaceport)
 
 from survival_events_squads import *     # noqa: E402,F401,F403  orders, ace moves, Wolf, director, tells, allies, AWACS
 from survival_events_festival import *   # noqa: E402,F401,F403  GONE FISHIN', THE FESTIVAL (adds its flags)

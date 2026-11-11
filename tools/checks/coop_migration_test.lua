@@ -82,7 +82,13 @@ local M = _G.M
 CFG.coop.enabled = true
 local function tick(dt) clock = clock + (dt or 0.25); M.nextInfo = 0; COOP.tick(0) end
 local function line(part, from) for i = #logs, from or 1, -1 do if has(logs[i], part) then return logs[i] end end end
-local function sentOf(kind, from) local t = {}; for i = from or 1, #sent do if sent[i]:match("^%-?%d+>" .. kind .. "|") then t[#t + 1] = sent[i] end end; return t end
+local function sentOf(kind, from)                         -- (a message with fields, or none: "jn")
+    local t = {}
+    for i = from or 1, #sent do
+        if sent[i]:match("^%-?%d+>" .. kind .. "|") or sent[i]:match("^%-?%d+>" .. kind .. "$") then t[#t + 1] = sent[i] end
+    end
+    return t
+end
 local function obj(name) return { name = name, addr = math.random(1, 1e9), SetActorHiddenInGame = function(self, v) self.hidden = v end,
                                   SetActorEnableCollision = function(self, v) self.coll = v end } end
 
@@ -136,7 +142,7 @@ ALLY = nil
 
 ---------------------------------------------------------------------------------------------------- the first in line
 print("the first in line takes over")
-local function asJoiner(me, slot)
+local function asJoiner(me, slot, noRnd)
     COOP.reopen("join", "test")
     COOP.slot, M.state, info.state, info.me, M.mySidV = slot, "linked", "linked", me, nil
     M.mig, M.migratedFrom, M.hostLostAt, M.hostAwayUntil, M.succ = nil, nil, nil, nil, nil
@@ -148,6 +154,8 @@ local function asJoiner(me, slot)
     end
     inbox[#inbox + 1] = "0|sq|" .. SID.host .. "|2:" .. SID.b .. ",1:" .. SID.a .. ",3:" .. SID.c
     inbox[#inbox + 1] = "0|al|AAGun:0,Wingmen:" .. SID.c .. ",ZfaCarrier:" .. SID.a   -- ((2026-11-07) a carrier too)
+    -- ((review of 2026-11-11, board-1) the host's round state in this run: a "left" notice is for a run they share)
+    if not noRnd then inbox[#inbox + 1] = "0|rnd|5|fighting|10.0|1|1|4" end
     D = { round = 5, state = "fighting", now = 500, startRound = 1 }
     tick()
 end
@@ -168,10 +176,14 @@ tick(29)
 check(#opens == o0 and not M.mig, "29 s on: still waiting")
 tick(2)
 local op = opens[#opens]
-check(op and op.role == "host" and op.partner == SID.a .. "," .. SID.c .. ",auto",
-      "31 s on: this game opens as host looking for the others' Steam IDs (" .. tostring(op and op.partner) .. ")")
+check(op and op.role == "host" and op.partner == SID.a .. "," .. SID.c .. "," .. SID.host .. ",auto",
+      "31 s on: this game opens as host looking for the others' Steam IDs, and (2026-11-11) the old host's: if it's still "
+      .. "up, this game's own link dropped (" .. tostring(op and op.partner) .. ")")
+check(line("the old host looked for too", from) ~= nil, "... logged")
 check(COOP.host() and M.mig and M.mig.hosting, "it's the host")
 check(copy.HealthInternal == 0, "the old host's copies taken down")
+check(COOP.tornAll(20) == "host migration" and COOP.tornAll(-1) == nil,
+      "(2026-11-11) ... told to the allies (COOP.tornAll): a defence gone with them isn't called LOST")
 check(hostPlane.hidden == true and M.peers[0] == nil, "the old host's plane set aside, hidden")
 check(M.parkAt and M.parkAt[23] and M.parkAt[23].obj == hostPlane and has(table.concat(swaps, " "), "0<>23"),
       "(0.73.77) ... and kept out of its slot in the runtime (slot 24): the next real plane spawned in slot 1 can't destroy it")
@@ -259,7 +271,7 @@ asJoiner(SID.c, 3)
 info.state = "lost"
 inbox[#inbox + 1] = "0|sys|lost"
 tick(); tick(31); tick(21); tick(21)
-check(opens[#opens].role == "host" and opens[#opens].partner == SID.b .. "," .. SID.a .. ",auto" and COOP.host(),
+check(opens[#opens].role == "host" and opens[#opens].partner == SID.b .. "," .. SID.a .. "," .. SID.host .. ",auto" and COOP.host(),
       "Bee and Ann silent: Cid, last in line, takes over (" .. tostring(opens[#opens].partner) .. ")")
 asJoiner(SID.c, 3)
 M.succ = { { slot = 2, sid = SID.b }, { slot = 1, sid = SID.a } }        -- (Cid joined after the last line was sent)
@@ -280,6 +292,197 @@ tick(); tick(60)
 check(#opens == o2 and not M.mig, "the host's reloading (hl 120): 60 s on, still waiting")
 tick(61)
 check(#opens == o2 + 1 and opens[#opens].partner == SID.b, "121 s on: the next host")
+
+---------------------------------------------------------------------------------------------------- the host left its run
+-- ((2026-11-11) Delta's run of 2026-11-10: Saint Alessia left her level to the main menu with co-op open; nobody was told,
+-- the joiners waited 30 s of silence, a link back from her menu restarted that wait and took 105 copies down for her
+-- empty picture, and a hit in that wait ended Delta's run)
+print("... the host said it left its run (hl|<round>|left)")
+asJoiner(SID.b, 2)                                       -- (Bee: first in line)
+local o4, from4 = #opens, #logs + 1
+inbox[#inbox + 1] = "0|hl|35|left"
+tick()
+local op4 = opens[#opens]
+check(#opens == o4 + 1 and op4.role == "host" and op4.partner == SID.a .. "," .. SID.c .. ",auto" and M.mig and M.mig.left,
+      "the first in line: host at once, no 30 s of silence, the old host not looked for (" .. tostring(op4 and op4.partner) .. ")")
+check(line("left its run in round 35 (hl|left)", from4) and has(callouts[#callouts], "YOU ARE THE NEW HOST")
+      and line("the host (Host) left its run (round 35): going down the line of 3", from4), "logged: the host left its run, round 35")
+local o5 = #opens
+inbox[#inbox + 1] = "0|sys|samerole|HOST"
+tick()
+check(#opens == o5 and COOP.host() and line("the old host left its run: this game stays the host"),
+      "alone and another host heard: it doesn't go back to a host that left its run (it may be its main menu)")
+tick(61)
+check(M.mig == nil and M.migratedFrom == nil, "the migration over: nothing to step back to")
+asJoiner(SID.c, 3)                                       -- (Cid: third in line)
+inbox[#inbox + 1] = "0|hl|35|left"
+tick()
+check(opens[#opens].role == "join" and opens[#opens].partner == SID.b and has(callouts[#callouts], "BEE TAKES OVER"),
+      "the others: Bee, first in line, joined at once (" .. tostring(opens[#opens].partner) .. ")")
+print("... the host's link back after it said it left (no line to go down)")
+asJoiner(SID.c, 3)
+M.succ = {}
+local copy2 = obj("copy2")
+copy2.HealthInternal = 5000
+function copy2:SetMinHealth() end
+function copy2:ModifyHealth() self.HealthInternal = 0 end
+M.copies = { [9] = { obj = copy2, exp = 5000, addr = copy2.addr } }
+inbox[#inbox + 1] = "0|sys|lost"
+tick()
+inbox[#inbox + 1] = "0|hl|35|left"
+tick()
+local lostAt, s6 = M.hostLostAt, #sent
+inbox[#inbox + 1] = "0|sys|up"
+tick()
+check(copy2.HealthInternal == 5000 and #sentOf("jn", s6 + 1) == 0 and M.hostLostAt == lostAt
+      and line("the copies here kept, no picture asked"), "its link back: the copies kept, no jn, the migration's clock kept")
+print("... a \"left\" notice with a bad round")
+asJoiner(SID.c, 3)
+for _, bad in ipairs({ "1e999", "-1", "1.5", "abc", "" }) do
+    M.said = {}
+    inbox[#inbox + 1] = "0|hl|" .. bad .. "|left"
+    tick()
+    check(M.hostLeft == nil and M.mig == nil and line("left\" notice refused"), "hl|" .. bad .. "|left refused")
+end
+
+-- ((review of 2026-11-11, board-1 / board-2) a "left" notice only for a run this joiner shares with that host: kept with no
+-- run (the main menu, a hangar) or for a run of its own just loaded, it migrated away at the next run's first tick
+print("... a \"left\" notice outside a run shared with the host (review of 2026-11-11, board-1 / board-2)")
+asJoiner(SID.c, 3)
+D = nil                                                  -- (this game's run over, at its main menu)
+tick()
+local oA, fromA = #opens, #logs + 1
+M.hlSkipAt = nil
+inbox[#inbox + 1] = "0|hl|35|left"
+tick()
+check(M.hostLeft == nil and M.hostLostAt == nil and line("left its run in round 35 (hl|left): not taken (no run here)", fromA),
+      "no run here: the notice not taken, no migration clock")
+inbox[#inbox + 1] = "0|sys|up"
+inbox[#inbox + 1] = "0|rnd|1|wait|10.0|0|0|0"
+D = { round = 0, state = "wait", now = 600, startRound = 1 }   -- (the next run with the same host)
+tick(); tick()
+check(#opens == oA and M.mig == nil and not has(callouts[#callouts], "NEW HOST"),
+      "the next run with the same host: no migration at its first tick")
+asJoiner(SID.c, 3, true)                                 -- (a run of its own just loaded: no "rnd" from the host yet)
+local oB, fromB = #opens, #logs + 1
+M.hlSkipAt = nil
+inbox[#inbox + 1] = "0|hl|51|left"                       -- (its "jn" answered by a host still at its hangar)
+tick()
+check(#opens == oB and M.hostLeft == nil and M.mig == nil
+      and line("left its run in round 51 (hl|left): not taken (this run hasn't had the host's round yet)", fromB),
+      "a run here the host's round state hasn't reached: the notice not taken (it waits for the host's rs|n)")
+asJoiner(SID.c, 3)
+oB = #opens
+DOWN = { ended = function() return true end }            -- (this game's run over: every player down)
+M.hlSkipAt = nil
+inbox[#inbox + 1] = "0|hl|51|left"
+tick()
+check(#opens == oB and M.hostLeft == nil and line("not taken (this game's run is over)"),
+      "after this game's run over: not taken (a migration would bring the run back)")
+DOWN = nil
+asJoiner(SID.c, 3)
+CFG.coop.migration.enabled = false
+M.hlSkipAt = nil
+inbox[#inbox + 1] = "0|hl|51|left"
+tick()
+check(M.hostLeft == nil and line("not taken (host migration off)"), "the migration off: not taken")
+local sC = #sent
+inbox[#inbox + 1] = "0|sys|lost"
+tick()
+inbox[#inbox + 1] = "0|sys|up"
+tick()
+local jnC = 0
+for i = sC + 1, #sent do if sent[i]:match("^%-?%d+>jn$") then jnC = jnC + 1 end end
+check(jnC == 1, "... so the host's link back still asks for its picture (jn)")
+CFG.coop.migration.enabled = true
+asJoiner(SID.c, 3)
+M.succ = {}                                              -- (no line to go down: the notice stays)
+inbox[#inbox + 1] = "0|hl|51|left"
+tick()
+check(M.hostLeft ~= nil and M.hostLostAt ~= nil, "(no line: the notice kept, the clock it set)")
+inbox[#inbox + 1] = "0|rs|n"
+tick()
+check(M.hostLeft == nil and M.hostLostAt == nil and line("the host's \"left\" notice (round 51) dropped: the host's run started (rs)"),
+      "the host's next run (rs|n): the notice and the clock it set dropped")
+inbox[#inbox + 1] = "0|hl|51|left"
+tick()
+check(M.hostLeft ~= nil, "(kept again)")
+D = { round = 0, state = "wait", now = 700, startRound = 1 }   -- (this game's new run)
+tick()
+check(M.hostLeft == nil and M.hostLostAt == nil, "a new run here: the notice dropped")
+D = nil
+
+print("... the host: leaving its run, a jn then, another host heard")
+COOP.reopen("host", "test")
+COOP.slot, info.role, info.state = 0, "host", "linked"
+M.mig, M.migratedFrom = nil, nil
+M.roster = { [0] = { name = "Host", sid = SID.host }, [1] = { name = "Ann", sid = SID.a }, [2] = { name = "Bee", sid = SID.b } }
+D = { round = 51, state = "fighting", now = 900, startRound = 1 }
+svLevelOn = true
+inbox[#inbox + 1] = "1|sys|samerole|NOTMEXI"
+tick()
+local sameCo = nil
+for _, c in ipairs(callouts) do if has(c, "HOSTS TOO") then sameCo = c end end
+check(sameCo and has(sameCo, "NOTMEXI HOSTS TOO") and has(sameCo, "REJOINS YOU") and line("most likely a joiner's game that took the run over alone"),
+      "another host heard while this one hosts a run with players: named, said to rejoin (" .. tostring(sameCo) .. ")")
+local s7 = #sent
+COOP.hostLeaving(51, "test")                             -- (sv_main.lua runLeft: then D goes)
+D = nil
+tick()
+check(#sentOf("hl", s7 + 1) == 0 and M.leftPending, "its run over: nothing sent while Survival's level is still the one on")
+M.awaySentUntil = clock + 30                             -- (a reload it said, hl|<secs>)
+svLevelOn = false
+tick()
+check(#sentOf("hl", s7 + 1) == 0, "... nor while a reload it announced is on")
+M.awaySentUntil = nil
+tick()
+local hl7 = sentOf("hl", s7 + 1)[1]
+check(hl7 == "-1>hl|51|left" and line("every joiner told this game left its run in round 51"), "out of its level: every joiner told, hl|51|left (" .. tostring(hl7) .. ")")
+local s8 = #sent
+inbox[#inbox + 1] = "1|jn"
+tick()
+check(#sentOf("rs", s8 + 1) == 0 and sentOf("hl", s8 + 1)[1] == "1>hl|51|left" and line("this game has no run (it left its run in round 51"),
+      "a jn with no run here: no empty picture, told it left (" .. tostring(sentOf("hl", s8 + 1)[1]) .. ")")
+COOP.hostLeaving(51, "test")
+D = { round = 0, state = "wait", now = 950, startRound = 1 }
+tick()
+check(M.leftPending == nil and M.leftRun == nil and line("a run here again: the joiners not told"), "a run here again (a reload): the notice taken back")
+-- ((review of 2026-11-11, board-2) the notice sent, then Survival's level loading again for the next run (no D yet): a
+-- joiner already in it asking (jn) gets nothing, not "left" (it migrated away from a host about to host it)
+D, svLevelOn = nil, false
+COOP.hostLeaving(51, "test")
+tick()
+check(M.leftRun ~= nil, "(the notice sent again: out of the level)")
+svLevelOn = true
+local s9 = #sent
+inbox[#inbox + 1] = "1|jn"
+tick()
+check(M.leftRun == nil and #sentOf("hl", s9 + 1) == 0 and #sentOf("rs", s9 + 1) == 0,
+      "Survival's level loading again: the notice taken back, a jn then answered with nothing (" .. tostring(sentOf("hl", s9 + 1)[1]) .. ")")
+-- ((review of 2026-11-11) a run that ended with every player down: no notice at all (the joiners' runs are over too)
+D = { round = 51, state = "fighting", now = 990, startRound = 1 }
+tick()
+M.ro = { round = 51, at = clock }
+local s10 = #sent
+COOP.hostLeaving(51, "test")
+D, svLevelOn = nil, false
+tick(); tick(130)
+check(#sentOf("hl", s10 + 1) == 0 and M.leftPending == nil and line("after the run over: the joiners not told it left"),
+      "after a run over: the joiners never told it left")
+-- ((review of 2026-11-11) a run-over's reload hold (hl|120) over with the next run here: a quick retry, then a quit,
+-- tells the joiners at once, not when the old 120 s run out
+M.ro = nil
+COOP.hostAway(120)
+D = { round = 0, state = "wait", now = 1000, startRound = 1 }
+svLevelOn = true
+tick()
+check(M.awaySentUntil == nil, "the next run here: the reload's hold over")
+local s11 = #sent
+COOP.hostLeaving(1, "test")
+D, svLevelOn = nil, false
+tick()
+check(sentOf("hl", s11 + 1)[1] == "-1>hl|1|left", "... a quit then tells the joiners at once (" .. tostring(sentOf("hl", s11 + 1)[1]) .. ")")
+D, svLevelOn = nil, nil
 
 print("... off")
 asJoiner(SID.c, 3)

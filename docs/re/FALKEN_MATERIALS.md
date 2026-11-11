@@ -1,7 +1,7 @@
 # The Falken add-on's materials, and what VALKA's X-02S should copy (research of 2026-11-02)
 
 Source: "Falken Add On 1.0.0" (ADF-01B FALKEN as a player aircraft for AC8; AC7's model and textures), the zip in
-E:\DOWNLOADS, read only. Nothing of it was copied into this repo. Tags as in AIRCRAFT_MATERIALS.md: **[V]** verified
+your downloads folder, read only. Nothing of it was copied into this repo. Tags as in AIRCRAFT_MATERIALS.md: **[V]** verified
 in the packages, **[I]** inferred, **[T]** in game. Stock packages for comparison were pulled with retoc
 (build/scan/all_chunks.txt ids) into the research scratchpad.
 
@@ -151,7 +151,7 @@ new Basecolor, a constant Livemap and a flat normal, then with the base's damage
   UnversionedProperties), like AC8's stock. Ours: versioned (zen versioning info ue4 522, ue5 1012, licensee 0;
   flags 0x80000200). [V]
 - **AC8's UTexture has one runtime property that stock UE 5.4 doesn't: `ForceStreamedMips` (int32), index 8**, between
-  LODBias and CompressionSettings. [V: AC8's usmap against E:\UE_5.4's Texture.h / Texture2D.h /
+  LODBias and CompressionSettings. [V: AC8's usmap against $UE's Texture.h / Texture2D.h /
   StreamableRenderAsset.h] Unversioned properties are written by index, so:
 
   | property | stock UE 5.4 | AC8 |

@@ -19,7 +19,7 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
 local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function writeAll(p, s) local f = assert(io.open(p, "wb")); f:write(s); f:close() end
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
@@ -505,6 +505,27 @@ check(callouts[1] == "CIWS LOST / " .. CFG.allies.text.def_lost_sub and line("al
 alive = { SV_Unit_AAGun_A = 1 }
 ALLY.tick(210)
 check(ALLY.hudLine():find("AA 1  SAM 0", 1, true) and not has(ALLY.hudLine(), "CIWS"), "none up: no CIWS on the row (" .. ALLY.hudLine() .. ")")
+do  -- ((2026-11-11) Delta's of 2026-11-10: a co-op joiner's link back took every copy down, and ten defences were called
+    -- LOST in 5 s) a joiner's defence gone with every copy here (COOP.tornAll: sv_coop_joiner.lua killAllCopies) isn't
+    -- lost: no callout, logged; one gone otherwise still is
+    local keepC = COOP
+    local torn = "link back"
+    COOP = { client = function() return true end, host = function() return false end, tornAll = function() return torn end }
+    alive = { SV_Unit_AAGun_A = 1, SV_Unit_Ciws_A = 1 }
+    R.alive = {}; ALLY.tick(215)                     -- (the counts asked afresh: ALLY.alive keeps one a few seconds)
+    alive = { SV_Unit_AAGun_A = 1 }
+    callouts, from = {}, #logs + 1
+    R.alive = {}; ALLY.tick(220)
+    check(#callouts == 0 and line("allies: CIWS (SV_Unit_Ciws_A) gone here in round 3 with every copy (link back): not lost", from),
+          "a joiner's CIWS gone with every copy (a link back): no LOST, logged")
+    alive, torn = { SV_Unit_AAGun_A = 1, SV_Unit_Ciws_A = 1 }, nil
+    R.alive = {}; ALLY.tick(225)
+    alive = { SV_Unit_AAGun_A = 1 }
+    callouts = {}
+    R.alive = {}; ALLY.tick(230)
+    check(callouts[1] == "CIWS LOST / " .. CFG.allies.text.def_lost_sub, "... one gone with no teardown: still LOST")
+    COOP = keepC
+end
 local lvl = "/Game/Mods/SurvivalMode/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel."
 local c1 = { full = "BP_GR033_ciws_CP_Ally_C " .. lvl .. "BP_GR033_ciws_CP_Ally_C_1", addr = addr(), HealthInternal = 200, MaxHealth = 60 }
 local g1 = { full = "BP_GR002_gepa_CP_C " .. lvl .. "BP_GR002_gepa_CP_C_1", addr = addr(), HealthInternal = 600, MaxHealth = 60 }
@@ -1000,6 +1021,29 @@ do
           and has(line("allies: " .. U .. " sent after VOID WATCHER 1: round 5's strike flight (2 of 2 planes", l0), "TargetFirst")
           and calloutHas("HEADING FOR VOID WATCHER 1") ~= nil and R.hunted[U] == true,
           "G5: 4 s up: its 2 planes onto VOID WATCHER 1 (Normal, TargetFirst), logged, called out, the hunt leaves it alone")
+    -- ((2026-11-11, Saint Alessia's 50-round run, flow-3) the enemies' hunt for the allied aircraft (RE_SV_Hunt_NN: allied
+    -- aircraft first, else "Player") not while you're DOWN: it came 2-5 s after co-op's down pass had sent the flight
+    -- after a living player. Held, not dropped: its roll once you're back
+    do
+        local HU, downNow = "ERA_Unit_07_Dep_Air1", true
+        local rawDown = DOWN
+        DOWN = { me = function() return downNow end }
+        local h0, l1 = 0, #logs
+        for _, e in ipairs(events) do if has(e, "RE_SV_Hunt_") then h0 = h0 + 1 end end
+        D.up[HU] = true
+        step(0.25, 24)                                  -- (6 s up, airborne allies)
+        local h1 = 0
+        for _, e in ipairs(events) do if has(e, "RE_SV_Hunt_") then h1 = h1 + 1 end end
+        check(not R.hunted[HU] and h1 == h0 and line("allies: you're down: the enemies' hunts for the allied aircraft wait for your revive", l1) ~= nil,
+              "you DOWN: a flight up 6 s with allied aircraft airborne isn't rolled for the allies' hunt (it named your hidden plane), logged")
+        downNow = false
+        step(0.25, 8)                                   -- (its checks: once a second)
+        check(R.hunted[HU] == true and line("allies: you're back: the enemies' hunts for the allied aircraft go on", l1) ~= nil,
+              "... back in the fight: its roll then")
+        D.up[HU] = nil
+        step()
+        DOWN = rawDown
+    end
     D.up["ERA_Unit_04_Dep_Air0"] = true
     planes[#planes + 1] = { obj = enemy("BP_OP1004_f15c_4"), unit = "ERA_Unit_04_Dep_Air0" }
     local n0 = #orders

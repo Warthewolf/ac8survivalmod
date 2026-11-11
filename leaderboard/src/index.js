@@ -12,7 +12,8 @@
 // zollars the host's own, plus "coop": {"players": N, "squad": [{"pilot", "aircraft", "air", "ground", "revives",
 // "host"}, ...]} (host first). Its limits scale with the players; it's stored in runs (players, squad, crew set; NULL on
 // a solo run) with its squad in squads, and it's on the CO-OP boards only: every solo board and record reads
-// "players IS NULL".
+// "players IS NULL". Every game of the room holds that run_id (host migration): from 2026-11-11 the furthest copy sent
+// is the one kept (submit, supersedes), a shorter one archived as "superseded:<time>".
 //   GET  /admin         the admin page (the user only: ADMIN_KEY): reset the boards (archived, so it can be undone),
 //                       restore the last reset, the builds runs are accepted from, build verification on / off;
 //                       its actions are POST /admin/<action> with the key in the JSON body, never in the address
@@ -110,7 +111,8 @@ function checkRun(run) {
   const sp = run.specials || [];
   if (!Array.isArray(sp) || sp.length > run.round) return "too many specials";
   for (const s of sp) {
-    if (typeof s.kind !== "string" || !/^[a-z]{1,16}$/.test(s.kind) || !isInt(s.round, 1, run.round)
+    // (2026-11-11) a null or non-object entry is refused like any bad one: it used to throw here (a 500, not a 422)
+    if (!s || typeof s !== "object" || Array.isArray(s) || typeof s.kind !== "string" || !/^[a-z]{1,16}$/.test(s.kind) || !isInt(s.round, 1, run.round)
         || !isInt(s.seconds, 5, 3600) || typeof s.won !== "boolean")
       return "bad special";
   }
@@ -152,7 +154,11 @@ function checkSquad(run) {
   if (squad[0].pilot.toLowerCase() !== run.pilot.toLowerCase()) return "squad's host isn't the run's pilot";
   if (air !== run.kills.air || ground !== run.kills.ground) return "squad's kills don't add up to the run's";
   if (revives > maxRevives) return "too many revives for the rounds and players";
-  run.coop = { players: n, squad };
+  // ((2026-11-11) "takeover": true from a game that took the run over by host migration and that nobody joined: a lone
+  // takeover, its own link maybe the one that dropped while its first host played on. Kept with the run (runs.takeover)
+  // and below a further copy's (supersedes); left out it's false)
+  if (c.takeover !== undefined && c.takeover !== null && typeof c.takeover !== "boolean") return "bad co-op takeover";
+  run.coop = { players: n, squad, takeover: c.takeover === true };
   return null;
 }
 
@@ -219,7 +225,7 @@ const num = (n) => n.toLocaleString("en-US");
 const esc = (s) => String(s).replace(/[\\_*~`|>]/g, "\\$&");
 
 // A run's post in #survival-runs; a co-op run's lists its squad (its description: up to 24 lines, within Discord's 4096)
-function runEmbed(run, sc, verified = true) {
+function runEmbed(run, sc, verified = true, replaced = null) {
   const won = (run.specials || []).filter((s) => s.won);
   const c = run.coop;
   const revives = c ? c.squad.reduce((t, p) => t + p.revives, 0) : 0;
@@ -245,7 +251,9 @@ function runEmbed(run, sc, verified = true) {
     ],
     footer: { text: `${run.ended === "died" ? (c ? "Every player shot down" : "Shot down") : run.how === "restart" ? "Restarted" : "Left the run"}` +
                     `${c ? ` · Co-op, ${c.players} players` : ""} · Survival Mode ${run.mod}` +
-                    (verified ? "" : " · older mod, build not checked") },
+                    (verified ? "" : " · older mod, build not checked") +
+                    (c && c.takeover ? " · carried on alone by host migration" : "") +
+                    (replaced ? ` · replaces this co-op run's round ${replaced.round} copy (${replaced.pilot})` : "") },
   };
 }
 
@@ -497,9 +505,11 @@ async function refreshBoards(env, force) {
 // older mod's run taken while verification was off; players / squad / crew from the co-op runs of 2026-11-03: the squad's
 // size, its pilots in squad order and its crew key, squadOf / crewOf, all NULL on a solo run), added to an older
 // database once per Worker instance. specials gets players too (NULL on a solo run's), so the solo specials boards
-// leave co-op runs out.
+// leave co-op runs out. takeover ((2026-11-11) a co-op run's): 1 when the game that sent it took the run over by host
+// migration and nobody joined it, else 0 (NULL on a solo run and on co-op runs stored before).
 const NEW_COLUMNS = { aircraft: "TEXT", how: "TEXT", tier: "TEXT", aces: "INTEGER", allies: "INTEGER", af_down: "INTEGER",
-                      captured: "INTEGER", build: "TEXT", verified: "INTEGER", players: "INTEGER", squad: "TEXT", crew: "TEXT" };
+                      captured: "INTEGER", build: "TEXT", verified: "INTEGER", players: "INTEGER", squad: "TEXT", crew: "TEXT",
+                      takeover: "INTEGER" };
 const SPECIAL_NEW_COLUMNS = { players: "INTEGER" };
 const RUN_COLS = ["run_id", "pilot", "difficulty", "round", "score", "air_kills", "ground_kills", "earned", "spent", "time_s",
                   "ended", "mod_version", "submitted", "ip_hash", ...Object.keys(NEW_COLUMNS)];
@@ -597,10 +607,28 @@ async function submit(req, env, ctx) {
   }
   const ipHash = await ipHashOf(req, env);
   const now = Math.floor(Date.now() / 1000);
-  // (a run taken off by a reset and sent again isn't put back on the fresh boards: it comes back with the reset's undo)
-  if (await env.DB.prepare("SELECT 1 FROM runs WHERE run_id = ? UNION ALL SELECT 1 FROM runs_archive WHERE run_id = ?")
-        .bind(run.run_id, run.run_id).first())
-    return json({ ok: true, duplicate: true });                    // (the game may resend after a lost reply)
+  // A run_id stored already: the game may resend after a lost reply (a duplicate). ((2026-11-11) A co-op run is the one
+  // run_id every game of the room holds (host migration): Saint Alessia's round-51 run of 2026-11-10 was answered
+  // duplicate:true and lost, because a joiner's game whose own link had dropped took the run over alone and sent its
+  // round-35 copy first. A co-op copy that went further (supersedes) replaces the stored one, after the build checks
+  // below; a copy as far or shorter is a duplicate that says what's stored, so the game knows its copy wasn't taken.)
+  const stored = await env.DB.prepare(`SELECT pilot, round, time_s, players, verified, takeover FROM runs WHERE run_id = ?`)
+    .bind(run.run_id).first();
+  const storedOf = (s) => ({ pilot: s.pilot, round: s.round, time_s: s.time_s, ...(s.takeover === 1 ? { takeover: true } : {}) });
+  let supersede = null;
+  if (stored) {
+    const why = supersedes(run, stored);
+    // (same: the stored copy is this one, a resend after a lost reply: the game counts it as taken)
+    const same = !!run.coop && String(stored.pilot || "").toLowerCase() === run.pilot.toLowerCase() && stored.round === run.round
+      && stored.time_s === run.time_s;
+    if (why !== null) return json({ ok: true, duplicate: true, ...(run.coop ? { stored: storedOf(stored), why, ...(same ? { same: true } : {}) } : {}) });
+    supersede = stored;
+  // (a run taken off by a reset and sent again isn't put back on the fresh boards: it comes back with the reset's undo;
+  // a co-op copy replaced by a further one is archived too, under "superseded:<time>", and doesn't count here)
+  } else if (await env.DB.prepare("SELECT 1 FROM runs_archive WHERE run_id = ? AND reset_id NOT LIKE 'superseded:%'")
+        .bind(run.run_id).first()) {
+    return json({ ok: true, duplicate: true, ...(run.coop ? { archived: true } : {}) });
+  }
   const recent = await env.DB.prepare("SELECT COUNT(*) AS n FROM runs WHERE ip_hash = ? AND submitted > ?")
     .bind(ipHash, now - 3600).first();
   if (recent.n >= RATE_PER_HOUR) return json({ ok: false, error: "too many runs this hour, try later" }, 429);
@@ -620,6 +648,9 @@ async function submit(req, env, ctx) {
   } else if (await verifyOn(env)) {
     return json({ ok: false, error: "no build check: update or reinstall survival mode" }, 422);
   }
+  // (a further copy never puts an unchecked build's run over a checked one)
+  if (supersede && supersede.verified === 1 && verified !== 1)
+    return json({ ok: true, duplicate: true, stored: storedOf(supersede), why: "the stored copy is from a checked build" });
   // (a co-op run: the same score on the squad's totals; stored with its size, squad and crew, its specials marked with
   // its size, and its squad's rows: all in the one batch, so a run is never stored without its squad)
   const sc = score(run);
@@ -627,12 +658,12 @@ async function submit(req, env, ctx) {
   const c = run.coop || null;
   const batch = [env.DB.prepare(
     `INSERT INTO runs (run_id, pilot, difficulty, round, score, air_kills, ground_kills, earned, spent, time_s, ended,
-     mod_version, submitted, ip_hash, aircraft, how, tier, aces, allies, af_down, captured, build, verified, players, squad, crew)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+     mod_version, submitted, ip_hash, aircraft, how, tier, aces, allies, af_down, captured, build, verified, players, squad, crew,
+     takeover) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(run.run_id, run.pilot, run.difficulty, run.round, sc, run.kills.air, run.kills.ground, run.zollars.earned,
           run.zollars.spent, run.time_s, run.ended, run.mod, now, ipHash, opt(run.aircraft), opt(run.how), opt(run.tier),
           opt(run.aces), opt(run.allies), opt(run.af_down), opt(run.captured), checked || null, verified,
-          c ? c.players : null, c ? squadOf(c) : null, c ? crewOf(c) : null)];
+          c ? c.players : null, c ? squadOf(c) : null, c ? crewOf(c) : null, c ? (c.takeover ? 1 : 0) : null)];
   for (const s of run.specials || [])
     batch.push(env.DB.prepare(`INSERT INTO specials (run_id, kind, round, seconds, won, pilot, difficulty, players)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -640,17 +671,48 @@ async function submit(req, env, ctx) {
   if (c)
     c.squad.forEach((p, slot) => batch.push(env.DB.prepare(`INSERT INTO squads (${SQUAD_COLS.join(", ")})
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(run.run_id, slot, p.pilot, p.aircraft, p.air, p.ground, p.revives, p.host ? 1 : 0)));
-  await env.DB.batch(batch);
+  // ((2026-11-11) a further co-op copy: the stored one, its specials and squad archived under "superseded:<now>" and
+  // taken off in the same batch (D1 runs a batch as one transaction). The run's row goes only when it's still the copy
+  // read above: one replaced meanwhile makes the INSERT below fail and the whole batch with it; the game sends again.)
+  const pre = [];
+  if (supersede) {
+    const rid = `superseded:${now}`, rc = RUN_COLS.join(", "), spc = SPECIAL_COLS.join(", "), qc = SQUAD_COLS.join(", ");
+    pre.push(
+      env.DB.prepare(`INSERT INTO runs_archive (reset_id, reset_at, ${rc}) SELECT ?, ?, ${rc} FROM runs WHERE run_id = ?`).bind(rid, now, run.run_id),
+      env.DB.prepare(`INSERT INTO specials_archive (reset_id, reset_at, ${spc}) SELECT ?, ?, ${spc} FROM specials WHERE run_id = ?`).bind(rid, now, run.run_id),
+      env.DB.prepare(`INSERT INTO squads_archive (reset_id, reset_at, ${qc}) SELECT ?, ?, ${qc} FROM squads WHERE run_id = ?`).bind(rid, now, run.run_id),
+      env.DB.prepare("DELETE FROM squads WHERE run_id = ?").bind(run.run_id),
+      env.DB.prepare("DELETE FROM specials WHERE run_id = ?").bind(run.run_id),
+      env.DB.prepare("DELETE FROM runs WHERE run_id = ? AND round = ? AND time_s = ?").bind(run.run_id, supersede.round, supersede.time_s));
+  }
+  await env.DB.batch([...pre, ...batch]);
   // the post and the boards: a Discord hiccup mustn't lose the run (it's stored), so their errors are only logged; they
   // run after the reply (ctx.waitUntil), so a rate-limit wait never holds the game past its 15 s timeout (code review
   // of 2026-10-23)
   const after = (async () => {
-    try { await discord(env, "POST", `/channels/${env.RUNS_CHANNEL_ID}/messages`, { embeds: [runEmbed(run, sc, verified === 1)] }); }
+    try { await discord(env, "POST", `/channels/${env.RUNS_CHANNEL_ID}/messages`, { embeds: [runEmbed(run, sc, verified === 1, supersede)] }); }
     catch (e) { console.log(String(e)); }
     try { await refreshBoards(env); } catch (e) { console.log(String(e)); }
   })();
   if (ctx && ctx.waitUntil) ctx.waitUntil(after); else await after;     // (tests: no ctx)
-  return json({ ok: true, score: sc });
+  return json({ ok: true, score: sc, ...(supersede ? { replaced: true, was: storedOf(supersede) } : {}) });
+}
+
+// ((2026-11-11) a co-op run's copies) null when `run` replaces the stored copy `s` of its run_id, else why it doesn't.
+// Only a co-op copy of a co-op run that went further: a higher round; the same round, sent by a game that didn't take
+// the run over alone (a lone takeover is the copy most likely forked off by a dropped link) when the stored one did;
+// else the same round and a longer time. And one whose squad has the stored copy's host in it: the same room's run
+// (the signing key ships in main.dll, so the room's run id alone isn't proof).
+function supersedes(run, s) {
+  if (!run.coop) return "a solo run";
+  if (s.players === null || s.players === undefined) return "the stored run is a solo run";
+  const mine = [run.round, run.coop.takeover ? 0 : 1, run.time_s], theirs = [s.round, s.takeover === 1 ? 0 : 1, s.time_s];
+  let cmp = 0;
+  for (let i = 0; i < 3 && cmp === 0; i++) cmp = Math.sign(mine[i] - theirs[i]);
+  if (cmp <= 0) return "the stored copy is as far or further";
+  const host = String(s.pilot || "").toLowerCase();
+  if (!run.coop.squad.some((p) => p.pilot.toLowerCase() === host)) return "the stored copy's host isn't in this squad";
+  return null;
 }
 
 // A pilot's solo runs (as before: co-op runs left out of them) and, in a field of its own, the co-op runs they flew in,

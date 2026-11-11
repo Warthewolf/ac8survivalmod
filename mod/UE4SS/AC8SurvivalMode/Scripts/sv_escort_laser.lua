@@ -855,6 +855,7 @@ function ZLAUNCH.risen(C, F, now)
                         if p.Z < parkZ then e.parked = true
                         elseif p.Z > riseZ and nearShip and not e.out and (e.parked or (e.at or 0) >= F.at - 1) and ESC.same(e) then
                             e.out = true
+                            e.retired, e.dived = nil, nil      -- ((2026-11-11) launched again: one that couldn't be finished flies)
                             e.armUnit = F.unit                 -- (its laser's record: ZLAS.drive)
                             out = out + 1
                             if onObj(e.obj) then back = back + 1 end
@@ -890,9 +891,62 @@ local function players()
     local ok, v = pcall(function() local l = pawn:K2_GetActorLocation(); return { X = l.X, Y = l.Y, Z = l.Z } end)
     return ok and v and { { slot = 0, obj = pawn, at = v, isMe = true } } or {}
 end
+-- the ship a ZFA-44 unit (a launcher arm's, a pose flight's) is of, and its cover record
+local function armOf(unit)
+    local c = cc()
+    for si, arms in ipairs(c.launchers or {}) do
+        for _, arm in ipairs(arms) do if arm.unit == unit then return si, arm.cover end end
+    end
+    for i, pu in ipairs(c.pose_units or {}) do if pu == unit then return i, (c.pose_cover or {})[i] end end
+    return nil, nil
+end
+-- ship i's carrier on station (the host's or solo)
+local function carrierUp(i)
+    local R = ESC.R
+    local C = i and R and R.D == D and R.carriers and R.carriers[i]
+    return C ~= nil and C.state == "up"
+end
+-- ((2026-11-11) Saint Alessia's run: all 70 Helios blasts on the zone's east edge, the flights 30 km from every player on
+-- average, why unknown) every pos_log_s each VAMPIRES plane up here (above rise_m, its own, alive) where it is, every
+-- game: `carrier: VAMPIRES <unit> <plane> at (x, y) km z m, v km/h, health h (<what it's doing>)`
+local function posLog(c, riseZ)
+    local every, clock = num(c.pos_log_s, 30), os.clock()
+    if every <= 0 or clock < (ZLAUNCH.posAt or 0) then return end
+    ZLAUNCH.posAt = clock + every
+    local n, client, seen = 0, COOP and COOP.client and COOP.client(), {}
+    for u, l in pairs(ESC.planes or {}) do
+        if ESC.kindOf(u) == "zfa" then
+            for _, e in ipairs(l) do
+                if n < 24 and not e.dead and not seen[e.addr] and ESC.same(e, 1) then
+                    seen[e.addr] = true
+                    local ok, p, v, h = pcall(function()
+                        local a, b = e.obj:K2_GetActorLocation(), e.obj:GetVelocity()
+                        return { X = a.X, Y = a.Y, Z = a.Z }, math.sqrt(b.X ^ 2 + b.Y ^ 2 + b.Z ^ 2) * 0.036, e.obj.HealthInternal
+                    end)
+                    if ok and p and p.Z > riseZ and not (type(h) == "number" and h <= 0) then
+                        n = n + 1
+                        local unit = e.armUnit or u
+                        local what = "its carrier gone"
+                        if e.retired then what = "switched off: it couldn't be finished"
+                        elseif ZDIVE and ZDIVE.waiting and ZDIVE.waiting(e.addr) then what = "held for its dive"
+                        elseif ZDIVE and ZDIVE.diving and ZDIVE.diving(e.addr) then what = "diving"
+                        elseif client then what = "this game's own"
+                        elseif carrierUp((armOf(unit))) then what = "escorting" end
+                        log(string.format("carrier: VAMPIRES %s %s at (%.1f, %.1f) km %.0f m, %.0f km/h, health %s (%s)", unit,
+                            nameOf(e.obj):match("_C_(%d+)$") or tostring(e.addr), p.X / 100000, p.Y / 100000, p.Z / 100, v or 0, tostring(h), what))
+                    end
+                end
+            end
+        end
+    end
+end
 function ZLAUNCH.coverTick()
     local c = cc()
-    if c.escort == false or not D then return end
+    if not D then return end
+    local riseZ = num(c.rise_m, -50) * 100
+    local okP, errP = pcall(posLog, c, riseZ)
+    if not okP then logOnce("zfa pos", "carrier: VAMPIRES position log error " .. tostring(errP)) end
+    if c.escort == false then return end
     if COOP and COOP.client and COOP.client() then return end
     local clock = os.clock()
     ZLAUNCH.coverAt = ZLAUNCH.coverAt or 0
@@ -900,19 +954,18 @@ function ZLAUNCH.coverTick()
     ZLAUNCH.coverAt = clock + num(c.escort_s, 6)
     -- the flights up: unit -> { cover record, planes, centre }
     local fl = {}
-    local riseZ = num(c.rise_m, -50) * 100
     for u, l in pairs(ESC.planes or {}) do
         if ESC.kindOf(u) == "zfa" then
             for _, e in ipairs(l) do
-                local unit, ev = e.armUnit, nil
-                if unit then
-                    for _, arms in ipairs(c.launchers or {}) do
-                        for _, arm in ipairs(arms) do if arm.unit == unit then ev = arm.cover end end
-                    end
-                else
-                    for i, pu in ipairs(c.pose_units or {}) do if pu == u then unit, ev = u, (c.pose_cover or {})[i] end end
-                end
-                if unit and ESC.same(e, 1) and not (ZDIVE and ZDIVE.diving and ZDIVE.diving(e.addr)) then   -- (a diving one: its target)
+                local unit = e.armUnit
+                if not unit then for _, pu in ipairs(c.pose_units or {}) do if pu == u then unit = u end end end
+                local ship, ev = armOf(unit)
+                -- ((2026-11-11) Saint Alessia's run: a carrier gone, its planes were ordered on for hours) while its carrier's
+                -- on station and the dive hasn't it; one held for the dive escorts until it dives (brought toward the
+                -- fight); never one the dive took or that couldn't be finished (switched off)
+                local wait = ZDIVE and ZDIVE.waiting and ZDIVE.waiting(e.addr)
+                local mine = wait or (not e.dived and not e.retired and carrierUp(ship) and not (ZDIVE and ZDIVE.diving and ZDIVE.diving(e.addr)))
+                if unit and mine and ESC.same(e, 1) then
                     local okH, h = pcall(function() return e.obj.HealthInternal end)
                     local ok, p = pcall(function() local v = e.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
                     if ok and p and p.Z > riseZ and not (okH and type(h) == "number" and h <= 0) then
@@ -1001,11 +1054,60 @@ function ZLAUNCH.pickArm(C, arms)
     log(string.format("carrier: %s: every launcher arm's last ZFA-44s are still up: arm %d as it comes", tostring(C.name), j))
     return j
 end
+-- ((2026-11-11) Saint Alessia's 50-round co-op run of 0.74.36, docs/re/ESCORT.md "The ZFA-44s' end": none of its 24
+-- ZFA-44s died in 4.5 h. Every scripted end hit them with GameplayStatics.ApplyDamage, which takes nothing off AC8's AI
+-- planes, and its pcall passing was taken for a kill) ZLAUNCH.finish(e, why, final): an ESC.planes entry's ZFA-44 (or a
+-- dive's held one) finished off where it is, unpaid: its own plane still (ESC.same, read now: hard rule 59), its copies on
+-- the joiners down first (the host's), then sv_core.lua finishUnpaid (ModifyHealth). Not down and final: switched off
+-- (ESC.offObj) and retired (never escorted or held for a dive again), said once a plane `carrier: a ZFA-44 <id> (<why>)
+-- could not be finished (health N ...): switched off`; the first one down each level says how it went. -> dead, its
+-- health after, how ("not its plane": nothing done)
+local function fin()
+    ZLAUNCH.fin = ZLAUNCH.fin or { failN = 0 }
+    return ZLAUNCH.fin
+end
+function ZLAUNCH.finish(e, why, final)
+    if not (e and ESC.same(e)) then return false, nil, "not its plane" end
+    if COOP and COOP.removeObj then pcall(COOP.removeObj, e.obj) end
+    local dead, h, how = finishUnpaid(e.obj)
+    local F = fin()
+    if dead then
+        e.dead, e.retired = true, nil
+        if not F.okSaid and how ~= "already down" then
+            F.okSaid = true
+            log(string.format("carrier: a ZFA-44 finished off (%s): its health read %s after ModifyHealth (%s), as every one this level should",
+                tostring(why), tostring(h), tostring(how)))
+        end
+    elseif final then
+        if ESC.offObj then pcall(ESC.offObj, e.obj) end
+        e.retired = true
+        if not e.failSaid and F.failN < 40 then
+            e.failSaid, F.failN = true, F.failN + 1
+            log(string.format("carrier: a ZFA-44 %s (%s) could not be finished (health %s after ModifyHealth and ApplyDamage): switched off",
+                nameOf(e.obj):match("_C_(%d+)$") or tostring(e.addr), tostring(why), tostring(h)))
+        end
+    end
+    return dead, h, how
+end
+-- every entry of list finished off (final): how many down, how many switched off instead
+function ZLAUNCH.finishAll(list, why)
+    local n, off = 0, 0
+    for _, e in ipairs(list or {}) do
+        local dead, _, how = ZLAUNCH.finish(e, why, true)
+        if dead then n = n + 1 elseif how ~= "not its plane" then off = off + 1 end
+    end
+    return n, off
+end
 -- ((2026-11-09) Shazzy's solo host log of 0.74.36: AC8 crashed at the STORE's close (an access violation reading 0x3d9
 -- under the stock AI restore) 26 s after CARRIER 1's hull unit was destroyed with 10 parked ZFA-44s of its launchers
 -- still up ("still has 2 up after 30 s" for 5 arms). A carrier's hull unit never goes off the spawner's list while a
 -- ZFA-44 of its launcher arms is up, as an arm's own unit never does: true while ship i's is held (`who` logged once,
--- t.heldSaid), looked at again by the caller (sv_escort.lua's leaving carrier and recycleTick)
+-- t.heldSaid), looked at again by the caller (sv_escort.lua's leaving carrier and recycleTick, a joiner's spawn and
+-- recycle of it). ((2026-11-11) Saint Alessia's run: with the kill failing, every ship would have been held for the run)
+-- While it holds, ship i's ZFA-44s (but the dive's: it holds them through their round) finished off again every 5 s;
+-- HOLD_GIVE_UP_S after the dive's last one, given up and said once: the hull and the ship's STORE slot stay held (never
+-- taken off with planes up; nothing frees the slot without SV_Recycle)
+local HOLD_GIVE_UP_S = 60
 function ZLAUNCH.holdHull(i, t, who, why)
     local up = 0
     for _, arm in ipairs((cc().launchers or {})[i] or {}) do
@@ -1014,55 +1116,98 @@ function ZLAUNCH.holdHull(i, t, who, why)
             if ok and type(a) == "number" and a > 0 then up = up + a end
         end
     end
-    if up > 0 and not t.heldSaid then
-        t.heldSaid = true
+    if up <= 0 then return false end
+    local now = os.clock()
+    if not t.heldSaid then
+        t.heldSaid, t.holdAt = true, now
         log(string.format("carrier: %s (%s): its hull held on the spawner's list, switched off: %d ZFA-44s of its launchers "
             .. "still up (never taken off with them up; looked at again every 5 s)", tostring(who), tostring(why), up))
     end
-    return up > 0
+    if ZDIVE and ZDIVE.holding and ZDIVE.holding(i) then t.holdAt = now          -- (the dive's: its round first)
+    elseif not t.gaveUp then
+        if now >= (t.killAt or 0) then           -- (a joiner: its parked and switched-off ones; its flying ones may be the
+            t.killAt = now + 5                    -- host's next launch's, forwarded here while it waits)
+            local client = COOP and COOP.client and COOP.client()
+            pcall(ZLAUNCH.parkedOff, i, nil, tostring(who) .. " held", not client, true)
+            if ZLAUNCH.offKill then pcall(ZLAUNCH.offKill, i, tostring(who) .. " held") end
+        end
+        if now - (t.holdAt or now) >= HOLD_GIVE_UP_S then
+            t.gaveUp = true
+            log(string.format("carrier: %s (%s): %d ZFA-44s of its launchers still up %d s on, finished off every 5 s: given up; "
+                .. "its hull stays on the spawner's list, its ship busy in the STORE (never taken off with planes up)",
+                tostring(who), tostring(why), up, HOLD_GIVE_UP_S))
+        end
+    end
+    return true
 end
 -- (a carrier leaving or sunk, the host's or a joiner's own) ship i's parked ZFA-44s (under parked_m, never launched)
--- finished off where they are, under the sea, unpaid, and its arms' units (but keep's: its flight up) off the spawner's
--- list once nothing of them is up (sv_escort.lua recycleTick: never with planes up), so its next ship's launchers have
--- their own again. How many finished off
-function ZLAUNCH.parkedOff(i, keep, why)
+-- finished off where they are, under the sea, unpaid (ZLAUNCH.finish), and its arms' units (but keep's: its flight up)
+-- off the spawner's list once nothing of them is up (sv_escort.lua recycleTick: never with planes up), so its next ship's
+-- launchers have their own again. How many finished off (their health read 0), and how many were tried
+-- all: ((2026-11-11) ESC.restart, holdHull) every ZFA-44 of ship i's arms, flying ones too, not only the parked
+-- live: (holdHull) not the dive's held ones, and its arms' units queued only once one went down, each once
+function ZLAUNCH.parkedOff(i, keep, why, all, live)
     local c = cc()
     local arms = (c.launchers or {})[i] or {}
     local parkZ = num(c.parked_m, -100) * 100
-    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
-    local mine, n = {}, 0
+    local client = COOP and COOP.client and COOP.client()
+    local mine, n, hit, left, by = {}, 0, 0, {}, {}
     for _, arm in ipairs(arms) do if type(arm.unit) == "string" then mine[arm.unit] = true end end
     for u, l in pairs((ESC and ESC.planes) or {}) do
         if mine[u] then
             for _, e in ipairs(l) do
-                if liveAddr(e.obj) == e.addr then
+                if liveAddr(e.obj) == e.addr and not e.dead then
                     local okL, z = pcall(function() return e.obj:K2_GetActorLocation().Z end)
-                    if okL and type(z) == "number" and z < parkZ and ESC.same(e) then   -- (its own plane: never another's at its address)
-                        if COOP and COOP.removeObj then pcall(COOP.removeObj, e.obj) end
-                        pcall(function() e.obj:SetIsInvincible(false) end)
-                        pcall(function() e.obj.bIsInvincible = false end)
-                        pcall(function() e.obj:SetMinHealth(0.0) end)
-                        -- ((2026-11-09) Shazzy's log of 0.74.36: 10 "finished off" and every arm still 2 up 30 s on:
-                        -- a carrier leaving had switched them off (offObj: SetActive false), and an inactive object
-                        -- takes no damage (inferred). Switched on again first, under the sea, then the blow)
-                        pcall(function() e.obj:SetActive(true, false, false) end)
-                        if valid(gs) and pcall(function() gs:ApplyDamage(e.obj, 1.0e8, nil, nil, nil) end) then n = n + 1 end
+                    if (all or (okL and type(z) == "number" and z < parkZ))
+                        and not (live and ZDIVE and ZDIVE.diving and ZDIVE.diving(e.addr))
+                        and not (client and COOP.copyAt and COOP.copyAt(e.addr)) then   -- (never a bound copy of the host's)
+                        local dead, h, how = ZLAUNCH.finish(e, why, true)
+                        if how ~= "not its plane" and how ~= "already down" then
+                            hit = hit + 1
+                            if dead then n, by[how] = n + 1, (by[how] or 0) + 1
+                            else left[#left + 1] = type(h) == "number" and string.format("%.0f", h) or "unread" end
+                        end
                     end
                 end
             end
         end
     end
     local q = 0
-    for u in pairs(mine) do                             -- (only once some were parked: nothing else of theirs to free)
-        if n > 0 and u ~= keep and ESC and ESC.recycleQ then
+    for u in pairs(mine) do                             -- (only once some were tried: nothing else of theirs to free)
+        local dup = false
+        if live then for _, x in ipairs((ESC and ESC.recycleQ) or {}) do if x.unit == u then dup = true end end end
+        if hit > 0 and u ~= keep and ESC and ESC.recycleQ and not dup and (n > 0 or not live) then
             ESC.recycleQ[#ESC.recycleQ + 1] = { unit = u, at = os.clock() + 3, why = tostring(why) .. ": its parked ZFA-44s" }
             q = q + 1
         end
     end
-    if n > 0 then
-        log(string.format("carrier: %s: %d parked ZFA-44s of ship %d finished off under the sea, %d of its arms' units off the list once none is up",
-            tostring(why), n, i, q))
+    if hit > 0 then
+        local ways = {}
+        for k, v in pairs(by) do ways[#ways + 1] = string.format("%d by %s", v, k) end
+        table.sort(ways)
+        log(string.format("carrier: %s: %d %sZFA-44s of ship %d finished off%s%s%s, %d of its arms' units off the list once none is up",
+            tostring(why), n, all and "" or "parked ", i, all and "" or " under the sea", #ways > 0 and (" (" .. table.concat(ways, ", ") .. ")") or "",
+            #left > 0 and string.format("; %d could not be (health %s): switched off", #left, table.concat(left, ", ", 1, math.min(#left, 6))) or "", q))
     end
-    return n
+    return n, hit
 end
+-- ((2026-11-11) the session's review: a joiner's own ZFA-44s of a carrier that left were switched off, not finished off
+-- (sv_escort.lua ownZfaOff), and switched off they count up: the host's next spawn of that hull waited on them for good)
+-- this game's ZFA-44s of ship i that couldn't be finished (ESC.offZfa) finished off again (ZLAUNCH.finish: its own plane
+-- still, hard rule 59). How many went (health 0), how many were tried
+function ZLAUNCH.offKill(i, why)
+    local l = ESC and ESC.offZfa and ESC.offZfa[i]
+    if not l or #l == 0 then return 0, 0 end
+    local n, hit = 0, 0
+    for k = #l, 1, -1 do
+        local dead, _, how = ZLAUNCH.finish(l[k], why, true)
+        if how == "not its plane" or dead then table.remove(l, k) end   -- (gone, or another object's at its address now)
+        if how ~= "not its plane" then hit = hit + 1; if dead then n = n + 1 end end
+    end
+    if hit > 0 then
+        log(string.format("carrier: %s: %d of this game's switched-off ZFA-44s of ship %d finished off (%d tried)", tostring(why), n, i, hit))
+    end
+    return n, hit
+end
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS.zfa_finish = function() ZLAUNCH.fin = nil end end
 end

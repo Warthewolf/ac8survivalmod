@@ -233,6 +233,18 @@ local function defencesUp(kind)
     return n, #units
 end
 
+-- ((2026-11-11) Saint Alessia's 50-round co-op run, lag-3) a defence's spawn names its unit (spawningUnit, as the co-op
+-- host's SV_Spawn does): sv_allies.lua keeps its objects as they're made (ALLY.parts), so the round clear's repair and
+-- the defences' health read those instead of walking every object for their classes
+local function spawnDefence(unit)
+    if spawningUnit ~= nil then return SV_Spawn(unit) end
+    spawningUnit = unit
+    local ok, r = pcall(SV_Spawn, unit)
+    spawningUnit = nil
+    if not ok then error(r, 0) end
+    return r
+end
+
 -- A free unit of defence `kind` and its price now (each one built makes the next of its kind dearer), or nil.
 local function defenceFor(kind)
     local d = CFG.shop.items.Airfield.defences
@@ -664,7 +676,7 @@ function shopBuildFor(slot, name, price, kind, asked)
             slot and tostring(slot + 1) or "?", kind, tonumber(price) or 0, rp, RUN.defences.bought[kind] or 0))
         return false, string.format("THE PRICE IS NOW %d", rp)
     end
-    local r = SV_Spawn(f.unit)
+    local r = spawnDefence(f.unit)
     if ALLY.forgetAlive then ALLY.forgetAlive(f.unit) end    -- ((0.73.77) the allies' kept count of it asked afresh: B3)
     if r <= 0 then return false, "COULD NOT BUILD IT (" .. (SV_ERR[r] or tostring(r)) .. ")." end
     if asked then RUN.defences.bought[kind], RUN.dirty = (RUN.defences.bought[kind] or 0) + 1, true end
@@ -782,7 +794,7 @@ function shopBuy(name)
         RUN.bought[name] = (RUN.bought[name] or 0) + 1
         return done(string.format("%s for %d.", msg, price))
     elseif o.unit then                               -- a defence
-        local r = SV_Spawn(o.unit)
+        local r = spawnDefence(o.unit)
         if ALLY.forgetAlive then ALLY.forgetAlive(o.unit) end    -- ((0.73.77) the allies' kept count of it asked afresh: B3)
         if r <= 0 then return done("COULD NOT BUILD IT (" .. (SV_ERR[r] or tostring(r)) .. ").") end
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price

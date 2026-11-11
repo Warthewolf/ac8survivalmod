@@ -761,7 +761,8 @@ function FISH.fromHost(k, f)
         end
     elseif k == "fsx" then
         local kind, state = tostring(f[2] or ""):match("^(%a+)$"), tostring(f[3] or ""):match("^(%a+)$")
-        if not (kind and state and #kind <= 16 and #state <= 16) then return end
+        -- ((2026-11-11) coop_guard_test: keyed by any word, 1,800 rows in a flood) only the two rounds that send one
+        if not (kind and state and #state <= 16 and (kind == "fishing" or kind == "festival")) then return end
         L.rows[kind] = { state = state, a = num(f[4], 0, 1e6) or 0, b = num(f[5], 0, 1e6) or 0, c = num(f[6], 0, 1e7) or 0, at = os.clock() }
     elseif k == "fw" then
         -- ((code review of 2026-11-07, finding 9) the most a round can hold: every shoal (FISH.maxShoals) its heaviest
@@ -785,7 +786,8 @@ function FISH.fromHost(k, f)
         local most = sh * FISH.maxKg()
         round = math.min(math.floor(round), 1000)                -- (finding 9: the pay's round factor, at most round 1000's)
         total = math.min(math.floor(total or 0), sh)
-        team, ally = math.min(team, most), math.min(ally or 0, most)
+        -- ((2026-11-11) coop_guard_test: a fractional haul errored in FISH.weighHere's %d log line after the pay) whole kg
+        team, ally = math.floor(math.min(team, most) + 0.5), math.floor(math.min(ally or 0, most) + 0.5)
         local okW, errW = pcall(FISH.weighHere, L.weigh, math.floor(players), team, ally, round, total)
         if not okW then log("fishing: the host's weigh-in not read here: " .. tostring(errW)) end
         L.weigh, L.haul = {}, {}

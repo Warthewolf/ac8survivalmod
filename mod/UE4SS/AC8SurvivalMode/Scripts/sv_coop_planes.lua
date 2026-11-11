@@ -628,6 +628,27 @@ function M.radarOn(P)
     local okW = pcall(function() o.bIsActivated = true end)
     return okW and "on the radar again (activated)" or "NOT activated again"
 end
+-- ((2026-11-11, Delta's log of Saint Alessia's 50-round run: a revived player's real plane 22-37 km off their stream for
+-- a minute, "at most 36583 m off where it was sent" 2 s after the revive) a real plane hidden while its player was down
+-- or out of the mission isn't fed by the runtime (unbound: SV_CoopPeer 0) and stays where it was hidden. Before it's
+-- shown again (peerTick) it's moved to their newest streamed state (P.at, P.rot: SV_CoopPeerAt's, read this tick), so the
+-- runtime's first feed starts there. What it did, for peerTick's "shown" line, or nil (no plane or no state)
+function M.toNewest(slot, P)
+    local o, at, rot = P and P.obj, P and P.at, P and P.rot
+    if not (o and live(o) and at and finite(at.X, 1e10) and finite(at.Y, 1e10) and finite(at.Z, 1e10)) then return nil end
+    local function where()
+        local okL, v = pcall(function() local l = o:K2_GetActorLocation(); return { X = l.X, Y = l.Y, Z = l.Z } end)
+        return (okL and v and finite(v.X, 1e12) and finite(v.Y, 1e12) and finite(v.Z, 1e12)) and v or nil
+    end
+    local from = where()
+    local function deg(i) return (rot and finite(rot[i], 1e4)) and rot[i] or 0 end
+    local to = { X = at.X, Y = at.Y, Z = at.Z }
+    local ok = pcall(function() o:K2_SetActorLocationAndRotation(to, { Pitch = deg(1), Yaw = deg(2), Roll = deg(3) }, false, {}, true) end)
+    local after = ok and where() or nil
+    local function m(a) return math.sqrt((a.X - to.X) ^ 2 + (a.Y - to.Y) ^ 2 + (a.Z - to.Z) ^ 2) / 100 end
+    return string.format("%s to their newest state first (%s from it%s)", ok and "moved" or "NOT moved",
+        from and string.format("%.1f km", m(from) / 1000) or "? km", after and string.format("; read back %.0f m off", m(after)) or "")
+end
 -- a slot no player has in the runtime (nor this game, nor a plane kept there), the highest first (the host gives the
 -- lowest free one to a newcomer)
 local function freeNative(but)
@@ -981,7 +1002,11 @@ function peerTick(slot)
         if show ~= P.shown then
             P.shown = show
             local radar                                  -- ((0.73.83) off the radar while hidden: M.radarOff)
+            local okM, moved = false, nil                -- ((2026-11-11) a real plane to its newest state before it's shown)
+            if show and P.real then okM, moved = pcall(M.toNewest, slot, P) end
+            moved = okM and moved or nil
             if show then radar = M.radarOn(P) end
+            if moved then radar = radar and (radar .. "; " .. moved) or moved end
             pcall(function() P.obj:SetActorHiddenInGame(not show) end)
             pcall(function() P.obj:SetActorEnableCollision(show) end)
             if type(SV_CoopPeer) == "function" then SV_CoopPeer(slot, show and P.addr or 0) end
@@ -1298,6 +1323,45 @@ function COOP.huntHost(unit)
     if DOWN and DOWN.me and DOWN.me() == true then return 0 end   -- ((2026-11-07) never onto your plane while you're down)
     return valid(pawn) and orderFlight(unit, pawn, PRIO_PLAYER_ONLY_NO_LIMIT) or 0
 end
+-- ((2026-11-11, Saint Alessia's 50-round run) for sv_ai.lua ACE.hunt, which put the top tier's TargetActor back on the
+-- host's own plane every 2 s, her hidden DOWN plane too, and so undid every hunt above: "the enemy AI followed my corpse
+-- plane in its orbit around the base")
+-- (the host) the plane flight `unit` was sent after (COOP.huntReal, this generation of it) while its player can still be
+-- hunted, or nil, and that player's slot
+function COOP.huntTarget(unit)
+    local h = unit and M.huntOn and M.huntOn[unit]
+    local u = unit and M.units[unit]
+    if not (h and u and u.gen == h.gen) then return nil end
+    local o = realTarget(h.slot)
+    if not o then return nil end
+    return o, h.slot
+end
+-- (the host) the living player's real plane the fewest flights are sent after (COOP.huntReal's pick), and its slot, or nil
+function COOP.huntPick()
+    local count, best, bestN = {}, nil, nil
+    for _, h in pairs(M.huntOn or {}) do count[h.slot] = (count[h.slot] or 0) + 1 end
+    for s = 0, MAX_SLOT do
+        if realTarget(s) and (best == nil or (count[s] or 0) < bestN) then best, bestN = s, count[s] or 0 end
+    end
+    if best == nil then return nil end
+    return realTarget(best), best
+end
+-- Whether obj is another living player's plane here (their real plane or AI stand-in: shown, their state fresh, not
+-- DOWN, not down at their airfield), by its address: that player's slot, or nil
+function COOP.isPlayerPlane(obj)
+    local a = obj ~= nil and valid(obj) and addrOf(obj) or nil
+    if not a then return nil end
+    for s = 0, MAX_SLOT do
+        local P = M.peers[s]
+        if s ~= COOP.slot and P and P.addr == a and P.obj and P.shown and P.fresh and not P.down and not P.onAirfield
+            and valid(P.obj) then
+            return s
+        end
+    end
+    return nil
+end
+-- (sv_down.lua's revive check) whether player slot's link was lost (the native's sys|lost) and hasn't come back
+function COOP.linkLost(slot) return M.lostAt ~= nil and M.lostAt[slot] ~= nil end
 function COOP.watchable()
     local out = {}
     for s = 0, MAX_SLOT do

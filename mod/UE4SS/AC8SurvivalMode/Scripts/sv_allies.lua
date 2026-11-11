@@ -568,6 +568,86 @@ local function repairActors(classes)
     end
     return n
 end
+-- an object's name holds its class's ("BP_GR002_gepa_CP_C_2147..."): the classes' patterns
+local function wantOf(classes)
+    local w = {}
+    for _, cls in ipairs(classes) do w[#w + 1] = cls:gsub("_C$", "") .. "_C_" end
+    return w
+end
+local SHIP_WANT, DEF_WANT = wantOf(SHIP_CLASSES), wantOf(DEF_CLASSES)
+local function nameWanted(nm, want)
+    for _, k in ipairs(want) do if nm:find(k, 1, true) then return true end end
+    return false
+end
+-- ((2026-11-11) Saint Alessia's 50-round co-op run, lag-3: ALLY.repairAll walked SHIP_CLASSES' four classes with ships at
+-- sea and DEF_CLASSES' three with defences up over every object (FindAllOf: this game's object hash tables aren't found,
+-- ~41 ms a walk), all in the tick of each round clear: 120-320 ms frozen at every clear from round 8, for 0-3 objects
+-- repaired. The allied ships' and the airfield defences' objects are kept as SV_Spawn makes them (spawningUnit names
+-- their unit then: ALLY.buy, the STORE's defences in sv_shop.lua, a co-op joiner's copies), ALLY.parts[unit] = { at,
+-- { obj, name } ... }, each name read the tick after (partsTick); one is used only while it's live and still has that name
+-- (hard rule 59). The repair and the defences' health read those; a unit up with none kept is walked for as before, one
+-- class a tick at a round clear (at once for the STORE's airfield repair, as before), and logged.)
+ALLY.parts = ALLY.parts or {}
+local PART_KIND = {}                                    -- unit -> "ship" / "defence"
+for _, sh in pairs(CFG.allies.ships) do for _, u in ipairs(sh.units or {}) do PART_KIND[u] = "ship" end end
+for _, def in pairs(CFG.shop.items.Airfield.defences or {}) do
+    if type(def) == "table" and type(def.units) == "table" then for _, u in ipairs(def.units) do PART_KIND[u] = "defence" end end
+end
+local partsNew = {}
+if type(NotifyOnNewObject) == "function" then
+    pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
+        local u = spawningUnit
+        if not (u and PART_KIND[u]) then return end
+        local l = ALLY.parts[u]
+        if not l or os.clock() - (l.at or 0) > 2 then l = { at = os.clock() }; ALLY.parts[u] = l end   -- (a new spawn of it)
+        if #l < 24 then
+            local p = { obj = o }
+            l[#l + 1] = p
+            if #partsNew < 200 then partsNew[#partsNew + 1] = p end
+        end
+    end)
+end
+-- (every tick, first in ALLY.tick) the new objects' names, read once they're made
+local function partsTick()
+    if #partsNew == 0 then return end
+    local q = partsNew
+    partsNew = {}
+    for _, p in ipairs(q) do if liveAddr(p.obj) then p.name = nameOf(p.obj) end end
+end
+-- unit u's kept objects of these classes, each live and still the object it was; nil when none of it is kept
+local function keptParts(u, want)
+    local l = ALLY.parts[u]
+    if not l then return nil end
+    local out, any = {}, false
+    for _, p in ipairs(l) do
+        if p.name and p.name ~= "?" then
+            any = true
+            if nameWanted(p.name, want) and liveAddr(p.obj) and nameOf(p.obj) == p.name then out[#out + 1] = p.obj end
+        end
+    end
+    return any and out or nil
+end
+-- a repair's walk left (a unit up with none of its objects kept): its classes, one a tick (repairWalkTick)
+local function repairWalk(R, classes, why)
+    local w = R.repairWalk or { classes = {}, i = 0, n = 0, why = {} }
+    for _, cls in ipairs(classes) do
+        local has = false
+        for _, c in ipairs(w.classes) do if c == cls then has = true end end
+        if not has then w.classes[#w.classes + 1] = cls end
+    end
+    w.why[#w.why + 1] = why
+    R.repairWalk = w
+end
+local function repairWalkTick(R)
+    local w = R.repairWalk
+    if not w then return end
+    w.i = w.i + 1
+    if w.classes[w.i] then w.n = w.n + repairActors({ w.classes[w.i] }) end
+    if w.i >= #w.classes then
+        R.repairWalk = nil
+        log(string.format("allies: the repair's walk for %s done, a class a tick: %d more repaired", table.concat(w.why, ", "), w.n))
+    end
+end
 -- ((0.73.79, the lag audit's item 7) The defences' repair walked DEF_CLASSES (three walks over every object, 105-150 ms
 -- on a tester's PC) at every round clear even with none bought. With none of the STORE's defences up (R.defCount, from
 -- their units) only the shuttle pad's objects of those classes are left in the level, and they're recorded as they
@@ -578,22 +658,36 @@ local function defencesUp()
     for _, kind in ipairs(DEF_KINDS or {}) do n = n + (R.defCount[kind] or 0) end
     return n
 end
-local function repairDefenceActors()
-    local up = defencesUp()
-    if up == nil or up > 0 then return repairActors(DEF_CLASSES) end
-    local want, n = {}, 0
-    for _, cls in ipairs(DEF_CLASSES) do want[#want + 1] = cls:gsub("_C$", "") .. "_C_" end
-    for _, l in pairs(SHUTTLE and SHUTTLE.pad or {}) do
-        for _, o in ipairs(l) do
-            if liveAddr(o) then
-                local nm = nameOf(o)
-                for _, k in ipairs(want) do
-                    if nm:find(k, 1, true) then
-                        if healOne(o) then n = n + 1 end
-                        break
-                    end
-                end
+-- (lag-3) a defence unit up: the allies' count of it (R.defUp), or asked when there's none yet
+local function defUnitUp(R, u)
+    if type(R.defUp) == "table" then return R.defUp[u] == true end
+    return (tonumber(ALLY.alive(u)) or 0) > 0
+end
+-- spread (a round clear's): a walk left for a defence up with none of its objects kept goes one class a tick; else (the
+-- STORE's airfield repair) at once
+local function repairDefenceActors(spread)
+    local R, n, missing = ALLY.state(), 0, {}
+    if defencesUp() ~= 0 then                           -- (some up, or not counted yet)
+        for u, kind in pairs(PART_KIND) do
+            if kind == "defence" then
+                local l = keptParts(u, DEF_WANT)
+                if l then for _, o in ipairs(l) do if healOne(o) then n = n + 1 end end
+                elseif defUnitUp(R, u) then missing[#missing + 1] = u end
             end
+        end
+    end
+    for _, l in pairs(SHUTTLE and SHUTTLE.pad or {}) do  -- (the pad's, recorded as they spawn)
+        for _, o in ipairs(l) do
+            if liveAddr(o) and nameWanted(nameOf(o), DEF_WANT) and healOne(o) then n = n + 1 end
+        end
+    end
+    if #missing > 0 then
+        table.sort(missing)
+        local why = "the defences " .. table.concat(missing, " ") .. " (none of their objects kept)"
+        if spread and CFG.allies.enabled then repairWalk(R, DEF_CLASSES, why)
+        else
+            n = n + repairActors(DEF_CLASSES)
+            log("allies: the repair walked for " .. why .. " at once")
         end
     end
     return n
@@ -616,7 +710,35 @@ local function defenceHealth(R, now)
     for _, kind in ipairs(DEF_KINDS) do n = n + (R.defCount and R.defCount[kind] or 0) end
     if n == 0 then R.defActors, R.defWalk = nil, nil; return nil end
     if not R.defWalk and (not R.defActors or R.defActorsN ~= n or now >= (R.defActorsAt or 0)) then
-        R.defWalk = { i = 0, list = {}, n = n }
+        -- ((2026-11-11) lag-3: from the defences' own objects as they spawned (ALLY.parts) when every one up has them kept,
+        -- no walk (each of the three took 41-48 ms late in her run, a hitch whenever they were looked for); else walked)
+        local list, all, units = {}, true, 0
+        for u, kind in pairs(PART_KIND) do
+            if all and kind == "defence" and type(R.defUp) == "table" and R.defUp[u] then
+                local l = keptParts(u, DEF_WANT)
+                if not l then all = false
+                else
+                    units = units + 1
+                    for _, o in ipairs(l) do
+                        local ok, loc, h = pcall(function() return o:K2_GetActorLocation(), o.HealthInternal end)
+                        if ok and loc and type(h) == "number" and h > 0
+                            and math.sqrt((loc.X - AIRFIELD.X) ^ 2 + (loc.Y - AIRFIELD.Y) ^ 2) < 400000 then
+                            list[#list + 1] = o
+                        end
+                    end
+                end
+            end
+        end
+        if all and units > 0 then
+            R.defActors, R.defActorsN, R.defActorsAt, R.defHpAt = list, n, now + DEF_WALK_S, nil
+            if not R.defKeptSaid then
+                R.defKeptSaid = true
+                log(string.format("allies: the airfield defences' actors from their objects kept at their spawn: %d for %d up, "
+                    .. "no walk (lag-3)", #list, n))
+            end
+        else
+            R.defWalk = { i = 0, list = {}, n = n }
+        end
     end
     local w = R.defWalk
     if w then                                             -- (one class this tick)
@@ -662,7 +784,8 @@ end
 -- ((0.73.77) a look for them that's under way too)
 function ALLY.forgetActors()
     local R = ALLY.run
-    if R then R.defActors, R.defWalk = nil, nil end
+    if R then R.defActors, R.defWalk, R.repairWalk = nil, nil, nil end
+    ALLY.parts, partsNew = {}, {}                    -- ((lag-3) the objects kept at their spawn: freed with them)
 end
 
 -- (0.73.77, Workstream B3) Each allied and defence unit's SV_UnitAlive, a share each tick (as the plane sweep visits an
@@ -708,7 +831,7 @@ local function aliveShare(R, now)
 end
 
 function ALLY.repairDefences()
-    local n = repairDefenceActors()
+    local n = repairDefenceActors(false)
     if n > 0 then log(string.format("allies: %d airfield defences repaired with the airfield", n)) end
     return n
 end
@@ -724,14 +847,23 @@ function ALLY.repairAll()
             end)
         end
     end
-    local ships = next(ALLY.shipsAtSea()) and repairActors(SHIP_CLASSES) or 0
-    local defs = repairDefenceActors()
+    -- ((2026-11-11) lag-3: the ships' parts and the defences from their objects kept at their spawn, no walk; a walk left
+    -- for one with none kept, a class a tick from the next tick: repairWalkTick)
+    local ships, shipsLeft = 0, {}
+    for _, u in ipairs(ALLY.shipsAtSea()) do
+        local l = keptParts(u, SHIP_WANT)
+        if l then for _, o in ipairs(l) do if healOne(o) then ships = ships + 1 end end
+        else shipsLeft[#shipsLeft + 1] = u end
+    end
+    if #shipsLeft > 0 then repairWalk(R, SHIP_CLASSES, "the ships " .. table.concat(shipsLeft, " ") .. " (none of their objects kept)") end
+    local defs = repairDefenceActors(true)
     local n = planesN + ships + defs
     if n > 0 then
         local t = CFG.allies.text
         hudCallout(t.repaired, string.format(t.repaired_sub, n))
     end
-    log(string.format("allies: repaired between rounds: %d aircraft, %d ship parts, %d airfield defences", planesN, ships, defs))
+    log(string.format("allies: repaired between rounds: %d aircraft, %d ship parts, %d airfield defences%s", planesN, ships, defs,
+        R.repairWalk and string.format(" (a walk left for %s: a class a tick)", table.concat(R.repairWalk.why, ", ")) or ""))
 end
 
 -- The allied aircraft's orders (CFG.allies.orders): R.order now, ALLY.nextOrder the next one (the STORE's row, Ctrl+F4)
@@ -838,6 +970,7 @@ end
 -- (0.73.73) VOID WATCHER 1's ESM field o, new ("new") or launched again from the pool ("again"): its range and time
 -- ours. Logged: the first two new ones (as before), the first two launched again, then every 25th.
 local ESM_KEYS = { "SupportEffectRangeMeter", "EffectRangeMeter", "LifeTime" }
+local ESM_SWEEP_S, ESM_ACTIVE_S, ESM_KEEP = 3, 90, 32        -- ((2026-11-11) lag-5: ALLY.awacsTick's field loop)
 local function esmSet(R, aw, o, how)
     local was, now2 = {}, {}
     for _, k in ipairs(ESM_KEYS) do pcall(function() was[k] = o[k] end) end
@@ -1156,23 +1289,61 @@ function ALLY.awacsTick(R, now)
     -- range and time ("the ESM only lasted the same amount of time that a player's does", Shazzy). Each field seen is
     -- kept (R.esmFields, by address), and set again whenever it's launched: shown after it was hidden, or shown with the
     -- game's range on it (the launch wrote its own)
+    -- ((2026-11-11) Saint Alessia's 50-round co-op run, lag-5: there every launch made a new field (none launched again),
+    -- and every field ever seen was kept and read every tick, VOID WATCHER up or not, its name read too: 5 -> 163 fields,
+    -- ~4 ms a tick, ~330 SV_ObjChain calls. Now a tick reads the fields set in the last life_s + 5 s; the others are swept
+    -- for a launch again a slice a tick, all of them every ESM_SWEEP_S, and only while VOID WATCHER is airborne here or a
+    -- field was set in the last ESM_ACTIVE_S; a field's name is compared with the one it was kept with before it's set
+    -- again (hard rule 59), not every tick; the newest ESM_KEEP kept.)
     local q = ALLY.esmNew
     if q and #q > 0 then
         ALLY.esmNew = {}
         for _, o in ipairs(q) do
             local a = liveAddr(o)
-            if a and nameOf(o):find(aw.esm.class, 1, true) then
+            local nm = a and nameOf(o)
+            if nm and nm:find(aw.esm.class, 1, true) then
                 R.esmFields = R.esmFields or {}
                 local okH, hid = pcall(function() return o.bHidden end)
-                R.esmFields[a] = { obj = o, name = nameOf(o), shown = okH and hid == false }
+                R.esmFields[a] = { obj = o, name = nm, shown = okH and hid == false, at = now }
                 esmSet(R, aw, o, "new")
+                R.esmSetAt = now
+            end
+        end
+        local byAge = {}                                     -- (the newest ESM_KEEP kept)
+        for a, e in pairs(R.esmFields or {}) do byAge[#byAge + 1] = { a = a, at = e.at or 0 } end
+        if #byAge > ESM_KEEP then
+            table.sort(byAge, function(x, y) if x.at ~= y.at then return x.at > y.at end return x.a > y.a end)
+            for i = ESM_KEEP + 1, #byAge do R.esmFields[byAge[i].a] = nil end
+            R.esmDropped = (R.esmDropped or 0) + #byAge - ESM_KEEP
+            if not R.esmDropSaid then
+                R.esmDropSaid = true
+                log(string.format("allies: %s's ESM fields: the newest %d kept, the oldest let go (lag-5)", aw.name, ESM_KEEP))
             end
         end
     end
-    for a, e in pairs(R.esmFields or {}) do
-        if liveAddr(e.obj) ~= a or nameOf(e.obj) ~= e.name then
-            R.esmFields[a] = nil                             -- (gone, or its address another object's now)
-        else
+    local fields = R.esmFields
+    if not fields or next(fields) == nil then return end
+    local airborne = s and not s.queued and not s.home and (f.SV_AwacsAir or 0) > 0
+    if not airborne and now - (R.esmSetAt or -1e9) > ESM_ACTIVE_S then return end   -- (nothing to launch them again)
+    local recentS = (tonumber(aw.esm.life_s) or 15) + 5
+    local visit, old = {}, {}
+    for a, e in pairs(fields) do
+        if now - (e.at or 0) <= recentS then visit[#visit + 1] = a else old[#old + 1] = a end
+    end
+    if #old > 0 then                                      -- (the sweep's slice: every field once an ESM_SWEEP_S)
+        table.sort(old)
+        local per = math.ceil(#old / (ESM_SWEEP_S * 4))
+        for _ = 1, math.min(per, #old) do
+            R.esmSweep = (R.esmSweep or 0) % #old + 1
+            visit[#visit + 1] = old[R.esmSweep]
+        end
+    end
+    R.esmVisits = (R.esmVisits or 0) + #visit
+    for _, a in ipairs(visit) do
+        local e = fields[a]
+        if e and liveAddr(e.obj) ~= a then
+            fields[a] = nil                                  -- (gone)
+        elseif e then
             local okH, hid = pcall(function() return e.obj.bHidden end)
             local blind = not okH or type(hid) ~= "boolean"
             local shown = not blind and hid == false
@@ -1182,11 +1353,19 @@ function ALLY.awacsTick(R, now)
             end
             local okR, rng = pcall(function() return e.obj.EffectRangeMeter end)
             local theirs = okR and type(rng) == "number" and math.abs(rng - aw.esm.range_m) > 0.5
-            if (shown and not e.shown) or (theirs and (shown or blind)) then esmSet(R, aw, e.obj, "again") end
+            if (shown and not e.shown) or (theirs and (shown or blind)) then
+                if nameOf(e.obj) ~= e.name then
+                    fields[a] = nil                          -- (its address another object's now: never set)
+                else
+                    esmSet(R, aw, e.obj, "again")
+                    e.at, R.esmSetAt = now, now
+                end
+            end
             e.shown = shown
         end
     end
 end
+
 -- (every ESM / ECM field the game makes, its actor at construction, for ALLY.awacsTick; only VOID WATCHER 1's class is
 -- changed there)
 if type(NotifyOnNewObject) == "function" then
@@ -1199,9 +1378,16 @@ end
 -- ((0.73.77, Workstream B1) the allies part's shares in the perf line, "allies/<share>": sv_main.lua's PERF)
 local function pa(name, t0) if PERF and PERF.add then PERF.add(name, t0) end end
 function ALLY.tick(now)
+    pcall(partsTick)                                 -- ((lag-3) the new ships' and defences' objects' names)
     if not (CFG.allies.enabled and D and nativeReady()) then return end
     local R, c, t = ALLY.state(), CFG.allies, CFG.allies.text
     local t0 = os.clock()
+    if R.repairWalk then                             -- ((lag-3) a repair's walk left: one class this tick)
+        local okW, errW = pcall(repairWalkTick, R)
+        if not okW then R.repairWalk = nil; log("allies: the repair's walk error " .. tostring(errW)) end
+        pa("allies/repair walk", t0)
+        t0 = os.clock()
+    end
     for _, u in ipairs(c.aircraft.units) do          -- a bought flight: off the ground once you are, runway clear
         local s = R.up[u]
         local ready
@@ -1320,13 +1506,22 @@ function ALLY.tick(now)
         -- them, and at least `hunters` a round (economy review: "hunter pairs that go for allies")
         if R.huntRound ~= D.round then R.huntRound, R.hunters = D.round, 0 end
         for u in pairs(R.seen) do if not D.up[u] then R.seen[u], R.hunted[u] = nil, nil end end
+        -- ((2026-11-11, Saint Alessia's 50-round run) not while you're DOWN, sv_down.lua: the hunt's order prefers allied
+        -- aircraft, else "Player", your hidden plane, and it came 2-5 s after co-op's down pass had sent the flight after a
+        -- living player (sv_coop.lua). Held, not dropped: a flight still up when you're back has its roll then)
+        local hostDown = DOWN ~= nil and DOWN.me ~= nil and DOWN.me() == true
+        if hostDown ~= (R.huntDownSaid or false) then
+            R.huntDownSaid = hostDown
+            log(hostDown and "allies: you're down: the enemies' hunts for the allied aircraft wait for your revive"
+                or "allies: you're back: the enemies' hunts for the allied aircraft go on")
+        end
         for u in pairs(D.up) do
             local i = poolIndex(u)
             if i then
                 R.seen[u] = R.seen[u] or now
                 -- (not a Wolf flight while its trap is held, CFG.roles.wolf, nor one the squad director holds back,
                 -- CFG.director: the hunt's order would free it)
-                if airborne > 0 and not R.hunted[u] and now - R.seen[u] >= 4 and not TAC.decoyed(u, now)
+                if airborne > 0 and not hostDown and not R.hunted[u] and now - R.seen[u] >= 4 and not TAC.decoyed(u, now)
                     and not (WOLF and WOLF.holding(u)) and not (DIR and DIR.holding and DIR.holding(u))
                     and not (ESC and ESC.holds and ESC.holds(u)) then   -- ((2026-11-06) after CHARLENE: sv_escort.lua)
                     R.hunted[u] = true
@@ -1341,11 +1536,16 @@ function ALLY.tick(now)
         -- the airfield's defences: how many are up, and a warning for each one lost (economy review: "warn when one is lost")
         local d = CFG.shop.items.Airfield.defences
         R.defUp, R.defCount = R.defUp or {}, { aa = 0, sam = 0, ciws = 0 }
+        -- ((2026-11-11) Delta's of 2026-11-10: a co-op joiner's copies all taken down at a link back, and ten defences
+        -- called LOST in 5 s) a joiner's defence gone with every copy here (sv_coop_joiner.lua COOP.tornAll) isn't lost
+        local torn = COOP and COOP.client and COOP.client() and COOP.tornAll and COOP.tornAll(20) or nil
         for _, kind in ipairs(DEF_KINDS) do
             for _, u in ipairs(d[kind] and d[kind].units or {}) do
                 local up = ALLY.alive(u, now) > 0        -- ((0.73.77) the share's count: B3)
                 if up then R.defCount[kind] = R.defCount[kind] + 1 end
-                if R.defUp[u] and not up then
+                if R.defUp[u] and not up and torn then
+                    log(string.format("allies: %s (%s) gone here in round %d with every copy (%s): not lost", d[kind].label, u, D.round, torn))
+                elseif R.defUp[u] and not up then
                     hudCallout(string.format(t.def_lost, d[kind].label), t.def_lost_sub)
                     log(string.format("allies: %s (%s) lost in round %d", d[kind].label, u, D.round))
                     RUN.dirty = true

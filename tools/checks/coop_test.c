@@ -120,6 +120,39 @@ static void PlayerPath(int slot, double t, double* p, double* r)
     r[0] = 5.0; r[1] = fmod(a * 180.0 / CO_PI + 90.0 + 540.0, 360.0) - 180.0; r[2] = 30.0;
 }
 static void EnemyPath(double t, double* p, double* r) { p[0] = 2500000.0 * sin(t * 0.01); p[1] = -100000.0; p[2] = 300000.0; r[0] = 0; r[1] = 0; r[2] = 0; }
+/* ((2026-11-11) another host's hello on the host's port: a game that took the run over alone after its own link dropped,
+ * NotMexi's of 2026-11-10) a second "host" on 127.0.0.1:27799: its socket, its hello, and the host hellos it gets back */
+static uintptr_t SameOpen(void)
+{
+    uintptr_t s = WS.socket(2, 2, 17);
+    if (s == (uintptr_t)-1 || !s) return 0;
+    uint32_t nb = 1; WS.ioctl(s, (int32_t)0x8004667E /* FIONBIO */, &nb);
+    CoSockAddr a; memset(&a, 0, sizeof(a)); a.family = 2; a.port = CoBE16(27799);
+    if (WS.bind(s, &a, sizeof(a)) != 0) { WS.closesocket(s); return 0; }
+    return s;
+}
+static void SameHello(uintptr_t s)
+{
+    uint8_t b[160], *p = CoHeader(b, 'H');
+    *p++ = CO_ROLE_HOST; CoPut32(&p, 0x0f0f0f0fu); CoPut32(&p, 1); CoPut32(&p, 0); CoPut32(&p, 0);
+    *p++ = CO_SLOT_NONE; *p++ = 4;
+    char ver[32] = "test", name[64] = "Fork|me\001";
+    memcpy(p, ver, 32); p += 32; memcpy(p, name, 64); p += 64;
+    CoSockAddr to; memset(&to, 0, sizeof(to));
+    CoParseIp("127.0.0.1:27791", &to, 27791);
+    WS.sendto(s, (const char*)b, (int32_t)(p - b), 0, &to, sizeof(to));
+}
+static int SameReplies(uintptr_t s)
+{
+    int n = 0; uint8_t buf[512];
+    for (;;) {
+        CoSockAddr from; int32_t fl = sizeof(from);
+        int32_t got = WS.recvfrom(s, (char*)buf, (int32_t)sizeof(buf), 0, &from, &fl);
+        if (got <= 0) break;
+        if (got > 5 && buf[0] == CO_MAGIC && buf[2] == 'H' && buf[4] == CO_ROLE_HOST) ++n;
+    }
+    return n;
+}
 static double Dist(const double* a, const double* b) { return sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]) + (a[2] - b[2]) * (a[2] - b[2])) / 100.0; }
 
 int main(int argc, char** argv)
@@ -161,6 +194,13 @@ int main(int argc, char** argv)
     *(void***)copy = g_vt;
     double t0 = CoNow(), p[3], rot[3];
     int sentRel = 0, order = 1, gotRel = 0, bound = 0, frames = 0, sentUp = 0, fromJoin[CO_MAX_PLAYERS] = { 0 };
+    int spoofed = 0, spoofGot = 0;                        /* (2026-11-11: messages posing as the runtime's own) */
+    /* ((2026-11-11) another host's hello answered, once (sameSys: its sys lines in Lua, the name made safe); a full
+     * reliable queue's drops counted and said) */
+    uintptr_t sameSock = 0;
+    int sameStep = 0, sameGot = 0, sameSys = 0, sameName = 0, queueStep = 0, queueOk = 0, gotQ = 0;
+    double sameAt = 0, queueAt = 0;
+    uint32_t queueFirst = 0;
     double eSum[CO_MAX_PLAYERS] = { 0 }, eMax[CO_MAX_PLAYERS] = { 0 }, enSum = 0, enMax = 0;
     int eN[CO_MAX_PLAYERS] = { 0 }, enN = 0;
     while (CoNow() - t0 < runFor) {
@@ -178,11 +218,46 @@ int main(int argc, char** argv)
                 char m[32]; sprintf(m, "m|%d", ++sentRel);
                 Args(&f); ArgS(&f, m); ArgN(&f, 1); ArgN(&f, -1); CallI(L_CoopSend, &f);
             }
+            /* ((2026-11-11) every joiner linked: another host's hello, twice 0.5 s apart; with players linked this host
+             * answers the first only (its warning's 10 s), and Lua hears "sys|samerole|<name>" once. No loss meanwhile:
+             * the one answer mustn't be the 20 % dropped) */
+            if (sameStep == 0 && linked == joiners && t - t0 > 5.0) {
+                sameSock = SameOpen();
+                if (sameSock) { g_drop = 0; SameHello(sameSock); sameAt = t; sameStep = 1; } else sameStep = 9;
+            } else if (sameStep == 1 && t - sameAt > 0.5) {
+                sameGot += SameReplies(sameSock); SameHello(sameSock); sameStep = 2;
+            } else if (sameStep == 2 && t - sameAt > 1.5) {
+                sameGot += SameReplies(sameSock); g_drop = 20; sameStep = 3;
+                printf("host: samerole: %d answer(s) to two hellos of another host, %d sys line(s) in Lua (name made safe: %s)\n",
+                       sameGot, sameSys, sameName ? "yes" : "NO");
+                if (sameGot == 1 && sameSys == 1 && sameName) printf("host: samerole: answered once, told Lua once\n");
+            }
+            /* ((2026-11-11) the 50-round run's "reliable queue to player 1 full", 25 lines: the player's number and name
+             * as every line has them, the drops counted, one line a second; once the 120 have all been acked: 300 to
+             * player 2 at once, 256 queued, 44 dropped: 1 said at once, 43 a second on) */
+            if (queueStep == 0 && sentRel == 120 && CO.links[1].used && CO.links[1].nout == 0 && t - t0 > 8.0) {
+                for (int i = 0; i < 300; ++i) { char m[32]; sprintf(m, "q|%d", i); Args(&f); ArgS(&f, m); ArgN(&f, 1); ArgN(&f, 1); CallI(L_CoopSend, &f); }
+                queueFirst = CO.links[1].qDrops; queueAt = t; queueStep = 1;
+            } else if (queueStep == 1 && t - queueAt > 1.5) {
+                queueOk = queueFirst == 43 && CO.links[1].qDrops == 0 && CO.links[1].qDropSaid > queueAt;
+                printf("host: queue full: %u drops waiting after the first was said (43 expected), %u left after a second%s\n",
+                       queueFirst, CO.links[1].qDrops, queueOk ? ": said in two lines, player 2 by number and name" : ": WRONG");
+                queueStep = 2;
+            }
         } else {
             if (CO.mySlot >= 0 && !bound) {
                 for (int s = 0; s < players; ++s) if (s != CO.mySlot) { Args(&f); ArgN(&f, s); ArgN(&f, (double)(uintptr_t)pup[s]); CallI(L_CoopPeer, &f); }
                 Args(&f); ArgN(&f, 7); ArgN(&f, (double)(uintptr_t)copy); CallI(L_CoopBind, &f);
                 printf("join: I am player %d; bound the other %d and the enemy\n", CO.mySlot + 1, joiners); bound = 1;
+            }
+            /* ((2026-11-11) a joiner's message with the form of the runtime's own notices, reliable and not: refused by the
+             * host's runtime (coop.c CoNetPush), never in its Lua inbox; the reliable ones still move the channel on, so
+             * the 40 that follow all arrive) */
+            if (bound && sentUp == 10 && !spoofed) {
+                Args(&f); ArgS(&f, "sys|slot|25"); ArgN(&f, 1); CallI(L_CoopSend, &f);
+                Args(&f); ArgS(&f, "sys|slot|25"); ArgN(&f, 0); CallI(L_CoopSend, &f);
+                Args(&f); ArgS(&f, "sys"); ArgN(&f, 1); CallI(L_CoopSend, &f);
+                spoofed = 1;
             }
             if (bound && sentUp < 40 && frames % 2 == 0) {     /* (40 messages up to the host) */
                 char m[32]; sprintf(m, "j|%d", ++sentUp);
@@ -198,6 +273,9 @@ int main(int argc, char** argv)
             m = m ? m + 1 : f.retS;
             if (!strncmp(m, "m|", 2)) { int k = atoi(m + 2); ++gotRel; if (k != order) printf("join: OUT OF ORDER: got %d, wanted %d\n", k, order); order = k + 1; }
             else if (!strncmp(m, "j|", 2)) { if (from >= 0 && from < CO_MAX_PLAYERS) ++fromJoin[from]; }
+            else if (!strcmp(m, "sys|slot|25") || !strcmp(m, "sys")) { ++spoofGot; printf("%s: SPOOF REACHED LUA: %s\n", who, f.retS); }
+            else if (!strncmp(m, "sys|samerole|", 13)) { ++sameSys; sameName = !strcmp(m + 13, "Fork?me?"); printf("%s: %s\n", who, f.retS); }
+            else if (!strncmp(m, "q|", 2)) ++gotQ;
             else { if (!strncmp(m, "sys|badver|", 11)) gotBad = 1; printf("%s: %s\n", who, f.retS); }
         }
         if (!host && bound && t - t0 > 3.0 && CoNow() - CO.players[0].plane.lastRecv < 0.2) {
@@ -228,6 +306,10 @@ int main(int argc, char** argv)
     if (host) {
         int ok = 1;
         for (int k = 1; k < players; ++k) { printf("host: from player %d: %d of 40 messages\n", k + 1, fromJoin[k]); if (fromJoin[k] != 40) ok = 0; }
+        printf("host: sys guard: %d joiner messages posing as the runtime's own reached Lua\n", spoofGot);
+        if (spoofGot) ok = 0;
+        if (sameStep != 3 || sameGot != 1 || sameSys != 1 || !sameName) { printf("host: samerole: NOT as it should (step %d)\n", sameStep); ok = 0; }
+        if (queueStep != 2 || !queueOk) { printf("host: queue full: NOT checked as it should (step %d)\n", queueStep); ok = 0; }
         return ok ? 0 : 2;
     }
     int ok = gotRel == 120 && order == 121 && enN > 0 && enSum / enN < 5.0;

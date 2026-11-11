@@ -25,7 +25,8 @@
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
+
 local PARTS = dofile("parts.lua")(MOD, readAll)            -- (a part and its pieces: tools/checks/parts.lua)
 local function has(s, part) return s ~= nil and s:find(part, 1, true) ~= nil end
 do
@@ -79,6 +80,13 @@ local function plane(full)
     function o:SetActorTickEnabled(v) self.tick = v end
     function o:K2_GetActorLocation() return { X = self.X, Y = self.Y, Z = self.Z } end
     function o:K2_SetActorLocation(v) self.X, self.Y, self.Z = v.X, v.Y, v.Z; return true end
+    -- ((2026-11-11) and the move before a hidden plane is shown again: where it was hidden, until then; the order of
+    -- the move and the show kept, M.toNewest)
+    function o:K2_SetActorLocationAndRotation(v, r)
+        self.X, self.Y, self.Z, self.rot = v.X, v.Y, v.Z, r
+        self.movedHidden = self.hidden
+        return true
+    end
     function o:K2_DestroyActor() self.destroyed = true end
     function o:SetIsInvincible() end
     function o:GetAddress() return self.addr end
@@ -237,8 +245,20 @@ do
     tick()
     check(M.peers[1] ~= Pold and M.peers[1].obj == rflm and rflm.hidden == true and rflm.bIsActivated == false,
           "(0.73.83) a new run here: player 2's table made again, their plane kept (still DOWN: hidden, off the radar)")
-    peerState[1] = FRESH; tick()
+    -- ((2026-11-11, joiner-9 of Delta's log: a revived player's real plane 22-37 km off their stream for a minute) hidden
+    -- while DOWN, the runtime doesn't feed it: it sits where it was hidden. Shown again, it's moved to their newest
+    -- state first, while still hidden, with their rotation, and the shown line says so
+    rflm.X, rflm.Y, rflm.Z = 3700000, -1200000, 250000      -- (where it was hidden: 37 km off)
+    rflm.rot, rflm.movedHidden = nil, nil
+    local f1 = #logs + 1
+    peerState[1] = "520000,10000,310000,5,123,-10,1000,100,3,100"; tick()
     check(rflm.hidden == false and rflm.bIsActivated == true, "(0.73.83) up again after the new run: shown, on the radar (kept by its address)")
+    check(rflm.X == 520000 and rflm.Y == 10000 and rflm.Z == 310000 and rflm.rot and rflm.rot.Pitch == 5 and rflm.rot.Yaw == 123
+          and rflm.rot.Roll == -10 and rflm.movedHidden == true,
+          "(joiner-9) shown again: moved to their newest state (its place and rotation) before it's shown, not after")
+    check(has(line("coop: player 2's plane shown", f1), "moved to their newest state first (34.0 km from it; read back 0 m off)"),
+          "(joiner-9) ... said on the shown line (" .. tostring(line("coop: player 2's plane shown", f1)) .. ")")
+    peerState[1] = FRESH; tick()
     D = Dkeep; tick()
     -- a plane the game had deactivated itself stays so
     rflm.bIsActivated = false
@@ -658,7 +678,7 @@ do
     check(line("coop: player 8's falken: its own blueprint is installed here (" .. FALKEN_BP .. "): the real thing", fromK) ~= nil
           and line("coop: player 8's plane is their real falken (a player plane", fromK) ~= nil, "... logged")
     -- a path that isn't /Game/: never loaded
-    CFG.coop.real_paths.mystery = "C:/evil.uasset"
+    CFG.coop.real_paths.mystery = "C:/evil.uasset"  -- paths_check: ok
     check(M.modClassPath("mystery") == nil and M.modClassPath("FALKEN") == FALKEN_BP, "only /Game/ paths; the code any case")
     CFG.coop.real_paths.mystery = nil
     inbox[#inbox + 1] = "7|sys|left"

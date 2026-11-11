@@ -1,0 +1,141 @@
+SURVIVAL MODE DEV INSTALL - WHAT TO TEST (YOUR OWN SESSION, FROM 0.74.49)
+Build: your dev install, VALKA=1 ZFA=1 TANI=1 (every test key, the ZFA-44, VALKA, the Tanicorn). Keys: the Key List file.
+Builds are named by what they changed, version in brackets (PR #4, also "0.74.48", may move the two newest up one).
+NEVER FLOWN, first in their round: [0.74.48] a carrier's hull held while its ZFA-44s are up (Shazzy's STORE crash) and
+[0.74.49] the laser's 0.5 s swing. The rest (0.74.20-0.74.46) are mostly unconfirmed (0.74.22, .37, .44 never installed);
+seen working: AC7's laser with its owner, AC8's beam intercepting, the Online Mode songs (0.74.31-.32), the Helios dive
+solo (0.74.34), the storm's own strikes (0.74.36), the sky / layout probes, the Tanicorn mount's spawn (0.74.47).
+LUA LOG = ue4ss\Mods\AC8SurvivalMode\AC8SurvivalMode_lua.log, RUNTIME LOG = AC8SurvivalMode.log beside it; with PR #4
+they're in logs\ (AC8SurvivalMode_lua_<date>.log, _<date>.log, _crumbs_<date>.log), a set a session, the last zipped at
+start, no _crumbs.prev.log, step 2's runtime 0.32.33. Lines are quoted without time and tag; <...> is a part that changes.
+
+A. BEFORE TAKE-OFF
+1. Before merging, `python -I tools/subtitles.py diff`; if the installed file differs, `... pull` first, or your subtitle
+   edits are replaced. Merge branch claude/affectionate-mayer-8doj90 (0.74.48 / 0.74.49) into the main tree. `VALKA=1 ZFA=1
+   TANI=1 sh tools/build_all.sh`: "leaderboard: runs go to ...", "staged AC7's LaserInterceptor (...)" (not "no
+   LaserInterceptor container": then no laser steps), "staged the Tanicorn's parts". `VALKA=1 ZFA=1 TANI=1 sh
+   tools/package_dev.sh <version>`: "ZFA=1: the ZFA-44's container staged", "TANI=1: ...". It only stages: close AC8, back
+   up ue4ss\Mods\AC8SurvivalMode and ue4ss\Mods\IoStoreLoaderMod\SurvivalMode (build/backup/install_before_<version>), copy
+   build/release/stage_dev_<version>/ue4ss over the game's ue4ss (config\survival.ini isn't in the stage: it stays).
+2. Start AC8. RUNTIME LOG: "AC8 Survival Mode runtime 0.32.34" and [0.74.23] "guard: a unit's side for its health bar
+   (<addr>: objects at +<x>, side +<x>, Get <addr>): 3 of 3 vtable slots guarded". FAILURE: "... not guarded".
+3. LUA LOG at the main menu: "loaded, version <version>-coop2mp.<n>"; [0.74.24] "subtitles: config\subtitles.ini: <n> lists,
+   <m> lines, ..." (147 lists), NO "subtitles: line <N>: ..."; [0.74.46] "tanicorn: rows at the main menu:
+   SV_Model_TaniMount in DT_NPC_Model, SV_Npc_TaniMount in DT_NPC"; "zfa li: AC7's LaserInterceptor on the ZFA-44s
+   (BlueprintGeneratedClass /Game/Mods/SurvivalMode/Laser7/BP_SV_LaserInterceptor.BP_SV_LaserInterceptor_C, its own search
+   off: ...)". FAILURE: "... NOT added", "zfa li: ... not loaded (...)", "test: Ctrl+<key> is bound twice" / "not bound".
+4. [0.74.27] Note your COOP HOST values first (RESET puts all of them, CO-OP ROOM too, back to the shipped ones, saved).
+   COOP HOST: CO-OP ENEMIES off +15%, MORE RULES > RESET TO DEFAULTS: "menu: the host setup is back to the defaults (<...>);
+   the co-op rows too: aircraft_per_player"; +15% again, and after a restart (copy the two logs first). Set yours again.
+5. Start a solo run. [0.74.28] Wherever the game shows the mission's date it reads 14.Aug.2015 (it read 08.Feb.2030).
+
+B. ONE SOLO RUN (to round 19 if you can; the schedule: round 2 the shuttle, 6 THE ESCORT, 9 GONE FISHIN', 15 THE FESTIVAL
+   at sunset, 16-18 the night)
+ROUND 1
+6. The save: LUA LOG "music player: the save's music lists found (...); each list build's grants to them are cut back
+   off", RUNTIME LOG "music player: track list built: <n> tracks its banks have, 120 listed (...); Survival's rows are in:
+   cut back off <k> names it granted to the save" (no "found": the stock list, the save untouched). [0.74.34] Pause > music
+   player, Hush one pass: it moves on at about 5:12, its end. RUNTIME LOG "music player: AKE_Bgm_Online_ACE7_Hush_Play loops
+   (<ms> ms given): it moves on after 312 s (...)". Then Ctrl+F9 three times (break 6's carrier costs 15,000).
+BREAK 1 (stay airborne for 7)
+7. [0.74.43-0.74.46] Fly out over open sea (the mount goes 3 km ahead of your nose at 7 m, whatever is there), Ctrl+T:
+   "TEST: TANICORN MOUNT / 3 KM AHEAD". "tanicorn: Ctrl+T, SV_Unit_TaniTest at (<x>, <y>, 700) facing <deg>: 1 up", "...
+   the spawn made <...>", "tanicorn: mount <name> up at <where>: fire control arms 1, health <h>/<max>", then 60 s every 2 s
+   "tanicorn: <name> hp <h>/<max> yaw <y>/<p> pitch <y>/<p>": turning to you moves the first number after yaw, elevating
+   the second after pitch. Watch: it fires, your hits drop its hp, a wreck: shoot it down (else it's up for step 8's STORE).
+   FAILURE: "tanicorn: straight spawn of our class 300 m from the spot: ..." (the spawner made none), yaw never moves,
+   "tanicorn: reading turret_yaw failed: ..." (or turret_pitch).
+8. Ctrl+DEL: "TEST: VAMPIRES / UNLOCKED, ONE SENT"; LUA LOG "escort: test: Ctrl+DEL: the ZFA-44 carriers unlocked; ...".
+   It serves rounds 2-4. Land, open the STORE, close it (a close with no carrier leaving, for comparison).
+ROUND 2 (the shuttle)
+9. [0.74.49] Once its ZFA-44s are out: "zfa li: <plane>@<addr> (<unit>) carries AC7's LaserInterceptor: owner its plane
+   (SV_LaserOwner 1), search every <n> s (off), at SOC_Gun_01, a swing 0.50 s, its swing curve cleared (<v> at 0.50 s): a
+   straight swing" ("kept" only after a laser7 rebuild). FAILURE: "a swing 1.00 s", "its swing curve NOT cleared (...)",
+   "owner NOT its plane". Only a session's first 60 "zfa li:" lines are written. Watch: the beam snaps onto a missile in
+   half a second, on it to the kill ("zfa li: <plane> swings onto <missile> ...", "... laser shot down <missile> (...)"; a
+   miss "zfa li: <missile> still up <s> s after <plane>'s swing: ..."). As round 3 starts "carrier: round 2: AC7's lasers:
+   <v> volleys, <s> swings, <k> missiles shot down ..." (the run's totals, break 1 in): more kills per volley than Alyssa's
+   4 in 3. [0.74.23] Here and at step 17's launch, RUNTIME LOG "guard: a unit's health bar asked the side of a unit with no
+   objects (...)" / "... whose first object is gone ...": the guard caught 0.74.21's launch crash (note the time).
+10. Ctrl+[ once: a volley with no missile near ("test: Ctrl+[: <plane>'s laser <addr>, state <s>, phase <p>").
+11. [0.74.33] Missiles up to 2 km off start a volley; maybe "zfa li: <plane>'s volley held past its 6.0 s: ...". [0.74.25]
+   The ZFA-44s fire no gun, only the laser. [0.74.35] No enemy shoots missiles down with a beam (watch the screen: the log
+   stops at 60). In a "carries" line the plane before "@" must be the ZFA-44's own (BP_OP0018_uavc_CP_Ally, as in the
+   first lines), never an Su-47, F-15E or other enemy; its unit E_Unit_01_drone_<n>_0 / _<n>_1 or SV_Unit_ZfaA / _ZfaB.
+   "carrier: a ZFA-44's address is another object's now ..." is the guard (not capped).
+12. [0.74.21] "specials: round 2 is the schedule's shuttle". [0.74.20] KASKA's intercepted channel on the subtitle strip
+   (INTERCEPT: KASKA / EMBDIR LAUNCH), never to you: "kaska: start", "kaska: mark 120" ... "mark 10", "kaska: launched" /
+   "kaska: lost", in the break "kaska: after".
+ROUND 3: [0.74.21] "specials: round 3: no special (the schedule's part of the run, to round 15)".
+ROUND 4's CLEAR, BREAK 4: THE CARRIER LEAVES
+13. [0.74.48] LUA LOG, in order: maybe "carrier: <ship> leaving: <n> parked ZFA-44s of ship <i> finished off under the sea,
+   ..." and ~3 s on, for each arm, "escort: E_Unit_01_drone_<n>_0 off the spawner's list (<ship> leaving: its parked
+   ZFA-44s): SV_Recycle <r>" (good); "... <n> ZFA-44s stay up for their final dive ...", "... leaving after 3 rounds: ...",
+   "carrier: <ship> (3 rounds served): its hull held on the spawner's list, switched off: <n> ZFA-44s ... still up (...)".
+   FAILURE (2026-11-11): "... finished off under the sea (<n> more took the blow and still have health: <hp>, ...)": the blow
+   doesn't kill them (the count is of ZFA-44s whose health read 0 after it now, not of blows).
+14. [0.74.48] Land, buy ammo and allies in the STORE, close it: NO CRASH. RUNTIME LOG "minigame: type <t> ends: restore of
+   <n> AI objects; ..." and more lines after. FAILURE: the game stops at the close (Shazzy's). Bad sign: "escort:
+   E_Unit_01_drone_<n>_0 (<why>) still has 2 up after 30 s: ..." (the parked ones didn't die).
+ROUND 5
+15. [0.74.48; the dive itself worked in your 0.74.34 test] "dive: round 5's enemies up: <n> held ZFA-44s dive ...", "dive:
+   Helios blast <i> (...)", "dive: over: ...", then the new part: "carrier: <ship> gone (3 rounds served): off the spawner's
+   list (SV_Recycle <r>); the STORE can call another". No "gone": the ship is held for the run (note the round).
+ROUND 6 (THE ESCORT)
+16. [0.74.24] CHARLENE, the B-1, and her four escorts land from 600 km/h. "escort: <name>'s final at 600 km/h until <d> km
+   from the touchdown (...)", for each "escort: <name> landed (on the ground, taxiing to its slot); <where>" ("landed
+   (stopped)" only in the Ctrl+F5 test), "escort: round 6, the escort WON: <n> of <m> landed ...". FAILURE: "landed (the
+   safety timeout: ...)", "escort: <name> flying again after it landed", one off the runway's end.
+   [subtitles, 2026-11-11] At the win CHARLENE's thanks comes in two parts, each broken into lines INSIDE the strip's box
+   (the box as tall as its lines), then COMONA CONTROL's VAMPIRES line on two lines. FAILURE: text past the box's sides.
+BREAK 6
+17. [0.74.26 / 0.74.30] STORE > AIRFIELD > VAMPIRES (a second carrier, rounds 7-9; step 9's guard). Its ZFA-44s come out
+   boxed and lockable; maybe "carrier: <ship>: arm <j> of <n> next (...)" or "... out of its container (...; <n> had been
+   switched off by a carrier leaving: on again, box and all)". FAILURE: "none of <unit> seen out of its container in <s> s".
+BREAK 7: Ctrl+- (round 8 is THE DECOY)
+18. [0.74.32] "special: THE DECOY's trap springs (<why>): up to 12 Spear UAVs ..."; at a lock "decoy: UAV <k> has you: its
+   minimap ring every 2.0 s ...": a ping ring on that UAV. FAILURE: "decoy: the minimap ring ... isn't in this build".
+ROUND 9's CLEAR (GONE FISHIN', "specials: round 9 is the schedule's fishing"): the second carrier leaves.
+19. [0.74.48] Shazzy's exact case: steps 13-15 again, the STORE in break 9.
+20. [0.74.25 / 0.74.26] BREAK 15 -> ROUND 16 (sunset into night) and BREAK 18 -> ROUND 19 (night into sunrise): no
+   pitch-black gap at either swap, no green sea at night, no visible light steps in the break (written every 1 s).
+   Screenshots of each swap and of the sea; a swap the run didn't reach: note it unseen (Ctrl+PAGE_DOWN is a quick look).
+
+RESTART (2026-11-11): with a carrier out, pause > restart the mission. LUA LOG "carrier: <ship> (the run starts over):
+   <n> parked ZFA-44s of ship <i> finished off under the sea, ..."; the next carrier bought in the new run comes out (before,
+   the old hull stayed held for the level and its slot with it).
+
+C. THE STORM (record the screen): a NEW run, before round 9 (from GONE FISHIN' on the day-night arc owns the light, the
+   storm's darkening off). Each strike takes 10% of your health and can kill: repair between stages, or keep out of cells.
+21. [0.74.40-0.74.42] Ctrl+' four times, ~30 s apart (stages 1-4), a fifth: it clears. "storm build-up: on (Ctrl+'): stage
+   1 by hand, seed <n>", "... stage <s>: <n> storm cells (...)", "... its darkening on (<n> values)", at a stage change or
+   the clear "... transition (<why>): faded out, ... faded back in", at stage 2 "storm layout: the storm's (stage 2): the
+   layout <old> -> CVC_ms12_250708; ...", "cloud lightning (stage <s>): ...". Watch: darker each stage, a callout a stage,
+   turbulence and strikes in a cell from stage 2, flashes, thunder, the fade hiding the blink, the storm clouds in.
+   FAILURE: "transition (...): NOT made", a blink outside a fade, in daylight "its darkening the night arc owns the light".
+22. [0.74.42] Ctrl+\ five times: "cloud lightning (probe <i>: <which>): ...": which of the five lights the clouds best?
+23. [0.74.36-0.74.42] Ctrl+]: "storm build-up: on (Ctrl+]): Distant Thunder at round <N>, stages 1-3 in rounds <N-3>-<N-1>,
+   ...", "... round <N> is Distant Thunder's (D.forceSpecial)", then "... the storm clears (...)" and "... over (...)".
+
+D. CO-OP: friends need a zip packed from this tree, `BUILD_NAME=COOP2MP COOP=1 ZFA=1 sh tools/package_release.sh online
+   <version>` (TESTER=1 too for step 27), their "loaded, version" exactly yours. Without ZFA=1 a joiner has no AC7's laser
+   (only "zfa li: ... not loaded (...; no SurvivalMode_Laser7_P?)", no laser lines). Another build won't link: joiner's
+   RUNTIME LOG "coop: the host runs Survival <v> and this game <v>: it won't link with another build ...", LUA LOG "coop:
+   the host runs Survival <v>, this game <v>: another build doesn't link ..."; host's LUA LOG "coop: <name> tried to join
+   with Survival <v> (yours <v>): refused", RUNTIME LOG "coop: refused <name>: their Survival is <v>, this game's <v> ...".
+24. [0.74.22] A friend joins after round 2's shuttle: no shuttle pad on their game. Ctrl+1 brings the shuttle back: host's
+   LUA LOG "coop: <unit> brought back here: announced to the joiners again (gen <n>), <k> of its <m> ...".
+25. [0.74.25] A carrier up: each joiner's LUA LOG "zfa li: ... carries AC7's LaserInterceptor: ..." or "zfa li: no ZFA-44
+   up here to fit (a joiner): <n> seen here, ...". [0.74.48] its leaving and the STORE with friends in. [0.74.34] the
+   dive: joiner's "dive: the host's ZFA-44s dive; <n> of this game's ...".
+26. [0.74.32] THE DECOY: "... up to <12 + 4 per other player, at most 40> Spear UAVs ..."; someone joining mid-round:
+   "decoy: <n> players now: up to <m> Spear UAVs this round (was <k>)". 27. [0.74.36-0.74.42] Ctrl+' as host: each
+   joiner's "storm build-up: on (the host's): stage <s> by hand, seed <n>" with your seed, the same cells on their screens.
+
+KNOWN (not tests): Mission 13's rain doesn't fall in the storm (stage 3 says "rain" on); the rain pillar is off; the swing
+curve is cleared (straight) until laser7 is rebuilt; a carrier whose parked ZFA-44s never die stays held for the run;
+Daredevil and 25 lobby-only songs aren't in the player.
+
+KEEP (copy them before AC8 starts again): AC8SurvivalMode_lua.log, AC8SurvivalMode.log, AC8SurvivalMode_crumbs.log and
+_crumbs.prev.log (PR #4: its logs\ folder), ue4ss\UE4SS.log, AC8IoStoreLoader.log, any crash folder (UECC report, minidump),
+hud_dump.txt (Ctrl+F7), the storm recording, the night screenshots, a note of the time of anything odd. Co-op: everyone's.

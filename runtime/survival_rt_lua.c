@@ -770,7 +770,11 @@ static int L_MenuSetting(void* lua)
 static int L_Reset(void* lua)
 {
     g_spawner = NULL; g_phase = NULL; g_wd = NULL;
-    g_spawnerLost = 0;                             /* a new run: search for its spawner again (hotfix5) */
+    g_spawnerIdx = g_wdIdx = -1; g_phaseInSpawner = 0;     /* (lag-1: the spawner's kept checks and tables, afresh) */
+    ++g_unitGen; UtForget(&g_ut);
+    g_dlWd = NULL; g_dlList = NULL; memset(&g_puOk, 0, sizeof(g_puOk)); memset(g_dc, 0, sizeof(g_dc));
+    memset(g_uaOff, 0, sizeof(g_uaOff));
+    g_spawnerLost = 0;                            /* a new run: search for its spawner again (hotfix5) */
     g_shopHead = g_shopCount = 0;                  /* a pick made as the level ended isn't bought in the next run */
     if (g_teardown) {                              /* (0.32.22) the next Survival level: the gate opens */
         Log(L"teardown gate: open (a new Survival level: SV_Reset)");
@@ -940,7 +944,7 @@ static DWORD WINAPI BuildHashThread(void* arg)
 {
     (void)arg;
     char hex[65];
-    if (BuildHashNow(hex, L"the game started")) BuildHexSet(hex);
+    if (BuildHashNow(hex, L"the game started")) { BuildHexSet(hex); LbSessionAdd("build_hash", hex); }
     return 0;
 }
 

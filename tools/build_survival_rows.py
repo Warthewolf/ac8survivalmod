@@ -98,12 +98,55 @@ def build_radio():
         keep.append(((grp, 0), row))
         have.add(grp)
         tells += 1
+    # ((2026-11-11) the user: "Use the Mission 22 radio lines for the rocket warning") the Spaceport rockets' lines
+    # (survival_events.SP_RADIO), each a group of its own with LimitPlayCount 0 (a stock ms022 row's 1 would leave it
+    # silent once the shuttle round's countdown had played it): a 'group' its ms022 rows copied in their order (Baxter's
+    # and Tasha's left out, as the shuttle round's; a chain on to another group cut), a 'line' that ms022 line alone on
+    # the tells' template row with its own speaker
+    def maybe(row, n):
+        v = [q for q in row[2] if q[1] == n]
+        return v[0][3] if v else None
+    stock_rows = [(k, row) for k, row in keep if str(k[0]).isdigit()]
+    by_text = {}
+    for _, row in stock_rows:
+        t = maybe(row, 'TextID')
+        if t is not None: by_text.setdefault(full(t), row)
+    sp_said = []
+    for grp, kind, src in survival_events.SP_RADIO:
+        assert grp not in have, f'{grp}: a group Mission 22 has, or twice'
+        if kind == 'group':
+            rows = [copy.deepcopy(row) for _, row in stock_rows if full(field(row, 'RadioGroupID')) == src
+                    and field(row, 'SpeakerID')[1] not in RADIO_DROP_SPEAKERS]
+            assert rows, f'SP_RADIO {grp}: Mission 22 has no group {src} (or only Baxter\'s and Tasha\'s lines in it)'
+        else:
+            assert kind == 'line' and src in by_text, f'SP_RADIO {grp}: {src} isn\'t a line of Mission 22\'s table'
+            assert src + '_Play' in voice, f'{src}: no voice in {VOICE_DB}'
+            row = copy.deepcopy(tpl)
+            setf(row, 'TextID', survival_events.fname(src))
+            setf(row, 'SpeakerID', ('str', field(by_text[src], 'SpeakerID')[1]))
+            z.nb.add(survival_events.fname(src)[1])
+            rows = [row]
+        for i, row in enumerate(rows):
+            setf(row, 'RadioGroupID', survival_events.fname(grp))
+            setf(row, 'LimitPlayCount', ('raw', 'Int8', b'\x00'))
+            nxt = maybe(row, 'NextRadioGroupID')
+            if nxt is not None and full(nxt) not in ('None', ''):
+                z.nb.add('None')                           # (not in DT_SV_Radio's name map: the first build of 0.74.52 stopped here)
+                setf(row, 'NextRadioGroupID', survival_events.fname('None'))
+            name = grp if i == 0 else f'{grp}{chr(65 + i)}'          # (letters only: hard rule 17)
+            assert survival_events.survival_fname_plain(name), name
+            for n in (grp, name, field(row, 'SpeakerID')[1]): z.nb.add(n)
+            keep.append(((name, 0), row))
+        have.add(grp)
+        sp_said.append(f'{grp} ({src}): ' + ', '.join(f'{full(field(r, "TextID"))} {field(r, "SpeakerID")[1]}' for r in rows))
     dt['rows'] = keep
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveRadioTable')
     assert chk['rows'] == dt['rows']
     save(z, RADIO)
-    print(f'  radio: {len(keep)} rows ({dropped} dropped, {len(done)} replaced, {tells} tell and decoy lines)')
+    print(f'  radio: {len(keep)} rows ({dropped} dropped, {len(done)} replaced, {tells} tell and decoy lines, '
+          f'{len(sp_said)} rocket groups)')
+    for line in sp_said: print('    the rockets\' ' + line)
 
 
 def names_in(v):

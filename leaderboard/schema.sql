@@ -29,7 +29,10 @@ CREATE TABLE IF NOT EXISTS runs (
   -- from the co-op runs (2026-11-03; null on a solo run, which the solo boards keep to; the Worker adds these too)
   players     INTEGER,                   -- the squad's size, 2-24 (the host sends one run for the room)
   squad       TEXT,                      -- its pilots in squad order, host first, comma-separated (shown on the boards)
-  crew        TEXT                       -- the same names in lower case, sorted: one squad on the CO-OP boards, whoever hosted
+  crew        TEXT,                      -- the same names in lower case, sorted: one squad on the CO-OP boards, whoever hosted
+  -- (2026-11-11; the Worker adds it too) 1: sent by a game that took the co-op run over by host migration and that
+  -- nobody joined (a further copy of the same run replaces the stored one: src/index.js supersedes); 0 other co-op runs
+  takeover    INTEGER
 );
 CREATE INDEX IF NOT EXISTS runs_round ON runs (difficulty, round DESC, score DESC);
 CREATE INDEX IF NOT EXISTS runs_score ON runs (difficulty, score DESC);
@@ -76,14 +79,15 @@ CREATE TABLE IF NOT EXISTS builds (mod TEXT NOT NULL, build TEXT NOT NULL, note 
 -- Builds runs came from that weren't registered (shown on /admin)
 CREATE TABLE IF NOT EXISTS builds_seen (mod TEXT NOT NULL, build TEXT NOT NULL, first INTEGER NOT NULL, last INTEGER NOT NULL,
   n INTEGER NOT NULL, pilot TEXT, PRIMARY KEY (mod, build));
--- Each reset of the boards, and what it took off (so it can be undone)
+-- Each reset of the boards, and what it took off (so it can be undone). (2026-11-11) The archive's rows under a reset_id
+-- "superseded:<unix time>" are co-op copies a further copy of the same run replaced (no resets row: restore leaves them)
 CREATE TABLE IF NOT EXISTS resets (reset_id TEXT PRIMARY KEY, at INTEGER NOT NULL, runs INTEGER NOT NULL,
   specials INTEGER NOT NULL, restored INTEGER);
 CREATE TABLE IF NOT EXISTS runs_archive (reset_id TEXT NOT NULL, reset_at INTEGER NOT NULL, run_id TEXT NOT NULL, pilot TEXT,
   difficulty TEXT, round INTEGER, score INTEGER, air_kills INTEGER, ground_kills INTEGER, earned INTEGER, spent INTEGER,
   time_s INTEGER, ended TEXT, mod_version TEXT, submitted INTEGER, ip_hash TEXT, aircraft TEXT, how TEXT, tier TEXT,
   aces INTEGER, allies INTEGER, af_down INTEGER, captured INTEGER, build TEXT, verified INTEGER, players INTEGER, squad TEXT,
-  crew TEXT);
+  crew TEXT, takeover INTEGER);
 CREATE INDEX IF NOT EXISTS runs_archive_reset ON runs_archive (reset_id);
 CREATE INDEX IF NOT EXISTS runs_archive_run ON runs_archive (run_id);
 CREATE TABLE IF NOT EXISTS specials_archive (reset_id TEXT NOT NULL, reset_at INTEGER NOT NULL, run_id TEXT NOT NULL,

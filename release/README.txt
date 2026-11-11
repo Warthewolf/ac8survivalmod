@@ -105,8 +105,8 @@ an "ACE INBOUND" callout names each one the first time it shows up.
 
 Special rounds: round 2 is always the Shuttle Launch, round 6 THE ESCORT, round 9 GONE FISHIN' and round 15 THE
 FESTIVAL. After the festival any round can be any of the others (about 1 in 3, never two in a row), each at most once
-every 10 rounds. They get harder the later they come, and from round 12 the Ladons, the Alicorn and AB.L..IN bring
-escorts. ([specials.schedule] enabled = false in survival.ini: random specials from round 4 instead.)
+every 10 rounds. They get harder the later they come, and from round 12 the Alicorn and AB.L..IN bring escorts.
+([specials.schedule] enabled = false in survival.ini: random specials from round 4 instead.)
 - SHUTTLE LAUNCH: the EMBDIR Shuttle - CORRIS on the spaceport pad, with its AA guns and SAMs. Protect it through
   the ~2.5 minute countdown while War's jets attack. If it's destroyed the shop is closed through the next round.
 - THE ESCORT: CHARLENE's B-1B and her four KMG escorts fly in under attack; bring them to Comona and see them land.
@@ -120,7 +120,7 @@ escorts. ([specials.schedule] enabled = false in survival.ini: random specials f
   which drives for the runway. Each BTR that reaches it captures 25 % of the airfield; at 100 % the airfield is taken
   (no landing, no STORE) until you destroy them or two rounds pass. Fighters (and maybe bombers) come too.
 - THE LADONS: KOT and MISHKA come in from the far west and bomb the airfield on every pass until both are down
-  (escorted from round 12).
+  (nothing else flies in their round).
 - THE ALICORN: the submarine carrier sails the west sea, diving and surfacing, firing its railgun and missiles.
   Destroy its four ballast tanks to open its core, then the core.
 - AB.L..IN (IFF: FATAL ERROR): a lone EA-18G with its jammer always on. Every time you hit it, it vanishes in
@@ -147,44 +147,35 @@ Score: 1000 a round reached, 100 an aircraft, 50 a ground or sea target, 3000 a 
 x1 Standard, x1.5 Ace.
 
 ONLINE ONLY END
-OFFLINE: Offline edition
-OFFLINE: ---------------
-OFFLINE: This edition never connects to the internet: it has no leaderboard code at all. When a run ends (shot down,
-OFFLINE: restarted, or left) a summary shows how it went: round, score, kills, specials beaten, time. The Online edition
-OFFLINE: submits runs to the Discord leaderboard as well.
-OFFLINE: Score: 1000 a round reached, 100 an aircraft, 50 a ground or sea target, 3000 a special round beaten, x0.75 Casual,
-OFFLINE: x1 Standard, x1.5 Ace.
-OFFLINE:
 Settings: ue4ss\Mods\AC8SurvivalMode\config\survival.ini, made the first time you play. Open it in Notepad. Every
 setting is listed with its default and switched off by a ; in front of it; remove the ; to change it. Restart the
 game after a change. Delete the file to get a fresh one.
-- To try the later rounds straight away, find [rounds] and add the line  start_round = 10  (the Anomaly),
-  16 (the named aces) or 28 (the Reapers). Take it out again for a normal run.
+- To try the later rounds straight away, find [rounds] and add the line  start_round = 16  (the named aces) or
+  28 (the Reapers). Take it out again for a normal run.
 - Rename the aces under [aces.mercenary] ... [aces.reaper], and MINDRIPPER under [specials.anomaly].
 - After an update, new settings are added at the end of your survival.ini (switched off), with their notes.
 
 
 If something goes wrong
 -----------------------
-Please send these (and say what you saw, and which AC8 Mod Loader version you have: the first line of
-AC8IoStoreLoader.log):
-- ...\Win64\ue4ss\UE4SS.log
-- ...\Win64\ue4ss\Mods\AC8SurvivalMode\AC8SurvivalMode.log
-- ...\Win64\ue4ss\Mods\AC8SurvivalMode\AC8SurvivalMode_lua.log  (kept even when the game crashes)
-- ...\Win64\ue4ss\Mods\IoStoreLoaderMod\AC8IoStoreLoader.log
-- after a crash: the newest folder in %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\
-  (paste that path into the File Explorer address bar)
-Copy the logs right after you close the game (they're rewritten every time it starts).
+Please send the log zip and ...\Win64\ue4ss\Mods\IoStoreLoaderMod\AC8IoStoreLoader.log (the mod loader's log, not in
+the zip), and say what you saw.
+Every game's logs are in ...\Win64\ue4ss\Mods\AC8SurvivalMode\logs\, their names dated with the game's start:
+- start the game again once (the main menu is enough): the session before is zipped into
+  logs\AC8Survival_<date>_<version>.zip, with the game's own logs and crash folder of that time. Send that zip.
+- a session's files that couldn't be zipped stay in logs\ under their dated names (AC8SurvivalMode_<date>.log,
+  AC8SurvivalMode_lua_<date>.log, AC8SurvivalMode_crumbs_<date>.log, session_<date>.txt, UE4SS_<date>.log):
+  send those instead. Sorted by date in File Explorer, they're the newest.
+- the 10 newest zips are kept; nothing else in logs\ is deleted by the mod.
 
 After a crash, send this
 ------------------------
-Before you start the game again (it rewrites the logs), zip and send:
-1. The newest UECC-Windows-... folder in %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\
-   (sort by date): its UEMinidump.dmp and CrashContext.runtime-xml matter most.
-2. From ...\Win64\ue4ss\Mods\AC8SurvivalMode\: AC8SurvivalMode_lua.log, AC8SurvivalMode.log,
-   AC8SurvivalMode_crumbs.log and AC8SurvivalMode_crumbs.prev.log (the crumbs.prev file is the crashed session's last
-   steps, if you already started the game again).
-3. ...\Win64\ue4ss\UE4SS.log
+1. Start the game again (the main menu is enough) and send the newest logs\AC8Survival_<date>_<version>.zip: it has
+   that session's logs, the crash breadcrumbs (its last steps) and the game's crash folder.
+2. If there's no zip for that time, send that session's files from logs\ (named with its date, see above) and the
+   newest UECC-Windows-... folder in %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\
+   (paste that path into the File Explorer address bar): its UEMinidump.dmp and CrashContext.runtime-xml matter most.
+3. ...\Win64\ue4ss\Mods\IoStoreLoaderMod\AC8IoStoreLoader.log (the mod loader's log, not in the zip).
 4. A line on what happened: the round, what you were doing (flying, in the STORE, DOWN and spectating, quitting the
    mission, a special round), and in co-op who hosted.
 

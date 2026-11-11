@@ -247,10 +247,40 @@ ALCN_ACTIONS = {'RE_SV_AlcnRailgun': 'ALCN_ShotRailgun_Distributed', 'RE_SV_Alcn
                 'RE_SV_AlcnAdvance': 'ALCN_AdvancePhase'}
 
 
+# ((2026-11-11) Saint Alessia's 50-round co-op run: a player who relogged mid-Alicorn got a fresh one at the lane's west end,
+# the host's 0-16 km off) A co-op rejoiner's copy is spawned at the host's hull (Scripts/sv_alicorn.lua SPC.alicornRejoin)
+# and given the leg from the lane's waypoint just ahead of it: a whole leg would turn it back to its first point (hard rule
+# 2), so each leg from each waypoint inside the lane is a path of its own, SV_Path_Alicorn<Out|Back><letter> (the
+# waypoints A-E west to east, Scripts/sv_alicorn.lua LANE_KM / LANE_LETTERS: bosses_build_check.py keeps them in step),
+# started by RE_SV_AlcnLeg<Out|Back>[<letter>] (alcn_legs); its end hands over to the other way's whole leg, as theirs do.
+ALCN_LEG_LETTERS = 'ABCDE'
+
+
 def alcn_paths():
-    """The Alicorn's way out and back (cm, on the surface)."""
+    """The Alicorn's way out and back (cm, on the surface), then each leg from each waypoint inside the lane (B-D): out
+    (east) from it, back (west) from it."""
     out = [(x * 100000.0, y * 100000.0, 0.0) for x, y in ALCN_ROUTE]
-    return [('SV_Path_AlicornOut', out), ('SV_Path_AlicornBack', list(reversed(out)))]
+    assert len(ALCN_LEG_LETTERS) == len(out), (ALCN_LEG_LETTERS, len(out))
+    paths = [('SV_Path_AlicornOut', out), ('SV_Path_AlicornBack', list(reversed(out)))]
+    for k in range(1, len(out) - 1):
+        paths.append((f'SV_Path_AlicornOut{ALCN_LEG_LETTERS[k]}', out[k:]))
+        paths.append((f'SV_Path_AlicornBack{ALCN_LEG_LETTERS[k]}', list(reversed(out[:k + 1]))))
+    return paths
+
+
+def alcn_legs():
+    """{remote event: (the path it starts, the path its end hands over to)}: RE_SV_AlcnLegOut / RE_SV_AlcnLegBack (the
+    whole legs, whose own ends hand over already: None) and RE_SV_AlcnLeg<Out|Back><letter> (one from that waypoint, then
+    the other way's whole leg)."""
+    paths = alcn_paths()
+    out, back = paths[0][0], paths[1][0]
+    legs = {}
+    for name, _ in paths:
+        tail = name[len('SV_Path_Alicorn'):]
+        assert tail.isalpha(), name                   # (letters: no FName number to split off, hard rule 17)
+        then = None if name in (out, back) else (back if tail.startswith('Out') else out)
+        legs['RE_SV_AlcnLeg' + tail] = (name, then)
+    return legs
 
 
 def lcac_lane_names():
@@ -538,13 +568,25 @@ def build_alicorn(g, flag, stock_ep):
     t_remove = g.exec_template('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
     assert arg_values(t_path)[4] == ALCN_SPEED and arg_values(t_dive)[1] == 'Diving' and arg_values(t_surface)[1] == 'Surface'
     finish = '01_A_Air1_f18e_PathFinish'
-    (out, _), (back, _) = alcn_paths()
+    (out, _), (back, _) = alcn_paths()[:2]
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', 'SV_AlcnUp', arg_changes={0: ALCN_UNIT})
     g.execute(t_path, 'SV_AlcnUp', {0: ALCN_OBJ, 2: out}, delay=1.0)
     g.execute(t_eng, 'SV_AlcnUp', {0: 'NoneSelect', 1: ALCN_UNIT}, delay=2.0)
     for ev, a, b in (('SV_AlcnOut', out, back), ('SV_AlcnBack', back, out)):
         g.trigger(finish, ev, arg_changes={0: ALCN_OBJ, 2: a})
         g.execute(t_path, ev, {0: ALCN_OBJ, 2: b})
+    # ((2026-11-11) a co-op rejoiner's copy, spawned at the host's hull: the leg from the waypoint just ahead of it (Lua's
+    # RE_SV_AlcnLeg*: Scripts/sv_alicorn.lua SPC.alicornLegOf), and each part leg's end hands over to the other way's
+    # whole leg (SV_AlcnEnd<Out|Back><letter>, as SV_AlcnOut / SV_AlcnBack do the whole legs')
+    lua = runtime_lua()
+    for ev, (path, then) in alcn_legs().items():
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_path, ev, {0: ALCN_OBJ, 2: path})
+        if then:
+            end_ev = 'SV_AlcnEnd' + path[len('SV_Path_Alicorn'):]
+            g.trigger(finish, end_ev, arg_changes={0: ALCN_OBJ, 2: path})
+            g.execute(t_path, end_ev, {0: ALCN_OBJ, 2: then})
+    assert '"RE_SV_AlcnLegOut"' in lua and '"RE_SV_AlcnLegBack"' in lua, 'Scripts/sv_alicorn.lua never names the whole legs'
     for ev, t in (('RE_SV_AlcnDive', t_dive), ('RE_SV_AlcnSurface', t_surface)):
         g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
         g.execute(t, ev, {0: ALCN_OBJ})
@@ -946,9 +988,20 @@ def build_shuttle(g, flag):
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_ShuttleRemove')
     for unit in (SHUTTLE_UNIT, PAD_UNIT):
         g.execute(t_off, 'RE_SV_ShuttleRemove', {0: 'NoneSelect', 1: unit, 2: 'NoneSelect', 3: 'false'})
-    # the flags back to 0 once it's taken off (they're set to 0 at its next appearance too)
-    for name in resets:
+    # the flags back to 0 once it's taken off (they're set to 0 at its next appearance too). ((2026-11-11) SV_ShuttleRound
+    # too, kept out of `resets`, which SV_ShuttleUp sets to 0 before its own Set 1: until then only the liftoff at T or a
+    # kill on the pad set it back, and Saint Alessia's co-op host, whose liftoff her STORE ate, sent every raid after it
+    # at the shuttle, SV_BomberUp_NN's shuttle branch. Scripts/sv_rounds.lua SPC.shuttleRemoveCheck reads SV_ShuttleRound
+    # and SV_ShuttleLaunched still up after this event as its being lost, and fires it again)
+    cleared = resets + ['SV_ShuttleRound']
+    assert {'SV_ShuttleRound', 'SV_ShuttleLaunched'} <= set(cleared), cleared
+    for name in cleared:
         flag('RE_SV_ShuttleRemove', name, 'Set', 0)
+    # ((2026-11-11, the review of the replay) and what T+30 and T switch off: the boost and the ignition loop, which T-14
+    # put on. A replay that gives up, or a shuttle taken off before its replayed tail, had them on at its empty pad for
+    # the rest of the run; a second off after T+30 / T does nothing)
+    g.execute(t_vfx_off, 'RE_SV_ShuttleRemove')
+    g.execute(t_sound, 'RE_SV_ShuttleRemove', {0: SHUTTLE_SOUND + 'Ignition_Stop', 1: SHUTTLE})
     # hits: Mission 22's ObjectDamage_Shuttle; its low-health radio (61 / 31 / 16 %) keeps the stock health conditions.
     # Mission 22 also gates each stage on a bool flag of its own (Bool_Shuttle_Damage_Phase0N), which Survival's flag
     # asset doesn't have: that check is replaced by an int flag of Survival's, set when the line plays and reset when the

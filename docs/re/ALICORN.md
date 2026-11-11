@@ -461,3 +461,60 @@ WP_L_1..6 = hatchL_01..06, WP_R_1..6 = hatchR_01..06. (The NPC row says `airs0`,
    - Set `RadiusInMeter` as `ladon_units` does. The faction stays 2.
 5. EP: `RE_SV_Alcn*` remote events with the templates from 5.5. Drive the timing from Lua, not from delays gated on
    flags (hard rule 26).
+
+## 6. In co-op, after Saint Alessia's 50-round run (2026-11-11)
+Round 45 of her 10-player run: "alicorn desync, was invulnerable to Delta, Acorn relogged, shot the water a bit on my end,
+suddenly alicorn destroyed". Both games' logs (the host's and Delta's, a joiner) showed no sync bug: Delta's copy was bound
+to all 95 of the host's ids, its parts went down on the host's "dn" within a second, its dives matched. The open core took
+about 60 standard missiles (2,859 HP at x0.92) with its health on nobody's screen, nothing logged its hits or whose kill it
+was, and The Iron Acorn's copy after his relog was a fresh one at the lane's west end. What changed
+(Scripts/sv_alicorn.lua, sv_coop*.lua, sv_hud.lua; tests tools/checks/alicorn_test.sh, bosses_build_check.py):
+
+- **The core's health on every screen.** Once it's open the NEXT row reads `CORE n%` (from its health when it opened; the
+  host's `s.corePct`), `SHUT` before, `EXPOSED` while its health can't be read. A joiner's row comes from the host's "rnd"
+  field 16, `<tanks 0-4>:<s | e | 0-100>:<dived 0/1>` (SPC.alicornCode; anything else: no row; 5 s old: no row). A
+  callout `ALICORN CORE: n%` as it drops past 75, 50 and 25 % (once each; the lowest crossed only; none at its sink),
+  mirrored to the joiners as every host callout.
+- **The core sized by the players flying** (the user, 2026-11-11: "Yes add the alicorns core size"). As it opens, before
+  CORE 100% is taken, its health is set in standard missiles as the tanks' are: `core_missiles` (10) for one player plus
+  `core_missiles_per_player` (3.3) for each other player flying then (a co-op host: itself while it's up, not DOWN and not
+  down at the airfield, plus othersFlying(); solo: just you), x the round's growth as the tanks' (hx / health_x: x3.05 at
+  round 45), split across the core's parts that are up: at round 45 ~30 missiles alone and ~61 for four (the user's
+  agreed numbers, 2026-11-11; it had ~60 whoever flew), linear in the players flying past four. `special: the Alicorn's
+  core sized: 19.9 missiles (10 + 3.3 x 3 other players flying), 29134 health (x3.05: round 45's growth, as the tanks';
+  48 damage a missile)` (health x 10, as HealthInternal: 19.9 x 3.05 = ~61 of those missiles). The missile's damage
+  unread (or core_missiles 0): its health as it was, `special: the Alicorn's core keeps its health (your missile's damage
+  can't be read): ...`. The joiners' copies take it from the host's next "hp" (a health that changed, within a second).
+- **Logs.** The host: `special: Alicorn core hit: -X (Y left, Z%)` (", its core still shut" before it opens), `the Alicorn's
+  core open with N health`, `the Alicorn's core at Z% (...): called out (under 75%)`, `the Alicorn's hull at (x, y) km,
+  heading H, its out|back leg` every 30 s; `coop: the joiners' hits dealt here in the last 60 s (health x 10): player 4: 23
+  hits (21 taken, 0 refused, 2 dropped), 9870: 9870 on SV_Unit_Alicorn (core 6300)` (hostHit's tally a player a minute;
+  refused = the health didn't move, dropped = an id down or unknown; the once-a-run refusal line is gone);
+  `coop: SV_Unit_Alicorn's BP_MP028_dummy_emlmcore_Base_C#1 down here: player 4's kill; the joiners' hits on it: ...` for
+  a special's ship or part (40 a minute at most). Every game's `coopfire: 60 s` line adds `N with their target not here`
+  (the host's replay of a T4b launch whose target id isn't up there: unguided) and `your launches at a target with no co-op
+  id N` (a joiner's launch at a copy not bound: it goes as p:0, unguided everywhere).
+- **A joiner's copies at the host's health.** The host's "hp" for an id not bound yet is kept (M.pendHp: 4,096 ids, 120 s
+  each at most; forgotten on a new "bd" / "gd" or a "dn") and put on a ship's or part's copy as it's bound (planes keep
+  their own scaling, enemyLate): `coop: the host's SV_Unit_Alicorn here bound with the host's health, which came first
+  (BP_MP028_dummy_emlmcore_Base_C#1 31250 -> 28594)`, once a spawn.
+- **A joiner's surfacing (alicorn-7).** From the host's RE_SV_AlcnSurface after its RE_SV_AlcnDive, each joiner checks its
+  own copy as the host checks its own: every resurface_s while it's over surfaced_m down and not rising it orders it here
+  too (COOP.eventHere), resurface_tries times at most, up_wait_s at most. `special: the Alicorn's copy here is still 56 m
+  down 8 s after the host's order, not rising: surfaced here (1, fired)`, `... surfaced 9 s after the host's order (1 of its
+  orders, 0 sent here)`, `... still N m down: left as it is`; its place every 30 s, `special: the Alicorn's copy here at (x,
+  y) km, heading H (the host's: 0 tanks, core 62%)`.
+- **A rejoiner's Alicorn at the host's hull.** hostSync sends that joiner's "sp" with the hull's pose (its LiveAIAlicorn,
+  `BP_BA002_alcn_N000_00100_C`, from its spawn's record; its core's place if it isn't there) and, 2 s on, the leg from the
+  lane's waypoint just ahead of the hull (SPC.alicornLegOf: the first 300 m or more ahead, its way from its moves, else its
+  bow): `coop: player 3's Alicorn to come up at the host's hull, (-21.0, -5.4) km, heading 0, out: from C (...)`, then
+  `coop: player 3 brought up to date: RE_SV_AlcnLegOutC`. The events (tools/survival_events_specials.py alcn_legs):
+  RE_SV_AlcnLegOut / Back (the whole legs, from A / E) and RE_SV_AlcnLeg<Out|Back><B|C|D> on the paths
+  SV_Path_AlicornOut<L> (L east) / SV_Path_AlicornBack<L> (L west), each part leg's end handing over to the other way's whole
+  leg (hard rule 2: a whole leg would turn a mid-lane copy back to its first point). A spawn at a pose moves the unit's
+  desc for good, so this game's next spawn of it with none goes back to the lane's start (SPC.alicornPose, host and
+  joiner: `special: the Alicorn's spawn here at its lane's start again`). The joiner holds a replay for a unit ("ev|<event>|
+  <unit>": the leg, the open core, the dive) until its copy has been up 3 s (M.unitPending; 90 s at most): `coop: the host's
+  RE_SV_AlcnOpenCore for SV_Unit_Alicorn fired here 14.2 s after it came (its copy up first)`. Untried in game: a spawn
+  pose for this 226-object unit (the deck's launches use poses on 2-ship flights only) and the part legs (the container
+  needs the user's build_all.sh).

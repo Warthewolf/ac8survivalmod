@@ -27,7 +27,7 @@ of the state: its statement's `local ` is dropped (a bare `local a, b` becomes `
 Every name still means the declaration it meant (the analysis resolves them by scope with lua_check.py's parser): it
 refuses a name that would turn global while any part (this one included) already reads or sets a global of that name or
 looks it up in _G, one declared twice whose two declarations would both turn global, a Lua / UE4SS global's name, an
-SV_* (the runtime's natives), a statement sharing its line with another, a TEST ONLY / ONLINE ONLY block cut in two and
+SV_* (the runtime's natives), a statement sharing its line with another, a TEST ONLY / DEV ONLY / ONLINE ONLY block cut in two and
 a moved field it can't shift exactly. The pieces, with `local` put back, the moved fields' lines as they were and the
 added lines (headers, `end` / `do`, `}`) taken out, are byte for byte the old file (checked before writing; CRLF kept).
 """
@@ -439,7 +439,7 @@ def split(part):
     # TEST ONLY / ONLINE ONLY blocks whole in each piece
     for k in range(len(pieces)):
         body = '\n'.join(lines[bounds[k] - 1:bounds[k + 1] - 1])
-        for a, b in (('ONLINE ONLY BEGIN', 'ONLINE ONLY END'), ('TEST ONLY BEGIN', 'TEST ONLY END')):
+        for a, b in (('ONLINE ONLY BEGIN', 'ONLINE ONLY END'), ('TEST ONLY BEGIN', 'TEST ONLY END'), ('DEV ONLY BEGIN', 'DEV ONLY END')):
             if body.count(a) != body.count(b): problems.append(f'{names[k]}: {a} / {b} unbalanced (a cut inside one)')
 
     # the pieces' lines

@@ -70,6 +70,10 @@ check("a sane run passes", checkRun(run) === null);
 { const newer = { ...run, specials: [...run.specials, { kind: "wormhole", round: 11, seconds: 90, won: true }] };
   check("a special this Worker doesn't know is left out, not the run", checkRun(newer) === null && newer.specials.length === 2); }
 check("a bad special kind is refused", checkRun({ ...run, specials: [{ kind: "<x>", round: 3, seconds: 90, won: true }] }) !== null);
+for (const bad of [null, 7, "ladon", [], [{ kind: "ladon" }]]) {   // (2026-11-11: a null entry threw, so a 500)
+  let why; try { why = checkRun({ ...run, specials: [run.specials[0], bad] }); } catch (e) { why = "THREW " + e.message; }
+  check(`a special entry of ${JSON.stringify(bad)} is refused, not thrown (${why})`, why === "bad special");
+}
 check("too many kills is refused", checkRun({ ...run, kills: { air: 9999, ground: 0 } }) !== null);
 check("a too-short run is refused", checkRun({ ...run, time_s: 10 }) !== null);
 check("a bad pilot name is refused", checkRun({ ...run, pilot: "<script>" }) !== null);
@@ -589,6 +593,106 @@ check("nothing left to undo", a.status === 404 && a.j.status.undo === null);
   const e = await boardEmbeds(env);
   const ace = e[0].fields.find((f) => f.name === "Ace").value;
   check(`the boards are back: ${JSON.stringify(ace.split("\n")[0])}`, ace.includes("round 50"));
+}
+// ---------------------------------------------------------------------------------------------- a co-op run's copies
+// (2026-11-11) Saint Alessia's 50-round run of 2026-11-10: NotMexi's game, its own link dropped, took the run over alone
+// (host migration) and sent its round-35 copy under the room's run_id first; her round-51 copy was answered
+// {"ok":true,"duplicate":true} and was on the board nowhere. The furthest copy is kept now, the shorter one archived.
+{
+  const ID = "2498a83c" + "0".repeat(24), names = ["Saint Alessia", "Froya", "Amia", "Delta", "The Iron Acorn", "NotMexi",
+    "Shazzy", "LittleSneeze"];
+  // a copy of the room's run: `host` first, the others after, `air` kills each, one won special a 10 rounds
+  const copy = (host, round, time_s, extra = {}) => {
+    const squad = [host, ...names.filter((n) => n !== host)].map((p, i) => sq(p, "f22a", 20, 2, 0, i === 0));
+    return team(ID, { pilot: host, round, time_s, kills: { air: 20 * squad.length, ground: 2 * squad.length }, aces: 0, allies: 0,
+      specials: Array.from({ length: Math.floor(round / 10) }, (_, i) => ({ kind: "ladon", round: 10 * (i + 1), seconds: 200, won: true })),
+      coop: { players: squad.length, squad, ...(extra.takeover !== undefined ? { takeover: extra.takeover } : {}) }, ...extra.run });
+  };
+  const row = () => db.prepare("SELECT pilot, round, time_s, players, takeover, verified FROM runs WHERE run_id = ?").get(ID);
+  const archived = (t) => count(`SELECT COUNT(*) AS n FROM ${t} WHERE run_id = '${ID}' AND reset_id LIKE 'superseded:%'`);
+  check("a lone takeover's flag passes the checks", (() => { const t = copy("NotMexi", 35, 11190, { takeover: true }); return checkRun(t) === null && t.coop.takeover === true; })());
+  check("a takeover flag that isn't true or false is refused", checkRun(copy("NotMexi", 35, 11190, { takeover: "yes" })) === "bad co-op takeover");
+  check("a copy without the flag: not a takeover", (() => { const t = copy("Froya", 35, 11190); return checkRun(t) === null && t.coop.takeover === false; })());
+  // NotMexi's lone takeover, first
+  r = await postBuilt(JSON.stringify(copy("NotMexi", 35, 11190, { takeover: true })), C2B, "8.0.0.1");
+  j = await r.json();
+  let st = row();
+  check(`the lone takeover's round-35 copy stored first: ${JSON.stringify(j)} ${JSON.stringify(st)}`, r.status === 200 && j.ok
+    && !j.replaced && st && st.pilot === "NotMexi" && st.round === 35 && st.takeover === 1 && st.players === 8);
+  // her round-51 copy: replaces it
+  posted.length = 0;
+  r = await postBuilt(JSON.stringify(copy("Saint Alessia", 51, 19883)), C2B, "8.0.0.2");
+  j = await r.json();
+  st = row();
+  check(`her round-51 copy replaces it: ${JSON.stringify(j)}`, r.status === 200 && j.ok && j.replaced === true
+    && j.was && j.was.pilot === "NotMexi" && j.was.round === 35 && j.was.takeover === true && j.score === score(copy("Saint Alessia", 51, 19883)));
+  check(`... the run's row is hers now: ${JSON.stringify(st)}`, st && st.pilot === "Saint Alessia" && st.round === 51 && st.takeover === 0
+    && count(`SELECT COUNT(*) AS n FROM runs WHERE run_id = '${ID}'`) === 1);
+  check("... its squad and specials hers only", count(`SELECT COUNT(*) AS n FROM squads WHERE run_id = '${ID}'`) === 8
+    && db.prepare(`SELECT pilot FROM squads WHERE run_id = '${ID}' AND slot = 0`).get().pilot === "Saint Alessia"
+    && count(`SELECT COUNT(*) AS n FROM specials WHERE run_id = '${ID}'`) === 5);
+  check(`... the round-35 copy archived as superseded (runs ${archived("runs_archive")}, squads ${archived("squads_archive")}, specials ${archived("specials_archive")})`,
+    archived("runs_archive") === 1 && archived("squads_archive") === 8 && archived("specials_archive") === 3
+    && db.prepare(`SELECT pilot FROM runs_archive WHERE run_id = '${ID}'`).get().pilot === "NotMexi");
+  const em = posted.map((b) => JSON.parse(b)).find((p) => p.embeds && p.embeds[0].title.includes("squad of 8"));
+  check(`... posted, saying what it replaces: ${em && em.embeds[0].footer.text}`, em && em.embeds[0].title.startsWith("Saint Alessia's squad of 8 reached round 51")
+    && em.embeds[0].footer.text.endsWith("· replaces this co-op run's round 35 copy (NotMexi)"));
+  // the shorter copy again (a resend, or a game that ended earlier): a duplicate that says what's stored
+  r = await postBuilt(JSON.stringify(copy("NotMexi", 35, 11190, { takeover: true })), C2B, "8.0.0.3");
+  j = await r.json();
+  check(`the round-35 copy again: a duplicate, what's stored said: ${JSON.stringify(j)}`, j.ok && j.duplicate === true
+    && j.stored && j.stored.pilot === "Saint Alessia" && j.stored.round === 51 && j.why === "the stored copy is as far or further"
+    && !j.same && row().pilot === "Saint Alessia" && archived("runs_archive") === 1);
+  r = await postBuilt(JSON.stringify(copy("Saint Alessia", 51, 19883)), C2B, "8.0.0.3");
+  j = await r.json();
+  check("her own copy again (a lost reply): a duplicate, said to be this very copy (same)", j.duplicate === true && j.stored.round === 51
+    && j.same === true && archived("runs_archive") === 1);
+  // a further copy whose squad hasn't the stored host: another room's, or made up
+  const other = copy("Froya", 52, 20000);
+  other.coop.squad = other.coop.squad.filter((p) => p.pilot !== "Saint Alessia");
+  other.coop.players = other.coop.squad.length; other.kills = { air: 20 * other.coop.players, ground: 2 * other.coop.players };
+  r = await postBuilt(JSON.stringify(other), C2B, "8.0.0.4");
+  j = await r.json();
+  check(`a further copy without the stored host in its squad: a duplicate (${j.why})`, j.duplicate === true
+    && j.why === "the stored copy's host isn't in this squad" && row().pilot === "Saint Alessia");
+  // a further copy from an unchecked build never goes over a checked one
+  r = await post(JSON.stringify(copy("Delta", 53, 21000)), undefined, "8.0.0.5");
+  j = await r.json();
+  check(`a further copy from an unchecked build: a duplicate (${j.why})`, r.status === 200 && j.duplicate === true
+    && j.why === "the stored copy is from a checked build" && row().round === 51);
+  // the same round: a copy that isn't a lone takeover beats one that is; else the longer time
+  r = await postBuilt(JSON.stringify(copy("Delta", 51, 20500, { takeover: true })), C2B, "8.0.0.6");
+  j = await r.json();
+  check("the same round, longer, but a lone takeover over hers: a duplicate", j.duplicate === true && row().pilot === "Saint Alessia");
+  r = await postBuilt(JSON.stringify(copy("Delta", 51, 20500)), C2B, "8.0.0.6");
+  j = await r.json();
+  check(`the same round and longer, not a takeover: replaces (${JSON.stringify(j.was)})`, j.replaced === true && row().pilot === "Delta"
+    && row().time_s === 20500 && archived("runs_archive") === 2);
+  // a solo run under the run_id, and the archived (reset) case
+  r = await postBuilt(JSON.stringify({ ...run, run_id: ID, mod: C2, build: C2B, edited: [], round: 60, time_s: 30000 }), C2B, "8.0.0.7");
+  j = await r.json();
+  check("a solo run under a co-op run's id: a duplicate, nothing replaced", j.duplicate === true && !j.stored && row().pilot === "Delta");
+  const ID2 = "2498a83d" + "0".repeat(24);
+  db.prepare(`INSERT INTO runs_archive (reset_id, reset_at, run_id, pilot, round, time_s, players) VALUES ('1-reset', 1, ?, 'NotMexi', 35, 11190, 8)`).run(ID2);
+  const late = copy("Saint Alessia", 51, 19883); late.run_id = ID2;
+  r = await postBuilt(JSON.stringify(late), C2B, "8.0.0.8");
+  j = await r.json();
+  check("a co-op run a reset took off: a duplicate (archived), not put back", j.duplicate === true && j.archived === true
+    && count(`SELECT COUNT(*) AS n FROM runs WHERE run_id = '${ID2}'`) === 0);
+  const ID3 = "2498a83e" + "0".repeat(24);
+  db.prepare(`INSERT INTO runs_archive (reset_id, reset_at, run_id, pilot, round, time_s, players) VALUES ('superseded:1', 1, ?, 'NotMexi', 35, 11190, 8)`).run(ID3);
+  const back = copy("Saint Alessia", 51, 19883); back.run_id = ID3;
+  r = await postBuilt(JSON.stringify(back), C2B, "8.0.0.9");
+  j = await r.json();
+  check("only a superseded copy in the archive: the run's taken", r.status === 200 && j.ok && !j.duplicate
+    && count(`SELECT COUNT(*) AS n FROM runs WHERE run_id = '${ID3}'`) === 1);
+  // a lone takeover's own post says so
+  posted.length = 0;
+  const ID4 = "2498a83f" + "0".repeat(24), alone = copy("NotMexi", 35, 11190, { takeover: true }); alone.run_id = ID4;
+  r = await postBuilt(JSON.stringify(alone), C2B, "8.0.0.10");
+  const em4 = posted.map((b) => JSON.parse(b)).find((p) => p.embeds && p.embeds[0].title.includes("squad of 8"));
+  check(`a lone takeover's post: ${em4 && em4.embeds[0].footer.text}`, r.status === 200 && em4
+    && em4.embeds[0].footer.text.includes("· carried on alone by host migration"));
 }
 // the slash commands answered late (2026-10-30: "The application did not respond"): the board is made and edited into
 // the "thinking..." answer through the interaction's webhook; a failure says so there

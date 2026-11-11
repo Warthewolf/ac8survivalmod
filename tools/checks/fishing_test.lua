@@ -364,7 +364,7 @@ check(speakers.SAL and speakers["COMONA CONTROL"] and speakers["COMONA TOWER"] a
       "SAL, COMONA CONTROL, COMONA TOWER and the CREW CHIEF all have lines (T| and G|)")
 check(longest <= 70, "SAL's lines under 70 characters (the longest " .. longest .. ")")
 -- ((2026-11-07) the strip's box grown to its wrapped lines: SUB.lineCount, whole words by their width at the font's em)
-local WRAP, EMU = CFG.hud.subs.w - 80, CFG.hud.subs.em_units
+local WRAP, EMU = CFG.hud.subs.w - (SUB.wrapPad or 120), CFG.hud.subs.em_units   -- ((2026-11-11) the strip's own width: SUB.wrap)
 check(SUB.lineCount("With the little gun! Like a spear fisherman. Respect.", WRAP, EMU) == 1
       and SUB.lineCount(string.rep("word ", 30), WRAP, EMU) == 3 and SUB.lineCount("", WRAP, EMU) == 1, "the strip's line count (whole words)")
 -- (the user's screenshot of 2026-11-07: this 63-character line fitted on one line, and got a two-line box)
@@ -381,6 +381,65 @@ do                                                  -- (the four lines measured 
         if est < l[2] or est > l[2] * 1.06 then ok = false end
     end
     check(ok, "each measured line's width estimated at or a little over what the screenshots show")
+end
+do                                                  -- ((2026-11-11) the strip's lines broken in Lua: SUB.wrap)
+    -- (the user's screenshots of 0.74.4x: the text didn't wrap in game, one line past both sides of the box; widths
+    -- measured there in layout units)
+    local seen = { { "Let's get going. I don't want to get caught up in the investigation afterwards.", 1730 },
+                   { "Two cargo vessels with ZFA-44s inbound. Call VAMPIRES from the STORE.", 1661 },
+                   { "Thank You Pilot, I've sent word to HQ and they've sent two Cargo Vessels into the Area with the Special ZFA-44 Airframes,", 2726 } }
+    local W = CFG.hud.subs.w - 120
+    local near, fit, two = true, true, true
+    for _, l in ipairs(seen) do
+        local est = SUB.ems(l[1]) * EMU
+        if est < l[2] * 0.96 or est > l[2] * 1.06 then near = false end
+        local text, n = SUB.wrap(l[1], W, EMU)
+        local back = text:gsub("\n", " ")
+        if back ~= l[1] or n ~= 2 then two = false end
+        for ln in text:gmatch("[^\n]+") do
+            -- (the widest a line can be on screen: its estimate over the model's worst under-estimate seen, 2.5 %)
+            if SUB.ems(ln) * EMU / 0.975 > CFG.hud.subs.w - 80 then fit = false end
+        end
+    end
+    check(near, "the width model within 4 % under / 6 % over each line the 2026-11-11 screenshots measured")
+    check(two and fit, "those three lines broken in two at words, every line inside the box at the model's worst")
+    local t1, n1 = SUB.wrap("Short.", W, EMU)
+    local t0, n0 = SUB.wrap("", W, EMU)
+    local tl, nl = SUB.wrap(string.rep("x", 400) .. " end", W, EMU)
+    check(t1 == "Short." and n1 == 1 and t0 == "" and n0 == 1 and nl == 2 and tl:sub(-4) == "\nend",
+          "a short line as it is, nothing as one empty line, a word wider than the box on a line of its own")
+    local same = true
+    for _, s in ipairs({ "With the little gun! Like a spear fisherman. Respect.", string.rep("word ", 30), seen[3][1] }) do
+        local _, n = SUB.wrap(s, W, EMU)
+        if n ~= SUB.lineCount(s, W, EMU) then same = false end
+    end
+    check(same, "SUB.wrap's line count is SUB.lineCount's at the same width")
+    local sv = readAll(MOD .. "/Scripts/sv_subs.lua")
+    check(sv:find("cur.shown, cur.nLines = SUB.wrap(cur.text", 1, true) ~= nil and sv:find('setText(H.subText, "subTextStr", cur.shown)', 1, true) ~= nil,
+          "the strip shows the broken text and sizes its box from it (sv_subs.lua hudTick)")
+end
+do                                                  -- ((2026-11-11) the shipped config\subtitles.ini, which wins in game)
+    -- every SPEAKER|text line (a named one's too) on the strip at its own width: two lines at most; CHARLENE's thanks
+    -- (subtitle = ..., said in pieces of thanks_chars) three at most. Values filled in wide ({kg} 9999, {dir} south-west)
+    local fill = { kg = "9999", dir = "south-west", name = "Danielle", n = "99", fish = "SWORDFISH",
+                   rocket = "B", s = "110", b = "110", km = "20" }   -- ((2026-11-11) the retake's rockets' lines)
+    local most, n, over, thanks = 0, 0, {}, 0
+    for raw in readAll(MOD .. "/config/subtitles.ini"):gmatch("[^\r\n]+") do
+        local text = raw:match("^%s*[%u][%w_]*|(.+)$") or raw:match("^%s*[%w_]+%s*=%s*[%u][%w_]*|(.+)$")
+        if text then
+            text = text:gsub("{(%w+)}", function(k) return fill[k] or "XXXXXXXX" end)
+            local _, c = SUB.wrap(text, WRAP, EMU)
+            n, most = n + 1, math.max(most, c)
+            if c > 2 then over[#over + 1] = c .. ": " .. text:sub(1, 50) end
+        end
+        local th = raw:match("^%s*subtitle%s*=%s*(.+)$")
+        if th then
+            local cut = tonumber(CFG.specials.escort.thanks_chars) or 125
+            for i = 1, #th, cut do local _, c = SUB.wrap(th:sub(i, i + cut - 1), WRAP, EMU); thanks = math.max(thanks, c) end
+        end
+    end
+    check(n > 400 and #over == 0 and thanks <= 3, string.format("the shipped subtitles.ini: %d lines, at most %d strip lines (%s); CHARLENE's thanks' pieces %d at most",
+        n, most, #over == 0 and "none past two" or table.concat(over, "; "), thanks))
 end
 do                                                  -- (SAL's and CONTROL's lines: one line each on the strip, two at most)
     local one, n, most = 0, 0, 0

@@ -8,11 +8,11 @@ Research and extraction only: nothing cooked, installed or run, no Survival code
 
 Tags: **[confirmed in data]** read from the packages, **[inferred]** reasoned from them, **[needs an in-game test]**.
 
-Sources, read only: the user's work folder `D:\Ace Combat PAKS\unrealpak\Engine\Binaries\Win64\Alicorn_Special_Raid_IV`
-(plain UE 4.18 packages) and AC7's export `E:\Ace Combat 7 Exports\Game` ("ACE7" encrypted, read through
+Sources, read only: the user's work folder `<unrealpak folder>\Engine\Binaries\Win64\Alicorn_Special_Raid_IV`
+(plain UE 4.18 packages) and AC7's export `$AC7\Game` ("ACE7" encrypted, read through
 tools/ac7_decrypt.py). UModel ran from a copy in the output folder, so nothing was written on D:.
 
-Output (git-ignored, the build machine): `E:\ACE8 Survival Mode\build\zfa44\`
+Output (git-ignored, the build machine): `build\zfa44\` (the main tree)
 
 | folder | what |
 |---|---|
@@ -287,12 +287,12 @@ the host's afterburner moves to burner_01 / _02. Log: `zfa44: T0 ...` lines with
   only their roles are mapped (section 6.1).
 - The damage meshes are exported but are the old drone's; no ZFA-44 wreck exists in the mod.
 
-## 8. T0 build (2026-11-06, branch feature/zfa44, worktree `E:\ACE8 SM zfa44`; built, not yet run in game)
+## 8. T0 build (2026-11-06, branch feature/zfa44, its own worktree; built, not yet run in game)
 Test T0 of section 6.3: the ZFA-44 cooked for AC8 and put on a live enemy aircraft by a test key. Nothing of the mod or
 AC7 is committed: only `tools/zfa44/` (the scripts) and `Scripts/sv_zfa44.lua`.
 
 ### 8.1 What was made
-`sh tools/zfa44/build.sh` (UE 5.4 at `E:/UE_5.4`, this tree's own `ue/Live` project as tools/solg used it, `py -3.12`
+`sh tools/zfa44/build.sh` (UE 5.4 at `$UE`, this tree's own `ue/Live` project as tools/solg used it, `py -3.12`
 with numpy and Pillow). Its outputs are git-ignored, in `build/zfa44/` (the main tree's, through the junction): `prep/`
 (SK_ZFA44.gltf / .bin, the textures as PNG, layout.json), `ue_import.log`, `ue_import_stdout.log`, `cook.log`,
 `cook_check.log`, `build.log`, `stage/`, and **`out/SurvivalMode_ZFA44_P.utoc / .ucas / .pak`** (29.5 MB, 14 packages,
@@ -439,3 +439,6 @@ enemies near it, players and allies untouched. Scripts/sv_escort_dive.lua (ZDIVE
 - Checks for the first test: the burst and its size (fx_scale), the sound, the shake; the ZFA-44s really closing to
   800 m (AI pursuit may hold off: then the 40 s blast where it is still reaches 1 km); the kills paid; a joiner's view.
   tools/checks/dive_test.sh.
+- (2026-11-11) Saint Alessia's 50-round run: the ZFA-44 "finished off unpaid (GameplayStatics ApplyDamage)" above never
+  died (ApplyDamage takes nothing off AC8's AI planes). Since then every end goes through ModifyHealth, each dive has its
+  own id and callout, and its clock starts once its target is in reach: docs/re/ESCORT.md "The ZFA-44s' end".

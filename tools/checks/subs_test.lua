@@ -64,6 +64,15 @@ check(made:find("\r\nsubtitle = Thank You Pilot,", 1, true), "CHARLENE's thanks 
 
 print("the shipped file: no mistakes")
 local shipped = readAll(MOD .. "/config/subtitles.ini")
+-- git stores the file with LF line ends, and a Windows checkout writes it out with CRLF (the zips carry that one). A
+-- checkout with LF (Linux, a cloud session) is read as it is first, then the test goes on with the CRLF form below.
+if not shipped:find("\r\n", 1, true) then
+    writeAll(FILE, shipped)
+    local Lf = #logs + 1
+    load()
+    check(SUBT.loaded and #SUBT.loaded.bad == 0 and since(Lf, "mistakes skipped") == 0, "the shipped file with LF line ends: no mistake")
+    shipped = shipped:gsub("\n", "\r\n")
+end
 writeAll(FILE, shipped)
 local L1 = #logs + 1
 load()
@@ -123,6 +132,21 @@ check(since(L2, "subtitles: config\\subtitles.ini:") == 1 and since(L2, "mistake
       "the counts and each mistake logged")
 check(CFG_DEFAULTS.specials.shuttle.subs.hit[2][1] == "KASKA|Edited by a friend." and CFG_DEFAULTS.hud.subs.speakers.NEWBIE == "A NEW SPEAKER",
       "the file's lines are the shipped defaults (CFG_DEFAULTS)")
+
+print("a broken [section] line (2026-11-11: a friend's \"[specials.fishing.text.grade_b]z\")")
+do
+    local root = deepCopy(CFG_DEFAULTS)
+    local ownB = deepCopy(root.specials.fishing.text.grade_b)
+    local st3 = SUBT.apply("[specials.fishing.text.grade_a]\r\nS|An A line.\r\n[specials.fishing.text.grade_b]z\r\n"
+        .. "S|A B line.\r\nS|Another B line.\r\n[specials.fishing.text.grade_c]\r\nS|A C line.\r\n", root)
+    local t = root.specials.fishing.text
+    local said = false
+    for _, b in ipairs(st3.bad) do if b:find("line 3: a broken [section] line", 1, true) then said = true end end
+    check(#t.grade_a == 1 and t.grade_a[1] == "S|An A line.", "the list above keeps only its own lines (none of the broken section's)")
+    check(#t.grade_b == #ownB and t.grade_b[1] == ownB[1], "the broken section's list keeps the game's lines")
+    check(#t.grade_c == 1 and t.grade_c[1] == "S|A C line.", "the next whole section reads as ever")
+    check(said and #st3.bad == 1, "the broken line logged once (" .. table.concat(st3.bad, "; ") .. ")")
+end
 
 writeAll(FILE, shipped)
 print(fails == 0 and "subs_test: all passed" or ("subs_test: " .. fails .. " FAILED"))
