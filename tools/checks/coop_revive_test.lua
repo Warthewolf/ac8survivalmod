@@ -243,6 +243,20 @@ check(pawn.MinHealth == 0 and DOWN.floor() == 0, "solo: no floor (as ever)")
 pawn.HealthInternal = 1
 ticks(1)
 check(not DOWN.me(), "solo at 0.1 HP: never down")
+-- ((2026-11-11) SECOND CHANCE solo: its floor read back as co-op's is. The game puts MinHealth back on a restore (an
+-- airfield stop), and solo it was set once and never again: a paid item that did nothing after a landing)
+RUN.insured = true
+pawn.HealthInternal = 1000
+tick()
+check(pawn.MinHealth == 4, "solo, a SECOND CHANCE held: its floor 4 HP (" .. tostring(pawn.MinHealth) .. ")")
+pawn.MinHealth = 0                                   -- (the game's restore at the airfield)
+from = #logs + 1
+tick()
+check(pawn.MinHealth == 4 and line("insurance: your aircraft's floor was put back by the game", from) ~= nil,
+      "solo: the game puts it back to 0: set again (logged)")
+RUN.insured = false
+tick()
+check(pawn.MinHealth == 0, "solo, no SECOND CHANCE: no floor again")
 scene("host", 0, { [1] = FLY })
 RUN.insured = true
 tick()

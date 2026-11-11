@@ -2385,3 +2385,11 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   - pendKeep: a plain unit name, at most 512 units' binds waiting.
 - The suite's SV_UnitAlive stub answers -2 for a unit this game hasn't (as the runtime), and a call of it with one is
   no longer a finding: it's the question the joiner asks before anything acts on the unit.
+
+## SECOND CHANCE solo (2026-11-11; Lua for the next build; not yet run in game)
+- INS.tick read the floor back (and set it again when the game had put MinHealth back) only while co-op's revive floor
+  was on: solo, a SECOND CHANCE's floor was set once, and the game's restore at an airfield stop took it off for good, a
+  paid item that did nothing after a landing (sv_tactical.lua, from the survey's review). Now read back whenever a floor
+  is held. coop_revive_test: the solo case (set, put back by the game, set again and logged, gone with the item).
+  To see in game: buy SECOND CHANCE, land, take off, get shot down: it should fire (`insurance: SECOND CHANCE used ...`),
+  after `insurance: your aircraft's floor was put back by the game` at the stop.

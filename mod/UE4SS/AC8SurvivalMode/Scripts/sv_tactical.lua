@@ -502,7 +502,9 @@ function INS.tick(now)
     local insured = c.enabled and RUN.insured
     local want = insured and math.max(mh * c.floor, fl) or fl
     local reset = false
-    if fl > 0 and INS.min == want and INS.pawn == addrOf(pawn) then
+    -- (read back whenever a floor is held: ((2026-11-11) a solo SECOND CHANCE's was set once and never again, so the
+    -- game's restore at an airfield stop took it off for good: a paid item that did nothing after a landing)
+    if want > 0 and INS.min == want and INS.pawn == addrOf(pawn) then
         local okR, cur = pcall(function() return pawn.MinHealth end)
         reset = okR and type(cur) == "number" and math.abs(cur - want) > 0.001
     end
