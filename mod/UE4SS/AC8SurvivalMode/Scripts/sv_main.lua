@@ -535,12 +535,12 @@ local function probeTick(tick)
             local okDs, errDs = pcall(DECOY.setup)
             if not okDs then log("decoy: setup error " .. tostring(errDs)); DECOY.setupDone = true end
         end
-        -- TEST ONLY BEGIN (THE TANICORN's test mount's rows, at the main menu as the shoal's: sv_tanicorn.lua)
+        -- DEV ONLY BEGIN (THE TANICORN's test mount's rows, at the main menu as the shoal's: sv_tanicorn.lua; dev install only)
         if TANI and TANI.setup then
             local okTs, errTs = pcall(TANI.setup)
             if not okTs then log("tanicorn: setup error " .. tostring(errTs)); TANI.setupDone = true end
         end
-        -- TEST ONLY END
+        -- DEV ONLY END
         if COOP and COOP.syncSetup then                  -- (the co-op stand-ins' damage-0 rows, sv_coop.lua)
             local okCs, errCs = pcall(COOP.syncSetup)
             if not okCs then log("coopfire: setup error " .. tostring(errCs)) end

@@ -834,10 +834,11 @@ Status: not started. Depends on: everything above.
   friends' zip never has any of it:
   1. the TANACORN's container ships only in `TANI=1` dev builds (`VALKA=1 ZFA=1 TANI=1 sh tools/package_dev.sh
      <version>`); package_release.sh already drops SurvivalMode_Tani_P;
-  2. round 30's Lua (the schedule's `rounds[30] = "fleet"` and the fleet's parts, sv_fleet*.lua) inside TEST ONLY blocks
-     (or a whole part that is one, as sv_anomalies_dev.lua), which tools/strip_test_only.py takes out of every release
-     zip, TESTER zips included; a check (tools/checks/fleet_test.sh) that a release copy of the parts has no `fleet`
-     kind and no round-30 slot;
+  2. round 30's Lua (the schedule's `rounds[30] = "fleet"` and the fleet's parts, sv_fleet*.lua) inside DEV ONLY blocks
+     (2026-11-11: TEST ONLY blocks stay in TESTER zips; DEV ONLY ones, which tools/strip_test_only.py takes out of every
+     zip, TESTER zips included, are the dev install's only, as THE TANICORN's test mount is; tools/checks/
+     zip_leak_test.sh checks every kind of zip's Lua for them); a check (tools/checks/fleet_test.sh) that a release copy
+     of the parts has no `fleet` kind and no round-30 slot;
   3. at run time round 30 is the fleet only when the TANACORN's class loads (a dev build without TANI=1: a normal round,
      logged `fleet: round 30: the TANACORN isn't in this build: a normal round`).
   The fleet's ships, rows and world data are stock-based and can stay in Survival's own container (unused without

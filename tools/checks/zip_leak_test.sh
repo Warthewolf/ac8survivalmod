@@ -4,7 +4,8 @@
 #   THE TANICORN's (SurvivalMode_Tani_P: Sea Power's Iowa, the user's install only): in no zip, ZFA=1 / TESTER=1 / COOP=1
 #     included (until 2026-11-11 a ZFA=1 release zip and every package_test.sh zip after a TANI=1 build kept it);
 #   the ZFA-44's and its laser's (SurvivalMode_ZFA44_P, SurvivalMode_Laser7_P): only with ZFA=1;
-#   tools/zip_guard.sh refuses a stage that still holds the Tanicorn's.
+#   tools/zip_guard.sh refuses a stage that still holds the Tanicorn's;
+#   no zip's Lua holds a DEV ONLY block (the Tanicorn's test: the user, 2026-11-11, not in TESTER zips either).
 # Everything happens in a temporary folder outside the repo: a copy of the packaging tools, the real Lua parts as the
 # made-up build/install, empty stand-ins for the containers and main.dll, RELEASE_DIR there too, nothing registered
 # (SV_LB_REGISTER=0). Your build/, build/release and .env are never touched.
@@ -34,6 +35,13 @@ done
 
 fails=0
 check() { if [ "$1" = 0 ]; then echo "  ok   $2"; else echo "  FAIL $2"; fails=$((fails + 1)); fi; }
+# devfree <zip>: 0 when no Lua in the zip has the user's dev install only code (a DEV ONLY block, THE TANICORN's test:
+# its TANI table, sv_main.lua's TANI.setup), the user's answer of 2026-11-11: never in a TESTER zip either
+devfree() { python -I -c "
+import sys, zipfile
+z = zipfile.ZipFile(sys.argv[1])
+bad = [n for n in z.namelist() if n.endswith('.lua') and any(w in z.read(n).decode('utf-8', 'replace') for w in ('DEV ONLY', 'TANI = {', 'TANI.setup'))]
+sys.exit(1 if bad else 0)" "$1"; }
 # holds <zip> <container>: 0 when the zip carries that container's .utoc
 holds() { python -I -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(0 if any(x.endswith('/' + sys.argv[2] + '.utoc') for x in n) else 1)" "$1" "$2"; }
 # one <label> <zip glob> <zfa: 1 kept / 0 out> <command...>: packs one zip, then what it carries
@@ -45,6 +53,8 @@ one() {
         if [ -z "$z" ]; then check 1 "$label: a zip made ($glob)"; return; fi
         holds "$z" SurvivalMode_Tani_P && r=1 || r=0
         check $r "$label: no Tanicorn container"
+        devfree "$z" && r=0 || r=1
+        check $r "$label: no dev-install-only Lua (DEV ONLY blocks, the Tanicorn's test)"
         holds "$z" SurvivalMode_P && r=0 || r=1
         check $r "$label: Survival's own container in it"
         if [ "$zfa" = 1 ]; then

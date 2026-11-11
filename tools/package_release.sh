@@ -69,6 +69,8 @@ rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*
 # Only for the tester the user names: every other zip strips them (user, 2026-10-23: test keys out of releases).
 if [ "$TESTER" = 1 ]; then
     echo "TESTER=1: test keys and the diagnostic loggers kept ($(grep -c 'TEST ONLY BEGIN' "$mod"/Scripts/*.lua | awk -F: '{s+=$2} END {print s}') test blocks)"
+    # (DEV ONLY blocks: the user's dev install only, never in a TESTER zip either: THE TANICORN's test, the fleet; user, 2026-11-11)
+    python -I tools/strip_test_only.py --dev-only "$mod"/Scripts/*.lua "$mod"/config/survival.default.ini
 else
 # (the default ini too: its test-only sections, the lightning Anomaly's, 2026-11-07; each leaves a lone ";" line)
 python -I tools/strip_test_only.py "$mod"/Scripts/*.lua "$mod"/config/survival.default.ini

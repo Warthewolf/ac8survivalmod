@@ -55,7 +55,8 @@ Git Bash rewrites `/Game/...` arguments into Windows paths; `export MSYS_NO_PATH
 
 ## Ctrl keys (every one bound once across Scripts/*.lua; 2026-11-07)
 UE4SS's key binds are keyboard only and don't take the key from the game. Test keys sit in TEST ONLY blocks
-(tools/strip_test_only.py takes them out of every zip but a TESTER=1 one), and a press makes the run unranked. Test keys
+(tools/strip_test_only.py takes them out of every zip but a TESTER=1 one; DEV ONLY blocks, the user's dev install only,
+out of every zip, TESTER=1 included: 2026-11-11), and a press makes the run unranked. Test keys
 bound through sv_core.lua `testKey` or sv_main.lua's test block share `TEST_KEYS`, which the release keys below join in a
 test build: a key bound twice logs `test: Ctrl+<key> is bound twice`, a key name UE4SS hasn't logs `... not bound`.
 
@@ -85,7 +86,7 @@ test build: a key bound twice logs `test: Ctrl+<key> is bound twice`, a key name
 | Ctrl+, (`OEM_COMMA`) | the storm test: AC8's lightning on you 60 s; again: the stall flag 3 s; again: off (test) | sv_anomalies.lua |
 | Ctrl+. (`OEM_PERIOD`) | the next round is IFF FATAL ERROR / DI..ANT TH..D..R, the lightning Anomaly (test; never drawn) | sv_anomalies.lua |
 | Ctrl+[ (`OEM_FOUR`) | AC7's laser volley test (test; ZFA=1 builds) | sv_escort_li.lua |
-| Ctrl+T | THE TANICORN's test mount 3 km ahead (test; TANI=1 builds; Ctrl+` was the game console's key) | sv_tanicorn.lua |
+| Ctrl+T | THE TANICORN's test mount 3 km ahead (dev install only: a DEV ONLY block, never in a TESTER zip; TANI=1 builds; Ctrl+` was the game console's key) | sv_tanicorn.lua |
 
 THE ESCORT's T0 and carrier keys were Ctrl+F1 / F2 (the tactical items' keys: both ran on a press) and THE DECOY's were
 Ctrl+PAGE_UP / PAGE_DOWN / HOME, now THE FESTIVAL's, the arc's step and GONE FISHIN''s; the lightning Anomaly's

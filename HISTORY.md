@@ -2512,3 +2512,12 @@ fichier"; "tu met tous dans logs, dater les crumbs").
 - Not fixed here (PR #4's review, reported 2026-11-11): UE4SS.log's copy every 10 s can miss its last seconds at a crash
   (the readmes no longer say to send UE4SS.log first); LzPick fills its 32 slots before dropping zipped sessions;
   release/README.txt's leaderboard paragraph still names AC8SurvivalMode_lua.log; .gitignore's leftover " origin/main".
+
+## TESTER zips: no Tanicorn test (2026-11-11, in 0.74.50; packaging and Lua markers)
+- The user's answer: strip THE TANICORN's Ctrl+T mount test from TESTER zips too. A new block kind, `-- DEV ONLY BEGIN` /
+  `-- DEV ONLY END`: the user's dev install only (package_dev.sh keeps it), out of EVERY zip, TESTER=1 included
+  (tools/strip_test_only.py: by default with the TEST ONLY blocks; `--dev-only` in package_release.sh's TESTER branch,
+  which keeps the TEST ONLY ones). sv_tanicorn.lua's block and sv_main.lua's TANI.setup call are DEV ONLY now; round 30's
+  fleet goes the same way (INVINCIBLE_FLEET.md WP12's lock 2 corrected: TEST ONLY blocks stay in TESTER zips).
+  lua_split / lua_split_part keep DEV ONLY blocks whole. zip_leak_test checks every kind of zip's Lua for DEV ONLY code
+  (the old packager fails the TESTER case). A TESTER copy and a release copy both load (lua_load_test).
