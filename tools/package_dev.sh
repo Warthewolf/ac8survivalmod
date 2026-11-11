@@ -49,11 +49,14 @@ else
     rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ZFA44_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Laser7_P.*
 fi
 # TANI=1 keeps THE TANICORN's parts (tools/tanicorn; the Tanager stand-in is Sea Power's Iowa: the user's install only;
-# test: Ctrl+` in a run, Scripts/sv_tanicorn.lua), from build/install or else build/tanicorn/out; without it, none
+# test: Ctrl+T in a run, Scripts/sv_tanicorn.lua), from build/install or else the main tree's build/tanicorn/out (where
+# tools/tanicorn/build.sh writes it from any worktree); without it, none
 if [ "$TANI" = 1 ]; then
     if [ ! -f "$st/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.utoc" ]; then
-        [ -f build/tanicorn/out/SurvivalMode_Tani_P.utoc ] || { echo "TANI=1: no Tanicorn container (sh tools/tanicorn/build.sh)"; exit 1; }
-        cp build/tanicorn/out/SurvivalMode_Tani_P.utoc build/tanicorn/out/SurvivalMode_Tani_P.ucas "$st/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/"
+        TA_MAIN=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+        if [ -n "$TA_MAIN" ]; then TA="$(dirname "$TA_MAIN")/build/tanicorn/out"; else TA=build/tanicorn/out; fi
+        [ -f "$TA/SurvivalMode_Tani_P.utoc" ] || { echo "TANI=1: no Tanicorn container in $TA (sh tools/tanicorn/build.sh)"; exit 1; }
+        cp "$TA/SurvivalMode_Tani_P.utoc" "$TA/SurvivalMode_Tani_P.ucas" "$st/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/"
     fi
     echo "TANI=1: the Tanicorn's container staged (Ctrl+T in a run: its test mount)"
 else

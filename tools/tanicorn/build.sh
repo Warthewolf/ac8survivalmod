@@ -14,8 +14,8 @@
 #   7. retoc to-zen        only /Game/Mods/SurvivalMode/Tanicorn -> the container, 8. pad.py (hard rule 8)
 # TANI_PARTS=T5,HULL builds only those parts (the import, the spec, the cook's checks). TANI_STOP=export stops after
 # step 2 (no UE needed: the parts on disk and their check).
-# The Tanager stand-in is Sea Power's Iowa (user, 2026-11-09: "my install only"): nothing built here is committed or
-# shipped. tools/build_all.sh stages the container with TANI=1 only; package_release.sh never ships it.
+# The Tanager stand-in is Sea Power's Iowa (user, 2026-11-09: "my install only"): nothing built here is
+# shipped (milestone 0's cooked container is kept in art/tanicorn/ingame at the user's request). tools/build_all.sh stages the container with TANI=1 only; package_release.sh never ships it.
 set -e
 cd "$(dirname "$0")/../.."
 . tools/env.sh

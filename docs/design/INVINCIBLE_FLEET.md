@@ -64,8 +64,9 @@ Tags as in docs/re: [V] read in a file or seen in game (where), [I] inferred, [?
 - Commits `[claude] what changed` (or the agent's own tag), with the session's attribution lines; push only to the
   branch the session was given.
 - Each work package below gets its log lines (`fleet: ...`, `tanicorn: ...`, `ford: ...`), its settings in
-  CFG.specials.fleet / survival.ini [specials.fleet] (players edit values without a rebuild), and its test-only keys
-  inside TEST ONLY blocks (tools/strip_test_only.py drops them from a release).
+  CFG.specials.fleet / survival.ini [specials.fleet] (players edit values without a rebuild), and its test keys
+  inside DEV ONLY blocks (2026-11-11: tools/strip_test_only.py takes them out of every zip, TESTER=1 included;
+  package_dev.sh keeps them. TEST ONLY blocks stay in TESTER zips, so never the fleet's).
 
 ---------------------------------------------------------------------------------------------------------------------
 ## 2. The user's decisions

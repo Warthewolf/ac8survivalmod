@@ -61,7 +61,9 @@ game's `ue4ss/Mods` folder (`AC8_MODS`). Never change the game's own files.
   (`lua_check.py` checks it).
 - **Every build handed to someone gets a new version** (`python -I tools/bump_version.py` before `build_all.sh`).
   Co-op refuses to link games on different builds.
-- **Test keys never ship.** Code between `-- TEST ONLY BEGIN` and `-- TEST ONLY END` is stripped from every release zip.
+- **Test keys never ship.** Code between `-- TEST ONLY BEGIN` and `-- TEST ONLY END` is stripped from every release zip
+  (a tester's zip, TESTER=1, keeps it). Code between `-- DEV ONLY BEGIN` and `-- DEV ONLY END` is the user's own dev
+  install only (package_dev.sh): stripped from every zip, a tester's included (THE TANICORN's test, round 30's fleet).
 - **Commits** say what changed and why, starting with who made them: `[name] what changed`.
 
 ## Where things are

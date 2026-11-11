@@ -76,9 +76,12 @@ fi
 # THE TANICORN's parts (tools/tanicorn: Survival's own blueprints on the Tanager stand-in, Sea Power's Iowa: the user's
 # install only, 2026-11-09): staged with TANI=1 only (package_dev.sh keeps it with TANI=1; package_release.sh never ships it)
 if [ "$TANI" = 1 ]; then
-    [ -f build/tanicorn/out/SurvivalMode_Tani_P.utoc ] || { echo "TANI=1: no Tanicorn container (sh tools/tanicorn/build.sh)"; exit 1; }
-    cp build/tanicorn/out/SurvivalMode_Tani_P.utoc build/tanicorn/out/SurvivalMode_Tani_P.ucas build/install/SurvivalMode/
-    echo "staged the Tanicorn's parts (build/tanicorn/out/SurvivalMode_Tani_P; dev only)"
+    # (the main tree's build/tanicorn/out, where tools/tanicorn/build.sh writes it from any worktree: as L7 above)
+    TA_MAIN=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+    if [ -n "$TA_MAIN" ]; then TA="$(dirname "$TA_MAIN")/build/tanicorn/out"; else TA=build/tanicorn/out; fi
+    [ -f "$TA/SurvivalMode_Tani_P.utoc" ] || { echo "TANI=1: no Tanicorn container in $TA (sh tools/tanicorn/build.sh)"; exit 1; }
+    cp "$TA/SurvivalMode_Tani_P.utoc" "$TA/SurvivalMode_Tani_P.ucas" build/install/SurvivalMode/
+    echo "staged the Tanicorn's parts ($TA/SurvivalMode_Tani_P; dev only)"
 fi
 cp -r mod/UE4SS/AC8SurvivalMode build/install/
 mkdir -p build/install/AC8SurvivalMode/dlls && cp build/runtime/main.dll build/install/AC8SurvivalMode/dlls/

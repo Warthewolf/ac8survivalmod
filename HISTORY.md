@@ -2527,5 +2527,13 @@ fichier"; "tu met tous dans logs, dater les crumbs").
   every main.dll had made its own no-network check refuse it since). package_release.sh makes Online zips only and
   refuses "offline" with that note; its SV_OFFLINE DLL rebuild and word check are gone; release/README.txt's Offline
   section is out. edition.py online still takes the sources' OFFLINE: lines and ONLINE ONLY markers out (the Lua's own
-  markers are left: nothing shipped changed). runtime/build.sh OFFLINE=1 still builds an SV_OFFLINE main.dll, which
-  nothing ships. tools/README.md, docs/re/MENU_PAGES.md say so.
+  markers are left: nothing shipped changed). `OFFLINE=1 sh runtime/build.sh` still builds an SV_OFFLINE main.dll
+  (build/runtime/offline), which nothing ships. tools/README.md, docs/re/MENU_PAGES.md say so.
+- The merge and packaging review (2026-11-11, 3 reviewers and a skeptic each: the merge lost nothing of either side; the
+  DEV ONLY strip leaves release zips byte for byte as before and TESTER zips without the Tanicorn test; Online zips are
+  byte for byte unchanged by the Offline retirement). 4 small findings fixed: tools/tanicorn/build.sh's header said again
+  that nothing it builds is committed (the merge took back this branch's correction: milestone 0's container is in
+  art/tanicorn/ingame); build_all.sh and package_dev.sh stage TANI=1's container from the main tree's build/tanicorn/out,
+  where tools/tanicorn/build.sh writes it from any worktree (as L7 does; before, a worktree build said "no Tanicorn
+  container" just after making one); the fleet plan's general rule (1.4) and CONTRIBUTING.md say DEV ONLY for the dev
+  install's test keys; tools/README.md's OFFLINE build command the right way round.
