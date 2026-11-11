@@ -1,8 +1,8 @@
 #!/bin/sh
 # build.sh : builds the Survival Mode native runtime (UE4SS C++ mod) with LLVM only.
 # Output: build/runtime/main.dll  (staged by tools/build_all.sh into AC8SurvivalMode/dlls/)
-# OFFLINE=1 build.sh: the Offline edition's build/runtime/offline/main.dll, compiled with SV_OFFLINE (no leaderboard
-# code at all: no WinHTTP, bcrypt, address, key or Steam name; tools/package_release.sh offline).
+# OFFLINE=1 build.sh: build/runtime/offline/main.dll, compiled with SV_OFFLINE (no leaderboard code at all: no WinHTTP,
+# bcrypt, address, key or Steam name). The Offline zip that shipped it was retired on 2026-11-11: nothing ships it now.
 # LLVM: tools/llvm/LLVM/bin (unpacked from the LLVM Windows installer), or LLVM on PATH.
 set -e
 export MSYS_NO_PATHCONV=1   # Git Bash would turn /dll etc. into paths

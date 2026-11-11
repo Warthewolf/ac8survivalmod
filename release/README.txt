@@ -147,14 +147,6 @@ Score: 1000 a round reached, 100 an aircraft, 50 a ground or sea target, 3000 a 
 x1 Standard, x1.5 Ace.
 
 ONLINE ONLY END
-OFFLINE: Offline edition
-OFFLINE: ---------------
-OFFLINE: This edition never connects to the internet: it has no leaderboard code at all. When a run ends (shot down,
-OFFLINE: restarted, or left) a summary shows how it went: round, score, kills, specials beaten, time. The Online edition
-OFFLINE: submits runs to the Discord leaderboard as well.
-OFFLINE: Score: 1000 a round reached, 100 an aircraft, 50 a ground or sea target, 3000 a special round beaten, x0.75 Casual,
-OFFLINE: x1 Standard, x1.5 Ace.
-OFFLINE:
 Settings: ue4ss\Mods\AC8SurvivalMode\config\survival.ini, made the first time you play. Open it in Notepad. Every
 setting is listed with its default and switched off by a ; in front of it; remove the ; to change it. Restart the
 game after a change. Delete the file to get a fresh one.

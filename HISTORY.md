@@ -2521,3 +2521,11 @@ fichier"; "tu met tous dans logs, dater les crumbs").
   fleet goes the same way (INVINCIBLE_FLEET.md WP12's lock 2 corrected: TEST ONLY blocks stay in TESTER zips).
   lua_split / lua_split_part keep DEV ONLY blocks whole. zip_leak_test checks every kind of zip's Lua for DEV ONLY code
   (the old packager fails the TESTER case). A TESTER copy and a release copy both load (lua_load_test).
+
+## The Offline zip retired (2026-11-11, in 0.74.50; packaging and docs)
+- The user's answer: retire the separate Offline zip (the menu's SP OFFLINE covers playing offline; co-op's Steam code in
+  every main.dll had made its own no-network check refuse it since). package_release.sh makes Online zips only and
+  refuses "offline" with that note; its SV_OFFLINE DLL rebuild and word check are gone; release/README.txt's Offline
+  section is out. edition.py online still takes the sources' OFFLINE: lines and ONLINE ONLY markers out (the Lua's own
+  markers are left: nothing shipped changed). runtime/build.sh OFFLINE=1 still builds an SV_OFFLINE main.dll, which
+  nothing ships. tools/README.md, docs/re/MENU_PAGES.md say so.

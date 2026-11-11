@@ -13,7 +13,7 @@ Labels as in AIRFIELD_SHOP_UI.md: **[V]** verified (in game or in the files), **
 main menu: SURVIVAL MODE >                                   (DT_SV_MenuRows SurvivalMenu, MenuID SV_PgModes)
   SURVIVAL MODE (SV_PgModes)
     SURVIVAL MODE SP OFFLINE >     SV_Mode_Offline -> SV_PgOffline
-    SURVIVAL MODE SP ONLINE  >     SV_Mode_Online  -> SV_PgOnline     (taken off in the Offline edition)
+    SURVIVAL MODE SP ONLINE  >     SV_Mode_Online  -> SV_PgOnline     (taken off in the Offline edition, retired 2026-11-11)
     SURVIVAL MODE COOP HOST  >     SV_Mode_Host    -> SV_PgHost       (taken off without co-op)
     SURVIVAL MODE COOP JOIN        SV_Mode_Join    -> CampaignFreeMissionDifficulty (a start)
     QUICK START: <last mode>       SV_Quick        -> CampaignFreeMissionDifficulty (a start, SV_MenuQuick's mode)
