@@ -16,10 +16,15 @@ sockets with their rotations (SOC_Gun_NN on turret_pitch, SOC_Vls_NN on Body alo
 36 Mount_* sockets on its static mesh (mesh_sockets), and a blueprint for each gun mount on the 5-inch's layout
 (BP_SV_Tani_T5 / _T16 / _CIWS / _LASER; FCS below). The VLS blocks and the hull get their blueprints in WP1 / WP2.
 """
-import json, os
+import json, os, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BUILD = os.environ.get('TANI_BUILD') or os.path.normpath(os.path.join(HERE, '..', '..', 'build', 'tanicorn'))
+sys.path.insert(0, os.path.join(HERE, '..'))   # (python -I: tools/env.py)
+import env
+# build outputs live in the main tree's build/: TANI_BUILD (build.sh sets it), else SV_ROOT's, else the main git tree's,
+# else this checkout's
+_root, _main = env.roots()
+BUILD = os.environ.get('TANI_BUILD') or os.path.join(os.environ.get('SV_ROOT') or _main or _root, 'build', 'tanicorn')
 DEST = '/Game/Mods/SurvivalMode/Tanicorn'
 AA_SHELL = '/Game/Blueprints/Weapons/AAGUN/BP_wp_aagun_vessel'          # LiveBulletEmitter (its emitter base's class)
 

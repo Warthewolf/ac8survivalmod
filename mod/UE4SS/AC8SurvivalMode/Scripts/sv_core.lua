@@ -36,27 +36,48 @@ local function rowsOf(t)
     return { ROW }
 end
 
--- Every line also goes to AC8SurvivalMode\AC8SurvivalMode_lua.log, written through at once: UE4SS.log loses its last
--- lines when the game crashes (a friend's test of 2026-10-22: it stopped 40 s before the crash on sortie).
--- main.lua's folder (Scripts\): the mod's files are found from it (..\config\, ..\AC8SurvivalMode_lua.log, ai\)
+-- Every line also goes to AC8SurvivalMode\logs\AC8SurvivalMode_lua_<stamp>.log, written through at once: UE4SS.log
+-- loses its last lines when the game crashes (a friend's test of 2026-10-22: it stopped 40 s before the crash on
+-- sortie). The stamp is the session's, from the runtime (SV_LogStamp, runtime 0.32.33: every file of a session is
+-- dated, so no session overwrites another's); in the mod's folder when the runtime couldn't make logs\; without the
+-- runtime, the old undated AC8SurvivalMode\AC8SurvivalMode_lua.log.
+-- main.lua's folder (Scripts\): the mod's files are found from it (..\config\, ..\logs\, ai\)
 SCRIPT_DIR = debug.getinfo(1, "S").source:match("^@(.*[/\\])") or ""
 
 log = nil
 do
     local LOG_FILE = nil
     local dir = SCRIPT_DIR .. "..\\"
-    local ok, f = pcall(io.open, dir .. "AC8SurvivalMode_lua.log", "w")
-    if ok and f then LOG_FILE = f; pcall(function() f:setvbuf("no") end) end
+    local stamp = nil
+    if type(SV_LogStamp) == "function" then
+        local okS, v = pcall(SV_LogStamp)
+        if okS and type(v) == "string" and v:match("^%d%d%d%d%-%d%d%-%d%d_%d%d%-%d%d%-%d%d%l?$") then stamp = v end
+    end
+    local names = stamp and { dir .. "logs\\AC8SurvivalMode_lua_" .. stamp .. ".log", dir .. "AC8SurvivalMode_lua_" .. stamp .. ".log" }
+        or { dir .. "AC8SurvivalMode_lua.log" }
+    for _, name in ipairs(names) do
+        if not LOG_FILE then
+            local ok, f = pcall(io.open, name, "w")
+            if ok and f then LOG_FILE = f; pcall(function() f:setvbuf("no") end) end
+        end
+    end
     function log(s)
         print(TAG .. s .. "\n")
         if LOG_FILE then pcall(function() LOG_FILE:write(os.date("%H:%M:%S ") .. s .. "\n") end) end
     end
 end
 
--- A line in the crash breadcrumbs (the native runtime's AC8SurvivalMode_crumbs.log, from 0.32.13: SV_Crumb, written at
--- once, the session before kept as .prev): the risky things Survival's Lua does (spawns, removals, copies taken down,
+-- A line in the crash breadcrumbs (the native runtime's logs\AC8SurvivalMode_crumbs_<stamp>.log, from 0.32.13: SV_Crumb,
+-- written at once, a file per session): the risky things Survival's Lua does (spawns, removals, copies taken down,
 -- teardowns), so a crash shows what came just before it. Nothing with an older runtime.
 function crumb(s) if type(SV_Crumb) == "function" then pcall(SV_Crumb, tostring(s):sub(1, 230)) end end
+
+-- The log bundle (runtime 0.32.32): lines for logs\session_<stamp>.txt, which goes into the zip of this session's logs (the
+-- version and the co-op role; "key=value", the native SV_Session). Nothing with an older runtime.
+if SV_Session then
+    pcall(SV_Session, "mod=" .. tostring(VERSION))
+    pcall(SV_Session, "role=solo")
+end
 
 -- A line logged once a session for its key (a hook that fails every tick logs one line, not one a tick).
 -- hookErr(what, pcall(f, ...)): a hook's pcall with its first error logged ("<what> error ..."), its results passed

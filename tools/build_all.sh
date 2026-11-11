@@ -44,6 +44,7 @@ python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/ai
 python -X utf8 -I tools/checks/ini_check.py   # every survival.default.ini setting is one CFG has
 python -X utf8 -I tools/subtitles.py check     # config/subtitles.ini: every line reads (sv_config_subs.lua), no mistake
 python -X utf8 -I tools/checks/size_check.py  # no source file over 2,000 lines (CONTRIBUTING.md)
+python -X utf8 -I tools/checks/paths_check.py  # no machine path in tools, runtime, mod, docs, AGENTS.md (.env instead)
 sh runtime/build.sh   # native runtime: build/runtime/main.dll
 python -X utf8 -I tools/build_survival.py
 python -X utf8 -I tools/pack.py
@@ -63,7 +64,8 @@ if [ "$ZFA" = 1 ]; then
     cp build/zfa44/out/SurvivalMode_ZFA44_P.utoc build/zfa44/out/SurvivalMode_ZFA44_P.ucas build/install/SurvivalMode/
     echo "staged the ZFA-44 (build/zfa44/out/SurvivalMode_ZFA44_P; dev only)"
     # (2026-11-07) AC7's LaserInterceptor, the ZFA-44's weapon (tools/laser7: the user's AC7 exception of 2026-11-07)
-    L7="E:/ACE8 Survival Mode/build/laser7/out"
+    L7_MAIN=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)   # (the main tree, as release_dir.sh)
+    if [ -n "$L7_MAIN" ]; then L7="$(dirname "$L7_MAIN")/build/laser7/out"; else L7=build/laser7/out; fi
     if [ -f "$L7/SurvivalMode_Laser7_P.utoc" ]; then
         cp "$L7/SurvivalMode_Laser7_P.utoc" "$L7/SurvivalMode_Laser7_P.ucas" build/install/SurvivalMode/
         echo "staged AC7's LaserInterceptor ($L7/SurvivalMode_Laser7_P)"

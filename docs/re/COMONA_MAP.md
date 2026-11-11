@@ -8,7 +8,7 @@ comes from the stock packages unless it is marked otherwise:
 - **[inferred]** reasoned from data, not read directly,
 - **[in-game check]** still needs a test in the game.
 
-The data, the scripts that made it and the decoded textures are in `E:\ACE8 Survival Mode\build\research\comona\`
+The data, the scripts that made it and the decoded textures are in `build\research\comona\` (the main tree)
 (git-ignored; `manifest.json` there lists every file). Look at `comona_overview.png` first: it is the whole island chain
 with its places labelled, plus close-ups of the spaceport and the airport.
 

@@ -60,7 +60,7 @@ local HEADER = table.concat({
     "; name = text   changes one line held under a name, or who a speaker code is (in the name lists).",
     "; Lines starting with ; are notes, skipped.",
     ";",
-    "; Mistakes are skipped, never fatal: the game's log (AC8SurvivalMode_lua.log) lists each one as \"subtitles: line N: ...\".",
+    "; Mistakes are skipped, never fatal: the game's log (logs\\AC8SurvivalMode_lua_<date>.log) lists each one as \"subtitles: line N: ...\".",
     "; Every Survival Mode update brings this file and replaces the one here: send your changes to the mod's author",
     "; (@voidcallsreaper on Discord) before you install a new version. Delete it to get the game's own lines back: the game",
     "; writes it again when it starts.",

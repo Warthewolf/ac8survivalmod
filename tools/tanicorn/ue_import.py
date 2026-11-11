@@ -1,5 +1,5 @@
-"""ue_import.py : run inside UE 5.4 in the AC8 template project (E:/AC8LiveProject, which has AC8's classes compiled):
-  UnrealEditor-Cmd E:/AC8LiveProject/Live.uproject -run=pythonscript -script=tools/tanicorn/ue_import.py
+"""ue_import.py : run inside UE 5.4 in the AC8 template project ($AC8_LIVE_PROJECT, which has AC8's classes compiled):
+  UnrealEditor-Cmd $AC8_LIVE_PROJECT/Live.uproject -run=pythonscript -script=tools/tanicorn/ue_import.py
 
 THE TANACORN's parts under /Game/Mods/SurvivalMode/Tanicorn from build/tanicorn/src_<part>
 (tools/tanicorn/export_tanacorn.py; the first 5-inch mount came from prepare_part.py), for every part in
@@ -20,7 +20,11 @@ import json, os
 import unreal
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BUILD = os.environ.get('TANI_BUILD') or os.path.normpath(os.path.join(HERE, '..', '..', 'build', 'tanicorn'))
+# (Unreal's own Python has no tools/env.py: build.sh passes the build folder, TANI_BUILD, and the main tree's, SV_ROOT)
+ROOT = os.environ.get('SV_ROOT')
+BUILD = os.environ.get('TANI_BUILD') or (ROOT and os.path.join(ROOT, 'build', 'tanicorn'))
+if not BUILD:
+    raise RuntimeError("TANI_BUILD / SV_ROOT aren't set: run this through tools/tanicorn/build.sh (it passes the main tree's folder)")
 LOG = os.path.join(BUILD, 'ue_import.log')
 DEST = '/Game/Mods/SurvivalMode/Tanicorn'
 GEAR = '/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear'

@@ -9,7 +9,7 @@ in-game test (section 4).
 Scratch (in `build/research/loc/`, not in git):
 - `pak.py`: reads the legacy `pakchunk*-Windows.pak` (v11, encrypted index, Oodle). The AES key comes from
   ACE8AircraftBuilder's settings.json, as in get_stock.sh. Usage: `pak.py list <pak>` / `pak.py get <pak> <substr> <outdir>`.
-- `acloc.py`: decodes AC7/AC8 `.dat` text files (a Python port of `E:\Ace8Loceditor\bundle-1\src\Loc.cs`).
+- `acloc.py`: decodes AC7/AC8 `.dat` text files (a Python port of `<Ace8Loceditor folder>\bundle-1\src\Loc.cs`).
 - `GameData/`: the 28 stock `.dat` files. `CP_en.tsv` / `ON_en.tsv` (index, key, English). `CP.json` / `ON.json` (every key in
   all 13 languages).
 - `ms022_text.tsv`: Mission 22's 667 radio rows with their English subtitles. `awacs_all.tsv`: all 4154 AWACS rows in every

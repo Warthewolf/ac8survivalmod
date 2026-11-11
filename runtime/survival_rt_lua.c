@@ -940,7 +940,7 @@ static DWORD WINAPI BuildHashThread(void* arg)
 {
     (void)arg;
     char hex[65];
-    if (BuildHashNow(hex, L"the game started")) BuildHexSet(hex);
+    if (BuildHashNow(hex, L"the game started")) { BuildHexSet(hex); LbSessionAdd("build_hash", hex); }
     return 0;
 }
 

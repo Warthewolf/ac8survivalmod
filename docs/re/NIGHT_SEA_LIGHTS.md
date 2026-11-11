@@ -8,7 +8,7 @@ airport lights at night (B). The sky itself (Mission 9's lighting, CSP, exposure
 
 Tags: **[D]** read from the game's data (the package is named), **[I]** inferred, **[T]** needs an in-game test.
 
-Scripts and decoded data: `E:\ACE8 Survival Mode\build\research\night\sea\` (git-ignored). `nd.py` dumps a package's
+Scripts and decoded data: `build\research\night\sea\` (the main tree) (git-ignored). `nd.py` dumps a package's
 exports, `micmp.py` puts material instances side by side, `chain.py` walks a material instance up to its master,
 `bc6h.py` decodes AC8's BC6H sky-light cubemaps and prints their radiance, `cubepng.py` renders one as a PNG
 (`cube_m004_below.png`, `cube_m009_below.png`, `cube_m022_below.png`, `cube_m004_seaarea.png`), `lvl.py` surveys a level,

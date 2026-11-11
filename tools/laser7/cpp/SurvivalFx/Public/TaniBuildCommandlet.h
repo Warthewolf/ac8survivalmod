@@ -1,5 +1,5 @@
 // TaniBuildCommandlet: builds the Tanicorn's parts (tools/tanicorn, docs/re/TANICORN.md) from a JSON spec.
-//   UnrealEditor-Cmd.exe E:/AC8LiveProject/Live.uproject -run=TaniBuild -spec=<tani.spec.json> -log=<out.log>
+//   UnrealEditor-Cmd.exe <AC8_LIVE_PROJECT>/Live.uproject -run=TaniBuild -spec=<tani.spec.json> -log=<out.log>
 // The spec: {
 //   "sockets":    [ { "skeleton": "/Game/...", "name", "bone", "loc": [x, y, z], "rot": [pitch, yaw, roll] } ],
 //   "mesh_sockets": [ { "mesh": "/Game/...", "name", "loc": [x, y, z], "rot": [pitch, yaw, roll] } ]   on a static mesh

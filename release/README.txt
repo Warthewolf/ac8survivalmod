@@ -166,25 +166,24 @@ game after a change. Delete the file to get a fresh one.
 
 If something goes wrong
 -----------------------
-Please send these (and say what you saw, and which AC8 Mod Loader version you have: the first line of
-AC8IoStoreLoader.log):
-- ...\Win64\ue4ss\UE4SS.log
-- ...\Win64\ue4ss\Mods\AC8SurvivalMode\AC8SurvivalMode.log
-- ...\Win64\ue4ss\Mods\AC8SurvivalMode\AC8SurvivalMode_lua.log  (kept even when the game crashes)
-- ...\Win64\ue4ss\Mods\IoStoreLoaderMod\AC8IoStoreLoader.log
-- after a crash: the newest folder in %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\
-  (paste that path into the File Explorer address bar)
-Copy the logs right after you close the game (they're rewritten every time it starts).
+Please send the log zip and ...\Win64\ue4ss\Mods\IoStoreLoaderMod\AC8IoStoreLoader.log (the mod loader's log, not in
+the zip), and say what you saw.
+Every game's logs are in ...\Win64\ue4ss\Mods\AC8SurvivalMode\logs\, their names dated with the game's start:
+- start the game again once (the main menu is enough): the session before is zipped into
+  logs\AC8Survival_<date>_<version>.zip, with the game's own logs and crash folder of that time. Send that zip.
+- a session's files that couldn't be zipped stay in logs\ under their dated names (AC8SurvivalMode_<date>.log,
+  AC8SurvivalMode_lua_<date>.log, AC8SurvivalMode_crumbs_<date>.log, session_<date>.txt, UE4SS_<date>.log):
+  send those instead. Sorted by date in File Explorer, they're the newest.
+- the 10 newest zips are kept; nothing else in logs\ is deleted by the mod.
 
 After a crash, send this
 ------------------------
-Before you start the game again (it rewrites the logs), zip and send:
-1. The newest UECC-Windows-... folder in %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\
-   (sort by date): its UEMinidump.dmp and CrashContext.runtime-xml matter most.
-2. From ...\Win64\ue4ss\Mods\AC8SurvivalMode\: AC8SurvivalMode_lua.log, AC8SurvivalMode.log,
-   AC8SurvivalMode_crumbs.log and AC8SurvivalMode_crumbs.prev.log (the crumbs.prev file is the crashed session's last
-   steps, if you already started the game again).
-3. ...\Win64\ue4ss\UE4SS.log
+1. Start the game again (the main menu is enough) and send the newest logs\AC8Survival_<date>_<version>.zip: it has
+   that session's logs, the crash breadcrumbs (its last steps) and the game's crash folder.
+2. If there's no zip for that time, send that session's files from logs\ (named with its date, see above) and the
+   newest UECC-Windows-... folder in %LOCALAPPDATA%\BANDAI NAMCO Entertainment\ACE COMBAT 8\Saved\Crashes\
+   (paste that path into the File Explorer address bar): its UEMinidump.dmp and CrashContext.runtime-xml matter most.
+3. ...\Win64\ue4ss\Mods\IoStoreLoaderMod\AC8IoStoreLoader.log (the mod loader's log, not in the zip).
 4. A line on what happened: the round, what you were doing (flying, in the STORE, DOWN and spectating, quitting the
    mission, a special round), and in co-op who hosted.
 

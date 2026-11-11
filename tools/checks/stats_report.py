@@ -1,4 +1,4 @@
-"""stats_report.py <AC8SurvivalMode_lua.log> [more logs] : the behaviour roadmap's seven measurements from test logs
+"""stats_report.py <AC8SurvivalMode_lua_<date>.log (in logs/, or the old AC8SurvivalMode_lua.log)> [more logs] : the behaviour roadmap's seven measurements from test logs
 (docs/re/BEHAVIOUR_DIRECTOR.md, unit 1; Scripts/sv_stats.lua writes the lines). Read only. Prints each run's
 "stats: run over" line as a table against the behaviour thesis' targets, one row per "stats: round" line, the
 "kill-time:" lines' time to kill over every run, and the "death:", "director:" and "spawn index:" lines; P5's tail

@@ -1,7 +1,7 @@
 #!/bin/sh
 # build.sh : AC7's LaserInterceptor for AC8 (tools/laser7/README.md) -> build/laser7/out/SurvivalMode_Laser7_P.utoc / .ucas
 #   0. UModel (AC7's)   the beam's meshes and the sparks' texture (build/ac7/laser/umodel), once
-#   1. ue_import.py     in the AC8 template project (E:/AC8LiveProject, UE 5.4): meshes, texture, the four materials
+#   1. ue_import.py     in the AC8 template project ($AC8_LIVE_PROJECT, UE 5.4): meshes, texture, the four materials
 #   2. spec.py          the commandlet's spec: AC7's swing curve, its two beam effects (fxspec.py), the blueprint
 #   3. LaserFx          (the SurvivalFx editor module's commandlet, tools/laser7/cpp) builds them
 #   4. cook             Windows, VERSIONED (hard rule 42)
@@ -13,8 +13,12 @@ cd "$(dirname "$0")/../.."
 sv_need UE "Unreal Engine 5.4's folder"
 sv_need UMODEL "AC7's UModel exe"
 sv_need AC7 "AC7's exported assets"
-MAIN="E:/ACE8 Survival Mode"                       # (build outputs live in the main tree's build/, as the release zips)
-PROJ=E:/AC8LiveProject
+sv_need AC8_LIVE_PROJECT "the AC8 template project (Live.uproject's folder) for tools/laser7"
+PROJ=$AC8_LIVE_PROJECT
+# the main git tree (build outputs live in its build/, as the release zips; as tools/release_dir.sh), else this checkout
+MAIN=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+if [ -n "$MAIN" ]; then MAIN=$(dirname "$MAIN"); else MAIN=$(pwd); fi
+export SV_ROOT="$MAIN"                              # (spec.py and ue_import.py read it)
 CMD="$UE/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
 OUT="$MAIN/build/laser7"
 UM="$MAIN/build/ac7/laser/umodel"

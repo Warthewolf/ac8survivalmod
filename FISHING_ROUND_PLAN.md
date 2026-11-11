@@ -9,7 +9,7 @@ Status: plan only. Nothing is built and nothing is tested in game. Mark each mec
 as AGENTS.md says.
 
 ## 0. Decisions of 2026-11-06 (user) and what the code has gained since this draft
-Work branch: `feature/fishing` from COOP2MP 0.73.84 (c8410b4), worktree `E:\ACE8 SM fishing`. This draft was written
+Work branch: `feature/fishing` from COOP2MP 0.73.84 (c8410b4), worktree `ACE8 SM fishing` (beside the main tree). This draft was written
 on a branch cut from 0.70.6 (`plan/fishing-round`); build nothing on that branch.
 
 The user's answers to section 5:

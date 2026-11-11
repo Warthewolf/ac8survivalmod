@@ -3,7 +3,7 @@
 Static analysis of `AceCombat8.exe` (build of 2026-09-29, image base 0x140000000) only: **nothing here was tested in
 game**. Companion to `BEHAVIOUR_NATIVE_LOGIC.md` (sections 8-9: AI state machine, RunBehavior slots),
 `BEHAVIOUR_NATIVE_MOVE.md` (the PursuerTarget / ManeuverTurnAdvanced tasks LastTGT uses) and `AI_BEHAVIOURS.md`
-(unique-action list). Scratch (scripts, dumps): the session's scratchpad (`...\scratchpad\ua\`, not kept)
+(unique-action list). Scratch (scripts, dumps): `<scratchpad>\ua\`
 (`ann.py` = annotated disassembly of one function, `strs.py` = string search; both use `tools/re/exe.py`).
 
 Confidence: **[C]** confirmed in disassembly, **[I]** inferred (code seen, meaning is a reading), **[?]** not traced.

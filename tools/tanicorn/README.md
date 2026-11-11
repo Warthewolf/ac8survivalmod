@@ -4,8 +4,8 @@ The user's Anomaly boss, built from Survival's own assets: research, decisions a
 The Tanager stand-in is Sea Power's Iowa (the user, 2026-11-09: "my install only"): its inputs and every output live in
 `build/tanicorn` (git-ignored), and its container ships with TANI=1 dev builds only.
 
-`sh tools/tanicorn/build.sh` (UE 5.4, Blender 3.3, E:/AC8LiveProject; `BLENDER=` if Blender isn't in its default
-folder; `TANI_PARTS=T5,HULL` for some parts only; `TANI_STOP=export` to stop before UE):
+`sh tools/tanicorn/build.sh` (Blender 3.3 = `$BLENDER`; past the export UE 5.4 = `$UE` and `$AC8_LIVE_PROJECT`, all
+from `.env`; `TANI_PARTS=T5,HULL` for some parts only; `TANI_STOP=export` to stop before UE):
 1. `model_tanacorn.py`: the Leviathan design (`art/tanicorn/design`, in the repo) -> `build/tanicorn/model/
    Tanacorn_model.blend`, made again only when the design or its scripts changed (~2 min).
 2. `export_tanacorn.py`: every part type in the frame of its hull socket -> `build/tanicorn/src_<part>` and

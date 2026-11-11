@@ -38,3 +38,14 @@ GetLocalTime
 K32GetProcessMemoryInfo
 QueryPerformanceCounter
 QueryPerformanceFrequency
+CreateDirectoryW
+RemoveDirectoryW
+DeleteFileW
+MoveFileExW
+CopyFileW
+GetEnvironmentVariableW
+GetSystemTimeAsFileTime
+FileTimeToLocalFileTime
+FileTimeToSystemTime
+SetFilePointerEx
+SetFilePointer

@@ -5,7 +5,7 @@
 #     Code for sending the files remains"): dlls/main.dll rebuilt with SV_OFFLINE (runtime/build.sh OFFLINE=1), main.lua,
 #     survival.default.ini and README.txt through tools/edition.py offline; the zip is refused if any of it still holds
 #     network code (WinHTTP, bcrypt, the Worker's address, SV_Post*, SV_SteamName, the run queue or pilot files).
-# Where: the zip and its .buildhash.txt always go to the main tree's build/release (E:\ACE8 Survival Mode\build\release),
+# Where: the zip and its .buildhash.txt always go to the main tree's build/release,
 #   from any worktree (tools/release_dir.sh; user, 2026-11-07); RELEASE_DIR=<folder> overrides it.
 # Both: test-only code stripped (tools/strip_test_only.py), no player settings, logs or leaderboard files.
 # Online: the release's build hash (tools/build_hash.py over the staged files, as the game's runtime works it out) is
