@@ -151,6 +151,7 @@ local RET = {
 }
 local KNOWN_UNITS = {}
 RET.SV_Spawn = function(unit) return KNOWN_UNITS[unit] and 2 or -2 end
+RET.SV_UnitAlive = function(unit) return KNOWN_UNITS[unit] and 0 or -2 end   -- (0: none up, as before; -2 the runtime's SV_ERR_NO_UNIT)
 for _, n in ipairs(NATIVES) do
     local r = RET[n]
     _G[n] = function(...)
@@ -230,7 +231,9 @@ end
 local function finiteN(v) return type(v) == "number" and v == v and v > -math.huge and v < math.huge end
 local function whole(v, lo, hi) return finiteN(v) and v == math.floor(v) and v >= lo and v <= hi end
 local function printable(s) return type(s) == "string" and #s >= 1 and #s < 1024 and not s:find("[^\32-\126]") end
-local UNIT_ARG = { SV_Spawn = 1, SV_SetAircraft = 1, SV_SetLevel = 1, SV_Recycle = 1, SV_UnitAlive = 1 }
+-- (SV_UnitAlive is left out: a question, answered -2 for a unit this game hasn't, as the runtime does; how the joiner
+-- learns the host's unit isn't this game's before anything acts on it, 2026-11-11)
+local UNIT_ARG = { SV_Spawn = 1, SV_SetAircraft = 1, SV_SetLevel = 1, SV_Recycle = 1 }
 -- what's wrong with one native call, or nil
 local function badCall(c)
     local a = c.args
@@ -515,34 +518,10 @@ local NOHUGE = {}   -- ((2026-11-11) rnd's waves were held back here: a huge one
 
 ---------------------------------------------------------------------------------------------------- KNOWN defects
 -- (each found by this suite in shipped code; a check of its own below shows it, and the summary lists it)
-knownDefect("af-health", "sv_coop_migration.lua:478-484 \"af\": the airfield's hp / full / max tonumber only: \"1e999\", "
-    .. "-5, a hp over the max reach AF")
-knownDefect("sp-index", "sv_coop_migration.lua:531-532 + sv_coop_joiner.lua:521 \"sp\": an op's AI object index "
-    .. "unbounded (\"row@99999999999999999999\" -> SV_SetAircraft(unit, row, 1e20); runtime L_SetAircraft casts it to int)")
-knownDefect("sp-level", "sv_coop_migration.lua:539 + sv_coop_joiner.lua:524 \"sp\": the AI level (field 5) unbounded: "
-    .. "\"1e999\" -> SV_SetLevel(unit, inf) (the native refuses it)")
-knownDefect("sp-unit", "sv_coop_joiner.lua:521/539 doSpawn: the host's unit name isn't checked against this game's units "
-    .. "before SV_SetAircraft / SV_SetLevel / SV_Spawn (the native answers \"no such unit\")")
-knownDefect("ev-long", "sv_coop_migration.lua:645-646 \"ev\": a name not cut before hostEvent -> SV_Event (the 64-character "
-    .. "cut is only on the queued path, line 644; the native refuses names of 128+)")
-knownDefect("bd-id", "sv_coop_migration.lua:541-568 \"bd\" / 613-616 \"dn\": the stream id tonumber only (\"gd\" checks "
-    .. "1-65535 whole): 1.5, -1, 1e999 reach M.dead (no bound: any number a new key) and SV_CoopBind (the native truncates "
-    .. "1.5 to id 1)")
-knownDefect("spawnQ-flood", "sv_coop_migration.lua:539 \"sp\": M.spawnQ has no bound while this level loads "
-    .. "(1,800 queued; \"ev\" is capped at 64, \"dv\" at 32)")
-knownDefect("fsx-flood", "sv_fishing.lua:765-767 \"fsx\": FISH.cl.rows keyed by any word the host sends, no bound")
-knownDefect("hl-format", "sv_coop_migration.lua:126 M.onHostAway: \"hl|1.5\" (a fraction of a second) passes the "
-    .. "check and errors in string.format(\"%d\") after M.hostAwayUntil is set (the error escapes to COOP.tick's pcall)")
-knownDefect("af-format", "sv_coop_migration.lua:480-483 \"af\": a fractional or huge maximum (\"af|900|1000|1|1.5\", "
-    .. "\"1e308\") errors in string.format(\"%d\") at line 482 after AF.hp / AF.full are written: AF.max, AF.down and the "
-    .. "landing's RE_SV_AirfieldClose / Open are never applied (half-applied)")
-knownDefect("fwe-fraction", "sv_fishing.lua:770-790 \"fwe\": a fractional team haul (\"fwe|3|1.5|0|7|3\") reaches "
-    .. "FISH.weighHere, whose log line (sv_fishing.lua:631, %d) errors after the pay is made (caught, logged \"not read\")")
 -- (not a defect: dec's own error() for a payload nested past 40, caught by M.onSettings' pcall and logged; counted here
 -- so that it shows)
 knownDefect("cf-deep", "sv_coop_sync.lua dec: a cf nested past 40 levels raises \"settings nested too deep\", caught "
     .. "and logged by M.onSettings (the settings kept as they were)", true)
-knownDefect("pendBind-flood", "sv_coop_joiner.lua:400-405 pendKeep: M.pendBind keyed by any unit name in \"bd\" / \"gd\", no bound")
 
 ---------------------------------------------------------------------------------------------------- feeding
 local function msgText(fields) return table.concat(fields, "|") end
@@ -615,24 +594,9 @@ end
 
 -- which KNOWN defect a finding is (by message type and what it says), or nil: a new failure
 local function knownOf(side, kind)
-    return function(cat, m)
-        if side == "join" and kind == "af" and m:find("^airfield") then return "af-health" end
-        if side == "join" and kind == "sp" then
-            if m:find("index") then return "sp-index" end
-            if m:find("SV_SetLevel: level") or (m:find("SV_SetLevel") and m:find("argument 2")) then return "sp-level" end
-            if m:find("unknown unit") then return "sp-unit" end
-            if m:find("SV_SetAircraft") and m:find("argument 3") then return "sp-index" end
-        end
-        if side == "join" and kind == "ev" and m:find("^SV_Event: event") then return "ev-long" end
-        if side == "join" and (kind == "bd") and m:find("SV_CoopBind") then return "bd-id" end
-        if side == "join" and (kind == "bd" or kind == "dn") and m:find("^dead id") then return "bd-id" end
-        -- (by the file and the error, not the line: an edit above it moves the line)
-        local fmt = "%.lua:%d+: bad argument #%d+ to 'format' %(number has no integer representation%)"
-        if side == "join" and kind == "hl" and m:find("sv_coop_migration" .. fmt) then return "hl-format" end
-        if side == "join" and kind == "af" and m:find("sv_coop_migration" .. fmt) then return "af-format" end
-        if side == "join" and kind == "fwe" and m:find("sv_fishing" .. fmt) then return "fwe-fraction" end
-        return nil
-    end
+    -- ((2026-11-11) every defect this suite found is fixed (sv_coop_migration.lua, sv_coop_joiner.lua, sv_fishing.lua,
+    -- runtime/coop.c): a finding is a failure again. A new one found and left for later: its id here and a knownDefect)
+    return function(cat, m) return nil end
 end
 
 -- what a tick swallows with no message at all (the stubbed world's own): not counted against a message
@@ -837,7 +801,7 @@ end
 -- a table made distinct: no table past its bound, no error, the limits held (zollars: finite and not below 0 only; the
 -- host's round bonus has no count a round by design)
 say("floods (1,800 messages a type)")
-local FLOOD_KNOWN = { spawnQ = "spawnQ-flood", fishRows = "fsx-flood", pendBind = "pendBind-flood" }
+local FLOOD_KNOWN = {}   -- ((2026-11-11) M.spawnQ, the fishing rows and M.pendBind bounded now: SPAWNQ_MAX, PEND_MAX)
 local function letters(i) local t = {}; repeat t[#t + 1] = string.char(97 + i % 26); i = i // 26 until i == 0; return table.concat(t) end
 local KEYED = { sp = 2, bd = 2, gd = 2, ev = 2, wd = 2, fsx = 2, dv = 3 }   -- (the field a table is keyed by)
 local function flood(side, kind, base, loading)
@@ -948,14 +912,27 @@ do
         if M.rnd ~= keep then fail(c2, "limits", bad, "taken (round " .. tostring(M.rnd and M.rnd.round) .. ")")
         elseif D.waves and #D.waves > 3 then fail(c2, "tables", bad, "#D.waves " .. #D.waves) end
     end
-    -- af's half-applied message: the airfield's health taken, its landing state not
+    -- ((2026-11-11) fixed) af: a fractional maximum used to leave the health taken and the landing state not; now the
+    -- whole message is refused, and a good one is taken whole
+    local ca = covOf("join", "af")
     scene("join")
+    local hp0 = AF.hp
+    ca.fed = ca.fed + 1
     inbox[#inbox + 1] = "0|af|10|1000|1|1.5"
     tick()
-    if AF.hp == 10 and AF.down ~= true then
-        local K = KNOWN["af-format"]; K.hits = K.hits + 1
-        K.ex = K.ex or ("af|10|1000|1|1.5 -> AF.hp " .. AF.hp .. ", AF.down " .. tostring(AF.down) .. " (the host's is down)")
+    if AF.hp ~= hp0 or AF.down == true then fail(ca, "limits", "af|10|1000|1|1.5", "half taken: AF.hp " .. tostring(AF.hp) .. ", AF.down " .. tostring(AF.down)) end
+    scene("join")
+    ca.fed = ca.fed + 1
+    inbox[#inbox + 1] = "0|af|10|1000|1|1000"
+    tick()
+    if not (AF.hp == 10 and AF.full == 1000 and AF.down == true and AF.max == 1000) then
+        fail(ca, "limits", "af|10|1000|1|1000", "not taken whole: AF.hp " .. tostring(AF.hp) .. ", AF.down " .. tostring(AF.down) .. ", AF.max " .. tostring(AF.max))
     end
+    scene("join")
+    ca.fed = ca.fed + 1
+    inbox[#inbox + 1] = "0|af|5000|-3|0|1000"                   -- (over the maximum, under 0: within it)
+    tick()
+    if not (AF.hp == 1000 and AF.full == 0) then fail(ca, "limits", "af|5000|-3|0|1000", "not clamped: AF.hp " .. tostring(AF.hp) .. ", AF.full " .. tostring(AF.full)) end
 end
 
 ---------------------------------------------------------------------------------------------------- summary

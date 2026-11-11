@@ -596,4 +596,9 @@ players) and 32 (12) through.
 The same suite: a host's "rnd" with waves 1e999 froze a joiner for good (clientRounds made a table a wave), and its round,
 clock, wave and alive count went in unchecked. "rnd" is now refused whole (the last one kept, `coop: the host's round
 state refused (...)` once) unless round 0-9999, a word state, secs 0-86400, wave and waves 0-256, alive 0-100000.
+The rest of the suite's findings, fixed the same day (Lua): "af" checked whole before it's written (the health clamped
+to the maximum), "hl" and "fwe" whole numbers, "fsx" only the fishing and festival rows, "sp" a plain unit name, an AI
+object index -1-63, a whole level, the joiner's spawn queue a unit once and 256 at most, a unit this game hasn't
+dropped at SV_UnitAlive -2, "bd" / "dn" ids whole 1-65535, "ev" names of 64 characters at most, pendKeep 512 units.
+coop_guard_test.lua has no known defect left: a new finding fails it.
 

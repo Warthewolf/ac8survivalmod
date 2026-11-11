@@ -2367,3 +2367,21 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   the state kept; huge wave counts fed again). run_all: 63 pass; coop_test passes on Linux.
 - The next build needs its version (bump_version.py) and friends need the same build to link. To see in game: co-op as
   ever (the guards never fire between two honest games; a refusal line in a log means another game sent one).
+
+## Co-op: the rest of the hostile-message findings (2026-11-11; Lua for the next build; not yet run in game)
+- The user: "Do all". Every defect tools/checks/coop_guard_test.lua still listed is fixed, and the suite has no KNOWN
+  entry left (cf-deep, the settings decoder's own refusal, stays as BY DESIGN): any finding fails it again. With the old
+  Lua it reports 208 failures.
+  - "af": every number checked before anything is written (it errored after the health and before the landing state),
+    the maximum whole (0: the host's unknown, kept), the health clamped within it.
+  - "hl": whole seconds (1.5 errored in the log after the wait was set). "fwe": the team's and allies' kg whole (the
+    weigh-in's log errored after the pay). "fsx": only the fishing and festival rows (keyed by any word before).
+  - "sp": a plain unit name; an op's AI object index -1 or 0-63 (SetAircraft looks at a unit's first 64; a 20-digit one
+    reached its (int) cast); the AI level whole 0-65535 or -1; the generation whole; M.spawnQ holds a unit once (its
+    newest spawn takes its place) and at most 256 units while the level loads. doSpawn drops a unit this game doesn't
+    have (SV_UnitAlive -2 / -4) before SV_SetAircraft / SV_SetLevel / SV_Spawn.
+  - "bd" / "dn": stream ids whole 1-65535 (as "gd"'s), the plane's order whole 1-65535. "ev": a name past 64
+    characters refused (the queued path cut it to another name; Survival's longest is 25).
+  - pendKeep: a plain unit name, at most 512 units' binds waiting.
+- The suite's SV_UnitAlive stub answers -2 for a unit this game hasn't (as the runtime), and a call of it with one is
+  no longer a finding: it's the question the joiner asks before anything acts on the unit.

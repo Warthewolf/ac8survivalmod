@@ -4,6 +4,7 @@
 -- another part uses is a global of this mod's Lua state, its own helpers stay local.
 do  -- (sv_coop.lua's do block, continued: this piece's own helpers stay local to it)
 local M = COOP.M                                   -- (sv_coop.lua's M, handed on)
+local PEND_MAX = 512                                 -- (units whose binds wait for their spawn here: pendKeep)
 local crumb = crumb or function() end  -- (as in sv_coop.lua)
 
 ---------------------------------------------------------------------------------------------------- joiner
@@ -354,7 +355,7 @@ end
 function COOP.levelDrop(why)
     local n = 0
     for _ in pairs(M.copies or {}) do n = n + 1 end
-    M.copies, M.cunits, M.spawnQ, M.holdQ, M.rep, M.pendBind = {}, {}, {}, nil, nil, nil
+    M.copies, M.cunits, M.spawnQ, M.holdQ, M.rep, M.pendBind, M.pendN = {}, {}, {}, nil, nil, nil, 0
     M.objsOf = {}
     M.mslAt, M.mslEnd, M.gunAtT, M.shotTgt = {}, {}, {}, {}   -- ((0.73.79) your shots by the copy they went for)
     local p = 0
@@ -382,7 +383,7 @@ end
 local REP_WAIT_S, JUDGE_AFTER_S = 10, 3
 function onResync()
     M.rep = { at = os.clock(), units = {}, ids = {}, rebound = 0 }
-    M.spawnQ, M.pendBind = {}, nil                       -- (the picture sends every flight the host has up again)
+    M.spawnQ, M.pendBind, M.pendN = {}, nil, 0           -- (the picture sends every flight the host has up again)
     M.cnt.repairs = M.cnt.repairs + 1
     crumb("coop: the host's whole picture is coming (rs|j): the copies here kept")
     log("coop: the host's whole picture is coming (rs|j, its answer to this game's jn): the copies here are kept and checked against it")
@@ -400,6 +401,17 @@ end
 function pendKeep(unit, gen, field, k, id)
     M.pendBind = M.pendBind or {}
     local pb = M.pendBind[unit]
+    if not pb then
+        -- ((2026-11-11) coop_guard_test: keyed by any unit name in "bd" / "gd", 1,800 in a flood) a plain unit name, and at
+        -- most PEND_MAX units waiting for their spawn; past it the rest are dropped, logged once
+        if not tostring(unit or ""):match("^[%w_]+$") then return end
+        M.pendN = (M.pendN or 0) + 1
+        if M.pendN > PEND_MAX then
+            M.pendN = PEND_MAX
+            once("pendfull", string.format("coop: binds for %d of the host's units already wait here: %s's dropped", PEND_MAX, tostring(unit)))
+            return
+        end
+    end
     if not pb or pb.gen ~= gen then pb = { gen = gen, binds = {}, gbinds = {} }; M.pendBind[unit] = pb end
     pb[field][k] = id
 end
@@ -468,6 +480,12 @@ local function doSpawn(q)
         return true                                      -- (that flight is up here already)
     end
     local alive = rawUnitAlive and rawUnitAlive(unit) or 0
+    -- ((2026-11-11) coop_guard_test: a unit this game doesn't have went on to SV_SetAircraft / SV_SetLevel / SV_Spawn, each
+    -- refusing it) SV_UnitAlive's -2 (no unit of that name) or -4 (not a name): the host's spawn is dropped here
+    if alive == -2 or alive == -4 then
+        once("spunit" .. tostring(unit), string.format("coop: the host's %s isn't a unit of this game (SV_UnitAlive %d): its spawn dropped", tostring(unit), alive))
+        return true
+    end
     if type(alive) == "number" and alive > 0 then        -- the copy of its last flight still up: down first
         if not q.downDone then
             -- (0.73.73) whatever of it is up here, whatever its kind, tracked or not (takeUnitDown). 0.73.70's take-down
@@ -530,7 +548,7 @@ local function doSpawn(q)
     if pb and pb.gen == q.gen then
         for ord, id in pairs(pb.binds) do M.cunits[unit].binds[ord] = id end
         for key, id in pairs(pb.gbinds) do M.cunits[unit].gbinds[key] = id end
-        M.pendBind[unit] = nil
+        M.pendBind[unit] = nil; M.pendN = math.max(0, (M.pendN or 1) - 1)
     end
     spawningUnit, spawningIdx = unit, 0                  -- (each copy's index in its flight, p.k: the host's order too)
     if SPC and unit == SPC.alicornUnit then SPC.alcnPool = nil end   -- ((0.73.83) this copy's pools, not the last one's: as the host's alicornSpawn)

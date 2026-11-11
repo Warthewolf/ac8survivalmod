@@ -6,6 +6,7 @@ do  -- (sv_coop.lua's do block, continued: this piece's own helpers stay local t
 local M = COOP.M                                   -- (sv_coop.lua's M, handed on)
 -- ((2026-11-11) the ranges a host's round state ("rnd") and the runtime's "sys|slot" must be in: tools/checks/coop_guard_test.lua)
 local RND_MAX = { round = 9999, secs = 86400, waves = 256, alive = 100000, players = (MAX_SLOT or 23) + 1 }
+local SPAWNQ_MAX = 256                                -- (different units waiting for a joiner's level: "sp"; ~150 units)
 local crumb = crumb or function() end  -- (as in sv_coop.lua)
 
 ---------------------------------------------------------------------------------------------------- host migration
@@ -123,7 +124,8 @@ function M.onAllies(f)
 end
 function M.onHostAway(f)
     local secs = tonumber(f[2])
-    if secs and secs > 0 and secs <= 300 then
+    if secs and secs >= 1 and secs <= 300 then
+        secs = math.floor(secs)                          -- ((2026-11-11) "hl|1.5" errored in the %d below after the wait was set)
         M.hostAwayUntil = os.clock() + secs
         log(string.format("coop: migration: the host's reloading, waited for up to %d s", secs))
     end
@@ -491,8 +493,18 @@ local function onJoinerMessage(f)
         if slotOk(s) then M.markLeft(s, "started their game over") end
     elseif k == "af" and AF then
         local down = f[4] == "1"
-        AF.hp, AF.full, RUN.dirty = tonumber(f[2]) or AF.hp, tonumber(f[3]) or AF.full, true
-        local mx = tonumber(f[5])                         -- (the host's maximum: the bar is out of it, not this game's own)
+        -- ((2026-11-11) tools/checks/coop_guard_test.lua: tonumber only, so inf / -5 / a health over the maximum reached AF,
+        -- and a fractional maximum errored in the %d below after the health was written, the landing never closed) every
+        -- number checked first: the maximum whole (0: the host's unknown, this game's kept), the health within it
+        local hp, full, mx = tonumber(f[2]), tonumber(f[3]), tonumber(f[5])
+        local function fin(v) return v ~= nil and v == v and v > -math.huge and v < math.huge end
+        if not (fin(hp) and fin(full) and (mx == nil or (fin(mx) and mx == math.floor(mx) and mx >= 0 and mx <= 1e6))) then
+            once("afbad", "coop: the host's airfield message refused (a number not finite, or its maximum not whole): "
+                .. (table.concat(f, "|", 1, math.min(#f, 5)):gsub("%c", "?")):sub(1, 80))
+            return
+        end
+        local top = (mx and mx > 0) and mx or AF.max or (CFG.airfield and CFG.airfield.hp) or 1e6
+        AF.hp, AF.full, RUN.dirty = math.max(0, math.min(top, hp)), math.max(0, math.min(top, full)), true
         if mx and mx > 0 and mx ~= AF.max then
             log(string.format("coop: the host's airfield maximum %d here (this game's own setup had %s)", mx, tostring(AF.max)))
             AF.max = mx
@@ -536,6 +548,12 @@ local function onJoinerMessage(f)
         end
     elseif k == "sp" then
         local unit, pose, ops = short(f[2], 96), nil, {}
+        -- ((2026-11-11) coop_guard_test: an empty or odd unit name went on to SV_UnitAlive / SV_SetAircraft / SV_Spawn) a
+        -- unit's name is letters, digits and _ only; one this game doesn't have is refused by doSpawn (SV_UnitAlive -2)
+        if not unit:match("^[%w_]+$") then
+            once("spname", "coop: the host's spawn of a unit with no plain name refused: " .. (unit:gsub("%c", "?")):sub(1, 40))
+            return
+        end
         if f[3] and f[3] ~= "-" then
             local p = {}
             for v in f[3]:gmatch("[^,]+") do p[#p + 1] = tonumber(v) end
@@ -544,14 +562,30 @@ local function onJoinerMessage(f)
         if f[4] and f[4] ~= "-" then
             for op in f[4]:gmatch("[^;]+") do
                 local row, idx = op:match("^(.-)@(-?%d+)$")
-                if row then ops[#ops + 1] = { row = row, idx = tonumber(idx) } end
+                idx = tonumber(idx)
+                -- ((2026-11-11) an index of 20 digits reached SV_SetAircraft, whose (int) cast of it is undefined: likely
+                -- INT_MIN, every AI object of the unit) -1 (every one) or 0-63 (SetAircraft looks at a unit's first 64)
+                if row and idx and idx >= -1 and idx <= 63 and #ops < 64 then ops[#ops + 1] = { row = row, idx = idx } end
             end
         end
         local gen = tonumber(f[6]) or 0
+        if not (gen == math.floor(gen) and gen >= 0 and gen <= 1e9) then gen = 0 end
+        -- (the AI level: SV_SetLevel's whole 0-65535 (an ai_level x 100; the runtime casts it to int); -1 none. inf, 1.5 or
+        -- 1e9 went through as they were)
+        local lvl = tonumber(f[5])
+        if lvl and lvl == lvl and lvl >= -1 and lvl < 65536 then lvl = math.floor(lvl) else lvl = nil end
         local rp = M.rep
         local rep = rp ~= nil and not rp.done                 -- ((0.73.73) part of the host's picture: a repair's)
         if rep then rp.units[unit] = { gen = gen, alive = {}, galive = {} } end
-        M.spawnQ[#M.spawnQ + 1] = { unit = unit, pose = pose, ops = ops, level = tonumber(f[5]), gen = gen, rep = rep }
+        -- ((2026-11-11) coop_guard_test: no bound while this level loads, 1,800 queued in a flood) a unit queued again takes
+        -- its own place (its newest spawn: the older one would only be taken down for it), and past SPAWNQ_MAX different
+        -- units the rest are refused, logged once
+        local q = { unit = unit, pose = pose, ops = ops, level = lvl, gen = gen, rep = rep }
+        local at
+        for i, e in ipairs(M.spawnQ) do if e.unit == unit then at = i; break end end
+        if at then M.spawnQ[at] = q
+        elseif #M.spawnQ < SPAWNQ_MAX then M.spawnQ[#M.spawnQ + 1] = q
+        else once("spawnQfull", string.format("coop: %d of the host's spawns already waiting here: %s's refused", SPAWNQ_MAX, unit)) end
     elseif k == "bd" then
         local unit, gen, ord, id = short(f[2], 96), tonumber(f[3]), tonumber(f[4]), tonumber(f[5])
         if not M.bdLast or (M.bdLastN or 0) > 512 then M.bdLast, M.bdLastN = {}, 0 end   -- (the last generation's
@@ -562,6 +596,8 @@ local function onJoinerMessage(f)
         end
         bl.n = bl.n + 1
         if not (gen and ord and id) then return end
+        -- ((2026-11-11) coop_guard_test: 1.5, -1, 1e999 reached M.dead and SV_CoopBind) whole, in range, as "gd"'s
+        if not (id == math.floor(id) and id >= 1 and id <= 65535 and ord == math.floor(ord) and ord >= 1 and ord <= 65535) then return end
         M.dead[id] = nil                                 -- ((0.73.73) named by the host now: up, until its "dn" says not)
         repNote(unit, gen, id, ord, nil)
         local cu = M.cunits[unit]
@@ -627,7 +663,7 @@ local function onJoinerMessage(f)
         end
     elseif k == "dn" then
         local id = tonumber(f[2])
-        if id then
+        if id and id == math.floor(id) and id >= 1 and id <= 65535 then   -- ((2026-11-11) whole and in range, as "gd"'s)
             M.dead[id] = true
             local rp = M.rep
             local r = rp and not rp.done and rp.ids[id]       -- (the host's picture: down there)
@@ -654,9 +690,12 @@ local function onJoinerMessage(f)
         end
     elseif k == "ev" then
         local unit = (f[3] and f[3] ~= "") and short(f[3], 96) or nil   -- ((0.73.73) a replay for that unit's fresh copy)
+        -- ((2026-11-11) coop_guard_test: a name of 206 characters went to SV_Event (only the queued path cut it, to another
+        -- name): no event of Survival's is that long, so one past 64 is refused)
+        if #tostring(f[2] or "") > 64 then return end
         if mirroredEvent(f[2]) and D and rawEvent and not levelReady() then    -- (held until this level is ready)
             M.evQ = M.evQ or {}
-            if #M.evQ < 64 then M.evQ[#M.evQ + 1] = { name = short(f[2], 64), at = os.clock(), unit = unit } end
+            if #M.evQ < 64 then M.evQ[#M.evQ + 1] = { name = f[2], at = os.clock(), unit = unit } end
         elseif mirroredEvent(f[2]) and D and rawEvent and not keptThrough(unit, f[2]) then
             hostEvent(f[2])
         end
