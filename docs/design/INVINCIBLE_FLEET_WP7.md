@@ -268,3 +268,5 @@ in formation for the run in.
 | 45 km/h for every class | the path record's speed; a class may have its own top speed [?] | the off-its-spot lines grow: per-class speeds in the records |
 | the turrets firing | Mission 22's on their stock fire control (short ranges); a hull's order doesn't reach them, so each part has its own | the weapons lines say which: WP9's clones |
 | the frame rate | 15 ships, ~63 objects, 15 paths of 63 points | the perf line's Lua tick with the fleet up (the Spaceport's ~110 objects ran) |
+| the take-off (Ctrl+N again) | RE_SV_IFFleetRemove's LiveDestroyUnitExecution runs a tick after SPC.cleanUp finished the ships off: a destroy on objects just killed hasn't been seen (the Spaceport's remove came on live ships or long-sunk ones) | a crash at the second press: take the event out of takeOff (SPC.cleanUp and its 2 s check alone, every special's route) |
+| a Ctrl+N mid-STORE | refused both ways (finding 4); the STORE test (D.musicHold, LANDW) is sv_coop_sync.lua's inStore | a press that isn't refused there: the `in the STORE` line missing |

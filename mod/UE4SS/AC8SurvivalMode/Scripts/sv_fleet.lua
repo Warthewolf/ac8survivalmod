@@ -2,8 +2,8 @@
 -- docs/design/INVINCIBLE_FLEET_RISE_FORD.md). Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order after
 -- sv_spaceport (whose Ford it spawns, SV_Unit_SpFord): a name another part uses is a global of this mod's Lua state, its
 -- own helpers stay local. The whole part is one test-only block, which tools/strip_test_only.py takes out of every
--- release zip, and tools/dev_only.py out of a TESTER zip (package_release.sh TESTER=1, which keeps every other part's test
--- keys: round 30 is the user's dev install only, AGENTS.md), only this header left there, its settings
+-- release and test zip, and tools/dev_only.py out of a TESTER zip (package_release.sh TESTER=1, which keeps every other
+-- part's test keys: round 30 is the user's dev install only, AGENTS.md), only this header left there, its settings
 -- (CFG.specials.fleet) with it.
 --
 -- GEOFON is the stock Gerald R. Ford carrier, the Spaceport's SV_Unit_SpFord, spawned here alone (never in a Spaceport
