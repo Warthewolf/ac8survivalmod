@@ -260,6 +260,38 @@ def grey(px):
 
 
 IOWA_TEX = os.path.join(OUT, "iowa", "textures")        # (Sea Power's sheets: each <name>_tx.jpg's <name>_spec.jpg)
+if not os.path.isdir(IOWA_TEX) and os.environ.get("TANI_BUILD"):  # (an export into a scratch folder: the build's own copy)
+    IOWA_TEX = os.path.join(os.environ["TANI_BUILD"], "iowa", "textures")
+# (2026-11-12, docs/re/TANICORN_TEXTURES.md 8.6 / 8.9) the livemaps' knobs, by environment (build.sh's export passes
+# them on). Metallic on these dark albedos (the Iowa grey ~0.06, the Alicorn plating ~0.04 linear) only darkens them: it
+# takes the diffuse away and leaves a specular of ~0.04 (the renders: metallic 0.65 / 0.5-0.6 drew the upper works and
+# the hull 25-50 % darker than 0.74.61). AC8's own warship (the Ford's MROS) is metallic 0.01-0.03, roughness 0.57-0.68.
+#   TANI_PAINT_METAL  the Iowa slots' metallic: 0 (default) keeps 0.74.62's paint (R 0, G 0.85 - 0.5 x spec); above 0,
+#                     the design's _ALCPAINT look toned down (capped at 0.2, roughness about PAINT_ROUGH 0.45 by spec)
+#   TANI_ALC_METAL    the Alicorn sheets' metallic as a share of MREC.R (default 0)
+#   TANI_ALC_ROUGH    the Alicorn sheets' roughness floor: G = floor + 0.8 x MREC.G, clipped floor..0.9 (default
+#                     0.30: the plain plating's MREC.G 0.09-0.15 lands on 0.37-0.42, the stock Alicorn's sides' level)
+def _knob(name, default, lo, hi):
+    try:
+        return min(max(float(os.environ.get(name, default)), lo), hi)
+    except ValueError:
+        return float(default)
+
+
+PAINT_METAL, PAINT_ROUGH = _knob("TANI_PAINT_METAL", 0.0, 0.0, 0.2), 0.45
+ALC_METAL = _knob("TANI_ALC_METAL", 0.0, 0.0, 1.0)
+ALC_ROUGH_MIN = _knob("TANI_ALC_ROUGH", 0.30, 0.0, 0.9)
+ALC_WRITTEN = set()                                      # (alc_sheet: the shared Alicorn sheets written in this run)
+# (2026-11-12, TANICORN_TEXTURES.md 8.10) the sheet regions only our pod tops sample: the stock Alicorn's VLS lid art
+# (teal shields, bars, long panels and the two big hexagons), which its own lid meshes (SM_BA002_alcn_vls_*) cover; on
+# ours it lay bare in each pod's 8 m well, teal. Texel boxes of the 4096 sheet (x0, y0, x1, y1; rows down from the top,
+# ends exclusive), scaled to the sheet's size, each with the offsets (dx, dy) to the plain plating it's filled from,
+# tried in order: the shields and bars from the plating to their right, the long panels and big hexagons from the
+# plating above them. The railguns' smaller hexagons start at row 1576 (and the small plates under the shields at 964):
+# the boxes stop short of them
+ALC_FILL = {"ALC_b": (((3456, 728, 3672, 963), ((240, 0), (360, 0), (480, 0))),
+                      ((3572, 1270, 4096, 1575), ((0, -320), (120, -320), (0, -480), (360, -320), (0, -640))))}
+ALC_PLAN = {}                                            # (alc_fill_plan: one plan a sheet, made from its colour)
 
 
 def spec_of(img):
@@ -279,45 +311,147 @@ def spec_of(img):
 def livemap(px, sp):
     """the slot's own livemap for AC8's gear material (metallic, roughness, occlusion): R 0 (metallic, as the Ford's),
     G = 0.85 - 0.5 x spec (Sea Power's spec read as 0..1 grey), B = occlusion clip(sqrt(lum / median), 0.4, 1.0) from
-    the colour sheet's own light and shade; the spec resampled to the sheet's size (nearest)"""
+    the colour sheet's own light and shade; the spec resampled to the sheet's size (nearest). 0.74.62's paint: the upper
+    works were the best-reading part of its screenshots.
+    With TANI_PAINT_METAL above 0 (an A/B, at most 0.2): R = PAINT_METAL, G = 0.45 + 0.6 x (median spec - spec),
+    0.25..0.7 (shinier where Sea Power's spec is brighter), the design's _ALCPAINT look (metallic 0.65 / roughness 0.26)
+    toned for AC8's light: at 0.65 the renders drew the upper works at about half 0.74.62's brightness (2026-11-12)"""
     h, w = px.shape[:2]
     if sp.shape[:2] != (h, w):
         sp = sp[(np.arange(h) * sp.shape[0] // h)[:, None], (np.arange(w) * sp.shape[1] // w)[None, :]]
     s = sp[:, :, :3].mean(axis=2)
     lum = lum_of(px)
     out = np.zeros((h, w, 4), np.float32)
-    out[:, :, 1] = np.clip(0.85 - 0.5 * s, 0.05, 1.0)
+    if PAINT_METAL > 0:
+        out[:, :, 0] = PAINT_METAL
+        out[:, :, 1] = np.clip(PAINT_ROUGH + 0.6 * (float(np.median(s)) - s), 0.25, 0.7)
+    else:
+        out[:, :, 1] = np.clip(0.85 - 0.5 * s, 0.05, 1.0)
     out[:, :, 2] = np.clip(np.sqrt(lum / max(float(np.median(lum)), 1e-4)), 0.4, 1.0)
     out[:, :, 3] = 1.0
     return out
 
 
+def alc_livemap(mrec):
+    """(2026-11-12, docs/re/TANICORN_TEXTURES.md 8.6 / 8.9) an Alicorn sheet's livemap for our gear instance, from its
+    own MREC (R metallic, G roughness, as the design reads it): R = MREC.R x ALC_METAL (0 by default), G = ALC_ROUGH_MIN
+    + 0.8 x MREC.G clipped ALC_ROUGH_MIN..0.9 (a remap, not a clamp: the plating's own variation stays, at the stock
+    Alicorn's level; a floor of 0.25 made all of ALC_b one gloss, streaking down the pods), B = occlusion 1 (MREC's B is 0
+    everywhere: as occlusion it blacks the slot out, 0.74.60)"""
+    out = np.ones(mrec.shape[:2] + (4,), np.float32)
+    out[:, :, 0] = mrec[:, :, 0] * ALC_METAL
+    out[:, :, 1] = np.clip(ALC_ROUGH_MIN + 0.8 * mrec[:, :, 1], ALC_ROUGH_MIN, 0.9)
+    return out
+
+
+def _grow(m, n):
+    """a mask grown by n texels (4-neighbours)"""
+    for _ in range(n):
+        g = m.copy()
+        g[1:, :] |= m[:-1, :]
+        g[:-1, :] |= m[1:, :]
+        g[:, 1:] |= m[:, :-1]
+        g[:, :-1] |= m[:, 1:]
+        m = g
+    return m
+
+
+def alc_fill_plan(m, px):
+    """(2026-11-12, TANICORN_TEXTURES.md 8.10) where the sheet's pod-top lid art goes and what plating fills it, from the
+    colour sheet's pixels (Blender's rows, bottom up): the teal texels in each of ALC_FILL's boxes grown by 3 (their dark
+    outline), each taken from the first of the box's offsets (texels of the 4096 sheet) that lands on plain plating (no
+    colour, no white, 6 texels clear of any marking). Returns (the sheet's size, to rows, to cols, from rows, from cols,
+    the colour shift that matches the plating round the region) in Blender's rows, or None for a sheet without boxes"""
+    if m in ALC_PLAN:
+        return ALC_PLAN[m]
+    plan = None
+    if m in ALC_FILL:
+        h, w = px.shape[:2]
+        c = px[::-1, :, :3]                                   # (top-down rows, as the boxes)
+        sat = c.max(axis=2) - c.min(axis=2)
+        luma = c @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+        teal = (sat > 0.10) & (c[:, :, 1] > c[:, :, 0] + 0.05) & (c[:, :, 2] > c[:, :, 0] + 0.05)
+        fills = []
+        for (x0, y0, x1, y1), offsets in ALC_FILL[m]:
+            box = np.zeros((h, w), bool)
+            box[y0 * h // 4096:y1 * h // 4096, x0 * w // 4096:x1 * w // 4096] = True
+            fills.append((_grow(teal & box, 3) & box, offsets))
+        every = np.logical_or.reduce([f for f, _ in fills])
+        clean = ~_grow((sat > 0.06) | (luma > 0.40) | (luma < 0.08), 6) & ~_grow(every, 6)
+        pieces = []
+        for fill, offsets in fills:
+            ty, tx = np.nonzero(fill)
+            fy, fx = np.full(len(ty), -1), np.full(len(ty), -1)
+            for dx, dy in offsets:
+                sy, sx = ty + dy * h // 4096, tx + dx * w // 4096
+                ok = (fy < 0) & (sy >= 0) & (sy < h) & (sx >= 0) & (sx < w)
+                ok[ok] = clean[sy[ok], sx[ok]]
+                fy[ok], fx[ok] = sy[ok], sx[ok]
+            left = int((fy < 0).sum())
+            assert left == 0, "alc_fill_plan %s: %d texels with no plain plating at any offset" % (m, left)
+            pieces.append((ty, tx, fy, fx))
+        ty, tx, fy, fx = (np.concatenate(a) for a in zip(*pieces))
+        ring = _grow(every, 8) & ~_grow(every, 2) & clean
+        shift = c[ring].mean(axis=0) - c[fy, fx].mean(axis=0)
+        plan = ((h, w), h - 1 - ty, tx, h - 1 - fy, fx, shift)
+        print("export: %s's pod-top lid art filled with plating: %d texels (%.2f %% of the sheet), colour shift %s"
+              % (m, len(ty), 100.0 * len(ty) / (h * w), ", ".join("%.4f" % v for v in shift)))
+    ALC_PLAN[m] = plan
+    return plan
+
+
+def alc_sheet(mat, m, folder):
+    """(2026-11-12) an Alicorn sheet's three textures, one set for every part that wears it (the hull, the railcannon,
+    the sub-railguns: ue_import.py imports each name once): T_SV_Tani_ALC_<a|b>_D (the colour sheet), _N (its normal
+    map), _L (alc_livemap of its MREC); written into each part's folder. The pod tops' lid art is filled with plating in
+    all three (alc_fill_plan: only the hull's pod tops sample it)"""
+    stem = "T_SV_Tani_" + m
+    for sfx, sock, conv in (("_D", "Base Color", None), ("_N", "Normal", None), ("_L", "Metallic", alc_livemap)):
+        img = base_image(mat, sock)
+        path = os.path.join(folder, stem + sfx + ".png")
+        if img and path not in ALC_WRITTEN:                      # (once a folder in this run; a stale file is replaced)
+            ALC_WRITTEN.add(path)
+            px = pixels(img)
+            colour = base_image(mat)
+            if m in ALC_PLAN or not colour:
+                plan = ALC_PLAN.get(m)
+            else:
+                plan = alc_fill_plan(m, px if sfx == "_D" else pixels(colour))
+            if plan is not None:
+                size, ty, tx, fy, fx, shift = plan
+                if px.shape[:2] == size:
+                    px[ty, tx, :] = px[fy, fx, :]
+                    if sfx == "_D":
+                        px[ty, tx, :3] = np.clip(px[ty, tx, :3] + shift, 0.0, 1.0)
+                else:
+                    print("export: WARNING %s%s isn't the colour sheet's size: its lid art left as it is" % (stem, sfx))
+            save_png(conv(px) if conv else px, path)
+    return (stem + "_D", stem + "_N" if base_image(mat, "Normal") else None,
+            stem + "_L" if base_image(mat, "Metallic") else None)
+
+
 def slots_for(part, folder, mats):
     """a material slot per material in use: its base colour written as T_SV_Tani_<part>_<n>_D (one file per source
-    image), the Alicorn's sheets with their normal maps. `part` is the textures' owner: the eight side VLS blocks
-    share one set (VLSS)"""
+    image), the Alicorn's sheets as one shared set with their normal maps and livemaps (alc_sheet). `part` is the
+    textures' owner: the eight side VLS blocks share one set (VLSS)"""
     slots, done = [], {}
     for k, m in enumerate(mats):
         mat = bpy.data.materials.get(m)
         img = base_image(mat)
         own = m.startswith(("TANA_", "ALC_"))
         key = (img.name if img else None, own)
+        if key not in done and m.startswith("ALC_") and img:
+            done[key] = alc_sheet(mat, m, folder)
         if key not in done:
             name = "T_SV_Tani_%s_%d_D" % (part, len(done))
             px = pixels(img) if img else np.full((4, 4, 4), 0.5, np.float32)
             save_png(px if own else grey(px), os.path.join(folder, name + ".png"))
-            nrm = None
-            if m.startswith("ALC_"):
-                ni = base_image(mat, "Normal")
-                if ni:
-                    nrm = "T_SV_Tani_%s_%d_N" % (part, len(done))
-                    save_png(pixels(ni), os.path.join(folder, nrm + ".png"))
             liv = None
             sp = None if own or not img else spec_of(img)
             if sp is not None:
                 liv = "T_SV_Tani_%s_%d_L" % (part, len(done))
                 save_png(livemap(px, sp), os.path.join(folder, liv + ".png"))
-            done[key] = (name, nrm, liv)
+            done[key] = (name, None, liv)
         cut = base_image(mat, "Alpha")
         slots.append({"slot": k, "material": m, "source": img.name if img else None, "basecolor": done[key][0],
                       "normal": done[key][1], **({"livemap": done[key][2]} if done[key][2] else {}),
