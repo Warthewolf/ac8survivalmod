@@ -912,6 +912,21 @@ do
         if M.rnd ~= keep then fail(c2, "limits", bad, "taken (round " .. tostring(M.rnd and M.rnd.round) .. ")")
         elseif D.waves and #D.waves > 3 then fail(c2, "tables", bad, "#D.waves " .. #D.waves) end
     end
+    -- ((2026-11-11) the session's review) "gd": a key only in the host's groundKey form ("<class>#<n>"), and a unit's
+    -- binds bounded (M.BINDS_MAX) though every key is new: a flood that varies field 4, which the floods above don't
+    local cg = covOf("join", "gd")
+    scene("join")
+    local keys = 5000
+    for i = 1, keys do inbox[#inbox + 1] = string.format("0|gd|%s|1|BP_Flood_C#%d|%d", U1, i, i % 65535 + 1) end
+    inbox[#inbox + 1] = "0|gd|" .. U1 .. "|1|not a ground key|9"
+    for _ = 1, 12 do tick() end
+    cg.fed = cg.fed + keys + 1
+    local function size(t) local n = 0; for _ in pairs(t or {}) do n = n + 1 end; return n end
+    local held = (M.pendBind and M.pendBind[U1] and M.pendBind[U1].gbinds) or (M.cunits[U1] and M.cunits[U1].gbinds) or {}
+    local cap = M.BINDS_MAX or 4096
+    if size(held) > cap then fail(cg, "tables", "gd flood of new keys", size(held) .. " binds for one unit (bound " .. cap .. ")") end
+    if held["not a ground key"] ~= nil then fail(cg, "limits", "gd|...|not a ground key", "taken as a key") end
+    if size(held) == 0 then fail(cg, "tables", "gd flood of new keys", "nothing kept: the honest form refused?") end
     -- ((2026-11-11) fixed) af: a fractional maximum used to leave the health taken and the landing state not; now the
     -- whole message is refused, and a good one is taken whole
     local ca = covOf("join", "af")

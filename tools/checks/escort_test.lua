@@ -597,6 +597,23 @@ do
     CFG.specials.escort.coop_scale = false
     check(ESC.roomMore(4) == 4 and ESC.roomMore(24, "max_up") == 24, "coop_scale = false: as a solo run's")
     CFG.specials.escort.coop_scale = true
+    -- ((2026-11-11) the session's review) 2-3 players: min_n 4 x 1.15 = 5, odd, and with 5 of the room's max_up left the
+    -- wave of 2-ships could be 6, one over. min_n is made even now: with 5 left the wave is held
+    COOP = { more = function(n, capKey) return math.min(math.floor(n * 1.15 + 0.5), capKey and 30 or 99) end }
+    local maxUp2 = ESC.roomMore(C.waves.max_up, "max_up")
+    local five = {}
+    for i = 1, maxUp2 - 5 do five[i] = { unit = "x" .. i } end
+    planes = five
+    local busy2 = {}
+    for u, v in pairs(D.up) do busy2[u] = v end
+    for u in pairs(busy2) do D.up[u] = nil end
+    local n1 = #wavesOf()
+    local from2 = #logs + 1
+    ESC.S.reinf.at, ESC.S.reinf.fullSaid = 0, nil
+    run(0.25)
+    check(#wavesOf() == n1 and has(line("escort: wave " .. (n1 + 1) .. " held:", from2), "max_up " .. maxUp2),
+          "2 players, 5 of the room's max_up left: the wave held, never 6 (min_n made even: 6)")
+    for u, v in pairs(busy2) do if D.up[u] == nil then D.up[u] = v end end
     COOP = nil
     check(ESC.roomMore(12) == 12, "solo: as set")
     COOP, planes = keepC, keepP
@@ -896,7 +913,7 @@ do
 end
 do                                                  -- (every line theirs: at most 70 characters, two lines on the strip)
     local longest, most, n, bad = 0, 0, 0, {}
-    local WRAP, EMU = CFG.hud.subs.w - 80, CFG.hud.subs.em_units
+    local WRAP, EMU = CFG.hud.subs.w - (SUB.wrapPad or 120), CFG.hud.subs.em_units   -- ((2026-11-11) the strip's own width: SUB.wrap)
     local function each(l)
         for _, x in ipairs(flatL(l)) do
             local who, text = ESUB.line(x, { dir = "south-west", name = "Danielle" })
@@ -1194,7 +1211,10 @@ print("(0.74.25) the next carrier's arm: one whose last ZFA-44s aren't up; a lea
     local n, hitN = ZLAUNCH.parkedOff(1, arms[1].unit, "TEST CARRIER leaving")
     check(n == 1 and hitN == 1 and #dmg == 1 and dmg[1] == parked, "a leaving ship: its parked ZFA-44 finished off under the sea, not the one flying ("
           .. tostring(n) .. ")")
+    check(#ESC.recycleQ == q0 + #arms - 1, "... its arms' units queued off the list once none is up, but its flight's ("
+          .. (#ESC.recycleQ - q0) .. " of " .. #arms .. ")")
     -- ((2026-11-11) counted only when its health reads 0 after the blow: one that keeps health is said, not counted)
+    local q1 = #ESC.recycleQ
     local parked2 = plane(arms[1].unit, sp[1], sp[2], -24483.9, 0, 0)
     parked2.HealthInternal = 1300
     tough[parked2] = true
@@ -1203,10 +1223,13 @@ print("(0.74.25) the next carrier's arm: one whose last ZFA-44s aren't up; a lea
     local n2, hit2 = ZLAUNCH.parkedOff(1, nil, "TEST CARRIER leaving again")
     check(n2 == 0 and hit2 == 1 and has(line("carrier: TEST CARRIER leaving again: 0 parked ZFA-44s", fromT), "1 more took the blow and still have health: 1300"),
           "a parked ZFA-44 the blow leaves with health: not counted, said with its health")
-    ESC.planes[arms[1].unit] = { { obj = parked, addr = parked.addr, name = parked.full, at = 0 } }
-    for i = #ESC.recycleQ, q0 + #arms, -1 do table.remove(ESC.recycleQ, i) end
-    check(#ESC.recycleQ == q0 + #arms - 1, "... its arms' units queued off the list once none is up, but its flight's ("
-          .. (#ESC.recycleQ - q0) .. " of " .. #arms .. ")")
+    -- ((2026-11-11) a restart's: every ZFA-44 of the ship, its flying ones too (all))
+    local flying2 = plane(arms[1].unit, sp[1], sp[2], 50000, 0, 600)
+    ESC.planes[arms[1].unit] = { { obj = flying2, addr = flying2.addr, name = flying2.full, at = 0 } }
+    local d0 = #dmg
+    local n3 = ZLAUNCH.parkedOff(1, nil, "TEST CARRIER (a restart)", true)
+    check(n3 == 1 and dmg[#dmg] == flying2 and #dmg == d0 + 1, "a restart's: a flying ZFA-44 of the ship finished off too (all)")
+    for i = #ESC.recycleQ, q1 + 1, -1 do table.remove(ESC.recycleQ, i) end   -- (only what these two calls added)
     ESC.planes[arms[1].unit] = keepPl
     for i = #ESC.recycleQ, q0 + 1, -1 do table.remove(ESC.recycleQ, i) end
     for _, a in ipairs(arms) do alive[a.unit] = nil end
@@ -1326,14 +1349,14 @@ events = {}
 -- they held its hull on the list for the rest of the level)
 do
     local poCalls, rawPO = {}, ZLAUNCH.parkedOff
-    ZLAUNCH.parkedOff = function(i, keep, why) poCalls[#poCalls + 1] = { i = i, why = tostring(why) }; return rawPO(i, keep, why) end
+    ZLAUNCH.parkedOff = function(i, keep, why, all) poCalls[#poCalls + 1] = { i = i, why = tostring(why), all = all }; return rawPO(i, keep, why, all) end
     local outN = 0
     for _, C in pairs(R0.carriers) do if C.state ~= "leaving" then outN = outN + 1 end end
     ESC.restart("test restart")
     ZLAUNCH.parkedOff = rawPO
     local poOk = #poCalls == outN and outN > 0
-    for _, c2 in ipairs(poCalls) do if not c2.why:find("test restart", 1, true) then poOk = false end end
-    check(poOk, string.format("a restart: each carrier out has its parked ZFA-44s finished off (%d of %d)", #poCalls, outN))
+    for _, c2 in ipairs(poCalls) do if not (c2.why:find("test restart", 1, true) and c2.all == true) then poOk = false end end
+    check(poOk, string.format("a restart: each carrier out has every ZFA-44 of its arms finished off, its flight's too (%d of %d)", #poCalls, outN))
 end
 local allOff = #rs == 5
 for _, p2 in ipairs(rs) do if not (p2.active == false and p2.hidden == true) then allOff = false end end

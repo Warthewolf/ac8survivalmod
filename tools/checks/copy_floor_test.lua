@@ -170,7 +170,9 @@ ESC = { localZfa = function() return zfaHere end,
         hullShip = function(u) return u == "SV_Unit_Cargo1" and 1 or nil end }       -- (sv_escort.lua's: ship 1's hull)
 -- (sv_escort_laser.lua's ZLAUNCH.holdHull: whether ship i's hull is held, its ZFA-44s up; escort_test tests the real one)
 local hullHeld, holdAsked = false, {}
-ZLAUNCH = { holdHull = function(i, t, who, why) holdAsked[#holdAsked + 1] = tostring(i) .. " " .. tostring(who); return hullHeld end }
+local offKills = {}
+ZLAUNCH = { holdHull = function(i, t, who, why) holdAsked[#holdAsked + 1] = tostring(i) .. " " .. tostring(who); return hullHeld end,
+            offKill = function(i, why) offKills[#offKills + 1] = i; return 0, 0 end }
 
 PARTS.dofile("sv_config.lua")
 PARTS.load("sv_coop.lua", "=sv_coop.lua", { { "\nlocal M = {", "\nM = {" } })   -- (its pieces too; M exposed)
@@ -588,6 +590,20 @@ else
     local cargoOff = false
     for i = r0 + 1, #recycled do if recycled[i]:find("^SV_Unit_Cargo1/") then cargoOff = true end end
     check(cargoOff, "join: ... and off the list once none is up (" .. tostring(recycled[#recycled]) .. ")")
+
+    -- ((2026-11-11) the session's review) the host's spawn of a held hull waits: never spawned (its own recycle) or forced
+    -- off while a ZFA-44 of its launchers is up here; this game's switched-off ZFA-44s of it finished off first, once
+    print("join: the host's spawn of a carrier's hull waits while its ZFA-44s are up here")
+    world.SV_Unit_Cargo1 = nil
+    hullHeld = true
+    local k0 = #offKills
+    inbox[#inbox + 1] = "0|sp|SV_Unit_Cargo1|-|-|-1|7"
+    tick(); tick(1.5); tick(6)
+    check(world.SV_Unit_Cargo1 == nil and #offKills == k0 + 1 and offKills[#offKills] == 1,
+          "join: not spawned while ship 1's ZFA-44s are up here; its switched-off ones finished off once (" .. (#offKills - k0) .. ")")
+    hullHeld = false
+    tick(5.25)
+    check(world.SV_Unit_Cargo1 ~= nil, "join: ... spawned once none is up")
 
     print("join: A9, the host's run-over while the level loads")
     local d0 = #downs

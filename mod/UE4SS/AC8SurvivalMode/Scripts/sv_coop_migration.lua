@@ -620,11 +620,15 @@ local function onJoinerMessage(f)
     elseif k == "gd" then                                -- a ship's, vehicle's or part's id (hostGround)
         local unit, gen, key, id = short(f[2], 96), tonumber(f[3]), short(f[4], 96), tonumber(f[5])
         if not (gen and id and id >= 1 and id <= 65535 and id == math.floor(id)) then return end
+        -- ((2026-11-11) the session's review: any text keyed a unit's binds, no bound) the host's groundKey form,
+        -- "<class>#<n>", and at most M.BINDS_MAX binds a unit (M.mapFull)
+        if not key:match("^[%w_]+#%d+$") then return end
         M.dead[id] = nil                                 -- ((0.73.73) as a plane's "bd")
         repNote(unit, gen, id, nil, key)
         local cu = M.cunits[unit]
         if not cu or cu.gen ~= gen then pendKeep(unit, gen, "gbinds", key, id); return end   -- (as a plane's "bd")
         cu.gbinds = cu.gbinds or {}
+        if cu.gbinds[key] == nil and M.mapFull(cu.gbinds, M.BINDS_MAX) then return end
         cu.gbinds[key] = id
         local o = cu.gobjs and cu.gobjs[key]
         if o and live(o) then bindGround(id, o, unit, key) end

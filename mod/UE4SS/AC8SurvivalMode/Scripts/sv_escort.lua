@@ -488,7 +488,7 @@ local function wavesTick(S, now)
     if not (A.r and A.r.at and A.r.hdg) then S.reinf.at = now + 2; return end
     local up = 0
     for _, p in ipairs(planes or {}) do if not p.down and not KIND[p.unit] then up = up + 1 end end
-    local lo = math.max(2, ESC.roomMore(math.floor(num(w.min_n, 4))))
+    local lo = 2 * math.ceil(math.max(2, ESC.roomMore(math.floor(num(w.min_n, 4)))) / 2)   -- (even: (2026-11-11) 2-3 players made it 5, a wave of 6 one over max_up)
     local hi = math.max(lo, ESC.roomMore(math.floor(num(w.max_n, 12))))
     local maxUp = ESC.roomMore(math.floor(num(w.max_up, 24)), "max_up")
     local room = maxUp - up
@@ -1613,7 +1613,8 @@ local function ownZfaOff(i, before)
                 if entryLive(e) and (before == nil or (e.at or 0) < before)
                     and not (COOP and COOP.copyAt and COOP.copyAt(e.addr)) then
                     if offObj(e.obj) then n = n + 1 end
-                    table.remove(l, k)
+                    table.remove(l, k)          -- (kept for ZLAUNCH.offKill: (2026-11-11) a hull the host spawns again waits on them)
+                    ESC.offZfa = ESC.offZfa or {}; ESC.offZfa[i] = ESC.offZfa[i] or {}; if #ESC.offZfa[i] < 64 then table.insert(ESC.offZfa[i], e) end
                 end
             end
         end
@@ -1914,9 +1915,9 @@ function ESC.restart(why)
     if R and not client() then
         for _, C in pairs(R.carriers) do
             if C.state ~= "leaving" then
-                -- ((2026-11-11) its parked ZFA-44s finished off, as a leaving one's and a joiner's (ESC.localOff): left up, they
-                -- held its hull on the list for the rest of the level, ZLAUNCH.holdHull)
-                if ZLAUNCH and ZLAUNCH.parkedOff then pcall(ZLAUNCH.parkedOff, C.idx, C.flight and C.flight.unit, C.name .. " (" .. why .. ")") end
+                -- ((2026-11-11) every ZFA-44 of its arms finished off, its flight's too (switched off, they still count up): left up,
+                -- they held its hull on the list for the rest of the level, ZLAUNCH.holdHull. Before flightOff: on live planes)
+                if ZLAUNCH and ZLAUNCH.parkedOff then pcall(ZLAUNCH.parkedOff, C.idx, nil, C.name .. " (" .. why .. ")", true) end
                 if C.flight then flightOff(C.flight, why) end
                 if COOP and COOP.removeNow then pcall(COOP.removeNow, C.unit) end
                 for _, e in ipairs((ESC.shipObjs or {})[C.unit] or {}) do if liveAddr(e.obj) == e.addr then offObj(e.obj) end end
@@ -1941,7 +1942,7 @@ end
 -- the level's objects forgotten with it, none of them touched (sv_core.lua levelDrop)
 if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["the escort"] = function()
-        ESC.S, ESC.R, ESC.planes, ESC.dressQ, ESC.newObjs, ESC.hulls, ESC.shipObjs = nil, nil, {}, {}, {}, {}, nil
+        ESC.S, ESC.R, ESC.planes, ESC.dressQ, ESC.newObjs, ESC.hulls, ESC.shipObjs, ESC.offZfa = nil, nil, {}, {}, {}, {}, nil, nil
         ESC.recycleQ, ESC.clientClosed, ESC.host = {}, nil, nil
     end
 end

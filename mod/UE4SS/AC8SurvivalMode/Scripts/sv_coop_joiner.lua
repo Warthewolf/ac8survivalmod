@@ -5,6 +5,13 @@
 do  -- (sv_coop.lua's do block, continued: this piece's own helpers stay local to it)
 local M = COOP.M                                   -- (sv_coop.lua's M, handed on)
 local PEND_MAX = 512                                 -- (units whose binds wait for their spawn here: pendKeep)
+M.BINDS_MAX = 4096                                   -- (one unit's binds: a unit's own objects are tens; this bounds a flood only)
+-- whether table t has `cap` entries or more (counted: a flood's tables bounded without a count to keep in step)
+function M.mapFull(t, cap)
+    local n = 0
+    for _ in pairs(t or {}) do n = n + 1; if n >= cap then return true end end
+    return false
+end
 local crumb = crumb or function() end  -- (as in sv_coop.lua)
 
 ---------------------------------------------------------------------------------------------------- joiner
@@ -355,7 +362,7 @@ end
 function COOP.levelDrop(why)
     local n = 0
     for _ in pairs(M.copies or {}) do n = n + 1 end
-    M.copies, M.cunits, M.spawnQ, M.holdQ, M.rep, M.pendBind, M.pendN = {}, {}, {}, nil, nil, nil, 0
+    M.copies, M.cunits, M.spawnQ, M.holdQ, M.rep, M.pendBind = {}, {}, {}, nil, nil, nil
     M.objsOf = {}
     M.mslAt, M.mslEnd, M.gunAtT, M.shotTgt = {}, {}, {}, {}   -- ((0.73.79) your shots by the copy they went for)
     local p = 0
@@ -383,7 +390,7 @@ end
 local REP_WAIT_S, JUDGE_AFTER_S = 10, 3
 function onResync()
     M.rep = { at = os.clock(), units = {}, ids = {}, rebound = 0 }
-    M.spawnQ, M.pendBind, M.pendN = {}, nil, 0           -- (the picture sends every flight the host has up again)
+    M.spawnQ, M.pendBind = {}, nil                       -- (the picture sends every flight the host has up again)
     M.cnt.repairs = M.cnt.repairs + 1
     crumb("coop: the host's whole picture is coming (rs|j): the copies here kept")
     log("coop: the host's whole picture is coming (rs|j, its answer to this game's jn): the copies here are kept and checked against it")
@@ -403,16 +410,16 @@ function pendKeep(unit, gen, field, k, id)
     local pb = M.pendBind[unit]
     if not pb then
         -- ((2026-11-11) coop_guard_test: keyed by any unit name in "bd" / "gd", 1,800 in a flood) a plain unit name, and at
-        -- most PEND_MAX units waiting for their spawn; past it the rest are dropped, logged once
+        -- most PEND_MAX units waiting for their spawn (counted, not kept count of: nothing to drift); past it the rest are
+        -- dropped, logged once
         if not tostring(unit or ""):match("^[%w_]+$") then return end
-        M.pendN = (M.pendN or 0) + 1
-        if M.pendN > PEND_MAX then
-            M.pendN = PEND_MAX
+        if M.mapFull(M.pendBind, PEND_MAX) then
             once("pendfull", string.format("coop: binds for %d of the host's units already wait here: %s's dropped", PEND_MAX, tostring(unit)))
             return
         end
     end
     if not pb or pb.gen ~= gen then pb = { gen = gen, binds = {}, gbinds = {} }; M.pendBind[unit] = pb end
+    if pb[field][k] == nil and M.mapFull(pb[field], M.BINDS_MAX) then return end   -- ((2026-11-11) review: any key, no bound)
     pb[field][k] = id
 end
 local function upHere(o) return o ~= nil and live(o) ~= nil and (health(o) or 1) > 0 end
@@ -478,6 +485,16 @@ local function doSpawn(q)
     local had = M.cunits[unit]
     if had and had.gen == q.gen and not had.respawn and (unitUp(had) or os.clock() - (had.at or 0) < JUDGE_AFTER_S) then
         return true                                      -- (that flight is up here already)
+    end
+    -- ((2026-11-11) the session's review) a carrier's hull the host spawns again: never taken off this game's list (the
+    -- force recycle below, or the spawn's own) while a ZFA-44 of its launchers is up here, the host's rule since 0.74.48
+    -- (Shazzy's STORE-close crash). This game's switched-off ZFA-44s of that ship finished off first (once), then it
+    -- waits, 5 s at a time (looked at by ZLAUNCH.holdHull, logged once)
+    local hull = ESC and ESC.hullShip and ESC.hullShip(unit)
+    if hull and ZLAUNCH and ZLAUNCH.holdHull and ZLAUNCH.holdHull(hull, q, unit, "the host's spawn of it") then
+        if not q.offKilled and ZLAUNCH.offKill then q.offKilled = true; pcall(ZLAUNCH.offKill, hull, "the host's " .. unit .. " spawned again") end
+        q.at = os.clock() + 5
+        return false
     end
     local alive = rawUnitAlive and rawUnitAlive(unit) or 0
     -- ((2026-11-11) coop_guard_test: a unit this game doesn't have went on to SV_SetAircraft / SV_SetLevel / SV_Spawn, each
@@ -548,7 +565,7 @@ local function doSpawn(q)
     if pb and pb.gen == q.gen then
         for ord, id in pairs(pb.binds) do M.cunits[unit].binds[ord] = id end
         for key, id in pairs(pb.gbinds) do M.cunits[unit].gbinds[key] = id end
-        M.pendBind[unit] = nil; M.pendN = math.max(0, (M.pendN or 1) - 1)
+        M.pendBind[unit] = nil
     end
     spawningUnit, spawningIdx = unit, 0                  -- (each copy's index in its flight, p.k: the host's order too)
     if SPC and unit == SPC.alicornUnit then SPC.alcnPool = nil end   -- ((0.73.83) this copy's pools, not the last one's: as the host's alicornSpawn)

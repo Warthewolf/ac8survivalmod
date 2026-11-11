@@ -232,6 +232,7 @@ end
 -- of its own. Three lines the screenshots measured came out 2.5 % under to 3 % over the model, so the strip breaks
 -- WRAP_PAD (120) inside the box rather than the 80 of its old wrap: a line the model puts at 1,440 is at most ~1,477.
 local WRAP_PAD = 120
+SUB.wrapPad = WRAP_PAD                                -- (the tests measure at the strip's own width)
 function SUB.wrap(text, wrap, em)
     wrap = math.max(100, tonumber(wrap) or 1440)
     em = math.max(1, tonumber(em) or 50)

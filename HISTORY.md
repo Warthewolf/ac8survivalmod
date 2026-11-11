@@ -2419,3 +2419,25 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   joiner's restart did): left up, they held the hull on the list for the rest of the level. escort_test (2 of 2; the old
   code 0 of 2). It adds a kill call at a restart in the carrier path: the same one leaving and sunk carriers make.
 - run_all: 63 pass; coop_test passes. The test sheet's step 13 and a RESTART step say what to look for.
+
+## The session's review (2026-11-11; Lua for the next build; not yet run in game)
+- An independent review of every change to shipped code this session (4 reviewers, a skeptic per finding): 7 findings
+  kept, 4 refuted. All 7 fixed, each with a check that fails on the code before it:
+  - A joiner's own spawn of a carrier's hull (the host's next "sp" for it: takeUnitDown's force recycle, or the spawn's
+    own recycle) went past the hull hold. doSpawn now waits, 5 s at a time, while ZLAUNCH.holdHull says a ZFA-44 of its
+    launchers is up there, and first finishes off (once) this game's own switched-off ZFA-44s of that ship, which
+    ownZfaOff now keeps (ESC.offZfa, at most 64 a ship, dropped with the level; ZLAUNCH.offKill: name checked, switched
+    on, the blow, counted by health). copy_floor_test.
+  - A restart with a carrier's flight in the air: its ZFA-44s were only switched off and still counted up, so the hull
+    stayed held. ESC.restart now finishes off every ZFA-44 of the ship's arms (ZLAUNCH.parkedOff's `all`), before
+    flightOff, on live planes: the way the dive's finish already worked in game. escort_test.
+  - 2-3 players: CHARLENE's waves' min_n came out odd (5) and a wave of 2-ships could be one over the room's max_up.
+    min_n is made even. escort_test.
+  - "gd": a key only in the host's groundKey form "<class>#<n>", at most M.BINDS_MAX (4,096) binds a unit, pending or
+    up (any text keyed them, no bound); pendKeep's units counted from the table (M.mapFull), not kept count of (a reset
+    path had missed the counter). coop_guard_test floods field 4 now.
+  - coop_test.sh's SANITIZE pass looked for coop.c:775; CoNetPush moved it, so it said the known overlap was gone while
+    it printed it: matched by function now. The strip-line tests measure at the strip's own width (SUB.wrapPad), and
+    fishing_test checks every line of the shipped subtitles.ini (none past two lines; the thanks' pieces three).
+    escort_test's "but its flight's" check runs straight after its call again (my earlier edit had made it unable to fail).
+- run_all: 63 pass (escort_test 0 failures in 20 runs); coop_test passes; SANITIZE=1 reports only the known overlap.

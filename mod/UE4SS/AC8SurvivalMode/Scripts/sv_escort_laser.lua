@@ -1026,7 +1026,8 @@ end
 -- list once nothing of them is up (sv_escort.lua recycleTick: never with planes up), so its next ship's launchers have
 -- their own again. How many finished off (their health read 0 after the blow; (2026-11-11) a blow that didn't fail was
 -- counted before, so 0.74.36's "10 finished off" said nothing of whether they died), and how many took the blow
-function ZLAUNCH.parkedOff(i, keep, why)
+-- all: ((2026-11-11) ESC.restart) every ZFA-44 of ship i's arms, flying ones too, not only the parked
+function ZLAUNCH.parkedOff(i, keep, why, all)
     local c = cc()
     local arms = (c.launchers or {})[i] or {}
     local parkZ = num(c.parked_m, -100) * 100
@@ -1038,7 +1039,7 @@ function ZLAUNCH.parkedOff(i, keep, why)
             for _, e in ipairs(l) do
                 if liveAddr(e.obj) == e.addr then
                     local okL, z = pcall(function() return e.obj:K2_GetActorLocation().Z end)
-                    if okL and type(z) == "number" and z < parkZ and ESC.same(e) then   -- (its own plane: never another's at its address)
+                    if (all or (okL and type(z) == "number" and z < parkZ)) and ESC.same(e) then   -- (its own plane: never another's at its address)
                         if COOP and COOP.removeObj then pcall(COOP.removeObj, e.obj) end
                         pcall(function() e.obj:SetIsInvincible(false) end)
                         pcall(function() e.obj.bIsInvincible = false end)
@@ -1066,10 +1067,39 @@ function ZLAUNCH.parkedOff(i, keep, why)
         end
     end
     if hit > 0 then
-        log(string.format("carrier: %s: %d parked ZFA-44s of ship %d finished off under the sea%s, %d of its arms' units off the list once none is up",
-            tostring(why), n, i, #left > 0 and string.format(" (%d more took the blow and still have health: %s)", #left,
+        log(string.format("carrier: %s: %d %sZFA-44s of ship %d finished off%s%s, %d of its arms' units off the list once none is up",
+            tostring(why), n, all and "" or "parked ", i, all and "" or " under the sea", #left > 0 and string.format(" (%d more took the blow and still have health: %s)", #left,
             table.concat(left, ", ", 1, math.min(#left, 6))) or "", q))
     end
+    return n, hit
+end
+-- ((2026-11-11) the session's review: a joiner's own ZFA-44s of a carrier that left are switched off, not finished off
+-- (sv_escort.lua ownZfaOff), and switched off they count up: the host's next spawn of that hull waited on them for good)
+-- this game's switched-off ZFA-44s of ship i (ESC.offZfa) finished off, unpaid, each checked by its name first (hard
+-- rule 59), switched on before the blow as parkedOff does. How many went (health 0 after it), how many took the blow
+function ZLAUNCH.offKill(i, why)
+    local l = ESC and ESC.offZfa and ESC.offZfa[i]
+    if not l or #l == 0 then return 0, 0 end
+    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+    local n, hit = 0, 0
+    for k = #l, 1, -1 do
+        local e = l[k]
+        if liveAddr(e.obj) == e.addr and ESC.same(e) then
+            pcall(function() e.obj:SetIsInvincible(false) end)
+            pcall(function() e.obj.bIsInvincible = false end)
+            pcall(function() e.obj:SetMinHealth(0.0) end)
+            pcall(function() e.obj:SetActive(true, false, false) end)
+            pcall(function() e.obj:SetActorTickEnabled(true) end)
+            if valid(gs) and pcall(function() gs:ApplyDamage(e.obj, 1.0e8, nil, nil, nil) end) then
+                hit = hit + 1
+                local okH, h = pcall(function() return e.obj.HealthInternal end)
+                if okH and type(h) == "number" and h <= 0 then n = n + 1; table.remove(l, k) end
+            end
+        else
+            table.remove(l, k)                           -- (gone, or another object's at its address now)
+        end
+    end
+    log(string.format("carrier: %s: %d of this game's switched-off ZFA-44s of ship %d finished off (%d took the blow)", tostring(why), n, i, hit))
     return n, hit
 end
 end

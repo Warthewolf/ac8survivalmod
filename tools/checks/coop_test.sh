@@ -7,7 +7,7 @@
 #   SANITIZE=1 sh tools/checks/coop_test.sh   (not Windows) then the same two rooms again built with gcc
 #       -fsanitize=address,undefined,float-cast-overflow (SAN_CC= another compiler with ASan's runtime). Opt-in: it
 #       doubles the ~40 s. It first shows the one known finding unsuppressed (memcpy-param-overlap in CoPushSnap,
-#       coop.c:775: told KNOWN, not a failure), then runs the rooms with only that report suppressed (an ASan
+#       coop.c CoPushSnap: told KNOWN, not a failure), then runs the rooms with only that report suppressed (an ASan
 #       suppression on CoPushSnap's memcpy calls) and fails on any other sanitizer report.
 # A run fails when a process's exit code isn't 0 or its summary line is missing (a mute run is a failure: glibc's
 # streams once lost every printf after a wprintf, and the test "passed" with nothing said).
@@ -141,12 +141,12 @@ if [ "${SANITIZE:-0}" = 1 ]; then
     sleep 0.3
     COOP_TEST_JOINERS=1 ./coop_test_san.exe join 5 > known_join.txt 2>&1 || true
     wait || true
-    if grep -q "memcpy-param-overlap" known_host.txt known_join.txt && grep -q "in CoPushSnap .*coop.c:775" known_host.txt known_join.txt; then
-        echo "coop test (sanitized): KNOWN DEFECT reproduced, not counted: memcpy-param-overlap in CoPushSnap (runtime/coop.c:775,"
+    if grep -q "memcpy-param-overlap" known_host.txt known_join.txt && grep -q "in CoPushSnap .*coop\.c:[0-9]" known_host.txt known_join.txt; then
+        echo "coop test (sanitized): KNOWN DEFECT reproduced, not counted: memcpy-param-overlap in CoPushSnap (runtime/coop.c,"
         echo "    a stream's 13th snapshot shifts its 12 with memcpy over itself; memmove is the call). Its stack:"
         grep -h -A6 "memcpy-param-overlap" known_host.txt known_join.txt | head -8 | sed 's/^/    /'
     else
-        echo "coop test (sanitized): the known memcpy-param-overlap in CoPushSnap (coop.c:775) wasn't reported this time:"
+        echo "coop test (sanitized): the known memcpy-param-overlap in CoPushSnap (runtime/coop.c) wasn't reported this time:"
         echo "    fixed? then drop asan.supp's line from coop_test.sh"
         grep -h -A8 "ERROR: AddressSanitizer" known_host.txt known_join.txt | head -10 | sed 's/^/    /' || true
     fi
