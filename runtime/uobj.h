@@ -55,6 +55,20 @@ static int UObjAllocated(const uint8_t* o)
     return *(const uint8_t* const*)(chunk + (size_t)(idx & 0xFFFF) * 0x18) == o;
 }
 
+/* (Saint Alessia's 50-round co-op run, lag-1: the spawner's checks) 1 GUObjectArray's slot idx still holds o (o is
+ * allocated: its memory can be read), 0 it doesn't (o was freed: the slot is empty or another object's), -1 can't tell
+ * (GUObjectArray not found, or no index kept). Reads only the array, never o: for an object the runtime kept with the
+ * index it had when it was found (the spawner, its world data and world), checked without a system call. */
+static int UObjSlotHolds(const uint8_t* o, int32_t idx)
+{
+    if (!g_uoChunks || idx < 0) return -1;
+    if (!o || idx >= *g_uoNum) return 0;
+    uint8_t* const* chunks = *g_uoChunks;
+    const uint8_t* chunk = chunks ? chunks[idx >> 16] : NULL;
+    if (!chunk) return 0;
+    return *(const uint8_t* const*)(chunk + (size_t)(idx & 0xFFFF) * 0x18) == o;
+}
+
 /* ---- which event fields a game function uses as UObjects (runtime 0.32.21; flight.c's event guard) -----------------
  * The game's events (FLive*Event: a vtable, the type at slot 1, the event's objects as raw pointers from +0x18) are
  * matched against the triggers of their type by slot 12 (+0x60), Match(event, trigger, a, b), on worker threads. An

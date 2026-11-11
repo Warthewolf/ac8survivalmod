@@ -80,6 +80,9 @@ this mod). Call them only from the game thread (`ExecuteInGameThread`).
 | `SV_Reset()` | forgets the cached spawner (main.lua calls it on level load) |
 | `SV_Version()` | "0.6.0" |
 
+(2026-11-11) The lookups behind these (the spawner's checks, the phase list's id -> unit table, the descs by name) run
+without system calls once the spawner is found: `LAG.md` lag-1, its minute line `units: the last minute: ...`.
+
 The rounds (main.lua, "rounds" section, settings in `CFG`, optional `Scripts/survival_config.lua` overrides): each
 round picks random flights that are down from the pool (Mission 22's 24 two-ship "kokatu" flights,
 `ERA_Unit_01..08_Dep_Air0..2`), gives each a random aircraft type, and spawns them 18-25 km from Comona Airport on a

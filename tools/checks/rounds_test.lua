@@ -178,6 +178,70 @@ for i = 25, 40 do ALIVE.tick(50 + i * 0.25) end  -- 4 s more
 check(refreshed >= 2 and refreshed <= 6 and asks == a0,       -- (A and X: each about once a second for its 3 s)
       "units nobody asks about are refreshed by the tick for WATCH_S, then forgotten (" .. refreshed .. " refreshes, then "
       .. (asks - a0) .. ")")
+-- ((2026-11-11) Saint Alessia's 50-round co-op run, lag-2: ALIVE's budget counted asks only, and an answer 3 s old was
+-- asked again whatever the budget: at rounds 49-50 the Spaceport's 52 units kept it at 32 a second at ~9.5 ms an ask,
+-- 69-71 ms a tick. Now the tick's native time is budgeted too (os.clock), an answer past its hard age is asked only while
+-- that time lasts (else kept up to CAP_S))
+print("ALIVE: the tick's native time budget (lag-2)")
+do
+    local rawAlive = SV_UnitAlive
+    SV_UnitAlive = function(u) clock = clock + 0.0095; return rawAlive(u) end   -- (9.5 ms an ask, rounds 49-50's)
+    planes = {}
+    D = { round = 49, now = 200 }
+    local U = {}
+    for i = 1, 52 do U[i] = "SV_Unit_Sp" .. i; alive[U[i]] = 1 end
+    local L2 = #logs + 1
+    local nTicks, total, worstMs, forcedOk = 0, 0, 0, nil
+    for k = 0, 79 do                                    -- 20 s, every unit asked for every tick (maxAge 1 s, as aliveOf)
+        local t = 200 + k * 0.25
+        D.now = t
+        local c0, n0 = clock, asks
+        if k == 60 then planes = { { unit = U[7], down = true } } end
+        ALIVE.tick(t)
+        for _, u in ipairs(U) do ALIVE.ask(u, t) end
+        if k == 60 then forcedOk = asks - n0 >= 2; planes = {} end
+        if k >= 8 then                                  -- (after the first 2 s: the 52 first answers were asked at once)
+            nTicks, total = nTicks + 1, total + (asks - n0)
+            local ms = (clock - c0) * 1000
+            if ms > worstMs then worstMs = ms end
+        end
+    end
+    local avg = total / nTicks
+    check(avg <= 2.5, string.format("52 units watched at 9.5 ms an ask: %.2f native asks a tick (8 or more before: the "
+        .. "count budget's 32 a second and every answer 3 s old asked again)", avg))
+    check(worstMs <= 3 * 9.5 + 0.01, string.format("... the worst tick %.1f ms of them (76 ms or more before)", worstMs))
+    check(forcedOk, "... a plane seen down by the sweep: its unit asked at once all the same")
+    pcall(ALIVE.report, 49)
+    local line = lineOf(L2, "^alive: round 49:") or ""
+    local oldest = tonumber(line:match("the oldest answer used ([%d%.]+) s old"))
+    local cut = tonumber(line:match("(%d+) refreshes cut by it"))
+    local held = tonumber(line:match("(%d+) answers kept past 3 s"))
+    check(oldest and oldest < 13, "... the oldest answer used about CAP_S (10 s; one older asked a tick, so 52 units' "
+        .. "oldest a little more): " .. tostring(oldest))
+    check(cut and cut > 0 and held and held > 0, "the round's line: the refreshes the time budget cut, the answers kept past "
+        .. "3 s: " .. line)
+    SV_UnitAlive = rawAlive
+    -- an answer past HARD_S: asked again while the tick's time lasts; once it's spent, kept (up to CAP_S)
+    D = { round = 50, now = 300 }
+    ALIVE.tick(300)
+    local F = {}
+    for i = 1, 40 do F[i] = string.format("SV_Unit_F%02d", i); alive[F[i]] = 1; ALIVE.ask(F[i], 300) end
+    alive.SV_Unit_H, alive.SV_Unit_Z = 2, 3
+    ALIVE.ask("SV_Unit_H", 300); ALIVE.ask("SV_Unit_Z", 300)
+    for _, u in ipairs(F) do ALIVE.ask(u, 301.2, 99) end                  -- (still asked for, no native ask: WATCH_S)
+    ALIVE.ask("SV_Unit_H", 301.2, 99); ALIVE.ask("SV_Unit_Z", 301.2, 99)
+    D.now = 303.5
+    ALIVE.tick(303.5)                         -- (its 32 asks spent on F01-F32, 3.5 s old: H and Z left 3.5 s old)
+    local n0 = asks
+    check(ALIVE.ask("SV_Unit_H", 303.5) == 2 and asks == n0 + 1, "an answer 3.5 s old, the tick's asks spent, its time "
+        .. "not: asked again (past HARD_S)")
+    SV_UnitAlive = function(u) clock = clock + 0.0095; return rawAlive(u) end
+    ALIVE.ask("SV_Unit_New", 303.5)                       -- (never asked: at once, 9.5 ms: the tick's time spent)
+    SV_UnitAlive = rawAlive
+    n0 = asks
+    check(ALIVE.ask("SV_Unit_Z", 303.5) == 3 and asks == n0, "... once the tick's time is spent: the 3.5 s answer kept "
+        .. "(before: asked again past 3 s, whatever the budget)")
+end
 
 ---------------------------------------------------------------------------------------------------- the rounds' check
 print("the fighting check over 20 flights: spread over the ticks")

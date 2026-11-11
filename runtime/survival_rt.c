@@ -25,6 +25,7 @@
 #include "win32_min.h"
 #include "sigs.h"
 #include "uobj.h"                /* (0.32.22: up here for the teardown gate; flight.c's include is then a no-op) */
+#include "unittab.h"             /* the spawner's id -> unit table (Saint Alessia's 50-round run, lag-1) */
 
 #define RT_VERSION           L"0.32.34"
 #define RT_VERSION_A         "0.32.34"      /* SV_Version()'s: keep in step with RT_VERSION */

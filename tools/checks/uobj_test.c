@@ -100,6 +100,7 @@ static uint32_t Detect(const uint8_t* code, size_t len, size_t n)
 int main(void)
 {
     check(UObjLive((const uint8_t*)0x10000000) == -1, "no GUObjectArray found: can't tell (-1)");
+    check(UObjSlotHolds((const uint8_t*)0x10000000, 5) == -1, "no GUObjectArray found: a kept object's slot can't tell (-1)");
     static int32_t num;
     static uint32_t gcFlag = 2;                            /* (ReachabilityFlag1, the game's value at start) */
     uint8_t* chunk0 = calloc(65536, 0x18), * chunk1 = calloc(65536, 0x18);
@@ -184,6 +185,19 @@ int main(void)
     *(int32_t*)(objs[5] + 0xC) = -1;
     check(UObjAllocated(objs[5]) == 0 && UObjAllocated(NULL) == 0 && UObjAllocated((const uint8_t*)(objs[0] + 4)) == 0,
           "not allocated: index -1, null, misaligned");
+    /* (Saint Alessia's 50-round run, lag-1) a kept object checked at the slot it was found in, never read itself: the
+     * spawner's checks without a memory query (survival_rt_game.c KeptLive, ObjGoneWhyAt) */
+    check(UObjSlotHolds(objs[0], 5) == 1 && UObjSlotHolds(objs[1], 65536 + 7) == 1, "slot holds: a kept live object");
+    check(UObjSlotHolds(objs[3], 12) == 1, "slot holds: one marked garbage is still allocated (its flags read next)");
+    check(UObjSlotHolds(objs[0], 6) == 0, "slot holds: not at another index");
+    check(UObjSlotHolds(objs[0], -1) == -1, "slot holds: no index kept: can't tell (the old memory query then)");
+    check(UObjSlotHolds(objs[0], num) == 0 && UObjSlotHolds(objs[0], 3 * 65536) == 0,
+          "slot holds: an index past the count, or in a chunk not made: no");
+    *(uint8_t**)(table[0] + 14 * 0x18) = objs[0];
+    check(UObjSlotHolds((const uint8_t*)0x10, 14) == 0, "slot holds: freed, its slot another object's: no (the freed "
+          "memory never read: 0x10 here)");
+    *(uint8_t**)(table[0] + 14 * 0x18) = NULL;
+    check(UObjSlotHolds((const uint8_t*)0x10, 14) == 0 && UObjSlotHolds(NULL, 5) == 0, "slot holds: its slot empty, or no object: no");
     /* (0.32.21) the event guard's detector: bit (offset >> 3) */
     check(Detect(kEnemyBehind, sizeof(kEnemyBehind), 0xc8) == ((1u << 3) | (1u << 4)), "EnemyBehind: +0x18 and +0x20");
     check(Detect(kType10, sizeof(kType10), 0x48) == (1u << 3), "type 10: +0x18 (a copy of the event, a virtual call)");

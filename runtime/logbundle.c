@@ -7,7 +7,9 @@
  *   logs\AC8SurvivalMode_crumbs_<stamp>.log   the crash breadcrumbs (OpenCrumbs)
  *   logs\session_<stamp>.txt                  key=value lines (LbSessionAdd, Lua's SV_Session): start, start_ft, rt,
  *                                             main_dll_ts, pid, build_hash, mod, role ... (a later line with the same key wins)
- *   logs\UE4SS_<stamp>.log                    UE4SS.log copied every 10 s (UE4SS empties UE4SS.log when it starts)
+ *   logs\UE4SS_<stamp>.log                    UE4SS.log copied every 10 s (UE4SS empties UE4SS.log when it starts); a run
+ *                                             of the same line once with its count, at most 64 MB (logdedup.h: lag-8)
+ *   logs\UE4SS_stats_<stamp>.txt              that copy's counts and most repeated line (bundle.txt sums them up)
  *   logs\AC8Survival_<stamp>_<mod>.zip        a finished session, the 10 newest zips kept (no size cap)
  * At every start a background thread (LbZipThread) zips each earlier session that has no zip yet (logzip.h's LzPick):
  * its files, the game's Saved\Logs\*.log and the files of each Saved\Crashes\UECC-* folder written during it (Saved is
@@ -20,6 +22,7 @@
  * and nothing is zipped. The zip format is logzip.h's. Every function here is static, buffers are static (no stack
  * probe is linked).                                                                                                    */
 #include "logzip.h"
+#include "logdedup.h"                       /* (lag-8: the UE4SS.log copy's filter) */
 
 #define LB_KEEP 10
 #define LB_MAXS 32                               /* sessions zipped at one start at most (the others at the next) */
@@ -421,6 +424,38 @@ static int LbZipSession(const wchar_t* s, LbZipRes* r)
     } else {
         LbRepAdd("the game's Saved folder: LOCALAPPDATA not set, nothing taken from it\n");
     }
+    /* ((2026-11-11) lag-8) the UE4SS.log copy's counts and its most repeated line (logs\UE4SS_stats_<s>.txt) */
+    {
+        static char sb[1200];
+        static wchar_t sp[PATH_CAP];
+        wchar_t t[80];
+        size_t sn = 0;
+        LbEnt(t, 80, L"UE4SS_stats_", s, L".txt");
+        HANDLE h = LbJoin(sp, g_lbDir, t) ? CreateFileW(sp, GENERIC_READ, 7u, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL)
+                                          : INVALID_HANDLE_VALUE;
+        if (h != INVALID_HANDLE_VALUE) {
+            DWORD got = 0;
+            if (ReadFile(h, sb, (DWORD)sizeof(sb) - 1, &got, NULL)) sn = got;
+            CloseHandle(h);
+        }
+        char v[220];
+        if (sn && LbKey(sb, sn, "ue4ss_read_bytes", v, sizeof(v))) {
+            LbRepAdd("\nUE4SS.log: "); LbRepNum((LbParseU64(v) + (1u << 19)) >> 20); LbRepAdd(" MB read, ");
+            v[0] = 0; LbKey(sb, sn, "ue4ss_copied_bytes", v, sizeof(v));
+            LbRepNum((LbParseU64(v) + (1u << 19)) >> 20); LbRepAdd(" MB copied into UE4SS_"); LbRepW(s); LbRepAdd(".log (");
+            v[0] = 0; LbKey(sb, sn, "ue4ss_lines", v, sizeof(v)); LbRepNum(LbParseU64(v)); LbRepAdd(" lines, ");
+            v[0] = 0; LbKey(sb, sn, "ue4ss_collapsed", v, sizeof(v)); LbRepNum(LbParseU64(v));
+            LbRepAdd(" of them repeats of the line before, collapsed into one line each run, ");
+            v[0] = 0; LbKey(sb, sn, "ue4ss_dropped", v, sizeof(v)); LbRepNum(LbParseU64(v)); LbRepAdd(" past the copy's 64 MB)\n");
+            v[0] = 0; LbKey(sb, sn, "ue4ss_top_count", v, sizeof(v));
+            if (LbParseU64(v)) {
+                LbRepAdd("its most repeated line ("); LbRepNum(LbParseU64(v)); LbRepAdd(" repeats): ");
+                v[0] = 0; LbKey(sb, sn, "ue4ss_top_line", v, sizeof(v)); LbRepAdd(v); LbRepAdd("\n");
+            }
+        } else {
+            LbRepAdd("\nUE4SS.log: no counts (UE4SS_stats_ missing: an older runtime, or nothing was copied)\n");
+        }
+    }
     LbRepAdd("\nfiles in the zip: "); LbRepNum((uint64_t)r->files);
     LbRepAdd(", skipped or partial: "); LbRepNum((uint64_t)r->skipped); LbRepAdd("\n");
     if (nbad) {
@@ -555,13 +590,65 @@ static DWORD WINAPI LbZipThread(void* arg)
     return 0;
 }
 
-/* UE4SS.log -> logs\UE4SS_<stamp>.log, what was added since the last copy, every 10 s */
+/* UE4SS.log -> logs\UE4SS_<stamp>.log, what was added since the last copy, every 10 s.
+ * ((2026-11-11) Saint Alessia's 50-round co-op run, lag-8: through logdedup.h, a run of lines the same after their time
+ * stamp written once and counted, the copy stopped at 64 MB; her 415 MB UE4SS.log was 98.3% one line of another mod's.
+ * The counts and the most repeated line in logs\UE4SS_stats_<stamp>.txt (rewritten each pass that read something, then
+ * summed up in the bundle's bundle.txt), and in the runtime's log every 10 minutes: "logs: UE4SS.log's copy: ...") */
+static HANDLE  g_ldOut = INVALID_HANDLE_VALUE;
+static uint8_t g_ldBuf[65536];
+static size_t  g_ldBufN;
+static LdState g_ld;
+static void LdFlushOut(void)
+{
+    if (!g_ldBufN) return;
+    DWORD put = 0;
+    WriteFile(g_ldOut, g_ldBuf, (DWORD)g_ldBufN, &put, NULL);
+    g_ldBufN = 0;
+}
+static void LdPutOut(void* ctx, const char* p, size_t n)
+{
+    (void)ctx;
+    while (n) {
+        if (g_ldBufN == sizeof(g_ldBuf)) LdFlushOut();
+        size_t k = sizeof(g_ldBuf) - g_ldBufN;
+        if (k > n) k = n;
+        memcpy(g_ldBuf + g_ldBufN, p, k);
+        g_ldBufN += k; p += k; n -= k;
+    }
+}
+static void LbStatsKey(char* b, size_t* k, size_t cap, const char* key, uint64_t v, const char* text)
+{
+    for (size_t i = 0; key[i] && *k + 2 < cap; ++i) b[(*k)++] = key[i];
+    if (*k + 2 < cap) b[(*k)++] = '=';
+    if (text) for (size_t i = 0; text[i] && *k + 3 < cap; ++i) b[(*k)++] = text[i];
+    else if (*k + 24 < cap) *k += LbNum(b + *k, v);
+    if (*k + 2 < cap) { b[(*k)++] = '\r'; b[(*k)++] = '\n'; }
+}
+static void LbUe4ssStats(const wchar_t* path)
+{
+    static char b[1024];
+    size_t k = 0;
+    LbStatsKey(b, &k, sizeof(b), "ue4ss_read_bytes", g_ld.inBytes, NULL);
+    LbStatsKey(b, &k, sizeof(b), "ue4ss_copied_bytes", g_ld.outBytes, NULL);
+    LbStatsKey(b, &k, sizeof(b), "ue4ss_lines", g_ld.lines, NULL);
+    LbStatsKey(b, &k, sizeof(b), "ue4ss_collapsed", g_ld.collapsed, NULL);
+    LbStatsKey(b, &k, sizeof(b), "ue4ss_dropped", g_ld.dropped, NULL);
+    LbStatsKey(b, &k, sizeof(b), "ue4ss_top_count", g_ld.topN, NULL);
+    LbStatsKey(b, &k, sizeof(b), "ue4ss_top_line", 0, g_ld.topText);
+    HANDLE h = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return;
+    DWORD put = 0;
+    WriteFile(h, b, (DWORD)k, &put, NULL);
+    CloseHandle(h);
+}
 static DWORD WINAPI LbUe4ssThread(void* arg)
 {
-    static wchar_t src[PATH_CAP], dst[PATH_CAP];
+    static wchar_t src[PATH_CAP], dst[PATH_CAP], stats[PATH_CAP];
     static uint8_t buf[32768];
     (void)arg;
     if (!LbPath(dst, L"UE4SS", L".log")) return 0;
+    int haveStats = LbPath(stats, L"UE4SS_stats", L".txt");
     HANDLE m = GetModuleHandleW(L"UE4SS.dll");
     DWORD n = m ? GetModuleFileNameW(m, src, PATH_CAP) : 0;
     if (!n || n >= PATH_CAP) { Log(L"logs: UE4SS.dll not found; UE4SS.log is not copied"); return 0; }
@@ -575,29 +662,45 @@ static DWORD WINAPI LbUe4ssThread(void* arg)
     }
     HANDLE out = CreateFileW(dst, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (out == INVALID_HANDLE_VALUE) { Log(L"logs: %s could not be created; UE4SS.log is not copied", dst); return 0; }
-    Log(L"logs: UE4SS.log (%s) is copied to %s every 10 s", src, dst);
+    g_ldOut = out;
+    LdInit(&g_ld);
+    Log(L"logs: UE4SS.log (%s) is copied to %s every 10 s (a run of the same line once, counted; at most 64 MB: lag-8)", src, dst);
     int64_t off = 0;
+    uint64_t lineAt = GetTickCount64(), saidCollapsed = 0;
     for (;;) {
+        int64_t was = off;
         HANDLE in = CreateFileW(src, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
         if (in != INVALID_HANDLE_VALUE) {
             int64_t size = 0;
             if (GetFileSizeEx(in, &size)) {
                 if (size < off) {                                /* it got smaller: UE4SS started over */
                     static const char mark[] = "\r\n---- UE4SS.log started over ----\r\n";
-                    DWORD put = 0;
-                    WriteFile(out, mark, (DWORD)(sizeof(mark) - 1), &put, NULL);
-                    off = 0;
+                    LdRunEnd(&g_ld, LdPutOut, NULL);
+                    g_ld.curN = g_ld.curLen = 0;
+                    LdPutOut(NULL, mark, sizeof(mark) - 1);
+                    off = was = 0;
                 }
                 if (size > off && SetFilePointerEx(in, off, NULL, 0)) {
                     for (;;) {
-                        DWORD got = 0, put = 0;
+                        DWORD got = 0;
                         if (!ReadFile(in, buf, (DWORD)sizeof(buf), &got, NULL) || !got) break;
-                        if (!WriteFile(out, buf, got, &put, NULL) || put != got) break;
+                        LdFeed(&g_ld, (const char*)buf, got, LdPutOut, NULL);
                         off += got;
                     }
                 }
             }
             CloseHandle(in);
+        }
+        if (off == was) LdIdle(&g_ld, LdPutOut, NULL);       /* (nothing new: a run's count written now) */
+        LdFlushOut();
+        if (haveStats && off != was) LbUe4ssStats(stats);
+        uint64_t now = GetTickCount64();
+        if (now - lineAt >= 600000 || (g_ld.collapsed >= 1000 && !saidCollapsed)) {
+            lineAt = now;
+            saidCollapsed = g_ld.collapsed ? g_ld.collapsed : 1;
+            Log(L"logs: UE4SS.log's copy: %u MB read, %u MB written, %u lines, %u of them repeats collapsed, %u past the "
+                L"64 MB cap; its most repeated line %u times (lag-8)", (uint32_t)(g_ld.inBytes >> 20), (uint32_t)(g_ld.outBytes >> 20),
+                (uint32_t)g_ld.lines, (uint32_t)g_ld.collapsed, (uint32_t)g_ld.dropped, (uint32_t)g_ld.topN);
         }
         Sleep(10000);
     }
