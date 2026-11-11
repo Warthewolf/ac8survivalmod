@@ -26,6 +26,13 @@ if [ -f build/install/tani_wd.txt ] && [ "$TANI" != 1 ]; then
     echo "  TANI=1 (its container staged with it), or run tools/build_all.sh without TANI=1 first"
     exit 1
 fi
+# ((2026-11-12, the stage-1 review) and the other way: TANI=1 on a world data built without it would stage the container,
+# whose BP_SV_Tani_HULLLIVE makes its live parts' child actors with no desc behind them (Ctrl+L; never run, no stock ship
+# does it): TANI=1 packages a TANI=1 build only)
+if [ "$TANI" = 1 ] && [ ! -f build/install/tani_wd.txt ]; then
+    echo "package_dev.sh: TANI=1 needs a TANI=1 tools/build_all.sh (its world data gives THE TANACORN's live parts their descs): rerun it with TANI=1"
+    exit 1
+fi
 rm -rf "$st"
 mkdir -p "$st/ue4ss/Mods/IoStoreLoaderMod"
 cp -r build/install/AC8SurvivalMode "$st/ue4ss/Mods/"

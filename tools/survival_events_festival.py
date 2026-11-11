@@ -99,10 +99,39 @@ def tani_mount(part):
 
 
 TANI_MOUNTS = [tani_mount(p) for p in TANI_MOUNT_PARTS]
+# (2026-11-12, WP1's VLS route: docs/re/TANICORN.md "VLS") THE TANACORN's VLS blocks, each a blueprint of Survival's own
+# (tools/tanicorn/spec.py vls_mount: BP_SV_Tani_<part>, its mesh a SkeletalMeshComponent TurretMesh with the 8 cells
+# SOC_Vls_01..08 and the lids' Open animation): the deck block VLSD (one blueprint for its 8 sockets VLSD_1..8) and the side
+# blocks VLSS_L1..L4 / R1..R4 (each its own mesh, so its own blueprint). Every block type its own mission, DT_NPC and model
+# row as the gun mounts' (its model row's blueprint its own), all on ONE fire control row TANI_VLS_FCS that
+# Scripts/sv_tanicorn.lua (TANI.vls_fcs) clones at the main menu from the Aegis Mk 41's NPC_FCS_VesselVLSmk41 (its arm
+# BP_FCS_Vessel_VLS_VE002_mk41: LauncherCommon on TurretMesh, prefix VLS, BP_wp_vls_a0) with SlotNum 8 and a boss's reach and
+# timings. part: its tag (never ending in a digit: hard rule 17, build_survival.py's extra rows assert it). Only the
+# TANI_VLS_TEST types have units of their own (Ctrl+K: as Ctrl+U's test mounts); the rest are live parts only (Ctrl+L).
+TANI_VLS_FCS = 'SV_FCS_TaniVLS'
+TANI_VLS_HEALTH = 40.0
+TANI_VLS_PARTS = {'VLSD': 'VLSDeck', **{f'VLSS_{s}{n}': f'VLSS{s}{n}Side' for s in 'LR' for n in range(1, 5)}}
+TANI_VLS_TEST = ('VLSD', 'VLSS_L1')
+
+
+def tani_vls(part):
+    """The names of THE TANACORN's VLS block type `part` (TANI_VLS_PARTS), as tani_mount's, on TANI_VLS_FCS; test: its own
+    unit (TANI_VLS_TEST)."""
+    tag = TANI_VLS_PARTS[part]
+    assert not tag[-1:].isdigit(), tag
+    return {'part': part, 'tag': tag, 'unit': f'SV_Unit_Tani{tag}', 'obj': f'SV_Obj_Tani{tag}', 'row': f'sv_tani_{tag.lower()}',
+            'npc': f'SV_Npc_Tani{tag}', 'model': f'SV_Model_Tani{tag}',
+            'bp': f'/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_{part}', 'bp_class': f'BP_SV_Tani_{part}_C',
+            'fcs': TANI_VLS_FCS, 'name_key': f'SV_Tani{tag}_Name', 'health': TANI_VLS_HEALTH, 'up': f'SV_TaniUp{tag}',
+            'test': part in TANI_VLS_TEST}
+
+
+TANI_VLS = [tani_vls(p) for p in TANI_VLS_PARTS]
+TANI_VLS_UNITS = [m for m in TANI_VLS if m['test']]     # (Ctrl+K's two test blocks: units, orders as TANI_MOUNTS')
 # (2026-11-11, WP2 step 2, route (a): docs/design/INVINCIBLE_FLEET.md "WP2 step 2") THE TANACORN with her gun mounts LIVE,
 # a second hull beside the drawn one (TANI_HULL_*: Ctrl+Y / Ctrl+R, unchanged): BP_SV_Tani_HULLLIVE (tools/tanicorn/spec.py
-# hull_bp, LIVE: the same rise rig and hull mesh) whose 16 gun-mount sockets carry LiveChildActorComponents, Part_<socket>,
-# the mount's own blueprint. In the world data each is a child desc of the hull's object (Mission 22's Aegis mk15 child as
+# hull_bp, LIVE: the same rise rig and hull mesh) whose 16 gun-mount sockets ((2026-11-12) and 16 VLS sockets: 32 parts)
+# carry LiveChildActorComponents, Part_<socket>, the mount's own blueprint. In the world data each is a child desc of the hull's object (Mission 22's Aegis mk15 child as
 # the template: tools/build_survival_world.py tanicorn_units) naming its class, a HARD import of the Tanicorn container's
 # blueprint (hard rule 7), so ONLY in TANI=1 builds (TANI_WD: the switch the user sets for build_all.sh and package_dev.sh;
 # the packagers refuse a build whose world data has it: build/install/tani_wd.txt). Each part on the mount's own rows (the
@@ -123,18 +152,24 @@ TANI_HULL_LIVE_UP = 'SV_TaniUpHullLive'            # (the hull's appearance: eac
 TANI_LIVE_ORDER_S = 2.5
 TANI_PKG = '/Game/Mods/SurvivalMode/Tanicorn'      # (the container's folder: no import under it without TANI_WD)
 # each mount type's sockets on the hull (tools/tanicorn's export: the hull's Mount_<socket>), in its parts.json order
+# ((2026-11-12) and the VLS blocks': the deck block's 8 (VLSD_1..8, one type), each side block its own type and socket)
 TANI_LIVE_SOCKETS = {'T16': ['T16_FWD', 'T16_AFT'], 'T5': [f'T5_{k}' for k in range(1, 7)],
                      'CIWS': [f'CIWS_{k}' for k in range(1, 5)],
-                     'LASER': ['LASER_FWD_L', 'LASER_FWD_R', 'LASER_AFT_L', 'LASER_AFT_R']}
+                     'LASER': ['LASER_FWD_L', 'LASER_FWD_R', 'LASER_AFT_L', 'LASER_AFT_R'],
+                     'VLSD': [f'VLSD_{k}' for k in range(1, 9)],
+                     **{p: [p] for p in TANI_VLS_PARTS if p != 'VLSD'}}
 
 
 def tani_live():
     """THE TANACORN's live parts, one a socket: its component (Part_<socket>), its object as event args write it
     (SV_Obj_TaniHullLive_Part_<socket>; the world data stores both through fname: 'Part_T5_1' = ('Part_T5', 2), hard rule
-    17), its mount type's mission row, DT_NPC row and blueprint (the T5's TANI_*, the others' TANI_MOUNTS)."""
+    17), its mount type's mission row, DT_NPC row and blueprint (the T5's TANI_*, the others' TANI_MOUNTS, (2026-11-12) the
+    VLS blocks' TANI_VLS)."""
     out = []
+    vls = {m['part']: m for m in TANI_VLS}
     for part, sockets in TANI_LIVE_SOCKETS.items():
-        m = {'row': TANI_ROW, 'npc': TANI_NPC, 'bp': TANI_BP, 'bp_class': TANI_BP_CLASS} if part == 'T5' else tani_mount(part)
+        m = ({'row': TANI_ROW, 'npc': TANI_NPC, 'bp': TANI_BP, 'bp_class': TANI_BP_CLASS} if part == 'T5'
+             else vls[part] if part in vls else tani_mount(part))
         for s in sockets:
             comp, obj = f'Part_{s}', f'{TANI_HULL_LIVE_OBJ}_Part_{s}'
             assert fname(comp)[2] == fname(obj)[2], (comp, obj)          # (the same split tail: hard rule 17)
@@ -480,7 +515,8 @@ def build_tanicorn(g, stock_ep):
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: TANI_UNIT})
     g.execute(t_part, up, {0: TANI_OBJ}, delay=1.0)
     print(f'  tanicorn: {TANI_OBJ} ordered as it appears ({up}: Normal, PlayerFirst)')
-    for m in TANI_MOUNTS:                    # (0.74.61) the other gun mounts, the same way (TANI_MOUNTS)
+    # (0.74.61) the other gun mounts, the same way (TANI_MOUNTS); (2026-11-12) and Ctrl+K's two VLS test blocks (TANI_VLS_UNITS)
+    for m in TANI_MOUNTS + TANI_VLS_UNITS:
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', m['up'], arg_changes={0: m['unit']})
         g.execute(t_part, m['up'], {0: m['obj']}, delay=1.0)
         print(f'  tanicorn: {m["obj"]} ({m["part"]}) ordered as it appears ({m["up"]}: Normal, PlayerFirst)')

@@ -304,8 +304,9 @@ def tanicorn_units(units, used_ids, z, top_number):
         put(ob[2], 'LiveAIObjectDesc', 'bIgnoreSetAutoSkipUpdateTransform', ('raw', 'Bool', b'\x01'))
     print(f'  {se.TANI_HULL_UNIT}: {names[0]} on {se.TANI_HULL_ROW} (the Tanacorn hull test; never skipped far off)')
     tanicorn_live_unit(units, used_ids, z, top_number, src)
-    # (0.74.61) the other gun mounts (TANI_MOUNTS: T16, CIWS, LASER), each as the T5: Ctrl+U
-    for m in se.TANI_MOUNTS:
+    # (0.74.61) the other gun mounts (TANI_MOUNTS: T16, CIWS, LASER), each as the T5: Ctrl+U; (2026-11-12) and the two VLS
+    # test blocks (TANI_VLS_UNITS: VLSD, VLSS_L1): Ctrl+K
+    for m in se.TANI_MOUNTS + se.TANI_VLS_UNITS:
         names = port_unit(units, used_ids, z, src, m['unit'], m['obj'], m['row'], [(0.0, 0.0, se.FISH_Z_CM)], 0.0,
                           top_number, tgt=True)
         assert names == [m['obj']], names

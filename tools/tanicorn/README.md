@@ -35,6 +35,15 @@ folder; `TANI_PARTS=T5,HULL` for some parts only; `TANI_STOP=export` to stop bef
    LiveChildActorComponents whose child is that mount's blueprint (`child actor Part_<socket>: <class> (template ...)` in
    tanibuild.log, one a live part: build.sh counts them); the VLS blocks, railcannon and sub-railguns drawn as on HULL. Its
    world data (each part a child desc importing the mount's blueprint) is in TANI=1 builds only (Ctrl+L in a run).
+   (2026-11-12, WP1's VLS route: docs/re/TANICORN.md "VLS") the VLS blocks' blueprints (`vls_mount`): BP_SV_Tani_VLSD (the
+   deck block, one blueprint for its 8 sockets) and BP_SV_Tani_VLSS_L1..L4 / R1..R4 (each side block its own mesh), on the
+   gun mounts' layout but their mesh a SkeletalMeshComponent `TurretMesh` (the Mk 41's component name: its cells
+   SOC_Vls_01..08, AS_SV_Tani_<part>_Open in single-node mode held shut; Lua opens the lids when a block fires), a
+   LauncherCommon arm with the VLS prefix and the Mk 41's missile (a stub for BP_wp_vls_a0 on LiveVLSMissile; in game the
+   row SV_FCS_TaniVLS's arm replaces it), the mounts' wreck. HULLLIVE then has all 16 VLS sockets live too: 32
+   `child actor Part_...` lines (Part_VLSD_1..8, Part_VLSS_L1..R4), only the railcannon and sub-railguns drawn. The cook
+   checks each block's BP_SV_Tani_<part> with its mesh, skeleton, wreck and Open. In a run: Ctrl+K (the VLSD and VLSS_L1
+   test blocks 3 km ahead), Ctrl+L (all of them live on the hull).
 6. Cook (VERSIONED, hard rule 42); 7. `retoc to-zen` of `/Game/Mods/SurvivalMode/Tanicorn` only; 8. `pad.py`.
 The first 5-inch mount (milestone 0) came through `prepare_part.py` from `build/tanicorn/src.blend` (`bl_import.py`);
 the export gives the same T5 (the same pivot and muzzles) and build.sh no longer calls them. Logs to read after a
@@ -93,4 +102,5 @@ The survey the user was sent (2026-11-10, after the audit's fixes) is in `art/ta
 The clips the user was sent are in `art/tanicorn/video/` (rendered BEFORE the audit: they still show the faults). The previews the user saw are in
 `art/tanicorn/renders/model/`. Next: build.sh on the user's machine (above), then WP1's mount tests.
 
-In game (test builds): Scripts/sv_tanicorn.lua, Ctrl+T in a run.
+In game (test builds): Scripts/sv_tanicorn.lua, Ctrl+T in a run (Ctrl+U the other gun mounts, Ctrl+K the VLS blocks,
+Ctrl+Y / Ctrl+L the hull drawn / live, Ctrl+R the rise; tools/README.md's key table).

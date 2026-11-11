@@ -300,8 +300,8 @@ def build_model_rows():
     set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.TANI_HULL_LIVE_NAME_KEY))
     out.append(((survival_events.TANI_HULL_LIVE_MODEL, 0), row))
     # (0.74.61) the other gun mounts' model rows (survival_events.TANI_MOUNTS: T16, CIWS, LASER): the same, each its own
-    # blueprint BP_SV_Tani_<part>, health and name key
-    for m in survival_events.TANI_MOUNTS:
+    # blueprint BP_SV_Tani_<part>, health and name key; (2026-11-12) and each VLS block type's (survival_events.TANI_VLS)
+    for m in survival_events.TANI_MOUNTS + survival_events.TANI_VLS:
         row = copy.deepcopy(crow[(f[1], f[2])])
         row[2][:] = [(q[0], q[1], q[2], ('soft', ('name', m['bp'], 0), ('name', m['bp_class'], 0), ''))
                      if q[1] == 'BlueprintClass' else q for q in row[2]]
@@ -330,7 +330,7 @@ def build_model_rows():
     for n in (survival_events.TANI_BP, survival_events.TANI_BP_CLASS, survival_events.TANI_HULL_BP,
               survival_events.TANI_HULL_BP_CLASS, survival_events.TANI_HULL_LIVE_BP,
               survival_events.TANI_HULL_LIVE_BP_CLASS): z.nb.add(n)
-    for m in survival_events.TANI_MOUNTS:
+    for m in survival_events.TANI_MOUNTS + survival_events.TANI_VLS:
         for n in (m['bp'], m['bp_class']): z.nb.add(n)
     for k, row in out:
         for n in names_in(row) + [k[0]]: z.nb.add(n)

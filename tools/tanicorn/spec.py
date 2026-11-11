@@ -20,6 +20,11 @@ animation) get their SOC_Gun_01 like the others and no blueprint of their own ye
 blueprint draws them, stowed, on Mount_RAILCANNON / Mount_RAILGUN_L / _R as it draws every part.
 (2026-11-11, WP2 step 2, route (a)) BP_SV_Tani_HULLLIVE: the same hull with the gun mounts LIVE (LIVE: each T16 / T5 / CIWS /
 LASER socket a LiveChildActorComponent whose child is that mount's own blueprint), the rest drawn; BP_SV_Tani_HULL unchanged.
+(2026-11-12, WP1's VLS route: docs/re/TANICORN.md "VLS") the VLS blocks' blueprints (vls_mount: BP_SV_Tani_VLSD, the deck
+block on its 8 sockets, and BP_SV_Tani_VLSS_L1..R4, each side block its own mesh): their mesh a SkeletalMeshComponent
+TurretMesh (the Mk 41's component name; its cells SOC_Vls_01..08, the lids' AS_SV_Tani_<part>_Open in single-node mode,
+shut), a LauncherCommon arm on it with the VLS prefix and the Mk 41's missile (the row's arm replaces it), the gun mounts'
+wreck and damage state; on BP_SV_Tani_HULLLIVE all 16 VLS sockets live too (32 parts).
 """
 import json, os
 
@@ -30,6 +35,9 @@ AA_SHELL = '/Game/Blueprints/Weapons/AAGUN/BP_wp_aagun_vessel'          # LiveBu
 # the ground flak gun's shell (BP_FCS_FlakGun_00's weapon; BP_flakgun_BaseClass on the native LiveFlakGun): one shell a
 # shot from the launcher, not an attached emitter
 FLAK_SHELL = '/Game/Blueprints/Weapons/FlakGun/NPC/BP_wp_flakgun'
+# (2026-11-12) the Aegis Mk 41's missile (BP_FCS_Vessel_VLS_VE002_mk41's weapon; BP_wp_vls_BaseClass on the native
+# LiveVLSMissile: its script imports, build/stock): the VLS blocks' own arm names it (a stub here, never packed)
+VLS_MISSILE = '/Game/Blueprints/Weapons/MSL/NPC/Vls/BP_wp_vls_a0'
 
 
 def obj(path):
@@ -106,6 +114,85 @@ def mount(part, info, fcs):
             'DamagedStateComponent': {
                 'DefaultDestroySystemList': [{'$new': 'LiveDefaultDestroySystemChangeMesh', 'props': {
                     'DestroyHideMeshNameList': '((ChangeTime=0,TargetMeshName="TurretPoseableMesh",bHideToFinalExplosion=True,bReflectChildMesh=False))',
+                    'DestroyVisibleMeshNameList': '((ChangeTime=0,TargetMeshName="DamagedStaticMesh",bHideToFinalExplosion=False,bReflectChildMesh=False))',
+                    'bChangeMeshes': 'True', 'bHideMeshes': 'True'}}],
+            },
+        },
+    }
+
+
+VLS_CELLS = 8                                          # (SOC_Vls_01..08: the export's, every block's)
+
+
+def vls_mount(part, info, fcs):
+    """(2026-11-12, WP1's VLS route: docs/re/TANICORN.md "VLS", the Mk 41's way) a VLS block's blueprint BP_SV_Tani_<part> on the
+    gun mounts' native ALiveAIGroundVehicleObject and layout (mount), but:
+      TurretMesh  a SkeletalMeshComponent under the Mk 41's component name (its TurretMesh is a static mesh; a LauncherCommon
+                  reading its sockets off a skinned one is the Ladon's HatchAnimSK), both mesh fields as every mount since
+                  0.74.52, its cells SOC_Vls_01..08 on Body (the Mk 41's spelling), in single-node mode on
+                  AS_SV_Tani_<part>_Open held at 0 (the lids shut), not playing: Scripts/sv_tanicorn.lua plays it open when the
+                  block fires and back shut after (its lids watch)
+      the arm     AIControlCommon + LauncherCommon (no bones: MeshComponentName TurretMesh, SlotSocket, the VLS prefix, SlotNum
+                  8) + ProjectileCommon (the Mk 41's missile): in game the row's arm (SV_FCS_TaniVLS, from NPC_FCS_VesselVLSmk41:
+                  BP_FCS_Vessel_VLS_VE002_mk41, the same launcher on the same component name) replaces it, as on every mount
+      the wreck   as the mounts': TurretMesh hidden, DamagedStaticMesh (SM_SV_Tani_<part>_DAM) shown
+      the hit     a sphere round its cells: their middle, the farthest cell's reach + hit_pad_cm (EnemyPawn)"""
+    name = f'Tani_{part}'
+    cells = sorted(s['name'] for s in info['sockets'])
+    assert cells == [f'SOC_Vls_{i:02d}' for i in range(1, VLS_CELLS + 1)], (part, cells)
+    assert info.get('kind') == 'vls' and (info.get('anim') or {}).get('name') == 'Open', (part, info.get('kind'), info.get('anim'))
+    mid = [sum(s['loc'][i] for s in info['sockets']) / len(info['sockets']) for i in range(3)]
+    reach = max(sum((s['loc'][i] - mid[i]) ** 2 for i in range(3)) ** 0.5 for s in info['sockets'])
+    sk, anim = obj(f'{DEST}/Model/SK_SV_{name}'), obj(f'{DEST}/Model/AS_SV_{name}_Open')
+    return {
+        'path': f'{DEST}/BP_SV_{name}',
+        'parent': 'LiveAIGroundVehicleObject',
+        'scs': [
+            {'name': 'TurretMesh', 'class': 'SkeletalMeshComponent', 'parent': 'RootComponent',
+             'props': {'SkeletalMesh': sk, 'SkinnedAsset': sk, 'AnimationMode': 'AnimationSingleNode',
+                       'AnimationData': (f'(AnimToPlay="{anim}",bSavedLooping=False,bSavedPlaying=False,'
+                                         'SavedPosition=0.000000,SavedPlayRate=1.000000)')}},
+            {'name': 'DamagedStaticMesh', 'class': 'StaticMeshComponent', 'parent': 'RootComponent',
+             'props': {'StaticMesh': obj(f'{DEST}/Model/SM_SV_{name}_DAM'), 'bVisible': 'False'}},
+            {'name': 'DamagedCollision', 'class': 'SphereComponent', 'parent': 'RootComponent',
+             'props': {'SphereRadius': str(round(reach + fcs['hit_pad_cm'])),
+                       'RelativeLocation': f'(X={int(round(mid[0]))},Y={int(round(mid[1]))},Z={int(round(mid[2]))})',
+                       'BodyInstance': '(CollisionEnabled=QueryAndPhysics,ObjectType=ECC_GameTraceChannel3,'
+                                       'CollisionProfileName="EnemyPawn")'}},
+        ],
+        'cdo': {
+            'AutoPossessAI': 'PlacedInWorldOrSpawned',
+            'GameObjectId': '1000',
+            'GameObjectCategory': 'Category_CarrierBattery',
+            'PursuitPointOffset': '(X=0,Y=0,Z=45000)',
+            'bKeepOnGround': 'False',
+            'bIsSea': 'True',
+            'bShowHUDBox': 'True',
+            'BriDebriIconType': 'Weapons',
+            'DamageSound': '(bEnableDamageSound=True)',
+        },
+        'components': {
+            'FireControlSystemComponent': {
+                'EnemySearchType': fcs['search'],
+                'AllArms': [{'$new': 'LiveFireControlSystemArms', 'props': {
+                    'AIModule': {'$new': 'LiveFCSModule_AIControlCommon'},
+                    'LauncherModule': {'$new': 'LiveFCSModule_LauncherCommon', 'props': {
+                        'MeshComponentName': 'TurretMesh',
+                        'FireControl': (f'(LauncherDirection=SlotSocket,CaptureDistance={fcs["capture_cm"]},'
+                                        f'CaptureMinDistance={fcs["min_cm"]},CaptureAngleRange={fcs["cone"]},'
+                                        f'ActivationTime={fcs["activation"]},TriggeringTime={fcs["triggering"]},'
+                                        f'ShotIntervalTime={fcs["interval"]},RestingTime={fcs["resting"]},'
+                                        f'TriggerCount={fcs["trigger_count"]})'),
+                        'Performance': (f'(FireRate={fcs["fire_rate"]},MagazineCapacity={fcs["magazine"]},'
+                                        f'ReloadTime={fcs["reload"]},SlotNum={VLS_CELLS},SlotSocketPrefix=VLS)'),
+                    }},
+                    'ProjectileModule': {'$new': 'LiveFCSModule_ProjectileCommon', 'props': {
+                        'WeaponClass': f'{obj(fcs["weapon"])}_C'}},
+                }}],
+            },
+            'DamagedStateComponent': {
+                'DefaultDestroySystemList': [{'$new': 'LiveDefaultDestroySystemChangeMesh', 'props': {
+                    'DestroyHideMeshNameList': '((ChangeTime=0,TargetMeshName="TurretMesh",bHideToFinalExplosion=True,bReflectChildMesh=False))',
                     'DestroyVisibleMeshNameList': '((ChangeTime=0,TargetMeshName="DamagedStaticMesh",bHideToFinalExplosion=False,bReflectChildMesh=False))',
                     'bChangeMeshes': 'True', 'bHideMeshes': 'True'}}],
             },
@@ -196,16 +283,27 @@ FCS = {
 
 # (2026-11-11, WP2 step 2, route (a)) the parts live on BP_SV_Tani_HULLLIVE: every socket of these (the gun mounts, each with
 # its blueprint and fire control row: T16_FWD / _AFT, T5_1-6, CIWS_1-4, LASER_FWD_L / _R, LASER_AFT_L / _R); every other
-# socket (the VLS blocks, the railcannon, the sub-railguns) drawn as on BP_SV_Tani_HULL. tools/survival_events_festival.py
+# socket drawn as on BP_SV_Tani_HULL (the VLS blocks too until 2026-11-12). tools/survival_events_festival.py
 # TANI_LIVE names the same sockets for the world data (build_survival.py check_tanicorn_build compares them with this spec)
-LIVE = ('T16', 'T5', 'CIWS', 'LASER')
+# (2026-11-12) and the VLS blocks (VLS_PARTS: the deck block's 8 sockets VLSD_1..8 on BP_SV_Tani_VLSD, each side block's
+# own on its BP_SV_Tani_VLSS_<side>): 32 live parts, only the railcannon and the sub-railguns drawn
+VLS_PARTS = ('VLSD',) + tuple(f'VLSS_{s}{n}' for s in 'LR' for n in range(1, 5))
+LIVE = ('T16', 'T5', 'CIWS', 'LASER') + VLS_PARTS
+# (2026-11-12) the VLS blocks' own arm (vls_mount), as the row Scripts/sv_tanicorn.lua makes (TANI.vls_fcs: SV_FCS_TaniVLS from
+# the Mk 41's NPC_FCS_VesselVLSmk41, which replaces it in game): 7 km down to 600 m, all round, a ripple of 4 missiles 0.4 s
+# apart, 10 s rest, 8 cells then a 15 s reload; the Mk 41's missile (9 s, 3000 km/h: about 7.5 km). Not a design decision:
+# the boss's tuning comes with WP3
+VLS_FCS = {'search': 'AIR_ONLY', 'capture_cm': 700000, 'min_cm': 60000, 'cone': 180, 'activation': 2, 'triggering': 1.6,
+           'interval': 0.4, 'resting': 10, 'trigger_count': 4, 'fire_rate': 12, 'magazine': VLS_CELLS, 'reload': 15,
+           'weapon': VLS_MISSILE, 'hit_pad_cm': 200}
 
 
 def main():
     parts = json.load(open(os.path.join(BUILD, 'parts.json')))
     only = [x for x in os.environ.get('TANI_PARTS', '').split(',') if x]
     spec = {'sockets': [], 'mesh_sockets': [], 'stubs': [{'path': AA_SHELL, 'parent': 'LiveBulletEmitter'},
-                                                         {'path': FLAK_SHELL, 'parent': 'LiveFlakGun'}],
+                                                         {'path': FLAK_SHELL, 'parent': 'LiveFlakGun'},
+                                                         {'path': VLS_MISSILE, 'parent': 'LiveVLSMissile'}],
             'blueprints': []}
     parts_on, hull, rig = [], False, None
     for p in parts:
@@ -234,12 +332,15 @@ def main():
             spec['sockets'].append({'skeleton': obj(f'{DEST}/Model/SKEL_SV_Tani_{p}'),
                                     'mesh': obj(f'{DEST}/Model/SK_SV_Tani_{p}'), 'name': s['name'],
                                     'bone': s['bone'], 'loc': s['loc'], 'rot': s.get('rot', [0, 0, 0])})
-        if kind == 'turret' and p in FCS:              # (the VLS blocks, the railcannon and the sub-railguns: none yet)
+        if kind == 'turret' and p in FCS:              # (the railcannon and the sub-railguns: none yet)
             spec['blueprints'].append(mount(p, info, FCS[p]))
+        elif kind == 'vls' and p in VLS_PARTS:         # ((2026-11-12) the VLS blocks: WP1's VLS route)
+            spec['blueprints'].append(vls_mount(p, info, VLS_FCS))
     live_said = ''
     if hull:
         spec['blueprints'].append(hull_bp(parts_on, rig))
-        # (2026-11-11) and THE TANACORN with her gun mounts live: the same hull, the LIVE parts' sockets child actors
+        # (2026-11-11) and THE TANACORN with her gun mounts ((2026-11-12) and VLS blocks) live: the same hull, the LIVE
+        # parts' sockets child actors
         made = {b['path'] for b in spec['blueprints']}
         lb = hull_bp(parts_on, rig, live=LIVE, name='HULLLIVE')
         kids = [n for n in lb['scs'] if 'child_class' in n]

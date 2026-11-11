@@ -260,6 +260,22 @@ tagged. Arm values are the arm's own; a row's values replace them (L2-L4). Row d
     Or open them once at the rise. Way 1 only if a lid must follow every trigger.
   - Side blocks: their sockets lean with the hull, and LauncherDirection SlotSocket launches along each socket's +X
     [I]. Whether BP_wp_vls_a0's LiveVLSMovementComponent keeps that line or climbs straight up first is unknown [?].
+- **Built on this route (2026-11-12, not yet built in UE or run in game).** tools/tanicorn/spec.py `vls_mount`:
+  BP_SV_Tani_VLSD (the deck block, one blueprint for VLSD_1..8) and BP_SV_Tani_VLSS_L1..R4 (each side block its own mesh)
+  on ALiveAIGroundVehicleObject: TurretMesh a SkeletalMeshComponent (both mesh fields, AS_SV_Tani_<part>_Open in
+  single-node mode held at 0, shut), the mounts' wreck and damage state, a hit sphere round the cells, and an arm of its
+  own as the row's (LauncherCommon on TurretMesh, SlotSocket, prefix VLS, SlotNum 8; ProjectileCommon on a stub of
+  BP_wp_vls_a0, whose BP_wp_vls_BaseClass is a LiveVLSMissile [V: its script imports]). The row: SV_FCS_TaniVLS,
+  NPC_FCS_VesselVLSmk41 cloned at the main menu by sv_tanicorn.lua (TANI.vls_fcs: SlotNum 8, magazine 8, reload 15 s,
+  7 km down to 600 m, cone 180, a ripple of 4 0.4 s apart over 1.6 s, 10 s rest; the stock row's 3 km, one shot every 5 s
+  and the AI module / weapon row kept). Each block type its own mission, DT_NPC and model row (survival_events.TANI_VLS);
+  VLSD and VLSS_L1 also a unit each (Ctrl+K). On BP_SV_Tani_HULLLIVE all 16 VLS sockets are live parts (32 with the gun
+  mounts). The lids: route "Lua calling the component" (SetAnimationMode / SetAnimation / SetPlayRate / Play, as the rise's
+  rig), opened on a launch (a pooled LiveVLSMissile shown with its OwningGameObject a block: sv_weaponlog.lua's launch
+  rule) and shut 6 s after; if a launch's owner is an actor of ours that isn't a block, by your range instead.
+  tools/checks/tani_vls_test.sh. Open: whether the row's arm takes our skinned TurretMesh's sockets (`asset finds
+  SOC_Vls_01 true`, then the missile lines' nearest cell), whose OwningGameObject a part's missile names, and the side
+  blocks' launch line.
 
 ### LASER
 - No BP_FCS arm fires a laser [V: 163 arms]. Decided by the user, 2026-11-11: the LASER mounts carry AC7's

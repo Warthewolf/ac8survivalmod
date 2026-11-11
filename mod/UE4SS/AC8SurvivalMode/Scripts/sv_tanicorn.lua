@@ -28,6 +28,12 @@
 --   Ctrl+L in a run   (2026-11-11) THE TANACORN with her 16 gun mounts LIVE (TANI.live: each a child actor, its own health,
 --                     box, fire control and order), 5 km ahead as Ctrl+Y; a line a part at +2 s and +8 s, its health and
 --                     aim every 5 s for 2 minutes, a line when one goes down (TANI=1 builds: the world data has the parts).
+--                     (2026-11-12) and her 16 VLS blocks live too (32 parts), their lids watched as Ctrl+K's.
+--   Ctrl+K in a run   (2026-11-12) THE TANACORN's VLS test blocks (TANI.vls: the deck block VLSD and the side block VLSS_L1),
+--                     each on its own rows and the fire control row SV_FCS_TaniVLS (the Aegis Mk 41's, cloned at the main
+--                     menu), 3 km ahead across your path; logged as Ctrl+U's mounts, their missiles as the shells
+--                     (`tanicorn: VLSD missile N ...`), and their lids (AS_SV_Tani_<part>_Open) opened when a block fires and
+--                     shut again after (`tanicorn: VLS ... lids opening / shutting`).
 -- TEST ONLY BEGIN
 TANI = { unit = "SV_Unit_TaniTest", npc = "SV_Npc_TaniMount", model = "SV_Model_TaniMount",
          class = "BP_SV_Tani_T5_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5.BP_SV_Tani_T5_C",
@@ -99,11 +105,51 @@ TANI.live = { unit = "SV_Unit_TaniHullLive", npc = "SV_Npc_TaniHullLive", model 
                   { "T5_1", "T5" }, { "T5_2", "T5" }, { "T5_3", "T5" }, { "T5_4", "T5" }, { "T5_5", "T5" }, { "T5_6", "T5" },
                   { "CIWS_1", "CIWS" }, { "CIWS_2", "CIWS" }, { "CIWS_3", "CIWS" }, { "CIWS_4", "CIWS" },
                   { "LASER_FWD_L", "LASER" }, { "LASER_FWD_R", "LASER" }, { "LASER_AFT_L", "LASER" }, { "LASER_AFT_R", "LASER" },
+                  -- ((2026-11-12) the VLS blocks: the deck block's 8 sockets on one type, each side block its own)
+                  { "VLSD_1", "VLSD" }, { "VLSD_2", "VLSD" }, { "VLSD_3", "VLSD" }, { "VLSD_4", "VLSD" },
+                  { "VLSD_5", "VLSD" }, { "VLSD_6", "VLSD" }, { "VLSD_7", "VLSD" }, { "VLSD_8", "VLSD" },
+                  { "VLSS_L1", "VLSS_L1" }, { "VLSS_L2", "VLSS_L2" }, { "VLSS_L3", "VLSS_L3" }, { "VLSS_L4", "VLSS_L4" },
+                  { "VLSS_R1", "VLSS_R1" }, { "VLSS_R2", "VLSS_R2" }, { "VLSS_R3", "VLSS_R3" }, { "VLSS_R4", "VLSS_R4" },
               } }
+-- (2026-11-12, WP1's VLS route: docs/re/TANICORN.md "VLS") THE TANACORN's VLS blocks (survival_events.TANI_VLS): the deck
+-- block VLSD (one blueprint for its 8 sockets VLSD_1..8) and the side blocks VLSS_L1..L4 / R1..R4 (each its own mesh and
+-- blueprint), each BP_SV_Tani_<part> on the gun mounts' layout but its mesh a SkeletalMeshComponent TurretMesh (its cells
+-- SOC_Vls_01..08, its lids' AS_SV_Tani_<part>_Open), all on ONE fire control row (vls_fcs): the Aegis Mk 41's
+-- NPC_FCS_VesselVLSmk41 (its arm BP_FCS_Vessel_VLS_VE002_mk41: LauncherCommon on TurretMesh, the VLS prefix, BP_wp_vls_a0)
+-- cloned at the main menu with SlotNum 8 and fcs_set: a boss's reach (7 km: the Mk 41 missile's 9 s at 3000 km/h, not the
+-- destroyer's 3 km) and a ripple of 4 a trigger (TriggerCount shots ShotIntervalTime apart over TriggeringTime, then
+-- RestingTime: sv_allies.lua's salvos), 8 cells then a 15 s reload; not a design decision (the boss's tuning is WP3's).
+-- No bones: no turn speeds or arcs (fcs_speed nil). Each { part, tag, test } gives its names as
+-- survival_events.tani_vls makes them (tools/build_survival.py check_tanicorn_vls reads them here); test: its own unit
+-- (Ctrl+K). face: its yaw against the line to you at Ctrl+K (a side block launches along its own -Y, leaning out 47-55 deg).
+TANI.vls_fcs = { fcs = "SV_FCS_TaniVLS", fcs_src = "NPC_FCS_VesselVLSmk41", fcs_slots = 8,
+                 fcs_set = { { "CaptureDistance", 7000 }, { "CaptureMinDistance", 600 }, { "CaptureAngleRange", 180 },
+                             { "ActivationTime", 2 }, { "TriggerCount", 4 }, { "ShotIntervalTime", 0.4 },
+                             { "TriggeringTime", 1.6 }, { "RestingTime", 10 }, { "MagazineCapacity", 8 }, { "ReloadTime", 15 } } }
+TANI.vls = {}
+for _, p in ipairs({
+    { part = "VLSD", tag = "VLSDeck", test = true }, { part = "VLSS_L1", tag = "VLSSL1Side", test = true },
+    { part = "VLSS_L2", tag = "VLSSL2Side" }, { part = "VLSS_L3", tag = "VLSSL3Side" }, { part = "VLSS_L4", tag = "VLSSL4Side" },
+    { part = "VLSS_R1", tag = "VLSSR1Side" }, { part = "VLSS_R2", tag = "VLSSR2Side" }, { part = "VLSS_R3", tag = "VLSSR3Side" },
+    { part = "VLSS_R4", tag = "VLSSR4Side" },
+}) do
+    local bp, F = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_" .. p.part, TANI.vls_fcs
+    local cls = "BP_SV_Tani_" .. p.part .. "_C"
+    local anim = "/Game/Mods/SurvivalMode/Tanicorn/Model/AS_SV_Tani_" .. p.part .. "_Open"
+    TANI.vls[#TANI.vls + 1] = {
+        key = p.part, vls = true, test = p.test, unit = p.test and ("SV_Unit_Tani" .. p.tag) or nil,
+        npc = "SV_Npc_Tani" .. p.tag, model = "SV_Model_Tani" .. p.tag, name_key = "SV_Tani" .. p.tag .. "_Name",
+        name = "TANACORN VLS", class = cls, class_path = bp .. "." .. cls,
+        cdo_path = bp .. ".Default__" .. cls, anim = anim .. "." .. anim:match("[^/]+$"), health = 40,
+        fcs = F.fcs, fcs_src = F.fcs_src, fcs_slots = F.fcs_slots, fcs_set = F.fcs_set,
+        face = p.part == "VLSD" and 180 or 270 }
+end
+for _, k in ipairs(TANI.vls) do TANI.live.row_health[k.key] = k.health end   -- (survival_events.TANI_VLS_HEALTH)
 do
 local T = { rows = nil, next = 0, seen = {}, until_ = 0, checks = {}, shells = {}, stock = {} }
 local KINDS = { TANI }                                   -- every gun mount type (the T5 and TANI.mounts): its key and class
 for _, k in ipairs(TANI.mounts) do KINDS[#KINDS + 1] = k end
+for _, k in ipairs(TANI.vls) do KINDS[#KINDS + 1] = k end   -- ((2026-11-12) and every VLS block type: k.vls)
 
 local function kindOf(o)                                 -- the mount type of one of our mounts (by its class), or nil
     local cls = "?"
@@ -126,16 +172,19 @@ end
 -- spec.fcs_src with its muzzles (SlotNum), a magazine of at least that, its turn speeds (fcs_speed: a number, or { yaw,
 -- pitch }) and, when spec has them, its yaw / pitch arcs. The row path is the one that gives the arm its muzzles (0.74.58,
 -- the user: "THE GUN FIRED FROM THE BARREL THIS TIME", "only one barrel was working": the row's SlotNum 1)
+-- ((2026-11-12) a VLS block's (k.vls): no turn speeds (no bones: fcs_speed nil), its fields fcs_set { { field, value }, ... }
+-- after the rest, read back in the line as `set CaptureDistance 7000, ...`)
 local function fcsRow(fcs, spec)
     local ys, ps = spec.fcs_speed, spec.fcs_speed
     if type(spec.fcs_speed) == "table" then ys, ps = spec.fcs_speed[1], spec.fcs_speed[2] end
     local okF, whyF = cloneRow(fcs, spec.fcs_src, spec.fcs, function(r)
         r.SlotNum = spec.fcs_slots
         if (tonumber(r.MagazineCapacity) or 0) < spec.fcs_slots then r.MagazineCapacity = spec.fcs_slots end
-        r.YawSpeed, r.PitchSpeed = ys, ps
+        if ys then r.YawSpeed, r.PitchSpeed = ys, ps end
         if spec.yaw then r.YawAngleMin, r.YawAngleMax = spec.yaw[1], spec.yaw[2] end
         if spec.pitch then r.PitchAngleMin, r.PitchAngleMax = spec.pitch[1], spec.pitch[2] end
         if spec.no_gun then r.bLimitAmmo, r.AmmoCount = true, 0 end   -- ((2026-11-11) the laser's aim only, no gun)
+        for _, fv in ipairs(spec.fcs_set or {}) do r[fv[1]] = fv[2] end
     end)
     local slots, mag, speed, arcs, ammo = "?", "?", "?", "?", ""
     pcall(function()
@@ -145,6 +194,11 @@ local function fcsRow(fcs, spec)
         arcs = string.format("yaw %s..%s, pitch %s..%s", tostring(r.YawAngleMin), tostring(r.YawAngleMax),
             tostring(r.PitchAngleMin), tostring(r.PitchAngleMax))
         if spec.no_gun then ammo = string.format(", ammo limited %s, %s rounds (no gun)", tostring(r.bLimitAmmo), tostring(r.AmmoCount)) end
+        if spec.fcs_set then
+            local t = {}
+            for _, fv in ipairs(spec.fcs_set) do t[#t + 1] = fv[1] .. " " .. tostring(r[fv[1]]) end
+            ammo = ammo .. "; set " .. table.concat(t, ", ")
+        end
     end)
     log(string.format("tanicorn: fire control row %s from %s: %s (SlotNum %s, magazine %s, yaw / pitch speed %s, %s%s)",
         spec.fcs, spec.fcs_src, okF and "in" or ("NOT made: " .. tostring(whyF)), slots, mag, speed, arcs, ammo))
@@ -172,7 +226,10 @@ local function rowsIn()                                  -- the model first: the
     local fcs = loadObject(FCS_TABLE)
     if fcs then
         pin(fcs, nameOf(fcs))
-        for _, k in ipairs(KINDS) do fcsRow(fcs, k) end
+        local made = {}                                  -- ((2026-11-12) every VLS type on one row: made and logged once)
+        for _, k in ipairs(KINDS) do
+            if not made[k.fcs] then made[k.fcs] = true; fcsRow(fcs, k) end
+        end
     end
     local m = addRow(mt, mr, TANI.model)
     local n = addRow(npc, mine, TANI.npc)
@@ -187,11 +244,20 @@ local function rowsIn()                                  -- the model first: the
         allIn = allIn and km and kn
         more[#more + 1] = string.format("%s %s, %s %s", k.model, km and "in" or "NOT added", k.npc, kn and "in" or "NOT added")
     end
+    local vIn, vOut = 0, {}                                  -- ((2026-11-12) the VLS block types' (TANI.vls): a count
+    for _, k in ipairs(TANI.vls) do                          -- and the ones not in by name)
+        local km, kn = addRow(mt, mr, k.model), addRow(npc, mine, k.npc)
+        allIn = allIn and km and kn
+        if km and kn then vIn = vIn + 1 else vOut[#vOut + 1] = k.model .. " / " .. k.npc end
+    end
+    more[#more + 1] = string.format("the %d VLS block types' rows: %d in%s", #TANI.vls, vIn,
+        #vOut > 0 and (", NOT added: " .. table.concat(vOut, ", ")) or "")
     if type(SV_SetText) == "function" then
         pcall(SV_SetText, TANI.name_key, TANI.name)
         pcall(SV_SetText, TANI.hull.name_key, TANI.hull.name)
         pcall(SV_SetText, TANI.live.name_key, TANI.live.name)
         for _, k in ipairs(TANI.mounts) do pcall(SV_SetText, k.name_key, k.name) end
+        for _, k in ipairs(TANI.vls) do pcall(SV_SetText, k.name_key, k.name) end
     end
     T.rows = m and n and hm and hn and lm and ln and allIn
     return T.rows, string.format("%s %s, %s %s; %s %s, %s %s; %s %s, %s %s; %s", TANI.model, m and "in DT_NPC_Model" or "NOT added",
@@ -260,12 +326,25 @@ local function turretMesh(o)
     return m or o.TurretPoseableMesh
 end
 
+-- (2026-11-12) a VLS block's TurretMesh (a SkeletalMeshComponent, not a PoseableMeshComponent: the lids play on it, the row's
+-- LauncherCommon reads its cells off it), from its component tree; the mesh and the socket a mount's lines read (k: its type)
+local VLS_CELL = "SOC_Vls_01"
+local function vlsMesh(o)
+    for _, c in ipairs((SPC and SPC.V and SPC.V.comps and SPC.V.comps(o, "/Script/Engine.SkeletalMeshComponent")) or {}) do
+        local okN, n = pcall(function() return c:GetFName():ToString() end)
+        if okN and n == "TurretMesh" then return c end
+    end
+    return nil
+end
+local function partMesh(o, k) if k and k.vls then return vlsMesh(o) end return turretMesh(o) end
+
 -- (0.74.54) what the engine sees of a mount's muzzle (0.74.50-0.74.53: every shell, AA stream or flak, left the turret
 -- mesh's origin, under the mount, along its forward: SOC_Gun_01 never found): the mesh, its asset (and the deprecated
 -- SkeletalMesh field), the asset's sockets, whether the component knows SOC_Gun_01, its bone, and where it puts it
 -- against the mesh's origin (at the barrels' tips: ~ +10 m forward, +4 m up; at (0, 0, 0): not found)
 local MUZZLE = "SOC_Gun_01"
-local function muzzleProbe(m)
+local function muzzleProbe(m, sock)                    -- ((2026-11-12) sock: a VLS block's first cell, SOC_Vls_01)
+    sock = sock or MUZZLE
     local out = {}
     local function try(label, f)
         local ok, v = pcall(f)
@@ -275,11 +354,11 @@ local function muzzleProbe(m)
     try("asset", function() return nameOf(m.SkinnedAsset):match("([^%.]+)$") end)
     try("old field", function() return valid(m.SkeletalMesh) and nameOf(m.SkeletalMesh):match("([^%.]+)$") or "empty" end)
     try("asset sockets", function() return m.SkinnedAsset:NumSockets() end)
-    try("asset finds " .. MUZZLE, function() return valid(m.SkinnedAsset:FindSocket(FName(MUZZLE))) end)
-    try("component has it", function() return m:DoesSocketExist(FName(MUZZLE)) end)
-    try("its bone", function() return m:GetSocketBoneName(FName(MUZZLE)):ToString() end)
+    try("asset finds " .. sock, function() return valid(m.SkinnedAsset:FindSocket(FName(sock))) end)
+    try("component has it", function() return m:DoesSocketExist(FName(sock)) end)
+    try("its bone", function() return m:GetSocketBoneName(FName(sock)):ToString() end)
     try("at", function()
-        local l, c = m:GetSocketLocation(FName(MUZZLE)), m:K2_GetComponentLocation()
+        local l, c = m:GetSocketLocation(FName(sock)), m:K2_GetComponentLocation()
         return string.format("(%+.0f, %+.0f, %+.0f) cm from the mesh's origin", l.X - c.X, l.Y - c.Y, l.Z - c.Z)
     end)
     try("names", function()
@@ -337,6 +416,23 @@ local function aim(o)
     if not T.aimErr then T.aimErr = true; log("tanicorn: reading the barrel failed: " .. tostring(r)) end
     return "barrel ?"
 end
+
+-- (2026-11-12) a VLS block's lids and first cell for its lines (it has no barrel): the lids' animation position (0 shut, its
+-- end open), whether it plays and at what rate, and SOC_Vls_01 against the block
+local function lidLine(o)
+    local m = vlsMesh(o)
+    if not m then return "no TurretMesh (SkeletalMeshComponent) found" end
+    local pos, playing, rate, cell = "?", "?", "?", ""
+    pcall(function() pos = string.format("%.2f", m:GetPosition()) end)
+    pcall(function() playing = tostring(m:IsPlaying()) end)
+    pcall(function() rate = string.format("%.1f", m:GetPlayRate()) end)
+    pcall(function()
+        local l, ml = m:GetSocketLocation(FName(VLS_CELL)), o:K2_GetActorLocation()
+        cell = string.format(", %s (%+.0f, %+.0f, %+.0f) from the block", VLS_CELL, l.X - ml.X, l.Y - ml.Y, l.Z - ml.Z)
+    end)
+    return string.format("lids at %s s (playing %s, rate %s)%s", pos, playing, rate, cell)
+end
+local function aimOf(o, k) if k and k.vls then return lidLine(o) end return (aim(o)) end
 
 -- (0.74.55) every flak shell the game makes while a mount is watched (NotifyOnNewObject, as ALLY's ESM fields: the actor
 -- at its construction, before it has a place), then at the next tick its place and velocity run back over its age to
@@ -547,9 +643,9 @@ local function watch(now)
             T.seen[id] = true
             log(string.format("tanicorn: %s mount %s up at %s: fire control arms %s, health %s/%s", k.key, nameOf(o), at(o),
                 armsOf(o), tostring(h), tostring(mx)))
-            log("tanicorn: " .. k.key .. " muzzle: " .. muzzleProbe(turretMesh(o)))
+            log("tanicorn: " .. k.key .. " muzzle: " .. muzzleProbe(partMesh(o, k), k.vls and VLS_CELL or nil))
             if k.li then liCarry(o, k) end               -- ((2026-11-11) the LASER: AC7's LaserInterceptor)
-            if not T.stockSaid then                      -- (once a key press: the same for every mount)
+            if not k.vls and not T.stockSaid then        -- (once a key press: the same for every gun mount)
                 T.stockSaid = true
                 log("tanicorn: a stock turret's muzzle: " .. stockProbe(o))
             end
@@ -557,7 +653,7 @@ local function watch(now)
         local ay = "?"
         pcall(function() ay = string.format("%.1f", o:K2_GetActorRotation().Yaw) end)
         log(string.format("tanicorn: %s %s hp %s/%s actor yaw %s, %s", k.key, (nameOf(o):match("([^%.:]+)$")) or "?",
-            tostring(h), tostring(mx), ay, (aim(o))))
+            tostring(h), tostring(mx), ay, aimOf(o, k)))
     end
 end
 
@@ -647,6 +743,281 @@ testKey("U", "sv_tanicorn.lua's mounts test", function()
 end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn mount watch", fn = watch }
 
+-- (2026-11-12, WP1's VLS route: docs/re/TANICORN.md "VLS") the VLS blocks' watch: their lids and their missiles, for every
+-- object of a VLS class (Ctrl+K's test blocks and Ctrl+L's live ones alike) while it's on (lidWatch: watch_s from the last key).
+-- The lids (AS_SV_Tani_<part>_Open, 0.5 s: shut at 0, open at its end) on each block's TurretMesh open when the block fires (a
+-- launch of a VLS missile whose OwningGameObject, else its owner, is that block) and shut again close_s after its last one.
+-- A launch as sv_weaponlog.lua tells them (the missiles are pooled: one shown now, bHidden false, that was hidden or unseen
+-- the look before, or shown with a new owner; the first look only learns what's up). If one can't be told apart (its owner
+-- none, or an actor of ours that isn't a block: the hull?), from then on a block's lids also open while you're within its
+-- row's reach (vls_fcs CaptureDistance) and shut close_s after you leave it. The animation is played as the rise plays its
+-- rig: the first time on a block SetAnimationMode (single node, not forced) / SetAnimation / SetPosition 0; then SetPlayRate 1
+-- and Play to open, SetPlayRate -1 and Play to shut from where it is. Logged: `tanicorn: VLS watch on (<why>) for N s: ...`,
+-- `tanicorn: VLS watch: N VLS missiles known, ...` (its first look), once a block `tanicorn: VLS <block> (<type>) lids
+-- opening (<why>): AS_SV_Tani_<type>_Open 0.50 s on TurretMesh, from 0.00 s` and `... lids shutting (...)`, each of our
+-- launches (the first 12 of each type a key press) `tanicorn: <type> missile N (<class>) by <block>: at (...) from the block,
+-- its nearest cell SOC_Vls_0K D m off, flying yaw Y pitch P at V m/s (seen within a look of its launch); its target <you|...>`,
+-- and at its end `tanicorn: VLS watch over (...): N launches by our blocks (<type> n, ...), ...`. A block is kept by its
+-- address AND the name it was captured with, checked before anything is done to it (hard rule 59).
+TANI.lid = { close_s = 6, parts_s = 2, walk_s = 10, watch_s = 180 }
+local lidWatch
+do
+local VNEW = {}
+if type(NotifyOnNewObject) == "function" then
+    pcall(NotifyOnNewObject, "/Script/Live.LiveVLSMissile", function(o) if #VNEW < 64 then VNEW[#VNEW + 1] = o end end)
+end
+local LW = { until_ = 0, on = false, pool = {}, state = {}, parts = {}, partsAt = 0, walkAt = 0, anims = {}, byType = {} }
+local function short(o) return (nameOf(o):match("([^%.:]+)$")) or "?" end
+local function same(e) return e and liveAddr(e.o) == e.a and nameOf(e.o) == e.name end   -- (hard rule 59)
+local function reachCm()
+    for _, fv in ipairs(TANI.vls_fcs.fcs_set) do if fv[1] == "CaptureDistance" then return fv[2] * 100 end end
+    return 700000
+end
+local function lidAnim(k)                                -- a block type's Open animation, kept (false: it didn't load)
+    local a = LW.anims[k.anim]
+    if a == false then return nil end
+    if a and liveObj(a) then return a end
+    a = loadObject(k.anim)
+    if a and valid(a) then pin(a, "tanicorn lids " .. k.key); LW.anims[k.anim] = a; return a end
+    LW.anims[k.anim] = false
+    return nil
+end
+local function lidPlay(e, open, why)                     -- one block's lids opening (open) or shutting
+    local m = vlsMesh(e.o)
+    if not m then
+        if not e.said.mesh then e.said.mesh = true; log("tanicorn: VLS " .. e.who .. " (" .. e.k.key .. "): no TurretMesh "
+            .. "(SkeletalMeshComponent) on it: its lids can't move (a build before the VLS blueprints?)") end
+        return
+    end
+    local anim, fails = lidAnim(e.k), {}
+    if not e.ready then
+        e.ready = true
+        if not pcall(function() m:SetAnimationMode(1, false) end) then fails[#fails + 1] = "SetAnimationMode FAILED" end
+        if not anim then fails[#fails + 1] = "its animation NOT loaded (" .. e.k.anim .. ")"
+        elseif not pcall(function() m:SetAnimation(anim) end) then fails[#fails + 1] = "SetAnimation FAILED" end
+        if not pcall(function() m:SetPosition(0, false) end) then fails[#fails + 1] = "SetPosition 0 FAILED" end
+    end
+    if not pcall(function() m:SetPlayRate(open and 1 or -1) end) then fails[#fails + 1] = "SetPlayRate FAILED" end
+    if not pcall(function() m:Play(false) end) then fails[#fails + 1] = "Play FAILED" end
+    e.open = open
+    if open then e.opened = (e.opened or 0) + 1 end
+    local tag = open and "opening" or "shutting"
+    if not e.said[tag] then                              -- (once a block)
+        e.said[tag] = true
+        local len, pos = "?", "?"
+        pcall(function() len = string.format("%.2f", anim:GetPlayLength()) end)
+        pcall(function() pos = string.format("%.2f", m:GetPosition()) end)
+        log(string.format("tanicorn: VLS %s (%s) lids %s (%s): %s %s s on TurretMesh, from %s s%s", e.who, e.k.key, tag, why,
+            anim and short(anim) or "no animation", len, pos, #fails > 0 and ("; " .. table.concat(fails, ", ")) or ""))
+    end
+end
+local function lidParts(now)                             -- every block of ours: { o, a, name, k, who } by address
+    if now < LW.partsAt then return end
+    LW.partsAt = now + TANI.lid.parts_s
+    local seen = {}
+    for _, k in ipairs(TANI.vls) do
+        for _, o in ipairs(FindAllOf(k.class) or {}) do
+            local a = liveAddr(o)
+            if a and not nameOf(o):find("Default__", 1, true) then
+                local e = LW.parts[a]
+                if not (e and nameOf(o) == e.name) then  -- (new, or another object at its address now: hard rule 59)
+                    local who = short(o)                 -- (a live part: its component on the hull, Part_<socket>)
+                    pcall(function()
+                        local c = o.RootComponent:GetAttachParent():GetFName():ToString()
+                        if c:find("^Part_") then who = c end
+                    end)
+                    LW.parts[a] = { o = o, a = a, name = nameOf(o), k = k, who = who, said = {}, open = false }
+                end
+                seen[a] = true
+            end
+        end
+    end
+    for a in pairs(LW.parts) do if not seen[a] then LW.parts[a] = nil end end
+end
+local function ownerOf(o)                                -- who launched it: its OwningGameObject, else its owner
+    for _, f in ipairs({ function() return o.OwningGameObject end, function() return o:GetOwner() end }) do
+        local ok, w = pcall(f)
+        if ok and valid(w) then return w end
+    end
+    return nil
+end
+local function missileLine(o, e)                         -- one of our launches, as the shells' lines (12 a type a key press)
+    local k = e.k
+    T.shells[k.key] = (T.shells[k.key] or 0) + 1
+    local nth = T.shells[k.key]
+    if nth > 12 then return end
+    local ok, line = pcall(function()
+        local l, v, bl = o:K2_GetActorLocation(), o:GetVelocity(), e.o:K2_GetActorLocation()
+        local m = vlsMesh(e.o)
+        local near, nd = "?", nil
+        for i = 1, 8 do
+            local cell = string.format("SOC_Vls_%02d", i)
+            local okS, q = pcall(function() return m:GetSocketLocation(FName(cell)) end)
+            if okS and q then
+                local d = math.sqrt((q.X - l.X) ^ 2 + (q.Y - l.Y) ^ 2 + (q.Z - l.Z) ^ 2)
+                if not nd or d < nd then nd, near = d, cell end
+            end
+        end
+        local y, pt = heading(v.X, v.Y, v.Z)
+        local tgt, pawn = "none", liveObj(survivalPC) and survivalPC.Pawn or nil
+        pcall(function()
+            local t = o.TargetToHome
+            if valid(t) then tgt = (valid(pawn) and addrOf(t) == addrOf(pawn)) and "you" or short(t) end
+        end)
+        return string.format("missile %d (%s) by %s: at (%+.0f, %+.0f, %+.0f) from the block, its nearest cell %s %s m off, "
+            .. "flying yaw %.1f pitch %.1f at %.0f m/s (seen within a look of its launch); its target %s", nth, short(o), e.who,
+            l.X - bl.X, l.Y - bl.Y, l.Z - bl.Z, near, nd and string.format("%.1f", nd / 100) or "?", y, pt,
+            math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z) / 100, tgt)
+    end)
+    log("tanicorn: " .. k.key .. " " .. (ok and line or ("a missile, not read: " .. tostring(line))))
+end
+local function launched(o, ow, now)                      -- a VLS missile just launched (ow: its owner, or nil)
+    local oa = ow and addrOf(ow) or nil
+    local e = oa and LW.parts[oa]
+    if oa and not e and ow and short(ow):find("Tani", 1, true) then   -- (a block that came up since the last list: again)
+        LW.partsAt = 0
+        lidParts(now)
+        e = LW.parts[oa]
+    end
+    if e and same(e) then
+        LW.ours = LW.ours + 1
+        LW.byType[e.k.key] = (LW.byType[e.k.key] or 0) + 1
+        e.until_ = now + TANI.lid.close_s
+        if not e.open then lidPlay(e, true, "its missile " .. short(o)) end
+        missileLine(o, e)
+        return
+    end
+    local wn = ow and short(ow) or "none"
+    if ow and not wn:find("Tani", 1, true) then LW.others = LW.others + 1; return end   -- (a stock ship's, an ally's)
+    LW.blind = LW.blind + 1
+    if not LW.reach then
+        LW.reach = true
+        log(string.format("tanicorn: a VLS missile (%s) launched by %s: not one of our blocks, so a block's launch can't be told "
+            .. "apart here; from now on a block's lids also open while you're within %.0f km of it (its row's reach) and shut %d s "
+            .. "after you leave it", short(o), wn, reachCm() / 100000, TANI.lid.close_s))
+    end
+end
+local function lidOver(why)                              -- the watch's end: the lids shut, its line
+    LW.on = false
+    for _, e in pairs(LW.parts) do if e.open and same(e) then lidPlay(e, false, why) end end
+    local t = {}
+    for k, n in pairs(LW.byType) do t[#t + 1] = k .. " " .. n end
+    table.sort(t)
+    local n, opened = 0, 0
+    for _, e in pairs(LW.parts) do n = n + 1; opened = opened + (e.opened or 0) end
+    log(string.format("tanicorn: VLS watch over (%s): %d launches by our blocks (%s), %d by others, %d not told apart; %d blocks "
+        .. "of ours up, their lids opened %d times%s", why, LW.ours, #t > 0 and table.concat(t, ", ") or "none", LW.others,
+        LW.blind, n, opened, LW.reach and " (they followed your range too)" or ""))
+end
+lidWatch = function(now, why)
+    LW.until_ = math.max(LW.until_ or 0, now + TANI.lid.watch_s)
+    if LW.on then log(string.format("tanicorn: VLS watch on till +%d s from now (%s)", TANI.lid.watch_s, why)); return end
+    LW.on, LW.primed, LW.state, LW.reach, LW.partsAt = true, false, {}, false, 0
+    LW.ours, LW.others, LW.blind, LW.byType = 0, 0, 0, {}
+    log(string.format("tanicorn: VLS watch on (%s) for %d s: each block's lids open when it fires and shut %d s after its last "
+        .. "missile; its missiles logged (the VLS missiles kept %s, a walk every %d s)", why, TANI.lid.watch_s, TANI.lid.close_s,
+        type(NotifyOnNewObject) == "function" and "as the game makes them" or "by walks only", TANI.lid.walk_s))
+end
+TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn vls lids", fn = function(now)
+    if not LW.on then return end
+    if not D or (levelTorn and levelTorn()) then
+        LW.on, LW.parts, LW.pool, LW.state = false, {}, {}, {}
+        VNEW = {}
+        return
+    end
+    if walkBusy and walkBusy() then return end           -- (the walks wait while the engine frees objects, as WLOG's)
+    lidParts(now)
+    for _, o in ipairs(VNEW) do local a = liveAddr(o); if a then LW.pool[a] = o end end
+    VNEW = {}
+    if now >= LW.walkAt then                             -- (those made before the watch, or dropped past 64)
+        LW.walkAt = now + TANI.lid.walk_s
+        for _, o in ipairs(FindAllOf("LiveVLSMissile") or {}) do
+            local a = liveAddr(o)
+            if a and not LW.pool[a] then LW.pool[a] = o end
+        end
+    end
+    local cur = {}
+    for a, o in pairs(LW.pool) do
+        if liveAddr(o) ~= a then LW.pool[a] = nil         -- (gone: dropped)
+        else
+            local okH, hid = pcall(function() return o.bHidden end)
+            local shown = (not okH) or hid == false      -- (unreadable: shown, so a new one or a new owner still counts)
+            local ow = shown and ownerOf(o) or nil
+            local oa = ow and addrOf(ow) or nil
+            local prev = LW.state[a]
+            if LW.primed and shown and (not prev or not prev.shown or prev.owner ~= oa) then launched(o, ow, now) end
+            cur[a] = { shown = shown, owner = oa }
+        end
+    end
+    LW.state = cur
+    if not LW.primed then
+        LW.primed = true
+        local n, up, b = 0, 0, 0
+        for _, s in pairs(cur) do n = n + 1; if s.shown then up = up + 1 end end
+        for _ in pairs(LW.parts) do b = b + 1 end
+        log(string.format("tanicorn: VLS watch: %d VLS missiles known, %d shown now (not counted); %d blocks of ours up", n, up, b))
+    end
+    local me = LW.reach and playerLocation() or nil      -- (the lids by your range: once a launch couldn't be told apart)
+    for _, e in pairs(LW.parts) do
+        if same(e) then
+            if me then
+                local okP, p = pcall(function() return e.o:K2_GetActorLocation() end)
+                local d = okP and p and math.sqrt((p.X - me.X) ^ 2 + (p.Y - me.Y) ^ 2 + (p.Z - me.Z) ^ 2) or nil
+                if d and d <= reachCm() then
+                    e.until_ = now + TANI.lid.close_s
+                    if not e.open then lidPlay(e, true, string.format("you within %.1f km", d / 100000)) end
+                end
+            end
+            if e.open and now >= (e.until_ or 0) then
+                lidPlay(e, false, string.format("%d s after its last missile%s", TANI.lid.close_s,
+                    LW.reach and " or you leaving its reach" or ""))
+            end
+        end
+    end
+    if now >= LW.until_ then lidOver("its " .. TANI.lid.watch_s .. " s are up") end
+end }
+end
+
+-- (2026-11-12) Ctrl+K: THE TANACORN's VLS test blocks (TANI.vls with test: the deck block VLSD and the side block VLSS_L1), each
+-- on its own rows and SV_FCS_TaniVLS, 3 km ahead (TANI.ahead_cm) in a row across your path, mount_gap_cm apart, each turned so
+-- its cells launch toward you (k.face). Logged as Ctrl+U's mounts: `tanicorn: <type> class loaded ...; defaults: fire control
+-- arms 1, launcher mesh TurretMesh, ...`, `tanicorn: Ctrl+K, <unit> (<type>) at (x, y, z) facing F: 1 up; the spawn made ...`,
+-- `tanicorn: <type> +1 s / +4 s: ...`, while they're up `tanicorn: <type> mount ... up at ...: fire control arms 1 (<the
+-- row's arm> / LiveFCSModule_LauncherCommon) ...`, `tanicorn: <type> muzzle: ... asset finds SOC_Vls_01 true ...`, every 2 s
+-- `tanicorn: <type> <name> hp H/M actor yaw Y, lids at P s (playing ..., rate ...), SOC_Vls_01 (...) from the block`; and the
+-- VLS watch's lines (lidWatch above: the lids, the missiles)
+testKey("K", "sv_tanicorn.lua's VLS test", function()
+    if not (D and D.now) or not nativeReady() then log("tanicorn: Ctrl+K outside a Survival run"); return end
+    if COOP and COOP.client and COOP.client() then log("tanicorn: Ctrl+K: the host spawns them (you're a joiner)"); return end
+    local tests = {}
+    for _, k in ipairs(TANI.vls) do if k.test then tests[#tests + 1] = k end end
+    for _, k in ipairs(tests) do log("tanicorn: " .. k.key .. " class " .. classCheck(k)) end
+    local ok, why = rowsIn()
+    log("tanicorn: rows: " .. why)
+    local p = playerLocation()
+    if not p then log("tanicorn: no player location"); return end
+    local yaw = playerYaw()
+    local fx, fy = math.cos(math.rad(yaw)), math.sin(math.rad(yaw))
+    local cx, cy = p.X + fx * TANI.ahead_cm, p.Y + fy * TANI.ahead_cm
+    local now, up, n = os.clock(), {}, #tests
+    for i, k in ipairs(tests) do
+        local off = (i - (n + 1) / 2) * TANI.mount_gap_cm    -- (across your path: + is your right)
+        local x, y = cx - fy * off, cy + fx * off
+        local face = (yaw + k.face) % 360
+        local r, list = spawnMount(k, x, y, face)
+        local said = r > 0 and (r .. " up") or ("not spawned (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")")
+        log(string.format("tanicorn: Ctrl+K, %s (%s) at (%.0f, %.0f, %d) facing %.0f: %s%s; the spawn made %s", k.unit, k.key,
+            x, y, TANI.z_cm, face, said, ok and "" or " (its rows aren't all in)", describe(list)))
+        if r > 0 then up[#up + 1] = k.key end
+        T.checks[#T.checks + 1] = { at = now + 1, tag = "+1 s", made = list, k = k, x = x, y = y }
+        T.checks[#T.checks + 1] = { at = now + 4, tag = "+4 s", made = list, k = k, x = x, y = y }
+        T.shells[k.key] = 0
+    end
+    hudCallout("TEST: TANICORN VLS", #up > 0 and (table.concat(up, ", ") .. " 3 KM AHEAD") or "NOT SPAWNED")
+    T.next, T.until_ = 0, now + TANI.watch_s
+    lidWatch(now, "Ctrl+K")
+end)
+
 -- (0.74.60) Ctrl+Y: THE TANACORN's hull with every part drawn on its socket (BP_SV_Tani_HULL), broadside to you hull.ahead_cm
 -- out, its waterline on the sea. Logged: our class loaded, the spawn, and 2 s and 8 s on where it is and how many of its
 -- parts' meshes it carries (PoseableMeshComponents: 32 expected, 2 + 6 + 4 + 4 + 16) and its static meshes (the hull's).
@@ -719,17 +1090,20 @@ end
 
 -- (2026-11-11, WP2 step 2, route (a)) Ctrl+L: THE TANACORN with her gun mounts live (TANI.live), broadside ahead_cm out,
 -- her waterline on the sea, as Ctrl+Y (a live hull already up is looked at again: its unit can't spawn while its flight is
--- up, hard rule 16). Logged: `tanicorn: live hull class ...`, `tanicorn: the live parts' classes: T5 in memory, ...` (a
--- TANI=1 world data loads them with the level: its child descs import them), `tanicorn: Ctrl+L, SV_Unit_TaniHullLive at
--- (x, y, 0) facing F: N up`; at +2 s and +8 s a line a part, `tanicorn: live +2 s: Part_T5_1 (T5): BP_SV_Tani_T5_C <name>,
--- health H/M (its row's 40), 0.0 m from Mount_T5_1, on Part_T5_1 (attached to the hull true), a child of the hull true (its
+-- up, hard rule 16). Logged: `tanicorn: live hull class ...`, `tanicorn: the mount classes: T5 in memory, ...` (whether the
+-- container is mounted, never whether the world data has the parts: the hull's class and the NPC cache load them either
+-- way; the +2 s / +8 s lines' `a child of the hull` tells that), `tanicorn: Ctrl+L, SV_Unit_TaniHullLive at (x, y, 0) facing
+-- F: N up`; at +2 s and +8 s a line a part, `tanicorn: live +2 s: Part_T5_1 (T5): BP_SV_Tani_T5_C <name>, health H/M (its
+-- row's 40), 0.0 m from Mount_T5_1, on Part_T5_1 (attached to the hull true), a child of the hull true (its
 -- AttachedParentGameObject <the hull>)` (on: its root's attach parent; a child: in the hull's AttachedChildGameObjects),
--- then `tanicorn: live +2 s: N of 16 parts up ...`; the first part of each type its fire control arms and muzzle (as Ctrl+T's / Ctrl+U's mount lines); each LASER part
--- handed to AC7's LaserInterceptor (liCarry: `tanicorn: LASER mount ... handed to ...`, then sv_escort_li.lua's `zfa li:`);
--- every every_s for watch_s `tanicorn: live +T s: Part_T5_1 (T5) hp H/M, barrel yaw Y pitch P, muzzle (...) from the mount;
--- D m from its socket`; `tanicorn: live Part_T5_1 (T5) destroyed at +T s ...` when a part goes down (its health 0, or gone)
--- while the hull lives; the shells as the mounts' (`tanicorn: T5 shell N: ...`: keyed by their mount's class, so the parts'
--- too). Each part kept by its address AND the name it was captured with (hard rule 59).
+-- then `tanicorn: live +2 s: N of 32 parts up ...`; the first part of each type its fire control arms and muzzle (as Ctrl+T's
+-- / Ctrl+U's / Ctrl+K's mount lines: a VLS block's SOC_Vls_01 on its TurretMesh); each LASER part handed to AC7's
+-- LaserInterceptor (liCarry: `tanicorn: LASER mount ... handed to ...`, then sv_escort_li.lua's `zfa li:`); every every_s
+-- for watch_s `tanicorn: live +T s: Part_T5_1 (T5) hp H/M, barrel yaw Y pitch P, muzzle (...) from the mount; D m from its
+-- socket` (a VLS block: `lids at P s ...` in place of its barrel); `tanicorn: live Part_T5_1 (T5) destroyed at +T s ...`
+-- when a part goes down (its health 0, or gone) while the hull lives; the shells as the mounts' (`tanicorn: T5 shell N: ...`:
+-- keyed by their mount's class, so the parts' too); (2026-11-12) the VLS blocks' lids and missiles in the VLS watch's lines
+-- (lidWatch, on from the key press). Each part kept by its address AND the name it was captured with (hard rule 59).
 do
 local LV = nil                                           -- the live hull's watch (Ctrl+L)
 local KIND = {}                                          -- a mount type's key -> its KINDS entry (the T5's: TANI)
@@ -806,7 +1180,7 @@ local function partLine(W, s, key, kids)
         if k and not W.kinds[key] then                   -- (the first of each type: as the mounts' up and muzzle lines)
             W.kinds[key] = true
             log(string.format("tanicorn: live %s %s: fire control arms %s", key, cn, armsOf(ch)))
-            log("tanicorn: live " .. key .. " muzzle: " .. muzzleProbe(turretMesh(ch)))
+            log("tanicorn: live " .. key .. " muzzle: " .. muzzleProbe(partMesh(ch, k), k.vls and VLS_CELL or nil))
         end
         if k and k.li then liCarry(ch, k, TANI.live.unit .. " " .. cn) end   -- (the LASER: AC7's LaserInterceptor, as Ctrl+U's)
     end
@@ -841,7 +1215,8 @@ local function liveLook(W, tag)
     for _ in pairs(W.comps) do n = n + 1 end
     log(string.format("tanicorn: live %s: %d of %d parts up on %s at %s (its %d part components; its AttachedChildGameObjects %s; "
         .. "its health %s/%s)%s", tag, up, #TANI.live.parts, short(W.o), at(W.o), n, tostring(nk), tostring(h), tostring(mx),
-        up == 0 and ": none live (a world data without them? TANI=1 builds only; the classes line above)" or ""))
+        up == 0 and (": none live (a world data without them? TANI=1 builds only; each part's `a child of the hull` above, "
+            .. "never the mount classes line: those load either way)") or ""))
 end
 local function liveDowns(W, now)                         -- a line when a part goes down (its health 0, or the actor gone)
     for _, pr in ipairs(TANI.live.parts) do
@@ -879,7 +1254,7 @@ local function liveLines(W, now)                         -- every every_s: each 
             local d = gap(mesh and v3of(function() return mesh:GetSocketLocation(FName("Mount_" .. s)) end),
                 v3of(function() return e.o:K2_GetActorLocation() end))
             log(string.format("tanicorn: live +%.0f s: Part_%s (%s) hp %s/%s, %s; %s m from its socket", now - W.t0, s, key,
-                tostring(h), tostring(mx), (aim(e.o)), d and string.format("%.1f", d / 100) or "?"))
+                tostring(h), tostring(mx), aimOf(e.o, e.k), d and string.format("%.1f", d / 100) or "?"))
         end
     end
 end
@@ -891,12 +1266,16 @@ testKey("L", "sv_tanicorn.lua's live hull test", function()
     local cls, why = loadObject(C.class_path)
     log("tanicorn: live hull class " .. (cls and ("loaded " .. nameOf(cls)) or ("NOT loaded: " .. tostring(why))))
     if cls then pin(cls, "tanicorn live hull class") end
+    -- ((2026-11-12, the stage-1 review) the mount classes are in memory whatever the world data holds: the hull's class
+    -- above loads them (its child actor templates import every mount's package) and so does the NPC cache at the level's
+    -- start (every test row's model blueprint). So this line only says the container is mounted, never whether the world
+    -- data has the parts: partLine's `a child of the hull <true|false> (its AttachedParentGameObject ...)` at +2 s and +8 s does)
     local said = {}
-    for _, k in ipairs(KINDS) do                         -- (the parts' classes: a TANI=1 world data's imports load them)
+    for _, k in ipairs(KINDS) do
         said[#said + 1] = k.key .. (valid(StaticFindObject(k.class_path)) and " in memory" or " NOT in memory")
     end
-    log("tanicorn: the live parts' classes: " .. table.concat(said, ", ")
-        .. " (a TANI=1 build's world data imports them: loaded with the level)")
+    log("tanicorn: the mount classes: " .. table.concat(said, ", ") .. " (loaded by the hull's class and the NPC cache: this "
+        .. "can't tell whether the world data has the parts; the +2 s / +8 s lines' `a child of the hull` does)")
     local ok, rows = rowsIn()
     log("tanicorn: rows: " .. rows)
     local now = os.clock()
@@ -930,6 +1309,7 @@ testKey("L", "sv_tanicorn.lua's live hull test", function()
     W.next, W.until_ = now + C.looks_s[#C.looks_s] + C.every_s, now + C.watch_s
     for _, k in ipairs(KINDS) do T.shells[k.key] = 0 end -- (the first 12 shells of each type again: the parts' too)
     LV = W
+    lidWatch(now, "Ctrl+L")                              -- ((2026-11-12) her VLS blocks' lids and missiles)
 end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn live hull", fn = function(now)
     local W = LV

@@ -678,7 +678,10 @@ above, or one EngagementOrderOverride(..., PropogateToChild true) on the hull fr
 
 **Fallbacks**
 - No child (live parts 0 of 2, or an actor with no health): UE4SS.log for the loader on our import (a skipped package),
-  the classes loaded (TANI's class check on BP_SV_Tani_T5), the hull row in DT_NPC with its ChildNPCId; then the descs'
+  the classes loaded (TANI's class check on BP_SV_Tani_T5: only whether the container is mounted; (2026-11-12, the stage-1
+  review) the mount classes load whatever the world data holds, through the live hull's class and the NPC cache, so the
+  world data is told only by each part's `a child of the hull <true|false>` at +2 s / +8 s), the hull row in DT_NPC with
+  its ChildNPCId; then the descs'
   MissionNpcID None (EB_002's and the Ladon's way); then the hull on LiveAIVessels (as the Aegis) or LiveAIUniqueObject
   (as the Land Aegis), whose children are proven.
 - A crash at the hull's spawn: the crumbs; then the steps one at a time, the probe socket out first.

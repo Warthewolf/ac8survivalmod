@@ -686,8 +686,9 @@ def build_npc_rows():
         set_prop(row[2], [k for k, (n, t) in schema.items() if n == name][0], name, value)
     out.append(((se.TANI_NPC, 0), row))
     # (0.74.61) the other gun mounts' rows (se.TANI_MOUNTS: T16, CIWS, LASER), as the T5's: each on its own model row and its
-    # own fire control row (Scripts/sv_tanicorn.lua clones it at the main menu from a stock row, as SV_FCS_TaniT5)
-    for m in se.TANI_MOUNTS:
+    # own fire control row (Scripts/sv_tanicorn.lua clones it at the main menu from a stock row, as SV_FCS_TaniT5);
+    # (2026-11-12) and the VLS blocks' (se.TANI_VLS: each type its own model row, all on SV_FCS_TaniVLS)
+    for m in se.TANI_MOUNTS + se.TANI_VLS:
         row = copy.deepcopy(rows[(f[1], f[2])])
         for name, value in (('WeaponDurabilityId', ('name', se.FISH_DURABILITY[0], 0)),
                             ('ExplosionDurabilityId', ('name', se.FISH_DURABILITY[1], 0)),
@@ -1184,6 +1185,42 @@ def check_zfa_laser_build():
 TANI_WD_MARKER = os.path.join(ROOT, 'build', 'out', 'tani_wd.txt')
 
 
+def check_tanicorn_vls(lua, table, zw, w, T, E, show):
+    """(2026-11-12, WP1's VLS route) THE TANACORN's VLS block types (survival_events.TANI_VLS) read back, in every build (names
+    only): each type's mission row -> its DT_NPC row (NpcFCSId0 TANI_VLS_FCS, its own model row) -> its model row (its own
+    blueprint BP_SV_Tani_<part>); a unit and its order only for the TANI_VLS_TEST types (Ctrl+K), none for the rest; and
+    Scripts/sv_tanicorn.lua's TANI.vls: the same { part, tag, test } in the same order, its names made as tani_vls makes them,
+    on the same fire control row. -> its line's text."""
+    se = survival_events
+    plain = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    mission = table(NPC_TABLE, 'LiveNpcMissionDataTable')
+    npcs = table(DATA + 'DT_SV_NpcRows', 'LiveNpcDataTable')
+    models = table(DATA + 'DT_SV_ModelRows', 'LiveModelDataTable')
+    units = {plain(field_of(u, 'Name')) for u in [p for p in w[2] if p[1] == 'UnitDescList'][0][3][1]}
+    for m in se.TANI_VLS:
+        assert plain(mission[m['row']]['NpcId']) == m['npc'], (m['row'], mission[m['row']]['NpcId'])
+        r = npcs[m['npc']]
+        assert plain(r['NpcFCSId0']) == se.TANI_VLS_FCS and plain(r['ModelId']) == m['model'], (m['npc'], r['NpcFCSId0'], r['ModelId'])
+        bp = models[m['model']]['BlueprintClass']
+        assert bp[1][1] == m['bp'] and bp[2][1] == m['bp_class'], (m['model'], bp)
+        assert (m['unit'] in units) == m['test'], (m['unit'], m['test'])
+        ex = [ep_dump.fields(e) for e in E if show(ep_dump.fields(e)['ConnectionEventName']) == m['up']]
+        trig = [t for t in T if show(ep_dump.fields(t)['EventName']) == m['up']]
+        if m['test']:
+            assert len(trig) == 1 and [show(ep_dump.fields(f['ArgsInfo'][1][0])['Value']) for f in ex] == [m['obj']], (m['up'], len(trig), len(ex))
+        else:
+            assert not trig and not ex, (m['up'], 'a VLS type with no unit has an order')
+    got = [(p, t, bool(x)) for p, t, x in re.findall(r'part = "([A-Z0-9_]+)", tag = "([A-Za-z0-9]+)"(, test = true)?', lua)]
+    assert got == [(m['part'], m['tag'], m['test']) for m in se.TANI_VLS], ('Scripts/sv_tanicorn.lua TANI.vls', got)
+    for want in ['"SV_Unit_Tani" .. p.tag', '"SV_Npc_Tani" .. p.tag', '"SV_Model_Tani" .. p.tag', '"SV_Tani" .. p.tag .. "_Name"',
+                 '"/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_" .. p.part', f'fcs = "{se.TANI_VLS_FCS}"']:
+        assert want in lua, f'Scripts/sv_tanicorn.lua TANI.vls: no {want}'
+    m0 = se.TANI_VLS[0]
+    assert m0['npc'] == 'SV_Npc_Tani' + m0['tag'] and m0['bp'].endswith('/BP_SV_Tani_' + m0['part']), m0
+    return (f'; the {len(se.TANI_VLS)} VLS block types\' rows (on {se.TANI_VLS_FCS}), the units and orders of '
+            f'{", ".join(m["part"] for m in se.TANI_VLS_UNITS)} and Lua\'s TANI.vls read back')
+
+
 def check_tanicorn_build():
     """(2026-11-11, WP2 step 2, route (a)) THE TANACORN's live parts read back from the packages this build saved, and the
     gate. Without TANI=1 (survival_events.TANI_WD) the lock: no package under the Tanicorn container's folder imported by
@@ -1239,14 +1276,15 @@ def check_tanicorn_build():
     for want in [f'unit = "{se.TANI_HULL_LIVE_UNIT}"', f'npc = "{se.TANI_HULL_LIVE_NPC}"', f'model = "{se.TANI_HULL_LIVE_MODEL}"',
                  f'class_path = "{se.TANI_HULL_LIVE_BP}.{se.TANI_HULL_LIVE_BP_CLASS}"', f'name_key = "{se.TANI_HULL_LIVE_NAME_KEY}"']:
         assert want in lua, f'Scripts/sv_tanicorn.lua: no {want}'
-    lua_parts = re.findall(r'\{ "([A-Z0-9_]+)", "(T16|T5|CIWS|LASER)" \}', lua)
+    lua_parts = re.findall(r'\{ "([A-Z0-9_]+)", "(T16|T5|CIWS|LASER|VLSD|VLSS_[LR][1-4])" \}', lua)
     assert lua_parts == [(p['socket'], p['part']) for p in se.TANI_LIVE], ('Scripts/sv_tanicorn.lua TANI.live.parts', lua_parts)
+    vls_said = check_tanicorn_vls(lua, table, zw, w, T, E, show)
     if not se.TANI_WD:                         # the lock
         assert not tani, f'the world data imports the Tanicorn container without TANI=1: {tani}'
         assert not kids, f'{se.TANI_HULL_LIVE_OBJ} has {len(kids)} parts without TANI=1'
         if os.path.exists(TANI_WD_MARKER): os.remove(TANI_WD_MARKER)
         print(f'  tanicorn: no live parts (TANI unset): the world data imports nothing of {se.TANI_PKG} (the lock holds); '
-              f'{se.TANI_HULL_LIVE_NPC}\'s {len(row_comps)} part rows, {len(ex)} orders and Lua\'s names read back: all there')
+              f'{se.TANI_HULL_LIVE_NPC}\'s {len(row_comps)} part rows, {len(ex)} orders and Lua\'s names read back: all there{vls_said}')
         return
     want_pkgs = sorted({p['bp'] for p in se.TANI_LIVE})
     assert tani == want_pkgs, (tani, want_pkgs)
@@ -1285,7 +1323,7 @@ def check_tanicorn_build():
                 'package_dev.sh takes it with TANI=1 only.\n' + ''.join(f'{p}\n' for p in tani))
     print(f'  tanicorn: {se.TANI_HULL_LIVE_UNIT}: {len(kids)} live parts (TANI=1) read back: each its own desc and class '
           f'import, the same components as {se.TANI_HULL_LIVE_NPC}\'s ChildNPCComponentNames {spec_said}; {len(ex)} orders; '
-          f'the world data imports {", ".join(tani)}; marker {TANI_WD_MARKER}')
+          f'the world data imports {", ".join(tani)}; marker {TANI_WD_MARKER}{vls_said}')
 
 
 # ---------------------------------------------------------------- NPC mission table
@@ -1327,8 +1365,8 @@ NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a 
     (survival_events.TANI_HULL_ROW, survival_events.FISH_ROW_TEMPLATE, survival_events.TANI_HULL_NPC),   # and its hull test
     # (2026-11-11) and its hull with the gun mounts live (survival_events.TANI_HULL_LIVE_*: Ctrl+L)
     (survival_events.TANI_HULL_LIVE_ROW, survival_events.FISH_ROW_TEMPLATE, survival_events.TANI_HULL_LIVE_NPC),
-    # (0.74.61) and its other gun mounts (survival_events.TANI_MOUNTS: T16, CIWS, LASER)
-    *[(m['row'], survival_events.FISH_ROW_TEMPLATE, m['npc']) for m in survival_events.TANI_MOUNTS],
+    # (0.74.61) and its other gun mounts (survival_events.TANI_MOUNTS: T16, CIWS, LASER); (2026-11-12) its VLS blocks (TANI_VLS)
+    *[(m['row'], survival_events.FISH_ROW_TEMPLATE, m['npc']) for m in survival_events.TANI_MOUNTS + survival_events.TANI_VLS],
 ] + [  # the fighter roles' behaviour rows (survival_events.ROLE_ROW, P1): DT_NPC rows Scripts/sv_rows.lua rolesSetup makes
     (row, 'f16c_common', npc) for row, npc in survival_events.ROLE_NPC.items()]
 # Enemy search (main.lua CFG.search): for each of these rows a copy <row>_sv whose NpcId is <its NpcId>_SV, the DT_NPC
