@@ -39,8 +39,11 @@ M_GLASS = mat("TANA_glass", (0.010, 0.030, 0.034), 0.9, 0.06)            # its w
 # ---------------------------------------------------------------------------------------------------- clean solids
 class Part:
     """primitives (each with a material) united into one closed solid; cutters carved out of it"""
-    def __init__(self):
+    def __init__(self, overlap=False):
+        """overlap: the cutters (and what goes in after the cut) may overlap each other (firemode.py's turret): the
+        cut and the post union then resolve their own shells too (slower; the original parts don't need it)"""
         self.bm, self.cut, self.post, self.mats = bmesh.new(), bmesh.new(), bmesh.new(), []
+        self.overlap = overlap
 
     def _slot(self, m):
         if m not in self.mats:
@@ -109,6 +112,8 @@ class Part:
             WORK.objects.link(cutter)
             d = tmp.modifiers.new("cells", "BOOLEAN")
             d.operation, d.solver, d.object = "DIFFERENCE", "EXACT", cutter
+            if self.overlap:
+                d.use_self = True
             if hasattr(d, "material_mode"):
                 d.material_mode = "TRANSFER"                       # the wells' walls take the cutter's dark
         poster = None
@@ -121,6 +126,8 @@ class Part:
             WORK.objects.link(poster)
             q = tmp.modifiers.new("post", "BOOLEAN")
             q.operation, q.solver, q.object = "UNION", "EXACT", poster
+            if self.overlap:
+                q.use_self = True
             if hasattr(q, "material_mode"):
                 q.material_mode = "TRANSFER"
         self.post.free()
@@ -320,9 +327,12 @@ def final_mat(src, img, part):
 def bake(me, proto, part, size):
     img = bpy.data.images.new("T_TANA_%s_D" % part, size, size, alpha=False)
     srcs = [m or M_PAINT for m in me.materials]               # (a slot the boolean left empty: the paint)
-    me.materials.clear()
-    for s in srcs:
+    idx = [0] * len(me.polygons)                               # every face's slot, kept: materials.clear() puts every
+    me.polygons.foreach_get("material_index", idx)             # face on slot 0 (until 2026-11-11 each part was baked
+    me.materials.clear()                                       # and drawn in its first material only: no dark wells,
+    for s in srcs:                                             # glass or teal)
         me.materials.append(bake_mat(s, img))
+    me.polygons.foreach_set("material_index", idx)
     select_only(proto)
     sc = bpy.context.scene
     sc.render.engine, sc.cycles.device, sc.cycles.samples = "CYCLES", "CPU", 16
@@ -336,6 +346,7 @@ def bake(me, proto, part, size):
     me.materials.clear()
     for m in finals:
         me.materials.append(m)
+    me.polygons.foreach_set("material_index", idx)
     px = img.pixels[:]
     lum = [0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2] for i in range(0, len(px), 4 * 97)]
     CHECK.setdefault(me.name, {})["texture"] = {"file": os.path.basename(img.filepath_raw), "size": size,

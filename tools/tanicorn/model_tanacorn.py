@@ -673,6 +673,16 @@ for house, gun in made["laser"]:
 print("model: %d laser turrets keyed: out %d-%d, back %d-%d" % (len(made["laser"]), LASER_KEYS[0][0], LASER_KEYS[0][1],
                                                                LASER_KEYS[1][0], LASER_KEYS[1][1]))
 
+# the 16-inch triples, modelled again with their fire mode (firemode.py; the user, 2026-11-11): the mount replaces the
+# Iowa's on both turrets in place (same outline and pivots, the trunnion back behind the face), its moving pieces in
+# their own collection, the transform keyed (firemode.KEYS: deploy 110-185, stow 226-301)
+import firemode
+firemode.build(collection("TANACORN fire mode", COLL), lambda t: print("model: " + t))
+firemode.key(lambda t: print("model: " + t))
+with open(os.path.join(OUT, "tanacorn_model_check.json"), "w") as f:          # (again, with the mount's parts)
+    json.dump({**CHECK, "LEV_HULL uv map": HULL_UV}, f, indent=1)
+print("model: every part clean, the 16-inch mount's too: %s" % all(r.get("clean") for r in CHECK.values()))
+
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, "Tanacorn_model.blend"), compress=False, copy=True)
 for _, hs in hatches.values():                     # the renders below pose the hatches themselves (open_hatches)
     for h, hinge in hs:

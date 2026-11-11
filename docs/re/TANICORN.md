@@ -133,3 +133,41 @@ build/liveproject/Source/Live/Public (= E:/AC8LiveProject).
 - First run: read `build/tanicorn/ue_import.log` (warnings counted before `done`), `tanibuild.log`, `cook.log`; the
   list of what to look for is in docs/design/INVINCIBLE_FLEET.md, WP0 handover, "for UE".
 
+
+## 7. The 16-inch triples' FIRE MODE (2026-11-11; modelled, not yet built on the machine or seen in game)
+The user: "we make them look normal, until they transform into fire mode" (their stills: side armour that opens, barrels
+that split lengthwise into rails with a glow between, green lightning and rings when it fires), then "Edit the barrels
+and gun mount itself". `tools/tanicorn/firemode.py` (run by model_tanacorn.py) models the whole mount again from scratch
+on tanakit.py's clean solids, in place of the Iowa's on both turrets: the design's outline, size and yaw pivot, the
+trunnion moved back to 1.2 m behind the face (house frame (11.42, 0.10, 3.17) m; the muzzles where they were).
+- **Stowed** (a normal battleship turret): armoured house with skirt, raised roof plate, sighting hoods, hatches,
+  vents, rangefinder ears; three guns in drum mantlets set in wells in the sloped face; long tapered barrels (bands,
+  muzzle swell, a real bore); dim teal running lights under the guns.
+- **Fire mode** (2.5 s; `STAGES`): the forward side walls are armour slabs hinged at their top edge that swing 50 deg up
+  and out over bays of glowing coil stacks (`Armor_L/R`); the roof's rear splits down the middle, each half lifting
+  58 deg on its outer edge over glowing heat-sink fins (`Vent_L/R`); each barrel forward of its root is two half solids
+  (`Barrel_n_L/R`) that slide 0.42 m apart and toe out 1.5 deg, their split faces carrying a glowing bore and two
+  glowing rail channels; each half's chase (`Chase_n_L/R`) telescopes 3.6 m forward off a glowing coil sleeve.
+  The stow is the same backwards. Keyed into the model's timeline: deploy 110-185, stow 226-301.
+- **Triangles**: a turret 49.2k (house 13.6k, guns' roots 4.7k, plates and vents 2.1k, the twelve barrel pieces 28.7k).
+- **Export** (export_tanacorn.py): `T16` (house on turret_yaw, drums and roots on turret_pitch; SOC_Gun_01..03 at the
+  open forks' muzzles; its wreck the house and roots: barrels gone) plus two skinned parts riding its bones, each with
+  the animation `Deploy` sampled from the model's keys (rotation and place a bone, 30 fps): `T16_ARMOR` (Root at
+  turret_yaw > Armor_L/R, Vent_L/R) and `T16_GUNS` (Root at turret_pitch > Barrel_1_L .. 3_R > Chase_*;
+  SOC_Charge_01..03 1.5 m ahead of each open fork, for the charge effects). check_export.py reads each back: bones in
+  place, one action, shut at its start, the farthest bone 3.6 m off its rest at its end.
+- **UE** (ue_import.py kind `deploy`: SK_SV_Tani_T16_ARMOR / _GUNS + AS_SV_..._Deploy; spec.py FIRE_MODE):
+  BP_SV_Tani_T16 gets `FireModeArmor` / `FireModeGuns`, SkeletalMeshComponents attached to TurretPoseableMesh at
+  turret_yaw / turret_pitch, AnimationSingleNode with Deploy loaded and held shut, no collision, hidden by the
+  destroy system with the turret. The FCS's ActivationTime is 3 s (longer than the transform). [?] that a component
+  attached to a PoseableMesh's bone follows the bone as the fire control turns it (standard UE; not yet seen in AC8).
+- **In game, still to build (WP1 / WP11)**: Lua opens a T16 when its fire control engages (`PlayAnimation(Deploy,
+  false)` on both components) and shuts it a while after its last shot (`SetPlayRate(-1)`, play); the glow through the
+  glow slots' material instances (their slots are their own: `*_fm_bank`, `*_fm_rail`, `*_fm_slit`; AC8's gear
+  material has `Ctrl_All_Emissive` and a Livemap, its emissive mask [?]); the charge and the shot with AC8's own
+  effects at SOC_Charge_NN (the Alicorn's lightning `NS_alcn_LiSpark_*`, the rail cannon's discharge; hard rule 58:
+  never our own compiled materials).
+- **Preview**: `film_firemode.py` (stills and a clip at dusk; its lightning, rings and bolt are Blender's, the preview's
+  only). Renders in art/tanicorn/renders/firemode, the clip in art/tanicorn/video.
+- The breach film (breach_tanacorn.py) predates the new mount: re-rendered as it is, its 16-inch salvos would leave
+  from the guns' roots (it finds muzzles on LEV_G16_*.001, now only the drums and roots).

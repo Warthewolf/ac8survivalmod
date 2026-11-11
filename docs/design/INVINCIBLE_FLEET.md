@@ -175,7 +175,7 @@ left as they were):**
 | weapon | count | where (the Leviathan design) | fires at | phase |
 |---|---|---|---|---|
 | bow railcannon (the Alicorn's) | 1 | its teal bay in the bow, where the Iowa's turret A stood | the airfield: a 30 s charge, again every 90 s while it lives (the user confirmed the timing, 2026-11-10) | 2 |
-| 16-inch triple turret, railgun shells | **2** | turret B forward of the bridge, turret C aft | the players, and the airfield from the gun line (WP13) | 1 |
+| 16-inch triple turret, railgun shells; normal-looking until it transforms into FIRE MODE (the user, 2026-11-11: docs/re/TANICORN.md 7) | **2** | turret B forward of the bridge, turret C aft | the players, and the airfield from the gun line (WP13) | 1 |
 | 5-inch twin flak mount | 6 | three a side along the superstructure | the players | 1 |
 | close-in mounts | 8: **4 CIWS guns** + **4 laser interceptors** (0.5 s swing) (the user, 2026-11-10: "Add 4 more corners for 8") | CIWS: the Iowa's four Phalanx positions amidships (+22 m and -54 m, about 12-14 m off the centreline, ~31 m up); lasers: four new corners, a pair on the main deck forward of the superstructure (+50 m, 14 m off, ~13 m up) and a pair at the superstructure's aft end (-100 m, 14 m off, ~23 m up), covering the bow and stern arcs (empties LEV_LASER_FWD_L/R, LEV_LASER_AFT_L/R in the design files) | lasers: the players' missiles; CIWS: the players | 1 |
 | VLS block, 8 cells, on the aft deck | **8** (64 cells) | the aft deck between the Alicorn's sponsons, round and behind turret C (the user, 2026-11-10) | the players | 1 |
@@ -497,6 +497,9 @@ Survival's rows; Ctrl+T in a test build). Not seen: aiming, firing, hits, wreck.
 - Steps: [user test] Ctrl+T: the T5 aims (its `tanicorn: ... yaw / pitch` log values move as you fly round it),
   fires flak, takes hits, swaps to its wreck. If it never turns: bone names, SlotSocketPrefix or sockets
   (TANICORN.md open questions). Then one mount type at a time on the same route [machine build, repo Lua]:
+  - the **16-inch triple's FIRE MODE** (docs/re/TANICORN.md 7): FireModeArmor / FireModeGuns ride the turret's bones
+    and draw (BP_SV_Tani_T16); then Lua opens it as it engages and shuts it after (Deploy forwards / backwards), the
+    glow slots lit, AC8's lightning at SOC_Charge_NN;
   - the **16-inch triple, railgun shells**: LiveFCSModule_LauncherTripleRailCannon + weapon BP_wp_eml_ldbs01
     (GR036's land battleship), three pitch bones as GR037's or one pitch bone with three muzzles [?], the minimap
     and RAILGUN WARNING (hard rule 45);

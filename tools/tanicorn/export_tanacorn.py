@@ -9,6 +9,11 @@ socket it sits on (SOCKET_Mount_<name>: its base at the origin, +X its forward),
   turrets  T16 (the 16-inch triple), T5 (the 5-inch twin), CIWS, LASER (the beam director):
            Tani_<P>.gltf skinned Body > turret_yaw > turret_pitch, every joint with an identity rotation, the house on
            turret_yaw, the guns on turret_pitch (its place the guns' trunnion); muzzle sockets SOC_Gun_NN on turret_pitch
+           (the 16-inch's at its fire-mode muzzles, firemode.py; its wreck the house and the guns' roots: barrels gone)
+  deploy   the 16-inch's FIRE MODE (firemode.py): T16_ARMOR (Root > Armor_L/R, Vent_L/R: its origin turret_yaw's place)
+           and T16_GUNS (Root > Barrel_1_L .. 3_R > Chase_1_L .. 3_R: its origin turret_pitch's, sockets SOC_Charge_01..03
+           ahead of the open forks), each with the animation "Deploy" (2.5 s, 30 fps: rotations and places sampled
+           from the model's own keys; the stow is Deploy backwards), to ride the turret's bones
   VLS      VLSD (the aft deck's block; one mesh for all 8) and VLSS_L1..L4 / VLSS_R1..R4 (the bow's side blocks, each
            bent onto its own stretch of the hull): Tani_<P>.gltf skinned Body > Hatch_01..08, each lid's joint on its
            hinge, and the animation "Open" (0.5 s: every lid swings open about its hinge); sockets SOC_Vls_01..08 on
@@ -120,7 +125,8 @@ class Mesh:
 
 def write_gltf(path, name, prims, slots, joints=None, anim=None):
     """joints: [(name, parent index or -1, world place in the part's frame)] with identity rotations; anim: (name,
-    times, [(joint index, [quaternions (x, y, z, w) in the part's Blender frame])])"""
+    times, [(joint index, [quaternions (x, y, z, w) in the part's Blender frame]
+    [, [translations (x, y, z) from the joint's parent, Blender frame]])])"""
     bins = bytearray()
     views, accs = [], []
 
@@ -172,11 +178,16 @@ def write_gltf(path, name, prims, slots, joints=None, anim=None):
             aname, times, chans = anim
             t_acc = add(np.array(times, np.float32).reshape(-1, 1), 5126, "SCALAR", None, True)
             samplers, channels = [], []
-            for j, quats in chans:
+            for ch in chans:
+                j, quats = ch[0], ch[1]
                 q = np.array(quats, np.float32)                        # (x, y, z, w) -> glTF axes (x, z, -y, w)
                 q = np.stack([q[:, 0], q[:, 2], -q[:, 1], q[:, 3]], axis=1)
                 samplers.append({"input": t_acc, "output": add(q, 5126, "VEC4"), "interpolation": "LINEAR"})
                 channels.append({"sampler": len(samplers) - 1, "target": {"node": j, "path": "rotation"}})
+                if len(ch) > 2 and ch[2] is not None:                  # (a moving joint: its place from its parent)
+                    samplers.append({"input": t_acc, "output": add(gl(np.array(ch[2], np.float32)), 5126, "VEC3"),
+                                     "interpolation": "LINEAR"})
+                    channels.append({"sampler": len(samplers) - 1, "target": {"node": j, "path": "translation"}})
             doc["animations"] = [{"name": aname, "samplers": samplers, "channels": channels}]
     else:
         doc["nodes"], doc["scenes"] = [{"name": name, "mesh": 0}], [{"nodes": [0]}]
@@ -296,7 +307,8 @@ def socket_of(name):
 
 
 def turret(part, on, house, guns, pivot, muzzle=None):
-    """a gun mount in the frame of its first hull socket: the house on turret_yaw, the guns on turret_pitch"""
+    """a gun mount in the frame of its first hull socket: the house on turret_yaw, the guns on turret_pitch; muzzle: the
+    muzzle (a point) or muzzles (a list) when they aren't the guns' farthest-forward vertices"""
     Mi = socket_of(on[0]).inverted()
     mesh = Mesh()
     mesh.add(D[house], Mi @ D[house].matrix_world, 1)
@@ -304,7 +316,9 @@ def turret(part, on, house, guns, pivot, muzzle=None):
     at = Mi @ pivot
     gw = np.array([Mi @ D[guns].matrix_world @ v.co for v in D[guns].data.vertices])
     c = gw.mean(axis=0)
-    if muzzle is not None:
+    if isinstance(muzzle, list):
+        tips = [Mi @ m for m in muzzle]
+    elif muzzle is not None:
         tips = [Mi @ muzzle]
     else:                                                  # the barrels' mouths: the farthest-forward vertices, by barrel
         front = gw[gw[:, 0] > gw[:, 0].max() - 0.6]
@@ -362,7 +376,59 @@ def vls(part, on, body, axis, deg, tex=None):
     finish(part, mesh, info, joints, ("Open", times, [(k, quats) for k in range(1, len(lids) + 1)]), tex=tex)
 
 
-turret("T16", ["T16_FWD", "T16_AFT"], "LEV_T16_FWD.001", "LEV_G16_FWD.001", D["LEV_G16_FWD_trunnion"].matrix_world.translation)
+def deploy(part, on, attach, frame_obj, pieces, sockets=()):
+    """a fire-mode part (firemode.py): a skinned mesh whose origin is its turret's `attach` bone (frame_obj's place),
+    Root > a bone a moving piece (pieces: (bone, parent bone or None for Root, object)), and the animation "Deploy": the
+    model's own keys (firemode.KEYS' deploy) sampled at 30 fps, each bone's rotation and place from its parent"""
+    Mi = socket_of(on[0]).inverted()
+    F = (Mi @ frame_obj.matrix_world).inverted() @ Mi         # world -> this part's frame (the attach bone at rest)
+    mesh, joints, names, objs = Mesh(), [("Root", -1, (0, 0, 0))], ["Root"], [frame_obj]
+    bones = {"Root": [0, 0, 0]}
+    for bone, parent, name in pieces:
+        ob = D[name]
+        W = F @ ob.matrix_world
+        assert (W.to_quaternion().angle < 1e-4), "%s: %s isn't at rest square to its part" % (part, name)
+        mesh.add(ob, W, len(joints))
+        joints.append((bone, names.index(parent or "Root"), tuple(W.translation)))
+        names.append(bone)
+        objs.append(ob)
+        bones[bone] = ue_cm(W.translation)
+    f0, f1 = FM.KEYS[0]
+    times, rots, locs = [], {j: [] for j in range(1, len(joints))}, {j: [] for j in range(1, len(joints))}
+    far = 0.0
+    sc = bpy.context.scene
+    for f in range(f0, f1 + 1):
+        sc.frame_set(f)
+        times.append((f - f0) / float(FM.FPS))
+        for j in range(1, len(joints)):
+            L = objs[joints[j][1]].matrix_world.inverted() @ objs[j].matrix_world
+            q = L.to_quaternion()
+            rots[j].append((q.x, q.y, q.z, q.w))
+            locs[j].append(tuple(L.translation))
+            if f == f1:
+                far = max(far, (L.translation - Vector(joints[j][2]) + Vector(joints[joints[j][1]][2])).length)
+    sc.frame_set(1)
+    info = {"kind": "deploy", "on": on, "attach_bone": attach, "bones": bones,
+            "sockets": [{"name": n, "bone": "Root", "loc": ue_cm(F @ w), "rot": [0, 0, 0]} for n, w in sockets],
+            "anim": {"name": "Deploy", "length_s": round((f1 - f0) / float(FM.FPS), 3), "frames": f1 - f0 + 1,
+                     "farthest_move_m": round(far, 3),
+                     "note": "stow = Deploy backwards; the bones' rest is shut"}}
+    finish(part, mesh, info, joints, ("Deploy", times, [(j, rots[j], locs[j]) for j in range(1, len(joints))]), wreck=False)
+
+
+# the 16-inch triple (firemode.py's mount): house and drums aim; its fire mode is two more skinned parts riding its bones
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import firemode as FM
+TR = D["LEV_G16_FWD_trunnion"]
+turret("T16", ["T16_FWD", "T16_AFT"], "LEV_T16_FWD.001", "LEV_G16_FWD.001", TR.matrix_world.translation,
+       muzzle=[TR.matrix_world @ Vector((FM.MUZZLE + FM.CHASE_OUT + 0.3, y, 0.0)) for y in FM.GUN_Y])
+deploy("T16_ARMOR", ["T16_FWD", "T16_AFT"], "turret_yaw", D["LEV_T16_FWD.001"],
+       [(n, None, "TANA_T16_FWD_" + n) for n in ("Armor_L", "Armor_R", "Vent_L", "Vent_R")])
+deploy("T16_GUNS", ["T16_FWD", "T16_AFT"], "turret_pitch", TR,
+       [(b, None, "TANA_T16_FWD_" + b) for b in ("Barrel_%d_%s" % (n, s) for n in (1, 2, 3) for s in "LR")]
+       + [("Chase_%d_%s" % (n, s), "Barrel_%d_%s" % (n, s), "TANA_T16_FWD_Chase_%d_%s" % (n, s)) for n in (1, 2, 3) for s in "LR"],
+       sockets=[("SOC_Charge_%02d" % (k + 1), TR.matrix_world @ Vector((FM.MUZZLE + FM.CHASE_OUT + 1.5, y, 0.0)))
+                for k, y in enumerate(FM.GUN_Y)])
 turret("T5", ["T5_%d" % k for k in range(1, 7)], "LEV_IOWA_T5_1.001", "LEV_IOWA_G5_1.001",
        D["LEV_IOWA_G5_1_trunnion"].matrix_world.translation)
 turret("CIWS", ["CIWS_%d" % k for k in range(1, 5)], "LEV_IOWA_CIWS_1.001", "LEV_IOWA_CG_1.001",

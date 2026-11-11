@@ -62,9 +62,29 @@ for p in parts:
                     far = max((ev_p - arm.matrix_world @ arm.data.bones["Hatch_01"].head_local).length for ev_p in [lid.matrix_world @ lid.data.vertices[i].co for i in idx])
                     msg += ", swings %.1f deg (json %.1f), lid reaches %.2f m from its hinge, %d verts" % (swing, abs(info["anim"]["open_deg"]), far, len(idx))
                     ok = ok and abs(swing - abs(info["anim"]["open_deg"])) < 0.5
+            if info["kind"] == "deploy":
+                # the fire mode's Deploy: one action; at its last frame the farthest any bone has moved from its parent
+                # (its pose location) is the export's
+                acts = list(bpy.data.actions)
+                ok = ok and len(acts) == 1
+                if acts:
+                    a, arm = acts[0], arms[0]
+                    arm.animation_data_create()
+                    arm.animation_data.action = a
+                    sc = bpy.context.scene
+                    sc.frame_set(int(a.frame_range[0]))
+                    start = max(pb.location.length for pb in arm.pose.bones)
+                    sc.frame_set(int(a.frame_range[1]))
+                    far = max(pb.location.length for pb in arm.pose.bones)
+                    turn = max(math.degrees(pb.rotation_quaternion.angle) for pb in arm.pose.bones)
+                    msg += " | anim '%s' frames %.0f-%.0f: shut %.3f m, open: a bone %.2f m off its rest (json %.2f), turns to %.1f deg" % (
+                        a.name, a.frame_range[0], a.frame_range[1], start, far, info["anim"]["farthest_move_m"], min(turn, 360 - turn))
+                    ok = ok and start < 0.01 and abs(far - info["anim"]["farthest_move_m"]) < 0.02
         say(ok, msg)
     if info["kind"] == "turret":
         print("CHECK      %-8s pitch pivot %s cm, sockets %s, guns lie %s m from the pivot" % (p, info["bones"]["turret_pitch"], [(s["name"], s["loc"]) for s in info["sockets"]], info["guns_forward_m"]))
+    if info["kind"] == "deploy":
+        print("CHECK      %-8s on %s: bones %s, sockets %s" % (p, info["attach_bone"], sorted(info["bones"]), [(s["name"], s["loc"]) for s in info["sockets"]]))
     if info["kind"] == "vls":
         print("CHECK      %-8s SOC_Vls_01 %s rot %s ; Hatch_01 %s" % (p, info["sockets"][0]["loc"], info["sockets"][0]["rot"], info["bones"]["Hatch_01"]))
 h = json.load(open(os.path.join(root, "src_HULL", "Tani_HULL.json")))

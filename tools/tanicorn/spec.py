@@ -14,7 +14,8 @@ Values that aren't set inherit the game's own native defaults (only differences 
 THE TANACORN's parts (tools/tanicorn/export_tanacorn.py; docs/design/INVINCIBLE_FLEET.md WP0 -> WP1): every part's
 sockets with their rotations (SOC_Gun_NN on turret_pitch, SOC_Vls_NN on Body along each cell's launch line), the hull's
 36 Mount_* sockets on its static mesh (mesh_sockets), and a blueprint for each gun mount on the 5-inch's layout
-(BP_SV_Tani_T5 / _T16 / _CIWS / _LASER; FCS below). The VLS blocks and the hull get their blueprints in WP1 / WP2.
+(BP_SV_Tani_T5 / _T16 / _CIWS / _LASER; FCS below; the 16-inch's with its fire mode's two meshes, FIRE_MODE). The VLS
+blocks and the hull get their blueprints in WP1 / WP2.
 """
 import json, os
 
@@ -37,6 +38,26 @@ def bones(yaw, pitch):
     return '(' + one(1, 'turret_yaw', yaw, (45, -45, 45)) + ',' + one(2, 'turret_pitch', (45, -45, 45), pitch) + ')'
 
 
+# The 16-inch's FIRE MODE (firemode.py; export_tanacorn.py's deploy parts): two skeletal meshes riding the turret's own
+# bones, each with its Deploy loaded and held at its start (shut); the game plays it forward to open and backwards to
+# shut (PlayAnimation / SetPlayRate on the component: docs/re/TANICORN.md 7). They draw only: the hit sphere stays the
+# turret's, and the destroy system hides them with the turret.
+FIRE_MODE = {'T16': [('FireModeArmor', 'T16_ARMOR', 'turret_yaw'), ('FireModeGuns', 'T16_GUNS', 'turret_pitch')]}
+
+
+def fire_mode_scs(part):
+    out = []
+    for comp, sub, bone in FIRE_MODE.get(part, []):
+        anim = obj(f'{DEST}/Model/AS_SV_Tani_{sub}_Deploy')
+        out.append({'name': comp, 'class': 'SkeletalMeshComponent', 'parent': 'TurretPoseableMesh', 'socket': bone,
+                    'props': {'SkinnedAsset': obj(f'{DEST}/Model/SK_SV_Tani_{sub}'),
+                              'AnimationMode': 'AnimationSingleNode',
+                              'AnimationData': (f'(AnimToPlay="{anim}",bSavedLooping=False,bSavedPlaying=False,'
+                                                f'SavedPosition=0,SavedPlayRate=1)'),
+                              'BodyInstance': '(CollisionEnabled=NoCollision)'}})
+    return out
+
+
 def mount(part, info, fcs):
     name = f'Tani_{part}'
     bp = f'{DEST}/BP_SV_{name}'
@@ -54,7 +75,7 @@ def mount(part, info, fcs):
              'props': {'SphereRadius': str(fcs['hit_radius_cm']), 'RelativeLocation': f'(X=0,Y=0,Z={fcs["hit_z_cm"]})',
                        'BodyInstance': '(CollisionEnabled=QueryAndPhysics,ObjectType=ECC_GameTraceChannel3,'
                                        'CollisionProfileName="EnemyPawn")'}},
-        ],
+        ] + fire_mode_scs(part),
         'cdo': {
             'AutoPossessAI': 'PlacedInWorldOrSpawned',
             'GameObjectId': '1000',
@@ -87,7 +108,9 @@ def mount(part, info, fcs):
             },
             'DamagedStateComponent': {
                 'DefaultDestroySystemList': [{'$new': 'LiveDefaultDestroySystemChangeMesh', 'props': {
-                    'DestroyHideMeshNameList': '((ChangeTime=0,TargetMeshName="TurretPoseableMesh",bHideToFinalExplosion=True,bReflectChildMesh=False))',
+                    'DestroyHideMeshNameList': '(' + ','.join(
+                        f'(ChangeTime=0,TargetMeshName="{m}",bHideToFinalExplosion=True,bReflectChildMesh=False)'
+                        for m in ['TurretPoseableMesh'] + [c for c, _, _ in FIRE_MODE.get(part, [])]) + ')',
                     'DestroyVisibleMeshNameList': '((ChangeTime=0,TargetMeshName="DamagedStaticMesh",bHideToFinalExplosion=False,bReflectChildMesh=False))',
                     'bChangeMeshes': 'True', 'bHideMeshes': 'True'}}],
             },
@@ -106,7 +129,8 @@ T5_FCS = {'search': 'AIR_ONLY', 'yaw': (40, -180, 180), 'pitch': (40, 0, 80), 'c
 # to aim and fire from the test key before its real weapon is built; none of these values is a design decision.
 FCS = {
     'T5': T5_FCS,
-    'T16': {**T5_FCS, 'yaw': (12, -150, 150), 'pitch': (8, -2, 45), 'interval': 2, 'resting': 6, 'fire_rate': 3,
+    'T16': {**T5_FCS, 'yaw': (12, -150, 150), 'pitch': (8, -2, 45), 'activation': 3, 'interval': 2, 'resting': 6,
+            'fire_rate': 3,
             'magazine': 3, 'reload': 8, 'hit_radius_cm': 1800, 'hit_z_cm': 400},
     'CIWS': {**T5_FCS, 'yaw': (120, -180, 180), 'pitch': (100, -10, 85), 'activation': 1, 'triggering': 2,
              'interval': 0.1, 'resting': 1, 'fire_rate': 30, 'magazine': 60, 'hit_radius_cm': 350, 'hit_z_cm': 300},

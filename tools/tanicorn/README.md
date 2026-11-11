@@ -6,13 +6,14 @@ The Tanager stand-in is Sea Power's Iowa (the user, 2026-11-09: "my install only
 
 `sh tools/tanicorn/build.sh` (UE 5.4, Blender 3.3, E:/AC8LiveProject; `BLENDER=` if Blender isn't in its default
 folder; `TANI_PARTS=T5,HULL` for some parts only; `TANI_STOP=export` to stop before UE):
-1. `model_tanacorn.py`: the Leviathan design (`art/tanicorn/design`, in the repo) -> `build/tanicorn/model/
+1. `model_tanacorn.py` (with `tanakit.py`, `firemode.py`): the Leviathan design (`art/tanicorn/design`, in the repo) -> `build/tanicorn/model/
    Tanacorn_model.blend`, made again only when the design or its scripts changed (~2 min).
 2. `export_tanacorn.py`: every part type in the frame of its hull socket -> `build/tanicorn/src_<part>` and
    `parts.json`: the four gun mounts T16, T5, CIWS, LASER (skinned glTF, Body > turret_yaw > turret_pitch, identity
    rotations, muzzle sockets SOC_Gun_NN), the VLS blocks VLSD and VLSS_L1..R4 (Body > Hatch_01..08, the animation
    Open, launch sockets SOC_Vls_NN), the hull HULL (static, its 36 Mount_* sockets), each part's wreck, textures,
-   `Tani_<part>.json` (kind, bones, sockets in UE cm with UE rotators, slots). `check_export.py` reads every glTF
+   `Tani_<part>.json` (kind, bones, sockets in UE cm with UE rotators, slots). The 16-inch's fire mode: T16_ARMOR
+   and T16_GUNS (kind deploy: Root > its pieces, the animation Deploy). `check_export.py` reads every glTF
    back into Blender and compares it with its json (triangles, slots, bones, each lid's swing): `CHECK ALL OK`.
 3. `ue_import.py` in the template project: textures, instances on AC8's gear material (stubs at AC8's paths, never
    packed), the rigged meshes, the lids' AnimSequences (AS_SV_Tani_<part>_Open), the hull's static mesh, the wrecks.
@@ -80,6 +81,17 @@ salvos, 5-inch flak, lasers burning down sea-skimmers, CIWS, sub-railguns, an af
 its target from its own rig (the turret's yaw and pitch, the guns' long axis, its mouths found from the mesh). About
 21 s a frame at 1280x720 and 8 samples on 4 cores; TANA_BREACH_RESUME=1 goes on from the frames already rendered.
 `TANA_BREACH_FRAMES=110,312` renders test stills, `TANA_BREACH_FX=0` leaves the weapons out.
+
+**The 16-inch triples' fire mode** (2026-11-11, the user: "look normal, until they transform into fire mode"; docs/re/
+TANICORN.md 7): `firemode.py`, run by model_tanacorn.py, models the 16-inch mount again from scratch on `tanakit.py`'s
+clean solids (the kit split out of model_tanacorn.py: Part, unwrap, check, bake) in place of the Iowa's on both turrets,
+and keys its transform (side armour and roof vents opening, barrels splitting into rails, chases telescoping) at 110-185
+/ 226-301. The export gives it two more parts, T16_ARMOR and T16_GUNS, each with its Deploy. Stills and a clip:
+
+    blender -b build/tanicorn/model/Tanacorn_model.blend -P tools/tanicorn/film_firemode.py -- build/tanicorn/firemode [stills] [clip]
+
+(dusk, TANA_FM_SUN; TANA_FM_SAMPLES, TANA_FM_RES, TANA_FM_FRAMES=a,b for a test stretch of the clip; ~7 s a frame at
+1280x720 and 10 samples on 4 cores).
 
 **Checking her over** (after any change to the design files or straighten.py): `audit_tanacorn.py` on the saved
 model measures her from every side (rays 0.25 m apart from six sides: port against starboard, faces seen from behind;

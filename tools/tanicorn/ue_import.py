@@ -10,6 +10,7 @@ build/tanicorn/parts.json (TANI_PARTS=T5,HULL picks some), by its json's kind:
                                        (hard rules 42, 58: no master material of ours)
   turret   Model/SK_SV_<part> (+ SKEL_SV_<part>, PA_SV_<part>): bones Body > turret_yaw > turret_pitch
   vls      Model/SK_SV_<part> (+ SKEL, PA): bones Body > Hatch_01..08, and AS_SV_<part>_Open (the lids' swing, 0.5 s)
+  deploy   Model/SK_SV_<part> (+ SKEL, PA): Root > the fire mode's pieces, and AS_SV_<part>_Deploy (2.5 s; firemode.py)
   hull     Model/SM_SV_Tani_HULL: one static mesh (its 36 Mount_* sockets come from TaniBuild), collision its triangles
   each but the hull: Model/SM_SV_<part>_DAM, the wreck (a static mesh the destroy system shows)
 AC8's materials are stubs at their own paths here; the game loads its own. tools/tanicorn/build.sh packs only
@@ -301,6 +302,15 @@ def part(p, gear, dn):
             say(f'AS_SV_{name}_Open: {soft(lambda: round(anim.get_play_length(), 3))} s (export {info["anim"]["length_s"]} s)')
         else:
             say(f'  WARNING {name}: the import made no animation (the lids\' Open): {kinds}')
+    elif kind == 'deploy':
+        # the 16-inch's fire mode (firemode.py): a mesh riding a turret bone, its Deploy (the stow: Deploy backwards)
+        sk, kinds = skinned(name, info, src, mats, ['Root'] + list(info['bones']))
+        anim = renamed(kinds, 'AnimSequence', f'{DEST}/Model/AS_SV_{name}_Deploy')
+        if anim:
+            EAL.save_loaded_asset(anim)
+            say(f'AS_SV_{name}_Deploy: {soft(lambda: round(anim.get_play_length(), 3))} s (export {info["anim"]["length_s"]} s)')
+        else:
+            say(f'  WARNING {name}: the import made no animation (the fire mode\'s Deploy): {kinds}')
     else:
         skinned(name, info, src, mats, ('Body', 'turret_yaw', 'turret_pitch'))
     if info.get('wreck', True):
