@@ -15,7 +15,7 @@ rm -rf "$OUT" && mkdir -p "$OUT"
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) WIN=1 ;; *) WIN=0 ;; esac
 # C suites that need windows.h and Win32 at run time (a vectored exception handler, Winsock / Steam lookups, bcrypt,
 # FindFirstFileW): only on Windows
-WIN_ONLY=" safecall_test pathguard_test flight_test coop_test build_hash_test "
+WIN_ONLY=" safecall_test pathguard_test flight_test coop_test build_hash_test logbundle_test "   # (logbundle_test: PR #4's, once merged)
 TO=""
 command -v timeout > /dev/null 2>&1 && TO="timeout 600"
 FILTER="$*"
@@ -58,6 +58,8 @@ run ini_check      python -X utf8 -I tools/checks/ini_check.py
 run subtitles      python -X utf8 -I tools/subtitles.py check
 run size_check     python -X utf8 -I tools/checks/size_check.py
 run menu_pages     python -X utf8 -I tools/checks/menu_pages_test.py
+# no machine path in the repo (PR #4's paths_check.py, run by its build_all.sh; once merged)
+[ -f tools/checks/paths_check.py ] && run paths_check python -X utf8 -I tools/checks/paths_check.py
 # hard rule 43 over the native runtime (not in build_all.sh yet)
 run rt_format      python -X utf8 -I tools/checks/rt_format_check.py
 # the suites
