@@ -279,3 +279,52 @@ data. tools/checks/spaceport_test.sh covers each piece.
   27; on a joiner `credits: +N (landing craft sunk (...) (the host's round))` and the NEXT row in both rounds; land
   during the assault (solo) and see the clocks line; the rockets' objects line, an escape's height, the split's line;
   the round after the retake: no `didn't come` or leftovers; a later Spaceport starts (no `no spaceport can come now`).
+
+## 2026-11-11: the rockets' warnings, the host's word on them, the retake's start spread out (not yet run in game)
+From Saint Alessia's co-op run of 0.74.36 (round 50: both rockets escaped with a 4 s banner each, Froya the only player
+flying; the joiner Delta's rocket B ended ~107 s after its launch, the host's 225 s; the retake's start held the game
+thread ~0.75 s). The user: "10000% need to add the mission dialogue about stopping the rocket launch", "Use the Mission 22
+radio lines for the rocket warning". Lua (sv_spaceport.lua, CFG.specials.spaceport.retake.rockets, the strip's
+config/subtitles.ini, a little in sv_coop.lua / sv_coop_migration.lua / sv_hud.lua) and the event package (needs
+build_all.sh). tools/checks/spaceport_test.sh and coop_guard_test.sh cover it.
+- The moments: the rockets' spawn (the brief), warn_s (15) before each launch, its count's last call 2 s before it, the
+  liftoff, halfway up (half_m 10,100 m; with no height read, 55 s on), its escape, its kill. Each: a big callout
+  (big_x 1.5; ROCKET A: LIFTOFF IN 15 S, ROCKET A LAUNCHED, ROCKET A HALFWAY TO ORBIT, ROCKET ESCAPED / DOWN), Comona
+  Control's line (`CTRL|`, rockets.subs in config/subtitles.ini: one of the moment's lines this run hasn't said, {rocket}
+  {s} {b} {km} filled in, so A's and B's are each their own and a second retake says the other ones) and Mission 22's
+  radio: RE_SV_SpRadioBrief (`01_Wave5_Countdown_Start`, the shuttle's countdown start), RE_SV_SpRadioWarn
+  (`01_Countdown_Ignistion`), RE_SV_SpRadioLaunch (`01_Countdown_Shuttle2and1`), RE_SV_SpRadioDown (v0001_0038 "Joker 1,
+  bandit downed!"), each a DT_SV_Radio group of its own (SV_Radio_Sp<X>, LimitPlayCount 0: survival_events.py SP_RADIO,
+  build_survival_rows.py build_radio), forwarded to every joiner; radio = false: none. No radio line for halfway and the
+  escape: no Mission 22 line known for them. Line: `special: rocket A: warn (callout '...'; line said; RE_SV_SpRadioWarn 1)`
+  (the line `every one said already this run`, `not taken by the subtitle strip`). The NEXT row: `ROCKETS: A IN 0:41  B
+  12.3 KM` (A / B DOWN, IN ORBIT, GONE); the retake's end: `NO REWARD: N ROCKET(S) REACHED ORBIT`.
+- The host's word: only the host's (or a solo game's) climb ends a rocket. Its PathFinish records (SV_SpRocketOut<L>) are
+  gated on the flag SV_SpRocketHost, set by RE_SV_SpRocketHostOn on the host alone (at the spawn and each launch; a
+  KEEP_EVENTS name), a joiner's set to 0 by RE_SV_SpRocketHostOff. The host sends "rk|<A|B>|<pad / launched / half /
+  escaped / lost / down>|<height m>" as each changes and every 10 s again (COOP.rocket); a joiner ends its own copy on
+  the host's escaped or lost only (RE_SV_SpRocketEnd<L>: the climb's end's hide and switch-off), once a retake, held
+  while its level loads. The joiners' NEXT row takes the rockets from "spx" (`r:<g>:<ships>:<A>:<B>`, tokens p<s> /
+  u<100 m> / u / d / e / x / -). Lines: host `special: the retake's rockets on the pads: ...; their climbs end them on
+  this game alone (RE_SV_SpRocketHostOn 1)`, joiner `coop: this game's rockets end on the host's word alone
+  (RE_SV_SpRocketHostOff 1)`, `coop: the host's rocket A: launched`, `coop: the host's rocket A escaped at 20200 m: this
+  game's copy taken off (RE_SV_SpRocketEndA 1)`.
+- A launch the host's STORE ate (HISTORY 0.74.51's "not in this fix"): 5 s after it a rocket still on its pad here (its
+  object within 200 m of where it stood, under 100 m up) is launched again on the host alone once its STORE is shut
+  (SPC.storeShut), 3 tries, its clocks from then: `special: rocket A still on its pad after its launch here: fired again
+  once this game's events can take (...)`, `... launched again here, try 1 of 3 (...)`, `special: rocket A left its pad:
+  its launch took here (fired again 1 time)`. The mark read back too: `the host's mark on its climbs not set here
+  (SV_SpRocketHost 0): set again`.
+- The climb in the log (why the host's B took 225 s): `special: rocket A: N m up, N km/h, N s after its launch (boosted)`
+  every log_s (10), `special: rocket A 8 s after its boost: N km/h: boosted | NOT boosted (Mission 19's boost 1000 km/h,
+  its launch 280)`.
+- The retake's start spread out (lag-4): SPORT.retakeSpawn only queues (s.jobs): the rockets, their debris, the garrison,
+  the island, the carried ships' checks, at most one spawn or two checks a tick (retakeJobs); busy while queued, the
+  ships still to check counted afloat and shared for a host migration. `special: round N, the Spaceport Retake starts:
+  N spawns and checks queued (a spawn or 2 checks a tick)`, then `special: round N, the Spaceport Retake: N garrison
+  vehicles, N island enemies, N ships from the assault (its spawns and checks N s after its start)`; nothing came: `no
+  garrison, island enemies, ships or rockets came for the retake: its reward is withheld`. The craft, garrison and
+  island counts are asked at most every 2.5 s (UNIT_AGE_S; lag-2).
+- To see in game: a retake with a joiner: the brief, both warnings, the count, the launches and halfway on both games
+  (voice, subtitle, banner); a joiner's rocket stays up to the host's escape and goes with it; the climb lines (A and B
+  both boosted, ~1,000 km/h); land during the retake as host (others flying) and see a launch the STORE ate fired again.

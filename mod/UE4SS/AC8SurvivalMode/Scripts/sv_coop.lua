@@ -76,6 +76,16 @@ function COOP.debit(n, why)
     send(true, "db", n, tostring(why or ""):sub(1, 80))
     log(string.format("coop: a penalty of %d (%s) sent to every joiner (%d linked)", n, tostring(why), M.linkedPeers or 0))
 end
+-- ((2026-11-11) Saint Alessia's co-op run: every game flew its own rocket, Delta's B ending ~2 minutes before the host's)
+-- The Spaceport Retake's rockets, the host's word on each (sv_spaceport.lua rkSend: as each changes, every 10 s again):
+-- "rk|<A|B>|<state>|<height m>", state pad / launched / half / escaped / lost / down, the height empty when not read. A
+-- joiner ends its own copy of a rocket only on the host's escaped or lost (SPORT.rkFromHost).
+function COOP.rocket(L, st, alt)
+    if not COOP.host() then return false end
+    alt = tonumber(alt)
+    return send(true, "rk", tostring(L), tostring(st),
+        (alt and alt == alt and math.abs(alt) < 1e7) and string.format("%.0f", alt) or "")
+end
 -- (0.74.0) GONE FISHIN' and THE FESTIVAL (sv_fishing.lua, sv_festival.lua): the host's round, its numbers to every joiner.
 --   "fh|<slot>|<catch>|<kg>|<x>|<y>"  a shoal's catch, credited to player <slot> (-1: the allies', shared out at the
 --                                     weigh-in), where it was (each game's splash)
@@ -445,6 +455,9 @@ local KEEP_EVENTS = {
     -- decoy can't let them through): the Spear and its sure kill at "Player" (only the locked player's game calls them),
     -- each game's own lasers on its own marks, its bait's ping and its radio lines (the host's locks come as "dk")
     "^RE_SV_DecoySpear_", "^RE_SV_DecoyKill$", "^RE_SV_DecoyLaser", "^RE_SV_DecoyBait", "^RE_SV_DecoyRadio_",
+    -- ((2026-11-11) the Spaceport Retake's rockets, sv_spaceport.lua: the mark that the host's climbs end its rockets,
+    -- set on the host alone (a joiner's set back to 0), and a joiner's own end of a rocket on the host's "rk")
+    "^RE_SV_SpRocketHost", "^RE_SV_SpRocketEnd",
 }                              -- ((code review of 2026-11-07, finding 1) the carriers' RE_SV_CargoLaunch_<s>_<n> is
                                -- forwarded for the look: each joiner's copy of the ship launches ZFA-44s of its own, which
                                -- M.standInSet takes as the host's allies' (sv_escort.lua ESC.localZfa), hostEvent takes the

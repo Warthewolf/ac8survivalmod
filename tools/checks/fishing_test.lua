@@ -421,7 +421,8 @@ end
 do                                                  -- ((2026-11-11) the shipped config\subtitles.ini, which wins in game)
     -- every SPEAKER|text line (a named one's too) on the strip at its own width: two lines at most; CHARLENE's thanks
     -- (subtitle = ..., said in pieces of thanks_chars) three at most. Values filled in wide ({kg} 9999, {dir} south-west)
-    local fill = { kg = "9999", dir = "south-west", name = "Danielle", n = "99", fish = "SWORDFISH" }
+    local fill = { kg = "9999", dir = "south-west", name = "Danielle", n = "99", fish = "SWORDFISH",
+                   rocket = "B", s = "110", b = "110", km = "20" }   -- ((2026-11-11) the retake's rockets' lines)
     local most, n, over, thanks = 0, 0, {}, 0
     for raw in readAll(MOD .. "/config/subtitles.ini"):gmatch("[^\r\n]+") do
         local text = raw:match("^%s*[%u][%w_]*|(.+)$") or raw:match("^%s*[%w_]+%s*=%s*[%u][%w_]*|(.+)$")

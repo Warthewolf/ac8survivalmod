@@ -515,7 +515,11 @@ local function onJoinerMessage(f)
             log("coop: the host's airfield is " .. (down and "down: landing closed" or "back up: landing open"))
         end
     elseif k == "co" then
-        if cfg().callouts then M.noMirror = true; pcall(hudCallout, short(f[2], 120), f[3] ~= "" and short(f[3], 120) or nil, f[4] == "1"); M.noMirror = false end
+        -- ((2026-11-11) a big one's scale (the host's sends it: 1.1 to 3; "1", an older host's: 1.5), never true here,
+        -- which the banner's SetRenderScale can't take: the joiners' big callouts were drawn at their own size)
+        local b = tonumber(f[4])
+        local big = (b and b > 1 and b <= 3) and b or (f[4] == "1" and 1.5) or nil
+        if cfg().callouts then M.noMirror = true; pcall(hudCallout, short(f[2], 120), f[3] ~= "" and short(f[3], 120) or nil, big); M.noMirror = false end
     elseif k == "tl" then                                -- a tell (sv_tells.lua): an id this game knows, a number
         local id, a = short(f[2], 32), tonumber(f[3])
         local now = os.clock()
@@ -746,6 +750,11 @@ local function onJoinerMessage(f)
             local okS, errS = pcall(SPORT.fromHost, short(f[2], 400))
             if not okS then once("spx", "coop: the host's Spaceport state not read: " .. tostring(errS)) end
         end
+    elseif k == "rk" and COOP.client() then              -- ((2026-11-11) the host's word on a rocket: sv_spaceport.lua
+        if SPORT and SPORT.rkFromHost then
+            local okR, errR = pcall(SPORT.rkFromHost, { f[1], short(f[2], 2), short(f[3], 12), short(f[4], 12) })
+            if not okR then once("rk", "coop: the host's rocket state not read: " .. tostring(errR)) end
+        end
     elseif k == "es" and COOP.client() then              -- ((2026-11-06) THE ESCORT's state, the ZFA-44 carriers: sv_escort.lua
         if ESC and ESC.onHost then
             local okE, errE = pcall(ESC.onHost, f)
@@ -935,7 +944,10 @@ end
 local rawCallout = hudCallout
 hudCallout = function(text, sub, big)
     rawCallout(text, sub, big)
-    if COOP.host() and M.mirror > 0 and not M.noMirror and cfg().callouts then send(true, "co", text or "", sub or "", big and 1 or 0) end
+    if COOP.host() and M.mirror > 0 and not M.noMirror and cfg().callouts then
+        local sc = big and math.max(1.1, math.min(3, tonumber(big) or 1.5)) or nil   -- ((2026-11-11) its scale: "co" above
+        send(true, "co", text or "", sub or "", sc and string.format("%.1f", sc) or 0)
+    end
 end
 -- ((0.74.0) a subtitle line of the host's round logic goes to every joiner too, "sb", as a callout's "co"; SUB.sayHere never)
 if SUB and SUB.say then
