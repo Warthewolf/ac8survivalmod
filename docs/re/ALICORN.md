@@ -474,7 +474,15 @@ was, and The Iron Acorn's copy after his relog was a fresh one at the lane's wes
   host's `s.corePct`), `SHUT` before, `EXPOSED` while its health can't be read. A joiner's row comes from the host's "rnd"
   field 16, `<tanks 0-4>:<s | e | 0-100>:<dived 0/1>` (SPC.alicornCode; anything else: no row; 5 s old: no row). A
   callout `ALICORN CORE: n%` as it drops past 75, 50 and 25 % (once each; the lowest crossed only; none at its sink),
-  mirrored to the joiners as every host callout. Its toughness is unchanged (a balance call: still the online health x hx).
+  mirrored to the joiners as every host callout.
+- **The core sized by the players flying** (the user, 2026-11-11: "Yes add the alicorns core size"). As it opens, before
+  CORE 100% is taken, its health is set in standard missiles as the tanks' are: `core_missiles` (30) for one player plus
+  `core_missiles_per_player` (10) for each other player flying then (a co-op host: itself while it's up, not DOWN and not
+  down at the airfield, plus othersFlying(); solo: just you), x the round's growth as the tanks' (hx / health_x: x3.05 at
+  round 45), split across the core's parts that are up. `special: the Alicorn's core sized: 60 missiles (30 + 10 x 3 other
+  players flying), 87840 health (x3.05: round 45's growth, as the tanks'; 48 damage a missile)`. The missile's damage
+  unread (or core_missiles 0): its health as it was, `special: the Alicorn's core keeps its health (your missile's damage
+  can't be read): ...`. The joiners' copies take it from the host's next "hp" (a health that changed, within a second).
 - **Logs.** The host: `special: Alicorn core hit: -X (Y left, Z%)` (", its core still shut" before it opens), `the Alicorn's
   core open with N health`, `the Alicorn's core at Z% (...): called out (under 75%)`, `the Alicorn's hull at (x, y) km,
   heading H, its out|back leg` every 30 s; `coop: the joiners' hits dealt here in the last 60 s (health x 10): player 4: 23

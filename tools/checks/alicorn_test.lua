@@ -7,6 +7,11 @@
 --   the host's core: its health at opening, each hit logged as the tanks' (one while shut too), CORE n% on the NEXT row
 --     (SPC.alicornRow) and in "rnd" field 16 (SPC.alicornCode), a callout as it drops past 75 / 50 / 25 % (once each, the
 --     lowest crossed only), none at its sink;
+--   its core's size as it opens (the user, 2026-11-11): core_missiles + core_missiles_per_player for each other player
+--     flying (solo; a co-op host alone, with 2 and 3 others; others down at their airfield, shot down or not heard from;
+--     the host DOWN or down at the airfield), x the round's growth, split across its parts, CORE 100% that health, no hit
+--     logged for it, in the host's next "hp" and on a joiner's copy; its health as it was when the missile's damage
+--     can't be read or core_missiles is 0;
 --   its hull: the way it sails from its moves, its place in the log every 30 s; the leg from each place on the lane
 --     (SPC.alicornLegOf: the first waypoint 300 m or more ahead, the other way's whole leg at an end), the rejoiner's pose
 --     and leg (SPC.alicornRejoin), the spawn back at the lane's start after one at a pose (SPC.alicornPose);
@@ -214,6 +219,123 @@ tickA(13, 14)
 check(s.coreOpen and SPC.alicornRow(T) == "ALICORN: BALLAST TANKS 0/4  CORE EXPOSED" and SPC.alicornCode() == "0:e:0",
       "its core's health unreadable: EXPOSED, \"e\" in rnd")
 
+---------------------------------------------------------------------------------------------------- the core's size
+-- (the user, 2026-11-11: "Yes add the alicorns core size") core_missiles for one player, core_missiles_per_player for each
+-- other player flying as it opens, x the round's growth as the tanks' (round 45: x3.05); 48 damage a missile here
+print("the core sized by the players flying as it opens")
+local MSL = { full = "BP_plwp_msl_f0_C_1", addr = 90, damage = 48 }
+local GROWTH = 0.915 / 0.3                                -- (hx / health_x at round 45)
+local function sized(n) return math.floor(n * 48 * 10 * GROWTH + 0.5) end
+local function peer(slot, alive_, fresh, onAirfield)
+    M.peers[slot] = { at = KM(-15, -5, 2), alive = alive_, fresh = fresh, onAirfield = onAirfield, flags = 1 }
+end
+-- open its core after the round's first passes (the tanks found and sized, the missile's damage read); the core's health
+-- then, and the log from its opening
+local function openCore(cores)
+    s = alicornRound()
+    if cores then
+        FA[AL.core_class] = cores
+        SPC.CLEAN_OBJ[UNIT] = { at = clock, hull, cores[1], cores[2], tanks[1], tanks[2], tanks[3], tanks[4] }
+        core = cores[1]
+    end
+    tickA(0, 12)
+    for _, o in ipairs(tanks) do o.HealthInternal = 0 end
+    local from = #logs + 1
+    tickA(13, 14)
+    return from
+end
+FA.LiveMissile = { MSL }
+f0 = openCore()
+check(core.HealthInternal == sized(30) and s.coreFull == sized(30) and s.corePct == 100
+      and has(line("special: the Alicorn's core sized:", f0), "sized: 30 missiles (30 + 10 x 0 other players flying), " .. sized(30) .. " health"),
+      "solo: 30 missiles x3.05 (" .. tostring(core.HealthInternal) .. "; " .. tostring(line("special: the Alicorn's core sized:", f0)) .. ")")
+check(SPC.alicornRow(T) == "ALICORN: BALLAST TANKS 0/4  CORE 100%" and SPC.alicornCode() == "0:100:0"
+      and has(line("special: the Alicorn's core open with " .. sized(30) .. " health", f0), "CORE 100%"),
+      "CORE 100% is the sized core (its row, rnd, the log)")
+check(line("special: Alicorn core hit:", f0) == nil, "its sizing isn't logged as a hit")
+core.HealthInternal = math.floor(sized(30) * 0.74)
+tickA(15, 16)
+check(s.corePct == 74 and #called(string.format(T.alicorn_core_left, 74)) == 1, "a hit to 74 % of the sized core: 74 %, called out")
+-- a co-op host: itself and the others flying (alive, fresh, not down at the airfield)
+COOP.open, COOP.role, COOP.slot = true, "host", 0
+M.peers = {}
+f0 = openCore()
+check(core.HealthInternal == sized(30) and has(line("special: the Alicorn's core sized:", f0), "(30 + 10 x 0 other players flying)"),
+      "a co-op host flying alone: 30")
+M.peers = {}; peer(1, true, true, false); peer(2, true, true, false)
+f0 = openCore()
+check(core.HealthInternal == sized(50) and has(line("special: the Alicorn's core sized:", f0), "50 missiles (30 + 10 x 2 other players flying)"),
+      "3 flying: 50 (" .. tostring(line("special: the Alicorn's core sized:", f0)) .. ")")
+peer(3, true, true, false)
+f0 = openCore()
+check(core.HealthInternal == sized(60) and s.coreFull == sized(60) and has(line("special: the Alicorn's core sized:", f0), "60 missiles (30 + 10 x 3 other players flying)"),
+      "4 flying: 60")
+peer(4, true, true, true); peer(5, false, true, false); peer(6, true, false, false)
+f0 = openCore()
+check(core.HealthInternal == sized(60), "... one more down at their airfield, one shot down, one not heard from: still 60")
+local DOWN0 = DOWN
+DOWN = { me = function() return true end }
+f0 = openCore()
+check(core.HealthInternal == sized(50) and has(line("special: the Alicorn's core sized:", f0), "(30 + 10 x 2 other players flying)"),
+      "the host DOWN, 3 others flying: 50 (" .. tostring(line("special: the Alicorn's core sized:", f0)) .. ")")
+DOWN = DOWN0
+grounded = true
+f0 = openCore()
+check(core.HealthInternal == sized(50), "the host down at the airfield, 3 others flying: 50")
+grounded = false
+M.peers = {}; peer(1, true, true, false)
+f0 = openCore()
+check(has(line("special: the Alicorn's core sized:", f0), "(30 + 10 x 1 other player flying)") and core.HealthInternal == sized(40),
+      "2 flying: 40, \"1 other player\"")
+-- its health reaches the joiners: the host's next "hp" for its core's id
+M.units, M.byId, M.replays = {}, {}, {}
+M.units[UNIT] = { gen = 7, n = 0, planes = {}, ground = { ["BP_MP028_dummy_emlmcore_Base_C#1"] = { id = 2161 } }, at = clock }
+s = alicornRound()
+M.byId[2161] = { obj = core, unit = UNIT, key = "BP_MP028_dummy_emlmcore_Base_C#1", addr = core.addr, sentHp = 28594 }
+tickA(0, 12)
+for _, o in ipairs(tanks) do o.HealthInternal = 0 end
+tickA(13, 14)
+sent, M.nextHp = {}, clock
+hostTick()
+local hpMsg
+for _, m in ipairs(sent) do if m:find("^hp|") then hpMsg = m end end
+check(hpMsg and has(hpMsg, "2161:" .. sized(40)), "the sized core in the host's next hp, for the joiners' copies (" .. tostring(hpMsg) .. ")")
+COOP.open, COOP.role, COOP.slot = false, nil, nil
+M.peers, M.units, M.byId = {}, {}, {}
+-- two core parts: the total split; a smaller core: no false hit
+local cA = mkObj(AL.core_class .. "_1", KM(-20, -5.5), nil, 31250)
+local cB = mkObj(AL.core_class .. "_2", KM(-20, -5.5), nil, 31250)
+f0 = openCore({ cA, cB })
+local half = math.floor(sized(30) / 2 + 0.5)
+check(cA.HealthInternal == half and cB.HealthInternal == half and s.coreFull == 2 * half
+      and has(line("special: the Alicorn's core sized:", f0), "; 2 parts, " .. half .. " each"), "two core parts: the total split between them")
+AL.core_missiles = 5
+f0 = openCore()
+check(core.HealthInternal == sized(5) and s.corePct == 100 and line("special: Alicorn core hit:", f0) == nil,
+      "core_missiles 5 (under what it had): " .. sized(5) .. ", CORE 100%, no hit logged")
+AL.core_missiles = 0
+f0 = openCore()
+check(core.HealthInternal == 28594 and line("special: the Alicorn's core sized:", f0) == nil, "core_missiles 0: its health as it was")
+AL.core_missiles = 30
+-- the missile's damage unread: its health as it was, logged
+FA.LiveMissile = nil
+f0 = openCore()
+check(core.HealthInternal == 28594 and s.coreFull == 28594 and s.corePct == 100
+      and has(line("special: the Alicorn's core keeps its health", f0), "your missile's damage can't be read): 30 missiles"),
+      "the missile's damage unread: its health as it was (" .. tostring(line("special: the Alicorn's core keeps its health", f0)) .. ")")
+-- tank_missiles 0 (never read for the tanks): read as the core opens
+AL.tank_missiles = 0
+s = alicornRound()
+tickA(0, 12)
+FA.LiveMissile = { MSL }
+for _, o in ipairs(tanks) do o.HealthInternal = 0 end
+f0 = #logs + 1
+tickA(13, 14)
+check(core.HealthInternal == sized(30) and has(line("special: the Alicorn's core sized:", f0), "48 damage a missile from BP_plwp_msl_f0_C_1"),
+      "tank_missiles 0: the missile's damage read as the core opens")
+AL.tank_missiles = 6
+FA.LiveMissile = nil
+
 ---------------------------------------------------------------------------------------------------- its hull and legs
 print("its hull: its way, its place every 30 s, the leg from each place, the rejoiner's pose")
 s = alicornRound()
@@ -380,6 +502,10 @@ bindGround(2161, copyCore, UNIT, "BP_MP028_dummy_emlmcore_Base_C#1")
 check(copyCore.HealthInternal == 28594 and M.copies[2161].exp == 28594 and M.copies[2161].hp == 28594 and M.pendHp[2161] == nil
       and has(line("coop: the host's SV_Unit_Alicorn here bound with the host's health", f0), "31250 -> 28594"),
       "bound: the host's health on it, not its stock 31,250 (logged once a spawn)")
+onJoinerMessage({ "hp", "2161:" .. sized(60) })
+check(copyCore.HealthInternal == sized(60) and M.copies[2161].exp == sized(60),
+      "the host's core sized as it opened (more than it had): on the copy here (" .. copyCore.HealthInternal .. ")")
+onJoinerMessage({ "hp", "2161:28594" })
 onJoinerMessage({ "gd", UNIT, "7", "BP_BA002_alcn_btankfl_Base_C#1", "2162" })
 check(M.pendHp[2162] == nil and M.pendHpN == 0, "a gd naming that id anew: its kept health forgotten")
 onJoinerMessage({ "hp", "2163:500" })

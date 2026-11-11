@@ -12,7 +12,10 @@
 --   the camera: the first other player watched, a CameraComponent behind and above their plane, the next on the key, the
 --     next by itself when the one watched goes down, the view put back (counted) when the game takes it, the HUD line;
 --   a revive by a joiner (the host's checks, "rb" to everyone, the room's count and the next price) and by the host
---     (the STORE row's label, "(+1)", the price); the downed game's way back (loiter off, the plane as it was, repaired,
+--     (the STORE row's label, "(+1)", the price); (2026-11-11, the user: "readjust the revive costs") each player's own
+--     revives pricing theirs, raise_max's cap (round 50: 9,500 to 28,500), the run's count apart, a late joiner's table
+--     in "rc", the host's refusal "rx" putting a joiner's price right, broken counts and tables not taken;
+--     the downed game's way back (loiter off, the plane as it was, repaired,
 --     safe_s invincible, respawn loiter / native with SV_Respawn's pose; a plane that isn't flying, crashed into the
 --     ground with its floor held, native whatever respawn says: the user's co-op run of 2026-10-30);
 --   the refusals: not on the airfield, not down, a second revive, a wrong price, a bad request, another player's "dw";
@@ -224,7 +227,22 @@ do
     check(at(30, "fighting", 0) == 6500 and at(1, "spawning", 0) == 2150, "round 30: 6500; round 1: 2150 (" .. at(30, "fighting", 0) .. ", " .. at(1, "spawning", 0) .. ")")
     check(at(9, "wait", 0) == 3500 and at(0, "wait", 0) == 2150, "in the break after round 9: round 10's 3500; before round 1: round 1's 2150")
     check(DOWN.priceFor(0, 20) == 5000, "another round's price on asking: round 20, 5000")
+    -- ((2026-11-11) the user: "readjust the revive costs") n is the revived player's own revives; raise_max 3 at most:
+    -- round 50's base 9,500, never over 28,500 (the 50-round run's 13th revive cost 138,240)
+    check(cr.raise_max == 3, "shipped: raise_max 3 (" .. tostring(cr.raise_max) .. ")")
+    local q = {}
+    for _, n in ipairs({ 0, 1, 4, 5, 12, 100000 }) do q[#q + 1] = at(50, "fighting", n) end
+    check(table.concat(q, " ") == "9500 11880 23190 28500 28500 28500",
+          "round 50: 9500, their 2nd 11880, 5th 23190; the 6th, 13th and 100001st capped at 28500 (" .. table.concat(q, " ") .. ")")
+    check(DOWN.priceFor(5, 49) == 28050 and DOWN.priceFor(1, 49) == 11690, "round 49's on asking: capped 28050, the 2nd 11690 ("
+          .. DOWN.priceFor(5, 49) .. ", " .. DOWN.priceFor(1, 49) .. ")")
+    cr.raise_max = 0
+    check(at(50, "fighting", 12) == 138240, "raise_max 0: no cap (round 50's 13th: 138240, as in the 50-round run)")
+    cr.raise_max = 0.5
+    check(at(50, "fighting", 3) == 9500, "raise_max under 1: never over the base (9500)")
+    cr.raise_max = 3
     cr.price, cr.raise, cr.price_per_round = 5000, 1.5, 0   -- (the checks below were written for 5000 x1.5 flat: the logic is the same)
+    check(DOWN.priceFor(3) == 15000 and DOWN.priceFor(2) == 11250, "5000 x1.5: the 3rd 11250, the 4th capped at 15000 (x3)")
 end
 
 print("the floor")
@@ -484,22 +502,23 @@ check(P1.hidden == true, "their plane hidden here")
 sent = {}
 inbox[#inbox + 1] = "2|rv|1|5000"
 tick()
-check(msgs("rb") == "-1>rb|1|1|2" and St.count == 1 and callout("B BACK"), "player 3 at their airfield revives player 2: rb|1|1|2 to everyone, the count 1")
+check(msgs("rb") == "-1>rb|1|1|2|1" and St.count == 1 and St.per[1] == 1 and callout("B BACK"),
+      "player 3 at their airfield revives player 2: rb|1|1|2|1 to everyone, the run's count 1, theirs 1")
 sent = {}
 inbox[#inbox + 1] = "2|rv|1|7500"
 tick()
-check(msgs("rx") == "2>rx|1|ALREADY BEING REVIVED|1", "a second revive within 15 s: refused (" .. msgs("rx") .. ")")
+check(msgs("rx") == "2>rx|1|ALREADY BEING REVIVED|1|1", "a second revive within 15 s: refused, theirs with it (" .. msgs("rx") .. ")")
 sent = {}
 clock = clock + 16
 inbox[#inbox + 1] = "2|rv|1|5000"
 tick()
-check(msgs("rx") == "2>rx|1|THE PRICE CHANGED: NOW 7500|1", "the old price: refused, the new one said")
+check(msgs("rx") == "2>rx|1|THE PRICE CHANGED: NOW 7500|1|1", "the old price: refused, the new one said (their second: x1.5)")
 sent = {}
 peer(2, FLY)
 tick()
 inbox[#inbox + 1] = "2|rv|1|7500"
 tick()
-check(msgs("rx") == "2>rx|1|NOT AT THE AIRFIELD|1", "the reviver not at the airfield: refused")
+check(msgs("rx") == "2>rx|1|NOT AT THE AIRFIELD|1|1", "the reviver not at the airfield: refused")
 sent = {}
 peer(1, FLY); peer(2, AIRFIELD_F)
 tick()
@@ -507,8 +526,63 @@ inbox[#inbox + 1] = "2|rv|1|7500"
 inbox[#inbox + 1] = "2|rv|x|7500"
 inbox[#inbox + 1] = "1|dw|2"
 tick()
-check(msgs("rx") == "2>rx|1|NOT DOWN|1 2>rx|x|A BAD REQUEST", "not down; a bad request (" .. msgs("rx") .. ")")
+check(msgs("rx") == "2>rx|1|NOT DOWN|1|1 2>rx|x|A BAD REQUEST", "not down; a bad request (" .. msgs("rx") .. ")")
 check(msgs("dw") == "" and line("revive: player 2 said another player is down; ignored", from) ~= nil, "a dw for another slot: ignored")
+
+print("revives: each player's own count, the run's apart (2026-11-11: \"readjust the revive costs\")")
+do
+    scene("host", 0, { [1] = FLY, [2] = AIRFIELD_F })
+    local function downB() peer(1, DOWNED); inbox[#inbox + 1] = "1|dw|1"; tick(); sent = {} end
+    local function upB() peer(1, FLY); tick(); clock = clock + 16 end
+    downB()
+    inbox[#inbox + 1] = "2|rv|1|5000"; tick()
+    upB(); downB()
+    check(DOWN.offer().price == 7500, "B's second: 7500")
+    inbox[#inbox + 1] = "2|rv|1|7500"; tick()
+    check(msgs("rb") == "-1>rb|1|2|2|2" and St.per[1] == 2, "B's second taken: rb with theirs 2")
+    upB()
+    peer(2, DOWNED); inbox[#inbox + 1] = "2|dw|2"; tick()
+    grounded = true
+    local o = DOWN.offer()
+    check(o.label == "REVIVE C" and o.price == 5000, "C down after B's two: C's first, 5000 (" .. tostring(o.price) .. ")")
+    local ok = DOWN.buy(5000)
+    check(ok and St.count == 3 and St.per[1] == 2 and St.per[2] == 1, "C revived by the host: the run's count 3, B 2, C 1")
+    grounded = false
+    peer(2, AIRFIELD_F); tick(); clock = clock + 16
+    downB()
+    inbox[#inbox + 1] = "2|rv|1|11250"; tick()
+    check(msgs("rb") == "-1>rb|1|4|2|3" and St.count == 4 and St.per[1] == 3, "B's third at 11250: the run's revive 4, theirs 3")
+    -- a joiner who links now gets the run's count and each player's own
+    sent = {}
+    DOWN.syncTo(2)
+    check(msgs("rc") == "2>rc|4|1:3,2:1", "a late joiner's rc: the run's 4, B 3, C 1 (" .. msgs("rc") .. ")")
+end
+do
+    scene("join", 2, { [0] = FLY, [1] = FLY })
+    inbox[#inbox + 1] = "0|rc|4|1:3,2:1"
+    tick()
+    check(St.count == 4 and St.per[1] == 3 and St.per[2] == 1, "a late joiner: the host's rc taken whole (4; B 3, C 1)")
+    peer(1, DOWNED); tick()
+    local o = DOWN.offer()
+    check(o.price == 15000 and has(o.help, "Their revives this run: 3 of 4") and has(o.help, "x3 at most"),
+          "its row: B at their 4th, capped at x3: 15000 (" .. tostring(o.price) .. "; " .. tostring(o.help) .. ")")
+    inbox[#inbox + 1] = "0|rc|5|0:1,1:2,99:7,x:1,2:1e9,3:-1,4:1.5,5:100001,6:100000,,7:"
+    tick()
+    check(St.count == 5 and St.per[0] == 1 and St.per[1] == 2 and St.per[2] == nil and St.per[6] == 100000 and St.per[99] == nil
+          and St.per[4] == nil and St.per[5] == nil and St.per[3] == nil, "a broken rc: only whole slots 0-23 and counts 0-100000 taken")
+    inbox[#inbox + 1] = "0|rc|5|" .. string.rep("1:1,", 100)
+    tick()
+    check(St.per[1] == 2, "an rc table too long: kept as it was")
+    inbox[#inbox + 1] = "0|rc|5|"
+    tick()
+    check(next(St.per) == nil, "an empty rc table: nobody's revived")
+    inbox[#inbox + 1] = "0|rb|1|6|0|nan"
+    tick()
+    check(St.per[1] == 1 and St.count == 6, "an rb with a broken count of theirs: one more of theirs here")
+    inbox[#inbox + 1] = "0|rx|1|NOT DOWN|6|1e9"
+    tick()
+    check(St.per[1] == 1, "an rx with a count past 100000: not taken")
+end
 
 print("revives: the price by the round (0.73.78, economy C6)")
 do
@@ -524,7 +598,7 @@ do
     from = #logs + 1
     inbox[#inbox + 1] = "2|rv|1|3500"
     tick()
-    check(msgs("rb") == "-1>rb|1|1|2" and St.count == 1 and has(line("revive: player 3 revived player 2 for 3500", from), "round 10's price"),
+    check(msgs("rb") == "-1>rb|1|1|2|1" and St.count == 1 and has(line("revive: player 3 revived player 2 for 3500", from), "the run's revive 1, their 1; round 10's price"),
           "round 10: player 3's revive at 3500 taken (round 10's price, logged)")
     peer(1, FLY); tick()
     D.state = "wait"                                  -- (round 10 cleared: the break's prices are round 11's)
@@ -533,12 +607,12 @@ do
     sent = {}
     inbox[#inbox + 1] = "2|rv|1|3500"
     tick()
-    check(msgs("rx") == "2>rx|1|THE PRICE CHANGED: NOW 4560|1", "the break: the run's first revive's price again: refused, round 11's 4560 said ("
+    check(msgs("rx") == "2>rx|1|THE PRICE CHANGED: NOW 4560|1|1", "the break: their first revive's price again: refused, round 11's 4560 said ("
           .. msgs("rx") .. ")")
     sent = {}
     inbox[#inbox + 1] = "2|rv|1|4380"
     tick()
-    check(msgs("rb") == "-1>rb|1|2|2" and St.count == 2, "... round 10's price for the second revive (4380), asked as the round changed: taken")
+    check(msgs("rb") == "-1>rb|1|2|2|2" and St.count == 2, "... round 10's price for their second revive (4380), asked as the round changed: taken")
     cr.price, cr.raise, cr.price_per_round = 5000, 1.5, 0
 end
 
@@ -553,11 +627,12 @@ local ok, why = DOWN.buy(5000)
 check(not ok and why == "NOT AT THE AIRFIELD.", "the host in the air: refused, nothing charged (" .. tostring(why) .. ")")
 grounded = true
 ok, why = DOWN.buy(5000)
-check(ok and why == "REVIVED B." and msgs("rb") == "-1>rb|1|1|0", "at the airfield: REVIVED B., rb|1|1|0")
+check(ok and why == "REVIVED B." and msgs("rb") == "-1>rb|1|1|0|1", "at the airfield: REVIVED B., rb|1|1|0|1")
 peer(1, FLY); tick()
 o = DOWN.offer()
-check(o.label == "REVIVE C" and o.price == 7500, "then REVIVE C at 7500 (x1.5)")
-ok, why = DOWN.buy(5000)
+check(o.label == "REVIVE C" and o.price == 5000 and has(o.help, "Their revives this run: 0 of 1"),
+      "then REVIVE C at 5000: their first (B's revive isn't theirs; 2026-11-11) (" .. tostring(o.price) .. "; " .. tostring(o.help) .. ")")
+ok, why = DOWN.buy(7500)
 check(not ok and why == "THE PRICE CHANGED: CHECK IT AND PRESS AGAIN.", "an old price: refused")
 COOP.open = false
 check(DOWN.offer().why == "CO-OP ONLY.", "co-op closed: CO-OP ONLY.")
@@ -634,7 +709,11 @@ pawn.at, pawn.flySpeed = nil, nil
 sent = {}
 peer(2, DOWNED); tick()
 o = DOWN.offer()
-check(o.label == "REVIVE C" and o.price == 5000 * 1.5 * 1.5, "player 3 down: REVIVE C at the room's count 2: 11250 (" .. tostring(o.price) .. ")")
+check(o.label == "REVIVE C" and o.price == 5000, "player 3 down: REVIVE C at their own count 0: 5000, not the room's (" .. tostring(o.price) .. ")")
+inbox[#inbox + 1] = "0|rx|2|NOT DOWN|4|2"                -- (the host's refusal of an ask of before: theirs is 2)
+tick()
+o = DOWN.offer()
+check(St.per[2] == 2 and St.count == 4 and o.price == 5000 * 1.5 * 1.5, "the host's rx with theirs (2): the price put right, 11250 (" .. tostring(o.price) .. ")")
 ok, why = DOWN.buy(o.price)
 RUN.credits = RUN.credits - o.price                      -- (sv_shop.lua's shopBuy charges it)
 check(ok and msgs("rv") == "0>rv|2|11250" and St.pending[2] ~= nil, "asked: rv|2|11250 to the host (" .. msgs("rv") .. ")")
@@ -646,9 +725,10 @@ ok = DOWN.buy(11250); RUN.credits = RUN.credits - 11250
 ticks(10.25)
 check(RUN.credits == 20000 and RUN.msg.Revive == "NO ANSWER FROM THE HOST. 11250 REFUNDED.", "no answer in 10 s: refunded")
 ok = DOWN.buy(11250); RUN.credits = RUN.credits - 11250
-inbox[#inbox + 1] = "0|rb|2|3|1"
+inbox[#inbox + 1] = "0|rb|2|5|1|3"
 tick()
-check(RUN.credits == 8750 and RUN.msg.Revive == "REVIVED C." and St.count == 3 and callout("C BACK"), "rb by you: paid, REVIVED C., the count 3")
+check(RUN.credits == 8750 and RUN.msg.Revive == "REVIVED C." and St.count == 5 and St.per[2] == 3 and callout("C BACK"),
+      "rb by you: paid, REVIVED C., the run's count 5, theirs 3")
 -- the round bonus while down
 pawn.HealthInternal = 1
 tick()
@@ -680,7 +760,7 @@ inbox[#inbox + 1] = "1|rv|0|5000"
 tick()
 check(not DOWN.me() and pawn.hidden == false and pawn.collision == true and pawn.bEnableWeaponInput == true and survivalPC.view == pawn,
       "player 2 at their airfield revives the host: back, shown, armed, the view its own")
-check(msgs("rb") == "-1>rb|0|1|1" and St.count == 1 and line("^revive: player 2 revived player 1 for 5000", from) ~= nil
+check(msgs("rb") == "-1>rb|0|1|1|1" and St.count == 1 and line("^revive: player 2 revived player 1 for 5000", from) ~= nil
       and callout("BACK IN THE FIGHT"), "rb|0|1|1 to everyone, the room's count 1, logged, called out (" .. msgs("rb") .. ")")
 check(pawn.HealthInternal == 1000 and events[#events] == "RE_SV_RepairAircraft", "repaired")
 peer(1, FLY)
@@ -689,13 +769,13 @@ tick()
 sent = {}
 inbox[#inbox + 1] = "1|rv|0|7500"
 tick()
-check(DOWN.me() and msgs("rx") == "1>rx|0|NOT AT THE AIRFIELD|1", "down again, the joiner flying: refused, told why (" .. msgs("rx") .. ")")
+check(DOWN.me() and msgs("rx") == "1>rx|0|NOT AT THE AIRFIELD|1|1", "down again, the joiner flying: refused, told why (" .. msgs("rx") .. ")")
 peer(1, AIRFIELD_F)
 tick()                                            -- (their landed state in first)
 sent = {}
 inbox[#inbox + 1] = "1|rv|0|7500"
 tick()
-check(not DOWN.me() and msgs("rb") == "-1>rb|0|2|1", "down again within 15 s of the last revive, the joiner landed: revived again ("
+check(not DOWN.me() and msgs("rb") == "-1>rb|0|2|1|2", "down again within 15 s of the last revive, the joiner landed: revived again ("
       .. msgs("rb") .. msgs("rx") .. ")")
 
 ---------------------------------------------------------------------------------------------------- the landing's lock
@@ -1066,7 +1146,7 @@ do
     sent, from = {}, #logs + 1
     inbox[#inbox + 1] = "2|rv|1|5000"
     tick()
-    check(msgs("rx") == "2>rx|1|THEIR LINK IS LAGGING: TRY AGAIN|0" and St.count == 0 and msgs("rb") == ""
+    check(msgs("rx") == "2>rx|1|THEIR LINK IS LAGGING: TRY AGAIN|0|0" and St.count == 0 and msgs("rb") == ""
           and has(line("^revive: player 3's revive of player 2 refused", from), "(their last state 800 ms old)"),
           "their last state 800 ms old: refused (refunded there), nothing counted, logged with the age (" .. msgs("rx") .. ")")
     peer(1, DOWNED, 100)
@@ -1075,13 +1155,13 @@ do
     sent = {}
     inbox[#inbox + 1] = "2|rv|1|5000"
     tick()
-    check(msgs("rx") == "2>rx|1|THEIR LINK IS LAGGING: TRY AGAIN|0" and has(line("^revive: player 3's revive of player 2 refused", from), "their link is lost"),
+    check(msgs("rx") == "2>rx|1|THEIR LINK IS LAGGING: TRY AGAIN|0|0" and has(line("^revive: player 3's revive of player 2 refused", from), "their link is lost"),
           "their link lost (sys|lost): refused")
     M.lostAt[1] = nil
     sent = {}
     inbox[#inbox + 1] = "2|rv|1|5000"
     tick()
-    check(msgs("rb") == "-1>rb|1|1|2" and St.count == 1, "heard from now: revived as ever")
+    check(msgs("rb") == "-1>rb|1|1|2|1" and St.count == 1, "heard from now: revived as ever")
 end
 
 print("a joiner's host lost: the floor and the run held through a host migration (Delta's log, joiner-5; board-5)")

@@ -14,7 +14,8 @@
 --               (the others hide your plane and count you out: COOP.players() alive false), "dw" to the host, which tells
 --               everyone; your view on another player's plane (the spectator camera below)
 --   revive      any other player at their airfield buys you back from the STORE's AIRFIELD page (REVIVE <NAME>, the one
---               down longest: price x raise for each revive in the run, the host's count); the host checks it and tells
+--               down longest: price x raise for each of their own revives in the run, raise_max at most, the host's
+--               count); the host checks it and tells
 --               everyone ("rb"): you're back, repaired, safe_s invincible, where the loiter left you (respawn "loiter")
 --               or 4 km out from the runway at 500 m ("native": SV_Respawn; also a plane that isn't flying, crashed into
 --               the ground: GROUND_MS); the others call it out
@@ -32,8 +33,10 @@
 --              player (restoreAfter): shown, collision, weapons, attackers, mortal; the view off the plane you watched.
 --   the edge   a DOWN plane EDGE_CM from the combat zone's edge is put back over the airfield (SV_Respawn), flown again.
 -- Messages (reliable; sv_coop.lua hands them over, its guards first): joiner -> host dw|<slot>, rv|<slot>|<price>;
--- host -> everyone dw|<slot>|<count>[|q], rb|<slot>|<count>|<by>, ro|<round>; host -> one joiner rx|<slot>|<why>|<count>
--- (a refused revive: refunded), rc|<count> (the room's revives, as it links).
+-- host -> everyone dw|<slot>|<count>[|q], rb|<slot>|<count>|<by>|<theirs>, ro|<round>; host -> one joiner
+-- rx|<slot>|<why>|<count>|<theirs> (a refused revive: refunded; <theirs> puts its price right), rc|<count>|<slot:n,...>
+-- (the room's revives and each player's own, as it links). <count>: the run's revives (logs, messages); <theirs>: that
+-- player's own, which their price goes by (St.per; the user, 2026-11-11: "readjust the revive costs").
 DOWN = {}
 do
 local RO_CONFIRM_S, PENDING_S, REVIVING_S, MSG_PER_S, PRESENT_MS = 3, 10, 15, 4, 5000
@@ -61,7 +64,7 @@ local INPUTS = { { "bEnableWeaponInput", false }, { "bEnableFlareInput", false }
 local ATTACKERS = { "MaxPlaneAttackerMissiles", "MaxPursuitAttackers", "MaxNonPlaneAttackerMissiles" }
 -- "native" respawn: 4 km out from the runway along its heading (Comona's runway, yaw -23: the takeoff's way), 500 m up
 local RUNWAY = { X = 1609574.0, Y = -435747.0, yaw = -23, out_cm = 400000, z_cm = 50000 }
-local St = { down = false, since = {}, count = 0, pending = {}, reviving = {}, cams = {}, rate = {}, reverts = 0 }
+local St = { down = false, since = {}, count = 0, per = {}, pending = {}, reviving = {}, cams = {}, rate = {}, reverts = 0 }
 DOWN.St = St                                    -- (the offline test's)
 
 local function rc() local c = CFG.coop and CFG.coop.revive; return type(c) == "table" and c or {} end
@@ -84,13 +87,23 @@ end
 local function name(slot) return upper((COOP and COOP.name and COOP.name(slot)) or ("PLAYER " .. (slot + 1)), 14) end
 local function callout(text, sub) if type(hudCallout) == "function" then pcall(hudCallout, text, sub) end end
 -- ((0.73.78, economy C6, approved 2026-11-03) price + price_per_round x the round (sv_ai.lua itemPrice / priceRound: in
--- a break the next round), x raise for each revive in the run; `round` another round's (the host's check of a price
--- asked as the round changed)
+-- a break the next round), x raise for each of the revived player's own revives in the run (n: theirs(slot)), x
+-- raise_max at most (0: no cap); `round` another round's (the host's check of a price asked as the round changed).
+-- ((2026-11-11) the user after Saint Alessia's 50-round run: "And yeah readjust the revive costs": n was every revive in
+-- the run by anyone, round 50's 13th 138,240 Z; now a player's own, and at round 50 never over 9,500 x 3 = 28,500.)
+-- The cap is here, not in itemPrice: the STORE's items share that.
 local function priceFor(n, round)
     local c = rc()
-    return itemPrice(num(c.price, 2000), num(c.price_per_round, 0), num(c.raise, 1), n or 0, round)
+    local price, perRound = num(c.price, 2000), num(c.price_per_round, 0)
+    local p = itemPrice(price, perRound, num(c.raise, 1), n or 0, round)
+    local cap = num(c.raise_max, 0)
+    if cap > 0 then p = math.min(p, itemPrice(price, perRound, math.max(1, cap), 1, round)) end
+    return p
 end
 DOWN.priceFor = priceFor                        -- (the offline test's)
+-- a player's own revives in the run (St.per, the host's count, kept in step by "rb" / "rx" / "rc")
+local function theirs(slot) return St.per[slot] or 0 end
+DOWN.theirs = theirs
 
 -- Revives on: co-op open with another game linked, in a run
 function DOWN.active() return rc().enabled == true and D ~= nil and inRoom() end
@@ -690,7 +703,7 @@ function DOWN.reset(why, newLevel)
         if RUN then RUN.credits, RUN.spent, RUN.dirty = RUN.credits + p.price, math.max(0, (RUN.spent or 0) - p.price), true end
         log(string.format("revive: player %d's revive refunded (%d): %s", slot + 1, p.price, tostring(why)))
     end
-    St.since, St.count, St.pending, St.reviving, St.cams = {}, 0, {}, {}, {}
+    St.since, St.count, St.per, St.pending, St.reviving, St.cams = {}, 0, {}, {}, {}, {}
     St.ended, St.noFloor, St.allDownAt, St.safeUntil, St.respawnAt, St.watch = false, nil, nil, nil, nil, nil
     St.arm = nil                                                -- (0.73.73: no revive's watch over the next run's plane)
     St.wasIn, St.heldFor = nil, nil                             -- ((0.73.77) A8: everyone loads in again)
@@ -784,11 +797,13 @@ function DOWN.offer()
     local t = l[1]
     o.slot = t.slot
     o.label = "REVIVE " .. name(t.slot) .. (#l > 1 and string.format(" (+%d)", #l - 1) or "")
-    o.help = string.format("%s has been down %d s: buys them back, repaired, in the air. Revives this run: %d (each costs x%g more%s).",
-        name(t.slot), math.floor(os.clock() - t.since), St.count, num(c.raise, 1),
+    local cap = num(c.raise_max, 0)
+    o.help = string.format("%s has been down %d s: buys them back, repaired, in the air. Their revives this run: %d of %d (each "
+        .. "of theirs costs x%g more%s%s).", name(t.slot), math.floor(os.clock() - t.since), theirs(t.slot), St.count,
+        num(c.raise, 1), cap > 0 and string.format(", x%g at most", math.max(1, cap)) or "",
         num(c.price_per_round, 0) > 0 and string.format(", and %d more a round", num(c.price_per_round, 0)) or "")
     if St.pending[t.slot] then o.why = "ASKED: WAITING FOR THE HOST."; return o end
-    o.price = priceFor(St.count)
+    o.price = priceFor(theirs(t.slot))
     return o
 end
 
@@ -815,8 +830,9 @@ local function hostRevive(slot, by, price)
     elseif St.reviving[slot] and os.clock() - St.reviving[slot] < REVIVING_S then why = "ALREADY BEING REVIVED"
     -- ((0.73.78, C6) the price by the round: one asked at the last round's price is taken too, the round having changed
     -- on its way here (a joiner's round is the host's "rnd", a moment behind; never ahead)
-    elseif price ~= priceFor(St.count) and not (priceRound() > 1 and price == priceFor(St.count, priceRound() - 1)) then
-        why = "THE PRICE CHANGED: NOW " .. priceFor(St.count)
+    -- ((2026-11-11) the revived player's own revives, theirs(slot))
+    elseif price ~= priceFor(theirs(slot)) and not (priceRound() > 1 and price == priceFor(theirs(slot), priceRound() - 1)) then
+        why = "THE PRICE CHANGED: NOW " .. priceFor(theirs(slot))
     elseif not onAirfield(by) then why = "NOT AT THE AIRFIELD" end
     if why then
         log(string.format("revive: player %s's revive of player %s refused: %s%s", tostring((tonumber(by) or -1) + 1),
@@ -824,9 +840,10 @@ local function hostRevive(slot, by, price)
         return false, why
     end
     St.count, St.reviving[slot], St.since[slot] = St.count + 1, os.clock(), nil
-    COOP.msg(nil, "rb", slot, St.count, by)
-    log(string.format("revive: player %d revived player %d for %d (the run's revive %d; round %d's price)", by + 1, slot + 1,
-        price, St.count, priceRound()))
+    St.per[slot] = math.min(100000, theirs(slot) + 1)
+    COOP.msg(nil, "rb", slot, St.count, by, St.per[slot])
+    log(string.format("revive: player %d revived player %d for %d (the run's revive %d, their %d; round %d's price)", by + 1,
+        slot + 1, price, St.count, St.per[slot], priceRound()))
     LB.stat("revives", 1, by)                       -- ((0.73.77) by: the co-op run's squad, revives given)
     if slot == mySlot() then DOWN.back("revived by " .. name(by))
     else callout(name(slot) .. " BACK", "REVIVED BY " .. name(by)) end
@@ -861,6 +878,24 @@ local function rateOk(slot, max)                 -- (at most max a second from t
     return r.n <= (max or MSG_PER_S)
 end
 local function whole(v, lo, hi) v = tonumber(v); return (v and v == math.floor(v) and v >= lo and v <= hi) and v or nil end
+-- ((2026-11-11) each player's own revives) the host's table for "rc", "<slot>:<n>,..." (none at 0), and a joiner's read
+-- of it: whole slots 0-23 and counts 0-100000 only (anything else in it dropped); nil when it's no text or too long
+local PER_TEXT_MAX = 24 * 10
+local function perText()
+    local t = {}
+    for slot = 0, 23 do local n = St.per[slot]; if n and n > 0 then t[#t + 1] = string.format("%d:%d", slot, n) end end
+    return table.concat(t, ",")
+end
+local function perTable(v)
+    if type(v) ~= "string" or #v > PER_TEXT_MAX then return nil end
+    local t = {}
+    for item in (v .. ","):gmatch("([^,]*),") do
+        local a, b = item:match("^(%d+):(%d+)$")
+        local slot, n = whole(a, 0, 23), whole(b, 0, 100000)
+        if slot and n then t[slot] = n end
+    end
+    return t
+end
 
 -- (the host) a joiner's "dw" (it's down: told to everyone) or "rv" (it buys a revive)
 function DOWN.onHost(from, f)
@@ -882,7 +917,7 @@ function DOWN.onHost(from, f)
         local slot, price = whole(f[2], 0, 23), num(f[3], nil)
         if not (slot and price) then COOP.msg(from, "rx", tostring(f[2] or ""):sub(1, 4), "A BAD REQUEST"); return end
         local ok, why = hostRevive(slot, from, price)
-        if not ok then COOP.msg(from, "rx", slot, why, St.count) end
+        if not ok then COOP.msg(from, "rx", slot, why, St.count, theirs(slot)) end
     end
 end
 
@@ -892,7 +927,12 @@ function DOWN.onJoiner(f)
     if not rateOk(0, 60) and k ~= "ro" then logOnce("downrate0", "revive: the host sends too many; dropped"); return end
     local slot = whole(f[2], 0, 23)
     if k == "ro" then DOWN.runOver(whole(f[2], 0, 100000), "the host"); return end
-    if k == "rc" then St.count = whole(f[2], 0, 100000) or St.count; return end
+    if k == "rc" then
+        St.count = whole(f[2], 0, 100000) or St.count
+        local per = perTable(f[3])                  -- ((2026-11-11) each player's own revives: the host's table whole)
+        if per then St.per = per end
+        return
+    end
     if not slot then return end
     local n = whole(f[3], 0, 100000)
     if k == "dw" then
@@ -908,13 +948,16 @@ function DOWN.onJoiner(f)
     elseif k == "rb" then
         local by = whole(f[4], 0, 23)
         if n then St.count = n end
+        -- ((2026-11-11) their own revives, the host's count; a broken one: this game's count of theirs, one more)
+        St.per[slot] = whole(f[5], 0, 100000) or math.min(100000, theirs(slot) + 1)
         St.since[slot] = nil
         local mine = St.pending[slot]
         if mine and by == mySlot() then
             St.pending[slot] = nil
             if RUN then RUN.msg.Revive, RUN.dirty = "REVIVED " .. name(slot) .. ".", true end
         end
-        log(string.format("revive: player %d revived by player %s (the run's revive %s)", slot + 1, by and tostring(by + 1) or "?", tostring(n)))
+        log(string.format("revive: player %d revived by player %s (the run's revive %s, their %d)", slot + 1, by and tostring(by + 1) or "?",
+            tostring(n), theirs(slot)))
         if slot == mySlot() then DOWN.back("revived by " .. (by and name(by) or "a wingman"))
         else callout(name(slot) .. " BACK", by and ("REVIVED BY " .. name(by)) or nil) end
     elseif k == "rx" then
@@ -922,6 +965,8 @@ function DOWN.onJoiner(f)
         local why = upper(tostring(f[3] or ""):gsub("[%c|]", ""), 60)
         local cnt = whole(f[4], 0, 100000)
         if cnt then St.count = cnt end
+        local per = whole(f[5], 0, 100000)          -- ((2026-11-11) their own revives, the host's: the price put right)
+        if per then St.per[slot] = per end
         if p then
             St.pending[slot] = nil
             RUN.credits, RUN.spent, RUN.dirty = RUN.credits + p.price, math.max(0, RUN.spent - p.price), true
@@ -933,7 +978,7 @@ end
 
 -- (the host) a joiner who links (or starts over) gets the room's count and who's down now, without the callouts
 function DOWN.syncTo(to)
-    COOP.msg(to, "rc", St.count)
+    COOP.msg(to, "rc", St.count, perText())
     if St.down then COOP.msg(to, "dw", mySlot(), St.count, "q") end
     for _, e in ipairs(downList()) do if e.slot ~= to then COOP.msg(to, "dw", e.slot, St.count, "q") end end
 end
@@ -1122,7 +1167,7 @@ function DOWN.tick()
     if now >= (St.listAt or 0) then                         -- (the STORE's REVIVE row follows who's down: once a second)
         St.listAt = now + 1
         local key = {}
-        for _, e in ipairs(downList()) do key[#key + 1] = e.slot end
+        for _, e in ipairs(downList()) do key[#key + 1] = e.slot .. ":" .. theirs(e.slot) end   -- (their revives: the price)
         key = table.concat(key, ",") .. "/" .. St.count .. (St.down and "/me" or "")
         if key ~= St.listKey then St.listKey, RUN.dirty = key, true end
     end

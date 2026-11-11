@@ -521,12 +521,21 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
   FOR A REVIVE`, else the NEXT row `DOWN: WATCHING <NAME>  [O] NEXT` (sv_hud.lua).
 - **Revive**: the STORE's AIRFIELD page's sixth row, REVIVE (tools/build_survival.py STORE_PAGES; CFG.shop.items.Revive,
   role "revive": sv_shop.lua offer / shopBuy -> DOWN.offer / DOWN.buy): `REVIVE <NAME>` the one down longest, `(+N)`
-  for more, price x raise ^ (the run's revives, the host's count); else `CO-OP ONLY.`, `NOBODY IS DOWN.`, `YOU'RE
+  for more, (price + price_per_round x the round) x min(raise ^ theirs, raise_max), theirs the revived player's own
+  revives in the run (St.per, the host's count); else `CO-OP ONLY.`, `NOBODY IS DOWN.`, `YOU'RE
   DOWN.`, `ASKED: WAITING FOR THE HOST.`. The host buying checks itself; a joiner pays at once, sends "rv" and is
   refunded on "rx" or after 10 s with no answer. The host's checks: both slots real and different, the target down
-  (bit 8 in its fresh state, or the host itself), no revive of it in the last 15 s, the price the count's, the reviver
+  (bit 8 in its fresh state, or the host itself), no revive of it in the last 15 s, the price theirs' (or the last
+  round's, asked as the round changed), the reviver
   on the ground at its airfield (bit 4 in its fresh state; the host: playerOnAirfield). Then "rb" to everyone: the
   downed game comes back, the others call `<NAME> BACK` / `REVIVED BY <NAME>`.
+- **Revive costs per player** (the user, 2026-11-11, after Saint Alessia's 50-round run: "And yeah readjust the revive
+  costs"; round 50's 13th revive cost 138,240 Z, raise ^ every revive in the run by anyone). A price goes by the revived
+  player's own revives (St.per: slot -> n), x raise_max at most (3; 0: no cap; under 1 counts as 1): at round 50 the
+  base is 9,500 and no revive costs more than 28,500. The run's count (St.count) stays for the logs and the messages.
+  The host counts a slot's revive as it applies it and sends it in "rb"; a joiner that links gets every player's in
+  "rc"; the host's "rx" carries the slot's, so a joiner's price is put right by a refusal. The cap is sv_down.lua
+  priceFor's (sv_ai.lua itemPrice is the STORE's items' too).
 - **Back**: SV_Down(0), shown, collision on, inputs and attacker limits back (a limit only if still 0), the view on
   your plane, RE_SV_RepairAircraft and HealthInternal written full, safe_s invincible; respawn "loiter" stays where it
   was flown, "native" calls SV_Respawn 4 km out from the runway (1609574, -435747) along its heading (yaw -23), 500 m
@@ -547,11 +556,14 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
   100 s at most (until 2026-11-11: 10 s; see "The 50-round run's fixes" below). sv_leaderboard.lua's death check ends nothing while revives hold
   the run (co-op, linked): only "ro" does. The host's "rs" (a new run) brings a downed joiner back and refunds an open
   revive; a new level clears everything.
-- **Protocol** (reliable; guards: slots 0-23, whole numbers, text cut to 60 capitals; at most 4 a second from a joiner,
-  60 from the host): joiner -> host `dw|<slot>` (its own slot only), `rv|<slot>|<price>`; host -> everyone
-  `dw|<slot>|<count>[|q]` (q: a catch-up, no callout), `rb|<slot>|<count>|<by>`, `ro|<round>`; host -> one joiner
-  `rx|<slot>|<why>|<count>`, and as it links (hostSync -> DOWN.syncTo) `rc|<count>` with a `dw ... q` for each one down.
-- **Settings** [coop.revive] (CFG.coop.revive): enabled, floor_hp 0.1, price 2500, raise 1.25 (5000 x 1.5 until 2026-10-30: the user, "lower the cost for reviving"), safe_s 5, respawn loiter |
+- **Protocol** (reliable; guards: slots 0-23, whole numbers, counts 0-100000, text cut to 60 capitals; at most 4 a
+  second from a joiner, 60 from the host): joiner -> host `dw|<slot>` (its own slot only), `rv|<slot>|<price>`; host ->
+  everyone `dw|<slot>|<count>[|q]` (q: a catch-up, no callout), `rb|<slot>|<count>|<by>|<theirs>`, `ro|<round>`; host ->
+  one joiner `rx|<slot>|<why>|<count>|<theirs>`, and as it links (hostSync -> DOWN.syncTo) `rc|<count>|<slot:n,...>`
+  (each player's own revives, none at 0; on a joiner the table is taken whole, only whole slots 0-23 and counts 0-100000
+  in it, one over 240 characters not at all) with a `dw ... q` for each one down. <count> is the run's revives,
+  <theirs> that player's own (an "rb" with a broken one: one more of theirs here).
+- **Settings** [coop.revive] (CFG.coop.revive): enabled, floor_hp 0.1, price 2000 + price_per_round 150 (0.73.78; 2500 flat before), raise 1.25 (5000 x 1.5 until 2026-10-30: the user, "lower the cost for reviving"), raise_max 3 (2026-11-11), safe_s 5, respawn loiter |
   native, key O, ctrl false, down_round_bonus true; [coop.revive.loiter] alt_m 2500, radius_m 4000;
   [coop.revive.camera] back_m 30, up_m 8, blend_s 0.5. [coop] is PERSONAL, but sv_coop.lua's SHARED_IN makes
   coop.revive the host's for everyone except OWN_IN (key, ctrl, camera).
@@ -560,7 +572,8 @@ a run on; solo stays exactly as before (no floor, the game's death, LB.deathChec
   the airfield / up), <N> m/s; watching <name>` every 5 s (every 30 s after a minute); `down: your plane isn't flying (N
   m/s, N m up, N km from the airfield): a revive brings you back 4 km out from the runway, 500 m up` (once a DOWN); `spectate: view <NAME> (<why>), reverted N
   times`, `spectate: view put back on <NAME> (the game took it back N times)`; `down: player N (<NAME>) is down`;
-  `revive: asked the host to revive player N for P`; `revive: player N revived player M for P (the run's revive K)`
+  `revive: asked the host to revive player N for P`; `revive: player N revived player M for P (the run's revive K, their
+  T; round R's price)` (a joiner's: `revive: player M revived by player N (the run's revive K, their T)`)
   or `... refused: <WHY>`; `revive: back (revived by <NAME>) after N s down: repaired (event fired, health written), 5 s
   invincible, <where>` (`... (your plane wasn't flying: N m/s): done` for a crashed one); `revive: respawn d=<m> m`; `down: every player in the mission is down (N) for 3 s`; `down: run
   over in round N`; `down: the mission's end (RE_SV_RunOver, Mission 15's MissionFailed): fired`.

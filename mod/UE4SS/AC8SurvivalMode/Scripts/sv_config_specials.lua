@@ -70,6 +70,10 @@ CFG.specials = {
     -- VLS, SAM, AA guns, CIWS, ECM and their hatches) take weapon_missiles each, its railguns railgun_missiles
     -- (user, 2026-10-23: "lower the health down on the alicorns weaponry"; they had the online squad's 800-2000 and
     -- took 10-62.5 % from most weapons); never more than they had. 0: their online health.
+    -- Its core, as it opens, takes core_missiles of your standard missiles for one player and core_missiles_per_player
+    -- more for each other player flying then (a co-op host: itself if it's up, not DOWN and not down at the airfield,
+    -- and the others flying; solo: just you), more a round as the tanks' (user, 2026-11-11: "Yes add the alicorns core
+    -- size"; it had ~60 missiles' health whoever flew). The missile's damage unread, or core_missiles 0: health_x as before.
     -- Its rows are Online Mode's (DT_SV_Alcn*): `tables` adds them to the campaign tables at the main menu.
     -- Debuffed across the board (user, 2026-10-23: "way too strong"; were 110 / 30 / 25 / 35 / 25, health x0.5,
     -- +0.04 a round, at most x1.5): shorter dives, its first shot later, railgun and volleys less often, less health.
@@ -104,6 +108,7 @@ CFG.specials = {
                          alt_m = 1200, ahead_m = 800 },
                 volley_every_s = 45, health_x = 0.3, health_per_round = 0.05, health_max_x = 1.4,
                 tank_pay = 500, reward = 12000, reward_per_round = 400, tank_missiles = 6,
+                core_missiles = 30, core_missiles_per_player = 10,
                 weapon_missiles = 3, railgun_missiles = 4,
                 weapon_classes = {   -- its weapons and their hatches: which *_missiles each takes
                     BP_BA002_alcn_hatch_emls_L_Base_C = "railgun_missiles", BP_BA002_alcn_hatch_emls_R_Base_C = "railgun_missiles",

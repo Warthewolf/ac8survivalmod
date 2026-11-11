@@ -302,6 +302,10 @@ local function badState(credits0)
     if St then
         if not whole(St.count, 0, 100000) then return "revives count " .. tostring(St.count) end
         ok, k = slotKeys(St.since); if not ok then return "down slot " .. tostring(k) end
+        -- ((2026-11-11) each player's own revives: "rb" / "rx" / "rc")
+        if type(St.per) ~= "table" then return "revives per player " .. tostring(St.per) end
+        ok, k = slotKeys(St.per); if not ok then return "revives per player: slot " .. tostring(k) end
+        for sl, n in pairs(St.per) do if not whole(n, 0, 100000) then return "revives of slot " .. tostring(sl) .. ": " .. tostring(n) end end
     end
     if RUN.bought then for nm, n in pairs(RUN.bought) do if not whole(n, 0, 1e6) then return "bought " .. tostring(nm) .. " " .. tostring(n) end end end
     return nil
@@ -318,7 +322,7 @@ local function tableSizes()
         fishHaul = { count(fl.haul), 25 }, fishWeigh = { count(fl.weigh), 25 }, lbSquad = { LB.co and count(LB.co.squad) or 0, 64 },
         lbSpecials = { LB.co and count(LB.co.specials) or 0, 200 }, succ = { #(M.succ or {}), 24 },
         allyList = { #(M.allyList or {}), 40 }, recycleDue = { #(M.recycleDue or {}), 64 },
-        downSince = { St and count(St.since) or 0, 24 },
+        downSince = { St and count(St.since) or 0, 24 }, downPer = { St and count(St.per) or 0, 24 },
         zdDives = { ZDIVE and ZDIVE.d and count(ZDIVE.d.dives) or 0, 8 }, zdHeld = { ZDIVE and ZDIVE.d and #(ZDIVE.d.held or {}) or 0, 64 },
     }
 end
@@ -434,10 +438,10 @@ local TYPES = {
     { "join", "lb", { "lb", "r", HEX, "60", "1", "2", "0", "0", "0", "0", "5" } },
     { "join", "hq", { "hq" } },
     { "join", "dw", { "dw", "2", "0" } },
-    { "join", "rb", { "rb", "2", "1", "0" } },
-    { "join", "rx", { "rx", "2", "A BAD REQUEST", "0" } },
+    { "join", "rb", { "rb", "2", "1", "0", "1" } },                -- ((2026-11-11) field 5: theirs, the slot's own revives)
+    { "join", "rx", { "rx", "2", "A BAD REQUEST", "0", "3" } },
     { "join", "ro", { "ro", "6" } },
-    { "join", "rc", { "rc", "2" } },
+    { "join", "rc", { "rc", "2", "1:1,2:1" } },                     -- ((2026-11-11) field 3: each player's own revives)
     { "join", "rnd", { "rnd", "6", "fighting", "30", "2", "3", "4", "1", "2", "m1w0s0", "", "", "0", "Wingmen:1;", "0", "0:62:0" } },
     { "join", "pi", { "pi", "2", "su33_common", "@VERSION", "Cara", "su33", "5,6/7/1,0", "44/1/9", "Su-33", "76561198000000003", "", "" } },
     { "join", "po", { "po", "2" } },
@@ -655,10 +659,10 @@ local EFFECT = {
     ["join lb"] = function() return LB.co and LB.co.run and LB.co.run.round == 5 end,
     ["join hq"] = function() return sentHas(">hi|") end,
     ["join dw"] = function() return St.since[2] ~= nil end,
-    ["join rb"] = function() return logHas("^revive: player 3 revived") end,
-    ["join rx"] = function() return RUN.credits == CR0 + 5000 end,
+    ["join rb"] = function() return logHas("^revive: player 3 revived") and St.per[2] == 1 end,
+    ["join rx"] = function() return RUN.credits == CR0 + 5000 and St.per[2] == 3 end,
     ["join ro"] = function() return St.ended == true and called("SV_Event", "RE_SV_RunOver") end,
-    ["join rc"] = function() return St.count == 2 end,
+    ["join rc"] = function() return St.count == 2 and St.per[1] == 1 and St.per[2] == 1 end,
     ["join rnd"] = function() return D.round == 6 and D.state == "fighting" and M.rnd.alicorn ~= nil and M.rnd.alicorn.pct == 62 end,
     ["join pi"] = function() return M.roster[2] and M.roster[2].name == "Cara" end,
     ["join po"] = function() return M.roster[2] == nil end,

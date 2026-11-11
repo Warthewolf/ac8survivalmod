@@ -492,6 +492,52 @@ function SPC.alicornDeck(now, s, c)
     end
 end
 
+-- ((2026-11-11, the user after Saint Alessia's 50-round run: "Yes add the alicorns core size"; its core had the same
+-- ~60 missiles' health whoever was flying, and Delta fought it mostly alone) its core's health as it opens, in your
+-- standard missiles as the tanks': core_missiles for one player and core_missiles_per_player for each other player
+-- flying then (a co-op host: itself while it's up, not DOWN and not down at the airfield, and othersFlying(); solo: just
+-- you), more a round as the tanks' (hx / health_x), split across its core's parts that are up; done before CORE 100% is
+-- taken (s.coreFull), so that's the sized core. The missile's damage unread (or core_missiles 0): its health as it is.
+-- A joiner's copies get it in the host's next "hp" (hostTick: a health that changed, within a second).
+local function playersFlying()
+    if not (COOP and COOP.host and COOP.host()) then return 1 end
+    local down = DOWN ~= nil and type(DOWN.me) == "function" and DOWN.me() == true
+    local okE, e = pcall(function() return COOP.me and COOP.me() end)
+    local up = not down and not playerOnAirfield() and not (okE and type(e) == "table" and e.alive == false)
+    local okO, o = pcall(othersFlying)
+    return (up and 1 or 0) + ((okO and tonumber(o)) or 0)
+end
+local function coreSize(s, c, core, hx)
+    local base, per = tonumber(c.core_missiles) or 0, math.max(0, tonumber(c.core_missiles_per_player) or 0)
+    if base <= 0 then return end                          -- (0: its health x health_x, as before)
+    local up = {}
+    for _, o in ipairs(core) do local h = hp(o); if h and h > 0 then up[#up + 1] = o end end
+    local d, from = s.mslDamage, nil
+    if not d then                                          -- (tank_missiles 0 never read it; a missile in the air now)
+        local okD, v, f = pcall(SPC.playerMissileDamage)
+        if okD and v then d, from = v, f end
+    end
+    local others = math.max(0, playersFlying() - 1)
+    local n = base + per * others
+    local what = string.format("%g missiles (%g + %g x %d other player%s flying)", n, base, per, others, others == 1 and "" or "s")
+    if not d or #up == 0 then
+        log(string.format("special: the Alicorn's core keeps its health (%s): %s", not d and "your missile's damage can't be read"
+            or "none of its parts' health can be read", what))
+        return
+    end
+    local growth = hx / (c.health_x or 1)
+    local each = math.max(1, math.floor(n * d * 10 * growth / #up + 0.5))
+    local bad = 0
+    for _, o in ipairs(up) do
+        if not pcall(function() o.HealthInternal = each end) then bad = bad + 1 end
+        s.scaled[addrOf(o) or nameOf(o)] = true             -- (never scaled again by the round's pass)
+    end
+    s.coreLast = nil                                       -- (its health set, not a hit)
+    log(string.format("special: the Alicorn's core sized: %s, %d health (x%.2f: round %d's growth, as the tanks'; %d damage a "
+        .. "missile%s%s%s)", what, each * #up, growth, D.round, math.floor(d + 0.5), from and (" from " .. tostring(from)) or "",
+        #up > 1 and string.format("; %d parts, %d each", #up, each) or "", bad > 0 and string.format("; %d writes FAILED", bad) or ""))
+end
+
 function SPC.alicornTick(now, s)
     if s.state == "sail" then poolTick(now) end
     if s.state ~= "sail" or now < (s.nextAt or 0) then return end
@@ -682,6 +728,8 @@ function SPC.alicornTick(now, s)
         fire("RE_SV_AlcnAdvance"); fire("RE_SV_AlcnOpenCore")
         hudCallout(t.alicorn_core, t.alicorn_core_sub)
         log("special: the Alicorn's ballast tanks are gone: its core opens")
+        local okZ, errZ = pcall(coreSize, s, c, core, hx)  -- (before CORE 100% is taken, just below)
+        if not okZ then log("special: the Alicorn's core's size: error " .. tostring(errZ)) end
     end
     -- ((2026-11-11) the core's health, as the tanks': each hit on it logged (none was), and once it's open its share of
     -- what it had then (s.corePct: every game's NEXT row, "rnd" field 16), called out once at each of CORE_CALLS crossed)
