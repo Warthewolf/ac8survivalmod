@@ -1181,7 +1181,8 @@ print("(0.74.25) the next carrier's arm: one whose last ZFA-44s aren't up; a lea
     check(j3 == 1, "arm 1's flight down: arm 1 again (" .. tostring(j3) .. ")")
     local GSk = statics["/Script/Engine.Default__GameplayStatics"]
     local dmg = {}
-    local gsStub = { full = "GameplayStatics", addr = addr(), ApplyDamage = function(_, o) dmg[#dmg + 1] = o end }
+    local tough = {}                                           -- (a plane the blow leaves with health: 2026-11-11)
+    local gsStub = { full = "GameplayStatics", addr = addr(), ApplyDamage = function(_, o) dmg[#dmg + 1] = o; if not tough[o] then o.HealthInternal = 0 end end }
     statics["/Script/Engine.Default__GameplayStatics"] = gsStub
     local sp = K.ship_at[1]
     local parked = plane(arms[1].unit, sp[1], sp[2], -24483.9, 0, 0)
@@ -1190,9 +1191,20 @@ print("(0.74.25) the next carrier's arm: one whose last ZFA-44s aren't up; a lea
     ESC.planes[arms[1].unit] = { { obj = parked, addr = parked.addr, name = parked.full, at = 0 },
                                  { obj = flying, addr = flying.addr, name = flying.full, at = 0 } }
     local q0 = #ESC.recycleQ
-    local n = ZLAUNCH.parkedOff(1, arms[1].unit, "TEST CARRIER leaving")
-    check(n == 1 and #dmg == 1 and dmg[1] == parked, "a leaving ship: its parked ZFA-44 finished off under the sea, not the one flying ("
+    local n, hitN = ZLAUNCH.parkedOff(1, arms[1].unit, "TEST CARRIER leaving")
+    check(n == 1 and hitN == 1 and #dmg == 1 and dmg[1] == parked, "a leaving ship: its parked ZFA-44 finished off under the sea, not the one flying ("
           .. tostring(n) .. ")")
+    -- ((2026-11-11) counted only when its health reads 0 after the blow: one that keeps health is said, not counted)
+    local parked2 = plane(arms[1].unit, sp[1], sp[2], -24483.9, 0, 0)
+    parked2.HealthInternal = 1300
+    tough[parked2] = true
+    ESC.planes[arms[1].unit] = { { obj = parked2, addr = parked2.addr, name = parked2.full, at = 0 } }
+    local fromT = #logs + 1
+    local n2, hit2 = ZLAUNCH.parkedOff(1, nil, "TEST CARRIER leaving again")
+    check(n2 == 0 and hit2 == 1 and has(line("carrier: TEST CARRIER leaving again: 0 parked ZFA-44s", fromT), "1 more took the blow and still have health: 1300"),
+          "a parked ZFA-44 the blow leaves with health: not counted, said with its health")
+    ESC.planes[arms[1].unit] = { { obj = parked, addr = parked.addr, name = parked.full, at = 0 } }
+    for i = #ESC.recycleQ, q0 + #arms, -1 do table.remove(ESC.recycleQ, i) end
     check(#ESC.recycleQ == q0 + #arms - 1, "... its arms' units queued off the list once none is up, but its flight's ("
           .. (#ESC.recycleQ - q0) .. " of " .. #arms .. ")")
     ESC.planes[arms[1].unit] = keepPl
@@ -1310,7 +1322,19 @@ press("ZfaCarrier")
 local S0, R0 = ESC.S, ESC.R
 check(R0 and next(R0.carriers) ~= nil, "(a carrier out)")
 events = {}
-ESC.restart("test restart")
+-- ((2026-11-11) a carrier out at the restart: its parked ZFA-44s finished off, as a leaving one's and a joiner's, or
+-- they held its hull on the list for the rest of the level)
+do
+    local poCalls, rawPO = {}, ZLAUNCH.parkedOff
+    ZLAUNCH.parkedOff = function(i, keep, why) poCalls[#poCalls + 1] = { i = i, why = tostring(why) }; return rawPO(i, keep, why) end
+    local outN = 0
+    for _, C in pairs(R0.carriers) do if C.state ~= "leaving" then outN = outN + 1 end end
+    ESC.restart("test restart")
+    ZLAUNCH.parkedOff = rawPO
+    local poOk = #poCalls == outN and outN > 0
+    for _, c2 in ipairs(poCalls) do if not c2.why:find("test restart", 1, true) then poOk = false end end
+    check(poOk, string.format("a restart: each carrier out has its parked ZFA-44s finished off (%d of %d)", #poCalls, outN))
+end
 local allOff = #rs == 5
 for _, p2 in ipairs(rs) do if not (p2.active == false and p2.hidden == true) then allOff = false end end
 local q = {}

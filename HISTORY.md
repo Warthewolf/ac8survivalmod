@@ -2402,3 +2402,20 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   the new part sv_escort_waves.lua (with ESC.roomMore) to keep sv_escort.lua under 2,000 lines. escort_test: 4 new checks,
   all pass; lua_load_test, rounds_test, coop_settings_test pass (leaderboard_test online's 3 and subs_test fail the same
   without this change). No version bump: no build made.
+
+## Carriers: three fixes (2026-11-11; Lua for the next build; not yet run in game)
+- Merged first: claude/sleepy-thompson-o8sj3o's THE ESCORT scaled by players (above), whose sv_escort_waves.lua split
+  left sv_escort.lua room (1,982 lines now). Its new escort_test check failed 3 runs in 20 (the free pool varies run to
+  run: Lua 5.4 seeds table hashing afresh): that step frees the pool first, 0 failures in 30; dive_test checks
+  sv_escort_dive after sv_escort_li, not last.
+- A parked or diving ZFA-44 is counted "finished off" only when its health reads 0 after the blow (sv_escort_laser.lua
+  ZLAUNCH.parkedOff, sv_escort_dive.lua ZDIVE.finish): a blow that didn't fail was counted before, so 0.74.36's "10
+  finished off" with every arm still up said nothing. The log adds "(<n> more took the blow and still have health:
+  <hp> ...)". Arms' units are still queued off the list after any blow (holdHull keeps the hull meanwhile).
+- A co-op joiner's recycle of a unit the host took off holds a carrier's hull while a ZFA-44 of its launchers is up on
+  that game (sv_coop_migration.lua, ESC.hullShip + ZLAUNCH.holdHull, again 5 s on): the host's rule since 0.74.48 (the
+  STORE-close crash), which the joiner's own SV_Recycle(unit, 1) went past. copy_floor_test.
+- A pause-menu restart with a carrier out finishes off its parked ZFA-44s (ESC.restart, as a leaving carrier and a
+  joiner's restart did): left up, they held the hull on the list for the rest of the level. escort_test (2 of 2; the old
+  code 0 of 2). It adds a kill call at a restart in the carrier path: the same one leaving and sunk carriers make.
+- run_all: 63 pass; coop_test passes. The test sheet's step 13 and a RESTART step say what to look for.

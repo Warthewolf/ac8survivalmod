@@ -72,6 +72,8 @@ ROUND 4's CLEAR, BREAK 4: THE CARRIER LEAVES
    ..." and ~3 s on, for each arm, "escort: E_Unit_01_drone_<n>_0 off the spawner's list (<ship> leaving: its parked
    ZFA-44s): SV_Recycle <r>" (good); "... <n> ZFA-44s stay up for their final dive ...", "... leaving after 3 rounds: ...",
    "carrier: <ship> (3 rounds served): its hull held on the spawner's list, switched off: <n> ZFA-44s ... still up (...)".
+   FAILURE (2026-11-11): "... finished off under the sea (<n> more took the blow and still have health: <hp>, ...)": the blow
+   doesn't kill them (the count is of ZFA-44s whose health read 0 after it now, not of blows).
 14. [0.74.48] Land, buy ammo and allies in the STORE, close it: NO CRASH. RUNTIME LOG "minigame: type <t> ends: restore of
    <n> AI objects; ..." and more lines after. FAILURE: the game stops at the close (Shazzy's). Bad sign: "escort:
    E_Unit_01_drone_<n>_0 (<why>) still has 2 up after 30 s: ..." (the parked ones didn't die).
@@ -98,6 +100,10 @@ ROUND 9's CLEAR (GONE FISHIN', "specials: round 9 is the schedule's fishing"): t
 20. [0.74.25 / 0.74.26] BREAK 15 -> ROUND 16 (sunset into night) and BREAK 18 -> ROUND 19 (night into sunrise): no
    pitch-black gap at either swap, no green sea at night, no visible light steps in the break (written every 1 s).
    Screenshots of each swap and of the sea; a swap the run didn't reach: note it unseen (Ctrl+PAGE_DOWN is a quick look).
+
+RESTART (2026-11-11): with a carrier out, pause > restart the mission. LUA LOG "carrier: <ship> (the run starts over):
+   <n> parked ZFA-44s of ship <i> finished off under the sea, ..."; the next carrier bought in the new run comes out (before,
+   the old hull stayed held for the level and its slot with it).
 
 C. THE STORM (record the screen): a NEW run, before round 9 (from GONE FISHIN' on the day-night arc owns the light, the
    storm's darkening off). Each strike takes 10% of your health and can kill: repair between stages, or keep out of cells.

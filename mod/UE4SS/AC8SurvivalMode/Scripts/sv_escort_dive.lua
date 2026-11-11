@@ -134,7 +134,8 @@ local function effects(where)
     end
 end
 
--- a held ZFA-44 finished off where it is, unpaid (ZLAUNCH.parkedOff's way): whether it went
+-- a held ZFA-44 finished off where it is, unpaid (ZLAUNCH.parkedOff's way): whether it went, its health read 0 after the
+-- blow ((2026-11-11) a blow that didn't fail was counted before), and whether the blow went through at all
 function ZDIVE.finish(e, why)
     e.gone = true
     if not same(e) then return false end                 -- (read now: never another's plane at its address)
@@ -145,7 +146,9 @@ function ZDIVE.finish(e, why)
     local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
     local ok = valid(gs) and pcall(function() gs:ApplyDamage(e.obj, 1.0e8, nil, nil, nil) end)
     if not ok then ok = pcall(function() e.obj:ModifyHealth(-1.0e8, nil, true) end) end
-    return ok
+    if not ok then return false, false end
+    local okH, h = pcall(function() return e.obj.HealthInternal end)
+    return okH and type(h) == "number" and h <= 0, true
 end
 function ZDIVE.diving(addr)
     local s = ZDIVE.d

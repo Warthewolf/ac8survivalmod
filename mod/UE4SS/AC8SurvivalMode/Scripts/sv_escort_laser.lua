@@ -1024,13 +1024,14 @@ end
 -- (a carrier leaving or sunk, the host's or a joiner's own) ship i's parked ZFA-44s (under parked_m, never launched)
 -- finished off where they are, under the sea, unpaid, and its arms' units (but keep's: its flight up) off the spawner's
 -- list once nothing of them is up (sv_escort.lua recycleTick: never with planes up), so its next ship's launchers have
--- their own again. How many finished off
+-- their own again. How many finished off (their health read 0 after the blow; (2026-11-11) a blow that didn't fail was
+-- counted before, so 0.74.36's "10 finished off" said nothing of whether they died), and how many took the blow
 function ZLAUNCH.parkedOff(i, keep, why)
     local c = cc()
     local arms = (c.launchers or {})[i] or {}
     local parkZ = num(c.parked_m, -100) * 100
     local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
-    local mine, n = {}, 0
+    local mine, n, hit, left = {}, 0, 0, {}
     for _, arm in ipairs(arms) do if type(arm.unit) == "string" then mine[arm.unit] = true end end
     for u, l in pairs((ESC and ESC.planes) or {}) do
         if mine[u] then
@@ -1046,7 +1047,12 @@ function ZLAUNCH.parkedOff(i, keep, why)
                         -- a carrier leaving had switched them off (offObj: SetActive false), and an inactive object
                         -- takes no damage (inferred). Switched on again first, under the sea, then the blow)
                         pcall(function() e.obj:SetActive(true, false, false) end)
-                        if valid(gs) and pcall(function() gs:ApplyDamage(e.obj, 1.0e8, nil, nil, nil) end) then n = n + 1 end
+                        if valid(gs) and pcall(function() gs:ApplyDamage(e.obj, 1.0e8, nil, nil, nil) end) then
+                            hit = hit + 1
+                            local okH, h = pcall(function() return e.obj.HealthInternal end)
+                            if okH and type(h) == "number" and h <= 0 then n = n + 1
+                            else left[#left + 1] = (okH and type(h) == "number") and string.format("%.0f", h) or "unread" end
+                        end
                     end
                 end
             end
@@ -1054,15 +1060,16 @@ function ZLAUNCH.parkedOff(i, keep, why)
     end
     local q = 0
     for u in pairs(mine) do                             -- (only once some were parked: nothing else of theirs to free)
-        if n > 0 and u ~= keep and ESC and ESC.recycleQ then
+        if hit > 0 and u ~= keep and ESC and ESC.recycleQ then
             ESC.recycleQ[#ESC.recycleQ + 1] = { unit = u, at = os.clock() + 3, why = tostring(why) .. ": its parked ZFA-44s" }
             q = q + 1
         end
     end
-    if n > 0 then
-        log(string.format("carrier: %s: %d parked ZFA-44s of ship %d finished off under the sea, %d of its arms' units off the list once none is up",
-            tostring(why), n, i, q))
+    if hit > 0 then
+        log(string.format("carrier: %s: %d parked ZFA-44s of ship %d finished off under the sea%s, %d of its arms' units off the list once none is up",
+            tostring(why), n, i, #left > 0 and string.format(" (%d more took the blow and still have health: %s)", #left,
+            table.concat(left, ", ", 1, math.min(#left, 6))) or "", q))
     end
-    return n
+    return n, hit
 end
 end

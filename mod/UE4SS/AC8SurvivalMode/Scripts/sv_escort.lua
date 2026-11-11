@@ -57,6 +57,7 @@ mapUnits()
 -- MOONCHILD, repaired between rounds, their kills the allies'), CHARLENE and the ships on their own
 for u, kd in pairs(KIND) do ALLY.unit[u] = (kd == "escort" or kd == "zfa") and "air" or kd end
 function ESC.kindOf(unit) return unit and KIND[unit] or nil end
+function ESC.hullShip(unit) return unit and KIND[unit] == "cargo" and CARGO_I[unit] or nil end   -- (a carrier's hull: its ship)
 
 ---------------------------------------------------------------------------------------------------- planes and objects
 -- each of these units' planes as logPlane saw them: ESC.planes[unit] = { { obj, addr, name, at }, ... }; the live one
@@ -1913,6 +1914,9 @@ function ESC.restart(why)
     if R and not client() then
         for _, C in pairs(R.carriers) do
             if C.state ~= "leaving" then
+                -- ((2026-11-11) its parked ZFA-44s finished off, as a leaving one's and a joiner's (ESC.localOff): left up, they
+                -- held its hull on the list for the rest of the level, ZLAUNCH.holdHull)
+                if ZLAUNCH and ZLAUNCH.parkedOff then pcall(ZLAUNCH.parkedOff, C.idx, C.flight and C.flight.unit, C.name .. " (" .. why .. ")") end
                 if C.flight then flightOff(C.flight, why) end
                 if COOP and COOP.removeNow then pcall(COOP.removeNow, C.unit) end
                 for _, e in ipairs((ESC.shipObjs or {})[C.unit] or {}) do if liveAddr(e.obj) == e.addr then offObj(e.obj) end end

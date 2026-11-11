@@ -1343,7 +1343,14 @@ function COOP.tick(tick)
             if now0 >= e.at then
                 table.remove(M.recycleDue, i)
                 local n = type(SV_UnitAlive) == "function" and SV_UnitAlive(e.unit) or -5
-                if n >= 0 and n ~= -7 and type(SV_Recycle) == "function" then
+                -- ((2026-11-11) a carrier's hull, never off this game's list while a ZFA-44 of its launchers is up here: the
+                -- host's own rule since 0.74.48 (Shazzy's crash at the STORE's close), which a joiner's recycle went past.
+                -- Looked at again 5 s on, as the host's recycleTick does)
+                local hull = ESC and ESC.hullShip and ESC.hullShip(e.unit)
+                if hull and ZLAUNCH and ZLAUNCH.holdHull and ZLAUNCH.holdHull(hull, e, e.unit, "the host's " .. tostring(e.why)) then
+                    e.at = now0 + 5
+                    M.recycleDue[#M.recycleDue + 1] = e
+                elseif n >= 0 and n ~= -7 and type(SV_Recycle) == "function" then
                     crumb("coop: SV_Recycle " .. e.unit .. " (the host's " .. tostring(e.why) .. ")")
                     local okR, r = pcall(SV_Recycle, e.unit, n > 0 and 1 or 0)
                     log(string.format("coop: %s off this game's spawner list (the host's %s; %d alive here): SV_Recycle %s",
