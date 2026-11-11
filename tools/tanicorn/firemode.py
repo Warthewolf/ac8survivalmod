@@ -55,8 +55,23 @@ STYLES = {
     7: {"name": "Three petals, clamshell roof", "barrel": {"split": "T3", "hinge": 5.0}, "armour": "clamshell"},
     8: {"name": "Fog circuits, jaws, layered armour", "barrel": {"split": "LR", "hinge": 3.5}, "armour": "layers",
         "circuit": True},
+    # the user's own (2026-11-11, with two manga panels of the guns opened round coil rings): "Split the barrels into
+    # four sections. Then split the barrels in the middle and have them slide back and angle themselves upwards. Keep
+    # the glowing rod in the center of the barrel. Have the back left and back right of the turret explode outwards.
+    # And have the front right and left sides also explode outwards. Feel free to model an interior of the gun housing."
+    9: {"name": "Four sections split mid-length, sliding back, angled up; quarters exploding out; the gun house inside",
+        "barrel": {"split": "Q4", "mid": True}, "armour": "quarters", "interior": True},
 }
-DEFAULT_STYLE = 1
+DEFAULT_STYLE = 9
+# style 9's barrel: a thin shell in four sections (port, top, starboard, bottom) round a core assembly (the glowing rod,
+# coil rings on spokes, rails), each section cut at X_MID; the pieces part (MID_OUT), slide back (MID_BACK) and pitch up
+# (MID_TILT deg, parallel: the top ones about their back end, the bottom ones about their front, the sides about their
+# middle), the rear pieces less than the front so the front ones stack outside them
+X_MID = 14.95
+MID_OUT, MID_BACK, MID_TILT = {"rear": 0.75, "front": 1.45}, {"rear": 0.6, "front": 3.2}, 16.0
+MID_STAGES = ((0.25, 0.5), (0.45, 0.7), (0.65, 0.9))      # part, slide back, pitch up
+SHELL_T = 0.13                                            # the shell's thickness
+RING_R, RING_T, RING_STEP = 0.56, 0.08, 1.7               # the coil rings: radius, tube, spacing
 SPLITS = {"LR": (0, 180), "TB": (90, 270), "Q4": (0, 90, 180, 270), "T3": (90, 210, 330), "S4": (45, 135, 225, 315)}
 STAGE_ARMOUR, STAGE_BARREL, STAGE_GLOW, STAGE_SLIT = (0.0, 0.45), (0.3, 0.7), (0.6, 1.0), (0.0, 0.2)
 
@@ -90,11 +105,12 @@ def smooth(t, a, b):
 
 
 # ---------------------------------------------------------------------------------------------------- materials
-# Nothing inside glows (the user, 2026-11-11: "Don't have the insides glow"): the bays under the armour, the fins under
-# the roof and the barrels' bores are dark machinery. Only the running lights outside glow (dim stowed, brighter in fire
-# mode), and the core rods only while a gun fires (FIRE: glow(t, fire)).
+# Nothing inside glows (the user, 2026-11-11: "Don't have the insides glow") but the core rods ("Keep the glowing rod in
+# the center of the barrel"): the bays under the armour, the fins under the roof, the gun house's machinery and the
+# barrels' bores are dark. The running lights outside glow dim stowed, brighter in fire mode; the cores light in fire
+# mode and flare as a gun fires (FIRE: glow(t, fire)).
 GLOW = {   # key: (base colour, emission colour, strength stowed, strength in fire mode, its stretch)
-    "fm_core": ((0.06, 0.055, 0.045), (1.00, 0.85, 0.35), 0.0, 0.0, STAGE_GLOW),
+    "fm_core": ((0.06, 0.055, 0.045), (1.00, 0.85, 0.35), 0.0, 5.0, STAGE_GLOW),
     "fm_slit": ((0.06, 0.40, 0.36), (0.20, 0.95, 0.88), 1.0, 7.0, STAGE_SLIT),
 }
 FIRE = {"fm_core": 8.0}                   # a core rod's glow as its gun fires
@@ -185,6 +201,25 @@ def arc_tube(part, x, r_arc, a0, a1, r_tube, m, steps=10):
     fs += [bm.faces.new(rings[0][::-1]), bm.faces.new(rings[-1])]
     bmesh.ops.recalc_face_normals(bm, faces=fs)
     part._put(bm, [v for r in rings for v in r], m)
+
+
+def torus_x(part, x, y, z, R, r, m, major=20, minor=6, post=True):
+    """a ring round the x axis at (x, y, z): radius R, tube r"""
+    bm = part._bm(False, post)
+    rings = []
+    for i in range(major):
+        a = 2 * math.pi * i / major
+        rad = Vector((0, math.cos(a), math.sin(a)))
+        c = Vector((x, y, z)) + rad * R
+        rings.append([bm.verts.new(c + Vector((1, 0, 0)) * r * math.cos(b) + rad * r * math.sin(b))
+                      for b in [2 * math.pi * j / minor for j in range(minor)]])
+    fs = []
+    for i in range(major):
+        r0, r1 = rings[i], rings[(i + 1) % major]
+        for j in range(minor):
+            fs.append(bm.faces.new((r0[j], r0[(j + 1) % minor], r1[(j + 1) % minor], r1[j])))
+    bmesh.ops.recalc_face_normals(bm, faces=fs)
+    part._put(bm, [v for rr in rings for v in rr], m)
 
 
 def offset2d(poly, d):
@@ -367,13 +402,14 @@ def circuit(part, S, name, region, seed):
             horiz = not horiz
 
 
-def struts(part, S, name, region, travel):
-    """two arms on a slab's inside, along its travel (shut, they run into the core)"""
+def struts(part, S, name, region, travel, reach=1.0, height=0.5):
+    """two arms on a slab's inside, along its travel (shut, they run into the core; reach m past the travel)"""
     O, I, u, v, n = S.wall(name)
     d = travel.normalized()
-    L = travel.length + 1.0
+    L = travel.length + reach
     for s in (0.3, 0.7):
-        a = Shell.at(O, region[0][0] + (region[1][0] - region[0][0]) * s, (region[0][1] + region[3][1]) / 2.0) - n * (SHELL * 0.6)
+        w = region[0][1] + (region[3][1] - region[0][1]) * height
+        a = Shell.at(O, region[0][0] + (region[1][0] - region[0][0]) * s, w) - n * (SHELL * 0.6)
         cyl(part, 0.17, 0.17, L, a - d * (L / 2.0), d, M_PAINT, 16)
 
 
@@ -407,6 +443,39 @@ def armour_plan(style, S):
         plan.append(("Armor_roof_rear", "roof", (-99.0, -5.0, 0), None, [("T", Vector((-1.2, 0, 1.1)), (0.0, 0.4))]))
         plan.append(("Armor_roof_mid", "roof", (-5.0, 3.5, 0), None, [("T", Vector((0, 0, 1.9)), (0.05, 0.45))]))
         plan.append(("Armor_roof_front", "roof", (3.5, 99.0, 0), None, [("T", Vector((0.7, 0, 1.0)), (0.1, 0.45))]))
+    elif kind == "quarters":
+        # the back left and right (the aft side walls in two chunks, the rear corners) and the front left and right
+        # (the forward side walls in two bands, the chamfers) blown outward on arms, each chunk turning as it goes
+        def bottom(name, reg):
+            O = S.wall(name)[0]
+            return Shell.at(O, (reg[0][0] + reg[1][0]) / 2.0, reg[0][1])
+        for s, sg in (("L", 1.0), ("R", -1.0)):
+            a, f, c = "aside_" + s, "fside_" + s, "chamfer_" + s
+            u = lambda nm: S.wall(nm)[2]
+            back = ((0, 0), (0.5, 0), (0.5, 1), (0, 1))
+            mid = ((0.5, 0), (1, 0), (1, 1), (0.5, 1))
+            low = ((0, 0), (1, 0), (1, 0.5), (0, 0.5))
+            high = ((0, 0.5), (1, 0.5), (1, 1), (0, 1))
+            plan.append(("Armor_%s_1" % a, "wall", a, back,
+                         [("T", out(a) * 3.0 + Vector((-0.9, 0, 0.5)), (0.0, 0.35)),
+                          ("R", u(a), bottom(a, back), -sg * 14.0, (0.1, 0.4))]))
+            plan.append(("Armor_%s_2" % a, "wall", a, mid,
+                         [("T", out(a) * 2.4 + Vector((0, 0, 0.3)), (0.03, 0.36)),
+                          ("R", u(a), bottom(a, mid), -sg * 9.0, (0.1, 0.4))]))
+            plan.append(("Armor_rear_%s3" % s, "wall", "rear_%s3" % s, None,
+                         [("T", out("rear_%s3" % s) * 2.6 + Vector((-0.8, 0, 0.3)), (0.0, 0.35)),
+                          ("R", Vector((0, 0, 1)), bottom("rear_%s3" % s, WHOLE), sg * 10.0, (0.1, 0.4))]))
+            plan.append(("Armor_rear_%s2" % s, "wall", "rear_%s2" % s, None,
+                         [("T", out("rear_%s2" % s) * 1.8, (0.02, 0.35))]))
+            plan.append(("Armor_%s_1" % f, "wall", f, low,
+                         [("T", out(f) * 2.4 + Vector((0.3, 0, -0.1)), (0.05, 0.38)),
+                          ("R", u(f), bottom(f, low), -sg * 6.0, (0.12, 0.42))]))
+            plan.append(("Armor_%s_2" % f, "wall", f, high,
+                         [("T", out(f) * 3.2 + Vector((0.2, 0, 0.7)), (0.05, 0.4)),
+                          ("R", u(f), bottom(f, high), -sg * 16.0, (0.12, 0.45))]))
+            plan.append(("Armor_" + c, "wall", c, None,
+                         [("T", out(c) * 2.6 + Vector((1.0, 0, 0.2)), (0.05, 0.4)),
+                          ("R", Vector((0, 0, 1)), bottom(c, WHOLE), -sg * 12.0, (0.12, 0.45))]))
     elif kind == "clamshell":
         for s, sg in (("L", 1.0), ("R", -1.0)):
             piv = Vector((0.0, S.y0 + sg * 8.9, Z1))
@@ -419,16 +488,114 @@ def armour_plan(style, S):
 
 
 # ---------------------------------------------------------------------------------------------------- the guns
-def stays_part():
-    """what doesn't split: each gun's bloomer boot, its barrel's root ring and its core rod (the guns' frame)"""
+def stays_part(rings=False, breech=False):
+    """what doesn't split: each gun's bloomer boot, its barrel's root ring and its core rod (the guns' frame); rings:
+    the core assembly round the rod (coil rings on spokes and hubs, four rails through them: style 9, after the user's
+    manga panels); breech: the breech, its block and recoil cylinders and the cradle inside the house"""
     p = Part(overlap=True)
     for yc in GUN_Y:
         for x0, x1, r in BOOT:
             cone_x(p, x0, x1, r, r - 0.03, yc, 0.0, M_PAINT, SEG)
         cone_x(p, 2.7, SPLIT + 0.02, 1.12, 1.1, yc, 0.0, M_PAINT, SEG)
         cone_x(p, SPLIT - 0.4, MUZZLE - 0.7, CORE_R, CORE_R, yc, 0.0, MAT["fm_core"], 24)
-        cone_x(p, SPLIT - 0.05, SPLIT + 0.08, BORE + 0.03, BORE + 0.03, yc, 0.0, M_DARK, 32, cut=True)
+        if not rings:
+            cone_x(p, SPLIT - 0.05, SPLIT + 0.08, BORE + 0.03, BORE + 0.03, yc, 0.0, M_DARK, 32, cut=True)
+        else:
+            x = SPLIT + 0.9
+            while x < MUZZLE - 1.2:
+                torus_x(p, x, yc, 0.0, RING_R, RING_T, M_PAINT, major=16)
+                cone_x(p, x - 0.16, x + 0.16, 0.33, 0.33, yc, 0.0, M_DARK, 12, post=True)
+                for k in range(4):
+                    a = math.radians(45 + 90 * k)
+                    d = Vector((0, math.cos(a), math.sin(a)))
+                    box(p, Vector((x, yc, 0.0)) + d * ((RING_R + 0.3) / 2.0), (XYZ[0], d, XYZ[0].cross(d)),
+                        (0.07, RING_R - 0.28, 0.07), M_PAINT, post=True)
+                x += RING_STEP
+            for k in range(4):
+                a = math.radians(90 * k)
+                cone_x(p, SPLIT + 0.8, x - RING_STEP + 0.1, 0.05, 0.05, yc + RING_R * math.cos(a), RING_R * math.sin(a),
+                       M_DARK, 8, post=True)
+        if breech:
+            cone_x(p, -6.4, -0.3, 1.2, 1.15, yc, 0.0, M_PAINT, 32)
+            cone_x(p, -6.9, -6.3, 1.38, 1.38, yc, 0.0, M_DARK, 32)
+            abox(p, (-7.4, yc - 0.7, -0.8), (-6.8, yc + 0.7, 0.8), M_PAINT)
+            for e in (-1.0, 1.0):
+                cone_x(p, -4.2, 0.4, 0.28, 0.28, yc + e * 0.9, 1.0, M_DARK, 16)
+            abox(p, (-5.2, yc - 1.0, -1.55), (0.6, yc + 1.0, -1.1), M_PAINT)
     return p
+
+
+def shell_piece_part(seg):
+    """style 9: one section of the barrel's thin shell (a quarter round +y), its rear or its front half; its own frame:
+    x from the half's back end, on the barrel's axis. The front half's muzzle closed down to a gun's bore"""
+    p = Part(overlap=True)
+    x0, x1 = (SPLIT, X_MID - 0.02) if seg == "rear" else (X_MID + 0.02, MUZZLE)
+    for a, b, r0, r1 in BARREL:
+        lo, hi = max(a, x0), min(b, x1)
+        if hi - lo > 1e-3:
+            ra = r0 + (r1 - r0) * (lo - a) / (b - a)
+            rb = r0 + (r1 - r0) * (hi - a) / (b - a)
+            cone_x(p, lo - x0, hi - x0, ra, rb, 0.0, 0.0, M_PAINT, SEG)
+    rin = lambda x: (1.02 - SHELL_T) + ((0.86 - SHELL_T) - (1.02 - SHELL_T)) * (x - SPLIT) / (MUZZLE - SPLIT)
+    end = x1 + 1.0 if seg == "rear" else MUZZLE - 0.45
+    cone_x(p, -1.0, end - x0, rin(x0 - 1.0), rin(end), 0.0, 0.0, M_DARK, SEG, cut=True)
+    if seg == "front":
+        cone_x(p, MUZZLE - 0.6 - x0, MUZZLE + 1.0 - x0, 0.42, 0.42, 0.0, 0.0, M_DARK, SEG, cut=True)
+    L = x1 - x0
+    half = math.radians(45.0)
+    W = 6.0
+    for th, sgn in ((-half, -1.0), (half, 1.0)):
+        r = Vector((0, math.cos(th), math.sin(th)))
+        nrm = Vector((0, -math.sin(th), math.cos(th)))
+        box(p, Vector((L / 2.0, 0, 0)) + nrm * (sgn * W / 2.0), (XYZ[0], r, nrm), (L + 4.0, 2 * W, W), M_DARK, cut=True)
+    return p
+
+
+def interior(h, S):
+    """style 9: the gun house's inside, seen where its quarters blow out: a hollow behind each aft and forward side
+    wall (cut into the core) fitted with a grated floor, frames and pipes along its inner wall, a shell hoist and
+    racks of shells aft, cabinets forward; the outer guns' breeches (on the guns) show in it"""
+    y0 = S.y0
+    zf, zt = Z0 + 0.15, Z1 - 0.75
+    for sg in (1.0, -1.0):
+        Y = lambda v: y0 + sg * v
+        lo_hi = lambda a, b: (min(Y(a), Y(b)), max(Y(a), Y(b)))
+        for x0, x1 in ((-13.9, 2.9), (3.7, 9.6)):
+            a, b = lo_hi(3.6, 15.0)
+            abox(h, (x0, a, zf), (x1, b, zt), M_DARK, cut=True)
+            a, b = lo_hi(3.65, 12.5)
+            abox(h, (x0 + 0.05, a, zf - 0.02), (x1 - 0.05, b, zf + 0.1), M_DARK, post=True)          # the floor
+            x = x0 + 0.4
+            while x < x1 - 0.3:                                                                   # its grating
+                a, b = lo_hi(3.7, 11.0)
+                abox(h, (x - 0.05, a, zf + 0.1), (x + 0.05, b, zf + 0.18), M_PAINT, post=True)
+                x += 0.6
+            x = x0 + 0.6
+            while x < x1 - 0.3:                                                                   # frames
+                a, b = lo_hi(3.6, 3.95)
+                abox(h, (x - 0.14, a, zf), (x + 0.14, b, zt), M_PAINT, post=True)
+                x += 2.4
+            for k, (v, z, r) in enumerate(((4.1, 1.6, 0.14), (4.2, 2.3, 0.1), (4.15, 4.5, 0.16), (4.3, 5.1, 0.1))):
+                cyl(h, r, r, x1 - x0 - 0.2, Vector(((x0 + x1) / 2.0, Y(v), z)), (1, 0, 0), M_DARK, 12, post=True)
+        # aft: the shell hoist and two racks of shells by the outer gun
+        cyl(h, 0.95, 0.95, zt - zf, Vector((-10.4, Y(6.6), (zf + zt) / 2.0)), (0, 0, 1), M_PAINT, 24, post=True)
+        for z in (zf + 0.9, zt - 1.0):
+            cyl(h, 1.05, 1.05, 0.18, Vector((-10.4, Y(6.6), z)), (0, 0, 1), M_DARK, 24, post=True)
+        for row, z in enumerate((1.25, 1.85)):
+            for k in range(6):
+                c = Vector((-13.2 + 0.62 * k, Y(9.0), z))
+                cyl(h, 0.26, 0.26, 1.5, c, (0, sg, 0), M_PAINT, 12, post=True)
+                cyl(h, 0.26, 0.02, 0.55, c + Vector((0, sg * 1.02, 0)), (0, sg, 0), M_DARK, 12, post=True)
+        a, b = lo_hi(8.2, 8.4)
+        abox(h, (-13.6, a, 0.95), (-9.5, b, 2.25), M_DARK, post=True)
+        a, b = lo_hi(5.2, 5.6)
+        abox(h, (-10.2, a, 2.4), (-6.6, b, 2.7), M_PAINT, post=True)                            # the rammer's rail
+        # forward: cabinets along the inner wall
+        for x in (4.6, 6.0, 7.4, 8.8):
+            a, b = lo_hi(4.0, 4.75)
+            abox(h, (x - 0.55, a, zf + 0.1), (x + 0.55, b, zf + 2.3), M_PAINT, post=True)
+            a, b = lo_hi(4.74, 4.8)
+            abox(h, (x - 0.45, a, zf + 0.3), (x + 0.45, b, zf + 2.1), M_DARK, post=True)
 
 
 def piece_part(n_split):
@@ -532,14 +699,14 @@ def armour_piece(S, st, bone, k, nm, region, ops):
         slab(p, S, nm, reg)
         if st.get("circuit"):
             circuit(p, S, nm, reg, sum(map(ord, bone)))
-        if nm.startswith("aside") and reg[3][1] > 0.9:
+        if nm.startswith("aside") and reg[3][1] > 0.9 and reg[0][0] < 0.19 < reg[1][0]:      # (the ear is 0.19 along)
             ears(p, S, 1.0 if nm.endswith("L") else -1.0)
         O, I, u, v, n = S.wall(nm)
         if nm.startswith("fside") and reg[3][1] > 0.9:
             c = Shell.at(O, 0.75, (reg[0][1] + reg[3][1]) / 2.0 if region else 0.62)
             box(p, c + n * 0.02, (u, n.cross(u).normalized(), n), (0.9, 0.13, 0.06), MAT["fm_slit"], post=True)
-        if tr.length > 0.3:
-            struts(p, S, nm, reg, tr)
+        if tr.length > 0.3:                       # (into the gun house's hollow: arms long enough to reach its wall)
+            struts(p, S, nm, reg, tr, *((6.0, 0.85) if st.get("interior") else ()))
         J = sum([Shell.at(O, s, w) for s, w in reg], Vector()) / 4.0
     else:
         x_lo, x_hi, side = nm
@@ -574,7 +741,8 @@ def build(coll, log=print, style=None):
     h.prism(offset2d(S.B, 0.22), "Z", 0.0, Z0 + 0.28)
     for name in NAMES:
         if name in moves:
-            bay(h, S, name)
+            if not st.get("interior"):
+                bay(h, S, name)
         else:
             slab(h, S, name)
             if st.get("circuit"):
@@ -594,18 +762,28 @@ def build(coll, log=print, style=None):
             ears(h, S, sg)
     gun_wells(h, S)
     face_lights(h, S)
+    if st.get("interior"):
+        interior(h, S)
     house = solid("house", h, 2048)
     armour = []
     for bone, k, nm, region, ops in plan:
         p, J = armour_piece(S, st, bone, k, nm, region, ops)
         armour.append((bone, solid(bone, p, 1024, J), J, ops))
     # the guns: the fixed parts, and one barrel piece turned round to each sector
-    stays = solid("stays", stays_part(), 1024, bevel=0)
-    angles = SPLITS[st["barrel"]["split"]]
-    base = solid("piece", piece_part(len(angles)), 512, bevel=0)
-    pieces = [turned(base, a, "piece_%d" % (k + 1)) for k, a in enumerate(angles)]
-    del PROTO["piece"]
     bs = st["barrel"]
+    stays = solid("stays", stays_part(rings=bs.get("mid", False), breech=st.get("interior", False)), 1024, bevel=0)
+    angles = SPLITS[bs["split"]]
+    if bs.get("mid"):                                     # style 9: eight shell pieces a gun, rear and front halves
+        segs = {}
+        for seg in ("rear", "front"):
+            base = solid("piece_" + seg, shell_piece_part(seg), 512, bevel=0)
+            segs[seg] = [turned(base, a, "piece_%s_%d" % (seg, k + 1)) for k, a in enumerate(angles)]
+            del PROTO["piece_" + seg]
+        pieces = None
+    else:
+        base = solid("piece", piece_part(len(angles)), 512, bevel=0)
+        pieces = [turned(base, a, "piece_%d" % (k + 1)) for k, a in enumerate(angles)]
+        del PROTO["piece"]
     INFO.update({"style": n, "name": st["name"], "trunnion_m": list(S.trun), "muzzle_m": MUZZLE,
                  "extend_m": bs.get("extend", 0.0), "split": bs["split"]})
     for tag in TURRETS:
@@ -641,6 +819,18 @@ def build(coll, log=print, style=None):
             local = [o if o[0] == "T" else (o[0], o[1], Vector(o[2]) - J, o[3], o[4]) for o in ops]
             add(bone, me, T.house, T.R @ Matrix.Translation(J), "ARMOR", local)
         for b, yc in enumerate(GUN_Y, 1):
+            if pieces is None:
+                for j, seg in enumerate(("rear", "front")):
+                    x0 = SPLIT if seg == "rear" else X_MID + 0.02
+                    L = (X_MID - 0.02 - SPLIT) if seg == "rear" else (MUZZLE - x0)
+                    for k, a in enumerate(angles):
+                        d = Vector((0, math.cos(math.radians(a)), math.sin(math.radians(a))))
+                        xp = 0.0 if a == 90 else (L if a == 270 else L / 2.0)       # top: its back, bottom: its front
+                        ops = [("T", d * MID_OUT[seg], MID_STAGES[0]), ("T", Vector((-MID_BACK[seg], 0, 0)), MID_STAGES[1]),
+                               ("R", Vector((0, 1, 0)), Vector((xp, 0, 0)) + d * 1.0, -MID_TILT, MID_STAGES[2])]
+                        add("Barrel_%d_%d" % (b, j * 4 + k + 1), segs[seg][k], T.trun, Matrix.Translation((x0, yc, 0.0)),
+                            "GUNS", ops, {"fm_dir": a, "fm_barrel": b, "fm_x0": x0})
+                continue
             for k, a in enumerate(angles):
                 d = Vector((0, math.cos(math.radians(a)), math.sin(math.radians(a))))
                 ops = []
@@ -654,7 +844,7 @@ def build(coll, log=print, style=None):
     per = tris["house"] + tris["stays"] + sum(v for k, v in tris.items() if k.startswith("Armor")) + \
         3 * sum(v for k, v in tris.items() if k.startswith("piece"))
     log("firemode: style %d (%s): %d moving armour pieces, %d barrel pieces a gun; %d triangles a turret" % (
-        n, st["name"], len(armour), len(angles), per))
+        n, st["name"], len(armour), len(angles) * (2 if pieces is None else 1), per))
     pose(0.0)
     return TURRET
 

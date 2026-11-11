@@ -10,6 +10,8 @@ moon lamp, the glow doing the rest). Turret B (LEV_T16_FWD), three views each li
                        glows otherwise), green lightning from the cores to the open pieces, green rings at the muzzles
   style<N>_3_side      its port side close up, transformed (the armour off its bays)
   style<N>_4_front     from ahead, above and to port, transformed: the opened guns and the face
+  style<N>_5_inside, _6_inside_front   (a style with the gun house's interior) into it past the blown-out quarters
+  style<N>_seq_1..5    (with `sequence`) the transform at t 0, 0.3, 0.55, 0.75, 1
   stowed               (with `stowed`) the turret shut, before it transforms (the same for every style)
 The lightning, rings and flash are the preview's own (PREVIEW_*); in the game they are AC8's own effects (hard rule 58).
 TANA_FM_SAMPLES (12), TANA_FM_RES (1280x720).
@@ -146,8 +148,16 @@ def core_point(b, x):
 
 
 def piece_point(ob, x, r):
+    """a point on a barrel piece's inside, x along the barrel from SPLIT (its own frame starts at fm_x0)"""
     a = math.radians(ob["fm_dir"])
+    x = x + firemode.SPLIT - ob.get("fm_x0", firemode.SPLIT)
     return ob.matrix_world @ Vector((x, r * math.cos(a), r * math.sin(a)))
+
+
+def covers(ob, x):
+    """does this piece run over x (from SPLIT)? (style 9's halves each cover half the barrel)"""
+    x0 = ob.get("fm_x0", firemode.SPLIT) - firemode.SPLIT
+    return x0 - 0.1 <= x <= x0 + (firemode.X_MID - firemode.SPLIT) + 0.1 if "fm_x0" in ob else True
 
 
 def effects(level, firing, seed):
@@ -162,10 +172,20 @@ def effects(level, firing, seed):
     L = firemode.MUZZLE - firemode.SPLIT
     for b in (1, 2, 3):
         mine = [o for o in pieces if o["fm_barrel"] == b]
+        shell = any("fm_x0" in o for o in mine)
         for _ in range(int(2 + 4 * level)):                 # from the core to the open pieces, inside the gun
             x = rnd.uniform(0.35, 0.97) * L
-            o = rnd.choice(mine)
-            poly(jag(core_point(b, firemode.SPLIT + x + EXT), piece_point(o, x, firemode.BORE - 0.05), 0.08, 5, rnd), 0.02, ARC)
+            o = rnd.choice([q for q in mine if covers(q, x)] or mine)
+            poly(jag(core_point(b, firemode.SPLIT + x + EXT), piece_point(o, x, 0.8 if shell else firemode.BORE - 0.05), 0.08, 5, rnd),
+                 0.02, ARC)
+        if shell:                                           # and along the core's coil rings
+            for _ in range(int(3 + 4 * level)):
+                k = rnd.randrange(int((L - 2.1) / firemode.RING_STEP))
+                x = firemode.SPLIT + 0.9 + firemode.RING_STEP * k
+                a = rnd.uniform(0, 2 * math.pi)
+                M, yc, fwd = barrel_frame(b)
+                q = M @ Vector((x + firemode.RING_STEP, yc + firemode.RING_R * math.cos(a), firemode.RING_R * math.sin(a)))
+                poly(jag(core_point(b, x), q, 0.07, 4, rnd), 0.018, ARC)
         M, yc, fwd = barrel_frame(b)
         tip = core_point(b, firemode.MUZZLE + EXT)
         if firing:                                          # two rings ahead of the muzzle, a few sparks off it
@@ -209,3 +229,15 @@ firemode.pose(1.0)
 effects(0, 0, 11)
 aim(C + Vector((5, 36, 6)), C + Vector((1, 0, 3.6)), 28)
 render("style%d_3_side" % STYLE)
+if firemode.STYLES[STYLE].get("interior"):                 # into the gun house, past the blown-out back left quarter
+    aim(C + Vector((-21, 17, 3.2)), C + Vector((-9, 7.0, 2.4)), 22)
+    render("style%d_5_inside" % STYLE)
+    aim(C + Vector((19, 16, 3.0)), C + Vector((6.5, 6.5, 2.3)), 22)      # and the front left
+    render("style%d_6_inside_front" % STYLE)
+if "sequence" in argv[2:]:                                 # the transform in five steps, from ahead and to port
+    T.trun.rotation_euler.y = -math.radians(10.0)
+    for k, t in enumerate((0.0, 0.3, 0.55, 0.75, 1.0)):
+        firemode.pose(t)
+        effects(0, 0, 0)
+        aim(C + Vector((50, 28, 17)), C + Vector((15, 0, 4)), 30)
+        render("style%d_seq_%d" % (STYLE, k + 1))

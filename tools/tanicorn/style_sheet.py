@@ -33,14 +33,24 @@ def label(im, text, size=30):
     return im
 
 
+EXTRA = (("5_inside", "inside, past the back quarter"), ("6_inside_front", "inside, past the front quarter"))
 done = sorted(n for n in NAMES if all(os.path.exists(os.path.join(SRC, "style%d_%s.png" % (n, v))) for v, _ in VIEWS))
 W, H = 960, 540
 for n in done:
-    row = Image.new("RGB", (W * 2, H * 2 + 70), (12, 14, 18))
+    views = list(VIEWS) + [e for e in EXTRA if os.path.exists(os.path.join(SRC, "style%d_%s.png" % (n, e[0])))]
+    cols = 3 if len(views) > 4 else 2
+    row = Image.new("RGB", (W * cols, H * 2 + 70), (12, 14, 18))
     label(row, "STYLE %d   %s" % (n, NAMES[n]), 40)
-    for k, (v, cap) in enumerate(VIEWS):
+    seq = [os.path.join(SRC, "style%d_seq_%d.png" % (n, k)) for k in range(1, 6)]
+    if all(os.path.exists(f) for f in seq):                 # its transform in five steps, under it
+        strip = Image.new("RGB", (W * 5, H + 60), (12, 14, 18))
+        label(strip, "STYLE %d   the transform, step by step" % n, 34)
+        for k, f in enumerate(seq):
+            strip.paste(label(Image.open(f).convert("RGB").resize((W, H)), "%d" % (k + 1), 26), (k * W, 60))
+        strip.save(os.path.join(OUT, "style_%d_sequence.png" % n))
+    for k, (v, cap) in enumerate(views):
         im = Image.open(os.path.join(SRC, "style%d_%s.png" % (n, v))).convert("RGB").resize((W, H))
-        row.paste(label(im, cap, 22), ((k % 2) * W, 70 + (k // 2) * H))
+        row.paste(label(im, cap, 22), ((k % cols) * W, 70 + (k // cols) * H))
     row.save(os.path.join(OUT, "style_%d.png" % n))
 for v, cap in VIEWS:
     grid = Image.new("RGB", (W * 4, H * 2), (0, 0, 0))

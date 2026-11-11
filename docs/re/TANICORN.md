@@ -140,8 +140,11 @@ armour comes apart in angular blocks, side plates held out on arms and slabs sta
 splitting lengthwise and opening like jaws round a glowing core, bracket rings along the open halves; green lightning
 and rings as it fires). Two passes were turned down ("Surely you can do a higher quality job than this", "I don't like
 this version either"); then: "give me 8 different versions of the Turret with different styles, I want it as close as
-humanly possible to what those screenshots showed you and I'll pick". **Waiting on the user's pick**; DEFAULT_STYLE is 1
-until then.
+humanly possible to what those screenshots showed you and I'll pick". Then, with two manga panels of the guns opened
+round coil rings, the user's own spec, built as **style 9 (DEFAULT_STYLE)**: "Split the barrels into four sections.
+Then split the barrels in the middle and have them slide back and angle themselves upwards. Keep the glowing rod in
+the center of the barrel. Have the back left and back right of the turret explode outwards. And have the front right
+and left sides also explode outwards. Feel free to model an interior of the gun housing." Not yet approved.
 - `tools/tanicorn/firemode.py` (run by model_tanacorn.py; `TANA_FM_STYLE` 1-8, 0 for the design's Iowa mount) models
   the mount from scratch on tanakit.py's clean solids, in place of the Iowa's on both turrets: the design's outline,
   size and yaw pivot, the trunnion moved back to 1.2 m behind the face (house frame (11.42, 0.10, 3.17) m), the muzzles
@@ -157,12 +160,23 @@ until then.
   walls and rear sliding out); 5 four petals + exploded house; 6 four staves on the diagonals + layered armour;
   7 three petals + clamshell roof (its halves hinged up on their outer edges, the forward side walls hinged down);
   8 jaws + layered armour + the Fog's glowing circuit lines over the armour. 32-47k triangles a turret.
+  **9** (the user's spec): each barrel a thin shell in four sections (port, top, starboard, bottom), each cut at mid
+  length (X_MID): the eight pieces part, slide back (the front halves further, stacking outside the rear ones) and
+  pitch up 16 deg as parallel plates (the top ones about their back end, the bottom ones about their front, the sides
+  about their middle); inside, the core assembly: the glowing rod, coil rings on spokes and hubs every 1.7 m, four
+  rails; the back left / right (the aft side walls in two chunks, the rear corners) and the front left / right (the
+  forward side walls in two bands, the chamfers) blow outward on long arms, turning as they go; behind them the gun
+  house's interior (hollows cut into the core: grated floors, frames and pipes, a shell hoist and shell racks aft,
+  cabinets forward; each gun's breech, block, recoil cylinders and cradle on the guns). 54k triangles a turret (the
+  core assemblies 10k of it). Before export: the house's interior posts leave a few non-manifold edges (9) and the
+  core assemblies 15 degenerate faces: to clean.
 - **Each piece** is an object `TANA_T16_<tag>_<bone>` carrying its motion (`fm_ops`: translations and turns, each over
   a stretch of the 2.5 s transform), part (`fm_part`: ARMOR or GUNS) and bone (`fm_bone`). Keyed into the model's
   timeline: deploy 110-185, stow 226-301.
 - **Choosing**: `styles_firemode.py` builds one style on a model made with `TANA_FM_STYLE=0` (untextured) and renders
-  it at night from four sides (from above and behind, from ahead, firing, the side); `style_sheet.py` lays them out.
-  The sheets the user chose from: art/tanicorn/renders/styles.
+  it at night from four sides (from above and behind, from ahead, firing, the side; with an interior, two views into
+  it; with `sequence`, the transform in five steps); `style_sheet.py` lays them out. The sheets: art/tanicorn/renders/
+  styles (1-8), art/tanicorn/renders/style9.
 - **Export** (export_tanacorn.py): `T16` (house on turret_yaw, boots, root rings and core rods on turret_pitch;
   SOC_Gun_01..03 at the open muzzles; its wreck the house and roots: barrels gone) plus two skinned parts riding its
   bones, each with the animation `Deploy` sampled from the model's keys (rotation and place a bone, 30 fps):
