@@ -119,7 +119,7 @@ MaxAnisotropy comes from Engine/Config/BaseScalability.ini, since AC8's Windows 
   reflected struct; the exe has only the enum's names [?]. **Not a difference from stock.** As an A/B only:
   fix 7.
 
-## 2. What the cook holds [V: E:/AC8LiveProject/Saved/Cooked/.../Tanicorn/Textures, read from the bytes after the PF_ string]
+## 2. What the cook holds [V: $AC8_LIVE_PROJECT/Saved/Cooked/.../Tanicorn/Textures, read from the bytes after the PF_ string]
 | texture | size | format | mips | in .ubulk | LODGroup | NeverStream |
 |---|---|---|---|---|---|---|
 | T_SV_Tani_HULL_10_D (ALC_a) | 4096 | DXT1 | 13 (first 0) | mips 0-5, 11,182,080 B = 4096..128 exactly | World (default) | no |
@@ -391,7 +391,7 @@ medium**: UV work, a new survey and audit.
   PIL ImageStat over src_*/T_SV_Tani_*_D.png and build/tanicorn/iowa/textures.
 - The user's settings: `grep render build/backup/install_before_*/AC8SurvivalMode/AC8SurvivalMode_lua.log`, and
   `[ScalabilityGroups]` in AC8's GameUserSettings.ini, read only.
-- UE 5.4 source (E:/UE_5.4):
+- UE 5.4 source ($UE):
   - Engine/Source/Runtime/Engine/Private/Streaming/TextureStreamingHelpers.cpp:313;
   - StreamingTexture.h:165 (IsMaxResolutionAffectedByGlobalBias), StreamingTexture.cpp:195, and
     AsyncTextureStreaming.cpp:360 (the per-texture mode AC8 turns off);
@@ -400,7 +400,7 @@ medium**: UV work, a new survey and audit.
 
 ## 8. 0.74.62: the stock instance draws our hull near black (research and fix of 2026-11-12)
 8.1-8.8 are stage 1 (corrected after its review); 8.9-8.12 are stage 2, the review's fixes.
-The user on 0.74.62 (fixes 1-5 above built in), with three screenshots: "they still look really bad" (D:\Screenshots
+The user on 0.74.62 (fixes 1-5 above built in), with three screenshots: "they still look really bad" (<the user's screenshots folder>/
 2288340_20261111222517_1 and _222606_1, 0.74.62; _20261111054037_1, 0.74.61). The hull's Alicorn surfaces read dark
 brown-black and smeared along their length, the pods streaked, white blocks scattered along the forward deck, the upper
 works a flat light grey. Nothing here was run in game; the renders are Blender 3.3 (Cycles) emulations, and the scripts
@@ -518,7 +518,7 @@ Through the ID pass (ratio.py), the ALC surfaces against the rest. Ratios, then 
   4. How Mult_Albedo (MI_Vehicle's static switch, true) and Diffuse Mult (0) combine: unknown without the shader code.
   - retoc's to-legacy of the shader library (ShaderArchive-Live_Chunk10-PCD3D_SM6) stops on "memory allocation of
     40965993440 bytes failed", so the DXIL couldn't be disassembled (dxc.exe is in
-    E:/UE_5.4/Engine/Binaries/ThirdParty/ShaderConductor/Win64).
+    $UE/Engine/Binaries/ThirdParty/ShaderConductor/Win64).
 - Black vertex colours on the ALC faces with `TANI_ALC=stock` (8.6.3) tests candidates 1 and 2 at once. It is one test
   among these, not the expected cure.
 - fix 1 above ("risk: low") is withdrawn as the default. The gear route (8.6) doesn't depend on which candidate it is.

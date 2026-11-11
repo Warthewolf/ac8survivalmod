@@ -1459,7 +1459,7 @@ local function v3(c, f) local ok, v = pcall(f); if ok and v then return { X = v.
 local function riseHere(R)                               -- the rig's time: its own position, else the clock's
     local ok, p = pcall(function() return R.rig:GetPosition() end)
     if ok and type(p) == "number" and R.playing then return p end
-    return R.playing and (os.clock() - R.t1) * TANI.rise.rate or 0
+    return R.playing and (os.clock() - R.t1) * (R.rate or TANI.rise.rate) or 0
 end
 local function riseLook(R, t)
     local C = TANI.rise
@@ -1486,6 +1486,7 @@ end
 local function riseBack(R, why)                          -- your view, plane and the enemies' limits put back
     if not R or R.back then return end
     R.back = true
+    if CINE and CINE.stop then pcall(CINE.stop, why) end -- ((0.74.65) the director's cameras off first: its locked blend kept)
     local parts = {}
     local pawn = liveObj(survivalPC) and survivalPC.Pawn or nil
     if R.cine then
@@ -1517,6 +1518,12 @@ local function riseCine(R)                               -- the cinematic: autop
         if okR and type(v) == "number" and pcall(function() pawn[f] = 0 end) then R.limits[f] = v end
     end
     R.cine = true
+    if CINE and CINE.play then                            -- ((0.74.65) the director's keyed cameras; the rig's SOC_Cam the fallback)
+        local okP, okC, whyC = pcall(CINE.play, R, { rate = R.rate or C.rate })
+        if okP and okC then log("tanicorn: rise cinematic: sv_cine.lua's keyed cameras (" .. tostring(whyC) .. ")"); return end
+        log("tanicorn: rise cinematic: sv_cine.lua's cameras not made (" .. tostring(okP and whyC or ("error " .. tostring(okC)))
+            .. "): the rig's SOC_Cam camera")
+    end
     local cam, why = nil, "no SV_Spawncam (runtime 0.32.1)"
     -- ((0.74.64) a CameraActor spawned from Lua first, as sv_escort_li.lua spawns the laser (deferred, then finished):
     -- SV_SpawnCam answered -1 in the user's solo run of 0.74.63, it finds the world through co-op's own plane)
@@ -1629,7 +1636,13 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
                 #steps > 0 and (" (" .. table.concat(steps, ", ") .. ")") or "", tick, uro, C.part, R.part and "found" or "NOT found"))
             R.state, R.t0 = "hold", now
             riseLook(R, 0)
-            if C.cinematic then riseCine(R) end
+            -- ((0.74.65) sv_cine.lua's director: in director mode the rise plays slowed with no cinematic, CINE's markers
+            -- and keys over it; else the cinematic, which takes CINE's keyed cameras first: docs/re/CINEMATIC.md 5)
+            local dir = nil
+            if CINE and CINE.director then local okD, d = pcall(CINE.director); if okD then dir = d end end
+            R.rate = dir and dir.speed or C.rate
+            if dir then pcall(CINE.play, R, { rate = R.rate })
+            elseif C.cinematic then riseCine(R) end
         elseif now - R.at > C.find_s then
             log(string.format("tanicorn: rise: %s after %d s (an old hull without the rise rig? a build before it)",
                 not R.o and "no new hull of ours found" or ("its " .. (not R.rig and "RiseRig" or "HullMesh") .. " NOT found"), C.find_s))
@@ -1639,10 +1652,10 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
     end
     if liveAddr(R.o) == nil or nameOf(R.o) ~= R.name then riseBack(R, "the hull is gone"); RISE = nil; return end
     if R.state == "hold" and now - R.t0 >= C.hold_s then
-        local okP = pcall(function() R.rig:SetPlayRate(C.rate) end)
+        local okP = pcall(function() R.rig:SetPlayRate(R.rate or C.rate) end)
         if not pcall(function() if not R.rig:IsPlaying() then R.rig:Play(false) end end) then okP = false end
         R.state, R.t1, R.playing = "rising", now, true
-        log(string.format("tanicorn: rise: playing at rate %.2f%s", C.rate, okP and "" or " (SetPlayRate / Play FAILED)"))
+        log(string.format("tanicorn: rise: playing at rate %.2f%s", R.rate or C.rate, okP and "" or " (SetPlayRate / Play FAILED)"))
     end
     if R.cine and R.cam then                              -- (the game may take the view back: given again)
         local okT, vt = pcall(function() return survivalPC:GetViewTarget() end)
@@ -1744,7 +1757,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
     end
     local okI, still = pcall(function() return R.rig:IsPlaying() end)
     local done = (t >= C.slam_s + 2.4 and okI and still == false)
-        or now - R.t1 >= C.length_s / math.max(0.05, C.rate) + C.end_pad_s
+        or now - R.t1 >= C.length_s / math.max(0.05, R.rate or C.rate) + C.end_pad_s
     if done and not R.ended then
         R.ended = true
         R.endAt = now

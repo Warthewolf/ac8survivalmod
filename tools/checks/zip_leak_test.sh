@@ -18,7 +18,7 @@ trap 'rm -rf "$T"' EXIT
 F="$T/root"
 mkdir -p "$F/tools/checks" "$F/runtime" "$F/release" "$F/build/runtime" "$F/build/install/SurvivalMode" "$F/out"
 for f in package_release.sh package_test.sh release_dir.sh env.sh zip_guard.sh strip_test_only.py quiet_logs.py edition.py \
-         coop_edition.py novalka.py nospaceport.py build_hash.py lb_register.py lua_parts.py; do
+         coop_edition.py novalka.py nospaceport.py build_hash.py lb_register.py lua_parts.py dev_only.py; do
     cp "tools/$f" "$F/tools/"
 done
 cp tools/checks/lua_check.py "$F/tools/checks/"

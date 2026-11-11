@@ -5,7 +5,7 @@ docs/design/INVINCIBLE_FLEET.md. Nothing here is built. It doesn't change the pl
 WP4 / WP5 text it says so, and section 7 lists what the plan file should take over.
 
 Tags as in docs/re: [V] read in a file, a dump or seen in game (where), [I] inferred, [?] not known yet.
-Dumps made tonight (scratch, not kept in the repo): `C:/Users/Naish/AppData/Local/Temp/claude/db8a795f8cbb4324/3e40f786-2aa7-4710-9295-fd101baefd71/scratchpad/agentE`
+Dumps made tonight (scratch, not kept in the repo): `<a session scratchpad>/agentE`
 (`legacy/` the stock packages converted with retoc; `grfd_base.txt` / `grfd_objs.txt` / `grfd_extra.txt` the Ford's
 blueprint, `vbdp.txt` BP_Vessel_BodyDestroyParam, `CUR_*.txt` the Alicorn's surface / dive curves, `mesh_grfd` the Ford's
 mesh as glTF, `grifn_base.txt` the Grifn). Re-made in minutes with the commands in section A.
@@ -483,7 +483,7 @@ Questions for the user (with the agent's recommended answer):
   CUR_SurfaceRotationCurve, CUR_DiveLocationCurve, CUR_DiveRotationCurve, BP_BA002_alcn_Root, BP_BA002_alcn_PlnBase,
   A_BA002_alcn_DAM, SK_BA002_alcn_DAM, S_BA002_alcn_DAM, A_VE022_gifn_dive, A_VE022_gifn_surface, ABP_Grifn_Diving,
   BP_VE022_grifn_Base.
-- Dumper: `USMAP="E:/ACE8 Survival Mode/build/tanicorn/alcn/mappings.usmap" MSYS_NO_PATHCONV=1 ACE8AircraftBuilder.exe dev
+- Dumper: `USMAP="<repo>/build/tanicorn/alcn/mappings.usmap" MSYS_NO_PATHCONV=1 ACE8AircraftBuilder.exe dev
   dump|obj|mesh|sockets|skeleton <path without .uasset> [<export index, 1-based>]` (a copy in the scratch dir). `dev obj`
   of the Ford's CDO (export 4) fails: the usmap doesn't know LiveAirCurrent's newer fields; its components read fine.
   Run the exe only with a `dev` command: with no arguments it opens its window.

@@ -69,13 +69,13 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   for the Tanager). Its model and art are in art/tanicorn at the user's request (2026-11-10: "you are allowed to push the
   model"); its cooked container still ships in TANI=1 dev builds only (package_release.sh drops it). Round 30's
   INVINCIBLE FLEET, whose boss it is (docs/design/INVINCIBLE_FLEET.md), is the user's dev install only too (user,
-  2026-11-10: "Keep it dev install only"): its Lua test-only, never in a release or TESTER zip. Its live parts' world data
+  2026-11-10: "Keep it dev install only"): its Lua in DEV ONLY blocks, never in a release or TESTER zip
+  (tools/strip_test_only.py takes them out of every zip; package_dev.sh keeps them; THE TANICORN's test mount too;
+  tools/dev_only.py cuts sv_tanicorn / sv_fleet / sv_cine to their headers in a TESTER zip). Its live parts' world data
   (child descs importing the container's blueprints) is built with TANI=1 only: such a build leaves build/install/tani_wd.txt,
   and package_release.sh / package_test.sh refuse it (package_dev.sh takes it with TANI=1 only, and TANI=1 only with it).
-- Release zips always go to the main tree's build/release, `E:\ACE8 Survival Mode\build\release`, from any worktree
-  (user, 2026-11-07): tools/package_release.sh and package_test.sh find it through tools/release_dir.sh.
-  2026-11-10: "Keep it dev install only"): its Lua in DEV ONLY blocks, never in a release or TESTER zip
-  (tools/strip_test_only.py takes them out of every zip; package_dev.sh keeps them; THE TANICORN's test mount too).
+  Run tools/tanicorn/build.sh to the end BEFORE `TANI=1 build_all.sh`: build_all stages the container it finds, and a
+  world data importing blueprints the container lacks must never be packaged (the reviews of 2026-11-12).
 - Release zips always go to the main tree's build/release (git's main working tree), from any worktree (user,
   2026-11-07): tools/package_release.sh and package_test.sh find it through tools/release_dir.sh (`RELEASE_DIR` in
   `.env` overrides it).

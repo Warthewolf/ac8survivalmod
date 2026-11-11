@@ -2988,3 +2988,22 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - Packaged: BUILD_NAME=COOP2MP COOP=1 ZFA=1 sh tools/package_release.sh online 0.74.52 ->
   AC8SurvivalMode_COOP2MP_0.74.52_Online_COOP_ZFA44.zip (41.8 MB, 91 files; SurvivalMode_P, Valka, ZFA44 containers; no
   TEST ONLY block), build hash 94924732eeae..., registered. Not installed on the user's machine (her install: 0.74.64).
+
+## 0.74.65-coop2mp.157 (2026-11-12, runtime 0.32.35; dev = the Tanicorn line + the cloud co-op line + the fleet)
+- The first build of the merged dev (branch tools/install-0.74.65): the cloud co-op line (0.74.50-0.74.52: Saint
+  Alessia's run fixes, the shuttle replay, ZFA-44 deaths, the Alicorn core, the Spaceport rockets' radio, PR #4's log
+  bundles), THE TANACORN's live mounts (Ctrl+L, 32 parts) and VLS (Ctrl+K), its textures (stages 1-2), the rise director
+  (sv_cine.lua: Ctrl+D / E / V / W, the review's 15 fixes) now HOOKED into the rise (docs/re/CINEMATIC.md 5: the rise tick's
+  CINE.play in director mode, riseCine's keyed cameras with SOC_Cam the fallback, riseBack's CINE.stop, R.rate), and
+  INVINCIBLE FLEET WP7 (Ctrl+N, the review's six fixes).
+- tools/tanicorn/build.sh needed BLENDER and AC8_LIVE_PROJECT in .env (the cloud line's no-machine-path rule); the cook's
+  container holds all 15 blueprints (HULL, HULLLIVE, T5, T16, CIWS, LASER, VLSD, VLSS_L1..R4), staged = built (cmp).
+  Both weapons reviews of stage 2 found nothing that crashes at Ctrl+L / Ctrl+K; their one major (no check that the
+  staged container holds what the TANI=1 world data imports) is still open: the order build.sh -> build_all -> package_dev
+  was kept by hand and checked here.
+- Fixes on the way: six machine paths out of docs (paths_check), tools/dev_only.py cuts DEV ONLY blocks too,
+  zip_leak_test copies dev_only.py, AGENTS.md's TANICORN bullet de-duplicated after the merge.
+- run_all: 74 passed (zip_leak_test after its fix), 2 failed, 1 skipped: dive_test (CRLF in piece()) and logbundle_test
+  (the test exe's ANSI stdout), both harness faults on Windows (HANDOFF_2026-11-12.md).
+- build 11391c07dede... registered. INSTALLED 2026-11-12 05:28 (backup: build/backup/install_before_0.74.65). The
+  installed subtitles.ini was 0.74.64's shipped copy (no edits of hers), replaced by the merged one.
