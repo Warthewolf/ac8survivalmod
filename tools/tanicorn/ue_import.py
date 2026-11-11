@@ -5,9 +5,16 @@ THE TANACORN's parts under /Game/Mods/SurvivalMode/Tanicorn from build/tanicorn/
 (tools/tanicorn/export_tanacorn.py; the first 5-inch mount came from prepare_part.py), for every part in
 build/tanicorn/parts.json (TANI_PARTS=T5,HULL picks some), by its json's kind:
   Textures/T_SV_<part>_<n>_D, _N, _L   ordinary textures (never virtual: hard rule 44)
+  Textures/T_SV_Tani_ALC_<a|b>_D, _N, _L
+                                       the Alicorn's two 4096 sheets, one set for every part that wears them (the hull,
+                                       the railcannon, both sub-railguns: export_tanacorn.py alc_sheet), never streamed
+                                       unless TANI_ALC_RESIDENT=0 (~85 MiB of VRAM while the ship is loaded: the user's
+                                       Texture Quality cuts streamed textures two mips; docs/re/TANICORN_TEXTURES.md 8.11)
   Materials/MI_SV_<part>_<n>           instances of the x40a's gear instance MI_PP0016_x40a_Gear (-> MP_Gear), the route
                                        the ZFA-44 and VALKA drew with in game: AC8's own shaders, no static switch set
                                        (hard rules 42, 58: no master material of ours)
+  Materials/MI_SV_Tani_ALC_a, _b       the same, one a sheet, shared by every part's ALC_a / ALC_b slots (TANI_ALC=stock
+                                       puts the stock Alicorn's own instances there, by path: 0.74.62's route, near black)
   turret   Model/SK_SV_<part> (+ SKEL_SV_<part>, PA_SV_<part>): bones Body > turret_yaw > turret_pitch
   vls      Model/SK_SV_<part> (+ SKEL, PA): bones Body > Hatch_01..08, and AS_SV_<part>_Open (the lids' swing, 0.5 s)
   railcannon, railgun (the Alicorn's deploying parts: RAILCANNON, RAILGUN_L / _R)
@@ -38,12 +45,14 @@ SCALARS = {'Ctrl_All_Emissive': 0.0, 'Turbine_speed': 0.0, 'DNormal_Strength': 0
 # (2026-11-11, docs/re/TANICORN_TEXTURES.md fix 1) the Alicorn's surfaces (the design's ALC_a / ALC_b slots: 78 % of the
 # hull, the railcannon and sub-railguns) on the stock Alicorn's own instances, by path. Stubs here at AC8's paths, never
 # packed (build.sh packs only DEST); their shader map has the Local and GPUSkin vertex factories.
-# (2026-11-12, TANICORN_TEXTURES.md section 8) NOT the default any more: 0.74.62 drew every ALC surface with no diffuse at
-# all (darker than the sea, none of the sheets' detail, smooth streaked reflections: the stock instance's wet layer,
-# "Wet Surface" on with "Diffuse Mult" 0, at full strength); the stock Alicorn's meshes carry vertex colours (black on
-# its plating) and ours none (UE draws them white). TANI_ALC=stock still builds this route, for an A/B once the hull
-# carries the Alicorn's vertex colours; the default (gear) puts the ALC slots on our gear instance with the sheets'
-# own livemaps (export_tanacorn.py alc_sheet: T_SV_Tani_ALC_<a|b>_D / _N / _L, one set for every part)
+# (2026-11-12, TANICORN_TEXTURES.md section 8) NOT the default any more: 0.74.62 drew every ALC surface near black, its
+# diffuse darkened to about x0.1 with the albedo's hue kept (the stern deck's yellow marking and runway lines still
+# show), smooth streaked reflections down the pods. Why is not proved (8.5): the instance's wet layer ("Wet Surface" on,
+# "Diffuse Mult" 0), our mesh's missing vertex colours (UE draws them white; the stock Alicorn's are black on its
+# plating, coloured clusters on its fittings: a wind / WPO weight as likely as a wet mask), or parameters the Alicorn's
+# blueprint sets on its own instances at run time. TANI_ALC=stock still builds this route for an A/B; the default (gear)
+# puts the ALC slots on our gear instance with the sheets' own livemaps (export_tanacorn.py alc_sheet:
+# T_SV_Tani_ALC_<a|b>_D / _N / _L, one set for every part)
 ALC_MI = {'ALC_a': '/Game/OnlineMode/Vehicles/Boss/BA002_alcn/Materials/MI_BA002_alcn_a_Inst',
           'ALC_b': '/Game/OnlineMode/Vehicles/Boss/BA002_alcn/Materials/MI_BA002_alcn_b_Inst'}
 M_BASIC_DIFFUSE = '/Game/OnlineMode/Materials/Core/M_Basic_Diffuse'
@@ -52,6 +61,11 @@ ALC_ROUTE = os.environ.get('TANI_ALC', 'gear')          # 'gear' (default) or 's
 # (fix 4) textures this size or smaller are never streamed: the game's Texture Quality mip bias (2 at Medium: 4096 -> 1024,
 # 1024 -> 256) skips textures that aren't streamed; ~6 MB of VRAM while the ship is loaded
 NEVER_STREAM_PX = 1024
+# (2026-11-12, TANICORN_TEXTURES.md 8.11) the shared Alicorn sheets too (T_SV_Tani_ALC_*: 78 % of the hull's area): the
+# user plays at Texture Quality 1 (MipBias 2), which streams them at 1024, 2.5 texels a metre, a 40 cm texel. Resident:
+# D and L DXT1, N BC5, with their mips 2 x (10.7 + 21.3 + 10.7) = ~85 MiB of VRAM while the ship is loaded, in the
+# dev-only container. TANI_ALC_RESIDENT=0 streams them as 0.74.61 did (fix 1b's question for the user)
+ALC_RESIDENT = os.environ.get('TANI_ALC_RESIDENT', '1') != '0'
 
 AT = unreal.AssetToolsHelpers.get_asset_tools()
 MEL = unreal.MaterialEditingLibrary
@@ -158,6 +172,8 @@ def texture(src_dir, name, srgb, compression, flat=False):
         tex.set_editor_property('filter', unreal.TextureFilter.TF_NEAREST)
     elif max(tex.blueprint_get_size_x(), tex.blueprint_get_size_y()) <= NEVER_STREAM_PX:
         tex.set_editor_property('never_stream', True)         # (fix 4: the Texture Quality bias never cuts it)
+    elif name.startswith('T_SV_Tani_ALC_') and ALC_RESIDENT:
+        tex.set_editor_property('never_stream', True)         # (8.11: the Alicorn sheets at 4096 at any Texture Quality)
     EAL.save_loaded_asset(tex)
     say(f'texture {name}: {tex.blueprint_get_size_x()}x{tex.blueprint_get_size_y()}, srgb {srgb}, {compression}, '
         f'group {soft(lambda: tex.get_editor_property("lod_group"))}, never stream {soft(lambda: tex.get_editor_property("never_stream"))}')
@@ -390,7 +406,8 @@ def main():
         basic = stub_material(M_BASIC_DIFFUSE, ALC_TEX)
         alc = {k: stub_instance(path, basic) for k, path in ALC_MI.items()}
     say('the ALC slots: ' + ('the stock Alicorn instances (TANI_ALC=stock)' if alc else
-                             'our gear instances MI_SV_Tani_ALC_a / _b with the sheets\' MREC livemaps'))
+                             'our gear instances MI_SV_Tani_ALC_a / _b with the sheets\' MREC livemaps, the sheets '
+                             + ('never streamed' if ALC_RESIDENT else 'streamed (TANI_ALC_RESIDENT=0)')))
     only = [x for x in os.environ.get('TANI_PARTS', '').split(',') if x]
     for p in parts:
         if only and p not in only:
