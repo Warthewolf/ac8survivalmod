@@ -105,8 +105,8 @@ an "ACE INBOUND" callout names each one the first time it shows up.
 
 Special rounds: round 2 is always the Shuttle Launch, round 6 THE ESCORT, round 9 GONE FISHIN' and round 15 THE
 FESTIVAL. After the festival any round can be any of the others (about 1 in 3, never two in a row), each at most once
-every 10 rounds. They get harder the later they come, and from round 12 the Ladons, the Alicorn and AB.L..IN bring
-escorts. ([specials.schedule] enabled = false in survival.ini: random specials from round 4 instead.)
+every 10 rounds. They get harder the later they come, and from round 12 the Alicorn and AB.L..IN bring escorts.
+([specials.schedule] enabled = false in survival.ini: random specials from round 4 instead.)
 - SHUTTLE LAUNCH: the EMBDIR Shuttle - CORRIS on the spaceport pad, with its AA guns and SAMs. Protect it through
   the ~2.5 minute countdown while War's jets attack. If it's destroyed the shop is closed through the next round.
 - THE ESCORT: CHARLENE's B-1B and her four KMG escorts fly in under attack; bring them to Comona and see them land.
@@ -120,7 +120,7 @@ escorts. ([specials.schedule] enabled = false in survival.ini: random specials f
   which drives for the runway. Each BTR that reaches it captures 25 % of the airfield; at 100 % the airfield is taken
   (no landing, no STORE) until you destroy them or two rounds pass. Fighters (and maybe bombers) come too.
 - THE LADONS: KOT and MISHKA come in from the far west and bomb the airfield on every pass until both are down
-  (escorted from round 12).
+  (nothing else flies in their round).
 - THE ALICORN: the submarine carrier sails the west sea, diving and surfacing, firing its railgun and missiles.
   Destroy its four ballast tanks to open its core, then the core.
 - AB.L..IN (IFF: FATAL ERROR): a lone EA-18G with its jammer always on. Every time you hit it, it vanishes in
@@ -158,8 +158,8 @@ OFFLINE:
 Settings: ue4ss\Mods\AC8SurvivalMode\config\survival.ini, made the first time you play. Open it in Notepad. Every
 setting is listed with its default and switched off by a ; in front of it; remove the ; to change it. Restart the
 game after a change. Delete the file to get a fresh one.
-- To try the later rounds straight away, find [rounds] and add the line  start_round = 10  (the Anomaly),
-  16 (the named aces) or 28 (the Reapers). Take it out again for a normal run.
+- To try the later rounds straight away, find [rounds] and add the line  start_round = 16  (the named aces) or
+  28 (the Reapers). Take it out again for a normal run.
 - Rename the aces under [aces.mercenary] ... [aces.reaper], and MINDRIPPER under [specials.anomaly].
 - After an update, new settings are added at the end of your survival.ini (switched off), with their notes.
 

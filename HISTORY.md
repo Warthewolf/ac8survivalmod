@@ -2309,3 +2309,9 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
   misses that dropped VALKA's and the 0.74.0 specials' wins and refused co-op runs, caught before a release) and
   `tools/checks/rt_format_check.py` (hard rule 43 over runtime/*.c: 351 Log / Crumb / TcAppend calls, 0 problems; it
   fails on %04x, %ld, %f and on more specifiers than arguments). Neither is in build_all.sh yet.
+- The player readmes' wrong facts (release/README.txt, README_COOP.txt; not in the build hash): the Ladons never bring
+  escorts (user, 2026-10-25: "during a ladon round, only the ladon's spawn"), so the two lines saying they do from round
+  12 now say the Alicorn and AB.L..IN do and nothing else flies with the Ladons; `start_round = 10` is no longer the
+  Anomaly (the schedule), so the tip names 16 and 28 only; co-op's "shot down, retry ... not sent to the leaderboard"
+  replaced by DOWN / REVIVE and the host's team run ([coop] leaderboard = true by default, sv_down.lua). The STORE
+  block, subtitles.ini, the credits line and the co-op 'Known:' list are left for the user.
