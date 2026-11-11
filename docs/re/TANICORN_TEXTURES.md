@@ -392,3 +392,160 @@ medium**: UV work, a new survey and audit.
     AsyncTextureStreaming.cpp:360 (the per-texture mode AC8 turns off);
   - Engine/Classes/Engine/TextureLODSettings.h (the group defaults);
   - Private/TextureLODSettings.cpp:153 (cooked LODBias).
+
+## 8. 0.74.62: the stock instance draws our hull with no diffuse (research and fix of 2026-11-12)
+The user on 0.74.62 (fixes 1-5 above built in), with three screenshots: "they still look really bad" (D:\Screenshots
+2288340_20261111222517_1 and _222606_1, 0.74.62; _20261111054037_1, 0.74.61). The hull's Alicorn surfaces read dark
+brown-black and smeared along their length, the pods streaked, white blocks scattered along the forward deck, the upper
+works a flat light grey. Nothing here was run in game; the renders are Blender 3.3 (Cycles) emulations, and the scripts
+are scratch files (the method is under "How to check" below). Tags as above.
+
+### 8.1 What the screenshots measure [V]
+Mean pixel values (sRGB -> linear) of sunlit, upward-facing patches next to each other:
+
+| shot | ALC surface | linear | Iowa surface beside it (gear) | linear | ALC / Iowa |
+|---|---|---|---|---|---|
+| 0.74.61 (gear, flat livemap) | deck amidships / forward | 0.027 / 0.038 | T16 roof | 0.049 | 0.6-0.8 |
+| 0.74.62 #1 | forward deck | 0.017 | superstructure / T16 | 0.118 / 0.101 | 0.14-0.17 |
+| 0.74.62 #2 | deck beside the superstructure, pod top | 0.002 / 0.002 | roof, turret top | 0.068 / 0.067 | **0.03** |
+
+(the green channel's linear value, nearest to luminance)
+- In 0.74.62 the ALC deck is darker than the sea beside it (the sea's green 0.013). None of the sheets' detail shows on
+  it (no runway lines, no panel lines: 0.74.61's deck had both with the same UVs and the same sheets); only soft
+  reflections, long streaks of them down the pods. The albedos say it should be ~0.7-0.8 of the Iowa grey, and even
+  MREC read as metallic (diffuse x 0.4-0.5) only takes it to ~0.3. **In game the ALC surfaces had no diffuse at all.**
+- The white blocks along the forward deck in #1 are Iowa fittings (gear slots): the ID pass of the same view (red
+  ALC, green the rest) has them green. They were lit grey against a black deck.
+
+### 8.2 Not the UVs [V: area-weighted texels per metre from the export's glTF, 4096 px sheets]
+| surface | ours: area m2 | texels/m (most / least, p50) | anisotropy p50 / p90 | stock Alicorn (the same class) |
+|---|---|---|---|---|
+| ALC_a deck / side | 8,717 / 15,003 | 10.2 / 10.2, 10.3 / 9.9 | 1.00 / 1.00, 1.06 / 1.15 | 10.3 / 10.1-10.2; 1.02 / 1.07-1.15 |
+| ALC_b deck / side | 29,940 / 12,519 | 10.2 / 10.2, 10.2 / 10.2 | 1.00 / 1.21, 1.00 / 1.10 | 10.3 / 10.1; 1.02-1.03 / 1.11-1.24 |
+| ALC_b pods | 23,922 | 10.3 / 9.8 | 1.06 / 1.29 | |
+| ALC_b under the water | 78,636 | 10.2 / 5.4 | 1.9 / 2.5 (the girth squeeze, SQUEEZE 2.5) | 1.04 / 1.15 |
+
+Above the water, every face has the stock Alicorn's density and is nearly square (anisotropy over 3 on 1.3 % of
+ALC_a's sides and under 0.2 % of everything else there). +u runs along the ship on 81-100 % of each class, as on the
+stock (85-99 %); the rest are faces looking fore or aft. Mirrored UVs are 52-58 % of the sides, where they fold to and fro
+along the length, and 73-100 % of the decks (the stock: 90-100 %). MikkTSpace handles a mirror. **Nothing is smeared by
+the map**, so hull_uv.py and model_tanacorn.py are unchanged.
+
+### 8.3 Not the sheets [V: each face sampled at 7 points, area-weighted]
+| | albedo sRGB | linear luma (std) | MREC R / G | white texels | coloured texels |
+|---|---|---|---|---|---|
+| ours ALC_a / ALC_b | 0.21 grey / 0.21 grey | 0.039 (0.016) / 0.040 (0.024) | 0.48 / 0.24, 0.56 / 0.15 | 0.2 % / 1.3 % | 0 % / 0.9 % |
+| ours sides (a / b) | 0.21 / 0.21 | 0.038 / 0.036 | 0.57 / 0.14, 0.63 / 0.09 | 0.3 % / 0 % | 0 % |
+| stock ALC_a / ALC_b | 0.24-0.29 teal-grey / 0.21 | 0.079 (0.083) / 0.041 (0.029) | 0.48 / 0.31, 0.52 / 0.22 | 19 % / 2 % | 20 % / 2 % |
+| stock sides (a) | 0.28, 0.39, 0.38 (teal) | 0.139 | 0.50 / 0.37 | 47 % | 51 % |
+
+- Our hull samples the plain dark plating, the Alicorn's own deck layout and its side strip; it wears far fewer
+  markings than the stock Alicorn does. The stock's sides sit half on the sheet's teal panels and white sheet, so the
+  stock reads lighter. **The markings aren't misplaced by the map.**
+- The one coloured patch that shows on ours is a teal hexagon on top of each pod (x -125..-103 m, 665 m2 a pod): the
+  Alicorn's own pod art, which its separate VLS lid meshes (SM_BA002_alcn_vls_L/R_0n) partly cover on the stock. It's
+  left as it is, since teal is the Alicorn's own colour (the stock's sides are half teal panels).
+- What MREC is [I]: B is 0 everywhere and A 255 (DXT1). R is 1.0 on the sheet's brown rusted plates and 0 on its light
+  grey sheet and pipes; the plain plating is R 0.60 / G 0.14. The design (Leviathan, the renders the user approved)
+  shades it as R metallic, G roughness, and so does everything below.
+
+### 8.4 The renders [V renders; I that they stand for the game's lighting]
+The same views as the screenshots (Nishita sky, sun at 38 deg, Filmic), on the export's glTF and the stock glbs:
+- `wet`: the ALC slots with their albedo taken away and roughness x 0.35 (a wet layer at full strength with a diffuse
+  multiplier of 0, as the stock instance's parameters read);
+- `dry`: base D, metallic MREC.R, roughness MREC.G and the sheet's normal map;
+- `gear`: 0.74.61, the flat livemap.
+
+Through the ID pass, the ALC surfaces against the rest:
+
+| view | wet | dry | 0.74.61 gear | after (8.6) | in game |
+|---|---|---|---|---|---|
+| over the superstructure (#2) | **0.13** | 0.66 | 0.99 | 1.48 | 0.74.62: **0.03**; 0.74.61: 0.6-0.8 |
+| high off the bow (#1) | **0.39** | 0.71 | 0.91 | 1.22 | 0.74.62: **0.14** |
+
+- Only `wet` gives 0.74.62's look: a black hull, no deck detail, mirror streaks down the pods, and the Iowa fittings
+  standing out white. `dry` (the stock Alicorn's data as the design shades it) gives a metallic grey hull with every
+  panel line, as the stock Alicorn renders the same way.
+- So under the stock instance, something takes the diffuse away from our hull and not, as far as its data says, from
+  the Alicorn's.
+
+### 8.5 The cause: the stock instance's wet layer on a mesh with no vertex colours [V parts; I the link]
+- **The instance** [V, the names in its own shader map, MI_BA002_alcn_a_Inst.uexp]: its permutation uses Albedo_map,
+  MREC_map, Normal_map, Base Normal (0), **Diffuse Mult (0)**, Flood Level (0), Puddle Diffuse Mult (1), Specular
+  Intensity, Spec_Exponent / Spec_Intensity, **wet_clouds (0), Wet_Max (0.35), Wet_Percentage (0)**, the Emissive_*
+  set, and the static switch **Wet Surface = true**. There are no AO, UV-set, tint or decal parameters, and no
+  lightmap (TBasePassPSFNoLightMapPolicy only), so the second UV channel doesn't matter.
+  - Its chain is vessels_Inst (only RefractionDepthBias) -> MI_Vehicle (Mult_Albedo true, Enable_Emissive 0) ->
+    M_Basic_Diffuse (NumCustomizedUVs 7; the functions MF_Wet_Shader, MF_WindVertexAnimation, MPC_Global).
+- **The meshes** [V, the cooked buffers: retoc to-legacy of SM_BA002_alcn, _body, _bridge]: every LOD of the stock
+  Alicorn carries a colour vertex buffer (stride 4).
+  - LOD 0 is near black (every channel <= 8) on 43 % / 50 % / 65 % of the vertices (alcn / body / bridge): all the
+    plain hull plating, as the plots show.
+  - Coloured vertices cluster on the fittings, the bridge and the nose; 11 % of body's vertices are white, on the
+    centreline ridge.
+  - Means (B, G, R): 0.11 / 0.10 / 0.20, 0.18 / 0.17 / 0.24, 0.07 / 0.10 / 0.17.
+- **Ours** has no colour attribute: export_tanacorn.py writes POSITION, NORMAL and TEXCOORD_0 only. UE then draws the
+  mesh with its null colour buffer, which is **white** on every vertex (FNullColorVertexBuffer). This is the one
+  per-mesh input the instance can read that differs from the stock Alicorn's: the UVs (8.2), the sheets (8.3) and the
+  normals (0.74.61 lit fine) don't.
+- [I] The wet layer ("Wet Surface" on, "Diffuse Mult" 0) is masked by the vertex colour: the Alicorn's black plating
+  is dry, our white hull fully wet, its albedo times 0 and its roughness pulled down. That is 8.1's measured look and
+  8.4's `wet` render.
+- [?] Not proved from the shader code. retoc's to-legacy of the shader library (ShaderArchive-Live_Chunk10-PCD3D_SM6)
+  stops on "memory allocation of 40965993440 bytes failed", so the DXIL couldn't be disassembled (dxc.exe is in
+  E:/UE_5.4/Engine/Binaries/ThirdParty/ShaderConductor/Win64).
+- fix 1 above ("risk: low") is withdrawn as the default.
+
+### 8.6 The fix (export_tanacorn.py's texture functions, ue_import.py's material choice)
+1. **The ALC slots go back on our gear instance, with a livemap made from the sheet's own MREC.** The gear material
+   draws the sheets' albedo whatever the vertex colour: 0.74.61 proved it, with ratio 0.6-0.8 in game.
+   - `alc_sheet` writes one shared set a sheet, used by the hull, the railcannon and both sub-railguns:
+     T_SV_Tani_ALC_<a|b>_D (the colour sheet as it is), _N (its normal map) and _L.
+   - _L comes from `alc_livemap`: R = MREC.R (metallic), G = max(MREC.G, ALC_ROUGH_MIN 0.25) (roughness), B = 1
+     (occlusion; MREC's B of 0 would black it out, 0.74.60).
+   - ue_import.py makes one instance a sheet, MI_SV_Tani_ALC_a / _b on MI_PP0016_x40a_Gear, shared by every part. The
+     log line is `the ALC slots: our gear instances ...`.
+   - The floor of 0.25: our sides take the sheets' glossiest plating (G 0.07-0.14, against the stock sides' 0.29-0.37),
+     which smears into a mirror along a 650 m hull. 0.25 is the design's own paint roughness (_ALCPAINT 0.26).
+   - The 4096 textures come back (fix 1 had dropped them). Shared, they are 6 instead of 0.74.61's 10: D + N + L ~45 MB
+     a sheet, ~90 MB, against 168 MB in 0.74.61.
+2. **The upper works take the design's paint.** `livemap()` sets R = PAINT_METAL 0.65 (it was 0) and
+   G = 0.26 + 0.6 x (median spec - spec), clipped 0.12..0.6 (it was 0.85 - 0.5 x spec). B is unchanged.
+   - The design's _ALCPAINT materials, the look the user approved, are metallic 0.65 / roughness 0.26 on the Alicorn
+     grey. 0.74.62's matte non-metal drew them a flat light grey beside the metallic hull.
+   - This covers the hull's Iowa slots, T16, T5 and CIWS. Our own art (TANA_*) keeps the flat livemap.
+3. `TANI_ALC=stock` still builds 0.74.62's route, for an A/B once the hull carries the Alicorn's vertex colours: COLOR_0
+   (0, 0, 0, 1) on the ALC faces in export_tanacorn.py's glTF writer, white on the rest. That is outside this lane's
+   files (write_gltf), so it isn't built.
+4. export_tanacorn.py reads Sea Power's spec maps from $TANI_BUILD/iowa/textures when the output folder has none (an
+   export into a scratch folder). build.sh's own run is unchanged.
+
+Checked: an export from build/tanicorn/model/Tanacorn_model.blend into a scratch folder.
+- The HULL, RAILCANNON, RAILGUN_L, T16, T5 and CIWS .bin files are byte-identical to 0.74.62's: the geometry is
+  unchanged.
+- check_export.py gives `CHECK ALL OK: 18 parts, 0 failures`.
+
+### 8.7 Renders (960 x 540, in that night's scratch folder `texb`, not in the repo)
+- `before_0.74.62_stockMI_wet_<view>.png` (0.74.62 as the game drew it);
+- `before_0.74.62_stockMI_dry_<view>.png` (the stock instance's data without the wet layer);
+- `before_0.74.61_gear_flatlivemap_<view>.png`;
+- `after_gearMI_MREClivemap_<view>.png` (this fix, from the new export's own PNGs);
+- `stock_alicorn_MREC_<view>.png` (SM_BA002_alcn + _body + _bridge with the same sheets and shading).
+
+The views are shot1, shot2 and shot3 (like the screenshots), side, close and deckfwd. grids/compare_<view>.png holds
+wet / after / 0.74.61 / stock side by side.
+
+### 8.8 What only the game can judge
+- That the gear route draws the sheets' detail again, with the ALC deck at about the Iowa grey's brightness or a little
+  over it (8.4's "after" column), in daylight and at the user's Texture Quality.
+- Whether the hull and upper works now read as one metallic grey, as in the design renders, and whether the sides are
+  too glossy or too matte. The knobs are ALC_ROUGH_MIN, and PAINT_METAL / PAINT_ROUGH in export_tanacorn.py.
+- Whether the vertex colour is really the wet layer's mask. A/B: COLOR_0 black on the ALC faces with `TANI_ALC=stock`.
+  If the hull then draws like the stock Alicorn, that route is the closest to the Alicorn's own look (its wet sheen
+  and hit material included).
+- How to check: scratch scripts gltfread.py / uvstat.py (texels per metre, anisotropy, mirrored share, u along the
+  length, from POSITION / TEXCOORD_0) and sheetstat.py (the sheets sampled at 7 points a face, coverage maps).
+  - smcolor.py / smcolor_map.py: the cooked colour buffer is the (4, N, 4, N) block after the position buffer
+    (12, N, 12, N) and the static mesh vertex buffer, 2 bytes of strip flags before each.
+  - render.py (the shadings above and an ID pass), ratio.py (ALC against the rest through the ID pass), patch.py (the
+    screenshots' pixels).

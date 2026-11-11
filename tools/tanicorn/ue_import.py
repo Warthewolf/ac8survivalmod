@@ -36,13 +36,19 @@ GEAR_SCALARS = ['Ctrl_All_Emissive', 'Turbine_speed', 'NormalIntencity', 'DNorma
 SCALARS = {'Ctrl_All_Emissive': 0.0, 'Turbine_speed': 0.0, 'DNormal_Strength': 0.0, 'DamegedNormal_Intencity': 0.0,
            'PlayerPlane_Damage': 0.0}
 # (2026-11-11, docs/re/TANICORN_TEXTURES.md fix 1) the Alicorn's surfaces (the design's ALC_a / ALC_b slots: 78 % of the
-# hull, the railcannon and sub-railguns) on the stock Alicorn's own instances, by path: its MREC, normal maps, wet sheen
-# and sharpness at any Texture Quality, the same streamed 4096 sheets. Stubs here at AC8's paths, never packed (build.sh
-# packs only DEST); their shader map has the Local and GPUSkin vertex factories (the hull and the skinned parts)
+# hull, the railcannon and sub-railguns) on the stock Alicorn's own instances, by path. Stubs here at AC8's paths, never
+# packed (build.sh packs only DEST); their shader map has the Local and GPUSkin vertex factories.
+# (2026-11-12, TANICORN_TEXTURES.md section 8) NOT the default any more: 0.74.62 drew every ALC surface with no diffuse at
+# all (darker than the sea, none of the sheets' detail, smooth streaked reflections: the stock instance's wet layer,
+# "Wet Surface" on with "Diffuse Mult" 0, at full strength); the stock Alicorn's meshes carry vertex colours (black on
+# its plating) and ours none (UE draws them white). TANI_ALC=stock still builds this route, for an A/B once the hull
+# carries the Alicorn's vertex colours; the default (gear) puts the ALC slots on our gear instance with the sheets'
+# own livemaps (export_tanacorn.py alc_sheet: T_SV_Tani_ALC_<a|b>_D / _N / _L, one set for every part)
 ALC_MI = {'ALC_a': '/Game/OnlineMode/Vehicles/Boss/BA002_alcn/Materials/MI_BA002_alcn_a_Inst',
           'ALC_b': '/Game/OnlineMode/Vehicles/Boss/BA002_alcn/Materials/MI_BA002_alcn_b_Inst'}
 M_BASIC_DIFFUSE = '/Game/OnlineMode/Materials/Core/M_Basic_Diffuse'
 ALC_TEX = ['Albedo_map', 'MREC_map', 'Normal_map']
+ALC_ROUTE = os.environ.get('TANI_ALC', 'gear')          # 'gear' (default) or 'stock'
 # (fix 4) textures this size or smaller are never streamed: the game's Texture Quality mip bias (2 at Medium: 4096 -> 1024,
 # 1024 -> 256) skips textures that aren't streamed; ~6 MB of VRAM while the ship is loaded
 NEVER_STREAM_PX = 1024
@@ -218,7 +224,8 @@ def soft(fn):
 
 
 TEX = {}                                # textures imported in this run, by name (the side VLS blocks share one set,
-                                        # the two sub-railguns another)
+                                        # the two sub-railguns another, every part the Alicorn's sheets)
+SHARED = {}                             # instances every part shares, by name (the ALC slots' MI_SV_Tani_ALC_a / _b)
 DEPLOY = ('railcannon', 'railgun')      # export_tanacorn.py deploying(): a rig and its Deploy
 
 
@@ -230,8 +237,10 @@ def tex_once(src, name, *args, **kw):
 
 def materials(name, info, src, gear, dn, alc=None):
     """an instance a slot: its base colour, its own normal map where the export has one (the Alicorn's sheets).
-    (2026-11-11) A slot of the design's ALC_a / ALC_b takes the stock Alicorn's instance (alc, fix 1); an Iowa slot its own
-    livemap (the export's per-slot `livemap` from Sea Power's spec map: fix 3), else the flat one"""
+    (2026-11-11) An Iowa slot its own livemap (the export's per-slot `livemap` from Sea Power's spec map: fix 3), else the
+    flat one. (2026-11-12) A slot of the design's ALC_a / ALC_b: one gear instance for every part, MI_SV_Tani_ALC_<a|b>,
+    on the shared sheets and their MREC livemap (TANICORN_TEXTURES.md section 8); with TANI_ALC=stock (alc given) the
+    stock Alicorn's instance instead (fix 1)"""
     n = tex_once(src, info.get('flat_normal', f'T_SV_{name}_N'), False, TCS.TC_NORMALMAP)
     lm = tex_once(src, info.get('livemap', f'T_SV_{name}_L'), False, TCS.TC_VECTOR_DISPLACEMENTMAP, flat=True)
     mats = []
@@ -240,11 +249,22 @@ def materials(name, info, src, gear, dn, alc=None):
             mats.append(alc[s['material']])
             say(f'  {name} slot {s["slot"]} ({s["material"]}): the stock {alc[s["material"]].get_name()}')
             continue
+        shared = s['material'] in ALC_MI
+        mi_name = f'MI_SV_Tani_{s["material"]}' if shared else f'MI_SV_{name}_{s["slot"]}'
+        if shared and mi_name in SHARED:
+            mats.append(SHARED[mi_name])
+            say(f'  {name} slot {s["slot"]} ({s["material"]}): {mi_name}')
+            continue
         c = tex_once(src, s['basecolor'], True, TCS.TC_DEFAULT)
         sn = tex_once(src, s['normal'], False, TCS.TC_NORMALMAP) if s.get('normal') else n
         sl = tex_once(src, s['livemap'], False, TCS.TC_MASKS) if s.get('livemap') else lm
-        mats.append(instance(f'MI_SV_{name}_{s["slot"]}', gear, [('Basecolor', c), ('Normalmap', sn), ('Livemap', sl),
-                                                                   ('Detail_Normal', dn), ('Blend_Dameged_Normalmap', dn)]))
+        if shared and not s.get('livemap'):
+            say(f'  WARNING {name} slot {s["slot"]} ({s["material"]}): no livemap of its own in the export (the flat '
+                f'one instead): re-export with export_tanacorn.py alc_sheet')
+        mats.append(instance(mi_name, gear, [('Basecolor', c), ('Normalmap', sn), ('Livemap', sl),
+                                             ('Detail_Normal', dn), ('Blend_Dameged_Normalmap', dn)]))
+        if shared:
+            SHARED[mi_name] = mats[-1]
         if s.get('cutout'):
             say(f'  NOTE MI_SV_{name}_{s["slot"]}: its source has a cut-out ({s["cutout"]}: a lattice); AC8\'s gear '
                 f'material has no opacity, so it draws solid')
@@ -365,8 +385,12 @@ def main():
         EAL.delete_directory(DEST)
     gear = stub_instance(GEAR, stub_material(MP_GEAR, GEAR_TEX, GEAR_SCALARS))
     dn = unreal.load_asset(DEFAULT_NORMAL)
-    basic = stub_material(M_BASIC_DIFFUSE, ALC_TEX)
-    alc = {k: stub_instance(path, basic) for k, path in ALC_MI.items()}     # (fix 1: the stock Alicorn's instances)
+    alc = None
+    if ALC_ROUTE == 'stock':                                                # (fix 1: the stock Alicorn's instances)
+        basic = stub_material(M_BASIC_DIFFUSE, ALC_TEX)
+        alc = {k: stub_instance(path, basic) for k, path in ALC_MI.items()}
+    say('the ALC slots: ' + ('the stock Alicorn instances (TANI_ALC=stock)' if alc else
+                             'our gear instances MI_SV_Tani_ALC_a / _b with the sheets\' MREC livemaps'))
     only = [x for x in os.environ.get('TANI_PARTS', '').split(',') if x]
     for p in parts:
         if only and p not in only:

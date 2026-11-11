@@ -260,6 +260,13 @@ def grey(px):
 
 
 IOWA_TEX = os.path.join(OUT, "iowa", "textures")        # (Sea Power's sheets: each <name>_tx.jpg's <name>_spec.jpg)
+if not os.path.isdir(IOWA_TEX) and os.environ.get("TANI_BUILD"):  # (an export into a scratch folder: the build's own copy)
+    IOWA_TEX = os.path.join(os.environ["TANI_BUILD"], "iowa", "textures")
+# (2026-11-12, docs/re/TANICORN_TEXTURES.md section 8) the paint the design gives every Iowa surface (its _ALCPAINT
+# materials: metallic 0.65, roughness 0.26, the Alicorn grey) and the floor under the Alicorn sheets' own roughness
+PAINT_METAL, PAINT_ROUGH = 0.65, 0.26
+ALC_ROUGH_MIN = 0.25
+ALC_WRITTEN = set()                                      # (alc_sheet: the shared Alicorn sheets written in this run)
 
 
 def spec_of(img):
@@ -277,47 +284,74 @@ def spec_of(img):
 
 
 def livemap(px, sp):
-    """the slot's own livemap for AC8's gear material (metallic, roughness, occlusion): R 0 (metallic, as the Ford's),
-    G = 0.85 - 0.5 x spec (Sea Power's spec read as 0..1 grey), B = occlusion clip(sqrt(lum / median), 0.4, 1.0) from
-    the colour sheet's own light and shade; the spec resampled to the sheet's size (nearest)"""
+    """the slot's own livemap for AC8's gear material (metallic, roughness, occlusion), the design's Alicorn paint
+    (2026-11-12): R = PAINT_METAL, G = roughness about PAINT_ROUGH by Sea Power's spec (shinier where its spec is
+    brighter than its median: 0.26 + 0.6 x (median - spec), 0.12..0.6), B = occlusion clip(sqrt(lum / median), 0.4, 1.0)
+    from the colour sheet's own light and shade; the spec resampled to the sheet's size (nearest).
+    (0.74.62 had R 0 and G 0.85 - 0.5 x spec, matte non-metal: the upper works drew a flat light grey beside the
+    metallic hull, where the design, the look the user approved, paints them metallic 0.65 / roughness 0.26)"""
     h, w = px.shape[:2]
     if sp.shape[:2] != (h, w):
         sp = sp[(np.arange(h) * sp.shape[0] // h)[:, None], (np.arange(w) * sp.shape[1] // w)[None, :]]
     s = sp[:, :, :3].mean(axis=2)
     lum = lum_of(px)
     out = np.zeros((h, w, 4), np.float32)
-    out[:, :, 1] = np.clip(0.85 - 0.5 * s, 0.05, 1.0)
+    out[:, :, 0] = PAINT_METAL
+    out[:, :, 1] = np.clip(PAINT_ROUGH + 0.6 * (float(np.median(s)) - s), 0.12, 0.6)
     out[:, :, 2] = np.clip(np.sqrt(lum / max(float(np.median(lum)), 1e-4)), 0.4, 1.0)
     out[:, :, 3] = 1.0
     return out
 
 
+def alc_livemap(mrec):
+    """(2026-11-12, docs/re/TANICORN_TEXTURES.md section 8) an Alicorn sheet's livemap for our gear instance, from its
+    own MREC as the design shades it (MREC R -> metallic, G -> roughness): R = MREC.R, G = MREC.G floored at
+    ALC_ROUGH_MIN (the hull's sides take the sheets' glossiest plating, 0.07-0.14: a mirror along a 650 m hull),
+    B = occlusion 1 (MREC's B is 0 everywhere: as occlusion it blacks the slot out, 0.74.60)"""
+    out = np.ones(mrec.shape[:2] + (4,), np.float32)
+    out[:, :, 0] = mrec[:, :, 0]
+    out[:, :, 1] = np.maximum(mrec[:, :, 1], ALC_ROUGH_MIN)
+    return out
+
+
+def alc_sheet(mat, m, folder):
+    """(2026-11-12) an Alicorn sheet's three textures, one set for every part that wears it (the hull, the railcannon,
+    the sub-railguns: ue_import.py imports each name once): T_SV_Tani_ALC_<a|b>_D (the colour sheet as it is), _N (its
+    normal map), _L (alc_livemap of its MREC); written into each part's folder"""
+    stem = "T_SV_Tani_" + m
+    for sfx, sock, conv in (("_D", "Base Color", None), ("_N", "Normal", None), ("_L", "Metallic", alc_livemap)):
+        img = base_image(mat, sock)
+        path = os.path.join(folder, stem + sfx + ".png")
+        if img and path not in ALC_WRITTEN:                      # (once a folder in this run; a stale file is replaced)
+            ALC_WRITTEN.add(path)
+            px = pixels(img)
+            save_png(conv(px) if conv else px, path)
+    return (stem + "_D", stem + "_N" if base_image(mat, "Normal") else None,
+            stem + "_L" if base_image(mat, "Metallic") else None)
+
+
 def slots_for(part, folder, mats):
     """a material slot per material in use: its base colour written as T_SV_Tani_<part>_<n>_D (one file per source
-    image), the Alicorn's sheets with their normal maps. `part` is the textures' owner: the eight side VLS blocks
-    share one set (VLSS)"""
+    image), the Alicorn's sheets as one shared set with their normal maps and livemaps (alc_sheet). `part` is the
+    textures' owner: the eight side VLS blocks share one set (VLSS)"""
     slots, done = [], {}
     for k, m in enumerate(mats):
         mat = bpy.data.materials.get(m)
         img = base_image(mat)
         own = m.startswith(("TANA_", "ALC_"))
         key = (img.name if img else None, own)
+        if key not in done and m.startswith("ALC_") and img:
+            done[key] = alc_sheet(mat, m, folder)
         if key not in done:
             name = "T_SV_Tani_%s_%d_D" % (part, len(done))
             px = pixels(img) if img else np.full((4, 4, 4), 0.5, np.float32)
             save_png(px if own else grey(px), os.path.join(folder, name + ".png"))
-            nrm = None
-            if m.startswith("ALC_"):
-                ni = base_image(mat, "Normal")
-                if ni:
-                    nrm = "T_SV_Tani_%s_%d_N" % (part, len(done))
-                    save_png(pixels(ni), os.path.join(folder, nrm + ".png"))
             liv = None
             sp = None if own or not img else spec_of(img)
             if sp is not None:
                 liv = "T_SV_Tani_%s_%d_L" % (part, len(done))
                 save_png(livemap(px, sp), os.path.join(folder, liv + ".png"))
-            done[key] = (name, nrm, liv)
+            done[key] = (name, None, liv)
         cut = base_image(mat, "Alpha")
         slots.append({"slot": k, "material": m, "source": img.name if img else None, "basecolor": done[key][0],
                       "normal": done[key][1], **({"livemap": done[key][2]} if done[key][2] else {}),
