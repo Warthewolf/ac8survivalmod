@@ -64,15 +64,16 @@ STYLES = {
     # the user's clip (2026-11-11, an 8 s screen recording: "Watch this frame by frame. I want it to look exactly like
     # this"), with their correction before it: "have the front right and left sides, along with the front section of the
     # roof lift up". As its frames show it: each barrel's shell is four quarters, top, bottom, port and starboard, the
-    # seams an X on the muzzle (frames 11-41); the side quarters part first, then the top and bottom (41-57), and the
-    # quarters, cut in the middle, slide back over their rear halves round a smooth glowing rod as long as the opened
-    # staves (59-65), angled a little out. The side walls split on a stepped seam, high aft and running down forward
-    # (176): the lower block slides straight out, the upper one lifts, the rear corner swings open in two doors on its
-    # edges, a big drum inside (177-198); the front sides and the roof's front lift up (the user's words).
-    10: {"name": "The clip: quarters part and slide back along the glowing rod; the side walls split, lift and slide; "
-                 "the rear corners open",
+    # seams an X on the muzzle (frames 11-41); the quarters step out together, the seams flashing yellow (47-50), and,
+    # cut in the middle, slide back over their rear halves in two steps, angling up (57-59), round a khaki rod that
+    # then pushes out and lights (61-70). The side walls split on a stepped seam, high aft and running down forward
+    # (171-176): the upper panel lifts straight up, the lower one slides forward, the rear corners fold out into ramps
+    # with their upper halves standing back up, the roof over the rear rises (177-183), a big drum inside; the roof's
+    # front halves rise and tip up like visors (38-44): "the front ... sides, along with the front section of the roof
+    # lift up".
+    10: {"name": "The clip: quarters slide back round the rod; panels lift, rear folds out, roof front tips up",
          "barrel": {"split": "Q4", "mid": True, "clip": True, "shell_t": 0.3, "bore": 0.58, "rim": True, "edges": True},
-         "armour": "clip", "interior": True, "roof_static": (-99.0, 3.4), "rings_glow": True, "rings_to": 7.6,
+         "armour": "clip", "interior": True, "roof_static": (-8.0, 3.4), "rings_glow": True, "rings_to": 7.6,
          "core": (0.24, 23.8, 2.0), "struts": False},
 }
 DEFAULT_STYLE = 10
@@ -525,35 +526,39 @@ def armour_plan(style, S):
                          [("T", out(c) * 2.6 + Vector((1.0, 0, 0.2)), (0.05, 0.4)),
                           ("R", Vector((0, 0, 1)), bottom(c, WHOLE), -sg * 12.0, (0.12, 0.45))]))
     elif kind == "clip":
-        # the aft side wall's seam as the clip's frame 176 draws it (along 0 aft .. 1 forward, up 0 .. 1): level at half
-        # height from the rear corner to 0.53 along, then down on a slant to the foot at 0.83
-        lower = [(0, 0), (0.83, 0), (0.53, 0.5), (0, 0.5)]
-        upper = [(0, 0.5), (0.53, 0.5), (0.83, 0), (1, 0), (1, 1), (0, 1)]
+        # as the clip's side shot draws it (frames 171-183, read by the analysis): the aft side wall's seam level at
+        # half height from the rear corner to 0.35 along, sloping down to 0.71, then straight down to the foot at 0.73:
+        # above it an L-shaped panel (its forward tab full height) lifts straight up 0.42 H, no tilt; below it the
+        # lower panel slides forward 0.42 H along the foot (once the tab is clear) and 0.1 H out
+        H = Z1 - Z0
+        upper = [(0, 0.51), (0.35, 0.51), (0.71, 0.39), (0.73, 0), (1, 0), (1, 1), (0, 1)]
+        lower = [(0, 0), (0.73, 0), (0.71, 0.39), (0.35, 0.51), (0, 0.51)]
         for s, sg in (("L", 1.0), ("R", -1.0)):
             flip = (lambda P: P) if s == "L" else (lambda P: [(1 - a, b) for a, b in reversed(P)])   # (starboard walls
-            A, F, C = "aside_" + s, "fside_" + s, "chamfer_" + s                               # run front to back)
+            A = "aside_" + s                                                                   # run front to back)
             O, I, u, v, n = S.wall(A)
-            piv = Shell.at(O, 0.5, 0.5)
-            # the upper block lifts clear of the roof and leans out a little (177-181); the lower block slides
-            # straight out and a little forward (178: its rear end past the rear corner's seam)
-            plan.append(("Armor_%s_up" % A, "wall", A, flip(upper),
-                         [("T", out(A) * 0.7 + Vector((0, 0, 1.5)), (0.06, 0.4)), ("R", u, piv, -sg * 6.0, (0.12, 0.44))]))
+            fwd = u if s == "L" else -u
+            plan.append(("Armor_%s_up" % A, "wall", A, flip(upper), [("T", Vector((0, 0, 0.42 * H)), (0.03, 0.28))]))
             plan.append(("Armor_%s_low" % A, "wall", A, flip(lower),
-                         [("T", out(A) * 2.7 + Vector((0.5, 0, 0)), (0.0, 0.36))]))
-            # the rear corner opens in two doors on their aft / inboard edges, lifting a little (177-181)
-            for name, ang, push in (("rear_%s3" % s, 62.0, 0.8), ("rear_%s2" % s, 30.0, 1.2)):
-                Ow = S.wall(name)[0]
-                hinge = (Ow[0] + Ow[3]) / 2.0 if s == "L" else (Ow[1] + Ow[2]) / 2.0
-                plan.append(("Armor_" + name, "wall", name, None,
-                             [("T", out(name) * push + Vector((0, 0, 0.35)), (0.0, 0.3)),
-                              ("R", Vector((0, 0, 1)), hinge, sg * ang, (0.05, 0.4))]))
-            Of, If, uf, vf, nf = S.wall(F)
-            plan.append(("Armor_" + F, "wall", F, None,
-                         [("T", Vector((0, 0, 2.1)) + out(F) * 0.6, (0.08, 0.45)),
-                          ("R", uf, (Of[0] + Of[1]) / 2.0, -sg * 10.0, (0.12, 0.47))]))
-            plan.append(("Armor_" + C, "wall", C, None, [("T", Vector((0.3, 0, 2.1)) + out(C) * 0.5, (0.08, 0.45))]))
-        plan.append(("Armor_roof_front", "roof", (3.4, 99.0, 0), None,
-                     [("T", Vector((0.2, 0, 2.3)), (0.1, 0.47)), ("R", Vector((0, 1, 0)), Vector((3.4, S.y0, Z1)), -6.0, (0.15, 0.5))]))
+                         [("T", fwd * (0.42 * H) + n * 0.6, (0.2, 0.42))]))
+            # the rear corner: each of its two facets tips out on its foot (62 deg: a ramp) and folds at 0.4 of its
+            # height, its upper part standing back up, leaning in toward the house (the clip's leaves, 15 / 25 deg)
+            for name, lean in (("rear_%s3" % s, 15.0), ("rear_%s2" % s, 25.0)):
+                Ow, Iw, uw, vw, nw = S.wall(name)
+                foot, fold = (Ow[0] + Ow[1]) / 2.0, Shell.at(Ow, 0.5, 0.4)
+                tip = ("R", uw, foot, 62.0, (0.04, 0.32))
+                plan.append(("Armor_%s_low" % name, "wall", name, ((0, 0), (1, 0), (1, 0.4), (0, 0.4)), [tip]))
+                plan.append(("Armor_%s_up" % name, "wall", name, ((0, 0.4), (1, 0.4), (1, 1), (0, 1)),
+                             [tip, ("R", uw, fold, -(62.0 + lean), (0.08, 0.36))]))
+        # the roof over the rear corner rises straight up 0.27 H, a canopy (frames 177-183)
+        plan.append(("Armor_roof_rear", "roof", (-99.0, -8.0, 0), None, [("T", Vector((0, 0, 0.27 * H)), (0.04, 0.3))]))
+        # the roof's front, over the front corners, in two halves that rise and tip up like visors on their rear
+        # edges, a little out (the superfiring turret, frames 38-44): "the front right and left sides, along with
+        # the front section of the roof lift up"; the front corners' walls stay (the side shot: 179-198)
+        for s, sg in (("L", 1.0), ("R", -1.0)):
+            plan.append(("Armor_roof_front_" + s, "roof", (3.4, 99.0, sg), None,
+                         [("T", Vector((0, sg * 0.35, 1.6)), (0.06, 0.34)),
+                          ("R", Vector((0, 1, 0)), Vector((3.4, S.y0 + sg * 5.0, Z1)), -18.0, (0.12, 0.42))]))
     elif kind == "clamshell":
         for s, sg in (("L", 1.0), ("R", -1.0)):
             piv = Vector((0.0, S.y0 + sg * 8.9, Z1))
@@ -667,59 +672,74 @@ def shell_piece_part(seg, cut=X_MID, shell_t=SHELL_T, bore=0.42, rim=False, edge
     return p
 
 
-def interior(h, S):
-    """style 9: the gun house's inside, seen where its quarters blow out: a hollow behind each aft and forward side
-    wall (cut into the core) fitted with a grated floor, frames and pipes along its inner wall, a shell hoist and
-    racks of shells aft, cabinets forward; the outer guns' breeches (on the guns) show in it"""
+def interior(h, S, moves=None):
+    """styles 9, 10: the gun house's inside, seen where its armour opens: a hollow cut into the core behind each aft
+    side wall (and forward one) that moves, a doorway into it through a rear corner that opens; a grated floor, frames
+    and pipes along its inner wall, a shell hoist, racks of shells, the training gear's big wheel (the clip's drum) aft,
+    cabinets forward; the outer guns' breeches (on the guns) show in it. Nothing in it meets another face flat on (the
+    union breaks on coplanar contact): what stands on something sinks a little into it; nothing pokes past the core"""
+    moves = set(NAMES) if moves is None else moves
     y0 = S.y0
-    zf, zt = Z0 + 0.15, Z1 - 0.75
-    for sg in (1.0, -1.0):
+    zf, zt = Z0 + 0.3, Z1 - 0.75                              # (the floor clear of the skirt's top, Z0 + 0.28)
+    for sg, s in ((1.0, "L"), (-1.0, "R")):
         Y = lambda v: y0 + sg * v
         lo_hi = lambda a, b: (min(Y(a), Y(b)), max(Y(a), Y(b)))
-        for x0, x1 in ((-13.9, 2.9), (3.7, 9.6)):
+        Ia, If = S.wall("aside_" + s)[1], S.wall("fside_" + s)[1]
+
+        def core(x):                                          # |y| of the side walls' core at x, from y0
+            I = Ia if x < min(If[0].x, If[1].x) else If          # (the aft wall, or the forward one past their corner)
+            t = (x - I[0].x) / (I[1].x - I[0].x)
+            return abs(I[0].lerp(I[1], t).y - y0)
+        bays = ([(-13.6, 2.9)] if "aside_" + s in moves else []) + ([(3.7, 9.6)] if "fside_" + s in moves else [])
+        if "rear_%s2" % s in moves:                           # the doorway through the rear corner
+            a, b = lo_hi(3.6, 9.0)
+            abox(h, (-15.6, a, zf), (-13.4, b, zt), M_DARK, cut=True)
+        for x0, x1 in bays:
             a, b = lo_hi(3.6, 15.0)
             abox(h, (x0, a, zf), (x1, b, zt), M_DARK, cut=True)
-            a, b = lo_hi(3.65, 12.5)
-            abox(h, (x0 + 0.05, a, zf - 0.02), (x1 - 0.05, b, zf + 0.1), M_DARK, post=True)          # the floor
+            reach = lambda x: core(x) - 0.1
+            h.prism([(x0 - 0.05, Y(3.55)), (x1 + 0.05, Y(3.55)), (x1 + 0.05, Y(reach(x1))), (x0 - 0.05, Y(reach(x0)))][::int(sg)],
+                    "Z", zf - 0.05, zf + 0.1, M_DARK, post=True)                                   # the floor
             x = x0 + 0.4
             while x < x1 - 0.3:                                                                   # its grating
-                a, b = lo_hi(3.7, 11.0)
-                abox(h, (x - 0.05, a, zf + 0.1), (x + 0.05, b, zf + 0.18), M_PAINT, post=True)
+                a, b = lo_hi(3.7, reach(x) - 0.15)
+                abox(h, (x - 0.05, a, zf + 0.08), (x + 0.05, b, zf + 0.18), M_PAINT, post=True)
                 x += 0.6
             x = x0 + 0.6
             while x < x1 - 0.3:                                                                   # frames
-                a, b = lo_hi(3.6, 3.95)
-                abox(h, (x - 0.14, a, zf), (x + 0.14, b, zt), M_PAINT, post=True)
+                a, b = lo_hi(3.5, 3.9)
+                abox(h, (x - 0.14, a, zf - 0.05), (x + 0.14, b, zt + 0.05), M_PAINT, post=True)
                 x += 2.4
-            for k, (v, z, r) in enumerate(((4.1, 1.6, 0.14), (4.2, 2.3, 0.1), (4.15, 4.5, 0.16), (4.3, 5.1, 0.1))):
-                cyl(h, r, r, x1 - x0 - 0.2, Vector(((x0 + x1) / 2.0, Y(v), z)), (1, 0, 0), M_DARK, 12, post=True)
-        # aft: the shell hoist and two racks of shells by the outer gun
-        cyl(h, 0.95, 0.95, zt - zf, Vector((-10.4, Y(6.6), (zf + zt) / 2.0)), (0, 0, 1), M_PAINT, 24, post=True)
-        for z in (zf + 0.9, zt - 1.0):
-            cyl(h, 1.05, 1.05, 0.18, Vector((-10.4, Y(6.6), z)), (0, 0, 1), M_DARK, 24, post=True)
-        for row, z in enumerate((1.25, 1.85)):
-            for k in range(6):
-                c = Vector((-13.2 + 0.62 * k, Y(9.0), z))
-                cyl(h, 0.26, 0.26, 1.5, c, (0, sg, 0), M_PAINT, 12, post=True)
-                cyl(h, 0.26, 0.02, 0.55, c + Vector((0, sg * 1.02, 0)), (0, sg, 0), M_DARK, 12, post=True)
-        a, b = lo_hi(8.2, 8.4)
-        abox(h, (-13.6, a, 0.95), (-9.5, b, 2.25), M_DARK, post=True)
-        a, b = lo_hi(5.2, 5.6)
-        abox(h, (-10.2, a, 2.4), (-6.6, b, 2.7), M_PAINT, post=True)                            # the rammer's rail
-        # the training gear's big wheel by the outer gun (the clip's round drum), its teeth, its hub
-        gc = Vector((-2.6, Y(8.0), 2.5))
-        cyl(h, 1.65, 1.65, 0.45, gc, (0, 1, 0), M_PAINT, 40, post=True)
-        cyl(h, 0.55, 0.55, 0.8, gc, (0, 1, 0), M_DARK, 20, post=True)
-        for k in range(30):
-            a = 2 * math.pi * k / 30
-            r = Vector((math.cos(a), 0, math.sin(a)))
-            box(h, gc + r * 1.72, (r, XYZ[1], XYZ[1].cross(r)), (0.18, 0.4, 0.16), M_DARK, post=True)
-        # forward: cabinets along the inner wall
-        for x in (4.6, 6.0, 7.4, 8.8):
-            a, b = lo_hi(4.0, 4.75)
-            abox(h, (x - 0.55, a, zf + 0.1), (x + 0.55, b, zf + 2.3), M_PAINT, post=True)
-            a, b = lo_hi(4.74, 4.8)
-            abox(h, (x - 0.45, a, zf + 0.3), (x + 0.45, b, zf + 2.1), M_DARK, post=True)
+            for k, (v, z, r) in enumerate(((4.1, 1.75, 0.14), (4.2, 2.45, 0.1), (4.15, 4.5, 0.16), (4.3, 5.1, 0.1))):
+                cyl(h, r, r, x1 - x0 + 0.1, Vector(((x0 + x1) / 2.0, Y(v), z)), (1, 0, 0), M_DARK, 12, post=True)
+            if x0 > 0:                                        # forward: cabinets along the inner wall, past the pipes
+                for x in (4.6, 6.0, 7.4, 8.8):
+                    a, b = lo_hi(4.5, 5.25)
+                    abox(h, (x - 0.55, a, zf + 0.05), (x + 0.55, b, zf + 2.3), M_PAINT, post=True)
+                    a, b = lo_hi(5.24, 5.3)
+                    abox(h, (x - 0.45, a, zf + 0.3), (x + 0.45, b, zf + 2.1), M_DARK, post=True)
+                continue
+            # aft: the shell hoist, two racks of shells (inside the core's line), the rammer's rail
+            cyl(h, 0.95, 0.95, zt - zf + 0.1, Vector((-9.6, Y(6.6), (zf + zt) / 2.0)), (0, 0, 1), M_PAINT, 24, post=True)
+            for z in (zf + 0.9, zt - 1.0):
+                cyl(h, 1.05, 1.05, 0.18, Vector((-9.6, Y(6.6), z)), (0, 0, 1), M_DARK, 24, post=True)
+            for row, z in enumerate((1.4, 2.0)):
+                for k in range(4):
+                    c = Vector((-13.4 + 0.6 * k, Y(7.6), z))
+                    cyl(h, 0.26, 0.26, 1.2, c, (0, sg, 0), M_PAINT, 12, post=True)
+                    cyl(h, 0.26, 0.02, 0.45, c + Vector((0, sg * 0.8, 0)), (0, sg, 0), M_DARK, 12, post=True)
+            a, b = lo_hi(8.3, 8.5)
+            abox(h, (-13.55, a, zf + 0.05), (-11.0, b, 2.4), M_DARK, post=True)
+            a, b = lo_hi(5.2, 5.6)
+            abox(h, (-10.2, a, 2.4), (-6.6, b, 2.7), M_PAINT, post=True)
+            # the training gear's big wheel by the outer gun (the clip's round drum), its teeth, its hub
+            gc = Vector((-2.6, Y(8.0), 2.95))
+            cyl(h, 1.65, 1.65, 0.45, gc, (0, 1, 0), M_PAINT, 40, post=True)
+            cyl(h, 0.55, 0.55, 0.8, gc, (0, 1, 0), M_DARK, 20, post=True)
+            for k in range(30):
+                a = 2 * math.pi * k / 30
+                r = Vector((math.cos(a), 0, math.sin(a)))
+                box(h, gc + r * 1.72, (r, XYZ[1], XYZ[1].cross(r)), (0.18, 0.4, 0.16), M_DARK, post=True)
 
 
 def piece_part(n_split):
@@ -845,7 +865,7 @@ def armour_piece(S, st, bone, k, nm, region, ops):
         J = Vector((cx, S.y0 + side * 4.5, Z1))
         if tr.length > 0.3:
             L = tr.length + 1.2
-            for dy in (-3.5, 3.5):
+            for dy in ((-3.5, 3.5) if not side else (side * 2.5, side * 6.5)):
                 cyl(p, 0.22, 0.22, L, Vector((cx, S.y0 + dy, S.zc + 0.1)) - tr.normalized() * (L / 2.0), tr, M_PAINT, 16)
     return p, J
 
@@ -886,6 +906,10 @@ def build(coll, log=print, style=None):
         while x < 9.6:
             abox(h, (x - 0.08, S.y0 - 6.0, S.zc - 0.02), (x + 0.08, S.y0 + 6.0, S.zc + 0.3), M_PAINT, post=True)
             x += 0.6
+        x = lo - 0.5
+        while x > -13.8:                                      # (and aft, under a rear block that rises)
+            abox(h, (x - 0.08, S.y0 - 5.0, S.zc - 0.02), (x + 0.08, S.y0 + 5.0, S.zc + 0.3), M_PAINT, post=True)
+            x -= 0.6
     elif not roof_moves:
         roof_slab(h, S)
         roof_details(h, S)
@@ -902,7 +926,7 @@ def build(coll, log=print, style=None):
     gun_wells(h, S)
     face_lights(h, S)
     if st.get("interior"):
-        interior(h, S)
+        interior(h, S, moves)
     house = solid("house", h, 2048)
     armour = []
     for bone, k, nm, region, ops in plan:

@@ -258,7 +258,7 @@ if os.environ.get("TANA_CLIP_CAM"):                         # (x y z, look x y z
     _c = [float(v) for v in os.environ["TANA_CLIP_CAM"].split(",")]
     CLIP_FRONT_CAM = (tuple(_c[0:3]), tuple(_c[3:6]), _c[6])
 CLIP_SIDE = (0.0, 0.03, 0.12, 0.2, 0.45, 1.0)
-CLIP_SIDE_CAM = ((-12.0, -23.0, 3.6), (-1.0, 0.0, 4.2), 18)
+CLIP_SIDE_CAM = ((-20.0, -24.0, 3.0), (-4.0, 0.0, 4.4), 28)
 if os.environ.get("TANA_CLIP_SIDE_CAM"):
     _c = [float(v) for v in os.environ["TANA_CLIP_SIDE_CAM"].split(",")]
     CLIP_SIDE_CAM = (tuple(_c[0:3]), tuple(_c[3:6]), _c[6])
@@ -301,8 +301,9 @@ render("style%d_3_side" % STYLE)
 if firemode.STYLES[STYLE].get("interior"):                 # into the gun house, past the blown-out back left quarter
     aim(C + Vector((-21, 17, 3.2)), C + Vector((-9, 7.0, 2.4)), 22)
     render("style%d_5_inside" % STYLE)
-    aim(C + Vector((19, 16, 3.0)), C + Vector((6.5, 6.5, 2.3)), 22)      # and the front left
-    render("style%d_6_inside_front" % STYLE)
+    if firemode.STYLES[STYLE]["armour"] != "clip":          # and the front left (style 10's front walls stay)
+        aim(C + Vector((19, 16, 3.0)), C + Vector((6.5, 6.5, 2.3)), 22)
+        render("style%d_6_inside_front" % STYLE)
 if "clip" in argv[2:]:                                     # the user's clip's two shots, for a side-by-side with it
     night_world()
     for k, (t, fire) in enumerate(CLIP_FRONT):             # low ahead and to starboard, the guns lifted, the sky behind
