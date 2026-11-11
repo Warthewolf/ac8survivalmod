@@ -518,10 +518,12 @@ end
 -- (2026-11-12) HUD.hold(on, why[, opts]): Survival's HUD off while anything holds it, back when the last one lets go (the
 -- user, 2026-11-11: "look into turning the HUD off during the cinematic too": THE TANACORN's rise and its camera preview,
 -- sv_cine.lua). A holder is its why: holding twice is one hold and letting go twice is nothing, so two holders can't undo
--- each other. opts.callouts: the callout banner still shows (the preview's "KEY n OF m"): while every holder allows it,
--- only the rest of it is off (the canvas's other widgets at render opacity 0, each one's own put back after). A hold
--- belongs to the run it was made in (D): a new run drops it. The run's summary (LB.show) is never held, and callouts
--- wait while it's all off. -> whether this made a new hold (on) or let one go (off). Logged: `hud: held (<why>)`,
+-- each other. opts.callouts: the callout banner and the subtitles still show (the preview's "KEY n OF m", the rise's
+-- own callout and radio): while every holder allows it, only the rest of it is off (the canvas's other widgets at render
+-- opacity 0, each one's own put back after). A hold belongs to the run it was made in (D): a new run drops it. The run's
+-- summary (LB.show) is never held, and callouts and subtitles wait while it's all off. While sv_cine.lua's route showhud
+-- has the game's bShowHUD off (CINE.GH.show), that isn't taken for the game's HUD off (its hold says what is). -> whether
+-- this made a new hold (on) or let one go (off). Logged: `hud: held (<why>)`,
 -- `hud: <why> let go`, `hud: hidden (held: <whys>)`, `hud: <why>'s hold dropped (its run is over)`.
 HUD = { holds = {} }
 function HUD.hold(on, why, opts)
@@ -551,13 +553,17 @@ function HUD.state()
     table.sort(names)
     return all and "all" or "rows", table.concat(names, ", ")
 end
-local function holdRows(on)                      -- (a "rows" hold: everything but the banner at render opacity 0)
+local function holdRows(on)                      -- (a "rows" hold: all but the banner and subtitles at render opacity 0)
     if (H.rowsHeld == true) == on then return end
     H.rowsHeld = on
     H.rowsOp = H.rowsOp or {}
     local c, n = H.canvas, 0
     pcall(function() n = c:GetChildrenCount() end)
-    local keep = { [addrOf(H.banner) or "banner"] = true, [addrOf(H.sub) or "sub"] = true }
+    local keep = {}
+    for _, w in ipairs({ H.banner, H.sub, H.subPanel, H.subWho, H.subText }) do   -- (the callouts and sv_subs.lua's strip)
+        local a = addrOf(w)
+        if a then keep[a] = true end
+    end
     for i = 0, n - 1 do
         pcall(function()
             local w = c:GetChildAt(i)
@@ -594,6 +600,8 @@ function hudTick(now, paused, pc)
     pcall(function() pawnOk = valid(pc.Pawn) end)
     local gameHud = true
     pcall(function() local hud = pc:GetHUD(); if valid(hud) then gameHud = hud.bShowHUD end end)
+    -- ((2026-11-12) sv_cine.lua's route showhud turned it off: its own HUD.hold says what of Survival's is off)
+    if not gameHud and CINE and CINE.GH and CINE.GH.show ~= nil then gameHud = true end
     local hold, holders = HUD.state()                          -- ((2026-11-12) HUD.hold: the rise's cinematic)
     if LB.show ~= nil then hold = nil end
     local show = ((not paused) and pawnOk and gameHud and hold ~= "all") or (LB.show ~= nil)    -- (the run's summary stays up)

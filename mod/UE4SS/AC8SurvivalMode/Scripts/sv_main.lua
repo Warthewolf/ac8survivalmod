@@ -379,6 +379,7 @@ local function runLeft(why)
     pcall(SND.stopAll)
     pcall(hudRed, false, nil, true)        -- ((0.73.76) VALKA's red sky put back at once, a joiner's too: no tick may follow)
     if SKY then pcall(SKY.restore, "the level was left") end   -- ((0.74.0) the sky's values Survival changed: sv_sky.lua)
+    if CINE and CINE.leave then pcall(CINE.leave, why) end    -- ((2026-11-12) the rise cinematic's HUD hide: sv_cine.lua)
     if SKY and SKY.arcReset then pcall(SKY.arcReset, "the level was left") end
     pcall(TAC.reset)                       -- (the gun's class default back to stock)
     if DOWN and DOWN.reset then pcall(DOWN.reset, "the level was left", true) end
