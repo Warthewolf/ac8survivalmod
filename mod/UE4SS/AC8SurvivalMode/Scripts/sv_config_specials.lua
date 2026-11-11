@@ -632,6 +632,10 @@ CFG.specials = {
                -- EngagementOrderOverride onto her (Normal, TargetFirst), again every again_s, kept out of the squad
                -- director's and co-op's hunts; back on you once she's on the ground or lost
                attack = { enabled = true, share = 0.6, max = 4, after_s = 4, again_s = 10 },
+               -- ((2026-11-09) the user: "we need to scale the enemies by players") in co-op the host's room gets more:
+               -- attack.max, waves.min_n / max_n and waves.max_up x co-op's aircraft_per_player for each player past the
+               -- first (COOP.more; max_up within [coop] max_up), as a round's aircraft are; false: as a solo run's
+               coop_scale = true,
                -- the round's flights spawned ahead of her (share of them, km ahead along her heading, within side_km of it)
                ahead = { enabled = true, share = 0.5, km = 15, side_km = 6 },
                -- ((2026-11-07) the user: "Keep spawning Multiple enemy fighters until she lands, have them range from 4

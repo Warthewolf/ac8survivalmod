@@ -91,8 +91,14 @@ not yet run in game. None of it is a hard rule until a test confirms it.
   every_s (the first first_s after her spawn) min_n .. max_n aircraft of free pool flights (2-, 4- and 6-ships; one shot
   down flies again), all from one of eight directions round her (ahead, ahead right, ... ahead left; never the last
   wave's nor one next to it), km out, spread_deg apart, alt_m up, facing her; held while max_up enemies are up; each
-  always goes after her. Log `escort: wave N: A aircraft (W asked) <side> of CHARLENE, from the <compass>, K km out: ...`,
-  `escort: wave N held: ...`.
+  always goes after her. Log `escort: wave N: A aircraft (W asked, LO-HI[, max_up M for the room]) <side> of CHARLENE,
+  from the <compass>, K km out: ...`, `escort: wave N held: ...`.
+- Co-op (`coop_scale`, 2026-11-09, the user: "With the enemies in escort charlene, we need to scale the enemies by
+  players"): in the host's room attack.max (her attackers at once) and the waves' min_n, max_n and max_up grow as a
+  round's aircraft do (ESC.roomMore -> COOP.more: [coop] aircraft_per_player more for each player past the first; max_up
+  within [coop] max_up, 30). With the shipped 0.15 and 4 players: 6 attackers, waves of 6-17, up to 30 up (solo 4, 4-12,
+  24). The round's own flights were already scaled (sv_rounds.lua startRound). Solo and joiners: as set. The wave picker
+  and ESC.roomMore are in sv_escort_waves.lua (sv_escort.lua's 2,000-line limit).
 - The escorts (`guard`): every every_s each escort's planes onto an enemy within km of her (EngagementOrderOverride on an
   allied plane onto an enemy: **[test]**, COOP.coverFor's way).
 - Landing (`landing`, `geo`), each step its record `<rec><Final|Roll|Taxi|Stop>`: her final within final_at_m of the IAF

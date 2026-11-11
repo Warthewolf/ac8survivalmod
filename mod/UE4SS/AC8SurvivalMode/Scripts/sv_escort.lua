@@ -11,7 +11,7 @@
 --           again_s; ESC.holds(unit) keeps them out of the squad director (sv_director.lua busy), co-op's split hunt
 --           (sv_coop.lua) and the allies' hunts (sv_allies.lua); back on you at her touchdown or loss. The round's flights
 --           spawn ahead of her (DIR.spawnAt, ahead.share), and waves of 4-12 come at her from a new direction each
---           every every_s until she touches down (waves)
+--           every every_s until she touches down (waves); in co-op more of both for the room (coop_scale: sv_escort_waves.lua)
 --   guard   the escorts' planes onto the enemies nearest her, every guard.every_s
 --   landing by distance to CFG geo (Lua fires each step's record): her final within final_at_m of the approach fix (gear
 --           down: EnableLandingGear; landing closed to the players), rollout near the touchdown point (invincible), taxi
@@ -427,7 +427,7 @@ local function attackTick(S, now, o)
     for _, u in ipairs(units) do
         S.seen[u] = S.seen[u] or now
         if S.decided[u] == nil and now - S.seen[u] >= num(a.after_s, 4) then
-            local want = attackOk(u) and n < num(a.max, 4) and (S.reinf.units[u] or math.random() < num(a.share, 0.6))
+            local want = attackOk(u) and n < ESC.roomMore(num(a.max, 4)) and (S.reinf.units[u] or math.random() < num(a.share, 0.6))
             S.decided[u] = want and true or false
             if want then
                 local k, total = orderPlanes(u, o, PRIO_TARGET_FIRST)
@@ -478,30 +478,6 @@ end
 local SECTOR = { "ahead", "ahead right", "right", "behind right", "behind", "behind left", "left", "ahead left" }
 local COMPASS = { "north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west" }
 ESC.SECTOR = SECTOR
--- free flights for a wave of `want` aircraft (a random mix of the sizes that still fit): the flights, the aircraft
-local function waveFlights(want)
-    local pend = {}
-    for _, q in ipairs(D.queue or {}) do pend[q] = true end
-    for i = (D.wave or 1), #(D.waves or {}) do for _, q in ipairs(D.waves[i] or {}) do pend[q] = true end end
-    local bySize, sizes = {}, {}
-    for _, u in ipairs(CFG.pool or {}) do
-        if not D.up[u] and not pend[u] and not (PROBE_OF and PROBE_OF[u]) and poolIndex(u)
-            and not (ROLE and ROLE.sitsOut and ROLE.sitsOut(u)) and noneUp(aliveOf(u)) then
-            local n = flightSize(u)
-            if not bySize[n] then bySize[n] = {}; sizes[#sizes + 1] = n end
-            table.insert(bySize[n], u)
-        end
-    end
-    local out, got = {}, 0
-    while true do
-        local fit = {}
-        for _, n in ipairs(sizes) do if n <= want - got and #bySize[n] > 0 then fit[#fit + 1] = n end end
-        if #fit == 0 then break end
-        local n = fit[math.random(#fit)]
-        out[#out + 1], got = table.remove(bySize[n], math.random(#bySize[n])), got + n
-    end
-    return out, got
-end
 local function wavesTick(S, now)
     local w = ec().waves or {}
     if not (w.enabled and D and D.up) or now < S.reinf.at then return end
@@ -511,14 +487,15 @@ local function wavesTick(S, now)
     if not (A.r and A.r.at and A.r.hdg) then S.reinf.at = now + 2; return end
     local up = 0
     for _, p in ipairs(planes or {}) do if not p.down and not KIND[p.unit] then up = up + 1 end end
-    local lo = math.max(2, math.floor(num(w.min_n, 4)))
-    local hi = math.max(lo, math.floor(num(w.max_n, 12)))
-    local room = math.floor(num(w.max_up, 24)) - up
+    local lo = math.max(2, ESC.roomMore(math.floor(num(w.min_n, 4))))
+    local hi = math.max(lo, ESC.roomMore(math.floor(num(w.max_n, 12))))
+    local maxUp = ESC.roomMore(math.floor(num(w.max_up, 24)), "max_up")
+    local room = maxUp - up
     if room < lo then
         S.reinf.at = now + 5
         if not S.reinf.fullSaid then
             S.reinf.fullSaid = true
-            log(string.format("escort: wave %d held: %d enemy aircraft up (max_up %d)", S.reinf.n + 1, up, math.floor(num(w.max_up, 24))))
+            log(string.format("escort: wave %d held: %d enemy aircraft up (max_up %d)", S.reinf.n + 1, up, maxUp))
         end
         return
     end
@@ -526,7 +503,7 @@ local function wavesTick(S, now)
     -- (the flights are 2-, 4- and 6-ships: an even count, at least min_n, at most max_n and the room left)
     local top = math.min(hi, room)
     local want = 2 * math.random(math.ceil(lo / 2), math.max(math.ceil(lo / 2), math.floor(top / 2)))
-    local list, got = waveFlights(want)
+    local list, got = ESC.waveFlights(want, aliveOf, noneUp)
     if got < lo then
         S.reinf.at = now + 5
         if not S.reinf.noneSaid then
@@ -586,8 +563,9 @@ local function wavesTick(S, now)
             said[#said + 1] = u .. " NOT (" .. ERR(r) .. ")"
         end
     end
-    log(string.format("escort: wave %d: %d aircraft (%d asked) %s of CHARLENE, from the %s, %.1f km out: %s (%d enemy aircraft were up)",
-        S.reinf.n, nUp, want, SECTOR[sec], COMPASS[math.floor(((base + 22.5) % 360) / 45) + 1], km, table.concat(said, ", "), up))
+    log(string.format("escort: wave %d: %d aircraft (%d asked, %d-%d%s) %s of CHARLENE, from the %s, %.1f km out: %s (%d enemy aircraft were up)",
+        S.reinf.n, nUp, want, lo, hi, (maxUp ~= math.floor(num(w.max_up, 24))) and string.format(", max_up %d for the room", maxUp) or "",
+        SECTOR[sec], COMPASS[math.floor(((base + 22.5) % 360) / 45) + 1], km, table.concat(said, ", "), up))
 end
 -- the escorts' planes onto the enemies nearest her
 local function guardTick(S, now)

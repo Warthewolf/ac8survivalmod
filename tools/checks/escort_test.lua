@@ -571,6 +571,36 @@ do
     run(6)
     check(#wavesOf() == n0 + 1, "... and sent once there's room")
 end
+-- ((2026-11-09) the user: "With the enemies in escort charlene, we need to scale the enemies by players") the escort's own
+-- numbers for the host's room through COOP.more (as a round's aircraft); solo, or coop_scale = false: as set
+do
+    local keepC, keepP = COOP, planes
+    local asked = {}
+    COOP = { more = function(n, capKey) asked[#asked + 1] = capKey or "-"; return math.min(math.floor(n * 1.45 + 0.5), capKey and 30 or 99) end }
+    check(ESC.roomMore(4) == 6 and ESC.roomMore(12) == 17 and ESC.roomMore(24, "max_up") == 30 and asked[3] == "max_up",
+          "co-op: attack.max / min_n / max_n x the room, max_up within [coop] max_up (" .. ESC.roomMore(4) .. ", " .. ESC.roomMore(24, "max_up") .. ")")
+    local full = {}
+    for i = 1, C.waves.max_up do full[i] = { unit = "x" .. i } end
+    planes = full
+    local n0 = #wavesOf()
+    ESC.S.reinf.at = 0
+    -- ((2026-11-11) the pool's flights freed for this one step: which ones the earlier waves took varies from run to run
+    -- (Lua 5.4 seeds its tables' hashing afresh each run), and 3 runs in 20 had free flights for only 4 aircraft against
+    -- the room's min_n 6: "wave held", not the max_up this checks. Put back after it)
+    local busy = {}
+    for u, v in pairs(D.up) do busy[u] = v end
+    for u in pairs(busy) do D.up[u] = nil end
+    run(0.25)
+    check(#wavesOf() == n0 + 1 and has(line("escort: wave " .. (n0 + 1) .. ":"), "max_up 30 for the room"),
+          "co-op: a wave sent with max_up enemy aircraft up (the room's max_up is higher), logged")
+    for u, v in pairs(busy) do if D.up[u] == nil then D.up[u] = v end end
+    CFG.specials.escort.coop_scale = false
+    check(ESC.roomMore(4) == 4 and ESC.roomMore(24, "max_up") == 24, "coop_scale = false: as a solo run's")
+    CFG.specials.escort.coop_scale = true
+    COOP = nil
+    check(ESC.roomMore(12) == 12, "solo: as set")
+    COOP, planes = keepC, keepP
+end
 do                                                  -- (at the zone's corner, her start: from a direction inside it)
     pose(HP, st.x, st.y, 300000, 55, 600)
     ESC.S.reinf.at = 0

@@ -298,7 +298,11 @@ check(las:find("not (ZDIVE and ZDIVE.diving and ZDIVE.diving(e.addr))", 1, true)
 check(las:find("pcall(ZDIVE.tick)", 1, true) ~= nil, "ZLAS.tick runs ZDIVE.tick")
 check(readAll(MOD .. "/Scripts/sv_coop_migration.lua"):find('k == "zd" and COOP.client()', 1, true) ~= nil, "the joiner's zd dispatch")
 local fam = PARTS.family("sv_escort")
-check(fam[#fam] == "sv_escort_dive.lua", "main.lua MODULES: sv_escort_dive after sv_escort_li")
+local posOf = {}
+for i, m in ipairs(fam) do posOf[m] = i end
+-- ((2026-11-11) sv_escort_waves.lua comes after it now: the order that matters is after sv_escort_li's)
+check(posOf["sv_escort_dive.lua"] and posOf["sv_escort_li.lua"] and posOf["sv_escort_dive.lua"] > posOf["sv_escort_li.lua"],
+      "main.lua MODULES: sv_escort_dive after sv_escort_li")
 
 print(fails == 0 and "dive test: all checks passed" or ("dive test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)
