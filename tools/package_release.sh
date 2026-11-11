@@ -56,11 +56,14 @@ if [ "$ZFA" = 1 ]; then
     echo "ZFA=1: the ZFA-44 kept (its container and Scripts/sv_zfa44.lua)"
 else
 rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ZFA44_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Laser7_P.*   # (and its weapon, AC7's LaserInterceptor)
-rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*   # THE TANICORN's parts: the user's install only, never shipped
 if [ -f "$mod/Scripts/sv_zfa44.lua" ]; then
     head -n 1 "$mod/Scripts/sv_zfa44.lua" > "$mod/Scripts/sv_zfa44.lua.tmp" && mv "$mod/Scripts/sv_zfa44.lua.tmp" "$mod/Scripts/sv_zfa44.lua"
 fi
 fi
+# THE TANICORN's parts (its container: the Tanager stand-in is Sea Power's Iowa, the user's install only; AGENTS.md):
+# never in any zip made here, ZFA=1 and TESTER=1 included. Until 2026-11-11 this line sat in the no-ZFA branch above, so
+# a ZFA=1 zip packed after a TANI=1 build_all.sh would have carried it (tools/checks/zip_leak_test.sh)
+rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*
 # TESTER=1: a tester's build (user, 2026-11-03: "give me a tester version for alyssa"): the test keys (force a special,
 # zollars, ...) and the diagnostic loggers KEPT, everything else as the friends' zip; named ..._<version>_TESTER_...
 # Only for the tester the user names: every other zip strips them (user, 2026-10-23: test keys out of releases).
@@ -126,6 +129,8 @@ if bad:
 print('offline check: no network code in', st)
 " "$st"
 fi
+# the last look before the zip: nothing of the user's install only (tools/checks/zip_leak_test.sh)
+sh tools/zip_guard.sh "$st"
 # BUILD_NAME=<name>: a build line's own name in the zip's (BUILD_NAME=COOP2MP: docs/re/COOP2MP.md)
 tv=$ver; [ "$TESTER" = 1 ] && tv="${ver}_TESTER"
 . tools/release_dir.sh

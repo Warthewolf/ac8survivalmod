@@ -64,6 +64,15 @@ check(made:find("\r\nsubtitle = Thank You Pilot,", 1, true), "CHARLENE's thanks 
 
 print("the shipped file: no mistakes")
 local shipped = readAll(MOD .. "/config/subtitles.ini")
+-- git stores the file with LF line ends, and a Windows checkout writes it out with CRLF (the zips carry that one). A
+-- checkout with LF (Linux, a cloud session) is read as it is first, then the test goes on with the CRLF form below.
+if not shipped:find("\r\n", 1, true) then
+    writeAll(FILE, shipped)
+    local Lf = #logs + 1
+    load()
+    check(SUBT.loaded and #SUBT.loaded.bad == 0 and since(Lf, "mistakes skipped") == 0, "the shipped file with LF line ends: no mistake")
+    shipped = shipped:gsub("\n", "\r\n")
+end
 writeAll(FILE, shipped)
 local L1 = #logs + 1
 load()

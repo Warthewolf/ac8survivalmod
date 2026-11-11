@@ -37,7 +37,7 @@ is ever committed.
 ```sh
 sh tools/checks/lua_build.sh                       # once: builds Lua 5.4.6 (UE4SS's) into build/checks for the tests
 python -X utf8 tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua   # after every Lua edit
-for t in tools/checks/*_test.sh; do sh "$t" > /dev/null 2>&1 || echo "FAILED: $t"; done   # the test suites
+sh tools/checks/run_all.sh                         # every check that needs no game files, with a table
 sh tools/build_all.sh                              # the full build: build/install (the mod, ready to install)
 sh tools/package_dev.sh <name>                     # your own test install, test keys kept: build/release/stage_dev_<name>
 ```

@@ -2277,3 +2277,26 @@ From Alyssa's two TESTER runs of 0.74.30 (co-op host): "ZFA crashed game", "Musi
 - Log: the `zfa li: ... carries AC7's LaserInterceptor` line ends `a swing 0.50 s, its swing curve kept / cleared /
   NOT cleared (...)`. escort_test (the values, the curve cleared, the beam's life 6.7 s), lua_load pass; lua_check.
 - To see in game: the beam snaps onto a missile in half a second and stays on it to the kill; more kills per volley.
+
+## Checks off the home PC (2026-11-11; tools and tests only, no new build: nothing that ships changed)
+- `sh tools/checks/run_all.sh` runs every check that needs no game files (build_all.sh's own, every `*_test.sh`, the
+  Worker's tests) and ends with a table. In a Linux cloud session: 59 pass, 0 fail, 5 skipped (the C suites that need
+  Win32: build_hash, coop, flight, pathguard, safecall). `coop_test` only when named (`run_all.sh coop_test`).
+- What had stopped them off Windows: `lua_build.sh` didn't link libm; `ep_dump.py` loaded the git-ignored
+  `tools/scriptobjs.pkl` at import, so the aces, bosses, defences, director, roles and tells suites' Python halves
+  couldn't import survival_events (it now loads it when a stock package's imports are first shown); `subs_test`
+  expected CRLF in the shipped subtitles.ini (git stores LF, a Windows checkout writes CRLF: it now reads the LF form
+  too, then goes on with CRLF); `uobj_test` / `vfmt_test` used the Win32 CRT and threads (POSIX stand-ins; vfmt_test
+  still fails on the old 0.32.22 PUT macro off Windows).
+- `lua_check.py` reads the runtime's registered functions from RegisterLua's table (runtime/survival_rt.c) instead of a
+  hand-kept list: 20 false warnings gone; it warns if a hand-listed native name is no longer registered. One warning
+  is left and real: `PPTEST` (sv_main.lua:636) is set by nothing any more; the check there is dead code.
+- A leak in the packagers: `package_release.sh` took THE TANICORN's container out only in its no-ZFA branch, so a ZFA=1
+  zip (the friends' and Alyssa's) packed after a TANI=1 build_all.sh would have carried it; `package_test.sh` never took
+  it out, nor the laser's container without ZFA=1. Both now always take it out, and `tools/zip_guard.sh` refuses a
+  stage that still holds it. `tools/checks/zip_leak_test.sh` packs six kinds of zip from a made-up build in a temp folder
+  (no game, nothing registered) and checks each one's containers; on the old scripts it fails 6 checks. No zip given out
+  so far was made after a TANI=1 build with ZFA=1 as far as HISTORY.md shows (the 0.74.43-0.74.46 Tanicorn builds were
+  package_dev.sh installs).
+- Not changed: TESTER=1 zips still keep every TEST ONLY block, sv_tanicorn.lua's Ctrl+T mount test included (a question
+  for the user).

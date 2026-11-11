@@ -31,11 +31,14 @@ if [ "$ZFA" = 1 ]; then
     fi
     echo "ZFA=1: the ZFA-44 kept (its container and Scripts/sv_zfa44.lua)"
 else
-rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ZFA44_P.*
+rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ZFA44_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Laser7_P.*   # (and its weapon, AC7's LaserInterceptor, as package_release.sh)
 if [ -f "$mod/Scripts/sv_zfa44.lua" ]; then
     head -n 1 "$mod/Scripts/sv_zfa44.lua" > "$mod/Scripts/sv_zfa44.lua.tmp" && mv "$mod/Scripts/sv_zfa44.lua.tmp" "$mod/Scripts/sv_zfa44.lua"
 fi
 fi
+# THE TANICORN's parts: the user's install only, never in a zip made here (package_release.sh; until 2026-11-11 this
+# script didn't take them out at all: tools/checks/zip_leak_test.sh)
+rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*
 # the test-only cheats (TEST ONLY BEGIN ... END in Scripts/*.lua: the +5000 zollars key) never ship, nor the default
 # ini's test-only sections (the lightning Anomaly's, 2026-11-07; each leaves a lone ";" line)
 python -I tools/strip_test_only.py "$mod"/Scripts/*.lua "$mod"/config/survival.default.ini
@@ -43,6 +46,7 @@ python -X utf8 -I tools/checks/lua_check.py "$mod"/Scripts/*.lua
 sed "s/{DATE}/$(date +%Y-%m-%d)/; s/{LUA}/$lua/; s/{RT}/$rt/" release/README.txt > "$st/README.txt"
 suffix=""
 [ "$ZFA" = 1 ] && suffix=_ZFA44
+sh tools/zip_guard.sh "$st"   # (the last look before the zip: nothing of the user's install only)
 . tools/release_dir.sh
 out="$REL/AC8SurvivalMode_$name$suffix.zip"
 python -I -c "

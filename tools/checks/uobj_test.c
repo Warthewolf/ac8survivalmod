@@ -11,6 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../../runtime/uobj.h"
+#ifndef _WIN32   /* Linux (a cloud session): the CRT's aligned allocation */
+static void* _aligned_malloc(size_t n, size_t a) { void* p = NULL; return posix_memalign(&p, a, n) ? NULL : p; }
+static void _aligned_free(void* p) { free(p); }
+#endif
 
 /* (runtime 0.32.21) real event checks of the 2026-11-02 exe (first bytes; the detector reads 0x48 past n) */
 /* 0x14742ced0, EnemyBehind (type 0x1b): +0x18 and +0x20 from rcx, each tested */
