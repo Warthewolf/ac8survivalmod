@@ -181,13 +181,15 @@ approved. (The recording is the user's and stays out of the repository; so do th
   roots ("angle themselves upwards": the side quarters 10 deg, the top one 5, the bottom one level); the rod, a plain
   khaki cylinder with a rounded tip (r 0.24 m) and its own piece (Barrel_<gun>_9), then pushes 2 m forward to 88 % of
   the barrel and lights yellow as the gun charges; three coil rings at its root glow gold with it, and strips along
-  the staves' inner edges as it fires (CLIP). The armour as the clip's side shot draws it (frames 171-183): the aft
+  the staves' inner edges as it fires (CLIP); the outer guns' ribbed boots each drop an outboard band out and down
+  like a petal as the staves slide (PETAL; Barrel_1_10, Barrel_3_10). The armour as the clip's side shot draws it (frames 171-183): the aft
   side wall's seam runs level at half height, slopes down and drops to the foot; the L-shaped panel above it (its
   forward tab full height) lifts straight up 0.42 H, the lower panel slides forward 0.42 H along the foot and 0.1 H
   out; each rear corner's two facets tip out on their feet into a ramp and fold at 0.4 of their height, the upper
   halves standing back up leaning in (15 / 25 deg); the roof over the rear rises 0.27 H, a canopy; the roof's front
-  halves, over the front corners, rise 1.6 m and tip up 18 deg like visors (the superfiring turret, frames 38-44: "the front right and left
-  sides, along with the front section of the roof lift up"); the front corners' walls stay. Behind the opened walls
+  halves, over the front corners, rise 1.6 m and tip up 18 deg like visors (the superfiring turret, frames 38-44:
+  "the front right and left sides, along with the front section of the roof lift up"); the front corners' walls stay.
+  Behind the opened walls
   the gun house's interior, cut only where walls open (the training gear's big drum, the hoist, shell racks; a doorway
   through each rear corner). No strut arms. 36k triangles a turret; every part a clean solid (nothing in the interior
   meets another face flat on: what stands on something sinks a little into it).

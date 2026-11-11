@@ -215,7 +215,7 @@ def effects(level, firing, seed):
     rnd = random.Random(seed)
     ARC_EM.inputs["Strength"].default_value = 2.5 + 2.0 * firing      # (green stays green: brighter goes white)
     RING_EM.inputs["Strength"].default_value = 1.6
-    pieces = [o for o in T.pieces() if "fm_barrel" in o and "fm_rod" not in o]
+    pieces = [o for o in T.pieces() if "fm_barrel" in o and "fm_rod" not in o and "fm_petal" not in o]
     L = (CORE[1] if CORE else firemode.MUZZLE) - firemode.SPLIT          # (the arcs stop at the rod's tip)
     RL = (firemode.STYLES[STYLE].get("rings_to") or firemode.MUZZLE) - firemode.SPLIT   # (and its rings')
     for b in (1, 2, 3):

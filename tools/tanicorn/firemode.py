@@ -72,7 +72,8 @@ STYLES = {
     # front halves rise and tip up like visors (38-44): "the front ... sides, along with the front section of the roof
     # lift up".
     10: {"name": "The clip: quarters slide back round the rod; panels lift, rear folds out, roof front tips up",
-         "barrel": {"split": "Q4", "mid": True, "clip": True, "shell_t": 0.3, "bore": 0.58, "rim": True, "edges": True},
+         "barrel": {"split": "Q4", "mid": True, "clip": True, "shell_t": 0.3, "bore": 0.58, "rim": True, "edges": True,
+                    "petals": True},
          "armour": "clip", "interior": True, "roof_static": (-8.0, 3.4), "rings_glow": True, "rings_to": 7.6,
          "core": (0.24, 23.8, 2.0), "struts": False},
 }
@@ -85,7 +86,7 @@ DEFAULT_STYLE = 10
 # pushes forward ("core"'s third value, 61) and lights up (64-70); a yellow flash from the seams as they open (47-49)
 CLIP = {"part": 0.55, "front_out": 0.7, "back": 9.0, "back_first": 0.3, "pitch": (10.0, 5.0, 0.0),
         "stages": {"part": (0.04, 0.16), "out": (0.18, 0.28), "back1": (0.3, 0.4), "back2": (0.46, 0.62),
-                   "pitch": (0.46, 0.62), "push": (0.66, 0.74)},
+                   "pitch": (0.46, 0.62), "push": (0.66, 0.74), "petal": (0.32, 0.55)},
         "flash": (0.04, 0.2, 1.4)}
 # style 9's barrel: a thin shell in four sections (port, top, starboard, bottom) round a core assembly (the glowing rod,
 # coil rings on spokes, rails), each section cut at X_MID; the pieces part (MID_OUT), slide back (MID_BACK) and pitch up
@@ -591,14 +592,35 @@ def rod_x(part, x0, x1, r, y, z, m, seg=24, cap=6):
     part._put(bm, [v for q in rings for v in q] + [tip], m)
 
 
-def stays_part(rings=False, breech=False, ring_mat=None, rings_to=None, rails=True, core=None):
+PETAL = (1.6, 2.65, 0.4, 0.9)     # style 10's boot petals (the clip, 57-59): x from, to; their inboard edge off the
+                                  # gun's axis; their half height. Each outer gun's, outboard; it falls out and down
+
+
+def petal_part(sg):
+    """the outboard band of a gun's ribbed boot (the gun's frame, its axis at y 0), sg 1 port / -1 starboard"""
+    p = Part(overlap=True)
+    x0, x1, y0, hz = PETAL
+    for a, b, r in BOOT:
+        cone_x(p, a, b, r, r - 0.03, 0.0, 0.0, M_PAINT, SEG)
+    W = 9.0
+    for lo, hi in (((-W, -W, -W), (x0, W, W)), ((x1, -W, -W), (W, W, W)), ((-W, -W, hz), (W, W, W)),
+                   ((-W, -W, -W), (W, W, -hz)), (((-W, -W, -W), (W, y0, W)) if sg > 0 else ((-W, -y0, -W), (W, W, W)))):
+        abox(p, lo, hi, M_DARK, cut=True)
+    return p
+
+
+def stays_part(rings=False, breech=False, ring_mat=None, rings_to=None, rails=True, core=None, petals=False):
     """what doesn't split: each gun's bloomer boot, its barrel's root ring and its core rod (the guns' frame); rings:
     the core assembly round the rod (coil rings on spokes and hubs, four rails through them: style 9, after the user's
     manga panels); breech: the breech, its block and recoil cylinders and the cradle inside the house"""
     p = Part(overlap=True)
-    for yc in GUN_Y:
+    for b, yc in enumerate(GUN_Y, 1):
         for x0, x1, r in BOOT:
             cone_x(p, x0, x1, r, r - 0.03, yc, 0.0, M_PAINT, SEG)
+        if petals and b != 2:                               # (the outer guns' outboard petals: pieces of their own)
+            sg = 1.0 if yc > 0 else -1.0
+            a, c = sorted((yc + sg * PETAL[2], yc + sg * 3.0))
+            abox(p, (PETAL[0], a, -PETAL[3]), (PETAL[1], c, PETAL[3]), M_DARK, cut=True)
         cone_x(p, 2.7, SPLIT + 0.02, 1.12, 1.1, yc, 0.0, M_PAINT, SEG)
         if core:                                            # (r, its tip's x when out, its push): style 10's
             if not core[2]:                                 # rod, a piece of its own when it moves (build)
@@ -937,7 +959,7 @@ def build(coll, log=print, style=None):
     stays = solid("stays", stays_part(rings=bs.get("mid", False), breech=st.get("interior", False),
                                       ring_mat=MAT["fm_ring"] if st.get("rings_glow") else None,
                                       rings_to=st.get("rings_to"), rails=not st.get("rings_to"),
-                                      core=st.get("core")), 1024, bevel=0)
+                                      core=st.get("core"), petals=bs.get("petals", False)), 1024, bevel=0)
     angles = SPLITS[bs["split"]]
     cut = bs.get("cut", X_MID)
     core, rod_me = st.get("core"), None
@@ -945,6 +967,8 @@ def build(coll, log=print, style=None):
         rp = Part()
         rod_x(rp, SPLIT - 0.4, core[1] - core[2], core[0], 0.0, 0.0, MAT["fm_core"])
         rod_me = solid("core", rp, 256, bevel=0)
+    petal_me = {sg: solid("petal_" + ("L" if sg > 0 else "R"), petal_part(sg), 256, bevel=0)
+                for sg in (1.0, -1.0)} if bs.get("petals") else {}
     if bs.get("mid"):                                     # styles 9, 10: eight shell pieces a gun, rear and front parts
         segs = {}
         for seg in ("rear", "front"):
@@ -1021,6 +1045,11 @@ def build(coll, log=print, style=None):
                     add("Barrel_%d_9" % b, rod_me, T.trun, Matrix.Translation((0.0, yc, 0.0)), "GUNS",
                         [("T", Vector((core[2], 0, 0)), CLIP["stages"]["push"])],
                         {"fm_barrel": b, "fm_rod": True, "fm_tip": core[1]})
+                if petal_me and b != 2:                 # the outer guns' boot petals fall out and down (57-59)
+                    sg = 1.0 if yc > 0 else -1.0
+                    add("Barrel_%d_10" % b, petal_me[sg], T.trun, Matrix.Translation((0.0, yc, 0.0)), "GUNS",
+                        [("R", Vector((1, 0, 0)), Vector((0, sg * PETAL[2], -PETAL[3])), -sg * 50.0,
+                          CLIP["stages"]["petal"])], {"fm_barrel": b, "fm_petal": True})
                 continue
             for k, a in enumerate(angles):
                 d = Vector((0, math.cos(math.radians(a)), math.sin(math.radians(a))))
