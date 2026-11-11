@@ -311,6 +311,7 @@ local function tableSizes()
     local fl = FISH and FISH.cl or {}
     return {
         spawnQ = { #(M.spawnQ or {}), 256 }, dead = { count(M.dead), 4096 }, pendBind = { count(M.pendBind), 512 },
+        pendHp = { count(M.pendHp), 4096 }, hitT = { count(M.hitT), 24 },   -- ((2026-11-11) the Alicorn's: M.notePendHp, hostHit)
         evQ = { #(M.evQ or {}), 64 }, dvQ = { #(M.dvQ or {}), 32 }, holdQ = { #(M.holdQ or {}), 32 },
         cfParts = { count(M.cfParts), 400 }, roster = { count(M.roster), 24 }, builds = { count(M.builds), 64 },
         bdLast = { count(M.bdLast), 513 }, killer = { count(M.killer), 4096 }, fishRows = { count(fl.rows), 64 },
@@ -375,6 +376,7 @@ local function scene(side)
     M.bdLast, M.killer, M.recycleDue, M.rnd, M.succ, M.allyList = nil, nil, nil, nil, {}, {}
     -- ((2026-11-11) the host's "left" notice and the migration it starts: each message's own)
     M.hostLeft, M.hostLostAt, M.hostAwayUntil, M.mig, M.leftPending, M.leftRun = nil, nil, nil, nil, nil, nil
+    M.pendHp, M.pendHpN, M.hitT = nil, nil, nil
     M.byId, M.units = {}, {}
     if DOWN and DOWN.reset then DOWN.reset("a hostile message's scene", true) end
     if St then St.rate = {}; St.count = 0 end
@@ -436,7 +438,7 @@ local TYPES = {
     { "join", "rx", { "rx", "2", "A BAD REQUEST", "0" } },
     { "join", "ro", { "ro", "6" } },
     { "join", "rc", { "rc", "2" } },
-    { "join", "rnd", { "rnd", "6", "fighting", "30", "2", "3", "4", "1", "2", "m1w0s0", "", "", "0", "Wingmen:1;", "0" } },
+    { "join", "rnd", { "rnd", "6", "fighting", "30", "2", "3", "4", "1", "2", "m1w0s0", "", "", "0", "Wingmen:1;", "0", "0:62:0" } },
     { "join", "pi", { "pi", "2", "su33_common", "@VERSION", "Cara", "su33", "5,6/7/1,0", "44/1/9", "Su-33", "76561198000000003", "", "" } },
     { "join", "po", { "po", "2" } },
     { "join", "rj", { "rj", "2" } },
@@ -483,6 +485,9 @@ local TYPES = {
     { "join", "zd", { "zd", "v", "3" }, extra = true },
     { "join", "zd", { "zd", "e" }, extra = true },
     { "join", "ev", { "ev", "RE_SV_AlcnOpenCore", U1 }, extra = true },
+    -- ((2026-11-11) the Alicorn: rnd field 16 shut and dived; the host's health for ids not bound here yet, M.pendHp)
+    { "join", "rnd", { "rnd", "6", "fighting", "30", "2", "3", "4", "1", "2", "m1w0s0", "alicorn", "alicorn:sail", "0", "Wingmen:1;", "0", "2:s:1" }, extra = true },
+    { "join", "hp", { "hp", "77:500,78:-5,79:99999999999,0:40,70000:9" }, extra = true },
     { "join", "rs", { "rs", "n" }, extra = true },
     { "join", "rs", { "rs", "m" }, extra = true },
     { "join", "spx", { "spx", "r:5:2;12:40:11:Fleet1,Fleet2" }, extra = true },
@@ -654,7 +659,7 @@ local EFFECT = {
     ["join rx"] = function() return RUN.credits == CR0 + 5000 end,
     ["join ro"] = function() return St.ended == true and called("SV_Event", "RE_SV_RunOver") end,
     ["join rc"] = function() return St.count == 2 end,
-    ["join rnd"] = function() return D.round == 6 and D.state == "fighting" end,
+    ["join rnd"] = function() return D.round == 6 and D.state == "fighting" and M.rnd.alicorn ~= nil and M.rnd.alicorn.pct == 62 end,
     ["join pi"] = function() return M.roster[2] and M.roster[2].name == "Cara" end,
     ["join po"] = function() return M.roster[2] == nil end,
     ["join rj"] = function() return logHas("started their game over") or true end,
@@ -948,6 +953,18 @@ do
         tick()
         if M.rnd ~= keep then fail(c2, "limits", bad, "taken (round " .. tostring(M.rnd and M.rnd.round) .. ")")
         elseif D.waves and #D.waves > 3 then fail(c2, "tables", bad, "#D.waves " .. #D.waves) end
+    end
+    -- ((2026-11-11) rnd field 16, the host's Alicorn for this game's row (SPC.alicornCode): only "<0-4>:<s|e|0-100>:<0|1>"
+    -- is taken, whole numbers in range; anything else leaves no row
+    for _, bad in ipairs({ "5:1:0", "0:101:0", "0:-1:0", "0:1.5:0", "0:nan:0", "0:inf:0", "0:1e2x:0", "1:2", "1:2:3", "a:b:c",
+                           "0:0x7fffffff:0", "4:" .. string.rep("9", 400) .. ":0", LONG, "\1:\2:\3" }) do
+        scene("join")
+        c2.fed = c2.fed + 1
+        local f = { "0", "rnd", "6", "fighting", "30", "2", "3", "4", "", "", "", "alicorn", "alicorn:sail", "0", ";", "0", bad }
+        inbox[#inbox + 1] = table.concat(f, "|")
+        tick()
+        local a = M.rnd and M.rnd.alicorn
+        if a then fail(c2, "limits", "rnd field 16 " .. bad:sub(1, 20), string.format("taken (%s tanks, %s %%)", tostring(a.tanks), tostring(a.pct))) end
     end
     -- ((2026-11-11) the session's review) "gd": a key only in the host's groundKey form ("<class>#<n>"), and a unit's
     -- binds bounded (M.BINDS_MAX) though every key is new: a flood that varies field 4, which the floods above don't

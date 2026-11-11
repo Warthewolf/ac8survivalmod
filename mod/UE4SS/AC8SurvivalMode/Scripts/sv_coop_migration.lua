@@ -490,6 +490,13 @@ local function onJoinerMessage(f)
         -- ((0.73.77, D4) the special in play there and its state: two words, or none)
         local hk, hst = tostring(f[12] or ""):match("^(%a+):(%a+)$")
         local hs = (hk and #hk <= 16 and #hst <= 16) and { kind = hk, state = hst } or nil
+        -- ((2026-11-11) field 16: the host's Alicorn for this game's row, SPC.alicornCode's "<tanks>:<core>:<dived>": its
+        -- ballast tanks left 0-4, its core shut (s), open with its health unread (e) or at 0-100 %, dived 0 / 1; else none)
+        local at, ac, ad = tostring(f[16] or ""):sub(1, 16):match("^([0-4]):(%w+):([01])$")
+        local apct = tonumber(ac)
+        local apOk = apct ~= nil and apct == math.floor(apct) and apct >= 0 and apct <= 100
+        local alcn = (at and (ac == "s" or ac == "e" or apOk))
+            and { tanks = tonumber(at), open = ac ~= "s", pct = (ac ~= "s" and ac ~= "e") and apct or nil, dived = ad == "1" } or nil
         -- ((2026-11-11) tools/checks/coop_guard_test.lua: the round's numbers were only tonumber'd, and a joiner's clientRounds
         -- makes one table a wave, so "rnd|6|fighting|30|2|1e999" froze the joiner's game for good and 1e999 / -5 / 1.5 went
         -- into D.round, D.at, D.wave) the round's numbers whole and in range, its state a word, or the message is refused
@@ -505,7 +512,7 @@ local function onJoinerMessage(f)
         end
         M.rnd = { round = rr, state = rst, secs = rsecs, wave = rw,
                   waves = rws, alive = ral, level = lv, glitchPhase = gp, got = os.clock(),
-                  allies = roomAlliesOf(f[10]), special = sk, hostSpecial = hs }
+                  allies = roomAlliesOf(f[10]), special = sk, hostSpecial = hs, alicorn = alcn }
         -- ((0.73.78, plan G5) the room's VOID WATCHER 1 purchases (the host's count): this game's STORE prices it from it,
         -- as the host checks a joiner's ask)
         local vb = tonumber(f[13])
@@ -690,6 +697,7 @@ local function onJoinerMessage(f)
         -- ((2026-11-11) coop_guard_test: 1.5, -1, 1e999 reached M.dead and SV_CoopBind) whole, in range, as "gd"'s
         if not (id == math.floor(id) and id >= 1 and id <= 65535 and ord == math.floor(ord) and ord >= 1 and ord <= 65535) then return end
         M.dead[id] = nil                                 -- ((0.73.73) named by the host now: up, until its "dn" says not)
+        M.forgetPendHp(id)                               -- ((2026-11-11) a health kept for its last object: not this one's)
         repNote(unit, gen, id, ord, nil)
         local cu = M.cunits[unit]
         if not cu or cu.gen ~= gen then
@@ -715,6 +723,7 @@ local function onJoinerMessage(f)
         -- "<class>#<n>", and at most M.BINDS_MAX binds a unit (M.mapFull)
         if not key:match("^[%w_]+#%d+$") then return end
         M.dead[id] = nil                                 -- ((0.73.73) as a plane's "bd")
+        M.forgetPendHp(id)                               -- ((2026-11-11) as a plane's "bd")
         repNote(unit, gen, id, nil, key)
         local cu = M.cunits[unit]
         if not cu or cu.gen ~= gen then pendKeep(unit, gen, "gbinds", key, id); return end   -- (as a plane's "bd")
@@ -729,6 +738,8 @@ local function onJoinerMessage(f)
         for id, h in (f[2] or ""):gmatch("(%d+):(%-?%d+)") do
             local c = M.copies[tonumber(id)]
             h = tonumber(h)
+            -- ((2026-11-11) an id not bound here yet: the host's health kept for its bind, M.notePendHp)
+            if not c and h and h > 0 and tonumber(id) >= 1 and tonumber(id) <= 65535 then M.notePendHp(tonumber(id), h) end
             -- ((code review of 2026-11-07, finding 6) never onto this game's copy of SAL's boat: an older host sends it)
             if c and FISH and FISH.isBoat and FISH.isBoat(c.unit) then c = nil end
             if c and h and h > 0 and live(c.obj) then
@@ -760,6 +771,7 @@ local function onJoinerMessage(f)
         local id = tonumber(f[2])
         if id and id == math.floor(id) and id >= 1 and id <= 65535 then   -- ((2026-11-11) whole and in range, as "gd"'s)
             M.dead[id] = true
+            M.forgetPendHp(id)                           -- ((2026-11-11) down: no health of the host's to put on it)
             local rp = M.rep
             local r = rp and not rp.done and rp.ids[id]       -- (the host's picture: down there)
             local pu = r and rp.units[r.unit]
@@ -788,9 +800,14 @@ local function onJoinerMessage(f)
         -- ((2026-11-11) coop_guard_test: a name of 206 characters went to SV_Event (only the queued path cut it, to another
         -- name): no event of Survival's is that long, so one past 64 is refused)
         if #tostring(f[2] or "") > 64 then return end
-        if mirroredEvent(f[2]) and D and rawEvent and not levelReady() then    -- (held until this level is ready)
+        -- (held until this level is ready; ((2026-11-11) a replay for a unit's fresh copy, until that copy's up here:
+        -- M.unitPending, the rejoiner's Alicorn)
+        local waits = unit ~= nil and M.unitPending(unit)
+        if mirroredEvent(f[2]) and D and rawEvent and (not levelReady() or waits) then
             M.evQ = M.evQ or {}
-            if #M.evQ < 64 then M.evQ[#M.evQ + 1] = { name = f[2], at = os.clock(), unit = unit } end
+            if #M.evQ < 64 then M.evQ[#M.evQ + 1] = { name = f[2], at = os.clock(), unit = unit, waited = waits or nil } end
+            if waits then once("evwait", "coop: the host's " .. tostring(f[2]) .. " for " .. unit
+                .. " waits here: its copy isn't up yet (each one's firing logged)") end
         elseif mirroredEvent(f[2]) and D and rawEvent and not keptThrough(unit, f[2]) then
             hostEvent(f[2])
         end

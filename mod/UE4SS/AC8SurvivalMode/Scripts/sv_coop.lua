@@ -802,7 +802,24 @@ function COOP.withdrawn(unit)
     send(true, "wd", unit)
     return true
 end
+-- ((2026-11-11) the 50-round run's host never said who sank the Alicorn's core) a special's ship or part down here (not a
+-- pool flight's, not an ally's, not one taken off): whose kill its "dn" named and the joiners' hits on it (HP: e.by),
+-- 40 lines a minute at most (M.hitTallyTick starts the count again)
+local KILL_WHO = { allies = "the allies'", ships = "the allied ships'", defences = "the airfield defences'" }
+local function killNote(e, kl)
+    if not (e.key and kl ~= false and not e.unpaid and M.specialUnit(e.unit)) then return end
+    M.killSaid = (M.killSaid or 0) + 1
+    if M.killSaid > 40 then return end
+    local by = {}
+    for s, x in pairs(e.by or {}) do by[#by + 1] = string.format("player %d %.0f", s + 1, x) end
+    table.sort(by)
+    local who = (kl and kl.slot and string.format("player %d's kill%s", kl.slot + 1, kl.slot == (COOP.slot or 0) and " (yours)" or ""))
+        or (kl and KILL_WHO[kl.side]) or "nobody's (nothing read)"
+    log(string.format("coop: %s's %s down here: %s; the joiners' hits on it: %s", tostring(e.unit), tostring(e.key), who,
+        #by > 0 and table.concat(by, ", ") or "none"))
+end
 local function tallyKill(e, kl)
+    pcall(killNote, e, kl)
     if not (kl and kl.slot) or (type(levelGoing) == "function" and levelGoing()) then return end
     M.tally = M.tally or {}
     local t = M.tally[kl.slot] or { air = 0, ground = 0 }
@@ -813,6 +830,7 @@ end
 
 function hostTick()
     local now = os.clock()
+    pcall(M.hitTallyTick, now)                           -- ((2026-11-11) the joiners' hits here, a line a minute)
     -- deaths at once, health once a second
     local batch, nb = {}, 0
     local wantHp = now >= M.nextHp
@@ -922,8 +940,12 @@ function hostTick()
         table.sort(db)
         -- ((0.74.0) field 15: the run's GONE FISHIN' round, F (0: none), the day-night arc's and THE FESTIVAL's: sv_sky.lua)
         local arcF = math.floor(tonumber(RUN and RUN.arcF) or 0)
+        -- ((2026-11-11) field 16: the Alicorn's row for the joiners' screens, its tanks, core and dive: SPC.alicornCode)
+        local okAc, ac = pcall(function() return SPC and SPC.alicornCode and SPC.alicornCode() or "" end)
+        if not okAc then once("alcncode", "coop: the Alicorn's row not sent: " .. tostring(ac)) end
         send(false, "rnd", D.round or 0, D.state or "wait", string.format("%.1f", secs), D.wave or 0, D.waves and #D.waves or 0, alive, lv, gp, al,
-            spk, ss, string.format("%d", vb), table.concat(rb, ",") .. ";" .. table.concat(db, ","), string.format("%d", arcF))
+            spk, ss, string.format("%d", vb), table.concat(rb, ",") .. ";" .. table.concat(db, ","), string.format("%d", arcF),
+            (okAc and type(ac) == "string") and ac or "")
     end
     -- ((0.73.77, the plan's I7: S12) the Spaceport (sv_spaceport.lua SPORT.coopCode): its NEXT row's numbers for the
     -- joiners' rows, and a retake due or in play, which each joiner keeps for a host migration ("spx"; as it changes,
@@ -1039,6 +1061,16 @@ end
 -- the picture's whole, so it knows which of its flights the host no longer has. The testers' logs of 0.73.70: every
 -- answer took all of a joiner's copies down ("29 copies taken down (the host's run started over)") and its fresh spawns
 -- were refused while the ones it couldn't finish stayed up ("its last flight is still up", 409 times).
+-- ((2026-11-11, the 50-round run: The Iron Acorn relogged mid-Alicorn and his game spawned a fresh one at its lane's west
+-- end, the host's 0-16 km off, his shots "in the water" there) the unit as joiner `to` spawns it again: the Alicorn,
+-- sailing, at its hull's pose (SPC.alicornRejoin; its leg replayed 2 s on, hostSync), a copy of u with that pose; else u
+function M.rejoinUnit(to, unit, u)
+    if not (SPC and unit == SPC.alicornUnit and SPC.alicornRejoin) then return u end
+    local okR, pose, ev, what = pcall(SPC.alicornRejoin)
+    if not (okR and type(pose) == "table") then return u end
+    log(string.format("coop: player %d's Alicorn to come up at the host's hull, %s (%s 2 s on)", to + 1, tostring(what), tostring(ev)))
+    return { pose = pose, ops = u.ops, level = u.level, gen = u.gen }
+end
 function hostSync(to)
     M.cnt.jnGot = M.cnt.jnGot + 1
     crumb("coop: player " .. tostring((to or 0) + 1) .. " asked for the whole picture: sent (rs|j)")
@@ -1047,7 +1079,7 @@ function hostSync(to)
     local n = 0
     for unit, u in pairs(M.units) do
         n = n + 1
-        sendUnit(to, unit, u)
+        sendUnit(to, unit, M.rejoinUnit(to, unit, u))
         for ord, pl in pairs(u.planes) do
             sendTo(to, true, "bd", unit, u.gen, ord, pl.id)
             if pl.dead then sendTo(to, true, "dn", pl.id, "r") end
@@ -1066,6 +1098,13 @@ function hostSync(to)
     -- the Alicorn's fresh copy there: its core open, under water, as here (events of the fight it missed)
     local s = D and D.special
     if s and s.kind == "alicorn" and s.state == "sail" then
+        -- ((2026-11-11) spawned there at its hull (its "sp", M.rejoinUnit), its leg from the waypoint just ahead of the
+        -- hull as it is 2 s on (SPC.alicornRejoin; a joiner holds a unit's replay till its copy's up: M.unitPending)
+        M.replays = M.replays or {}
+        M.replays[#M.replays + 1] = { at = os.clock() + 2, to = to, unit = SPC and SPC.alicornUnit or nil, fn = function()
+            local okR, _, ev = pcall(SPC.alicornRejoin)
+            return (okR and type(ev) == "string") and { ev } or {}
+        end }
         local ev = {}
         if s.coreOpen then ev[#ev + 1] = "RE_SV_AlcnAdvance"; ev[#ev + 1] = "RE_SV_AlcnOpenCore" end
         if s.dived then ev[#ev + 1] = "RE_SV_AlcnDive" end
@@ -1109,9 +1148,64 @@ function hostSync(to)
     log(string.format("coop: sent player %d the run: %d flights", to + 1, n))
 end
 
+-- ((2026-11-11) Saint Alessia's 50-round run: "the Alicorn was invulnerable to Delta" could only be guessed at from the
+-- host's logs, hostHit logged nothing but a refusal once a run) The joiners' hits here, a tally a player
+-- (M.hitTally), logged once a minute (M.hitTallyTick, hostTick): how many came, were taken (the health moved), refused (it
+-- didn't) and dropped (an id down or unknown here, a bad number), the health they took off (x 10, as the Alicorn's
+-- lines), on a special's units (not a pool flight's, not an ally's) by unit, the Alicorn's core and tanks apart.
+-- Whether unit is a special's (its kills' players logged too: tallyKill)
+function M.specialUnit(unit)
+    if type(unit) ~= "string" or allyUnit(unit) then return false end
+    return not (type(poolIndex) == "function" and poolIndex(unit))
+end
+local function hitTally(from)
+    if not slotOk(from) then return nil end
+    M.hitT = M.hitT or {}
+    local t = M.hitT[from]
+    if not t then t = { n = 0, took = 0, refused = 0, dropped = 0, dealt = 0, units = {} }; M.hitT[from] = t end
+    return t
+end
+-- (the Alicorn's part a key names: "core", "tanks", or nil)
+local function alcnPart(e)
+    local c = CFG.specials and CFG.specials.alicorn
+    if not (type(c) == "table" and SPC and e.unit == SPC.alicornUnit and type(e.key) == "string") then return nil end
+    local cls = e.key:match("^(.-)#%d+$")
+    if cls == c.core_class then return "core" end
+    for _, t in ipairs(c.tank_classes or {}) do if cls == t then return "tanks" end end
+    return nil
+end
+function M.hitTallyTick(now)
+    if now < (M.hitTAt or 0) then return end
+    M.hitTAt, M.killSaid = now + 60, 0
+    local T = M.hitT
+    M.hitT = nil
+    if not T then return end
+    local per = {}
+    for s, t in pairs(T) do
+        local us = {}
+        for u, x in pairs(t.units) do
+            local sub = {}
+            for _, k in ipairs({ "core", "tanks" }) do if x[k] then sub[#sub + 1] = string.format("%s %.0f", k, x[k]) end end
+            us[#us + 1] = string.format("%.0f on %s%s", x.dealt, u, #sub > 0 and (" (" .. table.concat(sub, ", ") .. ")") or "")
+        end
+        table.sort(us)
+        per[#per + 1] = { s = s, text = string.format("player %d: %d hits (%d taken, %d refused, %d dropped), %.0f%s", s + 1, t.n,
+            t.took, t.refused, t.dropped, t.dealt, #us > 0 and (": " .. table.concat(us, ", ")) or "") }
+    end
+    table.sort(per, function(a, b) return a.s < b.s end)
+    local lines = {}
+    for _, p in ipairs(per) do lines[#lines + 1] = p.text end
+    log("coop: the joiners' hits dealt here in the last 60 s (health x 10): " .. table.concat(lines, "; "))
+end
+
 function hostHit(from, id, dmg)
     local e = M.byId[id]
-    if not (e and not e.dead and valid(e.obj) and finite(dmg, math.huge) and dmg > 0) then return end
+    local T = hitTally(from)
+    if T then T.n = T.n + 1 end
+    if not (e and not e.dead and valid(e.obj) and finite(dmg, math.huge) and dmg > 0) then
+        if T then T.dropped = T.dropped + 1 end
+        return
+    end
     dmg = math.min(dmg, HIT_MAX)
     e.by = e.by or {}                                       -- ((0.73.77, economy C1) each player's hits on it: its killer)
     e.by[from] = (e.by[from] or 0) + dmg
@@ -1134,10 +1228,22 @@ function hostHit(from, id, dmg)
     if real and e.addr then
         M.joinHits = M.joinHits or {}
         M.joinHits[e.addr] = (M.joinHits[e.addr] or 0) + dmg
-        h1 = health(e.obj)
-        if h0 and h1 and h1 >= h0 then
-            once("hitrefused", string.format("coop: a hit from player %d's real plane wasn't taken (health %d before and after)",
-                from + 1, h0))
+    end
+    -- ((2026-11-11) taken or refused, counted a player a minute (M.hitTallyTick): its once-a-run line was used up by
+    -- 19:20 in the 50-round run, so nothing after it could show a refusal)
+    h1 = health(e.obj)
+    if T and h0 and h1 then
+        if h1 < h0 then
+            T.took, T.dealt = T.took + 1, T.dealt + (h0 - h1)
+            if M.specialUnit(e.unit) then
+                local u = T.units[e.unit]
+                if not u then u = { dealt = 0 }; T.units[e.unit] = u end
+                u.dealt = u.dealt + (h0 - h1)
+                local part = alcnPart(e)
+                if part then u[part] = (u[part] or 0) + (h0 - h1) end
+            end
+        else
+            T.refused = T.refused + 1
         end
     end
 end

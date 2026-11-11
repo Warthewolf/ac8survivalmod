@@ -93,6 +93,9 @@ constantly are hidden unless the player wants to see them".
   TARGET stay as they are.
 - Always shown: ROUND / WAVE, ZOLLARS, AIRFIELD and NEXT. The info rows ALLIES, ITEMS and CO-OP only peek (below), and
   are hidden while the info wall is open. NEXT comes first so it stays put while they peek.
+- (2026-11-11) The Alicorn's NEXT row, `ALICORN: BALLAST TANKS n/4  CORE SHUT | n% | EXPOSED  (DIVED)`, is
+  SPC.alicornRow's (sv_alicorn.lua): the host's own, a co-op joiner's from the host's "rnd" field 16 (a joiner had none
+  before). CORE n% is the core's health left of what it had when it opened (docs/re/ALICORN.md 6).
 - Closed, an info row still shows `peek_s` (5 s, up to the next second's read) when its news changes or it comes back
   after having nothing. Each row's news is its line function's second value: ALLY.hudLine's which flights, ships and
   defences are there and the order (not their counts, health or the kills), TAC.line's the items carried and SECOND

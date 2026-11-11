@@ -11,7 +11,10 @@ the game (tools/checks/bosses_test.sh runs it; tools/build_all.sh builds and che
   - AB.L..IN's LastTGT (RE_SV_GlitchTurn) among GLITCH_POST_STALL but never one of Lua's random post_stall_moves;
   - the two new radio lines in TELL_LINES (AWACS lines, letters only, named by the Lua catalog);
   - the Lua names the build checks for: RE_SV_AnomalyPackSpring / Hold fired, ^RE_SV_AnomalyPack kept in co-op,
-    RE_SV_LadonRage fired, RE_SV_GlitchTurn fired.
+    RE_SV_LadonRage fired, RE_SV_GlitchTurn fired;
+  - (2026-11-11) the Alicorn's legs for a co-op rejoiner's copy (survival_events.alcn_legs, Scripts/sv_alicorn.lua
+    SPC.alicornLegOf): Lua's LANE_KM / LANE_LETTERS the build's ALCN_ROUTE / ALCN_LEG_LETTERS, each RE_SV_AlcnLeg*'s path
+    from its waypoint on along the lane its way, a part leg's end onto the other way's whole leg, letters only.
 """
 import math
 import os
@@ -86,6 +89,34 @@ for g, tid in (('SV_Radio_GlitchEcm', 'v0001_2693'), ('SV_Radio_LadonRage', 'v00
 for name in ('"RE_SV_AnomalyPackSpring"', '"RE_SV_AnomalyPackHold"', '"^RE_SV_AnomalyPack"', '"RE_SV_LadonRage"',
              '"RE_SV_GlitchTurn"'):
     if name not in lua: bad.append(f'the runtime never names {name}')
+# ((2026-11-11) the Alicorn's legs for a co-op rejoiner's copy: Lua's lane and letters the build's (ALCN_ROUTE,
+# ALCN_LEG_LETTERS), each leg's path from the waypoint its name says (Out / Back: the lane's ends), on along the lane its
+# way (east / west), its end handing over to the other way's whole leg; letters only (hard rule 17); the whole legs named
+# by Lua (SPC.alicornLegOf)
+m = re.search(r'local LANE_KM = \{ (.*?) \}\n', lua)
+lane = [tuple(float(v) for v in p) for p in re.findall(r'\{ (-?[\d.]+), (-?[\d.]+) \}', m.group(1))] if m else []
+if lane != [tuple(p) for p in se.ALCN_ROUTE]: bad.append(f'Scripts/sv_alicorn.lua LANE_KM {lane} != ALCN_ROUTE {se.ALCN_ROUTE}')
+m = re.search(r'local LANE_LETTERS = "(\w+)"', lua)
+if not m or m.group(1) != se.ALCN_LEG_LETTERS: bad.append('Scripts/sv_alicorn.lua LANE_LETTERS != ALCN_LEG_LETTERS')
+paths = dict(se.alcn_paths())
+legs = se.alcn_legs()
+want = {'RE_SV_AlcnLegOut', 'RE_SV_AlcnLegBack'} | {f'RE_SV_AlcnLeg{d}{L}' for d in ('Out', 'Back') for L in se.ALCN_LEG_LETTERS[1:-1]}
+if set(legs) != want: bad.append(f'alcn_legs: {sorted(legs)} != {sorted(want)}')
+wp = {L: (x * 100000.0, y * 100000.0) for L, (x, y) in zip(se.ALCN_LEG_LETTERS, se.ALCN_ROUTE)}
+for ev, (path, then) in legs.items():
+    tail = ev[len('RE_SV_AlcnLeg'):]
+    way, L = ('Out', tail[3:]) if tail.startswith('Out') else ('Back', tail[4:])
+    first = wp[L or (se.ALCN_LEG_LETTERS[0] if way == 'Out' else se.ALCN_LEG_LETTERS[-1])]
+    pts = paths.get(path)
+    if not pts or tuple(pts[0][:2]) != first: bad.append(f'{ev}: its path {path} doesn\'t start at its waypoint')
+    elif any((b[0] - a[0]) * (1 if way == 'Out' else -1) <= 0 for a, b in zip(pts, pts[1:])) or len(pts) < 2:
+        bad.append(f'{ev}: {path} doesn\'t run on {way.lower()} along the lane')
+    if not se.survival_fname_plain(ev) or not se.survival_fname_plain(path): bad.append(f'{ev} / {path}: a numeric tail')
+    other = list(paths)[1] if way == 'Out' else list(paths)[0]          # (the other way's whole leg)
+    if L and then != other: bad.append(f'{ev}: its end hands over to {then}, not {other}')
+    if not L and then is not None: bad.append(f'{ev}: a whole leg with a handover of its own ({then})')
+for name in ('"RE_SV_AlcnLegOut"', '"RE_SV_AlcnLegBack"'):
+    if name not in lua: bad.append(f'Scripts/sv_alicorn.lua never names {name}')
 if bad:
     print('bosses build: FAILED\n  ' + '\n  '.join(bad))
     sys.exit(1)
