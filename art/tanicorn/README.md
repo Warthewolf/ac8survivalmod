@@ -21,6 +21,10 @@ Tanager). Design, research and build plan: docs/re/TANICORN.md; the build pipeli
   styles_firemode.py, style_sheet.py; 2026-11-11): each style from above, ahead, firing and the side, at night.
 - `renders/style9/`: style 9, the user's own spec (four-section barrels split mid-length, sliding back and angled up
   round the glowing core; the quarters blown out; the gun house's interior), with its transform step by step.
+- `renders/style10/`: style 10, the default, after the user's screen recording (barrels in top / bottom / side quarters
+  that step out, slide back and pitch up round a khaki rod that pushes out and lights; the side walls split, lift and
+  slide, the rear corners open as doors; the front sides and roof front lift): its views, its transform step by step
+  and the recording's two shots as the model does them (the recording itself stays out of the repository).
 
 Sources: the Alicorn is AC8's (exported with ACE8 Aircraft Builder's `dev mesh`); the Iowa is Sea Power's model.
 Pushed to this repository at the user's request (2026-11-10).

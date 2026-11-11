@@ -12,6 +12,8 @@ moon lamp, the glow doing the rest). Turret B (LEV_T16_FWD), three views each li
   style<N>_4_front     from ahead, above and to port, transformed: the opened guns and the face
   style<N>_5_inside, _6_inside_front   (a style with the gun house's interior) into it past the blown-out quarters
   style<N>_seq_1..5    (with `sequence`) the transform at t 0, 0.3, 0.55, 0.75, 1
+  style<N>_clip_front_1..8, _clip_side_1..6   (with `clip`; `only=clip` renders nothing else) the user's clip's two shots (CLIP_*), step by step:
+                       style_sheet.py lays them beside the clip's frames when given their folder
   stowed               (with `stowed`) the turret shut, before it transforms (the same for every style)
 The lightning, rings and flash are the preview's own (PREVIEW_*); in the game they are AC8's own effects (hard rule 58).
 TANA_FM_SAMPLES (12), TANA_FM_RES (1280x720).
@@ -22,6 +24,7 @@ from mathutils import Vector
 argv = sys.argv[sys.argv.index("--") + 1:]
 OUT, STYLE = os.path.abspath(argv[0]), int(argv[1])
 STOWED = "stowed" in argv[2:]
+ONLY = next((a[5:] for a in argv[2:] if a.startswith("only=")), None)
 os.makedirs(OUT, exist_ok=True)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tanakit
@@ -67,13 +70,55 @@ sc.camera = cam
 C = T.house.matrix_world.translation.copy()
 
 
+def cel_glow():
+    """the cores and their rings glow to the camera but light nothing round them, as in the user's clip (an anime's cel
+    look): lit by them, the staves' insides read gold"""
+    for key in ("fm_core", "fm_ring", "fm_edge"):
+        nt = firemode.MAT[key].node_tree
+        out = next(n for n in nt.nodes if n.bl_idname == "ShaderNodeOutputMaterial")
+        lp, mix, dk = (nt.nodes.new(k) for k in ("ShaderNodeLightPath", "ShaderNodeMixShader", "ShaderNodeBsdfDiffuse"))
+        dk.inputs["Color"].default_value = (0.03, 0.03, 0.03, 1.0)
+        nt.links.new(lp.outputs["Is Camera Ray"], mix.inputs[0])
+        nt.links.new(dk.outputs[0], mix.inputs[1])
+        nt.links.new(nt.nodes["Principled BSDF"].outputs[0], mix.inputs[2])
+        nt.links.new(mix.outputs[0], out.inputs["Surface"])
+
+
+def night_world():
+    """the clip's sky: deep blue, lighter at the horizon (the views until then keep the design's dusk)"""
+    w = bpy.data.worlds.new("PREVIEW_night")
+    w.use_nodes = True
+    nt = w.node_tree
+    bg = nt.nodes["Background"]
+    tc, sep, ramp = (nt.nodes.new(k) for k in ("ShaderNodeTexCoord", "ShaderNodeSeparateXYZ", "ShaderNodeValToRGB"))
+    nt.links.new(tc.outputs["Generated"], sep.inputs[0])
+    nt.links.new(sep.outputs["Z"], ramp.inputs[0])
+    ramp.color_ramp.elements[0].color = (0.035, 0.06, 0.24, 1.0)
+    ramp.color_ramp.elements[1].position = 0.6
+    ramp.color_ramp.elements[1].color = (0.008, 0.014, 0.07, 1.0)
+    nt.links.new(ramp.outputs["Color"], bg.inputs["Color"])
+    bg.inputs["Strength"].default_value = 1.0
+    sc.world = w
+    moon.data.energy = 3.5
+    sc.view_settings.view_transform, sc.view_settings.exposure = "Standard", 0.6   # (the cel look keeps its yellows)
+    global CLIP_LIGHT
+    CLIP_LIGHT = True
+
+
+cel_glow()
+
+
+CLIP_LIGHT = False
+
+
 def aim(loc, look, lens):
     loc, look = Vector(loc), Vector(look)
     cam.location = loc
     cam.rotation_euler = (look - loc).to_track_quat("-Z", "Y").to_euler()
     cam.data.lens = lens
     d = (loc - look).normalized()                              # the moon over the camera's shoulder, high
-    moon.rotation_euler = (-d + Vector((0.4, -0.3, -1.2))).normalized().to_track_quat("-Z", "Y").to_euler()
+    tilt = Vector((0.15, -0.1, -0.45)) if CLIP_LIGHT else Vector((0.4, -0.3, -1.2))   # (the clip: lower, from behind
+    moon.rotation_euler = (-d + tilt).normalized().to_track_quat("-Z", "Y").to_euler()  # the camera, the sides lit)
 
 
 # ---------------------------------------------------------------------------------------------------- effects
@@ -94,6 +139,7 @@ RING, RING_EM = emit_mat("PREVIEW_ring", (0.2, 0.85, 0.3))
 FX = bpy.data.collections.new("PREVIEW_fx")
 sc.collection.children.link(FX)
 BS = firemode.STYLES[STYLE]["barrel"]
+CORE = firemode.STYLES[STYLE].get("core")                  # (style 10's rod: radius, its tip's x)
 EXT = BS.get("extend", 0.0)
 
 
@@ -157,7 +203,7 @@ def piece_point(ob, x, r):
 def covers(ob, x):
     """does this piece run over x (from SPLIT)? (style 9's halves each cover half the barrel)"""
     x0 = ob.get("fm_x0", firemode.SPLIT) - firemode.SPLIT
-    return x0 - 0.1 <= x <= x0 + (firemode.X_MID - firemode.SPLIT) + 0.1 if "fm_x0" in ob else True
+    return x0 - 0.1 <= x <= x0 + ob.get("fm_len", firemode.X_MID - firemode.SPLIT) + 0.1 if "fm_x0" in ob else True
 
 
 def effects(level, firing, seed):
@@ -165,11 +211,13 @@ def effects(level, firing, seed):
     clear_fx()
     if level <= 0:
         return
+    bpy.context.view_layer.update()                         # (the pieces' and guns' world matrices: as just posed)
     rnd = random.Random(seed)
     ARC_EM.inputs["Strength"].default_value = 2.5 + 2.0 * firing      # (green stays green: brighter goes white)
     RING_EM.inputs["Strength"].default_value = 1.6
-    pieces = [o for o in T.pieces() if "fm_barrel" in o]
-    L = firemode.MUZZLE - firemode.SPLIT
+    pieces = [o for o in T.pieces() if "fm_barrel" in o and "fm_rod" not in o]
+    L = (CORE[1] if CORE else firemode.MUZZLE) - firemode.SPLIT          # (the arcs stop at the rod's tip)
+    RL = (firemode.STYLES[STYLE].get("rings_to") or firemode.MUZZLE) - firemode.SPLIT   # (and its rings')
     for b in (1, 2, 3):
         mine = [o for o in pieces if o["fm_barrel"] == b]
         shell = any("fm_x0" in o for o in mine)
@@ -180,7 +228,7 @@ def effects(level, firing, seed):
                  0.02, ARC)
         if shell:                                           # and along the core's coil rings
             for _ in range(int(3 + 4 * level)):
-                k = rnd.randrange(int((L - 2.1) / firemode.RING_STEP))
+                k = rnd.randrange(max(1, int((min(L, RL) - 2.1) / firemode.RING_STEP)))
                 x = firemode.SPLIT + 0.9 + firemode.RING_STEP * k
                 a = rnd.uniform(0, 2 * math.pi)
                 M, yc, fwd = barrel_frame(b)
@@ -188,7 +236,11 @@ def effects(level, firing, seed):
                 poly(jag(core_point(b, x), q, 0.07, 4, rnd), 0.018, ARC)
         M, yc, fwd = barrel_frame(b)
         tip = core_point(b, firemode.MUZZLE + EXT)
-        if firing:                                          # two rings ahead of the muzzle, a few sparks off it
+        if firing and CORE:                                 # the clip (frames 66-70): wide thin rings round the
+            for k in range(3):                              # rod's front half, sparks off its tip
+                ring(core_point(b, CORE[1] - 7.0 + 3.0 * k), fwd, 2.6 + 1.7 * k, 0.03)
+            tip = core_point(b, CORE[1])
+        elif firing:                                        # two rings ahead of the muzzle, a few sparks off it
             for k in range(2):
                 ring(tip + fwd * (1.5 + 3.0 * k), fwd, 1.3 + 0.9 * k, 0.035)
             for _ in range(3):
@@ -197,7 +249,24 @@ def effects(level, firing, seed):
                      0.02, ARC)
 
 
+# the clip's shots (with `clip`): its frames 46-70 (the barrels opening, then the charge and the shot) and 165-198 (the
+# armour opening), each step at the transform's t (fire: the charge, 1 the shot); cameras (place, look at, lens)
+CLIP_ELEV = 5.0
+CLIP_FRONT = ((0.0, 0.0), (0.16, 0.0), (0.26, 0.0), (0.4, 0.0), (0.6, 0.0), (1.0, 0.0), (1.0, 0.6), (1.0, 1.0))
+CLIP_FRONT_CAM = ((56.0, -8.0, 1.0), (20.0, -1.0, 8.0), 26)
+if os.environ.get("TANA_CLIP_CAM"):                         # (x y z, look x y z, lens: to frame a shot)
+    _c = [float(v) for v in os.environ["TANA_CLIP_CAM"].split(",")]
+    CLIP_FRONT_CAM = (tuple(_c[0:3]), tuple(_c[3:6]), _c[6])
+CLIP_SIDE = (0.0, 0.03, 0.12, 0.2, 0.45, 1.0)
+CLIP_SIDE_CAM = ((-12.0, -23.0, 3.6), (-1.0, 0.0, 4.2), 18)
+if os.environ.get("TANA_CLIP_SIDE_CAM"):
+    _c = [float(v) for v in os.environ["TANA_CLIP_SIDE_CAM"].split(",")]
+    CLIP_SIDE_CAM = (tuple(_c[0:3]), tuple(_c[3:6]), _c[6])
+
+
 def render(name):
+    if ONLY and ONLY not in name:                          # (`only=clip`: just the views so named)
+        return
     sc.render.filepath = os.path.join(OUT, name + ".png")
     bpy.ops.render.render(write_still=True)
     print("styles: rendered", name)
@@ -234,6 +303,20 @@ if firemode.STYLES[STYLE].get("interior"):                 # into the gun house,
     render("style%d_5_inside" % STYLE)
     aim(C + Vector((19, 16, 3.0)), C + Vector((6.5, 6.5, 2.3)), 22)      # and the front left
     render("style%d_6_inside_front" % STYLE)
+if "clip" in argv[2:]:                                     # the user's clip's two shots, for a side-by-side with it
+    night_world()
+    for k, (t, fire) in enumerate(CLIP_FRONT):             # low ahead and to starboard, the guns lifted, the sky behind
+        T.trun.rotation_euler.y = -math.radians(CLIP_ELEV)
+        firemode.pose(t, fire=fire)
+        effects(fire, 1 if fire >= 1 else 0, 13 + k)
+        aim(C + Vector(CLIP_FRONT_CAM[0]), C + Vector(CLIP_FRONT_CAM[1]), CLIP_FRONT_CAM[2])
+        render("style%d_clip_front_%d" % (STYLE, k + 1))
+    T.trun.rotation_euler.y = -math.radians(4.0)
+    for k, t in enumerate(CLIP_SIDE):                       # the house's starboard side from the deck, its rear on the left
+        firemode.pose(t)
+        effects(0, 0, 0)
+        aim(C + Vector(CLIP_SIDE_CAM[0]), C + Vector(CLIP_SIDE_CAM[1]), CLIP_SIDE_CAM[2])
+        render("style%d_clip_side_%d" % (STYLE, k + 1))
 if "sequence" in argv[2:]:                                 # the transform in five steps, from ahead and to port
     T.trun.rotation_euler.y = -math.radians(10.0)
     for k, t in enumerate((0.0, 0.3, 0.55, 0.75, 1.0)):

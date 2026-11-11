@@ -427,13 +427,15 @@ TR = D["LEV_G16_FWD_trunnion"]
 FMP = sorted((o for o in D if o.name.startswith("TANA_T16_FWD_") and "fm_part" in o), key=lambda o: o.name)
 if FMP:
     EXT = max([0.0] + [op[1][0] for o in FMP if o["fm_part"] == "GUNS" for op in _json.loads(o["fm_ops"]) if op[0] == "T"])
+    TIP = max([0.0] + [o.get("fm_tip", 0.0) for o in FMP])     # (style 10: the shot leaves its rods' tips, out)
+    MZ = TIP if TIP else FM.MUZZLE + EXT
     turret("T16", ["T16_FWD", "T16_AFT"], "LEV_T16_FWD.001", "LEV_G16_FWD.001", TR.matrix_world.translation,
-           muzzle=[TR.matrix_world @ Vector((FM.MUZZLE + EXT + 0.3, y, 0.0)) for y in FM.GUN_Y])
+           muzzle=[TR.matrix_world @ Vector((MZ + 0.3, y, 0.0)) for y in FM.GUN_Y])
     deploy("T16_ARMOR", ["T16_FWD", "T16_AFT"], "turret_yaw", D["LEV_T16_FWD.001"],
            [(o["fm_bone"], None, o.name) for o in FMP if o["fm_part"] == "ARMOR"])
     deploy("T16_GUNS", ["T16_FWD", "T16_AFT"], "turret_pitch", TR,
            [(o["fm_bone"], None, o.name) for o in FMP if o["fm_part"] == "GUNS"],
-           sockets=[("SOC_Charge_%02d" % (k + 1), TR.matrix_world @ Vector((FM.MUZZLE + EXT + 1.5, y, 0.0)))
+           sockets=[("SOC_Charge_%02d" % (k + 1), TR.matrix_world @ Vector((MZ + 1.5, y, 0.0)))
                     for k, y in enumerate(FM.GUN_Y)])
 else:
     turret("T16", ["T16_FWD", "T16_AFT"], "LEV_T16_FWD.001", "LEV_G16_FWD.001", TR.matrix_world.translation)

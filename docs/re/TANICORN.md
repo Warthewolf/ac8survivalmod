@@ -134,17 +134,20 @@ build/liveproject/Source/Live/Public (= E:/AC8LiveProject).
   list of what to look for is in docs/design/INVINCIBLE_FLEET.md, WP0 handover, "for UE".
 
 
-## 7. The 16-inch triples' FIRE MODE: eight styles for the user to choose (2026-11-11; modelled, not yet built on the machine or seen in game)
+## 7. The 16-inch triples' FIRE MODE: the styles, the user's spec and their clip (2026-11-11; modelled, not yet built on the machine or seen in game)
 The user: "we make them look normal, until they transform into fire mode" (their stills: a battleship turret whose
 armour comes apart in angular blocks, side plates held out on arms and slabs staggered out in layers; each barrel
 splitting lengthwise and opening like jaws round a glowing core, bracket rings along the open halves; green lightning
 and rings as it fires). Two passes were turned down ("Surely you can do a higher quality job than this", "I don't like
 this version either"); then: "give me 8 different versions of the Turret with different styles, I want it as close as
 humanly possible to what those screenshots showed you and I'll pick". Then, with two manga panels of the guns opened
-round coil rings, the user's own spec, built as **style 9 (DEFAULT_STYLE)**: "Split the barrels into four sections.
-Then split the barrels in the middle and have them slide back and angle themselves upwards. Keep the glowing rod in
-the center of the barrel. Have the back left and back right of the turret explode outwards. And have the front right
-and left sides also explode outwards. Feel free to model an interior of the gun housing." Not yet approved.
+round coil rings, the user's own spec, built as style 9: "Split the barrels into four sections. Then split the barrels
+in the middle and have them slide back and angle themselves upwards. Keep the glowing rod in the center of the barrel.
+Have the back left and back right of the turret explode outwards. And have the front right and left sides also explode
+outwards. Feel free to model an interior of the gun housing.", then "have the front right and left sides, along with
+the front section of the roof lift up". Then an 8 s screen recording of an anime battleship's turrets transforming:
+"Watch this frame by frame. I want it to look exactly like this." That is **style 10 (DEFAULT_STYLE)**. Not yet
+approved. (The recording is the user's and stays out of the repository; so do the side-by-side sheets with its frames.)
 - `tools/tanicorn/firemode.py` (run by model_tanacorn.py; `TANA_FM_STYLE` 1-8, 0 for the design's Iowa mount) models
   the mount from scratch on tanakit.py's clean solids, in place of the Iowa's on both turrets: the design's outline,
   size and yaw pivot, the trunnion moved back to 1.2 m behind the face (house frame (11.42, 0.10, 3.17) m), the muzzles
@@ -170,18 +173,34 @@ and left sides also explode outwards. Feel free to model an interior of the gun 
   cabinets forward; each gun's breech, block, recoil cylinders and cradle on the guns). 54k triangles a turret (the
   core assemblies 10k of it). Before export: the house's interior posts leave a few non-manifold edges (9) and the
   core assemblies 15 degenerate faces: to clean.
+  **10** (the clip, read frame by frame by a workflow of analysts, 2026-11-11; its frame numbers in firemode.py): each
+  barrel's shell is four quarters, top, bottom, port and starboard, their seams an X on the muzzle (shell 0.3 m thick,
+  bore 0.58 m), each cut at mid length (the user's words); the quarters step out from the rod together, a yellow flash
+  from the seams as they open (firemode.FLASH), the front halves step out further and slide back over the rear ones in
+  two steps (a small one, then the rest: their ends at 65 % of the barrel), while the whole staves pitch up about their
+  roots ("angle themselves upwards": the side quarters 10 deg, the top one 5, the bottom one level); the rod, a plain
+  khaki cylinder with a rounded tip (r 0.24 m) and its own piece (Barrel_<gun>_9), then pushes 2 m forward to 88 % of
+  the barrel and lights yellow as the gun charges; three coil rings at its root glow gold with it (CLIP). The side
+  walls split on a stepped seam: the lower block slides straight out, the upper one lifts 1.5 m and leans out, the rear
+  corner opens in two doors on their edges (62 and 30 deg), behind them the gun house's interior with the training
+  gear's big drum; the front sides, the chamfers and the roof's front lift up (the user's words). No strut arms. 44k
+  triangles a turret.
 - **Each piece** is an object `TANA_T16_<tag>_<bone>` carrying its motion (`fm_ops`: translations and turns, each over
   a stretch of the 2.5 s transform), part (`fm_part`: ARMOR or GUNS) and bone (`fm_bone`). Keyed into the model's
   timeline: deploy 110-185, stow 226-301.
 - **Choosing**: `styles_firemode.py` builds one style on a model made with `TANA_FM_STYLE=0` (untextured) and renders
   it at night from four sides (from above and behind, from ahead, firing, the side; with an interior, two views into
-  it; with `sequence`, the transform in five steps); `style_sheet.py` lays them out. The sheets: art/tanicorn/renders/
-  styles (1-8), art/tanicorn/renders/style9.
+  it; with `sequence`, the transform in five steps; with `clip`, the recording's two shots, low ahead of the raised
+  guns and the house's side from the deck, step by step at its frames' moments, at night under a cel look: the glow
+  lights nothing round it); `style_sheet.py` lays them out, with the recording's frames (a folder of frame_NNN.png at
+  24 fps) beside the clip steps (CLIP_PAIRS). The sheets: art/tanicorn/renders/styles (1-8), art/tanicorn/renders/
+  style9, art/tanicorn/renders/style10 (the model's side only).
 - **Export** (export_tanacorn.py): `T16` (house on turret_yaw, boots, root rings and core rods on turret_pitch;
   SOC_Gun_01..03 at the open muzzles; its wreck the house and roots: barrels gone) plus two skinned parts riding its
   bones, each with the animation `Deploy` sampled from the model's keys (rotation and place a bone, 30 fps):
   `T16_ARMOR` (Root at turret_yaw > the style's armour pieces) and `T16_GUNS` (Root at turret_pitch >
-  Barrel_<gun>_<piece>; SOC_Charge_01..03 1.5 m ahead of the muzzles, for the charge effects). check_export.py reads
+  Barrel_<gun>_<piece>; SOC_Charge_01..03 1.5 m ahead of the muzzles, for the charge effects; style 10's shots and
+  charges leave the rods' tips, out: each rod's `fm_tip`). check_export.py reads
   each back: bones in place, one action, shut at its start, its farthest bone where the export says.
 - **UE** (ue_import.py kind `deploy`: SK_SV_Tani_T16_ARMOR / _GUNS + AS_SV_..._Deploy; spec.py FIRE_MODE):
   BP_SV_Tani_T16 gets `FireModeArmor` / `FireModeGuns`, SkeletalMeshComponents attached to TurretPoseableMesh at
