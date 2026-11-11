@@ -704,28 +704,58 @@ TANI.rise = { hold_s = 1.5, rate = 1.0, breach_s = 0.8, slam_s = 9.0, length_s =
               cam_fov = 55, autopilot_alt_m = 1500, autopilot_radius_m = 3500, every_s = 0.5, ahead_cm = 500000, find_s = 10,
               end_pad_s = 1.0,
               breach_m = 115.8,                          -- (where her axis stands in the sea: from her rest midships, forward)
-              spray_s = 0.5, spray_scale = 1.5,          -- (the sea off her where she stands in the water, rising and falling)
-              fx_scale = 1.5,                            -- (the Ford's effects, for a 333 m ship, on her 650 m)
               bow_x_m = 324.8,                           -- (the bow's tip from midships: tools/tanicorn's hull export)
               -- the two hull sockets the pitch is measured between, and their rest angle (deg: the hull's json, UE cm)
               bow_socket = "Mount_RAILCANNON", stern_socket = "Mount_VLSD_8", rest_pitch = math.deg(math.atan(-691.8 - 991.4, 12590.4 + 26400.0)),
               part = "Part_T16_FWD",
               anim = "/Game/Mods/SurvivalMode/Tanicorn/Model/AS_SV_Tani_RIG_Rise",
-              -- (the Alicorn's own four surfacing systems, all at once where she breaks the surface)
-              breach_fx = { "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_ex03_alcn_surfacing01_ON",
-                            "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_ex03_alcn_surfacing02_ON",
-                            "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_ex03_alcn_surfacing03_ON",
-                            "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_ex03_alcn_surfacing04_ON" },
               breach_sound = "/Game/WwiseAssets/BA002_alcn/AKE_BA002_alcn_Surface_Play",
-              spray_fx = "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsWaveSplashL001",
-              foam_fx = "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsWaveFoamXL001",
-              slam_fx = { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsWaveFoamXL001",
-                          "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsWaveSplashL001" },
-              -- (the Ford's death's water pillars, either side of her forebody at the slam: x forward of midships, y across)
-              pillar_fx = "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsPillarL001",
-              pillars = { { 100, -60 }, { 100, 60 }, { 200, -55 }, { 200, 55 }, { 280, -40 }, { 280, 40 } },
-              slam_spots = 13, shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios",
+              -- ((0.74.65) the user on 0.74.64's recording: "needs more water VFX": the Ford's effects, made for a 333 m
+              -- ship, barely showed on her 650 m; only the slam's water pillars (NS_VesselsPillarL001) read on screen. Now
+              -- the water AC8 made for ships her size as well: the Alicorn's and the Arsenal Bird's cutscene water (Online
+              -- Mode's IGC: spawned bare, no user parameter needed), with the Ford's pillars at twice their size.
+              -- Each entry { path, scale, forward m, starboard m } from her rest midships; the paths are FX.* below)
+              breach = {                                 -- (at breach_s, round where her axis stands in the sea)
+                  { "SURF1", 1, 0, 0 }, { "SURF2", 1, 0, 0 }, { "SURF3", 1, 0, 0 }, { "SURF4", 1, 0, 0 },
+                  { "ALCN_PILLAR_1", 1, 0, 0 }, { "ALCN_PILLAR_2", 1, 10, 0 }, { "ALCN_BLAST", 1, 25, 0 },
+                  { "MIST", 1, 0, 0 }, { "FORD_PILLAR", 2, 0, -45 }, { "FORD_PILLAR", 2, 0, 45 } },
+              -- (from breach_s to rise_until_s, one every rise_every_s, cycled, on a ring ring_m round where she stands)
+              rise = { { "AB_SPLASH", 1 }, { "FORD_PILLAR", 2 }, { "IMPACT_L", 1 }, { "FORD_SPLASH", 3 } },
+              rise_every_s = 0.3, rise_until_s = 5.0, ring_m = { 35, 75 },
+              foam = { "FOAM_IGC", 1 }, foam_every_s = 1.0,  -- (where she stands, breach to the slam)
+              -- (from rise_until_s to the slam: her bow coming down, the rest of her coming up through the surface aft
+              -- of where she stood: along her hull there, both sides)
+              fall = { { "FORD_PILLAR", 2 }, { "MIST", 1 }, { "AB_SPLASH", 1 }, { "FORD_SPLASH", 3 } }, fall_every_s = 0.3,
+              -- (at slam_s: { path, scale, forward m, starboard m })
+              slam = { { "ALCN_PILLAR_BIG", 1, -200, -50 }, { "ALCN_PILLAR_BIG", 1, -200, 50 }, { "ALCN_PILLAR_BIG", 1, 0, -55 },
+                       { "ALCN_PILLAR_BIG", 1, 0, 55 }, { "ALCN_PILLAR_BIG", 1, 200, -50 }, { "ALCN_PILLAR_BIG", 1, 200, 50 },
+                       { "ALCN_PILLAR_3", 1, 300, 0 }, { "AB_LAND_L", 1, -100, -70 }, { "AB_LAND_L", 1, 150, -70 },
+                       { "AB_LAND_R", 1, -100, 70 }, { "AB_LAND_R", 1, 150, 70 }, { "ALCN_BLAST", 1, 280, 0 } },
+              slam_pillars = { "FORD_PILLAR", 2 }, slam_pillar_m = 50,     -- (both sides, every slam_pillar_m stern to bow)
+              slam_foam = { "FORD_FOAM", 2 }, slam_spots = 13,             -- (along her keel)
+              settle = { "FOAM_IGC", 1 }, settle_every_s = 0.5, settle_until_s = 12.5,   -- (foam along her as she settles)
+              shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios",
               shake_km = 8 }
+do
+    local V, IGC = "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/", "/Game/OnlineMode/VFX/IGC/Emergency/"
+    local BOSS = "/Game/OnlineMode/VFX/Vehicles/Boss/"
+    TANI.rise.FX = {
+        SURF1 = BOSS .. "BA002_alcn/Niagara/NS_ex03_alcn_surfacing01_ON", SURF2 = BOSS .. "BA002_alcn/Niagara/NS_ex03_alcn_surfacing02_ON",
+        SURF3 = BOSS .. "BA002_alcn/Niagara/NS_ex03_alcn_surfacing03_ON", SURF4 = BOSS .. "BA002_alcn/Niagara/NS_ex03_alcn_surfacing04_ON",
+        ALCN_PILLAR_1 = IGC .. "EB002/ED/Niagara/NS_IGC_alcn_ED_WaterPillar_c02_1st_ON",
+        ALCN_PILLAR_2 = IGC .. "EB002/ED/Niagara/NS_IGC_alcn_ED_WaterPillar_c02_2nd_ON",
+        ALCN_PILLAR_3 = IGC .. "EB002/ED/Niagara/NS_IGC_alcn_ED_WaterPillar_c03_ON",
+        ALCN_PILLAR_BIG = IGC .. "EB002/ED/Niagara/NS_IGC_alcn_WaterPillar_c05_ON",
+        ALCN_BLAST = BOSS .. "BA002_alcn/Niagara/NS_alcn_WaterExplosion01_ON",
+        MIST = IGC .. "EB001/ED/Niagara/NS_IGC_aias_WaterSmoke_c03_ON",
+        FOAM_IGC = IGC .. "EB002/OP/Niagara/NS_IGC_aegs_WaterFoam_OP_c02_ON",
+        AB_SPLASH = BOSS .. "BA001_aias/Niagara/NS_MS19_AB_LandingSplash_01_ON",
+        AB_LAND_L = BOSS .. "BA001_aias/Niagara/NS_MS19_AB_LandingSplash_00_L_ON",
+        AB_LAND_R = BOSS .. "BA001_aias/Niagara/NS_MS19_AB_LandingSplash_00_R_ON",
+        IMPACT_L = BOSS .. "BA001_aias/Niagara/NS_WaterImpact_L01_ON",
+        FORD_PILLAR = V .. "NS_VesselsPillarL001", FORD_SPLASH = V .. "NS_VesselsWaveSplashL001", FORD_FOAM = V .. "NS_VesselsWaveFoamXL001",
+    }
+end
 local RISE_ATTACKERS = { "MaxPlaneAttackerMissiles", "MaxPursuitAttackers", "MaxNonPlaneAttackerMissiles" }   -- (sv_down.lua's)
 local RA = {}
 local function riseAsset(path, cls)                      -- an asset by path (a blueprint's class with cls), kept
@@ -962,50 +992,67 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
     -- ((0.74.64) the sea round her, in her rest frame: her rest place (R.x, R.y, R.z) and forward (the actor's, as a vector:
     -- rotators don't read from Lua). Her motion (the surfacing shot's) slides along her own axis through one point on the
     -- sea, then pivots about it (breach_m forward of her rest midships), so that's where the water stands round her)
+    -- ((0.74.65) "needs more water VFX": the effects by name from TANI.rise.FX, many more of them, bigger ones)
     if not R.fwd then
         local f = v3(R.o, function() return R.o:GetActorForwardVector() end)
         local h = f and math.sqrt(f.X * f.X + f.Y * f.Y) or 0
         R.fwd = h > 1e-6 and { X = f.X / h, Y = f.Y / h } or { X = 1, Y = 0 }
-        R.fx = { up = 0, of = 0 }
+        R.fx = { up = 0, of = 0, by = {} }
     end
     local function spot(along_m, across_m)               -- a place on the sea in her frame (m: forward, starboard)
         local f = R.fwd
         return { X = R.x + (f.X * along_m - f.Y * across_m) * 100, Y = R.y + (f.Y * along_m + f.X * across_m) * 100, Z = R.z }
     end
-    local function fx(path, where, sc)
+    local function fx(key, where, sc)                    -- an effect by its FX name: counted, and by name when it fails
         R.fx.of = R.fx.of + 1
+        local path = C.FX[key] or key
         if riseFx(path, where, sc) then R.fx.up = R.fx.up + 1; return true end
+        R.fx.by[key] = (R.fx.by[key] or 0) + 1
         return false
+    end
+    local function list(l, along, across)               -- a list of { key, scale, forward, starboard } round a point
+        local up = 0
+        for _, e in ipairs(l) do if fx(e[1], spot(along + (e[3] or 0), across + (e[4] or 0)), e[2]) then up = up + 1 end end
+        return up
     end
     if not R.breached and t >= C.breach_s then
         R.breached = true
-        local where, up = spot(C.breach_m, 0), 0
-        for _, p in ipairs(C.breach_fx) do if fx(p, where, 1) then up = up + 1 end end
-        log(string.format("tanicorn: rise breach at +%.1f s: %d of %d of the Alicorn's surfacing effects up (%.0f m forward of her "
-            .. "rest midships), the sound %s", t, up, #C.breach_fx, C.breach_m, riseSound(C.breach_sound, where) and "played" or "FAILED"))
+        local up = list(C.breach, C.breach_m, 0)
+        log(string.format("tanicorn: rise breach at +%.1f s: %d of %d effects up (%.0f m forward of her rest midships), the sound %s",
+            t, up, #C.breach, C.breach_m, riseSound(C.breach_sound, spot(C.breach_m, 0)) and "played" or "FAILED"))
     end
-    -- the sea pouring off her where she stands in it, both sides, while she rises and her bow comes down; from her hang on,
-    -- along her hull aft of it too, as the rest of her comes up through the surface
-    if R.breached and t < C.slam_s + 0.5 and now >= (R.sprayAt or 0) then
-        R.sprayAt = now + C.spray_s
+    -- the sea round where she stands while she climbs (a ring), then along her hull aft of it as her bow comes down and the
+    -- rest of her comes up through the surface; foam where she stands all the while
+    if R.breached and t < C.slam_s and now >= (R.sprayAt or 0) then
+        local rising = t < C.rise_until_s
+        R.sprayAt = now + (rising and C.rise_every_s or C.fall_every_s)
         R.sprays = (R.sprays or 0) + 1
-        local side = (R.sprays % 2 == 0) and 1 or -1
-        fx(C.spray_fx, spot(C.breach_m + math.random(-20, 20), side * 35), C.spray_scale)
-        if R.sprays % 3 == 0 then fx(C.foam_fx, spot(C.breach_m, 0), C.spray_scale) end
-        if t > 5.0 then
-            local back = math.min(300, (t - 5.0) / 4.0 * 300)      -- (5 -> 9 s: from where she stands to 300 m aft of it)
-            fx(C.spray_fx, spot(C.breach_m - back * math.random(), -side * 35), C.spray_scale)
+        local l = rising and C.rise or C.fall
+        local e = l[(R.sprays - 1) % #l + 1]
+        if rising then
+            local a, r = math.rad(math.random(0, 359)), math.random(C.ring_m[1], C.ring_m[2])
+            fx(e[1], spot(C.breach_m + math.cos(a) * r, math.sin(a) * r), e[2])
+        else
+            local back = math.min(300, (t - C.rise_until_s) / math.max(0.1, C.slam_s - C.rise_until_s) * 300)
+            fx(e[1], spot(C.breach_m - back * math.random(), (R.sprays % 2 == 0 and 1 or -1) * math.random(30, 50)), e[2])
         end
+        if now >= (R.foamAt or 0) then R.foamAt = now + C.foam_every_s; fx(C.foam[1], spot(C.breach_m, 0), C.foam[2]) end
     end
     if not R.slammed and t >= C.slam_s then
         R.slammed = true
         local n, up, of = math.max(2, C.slam_spots), 0, 0
-        for i = 0, n - 1 do                                -- (along her keel, stern to bow, at sea level)
-            local where = spot(-300 + 600 * i / (n - 1), 0)
-            for _, p in ipairs(C.slam_fx) do of = of + 1; if fx(p, where, C.fx_scale) then up = up + 1 end end
+        for i = 0, n - 1 do                                -- (foam along her keel, stern to bow, at sea level)
+            of = of + 1
+            if fx(C.slam_foam[1], spot(-300 + 600 * i / (n - 1), 0), C.slam_foam[2]) then up = up + 1 end
         end
-        local pu = 0
-        for _, q in ipairs(C.pillars) do if fx(C.pillar_fx, spot(q[1], q[2]), C.fx_scale) then pu = pu + 1 end end
+        local pu, po = 0, 0
+        for x = -300, 300, C.slam_pillar_m do              -- (pillars both sides, every slam_pillar_m)
+            for _, y in ipairs({ -45, 45 }) do
+                po = po + 1
+                if fx(C.slam_pillars[1], spot(x, y), C.slam_pillars[2]) then pu = pu + 1 end
+            end
+        end
+        local bu = list(C.slam, 0, 0)
         local shook = false
         local cls = riseAsset(C.shake, true)
         local you = playerLocation()
@@ -1015,9 +1062,20 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
             shook = pcall(function() survivalPC:ClientStartCameraShake(cls, sc, 0, { Pitch = 0, Yaw = 0, Roll = 0 }) end)
                 or pcall(function() survivalPC.PlayerCameraManager:StartCameraShake(cls, sc, 0, { Pitch = 0, Yaw = 0, Roll = 0 }) end)
         end
-        log(string.format("tanicorn: rise slam at +%.1f s: %d of %d foam / splashes along her keel, %d of %d water pillars up; "
-            .. "the shake %s (%.1f km); %d of %d of the rise's effects came back in all (%d sprays)", t, up, of, pu, #C.pillars,
-            shook and "on" or (cls and "not on" or "NOT loaded"), km_, R.fx.up, R.fx.of, R.sprays or 0))
+        log(string.format("tanicorn: rise slam at +%.1f s: %d of %d foam along her keel, %d of %d pillars along her sides, %d of %d "
+            .. "big ones (the Alicorn's, the Arsenal Bird's); the shake %s (%.1f km)", t, up, of, pu, po, bu, #C.slam,
+            shook and "on" or (cls and "not on" or "NOT loaded"), km_))
+    end
+    if R.slammed and t < C.settle_until_s and now >= (R.settleAt or 0) then   -- (foam along her as she settles)
+        R.settleAt = now + C.settle_every_s
+        fx(C.settle[1], spot(math.random(-300, 300), math.random(-40, 40)), C.settle[2])
+    end
+    if R.slammed and t >= C.settle_until_s and not R.fxSaid then
+        R.fxSaid = true
+        local miss = {}
+        for k, n in pairs(R.fx.by) do miss[#miss + 1] = k .. " x" .. n end
+        log(string.format("tanicorn: rise effects: %d of %d came back (%d sprays)%s", R.fx.up, R.fx.of, R.sprays or 0,
+            #miss > 0 and ("; NOT: " .. table.concat(miss, ", ")) or ""))
     end
     local okI, still = pcall(function() return R.rig:IsPlaying() end)
     local done = (t >= C.slam_s + 2.4 and okI and still == false)

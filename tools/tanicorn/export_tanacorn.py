@@ -617,8 +617,10 @@ def surf_pose(t):
 # t s, the camera's place and the point it looks at, m in UE's axes from her rest (x her forward, y her starboard: y < 0
 # is off her port side): low on the water off her port bow, close as her stem comes up, then further off and wider as
 # her bow comes down and she levels (the surfacing shot's two cameras, as one moving camera)
+# ((0.74.65) the user on 0.74.64: "the camera zooms too far away": it pulled back to ~1.6 km for the fall and the slam; now
+# it stays within ~950 m of her, drifting aft with her as she levels)
 RISE_CAM = [(0.0, 700.0, -650.0, 12.0, 300.0, 0.0, 40.0), (5.0, 680.0, -660.0, 14.0, 200.0, 0.0, 70.0),
-            (9.0, 900.0, -1100.0, 25.0, 60.0, 0.0, 15.0), (15.0, 950.0, -1250.0, 30.0, 0.0, 0.0, 10.0)]
+            (9.0, 640.0, -700.0, 16.0, 80.0, 0.0, 15.0), (15.0, 600.0, -720.0, 18.0, 40.0, 0.0, 10.0)]
 
 
 def pchip(keys, col, t):

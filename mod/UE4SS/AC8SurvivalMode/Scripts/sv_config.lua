@@ -1145,7 +1145,10 @@ CFG = {
                                  -- can't bind (hard rule 42's materials). li_fx "ac8": the beam is AC8's own port of the
                                  -- same UAV beam (Niagara li_fx_beam, User.BeamLength / BeamLifeTime, and the end flash
                                  -- li_fx_end) on the laser as it swings; AC7's two never lit. "ac7": AC7's (crashes).
-                                 li_fx = "ac8", li_fx_beam = "/Game/VFX/Vehicles/Weapon/TLS/NS_UAVTLS_Muzzleflash01",
+                                 -- ((0.74.65) the user's pick from 0.74.64's Ctrl+[ picker: "the players tls worked":
+                                 -- AC8's player TLS beam, its own colours, the same User.BeamLength / BeamLifeTime;
+                                 -- the UAV beam NS_UAVTLS_Muzzleflash01 was blue, and a BeamColor write hid it)
+                                 li_fx = "ac8", li_fx_beam = "/Game/VFX/Vehicles/Weapon/TLS/NS_TLS_Muzzleflash01",
                                  li_fx_end = "/Game/VFX/Vehicles/Weapon/TLS/NS_UAVTLS_EndLaser001",
                                  -- ((2026-11-11) the user: "change the laser color to red") the beam's colour, linear HDR
                                  -- { R, G, B }: li_fx_beam's own User.BeamColor (the UAV beam's only colour parameter; its
