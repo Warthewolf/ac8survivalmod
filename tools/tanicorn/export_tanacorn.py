@@ -10,10 +10,11 @@ socket it sits on (SOCKET_Mount_<name>: its base at the origin, +X its forward),
            Tani_<P>.gltf skinned Body > turret_yaw > turret_pitch, every joint with an identity rotation, the house on
            turret_yaw, the guns on turret_pitch (its place the guns' trunnion); muzzle sockets SOC_Gun_NN on turret_pitch
            (the 16-inch's at its fire-mode muzzles, firemode.py; its wreck the house and the guns' roots: barrels gone)
-  deploy   the 16-inch's FIRE MODE (firemode.py): T16_ARMOR (Root > Armor_L/R, Vent_L/R: its origin turret_yaw's place)
-           and T16_GUNS (Root > Barrel_1_L .. 3_R > Chase_1_L .. 3_R: its origin turret_pitch's, sockets SOC_Charge_01..03
-           ahead of the open forks), each with the animation "Deploy" (2.5 s, 30 fps: rotations and places sampled
-           from the model's own keys; the stow is Deploy backwards), to ride the turret's bones
+  deploy   the 16-inch's FIRE MODE (firemode.py, the style the model was built with): T16_ARMOR (Root > the style's
+           moving armour pieces: its origin turret_yaw's place) and T16_GUNS (Root > Barrel_<gun>_<piece>: its origin
+           turret_pitch's, sockets SOC_Charge_01..03 ahead of the open muzzles), each with the animation "Deploy"
+           (2.5 s, 30 fps: rotations and places sampled from the model's own keys; the stow is Deploy backwards), to
+           ride the turret's bones
   VLS      VLSD (the aft deck's block; one mesh for all 8) and VLSS_L1..L4 / VLSS_R1..R4 (the bow's side blocks, each
            bent onto its own stretch of the hull): Tani_<P>.gltf skinned Body > Hatch_01..08, each lid's joint on its
            hinge, and the animation "Open" (0.5 s: every lid swings open about its hinge); sockets SOC_Vls_01..08 on
@@ -416,19 +417,26 @@ def deploy(part, on, attach, frame_obj, pieces, sockets=()):
     finish(part, mesh, info, joints, ("Deploy", times, [(j, rots[j], locs[j]) for j in range(1, len(joints))]), wreck=False)
 
 
-# the 16-inch triple (firemode.py's mount): house and drums aim; its fire mode is two more skinned parts riding its bones
+# the 16-inch triple: with firemode.py's mount (a style chosen, TANA_FM_STYLE) its house and boots aim and its fire mode
+# is two more skinned parts riding its bones, their pieces as the style made them (each object's fm_part / fm_bone);
+# without it (style 0), the design's Iowa mount as it was
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import firemode as FM
+import json as _json
 TR = D["LEV_G16_FWD_trunnion"]
-turret("T16", ["T16_FWD", "T16_AFT"], "LEV_T16_FWD.001", "LEV_G16_FWD.001", TR.matrix_world.translation,
-       muzzle=[TR.matrix_world @ Vector((FM.MUZZLE + FM.CHASE_OUT + 0.3, y, 0.0)) for y in FM.GUN_Y])
-deploy("T16_ARMOR", ["T16_FWD", "T16_AFT"], "turret_yaw", D["LEV_T16_FWD.001"],
-       [(n, None, "TANA_T16_FWD_" + n) for n in ("Armor_L", "Armor_R", "Vent_L", "Vent_R")])
-deploy("T16_GUNS", ["T16_FWD", "T16_AFT"], "turret_pitch", TR,
-       [(b, None, "TANA_T16_FWD_" + b) for b in ("Barrel_%d_%s" % (n, s) for n in (1, 2, 3) for s in "LR")]
-       + [("Chase_%d_%s" % (n, s), "Barrel_%d_%s" % (n, s), "TANA_T16_FWD_Chase_%d_%s" % (n, s)) for n in (1, 2, 3) for s in "LR"],
-       sockets=[("SOC_Charge_%02d" % (k + 1), TR.matrix_world @ Vector((FM.MUZZLE + FM.CHASE_OUT + 1.5, y, 0.0)))
-                for k, y in enumerate(FM.GUN_Y)])
+FMP = sorted((o for o in D if o.name.startswith("TANA_T16_FWD_") and "fm_part" in o), key=lambda o: o.name)
+if FMP:
+    EXT = max([0.0] + [op[1][0] for o in FMP if o["fm_part"] == "GUNS" for op in _json.loads(o["fm_ops"]) if op[0] == "T"])
+    turret("T16", ["T16_FWD", "T16_AFT"], "LEV_T16_FWD.001", "LEV_G16_FWD.001", TR.matrix_world.translation,
+           muzzle=[TR.matrix_world @ Vector((FM.MUZZLE + EXT + 0.3, y, 0.0)) for y in FM.GUN_Y])
+    deploy("T16_ARMOR", ["T16_FWD", "T16_AFT"], "turret_yaw", D["LEV_T16_FWD.001"],
+           [(o["fm_bone"], None, o.name) for o in FMP if o["fm_part"] == "ARMOR"])
+    deploy("T16_GUNS", ["T16_FWD", "T16_AFT"], "turret_pitch", TR,
+           [(o["fm_bone"], None, o.name) for o in FMP if o["fm_part"] == "GUNS"],
+           sockets=[("SOC_Charge_%02d" % (k + 1), TR.matrix_world @ Vector((FM.MUZZLE + EXT + 1.5, y, 0.0)))
+                    for k, y in enumerate(FM.GUN_Y)])
+else:
+    turret("T16", ["T16_FWD", "T16_AFT"], "LEV_T16_FWD.001", "LEV_G16_FWD.001", TR.matrix_world.translation)
 turret("T5", ["T5_%d" % k for k in range(1, 7)], "LEV_IOWA_T5_1.001", "LEV_IOWA_G5_1.001",
        D["LEV_IOWA_G5_1_trunnion"].matrix_world.translation)
 turret("CIWS", ["CIWS_%d" % k for k in range(1, 5)], "LEV_IOWA_CIWS_1.001", "LEV_IOWA_CG_1.001",

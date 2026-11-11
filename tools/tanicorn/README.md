@@ -82,16 +82,18 @@ its target from its own rig (the turret's yaw and pitch, the guns' long axis, it
 21 s a frame at 1280x720 and 8 samples on 4 cores; TANA_BREACH_RESUME=1 goes on from the frames already rendered.
 `TANA_BREACH_FRAMES=110,312` renders test stills, `TANA_BREACH_FX=0` leaves the weapons out.
 
-**The 16-inch triples' fire mode** (2026-11-11, the user: "look normal, until they transform into fire mode"; docs/re/
-TANICORN.md 7): `firemode.py`, run by model_tanacorn.py, models the 16-inch mount again from scratch on `tanakit.py`'s
-clean solids (the kit split out of model_tanacorn.py: Part, unwrap, check, bake) in place of the Iowa's on both turrets,
-and keys its transform (side armour and roof vents opening, barrels splitting into rails, chases telescoping) at 110-185
-/ 226-301. The export gives it two more parts, T16_ARMOR and T16_GUNS, each with its Deploy. Stills and a clip:
+**The 16-inch triples' fire mode** (2026-11-11, the user: "look normal, until they transform into fire mode", then
+eight styles to choose from; docs/re/TANICORN.md 7): `firemode.py`, run by model_tanacorn.py, models the 16-inch mount
+from scratch on `tanakit.py`'s clean solids (the kit split out of model_tanacorn.py: Part, unwrap, check, bake) in
+place of the Iowa's on both turrets, in the style `TANA_FM_STYLE` (1-8; 0 keeps the design's Iowa mount), and keys
+its transform at 110-185 / 226-301. The export gives it two more parts, T16_ARMOR and T16_GUNS, each with its Deploy.
+The styles side by side (a model made with TANA_FM_STYLE=0, then each style built untextured and rendered at night):
 
-    blender -b build/tanicorn/model/Tanacorn_model.blend -P tools/tanicorn/film_firemode.py -- build/tanicorn/firemode [stills] [clip]
+    TANA_FM_STYLE=0 blender -b art/tanicorn/design/Leviathan_animated.blend -P tools/tanicorn/model_tanacorn.py -- build/tanicorn/model_base
+    blender -b build/tanicorn/model_base/Tanacorn_model.blend -P tools/tanicorn/styles_firemode.py -- build/tanicorn/styles <1-8> [stowed]
+    python -I tools/tanicorn/style_sheet.py build/tanicorn/styles build/tanicorn/styles/sheets
 
-(dusk, TANA_FM_SUN; TANA_FM_SAMPLES, TANA_FM_RES, TANA_FM_FRAMES=a,b for a test stretch of the clip; ~7 s a frame at
-1280x720 and 10 samples on 4 cores).
+(~1 min a style on 4 cores; TANA_FM_SAMPLES, TANA_FM_RES).
 
 **Checking her over** (after any change to the design files or straighten.py): `audit_tanacorn.py` on the saved
 model measures her from every side (rays 0.25 m apart from six sides: port against starboard, faces seen from behind;

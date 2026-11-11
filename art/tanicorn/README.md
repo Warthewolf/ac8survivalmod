@@ -17,8 +17,8 @@ Tanager). Design, research and build plan: docs/re/TANICORN.md; the build pipeli
   5-inch mount as prepared (glTF, textures, bones / sockets); `ingame/container/SurvivalMode_Tani_P`: milestone 0's cooked
   container (BP_SV_Tani_T5 and its assets), 0.74.47's.
 
-- `renders/firemode/` and `video/tanacorn_firemode.mp4`: the 16-inch triples' fire mode (tools/tanicorn/firemode.py,
-  2026-11-11): the mount modelled again, stowed and in fire mode, at dusk (film_firemode.py).
+- `renders/styles/`: the 16-inch triples' fire mode in eight styles for the user's pick (tools/tanicorn/firemode.py,
+  styles_firemode.py, style_sheet.py; 2026-11-11): each style from above, ahead, firing and the side, at night.
 
 Sources: the Alicorn is AC8's (exported with ACE8 Aircraft Builder's `dev mesh`); the Iowa is Sea Power's model.
 Pushed to this repository at the user's request (2026-11-10).
