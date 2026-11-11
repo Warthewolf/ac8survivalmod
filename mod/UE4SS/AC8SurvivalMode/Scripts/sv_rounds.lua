@@ -47,10 +47,12 @@ function SPC.shuttleClockTick(now)
         k.fired = k.fired + 1
         local name = "RE_SV_ShuttleT_" .. k.fired
         local r
-        -- ((2026-11-11) the tail after liftoff while this game's own liftoff is replayed, SPC.shuttleReplayTick: sent
+        -- ((2026-11-11) the tail after liftoff once this game's own liftoff is replayed, SPC.shuttleReplayTick: sent
         -- on to the other players, whose shuttles lifted off on time, and not fired here, where the replay fires its
-        -- own at their offsets from its liftoff; here the climb's second leg would have flown the shuttle off its pad)
-        if D.shuttleReplay and k.fired > T then
+        -- own at their offsets from its liftoff (or its switch-offs, SPC.shuttleReplayEnd); here the climb's second leg
+        -- would have flown the shuttle off its pad, or put a replayed one back on it. Marked on the clock: it may be
+        -- held past the replay's end)
+        if k.replayed and k.fired > T then              -- (SPC.shuttleReplayStart's mark, kept to the clock's end)
             r = COOP and COOP.eventThere and COOP.eventThere(name) or 0
             if not k.tailSaid then
                 k.tailSaid = true
@@ -596,7 +598,7 @@ local function specialTick(now)
     -- and a shuttle destroyed while it's 0 counts as shot down on the pad (failure radio, SV_ShuttleLost)
     if D.shuttleRemoveAt and now >= D.shuttleRemoveAt then
         D.shuttleRemoveAt, D.shuttleEventAt, D.shuttleCheckAt = nil, now + 3, now + 5
-        D.shuttleReplay = nil                       -- (a replay's tail not fired yet: the shuttle's going)
+        SPC.shuttleReplayEnd(now, "the shuttle taken off")   -- (a replay's tail not fired yet: its switch-offs here)
         if D.shuttleClock and D.shuttleClock.inv then SPC.shuttleInvincible(false); D.shuttleClock.inv = false end
         local okT, errT = pcall(SPC.shuttleTakeOff)
         if not okT then log("special: shuttle and pad off: error " .. tostring(errT)) end

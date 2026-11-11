@@ -955,6 +955,11 @@ def build_shuttle(g, flag):
     assert {'SV_ShuttleRound', 'SV_ShuttleLaunched'} <= set(cleared), cleared
     for name in cleared:
         flag('RE_SV_ShuttleRemove', name, 'Set', 0)
+    # ((2026-11-11, the review of the replay) and what T+30 and T switch off: the boost and the ignition loop, which T-14
+    # put on. A replay that gives up, or a shuttle taken off before its replayed tail, had them on at its empty pad for
+    # the rest of the run; a second off after T+30 / T does nothing)
+    g.execute(t_vfx_off, 'RE_SV_ShuttleRemove')
+    g.execute(t_sound, 'RE_SV_ShuttleRemove', {0: SHUTTLE_SOUND + 'Ignition_Stop', 1: SHUTTLE})
     # hits: Mission 22's ObjectDamage_Shuttle; its low-health radio (61 / 31 / 16 %) keeps the stock health conditions.
     # Mission 22 also gates each stage on a bool flag of its own (Bool_Shuttle_Damage_Phase0N), which Survival's flag
     # asset doesn't have: that check is replaced by an int flag of Survival's, set when the line plays and reset when the

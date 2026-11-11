@@ -2574,6 +2574,19 @@ fichier"; "tu met tous dans logs, dater les crumbs").
   lost and fired again with the retasks, 146 took and 150 lost, never taking (3 tries), solo at once, a joiner never;
   the old "down all the countdown" case now expects the replay. run_all: 64 passed, 5 skipped (Windows only). The
   generator wasn't run here (no game files): build_all.sh on the user's machine rebuilds the container.
+- The fix's review (2026-11-11, 5 lenses and a skeptic each; 7 confirmed, all fixed): the clock's tail after T goes to
+  the joiners only for as long as the clock lives (marked on the clock: a clock held past the replay's end fired 157 /
+  163 / 180 on the host again); a replay that gives up, or is cut short by the removal, fires the tail's switch-offs here
+  (T+7 the focus camera, T+30 the boost; never T+13's climb), and RE_SV_ShuttleRemove switches the boost and the
+  ignition loop off too (generator); every raid flight up since the countdown ran out (its appearance read
+  SV_ShuttleRound 1: the shuttle's orders) goes back onto the airfield when the replay lifts off or gives up, the
+  shuttle round's own strike apart; the gate tracks the airfield visit every tick, so a STORE shut just before the
+  countdown ran out counts (it waited for the takeoff); the climb is held while the STORE is back between 146 and 150
+  (no try spent); no replay when the flags can't be read or the shuttle is already well off its pad (> 1 km across or
+  0.5 km up: it flew). Tests: an ordinary liftoff and removal with the new code, the stub's 146 leaving the shuttle on
+  its pad (Mission 22's ~0 speed path), each event's time, the clock held past the replay, the 300 s give-up, the
+  removal's 3 tries, the raids back, the STORE shut just after T, the STORE back mid-replay, unreadable flags, a shuttle
+  that flew without its flags; each of the review's mutations fails one.
 - Not in this fix (docs/design notes for the user): a bomber or strike flight that appears inside the host's minigame
   has nothing that fires its orders again (sv_spawn.lua spawnBomber gives it no D.orders entry); a joiner's own STORE
   can eat the host's forwarded liftoff (her player 3 was in one at T; their logs would tell); other one-shot host events

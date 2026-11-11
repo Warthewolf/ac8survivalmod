@@ -2481,7 +2481,12 @@ The units' own sections above were corrected in place where behaviour changed ("
   ...`, `special: shuttle liftoff replayed here, try N of 3: ...`, `special: shuttle lifted off here at the replay's try
   N (...)`, `special: shuttle liftoff not replayed here: ...`, `special: RE_SV_ShuttleRemove didn't take here (...)`,
   `special: shuttle after its countdown, round R: SV_ShuttleLaunched L, SV_ShuttleRound S; the shuttle ...; the nearest
-  enemy aircraft ... from the pad, N within 5 km` (every 30 s to its removal). Untested in game (coop_landing_test.sh).
+  enemy aircraft ... from the pad, N within 5 km` (every 30 s to its removal). Its review: a replay that gives up or is
+  cut short fires the tail's switch-offs (T+7, T+30) on the host, RE_SV_ShuttleRemove switches the boost and the
+  ignition loop off too, every raid flight up since the countdown ran out goes back onto the airfield when the replay
+  ends (`special: raid flights up since the shuttle's countdown ran out back onto the airfield (...)`), and no replay
+  starts when the flags can't be read or the shuttle is already well off its pad (`special: shuttle liftoff not
+  replayed: ...`). Untested in game (coop_landing_test.sh).
 
 **F6 the HUD info key** (a4c99b7, 30eb9a4; the user's request of 2026-10-29, a cluttered 3-player co-op HUD)
 - CFG.hud.info ([hud.info]; enabled, key I, ctrl, start_open, peek_s 5; PERSONAL in co-op): the CO-OP, ALLIES and ITEMS
