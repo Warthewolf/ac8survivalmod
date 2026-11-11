@@ -67,10 +67,11 @@ STYLES = {
     # four quarters, top, bottom, port and starboard, the seams an X on the muzzle (frames 11-41); the quarters step out
     # together, the seams flashing lemon (47-50), the sleeve's petals fall out (57-59), and, cut in the middle (the
     # user's words: the clip's shells are whole, but slid a third back into a three-gun house they collide), slide back
-    # over their rear halves in two steps, angling up (57-59), round a khaki rod that then pushes out and lights
-    # (61-70). The side walls split on a stepped seam (141-176): the upper panels lift straight up with the roof's front
-    # halves, the lower ones slide forward, the rear wall and its roof strip tip aft in two halves, a ramp and a standing
-    # leaf each (177-183; 34-45 and 169-171 on the turrets behind), a big drum inside; the front corners stay.
+    # over their rear halves in two steps along the rod (57-59; the user: "following the glowing core"), round a khaki
+    # rod that then pushes out and lights (61-70). The side walls split on a stepped seam (141-176): the upper panels
+    # lift straight up with the roof's front halves, the lower ones slide forward, the rear wall and its roof strip tip
+    # aft in two halves, a ramp and a standing leaf each (177-183; 34-45 and 169-171 on the turrets behind), a big drum
+    # inside; the front corners stay.
     10: {"name": "The clip: quarters slide back round the rod; roof front and side panels lift, the rear folds out",
          "barrel": {"split": "Q4", "mid": True, "clip": True, "shell_t": 0.22, "bore": 0.47, "rim": True, "edges": True,
                     "cut": 12.67},
@@ -84,10 +85,12 @@ DEFAULT_STYLE = 10
 # style 10's barrel (the clip's frames 47-70, read by the analysis of 2026-11-11): the four quarters step out from the rod
 # together ("part", 47), the front halves a little further (to pass over the rear ones: (offset difference) x cos 45 >
 # the rear's outer radius - the front's inner), then the front halves slide back in two steps ("back", a small step at
-# 57, the rest at 59) to 65 % of the barrel, while the whole staves pitch up about their roots ("pitch": the side
-# quarters, the top one, the bottom one; deg nose up: "have them slide back and angle themselves upwards"); the rod
-# pushes forward ("core"'s third value, 61) and lights up (64-70); a yellow flash from the seams as they open (47-49)
-CLIP = {"part": 0.55, "front_out": 0.7, "back": 9.0, "back_first": 0.3, "pitch": (10.0, 5.0, 0.0),
+# 57, the rest at 59) to 65 % of the barrel; the staves stay parallel to the rod (the user, 2026-11-11, of their
+# angling up 10 / 5 deg about the roots, which put the front ends ~2.8 m over the rod: "Why are these up so high,
+# they should be following the glowing core"; "pitch", deg nose up for the side quarters, the top one, the bottom
+# one, is 0); the rod pushes forward ("core"'s third value, 61) and lights up (64-70); a yellow flash from the seams as
+# they open (47-49)
+CLIP = {"part": 0.55, "front_out": 0.7, "back": 9.0, "back_first": 0.3, "pitch": (0.0, 0.0, 0.0),
         "stages": {"part": (0.04, 0.16), "out": (0.18, 0.28), "back1": (0.3, 0.4), "back2": (0.46, 0.62),
                    "pitch": (0.46, 0.62), "push": (0.66, 0.74), "petal": (0.32, 0.55)},
         "flash": (0.04, 0.2, 1.4)}
@@ -1542,17 +1545,17 @@ def build(coll, log=print, style=None):
                     L = (cut - 0.02 - SPLIT) if seg == "rear" else (MUZZLE - x0)
                     for k, a in enumerate(angles):
                         d = Vector((0, math.cos(math.radians(a)), math.sin(math.radians(a))))
-                        if bs.get("clip"):              # the clip: quarters out, fronts back, staves pitched up
+                        if bs.get("clip"):              # the clip: quarters out, fronts back along the rod
                             st_ = cl["stages"]
                             up = cl["pitch"][0 if abs(d.y) > 0.5 else (1 if d.z > 0 else 2)]
                             ops = [("T", d * cl["part"], st_["part"])]
-                            if seg == "front":          # (its turn about the stave's root: the rear half's back end)
-                                ops += [("T", d * cl["front_out"], st_["out"]),
-                                        ("R", Vector((0, 1, 0)), Vector((SPLIT - x0, 0, 0)) - d * cl["front_out"],
-                                         -up, st_["pitch"]),
-                                        ("T", Vector((-cl["back"] * cl["back_first"], 0, 0)), st_["back1"]),
+                            if seg == "front":          # (a turn about the stave's root: the rear half's back end)
+                                ops += [("T", d * cl["front_out"], st_["out"])]
+                                ops += [("R", Vector((0, 1, 0)), Vector((SPLIT - x0, 0, 0)) - d * cl["front_out"],
+                                         -up, st_["pitch"])] if up else []
+                                ops += [("T", Vector((-cl["back"] * cl["back_first"], 0, 0)), st_["back1"]),
                                         ("T", Vector((-cl["back"] * (1 - cl["back_first"]), 0, 0)), st_["back2"])]
-                            else:
+                            elif up:
                                 ops.append(("R", Vector((0, 1, 0)), Vector((0, 0, 0)), -up, st_["pitch"]))
                         else:
                             xp = 0.0 if a == 90 else (L if a == 270 else L / 2.0)   # top: its back, bottom: its front

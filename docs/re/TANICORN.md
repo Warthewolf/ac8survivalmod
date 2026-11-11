@@ -180,8 +180,10 @@ approved. (The recording is the user's and stays out of the repository; so do th
   "split the barrels in the middle"; the clip's shells are whole, sliding about a third of the barrel back into the
   turret: with three guns close together that collides, so the halves telescope instead); the quarters step out from
   the rod together with a pale lemon flash from the seams (firemode.FLASH); the front halves step out further and
-  slide back 6.8 m over the rear ones in two steps while the whole staves pitch up about their roots ("angle
-  themselves upwards": the side quarters 10 deg, the top one 5, the bottom one level); the rod, a plain khaki cylinder
+  slide back 6.8 m over the rear ones in two steps, every stave parallel to the rod (the user, 2026-11-11: "Why are
+  these up so high, they should be following the glowing core"; until then they angled up about their roots after
+  "angle themselves upwards", the side quarters 10 deg and the top one 5, their front ends ~2.8 m over the rod:
+  firemode.CLIP "pitch", now 0); the rod, a plain khaki cylinder
   with a paler rounded tip (r 0.2 m; its own piece, Barrel_<gun>_9), pushes 2 m forward, its tip to 20.7 m (84 % of
   the barrel), and lights lemon as the gun charges, three cream coil rings at its root and strips along the staves'
   inner edges with it (CLIP).
