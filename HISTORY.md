@@ -2645,3 +2645,15 @@ fichier"; "tu met tous dans logs, dater les crumbs").
   allies onto players; joiners migrate at once when the host leaves; the furthest co-op copy wins by round; revive
   freshness 500 ms; the dive's speed_kmh 1200 / approach_s 120; the rockets' subtitle drafts; no radio line for "half
   way up" or "escaped" (no Mission 22 line fits).
+
+## 0.74.52-coop2mp.144: first build and friends' zip (2026-11-12, built on the user's machine)
+- The cloud line's first local build (worktree .claude/worktrees/cloud-0.74.52, build inputs linked from the main tree).
+  build_radio stopped on the Spaceport rockets' rows ("ValueError: 'None' is not in list": DT_SV_Radio's name map has no
+  None); fixed in 4341c71 (z.nb.add('None') before a chain is cut). Radio: 731 rows, 4 rocket groups.
+- run_all: 70 passed, 2 failed, 1 skipped (coop_test). Both failures are the harnesses on Windows, not the code:
+  dive_test's piece() looks for "\nend\n" and a Windows checkout has CRLF (passes on an LF copy); logbundle_test decodes
+  the test exe's stdout as UTF-8 while the exe echoes its "é" argument in the ANSI code page (0 failures with
+  errors='replace').
+- Packaged: BUILD_NAME=COOP2MP COOP=1 ZFA=1 sh tools/package_release.sh online 0.74.52 ->
+  AC8SurvivalMode_COOP2MP_0.74.52_Online_COOP_ZFA44.zip (41.8 MB, 91 files; SurvivalMode_P, Valka, ZFA44 containers; no
+  TEST ONLY block), build hash 94924732eeae..., registered. Not installed on the user's machine (her install: 0.74.64).
