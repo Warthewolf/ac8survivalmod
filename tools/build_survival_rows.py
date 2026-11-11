@@ -131,6 +131,7 @@ def build_radio():
             setf(row, 'LimitPlayCount', ('raw', 'Int8', b'\x00'))
             nxt = maybe(row, 'NextRadioGroupID')
             if nxt is not None and full(nxt) not in ('None', ''):
+                z.nb.add('None')                           # (not in DT_SV_Radio's name map: the first build of 0.74.52 stopped here)
                 setf(row, 'NextRadioGroupID', survival_events.fname('None'))
             name = grp if i == 0 else f'{grp}{chr(65 + i)}'          # (letters only: hard rule 17)
             assert survival_events.survival_fname_plain(name), name
