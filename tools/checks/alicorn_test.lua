@@ -226,6 +226,12 @@ print("the core sized by the players flying as it opens")
 local MSL = { full = "BP_plwp_msl_f0_C_1", addr = 90, damage = 48 }
 local GROWTH = 0.915 / 0.3                                -- (hx / health_x at round 45)
 local function sized(n) return math.floor(n * 48 * 10 * GROWTH + 0.5) end
+-- the shipped defaults: ~30 missiles alone and ~61 for four at round 45 (the user's agreed numbers), never more than
+-- the old ~60 at any round; the cases below pin 30 / 10 to check the formula with whole numbers
+check(AL.core_missiles == 10 and AL.core_missiles_per_player == 3.3
+      and math.floor(AL.core_missiles * GROWTH + 0.5) == 31 and math.floor((AL.core_missiles + 3 * AL.core_missiles_per_player) * GROWTH + 0.5) == 61,
+      "the defaults: 10 + 3.3 a player: ~30 alone, ~61 for four at round 45's growth (x" .. string.format("%.2f", GROWTH) .. ")")
+AL.core_missiles, AL.core_missiles_per_player = 30, 10
 local function peer(slot, alive_, fresh, onAirfield)
     M.peers[slot] = { at = KM(-15, -5, 2), alive = alive_, fresh = fresh, onAirfield = onAirfield, flags = 1 }
 end
