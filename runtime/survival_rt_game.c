@@ -226,6 +226,40 @@ static int LiveObject(void* o)
     return o && Readable(o, 0x28) && !(*(uint32_t*)((uint8_t*)o + 8) & RF_NOT_LIVE);
 }
 
+/* ---- the spawner's checks without system calls (Saint Alessia's 50-round co-op run, lag-1) ------------------------------
+ * Every spawner call (SV_UnitAlive above all: 2-8 a tick) ran SpawnerReady's six VirtualQuery checks of objects it had
+ * found already, then RegisteredUnit's two for every entry of the phase's unit list: 0.53 ms a call at round 2, ~6 ms
+ * from round 22, 9.4-9.9 ms at rounds 49-50 (~0.1 ms an entry), up to half the host's Lua tick. Now an object the runtime
+ * keeps (the spawner, its world data, the world) is checked at the GUObjectArray slot it was found in (UObjSlotHolds: it
+ * is still allocated, so its memory can be read), a vtable slot inside the game's image is read without a check (InGame:
+ * the image is always mapped), the list's own memory is checked when its data or count change, the unit descs and the
+ * units' array offsets are kept, and the list's ids are read only when the list changes (unittab.h). Without
+ * GUObjectArray (flight.c UoFind found nothing) every check is the old one. A minute line ("units: the last minute: ...")
+ * gives SV_UnitAlive's cost. */
+static int32_t  g_spawnerIdx = -1, g_wdIdx = -1;    /* their GUObjectArray indexes when found (FindSpawner) */
+static int      g_phaseInSpawner;                  /* the phase is a struct inside the spawner (its memory with it) */
+static uint32_t g_unitGen;                         /* the spawner's own changes to the list: Spawn, Recycle, destroys, SV_Reset */
+
+/* o (kept with its index idx) is still a live object: LiveObject's answer, without its system call where it can */
+static int KeptLive(void* o, int32_t idx)
+{
+    int held = UObjSlotHolds((const uint8_t*)o, idx);
+    if (held < 0) return LiveObject(o);
+    return held && !(*(uint32_t*)((uint8_t*)o + 8) & RF_NOT_LIVE);
+}
+
+/* the spawner is allocated (its slot holds it) and the phase a struct in it: the phase's own fields can be read */
+static int SpawnerHeld(void)
+{
+    return g_spawner && g_phaseInSpawner && UObjSlotHolds((const uint8_t*)g_spawner, g_spawnerIdx) == 1;
+}
+
+/* a vtable slot: inside the game's image (always mapped), else readable memory (the old check) */
+static int VSlotOk(void* const* slot)
+{
+    return (((uintptr_t)slot & 7) == 0 && InGame(slot) && InGame((const uint8_t*)(slot + 1) - 1)) || Readable(slot, 8);
+}
+
 /* ---- the teardown gate (runtime 0.32.22, plan F1a) ------------------------------------------------------------------
  * The crash on quit (Shazzy 2026-11-02 16:57:02 while DOWN, cressendo 2026-11-03 10:42:25 from flight; both 0.32.21):
  * UE4SS.dll+0x2ab5bd is the Lua UObject's property lookup (mov rcx, [GetClassPrivate(obj)] before FindProperty, in the
@@ -246,11 +280,15 @@ static void*            g_world;               /* the spawner's world, kept when
 static int              GcPurgePending(void);  /* (flight.c: the engine's purge flags) */
 static int              RcDrop(void);          /* (below: the deferred unit destroys) */
 
-/* why o (an object kept by the runtime) is gone, or NULL while it's still the engine's live object */
-static const wchar_t* ObjGoneWhy(void* o)
+/* why o (an object kept by the runtime) is gone, or NULL while it's still the engine's live object. keptIdx: the GUObjectArray
+ * index it had when it was kept, or -1: (lag-1) a slot that still holds o needs no memory check, one that doesn't is
+ * freed (as UObjAllocated would find, without reading o) */
+static const wchar_t* ObjGoneWhyAt(void* o, int32_t keptIdx)
 {
     uint8_t* p = (uint8_t*)o;
-    if (!p || !Readable(p, 0x28)) return L"its memory was released";
+    int held = p ? UObjSlotHolds(p, keptIdx) : -1;
+    if (held == 0) return L"it was freed";
+    if (!p || (held < 0 && !Readable(p, 0x28))) return L"its memory was released";
     uint32_t rf = *(uint32_t*)(p + 8);
     if (rf & (0x8000 | 0x10000 | 0x40000000)) return L"it is being destroyed";   /* RF_BeginDestroyed, Finish, MirroredGarbage */
     if (!g_uoChunks) return LiveObject(p) ? NULL : L"its flags say it isn't live";
@@ -262,6 +300,7 @@ static const wchar_t* ObjGoneWhy(void* o)
     if ((f & *g_uoGcFlag) && GcPurgePending()) return L"it is unreachable and being purged";
     return NULL;
 }
+static const wchar_t* ObjGoneWhy(void* o) { return ObjGoneWhyAt(o, -1); }
 
 static void TeardownClose(const wchar_t* why)
 {
@@ -281,7 +320,7 @@ static int TeardownCheck(void)
 {
     if (g_teardown) return 1;
     if (!g_world) return 0;                            /* (no Survival level seen since SV_Reset) */
-    const wchar_t* why = ObjGoneWhy(g_world);
+    const wchar_t* why = ObjGoneWhyAt(g_world, g_worldIdx);
     if (!why && (*(int32_t*)((uint8_t*)g_world + 0xC) != g_worldIdx || *(uint64_t*)((uint8_t*)g_world + 0x18) != g_worldName))
         why = L"its memory is another object's";
     if (!why) return 0;
@@ -346,6 +385,7 @@ static void RcDrain(void)
         Crumb(L"recycle %s: destroying its old unit actor %p (deferred %d s)", e.name, e.unit, (int32_t)(g_rcWaitMs / 1000));
         g_destroyActor(e.unit, 0);
         ++g_rcDone;
+        ++g_unitGen;                                   /* (lag-1: the id table looks again) */
         Crumb(L"recycle %s: destroyed", e.name);
         Log(L"recycle %s: its old unit actor %p destroyed, %d s after it was taken off the phase's list (%u so far, %u gone "
             L"before, %d waiting)", e.name, e.unit, (int32_t)(g_rcWaitMs / 1000), g_rcDone, g_rcSkipped, g_rcN - i - 1 + keep);
@@ -360,18 +400,28 @@ static void* PhaseWorldData(uint8_t* phase)
     return LiveObject(wd) && NameEq((FNameRaw*)((uint8_t*)wd + 0x18), &g_wdName) ? wd : NULL;   /* UObject::NamePrivate */
 }
 
+/* (lag-1) the kept spawner's world data, as PhaseWorldData answers it, without a system call while the spawner's and the
+ * world data's slots hold them */
+static void* PhaseWorldDataKept(void)
+{
+    if (!SpawnerHeld()) return PhaseWorldData(g_phase);
+    void* wd = *(void**)(g_phase + LY.phaseWd);
+    if (!wd || wd != g_wd || UObjSlotHolds((const uint8_t*)wd, g_wdIdx) != 1) return PhaseWorldData(g_phase);
+    return !(*(uint32_t*)((uint8_t*)wd + 8) & RF_NOT_LIVE) && NameEq((FNameRaw*)((uint8_t*)wd + 0x18), &g_wdName) ? wd : NULL;
+}
+
 static int FindSpawner(void)
 {
     if (!g_wdName.index && !MakeName(WD_NAME, &g_wdName)) return 0;      /* Survival's world data isn't loaded */
-    if (g_spawner && LiveObject(g_spawner) && *(void**)g_spawner == g_spawnerVt && PhaseWorldData(g_phase) == g_wd)
+    if (g_spawner && KeptLive(g_spawner, g_spawnerIdx) && *(void**)g_spawner == g_spawnerVt && PhaseWorldDataKept() == g_wd)
         return 1;
     if (g_spawner) {                                   /* it was found and has gone: the level is going away */
         g_spawnerLost = 1;
         Log(L"spawner: this level's LiveUnitSpawner is gone (the level is ending): no search until the next run");
         Crumb(L"spawner gone (teardown gate %s)", TeardownCheck() ? L"closed: its world is going too" : L"open: its world is still live");
     }
-    g_spawner = NULL; g_phase = NULL; g_wd = NULL;
-    if (g_spawnerLost) return 0;                       /* (FindAllOf over objects being freed crashed: hotfix5) */
+    g_spawner = NULL; g_phase = NULL; g_wd = NULL; g_spawnerIdx = g_wdIdx = -1; g_phaseInSpawner = 0;
+    if (g_spawnerLost) return 0;                      /* (FindAllOf over objects being freed crashed: hotfix5) */
     PtrVector v = { NULL, NULL, NULL };
     g_findAllOf(L"LiveUnitSpawner", &v);
     for (void** p = v.first; p && p < v.last && !g_spawner; ++p) {
@@ -386,9 +436,17 @@ static int FindSpawner(void)
             continue;
         }
         g_spawner = *p; g_spawnerVt = *(void**)*p; g_phase = phase; g_wd = wd;
+        /* (lag-1) kept with their GUObjectArray indexes (KeptLive); the phase is the spawner's GlobalPhase struct
+         * property (U.valuePtr: the object plus the property's offset), so its fields are the spawner's memory */
+        g_spawnerIdx = UObjAllocated((uint8_t*)*p) == 1 ? *(int32_t*)((uint8_t*)*p + 0xC) : -1;
+        g_wdIdx = UObjAllocated((uint8_t*)wd) == 1 ? *(int32_t*)((uint8_t*)wd + 0xC) : -1;
+        g_phaseInSpawner = phase > (uint8_t*)*p + 0x28 && phase < (uint8_t*)*p + 0x4000;
+        ++g_unitGen;
     }
     FreeVector(&v);
-    if (g_spawner) Log(L"spawner: LiveUnitSpawner %p, global phase %p, world data %p", g_spawner, g_phase, g_wd);
+    if (g_spawner) Log(L"spawner: LiveUnitSpawner %p, global phase %p, world data %p; checked through GUObjectArray: %s",
+                       g_spawner, g_phase, g_wd, g_spawnerIdx >= 0 && g_wdIdx >= 0 && g_phaseInSpawner ? L"yes" :
+                       L"no (each check a memory query, as before)");
     return g_spawner != NULL;
 }
 
@@ -402,8 +460,12 @@ static int SpawnerReady(void)
     /* A spawner whose level isn't in a world yet (Survival's level still loading) spawns into no world: a co-op
      * joiner spawning the host's flights as its level loaded crashed in UWorld::SpawnActor reading world+0x30 (two
      * joiners' games, 2026-10-25, runtime 0.22.7). */
-    void* world = VCall(g_spawner, VF_WORLD);
-    if (!world || !LiveObject(world)) {
+    void* world;
+    if (SpawnerHeld()) {                               /* (lag-1) its vtable checked by FindSpawner: VCall without a query */
+        void** slot = *(void***)g_spawner + VF_WORLD;
+        world = VSlotOk(slot) ? (void*)((Fn1)*slot)(g_spawner) : NULL;
+    } else world = VCall(g_spawner, VF_WORLD);
+    if (!world || !(world == g_world ? KeptLive(world, g_worldIdx) : LiveObject(world))) {
         static uint32_t said;
         if (said++ % 20 == 0) Log(L"spawner %p: no world yet (the level is still loading); spawns wait", g_spawner);
         return SV_ERR_LOADING;
@@ -418,20 +480,40 @@ static int SpawnerReady(void)
     return 1;
 }
 
+/* (lag-1) the world data's UnitDescList (U.valuePtr once a world data), and the descs found by name: a slot per name's
+ * hash, used while the list is the one it was found in and the desc there still has that name */
+static void*      g_dlWd;
+static TArrayRaw* g_dlList;
+static TArrayRaw* DescList(void)
+{
+    if (g_dlWd != g_wd || !g_dlList) { g_dlList = (TArrayRaw*)U.valuePtr(g_wd, L"UnitDescList"); g_dlWd = g_wd; }
+    return g_dlList;
+}
+#define DC_SLOTS 256
+static struct { FNameRaw name; uint8_t* data; int32_t num, i; } g_dc[DC_SLOTS];
+
 static uint8_t* FindDesc(const FNameRaw* name)
 {
-    TArrayRaw* a = (TArrayRaw*)U.valuePtr(g_wd, L"UnitDescList");
+    TArrayRaw* a = DescList();
     if (!a || !a->data || a->num < 0 || a->num > 4096) return NULL;
+    uint32_t h = (name->index * 2654435761u ^ name->number * 40503u) % DC_SLOTS;
+    if (g_dc[h].data == a->data && g_dc[h].num == a->num && NameEq(&g_dc[h].name, name) && g_dc[h].i < a->num) {
+        uint8_t* d = a->data + (size_t)g_dc[h].i * (size_t)LY.descSize;
+        if (NameEq((FNameRaw*)(d + LY.name), name)) return d;
+    }
     for (int32_t i = 0; i < a->num; ++i) {
         uint8_t* d = a->data + (size_t)i * (size_t)LY.descSize;
-        if (NameEq((FNameRaw*)(d + LY.name), name)) return d;
+        if (NameEq((FNameRaw*)(d + LY.name), name)) {
+            g_dc[h].name = *name; g_dc[h].data = a->data; g_dc[h].num = a->num; g_dc[h].i = i;
+            return d;
+        }
     }
     return NULL;
 }
 
 static uint8_t* FindDescById(uint32_t id)
 {
-    TArrayRaw* a = (TArrayRaw*)U.valuePtr(g_wd, L"UnitDescList");
+    TArrayRaw* a = DescList();
     if (!a || !a->data || a->num < 0 || a->num > 4096) return NULL;
     for (int32_t i = 0; i < a->num; ++i) {
         uint8_t* d = a->data + (size_t)i * (size_t)LY.descSize;
@@ -440,11 +522,17 @@ static uint8_t* FindDescById(uint32_t id)
     return NULL;
 }
 
+/* (lag-1) the list's own memory: checked when its data, count or capacity change (the list's TArray itself, a field of
+ * the spawner's GlobalPhase: no check while SpawnerHeld) */
+static struct { uint8_t* phase; uint8_t* data; int32_t num, max; } g_puOk;
 static TArrayRaw* PhaseUnits(void)
 {
     TArrayRaw* a = (TArrayRaw*)(g_phase + LY.unitList);
-    if (!Readable(a, sizeof(*a)) || a->num < 0 || a->num > 4096 || a->num > a->max) return NULL;
-    if (a->num && !Readable(a->data, (size_t)a->num * 8)) return NULL;
+    if ((!SpawnerHeld() && !Readable(a, sizeof(*a))) || a->num < 0 || a->num > 4096 || a->num > a->max) return NULL;
+    if (a->num && !(g_puOk.phase == g_phase && g_puOk.data == a->data && g_puOk.max == a->max && g_puOk.num >= a->num)) {
+        if (!Readable(a->data, (size_t)a->num * 8)) return NULL;
+        g_puOk.phase = g_phase; g_puOk.data = a->data; g_puOk.num = a->num; g_puOk.max = a->max;
+    }
     return a;
 }
 
@@ -452,23 +540,66 @@ static uint32_t UnitId(uint8_t* unit)
 {
     uint8_t* iface = unit + LY.idIface;
     void** vt = *(void***)iface;
-    if (!Readable(vt + LY.idSlot / 8, 8)) return 0;
+    if (!VSlotOk(vt + LY.idSlot / 8)) return 0;     /* ((lag-1) in the game's image: no memory query) */
     return ((uint32_t (*)(void*))vt[LY.idSlot / 8])(iface);
 }
 
+/* (lag-1) Readable, with the regions a walk has found readable kept (units from one allocator region: one query) */
+typedef struct { const uint8_t* lo[4]; const uint8_t* hi[4]; int next; } RgCache;
+static int RgReadable(RgCache* c, const void* p, size_t n)
+{
+    const uint8_t* q = (const uint8_t*)p;
+    for (int i = 0; i < 4; ++i) if (c->lo[i] && q >= c->lo[i] && q + n <= c->hi[i]) return 1;
+    MEMORY_BASIC_INFORMATION mi;
+    if (!p || !VirtualQuery(p, &mi, sizeof(mi))) return 0;
+    if (mi.State != MEM_COMMIT || (mi.Protect & (PAGE_NOACCESS | PAGE_GUARD))) return 0;
+    c->lo[c->next] = (const uint8_t*)mi.BaseAddress;
+    c->hi[c->next] = (const uint8_t*)mi.BaseAddress + mi.RegionSize;
+    c->next = (c->next + 1) & 3;
+    return q + n <= (const uint8_t*)mi.BaseAddress + mi.RegionSize;
+}
+
+/* an entry of the phase's list: full (the table's build) its memory readable (as the old walk checked each) and, where
+ * GUObjectArray tells, still an allocated object; a hit's check (the entry the table names, still on the list in its
+ * place): still allocated, or readable without GUObjectArray */
+static int UtEntryOk(void* ctx, uint8_t* u, int full)
+{
+    if (((uintptr_t)u & 7) || (uintptr_t)u < 0x10000 || (uintptr_t)u > 0x7FFFFFFFFFFFull) return 0;
+    if (full) return RgReadable((RgCache*)ctx, u, (size_t)LY.idIface + 8) && UObjAllocated(u) != 0;
+    int a = UObjAllocated(u);
+    return a < 0 ? Readable(u, (size_t)LY.idIface + 8) : a;
+}
+static uint32_t UtEntryId(void* ctx, uint8_t* u) { (void)ctx; return UnitId(u); }
+
+static UnitTab g_ut;
 static uint8_t* RegisteredUnit(uint32_t id)
 {
     TArrayRaw* a = PhaseUnits();
-    for (int32_t i = 0; a && i < a->num; ++i) {
-        uint8_t* u = ((uint8_t**)a->data)[i];
-        if (u && Readable(u, LY.idIface + 8) && UnitId(u) == id) return u;
-    }
-    return NULL;
+    if (!a) return NULL;
+    RgCache rc;
+    memset(&rc, 0, sizeof(rc));
+    return UtFind(&g_ut, (uint8_t* const*)a->data, a->num, g_unitGen, GetTickCount64(), id, UtEntryOk, UtEntryId, &rc);
 }
 
-/* Number of entries in one of the unit's reflected arrays (AliveChildAIGameObjects, ChildAIGameObjects), -1 unknown. */
+/* Number of entries in one of the unit's reflected arrays (AliveChildAIGameObjects, ChildAIGameObjects), -1 unknown.
+ * ((lag-1) the array's offset kept per class and name: U.valuePtr once; no memory query while the unit is allocated, the
+ * array a field of it) */
+static struct { void* cls; const wchar_t* prop; int32_t off; } g_uaOff[16];
+static int g_uaNext;
 static int32_t UnitArrayNum(uint8_t* unit, const wchar_t* prop)
 {
+    if (UObjAllocated(unit) == 1) {
+        void* cls = *(void**)(unit + 0x10);                /* (UObjectBase::ClassPrivate) */
+        for (int i = 0; i < 16; ++i)
+            if (g_uaOff[i].cls == cls && g_uaOff[i].prop == prop) return ((TArrayRaw*)(unit + g_uaOff[i].off))->num;
+        uint8_t* p = (uint8_t*)U.valuePtr(unit, prop);
+        if (!p) return -1;
+        if (p > unit && p < unit + 0x10000) {
+            g_uaOff[g_uaNext].cls = cls; g_uaOff[g_uaNext].prop = prop; g_uaOff[g_uaNext].off = (int32_t)(p - unit);
+            g_uaNext = (g_uaNext + 1) & 15;
+        }
+        return Readable(p, sizeof(TArrayRaw)) ? ((TArrayRaw*)p)->num : -1;
+    }
     TArrayRaw* a = (TArrayRaw*)U.valuePtr(unit, prop);
     return a && Readable(a, sizeof(*a)) ? a->num : -1;
 }
@@ -488,6 +619,7 @@ static int Recycle(uint8_t* desc, const wchar_t* name, int force)
     int later = force != 2 && RcDefer(unit, name);
     Crumb(L"recycle %s: unregistering its unit actor %p (%d alive)%s", name, unit, alive, later ? L", its destroy deferred" : L" and destroying it");
     g_unregisterUnit(g_phase, unit);
+    ++g_unitGen;                                       /* (lag-1: the id table looks again) */
     if (!later) g_destroyActor(unit, 0);
     Crumb(L"recycle %s: done", name);
     if (later)
@@ -543,7 +675,8 @@ static int64_t Spawn(const wchar_t* name, const double* pose)
     if (Recycle(desc, name, 0) < 0) return SV_ERR_UP;
     if (pose) SetPose(desc, pose);
     uint8_t* unit = (uint8_t*)g_spawnUnit(g_spawner, &fn, g_wd);
-    if (!unit) { Log(L"spawn %s: the game spawned nothing", name); return SV_ERR_REFUSED; }
+    ++g_unitGen;                                       /* (lag-1: the id table looks again) */
+    if (!unit){ Log(L"spawn %s: the game spawned nothing", name); return SV_ERR_REFUSED; }
     int32_t n = UnitArrayNum(unit, L"ChildAIGameObjects");
     int listed = RegisteredUnit(*(uint32_t*)(desc + LY.uniqueId)) == unit;
     const double* u = (const double*)(desc + LY.uPoint);
@@ -595,7 +728,7 @@ static int64_t SetLevel(const wchar_t* name, int32_t level)
     return set;
 }
 
-static int64_t UnitAlive(const wchar_t* name)
+static int64_t UnitAliveAsk(const wchar_t* name)
 {
     int ready = SpawnerReady();
     if (ready != 1) return ready;
@@ -604,6 +737,43 @@ static int64_t UnitAlive(const wchar_t* name)
     if (!desc) return SV_ERR_NO_UNIT;
     uint8_t* unit = RegisteredUnit(*(uint32_t*)(desc + LY.uniqueId));
     return unit ? UnitArrayNum(unit, L"AliveChildAIGameObjects") : SV_NOT_SPAWNED;
+}
+
+/* (lag-1) SV_UnitAlive's cost, a line a minute while it's asked: "units: the last minute: N SV_UnitAlive asks, X us each
+ * on average (worst Y us) ..." (Saint Alessia's 50-round run: 530 us a call at round 2, ~6,000 from round 22, 9,400-9,900
+ * at rounds 49-50) */
+static int64_t g_ucFreq;
+static struct {
+    uint64_t lineAt, sumUs;
+    uint32_t asks, worstUs, builds, byGen, byList, byAge, byMoved, walked, skipped;
+    int32_t  listMax;
+} UC;
+static int64_t UnitAlive(const wchar_t* name)
+{
+    int64_t t0 = 0, t1 = 0;
+    if (!g_ucFreq) QueryPerformanceFrequency(&g_ucFreq);
+    QueryPerformanceCounter(&t0);
+    int64_t r = UnitAliveAsk(name);
+    QueryPerformanceCounter(&t1);
+    uint32_t us = g_ucFreq > 0 && t1 >= t0 ? (uint32_t)((t1 - t0) * 1000000 / g_ucFreq) : 0;
+    ++UC.asks;
+    UC.sumUs += us;
+    if (us > UC.worstUs) UC.worstUs = us;
+    if (g_ut.num > UC.listMax) UC.listMax = g_ut.num;
+    uint64_t now = GetTickCount64();
+    if (!UC.lineAt) UC.lineAt = now;
+    if (now - UC.lineAt >= 60000) {
+        Log(L"units: the last minute: %u SV_UnitAlive asks, %u us each on average (worst %u us); the phase's list up to %d "
+            L"long; its id table built %u times (%u for the spawner's own changes, %u the list's, %u on its %d s refresh, %u "
+            L"a hit moved), %u entries read, %u skipped; kept objects checked through GUObjectArray: %s (lag-1)",
+            UC.asks, (uint32_t)(UC.sumUs / UC.asks), UC.worstUs, UC.listMax, g_ut.builds - UC.builds, g_ut.byGen - UC.byGen,
+            g_ut.byList - UC.byList, g_ut.byAge - UC.byAge, (int32_t)(UT_REFRESH_MS / 1000), g_ut.byMoved - UC.byMoved,
+            g_ut.walked - UC.walked, g_ut.skipped - UC.skipped, SpawnerHeld() ? L"yes" : L"no");
+        UC.lineAt = now; UC.sumUs = 0; UC.asks = 0; UC.worstUs = 0; UC.listMax = 0;
+        UC.builds = g_ut.builds; UC.byGen = g_ut.byGen; UC.byList = g_ut.byList; UC.byAge = g_ut.byAge;
+        UC.byMoved = g_ut.byMoved; UC.walked = g_ut.walked; UC.skipped = g_ut.skipped;
+    }
+    return r;
 }
 
 /* Logs the phase's unit list (what blocks or allows a spawn); returns its length. */
@@ -1294,9 +1464,63 @@ static uint64_t      g_invLastMs;
 static void FlightInputHook(uint8_t* plane, float* out);   /* flight.c: DOWN's autopilot, SV_InputNow's record */
 static void InvertInput(float* out);
 
+/* ((2026-11-11) Delta's joiner log of Saint Alessia's 50-round run, joiner-4: no frame time was logged on any game, so
+ * "lag during Ace waves" couldn't be told from the logs) a line a minute on every game while a plane flies: its frames,
+ * their average, 95th percentile and worst, and how many took over 50 / 100 ms. The flight input build runs a few times
+ * a frame (for each player plane, back to back): a call 3 ms or more after the one before starts a new frame. A gap over
+ * 2 s (a pause, a load) isn't counted as a frame. "frames: the last minute: ..." */
+#define FT_BUCKETS 256
+static struct {
+    int64_t  freq, lastCall, frameAt;
+    uint64_t minuteAt;
+    uint32_t frames, over50, over100, stalls, hist[FT_BUCKETS];
+    double   sumMs, worstMs;
+} FT;
+static void FtCall(void)
+{
+    int64_t now = 0;
+    if (!FT.freq) QueryPerformanceFrequency(&FT.freq);
+    if (FT.freq <= 0 || !QueryPerformanceCounter(&now)) return;
+    int64_t gap = now - FT.lastCall;
+    int same = FT.lastCall && gap >= 0 && gap * 1000 < 3 * FT.freq;
+    FT.lastCall = now;
+    if (same) return;
+    if (FT.frameAt) {
+        double ms = (double)(now - FT.frameAt) * 1000.0 / (double)FT.freq;
+        if (ms >= 2000.0 || ms < 0) ++FT.stalls;
+        else {
+            ++FT.frames;
+            FT.sumMs += ms;
+            if (ms > FT.worstMs) FT.worstMs = ms;
+            if (ms >= 50.0) ++FT.over50;
+            if (ms >= 100.0) ++FT.over100;
+            ++FT.hist[ms >= FT_BUCKETS - 1 ? FT_BUCKETS - 1 : (int)ms];
+        }
+    }
+    FT.frameAt = now;
+    uint64_t t = GetTickCount64();
+    if (!FT.minuteAt) FT.minuteAt = t;
+    if (t - FT.minuteAt < 60000) return;
+    if (FT.frames) {
+        uint32_t want = FT.frames - FT.frames / 20, seen = 0, p95 = 0;
+        for (int i = 0; i < FT_BUCKETS; ++i) { seen += FT.hist[i]; if (seen >= want) { p95 = (uint32_t)i + 1; break; } }
+        uint32_t tenths = (uint32_t)(FT.sumMs * 10.0 / FT.frames + 0.5);
+        uint32_t fps = FT.sumMs > 0 ? (uint32_t)(FT.frames * 1000.0 / FT.sumMs + 0.5) : 0;
+        Log(L"frames: the last minute: %u frames while a plane flew (%u fps), %u.%u ms on average, 95%% under %u ms%s, worst "
+            L"%u ms; %u over 50 ms, %u over 100 ms; %u gaps over 2 s not counted (a pause, a load) (joiner-4)", FT.frames, fps,
+            tenths / 10, tenths % 10, p95, p95 >= FT_BUCKETS ? L" or more" : L"", (uint32_t)(FT.worstMs + 0.5), FT.over50,
+            FT.over100, FT.stalls);
+    }
+    FT.minuteAt = t;
+    FT.frames = FT.over50 = FT.over100 = FT.stalls = 0;
+    FT.sumMs = FT.worstMs = 0;
+    memset(FT.hist, 0, sizeof(FT.hist));
+}
+
 static void OnBuildInput(uint8_t* plane, float* out)
 {
     g_nextBuildInput(plane, out);
+    FtCall();                                        /* ((joiner-4) the frame-time line) */
     CoopFrame(0);                                    /* (only when the music player's tick doesn't run) */
     if (plane && out && plane == g_invPlane) InvertInput(out);
     FlightInputHook(plane, out);                     /* (DOWN last: its autopilot is never inverted) */
