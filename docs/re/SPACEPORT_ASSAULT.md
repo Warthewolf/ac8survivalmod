@@ -315,6 +315,14 @@ build_all.sh). tools/checks/spaceport_test.sh and coop_guard_test.sh cover it.
   once this game's events can take (...)`, `... launched again here, try 1 of 3 (...)`, `special: rocket A left its pad:
   its launch took here (fired again 1 time)`. The mark read back too: `the host's mark on its climbs not set here
   (SV_SpRocketHost 0): set again`.
+- (2026-11-11, docs/re/COOP.md section 13) A joiner's own STORE: the host's RE_SV_SpRocketLaunch<L> / Boost<L> that come
+  while it's open are held and fired there in order once it's shut, the boost boost_s after its launch (`storeq: the
+  host's RE_SV_SpRocketLaunchA held here: ...`), its own RE_SV_SpRocketEnd<L> / HostOff fired again then (STOREQ.here,
+  with the rockets' units: not once a new retake's rockets spawned). The removals know their units on every game: a
+  wave's craft (RE_SV_SpLcacRemove<g><w>: SV_Unit_SpLcac<g><w>) and its troops (RE_SV_SpTroopsRemove<g><w><c>) from their
+  names, the fleet, the garrison, the island and the rockets noted by sv_spaceport.lua at its load (STOREQ.note): one a
+  STORE ate is fired again on the host alone once it's shut, one a joiner held fired there, while any of them is still
+  up and none spawned again since (the lane's next wave keeps its copies).
 - The climb in the log (why the host's B took 225 s): `special: rocket A: N m up, N km/h, N s after its launch (boosted)`
   every log_s (10), `special: rocket A 8 s after its boost: N km/h: boosted | NOT boosted (Mission 19's boost 1000 km/h,
   its launch 280)`.

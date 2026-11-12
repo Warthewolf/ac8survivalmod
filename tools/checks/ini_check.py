@@ -2,7 +2,8 @@
 CFG has, with a value of its kind (there's no Lua on the build machine, so CFG's table literal is read here as
 Scripts/sv_config.lua's loadIni reads the ini: sections through INI_ALIAS and "shop." -> "shop.items.", keys any case).
 sv_config.lua is read with its next pieces (tools/lua_split_part.py, tools/lua_parts.py): CFG's `CFG = { ... }` and
-its fields set after it as statements of their own (`CFG.specials = { ... }`, sv_config_specials.lua).
+its fields set after it as statements of their own (`CFG.specials = { ... }`, sv_config_specials.lua; and fields of
+those, `CFG.specials.fishing = { ... }`, sv_config_arc.lua).
 A switched-off line (";key = value") is checked as if it were on. Exit 1 on the first problem list.
 """
 import os
@@ -73,9 +74,14 @@ def cfg_table(path):
     start = src.index('\nCFG = {') + len('\nCFG = ')
     p = Parser(tokens(src[start:]))
     cfg = p.table()
-    # (CFG's fields set as statements after it: `CFG.<key> = { ... }` at a line's start)
-    for m in re.finditer(r'\nCFG\.(\w+) = (?=\{)', src):
-        cfg['keyed'][m.group(1)] = Parser(tokens(src[m.end():])).table()
+    # (CFG's fields set as statements after it: `CFG.<key> = { ... }` at a line's start, or a field of one of them,
+    # `CFG.specials.<key> = { ... }` (sv_config_arc.lua), in the order they're set)
+    for m in re.finditer(r'\nCFG((?:\.\w+)+) *= *(?=\{)', src):
+        path, t = m.group(1).split('.')[1:], cfg
+        for k in path[:-1]:
+            t = t['keyed'].get(k)
+            if not isinstance(t, dict): raise SystemExit(f'ini check: CFG.{".".join(path)} set before CFG.{k}')
+        t['keyed'][path[-1]] = Parser(tokens(src[m.end():])).table()
     return cfg, src
 
 

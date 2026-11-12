@@ -3014,3 +3014,32 @@ game. The work was split by file between agents; the builds ran in sequence in t
   c663e490c601... registered. New: package_release.sh TANI=1 (only with TESTER=1; checks the staged container holds
   every blueprint tani_wd.txt names, here all 14), dev_only.py --keep-tani, zip_guard.sh ZIP_GUARD_TANI. A plain TESTER
   zip made first (no Tanacorn) was deleted before anyone got it. zip_leak_test passes; TANI=1 without TESTER=1 refused.
+
+## 0.74.66-coop2mp.158: the STORE's lost events in general, the log report tool, the splits (2026-11-12; Lua, tools, the event package)
+- The user: "Go for all of them" (after 0.74.52 was pushed; made in the cloud on 0.74.52's line and moved onto dev at
+  0.74.65): the rest of the STORE problem, a log report tool, a test
+  checklist for 0.74.52 (a Claude Doc), and the housekeeping (splits, a PR into dev). Untested in game.
+- **The STORE's lost events** (hard rule 64; Scripts/sv_rounds_store.lua, STOREQ, sv_rounds' family): this game's gate
+  (SPC.storeShut's, now tracked every tick on the host and on a joiner) and, for one-shot events that change the world,
+  "fired while the gate was closed: checked by its effect, fired again here once it's open". Host: bomber / strike
+  flights that appeared in the STORE get their orders (new RE_SV_BomberOrders_NN, read back through SV_BOrd_NN and the
+  per-route SV_BRoute_NN* counters), a boss's end, Wolf / director frees, the one-shot removals (Alicorn, AWACS, LCAC,
+  FlightOff, the Spaceport's). Joiner: the host's forwarded one-shots held while its own STORE is up and fired in order
+  once it's shut (the shuttle's countdown collapsed to what changes the world; only the same unit's or series' events
+  wait behind a held one). Never repeating events, spawns, pay or counters; the shuttle's own replay stays. Log lines
+  `storeq: ...`. A skeptic's 9 findings fixed. tools/checks/store_events_test.sh. Needs build_all.sh (the new orders
+  event and counters); with an older package the gate alone (logged).
+- **tools/log_report.py** (docs/re/LOG_REPORT.md): one or more log bundles (a folder or a zip; the old layout and
+  0.74.52's logs\ one; a host's and its joiners', clocks aligned on round clears) on one Markdown page: the build, who
+  played and hosted (forks and migrations), rounds with their kinds, lag by round, STORE windows and the events in them,
+  DOWN and revives, co-op link health, ZFA-44s, the shuttle, rockets, the Alicorn, the leaderboard's answers, errors,
+  UE4SS.log's repeats, and a checklist of 0.74.51-52's new log lines (seen / not seen). `python -X utf8 -I
+  tools/log_report.py <bundle> [<bundle> ...] -o page.md`. Tried on Saint Alessia's and Delta's logs; a skeptic's 14
+  findings fixed; tools/checks/log_report_test.sh on made-up fixtures. It's 1,967 lines: its next addition needs a split.
+- **Splits** (no behaviour change; CFG / CFG_DEFAULTS / ESC dumped equal before and after): sv_escort.lua -> + 
+  sv_escort_carriers.lua (the ZFA-44 carriers, "es", the menu rows, ESC.tick, the restart); sv_config_specials.lua -> +
+  sv_config_arc.lua (CFG.specials from GONE FISHIN' on, CFG.sky / music / hud). tools/lua_split_part.py splits a piece of
+  an existing family again and cuts a dotted table's fields; ini_check reads `CFG.specials.<key> = {` statements.
+- Checks (on dev): run_all 73 passed, 5 skipped (Windows only); fleet_test's check of package_release.sh's TESTER line
+  updated for dev's own 0904573 (`${TANIZIP:+--keep-tani}` and `|| exit 1`: it failed on dev itself); escort_test's "every_s apart" failed once under run_all and 0
+  times in 80 runs alone (old and new code alike): a rare flake to look at, not from this change.

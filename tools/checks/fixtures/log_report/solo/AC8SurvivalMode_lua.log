@@ -1,0 +1,31 @@
+00:00:05 loaded, version 0.74.52-coop2mp.144
+00:00:06 leaderboard: Steam name 'Solo Pilot'
+00:00:20 airfield: landing closed (RE_SV_AirfieldClose)
+00:00:21 special: VALKA RE_SV_ValkaTp_BAG not fired: the run is over
+00:00:25 specials: ERA_Unit_08_Dep_Air0 A (f35c_common_svd) fires its NPC_FCS_PlaneLAAM000_SV_SKIRM at you, 11.3 km (RE_SV_SpecFire_22A: 1)
+00:00:26 aces: BP_OP1030_su33_CP_C_2147255351 has you 521 m behind it, 55 deg off its tail: RE_SV_AceKulbit_04 (1), 1 so far
+00:00:27 carrier: the host's RE_SV_CargoLaunch_1_4 here: E_Unit_01_drone_1_0 first (2 up: left as they are)
+00:01:00 hud: callout 'ROUND 1' / 'HOSTILES INBOUND'
+00:01:02 round 1: 6 aircraft: 2 fighters in 1 squadrons, bomber raid: 4 bombers in 2 squadrons from the north (bearing 0); cap 30, up to 29 at once
+00:02:00 round 1 clear; round 2 in 20 s
+00:02:18 round 2: a strike package (EA_Unit_05_Air0) goes for the airfield
+00:02:20 round 2: 8 aircraft: 8 fighters in 4 squadrons; cap 30, up to 29 at once
+00:02:40 carrier: ZFA-44 CARRIER 1 leaving: 2 of this game's switched-off ZFA-44s of ship 1 finished off (3 tried)
+00:03:00 escort: E_Unit_01_drone_1_0 (ZFA-44 CARRIER 1) still has 2 up after 30 s
+00:03:05 hud: callout 'YOU'RE DOWN' / 'A WINGMAN CAN REVIVE YOU AT THEIR AIRFIELD'
+00:03:20 hud: callout 'YOU'RE DOWN' / 'A WINGMAN CAN REVIVE YOU AT THEIR AIRFIELD'
+00:03:22 down: run over in round 2: every player is down
+00:03:22 stats: round 2 (Rookie, normal, 1 player) (cut short: died): length 62 s (0 s at the airfield), 1 wave; aircraft down 3 (yours 3), ordinary fighters 3 (yours 3)
+00:03:23 leaderboard: run over (down): round 2, score 500, 10 air / 0 ground kills, 0 specials beaten, 0:03:00
+00:03:24 leaderboard: sending the run (job 1)
+00:03:26 leaderboard: the run: the server answered -12007 (the server's name didn't resolve (DNS, or the address is blocked)):
+00:03:40 leaderboard: a waiting run: the server answered 200: {"ok":true,"replaced":true}
+00:03:40 leaderboard: co-op run 1a2b3c4d stored: it replaced the board's shorter copy of the run (x)
+00:03:50 leaderboard: a kept run (1a2b3c4d; refused as an unknown build 1 days ago, resent 1 times) resent: answered 200: taken, off refused_runs.txt: {"ok":true}
+00:04:28 hud: callout 'ROUND 1' / 'HOSTILES INBOUND'
+00:04:30 round 1: 4 aircraft: 4 fighters in 2 squadrons; cap 30, up to 29 at once
+00:05:30 round 1 clear; round 2 in 20 s
+00:05:50 hud: callout 'SPECIAL ROUND 2' / 'SUBMARINE CONTACT'
+00:06:00 coop: the round waits for Nobody (not in the mission yet), up to 90 s
+00:08:30 round 2: 1 aircraft: 0 fighters in 0 squadrons, special alicorn: 1 strike aircraft in 0 squadrons; cap 30, up to 29 at once
+00:09:00 round 2 clear; round 3 in 20 s

@@ -335,6 +335,11 @@ Context only (each unique in this build; `python -X utf8 tools/re/mksig.py <va> 
   VisibleListForIGC +0x640, HiddenVFXListForIGC +0x650) does the same two locks for cinematics and spares
   `bMinigameAIObject` objects. Nothing suggests the STORE runs it; a probe could log those four Nums on the campaign game mode.
 - The renderer crashes of 2026-11-01 (old build's 0x142c6c1a0) weren't re-traced.
+- (2026-11-11, hard rule 64) Events fired while the minigames run lose their records even with the deactivation skipped
+  (Saint Alessia's co-op host of 0.74.36; a solo rearm of 2026-10-22 lost a flight's appearance too): it isn't the AI
+  freeze. Survival's answer is in Lua: this game's gate (D.musicHold and the airfield visit) and the one-shots fired
+  again once it's shut, the host's and a joiner's: docs/re/COOP.md section 13 (Scripts/sv_rounds_store.lua). Which part
+  of the game drops them (the dispatch's gate, docs/re/EVENTS_AIRCRAFT.md, or the processor queue) is still open.
 
 ## How it was found
 `tools/re/exe.py` with a private EXE_CACHE; `refl.py`-style reads of the UECodeGen params (FPropertyParamsBaseWithOffset:

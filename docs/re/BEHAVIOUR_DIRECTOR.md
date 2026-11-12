@@ -2695,3 +2695,15 @@ lines (the bomber rework's). The checklists above that read `ai:` lines or the 1
   item 2 of unit 4) leaves no warning at all; the sure tells too (they showed their callout before).
 - A perf window of 5 minutes reports the worst tick over 5 minutes: the checklists' "director worst under ~3 ms" reads
   the same; a spike is harder to place in time (verbose gives the minute).
+
+## The host's STORE and the one-shots it eats (2026-11-11; hard rule 64's rest; untested in game)
+docs/re/COOP.md section 13 (Scripts/sv_rounds_store.lua). For this layer: a Wolf trap's free (RE_SV_WolfFree_<NN><L>) or
+a director's (RE_SV_DirFree_NN) fired while the host's landing STORE is open is fired again on the host alone once it's
+shut, after its flight's own orders, unless a newer hold of that flight came after it (its own, the director's, a Wolf
+trap's or your decoy's) or the flight spawned again (a lost free left a plane at engagement None for good: Lua had
+dropped it as free); a joiner holds the forwarded free while its own STORE is open. A raid escort's RE_SV_Escort_NN lost
+there waits for its flight's own orders too (they'd overwrite it). A raid flight that appears in the host's STORE gets
+its appearance's orders again (RE_SV_BomberOrders_NN, read back by SV_BOrd_NN; in the shuttle round the shuttle's while
+SV_ShuttleRound is 1, the airfield's after), its heavies' route and loops after them (each its own counter); a pressure
+preset lost there is fired again (the last one only); MINDRIPPER's and VALKA's ends with their flag read back, and the
+newer preset fired again after an end that came late (it puts ATTACK_BASE back).

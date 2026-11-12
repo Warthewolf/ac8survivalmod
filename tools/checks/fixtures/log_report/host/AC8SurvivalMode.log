@@ -1,0 +1,24 @@
+23:49:55 AC8 Survival Mode runtime 0.32.35
+23:49:56 leaderboard: the game started: build hash 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef (52 scripts, 12 behaviour scripts, the ini, main.dll and the container: 68 files, 5909 KB, 15 ms)
+23:49:57 spawner: LiveUnitSpawner 1A2B3C, global phase 4D5E6F, world data 7A8B9C; checked through GUObjectArray: yes
+23:50:20 coop: joined: Wren (joiner, mod 0.74.52-coop2mp.144) as player 2
+23:50:20 coop: player 2: link up
+23:50:22 coop: joined: Osprey (joiner, mod 0.74.52-coop2mp.144) as player 3
+23:50:22 coop: player 3: link up
+23:50:30 coop: refused Gan|net <b>`x`</b>: their Survival is 0.74.40-coop2mp.132, this game's 0.74.52-coop2mp.144 (another build doesn't link)
+23:51:20 coop: you are player 1; 4 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+23:51:20 coop:   player 2 Wren: linked, rtt 175 ms; sent 60 packets (4 KB), got 14 (0 KB), 0 resent; their plane 0 moves
+23:51:20 coop:   player 3 Osprey: linked, rtt 300 ms; sent 50 packets (3 KB), got 12 (0 KB), 3 resent; their plane 0 moves
+23:52:20 coop: you are player 1; 6 enemy streams bound (0 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 0 ms); the last minute's 0 enemy moves: 0 past their newest state, 0 held
+23:52:20 coop:   player 2 Wren: linked, rtt 190 ms; sent 200 packets (14 KB), got 40 (1 KB), 1 resent; their plane 0 moves
+23:52:20 coop:   player 3 Osprey: link lost, rtt 900 ms; sent 150 packets (10 KB), got 30 (0 KB), 10 resent; their plane 0 moves
+23:52:20 units: the last minute: 120 SV_UnitAlive asks, 14 us each on average (worst 90 us); the phase's list up to 40 long; its id table built 3 times (1 for the spawner's own changes, 1 the list's, 1 on its 2 s refresh, 0 a hit moved), 400 entries read, 0 skipped; kept objects checked through GUObjectArray: yes (lag-1)
+23:52:20 frames: the last minute: 1700 frames while a plane flew (28 fps), 35.2 ms on average, 95% under 45 ms, worst 110 ms; 2 over 50 ms, 1 over 100 ms; 0 gaps over 2 s not counted (a pause, a load) (joiner-4)
+23:54:01 minigame: type 8 starts; its deactivation of 43 AI objects skipped (co-op): they keep flying
+23:54:29 minigame: type 7 ends: restore of 43 AI objects; lists were 0 / hidden 0 / 0 (co-op keep 1)
+00:00:30 coop: player 3: link lost (nothing for 6 s)
+00:01:20 frames: the last minute: 1200 frames while a plane flew (20 fps), 50.0 ms on average, 95% under 90 ms, worst 300 ms; 20 over 50 ms, 4 over 100 ms; 0 gaps over 2 s not counted (a pause, a load) (joiner-4)
+00:01:20 units: the last minute: 300 SV_UnitAlive asks, 20 us each on average (worst 400 us); the phase's list up to 80 long; its id table built 9 times (3 for the spawner's own changes, 3 the list's, 3 on its 2 s refresh, 0 a hit moved), 900 entries read, 0 skipped; kept objects checked through GUObjectArray: yes (lag-1)
+00:01:40 coop: player 3 gone (nothing for 90 s); the slot is free
+00:09:01 leaderboard: sending a run: build hash 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef (68 files, 5909 KB, 1750 ms)
+00:09:02 leaderboard: run sent, status 200

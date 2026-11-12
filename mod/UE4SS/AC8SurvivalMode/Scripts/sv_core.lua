@@ -1289,7 +1289,10 @@ function flagLine()
             if val >= 1 then up = up + 1 end
         else
             parts[#parts + 1] = name .. "=" .. tostring(val)
-            if not FLAG_COUNTERS[name] then keys[#keys + 1] = parts[#parts] end
+            -- ((2026-11-11) the bomber flights' orders and routes run, counters too: sv_rounds_store.lua)
+            if not (FLAG_COUNTERS[name] or name:sub(1, 8) == "SV_BOrd_" or name:sub(1, 10) == "SV_BRoute_") then
+                keys[#keys + 1] = parts[#parts]
+            end
         end
     end
     if #parts == 0 then return nil, up end

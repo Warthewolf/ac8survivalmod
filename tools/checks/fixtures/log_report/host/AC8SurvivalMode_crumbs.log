@@ -1,0 +1,4 @@
+23:50:02.100 t100 lua bridge: all registered
+23:54:12.100 t100 lua: event RE_SV_ShuttleT_150: 1
+23:54:13.000 t100 lua: event RE_SV_DirFree_04: 1
+00:09:03.000 t100 lua: tick lost: queued again (1 so far)

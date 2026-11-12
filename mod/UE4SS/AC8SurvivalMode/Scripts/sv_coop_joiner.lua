@@ -706,6 +706,8 @@ local function freeWaiting(name)                       -- a release fired here: 
     end
 end
 function hostEvent(name)                          -- (a joiner) one of the host's events, here
+    -- ((2026-11-11) what it undoes dropped from this game's STORE queue first, a hold that waits below included)
+    if STOREQ and STOREQ.undo then pcall(STOREQ.undo, tostring(name)) end
     local nn, L = holdOf(name, "Hold")
     local due = nn and holdDue(nn)
     if due and os.clock() < due then
@@ -722,8 +724,18 @@ function hostEvent(name)                          -- (a joiner) one of the host'
         local okB, errB = pcall(ESC.beforeHostEvent, name)
         if not okB then once("esc before", "coop: the host's " .. tostring(name) .. ": the carrier's check here failed: " .. tostring(errB)) end
     end
-    local r = rawEvent(name)
-    if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. name .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
+    -- ((2026-11-11) hard rule 64: this game's own landing STORE eats what comes in it; the one-shots that change the world
+    -- are held while it's open and fired here in order once it's shut, STOREQ.tick; the rest fired now as ever)
+    local held = false
+    if STOREQ and STOREQ.forwarded then
+        local okH, h = pcall(STOREQ.forwarded, name)
+        if not okH then once("storeqfw", "coop: the STORE's hold here: error " .. tostring(h)) end
+        held = okH and h == true
+    end
+    if not held then
+        local r = rawEvent(name)
+        if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. name .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
+    end
     -- ((2026-11-11, alicorn-7) the Alicorn's dive and surfacing, for this game's check of its copy: sv_alicorn.lua)
     if SPC and SPC.alicornHostEvent and tostring(name):find("^RE_SV_Alcn") then
         local okA, errA = pcall(SPC.alicornHostEvent, tostring(name))
@@ -826,6 +838,12 @@ function clientRounds(now)
         else D.waves = nil end
     end
     if not levelReady() then return end
+    -- ((2026-11-11) hard rule 64: this game's STORE gate, and the host's events held while it was closed fired here in
+    -- order once it's open: sv_rounds_store.lua, hostEvent below)
+    if STOREQ and STOREQ.tick then
+        local okQ, errQ = pcall(STOREQ.tick, now)
+        if not okQ then once("storeq", "coop: the STORE's held events here: error " .. tostring(errQ)) end
+    end
     if M.dvQ and #M.dvQ > 0 then                         -- the director's events here once their delay is up ("dv")
         local keep = {}
         for _, q in ipairs(M.dvQ) do
