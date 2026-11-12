@@ -1554,9 +1554,15 @@ TANI.rise = { hold_s = 1.5, rate = 1.0, breach_s = 0.8, slam_s = 9.0, length_s =
               -- the water AC8 made for ships her size as well: the Alicorn's and the Arsenal Bird's cutscene water (Online
               -- Mode's IGC: spawned bare, no user parameter needed), with the Ford's pillars at twice their size.
               -- Each entry { path, scale, forward m, starboard m } from her rest midships; the paths are FX.* below)
+              -- ((2026-11-12) the user on 0.74.66: "the water height on the rise is too big now": the Alicorn's ending
+              -- cutscene's pillars (ALCN_PILLAR_2 / _3 / _BIG: NS_IGC_alcn_ED_WaterPillar_c02_2nd / c03 / c05) are
+              -- world-space mesh columns 2.4-2.8 km tall and 0.5-1 km wide, which the spawn's scale doesn't touch (their
+              -- particle scripts emulated, the rise-water research): out. In their place the cutscene's c02_1st
+              -- (ALCN_PILLAR_1: local space, ~100 m at scale 1, so its scale holds) and the Alicorn's water blast (local
+              -- space, fixed bounds 150 m), larger)
               breach = {                                 -- (at breach_s, round where her axis stands in the sea)
                   { "SURF1", 1, 0, 0 }, { "SURF2", 1, 0, 0 }, { "SURF3", 1, 0, 0 }, { "SURF4", 1, 0, 0 },
-                  { "ALCN_PILLAR_1", 1, 0, 0 }, { "ALCN_PILLAR_2", 1, 10, 0 }, { "ALCN_BLAST", 1, 25, 0 },
+                  { "ALCN_PILLAR_1", 2, 0, 0 }, { "ALCN_PILLAR_1", 1.5, 40, 0 }, { "ALCN_BLAST", 2, 25, 0 },
                   { "MIST", 1, 0, 0 }, { "FORD_PILLAR", 2, 0, -45 }, { "FORD_PILLAR", 2, 0, 45 } },
               -- (from breach_s to rise_until_s, one every rise_every_s, cycled, on a ring ring_m round where she stands)
               rise = { { "AB_SPLASH", 1 }, { "FORD_PILLAR", 2 }, { "IMPACT_L", 1 }, { "FORD_SPLASH", 3 } },
@@ -1566,10 +1572,11 @@ TANI.rise = { hold_s = 1.5, rate = 1.0, breach_s = 0.8, slam_s = 9.0, length_s =
               -- of where she stood: along her hull there, both sides)
               fall = { { "FORD_PILLAR", 2 }, { "MIST", 1 }, { "AB_SPLASH", 1 }, { "FORD_SPLASH", 3 } }, fall_every_s = 0.3,
               -- (at slam_s: { path, scale, forward m, starboard m })
-              slam = { { "ALCN_PILLAR_BIG", 1, -200, -50 }, { "ALCN_PILLAR_BIG", 1, -200, 50 }, { "ALCN_PILLAR_BIG", 1, 0, -55 },
-                       { "ALCN_PILLAR_BIG", 1, 0, 55 }, { "ALCN_PILLAR_BIG", 1, 200, -50 }, { "ALCN_PILLAR_BIG", 1, 200, 50 },
-                       { "ALCN_PILLAR_3", 1, 300, 0 }, { "AB_LAND_L", 1, -100, -70 }, { "AB_LAND_L", 1, 150, -70 },
-                       { "AB_LAND_R", 1, -100, 70 }, { "AB_LAND_R", 1, 150, 70 }, { "ALCN_BLAST", 1, 280, 0 } },
+              -- ((2026-11-12) the 2.8 km pillars out, as at the breach: c02_1st and the water blast at their spots)
+              slam = { { "ALCN_PILLAR_1", 2, -200, -50 }, { "ALCN_PILLAR_1", 2, -200, 50 }, { "ALCN_PILLAR_1", 2, 0, -55 },
+                       { "ALCN_PILLAR_1", 2, 0, 55 }, { "ALCN_PILLAR_1", 2, 200, -50 }, { "ALCN_PILLAR_1", 2, 200, 50 },
+                       { "ALCN_BLAST", 2, 300, 0 }, { "AB_LAND_L", 1, -100, -70 }, { "AB_LAND_L", 1, 150, -70 },
+                       { "AB_LAND_R", 1, -100, 70 }, { "AB_LAND_R", 1, 150, 70 }, { "ALCN_BLAST", 2, 280, 0 } },
               slam_pillars = { "FORD_PILLAR", 2 }, slam_pillar_m = 50,     -- (both sides, every slam_pillar_m stern to bow)
               slam_foam = { "FORD_FOAM", 2 }, slam_spots = 13,             -- (along her keel)
               settle = { "FOAM_IGC", 1 }, settle_every_s = 0.5, settle_until_s = 12.5,   -- (foam along her as she settles)
@@ -1587,6 +1594,7 @@ do
         SURF1 = BOSS .. "BA002_alcn/Niagara/NS_ex03_alcn_surfacing01_ON", SURF2 = BOSS .. "BA002_alcn/Niagara/NS_ex03_alcn_surfacing02_ON",
         SURF3 = BOSS .. "BA002_alcn/Niagara/NS_ex03_alcn_surfacing03_ON", SURF4 = BOSS .. "BA002_alcn/Niagara/NS_ex03_alcn_surfacing04_ON",
         ALCN_PILLAR_1 = IGC .. "EB002/ED/Niagara/NS_IGC_alcn_ED_WaterPillar_c02_1st_ON",
+        -- (ALCN_PILLAR_2 / _3 / _BIG: in no list since 2026-11-12: 2.4-2.8 km towers, see TANI.rise.breach)
         ALCN_PILLAR_2 = IGC .. "EB002/ED/Niagara/NS_IGC_alcn_ED_WaterPillar_c02_2nd_ON",
         ALCN_PILLAR_3 = IGC .. "EB002/ED/Niagara/NS_IGC_alcn_ED_WaterPillar_c03_ON",
         ALCN_PILLAR_BIG = IGC .. "EB002/ED/Niagara/NS_IGC_alcn_WaterPillar_c05_ON",
