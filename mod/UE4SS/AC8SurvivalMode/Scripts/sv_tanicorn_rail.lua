@@ -9,8 +9,9 @@
 --   its hatches shut). Seen by the live watch (its armour on), after_s on its Deploy's end pose is written from here in
 --   component space, as quaternion transforms (never rotators: the pitch-key trap), stepped over deploy_s: the lift
 --   (0, 0, -600) -> (0, 0, 0) cm, Hatch_n / Hatch_p 105 deg about X at (0, +-460, -30). Then its lift is read back
---   (GetBoneLocationByName, component space) and SOC_Gun_01's height; only with the lift up (within up_cm of 0) is it
---   ordered: its remote event RE_SV_TaniRailOrderL / RE_SV_TaniRailOrderR (host or solo; held while the STORE is open),
+--   (GetBoneLocationByName, component space: as written) and SOC_Gun_01's height (as drawn); only with the lift up (within
+--   up_cm of 0) AND the muzzle raised as drawn (SOC_Gun_01 at least raised_cm up in the mesh: stowed -196, raised ~+404) is it
+--   ordered, never from inside the hull: its remote event RE_SV_TaniRailOrderL / RE_SV_TaniRailOrderR (host or solo; held while the STORE is open),
 --   its arm's railgun HUD written first (hard rule 45: IsDispRadarMap, ForceAlertDisp, HUDControl 1, read back). No
 --   read-back, no order. Its barrel watched move_s after (hard rule 64): one that never moved gets its order again, up to
 --   `tries`, and again move_s after the STORE shuts. Its lift read every check_s and written again if it fell back.
@@ -41,7 +42,7 @@
 --   `tanicorn rc: Part_RAILCANNON shot down at +T s (...)`, `tanicorn rc: cycle over (<why>) ...`.
 -- DEV ONLY BEGIN
 do
-TANI.railgun = { after_s = 3, deploy_s = 2.2, up_cm = 50, writes = 2, move_s = 8, move_deg = 2, tries = 4, check_s = 5 }
+TANI.railgun = { after_s = 3, deploy_s = 2.2, up_cm = 50, raised_cm = 300, writes = 2, move_s = 8, move_deg = 2, tries = 4, check_s = 5 }
 local ORDER = { RAILGUN_L = "RE_SV_TaniRailOrderL", RAILGUN_R = "RE_SV_TaniRailOrderR" }   -- (the build's remote events)
 local MUZZLE, DEPLOY_LEN, HATCH_DEG = "SOC_Gun_01", 2.167, 105   -- (the cooked Deploy's lift end, its hatches' turn)
 local FLAGS0 = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
@@ -315,22 +316,29 @@ local function gunStep(e, now, dt)
         for _, b in ipairs(pose(e.mesh, math.min(1, e.t / math.max(0.05, G.deploy_s)) * DEPLOY_LEN)) do e.bad[#e.bad + 1] = b end
         if e.t >= G.deploy_s then e.state, e.writes = "check", 1 end
     elseif e.state == "check" then                       -- (a tick after its last write: the pose drawn since)
-        local z, why = liftZ(e.mesh)
+        local z, why = liftZ(e.mesh)                     -- (as written)
+        local sz, swhy = sockZ(e.mesh)                   -- (as drawn: where its fire control fires from)
         local fails = #e.bad > 0 and ("; writes that failed: " .. table.concat(e.bad, ", ", 1, math.min(3, #e.bad))) or ""
-        if z and math.abs(z) <= G.up_cm then
-            local sz = sockZ(e.mesh)
+        local liftUp = z ~= nil and math.abs(z) <= G.up_cm
+        if liftUp and sz and sz >= G.raised_cm then
             e.state = "order"
-            gunLog(e, string.format("deployed: lift z %.0f cm (up), SOC_Gun_01 z %s cm in the mesh (raised ~+404%s)%s", z, cm(sz),
-                (sz and sz < 100) and ": NOT raised as drawn, ordered on the lift's read" or "", fails))
+            gunLog(e, string.format("deployed: lift z %.0f cm (up), SOC_Gun_01 z %.0f cm in the mesh (raised ~+404)%s", z, sz, fails))
             orderTry(e, now, "its deploy read back")
-        elseif z and e.writes < G.writes then
+        elseif z and (sz or not liftUp) and e.writes < G.writes then
             e.writes = e.writes + 1
             pose(e.mesh, DEPLOY_LEN)
-            gunLog(e, string.format("its lift reads z %.0f cm after its deploy: the end pose written again (%d of %s)", z, e.writes, g(G.writes)))
+            gunLog(e, liftUp and string.format("its lift reads z %.0f cm (up) but SOC_Gun_01 z %.0f cm in the mesh as drawn after its "
+                .. "deploy: the end pose written again (%d of %s)", z, sz, e.writes, g(G.writes))
+                or string.format("its lift reads z %.0f cm after its deploy: the end pose written again (%d of %s)", z, e.writes, g(G.writes)))
         else
             e.state = "failed"
-            gunLog(e, "NOT ordered: " .. (z and string.format("its lift still reads z %.0f cm after %d writes (the pose doesn't take?)", z,
-                e.writes) or ("its lift can't be read back (" .. tostring(why) .. ")")) .. ": a gun inside the hull isn't ordered" .. fails)
+            local r
+            if not z then r = "its lift can't be read back (" .. tostring(why) .. ")"
+            elseif not liftUp then r = string.format("its lift still reads z %.0f cm after %d writes (the pose doesn't take?)", z, e.writes)
+            elseif not sz then r = "SOC_Gun_01 can't be read back as drawn (" .. tostring(swhy) .. ")"
+            else r = string.format("SOC_Gun_01 still z %.0f cm in the mesh as drawn after %d writes, its lift z %.0f cm (written, "
+                .. "not drawn?)", sz, e.writes, z) end
+            gunLog(e, "NOT ordered: " .. r .. ": a gun inside the hull isn't ordered" .. fails)
         end
     elseif e.state == "order" then
         orderTry(e, now, "its deploy read back")

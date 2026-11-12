@@ -187,8 +187,9 @@ local function railgun(key, name, at, part)
         local v = self.bones[b] or { X = 0, Y = 0, Z = 0 }
         return { X = v.X, Y = v.Y, Z = v.Z, space = space }
     end
-    function pm:GetSocketTransform(s, space)
-        return { Translation = { X = 875.6, Y = -0.5, Z = -196 + (self.bones.lift.Z + 600) }, space = space }
+    function pm:GetSocketTransform(s, space)                  -- (as drawn: sockLow, a pose written but never drawn)
+        local lz = self.sockLow and -600 or self.bones.lift.Z
+        return { Translation = { X = 875.6, Y = -0.5, Z = -196 + (lz + 600) }, space = space }
     end
     function pm:GetSocketLocation(s)
         local base = { X = at.X - 199, Y = at.Y, Z = at.Z + self.bones.lift.Z + 404 }
@@ -450,6 +451,18 @@ local nl = untilLog("tanicorn rail: RAILGUN_R Part_RAILGUN_R BP_SV_Tani_RAILGUN_
 check(nl ~= nil, "the new one seen once the live watch looks at it again (" .. tostring(nl) .. ")")
 local cl = untilLog("tanicorn rail: RAILGUN_R NOT ordered: its lift can't be read back", 40, n0 + 1)
 check(cl ~= nil and fired("RE_SV_TaniRailOrderR") == 0, "its lift unreadable: NOT ordered (no read-back, no order)")
+-- its lift up as written but its muzzle still down as drawn (the gun would fire from inside the hull): written again, never ordered
+local low = railgun("RAILGUN_R", "drawnLow", { X = 480000, Y = 4000, Z = 1000 }, "Part_RAILGUN_R")
+LIVE[low.__addr] = nil
+low.__addr = newR.__addr
+LIVE[newR.__addr] = low
+low.pm.sockLow = true
+for _, c in ipairs(HULL.pcomps) do if c.socket == "RAILGUN_R" then c.ChildActor = low end end
+n0 = #LOG
+local ll = untilLog("tanicorn rail: RAILGUN_R NOT ordered: SOC_Gun_01 still z -196 cm in the mesh as drawn after 2 writes, its lift z 0 cm", 80, n0 + 1)
+check(ll ~= nil and logged("tanicorn rail: RAILGUN_R its lift reads z 0 cm (up) but SOC_Gun_01 z -196 cm in the mesh as drawn after its "
+    .. "deploy: the end pose written again (2 of 2)", n0 + 1) ~= nil and fired("RE_SV_TaniRailOrderR") == 0,
+    "its lift up as written, its muzzle down as drawn: written again, then NOT ordered (" .. tostring(ll) .. ")")
 
 print("the railcannon: its shield, Ctrl+H, its deploy")
 local sl = logged("tanicorn rc: Part_RAILCANNON BP_SV_Tani_RAILCANNON_C rc_")

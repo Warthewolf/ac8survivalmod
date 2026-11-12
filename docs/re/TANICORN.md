@@ -359,9 +359,10 @@ on HULLLIVE (Part_RAILCANNON, Part_RAILGUN_L, Part_RAILGUN_R); none is ordered a
   TurretPoseableMesh in component space (SetBoneTransformByName, EBoneSpaces 1) as quaternion transforms, stepped over 2.2 s:
   the lift (0, 0, -600) -> (0, 0, 0) cm, Hatch_n / Hatch_p 105 deg about X ((-+0.79335, 0, 0, 0.60876)) at (0, +-460, -30).
   Then it reads the lift back (GetBoneLocationByName, component space: what was written) and SOC_Gun_01's height
-  (GetSocketTransform, RTS_Component 2: what's drawn; stowed -196 cm, raised +404). Only with the lift within 50 cm of 0 is it
-  ordered (its remote event, host or solo; held while the STORE is open), its arm's railgun HUD written first (hard rule 45)
-  and read back. A lift that reads down is written once more, then never ordered; a lift that can't be read: never ordered.
+  (GetSocketTransform, RTS_Component 2: what's drawn, where its fire control fires from; stowed -196 cm, raised +404). Only
+  with the lift within 50 cm of 0 AND SOC_Gun_01 at least 300 cm up as drawn is it ordered (never from inside the hull) (its remote event, host or solo; held while the STORE is open), its arm's railgun HUD written first (hard rule 45)
+  and read back. A lift that reads down, or a muzzle that stays down as drawn, is written once more, then never ordered; a lift or a
+  muzzle that can't be read: never ordered.
   Hard rule 64: a barrel that hasn't moved 8 s after its order (yaw / pitch within 2 deg, from the shell lines' aim) is
   ordered again, up to 4 times, the check put off until 8 s after the STORE shuts. The lift is read every 5 s after and
   written again if it fell back. The fire control owns yaw and pitch: the design's 35 / 22 deg ready pose isn't written.
