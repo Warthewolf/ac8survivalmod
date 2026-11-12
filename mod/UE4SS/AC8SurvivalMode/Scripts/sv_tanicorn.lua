@@ -1574,7 +1574,12 @@ TANI.rise = { hold_s = 1.5, rate = 1.0, breach_s = 0.8, slam_s = 9.0, length_s =
               slam_foam = { "FORD_FOAM", 2 }, slam_spots = 13,             -- (along her keel)
               settle = { "FOAM_IGC", 1 }, settle_every_s = 0.5, settle_until_s = 12.5,   -- (foam along her as she settles)
               shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios",
-              shake_km = 8 }
+              shake_km = 8,
+              -- ((2026-11-12) the user on 0.74.66: "the water height on the rise is too big now": a column 2 km tall stood
+              -- where she broke the surface long after the rise. Nothing stopped an effect: a cutscene's looping water (the
+              -- IGC ones) is switched off by its cutscene, never by itself. Every rise effect is now deactivated fx_life_s
+              -- after it's spawned (its particles fade out), whatever the rise is doing then)
+              fx_life_s = 8 }
 do
     local V, IGC = "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/", "/Game/OnlineMode/VFX/IGC/Emergency/"
     local BOSS = "/Game/OnlineMode/VFX/Vehicles/Boss/"
@@ -1605,6 +1610,29 @@ local function riseAsset(path, cls)                      -- an asset by path (a 
     if RA[full] then pin(RA[full], "the rise's " .. full:match("[^%.]+$")) end
     return RA[full]
 end
+-- ((2026-11-12) every effect the rise spawns, stopped fx_life_s on: { c, a, name, at } (hard rule 59: its address and name
+-- checked before it's touched); a tick of its own, so the rise's end doesn't leave one running; forgotten with the level)
+local FXLIVE = {}
+local function fxStop(e, why)
+    if liveAddr(e.c) == e.a and nameOf(e.c) == e.name then
+        if pcall(function() e.c:Deactivate() end) then return true end
+    end
+    return false
+end
+TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise fx", fn = function(now)
+    if #FXLIVE == 0 then return end
+    local keep, stopped = {}, 0
+    for _, e in ipairs(FXLIVE) do
+        if now >= e.at then
+            if fxStop(e) then stopped = stopped + 1 end
+        else
+            keep[#keep + 1] = e
+        end
+    end
+    FXLIVE = keep
+    if stopped > 0 then TANI.rise.fxStopped = (TANI.rise.fxStopped or 0) + stopped end
+end }
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["tanicorn rise fx"] = function() FXLIVE = {} end end
 local function riseFx(path, where, n)                    -- an AC8 effect at a place: whether one came back, live
     local lib, sys = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary"), riseAsset(path)
     if not (valid(lib) and sys and liveObj(survivalPC)) then return false end
@@ -1616,8 +1644,11 @@ local function riseFx(path, where, n)                    -- an AC8 effect at a p
     end)
     if not (ok and c) then return false end
     local okV, v = pcall(function() return c:IsValid() end)
-    return okV and v == true
+    if not (okV and v == true) then return false end
+    FXLIVE[#FXLIVE + 1] = { c = c, a = addrOf(c), name = nameOf(c), at = os.clock() + (TANI.rise.fx_life_s or 8) }
+    return true
 end
+TANI.rise.spawnFx = riseFx                                -- (tani_vls_test's: the spawn and its stop)
 local function riseSound(path, where)
     local ev, ak = riseAsset(path), StaticFindObject("/Script/AkAudio.Default__AkGameplayStatics")
     if not (ev and valid(ak) and liveObj(survivalPC)) then return false end
@@ -1930,7 +1961,8 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
         R.fxSaid = true
         local miss = {}
         for k, n in pairs(R.fx.by) do miss[#miss + 1] = k .. " x" .. n end
-        log(string.format("tanicorn: rise effects: %d of %d came back (%d sprays)%s", R.fx.up, R.fx.of, R.sprays or 0,
+        log(string.format("tanicorn: rise effects: %d of %d came back (%d sprays; %d stopped so far, each %s s after its spawn)%s",
+            R.fx.up, R.fx.of, R.sprays or 0, TANI.rise.fxStopped or 0, tostring(TANI.rise.fx_life_s),
             #miss > 0 and ("; NOT: " .. table.concat(miss, ", ")) or ""))
     end
     local okI, still = pcall(function() return R.rig:IsPlaying() end)

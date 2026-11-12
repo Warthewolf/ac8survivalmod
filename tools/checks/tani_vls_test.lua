@@ -111,9 +111,21 @@ function loadObject(path)
         CLASSES[path] = CLASSES[path] or obj(path)
         return CLASSES[path]
     end
+    if path:find("/NS_", 1, true) then                    -- ((2026-11-12) the rise's effects)
+        CLASSES[path] = CLASSES[path] or obj(path)
+        return CLASSES[path]
+    end
     return nil, "not stubbed"
 end
+local NIAG = { spawned = {} }                              -- ((2026-11-12) the rise's effects: each component kept here)
+function NIAG:SpawnSystemAtLocation(_, sys, where, _, sc)
+    local c = obj("NiagaraComponent /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.NiagaraComponent_" .. nextA)
+    function c:Deactivate() self.off = true end
+    self.spawned[#self.spawned + 1] = c
+    return c
+end
 function StaticFindObject(path)
+    if path == "/Script/Niagara.Default__NiagaraFunctionLibrary" then return setmetatable(NIAG, OBJ) end
     if path:find("Default__BP_SV_Tani_VLS", 1, true) then
         local mesh = { ToString = function() return "TurretMesh" end }
         return obj(path, { FireControlSystemComponent = { AllArms = { { LauncherModule = { MeshComponentName = mesh } } } },
@@ -542,6 +554,21 @@ DRAWN[2].HealthInternal = 49000
 tick()
 check(logged("HULL drawn_", n0 + 1) ~= nil and logged("hp 50000 -> 49000/5000 (-1000)", n0 + 1) ~= nil,
     "a hull's health that moves is logged (with the armour on: never expected)")
+-- ((2026-11-12) the user on 0.74.66: "the water height on the rise is too big now": a looping cutscene effect stood there
+-- after the rise. Every rise effect is stopped fx_life_s after its spawn, by its own tick; a reused address left alone)
+print("the rise's effects stopped")
+NIAG.__addr, NIAG.__name = 0x9990, "NiagaraFunctionLibrary /Script/Niagara.Default__NiagaraFunctionLibrary"
+LIVE[NIAG.__addr] = NIAG
+check(TANI.rise.spawnFx("/Game/OnlineMode/VFX/IGC/X/NS_Test_Pillar", { X = 0, Y = 0, Z = 0 }, 1) == true
+    and TANI.rise.spawnFx("/Game/OnlineMode/VFX/IGC/X/NS_Test_Mist", { X = 0, Y = 0, Z = 0 }, 1) == true, "two effects spawned")
+local f1, f2 = NIAG.spawned[#NIAG.spawned - 1], NIAG.spawned[#NIAG.spawned]
+f2.__name = "NiagaraComponent /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.SomethingElse_7"   -- (its address reused)
+for _ = 1, math.ceil(TANI.rise.fx_life_s / 0.25) - 2 do tick() end
+check(not f1.off, "not before fx_life_s")
+for _ = 1, 4 do tick() end
+check(f1.off == true and not f2.off, "stopped fx_life_s after its spawn; another object at a kept address left alone (hard rule 59)")
+check(type(LEVEL_DROPS["tanicorn rise fx"]) == "function", "forgotten with the level (LEVEL_DROPS)")
+
 -- ((2026-11-12, the review) a new run in the same level closes the probe; each part's level drop forgets its own
 print("the probe and the armour with the level")
 n0 = #LOG
