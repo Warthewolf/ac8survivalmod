@@ -372,3 +372,186 @@ def check_fleet_build():
     print(f'  invincible fleet: {len(fleet)} units, {sum(len(s["parts"]) for s in fleet)} parts, {len(fleet)} lanes, '
           f'{len(events)} events ({n_ex} execs: ' + ', '.join(f'{k} {n}' for k, n in sorted(kinds.items()))
           + ') and their rows read back from the packages: all there')
+
+
+# ---------------------------------------------------------------- THE TANACORN's railguns: their arm and row (stage 4)
+# (2026-11-12, docs/re/TANICORN.md "Railguns and railcannon"; the route chosen by the stage-4 research's weapon topic, two
+# dry runs) the sub-railguns RAILGUN_L / _R fire the Alicorn's own round BP_wp_emls_alcn from an arm of ours: the T16's
+# proven BP_FCS_Vessel_Artillery_00 (BoneControl on TurretPoseableMesh, BN_turret_yaw / BN_turret_pitch, the GUN prefix)
+# copied as survival_events.TANI_RAIL_ARM, its 7 imports of the artillery shell put on the round's 7 public exports by
+# role (1:1: no null import, unlike the ZFA's laser), its launcher a LauncherTripleRailCannon (the x40a RailGun's class
+# and template ids: the TripleRailCannon VALKA fired on our exact bones) for hard rule 45's minimap line and RAILGUN
+# WARNING, its properties rewritten BY NAME (an unversioned subclass gives its own fields the low indexes: copied by
+# index, BoneControl's first fields read back as HUDControl ...); its search 18 km. Its row TANI_RAIL_FCS (the T16's
+# NPC_FCS_VesselArtillery000 copied: its AI module Turret500 kept, its NpcWeaponId (Artillery_Vessel_000: damage 40,
+# 4000 km/h) cleared so the round keeps its own values) in a table of its own (DT_SV_NpcFCS holds the ZFA's row only:
+# check_zfa_laser_build), which Scripts/sv_tanicorn.lua copies whole into DT_NPC_FCS at the main menu. Imports only
+# stock packages: in every build. TANI_RAIL_LAUNCHER 'bone' keeps the T16's BoneControl (only the round changed): the
+# fallback if a row-named TripleRailCannon misbehaves (it has never fired with its own AI: VALKA's fired on command).
+TANI_RAIL_ROLES = {'BP_wp_artillery_vesselgun_C': 'BP_wp_emls_alcn_C',
+                   'Default__BP_wp_artillery_vesselgun_C': 'Default__BP_wp_emls_alcn_C',
+                   'WeaponCollisionEffectModule': 'WeaponCollisionEffectModule', 'Artillery Movement': 'Bullet Movement',
+                   'Fire Particles NS': 'Fire Particles NS', 'DefaultSceneRoot_GEN_VARIABLE': 'DefaultSceneRoot_GEN_VARIABLE',
+                   'Static Mesh': 'Static Mesh'}
+TANI_RAIL_LAUNCHER = 'triple'
+TANI_RAIL_PERFORMANCE = {'FireRate': 6, 'MagazineCapacity': 1, 'ReloadTime': 10.0, 'bEnableSpinUp': True, 'SpinUpTime': 3.0}
+TANI_RAIL_FIRE_CONTROL = {'CaptureDistance': 1800000.0, 'CaptureMinDistance': 10000.0, 'CaptureAngleRange': 10.0,
+                          'ActivationTime': 0.6, 'TriggeringTime': 10.0, 'TriggerCount': 1, 'ShotIntervalTime': 10.0,
+                          'RestingTime': 10.0, 'PredictionOffsetTime': 0.5}
+TANI_RAIL_SEARCH_CM = (1800000.0, 1900000.0)        # its AIControlCommon's lock / loss radius (cm): the round's 18 km
+TANI_RAIL_ROW_VALUES = {'FireRate': 6, 'MagazineCapacity': 1, 'ReloadTime': 10.0, 'SlotNum': 1, 'bEnableSpinUp': True,
+                        'SpinUpTime': 3.0, 'PredictionOffsetTime': 0.5, 'CaptureDistance': 18000.0, 'CaptureMinDistance': 100.0,
+                        'CaptureAngleRange': 10.0, 'ActivationTime': 0.6, 'TriggeringTime': 10.0, 'TriggerCount': 1,
+                        'ShotIntervalTime': 10.0, 'RestingTime': 10.0, 'YawSpeed': 90.0, 'YawAngleMin': -180.0,
+                        'YawAngleMax': 180.0, 'PitchSpeed': 90.0, 'PitchAngleMin': 0.0, 'PitchAngleMax': 90.0}
+TANI_RAIL_ROW_CLEAR = ('NpcWeaponId', 'ActivationRandomTimeMin', 'ActivationRandomTimeMax')
+TANI_RAIL_ARM_CLASS = 'BP_FCS_Vessel_Artillery_00_C'  # (its class export keeps its name: a zen package's export hashes are
+                                                       # package-relative, as the ZFA's BP_FCS_Vessel_CIWS_00_C)
+
+
+def build_tani_rail():
+    """THE TANACORN's railguns' arm survival_events.TANI_RAIL_ARM and its row TANI_RAIL_FCS in TANI_RAIL_FCS_TABLE (above)."""
+    import copy
+    se = survival_events
+    u64 = zfa_tls_u64
+    z = ZenPkg(stock(se.TANI_RAIL_ARM_SOURCE))
+    old_w, new_w, trc = (ZenPkg(stock(p)) for p in (se.TANI_RAIL_OLD_WEAPON, se.TANI_RAIL_ROUND, se.TANI_RAIL_LAUNCHER_SOURCE))
+    pub = lambda zz: {u64(e, 56): zz.export_name(i) for i, e in enumerate(zz.exports) if u64(e, 56)}
+    old_pub, new_pub = pub(old_w), {n: h for h, n in pub(new_w).items()}
+    assert sorted(old_pub.values()) == sorted(TANI_RAIL_ROLES), ('the artillery shell changed', sorted(old_pub.values()))
+    assert sorted(new_pub) == sorted(TANI_RAIL_ROLES.values()), ('the railgun round changed', sorted(new_pub))
+    assert z.imp_pkgs == [se.TANI_RAIL_OLD_WEAPON], z.imp_pkgs
+    # 1. the round: each import of the shell's onto the round's export of its role
+    k = z.imp_pkgs.index(se.TANI_RAIL_OLD_WEAPON)
+    mine = [i for i, x in enumerate(z.imports) if x >> 62 == 2 and (x >> 32) & 0x3fffffff == k]
+    role = {i: old_pub[z.imp_hashes[z.imports[i] & 0xffffffff]] for i in mine}
+    assert sorted(set(role.values())) == sorted(TANI_RAIL_ROLES), role
+    for i in mine:
+        z.imp_hashes[z.imports[i] & 0xffffffff] = new_pub[TANI_RAIL_ROLES[role[i]]]
+    z.set_imported_package(se.TANI_RAIL_OLD_WEAPON, se.TANI_RAIL_ROUND)
+    # 2. the launcher: its numbers, and (triple) TripleRailCannon's class and template ids, its properties by name
+    li = z.export_index('LiveFCSModule_LauncherBoneControl_0')
+    v, rest = props_of(z, li, 'LiveFCSModule_LauncherBoneControl')
+    have = {q[1]: q[3] for q in v[2] if not q[2]}
+    perf, fc = copy.deepcopy(have['Performance']), copy.deepcopy(have['FireControl'])
+    for f, x in TANI_RAIL_PERFORMANCE.items():
+        zfa_tls_set(perf[2], perf[1], f, zfa_tls_value(perf[1], f, x))
+    for f, x in TANI_RAIL_FIRE_CONTROL.items():
+        zfa_tls_set(fc[2], fc[1], f, zfa_tls_value(fc[1], f, x))
+    assert TANI_RAIL_LAUNCHER in ('triple', 'bone'), TANI_RAIL_LAUNCHER
+    if TANI_RAIL_LAUNCHER == 'triple':
+        el = trc.export_index('LiveFCSModule_LauncherTripleRailCannon_0')
+        c0, t0 = u64(z.exports[li], 32), u64(z.exports[li], 48)
+        c1, t1 = u64(trc.exports[el], 32), u64(trc.exports[el], 48)
+        assert c1 >> 62 == 1 and t1 >> 62 == 1, 'script imports'
+        assert z.imports.count(c0) == 1 and z.imports.count(t0) == 1, 'launcher ids'
+        z.imports = [c1 if x == c0 else t1 if x == t0 else x for x in z.imports]
+        struct.pack_into('<Q', z.exports[li], 32, c1)
+        struct.pack_into('<Q', z.exports[li], 48, t1)
+        sn = 'LiveFCSModule_LauncherTripleRailCannon'
+        tv = ('struct', sn, [])
+        for q in v[2]:
+            if q[1] not in ('Performance', 'FireControl'):
+                zfa_tls_set(tv[2], sn, q[1], copy.deepcopy(q[3]), zero=q[2])
+        zfa_tls_set(tv[2], sn, 'ForceAlertDisp', ('raw', 'Bool', b'\x01'))
+        zfa_tls_set(tv[2], sn, 'IsDispRadarMap', ('raw', 'Bool', b'\x01'))
+        zfa_tls_set(tv[2], sn, 'HUDControl', ('enum', 'ELiveFCSRailGunHUDControl', ('raw', 'Byte', b'\x01')))
+    else:
+        sn, tv = 'LiveFCSModule_LauncherBoneControl', copy.deepcopy(v)
+    zfa_tls_set(tv[2], sn, 'Performance', perf)
+    zfa_tls_set(tv[2], sn, 'FireControl', fc)
+    z.payloads[li] = bytearray(write_props(z, tv) + rest)
+    # 3. its AI: the round's 18 km
+    ai = z.export_index('LiveFCSModule_AIControlCommon_0')
+    av, arest = props_of(z, ai, 'LiveFCSModule_AIControlCommon')
+    for f, r in zip(('EnemySearchLockAreaBounds', 'EnemySearchLossAreaBounds'), TANI_RAIL_SEARCH_CM):
+        b = copy.deepcopy([q[3] for q in av[2] if q[1] == f][0])
+        zfa_tls_set(b[2], b[1], 'Radius', zfa_tls_value(b[1], 'Radius', r))
+        zfa_tls_set(av[2], av[1], f, b)
+    z.payloads[ai] = bytearray(write_props(z, av) + arest)
+    # 4. under Survival's path
+    z.rename(se.TANI_RAIL_ARM_SOURCE, se.TANI_RAIL_ARM)
+    assert se.TANI_RAIL_ARM in z.names and se.TANI_RAIL_ARM_SOURCE not in z.names
+    for i, s_ in ((li, sn), (ai, 'LiveFCSModule_AIControlCommon')):
+        props_of(z, i, s_)                                  # (each reads back and round-trips)
+    save(z, se.TANI_RAIL_ARM)
+    cls = z.export_name(0)
+    assert cls == TANI_RAIL_ARM_CLASS, cls
+
+    def edit(props):
+        zfa_tls_set(props, 'LiveNpcFCSDataTable', 'FCSBlueprintClass', ('soft', ('name', se.TANI_RAIL_ARM, 0), ('name', cls, 0), ''))
+        for f in TANI_RAIL_ROW_CLEAR:
+            zfa_tls_set(props, 'LiveNpcFCSDataTable', f, zero=True)
+        for f, x in TANI_RAIL_ROW_VALUES.items():
+            zfa_tls_set(props, 'LiveNpcFCSDataTable', f, zfa_tls_value('LiveNpcFCSDataTable', f, x))
+    build_rows_table('/Game/Datatables/AI/NPC/FCS/DT_NPC_FCS', se.TANI_RAIL_FCS_TABLE, 'LiveNpcFCSDataTable',
+                     se.TANI_RAIL_FCS_ROW_SOURCE, se.TANI_RAIL_FCS, edit)
+    print(f'  tanicorn rail: {se.TANI_RAIL_ARM} ({cls}: {se.TANI_RAIL_ARM_SOURCE.rsplit("/", 1)[1]} firing '
+          f'{se.TANI_RAIL_ROUND.rsplit("/", 1)[1]} from a {sn[len("LiveFCSModule_"):]}, {len(mine)} imports moved, search '
+          f'{TANI_RAIL_SEARCH_CM[0] / 100000:g} km), its row {se.TANI_RAIL_FCS} in {se.TANI_RAIL_FCS_TABLE.rsplit("/", 1)[1]} '
+          f'(from {se.TANI_RAIL_FCS_ROW_SOURCE}, its NpcWeaponId cleared)')
+
+
+def check_tani_rail_build():
+    """(2026-11-12) The railguns' arm, its row and the rail parts' rows read back from the packages this build saved, and
+    the names Lua uses for them (Scripts/sv_tanicorn.lua: TANI.rail_fcs, TANI.rail; the live parts' text is
+    check_tanicorn_build's)."""
+    se = survival_events
+    plain = lambda n: n[1] if n[2] == 0 else f'{n[1]}_{n[2] - 1}'
+    load = lambda path: ZenPkg(data=open(os.path.join(OUT, path[len('/Game/'):]) + '.uasset', 'rb').read())
+    u64 = zfa_tls_u64
+    z = load(se.TANI_RAIL_ARM)
+    rnd, trc = ZenPkg(stock(se.TANI_RAIL_ROUND)), ZenPkg(stock(se.TANI_RAIL_LAUNCHER_SOURCE))
+    rnd_pub = sorted(u64(e, 56) for e in rnd.exports if u64(e, 56))
+    assert z.names[z.name_idx] == se.TANI_RAIL_ARM and z.imp_pkgs == [se.TANI_RAIL_ROUND], (z.names[z.name_idx], z.imp_pkgs)
+    got = sorted(set(z.imp_hashes[x & 0xffffffff] for x in z.imports if x >> 62 == 2))
+    assert got == rnd_pub, ('the round imports', [hex(h) for h in got])
+    wc = dict((q[1], q[3]) for q in props_of(z, z.export_index('LiveFCSModule_ProjectileCommon_0'), 'LiveFCSModule_ProjectileCommon')[0][2])
+    w = z.imports[-wc['WeaponClass'][1] - 1]
+    assert w >> 62 == 2 and z.imp_hashes[w & 0xffffffff] == export_hash(se.TANI_RAIL_ROUND.rsplit('/', 1)[1] + '_C'), wc
+    li = z.export_index('LiveFCSModule_LauncherBoneControl_0')
+    if TANI_RAIL_LAUNCHER == 'triple':
+        el = trc.export_index('LiveFCSModule_LauncherTripleRailCannon_0')
+        assert (u64(z.exports[li], 32), u64(z.exports[li], 48)) == (u64(trc.exports[el], 32), u64(trc.exports[el], 48)), 'launcher'
+        sn = 'LiveFCSModule_LauncherTripleRailCannon'
+    else:
+        sn = 'LiveFCSModule_LauncherBoneControl'
+    lc = dict((q[1], q[3]) for q in props_of(z, li, sn)[0][2] if not q[2])
+    assert lc['MeshComponentName'] == ('name', 'TurretPoseableMesh', 0), lc.get('MeshComponentName')
+    bones = [[b[3] for b in cb[2] if b[1] == 'BoneName'][0] for cb in lc['ControlBones'][1]]
+    assert bones == [('name', 'BN_turret_yaw', 0), ('name', 'BN_turret_pitch', 0)], bones
+    if sn.endswith('TripleRailCannon'):
+        assert lc['HUDControl'][2] == ('raw', 'Byte', b'\x01') and lc['IsDispRadarMap'] == ('raw', 'Bool', b'\x01') \
+            and lc['ForceAlertDisp'] == ('raw', 'Bool', b'\x01'), 'hard rule 45 fields'
+    fc = dict((q[1], q) for q in lc['FireControl'][2])
+    assert fc['LauncherDirection'][3][2] == ('raw', 'Byte', b'\x01'), fc['LauncherDirection']       # SlotSocket
+    cls = z.export_name(0)
+
+    def table(path, st):
+        zt = load(path)
+        dt, _ = dtx.parse(uprop.Ctx(bytes(zt.payloads[0]), zt.names), 0, st)
+        return {plain(('name',) + k): dict((q[1], q[3]) for q in r[2]) for k, r in dt['rows']}
+    fcs = table(se.TANI_RAIL_FCS_TABLE, 'LiveNpcFCSDataTable')
+    assert list(fcs) == [se.TANI_RAIL_FCS], list(fcs)
+    r = fcs[se.TANI_RAIL_FCS]
+    assert r['FCSBlueprintClass'] == ('soft', ('name', se.TANI_RAIL_ARM, 0), ('name', cls, 0), ''), r['FCSBlueprintClass']
+    assert r['NpcWeaponId'] is None and r['NpcAIModuleId'] is not None, (r['NpcWeaponId'], r['NpcAIModuleId'])
+    assert struct.unpack('<f', r['CaptureDistance'][2])[0] == TANI_RAIL_ROW_VALUES['CaptureDistance'], r['CaptureDistance']
+    npc = table(DATA + 'DT_SV_NpcRows', 'LiveNpcDataTable')
+    model = table(DATA + 'DT_SV_ModelRows', 'LiveModelDataTable')
+    for m in se.TANI_RAIL:
+        n = npc[m['npc']]
+        assert plain(n['ModelId']) == m['model'], (m['npc'], n['ModelId'])
+        assert (n.get('NpcFCSId0') == ('name', m['fcs'], 0)) if m['fcs'] else not n.get('NpcFCSId0'), (m['npc'], n.get('NpcFCSId0'))
+        mo = model[m['model']]
+        assert mo['BlueprintClass'][1][1] == m['bp'] and mo['BlueprintClass'][2][1] == m['bp_class'], mo['BlueprintClass']
+        assert abs(struct.unpack('<f', mo['MaxHealth'][2])[0] - m['health']) < 1e-3, (m['model'], mo['MaxHealth'])
+    lua = open(os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'sv_tanicorn.lua'), encoding='utf-8').read()
+    for want in (f'fcs = "{se.TANI_RAIL_FCS}"', f'table = "{se.TANI_RAIL_FCS_TABLE}.{se.TANI_RAIL_FCS_TABLE.rsplit("/", 1)[1]}"'):
+        assert want in lua, f'Scripts/sv_tanicorn.lua TANI.rail_fcs: no {want}'
+    got_l = re.findall(r'\{ rail = "([A-Z_]+)", tag = "([A-Za-z]+)"', lua)
+    assert got_l == [(m['part'], m['tag']) for m in se.TANI_RAIL], ('Scripts/sv_tanicorn.lua TANI.rail', got_l)
+    print(f'  tanicorn rail: {cls} in {se.TANI_RAIL_ARM} read back ({sn[len("LiveFCSModule_"):]} on TurretPoseableMesh '
+          f'BN_turret_yaw / BN_turret_pitch, the round {se.TANI_RAIL_ROUND.rsplit("/", 1)[1]}, its {len(rnd_pub)} exports'
+          + (', HUDControl 1, minimap line and alert' if sn.endswith('TripleRailCannon') else '')
+          + f'); {se.TANI_RAIL_FCS} names it, no NpcWeaponId; {len(se.TANI_RAIL)} rail parts\' rows and Lua\'s names read back')

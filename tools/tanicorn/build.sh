@@ -12,7 +12,7 @@
 #                          blueprints straight on AC8's native classes, (2026-11-12) the VLS blocks' (BP_SV_Tani_VLSD,
 #                          BP_SV_Tani_VLSS_L1..R4: TurretMesh skinned, the lids' Open on it), the hull drawn whole
 #                          (BP_SV_Tani_HULL) and (2026-11-11) with its gun mounts and (2026-11-12) VLS blocks live as child
-#                          actors (BP_SV_Tani_HULLLIVE: 32 `child actor ...` lines)
+#                          actors (BP_SV_Tani_HULLLIVE: 35 `child actor ...` lines since 2026-11-12, the rail parts too)
 #   6. cook                Windows, VERSIONED (hard rule 42)
 #   7. retoc to-zen        only /Game/Mods/SurvivalMode/Tanicorn -> the container, 8. pad.py (hard rule 8)
 # TANI_PARTS=T5,HULL builds only those parts (the import, the spec, the cook's checks). TANI_STOP=export stops after
@@ -109,7 +109,8 @@ for p in json.load(open(os.path.join(out, 'parts.json'))):
     print(' '.join({'hull': ['Model/SM_SV_' + n, 'BP_SV_' + n, 'BP_SV_%sLIVE' % n],    # ((2026-11-11) and the live hull)
                     # ((2026-11-12) and each VLS block's blueprint: spec.py vls_mount)
                     'vls': ['BP_SV_' + n, 'Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/SM_SV_%s_DAM' % n, 'Model/AS_SV_%s_Open' % n],
-                    'railcannon': deploy, 'railgun': deploy,       # (no blueprint of their own yet: the hull's draws them)
+                    # ((2026-11-12, stage 4) and their blueprints: spec.py railcannon_mount / mount(), live parts of HULLLIVE)
+                    'railcannon': ['BP_SV_' + n] + deploy, 'railgun': ['BP_SV_' + n] + deploy,
                     'rig': ['Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/AS_SV_%s_Rise' % n],   # (2026-11-11: the rise rig)
                     'turret': ['BP_SV_' + n, 'Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/SM_SV_%s_DAM' % n]}[k]))
 " | tr -d '\r'); do                 # (Windows' Python ends its lines in CR LF: the CR stuck to each line's last name)

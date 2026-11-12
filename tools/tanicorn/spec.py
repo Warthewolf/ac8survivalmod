@@ -308,7 +308,20 @@ FCS = {
 # (2026-11-12) and the VLS blocks (VLS_PARTS: the deck block's 8 sockets VLSD_1..8 on BP_SV_Tani_VLSD, each side block's
 # own on its BP_SV_Tani_VLSS_<side>): 32 live parts, only the railcannon and the sub-railguns drawn
 VLS_PARTS = ('VLSD',) + tuple(f'VLSS_{s}{n}' for s in 'LR' for n in range(1, 5))
-LIVE = ('T16', 'T5', 'CIWS', 'LASER') + VLS_PARTS
+# ((2026-11-12, stage 4: docs/re/TANICORN.md "Railguns and railcannon") and the Alicorn's armaments: 35 live parts, none drawn
+RAIL_PARTS = ('RAILCANNON', 'RAILGUN_L', 'RAILGUN_R')
+LIVE = ('T16', 'T5', 'CIWS', 'LASER') + VLS_PARTS + RAIL_PARTS
+# (2026-11-12, stage 4) the sub-railguns' own arm (mount() on their rig: TurretPoseableMesh, BN_turret_yaw / BN_turret_pitch,
+# SOC_Gun_01), as their row makes it (SV_FCS_TaniRail: tools/build_survival_fleet.py build_tani_rail, whose arm replaces this
+# one in game: the Alicorn's round from a TripleRailCannon): 18 km, a 10 deg cone, a shot every 10 s after a 3 s spin-up.
+# Their rest pose is stowed (the lift 6 m down; Scripts/sv_tanicorn_rail.lua raises it before ordering the gun), so the hit
+# sphere is the RAISED gun's: about 9 m round its house, 2 m over the socket. The inline shell is the T16's stub (never
+# packed): the row's arm fires the round
+RAIL_FCS = {p: {**T5_FCS, 'yaw': (90, -180, 180), 'pitch': (90, 0, 90), 'capture_cm': 1800000, 'cone': 10, 'activation': 0.6,
+                'triggering': 10, 'interval': 10, 'resting': 10, 'trigger_count': 1, 'fire_rate': 6, 'magazine': 1, 'reload': 10,
+                'hit_radius_cm': 900, 'hit_z_cm': 200} for p in ('RAILGUN_L', 'RAILGUN_R')}
+# both: never skipped far off (the hull's flags): the railcannon's barrel and muzzle socket, the railguns' raised pose, at range
+FAR_CDO = {'bIgnoreMeshOptimize': 'True', 'bIgnoreSetAutoSkipUpdateTransform': 'True'}
 # (2026-11-12) the VLS blocks' own arm (vls_mount), as the row Scripts/sv_tanicorn.lua makes (TANI.vls_fcs: SV_FCS_TaniVLS from
 # the Mk 41's NPC_FCS_VesselVLSmk41, which replaces it in game): 7 km down to 600 m, all round, a ripple of 4 missiles 0.4 s
 # apart, 10 s rest, 8 cells then a 15 s reload; the Mk 41's missile (9 s, 3000 km/h: about 7.5 km). Not a design decision:
@@ -316,6 +329,62 @@ LIVE = ('T16', 'T5', 'CIWS', 'LASER') + VLS_PARTS
 VLS_FCS = {'search': 'AIR_ONLY', 'capture_cm': 700000, 'min_cm': 60000, 'cone': 180, 'activation': 2, 'triggering': 1.6,
            'interval': 0.4, 'resting': 10, 'trigger_count': 4, 'fire_rate': 12, 'magazine': VLS_CELLS, 'reload': 15,
            'weapon': VLS_MISSILE, 'hit_pad_cm': 200}
+
+
+def railcannon_mount(part, info):
+    """(2026-11-12, stage 4) THE TANACORN's bow railcannon as a live part, BP_SV_Tani_RAILCANNON on the gun mounts' native
+    ALiveAIGroundVehicleObject, no arms (the stock Alicorn's railcannon has no weapon either; its charged shot at the airfield
+    is Scripts/sv_tanicorn_rail.lua's):
+      TurretMesh   a SkeletalMeshComponent (SK_SV_Tani_RAILCANNON: Body > railcannon_pitch > barrel_n / barrel_p, SOC_Gun_01 on
+                   railcannon_pitch) in single-node mode on AS_SV_Tani_RAILCANNON_Deploy held at 0 (stowed), always posed and
+                   refreshed (the rise rig's flags: its muzzle socket right with nobody looking); Lua plays it
+      the wreck    as the mounts': TurretMesh hidden, SM_SV_Tani_RAILCANNON_DAM shown
+      the hit      two spheres (the part is about 106 m long): one round the bay at its root, one 30 m back from the muzzle on
+                   SOC_Gun_01, so it follows the barrel as it rises"""
+    name = f'Tani_{part}'
+    assert info.get('kind') == 'railcannon' and (info.get('anim') or {}).get('name') == 'Deploy', (part, info.get('kind'))
+    assert [x['name'] for x in info['sockets']] == ['SOC_Gun_01'], info['sockets']
+    sk, anim = obj(f'{DEST}/Model/SK_SV_{name}'), obj(f'{DEST}/Model/AS_SV_{name}_Deploy')
+    hit = ('(CollisionEnabled=QueryAndPhysics,ObjectType=ECC_GameTraceChannel3,CollisionProfileName="EnemyPawn")')
+    return {
+        'path': f'{DEST}/BP_SV_{name}',
+        'parent': 'LiveAIGroundVehicleObject',
+        'scs': [
+            {'name': 'TurretMesh', 'class': 'SkeletalMeshComponent', 'parent': 'RootComponent',
+             'props': {'SkeletalMesh': sk, 'SkinnedAsset': sk, 'AnimationMode': 'AnimationSingleNode',
+                       'AnimationData': (f'(AnimToPlay="{anim}",bSavedLooping=False,bSavedPlaying=False,'
+                                         'SavedPosition=0.000000,SavedPlayRate=1.000000)'),
+                       'VisibilityBasedAnimTickOption': 'AlwaysTickPoseAndRefreshBones',
+                       'bEnableUpdateRateOptimizations': 'False'}},
+            {'name': 'DamagedStaticMesh', 'class': 'StaticMeshComponent', 'parent': 'RootComponent',
+             'props': {'StaticMesh': obj(f'{DEST}/Model/SM_SV_{name}_DAM'), 'bVisible': 'False'}},
+            {'name': 'DamagedCollision', 'class': 'SphereComponent', 'parent': 'RootComponent',
+             'props': {'SphereRadius': '2500', 'RelativeLocation': '(X=1500,Y=0,Z=1100)', 'BodyInstance': hit}},
+            {'name': 'DamagedCollisionBarrel', 'class': 'SphereComponent', 'parent': 'TurretMesh', 'socket': 'SOC_Gun_01',
+             'props': {'SphereRadius': '2500', 'RelativeLocation': '(X=-3000,Y=0,Z=0)', 'BodyInstance': hit}},
+        ],
+        'cdo': {
+            'AutoPossessAI': 'PlacedInWorldOrSpawned',
+            'GameObjectId': '1000',
+            'GameObjectCategory': 'Category_CarrierBattery',
+            'PursuitPointOffset': '(X=0,Y=0,Z=45000)',
+            'bKeepOnGround': 'False',
+            'bIsSea': 'True',
+            'bShowHUDBox': 'True',
+            'BriDebriIconType': 'Weapons',
+            'DamageSound': '(bEnableDamageSound=True)',
+            **PART_CDO, **FAR_CDO,
+        },
+        'components': {
+            'DamagedStateComponent': {
+                'DefaultDestroySystemList': [{'$new': 'LiveDefaultDestroySystemChangeMesh', 'props': {
+                    'DestroyHideMeshNameList': '((ChangeTime=0,TargetMeshName="TurretMesh",bHideToFinalExplosion=True,bReflectChildMesh=False))',
+                    'DestroyVisibleMeshNameList': '((ChangeTime=0,TargetMeshName="DamagedStaticMesh",bHideToFinalExplosion=False,bReflectChildMesh=False))',
+                    'bChangeMeshes': 'True', 'bHideMeshes': 'True'}}],
+                'InducedExplosionSystem': PART_IES,
+            },
+        },
+    }
 
 
 def main():
@@ -352,10 +421,16 @@ def main():
             spec['sockets'].append({'skeleton': obj(f'{DEST}/Model/SKEL_SV_Tani_{p}'),
                                     'mesh': obj(f'{DEST}/Model/SK_SV_Tani_{p}'), 'name': s['name'],
                                     'bone': s['bone'], 'loc': s['loc'], 'rot': s.get('rot', [0, 0, 0])})
-        if kind == 'turret' and p in FCS:              # (the railcannon and the sub-railguns: none yet)
+        if kind == 'turret' and p in FCS:
             spec['blueprints'].append(mount(p, info, FCS[p]))
         elif kind == 'vls' and p in VLS_PARTS:         # ((2026-11-12) the VLS blocks: WP1's VLS route)
             spec['blueprints'].append(vls_mount(p, info, VLS_FCS))
+        elif kind == 'railgun' and p in RAIL_FCS:      # ((2026-11-12, stage 4) the sub-railguns: the mounts' layout, raised by Lua)
+            bp = mount(p, info, RAIL_FCS[p])
+            bp['cdo'].update(FAR_CDO)
+            spec['blueprints'].append(bp)
+        elif kind == 'railcannon' and p in RAIL_PARTS:  # ((2026-11-12, stage 4) the bow railcannon: no arms, Lua's shot)
+            spec['blueprints'].append(railcannon_mount(p, info))
     live_said = ''
     if hull:
         spec['blueprints'].append(hull_bp(parts_on, rig))
