@@ -188,6 +188,7 @@ local function count(t) local n = 0; for _ in pairs(t) do n = n + 1 end; return 
 
 print("sv_tanicorn.lua's VLS blocks")
 dofile(DIR .. "sv_tanicorn.lua")
+dofile(DIR .. "sv_tanicorn_rise.lua")                 -- ((2026-11-12) the rise: its piece since the split)
 dofile(DIR .. "sv_tanicorn_hits.lua")              -- ((2026-11-12) the hit probe: its piece)
 
 -- the types and their names

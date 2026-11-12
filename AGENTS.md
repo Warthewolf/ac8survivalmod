@@ -71,7 +71,7 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   INVINCIBLE FLEET, whose boss it is (docs/design/INVINCIBLE_FLEET.md), is the user's dev install only too (user,
   2026-11-10: "Keep it dev install only"): its Lua in DEV ONLY blocks, never in a release or TESTER zip
   (tools/strip_test_only.py takes them out of every zip; package_dev.sh keeps them; THE TANICORN's test mount too;
-  tools/dev_only.py cuts sv_tanicorn / sv_fleet / sv_cine to their headers in a TESTER zip). Its live parts' world data
+  tools/dev_only.py cuts sv_tanicorn (and its pieces _rise, _hits) / sv_fleet / sv_cine to their headers in a TESTER zip). Its live parts' world data
   (child descs importing the container's blueprints) is built with TANI=1 only: such a build leaves build/install/tani_wd.txt,
   and package_release.sh / package_test.sh refuse it (package_dev.sh takes it with TANI=1 only, and TANI=1 only with it).
   Run tools/tanicorn/build.sh to the end BEFORE `TANI=1 build_all.sh`: build_all stages the container it finds, and a
