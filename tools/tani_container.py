@@ -126,6 +126,13 @@ def check(utoc, exports, hull_imports=()):
     except Exception as e:                               # (a broken .utoc is a problem to report, never a pass)
         return [f'{utoc} unreadable: {e}']
     probs, info = [], {}
+    # ((2026-11-12, the review) every block the game may read, not only the needed packages': each read rounded up to 16
+    # bytes must fit in the .ucas (hard rule 8, tools/x02s/pad.py), or the container doesn't mount)
+    size = os.path.getsize(c.ucas)
+    short = [i for i, (bo, cs, _us, _m) in enumerate(c.toc.blocks) if bo + ((cs + 15) & ~15) > size]
+    if short:
+        probs.append(f'{c.ucas}: {len(short)} of its {len(c.toc.blocks)} blocks read past its end ({size} bytes; the first, '
+                     f'block {short[0]}): cut short or never padded (hard rule 8: tools/x02s/pad.py)')
 
     def look(pkg):
         if pkg not in info:

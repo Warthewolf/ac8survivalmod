@@ -59,6 +59,9 @@ def make_container(utoc, packages, compressed=False):
     toc = hdr + b''.join(ids) + b''.join(offlen) + b''.join(blocks) + b''.join(cms) + b'\0' * (33 * n)
     with open(utoc, 'wb') as f:
         f.write(toc)
+    # (padded as tools/x02s/pad.py pads, hard rule 8: until every block's read rounded up to 16 bytes fits)
+    reach = max([int.from_bytes(b[0:5], 'little') + ((int.from_bytes(b[5:8], 'little') + 15) & ~15) for b in blocks] or [0])
+    ucas += b'\0' * max(0, reach - len(ucas))
     with open(tc.ucas_of(utoc), 'wb') as f:
         f.write(ucas)
 
@@ -198,6 +201,11 @@ def main():
         p = tc.check(u, need, hulls)
         check(len(p) == 1 and has(p, 'BP_SV_Tani_HULLLIVE imports none of BP_SV_Tani_VLSD'),
               f'an old hull without the VLS children ({p[0][:100] if p else p})')
+        make_container(u, tani_packages())
+        with open(tc.ucas_of(u), 'r+b') as f:                           # (its last block cut: hard rule 8)
+            f.truncate(os.path.getsize(tc.ucas_of(u)) - 40)
+        p = tc.check(u, need, hulls)
+        check(any('read past its end' in x for x in p), f'a .ucas cut short: refused ({p[:1]})')
         make_container(u, tani_packages(), compressed=True)
         p = tc.check(u, need, hulls)
         check(p and all('compressed' in x for x in p), f'a compressed container is a problem, not a pass ({len(p)})')
