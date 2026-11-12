@@ -11,9 +11,9 @@ import re
 import sys
 
 DEV_ONLY = ('sv_tanicorn.lua', 'sv_tanicorn_rise.lua', 'sv_tanicorn_hits.lua', 'sv_tanicorn_rail.lua', 'sv_fleet.lua',
-            'sv_fleet_storm.lua', 'sv_fleet_round.lua', 'sv_fleet_lasers.lua', 'sv_fleet_surface.lua', 'sv_fleet_capture.lua', 'sv_cine.lua')   # (main.lua MODULES: THE TANICORN, her rise, hit probe, railguns /
-#           railcannon, the fleet, its night storm (2026-11-17), the rise's cinematic)
-GLOBALS = ('TANI', 'GEO', 'IFLEET', 'IFSKY', 'IFROUND', 'IFLASER', 'IFSURF', 'IFCAP', 'CINE')            # (what they define; other parts only test them for nil)
+            'sv_fleet_storm.lua', 'sv_fleet_round.lua', 'sv_fleet_lasers.lua', 'sv_fleet_surface.lua', 'sv_fleet_capture.lua', 'sv_cine.lua', 'sv_deal.lua')   # (main.lua MODULES: THE TANICORN, her rise, hit probe, railguns /
+#           railcannon, the fleet, its night storm (2026-11-17), the rise's cinematic; THE DEAL: 2026-11-12)
+GLOBALS = ('TANI', 'GEO', 'IFLEET', 'IFSKY', 'IFROUND', 'IFLASER', 'IFSURF', 'IFCAP', 'CINE', 'DEAL')            # (what they define; other parts only test them for nil)
 BLOCK = re.compile(r'[ \t]*-- (TEST|DEV) ONLY BEGIN.*?-- \1 ONLY END[^\n]*\n', re.S)   # (DEV ONLY: the cloud line's markers)
 
 
@@ -56,10 +56,10 @@ if __name__ == '__main__':
     if args[:1] == ['--keep-tani']:
         # ((2026-11-12) the user: "add the tanacorn and the fleet" to the TESTER zip: package_release.sh TESTER=1 TANI=1)
         # THE TANICORN's (and her hit probe's) and the fleet's parts kept whole; only the rise director (sv_cine.lua) cut
-        DEV_ONLY, GLOBALS = ('sv_cine.lua',), ('CINE',)
+        DEV_ONLY, GLOBALS = ('sv_cine.lua', 'sv_deal.lua'), ('CINE', 'DEAL')   # (THE DEAL: the dev install's only, never a TESTER's)
         args = args[1:]
         print('dev_only: --keep-tani: sv_tanicorn.lua, sv_tanicorn_rise.lua, sv_tanicorn_hits.lua, sv_tanicorn_rail.lua, sv_fleet.lua, sv_fleet_storm.lua, sv_fleet_round.lua, sv_fleet_lasers.lua, sv_fleet_surface.lua and sv_fleet_capture.lua '
-              'kept whole (TESTER=1 TANI=1)')
+              'kept whole (TESTER=1 TANI=1); sv_cine.lua and sv_deal.lua cut')
     if len(args) != 1:
         sys.exit('usage: dev_only.py [--keep-tani] <mod folder (holding Scripts/)>')
     main(args[0])
