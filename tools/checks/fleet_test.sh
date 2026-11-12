@@ -816,7 +816,10 @@ if python -X utf8 -I "$HERE/../dev_only.py" "$W/tester_bad" > "$W/tester_bad.txt
 fi
 grep -q 'sv_audit.lua: IFLEET still defined' "$W/tester_bad.txt" || { cat "$W/tester_bad.txt"; echo "  FAIL its refusal doesn't say where"; exit 1; }
 echo "  ok   a part defining IFLEET outside them: refused ($(grep -c 'still defined' "$W/tester_bad.txt") found)"
-sed -n '/^if \[ "\$TESTER" = 1 \]; then/,/^else/p' "$HERE/../package_release.sh" | grep -q '^    python -X utf8 -I tools/dev_only.py "\$mod"$' \
+# ((2026-11-12) TESTER=1 TANI=1, the user's tester zip WITH THE TANACORN, passes --keep-tani (TANIZIP; zip_leak_test.sh tests
+# that branch); every other TESTER zip runs it bare, its failure stopping the zip)
+sed -n '/^if \[ "\$TESTER" = 1 \]; then/,/^else/p' "$HERE/../package_release.sh" \
+    | grep -qxF '    python -X utf8 -I tools/dev_only.py ${TANIZIP:+--keep-tani} "$mod" || exit 1' \
     || { echo "  FAIL package_release.sh's TESTER branch doesn't run it"; exit 1; }
-echo "  ok   package_release.sh's TESTER=1 runs it"
+echo "  ok   package_release.sh's TESTER=1 runs it (--keep-tani only with TANI=1)"
 echo "fleet test (TESTER copy): all passed"
