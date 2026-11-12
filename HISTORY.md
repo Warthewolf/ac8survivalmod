@@ -3014,3 +3014,33 @@ game. The work was split by file between agents; the builds ran in sequence in t
   c663e490c601... registered. New: package_release.sh TANI=1 (only with TESTER=1; checks the staged container holds
   every blueprint tani_wd.txt names, here all 14), dev_only.py --keep-tani, zip_guard.sh ZIP_GUARD_TANI. A plain TESTER
   zip made first (no Tanacorn) was deleted before anyone got it. zip_leak_test passes; TANI=1 without TESTER=1 refused.
+
+## The 0.74.65 hand-off's open items closed (2026-11-12 evening; tools and test-only Lua, for the next build: 0.74.66)
+- THE TANACORN's container checked against what a TANI=1 world data imports (both weapons reviews' major finding):
+  tools/tani_container.py reads the container's packages (uncompressed IoStore; versioned packages too, from the zen
+  summary's absolute offsets). check_tanicorn_build stops a TANI=1 build whose container lacks a class the world data
+  imports (package and public export hash: the old assert compared export_hash with itself), BP_SV_Tani_HULLLIVE's class,
+  a part the hull's cooked package must import (a new spec beside an old cook), or a block a 16-byte read can't fit
+  (hard rule 8); tani_wd.txt now pins the container's sha256 and those needs. build_all.sh, package_dev.sh TANI=1 and
+  package_release.sh TESTER=1 TANI=1 verify their staged copy against it (`tani_container: ... is the container the
+  build checked ...`, else REFUSED); a marker from before (0.74.65's) is refused: rebuild with TANI=1 (no UE needed).
+  The real container: 14 classes, HULLLIVE importing its 13 parts, its directory index's 203 packages all as the reader
+  finds them. build/install was rebuilt with ZFA=1 TANI=1 from this line to test it (the same 0.74.65 sources; a new
+  main.dll timestamp, hash fb0912385a9a...): nothing packaged, installed or registered from it.
+- Ctrl+L's guard (the weapons runtime review's watch): the last live hull's parts kept when its actor goes or a second
+  Ctrl+L replaces its watch; with no hull of ours up, no new one spawned while any of them lives (health above 0 or
+  unreadable, still the object kept: hard rule 59), so SV_Spawn's recycle never takes the unit off the list under live
+  parts (the 0.74.48 pattern); forgotten with the level. Log: `tanicorn: Ctrl+L refused: no live hull of ours up, but N
+  part(s) of the last one still alive (Part_...)`, `tanicorn: live: the hull is gone at +T s; N of its parts still up`.
+- Harnesses: dive_test's readAll gives LF text (a Windows checkout's CRLF), logbundle_test reads the exe's ANSI stdout
+  with errors='replace'; fleet_test looked for package_release.sh's old TESTER line (failing on dev since 0904573).
+- Tests: tani_container_test.sh (new: made-up containers, the real one against its own directory index), zip_leak_test's
+  TESTER=1 TANI=1 cases (refused without TESTER=1; the _TANACORN zip; a container changed since the build refused),
+  tani_vls_test's Ctrl+L cases (a reused address as the game has it, a press before the watch's tick). An adversarial
+  review (4 lenses, 3 skeptics a finding) confirmed 3 minor test gaps, all fixed. run_all: 76 passed, 0 failed, 1 skipped
+  (coop_test, only when named).
+- The tester's report on the 0.74.65 TANACORN zip (2026-11-12): "the alicorns armaments aren't working on the tanacorn"
+  (RAILCANNON / RAILGUN_L / _R are drawn only: no blueprint or fire control yet) and "if the Tanacorn is hit, everything
+  immediately dies" (both hulls are damageable LiveAIGroundVehicleObject actors; Ctrl+Y's parts are meshes on it, Ctrl+L's
+  child actors of it). The user's decision: damage like the Alicorn (the hull can't be damaged, every part shot down on
+  its own, she sinks when her core is destroyed). The tester's log is still to come.
