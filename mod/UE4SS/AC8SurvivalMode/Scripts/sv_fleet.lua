@@ -123,6 +123,53 @@ CFG.specials.fleet = {
     -- the course in and the runway's centre (survival_events_fleet.py IF_YAW, IF_RUNWAY), for the lines
     formation = { per_step = 3, gap_s = 0.5, settle_s = 2, go_s = 15, moved_m = 50, every_s = 10, guns_s = 2, clear_s = 8,
                   course_yaw = 45, runway_cm = { 1610476, -436143 } },
+    -- (2026-11-12, stage 4: docs/re/TANICORN.md "Railguns and railcannon") THE TANACORN's bow railcannon, its charged shot at
+    -- the airfield (sv_tanicorn_rail.lua; Ctrl+H on Ctrl+L's live hull, WP11's phase 2 later; WP13): its Deploy over deploy_s
+    -- (AS_SV_Tani_RAILCANNON_Deploy, 3.33 s), then a charge of charge_s, the shot, and the next charge every_s after the last
+    -- one STARTED (a shot every 90 s); damage on the airfield where the round lands, of its CFG.airfield.hp (250) scaled to the
+    -- menu's AIRFIELD HEALTH (damage_of_max); its health missiles of your standard missiles, +per_player of them for each
+    -- other player (8 solo, 12 for two), never above its row's 1000. Its round flies speed_kms (the stock railgun shell's) to
+    -- a spot on the runway (x, y, z cm, its yaw: sv_down.lua's) spread_m along it and across_m across; one in flight when
+    -- it's shot down still lands (flight_lands). The clock holds while paused, in the STORE, while you're landed with nobody
+    -- else flying, and (before a charge) while the airfield is down (hold). Its effects are AC8's own (hard rule 58), each
+    -- { path, scale } stopped fx_life_s after its spawn (its charge at the shot): the charge her discharge on SOC_Gun_01
+    -- (spawned again every refire_s if it ended), the muzzle the GR036 main gun's and her long discharge, the streak a beam
+    -- (AC8's player TLS, User.BeamLength: "the players tls worked", 0.74.65) or a trail (the main gun's bullet trail every
+    -- step_km as the round passes), the impact the GR036 main cannon's blast, her railcannon's and DECOY's ground set; her
+    -- cannon's charge sounds (by name, on the railcannon: BA002_alcn's Cannon bank) with the RTPC rtpc_from -> rtpc_to over
+    -- charge_sound_s; max_off_deg under 180 holds the shot until her bow points within it
+    railcannon = {
+        enabled = true, deploy_s = 3.4, charge_s = 30, every_s = 90, damage = 100, damage_of_max = true,
+        missiles = 8, per_player = 0.5,
+        speed_kms = 11.1, flight_min_s = 0.5, flight_lands = true,
+        runway = { 1609574, -435747, 500, -23 }, spread_m = 600, across_m = 15, max_off_deg = 180,
+        alert = { enabled = true, off_after_s = 3 }, warn_left_s = 10, radio = true,
+        hold = { paused = true, store = true, landed_alone = true, af_down = true },
+        fx_life_s = 6, refire = true, refire_s = 2,
+        fx = {
+            charge = { "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_alcn_RailCannonDischarge_ON", 1 },
+            muzzle = { { "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_Maingun_Muzzle", 3 },
+                       { "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_alcn_RailGunDischarge_Long_ON", 1 } },
+            streak = { mode = "beam", fx = "/Game/VFX/Vehicles/Weapon/TLS/NS_TLS_Muzzleflash01", life_s = 0.8,
+                       trail = "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_Maingun_BulletTrail", step_km = 1 },
+            impact = { { "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_MainCannonExplosionA001", 3 },
+                       { "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_alcn_emlmExplosion_ON", 1 },
+                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 1 },
+                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_ShockWave001", 1 },
+                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_SandSmoke001", 1 },
+                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_RingSmoke001", 1 } },
+        },
+        sound = { rtpc_init = "AKE_BA002_alcn_Cannon_RTPC_Init", charge = "AKE_BA002_alcn_Cannon_Charge_Play",
+                  charge_end = "AKE_BA002_alcn_Cannon_Charge_End_Play", charge_stop = "AKE_BA002_alcn_Cannon_Charge_Stop",
+                  charge_sound_s = 20, rtpc = "EX03_CANNON_CHARGE", rtpc_from = 50, rtpc_to = 100,
+                  shot = "/Game/WwiseAssets/Events/SFX/AKE_GR036_ldbs1_Railgun_Shot",
+                  pass = "/Game/WwiseAssets/Events/CS_AceLive_SE/Events_General/AMMO/AIR/SE_GEN_AMMO_AIR/AKE_GEN_AMMO_AIR_ldbs_RailGun_Pass_Play",
+                  impact = "/Game/WwiseAssets/Events/SFX/AKE_Weapon_SuperLongMainGun_Explosion_Ground_Play" },
+        shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios", shake_km = 8,
+        text = { aim = "THE TANACORN IS AIMING AT THE AIRFIELD", aim_sub = "RAILCANNON CHARGING: %d S",
+                 soon = "RAILCANNON FIRING IN %d S", hit = "THE AIRFIELD IS HIT", hit_sub = "TANACORN RAILCANNON: -%d",
+                 down = "TANACORN RAILCANNON DOWN", down_sub = "THE AIRFIELD IS SAFE" },
+    },
 }
 -- (set after sv_config_ini.lua took CFG_DEFAULTS: shipped as it is, so no difference the leaderboard's LB.edited or the
 -- co-op settings sync would see)
