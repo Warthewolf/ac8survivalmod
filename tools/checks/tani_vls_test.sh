@@ -28,6 +28,12 @@ if grep -vq '^--' "$W/stripped/Scripts/sv_tanicorn_rise.lua"; then echo "  FAIL 
 echo "  ok   sv_tanicorn_rise.lua only its header ($(wc -l < "$W/stripped/Scripts/sv_tanicorn_rise.lua") comment lines)"
 if grep -vq '^--' "$W/stripped/Scripts/sv_tanicorn_hits.lua"; then echo "  FAIL a line that isn't a comment left in sv_tanicorn_hits.lua"; exit 1; fi
 echo "  ok   sv_tanicorn_hits.lua only its header ($(wc -l < "$W/stripped/Scripts/sv_tanicorn_hits.lua") comment lines)"
+# ((stage 4) the railguns' and railcannon's piece too)
+if grep -vq '^--' "$W/stripped/Scripts/sv_tanicorn_rail.lua"; then echo "  FAIL a line that isn't a comment left in sv_tanicorn_rail.lua"; exit 1; fi
+if grep -q 'DEV ONLY\|TANI = {\|TANI\.setup' "$W/stripped/Scripts/sv_tanicorn_rail.lua"; then
+    echo "  FAIL sv_tanicorn_rail.lua's header names what a zip mustn't hold (zip_leak_test's devfree)"; exit 1
+fi
+echo "  ok   sv_tanicorn_rail.lua only its header ($(wc -l < "$W/stripped/Scripts/sv_tanicorn_rail.lua") comment lines)"
 if ! OUT=$(sh lua_load_test.sh "$W/stripped" 2>&1); then echo "$OUT"; echo "  FAIL the release copy doesn't load"; exit 1; fi
 echo "  ok   $(echo "$OUT" | tail -1)"
 echo "tani vls test (release copy): all passed"

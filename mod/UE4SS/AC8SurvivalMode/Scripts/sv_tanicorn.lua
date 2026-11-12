@@ -33,6 +33,8 @@
 --                     aim every 5 s for 2 minutes, a line when one goes down (TANI=1 builds: the world data has the parts).
 --                     (2026-11-12) and her 16 VLS blocks live too (32 parts), their lids watched as Ctrl+K's. Refused
 --                     while no hull of ours is up but a part of the last one still lives (`tanicorn: Ctrl+L refused: ...`).
+--                     (2026-11-12, stage 4) and the Alicorn's armaments (35 parts): the sub-railguns RAILGUN_L / _R deploy
+--                     and are ordered once read back, the bow RAILCANNON's cycle on Ctrl+H (sv_tanicorn_rail.lua, TANI.rail).
 --   Ctrl+K in a run   (2026-11-12) THE TANACORN's VLS test blocks (TANI.vls: the deck block VLSD and the side block VLSS_L1),
 --                     each on its own rows and the fire control row SV_FCS_TaniVLS (the Aegis Mk 41's, cloned at the main
 --                     menu), 3 km ahead across your path; logged as Ctrl+U's mounts, their missiles as the shells
@@ -95,10 +97,10 @@ TANI.mount_gap_cm = 40000                                -- (Ctrl+U: the three a
 -- Ctrl+L (survival_events.TANI_HULL_LIVE_* / TANI_LIVE): BP_SV_Tani_HULLLIVE, the drawn hull's rise rig and hull mesh with
 -- each gun mount's socket a LiveChildActorComponent (Part_<socket>) whose child is that mount's own blueprint, made a live
 -- part of the hull's AI object by the world data (TANI=1 builds only): its own rows (the test mounts'), health, box and
--- TGT, fire control row, and its order 2.5 s after the hull appears. The VLS blocks, railcannon and sub-railguns drawn as
--- on BP_SV_Tani_HULL. parts: { socket, mount type } in the build's order (tools/build_survival.py check_tanicorn_build
--- reads them here); row_health: each type's model row's MaxHealth (TANI_HEALTH, TANI_MOUNT_PARTS), to tell whether the
--- part took its row
+-- TGT, fire control row, and its order 2.5 s after the hull appears ((2026-11-12) the VLS blocks live too; stage 4: the
+-- railcannon and sub-railguns, TANI.rail, never ordered then). parts: { socket, mount type } in the build's order
+-- (tools/build_survival.py check_tanicorn_build reads them here); row_health: each type's model row's MaxHealth
+-- (TANI_HEALTH, TANI_MOUNT_PARTS), to tell whether the part took its row
 TANI.live = { unit = "SV_Unit_TaniHullLive", npc = "SV_Npc_TaniHullLive", model = "SV_Model_TaniHullLive",
               class = "BP_SV_Tani_HULLLIVE_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_HULLLIVE.BP_SV_Tani_HULLLIVE_C",
               name_key = "SV_TaniHullLive_Name", name = "TANACORN", ahead_cm = 500000, z_cm = 0,
@@ -114,6 +116,8 @@ TANI.live = { unit = "SV_Unit_TaniHullLive", npc = "SV_Npc_TaniHullLive", model 
                   { "VLSD_5", "VLSD" }, { "VLSD_6", "VLSD" }, { "VLSD_7", "VLSD" }, { "VLSD_8", "VLSD" },
                   { "VLSS_L1", "VLSS_L1" }, { "VLSS_L2", "VLSS_L2" }, { "VLSS_L3", "VLSS_L3" }, { "VLSS_L4", "VLSS_L4" },
                   { "VLSS_R1", "VLSS_R1" }, { "VLSS_R2", "VLSS_R2" }, { "VLSS_R3", "VLSS_R3" }, { "VLSS_R4", "VLSS_R4" },
+                  -- ((2026-11-12, stage 4) the Alicorn's armaments: each socket its own type, TANI.rail)
+                  { "RAILCANNON", "RAILCANNON" }, { "RAILGUN_L", "RAILGUN_L" }, { "RAILGUN_R", "RAILGUN_R" },
               } }
 -- (2026-11-12, WP1's VLS route: docs/re/TANICORN.md "VLS") THE TANACORN's VLS blocks (survival_events.TANI_VLS): the deck
 -- block VLSD (one blueprint for its 8 sockets VLSD_1..8) and the side blocks VLSS_L1..L4 / R1..R4 (each its own mesh and
@@ -149,6 +153,26 @@ for _, p in ipairs({
         face = p.part == "VLSD" and 180 or 270 }
 end
 for _, k in ipairs(TANI.vls) do TANI.live.row_health[k.key] = k.health end   -- (survival_events.TANI_VLS_HEALTH)
+-- (2026-11-12, stage 4: docs/re/TANICORN.md "Railguns and railcannon") the Alicorn's armaments on her live hull
+-- (survival_events.TANI_RAIL_PARTS; their play is sv_tanicorn_rail.lua's): the sub-railguns RAILGUN_L / _R, mounts on their
+-- TurretPoseableMesh (stowed at rest: the lift 6 m down) on one fire control row of the build's, SV_FCS_TaniRail in
+-- DT_SV_TaniFCS (rail_fcs: its arm a TripleRailCannon firing the Alicorn's BP_wp_emls_alcn), copied whole into DT_NPC_FCS at
+-- the main menu (never cloned: hard rule 29); the bow RAILCANNON, armless, its TurretMesh a SkeletalMeshComponent playing
+-- its Deploy (cannon). Each { rail, tag } gives its names as survival_events.tani_rail makes them; none has a unit of its own
+TANI.rail_fcs = { fcs = "SV_FCS_TaniRail", table = "/Game/Mods/SurvivalMode/Data/DT_SV_TaniFCS.DT_SV_TaniFCS" }
+TANI.rail = {}
+for _, p in ipairs({ { rail = "RAILCANNON", tag = "Railcannon", cannon = true }, { rail = "RAILGUN_L", tag = "RailgunL" },
+                     { rail = "RAILGUN_R", tag = "RailgunR" } }) do
+    local bp, cls = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_" .. p.rail, "BP_SV_Tani_" .. p.rail .. "_C"
+    local anim = "/Game/Mods/SurvivalMode/Tanicorn/Model/AS_SV_Tani_" .. p.rail .. "_Deploy"
+    TANI.rail[#TANI.rail + 1] = {
+        key = p.rail, cannon = p.cannon == true, npc = "SV_Npc_Tani" .. p.tag, model = "SV_Model_Tani" .. p.tag,
+        name_key = "SV_Tani" .. p.tag .. "_Name", name = p.cannon and "TANACORN RAILCANNON" or "TANACORN RAILGUN",
+        class = cls, class_path = bp .. "." .. cls, cdo_path = bp .. ".Default__" .. cls, anim = anim .. "." .. anim:match("[^/]+$"),
+        health = p.cannon and 1000 or 400, fcs = not p.cannon and TANI.rail_fcs.fcs or nil,
+        fcs_table = not p.cannon and TANI.rail_fcs.table or nil }
+end
+for _, k in ipairs(TANI.rail) do TANI.live.row_health[k.key] = k.health end
 -- (2026-11-12) THE TANACORN takes damage like the Alicorn (the user, after a tester's "if the Tanacorn is hit, everything
 -- immediately dies" on 0.74.65; docs/re/TANICORN.md "Damage"): hull, her hull can't be damaged (the Alicorn's hull:
 -- bCanBeDamaged False; here SetIsInvincible too, GEOFON's route, which sv_core.lua finishUnpaid undoes: hard rule 63);
@@ -164,6 +188,7 @@ local T = { rows = nil, next = 0, seen = {}, until_ = 0, checks = {}, shells = {
 local KINDS = { TANI }                                   -- every gun mount type (the T5 and TANI.mounts): its key and class
 for _, k in ipairs(TANI.mounts) do KINDS[#KINDS + 1] = k end
 for _, k in ipairs(TANI.vls) do KINDS[#KINDS + 1] = k end   -- ((2026-11-12) and every VLS block type: k.vls)
+for _, k in ipairs(TANI.rail) do KINDS[#KINDS + 1] = k end  -- ((stage 4) the railguns as mounts; the railcannon, k.cannon, a TurretMesh)
 
 local function kindOf(o)                                 -- the mount type of one of our mounts (by its class), or nil
     local cls = "?"
@@ -241,8 +266,13 @@ function rowsIn()                                  -- the model first: the row n
     if fcs then
         pin(fcs, nameOf(fcs))
         local made = {}                                  -- ((2026-11-12) every VLS type on one row: made and logged once)
-        for _, k in ipairs(KINDS) do
-            if not made[k.fcs] then made[k.fcs] = true; fcsRow(fcs, k) end
+        for _, k in ipairs(KINDS) do                     -- ((stage 4) the railcannon has none; the railguns' is the build's,
+            if k.fcs and not made[k.fcs] then            -- copied whole: sv_tanicorn_rail.lua TANI.railRow)
+                made[k.fcs] = true
+                if not k.fcs_table then fcsRow(fcs, k)
+                elseif TANI.railRow then TANI.railRow(fcs, k)
+                else log("tanicorn: fire control row " .. k.fcs .. " NOT in: no sv_tanicorn_rail.lua") end
+            end
         end
     end
     local m = addRow(mt, mr, TANI.model)
@@ -266,12 +296,21 @@ function rowsIn()                                  -- the model first: the row n
     end
     more[#more + 1] = string.format("the %d VLS block types' rows: %d in%s", #TANI.vls, vIn,
         #vOut > 0 and (", NOT added: " .. table.concat(vOut, ", ")) or "")
+    local rIn, rOut = 0, {}                                  -- ((stage 4) the rail parts' (TANI.rail), as the VLS types')
+    for _, k in ipairs(TANI.rail) do
+        local km, kn = addRow(mt, mr, k.model), addRow(npc, mine, k.npc)
+        allIn = allIn and km and kn
+        if km and kn then rIn = rIn + 1 else rOut[#rOut + 1] = k.model .. " / " .. k.npc end
+    end
+    more[#more + 1] = string.format("the %d rail part types' rows: %d in%s", #TANI.rail, rIn,
+        #rOut > 0 and (", NOT added: " .. table.concat(rOut, ", ")) or "")
     if type(SV_SetText) == "function" then
         pcall(SV_SetText, TANI.name_key, TANI.name)
         pcall(SV_SetText, TANI.hull.name_key, TANI.hull.name)
         pcall(SV_SetText, TANI.live.name_key, TANI.live.name)
         for _, k in ipairs(TANI.mounts) do pcall(SV_SetText, k.name_key, k.name) end
         for _, k in ipairs(TANI.vls) do pcall(SV_SetText, k.name_key, k.name) end
+        for _, k in ipairs(TANI.rail) do pcall(SV_SetText, k.name_key, k.name) end
     end
     T.rows = m and n and hm and hn and lm and ln and allIn
     return T.rows, string.format("%s %s, %s %s; %s %s, %s %s; %s %s, %s %s; %s", TANI.model, m and "in DT_NPC_Model" or "NOT added",
@@ -350,7 +389,7 @@ local function vlsMesh(o)
     end
     return nil
 end
-local function partMesh(o, k) if k and k.vls then return vlsMesh(o) end return turretMesh(o) end
+local function partMesh(o, k) if k and (k.vls or k.cannon) then return vlsMesh(o) end return turretMesh(o) end
 
 -- (0.74.54) what the engine sees of a mount's muzzle (0.74.50-0.74.53: every shell, AA stream or flak, left the turret
 -- mesh's origin, under the mount, along its forward: SOC_Gun_01 never found): the mesh, its asset (and the deprecated
@@ -446,7 +485,12 @@ local function lidLine(o)
     end)
     return string.format("lids at %s s (playing %s, rate %s)%s", pos, playing, rate, cell)
 end
-local function aimOf(o, k) if k and k.vls then return lidLine(o) end return (aim(o)) end
+local function aimOf(o, k)
+    if k and k.cannon then return TANI.rcLine and TANI.rcLine(o) or "no sv_tanicorn_rail.lua" end   -- ((stage 4) its cycle)
+    if k and k.vls then return lidLine(o) end
+    return (aim(o))
+end
+TANI.partMesh, TANI.aim = partMesh, aim                   -- ((stage 4) sv_tanicorn_rail.lua's: their meshes, a barrel's aim)
 
 -- (0.74.55) every flak shell the game makes while a mount is watched (NotifyOnNewObject, as ALLY's ESM fields: the actor
 -- at its construction, before it has a place), then at the next tick its place and velocity run back over its age to
@@ -460,7 +504,8 @@ local function aimOf(o, k) if k and k.vls then return lidLine(o) end return (aim
 -- attached: its start comes from its place and velocity) and the CIWS / LASER's gun (BP_wp_ciws_vessel, a
 -- LiveAttachedInterceptorWeapon: it hangs where the flak gun does, its socket the line to read)
 local NEWSHELL = {}
-local SHELL_CLASSES = { "/Script/Live.LiveFlakGun", "/Script/Live.LiveArtillery", "/Script/Live.LiveAttachedInterceptorWeapon" }
+local SHELL_CLASSES = { "/Script/Live.LiveFlakGun", "/Script/Live.LiveArtillery", "/Script/Live.LiveAttachedInterceptorWeapon",
+                        "/Script/Live.LiveEMLBullet_BattleShip" }   -- ((stage 4) the railguns' BP_wp_emls_alcn rounds)
 if type(NotifyOnNewObject) == "function" then
     for _, c in ipairs(SHELL_CLASSES) do
         local short = c:match("Live%.(.+)$")
@@ -1047,7 +1092,7 @@ end
 -- its spawn (Ctrl+Y / Ctrl+R: the key's own look; Ctrl+L: the watch's first tick), each live part the first tick its child
 -- actor is there (Ctrl+L's watch, before its +2 s look). Every object once by its address and name (hard rule 59); every
 -- write read back. Logged: `tanicorn: armour (<key>): the hull <name> can't be damaged (the Alicorn's way): SetIsInvincible
--- called; read back bIsInvincible true, bCanBeDamaged false, ...` and, on Ctrl+L, `tanicorn: armour: N of 32 parts at +T s
+-- called; read back bIsInvincible true, bCanBeDamaged false, ...` and, on Ctrl+L, `tanicorn: armour: N of 35 parts at +T s
 -- ...` with the first part of each type's read-back (its induced explosion's values). TANI.armoured: the hulls armoured this
 -- level { o, a, name, why } (sv_tanicorn_hits.lua watches their health); forgotten with the level.
 local ARMOUR = {}
@@ -1185,7 +1230,7 @@ end }
 -- F: N up`; at +2 s and +8 s a line a part, `tanicorn: live +2 s: Part_T5_1 (T5): BP_SV_Tani_T5_C <name>, health H/M (its
 -- row's 40), 0.0 m from Mount_T5_1, on Part_T5_1 (attached to the hull true), a child of the hull true (its
 -- AttachedParentGameObject <the hull>)` (on: its root's attach parent; a child: in the hull's AttachedChildGameObjects),
--- then `tanicorn: live +2 s: N of 32 parts up ...`; the first part of each type its fire control arms and muzzle (as Ctrl+T's
+-- then `tanicorn: live +2 s: N of 35 parts up ...`; the first part of each type its fire control arms and muzzle (as Ctrl+T's
 -- / Ctrl+U's / Ctrl+K's mount lines: a VLS block's SOC_Vls_01 on its TurretMesh); each LASER part handed to AC7's
 -- LaserInterceptor (liCarry: `tanicorn: LASER mount ... handed to ...`, then sv_escort_li.lua's `zfa li:`); every every_s
 -- for watch_s `tanicorn: live +T s: Part_T5_1 (T5) hp H/M, barrel yaw Y pitch P, muzzle (...) from the mount; D m from its
@@ -1388,6 +1433,7 @@ local function liveArmour(W, now)
     end
 end
 function TANI.liveSeen() return LV and LV.seen or nil end
+function TANI.liveHull() if LV and LV.o and same(LV) then return LV.o end return nil end   -- ((stage 4) Ctrl+H's)
 -- ((2026-11-12, the review) the watch and the kept parts forgotten with the level: a test tick never runs between the gate
 -- closing and the next run's D, so their own `not D` checks can't)
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["tanicorn live"] = function() LV, KEPT = nil, nil end end
