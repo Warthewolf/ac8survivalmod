@@ -50,6 +50,7 @@ function addrOf(o) return type(o) == "table" and o.addr or nil end
 function liveAddr(o) return valid(o) and (addrOf(o) or 1) or nil end
 svLevelOn = true
 part("sv_config.lua")
+math.randomseed(7)                               -- (again: sv_config_ini.lua seeds from os.time() as it loads)
 SPC = SPC or {}
 SPC.kinds, SPC.CLEAN_OBJ, SPC.cleanWatch, SPC.seenUnits = {}, {}, {}, {}
 part("sv_decoy.lua")

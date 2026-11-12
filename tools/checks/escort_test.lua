@@ -108,6 +108,7 @@ function valid(o) return type(o) == "table" and not o.gone end
 function nameOf(o) return type(o) == "table" and (o.full or "?") or "?" end
 function addrOf(o) return type(o) == "table" and o.addr or nil end
 part("sv_config.lua")
+math.randomseed(7)                                  -- (again: sv_config_ini.lua seeds from os.time() as it loads)
 part("sv_rows.lua"); part("sv_ai.lua"); part("sv_hud.lua"); part("sv_spawn.lua"); part("sv_rounds.lua")
 part("sv_flights.lua"); part("sv_shop.lua"); part("sv_allies.lua"); part("sv_tactical.lua")
 local onAirfield = false
@@ -467,6 +468,7 @@ local function wavesOf()
     end
     return ws
 end
+WFA = { raw = ESC.waveFlights }; ESC.waveFlights = function(...) WFA[#WFA + 1] = { ... }; return WFA.raw(...) end   -- (wavesTick's asks)
 planes[2].down = true
 local HP = P.SV_Unit_Charlene
 pose(HP, ZONE.X, ZONE.Y, 300000, 55, 600)          -- (her start's at the combat zone's corner: in its middle here)
@@ -481,7 +483,7 @@ for i, w in ipairs(ws) do
     if i > 1 then
         local dd = math.min((w.sec - ws[i - 1].sec) % 8, (ws[i - 1].sec - w.sec) % 8)
         if not w.sec or dd <= 1 then okDir = false end
-        if math.abs(w.at - ws[i - 1].at - C.waves.every_s) > 0.6 then okGap = false end
+        if math.abs(w.at - ws[i - 1].at - C.waves.every_s) > 0.125 then okGap = false end   -- (half a 0.25 s tick)
     end
 end
 check(okN, "each wave min_n .. max_n aircraft (" .. table.concat(sizes, ", ") .. ")")
@@ -496,6 +498,23 @@ do                                                  -- (her start is at the comb
     check(out == 0, "no wave's flight put on the combat zone's edge (" .. out .. ")")
 end
 check(okGap, "every_s apart")
+ESC.waveFlights, WFA.ok = WFA.raw, #WFA > 0         -- (each ask with min_n made even and its top, want .. max_n)
+for _, a in ipairs(WFA) do WFA.ok = WFA.ok and a[4] == 2 * math.ceil(C.waves.min_n / 2) and (a[5] or 0) >= a[1] and a[5] <= C.waves.max_n end
+check(WFA.ok, "wavesTick hands ESC.waveFlights min_n and its top (" .. #WFA .. " waves; a wave of 4 takes a 6-ship when no other's free)")
+do                                                  -- ((2026-11-12) a wave's flights make what's asked when the free ones can:
+    local rawUp, rawPool, okW, fl = D.up, CFG.pool, true, {}   -- a 2-ship drawn first for a wave of 4, no other 2-ship free: 2, held 5 s)
+    local function wf(pool, want, lo, top)          -- (the aircraft, and the free flights')
+        CFG.pool, D.up = pool, {}; return select(2, ESC.waveFlights(want, function() return 0 end, function() return true end, lo, top))
+    end
+    local pool = { "ERA_Unit_91_Dep_Air0", "ERA_Unit_91_Dep_Air1", "ERA_Unit_92_Dep_Air1", "ERA_Unit_91_Dep_Air2", "ERA_Unit_92_Dep_Air2" }
+    local sixes = { pool[4], pool[5] }
+    for _ = 1, 200 do if wf(pool, 4, 4, 4) ~= 4 or wf(pool, 10, 4, 10) ~= 10 or wf(pool, 6, 4, 6) ~= 6 then okW = false end end
+    fl[1], fl[2], fl[3] = wf(sixes, 4, 4, 12), wf({ "ERA_Unit_91_Dep_Air0" }, 4, 4, 12), wf(pool, 30, 4, 30)
+    fl[4], fl[5] = wf(sixes, 4, 4, 4); CFG.pool, D.up = rawPool, rawUp   -- (no room for a 6-ship: none, with the 12 free for the log)
+    check(okW and fl[1] == 6 and fl[2] == 2 and fl[3] == 22 and fl[4] == 0 and fl[5] == 12, string.format("a wave's free flights make "
+          .. "the aircraft asked (4, 10, 6 of a 2-, two 4- and two 6-ships, 200 draws each), only 6-ships for 4: 6; one 2-ship: 2 "
+          .. "(held); all: %s; only 6-ships, room for 4: %s, %s free", tostring(fl[3]), tostring(fl[4]), tostring(fl[5])))
+end
 check(saidFrom(C.text.say.first_attack, 1) == 1, "... then said, once")
 do                                                  -- (each wave sent at her: a line naming where it's from, room allowing)
     local n = 0
@@ -588,9 +607,8 @@ do
     planes = full
     local n0 = #wavesOf()
     ESC.S.reinf.at = 0
-    -- ((2026-11-11) the pool's flights freed for this one step: which ones the earlier waves took varies from run to run
-    -- (Lua 5.4 seeds its tables' hashing afresh each run), and 3 runs in 20 had free flights for only 4 aircraft against
-    -- the room's min_n 6: "wave held", not the max_up this checks. Put back after it)
+    -- ((2026-11-11) the pool's flights freed for this one step: the earlier waves' flights can leave too few free for the
+    -- room's min_n 6, a "wave held" that isn't the max_up this checks. Put back after it)
     local busy = {}
     for u, v in pairs(D.up) do busy[u] = v end
     for u in pairs(busy) do D.up[u] = nil end
