@@ -29,7 +29,8 @@
 --   Ctrl+L in a run   (2026-11-11) THE TANACORN with her 16 gun mounts LIVE (TANI.live: each a child actor, its own health,
 --                     box, fire control and order), 5 km ahead as Ctrl+Y; a line a part at +2 s and +8 s, its health and
 --                     aim every 5 s for 2 minutes, a line when one goes down (TANI=1 builds: the world data has the parts).
---                     (2026-11-12) and her 16 VLS blocks live too (32 parts), their lids watched as Ctrl+K's.
+--                     (2026-11-12) and her 16 VLS blocks live too (32 parts), their lids watched as Ctrl+K's. Refused
+--                     while no hull of ours is up but a part of the last one still lives (`tanicorn: Ctrl+L refused: ...`).
 --   Ctrl+K in a run   (2026-11-12) THE TANACORN's VLS test blocks (TANI.vls: the deck block VLSD and the side block VLSS_L1),
 --                     each on its own rows and the fire control row SV_FCS_TaniVLS (the Aegis Mk 41's, cloned at the main
 --                     menu), 3 km ahead across your path; logged as Ctrl+U's mounts, their missiles as the shells
@@ -1107,6 +1108,12 @@ end
 -- (lidWatch, on from the key press). Each part kept by its address AND the name it was captured with (hard rule 59).
 do
 local LV = nil                                           -- the live hull's watch (Ctrl+L)
+-- ((2026-11-12, the weapons runtime review) the parts of a watch that ended with its hull gone, or that a new Ctrl+L
+-- replaced: { o, a, name, key, s } each. If AC8 ever removes a killed hull's actor while its parts live on, the hull's
+-- unit counts nothing alive, so SV_Spawn's recycle would take it off the spawner's list under live parts: the 0.74.48
+-- STORE crash's pattern (hard rule 16). Ctrl+L refuses to spawn while any of them lives (keptAlive); forgotten with the
+-- level. Not seen in game: the child actor components should take the parts down with the hull.)
+local KEPT = nil
 local KIND = {}                                          -- a mount type's key -> its KINDS entry (the T5's: TANI)
 for _, k in ipairs(KINDS) do KIND[k.key] = k end
 local function short(o) return (nameOf(o):match("([^%.:]+)$")) or "?" end
@@ -1122,6 +1129,28 @@ local function healthOf(o)
     pcall(function() h = o.HealthInternal end)
     pcall(function() mx = o.MaxHealth end)
     return tonumber(h), tonumber(mx)
+end
+local function keep(W)                                   -- a watch's parts into KEPT (each object once)
+    local have = {}
+    for _, k in ipairs(KEPT or {}) do have[tostring(k.a) .. k.name] = true end
+    for s, e in pairs(W.parts or {}) do
+        if e.a and not have[tostring(e.a) .. e.name] then
+            KEPT = KEPT or {}
+            KEPT[#KEPT + 1] = { o = e.o, a = e.a, name = e.name, key = e.key, s = s }
+            have[tostring(e.a) .. e.name] = true
+        end
+    end
+end
+local function keptAlive()                               -- KEPT's parts still up (still the object kept, health > 0 or unread)
+    local out = {}
+    for _, k in ipairs(KEPT or {}) do
+        if same(k) then
+            local h = healthOf(k.o)
+            if h == nil or h > 0 then out[#out + 1] = k end
+        end
+    end
+    KEPT = #out > 0 and out or nil
+    return out
 end
 local function hullMesh(W)                               -- the live hull's HullMesh (its Mount_* sockets)
     if W.mesh and liveObj(W.mesh) then return W.mesh end
@@ -1292,6 +1321,22 @@ testKey("L", "sv_tanicorn.lua's live hull test", function()
             .. "%s at %s, looked at again", short(up), at(up)))
         hudCallout("TEST: TANACORN LIVE", "THE HULL ALREADY UP")
     else
+        -- ((2026-11-12, the runtime review) no hull of ours up: parts of the last one still alive mean its unit is still
+        -- theirs, and SV_Spawn's recycle would take it off the spawner's list under them (KEPT above): not spawned)
+        if LV then keep(LV) end
+        local orphans = keptAlive()
+        if #orphans > 0 then
+            local ns = {}
+            for _, k in ipairs(orphans) do ns[#ns + 1] = "Part_" .. tostring(k.s) .. " (" .. tostring(k.key) .. ")" end
+            table.sort(ns)
+            for i = #ns, 9, -1 do ns[i] = nil end         -- (the first 8 named)
+            log(string.format("tanicorn: Ctrl+L refused: no live hull of ours up, but %d part(s) of the last one still alive (%s%s): "
+                .. "its unit may still be theirs, and a spawn's recycle under live parts is the 0.74.48 STORE crash's pattern "
+                .. "(hard rule 16); shoot them down or leave the level first", #orphans, table.concat(ns, ", "),
+                #orphans > 8 and ", ..." or ""))
+            hudCallout("TEST: TANACORN LIVE", "HER PARTS STILL UP")
+            return
+        end
         local p = playerLocation()
         if not p then log("tanicorn: no player location"); return end
         local yaw = playerYaw()
@@ -1309,10 +1354,12 @@ testKey("L", "sv_tanicorn.lua's live hull test", function()
     for _, s in ipairs(C.looks_s) do W.looks[#W.looks + 1] = { at = now + s, tag = "+" .. s .. " s" } end
     W.next, W.until_ = now + C.looks_s[#C.looks_s] + C.every_s, now + C.watch_s
     for _, k in ipairs(KINDS) do T.shells[k.key] = 0 end -- (the first 12 shells of each type again: the parts' too)
+    if LV then keep(LV) end                              -- ((2026-11-12) the replaced watch's parts: KEPT, until they're down)
     LV = W
     lidWatch(now, "Ctrl+L")                              -- ((2026-11-12) her VLS blocks' lids and missiles)
 end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn live hull", fn = function(now)
+    if KEPT and (not D or (levelTorn and levelTorn())) then KEPT = nil end   -- (the level's parts went with it)
     local W = LV
     if not W then return end
     if not D or (levelTorn and levelTorn()) then LV = nil; return end
@@ -1331,7 +1378,11 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn live hull", fn = function(now)
         end
     end
     if not same(W) then
-        log(string.format("tanicorn: live: the hull is gone at +%.1f s", now - W.t0)); LV = nil; return
+        keep(W)                                          -- ((2026-11-12) its parts kept for Ctrl+L's guard)
+        local up = keptAlive()
+        log(string.format("tanicorn: live: the hull is gone at +%.1f s%s", now - W.t0, #up > 0 and string.format(
+            "; %d of its parts still up as it goes (Ctrl+L refuses a new hull while any lives)", #up) or ""))
+        LV = nil; return
     end
     while W.looks[1] and now >= W.looks[1].at do liveLook(W, table.remove(W.looks, 1).tag) end
     if now >= (W.downAt or 0) then W.downAt = now + 0.5; liveDowns(W, now) end   -- (twice a second, while the hull lives)
