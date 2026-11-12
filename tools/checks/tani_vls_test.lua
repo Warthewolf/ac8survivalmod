@@ -386,6 +386,12 @@ for _ = 1, 10 do tick() end
 check(logged("tanicorn: live +2 s: Part_VLSD_1 (VLSD): ") ~= nil, "its parts seen at +2 s")
 local h1 = HULLS[1]
 sink(h1)
+-- (the review of 2026-11-12) a press before the watch's tick has seen the hull go: the handler keeps the parts itself
+n0 = #LOG
+KEYS.L()
+check(logged("Ctrl+L refused", n0 + 1) ~= nil and hullSpawns() == 1
+    and logged("callout: TEST: TANACORN LIVE / HER PARTS STILL UP", n0 + 1) ~= nil,
+    "Ctrl+L before the watch's tick saw the hull go: refused (the handler keeps the watch's parts itself)")
 n0 = #LOG
 tick()
 check(logged("the hull is gone at +", n0 + 1) ~= nil and logged("2 of its parts still up as it goes", n0 + 1) ~= nil,
@@ -404,10 +410,11 @@ KEYS.L()
 ref = logged("tanicorn: Ctrl+L refused: no live hull of ours up, but 1 part(s)", n0 + 1)
 check(ref ~= nil and ref:find("Part_VLSD_1", 1, true) ~= nil and hullSpawns() == 1,
     "a part at health 0 no longer counts; one whose health can't be read still does (" .. tostring(ref) .. ")")
--- hard rule 59: another object at that part's address now: not the part, so nothing holds Ctrl+L
+-- hard rule 59: another object at that part's address now: not the part, so nothing holds Ctrl+L. As in the game, the kept
+-- wrapper stays valid at its address (SV_ObjChain answers for whatever lives there) and answers the new object's name, its
+-- health unreadable (counted as up): only the name half of same() can tell it isn't the part (the review of 2026-11-12)
 local p1 = h1.parts.VLSD_1
-free(p1)
-obj("BP_SV_Tani_VLSD_C /Game/Maps.someone_else", {}, p1.__addr)
+p1.__name = "BP_SV_Tani_VLSD_C /Game/Maps.someone_else"
 n0 = #LOG
 KEYS.L()
 check(logged("Ctrl+L refused", n0 + 1) == nil and hullSpawns() == 2, "another object at the part's address: not counted, spawned")
@@ -417,7 +424,7 @@ for _ = 1, 10 do tick() end
 n0 = #LOG
 KEYS.L()
 check(logged("a live hull already up", n0 + 1) ~= nil and hullSpawns() == 2, "Ctrl+L with the hull up: looked at again, no spawn")
-sink(HULLS[2])
+if HULLS[2] then sink(HULLS[2]) end                      -- (none when a check above failed: the rest still runs)
 n0 = #LOG
 tick()
 check(logged("2 of its parts still up as it goes", n0 + 1) ~= nil, "gone before the new watch saw its parts: the old watch's kept")
