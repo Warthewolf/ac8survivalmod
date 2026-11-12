@@ -3044,3 +3044,29 @@ game. The work was split by file between agents; the builds ran in sequence in t
   immediately dies" (both hulls are damageable LiveAIGroundVehicleObject actors; Ctrl+Y's parts are meshes on it, Ctrl+L's
   child actors of it). The user's decision: damage like the Alicorn (the hull can't be damaged, every part shot down on
   its own, she sinks when her core is destroyed). The tester's log is still to come.
+
+## 0.74.66-coop2mp.158 (2026-11-12, runtime 0.32.35): THE TANACORN takes damage like the Alicorn
+- A tester on 0.74.65's ..._TANACORN zip: "the alicorns armaments aren't working on the tanacorn" and "if the Tanacorn is
+  hit, everything immediately dies". The user's decision: damage like the Alicorn (her hull can't be damaged, each part
+  shot down on its own, she sinks at her core). Research (docs/re/TANICORN.md "Damage"): not the hull's health (5000, the
+  Aegis's durability rows); the parts were 30-80 health (one missile each, with splash) and every part kept AC8's native
+  death blast (radius 100, damage 100, not parent-only) over parts 14-23 m apart: a chain.
+- Cooked (tools/tanicorn/spec.py, build.sh: container sha256 ecdc69983cb9...): every part's InducedExplosionSystem at the
+  stock Aegis turrets' values (ExplosionRadius 0, HitDistance 0, parent-only, damage 20) and bIsInvincibleInducedExplosion;
+  both hulls bCanBeDamaged False (the Alicorn's hull).
+- Run time (sv_tanicorn.lua TANI.armour, test-only): the hull SetIsInvincible / bIsInvincible / bCanBeDamaged false at its
+  spawn (Ctrl+Y, Ctrl+R, Ctrl+L), each live part's blast defused at Ctrl+L's first tick, every write read back
+  (`tanicorn: armour (...)`); TANI.armour off skips this layer only (the cooked values stay).
+- The parts' rows x5: T5 200, CIWS 150, LASER 150, VLS 200, T16 400 (the test mounts share them).
+- The hit probe (sv_tanicorn_hits.lua, its own dev-only part; kept in a TESTER=1 TANI=1 zip): every tick each armoured
+  hull's and Ctrl+L part's health; `tanicorn hits: start ...` (what decides where damage goes), a line on every change (by
+  whom), DOWN, GONE, `the HULL is DOWN` (never expected now), `over (...)`; closed with the level (LEVEL_DROPS) or a new run.
+- Review (2 lenses, 3 skeptics a finding): 2 minor confirmed, both fixed (the level resets ran in test ticks, which never
+  run once the gate has closed: LEVEL_DROPS now; the A/B switch's lines and test). Tests: tani_vls_test (armour at the
+  first tick, the probe's lines, parts off, Ctrl+Y's armour, the level drops), fleet_test, zip_leak_test, the rest.
+- Not in yet: the Alicorn's railcannon and sub-railguns (drawn only: WP11 M3), her core (WP11 phase 3). Not tested in game:
+  whether AC8 honours bCanBeDamaged False on an AI hull of ours, whether the parts' writes take after spawn (the probe's
+  start lines read them back), the parts' new health against missiles and splash.
+- Packaged: AC8SurvivalMode_COOP2MP_0.74.66_TESTER_Online_COOP_ZFA44_TANACORN.zip (88 MB, 97 files; build 6963d6952ae8...,
+  registered) with ..._0.74.66_TESTER_Keys.txt (what to test first, the log to send); the dev stage 5e3c829aef7f...
+  registered, INSTALLED 2026-11-12 20:21 (backup: build/backup/install_before_0.74.66).
