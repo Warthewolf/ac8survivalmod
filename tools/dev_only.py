@@ -10,7 +10,8 @@ import os
 import re
 import sys
 
-DEV_ONLY = ('sv_tanicorn.lua', 'sv_fleet.lua', 'sv_cine.lua')   # (main.lua MODULES: THE TANICORN, the fleet, the rise's cinematic)
+DEV_ONLY = ('sv_tanicorn.lua', 'sv_tanicorn_hits.lua', 'sv_fleet.lua', 'sv_cine.lua')   # (main.lua MODULES: THE TANICORN and her
+#           hit probe, the fleet, the rise's cinematic)
 GLOBALS = ('TANI', 'GEO', 'IFLEET', 'CINE')                     # (what they define; other parts only test them for nil)
 BLOCK = re.compile(r'[ \t]*-- (TEST|DEV) ONLY BEGIN.*?-- \1 ONLY END[^\n]*\n', re.S)   # (DEV ONLY: the cloud line's markers)
 
@@ -53,10 +54,10 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     if args[:1] == ['--keep-tani']:
         # ((2026-11-12) the user: "add the tanacorn and the fleet" to the TESTER zip: package_release.sh TESTER=1 TANI=1)
-        # THE TANICORN's and the fleet's parts kept whole; only the rise director (sv_cine.lua) cut
+        # THE TANICORN's (and her hit probe's) and the fleet's parts kept whole; only the rise director (sv_cine.lua) cut
         DEV_ONLY, GLOBALS = ('sv_cine.lua',), ('CINE',)
         args = args[1:]
-        print('dev_only: --keep-tani: sv_tanicorn.lua and sv_fleet.lua kept whole (TESTER=1 TANI=1)')
+        print('dev_only: --keep-tani: sv_tanicorn.lua, sv_tanicorn_hits.lua and sv_fleet.lua kept whole (TESTER=1 TANI=1)')
     if len(args) != 1:
         sys.exit('usage: dev_only.py [--keep-tani] <mod folder (holding Scripts/)>')
     main(args[0])

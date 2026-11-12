@@ -101,7 +101,7 @@ TANI.live = { unit = "SV_Unit_TaniHullLive", npc = "SV_Npc_TaniHullLive", model 
               class = "BP_SV_Tani_HULLLIVE_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_HULLLIVE.BP_SV_Tani_HULLLIVE_C",
               name_key = "SV_TaniHullLive_Name", name = "TANACORN", ahead_cm = 500000, z_cm = 0,
               comp_class = "/Script/Live.LiveChildActorComponent", looks_s = { 2, 8 }, every_s = 5, watch_s = 120,
-              row_health = { T16 = 80, T5 = 40, CIWS = 30, LASER = 30 },
+              row_health = { T16 = 400, T5 = 200, CIWS = 150, LASER = 150 },   -- ((2026-11-12) x5: each took one missile)
               parts = {
                   { "T16_FWD", "T16" }, { "T16_AFT", "T16" },
                   { "T5_1", "T5" }, { "T5_2", "T5" }, { "T5_3", "T5" }, { "T5_4", "T5" }, { "T5_5", "T5" }, { "T5_6", "T5" },
@@ -142,11 +142,21 @@ for _, p in ipairs({
         key = p.part, vls = true, test = p.test, unit = p.test and ("SV_Unit_Tani" .. p.tag) or nil,
         npc = "SV_Npc_Tani" .. p.tag, model = "SV_Model_Tani" .. p.tag, name_key = "SV_Tani" .. p.tag .. "_Name",
         name = "TANACORN VLS", class = cls, class_path = bp .. "." .. cls,
-        cdo_path = bp .. ".Default__" .. cls, anim = anim .. "." .. anim:match("[^/]+$"), health = 40,
+        cdo_path = bp .. ".Default__" .. cls, anim = anim .. "." .. anim:match("[^/]+$"), health = 200,   -- ((2026-11-12) was 40)
         fcs = F.fcs, fcs_src = F.fcs_src, fcs_slots = F.fcs_slots, fcs_set = F.fcs_set,
         face = p.part == "VLSD" and 180 or 270 }
 end
 for _, k in ipairs(TANI.vls) do TANI.live.row_health[k.key] = k.health end   -- (survival_events.TANI_VLS_HEALTH)
+-- (2026-11-12) THE TANACORN takes damage like the Alicorn (the user, after a tester's "if the Tanacorn is hit, everything
+-- immediately dies" on 0.74.65; docs/re/TANICORN.md "Damage"): hull, her hull can't be damaged (the Alicorn's hull:
+-- bCanBeDamaged False; here SetIsInvincible too, GEOFON's route, which sv_core.lua finishUnpaid undoes: hard rule 63);
+-- parts, no part's death sets off its neighbours (every part kept AC8's native induced explosion, radius 100 and damage
+-- 100 not limited to its parent, over parts 14-23 m apart: one hit, a chain): bCauseExplosionOnDeath off,
+-- bIsInvincibleInducedExplosion on and its InducedExplosionSystem at the stock Aegis turrets' values (ies). Off: this
+-- run-time layer skipped, the hull or parts as COOKED: from 31b505d tools/tanicorn/spec.py cooks the same values into the
+-- blueprints, so an A/B of the reported chain needs a container cooked without spec.py's PART_IES / PART_CDO / HULL_CDO
+TANI.armour = { hull = true, parts = true, ies = { ExplosionRadius = 0, HitDistance = 0, bIsExplosionDamageParentOnly = true,
+                                                   damage = 20 } }
 do
 local T = { rows = nil, next = 0, seen = {}, until_ = 0, checks = {}, shells = {}, stock = {} }
 local KINDS = { TANI }                                   -- every gun mount type (the T5 and TANI.mounts): its key and class
@@ -1020,6 +1030,90 @@ testKey("K", "sv_tanicorn.lua's VLS test", function()
     lidWatch(now, "Ctrl+K")
 end)
 
+-- every hull of ours in the level, either kind (Ctrl+Y's drawn BP_SV_Tani_HULL, Ctrl+L's live BP_SV_Tani_HULLLIVE)
+local function ourHulls()
+    local out = {}
+    for _, cls in ipairs({ TANI.hull.class, TANI.live.class }) do
+        for _, o in ipairs(FindAllOf(cls) or {}) do
+            if valid(o) and not nameOf(o):find("Default__", 1, true) then out[#out + 1] = o end
+        end
+    end
+    return out
+end
+
+-- (2026-11-12) her armour (TANI.armour: damage like the Alicorn), put on each object once, as soon as it's seen: her hull at
+-- its spawn (Ctrl+Y / Ctrl+R: the key's own look; Ctrl+L: the watch's first tick), each live part the first tick its child
+-- actor is there (Ctrl+L's watch, before its +2 s look). Every object once by its address and name (hard rule 59); every
+-- write read back. Logged: `tanicorn: armour (<key>): the hull <name> can't be damaged (the Alicorn's way): SetIsInvincible
+-- called; read back bIsInvincible true, bCanBeDamaged false, ...` and, on Ctrl+L, `tanicorn: armour: N of 32 parts at +T s
+-- ...` with the first part of each type's read-back (its induced explosion's values). TANI.armoured: the hulls armoured this
+-- level { o, a, name, why } (sv_tanicorn_hits.lua watches their health); forgotten with the level.
+local ARMOUR = {}
+TANI.armoured = {}
+local function akey(o) return tostring(addrOf(o)) .. "|" .. nameOf(o) end
+local function readBack(o, fields)
+    local t = {}
+    for _, f in ipairs(fields) do
+        local ok, v = pcall(function() return o[f] end)
+        t[#t + 1] = f .. " " .. (ok and tostring(v) or "?")
+    end
+    return table.concat(t, ", ")
+end
+local function hullArmour(o, why)
+    if not valid(o) or ARMOUR[akey(o)] then return false end
+    ARMOUR[akey(o)] = true
+    TANI.armoured[#TANI.armoured + 1] = { o = o, a = addrOf(o), name = nameOf(o), why = why }   -- (armour on or not: the probe's)
+    if not TANI.armour.hull then
+        log(string.format("tanicorn: armour (%s): OFF for the hull %s (TANI.armour.hull false: the run-time layer skipped, the hull as cooked); read back %s", why,
+            (nameOf(o):match("([^%.:]+)$")) or "?", readBack(o, { "bIsInvincible", "bCanBeDamaged", "HealthInternal", "MaxHealth" })))
+        return true
+    end
+    local okI = pcall(function() o:SetIsInvincible(true) end)
+    for f, v in pairs({ bIsInvincible = true, bCanBeDamaged = false, bIsInvincibleInducedExplosion = true,
+                        bCauseExplosionOnDeath = false }) do
+        pcall(function() o[f] = v end)
+    end
+    log(string.format("tanicorn: armour (%s): the hull %s can't be damaged (the Alicorn's way): SetIsInvincible %s; read back %s",
+        why, (nameOf(o):match("([^%.:]+)$")) or "?", okI and "called" or "FAILED",
+        readBack(o, { "bIsInvincible", "bCanBeDamaged", "bIsInvincibleInducedExplosion", "bCauseExplosionOnDeath", "HealthInternal",
+                      "MaxHealth" })))
+    return true
+end
+-- a live part: nil when it was armoured already (or armour's off), else its read-back
+local function partArmour(o)
+    if not valid(o) or ARMOUR[akey(o)] then return nil end
+    ARMOUR[akey(o)] = true
+    if not TANI.armour.parts then
+        local cooked = "none found"
+        pcall(function()
+            local x = o.DamagedStateComponent.InducedExplosionSystem
+            if valid(x) then cooked = readBack(x, { "ExplosionRadius", "HitDistance", "bIsExplosionDamageParentOnly", "damage" }) end
+        end)
+        return "OFF (TANI.armour.parts false: the run-time layer skipped, the part as cooked); read back " .. readBack(o,
+            { "bCauseExplosionOnDeath", "bIsInvincibleInducedExplosion", "HealthInternal", "MaxHealth" })
+            .. "; its induced explosion as cooked: " .. cooked
+    end
+    for f, v in pairs({ bCauseExplosionOnDeath = false, bIsInvincibleInducedExplosion = true }) do pcall(function() o[f] = v end) end
+    local sys, n = nil, 0
+    pcall(function() sys = o.DamagedStateComponent.InducedExplosionSystem end)
+    if valid(sys) then
+        for f, v in pairs(TANI.armour.ies) do
+            if pcall(function() sys[f] = v end) then n = n + 1 end
+        end
+    end
+    return readBack(o, { "bCauseExplosionOnDeath", "bIsInvincibleInducedExplosion", "HealthInternal", "MaxHealth" })
+        .. "; its induced explosion: " .. (valid(sys) and (n .. " written, read back " .. readBack(sys, { "ExplosionRadius",
+            "HitDistance", "bIsExplosionDamageParentOnly", "damage" })) or "none found")
+end
+local function armourHulls(why)                          -- every hull of ours up now (a key's own look)
+    for _, o in ipairs(ourHulls()) do hullArmour(o, why) end
+end
+-- forgotten with the level (levelDrop: the gate stops the test ticks before D goes, so the tick is only a backstop)
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["tanicorn armour"] = function() ARMOUR, TANI.armoured = {}, {} end end
+TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn armour", fn = function()
+    if next(ARMOUR) ~= nil and (not D or (levelTorn and levelTorn())) then ARMOUR, TANI.armoured = {}, {} end
+end }
+
 -- (0.74.60) Ctrl+Y: THE TANACORN's hull with every part drawn on its socket (BP_SV_Tani_HULL), broadside to you hull.ahead_cm
 -- out, its waterline on the sea. Logged: our class loaded, the spawn, and 2 s and 8 s on where it is and how many of its
 -- parts' meshes it carries (PoseableMeshComponents: 32 expected, 2 + 6 + 4 + 4 + 16) and its static meshes (the hull's).
@@ -1031,6 +1125,7 @@ local function hullLook(tag)
     end
     if #found == 0 then log(string.format("tanicorn: hull %s: none of our class in the level", tag)); return end
     for _, o in ipairs(found) do
+        hullArmour(o, "Ctrl+Y")                           -- ((2026-11-12) if its spawn's look missed it)
         local parts, statics = "?", "?"
         if SPC and SPC.V and SPC.V.comps then
             pcall(function() parts = #SPC.V.comps(o, "/Script/Engine.PoseableMeshComponent") end)
@@ -1068,6 +1163,7 @@ testKey("Y", "sv_tanicorn.lua's hull test", function()
     log(string.format("tanicorn: Ctrl+Y, %s at (%.0f, %.0f, %d) facing %.0f: %s%s", H.unit, x, y, H.z_cm, face, said,
         ok and "" or " (its rows aren't all in)"))
     hudCallout("TEST: TANACORN", r > 0 and "5 KM AHEAD" or "NOT SPAWNED")
+    if r > 0 then armourHulls("Ctrl+Y") end              -- ((2026-11-12) her hull can't be damaged: TANI.armour)
     T.hullChecks = { { at = os.clock() + 2, tag = "+2 s" }, { at = os.clock() + 8, tag = "+8 s" } }
 end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn hull look", fn = function(now)
@@ -1078,17 +1174,6 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn hull look", fn = function(now)
     end
     if #T.hullChecks == 0 then T.hullChecks = nil end
 end }
-
--- every hull of ours in the level, either kind (Ctrl+Y's drawn BP_SV_Tani_HULL, Ctrl+L's live BP_SV_Tani_HULLLIVE)
-local function ourHulls()
-    local out = {}
-    for _, cls in ipairs({ TANI.hull.class, TANI.live.class }) do
-        for _, o in ipairs(FindAllOf(cls) or {}) do
-            if valid(o) and not nameOf(o):find("Default__", 1, true) then out[#out + 1] = o end
-        end
-    end
-    return out
-end
 
 -- (2026-11-11, WP2 step 2, route (a)) Ctrl+L: THE TANACORN with her gun mounts live (TANI.live), broadside ahead_cm out,
 -- her waterline on the sea, as Ctrl+Y (a live hull already up is looked at again: its unit can't spawn while its flight is
@@ -1206,6 +1291,9 @@ local function partLine(W, s, key, kids)
     local e = W.parts[s]
     if not (e and same(e)) then
         e = { o = ch, a = addrOf(ch), name = nameOf(ch), k = k, key = key, alive = true }
+        partArmour(ch)                                   -- ((2026-11-12) if the watch's first ticks missed it)
+        W.seen = W.seen or {}
+        W.seen[s] = { o = ch, a = e.a, name = e.name, key = key }   -- (sv_tanicorn_hits.lua: TANI.liveSeen)
         W.parts[s] = e
         if k and not W.kinds[key] then                   -- (the first of each type: as the mounts' up and muzzle lines)
             W.kinds[key] = true
@@ -1267,6 +1355,41 @@ local function liveDowns(W, now)                         -- a line when a part g
         end
     end
 end
+-- ((2026-11-12) TANI.armour) her hull, then each part as soon as its child actor is there: every tick from the hull's find
+-- until all are done or armour_s is up (before the +2 s look and the first hit); W.seen: { [socket] = { o, a, name, key } }
+-- of each part seen (sv_tanicorn_hits.lua reads it: TANI.liveSeen)
+local ARMOUR_S = 5
+local function liveArmour(W, now)
+    hullArmour(W.o, "Ctrl+L")
+    W.seen = W.seen or {}
+    local comps, n, said, first = partComps(W), 0, {}, {}
+    for _, pr in ipairs(TANI.live.parts) do
+        local s, key = pr[1], pr[2]
+        local ch = comps["Part_" .. s] and childOf(comps["Part_" .. s])
+        if ch then
+            if not (W.seen[s] and W.seen[s].a == addrOf(ch) and W.seen[s].name == nameOf(ch)) then
+                W.seen[s] = { o = ch, a = addrOf(ch), name = nameOf(ch), key = key }
+            end
+            local rb = partArmour(ch)
+            if rb and not first[key] then first[key] = true; said[#said + 1] = key .. " (Part_" .. s .. "): " .. rb end
+            n = n + 1
+        end
+    end
+    W.armourN = n
+    for _, line in ipairs(said) do log("tanicorn: armour: " .. line) end
+    if n >= #TANI.live.parts or now - W.t0 > ARMOUR_S then
+        W.armourDone = true
+        log(string.format("tanicorn: armour: %d of %d parts at +%.1f s (%s)%s", n, #TANI.live.parts, now - W.t0,
+            TANI.armour.parts and "no death blast, none set off by a neighbour's"
+                or "OFF: the run-time layer skipped, the parts as cooked",
+            n < #TANI.live.parts and ": the rest at their first look" or ""))
+    end
+end
+function TANI.liveSeen() return LV and LV.seen or nil end
+-- ((2026-11-12, the review) the watch and the kept parts forgotten with the level: a test tick never runs between the gate
+-- closing and the next run's D, so their own `not D` checks can't)
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["tanicorn live"] = function() LV, KEPT = nil, nil end end
+
 local function liveLines(W, now)                         -- every every_s: each live part's health, aim and socket gap
     W.comps = partComps(W)
     local kids = hullKids(W)
@@ -1317,6 +1440,7 @@ testKey("L", "sv_tanicorn.lua's live hull test", function()
     local W = { t0 = now, before = before, parts = {}, kinds = {}, comps = {}, looks = {} }
     if up then
         W.o, W.a, W.name = up, addrOf(up), nameOf(up)
+        hullArmour(up, "Ctrl+L")                          -- ((2026-11-12) TANI.armour, if it hasn't it yet)
         log(string.format("tanicorn: Ctrl+L, a live hull already up (its unit can't spawn again while it's up: hard rule 16): "
             .. "%s at %s, looked at again", short(up), at(up)))
         hudCallout("TEST: TANACORN LIVE", "THE HULL ALREADY UP")
@@ -1377,6 +1501,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn live hull", fn = function(now)
             return
         end
     end
+    if not W.armourDone and same(W) then liveArmour(W, now) end   -- ((2026-11-12) TANI.armour, from the first tick)
     if not same(W) then
         keep(W)                                          -- ((2026-11-12) its parts kept for Ctrl+L's guard)
         local up = keptAlive()
@@ -1635,6 +1760,7 @@ testKey("R", "sv_tanicorn.lua's rise test", function()
         log(string.format("tanicorn: Ctrl+R, the hull already up rises where it is: %s at (%.0f, %.0f, %.0f); the rise animation %s",
             (nameOf(up):match("([^%.:]+)$")) or "?", at0.X, at0.Y, at0.Z, anim and "loaded" or "NOT loaded"))
         hudCallout("TEST: THE TANACORN RISES", "THE HULL ALREADY UP")
+        hullArmour(up, "Ctrl+R")                          -- ((2026-11-12) TANI.armour, if it hasn't it yet)
         RISE = { o = up, name = nameOf(up), x = at0.X, y = at0.Y, z = at0.Z, before = {}, anim = anim, at = os.clock(),
                  state = "finding", next = 0 }
         return
@@ -1650,6 +1776,7 @@ testKey("R", "sv_tanicorn.lua's rise test", function()
         face, r > 0 and (r .. " up") or ("not spawned (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")"),
         ok and "" or " (its rows aren't all in)", rows, anim and ("animation " .. nameOf(anim):match("[^%.]+$")) or "animation NOT loaded"))
     hudCallout("TEST: THE TANACORN RISES", r > 0 and "5 KM AHEAD" or "NOT SPAWNED")
+    if r > 0 then armourHulls("Ctrl+R") end              -- ((2026-11-12) her hull can't be damaged: TANI.armour)
     if r > 0 then RISE = { x = x, y = y, z = H.z_cm, before = before, anim = anim, at = os.clock(), state = "finding", next = 0 } end
 end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)

@@ -59,6 +59,7 @@ function playerLocationDirty() end
 local ME = { X = 0, Y = 0, Z = 100000 }
 function playerLocation() return { X = ME.X, Y = ME.Y, Z = ME.Z } end
 TEST_TICKS = {}
+LEVEL_DROPS = {}                                           -- (sv_core.lua's: what each part forgets with the level)
 local KEYS = {}
 function testKey(name, who, fn) KEYS[name] = fn; return true end
 local NEW = {}
@@ -175,6 +176,7 @@ local function count(t) local n = 0; for _ in pairs(t) do n = n + 1 end; return 
 
 print("sv_tanicorn.lua's VLS blocks")
 dofile(DIR .. "sv_tanicorn.lua")
+dofile(DIR .. "sv_tanicorn_hits.lua")              -- ((2026-11-12) the hit probe: its piece)
 
 -- the types and their names
 check(type(TANI.vls) == "table" and #TANI.vls == 9, "TANI.vls: 9 block types (" .. tostring(TANI.vls and #TANI.vls) .. ")")
@@ -194,7 +196,8 @@ for _, k in ipairs(TANI.vls or {}) do allFcs = allFcs and k.fcs == "SV_FCS_TaniV
 check(allFcs, "every type on SV_FCS_TaniVLS, no turn speeds")
 check(#TANI.live.parts == 32 and TANI.live.parts[17][1] == "VLSD_1" and TANI.live.parts[32][2] == "VLSS_R4",
     "TANI.live: 32 parts, the VLS blocks last (" .. #TANI.live.parts .. ")")
-check(TANI.live.row_health.VLSD == 40 and TANI.live.row_health.VLSS_R2 == 40, "each VLS type's row health 40")
+check(TANI.live.row_health.VLSD == 200 and TANI.live.row_health.VLSS_R2 == 200 and TANI.live.row_health.T5 == 200
+    and TANI.live.row_health.T16 == 400, "each VLS type's row health 200, the T5's 200, the T16's 400 (2026-11-12: x5)")
 check(KEYS.K ~= nil and KEYS.L ~= nil, "Ctrl+K and Ctrl+L bound")
 check(NEW["/Script/Live.LiveVLSMissile"] ~= nil, "the VLS missiles kept as the game makes them (NotifyOnNewObject)")
 
@@ -353,6 +356,10 @@ local LIVECLS = TANI.live.class
 local function livePart(socket)
     local b = block("VLSD", "live_" .. socket .. "_" .. nextA, { X = 500000, Y = 0, Z = 700 }, "Part_" .. socket)
     b.HealthInternal, b.MaxHealth = 400, 40
+    -- (2026-11-12) AC8's native induced explosion on death, as our cooked parts keep it (TANI.armour defuses it)
+    b.DamagedStateComponent = { InducedExplosionSystem = obj("LiveInducedExplosionSystemArrangement ies_" .. socket,
+        { ExplosionRadius = 100, HitDistance = 20, bIsExplosionDamageParentOnly = false, damage = 100 }) }
+    b.bCauseExplosionOnDeath, b.bIsInvincibleInducedExplosion = true, false
     return b
 end
 local HULLS = {}
@@ -367,6 +374,8 @@ local function liveHull()
     local h = obj(LIVECLS .. " /Game/Maps.hull_" .. nextA, { at = { X = 500000, Y = 0, Z = 0 }, HealthInternal = 1000, MaxHealth = 100,
         comps = { [TANI.live.comp_class] = comps, ["/Script/Engine.StaticMeshComponent"] = { mesh } } })
     h.parts = parts
+    h.bCanBeDamaged = true
+    function h:SetIsInvincible(v) self.inv = v end
     FINDS[LIVECLS] = { h }
     HULLS[#HULLS + 1] = h
     return h
@@ -382,9 +391,44 @@ ME.X, ME.Y, ME.Z = 0, 0, 100000
 -- a first hull, its parts seen at +2 s, then its actor gone with both parts still up
 KEYS.L()
 check(hullSpawns() == 1, "Ctrl+L with nothing up: spawned")
-for _ = 1, 10 do tick() end
-check(logged("tanicorn: live +2 s: Part_VLSD_1 (VLSD): ") ~= nil, "its parts seen at +2 s")
+-- ((2026-11-12) her armour, TANI.armour: the hull and every part at the watch's first tick, before the +2 s look)
+n0 = #LOG
+tick()
 local h1 = HULLS[1]
+local a1, ies1 = h1.parts.VLSD_1, h1.parts.VLSD_1.DamagedStateComponent.InducedExplosionSystem
+check(h1.inv == true and h1.bIsInvincible == true and h1.bCanBeDamaged == false and h1.bCauseExplosionOnDeath == false,
+    "armour: her hull can't be damaged from the watch's first tick (SetIsInvincible, bCanBeDamaged false)")
+local al = logged("tanicorn: armour (Ctrl+L): the hull ", n0 + 1)
+check(al ~= nil and al:find("SetIsInvincible called; read back bIsInvincible true, bCanBeDamaged false", 1, true) ~= nil,
+    "its line read back (" .. tostring(al) .. ")")
+check(a1.bCauseExplosionOnDeath == false and a1.bIsInvincibleInducedExplosion == true and ies1.ExplosionRadius == 0
+    and ies1.HitDistance == 0 and ies1.bIsExplosionDamageParentOnly == true and ies1.damage == 20
+    and h1.parts.VLSD_2.DamagedStateComponent.InducedExplosionSystem.ExplosionRadius == 0,
+    "armour: every part's death blast defused (no blast, immune to its neighbours', the Aegis turrets' values) before +2 s")
+local pl = logged("tanicorn: armour: VLSD (Part_VLSD_", n0 + 1)
+check(pl ~= nil and pl:find("4 written, read back ExplosionRadius 0, HitDistance 0, bIsExplosionDamageParentOnly true, damage 20", 1, true) ~= nil,
+    "the first part of its type read back (" .. tostring(pl) .. ")")
+check(logged("tanicorn hits: start +", n0 + 1) ~= nil and logged("HULL hull_", n0 + 1) ~= nil,
+    "the hit probe starts on her hull")
+for _ = 1, 9 do tick() end
+check(logged("tanicorn: live +2 s: Part_VLSD_1 (VLSD): ") ~= nil, "its parts seen at +2 s")
+local sl = logged("tanicorn hits: start +")
+check(sl ~= nil and logged("tanicorn hits: start", select(2, logged("tanicorn hits: start +")) + 1) ~= nil,
+    "the probe's start lines: the hull and the first part of a type")
+-- a hit on a part: logged with its health, a DOWN at 0; the hull's health never moves
+n0 = #LOG
+h1.parts.VLSD_2.HealthInternal = 150
+tick()
+local hl = logged("tanicorn hits: +", n0 + 1)
+check(hl ~= nil and hl:find("Part_VLSD_2 (VLSD) hp 400 -> 150/40 (-250); by", 1, true) ~= nil, "a hit on a part logged (" .. tostring(hl) .. ")")
+h1.parts.VLSD_2.HealthInternal = 0
+n0 = #LOG
+tick()
+check((logged("Part_VLSD_2 (VLSD) hp 150 -> 0/40 (-150) DOWN", n0 + 1)) ~= nil, "its DOWN line")
+check(logged("HULL hull_", n0 + 1) == nil, "the hull's health never moved: no line")
+h1.parts.VLSD_2.HealthInternal = 400                     -- (back up for the guard's checks below)
+for _ = 1, 30 do tick() end
+check(logged("tanicorn: armour: 2 of 32 parts at +") ~= nil, "armour: its count line once armour_s is up (2 of 32 here)")
 sink(h1)
 -- (the review of 2026-11-12) a press before the watch's tick has seen the hull go: the handler keeps the parts itself
 n0 = #LOG
@@ -396,6 +440,8 @@ n0 = #LOG
 tick()
 check(logged("the hull is gone at +", n0 + 1) ~= nil and logged("2 of its parts still up as it goes", n0 + 1) ~= nil,
     "its hull gone: 2 parts still up, kept")
+check(logged("tanicorn hits: +", n0 + 1) ~= nil and logged("GONE (its actor no longer there)", n0 + 1) ~= nil,
+    "the probe: the hull GONE")
 n0 = #LOG
 KEYS.L()
 local ref = logged("tanicorn: Ctrl+L refused: no live hull of ours up, but 2 part(s) of the last one still alive", n0 + 1)
@@ -438,5 +484,83 @@ levelTorn = nil
 n0 = #LOG
 KEYS.L()
 check(logged("Ctrl+L refused", n0 + 1) == nil and hullSpawns() == 3, "a torn level forgets the kept parts: spawned")
+-- ((2026-11-12, the review) TANI.armour.parts off: the run-time layer skipped, the parts as cooked, said so
+print("Ctrl+L with TANI.armour.parts off")
+tick()
+for _, b in pairs(HULLS[3].parts) do b.HealthInternal = 0 end
+sink(HULLS[3])
+tick()
+TANI.armour.parts = false
+n0 = #LOG
+KEYS.L()
+tick()
+local h4 = HULLS[4]
+check(h4 ~= nil, "a new hull: the last one's parts were down")
+local q = h4 and h4.parts.VLSD_1
+check(q ~= nil and q.bCauseExplosionOnDeath == true and q.bIsInvincibleInducedExplosion == false
+    and q.DamagedStateComponent.InducedExplosionSystem.ExplosionRadius == 100, "parts off: each part untouched (its blast as cooked)")
+local ol = logged("tanicorn: armour: VLSD (Part_VLSD_", n0 + 1)
+check(ol ~= nil and ol:find("OFF (TANI.armour.parts false: the run-time layer skipped", 1, true) ~= nil
+    and ol:find("its induced explosion as cooked: ExplosionRadius 100, HitDistance 20", 1, true) ~= nil,
+    "its OFF read-back with the blast as cooked (" .. tostring(ol) .. ")")
+check(h4 ~= nil and h4.inv == true, "the hull's armour still on (TANI.armour.hull)")
+for _ = 1, 24 do tick() end
+check(logged("(OFF: the run-time layer skipped, the parts as cooked)", n0 + 1) ~= nil, "the OFF count line")
+TANI.armour.parts = true
+
+-- ((2026-11-12) TANI.armour on Ctrl+Y's drawn hull, at the key's own look; and the A/B switch: the hull as built, still probed)
+print("Ctrl+Y: her drawn hull's armour")
+local HCLS = TANI.hull.class
+local DRAWN = {}
+local spawnLive = SV_Spawn
+function SV_Spawn(unit, x, y, z, face)
+    if unit ~= TANI.hull.unit then return spawnLive(unit, x, y, z, face) end
+    local d = obj(HCLS .. " /Game/Maps.drawn_" .. nextA, { at = { X = 0, Y = 500000, Z = 0 }, HealthInternal = 50000, MaxHealth = 5000,
+        bCanBeDamaged = true })
+    function d:SetIsInvincible(v) self.inv = v end
+    FINDS[HCLS] = FINDS[HCLS] or {}
+    table.insert(FINDS[HCLS], d)
+    DRAWN[#DRAWN + 1] = d
+    return 1
+end
+TANI.armour.hull = false
+n0 = #LOG
+KEYS.Y()
+check(DRAWN[1] and DRAWN[1].inv == nil and DRAWN[1].bCanBeDamaged == true
+    and logged("tanicorn: armour (Ctrl+Y): OFF for the hull drawn_", n0 + 1) ~= nil, "TANI.armour.hull false: the hull as built, said so")
+tick()
+check(logged("tanicorn hits: start +", n0 + 1) ~= nil and logged("HULL drawn_", n0 + 1) ~= nil, "the probe watches it all the same")
+TANI.armour.hull = true
+n0 = #LOG
+KEYS.Y()
+check(DRAWN[2] and DRAWN[2].inv == true and DRAWN[2].bCanBeDamaged == false and DRAWN[1].inv == nil
+    and logged("tanicorn: armour (Ctrl+Y): the hull drawn_", n0 + 1) ~= nil,
+    "Ctrl+Y: the new drawn hull can't be damaged at its key press; the first one left as it was (once each)")
+tick()                                                    -- (the probe takes it up at its next tick)
+n0 = #LOG
+DRAWN[2].HealthInternal = 49000
+tick()
+check(logged("HULL drawn_", n0 + 1) ~= nil and logged("hp 50000 -> 49000/5000 (-1000)", n0 + 1) ~= nil,
+    "a hull's health that moves is logged (with the armour on: never expected)")
+-- ((2026-11-12, the review) a new run in the same level closes the probe; each part's level drop forgets its own
+print("the probe and the armour with the level")
+n0 = #LOG
+D = { now = 2 }
+tick()
+check(logged("tanicorn hits: over (a new run)", n0 + 1) ~= nil and logged("tanicorn hits: start +", n0 + 1) ~= nil,
+    "a new run: the probe closed and started again on the hulls still up")
+for _, k in ipairs({ "tanicorn hits", "tanicorn armour", "tanicorn live" }) do
+    check(type(LEVEL_DROPS[k]) == "function", "LEVEL_DROPS[\"" .. k .. "\"] registered")
+end
+n0 = #LOG
+LEVEL_DROPS["tanicorn hits"]()
+check(logged("tanicorn hits: over (the level left)", n0 + 1) ~= nil, "the level's drop closes the probe")
+LEVEL_DROPS["tanicorn armour"]()
+check(#TANI.armoured == 0, "and forgets the armoured hulls")
+LEVEL_DROPS["tanicorn live"]()
+n0 = #LOG
+tick()
+check(logged("the hull is gone", n0 + 1) == nil and logged("tanicorn hits:", n0 + 1) == nil,
+    "after the drops no stale watch or probe line")
 print(fails == 0 and "tani vls test: all passed" or ("tani vls test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

@@ -305,3 +305,40 @@ tagged. Arm values are the arm's own; a row's values replace them (L2-L4). Row d
   WeaponClass).
 - Package lists come from build/scan/all_chunks.txt (grep the paths).
 
+
+## Damage: like the Alicorn (2026-11-12)
+A tester on 0.74.65's ..._TANACORN zip: "the alicorns armaments aren't working on the tanacorn" and "if the Tanacorn is hit,
+everything immediately dies". The user's decision: damage **like the Alicorn**: her hull can't be damaged, every gun, VLS
+block and railgun is shot down on its own, she sinks only when her core is destroyed (WP11's three phases,
+docs/design/INVINCIBLE_FLEET.md). Research of 2026-11-12 (a workflow, each report checked by a skeptic):
+- Not the hull's health [V]: SV_Model_TaniHullLive MaxHealth 5000 (HealthInternal 50000), durability NPC_WPDur_000 /
+  test_NPC_ExpDur_000 (100 % everywhere, the stock Aegis's rows); the test mounts took their rows' health in game (0.74.64).
+- The parts were paper [V]: 30-80 health (about one standard missile each), 14-23 m apart, and the player's missile has
+  splash (ALiveExplosiveWeapon ExplosionRadius / AreaOfEffectDamage).
+- Every part and hull kept AC8's native induced explosion on death [V: LiveInducedExplosionSystemBase.cpp HitDistance 20,
+  ExplosionRadius 100, damage 100; Arrangement bIsExplosionDamageParentOnly false]: one part's death kills its neighbours.
+  The stock Aegis turrets defuse it (BP_VE002_aegs_mk45/mk15/mk41_Base: ExplosionRadius 0, HitDistance 0, parent-only,
+  damage 20); the Alicorn's parts keep the default on 500-3,125 health.
+- The chain can't sink a 5000 hull alone (32 x 100), but a hull's death takes its child actors with it [I]. The parent-damage
+  channels are off by default [V: DamageRateToParent 0, bIsReflectionDamageToParent false].
+- Ctrl+Y's hull (and Ctrl+R's when none is up) is one actor with every part a PoseableMeshComponent: nothing on it fires.
+- The Alicorn's hull: model HP 10, bCanBeDamaged False; its core part (alcn_core_01, bIsBoss) carries the boss's life.
+- Flags on our objects (headers): ALiveGameObject bIsInvincible / SetIsInvincible, bIsInvincibleInducedExplosion,
+  bIsNonTargetInducedExplosionTarget, MinHealth; ALiveAIGameObject bCauseExplosionOnDeath; AActor bCanBeDamaged;
+  ULiveDamagedStateComponent.InducedExplosionSystem (ULiveInducedExplosionSystemBase: HitDistance, ExplosionRadius, damage;
+  Arrangement: bIsExplosionDamageParentOnly, ExplosionSpawnDelay, bOverrideAttacker).
+- The Alicorn's railcannon and sub-railguns: drawn meshes on both hulls (no blueprint, fire control, rows or Lua). The stock
+  ones are driven by ALiveAIAlicorn itself (RailgunManager, CachedRailCannon, its action events); the stock railcannon
+  (BP_BA002_alcn_emlm_Base) has no weapon at all; the sub-railgun's arm is LauncherAlicornRailgun with BP_wp_emls_alcn
+  (damage 200, 18 km). Route (WP11 M3): live mounts on the T16 pattern with a row of ours with no NpcWeaponId (the
+  StrafingRailgun's way), their Deploy and the railcannon's charge and shot scripted in Lua.
+
+What 0.74.66 does. Cooked (tools/tanicorn/spec.py, 31b505d): every part's DamagedStateComponent.InducedExplosionSystem a
+LiveInducedExplosionSystemArrangement at the Aegis turrets' values and bIsInvincibleInducedExplosion on its CDO, both hulls
+bCanBeDamaged False. At run time (sv_tanicorn.lua TANI.armour, the same again with a read-back; sv_tanicorn_hits.lua): her hull SetIsInvincible,
+bIsInvincible, bCanBeDamaged false at its spawn (Ctrl+Y / Ctrl+R / Ctrl+L); each live part, at the watch's first tick,
+bCauseExplosionOnDeath false, bIsInvincibleInducedExplosion true, its InducedExplosionSystem written to the Aegis turrets'
+values; the parts' rows x5 (T5 200, CIWS 150, LASER 150, VLS 200, T16 400); a hit probe (`tanicorn hits: ...`). Untested in
+game: whether these writes after spawn take (the probe's start lines read them back), whether bCanBeDamaged False is
+honoured on an AI hull of ours. TANI.armour off skips only the run-time layer: an A/B of the chain needs a container cooked
+without spec.py's PART_IES / PART_CDO / HULL_CDO. Next: her core, then the Alicorn's weapons.

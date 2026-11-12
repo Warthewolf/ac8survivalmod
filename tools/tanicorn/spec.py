@@ -43,6 +43,17 @@ FLAK_SHELL = '/Game/Blueprints/Weapons/FlakGun/NPC/BP_wp_flakgun'
 # (2026-11-12) the Aegis Mk 41's missile (BP_FCS_Vessel_VLS_VE002_mk41's weapon; BP_wp_vls_BaseClass on the native
 # LiveVLSMissile: its script imports, build/stock): the VLS blocks' own arm names it (a stub here, never packed)
 VLS_MISSILE = '/Game/Blueprints/Weapons/MSL/NPC/Vls/BP_wp_vls_a0'
+# (2026-11-12) THE TANACORN takes damage like the Alicorn (the user, after a tester's "if the Tanacorn is hit, everything
+# immediately dies": docs/re/TANICORN.md "Damage"). Every part kept AC8's native induced explosion on death (radius 100,
+# damage 100, not limited to its parent: LiveInducedExplosionSystemBase.cpp), a chain over parts 14-23 m apart: each part's
+# own now has the stock Aegis turrets' values (BP_VE002_aegs_mk45 / mk15 / mk41_Base: ExplosionRadius 0, HitDistance 0,
+# parent-only, damage 20), and no part is set off by a neighbour's (bIsInvincibleInducedExplosion). The hulls can't be
+# damaged (the Alicorn's hull: bCanBeDamaged False; her life is in her core: a later stage). sv_tanicorn.lua TANI.armour
+# writes the same at run time on blueprints cooked before this.
+PART_IES = {'$new': 'LiveInducedExplosionSystemArrangement', 'props': {
+    'ExplosionRadius': '0', 'HitDistance': '0', 'bIsExplosionDamageParentOnly': 'True', 'damage': '20'}}
+PART_CDO = {'bIsInvincibleInducedExplosion': 'True'}
+HULL_CDO = {'bCanBeDamaged': 'False', 'bIsInvincibleInducedExplosion': 'True'}
 
 
 def obj(path):
@@ -89,6 +100,7 @@ def mount(part, info, fcs):
             'bShowHUDBox': 'True',
             'BriDebriIconType': 'Weapons',
             'DamageSound': '(bEnableDamageSound=True)',
+            **PART_CDO,
         },
         'components': {
             'FireControlSystemComponent': {
@@ -121,6 +133,7 @@ def mount(part, info, fcs):
                     'DestroyHideMeshNameList': '((ChangeTime=0,TargetMeshName="TurretPoseableMesh",bHideToFinalExplosion=True,bReflectChildMesh=False))',
                     'DestroyVisibleMeshNameList': '((ChangeTime=0,TargetMeshName="DamagedStaticMesh",bHideToFinalExplosion=False,bReflectChildMesh=False))',
                     'bChangeMeshes': 'True', 'bHideMeshes': 'True'}}],
+                'InducedExplosionSystem': PART_IES,
             },
         },
     }
@@ -175,6 +188,7 @@ def vls_mount(part, info, fcs):
             'bShowHUDBox': 'True',
             'BriDebriIconType': 'Weapons',
             'DamageSound': '(bEnableDamageSound=True)',
+            **PART_CDO,
         },
         'components': {
             'FireControlSystemComponent': {
@@ -200,6 +214,7 @@ def vls_mount(part, info, fcs):
                     'DestroyHideMeshNameList': '((ChangeTime=0,TargetMeshName="TurretMesh",bHideToFinalExplosion=True,bReflectChildMesh=False))',
                     'DestroyVisibleMeshNameList': '((ChangeTime=0,TargetMeshName="DamagedStaticMesh",bHideToFinalExplosion=False,bReflectChildMesh=False))',
                     'bChangeMeshes': 'True', 'bHideMeshes': 'True'}}],
+                'InducedExplosionSystem': PART_IES,
             },
         },
     }
@@ -256,7 +271,7 @@ def hull_bp(parts_on, rig=None, live=None, name='HULL'):
                     'bShowHUDBox': 'True', 'BriDebriIconType': 'Weapons',
                     # (2026-11-11) never skipped far off (the Alicorn's desc has both: docs/re/ALICORN.md; its world-data
                     # desc too, tools/build_survival_world.py): the rise's transforms must update at any range
-                    'bIgnoreMeshOptimize': 'True', 'bIgnoreSetAutoSkipUpdateTransform': 'True'}}
+                    'bIgnoreMeshOptimize': 'True', 'bIgnoreSetAutoSkipUpdateTransform': 'True', **HULL_CDO}}
 
 
 # milestone 0's mount: the Mk45's fire control, but searching the air (it's to track and fire at the player)
