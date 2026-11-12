@@ -21,7 +21,9 @@
 local MOD = arg[1]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
-local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return s end
+-- ((2026-11-12) LF text whatever the checkout: a Windows one has CRLF, and piece() and ZLAUNCH.finish's cut below look
+-- for "\nend\n")
+local function readAll(p) local f = assert(io.open(p, "rb")); local s = f:read("a"); f:close(); return (s:gsub("\r\n", "\n")) end
 local PARTS = dofile("parts.lua")(MOD, readAll)
 local function section(s) print(s) end
 

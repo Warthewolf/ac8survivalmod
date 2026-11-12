@@ -12,7 +12,9 @@ def check(cond, what):
 
 
 def run(*args):
-    r = subprocess.run([EXE, *args], capture_output=True, text=True, encoding='utf-8')
+    # ((2026-11-12) errors='replace': on Windows the exe prints its %ls through the ANSI code page, not UTF-8; the names
+    # are checked in the zip itself, never in these lines)
+    r = subprocess.run([EXE, *args], capture_output=True, text=True, encoding='utf-8', errors='replace')
     return r.returncode, r.stdout.splitlines()
 
 
