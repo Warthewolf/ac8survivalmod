@@ -33,6 +33,7 @@ local MODULES = {
     "sv_festival",                 -- THE FESTIVAL: the cruise missiles and the siren (docs/re/FISHING.md 6)
     "sv_decoy",                    -- THE DECOY: the bait, the Spear UAVs' locks and the Tonitrus Spear (docs/re/DECOY.md)
     "sv_tanicorn",                 -- THE TANICORN's test mount, test builds only (docs/re/TANICORN.md)
+    "sv_tanicorn_hits",            -- (sv_tanicorn.lua's next piece: the hit probe, test builds only)
     "sv_fleet",                    -- INVINCIBLE FLEET's tests, test builds only (docs/design/INVINCIBLE_FLEET_RISE_FORD.md)
     "sv_cine",                     -- THE TANACORN's rise cinematic and its director, test builds only (docs/re/CINEMATIC.md)
     "sv_flights",

@@ -56,7 +56,7 @@ TANI_NPC = 'SV_Npc_TaniMount'                  # DT_SV_NpcRows: GR000_dummy's ro
 TANI_MODEL = 'SV_Model_TaniMount'              # DT_SV_ModelRows: GR000_dummy's model row, our blueprint, TANI_HEALTH
 TANI_BP = '/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5'
 TANI_BP_CLASS = 'BP_SV_Tani_T5_C'
-TANI_HEALTH = 40.0
+TANI_HEALTH = 200.0   # ((2026-11-12) was 40: one missile; THE TANACORN's parts now take ~4 (the user: damage like the Alicorn)
 # (0.74.58) TANI_NPC's NpcFCSId0: the stock ground flak gun's fire control row; (0.74.59) its copy with the twin mount's two
 # muzzles (SlotNum 2), made at the main menu by Scripts/sv_tanicorn.lua (TANI.fcs; the stock row's SlotNum fires one barrel)
 TANI_FCS = 'SV_FCS_TaniT5'
@@ -86,7 +86,7 @@ TANI_NAME_KEY = 'SV_TaniMount_Name'
 #   LASER  NPC_FCS_VesselCIWS000 too, for now: no stock arms blueprint fires a laser (docs/re/TANICORN.md 3)
 # part: (the tag its names carry, its health). The tag never ends in a digit (build_survival.py's extra rows assert it;
 # hard rule 17), so the 16-inch's is T16Gun.
-TANI_MOUNT_PARTS = {'T16': ('T16Gun', 80.0), 'CIWS': ('CIWS', 30.0), 'LASER': ('LASER', 30.0)}
+TANI_MOUNT_PARTS = {'T16': ('T16Gun', 400.0), 'CIWS': ('CIWS', 150.0), 'LASER': ('LASER', 150.0)}   # ((2026-11-12) x5: 80 / 30 / 30 were one missile each)
 
 
 def tani_mount(part):
@@ -109,7 +109,7 @@ TANI_MOUNTS = [tani_mount(p) for p in TANI_MOUNT_PARTS]
 # timings. part: its tag (never ending in a digit: hard rule 17, build_survival.py's extra rows assert it). Only the
 # TANI_VLS_TEST types have units of their own (Ctrl+K: as Ctrl+U's test mounts); the rest are live parts only (Ctrl+L).
 TANI_VLS_FCS = 'SV_FCS_TaniVLS'
-TANI_VLS_HEALTH = 40.0
+TANI_VLS_HEALTH = 200.0   # ((2026-11-12) was 40, as TANI_HEALTH)
 TANI_VLS_PARTS = {'VLSD': 'VLSDeck', **{f'VLSS_{s}{n}': f'VLSS{s}{n}Side' for s in 'LR' for n in range(1, 5)}}
 TANI_VLS_TEST = ('VLSD', 'VLSS_L1')
 
