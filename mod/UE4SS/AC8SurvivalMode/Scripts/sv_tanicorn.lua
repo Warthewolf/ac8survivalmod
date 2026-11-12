@@ -1554,9 +1554,15 @@ TANI.rise = { hold_s = 1.5, rate = 1.0, breach_s = 0.8, slam_s = 9.0, length_s =
               -- the water AC8 made for ships her size as well: the Alicorn's and the Arsenal Bird's cutscene water (Online
               -- Mode's IGC: spawned bare, no user parameter needed), with the Ford's pillars at twice their size.
               -- Each entry { path, scale, forward m, starboard m } from her rest midships; the paths are FX.* below)
+              -- ((2026-11-12) the user on 0.74.66: "the water height on the rise is too big now": the Alicorn's ending
+              -- cutscene's pillars (ALCN_PILLAR_2 / _3 / _BIG: NS_IGC_alcn_ED_WaterPillar_c02_2nd / c03 / c05) are
+              -- world-space mesh columns 2.4-2.8 km tall and 0.5-1 km wide, which the spawn's scale doesn't touch (their
+              -- particle scripts emulated, the rise-water research): out. In their place the cutscene's c02_1st
+              -- (ALCN_PILLAR_1: local space, ~100 m at scale 1, so its scale holds) and the Alicorn's water blast (local
+              -- space, fixed bounds 150 m), larger)
               breach = {                                 -- (at breach_s, round where her axis stands in the sea)
                   { "SURF1", 1, 0, 0 }, { "SURF2", 1, 0, 0 }, { "SURF3", 1, 0, 0 }, { "SURF4", 1, 0, 0 },
-                  { "ALCN_PILLAR_1", 1, 0, 0 }, { "ALCN_PILLAR_2", 1, 10, 0 }, { "ALCN_BLAST", 1, 25, 0 },
+                  { "ALCN_PILLAR_1", 2, 0, 0 }, { "ALCN_PILLAR_1", 1.5, 40, 0 }, { "ALCN_BLAST", 2, 25, 0 },
                   { "MIST", 1, 0, 0 }, { "FORD_PILLAR", 2, 0, -45 }, { "FORD_PILLAR", 2, 0, 45 } },
               -- (from breach_s to rise_until_s, one every rise_every_s, cycled, on a ring ring_m round where she stands)
               rise = { { "AB_SPLASH", 1 }, { "FORD_PILLAR", 2 }, { "IMPACT_L", 1 }, { "FORD_SPLASH", 3 } },
@@ -1566,15 +1572,21 @@ TANI.rise = { hold_s = 1.5, rate = 1.0, breach_s = 0.8, slam_s = 9.0, length_s =
               -- of where she stood: along her hull there, both sides)
               fall = { { "FORD_PILLAR", 2 }, { "MIST", 1 }, { "AB_SPLASH", 1 }, { "FORD_SPLASH", 3 } }, fall_every_s = 0.3,
               -- (at slam_s: { path, scale, forward m, starboard m })
-              slam = { { "ALCN_PILLAR_BIG", 1, -200, -50 }, { "ALCN_PILLAR_BIG", 1, -200, 50 }, { "ALCN_PILLAR_BIG", 1, 0, -55 },
-                       { "ALCN_PILLAR_BIG", 1, 0, 55 }, { "ALCN_PILLAR_BIG", 1, 200, -50 }, { "ALCN_PILLAR_BIG", 1, 200, 50 },
-                       { "ALCN_PILLAR_3", 1, 300, 0 }, { "AB_LAND_L", 1, -100, -70 }, { "AB_LAND_L", 1, 150, -70 },
-                       { "AB_LAND_R", 1, -100, 70 }, { "AB_LAND_R", 1, 150, 70 }, { "ALCN_BLAST", 1, 280, 0 } },
+              -- ((2026-11-12) the 2.8 km pillars out, as at the breach: c02_1st and the water blast at their spots)
+              slam = { { "ALCN_PILLAR_1", 2, -200, -50 }, { "ALCN_PILLAR_1", 2, -200, 50 }, { "ALCN_PILLAR_1", 2, 0, -55 },
+                       { "ALCN_PILLAR_1", 2, 0, 55 }, { "ALCN_PILLAR_1", 2, 200, -50 }, { "ALCN_PILLAR_1", 2, 200, 50 },
+                       { "ALCN_BLAST", 2, 300, 0 }, { "AB_LAND_L", 1, -100, -70 }, { "AB_LAND_L", 1, 150, -70 },
+                       { "AB_LAND_R", 1, -100, 70 }, { "AB_LAND_R", 1, 150, 70 }, { "ALCN_BLAST", 2, 280, 0 } },
               slam_pillars = { "FORD_PILLAR", 2 }, slam_pillar_m = 50,     -- (both sides, every slam_pillar_m stern to bow)
               slam_foam = { "FORD_FOAM", 2 }, slam_spots = 13,             -- (along her keel)
               settle = { "FOAM_IGC", 1 }, settle_every_s = 0.5, settle_until_s = 12.5,   -- (foam along her as she settles)
               shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios",
-              shake_km = 8 }
+              shake_km = 8,
+              -- ((2026-11-12) the user on 0.74.66: "the water height on the rise is too big now": a column 2 km tall stood
+              -- where she broke the surface long after the rise. Nothing stopped an effect: a cutscene's looping water (the
+              -- IGC ones) is switched off by its cutscene, never by itself. Every rise effect is now deactivated fx_life_s
+              -- after it's spawned (its particles fade out), whatever the rise is doing then)
+              fx_life_s = 8 }
 do
     local V, IGC = "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/", "/Game/OnlineMode/VFX/IGC/Emergency/"
     local BOSS = "/Game/OnlineMode/VFX/Vehicles/Boss/"
@@ -1582,6 +1594,7 @@ do
         SURF1 = BOSS .. "BA002_alcn/Niagara/NS_ex03_alcn_surfacing01_ON", SURF2 = BOSS .. "BA002_alcn/Niagara/NS_ex03_alcn_surfacing02_ON",
         SURF3 = BOSS .. "BA002_alcn/Niagara/NS_ex03_alcn_surfacing03_ON", SURF4 = BOSS .. "BA002_alcn/Niagara/NS_ex03_alcn_surfacing04_ON",
         ALCN_PILLAR_1 = IGC .. "EB002/ED/Niagara/NS_IGC_alcn_ED_WaterPillar_c02_1st_ON",
+        -- (ALCN_PILLAR_2 / _3 / _BIG: in no list since 2026-11-12: 2.4-2.8 km towers, see TANI.rise.breach)
         ALCN_PILLAR_2 = IGC .. "EB002/ED/Niagara/NS_IGC_alcn_ED_WaterPillar_c02_2nd_ON",
         ALCN_PILLAR_3 = IGC .. "EB002/ED/Niagara/NS_IGC_alcn_ED_WaterPillar_c03_ON",
         ALCN_PILLAR_BIG = IGC .. "EB002/ED/Niagara/NS_IGC_alcn_WaterPillar_c05_ON",
@@ -1605,6 +1618,29 @@ local function riseAsset(path, cls)                      -- an asset by path (a 
     if RA[full] then pin(RA[full], "the rise's " .. full:match("[^%.]+$")) end
     return RA[full]
 end
+-- ((2026-11-12) every effect the rise spawns, stopped fx_life_s on: { c, a, name, at } (hard rule 59: its address and name
+-- checked before it's touched); a tick of its own, so the rise's end doesn't leave one running; forgotten with the level)
+local FXLIVE = {}
+local function fxStop(e, why)
+    if liveAddr(e.c) == e.a and nameOf(e.c) == e.name then
+        if pcall(function() e.c:Deactivate() end) then return true end
+    end
+    return false
+end
+TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise fx", fn = function(now)
+    if #FXLIVE == 0 then return end
+    local keep, stopped = {}, 0
+    for _, e in ipairs(FXLIVE) do
+        if now >= e.at then
+            if fxStop(e) then stopped = stopped + 1 end
+        else
+            keep[#keep + 1] = e
+        end
+    end
+    FXLIVE = keep
+    if stopped > 0 then TANI.rise.fxStopped = (TANI.rise.fxStopped or 0) + stopped end
+end }
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["tanicorn rise fx"] = function() FXLIVE = {} end end
 local function riseFx(path, where, n)                    -- an AC8 effect at a place: whether one came back, live
     local lib, sys = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary"), riseAsset(path)
     if not (valid(lib) and sys and liveObj(survivalPC)) then return false end
@@ -1616,8 +1652,11 @@ local function riseFx(path, where, n)                    -- an AC8 effect at a p
     end)
     if not (ok and c) then return false end
     local okV, v = pcall(function() return c:IsValid() end)
-    return okV and v == true
+    if not (okV and v == true) then return false end
+    FXLIVE[#FXLIVE + 1] = { c = c, a = addrOf(c), name = nameOf(c), at = os.clock() + (TANI.rise.fx_life_s or 8) }
+    return true
 end
+TANI.rise.spawnFx = riseFx                                -- (tani_vls_test's: the spawn and its stop)
 local function riseSound(path, where)
     local ev, ak = riseAsset(path), StaticFindObject("/Script/AkAudio.Default__AkGameplayStatics")
     if not (ev and valid(ak) and liveObj(survivalPC)) then return false end
@@ -1930,7 +1969,8 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
         R.fxSaid = true
         local miss = {}
         for k, n in pairs(R.fx.by) do miss[#miss + 1] = k .. " x" .. n end
-        log(string.format("tanicorn: rise effects: %d of %d came back (%d sprays)%s", R.fx.up, R.fx.of, R.sprays or 0,
+        log(string.format("tanicorn: rise effects: %d of %d came back (%d sprays; %d stopped so far, each %s s after its spawn)%s",
+            R.fx.up, R.fx.of, R.sprays or 0, TANI.rise.fxStopped or 0, tostring(TANI.rise.fx_life_s),
             #miss > 0 and ("; NOT: " .. table.concat(miss, ", ")) or ""))
     end
     local okI, still = pcall(function() return R.rig:IsPlaying() end)
