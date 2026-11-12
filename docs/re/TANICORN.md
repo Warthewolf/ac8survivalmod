@@ -333,9 +333,12 @@ docs/design/INVINCIBLE_FLEET.md). Research of 2026-11-12 (a workflow, each repor
   (damage 200, 18 km). Route (WP11 M3): live mounts on the T16 pattern with a row of ours with no NpcWeaponId (the
   StrafingRailgun's way), their Deploy and the railcannon's charge and shot scripted in Lua.
 
-What 0.74.66 does (Lua and data, no re-cook; sv_tanicorn.lua TANI.armour, sv_tanicorn_hits.lua): her hull SetIsInvincible,
+What 0.74.66 does. Cooked (tools/tanicorn/spec.py, 31b505d): every part's DamagedStateComponent.InducedExplosionSystem a
+LiveInducedExplosionSystemArrangement at the Aegis turrets' values and bIsInvincibleInducedExplosion on its CDO, both hulls
+bCanBeDamaged False. At run time (sv_tanicorn.lua TANI.armour, the same again with a read-back; sv_tanicorn_hits.lua): her hull SetIsInvincible,
 bIsInvincible, bCanBeDamaged false at its spawn (Ctrl+Y / Ctrl+R / Ctrl+L); each live part, at the watch's first tick,
 bCauseExplosionOnDeath false, bIsInvincibleInducedExplosion true, its InducedExplosionSystem written to the Aegis turrets'
 values; the parts' rows x5 (T5 200, CIWS 150, LASER 150, VLS 200, T16 400); a hit probe (`tanicorn hits: ...`). Untested in
 game: whether these writes after spawn take (the probe's start lines read them back), whether bCanBeDamaged False is
-honoured on an AI hull of ours. Next: the same cooked into the blueprints (spec.py), then her core and the Alicorn's weapons.
+honoured on an AI hull of ours. TANI.armour off skips only the run-time layer: an A/B of the chain needs a container cooked
+without spec.py's PART_IES / PART_CDO / HULL_CDO. Next: her core, then the Alicorn's weapons.

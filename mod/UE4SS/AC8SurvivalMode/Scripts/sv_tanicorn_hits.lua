@@ -81,15 +81,18 @@ local function over(why)
         P.changes, P.downs, P.gones))
     P = nil
 end
+-- ((2026-11-12, the review) closed with the level: levelDrop runs as the gate closes, before any test tick could see it)
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["tanicorn hits"] = function() if P then over("the level left") end end end
 TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn hits", fn = function(now)
     if not (TANI and TANI.armoured) then return end
-    if P and (not D or (levelTorn and levelTorn())) then over("the level left"); return end
+    if P and (not D or (levelTorn and levelTorn())) then over("the level left"); return end   -- (a backstop)
     if not D then return end
+    if P and P.D ~= D then over("a new run") end         -- (a restart in the same level: a new D, the world kept)
     local hulls = {}
     for _, h in ipairs(TANI.armoured) do if same(h) then hulls[#hulls + 1] = h end end
     if not P then
         if #hulls == 0 then return end                    -- (a probe starts with a hull of ours up, its clock from there)
-        P = { t0 = now, objs = {}, n = 0, reads = 0, changes = 0, downs = 0, gones = 0, typeSaid = {} }
+        P = { t0 = now, D = D, objs = {}, n = 0, reads = 0, changes = 0, downs = 0, gones = 0, typeSaid = {} }
     end
     for _, h in ipairs(hulls) do add(now, h.o, h.a, h.name, "HULL " .. short(h.o), "hull", nil) end
     local seen = TANI.liveSeen and TANI.liveSeen()

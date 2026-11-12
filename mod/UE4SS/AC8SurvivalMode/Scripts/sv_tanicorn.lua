@@ -152,8 +152,9 @@ for _, k in ipairs(TANI.vls) do TANI.live.row_health[k.key] = k.health end   -- 
 -- bCanBeDamaged False; here SetIsInvincible too, GEOFON's route, which sv_core.lua finishUnpaid undoes: hard rule 63);
 -- parts, no part's death sets off its neighbours (every part kept AC8's native induced explosion, radius 100 and damage
 -- 100 not limited to its parent, over parts 14-23 m apart: one hit, a chain): bCauseExplosionOnDeath off,
--- bIsInvincibleInducedExplosion on and its InducedExplosionSystem at the stock Aegis turrets' values (ies). Off: the
--- hull or parts as built (an A/B test of the cause)
+-- bIsInvincibleInducedExplosion on and its InducedExplosionSystem at the stock Aegis turrets' values (ies). Off: this
+-- run-time layer skipped, the hull or parts as COOKED: from 31b505d tools/tanicorn/spec.py cooks the same values into the
+-- blueprints, so an A/B of the reported chain needs a container cooked without spec.py's PART_IES / PART_CDO / HULL_CDO
 TANI.armour = { hull = true, parts = true, ies = { ExplosionRadius = 0, HitDistance = 0, bIsExplosionDamageParentOnly = true,
                                                    damage = 20 } }
 do
@@ -1063,7 +1064,7 @@ local function hullArmour(o, why)
     ARMOUR[akey(o)] = true
     TANI.armoured[#TANI.armoured + 1] = { o = o, a = addrOf(o), name = nameOf(o), why = why }   -- (armour on or not: the probe's)
     if not TANI.armour.hull then
-        log(string.format("tanicorn: armour (%s): OFF for the hull %s (TANI.armour.hull false: the hull as built); read back %s", why,
+        log(string.format("tanicorn: armour (%s): OFF for the hull %s (TANI.armour.hull false: the run-time layer skipped, the hull as cooked); read back %s", why,
             (nameOf(o):match("([^%.:]+)$")) or "?", readBack(o, { "bIsInvincible", "bCanBeDamaged", "HealthInternal", "MaxHealth" })))
         return true
     end
@@ -1083,8 +1084,14 @@ local function partArmour(o)
     if not valid(o) or ARMOUR[akey(o)] then return nil end
     ARMOUR[akey(o)] = true
     if not TANI.armour.parts then
-        return "OFF (TANI.armour.parts false: as built); read back " .. readBack(o, { "bCauseExplosionOnDeath",
-            "bIsInvincibleInducedExplosion", "HealthInternal", "MaxHealth" })
+        local cooked = "none found"
+        pcall(function()
+            local x = o.DamagedStateComponent.InducedExplosionSystem
+            if valid(x) then cooked = readBack(x, { "ExplosionRadius", "HitDistance", "bIsExplosionDamageParentOnly", "damage" }) end
+        end)
+        return "OFF (TANI.armour.parts false: the run-time layer skipped, the part as cooked); read back " .. readBack(o,
+            { "bCauseExplosionOnDeath", "bIsInvincibleInducedExplosion", "HealthInternal", "MaxHealth" })
+            .. "; its induced explosion as cooked: " .. cooked
     end
     for f, v in pairs({ bCauseExplosionOnDeath = false, bIsInvincibleInducedExplosion = true }) do pcall(function() o[f] = v end) end
     local sys, n = nil, 0
@@ -1101,6 +1108,8 @@ end
 local function armourHulls(why)                          -- every hull of ours up now (a key's own look)
     for _, o in ipairs(ourHulls()) do hullArmour(o, why) end
 end
+-- forgotten with the level (levelDrop: the gate stops the test ticks before D goes, so the tick is only a backstop)
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["tanicorn armour"] = function() ARMOUR, TANI.armoured = {}, {} end end
 TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn armour", fn = function()
     if next(ARMOUR) ~= nil and (not D or (levelTorn and levelTorn())) then ARMOUR, TANI.armoured = {}, {} end
 end }
@@ -1370,12 +1379,16 @@ local function liveArmour(W, now)
     for _, line in ipairs(said) do log("tanicorn: armour: " .. line) end
     if n >= #TANI.live.parts or now - W.t0 > ARMOUR_S then
         W.armourDone = true
-        log(string.format("tanicorn: armour: %d of %d parts at +%.1f s (no death blast, none set off by a neighbour's; TANI.armour "
-            .. "parts %s)%s", n, #TANI.live.parts, now - W.t0, tostring(TANI.armour.parts),
+        log(string.format("tanicorn: armour: %d of %d parts at +%.1f s (%s)%s", n, #TANI.live.parts, now - W.t0,
+            TANI.armour.parts and "no death blast, none set off by a neighbour's"
+                or "OFF: the run-time layer skipped, the parts as cooked",
             n < #TANI.live.parts and ": the rest at their first look" or ""))
     end
 end
 function TANI.liveSeen() return LV and LV.seen or nil end
+-- ((2026-11-12, the review) the watch and the kept parts forgotten with the level: a test tick never runs between the gate
+-- closing and the next run's D, so their own `not D` checks can't)
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["tanicorn live"] = function() LV, KEPT = nil, nil end end
 
 local function liveLines(W, now)                         -- every every_s: each live part's health, aim and socket gap
     W.comps = partComps(W)
