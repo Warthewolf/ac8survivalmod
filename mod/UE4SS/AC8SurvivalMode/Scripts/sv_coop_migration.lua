@@ -508,6 +508,13 @@ local function onHostMessage(from, f)
     elseif k == "fx" then M.fxFromJoiner(from, f)       -- a joiner's shots: its plane here fires them, the others told
     elseif (k == "dw" or k == "rv") and DOWN and DOWN.onHost then DOWN.onHost(from, f)   -- (down, a revive: sv_down.lua)
     elseif k == "lb" and LB and LB.coopMsg then LB.coopMsg(f, from)   -- ((0.73.77, plan H2) a joiner's leaderboard name)
+    -- DEV ONLY BEGIN (THE DEAL: a joiner's vote, sv_deal.lua; the user's dev install only)
+    elseif k == "vt" then
+        if DEAL and DEAL.onVote then
+            local okVt, errVt = pcall(DEAL.onVote, from, f)
+            if not okVt then once("vt", "coop: a joiner's deal vote not read: " .. tostring(errVt)) end
+        end
+    -- DEV ONLY END
     elseif k == "in" then                                -- a joiner's intensity (sv_director.lua P4), once a second
         local i, c = inNum(f[2], 100), inNum(f[3], 100)
         local now = os.clock()
@@ -902,6 +909,13 @@ local function onJoinerMessage(f)
             local okZd, errZd = pcall(ZDIVE.fromHost, f)
             if not okZd then once("zd", "coop: the host's dive message not read: " .. tostring(errZd)) end
         end
+    -- DEV ONLY BEGIN (THE DEAL: the host's vote and its result, sv_deal.lua; the user's dev install only)
+    elseif (k == "dl" or k == "dr") and COOP.client() then
+        if DEAL and DEAL.fromHost then
+            local okDl, errDl = pcall(DEAL.fromHost, k, f)
+            if not okDl then once("deal" .. k, "coop: the host's " .. k .. " not read: " .. tostring(errDl)) end
+        end
+    -- DEV ONLY END
     elseif k == "sb" and COOP.client() then              -- ((0.74.0) a subtitle line of the host's round: SUB.say)
         local secs = tonumber(f[4])
         if SUB and SUB.sayHere and f[3] and f[3] ~= "" and (secs == nil or finite(secs, 60)) and levelReady() then

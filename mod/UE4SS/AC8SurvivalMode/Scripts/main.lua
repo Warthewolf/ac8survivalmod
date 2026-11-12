@@ -60,6 +60,7 @@ local MODULES = {
     "sv_coop_migration",           -- (sv_coop.lua's next piece: tools/lua_split_part.py)
     "sv_down",                     -- co-op's revives and the spectator camera (after sv_coop: its messages and players)
     "sv_audit",                    -- the run's audits in the log: targets, pay, sync (after sv_coop: its addCredits wrap)
+    "sv_deal",                     -- THE DEAL: WAR & HAYTHORN's Yes / No vote on a special, dev install only (after sv_audit)
     "sv_zfa44",                    -- the ZFA-44's test T0 (docs/re/ZFA44.md; test code only: empty in every zip)
     "sv_main",
 }

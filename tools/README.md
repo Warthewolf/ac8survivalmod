@@ -92,6 +92,8 @@ release keys below join in a test build: a key bound twice logs `test: Ctrl+<key
 | Ctrl+R | THE TANACORN's rise test: the hull rises on its rig with the cinematic; a hull already up (Ctrl+Y's or Ctrl+L's) rises where it is (test; TANI=1 builds) | sv_tanicorn.lua |
 | Ctrl+L | THE TANACORN with her 16 gun mounts and 16 VLS blocks live (BP_SV_Tani_HULLLIVE: 32 parts, each a child actor on its own rows, ordered 2.5 s after she appears) 5 km ahead, broadside; a line a part at +2 s and +8 s, its health and aim (a block: its lids) every 5 s for 2 minutes; the VLS watch as Ctrl+K's (test; TANI=1 builds: their world data) | sv_tanicorn.lua |
 | Ctrl+K | THE TANACORN's VLS test blocks (the deck block VLSD and the side block VLSS_L1, on SV_FCS_TaniVLS: the Aegis Mk 41's row, 8 cells) 3 km ahead across your path, turned to launch at you; their missiles logged, each block's lids opened when it fires and shut 6 s after (the VLS watch, 3 minutes) (test; TANI=1 builds) | sv_tanicorn.lua |
+| Ctrl+A / Ctrl+X | THE DEAL's vote: YES / NO while WAR & HAYTHORN's offer is open (dev install only: a DEV ONLY block, never in a TESTER zip; `CFG.specials.deal.keys`) | sv_deal.lua |
+| Ctrl+H | THE DEAL offered now, any round (dev install only) | sv_deal.lua |
 | Ctrl+B | GEOFON's V-break look (T1): the Ford 3.5 km ahead, its two meshes posed as a carrier broken in a V, then parting; again: off (test) | sv_fleet.lua |
 | Ctrl+G | GEOFON's stages (T2): the Ford 4 km ahead; again: 20 % of its health off a press, its fires, smoke and list at 66 % and 33 % (test) | sv_fleet.lua |
 | Ctrl+N | INVINCIBLE FLEET's fleet (WP7): its 15 ships at their course start ~30 km north-west of the runway, in formation, sailing in; their lines every 10 s; again: off (test) | sv_fleet.lua |

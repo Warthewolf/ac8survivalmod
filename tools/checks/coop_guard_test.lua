@@ -386,6 +386,7 @@ local function scene(side)
     if St then St.rate = {}; St.count = 0 end
     if DECOY and DECOY.rx then DECOY.rx.at, DECOY.rx.n = -100, 0 end
     if FISH and FISH.cl then FISH.cl = { haul = {}, weigh = {}, rows = {}, round = nil } end
+    if DEAL then DEAL.V, DEAL.J, DEAL.won = nil, nil, nil end   -- (THE DEAL, sv_deal.lua: the dev install's)
     LB.co = nil
     if ALLY and ALLY.state then ALLY.state().order = nil end
     tick()                                         -- (the new run here: COOP.tick builds its lists again)
@@ -394,6 +395,8 @@ local function scene(side)
     M.hostRunD, M.hlSkipAt = side ~= "host" and D or nil, nil
     if side == "host" then
         LB.co = { id = HEX, mine = true, squad = {}, n = 0, specials = {}, run = {} }   -- (the host's co-op run: "lb|n")
+        -- (THE DEAL's vote 1 open on the host: a joiner's "vt" answers it)
+        if DEAL then DEAL.V = { id = 1, round = 5, kind = "ladon", phase = "open", votes = {}, at = 0, closeAt = 1e9 } end
         peer(1); peer(2)
         ENEMY = obj("BP_OP1022_f16c_CP_C", { plane = true })
         M.byId[5] = { obj = ENEMY, unit = U1, ord = 1, addr = ENEMY.addr }
@@ -428,6 +431,7 @@ local TYPES = {
     { "host", "rv", { "rv", "2", "5000" } },
     { "host", "lb", { "lb", "n", HEX, "Bob" } },
     { "host", "in", { "in", "50", "40", "80", "2" } },
+    { "host", "vt", { "vt", "1", "1" } },                          -- (THE DEAL's vote, sv_deal.lua: the dev install's)
     -- the joiner's (onJoinerMessage and the parts it hands them to)
     { "join", "cf", { "cf", "1", "1", "@CF" } },
     { "join", "fx", { "fx", "2", "m:11:0" } },
@@ -465,6 +469,8 @@ local TYPES = {
     { "join", "dk", { "dk", "s", "bait", "1", "0", "1", "6" } },
     { "join", "zd", { "zd", "b", "1000", "2000", "30000", "3", "1" } },   -- ((2026-11-11) its own down, its dive's id)
     { "join", "sb", { "sb", "COMONA", "Hold on.", "4" } },
+    { "join", "dl", { "dl", "1", "ladon", "30", "1", "0" } },      -- (THE DEAL's open vote and its result: sv_deal.lua)
+    { "join", "dr", { "dr", "1", "1", "0", "1" } },
     { "join", "fh", { "fh", "1", "@CATCH", "12", "1000", "2000" } },
     { "join", "fsx", { "fsx", "fishing", "on", "1", "2", "3" } },
     { "join", "fw", { "fw", "1", "40", "3", "1", "@CATCH", "12", "0" } },
@@ -650,6 +656,7 @@ local EFFECT = {
     ["host rv"] = function() return sentHas("^1>rx|2|") end,               -- (player 3 isn't down: refused)
     ["host lb"] = function() return LB.co and LB.co.pnames and next(LB.co.pnames) ~= nil end,
     ["host in"] = function() return M.ints[1] and M.ints[1].i == 50 end,
+    ["host vt"] = function() return not DEAL or (DEAL.V and DEAL.V.votes[1] == 1) end,      -- (no DEAL: a release's copy)
     ["join cf"] = function() return logHas("^coop: playing with the host's settings") end,
     ["join fx"] = function() return logHas("coopfire") or true end,        -- (player 3's plane here not up: nothing fired)
     ["join ak"] = function() return RUN.bought.Wingmen == 1 end,
@@ -686,6 +693,8 @@ local EFFECT = {
     ["join dk"] = function() return DECOY.cs and DECOY.cs.state == "bait" end,
     ["join zd"] = function() return true end,
     ["join sb"] = function() return true end,
+    ["join dl"] = function() return not DEAL or (DEAL.J and DEAL.J.id == 1 and DEAL.J.phase == "open") end,
+    ["join dr"] = function() return not DEAL or (DEAL.J and DEAL.J.phase == "closed" and DEAL.won ~= nil) end,
     ["join fh"] = function() return FISH.cl.haul[1] ~= nil end,
     ["join fsx"] = function() return FISH.cl.rows.fishing ~= nil end,
     ["join fw"] = function() return FISH.cl.weigh[1] ~= nil end,
