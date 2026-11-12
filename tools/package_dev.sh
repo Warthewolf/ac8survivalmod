@@ -72,6 +72,9 @@ if [ "$TANI" = 1 ]; then
         [ -f "$TA/SurvivalMode_Tani_P.utoc" ] || { echo "TANI=1: no Tanicorn container in $TA (sh tools/tanicorn/build.sh)"; exit 1; }
         cp "$TA/SurvivalMode_Tani_P.utoc" "$TA/SurvivalMode_Tani_P.ucas" "$st/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/"
     fi
+    # ((2026-11-12, both weapons reviews' major) the container staged is the one the build checked and holds every class its
+    # world data imports (tools/tani_container.py; build/install/tani_wd.txt names them), else nothing is installed
+    python -I tools/tani_container.py verify "$st/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.utoc" build/install/tani_wd.txt || exit 1
     echo "TANI=1: the Tanicorn's container staged (Ctrl+T in a run: its test mount)"
 else
     rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*

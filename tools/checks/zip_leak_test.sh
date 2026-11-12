@@ -18,9 +18,11 @@ trap 'rm -rf "$T"' EXIT
 F="$T/root"
 mkdir -p "$F/tools/checks" "$F/runtime" "$F/release" "$F/build/runtime" "$F/build/install/SurvivalMode" "$F/out"
 for f in package_release.sh package_test.sh release_dir.sh env.sh zip_guard.sh strip_test_only.py quiet_logs.py edition.py \
-         coop_edition.py novalka.py nospaceport.py build_hash.py lb_register.py lua_parts.py dev_only.py; do
+         coop_edition.py novalka.py nospaceport.py build_hash.py lb_register.py lua_parts.py dev_only.py \
+         tani_container.py zenpkg.py; do
     cp "tools/$f" "$F/tools/"
 done
+mkdir -p "$F/tools/scripts" && cp tools/scripts/utoc.py tools/scripts/cityhash.py "$F/tools/scripts/"   # (tani_container.py's)
 cp tools/checks/lua_check.py "$F/tools/checks/"
 cp runtime/survival_rt.c "$F/runtime/"
 cp release/README.txt release/README_COOP.txt "$F/release/"
@@ -78,6 +80,41 @@ one "friends' COOP2MP ZFA=1" "AC8SurvivalMode_COOP2MP_*_Online_COOP_ZFA44.zip" 1
 echo "test zips (package_test.sh)"
 one "test zip" "AC8SurvivalMode_leak.zip" 0 sh tools/package_test.sh leak
 one "test zip ZFA=1" "AC8SurvivalMode_leak_ZFA44.zip" 1 env ZFA=1 sh tools/package_test.sh leak
+echo "a tester's zip WITH THE TANACORN (TESTER=1 TANI=1: the user's call of 2026-11-12)"
+# a made-up TANI=1 build: a container of THE TANACORN's real package names and the marker check_tanicorn_build writes
+python -X utf8 -I tools/checks/tani_container_test.py --make "$F/build/install/SurvivalMode" "$F/build/install/tani_wd.txt" \
+    > "$T/tani_make.txt" 2>&1 && r=0 || r=1
+check $r "a made-up TANI=1 build"
+for tv in "" 0; do
+    rm -f "$F/out"/*.zip
+    (cd "$F" && env RELEASE_DIR="$F/out" SV_LB_REGISTER=0 TESTER="$tv" TANI=1 ZFA=1 sh tools/package_release.sh online 9.9.5) \
+        > "$T/tani_no_tester.txt" 2>&1 && r=1 || r=0
+    [ -z "$(ls "$F/out"/*.zip 2>/dev/null)" ] || r=1
+    check $r "TANI=1 with TESTER=${tv:-unset}: refused, no zip"
+done
+rm -f "$F/out"/*.zip
+(cd "$F" && env RELEASE_DIR="$F/out" SV_LB_REGISTER=0 TESTER=1 TANI=1 ZFA=1 sh tools/package_release.sh online 9.9.7) \
+    > "$T/tani_tester.txt" 2>&1 && r=0 || r=1
+z=$(ls "$F/out"/*_TESTER_Online_ZFA44_TANACORN.zip 2>/dev/null | head -n 1)
+[ -n "$z" ] || r=1
+check $r "TESTER=1 TANI=1: packaged as ..._TESTER_Online_ZFA44_TANACORN.zip"
+if [ -n "$z" ]; then
+    holds "$z" SurvivalMode_Tani_P && holds "$z" SurvivalMode_P && r=0 || r=1
+    check $r "TESTER=1 TANI=1: her container and Survival's own in it"
+    grep -q "is the container the build checked" "$T/tani_tester.txt" && r=0 || r=1
+    check $r "TESTER=1 TANI=1: the container verified against the build's marker (tools/tani_container.py)"
+fi
+# the same build with its container changed after the build checked it (tools/tanicorn/build.sh run again, a copy from
+# elsewhere): refused, no zip
+printf 'x' >> "$F/build/install/SurvivalMode/SurvivalMode_Tani_P.ucas"
+rm -f "$F/out"/*.zip
+(cd "$F" && env RELEASE_DIR="$F/out" SV_LB_REGISTER=0 TESTER=1 TANI=1 ZFA=1 sh tools/package_release.sh online 9.9.8) \
+    > "$T/tani_changed.txt" 2>&1 && r=1 || r=0
+[ -z "$(ls "$F/out"/*.zip 2>/dev/null)" ] || r=1
+grep -q "is not the container this build checked" "$T/tani_changed.txt" || r=1
+check $r "TESTER=1 TANI=1 with the container changed since the build: refused, no zip"
+rm -f "$F/build/install/tani_wd.txt"
+for x in utoc ucas; do echo "SurvivalMode_Tani_P.$x" > "$F/build/install/SurvivalMode/SurvivalMode_Tani_P.$x"; done
 echo "zip_guard.sh"
 mkdir -p "$T/stage/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode"
 echo x > "$T/stage/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_P.utoc"
