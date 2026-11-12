@@ -7,7 +7,9 @@ name is invented. The checks: each section's key lines on each page (the host al
 together, a logs folder of two session zips), the clocks aligned and the disagreements found, every table's rows as
 wide as its head (nothing from a log breaks one), no raw HTML from a log, UE4SS.log's collapsed runs counted back, a
 200,000-line UE4SS.log streamed, and the checklist's anchors still in the code (--check-anchors). cases(): the smaller
-bundles (solo/, pair/, fork/, rolecrash/, a migrated joiner, damaged zips), each for rules the big two don't reach.
+bundles (solo/, pair/, fork/, rolecrash/, storeq/: 0.74.66's STOREQ on a host and a joiner, and the host's without a STORE
+window, a migrated joiner, damaged zips), each for rules the big two don't reach; the checklist's tables a build each
+(0.74.52's, 0.74.66's); storeq_rules(): 0.74.66's rows, the Errors section and the STOREQ table's bold agree.
 """
 import os, re, shutil, subprocess, sys, time, tracemalloc, zipfile
 
@@ -136,8 +138,12 @@ def main():
         '| down-1 | DOWN host | lua | `stats: you\'re down: your flying isn\'t measured` | when | not seen |',
         '| lag-1 | lag | native | `units: the last minute: N SV_UnitAlive asks` | yes | seen 2 (first 23:52:20) |',
         '> see www\\.example.com or https\\://example.com/x')                                   # (no autolink)
+    has('host', a, "- this build is older than 0.74.66: the checklist's 0.74.66 lines can't be in its logs",   # (0.74.52's:
+        'Kestrel (host) runs 0.74.52-coop2mp.144, older than 0.74.66: none of these can be there.',          # 0.74.66's
+        "| storeq | STORE joiner | lua | `storeq: the host's X held here: ...; fired here once it's shut` | when | not in its build |")
     once('host', a, '| Kestrel | 23:57:00 |', '| OSPREY | 23:58:00 |')                # (a DOWN said twice at once: one)
-    lacks('host', a, "can't be said now", '| 1 | 2026-11-11 23:52:00', '## Clocks', '## Where the games disagree')
+    lacks('host', a, "can't be said now", '| 1 | 2026-11-11 23:52:00', '## Clocks', '## Where the games disagree',
+          'STOREQ by window', 'older than 0.74.52')
 
     # ---- the joiner alone (the runtime's zip of one session)
     b = page('joiner', jzip)
@@ -201,7 +207,10 @@ def main():
     has('zip_of_zips', d3, '| Wren (joiner) | joiner', 'read from logs/AC8Survival\\_%s' % STAMP.replace('_', '\\_'),
         '| 5001 | 99.9% | `[Lua] [NoisyMod] Event work complete; polling stopped` |')
     d2 = page('logsdir_old', logs, '--session', '2026-11-10_18-00-00')
-    has('logsdir_old', d2, '0.74.50-coop2mp.142', 'older than 0.74.52: none of these can be there')
+    has('logsdir_old', d2, '0.74.50-coop2mp.142', 'older than 0.74.52: none of these can be there',
+        "- this build is older than 0.74.52: the checklist's lines can't be in its logs",          # (every table's)
+        'older than 0.74.66: none of these can be there',
+        '| lag-1 | lag | native | `units: the last minute: N SV_UnitAlive asks` | yes | not in its build |')
 
     # ---- a big UE4SS.log, streamed: its counts
     big = os.path.join(OUT, 'big')
@@ -221,6 +230,7 @@ def main():
 
     cases(host, jzip)
     stream_check()
+    storeq_rules()
 
     # ---- the checklist's lines still in the code, each regex taking its sample
     r = run('--check-anchors')
@@ -280,6 +290,75 @@ def cases(host, jzip):
     f = page('rolecrash', os.path.join(FIX, 'rolecrash'))           # (a slot's role, then a takeover: no role line)
     has('rolecrash', f, '| rolecrash (joiner) | joiner (player 2; later the host by migration) |')
 
+    # ---- 0.74.66's STOREQ (two players' folders: Vireo hosts, Linnet joins, her clock 2:00:00 ahead): the host's events
+    # fired in its STORE or on the airfield before it, fired again once it's shut (took, refused, never took, a bomber
+    # flight's orders given again), the joiner's held ones fired after her window (one not needed, one dropped, one behind
+    # another, a shuttle second not played late), one fired late into a long STORE, an error outside any window
+    f = page('storeq', os.path.join(FIX, 'storeq'))
+    well_formed('storeq', f)
+    has('storeq', f,
+        # the windows' own table: what the lines inside say
+        '| 1 | 20:03:20 | 20:04:10 | 0:50 | 2 | - | **RE\\_SV\\_AlcnRemove**, **RE\\_SV\\_AnomalyEnd**, **RE\\_SV\\_Escort\\_09** |',
+        '| 1 | 20:06:00 [22:06:00] | 20:07:30 [22:07:30] | 1:30 | 3 | - | \\~RE\\_SV\\_AwacsRemove (h) (held), \\~RE\\_SV\\_Escort\\_07 (h) (held)',
+        # the host's STOREQ: the one fired on the airfield before the STORE in its window, what came of each, the summary
+        '| 1 | RE\\_SV\\_DirFree\\_04 to fire again (on the airfield, before the STORE); bomber flight EA\\_Unit\\_02\\_Air0 appeared '
+        '(on the airfield, before the STORE): its orders read back; RE\\_SV\\_AnomalyEnd to fire again (STORE open); '
+        'RE\\_SV\\_AlcnRemove to fire again (STORE open); RE\\_SV\\_Escort\\_09 to fire again (STORE open); RE\\_SV\\_WolfFree\\_05A '
+        'to fire again (just after) | 20:04:13 5 to fire (AlcnRemove 1, AnomalyEnd 1, DirFree 1, Escort 1, WolfFree 1) | '
+        '20:03:12 bomber flight',
+        '; **20:04:13 RE\\_SV\\_Escort\\_09 not fired again here (not fired: the level is still loading)**; 20:04:16 RE\\_SV\\_AnomalyEnd took here '
+        '(SV\\_AnomalyUp 0); 20:04:16 RE\\_SV\\_PressureB fired again here after RE\\_SV\\_AnomalyEnd',
+        '; **20:04:22 RE\\_SV\\_AlcnRemove never took here in 3 tries (1 alive)**; 20:04:40 RE\\_SV\\_DirFree\\_04 fired again here; '
+        '20:04:40 RE\\_SV\\_WolfFree\\_05A fired again here | **20:04:40 Escort (refused 1); AnomalyEnd (took 1); AlcnRemove '
+        '(failed 1); DirFree (fired 1); WolfFree (fired 1)** |',
+        '| - | - | - | **20:30:00 gate error \\[string "sv\\_rounds.lua"\\]:1440: attempt to compare nil with number** | - |',
+        # the joiner's: held in her window, fired after it (on the host's clock, hers in brackets)
+        '| 1 | RE\\_SV\\_Escort\\_07 (h) held (STORE open); RE\\_SV\\_AwacsRemove (h) held (STORE open); \\~RE\\_SV\\_ShuttleT\\_148 (h) '
+        'not fired late (STORE open: nothing that lasts); RE\\_SV\\_LcacRemoveA (h) held (STORE open); RE\\_SV\\_DirFree\\_07 (h) '
+        'behind what\'s held (RE\\_SV\\_Escort\\_07 still to fire here before it) | 20:07:33 [22:07:33] 3 to fire (AwacsRemove 1, '
+        'Escort 1, LcacRemove 1) | 20:07:33 [22:07:33] RE\\_SV\\_AwacsRemove not fired here: its effect is in already '
+        '(SV\\_AwacsAir 0); 20:07:33 [22:07:33] RE\\_SV\\_LcacRemoveA not fired here: SV\\_Unit\\_LcacA spawned again since;',
+        '20:07:40 [22:07:40] RE\\_SV\\_Escort\\_07 fired here (held 90 s); 20:07:41 [22:07:41] RE\\_SV\\_DirFree\\_07 fired here (held 6 s) | '
+        '20:07:41 [22:07:41] ShuttleT (dropped 1); AwacsRemove (already 1); LcacRemove (dropped 1); Escort (fired 1); DirFree (fired 1) |',
+        '| 2 | RE\\_SV\\_AlcnAlertOff (h) held (STORE open) | - | **20:17:20 [22:17:20] RE\\_SV\\_AlcnAlertOff fired here 420 s after it '
+        'came, this game\'s STORE still open (as before) (fired)** | **20:18:03 [22:18:03] AlcnAlertOff (late 1)** |',
+        # its errors: the refusal, never took, a summary with them, the late fire and its summary, the errors; the
+        # checklist's 0.74.66 table
+        '`storeq: RE_SV_Escort_09 not fired again here (not fired: the level is still loading) (Escort: the first this time)`',
+        '| Linnet (joiner) | 1 | lua | 20:18:03 [22:18:03] | 20:18:03 [22:18:03] | `storeq: done here: AlcnAlertOff (late 1)` |',
+        '`storeq: RE_SV_AlcnRemove never took here in 3 tries (1 alive) (AlcnRemove: the first this time)`',
+        '`storeq: done here: Escort (refused 1); AnomalyEnd (took 1)', "this game's STORE still open (as before) (fired) (AlcnAlertOff",
+        "`coop: the STORE's held events here: error [string \"sv_rounds_store.lua\"]:530",
+        '## Checklist: new log lines (0.74.52, 0.74.66)', "### 0.74.66's",
+        "| storeq | STORE joiner | lua | `storeq: the host's X held here: ...; fired here once it's shut` | when | seen 4 (first 20:06:10 [22:06:10]) | not seen |",
+        '| storeq | STORE | lua | `storeq: X never took here in N tries` | no | not seen | seen 1 (first 20:04:22) |',
+        '| storeq | STORE bombers | lua | `storeq: bomber flight X has its orders here` | when | not seen | seen 1 (first 20:04:17) |',
+        "| storeq | STORE | lua | `coop: the STORE's (check of X\\|hold here\\|held events here): error ` | no | seen 1 (first 20:25:00 [22:25:00]) | not seen |",
+        '| storeq | STORE | lua | `storeq: done here: ` | when | seen 2 (first 20:07:41 [22:07:41]) | seen 1 (first 20:04:40) |',
+        "| storeq | STORE joiner | lua | `storeq: X fired here N s after it came, this game's STORE still open` | no | "
+        'seen 1 (first 20:17:20 [22:17:20]) | not seen |',
+        '| Linnet (joiner) | +2:00:00 | 4 round clears | 0 s |')
+    if f.count('STOREQ by window (- none of them):') != 2:                    # (one a game)
+        fails.append('storeq: %d STOREQ tables, not 2' % f.count('STOREQ by window (- none of them):'))
+    lacks('storeq', f, 'older than 0.74.66', 'not in its build |',
+          '`storeq: RE_SV_AwacsRemove not fired here', "`storeq: RE_SV_AlcnRemove didn't take here", '`storeq: done here: ShuttleT',
+          "`storeq: the host's RE_SV_ShuttleT_148", '`storeq: RE_SV_LcacRemoveA not fired here')      # (routine: not errors)
+
+    nowin = os.path.join(OUT, 'storeq_nowin')
+    shutil.rmtree(nowin, ignore_errors=True)
+    os.makedirs(nowin)
+    with open(os.path.join(FIX, 'storeq', 'vireo', 'AC8SurvivalMode_lua.log'), encoding='utf-8') as a, \
+            open(os.path.join(nowin, 'AC8SurvivalMode_lua.log'), 'w', encoding='utf-8', newline='\n') as b:
+        b.write(''.join(x for x in a if ' music: ' not in x))
+    f = page('storeq_nowin', nowin)
+    well_formed('storeq_nowin', f)
+    has('storeq_nowin', f, 'No STORE window.\n\nSTOREQ by window (- none of them):\n\n| # |',
+        '| - | RE\\_SV\\_DirFree\\_04 to fire again (on the airfield, before the STORE); ',
+        '**20:30:00 gate error \\[string "sv\\_rounds.lua"\\]:1440: attempt to compare nil with number** | ')
+    m = re.search(r'STOREQ by window \(- none of them\):\n\n\|[^\n]*\n\|[^\n]*\n((?:\|[^\n]*\n)*)', f)
+    if not m or [x[:4] for x in m.group(1).splitlines()] != ['| - ']:
+        fails.append('storeq_nowin: its STOREQ table is not the one row -')
+
     # ---- a joiner that became the host by migration and started rounds: its joiner rounds kept, the same run
     mig = os.path.join(OUT, 'migrated')
     shutil.rmtree(mig, ignore_errors=True)
@@ -315,6 +394,31 @@ def cases(host, jzip):
         fh.seek(i.header_offset + 30 + n + m)
         fh.write(b'\xff')
     has('bad_deflate', page('bad_deflate', bad), 'AC8SurvivalMode\\_lua.log could not be read to its end (error)')
+
+
+def storeq_rules():
+    """0.74.66's checklist, the Errors section and the STOREQ table say the same: a row's sample is counted in Errors and
+    bold in the table when its expect is no (a sign of trouble), and only then; a summary (a when row, whatever it holds)
+    when a failure, refusal or late fire is in it"""
+    sys.path.insert(0, os.path.join(ROOT, 'tools'))
+    import log_report as L
+    import log_report_page as P
+
+    def counted(x):
+        return bool(L.ISSUE.search(x)) and not L.NOT_ISSUE.search(x)
+    for c in L.CHECKS_0_74_66:
+        x, bad = c[5], c[6] == 'no'
+        if x.startswith('storeq: done here: '):
+            continue
+        if counted(x) != bad:
+            fails.append('storeq rules: %s in Errors, its row expects %s: %s' % ('counted' if counted(x) else 'not counted', c[6], x[:90]))
+        if x.startswith('storeq: ') and bool(P.SQ_TROUBLE.search(x)) != bad:
+            fails.append('storeq rules: %s in the STOREQ table, its row expects %s: %s' % ('bold' if not bad else 'not bold', c[6], x[:90]))
+    for x, bad in [('storeq: done here: AlcnAlertOff (late 1)', True), ('storeq: done here: Escort (refused 1); DirFree (fired 1)', True),
+                   ('storeq: done here: AlcnRemove (failed 1)', True), ('storeq: done here: ShuttleT (dropped 1); AwacsRemove '
+                   '(already 1); HeavyRoute (unread 1); AnomalyEnd (took 1); Escort (fired 1)', False)]:
+        if counted(x) != bad:
+            fails.append('storeq rules: the summary %r %s in Errors' % (x, 'not counted' if bad else 'counted'))
 
 
 def stream_check():

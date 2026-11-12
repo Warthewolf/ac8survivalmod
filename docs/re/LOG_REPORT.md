@@ -10,6 +10,12 @@ all of them": the log report tool after the investigations of Saint Alessia's 50
       --no-ue4ss        skip UE4SS.log (the slowest file: ~5 s for her 396 MB)
       --check-anchors   the checklist's lines still in the code (and each regex taking its sample); exit 1 if not
 
+Two files (2026-11-12: no source file over 2,000 lines): tools/log_report.py reads (the bundles, the clocks, the rules,
+the checklist, Game and its parsers, the rounds, the clocks of several games, --check-anchors, main) and its part
+tools/log_report_page.py writes the page (Page, every section, report), imported back whole at log_report.py's end, as
+tools/build_survival.py's parts are. log_report.py puts its own folder on sys.path (python -I leaves it off), so it runs
+from any working folder. Run and import log_report.py, never the part.
+
 ## What it reads
 A bundle is a folder or a .zip, or a single .log:
 - the old layout (runtime 0.32.31 and before): `AC8SurvivalMode_lua.log`, `AC8SurvivalMode.log`,
@@ -36,7 +42,7 @@ in code spans).
 - **Build**: each game's role (host: `co-op run X started: this game hosts it`; joiner: `the host's (the host sends
   it)`; later the host by migration), Lua and runtime versions, build hash, session stamp, files, UE4SS's mods, the
   crumbs' last line (a hang or a crash shows there), crash folders and their `<ErrorMessage>`, `bundle.txt`'s summary,
-  and the player's `report.txt` quoted.
+  the player's `report.txt` quoted, and the checklist's builds newer than the game's (their lines can't be there).
 - **Clocks** (several bundles): every time is on the reference game's clock (the host's), each other game's own time
   in [brackets]. A joiner's offset is the median of its round clears (`round N cleared (the host's round)`, `ROUND N
   COMPLETE`) minus the host's (`round N clear`), the densest 20 s cluster; with the matches and their spread. The Lua
@@ -70,6 +76,19 @@ in code spans).
   also list what the reference's (the host's) log fired in them, its clock aligned: Delta's 18 windows hold the host's
   RE_SV_StrikeAegis*, AllyDefend/Hunt*, Escort_01/08/19, RadioRaidB. Her shuttle run shows its `lifted off (countdown
   over ...)` inside her STORE at 18:47:43.
+  From 0.74.66 (STOREQ, Scripts/sv_rounds_store.lua: hard rule 64's one-shots fired again once the STORE is shut; its
+  `storeq: ...` lines, docs/re/COOP.md section 13) a second table under each game's windows, a row a window: what its
+  gate held or saw fired while it was shut (a joiner's `the host's X held here`, a host's `X fired while ...: fired again
+  here once it's shut`, a shuttle second `not fired here: ... nothing that lasts`, a bomber flight watched, one `goes
+  behind what's held here`), the counts as the gate opened (`this game's events can take again: N to fire here in order
+  (<kind> n, ...)`, `N more to fire ... behind`), each one's outcome after it (`took here`, `fired here (held N s)`,
+  `fired again here, N s after it was lost`, `not fired here: its effect is in already`, `... spawned again since`, the
+  retries, a bomber flight's orders given again) and the queue's summary (`done here: <kind> (took n, ...)`); bold:
+  never took, refused (`not fired again here (not fired: ...)`), fired late into a STORE (`... 420 s after it came, this
+  game's STORE still open`), a flight left without its orders, an error. The log names only the first of each kind a
+  spell (the counts and the summary have the rest). A line that starts a queue goes to the window it's in, or the one it
+  comes up to 120 s before (the gate shuts on the airfield, before the STORE opens); what follows it, to that queue's
+  window; an error, to the window it's in, else the row `-` (none).
 - **DOWN and revives**: each player's DOWN (`down: you're down`, `YOU'RE DOWN`, `X DOWN` callouts; one said again within
   30 s is the same), back (`revive: back (revived by X)`, `X BACK`), or left / run over; the price from the host's
   `revive: player N revived player M for P` (matched by the revived slot). Names are matched as sv_down.lua gives them
@@ -91,10 +110,15 @@ in code spans).
   board already` line after an answer refines it, not a second answer), each with its lines.
 - **Errors and refusals**: lines with error / FAILED / refused / NOT / not fired / could not / given up / didn't resolve ... grouped by
   shape (numbers and ids as N / X), counts like `0 failed` and routine `can't be said now` left out; the game's own
-  `Saved/Logs` errors.
+  `Saved/Logs` errors. STOREQ's: `never took here`, `never had its orders`, a fire late into a STORE, `its orders not
+  given again`, `its orders not checked`, an old event package's bomber retask (`whether they took isn't readable`), a
+  refusal and a summary with failed / refused / late in (the lines its checklist expects `no`, and the summaries); its
+  routine `not fired ...` (not needed, undone, spawned again since, a shuttle second), retries and clean summaries left
+  out.
 - **UE4SS.log**: lines, size, span, lines by source (her Falken Red Gloss: 99.2%), the most repeated shapes, error-looking
   lines of other mods (Survival's own are in its log).
-- **Checklist: 0.74.52's new log lines**: seen N times (first) or not, per game. `yes` every run, `when` only when it
+- **Checklist: new log lines (0.74.52, 0.74.66)**: a table a build (0.74.52's fixes; 0.74.66's STOREQ), seen N times
+  (first) or not, per game; `not in its build` for a game older than the table's. `yes` every run, `when` only when it
   happens, `no` a sign of trouble.
 - **Where the games disagree** (several bundles): round clears more than 5 s apart after the offset, rounds one game
   started that the other has no start of, a player's own DOWN against the reference's, and the event package's flags
@@ -103,10 +127,14 @@ in code spans).
   on her game, by 00:09:43 on Delta's.
 
 ## The checklist
-`CHECKS` in tools/log_report.py: (fix, area, log, a regex at the line's start, an anchor: a literal of the code that
-prints it, a sample line, expect). For the next build's fixes add their lines there; `--check-anchors` (run by
-tools/checks/log_report_test.sh) fails when an anchor left the code (a reworded log line) or a regex doesn't take its
-sample. The page says when a game's build is older than 0.74.52 (none can be there).
+`CHECK_GROUPS` in tools/log_report.py: (build, where its lines come from, its rows), each row (fix, area, log, a regex at
+the line's start, an anchor: a literal of the code that prints it, or a tuple of them, each one there, a sample line,
+expect); `CHECKS` is every group's rows in order. For the next build's fixes add a group (`CHECKS_0_74_NN`) with their
+lines; `--check-anchors` (run by tools/checks/log_report_test.sh) fails when an anchor left the code (a reworded log line)
+or a regex doesn't take its sample. The page says when a game's build is older than a group's (none of its lines can be
+there): 0.74.52's (46 lines: lag, ZFA-44s, Spaceport, DOWN, revives, leaderboard, co-op, Alicorn, shuttle) and 0.74.66's
+(35: STOREQ's `storeq: ...` lines on a host, a joiner and for bomber flights, and the `coop: the STORE's ...: error`
+lines of its callers' pcalls).
 
 ## Tried on (2026-11-11)
 Saint Alessia's 50-round host bundle (0.74.36, 5.3 MB Lua log, 396 MB UE4SS.log) with Delta's (joiner): 6 s, offset
@@ -135,6 +163,15 @@ tools/checks/log_report_test.sh (Python; Windows Git Bash and Linux): made-up bu
 - `fork/` (link lost, gone, `X is also the host`, back as another slot), `rolecrash/` (a slot's role, then a takeover),
   the joiner with rounds after its host migration (made by the test), a cut session zip and a zip with a broken deflate
   stream;
+- `storeq/` (0.74.66; two players' folders, the joiner's clock 2:00:00 ahead): the host's STOREQ lines (one fired on the
+  airfield before its STORE and one in the gate's 3 s after it, both in that window's row, took, refused, never took
+  after its retries, a bomber flight's orders given again, the throttle's preset after a boss's end, the summary in
+  bold), the joiner's (held in her window, one not needed, one dropped as its unit spawned again, one behind another, a
+  shuttle second not played late, one fired 420 s late in a long STORE and its summary), an error outside any window;
+  the routine lines kept out of the errors, the troubles in; the checklist's 0.74.66 table seen per game, and on the
+  0.74.52 and 0.74.50 pages `not in its build`; the host's log without its music lines (made by the test): no STORE
+  window, its STOREQ table one row `-`; and each 0.74.66 row's sample in Errors and bold in the STOREQ table when its
+  expect is `no`, and only then (a summary when a failure, refusal or late fire is in it);
 - every table's rows as wide as its head (a pipe after an even run of backslashes ends a cell), no raw tag from a log,
   the collapsed UE4SS copy counted back, a 200,000-line UE4SS.log streamed (its count, and scan_ue4ss's peak memory
   under 4 MB for a 16 MB file), `--check-anchors`. Pages in build/checks/log_report.

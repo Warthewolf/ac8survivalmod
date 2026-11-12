@@ -507,12 +507,13 @@ local function wavesTick(S, now)
     -- (the flights are 2-, 4- and 6-ships: an even count, at least min_n, at most max_n and the room left)
     local top = math.min(hi, room)
     local want = 2 * math.random(math.ceil(lo / 2), math.max(math.ceil(lo / 2), math.floor(top / 2)))
-    local list, got = ESC.waveFlights(want, aliveOf, noneUp)
-    if got < lo then
+    local list, got, free = ESC.waveFlights(want, aliveOf, noneUp, lo, top)
+    if got < lo then                                 -- (no mix of the free flights from min_n up to max_n and the room)
         S.reinf.at = now + 5
         if not S.reinf.noneSaid then
             S.reinf.noneSaid = true
-            log(string.format("escort: wave %d held: free flights for only %d aircraft (min_n %d)", S.reinf.n + 1, got, lo))
+            log(string.format("escort: wave %d held: the free flights (%d aircraft) make no wave of %d to %d (min_n, max_n / the room)",
+                S.reinf.n + 1, tonumber(free) or got, lo, top))
         end
         return
     end

@@ -508,7 +508,7 @@ if rawEvent then
         if hostDownSkips(name) then r = -20 else r = rawEvent(name, ...) end
         if STOREQ and STOREQ.fired then
             local okQ, errQ = pcall(STOREQ.fired, name, r, okB and c0 or nil)
-            if not okQ then once("storeq", "coop: the STORE's check of " .. tostring(name) .. ": error " .. tostring(errQ)) end
+            if not okQ then once("storeqcheck", "coop: the STORE's check of " .. tostring(name) .. ": error " .. tostring(errQ)) end
         end
         local nm = tostring(name)
         if nm:find("Remove", 1, true) or nm:find("Off_", 1, true) or nm:find("RunOver", 1, true) or nm:find("Destroy", 1, true) then
