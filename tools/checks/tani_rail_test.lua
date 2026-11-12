@@ -75,7 +75,7 @@ function NotifyOnNewObject() end
 local FINDS = {}
 function FindAllOf(c) return FINDS[c] end
 function FindFirstOf() return nil end
-local PAUSED, ONAF, OTHERS = false, false, 0
+local PAUSED, ONAF, OTHERS, LANDING = false, false, 0, false
 function gamePaused() return PAUSED end
 function playerOnAirfield() return ONAF end
 function othersFlying() return OTHERS end
@@ -165,7 +165,13 @@ end
 for _, l in ipairs({ NIAG, SNDLIB, AKLIB }) do nextA = nextA + 0x10; l.__addr, l.__name = nextA, "lib " .. nextA; LIVE[nextA] = l end
 SPC = { V = { comps = function(o, cls) return (o.comps and o.comps[cls]) or {} end,
               PART_FLAGS = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true } },
-        playerMissileDamage = function() return 80, "BP_plwp_msl_a0" end }
+        playerMissileDamage = function() return 80, "BP_plwp_msl_a0" end,
+        -- (sv_rounds_shuttle.lua's: down at the airfield before this visit's STORE, on the rounds' clock)
+        storeShut = function(now)
+            if type(now) ~= "number" then error("SPC.storeShut wants the rounds' clock") end
+            if LANDING then return false, "you're down at the airfield, your STORE not open yet" end
+            return true, nil
+        end }
 local SHAKES = 0
 local pawn = obj("pawn", { K2_GetActorRotation = function() return { Yaw = 0 } end })
 survivalPC = obj("pc", { Pawn = pawn, ClientStartCameraShake = function() SHAKES = SHAKES + 1 end })
@@ -198,7 +204,8 @@ local function railgun(key, name, at, part)
         return { X = base.X + 1074 * math.cos(p) * math.cos(y), Y = base.Y + 1074 * math.cos(p) * math.sin(y), Z = base.Z + 1074 * math.sin(p) }
     end
     function pm:K2_GetComponentLocation() return { X = at.X, Y = at.Y, Z = at.Z } end
-    local lm = { HUDControl = 0, IsDispRadarMap = false, ForceAlertDisp = false }
+    local lmv = { HUDControl = 0, IsDispRadarMap = false, ForceAlertDisp = false }   -- (its writes in SEQ: before the order?)
+    local lm = setmetatable({}, { __index = lmv, __newindex = function(_, f, v) lmv[f] = v; SEQ[#SEQ + 1] = "hud " .. key .. " " .. f end })
     function lm:GetClass() return { GetFName = function() return { ToString = function() return "LiveFCSModule_LauncherTripleRailCannon" end } end } end
     local root = { GetAttachParent = function() return { GetFName = function() return { ToString = function() return part end } end } end }
     local o = obj("BP_SV_Tani_" .. key .. "_C " .. name, { at = at, HealthInternal = 4000, MaxHealth = 400, RootComponent = root,
@@ -403,6 +410,11 @@ check(dl ~= nil, "its lift read back up, SOC_Gun_01 raised (" .. tostring(dl or 
 check(fired("RE_SV_TaniRailOrderL") == 0 and logged("RAILGUN_L order held: the STORE is open", n0 + 1) ~= nil,
     "the STORE open: its order held (hard rule 64)")
 D.musicHold = nil
+PAUSED = true
+tick()
+check(fired("RE_SV_TaniRailOrderL") == 0 and logged("RAILGUN_L order held: the game paused (held through it)", n0 + 1) ~= nil,
+    "the game paused: its order held (hard rule 60)")
+PAUSED = false
 tick()
 local ol = logged("tanicorn rail: RAILGUN_L RE_SV_TaniRailOrderL fired (try 1, its deploy read back); railgun HUD "
     .. "LiveFCSModule_LauncherTripleRailCannon: written; read back IsDispRadarMap true, ForceAlertDisp true, HUDControl 1", n0 + 1)
@@ -415,6 +427,9 @@ for i, s in ipairs(SEQ) do
 end
 for i = lastWrite + 1, #SEQ do if SEQ[i] == "read RAILGUN_L lift" and not firstRead then firstRead = i end end
 check(firstOrder and firstRead and firstRead < firstOrder and lastWrite < firstRead, "the order only after the last write's read-back")
+local hudAt
+for i, s in ipairs(SEQ) do if s == "hud RAILGUN_L HUDControl" and not hudAt then hudAt = i end end
+check(hudAt and firstOrder and hudAt < firstOrder, "its railgun HUD written BEFORE its order (hard rule 45)")
 -- the stuck one: written twice, never ordered
 ticks(2)
 check(logged("tanicorn rail: RAILGUN_R its lift reads z -600 cm after its deploy: the end pose written again (2 of 2)", n0 + 1) ~= nil
@@ -497,6 +512,8 @@ check(dep and dep:find("shield off (4 flags written, SetIsInvincible(false) call
     .. "false, bIsNotFCSTargets false, bIsInvincible false)", 1, true) ~= nil and rc.inv == false, "its shield off, the flags as they were")
 check(dep and dep:find("health set to 8.0 missiles (6400 HealthInternal: 80 x 10 x 8.0, players 1)", 1, true) ~= nil
     and rc.HealthInternal == 6400, "its health sized: 8 of your missiles (solo)")
+check(logged("tanicorn rc: charge 1 at +", n0 + 1) == nil, "no charge in its deploy's tick (it waits for a tick nothing holds)")
+tick()
 
 print("the railcannon's charges")
 local c1 = logged("tanicorn rc: charge 1 at +", n0 + 1)
@@ -643,10 +660,15 @@ local other = railcannon("intruder", { X = 0, Y = 0, Z = 0 }, rc.__addr)
 other.bShowHUDBox, other.bIsInvincible = "untouched", "untouched"
 posts = #POSTS
 n0 = #LOG
+local cores = #CORE
 tick()
-check(logged("tanicorn rc: cycle over (its actor is gone)", n0 + 1) ~= nil and #other.mesh.calls == 0 and other.inv == nil
-    and other.bShowHUDBox == "untouched" and posted("AKE_BA002_alcn_Cannon_Charge_Stop", nil, posts + 1) == 0,
-    "another object at its address: the cycle over, nothing done to it (hard rule 59)")
+check(logged("tanicorn rc: Part_RAILCANNON gone with her hull up: taken as shot down at +", n0 + 1) ~= nil
+    and logged("its charge sound left (its actor gone: nothing posted on it)", n0 + 1) ~= nil
+    and logged("tanicorn rc: cycle over (shot down)", n0 + 1) ~= nil and #CORE == cores + 1
+    and logged("callout: TANACORN RAILCANNON DOWN / THE AIRFIELD IS SAFE", n0 + 1) ~= nil,
+    "gone with her hull up: shot down, as the Alicorn's parts (its callout, TANI.coreOpen)")
+check(#other.mesh.calls == 0 and other.inv == nil and other.bShowHUDBox == "untouched"
+    and posted("AKE_BA002_alcn_Cannon_Charge_Stop", nil, posts + 1) == 0, "nothing done to the object at its address now (hard rule 59)")
 -- the socket refused: her discharge on the root at the muzzle's place
 print("her discharge's fallback: the part's root")
 rc = railcannon("rc2", { X = 530000, Y = 0, Z = 1000 })
@@ -670,6 +692,43 @@ check(cr ~= nil and cr:find("NS_alcn_RailCannonDischarge_ON up on its root (SOC_
 check(logged("health kept at 10000 HealthInternal (16.0 missiles of 80 would be 12800: only ever lowered, never above its row's)", n0 + 1) ~= nil
     and rc.HealthInternal == 10000, "three players: 16 missiles, capped at its row's")
 NIAG.refuseSocket = nil
+
+print("down at the airfield, a Deploy that doesn't show up, your missile's damage read late")
+KEYS.H()                                                 -- (rc2's cycle stopped and stowed)
+local rc3 = railcannon("rc3", { X = 530000, Y = 0, Z = 1000 })
+for _, c in ipairs(HULL.pcomps) do if c.socket == "RAILCANNON" then c.ChildActor = rc3 end end
+COOP.players = function() return { {} } end
+n0 = #LOG
+KEYS.L()
+check(untilLog("tanicorn rc: Part_RAILCANNON BP_SV_Tani_RAILCANNON_C rc3 seen: shielded while stowed", 8, n0 + 1) ~= nil, "rc3 seen")
+LANDING = true
+KEYS.H()
+check(logged("Ctrl+H refused: you're down at the airfield, your STORE not open yet (an event fired there runs nothing: hard rule 64)",
+    n0 + 1) ~= nil, "Ctrl+H down at the airfield before its STORE: refused (the landing minigames, hard rule 64)")
+LANDING = false
+local play3 = rc3.mesh.Play
+rc3.mesh.Play = function(self, l) self.calls[#self.calls + 1] = "Play " .. tostring(l) end   -- (its Deploy never plays)
+local eA = #EVENTS
+KEYS.H()
+local np1 = untilLog("tanicorn rc: its Deploy not up at +3.4 s", 30, n0 + 1)
+local np2 = untilLog("tanicorn rc: NOT deployed:", 30, n0 + 1)
+check(np1 ~= nil and np1:find("SOC_Gun_01 z 1567 cm in the mesh (from 1567; raised: at least 2500): played again (1 of 1), "
+    .. "still shielded", 1, true) ~= nil, "its Deploy not up: played again once (" .. tostring(np1) .. ")")
+check(np2 ~= nil and np2:find("after 2 plays: kept shielded, no charge", 1, true) ~= nil and rc3.inv == true and rc3.bIsInvincible == true
+    and fired("RE_SV_AlcnAlertOn", eA + 1) == 0 and logged("tanicorn rc: cycle over (its Deploy didn't take)", n0 + 1) ~= nil,
+    "still not up: left shielded, no charge, no warning (" .. tostring(np2) .. ")")
+rc3.mesh.Play = play3                                    -- (its own again: plays)
+local reads = 0
+local md = SPC.playerMissileDamage
+SPC.playerMissileDamage = function() reads = reads + 1; if reads < 3 then return nil end return 80 end
+n0 = #LOG
+KEYS.H()
+local dp3 = untilLog("tanicorn rc: deployed at +", 30, n0 + 1)
+check(dp3 ~= nil and dp3:find("its health left at its row's (your missile's damage unread, try 1 of 5: again in 2 s): 10000", 1, true) ~= nil,
+    "your missile's damage unread at its deploy: its row's health for now (" .. tostring(dp3) .. ")")
+local hs3 = untilLog("tanicorn rc: health: health set to 8.0 missiles (6400 HealthInternal", 40, n0 + 1)
+check(hs3 ~= nil and rc3.HealthInternal == 6400 and reads == 3, "read again every 2 s: sized at the third read (" .. tostring(hs3) .. ")")
+SPC.playerMissileDamage = md
 KEYS.H()
 -- a torn level: forgotten
 levelTorn = function() return true end

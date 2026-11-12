@@ -17,14 +17,18 @@
 --   `tries`, and again move_s after the STORE shuts. Its lift read every check_s and written again if it fell back.
 -- The railcannon (Ctrl+H, on Ctrl+L's live hull): shielded while stowed from the first tick it's seen (the Alicorn's part
 --   flags SPC.V.PART_FLAGS and SetIsInvincible). A press plays its Deploy (AS_SV_Tani_RAILCANNON_Deploy on its TurretMesh,
---   the VLS lids' calls); at deploy_s the shield comes off and its health is sized in your standard missiles (missiles, +50 %
+--   the VLS lids' calls); at deploy_s, its muzzle up as drawn (SOC_Gun_01 at least raised_cm up; else played again redeploys
+--   times, then left stowed and shielded with no charge), the shield comes off and its health is sized in your standard
+--   missiles (read again every 2 s while unread, size_tries; missiles, +50 %
 --   of them for each other player, never above its row's); then a charge: the RAILGUN WARNING (RE_SV_AlcnAlertOn), the
 --   callout THE TANACORN IS AIMING AT THE AIRFIELD, the Alicorn's railgun radio, her discharge effect on SOC_Gun_01, her
 --   cannon's charge sounds and its RTPC; at charge_s the shot (AC8's own muzzle, streak and impact effects only: hard rule
 --   58; every effect stopped after its life), the round on the runway after its flight, damage on the airfield there (the
 --   host's: AF.bomb, none with the airfield down or off), the warning off; the next charge every_s after the last one
---   started, while it lives. Shot down mid-charge: everything off, no impact, a callout, TANI.coreOpen (stage 3's hook);
---   a round already in flight still lands (flight_lands). Its clock holds while paused (hard rule 60), in the STORE and
+--   started, while it lives (the first at the first tick nothing holds). Shot down mid-charge (or gone with her hull up,
+--   as the Alicorn's parts): everything off, no impact, a callout, TANI.coreOpen (stage 3's hook);
+--   a round already in flight still lands (flight_lands). Its clock holds while paused (hard rule 60), in the STORE and the
+--   landing minigames (busy: SPC.storeShut, hard rule 64) and
 --   while you're landed with nobody else flying. Ctrl+H again: stowed, shielded and stopped. Refused outside a run, on a
 --   joiner, in the STORE, with no live hull, with no Part_RAILCANNON child or with it down.
 -- Logged (the railguns `tanicorn rail: ...`, the railcannon `tanicorn rc: ...`):
@@ -63,6 +67,17 @@ local function joiner() return COOP ~= nil and type(COOP.client) == "function" a
 local function paused() return type(gamePaused) == "function" and gamePaused(survivalPC) == true end
 -- the landing STORE open (sv_fleet.lua OFF.store, sv_coop_sync.lua's inStore: its music held, the STORE's widget shown)
 local function store() return D ~= nil and D.musicHold == 1 and not (LANDW ~= nil and LANDW.wasShown == false) end
+-- (hard rule 64; the review of 2026-11-12, finding 4) why this game's own events would run nothing now, or nil: the STORE
+-- open, or SPC.storeShut's landing minigames (down at the airfield before this visit's STORE, and 3 s after either). Asked on
+-- the rounds' clock (D.now: the clock SPC.gate keeps, never os.clock); with no D.now, the STORE alone
+local function busy()
+    if store() then return "the STORE is open" end
+    if SPC and type(SPC.storeShut) == "function" and D and type(D.now) == "number" then
+        local ok, open, why = pcall(SPC.storeShut, D.now)
+        if ok and open == false then return tostring(why or "the landing minigames") end
+    end
+    return nil
+end
 local function landedAlone()                              -- you on the airfield with nobody else flying (sv_rounds.lua's)
     if type(playerOnAirfield) ~= "function" then return false end
     local ok, on = pcall(playerOnAirfield)
@@ -222,7 +237,7 @@ end
 local function railHud(e)
     local lm, cls = nil, "?"
     pcall(function() lm = e.o.FireControlSystemComponent.AllArms[1].LauncherModule end)
-    if lm == nil then return "not written: no arm / launcher read" end
+    if lm == nil then return "not written: no arm / launcher read", false end
     pcall(function() cls = lm:GetClass():GetFName():ToString() end)
     local okW = pcall(function() lm.IsDispRadarMap = true; lm.ForceAlertDisp = true; lm.HUDControl = 1 end)
     local rb = {}
@@ -230,36 +245,43 @@ local function railHud(e)
         local ok, v = pcall(function() return lm[f] end)
         rb[#rb + 1] = f .. " " .. (ok and tostring(v) or "?")
     end
-    return string.format("%s: %s; read back %s", cls, okW and "written" or "NOT written (not a TripleRailCannon?)", table.concat(rb, ", "))
+    return string.format("%s: %s; read back %s", cls, okW and "written" or "NOT written (not a TripleRailCannon?)", table.concat(rb, ", ")), okW
 end
 local function orderTry(e, now, why)
     local G = TANI.railgun
     if joiner() then e.state = "up"; gunLog(e, "up: not ordered here (a joiner: the host orders it)"); return end
     if now < (e.retryAt or 0) then return end
-    if store() then
-        if not e.storeSaid then e.storeSaid = true; gunLog(e, "order held: the STORE is open (an event fired there runs nothing: hard rule 64)") end
+    local held, note = nil, nil                          -- (held while paused, hard rule 60, and through the STORE and the
+    if paused() then held, note = "the game paused", "held through it"   -- landing minigames, hard rule 64)
+    else held = busy(); note = "an event fired there runs nothing: hard rule 64" end
+    if held then
+        if e.storeSaid ~= held then e.storeSaid = held; gunLog(e, "order held: " .. held .. " (" .. note .. ")") end
         return
     end
     e.storeSaid = nil
+    local hud = ""
+    if not e.hudDone then                                -- (hard rule 45 BEFORE its order; at the next order again until written)
+        local txt, done = railHud(e)
+        e.hudDone, hud = done == true, "; railgun HUD " .. tostring(txt)
+    end
     local ev = ORDER[e.k.key]
     local ok, err = fire(ev)
     e.tries = e.tries + 1
     if ok then
-        local hud = ""
-        if not e.hudDone then e.hudDone = true; hud = "; railgun HUD " .. railHud(e) end
         e.aim0, e.orderAt, e.checkAt, e.storeSeen, e.state = barrel(e), now, now + G.move_s, false, "ordered"
         gunLog(e, string.format("%s fired (try %d, %s)%s", ev, e.tries, why, hud))
     elseif e.tries >= G.tries then
         e.state = "gave up"
-        gunLog(e, string.format("%s NOT fired (%s) after %d tries: gave up", ev, tostring(err), e.tries))
+        gunLog(e, string.format("%s NOT fired (%s) after %d tries: gave up%s", ev, tostring(err), e.tries, hud))
     else
         e.retryAt = now + G.move_s
-        gunLog(e, string.format("%s NOT fired (%s, try %d): again in %s s", ev, tostring(err), e.tries, g(G.move_s)))
+        gunLog(e, string.format("%s NOT fired (%s, try %d): again in %s s%s", ev, tostring(err), e.tries, g(G.move_s), hud))
     end
 end
 local function orderCheck(e, now)                        -- (hard rule 64) its barrel moved since the order, or the order again
     local G = TANI.railgun
-    if store() then e.checkAt, e.storeSeen = now + G.move_s, true; return end   -- (the AI held there: looked at after)
+    if paused() then e.checkAt = now + G.move_s; return end                     -- (the world frozen: looked at after)
+    if busy() then e.checkAt, e.storeSeen = now + G.move_s, true; return end    -- (the AI held there: looked at after)
     if now < e.checkAt then return end
     local a = barrel(e)
     if not (a and e.aim0) then
@@ -417,14 +439,19 @@ end
 -- its health in your standard missiles (SPC.playerMissileDamage: HealthInternal is health x 10), once an object, only lowered
 local function sizeHealth(c)
     if SH and SH.sized then return "its health sized before: " .. tostring((hp(RC.o))) end
-    if SH then SH.sized = true end
     local d
     if SPC and type(SPC.playerMissileDamage) == "function" then
         local ok, v = pcall(SPC.playerMissileDamage)
         if ok then d = tonumber(v) end
     end
     local h0 = hp(RC.o)
-    if not d or d <= 0 then return "its health left at its row's (your missile's damage unread): " .. tostring(h0) end
+    if not d or d <= 0 then                              -- (read again every 2 s, size_tries in all: the Alicorn's 5)
+        local n, most = 1, num(c.size_tries, 5)
+        if SH then SH.tries = (SH.tries or 0) + 1; n = SH.tries; if n >= most then SH.sized = true end end
+        return string.format("its health left at its row's (your missile's damage unread, try %d of %s%s): %s", n, g(most),
+            n < most and ": again in 2 s" or "", tostring(h0))
+    end
+    if SH then SH.sized = true end
     local players = 1
     if COOP and type(COOP.players) == "function" then
         local ok, l = pcall(COOP.players)
@@ -442,7 +469,7 @@ local function sizeHealth(c)
 end
 local function alert(on)                                 -- the RAILGUN WARNING (forwarded to every game; hard rule 45)
     local ev = on and "RE_SV_AlcnAlertOn" or "RE_SV_AlcnAlertOff"
-    if not on and store() then PEND[ev] = true; return false, "held for the STORE's end (hard rule 64)" end
+    if not on and busy() then PEND[ev] = true; return false, "held for the STORE's end (hard rule 64)" end
     return fire(ev)
 end
 local function target(c, centre)                          -- a spot on the runway (its centre, or spread along / across it)
@@ -576,14 +603,17 @@ local function rcEnd(why, opt)                            -- the cycle over: its
     rcLog(string.format("cycle over (%s) at +%.1f s: %d charges, %d shots, %d impacts (-%d airfield in all)%s", why, R.t, R.n, R.shots,
         R.impacts, R.dealt, #done > 0 and ("; " .. table.concat(done, ", ")) or ""))
 end
-local function rcDown()                                   -- shot down (health 0): no impact from a charge, a round in flight lands
-    local c = rcc() or {}
+local function rcDown(gone)                               -- shot down (health 0, or gone): no impact from a charge, a round in
+    local c = rcc() or {}                                 -- flight lands
     local R = RC
     local done = {}
     R.dead = true
     if R.state == "charge" then
-        local okS = postOn((c.sound or {}).charge_stop, R.o)
-        done[#done + 1] = "its charge sound " .. (okS and "stopped" or "NOT stopped")
+        if gone then done[#done + 1] = "its charge sound left (its actor gone: nothing posted on it)"
+        else
+            local okS = postOn((c.sound or {}).charge_stop, R.o)
+            done[#done + 1] = "its charge sound " .. (okS and "stopped" or "NOT stopped")
+        end
         if fxStop(R.cfx) then done[#done + 1] = "its charge effect off" end
         R.cfx = nil
     end
@@ -594,7 +624,8 @@ local function rcDown()                                   -- shot down (health 0
     end
     local lands = R.state == "flight" and c.flight_lands ~= false
     hudCallout(text("down", "TANACORN RAILCANNON DOWN"), text("down_sub", "THE AIRFIELD IS SAFE"))
-    rcLog(string.format("Part_RAILCANNON shot down at +%.1f s (in its %s): %s; %s", R.t, R.state,
+    rcLog(string.format("Part_RAILCANNON %s at +%.1f s (in its %s): %s; %s", gone and "gone with her hull up: taken as shot down"
+        or "shot down", R.t, R.state,
         #done > 0 and table.concat(done, ", ") or "nothing to stop",
         lands and "its round in flight still lands" or "no impact"))
     if TANI.coreOpen then pcall(TANI.coreOpen, "the railcannon down") end
@@ -691,6 +722,26 @@ local function deployEnd()
     pcall(function() pos = string.format("%.2f", R.mesh:GetPosition()) end)
     pcall(function() len = string.format("%.2f", R.anim:GetPlayLength()) end)
     local z1, P = sockZ(R.mesh), target(c, true)
+    local up = num(c.raised_cm, 2500)                    -- ((the review, finding 2) as the railguns': never from inside her hull)
+    if not (z1 and z1 >= up) then
+        R.redeploys = (R.redeploys or 0) + 1
+        local what = string.format("position %s of %s s, SOC_Gun_01 z %s cm in the mesh (from %s; raised: at least %s)", pos, len, cm(z1),
+            cm(R.z0), g(up))
+        if R.redeploys <= num(c.redeploys, 1) then
+            local fails = {}
+            if not pcall(function() R.mesh:SetPosition(0, false) end) then fails[#fails + 1] = "SetPosition 0 FAILED" end
+            if not pcall(function() R.mesh:SetPlayRate(1) end) then fails[#fails + 1] = "SetPlayRate FAILED" end
+            if not pcall(function() R.mesh:Play(false) end) then fails[#fails + 1] = "Play FAILED" end
+            R.t = 0
+            rcLog(string.format("its Deploy not up at +%.1f s: %s: played again (%d of %s), still shielded%s", num(c.deploy_s, 3.4), what,
+                R.redeploys, g(num(c.redeploys, 1)), #fails > 0 and ("; " .. table.concat(fails, ", ")) or ""))
+            return
+        end
+        rcLog(string.format("NOT deployed: %s after %d plays: kept shielded, no charge (a railcannon inside her hull doesn't fire)",
+            what, R.redeploys))
+        rcEnd("its Deploy didn't take")
+        return
+    end
     local off = offDeg(R.mesh, P)
     local M = muzzleAt()
     local km_ = M and math.sqrt((P.X - M.X) ^ 2 + (P.Y - M.Y) ^ 2) / 1e5 or nil
@@ -700,13 +751,14 @@ local function deployEnd()
         .. "the barrel %s deg off the line to the runway (%s km); shield off (%s); %s", R.t, pos, len, cm(z1), cm(R.z0),
         (z1 and R.z0) and string.format("%+.1f", (z1 - R.z0) / 100) or "?", off and string.format("%.0f", off) or "?",
         km_ and string.format("%.1f", km_) or "?", sh, sizeHealth(c)))
-    chargeStart()
-end
+    R.state, R.chargeAt, R.sizeAt = "wait", R.t - num(c.every_s, 90), R.t + 2   -- ((finding 6) the first charge at the next
+end                                                       -- tick nothing holds: the STORE, landed alone, the airfield down)
 local function holdWhy(c)                                 -- why the cycle's clock waits now, or nil
     local H = c.hold or {}
     if H.paused ~= false and paused() then return "the game paused" end
     if RC.state == "deploy" then return nil end           -- (its Deploy plays in the world: only a pause holds it)
     if H.store ~= false and store() then return "the STORE open" end
+    if H.store ~= false then local b = busy(); if b then return b end end
     if H.landed_alone ~= false and landedAlone() then return "you landed with nobody else flying" end
     if RC.state == "wait" and H.af_down ~= false and AF and AF.down then return "the airfield down" end
     return nil
@@ -716,10 +768,18 @@ local function rcTick(now, dt)
     local R = RC
     if R.D ~= D then rcEnd("a new run"); return end
     if not R.dead then                                    -- (shot down with a round in flight: only the round's left)
-        if not same(R) then rcEnd("its actor is gone"); return end
-        if not (TANI.liveHull and TANI.liveHull()) then rcEnd("the hull is gone"); return end
-        local h = hp(R.o)
-        if h and h <= 0 then rcDown(); if not RC then return end end
+        local H = TANI.liveHull and TANI.liveHull()
+        if not H or (R.hull ~= nil and H ~= R.hull) then rcEnd("the hull is gone"); return end
+        if not same(R) then                               -- ((the review, finding 3) gone, her hull up: shot down, as the
+            rcDown(true); if not RC then return end       -- Alicorn's parts; nothing done to what's at its address now)
+        else
+            local h = hp(R.o)
+            if h and h <= 0 then rcDown(); if not RC then return end end
+        end
+    end
+    if not R.dead and R.sizeAt and R.t >= R.sizeAt and SH and SH.a == R.a and SH.name == R.name and not SH.sized then
+        R.sizeAt = R.t + 2
+        rcLog("health: " .. sizeHealth(c))
     end
     if R.alertOn and R.alertOffW and now >= R.alertOffW then   -- (the warning off_after_s after its impact, on the wall's
         local okA, whyA = alert(false)                         -- clock: no hold keeps it up; in the STORE it waits there)
@@ -803,6 +863,8 @@ function TANI.rcStart(why)
     if not (D and D.now) or not nativeReady() then return no("outside a Survival run", "NOT IN A RUN") end
     if joiner() then return no("the host's railcannon (you're a joiner)", "THE HOST'S") end
     if store() then return no("the STORE is open (an event fired there runs nothing: hard rule 64)", "NOT IN THE STORE") end
+    local b = busy()
+    if b then return no(b .. " (an event fired there runs nothing: hard rule 64)", "NOT NOW") end
     local c = rcc()
     if not c or c.enabled == false then return no("off (CFG.specials.fleet.railcannon)", "OFF") end
     if not (TANI.liveHull and TANI.liveHull()) then return no("no live hull of ours up: Ctrl+L first", "CTRL+L FIRST") end
@@ -832,7 +894,7 @@ function TANI.rcStart(why)
     pcall(function() len = string.format("%.2f", anim:GetPlayLength()) end)
     pcall(function() pos = string.format("%.2f", m:GetPosition()) end)
     RC = { D = D, o = e.o, a = e.a, name = e.name, mesh = m, anim = anim, state = "deploy", t = 0, n = 0, shots = 0, impacts = 0,
-           dealt = 0, z0 = z0 }
+           dealt = 0, z0 = z0, hull = TANI.liveHull() }
     rcLog(string.format("%s: deploying (AS_SV_Tani_RAILCANNON_Deploy %s s on TurretMesh, from %s s; SOC_Gun_01 z %s cm in the mesh%s); "
         .. "the shield off and the first charge at +%.1f s", why, len, pos, cm(z0), #fails > 0 and ("; " .. table.concat(fails, ", ")) or "",
         num(c.deploy_s, 3.4)))
@@ -866,7 +928,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rail", fn = function(now)
         TRAIL = left
     end
     for ev in pairs(PEND) do                              -- (hard rule 64: held through the STORE, fired once it's shut)
-        if not store() then
+        if not busy() then
             PEND[ev] = nil
             local ok, why = fire(ev)
             rcLog(string.format("%s fired after the STORE%s", ev, ok and "" or (": NOT (" .. tostring(why) .. ")")))

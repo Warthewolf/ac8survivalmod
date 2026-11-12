@@ -331,6 +331,9 @@ VLS_FCS = {'search': 'AIR_ONLY', 'capture_cm': 700000, 'min_cm': 60000, 'cone': 
            'weapon': VLS_MISSILE, 'hit_pad_cm': 200}
 
 
+RC_HIT_CM = 700                                     # (the railcannon's hit spheres: railcannon_mount)
+
+
 def railcannon_mount(part, info):
     """(2026-11-12, stage 4) THE TANACORN's bow railcannon as a live part, BP_SV_Tani_RAILCANNON on the gun mounts' native
     ALiveAIGroundVehicleObject, no arms (the stock Alicorn's railcannon has no weapon either; its charged shot at the airfield
@@ -339,8 +342,11 @@ def railcannon_mount(part, info):
                    railcannon_pitch) in single-node mode on AS_SV_Tani_RAILCANNON_Deploy held at 0 (stowed), always posed and
                    refreshed (the rise rig's flags: its muzzle socket right with nobody looking); Lua plays it
       the wreck    as the mounts': TurretMesh hidden, SM_SV_Tani_RAILCANNON_DAM shown
-      the hit      two spheres (the part is about 106 m long): one round the bay at its root, one 30 m back from the muzzle on
-                   SOC_Gun_01, so it follows the barrel as it rises"""
+      the hit      a chain of RC_HIT_CM spheres, none wider (the part is about 106 m long): one round its root (the bay), seven on
+                   SOC_Gun_01 back along the barrel to its pivot, 14 m apart, so they follow the barrel as it rises. The bow's
+                   side VLS blocks (VLSS_L1-L3 / R1-R3) stand 14-20 m off her centreline beside it: two 25 m spheres (its first
+                   cook) took their hits, the stowed railcannon shielded, so those blocks couldn't be shot (the review of
+                   2026-11-12); the chain clears each block's 6 m sphere by 9 m or more"""
     name = f'Tani_{part}'
     assert info.get('kind') == 'railcannon' and (info.get('anim') or {}).get('name') == 'Deploy', (part, info.get('kind'))
     assert [x['name'] for x in info['sockets']] == ['SOC_Gun_01'], info['sockets']
@@ -359,9 +365,11 @@ def railcannon_mount(part, info):
             {'name': 'DamagedStaticMesh', 'class': 'StaticMeshComponent', 'parent': 'RootComponent',
              'props': {'StaticMesh': obj(f'{DEST}/Model/SM_SV_{name}_DAM'), 'bVisible': 'False'}},
             {'name': 'DamagedCollision', 'class': 'SphereComponent', 'parent': 'RootComponent',
-             'props': {'SphereRadius': '2500', 'RelativeLocation': '(X=1500,Y=0,Z=1100)', 'BodyInstance': hit}},
-            {'name': 'DamagedCollisionBarrel', 'class': 'SphereComponent', 'parent': 'TurretMesh', 'socket': 'SOC_Gun_01',
-             'props': {'SphereRadius': '2500', 'RelativeLocation': '(X=-3000,Y=0,Z=0)', 'BodyInstance': hit}},
+             'props': {'SphereRadius': str(RC_HIT_CM), 'RelativeLocation': '(X=0,Y=0,Z=900)', 'BodyInstance': hit}},
+        ] + [
+            {'name': f'DamagedCollisionBarrel{i}', 'class': 'SphereComponent', 'parent': 'TurretMesh', 'socket': 'SOC_Gun_01',
+             'props': {'SphereRadius': str(RC_HIT_CM), 'RelativeLocation': f'(X={-700 - 1400 * i},Y=0,Z=0)', 'BodyInstance': hit}}
+            for i in range(7)
         ],
         'cdo': {
             'AutoPossessAI': 'PlacedInWorldOrSpawned',

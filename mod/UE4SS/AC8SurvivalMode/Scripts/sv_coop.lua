@@ -458,6 +458,10 @@ local KEEP_EVENTS = {
     -- ((2026-11-11) the Spaceport Retake's rockets, sv_spaceport.lua: the mark that the host's climbs end its rockets,
     -- set on the host alone (a joiner's set back to 0), and a joiner's own end of a rocket on the host's "rk")
     "^RE_SV_SpRocketHost", "^RE_SV_SpRocketEnd",
+    -- DEV ONLY BEGIN ((2026-11-12) THE TANACORN's railguns, sv_tanicorn_rail.lua: each ordered on the host once ITS copy
+    -- reads raised; a joiner's copy is never raised, and ordered it would fire from inside her hull. Kept where that part is)
+    "^RE_SV_TaniRailOrder",
+    -- DEV ONLY END
 }                              -- ((code review of 2026-11-07, finding 1) the carriers' RE_SV_CargoLaunch_<s>_<n> is
                                -- forwarded for the look: each joiner's copy of the ship launches ZFA-44s of its own, which
                                -- M.standInSet takes as the host's allies' (sv_escort.lua ESC.localZfa), hostEvent takes the

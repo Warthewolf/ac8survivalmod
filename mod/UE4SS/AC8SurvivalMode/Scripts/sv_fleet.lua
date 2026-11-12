@@ -137,10 +137,12 @@ CFG.specials.fleet = {
     -- (AC8's player TLS, User.BeamLength: "the players tls worked", 0.74.65) or a trail (the main gun's bullet trail every
     -- step_km as the round passes), the impact the GR036 main cannon's blast, her railcannon's and DECOY's ground set; her
     -- cannon's charge sounds (by name, on the railcannon: BA002_alcn's Cannon bank) with the RTPC rtpc_from -> rtpc_to over
-    -- charge_sound_s; max_off_deg under 180 holds the shot until her bow points within it
+    -- charge_sound_s; max_off_deg under 180 holds the shot until her bow points within it. Its Deploy must show up
+    -- (SOC_Gun_01 at least raised_cm up in its mesh as drawn: stowed ~1567, up ~3454) or it's played again redeploys times,
+    -- then left stowed and shielded with no charge; your missile's damage read size_tries times for its health
     railcannon = {
         enabled = true, deploy_s = 3.4, charge_s = 30, every_s = 90, damage = 100, damage_of_max = true,
-        missiles = 8, per_player = 0.5,
+        missiles = 8, per_player = 0.5, raised_cm = 2500, redeploys = 1, size_tries = 5,
         speed_kms = 11.1, flight_min_s = 0.5, flight_lands = true,
         runway = { 1609574, -435747, 500, -23 }, spread_m = 600, across_m = 15, max_off_deg = 180,
         alert = { enabled = true, off_after_s = 3 }, warn_left_s = 10, radio = true,

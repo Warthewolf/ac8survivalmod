@@ -382,7 +382,10 @@ def check_fleet_build():
 # role (1:1: no null import, unlike the ZFA's laser), its launcher a LauncherTripleRailCannon (the x40a RailGun's class
 # and template ids: the TripleRailCannon VALKA fired on our exact bones) for hard rule 45's minimap line and RAILGUN
 # WARNING, its properties rewritten BY NAME (an unversioned subclass gives its own fields the low indexes: copied by
-# index, BoneControl's first fields read back as HUDControl ...); its search 18 km. Its row TANI_RAIL_FCS (the T16's
+# index, BoneControl's first fields read back as HUDControl ...); its arm's search 18 km, its fire 18 km (CaptureDistance).
+# (The generator review of 2026-11-12: the row's AI module Turret500, kept, sets a turret's search in game (30 km:
+# docs/re/AIRFIELD_SUPPLY.md 4a), so they likely track from 30 km and fire inside 18 km; the ZFA's row clears its module
+# for the arm's own, untried on a turret.) Its row TANI_RAIL_FCS (the T16's
 # NPC_FCS_VesselArtillery000 copied: its AI module Turret500 kept, its NpcWeaponId (Artillery_Vessel_000: damage 40,
 # 4000 km/h) cleared so the round keeps its own values) in a table of its own (DT_SV_NpcFCS holds the ZFA's row only:
 # check_zfa_laser_build), which Scripts/sv_tanicorn.lua copies whole into DT_NPC_FCS at the main menu. Imports only
@@ -398,7 +401,8 @@ TANI_RAIL_PERFORMANCE = {'FireRate': 6, 'MagazineCapacity': 1, 'ReloadTime': 10.
 TANI_RAIL_FIRE_CONTROL = {'CaptureDistance': 1800000.0, 'CaptureMinDistance': 10000.0, 'CaptureAngleRange': 10.0,
                           'ActivationTime': 0.6, 'TriggeringTime': 10.0, 'TriggerCount': 1, 'ShotIntervalTime': 10.0,
                           'RestingTime': 10.0, 'PredictionOffsetTime': 0.5}
-TANI_RAIL_SEARCH_CM = (1800000.0, 1900000.0)        # its AIControlCommon's lock / loss radius (cm): the round's 18 km
+TANI_RAIL_SEARCH_CM = (1800000.0, 1900000.0)        # its AIControlCommon's lock / loss radius (cm): the round's 18 km (the
+                                                    # row's Turret500 module likely searches 30 km over it: above)
 TANI_RAIL_ROW_VALUES = {'FireRate': 6, 'MagazineCapacity': 1, 'ReloadTime': 10.0, 'SlotNum': 1, 'bEnableSpinUp': True,
                         'SpinUpTime': 3.0, 'PredictionOffsetTime': 0.5, 'CaptureDistance': 18000.0, 'CaptureMinDistance': 100.0,
                         'CaptureAngleRange': 10.0, 'ActivationTime': 0.6, 'TriggeringTime': 10.0, 'TriggerCount': 1,
@@ -551,7 +555,18 @@ def check_tani_rail_build():
         assert want in lua, f'Scripts/sv_tanicorn.lua TANI.rail_fcs: no {want}'
     got_l = re.findall(r'\{ rail = "([A-Z_]+)", tag = "([A-Za-z]+)"', lua)
     assert got_l == [(m['part'], m['tag']) for m in se.TANI_RAIL], ('Scripts/sv_tanicorn.lua TANI.rail', got_l)
+    # ((the generator review of 2026-11-12, finding 5) what Lua fires and sizes, the world data's: a railgun's event named
+    # otherwise in either never orders it (SV_Event on a name with no trigger), a health otherwise rows Lua's live watch wrong)
+    hl = re.search(r'health = p\.cannon and ([0-9.]+) or ([0-9.]+)', lua)
+    assert hl, 'Scripts/sv_tanicorn.lua TANI.rail: no `health = p.cannon and <railcannon> or <railgun>`'
+    for m in se.TANI_RAIL:
+        assert abs(float(hl.group(1 if m['part'] == 'RAILCANNON' else 2)) - m['health']) < 1e-3, (m['part'], m['health'], hl.group(0))
+    rl = open(os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'sv_tanicorn_rail.lua'), encoding='utf-8').read()
+    om = re.search(r'local ORDER = \{([^}]*)\}', rl)
+    assert om, 'Scripts/sv_tanicorn_rail.lua: no `local ORDER = { ... }`'
+    got_o = dict(re.findall(r'([A-Z_]+) = "([A-Za-z_]+)"', om.group(1)))
+    assert got_o == se.TANI_RAIL_ORDER_EVENTS, ('Scripts/sv_tanicorn_rail.lua ORDER', got_o, se.TANI_RAIL_ORDER_EVENTS)
     print(f'  tanicorn rail: {cls} in {se.TANI_RAIL_ARM} read back ({sn[len("LiveFCSModule_"):]} on TurretPoseableMesh '
           f'BN_turret_yaw / BN_turret_pitch, the round {se.TANI_RAIL_ROUND.rsplit("/", 1)[1]}, its {len(rnd_pub)} exports'
           + (', HUDControl 1, minimap line and alert' if sn.endswith('TripleRailCannon') else '')
-          + f'); {se.TANI_RAIL_FCS} names it, no NpcWeaponId; {len(se.TANI_RAIL)} rail parts\' rows and Lua\'s names read back')
+          + f'); {se.TANI_RAIL_FCS} names it, no NpcWeaponId; {len(se.TANI_RAIL)} rail parts\' rows and Lua\'s names, health and railgun events read back')

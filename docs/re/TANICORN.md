@@ -399,6 +399,20 @@ on HULLLIVE (Part_RAILCANNON, Part_RAILGUN_L, Part_RAILGUN_R); none is ordered a
   km, the round there in F s; muzzle fx 2 of 2 up; streak beam 1 of 1 up; shot sound posted`; `tanicorn rc: impact 1 at +T
   s: -100 airfield (AF.bomb B -> B2; health before H); impact fx 6 of 6 up, its sound posted, the shake ...`, then the
   game's `airfield: hit (...)`; `tanicorn rc: charge 2 at +93.5 s ...`; `tanicorn rc: cycle over (<why>) ...`.
+- The review of 2026-11-12 (both halves, before 0.74.68): a railgun's order isn't forwarded to the joiners (sv_coop.lua
+  KEEP_EVENTS ^RE_SV_TaniRailOrder, in a DEV ONLY block: a joiner's copy is never raised); its railgun HUD is written BEFORE
+  its order and again at the next until it's written; its orders and barrel checks hold while paused (hard rule 60), and its
+  orders, the warning's off and the held events through the landing minigames too (SPC.storeShut on the rounds' clock,
+  D.now: down at the airfield before this visit's STORE and 3 s after; hard rule 64). The railcannon: its Deploy must show
+  up (SOC_Gun_01 at least raised_cm 2500 up in its mesh as drawn) or it's played again (redeploys 1), then left stowed,
+  shielded, with no charge; its first charge waits for a tick nothing holds (the STORE, the landing, landed alone, the
+  airfield down); gone with her hull up it counts as shot down (the Alicorn's parts' rule: the callout, TANI.coreOpen,
+  nothing done to what's at its address now); your missile's damage read again every 2 s (size_tries 5). Its hit is a chain
+  of 7 m spheres (one at its root, seven back along the barrel on SOC_Gun_01): its first cook's two 25 m spheres covered the
+  side VLS blocks VLSS_L1-L3 / R1-R3, so the stowed (shielded) railcannon took their hits. check_tani_rail_build reads Lua's
+  railgun events and the rail parts' health against the generator's. Left as they are: the railguns' row keeps its AI
+  module Turret500 (a turret's search, 30 km: they likely track from there and fire inside the arm's 18 km), the railguns
+  aren't shielded while stowed (lockable for the ~5 s before Lua raises them).
 - Open (only the game can say): whether SetBoneTransformByName from UE4SS takes on AC8's PoseableMeshComponent and redraws
   (the deployed line's SOC_Gun_01 z: 404 is drawn, -196 not), whether a moved lift survives the native ControlBones (the
   lift read every 5 s, the shells' start), whether a row-named TripleRailCannon arm fires on our part (the arms line, the
