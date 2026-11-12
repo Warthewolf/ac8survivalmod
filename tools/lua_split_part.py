@@ -89,6 +89,14 @@ PLANS = {
          "the specials' code for test builds only: the whole piece is one test-only block, which "
          "tools/strip_test_only.py takes out of a release (only this header is left there)"),
     ]},
+    # ((2026-11-12) sv_tanicorn.lua at 1,980 of 2,000 lines before stage 4's railguns: the rise in a piece of its own; both
+    # pieces dev-only blocks whole (the user's dev install and a TESTER=1 TANI=1 zip: tools/dev_only.py))
+    'sv_tanicorn': {'pieces': [
+        ('sv_tanicorn', None, None),
+        ('sv_tanicorn_rise', ('at', '-- (2026-11-11) Ctrl+R: THE TANACORN rises on her rig'),
+         "THE TANACORN's rise (Ctrl+R): its rig, its water and sound, the cinematic and its camera; the dev install's "
+         "test code only: a release keeps this header alone"),
+    ]},
 }
 
 

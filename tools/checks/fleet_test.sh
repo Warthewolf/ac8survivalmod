@@ -795,11 +795,12 @@ if grep -n '^IFLEET = \|^GEO = \|^TANI = \|^CINE = \|testKey("N"\|testKey("B"\|t
     echo "  FAIL the dev install's keys or globals left in a TESTER copy (above)"; exit 1
 fi
 echo "  ok   no IFLEET, GEO, TANI or CINE and none of their keys (Ctrl+N, B, T, D ...) in any part of it"
-for p in sv_fleet sv_tanicorn sv_tanicorn_hits sv_cine; do
+for p in sv_fleet sv_tanicorn sv_tanicorn_rise sv_tanicorn_hits sv_cine; do
     if grep -v '^--' "$W/tester/Scripts/$p.lua" | grep -q '[^[:space:]]'; then echo "  FAIL $p.lua: code left"; exit 1; fi
-    if ! head -1 "$W/tester/Scripts/$p.lua" | grep -q "^-- $p.lua"; then echo "  FAIL $p.lua: its header gone"; exit 1; fi
+    # ((2026-11-12) a split part's first line is tools/lua_split_part.py's family note: its own name within the first three)
+    if ! head -3 "$W/tester/Scripts/$p.lua" | grep -q "^-- $p.lua"; then echo "  FAIL $p.lua: its header gone"; exit 1; fi
 done
-echo "  ok   sv_fleet.lua, sv_tanicorn.lua, sv_tanicorn_hits.lua and sv_cine.lua only their headers"
+echo "  ok   sv_fleet.lua, sv_tanicorn.lua, sv_tanicorn_rise.lua, sv_tanicorn_hits.lua and sv_cine.lua only their headers"
 n=$(grep -c 'TEST ONLY BEGIN' "$W"/tester/Scripts/*.lua | awk -F: '{s+=$2} END {print s}')
 if [ "$n" -lt 10 ] || ! grep -q 'testKey("F12"' "$W/tester/Scripts/sv_festival.lua"; then
     echo "  FAIL a tester's own test keys gone too ($n test blocks left)"; exit 1
