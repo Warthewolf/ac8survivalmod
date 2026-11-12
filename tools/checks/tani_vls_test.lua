@@ -11,7 +11,10 @@
 --     logs the missile against its nearest cell; close_s after, they shut (SetPlayRate -1, Play); a stock ship's missile
 --     changes nothing; a missile of an actor of ours that isn't a block (the hull) turns the range rule on, and a block with
 --     you inside its reach opens; another object at a block's address (hard rule 59) is a new block, the old one untouched;
---     the watch's end shuts the lids and logs its counts; a torn level drops everything.
+--     the watch's end shuts the lids and logs its counts; a torn level drops everything;
+--   ((2026-11-12, the weapons runtime review) Ctrl+L's guard: the last live hull's parts kept when its actor goes (or a second
+--     Ctrl+L replaces its watch); no new hull spawned while one of them lives (health above 0 or unreadable, still the object
+--     kept: hard rule 59); a torn level forgets them.
 local DIR = arg[1]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
@@ -342,5 +345,98 @@ levelTorn = nil
 n0 = #LOG
 tick()
 check(logged("tanicorn: VLS watch", n0 + 1) == nil and logged("lids ", n0 + 1) == nil, "a torn level: the watch off, nothing kept")
+
+-- ((2026-11-12, the weapons runtime review) Ctrl+L's guard: with no hull of ours up, no new one while a part of the last
+-- lives (SV_Spawn's recycle would take its unit off the list under them: the 0.74.48 STORE crash's pattern))
+print("Ctrl+L: the last live hull's parts kept past it")
+local LIVECLS = TANI.live.class
+local function livePart(socket)
+    local b = block("VLSD", "live_" .. socket .. "_" .. nextA, { X = 500000, Y = 0, Z = 700 }, "Part_" .. socket)
+    b.HealthInternal, b.MaxHealth = 400, 40
+    return b
+end
+local HULLS = {}
+local function liveHull()
+    local parts = { VLSD_1 = livePart("VLSD_1"), VLSD_2 = livePart("VLSD_2") }
+    local comps = {}
+    for s, b in pairs(parts) do
+        comps[#comps + 1] = { GetFName = function() return { ToString = function() return "Part_" .. s end } end, ChildActor = b }
+    end
+    local mesh = { GetFName = function() return { ToString = function() return "HullMesh" end } end,
+                   GetSocketLocation = function() return { X = 500000, Y = 0, Z = 700 } end }
+    local h = obj(LIVECLS .. " /Game/Maps.hull_" .. nextA, { at = { X = 500000, Y = 0, Z = 0 }, HealthInternal = 1000, MaxHealth = 100,
+        comps = { [TANI.live.comp_class] = comps, ["/Script/Engine.StaticMeshComponent"] = { mesh } } })
+    h.parts = parts
+    FINDS[LIVECLS] = { h }
+    HULLS[#HULLS + 1] = h
+    return h
+end
+function SV_Spawn(unit, x, y, z, face)
+    SPAWNS[#SPAWNS + 1] = { unit = unit }
+    if unit == TANI.live.unit then liveHull() end
+    return 1
+end
+local function hullSpawns() local n = 0; for _, s in ipairs(SPAWNS) do if s.unit == TANI.live.unit then n = n + 1 end end; return n end
+local function sink(h) free(h); FINDS[LIVECLS] = {} end           -- (the hull's actor gone, its parts left as they are)
+ME.X, ME.Y, ME.Z = 0, 0, 100000
+-- a first hull, its parts seen at +2 s, then its actor gone with both parts still up
+KEYS.L()
+check(hullSpawns() == 1, "Ctrl+L with nothing up: spawned")
+for _ = 1, 10 do tick() end
+check(logged("tanicorn: live +2 s: Part_VLSD_1 (VLSD): ") ~= nil, "its parts seen at +2 s")
+local h1 = HULLS[1]
+sink(h1)
+-- (the review of 2026-11-12) a press before the watch's tick has seen the hull go: the handler keeps the parts itself
+n0 = #LOG
+KEYS.L()
+check(logged("Ctrl+L refused", n0 + 1) ~= nil and hullSpawns() == 1
+    and logged("callout: TEST: TANACORN LIVE / HER PARTS STILL UP", n0 + 1) ~= nil,
+    "Ctrl+L before the watch's tick saw the hull go: refused (the handler keeps the watch's parts itself)")
+n0 = #LOG
+tick()
+check(logged("the hull is gone at +", n0 + 1) ~= nil and logged("2 of its parts still up as it goes", n0 + 1) ~= nil,
+    "its hull gone: 2 parts still up, kept")
+n0 = #LOG
+KEYS.L()
+local ref = logged("tanicorn: Ctrl+L refused: no live hull of ours up, but 2 part(s) of the last one still alive", n0 + 1)
+check(ref ~= nil and ref:find("(Part_VLSD_1 (VLSD), Part_VLSD_2 (VLSD))", 1, true) ~= nil,
+    "Ctrl+L refused, each live part named in order (" .. tostring(ref) .. ")")
+check(hullSpawns() == 1 and logged("callout: TEST: TANACORN LIVE / HER PARTS STILL UP", n0 + 1) ~= nil, "nothing spawned; its callout")
+-- one part down (health 0), the other's health unreadable: still up as far as Ctrl+L knows
+h1.parts.VLSD_2.HealthInternal = 0
+h1.parts.VLSD_1.HealthInternal = nil
+n0 = #LOG
+KEYS.L()
+ref = logged("tanicorn: Ctrl+L refused: no live hull of ours up, but 1 part(s)", n0 + 1)
+check(ref ~= nil and ref:find("Part_VLSD_1", 1, true) ~= nil and hullSpawns() == 1,
+    "a part at health 0 no longer counts; one whose health can't be read still does (" .. tostring(ref) .. ")")
+-- hard rule 59: another object at that part's address now: not the part, so nothing holds Ctrl+L. As in the game, the kept
+-- wrapper stays valid at its address (SV_ObjChain answers for whatever lives there) and answers the new object's name, its
+-- health unreadable (counted as up): only the name half of same() can tell it isn't the part (the review of 2026-11-12)
+local p1 = h1.parts.VLSD_1
+p1.__name = "BP_SV_Tani_VLSD_C /Game/Maps.someone_else"
+n0 = #LOG
+KEYS.L()
+check(logged("Ctrl+L refused", n0 + 1) == nil and hullSpawns() == 2, "another object at the part's address: not counted, spawned")
+-- a second Ctrl+L while the hull is up replaces the watch; the hull gone before the new watch's +2 s look: the replaced
+-- watch's parts still hold Ctrl+L
+for _ = 1, 10 do tick() end
+n0 = #LOG
+KEYS.L()
+check(logged("a live hull already up", n0 + 1) ~= nil and hullSpawns() == 2, "Ctrl+L with the hull up: looked at again, no spawn")
+if HULLS[2] then sink(HULLS[2]) end                      -- (none when a check above failed: the rest still runs)
+n0 = #LOG
+tick()
+check(logged("2 of its parts still up as it goes", n0 + 1) ~= nil, "gone before the new watch saw its parts: the old watch's kept")
+n0 = #LOG
+KEYS.L()
+check(logged("Ctrl+L refused", n0 + 1) ~= nil and hullSpawns() == 2, "Ctrl+L refused on them")
+-- a torn level forgets them
+levelTorn = function() return true end
+tick()
+levelTorn = nil
+n0 = #LOG
+KEYS.L()
+check(logged("Ctrl+L refused", n0 + 1) == nil and hullSpawns() == 3, "a torn level forgets the kept parts: spawned")
 print(fails == 0 and "tani vls test: all passed" or ("tani vls test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)
