@@ -112,6 +112,9 @@ fi
 if [ -f build/out/tani_wd.txt ]; then
     [ "$TANI" = 1 ] || { echo "build/out/tani_wd.txt without TANI=1: the world data was built with TANI=1 (rerun)"; exit 1; }
     cp build/out/tani_wd.txt build/install/
+    # ((2026-11-12, the weapons reviews) the container staged above is the one check_tanicorn_build checked: the same bytes,
+    # every class the world data imports (tools/tani_container.py)
+    python -I tools/tani_container.py verify build/install/SurvivalMode/SurvivalMode_Tani_P.utoc build/install/tani_wd.txt || exit 1
     echo "staged build/install/tani_wd.txt: this build's world data imports THE TANACORN's parts (TANI=1; dev installs only)"
 fi
 cp -r mod/UE4SS/AC8SurvivalMode build/install/

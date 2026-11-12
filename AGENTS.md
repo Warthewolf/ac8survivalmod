@@ -76,6 +76,9 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   and package_release.sh / package_test.sh refuse it (package_dev.sh takes it with TANI=1 only, and TANI=1 only with it).
   Run tools/tanicorn/build.sh to the end BEFORE `TANI=1 build_all.sh`: build_all stages the container it finds, and a
   world data importing blueprints the container lacks must never be packaged (the reviews of 2026-11-12).
+  tools/tani_container.py holds that: check_tanicorn_build stops a TANI=1 build whose container lacks a class its world
+  data imports (or whose hull doesn't import every part) and pins the container's sha256 in tani_wd.txt; build_all.sh,
+  package_dev.sh and package_release.sh refuse a staged copy that isn't that container (a marker older than it too).
   One exception, the TESTER zip (user, 2026-11-12: "nah nah add the tanacorn and the fleet"): `TESTER=1 TANI=1
   package_release.sh` on a TANI=1 build keeps her container, the Tanicorn world data, sv_tanicorn / sv_fleet whole and the
   DEV ONLY blocks (the rise director sv_cine still cut), only when the staged container holds every blueprint the world

@@ -53,14 +53,9 @@ if [ "$TANI" = 1 ]; then
     [ -f build/install/tani_wd.txt ] || { echo "package_release.sh: TANI=1 needs a TANI=1 build (ZFA=1 TANI=1 sh tools/build_all.sh)"; exit 1; }
     tc=build/install/SurvivalMode/SurvivalMode_Tani_P.utoc
     [ -f "$tc" ] || { echo "package_release.sh: TANI=1: no Tanicorn container staged ($tc)"; exit 1; }
-    python -I -c "
-import re, sys
-d = open(sys.argv[1], 'rb').read()
-want = set(re.findall(r'BP_SV_Tani_\w+', open(sys.argv[2], encoding='utf-8', errors='replace').read())) | {'BP_SV_Tani_HULLLIVE'}
-miss = sorted(w for w in want if (w + '.uasset').encode() not in d)
-if miss: sys.exit('package_release.sh: TANI=1: the staged container lacks ' + ', '.join(miss) + ': run sh tools/tanicorn/build.sh, then ZFA=1 TANI=1 sh tools/build_all.sh')
-print('TANI=1: the staged Tanicorn container holds all ' + str(len(want)) + ' blueprints the world data names')
-" "$tc" build/install/tani_wd.txt || exit 1
+    # ((2026-11-12) the container the build checked, every class its world data imports in it: tools/tani_container.py, as
+    # build_all.sh and package_dev.sh; until then a search for each blueprint's file name in the .utoc)
+    python -I tools/tani_container.py verify "$tc" build/install/tani_wd.txt || exit 1
     TANIZIP=1
 elif [ -f build/install/tani_wd.txt ]; then
     echo "package_release.sh: this build's world data imports THE TANACORN's parts (TANI=1: build/install/tani_wd.txt):"

@@ -1317,14 +1317,35 @@ def check_tanicorn_build():
             for p in se.TANI_LIVE:
                 assert nodes[p['comp']] == f"{p['bp']}.{p['bp_class']}", (p['comp'], nodes[p['comp']])
             spec_said = f'and the blueprint\'s {len(nodes)} LiveChildActorComponents in {spec_path}'
+    # ((2026-11-12, both weapons reviews' major) the container build_all.sh is about to stage must serve this world data:
+    # every class it imports from TANI_PKG (the package, and an export of that public hash: the assert on export_hash above
+    # only checks our own import), the live hull's class (the model row and Lua load it by path), and the hull's cooked
+    # package importing every part's blueprint (its child actor templates: build.sh writes the spec before it cooks, so a
+    # failed cook leaves a new spec beside an old container). What was checked goes into the marker, against which
+    # build_all.sh, package_dev.sh and package_release.sh verify the copy they stage (tools/tani_container.py).)
+    import tani_container
+    utoc = tani_container.default_path()
+    need = sorted({(zw.imp_pkgs[(x >> 32) & 0x3fffffff], zw.imp_hashes[x & 0xffffffff]) for x in zw.imports
+                   if x >> 62 == 2 and zw.imp_pkgs[(x >> 32) & 0x3fffffff] in tani}
+                  | {(se.TANI_HULL_LIVE_BP, export_hash(se.TANI_HULL_LIVE_BP_CLASS))})
+    assert {p for p, _ in need} == set(tani) | {se.TANI_HULL_LIVE_BP}, need
+    hulls = [(se.TANI_HULL_LIVE_BP, want_pkgs)]
+    probs = tani_container.check(utoc, need, hulls)
+    assert not probs, ('TANI=1: the Tanicorn container doesn\'t serve this world data (' + tani_container.REBUILD + '):\n  '
+                       + '\n  '.join(probs))
+    sha = tani_container.digest(utoc)
     os.makedirs(os.path.dirname(TANI_WD_MARKER), exist_ok=True)
     with open(TANI_WD_MARKER, 'w', encoding='utf-8', newline='\n') as f:
         f.write('THE TANACORN: this build\'s world data imports the Tanicorn container (TANI=1; tools/build_survival.py '
                 'check_tanicorn_build).\nThe user\'s dev install only: package_release.sh and package_test.sh refuse it, '
-                'package_dev.sh takes it with TANI=1 only.\n' + ''.join(f'{p}\n' for p in tani))
+                'package_dev.sh takes it with TANI=1 only.\n' + ''.join(f'{p}\n' for p in tani)
+                + '(the container checked, as tools/tani_container.py verify reads it:)\n'
+                + ''.join(tani_container.marker_lines(sha, need, hulls)))
     print(f'  tanicorn: {se.TANI_HULL_LIVE_UNIT}: {len(kids)} live parts (TANI=1) read back: each its own desc and class '
           f'import, the same components as {se.TANI_HULL_LIVE_NPC}\'s ChildNPCComponentNames {spec_said}; {len(ex)} orders; '
-          f'the world data imports {", ".join(tani)}; marker {TANI_WD_MARKER}{vls_said}')
+          f'the world data imports {", ".join(tani)}; the container {utoc} serves it ({len(need)} classes, '
+          f'{os.path.basename(se.TANI_HULL_LIVE_BP)} importing its {len(want_pkgs)} parts; sha256 {sha[:12]}...); '
+          f'marker {TANI_WD_MARKER}{vls_said}')
 
 
 # ---------------------------------------------------------------- NPC mission table
