@@ -95,6 +95,56 @@ def write_marker(path, utoc):
                 + ''.join(tc.marker_lines(tc.digest(utoc), need, hulls)))
 
 
+def dir_index(toc):
+    """{file path: chunk index} from a .utoc's directory index (FIoDirectoryIndexResource: its mount point, directory
+    entries {name, first child, next sibling, first file}, file entries {name, next file, chunk index}, string table; a
+    name ~0 is none): an account of the container the reader (tani_container.py) never reads"""
+    d, o = toc.raw, toc.dir_off
+    end = o + toc.dirsize
+
+    def fstring(o):
+        n = struct.unpack_from('<i', d, o)[0]
+        o += 4
+        if n >= 0:
+            return d[o:o + max(n - 1, 0)].decode('latin1'), o + n
+        return d[o:o - 2 * n - 2].decode('utf-16-le'), o - 2 * n
+
+    mount, o = fstring(o)
+    nd = struct.unpack_from('<i', d, o)[0]; o += 4
+    dirs = [struct.unpack_from('<IIII', d, o + 16 * i) for i in range(nd)]; o += 16 * nd
+    nf = struct.unpack_from('<i', d, o)[0]; o += 4
+    fils = [struct.unpack_from('<III', d, o + 12 * i) for i in range(nf)]; o += 12 * nf
+    ns = struct.unpack_from('<i', d, o)[0]; o += 4
+    strs = []
+    for _ in range(ns):
+        s, o = fstring(o)
+        strs.append(s)
+    assert o <= end, 'the directory index runs past its size'
+    none = 0xFFFFFFFF
+    out = {}
+
+    def walk(i, base):
+        while i != none:
+            name, child, sib, f = dirs[i]
+            here = base + (strs[name] + '/' if name != none else '')
+            while f != none:
+                fname, nxt, chunk = fils[f]
+                out[here + strs[fname]] = chunk
+                f = nxt
+            walk(child, here)
+            i = sib
+
+    walk(0, mount)
+    return out
+
+
+def pkg_path(file_path):
+    """a container file's package path: <...>/<Project>/Content/X/Y.uasset -> /Game/X/Y"""
+    p = file_path.replace('\\', '/')
+    i = p.find('/Content/')
+    return '/Game/' + os.path.splitext(p[i + len('/Content/'):] if i >= 0 else p.lstrip('./'))[0]
+
+
 fails = []
 
 
@@ -181,8 +231,24 @@ def main():
     if not os.path.exists(real):
         print('  skip: not built here (sh tools/tanicorn/build.sh)')
     else:
+        # ((2026-11-12, the review) checked against what the reader never uses: the .utoc's own directory index, its file
+        # names and the chunk each names; a stale cook stays a note, a reader that finds nothing a failure)
+        c = tc.Container(real)
+        files = dir_index(c.toc)
+        pk = {path: k for path, k in files.items() if path.endswith(('.uasset', '.umap'))}
+        bad = [path for path, k in pk.items()
+               if c.by_id.get(package_id(pkg_path(path))) != k or c.toc.ids[k][11] != tc.CHUNK_EXPORT_BUNDLE]
+        check(len(c.by_id) > 0 and len(pk) == len(c.by_id) and not bad,
+              f'its directory index names {len(pk)} packages, each the export bundle the reader finds under its id '
+              f'({len(c.by_id)} found; {len(bad)} wrong{": " + ", ".join(bad[:3]) if bad else ""})')
         p = tc.check(real, need, hulls)
         check(not any('unreadable' in x for x in p), 'every package read (versioned, uncompressed)')
+        ours = sorted({x for x, _ in need})
+        gone = [x for x in ours if (x + ': not in the container') in p]
+        check(len(gone) < len(ours), f'the reader finds the Tanicorn\'s blueprints ({len(ours) - len(gone)} of {len(ours)})')
+        if se.TANI_HULL_LIVE_BP not in gone:
+            h, imps = tc.package_info(c.read(se.TANI_HULL_LIVE_BP))
+            check(len(h) > 0 and len(imps) > 0, f'BP_SV_Tani_HULLLIVE parsed: {len(h)} public exports, {len(imps)} imported packages')
         print('  ' + ('it serves a TANI=1 world data' if not p else
                       'note: ' + '; '.join(p)[:300] + ' (not a test failure: run sh tools/tanicorn/build.sh)'))
     print('tani_container_test: ' + ('all passed' if not fails else f'{len(fails)} FAILED'))
