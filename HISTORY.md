@@ -3043,3 +3043,14 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - Checks (on dev): run_all 73 passed, 5 skipped (Windows only); fleet_test's check of package_release.sh's TESTER line
   updated for dev's own 0904573 (`${TANIZIP:+--keep-tani}` and `|| exit 1`: it failed on dev itself); escort_test's "every_s apart" failed once under run_all and 0
   times in 80 runs alone (old and new code alike): a rare flake to look at, not from this change.
+
+## 0.74.67-coop2mp.159: THE ESCORT's waves on time, the log report split (2026-11-12; Lua, tools)
+- THE ESCORT's waves no longer come 5 s late or short: ESC.waveFlights (sv_escort_waves.lua) drew a wave's flights at
+  random and could take a lone 2-ship first, leaving nothing to reach min_n while 4- and 6-ships were free; wavesTick then
+  held the wave 5 s or sent it short. It now works out the totals the free flights can make and keeps each pick
+  reachable; a wave is held only when no mix reaches min_n within max_n and the room. Found as escort_test's rare flake
+  (25 of 1000 clock seeds; sv_config_ini.lua reseeds math.random from os.time()); escort_test and decoy_test reseed after
+  sv_config. sv_coop.lua's STORE-check error line has its own once key. Untested in game.
+- tools/log_report.py split (+ log_report_page.py; the same pages) and 0.74.66's storeq: lines in its checklist and STORE
+  windows section. run_all 73 passed, 5 skipped (Windows only).
+- escort_test.lua is at 1,999 of 2,000 lines and its main chunk at 200 locals: split it before adding to it.
