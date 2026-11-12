@@ -3070,3 +3070,18 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - Packaged: AC8SurvivalMode_COOP2MP_0.74.66_TESTER_Online_COOP_ZFA44_TANACORN.zip (88 MB, 97 files; build 6963d6952ae8...,
   registered) with ..._0.74.66_TESTER_Keys.txt (what to test first, the log to send); the dev stage 5e3c829aef7f...
   registered, INSTALLED 2026-11-12 20:21 (backup: build/backup/install_before_0.74.66).
+
+## 0.74.67-coop2mp.159 (2026-11-12, runtime 0.32.35): the rise's water tower gone
+- The user on 0.74.66 (screenshots, Ctrl+Y then Ctrl+R at 20:43): "the water height on the rise is too big now": one white
+  column past her plane at 2 km, still standing ~25 s after the rise. Research (each effect's particle scripts emulated
+  from the cooked assets): the Alicorn ending cutscene's water pillars c02_2nd (breach), c03 and c05 (x6, slam) are
+  world-space mesh columns 2.4-2.8 km tall and 0.5-1 km wide; the spawn's scale doesn't touch them. Out of the rise's
+  lists; in their place c02_1st (local space, ~100 m at scale 1) at scale 2 / 1.5 and the Alicorn's water blast at 2.
+- Nothing ever stopped a rise effect, and four loop for ever when spawned bare (AB_SPLASH, AB_LAND_L / R, FOAM_IGC): every
+  rise effect is now kept (address and name: hard rule 59) and deactivated TANI.rise.fx_life_s (8 s) after its spawn, by a
+  tick of its own, forgotten with the level (`tanicorn: rise effects: ... N stopped so far ...`).
+- Tests: tani_vls_test (the stop, a reused address left alone, the level drop), cine, fleet, lua_load, size. Lua only:
+  the Tanicorn container is 0.74.66's (sha256 ecdc69983cb9...).
+- Packaged: AC8SurvivalMode_COOP2MP_0.74.67_TESTER_Online_COOP_ZFA44_TANACORN.zip (build 54ae898e60b3..., registered) with
+  its ..._TESTER_Keys.txt; the dev stage build/release/stage_dev_0.74.67 (0cbd48dee2c1..., registered). NOT installed: the
+  user, 2026-11-12: "don't install anything till i say so".
