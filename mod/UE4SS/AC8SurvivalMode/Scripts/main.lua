@@ -65,6 +65,9 @@ local MODULES = {
     "sv_audit",                    -- the run's audits in the log: targets, pay, sync (after sv_coop: its addCredits wrap)
     "sv_zfa44",                    -- the ZFA-44's test T0 (docs/re/ZFA44.md; test code only: empty in every zip)
     "sv_main",
+    "sv_plugins",                  -- other mods' special rounds: add-ons (Mods\AC8SurvivalAddons) and their API (SVP), last
+    "sv_plugins_api",              -- (sv_plugins.lua's next piece: tools/lua_split_part.py)
+    "sv_plugins_env",              -- (sv_plugins.lua's next piece: tools/lua_split_part.py)
 }
 
 local DIR = debug.getinfo(1, "S").source:match("^@(.*[/\\])") or ""

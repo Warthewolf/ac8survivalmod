@@ -129,6 +129,10 @@ SND.song = nil
 -- again from the next level's sound tick (unmuteTick: every 2 s, 15 tries), unless a song of that level mutes it first.)
 SND.unmuteDue = nil
 local function songMusicBack(sg)
+    if sg and sg.muted and PLUGINS and PLUGINS.bgmHeld and PLUGINS.bgmHeld() then   -- (an add-on's own track: kept muted)
+        log("sound: the song's over; the game's music stays muted for an add-on's track (its give-back unmutes)")
+        sg = { track = sg.track }
+    end
     if sg and sg.muted and type(SV_PlayBGM) == "function" then
         local r = SV_PlayBGM("AKE_System_BGM_Mute_Off")
         local ok = type(r) == "number" and r > 0
@@ -248,6 +252,7 @@ end
 -- every tick: the playing voices follow their source and you (pan, distance); the finished ones dropped
 local function unmuteTick()
     if not SND.unmuteDue or type(SV_PlayBGM) ~= "function" then return end
+    if PLUGINS and PLUGINS.bgmHeld and PLUGINS.bgmHeld() then SND.unmuteDue = nil; return end   -- (an add-on's track)
     if SND.song and SND.song.muted then SND.unmuteDue = nil; return end
     local now = os.clock()
     if now < (SND.unmuteAt or 0) then return end

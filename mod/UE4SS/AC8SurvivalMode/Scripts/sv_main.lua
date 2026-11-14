@@ -290,7 +290,9 @@ local function planeSweep(slot)
                 local ok, h = pcall(function() return p.obj.HealthInternal end)
                 if ok and type(h) == "number" and h <= 0 then up, dead = false, true end
             end
-            if up then
+            if up and PLUGINS and PLUGINS.owned and PLUGINS.owned(p) then   -- (an add-on's target, sv_plugins.lua: left
+                                                                           -- alone: no tier, manoeuvres, spike, stats)
+            elseif up then
                 pcall(function() local v = p.obj:K2_GetActorLocation(); p.at = { X = v.X, Y = v.Y, Z = v.Z } end)
                 p.dist = (p.at and you) and km(p.at, you) or nil                   -- (ACE.hunt's tell reads it)
                 local ft = D and p.unit and D.flightTier and D.flightTier[p.unit]
@@ -321,7 +323,9 @@ local function planeSweep(slot)
                 goneWithLevel(p, LEAVE.why)
             else
                 p.down = true
-                if dead then
+                if PLUGINS and PLUGINS.owns and PLUGINS.owns(p) then           -- (an add-on's unit, sv_plugins.lua: its
+                                                                               -- target or retired; no kill, no pay here)
+                elseif dead then
                     pcall(KILL.read, p)                                        -- (the last hits: it's still there)
                     downCounted(p, you, D and D.now)
                 elseif D then                                                  -- (gone without its death seen: held)
@@ -1009,6 +1013,7 @@ local function tickJob()
         local t1 = os.clock()
         local okB, errB = pcall(probeTickB, tick)
         if not okB then log("round probe: error (second half) " .. tostring(errB)) end
+        if PLUGINS and PLUGINS.tick then timed("plugins", PLUGINS.tick) end   -- (add-ons: sv_plugins.lua; guarded there)
         if tick % 4 == 3 then timed("speakers", ALLY.speakerTick, D ~= nil) end   -- the run's ally speakers, on and off
         if tick % 4 == 1 then timed("leaderboard", LB.poll) end                  -- the leaderboard sends' answers
         if tick % 20 == 7 then timed("leaderboard", LB.queueTick) end            -- runs waiting to be sent
