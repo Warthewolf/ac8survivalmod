@@ -3,7 +3,8 @@
 # AGENTS.md section 6: "make a release" = the user's permission for this one push. It puts dev's tip on origin's main
 # (fast-forward only, never a force), tags it v<version> and pushes the tag and dev. That is how players get an update.
 # It refuses unless: you are on dev, the tree is clean, dev is not behind origin/dev, origin/main is already inside dev
-# (nothing would be lost), the zip for <version> exists in the release folder, and the tag is new.
+# (nothing would be lost), main.lua's VERSION is exactly <version>, the PUBLIC zip AC8SurvivalMode_<version>_Online.zip
+# exists in the release folder (a friends' or tester zip does not count), and the tag is new. All of it before any push.
 # DRY_RUN=1 sh tools/release_push.sh <version> : checks everything and says what it would push, pushes nothing.
 # Then it creates the GitHub Release v<version> (the Releases section) with `gh`: title, the release notes and the PUBLIC
 # zip only (AC8SurvivalMode_<version>_Online.zip = the Nexus build; the friends' / tester variants are never attached).
@@ -36,22 +37,21 @@ else
 fi
 [ "$newc" -gt 0 ] || fail "main already has everything in dev: nothing to release"
 
-# the built version must be the one asked, and its zip must exist
+# the built version must be exactly the one asked (0.74.7 must not pass for 0.74.70), and its PUBLIC zip must exist
 lua=$(grep -m1 -E '^(local )?VERSION = ' mod/UE4SS/AC8SurvivalMode/Scripts/main.lua | sed 's/.*"\(.*\)".*/\1/')
-case "$lua" in "$ver"*) ;; *) fail "main.lua's VERSION is $lua, not $ver: bump and build first" ;; esac
+[ "$lua" = "$ver" ] || fail "main.lua's VERSION is $lua, not $ver: give the exact version (or bump and build first)"
 . tools/release_dir.sh
-ls "$REL"/AC8SurvivalMode_*"$ver"*.zip >/dev/null 2>&1 || fail "no zip for $ver in the release folder: run tools/package_release.sh first"
+pub="$REL/AC8SurvivalMode_${ver}_Online.zip"
+[ -f "$pub" ] || fail "no public zip $pub: run tools/package_release.sh online $ver first (a friends' or tester zip is never released)"
 notes="$REL/RELEASE_NOTES_$ver.md"
 [ -s "$notes" ] || fail "no release notes: write what changed (plain words) in $notes first (AGENTS.md section 6)"
 if grep -n -i -e 'thunder' -e 'tanicorn' -e 'tanacorn' -e 'invincible fleet' "$notes"; then
     fail "the notes name Distant Thunder / Tanacorn / the Fleet: they are never in a release (AGENTS.md section 5); take them out"
 fi
-pub="$REL/AC8SurvivalMode_${ver}_Online.zip"
 tag="v$ver"
 git rev-parse -q --verify "refs/tags/$tag" >/dev/null && fail "tag $tag already exists: a new build needs a new version (tools/bump_version.py)"
 
-echo "release_push: $newc commit(s) go to $remote/main as $tag; zip(s):"
-ls "$REL"/AC8SurvivalMode_*"$ver"*.zip
+echo "release_push: $newc commit(s) go to $remote/main as $tag; public zip: $pub"
 if [ "$DRY_RUN" = 1 ]; then echo "release_push: DRY RUN, nothing pushed."; exit 0; fi
 
 git tag -a "$tag" -m "Release $ver"
@@ -60,13 +60,12 @@ git push "$remote" dev:main        # fast-forward only: the remote refuses anyth
 git push "$remote" "$tag"
 # bring the local main branch up to date when git lets us (it may be checked out in another worktree)
 git fetch "$remote" main:main -q 2>/dev/null || echo "release_push: (local main not moved: it is checked out elsewhere; $remote/main is up to date)"
-# the GitHub Release (Releases section): notes + the public zip, if that zip exists
+# the GitHub Release (Releases section): notes + the public zip (checked above, before any push)
 if command -v gh >/dev/null 2>&1; then
     repo=$(git remote get-url "$remote")
-    set -- "$tag" --repo "$repo" --title "Survival Mode $ver" --notes-file "$notes" --target main
-    [ -f "$pub" ] && set -- "$@" "$pub" || echo "release_push: no public zip ($pub): the Release is created without a file"
-    if gh release create "$@"; then echo "release_push: GitHub Release $tag created."
-    else echo "release_push: the push worked but the GitHub Release failed (gh auth login? then: gh release create $tag --repo $repo --title \"Survival Mode $ver\" --notes-file $notes)"; fi
+    if gh release create "$tag" --repo "$repo" --title "Survival Mode $ver" --notes-file "$notes" --target main "$pub"; then
+        echo "release_push: GitHub Release $tag created."
+    else echo "release_push: the push worked but the GitHub Release failed (gh auth login? then: gh release create $tag --repo $repo --title \"Survival Mode $ver\" --notes-file $notes $pub)"; fi
 else
     echo "release_push: gh is not installed: no GitHub Release. Later: gh release create $tag --title \"Survival Mode $ver\" --notes-file $notes ${pub}"
 fi
