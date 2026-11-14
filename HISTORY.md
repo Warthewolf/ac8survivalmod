@@ -3054,3 +3054,25 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - tools/log_report.py split (+ log_report_page.py; the same pages) and 0.74.66's storeq: lines in its checklist and STORE
   windows section. run_all 73 passed, 5 skipped (Windows only).
 - escort_test.lua is at 1,999 of 2,000 lines and its main chunk at 200 locals: split it before adding to it.
+
+## 0.74.68-coop2mp.160: no unit actor destroyed under the STORE's freeze (2026-11-14; runtime 0.32.36)
+- The user's crash "while rearming" (their install: 0.74.36-coop2mp.128, runtime 0.32.31; solo): UECC, an access
+  violation reading 0x3d9 on the game thread at AceCombat8.exe+0x7dbbf5e (<- 0x147db9583 <- 0x147c95197), right after
+  `minigame: type 7 ends: restore of 256 AI objects; lists were 6 / hidden 6 / 125`. That is the same crash as Shazzy's
+  carrier hull of 2026-11-09 (0.74.50's ZLAUNCH.holdHull). This time the unit was an ace squadron's: round 31's Harvest broke
+  off (CFG.aces.break_off), 4 F-22s despawned unpaid (RE_SV_FlightOff_03, 16:56:58). At round 32's start aceGoneRecycle
+  force-recycled ERA_Unit_01_Dep_Air2 with them still reading alive (16:57:19). The STORE froze the AI at 16:57:41, and
+  the deferred destroy took the unit actor at 16:57:49 with the STORE still open. The restore crashed at 16:58:02.
+  In the same log, every STORE that had a unit actor destroyed inside it closed clean while its freeze lists held none
+  of that unit's objects: 15:20's escorts (lists 0 / 0), and the flights that had been shot down.
+- The general fix, in the runtime: while a STORE freeze holds its lists (flight_guards.c OnMgDeactivate .. OnMgRestore, solo;
+  co-op skips the freeze) and for 3 s after its restore, no unit actor is destroyed. The deferred destroys that come due
+  wait (RcDrain), and a recycle that would destroy at once (force 2, or a destroy wait of 0) is queued instead. SV_Reset
+  clears the hold (a level left inside the STORE never runs its restore). Log lines: `recycle: N unit actors due to be
+  destroyed wait for the STORE's restore ...` (once a freeze), `recycle: the STORE's restore done; N unit actors queued ...`.
+  This covers the carrier hull too, and any special that force-recycles units.
+- Checks: runtime build (clang -Werror), lua_check, size_check, paths_check, run_all 73 passed, 5 skipped (Windows
+  only). build_all.sh not run here (no game files in this session). Untested in game. To see in game: an ace round with
+  a break-off, then the STORE in the next round's first minute (or any STORE within 30 s of a round start). The "wait
+  for the STORE's restore" line, then `recycle ...: its old unit actor ... destroyed` a few seconds after
+  `minigame: type 7 ends`, with no crash.

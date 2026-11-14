@@ -781,6 +781,7 @@ static int L_Reset(void* lua)
         Crumb(L"teardown gate open (SV_Reset)");
     }
     g_teardown = 0;
+    g_mgHeld = 0; g_mgGraceUntil = 0;              /* (0.32.36: a level left inside the STORE never ran its restore) */
     g_world = NULL;                                /* (the next SpawnerReady keeps this level's; a restart's is the same one) */
     PtReset();                                     /* (the path tracker guard's skip list: flight.c) */
     return Ret(lua, 1);

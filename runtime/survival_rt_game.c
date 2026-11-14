@@ -342,6 +342,18 @@ static RcEntry  g_rc[RC_MAX];
 static int      g_rcN;
 static uint32_t g_rcWaitMs = 30000;
 static uint32_t g_rcDone, g_rcSkipped;
+/* (0.32.36) The STORE's freeze holds the AI objects it switched off (LiveMiniGameManager +0x68 / +0x78) until its restore
+ * at the STORE's close, which reads each one's unit. A unit actor destroyed between the two crashes that restore when
+ * one of its objects is on those lists: an access violation reading 0x3d9 at AceCombat8.exe+0x7dbbf5e (<- 0x147db9583
+ * <- 0x147c95197), Shazzy's carrier hull of 2026-11-09 and the user's run of 2026-11-14 (an ace squadron's break-off,
+ * despawned with 4 planes up, force-recycled at round 32's start, destroyed 30 s on with the STORE open). While a
+ * freeze is held (flight_guards.c OnMgDeactivate .. OnMgRestore) and for RC_STORE_GRACE_MS after, no unit actor is
+ * destroyed: the due ones wait, and a recycle that would destroy at once queues instead. */
+#define RC_STORE_GRACE_MS 3000
+static volatile int32_t g_mgHeld;                  /* 1: a STORE freeze holds its lists (its restore not run yet) */
+static uint64_t         g_mgGraceUntil;            /* GetTickCount64 after the restore: destroys wait until then */
+static int              g_rcHeldSaid;              /* (logged once a freeze) */
+static int RcStoreHeld(void) { return g_mgHeld || GetTickCount64() < g_mgGraceUntil; }
 
 static int RcDrop(void)
 {
@@ -353,7 +365,7 @@ static int RcDrop(void)
 /* 1 queued; 0 the queue is full (the caller destroys it at once, as before) */
 static int RcDefer(uint8_t* unit, const wchar_t* name)
 {
-    if (!g_rcWaitMs || g_rcN >= RC_MAX || !Readable(unit, 0x10)) return 0;
+    if ((!g_rcWaitMs && !RcStoreHeld()) || g_rcN >= RC_MAX || !Readable(unit, 0x10)) return 0;
     RcEntry* e = &g_rc[g_rcN++];
     e->unit = unit;
     e->idx = *(int32_t*)(unit + 0xC);
@@ -369,6 +381,17 @@ static void RcDrain(void)
 {
     if (!g_rcN || g_teardown) return;
     uint64_t now = GetTickCount64();
+    if (RcStoreHeld()) {                               /* (0.32.36) the STORE's freeze: nothing destroyed under it */
+        int due = 0;
+        for (int i = 0; i < g_rcN; ++i) due += now >= g_rc[i].due;
+        if (due && !g_rcHeldSaid) {
+            g_rcHeldSaid = 1;
+            Log(L"recycle: %d unit actors due to be destroyed wait for the STORE's restore (%d queued): none is destroyed while "
+                L"its freeze holds the AI objects, nor %d s after", due, g_rcN, RC_STORE_GRACE_MS / 1000);
+            Crumb(L"recycle: %d due destroys held for the STORE", due);
+        }
+        return;
+    }
     int keep = 0;
     for (int i = 0; i < g_rcN; ++i) {
         RcEntry e = g_rc[i];
@@ -616,7 +639,7 @@ static int Recycle(uint8_t* desc, const wchar_t* name, int force)
         Log(L"spawn %s: its last flight is still up (%d alive); not spawned again", name, alive);
         return -1;
     }
-    int later = force != 2 && RcDefer(unit, name);
+    int later = (force != 2 || RcStoreHeld()) && RcDefer(unit, name);   /* (0.32.36: never at once under the STORE) */
     Crumb(L"recycle %s: unregistering its unit actor %p (%d alive)%s", name, unit, alive, later ? L", its destroy deferred" : L" and destroying it");
     g_unregisterUnit(g_phase, unit);
     ++g_unitGen;                                       /* (lag-1: the id table looks again) */

@@ -648,6 +648,8 @@ static void OnMgDeactivate(uint8_t* mgr, uint8_t* objs)
         Crumb(L"minigame deactivation skipped, type %d, %d objects", type, n);
         return;
     }
+    g_mgHeld = 1;                                  /* (0.32.36: no unit actor destroyed until the restore) */
+    g_rcHeldSaid = 0;
     g_nextMgDeactivate(mgr, objs);
     if (mgr && UObjLive(mgr) == 1) {
         Log(L"minigame: type %d deactivated the world's AI: %d objects; lists %d / hidden %d / %d", type, n,
@@ -664,6 +666,12 @@ static void OnMgRestore(uint8_t* mgr, uint8_t* objs)
         MgLogObjects(L"listed", mgr + 0x68);
     }
     g_nextMgRestore(mgr, objs);
+    if (g_mgHeld) {
+        g_mgHeld = 0;
+        g_mgGraceUntil = GetTickCount64() + RC_STORE_GRACE_MS;
+        if (g_rcN) Log(L"recycle: the STORE's restore done; %d unit actors queued, the due ones destroyed from %d s on", g_rcN,
+                       RC_STORE_GRACE_MS / 1000);
+    }
 }
 
 static void MgInstall(void)
