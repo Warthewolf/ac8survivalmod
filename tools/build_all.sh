@@ -41,6 +41,7 @@ python -X utf8 -I tools/menu_stock.py   # Survival's menu pages: the stock main-
 python -X utf8 -I tools/checks/menu_pages_test.py > /dev/null || { python -X utf8 -I tools/checks/menu_pages_test.py; exit 1; }
 python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua   # no Lua here: syntax check
 python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/ai/*.lua   # the behaviour scripts (packed)
+python -X utf8 -I tools/checks/lua_check.py --addons examples/addons   # the example add-ons, each in an add-on's environment
 python -X utf8 -I tools/checks/ini_check.py   # every survival.default.ini setting is one CFG has
 python -X utf8 -I tools/subtitles.py check     # config/subtitles.ini: every line reads (sv_config_subs.lua), no mistake
 python -X utf8 -I tools/checks/size_check.py  # no source file over 2,000 lines (CONTRIBUTING.md)

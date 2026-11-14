@@ -55,6 +55,7 @@ sh tools/checks/lua_build.sh > "$OUT/lua_build.txt" 2>&1 || { cat "$OUT/lua_buil
 # the build's own checks (tools/build_all.sh)
 run lua_check      python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua
 run lua_check_ai   python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/ai/*.lua
+run lua_check_addons python -X utf8 -I tools/checks/lua_check.py --addons examples/addons
 run ini_check      python -X utf8 -I tools/checks/ini_check.py
 run subtitles      python -X utf8 -I tools/subtitles.py check
 run size_check     python -X utf8 -I tools/checks/size_check.py
