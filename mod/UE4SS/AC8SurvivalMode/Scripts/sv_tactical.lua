@@ -320,6 +320,31 @@ local function activator(pawn)
     return UP.act
 end
 
+-- (2026-11-14) which special weapons are mounted: the weapon activator's SpecialWeaponConfigs (reflected, each entry's
+-- WeaponClass: a hard class reference, not a soft one: hard rule 29), their class names joined; nil when none reads.
+-- Only the classes: SpWeaponID is Transient, and a key that flickers would read a raised load as a stock one.
+local function specialKey(pawn)
+    local act = activator(pawn)
+    if not act then return nil end
+    local names = {}
+    local function add(e)
+        local okC, cls = pcall(function() return e.WeaponClass end)
+        if okC and cls ~= nil then
+            local n = nameOf(cls)
+            if type(n) == "string" and n ~= "?" and n ~= "" then names[#names + 1] = n end
+        end
+    end
+    local okA, arr = pcall(function() return act.SpecialWeaponConfigs end)
+    if not (okA and arr ~= nil) then return nil end
+    if type(arr) == "table" then
+        for _, e in ipairs(arr) do add(e) end
+    else
+        pcall(function() arr:ForEach(function(_, e) add(e:get()) end) end)
+    end
+    if #names == 0 then return nil end
+    return table.concat(names, "|")
+end
+
 local function tier(key) return RUN.ups and RUN.ups[key] or 0 end
 
 local function step(key)
@@ -380,8 +405,32 @@ function UP.apply(pawn)
     -- with the bays, which ammoTick waits for before it puts back what you had (that run: 36 specials bought, the
     -- take-off reload left 24 and the count went down to it, the money gone).
     if type(SV_AmmoMax) == "function" and A and A.applied then
+        -- ((2026-11-14) NotMexi's run of 0.74.36: a full load equal to the one Survival set last was taken for its own, so
+        -- a special weapon swapped in at the hangar whose stock load was the old one's raised load (HCAA with LACM 18 ->
+        -- 36, then HCAA alone, stock 36) kept the old stock: 36 for the rest of the run at WEAPON BAYS tier 2, not 72.
+        -- Another weapon mounted (the activator's SpecialWeaponConfigs, else special 2's slot coming or going): the
+        -- special weapons' stock loads are read again)
+        local key, has3 = specialKey(pawn), nil
+        local m3 = SV_Ammo(3, 1)
+        if m3 >= 0 then has3 = true elseif m3 == -7 then has3 = false end   -- (-1: not ready, nothing said)
+        local why = nil
+        if key and b.wkey and key ~= b.wkey then why = "another special weapon mounted"
+        elseif has3 ~= nil and b.has3 ~= nil and has3 ~= b.has3 then   -- (also when the key reads: it may list options)
+            why = has3 and "a second special weapon mounted" or "the second special weapon taken off"
+        end
+        if key then b.wkey = key end
+        if has3 ~= nil then b.has3 = has3 end
+        if why then
+            for k = 2, 3 do b["max" .. k], b["set" .. k], b["fail" .. k] = nil, nil, nil end
+            log("upgrades: weapon bays: " .. why .. ": the special weapons' stock loads read again")
+        end
         for k = 1, 3 do
             local cur = SV_Ammo(k, 1)
+            if cur == -7 then                            -- (no such slot on this loadout: nothing kept for it)
+                b["max" .. k], b["set" .. k], b["fail" .. k] = nil, nil, nil
+                if A.max then A.max[k] = nil end
+                if A.bays then A.bays[k] = nil end
+            end
             if cur >= 0 and cur ~= b["set" .. k] then b["max" .. k] = cur end
             local base = b["max" .. k]
             if base and not b["fail" .. k] then             -- (one that didn't take stays at the aircraft's own)

@@ -412,6 +412,7 @@ function ammoTick(tick, pc)
         for k = 0, 4 do
             local m = SV_Ammo(k, 1)
             if m >= 0 then A.max[k] = math.max(m, A.bays and A.bays[k] or 0) end   -- (WEAPON BAYS': UP.apply raises it back)
+            if m == -7 and k >= 2 and k <= 3 then A.max[k] = nil end         -- (2026-11-14: a special slot this loadout lacks)
         end
     end
     if CFG.ammo.gun_unlimited and tick % 8 == 0 then                           -- every 2 s: gun back to full
