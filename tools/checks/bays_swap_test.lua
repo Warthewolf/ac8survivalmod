@@ -3,10 +3,12 @@
 -- 18 -> 36 and 10 -> 20; then HCAA alone again, stock 36 = the last load Survival set, so UP.apply took it for its own
 -- and kept the old stock 18: 36/36 for the rest of the run; and special 2's old maximum kept with no special 2). On the
 -- real sv_core, sv_config, sv_flights (ammoTick) and sv_tactical (UP.apply), the game stubbed as flares_test.lua's:
---   the swap seen by the activator's SpecialWeaponConfigs (the weapon classes): back to HCAA alone, 72;
---   the same with SpecialWeaponConfigs unreadable: special 2's slot going away says it;
---   a slot this loadout lacks: no maximum kept for it (A.max / A.bays), the STORE's rows and FULL REARM skip it;
---   no swap: the game's reload to stock raised once (36 -> 72), and an unchanged raised load never raised again.
+--   the swap seen by special 2's slot going away: back to HCAA alone, 72 (the activator's SpecialWeaponConfigs
+--     readable or not: it's only logged);
+--   a slot this loadout lacks: no maximum kept for it (A.max / A.bays), the real shop's FULL REARM and Special row skip it;
+--   no swap: the game's reload to stock raised once (36 -> 72), and an unchanged raised load never raised again;
+--   the review of 2026-11-14: the activator's list changing a pass after the loads raises nothing twice; a pass where
+--     no slot reads (-7 for all, missiles too) forgets nothing and raises nothing twice.
 local MOD, WORK = arg[1], arg[2]
 local fails = 0
 local function check(ok, what) if ok then print("  ok   " .. what) else print("  FAIL " .. what); fails = fails + 1 end end
@@ -67,6 +69,8 @@ function liveObj(o) return valid(o) end
 part("sv_config.lua")
 part("sv_rows.lua"); part("sv_ai.lua"); part("sv_hud.lua"); part("sv_spawn.lua"); part("sv_rounds.lua")
 part("sv_flights.lua")
+-- (shopBuy is a local of sv_shop.lua's block: made a global here so the test can press a row)
+PARTS.load("sv_shop.lua", nil, { { "\nlocal shopTexts, shopBuy ", "\nlocal shopTexts " } })
 part("sv_tactical.lua")
 function playerOnAirfield() return ground end
 local fired = {}
@@ -129,9 +133,46 @@ swaps("the classes readable")
 readable = false
 swaps("SpecialWeaponConfigs unreadable")
 
-print("FULL REARM and the STORE's Special row with no special 2")
-A.caps[3] = 5                                         -- (a count left from the old loadout)
-check(A.max[3] == nil, "rearm has no special 2 to charge (A.max[3] nil)")
+readable = true
+print("the review (2026-11-14): the activator's list changing a pass after the loads raises nothing twice")
+mount(config(HCAA), 36, -7)
+UP.apply(pawn)
+mount(config(HCAA), 24, -7)                           -- (a single special with its own stock 24: the list not yet updated)
+UP.apply(pawn)
+check(mx[2] == 48, "24 -> 48 (" .. mx[2] .. ")")
+act.SpecialWeaponConfigs = config(LACM)                -- (the list follows a pass later)
+UP.apply(pawn); UP.apply(pawn)
+check(mx[2] == 48, "the list's change raises nothing again (" .. mx[2] .. ")")
+
+print("the review: a pass where the slots can't be read (-7 for every slot) changes nothing")
+mount(config(HCAA2, LACM), 18, 10)
+UP.apply(pawn)
+check(mx[2] == 36 and mx[3] == 20, "HCAA with LACM: 36 / 20")
+local keep = { mx[1], mx[2], mx[3] }
+mx[1], mx[2], mx[3] = -7, -7, -7
+UP.apply(pawn)
+run(8)
+check(A.max[2] == 36 and A.max[3] == 20 and A.bays[2] == 36 and A.bays[3] == 20, "nothing forgotten while unreadable")
+mx[1], mx[2], mx[3] = keep[1], keep[2], keep[3]
+UP.apply(pawn); UP.apply(pawn)
+check(mx[2] == 36 and mx[3] == 20, string.format("read again: 36 / 20, not raised twice (%d / %d)", mx[2], mx[3]))
+
+print("FULL REARM and the STORE's Special row once special 2 is gone (the real sv_shop)")
+mount(config(HCAA), 36, -7)
+UP.apply(pawn)
+run(8)
+A.caps[2], A.caps[3] = 60, 5                          -- (special 1 short of 72; a count left from the old loadout)
+cnt[2] = 60
+RUN.msg, RUN.credits, RUN.spent, RUN.bought = RUN.msg or {}, 1000000, 0, {}
+local from = #logs + 1
+local okB, errB = pcall(shopBuy, "Rearm")
+local line = found("shop: Rearm:", from) or tostring(errB)
+check(okB and line:find("special 1 +12", 1, true) ~= nil and not line:find("special 2", 1, true),
+    "FULL REARM: special 1 +12, nothing for a special 2 that's gone (" .. line .. ")")
+from = #logs + 1
+local okS, errS = pcall(shopBuy, "Special")
+line = found("shop: Special:", from) or tostring(errS)
+check(okS and line:find("FULL LOAD", 1, true) ~= nil, "Special: at full load with special 1 72/72 (" .. line .. ")")
 
 print(fails == 0 and "bays swap test: all passed" or ("bays swap test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

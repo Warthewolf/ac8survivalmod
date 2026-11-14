@@ -408,25 +408,33 @@ function UP.apply(pawn)
         -- ((2026-11-14) NotMexi's run of 0.74.36: a full load equal to the one Survival set last was taken for its own, so
         -- a special weapon swapped in at the hangar whose stock load was the old one's raised load (HCAA with LACM 18 ->
         -- 36, then HCAA alone, stock 36) kept the old stock: 36 for the rest of the run at WEAPON BAYS tier 2, not 72.
-        -- Another weapon mounted (the activator's SpecialWeaponConfigs, else special 2's slot coming or going): the
-        -- special weapons' stock loads are read again)
-        local key, has3 = specialKey(pawn), nil
+        -- Special 2's slot coming or going is a new loadout, put on by the game with every slot's stock load in one go:
+        -- the special weapons' stock loads are read again. A -7 counts as "no such slot" only while the missiles' slot
+        -- reads (the slot array readable: AmmoGet answers -7 for an unreadable one too), so a pass that can't read
+        -- the slots changes nothing. The review of 2026-11-14: the activator's SpecialWeaponConfigs may change a pass
+        -- after the loads do (a load already raised would be raised twice), so it's only logged, to learn in game
+        -- whether it follows the hangar's pick; a swap between two single-special loadouts whose stock is the old raised
+        -- load is still missed (the stock read from the weapon itself would fix that: not yet reverse-engineered).
+        local readable = SV_Ammo(1, 1) >= 0
         local m3 = SV_Ammo(3, 1)
-        if m3 >= 0 then has3 = true elseif m3 == -7 then has3 = false end   -- (-1: not ready, nothing said)
-        local why = nil
-        if key and b.wkey and key ~= b.wkey then why = "another special weapon mounted"
-        elseif has3 ~= nil and b.has3 ~= nil and has3 ~= b.has3 then   -- (also when the key reads: it may list options)
-            why = has3 and "a second special weapon mounted" or "the second special weapon taken off"
-        end
-        if key then b.wkey = key end
-        if has3 ~= nil then b.has3 = has3 end
-        if why then
+        local has3 = nil
+        if m3 >= 0 then has3 = true elseif m3 == -7 and readable then has3 = false end   -- (else: nothing said)
+        if has3 ~= nil and b.has3 ~= nil and has3 ~= b.has3 then
             for k = 2, 3 do b["max" .. k], b["set" .. k], b["fail" .. k] = nil, nil, nil end
-            log("upgrades: weapon bays: " .. why .. ": the special weapons' stock loads read again")
+            log("upgrades: weapon bays: " .. (has3 and "a second special weapon mounted" or "the second special weapon taken off")
+                .. ": the special weapons' stock loads read again")
+        end
+        if has3 ~= nil then b.has3 = has3 end
+        if playerOnAirfield and playerOnAirfield() then                   -- (the hangar's pick, logged only: above)
+            local key = specialKey(pawn)
+            if key and key ~= b.wkey then
+                if b.wkey then log("upgrades: weapon bays: the activator's special weapons now " .. key .. " (logged only)") end
+                b.wkey = key
+            end
         end
         for k = 1, 3 do
             local cur = SV_Ammo(k, 1)
-            if cur == -7 then                            -- (no such slot on this loadout: nothing kept for it)
+            if k >= 2 and cur == -7 and readable then        -- (no such slot on this loadout: nothing kept for it)
                 b["max" .. k], b["set" .. k], b["fail" .. k] = nil, nil, nil
                 if A.max then A.max[k] = nil end
                 if A.bays then A.bays[k] = nil end
