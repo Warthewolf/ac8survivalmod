@@ -1,0 +1,17 @@
+02:49:50 AC8 Survival Mode runtime 0.32.35
+02:49:51 logs: this session's files are logs\*_2026-11-12_02-49-50.* (the runtime's and Lua's logs, the crumbs, session, UE4SS)
+02:49:52 spawner: LiveUnitSpawner 1A2B, global phase 3C4D, world data 5E6F; checked through GUObjectArray: yes
+02:50:27 coop: you are player 2
+02:50:27 coop: player 1: link up
+02:51:27 coop: you are player 2; 20 enemy streams bound (1000 moves, 0 failed); 0 bad packets; enemies drawn 120 ms behind the host (lateness 30 ms); the last minute's 1000 enemy moves: 10 past their newest state, 0 held
+02:51:27 coop:   player 1 Kestrel: linked, rtt 180 ms; sent 100 packets (10 KB), got 200 (20 KB), 2 resent; their plane 0 moves
+02:51:27 coop:   player 3 Osprey: linked, rtt 250 ms; sent 90 packets (9 KB), got 80 (8 KB), 0 resent; their plane 0 moves
+02:52:27 frames: the last minute: 1800 frames while a plane flew (30 fps), 33.3 ms on average, 95% under 40 ms, worst 120 ms; 0 over 50 ms, 1 over 100 ms; 0 gaps over 2 s not counted (a pause, a load) (joiner-4)
+02:52:27 units: the last minute: 60 SV_UnitAlive asks, 12 us each on average (worst 80 us); the phase's list up to 30 long; its id table built 2 times (1 for the spawner's own changes, 1 the list's, 0 on its 2 s refresh, 0 a hit moved), 60 entries read, 0 skipped; kept objects checked through GUObjectArray: yes (lag-1)
+02:57:31 minigame: type 8 starts; its deactivation of 30 AI objects skipped (co-op): they keep flying
+02:59:44 minigame: type 7 ends: restore of 30 AI objects; lists were 0 / hidden 0 / 0 (co-op keep 1)
+03:00:37 coop: player 1: link lost (nothing for 6 s)
+03:00:40 coop: player 1: link up
+03:00:27 frames: the last minute: 1200 frames while a plane flew (20 fps), 50.0 ms on average, 95% under 100 ms, worst 400 ms; 30 over 50 ms, 5 over 100 ms; 0 gaps over 2 s not counted (a pause, a load) (joiner-4)
+03:09:06 coop: reliable queue to player 1 (Kestrel) full (256 messages waiting for their acks): 3 message(s) dropped since the last such line
+03:09:06 logs: UE4SS.log's copy: 5 MB read, 1 MB written, 9 lines, 4 of them repeats collapsed, 0 past the 64 MB cap; its most repeated line 5000 times (lag-8)

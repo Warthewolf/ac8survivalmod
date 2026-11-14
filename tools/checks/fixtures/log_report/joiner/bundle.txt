@@ -1,0 +1,16 @@
+AC8 Survival Mode: the logs of one session
+bundle: AC8Survival_2026-11-12_02-49-50_0.74.52-coop2mp.144
+session: 2026-11-12_02-49-50
+start_ft=134000000000000000
+session file: found
+(zip entry times are UTC; entries that are not listed as SKIPPED are in the zip)
+
+added   AC8SurvivalMode_2026-11-12_02-49-50.log (1500 bytes)
+added   AC8SurvivalMode_lua_2026-11-12_02-49-50.log (3000 bytes)
+added   Saved/Logs/AceCombat8.log (300 bytes)
+SKIPPED Saved/Logs/AceCombat8-backup.log: could not be opened (locked or gone)
+
+UE4SS.log: 5 MB read, 1 MB copied into UE4SS_2026-11-12_02-49-50.log (5007 lines, 5000 of them repeats of the line before, collapsed into one line each run, 0 past the copy's 64 MB)
+its most repeated line (5000 repeats): [Lua] [NoisyMod] Event work complete; polling stopped
+
+files in the zip: 9, skipped or partial: 1

@@ -120,9 +120,11 @@ local function natives()
 end
 calls.len = {}
 
--- the shipped settings (sv_config_specials.lua's CFG.music), the limit made small for the test
+-- the shipped settings (sv_config_arc.lua's CFG.music, after sv_config_specials.lua's CFG.specials, whose last fields
+-- sv_config_arc.lua sets), the limit made small for the test
 CFG = {}
 PARTS.load("sv_config_specials.lua", nil, {})
+PARTS.load("sv_config_arc.lua", nil, {})
 local shippedHide = CFG.music and CFG.music.player_hide or {}
 check(#shippedHide == 13 and CFG.music.player_from == "jukebox" and CFG.music.player_max == 120,
       "shipped: 13 menu tracks hidden, the draw from the jukebox, the limit 120")

@@ -1,8 +1,9 @@
 -- sv_config_subs.lua: every subtitle line in one file a person can edit, config\subtitles.ini, read over CFG's own lines
--- at start. Piece 3 of 4 of sv_config.lua's family (sv_config.lua, sv_config_specials.lua, sv_config_subs.lua,
--- sv_config_ini.lua), run by main.lua right after the piece before it and before sv_config_ini.lua takes CFG_DEFAULTS:
--- the file's lines are the shipped ones (the leaderboard's edited-run check and co-op's settings sync never see a
--- difference). A name another part uses is a global of this mod's Lua state, its own helpers stay local.
+-- at start. Piece 4 of 5 of sv_config.lua's family (sv_config.lua, sv_config_specials.lua, sv_config_arc.lua,
+-- sv_config_subs.lua, sv_config_ini.lua), run by main.lua right after the piece before it and before sv_config_ini.lua
+-- takes CFG_DEFAULTS: the file's lines are the shipped ones (the leaderboard's edited-run check and co-op's settings
+-- sync never see a difference). A name another part uses is a global of this mod's Lua state, its own helpers stay
+-- local.
 --
 -- (2026-11-08) the user: "Can you please make it so that I can easily edit all these subtitles", "I want my friend to be
 -- able to edit all these subtitles easily". Every subtitle line is a "SPEAKER|text" string in CFG (the special rounds'

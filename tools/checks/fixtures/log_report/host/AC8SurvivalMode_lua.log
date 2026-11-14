@@ -1,0 +1,113 @@
+23:50:02 config: survival.ini, 0 settings
+23:50:02 loaded, version 0.74.52-coop2mp.144
+23:50:05 leaderboard: this build's hash is 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef (runs count only from a registered build)
+23:50:10 hud: callout 'CO-OP: YOU ARE THE HOST' / 'PLAYERS 1/24'
+23:50:10 leaderboard: co-op run 5eed1234 started: this game hosts it and keeps its squad (it sends the run)
+23:50:12 leaderboard: Steam name 'Kestrel'
+23:50:20 coop: player 2: sys|joined
+23:50:20 coop: player 2: sys|up
+23:50:20 coop: player 2 is Wren, Survival 0.74.52-coop2mp.144, runtime 0.32.35, flies (not yet: no plane)
+23:50:20 hud: callout 'WREN JOINED' / 'PLAYERS 2/24'
+23:50:22 coop: player 3: sys|joined
+23:50:22 coop: player 3 is Osprey, Survival 0.74.52-coop2mp.144, runtime 0.32.35, flies (not yet: no plane)
+23:50:30 coop: Gan|net <b>`x`</b> tried to join with Survival 0.74.40-coop2mp.132 (yours 0.74.52-coop2mp.144): refused
+23:50:30 hud: callout 'REFUSED GAN|NET <B>`X`</B>' / 'THEY HAVE 0.74.40-COOP2MP.132: UPDATE TO 0.74.52-COOP2MP.144'
+23:50:58 hud: callout 'ROUND 1' / 'HOSTILES INBOUND'
+23:51:00 round 1: 4 aircraft: 4 fighters in 2 squadrons; cap 30, up to 29 at once
+23:51:30 director: cover for player 1 not now (its tell can't be said now)
+23:52:00 perf: tick avg 12.0 ms (halves 6.0 + 6.0), worst half 100.0 ms (first 100, second 40) over 241 ticks; parts (ms a tick / worst, share): coop 3.0/10 25%, rounds 2.0/20 17%, ammo 1.0/5 8%; untimed 0.1 1%; within them: allies/counts 0.1/1 1%; memory 9000 MB, committed 20000 MB
+23:52:00 perf: lists: planes 4 (4 up; 0 down taken off since), co-op players 3; natives: SV_UnitAlive 0.5 a tick 0.02 ms (worst 1), SV_ObjChain 5 a tick; Lua heap 9.5 MB
+23:52:30 round 1 clear; round 2 in 20 s
+23:52:30 hud: callout 'ROUND 1 COMPLETE' / 'NEXT ROUND IN 20 SECONDS'
+23:52:35 stats: round 1 (Rookie, normal, 3 players): length 90 s (0 s at the airfield), 1 wave; aircraft down 4 (yours 2), ordinary fighters 4 (yours 2)
+23:52:36 alive: round 1: 10 native SV_UnitAlive asks (0 at once: a plane of the flight seen down), 2 kept answers used (0 past the tick's budget); (lag-2) the asks took 1.0 ms in all, 0.2 ms in a tick at most (its budget 4 ms): 0 refreshes cut by it, 0 answers kept past 3 s
+23:52:47 hud: callout 'SPECIAL ROUND 2' / 'DEFEND THE EMBDIR SHUTTLE - CORRIS'
+23:52:50 round 2: 8 aircraft: 6 fighters in 3 squadrons, special shuttle: 2 strike aircraft in 1 squadrons; cap 30, up to 29 at once
+23:52:51 special: shuttle SV_Unit_Shuttle: on the pad
+23:52:51 special: shuttle countdown running at 0 s
+23:52:52 round probe: flags SV_ShuttleLaunched=0 SV_ShuttleRound=1 SV_SpRocketEscA=0 flights up (SV_Up_*)=2
+23:53:00 round 2: bomber flight EA_Unit_01_Air0 as f15e_common_sv (2 set), 30 km out at bearing 106, 0.7 km up: 2 aircraft up (SV_ShuttleRound 1: its orders are the shuttle's)
+23:54:00 music: track clock held (landing store)
+23:54:10 director: bracket: RE_SV_Bracket_02 fired, RE_SV_Bracket_03 fired
+23:54:20 events: RE_SV_Escort_04 (ERA_Unit_02_Dep_Air0 escorts the raid) fired
+23:54:25 special: round 2, the shuttle lifted off (countdown over; 0 hits, health 100%)
+23:54:25 hud: callout 'SHUTTLE LAUNCHED' / '+3200 ZOLLARS'
+23:54:30 music: track clock running
+23:54:31 special: shuttle liftoff replayed here, try 1 of 3: RE_SV_ShuttleT_136 1, the climb 1
+23:54:35 special: shuttle lifted off here at the replay's try 1 (SV_ShuttleLaunched 1, SV_ShuttleRound 1)
+23:54:36 round probe: flags SV_ShuttleLaunched=1 SV_ShuttleRound=1 SV_SpRocketEscA=0 flights up (SV_Up_*)=0
+23:55:00 round 2 clear; round 3 in 20 s
+23:55:00 hud: callout 'ROUND 2 COMPLETE' / 'NEXT ROUND IN 20 SECONDS'
+23:55:05 stats: round 2 (Rookie, shuttle 130 s, 3 players): length 130 s (30 s at the airfield), 1 wave; aircraft down 8 (yours 3), ordinary fighters 6 (yours 2)
+23:55:18 hud: callout 'ROUND 3' / 'ACE SQUADRONS: VALKYRIE'
+23:55:20 round 3: 16 aircraft: 16 fighters in 4 squadrons, 4 waves (6 + 2 + 6 + 2 aircraft); cap 30, up to 7 at once
+23:56:00 carrier: ZFA-44 CARRIER 1 (SV_Unit_Cargo1) on station for player 2: its ZFA-44s launch in 20 s (from its container launchers)
+23:56:20 carrier: ZFA-44 CARRIER 1 launches its ZFA-44s: RE_SV_CargoLaunch_1_1 fired (container arm 1, E_Unit_01_drone_1_0)
+23:56:25 carrier: launched ZFA-44s +5 s: 2147000001 (30.1, -10.0) km 8000 m, 700 km/h, yaw -90; 2147000002 (30.5, -9.0) km 8000 m, 700 km/h, yaw -80; apart 500 m
+23:57:00 down: you're down at 0 HP in round 3: hidden, no collision
+23:57:00 hud: callout 'YOU'RE DOWN' / 'A WINGMAN CAN REVIVE YOU AT THEIR AIRFIELD  [O] NEXT PLAYER'
+23:57:10 aces: BP_OP1021_su57_CP_Named_C_1 not put back onto you: you're down (its target BP_x, left as it is; 1 planes so far)
+23:58:00 hud: callout 'OSPREY DOWN' / 'LAND AND REVIVE THEM FROM THE STORE'
+23:58:00 down: player 3 (OSPREY) is down
+23:58:30 carrier: VAMPIRES E_Unit_01_drone_1_0 2147000001 at (31.0, 5.0) km 8500 m, 700 km/h, health 2700 (escort)
+23:58:40 events: RE_SV_AllyDefendA (the allies' defence of the airfield) fired
+23:59:40 revive: player 2 revived player 1 for 9500 (the run's revive 1, their 1; round 3's price)
+23:59:41 revive: back (revived by WREN) after 161 s down: repaired (event fired, health written), 5 s invincible
+23:59:41 hud: callout 'BACK IN THE FIGHT' / 'REVIVED BY WREN'
+00:00:00 allies: BP_OP0018_uavc_CP_Ally_C_2147000001 (E_Unit_01_drone_1_0) at round 3's level (Regular): PilotRank 4, health x2.80 (2700 -> 2700)
+00:00:00 allies: BP_OP0018_uavc_CP_Ally_C_2147000002 (E_Unit_01_drone_1_0) at round 3's level (Regular): PilotRank 4, health x2.80 (2700 -> 2700)
+00:00:30 coop: player 3: sys|lost
+00:00:30 hud: callout 'CO-OP LINK LOST' / 'OSPREY'
+00:01:40 coop: player 3: sys|left
+00:01:40 hud: callout 'OSPREY LEFT'
+00:02:00 round 3 clear; round 4 in 20 s
+00:02:00 hud: callout 'ROUND 3 COMPLETE' / 'NEXT ROUND IN 20 SECONDS'
+00:02:05 perf: tick avg 45.5 ms (halves 30.0 + 15.5), worst half 380.0 ms (first 380, second 120) over 1201 ticks; parts (ms a tick / worst, share): rounds 30.1/200 66%, allies 5.0/40 11%, coop 3.2/12 7%; untimed 0.5 1%; within them: allies/counts 2.0/9 4%; memory 9500 MB, committed 21000 MB
+00:02:05 perf: lists: planes 12 (10 up; 2 down taken off since), co-op players 3; natives: SV_UnitAlive 2.0 a tick 0.10 ms (worst 1), SV_ObjChain 9 a tick; Lua heap 12.0 MB
+00:02:17 hud: callout 'SPECIAL ROUND 4' / 'RETAKE THE SPACEPORT'
+00:02:20 round 4: 52 aircraft: 52 fighters in 15 squadrons, special retake: 0 strike aircraft in 0 squadrons, 2 waves (30 + 22 aircraft); cap 60, up to 30 at once
+00:02:20 special: round 4, the Spaceport Retake starts: 40 spawns and checks queued (a spawn or 4 checks a tick)
+00:02:30 allies: BP_OP0018_uavc_CP_Ally_C_2147000001 (E_Unit_01_drone_1_0) at round 4's level (Regular): PilotRank 4, health x2.80 (2700 -> 2700)
+00:02:30 allies: BP_OP0018_uavc_CP_Ally_C_2147000002 (E_Unit_01_drone_1_0) at round 4's level (Regular): PilotRank 4, health x2.80 (2700 -> 2700)
+00:03:00 round probe: flags SV_ShuttleLaunched=0 SV_ShuttleRound=0 SV_SpRocketEscA=0 flights up (SV_Up_*)=6
+00:03:05 special: rocket A launched (RE_SV_SpRocketLaunchA 1)
+00:03:05 hud: callout 'ROCKET LAUNCH' / 'SHOOT IT DOWN BEFORE IT REACHES ORBIT'
+00:03:06 special: rocket A: launch (radio RE_SV_SpRadioLaunch 1; line 1; sub)
+00:03:07 special: rocket A left its pad: its launch took here
+00:04:50 special: rocket A escaped (its climb's end at 20200 m, 105 s after its launch): -2890 zollars, no retake reward
+00:04:51 round probe: flags SV_ShuttleLaunched=0 SV_ShuttleRound=0 SV_SpRocketEscA=1 flights up (SV_Up_*)=4
+00:05:10 coop: a copy here couldn't be finished (health 1800 after)
+00:05:30 carrier: ZFA-44 CARRIER 1 leaving: 2 parked ZFA-44s of ship 1 finished off under the sea, 1 of its arms' units off the list once none is up
+00:05:31 carrier: a ZFA-44 finished off (carrier leaving): its health read 0 after ModifyHealth (damage event), as every one this level should
+00:05:40 dive: a ZFA-44 of dive 1 onto the nearest enemy aircraft, 4.2 km off (about 13 s at 1200 km/h; 13.3 km in its 40 s)
+00:05:55 dive: Helios blast 1 (in reach) at (31.0, 4.0) km 900 m: 2 enemy aircraft down, 0 aces' or specials' hurt (dive 1: 2 down); its ZFA-44 down
+00:06:00 carrier: a ZFA-44 2147000002 (dive) could not be finished (health 2700 after ModifyHealth and ApplyDamage): switched off
+00:06:00 round 4 clear; round 5 in 20 s
+00:06:00 hud: callout 'ROUND 4 COMPLETE' / 'NEXT ROUND IN 20 SECONDS'
+00:06:17 hud: callout 'SPECIAL ROUND 5' / 'SUBMARINE CONTACT'
+00:06:20 round 5: 1 aircraft: 0 fighters in 0 squadrons, special alicorn: 1 strike aircraft in 0 squadrons; cap 60, up to 30 at once
+00:06:20 special: the Alicorn (SV_Unit_Alicorn): up
+00:06:21 special: the Alicorn's core sized: 20 missiles (10 + 3.3 x 3 other players flying), 9600 health (x1.00: round 5's growth, as the tanks'; 48 damage a missile)
+00:06:30 allies: BP_OP0018_uavc_CP_Ally_C_2147000001 (E_Unit_01_drone_1_0) at round 5's level (Regular): PilotRank 4, health x2.80 (2700 -> 2700)
+00:06:30 allies: BP_OP0018_uavc_CP_Ally_C_2147000002 (E_Unit_01_drone_1_0) at round 5's level (Regular): PilotRank 4, health x2.80 (2700 -> 2700)
+00:06:40 special: Alicorn tank fl hit: -500 (8284 left)
+00:06:41 special: Alicorn tank fl hit: -8284 (0 left)
+00:07:00 hud: callout 'CORE EXPOSED' / 'HIT THE ALICORN'S CORE'
+00:07:00 special: the Alicorn's core open with 9600 health: CORE 100% on every player's row
+00:07:10 special: Alicorn core hit: -4800 (4800 left, 50%)
+00:07:20 coop: the joiners' hits dealt here in the last 60 s (health x 10): player 2: 3 hits (3 taken, 0 refused, 0 dropped), 4800: 4800 on SV_Unit_Alicorn (core 4800)
+00:07:30 special: Alicorn core hit: -4800 (0 left, 0%)
+00:07:31 special: round 5, the Alicorn sunk 71 s after it appeared (core down, hull 210; 0 deck launches)
+00:07:31 round 5 clear; round 6 in 20 s
+00:07:31 hud: callout 'ROUND 5 COMPLETE' / 'NEXT ROUND IN 20 SECONDS'
+00:07:51 hud: callout 'ROUND 6' / 'HOSTILES INBOUND'
+00:07:51 round 6: 10 aircraft: 10 fighters in 5 squadrons; cap 60, up to 30 at once
+00:08:00 allies: BP_OP0018_uavc_CP_Ally_C_2147000001 (E_Unit_01_drone_1_0) at round 6's level (Regular): PilotRank 4, health x2.80 (2700 -> 2700)
+00:08:00 allies: BP_OP0018_uavc_CP_Ally_C_2147000002 (E_Unit_01_drone_1_0) at round 6's level (Regular): PilotRank 4, health x2.80 (2700 -> 2700)
+00:08:30 special: VALKA RE_SV_ValkaTp_BAG not fired: not fired: the co-op host is down (sv_coop.lua)
+00:09:00 coop: out of Survival's level: every joiner told this game left its run in round 6 (hl|6|left; 1 linked): they migrate at once
+00:09:00 leaderboard: co-op run 5eed1234 over (left): 3 players (air / ground kills / revives given): Kestrel (host) 20/1/0, Wren 8/1/1, Osprey 2/0/0
+00:09:00 leaderboard: run over (left): round 6, score 12345, 30 air / 2 ground kills, 3 specials beaten, 0:19:00
+00:09:00 leaderboard: sending the run (job 1) (co-op, 3 players)
+00:09:02 leaderboard: the run: the server answered 200: {"ok":true,"duplicate":true}
+00:09:02 leaderboard: co-op run 5eed1234 NOT stored: the leaderboard keeps another copy of it, as far or further (round 6), kept

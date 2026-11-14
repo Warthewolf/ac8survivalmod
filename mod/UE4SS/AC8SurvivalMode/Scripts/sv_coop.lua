@@ -501,7 +501,15 @@ rawEvent = SV_Event
 if rawEvent then
     SV_Event = function(name, ...)
         local r
+        -- ((2026-11-11) hard rule 64: one this game fires while its landing STORE is open fired again here once it's shut,
+        -- when it's one of the one-shots that change the world: sv_rounds_store.lua STOREQ)
+        local okB, c0 = false, nil
+        if STOREQ and STOREQ.before then okB, c0 = pcall(STOREQ.before, name) end
         if hostDownSkips(name) then r = -20 else r = rawEvent(name, ...) end
+        if STOREQ and STOREQ.fired then
+            local okQ, errQ = pcall(STOREQ.fired, name, r, okB and c0 or nil)
+            if not okQ then once("storeqcheck", "coop: the STORE's check of " .. tostring(name) .. ": error " .. tostring(errQ)) end
+        end
         local nm = tostring(name)
         if nm:find("Remove", 1, true) or nm:find("Off_", 1, true) or nm:find("RunOver", 1, true) or nm:find("Destroy", 1, true) then
             crumb("event " .. nm .. ": " .. tostring(r))

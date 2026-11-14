@@ -482,7 +482,7 @@ check(JO.HealthInternal == 0, "an older host's zd e (no dive): every dive's")
 COOP = nil
 
 section("the hooks")
-local esc = readAll(MOD .. "/Scripts/sv_escort.lua")
+local esc = PARTS.read("sv_escort")      -- (sv_escort.lua's family: the carriers are in sv_escort_carriers.lua)
 check(esc:find("return (ZDIVE and ZDIVE.take and ZDIVE.take(C)) or (C.flight and flightOff(C.flight, why)) or 0", 1, true) ~= nil
       and esc:find('local nf = shipDone(C, C.name .. " leaving")', 1, true) ~= nil and esc:find('local nf = shipDone(C, C.name .. " sunk")', 1, true) ~= nil,
       "sv_escort.lua: a carrier leaving or sunk asks ZDIVE.take first (shipDone)")
