@@ -3162,3 +3162,13 @@ game. The work was split by file between agents; the builds ran in sequence in t
   run_all.sh: 83 passed, 0 failed, 1 skipped (coop_test, named only); paths_check, size_check pass.
 - To see in game: a forced recycle (an ace break-off, the Alicorn) 0-30 s before landing, then the STORE: the "waits"
   line, no crash at the takeoff fade, then the "held for the STORE" destroy.
+
+## 0.74.70-coop2mp.162: friends' zip (2026-11-15, runtime 0.32.36; dev 2d3c56b: the STORE crash fix)
+- dev as of 2d3c56b: 0.74.69 plus runtime 0.32.36 (the recycles' unit destroys wait out the STORE's freeze: Phantom's
+  crash of 2026-11-13). Built in worktree .claude/worktrees/fix-store-recycle-freeze (branch tools/friends-0.74.70),
+  build inputs linked from the main tree as 0.74.69's; `ZFA=1 sh tools/build_all.sh`: leaderboard address in, no
+  tani_wd.txt.
+- Packaged: BUILD_NAME=COOP2MP COOP=1 ZFA=1 sh tools/package_release.sh online 0.74.70 ->
+  AC8SurvivalMode_COOP2MP_0.74.70_Online_COOP_ZFA44.zip (46.9 MB, 102 files; SurvivalMode_P, Valka, ZFA44, Laser7
+  containers), build hash 0aea0a694202..., registered; zip_leak_test passed (no Tanicorn, DEV ONLY, TEST ONLY or
+  Distant Thunder). Not installed. Not yet run in game.
