@@ -10,6 +10,13 @@ by the rules below. Talk to them in plain words, short: what you did, what is le
 Never use jargon without saying what it means. If something fails, say so with the error, and what you will try.
 The repo has two long-lived branches: `dev` (everything that works) and `main` (what players get = the last release).
 
+**The development cycle (this is how the repo lives; you run it, the user only says what she wants):**
+1. A new feature or experiment = a new branch from an up-to-date `dev`.
+2. It works and she keeps it: merge it into `dev`, close the branch, start the next one from `dev`.
+3. It does not work or she drops it: ask once, then delete the branch. `dev` never holds half-working experiments.
+4. She wants a build: release (section 6): `dev` goes to `main`, the build is tagged and listed in GitHub's Releases
+   with notes of what changed.
+
 ## 1. Project (what this is)
 A round-based survival mode mod for Ace Combat 8 (PC). Waves escalate each round; every 5th round is a special enemy
 round (aces, Ladon bombers, ...). Between rounds the player lands at an airfield and spends credits (kills) on ammo,
@@ -126,11 +133,20 @@ When the user says "release", "publish", "make the zip" or "ship it", do all of 
    `SONG=1` as the build has them; the user's own install: `sh tools/package_dev.sh <version>`, which never pushes).
    The zip goes to the main tree's `build/release`; `<zip>.buildhash.txt` is registered on the leaderboard by the script.
    Say clearly if the registration was skipped.
-4. **Push to `main`: `sh tools/release_push.sh <version>`.** It refuses unless the tree is clean, you are on `dev`, the
-   zip exists and the version is new; then it merges `dev` into `main`, tags `v<version>`, and pushes `main`, `dev` and
-   the tag to `origin`. This is how players get the update: a release that is built but not pushed is not released.
-   The user's request for a release is the permission for this one push; nothing else pushes to `main`.
-5. Tell the user in plain words: version, where the zip is, that `main` is updated (or what failed).
+4. **Write the release notes** in `<release folder>/RELEASE_NOTES_<version>.md` (the folder is where the zip went; not in
+   the repo). They are public, for players: a short plain description of what changed since the last release, in
+   groups (New / Changed / Fixed), a line each, no file names, no internal jargon. Build them from
+   `git log v<previous version>..dev` and this build's entry in `HISTORY.md`. Never mention Distant Thunder, THE
+   TANACORN, the Invincible Fleet or anything dev-only (the script refuses notes that do), nor another mod.
+5. **Push to `main` and publish: `sh tools/release_push.sh <version>`.** It refuses unless the tree is clean, you are
+   on `dev`, the notes and the zip exist and the version is new; then it pushes `dev`, puts `dev` on `main`
+   (fast-forward only), tags `v<version>`, and creates the GitHub Release (the Releases section) with the notes and the
+   PUBLIC zip `AC8SurvivalMode_<version>_Online.zip` (the Nexus build; friends' or tester zips are never attached).
+   Needs the `gh` GitHub CLI logged in (`gh auth login`, once). Without it the push still happens and the script prints
+   the `gh release create` line to run later. `DRY_RUN=1` checks everything and pushes nothing. This is how players get
+   the update: a release that is built but not pushed is not released. The user's request for a release is the
+   permission for this one push; nothing else pushes to `main`.
+6. Tell the user in plain words: version, where the zip is, that `main` and the Release are updated (or what failed).
 Never push to `main` any other way, never force-push, never rewrite history. Only `origin` is pushed to.
 
 ## 7. Working with two agents

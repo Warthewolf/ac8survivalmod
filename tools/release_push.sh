@@ -5,6 +5,11 @@
 # It refuses unless: you are on dev, the tree is clean, dev is not behind origin/dev, origin/main is already inside dev
 # (nothing would be lost), the zip for <version> exists in the release folder, and the tag is new.
 # DRY_RUN=1 sh tools/release_push.sh <version> : checks everything and says what it would push, pushes nothing.
+# Then it creates the GitHub Release v<version> (the Releases section) with `gh`: title, the release notes and the PUBLIC
+# zip only (AC8SurvivalMode_<version>_Online.zip = the Nexus build; the friends' / tester variants are never attached).
+# The notes are a plain description of what changed, written BEFORE running this (AGENTS.md section 6) into
+# <release folder>/RELEASE_NOTES_<version>.md; the script refuses without them. No gh, or not logged in: the push still
+# happens and the script prints the one gh command to run later (gh auth login once).
 # REMOTE=<name> to push somewhere else than origin (default origin). Needs no machine path: the zip folder comes from
 # tools/release_dir.sh (the main tree's build/release, or RELEASE_DIR in .env).
 set -e
@@ -36,6 +41,12 @@ lua=$(grep -m1 -E '^(local )?VERSION = ' mod/UE4SS/AC8SurvivalMode/Scripts/main.
 case "$lua" in "$ver"*) ;; *) fail "main.lua's VERSION is $lua, not $ver: bump and build first" ;; esac
 . tools/release_dir.sh
 ls "$REL"/AC8SurvivalMode_*"$ver"*.zip >/dev/null 2>&1 || fail "no zip for $ver in the release folder: run tools/package_release.sh first"
+notes="$REL/RELEASE_NOTES_$ver.md"
+[ -s "$notes" ] || fail "no release notes: write what changed (plain words) in $notes first (AGENTS.md section 6)"
+if grep -n -i -e 'thunder' -e 'tanicorn' -e 'tanacorn' -e 'invincible fleet' "$notes"; then
+    fail "the notes name Distant Thunder / Tanacorn / the Fleet: they are never in a release (AGENTS.md section 5); take them out"
+fi
+pub="$REL/AC8SurvivalMode_${ver}_Online.zip"
 tag="v$ver"
 git rev-parse -q --verify "refs/tags/$tag" >/dev/null && fail "tag $tag already exists: a new build needs a new version (tools/bump_version.py)"
 
@@ -49,4 +60,14 @@ git push "$remote" dev:main        # fast-forward only: the remote refuses anyth
 git push "$remote" "$tag"
 # bring the local main branch up to date when git lets us (it may be checked out in another worktree)
 git fetch "$remote" main:main -q 2>/dev/null || echo "release_push: (local main not moved: it is checked out elsewhere; $remote/main is up to date)"
+# the GitHub Release (Releases section): notes + the public zip, if that zip exists
+if command -v gh >/dev/null 2>&1; then
+    repo=$(git remote get-url "$remote")
+    set -- "$tag" --repo "$repo" --title "Survival Mode $ver" --notes-file "$notes" --target main
+    [ -f "$pub" ] && set -- "$@" "$pub" || echo "release_push: no public zip ($pub): the Release is created without a file"
+    if gh release create "$@"; then echo "release_push: GitHub Release $tag created."
+    else echo "release_push: the push worked but the GitHub Release failed (gh auth login? then: gh release create $tag --repo $repo --title \"Survival Mode $ver\" --notes-file $notes)"; fi
+else
+    echo "release_push: gh is not installed: no GitHub Release. Later: gh release create $tag --title \"Survival Mode $ver\" --notes-file $notes ${pub}"
+fi
 echo "release_push: DONE. $remote/main is at $(git rev-parse --short dev), tagged $tag."
