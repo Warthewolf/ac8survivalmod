@@ -320,6 +320,31 @@ local function activator(pawn)
     return UP.act
 end
 
+-- (2026-11-14) which special weapons are mounted: the weapon activator's SpecialWeaponConfigs (reflected, each entry's
+-- WeaponClass: a hard class reference, not a soft one: hard rule 29), their class names joined; nil when none reads.
+-- Only the classes: SpWeaponID is Transient, and a key that flickers would read a raised load as a stock one.
+local function specialKey(pawn)
+    local act = activator(pawn)
+    if not act then return nil end
+    local names = {}
+    local function add(e)
+        local okC, cls = pcall(function() return e.WeaponClass end)
+        if okC and cls ~= nil then
+            local n = nameOf(cls)
+            if type(n) == "string" and n ~= "?" and n ~= "" then names[#names + 1] = n end
+        end
+    end
+    local okA, arr = pcall(function() return act.SpecialWeaponConfigs end)
+    if not (okA and arr ~= nil) then return nil end
+    if type(arr) == "table" then
+        for _, e in ipairs(arr) do add(e) end
+    else
+        pcall(function() arr:ForEach(function(_, e) add(e:get()) end) end)
+    end
+    if #names == 0 then return nil end
+    return table.concat(names, "|")
+end
+
 local function tier(key) return RUN.ups and RUN.ups[key] or 0 end
 
 local function step(key)
@@ -380,8 +405,40 @@ function UP.apply(pawn)
     -- with the bays, which ammoTick waits for before it puts back what you had (that run: 36 specials bought, the
     -- take-off reload left 24 and the count went down to it, the money gone).
     if type(SV_AmmoMax) == "function" and A and A.applied then
+        -- ((2026-11-14) NotMexi's run of 0.74.36: a full load equal to the one Survival set last was taken for its own, so
+        -- a special weapon swapped in at the hangar whose stock load was the old one's raised load (HCAA with LACM 18 ->
+        -- 36, then HCAA alone, stock 36) kept the old stock: 36 for the rest of the run at WEAPON BAYS tier 2, not 72.
+        -- Special 2's slot coming or going is a new loadout, put on by the game with every slot's stock load in one go:
+        -- the special weapons' stock loads are read again. A -7 counts as "no such slot" only while the missiles' slot
+        -- reads (the slot array readable: AmmoGet answers -7 for an unreadable one too), so a pass that can't read
+        -- the slots changes nothing. The review of 2026-11-14: the activator's SpecialWeaponConfigs may change a pass
+        -- after the loads do (a load already raised would be raised twice), so it's only logged, to learn in game
+        -- whether it follows the hangar's pick; a swap between two single-special loadouts whose stock is the old raised
+        -- load is still missed (the stock read from the weapon itself would fix that: not yet reverse-engineered).
+        local readable = SV_Ammo(1, 1) >= 0
+        local m3 = SV_Ammo(3, 1)
+        local has3 = nil
+        if m3 >= 0 then has3 = true elseif m3 == -7 and readable then has3 = false end   -- (else: nothing said)
+        if has3 ~= nil and b.has3 ~= nil and has3 ~= b.has3 then
+            for k = 2, 3 do b["max" .. k], b["set" .. k], b["fail" .. k] = nil, nil, nil end
+            log("upgrades: weapon bays: " .. (has3 and "a second special weapon mounted" or "the second special weapon taken off")
+                .. ": the special weapons' stock loads read again")
+        end
+        if has3 ~= nil then b.has3 = has3 end
+        if playerOnAirfield and playerOnAirfield() then                   -- (the hangar's pick, logged only: above)
+            local key = specialKey(pawn)
+            if key and key ~= b.wkey then
+                if b.wkey then log("upgrades: weapon bays: the activator's special weapons now " .. key .. " (logged only)") end
+                b.wkey = key
+            end
+        end
         for k = 1, 3 do
             local cur = SV_Ammo(k, 1)
+            if k >= 2 and cur == -7 and readable then        -- (no such slot on this loadout: nothing kept for it)
+                b["max" .. k], b["set" .. k], b["fail" .. k] = nil, nil, nil
+                if A.max then A.max[k] = nil end
+                if A.bays then A.bays[k] = nil end
+            end
             if cur >= 0 and cur ~= b["set" .. k] then b["max" .. k] = cur end
             local base = b["max" .. k]
             if base and not b["fail" .. k] then             -- (one that didn't take stays at the aircraft's own)

@@ -88,6 +88,12 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   package_release.sh` on a TANI=1 build keeps her container, the Tanicorn world data, sv_tanicorn / sv_fleet whole and the
   DEV ONLY blocks (the rise director sv_cine still cut), only when the staged container holds every blueprint the world
   data names; the zip is named ..._TANACORN. TANI=1 is refused without TESTER=1: never in a friends' or Nexus zip.
+- Nothing of DISTANT THUNDER (the lightning Anomaly, docs/re/THUNDER.md) or THE TANACORN (and her INVINCIBLE FLEET) goes
+  into a release build, friends' or Nexus (user, 2026-11-14: "Anything that has to do with Distant Thunder or Tanacorn
+  does not go into the release build"). Their Lua stays in TEST ONLY / DEV ONLY blocks or test-only pieces, their assets
+  in their own containers; tools/checks/zip_leak_test.sh opens every release zip and fails on either (no Tanicorn
+  container, no DEV ONLY Lua, no Thunder trace in its Lua or ini). TESTER zips stay as the user set them (2026-11-03,
+  2026-11-12).
 - Release zips always go to the main tree's build/release (git's main working tree), from any worktree (user,
   2026-11-07): tools/package_release.sh and package_test.sh find it through tools/release_dir.sh (`RELEASE_DIR` in
   `.env` overrides it).
