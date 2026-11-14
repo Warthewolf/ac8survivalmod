@@ -3125,3 +3125,17 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - tools/log_report.py split (+ log_report_page.py; the same pages) and 0.74.66's storeq: lines in its checklist and STORE
   windows section. run_all 73 passed, 5 skipped (Windows only).
 - escort_test.lua is at 1,999 of 2,000 lines and its main chunk at 200 locals: split it before adding to it.
+
+## 0.74.69-coop2mp.161: friends' zip (2026-11-14, runtime 0.32.35; dev after PRs #5-#7 and the WEAPON BAYS fix)
+- dev as of 4aa95d5: the cloud line's 0.74.66-0.74.67 (PRs #5, #6: the STORE's lost events, tools/log_report.py, the
+  escort / config splits), 1nveigh's Add-on API 2.0 (PR #7, the user's exception), WEAPON BAYS after a special weapon
+  swap (NotMexi's log of 0.74.36), the release rule for Distant Thunder and the Tanacorn. 0.74.68 skipped: the user's
+  railguns build (feature/tanacorn-railguns, TANI=1) is staged in the main tree under it.
+- Built in worktree .claude/worktrees/friends-0.74.69 (branch tools/friends-0.74.69), build inputs linked from the main
+  tree (build/ac7, laser7, stock, valka_music, x02s, zfa44; tools/bin; tools/scriptobjs.pkl and build/checks/lua.exe
+  copied), LLVM_BIN pointed at the main tree's tools/llvm/LLVM/bin; `ZFA=1 sh tools/build_all.sh`: leaderboard address
+  in ("leaderboard: runs go to ..."), no tani_wd.txt.
+- Packaged: BUILD_NAME=COOP2MP COOP=1 ZFA=1 sh tools/package_release.sh online 0.74.69 ->
+  AC8SurvivalMode_COOP2MP_0.74.69_Online_COOP_ZFA44.zip (46.9 MB, 102 files; SurvivalMode_P, Valka, ZFA44, Laser7
+  containers; no Tanicorn container, no DEV ONLY / TEST ONLY Lua, no Distant Thunder trace), build hash 7ac365b735d5...,
+  registered. Not installed (the user: no install until told). Not yet run in game.
