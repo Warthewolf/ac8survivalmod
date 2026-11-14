@@ -649,6 +649,7 @@ static void OnMgDeactivate(uint8_t* mgr, uint8_t* objs)
         return;
     }
     g_nextMgDeactivate(mgr, objs);
+    if (g_nextMgRestore) g_mgFrozen = 1;               /* (0.32.36) the recycles' destroys wait for the restore */
     if (mgr && UObjLive(mgr) == 1) {
         Log(L"minigame: type %d deactivated the world's AI: %d objects; lists %d / hidden %d / %d", type, n,
             MgNum(mgr + 0x68), MgNum(mgr + 0x78), MgNum(mgr + 0x88));
@@ -664,6 +665,10 @@ static void OnMgRestore(uint8_t* mgr, uint8_t* objs)
         MgLogObjects(L"listed", mgr + 0x68);
     }
     g_nextMgRestore(mgr, objs);
+    if (g_mgFrozen) {
+        g_mgFrozen = 0;
+        Log(L"minigame: restored; the recycles' unit destroys go on (%d waiting)", g_rcN);
+    }
 }
 
 static void MgInstall(void)

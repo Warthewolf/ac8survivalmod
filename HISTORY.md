@@ -3139,3 +3139,26 @@ game. The work was split by file between agents; the builds ran in sequence in t
   AC8SurvivalMode_COOP2MP_0.74.69_Online_COOP_ZFA44.zip (46.9 MB, 102 files; SurvivalMode_P, Valka, ZFA44, Laser7
   containers; no Tanicorn container, no DEV ONLY / TEST ONLY Lua, no Distant Thunder trace), build hash 7ac365b735d5...,
   registered. Not installed (the user: no install until told). Not yet run in game.
+
+## The STORE crash in general: recycles' destroys wait out the freeze (2026-11-14; runtime 0.32.36; branch fix/store-recycle-freeze; not built yet)
+- Phantom's crash on 0.74.36 (solo, round 31 -> 32, the ANOMALY announced; streamed 2026-11-13): UECC at the STORE's
+  close, an access violation reading 0x3d9 on the game thread, stack 0x147dbbf5e <- 0x147db9583 <- 0x147c95197 (the
+  same as Shazzy's carrier-hull crash of 2026-11-09, fixed for carriers only in 0.74.50). The last runtime line is
+  `minigame: type 7 ends: restore of 157 AI objects` (written just before the game's restore runs). A break-off's forced
+  recycle at 21:14:57 (`ERA_Unit_01_Dep_Air0 ... taken down (forced, aircraft still counted alive)`) queued its unit
+  actor's destroy 30 s on: 21:15:27, inside the STORE (frozen 21:15:07, restored 21:15:38). Every other STORE of the
+  run (26 of them, the VOID WATCHER's and the Alicorn's forced recycles among them) had its destroys outside the freeze
+  and closed clean. So: a unit actor destroyed under planes the freeze listed, then the restore walks them. The run also
+  had SPWeaponCustomizer and falken-us4ss installed: their lines were the same at every earlier STORE, so not the cause.
+- runtime: g_mgFrozen, set after the stock deactivation (solo; only when the restore is hooked too) and cleared after
+  the stock restore returns (and at the teardown gate). RcDrain holds an entry due while it's set (logged once:
+  `recycle <unit>: its old unit actor ... is due, but the STORE has the world's AI frozen: its destroy waits ...`) and
+  destroys it at the first spawner call after the restore (`... held for the STORE`). A recycle that would destroy at
+  once (force 2, or recycle.destroy_after_s 0) during the freeze is queued for then too (RcDefer takes the wait).
+  Co-op's kept AI (SV_StoreKeepAI 1) has no freeze: nothing changes there.
+- tools/checks/store_recycle_test.sh (new; Windows only): the runtime's own RcDefer / RcDrain / Recycle /
+  OnMgDeactivate / OnMgRestore cut out by store_recycle_cut.py, the game stubbed: Phantom's timing, force 2 and no wait
+  inside the STORE, outside it as before, co-op, the restore not hooked, the teardown. 20 pass; 7 fail on dev's code.
+  run_all.sh: 83 passed, 0 failed, 1 skipped (coop_test, named only); paths_check, size_check pass.
+- To see in game: a forced recycle (an ace break-off, the Alicorn) 0-30 s before landing, then the STORE: the "waits"
+  line, no crash at the takeoff fade, then the "held for the STORE" destroy.
