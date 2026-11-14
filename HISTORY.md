@@ -3085,3 +3085,43 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - Packaged: AC8SurvivalMode_COOP2MP_0.74.67_TESTER_Online_COOP_ZFA44_TANACORN.zip (build 54ae898e60b3..., registered) with
   its ..._TESTER_Keys.txt; the dev stage build/release/stage_dev_0.74.67 (0cbd48dee2c1..., registered). NOT installed: the
   user, 2026-11-12: "don't install anything till i say so".
+
+## 0.74.66-coop2mp.158: the STORE's lost events in general, the log report tool, the splits (2026-11-12; Lua, tools, the event package)
+- The user: "Go for all of them" (after 0.74.52 was pushed; made in the cloud on 0.74.52's line and moved onto dev at
+  0.74.65): the rest of the STORE problem, a log report tool, a test
+  checklist for 0.74.52 (a Claude Doc), and the housekeeping (splits, a PR into dev). Untested in game.
+- **The STORE's lost events** (hard rule 64; Scripts/sv_rounds_store.lua, STOREQ, sv_rounds' family): this game's gate
+  (SPC.storeShut's, now tracked every tick on the host and on a joiner) and, for one-shot events that change the world,
+  "fired while the gate was closed: checked by its effect, fired again here once it's open". Host: bomber / strike
+  flights that appeared in the STORE get their orders (new RE_SV_BomberOrders_NN, read back through SV_BOrd_NN and the
+  per-route SV_BRoute_NN* counters), a boss's end, Wolf / director frees, the one-shot removals (Alicorn, AWACS, LCAC,
+  FlightOff, the Spaceport's). Joiner: the host's forwarded one-shots held while its own STORE is up and fired in order
+  once it's shut (the shuttle's countdown collapsed to what changes the world; only the same unit's or series' events
+  wait behind a held one). Never repeating events, spawns, pay or counters; the shuttle's own replay stays. Log lines
+  `storeq: ...`. A skeptic's 9 findings fixed. tools/checks/store_events_test.sh. Needs build_all.sh (the new orders
+  event and counters); with an older package the gate alone (logged).
+- **tools/log_report.py** (docs/re/LOG_REPORT.md): one or more log bundles (a folder or a zip; the old layout and
+  0.74.52's logs\ one; a host's and its joiners', clocks aligned on round clears) on one Markdown page: the build, who
+  played and hosted (forks and migrations), rounds with their kinds, lag by round, STORE windows and the events in them,
+  DOWN and revives, co-op link health, ZFA-44s, the shuttle, rockets, the Alicorn, the leaderboard's answers, errors,
+  UE4SS.log's repeats, and a checklist of 0.74.51-52's new log lines (seen / not seen). `python -X utf8 -I
+  tools/log_report.py <bundle> [<bundle> ...] -o page.md`. Tried on Saint Alessia's and Delta's logs; a skeptic's 14
+  findings fixed; tools/checks/log_report_test.sh on made-up fixtures. It's 1,967 lines: its next addition needs a split.
+- **Splits** (no behaviour change; CFG / CFG_DEFAULTS / ESC dumped equal before and after): sv_escort.lua -> + 
+  sv_escort_carriers.lua (the ZFA-44 carriers, "es", the menu rows, ESC.tick, the restart); sv_config_specials.lua -> +
+  sv_config_arc.lua (CFG.specials from GONE FISHIN' on, CFG.sky / music / hud). tools/lua_split_part.py splits a piece of
+  an existing family again and cuts a dotted table's fields; ini_check reads `CFG.specials.<key> = {` statements.
+- Checks (on dev): run_all 73 passed, 5 skipped (Windows only); fleet_test's check of package_release.sh's TESTER line
+  updated for dev's own 0904573 (`${TANIZIP:+--keep-tani}` and `|| exit 1`: it failed on dev itself); escort_test's "every_s apart" failed once under run_all and 0
+  times in 80 runs alone (old and new code alike): a rare flake to look at, not from this change.
+
+## 0.74.67-coop2mp.159: THE ESCORT's waves on time, the log report split (2026-11-12; Lua, tools)
+- THE ESCORT's waves no longer come 5 s late or short: ESC.waveFlights (sv_escort_waves.lua) drew a wave's flights at
+  random and could take a lone 2-ship first, leaving nothing to reach min_n while 4- and 6-ships were free; wavesTick then
+  held the wave 5 s or sent it short. It now works out the totals the free flights can make and keeps each pick
+  reachable; a wave is held only when no mix reaches min_n within max_n and the room. Found as escort_test's rare flake
+  (25 of 1000 clock seeds; sv_config_ini.lua reseeds math.random from os.time()); escort_test and decoy_test reseed after
+  sv_config. sv_coop.lua's STORE-check error line has its own once key. Untested in game.
+- tools/log_report.py split (+ log_report_page.py; the same pages) and 0.74.66's storeq: lines in its checklist and STORE
+  windows section. run_all 73 passed, 5 skipped (Windows only).
+- escort_test.lua is at 1,999 of 2,000 lines and its main chunk at 200 locals: split it before adding to it.

@@ -41,14 +41,21 @@ local function tierPay(base) return (TIER.pay(base * TIER.specialX(), D and D.ro
 local function fire(name) return tostring(type(SV_Event) == "function" and SV_Event(name) or "n/a") end
 -- ((review of 0.73.80) co-op: what's taken off without a kill goes down as nobody's on the host (sv_coop.lua
 -- COOP.takenOff), not as a kill of the player who once hit it; then the removal event
+-- ((2026-11-11) hard rule 64: each removal's units noted first, so one this game's STORE eats is fired again only while
+-- they're up and not spawned again since: sv_rounds_store.lua STOREQ.note)
+local function note(name, units) if STOREQ and STOREQ.note then pcall(STOREQ.note, name, units) end end
 local function offFire(unit, name)
     if COOP and COOP.takenOff then pcall(COOP.takenOff, unit) end
+    note(name, { unit })
     return fire(name)
 end
 local function fleetFire()                         -- (the fleet's ships still up, each unit's: RE_SV_SpFleetRemove)
-    if COOP and COOP.takenOff and SPORT.fleet then
-        for _, sh in ipairs(SPORT.fleet()) do pcall(COOP.takenOff, sh.unit) end
+    local units = {}
+    if SPORT.fleet then for _, sh in ipairs(SPORT.fleet()) do units[#units + 1] = sh.unit end end
+    if COOP and COOP.takenOff then
+        for _, u in ipairs(units) do pcall(COOP.takenOff, u) end
     end
+    note("RE_SV_SpFleetRemove", units)
     return fire("RE_SV_SpFleetRemove")
 end
 -- (0.73.80, R30_FINDINGS perf 2: the once-a-second looks asked SV_UnitAlive for every ship, wave, troop and deck flight
@@ -939,6 +946,7 @@ local function rocketsOff()
     if COOP and COOP.takenOff then
         for _, u in ipairs({ ROCKETS, DEBRIS[1], DEBRIS[2], DEBRIS[3] }) do pcall(COOP.takenOff, u) end
     end
+    note("RE_SV_SpRocketRemove", { ROCKETS, DEBRIS[1], DEBRIS[2], DEBRIS[3] })
     return fire("RE_SV_SpRocketRemove")
 end
 -- the rockets' and their debris's objects as SV_Spawn makes them: SPORT.rkObjs[unit] = { at = <clock>, obj, ... }
@@ -969,6 +977,19 @@ local ISLAND = { { "SV_Unit_SpIslExsam", "ad" }, { "SV_Unit_SpIslFlak", "ad" }, 
                  { "SV_Unit_SpIslApc", "armour" } }
 SPORT.ISLAND_UNITS = {}                           -- ((0.73.83) sv_rounds.lua SPC.recycleUnitsOf: off the list after the retake)
 for _, it in ipairs(ISLAND) do SPORT.ISLAND_UNITS[#SPORT.ISLAND_UNITS + 1] = it[1] end
+-- ((2026-11-11) hard rule 64) each removal's units noted at load, the same on every game (a joiner holds the host's in
+-- its own STORE and drops one whose units spawned again since): sv_rounds_store.lua STOREQ.note; a wave's craft and its
+-- troops it has from their names. RK_UNITS: what this game's own end of a rocket takes off (SPORT.rkFromHost)
+local RK_UNITS = { ROCKETS, DEBRIS[1], DEBRIS[2], DEBRIS[3] }
+do
+    local gar, fleet = {}, {}
+    for _, g in ipairs(GARRISON) do gar[#gar + 1] = "SV_Unit_SpGarrison" .. g end
+    for _, sh in ipairs(SPORT.fleet()) do fleet[#fleet + 1] = sh.unit end
+    note("RE_SV_SpGarrisonRemove", gar)
+    note("RE_SV_SpFleetRemove", fleet)
+    note("RE_SV_SpIslandRemove", SPORT.ISLAND_UNITS)
+    note("RE_SV_SpRocketRemove", RK_UNITS)
+end
 local function rcfg() return cfg().retake and cfg().retake.rockets or {} end
 
 -- ((2026-11-11) Saint Alessia's co-op run of 0.74.36, round 50: both rockets escaped with a 4 s banner each about them,
@@ -1085,6 +1106,9 @@ function SPORT.rkFromHost(f)
         log(string.format("coop: the host's rocket %s: %s%s", L, st, alt and string.format(" at %.0f m", alt) or ""))
     end
     if st == "pad" and was ~= "pad" and now - (J.ended[L] or -1e9) > 20 then J.ended[L] = nil end   -- (a new retake's)
+    -- ((2026-11-11) hard rule 64: fired again once this game's own landing STORE is shut, if it's open now:
+    -- sv_rounds_store.lua STOREQ.here; not when the rockets spawned again since: a new retake's copy)
+    if STOREQ and STOREQ.here then here = function(ev) return STOREQ.here(ev, RK_UNITS) end end
     if ready and type(here) == "function" and (J.offAt == nil or (st == "pad" and now - J.offAt > 60)) then
         J.offAt = now
         log("coop: this game's rockets end on the host's word alone (RE_SV_SpRocketHostOff " .. tostring(here("RE_SV_SpRocketHostOff")) .. ")")
@@ -1628,10 +1652,14 @@ function SPORT.retakeOver(now, s)
     if COOP and COOP.takenOff then                        -- ((review of 0.73.80) taken off: nobody's, as offFire)
         for _, g in ipairs(GARRISON) do pcall(COOP.takenOff, "SV_Unit_SpGarrison" .. g) end
     end
+    local gu = {}
+    for _, g in ipairs(GARRISON) do gu[#gu + 1] = "SV_Unit_SpGarrison" .. g end
+    note("RE_SV_SpGarrisonRemove", gu)
     fire("RE_SV_SpGarrisonRemove")                        -- (none should be left: tidy)
     if s.rk then rocketsOff() end
     if s.island and next(s.island) then
         if COOP and COOP.takenOff then for _, it in ipairs(ISLAND) do pcall(COOP.takenOff, it[1]) end end
+        note("RE_SV_SpIslandRemove", SPORT.ISLAND_UNITS)
         fire("RE_SV_SpIslandRemove")
     end
     if next(s.ships or {}) then SPORT.tidyFleet("the spaceport retaken") end   -- ((0.73.77) a sunk ship's parts left)

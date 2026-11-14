@@ -1,0 +1,7 @@
+[2026-11-12 02:49:45.0000001] UE4SS - v3.0.1 Beta #0 - Git SHA #e3ba1016
+[2026-11-12 02:49:45.1000000] Mod 'AC8SurvivalMode' has enabled.txt, starting mod.
+[2026-11-12 02:49:45.2000000] Mod 'NoisyMod' has enabled.txt, starting mod.
+[2026-11-12 02:50:00.0000000] [Lua] [NoisyMod] Event work complete; polling stopped
+[2026-11-12 02:59:00.0000000] ---- the line above 5000 more times (from [2026-11-12 02:50:00.1000000]) ----
+[2026-11-12 03:00:00.0000000] [Lua] [AC8SurvivalMode] loaded, version 0.74.52-coop2mp.144
+[2026-11-12 03:00:01.0000000] [Lua] Failed to expose size of 'class RC::Unreal::FObjectPtrProperty'

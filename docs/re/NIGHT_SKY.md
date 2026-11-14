@@ -190,7 +190,7 @@ Notes:
 
 The idea: copy Mission 9's whole night, not part of it. Then move it about one stop brighter for flying, because Comona
 has no night city sublevel and no ground-emissive glow. Every value can be set at run time. "Now" = CFG.sky.night and
-CFG.sky.stars in sv_config_specials.lua.
+CFG.sky.stars in sv_config_arc.lua.
 
 | lever (how, run time) | now | recommended | why |
 |---|---|---|---|

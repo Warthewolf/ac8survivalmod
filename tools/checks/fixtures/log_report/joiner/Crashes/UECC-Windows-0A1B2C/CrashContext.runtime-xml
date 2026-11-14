@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FGenericCrashContext>
+	<RuntimeProperties>
+		<ErrorMessage>Unhandled Exception: EXCEPTION_ACCESS_VIOLATION reading address 0x00000030 (made up for the test)</ErrorMessage>
+	</RuntimeProperties>
+</FGenericCrashContext>

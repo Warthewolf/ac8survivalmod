@@ -1,0 +1,41 @@
+20:00:00 loaded, version 0.74.66-coop2mp.158
+20:00:01 leaderboard: Steam name 'Vireo'
+20:00:02 leaderboard: co-op run c0ffee66 started: this game hosts it and keeps its squad (it sends the run)
+20:00:10 coop: player 2 is Linnet, Survival 0.74.66-coop2mp.158, runtime 0.32.35, flies (not yet: no plane)
+20:01:00 hud: callout 'ROUND 1' / 'HOSTILES INBOUND'
+20:01:02 round 1: 4 aircraft: 4 fighters in 2 squadrons; cap 30, up to 29 at once
+20:02:00 round 1 clear; round 2 in 20 s
+20:02:18 hud: callout 'ROUND 2' / 'HOSTILES INBOUND'
+20:02:20 round 2: 6 aircraft: 4 fighters in 2 squadrons, 2 heavies; cap 30, up to 29 at once
+20:03:05 storeq: RE_SV_DirFree_04 fired while you're down at the airfield, your STORE not open yet: fired again here once it's shut, unless it took after all (DirFree: the first this time)
+20:03:08 storeq: bomber flight EA_Unit_02_Air0 appeared while you're down at the airfield, your STORE not open yet: its orders read back in 4 s, given again here once this game's events can take
+20:03:12 storeq: bomber flight EA_Unit_02_Air0 without its orders here (SV_BOrd_02 still 0): given again once this game's events can take
+20:03:20 music: track clock held (landing store)
+20:03:40 storeq: RE_SV_AnomalyEnd fired while your landing STORE is open: fired again here once it's shut, unless it took after all (AnomalyEnd: the first this time)
+20:03:50 storeq: RE_SV_AlcnRemove fired while your landing STORE is open: fired again here once it's shut, unless it took after all (AlcnRemove: the first this time)
+20:03:55 storeq: RE_SV_Escort_09 fired while your landing STORE is open: fired again here once it's shut, whatever (Escort: the first this time)
+20:04:10 music: track clock running
+20:04:12 storeq: RE_SV_WolfFree_05A fired while your landing STORE closed a moment ago: fired again here once it's shut, whatever (WolfFree: the first this time)
+20:04:13 storeq: bomber flight EA_Unit_02_Air0 appeared without its orders here (SV_BOrd_02 still 0): RE_SV_BomberOrders_02 fired, try 1 of 3 (SV_ShuttleRound 0: the airfield's)
+20:04:13 storeq: this game's events can take again: 5 to fire here in order (AlcnRemove 1, AnomalyEnd 1, DirFree 1, Escort 1, WolfFree 1)
+20:04:13 storeq: RE_SV_DirFree_04 waits here for ERA_Unit_04_Dep_Air0's own orders first (RE_SV_FlightOrders_NN: as it went on time)
+20:04:13 storeq: RE_SV_AnomalyEnd fired again here, 33 s after it was lost (your landing STORE is open); its effect read back in 3 s
+20:04:13 storeq: RE_SV_AlcnRemove fired again here, 23 s after it was lost (your landing STORE is open); its effect read back in 3 s
+20:04:13 storeq: RE_SV_Escort_09 not fired again here (not fired: the level is still loading) (Escort: the first this time)
+20:04:16 storeq: RE_SV_AnomalyEnd took here (SV_AnomalyUp 0) (AnomalyEnd: the first this time)
+20:04:16 storeq: RE_SV_PressureB fired again here after RE_SV_AnomalyEnd: it came after it, and both set the attack throttle (fired)
+20:04:16 storeq: RE_SV_AlcnRemove didn't take here (1 alive): fired here again, try 2 of 3 (fired)
+20:04:17 storeq: bomber flight EA_Unit_02_Air0 has its orders here (SV_BOrd_02 1; RE_SV_BomberOrders_02 fired here 1 time)
+20:04:19 storeq: RE_SV_AlcnRemove didn't take here (1 alive): fired here again, try 3 of 3 (fired)
+20:04:22 storeq: RE_SV_AlcnRemove never took here in 3 tries (1 alive) (AlcnRemove: the first this time)
+20:04:40 storeq: RE_SV_DirFree_04 fired again here (DirFree: the first this time)
+20:04:40 storeq: RE_SV_WolfFree_05A fired again here (WolfFree: the first this time)
+20:04:40 storeq: done here: Escort (refused 1); AnomalyEnd (took 1); AlcnRemove (failed 1); DirFree (fired 1); WolfFree (fired 1)
+20:05:00 round 2 clear; round 3 in 20 s
+20:05:18 hud: callout 'ROUND 3' / 'HOSTILES INBOUND'
+20:05:20 round 3: 8 aircraft: 8 fighters in 4 squadrons; cap 30, up to 29 at once
+20:09:00 round 3 clear; round 4 in 20 s
+20:09:18 hud: callout 'ROUND 4' / 'HOSTILES INBOUND'
+20:09:20 round 4: 10 aircraft: 10 fighters in 5 squadrons; cap 30, up to 29 at once
+20:20:00 round 4 clear; round 5 in 20 s
+20:30:00 storeq: gate error [string "sv_rounds.lua"]:1440: attempt to compare nil with number

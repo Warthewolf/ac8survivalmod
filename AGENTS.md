@@ -473,9 +473,11 @@ admin key from the main tree's leaderboard/keys.secret). leaderboard/README.md h
   tools/edition.py over Scripts/*.lua).
 - No source file over 2,000 lines (a contributor, 2026-11-07: "not maintainable for human or AI";
   tools/checks/size_check.py fails build_all.sh on one). tools/lua_split_part.py split sv_coop.lua (+ _joiner,
-  _planes, _sync, _migration), sv_config.lua (+ _specials: CFG.specials / sky / music / hud as `CFG.<key> = {...}`
-  statements; + _ini: CFG_DEFAULTS, survival.ini, TIER / ROLE / ACE / GLS) and sv_anomalies.lua (+ _valka; + _dev,
-  the test-only lightning Anomaly, only its header left in a release). A part's family is the part and the MODULES
+  _planes, _sync, _migration), sv_config.lua (+ _specials: CFG.specials up to the Alicorn's as `CFG.<key> = {...}`
+  statements; + _arc: CFG.specials from GONE FISHIN' on, CFG.sky / music / hud, as `CFG.specials.<key> = ...` and
+  `CFG.<key> = {...}`; + _subs; + _ini: CFG_DEFAULTS, survival.ini, TIER / ROLE / ACE / GLS), sv_escort.lua (+ _carriers,
+  2026-11-11) and sv_anomalies.lua (+ _valka; + _dev, the test-only lightning Anomaly, only its header left in a
+  release). A part's family is the part and the MODULES
   entries right after it named <part>_<topic>. Tools that read or patch a part's text go through tools/lua_parts.py,
   the Lua tests through tools/checks/parts.lua (PARTS.load / read / dofile; each source edit applied in the piece that
   holds it). A local one piece uses from another is a global (check no other part has that name). sv_coop's M stays
@@ -513,7 +515,7 @@ Every subtitle line ("SPEAKER|text" in CFG.specials.*) and the speaker names liv
 user and her friends edit (user, 2026-11-08: "I want my friend to be able to edit all these subtitles easily").
 Scripts/sv_config_subs.lua reads it over CFG's own lines before CFG_DEFAULTS is taken (no leaderboard or co-op difference;
 not in the build hash) and changes only subtitle lines and the speaker names. The repo's file is what ships and wins over
-the Lua: change a shipped line in the file, not in sv_config_specials.lua. A new list of lines in Lua:
+the Lua: change a shipped line in the file, not in sv_config_specials.lua / sv_config_arc.lua. A new list of lines in Lua:
 `python -I tools/subtitles.py merge`. The user's or a friend's edited install: `python -I tools/subtitles.py pull`; run
 `diff` before installing a build over her install, or her edits are lost. build_all.sh runs `tools/subtitles.py check`;
 tools/checks/subs_test.sh tests the part. The file is made from a release's copy of the parts (no test-only lines).

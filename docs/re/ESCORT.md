@@ -98,7 +98,9 @@ not yet run in game. None of it is a hard rule until a test confirms it.
   round's aircraft do (ESC.roomMore -> COOP.more: [coop] aircraft_per_player more for each player past the first; max_up
   within [coop] max_up, 30). With the shipped 0.15 and 4 players: 6 attackers, waves of 6-17, up to 30 up (solo 4, 4-12,
   24). The round's own flights were already scaled (sv_rounds.lua startRound). Solo and joiners: as set. The wave picker
-  and ESC.roomMore are in sv_escort_waves.lua (sv_escort.lua's 2,000-line limit).
+  and ESC.roomMore are in sv_escort_waves.lua (sv_escort.lua's 2,000-line limit). (2026-11-11) sv_escort.lua was split
+  at its carriers (tools/lua_split_part.py): the ZFA-44 carriers, co-op's "es", the main menu's rows and ESC.tick are
+  sv_escort_carriers.lua's, run right after it.
 - The escorts (`guard`): every every_s each escort's planes onto an enemy within km of her (EngagementOrderOverride on an
   allied plane onto an enemy: **[test]**, COOP.coverFor's way).
 - Landing (`landing`, `geo`), each step its record `<rec><Final|Roll|Taxi|Stop>`: her final within final_at_m of the IAF

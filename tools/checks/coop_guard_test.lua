@@ -11,7 +11,9 @@
 -- fractional numbers, slots 0, 23, 24, 25, -1, over-long text, control characters, format strings, unknown unit and row
 -- names; the message cut short at each field; extra fields. Then: the joiner's messages from a slot that isn't the
 -- host's; "cf" payloads built with the real encoding (inf, NaN, wrong types, a player's own settings, build data, deep
--- nesting, a 2,000-item list); a flood of 1,800 of each type; a joiner's runtime-style "sys|..." to the host. Each valid
+-- nesting, a 2,000-item list); a flood of 1,800 of each type (and of the host's one-shots while a joiner's own landing
+-- STORE is open: held, bounded, fired or dropped once it's shut, sv_rounds_store.lua); a joiner's runtime-style "sys|..."
+-- to the host. Each valid
 -- message's effect is checked too, so the hostile ones reach a handler that runs. Checked after each message:
 --   err      no Lua error escaped to COOP.tick's pcall, and none swallowed by a pcall on the way (every pcall that
 --            fails while the message is handled is recorded; a missing method on a stubbed game object is not counted)
@@ -324,6 +326,8 @@ local function tableSizes()
         allyList = { #(M.allyList or {}), 40 }, recycleDue = { #(M.recycleDue or {}), 64 },
         downSince = { St and count(St.since) or 0, 24 }, downPer = { St and count(St.per) or 0, 24 },
         zdDives = { ZDIVE and ZDIVE.d and count(ZDIVE.d.dives) or 0, 8 }, zdHeld = { ZDIVE and ZDIVE.d and #(ZDIVE.d.held or {}) or 0, 64 },
+        storeQ = { D and D.storeQ and #D.storeQ.q or 0, 96 },          -- ((2026-11-11) a joiner's held events: sv_rounds_store.lua)
+        storeChecks = { D and D.storeQ and #(D.storeQ.checks or {}) or 0, 96 },   -- (... and those read back after their fire)
     }
 end
 
@@ -865,10 +869,15 @@ say("floods (1,800 messages a type)")
 local FLOOD_KNOWN = {}   -- ((2026-11-11) M.spawnQ, the fishing rows and M.pendBind bounded now: SPAWNQ_MAX, PEND_MAX)
 local function letters(i) local t = {}; repeat t[#t + 1] = string.char(97 + i % 26); i = i // 26 until i == 0; return table.concat(t) end
 local KEYED = { sp = 2, bd = 2, gd = 2, ev = 2, wd = 2, fsx = 2, dv = 3 }   -- (the field a table is keyed by)
-local function flood(side, kind, base, loading)
+-- ((2026-11-11) hard rule 64: STORE, a joiner's own landing STORE open: the host's one-shots of sv_rounds_store.lua's rules
+-- held there, names cycled over them with odd numbers, then the STORE shut and what's held fired or dropped)
+local STORE_EVS = { "RE_SV_FlightOff_%02d", "RE_SV_ShuttleT_%d", "RE_SV_WolfFree_%02dA", "RE_SV_LcacTroopsRemoveA%d",
+                    "RE_SV_PressureB", "RE_SV_AlcnRemove", "RE_SV_SpRocketLaunchA", "RE_SV_DirFree_%02d" }
+local function flood(side, kind, base, loading, store)
     scene(side)
     local c = covOf(side, kind)
     if loading then M.readyAt = clock + 1e6 end   -- (this joiner's level still loading: what waits for it is held)
+    if store then pawn.x, pawn.y, pawn.z = AIRFIELD.X, AIRFIELD.Y, 500; D.musicHold = 1 end
     local from = side == "host" and "1|" or "0|"
     for i = 1, 1800 do
         local f = { table.unpack(base) }
@@ -876,6 +885,7 @@ local function flood(side, kind, base, loading)
         local kj = KEYED[kind]
         if kj then
             if kind == "fsx" then f[kj] = letters(i)
+            elseif kind == "ev" and store then f[kj] = string.format(STORE_EVS[i % #STORE_EVS + 1], i % 100)
             elseif kind == "ev" then f[kj] = "RE_SV_Flood" .. letters(i)
             elseif kind == "dv" then f[kj] = f[kj] .. "_" .. i
             else f[kj] = f[kj] .. "_" .. letters(i) end
@@ -885,6 +895,13 @@ local function flood(side, kind, base, loading)
     c.fed = c.fed + 1800
     catching = true
     tick(); tick(); tick(); tick()
+    if store then
+        local held = D and D.storeQ and #D.storeQ.q or 0
+        if held == 0 then fail(c, "native", "flood in its STORE", "nothing held while this joiner's STORE was open") end
+        if held > 96 then fail(c, "tables", "flood in its STORE", "storeQ " .. held .. " entries (bound 96)") end
+        pawn.x, pawn.y, pawn.z, D.musicHold = 0, 0, 300000, 0
+        for _ = 1, 40 do tick() end                -- (the gate open 3 s on: what's held fired or dropped)
+    end
     catching = false
     local errs = 0
     for _, l in ipairs(logs) do if l:find("%.lua:%d+: ") or l:find("^coop: message error") then errs = errs + 1; if errs == 1 then fail(c, "err", "flood", l) end end end
@@ -912,6 +929,14 @@ for _, t in ipairs(TYPES) do
     local base = {}
     for i, v in ipairs(t[3]) do base[i] = fill(v) end
     if not (t[1] == "join" and t[2] == "rnd") then flood(t[1], t[2], base, false) end
+end
+-- what a joiner holds while its own landing STORE is open (sv_rounds_store.lua)
+for _, t in ipairs(TYPES) do
+    if t[1] == "join" and t[2] == "ev" and not t.extra then
+        local base = {}
+        for i, v in ipairs(t[3]) do base[i] = fill(v) end
+        flood("join", "ev", base, false, true)
+    end
 end
 -- what a joiner holds while its level loads
 for _, k in ipairs({ "sp", "ev", "dv", "bd", "gd", "dn" }) do

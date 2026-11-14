@@ -8,20 +8,25 @@ many over 2k, not maintainable for human or AI"). tools/lua_split.py's way, for 
 
 <part> is a PLANS key. The first piece keeps the part's name, the others are <part>_<topic>.lua, run by main.lua right
 after it in PLANS' order (tools/lua_parts.py and tools/checks/parts.lua read a part's family from MODULES).
+A part that is itself a piece of a family (PLANS 'family': sv_config_specials.lua, sv_config.lua's) is split the same
+way: its new pieces are that family's, <family>_<topic>.lua, run right after it, and each one's header counts the whole
+family; the part's own header, and the other pieces' headers counting the family, are brought up to date by hand.
 
 How the split keeps the behaviour. The part was one chunk run top to bottom; its pieces are consecutive slices of it,
 run in the same order in the same Lua state (main.lua: io + load, as every part). A cut falls:
   - between two top-level statements (as lua_split.py's);
   - between two statements of a top-level `do ... end` (sv_coop.lua and sv_anomalies.lua are one each, kept for hard
     rule 23's 200 locals): the piece before it gets an `end`, the piece after it a `do`;
-  - between two fields of a top-level table constructor (sv_config.lua's `CFG = {`, one statement of 2,755 lines):
-    the constructor is closed there and each field from the cut on becomes a statement `CFG.<key> = <value>` of the
-    next piece, in the same order (a field written as a block, `key = {` alone on its line, one indent less; one whose
-    value goes on from its key's line keeps its lines as they are, `CFG.` in place of its indent). The table gets the
-    same keys and values in the same order. Only its internal layout can differ (built in steps, not presized), so the
-    order pairs() walks it: Lua leaves that order unspecified (and 5.4 seeds its string hashes per Lua state anyway).
-    A moved value is now evaluated after the table is assigned, not before: the analysis fails on one that reads the
-    table's name outside a function, and lists the globals they read as they're built.
+  - between two fields of a top-level table constructor (sv_config.lua's `CFG = {`, one statement of 2,755 lines;
+    or a field of a global table's, a dotted name: sv_config_specials.lua's `CFG.specials = {`, 1,551 lines):
+    the constructor is closed there and each field from the cut on becomes a statement `CFG.<key> = <value>` (or
+    `CFG.specials.<key> = <value>`) of the next piece, in the same order (a field written as a block, `key = {` alone
+    on its line, one indent less; one whose value goes on from its key's line keeps its lines as they are, `CFG.` in
+    place of its indent). The table gets the same keys and values in the same order. Only its internal layout can
+    differ (built in steps, not presized), so the order pairs() walks it: Lua leaves that order unspecified (and 5.4
+    seeds its string hashes per Lua state anyway). A moved value is now evaluated after the table is assigned, not
+    before: the analysis fails on one that reads the table's (first) name outside a function, and lists the globals
+    they read as they're built.
 A local of the part's main chunk or of its top-level do block (a "unit" local) that another piece uses becomes a global
 of the state: its statement's `local ` is dropped (a bare `local a, b` becomes `a, b = nil, nil`), nothing else changes.
 Every name still means the declaration it meant (the analysis resolves them by scope with lua_check.py's parser): it
@@ -47,6 +52,8 @@ INDENT = '    '
 # own header stays, a line naming the family before it); a cut is ('at', text): at the first statement that starts at
 # or after the one line beginning with `text`, snapped back to where that statement's comments begin, or ('fields',
 # table, key): the top-level `table = {` constructor's fields from `key` on.
+# A part that is a piece of a family already: 'family': the family's first part (its new pieces <family>_<topic>).
+# A field cut's table may be a dotted name ('CFG.specials': `CFG.specials = {`, its fields from `key` on).
 # A shared unit local that can't turn global (its name is another part's global, or it holds a global's value taken
 # as the part loads) is handed on instead, never turned global:
 #   'carry': {name: table}: a local that is never assigned again (`local M = { ... }`); the piece declaring it adds
@@ -97,6 +104,25 @@ PLANS = {
          "THE TANACORN's rise (Ctrl+R): its rig, its water and sound, the cinematic and its camera; the dev install's "
          "test code only: a release keeps this header alone"),
     ]},
+    # (2026-11-11, both at 1,985-1,997 lines: each piece with room under the 2,000-line limit)
+    'sv_escort': {'pieces': [
+        ('sv_escort', None, None),
+        ('sv_escort_carriers', ('at', BANNER + 'the carriers'),
+         "the ZFA-44 carriers (CFG.allies.carrier, the STORE's ZfaCarrier): the STORE's row, a carrier sent, each "
+         "ship's launches and service, a ship sunk or leaving, a joiner's own ZFA-44s; co-op's \"es\" (THE ESCORT's "
+         "state and the carriers' for the joiners); then every tick's, THE ESCORT's and the carriers': the names on "
+         "the boxes, the main menu's rows, ESC.tick, a restart and a level torn down"),
+    ]},
+    # (a piece of sv_config.lua's family: its new piece sv_config_<topic>, run right after it, before sv_config_subs;
+    # named and described without the test-only special it holds too: a release keeps this header, and
+    # thunder_test.sh finds no trace of that special in a release's parts)
+    'sv_config_specials': {'family': 'sv_config', 'pieces': [
+        ('sv_config_specials', None, None),
+        ('sv_config_arc', ('fields', 'CFG.specials', 'fishing'),
+         "CFG.specials' last fields, each a statement of its own from `CFG.specials = {` (sv_config_specials.lua): "
+         "GONE FISHIN' and THE FESTIVAL (CFG.specials.fishing, festival and the rest); CFG.sky (the sky and the "
+         "day-night arc), CFG.music and CFG.hud (the HUD and its texts)"),
+    ]},
 }
 
 
@@ -118,6 +144,7 @@ class Units(Resolver):
         self.dos = []         # [do line, end line]
         self.in_do, self.cur_do, self.cur_unit = False, None, None
         self.table_name = table_name
+        self.table_path = table_name.split('.') if table_name else None   # (a dotted name: `CFG.specials = {`)
         self.ctor = None      # {'open', 'close': lines, 'fields': [[key, first line, last line, separator line]]}
         self.uses = []        # (decl index or None, name, line, function depth)
 
@@ -162,13 +189,22 @@ class Units(Resolver):
             self.expect('end')
             self.in_do, self.cur_do = False, None
             return
-        if (top and self.table_name and self.peek()[0] == 'name' and self.peek()[1] == self.table_name
-                and self.peek(1)[1] == '=' and self.peek(2)[1] == '{'):
+        if top and self.table_name and self.at_table():
             assert self.ctor is None, f'{self.table_name}: two top-level `{self.table_name} = {{`'
-            self.use(self.table_name, self.peek()[2]); self.k += 2
+            self.use(self.table_path[0], self.peek()[2]); self.k += 2 * len(self.table_path)
             self.ctor = self.record_table()
             return
         super().statement()
+
+    def at_table(self):
+        """the statement here is `<table_name> = {` (a dotted name's names and dots, then `=` and `{`)"""
+        i = 0
+        for j, n in enumerate(self.table_path):
+            if j and not (self.peek(i)[0] == 'op' and self.peek(i)[1] == '.'): return False
+            i += 1 if j else 0
+            if not (self.peek(i)[0] == 'name' and self.peek(i)[1] == n): return False
+            i += 1
+        return self.peek(i)[1] == '=' and self.peek(i + 1)[1] == '{'
 
     def record_table(self):
         open_ = self.peek()[2]
@@ -213,6 +249,23 @@ def modules():
     body = src[src.index('local MODULES = {'):]
     body = body[:body.index('\n}')]
     return re.findall(r'^\s*"(\w+)",', body, re.M)
+
+
+def family_of(first):
+    """a family's pieces in MODULES' order: its first part, then the MODULES right after it named <first>_<topic>"""
+    mods = modules()
+    if first not in mods: return [first]
+    i, out = mods.index(first) + 1, [first]
+    while i < len(mods) and mods[i].startswith(first + '_'):
+        out.append(mods[i]); i += 1
+    return out
+
+
+def new_family(part, names):
+    """(a piece of a family split again) the family's pieces once the new ones are in, right after the part"""
+    fam = family_of(PLANS[part]['family'])
+    i = fam.index(part) + 1
+    return fam[:i] + names[1:] + fam[i:]
 
 
 def anchor_line(lines, text):
@@ -311,8 +364,15 @@ def split(part):
     """(pieces, out, problems, notes, report): out[k] = the piece's lines [(text, original line or None, steps)]"""
     path = os.path.join(SCRIPTS, part + '.lua')
     text, eol = norm(path)
-    if 'tools/lua_split_part.py' in text[:800]:
+    fam = PLANS[part].get('family')
+    if fam is None and 'tools/lua_split_part.py' in text[:800]:
         sys.exit(f'{part}.lua was split already (its first line names its pieces); PLANS[{part!r}] is the record of how')
+    if fam is not None:
+        new = [pc[0] for pc in PLANS[part]['pieces'][1:]]
+        if any(n in modules() for n in new):
+            sys.exit(f'{part}.lua was split already (main.lua MODULES has {new}); PLANS[{part!r}] is the record of how')
+        assert part in family_of(fam), f'{part}: not a piece of {fam}.lua\'s family in main.lua MODULES'
+        assert all(n.startswith(fam + '_') for n in new), f'{part}: its new pieces are named {fam}_<topic>'
     lines = text.split('\n')
     if text.endswith('\n'): lines = lines[:-1]
     N = len(lines)
@@ -364,7 +424,8 @@ def split(part):
         f0 = fields[fi][1]
         for d, n, ln, depth in p.uses:
             if f0 <= ln < close and depth == 0:
-                if n == table_name: problems.append(f'line {ln}: a moved field reads {table_name} as it is built')
+                if n == table_name.split('.')[0]:
+                    problems.append(f'line {ln}: a moved field reads {n} as it is built (now after {table_name} is set)')
                 elif d is None and n not in KNOWN_GLOBALS: notes.append(f'line {ln}: a moved field reads {n} as it is built')
 
     # the shared unit locals: a unit's local another piece uses
@@ -515,16 +576,29 @@ def build(part, write=False):
             f.write(eol.join(header(part, names, k, what) + [t for t, _, _ in out[k]]) + eol)
     add_modules(part, names[1:])
     print(f'wrote {", ".join(n + ".lua" for n in names)}; main.lua MODULES: {", ".join(names[1:])} after {part}')
+    if PLANS[part].get('family'):
+        print(f'(by hand now: {part}.lua\'s own header, and the headers of {PLANS[part]["family"]}.lua\'s family that '
+              f'count its pieces: {", ".join(n + ".lua" for n in new_family(part, names) if n not in names[1:])})')
 
 
 def header(part, names, k, what):
     """a piece's first lines: the part's own header stays, a line before it names the family; a new piece says what
-    it holds and where it comes from (comment lines of at most 120 characters, as the parts')"""
+    it holds and where it comes from (comment lines of at most 120 characters, as the parts'). A piece of a family
+    split again: its own header stays as it is (none added), a new piece counts the whole family."""
     import textwrap
+    fam = PLANS[part].get('family')
+    if fam is not None:
+        if k == 0: return []
+        nf = new_family(part, names)
+        s = (f'{names[k]}.lua: {what}. Piece {nf.index(names[k]) + 1} of {len(nf)} of {fam}.lua\'s family '
+             f'({", ".join(n + ".lua" for n in nf)}), split from {part}.lua by tools/lua_split_part.py and run by main.lua '
+             f'right after the piece before it: a name another part uses is a global of this mod\'s Lua state, its own '
+             f'helpers stay local.')
+        return ['-- ' + l for l in textwrap.wrap(s, 117, break_long_words=False, break_on_hyphens=False)]
     if k == 0:
         s = (f'({part}.lua is the first of {len(names)} pieces, split by tools/lua_split_part.py: '
-             f'{", ".join(n + ".lua" for n in names[1:])} go on from where it ends, run by main.lua right after it, '
-             f'in that order.)')
+             f'{", ".join(n + ".lua" for n in names[1:])} {"goes" if len(names) == 2 else "go"} on from where it ends, '
+             f'run by main.lua right after it, in that order.)')
     else:
         s = (f'{names[k]}.lua: {what}. Piece {k + 1} of {len(names)} of {part}.lua ({", ".join(n + ".lua" for n in names)}), '
              f'split by tools/lua_split_part.py and run by main.lua right after the piece before it: a name another part '
@@ -541,7 +615,7 @@ def add_modules(part, new):
     add = []
     for n in new:
         q = f'    "{n}",'
-        add.append(q + ' ' * max(1, 35 - len(q)) + f'-- ({part}.lua\'s next piece: tools/lua_split_part.py)')
+        add.append(q + ' ' * max(1, 35 - len(q)) + f'-- ({PLANS[part].get("family", part)}.lua\'s next piece: tools/lua_split_part.py)')
     lines[i + 1:i + 1] = add
     with open(MAIN, 'w', encoding='utf-8', newline='') as f:
         f.write(eol.join(lines))

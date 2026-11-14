@@ -1,0 +1,33 @@
+22:00:00 loaded, version 0.74.66-coop2mp.158
+22:00:01 leaderboard: Steam name 'Linnet'
+22:00:05 coop: you are player 2
+22:00:06 coop: player 1 is Vireo (Survival 0.74.66-coop2mp.158, flies f22a_common)
+22:00:07 leaderboard: co-op run c0ffee66: the host's (the host sends it); its squad kept here too, for host migration
+22:01:00 hud: callout 'ROUND 1' / 'HOSTILES INBOUND'
+22:02:00 credits: +2500 (round 1 cleared (the host's round)), now 2500
+22:02:18 hud: callout 'ROUND 2' / 'HOSTILES INBOUND'
+22:05:00 credits: +2750 (round 2 cleared (the host's round)), now 5250
+22:05:18 hud: callout 'ROUND 3' / 'HOSTILES INBOUND'
+22:06:00 music: track clock held (landing store)
+22:06:10 storeq: the host's RE_SV_Escort_07 held here: your landing STORE is open; fired here once it's shut (Escort: the first held this time)
+22:06:20 storeq: the host's RE_SV_AwacsRemove held here: your landing STORE is open; fired here once it's shut (AwacsRemove: the first held this time)
+22:06:30 storeq: the host's RE_SV_ShuttleT_148 not fired here: your landing STORE is open, and it changes nothing that lasts (the countdown's radio, a sound, the camera's start: not played late)
+22:06:50 storeq: the host's RE_SV_LcacRemoveA held here: your landing STORE is open; fired here once it's shut (LcacRemove: the first held this time)
+22:07:30 music: track clock running
+22:07:33 storeq: this game's events can take again: 3 to fire here in order (AwacsRemove 1, Escort 1, LcacRemove 1)
+22:07:33 storeq: RE_SV_AwacsRemove not fired here: its effect is in already (SV_AwacsAir 0) (AwacsRemove: the first this time)
+22:07:33 storeq: RE_SV_LcacRemoveA not fired here: SV_Unit_LcacA spawned again since
+22:07:33 storeq: RE_SV_Escort_07 waits here for ERA_Unit_07_Dep_Air0's own orders first (RE_SV_FlightOrders_NN: as it went on time)
+22:07:35 storeq: the host's RE_SV_DirFree_07 goes behind what's held here: RE_SV_Escort_07 still to fire here before it (DirFree: the first this time)
+22:07:40 storeq: RE_SV_Escort_07 fired here (held 90 s) (Escort: the first this time)
+22:07:41 storeq: RE_SV_DirFree_07 fired here (held 6 s) (DirFree: the first this time)
+22:07:41 storeq: done here: ShuttleT (dropped 1); AwacsRemove (already 1); LcacRemove (dropped 1); Escort (fired 1); DirFree (fired 1)
+22:09:00 credits: +3000 (round 3 cleared (the host's round)), now 8250
+22:09:18 hud: callout 'ROUND 4' / 'HOSTILES INBOUND'
+22:10:00 music: track clock held (landing store)
+22:10:20 storeq: the host's RE_SV_AlcnAlertOff held here: your landing STORE is open; fired here once it's shut (AlcnAlertOff: the first held this time)
+22:17:20 storeq: RE_SV_AlcnAlertOff fired here 420 s after it came, this game's STORE still open (as before) (fired) (AlcnAlertOff: the first this time)
+22:18:00 music: track clock running
+22:18:03 storeq: done here: AlcnAlertOff (late 1)
+22:20:00 credits: +3250 (round 4 cleared (the host's round)), now 11500
+22:25:00 coop: the STORE's held events here: error [string "sv_rounds_store.lua"]:530: attempt to index a nil value (field 'checks')

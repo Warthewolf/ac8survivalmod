@@ -262,6 +262,7 @@ function ALIVE.fresh(unit, now)
 end
 function ALIVE.spawned(unit, r)
     if type(unit) ~= "string" then return end
+    if STOREQ and STOREQ.sawSpawn then STOREQ.sawSpawn(unit, r) end      -- ((2026-11-11) its spawns counted: sv_rounds_store.lua)
     if T.D ~= D then forgetAll() end
     r = tonumber(r)
     if r and r > 0 then
@@ -373,6 +374,12 @@ local function spawnBomber(unit, opts)
     local yaw = (raid or opts) and math.deg(math.atan(AIRFIELD.Y - y, AIRFIELD.X - x)) % 360 or (bearing + 180) % 360
     local band = heavy and b.altitude_m or b.strike_altitude_m
     local alt = band[1] + math.random() * (band[2] - band[1])
+    -- ((2026-11-11) hard rule 64: its orders' count before it, read back after: sv_rounds_store.lua STOREQ.bomberUp)
+    local ordersBefore = nil
+    if STOREQ and STOREQ.bomberPre then
+        local okO, v = pcall(STOREQ.bomberPre, unit)
+        if okO then ordersBefore = v end
+    end
     spawningUnit, spawningIdx = unit, 0                    -- (each plane's index in the flight: sv_core.lua p.k)
     local r = SV_Spawn(unit, x, y, alt * 100, yaw)
     spawningUnit, spawningIdx = nil, nil
@@ -390,6 +397,7 @@ local function spawnBomber(unit, opts)
     if r > 0 then
         D.up[unit], D.flown[unit] = true, true
         if D.shipStrike and D.shipStrike[unit] then ALLY.strike(unit, D.shipStrike[unit]) end   -- (its own callout)
+        if STOREQ and STOREQ.bomberUp then pcall(STOREQ.bomberUp, unit, r, ordersBefore, D.now) end
         if heavy and not (D.shipStrike and D.shipStrike[unit]) then pcall(HEAVY.route, unit, x, y) end   -- (sv_flights.lua)
         if D.bomberCallout ~= D.round and (not D.special or D.special.kind == "amphibious")
             and not (D.shipStrike and D.shipStrike[unit]) then

@@ -734,3 +734,112 @@ The user: "the enemy AI followed my corpse plane in its orbit around the base".
   (sv_coop_planes.lua M.toNewest; it isn't fed while hidden: Delta saw revived planes 22-37 km off their stream for a
   minute): `coop: player N's plane shown; on the radar again (activated); moved to their newest state first (X km from
   it; read back N m off)`.
+
+## 13. What a game's own landing STORE eats, fired again once it's shut (2026-11-11; hard rule 64's rest; untested in game)
+Hard rule 64: an event a game fires while its landing minigames run (Landing, Hangar = the STORE, SeamlessOut) runs none
+of its records, SV_Event answering 1 all the same. The shuttle's liftoff has its own replay (sv_rounds_shuttle.lua) and the
+Spaceport's launch its own relaunch (sv_spaceport.lua); the rest is Scripts/sv_rounds_store.lua (STOREQ, sv_rounds.lua's
+next piece), from the first shuttle investigation's sweep of every host event at the same risk (its ranks 2-7).
+- **The gate** (STOREQ.gate, its old name SPC.storeShut kept): closed while this game's landing STORE is open (D.musicHold:
+  solo the pause on the airfield, co-op the landing menu on screen; it lets go ~2.5 s after the menu closes), while it's
+  down at the airfield with no STORE yet this visit (the Landing and SeamlessIn minigames nothing here sees), and for 3 s
+  after either. Asked every tick on the host, a solo game and a joiner (roundsTick's start, clientRounds once its level
+  is ready); each closed spell numbered (the logs say a kind once a spell).
+- **The host (or a solo game)**: an event of STOREQ.RULES fired through SV_Event (sv_coop.lua's wrapper: STOREQ.before /
+  STOREQ.fired) while its gate is closed is fired again on this game alone (COOP.eventHere: the joiners had it on time)
+  once the gate's open, back to back, its effect read first and 3 s after (a flag it sets, a counter it adds to, its
+  unit read 0 alive), again while it hasn't taken, 3 tries; dropped when what undoes it came after it (a newer hold of a
+  free's flight, whichever system's: a Wolf trap's, the director's, a decoy; a newer preset; the On after an Off), when
+  its unit was spawned again since (a late removal or free would hit the new flight: STOREQ.sawSpawn counts every spawn,
+  ALIVE.spawned), or 900 s on. Never what repeats (raid and tail pings, ValkaHold, the jammer's ECM, a flight's chase,
+  cover orders: they heal by themselves), the shuttle's countdown and removal (their own replay), spawns, pay or counters.
+- **Order** (review of 2026-11-11): what shares a unit, or a chain (the shuttle's seconds; a rocket's launch and boost;
+  the attack throttle: the presets and the bosses' ends that put ATTACK_BASE back), goes in the order it came, and one
+  being read back (its own list, STOREQ's checks) holds back only what shares its unit or chain; the rest doesn't wait on
+  it. A free or an escort waits for its flight's own orders (ordersTick's RE_SV_FlightOrders_NN, D.orders; 30 s at most
+  from your takeoff), as it went on time; a heavy's route for its flight's (below). A boss's end fired late is followed
+  by the newer preset that came after it (fired on time), which it would otherwise undo. Gaps only where the timing is
+  the world's: the shuttle's seconds by their own offsets from T-4 on, a rocket's boost boost_s after its launch.
+- **Bomber and strike flights** (spawnBomber: STOREQ.bomberPre / bomberUp): the event package counts the orders that ran
+  for flight NN in SV_BOrd_NN (SV_BomberUp_NN, the new RE_SV_BomberOrders_NN, RE_SV_BomberRetask_NN: survival_events.py);
+  4 s after a spawn the count is read against the one before it, gate or not (as ordersTick reads a pool flight's
+  SV_Up_NN); unchanged, RE_SV_BomberOrders_NN (its appearance's own orders, the branch picked by SV_ShuttleRound as it
+  fires: the airfield's, or the shuttle's in the shuttle round) is fired here once the gate's open, read back, 3 tries.
+  An event package without the counter (built before 2026-11-11): a flight that appeared while the gate was closed gets
+  RE_SV_BomberRetask_NN (the airfield's) when SV_ShuttleRound reads 0, nothing (logged) when it's 1. A ship strike's
+  flight is left to its RE_SV_Strike (a rule); a heavy's route and each of its planes' loops (RE_SV_HeavyRoute /
+  HeavyLoop, each counted in a flag of its own: SV_BRoute_NNR, SV_BRoute_NN<L>; one for all of them read a second loop
+  lost in the same STORE as run once the first was fired again) wait 3 s behind its flight's orders and are fired again
+  only if they didn't run (a second run starts the path over). Each flight's watch reads ALIVE's kept answers (a second
+  old at most, within the tick's budget), not a native SV_UnitAlive a tick.
+- **A joiner**: the host's forwarded events of the rules marked `join` that come while its own gate is closed are held
+  (hostEvent: STOREQ.undo first, then STOREQ.forwarded) and fired here once it's open (the order above), each one's
+  effect read first (a removal whose copies are gone already, a boss's end already in: not fired); with the gate open one
+  comes as ever, unless it shares a unit or a chain with one still held or read back here, or its chain's last fired
+  here too short a time ago (then behind it: a 2-minute STORE's backlog no longer holds back the host's liftoff); 420 s
+  at most with the gate shut, then fired whatever, as before. The shuttle's countdown collapses to what changes the
+  world: T-20 (its MinHealth 1: a copy left mortal could be shot down here, and SV_ShuttleLost stops T's records), T-14
+  (the ignition), T-4 (onto its path), T (the climb, SV_ShuttleLaunched 1, SV_ShuttleRound 0), T+7 (the camera off, for a
+  T-2 that came before the gate shut), T+13 (the second leg), T+30 (the boost off), from T-4 on as far apart as on the
+  host (4, 7, 6 and 17 s); the radio lines, the sound flags and T-2's camera that come with the gate closed aren't fired
+  late. The Spaceport's removals know their units on every game (a wave's craft and its troops from their names, the
+  fleet, garrison, island and rockets noted by sv_spaceport.lua at its load): a held one is dropped when they spawned
+  again since (the lane's next wave). Its own end of a rocket (SPORT.rkFromHost: RE_SV_SpRocketEnd<L>,
+  RE_SV_SpRocketHostOff) goes through STOREQ.here with the rockets' units: fired now and again once it's shut, unless a
+  new retake's rockets spawned since. Repeating ones are fired at once, as ever.
+- **The rules** (what each event's records do: tools/survival_events*.py; why a second run is safe; how it's read back):
+
+  | event | records | twice | read back / dropped | host / joiner |
+  |---|---|---|---|---|
+  | RE_SV_AnomalyEnd | attack throttle to ATTACK_BASE, guards loose, SV_AnomalyUp 0, WARNING / radar noise / glass off | all set to a value | SV_AnomalyUp 0; dropped when MINDRIPPER spawns again | both |
+  | RE_SV_ValkaEnd | ATTACK_BASE, SV_ValkaUp 0, WARNING and noise off, charge sound stop | the same | SV_ValkaUp 0 | both |
+  | RE_SV_ValkaChargeOff, RE_SV_ValkaAlertOff, RE_SV_AlcnAlertOff | noise off and its sound stop; the RAILGUN WARNING off | offs | dropped when its On came after | both |
+  | RE_SV_AnomalyFieldOff | glass off, the soft noise back | the same | dropped when FieldOn came after | each player's own |
+  | RE_SV_WolfFree_<NN><L>, RE_SV_DirFree_NN | air-only search, PlayerOnlyNoLimit (its appearance's orders) | orders | dropped by a newer hold of its flight (WolfHold, DirHold, Decoy), or its flight spawned again; after its flight's own orders | both |
+  | RE_SV_DecoyEnd_NN | the same (the tactical decoy's end) | orders | dropped by a newer RE_SV_Decoy_NN, DirHold or WolfHold of its flight | host |
+  | RE_SV_Escort_NN, RE_SV_Strike<ship>_NN | a raid escort's / a ship strike's move, search, engagement | orders | dropped when its flight spawned again; an escort after its flight's own orders | both / host |
+  | RE_SV_Pressure<X> | the attack throttle's three values | values | dropped by a later preset; in order with the bosses' ends, and fired again after one fired late | both |
+  | RE_SV_HeavyRoute_<NN><S>, RE_SV_HeavyLoop_<NN><L><S> | a heavy's path (+ SV_BRoute_NNR / SV_BRoute_NN<L>) | only if it didn't run: a path starts over | its own counter up since its fire | host |
+  | RE_SV_AwacsHome, RE_SV_AwacsRemove | SV_AwacsHome 1; VOID WATCHER switched off, SV_AwacsAir 0 | flag, switch-off | the flag | both |
+  | RE_SV_AlcnRemove, RE_SV_ValkaEmlRemove, RE_SV_LcacRemove<l>, RE_SV_LcacTroopsRemove<l><c>, RE_SV_Sp*Remove | LiveDestroyUnit on its unit(s) (the Spaceport's: SpLcacRemove<g><w> / SpTroopsRemove<g><w><c> from the name, the rest noted by sv_spaceport.lua at its load: STOREQ.note) | a destroy of what's still up (nobody's: COOP.takenOff came first) | its units 0 alive; dropped when one spawned again | both |
+  | RE_SV_FlightOff_NN | the flight switched off | idempotent | gone already: not fired; not readable after | both |
+  | RE_SV_BomberRetask_NN | the airfield's orders | orders | dropped when its flight spawned again | joiner (the host's: the shuttle's replay) |
+  | RE_SV_ShuttleT_<s> (the kept seconds), RE_SV_SpRocketLaunch<L>, RE_SV_SpRocketBoost<L> | the shuttle's liftoff; a rocket's launch and boost | held, never fired twice | - | joiner (the host's: their own replays) |
+
+- **Left out, and why**: everything that repeats (heals by itself once the STORE's shut); spawns and what spawns
+  (RE_SV_CargoLaunch, the festival's salvos: a second run doubles them); counters and pay; paths that start over on a
+  second run with nothing to read whether the first ran (RE_SV_FestUp_<g>: its once-a-spawn window is 10 s; the
+  Alicorn's dive, volley and railgun; the Ladons' route, which their appearance carries); RE_SV_CargoRemove (sv_escort's
+  offObj takes the ships off itself); holds (a lost hold leaves a plane fighting, not stuck); RE_SV_RepairAircraft (the
+  STORE writes the health itself and reads it back); allied ships bought in the STORE (their appearance at the press:
+  the sweep's rank 3, not yet seen either way); the game-side triggers (appearances of specials, damage, PathFinish:
+  only their own read-backs, where they have one).
+- Log (`storeq: ...`, once per kind with a count): `storeq: <event> fired while your landing STORE is open: fired again
+  here once it's shut, unless it took after all (<kind>: the first this time)`, a joiner's `storeq: the host's <event> held
+  here: ...`, `storeq: the host's RE_SV_ShuttleT_<s> not fired here: ..., and it changes nothing that lasts (...)`,
+  `storeq: the host's <event> goes behind what's held here: <event> still to fire here before it | ... fired here N s
+  ago, M s before it on the host`, `storeq: this game's events can take again: N to fire here in order (<kind> n, ...)`
+  (as the gate opens; `N more to fire here in order, behind what fired just before them` for one behind with the gate
+  open), `storeq: <event> took here (<flag> v | none alive)`, `... fired here (held N s)` (a joiner's), `... not fired
+  again: it took after all (...)` (the host's) / `... not fired here: its effect is in already (...)` (a joiner's), `...
+  waits here for <unit>'s own orders first (RE_SV_FlightOrders_NN: as it went on time)`, `... didn't take here (...):
+  fired here again, try 2 of 3` (or `again once this game's events can take` while it's shut), `... never took here in 3
+  tries`, `... not fired again here: <event> came after it | <unit> spawned again since`, `storeq: RE_SV_Pressure<X>
+  fired again here after RE_SV_AnomalyEnd: it came after it, and both set the attack throttle (fired)`, `... fired here
+  420 s after it came, this game's STORE still open (as before)` (the gate shut only), `storeq: done here: <kind> (took
+  n, fired n, unread n, already n, failed n, refused n, late n, dropped n); ...` (once a pass, never while it's shut;
+  what was dropped while it was shut counted in), `storeq: error ...` / `storeq: gate error ...` (roundsTick's and
+  STOREQ.tick's pcalls: the tick goes on, a failing gate taken as open); bombers `storeq:
+  bomber flight <unit> appeared while ...: its orders read back in 4 s, ...`, `storeq: bomber flight <unit> appeared
+  without its orders here (SV_BOrd_NN still c): RE_SV_BomberOrders_NN fired, try 1 of 3 (SV_ShuttleRound s: the
+  airfield's | the shuttle's orders)`, `storeq: bomber flight <unit> has its orders here (SV_BOrd_NN c; ...)`, `...
+  RE_SV_BomberRetask_NN fired here (the airfield's orders; whether they took isn't readable: an event package without
+  SV_BOrd_NN ...)`.
+- Needs build_all.sh (the event package: RE_SV_BomberOrders_NN, SV_BOrd_NN, SV_BRoute_NNR / SV_BRoute_NN<L>); the Lua
+  works on an older one (the gate alone, as above; a heavy's paths fired again unread). Tests:
+  tools/checks/store_events_test.sh (an event package stub that drops what comes in a minigame; host, solo, bombers and
+  a joiner; each section fails with its hook taken out, and the review's (2026-11-11) on the code before it). No new
+  message on the wire (the joiners' hold works on "ev" as it comes; its queue and its checks bounded at 96 each).
+- To see in game: land as host with others flying and have a boss go down, a raid appear and a Wolf trap free while
+  you're in the STORE: the `storeq:` lines after it, the WARNING off, the raid on the airfield; as a joiner, be in the
+  STORE through the shuttle's liftoff and see it lift off 3 s after you close it (`storeq: ... ShuttleT ...`).

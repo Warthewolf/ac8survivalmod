@@ -388,7 +388,7 @@ makes the run unranked); the part is in MODULES before sv_main and is one TEST O
 ## 9. The production dressing (2026-11-06, branch feature/zfa44; not yet run in game)
 `Scripts/sv_zfa44.lua` now has the dressing outside its test block, for the escort's carriers (docs/re/ESCORT.md):
 `ZFA.dress(plane, { paint = k, label = text, hide_s = s })` (true and what it did, or false and why; each plane once, by
-its address), `ZFA.undress(plane)`, `ZFA.prodTick()` (from sv_escort.lua's tick: at most two dressed planes a tick get the
+its address), `ZFA.undress(plane)`, `ZFA.prodTick()` (from ESC.tick, sv_escort_carriers.lua: at most two dressed planes a tick get the
 host's meshes hidden again every hide_s; a gone one dropped), `ZFA.build` / `ZFA.strip` (the component, mesh, place and
 paint; shared with T0). The carriers' flights are dressed with CFG.allies.carrier.zfa.paint, default **3, GEAR, FLAT
 NORMAL** (the Falken's exactly, VALKA's paint 16: the only variant here proven to draw; T0 hasn't been run, so 1 COOKED
@@ -400,7 +400,7 @@ dressing out with it: a zip that ships the container needs package_release.sh to
 
 ## 10. Code review of 2026-11-07 (branch feature/decoy; nothing run in game)
 - **Co-op** (finding 1): a joiner's copy of a carrier launches ZFA-44s of its own from the host's forwarded launch
-  records; they're kept for the look and their fight is nobody's: sv_escort.lua ESC.localZfa() puts them in sv_coop.lua's
+  records; they're kept for the look and their fight is nobody's: sv_escort_carriers.lua ESC.localZfa() puts them in sv_coop.lua's
   stand-in set (their hits on an enemy copy never sent as that player's), each forwarded launch takes its arm's unit off
   the joiner's list first, and a carrier the host no longer has ("es" field 10) takes them off there. docs/re/ESCORT.md's
   "Code review of 2026-11-07" has the log lines.
@@ -412,7 +412,7 @@ dressing out with it: a zip that ships the container needs package_release.sh to
 The user: "these ZFA-44's will last 3 rounds before they fly towards the nearest enemy aircraft and explode on the
 aircraft they were targetting with an Helios Explosion"; her answers: at the start of the 4th round, the target and the
 enemies near it, players and allies untouched. Scripts/sv_escort_dive.lua (ZDIVE), CFG.allies.carrier.dive.
-- A carrier leaving after its service (sv_escort.lua, the host's or solo): ZDIVE.take(C) keeps its ZFA-44s up (out of
+- A carrier leaving after its service (sv_escort_carriers.lua, the host's or solo): ZDIVE.take(C) keeps its ZFA-44s up (out of
   their container, alive) instead of flightOff (switched off); parkedOff still finishes the parked ones. None up, or
   dive.enabled false: flightOff as before.
 - Through the break nothing; as the next round's enemy aircraft come (D.round > the leaving round, spawning / wave /

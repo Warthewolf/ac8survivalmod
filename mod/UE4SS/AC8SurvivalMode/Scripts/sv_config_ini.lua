@@ -1,8 +1,8 @@
 -- sv_config_ini.lua: the shipped settings (CFG_DEFAULTS), survival.ini and survival_config.lua over them, the
 -- difficulty preset, and what's built on CFG: the behaviour probe's tables, ACE, TIER, ROLE and the game's own Lua
--- (GLS). Piece 3 of 3 of sv_config.lua (sv_config.lua, sv_config_specials.lua, sv_config_ini.lua), split by
--- tools/lua_split_part.py and run by main.lua right after the piece before it: a name another part uses is a global of
--- this mod's Lua state, its own helpers stay local.
+-- (GLS). Piece 5 of 5 of sv_config.lua's family (sv_config.lua, sv_config_specials.lua, sv_config_arc.lua,
+-- sv_config_subs.lua, sv_config_ini.lua), split by tools/lua_split_part.py and run by main.lua right after the piece
+-- before it: a name another part uses is a global of this mod's Lua state, its own helpers stay local.
 for n = 1, 8 do for k = 0, 2 do CFG.pool[#CFG.pool + 1] = string.format("ERA_Unit_%02d_Dep_Air%d", n, k) end end
 -- (THE DECOY, sv_decoy.lua: in the rotation from its first build; added after the table, before CFG_DEFAULTS and the ini,
 -- so it's a shipped default like the rest, and the packaging's string edits of the rotation's literal (tools/novalka.py,

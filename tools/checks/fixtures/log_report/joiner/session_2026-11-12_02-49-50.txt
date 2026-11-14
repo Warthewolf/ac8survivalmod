@@ -1,0 +1,8 @@
+start=2026-11-12_02-49-50
+start_ft=134000000000000000
+rt=0.32.35
+pid=4242
+build_hash=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+mod=0.74.52-coop2mp.144
+role=solo
+role=joiner

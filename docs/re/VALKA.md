@@ -79,3 +79,9 @@ each tick along the camera-to-`light_dummy` line (ScreenSpaceOffsetX / Y), all a
 the curve Ms18_lensAlpha (keys (0.1, 1.0), (0.831, 0.84), (1.0, 0.0) over its life) into each material's `Alpha`.
 Survival's rebuild (0.68): AC7's textures on instances of AC8's Mission 23 flare, all as screen-space billboard elements
 on one spawned actor (no ghost planes yet). [T]
+
+## 6. Her end in a STORE (2026-11-11; untested in game)
+RE_SV_ValkaEnd (the WARNING and noise off, ATTACK_BASE, SV_ValkaUp 0), RE_SV_ValkaChargeOff and RE_SV_ValkaAlertOff fired
+while a game's landing STORE is open run nothing there (hard rule 64): the host fires them again once its STORE is shut
+(SV_ValkaUp read back; an Off dropped when its On came after it; the band's newer preset fired again after a late end,
+which puts ATTACK_BASE back), a joiner holds the forwarded ones until its own is shut: docs/re/COOP.md section 13.

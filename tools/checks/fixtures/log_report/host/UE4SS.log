@@ -1,0 +1,14 @@
+[2026-11-11 23:49:50.0000001] UE4SS - v3.0.1 Beta #0 - Git SHA #e3ba1016
+[2026-11-11 23:49:50.1000000] Mod 'AC8SurvivalMode' has enabled.txt, starting mod.
+[2026-11-11 23:49:50.2000000] Mod 'NoisyMod' has enabled.txt, starting mod.
+[2026-11-11 23:50:00.0000000] [Lua] [NoisyMod] polling 1 more object
+[2026-11-11 23:50:00.0000100] [Lua] [NoisyMod] polling 1 more object
+[2026-11-11 23:50:00.0000200] [Lua] [NoisyMod] polling 1 more object
+[2026-11-11 23:50:00.0000300] [Lua] [NoisyMod] polling 1 more object
+[2026-11-11 23:50:00.0000400] [Lua] [NoisyMod] polling 1 more object
+[2026-11-11 23:50:00.0000500] [Lua] [NoisyMod] polling 1 more object
+[2026-11-11 23:50:00.0000600] [Lua] [NoisyMod] polling 2 more objects
+[2026-11-11 23:50:00.0000700] [Lua] [NoisyMod] polling 3 more objects
+[2026-11-11 23:50:02.0000000] [Lua] [AC8SurvivalMode] loaded, version 0.74.52-coop2mp.144
+[2026-11-11 23:51:00.0000000] [Lua] [NoisyMod] Error: something failed in its poll
+[2026-11-11 23:52:00.0000000] [Lua] [AC8SurvivalMode] special: something FATAL ERROR named in Survival's own line

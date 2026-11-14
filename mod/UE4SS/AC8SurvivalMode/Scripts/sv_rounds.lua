@@ -1588,6 +1588,12 @@ function roundsTick(now)
     -- ((0.73.80) the tick's SV_UnitAlive budget, its oldest answers asked again first: ALIVE, sv_spawn.lua)
     local okAl, errAl = pcall(ALIVE.tick, now)
     if not okAl and tostring(errAl) ~= D.aliveErr then D.aliveErr = tostring(errAl); log("alive: error " .. D.aliveErr) end
+    -- ((2026-11-11) hard rule 64: this game's STORE gate, and what it ate fired again once it's open, before this tick's
+    -- own events: sv_rounds_store.lua; in a pcall as the joiner's clientRounds has it: an error there never stops the tick)
+    if STOREQ and STOREQ.tick then
+        local okQ, errQ = pcall(STOREQ.tick, now)
+        if not okQ and tostring(errQ) ~= D.storeQErr then D.storeQErr = tostring(errQ); log("storeq: error " .. D.storeQErr) end
+    end
     D.orders = D.orders or {}
     ordersTick(now)
     eventsTick(now)

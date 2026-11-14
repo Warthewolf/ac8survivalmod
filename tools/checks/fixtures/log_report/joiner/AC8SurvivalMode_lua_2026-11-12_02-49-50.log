@@ -1,0 +1,55 @@
+02:50:00 loaded, version 0.74.52-coop2mp.144
+02:50:05 leaderboard: Steam name 'Wren'
+02:50:27 coop: player 1: sys|paired
+02:50:27 coop: player 1: sys|slot|1
+02:50:27 coop: you are player 2
+02:50:27 coop: player 1: sys|up
+02:50:29 coop: player 1: sys|refused|Gan\|0.74.40-coop2mp.132
+02:50:28 coop: player 1 is Kestrel (Survival 0.74.52-coop2mp.144, flies f22a_common)
+02:50:28 coop: player 3 is Osprey (Survival 0.74.52-coop2mp.144, flies su47_common)
+02:50:30 leaderboard: co-op run 5eed1234: the host's (the host sends it); its squad kept here too, for host migration
+02:51:07 hud: callout 'ROUND 1' / 'HOSTILES INBOUND'
+02:52:37 credits: +2500 (round 1 cleared (the host's round)), now 2500
+02:52:37 hud: callout 'ROUND 1 COMPLETE' / 'NEXT ROUND IN 20 SECONDS'
+02:52:54 hud: callout 'SPECIAL ROUND 2' / 'DEFEND THE EMBDIR SHUTTLE - CORRIS'
+02:55:07 credits: +2750 (round 2 cleared (the host's round)), now 5250
+02:55:07 hud: callout 'ROUND 2 COMPLETE' / 'NEXT ROUND IN 20 SECONDS'
+02:55:25 hud: callout 'ROUND 3' / 'ACE SQUADRONS: VALKYRIE'
+02:57:07 hud: callout 'KESTREL DOWN' / 'LAND AND REVIVE THEM FROM THE STORE'
+02:57:30 music: track clock held (landing store)
+02:57:40 tell: wave (the host's): RE_SV_RadioWaveA (fired)
+02:57:50 coop: the host took ERA_Unit_01_Dep_Air0 off (RE_SV_FlightOff_01): 2 of its copies here off, unpaid; 2 taken down here, its unit off this game's spawner list 2 s on
+02:58:10 coop: the host's RE_SV_WolfHold_15B dropped here (RE_SV_WolfFree_15B came before it could go)
+02:58:20 special: RE_SV_ShuttleRemove didn't take here (SV_ShuttleRound 1, SV_ShuttleLaunched 1): fired again here once your STORE is shut
+02:58:07 hud: callout 'OSPREY DOWN' / 'LAND AND REVIVE THEM FROM THE STORE'
+02:59:40 revive: asked the host to revive player 1 for 9500
+02:59:45 music: track clock running
+02:59:46 music: track clock held (landing store)
+02:59:47 music: track clock running
+02:59:48 hud: callout 'KESTREL BACK' / 'REVIVED BY WREN'
+03:01:47 hud: callout 'OSPREY LEFT'
+03:02:16 credits: +3000 (round 3 cleared (the host's round)), now 8250
+03:02:16 hud: callout 'ROUND 3 COMPLETE' / 'NEXT ROUND IN 20 SECONDS'
+03:02:24 hud: callout 'SPECIAL ROUND 4' / 'RETAKE THE SPACEPORT'
+03:03:10 round probe: flags SV_ShuttleLaunched=0 SV_ShuttleRound=0 SV_SpRocketEscA=0 flights up (SV_Up_*)=6
+03:03:12 hud: callout 'ROCKET LAUNCH' / 'SHOOT IT DOWN BEFORE IT REACHES ORBIT'
+03:03:40 round probe: flags SV_ShuttleLaunched=0 SV_ShuttleRound=0 SV_SpRocketEscA=1 flights up (SV_Up_*)=6
+03:04:57 coop: the host's rocket A: escaped at 20200 m
+03:05:30 down: you're down at 0 HP in round 4: hidden, no collision
+03:05:30 hud: callout 'YOU'RE DOWN' / 'A WINGMAN CAN REVIVE YOU AT THEIR AIRFIELD  [O] NEXT PLAYER'
+03:05:50 revive: back (revived by KESTREL) after 20 s down: repaired (event fired, health written), 5 s invincible
+03:06:07 credits: +3250 (round 4 cleared (the host's round)), now 11500
+03:06:07 hud: callout 'ROUND 4 COMPLETE' / 'NEXT ROUND IN 20 SECONDS'
+03:06:24 hud: callout 'SPECIAL ROUND 5' / 'SUBMARINE CONTACT'
+03:06:30 coop: the host's SV_Unit_Alicorn here bound with the host's health, which came first (core 31250 -> 9600)
+03:07:07 hud: callout 'CORE EXPOSED' / 'HIT THE ALICORN'S CORE'
+03:07:38 credits: +3500 (round 5 cleared (the host's round)), now 15000
+03:07:38 hud: callout 'ROUND 5 COMPLETE' / 'NEXT ROUND IN 20 SECONDS'
+03:07:58 hud: callout 'ROUND 6' / 'HOSTILES INBOUND'
+03:08:00 perf: tick avg 14.0 ms (halves 7.0 + 7.0), worst half 90.0 ms (first 90, second 30) over 1201 ticks; parts (ms a tick / worst, share): coop 4.0/20 28%, escort 2.0/10 14%, allies 1.0/5 7%; untimed 0.1 1%; within them: allies/counts 0.1/1 1%; memory 8000 MB, committed 19000 MB
+03:08:00 perf: lists: planes 10 (10 up; 0 down taken off since), co-op players 3; natives: SV_UnitAlive 0.4 a tick 0.01 ms (worst 1), SV_ObjChain 3 a tick; Lua heap 8.0 MB
+03:09:07 coop: migration: the host (Kestrel) left its run in round 6 (hl|left): the next host now, not after 30 s of silence
+03:09:07 hud: callout 'KESTREL (HOST) LEFT THE RUN'
+03:09:08 hud: callout 'YOU ARE THE NEW HOST' / 'ROUND 6 STARTS ONCE EVERYONE'S BACK'
+03:09:08 coop: migration: this game is the next host (1 of 1 in line); the others are joining it
+03:09:08 leaderboard: co-op run 5eed1234: this game takes it over (host migration); it sends the run

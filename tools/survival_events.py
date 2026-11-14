@@ -15,7 +15,9 @@ by events: the game never spawns a desc again while its shot-down flight is stil
   SV_FlightDown_NN    (one per pool flight, destroyed) SV_Alive -= 1, SV_Kills += 1 (for the Lua log), SV_Up_NN = 0
   SV_BomberUp_NN      (one per bomber flight, BOMBERS) Mission 22's Comona Airport strike: unit area onto the airport,
                       ground-only search, engagement order on the airfield unit (AIRFIELD_UNIT); on the shuttle while
-                      SV_ShuttleRound is 1
+                      SV_ShuttleRound is 1; SV_BOrd_NN += 1
+  RE_SV_BomberOrders_NN  the same, fired by Scripts/sv_rounds_store.lua for a flight whose appearance didn't run (the
+                      host's landing minigames: hard rule 64); RE_SV_BomberRetask_NN the airfield's orders again
   SV_AirfieldHit_N    (one per airfield dummy) a weapon an enemy fired at it ended there: SV_AirHits += 1 and
                       Mission 22's explosion VFX on that dummy; Scripts/main.lua turns SV_AirHits into airfield health
   RE_SV_AirfieldClose / RE_SV_AirfieldOpen   landing off / on (fired by Scripts/main.lua with SV_Event)
@@ -777,24 +779,36 @@ def build_events(stock_ep):
     assert arg_values(t_sengage)[3] == 'AttackOnly' and arg_values(t_sengage)[5] == PAD_UNIT and arg_values(t_sengage)[6] == 'AIOnly'
     on_airfield = lambda: [g.cond('SV_ShuttleRound', 'Leq', 0)]
     on_shuttle = lambda: [g.cond('SV_ShuttleRound', 'Geq', 1)]
+    # ((2026-11-11) hard rule 64: a bomber flight that appears while the host's landing minigames run gets none of its
+    # appearance's records, and nothing gave them again: RE_SV_BomberOrders_NN is its appearance's orders fired by
+    # Scripts/sv_rounds_store.lua, the branch picked by SV_ShuttleRound when it fires, as RE_SV_FlightOrders_NN is a
+    # pool flight's; SV_BOrd_NN counts the orders that ran (the appearance, these, the retask), so Lua reads whether
+    # they took: the count before the spawn against the count after)
+    assert '"RE_SV_BomberOrders_%02d"' in runtime_lua() and '"SV_BOrd_%02d"' in runtime_lua(), \
+        'Scripts/sv_rounds_store.lua never fires RE_SV_BomberOrders_NN or reads SV_BOrd_NN'
     for k, unit in enumerate(BOMBERS):
         up = f'SV_BomberUp_{k + 1:02d}'
+        orders, count = f'RE_SV_BomberOrders_{k + 1:02d}', f'SV_BOrd_{k + 1:02d}'
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: unit})
-        g.execute(t_bmove, up, {0: unit}, delay=1.0, conds=on_airfield())
-        g.execute(t_bsearch, up, {1: unit}, delay=2.0, conds=on_airfield())
-        g.execute(t_bengage, up, {1: unit, 5: AIRFIELD_UNIT}, delay=2.0, conds=on_airfield())
-        # Comona Defense: while the shuttle is on its pad the strike flights go for it (Mission 22's waves' order)
-        g.execute(t_move, up, {0: unit, 1: SHUTTLE, 3: 'NoneSelect'}, delay=1.0, conds=on_shuttle())
-        # The shuttle is an AI plane (Blueprints/Vehicle/AI/Plane/OP0057_sstb): GROUND_ONLY, the airport strike's search,
-        # let the strike flights fly past it (report of 2026-10-23: never damaged). Air and ground, and Mission 22's
-        # AttackOnly order on it, so they go for nothing else.
-        g.execute(t_bsearch, up, {1: unit, 3: 'AIR_AND_GROUND'}, delay=2.0, conds=on_shuttle())
-        g.execute(t_sengage, up, {0: 'NoneSelect', 1: unit, 5: SHUTTLE_UNIT}, delay=2.0, conds=on_shuttle())
+        g.trigger('RE_SpawnEnemy_kokatu_1st', orders)                # a remote-event trigger (Lua's)
+        for ev in (up, orders):
+            flag(ev, count, 'Add', 1)
+            g.execute(t_bmove, ev, {0: unit}, delay=1.0, conds=on_airfield())
+            g.execute(t_bsearch, ev, {1: unit}, delay=2.0, conds=on_airfield())
+            g.execute(t_bengage, ev, {1: unit, 5: AIRFIELD_UNIT}, delay=2.0, conds=on_airfield())
+            # Comona Defense: while the shuttle is on its pad the strike flights go for it (Mission 22's waves' order)
+            g.execute(t_move, ev, {0: unit, 1: SHUTTLE, 3: 'NoneSelect'}, delay=1.0, conds=on_shuttle())
+            # The shuttle is an AI plane (Blueprints/Vehicle/AI/Plane/OP0057_sstb): GROUND_ONLY, the airport strike's
+            # search, let the strike flights fly past it (report of 2026-10-23: never damaged). Air and ground, and
+            # Mission 22's AttackOnly order on it, so they go for nothing else.
+            g.execute(t_bsearch, ev, {1: unit, 3: 'AIR_AND_GROUND'}, delay=2.0, conds=on_shuttle())
+            g.execute(t_sengage, ev, {0: 'NoneSelect', 1: unit, 5: SHUTTLE_UNIT}, delay=2.0, conds=on_shuttle())
         # ... and once the shuttle's taken off, back to the airfield (main.lua fires it for each strike flight still up;
         # a friend's log of 2026-10-24: with only the AttackOnly order on the gone shuttle, three bombers wandered
         # 35 km out for 4 minutes and the round couldn't end)
         retask = f'RE_SV_BomberRetask_{k + 1:02d}'
         g.trigger('RE_SpawnEnemy_kokatu_1st', retask)
+        flag(retask, count, 'Add', 1)
         g.execute(t_bmove, retask, {0: unit}, delay=1.0)
         g.execute(t_bsearch, retask, {1: unit}, delay=2.0)
         g.execute(t_bengage, retask, {1: unit, 5: AIRFIELD_UNIT}, delay=2.0)
@@ -856,7 +870,7 @@ def build_events(stock_ep):
     build_review(g, stock_ep, t_search, t_engage, t_bmove)
     build_wolf(g, stock_ep, t_search, t_engage)
     build_director(g, stock_ep, t_search, t_engage)
-    build_heavy(g, stock_ep)
+    build_heavy(g, stock_ep, flag)
     build_awacs(g, stock_ep)
     build_jammer(g, stock_ep)
     build_wraith(g)
@@ -868,14 +882,20 @@ def build_events(stock_ep):
     return g
 
 
-def build_heavy(g, stock_ep):
+def build_heavy(g, stock_ep, flag):
     """The heavies' routes (HEAVY_*), on Mission 16's Ladon path record and Mission 22's PathFinish trigger, as the
     Ladons': RE_SV_HeavyRoute_<NN><S> -> the lead's route; its end -> the loop; each loop's end -> the loop again;
-    RE_SV_HeavyLoop_<NN><L><S> -> object L on the loop (the next lead when the one before is shot down)."""
+    RE_SV_HeavyLoop_<NN><L><S> -> object L on the loop (the next lead when the one before is shot down). Each of Lua's
+    adds 1 to a counter of its own, the route SV_BRoute_NNR, object L's loop SV_BRoute_NN<L> ((2026-11-11) hard rule 64:
+    Scripts/sv_rounds_store.lua reads whether one fired while the host's STORE was open ran, and fires it again only if
+    it didn't: a second run starts the path over; one counter for all of a flight's read a second lost loop as run once
+    the first was fired again)."""
     import re
     lua = runtime_lua()
     for fmt in ('"RE_SV_HeavyRoute_%02d%s"', '"RE_SV_HeavyLoop_%02d%s%s"'):
         assert fmt in lua, f'Scripts/sv_flights.lua never fires {fmt}'
+    for fmt in ('"SV_BRoute_%02dR"', '"SV_BRoute_%02d%s"'):
+        assert fmt in lua, f'Scripts/sv_rounds_store.lua never reads {fmt} (the route\'s / a loop\'s counter)'
     m = re.search(r'AIRFIELD = \{ X = ([-\d.]+), Y = ([-\d.]+) \}', lua)
     assert m and abs(float(m.group(1)) / 100000 - AIRFIELD_KM[0]) < 1e-6 and \
         abs(float(m.group(2)) / 100000 - AIRFIELD_KM[1]) < 1e-6, 'AIRFIELD_KM != Scripts/sv_core.lua AIRFIELD'
@@ -893,12 +913,14 @@ def build_heavy(g, stock_ep):
         obs = objs[H['unit']][:BOMBER_SIZES[H['unit']]]
         g.trigger('RE_SpawnEnemy_kokatu_1st', H['ev'])                          # a remote event Lua fires
         g.execute(t_path, H['ev'], {0: obs[0], 2: H['path'], 4: HEAVY_SPEED})
+        flag(H['ev'], f'SV_BRoute_{H["n"]:02d}R', 'Add', 1)
         g.trigger(finish, f'SV_HeavyIn{H["n"]}{H["sector"]}', arg_changes={0: obs[0], 2: H['path']})
         g.execute(t_path, f'SV_HeavyIn{H["n"]}{H["sector"]}', {0: obs[0], 2: H['loop'], 4: HEAVY_SPEED})
         for j, ob in enumerate(obs):
             ev, lap = f'RE_SV_HeavyLoop_{H["n"]:02d}{chr(65 + j)}{H["sector"]}', f'SV_HeavyLap{H["n"]}{chr(65 + j)}{H["sector"]}'
             g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
             g.execute(t_path, ev, {0: ob, 2: H['loop'], 4: HEAVY_SPEED})
+            flag(ev, f'SV_BRoute_{H["n"]:02d}{chr(65 + j)}', 'Add', 1)
             g.trigger(finish, lap, arg_changes={0: ob, 2: H['loop']})
             g.execute(t_path, lap, {0: ob, 2: H['loop'], 4: HEAVY_SPEED})
         n += 1
@@ -1465,6 +1487,12 @@ INT_FLAGS += ['SV_AwacsHome', 'SV_AwacsOut']
 INT_FLAGS += [c['flag'] for c in sp_craft()] + [c['aflag'] for c in sp_craft()]
 INT_FLAGS += ['SV_SpRocketEscA', 'SV_SpRocketEscB']        # a rocket's climb finished: escaped (Scripts/sv_spaceport.lua)
 INT_FLAGS += ['SV_SpRocketHost']      # (2026-11-11) 1 on the host or solo: its rockets' climbs end them (build_spaceport)
+# ((2026-11-11) hard rule 64) bomber flight NN's orders that ran (its appearance, RE_SV_BomberOrders_NN, the retask) and
+# each heavy flight's route (SV_BRoute_NNR) and each of its planes' loops (SV_BRoute_NN<L>) that ran (build_heavy):
+# counters Scripts/sv_rounds_store.lua reads before and after (letters at the end: hard rule 17)
+INT_FLAGS += [f'SV_BOrd_{k + 1:02d}' for k in range(len(BOMBERS))]
+INT_FLAGS += [f'SV_BRoute_{BOMBERS.index(u) + 1:02d}{x}' for u in HEAVY_TRACKS
+              for x in 'R' + ''.join(chr(65 + j) for j in range(BOMBER_SIZES[u]))]
 
 from survival_events_squads import *     # noqa: E402,F401,F403  orders, ace moves, Wolf, director, tells, allies, AWACS
 from survival_events_festival import *   # noqa: E402,F401,F403  GONE FISHIN', THE FESTIVAL (adds its flags)

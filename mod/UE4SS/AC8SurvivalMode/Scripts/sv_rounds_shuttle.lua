@@ -23,24 +23,9 @@
 -- RE_SV_ShuttleRemove can be lost the same way: SV_ShuttleRound or SV_ShuttleLaunched still up after it (both set back to
 -- 0 by it) fires it again here, with the strike flights' retasks (SPC.shuttleRemoveAgainTick).
 do
-local GATE_S, REPLAY_TRIES, REPLAY_WAIT_S, REMOVE_TRIES, WATCH_S = 3, 3, 300, 3, 30
--- This game's own events can take (its landing minigames over): false, and why, while its landing STORE is open
--- (D.musicHold: solo the game's pause down at the airfield, co-op the landing menu on screen; it lets go ~2.5 s after the
--- menu closes) or it's down at the airfield with no STORE yet this visit (on short final, landing and taxiing in: the
--- Landing and SeamlessIn minigames, which nothing here sees), and for GATE_S after either. Asked every tick
--- (SPC.shuttleReplayTick), so a visit is seen from its start and a STORE shut before a replay starts still counts.
-function SPC.storeShut(now)
-    local G = SPC.gate
-    if not G then G = {}; SPC.gate = G end
-    local on, up = playerOnAirfield(), D.musicHold == 1
-    if on and not G.on then G.seen = false end          -- (a visit to the airfield starts: its STORE to come)
-    G.on = on
-    if up then G.seen = true end
-    local why = up and "your landing STORE is open" or (on and not G.seen) and "you're down at the airfield, your STORE not open yet" or nil
-    if why then G.busyAt, G.after = now, up and "your landing STORE closed a moment ago" or "you left the airfield a moment ago" end
-    if G.busyAt and now - G.busyAt < GATE_S then return false, why or G.after end
-    return true, nil
-end
+local REPLAY_TRIES, REPLAY_WAIT_S, REMOVE_TRIES, WATCH_S = 3, 300, 3, 30
+-- (this game's gate, SPC.storeShut: whether its own events can take, its landing minigames over; asked every tick
+-- here and by STOREQ.tick, so a visit is seen from its start: sv_rounds_store.lua, the next piece)
 local function flagText(f, name) return tostring((f or {})[name] or "?") end
 -- fires RE_SV_ShuttleT_<sec> on this game alone; the result is kept for the replay's last line
 local function fireHere(R, sec)

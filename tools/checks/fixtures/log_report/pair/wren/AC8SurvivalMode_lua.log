@@ -1,0 +1,23 @@
+11:00:00 loaded, version 0.74.52-coop2mp.144
+11:00:01 leaderboard: Steam name 'Wrenfield the Brave'
+11:00:05 coop: you are player 2
+11:00:06 coop: player 1 is Heron (Survival 0.74.52-coop2mp.144, flies f22a_common)
+11:00:07 leaderboard: co-op run feed5678: the host's (the host sends it); its squad kept here too, for host migration
+11:01:00 hud: callout 'ROUND 1' / 'HOSTILES INBOUND'
+11:02:00 credits: +2500 (round 1 cleared (the host's round)), now 2500
+11:03:00 credits: +2750 (round 2 cleared (the host's round)), now 5250
+11:03:18 hud: callout 'ROUND 3' / 'HOSTILES INBOUND'
+11:04:00 down: you're down at 0 HP in round 3: hidden, no collision
+11:04:00 hud: callout 'YOU'RE DOWN' / 'A WINGMAN CAN REVIVE YOU AT THEIR AIRFIELD'
+11:06:10 revive: the host refused your revive of player 3 (NOT AT THE AIRFIELD): 7000 refunded
+11:06:20 revive: no answer from the host on player 3's revive in 20 s: 7000 refunded
+11:06:30 revive: player 3's revive refunded (7000): the host's link lost
+11:06:40 shop: Revive: ZFA-44 CARRIER 1 ON STATION for 15000.
+11:06:50 shop: Revive: REVIVE ASKED FOR ZOë ÅNGSTRöM-Ø: THE HOST CONFIRMS IT.
+11:10:03 revive: back (revived by HERON) after 363 s down: repaired (event fired, health written), 5 s invincible
+11:12:00 credits: +3000 (round 3 cleared (the host's round)), now 8250
+11:12:18 hud: callout 'ROUND 4' / 'HOSTILES INBOUND'
+11:14:00 credits: +3250 (round 4 cleared (the host's round)), now 11500
+11:14:18 hud: callout 'ROUND 5' / 'HOSTILES INBOUND'
+11:14:25 coop: the host's VALKA mood on: the sky red and her song here too
+11:16:00 credits: +3500 (round 5 cleared (the host's round)), now 15000
