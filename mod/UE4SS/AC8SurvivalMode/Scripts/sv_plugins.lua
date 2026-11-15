@@ -33,8 +33,8 @@
 --                               round (its spawn to its over / abort: that round's tick watches it), 256 at most
 --   SVP.untarget(id)            taken off the watch, no pay; SVP.kill(id, why) down now, paid; SVP.alive(id): its own
 --   SVP.pay(n, why)             zollars (addCredits): a whole number, 0 to 1,000,000; anything else is refused
---   SVP.load(path)              an object of the add-on's own container by its path (sv_core.lua loadObject: hard
---                               rule 9), or nil and why
+--   SVP.load(path)              an object of the add-on's own container by its path (the engine's soft-reference
+--                               loader first, no object walk; else sv_core.lua loadObject: hard rule 9), or nil and why
 --   SVP.hold2d(path)            a 2D sound of the add-on's container held ready (its audio component, not playing,
 --                               kept for the level): play2d then plays it with no lookup and no spawn
 --   SVP.spawn(cls, at, yaw)     an actor of class `cls` (a class or its path, "/Game/Mods/<its own>/...C") at `at`
@@ -52,6 +52,7 @@
 --   SVP.round()                 the round number; SVP.run() a token of the run in progress (new each run)
 --   SVP.levelGoing()            the level is going away (sv_core.lua levelGoing): touch no object then. Every call
 --                               below that touches a game object refuses while it's true
+--   SVP.busy()                  why the API's walks, loads and sound starts wait now (a string), or nil: go
 --   SVP.callout(text, sub)      the round callout (hudCallout); SVP.say(who, text, secs) the subtitle strip (SUB.say)
 --   SVP.log(msg)                Survival's log, the add-on's name first
 --   SVP.isHost(), SVP.inCoop()  API 2.0 is single player: while co-op is open (COOP.open) no add-on round comes, no
@@ -80,7 +81,8 @@
 --                               and lines wait, not lost); always given back, 60 s at most
 --   SVP.sound(path, at)         a Wwise event at a spot; SVP.fx(path, at, scale, rot, floats) a Niagara system (the
 --                               component back); SVP.play2d(path, vol) a sound wave heard by you alone (ok, length s,
---                               its audio component: :Stop() cuts it short)
+--                               its audio component: :Stop() cuts it short); SVP.play3d(path, at, vol, att) one heard
+--                               in the world at `at` (att: the add-on's SoundAttenuation path; the same three back)
 --   SVP.playerPlane()           { a, X, Y, Z, VX, VY, VZ, health, down } of your plane, or nil
 --   SVP.retire(a)               the game kills one of the add-on's units (finishUnpaid): freed as a stock unit is,
 --                               nothing counted or paid for it (a target: off, unpaid)

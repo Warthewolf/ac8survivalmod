@@ -1346,6 +1346,8 @@ part("between add-ons, and small things", function()
         local sp2 = sp
         local c4 = asAddon("coopk", SVP.play2d, "/Game/X/W_Cond")
         check(c4 == true and sp == sp2 + 1, "the same asset live again (the purge over): play2d plays it")
+        -- (SVP.busy, assets loaded by path first, SVP.play3d: plugins_assets.lua, a file of its own for the size)
+        dofile("plugins_assets.lua")({ check = check, asAddon = asAddon, GS = GS, logs = logs })
         StaticFindObject = sfo
         loadObject, GS.SpawnSound2D, GS.CreateSound2D = realLoad, nil, nil
     end
