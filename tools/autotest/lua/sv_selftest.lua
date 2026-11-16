@@ -1120,6 +1120,44 @@ SUITES.surfacing = function()
     A.wait(2)
     A.do_(function() ST.shot("surfacing_after") end)
 end
+-- (2026-11-16) round 30 as it will look: the fleet's arc at its pre-dawn (step 5) with the storm in, then Ctrl+N: the fleet
+-- surfacing in the storm, its cinematic pictured as it plays, the real fleet up after
+SUITES.round30 = function()
+    intoRun()
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and IFSURF ~= nil, "the fleet's night and surfacing are in this build") then return "abort" end
+        IFSKY.step(2)                                     -- (the night first: the storm comes in at its moon)
+    end)
+    A.wait(8)
+    A.do_(function() IFSKY.step(5) end)                   -- (round 30: the pre-dawn, the storm on)
+    A.wait(8)
+    A.do_(function()
+        local a, w = SKY.arcState(), IFSKY.storm()
+        ST.check(a.k == 5 and w.on, "round 30's pre-dawn, the storm on", string.format("step %s, %s, storm %s, %d flashes", tostring(a.k), tostring(a.mode), tostring(w.on), w.flashes or 0))
+        ST.marks.s0 = ST.n
+        ST.press("N")
+    end)
+    A.log_("fleet surfacing: %d+ ships rise over", 10, "s0", false, function(l)
+        if not ST.check(l ~= nil, "the surfacing started in the storm", l) then return "abort" end
+    end)
+    for i = 1, 18 do
+        A.wait(1.5)
+        A.do_(function() ST.shot(string.format("r30_%02d", i)) end)
+    end
+    A.log_("fleet surfacing: the rise over", 20, "s0", true, function(l)
+        local up, of = nil, nil
+        if l then up, of = l:match("(%d+) of (%d+) doubles up") end
+        ST.check(up ~= nil and up == of and tonumber(of) >= 15, "every ship's double rose", l)
+    end)
+    A.log_("fleet surfacing: over", 10, "s0", true, function(l)
+        ST.check(l ~= nil and not l:find("NOT:", 1, true), "the swap and your view back", l)
+    end)
+    A.log_("fleet: Ctrl%+N: %d+ of %d+ ships up", 30, "s0", false, function(l)
+        ST.check(l ~= nil, "the real fleet up after the surfacing", l)
+    end)
+    A.wait(2)
+    A.do_(function() ST.shot("r30_after"); IFSKY.step(nil) end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
