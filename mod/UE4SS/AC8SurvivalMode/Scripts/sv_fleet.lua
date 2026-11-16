@@ -227,12 +227,15 @@ CFG.specials.fleet = {
                 waves = { boat = 0.0, grig = 2.0, gors = 2.5, udal = 4.0, krov = 4.5, aegis = 6.0, ford = 9.0 },
                 breach = { { "SURF1", 1 }, { "FORD_PILLAR", 1 }, { "MIST", 1 } },
                 slam = { { "ALCN_BLAST", 1 }, { "FORD_SPLASH", 2 }, { "FOAM_IGC", 1 }, { "FORD_PILLAR", 1 } },
-                shots = { { t = 0.0, ship = "GEOFON", at = { -2500, 1200, 450 }, look = { 1200, 0, 0 }, fov = 60 },
-                          { t = 1.5, ship = "PicketA", at = { -150, 350, 25 }, look = { 0, 0, 30 }, fov = 50 },
-                          { t = 5.5, ship = "RAVEN", at = { -300, 700, 40 }, look = { 0, 0, 40 }, fov = 45 },
-                          { t = 9.0, ship = "GEOFON", at = { 1100, 350, 20 }, look = { 0, 0, 80 }, fov = 55 },
-                          { t = 15.0, ship = "GEOFON", at = { 200, -1600, 120 }, look = { 0, 0, 50 }, fov = 50 },
-                          { t = 19.0, ship = "GEOFON", at = { -3000, -2000, 700 }, look = { 800, 0, 0 }, fov = 60 } } },
+                -- ((0.74.86) the autotest's run 43: the first cut's cameras too far, the last wide into the sun: closer, GEOFON
+                -- longer, the wide from ahead looking back)
+                shots = { { t = 0.0, ship = "PicketA", at = { -600, 500, 60 }, look = { 200, 0, 20 }, fov = 55 },
+                          { t = 2.5, ship = "HERNE", at = { -120, 220, 15 }, look = { 0, 0, 25 }, fov = 50 },
+                          { t = 4.5, ship = "KOLGA", at = { 150, -260, 20 }, look = { 0, 0, 30 }, fov = 50 },
+                          { t = 6.5, ship = "RAVEN", at = { 250, 200, 15 }, look = { 0, 0, 40 }, fov = 50 },
+                          { t = 9.5, ship = "GEOFON", at = { 500, 180, 12 }, look = { 0, 0, 90 }, fov = 60 },
+                          { t = 14.0, ship = "GEOFON", at = { -50, -700, 60 }, look = { 0, 0, 60 }, fov = 55 },
+                          { t = 19.5, ship = "GEOFON", at = { 2500, 1500, 500 }, look = { -500, 0, 0 }, fov = 60 } } },
 }
 -- (set after sv_config_ini.lua took CFG_DEFAULTS: shipped as it is, so no difference the leaderboard's LB.edited or the
 -- co-op settings sync would see)
