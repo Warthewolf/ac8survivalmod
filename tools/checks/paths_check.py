@@ -4,7 +4,7 @@ a script. tools/build_all.sh runs this; it fails the build on a drive-letter pat
 
     python -X utf8 -I tools/checks/paths_check.py
 
-Scans the git-tracked TEXT files under tools/, runtime/, mod/ and docs/, plus the repo's top-level files (AGENTS.md,
+Scans the git-tracked TEXT files under tools/, runtime/, mod/, docs/ and examples/, plus the repo's top-level files (AGENTS.md,
 CONTRIBUTING.md, the plans; not HISTORY.md, the build archive). A hit is `X:\\` or `X:/` (X a
 letter, not part of a longer word: `https://` and `file:///` don't match), `/Users/` or `/home/`. Left alone:
 - .env.example (its C:/... lines are examples); local plans (docs/design/*_PLAN.md) are git-ignored, so never scanned;
@@ -15,7 +15,7 @@ letter, not part of a longer word: `https://` and `file:///` don't match), `/Use
 import os, re, subprocess, sys
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
-SCAN = ('tools/', 'runtime/', 'mod/', 'docs/')
+SCAN = ('tools/', 'runtime/', 'mod/', 'docs/', 'examples/')
 SKIP_TOP = {'HISTORY.md'}                           # (the build archive: old notes, left as they were)
 EXEMPT = {'.env.example', 'tools/checks/paths_check.py'}   # (this file: its docstring and pattern describe paths)
 MARKER = 'paths_check: ok'
@@ -47,7 +47,7 @@ def main():
         for p, n, line in bad:
             print(f'  {p}:{n}: {line[:140]}')
         return 1
-    print('paths check: no machine path in tools, runtime, mod, docs and the top-level files')
+    print('paths check: no machine path in tools, runtime, mod, docs, examples and the top-level files')
     return 0
 
 

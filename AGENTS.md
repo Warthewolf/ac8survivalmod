@@ -65,6 +65,11 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   this happened and we were able to fix it"): the user's own AC8 mod Orbital Tonitrus Spear Strike (RoGLaser) and its
   cloud fix for the Spear's rods (each rod's blast at the clouds' height, the sky's ExplosionEffect as Mission 30's big
   one, a little wider: Scripts/sv_decoy.lua's clouds). Read only, from the user's upload; none of its files ship.
+  One more, a friend's code (user, 2026-11-14: "Inveigh is a friend of ours", "Merge it"): 1nveigh's Add-on API 2.0
+  (PR #7: Scripts/sv_plugins.lua + _api + _env, docs/ADDONS.md, docs/ADDONS_MAINTAINING.md, docs/re/PLUGINS.md,
+  examples/addons). Add-ons live in Mods/AC8SurvivalAddons, never in Survival's zip; a run with one is never sent to
+  the leaderboard (LB.edited) and none runs while co-op is open. Keep the PLUGINS checks in sv_main / sv_stats / sv_sound
+  / sv_leaderboard when editing those (ADDONS_MAINTAINING.md). Other people's PRs still need the user's yes, each one.
 - THE TANICORN (docs/re/TANICORN.md): the user's Anomaly boss fused from AC8's Alicorn and Sea Power's Iowa (standing in
   for the Tanager). Its model and art are in art/tanicorn at the user's request (2026-11-10: "you are allowed to push the
   model"); its cooked container still ships in TANI=1 dev builds only (package_release.sh drops it). Round 30's
@@ -83,6 +88,12 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   package_release.sh` on a TANI=1 build keeps her container, the Tanicorn world data, sv_tanicorn / sv_fleet whole and the
   DEV ONLY blocks (the rise director sv_cine still cut), only when the staged container holds every blueprint the world
   data names; the zip is named ..._TANACORN. TANI=1 is refused without TESTER=1: never in a friends' or Nexus zip.
+- Nothing of DISTANT THUNDER (the lightning Anomaly, docs/re/THUNDER.md) or THE TANACORN (and her INVINCIBLE FLEET) goes
+  into a release build, friends' or Nexus (user, 2026-11-14: "Anything that has to do with Distant Thunder or Tanacorn
+  does not go into the release build"). Their Lua stays in TEST ONLY / DEV ONLY blocks or test-only pieces, their assets
+  in their own containers; tools/checks/zip_leak_test.sh opens every release zip and fails on either (no Tanicorn
+  container, no DEV ONLY Lua, no Thunder trace in its Lua or ini). TESTER zips stay as the user set them (2026-11-03,
+  2026-11-12).
 - Release zips always go to the main tree's build/release (git's main working tree), from any worktree (user,
   2026-11-07): tools/package_release.sh and package_test.sh find it through tools/release_dir.sh (`RELEASE_DIR` in
   `.env` overrides it).

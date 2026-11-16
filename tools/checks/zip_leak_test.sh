@@ -44,6 +44,16 @@ import sys, zipfile
 z = zipfile.ZipFile(sys.argv[1])
 bad = [n for n in z.namelist() if n.endswith('.lua') and any(w in z.read(n).decode('utf-8', 'replace') for w in ('DEV ONLY', 'TANI = {', 'TANI.setup'))]
 sys.exit(1 if bad else 0)" "$1"; }
+# thunderfree <zip>: 0 when no Lua or ini in the zip has DISTANT THUNDER (the lightning Anomaly, test builds only:
+# tools/checks/thunder_test.sh's patterns). The user, 2026-11-14: "Anything that has to do with Distant Thunder or
+# Tanacorn does not go into the release build"
+thunderfree() { python -I -c "
+import re, sys, zipfile
+z = zipfile.ZipFile(sys.argv[1])
+pat = re.compile(r'thunder|IFF FATAL ERROR|DI\.\.ANT|Lightninig|LightningVolume', re.I)
+bad = [n for n in z.namelist() if n.endswith(('.lua', '.ini')) and pat.search(z.read(n).decode('utf-8', 'replace'))]
+print(*bad, sep=chr(10)) if bad else None
+sys.exit(1 if bad else 0)" "$1"; }
 # holds <zip> <container>: 0 when the zip carries that container's .utoc
 holds() { python -I -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(0 if any(x.endswith('/' + sys.argv[2] + '.utoc') for x in n) else 1)" "$1" "$2"; }
 # one <label> <zip glob> <zfa: 1 kept / 0 out> <command...>: packs one zip, then what it carries
@@ -57,6 +67,11 @@ one() {
         check $r "$label: no Tanicorn container"
         devfree "$z" && r=0 || r=1
         check $r "$label: no dev-install-only Lua (DEV ONLY blocks, the Tanicorn's test)"
+        case "$label" in *TESTER*|test*) ;; *)
+            thunderfree "$z" > "$T/$label.thunder.txt" && r=0 || r=1
+            check $r "$label: no Distant Thunder (the lightning Anomaly) in its Lua or ini"
+            [ $r = 0 ] || cat "$T/$label.thunder.txt" ;;
+        esac
         holds "$z" SurvivalMode_P && r=0 || r=1
         check $r "$label: Survival's own container in it"
         if [ "$zfa" = 1 ]; then

@@ -4,7 +4,7 @@
 -- state (UE4SS gives each Lua mod its own): a name one part shares with the others is a global of that state, each
 -- part's own helpers stay local to it. A part that fails to load stops the rest, as one file used to.
 -- (Hard rule 23 counts locals per part now: python tools/checks/lua_check.py Scripts/*.lua checks them all.)
-VERSION = "0.74.67"
+VERSION = "0.74.70"
 
 local MODULES = {
     "sv_core",
@@ -68,6 +68,9 @@ local MODULES = {
     "sv_audit",                    -- the run's audits in the log: targets, pay, sync (after sv_coop: its addCredits wrap)
     "sv_zfa44",                    -- the ZFA-44's test T0 (docs/re/ZFA44.md; test code only: empty in every zip)
     "sv_main",
+    "sv_plugins",                  -- other mods' special rounds: add-ons (Mods\AC8SurvivalAddons) and their API (SVP), last
+    "sv_plugins_api",              -- (sv_plugins.lua's next piece: tools/lua_split_part.py)
+    "sv_plugins_env",              -- (sv_plugins.lua's next piece: tools/lua_split_part.py)
 }
 
 local DIR = debug.getinfo(1, "S").source:match("^@(.*[/\\])") or ""

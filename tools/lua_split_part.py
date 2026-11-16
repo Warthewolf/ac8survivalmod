@@ -113,6 +113,18 @@ PLANS = {
          "state and the carriers' for the joiners); then every tick's, THE ESCORT's and the carriers': the names on "
          "the boxes, the main menu's rows, ESC.tick, a restart and a level torn down"),
     ]},
+    # (2026-11-13, the add-on API at 2,163 lines: the framework (guard, targets, kinds, run check, register), the API's
+    # calls, and each add-on's environment with the loader; the framework's own pcall is handed on, never a global)
+    'sv_plugins': {'carry': {'pcall': 'PLUGINS'}, 'pieces': [
+        ('sv_plugins', None, None),
+        ('sv_plugins_api', ('at', "    -- a target of the calling add-on's round"),
+         "the add-on API's calls (SVP): targets, assets, spawns and moves, the run's facts, jobs and events, "
+         "PLUGINS.tick, providers, what an add-on reads of Survival, pins, music and HUD, sounds and effects, the "
+         "player's plane, retire, despawn and hurt"),
+        ('sv_plugins_env', ('at', "    -- ---------------------------------------------------------------------------------------- each add-on's environment"),
+         "each add-on's environment (its allow-list, its natives, NotifyOnNewObject for add-ons), and finding and "
+         "loading the add-ons (Mods/AC8SurvivalAddons)"),
+    ]},
     # (a piece of sv_config.lua's family: its new piece sv_config_<topic>, run right after it, before sv_config_subs;
     # named and described without the test-only special it holds too: a release keeps this header, and
     # thunder_test.sh finds no trace of that special in a release's parts)

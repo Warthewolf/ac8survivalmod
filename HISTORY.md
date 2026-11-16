@@ -3125,3 +3125,50 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - tools/log_report.py split (+ log_report_page.py; the same pages) and 0.74.66's storeq: lines in its checklist and STORE
   windows section. run_all 73 passed, 5 skipped (Windows only).
 - escort_test.lua is at 1,999 of 2,000 lines and its main chunk at 200 locals: split it before adding to it.
+
+## 0.74.69-coop2mp.161: friends' zip (2026-11-14, runtime 0.32.35; dev after PRs #5-#7 and the WEAPON BAYS fix)
+- dev as of 4aa95d5: the cloud line's 0.74.66-0.74.67 (PRs #5, #6: the STORE's lost events, tools/log_report.py, the
+  escort / config splits), 1nveigh's Add-on API 2.0 (PR #7, the user's exception), WEAPON BAYS after a special weapon
+  swap (NotMexi's log of 0.74.36), the release rule for Distant Thunder and the Tanacorn. 0.74.68 skipped: the user's
+  railguns build (feature/tanacorn-railguns, TANI=1) is staged in the main tree under it.
+- Built in worktree .claude/worktrees/friends-0.74.69 (branch tools/friends-0.74.69), build inputs linked from the main
+  tree (build/ac7, laser7, stock, valka_music, x02s, zfa44; tools/bin; tools/scriptobjs.pkl and build/checks/lua.exe
+  copied), LLVM_BIN pointed at the main tree's tools/llvm/LLVM/bin; `ZFA=1 sh tools/build_all.sh`: leaderboard address
+  in ("leaderboard: runs go to ..."), no tani_wd.txt.
+- Packaged: BUILD_NAME=COOP2MP COOP=1 ZFA=1 sh tools/package_release.sh online 0.74.69 ->
+  AC8SurvivalMode_COOP2MP_0.74.69_Online_COOP_ZFA44.zip (46.9 MB, 102 files; SurvivalMode_P, Valka, ZFA44, Laser7
+  containers; no Tanicorn container, no DEV ONLY / TEST ONLY Lua, no Distant Thunder trace), build hash 7ac365b735d5...,
+  registered. Not installed (the user: no install until told). Not yet run in game.
+
+## The STORE crash in general: recycles' destroys wait out the freeze (2026-11-14; runtime 0.32.36; branch fix/store-recycle-freeze; not built yet)
+- Phantom's crash on 0.74.36 (solo, round 31 -> 32, the ANOMALY announced; streamed 2026-11-13): UECC at the STORE's
+  close, an access violation reading 0x3d9 on the game thread, stack 0x147dbbf5e <- 0x147db9583 <- 0x147c95197 (the
+  same as Shazzy's carrier-hull crash of 2026-11-09, fixed for carriers only in 0.74.50). The last runtime line is
+  `minigame: type 7 ends: restore of 157 AI objects` (written just before the game's restore runs). A break-off's forced
+  recycle at 21:14:57 (`ERA_Unit_01_Dep_Air0 ... taken down (forced, aircraft still counted alive)`) queued its unit
+  actor's destroy 30 s on: 21:15:27, inside the STORE (frozen 21:15:07, restored 21:15:38). Every other STORE of the
+  run (26 of them, the VOID WATCHER's and the Alicorn's forced recycles among them) had its destroys outside the freeze
+  and closed clean. So: a unit actor destroyed under planes the freeze listed, then the restore walks them. The run also
+  had SPWeaponCustomizer and falken-us4ss installed: their lines were the same at every earlier STORE, so not the cause.
+- runtime: g_mgFrozen, set after the stock deactivation (solo; only when the restore is hooked too) and cleared after
+  the stock restore returns (and at the teardown gate). RcDrain holds an entry due while it's set (logged once:
+  `recycle <unit>: its old unit actor ... is due, but the STORE has the world's AI frozen: its destroy waits ...`) and
+  destroys it at the first spawner call after the restore (`... held for the STORE`). A recycle that would destroy at
+  once (force 2, or recycle.destroy_after_s 0) during the freeze is queued for then too (RcDefer takes the wait).
+  Co-op's kept AI (SV_StoreKeepAI 1) has no freeze: nothing changes there.
+- tools/checks/store_recycle_test.sh (new; Windows only): the runtime's own RcDefer / RcDrain / Recycle /
+  OnMgDeactivate / OnMgRestore cut out by store_recycle_cut.py, the game stubbed: Phantom's timing, force 2 and no wait
+  inside the STORE, outside it as before, co-op, the restore not hooked, the teardown. 20 pass; 7 fail on dev's code.
+  run_all.sh: 83 passed, 0 failed, 1 skipped (coop_test, named only); paths_check, size_check pass.
+- To see in game: a forced recycle (an ace break-off, the Alicorn) 0-30 s before landing, then the STORE: the "waits"
+  line, no crash at the takeoff fade, then the "held for the STORE" destroy.
+
+## 0.74.70-coop2mp.162: friends' zip (2026-11-15, runtime 0.32.36; dev 2d3c56b: the STORE crash fix)
+- dev as of 2d3c56b: 0.74.69 plus runtime 0.32.36 (the recycles' unit destroys wait out the STORE's freeze: Phantom's
+  crash of 2026-11-13). Built in worktree .claude/worktrees/fix-store-recycle-freeze (branch tools/friends-0.74.70),
+  build inputs linked from the main tree as 0.74.69's; `ZFA=1 sh tools/build_all.sh`: leaderboard address in, no
+  tani_wd.txt.
+- Packaged: BUILD_NAME=COOP2MP COOP=1 ZFA=1 sh tools/package_release.sh online 0.74.70 ->
+  AC8SurvivalMode_COOP2MP_0.74.70_Online_COOP_ZFA44.zip (46.9 MB, 102 files; SurvivalMode_P, Valka, ZFA44, Laser7
+  containers), build hash 0aea0a694202..., registered; zip_leak_test passed (no Tanicorn, DEV ONLY, TEST ONLY or
+  Distant Thunder). Not installed. Not yet run in game.

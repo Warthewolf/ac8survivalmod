@@ -124,6 +124,9 @@ end
 function LB.edited(coopRun)
     local out, detail = {}, {}
     if CFG_USER_FILE then out[#out + 1] = CFG_USER_FILE; detail[#detail + 1] = CFG_USER_FILE .. " is in Scripts" end
+    for _, p in ipairs(PLUGINS and PLUGINS.loaded or {}) do                -- (an add-on found: sv_plugins.lua)
+        out[#out + 1] = "plugin " .. tostring(p.name); detail[#detail + 1] = "plugin " .. tostring(p.name) .. " is in AC8SurvivalAddons"
+    end
     local tk = (D and RUN and RUN.stats and RUN.stats.test_key) or LB.menuTestKey
     if tk then out[#out + 1] = "test key " .. tk; detail[#detail + 1] = "test key " .. tk .. " pressed" end
     if type(CFG_DEFAULTS) ~= "table" or not (COOP and COOP.cfgDiff) then return out, detail end

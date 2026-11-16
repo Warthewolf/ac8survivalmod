@@ -1,6 +1,8 @@
 """lua_check.py : Lua 5.4 syntax check (no Lua on the build machine).
 
   python lua_check.py <file.lua> ...
+  python lua_check.py --addons <dir> ...   (each add-on folder in <dir>, its files as one add-on environment's:
+                                            a global of Survival's or UE4SS's it reads is an ERROR)
 
 A tokenizer and recursive-descent parser for the Lua 5.4 grammar. It reports the first syntax error per file with its
 line, and warns about globals that are assigned but never declared local (typos) and locals used before their
@@ -368,6 +370,76 @@ def check(paths):
     return ok
 
 
+# An add-on's environment (docs/ADDONS.md "Your add-on's environment"; Scripts/sv_plugins.lua envFor, which
+# tools/checks/plugins_test.lua compares with this list): the only globals an add-on has, besides its own and the
+# natives its natives.txt names.
+ADDON_GLOBALS = {
+    'assert', 'error', 'ipairs', 'next', 'pairs', 'select', 'tonumber', 'tostring', 'type', 'rawequal', 'rawget',
+    'rawlen', 'rawset', 'print', '_VERSION', 'pcall', 'xpcall', 'setmetatable', 'getmetatable', 'string', 'table',
+    'math', 'utf8', 'os', 'io', 'collectgarbage', 'load', 'loadfile', 'dofile', 'FName', 'FText', 'FindFirstOf',
+    'FindAllOf', 'StaticFindObject', 'NotifyOnNewObject', 'SVP', '_G',
+}
+
+
+def natives_of(folder):
+    """an add-on folder's natives.txt: (names, prefixes)"""
+    import os, re
+    names, prefixes = set(), []
+    p = os.path.join(folder, 'natives.txt')
+    if os.path.exists(p):
+        for line in open(p, encoding='utf-8'):
+            w = re.sub(r'[#;].*$', '', line).strip()
+            if re.fullmatch(r'[A-Z][A-Z0-9]*_\w*\*', w): prefixes.append(w[:-1])
+            elif re.fullmatch(r'[A-Z][A-Z0-9]*_\w*', w): names.add(w)
+    return names, prefixes
+
+
+def check_addons(root):
+    """every add-on folder in root (examples/addons): its .lua files as one environment's. A global it reads that an
+    add-on's environment hasn't got and that none of its files sets: an ERROR when it's one of Survival's or
+    UE4SS's names (LoopAsync, RegisterHook, debug, Survival's functions: nil there, so a bug), else a WARNING. No add-on
+    folders in root: said, no error."""
+    import os, glob
+    folders = sorted(d for d in glob.glob(os.path.join(root, '*')) if os.path.isdir(d))
+    if not folders:
+        print(f'{root}: no add-on folders (nothing to check)')
+        return True
+    native = runtime_lua_names()
+    survival = KNOWN_GLOBALS | native
+    scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts')
+    for path in glob.glob(os.path.join(scripts, '*.lua')):   # (Survival's own globals: CFG, D, log, ...)
+        p = parse(path)
+        if p: survival |= set(p.globals_set)
+    ok = True
+    for d in folders:
+        paths = sorted(glob.glob(os.path.join(d, '*.lua')))
+        if not paths:
+            print(f'{d}: no .lua (Survival switches such an add-on off)'); continue
+        parsed = {path: parse(path) for path in paths}
+        if not all(parsed.values()):
+            ok = False; continue
+        own = {}
+        for p in parsed.values():
+            for n, line in p.globals_set.items(): own.setdefault(n, line)
+        names, prefixes = natives_of(d)
+        for path, p in parsed.items():
+            print(f'{path}: syntax ok (an add-on\'s environment; main chunk: at most {p.max_locals} of 200 locals in scope)')
+            for line, op in p.truncated:
+                ok = False
+                print(f"  ERROR line {line}: more names than values after a last `{op}`: `{op}` keeps one value of a call, so the extra names are always nil")
+            seen = set()
+            for n, line in p.used:
+                if n in ADDON_GLOBALS or n in own or n in seen: continue
+                if n in names or any(n.startswith(x) for x in prefixes): continue
+                seen.add(n)
+                if n in survival:
+                    ok = False
+                    print(f'  ERROR line {line}: {n} isn\'t in an add-on\'s environment (docs/ADDONS.md): nil there')
+                else:
+                    print(f'  WARNING: unknown global {n} (line {line}): a typo, a native not in natives.txt, or a local used before it is declared')
+    return ok
+
+
 def check_runtime_names():
     """The native runtime registers its Lua functions through a small-string buffer: a name over 15 characters is
     skipped at run time (runtime 0.14.0's SV_SetControlInvert never registered, test of 2026-10-22). Fail the build."""
@@ -380,5 +452,7 @@ def check_runtime_names():
 
 
 if __name__ == '__main__':
+    if sys.argv[1:2] == ['--addons']:                # lua_check.py --addons examples/addons
+        sys.exit(0 if all([check_addons(r) for r in sys.argv[2:]]) else 1)
     ok = check(sys.argv[1:]) and check_runtime_names()
     sys.exit(0 if ok else 1)

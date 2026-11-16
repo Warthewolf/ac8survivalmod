@@ -348,3 +348,7 @@ interfaces {ClassFunc, Offset} at +0x30). The manager from its StaticClass (the 
 constructor (0x159edbee0, vtable) -> the getter 0x147ee01b0 and its 84 callers -> functions in 0x1478e7000-0x1478f0000 using
 +0x68..+0x98 -> 0x1478eb7b0 (`Add` into +0x68 / +0x78 / +0x88) and its one caller. Class names and sizes from each
 `GetPrivateStaticClassBody` call; virtual slots from ALiveAIPlane's constructor 0x147cb9ac0 (vtables at +0, +0x330 ...).
+
+
+## The recycles' unit destroys wait for the restore (runtime 0.32.36)
+A unit actor destroyed while the freeze has its planes listed crashes the restore at the STORE's close (0x147dbbf5e <- 0x147db9583 <- 0x147c95197, reading 0x3d9: Shazzy 2026-11-09, Phantom 2026-11-13). The runtime's deferred destroys (survival_rt_game.c RcDrain) are held from OnMgDeactivate to the end of OnMgRestore (g_mgFrozen) and run at the first spawner call after it. tools/checks/store_recycle_test.sh.

@@ -12,7 +12,7 @@ import os, sys
 
 MAX_LINES = 2000
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
-DIRS = ['mod/UE4SS/AC8SurvivalMode/Scripts', 'tools', 'runtime', 'leaderboard/src']
+DIRS = ['mod/UE4SS/AC8SurvivalMode/Scripts', 'tools', 'runtime', 'leaderboard/src', 'examples']
 EXTS = ('.lua', '.py', '.sh', '.c', '.h', '.js')
 SKIP = {'build', 'data', 'llvm', 'bin', '__pycache__', 'node_modules', 'Content', 'x02s_assets'}
 

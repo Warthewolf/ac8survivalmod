@@ -277,7 +277,8 @@ function STATS.tailTick(now)
     local wkm, max = c.watch_km or 4.5, math.max(1, math.floor(c.watch_max or 4))
     local tkm, tdeg, grace = (c.tail_km or 3) * 1000, c.tail_deg or 70, c.watch_grace_s or 2.0
     for _, p in ipairs(planes) do
-        if p.tw then cand[#cand + 1] = p
+        if PLUGINS and PLUGINS.owned and PLUGINS.owned(p) then p.tw = nil   -- (an add-on's target: not watched)
+        elseif p.tw then cand[#cand + 1] = p
         elseif not p.down and p.tier and p.dist and p.dist <= wkm and p.unit and poolIndex(p.unit)
                and not BOMBER_UNIT[p.unit] then
             -- (likely on its tail: the sweep said so, or its last pose against you now; no read)

@@ -16,7 +16,7 @@ rm -rf "$OUT" && mkdir -p "$OUT"
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) WIN=1 ;; *) WIN=0 ;; esac
 # C suites that need windows.h and Win32 at run time (a vectored exception handler, Winsock / Steam lookups, bcrypt,
 # FindFirstFileW): only on Windows
-WIN_ONLY=" safecall_test pathguard_test build_hash_test logbundle_test "   # (flight_test, coop_test: Linux too, tools/checks/win32_posix.h)   # (logbundle_test: PR #4's, once merged)
+WIN_ONLY=" safecall_test pathguard_test build_hash_test logbundle_test store_recycle_test "   # (flight_test, coop_test: Linux too, tools/checks/win32_posix.h)   # (logbundle_test: PR #4's, once merged)
 TO=""
 command -v timeout > /dev/null 2>&1 && TO="timeout 600"
 FILTER="$*"
@@ -55,6 +55,7 @@ sh tools/checks/lua_build.sh > "$OUT/lua_build.txt" 2>&1 || { cat "$OUT/lua_buil
 # the build's own checks (tools/build_all.sh)
 run lua_check      python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/*.lua
 run lua_check_ai   python -X utf8 -I tools/checks/lua_check.py mod/UE4SS/AC8SurvivalMode/Scripts/ai/*.lua
+run lua_check_addons python -X utf8 -I tools/checks/lua_check.py --addons examples/addons
 run ini_check      python -X utf8 -I tools/checks/ini_check.py
 run subtitles      python -X utf8 -I tools/subtitles.py check
 run size_check     python -X utf8 -I tools/checks/size_check.py

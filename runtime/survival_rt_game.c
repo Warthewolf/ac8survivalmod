@@ -279,6 +279,7 @@ static volatile int32_t g_teardown;            /* 1: closed: Survival's level is
 static void*            g_world;               /* the spawner's world, kept when it was found live (SpawnerReady) */
 static int              GcPurgePending(void);  /* (flight.c: the engine's purge flags) */
 static int              RcDrop(void);          /* (below: the deferred unit destroys) */
+static volatile int     g_mgFrozen;            /* (flight_guards.c, 0.32.36) 1: the STORE's freeze has the world's AI listed */
 
 /* why o (an object kept by the runtime) is gone, or NULL while it's still the engine's live object. keptIdx: the GUObjectArray
  * index it had when it was kept, or -1: (lag-1) a slot that still holds o needs no memory check, one that doesn't is
@@ -306,6 +307,7 @@ static void TeardownClose(const wchar_t* why)
 {
     if (g_teardown) return;
     g_teardown = 1;
+    g_mgFrozen = 0;                                    /* (0.32.36: a level gone mid-STORE: no restore follows) */
     int dropped = RcDrop();
     Log(L"teardown gate: closed (Survival's level is going: its world %p: %s): Lua holds its level work and drops its object "
         L"lists, the runtime touches no level object until the next Survival level (SV_Reset); %d deferred unit destroys "
@@ -335,13 +337,20 @@ static int TeardownCheck(void)
  * heavy flight's first spawn. Taking the unit off the phase's list is what lets its desc spawn again (hard rule 16); the
  * actor's destroy now waits g_rcWaitMs (Lua's CFG.recycle.destroy_after_s, SV_RecycleWait; 30 s by default, 0 the
  * 0.32.21 way: at once), done from the next spawner call after that, only while the unit is still a live object of this
- * level (a restart's or the level's own destroy came first: nothing). The gate drops the queue. */
+ * level (a restart's or the level's own destroy came first: nothing). The gate drops the queue.
+ * (0.32.36) Never while the STORE's freeze is on (g_mgFrozen: from the minigame's AI deactivation to the end of its
+ * restore): the restore walks every AI object it deactivated, and a unit actor destroyed under its still-live planes
+ * crashed it (0x147dbbf5e <- 0x147db9583 <- 0x147c95197, reading 0x3d9): Shazzy's carrier hull of 2026-11-09 and
+ * Phantom's run of 2026-11-13, a break-off's forced recycle at 21:14:57 destroyed 30 s on at 21:15:27, inside the STORE
+ * (21:15:07-21:15:38); every STORE of that run whose destroys fell outside it closed clean. Entries due are held and
+ * destroyed at the first spawner call after the restore; a forced at-once destroy (force 2, or no wait) during the
+ * freeze is queued for then too. */
 #define RC_MAX 64
-typedef struct { uint8_t* unit; int32_t idx; uint64_t due; wchar_t name[48]; } RcEntry;
+typedef struct { uint8_t* unit; int32_t idx; uint32_t wait; uint64_t due; uint64_t held; wchar_t name[48]; } RcEntry;
 static RcEntry  g_rc[RC_MAX];
 static int      g_rcN;
 static uint32_t g_rcWaitMs = 30000;
-static uint32_t g_rcDone, g_rcSkipped;
+static uint32_t g_rcDone, g_rcSkipped, g_rcHeld;
 
 static int RcDrop(void)
 {
@@ -350,14 +359,17 @@ static int RcDrop(void)
     return n;
 }
 
-/* 1 queued; 0 the queue is full (the caller destroys it at once, as before) */
-static int RcDefer(uint8_t* unit, const wchar_t* name)
+/* 1 queued, due waitMs on (0: at the first drain the STORE's freeze allows); 0 not queued: no wait and no freeze, or the
+ * queue is full (the caller destroys it at once, as before) */
+static int RcDefer(uint8_t* unit, const wchar_t* name, uint32_t waitMs)
 {
-    if (!g_rcWaitMs || g_rcN >= RC_MAX || !Readable(unit, 0x10)) return 0;
+    if ((!waitMs && !g_mgFrozen) || g_rcN >= RC_MAX || !Readable(unit, 0x10)) return 0;
     RcEntry* e = &g_rc[g_rcN++];
     e->unit = unit;
     e->idx = *(int32_t*)(unit + 0xC);
-    e->due = GetTickCount64() + g_rcWaitMs;
+    e->wait = waitMs;
+    e->due = GetTickCount64() + waitMs;
+    e->held = 0;
     size_t k = 0;
     while (name && name[k] && k < 47) { e->name[k] = name[k]; ++k; }
     e->name[k] = 0;
@@ -373,6 +385,17 @@ static void RcDrain(void)
     for (int i = 0; i < g_rcN; ++i) {
         RcEntry e = g_rc[i];
         if (now < e.due) { g_rc[keep++] = e; continue; }
+        if (g_mgFrozen) {                              /* (0.32.36) the STORE's restore still to walk its planes */
+            if (!e.held) {
+                e.held = now;
+                ++g_rcHeld;
+                Log(L"recycle %s: its old unit actor %p is due, but the STORE has the world's AI frozen: its destroy waits for "
+                    L"the STORE's close (its restore walks the planes)", e.name, e.unit);
+                Crumb(L"recycle %s: deferred destroy of %p held (STORE freeze)", e.name, e.unit);
+            }
+            g_rc[keep++] = e;
+            continue;
+        }
         const wchar_t* why = ObjGoneWhy(e.unit);
         if (!why && *(int32_t*)(e.unit + 0xC) != e.idx) why = L"its slot is another object's";
         if (why) {
@@ -387,8 +410,9 @@ static void RcDrain(void)
         ++g_rcDone;
         ++g_unitGen;                                   /* (lag-1: the id table looks again) */
         Crumb(L"recycle %s: destroyed", e.name);
-        Log(L"recycle %s: its old unit actor %p destroyed, %d s after it was taken off the phase's list (%u so far, %u gone "
-            L"before, %d waiting)", e.name, e.unit, (int32_t)(g_rcWaitMs / 1000), g_rcDone, g_rcSkipped, g_rcN - i - 1 + keep);
+        Log(L"recycle %s: its old unit actor %p destroyed, %d s after it was taken off the phase's list%s (%u so far, %u gone "
+            L"before, %u held for a STORE, %d waiting)", e.name, e.unit, (int32_t)((now - e.due + e.wait) / 1000),
+            e.held ? L", held for the STORE" : L"", g_rcDone, g_rcSkipped, g_rcHeld, g_rcN - i - 1 + keep);
     }
     g_rcN = keep;
 }
@@ -616,15 +640,16 @@ static int Recycle(uint8_t* desc, const wchar_t* name, int force)
         Log(L"spawn %s: its last flight is still up (%d alive); not spawned again", name, alive);
         return -1;
     }
-    int later = force != 2 && RcDefer(unit, name);
+    int later = RcDefer(unit, name, force == 2 ? 0 : g_rcWaitMs);   /* (0.32.36: never at once in the STORE's freeze) */
     Crumb(L"recycle %s: unregistering its unit actor %p (%d alive)%s", name, unit, alive, later ? L", its destroy deferred" : L" and destroying it");
     g_unregisterUnit(g_phase, unit);
     ++g_unitGen;                                       /* (lag-1: the id table looks again) */
     if (!later) g_destroyActor(unit, 0);
     Crumb(L"recycle %s: done", name);
     if (later)
-        Log(L"spawn %s: its last flight %s; took it off the phase's list, its unit actor %p destroyed %d s on (%d waiting)", name,
-            alive ? L"was taken down (forced, aircraft still counted alive)" : L"was shot down", unit, (int32_t)(g_rcWaitMs / 1000), g_rcN);
+        Log(L"spawn %s: its last flight %s; took it off the phase's list, its unit actor %p destroyed %d s on%s (%d waiting)", name,
+            alive ? L"was taken down (forced, aircraft still counted alive)" : L"was shot down", unit, (int32_t)(g_rc[g_rcN - 1].wait / 1000),
+            g_mgFrozen ? L", once the STORE has closed" : L"", g_rcN);
     else
         Log(L"spawn %s: its last flight %s; took it off the phase's list and removed its unit actor%s", name,
             alive ? L"was taken down (forced, aircraft still counted alive)" : L"was shot down",
