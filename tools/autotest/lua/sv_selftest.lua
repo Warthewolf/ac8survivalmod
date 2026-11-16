@@ -459,7 +459,7 @@ SUITES.tanacorn = function()
         local rg = "RAILGUN_" .. side
         A.until_(function()
             return not C.railUp[side] or ST.findLog("tanicorn rail: " .. rg .. " its barrel moves", ST.marks.m0, true)
-        end, 25, function(l)
+        end, 85, function(l)          -- (run 27: a barrel started after +33 s)
             if C.railUp[side] then
                 ST.check(type(l) == "string", rg .. "'s barrel moves after its order", l or ST.findLog("tanicorn rail: " .. rg, ST.marks.m0, true))
             end
