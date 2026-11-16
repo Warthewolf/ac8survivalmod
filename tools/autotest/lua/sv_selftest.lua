@@ -496,6 +496,21 @@ SUITES.fleet = function()
         ST.info("waiting 70 s for the fleet to sail")
     end)
     A.wait(70)
+    -- (2026-11-16, 0.74.77) the ships' parts ordered PlayerOnlyNoLimit: no shell at the runway's target points any more
+    -- (run 21, 0.74.76: every gun's first shell went at BP_GR000_dummy_CP)
+    A.do_(function()
+        local atDummy, atYou, other = {}, {}, {}
+        for i = ST.marks.m0 + 1, ST.n do
+            local w, by, at = (ST.lines[i] or ""):match("weapons: first launch of (%S+) by (BP_VE%S+) .- at (%S+)")
+            if w then
+                local t = at:find("dummy", 1, true) and atDummy or (at == "you" and atYou or other)
+                t[#t + 1] = by .. " " .. w .. " -> " .. at
+            end
+        end
+        ST.check(#atDummy == 0, "no ship fires at the runway's target points", #atDummy .. " at them: " .. table.concat(atDummy, "; "))
+        ST.info(#atYou .. " ship weapons fired at you first (" .. table.concat(atYou, "; ") .. "), " .. #other ..
+            " at something else (" .. table.concat(other, "; ") .. ")")
+    end)
     -- (a ship's .hull is sv_fleet's entry { obj, addr, ... }: the actor is its .obj; GEOFON by name, not by order)
     local function geofon()
         for _, sh in ipairs(IFLEET.cur and IFLEET.cur.ships or {}) do
