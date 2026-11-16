@@ -1627,6 +1627,38 @@ SUITES.meshbolt2 = function()
         A.wait(1)
     end
 end
+-- (2026-11-17, 0.74.87) the fleet's storm night as you'd see it: its bolts (THUNDER.bolt: AC8's bolt meshes in the cloud
+-- lightning material) warmed up under the fade, then flashing round the airfield; pictured from your view and from a fixed
+-- camera 3 km up over the runway looking out to sea
+SUITES.stormview = function()
+    intoRun()
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and THUNDER ~= nil and THUNDER.bolt ~= nil, "the fleet's storm and its bolts are in this build") then return "abort" end
+        ST.marks.s0 = ST.n
+        IFSKY.step(3)
+    end)
+    A.log_("fleet storm: warm%-up under the black: %d+ bolts", 15, "s0", false, function(l)
+        ST.check(l ~= nil and not l:find("under the black: 0 bolts", 1, true), "the bolts and the rain warmed up under the fade", l)
+    end)
+    A.log_("bolts: %d+ %(the fleet's storm%)", 20, "s0", false, function(l)
+        ST.check(l ~= nil, "the storm's first bolt", l)
+    end)
+    for i = 1, 14 do
+        A.wait(0.6)
+        A.do_(function() ST.shot(string.format("storm_you_%02d", i)) end)
+    end
+    local eye = { X = 1610476, Y = -436143, Z = 300000 }
+    A.do_(function() ST.look(eye, { X = eye.X - 1000000, Y = eye.Y - 300000, Z = 150000 }, 75) end)
+    for i = 1, 10 do
+        A.wait(0.7)
+        A.do_(function() ST.shot(string.format("storm_wide_%02d", i)) end)
+    end
+    A.do_(function()
+        ST.lookBack()
+        local l = ST.findLog("bolts: ", ST.marks.s0, true)
+        ST.info("stormview: the last bolt line: " .. tostring(l))
+    end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
