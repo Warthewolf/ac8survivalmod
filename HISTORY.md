@@ -3252,3 +3252,20 @@ game. The work was split by file between agents; the builds ran in sequence in t
   the test plane at 60 % damage; both railguns turned (yaw 85.7 -> 143.4 / 142.4, pitch 0 -> 35.7 / 36.5) and fired
   (LiveEMLBullet_BattleShip at 11,089 m/s); armour, no death chain, the hull's 50,000 untouched; the railcannon's whole
   cycle (charge, shot, impact -100, shot down in its second charge, no impact). Pictures in its shots/.
+
+## 0.74.78-0.74.80 (2026-11-16, runtime 0.32.36; events, Lua; the Tanicorn container 0.74.74's): the fleet on you, the Spear's impact
+- 0.74.78: INVINCIBLE FLEET's unit-level ship order (Mission 22's, its priority Default) PlayerOnlyNoLimit too. The
+  autotest's new rounds-in-flight sampler (tools/autotest A.rounds: each round's TargetToHome after the orders; a gun's
+  first launch comes 1-2 s after its ship's spawn, before its order) read run 25 (0.74.77): 5 at you / 20 at the runway's
+  points; run 26 (0.74.78): 21 at you (the Aegis VLS) / 12 at the runway (the Aegis Mk 45, BELUGA's howitzer).
+- 0.74.79: each fleet unit air-only at its appearance (Mission 22's LiveAIChangeEnemySearchType AIR_ONLY, as the pool's
+  fighters; check_fleet_build knows the record): run 28, 14/14, 73 rounds at you (Mk 45 x51, VLS x15, KOLGA's AK-130,
+  the Gorshkov's gun, BELUGA's howitzer), none at the runway. The airfield's shelling stays WP13's (GROUND_ONLY at the
+  gun line). The railguns' re-orders 4 -> 10 (run 27: a barrel started turning after +33 s; at yaw 66 / pitch 39 by
+  +85 s). Run 29 (THE TANACORN): 40/40, 73 of her rounds at you, both railguns turned 8 s after their order and fired.
+- 0.74.80: the railcannon's impact is Mission 25 day 1's Tonitrus Spear strike as its cutscene draws it (the user,
+  2026-11-16, with a picture of it: "This is what the Railcannon Hit Impact should look like", "Rocky Island Day 1"):
+  PL_Mission025 (day 1) loads IGC_Ms250010, whose Shot0030 spawns NS_IGCVFX_Ms250010_Explosion001 / 002 / 005,
+  ShockWave001 / 002 (the two rings), SandSmoke001 and RingSmoke001 (day 2, PL_Mission025_2, loads Ms250020-40: no
+  strike). The GR036 main cannon's blast and her EML burst out; impact_life_s 25 (the dust; the rest fx_life_s 6).
+  tani_rail_test: the set pinned, 7 of 7 up, the dust still up 7.5 s on, all stopped after their life.
