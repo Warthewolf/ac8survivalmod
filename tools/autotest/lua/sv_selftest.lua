@@ -2481,6 +2481,510 @@ SUITES.flash92 = function()
         ST.lookBack()
     end)
 end
+-- (2026-11-17) watch93: the user watching the screen ("Keep testing and I'll watch the screen"): each step called out on
+-- the HUD first. The night storm (Ctrl+S); its own lightning paused; cloud flashes put 1.5, 3 or 6 km ahead of your camera
+-- at your height (in the layer you fly in), 0.4M to 8M, held ~1.5 s, one at a time; the four thunder sounds (Ctrl+J) 5 s
+-- apart; then the whole storm 20 s. Pictures at each flash for the record.
+SUITES.watch93 = function()
+    intoRun()
+    local C = {}
+    local function cfg() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
+    local function say(a, b) pcall(hudCallout, a, b); ST.info("watch93: " .. a .. " / " .. b) end
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and THUNDER ~= nil and THUNDER.cloudFlash ~= nil, "the storm and its flashes are in this build") then return "abort" end
+        say("TEST: NIGHT STORM", "CTRL+S IN 3 S")
+    end)
+    A.wait(3)
+    A.do_(function() ST.marks.k1 = ST.n; ST.press("S") end)
+    A.log_("fleet storm: in (", 15, "k1", true, function(l) ST.check(l ~= nil, "the storm in", l) end)
+    A.wait(4)
+    A.do_(function()
+        local L = cfg()
+        C.on, C.cloud = L.enabled, L.cloud and L.cloud.enabled
+        L.enabled = false
+        say("TEST: CLOUD FLASHES", "THE STORM'S OWN LIGHTNING PAUSED: WATCH AHEAD")
+    end)
+    A.wait(4)
+    local TRY = { { 400000, 3 }, { 1000000, 3 }, { 2000000, 3 }, { 3000000, 3 }, { 8000000, 3 },
+                  { 2000000, 1.5 }, { 8000000, 1.5 }, { 2000000, 6 }, { 8000000, 6 } }
+    for k, t in ipairs(TRY) do
+        local label = string.format("%s, %.1f KM AHEAD", t[1] >= 1000000 and string.format("%g MILLION", t[1] / 1000000) or string.format("%dK", t[1] / 1000), t[2])
+        A.do_(function() say(string.format("TEST: CLOUD FLASH %d/%d", k, #TRY), label .. " IN 2 S") end)
+        A.wait(2)
+        A.do_(function()
+            local pcm, L, R
+            pcall(function() pcm = survivalPC.PlayerCameraManager; local v = pcm:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+            pcall(function() R = pcm:GetCameraRotation() end)
+            if not (L and R) then ST.info("watch93: no camera"); return end
+            local yw = math.rad(R.Yaw or 0)
+            local at = { X = L.X + math.cos(yw) * t[2] * 100000, Y = L.Y + math.sin(yw) * t[2] * 100000, Z = L.Z }
+            local c = {}
+            for key, v in pairs(cfg().cloud or {}) do c[key] = v end
+            c.brightness, c.max_brightness, c.steps = t[1], 1.0e9, { 1, 1, 1, 1, 1, 1, 0 }
+            local ok, what = pcall(THUNDER.cloudFlash, at, "effect", "the test", c)
+            ST.info(string.format("watch93 flash %d: %s", k, ok and tostring(what) or ("error " .. tostring(what))))
+        end)
+        A.wait(0.5)
+        A.do_(function() ST.shot(string.format("w93_flash_%d", k)) end)
+        A.wait(3)
+    end
+    A.do_(function() say("TEST: THUNDER SOUNDS", "FOUR, 5 S APART: LISTEN") end)
+    A.wait(3)
+    for i = 1, 4 do
+        A.do_(function() ST.press("J") end)
+        A.wait(5)
+    end
+    A.do_(function()
+        local L = cfg()
+        L.enabled = C.on
+        say("TEST: THE WHOLE STORM", "BOLTS, CLOUD FLASHES, THUNDER: 20 S")
+    end)
+    for i = 1, 8 do
+        A.wait(2.5)
+        A.do_(function() ST.shot(string.format("w93_storm_%d", i)) end)
+    end
+    A.do_(function() say("TEST: DONE", "THANK YOU") end)
+    A.wait(2)
+end
+-- (2026-11-17) watch94: run 77, the user watching: none of the cloud flashes (Cloudly's effect light, 0.4M-8M) lit the
+-- clouds, and none of the thunder sounds was heard (posted by name). 0.74.94 plays them with PostEventAtLocation. Called
+-- out on the HUD first: the night storm (Ctrl+S); the four thunder sounds (Ctrl+J) 5 s apart; the whole sky flashed five
+-- ways, a double flicker each, the storm's own lightning paused (A the clouds' sky light x20, B the moonlight (the night's
+-- sun factor) x30, C the sky light x30, D the exposure +2.5, E B and C), twice through; the whole storm 15 s.
+SUITES.watch94 = function()
+    intoRun()
+    local C = {}
+    local function cfg() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
+    local function say(a, b) pcall(hudCallout, a, b); ST.info("watch94: " .. a .. " / " .. b) end
+    local function view() return SKY and SKY.viewCached and SKY.viewCached(os.clock(), nil) end
+    local KINDS = {
+        { "A", "THE CLOUDS' OWN SKY LIGHT X20", function(v) SKY.addField("cloud_amb", "CloudSkyAmbientLightIntensity"); return { { "asset|cloud_amb", "x", 20 } } end },
+        { "B", "THE MOONLIGHT X30", function(v) return { { "asset|sun_factor", "x", 30 } } end },
+        { "C", "THE SKY LIGHT X30", function(v) local t = {}; for _, x in ipairs(v.ctrl or {}) do t[#t + 1] = { "skyl|" .. x.name .. "|int", "x", 30 } end; return t end },
+        { "D", "THE EXPOSURE +2.5", function(v) local t = {}; for _, x in ipairs(v.ppv or {}) do t[#t + 1] = { "ppv|" .. x.name .. "|bias", "+", 2.5 } end; return t end },
+        { "E", "MOONLIGHT X30 AND SKY LIGHT X30", function(v)
+            local t = { { "asset|sun_factor", "x", 30 } }
+            for _, x in ipairs(v.ctrl or {}) do t[#t + 1] = { "skyl|" .. x.name .. "|int", "x", 30 } end
+            return t end },
+    }
+    local function on(K)
+        local v = view()
+        if not v then return "no sky view" end
+        C.saved = {}
+        local parts = {}
+        for _, k in ipairs(K[3](v)) do
+            local get, set = SKY.slot(v, k[1])
+            if get and set then
+                local old = get()
+                if type(old) == "number" then
+                    local new = k[2] == "x" and old * k[3] or old + k[3]
+                    C.saved[#C.saved + 1] = { set = set, old = old }
+                    set(new)
+                    parts[#parts + 1] = string.format("%s %.4g -> %.4g", k[1], old, new)
+                else
+                    parts[#parts + 1] = k[1] .. " unread"
+                end
+            else
+                parts[#parts + 1] = k[1] .. " no slot"
+            end
+        end
+        return #parts > 0 and table.concat(parts, ", ") or "nothing to write"
+    end
+    local function off() for _, x in ipairs(C.saved or {}) do pcall(x.set, x.old) end; C.saved = {} end
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and SKY ~= nil and SKY.slot ~= nil, "the storm and the sky's slots are in this build") then return "abort" end
+        say("TEST: NIGHT STORM", "CTRL+S IN 3 S")
+    end)
+    A.wait(3)
+    A.do_(function() ST.marks.k1 = ST.n; ST.press("S") end)
+    A.log_("fleet storm: in (", 15, "k1", true, function(l) ST.check(l ~= nil, "the storm in", l) end)
+    A.wait(3)
+    A.do_(function() say("TEST: THUNDER SOUNDS", "FOUR, 5 S APART: LISTEN (PLAYED THE NEW WAY)") end)
+    A.wait(3)
+    for i = 1, 4 do
+        A.do_(function() ST.marks["j" .. i] = ST.n; ST.press("J") end)
+        A.log_("fleet storm: Ctrl+J thunder " .. i .. " of 4", 3, "j" .. i, true, function(l)
+            ST.check(l ~= nil and l:find("(played;", 1, true) ~= nil, "Ctrl+J sound " .. i .. " played", l)
+        end)
+        A.wait(5)
+    end
+    A.do_(function()
+        local L = cfg()
+        C.on = L.enabled
+        L.enabled = false
+        say("TEST: SKY FLASHES", "THE STORM'S OWN LIGHTNING PAUSED: FIVE KINDS, A TO E")
+    end)
+    A.wait(4)
+    for round = 1, 2 do
+        for _, K in ipairs(KINDS) do
+            A.do_(function() say("TEST: SKY FLASH " .. K[1] .. (round == 2 and " AGAIN" or ""), K[2] .. " IN 2 S") end)
+            A.wait(2)
+            A.do_(function() ST.info("watch94 " .. K[1] .. ": " .. on(K)); if round == 1 then ST.shot("w94_" .. K[1] .. "_on") end end)
+            A.wait(0.3)
+            A.do_(function() off() end)
+            A.wait(0.2)
+            A.do_(function() on(K) end)
+            A.wait(0.25)
+            A.do_(function() off() end)
+            A.wait(1)
+            A.do_(function() if round == 1 then ST.shot("w94_" .. K[1] .. "_off") end end)
+            A.wait(2)
+        end
+    end
+    A.do_(function()
+        local L = cfg()
+        L.enabled = C.on
+        say("TEST: THE WHOLE STORM", "BOLTS, CLOUD FLASHES, THUNDER: 15 S")
+    end)
+    A.wait(15)
+    A.do_(function()
+        local n = 0
+        for i = ST.marks.k1 or 1, ST.n do
+            local l = ST.lines and ST.lines[i]
+            if l and l:find("fleet storm: thunder ", 1, true) then n = n + 1; ST.info("watch94 saw: " .. l) end
+        end
+        say("TEST: DONE", "THANK YOU")
+    end)
+    A.wait(2)
+end
+-- (2026-11-17) cloudunits: the user: "you need to be having the cloud light work". Its values reach Cloudly's drawn copy
+-- (runs 65-66) yet no flash lit a cloud (runs 70, 74-77, 0.4M-8M): is its position in Cloudly's own units? (Cloudly works in
+-- metres: KickBlastEffect's CenterInMeters; we and the stock lights we spawned gave centimetres.) The storm night, its own
+-- lightning paused, the storm's cloud light (THUNDER.cloudFlash) 1 km ahead of your camera, held ~1.5 s: its WorldPosition
+-- in cm (as ever), in m, in km, its radius and brightness to match; pictured before / on / after, each called out.
+SUITES.cloudunits = function()
+    intoRun()
+    local C = {}
+    local function cfg() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
+    local function say(a, b) pcall(hudCallout, a, b); ST.info("cloudunits: " .. a .. " / " .. b) end
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and THUNDER ~= nil and THUNDER.cloudFlash ~= nil, "the storm and its cloud light are in this build") then return "abort" end
+        ST.marks.k1 = ST.n
+        ST.press("S")
+    end)
+    A.log_("fleet storm: in (", 15, "k1", true, function(l)
+        ST.check(l ~= nil, "the storm in", l)
+        local L = cfg()
+        C.on = L.enabled
+        L.enabled = false
+    end)
+    A.wait(4)
+    -- { label, position scale, radius_m (the light's AttenuationRadius = radius_m x 100), brightness }
+    local TRY = { { "CM (AS EVER), 5 KM ROUND, 400K", 1, 5000, 400000 },
+                  { "METRES, 500000 ROUND (MISSION 12'S), 40K (MISSION 12'S)", 0.01, 5000, 40000 },
+                  { "METRES, 500000 ROUND, 400K", 0.01, 5000, 400000 },
+                  { "METRES, 5000 ROUND, 400K", 0.01, 50, 400000 },
+                  { "KM, 500 ROUND, 400K", 0.00001, 5, 400000 },
+                  { "METRES, 500000 ROUND, 4M", 0.01, 5000, 4000000 } }
+    for k, t in ipairs(TRY) do
+        local tag = "cu_" .. k
+        A.do_(function() say(string.format("TEST: CLOUD LIGHT %d/%d", k, #TRY), t[1] .. " IN 2 S") end)
+        A.wait(2)
+        A.do_(function() ST.shot(tag .. "_0_before") end)
+        A.wait(0.3)
+        A.do_(function()
+            local pcm, L, R
+            pcall(function() pcm = survivalPC.PlayerCameraManager; local v = pcm:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+            pcall(function() R = pcm:GetCameraRotation() end)
+            if not (L and R) then ST.info(tag .. ": no camera"); return end
+            local yw = math.rad(R.Yaw or 0)
+            local w = { X = L.X + math.cos(yw) * 100000, Y = L.Y + math.sin(yw) * 100000, Z = L.Z }
+            local at = { X = w.X * t[2], Y = w.Y * t[2], Z = w.Z * t[2] }
+            local c = {}
+            for key, v in pairs(cfg().cloud or {}) do c[key] = v end
+            c.brightness, c.radius_m, c.max_brightness, c.steps = t[4], t[3], 1.0e9, { 1, 1, 1, 1, 1, 1, 0 }
+            local ok, what = pcall(THUNDER.cloudFlash, at, "effect", "the test", c)
+            ST.info(string.format("%s: WorldPosition %.6g %.6g %.6g, radius %.6g, %s", tag, at.X, at.Y, at.Z, t[3] * 100,
+                ok and tostring(what) or ("error " .. tostring(what))))
+        end)
+        A.wait(0.4)
+        A.do_(function() ST.shot(tag .. "_1_on") end)
+        A.wait(0.5)
+        A.do_(function() ST.shot(tag .. "_2_on") end)
+        A.wait(2.5)
+        A.do_(function() ST.shot(tag .. "_3_after") end)
+        A.wait(1)
+    end
+    A.do_(function() local L = cfg(); L.enabled = C.on; say("TEST: DONE", "THANK YOU") end)
+    A.wait(2)
+end
+-- (2026-11-17) cloudforce: run 79: the cloud light's position in cm, m or km lit nothing either. Cloudly caches its clouds'
+-- lighting (shadows, AO, a reprojection history) and redoes it when told (ACloudlyActor ForceUpdate / ForceUpdateShadows /
+-- ForceUpdateAO / ClearReprojectionHistory): is the effect light baked into it? The storm night, its lightning paused, the
+-- storm's cloud light 1 km ahead of your camera (cm, 5 km round), held ~1.5 s, with each way of redoing it every tick while
+-- it's on; then 4M with all of them; then Mission 12's own light (at 4x) with all of them.
+SUITES.cloudforce = function()
+    intoRun()
+    local C = {}
+    local function cfg() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
+    local function say(a, b) pcall(hudCallout, a, b); ST.info("cloudforce: " .. a .. " / " .. b) end
+    local function cdo() return StaticFindObject("/Script/Cloudly.Default__CloudlyActor") end
+    local FORCE = {
+        none = function() return "nothing redone" end,
+        clear = function() local o = cdo(); return tostring(pcall(function() o:ClearReprojectionHistory() end)) end,
+        aoshadow = function() local o = cdo(); return tostring(pcall(function() o:ForceUpdateAO() end)) .. "/" .. tostring(pcall(function() o:ForceUpdateShadows(2) end)) end,
+        all = function()
+            local o = cdo()
+            local okF = pcall(function() o:ForceUpdate({ bForceUpdateShadows = true, bForceUpdateAO = true, FrameCount = 2, bRecaptureSkyLight = false,
+                                                         CurrentSkyLight = nil, World = nil, bClearReprojectionHistory = true }) end)
+            local okC = pcall(function() o:ClearReprojectionHistory() end)
+            return tostring(okF) .. "/" .. tostring(okC)
+        end,
+    }
+    local function ahead(km)
+        local pcm, L, R
+        pcall(function() pcm = survivalPC.PlayerCameraManager; local v = pcm:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+        pcall(function() R = pcm:GetCameraRotation() end)
+        if not (L and R) then return nil end
+        local yw = math.rad(R.Yaw or 0)
+        return { X = L.X + math.cos(yw) * km * 100000, Y = L.Y + math.sin(yw) * km * 100000, Z = L.Z }
+    end
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and THUNDER ~= nil and THUNDER.cloudFlash ~= nil, "the storm and its cloud light are in this build") then return "abort" end
+        ST.marks.k1 = ST.n
+        ST.press("S")
+    end)
+    A.log_("fleet storm: in (", 15, "k1", true, function(l)
+        ST.check(l ~= nil, "the storm in", l)
+        local L = cfg()
+        C.on = L.enabled
+        L.enabled = false
+    end)
+    A.wait(4)
+    local TRY = { { "NOTHING REDONE", "none", 400000 }, { "REPROJECTION CLEARED", "clear", 400000 },
+                  { "AO AND SHADOWS REDONE", "aoshadow", 400000 }, { "ALL REDONE", "all", 400000 }, { "ALL REDONE, 4M", "all", 4000000 } }
+    for k, t in ipairs(TRY) do
+        local tag = "cf_" .. k
+        A.do_(function() say(string.format("TEST: CLOUD LIGHT %d/%d", k, #TRY + 1), t[1] .. " IN 2 S") end)
+        A.wait(2)
+        A.do_(function() ST.shot(tag .. "_0_before") end)
+        A.wait(0.3)
+        A.do_(function()
+            local at = ahead(1)
+            if not at then ST.info(tag .. ": no camera"); return end
+            local c = {}
+            for key, v in pairs(cfg().cloud or {}) do c[key] = v end
+            c.brightness, c.radius_m, c.max_brightness, c.steps = t[3], 5000, 1.0e9, { 1, 1, 1, 1, 1, 1, 1, 0 }
+            local ok, what = pcall(THUNDER.cloudFlash, at, "effect", "the test", c)
+            ST.info(string.format("%s: %s; %s", tag, ok and tostring(what) or ("error " .. tostring(what)), FORCE[t[2]]()))
+        end)
+        for i = 1, 6 do
+            A.wait(0.25)
+            A.do_(function() FORCE[t[2]](); if i == 2 then ST.shot(tag .. "_1_on") elseif i == 5 then ST.shot(tag .. "_2_on") end end)
+        end
+        A.wait(2.5)
+        A.do_(function() ST.shot(tag .. "_3_after") end)
+        A.wait(1)
+    end
+    -- Mission 12's own light at 4x (its flash ~1-1.7 s), 1 km ahead, everything redone each tick
+    A.do_(function() say(string.format("TEST: CLOUD LIGHT %d/%d", #TRY + 1, #TRY + 1), "MISSION 12'S OWN LIGHT, ALL REDONE, IN 2 S") end)
+    A.wait(2)
+    A.do_(function()
+        if THUNDER.cloudOff then pcall(THUNDER.cloudOff) end    -- (one effect light: the storm's taken off first)
+        ST.shot("cf_m12_0_before")
+        local at = ahead(1)
+        local cls = loadObject("/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms012_PodargeDead.BP_CloudLight_Ms012_PodargeDead_C")
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        if not (at and cls and gs) then ST.info("cf_m12: no camera / class"); return end
+        local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = at, Scale3D = { X = 1, Y = 1, Z = 1 } }
+        local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(ST.pc(), cls, t, 1, nil, 1) end)
+        if okB and x then
+            pcall(function() x.WorldPosition = at end)
+            local okF, a = pcall(function() return gs:FinishSpawningActor(x, t, 1) end)
+            if okF and a then pcall(function() a.CustomTimeDilation = 4 end); C.m12 = a end
+        end
+        ST.info("cf_m12: Mission 12's light 1 km ahead at 4x: " .. tostring(C.m12 ~= nil))
+    end)
+    for i = 1, 12 do
+        A.wait(0.25)
+        A.do_(function() FORCE.all(); if i == 5 or i == 6 or i == 7 then ST.shot("cf_m12_" .. i) end end)
+    end
+    A.wait(2)
+    A.do_(function() local L = cfg(); L.enabled = C.on; say("TEST: DONE", "THANK YOU") end)
+    A.wait(2)
+end
+-- (2026-11-17) cloudday: runs 77-80: at the storm night no way of driving the cloud light lit a cloud (Mission 12's own
+-- light either). By day, Survival's own sky (no Ctrl+S): the cloud light 1 km and 4 km ahead of your camera at 400k and 4M,
+-- orange (Mission 12's colour, to tell it from the day's white), and Mission 12's own light 1 km ahead at 4x.
+SUITES.cloudday = function()
+    intoRun()
+    local C = {}
+    local function say(a, b) pcall(hudCallout, a, b); ST.info("cloudday: " .. a .. " / " .. b) end
+    local function ahead(km)
+        local pcm, L, R
+        pcall(function() pcm = survivalPC.PlayerCameraManager; local v = pcm:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+        pcall(function() R = pcm:GetCameraRotation() end)
+        if not (L and R) then return nil end
+        local yw = math.rad(R.Yaw or 0)
+        return { X = L.X + math.cos(yw) * km * 100000, Y = L.Y + math.sin(yw) * km * 100000, Z = L.Z }
+    end
+    A.wait(3)
+    local TRY = { { 1, 400000 }, { 1, 4000000 }, { 4, 400000 }, { 4, 4000000 } }
+    for k, t in ipairs(TRY) do
+        local tag = "cd_" .. k
+        A.do_(function() say(string.format("TEST: CLOUD LIGHT BY DAY %d/%d", k, #TRY + 1), string.format("%g KM AHEAD, %gK, ORANGE, IN 2 S", t[1], t[2] / 1000)) end)
+        A.wait(2)
+        A.do_(function() ST.shot(tag .. "_0_before") end)
+        A.wait(0.3)
+        A.do_(function()
+            local at = ahead(t[1])
+            if not at then ST.info(tag .. ": no camera"); return end
+            local c = { brightness = t[2], radius_m = 5000, max_brightness = 1.0e9, color = { 255, 120, 40 }, steps = { 1, 1, 1, 1, 1, 1, 0 } }
+            local ok, what = pcall(THUNDER.cloudFlash, at, "effect", "the test", c)
+            ST.info(tag .. ": " .. (ok and tostring(what) or ("error " .. tostring(what))))
+        end)
+        A.wait(0.4)
+        A.do_(function() ST.shot(tag .. "_1_on") end)
+        A.wait(0.5)
+        A.do_(function() ST.shot(tag .. "_2_on") end)
+        A.wait(2.5)
+        A.do_(function() ST.shot(tag .. "_3_after") end)
+        A.wait(1)
+    end
+    A.do_(function() say("TEST: CLOUD LIGHT BY DAY 5/5", "MISSION 12'S OWN LIGHT IN 2 S") end)
+    A.wait(2)
+    A.do_(function()
+        if THUNDER.cloudOff then pcall(THUNDER.cloudOff) end
+        ST.shot("cd_m12_0_before")
+        local at = ahead(1)
+        local cls = loadObject("/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms012_PodargeDead.BP_CloudLight_Ms012_PodargeDead_C")
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        if not (at and cls and gs) then return end
+        local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = at, Scale3D = { X = 1, Y = 1, Z = 1 } }
+        local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(ST.pc(), cls, t, 1, nil, 1) end)
+        if okB and x then
+            pcall(function() x.WorldPosition = at end)
+            local okF, a = pcall(function() return gs:FinishSpawningActor(x, t, 1) end)
+            if okF and a then pcall(function() a.CustomTimeDilation = 4 end) end
+        end
+    end)
+    for i = 1, 10 do
+        A.wait(0.25)
+        A.do_(function() if i >= 4 and i <= 7 then ST.shot("cd_m12_" .. i) end end)
+    end
+    A.do_(function() say("TEST: DONE", "THANK YOU") end)
+    A.wait(2)
+end
+-- (2026-11-17) cloudquality: runs 77-81: Cloudly's effect light lights nothing in Survival's level, day or night, the stock
+-- lights too. Cloudly's quality cvars (r.Cloudly.QualityLevel, .Min, .Max, the scalability's sg.*) read; then by day the
+-- orange cloud light 1 km ahead at 400k / 4M as the game has it, and again with r.Cloudly.QualityLevel at each of 0..4
+-- (put back after).
+SUITES.cloudquality = function()
+    intoRun()
+    local C = {}
+    local function say(a, b) pcall(hudCallout, a, b); ST.info("cloudquality: " .. a .. " / " .. b) end
+    local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    local function cv(n) local v; pcall(function() v = ks:GetConsoleVariableIntValue(n) end); return v end
+    local function cvf(n) local v; pcall(function() v = ks:GetConsoleVariableFloatValue(n) end); return v end
+    local function cmd(c) pcall(function() ks:ExecuteConsoleCommand(ST.pc(), c, ST.pc()) end) end
+    local function ahead(km)
+        local pcm, L, R
+        pcall(function() pcm = survivalPC.PlayerCameraManager; local v = pcm:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+        pcall(function() R = pcm:GetCameraRotation() end)
+        if not (L and R) then return nil end
+        local yw = math.rad(R.Yaw or 0)
+        return { X = L.X + math.cos(yw) * km * 100000, Y = L.Y + math.sin(yw) * km * 100000, Z = L.Z }
+    end
+    A.do_(function()
+        local names = { "r.Cloudly.QualityLevel", "r.Cloudly.QualityLevel.Min", "r.Cloudly.QualityLevel.Max", "r.Cloudly.ScalabilityBias.ScreenFraction",
+                        "r.Cloudly.ScalabilityBias.AllHighResTiles", "sg.EffectsQuality", "sg.ShadowQuality", "sg.PostProcessQuality", "sg.TextureQuality",
+                        "sg.ViewDistanceQuality", "sg.FoliageQuality", "sg.ShadingQuality", "sg.GlobalIlluminationQuality", "sg.ReflectionQuality" }
+        local t = {}
+        for _, n in ipairs(names) do t[#t + 1] = n .. " " .. tostring(cv(n)) .. " (" .. tostring(cvf(n)) .. ")" end
+        ST.info("cloudquality cvars: " .. table.concat(t, ", "))
+        C.q0 = cv("r.Cloudly.QualityLevel")
+    end)
+    A.wait(2)
+    local LEVELS = { "as is", 0, 1, 2, 3, 4 }
+    for k, q in ipairs(LEVELS) do
+        local tag = "cq_" .. k
+        A.do_(function()
+            if q ~= "as is" then cmd("r.Cloudly.QualityLevel " .. q) end
+            say(string.format("TEST: CLOUD QUALITY %s", tostring(q)), "1 KM AHEAD, 4M, ORANGE, IN 2 S")
+        end)
+        A.wait(2)
+        A.do_(function() ST.info(tag .. ": r.Cloudly.QualityLevel now " .. tostring(cv("r.Cloudly.QualityLevel"))); ST.shot(tag .. "_0_before") end)
+        A.wait(0.3)
+        A.do_(function()
+            local at = ahead(1)
+            if not at then return end
+            local c = { brightness = 4000000, radius_m = 5000, max_brightness = 1.0e9, color = { 255, 90, 20 }, steps = { 1, 1, 1, 1, 1, 1, 0 } }
+            local ok, what = pcall(THUNDER.cloudFlash, at, "effect", "the test", c)
+            ST.info(tag .. ": " .. (ok and tostring(what) or ("error " .. tostring(what))))
+        end)
+        A.wait(0.6)
+        A.do_(function() ST.shot(tag .. "_1_on") end)
+        A.wait(2.5)
+        A.do_(function() ST.shot(tag .. "_2_after") end)
+        A.wait(0.5)
+    end
+    A.do_(function() if C.q0 then cmd("r.Cloudly.QualityLevel " .. C.q0) end; say("TEST: DONE", "THANK YOU") end)
+    A.wait(2)
+end
+-- (2026-11-17) cloudscal: run 82: r.Cloudly.QualityLevel 0-4 changed nothing; the game runs at sg.* 1 (effects, shadows,
+-- post process, GI, reflections). Every sg.* at 3 and Cloudly at 3 (put back after): the orange cloud light 1 km ahead at
+-- 400k / 4M by day, then the storm night (Ctrl+S) with its lightning paused, the same.
+SUITES.cloudscal = function()
+    intoRun()
+    local C = {}
+    local function cfg() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
+    local function say(a, b) pcall(hudCallout, a, b); ST.info("cloudscal: " .. a .. " / " .. b) end
+    local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    local function cv(n) local v; pcall(function() v = ks:GetConsoleVariableIntValue(n) end); return v end
+    local function cmd(c) pcall(function() ks:ExecuteConsoleCommand(ST.pc(), c, ST.pc()) end) end
+    local SG = { "sg.EffectsQuality", "sg.ShadowQuality", "sg.PostProcessQuality", "sg.GlobalIlluminationQuality", "sg.ReflectionQuality", "r.Cloudly.QualityLevel" }
+    local function ahead(km)
+        local pcm, L, R
+        pcall(function() pcm = survivalPC.PlayerCameraManager; local v = pcm:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+        pcall(function() R = pcm:GetCameraRotation() end)
+        if not (L and R) then return nil end
+        local yw = math.rad(R.Yaw or 0)
+        return { X = L.X + math.cos(yw) * km * 100000, Y = L.Y + math.sin(yw) * km * 100000, Z = L.Z }
+    end
+    local function flash(tag, b)
+        A.do_(function() say("TEST: " .. tag, string.format("1 KM AHEAD, %gK, ORANGE, IN 2 S", b / 1000)) end)
+        A.wait(2)
+        A.do_(function() ST.shot(tag .. "_0_before") end)
+        A.wait(0.3)
+        A.do_(function()
+            local at = ahead(1)
+            if not at then return end
+            local c = { brightness = b, radius_m = 5000, max_brightness = 1.0e9, color = { 255, 90, 20 }, steps = { 1, 1, 1, 1, 1, 1, 0 } }
+            local ok, what = pcall(THUNDER.cloudFlash, at, "effect", "the test", c)
+            ST.info(tag .. ": " .. (ok and tostring(what) or ("error " .. tostring(what))))
+        end)
+        A.wait(0.6)
+        A.do_(function() ST.shot(tag .. "_1_on") end)
+        A.wait(2.5)
+        A.do_(function() ST.shot(tag .. "_2_after") end)
+        A.wait(0.5)
+    end
+    A.do_(function()
+        C.was = {}
+        for _, n in ipairs(SG) do C.was[n] = cv(n); cmd(n .. " 3") end
+        local t = {}
+        for _, n in ipairs(SG) do t[#t + 1] = n .. " " .. tostring(C.was[n]) .. " -> " .. tostring(cv(n)) end
+        ST.info("cloudscal: " .. table.concat(t, ", "))
+        say("TEST: HIGH SETTINGS", "EFFECTS, SHADOWS, GI, CLOUDS AT HIGH")
+    end)
+    A.wait(4)
+    flash("cs_day_400k", 400000)
+    flash("cs_day_4m", 4000000)
+    A.do_(function() ST.marks.k1 = ST.n; ST.press("S") end)
+    A.log_("fleet storm: in (", 15, "k1", true, function(l)
+        ST.check(l ~= nil, "the storm in", l)
+        local L = cfg(); C.on = L.enabled; L.enabled = false
+    end)
+    A.wait(4)
+    flash("cs_night_400k", 400000)
+    flash("cs_night_4m", 4000000)
+    A.do_(function()
+        local L = cfg(); L.enabled = C.on
+        for _, n in ipairs(SG) do if C.was[n] then cmd(n .. " " .. C.was[n]) end end
+        say("TEST: DONE", "SETTINGS PUT BACK")
+    end)
+    A.wait(2)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
