@@ -147,7 +147,48 @@ local function cellsOn(c)
     end
     return #CELLS, string.format(" (%d of them drawn after the clouds, sort %d)", set, pri)
 end
+-- a glow in the cloud over each bolt (cells.bolt_glow): a pool of the cells' glow, spawned inactive and drawn after the clouds
+-- as they are, the oldest moved over the new bolt's top and restarted, off life_s on
+local GLOW = { pool = {}, i = 0 }
+local function glowNew(c, at)
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    local sys = type(c.system) == "string" and loadObject(c.system) or nil
+    if not (lib and valid(lib) and sys and liveObj(survivalPC)) then return nil end
+    local pri, sc = math.floor(n(c.sort, 100)), n((c.bolt_glow or {}).scale, 1)
+    local ok, comp = pcall(function() return lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 },
+        { X = sc, Y = sc, Z = sc }, false, false, 0, false) end)
+    if not (ok and comp) then return nil end
+    pcall(function() comp.bOverrideSeparateTranslucencySortPriority = true end)
+    pcall(function() comp.SeparateTranslucencySortPriority = pri end)
+    pcall(function() comp:SetTranslucentSortPriority(pri) end)
+    return { o = comp, a = liveAddr(comp), name = nameOf(comp) }
+end
+local function glowAt(top, now)
+    local c = stc().cells or {}
+    local g = c.bolt_glow
+    if type(top) ~= "table" or type(g) ~= "table" or g.enabled == false or c.enabled == false then return "" end
+    local at = { X = top.X, Y = top.Y, Z = top.Z + n(g.up_m, 300) * 100 }
+    GLOW.i = GLOW.i % math.max(1, math.floor(n(g.pool, 12))) + 1
+    local e = GLOW.pool[GLOW.i]
+    if not cellOk(e) then e = glowNew(c, at); GLOW.pool[GLOW.i] = e end
+    if not e then return "; no glow" end
+    pcall(function() e.o:SetWorldLocation(at, false, {}, true) end)
+    pcall(function() e.o:ResetSystem() end)
+    pcall(function() e.o:Activate(true) end)
+    e.offAt = now + n(g.life_s, 1.5)
+    return string.format("; a glow %.1f km up", at.Z / 100000)
+end
+local function glowTick(now)
+    for _, e in ipairs(GLOW.pool) do
+        if e and e.offAt and now >= e.offAt then e.offAt = nil; if cellOk(e) then pcall(function() e.o:Deactivate() end) end end
+    end
+end
+local function glowOff()
+    for _, e in pairs(GLOW.pool) do if cellOk(e) then pcall(function() e.o:DestroyComponent() end) end end
+    GLOW.pool, GLOW.i = {}, 0
+end
 local function cellsOff()
+    glowOff()
     local k = 0
     for _, e in ipairs(CELLS) do
         if cellOk(e) then pcall(function() e.o:DestroyComponent() end); k = k + 1 end
@@ -259,9 +300,13 @@ local function lightTick(now)
     SW.n = (SW.n or 0) + 1
     local ok, what = pcall(THUNDER.cloudFlash, at, how, "the fleet's storm", cl)
     if THUNDER.bolt and c.bolts then
-        local okB, seen, why = pcall(THUNDER.bolt, { X = at.X, Y = at.Y, Z = 0 }, c.bolts, "the fleet's storm",
+        local okB, seen, why, top = pcall(THUNDER.bolt, { X = at.X, Y = at.Y, Z = 0 }, c.bolts, "the fleet's storm",
             IFSURF and IFSURF.state and IFSURF.state() and true)   -- (while the surfacing films: in its shot)
         what = tostring(what) .. "; " .. (okB and (seen or ("no bolt: " .. tostring(why))) or ("bolt error " .. tostring(seen)))
+        if okB and seen then
+            local okG, gw = pcall(glowAt, top, now)
+            what = what .. (okG and gw or ("; glow error " .. tostring(gw)))
+        end
     end
     local okT, th = pcall(thQueue, at, now)
     what = tostring(what) .. (okT and th or ("; thunder error " .. tostring(th)))
@@ -279,6 +324,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet storm", fn = function(now)
     end
     trTick(now)
     pcall(thTick, now)
+    pcall(glowTick, now)
     if THUNDER and THUNDER.cloudTick then pcall(THUNDER.cloudTick, now) end
     local w = wanted()
     if w ~= SW.on and not SW.tr then
@@ -288,7 +334,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet storm", fn = function(now)
     if SW.on and not SW.tr then lightTick(now) end
 end }
 if type(LEVEL_DROPS) == "table" then                       -- (the level's: its Cloudly actor and lights went with it)
-    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving, TH.q, TH.got, TH.ev, CELLS = nil, nil, {}, {}, {}, {} end
+    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving, TH.q, TH.got, TH.ev, CELLS = nil, nil, {}, {}, {}, {}; GLOW.pool, GLOW.i = {}, 0 end
 end
 end
 -- TEST ONLY END

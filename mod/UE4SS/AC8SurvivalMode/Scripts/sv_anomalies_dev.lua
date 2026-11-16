@@ -1284,7 +1284,7 @@ local function boltPlace(b, c, at)                          -- (a mesh, a size, 
     if BOLT.mat then pcall(function() b.c:SetMaterial(0, BOLT.mat) end) end
     local yaw = math.random() * 2 * math.pi
     local standing = e.ez >= 1.5 * math.max(e.ex, e.ey)
-    local sc, z
+    local sc, z, q = nil, nil, { X = 0, Y = 0, Z = math.sin(yaw / 2), W = math.cos(yaw / 2) }
     if standing then                                        -- (its foot on the sea, its top height_m up)
         sc = boltRng(c.height_m, { 1500, 4000 }) * 100 / math.max(1, 2 * e.ez)
         z = (at.Z or 0) - (e.oz - e.ez) * sc
@@ -1292,7 +1292,7 @@ local function boltPlace(b, c, at)                          -- (a mesh, a size, 
         sc = boltRng(c.length_m, { 2000, 6000 }) * 100 / math.max(1, 2 * math.max(e.ex, e.ey))
         z = boltRng(c.alt_m, { 2000, 5000 }) * 100 - e.oz * sc
     end
-    local q = { X = 0, Y = 0, Z = math.sin(yaw / 2), W = math.cos(yaw / 2) }
+    b.top = { X = at.X, Y = at.Y, Z = standing and (at.Z or 0) + 2 * e.ez * sc or z + e.oz * sc }   -- (its top: THUNDER.bolt's 3rd answer)
     pcall(function() b.a:K2_SetActorTransform({ Rotation = q, Translation = { X = at.X, Y = at.Y, Z = z }, Scale3D = { X = sc, Y = sc, Z = sc } }, false, {}, true) end)
     return string.format("%s %s x%.0f (%.1f km)", path:match("([%w_]+)$") or "?", standing and "standing" or "lying", sc,
         2 * (standing and e.ez or math.max(e.ex, e.ey)) * sc / 100000)
@@ -1326,7 +1326,7 @@ function THUNDER.bolt(at, c, why, inView)
     boltShow(b, b.steps[1] == 1)
     BOLT.n = (BOLT.n or 0) + 1
     if BOLT.n <= 5 or BOLT.n % 200 == 0 then log(string.format("bolts: %d (%s): %s, %d pooled", BOLT.n, tostring(why), what, #BOLT.pool)) end
-    return what
+    return what, nil, b.top
 end
 local function boltTick()
     for _, b in ipairs(BOLT.pool) do

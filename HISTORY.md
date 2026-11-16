@@ -3441,3 +3441,13 @@ game. The work was split by file between agents; the builds ran in sequence in t
   nothing in runs 77-83. Run 84 (listen94): the STORE beep and the four thunder sounds played (the user wasn't listening).
   Run 85 (cells95, 7/7): `fleet storm: cloud lightning: 19 of 19 up (19 of them drawn after the clouds, sort 100)`; the
   still camera onto the towers never took the view, so whether they glow is for the user's eyes.
+
+## 0.74.96 (2026-11-17; a test build, staged, not installed): a cloud glow over every bolt (feature/fleet-storm)
+- The user: "Is it possible to have more than 19? Like have them draw where the lightning bolts are?". THUNDER.bolt now
+  hands back the bolt's top (standing: its foot + its height; lying: its altitude; in the surfacing's shot too), and the
+  storm keeps a pool of 12 of the cells' glow (NS_CloudLightning, sort 100 as Mission 12's, scale 1): at each bolt the
+  oldest is moved up_m 300 over its top (into the cloud it comes out of), restarted, and switched off life_s 1.5 s on.
+  Mission 12's 19 stay as the background. Log: `fleet storm: flash N ...; a glow X km up`.
+- Run 86 (round30, 10/10, 0 view reverts): glows placed 3.6-4.1 km up over the bolts, the 19 cells up; the surfacing's
+  frames show the bolts but no glow round their tops at 4-14 km (frames 16-18's lilac is the pre-dawn sky, as in run 71).
+  Whether the glows read is for the user's eyes in game.
