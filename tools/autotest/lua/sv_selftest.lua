@@ -523,6 +523,43 @@ SUITES.tanacorn = function()
 end
 
 -- INVINCIBLE FLEET's formation test (WP7, Ctrl+N): every ship up, under way, GEOFON sailing, the rings holding, taken off
+-- (2026-11-16) the railcannon's impact (Mission 25 day 1's Spear strike set: TANI.rcFx "impact") at a few scales, one at a
+-- time over the runway's impact point, each pictured early and late from ~4.3 km off and 1.3 km up (under the cloud deck):
+-- the user's picture is the target look. conf scales=1,4,8,12 (the list)
+SUITES.spear = function()
+    intoRun()
+    local list = {}
+    for v in tostring(ST.conf.scales or "1,4,8,12"):gmatch("[%d%.]+") do list[#list + 1] = tonumber(v) end
+    local P = { X = 1609574, Y = -435747, Z = 500 }
+    local function at() return { X = P.X - 380000, Y = P.Y + 200000, Z = 130000 } end
+    local function on() return { X = P.X, Y = P.Y, Z = P.Z + 40000 } end
+    local keep
+    A.do_(function()
+        local rc = CFG and CFG.specials and CFG.specials.fleet and CFG.specials.fleet.railcannon
+        if not ST.check(TANI ~= nil and TANI.rcFx ~= nil and rc ~= nil and rc.fx and rc.fx.impact, "the railcannon's impact set is in this build") then
+            return "abort"
+        end
+        keep = {}
+        for i, e in ipairs(rc.fx.impact) do keep[i] = e[2] end
+    end)
+    for _, sc in ipairs(list) do
+        A.do_(function()
+            local rc = CFG.specials.fleet.railcannon
+            for _, e in ipairs(rc.fx.impact) do e[2] = sc end
+            local ok, up, of = pcall(TANI.rcFx, "impact", nil, P)
+            ST.check(ok and up == of and of == 7, string.format("the impact set at scale %s: %s of %s up", sc, tostring(up), tostring(of)))
+        end)
+        A.wait(2.0)
+        A.picture(string.format("spear_x%s_early", sc), at, on, 55)
+        A.wait(2.0)
+        A.picture(string.format("spear_x%s_late", sc), at, on, 55)
+        A.wait(19)                                        -- (its life, impact_life_s 25, runs out before the next)
+    end
+    A.do_(function()
+        local rc = CFG.specials.fleet.railcannon
+        for i, e in ipairs(rc.fx.impact) do e[2] = keep and keep[i] or 1 end
+    end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
