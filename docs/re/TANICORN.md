@@ -470,3 +470,27 @@ Deploy on a skeletal mesh had drawn its +19 m, so the railgun's lift and hatches
   order it; played again up to `writes` (2) times, then NOT ordered; every check_s the muzzle read again and the Deploy
   played again if it fell back; no LiftMesh (a container cooked before this): NOT ordered. tani_rail_test rewritten for it
   (all passed, the release copy too).
+
+## Her live mounts don't aim (2026-11-16, the autotest's runs 12-19)
+- In every run on her live hull (Ctrl+L) every gun mount's barrel sat at its rest angle the whole run (T16_FWD yaw ~74
+  pitch 0, CIWS_1 ~178 / -29.1, LASER_FWD_L 99 / 15.8: the same at every 5 s line) and no T5 / T16 / CIWS / LASER shell
+  was seen, whether your plane was invincible (runs 12-18) or shootable with a health floor (run 19: plane=floor).
+- The same blueprints as standalone test mounts (Ctrl+U, the user's flight of 2026-11-11 23:00) turned onto her (CIWS
+  -59.8 -> -64.3 / +5.9, LASER -46 -> -33.4 / 49.3) and the CIWS fired.
+- The railguns: a TripleRailCannon arm (fixed-angle: it needs no bones) FIRED its round on their order (run 16); a
+  BoneControl arm (runs 18-19) never fired (its barrel never aligns) and never turned.
+- So on her child-actor parts a PoseableMeshComponent's bone posing doesn't take: the fire control's yaw / pitch (and
+  route (i)'s Lua-written lift before), while a skeletal mesh's animation does (the railcannon's Deploy, the railguns'
+  LiftMesh). Next: the parts' actor / mesh ticks read and switched on from Lua (the autotest's tick probe), then the
+  fix where it shows (spec.py's part template, or Lua at the watch's first tick).
+- The live lines' "Part_T5_2 (T5) ... no TurretMesh (SkeletalMeshComponent) found": the aim reader looks for a VLS-style
+  TurretMesh on the T5 (a Lua lookup to fix: its mesh is TurretPoseableMesh).
+- Runs 18-20 (0.74.75-0.74.76): the BoneControl railgun arm (the stock Alicorn's kind) neither turned nor fired; a
+  shootable plane (plane=floor: MinHealth 45 of 113, not invincible) changed nothing; the tick probe found the
+  PoseableMesh tick OFF on CIWS / LASER / RAILGUN_L (on on T16) and the actor ticks on; with every tick switched on no
+  barrel moved either (T16 73.2, T5 73.3 (its aim read since the kind fix), CIWS 176.9 / -29.1, LASER 100.7 / 15.8,
+  RAILGUN_L 86.6: unchanged for 50 s). The fleet's STOCK child turrets aim and fire (run 14: the Aegis vessel guns,
+  KOLGA's AK-130s, BELUGA's howitzer), and the same T16 / CIWS / LASER blueprints aim as standalone test mounts (the
+  user's flight of 2026-11-11). So what's missing is in how her parts hang under her hull: the hull blueprint (an armless
+  native ALiveAIGroundVehicleObject), the child descs (Mission 22's Aegis mk15 child as their template), or the parts'
+  orders by name. Next: compare a stock ship's child part and hull (desc, CDO, AI and fire control) with hers.

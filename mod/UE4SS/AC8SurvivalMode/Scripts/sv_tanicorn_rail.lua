@@ -61,7 +61,7 @@ local X = { last = nil }                                  -- the tick's last clo
 local RG, FX, TRAIL, PEND = {}, {}, {}, {}                 -- the railguns, the effects, the trail's spots, held events
 local RC, SH = nil, nil                                    -- the railcannon's cycle (Ctrl+H) and its shield
 local RCK = nil                                            -- its TANI.rail entry
-for _, k in ipairs(TANI.rail or {}) do if k.cannon then RCK = k end end
+for _, k in ipairs(TANI.rail or {}) do if k.cannon == true then RCK = k end end
 
 local function short(o) return (nameOf(o):match("([^%.:]+)$")) or "?" end
 local function same(e) return e ~= nil and e.a ~= nil and liveAddr(e.o) == e.a and nameOf(e.o) == e.name end
@@ -394,7 +394,7 @@ end
 local function gunsTick(now, dt)
     local seen = TANI.liveSeen and TANI.liveSeen()
     for _, k in ipairs(TANI.rail or {}) do
-        local s = (not k.cannon) and seen and seen[k.key] or nil
+        local s = (k.cannon ~= true) and seen and seen[k.key] or nil
         local e = RG[k.key]
         if s and same(s) and not (e and e.a == s.a and e.name == s.name) then   -- (new, or another object there now)
             RG[k.key] = { o = s.o, a = s.a, name = s.name, k = k, state = "wait", seenAt = now, t = 0, plays = 0, tries = 0 }

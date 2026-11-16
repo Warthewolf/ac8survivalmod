@@ -389,7 +389,9 @@ local function vlsMesh(o)
     end
     return nil
 end
-local function partMesh(o, k) if k and (k.vls or k.cannon) then return vlsMesh(o) end return turretMesh(o) end
+-- ((2026-11-16) `== true`: the T5's kind is TANI itself, whose .vls is the list of VLS block types: the autotest's live lines
+-- read the T5 as a VLS block, "no TurretMesh (SkeletalMeshComponent) found")
+local function partMesh(o, k) if k and (k.vls == true or k.cannon == true) then return vlsMesh(o) end return turretMesh(o) end
 
 -- (0.74.54) what the engine sees of a mount's muzzle (0.74.50-0.74.53: every shell, AA stream or flak, left the turret
 -- mesh's origin, under the mount, along its forward: SOC_Gun_01 never found): the mesh, its asset (and the deprecated
@@ -486,8 +488,8 @@ local function lidLine(o)
     return string.format("lids at %s s (playing %s, rate %s)%s", pos, playing, rate, cell)
 end
 local function aimOf(o, k)
-    if k and k.cannon then return TANI.rcLine and TANI.rcLine(o) or "no sv_tanicorn_rail.lua" end   -- ((stage 4) its cycle)
-    if k and k.vls then return lidLine(o) end
+    if k and k.cannon == true then return TANI.rcLine and TANI.rcLine(o) or "no sv_tanicorn_rail.lua" end   -- ((stage 4) its cycle)
+    if k and k.vls == true then return lidLine(o) end
     return (aim(o))
 end
 TANI.partMesh, TANI.aim = partMesh, aim                   -- ((stage 4) sv_tanicorn_rail.lua's: their meshes, a barrel's aim)
@@ -702,9 +704,9 @@ local function watch(now)
             T.seen[id] = true
             log(string.format("tanicorn: %s mount %s up at %s: fire control arms %s, health %s/%s", k.key, nameOf(o), at(o),
                 armsOf(o), tostring(h), tostring(mx)))
-            log("tanicorn: " .. k.key .. " muzzle: " .. muzzleProbe(partMesh(o, k), k.vls and VLS_CELL or nil))
+            log("tanicorn: " .. k.key .. " muzzle: " .. muzzleProbe(partMesh(o, k), k.vls == true and VLS_CELL or nil))
             if k.li then liCarry(o, k) end               -- ((2026-11-11) the LASER: AC7's LaserInterceptor)
-            if not k.vls and not T.stockSaid then        -- (once a key press: the same for every gun mount)
+            if k.vls ~= true and not T.stockSaid then        -- (once a key press: the same for every gun mount)
                 T.stockSaid = true
                 log("tanicorn: a stock turret's muzzle: " .. stockProbe(o))
             end
@@ -1345,7 +1347,7 @@ local function partLine(W, s, key, kids)
         if k and not W.kinds[key] then                   -- (the first of each type: as the mounts' up and muzzle lines)
             W.kinds[key] = true
             log(string.format("tanicorn: live %s %s: fire control arms %s", key, cn, armsOf(ch)))
-            log("tanicorn: live " .. key .. " muzzle: " .. muzzleProbe(partMesh(ch, k), k.vls and VLS_CELL or nil))
+            log("tanicorn: live " .. key .. " muzzle: " .. muzzleProbe(partMesh(ch, k), k.vls == true and VLS_CELL or nil))
         end
         if k and k.li then liCarry(ch, k, TANI.live.unit .. " " .. cn) end   -- (the LASER: AC7's LaserInterceptor, as Ctrl+U's)
     end

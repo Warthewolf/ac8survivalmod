@@ -3227,3 +3227,12 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - Pictures from now on (the user: "Screenshots would be good"): the autotest's A.picture (its camera on the whole ship, a
   raised railgun, the railcannon charging, its impact, the fleet); run 20261116_203637_claude has four plus the game's own
   HighResShot copies. The parts' boxes said TANICORN (T5 / 16-INCH / CIWS / LASER): now TANACORN, the user's spelling.
+
+## 0.74.75-0.74.76 (2026-11-16, runtime 0.32.36; Lua and the arm only, the Tanicorn container 0.74.74's)
+- 0.74.75: TANI_RAIL_LAUNCHER 'bone' (the T16's BoneControl firing the Alicorn's round), Lua's railgun HUD write skipped
+  on a BoneControl arm, the parts' boxes TANACORN. Autotest 33/36 (run 20261116_204316_claude): deployed and ordered, but
+  the barrels never turned and never fired.
+- 0.74.76: the T5's kind read strictly (`k.vls == true`: TANI.vls is the list of VLS kinds, so the T5 read as a VLS
+  block, "no TurretMesh found"), the rail piece's two kind checks too. Autotest run 20 with a shootable plane and a tick
+  probe: none of her live mounts' barrels ever moves, ticks on or off, invincible or not (docs/re/TANICORN.md "Her live
+  mounts don't aim"): the open problem now, before the railguns' own.
