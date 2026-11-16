@@ -286,6 +286,13 @@ the same rule.
   the host goes through Survival's co-op pay, so every player gets their share as for Survival's own specials.
   Everything else is local to each game: spawns and despawns, sounds, effects, callouts, music, `SVP.playerPlane`, and
   `SVP.hurt` / `SVP.retire` of that game's own actors (a joiner's local copies of your units).
+- A joiner spawns (`SVP.spawn`) only while the host's round of your add-on is on there: `def.remote`'s own actors,
+  local to that game and never targets. When that round ends there, what it spawned is taken off.
+- Failure stays yours: an error in any of your callbacks (`def.remote`'s too) switches your add-on off on that game for
+  the session, as in solo. On the host its round ends and every joiner's is aborted; on a joiner its round there ends
+  and the host is told, so your next round doesn't come while that player is in. A joiner whose host's round goes
+  quiet (15 s, the room still up: a desync) switches it off there the same way. Survival's own co-op, and every other
+  add-on, go on.
 - `SVP.net` (your add-on's channel, on Survival's own co-op link):
   - `SVP.net.send(event, ...)`: the host's goes to every joiner, a joiner's to the host. `SVP.net.sendTo(slot, event,
     ...)`: the host to one player. Fields: numbers, booleans (as "1" / "0"), strings of 200 bytes at most; `|` becomes
@@ -316,7 +323,8 @@ the same rule.
 `plugin <name>: kind <kind> registered (...)`, `plugin <name>: loaded (...)`, `plugin <name>: not loaded: ...`,
 `plugin <name>: its round skipped: <why>`, `plugin <name>: its round skipped in co-op: <why>`,
 `plugins: co-op: player N (NAME) has add-on API 2.1, co-op add-ons: ...`, `plugins: co-op: the host has add-on API ...`,
-`plugin <name>: the host's <kind> round <n> here`, `plugin <name>: <what>: the add-on is switched off for this session`,
+`plugin <name>: the host's <kind> round <n> here`, `plugin <name>: co-op desync: the host's <kind> round went quiet for 15 s: the add-on is switched off for this session`,
+`plugin <name>: <what>: the add-on is switched off for this session`,
 `plugin <name>: Survival's music given back (...)`, `plugin <name>: <n> of its <m> pins let go (...)`, `plugins: none (...)`,
 `plugins: AC8SurvivalAddons looks like a UE4SS mod (...)`, `plugin <name>: SVP.target outside its own round: refused ...`,
 `plugin <name>: NotifyOnNewObject <class>: UE4SS refused it (...)`, `plugin <name>: <n> targets dropped (...)`.

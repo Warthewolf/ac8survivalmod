@@ -252,6 +252,9 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         local p = PLUGINS.running or PLUGINS.current
         local no = refused(p)
         if no then return nil, no end
+        if PLUGINS.joinerSpawn and not PLUGINS.joinerSpawn(p) then
+            return nil, "a co-op joiner spawns only in the host's round of its add-on (def.remote's own actors)"
+        end
         if type(cls) == "string" then
             local c, why = loadObject(cls)
             if not valid(c) then return nil, "class " .. cls .. " not loaded: " .. tostring(why) end
@@ -672,6 +675,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         if not R then return end
         N.remote[kind] = nil
         if PLUGINS.coopRelease then PLUGINS.coopRelease(R.p, "the host's round over") end
+        R.p.takeOffDue = true                                -- (what def.remote spawned here: taken off, takeOffTick)
         if how == "ov" then remoteCall(R, "over", now or os.clock(), arg)
         elseif type(R.def.abort) == "function" then remoteCall(R, "abort", arg)
         else remoteCall(R, "over", now or os.clock(), nil) end
@@ -679,8 +683,17 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         hudBack(R.p, "the host's round is over")
         plog(R.p, string.format("the host's %s round %s here (%s)", kind, how == "ov" and "over" or "taken off", tostring(arg)))
     end
+    -- (a joiner, PLUGINS.switchOff) its rounds of the host's ended here, and the host told this game's list without it
+    -- (the hello again at the next tick), so the host's next round of it doesn't count on this game
     function PLUGINS.remoteOff(p, why)
         for kind, R in pairs(N.remote) do if R.p == p then remoteEnd(kind, "ab", why) end end
+        if joiner() then N.hostList, N.helloAt, N.hlSaid = nil, 0, nil end
+    end
+    -- (SVP.spawn) a joiner's game spawns only while the host's round of p's kind is on here
+    function PLUGINS.joinerSpawn(p)
+        if not joiner() then return true end
+        for _, R in pairs(N.remote) do if R.p == p then return true end end
+        return false
     end
     local function remoteStart(kind, round, now)
         local c, p = PLUGINS.coop[kind], PLUGINS.kinds[kind]
@@ -793,7 +806,9 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         for kind, R in pairs(N.remote) do
             if going then remoteEnd(kind, "ab", "the level is going", now)
             elseif D ~= R.D then remoteEnd(kind, "ab", "this game's run ended", now)
-            elseif now - R.beat > QUIET_S then remoteEnd(kind, "ab", "the host's round went quiet", now)
+            elseif now - R.beat > QUIET_S then
+                remoteEnd(kind, "ab", "the host's round went quiet", now)
+                PLUGINS.switchOff(R.p, string.format("co-op desync: the host's %s round went quiet for %d s", kind, QUIET_S))
             elseif N.remote[kind] then remoteCall(R, "tick", now) end
         end
         if going then if PLUGINS.coopRelease then PLUGINS.coopRelease(nil, "the level is going") end return end

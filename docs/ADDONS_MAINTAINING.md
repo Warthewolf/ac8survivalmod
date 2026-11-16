@@ -132,6 +132,12 @@ environment.
   player, as in 2.0: while `COOP.open` is true its round never comes, none of its jobs run and every API call that
   changes the game refuses (`coopShut(p)` in `sv_plugins.lua`; `plugins_test` checks it). A friend on plain Survival keeps add-on rounds away and sees plain Survival. Co-op's version string check
   stays as it is. Player-facing rules: `docs/ADDONS.md` "Co-op".
+- The host is the round's truth: on a joiner `PLUGINS.hostOnly` refuses `SVP.target` / `kill` / `pay`, and
+  `PLUGINS.joinerSpawn` lets `SVP.spawn` through only inside the host's round of that add-on there (taken off at its
+  end, `remoteEnd`). Failure is the add-on's alone: `PLUGINS.switchOff` ends its round on the host (`coopEnd`: the
+  joiners abort) or on a joiner (`remoteOff`: its list sent to the host again without it); a joiner's quiet host's
+  round (QUIET_S, 15 s) is a desync and switches it off there too. `plugins_coop_test` shows Survival's own messages
+  and a second co-op add-on going on through each.
 - What co-op's code must keep for it (change one: update `sv_plugins.lua` in the same change, run
   `tools/checks/plugins_coop_test.sh`, two to four games simulated on one link):
   - `SV_CoopRecv` called BY NAME in `sv_coop_migration.lua`'s receive loop: the framework wraps that global and takes

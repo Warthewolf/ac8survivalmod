@@ -21,13 +21,18 @@ X.reg = { SVP.register("excalibur", {
         start = function(now, round) X.rem[#X.rem + 1] = "start:" .. tostring(round) end,
         over = function(now, result) X.rem[#X.rem + 1] = "over:" .. tostring(result) end,
         abort = function(why) X.rem[#X.rem + 1] = "abort:" .. tostring(why) end,
+        tick = function() if X.rboom then error("remote boom") end end,
     },
     joined = function(slot, has) X.joined[#X.joined + 1] = slot .. ":" .. tostring(has) end,
     kind = { spawn = function() return true end, busy = function() return true end },
 }) }
 SVP.net.on("hit", function(from, ...) X.got[#X.got + 1] = { from, ... } end)
-SVP.every(function() X.ev = (X.ev or 0) + 1 end)
+SVP.every(function() X.ev = (X.ev or 0) + 1; if X.boom then error("boom") end end)
 ]]
+local BEACON = [[B = { rem = {} }
+B.reg = SVP.register("beacon", { name = "Beacon", ver = "1", api = "2.1", coop = true,
+    remote = { start = function(now, round) B.rem[#B.rem + 1] = "start:" .. tostring(round) end },
+    kind = { spawn = function() return true end, busy = function() return true end } })]]
 local SOLO20 = [[S20 = { SVP.register("solok", { name = "Solo", api = "2.0", kind = { spawn = function() return true end } }) }
 SVP.every(function() EVN = (EVN or 0) + 1 end)]]
 
@@ -67,6 +72,7 @@ local function game(slot, plugins)
         env.BIND[id] = o; return 1
     end
     env.playerName = function(s) return "P" .. s end
+    env.loadObject = function() return nil, "(the test: no objects)" end
     env.PAID = {}
     env.COOP = { open = false, M = { mirror = 0, peers = {}, roster = {} } }
     local C = env.COOP
@@ -108,6 +114,7 @@ local function game(slot, plugins)
     end
     function G.coop(role) C.open, C.role, C.slot = role ~= nil, role, role and slot or nil end
     function G.said(pat) for _, l in ipairs(G.logs) do if l:find(pat, 1, true) then return true end end return false end
+    function G.saidEnd(pat) for _, l in ipairs(G.logs) do if l:sub(-#pat) == pat then return true end end return false end
     function G.count(pat) local n = 0; for _, l in ipairs(G.logs) do if l:find(pat, 1, true) then n = n + 1 end end return n end
     G.env = env
     net.games[slot] = G
@@ -243,6 +250,10 @@ check(F.env.X.rem[1] == "start:13" and H.env.X.joined[1] == "4:true", "a player 
 net.drop[4] = true; step(36)
 check(last(F.env.X.rem) == "abort:the host's round went quiet", "the host quiet for 15 s: the joiner's round aborted")
 net.drop[4] = nil
+step(2)
+check(F.env.PLUGINS.kinds.excalibur.off == true and F.said("co-op desync: the host's excalibur round went quiet for 15 s")
+    and H.said("player 5 (P4) has add-on API 2.1, co-op add-ons: none"),
+    "the desync: the add-on switched off on that game for the session, the host told its list without it")
 H.env.D = { round = 1, now = 1 }; step(2)
 check(last(A.env.X.rem):find("^abort:") ~= nil, "the host's run ended under its round: the joiner's remote.abort")
 A.going = true; step(1); A.going = false
@@ -314,6 +325,57 @@ do
     e.survivalPC = nil
     local P3 = as(h, "return SVP.players()")
     check(P3[1] and P3[1].a == nil and P3[1].X == 1, "players: no pawn: a = nil, the position still there")
+end
+print("failure contained: an add-on's error in co-op, a joiner's spawns")
+do
+    net.games = {}
+    local both = function() return { excalibur = 'EXC_VER = "0.5"\n' .. ADDON, beacon = BEACON } end
+    local h, j1, j2 = game(0, both()), game(1, both()), game(2, both())
+    h.coop("host"); j1.coop("join"); j2.coop("join"); roster(0, 1, 2); step(3)
+    local function addon(g, folder) for _, p in ipairs(g.env.PLUGINS.loaded) do if p.folder == folder then return p end end end
+    local ek, bk = h.env.SPC.kinds.excalibur, h.env.SPC.kinds.beacon
+    check(ek.ready(9, false) == true and bk.ready(9, false) == true, "three games, two co-op add-ons: both rounds may come")
+    local sp1, why1 = as(j1, 'return SVP.spawn("/Game/x.x_C", { X = 0, Y = 0, Z = 0 })')
+    check(sp1 == nil and tostring(why1):find("spawns only in the host's round", 1, true) ~= nil,
+        "a joiner's SVP.spawn outside the host's round of its add-on: refused")
+    ek.spawn(100); step(1)
+    local _, why2 = as(j1, 'return SVP.spawn("/Game/x.x_C", { X = 0, Y = 0, Z = 0 })')
+    check(not tostring(why2):find("spawns only", 1, true), "inside the host's round there: not refused for being a joiner")
+    -- (a joiner's def.remote errors: that add-on off on that game only; the host's round goes on for the others)
+    j1.aenv.X.rboom = true; step(1)
+    local e1 = addon(j1, "excalibur")
+    check(e1.off == true and j1.said("remote.tick error") and j1.said("the add-on is switched off for this session"),
+        "a joiner's def.remote error: that add-on switched off on that game")
+    step(2)
+    check(addon(j2, "excalibur").off ~= true and #j2.env.X.rem == 1 and j2.env.X.rem[1] == "start:9" and addon(h, "excalibur").off ~= true,
+        "the host's round goes on, the other joiner's too")
+    check(h.saidEnd("player 2 (P1) has add-on API 2.1, co-op add-ons: beacon 1"), "the host told: that game's list without it")
+    ek.over(120, { result = "won" }); step(1)
+    h.env.D.round = 10
+    check(ek.ready(10, false) == false and h.said("player 2 (P1) hasn't got it") and bk.ready(10, false) == true,
+        "the next round of it doesn't come with that game in (who, why); the other co-op add-on's still does")
+    -- (the host's add-on errors mid-round: off on the host, every joiner's round of it aborted, Survival's co-op goes on)
+    j1.env.COOP.M.roster, j2.env.COOP.M.roster, h.env.COOP.M.roster = { [0] = {}, [2] = {} }, { [0] = {}, [2] = {} }, { [0] = {}, [2] = {} }
+    net.games[1] = nil; step(2)
+    check(ek.ready(10, false) == true, "that game gone: it comes again")
+    ek.spawn(130); step(1)
+    check(last(j2.env.X.rem) == "start:10", "the host's round 10 on the joiner")
+    j2.inbox[#j2.inbox + 1] = "0|rnd|10|fighting"
+    h.aenv.X.boom = true
+    local okT = pcall(step, 2)
+    j2.inbox[#j2.inbox + 1] = "0|cr|5|x"; step(1)
+    check(okT and addon(h, "excalibur").off == true and h.said("the add-on is switched off for this session"),
+        "the host's add-on errors in co-op: switched off on the host for the session, the tick goes on")
+    check(last(j2.env.X.rem) == "abort:the host's add-on was switched off", "every joiner's round of it aborted, told why")
+    local rnd, cr = false, false
+    for _, m in ipairs(j2.war) do if m == "0|rnd|10|fighting" then rnd = true elseif m == "0|cr|5|x" then cr = true end end
+    check(rnd and cr and h.env.COOP.open == true and j2.env.COOP.open == true,
+        "Survival's own co-op goes on: its messages still reach its dispatch on both sides of the failure, the room open")
+    check(ek.ready(11, false) == false and bk.ready(11, false) == true and addon(h, "beacon").off ~= true,
+        "it never comes again this session; the other co-op add-on is untouched")
+    bk.spawn(140); step(1)
+    local bj = addon(j2, "beacon")
+    check(bj and last(bj.env.B.rem) == "start:10", "the other co-op add-on's round still runs on the joiner")
 end
 print(fails == 0 and "plugins_coop_test: all passed" or ("plugins_coop_test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)
