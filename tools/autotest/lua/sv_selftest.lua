@@ -1252,6 +1252,10 @@ SUITES.meshbolt = function()
             pcall(function() gs:FinishSpawningActor(a, t, 1) end)
             pcall(function() c:SetMobility(2) end)
             local okS = pcall(function() c:SetStaticMesh(mesh) end)
+            if tostring(ST.conf.mat or "") ~= "" then           -- (conf mat=<path>: the lightning's own material on it; the meshes carry the checker)
+                local mi = loadObject(tostring(ST.conf.mat))
+                pcall(function() c:SetMaterial(0, mi) end)
+            end
             local mat = "?"
             pcall(function() mat = c:GetMaterial(0):GetFullName() end)
             local bx = "?"
