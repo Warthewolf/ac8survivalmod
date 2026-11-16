@@ -1308,6 +1308,47 @@ SUITES.meshbolt = function()
     end
     A.do_(function() ST.lookBack() end)
 end
+-- (2026-11-16) a bolt you can see (runs 46-51: NS_CloudLightning's sprites and the bare bolt meshes never showed): the Online
+-- Alicorn's lightning arc (NS_alcn_LiSpark_edge*: a bolt mesh with its own material, glow, sparks and light) and the cloud
+-- lightning, each spawned ahead of your plane at a few sizes and turns, pictured from your own view; the storm night (night=1)
+SUITES.arcbolt = function()
+    intoRun()
+    local O = "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/"
+    local CL = "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning"
+    A.do_(function()
+        if tostring(ST.conf.night) == "1" and IFSKY and IFSKY.step then IFSKY.step(3) end
+    end)
+    A.wait(tostring(ST.conf.night) == "1" and 12 or 0.5)
+    local TRY = {
+        { O .. "NS_alcn_LiSpark_edgesingle_ON", 30, 2, 300, 0 },
+        { O .. "NS_alcn_LiSpark_edgesingle_ON", 150, 4, 600, 0 },
+        { O .. "NS_alcn_LiSpark_edgesingle_ON", 150, 4, 600, 90 },
+        { O .. "NS_alcn_LiSpark_edgedouble_ON", 150, 4, 600, 90 },
+        { O .. "NS_alcn_LiSpark_pointdouble_ON", 150, 4, 600, 0 },
+        { CL, 12, 4, 800, 0 },
+        { CL, 60, 8, 1500, 0 },
+    }
+    for n, k in ipairs(TRY) do
+        local path, sc, km, up, pitch = k[1], k[2], k[3], k[4], k[5]
+        A.do_(function()
+            local pl = ST.plane()
+            local sys = loadObject(path .. "." .. (path:match("([^/]+)$")))
+            local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+            if not (pl and sys and lib) then ST.info("arcbolt " .. n .. ": no plane / system / library"); return end
+            local at = ST.frame(pl, km * 100000, 0, up * 100)
+            local yaw = 0
+            pcall(function() yaw = pl:K2_GetActorRotation().Yaw end)
+            local ok, c = pcall(function() return lib:SpawnSystemAtLocation(ST.pc(), sys, at, { Pitch = pitch, Yaw = yaw + 90, Roll = 0 }, { X = sc, Y = sc, Z = sc }, true, true, 0, false) end)
+            if ok and c then pcall(function() c:SetVariableFloat(FName("Scale"), sc) end) end
+            ST.info(string.format("arcbolt %d: %s x%d, %d km ahead, %d m up, pitch %d: %s", n, path:match("([^/]+)$"), sc, km, up, pitch, tostring(ok and c ~= nil)))
+        end)
+        A.wait(0.1)
+        A.do_(function() ST.shot(string.format("arcbolt_%d_a", n)) end)
+        A.wait(0.4)
+        A.do_(function() ST.shot(string.format("arcbolt_%d_b", n)) end)
+        A.wait(2)
+    end
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
