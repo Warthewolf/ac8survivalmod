@@ -1158,6 +1158,35 @@ SUITES.round30 = function()
     A.wait(2)
     A.do_(function() ST.shot("r30_after"); IFSKY.step(nil) end)
 end
+-- (2026-11-16) the storm's lightning bolt as drawn (round30 run 45: a checkered sheet by the plane: a ribbon with the
+-- default material?): THUNDER.cloudFlash's bolt (NS_CloudLightning x bolt_scale) and its cloud light, each spawned at 3, 6
+-- and 12 km in front of a fixed camera over the airfield, by day, the game's own shot a moment after
+SUITES.bolt = function()
+    intoRun()
+    local R = { X = 1609574, Y = -435747, Z = 500 }
+    local eye = { X = R.X, Y = R.Y, Z = 60000 }
+    local dir = { X = -0.7071, Y = -0.7071 }
+    A.do_(function()
+        if not ST.check(THUNDER ~= nil and THUNDER.cloudFlash ~= nil, "the storm's cloud lightning is in this build") then return "abort" end
+        ST.look(eye, { X = eye.X + dir.X * 1000000, Y = eye.Y + dir.Y * 1000000, Z = 120000 }, 60)
+    end)
+    A.wait(2)
+    for _, k in ipairs({ { 3, "bolt" }, { 6, "bolt" }, { 12, "bolt" }, { 6, "class" } }) do
+        local km, how = k[1], k[2]
+        A.do_(function()
+            local cls = ((((CFG.specials.fleet or {}).sky or {}).storm or {}).lightning or {}).class
+            local at = { X = eye.X + dir.X * km * 100000, Y = eye.Y + dir.Y * km * 100000, Z = 250000 }
+            local ok, what = pcall(THUNDER.cloudFlash, at, how == "class" and cls or "bolt", "the bolt probe")
+            ST.info(string.format("bolt probe: %s at %d km: %s", how, km, ok and tostring(what) or ("error " .. tostring(what))))
+        end)
+        A.wait(0.25)
+        A.do_(function() ST.shot(string.format("bolt_%s_%02dkm", how, km)) end)
+        A.wait(0.6)
+        A.do_(function() ST.shot(string.format("bolt_%s_%02dkm_b", how, km)) end)
+        A.wait(2.5)
+    end
+    A.do_(function() ST.lookBack() end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
