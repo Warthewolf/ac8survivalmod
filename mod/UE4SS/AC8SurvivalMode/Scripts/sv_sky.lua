@@ -813,8 +813,11 @@ function SKY.arcF()
     return nil
 end
 local function nightRounds() return math.max(1, math.floor(n(acfg().night_rounds, 3))) end
-local function sinkRounds()                               -- (the sinking steps before the sunset: #sink_el, 5 for GONE FISHIN''s)
-    local se = acfg().sink_el
+local function sinkRounds()                               -- (the sinking steps before the sunset: sink_rounds (0 or more),
+    local c = acfg()                                      -- else #sink_el, 5 for GONE FISHIN''s)
+    local sr = tonumber(c.sink_rounds)
+    if sr then return math.max(0, math.floor(sr)) end
+    local se = c.sink_el
     return (type(se) == "table" and #se > 0) and #se or 5
 end
 function SKY.arcEnd() return sinkRounds() + 2 + nightRounds() + math.max(1, math.floor(n(acfg().sunrise_rounds, 4))) - 1 end

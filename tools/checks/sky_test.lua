@@ -407,6 +407,16 @@ check(f1.el == 7.5 and f1.az == 150 and near(f1.ex_min, 11) and f2.el == 1 and f
     and SKY.arcEnd() == 7 and SKY.arcState().sink == 1 and SKY.arcState().night == 2,
     "a profile's arc: one sinking round, the sunset at +2, two of night at +3 / +4, the dawn at +5, rising, midday at +8 (end +7)")
 ARC.profile, ARC.pcache = nil, nil
+-- INVINCIBLE FLEET's (the user, 2026-11-16: the sun setting from round 25, "Night can last for 3 rounds before Round 30"):
+-- no sinking round, the sunset at +1, night +2 .. +4, the dawn (the fleet's pre-dawn) at +5
+SKY.arcProfiles.ftest = { sink_rounds = 0, night_rounds = 3, sunrise_rounds = 3 }
+ARC.pcache = nil
+ARC.profile = "ftest"
+local g1, g2, g4, g5 = SKY.arcAnchor(1, base0), SKY.arcAnchor(2, base0), SKY.arcAnchor(4, base0), SKY.arcAnchor(5, base0)
+check(g1.el == 1 and g1.set_el == -3 and g1.mode == "sun" and g2.mode == "moon" and g4.mode == "moon" and near(g5.el, -4)
+    and g5.mode == "sun" and SKY.arcEnd() == 7,
+    "sink_rounds 0: the sunset at +1 (round 26), three of night +2 .. +4 (27-29), the pre-dawn at +5 (round 30)")
+ARC.profile, ARC.pcache = nil, nil
 check(SKY.arcEnd() == 13 and SKY.arcAnchor(6, base0).el == 1, "GONE FISHIN''s arc as it was without the profile")
 -- the owner: the latest start wins; SKY.arcF stays GONE FISHIN''s
 local keepRUN = RUN
