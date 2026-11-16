@@ -3053,6 +3053,88 @@ SUITES.cells95 = function()
     A.do_(function() ST.lookBack(); say("TEST: DONE", "THANK YOU") end)
     A.wait(2)
 end
+-- (2026-11-17) glow96: 0.74.96's glows over the bolts (Mission 12's NS_CloudLightning, sort 100) weren't seen in run 86's
+-- surfacing at 4-14 km. The storm night, its lightning paused: the glow put 2 km and 5 km ahead of your camera at your
+-- height + 300 m, at scale 1, 3 and 6 (spawned inactive, sort 100, activated), pictured at 0.3, 0.8 and 1.5 s; then four
+-- bolts struck 3-6 km out in your view (THUNDER.bolt) with a glow (scale 3) over each top.
+SUITES.glow96 = function()
+    intoRun()
+    local C = { list = {} }
+    local SYS = "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning.NS_CloudLightning"
+    local function cfg() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
+    local function say(a, b) pcall(hudCallout, a, b); ST.info("glow96: " .. a .. " / " .. b) end
+    local function cam()
+        local pcm, L, R
+        pcall(function() pcm = survivalPC.PlayerCameraManager; local v = pcm:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+        pcall(function() R = pcm:GetCameraRotation() end)
+        return L, R
+    end
+    local function glow(at, sc)
+        local lib, sys = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary"), loadObject(SYS)
+        if not (lib and sys) then return "no Niagara / system" end
+        local ok, comp = pcall(function() return lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = sc, Y = sc, Z = sc }, false, false, 0, false) end)
+        if not (ok and comp) then return "no spawn" end
+        pcall(function() comp.bOverrideSeparateTranslucencySortPriority = true end)
+        pcall(function() comp.SeparateTranslucencySortPriority = 100 end)
+        pcall(function() comp:SetTranslucentSortPriority(100) end)
+        pcall(function() comp:Activate(true) end)
+        C.list[#C.list + 1] = comp
+        return "up"
+    end
+    local function clear() for _, c in ipairs(C.list) do pcall(function() c:DestroyComponent() end) end; C.list = {} end
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and THUNDER ~= nil and THUNDER.bolt ~= nil, "the storm and its bolts are in this build") then return "abort" end
+        ST.marks.k1 = ST.n
+        ST.press("S")
+    end)
+    A.log_("fleet storm: in (", 15, "k1", true, function(l)
+        ST.check(l ~= nil, "the storm in", l)
+        local L = cfg(); C.on = L.enabled; L.enabled = false
+    end)
+    A.wait(4)
+    for _, km in ipairs({ 2, 5 }) do
+        for _, sc in ipairs({ 1, 3, 6 }) do
+            local tag = string.format("g96_%dkm_x%d", km, sc)
+            A.do_(function() say("TEST: CLOUD GLOW", string.format("%d KM AHEAD, SCALE %d, IN 2 S", km, sc)) end)
+            A.wait(2)
+            A.do_(function() ST.shot(tag .. "_0") end)
+            A.wait(0.2)
+            A.do_(function()
+                local L, R = cam()
+                if not (L and R) then return end
+                local yw = math.rad(R.Yaw or 0)
+                local at = { X = L.X + math.cos(yw) * km * 100000, Y = L.Y + math.sin(yw) * km * 100000, Z = L.Z + 30000 }
+                ST.info(tag .. ": " .. glow(at, sc))
+            end)
+            for j, w in ipairs({ 0.3, 0.5, 0.7 }) do
+                A.wait(w)
+                A.do_(function() ST.shot(string.format("%s_%d", tag, j)) end)
+            end
+            A.wait(1.5)
+            A.do_(function() clear() end)
+        end
+    end
+    for k = 1, 4 do
+        A.do_(function() say("TEST: A BOLT AND ITS GLOW " .. k .. "/4", "3-6 KM OUT IN YOUR VIEW, IN 2 S") end)
+        A.wait(2)
+        A.do_(function()
+            local b = {}
+            for key, v in pairs(cfg().bolts or {}) do b[key] = v end
+            b.view_km, b.steps = { 3, 6 }, { 1, 1, 1, 1, 1, 1, 0 }
+            local ok, what, why, top = pcall(THUNDER.bolt, { X = 0, Y = 0, Z = 0 }, b, "the test", true)
+            local g = (ok and type(top) == "table") and glow({ X = top.X, Y = top.Y, Z = top.Z + 30000 }, 3) or "no top"
+            ST.info(string.format("g96 bolt %d: %s; glow %s", k, ok and tostring(what or why) or ("error " .. tostring(what)), g))
+        end)
+        A.wait(0.3)
+        A.do_(function() ST.shot(string.format("g96_bolt%d_1", k)) end)
+        A.wait(0.6)
+        A.do_(function() ST.shot(string.format("g96_bolt%d_2", k)) end)
+        A.wait(1.5)
+        A.do_(function() clear() end)
+    end
+    A.do_(function() local L = cfg(); L.enabled = C.on; clear(); say("TEST: DONE", "THANK YOU") end)
+    A.wait(2)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
