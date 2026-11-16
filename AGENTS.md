@@ -438,6 +438,20 @@ Copy a working stock pattern before inventing a new one.
     cutscene's camera (rains) come up at its origin: hide them. Confirmed by the autotest's seq suite (runs 33-34) and the
     railcannon's impact in 0.74.82 (run 35, 40/40), 2026-11-16.
 
+69. A StaticMeshActor spawned from Lua draws its mesh only when SetMobility(2) and SetStaticMesh come between
+    BeginDeferredActorSpawnFromClass and FinishSpawningActor: set after, on the then-registered Static component,
+    SetStaticMesh refuses and nothing draws, not even the default checker (the autotest's runs 50-51: bolt meshes 3-10 km
+    tall, none seen; run 59: set before, a 100 m cube and SM_Thunder001 drawn). Movable, a pooled actor takes other meshes
+    later. A material missing from AC8's files (an engine BasicShapeMaterial, EmissiveMeshMaterial) reads back as itself
+    and draws as WorldGridMaterial. AC8's lightning bolts: VFX/ResourceAsset/Mesh/Lightning/SM_Thunder* (about 100 m tall)
+    with MI_NearCloudLightning001 drew white bolts with a blue edge (runs 60-61, the fleet's storm in 0.74.87).
+
+70. Cloudly's clouds take no light from Lua: an engine PointLight (1e7-1e11, 6-15 km radius, run 57) and the stock
+    BP_CloudLight_* (their 10 m default radius; with 4 km they ramp up over seconds in their own colours, run 55) lit
+    nothing in the storm night; the level's Cloudly actor has no EffectLight. NS_CloudLightning (the game's cloud
+    lightning) draws only a faint teal glow at any size or Color, and Niagara user parameters (Color, BeamLength) take
+    only when set on a system spawned inactive, before Activate (runs 53-58). Show lightning with rule 69's bolt meshes.
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
