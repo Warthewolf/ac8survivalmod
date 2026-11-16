@@ -509,18 +509,24 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         end
     end
     -- Co-op (add-on API 2.1). Survival's co-op is the host's: its rounds, kills and pay; the joiners' games mirror them
-    -- (sv_coop.lua). An add-on's round comes in co-op only when its kind has def.coop and def.remote (its joiner's
-    -- side) and every player in the room has the same add-on at the same version; else it's skipped, one line a run.
-    -- The host's word drives each game: the round's start, a beat every BEAT_S, its end or abort go to the joiners
-    -- that have it, whose def.remote draws it there (callouts, effects, music, its own local actors).
+    -- (sv_coop.lua). Having an add-on installed is the opt-in: every game in the room must have the same add-ons (each
+    -- one's folder, version and a hash of its .lua files). A joiner's list goes to the host as it links ("hi"), the
+    -- host's comes back ("hl"); any difference refuses the join on both games, said on both (callout "MISMATCHED
+    -- ADD-ONS" and every difference in the log): the joiner's co-op is closed (COOP.refuseJoin) and its run's picture
+    -- ("jn") is never asked, held until the lists match (PLUGINS.joinHeld). Matched, every add-on runs in co-op: its
+    -- rounds on the host, which drives each game (the round's start, a beat every BEAT_S, its end or abort), def.remote
+    -- (optional) its client side on each joiner (sounds, HUD, looks, its own local actors), fed over SVP.net. An add-on
+    -- switched off on one game (an error, a desync) is switched off on every game ("of").
     -- The channel is Survival's own (SV_CoopSend / SV_CoopRecv): messages "px|<ns>|<event>|<fields>", ns the
-    -- add-on's file name ("." the API's own: hi / hl / hq the add-on lists, st / hb / ov / ab a round). Nothing of
-    -- Survival's files changes for it: SV_CoopRecv is wrapped (sv_coop_migration.lua calls it by name), "px" taken
-    -- out before Survival's dispatch, which drops a tag it doesn't know (a friend's game without the API).
+    -- add-on's folder name ("." the API's own: hi / hl / hq the lists, of a switch-off, st / hb / ov / ab a round).
+    -- SV_CoopRecv is wrapped (sv_coop_migration.lua calls it by name), "px" taken out before Survival's dispatch;
+    -- sv_coop_migration.lua holds its "jn" on PLUGINS.joinHeld and gives COOP.refuseJoin.
     local NET_MAX, NET_RATE, NET_FIELD = 400, 20, 200      -- a message's bytes, an add-on's sends a second, a field's
     local HELLO_S, ASK_S, ASK_N, BEAT_S, QUIET_S = 5, 5, 6, 2, 15
+    local LIST_CHUNK, LIST_WAIT_S = 600, 30              -- (a list's piece in one message; a joiner's wait for the host's)
     local NAME_MAX = 15                                  -- (sv_plugins.lua's: an event's, a kind's name)
-    local N = { peers = {}, asked = {}, live = {}, remote = {}, handlers = {}, hostList = nil, helloAt = 0, said = {} }
+    local N = { peers = {}, asked = {}, live = {}, remote = {}, handlers = {}, hostList = nil, helloAt = 0, said = {},
+                parts = {}, matched = nil, linkAt = nil }
     PLUGINS.net = N
     local function open() return COOP ~= nil and COOP.open == true end
     local function host() return open() and type(COOP.host) == "function" and COOP.host() == true end
@@ -589,52 +595,132 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
     end
     PLUGINS.coopRelease = release
 
-    -- this game's co-op kinds, "<kind>:<version>" a kind, its plugin's
+    -- this game's add-ons, "<folder>=<version>=<hash>" each, sorted: every add-on found (loaded, failed or switched
+    -- off: what's installed is what must match); and the ones switched off here (each game switches them off too)
     local function myList()
         local t = {}
         for _, p in ipairs(PLUGINS.loaded) do
-            if not p.off then
-                for _, k in ipairs(p.kinds) do if PLUGINS.coop[k] then t[#t + 1] = k .. ":" .. ver(p.ver) end end
-            end
+            t[#t + 1] = tostring(p.ns or p.folder or p.name):lower() .. "=" .. ver(p.ver) .. "=" .. tostring(p.hash or "?")
         end
         table.sort(t)
-        local s = table.concat(t, ",")
-        while #s > 300 do t[#t] = nil; s = table.concat(t, ",") end
-        return s
+        return table.concat(t, ",")
+    end
+    local function myOff()
+        local t = {}
+        for _, p in ipairs(PLUGINS.loaded) do if p.off then t[#t + 1] = tostring(p.ns or p.folder):lower() end end
+        table.sort(t)
+        return table.concat(t, ",")
     end
     local function parseList(s)
         local out = {}
         for item in tostring(s or ""):gmatch("[^,]+") do
-            local k, v = item:match("^([%a][%w_]*):([%w%.%-_+]+)$")
-            if k and #k <= NAME_MAX and #v <= 20 then out[k] = v end
+            local k, v, h = item:match("^([%w_%-]+)=([^=]+)=([^=]+)$")
+            if k and #k <= 40 and #v <= 20 and #h <= 16 then out[k] = { ver = v, hash = h } end
         end
         return out
     end
     local function listText(t)
         local l = {}
-        for k, v in pairs(t or {}) do l[#l + 1] = k .. " " .. v end
+        for k, e in pairs(t or {}) do l[#l + 1] = k .. " " .. e.ver end
         table.sort(l)
         return #l > 0 and table.concat(l, ", ") or "none"
     end
     local function apiText() return SVP.api.major .. "." .. SVP.api.minor end   -- (sv_plugins.lua's API)
+    -- what differs between this game's list and theirs, a line each (me / them: "this game", "the host", a player)
+    local function diffLines(mine, theirs, me, them)
+        local ks, seen = {}, {}
+        for k in pairs(mine) do if not seen[k] then seen[k] = true; ks[#ks + 1] = k end end
+        for k in pairs(theirs) do if not seen[k] then seen[k] = true; ks[#ks + 1] = k end end
+        table.sort(ks)
+        local l = {}
+        for _, k in ipairs(ks) do
+            local a, b = mine[k], theirs[k]
+            if a and not b then l[#l + 1] = string.format("%s %s: on %s, missing on %s", k, a.ver, me, them)
+            elseif b and not a then l[#l + 1] = string.format("%s %s: on %s, missing on %s", k, b.ver, them, me)
+            elseif a.ver ~= b.ver then l[#l + 1] = string.format("%s: version %s on %s, %s on %s", k, a.ver, me, b.ver, them)
+            elseif a.hash ~= b.hash then
+                l[#l + 1] = string.format("%s %s: different files (%s on %s, %s on %s)", k, a.ver, a.hash, me, b.hash, them)
+            end
+        end
+        return l
+    end
+    -- the list in pieces, reliable: ev, api, its digest, i, n, piece, this game's switched-off add-ons
+    local function sendList(to, ev)
+        local s = myList()
+        local d = PLUGINS.hashText and PLUGINS.hashText(s):sub(1, 8) or tostring(#s)
+        local n = math.max(1, math.ceil(#s / LIST_CHUNK))
+        for i = 1, n do sendRaw(to, true, ".", ev, apiText(), d, i, n, s:sub((i - 1) * LIST_CHUNK + 1, i * LIST_CHUNK), myOff()) end
+    end
+    -- a piece in: the whole list (and the sender's switched-off add-ons) once every piece is here, else nil
+    local function listIn(from, f)
+        local d, i, n = clean(f[5] or "", 16), tonumber(f[6]), tonumber(f[7])
+        if not (i and n and i == math.floor(i) and n == math.floor(n) and i >= 1 and n >= 1 and n <= 32 and i <= n) then return nil end
+        local P = N.parts[from]
+        if not P or P.d ~= d or P.n ~= n then P = { d = d, n = n, got = {}, have = 0 }; N.parts[from] = P end
+        if not P.got[i] then P.got[i] = f[8] or ""; P.have = P.have + 1 end
+        if P.have < n then return nil end
+        N.parts[from] = nil
+        return table.concat(P.got, "", 1, n), f[9] or ""
+    end
+    local function say(text, sub)                       -- (Survival's own callout: where its other join refusals show)
+        if type(callout) == "function" then pcall(callout, text, sub)
+        elseif type(hudCallout) == "function" then pcall(hudCallout, text, sub) end
+    end
+    local function shown(l)
+        return (tostring(l[1]):upper():sub(1, 70)) .. (#l > 1 and string.format(" (+%d MORE: SEE THE LOG)", #l - 1) or "")
+    end
+    local function nameUp(s)
+        local ok, n = pcall(function() return playerName(s) end)
+        return (tostring(ok and n or ("PLAYER " .. (s + 1))):upper():sub(1, 20))
+    end
+    -- the add-ons another game has switched off: off here too (offFrom: not sent back to it)
+    local function offIn(from, offs, why)
+        for ns in tostring(offs or ""):gmatch("[^,]+") do
+            for _, p in ipairs(PLUGINS.loaded) do
+                if p.ns == ns and not p.off then
+                    p.offFrom = from
+                    PLUGINS.switchOff(p, string.format("switched off on %s's game (%s)", from == 0 and "the host" or nameOf(from),
+                        clean(why or "its own switch-off", 80)))
+                end
+            end
+        end
+    end
 
-    -- who has kind `kind` at this plugin's version: the host's view (N.peers, from each joiner's hello)
-    local function same(s, kind, p)
-        local e = N.peers[s]
-        return e ~= nil and e.kinds[kind] ~= nil and e.kinds[kind] == ver(p.ver)
+    -- (the API) this game's add-ons may run: co-op closed, the host, or a joiner whose list matched the host's
+    function PLUGINS.coopMatched()
+        if not open() then return true end
+        if host() then return true end
+        return joiner() and N.matched == true
+    end
+    -- (sv_coop_migration.lua, before a joiner's "jn") hold the run's picture until the lists match
+    function PLUGINS.joinHeld()
+        if not joiner() or N.matched == true then return false end
+        N.jnHeld = true
+        once("jnheld|" .. tostring(N.role), "the host's picture waits for the add-on check")
+        return true
+    end
+    local function releaseJoin()
+        if not N.jnHeld then return end
+        N.jnHeld = nil
+        if COOP.M then COOP.M.jnAt = os.clock() end
+        if type(send) == "function" then pcall(send, true, "jn") end
+    end
+    local function refuseHere(lines, why)               -- (a joiner) the join refused: said, co-op closed here
+        N.matched = false
+        nlog("the join is refused: " .. why .. (#lines > 0 and (": " .. table.concat(lines, "; ")) or ""))
+        say("CO-OP: MISMATCHED ADD-ONS", #lines > 0 and shown(lines) or why:upper():sub(1, 70))
+        if type(COOP.refuseJoin) == "function" then pcall(COOP.refuseJoin, "mismatched add-ons: " .. why) end
     end
 
     -- (the host, kindEntry's ready) whether kind's round may come in co-op now, and why not
     function PLUGINS.coopReady(p, kind)
-        if not PLUGINS.coop[kind] then return false, "it isn't made for co-op (no def.coop and def.remote)" end
         if joiner() then return false, "a co-op joiner's rounds are the host's" end
+        if not host() then return false, "co-op is open and this game is neither its host nor a joiner" end
         for _, s in ipairs(slots()) do
             if s ~= mySlot() then
                 local e = N.peers[s]
-                if not e then return false, nameOf(s) .. " hasn't said which add-ons they have (none, or no add-on API 2.1)" end
-                local v = e.kinds[kind]
-                if not v then return false, nameOf(s) .. " hasn't got it" end
-                if v ~= ver(p.ver) then return false, string.format("%s has version %s, this game %s", nameOf(s), v, ver(p.ver)) end
+                if not e then return false, nameOf(s) .. "'s add-ons aren't checked yet" end
+                if not e.matched then return false, nameOf(s) .. " has mismatched add-ons (refused)" end
             end
         end
         return true
@@ -647,7 +733,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         N.live[kind] = L
         local n = 0
         for _, s in ipairs(slots()) do
-            if s ~= mySlot() and same(s, kind, p) then
+            if s ~= mySlot() and N.peers[s] and N.peers[s].matched then
                 L.sent[s] = true
                 if sendRaw(s, true, ".", "st", kind, L.round) then n = n + 1 end
             end
@@ -683,11 +769,15 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         hudBack(R.p, "the host's round is over")
         plog(R.p, string.format("the host's %s round %s here (%s)", kind, how == "ov" and "over" or "taken off", tostring(arg)))
     end
-    -- (a joiner, PLUGINS.switchOff) its rounds of the host's ended here, and the host told this game's list without it
-    -- (the hello again at the next tick), so the host's next round of it doesn't count on this game
+    -- (PLUGINS.switchOff) an add-on off here is off on every game: a joiner tells the host, the host every joiner (but
+    -- the game it heard it from, p.offFrom); its rounds of the host's ended here
     function PLUGINS.remoteOff(p, why)
         for kind, R in pairs(N.remote) do if R.p == p then remoteEnd(kind, "ab", why) end end
-        if joiner() then N.hostList, N.helloAt, N.hlSaid = nil, 0, nil end
+        local from = p.offFrom
+        p.offFrom = nil
+        if host() then
+            for s, e in pairs(N.peers) do if e.matched and s ~= from then sendRaw(s, true, ".", "of", p.ns, clean(why, 80)) end end
+        elseif joiner() and from == nil and N.matched then sendRaw(nil, true, ".", "of", p.ns, clean(why, 80)) end
     end
     -- (SVP.spawn) a joiner's game spawns only while the host's round of p's kind is on here
     function PLUGINS.joinerSpawn(p)
@@ -697,6 +787,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
     end
     local function remoteStart(kind, round, now)
         local c, p = PLUGINS.coop[kind], PLUGINS.kinds[kind]
+        if not N.matched then return end                -- (the lists not matched: nothing of the host's round here)
         if not (c and p) or p.off then
             once("nokind|" .. tostring(kind) .. "|" .. tostring(D),
                 "the host's " .. tostring(kind) .. " round is on; this game " .. (p and "has it switched off" or "hasn't got it"))
@@ -710,42 +801,50 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
 
     -- the API's own messages (ns ".")
     local function sysIn(from, ev, f, now)
-        if ev == "hi" and host() then                    -- a joiner's add-ons
+        if ev == "hi" and host() then                    -- a joiner's add-ons (the whole list: every piece in)
+            local s, offs = listIn(from, f)
+            if not s then return end
+            local theirs = parseList(s)
+            local lines = diffLines(parseList(myList()), theirs, "this game (the host)", nameOf(from))
             local had = N.peers[from]
-            local kinds = parseList(f[5])
-            N.peers[from] = { api = clean(f[4], 8), kinds = kinds, at = now }
+            N.peers[from] = { api = clean(f[4], 8), list = theirs, matched = #lines == 0, at = now }
             N.asked[from] = nil
-            if not had or listText(had.kinds) ~= listText(kinds) then
-                nlog(string.format("%s has add-on API %s, co-op add-ons: %s", nameOf(from), clean(f[4], 8), listText(kinds)))
+            sendList(from, "hl")
+            if #lines > 0 then
+                if not (had and had.matched == false) then
+                    nlog(string.format("%s refused: mismatched add-ons: %s", nameOf(from), table.concat(lines, "; ")))
+                    say("REFUSED " .. nameUp(from), "MISMATCHED ADD-ONS: " .. shown(lines))
+                end
+                return
             end
-            sendRaw(from, true, ".", "hl", apiText(), myList())
-            for kind, L in pairs(N.live) do              -- (came during a round: theirs starts if they have it)
+            if not (had and had.matched) then
+                nlog(string.format("%s has the same add-ons (%s): they run in co-op", nameOf(from), listText(theirs)))
+            end
+            offIn(from, offs, "already off there")      -- (theirs off here too, relayed to the others)
+            for kind, L in pairs(N.live) do              -- (came during a round: theirs starts)
                 if not L.sent[from] then
-                    local has = same(from, kind, L.p)
-                    if has then L.sent[from] = true; sendRaw(from, true, ".", "st", kind, L.round) end
-                    nlog(string.format("%s came during %s's round %d: %s", nameOf(from), kind, L.round,
-                        has and "started on their game" or "they haven't got it, so they don't see it"))
+                    L.sent[from] = true
+                    sendRaw(from, true, ".", "st", kind, L.round)
+                    nlog(string.format("%s came during %s's round %d: started on their game", nameOf(from), kind, L.round))
                     local j = PLUGINS.coop[kind] and PLUGINS.coop[kind].joined
-                    if j then guard(L.p, "joined", j)(from, has) end
+                    if j then guard(L.p, "joined", j)(from, true) end
                 end
             end
-        elseif ev == "hl" and joiner() and from == 0 then -- the host's add-ons: the answer to this game's hello
-            N.hostList = parseList(f[5])
-            local mine = parseList(myList())
-            local key = listText(N.hostList) .. "|" .. listText(mine)
-            if N.hlSaid ~= key then
-                N.hlSaid = key
-                local l = {}
-                for k, v in pairs(mine) do
-                    local hv = N.hostList[k]
-                    l[#l + 1] = k .. (hv == v and ": its rounds come" or (hv and (": the host has version " .. hv .. ", so they don't")
-                        or ": the host hasn't got it, so they don't"))
-                end
-                table.sort(l)
-                nlog("the host has add-on API " .. clean(f[4], 8) .. ", co-op add-ons: " .. listText(N.hostList)
-                    .. (#l > 0 and ("; here " .. table.concat(l, "; ")) or ""))
+        elseif ev == "hl" and joiner() and from == 0 then -- the host's add-ons: the answer to this game's list
+            local s, offs = listIn(from, f)
+            if not s then return end
+            N.hostList = parseList(s)
+            local lines = diffLines(parseList(myList()), N.hostList, "this game", "the host")
+            if #lines > 0 then return refuseHere(lines, "this game's add-ons aren't the host's") end
+            if not N.matched then
+                N.matched = true
+                nlog("the host has the same add-ons (" .. listText(N.hostList) .. "): they run in co-op")
             end
-        elseif ev == "hq" and joiner() and from == 0 then N.helloAt = 0          -- the host asks: the hello again
+            offIn(0, offs, "already off there")
+            releaseJoin()
+        elseif ev == "hq" and joiner() and from == 0 then N.helloAt, N.hostList = 0, nil   -- the host asks: the list again
+        elseif ev == "of" and ((host() and N.peers[from] and N.peers[from].matched) or (joiner() and from == 0 and N.matched)) then
+            offIn(from, clean(f[4] or "", 40):lower(), f[5])
         elseif ev == "st" and joiner() and from == 0 then
             local kind, round = clean(f[4], NAME_MAX), tonumber(f[5])
             if kind:match("^[%a][%w_]*$") and round and round == math.floor(round) and round >= 0 and round < 100000 then
@@ -799,6 +898,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         local role = open() and tostring(COOP.role) .. "|" .. tostring(mySlot()) or nil
         if role ~= N.role then                          -- (co-op opened, closed, or the room changed hands)
             N.role, N.peers, N.asked, N.hostList, N.helloAt = role, {}, {}, nil, 0
+            N.parts, N.matched, N.jnHeld, N.linkAt = {}, nil, nil, now
             if PLUGINS.coopRelease then PLUGINS.coopRelease(nil, "co-op changed") end
             for kind in pairs(N.live) do N.live[kind] = nil end
             for kind in pairs(N.remote) do remoteEnd(kind, "ab", "co-op changed (" .. tostring(role or "closed") .. ")", now) end
@@ -816,9 +916,12 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         if joiner() then
             purgeOwned()
             ownedTick(now)
+            if N.hostList == nil and N.matched == nil and now - (N.linkAt or now) > LIST_WAIT_S then
+                return refuseHere({}, "the host never answered the add-on check (" .. LIST_WAIT_S .. " s)")
+            end
             if now >= N.helloAt then
                 N.helloAt = now + HELLO_S
-                if N.hostList == nil then sendRaw(nil, true, ".", "hi", apiText(), myList()) end
+                if N.hostList == nil then sendList(nil, "hi") end
             end
             return
         end
@@ -831,7 +934,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
                 a.n, a.at = a.n + 1, now + ASK_S
                 N.asked[s] = a
                 sendRaw(s, true, ".", "hq")
-                if a.n == ASK_N then nlog(nameOf(s) .. " hasn't answered (no add-on API 2.1 there): add-on rounds don't come in co-op") end
+                if a.n == ASK_N then nlog(nameOf(s) .. " hasn't answered the add-on check: add-on rounds don't come while they're in") end
             end
         end
         for kind, L in pairs(N.live) do
@@ -960,18 +1063,15 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         return true
     end
     function SVP.net.slot() return mySlot() end
-    -- (the host) the room's players and whether each has this add-on's co-op kinds at its version; a joiner: the host
+    -- (the host) the room's players and whether each one's add-ons matched (same = true: they run this add-on too); a
+    -- joiner: the host
     function SVP.net.peers()
         local p = PLUGINS.running or PLUGINS.current
         local out = {}
         if not (p and open()) then return out end
         for _, s in ipairs(slots()) do
             if s ~= mySlot() then
-                local ok = #p.kinds > 0
-                for _, k in ipairs(p.kinds) do
-                    if host() then ok = ok and same(s, k, p)
-                    else ok = ok and s == 0 and N.hostList ~= nil and N.hostList[k] == ver(p.ver) end
-                end
+                local ok = host() and N.peers[s] ~= nil and N.peers[s].matched == true or (s == 0 and N.matched == true)
                 out[#out + 1] = { slot = s, name = select(2, pcall(playerName, s)), same = ok }
             end
         end

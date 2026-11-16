@@ -93,7 +93,7 @@ own tables):
   of the object (UE4SS calls back on the thread that constructs it): the object is kept, and your callback gets it,
   once, at Survival's next tick, if it's still live and of that class, guarded like every other callback (an error or
   a stall switches the add-on off). Objects waiting at a tick that finds the walks held are dropped (with co-op open,
-  an add-on not made for co-op gets none);
+  none while co-op is open and the room's add-ons don't match);
   256 of a class wait a tick at most, the rest are dropped (said in the log). Ask for as narrow a class as you can: a
   class stays registered with UE4SS for the session, and a broad one (`Actor`, `Object`) queues every object of it.
   The callback is dropped when your add-on is switched off and at every level's teardown: ask again in the next level
@@ -210,8 +210,8 @@ tick.
 
 Every call that touches the game (spawn, move, despawn, hurt, retire, target, kill, pay, killPlayer, bgm, hud, sound,
 fx, play2d, hold2d, callout, say, load, playerPlane, players, pc, intercept, pin) refuses while the level is going,
-and the ones that change it once your add-on is switched off, or while co-op is open unless it's made for co-op (see
-Co-op).
+and the ones that change it once your add-on is switched off, or while co-op is open and the room's add-ons don't
+match (see Co-op).
 
 ## Rules (each one learned from a crash)
 - `LoopAsync`, `ExecuteInGameThread`, `ExecuteWithDelay` and `RegisterKeyBind` aren't in your environment: they run Lua
@@ -265,64 +265,72 @@ Co-op).
   it). An add-on can't reach that list.
 
 ## Co-op (API 2.1)
-Survival's co-op is the host's: its rounds, kills and pay; the joiners' games mirror them. An add-on's round follows
-the same rule.
-- Opt in with both `def.coop = true` and `def.remote` (the joiner's side). Without them the add-on is single player, as
-  in 2.0: while co-op is open (from the moment a host opens it, and on every joiner) its round never comes (one log
-  line a run), none of its jobs (`SVP.every`, `SVP.on`, `SVP.going`, NotifyOnNewObject callbacks) run, and every call
-  that changes the game refuses. With both, all of that runs in co-op too, by the rules below.
-- The round comes only when every player in the room has the same add-on kind at the same `def.ver`. Each game with
-  API 2.1 tells the host its co-op kinds as it links; a player who hasn't (no add-on, an older Survival, a stock one)
-  keeps the round away, and the host's log says who and why:
-  `plugin <name>: its round skipped in co-op: player 3 (NAME) has version 0.4, this game 0.5`.
-- The host runs the kind's callbacks as in solo. When its round starts, ends or is aborted, each joiner that has it
-  is told, and its `def.remote` runs there:
-  - `start(now, round)`, `tick(now)` (every tick while the host's round is on), `over(now, result)`, `abort(why)`.
-  - The joiner's round is also aborted if the host's goes quiet (15 s with no word), its own run or level ends, or the
-    room changes hands. Music and HUD taken there (`SVP.bgm`, `SVP.hud`) are given back as in solo.
-- `def.joined(slot, has)` (optional, the host): a player came during your round; `has` = they have it (their round
-  has been started). Send them what they need to catch up with `SVP.net.sendTo`.
-- Host only (refused on a joiner, one line): `SVP.target`, `SVP.untarget`'s targets, `SVP.kill`, `SVP.pay`. Pay on
-  the host goes through Survival's co-op pay, so every player gets their share as for Survival's own specials.
-  Everything else is local to each game: spawns and despawns, sounds, effects, callouts, music, `SVP.playerPlane`, and
-  `SVP.hurt` / `SVP.retire` of that game's own actors (a joiner's local copies of your units).
-- A joiner spawns (`SVP.spawn`) only while the host's round of your add-on is on there: `def.remote`'s own actors,
-  local to that game and never targets. When that round ends there, what it spawned is taken off.
-- Failure stays yours: an error in any of your callbacks (`def.remote`'s too) switches your add-on off on that game for
-  the session, as in solo. On the host its round ends and every joiner's is aborted; on a joiner its round there ends
-  and the host is told, so your next round doesn't come while that player is in. A joiner whose host's round goes
-  quiet (15 s, the room still up: a desync) switches it off there the same way. Survival's own co-op, and every other
-  add-on, go on.
-- `SVP.net` (your add-on's channel, on Survival's own co-op link):
+Survival's co-op is the host's: its rounds, kills and pay; the joiners' games mirror them. Add-ons follow the same
+rule.
+- **Having an add-on installed is the opt-in.** Every player in a co-op room must have the same add-ons: the same
+  folders in `Mods\AC8SurvivalAddons`, each at the same version (`def.ver`) with the same files (a hash of its .lua
+  files). There's no field to set.
+- **The check, as a joiner links.** The joiner's game sends its list to the host, and the host answers with its own.
+  - Any difference refuses the join on both games before the joiner's run joins the host's. The joiner's co-op is
+    closed and it plays on alone.
+  - The callout says "MISMATCHED ADD-ONS" (on the joiner) or "REFUSED NAME" (on the host), with the first
+    difference. The log has every one: an add-on missing on one side, an extra one, another version, or other files.
+  - A host that doesn't answer the check within 30 s refuses the join the same way.
+  - While a refused player is still in the room, no add-on round comes.
+- **Matched, every add-on runs in co-op.** Its jobs and callbacks run on every game, and its rounds come on the host.
+  - The host runs the kind's callbacks as in solo.
+  - Each joiner runs your add-on's client side: `def.remote` (optional) gets `start(now, round)`, `tick(now)` (every tick
+    while the host's round is on), `over(now, result)` and `abort(why)`, from the host's word. Give it your sounds,
+    HUD, looks and local actors, fed by your own messages (`SVP.net`).
+  - The joiner's round is also aborted if its own run or level ends, or the room changes hands.
+  - Music and HUD taken there (`SVP.bgm`, `SVP.hud`) are given back as in solo.
+- `def.joined(slot)` (optional, the host): a player came during your round, and their round has been started. Send them
+  what they need to catch up with `SVP.net.sendTo`.
+- **Host only** (refused on a joiner, one line): `SVP.target`, `SVP.untarget`'s targets, `SVP.kill`, `SVP.pay`.
+  - Pay on the host goes through Survival's co-op pay, so every player gets their share as for Survival's own specials.
+  - Everything else is local to each game: sounds, effects, callouts, music, `SVP.playerPlane`, and `SVP.hurt` /
+    `SVP.retire` of that game's own actors (a joiner's local copies of your units).
+- **A joiner spawns** (`SVP.spawn`) only while the host's round of your add-on is on there. Those are your client side's
+  own actors, local to that game and never targets; when that round ends there, they're taken off.
+- **A switch-off is everyone's.** An error in any of your callbacks (`def.remote`'s too) switches your add-on off for the
+  session, as in solo, and in co-op on every game in the room. So does a desync: the host's round quiet for 15 s on a
+  joiner, with the room still up.
+  - The host's round of it ends and every joiner's is aborted.
+  - An add-on already off on one game (it failed its load there) is switched off on the others as they match.
+  - Survival's own co-op, and every other add-on, go on.
+- **`SVP.net`** is your add-on's channel, on Survival's own co-op link:
   - `SVP.net.send(event, ...)`: the host's goes to every joiner, a joiner's to the host. `SVP.net.sendTo(slot, event,
-    ...)`: the host to one player. Fields: numbers, booleans (as "1" / "0"), strings of 200 bytes at most; `|` becomes
-    `/`. A message is 400 bytes at most, 20 a second for each add-on; over: refused (false and why), never cut short.
-  - `SVP.net.on(event, fn)`: `fn(fromSlot, ...)`, its fields as strings. A joiner hears only the host. Guarded as
+    ...)`: the host to one player.
+  - Fields: numbers, booleans (as "1" / "0"), strings of 200 bytes at most; `|` becomes `/`. A message is 400 bytes at
+    most, 20 a second for each add-on. Over the limit, a send is refused (false and why), never cut short.
+  - `SVP.net.on(event, fn)`: `fn(fromSlot, ...)`, with its fields as strings. A joiner hears only the host. Guarded as
     every callback.
-  - `SVP.net.peers()`: `{ { slot, name, same } }`, the other players and whether each has your add-on's kinds at your
-    version (a joiner sees the host). `SVP.net.slot()`: this game's slot.
-  - `SVP.net.stream(event, ...)` / `streamTo(slot, ...)`: the same, unreliable (may be lost or come out of order): for
-    state the next message replaces. Same limits.
-- Your AI planes' positions on Survival's own stream (the runtime's, 15 Hz, interpolated on the joiner; what Survival's
-  own enemies use): on the host `id = SVP.net.track(plane)`, send the id in a message of yours; on each joiner, after
-  spawning its copy, `SVP.net.follow(id, copy)`: the runtime moves the copy every frame. AI planes only (`follow`
-  refuses anything else: false, why). `SVP.net.untrack(id)` lets one go; at your round's end (or its abort, the level
-  going, the room changing) the API lets every one go.
-- A joiner's own AI planes: Survival's co-op takes down an enemy AI plane on a joiner's game that it can't match to
+  - `SVP.net.peers()`: `{ { slot, name, same } }`, the other players and whether their add-ons matched (a joiner sees
+    the host). `SVP.net.slot()`: this game's slot.
+  - `SVP.net.stream(event, ...)` / `streamTo(slot, ...)`: the same, but unreliable (a message may be lost or come out
+    of order): for state the next message replaces. Same limits.
+- **Your AI planes' positions** can ride Survival's own stream (the runtime's: 15 Hz, interpolated on the joiner; what
+  Survival's own enemies use).
+  - On the host, `id = SVP.net.track(plane)`; send the id in a message of yours.
+  - On each joiner, after spawning its copy, `SVP.net.follow(id, copy)`: the runtime moves the copy every frame.
+  - AI planes only: `follow` refuses anything else (false, why).
+  - `SVP.net.untrack(id)` lets one go. At your round's end (or its abort, the level going, the room changing), the API
+    lets every one go.
+- **A joiner's own AI planes:** Survival's co-op takes down an enemy AI plane on a joiner's game that it can't match to
   the host's, 15 s on, and asks the host for its whole picture. `SVP.net.own(plane)` (a joiner; `follow` does it too)
   keeps Survival's co-op and its sweeps off your plane there. Own every AI plane you spawn on a joiner.
-- A joiner's shots at your units: Survival replays a player's missiles on the other games by its own unit ids, which
-  your units don't have: on the host they fly unguided. Count a joiner's hits on its copies yourself and send them to
-  the host as claims (`SVP.net.send`), which applies them to its own unit (`SVP.hurt`) and pays through its target.
-- Damage to a joiner: the host decides it (it has every player's plane, `SVP.players`) and sends it; the joiner hurts
-  its own plane (`SVP.hurt(SVP.playerPlane().a, n)`), so each player's death stays their game's own.
-- A friend's game without the API drops the add-on's messages (Survival's dispatch ignores a tag it doesn't know) and
-  plays plain Survival; the host's add-on rounds stay away while they're in the room.
+- **A joiner's shots at your units:** Survival replays a player's missiles on the other games by its own unit ids, which
+  your units don't have, so on the host they fly unguided. Count a joiner's hits on its copies yourself and send them
+  to the host as claims (`SVP.net.send`). The host applies them to its own unit (`SVP.hurt`) and pays through its
+  target.
+- **Damage to a joiner:** the host decides it (it has every player's plane, `SVP.players`) and sends it; the joiner
+  hurts its own plane (`SVP.hurt(SVP.playerPlane().a, n)`), so each player's death stays their game's own.
 
 ## Log lines to look for
 `plugin <name>: kind <kind> registered (...)`, `plugin <name>: loaded (...)`, `plugin <name>: not loaded: ...`,
 `plugin <name>: its round skipped: <why>`, `plugin <name>: its round skipped in co-op: <why>`,
-`plugins: co-op: player N (NAME) has add-on API 2.1, co-op add-ons: ...`, `plugins: co-op: the host has add-on API ...`,
+`plugins: co-op: player N (NAME) has the same add-ons (...): they run in co-op`, `plugins: co-op: player N (NAME) refused: mismatched add-ons: ...`,
+`plugins: co-op: the join is refused: ...`, `plugin <name>: switched off on player N (NAME)'s game (...)`,
 `plugin <name>: the host's <kind> round <n> here`, `plugin <name>: co-op desync: the host's <kind> round went quiet for 15 s: the add-on is switched off for this session`,
 `plugin <name>: <what>: the add-on is switched off for this session`,
 `plugin <name>: Survival's music given back (...)`, `plugin <name>: <n> of its <m> pins let go (...)`, `plugins: none (...)`,

@@ -414,6 +414,31 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
             table.concat(p.kinds, ", ")))
     end
 
+    -- (co-op's add-on check, sv_plugins_api.lua) FNV-1a 64 of a text, 16 hex digits; an add-on's: over its .lua files,
+    -- each one's name (lower case) and bytes, in name order ("?" when one can't be read): the same files, the same hash
+    local function fnv(s, h)
+        for i = 1, #s, 4096 do
+            local b = { s:byte(i, math.min(#s, i + 4095)) }
+            for j = 1, #b do h = (h ~ b[j]) * 0x100000001b3 end
+        end
+        return h
+    end
+    function PLUGINS.hashText(s) return string.format("%016x", fnv(tostring(s), 0xcbf29ce484222325)) end
+    function PLUGINS.addonHash(p)
+        local fs = {}
+        for _, f in ipairs(p.files or {}) do fs[#fs + 1] = f end
+        table.sort(fs, function(a, b) return tostring(a.name):lower() < tostring(b.name):lower() end)
+        local h = 0xcbf29ce484222325
+        for _, f in ipairs(fs) do
+            local fh = io.open(f.path, "rb")
+            if not fh then return "?" end
+            local src = fh:read("a")
+            fh:close()
+            h = fnv(src or "", fnv(tostring(f.name):lower() .. "\0", h))
+        end
+        return string.format("%016x", h)
+    end
+
     function PLUGINS.load()
         playerRotation()                                   -- (the player's own rotation or not: before any add-on)
         local found, why = addonFolders()
@@ -428,6 +453,8 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         for _, a in ipairs(found) do                       -- (all of them listed first: PLUGINS.loaded)
             local p = { name = a.name, folder = a.name, files = a.files, nativesPath = a.natives, kinds = {} }
             p.ns = a.name:lower()                      -- (its co-op channel's name, SVP.net: its folder's, the same on every game)
+            local okH, h = pcall(PLUGINS.addonHash, p)      -- (co-op's add-on check: its files' hash)
+            p.hash = okH and h or "?"
             PLUGINS.loaded[#PLUGINS.loaded + 1] = p
             ps[#ps + 1] = p
             if not a.name:match("^[%w_%-]+$") or #a.name > 40 then p.badName = true end

@@ -58,7 +58,7 @@ environment.
   default object).
 - **The walks' hold:** `walkHold()` (sv_core.lua) and `levelGoing()`: the add-ons' `FindFirstOf` / `FindAllOf` /
   `StaticFindObject` / `NotifyOnNewObject`, and `SVP.widget` (UE4SS's `StaticConstructObject`, widget classes in a
-  widget tree only; also refused with co-op open for an add-on not made for co-op), refuse while either holds. The add-ons' `FindFirstOf` / `FindAllOf` /
+  widget tree only; also refused with co-op open while the room's add-ons don't match), refuse while either holds. The add-ons' `FindFirstOf` / `FindAllOf` /
   `StaticFindObject` and the API's own finds (`PLUGINS.find`) also wait on `walkBusy()` (the runtime's `SV_GcBusy`):
   if a new runtime loses `SV_GcBusy`, those walks are no longer held during a purge.
 - **UMG:** `SVP.widget` takes UMG's concrete widget classes by name (`WIDGET_OK`) or a widget blueprint's (its parents
@@ -127,19 +127,26 @@ environment.
 - Update `docs/ADDONS.md` and line 2 of `sv_plugins.lua` with every API change.
 
 ## Co-op (API 2.1)
-- An add-on kind comes in co-op only with `def.coop` + `def.remote`, on the host, when every player has the same kind
-  at the same version (each game's list goes to the host as it links). Without both fields an add-on is single
-  player, as in 2.0: while `COOP.open` is true its round never comes, none of its jobs run and every API call that
-  changes the game refuses (`coopShut(p)` in `sv_plugins.lua`; `plugins_test` checks it). A friend on plain Survival keeps add-on rounds away and sees plain Survival. Co-op's version string check
-  stays as it is. Player-facing rules: `docs/ADDONS.md` "Co-op".
-- The host is the round's truth: on a joiner `PLUGINS.hostOnly` refuses `SVP.target` / `kill` / `pay`, and
+- Having an add-on installed is the opt-in. Each game's list (an add-on a line: folder in lower case, `def.ver`, a
+  FNV-1a 64 hash of its .lua files' names and bytes: `PLUGINS.addonHash`, sv_plugins_env.lua) is compared as a joiner
+  links: "hi" (the joiner's, in pieces) and "hl" (the host's answer), sv_plugins_api.lua `sysIn`.
+  - Any difference refuses the join on both games: callouts on both, every difference in both logs. The joiner calls
+    `COOP.refuseJoin` (sv_coop_migration.lua: `closeCoop`).
+  - The joiner's run picture ("jn") waits for the match: sv_coop_migration.lua's `askPicture` asks `PLUGINS.joinHeld`
+    first, and the API sends the "jn" itself once the lists match.
+  - Until the lists match (and with co-op open on a game that's neither host nor joiner), `coopShut` keeps every
+    add-on's jobs and game-changing calls shut, 2.0's rule (`plugins_test` checks it).
+  - Co-op's version string check (coop.c) stays as it is and comes first: games of another Survival build never link.
+- The host is the round's truth. On a joiner, `PLUGINS.hostOnly` refuses `SVP.target` / `kill` / `pay`, and
   `PLUGINS.joinerSpawn` lets `SVP.spawn` through only inside the host's round of that add-on there (taken off at its
-  end, `remoteEnd`). Failure is the add-on's alone: `PLUGINS.switchOff` ends its round on the host (`coopEnd`: the
-  joiners abort) or on a joiner (`remoteOff`: its list sent to the host again without it); a joiner's quiet host's
-  round (QUIET_S, 15 s) is a desync and switches it off there too. `plugins_coop_test` shows Survival's own messages
-  and a second co-op add-on going on through each.
+  end, `remoteEnd`).
+- A switch-off is every game's. `PLUGINS.switchOff` calls `remoteOff`: a joiner sends "of" to the host, and the host to
+  every joiner but the one it heard it from. A joiner whose host's round goes quiet (QUIET_S, 15 s) treats it as a
+  desync and switches the add-on off. `plugins_coop_test` shows Survival's own messages and a second add-on going on.
+- Player-facing rules: `docs/ADDONS.md` "Co-op".
 - What co-op's code must keep for it (change one: update `sv_plugins.lua` in the same change, run
   `tools/checks/plugins_coop_test.sh`, two to four games simulated on one link):
+  - `askPicture` and `COOP.refuseJoin` in `sv_coop_migration.lua` (above).
   - `SV_CoopRecv` called BY NAME in `sv_coop_migration.lua`'s receive loop: the framework wraps that global and takes
     its own messages (`px|...`) out before Survival's dispatch. A local copy of it there would bypass the wrap.
   - The tag `px` stays unused by Survival, and `onHostMessage` / `onJoinerMessage` keep dropping a tag they don't know

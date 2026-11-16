@@ -55,11 +55,12 @@
 --                               below that touches a game object refuses while it's true
 --   SVP.callout(text, sub)      the round callout (hudCallout); SVP.say(who, text, secs) the subtitle strip (SUB.say)
 --   SVP.log(msg)                Survival's log, the add-on's name first
---   SVP.isHost(), SVP.inCoop()  not a co-op joiner (solo is a host) / co-op open. While co-op is open (COOP.open) an
---                               add-on without def.coop + def.remote is as in API 2.0, single player: no round of
---                               its comes, none of its jobs run and every call that changes the game refuses. One
---                               with both (API 2.1) runs in co-op: its round on the host when every player has it at
---                               its version, def.remote on the joiners; no
+--   SVP.isHost(), SVP.inCoop()  not a co-op joiner (solo is a host) / co-op open. Co-op (API 2.1): having an add-on
+--                               installed is the opt-in. A joiner's add-ons (folder, version, a hash of its .lua
+--                               files) are compared with the host's as it links: any difference refuses the join on
+--                               both games ("MISMATCHED ADD-ONS"); matched, every add-on runs in co-op, its rounds on
+--                               the host, def.remote (optional) its client side on the joiners. Until the room's
+--                               add-ons match (and with co-op open on a game that is neither host nor joiner) no
 --                               add-on job runs and every call that changes the game refuses
 --   SVP.every(fn)               fn(now) on the game thread from Survival's own tick (about every 250 ms; the main menu
 --                               before the first run too, not from a quit to the next Survival level: going then,
@@ -331,14 +332,14 @@ PLUGINS.pcall = pcall                              -- (pcall, handed to sv_plugi
     end
 
     -- API 2.0 is single player: while co-op is open (a host waiting or playing, a joiner) nothing of an add-on runs.
-    -- API 2.1: unless it's made for co-op (def.coop + def.remote: p.coop), coopShut(p) below
+    -- API 2.1: co-op open and this game's add-ons not (yet) matched with the room's (sv_plugins_api.lua coopMatched)
     function coopOpen() return COOP ~= nil and COOP.open == true end
-    function coopShut(p) return coopOpen() and not (p and p.coop == true) end
+    function coopShut(p) return coopOpen() and not (PLUGINS.coopMatched and PLUGINS.coopMatched()) end
     -- why an add-on's call that touches the game is refused now, or nil. A call with no add-on attached (not from its
     -- load or a guarded callback of it) is refused too: nothing of an add-on's acts outside the guard
     function refused(p)
         if SVP.levelGoing() then return "the level is going" end
-        if coopShut(p) then return "co-op is open (it isn't made for co-op: def.coop + def.remote)" end
+        if coopShut(p) then return "co-op is open and the room's add-ons aren't matched (yet)" end
         if not p then return "no add-on is calling (only from its load or its callbacks)" end
         if p.off then return "switched off" end
         return nil
@@ -767,8 +768,8 @@ PLUGINS.pcall = pcall                              -- (pcall, handed to sv_plugi
         e.ready = function(round, forced)
             if p.off then return false end
             if coopOpen() then
-                -- (co-op, API 2.1: a kind with def.coop + def.remote, on the host, every player with the same add-on
-                -- and version; else its round skipped, said once a run for each reason. A kind without: never)
+                -- (co-op, API 2.1: on the host, every player's add-ons matched with its own; else its round skipped,
+                -- said once a run for each reason)
                 local okC, whyC = PLUGINS.coopReady(p, kind)
                 if not okC then
                     local key = tostring(D) .. "|" .. str(whyC)
@@ -794,7 +795,7 @@ PLUGINS.pcall = pcall                              -- (pcall, handed to sv_plugi
             return true
         end
         e.spawn = function(now)
-            if p.off or coopShut(p) then return false end           -- (co-op: only a co-op kind, ready says so first)
+            if p.off or coopShut(p) then return false end           -- (co-op: the room's add-ons matched, ready says so first)
             -- (the run this round belongs to, set before its spawn: SVP.target works from there; PLUGINS.tick's run-over
             -- check; its kind: only that one's abort / over when its run ends)
             p.liveRun, p.liveKind = D, kind
@@ -983,14 +984,11 @@ PLUGINS.pcall = pcall                              -- (pcall, handed to sv_plugi
             plog(p, "kind " .. kind .. ": " .. table.concat(unused, ", ") .. " left out (not a field Survival uses)")
         end
         p.ver, p.api = str(def.ver or "?"):sub(1, 20), str(def.api)
-        -- (co-op, API 2.1: def.coop + def.remote (a table: its joiner's side), both, or the kind stays solo only as in
-        -- 2.0; def.joined(slot, has): the host told a player came during its round. Raw copies, as def's)
-        local remote = def.coop == true and type(def.remote) == "table" and rawCopy(def.remote) or nil
-        if def.coop == true and not remote then plog(p, "kind " .. kind .. ": def.coop without def.remote (its joiner's side): solo only") end
-        if remote then
-            PLUGINS.coop[kind] = { remote = remote, joined = type(def.joined) == "function" and def.joined or nil }
-            p.coop = true
-        end
+        -- (co-op, API 2.1: every kind comes in co-op once the room's add-ons match. def.remote (a table, optional): its
+        -- client side on a joiner's game while the host's round is on; def.joined(slot): the host told a player came
+        -- during its round. Raw copies, as def's)
+        PLUGINS.coop[kind] = { remote = type(def.remote) == "table" and rawCopy(def.remote) or {},
+                               joined = type(def.joined) == "function" and def.joined or nil }
         local c = plainCfg(p, kind, def.cfg)
         if c.enabled == nil then c.enabled = true end
         local n = iniOver(kind, c)
