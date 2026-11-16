@@ -1661,7 +1661,11 @@ local function lightTick(now)
     local ang = math.random() * 2 * math.pi
     local at = { X = ce.X + math.cos(ang) * d, Y = ce.Y + math.sin(ang) * d, Z = pick(c.alt_m, { 1500, 7000 }) * 100 }
     local how = "bolt"
-    if now >= (SW.lightAt or 0) then how = c.class or "bolt"; SW.lightAt = now + pick(c.light_every_s, { 2, 4 }) end
+    -- ((0.74.86) bolts only while the surfacing's cameras roll: at night the view went back to the plane after a cloud
+    -- light, the autotest's runs 41 and 44)
+    if now >= (SW.lightAt or 0) and not (IFSURF and IFSURF.state and IFSURF.state()) then
+        how = c.class or "bolt"; SW.lightAt = now + pick(c.light_every_s, { 2, 4 })
+    end
     SW.n = (SW.n or 0) + 1
     local ok, what = pcall(THUNDER.cloudFlash, at, how, "the fleet's storm")
     if SW.n <= 3 or SW.n % 100 == 0 then
