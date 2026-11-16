@@ -604,7 +604,8 @@ function TANI.rcFx(kind, M, P, rot, len)
             sOf = n
         end
     else
-        for _, e in ipairs(fx.impact or {}) do of = of + 1; if fxAt(e[1], P, ROT0, num(e[2], 1), life) then up = up + 1 end end
+        local il = num(c.impact_life_s, life)                -- (the Spear strike's dust lingers: its own life)
+        for _, e in ipairs(fx.impact or {}) do of = of + 1; if fxAt(e[1], P, ROT0, num(e[2], 1), il) then up = up + 1 end end
     end
     return up, of, sUp, sOf
 end

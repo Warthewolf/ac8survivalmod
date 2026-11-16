@@ -135,7 +135,9 @@ CFG.specials.fleet = {
     -- { path, scale } stopped fx_life_s after its spawn (its charge at the shot): the charge her discharge on SOC_Gun_01
     -- (spawned again every refire_s if it ended), the muzzle the GR036 main gun's and her long discharge, the streak a beam
     -- (AC8's player TLS, User.BeamLength: "the players tls worked", 0.74.65) or a trail (the main gun's bullet trail every
-    -- step_km as the round passes), the impact the GR036 main cannon's blast, her railcannon's and DECOY's ground set; her
+    -- step_km as the round passes), the impact Mission 25 day 1's Tonitrus Spear strike as its cutscene draws it (IGC
+    -- Ms250010's Shot0030: its three fireballs, its two shock rings, the sand skirt and the ring smoke; the user, 2026-11-16,
+    -- with its picture: "This is what the Railcannon Hit Impact should look like"), kept impact_life_s for its dust; her
     -- cannon's charge sounds (by name, on the railcannon: BA002_alcn's Cannon bank) with the RTPC rtpc_from -> rtpc_to over
     -- charge_sound_s; max_off_deg under 180 holds the shot until her bow points within it. Its Deploy must show up
     -- (SOC_Gun_01 at least raised_cm up in its mesh as drawn: stowed ~1567, up ~3454) or it's played again redeploys times,
@@ -147,17 +149,18 @@ CFG.specials.fleet = {
         runway = { 1609574, -435747, 500, -23 }, spread_m = 600, across_m = 15, max_off_deg = 180,
         alert = { enabled = true, off_after_s = 3 }, warn_left_s = 10, radio = true,
         hold = { paused = true, store = true, landed_alone = true, af_down = true },
-        fx_life_s = 6, refire = true, refire_s = 2,
+        fx_life_s = 6, impact_life_s = 25, refire = true, refire_s = 2,
         fx = {
             charge = { "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_alcn_RailCannonDischarge_ON", 1 },
             muzzle = { { "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_Maingun_Muzzle", 3 },
                        { "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_alcn_RailGunDischarge_Long_ON", 1 } },
             streak = { mode = "beam", fx = "/Game/VFX/Vehicles/Weapon/TLS/NS_TLS_Muzzleflash01", life_s = 0.8,
                        trail = "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_Maingun_BulletTrail", step_km = 1 },
-            impact = { { "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_MainCannonExplosionA001", 3 },
-                       { "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_alcn_emlmExplosion_ON", 1 },
-                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 1 },
+            impact = { { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 1 },
+                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion002", 1 },
+                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion005", 1 },
                        { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_ShockWave001", 1 },
+                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_ShockWave002", 1 },
                        { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_SandSmoke001", 1 },
                        { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_RingSmoke001", 1 } },
         },

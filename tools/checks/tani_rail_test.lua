@@ -291,6 +291,9 @@ for _, l in ipairs({ RCC.fx and RCC.fx.muzzle or {}, RCC.fx and RCC.fx.impact or
     for _, e in ipairs(l) do allAc8 = allAc8 and type(e[1]) == "string" and e[1]:find("^/Game/") ~= nil and not e[1]:find("/Mods/", 1, true) end
 end
 check(allAc8, "every effect AC8's own (no system of ours: hard rule 58)")
+local spear = RCC.fx and RCC.fx.impact and #RCC.fx.impact == 7
+for _, e in ipairs(RCC.fx and RCC.fx.impact or {}) do spear = spear and e[1]:find("^/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_") ~= nil end
+check(spear and RCC.impact_life_s == 25, "its impact Mission 25 day 1's Spear strike (IGC Ms250010 Shot0030's 7 systems), 25 s")
 CFG.specials.fleet = { railcannon = RCC }
 
 print("sv_tanicorn_rail.lua loaded with its family")
@@ -533,15 +536,19 @@ check(beam and beam.vars["User.BeamLength"] and math.abs(beam.vars["User.BeamLen
     "the beam's User.BeamLength the shot's length (" .. tostring(beam and beam.vars["User.BeamLength"]) .. " cm)")
 check(AF.bomb == 0, "no damage before the round lands")
 local im1 = untilLog("tanicorn rc: impact 1 at +", 20, n0 + 1)
-check(im1 ~= nil and im1:find(": -100 airfield (AF.bomb 0 -> 100; health before 250); impact fx 6 of 6 up, its sound posted, the shake "
+check(im1 ~= nil and im1:find(": -100 airfield (AF.bomb 0 -> 100; health before 250); impact fx 7 of 7 up, its sound posted, the shake "
     .. "none: you're", 1, true) ~= nil and AF.bomb == 100, "the impact: -100 on AF.bomb once (" .. tostring(im1) .. ")")
 check(logged("callout: THE AIRFIELD IS HIT / TANACORN RAILCANNON: -100", n0 + 1) ~= nil, "its callout")
 ticks(16)
 check(fired("RE_SV_AlcnAlertOn", e0 + 1) == 1 and fired("RE_SV_AlcnAlertOff", e0 + 1) == 1, "one RAILGUN WARNING pair a charge")
--- every effect stopped after its life (fx_life_s 6), one whose address was reused left alone
+-- every effect stopped after its life (fx_life_s 6; the impact's impact_life_s 25), one whose address was reused left alone
 local reused = NIAG.spawned[#NIAG.spawned]
 reused.__name = "NiagaraComponent /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.SomethingElse_9"
-ticks(30)
+local early = 0
+ticks(30)                                                 -- (7.5 s on: the impact's dust still up, the rest off)
+for _, c in ipairs(NIAG.spawned) do if c ~= reused and not c.off then early = early + 1 end end
+check(early >= 6, string.format("the impact's systems still up 7.5 s on (impact_life_s): %d", early))
+ticks(80)
 local allOff, n = true, 0
 for _, c in ipairs(NIAG.spawned) do if c ~= reused then n = n + 1; allOff = allOff and c.off == true end end
 check(allOff and n >= 9 and not reused.off, string.format("all %d of its effects stopped after their life; a reused address left alone", n))
