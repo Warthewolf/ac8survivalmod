@@ -1168,8 +1168,10 @@ SUITES.bolt = function()
     local dir = { X = -0.7071, Y = -0.7071 }
     A.do_(function()
         if not ST.check(THUNDER ~= nil and THUNDER.cloudFlash ~= nil, "the storm's cloud lightning is in this build") then return "abort" end
-        ST.look(eye, { X = eye.X + dir.X * 1000000, Y = eye.Y + dir.Y * 1000000, Z = 120000 }, 60)
+        if ST.conf.night == "1" and IFSKY and IFSKY.step then IFSKY.step(3) end   -- (conf night=1: the fleet's storm night)
     end)
+    A.wait(ST.conf.night == "1" and 12 or 0.5)
+    A.do_(function() ST.look(eye, { X = eye.X + dir.X * 1000000, Y = eye.Y + dir.Y * 1000000, Z = 120000 }, 60) end)
     A.wait(2)
     for _, k in ipairs({ { 3, "bolt" }, { 6, "bolt" }, { 12, "bolt" }, { 6, "class" } }) do
         local km, how = k[1], k[2]
