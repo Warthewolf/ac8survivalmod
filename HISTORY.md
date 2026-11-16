@@ -3385,3 +3385,6 @@ game. The work was split by file between agents; the builds ran in sequence in t
   the storm's fade to black. 0.74.91: the off press only asks the storm out (IFSKY.leaving: the storm not wanted), and
   the day comes back under its black (trTick's out phase), as the cloud swap does. Staged; its test (stormkey with
   pictures right after the off press) waits for the game to be closed (the user flying 0.74.89).
+- 0.74.91 INSTALLED 2026-11-17 for the user ("install it"; "no dont run a test i can do that": its autotest, run 73, was
+  cancelled through the gate 16 s in, before the suite ran, and her install restored), over 0.74.89 (backup:
+  build/backup/install_before_0.74.91); her settings, map notes, subtitles and the launcher's toggle (on) kept.
