@@ -1089,6 +1089,37 @@ SUITES.surface2 = function()
         return d, "a StaticMeshActor"
     end)
 end
+-- (2026-11-16) INVINCIBLE FLEET surfacing (IFSURF, CFG.specials.fleet.surface): Ctrl+N's doubles rise on her rig in waves,
+-- the cinematic's cuts pictured as it plays (your view is its camera), then the fade, the real fleet up on its spots, your
+-- view back
+SUITES.surfacing = function()
+    intoRun()
+    A.do_(function()
+        if not ST.check(IFSURF ~= nil and IFSURF.start ~= nil, "INVINCIBLE FLEET's surfacing is in this build") then return "abort" end
+        ST.marks.s0 = ST.n
+        ST.press("N")
+    end)
+    A.log_("fleet surfacing: %d+ ships rise over", 10, "s0", false, function(l)
+        if not ST.check(l ~= nil, "the surfacing started", l or ST.findLog("fleet surfacing:", ST.marks.s0, true)) then return "abort" end
+    end)
+    for i = 1, 18 do
+        A.wait(1.5)
+        A.do_(function() ST.shot(string.format("surfacing_%02d", i)) end)
+    end
+    A.log_("fleet surfacing: the rise over", 20, "s0", true, function(l)
+        local up, of = nil, nil
+        if l then up, of = l:match("(%d+) of (%d+) doubles up") end
+        ST.check(up ~= nil and up == of and tonumber(of) >= 15, "every ship's double rose", l)
+    end)
+    A.log_("fleet surfacing: over", 10, "s0", true, function(l)
+        ST.check(l ~= nil and not l:find("NOT:", 1, true), "the swap: the doubles off, the real fleet up, your view back", l)
+    end)
+    A.log_("fleet: Ctrl%+N: %d+ of %d+ ships up", 30, "s0", false, function(l)
+        ST.check(l ~= nil, "the real fleet up after the surfacing", l)
+    end)
+    A.wait(2)
+    A.do_(function() ST.shot("surfacing_after") end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
