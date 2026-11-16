@@ -391,7 +391,7 @@ SUITES.tanacorn = function()
         if C.railUp.L or C.railUp.R then ST.check(type(l) == "string", "a railgun fired (its first EML round seen)", l) end
     end)
     A.picture("railgun_L_raised", function()
-        local _, seen = partsSeen(); return ST.frame(seen.RAILGUN_L.o, 4000, -7000, 2500) end,
+        local _, seen = partsSeen(); return ST.frame(seen.RAILGUN_L.o, 2500, -4500, 1800) end,
         function() local _, seen = partsSeen(); return ST.frame(seen.RAILGUN_L.o, 0, 0, 500) end, 45)
     A.do_(function() C.af0 = AF and AF.bomb; ST.marks.m1 = ST.n; ST.press("H") end)   -- the bow railcannon
     A.log_("tanicorn rc: deployed at", 12, "m1", true, function(l)
@@ -401,8 +401,8 @@ SUITES.tanacorn = function()
         ST.check(l ~= nil and l:find("RAILGUN WARNING", 1, true) ~= nil, "its first charge, the RAILGUN WARNING up", l)
     end)
     A.picture("railcannon_charging", function()
-        local _, seen = partsSeen(); return ST.frame(seen.RAILCANNON.o, 2000, 14000, 4500) end,
-        function() local _, seen = partsSeen(); return ST.frame(seen.RAILCANNON.o, -2000, 0, 2000) end, 50)
+        local _, seen = partsSeen(); return ST.frame(seen.RAILCANNON.o, 4500, 9000, 2500) end,
+        function() local _, seen = partsSeen(); return ST.frame(seen.RAILCANNON.o, 4500, 0, 1500) end, 60)
     A.log_("tanicorn rc: SHOT 1 at", 45, "m1", true, function(l) ST.check(l ~= nil, "its first shot", l) end)
     A.picture("railcannon_impact", function() return { X = AIRFIELD.X - 90000, Y = AIRFIELD.Y + 60000, Z = 35000 } end,
         function() return { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 0 } end, 50)
