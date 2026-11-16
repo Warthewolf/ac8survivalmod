@@ -3451,3 +3451,10 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - Run 86 (round30, 10/10, 0 view reverts): glows placed 3.6-4.1 km up over the bolts, the 19 cells up; the surfacing's
   frames show the bolts but no glow round their tops at 4-14 km (frames 16-18's lilac is the pre-dawn sky, as in run 71).
   Whether the glows read is for the user's eyes in game.
+- Run 87 (glow96, 0.74.96, 6/6): the glow put 2 and 5 km ahead of your camera at night: scale 1 showed nothing; scale 3 and
+  6 lit the cloud there blue from inside over the first second (picture brightness 5 -> 7.4, blue over red 0.3 -> 2.2 at
+  2 km). Bolts struck 3-6 km out in your view with a glow at scale 3 over each top: no clear change at those distances.
+
+## 0.74.97 (2026-11-17; a test build, staged, not installed): the glows sized for the night (feature/fleet-storm)
+- storm.cells.scale_x 3 (Mission 12's 19), bolt_glow.scale 4 and life_s 2.5 (the glow builds over its first second):
+  run 87's scale 1 was unseen at 2-5 km at night. Config only; fleet_test passes; not run in game yet.

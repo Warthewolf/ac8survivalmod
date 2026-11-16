@@ -201,9 +201,9 @@ CFG.specials.fleet = {
                       -- off as it clears. cloud (Survival's own effect light) off: it lit nothing in runs 77-83)
                       -- (bolt_glow: (2026-11-17) the user: "Like have them draw where the lightning bolts are?": a pool of
                       -- the same glow, the oldest moved up_m over each bolt's top (into the cloud it comes out of) and
-                      -- restarted, off life_s on)
-                      cells = { enabled = true, sort = 100, scale_x = 1,
-                                bolt_glow = { enabled = true, pool = 12, life_s = 1.5, up_m = 300, scale = 1 },
+                      -- restarted, off life_s on; run 87: scale 1 unseen at 2-5 km at night, 3-6 lit the cloud blue, so 4, and the 19 x3)
+                      cells = { enabled = true, sort = 100, scale_x = 3,
+                                bolt_glow = { enabled = true, pool = 12, life_s = 2.5, up_m = 300, scale = 4 },
                                 system = "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning.NS_CloudLightning",
                                 spots = { { 2389746, -1425882, 636631, 1 }, { 2050221, -1352135, 639884, 1 }, { -2275497, 226132, 764355, 1 }, { -3067967, 383275, 764355, 1 },
                                          { -3159850, 3790150, 764355, 1 }, { -3159850, 4575129, 764355, 1 }, { -1165562, 2039202, 764355, 1 }, { 1798205, 1440965, 727172, 0.9 },
