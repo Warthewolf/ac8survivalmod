@@ -46,7 +46,8 @@
 --   `tanicorn rc: Part_RAILCANNON shot down at +T s (...)`, `tanicorn rc: cycle over (<why>) ...`.
 -- DEV ONLY BEGIN
 do
-TANI.railgun = { after_s = 3, deploy_s = 2.2, up_cm = 50, raised_cm = 300, writes = 2, move_s = 8, move_deg = 2, tries = 4, check_s = 5 }
+TANI.railgun = { after_s = 3, deploy_s = 2.2, up_cm = 50, raised_cm = 300, writes = 2, move_s = 8, move_deg = 2, tries = 4, check_s = 5,
+                  tick_always = true }   -- ((2026-11-16) its pose ticked always before the deploy: gunStep)
 local ORDER = { RAILGUN_L = "RE_SV_TaniRailOrderL", RAILGUN_R = "RE_SV_TaniRailOrderR" }   -- (the build's remote events)
 local MUZZLE, DEPLOY_LEN, HATCH_DEG = "SOC_Gun_01", 2.167, 105   -- (the cooked Deploy's lift end, its hatches' turn)
 local FLAGS0 = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
@@ -330,8 +331,20 @@ local function gunStep(e, now, dt)
         e.mesh = TANI.partMesh and TANI.partMesh(e.o, e.k)
         if not e.mesh then e.state = "failed"; gunLog(e, "NOT ordered: no TurretPoseableMesh (PoseableMeshComponent) found on it"); return end
         e.state, e.t = "deploying", 0
-        gunLog(e, string.format("deploying at +%.1f s over %.1f s: lift z %s cm, SOC_Gun_01 z %s cm in the mesh (stowed: -600 / -196)",
-            now - e.seenAt, G.deploy_s, cm(liftZ(e.mesh)), cm(sockZ(e.mesh))))
+        -- ((2026-11-16, the first in-game test: the lift read back up, SOC_Gun_01 stayed stowed as drawn) a PoseableMesh
+        -- refreshes its bones from what's written only while it ticks its pose, and the railguns' (mount()) had no
+        -- VisibilityBasedAnimTickOption: OnlyTickPoseWhenRendered, so nothing written was drawn with her off your screen.
+        -- The railcannon, which deployed, ticks always (AlwaysTickPoseAndRefreshBones = 0). Set here before the writes
+        -- (G.tick_always), read back in the line)
+        local tick = "left as cooked"
+        if G.tick_always ~= false then
+            pcall(function() e.mesh.VisibilityBasedAnimTickOption = 0 end)
+            pcall(function() e.mesh.bEnableUpdateRateOptimizations = false end)
+            local okT, v = pcall(function() return e.mesh.VisibilityBasedAnimTickOption end)
+            tick = "its pose ticked always (VisibilityBasedAnimTickOption read back " .. tostring(okT and v or "?") .. ")"
+        end
+        gunLog(e, string.format("deploying at +%.1f s over %.1f s: lift z %s cm, SOC_Gun_01 z %s cm in the mesh (stowed: -600 / -196); %s",
+            now - e.seenAt, G.deploy_s, cm(liftZ(e.mesh)), cm(sockZ(e.mesh)), tick))
     elseif e.state == "deploying" then
         if paused() then return end
         e.t = e.t + dt

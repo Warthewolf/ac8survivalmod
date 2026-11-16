@@ -3196,3 +3196,16 @@ game. The work was split by file between agents; the builds ran in sequence in t
   at your plane ~34 km off; Ctrl+N again took the fleet off (15 units, RE_SV_IFFleetRemove 1, 15 of 63 objects finished
   off) with no crash (WP7's risk: the take-off's destroy on objects just killed). Run folder
   build/autotest/runs/20261116_195346_claude.
+
+## 0.74.73-coop2mp.165: the railguns' pose ticked always (a test), the RTPC through her AkComponent (2026-11-16, runtime 0.32.36)
+- Lua only on 0.74.72 (the Tanicorn container unchanged, 3f59134b2690...): the railcannon's charge RTPC on her AkComponent
+  by name, the radio line's why, and (a test of a guess) the railguns' TurretPoseableMesh set to tick its pose always
+  (TANI.railgun.tick_always: VisibilityBasedAnimTickOption 0, bEnableUpdateRateOptimizations false) before the deploy's
+  writes. `TANI=1 ZFA=1 build_all.sh`, `TANI=1 VALKA=1 ZFA=1 package_dev.sh 0.74.73` -> stage_dev_0.74.73 (b364f448bfd0...,
+  registered). Not installed for play.
+- The autotest's tanacorn suite on it: 29/31 (run 20261116_200051_claude). New: a 500-point ModifyHealth on her hull with
+  its damage event, her invincibility on: 50000 -> 50000. The RTPC now `set` and stepping 50 -> 100 (fixed). The radio:
+  `not said (between rounds)` (the tells hold between rounds; the test's round 1 is an hour away: not a bug). The
+  railguns: still not drawn raised with the pose ticked always (read back 0): the guess is out, Lua's bone writes on that
+  mesh don't reach its drawn pose. The user's choice (2026-11-16): split the mesh (route (iv)): the hatches and lift their
+  own animated mesh (the railcannon's way, which draws), the gun riding on it.
