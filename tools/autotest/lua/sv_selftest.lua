@@ -491,6 +491,12 @@ SUITES.tanacorn = function()
         ST.check(C.af0 ~= nil and AF and AF.bomb and AF.bomb > C.af0, "the airfield took the damage (AF.bomb up)",
             tostring(C.af0) .. " -> " .. tostring(AF and AF.bomb))
     end)
+    -- (2026-11-16) the Spear strike's impact (Mission 25 day 1's cutscene set) from high and far, as the user's picture
+    -- frames it: ~7 km off, 3.5 km up, as the fireball grows, then its dust
+    local function wideAt() return { X = AIRFIELD.X - 600000, Y = AIRFIELD.Y + 300000, Z = 350000 } end
+    local function wideOn() return { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 60000 } end
+    A.picture("spear_impact_wide", wideAt, wideOn, 45)
+    A.picture("spear_impact_dust", wideAt, wideOn, 45)
     A.log_("tanicorn rc: charge 2 at", 80, "m1", true, function(l)        -- shot down mid-charge: no impact
         C.ch2 = ST.check(l ~= nil, "its second charge started", l)
     end)
