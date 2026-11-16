@@ -172,6 +172,39 @@ function ST.frame(o, f, r, u)                             -- a spot off o in its
     local p, F, R = ST.at(o), o:GetActorForwardVector(), o:GetActorRightVector()
     return { X = p.X + F.X * f + R.X * r, Y = p.Y + F.Y * f + R.Y * r, Z = p.Z + F.Z * f + R.Z * r + u }
 end
+-- (2026-11-16) what draws near your plane: every Niagara / Cascade effect and every static mesh within r_m of it, nearest
+-- first, with its asset, its owner and (for a mesh) its first material (round30 run 45: a checkered sheet by the plane)
+function ST.near(r_m, tag)
+    local pl = ST.plane()
+    if not (pl and valid(pl)) then ST.info("near " .. tag .. ": no plane"); return end
+    local P = ST.at(pl)
+    local r2 = (r_m * 100) ^ 2
+    local function short(o) local n = "?"; pcall(function() n = o:GetFullName() end); return (n:match("([^%./ ]+)$") or n) end
+    for _, k in ipairs({ "NiagaraComponent", "ParticleSystemComponent", "StaticMeshComponent", "InstancedStaticMeshComponent" }) do
+        local L = {}
+        local all = FindAllOf(k) or {}
+        for _, c in ipairs(all) do
+            local okL, v = pcall(function() return c:K2_GetComponentLocation() end)
+            if okL and v then
+                local d2 = (v.X - P.X) ^ 2 + (v.Y - P.Y) ^ 2 + (v.Z - P.Z) ^ 2
+                if d2 < r2 then
+                    local vis = true
+                    pcall(function() vis = c:IsVisible() end)
+                    local what, own = "?", "?"
+                    pcall(function() own = short(c:GetOwner()) end)
+                    if k == "NiagaraComponent" then pcall(function() what = short(c:GetAsset()) .. (c:IsActive() and "" or " (off)") end)
+                    elseif k == "ParticleSystemComponent" then pcall(function() what = short(c.Template) end)
+                    else pcall(function() what = short(c.StaticMesh) .. " / " .. short(c:GetMaterial(0)) end) end
+                    if vis then L[#L + 1] = { d = math.sqrt(d2) / 100, s = string.format("%s on %s %.0f m", what, own, math.sqrt(d2) / 100) } end
+                end
+            end
+        end
+        table.sort(L, function(a, b) return a.d < b.d end)
+        local out = {}
+        for i = 1, math.min(#L, 14) do out[i] = L[i].s end
+        ST.info(string.format("near %s: %s within %d m of your plane (%d of %d): %s", tag, k, r_m, #L, #all, table.concat(out, "; ")))
+    end
+end
 function ST.healthOf(o)
     local h, mx
     pcall(function() h = o.HealthInternal end)
@@ -1142,7 +1175,7 @@ SUITES.round30 = function()
     end)
     for i = 1, 18 do
         A.wait(1.5)
-        A.do_(function() ST.shot(string.format("r30_%02d", i)) end)
+        A.do_(function() ST.shot(string.format("r30_%02d", i)); if i >= 15 then ST.near(3000, "r30_" .. i) end end)
     end
     A.log_("fleet surfacing: the rise over", 20, "s0", true, function(l)
         local up, of = nil, nil
@@ -1152,6 +1185,10 @@ SUITES.round30 = function()
     A.log_("fleet surfacing: over", 10, "s0", true, function(l)
         ST.check(l ~= nil and not l:find("NOT:", 1, true), "the swap and your view back", l)
     end)
+    for i = 1, 4 do
+        A.wait(0.7)
+        A.do_(function() ST.shot(string.format("r30_over_%d", i)); ST.near(3000, "over_" .. i) end)
+    end
     A.log_("fleet: Ctrl%+N: %d+ of %d+ ships up", 30, "s0", false, function(l)
         ST.check(l ~= nil, "the real fleet up after the surfacing", l)
     end)
