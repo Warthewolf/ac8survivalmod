@@ -367,25 +367,22 @@ SUITES.tanacorn = function()
         C.hh0 = h1                                         -- (the later checks against what's there now)
     end)
     A.wait(5)                                             -- (the +2.5 s orders, the +8 s look)
-    -- (2026-11-16, runs 12-19) her live parts' posed meshes never move (the T16, CIWS, LASER at rest; the railguns' lift
-    -- writes and their arm's aim), while the same blueprints turn as standalone test mounts: their ticks, read, then on
+    -- (2026-11-16) her guns on you: the hull's unit area was the scored dummy's 1.5 km (they shelled the runway's target
+    -- points when she spawned near them, never your plane 5 km off): her first shell's target, then her barrels turning
+    A.log_("weapons: first launch of %S+ by BP_SV_Tani_", 40, "m0", false, function(l)
+        ST.check(l ~= nil and not l:find("dummy", 1, true), "her guns fire at you (not at the runway's target points)", l)
+    end)
+    A.wait(12)
     A.do_(function()
-        local _, seen = partsSeen()
-        for _, s in ipairs({ "T16_FWD", "CIWS_1", "LASER_FWD_L", "RAILGUN_L" }) do
-            local e = seen[s]
-            if e and ST.same(e) then
-                local m = nil
-                if not m then for _, c in ipairs((SPC and SPC.V and SPC.V.comps) and SPC.V.comps(e.o, "/Script/Engine.PoseableMeshComponent") or {}) do m = c end end
-                local function rd(f) local ok, v = pcall(f); return ok and tostring(v) or "?" end
-                local before = string.format("actor tick %s, its PoseableMesh %s tick %s (registered %s, active %s)",
-                    rd(function() return e.o:IsActorTickEnabled() end), m and "found" or "NOT found",
-                    m and rd(function() return m:IsComponentTickEnabled() end) or "-",
-                    m and rd(function() return m:IsRegistered() end) or "-", m and rd(function() return m:IsActive() end) or "-")
-                pcall(function() e.o:SetActorTickEnabled(true) end)
-                if m then pcall(function() m:SetComponentTickEnabled(true) end); pcall(function() m:SetActive(true, false) end) end
-                ST.info(string.format("tick probe Part_%s: %s; then on: actor tick %s, mesh tick %s", s, before,
-                    rd(function() return e.o:IsActorTickEnabled() end), m and rd(function() return m:IsComponentTickEnabled() end) or "-"))
+        for _, s in ipairs({ "T16_FWD", "CIWS_1", "LASER_FWD_L" }) do
+            local yaws = {}
+            for i = ST.marks.m0 + 1, ST.n do
+                local y = ST.lines[i] and ST.lines[i]:match("live %+%d+ s: Part_" .. s .. " %(.-barrel yaw (%-?[%d%.]+)")
+                if y then yaws[#yaws + 1] = y end
             end
+            local moved = false
+            for k = 2, #yaws do if yaws[k] ~= yaws[1] then moved = true end end
+            ST.check(moved, "Part_" .. s .. "'s barrel turns", #yaws .. " readings: " .. table.concat(yaws, " ", math.max(1, #yaws - 5)))
         end
     end)
     A.picture("tanacorn_whole", function() return ST.frame(C.hull, -30000, 90000, 22000) end,
@@ -492,12 +489,18 @@ SUITES.fleet = function()
         ST.info("waiting 70 s for the fleet to sail")
     end)
     A.wait(70)
-    A.picture("fleet_formation", function()
-        local G = IFLEET.cur.ships[1].hull; return ST.frame(G, -250000, -120000, 120000) end,
-        function() return ST.at(IFLEET.cur.ships[1].hull) end, 55)
-    A.picture("geofon_close", function()
-        local G = IFLEET.cur.ships[1].hull; return ST.frame(G, -45000, 30000, 12000) end,
-        function() return ST.at(IFLEET.cur.ships[1].hull) end, 50)
+    -- (a ship's .hull is sv_fleet's entry { obj, addr, ... }: the actor is its .obj; GEOFON by name, not by order)
+    local function geofon()
+        for _, sh in ipairs(IFLEET.cur and IFLEET.cur.ships or {}) do
+            if (sh.name == "GEOFON" or sh.key == "GEOFON") and sh.hull and valid(sh.hull.obj) then return sh.hull.obj end
+        end
+        local sh = IFLEET.cur and IFLEET.cur.ships[1]
+        return sh and sh.hull and sh.hull.obj
+    end
+    A.picture("fleet_formation", function() return ST.frame(geofon(), -250000, -120000, 120000) end,
+        function() return ST.at(geofon()) end, 55)
+    A.picture("geofon_close", function() return ST.frame(geofon(), -45000, 30000, 12000) end,
+        function() return ST.at(geofon()) end, 50)
     A.do_(function()
         local notUnder = {}
         for i = ST.marks.m0 + 1, ST.n do
