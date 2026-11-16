@@ -1846,6 +1846,354 @@ SUITES.cloudlit = function()
     A.wait(0.4)
     A.do_(function() ST.shot("cloudlit_C_3_back"); elRead("C back") end)
 end
+-- (2026-11-17) cloudlit's run 65: Mission 12's light lit the storm clouds orange at 3.5-4.5 s, nothing at 5-6 s (its
+-- brightness still 10-30k), white at 6.5-7 s (its curve at 0); the bare light held at 40k / 400k reached Cloudly's drawn
+-- copy and lit nothing (after that white flash: the exposure down?). Here, a line a tick (Cloudly's switch, the drawn
+-- copy's light, the asset's, the light's own): 1 the bare light first (the exposure still the night's), spawned at 0 and
+-- driven a tick at a time (a ramp, a hold, a flicker), 3 km ahead; 2 Mission 12's light 4 km ahead, read from its spawn to
+-- 9 s; 3 Mission 12's light at 4x (CustomTimeDilation: its flash at ~1-1.7 s), a lightning flash's length.
+SUITES.cloudlit2 = function()
+    intoRun()
+    local CLT = { t0 = 0 }
+    local BPP = "/Game/Blueprints/Cloudly/CloudLight/"
+    A.do_(function()
+        local S = (((CFG.specials or {}).fleet or {}).sky or {}).storm
+        if type(S) == "table" and type(S.lightning) == "table" then S.lightning.enabled = false end
+        if tostring(ST.conf.night or "1") == "1" and IFSKY and IFSKY.step then IFSKY.step(3) end
+    end)
+    A.wait(12)
+    local function g(v) if type(v) ~= "number" then return "?" end; return string.format("%.4g", v) end
+    local function lightOf(dd)
+        local s = "?"
+        pcall(function()
+            local t = dd.EffectLightTransientParams
+            local w, c = t.WorldPosition, t.LightColor
+            s = string.format("%s (%.2f %.2f %.2f) at %.1f %.1f %.1f km r %s f %s", g(t.LightBrightness), c.X, c.Y, c.Z,
+                w.X / 100000, w.Y / 100000, w.Z / 100000, g(t.AttenuationRadius), g(t.LightFalloffExponent))
+        end)
+        return s
+    end
+    local function rd(tag)
+        local V = SKY and SKY.viewCached and SKY.viewCached(os.clock(), nil)
+        if not V then return end
+        local use, drawn, asset, own = "?", "?", "?", "-"
+        pcall(function() use = tostring(V.actor.bUseEffectLight) end)
+        if V.asset then asset = lightOf(V.asset.Data) end
+        for _, r in ipairs(V.rend or {}) do
+            local n = 0
+            pcall(function() r.obj.Data.SkyParamsRO:ForEach(function(_, e) n = n + 1; if n == 1 then drawn = lightOf(e:get()) end end) end)
+        end
+        local l = CLT.a
+        if l and valid(l) then pcall(function() own = g(l.LightBrightness) end) end
+        ST.info(string.format("cl2 %s +%.2f s: use %s | drawn %s | asset %s | light %s", tag, os.clock() - CLT.t0, use, drawn,
+            asset == drawn and "same" or asset, own))
+    end
+    local function spawnCL(name, at)
+        local cls = loadObject(BPP .. name .. "." .. name .. "_C")
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        if not (cls and gs and valid(gs)) then return nil, "no class or GameplayStatics" end
+        local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = at.X, Y = at.Y, Z = at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+        local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(ST.pc(), cls, t, 1, nil, 1) end)
+        if not okB or x == nil or not valid(x) then return nil, "no actor" end
+        pcall(function() x.WorldPosition = { X = at.X, Y = at.Y, Z = at.Z } end)
+        local okF, a = pcall(function() return gs:FinishSpawningActor(x, t, 1) end)
+        if not okF or a == nil or not valid(a) then return nil, "its spawn didn't finish" end
+        return a, "up"
+    end
+    local function ahead(km, up_m)
+        local pl = ST.plane()
+        if not pl then return nil end
+        return ST.frame(pl, km * 100000, 0, up_m * 100)
+    end
+    -- 1: the bare light, driven by us a tick at a time
+    A.do_(function() rd("0 before"); ST.shot("cl2_0_before") end)
+    A.do_(function()
+        local at = ahead(3, 300)
+        if not at then ST.info("cl2 1: no plane"); return end
+        local a, why = spawnCL("BP_CloudLight_Base", at)
+        CLT.a, CLT.t0 = a, os.clock()
+        if a then
+            pcall(function() a.AttenuationRadius = 500000 end)
+            pcall(function() a.LightFalloffExponent = 4 end)
+            pcall(function() a.LightColor = { R = 215, G = 225, B = 255, A = 255 } end)
+            pcall(function() a.bUseInverseSquaredFalloff = false end)
+        end
+        ST.info(string.format("cl2 1: the bare light 3 km ahead, 300 m over you (%.0f %.0f %.0f): %s", at.X, at.Y, at.Z, why))
+    end)
+    local SEQ = { 0, 0, 5000, 20000, 40000, 40000, 40000, 40000, 40000, 40000, 20000, 5000, 0, 0, 40000, 0, 40000, 40000, 0, 0,
+                  400000, 400000, 400000, 400000, 0, 0 }
+    for i, b in ipairs(SEQ) do
+        A.do_(function()
+            if CLT.a and valid(CLT.a) then pcall(function() CLT.a.LightBrightness = b end) end
+            rd("1 set " .. b)
+            if i % 2 == 0 then ST.shot(string.format("cl2_1_%02d_%d", i, b)) end
+        end)
+        A.wait(0.25)
+    end
+    A.do_(function() if CLT.a and valid(CLT.a) then pcall(function() CLT.a:K2_DestroyActor() end) end; CLT.a = nil end)
+    A.wait(3)
+    -- 2: Mission 12's light, read from its spawn to 9 s
+    A.do_(function()
+        local at = ahead(4, 500)
+        if not at then return end
+        local a, why = spawnCL("BP_CloudLight_Ms012_PodargeDead", at)
+        CLT.a, CLT.t0 = a, os.clock()
+        ST.info("cl2 2: Mission 12's light 4 km ahead, 500 m over you: " .. why)
+    end)
+    for i = 1, 36 do
+        A.do_(function()
+            rd("2")
+            if i >= 12 and i % 2 == 0 then ST.shot(string.format("cl2_2_%02d", i)) end
+        end)
+        A.wait(0.25)
+    end
+    A.wait(3)
+    -- 3: Mission 12's light at 4x
+    A.do_(function()
+        local at = ahead(4, 500)
+        if not at then return end
+        local a, why = spawnCL("BP_CloudLight_Ms012_PodargeDead", at)
+        if a then pcall(function() a.CustomTimeDilation = 4 end) end
+        CLT.a, CLT.t0 = a, os.clock()
+        ST.info("cl2 3: Mission 12's light at 4x (CustomTimeDilation " .. tostring(a and a.CustomTimeDilation) .. "): " .. why)
+    end)
+    for i = 1, 14 do
+        A.do_(function()
+            rd("3")
+            if i >= 3 and i <= 9 then ST.shot(string.format("cl2_3_%02d", i)) end
+        end)
+        A.wait(0.25)
+    end
+end
+-- (2026-11-17) cloudlit3: runs 65-66 measured nothing: your plane flies IN the storm's cloud layer (ICING UP, a white-out,
+-- the exposure swinging), so its view went white and black whatever the light did. Here a still camera outside the clouds
+-- (5 km over your plane looking down onto the layer 6 km ahead; then 1.8 km under it looking up) and the bare cloud light
+-- (BP_CloudLight_Base, ours a tick at a time) in the layer at that spot: off, 40k, off, 400k, 4M (radius 50 km), off, each
+-- pictured 0.6 s after it's set; then Mission 12's light at 4x there (its flash at ~1-1.8 s). The camera re-aimed before
+-- each picture (a cloud light took the view back to the plane in runs 41 and 44).
+SUITES.cloudlit3 = function()
+    intoRun()
+    local CLT = { t0 = 0 }
+    local BPP = "/Game/Blueprints/Cloudly/CloudLight/"
+    A.do_(function()
+        local S = (((CFG.specials or {}).fleet or {}).sky or {}).storm
+        if type(S) == "table" and type(S.lightning) == "table" then S.lightning.enabled = false end
+        if tostring(ST.conf.night or "1") == "1" and IFSKY and IFSKY.step then IFSKY.step(3) end
+    end)
+    A.wait(12)
+    local function g(v) if type(v) ~= "number" then return "?" end; return string.format("%.4g", v) end
+    local function rd(tag)
+        local V = SKY and SKY.viewCached and SKY.viewCached(os.clock(), nil)
+        if not V then return end
+        local use, drawn = "?", "?"
+        pcall(function() use = tostring(V.actor.bUseEffectLight) end)
+        for _, r in ipairs(V.rend or {}) do
+            local n = 0
+            pcall(function()
+                r.obj.Data.SkyParamsRO:ForEach(function(_, e)
+                    n = n + 1
+                    if n == 1 then
+                        local t = e:get().EffectLightTransientParams
+                        drawn = string.format("%s at %.1f %.1f %.1f km r %s", g(t.LightBrightness), t.WorldPosition.X / 100000,
+                            t.WorldPosition.Y / 100000, t.WorldPosition.Z / 100000, g(t.AttenuationRadius))
+                    end
+                end)
+            end)
+        end
+        ST.info(string.format("cl3 %s: use %s | drawn %s", tag, use, drawn))
+    end
+    local function spawnCL(name, at)
+        local cls = loadObject(BPP .. name .. "." .. name .. "_C")
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        if not (cls and gs and valid(gs)) then return nil, "no class or GameplayStatics" end
+        local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = at.X, Y = at.Y, Z = at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+        local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(ST.pc(), cls, t, 1, nil, 1) end)
+        if not okB or x == nil or not valid(x) then return nil, "no actor" end
+        pcall(function() x.WorldPosition = { X = at.X, Y = at.Y, Z = at.Z } end)
+        local okF, a = pcall(function() return gs:FinishSpawningActor(x, t, 1) end)
+        if not okF or a == nil or not valid(a) then return nil, "its spawn didn't finish" end
+        return a, "up"
+    end
+    local function aim() if CLT.eye and CLT.tgt then ST.look(CLT.eye, CLT.tgt, 60) end end
+    local SEQ = { { 0, 500000 }, { 40000, 500000 }, { 0, 500000 }, { 400000, 500000 }, { 4000000, 5000000 }, { 0, 500000 } }
+    for v, view in ipairs({ { "over", 5000 }, { "under", -1800 } }) do
+        A.do_(function()
+            local pl = ST.plane()
+            if not pl then ST.info("cl3: no plane"); return end
+            CLT.tgt = ST.frame(pl, 600000, 0, 0)
+            CLT.eye = ST.frame(pl, 0, 0, view[2] * 100)
+            if v == 1 then
+                local a, why = spawnCL("BP_CloudLight_Base", CLT.tgt)
+                CLT.a = a
+                if a then
+                    pcall(function() a.LightFalloffExponent = 4 end)
+                    pcall(function() a.LightColor = { R = 215, G = 225, B = 255, A = 255 } end)
+                    pcall(function() a.bUseInverseSquaredFalloff = false end)
+                end
+                ST.info("cl3: the bare light in the layer 6 km ahead of your plane: " .. why)
+            elseif CLT.a and valid(CLT.a) then
+                pcall(function() CLT.a.WorldPosition = { X = CLT.tgt.X, Y = CLT.tgt.Y, Z = CLT.tgt.Z } end)
+                pcall(function() CLT.a:K2_SetActorLocation(CLT.tgt, false, {}, true) end)
+            end
+            local ok, why = ST.look(CLT.eye, CLT.tgt, 60)
+            ST.info(string.format("cl3 %s: a still camera %.1f km %s your plane, on the light's spot: %s", view[1],
+                math.abs(view[2]) / 1000, view[2] > 0 and "over" or "under", tostring(why)))
+        end)
+        A.wait(2.5)
+        for i, k in ipairs(SEQ) do
+            A.do_(function()
+                if CLT.a and valid(CLT.a) then
+                    pcall(function() CLT.a.LightBrightness = k[1] end)
+                    pcall(function() CLT.a.AttenuationRadius = k[2] end)
+                end
+            end)
+            A.wait(0.6)
+            A.do_(function() aim(); rd(string.format("%s %d set %d", view[1], i, k[1])) end)
+            A.do_(function() ST.shot(string.format("cl3_%s_%d_%d", view[1], i, k[1])) end)
+            A.wait(0.4)
+        end
+    end
+    A.do_(function() if CLT.a and valid(CLT.a) then pcall(function() CLT.a:K2_DestroyActor() end) end; CLT.a = nil end)
+    -- Mission 12's light at 4x, from over the layer again
+    A.do_(function()
+        local pl = ST.plane()
+        if not pl then return end
+        CLT.tgt = ST.frame(pl, 600000, 0, 0)
+        CLT.eye = ST.frame(pl, 0, 0, 500000)
+        ST.look(CLT.eye, CLT.tgt, 60)
+    end)
+    A.wait(2.5)
+    A.do_(function() aim(); ST.shot("cl3_m12_0_before") end)
+    A.wait(0.4)
+    A.do_(function()
+        local a, why = spawnCL("BP_CloudLight_Ms012_PodargeDead", CLT.tgt)
+        if a then pcall(function() a.CustomTimeDilation = 4 end) end
+        CLT.a, CLT.t0 = a, os.clock()
+        aim()
+        ST.info("cl3 m12: Mission 12's light at 4x at the spot: " .. why)
+    end)
+    for i = 1, 10 do
+        A.do_(function()
+            aim()
+            rd(string.format("m12 +%.2f s", os.clock() - CLT.t0))
+            if i >= 3 and i <= 8 then ST.shot(string.format("cl3_m12_%d", i)) end
+        end)
+        A.wait(0.25)
+    end
+    A.do_(function() ST.lookBack() end)
+end
+-- (2026-11-17) cloudlit4: run 67's still cameras swung white / black with each change of the light (the eye adaptation:
+-- off -> a white frame, 40k -> a black one), so nothing local could be read. Here the eye adaptation frozen
+-- (ShowFlag.EyeAdaptation 0: a fixed exposure from the night's min / max; put back after) and two still cameras under
+-- the storm's cloud base (1.8 km under your plane; 6 km and 12 km from the light's spot in the layer): off, 40k, off,
+-- 400k, off, 4M (radius 50 km), off; then Mission 12's light at 4x from the near one.
+SUITES.cloudlit4 = function()
+    intoRun()
+    local CLT = { t0 = 0 }
+    local BPP = "/Game/Blueprints/Cloudly/CloudLight/"
+    local function cmd(c)
+        local ks, pc = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary"), ST.pc()
+        local ok = valid(ks) and pc and pcall(function() ks:ExecuteConsoleCommand(pc, c, pc) end)
+        ST.info("cl4: console `" .. c .. "`: " .. tostring(ok))
+    end
+    A.do_(function()
+        local S = (((CFG.specials or {}).fleet or {}).sky or {}).storm
+        if type(S) == "table" and type(S.lightning) == "table" then S.lightning.enabled = false end
+        if tostring(ST.conf.night or "1") == "1" and IFSKY and IFSKY.step then IFSKY.step(3) end
+    end)
+    A.wait(12)
+    local function g(v) if type(v) ~= "number" then return "?" end; return string.format("%.4g", v) end
+    local function rd(tag)
+        local V = SKY and SKY.viewCached and SKY.viewCached(os.clock(), nil)
+        if not V then return end
+        local drawn = "?"
+        for _, r in ipairs(V.rend or {}) do
+            local n = 0
+            pcall(function()
+                r.obj.Data.SkyParamsRO:ForEach(function(_, e)
+                    n = n + 1
+                    if n == 1 then local t = e:get().EffectLightTransientParams; drawn = g(t.LightBrightness) .. " r " .. g(t.AttenuationRadius) end
+                end)
+            end)
+        end
+        ST.info(string.format("cl4 %s: drawn %s", tag, drawn))
+    end
+    local function spawnCL(name, at)
+        local cls = loadObject(BPP .. name .. "." .. name .. "_C")
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        if not (cls and gs and valid(gs)) then return nil, "no class or GameplayStatics" end
+        local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = at.X, Y = at.Y, Z = at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+        local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(ST.pc(), cls, t, 1, nil, 1) end)
+        if not okB or x == nil or not valid(x) then return nil, "no actor" end
+        pcall(function() x.WorldPosition = { X = at.X, Y = at.Y, Z = at.Z } end)
+        local okF, a = pcall(function() return gs:FinishSpawningActor(x, t, 1) end)
+        if not okF or a == nil or not valid(a) then return nil, "its spawn didn't finish" end
+        return a, "up"
+    end
+    local function aim() if CLT.eye and CLT.tgt then ST.look(CLT.eye, CLT.tgt, 60) end end
+    A.do_(function()
+        local pl = ST.plane()
+        if not pl then ST.info("cl4: no plane"); return end
+        CLT.tgt = ST.frame(pl, 600000, 0, 0)
+        CLT.base = ST.frame(pl, 0, 0, -180000)
+        CLT.F = pl:GetActorForwardVector()
+        local a, why = spawnCL("BP_CloudLight_Base", CLT.tgt)
+        CLT.a = a
+        if a then
+            pcall(function() a.LightFalloffExponent = 4 end)
+            pcall(function() a.LightColor = { R = 215, G = 225, B = 255, A = 255 } end)
+            pcall(function() a.bUseInverseSquaredFalloff = false end)
+        end
+        ST.info("cl4: the bare light in the layer 6 km ahead of your plane: " .. why)
+        cmd("ShowFlag.EyeAdaptation 0")
+    end)
+    local SEQ = { { 0, 500000 }, { 40000, 500000 }, { 0, 500000 }, { 400000, 500000 }, { 0, 500000 }, { 4000000, 5000000 }, { 0, 500000 } }
+    for v, back in ipairs({ 0, 600000 }) do
+        A.do_(function()
+            if not (CLT.base and CLT.F) then return end
+            CLT.eye = { X = CLT.base.X - CLT.F.X * back, Y = CLT.base.Y - CLT.F.Y * back, Z = CLT.base.Z }
+            aim()
+        end)
+        A.wait(1.5)
+        for i, k in ipairs(SEQ) do
+            A.do_(function()
+                if CLT.a and valid(CLT.a) then
+                    pcall(function() CLT.a.LightBrightness = k[1] end)
+                    pcall(function() CLT.a.AttenuationRadius = k[2] end)
+                end
+            end)
+            A.wait(0.6)
+            A.do_(function() aim(); rd(string.format("view %d step %d set %d", v, i, k[1])) end)
+            A.do_(function() ST.shot(string.format("cl4_v%d_%d_%d", v, i, k[1])) end)
+            A.wait(0.4)
+        end
+    end
+    A.do_(function() if CLT.a and valid(CLT.a) then pcall(function() CLT.a:K2_DestroyActor() end) end; CLT.a = nil end)
+    A.do_(function()
+        if not (CLT.base and CLT.F) then return end
+        CLT.eye = { X = CLT.base.X, Y = CLT.base.Y, Z = CLT.base.Z }
+        aim()
+    end)
+    A.wait(1.5)
+    A.do_(function() aim(); ST.shot("cl4_m12_0_before") end)
+    A.wait(0.4)
+    A.do_(function()
+        local a, why = spawnCL("BP_CloudLight_Ms012_PodargeDead", CLT.tgt)
+        if a then pcall(function() a.CustomTimeDilation = 4 end) end
+        CLT.a, CLT.t0 = a, os.clock()
+        aim()
+        ST.info("cl4 m12: Mission 12's light at 4x at the spot: " .. why)
+    end)
+    for i = 1, 10 do
+        A.do_(function()
+            aim()
+            rd(string.format("m12 +%.2f s", os.clock() - CLT.t0))
+            if i >= 3 and i <= 8 then ST.shot(string.format("cl4_m12_%d", i)) end
+        end)
+        A.wait(0.25)
+    end
+    A.do_(function() cmd("ShowFlag.EyeAdaptation 2"); ST.lookBack() end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()

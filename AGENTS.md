@@ -446,11 +446,20 @@ Copy a working stock pattern before inventing a new one.
     and draws as WorldGridMaterial. AC8's lightning bolts: VFX/ResourceAsset/Mesh/Lightning/SM_Thunder* (about 100 m tall)
     with MI_NearCloudLightning001 drew white bolts with a blue edge (runs 60-61, the fleet's storm in 0.74.87).
 
-70. Cloudly's clouds take no light from Lua: an engine PointLight (1e7-1e11, 6-15 km radius, run 57) and the stock
-    BP_CloudLight_* (their 10 m default radius; with 4 km they ramp up over seconds in their own colours, run 55) lit
-    nothing in the storm night; the level's Cloudly actor has no EffectLight. NS_CloudLightning (the game's cloud
-    lightning) draws only a faint teal glow at any size or Color, and Niagara user parameters (Color, BeamLength) take
-    only when set on a system spawned inactive, before Activate (runs 53-58). Show lightning with rule 69's bolt meshes.
+70. Cloudly lights its clouds from ONE effect light, and only an ALiveCloudLight drives it: its own fields (LightBrightness,
+    AttenuationRadius cm, LightFalloffExponent, LightColor, WorldPosition cm) go into the sky asset's
+    EffectLightTransientParams and the drawn copy a tick later, the Cloudly actor's bUseEffectLight off while it's up.
+    BP_CloudLight_Base (no timeline) is a light Lua drives a tick at a time. Engine PointLights never light the clouds (run
+    57); no level has the Cloudly actor's EffectLight component (none in Missions 4, 9, 12, 22); writing the asset's light
+    straight is zeroed while bUseEffectLight is on. The stock lights run fixed curves: Mission 9's peaks near 15 (useless),
+    Mission 12's ~40,000 at 4.1-6.8 s after spawn (radius 5 km), Mission 22's ~7,000 from 5 s. At the storm night, seen
+    from 6-12 km under the cloud base with the eye adaptation frozen (ShowFlag.EyeAdaptation 0), 40,000 showed nothing
+    and 400,000 (radius 5 km) turned the cloud base white within 0.6 s, lingering 0.6 s+ after it went off; 4,000,000
+    with a 50 km radius blacked the picture out for seconds (runs 66-68). Your plane flies IN the storm's cloud layer
+    (ICING UP): its own view whites out and its exposure swings, so judge cloud light from a still camera outside the
+    clouds (runs 65-66 misread that way; runs 55-57 pictured the stock lights before their curves began). NS_CloudLightning
+    (the game's cloud lightning) draws only a faint teal glow at any size or Color, and Niagara user parameters (Color,
+    BeamLength) take only when set on a system spawned inactive, before Activate (runs 53-58). Bolts: rule 69's meshes.
 
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
