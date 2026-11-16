@@ -3370,3 +3370,7 @@ game. The work was split by file between agents; the builds ran in sequence in t
   4-10 km ahead of your camera at 400k-1M, 5-10 km round: no clear change in your own view's pictures (auto exposure on,
   the view turning); 71 (round30, 10/10): the surfacing with the flashes on, 0 view reverts. The glow from your own view is
   not confirmed yet.
+- INSTALLED 2026-11-17 for the user to fly ("I'll fly it myself this time"), over 0.74.66 (backup:
+  build/backup/install_before_0.74.89); her survival.ini, profile, map notes and the Mod Launcher's toggle kept, her
+  subtitles.ini the same as the repo's. The storm comes with the fleet's night (round ~27, the arc from round 25) and
+  clears at round 35; Ctrl+\ four times puts Survival's own cloud flash 5 km ahead of you in any round.
