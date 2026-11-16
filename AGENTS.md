@@ -428,6 +428,16 @@ Copy a working stock pattern before inventing a new one.
     not be loaded from SurvivalMode_P"). The user's file had every mod off on 2026-11-16; tools/autotest/kit.py turns it on
     for a run and puts her file back byte-identical.
 
+68. A stock cutscene's VFX layer plays in Survival's level, exactly as the cutscene draws it, where we want it:
+    `LevelSequencePlayer.CreateLevelSequencePlayer(pc, <its CLS_..._VFX sequence>, settings, {})` (UE4SS Lua; the player's
+    GetOuter is its LevelSequenceActor), the actor's `bOverrideInstanceData = true` and `DefaultInstanceData.TransformOrigin`
+    set before Play moves every spawned piece by exactly that offset (its pieces stand at the cutscene's own spots
+    otherwise), and its spawnables go when the sequence ends unless `bPauseAtEnd` holds it at its last frame (they live on
+    and simulate; Stop takes them off). Each piece keeps its cutscene scale and user parameters, which a bare
+    SpawnSystemAtLocation of the same system doesn't (Mission 25's Spear strike: a small puff at x1). Pieces tied to the
+    cutscene's camera (rains) come up at its origin: hide them. Confirmed by the autotest's seq suite (runs 33-34) and the
+    railcannon's impact in 0.74.82 (run 35, 40/40), 2026-11-16.
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
