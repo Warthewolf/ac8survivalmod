@@ -374,15 +374,22 @@ SUITES.tanacorn = function()
     end)
     A.wait(12)
     A.do_(function()
+        local REST = { T16_FWD = 73, CIWS_1 = 177, LASER_FWD_L = 100 }     -- (their rest yaws in runs 12-20)
         for _, s in ipairs({ "T16_FWD", "CIWS_1", "LASER_FWD_L" }) do
             local yaws = {}
             for i = ST.marks.m0 + 1, ST.n do
                 local y = ST.lines[i] and ST.lines[i]:match("live %+%d+ s: Part_" .. s .. " %(.-barrel yaw (%-?[%d%.]+)")
                 if y then yaws[#yaws + 1] = y end
             end
+            -- (a barrel held on you reads the same each line: off its rest angle counts; run 23: T16_FWD 154.0 twice, rest
+            -- 71-75 in every run before. The CIWS and LASER are point defence: at rest with your plane ~5 km off)
             local moved = false
-            for k = 2, #yaws do if yaws[k] ~= yaws[1] then moved = true end end
-            ST.check(moved, "Part_" .. s .. "'s barrel turns", #yaws .. " readings: " .. table.concat(yaws, " ", math.max(1, #yaws - 5)))
+            for k = 1, #yaws do
+                if yaws[k] ~= yaws[1] or math.abs((tonumber(yaws[k]) or REST[s]) - REST[s]) > 10 then moved = true end
+            end
+            local what = #yaws .. " readings: " .. table.concat(yaws, " ", math.max(1, #yaws - 5)) .. " (rest ~" .. REST[s] .. ")"
+            if s == "T16_FWD" then ST.check(moved, "Part_T16_FWD's barrel turned onto you", what)
+            else ST.info("Part_" .. s .. (moved and " turned: " or " at rest (point defence, out of its reach): ") .. what) end
         end
     end)
     A.picture("tanacorn_whole", function() return ST.frame(C.hull, -30000, 90000, 22000) end,
