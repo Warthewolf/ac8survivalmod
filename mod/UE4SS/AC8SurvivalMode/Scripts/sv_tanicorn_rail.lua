@@ -5,16 +5,17 @@
 -- TANI (TANI.rail, its data, is sv_tanicorn.lua's), its settings are CFG.specials.fleet.railcannon (sv_fleet.lua, read when
 -- they're used). Each object kept by its address and name, checked before anything is done to it (hard rule 59); every
 -- call into the game in a pcall.
--- The sub-railguns (RAILGUN_L / _R, Ctrl+L's live hull): each one's TurretPoseableMesh rests stowed (its lift 6 m down,
---   its hatches shut). Seen by the live watch (its armour on), after_s on its Deploy's end pose is written from here in
---   component space, as quaternion transforms (never rotators: the pitch-key trap), stepped over deploy_s: the lift
---   (0, 0, -600) -> (0, 0, 0) cm, Hatch_n / Hatch_p 105 deg about X at (0, +-460, -30). Then its lift is read back
---   (GetBoneLocationByName, component space: as written) and SOC_Gun_01's height (as drawn); only with the lift up (within
---   up_cm of 0) AND the muzzle raised as drawn (SOC_Gun_01 at least raised_cm up in the mesh: stowed -196, raised ~+404) is it
---   ordered, never from inside the hull: its remote event RE_SV_TaniRailOrderL / RE_SV_TaniRailOrderR (host or solo; held while the STORE is open),
---   its arm's railgun HUD written first (hard rule 45: IsDispRadarMap, ForceAlertDisp, HUDControl 1, read back). No
---   read-back, no order. Its barrel watched move_s after (hard rule 64): one that never moved gets its order again, up to
---   `tries`, and again move_s after the STORE shuts. Its lift read every check_s and written again if it fell back.
+-- The sub-railguns (RAILGUN_L / _R, Ctrl+L's live hull; route (iv) since 2026-11-16, the first in-game test: Lua's
+--   bone writes on one TurretPoseableMesh read back but were never drawn): each one's LiftMesh (its pedestal and hatch
+--   doors, SK_SV_Tani_RAILGUN_<side>_LIFT) rests stowed (the lift 6 m down, the hatches shut) and its house rides the lift's
+--   SOC_Lift on TurretPoseableMesh. Seen by the live watch (its armour on), after_s on LiftMesh plays its Deploy (the
+--   railcannon's calls: SetPosition 0, SetPlayRate 1, Play); deploy_s on, SOC_Gun_01's height over the part's actor is
+--   read (as drawn: stowed ~-196, raised ~+404): only with it at least raised_cm is the gun ordered, never from inside the
+--   hull (its Deploy played again up to `writes` times, then left in): its remote event RE_SV_TaniRailOrderL /
+--   RE_SV_TaniRailOrderR (host or solo; held while the STORE is open), its arm's railgun HUD written first (hard rule 45:
+--   IsDispRadarMap, ForceAlertDisp, HUDControl 1, read back). No read-back, no order. Its barrel watched move_s after
+--   (hard rule 64): one that never moved gets its order again, up to `tries`, and again move_s after the STORE shuts. Its
+--   muzzle read every check_s and its Deploy played again if it fell back.
 -- The railcannon (Ctrl+H, on Ctrl+L's live hull): shielded while stowed from the first tick it's seen (the Alicorn's part
 --   flags SPC.V.PART_FLAGS and SetIsInvincible). A press plays its Deploy (AS_SV_Tani_RAILCANNON_Deploy on its TurretMesh,
 --   the VLS lids' calls); at deploy_s, its muzzle up as drawn (SOC_Gun_01 at least raised_cm up; else played again redeploys
@@ -32,8 +33,9 @@
 --   while you're landed with nobody else flying. Ctrl+H again: stowed, shielded and stopped. Refused outside a run, on a
 --   joiner, in the STORE, with no live hull, with no Part_RAILCANNON child or with it down.
 -- Logged (the railguns `tanicorn rail: ...`, the railcannon `tanicorn rc: ...`):
---   `tanicorn rail: RAILGUN_L Part_RAILGUN_L <name> seen: deploying in 3 s ...`, `... deploying at +T s over 2.2 s: lift z
---   -600 cm, SOC_Gun_01 z -196 cm in the mesh ...`, `... deployed: lift z 0 cm (up), SOC_Gun_01 z 404 cm in the mesh ...`
+--   `tanicorn rail: RAILGUN_L Part_RAILGUN_L <name> seen: deploying in 3 s ...`, `... deploying at +T s: its LiftMesh's
+--   Deploy played (...), checked 2.6 s on; SOC_Gun_01 z -196 cm over the part ...`, `... deployed: SOC_Gun_01 z 404 cm over
+--   the part (up), its Deploy at 2.17 s`
 --   (or `... NOT ordered: ...` and why), `... RE_SV_TaniRailOrderL fired (try 1, ...); railgun HUD <launcher class>:
 --   written; read back IsDispRadarMap true, ForceAlertDisp true, HUDControl 1`, `... its barrel moves (...) N s after the
 --   order: it took` (or `... fired again (try 2: ...)`, `... gave up ...`);
@@ -46,10 +48,11 @@
 --   `tanicorn rc: Part_RAILCANNON shot down at +T s (...)`, `tanicorn rc: cycle over (<why>) ...`.
 -- DEV ONLY BEGIN
 do
-TANI.railgun = { after_s = 3, deploy_s = 2.2, up_cm = 50, raised_cm = 300, writes = 2, move_s = 8, move_deg = 2, tries = 4, check_s = 5,
-                  tick_always = true }   -- ((2026-11-16) its pose ticked always before the deploy: gunStep)
+-- ((2026-11-16, route (iv)) deploy_s: its LiftMesh's Deploy (2.167 s, the lift's end) played out; raised_cm: SOC_Gun_01 over
+-- the part's actor (stowed ~-196, raised ~+404); writes: the plays of its Deploy before it's left in
+TANI.railgun = { after_s = 3, deploy_s = 2.6, raised_cm = 300, writes = 2, move_s = 8, move_deg = 2, tries = 4, check_s = 5 }
 local ORDER = { RAILGUN_L = "RE_SV_TaniRailOrderL", RAILGUN_R = "RE_SV_TaniRailOrderR" }   -- (the build's remote events)
-local MUZZLE, DEPLOY_LEN, HATCH_DEG = "SOC_Gun_01", 2.167, 105   -- (the cooked Deploy's lift end, its hatches' turn)
+local MUZZLE = "SOC_Gun_01"
 local FLAGS0 = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
 local FLAG_NAMES = { "bShowHUDBox", "bIsNotLockonTarget", "bIsNotFCSTargets", "bIsInvincible" }
 local NIAG, AK = "/Script/Niagara.Default__NiagaraFunctionLibrary", "/Script/AkAudio.Default__AkGameplayStatics"
@@ -104,7 +107,6 @@ local function zOf(f)                                     -- a vector's Z from a
     if ok and type(z) == "number" then return z end
     return nil, ok and "no Z read" or tostring(z):sub(1, 80)
 end
-local function liftZ(m) return zOf(function() return m:GetBoneLocationByName(FName("lift"), 1) end) end   -- (as written)
 local function sockZ(m)                                   -- SOC_Gun_01's height in the mesh (as drawn: RTS_Component 2)
     local z = zOf(function() return m:GetSocketTransform(FName(MUZZLE), 2).Translation end)
     if z then return z end
@@ -211,22 +213,33 @@ function TANI.railRow(fcs, k)
 end
 
 ---------------------------------------------------------------------------------------------------- the sub-railguns
--- one railgun's Deploy at its own time u (s, the cooked Deploy's clock): the hatches over 0-1.167 s, the lift over
--- 0.667-2.167 s, each a smoothstep (the cooked keys within 0.1 %); the bones that failed
-local ONE = { X = 1, Y = 1, Z = 1 }
-local function ss(a, b, t) local f = math.min(1, math.max(0, (t - a) / (b - a))); return f * f * (3 - 2 * f) end
-local function qx(deg) local h = math.rad(deg) / 2; return { X = math.sin(h), Y = 0, Z = 0, W = math.cos(h) } end
-local function pose(m, u)
-    local d, z = HATCH_DEG * ss(0, 1.167, u), -600 + 600 * ss(0.667, DEPLOY_LEN, u)
-    local bad = {}
-    for _, b in ipairs({ { "lift", { X = 0, Y = 0, Z = 0, W = 1 }, 0, 0, z }, { "Hatch_n", qx(-d), 0, 460, -30 },
-                         { "Hatch_p", qx(d), 0, -460, -30 } }) do
-        local t = { Rotation = b[2], Translation = { X = b[3], Y = b[4], Z = b[5] }, Scale3D = ONE }
-        local ok, err = pcall(function() m:SetBoneTransformByName(FName(b[1]), t, 1) end)   -- (EBoneSpaces 1: component)
-        if not ok then bad[#bad + 1] = b[1] .. " (" .. tostring(err):sub(1, 60) .. ")" end
+-- (2026-11-16, route (iv): the first in-game test, Lua's bone writes on one TurretPoseableMesh read back but never drawn)
+-- a sub-railgun's lift is its own mesh: LiftMesh (SK_SV_Tani_RAILGUN_<side>_LIFT, its pedestal and hatch doors) plays its
+-- Deploy as the railcannon's TurretMesh does (which drew its +19 m in game), and the house rides its SOC_Lift on
+-- TurretPoseableMesh. So the muzzle's height is read in the PART's frame (over its actor): the house's own mesh space
+-- never moves now
+local SKM = "/Script/Engine.SkeletalMeshComponent"
+local function liftMeshOf(o)                              -- its LiftMesh, or nil (a container cooked before route (iv))
+    for _, c in ipairs((SPC and SPC.V and SPC.V.comps) and SPC.V.comps(o, SKM) or {}) do
+        local ok, n = pcall(function() return c:GetFName():ToString() end)
+        if ok and n == "LiftMesh" then return c end
     end
-    return bad
+    return nil
 end
+local function muzzleUp(e)                                -- SOC_Gun_01 over the part's actor (cm, as drawn), or nil and why
+    return zOf(function()
+        local s, a = e.mesh:GetSocketLocation(FName(MUZZLE)), e.o:K2_GetActorLocation()
+        return { Z = s.Z - a.Z }
+    end)
+end
+local function playLift(m)                                -- its Deploy from the start: the calls that failed
+    local fails = {}
+    if not pcall(function() m:SetPosition(0, false) end) then fails[#fails + 1] = "SetPosition 0 FAILED" end
+    if not pcall(function() m:SetPlayRate(1) end) then fails[#fails + 1] = "SetPlayRate FAILED" end
+    if not pcall(function() m:Play(false) end) then fails[#fails + 1] = "Play FAILED" end
+    return fails
+end
+local function liftPos(e) local p = "?"; pcall(function() p = string.format("%.2f", e.lift:GetPosition()) end); return p end
 local function gunLog(e, s) log("tanicorn rail: " .. e.k.key .. " " .. s) end
 local function barrel(e)                                  -- its barrel's { yaw, pitch, ... } (sv_tanicorn.lua aim), or nil
     if not TANI.aim then return nil end
@@ -240,6 +253,11 @@ local function railHud(e)
     pcall(function() lm = e.o.FireControlSystemComponent.AllArms[1].LauncherModule end)
     if lm == nil then return "not written: no arm / launcher read", false end
     pcall(function() cls = lm:GetClass():GetFName():ToString() end)
+    -- ((2026-11-16) a BoneControl arm, the build's since the TripleRailCannon never turned its barrels: no railgun HUD fields
+    -- to write, as the stock Alicorn's sub-railguns (LauncherAlicornRailgun): done, nothing to write)
+    if cls == "LiveFCSModule_LauncherBoneControl" or cls == "LiveFCSModule_LauncherAlicornRailgun" then
+        return cls .. ": no railgun HUD fields (the stock Alicorn's sub-railguns have none)", true
+    end
     local okW = pcall(function() lm.IsDispRadarMap = true; lm.ForceAlertDisp = true; lm.HUDControl = 1 end)
     local rb = {}
     for _, f in ipairs({ "IsDispRadarMap", "ForceAlertDisp", "HUDControl" }) do
@@ -313,15 +331,17 @@ local function orderCheck(e, now)                        -- (hard rule 64) its b
     orderTry(e, now, string.format("again: its barrel still at yaw %.1f pitch %.1f %.0f s on%s", a.yaw, a.pitch, now - e.orderAt,
         e.storeSeen and ", the STORE was open" or ""))
 end
-local function liftCheck(e, now)                          -- its lift read again every check_s, written again if it fell back
+local function liftCheck(e, now)                          -- its muzzle read again every check_s: its Deploy again if it fell back
     local G = TANI.railgun
     if now < (e.liftAt or 0) then return end
     e.liftAt = now + G.check_s
-    local z = liftZ(e.mesh)
-    if z and math.abs(z) > G.up_cm then
-        pose(e.mesh, DEPLOY_LEN)
+    local z = muzzleUp(e)
+    if z and z < G.raised_cm and e.lift then
+        local was = liftPos(e)
+        playLift(e.lift)
         e.falls = (e.falls or 0) + 1
-        gunLog(e, string.format("its lift fell back to z %.0f cm (%d): the end pose written again", z, e.falls))
+        gunLog(e, string.format("its muzzle fell back to z %.0f cm over the part (%d; its Deploy at %s s): its Deploy played again",
+            z, e.falls, was))
     end
 end
 local function gunStep(e, now, dt)
@@ -330,50 +350,37 @@ local function gunStep(e, now, dt)
         if now - e.seenAt < G.after_s then return end
         e.mesh = TANI.partMesh and TANI.partMesh(e.o, e.k)
         if not e.mesh then e.state = "failed"; gunLog(e, "NOT ordered: no TurretPoseableMesh (PoseableMeshComponent) found on it"); return end
-        e.state, e.t = "deploying", 0
-        -- ((2026-11-16, the first in-game test: the lift read back up, SOC_Gun_01 stayed stowed as drawn) a PoseableMesh
-        -- refreshes its bones from what's written only while it ticks its pose, and the railguns' (mount()) had no
-        -- VisibilityBasedAnimTickOption: OnlyTickPoseWhenRendered, so nothing written was drawn with her off your screen.
-        -- The railcannon, which deployed, ticks always (AlwaysTickPoseAndRefreshBones = 0). Set here before the writes
-        -- (G.tick_always), read back in the line)
-        local tick = "left as cooked"
-        if G.tick_always ~= false then
-            pcall(function() e.mesh.VisibilityBasedAnimTickOption = 0 end)
-            pcall(function() e.mesh.bEnableUpdateRateOptimizations = false end)
-            local okT, v = pcall(function() return e.mesh.VisibilityBasedAnimTickOption end)
-            tick = "its pose ticked always (VisibilityBasedAnimTickOption read back " .. tostring(okT and v or "?") .. ")"
+        e.lift = liftMeshOf(e.o)
+        if not e.lift then
+            e.state = "failed"
+            gunLog(e, "NOT ordered: no LiftMesh on it (its container cooked before route (iv), 2026-11-16? tools/tanicorn/build.sh)")
+            return
         end
-        gunLog(e, string.format("deploying at +%.1f s over %.1f s: lift z %s cm, SOC_Gun_01 z %s cm in the mesh (stowed: -600 / -196); %s",
-            now - e.seenAt, G.deploy_s, cm(liftZ(e.mesh)), cm(sockZ(e.mesh)), tick))
+        local z0 = muzzleUp(e)
+        local fails = playLift(e.lift)
+        e.state, e.t, e.plays = "deploying", 0, 1
+        gunLog(e, string.format("deploying at +%.1f s: its LiftMesh's Deploy played (%s), checked %s s on; SOC_Gun_01 z %s cm over "
+            .. "the part (stowed ~-196)", now - e.seenAt, #fails > 0 and table.concat(fails, ", ") or "SetPosition 0, SetPlayRate 1, Play",
+            g(G.deploy_s), cm(z0)))
     elseif e.state == "deploying" then
         if paused() then return end
         e.t = e.t + dt
-        for _, b in ipairs(pose(e.mesh, math.min(1, e.t / math.max(0.05, G.deploy_s)) * DEPLOY_LEN)) do e.bad[#e.bad + 1] = b end
-        if e.t >= G.deploy_s then e.state, e.writes = "check", 1 end
-    elseif e.state == "check" then                       -- (a tick after its last write: the pose drawn since)
-        local z, why = liftZ(e.mesh)                     -- (as written)
-        local sz, swhy = sockZ(e.mesh)                   -- (as drawn: where its fire control fires from)
-        local fails = #e.bad > 0 and ("; writes that failed: " .. table.concat(e.bad, ", ", 1, math.min(3, #e.bad))) or ""
-        local liftUp = z ~= nil and math.abs(z) <= G.up_cm
-        if liftUp and sz and sz >= G.raised_cm then
+        if e.t >= G.deploy_s then e.state = "check" end
+    elseif e.state == "check" then                       -- (its Deploy played out: the muzzle as drawn, where it fires from)
+        local sz, why = muzzleUp(e)
+        if sz and sz >= G.raised_cm then
             e.state = "order"
-            gunLog(e, string.format("deployed: lift z %.0f cm (up), SOC_Gun_01 z %.0f cm in the mesh (raised ~+404)%s", z, sz, fails))
+            gunLog(e, string.format("deployed: SOC_Gun_01 z %.0f cm over the part (up), its Deploy at %s s", sz, liftPos(e)))
             orderTry(e, now, "its deploy read back")
-        elseif z and (sz or not liftUp) and e.writes < G.writes then
-            e.writes = e.writes + 1
-            pose(e.mesh, DEPLOY_LEN)
-            gunLog(e, liftUp and string.format("its lift reads z %.0f cm (up) but SOC_Gun_01 z %.0f cm in the mesh as drawn after its "
-                .. "deploy: the end pose written again (%d of %s)", z, sz, e.writes, g(G.writes))
-                or string.format("its lift reads z %.0f cm after its deploy: the end pose written again (%d of %s)", z, e.writes, g(G.writes)))
+        elseif sz and e.plays < G.writes then
+            e.plays, e.state, e.t = e.plays + 1, "deploying", 0
+            local fails = playLift(e.lift)
+            gunLog(e, string.format("its Deploy at %s s but SOC_Gun_01 z %.0f cm over the part: played again (%d of %s)%s", liftPos(e),
+                sz, e.plays, g(G.writes), #fails > 0 and ("; " .. table.concat(fails, ", ")) or ""))
         else
             e.state = "failed"
-            local r
-            if not z then r = "its lift can't be read back (" .. tostring(why) .. ")"
-            elseif not liftUp then r = string.format("its lift still reads z %.0f cm after %d writes (the pose doesn't take?)", z, e.writes)
-            elseif not sz then r = "SOC_Gun_01 can't be read back as drawn (" .. tostring(swhy) .. ")"
-            else r = string.format("SOC_Gun_01 still z %.0f cm in the mesh as drawn after %d writes, its lift z %.0f cm (written, "
-                .. "not drawn?)", sz, e.writes, z) end
-            gunLog(e, "NOT ordered: " .. r .. ": a gun inside the hull isn't ordered" .. fails)
+            gunLog(e, "NOT ordered: " .. (sz and string.format("SOC_Gun_01 still z %.0f cm over the part after %d plays (its Deploy at %s s)",
+                sz, e.plays, liftPos(e)) or ("SOC_Gun_01 can't be read (" .. tostring(why) .. ")")) .. ": a gun inside the hull isn't ordered")
         end
     elseif e.state == "order" then
         orderTry(e, now, "its deploy read back")
@@ -390,9 +397,9 @@ local function gunsTick(now, dt)
         local s = (not k.cannon) and seen and seen[k.key] or nil
         local e = RG[k.key]
         if s and same(s) and not (e and e.a == s.a and e.name == s.name) then   -- (new, or another object there now)
-            RG[k.key] = { o = s.o, a = s.a, name = s.name, k = k, state = "wait", seenAt = now, t = 0, writes = 0, bad = {}, tries = 0 }
-            gunLog(RG[k.key], string.format("Part_%s %s seen: deploying in %s s (its lift and hatches written in component space, then "
-                .. "read back: ordered only with its lift up)", k.key, short(s.o), g(TANI.railgun.after_s)))
+            RG[k.key] = { o = s.o, a = s.a, name = s.name, k = k, state = "wait", seenAt = now, t = 0, plays = 0, tries = 0 }
+            gunLog(RG[k.key], string.format("Part_%s %s seen: deploying in %s s (its LiftMesh's Deploy played, its muzzle then read "
+                .. "over the part: ordered only once it's up)", k.key, short(s.o), g(TANI.railgun.after_s)))
         end
     end
     for key, e in pairs(RG) do

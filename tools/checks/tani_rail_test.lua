@@ -178,29 +178,27 @@ local pawn = obj("pawn", { K2_GetActorRotation = function() return { Yaw = 0 } e
 survivalPC = obj("pc", { Pawn = pawn, ClientStartCameraShake = function() SHAKES = SHAKES + 1 end })
 AF = { max = 250, full = 250, hp = 250, down = false, bomb = 0, bombBase = 0, pending = {} }
 
--- a railgun: its TurretPoseableMesh keeps what's written (unless stuck), its barrel turned by the test (yaw, pitch)
-local function railgun(key, name, at, part)
-    local pm = { writes = {}, bones = { lift = { X = 0, Y = 0, Z = -600 } }, yaw = 0, pitch = 10 }
+-- a railgun (route (iv), 2026-11-16): its LiftMesh (a SkeletalMeshComponent) plays its Deploy (stuck: it never rises),
+-- its house on TurretPoseableMesh rides it: SOC_Gun_01 over the part 6 m higher once its lift is up; the barrel turned by
+-- the test (yaw, pitch). noLift: no LiftMesh (a container cooked before route (iv))
+local function railgun(key, name, at, part, noLift)
+    local pm = { yaw = 0, pitch = 10 }
+    local lift = { calls = {}, up = false, rate = 1 }
+    function lift:GetFName() return { ToString = function() return "LiftMesh" end } end
+    function lift:SetPosition(t, fire) self.calls[#self.calls + 1] = "SetPosition " .. t; if t == 0 then self.up = false end end
+    function lift:SetPlayRate(r) self.calls[#self.calls + 1] = "SetPlayRate " .. r; self.rate = r end
+    function lift:Play(loop)
+        self.calls[#self.calls + 1] = "Play " .. tostring(loop)
+        SEQ[#SEQ + 1] = "play " .. key
+        if not self.stuck and self.rate > 0 then self.up = true end
+    end
+    function lift:GetPosition() return self.up and 2.167 or 0 end
     function pm:GetFName() return { ToString = function() return "TurretPoseableMesh" end } end
     function pm:GetFullName() return "PoseableMeshComponent /Game/Maps.BP_SV_Tani_" .. key .. "_C:TurretPoseableMesh" end
-    function pm:SetBoneTransformByName(b, t, space)
-        self.writes[#self.writes + 1] = { bone = b, t = t, space = space }
-        SEQ[#SEQ + 1] = "write " .. key .. " " .. b
-        if not self.stuck then self.bones[b] = { X = t.Translation.X, Y = t.Translation.Y, Z = t.Translation.Z } end
-    end
-    function pm:GetBoneLocationByName(b, space)
-        SEQ[#SEQ + 1] = "read " .. key .. " " .. b
-        if self.noRead then error("no such function") end
-        local v = self.bones[b] or { X = 0, Y = 0, Z = 0 }
-        return { X = v.X, Y = v.Y, Z = v.Z, space = space }
-    end
-    function pm:GetSocketTransform(s, space)                  -- (as drawn: sockLow, a pose written but never drawn)
-        local lz = self.sockLow and -600 or self.bones.lift.Z
-        return { Translation = { X = 875.6, Y = -0.5, Z = -196 + (lz + 600) }, space = space }
-    end
     function pm:GetSocketLocation(s)
-        local base = { X = at.X - 199, Y = at.Y, Z = at.Z + self.bones.lift.Z + 404 }
+        local base = { X = at.X - 199, Y = at.Y, Z = at.Z + (lift.up and 0 or -600) + 404 }
         if s ~= "SOC_Gun_01" then return base end
+        SEQ[#SEQ + 1] = "read " .. key .. " muzzle"
         local y, p = math.rad(self.yaw), math.rad(self.pitch)
         return { X = base.X + 1074 * math.cos(p) * math.cos(y), Y = base.Y + 1074 * math.cos(p) * math.sin(y), Z = base.Z + 1074 * math.sin(p) }
     end
@@ -210,9 +208,10 @@ local function railgun(key, name, at, part)
     function lm:GetClass() return { GetFName = function() return { ToString = function() return "LiveFCSModule_LauncherTripleRailCannon" end } end } end
     local root = { GetAttachParent = function() return { GetFName = function() return { ToString = function() return part end } end } end }
     local o = obj("BP_SV_Tani_" .. key .. "_C " .. name, { at = at, HealthInternal = 4000, MaxHealth = 400, RootComponent = root,
-        comps = { ["/Script/Engine.PoseableMeshComponent"] = { pm } },
+        comps = { ["/Script/Engine.PoseableMeshComponent"] = { pm }, ["/Script/Engine.SkeletalMeshComponent"] = noLift and {} or { lift } },
         FireControlSystemComponent = { AllArms = { { LauncherModule = lm } } } })
-    o.pm, o.lm = pm, lm
+    function o:K2_GetActorLocation() return { X = at.X, Y = at.Y, Z = at.Z } end
+    o.pm, o.lm, o.lift = pm, lm, lift
     return o
 end
 -- the railcannon: its TurretMesh (a SkeletalMeshComponent) records what's played on it
@@ -377,44 +376,21 @@ n0 = #LOG
 KEYS.L()
 tick()
 local gL, gR, rc = HULL.parts.RAILGUN_L, HULL.parts.RAILGUN_R, HULL.parts.RAILCANNON
-gR.pm.stuck = true                                       -- (its pose never takes)
+gR.lift.stuck = true                                     -- (its Deploy never shows up)
 check(logged("tanicorn rail: RAILGUN_L Part_RAILGUN_L ", n0 + 1) ~= nil and logged("seen: deploying in 3 s", n0 + 1) ~= nil,
     "each railgun seen with the live watch's armour (" .. tostring(logged("tanicorn rail: RAILGUN_L", n0 + 1)) .. ")")
 ticks(10)
-check(#gL.pm.writes == 0, "nothing written before after_s (3 s)")
+check(#gL.lift.calls == 0, "nothing played before after_s (3 s)")
 D.musicHold = 1                                          -- (the STORE opens before its deploy ends: its order held)
 ticks(3)
-check(#gL.pm.writes > 0 and logged("tanicorn rail: RAILGUN_L deploying at +3.", n0 + 1) ~= nil
-    and logged("lift z -600 cm, SOC_Gun_01 z -196 cm in the mesh", n0 + 1) ~= nil, "after_s on: deploying, its stowed pose read first")
-local allCS, quats, lifts = true, true, {}
-for _, w in ipairs(gL.pm.writes) do
-    allCS = allCS and w.space == 1
-    local r = w.t.Rotation
-    quats = quats and r.W ~= nil and r.Pitch == nil and r.Yaw == nil and r.Roll == nil and w.t.Scale3D.X == 1
-    if w.bone == "lift" then lifts[#lifts + 1] = w.t.Translation.Z end
-end
+local dp = logged("tanicorn rail: RAILGUN_L deploying at +3.", n0 + 1)
+check(dp ~= nil and dp:find("its LiftMesh's Deploy played (SetPosition 0, SetPlayRate 1, Play)", 1, true) ~= nil
+    and dp:find("cm over the part (stowed ~-196)", 1, true) ~= nil and table.concat(gL.lift.calls, ", ") == "SetPosition 0, SetPlayRate 1, Play false",
+    "after_s on: its LiftMesh's Deploy played from 0, its stowed muzzle read first (" .. tostring(dp) .. ")")
 untilLog("tanicorn rail: RAILGUN_L deployed", 20, n0 + 1)
-for _, w in ipairs(gL.pm.writes) do
-    allCS = allCS and w.space == 1
-    local r = w.t.Rotation
-    quats = quats and r.W ~= nil and r.Pitch == nil and r.Yaw == nil and r.Roll == nil
-end
-lifts = {}
-for _, w in ipairs(gL.pm.writes) do if w.bone == "lift" then lifts[#lifts + 1] = w.t.Translation.Z end end
-check(allCS, "every bone written in component space (EBoneSpaces 1)")
-check(quats, "as quaternion transforms (Rotation { X, Y, Z, W }), never a rotator")
-local mono, mid = #lifts >= 6, 0
-for i = 2, #lifts do mono = mono and lifts[i] >= lifts[i - 1] end
-for _, z in ipairs(lifts) do if z > -600 and z < 0 then mid = mid + 1 end end
-check(mono and mid >= 3 and lifts[#lifts] == 0, "the lift stepped up over deploy_s, -600 -> 0 cm, after the hatches open ("
-    .. #lifts .. " writes, " .. string.format("%.0f .. %.0f", lifts[1] or 0, lifts[#lifts] or 0) .. ")")
-local hn, hp_
-for _, w in ipairs(gL.pm.writes) do if w.bone == "Hatch_n" then hn = w end; if w.bone == "Hatch_p" then hp_ = w end end
-check(hn and math.abs(hn.t.Rotation.X + 0.79335) < 1e-4 and math.abs(hn.t.Rotation.W - 0.60876) < 1e-4 and hn.t.Translation.Y == 460
-    and hn.t.Translation.Z == -30 and hp_ and math.abs(hp_.t.Rotation.X - 0.79335) < 1e-4 and hp_.t.Translation.Y == -460,
-    "the hatches' end pose: Hatch_n (-0.79335, 0, 0, 0.60876) at (0, 460, -30), Hatch_p (+0.79335, ...) at (0, -460, -30)")
-local dl = logged("tanicorn rail: RAILGUN_L deployed: lift z 0 cm (up), SOC_Gun_01 z 404 cm in the mesh", n0 + 1)
-check(dl ~= nil, "its lift read back up, SOC_Gun_01 raised (" .. tostring(dl or logged("RAILGUN_L deployed", n0 + 1)) .. ")")
+local dl = logged("tanicorn rail: RAILGUN_L deployed: SOC_Gun_01 z ", n0 + 1)
+check(dl ~= nil and dl:find("cm over the part (up), its Deploy at 2.17 s", 1, true) ~= nil,
+    "its Deploy played out: SOC_Gun_01 raised over the part (" .. tostring(dl or logged("RAILGUN_L deployed", n0 + 1)) .. ")")
 check(fired("RE_SV_TaniRailOrderL") == 0 and logged("RAILGUN_L order held: the STORE is open", n0 + 1) ~= nil,
     "the STORE open: its order held (hard rule 64)")
 D.musicHold = nil
@@ -428,21 +404,23 @@ local ol = logged("tanicorn rail: RAILGUN_L RE_SV_TaniRailOrderL fired (try 1, i
     .. "LiveFCSModule_LauncherTripleRailCannon: written; read back IsDispRadarMap true, ForceAlertDisp true, HUDControl 1", n0 + 1)
 check(fired("RE_SV_TaniRailOrderL") == 1 and ol ~= nil, "the STORE shut: ordered, its railgun HUD written and read back (" .. tostring(ol) .. ")")
 check(gL.lm.IsDispRadarMap == true and gL.lm.ForceAlertDisp == true and gL.lm.HUDControl == 1, "hard rule 45's three fields on its arm")
-local lastWrite, firstRead, firstOrder = 0, nil, nil
+local lastPlay, firstRead, firstOrder = 0, nil, nil
 for i, s in ipairs(SEQ) do
-    if s == "write RAILGUN_L lift" then lastWrite = i end
+    if s == "play RAILGUN_L" then lastPlay = i end
     if s == "event RE_SV_TaniRailOrderL" and not firstOrder then firstOrder = i end
 end
-for i = lastWrite + 1, #SEQ do if SEQ[i] == "read RAILGUN_L lift" and not firstRead then firstRead = i end end
-check(firstOrder and firstRead and firstRead < firstOrder and lastWrite < firstRead, "the order only after the last write's read-back")
+for i = lastPlay + 1, #SEQ do if SEQ[i] == "read RAILGUN_L muzzle" and not firstRead then firstRead = i end end
+check(firstOrder and firstRead and firstRead < firstOrder and lastPlay < firstRead, "the order only after its muzzle's read-back, after the play")
 local hudAt
 for i, s in ipairs(SEQ) do if s == "hud RAILGUN_L HUDControl" and not hudAt then hudAt = i end end
 check(hudAt and firstOrder and hudAt < firstOrder, "its railgun HUD written BEFORE its order (hard rule 45)")
--- the stuck one: written twice, never ordered
-ticks(2)
-check(logged("tanicorn rail: RAILGUN_R its lift reads z -600 cm after its deploy: the end pose written again (2 of 2)", n0 + 1) ~= nil
-    and logged("tanicorn rail: RAILGUN_R NOT ordered: its lift still reads z -600 cm after 2 writes", n0 + 1) ~= nil
-    and fired("RE_SV_TaniRailOrderR") == 0, "a pose that doesn't take: written again, then NOT ordered (fail safe)")
+-- the stuck one: played twice, never ordered
+ticks(14)
+check(logged("tanicorn rail: RAILGUN_R its Deploy at 0.00 s but SOC_Gun_01 z ", n0 + 1) ~= nil
+    and logged("cm over the part: played again (2 of 2)", n0 + 1) ~= nil
+    and logged("tanicorn rail: RAILGUN_R NOT ordered: SOC_Gun_01 still z ", n0 + 1) ~= nil
+    and logged("cm over the part after 2 plays (its Deploy at 0.00 s): a gun inside the hull isn't ordered", n0 + 1) ~= nil
+    and fired("RE_SV_TaniRailOrderR") == 0, "a Deploy that doesn't show up: played again, then NOT ordered (fail safe)")
 -- hard rule 64: its barrel never moves, so its order again move_s on; then it moves
 n0 = #LOG
 ticks(33)
@@ -452,40 +430,28 @@ gL.pm.yaw, gL.pm.pitch = 40, 18
 ticks(33)
 check(logged("tanicorn rail: RAILGUN_L its barrel moves (yaw 0.0 -> 40.0, pitch 10.0 -> 18.0)", n0 + 1) ~= nil
     and fired("RE_SV_TaniRailOrderL") == 2, "its barrel moving: the order took, no more orders")
--- its lift falls back: written again
-gL.pm.bones.lift.Z = -600
+-- its lift falls back: its Deploy again
+gL.lift.up = false
 n0 = #LOG
 ticks(21)
-check(logged("tanicorn rail: RAILGUN_L its lift fell back to z -600 cm (1): the end pose written again", n0 + 1) ~= nil
-    and gL.pm.bones.lift.Z == 0, "its lift read every check_s: fallen back, written again")
--- hard rule 59: another object at RAILGUN_R's address now (its lift can't be read): a new record, never ordered
+check(logged("tanicorn rail: RAILGUN_L its muzzle fell back to z ", n0 + 1) ~= nil
+    and logged("over the part (1; its Deploy at 0.00 s): its Deploy played again", n0 + 1) ~= nil and gL.lift.up == true,
+    "its muzzle read every check_s: fallen back, its Deploy played again")
+-- hard rule 59: another object at RAILGUN_R's address now, with no LiftMesh (a container cooked before route (iv)): never ordered
 local oldR = gR
-local newR = railgun("RAILGUN_R", "someoneElse", { X = 480000, Y = 4000, Z = 1000 }, "Part_RAILGUN_R")
+local newR = railgun("RAILGUN_R", "someoneElse", { X = 480000, Y = 4000, Z = 1000 }, "Part_RAILGUN_R", true)
 LIVE[newR.__addr] = nil
 newR.__addr = oldR.__addr
 LIVE[oldR.__addr] = newR
-newR.pm.noRead = true
 for _, c in ipairs(HULL.pcomps) do if c.socket == "RAILGUN_R" then c.ChildActor = newR end end
 n0 = #LOG
 ticks(2)
-check(logged("tanicorn rail: RAILGUN_R gone (its actor no longer there): forgotten", n0 + 1) ~= nil and #newR.pm.writes == 0,
-    "another object at its address: the record dropped, nothing written to the new one")
+check(logged("tanicorn rail: RAILGUN_R gone (its actor no longer there): forgotten", n0 + 1) ~= nil and #newR.lift.calls == 0,
+    "another object at its address: the record dropped, nothing played on the new one")
 local nl = untilLog("tanicorn rail: RAILGUN_R Part_RAILGUN_R BP_SV_Tani_RAILGUN_R_C someoneElse seen", 40, n0 + 1)
 check(nl ~= nil, "the new one seen once the live watch looks at it again (" .. tostring(nl) .. ")")
-local cl = untilLog("tanicorn rail: RAILGUN_R NOT ordered: its lift can't be read back", 40, n0 + 1)
-check(cl ~= nil and fired("RE_SV_TaniRailOrderR") == 0, "its lift unreadable: NOT ordered (no read-back, no order)")
--- its lift up as written but its muzzle still down as drawn (the gun would fire from inside the hull): written again, never ordered
-local low = railgun("RAILGUN_R", "drawnLow", { X = 480000, Y = 4000, Z = 1000 }, "Part_RAILGUN_R")
-LIVE[low.__addr] = nil
-low.__addr = newR.__addr
-LIVE[newR.__addr] = low
-low.pm.sockLow = true
-for _, c in ipairs(HULL.pcomps) do if c.socket == "RAILGUN_R" then c.ChildActor = low end end
-n0 = #LOG
-local ll = untilLog("tanicorn rail: RAILGUN_R NOT ordered: SOC_Gun_01 still z -196 cm in the mesh as drawn after 2 writes, its lift z 0 cm", 80, n0 + 1)
-check(ll ~= nil and logged("tanicorn rail: RAILGUN_R its lift reads z 0 cm (up) but SOC_Gun_01 z -196 cm in the mesh as drawn after its "
-    .. "deploy: the end pose written again (2 of 2)", n0 + 1) ~= nil and fired("RE_SV_TaniRailOrderR") == 0,
-    "its lift up as written, its muzzle down as drawn: written again, then NOT ordered (" .. tostring(ll) .. ")")
+local cl = untilLog("tanicorn rail: RAILGUN_R NOT ordered: no LiftMesh on it", 40, n0 + 1)
+check(cl ~= nil and fired("RE_SV_TaniRailOrderR") == 0, "no LiftMesh (an older container): NOT ordered (" .. tostring(cl) .. ")")
 
 print("the railcannon: its shield, Ctrl+H, its deploy")
 local sl = logged("tanicorn rc: Part_RAILCANNON BP_SV_Tani_RAILCANNON_C rc_")

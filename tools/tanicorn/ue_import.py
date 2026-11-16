@@ -246,7 +246,8 @@ def soft(fn):
 TEX = {}                                # textures imported in this run, by name (the side VLS blocks share one set,
                                         # the two sub-railguns another, every part the Alicorn's sheets)
 SHARED = {}                             # instances every part shares, by name (the ALC slots' MI_SV_Tani_ALC_a / _b)
-DEPLOY = ('railcannon', 'railgun')      # export_tanacorn.py deploying(): a rig and its Deploy
+DEPLOY = ('railcannon', 'railgun_lift')      # export_tanacorn.py deploying(): a rig and its Deploy ((2026-11-16, route (iv))
+                                             # a sub-railgun's lift; its house, kind railgun, imported as a turret's rig)
 
 
 def tex_once(src, name, *args, **kw):

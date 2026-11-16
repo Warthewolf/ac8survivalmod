@@ -396,7 +396,12 @@ TANI_RAIL_ROLES = {'BP_wp_artillery_vesselgun_C': 'BP_wp_emls_alcn_C',
                    'WeaponCollisionEffectModule': 'WeaponCollisionEffectModule', 'Artillery Movement': 'Bullet Movement',
                    'Fire Particles NS': 'Fire Particles NS', 'DefaultSceneRoot_GEN_VARIABLE': 'DefaultSceneRoot_GEN_VARIABLE',
                    'Static Mesh': 'Static Mesh'}
-TANI_RAIL_LAUNCHER = 'triple'
+# (2026-11-16, the autotest's first runs of route (iv): the TripleRailCannon fired the round (11 km/s) but its barrels never
+# turned: yaw and pitch at rest through 4 orders, the rounds leaving ~180 deg off them. It's the x40a's plane-fixed railgun
+# (FixAngleYaw / FixAnglePitch): the plane aims, the launcher doesn't. The stock Alicorn's own sub-railguns fly
+# LauncherAlicornRailgun, a bare LauncherBoneControl subclass, with no railgun HUD fields either. So 'bone': the T16's
+# proven BoneControl tracks and fires the Alicorn's round; no minimap line or RAILGUN WARNING from these two)
+TANI_RAIL_LAUNCHER = 'bone'
 TANI_RAIL_PERFORMANCE = {'FireRate': 6, 'MagazineCapacity': 1, 'ReloadTime': 10.0, 'bEnableSpinUp': True, 'SpinUpTime': 3.0}
 TANI_RAIL_FIRE_CONTROL = {'CaptureDistance': 1800000.0, 'CaptureMinDistance': 10000.0, 'CaptureAngleRange': 10.0,
                           'ActivationTime': 0.6, 'TriggeringTime': 10.0, 'TriggerCount': 1, 'ShotIntervalTime': 10.0,

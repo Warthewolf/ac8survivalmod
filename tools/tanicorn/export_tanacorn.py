@@ -575,15 +575,68 @@ def frame_in(Mi, name):
     return Matrix.Translation(loc) @ rot.to_matrix().to_4x4()
 
 
-def deploying(part, kind, on, rig, muzzle, tex=None, note=None):
-    """an Alicorn part that deploys (the bow's railcannon, a sub-railgun) in the frame of its hull socket. rig: [(bone,
+def muzzle_socket(rig, rest, at, Mi, meshes, muzzle):
+    """[SOC_Gun_01] at the middle of the front of the muzzle bones' meshes, in the socket bone's own axes (its empty's), or
+    [] for no muzzle: deploying()'s and riding()'s"""
+    if muzzle is None:
+        return []
+    jm, mj, nose = muzzle
+    E = rest[jm]
+    pts = np.array([E.inverted() @ Mi @ D[n].matrix_world @ v.co for n, j in meshes if j in mj for v in D[n].data.vertices])
+    front = pts[pts[:, 0] > pts[:, 0].max() - nose]
+    tip = E @ Vector((float(pts[:, 0].max()), float(front[:, 1].min() + front[:, 1].max()) / 2,
+                      float(front[:, 2].min() + front[:, 2].max()) / 2))
+    return [{"name": "SOC_Gun_01", "bone": rig[jm][0], "loc": ue_cm(tip - at[jm]), "rot": ue_rot(E)}]
+
+
+def riding(part, kind, on, rig, muzzle, tex=None, note=None):
+    """(2026-11-16, route (iv)) a turret that rides another part's socket: a sub-railgun's house and rails on its lift's
+    SOC_Lift (deploying()'s extra), no animation of its own (the fire control turns its bones). In the frame of its first
+    rig empty's stowed place (frame 1) on its hull socket's axes, as SOC_Lift is; rig: [(bone, parent index or -1, the
+    design's empty)], the stock turret names (BN_Body > BN_turret_yaw > BN_turret_pitch: a stock fire control row drives
+    them); every mesh child of an empty on the LAST bone naming that empty; identity rotations; muzzle as deploying()'s"""
+    sc = bpy.context.scene
+    sc.frame_set(1)
+    Ms = socket_of(on[0]).inverted()
+    Mi = Matrix.Translation(-frame_in(Ms, rig[0][2]).translation) @ Ms
+    rest = [frame_in(Mi, e) for _, _, e in rig]
+    at = [r.translation.copy() for r in rest]
+    bone_of = {}
+    for j, (_, _, e) in enumerate(rig):
+        bone_of[e] = j
+    meshes = [(c.name, j) for e, j in sorted(bone_of.items(), key=lambda x: x[1])
+              for c in sorted(D[e].children, key=lambda o: o.name) if c.type == "MESH"]
+    under, todo = set(), [D[rig[0][2]]]
+    while todo:
+        o = todo.pop()
+        for c in o.children:
+            under.add(c)
+            todo.append(c)
+    assert {o.name for o in under if o.type == "MESH"} == {n for n, _ in meshes}, "%s: a mesh not on a bone" % part
+    assert {o.name for o in under if o.type == "EMPTY"} <= set(bone_of), "%s: an empty not in the rig" % part
+    mesh = Mesh()
+    for n, j in meshes:
+        mesh.add(D[n], Mi @ D[n].matrix_world, j)
+    info = {"kind": kind, "on": on,
+            "bones": {b: ue_cm(at[j]) for j, (b, _, _) in enumerate(rig)},
+            "parents": {b: (rig[p][0] if p >= 0 else None) for b, p, _ in rig},
+            "sockets": muzzle_socket(rig, rest, at, Mi, meshes, muzzle),
+            **({"note": note} if note else {})}
+    finish(part, mesh, info, [(b, p, tuple(at[j])) for j, (b, p, _) in enumerate(rig)], tex=tex)
+
+
+def deploying(part, kind, on, rig, muzzle, tex=None, note=None, skip=(), extra=()):
+    """an Alicorn part that deploys (the bow's railcannon, a sub-railgun's lift) in the frame of its hull socket. rig: [(bone,
     parent index or -1, the design's empty that moves it)], every mesh child of an empty on that empty's bone; muzzle:
     (the socket's bone index, [bone indices whose meshes make the muzzle], nose m): SOC_Gun_01 at the middle of those
-    meshes' front (the vertices within `nose` m of it), along the socket bone's +X. The rest pose is the stowed one
-    (frame 1) and every joint has an identity rotation (the bones only carry places, as the turrets'); "Deploy" is the
-    design's own keys sampled a frame at a time, from the part's first key to the frame by which every bone is out
-    (each one's second key: out, held, back), a rotation and, where it moves (the railgun's lift), a translation for
-    each moving joint. Played backwards it stows (the design's own stow, keys 3-4, takes the same poses)."""
+    meshes' front (the vertices within `nose` m of it), along the socket bone's +X (None: no SOC_Gun_01). The rest pose is
+    the stowed one (frame 1) and every joint has an identity rotation (the bones only carry places, as the turrets');
+    "Deploy" is the design's own keys sampled a frame at a time, from the part's first key to the frame by which every bone
+    is out (each one's second key: out, held, back), a rotation and, where it moves (the railgun's lift), a translation for
+    each moving joint. Played backwards it stows (the design's own stow, keys 3-4, takes the same poses).
+    (2026-11-16, route (iv): the first in-game test, a Lua-written lift on the sub-railguns' TurretPoseableMesh never drawn)
+    skip: empties whose subtrees are another part's (a sub-railgun's house and rails: riding()); extra: [(socket name, bone
+    index, empty)] sockets at those empties' stowed places on that bone, the part's axes (SOC_Lift, where the house rides)."""
     sc = bpy.context.scene
     Mi = socket_of(on[0]).inverted()
     sc.frame_set(1)
@@ -594,8 +647,12 @@ def deploying(part, kind, on, rig, muzzle, tex=None, note=None):
     while todo:
         o = todo.pop()
         for c in o.children:
+            if c.name in skip:
+                continue
             under.add(c)
             todo.append(c)
+    extra_sockets = [{"name": n, "bone": rig[j][0], "loc": ue_cm(frame_in(Mi, e).translation - at[j]), "rot": [0, 0, 0]}
+                     for n, j, e in extra]
     assert {o.name for o in under if o.type == "MESH"} == {n for n, _ in meshes}, "%s: a mesh not on a bone" % part
     assert {o.name for o in under if o.type == "EMPTY"} == {e for _, _, e in rig[1:]}, "%s: an empty not in the rig" % part
     mesh = Mesh()
@@ -654,18 +711,11 @@ def deploying(part, kind, on, rig, muzzle, tex=None, note=None):
             moved = np.concatenate(by[j]) @ np.array(E.to_3x3()).T + np.array(E.translation)
             out[rig[j][0]]["end_box_m"] = [[round(float(x), 4) for x in moved.min(axis=0)],
                                            [round(float(x), 4) for x in moved.max(axis=0)]]
-    # the muzzle: the middle of the front of those meshes' vertices, in the socket bone's own axes (its empty's)
-    jm, mj, nose = muzzle
-    E = rest[jm]
-    pts = np.array([E.inverted() @ Mi @ D[n].matrix_world @ v.co for n, j in meshes if j in mj for v in D[n].data.vertices])
-    front = pts[pts[:, 0] > pts[:, 0].max() - nose]
-    tip = E @ Vector((float(pts[:, 0].max()), float(front[:, 1].min() + front[:, 1].max()) / 2,
-                      float(front[:, 2].min() + front[:, 2].max()) / 2))
     s1, s2 = min(k[2] for k in keys.values()), max(k[3] for k in keys.values())
     info = {"kind": kind, "on": on,
             "bones": {b: ue_cm(at[j]) for j, (b, _, _) in enumerate(rig)},
             "parents": {b: (rig[p][0] if p >= 0 else None) for b, p, _ in rig},
-            "sockets": [{"name": "SOC_Gun_01", "bone": rig[jm][0], "loc": ue_cm(tip - at[jm]), "rot": ue_rot(E)}],
+            "sockets": muzzle_socket(rig, rest, at, Mi, meshes, muzzle) + extra_sockets,
             "anim": {"name": "Deploy", "length_s": round((f1 - f0) / DEPLOY_FPS, 4), "fps": DEPLOY_FPS,
                      "design_frames": [f0, f1], "design_stow_frames": [s1, s2], "samples": len(times),
                      "off_the_model_m": round(worst, 5), "bones": out,
@@ -698,14 +748,22 @@ deploying("RAILCANNON", "railcannon", ["RAILCANNON"],
           note="the bay section and RC_body on Body; the barrel halves (the bow's doors) on barrel_n / barrel_p")
 # the sub-railguns: the same geometry in both sockets' frames (within 1 mm, measured 2026-11-10), but each trains
 # outboard as it deploys (yaw +35 deg port, -35 starboard): a part each, one set of textures
+# (2026-11-16, route (iv): the first in-game test showed Lua's writes to one rig's lift never drawn) each one two parts:
+# RAILGUN_<side>_LIFT (kind railgun_lift: the pedestal on lift, the hatch doors on Hatch_n / Hatch_p, the Deploy of those,
+# SOC_Lift on the lift where the house sits) and RAILGUN_<side> (kind railgun: the house on BN_turret_yaw, the rails on
+# BN_turret_pitch, SOC_Gun_01, no animation: it rides SOC_Lift, the fire control turns it)
 for side in "LR":
-    deploying("RAILGUN_" + side, "railgun", ["RAILGUN_" + side],
-              [("Body", -1, "railgun_" + side), ("lift", 0, "railgun_%s_lift" % side), (TB_YAW, 1, "railgun_%s_yaw" % side),
-               (TB_PITCH, 2, "railgun_%s_pitch" % side), ("Hatch_n", 0, "hatch_%s_door_n" % side),
+    deploying("RAILGUN_%s_LIFT" % side, "railgun_lift", ["RAILGUN_" + side],
+              [("Body", -1, "railgun_" + side), ("lift", 0, "railgun_%s_lift" % side), ("Hatch_n", 0, "hatch_%s_door_n" % side),
                ("Hatch_p", 0, "hatch_%s_door_p" % side)],
-              (3, (3,), 0.6), tex="RAILGUN",
-              note="pedestal on lift (6 m down when stowed), house on BN_turret_yaw, rails on BN_turret_pitch (the stock "
-                   "turrets' names: a stock fire control row can drive them), the hatch doors on Hatch_n / Hatch_p")
+              None, tex="RAILGUN", skip={"railgun_%s_yaw" % side}, extra=[("SOC_Lift", 1, "railgun_%s_yaw" % side)],
+              note="pedestal on lift (6 m down when stowed), the hatch doors on Hatch_n / Hatch_p; the house rides SOC_Lift "
+                   "(part RAILGUN_%s)" % side)
+    riding("RAILGUN_" + side, "railgun", ["RAILGUN_" + side],
+           [(TB_ROOT, -1, "railgun_%s_yaw" % side), (TB_YAW, 0, "railgun_%s_yaw" % side), (TB_PITCH, 1, "railgun_%s_pitch" % side)],
+           (2, (2,), 0.6), tex="RAILGUN",
+           note="house on BN_turret_yaw, rails on BN_turret_pitch (the stock turrets' names: a stock fire control row drives "
+                "them), its origin SOC_Lift's on part RAILGUN_%s_LIFT" % side)
 
 # ---------------------------------------------------------------------------------------------------- the rise rig
 # (2026-11-11, WP4: docs/design/INVINCIBLE_FLEET_RISE_FORD.md 2.3 / 4.1, route B2) RIG: none of the ship's geometry. Bones

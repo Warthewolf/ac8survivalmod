@@ -110,7 +110,10 @@ for p in json.load(open(os.path.join(out, 'parts.json'))):
                     # ((2026-11-12) and each VLS block's blueprint: spec.py vls_mount)
                     'vls': ['BP_SV_' + n, 'Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/SM_SV_%s_DAM' % n, 'Model/AS_SV_%s_Open' % n],
                     # ((2026-11-12, stage 4) and their blueprints: spec.py railcannon_mount / mount(), live parts of HULLLIVE)
-                    'railcannon': ['BP_SV_' + n] + deploy, 'railgun': ['BP_SV_' + n] + deploy,
+                    'railcannon': ['BP_SV_' + n] + deploy,
+                    # ((2026-11-16, route (iv)) a sub-railgun's blueprint on its house's rig, its lift's Deploy on the lift)
+                    'railgun': ['BP_SV_' + n, 'Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/SM_SV_%s_DAM' % n],
+                    'railgun_lift': deploy,
                     'rig': ['Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/AS_SV_%s_Rise' % n],   # (2026-11-11: the rise rig)
                     'turret': ['BP_SV_' + n, 'Model/SK_SV_' + n, 'Model/SKEL_SV_' + n, 'Model/SM_SV_%s_DAM' % n]}[k]))
 " | tr -d '\r'); do                 # (Windows' Python ends its lines in CR LF: the CR stuck to each line's last name)

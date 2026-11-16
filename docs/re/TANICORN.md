@@ -450,3 +450,23 @@ build/autotest/runs/20261116_194448_claude (verdict.txt, Survival's logs).
   3. The barrel 179 deg off the line to the runway: Ctrl+L spawns her broadside to you, and her railcannon is fixed along
      her bow, so the test's shot leaves the muzzle away from the airfield (the round is scripted to the runway anyway). In
      round 30 the fleet's course points her bow at the airfield (WP7); for the test only, not a bug.
+
+## The railguns' route (iv) (2026-11-16, after the first in-game test; the user's pick: "Split the mesh")
+0.74.73 confirmed route (i) out: with the TurretPoseableMesh set to tick its pose always (VisibilityBasedAnimTickOption read
+back 0) the Lua-written lift still read back up and SOC_Gun_01 still drew stowed (-196 cm). The railcannon's Lua-played
+Deploy on a skeletal mesh had drawn its +19 m, so the railgun's lift and hatches became a mesh of their own:
+- export_tanacorn.py: each RAILGUN_<side> two parts. RAILGUN_<side>_LIFT, kind railgun_lift (deploying(): Body > lift,
+  Hatch_n / Hatch_p; its Deploy 2.167 s: the lift 6.00 m up, both hatches 105 deg; SOC_Lift on the lift at the house's
+  stowed place, (0, 0, 0) from the lift bone), the house's subtree skipped. RAILGUN_<side>, kind railgun (riding(): the
+  house on BN_turret_yaw, the rails on BN_turret_pitch at (-199, 0, 404) cm, SOC_Gun_01 1074.6 cm ahead on it; no
+  animation; its origin SOC_Lift's). CHECK ALL OK (20 parts).
+- spec.py railgun_mount(): LiftMesh (SkeletalMeshComponent, single node on AS_SV_Tani_RAILGUN_<side>_LIFT_Deploy at 0,
+  AlwaysTickPoseAndRefreshBones), TurretPoseableMesh on LiftMesh's SOC_Lift (the arm's LauncherBoneControl as before), the
+  hit sphere on the turret, both meshes hidden and both wrecks shown at death; the drawn hull (BP_SV_Tani_HULL) hangs each
+  drawn house on its drawn lift, the live hull draws no lift whose railgun is live. ue_import / check_export / build.sh's
+  cook checks take the two kinds.
+- sv_tanicorn_rail.lua: after_s on, LiftMesh plays its Deploy (SetPosition 0, SetPlayRate 1, Play); deploy_s (2.6) on,
+  SOC_Gun_01's height over the part's actor (as drawn: stowed ~-196, raised ~+404) must be at least raised_cm (300) to
+  order it; played again up to `writes` (2) times, then NOT ordered; every check_s the muzzle read again and the Deploy
+  played again if it fell back; no LiftMesh (a container cooked before this): NOT ordered. tani_rail_test rewritten for it
+  (all passed, the release copy too).

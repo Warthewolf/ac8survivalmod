@@ -3209,3 +3209,21 @@ game. The work was split by file between agents; the builds ran in sequence in t
   railguns: still not drawn raised with the pose ticked always (read back 0): the guess is out, Lua's bone writes on that
   mesh don't reach its drawn pose. The user's choice (2026-11-16): split the mesh (route (iv)): the hatches and lift their
   own animated mesh (the railcannon's way, which draws), the gun riding on it.
+
+## 0.74.74-coop2mp.166: the railguns' route (iv) (2026-11-16, runtime 0.32.36; the Tanicorn container re-cooked)
+- The user's pick after 0.74.73 ("Split the mesh"): each sub-railgun's lift and hatches their own animated mesh, the house
+  riding its SOC_Lift (docs/re/TANICORN.md "The railguns' route (iv)"): export_tanacorn.py (deploying()'s skip / extra,
+  riding()), spec.py railgun_mount() and the drawn hull, check_export / ue_import / build.sh's kinds, sv_tanicorn_rail.lua
+  (LiftMesh's Deploy played, the muzzle read over the part), tani_rail_test rewritten (all passed). tools/tanicorn/build.sh:
+  CHECK ALL OK (20 parts), the cook clean, container 03d0e1d72cd6... (17 classes); TANI=1 build_all, stage_dev_0.74.74
+  (168e0046f163..., registered).
+- The autotest on it (run 20261116_202907_claude): 34/36. Both railguns deployed (`SOC_Gun_01 z 404 cm over the part (up),
+  its Deploy at 2.17 s`), ordered, and FIRED the Alicorn's round (LiveEMLBullet_BattleShip at ~11,060 m/s from the raised
+  muzzle). The two failures: their barrels never turned (yaw 80.3 / pitch 0, her own heading, through 4 orders; the rounds
+  left ~180 deg off them). LiveFCSModule_LauncherTripleRailCannon has FixAngleYaw / FixAnglePitch: the x40a's plane-fixed
+  railgun, the plane aims. The stock Alicorn's sub-railguns fly LauncherAlicornRailgun, a bare LauncherBoneControl
+  subclass (no railgun HUD fields). So TANI_RAIL_LAUNCHER 'bone' for 0.74.75 (the T16's tracking BoneControl, the
+  Alicorn's round; Lua's railgun HUD write skipped on a BoneControl arm).
+- Pictures from now on (the user: "Screenshots would be good"): the autotest's A.picture (its camera on the whole ship, a
+  raised railgun, the railcannon charging, its impact, the fleet); run 20261116_203637_claude has four plus the game's own
+  HighResShot copies. The parts' boxes said TANICORN (T5 / 16-INCH / CIWS / LASER): now TANACORN, the user's spelling.

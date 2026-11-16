@@ -44,7 +44,7 @@
 TANI = { unit = "SV_Unit_TaniTest", npc = "SV_Npc_TaniMount", model = "SV_Model_TaniMount",
          class = "BP_SV_Tani_T5_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5.BP_SV_Tani_T5_C",
          cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5.Default__BP_SV_Tani_T5_C",
-         dummy = "BP_GR000_dummy_CP_C", name_key = "SV_TaniMount_Name", name = "TANICORN MOUNT",
+         dummy = "BP_GR000_dummy_CP_C", name_key = "SV_TaniMount_Name", name = "TANACORN MOUNT",
          fcs = "SV_FCS_TaniT5", fcs_src = "NPC_FCS_FlakGun000", fcs_slots = 2,   -- (0.74.59; survival_events.TANI_FCS)
          -- (0.74.60) the row's turn speeds: the stock flak gun's 360 deg/s jumped about (the user's run of 0.74.59: "it
          -- tracks but not as smoothly as it was previously kinda jumps around like the stock flak cannon"); our arm's 40
@@ -72,19 +72,19 @@ TANI.mounts = {
     { key = "T16", unit = "SV_Unit_TaniT16Gun", npc = "SV_Npc_TaniT16Gun", model = "SV_Model_TaniT16Gun",
       class = "BP_SV_Tani_T16_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T16.BP_SV_Tani_T16_C",
       cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T16.Default__BP_SV_Tani_T16_C",
-      name_key = "SV_TaniT16Gun_Name", name = "TANICORN 16-INCH",
+      name_key = "SV_TaniT16Gun_Name", name = "TANACORN 16-INCH",
       fcs = "SV_FCS_TaniT16", fcs_src = "NPC_FCS_VesselArtillery000", fcs_slots = 3, fcs_speed = { 12, 8 },
       yaw = { -150, 150 }, pitch = { -2, 45 } },
     { key = "CIWS", unit = "SV_Unit_TaniCIWS", npc = "SV_Npc_TaniCIWS", model = "SV_Model_TaniCIWS",
       class = "BP_SV_Tani_CIWS_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_CIWS.BP_SV_Tani_CIWS_C",
       cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_CIWS.Default__BP_SV_Tani_CIWS_C",
-      name_key = "SV_TaniCIWS_Name", name = "TANICORN CIWS",
+      name_key = "SV_TaniCIWS_Name", name = "TANACORN CIWS",
       fcs = "SV_FCS_TaniCIWS", fcs_src = "NPC_FCS_VesselCIWS000", fcs_slots = 1, fcs_speed = { 120, 100 },
       yaw = { -180, 180 }, pitch = { -10, 85 } },
     { key = "LASER", unit = "SV_Unit_TaniLASER", npc = "SV_Npc_TaniLASER", model = "SV_Model_TaniLASER",
       class = "BP_SV_Tani_LASER_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_LASER.BP_SV_Tani_LASER_C",
       cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_LASER.Default__BP_SV_Tani_LASER_C",
-      name_key = "SV_TaniLASER_Name", name = "TANICORN LASER",
+      name_key = "SV_TaniLASER_Name", name = "TANACORN LASER",
       fcs = "SV_FCS_TaniLASER", fcs_src = "NPC_FCS_VesselCIWS000", fcs_slots = 1, fcs_speed = { 120, 100 },   -- (its aim)
       yaw = { -180, 180 }, pitch = { -10, 85 },
       -- (2026-11-11) the user: "the LASERS have to be Laser Interceptors": AC7's LaserInterceptor at its muzzle (li: handed
@@ -758,7 +758,7 @@ testKey("T", "sv_tanicorn.lua's mount test", function()
         log("tanicorn: straight spawn of our class 300 m from the spot: " .. whyD)
         if d then list[#list + 1] = d end
     end
-    hudCallout("TEST: TANICORN MOUNT", r > 0 and "3 KM AHEAD" or "NOT SPAWNED")
+    hudCallout("TEST: TANACORN MOUNT", r > 0 and "3 KM AHEAD" or "NOT SPAWNED")
     local now = os.clock()
     T.checks[#T.checks + 1] = { at = now + 1, tag = "+1 s", made = list, k = TANI, x = x, y = y }
     T.checks[#T.checks + 1] = { at = now + 4, tag = "+4 s", made = list, k = TANI, x = x, y = y }
@@ -797,7 +797,7 @@ testKey("U", "sv_tanicorn.lua's mounts test", function()
         T.checks[#T.checks + 1] = { at = now + 4, tag = "+4 s", made = list, k = k, x = x, y = y }
         T.shells[k.key] = 0
     end
-    hudCallout("TEST: TANICORN MOUNTS", #up > 0 and (table.concat(up, ", ") .. " 3 KM AHEAD") or "NOT SPAWNED")
+    hudCallout("TEST: TANACORN MOUNTS", #up > 0 and (table.concat(up, ", ") .. " 3 KM AHEAD") or "NOT SPAWNED")
     T.next, T.until_, T.stockSaid = 0, now + TANI.watch_s, nil
 end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn mount watch", fn = watch }

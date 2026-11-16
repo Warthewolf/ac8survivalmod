@@ -257,13 +257,23 @@ def hull_bp(parts_on, rig=None, live=None, name='HULL'):
                           'bEnableUpdateRateOptimizations': 'False',
                           'BodyInstance': '(CollisionEnabled=NoCollision,CollisionProfileName="NoCollision")'}},
                dict(hull, parent='RiseRig', socket='SOC_Hull')]
+    lifts = {p for p, _ in parts_on if p.endswith('_LIFT')}
     for part, sockets in parts_on:
         for s in sockets:
+            if part.endswith('_LIFT'):                 # ((2026-11-16, route (iv)) a sub-railgun's lift: in its live part's
+                if live and part[:-5] in live:         # blueprint when that one's live; drawn otherwise, its house on it
+                    continue
+                scs.append({'name': f'Part_{s}_LIFT', 'class': 'PoseableMeshComponent', 'parent': 'HullMesh',
+                            'socket': f'Mount_{s}', 'props': {'SkeletalMesh': sk(part), 'SkinnedAsset': sk(part)}})
+                continue
             if live and part in live:                  # (a live part: the mount's own blueprint as a child actor)
                 scs.append({'name': f'Part_{s}', 'class': 'LiveChildActorComponent', 'parent': 'HullMesh',
                             'socket': f'Mount_{s}', 'child_class': f'{obj(f"{DEST}/BP_SV_Tani_{part}")}_C'})
                 continue
-            scs.append({'name': f'Part_{s}', 'class': 'PoseableMeshComponent', 'parent': 'HullMesh', 'socket': f'Mount_{s}',
+            on = ('HullMesh', f'Mount_{s}')
+            if part + '_LIFT' in lifts:                # (a drawn sub-railgun's house: on its drawn lift's SOC_Lift)
+                on = (f'Part_{s}_LIFT', 'SOC_Lift')
+            scs.append({'name': f'Part_{s}', 'class': 'PoseableMeshComponent', 'parent': on[0], 'socket': on[1],
                         'props': {'SkeletalMesh': sk(part), 'SkinnedAsset': sk(part)}})
     return {'path': f'{DEST}/BP_SV_Tani_{name}', 'parent': 'LiveAIGroundVehicleObject', 'scs': scs,
             'cdo': {'AutoPossessAI': 'PlacedInWorldOrSpawned', 'GameObjectId': '1000', 'GameObjectCategory': 'Category_Ship',
@@ -329,6 +339,42 @@ FAR_CDO = {'bIgnoreMeshOptimize': 'True', 'bIgnoreSetAutoSkipUpdateTransform': '
 VLS_FCS = {'search': 'AIR_ONLY', 'capture_cm': 700000, 'min_cm': 60000, 'cone': 180, 'activation': 2, 'triggering': 1.6,
            'interval': 0.4, 'resting': 10, 'trigger_count': 4, 'fire_rate': 12, 'magazine': VLS_CELLS, 'reload': 15,
            'weapon': VLS_MISSILE, 'hit_pad_cm': 200}
+
+
+def railgun_mount(part, info, fcs):
+    """(2026-11-16, route (iv): the first in-game test, a Lua-written lift on one TurretPoseableMesh read back up but never
+    drawn) a sub-railgun BP_SV_Tani_RAILGUN_<side> as mount() lays it out, but on two meshes:
+      LiftMesh            a SkeletalMeshComponent (SK_SV_Tani_<part>_LIFT: Body > lift, Hatch_n / Hatch_p) in single-node mode on
+                          AS_SV_Tani_<part>_LIFT_Deploy held at 0 (stowed), always posed and refreshed: Lua plays it (the
+                          railcannon's way, which drew its +19 m in game)
+      TurretPoseableMesh  the house and rails (SK_SV_Tani_<part>: BN_Body > BN_turret_yaw > BN_turret_pitch, SOC_Gun_01) on
+                          LiftMesh's SOC_Lift, so it rises with the lift; the arm's LauncherBoneControl turns it as before
+      the hit             the mounts' sphere, on the turret (it rises with it)
+      the wreck           both meshes hidden, both wrecks shown"""
+    bp = mount(part, info, fcs)
+    name = f'Tani_{part}'
+    lift, anim = obj(f'{DEST}/Model/SK_SV_{name}_LIFT'), obj(f'{DEST}/Model/AS_SV_{name}_LIFT_Deploy')
+    scs = {c['name']: c for c in bp['scs']}
+    turret = dict(scs['TurretPoseableMesh'], parent='LiftMesh', socket='SOC_Lift')
+    hit = dict(scs['DamagedCollision'], parent='TurretPoseableMesh')
+    bp['scs'] = [
+        {'name': 'LiftMesh', 'class': 'SkeletalMeshComponent', 'parent': 'RootComponent',
+         'props': {'SkeletalMesh': lift, 'SkinnedAsset': lift, 'AnimationMode': 'AnimationSingleNode',
+                   'AnimationData': (f'(AnimToPlay="{anim}",bSavedLooping=False,bSavedPlaying=False,'
+                                     'SavedPosition=0.000000,SavedPlayRate=1.000000)'),
+                   'VisibilityBasedAnimTickOption': 'AlwaysTickPoseAndRefreshBones',
+                   'bEnableUpdateRateOptimizations': 'False'}},
+        turret, scs['DamagedStaticMesh'],
+        {'name': 'DamagedLiftMesh', 'class': 'StaticMeshComponent', 'parent': 'RootComponent',
+         'props': {'StaticMesh': obj(f'{DEST}/Model/SM_SV_{name}_LIFT_DAM'), 'bVisible': 'False'}},
+        hit,
+    ]
+    ds = bp['components']['DamagedStateComponent']['DefaultDestroySystemList'][0]['props']
+    one = '(ChangeTime=0,TargetMeshName="%s",bHideToFinalExplosion=%s,bReflectChildMesh=False)'
+    ds['DestroyHideMeshNameList'] = '(%s,%s)' % (one % ('TurretPoseableMesh', 'True'), one % ('LiftMesh', 'True'))
+    ds['DestroyVisibleMeshNameList'] = '(%s,%s)' % (one % ('DamagedStaticMesh', 'False'), one % ('DamagedLiftMesh', 'False'))
+    bp['cdo'].update(FAR_CDO)
+    return bp
 
 
 RC_HIT_CM = 700                                     # (the railcannon's hit spheres: railcannon_mount)
@@ -433,10 +479,8 @@ def main():
             spec['blueprints'].append(mount(p, info, FCS[p]))
         elif kind == 'vls' and p in VLS_PARTS:         # ((2026-11-12) the VLS blocks: WP1's VLS route)
             spec['blueprints'].append(vls_mount(p, info, VLS_FCS))
-        elif kind == 'railgun' and p in RAIL_FCS:      # ((2026-11-12, stage 4) the sub-railguns: the mounts' layout, raised by Lua)
-            bp = mount(p, info, RAIL_FCS[p])
-            bp['cdo'].update(FAR_CDO)
-            spec['blueprints'].append(bp)
+        elif kind == 'railgun' and p in RAIL_FCS:      # ((2026-11-16, route (iv)) the sub-railguns: the turret on its lift
+            spec['blueprints'].append(railgun_mount(p, info, RAIL_FCS[p]))   # mesh, raised by Lua playing the lift's Deploy)
         elif kind == 'railcannon' and p in RAIL_PARTS:  # ((2026-11-12, stage 4) the bow railcannon: no arms, Lua's shot)
             spec['blueprints'].append(railcannon_mount(p, info))
     live_said = ''
