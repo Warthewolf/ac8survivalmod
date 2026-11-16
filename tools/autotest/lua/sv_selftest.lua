@@ -686,6 +686,57 @@ SUITES.seq = function()
     run("high", high, highOn, 45, { 1.5, 3, 4.5, 6, 8, 11, 15, 20 })
     run("low", low, lowOn, 55, { 1.5, 3, 5, 8, 12 })
 end
+-- (2026-11-16) THE TANACORN's rise (Ctrl+R, sv_tanicorn_rise.lua; WP4): her rig found and played, the breach's and the
+-- slam's effects up, the hull from 130 m under the sea to its rest with the bow up ~35 deg on the way, the rise over and
+-- your view back; its cinematic pictured as it plays (the window grabs: your view is its camera)
+SUITES.rise = function()
+    intoRun()
+    A.do_(function()
+        if not ST.check(TANI ~= nil and TANI.rise ~= nil, "THE TANACORN's rise is in this build (sv_tanicorn_rise)") then return "abort" end
+        ST.marks.r0 = ST.n
+        ST.press("R")
+    end)
+    A.log_("tanicorn: Ctrl%+R", 10, "r0", false, function(l)
+        if not ST.check(l ~= nil and not l:find("outside", 1, true), "Ctrl+R: the hull up for its rise", l) then return "abort" end
+    end)
+    A.log_("tanicorn: rise: RiseRig found", 15, "r0", true, function(l)
+        ST.check(l ~= nil, "her RiseRig found and scrubbed to 0", l or ST.findLog("tanicorn: rise:", ST.marks.r0, true))
+    end)
+    A.log_("tanicorn: rise: playing at rate", 10, "r0", true, function(l)
+        ST.check(l ~= nil and not l:find("FAILED", 1, true), "her rise playing", l)
+    end)
+    for i, t in ipairs({ 1, 2.5, 4, 5.5, 7, 9, 10.5, 13, 16 }) do
+        A.wait(i == 1 and 1 or (t - ({ 1, 2.5, 4, 5.5, 7, 9, 10.5, 13, 16 })[i - 1]))
+        A.do_(function() ST.shot(string.format("rise_%02d_%04.1fs", i, t)) end)
+    end
+    A.log_("tanicorn: rise breach at", 5, "r0", true, function(l)
+        local up, of = nil, nil
+        if l then up, of = l:match("(%d+) of (%d+) effects up") end
+        ST.check(up ~= nil and up == of and tonumber(of) > 0, "the breach: every effect up", l)
+    end)
+    A.log_("tanicorn: rise slam at", 5, "r0", true, function(l)
+        ST.check(l ~= nil, "the slam: its foam and pillars", l)
+    end)
+    A.log_("tanicorn: rise over", 30, "r0", true, function(l)
+        ST.check(l ~= nil, "the rise over, your view back", l)
+        local zs, ps = {}, {}
+        for i = ST.marks.r0 + 1, ST.n do
+            local s = ST.lines[i] or ""
+            local z = s:match("tanicorn: rise %+[%d%.]+ s: hull at z (%-?[%d%.]+) m")
+            local pt = s:match("pitch (%-?[%d%.]+)")
+            if z then zs[#zs + 1] = tonumber(z); if pt then ps[#ps + 1] = tonumber(pt) end end
+        end
+        local zmin, zmax, pmax = math.huge, -math.huge, -math.huge
+        for _, z in ipairs(zs) do zmin, zmax = math.min(zmin, z), math.max(zmax, z) end
+        for _, v in ipairs(ps) do pmax = math.max(pmax, v) end
+        ST.check(#zs > 10 and zmin < -60 and zmax > zmin + 60, "her hull rose from under the sea",
+            string.format("%d readings, z %s .. %s m", #zs, tostring(zmin), tostring(zmax)))
+        ST.check(#ps > 10 and pmax > 20, "her bow up on the way (the pitch)", string.format("pitch at most %s deg", tostring(pmax)))
+    end)
+    A.log_("tanicorn: rise effects:", 20, "r0", true, function(l)
+        ST.info("rise effects: " .. tostring(l))
+    end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
