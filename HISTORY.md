@@ -3312,3 +3312,20 @@ game. The work was split by file between agents; the builds ran in sequence in t
   (CVC_ms04_20251216 -> CVC_ms12_250708), 130 flashes, the fleet up in the pre-dawn storm; the storm never cleared (the
   arc's step capped at midday's hold): SKY.arcState's kRaw, fixed in 0.74.84. Its pictures from 1.2 km were inside the
   storm's cloud deck (black, then grey): the suite's camera at 400 m now, a bolt forced in view before a shot.
+
+## 0.74.85-0.74.86 (2026-11-16; test builds only): INVINCIBLE FLEET surfaces, filmed (feature/fleet-storm)
+- The user: "when the Invincible Fleet first spawns, they should all Surface out of the sea the same way the Tanacorn does.
+  I want it to look cinematic as possible, so add multiple camera angles to that cutscene when they do surface."
+- The autotest's probes: THE TANACORN's rise rig (SK_SV_Tani_RIG, AS_SV_Tani_RIG_Rise) plays in a bare SkeletalMeshActor
+  (run 39-40); a live AI ship attached to its SOC_Hull never leaves the water (run 40: 0.2-0.9 m through the rise, its own
+  movement holds it, as hard rule 39's planes); a bare spawn of the ship's own blueprint class (no unit, no AI orders) and
+  a StaticMeshActor both ride it exactly, from -100 m to the surface (run 42, 14/14).
+- IFSURF (sv_fleet.lua, CFG.specials.fleet.surface): at Ctrl+N a double of each ship's own blueprint (every turret on) on
+  the rig, scaled by its length to her 650 m, measured at its rest and moved so it settles on the ship's spot, risen in
+  waves (pickets, frigates, Udaloy / Kirov, the Aegis cruisers, GEOFON last), TANI.rise.FX's waters at each breach and
+  slam, seven camera cuts (kept on screen), your plane invincible on the loiter autopilot with the attack limits at 0;
+  then a fade to black, the doubles off and the real fleet up on the same spots under it (F.burst), your view back. Run 43
+  (0.74.85, daylight): 9/9, 15 of 15 doubles up, 45 breach and 60 slam waters, 0 view reverts, the real fleet up after.
+- The storm night brighter (a profile's night_over: exposure 1.3 / 10 / +1.6): run 44's sea and coast visible under the
+  storm. At night a cloud light took the view back to the plane (runs 41, 44): bolts only while the surfacing films.
+- 0.74.86: the cameras closer (run 43's were far, the last wide into the sun), bolts only during it.
