@@ -12,6 +12,7 @@ closed (taskkill: the fast path must not run into QuitGame) and kit.py restore c
 run folder; rc 0 all passed, 1 a check failed, 2 no RESULT (watchdog, the game gone, a refused launch)."""
 import argparse
 import glob
+import shutil
 import os
 import subprocess
 import sys
@@ -63,6 +64,44 @@ def newest_lua_log(after):
     return best[1] if best else None
 
 
+SHOTS = {'n': 0}
+
+
+def shoot(line, note):
+    """a `selftest: SHOT <name> ...` line: the game's window captured to the run folder's shots/NN_<name>.png (the
+    self-test's own HighResShot files are collected after the run: collect_shots)"""
+    import re
+    m = re.search(r'selftest: SHOT (\S+)', line)
+    if not m:
+        return
+    SHOTS['n'] += 1
+    d = os.path.join(os.environ['SV_AUTOTEST_RUN'], 'shots')
+    os.makedirs(d, exist_ok=True)
+    out = os.path.join(d, '%02d_%s.png' % (SHOTS['n'], m.group(1)))
+    try:
+        hw = C.game_window(set(C.pids_of(C.GAME_EXE)))
+        size = C.capture_window(hw, out) if hw else None
+        note('job: picture %s: %s' % (m.group(1), ('%dx%d %s' % (size[0], size[1], os.path.basename(out))) if size
+                                       else 'the window not captured'))
+    except Exception as ex:                          # (only a picture: never in the way of the run)
+        note('job: picture %s failed: %s' % (m.group(1), ex))
+
+
+def collect_shots(t_launch, run_dir, note):
+    """the game's own screenshots (HighResShot: its Saved/Screenshots) made since the launch, moved to shots/"""
+    src = os.path.join(C.saved_dir(), 'Screenshots')
+    moved = []
+    for d, _, files in os.walk(src):
+        for f in files:
+            p = os.path.join(d, f)
+            if os.path.getmtime(p) >= t_launch - 5:
+                os.makedirs(os.path.join(run_dir, 'shots'), exist_ok=True)
+                dst = os.path.join(run_dir, 'shots', 'game_' + f)
+                shutil.move(p, dst)
+                moved.append(f)
+    note('job: the game\'s own screenshots: %s' % (', '.join(moved) if moved else 'none (HighResShot made none)'))
+
+
 def stalled_start():
     """UE4SS.log's last 30 lines all "Still waiting for object construction, N objects" with one N (a line every ~2.3 s:
     over a minute without a new object). The first two gated runs (2026-11-16) sat at 9,474 for minutes."""
@@ -112,6 +151,10 @@ def main(argv):
     if C.game_running():
         C.kill(C.GAME_EXE)
         time.sleep(4)
+    try:
+        collect_shots(t_launch, run_dir, note)
+    except Exception as ex:
+        note('job: the game\'s screenshots not collected: %s' % ex)
     r = subprocess.run(PY + [os.path.join(C.HERE, 'kit.py'), 'restore'], capture_output=True, text=True,
                        creationflags=C.NO_WINDOW, env=dict(os.environ, SV_AUTOTEST_RUN=run_dir))
     note((r.stdout + r.stderr).strip())
@@ -157,6 +200,8 @@ def follow(t_launch, a, note):
                 last_new = time.time()
                 for raw in chunk[:nl].splitlines():
                     line = raw.decode('utf-8', 'replace')
+                    if 'selftest: SHOT ' in line:
+                        shoot(line, note)
                     if 'selftest: ' in line:
                         note(line.strip())
                         if 'selftest: FAIL' in line:

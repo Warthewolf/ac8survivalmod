@@ -122,6 +122,49 @@ local function holdPlane(now)
         if okD and r == 1 then HOLD.apOn = a else HOLD.apOn = nil end
     end
 end
+-- ---- screenshots (the user, 2026-11-16: "Screenshots would be good") ------------------------------------------------
+-- ST.look(at, look, fov): a CameraActor of ours at `at` (world cm) turned onto `look`, your view on it (sv_cine.lua's spawn and
+-- SetViewTargetWithBlend); ST.shot(name): the game's own HighResShot (Saved/Screenshots, collected by job.py) and a
+-- `selftest: SHOT <name>` line (job.py captures the game's window too); ST.lookBack(): your plane's view, the camera gone.
+local CAM = nil
+local function quatOf(yaw, pitch)                         -- (yaw about Z, then pitch about Y: a camera's turn, no roll)
+    local cy, sy, cp, sp = math.cos(math.rad(yaw) / 2), math.sin(math.rad(yaw) / 2), math.cos(math.rad(pitch) / 2), math.sin(math.rad(pitch) / 2)
+    return { X = sy * sp, Y = -cy * sp, Z = sy * cp, W = cy * cp }
+end
+function ST.look(at, look, fov)
+    local gs, ccls, pc = StaticFindObject("/Script/Engine.Default__GameplayStatics"), StaticFindObject("/Script/Engine.CameraActor"), ST.pc()
+    if not (valid(gs) and valid(ccls) and pc) then return false, "no GameplayStatics / CameraActor / player controller" end
+    local dx, dy, dz = look.X - at.X, look.Y - at.Y, look.Z - at.Z
+    local yaw, pitch = math.deg(math.atan(dy, dx)), math.deg(math.atan(dz, math.sqrt(dx * dx + dy * dy)))
+    local t = { Rotation = quatOf(yaw, pitch), Translation = { X = at.X, Y = at.Y, Z = at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+    local okB, a = pcall(function() return gs:BeginDeferredActorSpawnFromClass(pc, ccls, t, 1, nil, 1) end)
+    if not (okB and a and valid(a)) then return false, "the camera's spawn gave nothing" end
+    pcall(function() gs:FinishSpawningActor(a, t, 1) end)
+    pcall(function() a:K2_SetActorRotation({ Pitch = pitch, Yaw = yaw, Roll = 0 }, true) end)
+    pcall(function() a.CameraComponent.bConstrainAspectRatio = false end)
+    pcall(function() a.CameraComponent:SetFieldOfView(fov or 50) end)
+    if CAM and valid(CAM) then pcall(function() CAM:K2_DestroyActor() end) end
+    CAM = a
+    local ok = pcall(function() pc:SetViewTargetWithBlend(a, 0, 0, 0, false) end)
+    return ok, ok and "your view on the camera" or "SetViewTargetWithBlend failed"
+end
+function ST.lookBack()
+    local pc, pawn = ST.pc(), ST.plane()
+    if pc and pawn then pcall(function() pc:SetViewTargetWithBlend(pawn, 0, 0, 0, false) end) end
+    if CAM and valid(CAM) then pcall(function() CAM:K2_DestroyActor() end) end
+    CAM = nil
+end
+function ST.shot(name)
+    local ks, pc = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary"), ST.pc()
+    local ok = valid(ks) and pc and pcall(function() ks:ExecuteConsoleCommand(pc, "HighResShot 1", pc) end)
+    say("SHOT " .. name .. " (HighResShot " .. (ok and "asked" or "NOT asked") .. ")")
+end
+function ST.at(o) local v = o:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end
+function ST.off(p, dx, dy, dz) return { X = p.X + dx, Y = p.Y + dy, Z = p.Z + dz } end
+function ST.frame(o, f, r, u)                             -- a spot off o in its own frame (forward / right / up, cm)
+    local p, F, R = ST.at(o), o:GetActorForwardVector(), o:GetActorRightVector()
+    return { X = p.X + F.X * f + R.X * r, Y = p.Y + F.Y * f + R.Y * r, Z = p.Z + F.Z * f + R.Z * r + u }
+end
 function ST.healthOf(o)
     local h, mx
     pcall(function() h = o.HealthInternal end)
@@ -147,6 +190,20 @@ function A.log_(pat, timeout, mark, plain, done)
         return ST.findLog(pat, mark and ST.marks[mark] or 0, plain) end }
 end
 function A.mark(name) A.do_(function() ST.marks[name] = ST.n end) end
+-- a picture's steps: the camera at atFn() onto lookFn() (read when the step runs), a frame or two drawn, the shot, back
+function A.picture(name, atFn, lookFn, fov)
+    A.do_(function()
+        local okA, at = pcall(atFn)
+        local okL, look = pcall(lookFn)
+        if not (okA and at and okL and look) then ST.info("picture " .. name .. ": its spot not read"); return end
+        local ok, why = ST.look(at, look, fov)
+        if not ok then ST.info("picture " .. name .. ": " .. tostring(why)) end
+    end)
+    A.wait(1.5)
+    A.do_(function() ST.shot(name) end)
+    A.wait(2.5)                                           -- (the job grabs the window within ~1 s of the line)
+    A.do_(function() ST.lookBack() end)
+end
 local aborted = false
 local function stepOnce(now)
     local s = Q[qi]
@@ -297,6 +354,8 @@ SUITES.tanacorn = function()
         C.hh0 = h1                                         -- (the later checks against what's there now)
     end)
     A.wait(5)                                             -- (the +2.5 s orders, the +8 s look)
+    A.picture("tanacorn_whole", function() return ST.frame(C.hull, -30000, 90000, 22000) end,
+        function() return ST.frame(C.hull, 0, 0, 3000) end, 55)
     chainTest(C, "T5", { "^T5" })
     chainTest(C, "VLS block", { "^VLSS_L", "^VLS" })
     C.railUp = {}
@@ -331,6 +390,9 @@ SUITES.tanacorn = function()
     end, 40, function(l)
         if C.railUp.L or C.railUp.R then ST.check(type(l) == "string", "a railgun fired (its first EML round seen)", l) end
     end)
+    A.picture("railgun_L_raised", function()
+        local _, seen = partsSeen(); return ST.frame(seen.RAILGUN_L.o, 4000, -7000, 2500) end,
+        function() local _, seen = partsSeen(); return ST.frame(seen.RAILGUN_L.o, 0, 0, 500) end, 45)
     A.do_(function() C.af0 = AF and AF.bomb; ST.marks.m1 = ST.n; ST.press("H") end)   -- the bow railcannon
     A.log_("tanicorn rc: deployed at", 12, "m1", true, function(l)
         ST.check(l ~= nil, "the railcannon deployed (Ctrl+H)", l or ST.findLog("tanicorn rc:", ST.marks.m1, true))
@@ -338,7 +400,12 @@ SUITES.tanacorn = function()
     A.log_("tanicorn rc: charge 1 at", 8, "m1", true, function(l)
         ST.check(l ~= nil and l:find("RAILGUN WARNING", 1, true) ~= nil, "its first charge, the RAILGUN WARNING up", l)
     end)
+    A.picture("railcannon_charging", function()
+        local _, seen = partsSeen(); return ST.frame(seen.RAILCANNON.o, 2000, 14000, 4500) end,
+        function() local _, seen = partsSeen(); return ST.frame(seen.RAILCANNON.o, -2000, 0, 2000) end, 50)
     A.log_("tanicorn rc: SHOT 1 at", 45, "m1", true, function(l) ST.check(l ~= nil, "its first shot", l) end)
+    A.picture("railcannon_impact", function() return { X = AIRFIELD.X - 90000, Y = AIRFIELD.Y + 60000, Z = 35000 } end,
+        function() return { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 0 } end, 50)
     A.log_("tanicorn rc: impact 1 at", 25, "m1", true, function(l)
         ST.check(l ~= nil, "its round hit the airfield", l)
         ST.check(C.af0 ~= nil and AF and AF.bomb and AF.bomb > C.af0, "the airfield took the damage (AF.bomb up)",
@@ -391,6 +458,12 @@ SUITES.fleet = function()
         ST.info("waiting 70 s for the fleet to sail")
     end)
     A.wait(70)
+    A.picture("fleet_formation", function()
+        local G = IFLEET.cur.ships[1].hull; return ST.frame(G, -250000, -120000, 120000) end,
+        function() return ST.at(IFLEET.cur.ships[1].hull) end, 55)
+    A.picture("geofon_close", function()
+        local G = IFLEET.cur.ships[1].hull; return ST.frame(G, -45000, 30000, 12000) end,
+        function() return ST.at(IFLEET.cur.ships[1].hull) end, 50)
     A.do_(function()
         local notUnder = {}
         for i = ST.marks.m0 + 1, ST.n do

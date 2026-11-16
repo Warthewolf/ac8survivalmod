@@ -278,5 +278,54 @@ def answer_driver_warning(game_pids, log):
     return n
 
 
+def game_window(pids):
+    """the game's biggest visible top-level window (its viewport), or None"""
+    best = []
+
+    def cb(h, _):
+        if _user32.IsWindowVisible(h) and _pid(h) in pids and _cls(h) != '#32770':
+            r = wt.RECT()
+            _user32.GetClientRect(h, ctypes.byref(r))
+            best.append((r.right * r.bottom, h))
+        return True
+    _user32.EnumWindows(_EnumProc(cb), 0)
+    return max(best)[1] if best else None
+
+
+def capture_window(hwnd, path):
+    """the window's client area to a PNG through PrintWindow(PW_RENDERFULLCONTENT): DWM's copy of it, a D3D game's too,
+    with no focus taken and nothing on top in the way (the user, 2026-11-16: "Screenshots would be good"). Returns
+    (width, height) or None."""
+    from PIL import Image
+    g32 = ctypes.windll.gdi32
+    r = wt.RECT()
+    _user32.GetClientRect(hwnd, ctypes.byref(r))
+    w, h = r.right, r.bottom
+    if w <= 0 or h <= 0:
+        return None
+    hdc = _user32.GetDC(hwnd)
+    mem = g32.CreateCompatibleDC(hdc)
+    bmp = g32.CreateCompatibleBitmap(hdc, w, h)
+    g32.SelectObject(mem, bmp)
+    ok = _user32.PrintWindow(hwnd, mem, 0x1 | 0x2)          # PW_CLIENTONLY | PW_RENDERFULLCONTENT
+
+    class BIH(ctypes.Structure):
+        _fields_ = [('biSize', wt.DWORD), ('biWidth', ctypes.c_long), ('biHeight', ctypes.c_long), ('biPlanes', wt.WORD),
+                    ('biBitCount', wt.WORD), ('biCompression', wt.DWORD), ('biSizeImage', wt.DWORD),
+                    ('biXPelsPerMeter', ctypes.c_long), ('biYPelsPerMeter', ctypes.c_long), ('biClrUsed', wt.DWORD),
+                    ('biClrImportant', wt.DWORD)]
+    bi = BIH()
+    bi.biSize, bi.biWidth, bi.biHeight, bi.biPlanes, bi.biBitCount = ctypes.sizeof(BIH), w, -h, 1, 32
+    buf = ctypes.create_string_buffer(w * h * 4)
+    got = g32.GetDIBits(mem, bmp, 0, h, buf, ctypes.byref(bi), 0)
+    g32.DeleteObject(bmp)
+    g32.DeleteDC(mem)
+    _user32.ReleaseDC(hwnd, hdc)
+    if not (ok and got):
+        return None
+    Image.frombuffer('RGBA', (w, h), buf.raw, 'raw', 'BGRA', 0, 1).convert('RGB').save(path)
+    return w, h
+
+
 _SEEN_DIALOGS = set()
 _ANSWERED = set()
