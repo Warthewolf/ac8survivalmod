@@ -833,7 +833,7 @@ SUITES.fleetnight = function()
         A.wait(9)                                         -- (the arc's blend_s 5, the storm's fade 2.6)
         A.do_(function()
             local a, w = SKY.arcState(), IFSKY.storm()
-            ST.check(a.on and a.profile == "fleet" and a.k == k and (w.on == stormy),
+            ST.check(a.on and a.profile == "fleet" and (a.kRaw or a.k) == k and (w.on == stormy),
                 string.format("%s: the fleet's arc at step %s, the %s, the storm %s", what, tostring(a.k), tostring(a.mode), w.on and "on" or "off"),
                 string.format("profile %s, step %s, mode %s, storm %s (%d flashes so far)", tostring(a.profile), tostring(a.k), tostring(a.mode),
                     tostring(w.on), w.flashes or 0))
