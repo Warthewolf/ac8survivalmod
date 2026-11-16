@@ -2308,6 +2308,53 @@ SUITES.cloudview = function()
     end
     A.do_(function() local L = cfg(); if L.cloud then L.cloud.enabled = CV.was end end)
 end
+-- (2026-11-17) 0.74.90's Ctrl+S (the user: "yeah make a test key that goes into night storm"): pressed, the fleet's night
+-- storm comes under its fade with its cloud light and flashes; again, it clears and the round's own sky is back; a third
+-- time, the storm again. Pictures from your view at each.
+SUITES.stormkey = function()
+    intoRun()
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and IFSKY.storm ~= nil, "the fleet's night storm is in this build") then return "abort" end
+        ST.marks.k1 = ST.n
+        ST.check(ST.press("S") == 1, "Ctrl+S is bound (one callback)")
+    end)
+    A.log_("fleet storm: the arc at step 3 now", 3, "k1", true, function(l) ST.check(l ~= nil, "Ctrl+S: the fleet's arc at its night", l) end)
+    A.log_("fleet storm: in (", 15, "k1", true, function(l) ST.check(l ~= nil, "the storm in under its fade", l) end)
+    A.log_("a cloud flash (", 20, "k1", true, function(l) ST.check(l ~= nil, "its cloud flashes", l) end)
+    for i = 1, 4 do
+        A.wait(1)
+        A.do_(function() ST.shot(string.format("sk_on_%d", i)) end)
+    end
+    A.do_(function()
+        ST.check(IFSKY.storm().on == true, "IFSKY.storm(): on", tostring(IFSKY.storm().flashes) .. " flashes")
+        ST.marks.k2 = ST.n
+        ST.press("S")
+    end)
+    A.wait(0.2)
+    A.do_(function() ST.shot("sk_leaving_1") end)        -- (0.74.90's run 72: the day here, a second before the fade)
+    A.wait(0.5)
+    A.do_(function() ST.shot("sk_leaving_2") end)
+    A.log_("fleet storm: the arc at step nil now", 4, "k2", true, function(l)
+        local i = select(2, ST.findLog("fleet storm: the arc at step nil now", ST.marks.k2, true))
+        local f = select(2, ST.findLog("under a fade to black", ST.marks.k2, true))
+        ST.check(l ~= nil and i ~= nil, "Ctrl+S again: the test's step off", l)
+        ST.info("cleared: the step off at log line " .. tostring(i) .. ", the fade's line at " .. tostring(f))
+    end)
+    A.log_("fleet storm: cleared (", 15, "k2", true, function(l) ST.check(l ~= nil, "the storm cleared under its fade", l) end)
+    A.wait(4)
+    A.do_(function()
+        ST.check(IFSKY.storm().on == false and IFSKY.k == nil, "IFSKY.storm(): off, no test step")
+        ST.shot("sk_day")
+    end)
+    A.wait(1)
+    A.do_(function()
+        ST.marks.k3 = ST.n
+        ST.press("S")
+    end)
+    A.log_("fleet storm: in (", 15, "k3", true, function(l) ST.check(l ~= nil, "a third Ctrl+S: the storm in again", l) end)
+    A.wait(3)
+    A.do_(function() ST.shot("sk_again") end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
