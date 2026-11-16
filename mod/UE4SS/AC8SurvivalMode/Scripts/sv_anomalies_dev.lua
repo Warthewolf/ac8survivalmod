@@ -1220,6 +1220,146 @@ local function clTick(now)
     end
 end
 THUNDER.cloudFlash, THUNDER.cloudTick = flash, clTick
+-- (2026-11-17) lightning bolts you can see: AC8's own bolt meshes (VFX/ResourceAsset/Mesh/Lightning, SM_Thunder* ...) on
+-- StaticMeshActors with the game's cloud lightning material (MI_NearCloudLightning001: white, a blue edge). The autotest's
+-- runs 46-60: NS_CloudLightning draws only a faint teal glow, the stock cloud lights and our own point lights light nothing
+-- in Cloudly's clouds; a bolt mesh draws once its mesh is set BEFORE its spawn finishes (after it, on a Static actor,
+-- SetStaticMesh refuses: runs 50-51 drew nothing), Movable so a pooled actor can take another mesh. A pool of c.pool actors,
+-- each bolt standing from the sea (a mesh taller than wide) or lying in the clouds at alt_m (one wider than tall), height_m /
+-- length_m long, a random turn, shown and hidden by c.steps a tick (the 250 ms tick: 1 shown, 0 hidden), then back in the
+-- pool. boltWarm shows the pool 400 m in front of your camera (under a fade to black: the material's first draw compiles
+-- there, not as the checker by your plane of the autotest's run 45). Log: `bolts: ...`.
+local BOLT = { pool = {}, mesh = {}, ext = {} }
+local function boltRng(r, d) r = type(r) == "table" and r or d; return r[1] + math.random() * (r[2] - r[1]) end
+local function boltMesh(path)
+    local m = BOLT.mesh[path]
+    if m and liveObj(m) then return m end
+    m = loadObject(path)
+    BOLT.mesh[path] = m
+    if m then
+        local okB, b = pcall(function() return m:GetBounds() end)
+        if okB and b then
+            BOLT.ext[path] = { ox = b.Origin.X, oy = b.Origin.Y, oz = b.Origin.Z, ex = b.BoxExtent.X, ey = b.BoxExtent.Y, ez = b.BoxExtent.Z }
+        end
+    end
+    return m
+end
+local function boltNew(c, mesh)                             -- (one pooled actor, hidden; its mesh set before it finishes)
+    local gs, cls = StaticFindObject("/Script/Engine.Default__GameplayStatics"), StaticFindObject("/Script/Engine.StaticMeshActor")
+    if not (gs and valid(gs) and cls and valid(cls) and liveObj(survivalPC) and mesh) then return nil end
+    local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = -1e6 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+    local okB, a = pcall(function() return gs:BeginDeferredActorSpawnFromClass(survivalPC, cls, t, 1, nil, 1) end)
+    if not (okB and a and valid(a)) then return nil end
+    local comp = a.StaticMeshComponent
+    pcall(function() comp:SetMobility(2) end)
+    pcall(function() comp:SetStaticMesh(mesh) end)
+    pcall(function() gs:FinishSpawningActor(a, t, 1) end)
+    pcall(function() comp:SetCollisionEnabled(0) end)
+    pcall(function() comp:SetCastShadow(false) end)
+    BOLT.mat = (BOLT.mat and liveObj(BOLT.mat)) and BOLT.mat or loadObject(c.material)
+    if BOLT.mat then pcall(function() comp:SetMaterial(0, BOLT.mat) end) end
+    pcall(function() a:SetActorHiddenInGame(true) end)
+    return { a = a, c = comp }
+end
+local function boltFree(c)                                  -- (a pooled actor not showing, or a new one while the pool's short)
+    for _, b in ipairs(BOLT.pool) do
+        if not b.steps and liveObj(b.a) then return b end
+    end
+    if #BOLT.pool >= math.floor(tonumber(c.pool) or 10) then return nil end
+    local list = c.meshes or {}
+    local b = boltNew(c, boltMesh(list[1] or ""))
+    if b then BOLT.pool[#BOLT.pool + 1] = b end
+    return b
+end
+local function boltPlace(b, c, at)                          -- (a mesh, a size, a spot, a turn: "standing" or "lying" and its size)
+    local list = c.meshes or {}
+    local path = list[math.random(math.max(1, #list))]
+    local m = boltMesh(path)
+    local e = BOLT.ext[path]
+    if not (m and e) then return nil end
+    pcall(function() b.c:SetStaticMesh(m) end)
+    if BOLT.mat then pcall(function() b.c:SetMaterial(0, BOLT.mat) end) end
+    local yaw = math.random() * 2 * math.pi
+    local standing = e.ez >= 1.5 * math.max(e.ex, e.ey)
+    local sc, z
+    if standing then                                        -- (its foot on the sea, its top height_m up)
+        sc = boltRng(c.height_m, { 1500, 4000 }) * 100 / math.max(1, 2 * e.ez)
+        z = (at.Z or 0) - (e.oz - e.ez) * sc
+    else                                                    -- (across the clouds at alt_m)
+        sc = boltRng(c.length_m, { 2000, 6000 }) * 100 / math.max(1, 2 * math.max(e.ex, e.ey))
+        z = boltRng(c.alt_m, { 2000, 5000 }) * 100 - e.oz * sc
+    end
+    local q = { X = 0, Y = 0, Z = math.sin(yaw / 2), W = math.cos(yaw / 2) }
+    pcall(function() b.a:K2_SetActorTransform({ Rotation = q, Translation = { X = at.X, Y = at.Y, Z = z }, Scale3D = { X = sc, Y = sc, Z = sc } }, false, {}, true) end)
+    return string.format("%s %s x%.0f (%.1f km)", path:match("([%w_]+)$") or "?", standing and "standing" or "lying", sc,
+        2 * (standing and e.ez or math.max(e.ex, e.ey)) * sc / 100000)
+end
+local function boltShow(b, on) pcall(function() b.a:SetActorHiddenInGame(not on) end) end
+-- a bolt at `at` (its foot: X, Y, Z sea level) by settings c; what it showed, or nil and why
+function THUNDER.bolt(at, c, why)
+    c = c or {}
+    if c.enabled == false then return nil, "off" end
+    local b = boltFree(c)
+    if not b then return nil, "the pool's all showing" end
+    local what = boltPlace(b, c, at)
+    if not what then return nil, "its mesh didn't load" end
+    local st = c.steps or { { 1, 0, 1 }, { 1 }, { 1, 0, 1, 0, 1 } }
+    b.steps, b.i = (type(st[1]) == "table") and st[math.random(#st)] or st, 1
+    boltShow(b, b.steps[1] == 1)
+    BOLT.n = (BOLT.n or 0) + 1
+    if BOLT.n <= 5 or BOLT.n % 200 == 0 then log(string.format("bolts: %d (%s): %s, %d pooled", BOLT.n, tostring(why), what, #BOLT.pool)) end
+    return what
+end
+local function boltTick()
+    for _, b in ipairs(BOLT.pool) do
+        if b.steps then
+            b.i = b.i + 1
+            local k = b.steps[b.i]
+            if k == nil or not liveObj(b.a) then b.steps = nil; if liveObj(b.a) then boltShow(b, false) end
+            else boltShow(b, k == 1) end
+        end
+    end
+end
+-- the pool made and shown 400 m in front of your camera (each a mesh of c.meshes in turn), for boltHide to take off: how many
+function THUNDER.boltWarm(c)
+    c = c or {}
+    local pcm
+    pcall(function() pcm = survivalPC.PlayerCameraManager end)
+    local L, R
+    if pcm and liveObj(pcm) then
+        pcall(function() local v = pcm:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+        pcall(function() R = pcm:GetCameraRotation() end)
+    end
+    if not (L and R) then return 0 end
+    local yw, pt = math.rad(R.Yaw or 0), math.rad(R.Pitch or 0)
+    local f = { X = math.cos(pt) * math.cos(yw), Y = math.cos(pt) * math.sin(yw), Z = math.sin(pt) }
+    local list, n = c.meshes or {}, 0
+    for i = 1, math.floor(tonumber(c.pool) or 10) do
+        local b = BOLT.pool[i]
+        if not (b and liveObj(b.a)) then
+            b = boltNew(c, boltMesh(list[1] or ""))
+            BOLT.pool[i] = b
+        end
+        if b then
+            local path = list[((i - 1) % math.max(1, #list)) + 1]
+            local m = boltMesh(path)
+            if m then pcall(function() b.c:SetStaticMesh(m) end) end
+            local d = 40000 + i * 2000
+            pcall(function() b.a:K2_SetActorTransform({ Rotation = { X = 0, Y = 0, Z = 0, W = 1 },
+                Translation = { X = L.X + f.X * d, Y = L.Y + f.Y * d, Z = L.Z + f.Z * d - 20000 }, Scale3D = { X = 3, Y = 3, Z = 3 } }, false, {}, true) end)
+            b.steps = nil
+            boltShow(b, true)
+            n = n + 1
+        end
+    end
+    BOLT.warm = n
+    log(string.format("bolts: %d warmed up in front of your camera (%s)", n, BOLT.mat and "the cloud lightning material" or "NO material"))
+    return n
+end
+function THUNDER.boltHide()
+    for _, b in ipairs(BOLT.pool) do b.steps = nil; if liveObj(b.a) then boltShow(b, false) end end
+end
+THUNDER.cloudTick = function(now) clTick(now); boltTick() end
 -- (the build-up's tick) a flash due at this stage: at a cell or round you, in the clouds
 local function clStorm(B, now)
     local c = lt()
@@ -1768,6 +1908,7 @@ if type(LEVEL_DROPS) == "table" then
         BU, SF.list, SF.ws, SF.rainWas, SK.zone, SK.inside, PB.i, PB.w, TR, SF.unsafeAt = nil, nil, nil, nil, nil, false, 0, nil, nil, nil
         LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LP.i = false, nil, nil, nil, false, 0
         CL.q, CL.light, CL.eff, CL.steps, CLP.i = {}, nil, nil, nil, 0
+        BOLT.pool, BOLT.mat, BOLT.warm = {}, nil, nil                     -- (the level took the pooled bolts with it)
         THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
         THUNDER.cls, THUNDER.copyHp, THUNDER.mgr = nil, nil, nil
     end

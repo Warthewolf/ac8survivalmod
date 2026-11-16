@@ -201,9 +201,21 @@ CFG.specials.fleet = {
             storm = { enabled = true, until_round = 35, out_s = 0.6, hold_s = 0.8, in_s = 1.2,
                       sound = { distant = "AKE_Ms12_ENV_AMB_DistantThunder_Play", distant_stop = "AKE_Ms12_ENV_AMB_DistantThunder_Stop",
                                 clap = "AKE_Environment_Thunder_Play" },
-                      lightning = { enabled = true, every_s = { 0.3, 0.8 }, light_every_s = { 2.0, 4.0 }, dist_km = { 2, 25 },
-                                    alt_m = { 1500, 7000 },
-                                    class = "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms009_FarExplosion.BP_CloudLight_Ms009_FarExplosion_C" } } },
+                      -- ((2026-11-17) the bolts you see: THUNDER.bolt's (sv_anomalies_dev.lua), AC8's bolt meshes in the
+                      -- game's cloud lightning material, a bolt each flash, the rain warmed up behind the fade (warm_fx);
+                      -- no cloud light (class): the stock ones lit nothing at night, the autotest's runs 55-57)
+                      lightning = { enabled = true, every_s = { 0.3, 0.8 }, dist_km = { 2, 25 }, alt_m = { 1500, 7000 },
+                                    bolts = { enabled = true, pool = 10, height_m = { 1800, 4500 }, length_m = { 2500, 7000 },
+                                              alt_m = { 2500, 5500 },
+                                              material = "/Game/VFX/Environment/Common/Lightning/CloudLightning/MI_NearCloudLightning001.MI_NearCloudLightning001",
+                                              meshes = { "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder001_IE03.SM_Thunder001_IE03",
+                                                         "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder006_IE04.SM_Thunder006_IE04",
+                                                         "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder002_IE03.SM_Thunder002_IE03",
+                                                         "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder003_IE03.SM_Thunder003_IE03",
+                                                         "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder005_IE03.SM_Thunder005_IE03",
+                                                         "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Lightning002_IE03.SM_Lightning002_IE03",
+                                                         "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder004_IE03.SM_Thunder004_IE03" } },
+                                    warm_fx = { "/Game/VFX/Environment/Common/Rain/NS_RainDroplets.NS_RainDroplets" } } } },
     -- (2026-11-16) the fleet surfaces as it comes (the user: "when the Invincible Fleet first spawns, they should all Surface
     -- out of the sea the same way the Tanacorn does. I want it to look cinematic as possible, so add multiple camera
     -- angles"): THE TANACORN's rise rig (rig, anim: her container's; the autotest's surface probes, runs 40-42: a live AI ship
@@ -1617,17 +1629,42 @@ local function fade(on, why)
     SW.tr = { on = on, why = why, phase = "out", at = os.clock() + (ok and n(c.out_s, 0.6) or 0), faded = ok }
     if not ok then log("fleet storm: no fade (" .. tostring(err) .. "): the clouds swapped at once") end
 end
+local WARM = {}
+local function warmUp()                                     -- (the bolts 400 m ahead and the rain on your camera, for the hold)
+    local L = stc().lightning or {}
+    local nb = (THUNDER.boltWarm and L.bolts and L.bolts.enabled ~= false) and select(2, pcall(THUNDER.boltWarm, L.bolts)) or 0
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    local pcm, at
+    pcall(function() pcm = survivalPC.PlayerCameraManager; local v = pcm:GetCameraLocation(); at = { X = v.X, Y = v.Y, Z = v.Z } end)
+    WARM.fx = {}
+    for _, path in ipairs(L.warm_fx or {}) do
+        local sys = loadObject(path)
+        local ok, comp = false, nil
+        if sys and lib and at then
+            ok, comp = pcall(function() return lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = 1, Y = 1, Z = 1 }, true, true, 0, false) end)
+        end
+        if ok and comp then WARM.fx[#WARM.fx + 1] = comp end
+    end
+    log(string.format("fleet storm: warm-up under the black: %s bolts, %d of %d effects", tostring(nb), #WARM.fx, #(L.warm_fx or {})))
+end
+local function warmOff()
+    if THUNDER.boltHide then pcall(THUNDER.boltHide) end
+    for _, comp in ipairs(WARM.fx or {}) do pcall(function() comp:DestroyComponent() end) end
+    WARM.fx = {}
+end
 local function trTick(now)
     local t = SW.tr
     if not t or now < t.at then return end
     local c = stc()
     local snd = c.sound or {}
     if t.phase == "out" then
+        if t.on then warmUp() end                           -- (under the black: the bolts' and the rain's first draw)
         local okL, what = pcall(THUNDER.layoutSet, t.on, t.on and "INVINCIBLE FLEET's night storm" or "INVINCIBLE FLEET's storm clearing")
         pcall(THUNDER.post, t.on and snd.distant or snd.distant_stop)
         if t.on and snd.clap then pcall(THUNDER.post, snd.clap) end
         t.phase, t.at, t.what = "hold", now + n(c.hold_s, 0.8), okL and what or ("error " .. tostring(what))
     elseif t.phase == "hold" then
+        warmOff()
         if t.faded then pcall(THUNDER.camFade, 1, 0, n(c.in_s, 1.2), false) end
         t.phase, t.at = "in", now + n(c.in_s, 1.2)
         local a = SKY.arcState()
@@ -1661,13 +1698,17 @@ local function lightTick(now)
     local ang = math.random() * 2 * math.pi
     local at = { X = ce.X + math.cos(ang) * d, Y = ce.Y + math.sin(ang) * d, Z = pick(c.alt_m, { 1500, 7000 }) * 100 }
     local how = "bolt"
-    -- ((0.74.86) bolts only while the surfacing's cameras roll: at night the view went back to the plane after a cloud
-    -- light, the autotest's runs 41 and 44)
-    if now >= (SW.lightAt or 0) and not (IFSURF and IFSURF.state and IFSURF.state()) then
-        how = c.class or "bolt"; SW.lightAt = now + pick(c.light_every_s, { 2, 4 })
+    -- ((0.74.86) cloud lights only off the surfacing's cameras: at night the view went back to the plane after one, the
+    -- autotest's runs 41 and 44; (2026-11-17) none unless c.class is set: they lit nothing, runs 55-57)
+    if c.class and now >= (SW.lightAt or 0) and not (IFSURF and IFSURF.state and IFSURF.state()) then
+        how = c.class; SW.lightAt = now + pick(c.light_every_s, { 2, 4 })
     end
     SW.n = (SW.n or 0) + 1
     local ok, what = pcall(THUNDER.cloudFlash, at, how, "the fleet's storm")
+    if THUNDER.bolt and c.bolts then
+        local okB, seen, why = pcall(THUNDER.bolt, { X = at.X, Y = at.Y, Z = 0 }, c.bolts, "the fleet's storm")
+        what = tostring(what) .. "; " .. (okB and (seen or ("no bolt: " .. tostring(why))) or ("bolt error " .. tostring(seen)))
+    end
     if SW.n <= 3 or SW.n % 100 == 0 then
         log(string.format("fleet storm: flash %d (%.0f km off its centre, %.1f km up): %s", SW.n, d / 100000, at.Z / 100000,
             ok and tostring(what) or ("error " .. tostring(what))))
