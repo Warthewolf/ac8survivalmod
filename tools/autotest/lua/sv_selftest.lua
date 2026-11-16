@@ -1187,6 +1187,38 @@ SUITES.bolt = function()
         A.do_(function() ST.shot(string.format("bolt_%s_%02dkm_b", how, km)) end)
         A.wait(2.5)
     end
+    -- (Mission 12's lightning volume's own effects: BP_LightninigVolume_MS12's defaults, each spawned 6 km ahead in view)
+    A.do_(function()
+        local cls = loadObject("/Game/Blueprints/System/Lightning/BP_LightninigVolume_MS12.BP_LightninigVolume_MS12_C")
+        local cdo
+        pcall(function() cdo = cls:GetCDO() end)
+        if not cdo then pcall(function() cdo = StaticFindObject("/Game/Blueprints/System/Lightning/BP_LightninigVolume_MS12.Default__BP_LightninigVolume_MS12_C") end) end
+        ST.BOLTS = {}
+        local parts = {}
+        for _, f in ipairs({ "LightinigEffect", "LivelyLightinigEffect", "LightinigPredictiveVoltageEffect" }) do
+            local okF, v = pcall(function() return cdo[f] end)
+            local nm = okF and v and v:IsValid() and v:GetFullName() or "none"
+            parts[#parts + 1] = f .. " = " .. nm
+            if nm ~= "none" then ST.BOLTS[#ST.BOLTS + 1] = { f = f, sys = v } end
+        end
+        local okI, iv = pcall(function() return cdo.PointLightIntensityMultiplier end)
+        ST.info("bolt probe: Mission 12's lightning volume: " .. table.concat(parts, "; ") .. "; light x" .. tostring(okI and iv))
+    end)
+    for k = 1, 3 do
+        A.do_(function()
+            local b = ST.BOLTS and ST.BOLTS[k]
+            if not b then return end
+            local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+            local at = { X = eye.X + dir.X * 600000, Y = eye.Y + dir.Y * 600000, Z = 0 }
+            local ok, c = pcall(function() return lib:SpawnSystemAtLocation(ST.pc(), b.sys, at, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = 1, Y = 1, Z = 1 }, true, true, 0, false) end)
+            ST.info(string.format("bolt probe: %s spawned 6 km ahead at sea level: %s", b.f, tostring(ok and c ~= nil)))
+        end)
+        A.wait(0.2)
+        A.do_(function() if ST.BOLTS and ST.BOLTS[k] then ST.shot(string.format("bolt_vol_%d", k)) end end)
+        A.wait(0.5)
+        A.do_(function() if ST.BOLTS and ST.BOLTS[k] then ST.shot(string.format("bolt_vol_%d_b", k)) end end)
+        A.wait(2)
+    end
     A.do_(function() ST.lookBack() end)
 end
 SUITES.fleet = function()
