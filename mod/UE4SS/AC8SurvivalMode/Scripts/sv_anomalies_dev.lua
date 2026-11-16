@@ -1123,8 +1123,8 @@ THUNDER.probeTick = probeTick
 -- ((2026-11-08) the user: "okay but how can we get lightning to play inside the clouds?") lightning in the storm's
 -- clouds: a flash lights them from inside, the game's way (ALiveCloudLight: Mission 9's far explosion, Mission 12's Podarge,
 -- Mission 22's shuttle launch light the clouds through Cloudly's effect light, a timeline each, restoring it after:
--- lightning.class, spawned at the spot with its WorldPosition) or Survival's own (method "effect": the Cloudly actor's
--- EffectLight driven in steps), with the game's cloud lightning bolt there (NS_CloudLightning x bolt_scale) and its thunder
+-- lightning.class, spawned at the spot with its WorldPosition) or Survival's own (method "effect": one bare cloud light
+-- driven a tick at a time, hard rule 70), with the game's cloud lightning bolt there (NS_CloudLightning x bolt_scale) and its thunder
 -- after the sound's time (thunder_s_per_km, at most thunder_max_s). From lightning.from_stage, every every_s[stage], at a
 -- storm cell (cell_share of them) or dist_km[stage] round you, alt_m up; one light at a time. Ctrl+\ is its probe: each
 -- press flashes the next way 5 km ahead of you, 3 km up. Log: `cloud lightning: ...`.
@@ -1134,7 +1134,7 @@ local CL_PROBE = {
     { "Mission 9's far explosion light", "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms009_FarExplosion.BP_CloudLight_Ms009_FarExplosion_C" },
     { "Mission 12's Podarge light", "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms012_PodargeDead.BP_CloudLight_Ms012_PodargeDead_C" },
     { "Mission 22's shuttle launch light", "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms022_ShuttleLaunch.BP_CloudLight_Ms022_ShuttleLaunch_C" },
-    { "Survival's own (Cloudly's effect light)", "effect" },
+    { "Survival's own cloud light (hard rule 70)", "effect" },
     { "the bolt alone (NS_CloudLightning)", "bolt" },
 }
 -- a cloud light of class path at `at`: the actor, or nil and why
@@ -1155,44 +1155,50 @@ local function cloudLightBP(path, at)
     if not okF or a == nil or not valid(a) then pcall(function() x:K2_DestroyActor() end); return nil, "its spawn didn't finish" end
     return a, string.format("brightness %s, radius %s cm", fmt(num(a, "LightBrightness"), "%.0f"), fmt(num(a, "AttenuationRadius"), "%.0f"))
 end
--- Survival's own: Cloudly's effect light at `at`, its intensity in steps a tick (the originals back after)
-local function effectFlash(at)
-    local V = skyView()
-    local a = V and V.actor
-    if not (a and liveObj(a)) then return false, "no Cloudly actor" end
-    local okL, l = pcall(function() return a.EffectLight end)
-    if not (okL and l ~= nil and liveObj(l)) then return false, "the Cloudly actor has no EffectLight" end
-    local c = lt()
-    CL.eff = CL.eff or { a = a, l = l, use = field(a, "bUseEffectLight"), int = num(l, "Intensity"), rad = num(l, "AttenuationRadius") }
-    pcall(function() a.bUseEffectLight = true end)
-    pcall(function() l:SetWorldLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true) end)
-    pcall(function() l:SetAttenuationRadius((tonumber(c.radius_m) or 6000) * 100) end)
-    if type(c.color) == "table" then pcall(function() l:SetLightColor({ R = c.color[1] / 255, G = c.color[2] / 255, B = c.color[3] / 255, A = 1 }, true) end) end
-    CL.steps, CL.stepI = c.effect_steps or { 1.0, 0.35, 0.8, 0.1, 0 }, 0
-    return true, "Cloudly's effect light (was " .. tostring(CL.eff.use) .. ", intensity " .. fmt(CL.eff.int, "%.0f") .. ")"
+-- Survival's own (hard rule 70): one bare cloud light kept, moved to `at`, driven a tick (c.steps x c.brightness, at most
+-- max_brightness: 4M blacked the picture out); never spawned while the surfacing films (the view went back, runs 41, 44)
+local function ownOk() return CL.own ~= nil and CL.ownA ~= nil and liveAddr(CL.own) == CL.ownA and nameOf(CL.own) == CL.ownN end
+local function ownLight(at, c)                              -- (the same actor still: hard rule 59)
+    local a = CL.own
+    if ownOk() then return a end
+    if IFSURF and IFSURF.state and IFSURF.state() then return nil, "not spawned while the surfacing films" end
+    local why
+    a, why = cloudLightBP((c or {}).own_class or "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Base.BP_CloudLight_Base_C", at)
+    CL.own, CL.ownA, CL.ownN = a, a and liveAddr(a), a and nameOf(a)
+    return a, why
+end
+local function effectFlash(at, c)
+    c = c or lt()
+    local a, why = ownLight(at, c)
+    if not a then return false, "no cloud light: " .. tostring(why) end
+    local k, r = type(c.color) == "table" and c.color or { 215, 225, 255 }, (tonumber(c.radius_m) or 5000) * 100
+    pcall(function() a.WorldPosition = { X = at.X, Y = at.Y, Z = at.Z } end)
+    pcall(function() a.AttenuationRadius, a.LightFalloffExponent = r, tonumber(c.falloff) or 4 end)
+    pcall(function() a.LightColor, a.bUseInverseSquaredFalloff = { R = k[1], G = k[2], B = k[3], A = 255 }, false end)
+    local b = type(c.brightness) == "table" and c.brightness[1] + math.random() * (c.brightness[2] - c.brightness[1]) or tonumber(c.brightness) or 300000
+    CL.b, CL.steps, CL.stepI = math.min(b, tonumber(c.max_brightness) or 1000000), c.steps or { 1, 0.3, 0.8, 0 }, 0
+    return true, string.format("a cloud flash (%.0f, %.1f km round)", CL.b, r / 100000)
 end
 local function effectTick()
     if not CL.steps then return end
-    local e = CL.eff
-    if not (e and liveObj(e.l)) then CL.steps = nil; return end
     CL.stepI = CL.stepI + 1
     local k = CL.steps[CL.stepI]
-    if k == nil then
-        CL.steps = nil
-        pcall(function() e.a.bUseEffectLight = e.use == "true" end)
-        if e.int then pcall(function() e.l:SetIntensity(e.int) end) end
-        if e.rad then pcall(function() e.l:SetAttenuationRadius(e.rad) end) end
-        return
-    end
-    pcall(function() e.l:SetIntensity(k * (tonumber(lt().effect_intensity) or 5.0e7)) end)
+    if k == nil then CL.steps, k = nil, 0 end
+    local a = CL.own
+    if ownOk() then pcall(function() a.LightBrightness = k * CL.b end) else CL.steps = nil end
+end
+THUNDER.cloudReady = function(c) return ownLight({ X = 0, Y = 0, Z = -1e6 }, c) end       -- (spawned under a fade)
+THUNDER.cloudOff = function()                                                            -- (gone: the clouds' own back)
+    if ownOk() then pcall(function() CL.own:K2_DestroyActor() end) end
+    CL.own, CL.steps = nil, nil
 end
 -- one flash at `at` by `how` (a class path, "effect" or "bolt"); what it did
-local function flash(at, how, why)
+local function flash(at, how, why, ec)
     local c = lt()
     local parts = {}
     if CL.light and liveObj(CL.light) and how ~= "bolt" then return "skipped (the last light still up)" end
     if how == "effect" then
-        local ok, w = effectFlash(at)
+        local ok, w = effectFlash(at, ec)
         parts[#parts + 1] = (ok and "" or "NO ") .. w
     elseif how ~= "bolt" then
         local a, w = cloudLightBP(how, at)
@@ -1878,7 +1884,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "thunder", fn = function(now)
             SK.inside, SK.noiseUntil, SK.upsetUntil, SK.upsetOn, SK.pawn, SK.zone = false, nil, nil, false, nil, nil
             BU, SF.list, SF.ws, SF.rainWas, TR, SF.unsafeAt = nil, nil, nil, nil, nil, nil
             LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LP.i = false, nil, nil, nil, false, 0
-            CL.q, CL.light, CL.eff, CL.steps, CLP.i = {}, nil, nil, nil, 0
+            CL.q, CL.light, CL.own, CL.steps, CLP.i = {}, nil, nil, nil, 0
         end
         return
     end
@@ -1911,7 +1917,7 @@ if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["thunder"] = function()
         BU, SF.list, SF.ws, SF.rainWas, SK.zone, SK.inside, PB.i, PB.w, TR, SF.unsafeAt = nil, nil, nil, nil, nil, false, 0, nil, nil, nil
         LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LP.i = false, nil, nil, nil, false, 0
-        CL.q, CL.light, CL.eff, CL.steps, CLP.i = {}, nil, nil, nil, 0
+        CL.q, CL.light, CL.own, CL.steps, CLP.i = {}, nil, nil, nil, 0
         BOLT.pool, BOLT.mat, BOLT.warm = {}, nil, nil                     -- (the level took the pooled bolts with it)
         THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
         THUNDER.cls, THUNDER.copyHp, THUNDER.mgr = nil, nil, nil

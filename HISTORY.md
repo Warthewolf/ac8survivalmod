@@ -3349,3 +3349,24 @@ game. The work was split by file between agents; the builds ran in sequence in t
   run 62 (round30, 10/10): the surfacing in the storm as before, no checker, but its cameras caught no bolt.
 - 0.74.88: while the surfacing films, each bolt strikes 4-14 km out in the camera's shot. Run 63 (round30, 10/10): bolts in
   its shots (frames 3 and 14 of 18, pictures every 1.5 s), blue-white against the pre-dawn storm.
+
+
+## 0.74.89 (2026-11-17; a test build only): cloud flashes in the fleet's storm (feature/fleet-storm)
+- The user: "Can you try to find out why the clouds don't light up please". Cloudly lights its clouds from ONE effect light
+  that only an ALiveCloudLight drives (its own fields -> the sky asset's EffectLightTransientParams -> the drawn copy a tick
+  later); engine lights never reach the clouds, and no level has the Cloudly actor's EffectLight component. The storm's cloud
+  light was Mission 9's (its curve peaks near 15: nothing), the earlier probes pictured Mission 12's and 22's before their
+  curves began (4.1 s, 5 s), and the plane flies in the storm's cloud layer (ICING UP), whose white-outs and exposure swings
+  read as "lit" in runs 65-66. From a still camera under the cloud base with the eye adaptation frozen (run 68): 40,000
+  shows nothing, 400,000 (radius 5 km) turns the cloud base white within 0.6 s and lingers 0.6 s+; 4,000,000 with a 50 km
+  radius blacks the picture out for seconds. Hard rule 70 rewritten (the autotest branch).
+- THUNDER's "effect" way (sv_anomalies_dev.lua) is now Survival's own cloud light: one BP_CloudLight_Base (no timeline)
+  kept, moved to the flash and driven a tick at a time (steps x brightness, at most max_brightness), never spawned while
+  the surfacing films (a cloud light's spawn took the view back in runs 41 and 44); THUNDER.cloudReady spawns it under the
+  storm's fade, THUNDER.cloudOff takes it off when the storm clears (hard rule 59's same-object check on it). The fleet's
+  storm: lightning.cloud (chance 0.5, every 0.6-1.6 s, 2-4.5 km up, 150k-400k, radius 5 km, blue-white, steps 1 0.3 0.9
+  0.2 0). thunder_test's Ctrl+\ probe 4 checks the driven light.
+- Runs: 69 (cloudstorm, 7/7): the light up under the fade, a cloud flash every ~1.5 s; 70 (cloudview, 6/6): flashes put
+  4-10 km ahead of your camera at 400k-1M, 5-10 km round: no clear change in your own view's pictures (auto exposure on,
+  the view turning); 71 (round30, 10/10): the surfacing with the flashes on, 0 view reverts. The glow from your own view is
+  not confirmed yet.

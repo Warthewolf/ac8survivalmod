@@ -203,8 +203,10 @@ CFG.specials.fleet = {
                                 clap = "AKE_Environment_Thunder_Play" },
                       -- ((2026-11-17) the bolts you see: THUNDER.bolt's (sv_anomalies_dev.lua), AC8's bolt meshes in the
                       -- game's cloud lightning material, a bolt each flash, the rain warmed up behind the fade (warm_fx);
-                      -- no cloud light (class): the stock ones lit nothing at night, the autotest's runs 55-57)
+                      -- cloud: Survival's own cloud light lights the clouds at some flashes (hard rule 70, runs 65-68))
                       lightning = { enabled = true, every_s = { 0.3, 0.8 }, dist_km = { 2, 25 }, alt_m = { 1500, 7000 },
+                                    cloud = { enabled = true, chance = 0.5, every_s = { 0.6, 1.6 }, alt_m = { 2000, 4500 }, radius_m = 5000,
+                                              brightness = { 150000, 400000 }, max_brightness = 1000000, color = { 215, 225, 255 }, steps = { 1, 0.3, 0.9, 0.2, 0 } },
                                     bolts = { enabled = true, pool = 10, height_m = { 1800, 4500 }, length_m = { 2500, 7000 },
                                               alt_m = { 2500, 5500 },
                                               material = "/Game/VFX/Environment/Common/Lightning/CloudLightning/MI_NearCloudLightning001.MI_NearCloudLightning001",
@@ -1644,7 +1646,10 @@ local function warmUp()                                     -- (the bolts 400 m 
         end
         if ok and comp then WARM.fx[#WARM.fx + 1] = comp end
     end
-    log(string.format("fleet storm: warm-up under the black: %s bolts, %d of %d effects", tostring(nb), #WARM.fx, #(L.warm_fx or {})))
+    local okC, cw = false, nil
+    if THUNDER.cloudReady and L.cloud and L.cloud.enabled ~= false then okC, cw = pcall(THUNDER.cloudReady, L.cloud) end
+    log(string.format("fleet storm: warm-up under the black: %s bolts, %d of %d effects, %s", tostring(nb), #WARM.fx,
+        #(L.warm_fx or {}), (okC and cw) and "its cloud light" or "NO cloud light (" .. tostring(cw) .. ")"))
 end
 local function warmOff()
     if THUNDER.boltHide then pcall(THUNDER.boltHide) end
@@ -1657,7 +1662,7 @@ local function trTick(now)
     local c = stc()
     local snd = c.sound or {}
     if t.phase == "out" then
-        if t.on then warmUp() end                           -- (under the black: the bolts' and the rain's first draw)
+        if t.on then warmUp() elseif THUNDER.cloudOff then pcall(THUNDER.cloudOff) end   -- (under the black)
         local okL, what = pcall(THUNDER.layoutSet, t.on, t.on and "INVINCIBLE FLEET's night storm" or "INVINCIBLE FLEET's storm clearing")
         pcall(THUNDER.post, t.on and snd.distant or snd.distant_stop)
         if t.on and snd.clap then pcall(THUNDER.post, snd.clap) end
@@ -1696,14 +1701,12 @@ local function lightTick(now)
     local d = pick(c.dist_km, { 2, 25 }) * 100000
     local ang = math.random() * 2 * math.pi
     local at = { X = ce.X + math.cos(ang) * d, Y = ce.Y + math.sin(ang) * d, Z = pick(c.alt_m, { 1500, 7000 }) * 100 }
-    local how = "bolt"
-    -- ((0.74.86) cloud lights only off the surfacing's cameras: at night the view went back to the plane after one, the
-    -- autotest's runs 41 and 44; (2026-11-17) none unless c.class is set: they lit nothing, runs 55-57)
-    if c.class and now >= (SW.lightAt or 0) and not (IFSURF and IFSURF.state and IFSURF.state()) then
-        how = c.class; SW.lightAt = now + pick(c.light_every_s, { 2, 4 })
+    local how, cl = "bolt", c.cloud                          -- (a cloud flash at some: Survival's own light, hard rule 70)
+    if type(cl) == "table" and cl.enabled ~= false and now >= (SW.lightAt or 0) and math.random() < (tonumber(cl.chance) or 0.5) then
+        how, SW.lightAt, at.Z = "effect", now + pick(cl.every_s, { 0.6, 1.6 }), pick(cl.alt_m, { 2000, 4500 }) * 100
     end
     SW.n = (SW.n or 0) + 1
-    local ok, what = pcall(THUNDER.cloudFlash, at, how, "the fleet's storm")
+    local ok, what = pcall(THUNDER.cloudFlash, at, how, "the fleet's storm", cl)
     if THUNDER.bolt and c.bolts then
         local okB, seen, why = pcall(THUNDER.bolt, { X = at.X, Y = at.Y, Z = 0 }, c.bolts, "the fleet's storm",
             IFSURF and IFSURF.state and IFSURF.state() and true)   -- (while the surfacing films: in its shot)
