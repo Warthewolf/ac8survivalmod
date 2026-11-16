@@ -4,7 +4,7 @@
 -- state (UE4SS gives each Lua mod its own): a name one part shares with the others is a global of that state, each
 -- part's own helpers stay local to it. A part that fails to load stops the rest, as one file used to.
 -- (Hard rule 23 counts locals per part now: python tools/checks/lua_check.py Scripts/*.lua checks them all.)
-VERSION = "0.74.91"
+VERSION = "0.74.92"
 
 local MODULES = {
     "sv_core",
@@ -39,6 +39,7 @@ local MODULES = {
     "sv_tanicorn_hits",            -- (sv_tanicorn.lua's next piece: the hit probe, test builds only)
     "sv_tanicorn_rail",            -- (sv_tanicorn.lua's next piece: the railguns and the railcannon, test builds only)
     "sv_fleet",                    -- INVINCIBLE FLEET's tests, test builds only (docs/design/INVINCIBLE_FLEET_RISE_FORD.md)
+    "sv_fleet_storm",              -- (sv_fleet.lua's next piece: the fleet's night storm, test builds only)
     "sv_cine",                     -- THE TANACORN's rise cinematic and its director, test builds only (docs/re/CINEMATIC.md)
     "sv_flights",
     "sv_shop",

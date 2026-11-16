@@ -39,8 +39,7 @@
 --                     <weapon> xN; ...; N of M parts fired`; a sunk ship once. Again: the fleet taken off (RE_SV_IFFleetRemove,
 --                     then OFF.down). Its rows go in at the main menu (`fleet: rows at the main menu: ...`; one missing:
 --                     Ctrl+N refuses); a unit still up from before: RE_SV_IFFleetRemove, the fleet held up to clear_s for it.
---   Ctrl+S in a run   the fleet's night storm now (IFSKY.step(3): the moon up, the storm under its fade); again: the
---                     round's own sky back under the storm's fade (IFSKY.leaving: run 72 saw the day a second before it).
+--   Ctrl+S in a run   the fleet's night storm now; again: the round's own sky back (sv_fleet_storm.lua, the next piece).
 -- Taking a test's ships off (OFF.down; the review of 8ca3195): never off the spawner's list by force with their objects up
 -- (0.74.11's crash D, 0.74.48's STORE crash), but the way every special's leftovers go (SPC.cleanUp, SPC.cleanTick); a key
 -- that would spawn a unit still going or up refuses, and the keys refuse in the landing STORE (its minigame holds the AI).
@@ -184,13 +183,22 @@ CFG.specials.fleet = {
     -- Thunder's storm cloud layout (Mission 12's) in and back under a fade to black (out_s, hold_s, in_s), its distant
     -- thunder and a clap, and cloud lightning every every_s within dist_km of the airfield or the fleet, alt_m up: a cloud
     -- light every light_every_s (one up at a time), bolts (x bolt_scale) between, the thunder after its distance's delay
-    -- (night_over: the storm night brighter than THE FESTIVAL's: under Mission 12's clouds it was all but black, the
-    -- autotest's run 41 of 0.74.84)
-    sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 3, sunrise_rounds = 3,
-                                                         night_over = { exposure = { 1.3, 10.0, 1.6 }, skylight_x = 1.2e-4 } },
+    -- (night_over: (2026-11-17) the user flying 0.74.91: "night time is too bright, also the sea is back to green again
+    -- which we fixed in the festival rounds": 0.74.86's brighter storm night (exposure 1.3 / 10 / +1.6, sky light x1.2e-4)
+    -- was what turned it, as 0.74.25's; THE FESTIVAL's night now (CFG.sky.night: 2.3 / 10 / +0.6), only its top exposure
+    -- capped at 4 so the camera can't stop down for a cloud flash (runs 67, 70: the auto exposure cancelled them out).
+    -- thunder: AC8 has no thunder event (the storm's AKE_Environment_Thunder_Play and Ms12 distant thunder were never
+    -- AC8's: nothing was heard); its booms and rumble stand in, near within near_km, far beyond, a strike's chance, after
+    -- its distance's delay (s_per_km, at most max_s), loaded and pinned under the storm's fade; Ctrl+J plays each in turn)
+    sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 3, sunrise_rounds = 3,
+                                                         night_over = { exposure = { 2.3, 4.0, 0.6 } } },
             storm = { enabled = true, until_round = 35, out_s = 0.6, hold_s = 0.8, in_s = 1.2,
-                      sound = { distant = "AKE_Ms12_ENV_AMB_DistantThunder_Play", distant_stop = "AKE_Ms12_ENV_AMB_DistantThunder_Stop",
-                                clap = "AKE_Environment_Thunder_Play" },
+                      sound = { clap = "AKE_Weapon_SuperLongMainGun_Explosion_Air_Play" },
+                      thunder = { enabled = true, chance = 0.7, near_km = 6, s_per_km = 2.9, max_s = 6,
+                                  near = { "/Game/WwiseAssets/Events/SFX/AKE_Weapon_SuperLongMainGun_Explosion_Air_Play",
+                                           "/Game/WwiseAssets/Events/SFX/AKE_Environment_Depot_Explosion_Play" },
+                                  far = { "/Game/WwiseAssets/OBJ_M09_CLOUDBOMB_EXP",
+                                          "/Game/WwiseAssets/Events/CS_AceLive_SE/Events_General/PLAYER/AIR/SE_GEN_PLAYER_AIR/AKE_GEN_PLAYER_AIR_Cloud_Rumble_CameraShake_Play" } },
                       -- ((2026-11-17) the bolts you see: THUNDER.bolt's (sv_anomalies_dev.lua), AC8's bolt meshes in the
                       -- game's cloud lightning material, a bolt each flash, the rain warmed up behind the fade (warm_fx);
                       -- cloud: Survival's own cloud light lights the clouds at some flashes (hard rule 70, runs 65-68))
@@ -1570,169 +1578,6 @@ end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet ships", fn = function(now) IFLEET.tick(now) end }
 if type(LEVEL_DROPS) == "table" then                       -- (the level's objects: forgotten, none of them touched)
     LEVEL_DROPS["fleet ships"] = function() IFLEET.cur = nil end
-end
-end
-
--- ---- INVINCIBLE FLEET's night and its storm (2026-11-16; CFG.specials.fleet.sky's note) -----------------------------
--- The arc: SKY.arcOwners.fleet (sv_sky.lua: the latest start owns it; GONE FISHIN''s F and THE FESTIVAL untouched). The
--- storm: on at the arc's first moon, off at storm.until_round, each time under a fade to black. Every game its own (the
--- round and its clock are the host's on every game). IFSKY.step(k): the arc at step k from the round now (a test's).
--- Log: `fleet storm: ...`.
-IFSKY = { k = nil }
-do
-local SW = { on = false }
-local function n(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
-local function sc() return (CFG.specials and CFG.specials.fleet or {}).sky or {} end
-local function stc() return sc().storm or {} end
-local function pick(t, d) t = type(t) == "table" and t or d; return n(t[1], d[1]) + (n(t[2], d[2]) - n(t[1], d[1])) * math.random() end
-if SKY and SKY.arcOwners then
-    SKY.arcOwners.fleet = function()
-        local c = sc()
-        if c.enabled == false or not D then return nil end
-        SKY.arcProfiles.fleet = c.profile
-        local r = math.floor(n(D.round, 0))
-        if IFSKY.k then return r - IFSKY.k end
-        local F = math.floor(n(c.from_round, 25))
-        if r >= F then return F end
-        return nil
-    end
-end
-function IFSKY.step(k)
-    IFSKY.k = tonumber(k)
-    if ARC and ARC.last then                              -- (blended in from the sky written last)
-        local b = {}
-        for a, v in pairs(ARC.last) do b[a] = v end
-        ARC.blendFrom, ARC.blendAt = b, nil
-    end
-    log(string.format("fleet storm: the arc at step %s now (a test's)", tostring(k)))
-end
-testKey("S", "sv_fleet.lua's night storm now", function()                     -- (the header's Ctrl+S)
-    if not (D and D.now and RUN) then log("fleet storm: Ctrl+S outside a Survival run"); return end
-    local on = IFSKY.k == nil or IFSKY.leaving
-    IFSKY.leaving = (not on and SW.on) or nil              -- (off: the day back under the storm's fade, in trTick)
-    if on or not SW.on then IFSKY.step(on and 3 or nil) end
-    hudCallout("TEST: NIGHT STORM", on and "THE FLEET'S NIGHT, ITS STORM COMING" or "THE ROUND'S OWN SKY BACK")
-end)
-local function wanted()
-    local c = stc()
-    if IFSKY.leaving or c.enabled == false or not (THUNDER and THUNDER.layoutSet and THUNDER.camFade) then return false end
-    local a = SKY and SKY.arcState and SKY.arcState()
-    if not (a and a.on and a.profile == "fleet" and a.k) then return false end
-    if n(a.kRaw, a.k) >= math.floor(n(c.until_round, 35)) - math.floor(n(sc().from_round, 25)) then return false end   -- (the uncapped step: midday's hold caps a.k)
-    return a.mode == "moon" or a.k >= n(a.sink, 0) + 2
-end
-local function fade(on, why)
-    local c = stc()
-    local ok, err = THUNDER.camFade(0, 1, n(c.out_s, 0.6), true)
-    SW.tr = { on = on, why = why, phase = "out", at = os.clock() + (ok and n(c.out_s, 0.6) or 0), faded = ok }
-    if not ok then log("fleet storm: no fade (" .. tostring(err) .. "): the clouds swapped at once") end
-end
-local WARM = {}
-local function warmUp()                                     -- (the bolts 400 m ahead and the rain on your camera, for the hold)
-    local L = stc().lightning or {}
-    local nb = (THUNDER.boltWarm and L.bolts and L.bolts.enabled ~= false) and select(2, pcall(THUNDER.boltWarm, L.bolts)) or 0
-    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
-    local pcm, at
-    pcall(function() pcm = survivalPC.PlayerCameraManager; local v = pcm:GetCameraLocation(); at = { X = v.X, Y = v.Y, Z = v.Z } end)
-    WARM.fx = {}
-    for _, path in ipairs(L.warm_fx or {}) do
-        local sys = loadObject(path)
-        local ok, comp = false, nil
-        if sys and lib and at then
-            ok, comp = pcall(function() return lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = 1, Y = 1, Z = 1 }, true, true, 0, false) end)
-        end
-        if ok and comp then WARM.fx[#WARM.fx + 1] = comp end
-    end
-    local okC, cw = false, nil
-    if THUNDER.cloudReady and L.cloud and L.cloud.enabled ~= false then okC, cw = pcall(THUNDER.cloudReady, L.cloud) end
-    log(string.format("fleet storm: warm-up under the black: %s bolts, %d of %d effects, %s", tostring(nb), #WARM.fx,
-        #(L.warm_fx or {}), (okC and cw) and "its cloud light" or "NO cloud light (" .. tostring(cw) .. ")"))
-end
-local function warmOff()
-    if THUNDER.boltHide then pcall(THUNDER.boltHide) end
-    for _, comp in ipairs(WARM.fx or {}) do pcall(function() comp:DestroyComponent() end) end
-    WARM.fx = {}
-end
-local function trTick(now)
-    local t = SW.tr
-    if not t or now < t.at then return end
-    local c = stc()
-    local snd = c.sound or {}
-    if t.phase == "out" then
-        if t.on then warmUp() elseif THUNDER.cloudOff then pcall(THUNDER.cloudOff) end   -- (under the black)
-        if not t.on and IFSKY.leaving then IFSKY.leaving = nil; IFSKY.step(nil) end   -- (Ctrl+S's day, unseen)
-        local okL, what = pcall(THUNDER.layoutSet, t.on, t.on and "INVINCIBLE FLEET's night storm" or "INVINCIBLE FLEET's storm clearing")
-        pcall(THUNDER.post, t.on and snd.distant or snd.distant_stop)
-        if t.on and snd.clap then pcall(THUNDER.post, snd.clap) end
-        t.phase, t.at, t.what = "hold", now + n(c.hold_s, 0.8), okL and what or ("error " .. tostring(what))
-    elseif t.phase == "hold" then
-        warmOff()
-        if t.faded then pcall(THUNDER.camFade, 1, 0, n(c.in_s, 1.2), false) end
-        t.phase, t.at = "in", now + n(c.in_s, 1.2)
-        local a = SKY.arcState()
-        log(string.format("fleet storm: %s (round %s, the arc's step %s, %s): %s%s", t.on and "in" or "cleared", tostring(D and D.round),
-            tostring(a.k), tostring(a.mode), tostring(t.what), t.faded and ", under a fade to black" or ""))
-    else
-        SW.tr = nil
-    end
-end
-local function centres()                                   -- (the airfield, and the fleet's flagship when it's up)
-    local out = {}
-    if type(AIRFIELD) == "table" and AIRFIELD.X then out[#out + 1] = { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = AIRFIELD.Z or 0 } end
-    local F = IFLEET and IFLEET.cur
-    for _, sh in ipairs(F and F.ships or {}) do
-        local o = sh.hull and sh.hull.obj
-        if o and liveObj(o) then
-            local ok, l = pcall(function() return o:K2_GetActorLocation() end)
-            if ok and l then out[#out + 1] = { X = l.X, Y = l.Y, Z = l.Z }; break end
-        end
-    end
-    return out
-end
-local function lightTick(now)
-    local c = stc().lightning or {}
-    if c.enabled == false or now < (SW.nextAt or 0) then return end
-    SW.nextAt = now + pick(c.every_s, { 0.3, 0.8 })
-    local cs = centres()
-    if #cs == 0 then return end
-    local ce = cs[math.random(#cs)]
-    local d = pick(c.dist_km, { 2, 25 }) * 100000
-    local ang = math.random() * 2 * math.pi
-    local at = { X = ce.X + math.cos(ang) * d, Y = ce.Y + math.sin(ang) * d, Z = pick(c.alt_m, { 1500, 7000 }) * 100 }
-    local how, cl = "bolt", c.cloud                          -- (a cloud flash at some: Survival's own light, hard rule 70)
-    if type(cl) == "table" and cl.enabled ~= false and now >= (SW.lightAt or 0) and math.random() < (tonumber(cl.chance) or 0.5) then
-        how, SW.lightAt, at.Z = "effect", now + pick(cl.every_s, { 0.6, 1.6 }), pick(cl.alt_m, { 2000, 4500 }) * 100
-    end
-    SW.n = (SW.n or 0) + 1
-    local ok, what = pcall(THUNDER.cloudFlash, at, how, "the fleet's storm", cl)
-    if THUNDER.bolt and c.bolts then
-        local okB, seen, why = pcall(THUNDER.bolt, { X = at.X, Y = at.Y, Z = 0 }, c.bolts, "the fleet's storm",
-            IFSURF and IFSURF.state and IFSURF.state() and true)   -- (while the surfacing films: in its shot)
-        what = tostring(what) .. "; " .. (okB and (seen or ("no bolt: " .. tostring(why))) or ("bolt error " .. tostring(seen)))
-    end
-    if SW.n <= 3 or SW.n % 100 == 0 then
-        log(string.format("fleet storm: flash %d (%.0f km off its centre, %.1f km up): %s", SW.n, d / 100000, at.Z / 100000,
-            ok and tostring(what) or ("error " .. tostring(what))))
-    end
-end
-function IFSKY.storm() return { on = SW.on, flashes = SW.n or 0, tr = SW.tr and SW.tr.phase or nil } end
-TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet storm", fn = function(now)
-    if not D or (levelTorn and levelTorn()) then
-        if SW.on and THUNDER and THUNDER.layoutSet then pcall(THUNDER.layoutSet, false, "INVINCIBLE FLEET's storm: the run's over") end
-        SW.on, SW.tr = false, nil
-        return
-    end
-    trTick(now)
-    if THUNDER and THUNDER.cloudTick then pcall(THUNDER.cloudTick, now) end
-    local w = wanted()
-    if w ~= SW.on and not SW.tr then
-        SW.on = w
-        fade(w, w and "the night sky's come" or "the storm clears")
-    end
-    if SW.on and not SW.tr then lightTick(now) end
-end }
-if type(LEVEL_DROPS) == "table" then                       -- (the level's: its Cloudly actor and lights went with it)
-    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving = nil, nil end
 end
 end
 

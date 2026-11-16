@@ -3388,3 +3388,20 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - 0.74.91 INSTALLED 2026-11-17 for the user ("install it"; "no dont run a test i can do that": its autotest, run 73, was
   cancelled through the gate 16 s in, before the suite ran, and her install restored), over 0.74.89 (backup:
   build/backup/install_before_0.74.91); her settings, map notes, subtitles and the launcher's toggle (on) kept.
+
+
+## 0.74.92 (2026-11-17; a test build): the storm night as THE FESTIVAL's, real thunder, flashes not cancelled (feature/fleet-storm)
+- The user flying 0.74.91: "night time is too bright, also the sea is back to green again which we fixed in the festival
+  rounds, and theres no spawning cloud lights or thunder, only the lightning bolts spawn".
+- The night: 0.74.86's brighter storm night (night_over exposure 1.3 / 10 / +1.6, sky light x1.2e-4) undid 0.74.25's
+  green-sea fix; the fleet's night is THE FESTIVAL's again (CFG.sky.night: 2.3 / 10 / +0.6, x4e-5), only its top exposure
+  capped at 4 (night_over exposure 2.3 / 4 / 0.6) so the camera can't stop down for a cloud flash: her log had 25 cloud
+  flashes in 30 s at 165k-365k, none seen (runs 67 and 70: the auto exposure cancelled them).
+- The thunder: AC8 has no AKE_Environment_Thunder_Play or Ms12 distant thunder (no such event in the game's files; nothing
+  was ever heard). Its booms and rumble stand in (storm.thunder: near within 6 km AKE_Weapon_SuperLongMainGun_Explosion_Air
+  / AKE_Environment_Depot_Explosion, far OBJ_M09_CLOUDBOMB_EXP / AKE_GEN_PLAYER_AIR_Cloud_Rumble_CameraShake; 70 % of
+  strikes, after the distance's delay), loaded and pinned under the storm's fade (as the Anomaly's sounds); the start's
+  clap is the air explosion. Ctrl+J plays each in turn so she can pick by ear. Log: `fleet storm: thunder N: ...`.
+- sv_fleet.lua (at 2,000 lines) split: its night and storm are sv_fleet_storm.lua, the next piece (dev only: dev_only.py,
+  IFSKY in its globals; fleet_test loads it; zip_leak_test and thunder_test check its release header). Three doubled
+  carriage returns in sv_fleet.lua's config gone with it.
