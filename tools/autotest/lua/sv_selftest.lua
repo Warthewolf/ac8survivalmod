@@ -2985,6 +2985,74 @@ SUITES.cloudscal = function()
     end)
     A.wait(2)
 end
+-- (2026-11-17) listen94: the user heard no thunder in runs 77-83 (only run 78 played 0.74.94's way, and she wasn't listening).
+-- A sound she knows (the STORE's bought beep, posted by name as the STORE does) as the control, then the four thunder
+-- sounds (Ctrl+J, PostEventAtLocation) 4 s apart, twice through, then the beep again; each called out first.
+SUITES.listen94 = function()
+    intoRun()
+    local BEEP = "AKE_GEN_UI_INGAME_BaseResupply_Decide_Play"
+    local function say(a, b) pcall(hudCallout, a, b); ST.info("listen94: " .. a .. " / " .. b) end
+    local function beep(tag)
+        A.do_(function() say("LISTEN: " .. tag, "THE STORE BEEP, A SOUND YOU KNOW, IN 2 S") end)
+        A.wait(2)
+        A.do_(function() ST.info("listen94 beep: " .. tostring(THUNDER and THUNDER.post and THUNDER.post(BEEP))) end)
+        A.wait(1.5)
+        A.do_(function() THUNDER.post(BEEP) end)
+        A.wait(2.5)
+    end
+    A.wait(3)
+    beep("THE CONTROL")
+    for round = 1, 2 do
+        for i = 1, 4 do
+            A.do_(function() say(string.format("LISTEN: THUNDER %d/4%s", i, round == 2 and " AGAIN" or ""), "IN 2 S") end)
+            A.wait(2)
+            A.do_(function() ST.marks["j" .. round .. i] = ST.n; ST.press("J") end)
+            A.log_("fleet storm: Ctrl+J thunder " .. i .. " of 4", 3, "j" .. round .. i, true, function(l)
+                ST.check(l ~= nil and l:find("(played;", 1, true) ~= nil, "thunder " .. i .. " played", l)
+            end)
+            A.wait(3)
+        end
+    end
+    beep("THE CONTROL AGAIN")
+    A.do_(function() say("LISTEN: DONE", "THANK YOU") end)
+    A.wait(2)
+end
+-- (2026-11-17) cells95: the user's Mission 12 screenshot: its clouds glow blue from inside: Mission012_Phase01_VFX's 19
+-- NS_CloudLightning in its cloud towers, drawn after the clouds (sort 100). 0.74.95's storm spawns them so: Ctrl+S, the
+-- 19 up, pictures from your view, then still cameras from over the airfield onto two of the towers (spot 1, spot 12), 8
+-- frames each 0.5 s apart; each step called out.
+SUITES.cells95 = function()
+    intoRun()
+    local function say(a, b) pcall(hudCallout, a, b); ST.info("cells95: " .. a .. " / " .. b) end
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil, "the storm is in this build") then return "abort" end
+        say("TEST: NIGHT STORM", "CTRL+S IN 3 S: MISSION 12'S CLOUD LIGHTNING")
+    end)
+    A.wait(3)
+    A.do_(function() ST.marks.k1 = ST.n; ST.press("S") end)
+    A.log_("fleet storm: cloud lightning: ", 15, "k1", true, function(l)
+        ST.check(l ~= nil and l:find("19 of 19 up (19 of them drawn after the clouds", 1, true) ~= nil, "the 19 cloud lightning cells up, drawn after the clouds", l)
+    end)
+    A.log_("fleet storm: in (", 15, "k1", true, function(l) ST.check(l ~= nil, "the storm in", l) end)
+    for i = 1, 6 do
+        A.wait(0.7)
+        A.do_(function() ST.shot(string.format("c95_you_%d", i)) end)
+    end
+    local VIEWS = { { "TOWER 1", { X = 2389746, Y = -1425882, Z = 636631 } }, { "TOWER 12", { X = 2618538, Y = -950632, Z = 636631 } } }
+    for v, V in ipairs(VIEWS) do
+        A.do_(function()
+            say("TEST: LOOK AT " .. V[1], "A STILL CAMERA OVER THE AIRFIELD")
+            ST.look({ X = 1610476, Y = -436143, Z = 350000 }, V[2], 45)
+        end)
+        A.wait(2)
+        for i = 1, 8 do
+            A.do_(function() ST.look({ X = 1610476, Y = -436143, Z = 350000 }, V[2], 45); ST.shot(string.format("c95_t%d_%d", v, i)) end)
+            A.wait(0.5)
+        end
+    end
+    A.do_(function() ST.lookBack(); say("TEST: DONE", "THANK YOU") end)
+    A.wait(2)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
