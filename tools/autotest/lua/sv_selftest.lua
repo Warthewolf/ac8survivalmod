@@ -2355,6 +2355,132 @@ SUITES.stormkey = function()
     A.wait(3)
     A.do_(function() ST.shot("sk_again") end)
 end
+-- (2026-11-17) 0.74.92 (the user flying 0.74.91: "night time is too bright, also the sea is back to green again ... and
+-- theres no spawning cloud lights or thunder"): Ctrl+S, the storm's warm-up with its thunder loaded, the first thunders
+-- posted, pictures from your view (the night's look, the sea), Ctrl+J's four sounds, then a still camera under the cloud
+-- base with a cloud flash put 6 km out in its view (the storm's own paused), under the night's capped exposure.
+SUITES.storm92 = function()
+    intoRun()
+    local C = {}
+    local function cfg() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and IFSKY.storm ~= nil, "the fleet's night storm is in this build") then return "abort" end
+        ST.marks.k1 = ST.n
+        ST.check(ST.press("S") == 1, "Ctrl+S is bound")
+    end)
+    A.log_("fleet storm: warm-up under the black", 6, "k1", true, function(l)
+        ST.check(l ~= nil and l:find("its cloud light", 1, true) ~= nil and l:find("thunder 4 of 4 loaded", 1, true) ~= nil,
+            "the warm-up: its cloud light, the 4 thunder sounds loaded", l)
+    end)
+    A.log_("fleet storm: in (", 15, "k1", true, function(l) ST.check(l ~= nil, "the storm in under its fade", l) end)
+    A.log_("fleet storm: thunder 1: ", 20, "k1", true, function(l)
+        ST.check(l ~= nil and l:find("posted", 1, true) ~= nil, "the first thunder posted", l)
+    end)
+    for i = 1, 10 do
+        A.wait(0.6)
+        A.do_(function() ST.shot(string.format("s92_you_%02d", i)) end)
+    end
+    for i = 1, 4 do
+        A.do_(function() ST.marks["j" .. i] = ST.n; ST.press("J") end)
+        A.log_("fleet storm: Ctrl+J thunder " .. i .. " of 4", 3, "j" .. i, true, function(l)
+            ST.check(l ~= nil and l:find("(posted;", 1, true) ~= nil, "Ctrl+J sound " .. i .. " posted", l)
+        end)
+        A.wait(1.5)
+    end
+    -- the still camera under the cloud base (run 68's), a flash put in its view, the night's own exposure (capped)
+    A.do_(function()
+        local L = cfg()
+        C.was = L.cloud and L.cloud.enabled
+        if L.cloud then L.cloud.enabled = false end
+        local pl = ST.plane()
+        if not pl then return end
+        C.tgt = ST.frame(pl, 600000, 0, 0)
+        C.eye = ST.frame(pl, 0, 0, -180000)
+        ST.look(C.eye, C.tgt, 60)
+    end)
+    A.wait(3)
+    A.do_(function() if C.eye then ST.look(C.eye, C.tgt, 60) end; ST.shot("s92_under_0_before") end)
+    A.wait(0.3)
+    A.do_(function()
+        if not C.tgt then return end
+        local c = {}
+        for k, v in pairs(cfg().cloud or {}) do c[k] = v end
+        c.brightness, c.steps = 300000, { 1, 1, 1, 1, 1, 1, 0 }
+        local ok, what = pcall(THUNDER.cloudFlash, C.tgt, "effect", "the test", c)
+        ST.info("storm92: a cloud flash put 6 km out in the camera's view: " .. (ok and tostring(what) or ("error " .. tostring(what))))
+    end)
+    for j, w in ipairs({ 0.3, 0.4, 0.5 }) do
+        A.wait(w)
+        A.do_(function() if C.eye then ST.look(C.eye, C.tgt, 60) end; ST.shot(string.format("s92_under_%d_on", j)) end)
+    end
+    A.wait(2.5)
+    A.do_(function() if C.eye then ST.look(C.eye, C.tgt, 60) end; ST.shot("s92_under_4_after") end)
+    A.do_(function()
+        local L = cfg()
+        if L.cloud then L.cloud.enabled = C.was end
+        ST.lookBack()
+        local th = 0
+        for i = ST.marks.k1 or 1, ST.n do
+            local l = ST.lines and ST.lines[i]
+            if l and l:find("fleet storm: thunder ", 1, true) then th = th + 1 end
+        end
+        ST.info(string.format("storm92: %d thunder lines logged (the first 3 and any not posted)", th))
+    end)
+end
+-- (2026-11-17) flash92: run 74's 300k flash showed nothing under the night's own exposure (run 68's 400k white was its
+-- frozen exposure, ~16x brighter than the night's). The storm night (Ctrl+S), the still camera under the cloud base
+-- (run 68's), the storm's own flashes paused: a flash 6 km out in its view at 1M, 2M, 4M, 8M (radius 5 km) and 2M at 10 km,
+-- max_brightness lifted for the test; pictured before / at 0.4 and 0.9 s / after (the blackout run 68 saw at 4M, 50 km).
+SUITES.flash92 = function()
+    intoRun()
+    local C = {}
+    local function cfg() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and THUNDER ~= nil and THUNDER.cloudFlash ~= nil, "the storm and its flashes are in this build") then return "abort" end
+        ST.marks.k1 = ST.n
+        ST.press("S")
+    end)
+    A.log_("fleet storm: in (", 15, "k1", true, function(l)
+        ST.check(l ~= nil, "the storm in", l)
+        local L = cfg()
+        C.was = L.cloud and L.cloud.enabled
+        if L.cloud then L.cloud.enabled = false end
+    end)
+    A.do_(function()
+        local pl = ST.plane()
+        if not pl then return end
+        C.tgt = ST.frame(pl, 600000, 0, 0)
+        C.eye = ST.frame(pl, 0, 0, -180000)
+        ST.look(C.eye, C.tgt, 60)
+    end)
+    A.wait(3)
+    local TRY = { { 1000000, 5000 }, { 2000000, 5000 }, { 4000000, 5000 }, { 8000000, 5000 }, { 2000000, 10000 } }
+    for k, t in ipairs(TRY) do
+        local tag = string.format("f92_%d_%dM_r%d", k, t[1] / 1000000, t[2] / 1000)
+        A.do_(function() if C.eye then ST.look(C.eye, C.tgt, 60) end; ST.shot(tag .. "_0_before") end)
+        A.wait(0.3)
+        A.do_(function()
+            if not C.tgt then return end
+            local c = {}
+            for key, v in pairs(cfg().cloud or {}) do c[key] = v end
+            c.brightness, c.radius_m, c.max_brightness, c.steps = t[1], t[2], 1.0e9, { 1, 1, 1, 1, 1, 1, 0 }
+            local ok, what = pcall(THUNDER.cloudFlash, C.tgt, "effect", "the test", c)
+            ST.info(tag .. ": " .. (ok and tostring(what) or ("error " .. tostring(what))))
+        end)
+        for j, w in ipairs({ 0.4, 0.5 }) do
+            A.wait(w)
+            A.do_(function() if C.eye then ST.look(C.eye, C.tgt, 60) end; ST.shot(string.format("%s_%d_on", tag, j)) end)
+        end
+        A.wait(2.5)
+        A.do_(function() if C.eye then ST.look(C.eye, C.tgt, 60) end; ST.shot(tag .. "_3_after") end)
+        A.wait(1)
+    end
+    A.do_(function()
+        local L = cfg()
+        if L.cloud then L.cloud.enabled = C.was end
+        ST.lookBack()
+    end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
