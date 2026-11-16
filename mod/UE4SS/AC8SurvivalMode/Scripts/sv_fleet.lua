@@ -194,6 +194,18 @@ CFG.specials.fleet = {
                                                          night_over = { exposure = { 2.3, 4.0, 0.6 } } },
             storm = { enabled = true, until_round = 35, out_s = 0.6, hold_s = 0.8, in_s = 1.2,
                       sound = { clap = "AKE_Weapon_SuperLongMainGun_Explosion_Air_Play" },
+                      -- (cells: (2026-11-17) the user's Mission 12: "they visibly appear to light the clouds with blue lighting":
+                      -- its Mission012_Phase01_VFX's 19 NS_CloudLightning in its cloud towers (Mission 12's layout is the
+                      -- storm's), each spot's scale as there, drawn after the clouds (sort 100, as there; at the default 0
+                      -- the clouds covered ours: the faint teal glow of runs 46-58); spawned under the storm's fade, taken
+                      -- off as it clears. cloud (Survival's own effect light) off: it lit nothing in runs 77-83)
+                      cells = { enabled = true, sort = 100, scale_x = 1,
+                                system = "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning.NS_CloudLightning",
+                                spots = { { 2389746, -1425882, 636631, 1 }, { 2050221, -1352135, 639884, 1 }, { -2275497, 226132, 764355, 1 }, { -3067967, 383275, 764355, 1 },
+                                         { -3159850, 3790150, 764355, 1 }, { -3159850, 4575129, 764355, 1 }, { -1165562, 2039202, 764355, 1 }, { 1798205, 1440965, 727172, 0.9 },
+                                         { 1278704, 1440965, 727172, 0.5 }, { 1442013, 1743569, 727172, 0.5 }, { 4357787, 2892324, 727172, 1 }, { 2618538, -950632, 636631, 1 },
+                                         { 121258, -1369681, 636631, 0.75 }, { -613885, -1941399, 636631, 0.95 }, { -1887114, -3717666, 636631, 1 }, { -3416988, -3257279, 764355, 1 },
+                                         { -3050114, -3086835, 764355, 1 }, { -2865498, -224223, 764355, 1 }, { -2275497, -433174, 764355, 1 } } },
                       thunder = { enabled = true, chance = 0.7, near_km = 6, s_per_km = 2.9, max_s = 6,
                                   near = { "/Game/WwiseAssets/Events/SFX/AKE_Weapon_SuperLongMainGun_Explosion_Air_Play",
                                            "/Game/WwiseAssets/Events/SFX/AKE_Environment_Depot_Explosion_Play" },
@@ -204,7 +216,7 @@ CFG.specials.fleet = {
                       -- cloud: Survival's own cloud light at some flashes (hard rule 70; 0.8-2M: 165k-365k unseen in the user's 0.74.91 flight,
                       -- 4M and 8M at 5 km round blacked nothing out in run 75; 4M at 50 km did in run 68))
                       lightning = { enabled = true, every_s = { 0.3, 0.8 }, dist_km = { 2, 25 }, alt_m = { 1500, 7000 },
-                                    cloud = { enabled = true, chance = 0.5, every_s = { 0.6, 1.6 }, alt_m = { 2000, 4500 }, radius_m = 5000,
+                                    cloud = { enabled = false, chance = 0.5, every_s = { 0.6, 1.6 }, alt_m = { 2000, 4500 }, radius_m = 5000,
                                               brightness = { 800000, 2000000 }, max_brightness = 3000000, color = { 215, 225, 255 }, steps = { 1, 0.3, 0.9, 0.2, 0 } },
                                     bolts = { enabled = true, pool = 10, height_m = { 1800, 4500 }, length_m = { 2500, 7000 },
                                               alt_m = { 2500, 5500 },

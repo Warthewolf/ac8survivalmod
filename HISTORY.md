@@ -3430,3 +3430,14 @@ game. The work was split by file between agents; the builds ran in sequence in t
   (run 81); r.Cloudly.QualityLevel 0-4 (the game runs 1; run 82); every sg.* at 3 and Cloudly at 3, day and storm night
   (the game runs sg 1; run 83). Survival's Cloudly actor (Mission 4's lighting sublevel) is set like Missions 9, 12 and
   22's. Open: whether AC8's own cloud lights show in their own missions (Mission 12's Podarge, Mission 22's shuttle).
+
+## 0.74.95 (2026-11-17; a test build, staged, not installed): Mission 12's cloud lightning in the storm (feature/fleet-storm)
+- The user's Mission 12 screenshot: "in Mission 12 they visibly appear to light the clouds with blue lighting". That is
+  Mission012_Phase01_VFX's 19 NiagaraActors of NS_CloudLightning, scale 0.5-1, 6.4-7.6 km up in its cloud towers, each
+  drawn after the clouds (TranslucencySortPriority 100, bOverrideSeparateTranslucencySortPriority with 100). Ours were at
+  scale 12 with the default priority 0, under the clouds: the faint teal glow of runs 46-58.
+- storm.cells: the same 19 spots and scales, spawned inactive under the storm's fade, sort 100 set, then activated; taken
+  off as it clears (hard rule 59's address and name kept). storm.lightning.cloud (Survival's own effect light) off: it lit
+  nothing in runs 77-83. Run 84 (listen94): the STORE beep and the four thunder sounds played (the user wasn't listening).
+  Run 85 (cells95, 7/7): `fleet storm: cloud lightning: 19 of 19 up (19 of them drawn after the clouds, sort 100)`; the
+  still camera onto the towers never took the view, so whether they glow is for the user's eyes.

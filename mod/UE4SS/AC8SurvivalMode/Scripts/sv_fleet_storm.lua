@@ -121,6 +121,40 @@ testKey("J", "sv_fleet_storm.lua's thunder sounds", function()                --
     log(string.format("fleet storm: Ctrl+J thunder %d of %d (%s): %s (%s; %d of %d loaded)", TH.k, #all,
         TH.k <= #(c.near or {}) and "near" or "far", name, tostring(r), loaded, #all))
 end)
+-- the storm's cloud lightning (stc().cells, sv_fleet.lua's note): Mission 12's NS_CloudLightning at its 19 spots, each
+-- spawned inactive, drawn after the clouds (its translucency sort priority, as Mission 12's), then activated; each kept
+-- with its address and name (hard rule 59) and taken off as the storm clears. Log: `fleet storm: cloud lightning: ...`.
+local CELLS = {}
+local function cellOk(e) return e ~= nil and e.a ~= nil and liveAddr(e.o) == e.a and nameOf(e.o) == e.name end
+local function cellsOn(c)
+    if #CELLS > 0 or type(c) ~= "table" or c.enabled == false then return #CELLS, "" end
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    local sys = type(c.system) == "string" and loadObject(c.system) or nil
+    if not (lib and valid(lib) and sys and liveObj(survivalPC)) then return 0, " (no Niagara, system or player controller)" end
+    local pri, set = math.floor(n(c.sort, 100)), 0
+    for _, s in ipairs(c.spots or {}) do
+        local sc = n(s[4], 1) * n(c.scale_x, 1)
+        local ok, comp = pcall(function() return lib:SpawnSystemAtLocation(survivalPC, sys, { X = s[1], Y = s[2], Z = s[3] },
+            { Pitch = 0, Yaw = 0, Roll = 0 }, { X = sc, Y = sc, Z = sc }, false, false, 0, false) end)
+        if ok and comp then
+            local okA = pcall(function() comp.bOverrideSeparateTranslucencySortPriority = true end)
+            local okB = pcall(function() comp.SeparateTranslucencySortPriority = pri end)
+            local okC = pcall(function() comp:SetTranslucentSortPriority(pri) end)
+            if okA and okB and okC then set = set + 1 end
+            pcall(function() comp:Activate(true) end)
+            CELLS[#CELLS + 1] = { o = comp, a = liveAddr(comp), name = nameOf(comp) }
+        end
+    end
+    return #CELLS, string.format(" (%d of them drawn after the clouds, sort %d)", set, pri)
+end
+local function cellsOff()
+    local k = 0
+    for _, e in ipairs(CELLS) do
+        if cellOk(e) then pcall(function() e.o:DestroyComponent() end); k = k + 1 end
+    end
+    CELLS = {}
+    return k
+end
 local function wanted()
     local c = stc()
     if IFSKY.leaving or c.enabled == false or not (THUNDER and THUNDER.layoutSet and THUNDER.camFade) then return false end
@@ -171,6 +205,14 @@ local function trTick(now)
     local snd = c.sound or {}
     if t.phase == "out" then
         if t.on then warmUp() elseif THUNDER.cloudOff then pcall(THUNDER.cloudOff) end   -- (under the black)
+        if t.on then
+            local okC, k, why = pcall(cellsOn, stc().cells)
+            log(string.format("fleet storm: cloud lightning: %s of %d up%s", okC and tostring(k) or ("error " .. tostring(k)),
+                #((stc().cells or {}).spots or {}), okC and why or ""))
+        else
+            local okC, k = pcall(cellsOff)
+            log("fleet storm: cloud lightning: " .. (okC and tostring(k) or "?") .. " taken off")
+        end
         if not t.on and IFSKY.leaving then IFSKY.leaving = nil; IFSKY.step(nil) end   -- (Ctrl+S's day, unseen)
         local okL, what = pcall(THUNDER.layoutSet, t.on, t.on and "INVINCIBLE FLEET's night storm" or "INVINCIBLE FLEET's storm clearing")
         pcall(THUNDER.post, t.on and snd.distant or snd.distant_stop)
@@ -246,7 +288,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet storm", fn = function(now)
     if SW.on and not SW.tr then lightTick(now) end
 end }
 if type(LEVEL_DROPS) == "table" then                       -- (the level's: its Cloudly actor and lights went with it)
-    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving, TH.q, TH.got, TH.ev = nil, nil, {}, {}, {} end
+    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving, TH.q, TH.got, TH.ev, CELLS = nil, nil, {}, {}, {}, {} end
 end
 end
 -- TEST ONLY END
