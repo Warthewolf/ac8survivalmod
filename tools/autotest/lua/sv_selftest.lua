@@ -367,6 +367,27 @@ SUITES.tanacorn = function()
         C.hh0 = h1                                         -- (the later checks against what's there now)
     end)
     A.wait(5)                                             -- (the +2.5 s orders, the +8 s look)
+    -- (2026-11-16, runs 12-19) her live parts' posed meshes never move (the T16, CIWS, LASER at rest; the railguns' lift
+    -- writes and their arm's aim), while the same blueprints turn as standalone test mounts: their ticks, read, then on
+    A.do_(function()
+        local _, seen = partsSeen()
+        for _, s in ipairs({ "T16_FWD", "CIWS_1", "LASER_FWD_L", "RAILGUN_L" }) do
+            local e = seen[s]
+            if e and ST.same(e) then
+                local m = nil
+                if not m then for _, c in ipairs((SPC and SPC.V and SPC.V.comps) and SPC.V.comps(e.o, "/Script/Engine.PoseableMeshComponent") or {}) do m = c end end
+                local function rd(f) local ok, v = pcall(f); return ok and tostring(v) or "?" end
+                local before = string.format("actor tick %s, its PoseableMesh %s tick %s (registered %s, active %s)",
+                    rd(function() return e.o:IsActorTickEnabled() end), m and "found" or "NOT found",
+                    m and rd(function() return m:IsComponentTickEnabled() end) or "-",
+                    m and rd(function() return m:IsRegistered() end) or "-", m and rd(function() return m:IsActive() end) or "-")
+                pcall(function() e.o:SetActorTickEnabled(true) end)
+                if m then pcall(function() m:SetComponentTickEnabled(true) end); pcall(function() m:SetActive(true, false) end) end
+                ST.info(string.format("tick probe Part_%s: %s; then on: actor tick %s, mesh tick %s", s, before,
+                    rd(function() return e.o:IsActorTickEnabled() end), m and rd(function() return m:IsComponentTickEnabled() end) or "-"))
+            end
+        end
+    end)
     A.picture("tanacorn_whole", function() return ST.frame(C.hull, -30000, 90000, 22000) end,
         function() return ST.frame(C.hull, 0, 0, 3000) end, 55)
     chainTest(C, "T5", { "^T5" })
