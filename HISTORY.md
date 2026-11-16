@@ -3295,3 +3295,20 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - Her rise with her guns live (Ctrl+L then Ctrl+R; the riselive suite, run 37: 15/15): the live hull already up rises
   where it is on the same rig (200.8 m under to +0.9 m), all 35 parts still there after it and each on its socket (70
   live-watch readings), her armour holds, and her T16's rounds in flight home on you after it (10 of 10, none at the runway).
+
+## 0.74.83-0.74.84 (2026-11-16; Lua, test builds only for the fleet's parts): INVINCIBLE FLEET's night and storm (feature/fleet-storm)
+- The user: "another day night cycle for this Special Round, using the same method we use for The Festival", the sun
+  setting from round 25, "Night can last for 3 rounds before Round 30", the fleet "at Early Morning, just before the sun
+  rises", "swap the new cloud layer in at the moment the Night Sky Appears, add a lot of lightning", seen and heard only,
+  the storm clearing "with a fade to black on round 35" ("to hide the sudden swap of the clouds back to normal").
+- sv_sky.lua (ships): the arc's owners and profiles (SKY.arcOwners / arcProfiles / arcOwner / arcState; the latest start
+  owns it; sink_rounds; GONE FISHIN''s F and THE FESTIVAL untouched: sky_test's checks, the Festival's arc as it was).
+- sv_fleet.lua (its TEST ONLY block): IFSKY owns the arc from round 25 (no sinking round: the sunset at 26, night 27-29,
+  the pre-dawn at 30, sunrise 31-33); the storm from its first moon to round 35, each way under a fade to black: Distant
+  Thunder's storm cloud layout (Mission 12's CVC_ms12_250708; sv_anomalies_dev.lua exports lySet / camFade / post), its
+  distant thunder and a clap, cloud lightning every 0.3-0.8 s within 25 km of the airfield and the fleet (a cloud light
+  every 2-4 s, bolts between, the thunder after its distance's delay).
+- Autotest fleetnight (run 38, 0.74.83: 14/16): every step on the fleet's arc, the storm in at the moon under a fade
+  (CVC_ms04_20251216 -> CVC_ms12_250708), 130 flashes, the fleet up in the pre-dawn storm; the storm never cleared (the
+  arc's step capped at midday's hold): SKY.arcState's kRaw, fixed in 0.74.84. Its pictures from 1.2 km were inside the
+  storm's cloud deck (black, then grey): the suite's camera at 400 m now, a bolt forced in view before a shot.
