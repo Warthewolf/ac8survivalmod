@@ -289,24 +289,37 @@ SUITES.tanacorn = function()
     A.wait(6)                                             -- (the +2.5 s orders, the +8 s look)
     chainTest(C, "T5", { "^T5" })
     chainTest(C, "VLS block", { "^VLSS_L", "^VLS" })
+    C.railUp = {}
     for _, side in ipairs({ "L", "R" }) do                 -- the railguns (stage 4)
         local rg = "RAILGUN_" .. side
-        A.log_("tanicorn rail: " .. rg .. " deployed", 20, "m0", true, function(l)
-            ST.check(l ~= nil and l:find("(up)", 1, true) ~= nil, rg .. " deployed (lift up, muzzle raised as drawn)",
-                l or ST.findLog("tanicorn rail: " .. rg, ST.marks.m0, true))
+        -- (either way it ends: deployed, or its NOT ordered line, 2026-11-16's first run: the drawn muzzle never rose)
+        A.until_(function()
+            return ST.findLog("tanicorn rail: " .. rg .. " deployed", ST.marks.m0, true)
+                or ST.findLog("tanicorn rail: " .. rg .. " NOT ordered", ST.marks.m0, true)
+        end, 20, function(l)
+            C.railUp[side] = ST.check(l ~= nil and l:find(" deployed: ", 1, true) ~= nil and l:find("(up)", 1, true) ~= nil,
+                rg .. " deployed (lift up, muzzle raised as drawn)", l or ST.findLog("tanicorn rail: " .. rg, ST.marks.m0, true))
         end)
-        A.log_("tanicorn rail: " .. rg .. " RE_SV_TaniRailOrder" .. side .. " fired", 10, "m0", true, function(l)
-            ST.check(l ~= nil, rg .. " ordered (its remote event fired after the read-back)", l)
+        A.until_(function()
+            return not C.railUp[side] or ST.findLog("tanicorn rail: " .. rg .. " RE_SV_TaniRailOrder" .. side .. " fired", ST.marks.m0, true)
+        end, 10, function(l)
+            if C.railUp[side] then ST.check(type(l) == "string", rg .. " ordered (its remote event fired after the read-back)", l) end
         end)
     end
     for _, side in ipairs({ "L", "R" }) do
         local rg = "RAILGUN_" .. side
-        A.log_("tanicorn rail: " .. rg .. " its barrel moves", 25, "m0", true, function(l)
-            ST.check(l ~= nil, rg .. "'s barrel moves after its order", l or ST.findLog("tanicorn rail: " .. rg, ST.marks.m0, true))
+        A.until_(function()
+            return not C.railUp[side] or ST.findLog("tanicorn rail: " .. rg .. " its barrel moves", ST.marks.m0, true)
+        end, 25, function(l)
+            if C.railUp[side] then
+                ST.check(type(l) == "string", rg .. "'s barrel moves after its order", l or ST.findLog("tanicorn rail: " .. rg, ST.marks.m0, true))
+            end
         end)
     end
-    A.log_("tanicorn: RAILGUN_[LR] shell 1", 40, "m0", false, function(l)
-        ST.check(l ~= nil, "a railgun fired (its first EML round seen)", l)
+    A.until_(function()
+        return not (C.railUp.L or C.railUp.R) or ST.findLog("tanicorn: RAILGUN_[LR] shell 1", ST.marks.m0)
+    end, 40, function(l)
+        if C.railUp.L or C.railUp.R then ST.check(type(l) == "string", "a railgun fired (its first EML round seen)", l) end
     end)
     A.do_(function() C.af0 = AF and AF.bomb; ST.marks.m1 = ST.n; ST.press("H") end)   -- the bow railcannon
     A.log_("tanicorn rc: deployed at", 12, "m1", true, function(l)

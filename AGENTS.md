@@ -29,7 +29,9 @@ Start every task with these steps, in this order, instead of starting wherever t
    - docs write `build/...`, `<repo>`, or the `.env` name (`$UE`, `$AC7`, `$AC8_DIR`).
    `tools/checks/paths_check.py` (run by `build_all.sh`) fails the build on one.
 5. **Check:** `lua_check.py` after every Lua edit, `build_all.sh` (it runs the checks), and the `tools/checks/` tests
-   for what changed. Report what passed, what failed and what couldn't be run.
+   for what changed. Report what passed, what failed and what couldn't be run. In the game, unattended: a dev stage
+   through `tools/autotest/gate.py` (tools/autotest/README.md; never start AC8 for a test any other way; the user's yes,
+   2026-11-16: whenever the game is closed, her Survival moved aside and put back).
 6. **Hand over:** a new version for every build the user gets, the build's notes at the end of HISTORY.md, a lesson a
    test confirms as a hard rule here (see "How the two agents share the work").
 
@@ -409,6 +411,22 @@ Copy a working stock pattern before inventing a new one.
     shuttle's T-4 and T (SV_ShuttleLaunched never set) and a flight's appearance orders were lost; events after it took
     with her still on the runway. A one-shot host event that matters is checked by its effect and fired again once the
     STORE is shut (sv_rounds_shuttle.lua SPC.storeShut: the shuttle's liftoff, its removal, the Spaceport's launch).
+
+65. Answer AC8's startup boxes (the "Known issues with graphics driver" box: a #32770 with Yes / No and its text in an Edit;
+    No is the answer, Yes opens NVIDIA's download page in the user's browser) with a POSTED WM_COMMAND, never a sent
+    BM_CLICK: the game runs the box in its own GetMessageW loop (AceCombat8.exe+1884555, through Steam's overlay hook), a
+    sent message is handled inside GetMessageW and never wakes it, and the game hangs at 9,474 objects with no window.
+    Five gated runs of 2026-11-16 hung so; the posted answer went on within a second (tools/autotest/common.py).
+
+66. UE4SS's Lua functions fail when called from a Lua coroutine ("The lua state ... has no instance inside lua_instances
+    unordered map"), and so does any of Survival's code that calls them (log, FindAllOf, finishUnpaid ...): a sequence
+    spread over ticks is a step list run from the tick, never a coroutine (tools/autotest/lua/sv_selftest.lua; the
+    self-test's coroutine found no player controller for two minutes, 2026-11-16).
+
+67. The Mod Loader skips a folder its IoStoreLoaderMod/loadorder.txt (the ACE8 Mod Launcher's: `+Name` on, `-Name` off)
+    has off: with `-SurvivalMode` the containers don't mount and Survival turns itself off ("Survival Mode's tables could
+    not be loaded from SurvivalMode_P"). The user's file had every mod off on 2026-11-16; tools/autotest/kit.py turns it on
+    for a run and puts her file back byte-identical.
 
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
