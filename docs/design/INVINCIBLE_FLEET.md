@@ -700,7 +700,9 @@ Status: not started. Depends on: WP2.
 - Pass: it fights a player for a whole test without help, every weapon type seen in the weapons log.
 
 ### WP4. The rise, on its own
-Status: not started. Depends on: WP2 (route A) or WP0's one-piece mesh (route B). Test it from a key with no fleet.
+Status (2026-11-16): route B2 built (0.74.62-0.74.67, Ctrl+R) and RUN IN GAME by the autotest (0.74.82, run 36, 13/13):
+her rig found and played, the hull from 200 m under to the surface, the bow up 35 deg and ~120 m, the breach 10 of 10 and
+the slam 13 + 26 + 12 effects, 97 of 97 in all, the cinematic and your view back (pictures in its shots/). Depends on: WP2 (route A) or WP0's one-piece mesh (route B). Test it from a key with no fleet.
 - What: from under the sea, bow first to the sky, hang, fall flat, settle; untargetable throughout; then fire, then
   targetable. Lua can't move it (250 ms tick, hard rule 39): the motion must be the game's.
 - **Route A, the submarine's own surface with our curves:** ALiveSubmarineBase surfaces along

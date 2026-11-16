@@ -3287,3 +3287,8 @@ game. The work was split by file between agents; the builds ran in sequence in t
   its base. In Survival (sv_tanicorn_rail.lua seqImpact, CFG railcannon.impact_seq): Explosion002 (605172, -533159, -5879
   in the sequence's space) put where the round lands, the rains and the rod's trail hidden, stopped impact_life_s on; any
   failure (no player, the origin refused: never played at the cutscene's own spot) falls back to its systems at x12.
+- THE TANACORN's rise (Ctrl+R, WP4) autotested for the first time (0.74.82, the rise suite, run 36: 13/13): her RiseRig
+  found and scrubbed to 0, played at rate 1; the hull from 200.8 m under the sea to +0.9 m in 32 readings, the bow up 35.0
+  deg, its tip ~120 m at most; the breach's 10 of 10 effects and its sound, the slam's 13 foam, 26 pillars and 12 big
+  splashes and its shake, 97 of 97 effects in all (each stopped 8 s on); the rise over with your view, autopilot,
+  invincibility and the attack limits put back. Its cinematic pictured through its own camera.
