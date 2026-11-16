@@ -211,6 +211,47 @@ function A.picture(name, atFn, lookFn, fov)
     A.wait(2.5)                                           -- (the job grabs the window within ~1 s of the line)
     A.do_(function() ST.lookBack() end)
 end
+-- (2026-11-16) what the rounds in flight of objects whose class matches ownerPat home on, sampled once a second for n
+-- seconds (each round counted once): checks none at the runway's target points (BP_GR000_dummy) and some at you
+function A.rounds(ownerPat, what, n)
+    local S = { last = -1, n = 0, you = 0, dummy = 0, other = {}, seen = {}, byD = {}, byY = {} }
+    A.until_(function()
+        local now = os.clock()
+        if now - S.last < 1 then return false end
+        S.last, S.n = now, S.n + 1
+        local pa
+        pcall(function() pa = ST.plane():GetAddress() end)
+        local ok, list = pcall(FindAllOf, "LiveExplosiveWeapon")
+        for _, w in ipairs(ok and list or {}) do
+            local hid, wa, own = nil, nil, ""
+            pcall(function() hid = w.bHidden end)
+            pcall(function() wa = w:GetAddress() end)
+            pcall(function() own = w.OwningGameObject:GetFullName() end)
+            if hid == false and wa and own:find(ownerPat, 1, true) then
+                local tn, ta = "none", nil
+                pcall(function() local t = w.TargetToHome; ta = t:GetAddress(); tn = t:GetFullName() end)
+                local key = tostring(wa) .. "|" .. tostring(ta)
+                if not S.seen[key] then
+                    S.seen[key] = true
+                    local ok2 = (own:match("(BP_[%w_]-_C)[_ ]") or own:sub(1, 30)):gsub("_C$", "")
+                    local wn = (w:GetFullName():match("(BP_wp_[%w_]-)_C") or "?")
+                    local k = ok2 .. " " .. wn
+                    if ta and pa and ta == pa then S.you = S.you + 1; S.byY[k] = (S.byY[k] or 0) + 1
+                    elseif tn:find("dummy", 1, true) then S.dummy = S.dummy + 1; S.byD[k] = (S.byD[k] or 0) + 1
+                    else local t = (tn:match("([%w_]+_C)_") or tn):sub(1, 40); S.other[t] = (S.other[t] or 0) + 1 end
+                end
+            end
+        end
+        return S.n >= n
+    end, n + 15, function()
+        local function list(t) local o = {}; for k, v in pairs(t) do o[#o + 1] = k .. " x" .. v end
+            return #o > 0 and table.concat(o, ", ") or "none" end
+        local d = string.format("%d samples: %d rounds at you (%s), %d at the runway's points (%s), others: %s", S.n, S.you,
+            list(S.byY), S.dummy, list(S.byD), list(S.other))
+        ST.check(S.dummy == 0, "no " .. what .. " round in flight homes on the runway's target points", d)
+        ST.check(S.you > 0, what .. " rounds in flight home on you", d)
+    end)
+end
 local aborted = false
 local function stepOnce(now)
     local s = Q[qi]
@@ -392,6 +433,7 @@ SUITES.tanacorn = function()
             else ST.info("Part_" .. s .. (moved and " turned: " or " at rest (point defence, out of its reach): ") .. what) end
         end
     end)
+    A.rounds("BP_SV_Tani_", "her", 20)
     A.picture("tanacorn_whole", function() return ST.frame(C.hull, -30000, 90000, 22000) end,
         function() return ST.frame(C.hull, 0, 0, 3000) end, 55)
     chainTest(C, "T5", { "^T5" })
@@ -499,40 +541,7 @@ SUITES.fleet = function()
     -- (2026-11-16, 0.74.77) the ships' parts ordered PlayerOnlyNoLimit: what their rounds in flight home on, sampled after
     -- the orders (a gun's FIRST launch comes 1-2 s after its ship's spawn, before its +2.5 s order: run 24's three at the
     -- runway's points were those; run 21 (0.74.76): every gun's at BP_GR000_dummy_CP)
-    local SMP = { last = -1, n = 0, you = 0, dummy = 0, other = {}, seen = {} }
-    A.until_(function()
-        local now = os.clock()
-        if now - SMP.last < 1 then return false end
-        SMP.last, SMP.n = now, SMP.n + 1
-        local pa
-        pcall(function() pa = ST.plane():GetAddress() end)
-        local ok, list = pcall(FindAllOf, "LiveExplosiveWeapon")
-        for _, w in ipairs(ok and list or {}) do
-            local hid, wa, own = nil, nil, ""
-            pcall(function() hid = w.bHidden end)
-            pcall(function() wa = w:GetAddress() end)
-            pcall(function() own = w.OwningGameObject:GetFullName() end)
-            if hid == false and wa and own:find("BP_VE0", 1, true) then
-                local tn, ta = "none", nil
-                pcall(function() local t = w.TargetToHome; ta = t:GetAddress(); tn = t:GetFullName() end)
-                local key = tostring(wa) .. "|" .. tostring(ta)
-                if not SMP.seen[key] then
-                    SMP.seen[key] = true
-                    if ta and pa and ta == pa then SMP.you = SMP.you + 1
-                    elseif tn:find("dummy", 1, true) then SMP.dummy = SMP.dummy + 1
-                    else local k = (tn:match("([%w_]+_C)_") or tn):sub(1, 40); SMP.other[k] = (SMP.other[k] or 0) + 1 end
-                end
-            end
-        end
-        return SMP.n >= 25
-    end, 40, function()
-        local o = {}
-        for k, n in pairs(SMP.other) do o[#o + 1] = k .. " x" .. n end
-        local what = string.format("%d samples: %d rounds at you, %d at the runway's points, others: %s", SMP.n, SMP.you,
-            SMP.dummy, #o > 0 and table.concat(o, ", ") or "none")
-        ST.check(SMP.dummy == 0, "no ship's round in flight homes on the runway's target points (after the orders)", what)
-        ST.check(SMP.you > 0, "the ships' rounds in flight home on you", what)
-    end)
+    A.rounds("BP_VE0", "ship", 25)
     -- (a ship's .hull is sv_fleet's entry { obj, addr, ... }: the actor is its .obj; GEOFON by name, not by order)
     local function geofon()
         for _, sh in ipairs(IFLEET.cur and IFLEET.cur.ships or {}) do
