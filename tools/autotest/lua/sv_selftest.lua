@@ -866,6 +866,97 @@ SUITES.fleetnight = function()
         IFSKY.step(nil)
     end)
 end
+-- (2026-11-16) the user: "when the Invincible Fleet first spawns, they should all Surface out of the sea the same way the
+-- Tanacorn does". A probe: can a stock ship ride THE TANACORN's rise rig? A bare SkeletalMeshActor with her rig (SK_SV_Tani_RIG,
+-- AS_SV_Tani_RIG_Rise) at GEOFON's spot and heading, scaled to her length; GEOFON's live hull attached to its SOC_Hull; the
+-- rise scrubbed to 0 and played; her height logged every 0.5 s, pictured from beside; detached at the end
+SUITES.surface = function()
+    intoRun()
+    local P = {}
+    local RIG = "/Game/Mods/SurvivalMode/Tanicorn/Model/SK_SV_Tani_RIG.SK_SV_Tani_RIG"
+    local ANIM = "/Game/Mods/SurvivalMode/Tanicorn/Model/AS_SV_Tani_RIG_Rise.AS_SV_Tani_RIG_Rise"
+    local function geofon()
+        for _, sh in ipairs(IFLEET and IFLEET.cur and IFLEET.cur.ships or {}) do
+            if (sh.name == "GEOFON" or sh.key == "GEOFON") and sh.hull and sh.hull.obj and valid(sh.hull.obj) then return sh.hull.obj end
+        end
+        return nil
+    end
+    A.do_(function() ST.marks.f0 = ST.n; ST.press("N") end)
+    A.log_("fleet: Ctrl%+N: %d+ of %d+ ships up", 60, "f0", false, function(l)
+        if not ST.check(l ~= nil, "the fleet up", l) then return "abort" end
+    end)
+    A.wait(3)
+    A.do_(function()
+        local g = geofon()
+        if not ST.check(g ~= nil, "GEOFON's hull found") then return "abort" end
+        P.g = g
+        local okL, l = pcall(function() return g:K2_GetActorLocation() end)
+        local okR, r = pcall(function() return g:K2_GetActorRotation() end)
+        if not (okL and okR) then ST.check(false, "GEOFON's place read"); return "abort" end
+        P.at, P.yaw = { X = l.X, Y = l.Y, Z = l.Z }, r.Yaw
+        local rig, anim = loadObject(RIG), loadObject(ANIM)
+        if not ST.check(rig ~= nil and anim ~= nil, "her rig and its rise loaded (the Tanicorn container)", tostring(rig) .. " / " .. tostring(anim)) then return "abort" end
+        local gs, cls = StaticFindObject("/Script/Engine.Default__GameplayStatics"), StaticFindObject("/Script/Engine.SkeletalMeshActor")
+        local sc = 0.5
+        local q = quatOf(P.yaw, 0)
+        local t = { Rotation = q, Translation = { X = P.at.X, Y = P.at.Y, Z = 0 }, Scale3D = { X = sc, Y = sc, Z = sc } }
+        local okB, a = pcall(function() return gs:BeginDeferredActorSpawnFromClass(ST.pc(), cls, t, 1, nil, 1) end)
+        if not ST.check(okB and a ~= nil and valid(a), "a SkeletalMeshActor for the rig spawned", tostring(a)) then return "abort" end
+        local m = a.SkeletalMeshComponent
+        local steps = {}
+        local function try(name, f) local ok, e = pcall(f); steps[#steps + 1] = name .. (ok and "" or (" FAILED " .. tostring(e):sub(1, 60))) end
+        try("SetSkeletalMeshAsset", function() m:SetSkeletalMeshAsset(rig) end)
+        try("tick option", function() m.VisibilityBasedAnimTickOption = 0 end)
+        try("no update-rate optimisations", function() m.bEnableUpdateRateOptimizations = false end)
+        try("FinishSpawning", function() gs:FinishSpawningActor(a, t, 1) end)
+        try("SetAnimationMode", function() m:SetAnimationMode(1, true) end)
+        try("SetAnimation", function() m:SetAnimation(anim) end)
+        try("SetPosition 0", function() m:SetPosition(0, false) end)
+        P.rig, P.m = a, m
+        local okS, s0 = pcall(function() return m:GetSocketLocation(FName("SOC_Hull")) end)
+        ST.info("surface: the rig: " .. table.concat(steps, ", ") .. string.format("; SOC_Hull at z %s m", okS and string.format("%.1f", s0.Z / 100) or "?"))
+        local okA, e = pcall(function() g:K2_AttachToComponent(m, FName("SOC_Hull"), 2, 2, 1, true) end)
+        ST.check(okA, "GEOFON attached to the rig's SOC_Hull", tostring(e))
+        local okZ, z = pcall(function() return g:K2_GetActorLocation().Z end)
+        ST.info(string.format("surface: GEOFON at z %s m once attached (was %.1f m)", okZ and string.format("%.1f", z / 100) or "?", P.at.Z / 100))
+        P.zs = {}
+    end)
+    A.do_(function()
+        local beside = function() return ST.frame(P.g, -20000, 90000, 3000) end
+        ST.look(beside(), { X = P.at.X, Y = P.at.Y, Z = 6000 }, 55)
+        local ok, e = pcall(function() P.m:Play(false) end)
+        ST.info("surface: the rise playing: " .. tostring(ok and "yes" or e))
+        P.t0 = os.clock()
+    end)
+    for i = 1, 32 do
+        A.wait(0.5)
+        A.do_(function()
+            local okZ, z = pcall(function() return P.g:K2_GetActorLocation().Z end)
+            local okP, pr = pcall(function() return P.g:K2_GetActorRotation().Pitch end)
+            P.zs[#P.zs + 1] = okZ and z / 100 or nil
+            if i % 4 == 0 then
+                ST.info(string.format("surface: +%.1f s GEOFON at z %s m, pitch %s", os.clock() - P.t0, okZ and string.format("%.1f", z / 100) or "?",
+                    okP and string.format("%.1f", pr) or "?"))
+            end
+            if i % 3 == 0 then ST.shot(string.format("surface_%02d", i)) end
+        end)
+    end
+    A.do_(function()
+        local zmin, zmax = math.huge, -math.huge
+        for _, z in ipairs(P.zs) do zmin, zmax = math.min(zmin, z), math.max(zmax, z) end
+        ST.check(#P.zs > 20 and zmax - zmin > 20, "GEOFON rode the rig (her height moved)", string.format("%d readings, z %.1f .. %.1f m", #P.zs, zmin, zmax))
+        ST.lookBack()
+        pcall(function() P.g:K2_DetachFromActor(1, 1, 1) end)
+        pcall(function() P.rig:K2_DestroyActor() end)
+        local okZ, z = pcall(function() return P.g:K2_GetActorLocation().Z end)
+        ST.info(string.format("surface: GEOFON detached at z %s m", okZ and string.format("%.1f", z / 100) or "?"))
+    end)
+    A.wait(4)
+    A.do_(function()
+        local okZ, z = pcall(function() return P.g:K2_GetActorLocation().Z end)
+        ST.info(string.format("surface: 4 s after: GEOFON at z %s m (back on the water?)", okZ and string.format("%.1f", z / 100) or "?"))
+    end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
