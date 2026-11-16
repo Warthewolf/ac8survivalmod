@@ -1220,15 +1220,11 @@ local function clTick(now)
     end
 end
 THUNDER.cloudFlash, THUNDER.cloudTick = flash, clTick
--- (2026-11-17) lightning bolts you can see: AC8's own bolt meshes (VFX/ResourceAsset/Mesh/Lightning, SM_Thunder* ...) on
--- StaticMeshActors with the game's cloud lightning material (MI_NearCloudLightning001: white, a blue edge). The autotest's
--- runs 46-60: NS_CloudLightning draws only a faint teal glow, the stock cloud lights and our own point lights light nothing
--- in Cloudly's clouds; a bolt mesh draws once its mesh is set BEFORE its spawn finishes (after it, on a Static actor,
--- SetStaticMesh refuses: runs 50-51 drew nothing), Movable so a pooled actor can take another mesh. A pool of c.pool actors,
--- each bolt standing from the sea (a mesh taller than wide) or lying in the clouds at alt_m (one wider than tall), height_m /
--- length_m long, a random turn, shown and hidden by c.steps a tick (the 250 ms tick: 1 shown, 0 hidden), then back in the
--- pool. boltWarm shows the pool 400 m in front of your camera (under a fade to black: the material's first draw compiles
--- there, not as the checker by your plane of the autotest's run 45). Log: `bolts: ...`.
+-- (2026-11-17) lightning bolts you can see (hard rules 69-70): AC8's bolt meshes (SM_Thunder* ...) on pooled Movable
+-- StaticMeshActors in the game's cloud lightning material (MI_NearCloudLightning001), standing from the sea (a mesh taller
+-- than wide) or lying in the clouds at alt_m, height_m / length_m long, a random turn, shown and hidden by c.steps a tick
+-- (1 shown, 0 hidden). In view: 4-14 km (view_km) out in your camera's shot. boltWarm shows the pool in front of your
+-- camera under a fade to black (the material's first draw there, not as run 45's checker by your plane). Log: `bolts: ...`.
 local BOLT = { pool = {}, mesh = {}, ext = {} }
 local function boltRng(r, d) r = type(r) == "table" and r or d; return r[1] + math.random() * (r[2] - r[1]) end
 local function boltMesh(path)
@@ -1296,10 +1292,25 @@ local function boltPlace(b, c, at)                          -- (a mesh, a size, 
         2 * (standing and e.ez or math.max(e.ex, e.ey)) * sc / 100000)
 end
 local function boltShow(b, on) pcall(function() b.a:SetActorHiddenInGame(not on) end) end
+local function camLook()                                    -- (your camera's spot and forward)
+    local pcm, L, R
+    pcall(function() pcm = survivalPC.PlayerCameraManager; local v = pcm:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+    pcall(function() R = pcm:GetCameraRotation() end)
+    if not (L and R) then return nil end
+    local yw, pt = math.rad(R.Yaw or 0), math.rad(R.Pitch or 0)
+    return L, { X = math.cos(pt) * math.cos(yw), Y = math.cos(pt) * math.sin(yw), Z = math.sin(pt) }
+end
 -- a bolt at `at` (its foot: X, Y, Z sea level) by settings c; what it showed, or nil and why
-function THUNDER.bolt(at, c, why)
+function THUNDER.bolt(at, c, why, inView)
     c = c or {}
     if c.enabled == false then return nil, "off" end
+    local L, f = nil, nil
+    if inView then L, f = camLook() end
+    if L then                                               -- (out in your camera's shot, its foot at sea level)
+        local d, fl = boltRng(c.view_km, { 4, 14 }) * 100000, math.max(1e-3, math.sqrt(f.X * f.X + f.Y * f.Y))
+        local sd = (math.random() * 2 - 1) * 0.45 * d
+        at = { X = L.X + (f.X * d - f.Y * sd) / fl, Y = L.Y + (f.Y * d + f.X * sd) / fl, Z = 0 }
+    end
     local b = boltFree(c)
     if not b then return nil, "the pool's all showing" end
     local what = boltPlace(b, c, at)
@@ -1324,16 +1335,8 @@ end
 -- the pool made and shown 400 m in front of your camera (each a mesh of c.meshes in turn), for boltHide to take off: how many
 function THUNDER.boltWarm(c)
     c = c or {}
-    local pcm
-    pcall(function() pcm = survivalPC.PlayerCameraManager end)
-    local L, R
-    if pcm and liveObj(pcm) then
-        pcall(function() local v = pcm:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
-        pcall(function() R = pcm:GetCameraRotation() end)
-    end
-    if not (L and R) then return 0 end
-    local yw, pt = math.rad(R.Yaw or 0), math.rad(R.Pitch or 0)
-    local f = { X = math.cos(pt) * math.cos(yw), Y = math.cos(pt) * math.sin(yw), Z = math.sin(pt) }
+    local L, f = camLook()
+    if not L then return 0 end
     local list, n = c.meshes or {}, 0
     for i = 1, math.floor(tonumber(c.pool) or 10) do
         local b = BOLT.pool[i]

@@ -1705,7 +1705,8 @@ local function lightTick(now)
     SW.n = (SW.n or 0) + 1
     local ok, what = pcall(THUNDER.cloudFlash, at, how, "the fleet's storm")
     if THUNDER.bolt and c.bolts then
-        local okB, seen, why = pcall(THUNDER.bolt, { X = at.X, Y = at.Y, Z = 0 }, c.bolts, "the fleet's storm")
+        local okB, seen, why = pcall(THUNDER.bolt, { X = at.X, Y = at.Y, Z = 0 }, c.bolts, "the fleet's storm",
+            IFSURF and IFSURF.state and IFSURF.state() and true)   -- (while the surfacing films: in its shot)
         what = tostring(what) .. "; " .. (okB and (seen or ("no bolt: " .. tostring(why))) or ("bolt error " .. tostring(seen)))
     end
     if SW.n <= 3 or SW.n % 100 == 0 then
