@@ -1578,8 +1578,17 @@ SUITES.meshbolt2 = function()
     A.do_(function() if tostring(ST.conf.night) == "1" and IFSKY and IFSKY.step then IFSKY.step(3) end end)
     A.wait(tostring(ST.conf.night) == "1" and 12 or 0.5)
     local M = "/Game/VFX/ResourceAsset/Mesh/Lightning/"
-    for n, k in ipairs({ { "/Engine/BasicShapes/Cube.Cube", 100, 2000, nil }, { M .. "SM_Thunder001_IE03.SM_Thunder001_IE03", 15, 3000, nil },
-                         { M .. "SM_Thunder001_IE03.SM_Thunder001_IE03", 15, 3000, "/Engine/EngineMaterials/EmissiveMeshMaterial.EmissiveMeshMaterial" } }) do
+    local T1 = M .. "SM_Thunder001_IE03.SM_Thunder001_IE03"
+    local AL, LT = "/Game/OnlineMode/VFX/Vehicles/Boss/", "/Game/VFX/Environment/Common/Lightning/CloudLightning/"
+    local SET = (tostring(ST.conf.set) == "mats") and {
+        { T1, 15, 3000, AL .. "BA002_alcn/Material/M_alcn_LiSparkEdge_ON.M_alcn_LiSparkEdge_ON" },
+        { T1, 15, 3000, AL .. "BA004_chnd/Material/MI_chnd_Flash002_ON.MI_chnd_Flash002_ON" },
+        { T1, 15, 3000, AL .. "BA002_alcn/Material/MI_alcn_Glow001_ON.MI_alcn_Glow001_ON" },
+        { T1, 15, 3000, LT .. "MI_CloudLightning001.MI_CloudLightning001" },
+        { T1, 15, 3000, LT .. "MI_NearCloudLightning001.MI_NearCloudLightning001" },
+    } or { { "/Engine/BasicShapes/Cube.Cube", 100, 2000, nil }, { T1, 15, 3000, nil },
+           { T1, 15, 3000, "/Engine/EngineMaterials/EmissiveMeshMaterial.EmissiveMeshMaterial" } }
+    for n, k in ipairs(SET) do
         local B = {}
         A.do_(function()
             local pl = ST.plane()
