@@ -3269,3 +3269,9 @@ game. The work was split by file between agents; the builds ran in sequence in t
   ShockWave001 / 002 (the two rings), SandSmoke001 and RingSmoke001 (day 2, PL_Mission025_2, loads Ms250020-40: no
   strike). The GR036 main cannon's blast and her EML burst out; impact_life_s 25 (the dust; the rest fx_life_s 6).
   tani_rail_test: the set pinned, 7 of 7 up, the dust still up 7.5 s on, all stopped after their life.
+- 0.74.81: the Spear strike's set at x12. Its cutscene sizes it by camera and by its particles' user parameters (CamOff,
+  ExpVelocityMax / Min, SmokeAlpha on each NiagaraComponent of Shot0030's spawnables; their transform tracks' scale 1-2),
+  not readable cleanly from the package; spawned bare at x1 its two shock rings come out at their cutscene size (~0.5 and
+  ~2 km up) and the fireball a small puff on the ground. The autotest's spear suite (run 31: x1 / x4 / x8 / x12 over the
+  runway's impact point, pictured from ~4.3 km and 1.3 km up): at x12 the fireball fills the space between its rings as in
+  the user's picture. (Its dust skirt is under Comona's low cloud deck from there.)
