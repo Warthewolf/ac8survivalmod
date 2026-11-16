@@ -3374,3 +3374,14 @@ game. The work was split by file between agents; the builds ran in sequence in t
   build/backup/install_before_0.74.89); her survival.ini, profile, map notes and the Mod Launcher's toggle kept, her
   subtitles.ini the same as the repo's. The storm comes with the fleet's night (round ~27, the arc from round 25) and
   clears at round 35; Ctrl+\ four times puts Survival's own cloud flash 5 km ahead of you in any round.
+
+
+## 0.74.90-0.74.91 (2026-11-17; test builds only): Ctrl+S, the fleet's night storm now (feature/fleet-storm)
+- The user: "yeah make a test key that goes into night storm". Ctrl+S in a run (sv_fleet.lua, test only, dev install
+  only): the fleet's arc at its night (IFSKY.step(3)), the storm in under its fade with its cloud light and flashes;
+  again: the round's own sky back; a new level forgets a test's step. tools/README.md's Ctrl key table has it.
+- 0.74.90, run 72 (stormkey, 14/14): on, off and on again as logged; but its picture 0.4 s after the off press showed the
+  day sky with the storm's clouds still in: the test step dropped at the press put the day back at once, a second before
+  the storm's fade to black. 0.74.91: the off press only asks the storm out (IFSKY.leaving: the storm not wanted), and
+  the day comes back under its black (trTick's out phase), as the cloud swap does. Staged; its test (stormkey with
+  pictures right after the off press) waits for the game to be closed (the user flying 0.74.89).

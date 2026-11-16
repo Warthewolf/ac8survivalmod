@@ -20,18 +20,12 @@
 --                     gap G m`: each copy's origin read back in the ship's frame (x along the keel, bow +, y across, z up
 --                     from the ship's origin, its waterline), and G the gap at the waterline between the two flight decks
 --                     (deck_m up in each copy) along the keel. A second Ctrl+B takes it off (OFF.down, below).
---                     (RISE_FORD.md 1.5's "15 m apart, 215 m parted" are along each copy's own keel: in the ship's frame
---                     the two decks meet the water ~0 m apart at the break, ~200-220 m once parted 100 m each way and sunk.)
 --   Ctrl+G in a run   T2, GEOFON's stages (RISE_FORD.md 4.2 (a)): the Ford alone 4 km ahead, broadside, its deck off, mortal;
---                     each further Ctrl+G takes `hit` (20 %) of its health off (ModifyHealth, as the Spaceport's
---                     finishParts). At 66 % (stage 1) AC8's vessel fire NS_VesselsFireL001 and smoke NS_VesselsSmokeS001
---                     attached to VesselMesh on the deck and the island, a list (VesselMesh's relative roll ramped over
---                     list_s, list_step_max a tick at most) and the Ford's own secondary blast sound; at 33 % (stage 2) more
---                     fire and its hull's slots on dynamic copies of its _DAM instances with Charred_Embers_Brightness x
---                     `embers` (materials "dim"; "dam": the _DAM instances themselves). A system that ends by itself is
---                     spawned again (refire). Logged: `geofon: up: ...`, `geofon: stage N at P % (health H %): F fires, S
---                     smoke, list R deg over T s, M material slots (<route>)`, every 5 s `geofon: +T s: health ...`, and
---                     `geofon: down at +T s (<why>)`; its fires off fx_off_s after.
+--                     each further Ctrl+G takes `hit` (20 %) of its health off. At 66 % AC8's vessel fire and smoke on the
+--                     deck and the island, a list (VesselMesh's roll over list_s) and its secondary blast sound; at 33 % more
+--                     fire and its hull on dynamic copies of its _DAM instances (embers x `embers`); a system that ends is
+--                     spawned again. Logged: `geofon: up: ...`, `geofon: stage N at P % (health H %): ...`, every 5 s
+--                     `geofon: +T s: health ...`, `geofon: down at +T s (<why>)`; its fires off fx_off_s after.
 -- The fleet (WP7's first test, 2026-11-12; docs/design/INVINCIBLE_FLEET_WP7.md): its own units SV_Unit_IF<Key> (never the
 -- Spaceport's), each ship on its lane from its course start ~30 km north-west of the runway (tools/survival_events_fleet.py):
 --   Ctrl+N in a run   the whole fleet (CFG.specials.fleet.ships: GEOFON, RAVEN, the four Aegis, Mission 22's seven cruisers
@@ -43,19 +37,15 @@
 --                     speed, heading, health, parts up; the others: km from GEOFON, m off their formation spot, speed,
 --                     heading, health, parts up) and `fleet: +T s weapons (since the last line): <ship> <part class>
 --                     <weapon> xN; ...; N of M parts fired`; a sunk ship once. Again: the fleet taken off (RE_SV_IFFleetRemove,
---                     then OFF.down). Its rows go into the game's tables at the main menu (sv_main.lua calls the setup:
---                     `fleet: rows at the main menu: ...`): with any missing, Ctrl+N refuses. A unit still up from before:
---                     RE_SV_IFFleetRemove and the fleet held up to clear_s for it, never spawned beside it.
+--                     then OFF.down). Its rows go in at the main menu (`fleet: rows at the main menu: ...`; one missing:
+--                     Ctrl+N refuses); a unit still up from before: RE_SV_IFFleetRemove, the fleet held up to clear_s for it.
+--   Ctrl+S in a run   the fleet's night storm now (IFSKY.step(3): the moon up, the storm under its fade); again: the
+--                     round's own sky back under the storm's fade (IFSKY.leaving: run 72 saw the day a second before it).
 -- Taking a test's ships off (OFF.down; the review of 8ca3195): never off the spawner's list by force with their objects up
--- (0.74.11's crash D, 0.74.48's STORE crash: a unit actor destroyed under its living objects), but the way every special's
--- leftovers go (sv_rounds.lua SPC.cleanUp): each object finished off (else switched off), each unit looked at 2 s on and
--- taken off the list then, one with nothing of it alive one each 0.5 s (SPC.cleanTick, SPC.recycleLater). A key that would
--- spawn a unit still being taken off, or still up, refuses (again in a few seconds). The three keys refuse in the landing
--- STORE (its minigame holds the world's AI: a spawn or a removal there was 0.74.11's and 0.74.48's case), and the fleet's
--- clock waits there as it does while paused.
--- Each kept object (the hull, its meshes, its parts, the effects) is checked to be the one captured (its address and its
--- name, hard rule 59) before anything is done to it; nothing moves while the game is paused (hard rule 60); every call
--- into the game is in a pcall and a failure is logged (these are look tests: a call the game doesn't take must say so).
+-- (0.74.11's crash D, 0.74.48's STORE crash), but the way every special's leftovers go (SPC.cleanUp, SPC.cleanTick); a key
+-- that would spawn a unit still going or up refuses, and the keys refuse in the landing STORE (its minigame holds the AI).
+-- Each kept object is checked to be the one captured (address and name, hard rule 59) before anything is done to it;
+-- nothing moves while paused (hard rule 60); every call into the game is in a pcall, a failure logged.
 -- TEST ONLY BEGIN (INVINCIBLE FLEET's tests: test builds only; docs/design/INVINCIBLE_FLEET_RISE_FORD.md 5, T1 and T2)
 CFG.specials.fleet = {
     geofon = {
@@ -1616,9 +1606,16 @@ function IFSKY.step(k)
     end
     log(string.format("fleet storm: the arc at step %s now (a test's)", tostring(k)))
 end
+testKey("S", "sv_fleet.lua's night storm now", function()                     -- (the header's Ctrl+S)
+    if not (D and D.now and RUN) then log("fleet storm: Ctrl+S outside a Survival run"); return end
+    local on = IFSKY.k == nil or IFSKY.leaving
+    IFSKY.leaving = (not on and SW.on) or nil              -- (off: the day back under the storm's fade, in trTick)
+    if on or not SW.on then IFSKY.step(on and 3 or nil) end
+    hudCallout("TEST: NIGHT STORM", on and "THE FLEET'S NIGHT, ITS STORM COMING" or "THE ROUND'S OWN SKY BACK")
+end)
 local function wanted()
     local c = stc()
-    if c.enabled == false or not (THUNDER and THUNDER.layoutSet and THUNDER.camFade) then return false end
+    if IFSKY.leaving or c.enabled == false or not (THUNDER and THUNDER.layoutSet and THUNDER.camFade) then return false end
     local a = SKY and SKY.arcState and SKY.arcState()
     if not (a and a.on and a.profile == "fleet" and a.k) then return false end
     if n(a.kRaw, a.k) >= math.floor(n(c.until_round, 35)) - math.floor(n(sc().from_round, 25)) then return false end   -- (the uncapped step: midday's hold caps a.k)
@@ -1663,6 +1660,7 @@ local function trTick(now)
     local snd = c.sound or {}
     if t.phase == "out" then
         if t.on then warmUp() elseif THUNDER.cloudOff then pcall(THUNDER.cloudOff) end   -- (under the black)
+        if not t.on and IFSKY.leaving then IFSKY.leaving = nil; IFSKY.step(nil) end   -- (Ctrl+S's day, unseen)
         local okL, what = pcall(THUNDER.layoutSet, t.on, t.on and "INVINCIBLE FLEET's night storm" or "INVINCIBLE FLEET's storm clearing")
         pcall(THUNDER.post, t.on and snd.distant or snd.distant_stop)
         if t.on and snd.clap then pcall(THUNDER.post, snd.clap) end
@@ -1734,7 +1732,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet storm", fn = function(now)
     if SW.on and not SW.tr then lightTick(now) end
 end }
 if type(LEVEL_DROPS) == "table" then                       -- (the level's: its Cloudly actor and lights went with it)
-    LEVEL_DROPS["fleet storm"] = function() SW = { on = false } end
+    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving = nil, nil end
 end
 end
 
