@@ -265,7 +265,9 @@ def build_fleet(g, flag, stock_ep):
         for ev in (s['up'], s['go']):
             g.execute(t_spath, ev, {0: s['obj'], 2: s['path'], 4: IF_SPEED}, delay=1.0)
             g.execute(t_upath, ev, {1: s['unit'], 2: s['path'], 4: IF_SPEED}, delay=1.0)
-            g.execute(t_seng, ev, {0: 'NoneSelect', 1: s['unit']}, delay=2.0)
+            # ((2026-11-16) its priority too: Mission 22's ship order says Default, and with it 20 of 25 rounds in flight
+            # still homed on the runway's points after the parts' PlayerOnlyNoLimit (autotest run 25); her hull has none)
+            g.execute(t_seng, ev, {0: 'NoneSelect', 1: s['unit'], 6: IF_PART_PRIORITY}, delay=2.0)
             for p in s['parts']:                                         # ((2026-11-16) the players only:
                 g.execute(t_part, ev, {0: p, 6: IF_PART_PRIORITY}, delay=2.5)   # PlayerFirst shelled the runway's points)
                 parts += 1
