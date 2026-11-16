@@ -152,6 +152,13 @@ CFG.specials.fleet = {
         alert = { enabled = true, off_after_s = 3 }, warn_left_s = 10, radio = true,
         hold = { paused = true, store = true, landed_alone = true, af_down = true },
         fx_life_s = 6, impact_life_s = 25, refire = true, refire_s = 2,
+        -- (2026-11-16) the impact as Mission 25 day 1's cutscene plays it (the user, with its picture: "that explosion needs to
+        -- look EXACTLY like this"): its own VFX layer (Shot0030's: every piece at its own scale, place, timing and settings)
+        -- played by a LevelSequencePlayer of ours, its transform origin moved so its ground explosion (Explosion002, at
+        -- anchor in the sequence's space) stands where the round lands; the cutscene camera's rains and the Spear rod's trail
+        -- (hide) hidden; held at its last frame for impact_life_s, then stopped. Off, or failing: fx.impact instead
+        impact_seq = { enabled = true, path = "/Game/Sequencer/IGC/IGC_Ms250010/VFX/CLS_IGC_Ms250010_Shot0030_VFX",
+                       anchor = { 605172, -533159, -5879 }, key = "Ms250010", hide = { "Rain", "BulletTrail" } },
         fx = {
             charge = { "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_alcn_RailCannonDischarge_ON", 1 },
             muzzle = { { "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_Maingun_Muzzle", 3 },

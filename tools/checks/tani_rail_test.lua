@@ -716,6 +716,63 @@ levelTorn = function() return true end
 tick()
 levelTorn = nil
 check(TANI.rcLine(rc):find("not shielded yet", 1, true) ~= nil, "a torn level: forgotten")
+-- (2026-11-16) the impact as its cutscene plays it (impact_seq): a LevelSequencePlayer of ours on its VFX layer, its origin
+-- P minus the anchor, played, held at its last frame; the camera's rains hidden as they come up; stopped and its actor taken
+-- off impact_life_s on; a player that won't take its origin: never played, the systems instead
+levelTorn = nil
+local SEQPL = {}
+local LSP = { made = {} }
+function LSP:CreateLevelSequencePlayer(pc, seq, settings)
+    local act = obj("LevelSequenceActor /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.LevelSequenceActor_" .. (#LSP.made + 1),
+        { DefaultInstanceData = {} })
+    function act:K2_DestroyActor() self.destroyed = true; LIVE[self.__addr] = nil end
+    if LSP.noOrigin then setmetatable(act.DefaultInstanceData, { __newindex = function() error("no instance data") end }) end
+    local pl = obj("AnimationPlayer " .. act.__name .. ".AnimationPlayer", { seq = seq, settings = settings, act = act, pc = pc })
+    function pl:GetOuter() return self.act end
+    function pl:Play() self.played = true end
+    function pl:Stop() self.stopped = true end
+    LSP.made[#LSP.made + 1] = pl
+    return pl
+end
+nextA = nextA + 0x10; LSP.__addr, LSP.__name = nextA, "lsp " .. nextA; LIVE[nextA] = setmetatable(LSP, OBJ)
+local sfo = StaticFindObject
+StaticFindObject = function(path)
+    if path == "/Script/LevelSequence.Default__LevelSequencePlayer" then return LSP end
+    return sfo(path)
+end
+local rain = obj("NiagaraActor /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.NiagaraActor_9001", {
+    NiagaraComponent = { Asset = obj("NiagaraSystem /Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Rain002.NS_IGCVFX_Ms250010_Rain002"),
+                         Deactivate = function(self) self.off = true end } })
+function rain:SetActorHiddenInGame(h) self.hidden = h end
+local boom = obj("NiagaraActor /Game/Maps/PL_SurvivalMode.PL_SurvivalMode:PersistentLevel.NiagaraActor_9002", {
+    NiagaraComponent = { Asset = obj("NiagaraSystem /Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion002.NS_IGCVFX_Ms250010_Explosion002"),
+                         Deactivate = function(self) self.off = true end } })
+function boom:SetActorHiddenInGame(h) self.hidden = h end
+FINDS["NiagaraActor"] = { rain, boom }
+local RP = { X = 1609574, Y = -435747, Z = 500 }
+local nSpawned = #NIAG.spawned
+local up1, of1, _, _, how1 = TANI.rcFx("impact", nil, RP)
+local pl1 = LSP.made[1]
+local o1 = pl1 and pl1.act.DefaultInstanceData.TransformOrigin
+check(up1 == 1 and of1 == 1 and how1 and how1:find("Mission 25's cutscene layer played, origin (1004402, 97412, 6379), held 25 s", 1, true) ~= nil
+    and pl1 and pl1.played and pl1.settings.bPauseAtEnd == true and pl1.act.bOverrideInstanceData == true and o1
+    and o1.Translation.X == 1004402 and o1.Translation.Y == 97412 and o1.Translation.Z == 6379 and #NIAG.spawned == nSpawned,
+    "its impact: the cutscene's layer played, its origin the impact point minus its anchor, held at its end, no system of its own (" .. tostring(how1) .. ")")
+tick(); tick()
+check(rain.hidden == true and rain.NiagaraComponent.off == true and not boom.hidden, "the cutscene camera's rain hidden, its explosion not")
+for _ = 1, 96 do tick() end                               -- (24.5 s on with the two above)
+check(not pl1.stopped and not pl1.act.destroyed, "still up 25 s on less a bit")
+for _ = 1, 4 do tick() end
+check(pl1.stopped == true and pl1.act.destroyed == true, "stopped and its actor taken off impact_life_s on")
+LSP.noOrigin = true
+nSpawned = #NIAG.spawned
+local up2, of2, _, _, how2 = TANI.rcFx("impact", nil, RP)
+local pl2 = LSP.made[2]
+check(pl2 and not pl2.played and pl2.act.destroyed == true and up2 == 7 and of2 == 7 and #NIAG.spawned == nSpawned + 7
+    and how2 and how2:find("its cutscene layer NOT played (its origin not set): its systems instead", 1, true) ~= nil,
+    "its origin refused: never played (never at the cutscene's own spot), its actor off, the systems instead (" .. tostring(how2) .. ")")
+StaticFindObject = sfo
+FINDS["NiagaraActor"] = nil
 if os.getenv("RAIL_LOG") then                             -- (RAIL_LOG=1: the part's own log lines, as a run would show them)
     for _, l in ipairs(LOG) do
         if l:find("tanicorn rail:", 1, true) or l:find("tanicorn rc:", 1, true) or l:find("SV_FCS_TaniRail", 1, true) then print("LOG " .. l) end

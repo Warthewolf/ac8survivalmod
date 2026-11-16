@@ -581,6 +581,67 @@ local function shake(c, at)
     if not ok then ok = pcall(function() survivalPC.PlayerCameraManager:StartCameraShake(cls, sc, 0, ROT0) end) end
     return ok and string.format("played at %.1f km", km_) or "FAILED"
 end
+-- (2026-11-16) the impact as its cutscene plays it (c.impact_seq, sv_fleet.lua's note; the user: "that explosion needs to
+-- look EXACTLY like this"): a LevelSequencePlayer of ours on Mission 25 day 1's Spear strike VFX layer, its transform
+-- origin moved so its ground explosion (anchor, in the sequence's own space) stands at P, held at its last frame
+-- (bPauseAtEnd: its pieces live on) and stopped life s on; the cutscene camera's rains and the rod's trail (hide) hidden as
+-- they come up. The autotest's seq suite (runs 33-34): it plays, the origin moves every piece, 11 up at +8 s, 0 once stopped.
+-- SEQS: { pl, a, name, act, aa, aname, key, hide, hides (when to hide), stopAt }
+local SEQS = {}
+local function seqSame(o, a, name) return o ~= nil and a ~= nil and liveAddr(o) == a and nameOf(o) == name end
+local function seqHide(e)                                 -- its extras (by their system's path) hidden and off
+    local n = 0
+    local okF, list = pcall(FindAllOf, "NiagaraActor")
+    for _, a in ipairs(okF and list or {}) do
+        local path = ""
+        pcall(function() path = a.NiagaraComponent.Asset:GetFullName() end)
+        if path:find(e.key, 1, true) then
+            for _, h in ipairs(e.hide) do
+                if path:find(h, 1, true) then
+                    pcall(function() a:SetActorHiddenInGame(true) end)
+                    pcall(function() a.NiagaraComponent:Deactivate() end)
+                    n = n + 1
+                    break
+                end
+            end
+        end
+    end
+    return n
+end
+local function seqImpact(q, P, life)                      -- true, what or false, why (the caller's fallback then)
+    local seq = asset(q.path)
+    if not seq then return false, "its sequence didn't load" end
+    local lsp = StaticFindObject("/Script/LevelSequence.Default__LevelSequencePlayer")
+    if not valid(lsp) then return false, "no LevelSequencePlayer" end
+    if not liveObj(survivalPC) then return false, "no player controller" end
+    local an = type(q.anchor) == "table" and q.anchor or {}
+    local o = { X = P.X - num(an[1], 0), Y = P.Y - num(an[2], 0), Z = P.Z - num(an[3], 0) }
+    local settings = { bAutoPlay = false, LoopCount = { Value = 0 }, PlayRate = 1.0, StartTime = 0.0, bRandomStartTime = false,
+        bRestoreState = false, bDisableMovementInput = false, bDisableLookAtInput = false, bHidePlayer = false, bHideHud = false,
+        bDisableCameraCuts = true, bPauseAtEnd = true }
+    local okC, pl = pcall(function() return lsp:CreateLevelSequencePlayer(survivalPC, seq, settings, {}) end)
+    if not (okC and pl and valid(pl)) then return false, "CreateLevelSequencePlayer: " .. tostring(pl) end
+    local act
+    pcall(function() act = pl:GetOuter() end)
+    local okO = false
+    if act ~= nil and valid(act) then
+        okO = pcall(function()
+            act.bOverrideInstanceData = true
+            act.DefaultInstanceData.TransformOrigin = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = o,
+                Scale3D = { X = 1, Y = 1, Z = 1 } }
+        end)
+    end
+    if not okO then                                       -- (never played at the cutscene's own spot)
+        if act ~= nil then pcall(function() act:K2_DestroyActor() end) end
+        return false, "its origin not set"
+    end
+    if not pcall(function() pl:Play() end) then pcall(function() act:K2_DestroyActor() end); return false, "Play refused" end
+    local now = os.clock()
+    SEQS[#SEQS + 1] = { pl = pl, a = addrOf(pl), name = nameOf(pl), act = act, aa = addrOf(act), aname = nameOf(act),
+        key = q.key or "Ms250010", hide = type(q.hide) == "table" and q.hide or {}, hides = { now + 0.2, now + 1.0 },
+        stopAt = now + life }
+    return true, string.format("Mission 25's cutscene layer played, origin (%.0f, %.0f, %.0f), held %s s", o.X, o.Y, o.Z, g(life))
+end
 -- the shot's and the impact's effects (AC8's own only: hard rule 58), each stopped after its life: how many came back of how
 -- many, and the streak's. Local to this game (a co-op message can call it on each joiner later: WP12)
 function TANI.rcFx(kind, M, P, rot, len)
@@ -605,7 +666,14 @@ function TANI.rcFx(kind, M, P, rot, len)
         end
     else
         local il = num(c.impact_life_s, life)                -- (the Spear strike's dust lingers: its own life)
+        local q, how = c.impact_seq, nil
+        if type(q) == "table" and q.enabled ~= false and type(q.path) == "string" then
+            local okQ, what = seqImpact(q, P, il)
+            if okQ then return 1, 1, 0, 0, what end
+            how = "its cutscene layer NOT played (" .. tostring(what) .. "): its systems instead"
+        end
         for _, e in ipairs(fx.impact or {}) do of = of + 1; if fxAt(e[1], P, ROT0, num(e[2], 1), il) then up = up + 1 end end
+        return up, of, sUp, sOf, how
     end
     return up, of, sUp, sOf
 end
@@ -741,11 +809,11 @@ local function impact()
         said = string.format("-%d airfield (AF.bomb %s -> %s; health before %s)", dmg, tostring(b0), tostring(AF.bomb), tostring(h0))
         hudCallout(text("hit", "THE AIRFIELD IS HIT"), fmt(text("hit_sub", "TANACORN RAILCANNON: -%d"), dmg))
     end
-    local okF, up, of = pcall(TANI.rcFx, "impact", nil, R.P)
-    if not okF then up, of = 0, 0 end
+    local okF, up, of, _, _, how = pcall(TANI.rcFx, "impact", nil, R.P)
+    if not okF then up, of, how = 0, 0, "its effects failed: " .. tostring(up) end
     local okS = soundAt((c.sound or {}).impact, R.P)
-    rcLog(string.format("impact %d at +%.1f s: %s; impact fx %d of %d up, its sound %s, the shake %s", R.impacts, R.t, said, up, of,
-        okS and "posted" or "NOT posted", shake(c, R.P)))
+    rcLog(string.format("impact %d at +%.1f s: %s; impact fx %d of %d up, its sound %s, the shake %s%s", R.impacts, R.t, said, up, of,
+        okS and "posted" or "NOT posted", shake(c, R.P), how and ("; " .. how) or ""))
     R.state, R.alertOffW = "wait", os.clock() + num((c.alert or {}).off_after_s, 3)
     if R.dead then rcEnd("shot down: its last round landed") end
 end
@@ -938,14 +1006,14 @@ end
 testKey("H", "sv_tanicorn_rail.lua's railcannon test", function() TANI.rcStart("Ctrl+H") end)
 
 local function forget()                                   -- (the level's objects: forgotten, none of them touched)
-    RC, SH, RG, FX, TRAIL, PEND, A = nil, nil, {}, {}, {}, {}, {}
+    RC, SH, RG, FX, TRAIL, PEND, A, SEQS = nil, nil, {}, {}, {}, {}, {}, {}
 end
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["tanicorn rail"] = forget end
 TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rail", fn = function(now)
     local dt = math.max(0, math.min(1, now - (X.last or now)))
     X.last = now
     if not D or (levelTorn and levelTorn()) then
-        if RC or SH or next(RG) ~= nil or #FX > 0 then forget() end
+        if RC or SH or next(RG) ~= nil or #FX > 0 or #SEQS > 0 then forget() end
         return
     end
     local keep = {}                                       -- every effect stopped after its life (AC8's IGC ones never stop)
@@ -954,6 +1022,19 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rail", fn = function(now)
         if not e.off then keep[#keep + 1] = e end
     end
     FX = keep
+    if #SEQS > 0 then                                     -- (the impact's cutscene layers: extras hidden, stopped at life)
+        local left = {}
+        for _, e in ipairs(SEQS) do
+            while e.hides[1] and now >= e.hides[1] do table.remove(e.hides, 1); seqHide(e) end
+            if now >= e.stopAt then
+                if seqSame(e.pl, e.a, e.name) then pcall(function() e.pl:Stop() end) end
+                if seqSame(e.act, e.aa, e.aname) then pcall(function() e.act:K2_DestroyActor() end) end
+            else
+                left[#left + 1] = e
+            end
+        end
+        SEQS = left
+    end
     if #TRAIL > 0 then                                    -- (the trail's spots as the round passes them)
         local left = {}
         for _, s in ipairs(TRAIL) do
