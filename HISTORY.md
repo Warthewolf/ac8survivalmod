@@ -3237,3 +3237,18 @@ game. The work was split by file between agents; the builds ran in sequence in t
   block, "no TurretMesh found"), the rail piece's two kind checks too. Autotest run 20 with a shootable plane and a tick
   probe: none of her live mounts' barrels ever moves, ticks on or off, invincible or not (docs/re/TANICORN.md "Her live
   mounts don't aim"): the open problem now, before the railguns' own.
+
+## 0.74.77-coop2mp.169 (2026-11-16, runtime 0.32.36; world data and events, the Tanicorn container 0.74.74's): her guns on you
+- The cause of "her live mounts don't aim" (a research pass over every autotest log): they did aim and fire, at the
+  runway's target points (BP_GR000_dummy_CP) and only when she spawned within ~1.5 km of them: her hull's unit is
+  Mission 13's scored dummy and kept its area (RadiusInMeter 1500, MinAltitudeInMeter 500); her parts engage only inside
+  it, and their order (Mission 16's PlayerFirst) picks the runway's points. The user, 2026-11-16: "They were aiming before
+  we started working on the railgun" (she flew close). INVINCIBLE FLEET's guns had shelled the runway's points the same way.
+- Fixed: her unit the ships' area (unit_area 45 km, 0-15 km high: build_survival_world.py tanicorn_live_unit); her
+  parts' orders and the railguns' PlayerOnlyNoLimit (TANI_LIVE_PRIORITY); the fleet's parts the same (IF_PART_PRIORITY).
+  The airfield's shelling stays WP13's (from the gun line) and the railcannon's.
+- Autotest run 23 (20261116_211717_claude, plane=floor): 37/40, the 3 fails the suite's own barrel check (a barrel held
+  on you read as still: fixed in the suite). Her T16's first shell at you (not the runway), T16_FWD at 154 (rest ~73),
+  the test plane at 60 % damage; both railguns turned (yaw 85.7 -> 143.4 / 142.4, pitch 0 -> 35.7 / 36.5) and fired
+  (LiveEMLBullet_BattleShip at 11,089 m/s); armour, no death chain, the hull's 50,000 untouched; the railcannon's whole
+  cycle (charge, shot, impact -100, shot down in its second charge, no impact). Pictures in its shots/.
