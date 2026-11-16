@@ -940,12 +940,14 @@ SUITES.surface = function()
     for i = 1, 32 do
         A.wait(0.5)
         A.do_(function()
+            local function f1(v) return type(v) == "number" and string.format("%.1f", v) or "?" end
             local okZ, z = pcall(function() return P.g:K2_GetActorLocation().Z end)
             local okP, pr = pcall(function() return P.g:K2_GetActorRotation().Pitch end)
-            P.zs[#P.zs + 1] = okZ and z / 100 or nil
+            local okS, sz = pcall(function() return P.m:GetSocketLocation(FName("SOC_Hull")).Z end)
+            if okZ and type(z) == "number" then P.zs[#P.zs + 1] = z / 100 end
             if i % 4 == 0 then
-                ST.info(string.format("surface: +%.1f s GEOFON at z %s m, pitch %s", os.clock() - P.t0, okZ and string.format("%.1f", z / 100) or "?",
-                    okP and string.format("%.1f", pr) or "?"))
+                ST.info(string.format("surface: +%s s GEOFON at z %s m, pitch %s; the rig's SOC_Hull at z %s m", f1(os.clock() - (P.t0 or os.clock())),
+                    f1(okZ and type(z) == "number" and z / 100 or nil), f1(okP and pr or nil), f1(okS and type(sz) == "number" and sz / 100 or nil)))
             end
             if i % 3 == 0 then ST.shot(string.format("surface_%02d", i)) end
         end)
