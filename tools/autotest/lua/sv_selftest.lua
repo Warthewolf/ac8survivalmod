@@ -1570,6 +1570,54 @@ SUITES.fxparams = function()
         A.wait(2.5)
     end
 end
+-- (2026-11-17) why runs 50-51's bolt meshes drew nothing (not even the default checker): an engine cube and a bolt mesh as
+-- StaticMeshActors, Movable before they finish, 2-3 km ahead of your plane, SetStaticMesh's own answer and the component's
+-- bounds read back, pictured at +0.2, +1 and +3 s; by day (no night=1) or the storm night
+SUITES.meshbolt2 = function()
+    intoRun()
+    A.do_(function() if tostring(ST.conf.night) == "1" and IFSKY and IFSKY.step then IFSKY.step(3) end end)
+    A.wait(tostring(ST.conf.night) == "1" and 12 or 0.5)
+    local M = "/Game/VFX/ResourceAsset/Mesh/Lightning/"
+    for n, k in ipairs({ { "/Engine/BasicShapes/Cube.Cube", 100, 2000, nil }, { M .. "SM_Thunder001_IE03.SM_Thunder001_IE03", 15, 3000, nil },
+                         { M .. "SM_Thunder001_IE03.SM_Thunder001_IE03", 15, 3000, "/Engine/EngineMaterials/EmissiveMeshMaterial.EmissiveMeshMaterial" } }) do
+        local B = {}
+        A.do_(function()
+            local pl = ST.plane()
+            local mesh = loadObject(k[1])
+            local gs, cls = StaticFindObject("/Script/Engine.Default__GameplayStatics"), StaticFindObject("/Script/Engine.StaticMeshActor")
+            local at = ST.frame(pl, k[3] * 100, (n == 1) and -60000 or 60000, 20000)
+            local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = at, Scale3D = { X = k[2], Y = k[2], Z = k[2] } }
+            local okB, a = pcall(function() return gs:BeginDeferredActorSpawnFromClass(ST.pc(), cls, t, 1, nil, 1) end)
+            if not (okB and a and valid(a) and mesh) then ST.info("meshbolt2 " .. n .. ": NOT spawned (mesh " .. tostring(mesh) .. ")"); return end
+            local c = a.StaticMeshComponent
+            local mob0 = "?"; pcall(function() mob0 = tostring(c.Mobility) end)
+            pcall(function() c:SetMobility(2) end)
+            local set1 = "?"; pcall(function() set1 = tostring(c:SetStaticMesh(mesh)) end)
+            pcall(function() gs:FinishSpawningActor(a, t, 1) end)
+            local set2 = "?"; pcall(function() set2 = tostring(c:SetStaticMesh(mesh)) end)
+            if k[4] then local mi = loadObject(k[4]); pcall(function() c:SetMaterial(0, mi) end) end
+            local got, mat, vis, sc, mob = "?", "?", "?", "?", "?"
+            pcall(function() got = c.StaticMesh:GetFullName():match("([^%./ ]+)$") end)
+            pcall(function() mat = c:GetMaterial(0):GetFullName():match("([^%./ ]+)$") end)
+            pcall(function() vis = tostring(c:IsVisible()) .. "/" .. tostring(a.bHidden) end)
+            pcall(function() local v = c:K2_GetComponentScale(); sc = string.format("%.0f", v.X) end)
+            pcall(function() mob = tostring(c.Mobility) end)
+            local bnd = "?"
+            pcall(function() local o, e, r = nil, nil, nil; local b = c.Bounds; bnd = string.format("%.0f m", (b.SphereRadius or 0) / 100) end)
+            local d = "?"
+            pcall(function() local L = c:K2_GetComponentLocation(); local P = ST.at(pl); d = string.format("%.1f km", math.sqrt((L.X-P.X)^2+(L.Y-P.Y)^2+(L.Z-P.Z)^2) / 100000) end)
+            B.a = a
+            ST.info(string.format("meshbolt2 %d: %s x%s: mobility %s -> %s, SetStaticMesh before %s / after %s, mesh %s, material %s, visible/hidden %s, bounds %s, %s off",
+                n, k[1]:match("([^%./]+)$"), sc, mob0, mob, set1, set2, got, mat, vis, bnd, d))
+        end)
+        for _, w in ipairs({ 0.2, 0.8, 2.0 }) do
+            A.wait(w)
+            A.do_(function() ST.shot(string.format("meshbolt2_%d_%.1f", n, w)) end)
+        end
+        A.do_(function() if B.a and valid(B.a) then pcall(function() B.a:K2_DestroyActor() end) end end)
+        A.wait(1)
+    end
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
