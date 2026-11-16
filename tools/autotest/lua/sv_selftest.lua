@@ -1659,6 +1659,193 @@ SUITES.stormview = function()
         ST.info("stormview: the last bolt line: " .. tostring(l))
     end)
 end
+-- (2026-11-17) why the clouds don't light up (the user: "Can you try to find out why the clouds don't light up please"):
+-- Cloudly lights its clouds from one effect light, which AC8's cloud lights (ALiveCloudLight) drive from a timeline. The stock
+-- curves (build/stock BP_CloudLight_*): Mission 9's far explosion peaks near 15 (radius 70 km), Mission 12's Podarge 40,000
+-- from 4.1 to 6.8 s after its spawn (radius 5 km, falloff 4), Mission 22's shuttle 7,000 from 5 s on (radius 2 km, falloff
+-- 12); cloudflash pictured each at 0.1 and 0.35 s and moved on at 3 s, and the storm's own lights were Mission 9's. Here,
+-- under the storm night, with the effect light read back each step (the Cloudly actor, its sky asset, the interpolated
+-- params, the renderer's drawn copy): A Mission 12's light pictured every 0.5 s from 3.5 s; B the bare cloud light
+-- (BP_CloudLight_Base: no timeline) held at 40,000 then 400,000, 6 km ahead then 2 km; C the sky asset's effect light
+-- written straight (bEnableEffectLight on, the brightness, position in cm then in m, radius), its originals put back.
+SUITES.cloudlit = function()
+    intoRun()
+    local CLT = {}
+    local BPP = "/Game/Blueprints/Cloudly/CloudLight/"
+    A.do_(function()
+        local S = (((CFG.specials or {}).fleet or {}).sky or {}).storm
+        if type(S) == "table" and type(S.lightning) == "table" then S.lightning.enabled = false end   -- (no bolts in the pictures)
+        if tostring(ST.conf.night or "1") == "1" and IFSKY and IFSKY.step then IFSKY.step(3) end
+    end)
+    A.wait(12)
+    local function f3(v) if type(v) ~= "number" then return tostring(v) end; return string.format("%.4g", v) end
+    local function params(dd, nm)
+        local s = nm .. ": ?"
+        pcall(function()
+            local p, t = dd.EffectLightParams, dd.EffectLightTransientParams
+            local w, c = t.WorldPosition, t.LightColor
+            s = string.format("%s: enable %s (density %s ^%s, brightness x%s, radius x%s, falloff x%s); light %s at %s %s %s, radius %s, falloff %s, colour %s %s %s, inverse-square %s",
+                nm, tostring(p.bEnableEffectLight), f3(p.DensityAttenuationFactor), f3(p.DensityAttenuationExponent),
+                f3(p.LightBrightnessScale), f3(p.AttenuationRadiusScale), f3(p.LightFalloffExponentScale),
+                f3(t.LightBrightness), f3(w.X), f3(w.Y), f3(w.Z), f3(t.AttenuationRadius), f3(t.LightFalloffExponent),
+                f3(c.X), f3(c.Y), f3(c.Z), tostring(t.bUseInverseSquaredFalloff))
+        end)
+        return s
+    end
+    local function elRead(tag)
+        local V = SKY and SKY.viewCached and SKY.viewCached(os.clock(), nil)
+        if not V then ST.info("cloudlit " .. tag .. ": no sky view"); return end
+        local a = V.actor
+        local use, el = "?", "?"
+        pcall(function() use = tostring(a.bUseEffectLight) end)
+        pcall(function() local l = a.EffectLight; el = (l ~= nil and liveObj(l)) and "yes" or "none" end)
+        ST.info(string.format("cloudlit %s: the Cloudly actor (%s): bUseEffectLight %s, EffectLight %s", tag, tostring(V.actorBy), use, el))
+        if V.asset then ST.info("cloudlit " .. tag .. ": " .. params(V.asset.Data, "the sky asset")) end
+        if V.interp then ST.info("cloudlit " .. tag .. ": " .. params(V.interp.Data, "the interpolated params" .. (V.interpOk and "" or " (the asset itself)"))) end
+        for _, r in ipairs(V.rend or {}) do
+            local n = 0
+            pcall(function()
+                r.obj.Data.SkyParamsRO:ForEach(function(_, e)
+                    n = n + 1
+                    if n <= 2 then ST.info("cloudlit " .. tag .. ": " .. params(e:get(), "drawn copy " .. n .. " of " .. tostring(r.name))) end
+                end)
+            end)
+            if n == 0 then ST.info("cloudlit " .. tag .. ": " .. tostring(r.name) .. " has no drawn copy to read") end
+        end
+        local l = CLT.a
+        if l and valid(l) then
+            local w = "?"
+            pcall(function() local v = l.WorldPosition; w = string.format("%.0f %.0f %.0f", v.X, v.Y, v.Z) end)
+            ST.info(string.format("cloudlit %s: the cloud light: brightness %s, radius %s, falloff %s, at %s, restore %s",
+                tag, f3(l.LightBrightness), f3(l.AttenuationRadius), f3(l.LightFalloffExponent), w, tostring(l.bRestoreUseEffectLight)))
+        end
+    end
+    local function spawnCL(name, at, set)
+        local cls = loadObject(BPP .. name .. "." .. name .. "_C")
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        if not (cls and gs and valid(gs)) then return nil, "no class or GameplayStatics" end
+        local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = at.X, Y = at.Y, Z = at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+        local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(ST.pc(), cls, t, 1, nil, 1) end)
+        if not okB or x == nil or not valid(x) then return nil, "no actor" end
+        pcall(function() x.WorldPosition = { X = at.X, Y = at.Y, Z = at.Z } end)
+        if set then set(x) end
+        local okF, a = pcall(function() return gs:FinishSpawningActor(x, t, 1) end)
+        if not okF or a == nil or not valid(a) then return nil, "its spawn didn't finish" end
+        if set then set(a) end
+        return a, "up"
+    end
+    local function hold(a, b, r, fo)
+        pcall(function() a.LightBrightness = b end)
+        pcall(function() a.AttenuationRadius = r end)
+        pcall(function() a.LightFalloffExponent = fo end)
+        pcall(function() a.LightColor = { R = 215, G = 225, B = 255, A = 255 } end)
+        pcall(function() a.bUseInverseSquaredFalloff = false end)
+    end
+    local function ahead(km, up_m)
+        local pl = ST.plane()
+        if not pl then return nil end
+        return ST.frame(pl, km * 100000, 0, up_m * 100)
+    end
+    -- A: Mission 12's Podarge light through its flash
+    A.do_(function() elRead("0 before"); ST.shot("cloudlit_0_before") end)
+    A.do_(function()
+        local at = ahead(6, 1500)
+        if not at then ST.info("cloudlit A: no plane"); return end
+        local a, why = spawnCL("BP_CloudLight_Ms012_PodargeDead", at)
+        CLT.a = a
+        ST.info(string.format("cloudlit A: Mission 12's Podarge light 6 km ahead, 1.5 km over you (%.0f %.0f %.0f): %s", at.X, at.Y, at.Z, why))
+    end)
+    A.wait(1)
+    A.do_(function() elRead("A +1 s") end)
+    A.wait(2.5)
+    for i = 1, 8 do
+        A.do_(function()
+            ST.shot(string.format("cloudlit_A_%d_%.1fs", i, 3 + 0.5 * i))
+            if i == 3 or i == 5 then elRead(string.format("A +%.1f s", 3 + 0.5 * i)) end
+        end)
+        A.wait(0.5)
+    end
+    A.wait(2)
+    A.do_(function() elRead("A after (its timeline over)"); CLT.a = nil end)
+    -- B: the bare cloud light, held by us
+    A.do_(function()
+        local at = ahead(6, 1500)
+        if not at then return end
+        local a, why = spawnCL("BP_CloudLight_Base", at, function(x) hold(x, 40000, 500000, 4) end)
+        CLT.a = a
+        ST.info("cloudlit B: the bare cloud light held at 40000, radius 5 km, falloff 4, 6 km ahead: " .. why)
+    end)
+    A.wait(0.4)
+    A.do_(function() ST.shot("cloudlit_B_1_40k") ; elRead("B 40000") end)
+    A.wait(0.8)
+    A.do_(function() ST.shot("cloudlit_B_2_40k") end)
+    A.do_(function() if CLT.a and valid(CLT.a) then hold(CLT.a, 400000, 500000, 4) end end)
+    A.wait(0.4)
+    A.do_(function() ST.shot("cloudlit_B_3_400k"); elRead("B 400000") end)
+    A.do_(function()
+        local at = ahead(2, 600)
+        if CLT.a and valid(CLT.a) and at then
+            pcall(function() CLT.a.WorldPosition = { X = at.X, Y = at.Y, Z = at.Z } end)
+            pcall(function() CLT.a:K2_SetActorLocation(at, false, {}, true) end)
+        end
+    end)
+    A.wait(0.4)
+    A.do_(function() ST.shot("cloudlit_B_4_400k_2km"); elRead("B 2 km") end)
+    A.do_(function() if CLT.a and valid(CLT.a) then pcall(function() CLT.a:K2_DestroyActor() end) end; CLT.a = nil end)
+    A.wait(0.6)
+    A.do_(function() ST.shot("cloudlit_B_5_gone"); elRead("B gone") end)
+    -- C: the sky asset's effect light written straight
+    local function cWrite(scale, tag)
+        local V = SKY and SKY.viewCached and SKY.viewCached(os.clock(), nil)
+        local at = ahead(4, 1000)
+        if not (V and V.asset and at) then ST.info("cloudlit C: no sky asset / plane"); return end
+        local objs = { V.asset }
+        if V.interpOk and V.interp then objs[#objs + 1] = V.interp end
+        for k, o in ipairs(objs) do
+            local d = o.Data
+            if not CLT.orig then
+                CLT.orig = {}
+                pcall(function()
+                    local p, t = d.EffectLightParams, d.EffectLightTransientParams
+                    CLT.orig = { en = p.bEnableEffectLight, b = t.LightBrightness, r = t.AttenuationRadius, f = t.LightFalloffExponent,
+                                 x = t.WorldPosition.X, y = t.WorldPosition.Y, z = t.WorldPosition.Z }
+                end)
+            end
+            pcall(function() d.EffectLightParams.bEnableEffectLight = true end)
+            pcall(function() d.EffectLightTransientParams.LightBrightness = 40000 end)
+            pcall(function() d.EffectLightTransientParams.AttenuationRadius = 500000 * scale end)
+            pcall(function() d.EffectLightTransientParams.LightFalloffExponent = 4 end)
+            pcall(function() d.EffectLightTransientParams.LightColor = { X = 0.85, Y = 0.9, Z = 1.0 } end)
+            pcall(function() d.EffectLightTransientParams.WorldPosition = { X = at.X * scale, Y = at.Y * scale, Z = at.Z * scale } end)
+        end
+        ST.info(string.format("cloudlit C (%s): the sky asset's effect light written%s: 40000, 4 km ahead, 1 km over you", tag, #objs > 1 and " (and the interpolated params)" or ""))
+    end
+    A.do_(function() cWrite(1, "cm") end)
+    A.wait(0.4)
+    A.do_(function() ST.shot("cloudlit_C_1_cm"); elRead("C cm") end)
+    A.do_(function() cWrite(0.01, "m") end)
+    A.wait(0.4)
+    A.do_(function() ST.shot("cloudlit_C_2_m"); elRead("C m") end)
+    A.do_(function()
+        local V = SKY and SKY.viewCached and SKY.viewCached(os.clock(), nil)
+        local o = CLT.orig or {}
+        local objs = { V and V.asset }
+        if V and V.interpOk and V.interp then objs[#objs + 1] = V.interp end
+        for _, x in ipairs(objs) do
+            if x then
+                local d = x.Data
+                if o.en ~= nil then pcall(function() d.EffectLightParams.bEnableEffectLight = o.en end) end
+                pcall(function() d.EffectLightTransientParams.LightBrightness = o.b or 0 end)
+                if o.r then pcall(function() d.EffectLightTransientParams.AttenuationRadius = o.r end) end
+                if o.f then pcall(function() d.EffectLightTransientParams.LightFalloffExponent = o.f end) end
+                if o.x then pcall(function() d.EffectLightTransientParams.WorldPosition = { X = o.x, Y = o.y, Z = o.z } end) end
+            end
+        end
+        ST.info("cloudlit C: the sky asset's effect light put back (enable " .. tostring(o.en) .. ", brightness " .. tostring(o.b) .. ")")
+    end)
+    A.wait(0.4)
+    A.do_(function() ST.shot("cloudlit_C_3_back"); elRead("C back") end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
