@@ -162,6 +162,8 @@ def cmd_install(a):
                  os.path.join(scripts, 'survival_config.lua'))
     with open(os.path.join(scripts, 'selftest.txt'), 'w', encoding='utf-8') as f:
         f.write('suite=%s\nmax_s=%d\nmenu_wait_s=%d\n' % (a.suite, a.max_s, a.menu_wait_s))
+        for kv in a.conf or []:                       # (extra self-test settings: plane=floor ...)
+            f.write(kv.strip() + '\n')
     patch_main(os.path.join(scripts, 'main.lua'))
     st['manifest'] = {i['name']: manifest(i['target']) for i in st['installed']}
     st['phase'] = 'installed'
@@ -243,6 +245,7 @@ def main(argv):
     i.add_argument('--suite', default='smoke')
     i.add_argument('--max-s', type=int, default=600)
     i.add_argument('--menu-wait-s', type=int, default=25)
+    i.add_argument('--conf', action='append', help='name=value for selftest.txt (plane=floor: shootable, never down)')
     sp.add_parser('restore')
     sp.add_parser('status')
     a = ap.parse_args(argv)

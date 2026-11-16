@@ -107,7 +107,14 @@ local function holdPlane(now)
     if not pawn then return end
     if now >= HOLD.inv then
         HOLD.inv = now + 2
-        pcall(function() pawn:SetIsInvincible(true) end)
+        if ST.conf.plane == "floor" then                  -- (shootable, never down: a health floor, not invincible)
+            pcall(function() pawn:SetIsInvincible(false) end)
+            local mx = tonumber(pawn.MaxHealth) or 100
+            pcall(function() pawn:SetMinHealth(mx * 0.4) end)
+            pcall(function() pawn.MinHealth = mx * 0.4 end)
+        else
+            pcall(function() pawn:SetIsInvincible(true) end)
+        end
     end
     local a = addrOf(pawn)
     if a and type(SV_Down) == "function" and (a ~= HOLD.apOn or now >= HOLD.ap) then
@@ -250,9 +257,15 @@ local function intoRun()
     end)
     A.wait(5)
     A.do_(function()
-        local inv
+        local inv, mh, mx
         pcall(function() inv = ST.plane().bIsInvincible end)
-        ST.check(inv == true, "your plane invincible (SetIsInvincible read back)", tostring(inv))
+        pcall(function() mh, mx = ST.plane().MinHealth, ST.plane().MaxHealth end)
+        if ST.conf.plane == "floor" then                  -- ((2026-11-16) an invincible plane drew no fire from her mounts)
+            ST.check(inv ~= true and tonumber(mh) and tonumber(mh) > 0, "your plane shootable but never down (a MinHealth floor)",
+                "bIsInvincible " .. tostring(inv) .. ", MinHealth " .. tostring(mh) .. " of MaxHealth " .. tostring(mx))
+        else
+            ST.check(inv == true, "your plane invincible (SetIsInvincible read back)", tostring(inv))
+        end
         ST.info(string.format("run state %s, round %s; on the airfield %s", tostring(D and D.state), tostring(D and D.round),
             tostring(playerOnAirfield and playerOnAirfield())))
         ST.doing = "the suite"

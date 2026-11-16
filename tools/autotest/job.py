@@ -118,6 +118,7 @@ def main(argv):
     ap.add_argument('--stage', required=True)
     ap.add_argument('--suite', default='smoke')
     ap.add_argument('--max-s', type=int, default=600)
+    ap.add_argument('--conf', action='append', default=[], help='name=value for the self-test (selftest.txt)')
     a = ap.parse_args(argv)
     who = os.environ.get('SV_AUTOTEST_WHO')
     run_dir = os.environ.get('SV_AUTOTEST_RUN')
@@ -133,7 +134,7 @@ def main(argv):
         note('job: the game is running: nothing done')
         return 2
     stage = os.path.abspath(a.stage)
-    r = subprocess.run(PY + [os.path.join(C.HERE, 'kit.py'), 'install', stage, '--suite', a.suite, '--max-s', str(a.max_s)],
+    r = subprocess.run(PY + [os.path.join(C.HERE, 'kit.py'), 'install', stage, '--suite', a.suite, '--max-s', str(a.max_s)] + [x for kv in a.conf for x in ('--conf', kv)],
                        capture_output=True, text=True, creationflags=C.NO_WINDOW)
     note((r.stdout + r.stderr).strip())
     if r.returncode != 0:
