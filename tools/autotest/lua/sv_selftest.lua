@@ -968,6 +968,127 @@ SUITES.surface = function()
         ST.info(string.format("surface: 4 s after: GEOFON at z %s m (back on the water?)", okZ and string.format("%.1f", z / 100) or "?"))
     end)
 end
+-- (2026-11-16) the surfacing, probe 2 (run 40: GEOFON's live hull attached to the rig never left the water: its own movement
+-- holds it): drawn doubles on the rig, the live ship and its parts hidden meanwhile. (A) a bare spawn of her own blueprint
+-- class (no unit, no AI orders), (B) a StaticMeshActor with her hull's mesh. Each rides a rise; its height logged, pictured
+SUITES.surface2 = function()
+    intoRun()
+    local P = {}
+    local RIG = "/Game/Mods/SurvivalMode/Tanicorn/Model/SK_SV_Tani_RIG.SK_SV_Tani_RIG"
+    local ANIM = "/Game/Mods/SurvivalMode/Tanicorn/Model/AS_SV_Tani_RIG_Rise.AS_SV_Tani_RIG_Rise"
+    local function f1(v) return type(v) == "number" and string.format("%.1f", v) or "?" end
+    local function zOf(o) local ok, z = pcall(function() return o:K2_GetActorLocation().Z end); return ok and type(z) == "number" and z / 100 or nil end
+    local function ship()
+        for _, sh in ipairs(IFLEET and IFLEET.cur and IFLEET.cur.ships or {}) do
+            if (sh.name == "GEOFON" or sh.key == "GEOFON") and sh.hull and sh.hull.obj and valid(sh.hull.obj) then return sh end
+        end
+        return nil
+    end
+    local function hideLive(h)
+        local sh = P.sh
+        local n = 0
+        for _, e in ipairs({ sh.hull, table.unpack(sh.parts or {}) }) do
+            if e and e.obj and valid(e.obj) then pcall(function() e.obj:SetActorHiddenInGame(h) end); n = n + 1 end
+        end
+        return n
+    end
+    local function newRig()
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        local cls = StaticFindObject("/Script/Engine.SkeletalMeshActor")
+        local rig, anim = loadObject(RIG), loadObject(ANIM)
+        local t = { Rotation = quatOf(P.yaw, 0), Translation = { X = P.at.X, Y = P.at.Y, Z = 0 }, Scale3D = { X = 0.5, Y = 0.5, Z = 0.5 } }
+        local a = gs:BeginDeferredActorSpawnFromClass(ST.pc(), cls, t, 1, nil, 1)
+        local m = a.SkeletalMeshComponent
+        pcall(function() m:SetSkeletalMeshAsset(rig) end)
+        pcall(function() m.VisibilityBasedAnimTickOption = 0 end)
+        pcall(function() m.bEnableUpdateRateOptimizations = false end)
+        gs:FinishSpawningActor(a, t, 1)
+        pcall(function() m:SetAnimationMode(1, true) end)
+        pcall(function() m:SetAnimation(anim) end)
+        pcall(function() m:SetPosition(0, false) end)
+        return a, m
+    end
+    local function ride(tag, makeDouble)
+        A.do_(function()
+            local okR, a, m = pcall(newRig)
+            if not ST.check(okR and a ~= nil, tag .. ": a rig spawned", tostring(a)) then return end
+            P.rig, P.m = a, m
+            local okD, d, why = pcall(makeDouble)
+            if not ST.check(okD and d ~= nil and valid(d), tag .. ": its double spawned", tostring(okD and why or d)) then return end
+            P.d = d
+            local okA, e = pcall(function() d:K2_AttachToComponent(m, FName("SOC_Hull"), 2, 2, 1, true) end)
+            ST.check(okA, tag .. ": its double on the rig's SOC_Hull", tostring(e))
+            ST.info(string.format("%s: the live GEOFON and %d of its objects hidden", tag, hideLive(true)))
+            P.zs = {}
+            ST.look(ST.frame(P.sh.hull.obj, -20000, 90000, 3000), { X = P.at.X, Y = P.at.Y, Z = 6000 }, 55)
+            pcall(function() m:Play(false) end)
+            P.t0 = os.clock()
+        end)
+        for i = 1, 30 do
+            A.wait(0.5)
+            A.do_(function()
+                if not P.d then return end
+                local z = zOf(P.d)
+                if z then P.zs[#P.zs + 1] = z end
+                local okS, sz = pcall(function() return P.m:GetSocketLocation(FName("SOC_Hull")).Z end)
+                if i % 4 == 0 then ST.info(string.format("%s: +%s s the double at z %s m; the rig's SOC_Hull at z %s m", tag, f1(os.clock() - P.t0), f1(z), f1(okS and sz / 100 or nil))) end
+                if i % 3 == 0 then ST.shot(string.format("%s_%02d", tag, i)) end
+            end)
+        end
+        A.do_(function()
+            local zmin, zmax = math.huge, -math.huge
+            for _, z in ipairs(P.zs or {}) do zmin, zmax = math.min(zmin, z), math.max(zmax, z) end
+            ST.check(#(P.zs or {}) > 20 and zmax - zmin > 15, tag .. ": the double rode the rig (its height moved)", string.format("%d readings, z %s .. %s m", #(P.zs or {}), f1(zmin), f1(zmax)))
+            ST.lookBack()
+            if P.d then pcall(function() P.d:K2_DestroyActor() end) end
+            if P.rig then pcall(function() P.rig:K2_DestroyActor() end) end
+            hideLive(false)
+            P.d, P.rig = nil, nil
+        end)
+        A.wait(2)
+    end
+    A.do_(function() ST.marks.f0 = ST.n; ST.press("N") end)
+    A.log_("fleet: Ctrl%+N: %d+ of %d+ ships up", 60, "f0", false, function(l)
+        if not ST.check(l ~= nil, "the fleet up", l) then return "abort" end
+    end)
+    A.wait(3)
+    A.do_(function()
+        P.sh = ship()
+        if not ST.check(P.sh ~= nil, "GEOFON found") then return "abort" end
+        local g = P.sh.hull.obj
+        local l, r = g:K2_GetActorLocation(), g:K2_GetActorRotation()
+        P.at, P.yaw = { X = l.X, Y = l.Y, Z = l.Z }, r.Yaw or 0
+        local okC, c = pcall(function() return g:GetClass() end)
+        P.cls = okC and c or nil
+        local meshes = {}
+        for _, c2 in ipairs(SPC and SPC.V and SPC.V.comps and SPC.V.comps(g, "/Script/Engine.StaticMeshComponent") or {}) do
+            local okM, sm = pcall(function() return c2.StaticMesh end)
+            if okM and sm and valid(sm) then meshes[#meshes + 1] = sm end
+        end
+        P.mesh = meshes[1]
+        ST.info(string.format("surface2: GEOFON's class %s, %d static meshes (the first %s)", P.cls and P.cls:GetFullName() or "?", #meshes,
+            P.mesh and P.mesh:GetFullName() or "none"))
+    end)
+    ride("double_A", function()                          -- (A) her own class, bare
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        local t = { Rotation = quatOf(P.yaw, 0), Translation = { X = P.at.X, Y = P.at.Y, Z = -20000 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+        local d = gs:BeginDeferredActorSpawnFromClass(ST.pc(), P.cls, t, 1, nil, 1)
+        gs:FinishSpawningActor(d, t, 1)
+        return d, "her class, bare"
+    end)
+    ride("double_B", function()                          -- (B) a StaticMeshActor with her hull's mesh
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        local cls = StaticFindObject("/Script/Engine.StaticMeshActor")
+        local t = { Rotation = quatOf(P.yaw, 0), Translation = { X = P.at.X, Y = P.at.Y, Z = -20000 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+        local d = gs:BeginDeferredActorSpawnFromClass(ST.pc(), cls, t, 1, nil, 1)
+        local c = d.StaticMeshComponent
+        pcall(function() c:SetMobility(2) end)
+        gs:FinishSpawningActor(d, t, 1)
+        pcall(function() c:SetMobility(2) end)
+        pcall(function() c:SetStaticMesh(P.mesh) end)
+        return d, "a StaticMeshActor"
+    end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
