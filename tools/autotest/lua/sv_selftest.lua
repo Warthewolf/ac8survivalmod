@@ -369,12 +369,12 @@ SUITES.fleet = function()
         ST.marks.m0 = ST.n
         ST.press("N")
     end)
-    A.log_("fleet: Ctrl+N: %d+ ships coming up", 5, "m0", false, function(l)
+    A.log_("fleet: Ctrl%+N: %d+ ships coming up", 5, "m0", false, function(l)
         if not ST.check(l ~= nil, "Ctrl+N: the fleet's ships queued", l or ST.findLog("fleet: Ctrl+N", ST.marks.m0, true)) then
             return "abort"
         end
     end)
-    A.log_("fleet: Ctrl+N: %d+ of %d+ ships up", 60, "m0", false, function(l)
+    A.log_("fleet: Ctrl%+N: %d+ of %d+ ships up", 60, "m0", false, function(l)
         local up, of = nil, nil
         if l then up, of = l:match("(%d+) of (%d+) ships up") end
         ST.check(l ~= nil and up == of, "every ship of the fleet up", l)
@@ -409,7 +409,7 @@ SUITES.fleet = function()
         ST.marks.m1 = ST.n
         ST.press("N")
     end)
-    A.log_("fleet: Ctrl+N at %+%d+ s: the fleet taken off", 5, "m1", false, function(l)
+    A.log_("fleet: Ctrl%+N at %+%d+ s: the fleet taken off", 5, "m1", false, function(l)
         ST.check(l ~= nil, "Ctrl+N again: the fleet taken off", l)
     end)
     A.wait(12)
