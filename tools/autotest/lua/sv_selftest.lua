@@ -737,6 +737,70 @@ SUITES.rise = function()
         ST.info("rise effects: " .. tostring(l))
     end)
 end
+-- (2026-11-16) THE TANACORN's rise with her guns live (round 30's phase 3: Ctrl+L, then Ctrl+R rises the hull already up):
+-- her 35 parts ride her rig through the rise (each on its socket after), her armour holds, then her rounds come at you
+SUITES.riselive = function()
+    intoRun()
+    local C = {}
+    A.do_(function()
+        if not ST.check(TANI ~= nil and TANI.rise ~= nil and TANI.live ~= nil, "THE TANACORN's live hull and rise in this build") then return "abort" end
+        ST.marks.m0 = ST.n
+        ST.press("L")
+    end)
+    A.until_(function() return partsSeen() >= #TANI.live.parts end, 20, function()
+        local n = partsSeen()
+        C.want = #TANI.live.parts
+        ST.check(n >= C.want, string.format("her live hull up with its %d parts", C.want), n .. " seen")
+    end)
+    A.wait(3)
+    A.do_(function()
+        ST.marks.r0 = ST.n
+        ST.press("R")
+    end)
+    A.log_("tanicorn: Ctrl%+R", 10, "r0", false, function(l)
+        ST.check(l ~= nil and l:find("already up", 1, true) ~= nil, "Ctrl+R: the live hull already up rises where it is", l)
+    end)
+    A.log_("tanicorn: rise: RiseRig found", 15, "r0", true, function(l)
+        ST.check(l ~= nil, "her RiseRig found on the live hull", l or ST.findLog("tanicorn: rise:", ST.marks.r0, true))
+    end)
+    for i, t in ipairs({ 1, 3, 5, 7, 9.5, 12 }) do
+        A.wait(i == 1 and 1 or (t - ({ 1, 3, 5, 7, 9.5, 12 })[i - 1]))
+        A.do_(function() ST.shot(string.format("riselive_%02d_%04.1fs", i, t)) end)
+    end
+    A.log_("tanicorn: rise over", 30, "r0", true, function(l)
+        ST.check(l ~= nil, "the rise over, your view back", l)
+        local zs = {}
+        for i = ST.marks.r0 + 1, ST.n do
+            local z = (ST.lines[i] or ""):match("tanicorn: rise %+[%d%.]+ s: hull at z (%-?[%d%.]+) m")
+            if z then zs[#zs + 1] = tonumber(z) end
+        end
+        local zmin, zmax = math.huge, -math.huge
+        for _, z in ipairs(zs) do zmin, zmax = math.min(zmin, z), math.max(zmax, z) end
+        ST.check(#zs > 10 and zmax > zmin + 60, "her live hull rose from under the sea", string.format("%d readings, z %s .. %s m", #zs, tostring(zmin), tostring(zmax)))
+        ST.marks.after = ST.n
+    end)
+    A.wait(8)                                             -- (two of the live watch's 5 s lines after the rise)
+    A.do_(function()
+        local _, seen = partsSeen()
+        local alive = 0
+        for _ in pairs(seen) do alive = alive + 1 end
+        ST.check(alive >= C.want, "all her parts still there after the rise", alive .. " of " .. tostring(C.want))
+        local far = {}
+        local n = 0
+        for i = (ST.marks.after or 0) + 1, ST.n do
+            local s = ST.lines[i] or ""
+            local part, d = s:match("live %+%d+ s: (Part_[%w_]+) %(.-; (%-?[%d%.]+) m from its socket")
+            if part then n = n + 1; if tonumber(d) > 5 then far[#far + 1] = part .. " " .. d .. " m" end end
+        end
+        ST.check(n > 0 and #far == 0, "each part on its socket after the rise (the live watch)", n .. " readings" .. (#far > 0 and (", off: " .. table.concat(far, ", ")) or ""))
+        local h = TANI.liveHull and TANI.liveHull()
+        local cbd, inv
+        pcall(function() cbd = h.bCanBeDamaged end)
+        pcall(function() inv = h.bIsInvincible end)
+        ST.check(cbd == false and inv == true, "her hull's armour after the rise", "bCanBeDamaged " .. tostring(cbd) .. ", bIsInvincible " .. tostring(inv))
+    end)
+    A.rounds("BP_SV_Tani_", "her (after the rise)", 15)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
