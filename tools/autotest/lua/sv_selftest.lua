@@ -496,20 +496,42 @@ SUITES.fleet = function()
         ST.info("waiting 70 s for the fleet to sail")
     end)
     A.wait(70)
-    -- (2026-11-16, 0.74.77) the ships' parts ordered PlayerOnlyNoLimit: no shell at the runway's target points any more
-    -- (run 21, 0.74.76: every gun's first shell went at BP_GR000_dummy_CP)
-    A.do_(function()
-        local atDummy, atYou, other = {}, {}, {}
-        for i = ST.marks.m0 + 1, ST.n do
-            local w, by, at = (ST.lines[i] or ""):match("weapons: first launch of (%S+) by (BP_VE%S+) .- at (%S+)")
-            if w then
-                local t = at:find("dummy", 1, true) and atDummy or (at == "you" and atYou or other)
-                t[#t + 1] = by .. " " .. w .. " -> " .. at
+    -- (2026-11-16, 0.74.77) the ships' parts ordered PlayerOnlyNoLimit: what their rounds in flight home on, sampled after
+    -- the orders (a gun's FIRST launch comes 1-2 s after its ship's spawn, before its +2.5 s order: run 24's three at the
+    -- runway's points were those; run 21 (0.74.76): every gun's at BP_GR000_dummy_CP)
+    local SMP = { last = -1, n = 0, you = 0, dummy = 0, other = {}, seen = {} }
+    A.until_(function()
+        local now = os.clock()
+        if now - SMP.last < 1 then return false end
+        SMP.last, SMP.n = now, SMP.n + 1
+        local pa
+        pcall(function() pa = ST.plane():GetAddress() end)
+        local ok, list = pcall(FindAllOf, "LiveExplosiveWeapon")
+        for _, w in ipairs(ok and list or {}) do
+            local hid, wa, own = nil, nil, ""
+            pcall(function() hid = w.bHidden end)
+            pcall(function() wa = w:GetAddress() end)
+            pcall(function() own = w.OwningGameObject:GetFullName() end)
+            if hid == false and wa and own:find("BP_VE0", 1, true) then
+                local tn, ta = "none", nil
+                pcall(function() local t = w.TargetToHome; ta = t:GetAddress(); tn = t:GetFullName() end)
+                local key = tostring(wa) .. "|" .. tostring(ta)
+                if not SMP.seen[key] then
+                    SMP.seen[key] = true
+                    if ta and pa and ta == pa then SMP.you = SMP.you + 1
+                    elseif tn:find("dummy", 1, true) then SMP.dummy = SMP.dummy + 1
+                    else local k = (tn:match("([%w_]+_C)_") or tn):sub(1, 40); SMP.other[k] = (SMP.other[k] or 0) + 1 end
+                end
             end
         end
-        ST.check(#atDummy == 0, "no ship fires at the runway's target points", #atDummy .. " at them: " .. table.concat(atDummy, "; "))
-        ST.info(#atYou .. " ship weapons fired at you first (" .. table.concat(atYou, "; ") .. "), " .. #other ..
-            " at something else (" .. table.concat(other, "; ") .. ")")
+        return SMP.n >= 25
+    end, 40, function()
+        local o = {}
+        for k, n in pairs(SMP.other) do o[#o + 1] = k .. " x" .. n end
+        local what = string.format("%d samples: %d rounds at you, %d at the runway's points, others: %s", SMP.n, SMP.you,
+            SMP.dummy, #o > 0 and table.concat(o, ", ") or "none")
+        ST.check(SMP.dummy == 0, "no ship's round in flight homes on the runway's target points (after the orders)", what)
+        ST.check(SMP.you > 0, "the ships' rounds in flight home on you", what)
     end)
     -- (a ship's .hull is sv_fleet's entry { obj, addr, ... }: the actor is its .obj; GEOFON by name, not by order)
     local function geofon()
@@ -519,7 +541,7 @@ SUITES.fleet = function()
         local sh = IFLEET.cur and IFLEET.cur.ships[1]
         return sh and sh.hull and sh.hull.obj
     end
-    A.picture("fleet_formation", function() return ST.frame(geofon(), -250000, -120000, 120000) end,
+    A.picture("fleet_formation", function() return ST.frame(geofon(), -140000, -70000, 50000) end,
         function() return ST.at(geofon()) end, 55)
     A.picture("geofon_close", function() return ST.frame(geofon(), -45000, 30000, 12000) end,
         function() return ST.at(geofon()) end, 50)
