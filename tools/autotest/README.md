@@ -59,6 +59,22 @@ The stage is a `package_dev.sh` stage (test keys kept: the fast path presses Ctr
   its impact on the airfield (AF.bomb up); shot down in its second charge: its cycle over, no impact; the hull's health
   unchanged at the end.
 
+## Pictures and settings
+- `A.picture(name, atFn, lookFn, fov)` in a suite: a CameraActor of ours at atFn() turned onto lookFn(), your view on it,
+  the game's own `HighResShot 1` and a `selftest: SHOT <name>` line; job.py grabs the game's window then (PrintWindow
+  with PW_RENDERFULLCONTENT: no focus taken) into the run's `shots/NN_<name>.png` and moves the game's own screenshots
+  (its Saved/Screenshots) there after the run (`game_HighresScreenshotNNNNN.png`). The tanacorn suite takes the whole
+  ship, a raised railgun, the railcannon charging and its impact; the fleet suite the formation and GEOFON.
+- `job.py --conf name=value` (repeatable) adds lines to selftest.txt: `plane=floor` keeps your plane shootable but never
+  down (SetMinHealth at 40 % of MaxHealth, not invincible), for tests of what shoots at you.
+
+## Lessons from the first runs (2026-11-16)
+- The driver box: a POSTED WM_COMMAND for its No, never a sent BM_CLICK (AGENTS.md hard rule 65).
+- No coroutines in the self-test: UE4SS's functions fail there (hard rule 66); suites are step lists.
+- The Mod Loader's loadorder.txt can switch Survival's containers off (hard rule 67): kit.py turns it on for the run.
+- FindFirstOf("PlayerController") matches only that exact class: GetPlayerController(game instance, 0).
+- In Lua patterns "+" is a quantifier: escape it ("Ctrl%+N").
+
 ## Rules (adopted as they are)
 1. Every game run goes through the gate, with --cleanup. Nothing else starts AC8 for a test.
 2. Stop a run with `cancel`, never by killing the gate.
