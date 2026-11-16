@@ -814,7 +814,7 @@ SUITES.fleetnight = function()
         ST.marks.n0 = ST.n
     end)
     local R = { X = 1609574, Y = -435747, Z = 500 }
-    local eye = function() return { X = R.X, Y = R.Y, Z = 120000 } end
+    local eye = function() return { X = R.X, Y = R.Y, Z = 40000 } end      -- (under the storm's cloud base: run 38 at 1.2 km was inside it)
     local nw = function() return { X = R.X - 1000000, Y = R.Y - 1000000, Z = 60000 } end
     local se = function() return { X = R.X + 1000000, Y = R.Y + 1000000, Z = 60000 } end
     local function geofonObj()
@@ -851,7 +851,16 @@ SUITES.fleetnight = function()
         A.wait(1.5)
         A.do_(function() ST.shot(string.format("night_k%02d_nw", k)) end)
         A.wait(0.9)
-        A.do_(function() ST.shot(string.format("night_k%02d_nw2", k)) end)
+        A.do_(function()                                  -- (a bolt 7 km ahead in view, then the game's own shot of it)
+            if stormy and THUNDER and THUNDER.cloudFlash then
+                local e, l = eye(), nw()
+                local dx, dy = l.X - e.X, l.Y - e.Y
+                local d = math.sqrt(dx * dx + dy * dy)
+                local cls = ((((CFG.specials.fleet or {}).sky or {}).storm or {}).lightning or {}).class
+                pcall(THUNDER.cloudFlash, { X = e.X + dx / d * 700000, Y = e.Y + dy / d * 700000, Z = 250000 }, cls or "bolt", "the test's, in view")
+            end
+            ST.shot(string.format("night_k%02d_nw2_bolt", k))
+        end)
         A.do_(function() ST.look(eye(), se(), 70) end)
         A.wait(1.5)
         A.do_(function() ST.shot(string.format("night_k%02d_se", k)) end)
