@@ -1497,6 +1497,79 @@ SUITES.pointflash = function()
         A.wait(2.5)
     end
 end
+-- (2026-11-16) the lightning effects with their parameters set BEFORE they start (runs 53-56 set them after: the Alicorn arc
+-- stayed red, the beam drew nothing): spawned inactive, Color / BeamLength / BeamLifeTime set, then activated. The cloud
+-- lightning big and white-blue, the Alicorn arc white-blue, a jagged bolt of the UAV beam; the storm night
+SUITES.fxparams = function()
+    intoRun()
+    local O = "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/"
+    local CLp = "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning"
+    local TLS = "/Game/VFX/Vehicles/Weapon/TLS/NS_UAVTLS_Muzzleflash01"
+    A.do_(function() if IFSKY and IFSKY.step then IFSKY.step(3) end end)
+    A.wait(12)
+    local function sysOf(path) return loadObject(path .. "." .. path:match("([^/]+)$")) end
+    local function spawn(sys, at, rot, sc, params)
+        local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+        local ok, c = pcall(function() return lib:SpawnSystemAtLocation(ST.pc(), sys, at, rot, { X = sc, Y = sc, Z = sc }, true, false, 0, false) end)
+        if not (ok and c) then return nil end
+        for _, q in ipairs(params) do
+            for _, nm in ipairs({ q[1], "User." .. q[1] }) do
+                if q[2] == "c" then pcall(function() c:SetVariableLinearColor(FName(nm), q[3]) end)
+                elseif q[2] == "v" then pcall(function() c:SetVariableVec3(FName(nm), q[3]) end)
+                else pcall(function() c:SetVariableFloat(FName(nm), q[3]) end) end
+            end
+        end
+        pcall(function() c:Activate(true) end)
+        return c
+    end
+    local WB = { R = 4.0, G = 5.0, B = 9.0, A = 1.0 }
+    local TRY = {
+        { "cloud lightning x40, white-blue", function(pl, cs)
+            local at = ST.frame(pl, 500000, -150000, 0); at.Z = 250000
+            cs[#cs + 1] = spawn(sysOf(CLp), at, { Pitch = 0, Yaw = 0, Roll = 0 }, 40, { { "Color", "c", WB } }) end },
+        { "cloud lightning x120, white-blue x4", function(pl, cs)
+            local at = ST.frame(pl, 800000, 200000, 0); at.Z = 300000
+            cs[#cs + 1] = spawn(sysOf(CLp), at, { Pitch = 0, Yaw = 0, Roll = 0 }, 120, { { "Color", "c", { R = 16, G = 20, B = 36, A = 1 } } }) end },
+        { "the Alicorn arc x150, white-blue", function(pl, cs)
+            local at = ST.frame(pl, 400000, -120000, 50000)
+            cs[#cs + 1] = spawn(sysOf(O .. "NS_alcn_LiSpark_edgesingle_ON"), at, { Pitch = 90, Yaw = 0, Roll = 0 }, 150, { { "Color", "c", WB } }) end },
+        { "a UAV beam bolt, width 25", function(pl, cs)
+            local sys = sysOf(TLS)
+            local base = ST.frame(pl, 500000, 150000, 0)
+            local fw, P0 = ST.frame(pl, 100, 0, 0), ST.at(pl)
+            local fx, fy = fw.X - P0.X, fw.Y - P0.Y
+            local fl = math.sqrt(fx * fx + fy * fy); fx, fy = fx / fl, fy / fl
+            local pts = {}
+            for i = 0, 8 do
+                local side = (i == 0 or i == 8) and 0 or (math.random() * 2 - 1) * 15000
+                pts[#pts + 1] = { X = base.X - fy * side, Y = base.Y + fx * side, Z = 200000 * (1 - i / 8) }
+            end
+            for i = 1, 8 do
+                local a, b = pts[i], pts[i + 1]
+                local dx, dy, dz = b.X - a.X, b.Y - a.Y, b.Z - a.Z
+                local len = math.sqrt(dx * dx + dy * dy + dz * dz)
+                cs[#cs + 1] = spawn(sys, a, { Pitch = math.deg(math.atan(dz, math.sqrt(dx * dx + dy * dy))), Yaw = math.deg(math.atan(dy, dx)), Roll = 0 }, 1,
+                    { { "BeamLength", "v", { X = len, Y = 25, Z = 25 } }, { "BeamLifeTime", "f", 0.5 } })
+            end
+        end },
+    }
+    for n, k in ipairs(TRY) do
+        local B = { cs = {} }
+        A.do_(function()
+            local pl = ST.plane()
+            if not pl then return end
+            local ok, err = pcall(k[2], pl, B.cs)
+            ST.info(string.format("fxparams %d: %s: %d effects started%s", n, k[1], #B.cs, ok and "" or (" (error " .. tostring(err) .. ")")))
+        end)
+        A.wait(0.1)
+        A.do_(function() ST.shot(string.format("fxparams_%d_a", n)) end)
+        A.wait(0.3)
+        A.do_(function() ST.shot(string.format("fxparams_%d_b", n)) end)
+        A.wait(0.6)
+        A.do_(function() for _, c in ipairs(B.cs) do pcall(function() c:DestroyComponent() end) end end)
+        A.wait(2.5)
+    end
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
