@@ -560,6 +560,132 @@ SUITES.spear = function()
         for i, e in ipairs(rc.fx.impact) do e[2] = keep and keep[i] or 1 end
     end)
 end
+-- (2026-11-16) the user: the railcannon's impact "needs to look EXACTLY like" Mission 25 day 1's Spear strike cutscene. A
+-- probe: the cutscene's own VFX layer (CLS_IGC_Ms250010_Shot0030_VFX: its spawnables with their parameters, transforms and
+-- timing) played by a LevelSequencePlayer of ours; where and when its pieces come up (they stand at the cutscene's own
+-- world spots); then again with its transform origin moved so its explosion lands on the runway's impact point, pictured
+-- low (under the clouds) and high (as the user's picture) through the strike
+SUITES.seq = function()
+    intoRun()
+    local SEQ = "/Game/Sequencer/IGC/IGC_Ms250010/VFX/CLS_IGC_Ms250010_Shot0030_VFX.CLS_IGC_Ms250010_Shot0030_VFX"
+    local P = { X = 1609574, Y = -435747, Z = 500 }
+    local S = { t0 = 0, seen = {} }
+    local function fn(o) local ok, n = pcall(function() return o:GetFullName() end); return ok and n or "?" end
+    local function pieces()
+        local out = {}
+        local ok, list = pcall(FindAllOf, "NiagaraActor")
+        for _, a in ipairs(ok and list or {}) do
+            local asset = "?"
+            pcall(function() asset = fn(a.NiagaraComponent.Asset) end)
+            if asset:find("Ms250010", 1, true) then
+                local l = { X = 0, Y = 0, Z = 0 }
+                pcall(function() l = ST.at(a) end)
+                local sc = "?"
+                pcall(function() local v = a:GetActorScale3D(); sc = string.format("%.2f", v.X) end)
+                out[#out + 1] = { a = a, name = (fn(a):match("([^%.:]+)$") or "?"), asset = asset:match("NS_IGCVFX_Ms250010_[%w_]+") or asset, l = l, sc = sc }
+            end
+        end
+        return out
+    end
+    local function say(tag)
+        local ps = pieces()
+        local parts = {}
+        for _, p in ipairs(ps) do
+            parts[#parts + 1] = string.format("%s=%s (%.0f, %.0f, %.0f) x%s", p.name, p.asset, p.l.X, p.l.Y, p.l.Z, p.sc)
+        end
+        ST.info(string.format("seq %s: %d pieces: %s", tag, #ps, table.concat(parts, "; ")))
+        return ps
+    end
+    local function newPlayer(origin)
+        local seq = loadObject(SEQ)
+        if not seq then return nil, "the sequence didn't load" end
+        local lsp = StaticFindObject("/Script/LevelSequence.Default__LevelSequencePlayer")
+        if not (lsp and lsp:IsValid()) then return nil, "no LevelSequencePlayer class" end
+        local settings = { bAutoPlay = false, LoopCount = { Value = 0 }, PlayRate = 1.0, StartTime = 0.0,
+            bRandomStartTime = false, bRestoreState = false, bDisableMovementInput = false, bDisableLookAtInput = false,
+            bHidePlayer = false, bHideHud = false, bDisableCameraCuts = true, bPauseAtEnd = false }
+        local out = {}
+        local ok, pl = pcall(function() return lsp:CreateLevelSequencePlayer(ST.pc(), seq, settings, out) end)
+        if not (ok and pl and pl:IsValid()) then return nil, "CreateLevelSequencePlayer: " .. tostring(pl) end
+        local actor
+        pcall(function() actor = pl:GetOuter() end)
+        local why = "origin none"
+        if origin and actor then
+            local okO, e = pcall(function()
+                actor.bOverrideInstanceData = true
+                actor.DefaultInstanceData.TransformOrigin = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 },
+                    Translation = origin, Scale3D = { X = 1, Y = 1, Z = 1 } }
+            end)
+            why = okO and string.format("origin (%.0f, %.0f, %.0f) set on %s", origin.X, origin.Y, origin.Z, fn(actor):match("[^%.:]+$") or "?")
+                or ("origin NOT set: " .. tostring(e))
+        end
+        local dur = "?"
+        pcall(function() local d = pl:GetDuration(); dur = string.format("%d frames at %d/%d", d.Time.FrameNumber.Value, d.Rate.Numerator, d.Rate.Denominator) end)
+        return pl, string.format("player %s, actor %s, duration %s, %s", fn(pl):match("[^%.:]+$") or "?", actor and (fn(actor):match("[^%.:]+$") or "?") or "none", dur, why)
+    end
+    -- 1: as the cutscene places it
+    A.do_(function()
+        local pl, why = newPlayer(nil)
+        ST.info("seq 1: " .. tostring(why))
+        if not ST.check(pl ~= nil, "the cutscene's VFX layer made into a player", why) then return "abort" end
+        S.p1 = pl
+        local ok, e = pcall(function() pl:Play() end)
+        ST.check(ok, "its player plays", tostring(e))
+        S.t0 = os.clock()
+    end)
+    for _, t in ipairs({ 0.5, 1.5, 3, 5, 8 }) do
+        A.wait(t == 0.5 and 0.5 or (t - ({ [1.5] = 0.5, [3] = 1.5, [5] = 3, [8] = 5 })[t]))
+        A.do_(function()
+            local ps = say(string.format("1 +%.1f s", os.clock() - S.t0))
+            for _, p in ipairs(ps) do if not S.boom and p.asset:find("Explosion", 1, true) then S.boom = p.l end end
+        end)
+    end
+    A.do_(function()
+        pcall(function() S.p1:Stop() end)
+        ST.check(S.boom ~= nil, "its explosion came up (where: the origin's move)", S.boom and string.format("(%.0f, %.0f, %.0f)", S.boom.X, S.boom.Y, S.boom.Z) or "none seen")
+        if not S.boom then return "abort" end
+    end)
+    A.wait(3)
+    -- 2: moved so its explosion stands on the runway's impact point, pictured
+    local low = function() return { X = P.X - 380000, Y = P.Y + 200000, Z = 130000 } end
+    local lowOn = function() return { X = P.X, Y = P.Y, Z = P.Z + 60000 } end
+    local high = function() return { X = P.X - 700000, Y = P.Y + 250000, Z = 600000 } end
+    local highOn = function() return { X = P.X, Y = P.Y, Z = P.Z + 80000 } end
+    A.do_(function()
+        local o = { X = P.X - S.boom.X, Y = P.Y - S.boom.Y, Z = P.Z - S.boom.Z }
+        local pl, why = newPlayer(o)
+        ST.info("seq 2: " .. tostring(why))
+        if not ST.check(pl ~= nil, "a second player with its origin moved", why) then return "abort" end
+        S.p2 = pl
+        pcall(function() pl:Play() end)
+        S.t0 = os.clock()
+        ST.look(high(), highOn(), 50)
+    end)
+    for i, t in ipairs({ 1.5, 3, 4.5, 6, 8, 10 }) do
+        A.wait(1.5)
+        A.do_(function()
+            if i == 1 then say(string.format("2 +%.1f s", os.clock() - S.t0)) end
+            ST.shot(string.format("seq_high_%02d", i))
+        end)
+    end
+    A.do_(function() say(string.format("2 +%.1f s", os.clock() - S.t0)); pcall(function() S.p2:Stop() end); ST.lookBack() end)
+    A.wait(3)
+    A.do_(function()
+        local o = { X = P.X - S.boom.X, Y = P.Y - S.boom.Y, Z = P.Z - S.boom.Z }
+        local pl, why = newPlayer(o)
+        ST.info("seq 3: " .. tostring(why))
+        S.p3 = pl
+        if pl then pcall(function() pl:Play() end) end
+        S.t0 = os.clock()
+        ST.look(low(), lowOn(), 55)
+    end)
+    for i = 1, 5 do
+        A.wait(1.8)
+        A.do_(function() ST.shot(string.format("seq_low_%02d", i)) end)
+    end
+    A.do_(function() pcall(function() S.p3:Stop() end); ST.lookBack() end)
+    A.wait(2)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
