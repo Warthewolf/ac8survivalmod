@@ -201,10 +201,11 @@ CFG.specials.fleet = {
                                           "/Game/WwiseAssets/Events/CS_AceLive_SE/Events_General/PLAYER/AIR/SE_GEN_PLAYER_AIR/AKE_GEN_PLAYER_AIR_Cloud_Rumble_CameraShake_Play" } },
                       -- ((2026-11-17) the bolts you see: THUNDER.bolt's (sv_anomalies_dev.lua), AC8's bolt meshes in the
                       -- game's cloud lightning material, a bolt each flash, the rain warmed up behind the fade (warm_fx);
-                      -- cloud: Survival's own cloud light lights the clouds at some flashes (hard rule 70, runs 65-68))
+                      -- cloud: Survival's own cloud light at some flashes (hard rule 70; 0.8-2M: 165k-365k unseen in the user's 0.74.91 flight,
+                      -- 4M and 8M at 5 km round blacked nothing out in run 75; 4M at 50 km did in run 68))
                       lightning = { enabled = true, every_s = { 0.3, 0.8 }, dist_km = { 2, 25 }, alt_m = { 1500, 7000 },
                                     cloud = { enabled = true, chance = 0.5, every_s = { 0.6, 1.6 }, alt_m = { 2000, 4500 }, radius_m = 5000,
-                                              brightness = { 150000, 400000 }, max_brightness = 1000000, color = { 215, 225, 255 }, steps = { 1, 0.3, 0.9, 0.2, 0 } },
+                                              brightness = { 800000, 2000000 }, max_brightness = 3000000, color = { 215, 225, 255 }, steps = { 1, 0.3, 0.9, 0.2, 0 } },
                                     bolts = { enabled = true, pool = 10, height_m = { 1800, 4500 }, length_m = { 2500, 7000 },
                                               alt_m = { 2500, 5500 },
                                               material = "/Game/VFX/Environment/Common/Lightning/CloudLightning/MI_NearCloudLightning001.MI_NearCloudLightning001",

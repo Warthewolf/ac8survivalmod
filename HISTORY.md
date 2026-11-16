@@ -3405,3 +3405,13 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - sv_fleet.lua (at 2,000 lines) split: its night and storm are sv_fleet_storm.lua, the next piece (dev only: dev_only.py,
   IFSKY in its globals; fleet_test loads it; zip_leak_test and thunder_test check its release header). Three doubled
   carriage returns in sv_fleet.lua's config gone with it.
+- Run 74 (storm92 on 0.74.92, 13/13): the warm-up's cloud light and 4 of 4 thunder sounds loaded, thunder posted from 7 s,
+  Ctrl+J's four posted (heard or not: the user's ears); the night much darker (your view ~5 of 255, no bright teal);
+  a 300k flash 6 km out from the still camera under the cloud base: no change (the exposure cap wasn't it). Run 75
+  (flash92): 1M-8M at 5 km round, 2M at 10 km: no blackout (run 68's was 4M at 50 km), and no change either, but that
+  camera saw the airfield's lights below the cloud base, no cloud: inconclusive.
+
+## 0.74.93 (2026-11-17; a test build, staged, not installed): the storm's cloud flashes 0.8-2M (feature/fleet-storm)
+- storm.lightning.cloud.brightness 0.8-2M (max 3M), radius 5 km: 165k-365k were unseen in the user's flight of 0.74.91.
+  Run 76 (storm92, 13/13 as run 74): flashes of 1.2-1.9M fired, no blackout from your view or the still camera; their
+  glow still not seen in the pictures. The install into her game was stopped by auto mode's check: waits for her word.
