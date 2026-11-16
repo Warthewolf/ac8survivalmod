@@ -213,7 +213,6 @@ CFG.specials.fleet = {
                                                          "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder002_IE03.SM_Thunder002_IE03",
                                                          "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder003_IE03.SM_Thunder003_IE03",
                                                          "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder005_IE03.SM_Thunder005_IE03",
-                                                         "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Lightning002_IE03.SM_Lightning002_IE03",
                                                          "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder004_IE03.SM_Thunder004_IE03" } },
                                     warm_fx = { "/Game/VFX/Environment/Common/Rain/NS_RainDroplets.NS_RainDroplets" } } } },
     -- (2026-11-16) the fleet surfaces as it comes (the user: "when the Invincible Fleet first spawns, they should all Surface

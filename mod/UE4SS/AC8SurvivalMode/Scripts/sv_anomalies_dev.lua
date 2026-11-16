@@ -1277,7 +1277,8 @@ local function boltPlace(b, c, at)                          -- (a mesh, a size, 
     local m = boltMesh(path)
     local e = BOLT.ext[path]
     if not (m and e) then return nil end
-    pcall(function() b.c:SetStaticMesh(m) end)
+    if 2 * math.max(e.ex, e.ey, e.ez) < (tonumber(c.min_mesh_m) or 20) * 100 then return nil end   -- (a tiny one scaled to km grows
+    pcall(function() b.c:SetStaticMesh(m) end)                                               -- as thick: SM_Lightning002, 0.74.87)
     if BOLT.mat then pcall(function() b.c:SetMaterial(0, BOLT.mat) end) end
     local yaw = math.random() * 2 * math.pi
     local standing = e.ez >= 1.5 * math.max(e.ex, e.ey)
@@ -1302,7 +1303,7 @@ function THUNDER.bolt(at, c, why)
     local b = boltFree(c)
     if not b then return nil, "the pool's all showing" end
     local what = boltPlace(b, c, at)
-    if not what then return nil, "its mesh didn't load" end
+    if not what then return nil, "its mesh didn't load (or is under min_mesh_m)" end
     local st = c.steps or { { 1, 0, 1 }, { 1 }, { 1, 0, 1, 0, 1 } }
     b.steps, b.i = (type(st[1]) == "table") and st[math.random(#st)] or st, 1
     boltShow(b, b.steps[1] == 1)
