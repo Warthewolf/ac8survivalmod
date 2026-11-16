@@ -194,7 +194,10 @@ CFG.specials.fleet = {
     -- Thunder's storm cloud layout (Mission 12's) in and back under a fade to black (out_s, hold_s, in_s), its distant
     -- thunder and a clap, and cloud lightning every every_s within dist_km of the airfield or the fleet, alt_m up: a cloud
     -- light every light_every_s (one up at a time), bolts (x bolt_scale) between, the thunder after its distance's delay
-    sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 3, sunrise_rounds = 3 },
+    -- (night_over: the storm night brighter than THE FESTIVAL's: under Mission 12's clouds it was all but black, the
+    -- autotest's run 41 of 0.74.84)
+    sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 3, sunrise_rounds = 3,
+                                                         night_over = { exposure = { 1.3, 10.0, 1.6 }, skylight_x = 1.2e-4 } },
             storm = { enabled = true, until_round = 35, out_s = 0.6, hold_s = 0.8, in_s = 1.2,
                       sound = { distant = "AKE_Ms12_ENV_AMB_DistantThunder_Play", distant_stop = "AKE_Ms12_ENV_AMB_DistantThunder_Stop",
                                 clap = "AKE_Environment_Thunder_Play" },

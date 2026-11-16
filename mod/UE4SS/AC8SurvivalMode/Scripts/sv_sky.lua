@@ -945,6 +945,12 @@ end
 -- the sky at the start of round F + k, on the stock sky `base`
 function SKY.arcAnchor(k, base)
     local c, ng = acfg(), (CFG.sky or {}).night or {}
+    if type(c.night_over) == "table" then              -- ((2026-11-16) a profile's own night: its settings over CFG.sky.night)
+        local m = {}
+        for f, v in pairs(ng) do m[f] = v end
+        for f, v in pairs(c.night_over) do m[f] = v end
+        ng = m
+    end
     local a = copy(base)
     a.mode, a.set_el, a.stars = "sun", nil, 0
     local R = math.max(1, math.floor(n(c.sunrise_rounds, 4)))
