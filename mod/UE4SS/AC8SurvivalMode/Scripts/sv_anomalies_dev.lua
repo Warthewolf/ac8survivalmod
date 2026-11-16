@@ -1027,6 +1027,9 @@ local function transitionTick(now)
     end
 end
 THUNDER.transitionTick = transitionTick
+-- ((2026-11-16) INVINCIBLE FLEET's night storm (sv_fleet.lua) drives these itself: the storm's cloud layout in or back,
+-- the camera's fade, a Wwise event)
+THUNDER.layoutSet, THUNDER.camFade, THUNDER.post = lySet, camFade, post
 
 -- ((2026-11-08) the user's recording of 0.74.36: the whole sky black for ~0.1 s at every write of the storm's cloud
 -- values; "we need to work that out") Ctrl+/: the sky probe. Each press puts the group before back, then writes the next

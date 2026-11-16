@@ -275,9 +275,10 @@ check(C ~= nil and C.unit == FORD and #C.stages == 2 and C.look.bow.pitch == 25 
     "CFG.specials.fleet.geofon: the Ford, two stages, the V's angles")
 check(CFG_DEFAULTS.specials.fleet ~= CFG.specials.fleet and same(CFG_DEFAULTS.specials.fleet, CFG.specials.fleet),
     "the same in CFG_DEFAULTS (a copy): shipped, no edit")
-check(type(keys.B) == "function" and type(keys.G) == "function" and type(keys.N) == "function" and #TEST_TICKS == 2
-    and TEST_TICKS[2].name == "fleet ships" and type(LEVEL_DROPS.fleet) == "function" and type(LEVEL_DROPS["fleet ships"]) == "function",
-    "Ctrl+B, Ctrl+G, Ctrl+N, their two ticks and level drops")
+check(type(keys.B) == "function" and type(keys.G) == "function" and type(keys.N) == "function" and #TEST_TICKS == 3
+    and TEST_TICKS[2].name == "fleet ships" and TEST_TICKS[3].name == "fleet storm" and type(LEVEL_DROPS.fleet) == "function"
+    and type(LEVEL_DROPS["fleet ships"]) == "function" and type(LEVEL_DROPS["fleet storm"]) == "function",
+    "Ctrl+B, Ctrl+G, Ctrl+N, their three ticks (the storm's, 2026-11-16) and level drops")
 local tick = TEST_TICKS[1].fn
 local function run(secs) for _ = 1, math.floor(secs / 0.25 + 0.5) do clock = clock + 0.25; tick(clock) end end
 

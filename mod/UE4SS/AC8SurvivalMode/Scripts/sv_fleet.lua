@@ -184,6 +184,23 @@ CFG.specials.fleet = {
                  soon = "RAILCANNON FIRING IN %d S", hit = "THE AIRFIELD IS HIT", hit_sub = "TANACORN RAILCANNON: -%d",
                  down = "TANACORN RAILCANNON DOWN", down_sub = "THE AIRFIELD IS SAFE" },
     },
+    -- (2026-11-16) the fleet's own night (the user: "another day night cycle for this Special Round, using the same method
+    -- we use for The Festival", the sun setting from round 25, "Night can last for 3 rounds before Round 30", the fleet "at
+    -- Early Morning, just before the sun rises"): sv_sky.lua's arc owned from from_round with profile over CFG.sky.arc (no
+    -- sinking round: the sunset at round 26, night 27-29, the pre-dawn at 30, sunrise over 31-33). Its storm (the user:
+    -- "swap the new cloud layer in at the moment the Night Sky Appears, add a lot of lightning in the area too, like a lot a
+    -- lot a lot"; seen and heard only; it "can clear with a fade to black on round 35", "to hide the sudden swap of the
+    -- clouds back to normal"): from the arc's first moon (the sunset's break, its darkest point) to until_round, Distant
+    -- Thunder's storm cloud layout (Mission 12's) in and back under a fade to black (out_s, hold_s, in_s), its distant
+    -- thunder and a clap, and cloud lightning every every_s within dist_km of the airfield or the fleet, alt_m up: a cloud
+    -- light every light_every_s (one up at a time), bolts (x bolt_scale) between, the thunder after its distance's delay
+    sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 3, sunrise_rounds = 3 },
+            storm = { enabled = true, until_round = 35, out_s = 0.6, hold_s = 0.8, in_s = 1.2,
+                      sound = { distant = "AKE_Ms12_ENV_AMB_DistantThunder_Play", distant_stop = "AKE_Ms12_ENV_AMB_DistantThunder_Stop",
+                                clap = "AKE_Environment_Thunder_Play" },
+                      lightning = { enabled = true, every_s = { 0.3, 0.8 }, light_every_s = { 2.0, 4.0 }, dist_km = { 2, 25 },
+                                    alt_m = { 1500, 7000 },
+                                    class = "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms009_FarExplosion.BP_CloudLight_Ms009_FarExplosion_C" } } },
 }
 -- (set after sv_config_ini.lua took CFG_DEFAULTS: shipped as it is, so no difference the leaderboard's LB.edited or the
 -- co-op settings sync would see)
@@ -1514,6 +1531,126 @@ end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet ships", fn = function(now) IFLEET.tick(now) end }
 if type(LEVEL_DROPS) == "table" then                       -- (the level's objects: forgotten, none of them touched)
     LEVEL_DROPS["fleet ships"] = function() IFLEET.cur = nil end
+end
+end
+
+-- ---- INVINCIBLE FLEET's night and its storm (2026-11-16; CFG.specials.fleet.sky's note) -----------------------------
+-- The arc: SKY.arcOwners.fleet (sv_sky.lua: the latest start owns it; GONE FISHIN''s F and THE FESTIVAL untouched). The
+-- storm: on at the arc's first moon, off at storm.until_round, each time under a fade to black. Every game its own (the
+-- round and its clock are the host's on every game). IFSKY.step(k): the arc at step k from the round now (a test's).
+-- Log: `fleet storm: ...`.
+IFSKY = { k = nil }
+do
+local SW = { on = false }
+local function n(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
+local function sc() return (CFG.specials and CFG.specials.fleet or {}).sky or {} end
+local function stc() return sc().storm or {} end
+local function pick(t, d) t = type(t) == "table" and t or d; return n(t[1], d[1]) + (n(t[2], d[2]) - n(t[1], d[1])) * math.random() end
+if SKY and SKY.arcOwners then
+    SKY.arcOwners.fleet = function()
+        local c = sc()
+        if c.enabled == false or not D then return nil end
+        SKY.arcProfiles.fleet = c.profile
+        local r = math.floor(n(D.round, 0))
+        if IFSKY.k then return r - IFSKY.k end
+        local F = math.floor(n(c.from_round, 25))
+        if r >= F then return F end
+        return nil
+    end
+end
+function IFSKY.step(k)
+    IFSKY.k = tonumber(k)
+    if ARC and ARC.last then                              -- (blended in from the sky written last)
+        local b = {}
+        for a, v in pairs(ARC.last) do b[a] = v end
+        ARC.blendFrom, ARC.blendAt = b, nil
+    end
+    log(string.format("fleet storm: the arc at step %s now (a test's)", tostring(k)))
+end
+local function wanted()
+    local c = stc()
+    if c.enabled == false or not (THUNDER and THUNDER.layoutSet and THUNDER.camFade) then return false end
+    local a = SKY and SKY.arcState and SKY.arcState()
+    if not (a and a.on and a.profile == "fleet" and a.k) then return false end
+    if a.k >= math.floor(n(c.until_round, 35)) - math.floor(n(sc().from_round, 25)) then return false end
+    return a.mode == "moon" or a.k >= n(a.sink, 0) + 2
+end
+local function fade(on, why)
+    local c = stc()
+    local ok, err = THUNDER.camFade(0, 1, n(c.out_s, 0.6), true)
+    SW.tr = { on = on, why = why, phase = "out", at = os.clock() + (ok and n(c.out_s, 0.6) or 0), faded = ok }
+    if not ok then log("fleet storm: no fade (" .. tostring(err) .. "): the clouds swapped at once") end
+end
+local function trTick(now)
+    local t = SW.tr
+    if not t or now < t.at then return end
+    local c = stc()
+    local snd = c.sound or {}
+    if t.phase == "out" then
+        local okL, what = pcall(THUNDER.layoutSet, t.on, t.on and "INVINCIBLE FLEET's night storm" or "INVINCIBLE FLEET's storm clearing")
+        pcall(THUNDER.post, t.on and snd.distant or snd.distant_stop)
+        if t.on and snd.clap then pcall(THUNDER.post, snd.clap) end
+        t.phase, t.at, t.what = "hold", now + n(c.hold_s, 0.8), okL and what or ("error " .. tostring(what))
+    elseif t.phase == "hold" then
+        if t.faded then pcall(THUNDER.camFade, 1, 0, n(c.in_s, 1.2), false) end
+        t.phase, t.at = "in", now + n(c.in_s, 1.2)
+        local a = SKY.arcState()
+        log(string.format("fleet storm: %s (round %s, the arc's step %s, %s): %s%s", t.on and "in" or "cleared", tostring(D and D.round),
+            tostring(a.k), tostring(a.mode), tostring(t.what), t.faded and ", under a fade to black" or ""))
+    else
+        SW.tr = nil
+    end
+end
+local function centres()                                   -- (the airfield, and the fleet's flagship when it's up)
+    local out = {}
+    if type(AIRFIELD) == "table" and AIRFIELD.X then out[#out + 1] = { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = AIRFIELD.Z or 0 } end
+    local F = IFLEET and IFLEET.cur
+    for _, sh in ipairs(F and F.ships or {}) do
+        local o = sh.hull and sh.hull.obj
+        if o and liveObj(o) then
+            local ok, l = pcall(function() return o:K2_GetActorLocation() end)
+            if ok and l then out[#out + 1] = { X = l.X, Y = l.Y, Z = l.Z }; break end
+        end
+    end
+    return out
+end
+local function lightTick(now)
+    local c = stc().lightning or {}
+    if c.enabled == false or now < (SW.nextAt or 0) then return end
+    SW.nextAt = now + pick(c.every_s, { 0.3, 0.8 })
+    local cs = centres()
+    if #cs == 0 then return end
+    local ce = cs[math.random(#cs)]
+    local d = pick(c.dist_km, { 2, 25 }) * 100000
+    local ang = math.random() * 2 * math.pi
+    local at = { X = ce.X + math.cos(ang) * d, Y = ce.Y + math.sin(ang) * d, Z = pick(c.alt_m, { 1500, 7000 }) * 100 }
+    local how = "bolt"
+    if now >= (SW.lightAt or 0) then how = c.class or "bolt"; SW.lightAt = now + pick(c.light_every_s, { 2, 4 }) end
+    SW.n = (SW.n or 0) + 1
+    local ok, what = pcall(THUNDER.cloudFlash, at, how, "the fleet's storm")
+    if SW.n <= 3 or SW.n % 100 == 0 then
+        log(string.format("fleet storm: flash %d (%.0f km off its centre, %.1f km up): %s", SW.n, d / 100000, at.Z / 100000,
+            ok and tostring(what) or ("error " .. tostring(what))))
+    end
+end
+function IFSKY.storm() return { on = SW.on, flashes = SW.n or 0, tr = SW.tr and SW.tr.phase or nil } end
+TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet storm", fn = function(now)
+    if not D or (levelTorn and levelTorn()) then
+        if SW.on and THUNDER and THUNDER.layoutSet then pcall(THUNDER.layoutSet, false, "INVINCIBLE FLEET's storm: the run's over") end
+        SW.on, SW.tr = false, nil
+        return
+    end
+    trTick(now)
+    if THUNDER and THUNDER.cloudTick then pcall(THUNDER.cloudTick, now) end
+    local w = wanted()
+    if w ~= SW.on and not SW.tr then
+        SW.on = w
+        fade(w, w and "the night sky's come" or "the storm clears")
+    end
+    if SW.on and not SW.tr then lightTick(now) end
+end }
+if type(LEVEL_DROPS) == "table" then                       -- (the level's: its Cloudly actor and lights went with it)
+    LEVEL_DROPS["fleet storm"] = function() SW = { on = false } end
 end
 end
 -- TEST ONLY END
