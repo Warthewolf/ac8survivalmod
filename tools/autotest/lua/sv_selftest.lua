@@ -1363,6 +1363,40 @@ SUITES.arcbolt = function()
         A.wait(2)
     end
 end
+-- (2026-11-16) the cloud flash's ways, pictured from your view in the storm night (run 53: a light inside the storm clouds
+-- lights them up): Cloudly's effect light ("effect") and the three stock cloud light classes with a real radius (the
+-- storm gave them none: 10 m), each 5 km ahead and 1 km up, pictured at +0.1 and +0.35 s
+SUITES.cloudflash = function()
+    intoRun()
+    A.do_(function()
+        if not ST.check(THUNDER ~= nil and THUNDER.cloudFlash ~= nil, "the cloud flash is in this build") then return "abort" end
+        if IFSKY and IFSKY.step then IFSKY.step(3) end
+    end)
+    A.wait(12)
+    local BP = "/Game/Blueprints/Cloudly/CloudLight/"
+    local TRY = {
+        { "effect", nil }, { "effect", nil },
+        { BP .. "BP_CloudLight_Ms009_FarExplosion.BP_CloudLight_Ms009_FarExplosion_C", 4000 },
+        { BP .. "BP_CloudLight_Ms012_PodargeDead.BP_CloudLight_Ms012_PodargeDead_C", 4000 },
+        { BP .. "BP_CloudLight_Ms022_ShuttleLaunch.BP_CloudLight_Ms022_ShuttleLaunch_C", 4000 },
+    }
+    for n, k in ipairs(TRY) do
+        A.do_(function()
+            local L = (((CFG.specials or {}).thunder or {}).buildup or {}).lightning
+            local lc = type(L) == "table" and L or nil
+            if lc then lc.radius_m, lc.bolt = k[2] or 6000, false end
+            local pl = ST.plane()
+            local at = ST.frame(pl, 500000, (n % 2 == 0) and 150000 or -150000, 100000)
+            local ok, what = pcall(THUNDER.cloudFlash, at, k[1], "the cloud flash probe")
+            ST.info(string.format("cloudflash %d: %s (radius %s m): %s", n, k[1]:match("BP_CloudLight_([%w_]+)%.") or k[1], tostring(k[2] or 6000), ok and tostring(what) or ("error " .. tostring(what))))
+        end)
+        A.wait(0.1)
+        A.do_(function() ST.shot(string.format("cloudflash_%d_a", n)) end)
+        A.wait(0.25)
+        A.do_(function() ST.shot(string.format("cloudflash_%d_b", n)) end)
+        A.wait(3)
+    end
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
