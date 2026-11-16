@@ -16,6 +16,9 @@ Mods/AC8SurvivalAddons/<your_addon>/*.lua          the add-on's Lua: Survival ru
                                                    order, all in the add-on's one environment
 Mods/AC8SurvivalAddons/<your_addon>/natives.txt    the native functions it may call, if it has a native mod (below)
 Mods/AC8SurvivalAddons/<your_addon>/<subfolder>/   its data files, if it has any (SVP.dir() .. "<subfolder>\\...")
+Mods/AC8SurvivalAddons/<your_addon>/paks.txt       the containers it installs outside its folder, a path under Mods
+                                                   a line (e.g. IoStoreLoaderMod\MyAddon\MyAddon_P.utoc): co-op
+                                                   compares them (Co-op); nothing else reads it
 Mods/<your C++ mod>/                               its native mod, if it needs one (optional)
 <your IoStore container>                           its assets (load them with SVP.load); never in Survival's own
 ```
@@ -268,13 +271,16 @@ match (see Co-op).
 Survival's co-op is the host's: its rounds, kills and pay; the joiners' games mirror them. Add-ons follow the same
 rule.
 - **Having an add-on installed is the opt-in.** Every player in a co-op room must have the same add-ons: the same
-  folders in `Mods\AC8SurvivalAddons`, each at the same version (`def.ver`) with the same files (a hash of its .lua
-  files). There's no field to set.
+  folders in `Mods\AC8SurvivalAddons`, each at the same version (`def.ver`) with the same files. The fingerprint covers
+  every file the add-on installs: its .lua files by their bytes, and every other file in its folder (subfolders too)
+  plus every container its `paks.txt` names, by name and size. List your IoStore container's `.utoc` / `.ucas` in
+  `paks.txt`. There's no field to set.
 - **The check, as a joiner links.** The joiner's game sends its list to the host, and the host answers with its own.
   - Any difference refuses the join on both games before the joiner's run joins the host's. The joiner's co-op is
     closed and it plays on alone.
   - The callout says "MISMATCHED ADD-ONS" (on the joiner) or "REFUSED NAME" (on the host), with the first
-    difference. The log has every one: an add-on missing on one side, an extra one, another version, or other files.
+    difference. The log has every one: an add-on missing on one side, an extra one, another version, or other files (another .lua, or an asset of another
+    size).
   - A host that doesn't answer the check within 30 s refuses the join the same way.
   - While a refused player is still in the room, no add-on round comes.
 - **Matched, every add-on runs in co-op.** Its jobs and callbacks run on every game, and its rounds come on the host.

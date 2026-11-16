@@ -128,7 +128,8 @@ environment.
 
 ## Co-op (API 2.1)
 - Having an add-on installed is the opt-in. Each game's list (an add-on a line: folder in lower case, `def.ver`, a
-  FNV-1a 64 hash of its .lua files' names and bytes: `PLUGINS.addonHash`, sv_plugins_env.lua) is compared as a joiner
+  FNV-1a 64 hash of every file it installs: its .lua by name and bytes, every other file in its folder and every
+  container its paks.txt names by name and size; `PLUGINS.addonHash`, sv_plugins_env.lua) is compared as a joiner
   links: "hi" (the joiner's, in pieces) and "hl" (the host's answer), sv_plugins_api.lua `sysIn`.
   - Any difference refuses the join on both games: callouts on both, every difference in both logs. The joiner calls
     `COOP.refuseJoin` (sv_coop_migration.lua: `closeCoop`).

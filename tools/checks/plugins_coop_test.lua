@@ -44,7 +44,7 @@ local clock = 0
 local function last(t) return t[#t] end
 
 -- one game: its own globals (env), its plugins folder as IterateGameDirectories gives it
-local function game(slot, plugins)
+local function game(slot, plugins, fs)
     local G = { slot = slot, inbox = {}, sent = {}, logs = {}, callouts = {} }
     local env = setmetatable({}, { __index = _G })
     env._G = env
@@ -134,17 +134,39 @@ local function game(slot, plugins)
         local folders, all = {}, {}
         local tmp = os.tmpname()
         for folder, src in pairs(plugins) do
+            local main, extra = src, {}
+            if type(src) == "table" then main, extra = src.main, src.files or {} end
             local p = tmp .. "_g" .. slot .. "_" .. folder .. "_main.lua"
-            local f = assert(io.open(p, "wb")); f:write(src); f:close()
+            local f = assert(io.open(p, "wb")); f:write(main); f:close()
             folders[folder] = { __files = { { __name = "main.lua", __absolute_path = p } } }
             all[#all + 1] = p
+            for rel, bytes in pairs(extra) do                  -- (its other files: "<sub>/<name>" in a subfolder)
+                local node, parts = folders[folder], {}
+                for s in rel:gmatch("[^/]+") do parts[#parts + 1] = s end
+                for i = 1, #parts - 1 do node[parts[i]] = node[parts[i]] or { __files = {} }; node = node[parts[i]] end
+                local q = tmp .. "_g" .. slot .. "_" .. folder .. "_" .. rel:gsub("[/\\]", "_")
+                local g = assert(io.open(q, "wb")); g:write(bytes); g:close()
+                node.__files[#node.__files + 1] = { __name = parts[#parts], __absolute_path = q }
+                all[#all + 1] = q
+            end
         end
         env.SCRIPT_DIR = "x\\Game\\Binaries\\Win64\\ue4ss\\Mods\\AC8SurvivalMode\\Scripts\\"   -- (no drive letter: paths_check)
         env.IterateGameDirectories = function()
             return { Game = { Binaries = { Win64 = { ue4ss = { Mods = { AC8SurvivalMode = {}, AC8SurvivalAddons = folders } } } } } }
         end
+        local pakTmp = {}
+        for rel, bytes in pairs(fs or {}) do                   -- (files under Mods: a declared container's)
+            local q = tmp .. "_g" .. slot .. "_pak_" .. rel:gsub("[/\\]", "_")
+            local g = assert(io.open(q, "wb")); g:write(bytes); g:close()
+            pakTmp[("..\\" .. rel:gsub("/", "\\")):lower()] = q
+            all[#all + 1] = q
+        end
         env.io = setmetatable({ open = function(p, m)       -- (AC8SurvivalAddons there: a folder fails fopen with EACCES)
             if type(p) == "string" and p:match("AC8SurvivalAddons$") then return nil, p .. ": stub", 13 end
+            if type(p) == "string" then
+                local tail = p:lower():match("ac8survivaladdons\\(%.%.\\.*)$")
+                if tail then local q = pakTmp[tail]; if q then return io.open(q, m) end; return nil, p .. ": no such file", 2 end
+            end
             return io.open(p, m)
         end }, { __index = io })
         for _, piece in ipairs(PARTS.sources("sv_plugins")) do assert(load(piece.src, "@" .. piece.name, "t", env))() end
@@ -251,7 +273,7 @@ local cases = {
     { 2, { excalibur = exc() }, "beacon 1: on this game (the host), missing on player 3 (P2)", "BEACON 1: ON THE HOST, MISSING ON THIS GAME", "missing" },
     { 3, { excalibur = exc(), beacon = BEACON, extra = "SVP.log('x')" }, "extra _: on player 4 (P3), missing on this game (the host)", "EXTRA _: ON THIS GAME, MISSING ON THE HOST", "extra" },
     { 4, { excalibur = exc("0.4"), beacon = BEACON }, "excalibur: version 0.5 on this game (the host), 0.4 on player 5 (P4)", "EXCALIBUR: VERSION 0.4 ON THIS GAME, 0.5 ON THE HOST", "another version" },
-    { 5, { excalibur = exc("0.5", "\n-- edited"), beacon = BEACON }, "excalibur 0.5: different files", "EXCALIBUR 0.5: DIFFERENT FILES", "the same version, other files (its hash)" },
+    { 5, { excalibur = exc("0.5", "\n-- edited"), beacon = BEACON }, "excalibur 0.5: other files", "EXCALIBUR 0.5: OTHER FILES", "the same version, another .lua (its hash)" },
 }
 for _, c in ipairs(cases) do
     local J = tryJoin(c[1], c[2])
@@ -261,6 +283,34 @@ for _, c in ipairs(cases) do
         c[5] .. ": the joiner's co-op closed (COOP.refuseJoin), the difference shown there")
     check(J.held == true and not J.sentJn() and J.evAtRefuse == J.ev0, c[5] .. ": the joiner's picture held and never asked, none of its add-ons ran in co-op")
     net.games[c[1]] = nil; roster(0, 1); step(1)
+end
+-- (every file it installs: the same .lua, an asset of another size in its folder, or a declared container's)
+local function withAssets(snd, pak)
+    return { main = exc(), files = { ["excalibur/radio.bnk"] = snd, ["paks.txt"] = "IoStoreLoaderMod/Excalibur/Exc_P.utoc\n" } }
+end
+do
+    local saved = net.games
+    net.games = {}
+    local h = game(0, { excalibur = withAssets("12345678") }, { ["IoStoreLoaderMod/Excalibur/Exc_P.utoc"] = "abcd" })
+    h.coop("host")
+    local ok = game(1, { excalibur = withAssets("87654321") }, { ["IoStoreLoaderMod/Excalibur/Exc_P.utoc"] = "dcba" })
+    ok.coop("join"); roster(0, 1); step(3)
+    check(ok.refused == nil and ok.said("the host has the same add-ons"), "the same .lua and assets of the same sizes: matched (sizes, not bytes, for assets)")
+    net.games[1] = nil
+    local big = game(2, { excalibur = withAssets("123456789") }, { ["IoStoreLoaderMod/Excalibur/Exc_P.utoc"] = "abcd" })
+    big.coop("join"); roster(0, 2); step(3)
+    check(big.refused and big.shown("EXCALIBUR 0.5: OTHER FILES") and h.said("excalibur 0.5: other files"),
+        "the same .lua, an asset in its folder of another size: refused, 'other files'")
+    net.games[2] = nil
+    local pk = game(3, { excalibur = withAssets("12345678") }, { ["IoStoreLoaderMod/Excalibur/Exc_P.utoc"] = "abcde" })
+    pk.coop("join"); roster(0, 3); step(3)
+    check(pk.refused and pk.shown("EXCALIBUR 0.5: OTHER FILES"), "the same folder, a container its paks.txt names of another size: refused, 'other files'")
+    net.games[3] = nil
+    local none = game(4, { excalibur = withAssets("12345678") }, {})
+    none.coop("join"); roster(0, 4); step(3)
+    check(none.refused and none.shown("OTHER FILES"), "a declared container missing: refused")
+    net.games = saved
+    roster(0, 1)
 end
 local J6 = game(6, { excalibur = exc() })
 J6.coop("join"); roster(0, 1, 6); step(3)

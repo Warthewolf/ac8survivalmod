@@ -510,7 +510,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
     end
     -- Co-op (add-on API 2.1). Survival's co-op is the host's: its rounds, kills and pay; the joiners' games mirror them
     -- (sv_coop.lua). Having an add-on installed is the opt-in: every game in the room must have the same add-ons (each
-    -- one's folder, version and a hash of its .lua files). A joiner's list goes to the host as it links ("hi"), the
+    -- one's folder, version and a hash of every file it installs: PLUGINS.addonHash). A joiner's list goes to the host as it links ("hi"), the
     -- host's comes back ("hl"); any difference refuses the join on both games, said on both (callout "MISMATCHED
     -- ADD-ONS" and every difference in the log): the joiner's co-op is closed (COOP.refuseJoin) and its run's picture
     -- ("jn") is never asked, held until the lists match (PLUGINS.joinHeld). Matched, every add-on runs in co-op: its
@@ -639,7 +639,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
             elseif b and not a then l[#l + 1] = string.format("%s %s: on %s, missing on %s", k, b.ver, them, me)
             elseif a.ver ~= b.ver then l[#l + 1] = string.format("%s: version %s on %s, %s on %s", k, a.ver, me, b.ver, them)
             elseif a.hash ~= b.hash then
-                l[#l + 1] = string.format("%s %s: different files (%s on %s, %s on %s)", k, a.ver, a.hash, me, b.hash, them)
+                l[#l + 1] = string.format("%s %s: other files (%s on %s, %s on %s)", k, a.ver, a.hash, me, b.hash, them)
             end
         end
         return l
