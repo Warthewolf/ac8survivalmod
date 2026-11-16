@@ -1319,7 +1319,16 @@ SUITES.arcbolt = function()
         if tostring(ST.conf.night) == "1" and IFSKY and IFSKY.step then IFSKY.step(3) end
     end)
     A.wait(tostring(ST.conf.night) == "1" and 12 or 0.5)
-    local TRY = {
+    local E = "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/"
+    local TRY = (tostring(ST.conf.set) == "2") and {
+        { E .. "NS_ElectricEvasion001", 10, 2, 300, 0 },
+        { E .. "NS_ElectricEvasion001", 40, 4, 600, 0 },
+        { E .. "NS_ElectricEvasion001", 40, 4, 600, 90 },
+        { E .. "NS_ElectricDischargeM001", 20, 2, 300, 0 },
+        { E .. "NS_ElectricDischargeM001", 80, 4, 600, 0 },
+        { O .. "NS_alcn_LiSpark_edgesingle_ON", 150, 6, 800, 90, true },
+        { O .. "NS_alcn_LiSpark_edgedouble_ON", 300, 10, 1500, 90, true },
+    } or {
         { O .. "NS_alcn_LiSpark_edgesingle_ON", 30, 2, 300, 0 },
         { O .. "NS_alcn_LiSpark_edgesingle_ON", 150, 4, 600, 0 },
         { O .. "NS_alcn_LiSpark_edgesingle_ON", 150, 4, 600, 90 },
@@ -1340,6 +1349,11 @@ SUITES.arcbolt = function()
             pcall(function() yaw = pl:K2_GetActorRotation().Yaw end)
             local ok, c = pcall(function() return lib:SpawnSystemAtLocation(ST.pc(), sys, at, { Pitch = pitch, Yaw = yaw + 90, Roll = 0 }, { X = sc, Y = sc, Z = sc }, true, true, 0, false) end)
             if ok and c then pcall(function() c:SetVariableFloat(FName("Scale"), sc) end) end
+            if ok and c and k[6] then                     -- (white-blue: the arc's Color, both spellings)
+                for _, nmC in ipairs({ "Color", "User.Color" }) do
+                    pcall(function() c:SetVariableLinearColor(FName(nmC), { R = 3.0, G = 4.0, B = 8.0, A = 1.0 }) end)
+                end
+            end
             ST.info(string.format("arcbolt %d: %s x%d, %d km ahead, %d m up, pitch %d: %s", n, path:match("([^/]+)$"), sc, km, up, pitch, tostring(ok and c ~= nil)))
         end)
         A.wait(0.1)
