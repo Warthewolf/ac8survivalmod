@@ -801,6 +801,71 @@ SUITES.riselive = function()
     end)
     A.rounds("BP_SV_Tani_", "her (after the rise)", 15)
 end
+-- (2026-11-16) INVINCIBLE FLEET's night and storm (sv_fleet.lua IFSKY, CFG.specials.fleet.sky): the arc stepped through its
+-- rounds (IFSKY.step: 25's sinking sun .. 35's clearing), the storm on from the night's first moon and off at 35, its
+-- lightning counted; each step pictured from 1.2 km over the airfield towards the fleet's north-west and away; at the
+-- pre-dawn (round 30) the fleet brought up (Ctrl+N) and GEOFON pictured in the storm
+SUITES.fleetnight = function()
+    intoRun()
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and IFSKY.step ~= nil and SKY ~= nil and SKY.arcState ~= nil, "INVINCIBLE FLEET's night is in this build") then
+            return "abort"
+        end
+        ST.marks.n0 = ST.n
+    end)
+    local R = { X = 1609574, Y = -435747, Z = 500 }
+    local eye = function() return { X = R.X, Y = R.Y, Z = 120000 } end
+    local nw = function() return { X = R.X - 1000000, Y = R.Y - 1000000, Z = 60000 } end
+    local se = function() return { X = R.X + 1000000, Y = R.Y + 1000000, Z = 60000 } end
+    local function geofonObj()
+        for _, sh in ipairs(IFLEET and IFLEET.cur and IFLEET.cur.ships or {}) do
+            if (sh.name == "GEOFON" or sh.key == "GEOFON") and sh.hull and sh.hull.obj and valid(sh.hull.obj) then return sh.hull.obj end
+        end
+        return nil
+    end
+    local STEPS = { { 0, "round 25: the sun starts down", false }, { 1, "round 26: sunset", false },
+                    { 2, "round 27: night, the storm in", true }, { 4, "round 29: night", true },
+                    { 5, "round 30: pre-dawn, the fleet", true }, { 6, "round 31: sunrise", true },
+                    { 8, "round 33: morning", true }, { 10, "round 35: the storm cleared", false } }
+    for _, stp in ipairs(STEPS) do
+        local k, what, stormy = stp[1], stp[2], stp[3]
+        A.do_(function() IFSKY.step(k) end)
+        A.wait(9)                                         -- (the arc's blend_s 5, the storm's fade 2.6)
+        A.do_(function()
+            local a, w = SKY.arcState(), IFSKY.storm()
+            ST.check(a.on and a.profile == "fleet" and a.k == k and (w.on == stormy),
+                string.format("%s: the fleet's arc at step %s, the %s, the storm %s", what, tostring(a.k), tostring(a.mode), w.on and "on" or "off"),
+                string.format("profile %s, step %s, mode %s, storm %s (%d flashes so far)", tostring(a.profile), tostring(a.k), tostring(a.mode),
+                    tostring(w.on), w.flashes or 0))
+        end)
+        if k == 5 then                                    -- (the fleet at the pre-dawn)
+            A.do_(function() ST.marks.f0 = ST.n; ST.press("N") end)
+            A.log_("fleet: Ctrl%+N: %d+ of %d+ ships up", 60, "f0", false, function(l)
+                ST.check(l ~= nil, "the fleet up in the pre-dawn storm", l)
+            end)
+            A.wait(5)
+            A.picture("fleetnight_geofon", function() return ST.frame(geofonObj(), -60000, 40000, 15000) end,
+                function() return ST.at(geofonObj()) end, 55)
+        end
+        A.do_(function() ST.look(eye(), nw(), 70) end)
+        A.wait(1.5)
+        A.do_(function() ST.shot(string.format("night_k%02d_nw", k)) end)
+        A.wait(0.9)
+        A.do_(function() ST.shot(string.format("night_k%02d_nw2", k)) end)
+        A.do_(function() ST.look(eye(), se(), 70) end)
+        A.wait(1.5)
+        A.do_(function() ST.shot(string.format("night_k%02d_se", k)) end)
+        A.do_(function() ST.lookBack() end)
+    end
+    A.do_(function()
+        local w = IFSKY.storm()
+        ST.check((w.flashes or 0) > 60, "a lot of lightning through the storm", (w.flashes or 0) .. " flashes")
+        ST.check(ST.findLog("fleet storm: in", ST.marks.n0, true) ~= nil and ST.findLog("fleet storm: cleared", ST.marks.n0, true) ~= nil,
+            "the storm swapped in and cleared, each under a fade to black",
+            tostring(ST.findLog("fleet storm: in", ST.marks.n0, true)) .. " / " .. tostring(ST.findLog("fleet storm: cleared", ST.marks.n0, true)))
+        IFSKY.step(nil)
+    end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
