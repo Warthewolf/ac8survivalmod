@@ -3275,3 +3275,15 @@ game. The work was split by file between agents; the builds ran in sequence in t
   ~2 km up) and the fireball a small puff on the ground. The autotest's spear suite (run 31: x1 / x4 / x8 / x12 over the
   runway's impact point, pictured from ~4.3 km and 1.3 km up): at x12 the fireball fills the space between its rings as in
   the user's picture. (Its dust skirt is under Comona's low cloud deck from there.)
+- 0.74.82: the railcannon's impact plays the cutscene's VFX layer itself (the user, 2026-11-16, with the picture again:
+  "that explosion needs to look EXACTLY like this"). Found by the autotest's seq suite (runs 33-34): a LevelSequencePlayer
+  of ours (LevelSequencePlayer.CreateLevelSequencePlayer on /Game/Sequencer/IGC/IGC_Ms250010/VFX/
+  CLS_IGC_Ms250010_Shot0030_VFX, 330 frames at 60 fps) plays it in Survival's level; it spawns 11 NiagaraActors at the
+  cutscene's own scales and places (Explosion001 x35.3, Explosion002 x25.11, RingSmoke001 x35.3, ShockWave001 / 002 x20,
+  Explosion005 / SandSmoke001 x1, the rod's trail falling in, three rains on its camera); the actor's
+  DefaultInstanceData.TransformOrigin (bOverrideInstanceData) moves every piece by exactly its offset; they go when the
+  sequence ends (5.5 s) unless it's held at its last frame (bPauseAtEnd: 11 still up at +8 s, 0 once stopped). Pictured
+  under Comona's cloud deck it is the cutscene's strike: the billowing fireball between its two shock rings, the dust at
+  its base. In Survival (sv_tanicorn_rail.lua seqImpact, CFG railcannon.impact_seq): Explosion002 (605172, -533159, -5879
+  in the sequence's space) put where the round lands, the rains and the rod's trail hidden, stopped impact_life_s on; any
+  failure (no player, the origin refused: never played at the cutscene's own spot) falls back to its systems at x12.
