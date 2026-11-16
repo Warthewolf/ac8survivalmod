@@ -107,6 +107,7 @@ SETTINGS = [
     ('AC8_DIR', "ACE COMBAT 8's install folder (holds Game/)", 'the build: the stock packages', True),
     ('AC8_PAKS', "the game's Paks folder (default AC8_DIR/Game/Content/Paks)", 'the build', True),
     ('AC8_MODS', "the game's ue4ss/Mods folder, where builds are installed (default from AC8_DIR)", 'installing', True),
+    ('AC8_SAVED', "the game's Saved folder: saves, crashes (default %LOCALAPPDATA%'s; tools/autotest)", 'optional', True),
     ('AC8_AES_KEY', "the game's AES key, 0x... (or AC8_AES_SETTINGS)", 'the build', False),
     ('AC8_AES_SETTINGS', 'a JSON file with an "aesKey" (instead of AC8_AES_KEY)', 'the build', True),
     ('LLVM_BIN', "LLVM's bin folder (default tools/llvm/LLVM/bin, else LLVM on PATH)", 'the native runtime', True),
