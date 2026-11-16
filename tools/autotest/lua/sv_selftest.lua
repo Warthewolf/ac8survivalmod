@@ -493,8 +493,8 @@ SUITES.tanacorn = function()
     end)
     -- (2026-11-16) the Spear strike's impact (Mission 25 day 1's cutscene set) from high and far, as the user's picture
     -- frames it: ~7 km off, 3.5 km up, as the fireball grows, then its dust
-    local function wideAt() return { X = AIRFIELD.X - 600000, Y = AIRFIELD.Y + 300000, Z = 350000 } end
-    local function wideOn() return { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 60000 } end
+    local function wideAt() return { X = 1609574 - 450000, Y = -435747 + 220000, Z = 110000 } end   -- (under the cloud deck: seq run 34)
+    local function wideOn() return { X = 1609574, Y = -435747, Z = 100000 } end
     A.picture("spear_impact_wide", wideAt, wideOn, 45)
     A.picture("spear_impact_dust", wideAt, wideOn, 45)
     A.log_("tanicorn rc: charge 2 at", 80, "m1", true, function(l)        -- shot down mid-charge: no impact
