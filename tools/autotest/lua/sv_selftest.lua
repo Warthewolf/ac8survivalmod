@@ -1221,6 +1221,52 @@ SUITES.bolt = function()
     end
     A.do_(function() ST.lookBack() end)
 end
+-- (2026-11-16) lightning bolts from AC8's own bolt meshes (runs 46-49: NS_CloudLightning draws no bolt, Mission 12's volume
+-- effects are discharges on a plane): SM_Thunder001 / 004 / SM_StraightLightning001 as a Movable StaticMeshActor, 4 km
+-- ahead of a fixed camera over the airfield, at three scales, shown 0.4 s then taken off; the storm night (conf night=1)
+SUITES.meshbolt = function()
+    intoRun()
+    local R = { X = 1609574, Y = -435747, Z = 500 }
+    local eye = { X = R.X, Y = R.Y, Z = 60000 }
+    local dir = { X = -0.7071, Y = -0.7071 }
+    local M = "/Game/VFX/ResourceAsset/Mesh/Lightning/"
+    A.do_(function()
+        if tostring(ST.conf.night) == "1" and IFSKY and IFSKY.step then IFSKY.step(3) end
+    end)
+    A.wait(tostring(ST.conf.night) == "1" and 12 or 0.5)
+    A.do_(function() ST.look(eye, { X = eye.X + dir.X * 1000000, Y = eye.Y + dir.Y * 1000000, Z = 100000 }, 60) end)
+    A.wait(2)
+    for _, k in ipairs({ { "SM_Thunder001_IE03", 30 }, { "SM_Thunder001_IE03", 100 }, { "SM_Thunder004_IE03", 100 },
+                         { "SM_StraightLightning001_IE03", 100 }, { "SM_Thunder006_IE04", 100 } }) do
+        local name, sc = k[1], k[2]
+        local B = {}
+        A.do_(function()
+            local mesh = loadObject(M .. name .. "." .. name)
+            local gs, cls = StaticFindObject("/Script/Engine.Default__GameplayStatics"), StaticFindObject("/Script/Engine.StaticMeshActor")
+            local at = { X = eye.X + dir.X * 400000, Y = eye.Y + dir.Y * 400000, Z = 150000 }
+            local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = at, Scale3D = { X = sc, Y = sc, Z = sc } }
+            local okB, a = pcall(function() return gs:BeginDeferredActorSpawnFromClass(ST.pc(), cls, t, 1, nil, 1) end)
+            if not (okB and a and valid(a) and mesh) then ST.info("meshbolt: " .. name .. " NOT spawned (mesh " .. tostring(mesh) .. ")"); return end
+            local c = a.StaticMeshComponent
+            pcall(function() c:SetMobility(2) end)
+            pcall(function() gs:FinishSpawningActor(a, t, 1) end)
+            pcall(function() c:SetMobility(2) end)
+            local okS = pcall(function() c:SetStaticMesh(mesh) end)
+            local mat = "?"
+            pcall(function() mat = c:GetMaterial(0):GetFullName() end)
+            local bx = "?"
+            pcall(function() local b = mesh:GetBounds(); bx = string.format("%.0f x %.0f x %.0f cm", b.BoxExtent.X * 2, b.BoxExtent.Y * 2, b.BoxExtent.Z * 2) end)
+            B.a = a
+            ST.info(string.format("meshbolt: %s x%d 4 km ahead: mesh set %s, material %s, its size %s", name, sc, tostring(okS), mat, bx))
+        end)
+        A.wait(0.15)
+        A.do_(function() ST.shot(string.format("meshbolt_%s_x%d", name, sc)) end)
+        A.wait(0.3)
+        A.do_(function() if B.a and valid(B.a) then pcall(function() B.a:K2_DestroyActor() end) end end)
+        A.wait(1.5)
+    end
+    A.do_(function() ST.lookBack() end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
