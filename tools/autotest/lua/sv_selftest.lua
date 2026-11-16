@@ -1456,6 +1456,47 @@ SUITES.beambolt = function()
         A.wait(2.5)
     end
 end
+-- (2026-11-16) a flash of our own in the storm clouds (run 53: a light inside them shows them; run 55: the stock cloud lights
+-- ramp up over seconds in their own colours): an engine PointLight, blue-white, km of radius, at three strengths, 6 km
+-- ahead and 3 km up, pictured at +0.1 and +0.3 s, then off; the storm night
+SUITES.pointflash = function()
+    intoRun()
+    A.do_(function() if IFSKY and IFSKY.step then IFSKY.step(3) end end)
+    A.wait(12)
+    for n, k in ipairs({ { 1e7, 6000 }, { 1e9, 6000 }, { 1e11, 8000 }, { 1e9, 15000 } }) do
+        local B = {}
+        A.do_(function()
+            local pl = ST.plane()
+            local gs, cls = StaticFindObject("/Script/Engine.Default__GameplayStatics"), StaticFindObject("/Script/Engine.PointLight")
+            local at = ST.frame(pl, 600000, (n % 2 == 0) and 200000 or -200000, 0)
+            at.Z = 300000
+            local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = at, Scale3D = { X = 1, Y = 1, Z = 1 } }
+            local okB, a = pcall(function() return gs:BeginDeferredActorSpawnFromClass(ST.pc(), cls, t, 1, nil, 1) end)
+            if not (okB and a and valid(a)) then ST.info("pointflash " .. n .. ": no light"); return end
+            pcall(function() gs:FinishSpawningActor(a, t, 1) end)
+            local c = a.PointLightComponent
+            local done = {}
+            for _, f in ipairs({
+                { "mobility", function() c:SetMobility(2) end },
+                { "colour", function() c:SetLightColor({ R = 0.75, G = 0.82, B = 1.0, A = 1.0 }, true) end },
+                { "radius", function() c:SetAttenuationRadius(k[2] * 100) end },
+                { "intensity", function() c:SetIntensity(k[1]) end },
+                { "source", function() c:SetSourceRadius(20000) end },
+            }) do done[#done + 1] = f[1] .. (pcall(f[2]) and "" or " NOT") end
+            local units = "?"
+            pcall(function() units = tostring(c.IntensityUnits) end)
+            B.a = a
+            ST.info(string.format("pointflash %d: intensity %.0e, radius %d m (units %s): %s", n, k[1], k[2], units, table.concat(done, ", ")))
+        end)
+        A.wait(0.1)
+        A.do_(function() ST.shot(string.format("pointflash_%d_a", n)) end)
+        A.wait(0.2)
+        A.do_(function() ST.shot(string.format("pointflash_%d_b", n)) end)
+        A.wait(0.2)
+        A.do_(function() if B.a and valid(B.a) then pcall(function() B.a:K2_DestroyActor() end) end end)
+        A.wait(2.5)
+    end
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
