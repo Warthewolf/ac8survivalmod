@@ -2194,6 +2194,120 @@ SUITES.cloudlit4 = function()
     end
     A.do_(function() cmd("ShowFlag.EyeAdaptation 2"); ST.lookBack() end)
 end
+-- (2026-11-17) 0.74.89's cloud flashes (the user: "Yeah test them"): the fleet's storm lights its clouds with Survival's own
+-- cloud light at some strikes (hard rule 70). The light up under the fade, the first cloud flash; pictures from your view,
+-- then from a still camera under the cloud base, then cloud flashes put in that camera's view (the storm's own paused).
+SUITES.cloudstorm = function()
+    intoRun()
+    local CS = {}
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and THUNDER ~= nil and THUNDER.cloudReady ~= nil, "the storm's cloud flashes are in this build") then return "abort" end
+        ST.marks.s0 = ST.n
+        IFSKY.step(3)
+    end)
+    A.log_("fleet storm: warm%-up under the black", 15, "s0", false, function(l)
+        ST.check(l ~= nil and l:find("its cloud light", 1, true) ~= nil, "the bolts, the rain and its cloud light warmed up under the fade", l)
+    end)
+    A.log_("cloud lightning %(the fleet's storm%): a cloud flash", 20, "s0", false, function(l)
+        ST.check(l ~= nil, "the storm's first cloud flash", l)
+    end)
+    for i = 1, 16 do
+        A.wait(0.6)
+        A.do_(function() ST.shot(string.format("cs_you_%02d", i)) end)
+    end
+    local eye = { X = 1610476, Y = -436143, Z = 120000 }
+    local tgt = { X = eye.X - 1000000, Y = eye.Y - 300000, Z = 300000 }
+    A.do_(function() ST.look(eye, tgt, 75) end)
+    for i = 1, 12 do
+        A.wait(0.6)
+        A.do_(function() ST.look(eye, tgt, 75); ST.shot(string.format("cs_under_%02d", i)) end)
+    end
+    -- cloud flashes put in the still camera's view, 6 km out in the cloud layer
+    local function cfg() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
+    A.do_(function()
+        local L = cfg()
+        CS.was = L.cloud and L.cloud.enabled
+        if L.cloud then L.cloud.enabled = false end
+    end)
+    A.wait(2.5)
+    for k, b in ipairs({ 200000, 400000 }) do
+        local at = { X = eye.X + (tgt.X - eye.X) * 0.6, Y = eye.Y + (tgt.Y - eye.Y) * 0.6, Z = 300000 }
+        A.do_(function() ST.look(eye, tgt, 75); ST.shot(string.format("cs_put_%d_0_before", k)) end)
+        A.wait(0.3)
+        A.do_(function()
+            local L = cfg()
+            local c = {}
+            for key, v in pairs(L.cloud or {}) do c[key] = v end
+            c.brightness, c.steps = b, { 1, 1, 1, 1, 1, 0.3, 0 }
+            local ok, what = pcall(THUNDER.cloudFlash, at, "effect", "the test", c)
+            ST.info(string.format("cloudstorm: a cloud flash put 6 km out in the camera's view at %d: %s", b, ok and tostring(what) or ("error " .. tostring(what))))
+        end)
+        for j, w in ipairs({ 0.3, 0.4, 0.5, 0.7, 1.0 }) do
+            A.wait(w)
+            A.do_(function() ST.look(eye, tgt, 75); ST.shot(string.format("cs_put_%d_%d", k, j)) end)
+        end
+        A.wait(1.5)
+    end
+    A.do_(function()
+        local L = cfg()
+        if L.cloud then L.cloud.enabled = CS.was end
+        ST.lookBack()
+        local n = 0
+        for i = ST.marks.s0 or 1, ST.n do
+            local l = ST.lines and ST.lines[i]
+            if l and l:find("a cloud flash (", 1, true) then n = n + 1 end
+        end
+        ST.info(string.format("cloudstorm: %d cloud flashes logged (of the first 60 lightning lines)", n))
+    end)
+end
+-- (2026-11-17) cloudview: run 69's storm flashes (150k-400k, 2-25 km round the centres) showed nothing clear in your view
+-- (auto exposure on, as you play). Here, from your own view, the storm's own cloud flashes paused: a flash put in your
+-- camera's view (4 km or 10 km ahead, at your height, in the layer you fly in), held ~2 s, pictured before / at 0.3, 0.8,
+-- 1.5 s / after; brightness 400k and 1M (its cap), radius 5 and 10 km.
+SUITES.cloudview = function()
+    intoRun()
+    local CV = {}
+    local function cfg() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and THUNDER ~= nil and THUNDER.cloudReady ~= nil, "the storm's cloud flashes are in this build") then return "abort" end
+        ST.marks.s0 = ST.n
+        IFSKY.step(3)
+    end)
+    A.log_("fleet storm: warm%-up under the black", 15, "s0", false, function(l)
+        ST.check(l ~= nil and l:find("its cloud light", 1, true) ~= nil, "its cloud light up under the fade", l)
+        local L = cfg()
+        CV.was = L.cloud and L.cloud.enabled
+        if L.cloud then L.cloud.enabled = false end
+    end)
+    A.wait(4)
+    local TRY = { { 4, 400000, 5000 }, { 4, 1000000, 5000 }, { 4, 400000, 10000 }, { 4, 1000000, 10000 }, { 10, 1000000, 10000 } }
+    for k, t in ipairs(TRY) do
+        local tag = string.format("cv_%d_%dkm_%dk_r%d", k, t[1], t[2] / 1000, t[3] / 1000)
+        A.do_(function() ST.shot(tag .. "_0_before") end)
+        A.wait(0.3)
+        A.do_(function()
+            local pcm, L, R
+            pcall(function() pcm = survivalPC.PlayerCameraManager; local v = pcm:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+            pcall(function() R = pcm:GetCameraRotation() end)
+            if not (L and R) then ST.info(tag .. ": no camera"); return end
+            local yw = math.rad(R.Yaw or 0)
+            local at = { X = L.X + math.cos(yw) * t[1] * 100000, Y = L.Y + math.sin(yw) * t[1] * 100000, Z = L.Z + 20000 }
+            local c = {}
+            for key, v in pairs(cfg().cloud or {}) do c[key] = v end
+            c.brightness, c.radius_m, c.steps = t[2], t[3], { 1, 1, 1, 1, 1, 1, 1, 1, 0 }
+            local ok, what = pcall(THUNDER.cloudFlash, at, "effect", "the test", c)
+            ST.info(string.format("%s: a cloud flash %d km ahead of your camera, 200 m over it: %s", tag, t[1], ok and tostring(what) or ("error " .. tostring(what))))
+        end)
+        for j, w in ipairs({ 0.3, 0.5, 0.7 }) do
+            A.wait(w)
+            A.do_(function() ST.shot(string.format("%s_%d_on", tag, j)) end)
+        end
+        A.wait(2.2)
+        A.do_(function() ST.shot(tag .. "_4_after") end)
+        A.wait(1)
+    end
+    A.do_(function() local L = cfg(); if L.cloud then L.cloud.enabled = CV.was end end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
