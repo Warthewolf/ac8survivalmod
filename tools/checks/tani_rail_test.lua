@@ -150,7 +150,8 @@ end
 local POSTS, AKPOSTS, RTPCS = {}, {}, {}
 local SNDLIB = { PostEventAtActorByName = function(_, name, actor) POSTS[#POSTS + 1] = { name = name, actor = actor, at = clock }; return #POSTS end }
 local AKLIB = { PostEventAtLocation = function(_, ev, where) AKPOSTS[#AKPOSTS + 1] = { ev = ev, where = where } end,
-                SetRTPCValue = function(_, rt, v, ms, actor, name) RTPCS[#RTPCS + 1] = { v = v, ms = ms, actor = actor, name = name } end }
+                -- (AC8's: (UAkRtpc*, Value, ms, Actor), no name: 0.74.72's five-argument call failed in game, 2026-11-16)
+                SetRTPCValue = function() error("UFunction::set: AkGameplayStatics.SetRTPCValue takes no RTPC name in AC8") end }
 local function posted(name, actor, from)
     local n = 0
     for i = from or 1, #POSTS do if POSTS[i].name == name and (actor == nil or POSTS[i].actor == actor) then n = n + 1 end end
@@ -232,9 +233,16 @@ local function railcannon(name, at, addr)
         return { X = at.X + 9131, Y = at.Y, Z = at.Z + 1566 }   -- (her bow along +X: the runway lies along it below)
     end
     function m:K2_GetComponentLocation() return { X = at.X, Y = at.Y, Z = at.Z } end
+    -- ((2026-11-16, the first in-game test) her AkComponent, the one her charge sound's post puts on her: the RTPC goes
+    -- there by name, UAkGameObject::SetRTPCValue(nil, Value, ms, RTPC); AC8's UAkGameplayStatics one takes no name)
+    local akc = {}
     local o = obj("BP_SV_Tani_RAILCANNON_C " .. name, { at = at, HealthInternal = 10000, MaxHealth = 1000,
         bShowHUDBox = true, bIsNotLockonTarget = false, bIsNotFCSTargets = false, bIsInvincible = false,
-        comps = { ["/Script/Engine.SkeletalMeshComponent"] = { m } } }, addr)
+        comps = { ["/Script/Engine.SkeletalMeshComponent"] = { m }, ["/Script/AkAudio.AkComponent"] = { akc } } }, addr)
+    function akc:SetRTPCValue(rt, v, ms, rtpcName)
+        if select("#", rt, v, ms, rtpcName) ~= 4 or type(rtpcName) ~= "string" then error("UFunction::set: AkComponent's SetRTPCValue") end
+        RTPCS[#RTPCS + 1] = { v = v, ms = ms, actor = o, name = rtpcName }
+    end
     function o:SetIsInvincible(v) self.inv = v end
     o.mesh = m
     return o

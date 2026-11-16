@@ -421,3 +421,32 @@ on HULLLIVE (Part_RAILCANNON, Part_RAILGUN_L, Part_RAILGUN_R); none is ordered a
   whether her discharge shows at our scale on SOC_Gun_01 and loops 30 s, the Cannon bank's events in Survival's level (ids
   above 0), the RTPC's signature, the beam at 10-50 km, and the TGT mark while it's shielded. Co-op: the joiners see the
   RAILGUN WARNING (forwarded) but none of the effects (TANI.rcFx, for a co-op message later: WP12).
+
+## The first in-game test (2026-11-16, 0.74.72, unattended: tools/autotest's tanacorn suite)
+The build 0.74.72 (feature/tanacorn-railguns + dev, TANI=1; the Tanicorn container 3f59134b2690...), run by the autotest
+gate on the user's PC with nobody at the controls (the fast path: OpenLevel from the main menu, your plane invincible on the
+DOWN autopilot, round 1 an hour away). 28 of 35 checks passed; the 7 failures are one cause. The run's folder:
+build/autotest/runs/20261116_194448_claude (verdict.txt, Survival's logs).
+- **Ctrl+L**: the live hull up (36 objects), all 35 live parts seen, the armour on every part at +0.1 s (`35 of 35 parts
+  ... no death blast, none set off by a neighbour's`), the hull bCanBeDamaged false / bIsInvincible true read back.
+- **No death chain (the tester's "if the Tanacorn is hit, everything immediately dies")**: Part_T5_1 finished off, 4 s on
+  no other part hurt and the hull at 50000 / 50000; the same for Part_VLSS_L1. Stage 1 / 2 work in game.
+- **The railguns: route (i) fails.** Both lifts read back z 0 cm (up) after the writes, but SOC_Gun_01 stayed at -196 cm
+  as drawn (stowed) after two writes: `RAILGUN_L NOT ordered: SOC_Gun_01 still z -196 cm in the mesh as drawn after 2
+  writes, its lift z 0 cm (written, not drawn?)`. Lua's SetBoneTransformByName on the TurretPoseableMesh reads back what
+  it wrote in the same tick, but the drawn pose doesn't take it (the arm's LauncherBoneControl poses that mesh every frame
+  [I]). No gun ordered, none fired (the safety rule held: a gun inside the hull isn't ordered). Next: route (iv).
+- **The railcannon (Ctrl+H) works whole**: its Deploy played on the skeletal TurretMesh moved the DRAWN socket (SOC_Gun_01
+  1559 -> 3454 cm, +19.0 m: a Lua-played animation on a child actor's skeletal mesh does redraw), the shield off, health 8
+  missiles (3200), charge 1 with the RAILGUN WARNING and its discharge on SOC_Gun_01, SHOT 1 at +33.8 s (muzzle fx 2 of 2,
+  the streak beam), impact 1 on the runway 0.5 s later (AF.bomb 0 -> 100, the airfield 250 -> 150, impact fx 6 of 6, the
+  shake), charge 2 at +93.9 s, finished off in it: `TANACORN RAILCANNON DOWN / THE AIRFIELD IS SAFE`, its warning and
+  effects off, no impact from that charge, the cycle over. The hull's health 50000 through the whole test.
+- **Errors found** (fixed on this branch after the run, or for the plan):
+  1. `RTPC EX03_CANNON_CHARGE: SetRTPCValue failed: sv_tanicorn_rail.lua:530: [UFunction::set ...`: AC8's
+     UAkGameplayStatics::SetRTPCValue takes (UAkRtpc*, float Value, int32 InterpolationTimeMs, AActor*) (the header dump:
+     build/liveproject/Source/AkAudio/Public/AkGameplayStatics.h:90), no RTPC name: the call passed five.
+  2. `radio not said` at both charges: TELL.say("alcn_rail_first" / "alcn_rail") gave nothing in this run.
+  3. The barrel 179 deg off the line to the runway: Ctrl+L spawns her broadside to you, and her railcannon is fixed along
+     her bow, so the test's shot leaves the muzzle away from the airfield (the round is scripted to the runway anyway). In
+     round 30 the fleet's course points her bow at the airfield (WP7); for the test only, not a bug.

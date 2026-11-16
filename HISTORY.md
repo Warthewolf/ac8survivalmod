@@ -3172,3 +3172,27 @@ game. The work was split by file between agents; the builds ran in sequence in t
   AC8SurvivalMode_COOP2MP_0.74.70_Online_COOP_ZFA44.zip (46.9 MB, 102 files; SurvivalMode_P, Valka, ZFA44, Laser7
   containers), build hash 0aea0a694202..., registered; zip_leak_test passed (no Tanicorn, DEV ONLY, TEST ONLY or
   Distant Thunder). Not installed. Not yet run in game.
+
+## 0.74.72-coop2mp.164: THE TANACORN's railguns line, tested in game by the autotest (2026-11-16, runtime 0.32.36)
+- feature/tanacorn-railguns (stage 4: the sub-railguns and the bow railcannon, f9f0d70 and before) with dev merged
+  (0.74.69-0.74.70: PRs #5-#7, WEAPON BAYS, the STORE crash fix); 0.74.68 was never built, 0.74.71 is the soak build:
+  this one is 0.74.72. `TANI=1 ZFA=1 sh tools/build_all.sh` (tani_container 3f59134b2690...: all 17 classes, the hull
+  importing its 16 parts; the leaderboard address in), `TANI=1 VALKA=1 ZFA=1 sh tools/package_dev.sh 0.74.72` ->
+  build/release/stage_dev_0.74.72, build hash 5d276bcd63e1..., registered. Not installed for play.
+- Run unattended by tools/autotest (branch tools/ac8-autotest; the user's yes of 2026-11-16) on her PC: smoke 5/5, the
+  tanacorn suite 28/35 (docs/re/TANICORN.md "The first in-game test"): her armour and no death chain WORK (a T5 and a VLS
+  block finished off, nothing else hurt, the hull 50000 throughout: the tester's "everything immediately dies" fixed); the
+  railcannon's whole cycle WORKS (Deploy drawn +19.0 m, charge with the RAILGUN WARNING, the shot, the airfield 250 -> 150,
+  shot down mid-charge: no impact, TANACORN RAILCANNON DOWN); the railguns DON'T: the Lua-written lift reads back up but
+  SOC_Gun_01 stays stowed as drawn, so neither is ordered (route (i) fails; route (iv) next). The fleet suite: see below.
+- Fixed after the run (Lua, for the next build): the railcannon's charge RTPC (AC8's AkGameplayStatics.SetRTPCValue takes
+  no RTPC name: the name now goes to her AkComponent, UAkGameObject::SetRTPCValue), the radio line's log says why it wasn't
+  said; tani_rail_test's stubs to AC8's signatures (all passed, the release copy too).
+- INVINCIBLE FLEET's first in-game run (WP7, Ctrl+N, the autotest's fleet suite on 0.74.72: 12/12): the 13 named ships'
+  rows in at the main menu; all 15 ships up with their 48 parts at the course start, GEOFON 30.5 km north-west of the
+  runway (bearing 315); every box named (GEOFON / CARRIER, RAVEN / AEGIS, BELUGA / BATTLECRUISER, KOLGA / DESTROYER, the
+  frigates; the pickets their class's); every ship under way at 45 km/h heading 135, the rings at 0.6 / 1.5 / 3.5 / 5 km
+  from GEOFON and every ship within 29 m of its spot after a minute; the artillery firing (vessel guns, BELUGA's howitzer)
+  at your plane ~34 km off; Ctrl+N again took the fleet off (15 units, RE_SV_IFFleetRemove 1, 15 of 63 objects finished
+  off) with no crash (WP7's risk: the take-off's destroy on objects just killed). Run folder
+  build/autotest/runs/20261116_195346_claude.

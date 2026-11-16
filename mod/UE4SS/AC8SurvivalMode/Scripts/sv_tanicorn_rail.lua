@@ -523,12 +523,22 @@ local function chargeAlive(e)                             -- its discharge still
     local ok, a = pcall(function() return e.c:IsActive() end)
     return not ok or a ~= false
 end
-local function rtpc(c, v)                                 -- her cannon's charge RTPC on her: true, or false and why
+-- her cannon's charge RTPC on her: true, or false and why. (2026-11-16, the first in-game test: AC8's
+-- UAkGameplayStatics::SetRTPCValue takes (UAkRtpc*, Value, InterpolationTimeMs, Actor), no name, so the name went to the
+-- AkComponent that her charge sound's post puts on her: UAkGameObject::SetRTPCValue(nil, Value, ms, RTPC name), a UFUNCTION;
+-- build/liveproject/Source/AkAudio/Public/AkGameObject.h:45)
+local AKC = "/Script/AkAudio.AkComponent"
+local function rtpc(c, v)
     local snd = c.sound or {}
-    local ak = StaticFindObject(AK)
-    if not valid(ak) then return false, "AkGameplayStatics not found" end
-    local ok, err = pcall(function() ak:SetRTPCValue(nil, v, 250, RC.o, FName(snd.rtpc or "EX03_CANNON_CHARGE")) end)
-    if ok then return true end
+    local name = snd.rtpc or "EX03_CANNON_CHARGE"
+    local list = (SPC and SPC.V and SPC.V.comps) and SPC.V.comps(RC.o, AKC) or {}
+    if #list == 0 then return false, "no AkComponent on her (her charge sound not posted yet?)" end
+    local err
+    for _, comp in ipairs(list) do
+        local ok, e = pcall(function() comp:SetRTPCValue(nil, v, 250, name) end)
+        if ok then return true end
+        err = e
+    end
     return false, tostring(err):sub(1, 80)
 end
 local function damageOf(c)                                -- the shot's damage: of the airfield's CFG.airfield.hp, scaled to its max
@@ -648,8 +658,9 @@ local function chargeStart()
     if c.radio ~= false then
         radio = "not said"
         if TELL and type(TELL.say) == "function" then
-            local okT, said = pcall(TELL.say, R.n == 1 and "alcn_rail_first" or "alcn_rail", TELL.ALL)
-            if okT and said == true then radio = "said" end
+            local okT, said, why = pcall(TELL.say, R.n == 1 and "alcn_rail_first" or "alcn_rail", TELL.ALL)
+            if okT and said == true then radio = "said"
+            else radio = "not said (" .. tostring(okT and why or said) .. ")" end   -- ((2026-11-16) its why, the test's "not said")
         end
     end
     local e, where = chargeFx(c)

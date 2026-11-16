@@ -776,7 +776,9 @@ Status: not started. Depends on: WP4, WP5.
   wreck, fires, becomes targetable.
 
 ### WP7. The fleet: ships, names, course
-Status (2026-11-12): first steps built, not yet run in game: docs/design/INVINCIBLE_FLEET_WP7.md (the research: which
+Status (2026-11-16): first steps RUN IN GAME by the autotest (0.74.72, HISTORY.md): all 15 ships up with their 48 parts,
+named, under way at 45 km/h in formation (within 29 m of their spots), firing, taken off with no crash. Before that
+(2026-11-12): first steps built: docs/design/INVINCIBLE_FLEET_WP7.md (the research: which
 classes Survival's world data has, Mission 22's enemy fleet never spawned; the 15 one-ship units SV_Unit_IF<Key>, the 13
 named ships on their own model and hull rows, the rings, the course lanes, Ctrl+N's test and its lines). Still to do: the
 supply ship, GEOFON's deck and AEGIR, the allies, the names in subtitles.ini, the builder shared with the Spaceport's.
