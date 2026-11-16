@@ -49,8 +49,10 @@ testKey("S", "sv_fleet.lua's night storm now", function()                     --
     hudCallout("TEST: NIGHT STORM", on and "THE FLEET'S NIGHT, ITS STORM COMING" or "THE ROUND'S OWN SKY BACK")
 end)
 -- the thunder (stc().thunder, sv_fleet.lua's note): AC8's booms and rumble, loaded and pinned (as the Anomaly's sounds),
--- one queued after a strike's distance and posted by name on your controller (THUNDER.post); Ctrl+J plays each in turn
-local TH = { q = {}, got = {} }
+-- one queued after a strike's distance and played at your camera with Wwise's PostEventAtLocation on the event itself
+-- (the way Survival's heard sounds go: sv_escort_laser.lua, sv_fleet.lua's GEOFON; 0.74.92-0.74.93 posted them by name,
+-- LiveSoundBlueprintLibrary.PostEventByName, and the user heard none, run 77); Ctrl+J plays each in turn
+local TH = { q = {}, got = {}, ev = {} }
 local function thName(path) return path:match("([^/]+)$") end
 local function thLoad(c)
     local k = 0
@@ -59,7 +61,7 @@ local function thLoad(c)
             local name = thName(path)
             if not TH.got[name] then
                 local o = loadObject(path .. "." .. name)
-                if o then pin(o, name); TH.got[name] = true end
+                if o then pin(o, name); TH.got[name], TH.ev[name] = true, o end
             end
             if TH.got[name] then k = k + 1 end
         end
@@ -79,12 +81,29 @@ local function thQueue(at, now)
     TH.q[#TH.q + 1] = { at = now + d, name = name }
     return string.format("; thunder %s in %.1f s (%.1f km)", name, d, km)
 end
+local function thPlay(name)                                -- (two signatures tried, the first that works kept)
+    local ev, ak = name and TH.ev[name], StaticFindObject("/Script/AkAudio.Default__AkGameplayStatics")
+    if not ev then return "NOT played (" .. tostring(name) .. " not loaded)" end
+    local L
+    pcall(function() local v = survivalPC.PlayerCameraManager:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+    if not (L and valid(ak) and liveObj(survivalPC)) then return "NOT played (no camera, Wwise or player controller)" end
+    local rot = { Pitch = 0, Yaw = 0, Roll = 0 }
+    local tries = { function() return ak:PostEventAtLocation(ev, L, rot, survivalPC) end,
+                    function() return ak:PostEventAtLocation(ev, L, rot, "", survivalPC) end }
+    local errs = {}
+    for i = (TH.way or 1), (TH.way or #tries) do
+        local ok, err = pcall(tries[i])
+        if ok then TH.way = i; return "played" end
+        errs[#errs + 1] = tostring(err)
+    end
+    return "NOT played (" .. table.concat(errs, "; "):sub(1, 120) .. ")"
+end
 local function thTick(now)
     for i = #TH.q, 1, -1 do
         if now >= TH.q[i].at then
-            local r = THUNDER and THUNDER.post and THUNDER.post(TH.q[i].name) or "no THUNDER.post"
+            local r = thPlay(TH.q[i].name)
             TH.n = (TH.n or 0) + 1
-            if TH.n <= 3 or r ~= "posted" then log(string.format("fleet storm: thunder %d: %s %s", TH.n, TH.q[i].name, tostring(r))) end
+            if TH.n <= 3 or r ~= "played" then log(string.format("fleet storm: thunder %d: %s %s", TH.n, TH.q[i].name, tostring(r))) end
             table.remove(TH.q, i)
         end
     end
@@ -97,7 +116,7 @@ testKey("J", "sv_fleet_storm.lua's thunder sounds", function()                --
     local loaded = thLoad(c)
     TH.k = (TH.k or 0) % #all + 1
     local name = thName(all[TH.k])
-    local r = THUNDER and THUNDER.post and THUNDER.post(name) or "no THUNDER.post"
+    local r = thPlay(name)
     hudCallout(string.format("TEST: THUNDER %d/%d", TH.k, #all), name:upper())
     log(string.format("fleet storm: Ctrl+J thunder %d of %d (%s): %s (%s; %d of %d loaded)", TH.k, #all,
         TH.k <= #(c.near or {}) and "near" or "far", name, tostring(r), loaded, #all))
@@ -155,7 +174,7 @@ local function trTick(now)
         if not t.on and IFSKY.leaving then IFSKY.leaving = nil; IFSKY.step(nil) end   -- (Ctrl+S's day, unseen)
         local okL, what = pcall(THUNDER.layoutSet, t.on, t.on and "INVINCIBLE FLEET's night storm" or "INVINCIBLE FLEET's storm clearing")
         pcall(THUNDER.post, t.on and snd.distant or snd.distant_stop)
-        if t.on and snd.clap then pcall(THUNDER.post, snd.clap) end
+        if t.on and snd.clap then pcall(thPlay, snd.clap) end
         t.phase, t.at, t.what = "hold", now + n(c.hold_s, 0.8), okL and what or ("error " .. tostring(what))
     elseif t.phase == "hold" then
         warmOff()
@@ -227,7 +246,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet storm", fn = function(now)
     if SW.on and not SW.tr then lightTick(now) end
 end }
 if type(LEVEL_DROPS) == "table" then                       -- (the level's: its Cloudly actor and lights went with it)
-    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving, TH.q, TH.got = nil, nil, {}, {} end
+    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving, TH.q, TH.got, TH.ev = nil, nil, {}, {}, {} end
 end
 end
 -- TEST ONLY END

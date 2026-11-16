@@ -3415,3 +3415,18 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - storm.lightning.cloud.brightness 0.8-2M (max 3M), radius 5 km: 165k-365k were unseen in the user's flight of 0.74.91.
   Run 76 (storm92, 13/13 as run 74): flashes of 1.2-1.9M fired, no blackout from your view or the still camera; their
   glow still not seen in the pictures. The install into her game was stopped by auto mode's check: waits for her word.
+
+## 0.74.94 (2026-11-17; a test build, staged, not installed): the thunder played as Survival's heard sounds (feature/fleet-storm)
+- The user watched runs 77-83 on screen ("Keep testing and I'll watch the screen").
+- Run 77 (watch93, 0.74.93): none of 9 cloud flashes (0.4M-8M, 1.5-6 km ahead) lit a cloud; none of the 4 thunder sounds was
+  heard: 0.74.92-0.74.93 posted them by name (LiveSoundBlueprintLibrary.PostEventByName), which plays only what the game
+  registers. 0.74.94 keeps the loaded events and plays them with AkGameplayStatics.PostEventAtLocation at your camera, the
+  way Survival's heard sounds go (sv_escort_laser.lua, GEOFON's); run 78: all four "played" (the user wasn't listening).
+- Run 78 also flashed the whole sky five ways; the moonlight x30 with the sky light x30 lit the cloud round the plane
+  grey-blue. The user: "you need to be having the cloud light work, not changing the moonlight or anything": not used.
+- Cloudly's effect light, its values reaching the drawn copy every tick, lit nothing in Survival's level in any of: its
+  position in cm, m or km and radius to match (run 79); with ForceUpdate / ForceUpdateAO / ForceUpdateShadows /
+  ClearReprojectionHistory every tick, and Mission 12's own light so (run 80); by day, orange, our light and Mission 12's
+  (run 81); r.Cloudly.QualityLevel 0-4 (the game runs 1; run 82); every sg.* at 3 and Cloudly at 3, day and storm night
+  (the game runs sg 1; run 83). Survival's Cloudly actor (Mission 4's lighting sublevel) is set like Missions 9, 12 and
+  22's. Open: whether AC8's own cloud lights show in their own missions (Mission 12's Podarge, Mission 22's shuttle).
