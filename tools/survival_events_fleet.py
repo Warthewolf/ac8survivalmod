@@ -255,6 +255,11 @@ def build_fleet(g, flag, stock_ep):
     t_spath = g.exec_template('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[0] == 'AC_Obj_01_Ship1_aegs_0')
     t_upath = g.exec_template('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[1] == 'AC_Unit_01_Ship1')
     t_remove = g.exec_template('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
+    # ((2026-11-16) the pool's air-only switch (Mission 22's appearance record: arg 1 the unit, arg 3 AIR_ONLY): with the
+    # PlayerOnlyNoLimit orders the ships' missiles homed on you, their guns (the Aegis Mk 45, BELUGA's howitzer) still on
+    # the runway's target points (autotest run 26: 21 / 12); the airfield's shelling is WP13's (GROUND_ONLY at the gun line)
+    t_search = g.exec_template('LiveAIChangeEnemySearchType', '01_E_AreaA_ReinforcementAppearance_0')
+    assert arg_values(t_search)[3] == 'AIR_ONLY', arg_values(t_search)
     assert arg_values(t_seng)[3] == 'Normal' and arg_values(t_part)[3] == 'Normal' and arg_values(t_part)[6] == 'PlayerFirst'
     assert arg_values(t_spath)[1] == 'NoneSelect' and arg_values(t_upath)[0] == 'NoneSelect', (arg_values(t_spath), arg_values(t_upath))
     float(arg_values(t_spath)[4]); float(arg_values(t_upath)[4])          # (arg 4: the speed, km/h)
@@ -268,6 +273,7 @@ def build_fleet(g, flag, stock_ep):
             # ((2026-11-16) its priority too: Mission 22's ship order says Default, and with it 20 of 25 rounds in flight
             # still homed on the runway's points after the parts' PlayerOnlyNoLimit (autotest run 25); her hull has none)
             g.execute(t_seng, ev, {0: 'NoneSelect', 1: s['unit'], 6: IF_PART_PRIORITY}, delay=2.0)
+            g.execute(t_search, ev, {1: s['unit']}, delay=2.0)
             for p in s['parts']:                                         # ((2026-11-16) the players only:
                 g.execute(t_part, ev, {0: p, 6: IF_PART_PRIORITY}, delay=2.5)   # PlayerFirst shelled the runway's points)
                 parts += 1

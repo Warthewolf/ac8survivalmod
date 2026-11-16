@@ -365,9 +365,11 @@ def check_fleet_build():
         kinds[cls] = kinds.get(cls, 0) + 1
         if cls == 'LiveAIPathExecution':
             assert args[2] in paths and (args[0] in objs or args[1] in units) and float(args[4]) == float(se.IF_SPEED), (ev, args[:5])
+        elif cls == 'LiveAIChangeEnemySearchType':                    # ((2026-11-16) each unit air-only: its guns on you)
+            assert args[1] in units and args[3] == 'AIR_ONLY', (ev, args[:4])
         else:
             assert cls in ('LiveAIEngagementOrder', 'LiveDestroyUnitExecution') and any(a in objs or a in units for a in args[:3]), (ev, cls, args[:3])
-    want_ex = sum(2 * (2 + 1 + len(s['parts'])) for s in fleet) + len(fleet)
+    want_ex = sum(2 * (2 + 1 + 1 + len(s['parts'])) for s in fleet) + len(fleet)   # (paths 2, order 1, search 1, parts)
     assert n_ex == want_ex, (n_ex, want_ex)
     print(f'  invincible fleet: {len(fleet)} units, {sum(len(s["parts"]) for s in fleet)} parts, {len(fleet)} lanes, '
           f'{len(events)} events ({n_ex} execs: ' + ', '.join(f'{k} {n}' for k, n in sorted(kinds.items()))

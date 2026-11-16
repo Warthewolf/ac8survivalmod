@@ -50,7 +50,9 @@
 do
 -- ((2026-11-16, route (iv)) deploy_s: its LiftMesh's Deploy (2.167 s, the lift's end) played out; raised_cm: SOC_Gun_01 over
 -- the part's actor (stowed ~-196, raised ~+404); writes: the plays of its Deploy before it's left in
-TANI.railgun = { after_s = 3, deploy_s = 2.6, raised_cm = 300, writes = 2, move_s = 8, move_deg = 2, tries = 4, check_s = 5 }
+-- ((2026-11-16) tries 4 -> 10: the barrels take 15 s to over 33 s to start turning after the order (autotest runs 23 and
+-- 27: run 27's were still at rest after 4 orders, at yaw 66 / pitch 39 by +85 s), so ~80 s of re-orders and watching)
+TANI.railgun = { after_s = 3, deploy_s = 2.6, raised_cm = 300, writes = 2, move_s = 8, move_deg = 2, tries = 10, check_s = 5 }
 local ORDER = { RAILGUN_L = "RE_SV_TaniRailOrderL", RAILGUN_R = "RE_SV_TaniRailOrderR" }   -- (the build's remote events)
 local MUZZLE = "SOC_Gun_01"
 local FLAGS0 = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
