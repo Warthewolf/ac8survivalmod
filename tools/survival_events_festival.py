@@ -184,6 +184,7 @@ TANI_HULL_LIVE_BP_CLASS = 'BP_SV_Tani_HULLLIVE_C'
 TANI_HULL_LIVE_NAME_KEY = 'SV_TaniHullLive_Name'   # (its box: TANACORN, Lua's text)
 TANI_HULL_LIVE_UP = 'SV_TaniUpHullLive'            # (the hull's appearance: each part's order)
 TANI_LIVE_ORDER_S = 2.5
+TANI_LIVE_PRIORITY = 'PlayerOnlyNoLimit'   # (2026-11-16) her parts' order: Mission 16's PlayerFirst shelled the runway's points
 TANI_PKG = '/Game/Mods/SurvivalMode/Tanicorn'      # (the container's folder: no import under it without TANI_WD)
 # each mount type's sockets on the hull (tools/tanicorn's export: the hull's Mount_<socket>), in its parts.json order
 # ((2026-11-12) and the VLS blocks': the deck block's 8 (VLSD_1..8, one type), each side block its own type and socket)
@@ -559,9 +560,12 @@ def build_tanicorn(g, stock_ep):
     # (2026-11-11, WP2 step 2) the live hull's parts (TANI_LIVE): each its own order by name TANI_LIVE_ORDER_S after the hull
     # appears, as the Spaceport's turrets get theirs (build_spaceport); names only, so in every build
     g.trigger('01_E_AreaA_ReinforcementAppearance_0', TANI_HULL_LIVE_UP, arg_changes={0: TANI_HULL_LIVE_UNIT})
+    # ((2026-11-16) TANI_LIVE_PRIORITY, as the pool's fighters are ordered: Mission 16's PlayerFirst let her guns pick the
+    # runway's target points (BP_GR000_dummy_CP: every shell of the autotest's run 20261116_202906_claude); the design's
+    # airfield shelling is WP13's, from the gun line, and the railcannon's)
     ordered = [p for p in TANI_LIVE if not p['rail']]
     for p in ordered:
-        g.execute(t_part, TANI_HULL_LIVE_UP, {0: p['obj']}, delay=TANI_LIVE_ORDER_S)
+        g.execute(t_part, TANI_HULL_LIVE_UP, {0: p['obj'], 6: TANI_LIVE_PRIORITY}, delay=TANI_LIVE_ORDER_S)
     # ((2026-11-12, stage 4) the rail parts never at the hull's +2.5 s: each railgun stowed 6 m inside the hull until
     # Scripts/sv_tanicorn_rail.lua raises it and fires its own remote event (TANI_RAIL_ORDER_EVENTS); the railcannon (no
     # arms) never ordered: its shot is Lua's)
@@ -569,9 +573,9 @@ def build_tanicorn(g, stock_ep):
         ev = p['rail'] and TANI_RAIL_ORDER_EVENTS.get(p['part'])
         if ev:
             g.trigger('RE_SpawnEnemy_kokatu_1st', ev)                     # (a remote event Lua fires)
-            g.execute(t_part, ev, {0: p['obj']}, delay=0.3)
+            g.execute(t_part, ev, {0: p['obj'], 6: TANI_LIVE_PRIORITY}, delay=0.3)
     print(f'  tanicorn: {TANI_HULL_LIVE_UNIT}\'s {len(ordered)} of {len(TANI_LIVE)} live parts ordered by name '
-          f'{TANI_LIVE_ORDER_S} s after it appears ({TANI_HULL_LIVE_UP}: Normal, PlayerFirst); the railguns each on its '
+          f'{TANI_LIVE_ORDER_S} s after it appears ({TANI_HULL_LIVE_UP}: Normal, {TANI_LIVE_PRIORITY}); the railguns each on its '
           f'own remote event ({", ".join(sorted(TANI_RAIL_ORDER_EVENTS.values()))}), the railcannon never'
           + ('' if TANI_WD else '; names only: this build has no live parts (TANI unset)'))
 

@@ -3193,7 +3193,8 @@ game. The work was split by file between agents; the builds ran in sequence in t
   runway (bearing 315); every box named (GEOFON / CARRIER, RAVEN / AEGIS, BELUGA / BATTLECRUISER, KOLGA / DESTROYER, the
   frigates; the pickets their class's); every ship under way at 45 km/h heading 135, the rings at 0.6 / 1.5 / 3.5 / 5 km
   from GEOFON and every ship within 29 m of its spot after a minute; the artillery firing (vessel guns, BELUGA's howitzer)
-  at your plane ~34 km off; Ctrl+N again took the fleet off (15 units, RE_SV_IFFleetRemove 1, 15 of 63 objects finished
+  (at the runway's target points, BP_GR000_dummy_CP, as the weapons lines say: corrected 2026-11-16; only the Aegis's
+  Mk 41 VLS fired at the player); Ctrl+N again took the fleet off (15 units, RE_SV_IFFleetRemove 1, 15 of 63 objects finished
   off) with no crash (WP7's risk: the take-off's destroy on objects just killed). Run folder
   build/autotest/runs/20261116_195346_claude.
 

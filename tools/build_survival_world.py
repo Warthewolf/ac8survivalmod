@@ -332,6 +332,10 @@ def tanicorn_live_unit(units, used_ids, z, top_number, src):
     u = unit_named(units, se.TANI_HULL_LIVE_UNIT)
     clear_flags(u, ('bIsLanding',))
     place(u, (0.0, 0.0, 0.0), 0.0)
+    # (2026-11-16) the ships' area (45 km, 0-15 km high): the scored dummy's own is 1.5 km and 500 m up, and her parts
+    # engage only inside it: the autotest's plane 5 km off was never fired at (her guns shelled the runway's target points
+    # when she spawned within ~1.5 km of them: run 20261116_202906_claude, the only one of seven that fired)
+    unit_area(u, se.SP_SHIP_AREA_M, se.SP_SHIP_ALT_M)
     ob = objects_of(u)[0]
     put(ob[2], 'LiveAIObjectDesc', 'bIgnoreMeshOptimize', ('raw', 'Bool', b'\x01'))
     put(ob[2], 'LiveAIObjectDesc', 'bIgnoreSetAutoSkipUpdateTransform', ('raw', 'Bool', b'\x01'))

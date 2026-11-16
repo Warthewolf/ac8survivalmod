@@ -471,7 +471,21 @@ Deploy on a skeletal mesh had drawn its +19 m, so the railgun's lift and hatches
   played again if it fell back; no LiftMesh (a container cooked before this): NOT ordered. tani_rail_test rewritten for it
   (all passed, the release copy too).
 
-## Her live mounts don't aim (2026-11-16, the autotest's runs 12-19)
+## Her live mounts don't aim (2026-11-16, the autotest's runs 12-20): her unit's area, not the parts
+- THE ANSWER (a research pass over every run's log, 2026-11-16): her parts aim and fire. In run 20261116_202906_claude
+  (0.74.74, everything of stage 4 in) T16_FWD turned to yaw 179.3 (rest 71-75), CIWS_1 to -101.2 (rest 175-179), CIWS_2 to
+  -102.3, 23 T16 shells and 336 VLS launches went off (the `weapons:` lines), every one at BP_GR000_dummy_CP, the
+  runway's target points; none at the player. Her hull's unit is Mission 13's scored dummy (tanicorn_live_unit,
+  port_unit), and it kept that unit's area: RadiusInMeter 1500, MinAltitudeInMeter 500. Her parts engage only inside it
+  (as every ship's: unit_area's note): that run's hull spawned 1.31 km from the runway, the other six 1.71-2.04 km, and
+  the autotest's plane circles ~5 km off. Their order (Mission 16's PlayerFirst) let them pick the runway's points.
+  The user flew close to her (and the test mounts, the same 1.5 km unit) and saw them aim (2026-11-16: "They were aiming
+  before we started working on the railgun"). So the notes below (bone posing not taking, the ticks) were wrong.
+- The fix (0.74.77): the ships' area on her unit (unit_area 45 km, 0-15 km high: build_survival_world.py
+  tanicorn_live_unit) and her parts' orders PlayerOnlyNoLimit (TANI_LIVE_PRIORITY, the railguns' too): the airfield's
+  shelling is WP13's, from the gun line, and the railcannon's. INVINCIBLE FLEET's parts the same (IF_PART_PRIORITY):
+  their guns had shelled the runway's points too.
+- The old notes, for the record:
 - In every run on her live hull (Ctrl+L) every gun mount's barrel sat at its rest angle the whole run (T16_FWD yaw ~74
   pitch 0, CIWS_1 ~178 / -29.1, LASER_FWD_L 99 / 15.8: the same at every 5 s line) and no T5 / T16 / CIWS / LASER shell
   was seen, whether your plane was invincible (runs 12-18) or shootable with a health floor (run 19: plane=floor).

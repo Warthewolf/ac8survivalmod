@@ -122,6 +122,8 @@ IF_TURN_KM, IF_LEG_KM, IF_LAPS = 2.0, 8.0, 2
 IF_STEP_KM, IF_ARC_DEG = 2.0, 20.0
 IF_SPEED = '45.0'                                # km/h, every ship (the path record's speed)
 IF_LEAD_M = 500.0
+IF_PART_PRIORITY = 'PlayerOnlyNoLimit'   # (2026-11-16) each part's order: PlayerFirst shelled the runway's target points; the
+                                         # airfield's shelling is WP13's, from the gun line
 IF_AREA_M, IF_ALT_M = SP_SHIP_AREA_M, SP_SHIP_ALT_M   # each unit's area (45 km: the whole course and the airfield)
 IF_COAST_KM = 3.0                                # no lane point nearer a land tile (COMONA_MAP.md 3's 22 tiles)
 IF_LAND_TILES = ['B14', 'B15', 'B16', 'C12', 'C13', 'C14', 'C15', 'D05', 'D06', 'D10', 'D11', 'D12', 'D13',
@@ -264,11 +266,11 @@ def build_fleet(g, flag, stock_ep):
             g.execute(t_spath, ev, {0: s['obj'], 2: s['path'], 4: IF_SPEED}, delay=1.0)
             g.execute(t_upath, ev, {1: s['unit'], 2: s['path'], 4: IF_SPEED}, delay=1.0)
             g.execute(t_seng, ev, {0: 'NoneSelect', 1: s['unit']}, delay=2.0)
-            for p in s['parts']:
-                g.execute(t_part, ev, {0: p}, delay=2.5)
+            for p in s['parts']:                                         # ((2026-11-16) the players only:
+                g.execute(t_part, ev, {0: p, 6: IF_PART_PRIORITY}, delay=2.5)   # PlayerFirst shelled the runway's points)
                 parts += 1
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_IFFleetRemove')
     for s in fleet:
         g.execute(t_remove, 'RE_SV_IFFleetRemove', {0: 'NoneSelect', 1: s['unit'], 2: 'NoneSelect'})
     print(f'  invincible fleet: {len(fleet)} ships (SV_IFUp<Key> / RE_SV_IFGo<Key>: each on its lane at {IF_SPEED} km/h, '
-          f'Normal; {parts // 2} parts ordered Normal / PlayerFirst), RE_SV_IFFleetRemove')
+          f'Normal; {parts // 2} parts ordered Normal / {IF_PART_PRIORITY}), RE_SV_IFFleetRemove')
