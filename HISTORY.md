@@ -3292,3 +3292,6 @@ game. The work was split by file between agents; the builds ran in sequence in t
   deg, its tip ~120 m at most; the breach's 10 of 10 effects and its sound, the slam's 13 foam, 26 pillars and 12 big
   splashes and its shake, 97 of 97 effects in all (each stopped 8 s on); the rise over with your view, autopilot,
   invincibility and the attack limits put back. Its cinematic pictured through its own camera.
+- Her rise with her guns live (Ctrl+L then Ctrl+R; the riselive suite, run 37: 15/15): the live hull already up rises
+  where it is on the same rig (200.8 m under to +0.9 m), all 35 parts still there after it and each on its socket (70
+  live-watch readings), her armour holds, and her T16's rounds in flight home on you after it (10 of 10, none at the runway).
