@@ -40,7 +40,8 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
     local TARGET_MAX = 256
     function SVP.target(actor, opts)
         local p = PLUGINS.running or PLUGINS.current
-        if not p or refused(p) or not isHandle(actor) then return nil end
+        if not p or refused(p) or PLUGINS.hostOnly(p, "SVP.target") then return nil end   -- (a joiner: the host's)
+        if not isHandle(actor) then return nil end
         if p.liveRun == nil or p.liveRun ~= D then
             if not p.targetRoundSaid then p.targetRoundSaid = true; plog(p, "SVP.target outside its own round: refused (from its spawn to its over only)") end
             return nil
@@ -87,6 +88,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
     function SVP.untarget(id) if ownTarget(id) then untarget(id, false) end end
     function SVP.alive(id) return ownTarget(id) ~= nil end
     function SVP.kill(id, why)
+        if PLUGINS.hostOnly(PLUGINS.running or PLUGINS.current, "SVP.kill") then return false end   -- (a joiner: the host's)
         local t = ownTarget(id)
         if not t or refused(t.p) then return false end
         down(id, t, str(why or "the add-on's"))
@@ -94,10 +96,10 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
     end
     function SVP.pay(n, why)
         local p = PLUGINS.running or PLUGINS.current
-        if refused(p) then return false end
+        if refused(p) or PLUGINS.hostOnly(p, "SVP.pay") then return false end
         local z = money(n)
         if z == nil then plog(p, "SVP.pay(" .. str(n) .. "): not a number, nothing paid"); return false end
-        if z > 0 then addCredits(z, str(why or "an add-on's round")) end
+        if z > 0 then PLUGINS.payRoom(z, str(why or "an add-on's round")) end
         return z > 0
     end
     local loadMiss = {}
@@ -302,11 +304,29 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         crumb("plugin despawn")
         return (PLUGINS.takeOff(a, p))
     end
+    -- each { slot, X, Y, Z, a, down }: a = that player's plane actor here (your pawn; another player's stand-in on the
+    -- host), nil when this game has none live; down = true when shot down (Survival's DOWN; a stand-in's own flag),
+    -- the same names as SVP.playerPlane's. A down player stays listed: skip it if you aim at players. Joiners only
+    -- on a co-op host (sv_coop.lua's M.peers[slot].obj); on a joiner, you alone
     function SVP.players()
         if SVP.levelGoing() then return {} end
         local l = playerLocation()
-        if not l then return {} end
-        return { { slot = 0, X = l.X, Y = l.Y, Z = l.Z } }
+        local me = COOP and COOP.slot or 0
+        local pawn
+        pcall(function() pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn end)
+        if not (pawn and valid(pawn)) then pawn = nil end
+        local out = l and { { slot = me, X = l.X, Y = l.Y, Z = l.Z, a = pawn,
+                              down = (DOWN and DOWN.me and DOWN.me()) == true } } or {}
+        if not (coopOpen() and COOP.host and COOP.host() and COOP.M and COOP.slots) then return out end
+        local okS, slots = pcall(COOP.slots)
+        for _, s in ipairs(okS and type(slots) == "table" and slots or {}) do
+            local P = s ~= me and COOP.M.peers and COOP.M.peers[s]
+            if P and P.obj and liveObj(P.obj) then
+                local okL, v = pcall(function() return P.obj:K2_GetActorLocation() end)
+                if okL and v then out[#out + 1] = { slot = s, X = v.X, Y = v.Y, Z = v.Z, a = P.obj, down = P.down == true } end
+            end
+        end
+        return out
     end
     function SVP.pad() return { X = SHUTTLE_PAD.X, Y = SHUTTLE_PAD.Y, Z = SHUTTLE_PAD.Z } end
     function SVP.runway() return { X = AIRFIELD.X, Y = AIRFIELD.Y } end
@@ -385,9 +405,8 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         end
     end
     local function emit(ev, now, a)
-        if coopOpen() then return end                       -- (API 2.0: single player)
-        local l = PLUGINS.on
-        for i = 1, #l do local e = l[i]; if e.ev == ev and not e.p.off then e.fn(now, a) end end   -- (as the pass began)
+        local l = PLUGINS.on                                -- (co-op open: only a co-op add-on's, coopShut)
+        for i = 1, #l do local e = l[i]; if e.ev == ev and not e.p.off and not coopShut(e.p) then e.fn(now, a) end end   -- (as the pass began)
     end
     -- the run and its round as Survival's tick sees them: the events above when they change
     local seenRun, seenRound = nil, nil
@@ -435,8 +454,10 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         if goingNow and not PLUGINS.wentGoing then         -- (once, the first tick of it: SVP.going's jobs, no game object)
             PLUGINS.wentGoing = true
             local l = PLUGINS.going
-            for i = 1, #l do local e = l[i]; if not e.p.off and not coopOpen() then e.fn(now) end end
+            for i = 1, #l do local e = l[i]; if not e.p.off and not coopShut(e.p) then e.fn(now) end end
             for _, p in ipairs(PLUGINS.loaded) do bgmBack(p, "the level is going"); hudBack(p, "the level is going") end
+            local okC, errC = pcall(PLUGINS.coopTick, now, true)   -- (co-op: the joiners' rounds off, nothing read)
+            if not okC then log("plugins: co-op error " .. str(errC)) end
         end
         -- (the one-way steps, once a teardown is certain (levelHard): the level's handles are an older level's, its
         -- marks, targets and owners dropped, what the add-ons spawned forgotten, pins let go, every NotifyOnNewObject
@@ -450,7 +471,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         if PLUGINS.levelMissed and not goingNow then
             PLUGINS.levelMissed, PLUGINS.goneMissed = false, true
             local l = PLUGINS.going                         -- (its SVP.going jobs, as at a teardown tick)
-            for i = 1, #l do local e = l[i]; if not e.p.off and not coopOpen() then e.fn(now) end end
+            for i = 1, #l do local e = l[i]; if not e.p.off and not coopShut(e.p) then e.fn(now) end end
             for _, p in ipairs(PLUGINS.loaded) do bgmBack(p, "the level went"); hudBack(p, "the level went") end
             oneWay("the level went")
         end
@@ -472,19 +493,476 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         if not okT then log("plugins: take-off error " .. str(errT)) end
         local okN, errN = pcall(PLUGINS.notifyTick)         -- (with co-op open: the objects dropped, none handed over)
         if not okN then log("plugins: NotifyOnNewObject error " .. str(errN)) end
-        if coopOpen() then return end                       -- (API 2.0: single player)
-        local l = PLUGINS.every
+        local okC, errC = pcall(PLUGINS.coopTick, now, false)   -- (co-op: the lists, the host's word, the beats)
+        if not okC then log("plugins: co-op error " .. str(errC)) end
+        local l = PLUGINS.every                             -- (co-op open: only a co-op add-on's, coopShut)
         for i = 1, #l do                                   -- (the jobs there as the pass began: one added now waits)
             local e = l[i]
-            if not e.p.off then
+            if not e.p.off and not coopShut(e.p) then
                 local t0 = os.clock()
                 e.fn(now)
                 perf(e.p, "every", (os.clock() - t0) * 1000)
             end
         end
     end
-    -- co-op's add-on channel (host -> joiners): not in API 2.0. Stubs; an add-on can test for it
-    SVP.net = { send = function() return false end, on = function() return false end, ready = false }
+    -- Co-op (add-on API 2.1). Survival's co-op is the host's: its rounds, kills and pay; the joiners' games mirror them
+    -- (sv_coop.lua). An add-on's round comes in co-op only when its kind has def.coop and def.remote (its joiner's
+    -- side) and every player in the room has the same add-on at the same version; else it's skipped, one line a run.
+    -- The host's word drives each game: the round's start, a beat every BEAT_S, its end or abort go to the joiners
+    -- that have it, whose def.remote draws it there (callouts, effects, music, its own local actors).
+    -- The channel is Survival's own (SV_CoopSend / SV_CoopRecv): messages "px|<ns>|<event>|<fields>", ns the
+    -- add-on's file name ("." the API's own: hi / hl / hq the add-on lists, st / hb / ov / ab a round). Nothing of
+    -- Survival's files changes for it: SV_CoopRecv is wrapped (sv_coop_migration.lua calls it by name), "px" taken
+    -- out before Survival's dispatch, which drops a tag it doesn't know (a friend's game without the API).
+    local NET_MAX, NET_RATE, NET_FIELD = 400, 20, 200      -- a message's bytes, an add-on's sends a second, a field's
+    local HELLO_S, ASK_S, ASK_N, BEAT_S, QUIET_S = 5, 5, 6, 2, 15
+    local NAME_MAX = 15                                  -- (sv_plugins.lua's: an event's, a kind's name)
+    local N = { peers = {}, asked = {}, live = {}, remote = {}, handlers = {}, hostList = nil, helloAt = 0, said = {} }
+    PLUGINS.net = N
+    local function open() return COOP ~= nil and COOP.open == true end
+    local function host() return open() and type(COOP.host) == "function" and COOP.host() == true end
+    local function joiner() return open() and type(COOP.client) == "function" and COOP.client() == true end
+    local function mySlot() return COOP and COOP.slot or 0 end
+    local function nlog(msg) log(("plugins: co-op: " .. str(msg)):gsub("%c", " ")) end
+    local function once(key, msg) if not N.said[key] then N.said[key] = true; nlog(msg) end end
+    local function slots()
+        local ok, l = pcall(function() return COOP.slots() end)
+        return (ok and type(l) == "table") and l or { mySlot() }
+    end
+    local function nameOf(s)
+        local ok, n = pcall(function() return playerName(s) end)
+        return string.format("player %d (%s)", s + 1, ok and tostring(n) or "?")
+    end
+    local function clean(v, n) return (tostring(v):gsub("[%c|]", "/"):sub(1, n or NET_FIELD)) end
+    local function ver(v) return (tostring(v or "?"):gsub("[^%w%.%-_+]", "_"):sub(1, 20)) end
+    local function sendRaw(to, reliable, ...)
+        if not open() or type(sendTo) ~= "function" then return false end
+        local ok, r = pcall(sendTo, to, reliable, "px", ...)
+        return ok and r == true
+    end
+
+    -- An add-on's AI planes on Survival's own native position stream (the runtime's enemy stream: 15 Hz, 22 bytes a
+    -- plane, interpolated with the link's delay on the joiner; SV_CoopTrack / SV_CoopBind, docs/re/COOP.md protocol 3):
+    -- the host tracks its plane under an id taken from Survival's own id counter (COOP.M.nextId, as sv_coop.lua's
+    -- hostPlane takes one, so the two never collide), sends the id in a message of its own, and each joiner binds its
+    -- local copy to it: the runtime moves the copy every frame. On a joiner an add-on's own AI planes are kept out of
+    -- Survival's plane list (sv_core.lua's `planes` / `pending`): Survival's co-op takes down an AI plane there that
+    -- it can't match to the host's, 15 s on (sv_coop_joiner.lua strayTick, "a stray", then asks the host for its whole
+    -- picture), and Survival's sweeps would count kills on it. SVP.net.own(actor) does that; follow does it too.
+    N.tracks, N.binds, N.owned, N.ownedAt = {}, {}, {}, 0
+    local function fullName(o)
+        local ok, n = pcall(function() return o:GetFullName() end)
+        return ok and type(n) == "string" and n ~= "" and n or nil
+    end
+    local function purgeOwned()                         -- (Survival's lists without the owned planes; never while going)
+        if not next(N.owned) then return end
+        for _, key in ipairs({ "pending", "planes" }) do
+            local list = _G[key]
+            if type(list) == "table" then
+                for i = #list, 1, -1 do
+                    local r = list[i]
+                    local a = type(r) == "table" and (r.addr or (r.obj ~= nil and addrOf and addrOf(r.obj))) or nil
+                    if a and N.owned[a] then table.remove(list, i) end
+                end
+            end
+        end
+    end
+    -- the owned planes that are gone (or whose address is another object's now) let go, every second
+    local function ownedTick(now)
+        if now - N.ownedAt < 1 then return end
+        N.ownedAt = now
+        for a, e in pairs(N.owned) do
+            if e.p.off or not liveObj(e.obj) or fullName(e.obj) ~= e.name then N.owned[a] = nil end
+        end
+    end
+    local function release(p, why)                      -- (an add-on's streams and owned planes; no game object read)
+        for id, t in pairs(N.tracks) do
+            if p == nil or t.p == p then N.tracks[id] = nil; if type(SV_CoopTrack) == "function" then pcall(SV_CoopTrack, id, 0) end end
+        end
+        for id, b in pairs(N.binds) do
+            if p == nil or b.p == p then N.binds[id] = nil; if type(SV_CoopBind) == "function" then pcall(SV_CoopBind, id, 0) end end
+        end
+        for a, e in pairs(N.owned) do if p == nil or e.p == p then N.owned[a] = nil end end
+    end
+    PLUGINS.coopRelease = release
+
+    -- this game's co-op kinds, "<kind>:<version>" a kind, its plugin's
+    local function myList()
+        local t = {}
+        for _, p in ipairs(PLUGINS.loaded) do
+            if not p.off then
+                for _, k in ipairs(p.kinds) do if PLUGINS.coop[k] then t[#t + 1] = k .. ":" .. ver(p.ver) end end
+            end
+        end
+        table.sort(t)
+        local s = table.concat(t, ",")
+        while #s > 300 do t[#t] = nil; s = table.concat(t, ",") end
+        return s
+    end
+    local function parseList(s)
+        local out = {}
+        for item in tostring(s or ""):gmatch("[^,]+") do
+            local k, v = item:match("^([%a][%w_]*):([%w%.%-_+]+)$")
+            if k and #k <= NAME_MAX and #v <= 20 then out[k] = v end
+        end
+        return out
+    end
+    local function listText(t)
+        local l = {}
+        for k, v in pairs(t or {}) do l[#l + 1] = k .. " " .. v end
+        table.sort(l)
+        return #l > 0 and table.concat(l, ", ") or "none"
+    end
+    local function apiText() return SVP.api.major .. "." .. SVP.api.minor end   -- (sv_plugins.lua's API)
+
+    -- who has kind `kind` at this plugin's version: the host's view (N.peers, from each joiner's hello)
+    local function same(s, kind, p)
+        local e = N.peers[s]
+        return e ~= nil and e.kinds[kind] ~= nil and e.kinds[kind] == ver(p.ver)
+    end
+
+    -- (the host, kindEntry's ready) whether kind's round may come in co-op now, and why not
+    function PLUGINS.coopReady(p, kind)
+        if not PLUGINS.coop[kind] then return false, "it isn't made for co-op (no def.coop and def.remote)" end
+        if joiner() then return false, "a co-op joiner's rounds are the host's" end
+        for _, s in ipairs(slots()) do
+            if s ~= mySlot() then
+                local e = N.peers[s]
+                if not e then return false, nameOf(s) .. " hasn't said which add-ons they have (none, or no add-on API 2.1)" end
+                local v = e.kinds[kind]
+                if not v then return false, nameOf(s) .. " hasn't got it" end
+                if v ~= ver(p.ver) then return false, string.format("%s has version %s, this game %s", nameOf(s), v, ver(p.ver)) end
+            end
+        end
+        return true
+    end
+
+    -- (the host) its round started: the joiners that have it start theirs
+    function PLUGINS.coopStart(p, kind, now)
+        if not (host() and PLUGINS.coop[kind]) then return end
+        local L = { p = p, round = D and D.round or 0, beat = os.clock(), sent = {} }   -- (now: the rounds' clock, D.now)
+        N.live[kind] = L
+        local n = 0
+        for _, s in ipairs(slots()) do
+            if s ~= mySlot() and same(s, kind, p) then
+                L.sent[s] = true
+                if sendRaw(s, true, ".", "st", kind, L.round) then n = n + 1 end
+            end
+        end
+        nlog(string.format("%s's round %d: started on %d joiner game(s) too", kind, L.round, n))
+    end
+    -- (the host) its round over ("ov", how it ended) or aborted ("ab", why): every joiner told
+    function PLUGINS.coopEnd(kind, how, arg)
+        local L = kind and N.live[kind]
+        if not L then return end
+        N.live[kind] = nil
+        if PLUGINS.coopRelease then PLUGINS.coopRelease(L.p, "its round " .. tostring(how)) end
+        sendRaw(nil, true, ".", how, kind, clean(arg or "", 60))
+        nlog(string.format("%s's round %d %s on the joiners' games (%s)", kind, L.round, how == "ov" and "over" or "aborted",
+            tostring(arg)))
+    end
+
+    -- (a joiner) the host's round of `kind` here: def.remote's start / tick / over / abort, guarded as every callback
+    local function remoteCall(R, what, ...)
+        local fn = R.def[what]
+        if type(fn) == "function" then return guard(R.p, "remote." .. what, fn)(...) end
+    end
+    local function remoteEnd(kind, how, arg, now)
+        local R = N.remote[kind]
+        if not R then return end
+        N.remote[kind] = nil
+        if PLUGINS.coopRelease then PLUGINS.coopRelease(R.p, "the host's round over") end
+        if how == "ov" then remoteCall(R, "over", now or os.clock(), arg)
+        elseif type(R.def.abort) == "function" then remoteCall(R, "abort", arg)
+        else remoteCall(R, "over", now or os.clock(), nil) end
+        bgmBack(R.p, "the host's round is over")
+        hudBack(R.p, "the host's round is over")
+        plog(R.p, string.format("the host's %s round %s here (%s)", kind, how == "ov" and "over" or "taken off", tostring(arg)))
+    end
+    function PLUGINS.remoteOff(p, why)
+        for kind, R in pairs(N.remote) do if R.p == p then remoteEnd(kind, "ab", why) end end
+    end
+    local function remoteStart(kind, round, now)
+        local c, p = PLUGINS.coop[kind], PLUGINS.kinds[kind]
+        if not (c and p) or p.off then
+            once("nokind|" .. tostring(kind) .. "|" .. tostring(D),
+                "the host's " .. tostring(kind) .. " round is on; this game " .. (p and "has it switched off" or "hasn't got it"))
+            return
+        end
+        if N.remote[kind] then remoteEnd(kind, "ab", "the host started it again") end
+        N.remote[kind] = { p = p, def = c.remote, round = round, beat = now, at = now, D = D }
+        plog(p, string.format("the host's %s round %s here", kind, tostring(round)))
+        remoteCall(N.remote[kind], "start", now, round)
+    end
+
+    -- the API's own messages (ns ".")
+    local function sysIn(from, ev, f, now)
+        if ev == "hi" and host() then                    -- a joiner's add-ons
+            local had = N.peers[from]
+            local kinds = parseList(f[5])
+            N.peers[from] = { api = clean(f[4], 8), kinds = kinds, at = now }
+            N.asked[from] = nil
+            if not had or listText(had.kinds) ~= listText(kinds) then
+                nlog(string.format("%s has add-on API %s, co-op add-ons: %s", nameOf(from), clean(f[4], 8), listText(kinds)))
+            end
+            sendRaw(from, true, ".", "hl", apiText(), myList())
+            for kind, L in pairs(N.live) do              -- (came during a round: theirs starts if they have it)
+                if not L.sent[from] then
+                    local has = same(from, kind, L.p)
+                    if has then L.sent[from] = true; sendRaw(from, true, ".", "st", kind, L.round) end
+                    nlog(string.format("%s came during %s's round %d: %s", nameOf(from), kind, L.round,
+                        has and "started on their game" or "they haven't got it, so they don't see it"))
+                    local j = PLUGINS.coop[kind] and PLUGINS.coop[kind].joined
+                    if j then guard(L.p, "joined", j)(from, has) end
+                end
+            end
+        elseif ev == "hl" and joiner() and from == 0 then -- the host's add-ons: the answer to this game's hello
+            N.hostList = parseList(f[5])
+            local mine = parseList(myList())
+            local key = listText(N.hostList) .. "|" .. listText(mine)
+            if N.hlSaid ~= key then
+                N.hlSaid = key
+                local l = {}
+                for k, v in pairs(mine) do
+                    local hv = N.hostList[k]
+                    l[#l + 1] = k .. (hv == v and ": its rounds come" or (hv and (": the host has version " .. hv .. ", so they don't")
+                        or ": the host hasn't got it, so they don't"))
+                end
+                table.sort(l)
+                nlog("the host has add-on API " .. clean(f[4], 8) .. ", co-op add-ons: " .. listText(N.hostList)
+                    .. (#l > 0 and ("; here " .. table.concat(l, "; ")) or ""))
+            end
+        elseif ev == "hq" and joiner() and from == 0 then N.helloAt = 0          -- the host asks: the hello again
+        elseif ev == "st" and joiner() and from == 0 then
+            local kind, round = clean(f[4], NAME_MAX), tonumber(f[5])
+            if kind:match("^[%a][%w_]*$") and round and round == math.floor(round) and round >= 0 and round < 100000 then
+                remoteStart(kind, round, now)
+            end
+        elseif ev == "hb" and joiner() and from == 0 then
+            local R = N.remote[clean(f[4], NAME_MAX)]
+            if R then R.beat = now end
+        elseif (ev == "ov" or ev == "ab") and joiner() and from == 0 then
+            remoteEnd(clean(f[4], NAME_MAX), ev, clean(f[5] or "", 60), now)
+        end
+    end
+
+    -- one message off the wire, "<slot>|px|<ns>|<event>|..."
+    local function netIn(m, now)
+        local slot, body = m:match("^(%d+)|(px|.*)$")
+        local from = tonumber(slot)
+        if not (from and from <= 15) then return end
+        local f = {}
+        for x in (body .. "|"):gmatch("([^|]*)|") do f[#f + 1] = (x:gsub("%c", "")) end
+        local ns, ev = f[2], f[3]
+        if not (ns and ev and ev:match("^[%a][%w_]*$") and #ev <= NAME_MAX) then return end
+        if ns == "." then return sysIn(from, ev, f, now) end
+        if joiner() and from ~= 0 then return end         -- (a joiner hears the host)
+        if not (joiner() or host()) then return end
+        local h = N.handlers[ns] and N.handlers[ns][ev]
+        if not h or h.p.off then return end
+        local args = {}
+        for i = 4, #f do args[#args + 1] = f[i]:sub(1, NET_FIELD) end
+        h.fn(from, table.unpack(args))
+    end
+    local function wrapRecv()
+        if type(SV_CoopRecv) ~= "function" or SV_CoopRecv == N.recv then return end
+        local rawRecv = SV_CoopRecv
+        N.recv = function()
+            for _ = 1, 600 do
+                local m = rawRecv()
+                if type(m) ~= "string" or m == "" or not m:find("^%d+|px|") then return m end
+                local ok, err = pcall(netIn, m, os.clock())
+                if not ok then once("netIn", "a message's error " .. tostring(err) .. " (" .. m:sub(1, 60) .. ")") end
+            end
+            return nil
+        end
+        SV_CoopRecv = N.recv
+    end
+    PLUGINS.wrapRecv = wrapRecv
+
+    -- (sv_main.lua's tick, PLUGINS.tick) the lists and the rounds' beats; `going`: the level's being torn down
+    function PLUGINS.coopTick(now, going)
+        wrapRecv()
+        local role = open() and tostring(COOP.role) .. "|" .. tostring(mySlot()) or nil
+        if role ~= N.role then                          -- (co-op opened, closed, or the room changed hands)
+            N.role, N.peers, N.asked, N.hostList, N.helloAt = role, {}, {}, nil, 0
+            if PLUGINS.coopRelease then PLUGINS.coopRelease(nil, "co-op changed") end
+            for kind in pairs(N.live) do N.live[kind] = nil end
+            for kind in pairs(N.remote) do remoteEnd(kind, "ab", "co-op changed (" .. tostring(role or "closed") .. ")", now) end
+        end
+        for kind, R in pairs(N.remote) do
+            if going then remoteEnd(kind, "ab", "the level is going", now)
+            elseif D ~= R.D then remoteEnd(kind, "ab", "this game's run ended", now)
+            elseif now - R.beat > QUIET_S then remoteEnd(kind, "ab", "the host's round went quiet", now)
+            elseif N.remote[kind] then remoteCall(R, "tick", now) end
+        end
+        if going then if PLUGINS.coopRelease then PLUGINS.coopRelease(nil, "the level is going") end return end
+        if not open() then return end
+        if joiner() then
+            purgeOwned()
+            ownedTick(now)
+            if now >= N.helloAt then
+                N.helloAt = now + HELLO_S
+                if N.hostList == nil then sendRaw(nil, true, ".", "hi", apiText(), myList()) end
+            end
+            return
+        end
+        local in_ = {}
+        for _, s in ipairs(slots()) do in_[s] = true end
+        for s in pairs(N.peers) do if not in_[s] then N.peers[s] = nil end end
+        for s in pairs(in_) do
+            local a = N.asked[s] or { n = 0, at = 0 }
+            if s ~= mySlot() and not N.peers[s] and a.n < ASK_N and now >= a.at then
+                a.n, a.at = a.n + 1, now + ASK_S
+                N.asked[s] = a
+                sendRaw(s, true, ".", "hq")
+                if a.n == ASK_N then nlog(nameOf(s) .. " hasn't answered (no add-on API 2.1 there): add-on rounds don't come in co-op") end
+            end
+        end
+        for kind, L in pairs(N.live) do
+            if L.p.liveKind ~= kind then PLUGINS.coopEnd(kind, "ab", "its round ended")
+            elseif now - L.beat >= BEAT_S then L.beat = now; sendRaw(nil, false, ".", "hb", kind, L.round) end
+        end
+    end
+
+    -- (a joiner) host-only calls: the round's truth is the host's
+    function PLUGINS.hostOnly(p, what)
+        if not joiner() then return false end
+        local key = tostring(p and p.name) .. "|" .. what
+        if not N.said[key] then N.said[key] = true; plog(p, what .. " is the host's in co-op: refused on a joiner's game") end
+        return true
+    end
+    -- pay, the host's in co-op: Survival's own co-op path (sv_coop_migration.lua addCredits: the share sent to each
+    -- joiner, "cr"), as a special of Survival's pays from its round's tick: M.mirror marks that path
+    function PLUGINS.payRoom(n, why)
+        local M = host() and COOP.M or nil
+        if not (M and type(M.mirror) == "number") then return addCredits(n, why) end
+        M.mirror = M.mirror + 1
+        local ok, err = pcall(addCredits, n, why)
+        M.mirror = M.mirror - 1
+        if not ok then error(err, 0) end
+    end
+
+    local function netOut(to, p, event, reliable, ...)
+        if not p then return false, "no add-on" end
+        local no = refused(p)
+        if no then return false, no end
+        if not open() then return false, "co-op isn't open" end
+        if not (type(event) == "string" and event:match("^[%a][%w_]*$") and #event <= NAME_MAX) then
+            return false, "an event is a name of letters, digits and _, 15 at most"
+        end
+        local parts = { p.ns, event }
+        for i = 1, select("#", ...) do
+            local v = select(i, ...)
+            local t = type(v)
+            if t == "number" then parts[#parts + 1] = (v == math.floor(v) and v > -1e15 and v < 1e15) and string.format("%d", v) or string.format("%.6g", v)
+            elseif t == "boolean" then parts[#parts + 1] = v and "1" or "0"
+            elseif t == "string" and #v <= NET_FIELD then parts[#parts + 1] = clean(v)
+            elseif t == "string" then return false, "a field over " .. NET_FIELD .. " bytes"
+            else return false, "a field is a number, a string or a boolean" end
+        end
+        if #table.concat(parts, "|") + 3 > NET_MAX then return false, "over " .. NET_MAX .. " bytes" end
+        local now = os.clock()
+        local r = p.netRate or { at = now, n = 0 }
+        if now - r.at >= 1 then r.at, r.n = now, 0 end
+        if r.n >= NET_RATE then
+            if p.netRateSaid ~= math.floor(now) then p.netRateSaid = math.floor(now); plog(p, "SVP.net: over " .. NET_RATE .. " sends a second, refused") end
+            return false, "over " .. NET_RATE .. " a second"
+        end
+        r.n, p.netRate = r.n + 1, r
+        return sendRaw(to, reliable, table.unpack(parts))
+    end
+    SVP.net = { ready = true }
+    function SVP.net.send(event, ...) return netOut(nil, PLUGINS.running or PLUGINS.current, event, true, ...) end
+    local function slotArg(slot)
+        if not host() then return false, "the host's" end
+        if not (type(slot) == "number" and slot == math.floor(slot) and slot >= 0 and slot <= 15) then return false, "no such slot" end
+        return true
+    end
+    function SVP.net.sendTo(slot, event, ...)
+        local ok, why = slotArg(slot)
+        if not ok then return false, why end
+        return netOut(slot, PLUGINS.running or PLUGINS.current, event, true, ...)
+    end
+    -- unreliable: may be lost or come out of order (for state the next message replaces); the same limits
+    function SVP.net.stream(event, ...) return netOut(nil, PLUGINS.running or PLUGINS.current, event, false, ...) end
+    function SVP.net.streamTo(slot, event, ...)
+        local ok, why = slotArg(slot)
+        if not ok then return false, why end
+        return netOut(slot, PLUGINS.running or PLUGINS.current, event, false, ...)
+    end
+    -- (the host) actor, an AI plane of the add-on's, on Survival's position stream: its id, or nil and why
+    function SVP.net.track(actor)
+        local p = PLUGINS.running or PLUGINS.current
+        if not (p and host()) then return nil, "the host's, in co-op" end
+        if type(SV_CoopTrack) ~= "function" then return nil, "this Survival's runtime has no SV_CoopTrack" end
+        local M = COOP.M
+        if not (type(M) == "table" and type(M.nextId) == "number") then return nil, "no co-op id counter (COOP.M.nextId)" end
+        if not liveAddr(actor) then return nil, "not a live actor" end
+        M.nextId = M.nextId % 65535 + 1
+        local id = M.nextId
+        local ok, r = pcall(SV_CoopTrack, id, actor)
+        if not (ok and r == 1) then return nil, "SV_CoopTrack refused it (" .. tostring(ok and r or "error") .. ")" end
+        N.tracks[id] = { p = p }
+        return id
+    end
+    -- (a joiner) this game's copy `actor` moved along the host's stream `id` (the host's SVP.net.track); owned too
+    function SVP.net.follow(id, actor)
+        local p = PLUGINS.running or PLUGINS.current
+        id = tonumber(id)
+        if not (p and joiner()) then return false, "a joiner's, in co-op" end
+        if type(SV_CoopBind) ~= "function" then return false, "this Survival's runtime has no SV_CoopBind" end
+        if not (id and id == math.floor(id) and id >= 1 and id <= 65535) then return false, "no such stream id" end
+        SVP.net.own(actor)
+        local ok, r = pcall(SV_CoopBind, id, actor)
+        if not (ok and r == 1) then return false, "SV_CoopBind refused it (" .. tostring(ok and r or "error") .. "): not an AI plane?" end
+        N.binds[id] = { p = p }
+        return true
+    end
+    -- (a joiner) actor is the add-on's own plane here: Survival's co-op and sweeps leave it alone (see above)
+    function SVP.net.own(actor)
+        local p = PLUGINS.running or PLUGINS.current
+        if not (p and joiner()) then return false, "a joiner's, in co-op" end
+        local a = actor ~= nil and liveAddr(actor) and addrOf and addrOf(actor)
+        if not a then return false, "not a live actor" end
+        N.owned[a] = { p = p, obj = actor, name = fullName(actor) }
+        purgeOwned()
+        return true
+    end
+    function SVP.net.untrack(id)
+        id = tonumber(id)
+        if id and N.tracks[id] then N.tracks[id] = nil; pcall(SV_CoopTrack, id, 0); return true end
+        if id and N.binds[id] then N.binds[id] = nil; pcall(SV_CoopBind, id, 0); return true end
+        return false
+    end
+    function SVP.net.on(event, fn)
+        local p = PLUGINS.running or PLUGINS.current
+        if not (p and type(fn) == "function" and type(event) == "string" and event:match("^[%a][%w_]*$") and #event <= NAME_MAX) then
+            return false
+        end
+        N.handlers[p.ns] = N.handlers[p.ns] or {}
+        N.handlers[p.ns][event] = { p = p, fn = guard(p, "net " .. event, fn) }
+        return true
+    end
+    function SVP.net.slot() return mySlot() end
+    -- (the host) the room's players and whether each has this add-on's co-op kinds at its version; a joiner: the host
+    function SVP.net.peers()
+        local p = PLUGINS.running or PLUGINS.current
+        local out = {}
+        if not (p and open()) then return out end
+        for _, s in ipairs(slots()) do
+            if s ~= mySlot() then
+                local ok = #p.kinds > 0
+                for _, k in ipairs(p.kinds) do
+                    if host() then ok = ok and same(s, k, p)
+                    else ok = ok and s == 0 and N.hostList ~= nil and N.hostList[k] == ver(p.ver) end
+                end
+                out[#out + 1] = { slot = s, name = select(2, pcall(playerName, s)), same = ok }
+            end
+        end
+        return out
+    end
+    wrapRecv()
 
     -- An add-on's native mod can give the API what Survival's runtime hasn't got, by name:
     --   SVP.provide("hurtPlayer", fn): fn(playerAddress, -healthPoints, causerAddress) -> 1 = dealt through the

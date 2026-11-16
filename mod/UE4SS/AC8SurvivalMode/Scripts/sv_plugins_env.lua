@@ -140,7 +140,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         return notifyCls[cls]
     end
     function PLUGINS.notifyTick()
-        if walkHeld() or coopOpen() then notifyQ = {}; return end
+        if walkHeld() then notifyQ = {}; return end
         local q0 = notifyQ
         notifyQ = {}
         for cls, q in pairs(q0) do
@@ -165,7 +165,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
                 local k = ok and keyOf(o) or nil
                 if k ~= nil then if seen[k] then ok = false else seen[k] = true end end
                 if ok and c then local okA, isA = pcall(function() return o:IsA(c) end); ok = okA and isA == true end
-                if ok then for i = 1, n do local e = l[i]; if not e.p.off then e.fn(o) end end end
+                if ok then for i = 1, n do local e = l[i]; if not e.p.off and not coopShut(e.p) then e.fn(o) end end end
             end
         end
     end
@@ -375,7 +375,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
     local function loadFailed(p, why)
         local rot = CFG.specials.rotation
         for _, k in ipairs(p.kinds) do
-            SPC.kinds[k], PLUGINS.kinds[k], CFG.specials[k] = nil, nil, nil
+            SPC.kinds[k], PLUGINS.kinds[k], CFG.specials[k], PLUGINS.coop[k] = nil, nil, nil, nil
             if p.addedRot and p.addedRot[k] and type(rot) == "table" then
                 for i = #rot, 1, -1 do if rot[i] == k then table.remove(rot, i) end end
             end
@@ -427,6 +427,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         local ps = {}
         for _, a in ipairs(found) do                       -- (all of them listed first: PLUGINS.loaded)
             local p = { name = a.name, folder = a.name, files = a.files, nativesPath = a.natives, kinds = {} }
+            p.ns = a.name:lower()                      -- (its co-op channel's name, SVP.net: its folder's, the same on every game)
             PLUGINS.loaded[#PLUGINS.loaded + 1] = p
             ps[#ps + 1] = p
             if not a.name:match("^[%w_%-]+$") or #a.name > 40 then p.badName = true end
