@@ -1572,7 +1572,7 @@ local function wanted()
     if c.enabled == false or not (THUNDER and THUNDER.layoutSet and THUNDER.camFade) then return false end
     local a = SKY and SKY.arcState and SKY.arcState()
     if not (a and a.on and a.profile == "fleet" and a.k) then return false end
-    if a.k >= math.floor(n(c.until_round, 35)) - math.floor(n(sc().from_round, 25)) then return false end
+    if n(a.kRaw, a.k) >= math.floor(n(c.until_round, 35)) - math.floor(n(sc().from_round, 25)) then return false end   -- (the uncapped step: midday's hold caps a.k)
     return a.mode == "moon" or a.k >= n(a.sink, 0) + 2
 end
 local function fade(on, why)

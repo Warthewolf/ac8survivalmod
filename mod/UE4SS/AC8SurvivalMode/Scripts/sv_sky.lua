@@ -830,7 +830,7 @@ function SKY.arcOwner()
     end
     return F, prof
 end
-function SKY.arcState() return { on = ARC.on, k = ARC.k, u = ARC.u, mode = ARC.mode, profile = ARC.profile, sink = sinkRounds(),
+function SKY.arcState() return { on = ARC.on, k = ARC.k, kRaw = ARC.kRaw, u = ARC.u, mode = ARC.mode, profile = ARC.profile, sink = sinkRounds(),
                                  night = nightRounds() } end
 function SKY.arcSet(F, why)
     F = tonumber(F)
@@ -1329,6 +1329,7 @@ function SKY.arcTick(now)
         if first then ARC.blendFrom, ARC.blendAt = copy(ARC.base), nil end
     end
     local k, u, why = arcPlace(now, F)
+    ARC.kRaw = k                                          -- (the round past F, before midday's hold caps it)
     if k > SKY.arcEnd() + 1 then k, u, why = SKY.arcEnd() + 1, 0, "midday, held" end
     ARC.k, ARC.u = k, u
     local s = SKY.arcAt(k, u, ARC.base)
