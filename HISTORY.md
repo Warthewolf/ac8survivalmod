@@ -3329,3 +3329,23 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - The storm night brighter (a profile's night_over: exposure 1.3 / 10 / +1.6): run 44's sea and coast visible under the
   storm. At night a cloud light took the view back to the plane (runs 41, 44): bolts only while the surfacing films.
 - 0.74.86: the cameras closer (run 43's were far, the last wide into the sun), bolts only during it.
+
+
+## 0.74.87-0.74.88 (2026-11-17; test builds only): the fleet's storm draws lightning bolts (feature/fleet-storm)
+- The user's storm wants "a lot of lightning", seen and heard. Until now nothing of it was seen: the autotest's probes
+  (runs 46-60, the storm night) found NS_CloudLightning draws only a faint teal glow at any size or Color; Mission 12's
+  strike effects are plane-sized; the Online Alicorn's arc stays red sparks; the stock cloud lights have a 10 m radius (and
+  ramp up over seconds in their own colours with more), engine point lights don't light Cloudly's clouds, and the level's
+  Cloudly actor has no EffectLight (hard rule 70). The bare bolt meshes drew nothing in runs 50-51 only because their mesh
+  was set after the spawn finished; set before it, AC8's SM_Thunder* bolts draw, and the game's MI_NearCloudLightning001
+  makes them white with a blue edge (runs 59-60, hard rule 69).
+- THUNDER.bolt (sv_anomalies_dev.lua): a pool of 10 Movable StaticMeshActors, a bolt mesh each flash (standing from the sea
+  1.8-4.5 km tall, or lying in the clouds), a random turn, a flicker a tick (1 0 1, 1, 1 0 1 0 1); meshes under 20 m are
+  skipped (SM_Lightning002 is half a metre: x12859 for a 6 km bolt in run 61). The fleet's storm makes one at each flash
+  (2-3 a second, 2-25 km round the airfield or GEOFON) with the glow and its thunder; no cloud lights any more. Under the
+  storm's fade to black the pool and the rain on your camera are shown once, so their first draw (run 45's checkered
+  sheet by the plane, most likely the rain's) is hidden.
+- 0.74.87: run 61 (stormview, 7/7): the warm-up's 10 bolts, the first bolt 2 s after the fade, bolts seen from your plane;
+  run 62 (round30, 10/10): the surfacing in the storm as before, no checker, but its cameras caught no bolt.
+- 0.74.88: while the surfacing films, each bolt strikes 4-14 km out in the camera's shot. Run 63 (round30, 10/10): bolts in
+  its shots (frames 3 and 14 of 18, pictures every 1.5 s), blue-white against the pre-dawn storm.
