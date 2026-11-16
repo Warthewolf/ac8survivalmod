@@ -1397,6 +1397,65 @@ SUITES.cloudflash = function()
         A.wait(3)
     end
 end
+-- (2026-11-16) a bolt drawn from AC8's own blue laser beam (NS_UAVTLS_Muzzleflash01: User.BeamLength = { length, width,
+-- width } along its forward axis): 8 segments zigzagging from the cloud base (2 km) down to the sea, a 3-segment branch,
+-- 5 km ahead of your plane and 1.5 km aside, at widths 3, 10 and 25, then the player TLS beam; the storm night
+SUITES.beambolt = function()
+    intoRun()
+    local TLS = "/Game/VFX/Vehicles/Weapon/TLS/"
+    A.do_(function() if IFSKY and IFSKY.step then IFSKY.step(3) end end)
+    A.wait(12)
+    local function seg(lib, sys, a, b, w, life)
+        local dx, dy, dz = b.X - a.X, b.Y - a.Y, b.Z - a.Z
+        local len = math.sqrt(dx * dx + dy * dy + dz * dz)
+        local rot = { Pitch = math.deg(math.atan(dz, math.sqrt(dx * dx + dy * dy))), Yaw = math.deg(math.atan(dy, dx)), Roll = 0 }
+        local ok, c = pcall(function() return lib:SpawnSystemAtLocation(ST.pc(), sys, a, rot, { X = 1, Y = 1, Z = 1 }, true, true, 0, false) end)
+        if not (ok and c) then return nil end
+        for _, nm in ipairs({ "User.BeamLength", "BeamLength" }) do
+            pcall(function() c:SetVariableVec3(FName(nm), { X = len, Y = w, Z = w }) end)
+        end
+        for _, nm in ipairs({ "User.BeamLifeTime", "BeamLifeTime" }) do pcall(function() c:SetVariableFloat(FName(nm), life) end) end
+        return c
+    end
+    for n, k in ipairs({ { "NS_UAVTLS_Muzzleflash01", 3 }, { "NS_UAVTLS_Muzzleflash01", 10 }, { "NS_UAVTLS_Muzzleflash01", 25 },
+                         { "NS_TLS_Muzzleflash01", 10 } }) do
+        local B = { cs = {} }
+        A.do_(function()
+            local pl = ST.plane()
+            local sys = loadObject(TLS .. k[1] .. "." .. k[1])
+            local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+            if not (pl and sys and lib) then ST.info("beambolt " .. n .. ": no plane / system / library"); return end
+            local base = ST.frame(pl, 500000, (n % 2 == 0) and 150000 or -150000, 0)
+            local fw = ST.frame(pl, 100, 0, 0)
+            local P0 = ST.at(pl)
+            local fx, fy = fw.X - P0.X, fw.Y - P0.Y
+            local fl = math.sqrt(fx * fx + fy * fy); fx, fy = fx / fl, fy / fl
+            local rx, ry = -fy, fx
+            local pts, top = {}, 200000
+            for i = 0, 8 do
+                local side = (i == 0 or i == 8) and 0 or (math.random() * 2 - 1) * 15000
+                local along = (i == 0 or i == 8) and 0 or (math.random() * 2 - 1) * 8000
+                pts[#pts + 1] = { X = base.X + rx * side + fx * along, Y = base.Y + ry * side + fy * along, Z = top * (1 - i / 8) }
+            end
+            for i = 1, 8 do local c = seg(lib, sys, pts[i], pts[i + 1], k[2], 0.4); if c then B.cs[#B.cs + 1] = c end end
+            local j = pts[3]                                   -- (a branch off the third joint)
+            local last = j
+            for i = 1, 3 do
+                local nx = { X = last.X + rx * 9000 + (math.random() * 2 - 1) * 4000, Y = last.Y + ry * 9000 + (math.random() * 2 - 1) * 4000, Z = last.Z - 22000 }
+                local c = seg(lib, sys, last, nx, k[2] * 0.6, 0.4); if c then B.cs[#B.cs + 1] = c end
+                last = nx
+            end
+            ST.info(string.format("beambolt %d: %s width %d: %d of 11 segments up, 5 km ahead, 2 km tall", n, k[1], k[2], #B.cs))
+        end)
+        A.wait(0.08)
+        A.do_(function() ST.shot(string.format("beambolt_%d_a", n)) end)
+        A.wait(0.25)
+        A.do_(function() ST.shot(string.format("beambolt_%d_b", n)) end)
+        A.wait(0.4)
+        A.do_(function() for _, c in ipairs(B.cs) do pcall(function() c:DestroyComponent() end) end end)
+        A.wait(2.5)
+    end
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
