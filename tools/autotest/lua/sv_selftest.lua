@@ -4005,6 +4005,8 @@ SUITES.capture = function()
     -- ((0.74.181) the user: "Go ahead": outside pictures of the plane at its touchdown on GEOFON's deck)
     A.until_(function() return ST.findLog("capture: seq %d+: touched down", ST.marks.c1, false) or IFCAP.state() == nil end, 200,
         function() end)
+    A.picture("capture_touchdown_above", function() local pl = ST.plane(); return pl and ST.off(ST.at(pl), 0, 1, 80000) end,
+        function() local pl = ST.plane(); return pl and ST.at(pl) end, 60)
     A.picture("capture_touchdown_behind", function() local pl = ST.plane(); return pl and ST.off(ST.at(pl), -6000, 0, 2500) end,
         function() local pl = ST.plane(); return pl and ST.at(pl) end, 50)
     A.picture("capture_touchdown_side", function() local pl = ST.plane(); return pl and ST.off(ST.at(pl), 0, 7000, 1200) end,
