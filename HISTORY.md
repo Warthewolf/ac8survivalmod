@@ -3575,3 +3575,16 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - sv_fleet_storm.lua: bolt_glow.flash, candidates in order (the burst, our own), the first that loads; IFSKY.strike.
   build_all.sh stages SurvivalMode_Storm*_P with TANI=1; every zip drops them (package_release / package_test /
   package_dev without TANI; zip_leak_test checks). Autotest suites flash, burstwatch (tools/ac8-autotest).
+
+## 0.74.112-0.74.119 (2026-11-17; test builds, staged, not installed): the cloud flash tuned (feature/cloud-flash)
+- tools/stormfx/build.sh wiped build/stormfx/out whole, the burst container with it (0.74.112 had none): it removes only
+  its own now.
+- Our own flash at 800 m x0.6 (0.74.112) and x2 (0.74.113): unseen at 4-10 km. AC8's near instance fades its sprites out
+  0.5-3.5 km from the camera (MI_NearCloudLightning001: emissive 5000 at byte 42, fade length 300000 at 79, start 50000
+  at 116; MI_CloudLightning001: emissive 5000, no fade). burst.py can copy both with those changed (MI_SV_CloudFlashNear /
+  Far, retargeted imports): 0.74.114-0.74.117 lit the sky behind the clouds at 7-10 km, saturated white even at 800.
+- Each flash a fresh system (0.74.116): AC8's burst reset and switched on again stayed dark after its first flash.
+- The user: "I think the cloud burst is too big, i liked the vanilla look": burst.py VANILLA (AC8's own instances as
+  they are, only the timing patched), the storm's burst scale 0.1, on 0.8 s, x20. 0.74.118 with min_km 3: a strike's
+  glow 2 km up and 4 km ahead whited the screen out and it stayed white (cause not found); 0.74.119 min_km 6: no white-out
+  in the strikes or the storm (run 20261117_145251), the far flashes logged.

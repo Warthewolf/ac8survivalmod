@@ -29,9 +29,10 @@ NAME = 'NS_SV_CloudFlash'
 MAT_STUB = '/Game/Base/Material/VFX/Lightning/M_VFX_NearCloudLightning'
 MI_STUB = '/Game/VFX/Environment/Common/Lightning/CloudLightning/MI_NearCloudLightning001'
 # the flash (seconds, metres, its 4x4 flipbook)
-LIFE_S, SPRITES, SIZE_M, SPREAD_M, FRAMES, SUBUV = 1.4, 3, 2600.0, 600.0, 16, (4, 4)
+# ((0.74.112) 2.6 km x6 whited the screen out in AC8 (MI_NearCloudLightning001 is emissive 5000): 800 m, x0.6)
+LIFE_S, SPRITES, SIZE_M, SPREAD_M, FRAMES, SUBUV = 1.4, 3, 800.0, 300.0, 16, (4, 4)
 FLICKER = [(0.00, 1.00), (0.05, 0.30), (0.10, 0.95), (0.17, 0.20), (0.25, 0.70), (0.36, 0.12), (0.55, 0.05), (1.00, 0.0)]
-BRIGHT = 6.0                           # the colour's peak (the material's own blue x this)
+BRIGHT = 2.0                           # the colour's peak (the material's own blue x this; 6 in 0.74.108-0.74.111 white-outs, 0.6 in 0.74.112 unseen at 7-10 km)
 LOG = os.path.join(OUT, 'ue_flash.log')
 AT = unreal.AssetToolsHelpers.get_asset_tools()
 EAL = unreal.EditorAssetLibrary

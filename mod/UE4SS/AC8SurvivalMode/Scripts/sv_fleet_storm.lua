@@ -227,6 +227,9 @@ local function glowAt(top, now)
     end
     GLOW.i = GLOW.i % math.max(1, math.floor(n(g.pool, 12))) + 1
     local e = GLOW.pool[GLOW.i]
+    -- ((0.74.116) our flashes: a fresh system each time (burstwatch of 0.74.115: AC8's burst reset and switched on again
+    -- stayed dark after its first flash), the slot's old one taken off)
+    if GLOW.flash and cellOk(e) then pcall(function() e.o:DestroyComponent() end); e = nil end
     if not cellOk(e) then e = glowNew(c, at); GLOW.pool[GLOW.i] = e end
     if not e then return "; no glow" end
     pcall(function() e.o:SetWorldLocation(at, false, {}, true) end)
@@ -237,7 +240,10 @@ local function glowAt(top, now)
 end
 local function glowTick(now)
     for _, e in ipairs(GLOW.pool) do
-        if e and e.offAt and now >= e.offAt then e.offAt = nil; if cellOk(e) then pcall(function() e.o:Deactivate() end) end end
+        if e and e.offAt and now >= e.offAt then
+            e.offAt = nil
+            if cellOk(e) then pcall(function() if GLOW.flash then e.o:DestroyComponent() else e.o:Deactivate() end end) end
+        end
     end
 end
 local function glowOff()

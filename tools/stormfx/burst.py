@@ -34,9 +34,50 @@ OLD = '/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning'
 NEW = '/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudBurst'
 SCRIPT_EXPORT = 34                     # (the system update script: its literal table holds the emitters' spawn inputs)
 LITERALS = {4440: 0.08, 4444: 0.22, 4448: 0.5, 4460: 0.15, 4464: 0.1, 4472: 0.4, 4480: 0.05}
-BURST = 5.0                            # (20 in 0.74.109-0.74.110: too many sprites stacked in its 0.5 s on)
+BURST = 20.0                           # (5 in 0.74.111-0.74.114: 2-3 flickering sprites, the pictures mostly dark)
+# ((0.74.114) AC8's near lightning instance fades its sprites out 0.5-3.5 km from the camera (MI_NearCloudLightning001's
+# FarFade_Start 50000, FarFade_Distance 300000, emissive 5000; the far one, MI_CloudLightning001, has no fade): nothing
+# showed at 7-10 km in 0.74.113's burstwatch. A copy with the fade pushed out and half the light, which the burst's
+# sprites use: only scalar values change, so AC8's own material and shaders draw it
+MI_OLD = '/Game/VFX/Environment/Common/Lightning/CloudLightning/MI_NearCloudLightning001'
+MI_NEW = '/Game/Mods/SurvivalMode/StormFx/MI_SV_CloudFlashNear'
+MI_VALUES = {42: (5000.0, 150.0),   # (2500 in 0.74.114-0.74.115, 800 in 0.74.116: saturated white)
+              79: (300000.0, 1000000.0), 116: (50000.0, 3000000.0)}   # (emissive, fade length, fade start)
+# ((0.74.118) the user, 2026-11-17: "I think the cloud burst is too big, i liked the vanilla look": AC8's own instances as
+# they are (its brightness and its fade), only the timing patched; the copies above stay for a later choice
+VANILLA = True
 WORK = os.path.join(MAIN, 'build', 'stormfx', 'burst')
 OUT = os.path.join(MAIN, 'build', 'stormfx', 'out')
+
+
+# ((0.74.116) the far emitters' instance too (MI_CloudLightning001: emissive 5000, no fade): 0.74.115's flash at 10 km was
+# saturated white
+MIF_OLD = '/Game/VFX/Environment/Common/Lightning/CloudLightning/MI_CloudLightning001'
+MIF_NEW = '/Game/Mods/SurvivalMode/StormFx/MI_SV_CloudFlashFar'
+MIF_VALUES = {42: (5000.0, 150.0)}    # (800 in 0.74.116: saturated white)
+
+
+def instance(MI_OLD=MI_OLD, MI_NEW=MI_NEW, MI_VALUES=MI_VALUES):
+    """A copy of a stock lightning instance with scalar values changed -> its bytes (near: its fade pushed out)."""
+    src = os.path.join(STOCK, MI_OLD[len('/Game/'):] + '.uasset')
+    if not os.path.exists(src):
+        sys.exit(f'burst: no stock {src} (sh tools/get_stock.sh {MI_OLD[len("/Game/"):]}.uasset)')
+    m = ZenPkg(src)
+    p = m.payloads[0]
+    for off, (want, new) in MI_VALUES.items():
+        got = struct.unpack_from('<f', p, off)[0]
+        if got != want:
+            sys.exit(f'burst: {MI_OLD} at {off} is {got}, not {want}: the stock package changed')
+        struct.pack_into('<f', p, off, new)
+    old_short, new_short = MI_OLD.rsplit('/', 1)[1], MI_NEW.rsplit('/', 1)[1]
+    i = m.export_index(old_short)
+    m.rename(MI_OLD, MI_NEW)
+    m.rename(old_short, new_short)
+    m.set_export_public_hash(i, new_short)
+    data = m.write()
+    ZenPkg(data=data)
+    print(f'burst: {MI_NEW}: ' + ', '.join(f'{a:g} -> {b:g}' for a, b in MI_VALUES.values()))
+    return data
 
 
 def main():
@@ -55,6 +96,22 @@ def main():
     z.rename(OLD, NEW)
     z.rename(old_short, new_short)
     z.set_export_public_hash(i, new_short)
+    mi = mif = None
+    if not VANILLA:
+        # the near emitter's sprites on our instance (the import's package and its object's public hash)
+        from zenpkg import export_hash
+        hs = z.imported_hash_index(MI_OLD)
+        assert len(hs) == 1 and z.imp_hashes[hs[0]] == export_hash(MI_OLD.rsplit('/', 1)[1]), (MI_OLD, hs)
+        z.imp_hashes[hs[0]] = export_hash(MI_NEW.rsplit('/', 1)[1])
+        z.set_imported_package(MI_OLD, MI_NEW)
+        mi = instance()
+        hs = z.imported_hash_index(MIF_OLD)
+        assert len(hs) == 1 and z.imp_hashes[hs[0]] == export_hash(MIF_OLD.rsplit('/', 1)[1]), (MIF_OLD, hs)
+        z.imp_hashes[hs[0]] = export_hash(MIF_NEW.rsplit('/', 1)[1])
+        z.set_imported_package(MIF_OLD, MIF_NEW)
+        mif = instance(MIF_OLD, MIF_NEW, MIF_VALUES)
+    else:
+        print('burst: AC8\'s own lightning instances as they are (VANILLA: the user, "i liked the vanilla look")')
     data = z.write()
     ZenPkg(data=data)                  # (must parse back)
     content = os.path.join(WORK, 'Content')
@@ -62,6 +119,9 @@ def main():
     dst = os.path.join(content, NEW[len('/Game/'):] + '.uasset')
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     open(dst, 'wb').write(data)
+    if mi is not None:
+        open(os.path.join(content, MI_NEW[len('/Game/'):] + '.uasset'), 'wb').write(mi)
+        open(os.path.join(content, MIF_NEW[len('/Game/'):] + '.uasset'), 'wb').write(mif)
     print(f'burst: {NEW} ({len(data)} bytes): {len(LITERALS)} spawn literals {sorted(set(LITERALS.values()))} -> {BURST}')
     os.makedirs(OUT, exist_ok=True)
     r = subprocess.run([sys.executable, '-I', os.path.join(TOOLS, 'pack.py'), '--name', 'SurvivalMode_StormBurst_P',

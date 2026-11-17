@@ -213,7 +213,7 @@ CFG.specials.fleet = {
                                               -- (burst.py; switched off life_s on, its particles finish), our own cooked one;
                                               -- else the stock glow above)
                                               flash = { { path = "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudBurst.NS_SV_CloudBurst",
-                                                          scale = 0.3, life_s = 0.5, min_km = 6 },   -- (burstwatch: on 0.5 s, its particles die with it; none within 6 km: run 140748's whiteouts)
+                                                          scale = 0.1, life_s = 0.8, min_km = 6 },   -- (burstwatch: on 0.5 s, its particles die with it; none within 3 km: run 140748's white-outs; 0.74.114: its near sprites on MI_SV_CloudFlashNear, no fade before 30 km)
                                                         { path = "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudFlash.NS_SV_CloudFlash",
                                                           scale = 1, life_s = 2.0 } } },
                                 system = "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning.NS_CloudLightning",

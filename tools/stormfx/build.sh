@@ -33,7 +33,7 @@ rm -rf "$PROJ/Saved/Cooked"
     -unattended -nop4 -nosplash -stdout > "$OUT/cook.log" 2>&1
 COOKED="$PROJ/Saved/Cooked/Windows/Live/Content/Mods/SurvivalMode/StormFx"
 [ -f "$COOKED/NS_SV_CloudFlash.uasset" ] || { echo "stormfx: nothing cooked at $COOKED"; exit 1; }
-rm -rf "$OUT/stage" "$OUT/out" && mkdir -p "$OUT/stage/Live/Content/Mods/SurvivalMode" "$OUT/out"
+rm -rf "$OUT/stage" && rm -f "$OUT"/out/SurvivalMode_StormFx_P.* && mkdir -p "$OUT/stage/Live/Content/Mods/SurvivalMode" "$OUT/out"   # (only its own: burst.py writes SurvivalMode_StormBurst_P there too)
 cp -r "$COOKED" "$OUT/stage/Live/Content/Mods/SurvivalMode/"
 find "$OUT/stage" -type f | sed "s#$OUT/stage/#  #"
 tools/bin/retoc.exe to-zen --version UE5_4 "$OUT/stage" "$OUT/out/SurvivalMode_StormFx_P.utoc"
