@@ -331,7 +331,7 @@ local function flyTick(now)
                 return
             end
         end
-        local rc = type(SV_Capture) == "function" and SV_Capture(addrOf(pawn) or 0, dk.X, dk.Y, math.max(50, alt), dk.yaw) or -1
+        local rc = type(SV_Capture) == "function" and SV_Capture(addrOf(pawn) or 0, dk.X, dk.Y, math.max(0, alt), dk.yaw) or -1
         if type(rc) == "number" and rc < 0 then giveBack("SV_Capture refused (" .. tostring(rc) .. ")") return end
         if not landing and (dist <= n(c.final_m, 300) or along > 0) then
             L.state, L.at = "trap", now

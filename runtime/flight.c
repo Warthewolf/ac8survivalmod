@@ -519,7 +519,7 @@ static int L_Capture(void* lua)
     if (!plane) { if (DN.c.gate) DownStop(L"capture off (Lua)"); return Ret(lua, 1); }
     double gx = 0, gy = 0, alt = 0, hd = 0;
     if (!ArgNumber(lua, &gx) || !ArgNumber(lua, &gy) || !ArgNumber(lua, &alt) || !ArgNumber(lua, &hd)) return Ret(lua, SV_ERR_BAD_ARGS);
-    if (!(gx > -1e9 && gx < 1e9 && gy > -1e9 && gy < 1e9 && alt >= 50 && alt <= 15000 && hd > -720 && hd < 720)) {
+    if (!(gx > -1e9 && gx < 1e9 && gy > -1e9 && gy < 1e9 && alt >= 0 && alt <= 15000 && hd > -720 && hd < 720)) {
         Log(L"capture: refused: gate (%d, %d) m, altitude %d m, heading %d", (int32_t)(gx / 100), (int32_t)(gy / 100), (int32_t)alt,
             (int32_t)hd);
         return Ret(lua, SV_ERR_BAD_ARGS);
