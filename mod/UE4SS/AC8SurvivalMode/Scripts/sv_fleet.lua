@@ -1451,7 +1451,8 @@ end
 -- IFLEET.onLaunch: sv_weaponlog.lua's word on each launch.
 IFLEET = { cur = nil, rowsOk = nil }
 do
-local TURRET = { "tani_laser", "mk15", "mk41", "mk45", "artillery", "_sam", "aagun", "ak130", "ak630", "a190", "a192", "3r14", "palma",
+-- ((0.74.164) "alcn_ecm": RAVEN's ECM part, the Alicorn's (its EW mast), a part, never its hull)
+local TURRET = { "tani_laser", "alcn_ecm", "mk15", "mk41", "mk45", "artillery", "_sam", "aagun", "ak130", "ak630", "a190", "a192", "3r14", "palma",
                  "kashtan", "s300" }
 local function fc() return CFG.specials.fleet end
 local function fm() return CFG.specials.fleet.formation end

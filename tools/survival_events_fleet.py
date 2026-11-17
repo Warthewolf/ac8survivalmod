@@ -60,6 +60,12 @@ IF_KINDS = {
 IF_AEGIS_BP = '/Game/Mods/SurvivalMode/Tanicorn/BP_SV_IF_Aegis'
 IF_AEGIS_BP_CLASS = 'BP_SV_IF_Aegis_C'
 IF_AEGIS_LASERS = ('LASER_BOW', 'LASER_AFT')
+# ((2026-11-17) the user: "Have the Raven use ECM too"; docs/design/INVINCIBLE_FLEET.md WP14's EW mast, route 1) RAVEN's
+# Mk 15 slot carries the Alicorn's ECM part (EB_002's `ecm` child: BP_BA002_alcn_ecm_Base, its jammer BP_wp_ecm_ON) on
+# its row alcn_ecm_01 (the Alicorn's rows, added at the main menu), as the Ladons' CIWS slots carry the Arsenal Bird's
+# pods (hard rule 38): its class imported from EB_002's world data, the hull row's child for that slot the ECM's row
+IF_RAVEN_ECM = {'ship': 'RAVEN', 'slot': 'BP_VE002_aegs_mk15_Base', 'part': 'ecm', 'npc': 'alcn_ecm_01',
+                'wd': '/Game/OnlineMode/Maps/EmergencyCall/EB_002/WD_EB_002', 'src_unit': 'Boss_0'}
 IF_AEGIS_LASER = [m for m in TANI_MOUNTS if m['part'] == 'LASER'][0]
 # Mission 22's ships' parts by their component (the world data's ComponentFieldName), renamed by place (their names end in
 # digits, _01 / _02: hard rule 17), and the GrandChildrens' (the Kirov's gun mount's Artillery) after their parent's
