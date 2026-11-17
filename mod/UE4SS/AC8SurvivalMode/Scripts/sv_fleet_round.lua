@@ -477,14 +477,18 @@ local function scarsTick()
     if F ~= SC.F then SC.F, SC.q, SC.done, SC.n, SC.slots, SC.of, SC.said, SC.lines = F, {}, {}, 0, 0, 0, nil, 0 end
     if not F then return end
     if IFSURF and IFSURF.state and IFSURF.state() then return end   -- (the real fleet only once the surfacing's over)
-    for _, sh in ipairs(F.ships) do
-        if sh.hull and not SC.done[sh.key] and not sh.sunk then
+    local tq = os.clock()
+    for _, sh in ipairs(F.ships) do                       -- ((0.74.151) one ship's components walked a tick: run 20261117_203153's
+        if sh.hull and not SC.done[sh.key] and not sh.sunk then   -- worst tick 146 ms had every ship walked at once)
             SC.done[sh.key] = true
             local k = scarQueue(sh)
             if k > 0 then SC.n = SC.n + 1 end
+            break
         end
     end
-    local per = math.max(1, math.floor(n(c.per_tick, 6)))
+    if PERF and PERF.add then PERF.add("fleet round/scars walk", tq) end
+    local ts = os.clock()
+    local per = math.max(1, math.floor(n(c.per_tick, 1)))
     for _ = 1, per do
         local j = table.remove(SC.q, 1)
         if not j then break end
@@ -498,6 +502,7 @@ local function scarsTick()
             end
         end
     end
+    if PERF and PERF.add then PERF.add("fleet round/scars set", ts) end
     if #SC.q == 0 and SC.n > 0 and SC.said ~= SC.n then
         SC.said = SC.n
         log(string.format("fleet: scars: %d ships, %d of %d material slots on their dimmed _DAM (embers x%g; the rest have none of their own)",
@@ -655,16 +660,24 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet round", fn = function(now)
         hudCallout(tx().warn or "INVINCIBLE FLEET", tx().warn_sub or "")
         rlog(string.format("round %d's break: the warning (%d radio lines)", D.round, say("warn")))
     end
+    local function share(name, t0) if PERF and PERF.add then PERF.add("fleet round/" .. name, t0) end end   -- ((0.74.149) each
+    local t0 = os.clock()                                  -- piece's own share of the round's tick on the perf line)
     pcall(scarsTick)                                      -- ((0.74.140) WP8: any fleet up, the round's or Ctrl+N's)
+    share("scars", t0)
     if not R then return end
     if IFLEET.cur ~= R.F then return end
-    pcall(turretsTick)
-    pcall(musicTick)
+    t0 = os.clock(); pcall(turretsTick); pcall(musicTick); share("turrets", t0)
+    t0 = os.clock()
     local okP, errP = pcall(p2Tick, now)
+    share("phase 2", t0)
     if not okP and not R.p2err then R.p2err = true; rlog("phase 2: error " .. tostring(errP)) end
+    t0 = os.clock()
     local okK, errK = pcall(deckTick, now)
+    share("deck", t0)
     if not okK and not R.deckErr then R.deckErr = true; rlog("deck: error " .. tostring(errK)) end
+    t0 = os.clock()
     local okS, errS = pcall(shellTick, now)
+    share("shelling", t0)
     if not okS and not R.shellErr then R.shellErr = true; rlog("shelling: error " .. tostring(errS)) end
     if not R.sightedSaid and #R.F.queue == 0 and not (IFSURF and IFSURF.state and IFSURF.state()) then
         R.sightedSaid, R.sightedAt = true, now

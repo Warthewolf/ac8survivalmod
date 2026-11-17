@@ -123,7 +123,7 @@ CFG.specials.fleet = {
                   course_yaw = 45, runway_cm = { 1610476, -436143 } },
     -- ((0.74.140) WP8: every fleet ship scarred from its spawn (sv_fleet_round.lua scarsTick): its slots on dimmed copies of their
     -- own _DAM instances, per_tick components a tick; embers: their glow x this (a look only: never ranked against)
-    scars = { enabled = true, per_tick = 6, embers = 0.05 },
+    scars = { enabled = true, per_tick = 1, embers = 0.05 },   -- ((0.74.152) 1: the game's own work, ~45 ms a part at worst (run 20261117_203608: the walks 0.0 ms, the sets 134 ms for 3))
     -- ((0.74.137) WP13, round 30: the fleet shells the airfield (sv_fleet_round.lua shellTick): each ship afloat of kinds within
     -- shell_km of the runway a salvo every every_s (staggered), its muzzle flash, flight_s on its damage off the airfield and
     -- its rounds of AC8's explosions on the runway (spread_m along it at runway_yaw, across_m across); none while it's down,
@@ -1306,10 +1306,42 @@ function GEO.fallHide(G)
 end
 -- ((0.74.140) WP8, the fleet's scars, sv_fleet_round.lua) every material slot of a component on a dimmed copy of its own
 -- _DAM instance (embers x embers), none where it has none -> slots set, slots, what each got
+-- ((0.74.150) one dimmed copy a _DAM material, shared by every slot that uses it (kept with its name, hard rule 59): run
+-- 20261117_202734's scars cost 4.6 ms a tick (176 the worst) making a copy a slot, 177 of them)
+local SCARMID = {}
 function GEO.scarComp(comp, embers)
     local e = keep(comp, true)
     if not e then return 0, 0, "gone" end
-    return damSlots({ e = e, strict = true }, "dim", embers)
+    local okN, n = pcall(function() return comp:GetNumMaterials() end)
+    n = (okN and type(n) == "number") and n or 0
+    local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
+    local set, said = 0, {}
+    for i = 0, n - 1 do
+        local dam, src = damFor(comp, i, true)
+        if dam then
+            local key = nameOf(dam)
+            local c = SCARMID[key]
+            if not (c and liveObj(c.o) and nameOf(c.o) == c.n) then
+                c = nil
+                if valid(kml) and liveObj(survivalPC) then
+                    local okK, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, dam, FName("None"), 0) end)
+                    if okK and mid and valid(mid) then
+                        local b
+                        pcall(function() b = mid:K2_GetScalarParameterValue(FName("Charred_Embers_Brightness")) end)
+                        pcall(function() mid:SetScalarParameterValue(FName("Charred_Embers_Brightness"), (type(b) == "number" and b > 0 and b or 650000) * num(embers, 0.05)) end)
+                        c = { o = mid, n = nameOf(mid) }
+                        SCARMID[key] = c
+                    end
+                end
+            end
+            local m = c and c.o or dam
+            if pcall(function() comp:SetMaterial(i, m) end) then set = set + 1 end
+            said[#said + 1] = string.format("slot %d %s -> %s%s", i, src, short(dam), c and " (shared copy)" or "")
+        else
+            said[#said + 1] = string.format("slot %d %s: no _DAM", i, src)
+        end
+    end
+    return set, n, #said > 0 and table.concat(said, ", ") or "no slots"
 end
 function GEO.where(G)
     if not (G and G.hull and same(G.hull)) then return nil end

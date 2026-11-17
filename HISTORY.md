@@ -3796,3 +3796,12 @@ game. The work was split by file between agents; the builds ran in sequence in t
   in run 20261117_193828, inside the cinematic) lands while GEOFON sits whole. split_max_s 9, rise_max_s 45.
 - Autotest phase2 (run 20261117_202226): 31/31: spawned 20:24:31, released 20:24:33 with the cinematic, the split at +1.1 s;
   the worst frame that minute 354 ms. Its first try was stopped for low memory (cleaned up, retried after 5 min).
+
+## 0.74.149-0.74.152 (2026-11-17): round 30's tick measured by piece; the scars spread out (feature/geofon-rise); staged
+- sv_fleet_round.lua: the round's tick timed by piece on the perf line (PERF.add "fleet round/scars", "/turrets",
+  "/phase 2", "/deck", "/shelling"; "/scars walk" and "/scars set"). Run 20261117_202734: the round 4.9 ms a tick, the scars
+  4.6 of it (176 ms the worst tick), everything else under 0.2.
+- 0.74.150: one dimmed copy a _DAM material shared by its slots (GEO.scarComp, SCARMID, kept by name): no change (5.1 /
+  146). 0.74.151: a ship's components walked one ship a tick: the walks 0.0 ms, the sets 5.1 / 134 for 3 parts (the game's
+  own work: the _DAM's first load, the mesh's render state). 0.74.152: scars.per_tick 1 (spread over ~40 s).
+- Autotests shell 12/12 on 0.74.149, 0.74.150, 0.74.151 (15 ships, 131 of 177 slots scarred each time).
