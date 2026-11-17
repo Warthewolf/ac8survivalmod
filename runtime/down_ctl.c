@@ -146,6 +146,9 @@ typedef struct {
 #define CP_LAND_MS      75.0   /* m/s (270 km/h): (0.32.39) landing, the brake held above this speed                */
 #define CP_LAND_HI      80.0   /* m/s: (0.32.40) the brake over this ...                                            */
 #define CP_LAND_LO      70.0   /* m/s: ... the throttle under this (0.32.39's brake alone stalled it at 49 m/s)      */
+#define CP_LAND_KH      0.25   /* deg of climb a metre of height error, landing (0.04 otherwise)                  */
+#define CP_LAND_SINK    6.0    /* deg: the steepest descent asked, landing                                         */
+#define CP_LAND_BANK    30.0   /* deg: the steepest bank, landing (the line's small corrections only)             */
 
 static double DnWrap(double a) { while (a > 180.0) a -= 360.0; while (a < -180.0) a += 360.0; return a; }
 static double DnClamp(double v, double lo, double hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -350,6 +353,9 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
         double eh = c->alt - h;
         c->altI = DnClamp(c->altI + eh * dt, -3000.0, 3000.0);
         double gammaWant = DnClamp(0.04 * eh + 0.0015 * c->altI, -12.0, 15.0);
+        /* (0.32.41) landing: the height held hard (0.32.40's 0.04 deg a metre left the capture 30-40 m off it: it crossed
+         * GEOFON's deck 32 m up), a gentle sink at most and its integral faster, so it follows the line down to the deck */
+        if (c->land) gammaWant = DnClamp(CP_LAND_KH * eh + DnClamp(0.01 * c->altI, -2.0, 2.0) - 0.3 * c->rth, -CP_LAND_SINK, 10.0);
         double vt = CoSqrt(vh * vh + vz * vz);
         double gamma = vt > 20.0 ? CoAtan2(vz, vh) / D2R : rot[0];
         /* the dive backstop: a steep dive the climb wanted doesn't pull it out of (a wrong pitch sign the check can't see
@@ -388,7 +394,7 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
         double bankWant;
         if (c->push) bankWant = CoAtan2(-wH, -wV) / D2R;       /* (pushed: the bank the other way, under DN_PUSH_OUT) */
         else {
-            double bmax = low ? DN_BANK_LOW : DN_BANK_MAX;
+            double bmax = c->land ? CP_LAND_BANK : low ? DN_BANK_LOW : DN_BANK_MAX;
             bankWant = DnClamp(CoAtan2(wH, wV < 0.0 && low ? 0.0 : wV) / D2R, -bmax, bmax);
         }
         c->bankF += DnWrap(bankWant - c->bankF) * DnClamp(dt / DN_BANK_TAU, 0.0, 1.0);   /* (smoothed: AC8 answers late) */
