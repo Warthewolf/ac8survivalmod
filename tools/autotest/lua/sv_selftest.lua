@@ -2533,6 +2533,10 @@ SUITES.phase2 = function()
     A.log_("cine: cinematic of 12 keys", 5, "p4", true, function(l)
         ST.check(l ~= nil and l:find("a cut", 1, true) ~= nil, "her rise's own shot list (12 keys, its cuts)", l)
     end)
+    A.log_("cine: cinematic of 12 keys", 5, "p4", true, function(l)   -- ((0.74.157) no camera that kept looking the wrong way)
+        local off = l and tonumber(l:match("read back worst ([%d%.]+) deg off"))
+        ST.check(off ~= nil and off <= 10, "every camera aimed where its key says (read back within 10 deg)", tostring(off))
+    end)
     A.log_("geofon: break look %+%d+ s: bow .-pitch [+-]?[1-9]", 8, "p4", false, function(l)
         ST.check(l ~= nil, "GEOFON's V reared (its halves' pitch read back off 0)", l)
     end)
@@ -2567,28 +2571,44 @@ SUITES.phase2 = function()
         ST.check(up ~= nil and of ~= nil and of > 0, "her parts counted", string.format("%s of %s up", tostring(up), tostring(of)))
         ST.info("phase2: the row: " .. tostring(IFROUND.row(D.special, {})))
         ST.marks.p5 = ST.n
-        local seen, k = TANI.liveSeen() or {}, 0
+        local seen, k = TANI.liveSeen() or {}, 0       -- ((0.74.157) 22 of 35 first (past phase2_share 0.6), never the railcannon
         for s, e in pairs(seen) do
-            if liveAddr(e.o) == e.a and nameOf(e.o) == e.name and k < 18 then
+            if s ~= "RAILCANNON" and liveAddr(e.o) == e.a and nameOf(e.o) == e.name and k < 22 then
                 if pcall(finishUnpaid, e.o) then k = k + 1 end
             end
         end
         C.firstK = k
-        ST.info("phase2: " .. k .. " of her guns finished")
+        ST.info("phase2: " .. k .. " of her guns finished (the railcannon kept)")
     end)
     A.log_("fleet round: phase 2: %d+ of her guns shot down", 6, "p5", false, function(l) ST.check(l ~= nil, "her guns paid as they go down", l) end)
-    A.wait(3)
+    A.log_("fleet round: phase 2: her phase 2 at", 10, "p5", true, function(l)   -- ((0.74.156) her phases)
+        ST.check(l ~= nil and l:find("started", 1, true) ~= nil, "her phase 2 (22 of 35 down): the railcannon's cycle started", l)
+    end)
+    A.log_("tanicorn rc: .-charg", 40, "p5", false, function(l) ST.check(l ~= nil, "her railcannon charging at the airfield", l) end)
     A.do_(function()
-        ST.shot("p2_half")
+        ST.shot("p2_railcannon")
         ST.marks.p6 = ST.n
-        local seen, k = TANI.liveSeen() or {}, 0
-        for s, e in pairs(seen) do
-            if liveAddr(e.o) == e.a and nameOf(e.o) == e.name then if pcall(finishUnpaid, e.o) then k = k + 1 end end
-        end
-        ST.info("phase2: the rest of her guns finished: " .. k)
+        local e = (TANI.liveSeen() or {})["RAILCANNON"]
+        local ok = e and liveAddr(e.o) == e.a and nameOf(e.o) == e.name and pcall(finishUnpaid, e.o)
+        ST.info("phase2: her railcannon shot down: " .. tostring(ok))
+    end)
+    A.log_("fleet round: phase 2: her core open", 15, "p6", true, function(l)
+        ST.check(l ~= nil and l:find("SetMinHealth", 1, true) ~= nil and l:find("railcannon", 1, true) ~= nil,
+            "her core open by her railcannon's loss: armour off, health held", l)
+    end)
+    A.wait(2)
+    A.do_(function()
+        ST.shot("p2_core")
+        ST.info("phase2: the row: " .. tostring(IFROUND.row(D.special, {})))
+        local o = TANI.liveHull and TANI.liveHull()
+        if not o then ST.info("phase2: no hull for the core"); return end
+        local h; pcall(function() h = o.HealthInternal end)
+        local ok = pcall(function() o:ModifyHealth(-((h or 1e6) / 10 + 1000), nil, true) end)
+        local h1; pcall(function() h1 = o.HealthInternal end)
+        ST.info(string.format("phase2: her core hit: %s -> %s (%s)", tostring(h), tostring(h1), ok and "ModifyHealth ok" or "FAILED"))
     end)
     A.log_("fleet round: phase 2: the TANACORN beaten", 15, "p5", true, function(l)
-        ST.check(l ~= nil, "all her guns down: beaten, her reward", l)
+        ST.check(l ~= nil and l:find("core destroyed", 1, true) ~= nil, "her core destroyed: beaten, her reward", l)
     end)
     A.wait(3)
     A.do_(function()
