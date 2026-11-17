@@ -3959,6 +3959,27 @@ SUITES.capture = function()
             ST.info("capture: your plane put 10 km behind GEOFON: SV_Respawn " .. tostring(rc))
         end
     end)
+    A.do_(function()                                       -- ((0.74.167) the player plane's targeting fields: what to switch off)
+        local pl = ST.plane()
+        local names = {}
+        pcall(function()
+            local cls = pl:GetClass()
+            while cls and cls:IsValid() do
+                cls:ForEachProperty(function(prop)
+                    local nm = prop:GetFName():ToString()
+                    local low = nm:lower()
+                    if low:find("target") or low:find("lock") or low:find("faction") or low:find("team") or low:find("attack")
+                        or low:find("hostile") or low:find("enemy") or low:find("aggro") then
+                        local v = "?"
+                        pcall(function() v = tostring(pl[nm]) end)
+                        names[#names + 1] = nm .. "=" .. v
+                    end
+                end)
+                cls = cls:GetSuperStruct()
+            end
+        end)
+        ST.info("capture: the player plane's targeting fields: " .. (#names > 0 and table.concat(names, ", ") or "none read"))
+    end)
     A.wait(3)
     A.do_(function()
         ST.marks.c1 = ST.n
