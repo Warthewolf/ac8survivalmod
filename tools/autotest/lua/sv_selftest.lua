@@ -3199,6 +3199,167 @@ SUITES.glow96 = function()
     A.do_(function() local L = cfg(); L.enabled = C.on; clear(); say("TEST: DONE", "THANK YOU") end)
     A.wait(2)
 end
+-- (2026-11-17) flash: our own cloud flash (tools/stormfx NS_SV_CloudFlash, a burst at each activation): the storm's glow
+-- pool uses it when its container is in (the log names it); spawned alone 3 and 6 km ahead at cloud height, pictures 0.1-1.2 s
+-- after; then strikes on cue in your view (IFSKY.strike: the bolt, our flash at its top, thunder), pictures on each; then the
+-- storm's own lightning for 12 s. Pass: the system loads, spawns and the game lives; the pictures say whether it draws.
+SUITES.flash = function()
+    intoRun()
+    local C = { list = {} }
+    local SYS = "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudFlash.NS_SV_CloudFlash"
+    local BURST = "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudBurst.NS_SV_CloudBurst"   -- (AC8's own, its spawn literals raised)
+    local function say(a, b) pcall(hudCallout, a, b); ST.info("flash: " .. a .. " / " .. b) end
+    local function cam()
+        local pcm, L, R
+        pcall(function() pcm = survivalPC.PlayerCameraManager; local v = pcm:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+        pcall(function() R = pcm:GetCameraRotation() end)
+        return L, R
+    end
+    local function ahead(km, upM)
+        local L, R = cam()
+        if not (L and R) then return nil end
+        local yw = math.rad(R.Yaw or 0)
+        return { X = L.X + math.cos(yw) * km * 100000, Y = L.Y + math.sin(yw) * km * 100000, Z = (upM and upM * 100) or (L.Z + 30000) }
+    end
+    local function flash(at, path, sc)
+        local lib, sys = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary"), loadObject(path or SYS)
+        if not sys then return "NOT loaded" end
+        if not lib then return "no Niagara" end
+        local ok, comp = pcall(function() return lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = sc or 1, Y = sc or 1, Z = sc or 1 }, false, false, 0, false) end)
+        if not (ok and comp) then return "no spawn" end
+        pcall(function() comp.bOverrideSeparateTranslucencySortPriority = true end)
+        pcall(function() comp.SeparateTranslucencySortPriority = 100 end)
+        pcall(function() comp:SetTranslucentSortPriority(100) end)
+        pcall(function() comp:Activate(true) end)
+        C.list[#C.list + 1] = comp
+        return "up"
+    end
+    local function clear() for _, c in ipairs(C.list) do pcall(function() c:DestroyComponent() end) end; C.list = {} end
+    local function L() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and IFSKY.strike ~= nil and THUNDER ~= nil, "the storm and its cued strike are in this build") then return "abort" end
+        ST.info("NS_SV_CloudFlash " .. (loadObject(SYS) and "loads" or "NOT in"))
+        ST.check(loadObject(BURST) ~= nil, "NS_SV_CloudBurst loads (AC8's own, patched: its container installed)", BURST)
+        ST.marks.k1 = ST.n
+        ST.press("S")
+    end)
+    A.log_("fleet storm: in (", 15, "k1", true, function(l)
+        ST.check(l ~= nil, "the storm in", l)
+        C.on = L().enabled; L().enabled = false            -- (its own lightning held while we take our pictures)
+    end)
+    A.wait(4)
+    -- (burstwatch, run 20261117_140335: left on, the burst lit the sky from its first frame (the stock one only at 15 s); its
+    -- particles die when it's switched off (bCanDieWhenEmitterDeactivates): on 0.5 s, pictures inside it; scales 0.15-0.6)
+    for _, sc in ipairs({ 0.15, 0.3, 0.6 }) do
+        local km = 5
+        local tag = string.format("bu_x%03d", math.floor(sc * 100))
+        A.do_(function() say("TEST: AC8'S CLOUD BURST", string.format("5 KM AHEAD, SCALE %.2f, IN 2 S", sc)) end)
+        A.wait(2)
+        A.do_(function() ST.shot(tag .. "_0") end)
+        A.wait(0.2)
+        A.do_(function() local at = ahead(km); ST.info(tag .. ": " .. (at and flash(at, BURST, sc) or "no camera")) end)
+        for j, w in ipairs({ 0.1, 0.15, 0.2 }) do
+            A.wait(w)
+            A.do_(function() ST.shot(string.format("%s_%d", tag, j)) end)
+        end
+        A.do_(function() for _, c in ipairs(C.list) do pcall(function() c:Deactivate() end) end end)
+        for j, w in ipairs({ 0.2, 0.6 }) do
+            A.wait(w)
+            A.do_(function() ST.shot(string.format("%s_%d", tag, j)) end)
+        end
+        A.wait(1.5)
+        A.do_(function() clear() end)
+    end
+    for _, km in ipairs({}) do                               -- (our own cooked flash: run 20261117_135637 drew it full-screen
+        local tag = string.format("fl_%dkm", km)            -- with blocky artifacts; off here)
+        A.do_(function() say("TEST: CLOUD FLASH", string.format("%d KM AHEAD, IN 2 S", km)) end)
+        A.wait(2)
+        A.do_(function() ST.shot(tag .. "_0") end)
+        A.wait(0.2)
+        A.do_(function() local at = ahead(km); ST.info(tag .. ": " .. (at and flash(at) or "no camera")) end)
+        for j, w in ipairs({ 0.1, 0.2, 0.3, 0.6 }) do
+            A.wait(w)
+            A.do_(function() ST.shot(string.format("%s_%d", tag, j)) end)
+        end
+        A.wait(1.5)
+        A.do_(function() clear() end)
+    end
+    for k = 1, 4 do
+        A.do_(function() say("TEST: A STRIKE " .. k .. "/4", "4 KM AHEAD, IN 2 S") end)
+        A.wait(2)
+        A.do_(function()
+            local at = ahead(4, 3000)
+            local ok, okS, what = pcall(IFSKY.strike, at, "the flash test")
+            ST.info(string.format("fl strike %d: %s", k, ok and tostring(what) or ("error " .. tostring(okS))))
+        end)
+        for j, w in ipairs({ 0.15, 0.25, 0.4 }) do
+            A.wait(w)
+            A.do_(function() ST.shot(string.format("fl_strike%d_%d", k, j)) end)
+        end
+        A.wait(1.5)
+    end
+    A.do_(function() L().enabled = C.on; say("TEST: THE STORM'S OWN", "12 S") end)
+    for i = 1, 8 do
+        A.wait(1.5)
+        A.do_(function() ST.shot(string.format("fl_storm_%d", i)) end)
+    end
+    A.do_(function()
+        local l = ST.findLog("fleet storm: the bolts' cloud flash:", ST.marks.k1, true)
+        ST.check(l ~= nil and l:find("NS_SV_CloudBurst", 1, true) ~= nil, "the storm's glow pool uses AC8's burst", l)
+        clear(); say("TEST: DONE", "THANK YOU")
+    end)
+    A.wait(2)
+end
+-- (2026-11-17) burstwatch: when do the cloud lightnings flash? Each spawned 5 km ahead at 3 km up and LEFT ON 16 s in front
+-- of a fixed camera, a picture every 0.5 s: Mission 12's stock NS_CloudLightning, AC8's patched NS_SV_CloudBurst (its spawn
+-- literals x20: run 20261117_140029 showed nothing switched off after 0.25 s: a loop delay?), our NS_SV_CloudFlash at 1/4 scale
+SUITES.burstwatch = function()
+    intoRun()
+    local W = {}
+    local LIST = { { "stock", "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning.NS_CloudLightning", 1 },
+                   { "burst", "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudBurst.NS_SV_CloudBurst", 1 },
+                   { "own", "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudFlash.NS_SV_CloudFlash", 0.25 } }
+    local function L() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and THUNDER ~= nil, "the storm is in this build") then return "abort" end
+        ST.marks.k1 = ST.n
+        ST.press("S")
+    end)
+    A.log_("fleet storm: in (", 15, "k1", true, function(l)
+        ST.check(l ~= nil, "the storm in", l)
+        W.on = L().enabled; L().enabled = false
+    end)
+    A.wait(4)
+    for _, e in ipairs(LIST) do
+        A.do_(function()
+            local me = playerLocation and playerLocation()
+            if not me then ST.info("burstwatch: no plane spot"); return end
+            W.cam = { X = me.X, Y = me.Y, Z = me.Z + 50000 }
+            W.spot = { X = me.X + 500000, Y = me.Y, Z = 300000 }
+            ST.look(W.cam, W.spot, 50)
+            local lib, sys = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary"), loadObject(e[2])
+            if not sys then ST.info("burstwatch " .. e[1] .. ": NOT loaded"); return end
+            local sc = e[3]
+            local ok, comp = pcall(function() return lib:SpawnSystemAtLocation(survivalPC, sys, W.spot, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = sc, Y = sc, Z = sc }, false, false, 0, false) end)
+            if ok and comp then
+                pcall(function() comp.bOverrideSeparateTranslucencySortPriority = true end)
+                pcall(function() comp.SeparateTranslucencySortPriority = 100 end)
+                pcall(function() comp:SetTranslucentSortPriority(100) end)
+                pcall(function() comp:Activate(true) end)
+                W.comp = comp
+            end
+            ST.info(string.format("burstwatch %s: %s at 5 km ahead, 3 km up (scale %s)", e[1], (ok and comp) and "spawned, on" or "NOT spawned", tostring(sc)))
+        end)
+        for i = 1, 32 do
+            A.wait(0.5)
+            A.do_(function() ST.shot(string.format("bw_%s_%02d", e[1], i)) end)
+        end
+        A.do_(function() if W.comp then pcall(function() W.comp:DestroyComponent() end); W.comp = nil end; ST.lookBack() end)
+        A.wait(2)
+    end
+    A.do_(function() L().enabled = W.on end)
+    A.wait(1)
+end
 -- (2026-11-17) fleet30: WP10 step 1 (sv_fleet_round.lua) played: the run set to round 29 in its first break: the warning;
 -- round 30 the fleet's: its callout, the surfacing, the fleet up; GEOFON sunk (finishUnpaid on its hull): 6,000 and its
 -- callout; the rest sunk and the round's own fighters finished: the win, 50,000, the airfield fully repaired. Pictures.
