@@ -222,12 +222,12 @@ local function fxAsset(path)
     return nil
 end
 -- an AC8 effect on the laser's root (it swings with it), or nil
-local function fxOn(r, path, life)
+local function fxOn(r, path, life, at)
     local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
     local sys = fxAsset(path)
     if not (valid(lib) and sys and r.li and liveLaser(r)) then return nil end
     local ok, comp = pcall(function()                     -- (EAttachLocation 0, KeepRelativeOffset: at its root, as AC7's)
-        return lib:SpawnSystemAttached(sys, r.li:K2_GetRootComponent(), FName("None"), { X = 0, Y = 0, Z = 0 },
+        return lib:SpawnSystemAttached(sys, r.li:K2_GetRootComponent(), FName("None"), at or { X = 0, Y = 0, Z = 0 },
             { Pitch = 0, Yaw = 0, Roll = 0 }, 0, true, true, 0, true)
     end)
     if not (ok and comp and comp:IsValid()) then
@@ -297,6 +297,9 @@ local function beam(r, yz)
         local c = r.fxBeam
         if not (c and liveObj(c)) then return end
         local len = num(zc().li_range_m, 1240) * 100              -- (AC8's own units: cm)
+        for _, x in ipairs(r.fxExtra or {}) do                     -- ((0.74.162) its bundle's copies the same length)
+            if liveObj(x) then pcall(function() x:SetVariableVec3(FName("User.BeamLength"), { X = len, Y = yz, Z = yz }) end) end
+        end
         pcall(function() c:SetVariableVec3(FName("User.BeamLength"), { X = len, Y = yz, Z = yz }) end)
         pcall(function() c:SetVariableVec3(FName("BeamLength"), { X = len, Y = yz, Z = yz }) end)
         -- ((2026-11-17) the user: the x1.5 width "weren't affected": AC8's beam doesn't take BeamLength's Y / Z as its
@@ -420,6 +423,22 @@ local function volleyOn(s, r, clock, why)
         if r.fxBeam and liveObj(r.fxBeam) then pcall(function() r.fxBeam:Deactivate() end) end
         r.fxBeam = fxOn(r, z.li_fx_beam, num(z.li_volley_s, 6.0) + num(z.li_intercept_s, 1.0) + num(z.li_end_s, 0.2))
         tint(r, r.fxBeam)                                 -- ((2026-11-11) li_color: red, AC7's)
+        -- ((0.74.162) the user: the lasers' width "didn't seem to be affected again": AC8's beam is a world-space mesh
+        -- particle, and its system has no width (User.BeamColor / BeamLength / BeamLifeTime only), so neither BeamLength's Y / Z
+        -- nor its component's scale widens it. li_beam_bundle copies of it around it, li_beam_off_cm across its axis: one
+        -- beam that reads li_beam_w x as wide; 0 copies when li_beam_w is 1 or less)
+        for _, x in ipairs(r.fxExtra or {}) do if liveObj(x) then pcall(function() x:Deactivate() end) end end
+        r.fxExtra = {}
+        if num(z.li_beam_w, 1) > 1 then
+            local o = num(z.li_beam_off_cm, 35) * (num(z.li_beam_w, 1) - 1) * 2
+            local spots = { { 0, o, 0 }, { 0, -o, 0 }, { 0, 0, o }, { 0, 0, -o } }
+            for k = 1, math.min(#spots, math.max(0, math.floor(num(z.li_beam_bundle, 4)))) do
+                local sp = spots[k]
+                local x = fxOn(r, z.li_fx_beam, num(z.li_volley_s, 6.0) + num(z.li_intercept_s, 1.0) + num(z.li_end_s, 0.2),
+                    { X = sp[1], Y = sp[2], Z = sp[3] })
+                if x then tint(r, x); r.fxExtra[#r.fxExtra + 1] = x end
+            end
+        end
         how = r.fxBeam and "AC8's beam" or "no beam drawn"
         beam(r, 1)
     else
@@ -450,6 +469,8 @@ local function beamOff(r, clock)
     if ac8fx() then
         if r.fxBeam and liveObj(r.fxBeam) then pcall(function() r.fxBeam:Deactivate() end) end
         r.fxBeam = nil
+        for _, x in ipairs(r.fxExtra or {}) do if liveObj(x) then pcall(function() x:Deactivate() end) end end
+        r.fxExtra = nil
     else
         pcall(function() r.li.MainLaser:Deactivate() end)
         pcall(function() r.li.MainLaser:SetVisibility(false, false) end)

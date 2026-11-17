@@ -397,6 +397,19 @@ static void PinApply(uint8_t* plane, float* out)
     if (now - PN.lastLog >= 5.0) { PN.lastLog = now; PinLog(L"pinned"); }
 }
 
+/* SV_PinInfo() -> "on,moves,refused,drift mean cm,drift worst cm,drifts read" (the autotest's read of it) */
+static int L_PinInfo(void* lua)
+{
+    static char out[160];
+    CoBuf b = { out, out + sizeof(out) - 1 };
+    CoPutI(&b, PN.on); CoPutS(&b, ","); CoPutI(&b, PN.moves); CoPutS(&b, ","); CoPutI(&b, PN.fails); CoPutS(&b, ",");
+    CoPutI(&b, PN.drifts ? (int64_t)(PN.driftSum / PN.drifts) : 0); CoPutS(&b, ","); CoPutI(&b, (int64_t)PN.driftMax);
+    CoPutS(&b, ","); CoPutI(&b, PN.drifts);
+    *b.p = 0;
+    U.luaSetString(lua, out, (size_t)(b.p - out));
+    return 1;
+}
+
 /* SV_Pin(plane, x_cm, y_cm, z_cm, vx_cms, vy_cms, yaw_deg, secs) -> 1, SV_ERR_BAD_ARGS, SV_ERR_NO_GAME, SV_ERR_NOT_LOCAL;
  * SV_Pin(0) -> 1: off. Never while DOWN's autopilot flies the plane. */
 static int L_Pin(void* lua)

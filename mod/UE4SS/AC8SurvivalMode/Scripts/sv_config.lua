@@ -1148,6 +1148,9 @@ CFG = {
                                  -- AC7's 6 / 8)
                                  -- ((2026-11-17) the user: "make the Laser Mesh thicker slightly so its more visible")
                                  -- li_beam_w: the beam's width x this (its BeamLength Y / Z; was 1)
+                                 -- ((0.74.162) AC8's beam has no width of its own: li_beam_w > 1 draws li_beam_bundle copies
+                                 -- of it round it, (li_beam_w - 1) x 2 x li_beam_off_cm across its axis)
+                                 li_beam_bundle = 4, li_beam_off_cm = 35,
                                  li_intercept_s = 0.5, li_volley_s = 20.0, li_rest_s = 10.0, li_end_s = 0.2, li_beam_x = 0, li_beam_w = 1.5,
                                  li_sure = true, li_sure_s = 0.6, li_log_n = 60,
                                  -- ((2026-11-08) Alyssa's run of 0.74.30: its first volley stopped the game in the
