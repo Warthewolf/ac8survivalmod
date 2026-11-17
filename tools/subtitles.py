@@ -11,6 +11,13 @@ Scripts/sv_config_subs.lua reads it over CFG's own lines at start). The file in 
                                               config/subtitles.ini: the user's or a friend's edits) checked, then copied
                                               over the repo's (the old one kept in build/backup/subtitles/)
   python -I tools/subtitles.py diff           whether the installed file differs from the repo's
+  python -I tools/subtitles.py all [out]      ((2026-11-18) the user: "all the subtitles in the subtitle file please including
+                                              round 30") one file with every line: the repo's subtitles.ini, then after a
+                                              marker line its dev file config/subtitles_dev.ini (round 30's: the dev
+                                              install's own, never zipped); default build/subtitles_all.ini
+  python -I tools/subtitles.py split FILE     such a file (edited) back into the two: its round 30 part into
+                                              config/subtitles_dev.ini, the rest checked and into config/subtitles.ini
+                                              (the old ones kept in build/backup/subtitles/)
 
 Runs tools/checks/subs_tool.lua on build/checks/lua.exe (tools/checks/lua_build.sh makes it).
 """
@@ -25,6 +32,9 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 MOD = os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode')
 REPO_FILE = os.path.join(MOD, 'config', 'subtitles.ini')
+DEV_FILE = os.path.join(MOD, 'config', 'subtitles_dev.ini')
+# (the line `all` puts between the two parts, which `split` cuts at)
+DEV_MARK = "; ======== ROUND 30 (the dev install's own lines: config/subtitles_dev.ini; never in a zip) ========"
 CHECKS = os.path.join(HERE, 'checks')
 LUA = os.path.join(ROOT, 'build', 'checks', 'lua.exe')
 WORK = os.path.join(ROOT, 'build', 'checks', 'subtitles')
@@ -152,6 +162,45 @@ def main(argv):
         shutil.copy(REPO_FILE, keep)
         shutil.copy(src, REPO_FILE)
         print(f'subtitles: pulled the installed file into the repo (the old one: {os.path.relpath(keep, ROOT)})')
+        return 0
+    if cmd == 'all':
+        out = argv[2] if len(argv) > 2 else os.path.join(ROOT, 'build', 'subtitles_all.ini')
+        if not os.path.isfile(DEV_FILE):
+            print(f'subtitles: no {os.path.relpath(DEV_FILE, ROOT)} yet (the game writes it on a dev run: take it from there)')
+            return 1
+        rel = open(REPO_FILE, 'rb').read().decode('utf-8').rstrip('\r\n')
+        dev = open(DEV_FILE, 'rb').read().decode('utf-8')
+        with open(out, 'wb') as f:
+            f.write((rel + '\r\n\r\n' + DEV_MARK + '\r\n\r\n' + dev).encode('utf-8'))
+        print(f'subtitles: wrote {out}: the shipped lines, then round 30\'s after the marker')
+        return 0
+    if cmd == 'split':
+        if len(argv) < 3:
+            print('usage: subtitles.py split FILE')
+            return 2
+        text = open(argv[2], 'rb').read().decode('utf-8')
+        if DEV_MARK not in text:
+            print('subtitles: no round 30 marker in that file (not one `all` wrote?): nothing split')
+            return 1
+        rel, dev = text.split(DEV_MARK, 1)
+        os.makedirs(WORK, exist_ok=True)
+        tmp = os.path.join(WORK, 'split_check.ini')
+        with open(tmp, 'wb') as f:
+            f.write((rel.rstrip('\r\n') + '\r\n').encode('utf-8'))
+        code, _, _ = check(tmp)
+        if code:
+            print('subtitles: not split: fix those lines first (the game skips them)')
+            return 1
+        bk = os.path.join(ROOT, 'build', 'backup', 'subtitles')
+        os.makedirs(bk, exist_ok=True)
+        stamp = time.strftime('%Y%m%d_%H%M%S')
+        for path in (REPO_FILE, DEV_FILE):
+            if os.path.isfile(path):
+                shutil.copy(path, os.path.join(bk, os.path.basename(path).replace('.ini', f'_{stamp}.ini')))
+        shutil.copy(tmp, REPO_FILE)
+        with open(DEV_FILE, 'wb') as f:
+            f.write(dev.lstrip('\r\n').encode('utf-8'))
+        print(f'subtitles: split into {os.path.relpath(REPO_FILE, ROOT)} and {os.path.relpath(DEV_FILE, ROOT)} (the old ones kept)')
         return 0
     print(__doc__)
     return 2
