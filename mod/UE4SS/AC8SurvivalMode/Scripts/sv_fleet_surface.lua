@@ -216,6 +216,10 @@ end
 local function playerHold(on)
     local pawn = liveObj(survivalPC) and survivalPC.Pawn or nil
     if not valid(pawn) then return "no plane of yours" end
+    if DOWN and DOWN.me and DOWN.me() then                       -- ((0.74.160) DOWN keeps its own: safe, held, its spectator view)
+        if on then S.limits = {} end
+        return "you're DOWN: your plane, controls and view left to DOWN"
+    end
     if on then
         local me = playerLocation()
         local c = cs()

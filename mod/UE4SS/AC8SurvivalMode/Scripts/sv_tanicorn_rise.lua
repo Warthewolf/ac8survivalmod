@@ -191,7 +191,10 @@ local function riseBack(R, why)                          -- your view, plane and
     if CINE and CINE.stop then pcall(CINE.stop, why) end -- ((0.74.65) the director's cameras off first: its locked blend kept)
     local parts = {}
     local pawn = liveObj(survivalPC) and survivalPC.Pawn or nil
-    if R.cine then
+    if R.cine and DOWN and DOWN.me and DOWN.me() then           -- ((0.74.160) DOWN keeps its own: never made mortal, given controls or a view
+        parts[#parts + 1] = "you're DOWN: your plane, controls and spectator view left to DOWN"
+        if R.cam then pcall(function() R.cam:K2_DestroyActor() end) end
+    elseif R.cine then
         if valid(pawn) then
             parts[#parts + 1] = pcall(function() survivalPC:SetViewTargetWithBlend(pawn, TANI.rise.blend_s, 0, 0, false) end)
                 and "view back on your plane" or "view back FAILED"
@@ -208,6 +211,8 @@ end
 local function riseCine(R)                               -- the cinematic: autopilot, invincible, limits, the view
     local C, pawn = TANI.rise, liveObj(survivalPC) and survivalPC.Pawn or nil
     if not valid(pawn) then log("tanicorn: rise cinematic: no plane of yours"); return end
+    R.cine = true
+    if DOWN and DOWN.me and DOWN.me() then R.limits = {}; return end   -- ((0.74.160) DOWN: already safe, held, its own autopilot)
     local me = playerLocation()
     local alt = math.max(C.autopilot_alt_m, me and me.Z / 100 or 0)
     local okD, rD = false, "no SV_Down"

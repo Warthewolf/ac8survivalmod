@@ -414,6 +414,7 @@ function DOWN.nextView(why)
 end
 -- each pass while DOWN: the one watched still there, the view still on it
 local function spectateTick(now)
+    if (CINE and CINE.active and CINE.active()) or (IFSURF and IFSURF.state and IFSURF.state()) then return end   -- ((0.74.160) round 30's cinematics: watched, then back)
     local w, l = St.watch, nil
     if w then
         l = watchable()
