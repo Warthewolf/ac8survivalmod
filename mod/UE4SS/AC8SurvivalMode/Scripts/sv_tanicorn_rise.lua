@@ -221,7 +221,9 @@ local function riseCine(R)                               -- the cinematic: autop
     end
     R.cine = true
     if CINE and CINE.play then                            -- ((0.74.65) the director's keyed cameras; the rig's SOC_Cam the fallback)
-        local okP, okC, whyC = pcall(CINE.play, R, { rate = R.rate or C.rate })
+        local hk = { rate = R.rate or C.rate }               -- ((0.74.134) a caller's own shots, bars and beats: TANI.roundRise)
+        for k, v in pairs(type(R.cineHooks) == "table" and R.cineHooks or {}) do hk[k] = v end
+        local okP, okC, whyC = pcall(CINE.play, R, hk)
         if okP and okC then log("tanicorn: rise cinematic: sv_cine.lua's keyed cameras (" .. tostring(whyC) .. ")"); return end
         log("tanicorn: rise cinematic: sv_cine.lua's cameras not made (" .. tostring(okP and whyC or ("error " .. tostring(okC)))
             .. "): the rig's SOC_Cam camera")
@@ -310,16 +312,17 @@ end)
 -- played) -> r (> 0: up), why not. The rise's tick runs at once after the spawn (the user, 2026-11-17: no fade, "she spawns
 -- as the Geofon is splitting apart"): she's found and put under the sea in the same call, never a tick on the surface.
 -- TANI.riseState(): the rise's state ("finding", "hold", "rising"), nil when there's none.
--- onBreach (optional): called with her rise's time the moment her bow breaks the surface (the round splits GEOFON there)
+-- onBreach (optional): called with her rise's time the moment her bow breaks the surface (the round splits GEOFON there);
+-- cineHooks (optional): CINE.play's keys / letterbox / beats for her cinematic (the round's own shots)
 local riseTick
-function TANI.roundRise(x, y, face, why, onBreach)
+function TANI.roundRise(x, y, face, why, onBreach, cineHooks)
     if RISE and not RISE.back then riseBack(RISE, "a new rise (" .. tostring(why) .. ")"); RISE = nil end
     local before = {}
     for _, o in ipairs(ourHulls()) do before[addrOf(o) or 0] = true end
     local r, no = TANI.liveSpawn(x, y, face, why)
     if (tonumber(r) or 0) <= 0 then return r, no end      -- (her armour: the live watch's, from the tick it finds her)
     RISE = { x = x, y = y, z = TANI.live.z_cm, before = before, anim = riseAsset(TANI.rise.anim), at = os.clock(), state = "finding",
-             next = 0, why = why, onBreach = onBreach }
+             next = 0, why = why, onBreach = onBreach, cineHooks = cineHooks }
     local okT, err = pcall(riseTick, os.clock())
     log(string.format("tanicorn: %s: the rise's find at once after her spawn: %s", tostring(why), okT and ("her state " ..
         tostring(RISE and RISE.state or "none")) or ("error " .. tostring(err))))

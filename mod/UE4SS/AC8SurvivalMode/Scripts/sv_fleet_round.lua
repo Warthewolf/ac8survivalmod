@@ -196,7 +196,10 @@ local function p2Rise(P, now)                            -- her spawn across GEO
     local face = (yaw + 90) % 360
     local bm = n((TANI.rise or {}).breach_m, 115.8) * 100   -- (her bow breaks the surface breach_m forward of her midships)
     local x, y = at.X - math.cos(math.rad(face)) * bm, at.Y - math.sin(math.rad(face)) * bm
-    local okR, r, no = pcall(TANI.roundRise, x, y, face, "round 30's phase 2", function(t) split(P, string.format("her bow's breach (+%.1f s into her rise)", t)) end)
+    local cine = p2c().cine
+    local hooks = (type(cine) == "table" and cine.enabled ~= false) and { keys = cine.keys, letterbox = cine.letterbox, beats = cine.beats } or nil
+    local okR, r, no = pcall(TANI.roundRise, x, y, face, "round 30's phase 2",
+        function(t) split(P, string.format("her bow's breach (+%.1f s into her rise)", t)) end, hooks)
     r = okR and tonumber(r) or -5
     rlog(string.format("phase 2: the TANACORN under GEOFON (%.0f, %.0f) facing %.0f (across its keel, her bow's breach at its midships): %s",
         x, y, face, r > 0 and "spawned, rising" or ("NOT spawned (" .. tostring(okR and no or r) .. "): GEOFON splits now")))

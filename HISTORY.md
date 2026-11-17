@@ -3696,3 +3696,26 @@ game. The work was split by file between agents; the builds ran in sequence in t
   stopped by Claude Code for low memory (their clean-up done by hand). fleet_test, restart_drop_test, lua_load_test pass.
   Untested in game by the user: how the split looks from her own plane and the cinematic; the pay's size at round 30
   (her 60,000 x4 = 240,000).
+
+## 0.74.133-0.74.135 (2026-11-17): GEOFON's V seen and reared, her rise's own camera work, more water on every ship's surfacing (feature/geofon-rise); staged, not installed
+- The user on 0.74.132's pictures: "Wheres the geofon in those photos" (its halves were 40 m under 5 s after the split),
+  "That looks like the tanacorn"; then "make the Rise of the Tanacorn more Cinematic with the Camera work" and "go over
+  the VFX used for the Invincible fleets rise out of the ocean also, it could use more VFX work on all the ships".
+- GEOFON's halves stand in their V and part over fall.part_s 20, sink only from sink_after_s 22 over sink_s 40 (poseAt's
+  sink on its own clock, c.fs), hidden at hide_s 65. The V never reared in game: its copies' z moved but their pitch read 0
+  after K2_SetRelativeLocationAndRotation (0.74.132-0.74.133) and after K2_SetRelativeRotation (0.74.134), though the
+  list's roll took through the latter; 0.74.135 sets each copy by K2_SetRelativeTransform with its turn a quaternion
+  (CINE.quat, as sv_cine.lua spawns its cameras): pitch +25 / -15 read back (run 20261117_181721). The pitch is read from
+  the copy's forward vector first (a rotator read 0).
+- Her rise's own shots (CFG.specials.fleet.round.phase2.cine; sv_cine.lua CINE.play hooks keys / letterbox / beats,
+  sv_tanicorn_rise.lua TANI.roundRise's cineHooks): 12 keys in her rest frame, 6 cuts (GEOFON whole pushing in, the tear
+  from the water looking up, her climb, her profile out of the wreck, above her bow as she falls, the waterline at the
+  slam, the pull-back reveal), letterbox 2.39, beats: the Helios shake at her breach, the hand-held shake, the slam's,
+  the title THE TANACORN / SHE HAS RISEN, KASKA's line. Run 20261117_181303: all 5 beats on time, 12 keys, 34 cameras.
+  The director's file (Ctrl+D / E / V / W) still drives Ctrl+R's rise.
+- The fleet's surfacing water (CFG.specials.fleet.surface.water; sv_fleet_surface.lua shipWater / keelSlam): each ship's
+  breach at its bow's breach point (breach_m x its scale; was its midships) with 6 waters; sprays round its bow as it
+  climbs, along its hull as it falls, rows of pillars and splashes along its keel at the slam, foam as it settles; denser on
+  bigger ships; at most max_live 150 up at once. Run 20261117_182008 (epic 25/25): 193 more waters, 272 held back at the cap;
+  52 fps that minute, 30 frames over 100 ms (the test's HighResShots among them). At night the sprays read faint.
+- phase2 on 0.74.135: 24/25 (the one FAIL the suite's own pattern: its `+` unescaped; the V's line shows +25 / -15).

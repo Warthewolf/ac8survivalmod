@@ -62,12 +62,70 @@ local function fxAt(name, at, sc)                         -- one of TANI.rise.FX
     S.fx[#S.fx + 1] = { e = kept(comp), off = os.clock() + n(cs().fx_life_s, 8) }
     return true
 end
-local function water(sh, list)
+-- ((0.74.134) the user: "go over the VFX used for the Invincible fleets rise out of the ocean also, it could use more VFX
+-- work on all the ships") cs().water: each ship's water from its bow's breach point (breach_m x its scale forward of its
+-- rest midships, where the rig's motion breaks the surface), sprays round its bow as it climbs and along its hull as it
+-- falls, the slam along its whole keel on both sides, foam as it settles; denser on bigger ships (dens), never more than
+-- max_live waters up at once (S.fx)
+local function wc() return cs().water or {} end
+local function shipSpot(sh, fwd_m, right_m)              -- a spot on the sea in a ship's frame (metres, scaled by its size)
+    return off({ X = sh.spot.X, Y = sh.spot.Y, Z = 0 }, S.u, S.r, { fwd_m * sh.sc, right_m * sh.sc, 0 })
+end
+local function room() return #S.fx < n(wc().max_live, 150) end
+local function wAt(sh, e, at)                            -- one water e = { FX name, scale } at at, the ship's own scale on it
+    if not room() then S.capped = (S.capped or 0) + 1; return false end
+    local ok = fxAt(e[1], at, math.max(0.25, sh.sc * n(cs().fx_x, 2)) * n(e[2], 1))
+    sh.wUp, sh.wOf = (sh.wUp or 0) + (ok and 1 or 0), (sh.wOf or 0) + 1
+    return ok
+end
+local function dense(sh) return math.random() <= math.min(1, math.max(n(wc().min_dens, 0.35), sh.sc * n(wc().dens, 3))) end
+local function shipWater(sh, r0, now)                    -- every tick of a ship's rise: its climb, fall and settle
+    local w = wc()
+    if w.enabled == false then return end
+    local bm = n(w.breach_m, 115.8)
+    if r0 >= n(cs().breach_s, 0.8) and r0 < n(w.climb_until_s, 5.5) and now >= (sh.climbAt or 0) then   -- (round its bow)
+        sh.climbAt = now + n(w.climb_every_s, 0.5)
+        if dense(sh) then
+            local l = w.climb or {}
+            local e = l[(sh.climbN or 0) % math.max(1, #l) + 1]
+            sh.climbN = (sh.climbN or 0) + 1
+            local a, rr = math.rad(math.random(0, 359)), math.random(n(w.ring_m and w.ring_m[1], 25), n(w.ring_m and w.ring_m[2], 60))
+            if e then wAt(sh, e, shipSpot(sh, bm + math.cos(a) * rr, math.sin(a) * rr)) end
+        end
+    end
+    if r0 >= n(w.climb_until_s, 5.5) and r0 < n(cs().slam_s, 9) and now >= (sh.fallAt or 0) then         -- (down along its hull)
+        sh.fallAt = now + n(w.fall_every_s, 0.45)
+        if dense(sh) then
+            local l = w.fall or {}
+            local e = l[(sh.fallN or 0) % math.max(1, #l) + 1]
+            sh.fallN = (sh.fallN or 0) + 1
+            local back = (r0 - n(w.climb_until_s, 5.5)) / math.max(0.1, n(cs().slam_s, 9) - n(w.climb_until_s, 5.5)) * 300
+            local side = (sh.fallN % 2 == 0) and 1 or -1
+            if e then wAt(sh, e, shipSpot(sh, bm - back * math.random(), side * math.random(30, 50))) end
+        end
+    end
+    if r0 >= n(cs().slam_s, 9) and r0 < n(cs().slam_s, 9) + n(w.settle_s, 4) and now >= (sh.settleAt or 0) then   -- (foam)
+        sh.settleAt = now + n(w.settle_every_s, 0.7)
+        if dense(sh) and w.settle then wAt(sh, w.settle, shipSpot(sh, math.random(-280, 280), math.random(-40, 40))) end
+    end
+end
+local function keelSlam(sh)                              -- the slam along its whole keel, both sides
+    local w = wc()
+    if w.enabled == false then return end
+    local k = math.max(2, math.floor(n(w.keel_spots, 6) * math.min(1, math.max(0.34, sh.sc * 3)) + 0.5))
+    for i = 0, k - 1 do
+        local f = -300 + 600 * i / (k - 1)
+        for _, e in ipairs(w.keel or {}) do
+            for _, y in ipairs({ -45, 45 }) do wAt(sh, e, shipSpot(sh, f, y)) end
+        end
+    end
+end
+local function water(sh, list, at)
     local up, of = 0, 0
     local sc = math.max(0.3, sh.sc * n(cs().fx_x, 2))
     for _, w in ipairs(type(list) == "table" and list or {}) do
         of = of + 1
-        if fxAt(w[1], { X = sh.spot.X, Y = sh.spot.Y, Z = 0 }, sc * n(w[2], 1)) then up = up + 1 end
+        if room() and fxAt(w[1], at or { X = sh.spot.X, Y = sh.spot.Y, Z = 0 }, sc * n(w[2], 1)) then up = up + 1 end
     end
     return up, of
 end
@@ -306,16 +364,18 @@ local function shipTick(sh, now)
     end
     if sh.state == "rise" then
         local r0 = now - sh.t0
-        if not sh.breach and r0 >= n(c.breach_s, 0.8) then
-            sh.breach = true; sh.bUp, sh.bOf = water(sh, c.breach)
+        if not sh.breach and r0 >= n(c.breach_s, 0.8) then   -- ((0.74.134) at its bow's breach point, where it breaks the sea)
+            sh.breach = true; sh.bUp, sh.bOf = water(sh, c.breach, wc().enabled ~= false and shipSpot(sh, n(wc().breach_m, 115.8), 0) or nil)
             local h = hit(sh, "breach")
             if h ~= "" then slog(string.format("+%.1f s %s breaches%s", t, sh.name ~= "" and sh.name or sh.key, h)) end
         end
         if not sh.slam and r0 >= n(c.slam_s, 9) then
             sh.slam = true; sh.sUp, sh.sOf = water(sh, c.slam)
+            keelSlam(sh)
             local h = hit(sh, "slam")
             if h ~= "" then slog(string.format("+%.1f s %s slams down%s", t, sh.name ~= "" and sh.name or sh.key, h)) end
         end
+        shipWater(sh, r0, now)
         if r0 >= n(c.length_s, 15) then sh.state = "rest" end
     end
 end
@@ -327,13 +387,15 @@ local function over(why)
     end
     if S.hand then pcall(function() survivalPC.PlayerCameraManager:StopAllCameraShakes(true) end) end
     local back = playerHold(false)
-    local b, sl, failed = 0, 0, {}
+    local b, sl, failed, wu, wo = 0, 0, {}, 0, 0
     for _, sh in ipairs(S.ships) do
         b, sl = b + (sh.bUp or 0), sl + (sh.sUp or 0)
+        wu, wo = wu + (sh.wUp or 0), wo + (sh.wOf or 0)
         if sh.failed then failed[#failed + 1] = (sh.name or sh.key) .. ": " .. sh.failed end
     end
-    slog(string.format("over (%s): %d doubles taken off, the real fleet up; %d breach and %d slam waters, %d shakes, %d roars, %d beats; %s%s",
-        why, nD, b, sl, S.shakes, S.sounds, S.beat, back, #failed > 0 and ("; NOT: " .. table.concat(failed, ", ")) or ""))
+    slog(string.format("over (%s): %d doubles taken off, the real fleet up; %d breach and %d slam waters, %d of %d climb / fall / keel / "
+        .. "settle waters (%d held back at the live cap), %d shakes, %d roars, %d beats; %s%s",
+        why, nD, b, sl, wu, wo, S.capped or 0, S.shakes, S.sounds, S.beat, back, #failed > 0 and ("; NOT: " .. table.concat(failed, ", ")) or ""))
     if HUD and HUD.hold then pcall(HUD.hold, false, HOLD) end
     if CINE and CINE.hudShow then pcall(CINE.hudShow, HOLD, "the surfacing over") end
     S = nil

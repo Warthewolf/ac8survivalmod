@@ -26,6 +26,10 @@
 --                          game's hidden (the first route of the file's `hud` that takes) and the target boxes (boxes).
 --                          -> true, "keyed"; false, why (no camera made: the caller's own then). In director mode it only
 --                          keeps the rise's frame and clock for Ctrl+E -> false, "director".
+--                          ((0.74.134) round 30's rise, the user: "make the Rise of the Tanacorn more Cinematic with the
+--                          Camera work") hooks.keys: its own shot list in place of the file's (cut keys jump, the others
+--                          blend); hooks.letterbox: the cameras' aspect held (the engine's black bars); hooks.beats: on the
+--                          rise's clock, each { t, shake = { path, scale } | title = { text, sub } | say = "CODE|text" } once.
 --   CINE.stop(why)         the view back on your plane, both HUDs and the boxes back, the cameras destroyed once the view
 --                          is off them (the level torn down: CINE.leave's, nothing touched).
 --   CINE.leave(why)        the level left (sv_main.lua runLeft): what can outlive it put back at once (the game's HUD
@@ -481,6 +485,36 @@ local function spawnCam(F, k)
         off = string.format("%.1f", math.deg(math.acos(math.max(-1, math.min(1, c)))))
     end)
     return { o = a, name = nameOf(a), at = at, rot = rot, off = off, rotOk = okR, fovOk = okF }
+end
+-- ((0.74.134) a beat on the rise's clock: the game's camera shake on your camera, the title card (the callout), a radio line
+local SHAKES = {}
+local function beatShake(spec)
+    if type(spec) ~= "table" or type(spec[1]) ~= "string" or not liveObj(survivalPC) then return false end
+    local path = spec[1]
+    local cls = SHAKES[path]
+    if not (cls and liveObj(cls)) then cls = loadObject(path .. "." .. path:match("[^/]+$") .. "_C"); SHAKES[path] = cls end
+    if not cls then return false end
+    local rot, sc = { Pitch = 0, Yaw = 0, Roll = 0 }, tonumber(spec[2]) or 1
+    if pcall(function() survivalPC:ClientStartCameraShake(cls, sc, 0, rot) end) then return true end
+    return pcall(function() survivalPC.PlayerCameraManager:StartCameraShake(cls, sc, 0, rot) end)
+end
+local function beatsTick(T, t)
+    for i, b in ipairs(T.hooks.beats) do
+        if not T.beatsDone[i] and t >= (tonumber(b.t) or 0) then
+            T.beatsDone[i] = true
+            local what
+            if b.shake then what = "shake " .. tostring((b.shake[1] or ""):match("[^/]+$")) .. (beatShake(b.shake) and "" or " NOT started")
+            elseif b.title and type(hudCallout) == "function" then
+                pcall(hudCallout, tostring(b.title.text or ""), tostring(b.title.sub or "")); what = "the title " .. tostring(b.title.text)
+            elseif b.say and SUB and SUB.say then
+                local code, text = tostring(b.say):match("^([^|]+)|(.+)$")
+                local sp = ((CFG.hud or {}).subs or {}).speakers or {}
+                if code then pcall(SUB.say, sp[code] or code, text) end
+                what = "a radio line (" .. tostring(code) .. ")"
+            end
+            log(string.format("cine: beat %d at %.1f s: %s", i, t, tostring(what or "nothing")))
+        end
+    end
 end
 local function trash(c, after)
     if c then S.trash[#S.trash + 1] = { o = c.o, name = c.name, at = os.clock() + (after or 0) } end
@@ -1028,7 +1062,7 @@ function CINE.play(R, hooks)
     if not F then log("cine: no cinematic: " .. tostring(whyF)); return false, whyF end
     local set = S.set
     local smooth = set.blend == "smooth"
-    T.keys = copyKeys(S.keys)
+    T.keys = copyKeys(type(hooks.keys) == "table" and #hooks.keys > 0 and hooks.keys or S.keys)
     T.path, T.step = CINE.path(T.keys, smooth, cfg.sample_s)
     T.fn = BLEND[set.blend] or 0
     T.cams, T.cur, T.reverts, T.at, T.blends, T.holds, T.worst, T.cuts = {}, 1, 0, os.clock(), {}, 0, 0, 0
@@ -1049,6 +1083,13 @@ function CINE.play(R, hooks)
                 p.key, num(p.t), i, c.at.X, c.at.Y, c.at.Z, c.rot.Yaw, c.rot.Pitch, c.rot.Roll, num(p.fov), p.cut and ", a cut" or "")
         end
     end
+    if tonumber(hooks.letterbox) then                     -- ((0.74.134) the black bars, as the fleet's surfacing)
+        for _, c in ipairs(T.cams) do
+            pcall(function() c.o.CameraComponent.bConstrainAspectRatio = true end)
+            pcall(function() c.o.CameraComponent.AspectRatio = tonumber(hooks.letterbox) end)
+        end
+    end
+    T.beatsDone = {}
     local enter = (T.keys[1] and T.keys[1].cut) and 0 or set.enter_blend
     local okV = viewOn(T.cams[1].o, enter, false, 1)
     S.play, S.R = T, T
@@ -1367,6 +1408,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "cine", fn = function(now)
     if T then
         local t = clockOf(T)
         if t then drive(T, t) end
+        if t and type(T.hooks.beats) == "table" then beatsTick(T, t) end
         local cam = T.cams[T.cur]
         if not sameObj(cam.o, cam.name) then
             CINE.stop("camera " .. T.cur .. " is gone")

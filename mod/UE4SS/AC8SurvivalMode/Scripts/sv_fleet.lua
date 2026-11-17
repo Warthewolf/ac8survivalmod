@@ -77,8 +77,10 @@ CFG.specials.fleet = {
         -- ((0.74.132) the user: "It has to look like the Tanacorn rising has split her in half") split the moment her bow
         -- breaks the surface at its midships: T1's V (bow and stern as look's) rearing from flat over rear_s, the halves
         -- parted part_m each way and sunk sink_m { bow, stern } over part_s from part_after_s, hidden at hide_s
-        fall = { watch_hp = 0.15, break_at = 0.03, rear_s = 1.2, part_after_s = 0.3, part_m = 110, part_s = 30,
-                 sink_m = { 120, 100 }, hide_s = 50, every_s = 5, log_s = 45 },
+        -- ((0.74.133) the user on 0.74.132's pictures: "Wheres the geofon in those photos": its halves were 40 m under 5 s
+        -- after the split; they now stand in their V and part over part_s, and sink only from sink_after_s over sink_s)
+        fall = { watch_hp = 0.15, break_at = 0.03, rear_s = 1.2, part_after_s = 0.3, part_m = 110, part_s = 20,
+                 sink_after_s = 22, sink_s = 40, sink_m = { 120, 100 }, hide_s = 65, every_s = 2.5, log_s = 70 },
     },
     -- (2026-11-12) WP7, the fleet (Ctrl+N; docs/design/INVINCIBLE_FLEET_WP7.md). The ships as the build makes them
     -- (tools/survival_events_fleet.py IF_SHIPS, which the build checks this table against): the name on its box ("" an
@@ -318,6 +320,29 @@ CFG.specials.fleet = {
                          part_pay = 500, reward_tani = 60000, rail_after_s = 20,
                          text = { rises = "THE TANACORN RISES", rises_sub = "SHOOT DOWN ALL HER GUNS", row = "TANACORN: %d OF %d GUNS",
                                   beaten = "THE TANACORN IS SILENCED", beaten_sub = "+%s ZOLLARS" },
+                         -- ((0.74.134) the user: "make the Rise of the Tanacorn more Cinematic with the Camera work") her
+                         -- rise's own shots (sv_cine.lua CINE.play hooks): keys in her rest frame (metres: f forward along her
+                         -- axis from her rest midships, s starboard, u up; GEOFON lies across her at f 116, its bow toward -s),
+                         -- t on her rise's clock (her bow out ~1 s, the top ~5 s, the slam 9 s, at rest 15 s), cut = a cut,
+                         -- else blended from the key before; letterboxed; beats: shakes, the title card, a radio line
+                         cine = { enabled = true, letterbox = 2.39,
+                                  keys = { { t = 0.0, cut = true, at = { 536, -60, 18 }, look = { 116, 0, 25 }, fov = 45 },
+                                           { t = 0.9, at = { 470, -50, 15 }, look = { 116, 0, 32 }, fov = 40 },
+                                           { t = 1.3, cut = true, at = { 300, 150, 3 }, look = { 110, 0, 70 }, fov = 65 },
+                                           { t = 3.2, at = { 320, 190, 8 }, look = { 70, 0, 115 }, fov = 68 },
+                                           { t = 3.6, cut = true, at = { -120, -660, 40 }, look = { 120, 0, 85 }, fov = 50 },
+                                           { t = 6.6, at = { -20, -580, 70 }, look = { 150, 0, 60 }, fov = 48 },
+                                           { t = 7.1, cut = true, at = { 430, 170, 250 }, look = { 200, 0, 40 }, fov = 55 },
+                                           { t = 8.5, at = { 400, 150, 200 }, look = { 150, 0, 15 }, fov = 58 },
+                                           { t = 8.7, cut = true, at = { 80, 240, 5 }, look = { 0, 0, 14 }, fov = 75 },
+                                           { t = 10.8, at = { 60, 260, 9 }, look = { -20, 0, 18 }, fov = 72 },
+                                           { t = 11.0, cut = true, at = { -430, 540, 70 }, look = { 60, 0, 30 }, fov = 55 },
+                                           { t = 15.0, at = { -900, 1100, 240 }, look = { 40, 0, 10 }, fov = 55 } },
+                                  beats = { { t = 0.9, shake = { "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios", 0.8 } },
+                                            { t = 1.3, shake = { "/Game/OnlineMode/Blueprint/IGC/CameraShake/BP_CamShake_HandShake_A", 0.6 } },
+                                            { t = 9.0, shake = { "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpact", 1.0 } },
+                                            { t = 11.4, title = { text = "THE TANACORN", sub = "SHE HAS RISEN" } },
+                                            { t = 12.2, say = "KASKA|Tanacorn, the fleet is yours. Burn their airfield to the ground." } } },
                          radio = { fall = { "CTRL|GEOFON's breaking in two! Something's... coming up between the halves!" },
                                    rises = { "CTRL|That's not a ship. That's the TANACORN! All units, take out her guns!" },
                                    half = { "CTRL|Half her guns are gone. Keep hammering her!" },
@@ -334,7 +359,18 @@ CFG.specials.fleet = {
                             grig = { "/Game/Blueprints/Vehicle/AI/Vessels/VE015_grig/CP/BP_VE015_grig_CP", 125 },
                             boat = { "/Game/Blueprints/Vehicle/AI/Vessels/VE011_mslb/CP/BP_VE011_mslb_CP", 56 } },
                 waves = { boat = 0.0, grig = 2.0, gors = 2.5, udal = 4.0, krov = 4.5, aegis = 6.0, ford = 9.0 },
-                breach = { { "SURF1", 1 }, { "FORD_PILLAR", 1 }, { "MIST", 1 } },
+                breach = { { "SURF1", 1 }, { "FORD_PILLAR", 1 }, { "MIST", 1 }, { "AB_LAND_L", 0.8 }, { "AB_LAND_R", 0.8 }, { "SURF2", 0.8 } },
+                -- ((0.74.134) the user: "go over the VFX used for the Invincible fleets rise out of the ocean also, it could use
+                -- more VFX work on all the ships") sv_fleet_surface.lua's water: the breach (above) at each ship's bow's
+                -- breach point; climb: round its bow every climb_every_s until climb_until_s (ring_m out, x its scale); fall:
+                -- down along its hull from its bow to the slam; keel: at the slam keel_spots along its keel, both sides;
+                -- settle: foam for settle_s; denser on bigger ships (dens x its scale, at least min_dens); max_live waters up
+                water = { enabled = true, breach_m = 115.8, max_live = 150, dens = 3, min_dens = 0.35,
+                          climb_until_s = 5.5, climb_every_s = 0.5, ring_m = { 25, 60 },
+                          climb = { { "SURF2", 0.6 }, { "MIST", 0.6 }, { "FORD_SPLASH", 0.8 }, { "SURF3", 0.6 } },
+                          fall_every_s = 0.45, fall = { { "FORD_SPLASH", 0.9 }, { "AB_LAND_L", 0.7 }, { "AB_LAND_R", 0.7 }, { "SURF4", 0.6 } },
+                          keel_spots = 6, keel = { { "FORD_PILLAR", 0.7 }, { "FORD_SPLASH", 0.8 } },
+                          settle_s = 4, settle_every_s = 0.7, settle = { "FORD_FOAM", 1 } },
                 slam = { { "ALCN_BLAST", 1 }, { "FORD_SPLASH", 2 }, { "FOAM_IGC", 1 }, { "FORD_PILLAR", 1 } },
                 -- ((2026-11-17) the user: "make the Ships Rising out of the sea cutscene more cinematic? like go epic with it";
                 -- sv_fleet_surface.lua) lead_s of empty sea before the pickets; each shot a move from `from` to `to`
@@ -678,6 +714,7 @@ local function poseAt(f, c)
     c = c or gc().look
     local g = num(c.g, 1)                                 -- ((0.74.132) how far the V has reared: 0 flat (whole), 1 the V)
     local sink, part = c.sink_m or { 0, 0 }, num(c.part_m, 0) * 100 * f
+    if c.sink_s then f = num(c.fs, 0) end                 -- ((0.74.133) the sink on its own clock: c.fs, lookTick's)
     return { x = part, y = 0, z = -(num(c.bow.down_m, 21) * g + num(sink[1], 0) * f) * 100, p = num(c.bow.pitch, 25) * g },
            { x = -part, y = 0, z = -(num(c.stern.down_m, 23) * g + num(sink[2], 0) * f) * 100, p = num(c.stern.pitch, -15) * g }
 end
@@ -692,9 +729,24 @@ local function place(m, q, o, oq)
     else
         loc, rot = { X = tx, Y = ty, Z = tz }, { Pitch = tp, Yaw = m.base.Yw, Roll = m.base.R }
     end
-    local ok, err = pcall(function() m.e.obj:K2_SetRelativeLocationAndRotation(loc, rot, false, {}, true) end)
-    if not ok then logOnce("geofon place " .. m.name, "geofon: " .. m.name .. " not posed (K2_SetRelativeLocationAndRotation): " .. tostring(err)) end
-    return ok
+    -- ((0.74.134) apart: run 20261117_180650's V never reared, its copies' z moved and their pitch read 0, while the list's
+    -- K2_SetRelativeRotation took (0.7 deg read back))
+    -- ((0.74.135) as a transform with its turn a quaternion, as sv_cine.lua spawns its cameras: run 20261117_181303's V read
+    -- pitch 0 after K2_SetRelativeRotation too (the list's roll took there); the two calls apart are the fallback)
+    local ok, err, okR, errR = false, nil, false, nil
+    if CINE and CINE.quat then
+        ok, err = pcall(function()
+            m.e.obj:K2_SetRelativeTransform({ Rotation = CINE.quat(rot), Translation = loc, Scale3D = { X = 1, Y = 1, Z = 1 } }, false, {}, true)
+        end)
+        okR, errR = ok, err
+    end
+    if not ok then
+        ok, err = pcall(function() m.e.obj:K2_SetRelativeLocation(loc, false, {}, true) end)
+        okR, errR = pcall(function() m.e.obj:K2_SetRelativeRotation(rot, false, {}, true) end)
+    end
+    if not (ok and okR) then logOnce("geofon place " .. m.name, "geofon: " .. m.name .. " not posed (" .. (ok and "" or ("K2_SetRelativeLocation: " .. tostring(err) .. " "))
+        .. (okR and "" or ("K2_SetRelativeRotation: " .. tostring(errR))) .. ")") end
+    return ok and okR
 end
 -- both copies at move fraction f; whether each was put ("root": it's the actor's own, never moved)
 local function posePair(L, f)
@@ -721,13 +773,14 @@ local function inFrame(c, l, yaw)
     local a = math.rad(yaw)
     local dx, dy = v.X - l.X, v.Y - l.Y
     local p, r
-    pcall(function() local w = c:K2_GetComponentRotation(); p, r = tonumber(w.Pitch), tonumber(w.Roll) end)
+    pcall(function()                                      -- ((0.74.133) its +X as a vector first: the round's run of 0.74.132
+        local f = c:GetForwardVector()                    -- read every rotator's pitch as 0 while the copies' z moved as posed
+        local n = math.sqrt(f.X * f.X + f.Y * f.Y + f.Z * f.Z)
+        if n > 1e-6 then p = math.deg(math.asin(math.max(-1, math.min(1, f.Z / n)))) end
+    end)
+    pcall(function() local w = c:K2_GetComponentRotation(); r = tonumber(w.Roll); if p == nil then p = tonumber(w.Pitch) end end)
     if p == nil then                                      -- ((0.74.63) the user's run of 0.74.62: every pitch "?": rotators
-        pcall(function()                                  -- don't read from Lua (0.74.55); its +X as a vector does
-            local f = c:GetForwardVector()
-            local n = math.sqrt(f.X * f.X + f.Y * f.Y + f.Z * f.Z)
-            if n > 1e-6 then p = math.deg(math.asin(math.max(-1, math.min(1, f.Z / n)))) end
-        end)
+        p = nil                                           -- don't read from Lua (0.74.55))
     end
     return { x = (dx * math.cos(a) + dy * math.sin(a)) / 100, y = (-dx * math.sin(a) + dy * math.cos(a)) / 100, z = (v.Z - l.Z) / 100,
              p = p, r = r }
@@ -912,17 +965,25 @@ local function lookTick(now, L0)
         c.g = math.min(1, (L.t - L.poseT) / math.max(0.1, num(c.rear_s, 1)))
         posePair(L, L.f or 0)
     end
-    local moveEnd = L.poseT + num(c.move_after_s, 0) + num(c.part_s, 25)
+    local moveEnd = L.poseT + math.max(num(c.move_after_s, 0) + num(c.part_s, 25),
+        c.sink_s and (num(c.sink_after_s, 0) + num(c.sink_s, 0)) or 0)
     if c.move and not L.moveDone then
         local mt = L.t - L.poseT - num(c.move_after_s, 0)
         if mt >= 0 and L.t >= (L.nextStep or 0) then
             L.nextStep = L.t + num(c.step_s, 0.25) - 0.05     -- (one step a tick at the ticks' 0.25 s)
             local f = math.min(1, mt / math.max(1, num(c.part_s, 25)))
+            local sinking = false
+            if c.sink_s then                              -- ((0.74.133) the sink after sink_after_s, over sink_s)
+                c.fs = math.min(1, math.max(0, (L.t - L.poseT - num(c.sink_after_s, 0)) / math.max(1, num(c.sink_s, 30))))
+                sinking = c.fs < 1
+                if c.fs > 0 and not L.sinkSaid then L.sinkSaid = true; log(string.format("geofon: break look +%.0f s: the halves sink", L.t)) end
+            end
             if not L.moveSaid then L.moveSaid = true; log(string.format("geofon: break look +%.0f s: the halves part", L.t)) end
             posePair(L, f)
-            if f >= 1 then
+            if f >= 1 and not sinking then
                 L.moveDone = true
-                log(string.format("geofon: break look +%.0f s: parted (%g m each way), held there", L.t, num(c.part_m, 0)))
+                log(string.format("geofon: break look +%.0f s: parted (%g m each way)%s, held there", L.t, num(c.part_m, 0),
+                    c.sink_s and " and sunk" or ""))
             end
         end
     elseif L.repose then
@@ -1160,6 +1221,7 @@ function GEO.fall(G)
     G.cfg = { bow = c.bow or gc().look.bow, stern = c.stern or gc().look.stern, parts_off = true, move = true,
               g = 0, rear_s = num(c.rear_s, 1.2),
               move_after_s = num(c.part_after_s, 2), part_m = num(c.part_m, 110), part_s = num(c.part_s, 40),
+              sink_after_s = num(c.sink_after_s, 20), sink_s = num(c.sink_s, 40),
               sink_m = c.sink_m or { 120, 100 }, step_s = 0.25, every_s = num(c.every_s, 5), log_s = num(c.log_s, 45) }
     G.down = G.down or G.t                                -- (its stages' tick stops: T2's down, no line)
     local h = G.hull.obj

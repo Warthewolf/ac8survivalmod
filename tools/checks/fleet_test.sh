@@ -113,6 +113,10 @@ local function comp(fn, parent, owner)
         self.RelativeRotation = { Pitch = r.Pitch, Yaw = r.Yaw, Roll = r.Roll }
     end
     c.K2_SetRelativeRotation = function(self, r) self.RelativeRotation = { Pitch = r.Pitch, Yaw = r.Yaw, Roll = r.Roll } end
+    c.K2_SetRelativeLocation = function(self, l)         -- ((0.74.134) the V's place and turn set apart: sv_fleet.lua place)
+        sets = sets + 1
+        self.RelativeLocation = { X = l.X, Y = l.Y, Z = l.Z }
+    end
     c.K2_GetComponentLocation = function(self)
         local f, o = inActor(self), self.owner
         local a = math.rad(o.yaw)
