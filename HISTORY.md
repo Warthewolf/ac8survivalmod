@@ -3670,3 +3670,29 @@ game. The work was split by file between agents; the builds ran in sequence in t
   its clean-up done by hand (kit.py restore, the saves unchanged).
 - 0.74.130 INSTALLED 2026-11-17 for the user ("Yes continhe"), over 0.74.128 (backup: build/backup/install_before_0.74.130);
   112 files verified; her config, subtitles (the same as the repo's) and the launcher's toggle kept.
+
+## 0.74.131-0.74.132 (2026-11-17): round 30's phase 2, GEOFON falls and the TANACORN rises (feature/geofon-rise, from feature/cloud-flash); staged, not installed
+- The user: "Continue building everything", then "GEOFON falls, Tanacorn rises" (WP5 + WP6 in the round), beaten "All her
+  guns down"; on 0.74.131's draft: "do not add a fade to black during her spawn, she spawns as the Geofon is splitting
+  apart" and "It has to look like the Tanacorn rising has split her in half".
+- sv_fleet_round.lua p2Tick (R.p2: watch, fall, rise, fight, beaten / skipped): the round's GEOFON gets T2's stages
+  (sv_fleet.lua GEO.attach / stagesStep: fires and smoke at 66 %, more and its dimmed _DAM slots at 33 %, the list); from
+  geofon.fall.watch_hp 15 % its health held at break_at 3 % (SetMinHealth); there it's held whole, stopped (its tick off),
+  off the targets and paid as sunk; the TANACORN spawned under it at once (TANI.roundRise: TANI.liveSpawn with Ctrl+L's
+  watch, then the rise's tick run in the same call so she's found and put under the sea before a frame on the surface),
+  across its keel with her bow's breach point (TANI.rise.breach_m) at its midships; her rise calls back at her breach
+  (RISE.onBreach) and GEOFON splits there: T1's V (GEO.fall / fallStep) rearing from flat over fall.rear_s 1.2, the halves
+  parted 110 m each way and sunk, hidden at hide_s; no breach in split_max_s 6: it splits anyway. After her rise: her
+  callout (THE TANACORN RISES / SHOOT DOWN ALL HER GUNS), the row TANACORN: n OF m GUNS, her railcannon's cycle from
+  rail_after_s 20; each gun paid part_pay 500 (x the tier), the half line; none up: TANI.liveDown, reward_tani 60,000 (x the
+  tier), THE TANACORN IS SILENCED; the round won only after her. Radio lines drafted in CFG.specials.fleet.round.phase2.
+- sv_tanicorn.lua TANI.liveSpawn / livePartsUp / liveDown; sv_tanicorn_rise.lua TANI.roundRise / riseState (the rise's tick
+  named riseTick). sv_fleet.lua's T1 / T2 code takes any record (poseAt's g: the V's rear, L.cfg; the test keys unchanged).
+- 0.74.131 (staged, never handed over) had a fade to black over her spawn 8 s into the break: taken out.
+- Autotest phase2 on 0.74.132 (run 20261117_175859): 22/22: round 30 from round 29's break, the fleet up, GEOFON's stage
+  1 and 2, its hold, held whole at 3 % and paid (24,000 at round 30), the TANACORN under it found in her spawn's call
+  ("her state hold"), GEOFON split by her bow's breach at +1.1 s of her rise, her rise over at +19 s, 35 of 35 guns counted,
+  paid as they went down (18: 36,000), beaten (240,000 at round 30's tier), the win after her. Two earlier runs were
+  stopped by Claude Code for low memory (their clean-up done by hand). fleet_test, restart_drop_test, lua_load_test pass.
+  Untested in game by the user: how the split looks from her own plane and the cinematic; the pay's size at round 30
+  (her 60,000 x4 = 240,000).

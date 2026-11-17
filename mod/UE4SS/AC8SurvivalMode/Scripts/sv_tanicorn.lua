@@ -1436,6 +1436,56 @@ local function liveArmour(W, now)
 end
 function TANI.liveSeen() return LV and LV.seen or nil end
 function TANI.liveHull() if LV and LV.o and same(LV) then return LV.o end return nil end   -- ((stage 4) Ctrl+H's)
+-- ((0.74.131) round 30's phase 2, sv_fleet_round.lua) TANI.liveSpawn(x, y, face, why): her live hull spawned there with
+-- Ctrl+L's watch (her armour, her parts' records and downs) -> r (> 0: up), why not. TANI.livePartsUp(): her parts still
+-- up, of how many (nil: no live hull of ours watched); a part the watch's looks never found counts as down once they're
+-- done. TANI.liveDown(why): her hull finished off (finishUnpaid takes her armour off first) -> down, how.
+function TANI.liveSpawn(x, y, face, why)
+    local C = TANI.live
+    local cls, err = loadObject(C.class_path)
+    if not cls then return -5, "her class didn't load (" .. tostring(err) .. ")" end
+    pin(cls, "tanicorn live hull class")
+    if LV then keep(LV) end
+    local orphans = keptAlive()
+    if #orphans > 0 then return -5, string.format("%d part(s) of the last hull still up (hard rule 16)", #orphans) end
+    local before = {}
+    for _, o in ipairs(FindAllOf(C.class) or {}) do before[addrOf(o) or 0] = true end
+    local r
+    if FISH and FISH.spawn then r = FISH.spawn(C.unit, x, y, C.z_cm, face) else r = SV_Spawn(C.unit, x, y, C.z_cm, face) end
+    r = tonumber(r) or -5
+    local okR, rows = rowsIn()
+    log(string.format("tanicorn: %s: %s at (%.0f, %.0f, %d) facing %.0f: %s%s", tostring(why), C.unit, x, y, C.z_cm, face,
+        r > 0 and (r .. " up") or ("not spawned (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")"), okR and "" or ("; rows: " .. rows)))
+    if r <= 0 then return r, "not spawned" end
+    local now = os.clock()
+    local W = { t0 = now, before = before, parts = {}, kinds = {}, comps = {}, looks = {}, why = why }
+    for _, s in ipairs(C.looks_s) do W.looks[#W.looks + 1] = { at = now + s, tag = "+" .. s .. " s" } end
+    W.next, W.until_ = now + C.looks_s[#C.looks_s] + C.every_s, now + C.watch_s
+    for _, k in ipairs(KINDS) do T.shells[k.key] = 0 end
+    LV = W
+    lidWatch(now, tostring(why))
+    return r
+end
+function TANI.livePartsUp()
+    local W = LV
+    if not (W and W.o and same(W)) then return nil end
+    local up, of = 0, 0
+    for _, pr in ipairs(TANI.live.parts) do
+        of = of + 1
+        local e = W.parts[pr[1]]
+        if e then if e.alive then up = up + 1 end
+        elseif #W.looks > 0 then up = up + 1 end          -- (not looked at yet: counted up until the looks are done)
+    end
+    return up, of
+end
+function TANI.liveDown(why)
+    local W = LV
+    if not (W and W.o and same(W)) then return false, "no live hull of ours" end
+    local ok, h, how = finishUnpaid(W.o)
+    log(string.format("tanicorn: live hull finished off (%s): %s, its health %s", tostring(why), ok and ("down by " .. tostring(how))
+        or "NOT down", tostring(h)))
+    return ok, how
+end
 -- ((2026-11-12, the review) the watch and the kept parts forgotten with the level: a test tick never runs between the gate
 -- closing and the next run's D, so their own `not D` checks can't)
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["tanicorn live"] = function() LV, KEPT = nil, nil end end

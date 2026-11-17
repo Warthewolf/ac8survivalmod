@@ -72,6 +72,13 @@ CFG.specials.fleet = {
               roll_deg = 5, list_s = 30, materials = "dim", embers = 0.2 },
         },
         test = { ahead_cm = 400000, hit = 0.20, fx_scale = 1, list_step_max = 0.1, refire = true, every_s = 5, fx_off_s = 30 },
+        -- ((0.74.131) round 30's phase 2: GEOFON's fall, sv_fleet_round.lua) its health held at break_at from watch_hp down
+        -- (SetMinHealth: no one hit takes it past the break); at break_at held whole and stopped, the TANACORN under it;
+        -- ((0.74.132) the user: "It has to look like the Tanacorn rising has split her in half") split the moment her bow
+        -- breaks the surface at its midships: T1's V (bow and stern as look's) rearing from flat over rear_s, the halves
+        -- parted part_m each way and sunk sink_m { bow, stern } over part_s from part_after_s, hidden at hide_s
+        fall = { watch_hp = 0.15, break_at = 0.03, rear_s = 1.2, part_after_s = 0.3, part_m = 110, part_s = 30,
+                 sink_m = { 120, 100 }, hide_s = 50, every_s = 5, log_s = 45 },
     },
     -- (2026-11-12) WP7, the fleet (Ctrl+N; docs/design/INVINCIBLE_FLEET_WP7.md). The ships as the build makes them
     -- (tools/survival_events_fleet.py IF_SHIPS, which the build checks this table against): the name on its box ("" an
@@ -299,7 +306,22 @@ CFG.specials.fleet = {
                         sighted = { "CTRL|They came up out of the sea... the whole fleet. Break them before they reach the airfield." },
                         half = { "CTRL|Half of the fleet's on the bottom. Keep at them!" },
                         geofon = { "CTRL|GEOFON is going down! The carrier's finished!" },
-                        won = { "CTRL|That's the last of them. The Aegir Fleet is destroyed. Ground crews, get that runway back in shape." } } },
+                        won = { "CTRL|That's the last of them. The Aegir Fleet is destroyed. Ground crews, get that runway back in shape." } },
+              -- ((0.74.131) phase 2, the user 2026-11-17: "GEOFON falls, Tanacorn rises"; beaten "All her guns down") GEOFON
+              -- breaks in a V at its fall's break_at (CFG.specials.fleet.geofon.fall); rise_after_s into the break (0: at it;
+              -- the user: no fade, "she spawns as the Geofon is splitting apart") the TANACORN spawned in the gap across its
+              -- keel (yaw + 90), put under the sea in the same call and risen with her cinematic; the round held until every
+              -- part of hers is down (her railcannon and railguns among them), each paid part_pay; then she's finished off,
+              -- reward_tani paid and the round won as phase 1's. Her railcannon's cycle on the airfield from rail_after_s
+              -- after the rise (TANI.rcStart). Lines drafted (the user edits them)
+              phase2 = { enabled = true, rise_after_s = 0, split_max_s = 6, rise_max_s = 40,
+                         part_pay = 500, reward_tani = 60000, rail_after_s = 20,
+                         text = { rises = "THE TANACORN RISES", rises_sub = "SHOOT DOWN ALL HER GUNS", row = "TANACORN: %d OF %d GUNS",
+                                  beaten = "THE TANACORN IS SILENCED", beaten_sub = "+%s ZOLLARS" },
+                         radio = { fall = { "CTRL|GEOFON's breaking in two! Something's... coming up between the halves!" },
+                                   rises = { "CTRL|That's not a ship. That's the TANACORN! All units, take out her guns!" },
+                                   half = { "CTRL|Half her guns are gone. Keep hammering her!" },
+                                   beaten = { "CTRL|Her guns are silent. She's going under!" } } } },
     surface = { enabled = true, rig = "/Game/Mods/SurvivalMode/Tanicorn/Model/SK_SV_Tani_RIG.SK_SV_Tani_RIG",
                 anim = "/Game/Mods/SurvivalMode/Tanicorn/Model/AS_SV_Tani_RIG_Rise.AS_SV_Tani_RIG_Rise", length_s = 15.0,
                 tani_m = 650, start_km = 30.5, breach_s = 0.8, slam_s = 9.0, fx_x = 2.0, fx_life_s = 8, jitter_s = 1.0, end_pad_s = 1.0,
@@ -652,11 +674,12 @@ local function rotP(x, z, deg)
     return x * c - z * s, x * s + z * c
 end
 -- the two copies' poses at move fraction f, in the ship's frame (cm, deg): bow, stern
-local function poseAt(f)
-    local c = gc().look
+local function poseAt(f, c)
+    c = c or gc().look
+    local g = num(c.g, 1)                                 -- ((0.74.132) how far the V has reared: 0 flat (whole), 1 the V)
     local sink, part = c.sink_m or { 0, 0 }, num(c.part_m, 0) * 100 * f
-    return { x = part, y = 0, z = -(num(c.bow.down_m, 21) + num(sink[1], 0) * f) * 100, p = num(c.bow.pitch, 25) },
-           { x = -part, y = 0, z = -(num(c.stern.down_m, 23) + num(sink[2], 0) * f) * 100, p = num(c.stern.pitch, -15) }
+    return { x = part, y = 0, z = -(num(c.bow.down_m, 21) * g + num(sink[1], 0) * f) * 100, p = num(c.bow.pitch, 25) * g },
+           { x = -part, y = 0, z = -(num(c.stern.down_m, 23) * g + num(sink[2], 0) * f) * 100, p = num(c.stern.pitch, -15) * g }
 end
 -- mesh m put at pose q on its home; on the other copy's frame when it hangs on it (o at oq)
 local function place(m, q, o, oq)
@@ -675,7 +698,7 @@ local function place(m, q, o, oq)
 end
 -- both copies at move fraction f; whether each was put ("root": it's the actor's own, never moved)
 local function posePair(L, f)
-    local qb, qs = poseAt(f)
+    local qb, qs = poseAt(f, L.cfg)
     local b, s = L.m.DamagedStaticMesh, L.m.VesselMesh
     local okB, okS = "not found", "not found"
     if s then okS = s.isRoot and "root" or (same(s.e) and place(s, qs, b, qb)) end
@@ -790,7 +813,7 @@ end
 -- (T1, at settle_s) the hull invincible, its parts and antennas hidden, the bow copy shown, the stern copy's slots _DAM,
 -- the V posed; the once line
 local function lookSetup(L)
-    local c = gc().look
+    local c = L.cfg or gc().look
     local h = L.hull
     local inv = pcall(function() h.obj:SetIsInvincible(true) end)
     pcall(function() h.obj.bIsInvincible = true end)
@@ -826,7 +849,7 @@ local function lookSetup(L)
         c.move and string.format("move: %g m each way and %s m down over %g s from +%g s, a step every %.2f s", num(c.part_m, 0),
             table.concat(c.sink_m or { 0, 0 }, " / "), num(c.part_s, 25), num(c.move_after_s, 0), num(c.step_s, 0.25)) or "no move",
         b and (b.onOther and "on VesselMesh" or "on its own parent") or "?", s and (s.onOther and "on DamagedStaticMesh" or "on its own parent") or "?"))
-    hudCallout("TEST: GEOFON V-BREAK", "3.5 KM AHEAD")
+    if not L.round then hudCallout("TEST: GEOFON V-BREAK", "3.5 KM AHEAD") end
 end
 
 -- (every every_s) the two copies read back: where they are, their gap at the waterline; a copy the game put back posed
@@ -839,7 +862,7 @@ local function lookLine(L)
     local h = num(gc().deck_m, 21)
     local xb, xs = waterX(qb, h), waterX(qs, h)
     local notes = {}
-    local wb, ws = poseAt(L.f or 0)
+    local wb, ws = poseAt(L.f or 0, L.cfg)
     for _, k in ipairs({ { qb, wb, b, "bow" }, { qs, ws, s, "stern" } }) do
         local q, w, m = k[1], k[2], k[3]
         local put = m and m.home and (m.home.P + w.p)
@@ -861,14 +884,14 @@ local function lookLine(L)
         qs and qs.p and string.format("%+.1f", qs.p) or "?", #notes > 0 and ("; " .. table.concat(notes, "; ")) or ""))
 end
 
-local function lookTick(now)
-    local L = GEO.look
+local function lookTick(now, L0)
+    local L = L0 or GEO.look
     if not L then return end
     local dt = math.min(1, math.max(0, now - (L.last or now)))
     L.last = now
     if paused() then return end
     L.t = L.t + dt
-    local c = gc().look
+    local c = L.cfg or gc().look
     if not L.posed then
         local ok = settled(L, "break look")
         if ok == false then                               -- (given up: what it made taken off, never left up)
@@ -879,10 +902,15 @@ local function lookTick(now)
         if not L.posed then return end
     end
     if not same(L.hull) then
-        GEO.look = nil
+        if L == GEO.look then GEO.look = nil end
+        L.over = true
         log(string.format("geofon: break look over at +%.0f s: its hull is gone (the rest taken off: %s)", L.t,
             takeOff(L, "its hull gone")))
         return
+    end
+    if c.rear_s and num(c.g, 1) < 1 then                  -- ((0.74.132) the V rearing (round 30: torn open by her bow)
+        c.g = math.min(1, (L.t - L.poseT) / math.max(0.1, num(c.rear_s, 1)))
+        posePair(L, L.f or 0)
     end
     local moveEnd = L.poseT + num(c.move_after_s, 0) + num(c.part_s, 25)
     if c.move and not L.moveDone then
@@ -995,7 +1023,7 @@ local function stageOn(G, k, st, share)
     end
     log(string.format("geofon: stage %d at %d %% (health %.0f %%): %d fires, %d smoke, %s, %d material slots (%s); its sound %s",
         k, math.floor(num(st.at, 0) * 100 + 0.5), share * 100, nF, nS, listSaid, nM, route, snd))
-    hudCallout("TEST: GEOFON STAGE " .. k, string.format("%.0f %% HEALTH", share * 100))
+    if not G.round then hudCallout("TEST: GEOFON STAGE " .. k, string.format("%.0f %% HEALTH", share * 100)) end
 end
 
 local function down(G, why)
@@ -1004,8 +1032,8 @@ local function down(G, why)
         why, G.stage or 0, #(gc().stages or {}), lit(G), #G.fx, num(gc().test.fx_off_s, 30)))
 end
 
-local function stagesTick(now)
-    local G = GEO.cur
+local function stagesTick(now, G0)
+    local G = G0 or GEO.cur
     if not G then return end
     local dt = math.min(1, math.max(0, now - (G.last or now)))
     G.last = now
@@ -1104,6 +1132,58 @@ local function hit(G)
     end
     log(string.format("geofon: Ctrl+G at +%.0f s: health %.0f %% -> %s (%s)", G.t, 100 * h / G.max,
         h1 and string.format("%.0f %%", 100 * h1 / G.max) or "?", way))
+end
+
+---------------------------------------------------------------------------------------------------- round 30's GEOFON
+-- ((0.74.131) round 30's phase 2, sv_fleet_round.lua: docs/design INVINCIBLE_FLEET_RISE_FORD.md 4.2 (a), (d)) the fleet's
+-- own GEOFON given T2's stages and T1's V as it falls (its settings CFG.specials.fleet.geofon.fall):
+--   GEO.attach(sh)       a record for the fleet's GEOFON (its hull and parts as the fleet keeps them; its meshes captured:
+--                        the `geofon: up` line) -> G, or nil and why
+--   GEO.stagesStep(G, now) its stages at 66 / 33 %, the list, its fires kept burning (T2's tick on it)
+--   GEO.fall(G)          its fall: the hull invincible and off the targets, its parts and antennas hidden, the V posed,
+--                        then the halves part and sink over fall.part_s (T1's on it, with fall's settings)
+--   GEO.fallStep(G, now) the fall's tick (T1's); G.over once the hull's gone
+--   GEO.fallHide(G)      both halves hidden (under the sea by then), its fires off
+--   GEO.where(G)         its hull's place and yaw (the TANACORN rises there)
+function GEO.attach(sh)
+    if not (sh and sh.hull and same(sh.hull)) then return nil, "its hull isn't up" end
+    local G = { kept = { sh.hull }, raw = {}, t = 0, tries = 0, last = os.clock(), fx = {}, done = {}, roll = 0, refired = 0,
+                round = true, ready = true }
+    for _, e in ipairs(sh.parts or {}) do G.kept[#G.kept + 1] = e end
+    local ok, why = capture(G)
+    if not ok then return nil, why end
+    return G
+end
+function GEO.stagesStep(G, now) stagesTick(now, G) end
+function GEO.fall(G)
+    local c = gc().fall or {}
+    G.cfg = { bow = c.bow or gc().look.bow, stern = c.stern or gc().look.stern, parts_off = true, move = true,
+              g = 0, rear_s = num(c.rear_s, 1.2),
+              move_after_s = num(c.part_after_s, 2), part_m = num(c.part_m, 110), part_s = num(c.part_s, 40),
+              sink_m = c.sink_m or { 120, 100 }, step_s = 0.25, every_s = num(c.every_s, 5), log_s = num(c.log_s, 45) }
+    G.down = G.down or G.t                                -- (its stages' tick stops: T2's down, no line)
+    local h = G.hull.obj
+    for f, v in pairs(SPC and SPC.V and SPC.V.PART_FLAGS or { bShowHUDBox = false, bIsNotLockonTarget = true,
+                                                                bIsNotFCSTargets = true }) do
+        if f ~= "bIsInvincible" then pcall(function() h[f] = v end) end
+    end
+    G.t, G.last = 0, os.clock()
+    lookSetup(G)
+    G.nextLine = 0
+end
+function GEO.fallStep(G, now) lookTick(now, G) end
+function GEO.fallHide(G)
+    local n = 0
+    for _, k in ipairs({ "DamagedStaticMesh", "VesselMesh" }) do
+        local m = G.m and G.m[k]
+        if m and same(m.e) and pcall(function() m.e.obj:SetVisibility(false, true) end) then n = n + 1 end
+    end
+    fxOff(G, 3)
+    return n
+end
+function GEO.where(G)
+    if not (G and G.hull and same(G.hull)) then return nil end
+    return frame(G.hull.obj)
 end
 
 ---------------------------------------------------------------------------------------------------- the keys

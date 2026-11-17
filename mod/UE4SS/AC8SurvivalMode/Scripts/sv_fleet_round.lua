@@ -20,8 +20,8 @@ local function tx() return rc().text or {} end
 local function joiner() return COOP ~= nil and COOP.client ~= nil and COOP.client() == true end
 local function rlog(s) log("fleet round: " .. s) end
 -- a radio list said in order (each "CODE|text": the code a speaker of CFG.hud.subs.speakers, else the speaker's name)
-local function say(key)
-    local list = (rc().radio or {})[key]
+local function say(key, from)
+    local list = (from or rc().radio or {})[key]
     if type(list) ~= "table" or not (SUB and SUB.say) then return 0 end
     local sp = ((CFG.hud or {}).subs or {}).speakers or {}
     local k = 0
@@ -147,6 +147,184 @@ local function turretsTick()
     end
 end
 
+---------------------------------------------------------------------------------------------------- phase 2
+-- ((0.74.131) the user, 2026-11-17: "GEOFON falls, Tanacorn rises", beaten "All her guns down"; docs/design
+-- INVINCIBLE_FLEET_RISE_FORD.md 4.2-4.3) R.p2 = { state, G, sh, ... }:
+--   watch  GEOFON's stages (sv_fleet.lua GEO.stagesStep); from fall.watch_hp its health held at fall.break_at
+--          (SetMinHealth), at break_at -> fall (paid and said as sunk: IFLEET.onSunk)
+--   fall   GEOFON held whole (invincible, its own tick off: it stops); rise_after_s in (0: at the break; no fade: the user,
+--          "she spawns as the Geofon is splitting apart") the TANACORN spawned across its keel, her bow's breach point at
+--          its midships, put under the sea at once and risen (TANI.roundRise) -> rise; ((0.74.132) the user: "It has to
+--          look like the Tanacorn rising has split her in half") the moment her bow breaks the surface GEOFON splits: its
+--          V rearing (GEO.fall / fallStep), hidden at hide_s; no breach by split_max_s: split anyway
+--   rise   her cinematic; at its end (or rise_max_s) -> fight
+--   fight  her parts counted (TANI.livePartsUp), each down paid part_pay, her railcannon's cycle from rail_after_s; none up:
+--          finished off (TANI.liveDown), reward_tani -> beaten
+--   skipped / beaten   nothing more (the round's end as phase 1's)
+-- Log: `fleet round: phase 2: ...`.
+local function p2c() return rc().phase2 or {} end
+local function tx2() return p2c().text or {} end
+local function fallC() return ((CFG.specials and CFG.specials.fleet or {}).geofon or {}).fall or {} end
+local function alive(e) return e ~= nil and e.obj ~= nil and liveAddr(e.obj) == e.addr and nameOf(e.obj) == e.name end
+local function hpOf(e)
+    local ok, h = pcall(function() return e.obj.HealthInternal end)
+    return (ok and type(h) == "number") and h or nil
+end
+local function p2skip(why) R.p2 = { state = "skipped" }; rlog("phase 2: " .. why .. ": no TANACORN this round") end
+local function stagesSaid()
+    local l = {}
+    for _, st in ipairs(((CFG.specials.fleet or {}).geofon or {}).stages or {}) do l[#l + 1] = string.format("%.0f %%", n(st.at, 0) * 100) end
+    return table.concat(l, " / ")
+end
+local function split(P, why)                              -- GEOFON torn open: its V rears, its halves part
+    if P.split then return end
+    P.split, P.splitAt = true, os.clock()
+    if not P.G then rlog("phase 2: her breach (" .. why .. "): GEOFON was already gone, no V"); return end
+    local okF, err = pcall(GEO.fall, P.G)
+    rlog(string.format("phase 2: GEOFON split in two by %s (%s)", why, okF and "its V rearing" or ("its V FAILED: " .. tostring(err))))
+    say("fall", p2c().radio)
+end
+local function p2Rise(P, now)                            -- her spawn across GEOFON's keel, her bow's breach at its midships
+    local at, yaw = P.at, P.yaw or 0
+    if P.G then local l, y = GEO.where(P.G); if l then at, yaw = l, y end end
+    if not (at and TANI and TANI.roundRise) then
+        rlog(string.format("phase 2: the TANACORN NOT spawned (%s)", at and "no TANI.roundRise (a build without her)"
+            or "GEOFON's place unknown"))
+        P.state = "skipped"
+        return
+    end
+    local face = (yaw + 90) % 360
+    local bm = n((TANI.rise or {}).breach_m, 115.8) * 100   -- (her bow breaks the surface breach_m forward of her midships)
+    local x, y = at.X - math.cos(math.rad(face)) * bm, at.Y - math.sin(math.rad(face)) * bm
+    local okR, r, no = pcall(TANI.roundRise, x, y, face, "round 30's phase 2", function(t) split(P, string.format("her bow's breach (+%.1f s into her rise)", t)) end)
+    r = okR and tonumber(r) or -5
+    rlog(string.format("phase 2: the TANACORN under GEOFON (%.0f, %.0f) facing %.0f (across its keel, her bow's breach at its midships): %s",
+        x, y, face, r > 0 and "spawned, rising" or ("NOT spawned (" .. tostring(okR and no or r) .. "): GEOFON splits now")))
+    if r <= 0 then split(P, "its own break (no TANACORN)"); P.state = "skipped"; return end
+    P.state, P.riseAt = "rise", now
+end
+local function hideHalves(P, now)
+    if P.G and P.split and not P.hidden and now - P.splitAt >= n(fallC().hide_s, 50) then
+        P.hidden = true
+        local okH, k = pcall(GEO.fallHide, P.G)
+        rlog(string.format("phase 2: GEOFON's halves hidden %.0f s after the split (%s of 2)", now - P.splitAt, okH and tostring(k) or "error"))
+    end
+end
+local function p2Fight(P, now)
+    local c = p2c()
+    hideHalves(P, now)
+    if P.railAt and now >= P.railAt then
+        P.railAt = nil
+        local okC, err = false, "no TANI.rcStart"
+        if TANI and TANI.rcStart then okC, err = pcall(TANI.rcStart, "round 30's phase 2") end
+        rlog("phase 2: her railcannon's cycle on the airfield " .. (okC and "started" or ("NOT started: " .. tostring(err))))
+    end
+    if now < (P.countAt or 0) then return end
+    P.countAt = now + 1
+    local up, of = nil, nil
+    if TANI and TANI.livePartsUp then up, of = TANI.livePartsUp() end
+    if up == nil then
+        P.state = "skipped"
+        rlog("phase 2: her live hull is gone (not beaten by her guns): phase 2 over without her reward")
+        return
+    end
+    P.up, P.of = up, of
+    local down = of - up
+    if down > P.paid then
+        local v = pay(n(c.part_pay, 500) * (down - P.paid), "the TANACORN's guns")
+        rlog(string.format("phase 2: %d of her guns shot down (%d of %d down): %s zollars", down - P.paid, down, of, tostring(v)))
+        P.paid = down
+    end
+    if not P.halfSaid and down * 2 >= of then P.halfSaid = true; say("half", c.radio) end
+    if up == 0 then
+        local okD, how = false, nil
+        if TANI.liveDown then okD, how = TANI.liveDown("round 30: all her guns down") end
+        local v = pay(n(c.reward_tani, 60000), "the TANACORN silenced")
+        hudCallout(tx2().beaten or "THE TANACORN IS SILENCED", string.format(tx2().beaten_sub or "+%s ZOLLARS", zl(v)))
+        say("beaten", c.radio)
+        P.state = "beaten"
+        rlog(string.format("phase 2: the TANACORN beaten at +%.0f s (all %d guns down): %s zollars; her hull %s", now - P.fightAt, of,
+            tostring(v), okD and ("down (" .. tostring(how) .. ")") or "NOT finished off"))
+    end
+end
+local function p2Tick(now)
+    local c = p2c()
+    if c.enabled == false or not (GEO and GEO.attach) then return end
+    local F, P = R.F, R.p2
+    local sh = F.ships[1]
+    local fl = fallC()
+    if not P then                                         -- (GEOFON once it's up and the surfacing's over)
+        if not (sh and sh.hull) or (IFSURF and IFSURF.state and IFSURF.state()) then return end
+        if sh.sunk then p2skip("GEOFON sank before it was watched"); return end
+        local G, why = GEO.attach(sh)
+        if not G then
+            R.p2tries = (R.p2tries or 0) + 1
+            if R.p2tries >= 5 then p2skip("GEOFON's meshes not captured (" .. tostring(why) .. ")") end
+            return
+        end
+        R.p2 = { state = "watch", G = G, sh = sh, paid = 0 }
+        rlog(string.format("phase 2: GEOFON watched (its stages at %s; held at %.0f %% from %.0f %%, broken there)", stagesSaid(),
+            n(fl.break_at, 0.03) * 100, n(fl.watch_hp, 0.15) * 100))
+        return
+    end
+    if P.state == "watch" then
+        local G = P.G
+        if not alive(G.hull) or sh.sunk then              -- (gone or at 0 before its hold took: the TANACORN where it was)
+            rlog(string.format("phase 2: GEOFON %s before its break: no V, the TANACORN rises where it was", sh.sunk and "sunk" or "gone"))
+            if not P.at then p2skip("GEOFON's place never read"); return end
+            P.G, P.state, P.t0 = nil, "fall", now
+            return
+        end
+        local l, yaw = GEO.where(G)
+        if l then P.at, P.yaw = l, yaw end
+        pcall(GEO.stagesStep, G, now)
+        local h = hpOf(G.hull)
+        local share = (h and G.max and G.max > 0) and h / G.max or 1
+        if share <= n(fl.watch_hp, 0.15) and not P.held then
+            P.held = true
+            local floor = G.max / 10 * n(fl.break_at, 0.03)  -- (HealthInternal is health x 10; SetMinHealth takes health)
+            local okM = pcall(function() G.hull.obj:SetMinHealth(floor) end)
+            rlog(string.format("phase 2: GEOFON at %.0f %%: its health held at %.0f %% (SetMinHealth %.0f %s)", share * 100,
+                n(fl.break_at, 0.03) * 100, floor, okM and "set" or "FAILED"))
+        end
+        if share <= n(fl.break_at, 0.03) + 0.002 then
+            pcall(function() G.hull.obj:SetIsInvincible(true) end)
+            pcall(function() G.hull.obj:SetActorTickEnabled(false) end)   -- (off its lane: it stops where it breaks)
+            for f, v in pairs({ bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true }) do
+                pcall(function() G.hull.obj[f] = v end)
+            end
+            sh.sunk = true
+            if IFLEET.onSunk then pcall(IFLEET.onSunk, F, sh, "broken by the TANACORN") end
+            P.state, P.t0 = "fall", now
+            rlog(string.format("phase 2: GEOFON at its break (%.0f %%): held whole and stopped; the TANACORN under it %g s on, "
+                .. "her bow splits it", share * 100, n(c.rise_after_s, 0)))
+        end
+        return
+    end
+    if P.G and P.split and not P.G.over and (P.state == "fall" or P.state == "rise" or P.state == "fight") then pcall(GEO.fallStep, P.G, now) end
+    if P.riseAt and not P.split and now - P.riseAt >= n(c.split_max_s, 6) then split(P, "its own break (no breach seen in time)") end
+    if P.state == "fall" then
+        if not P.G then split(P, "its own sinking") end
+        hideHalves(P, now)
+        if not P.riseAt and now - P.t0 >= n(c.rise_after_s, 0) then p2Rise(P, now) end
+        return
+    end
+    if P.state == "rise" then
+        hideHalves(P, now)
+        local st = TANI.riseState and TANI.riseState() or nil
+        if st == nil or now - P.riseAt >= n(c.rise_max_s, 40) then
+            P.state, P.fightAt, P.railAt = "fight", now, now + n(c.rail_after_s, 20)
+            hudCallout(tx2().rises or "THE TANACORN RISES", tx2().rises_sub or "")
+            say("rises", c.radio)
+            rlog(string.format("phase 2: the TANACORN up and fighting at +%.0f s from the break (her rise %s)", now - P.t0,
+                st == nil and "over" or ("cut at " .. n(c.rise_max_s, 40) .. " s: " .. tostring(st))))
+        end
+        return
+    end
+    if P.state == "fight" then p2Fight(P, now) end
+end
+local function p2Busy() return R ~= nil and R.p2 ~= nil and (R.p2.state == "fall" or R.p2.state == "rise" or R.p2.state == "fight") end
+
 -- the kind (sv_rounds.lua SPC; THE ESCORT's and the Spaceport's hooks)
 function IFROUND.spawn(now)
     if not ready(D and D.round) then rlog("round " .. tostring(D and D.round) .. ": not ready: a normal round"); return false end
@@ -162,12 +340,15 @@ end
 function IFROUND.busy(s)
     if not R then return false end
     if IFLEET.cur ~= R.F then return false end           -- (taken off: Ctrl+N)
-    return afloatN(R.F) > 0
+    return afloatN(R.F) > 0 or p2Busy()
 end
 function IFROUND.over(now, s)
     if not R then return end
     local F = R.F
-    local won = IFLEET.cur == F and afloatN(F) == 0
+    local won = IFLEET.cur == F and afloatN(F) == 0 and not p2Busy()
+    if p2Busy() and R.p2.state ~= "fall" and TANI and TANI.liveDown then   -- (the round over with her up: she goes with it)
+        rlog("phase 2: the round's over with the TANACORN up: " .. tostring(select(2, TANI.liveDown("round 30 over"))))
+    end
     rlog("music: " .. musicStop())
     if SKY then SKY.fightSlow = nil end
     if won then
@@ -191,6 +372,9 @@ function IFROUND.over(now, s)
 end
 function IFROUND.row(s, t)
     if not R then return nil end
+    if R.p2 and R.p2.state == "fight" and R.p2.of then
+        return string.format(tx2().row or "TANACORN: %d OF %d GUNS", R.p2.up or 0, R.p2.of)
+    end
     local g = R.F.ships[1]
     return string.format(tx().row or "FLEET: %d AFLOAT  CARRIER: %s", afloatN(R.F), (g and not g.sunk) and IFLEET.label(g) or "SUNK")
 end
@@ -236,6 +420,8 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet round", fn = function(now)
     if IFLEET.cur ~= R.F then return end
     pcall(turretsTick)
     pcall(musicTick)
+    local okP, errP = pcall(p2Tick, now)
+    if not okP and not R.p2err then R.p2err = true; rlog("phase 2: error " .. tostring(errP)) end
     if not R.sightedSaid and #R.F.queue == 0 and not (IFSURF and IFSURF.state and IFSURF.state()) then
         R.sightedSaid = true
         say("sighted")

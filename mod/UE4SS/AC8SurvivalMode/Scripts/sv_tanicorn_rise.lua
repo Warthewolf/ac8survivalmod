@@ -305,7 +305,28 @@ testKey("R", "sv_tanicorn.lua's rise test", function()
     if r > 0 then armourHulls("Ctrl+R") end              -- ((2026-11-12) her hull can't be damaged: TANI.armour)
     if r > 0 then RISE = { x = x, y = y, z = H.z_cm, before = before, anim = anim, at = os.clock(), state = "finding", next = 0 } end
 end)
-TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
+-- ((0.74.131) round 30's phase 2, sv_fleet_round.lua) TANI.roundRise(x, y, face, why): her live hull spawned there
+-- (TANI.liveSpawn: Ctrl+L's watch) and risen as Ctrl+R raises a new hull (found, scrubbed under the sea, the cinematic,
+-- played) -> r (> 0: up), why not. The rise's tick runs at once after the spawn (the user, 2026-11-17: no fade, "she spawns
+-- as the Geofon is splitting apart"): she's found and put under the sea in the same call, never a tick on the surface.
+-- TANI.riseState(): the rise's state ("finding", "hold", "rising"), nil when there's none.
+-- onBreach (optional): called with her rise's time the moment her bow breaks the surface (the round splits GEOFON there)
+local riseTick
+function TANI.roundRise(x, y, face, why, onBreach)
+    if RISE and not RISE.back then riseBack(RISE, "a new rise (" .. tostring(why) .. ")"); RISE = nil end
+    local before = {}
+    for _, o in ipairs(ourHulls()) do before[addrOf(o) or 0] = true end
+    local r, no = TANI.liveSpawn(x, y, face, why)
+    if (tonumber(r) or 0) <= 0 then return r, no end      -- (her armour: the live watch's, from the tick it finds her)
+    RISE = { x = x, y = y, z = TANI.live.z_cm, before = before, anim = riseAsset(TANI.rise.anim), at = os.clock(), state = "finding",
+             next = 0, why = why, onBreach = onBreach }
+    local okT, err = pcall(riseTick, os.clock())
+    log(string.format("tanicorn: %s: the rise's find at once after her spawn: %s", tostring(why), okT and ("her state " ..
+        tostring(RISE and RISE.state or "none")) or ("error " .. tostring(err))))
+    return r
+end
+function TANI.riseState() return RISE and not RISE.back and RISE.state or nil end
+riseTick = function(now)
     local R, C = RISE, TANI.rise
     if not R or R.back then return end
     if not D or (levelTorn and levelTorn()) then riseBack(R, "the run's over"); RISE = nil; return end
@@ -399,6 +420,10 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
     end
     if not R.breached and t >= C.breach_s then
         R.breached = true
+        if R.onBreach then
+            local okB, errB = pcall(R.onBreach, t)
+            if not okB then log("tanicorn: rise: its breach's caller: error " .. tostring(errB)) end
+        end
         local up = list(C.breach, C.breach_m, 0)
         log(string.format("tanicorn: rise breach at +%.1f s: %d of %d effects up (%.0f m forward of her rest midships), the sound %s",
             t, up, #C.breach, C.breach_m, riseSound(C.breach_sound, spot(C.breach_m, 0)) and "played" or "FAILED"))
@@ -469,6 +494,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
         riseLook(R, t)
     end
     if R.ended and now - R.endAt >= C.end_pad_s then riseBack(R, "the rise ended"); RISE = nil end
-end }
+end
+TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now) riseTick(now) end }
 end
 -- DEV ONLY END

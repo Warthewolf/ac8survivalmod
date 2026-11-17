@@ -60,7 +60,7 @@ if WANT == "dev" then
     check(said("zz raises's put%-back error") ~= nil, "a put-back that raises is said")
     check(said("zz drop raises's drop error") ~= nil, "a drop that raises is said")
     local l = said("^restart: the mission's reload took")
-    check(l ~= nil and l:find("fleet ships", 1, true) and l:find("put back first: fleet storm", 1, true) ~= nil,
+    check(l ~= nil and l:find("fleet ships", 1, true) and l:match("put back first: .*fleet storm") ~= nil,
         "one line names the parts dropped and put back: " .. tostring(l))
 else
     check(next(RESTART_DROPS) == nil, "no part named in a release (the fleet's parts stripped)")
