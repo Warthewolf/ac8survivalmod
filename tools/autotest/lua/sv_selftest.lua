@@ -2375,6 +2375,90 @@ end
 -- (2026-11-17) 0.74.90's Ctrl+S (the user: "yeah make a test key that goes into night storm"): pressed, the fleet's night
 -- storm comes under its fade with its cloud light and flashes; again, it clears and the round's own sky is back; a third
 -- time, the storm again. Pictures from your view at each.
+-- (2026-11-17) restart129: 0.74.129, the user's crash of 0.74.128 (a pause-menu restart in round 30, the storm again 8 s
+-- on, AceCombat8.exe+0x5761b98) and the cloud burst dimmed (burst.py DIM 300). Ctrl+S: the storm in, its flashes, pictures
+-- of the bursts; then a mission restart as sv_main.lua's restart check makes it (D.restarted, levelTick -1: the level-load
+-- reset; the self-test can't press the pause menu's RESTART, so the mission isn't reloaded); the restart's drop line, the
+-- storm's layout put back; then Ctrl+S again: the storm in again, 60 s of strikes, the strike light and the bursts, no crash.
+SUITES.restart129 = function()
+    intoRun()
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and IFSKY.storm ~= nil, "the fleet's night storm is in this build") then return "abort" end
+        ST.check(type(levelRestartDrop) == "function" and type(RESTART_DROPS) == "table" and RESTART_DROPS["fleet storm"] == true,
+            "levelRestartDrop and the fleet's RESTART_DROPS are in")
+        ST.marks.r1 = ST.n
+        ST.press("S")
+    end)
+    A.log_("fleet storm: in (", 20, "r1", true, function(l) ST.check(l ~= nil, "Ctrl+S: the storm in", l) end)
+    A.log_("fleet storm: flash 1 (", 25, "r1", true, function(l) ST.check(l ~= nil, "its cloud flashes", l) end)
+    for i = 1, 10 do
+        A.wait(1.3)
+        A.do_(function() ST.shot(string.format("rs_burst_%02d", i)) end)
+    end
+    A.do_(function()
+        ST.check(IFSKY.storm().on == true, "the storm on before the restart", tostring(IFSKY.storm().flashes) .. " flashes")
+        ST.marks.r2 = ST.n
+        D.restarted = true                                -- (as sv_main.lua's restart check: the level-load reset next tick)
+        levelTick = -1
+        ST.info("restart: D.restarted, levelTick -1 (the reset as after a pause-menu RESTART)")
+    end)
+    A.log_("restart: the mission's reload took", 10, "r2", true, function(l)
+        ST.check(l ~= nil and l:find("fleet storm", 1, true) ~= nil and l:find("put back first: fleet storm", 1, true) ~= nil,
+            "the restart dropped the fleet's parts, the storm put back first", l)
+    end)
+    A.log_("the mission restarted", 10, "r2", true, function(l) ST.check(l ~= nil, "the storm's layout back to the level's", l) end)
+    A.wait(6)
+    A.do_(function()
+        ST.check(D ~= nil and IFSKY.storm().on == false, "a new run, the storm off", "D " .. tostring(D ~= nil))
+        ST.check(IFLEET == nil or IFLEET.cur == nil, "no old fleet kept")
+        ST.shot("rs_after_restart")
+        ST.marks.r3 = ST.n
+        ST.press("S")
+    end)
+    A.log_("fleet storm: in (", 20, "r3", true, function(l) ST.check(l ~= nil, "Ctrl+S after the restart: the storm in again", l) end)
+    A.log_("strike light 1:", 30, "r3", true, function(l) ST.check(l ~= nil, "a strike light after the restart (where it crashed)", l) end)
+    for i = 1, 8 do
+        A.wait(6)
+        A.do_(function() ST.shot(string.format("rs_again_%02d", i)) end)
+    end
+    A.do_(function()
+        local s = IFSKY.storm()
+        ST.check(s.on == true and (s.flashes or 0) > 10, "60 s of the storm after the restart, no crash", tostring(s.flashes) .. " flashes")
+        local prob = ST.findLog("sunk (its hull gone)", ST.marks.r2, true)
+        ST.check(prob == nil, "no ghost ship paid as sunk after the restart")
+    end)
+end
+-- (2026-11-17) whiteout: what whites the clouds out in the storm (the user's picture of 0.74.128, again at 0.74.129 with
+-- the burst at 300)? Ctrl+S, the storm in, 24 pictures over ~36 s; run with config_whiteout_nolight (the strike light
+-- off) and config_whiteout_noburst (the cloud burst off: the stock glow), the pictures' white compared.
+SUITES.whiteout = function()
+    intoRun()
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and IFSKY.storm ~= nil, "the fleet's night storm is in this build") then return "abort" end
+        local lt = ((((CFG.specials.fleet or {}).sky or {}).storm or {}).lightning or {})
+        local w = tostring(ST.conf.whiteout or "")
+        if w == "nolight" and lt.plane_light then lt.plane_light.enabled = false end
+        if w == "noburst" and lt.bolt_glow then lt.bolt_glow.flash = {} end
+        local sc = ((((CFG.specials.fleet or {}).sky or {}).storm or {}).cells)
+        if w == "nocells" and sc then sc.enabled = false end   -- (the 19 cells and the bolts' glow / burst)
+        local bg = sc and sc.bolt_glow
+        if w == "noburst2" and bg then bg.flash = {} end         -- (the stock glow in its place)
+        if w == "noglow" and bg then bg.enabled = false end
+        if w == "nobolts" then lt.bolts = nil end
+        ST.info("whiteout: " .. w)
+        ST.info("plane_light enabled " .. tostring((lt.plane_light or {}).enabled) .. "; bolt_glow.flash " ..
+            tostring(type((lt.bolt_glow or {}).flash) == "table" and #lt.bolt_glow.flash or "none"))
+        ST.marks.w1 = ST.n
+        ST.press("S")
+    end)
+    A.log_("fleet storm: in (", 20, "w1", true, function(l) ST.check(l ~= nil, "Ctrl+S: the storm in", l) end)
+    A.wait(4)
+    for i = 1, 24 do
+        A.wait(1.5)
+        A.do_(function() ST.shot(string.format("wo_%02d", i)) end)
+    end
+    A.do_(function() ST.check(IFSKY.storm().on == true, "the storm still on", tostring(IFSKY.storm().flashes) .. " flashes") end)
+end
 SUITES.stormkey = function()
     intoRun()
     A.do_(function()
@@ -3378,6 +3462,56 @@ SUITES.burstwatch = function()
         end
     end
     A.do_(function() L().enabled = W.on end)
+    A.wait(1)
+end
+-- (2026-11-17) planelight: a strike's light on your plane (sv_fleet_storm.lua slFlash: our directional light from the strike,
+-- flickered a tick at a time). The night storm, its own lightning held; strikes on cue 4, 8 and 12 km off your camera's
+-- right, 3 km up, twice each; pictures just before and 0.1 / 0.35 / 0.6 s after. The log: the light made and turned.
+SUITES.planelight = function()
+    intoRun()
+    local W = {}
+    local function L() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
+    local function side(km)
+        local pcm, Lc, R
+        pcall(function() pcm = survivalPC.PlayerCameraManager; local v = pcm:GetCameraLocation(); Lc = { X = v.X, Y = v.Y, Z = v.Z } end)
+        pcall(function() R = pcm:GetCameraRotation() end)
+        if not (Lc and R) then return nil end
+        local yw = math.rad((R.Yaw or 0) + 60)
+        return { X = Lc.X + math.cos(yw) * km * 100000, Y = Lc.Y + math.sin(yw) * km * 100000, Z = 300000 }
+    end
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and IFSKY.strike ~= nil, "the storm and its cued strike are in this build") then return "abort" end
+        ST.marks.k1 = ST.n
+        ST.press("S")
+    end)
+    A.log_("fleet storm: in (", 15, "k1", true, function(l)
+        ST.check(l ~= nil, "the storm in", l)
+        W.on = L().enabled; L().enabled = false
+    end)
+    A.wait(5)
+    -- ((0.74.120) intensity 6 lifted the plane 5 -> 7 of 255: a ladder at 6 km)
+    for _, km in ipairs({ 6 }) do
+        for r, inten in ipairs({ 1000, 4000, 10000 }) do   -- ((0.74.122) the point light, at once)
+            local tag = string.format("pl_i%d", inten)
+            A.do_(function() local pl = L().plane_light; if pl then pl.intensity, pl.max_km = inten, 15 end; ST.shot(tag .. "_0") end)
+            A.wait(0.5)
+            A.do_(function()
+                local at = side(km)
+                local ok, okS, what = pcall(IFSKY.strike, at, "the plane-light test")
+                ST.info(string.format("%s: %s", tag, ok and tostring(what) or ("error " .. tostring(okS))))
+            end)
+            for q, w in ipairs({ 0.1, 0.25, 0.25 }) do
+                A.wait(w)
+                A.do_(function() ST.shot(string.format("%s_%d", tag, q)) end)
+            end
+            A.wait(2)
+        end
+    end
+    A.do_(function()
+        local l = ST.findLog("fleet storm: strike light 1:", ST.marks.k1, true)
+        ST.check(l ~= nil, "the strike light made and turned", l)
+        L().enabled = W.on
+    end)
     A.wait(1)
 end
 -- (2026-11-17) fleet30: WP10 step 1 (sv_fleet_round.lua) played: the run set to round 29 in its first break: the warning;
