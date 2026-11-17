@@ -3641,3 +3641,30 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - Checks: lua_check, fleet_test, arc_rounds_test, sky_test passed; build hash 003ecff669fd registered.
 - INSTALLED 2026-11-17 ("install it when it's done"), over 0.74.127 (backup: build/backup/install_before_0.74.128); 112
   files verified; her config, subtitles (the same as the repo's) and the launcher's toggle kept.
+
+## 0.74.129-0.74.130 (2026-11-17): the restart crash fixed, the storm's cloud burst lighter (feature/cloud-flash); staged, not installed
+- The user's crash of 0.74.128 (15:56:28, EXCEPTION_ACCESS_VIOLATION reading 0x1080000037 at AceCombat8.exe+0x5761b98,
+  called from UE4SS Lua): she died in round 30, restarted from the pause menu, Ctrl+F'd back to the fleet round; 8 s after
+  the storm came in, the crash. A pause-menu restart reloads the mission in the same world (the teardown gate watched the
+  same world 1706878B20 before and after), so levelGate never closed and LEVEL_DROPS never ran: the fleet's parts kept the
+  old mission's objects (the 15 old ships "sunk (its hull gone)" and paid, +65,000 Z, at 15:56:24). The exact call wasn't
+  in the dump (no call stack).
+- sv_core.lua levelRestartDrop (RESTART_DROPS, RESTART_PUTBACK): on a restart (sv_main.lua sets D.restarted where it sees
+  the event flags drop; the level-load reset calls it after ESC.restart) the drops of the parts named in RESTART_DROPS run,
+  after each RESTART_PUTBACK. Only the dev parts register (sv_fleet_storm.lua's TEST ONLY block: fleet, fleet ships /
+  lasers / round / storm / surfacing, thunder, tanicorn armour / live / hits / rail / rise fx, cine); every other part
+  keeps its own restart handling (the shuttle's pad, the sky's put-back, ESC.restart). The fleet storm's put-back: the
+  level's Cloudly layout back, the strike light off. Log: `restart: the mission's reload took these parts' objects: ...`.
+  tools/checks/restart_drop_test.sh (dev parts and a release copy: nothing named, nothing left of them).
+- The cloud burst (the user, 0.74.128: "we'll need to tone down the cloud burst brightness, but the Lighting we have
+  right now is correct"; her picture: the sky whited out over a cloud bank). Autotest whiteout runs (24 pictures each over
+  ~36 s of Ctrl+S's storm): the strike light off still whited out; the cells off, the bolts off (no glow on their tops),
+  the burst off (the stock glow) and no glow all had 0 of 24. It was NS_SV_CloudBurst: 0.74.129's DIM 300 (emissive
+  1/16, both instances, AC8's fades kept) changed nothing; 0.74.130's spawn literals 20 -> 4 with DIM 40: 0 of 24
+  whited out, the flash a blue glow lighting the clouds behind the bolt (run 20261117_163054). tools/stormfx/burst.py DIM.
+- 0.74.130 autotests: restart129 17/17 (a restart as sv_main.lua makes it, the storm's layout back, then the storm again:
+  77 flashes in 60 s, the strike light, no ghost ship paid; the test can't press the pause menu's RESTART, so the
+  mission wasn't really reloaded), whiteout 7/7 (1 of 24 pictures 3.9 % white: a strike close by lighting the plane).
+  Build hash 7cf1301b3fdf registered. Untested in game: a real pause-menu restart in round 30.
+- 0.74.129 (staged only) had the restart fix and DIM 300; one autotest run was stopped by Claude Code for low memory and
+  its clean-up done by hand (kit.py restore, the saves unchanged).

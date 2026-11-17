@@ -34,7 +34,7 @@ OLD = '/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning'
 NEW = '/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudBurst'
 SCRIPT_EXPORT = 34                     # (the system update script: its literal table holds the emitters' spawn inputs)
 LITERALS = {4440: 0.08, 4444: 0.22, 4448: 0.5, 4460: 0.15, 4464: 0.1, 4472: 0.4, 4480: 0.05}
-BURST = 20.0                           # (5 in 0.74.111-0.74.114: 2-3 flickering sprites, the pictures mostly dark)
+BURST = 4.0                            # (0.74.130: 20 in 0.74.115-0.74.129 whited the night sky out even at DIM 300: autotest whiteout runs 20261117_161131-163054; 5 in 0.74.111-0.74.114: 2-3 flickering sprites, the pictures mostly dark)
 # ((0.74.114) AC8's near lightning instance fades its sprites out 0.5-3.5 km from the camera (MI_NearCloudLightning001's
 # FarFade_Start 50000, FarFade_Distance 300000, emissive 5000; the far one, MI_CloudLightning001, has no fade): nothing
 # showed at 7-10 km in 0.74.113's burstwatch. A copy with the fade pushed out and half the light, which the burst's
@@ -46,6 +46,10 @@ MI_VALUES = {42: (5000.0, 150.0),   # (2500 in 0.74.114-0.74.115, 800 in 0.74.11
 # ((0.74.118) the user, 2026-11-17: "I think the cloud burst is too big, i liked the vanilla look": AC8's own instances as
 # they are (its brightness and its fade), only the timing patched; the copies above stay for a later choice
 VANILLA = True
+# ((0.74.129) the user flying 0.74.128's night storm, a picture of the sky blown out white: "we'll need to tone down the
+# cloud burst brightness": VANILLA's look (AC8's fades and sizes) with only the emissive of both instances lowered, on
+# copies (MI_SV_CloudFlashNear / Far, as the non-VANILLA route); None: AC8's own instances untouched
+DIM = 40.0                             # (AC8's 5000; 300 in 0.74.129)
 # ((2026-11-17) the user: "need to increase the brightness of the lightning bolt") the bolts' own copy of the near instance
 # (sv_fleet.lua bolts.material_bright), built whatever VANILLA says: brighter, its fade pushed out to 30 km
 BOLT_MI = '/Game/Mods/SurvivalMode/StormFx/MI_SV_StormBolt'
@@ -101,19 +105,23 @@ def main():
     z.rename(old_short, new_short)
     z.set_export_public_hash(i, new_short)
     mi = mif = None
-    if not VANILLA:
+    if not VANILLA or DIM:
+        near_values = MI_VALUES if not VANILLA else {42: (5000.0, DIM)}
+        far_values = MIF_VALUES if not VANILLA else {42: (5000.0, DIM)}
         # the near emitter's sprites on our instance (the import's package and its object's public hash)
         from zenpkg import export_hash
         hs = z.imported_hash_index(MI_OLD)
         assert len(hs) == 1 and z.imp_hashes[hs[0]] == export_hash(MI_OLD.rsplit('/', 1)[1]), (MI_OLD, hs)
         z.imp_hashes[hs[0]] = export_hash(MI_NEW.rsplit('/', 1)[1])
         z.set_imported_package(MI_OLD, MI_NEW)
-        mi = instance()
+        mi = instance(MI_OLD, MI_NEW, near_values)
         hs = z.imported_hash_index(MIF_OLD)
         assert len(hs) == 1 and z.imp_hashes[hs[0]] == export_hash(MIF_OLD.rsplit('/', 1)[1]), (MIF_OLD, hs)
         z.imp_hashes[hs[0]] = export_hash(MIF_NEW.rsplit('/', 1)[1])
         z.set_imported_package(MIF_OLD, MIF_NEW)
-        mif = instance(MIF_OLD, MIF_NEW, MIF_VALUES)
+        mif = instance(MIF_OLD, MIF_NEW, far_values)
+        if VANILLA:
+            print(f"burst: AC8's own look (VANILLA), only its emissive 5000 -> {DIM:g} (DIM)")
     else:
         print('burst: AC8\'s own lightning instances as they are (VANILLA: the user, "i liked the vanilla look")')
     data = z.write()

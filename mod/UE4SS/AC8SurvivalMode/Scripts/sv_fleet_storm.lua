@@ -540,5 +540,17 @@ end }
 if type(LEVEL_DROPS) == "table" then                       -- (the level's: its Cloudly actor and lights went with it)
     LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving, TH.q, TH.got, TH.ev, CELLS = nil, nil, {}, {}, {}, {}; GLOW.pool, GLOW.i, GLOW.flash, GLOW.fe = {}, 0, nil, nil; SL = { a = nil }; MARK = { pool = {}, i = 0 } end
 end
+if type(RESTART_PUTBACK) == "table" then                   -- ((0.74.129) a restart keeps the level: its Cloudly actor's
+    RESTART_PUTBACK["fleet storm"] = function()             -- layout back, our strike light off, before the drop above
+        if SW.on and THUNDER and THUNDER.layoutSet then pcall(THUNDER.layoutSet, false, "INVINCIBLE FLEET's storm: the mission restarted") end
+        slOff()
+    end
+end
+if type(RESTART_DROPS) == "table" then                     -- ((0.74.129) the parts whose objects a mission's reload takes:
+    for _, name in ipairs({ "fleet", "fleet ships", "fleet lasers", "fleet round", "fleet storm", "fleet surfacing", "thunder",   -- the
+                            "tanicorn armour", "tanicorn live", "tanicorn hits", "tanicorn rail", "tanicorn rise fx", "cine" }) do   -- old ships
+        RESTART_DROPS[name] = true                         -- paid as sunk, then the crash of 15:56:28; sv_core.lua levelRestartDrop)
+    end
+end
 end
 -- TEST ONLY END
