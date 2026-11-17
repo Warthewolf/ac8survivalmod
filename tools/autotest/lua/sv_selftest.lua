@@ -4002,6 +4002,13 @@ SUITES.capture = function()
     A.wait(10); A.do_(function() ST.shot("capture_fly_1"); ST.info("capture: state " .. tostring(IFCAP.state())) end)
     A.wait(15); A.do_(function() ST.shot("capture_fly_2"); ST.info("capture: state " .. tostring(IFCAP.state())) end)
     A.wait(15); A.do_(function() ST.shot("capture_fly_3"); ST.info("capture: state " .. tostring(IFCAP.state())) end)
+    -- ((0.74.181) the user: "Go ahead": outside pictures of the plane at its touchdown on GEOFON's deck)
+    A.until_(function() return ST.findLog("capture: seq %d+: touched down", ST.marks.c1, false) or IFCAP.state() == nil end, 200,
+        function() end)
+    A.picture("capture_touchdown_behind", function() local pl = ST.plane(); return pl and ST.off(ST.at(pl), -6000, 0, 2500) end,
+        function() local pl = ST.plane(); return pl and ST.at(pl) end, 50)
+    A.picture("capture_touchdown_side", function() local pl = ST.plane(); return pl and ST.off(ST.at(pl), 0, 7000, 1200) end,
+        function() local pl = ST.plane(); return pl and ST.at(pl) end, 50)
     -- (to its end on its own clock: the checks the moment it's over, not a fixed wait's later)
     A.until_(function() return IFCAP.state() == nil end, 200, function(v) ST.check(v ~= nil, "the capture over within 200 s") end)
     A.do_(function()                                       -- (at once: given back, mortal and targetable; then the harness's
