@@ -264,6 +264,9 @@ function testKey(name, who, fn) keys[name] = fn; return true end
 
 dofile(MOD .. "/Scripts/sv_fleet.lua")
 dofile(MOD .. "/Scripts/sv_fleet_storm.lua")              -- ((2026-11-17) its night storm, the next piece)
+SPC.kinds = SPC.kinds or {}                               -- ((2026-11-17) round 30, the piece after: sv_rounds.lua's and
+function specialFor(round) return nil end                 -- sv_spawn.lua's as the round piece finds them)
+dofile(MOD .. "/Scripts/sv_fleet_round.lua")
 local C = CFG.specials.fleet and CFG.specials.fleet.geofon
 local function same(a, b)
     if type(a) ~= type(b) then return false end
@@ -276,8 +279,9 @@ check(C ~= nil and C.unit == FORD and #C.stages == 2 and C.look.bow.pitch == 25 
     "CFG.specials.fleet.geofon: the Ford, two stages, the V's angles")
 check(CFG_DEFAULTS.specials.fleet ~= CFG.specials.fleet and same(CFG_DEFAULTS.specials.fleet, CFG.specials.fleet),
     "the same in CFG_DEFAULTS (a copy): shipped, no edit")
-check(type(keys.B) == "function" and type(keys.G) == "function" and type(keys.N) == "function" and #TEST_TICKS == 4
+check(type(keys.B) == "function" and type(keys.G) == "function" and type(keys.N) == "function" and #TEST_TICKS == 5
     and TEST_TICKS[2].name == "fleet ships" and TEST_TICKS[3].name == "fleet surfacing" and TEST_TICKS[4].name == "fleet storm"
+    and TEST_TICKS[5].name == "fleet round" and type(LEVEL_DROPS["fleet round"]) == "function"
     and type(LEVEL_DROPS.fleet) == "function" and type(LEVEL_DROPS["fleet ships"]) == "function"
     and type(LEVEL_DROPS["fleet storm"]) == "function" and type(LEVEL_DROPS["fleet surfacing"]) == "function",
     "Ctrl+B, Ctrl+G, Ctrl+N, their four ticks (the storm's and the surfacing's, 2026-11-16) and level drops")
@@ -760,6 +764,55 @@ alive2.SV_Unit_IFPicketB, stuck.SV_Unit_IFPicketB = 0, nil
 keys.N()
 LEVEL_DROPS["fleet ships"]("test")
 check(IFLEET.cur == nil, "forgotten when the level goes")
+
+-- ((2026-11-17) WP10 step 1, sv_fleet_round.lua) round 30, the fleet's: picked, warned, spawned, each ship paid once, held
+-- while one's afloat, won: the reward, the airfield fully repaired, the fleet taken off
+print("round 30, the fleet's round")
+local Dwas, RUNwas = D, RUN
+local K = SPC.kinds.fleet
+check(type(K) == "table" and type(K.spawn) == "function" and type(K.busy) == "function" and type(K.over) == "function"
+    and type(K.row) == "function" and K.sub() == "INVINCIBLE FLEET", "SPC.kinds.fleet: its hooks, its callout's line")
+D = { now = 5, round = 29, state = "wait" }
+RUN = { credits = 0, earned = 0 }
+CFG.specials.enabled = true
+local paidFor = {}
+function addCredits(n, why) RUN.credits = RUN.credits + n; paidFor[#paidFor + 1] = why end
+check(specialFor(30) == "fleet" and specialFor(29) == nil and specialFor(31) == nil and find("fleet round: round 30 is the fleet's$") ~= nil,
+    "round 30 is the fleet's (29 and 31 not)")
+check(K.budget(20) == 6, "a few of the round's own fighters (a quarter: 20 -> 6): " .. tostring(K.budget(20)))
+local c0 = #callouts
+TEST_TICKS[5].fn(clock); TEST_TICKS[5].fn(clock)
+check(#callouts == c0 + 1 and callouts[#callouts] == "INVINCIBLE FLEET / THE AEGIR FLEET IS UNDER WAY" and RUN.fleetWarned == true,
+    "round 29's break: the warning, once")
+D.round, D.state, D.special = 30, "fighting", { kind = "fleet", state = "pending" }
+check(K.spawn(clock) == true and IFLEET.cur ~= nil and IFLEET.cur.round == true and RUN.fleetRound == true and D.special.state == "fleet",
+    "spawned: the fleet up as round 30's")
+check(K.ready(30) == false, "once a run")
+check(K.busy(D.special) == true, "the round held while the fleet's afloat (queued)")
+local F2 = IFLEET.cur
+F2.queue = {}
+for _, sh in ipairs(F2.ships) do sh.r = 1 end
+check(K.row(D.special, {}) == "FLEET: 15 AFLOAT  CARRIER: GEOFON", "its NEXT row: " .. tostring(K.row(D.special, {})))
+local cr = RUN.credits
+F2.ships[1].sunk = true; IFLEET.onSunk(F2, F2.ships[1], "test"); IFLEET.onSunk(F2, F2.ships[1], "test")
+check(RUN.credits - cr == 6000 and callouts[#callouts] == "GEOFON SUNK / +6000 ZOLLARS" and paidFor[#paidFor] == "INVINCIBLE FLEET: GEOFON sunk",
+    "GEOFON sunk: 6,000 once, its callout")
+for i = 2, #F2.ships do F2.ships[i].sunk = true; IFLEET.onSunk(F2, F2.ships[i], "test") end
+check(RUN.credits - cr == 22600, "every ship paid once by its kind (6,000 + 5 x 1,600 + 1,400 + 6 x 1,000 + 2 x 600 = 22,600): "
+    .. tostring(RUN.credits - cr))
+check(K.busy(D.special) == false and K.row(D.special, {}) == "FLEET: 0 AFLOAT  CARRIER: SUNK", "all sunk: the round can end")
+AF = { hp = 100, full = 500, max = 1000, hits = 7, bomb = 3, closed = true, down = false }
+local repaired = false
+ALLY.repairAll = function() repaired = true end
+local ev0, cr2 = #events, RUN.credits
+K.over(clock, D.special)
+local opened = false
+for i = ev0 + 1, #events do if events[i] == "RE_SV_AirfieldOpen" then opened = true end end
+check(RUN.credits - cr2 == 50000 and find("fleet round: won at %+") ~= nil, "won: 50,000")
+check(AF.hp == 1000 and AF.full == 1000 and AF.base == 7 and AF.bombBase == 3 and AF.closed == false and opened and repaired,
+    "the airfield fully repaired (its health to its top, the landing open, ALLY.repairAll)")
+check(IFLEET.cur == nil and D.special.state == "done" and find("fleet round: its wrecks and parts taken off") ~= nil, "the fleet taken off, the special done")
+D, RUN = Dwas, RUNwas
 -- a row missing at the main menu: no Ctrl+N fleet; a text the game refuses (SV_SetText raising): the rest set (finding 5)
 IFLEET.setupDone, IFLEET.rowsOk = nil, nil
 T.npc.rows, T.mine.rows.SV_IF_Kolga = {}, nil

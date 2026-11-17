@@ -11,9 +11,9 @@ import re
 import sys
 
 DEV_ONLY = ('sv_tanicorn.lua', 'sv_tanicorn_rise.lua', 'sv_tanicorn_hits.lua', 'sv_tanicorn_rail.lua', 'sv_fleet.lua',
-            'sv_fleet_storm.lua', 'sv_cine.lua')   # (main.lua MODULES: THE TANICORN, her rise, hit probe and railguns /
+            'sv_fleet_storm.lua', 'sv_fleet_round.lua', 'sv_cine.lua')   # (main.lua MODULES: THE TANICORN, her rise, hit probe, railguns /
 #           railcannon, the fleet, its night storm (2026-11-17), the rise's cinematic)
-GLOBALS = ('TANI', 'GEO', 'IFLEET', 'IFSKY', 'CINE')            # (what they define; other parts only test them for nil)
+GLOBALS = ('TANI', 'GEO', 'IFLEET', 'IFSKY', 'IFROUND', 'CINE')            # (what they define; other parts only test them for nil)
 BLOCK = re.compile(r'[ \t]*-- (TEST|DEV) ONLY BEGIN.*?-- \1 ONLY END[^\n]*\n', re.S)   # (DEV ONLY: the cloud line's markers)
 
 
@@ -58,7 +58,7 @@ if __name__ == '__main__':
         # THE TANICORN's (and her hit probe's) and the fleet's parts kept whole; only the rise director (sv_cine.lua) cut
         DEV_ONLY, GLOBALS = ('sv_cine.lua',), ('CINE',)
         args = args[1:]
-        print('dev_only: --keep-tani: sv_tanicorn.lua, sv_tanicorn_rise.lua, sv_tanicorn_hits.lua, sv_tanicorn_rail.lua, sv_fleet.lua and sv_fleet_storm.lua '
+        print('dev_only: --keep-tani: sv_tanicorn.lua, sv_tanicorn_rise.lua, sv_tanicorn_hits.lua, sv_tanicorn_rail.lua, sv_fleet.lua, sv_fleet_storm.lua and sv_fleet_round.lua '
               'kept whole (TESTER=1 TANI=1)')
     if len(args) != 1:
         sys.exit('usage: dev_only.py [--keep-tani] <mod folder (holding Scripts/)>')

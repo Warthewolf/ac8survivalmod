@@ -241,6 +241,25 @@ CFG.specials.fleet = {
     -- its breach_s and slam_s (TANI.rise.FX's names, x its scale x fx_x), the cameras' shots (each from `t` s: a cut, at / look
     -- in metres off a ship's spot: forward along the course, right, up; fov), your plane invincible on the loiter autopilot;
     -- then a fade to black (fade), the doubles gone and the real fleet up on the same spots under it, your view back
+    -- (2026-11-17, WP10 step 1, sv_fleet_round.lua; the user: "Phase 1 now", the surfacing "at round start") round 30 is
+    -- the fleet's (never drawn, once a run): the surfacing, then it sails in; a few of the round's own fighters
+    -- (fighter_share of a normal round's); no time limit; each ship paid once as sunk (pay by kind: double the Spaceport's),
+    -- a turret shot off `turret`; won when every ship is sunk and the round's aircraft are down: `reward`, the airfield
+    -- fully repaired. music: Online Mode's AC04 track from the round's start, again at its length, the music player's
+    -- clock held meanwhile. radio: Survival's own lines, drafted for the user to edit here (dev install only: never in
+    -- config/subtitles.ini, which every release ships). GEOFON sinks like any ship until WP5 / WP6 (its fall, the rise)
+    round = { enabled = true, round = 30, fighter_share = 0.25, reward = 50000, turret = 300,
+              pay = { ford = 6000, aegis = 1600, krov = 1400, udal = 1000, grig = 1000, gors = 1000, boat = 600 },
+              music = { enabled = true, track = "AKE_Bgm_Online_ACE04_Invincible_Fleet_Play", len_s = 265.832 },
+              text = { sub = "INVINCIBLE FLEET", warn = "INVINCIBLE FLEET", warn_sub = "THE AEGIR FLEET IS UNDER WAY",
+                       row = "FLEET: %d AFLOAT  CARRIER: %s", sunk = "%s SUNK", won = "THE AEGIR FLEET IS DESTROYED",
+                       won_sub = "+%s ZOLLARS", restored = "AIRFIELD RESTORED", restored_sub = "ITS HEALTH, DEFENCES AND ALLIES" },
+              radio = { warn = { "CTRL|All units, Comona Control. Long-range radar has a surface group under way, bearing three-one-five.",
+                                 "CTRL|Fifteen contacts in formation. It's the Aegir Fleet, and it's coming straight for us." },
+                        sighted = { "CTRL|They came up out of the sea... the whole fleet. Break them before they reach the airfield." },
+                        half = { "CTRL|Half of the fleet's on the bottom. Keep at them!" },
+                        geofon = { "CTRL|GEOFON is going down! The carrier's finished!" },
+                        won = { "CTRL|That's the last of them. The Aegir Fleet is destroyed. Ground crews, get that runway back in shape." } } },
     surface = { enabled = true, rig = "/Game/Mods/SurvivalMode/Tanicorn/Model/SK_SV_Tani_RIG.SK_SV_Tani_RIG",
                 anim = "/Game/Mods/SurvivalMode/Tanicorn/Model/AS_SV_Tani_RIG_Rise.AS_SV_Tani_RIG_Rise", length_s = 15.0,
                 tani_m = 650, start_km = 30.5, breach_s = 0.8, slam_s = 9.0, fx_x = 2.0, fx_life_s = 8, jitter_s = 1.0, end_pad_s = 1.0,
@@ -1318,7 +1337,8 @@ local function allUp(F)
         g and string.format(" (GEOFON %.1f km from the runway, bearing %03.0f from it)", d2(g, { X = rw[1], Y = rw[2] }) / 1e5,
             compass(g.X - rw[1], g.Y - rw[2])) or "",
         km and string.format("GEOFON %.1f km from you, bearing %03.0f: fly there", km, brg) or "GEOFON's place NOT read"))
-    hudCallout("TEST: INVINCIBLE FLEET", km and string.format("%d SHIPS %.0f KM, BEARING %03.0f", up, km, brg) or string.format("%d SHIPS UP", up))
+    hudCallout(F.round and "INVINCIBLE FLEET" or "TEST: INVINCIBLE FLEET", km and string.format("%d SHIPS %.0f KM, BEARING %03.0f", up, km, brg)
+        or string.format("%d SHIPS UP", up))
 end
 
 local function sunkTick(F, sh)
@@ -1332,6 +1352,7 @@ local function sunkTick(F, sh)
     if why then
         sh.sunk = true
         log(string.format("fleet: +%.0f s %s sunk (%s); %d of its %d parts still up", F.t, label(sh), why, partsUp(sh), #sh.parts))
+        if IFLEET.onSunk then pcall(IFLEET.onSunk, F, sh, why) end   -- (round 30's pay: sv_fleet_round.lua)
     end
 end
 
@@ -1562,35 +1583,43 @@ testKey("N", "sv_fleet.lua's INVINCIBLE FLEET formation test (WP7)", function()
         hudCallout("TEST: INVINCIBLE FLEET", "OFF")
         return
     end
-    if not canRun() then return end
+    local no = IFLEET.launch("Ctrl+N")
+    if no == "busy" then hudCallout("TEST: INVINCIBLE FLEET", "STILL GOING: AGAIN IN A FEW SECONDS") end
+    if not no then hudCallout("TEST: INVINCIBLE FLEET", string.format("%d SHIPS COMING UP", #IFLEET.cur.ships)) end
+end)
+-- the fleet up (Ctrl+N's, and round 30's: sv_fleet_round.lua, why "round 30"): its ships queued at their course start, the
+-- surfacing first; nil, or why not ("busy": the fleet before still being taken off)
+function IFLEET.launch(why)
+    if not canRun() then return "it can't run (the line above)" end
     local ships = fleetList()
     local busy = {}                                       -- (the fleet before still being taken off: OFF.down's)
     for _, sh in ipairs(ships) do if OFF.queued(sh.unit) then busy[#busy + 1] = label(sh) end end
     if #busy > 0 then
-        log(string.format("fleet: Ctrl+N: the fleet before is still being taken off (%d units: %s): not spawned, again in a few seconds",
-            #busy, table.concat(busy, ", ")))
-        hudCallout("TEST: INVINCIBLE FLEET", "STILL GOING: AGAIN IN A FEW SECONDS")
-        return
+        log(string.format("fleet: %s: the fleet before is still being taken off (%d units: %s): not spawned, again in a few seconds",
+            why, #busy, table.concat(busy, ", ")))
+        return "busy"
     end
     local q, left, names = {}, {}, {}
     for _, sh in ipairs(ships) do
         q[#q + 1] = sh
         if OFF.alive(sh.unit) > 0 then left[sh.unit] = true; names[#names + 1] = label(sh) end
     end
-    F = { t = 0, queue = q, ships = ships, by = {}, fired = {}, guns = {}, firedParts = {}, nextAt = 0 }
+    local F = { t = 0, queue = q, ships = ships, by = {}, fired = {}, guns = {}, firedParts = {}, nextAt = 0,
+                round = why ~= "Ctrl+N" or nil }
     if #names > 0 then                                    -- (still up from before: taken off, the fleet held for them)
         for u in pairs(left) do if COOP and COOP.takenOff then pcall(COOP.takenOff, u) end end
         F.left, F.clearUntil = left, num(fm().clear_s, 8)
-        log(string.format("fleet: Ctrl+N: %d of the fleet's ships still up from before (%s): taken off (RE_SV_IFFleetRemove %s); "
-            .. "the fleet waits up to %g s for them, never spawned beside them", #names, table.concat(names, ", "),
-            removeFire("Ctrl+N: still up from before"), F.clearUntil))
+        log(string.format("fleet: %s: %d of the fleet's ships still up from before (%s): taken off (RE_SV_IFFleetRemove %s); "
+            .. "the fleet waits up to %g s for them, never spawned beside them", why, #names, table.concat(names, ", "),
+            removeFire(why .. ": still up from before"), F.clearUntil))
     end
     IFLEET.cur = F
     if IFSURF and IFSURF.start then pcall(IFSURF.start, F) end   -- (the surfacing first: the real fleet once it's over)
-    log(string.format("fleet: Ctrl+N: %d ships coming up at their course start, %d every %g s (their lanes in from north-west of "
-        .. "the runway; again: taken off)", #ships, math.floor(num(fm().per_step, 3)), num(fm().gap_s, 0.5)))
-    hudCallout("TEST: INVINCIBLE FLEET", string.format("%d SHIPS COMING UP", #ships))
-end)
+    log(string.format("fleet: %s: %d ships coming up at their course start, %d every %g s (their lanes in from north-west of "
+        .. "the runway; again: taken off)", why, #ships, math.floor(num(fm().per_step, 3)), num(fm().gap_s, 0.5)))
+    return nil
+end
+IFLEET.takeOff, IFLEET.partsUp, IFLEET.label = takeOff, partsUp, label
 
 TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet ships", fn = function(now) IFLEET.tick(now) end }
 if type(LEVEL_DROPS) == "table" then                       -- (the level's objects: forgotten, none of them touched)
