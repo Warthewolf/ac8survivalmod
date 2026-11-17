@@ -320,6 +320,7 @@ local function p2Fight(P, now)
         if not o or (h and h <= (P.coreFloor or 0) + 1) then
             local okD, how = false, nil                 -- ((0.74.137) her death: explosions, then she goes under bow first)
             if o and TANI.liveSink then okD, how = TANI.liveSink("round 30: her core destroyed", c.sink) end
+            if okD then IFCOOP.send("sink") end           -- ((0.74.165) her sinking on every game
             if not okD and o and TANI.liveDown then okD, how = TANI.liveDown("round 30: her core destroyed") end
             local v = pay(n(c.reward_tani, 60000), "the TANACORN sunk")
             hudCallout(tx2().beaten or "THE TANACORN IS SILENCED", string.format(tx2().beaten_sub or "+%s ZOLLARS", zl(v)))
@@ -1035,6 +1036,13 @@ function IFCOOP.onHost(f)
         local hooks = (type(cine) == "table" and cine.enabled ~= false) and { keys = cine.keys, letterbox = cine.letterbox, beats = cine.beats } or nil
         if not (TANI and TANI.joinRise) then return false, "no TANACORN in this build" end
         return TANI.joinRise(x, y, face % 360, "round 30 (the host's)", hooks)
+    end
+    if what == "sink" then                               -- ((0.74.165) her sinking on the host's copy here
+        if not (TANI and TANI.joinSink) then return false, "no TANACORN in this build" end
+        local okS, r, why = pcall(TANI.joinSink, "round 30 (the host's)", (((CFG.specials or {}).fleet or {}).round or {}).phase2
+            and ((CFG.specials.fleet.round.phase2 or {}).sink) or nil)
+        jlog("co-op: her sinking (the host's): " .. ((okS and r) and "on her copy here" or ("NOT: " .. tostring(okS and why or r))))
+        return okS and r
     end
     if what == "release" then
         if not (TANI and TANI.riseRelease) then return false, "no TANACORN in this build" end

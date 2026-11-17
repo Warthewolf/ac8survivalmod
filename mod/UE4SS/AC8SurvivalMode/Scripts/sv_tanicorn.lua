@@ -1547,13 +1547,27 @@ local function sinkTick(W, now)
     end
     if f >= 1 and not S.done then
         S.done = true
-        local okD, how = TANI.liveDown(S.why .. ": under")
+        local okD, how = false, "a joiner's copy: the host's"
+        if not W.joiner then okD, how = TANI.liveDown(S.why .. ": under") end
         pcall(function() S.mesh:SetVisibility(false, true) end)
         log(string.format("tanicorn: sink over at +%.0f s: %d of %d explosions came up; her hull %s; hidden", now - S.t0, S.ok, S.of,
             okD and ("down (" .. tostring(how) .. ")") or "NOT finished off"))
     end
 end
 function TANI.liveSinking() return LV ~= nil and LV.sink ~= nil and not LV.sink.done end
+-- ((0.74.165) a joiner: her sinking on the host's copy of her here (the host's word "if|sink"): a watch of the copy alone
+-- (no armour, no parts' looks or downs: the host's), the same sink, and at its end hidden, never finished off here (the
+-- host's "dn" does that)
+function TANI.joinSink(why, c)
+    local o = nil
+    for _, h in ipairs(ourHulls()) do o = h end
+    if not o then return false, "no copy of her here" end
+    if not (LV and LV.o == o) then
+        LV = { o = o, a = addrOf(o), name = nameOf(o), t0 = os.clock(), looks = {}, parts = {}, kinds = {}, comps = {}, before = {},
+               armourDone = true, joiner = true, downAt = math.huge, until_ = 0, next = math.huge }
+    end
+    return TANI.liveSink(why, c)
+end
 function TANI.liveDown(why)
     local W = LV
     if not (W and W.o and same(W)) then return false, "no live hull of ours" end
