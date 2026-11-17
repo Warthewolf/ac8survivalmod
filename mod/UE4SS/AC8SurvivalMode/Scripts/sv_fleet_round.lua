@@ -282,6 +282,10 @@ local function p2Tick(now)
         local l, yaw = GEO.where(G)
         if l then P.at, P.yaw = l, yaw end
         pcall(GEO.stagesStep, G, now)
+        if (G.stage or 0) > (P.stageSaid or 0) then             -- ((0.74.146) each stage of GEOFON's: its radio (stage1 / stage2)
+            P.stageSaid = G.stage
+            say("stage" .. G.stage)
+        end
         local h = hpOf(G.hull)
         local share = (h and G.max and G.max > 0) and h / G.max or 1
         if share <= n(fl.watch_hp, 0.15) and not P.held then
@@ -656,8 +660,15 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet round", fn = function(now)
     local okS, errS = pcall(shellTick, now)
     if not okS and not R.shellErr then R.shellErr = true; rlog("shelling: error " .. tostring(errS)) end
     if not R.sightedSaid and #R.F.queue == 0 and not (IFSURF and IFSURF.state and IFSURF.state()) then
-        R.sightedSaid = true
+        R.sightedSaid, R.sightedAt = true, now
         say("sighted")
+    end
+    -- ((0.74.146) the user: "Add more subtitles from Audrey and Valka ... wondering where the Tanager is") tanager_after_s
+    -- after the sighting: AUDREY and VALKA on the missing flagship
+    if R.sightedAt and not R.tanagerSaid and now - R.sightedAt >= n(rc().tanager_after_s, 10)
+        and (not R.p2 or R.p2.state == "watch") then        -- (only while GEOFON's still whole: before she's seen)
+        R.tanagerSaid = true
+        rlog(string.format("the Tanager's lines (%d)", say("tanager")))
     end
 end }
 -- ((2026-11-17) the user: "can I have a test key") Ctrl+F: the fleet's round next. In a break between rounds the run is set to

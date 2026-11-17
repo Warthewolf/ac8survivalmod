@@ -48,11 +48,19 @@ local function spawnDeferred(cls, at, yaw, sc)
     if not (okB and x and valid(x)) then return nil end
     return x, t, gs
 end
+local SYS = {}                                            -- ((0.74.145) each system loaded once, kept with its name (hard rule
+local function sysOf(path)                                -- 59): the surfacing's 300+ waters loaded each by path cost ~9 ms a tick)
+    local e = SYS[path]
+    if e and liveObj(e.o) and nameOf(e.o) == e.n then return e.o end
+    local o = loadObject(path .. "." .. (path:match("[^/]+$") or ""))
+    SYS[path] = o and { o = o, n = nameOf(o) } or nil
+    return o
+end
 local function fxAt(name, at, sc)                         -- one of TANI.rise.FX's waters, kept to be stopped at its life
     local FX = TANI and TANI.rise and TANI.rise.FX or {}
     local path = FX[name]
     if not path then return false end
-    local sys = loadObject(path .. "." .. (path:match("[^/]+$") or ""))
+    local sys = sysOf(path)
     local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
     if not (sys and valid(lib) and liveObj(survivalPC)) then return false end
     local okS, comp = pcall(function()

@@ -1016,6 +1016,22 @@ function CINE.stop(why)
         if S.R then S.R = nil; log("cine: the rise's frame let go (" .. tostring(why) .. ")") end
         return false
     end
+    -- ((0.74.147) the beats not reached yet: a title or a radio line still played (a shake not); run 20261117_193828's rise
+    -- ended at ~12 s of its clock after a 1.3 s hitch, before the title's beat at 11.4 s)
+    if type(P.hooks) == "table" and type(P.hooks.beats) == "table" and P.beatsDone then
+        for i, b in ipairs(P.hooks.beats) do
+            if not P.beatsDone[i] and (b.title or b.say) then
+                P.beatsDone[i] = true
+                if b.title and type(hudCallout) == "function" then pcall(hudCallout, tostring(b.title.text or ""), tostring(b.title.sub or "")) end
+                if b.say and SUB and SUB.say then
+                    local code, text = tostring(b.say):match("^([^|]+)|(.+)$")
+                    local sp = ((CFG.hud or {}).subs or {}).speakers or {}
+                    if code then pcall(SUB.say, sp[code] or code, text) end
+                end
+                log(string.format("cine: beat %d (%s) played as the cinematic ends", i, b.title and "the title" or "a radio line"))
+            end
+        end
+    end
     S.play, S.R = nil, nil
     local down = isDown()
     local back = (not down) and viewBack(cfg.back_blend_s)

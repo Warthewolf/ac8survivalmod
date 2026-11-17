@@ -413,6 +413,11 @@ local function gunsTick(now, dt)
             if h and h <= 0 then
                 gunLog(e, "shot down (" .. e.state .. "): its deploy and orders over")
                 e.state = "down"
+            elseif e.state == "wait" and TANI.riseState and TANI.riseState() then   -- ((0.74.145) held through her rise: run
+                if not e.riseSaid then                         -- 20261117_192818's railguns deployed and fired 7 s into it)
+                    e.riseSaid = true
+                    gunLog(e, "held while she rises: deploying once she's down on the water")
+                end
             else
                 gunStep(e, now, dt)
             end

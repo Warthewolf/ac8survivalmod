@@ -3774,3 +3774,17 @@ game. The work was split by file between agents; the builds ran in sequence in t
   (ahead_m 600 along its heading, alt_m 1100), first_s 30 after the fleet's up, every every_s 30, max_up 3, max_flights 6;
   not while you're down at the airfield with nobody flying. As the Spaceport's Ford's deck.
 - Autotest shell (run 20261117_192511): 12/12: the scars (15 ships, 131 of 177), the deck's launch 1 at +30 s, the shelling.
+
+## 0.74.145-0.74.147 (2026-11-17): her railguns wait for her rise, the surfacing 6x cheaper, Audrey and Valka in round 30 (feature/geofon-rise); staged
+- sv_tanicorn_rail.lua: a railgun seen while she rises (TANI.riseState) held in "wait" (run 20261117_192818's deployed and
+  fired 7 s into her rise), deploying once she's down: run 20261117_193828 "RAILGUN_L held while she rises".
+- sv_fleet_surface.lua sysOf: each water's Niagara system loaded once, kept with its name (hard rule 59): the surfacing's
+  part of the tick 9.4 ms -> 1.6 ms (runs 20261117_182008 / _194214).
+- The title card THE AEGIR FLEET HAS RESURFACED (the user).
+- Audrey and Valka (the user: "Add more subtitles from Audrey and Valka, especially around notable bits like the Geofon taking
+  damage or wondering where the Tanager is", her two lines): round 30's radio (warn, sighted, tanager tanager_after_s 10
+  after the sighting while GEOFON's whole, stage1 / stage2 at GEOFON's stages, won) and phase 2's (fall, rises, half,
+  beaten), the shelling's; drafted for her to edit in sv_fleet.lua (round 30 is dev only: not in subtitles.ini).
+- sv_cine.lua CINE.stop: a title or radio beat not reached when the cinematic ends is played then (run 20261117_193828: a
+  1.3 s hitch in her rise, the rise over at ~12 s of its clock, the title's beat at 11.4 never fired).
+- Autotests: epic 25/25 on 0.74.146 (RESURFACED); phase2 29/30 on 0.74.146 (the title beat: fixed in 0.74.147).

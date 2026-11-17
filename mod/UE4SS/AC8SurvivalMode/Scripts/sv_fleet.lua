@@ -136,7 +136,8 @@ CFG.specials.fleet = {
               sound = "AKE_Weapon_SuperLongMainGun_Explosion_Ground_Play",
               shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactSmall", shake_scale = 0.6, shake_km = 6,
               text = { shelling = "THE FLEET IS SHELLING THE AIRFIELD", shelling_sub = "SINK THE SHIPS IN RANGE" },
-              radio = { shelling = { "CTRL|Incoming! Naval gunfire on the airfield! The fleet's in range!" } } },
+              radio = { shelling = { "CTRL|Incoming! Naval gunfire on the airfield! The fleet's in range!",
+                                     "AUDREY|Shells on the runway! Valka, get down! Pilots, sink those gunships!" } } },
     -- (2026-11-12, stage 4: docs/re/TANICORN.md "Railguns and railcannon") THE TANACORN's bow railcannon, its charged shot at
     -- the airfield (sv_tanicorn_rail.lua; Ctrl+H on Ctrl+L's live hull, WP11's phase 2 later; WP13): its Deploy over deploy_s
     -- (AS_SV_Tani_RAILCANNON_Deploy, 3.33 s), then a charge of charge_s, the shot, and the next charge every_s after the last
@@ -319,12 +320,27 @@ CFG.specials.fleet = {
               text = { sub = "INVINCIBLE FLEET", warn = "INVINCIBLE FLEET", warn_sub = "THE AEGIR FLEET IS UNDER WAY",
                        row = "FLEET: %d AFLOAT  CARRIER: %s", sunk = "%s SUNK", won = "THE AEGIR FLEET IS DESTROYED",
                        won_sub = "+%s ZOLLARS", restored = "AIRFIELD RESTORED", restored_sub = "ITS HEALTH, DEFENCES AND ALLIES" },
+              -- ((0.74.146) the user: "Add more subtitles from Audrey and Valka, especially around notable bits like the Geofon
+              -- taking damage or wondering where the Tanager is", with her two lines (tanager); the rest drafted for her to edit:
+              -- tanager tanager_after_s after the sighting, stage1 / stage2 at GEOFON's stages)
+              tanager_after_s = 10,
               radio = { warn = { "CTRL|All units, Comona Control. Long-range radar has a surface group under way, bearing three-one-five.",
-                                 "CTRL|Fifteen contacts in formation. It's the Aegir Fleet, and it's coming straight for us." },
-                        sighted = { "CTRL|They came up out of the sea... the whole fleet. Break them before they reach the airfield." },
+                                 "CTRL|Fifteen contacts in formation. It's the Aegir Fleet, and it's coming straight for us.",
+                                 "AUDREY|The Aegir Fleet... Kaska's navy. Valka, stay by the hangar tonight.",
+                                 "VALKA|The sea feels wrong, Audrey. Something under it is waking up." },
+                        sighted = { "CTRL|They came up out of the sea... the whole fleet. Break them before they reach the airfield.",
+                                    "VALKA|They were sleeping down there. All of them.",
+                                    "AUDREY|Fourteen escorts and the carrier... GEOFON. But no flagship." },
+                        tanager = { "AUDREY|The Tanager is missing? Where could it be?",
+                                    "VALKA|I feel its presence close. The captain's soul is hurting." },
+                        stage1 = { "AUDREY|GEOFON's burning amidships! Keep pouring it on, pilots!" },
+                        stage2 = { "VALKA|The carrier is crying out, Audrey. Something underneath it is pushing up.",
+                                   "AUDREY|Underneath? ...Pilots, watch the water around GEOFON!" },
                         half = { "CTRL|Half of the fleet's on the bottom. Keep at them!" },
                         geofon = { "CTRL|GEOFON is going down! The carrier's finished!" },
-                        won = { "CTRL|That's the last of them. The Aegir Fleet is destroyed. Ground crews, get that runway back in shape." } },
+                        won = { "CTRL|That's the last of them. The Aegir Fleet is destroyed. Ground crews, get that runway back in shape.",
+                                "VALKA|Audrey, look. The sun's coming up.",
+                                "AUDREY|I see it. It's over, Valka. Hold my hand." } },
               -- ((0.74.131) phase 2, the user 2026-11-17: "GEOFON falls, Tanacorn rises"; beaten "All her guns down") GEOFON
               -- breaks in a V at its fall's break_at (CFG.specials.fleet.geofon.fall); rise_after_s into the break (0: at it;
               -- the user: no fade, "she spawns as the Geofon is splitting apart") the TANACORN spawned in the gap across its
@@ -368,10 +384,15 @@ CFG.specials.fleet = {
                                             { t = 9.0, shake = { "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpact", 1.0 } },
                                             { t = 11.4, title = { text = "THE TANACORN", sub = "SHE HAS RISEN" } },
                                             { t = 12.2, say = "KASKA|Tanacorn, the fleet is yours. Burn their airfield to the ground." } } },
-                         radio = { fall = { "CTRL|GEOFON's breaking in two! Something's... coming up between the halves!" },
-                                   rises = { "CTRL|That's not a ship. That's the TANACORN! All units, take out her guns!" },
-                                   half = { "CTRL|Half her guns are gone. Keep hammering her!" },
-                                   beaten = { "CTRL|Her guns are silent. She's going under!" } } } },
+                         radio = { fall = { "CTRL|GEOFON's breaking in two! Something's... coming up between the halves!",
+                                            "VALKA|There. That's what I felt. That's the Tanager." },
+                                   rises = { "CTRL|That's not a ship. That's the TANACORN! All units, take out her guns!",
+                                             "AUDREY|That's not the Tanager anymore, Valka. Kaska... what did you do to it?" },
+                                   half = { "CTRL|Half her guns are gone. Keep hammering her!",
+                                            "VALKA|She's hurting, Audrey. Her captain is still inside her." },
+                                   beaten = { "CTRL|Her guns are silent. She's going under!",
+                                              "VALKA|...She's quiet now. The captain can rest.",
+                                              "AUDREY|Rest easy, Tanager." } } } },
     surface = { enabled = true, rig = "/Game/Mods/SurvivalMode/Tanicorn/Model/SK_SV_Tani_RIG.SK_SV_Tani_RIG",
                 anim = "/Game/Mods/SurvivalMode/Tanicorn/Model/AS_SV_Tani_RIG_Rise.AS_SV_Tani_RIG_Rise", length_s = 15.0,
                 tani_m = 650, start_km = 30.5, breach_s = 0.8, slam_s = 9.0, fx_x = 2.0, fx_life_s = 8, jitter_s = 1.0, end_pad_s = 1.0,
