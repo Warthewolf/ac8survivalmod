@@ -253,17 +253,18 @@ end
 local function railHud(e)
     local lm, cls = nil, "?"
     -- ((2026-11-18) the minimap's red line: the display arm (a TripleRailCannon, NpcFCSId1: SV_FCS_TaniRailDisp) when it's there)
+    -- (its own ForEach, never an index past its end: 0.74.170's arms[1..4] read past a two-arm array and crashed the game,
+    -- autotest tanacorn run 20261118_012602, an access violation at 0x10 the moment RAILGUN_L was deployed)
     pcall(function()
-        local arms = e.o.FireControlSystemComponent.AllArms
-        for i = 1, 4 do
+        e.o.FireControlSystemComponent.AllArms:ForEach(function(_, el)
             local m = nil
-            pcall(function() m = arms[i].LauncherModule end)
+            pcall(function() m = el:get().LauncherModule end)
             if m then
                 local c = "?"
                 pcall(function() c = m:GetClass():GetFName():ToString() end)
                 if c == "LiveFCSModule_LauncherTripleRailCannon" then lm = m end
             end
-        end
+        end)
     end)
     if lm == nil then pcall(function() lm = e.o.FireControlSystemComponent.AllArms[1].LauncherModule end) end
     if lm == nil then return "not written: no arm / launcher read", false end
