@@ -351,7 +351,8 @@ CFG.specials.fleet = {
               -- ((0.74.144) deck: GEOFON's launches while it's afloat (sv_fleet_round.lua deckTick), as the Spaceport's Ford)
               deck = { enabled = true, first_s = 30, every_s = 30, size = 2, max_up = 3, max_flights = 6, ahead_m = 600, alt_m = 1100 },
               -- ((0.74.137) sink: her death (sv_tanicorn.lua TANI.liveSink): explosions along her, bow-down and under)
-              phase2 = { enabled = true, rise_after_s = 0, split_max_s = 6, rise_max_s = 40,
+              -- ((0.74.148) release_s: she's held under the sea this long after her spawn (its ~1.3 s hitch with GEOFON still whole)
+              phase2 = { enabled = true, rise_after_s = 0, release_s = 2.5, split_max_s = 9, rise_max_s = 45,
                          sink = { sink_s = 40, sink_m = 160, bow_deg = 12, roll_deg = 6, booms = 28, boom_every_s = 0.6,
                                   fx = { { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 3 },
                                          { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsFireL001", 3 },

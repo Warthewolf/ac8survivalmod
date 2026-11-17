@@ -315,14 +315,25 @@ end)
 -- onBreach (optional): called with her rise's time the moment her bow breaks the surface (the round splits GEOFON there);
 -- cineHooks (optional): CINE.play's keys / letterbox / beats for her cinematic (the round's own shots)
 local riseTick
-function TANI.roundRise(x, y, face, why, onBreach, cineHooks)
+-- opts.wait (optional, (0.74.148)): found and put under the sea at once, then held there (no cinematic, no play) until
+-- TANI.riseRelease(why): her spawn's hitch (~1.3 s, run 20261117_193828) lands before her rise, not inside its cinematic
+function TANI.riseRelease(why)
+    local R = RISE
+    if not (R and not R.back and R.wait) then return false end
+    R.wait = nil
+    R.t0 = os.clock()                                     -- (her hold_s from now)
+    log("tanicorn: rise: released (" .. tostring(why) .. ")" .. (R.cineLater and ": the cinematic now" or ""))
+    if R.cineLater then R.cineLater = nil; riseCine(R) end
+    return true
+end
+function TANI.roundRise(x, y, face, why, onBreach, cineHooks, opts)
     if RISE and not RISE.back then riseBack(RISE, "a new rise (" .. tostring(why) .. ")"); RISE = nil end
     local before = {}
     for _, o in ipairs(ourHulls()) do before[addrOf(o) or 0] = true end
     local r, no = TANI.liveSpawn(x, y, face, why)
     if (tonumber(r) or 0) <= 0 then return r, no end      -- (her armour: the live watch's, from the tick it finds her)
     RISE = { x = x, y = y, z = TANI.live.z_cm, before = before, anim = riseAsset(TANI.rise.anim), at = os.clock(), state = "finding",
-             next = 0, why = why, onBreach = onBreach, cineHooks = cineHooks }
+             next = 0, why = why, onBreach = onBreach, cineHooks = cineHooks, wait = type(opts) == "table" and opts.wait == true or nil }
     local okT, err = pcall(riseTick, os.clock())
     log(string.format("tanicorn: %s: the rise's find at once after her spawn: %s", tostring(why), okT and ("her state " ..
         tostring(RISE and RISE.state or "none")) or ("error " .. tostring(err))))
@@ -370,6 +381,7 @@ riseTick = function(now)
             if CINE and CINE.director then local okD, d = pcall(CINE.director); if okD then dir = d end end
             R.rate = dir and dir.speed or C.rate
             if dir then pcall(CINE.play, R, { rate = R.rate })
+            elseif C.cinematic and R.wait then R.cineLater = true    -- ((0.74.148) held: its cinematic at its release)
             elseif C.cinematic then riseCine(R) end
         elseif now - R.at > C.find_s then
             log(string.format("tanicorn: rise: %s after %d s (an old hull without the rise rig? a build before it)",
@@ -379,7 +391,7 @@ riseTick = function(now)
         return
     end
     if liveAddr(R.o) == nil or nameOf(R.o) ~= R.name then riseBack(R, "the hull is gone"); RISE = nil; return end
-    if R.state == "hold" and now - R.t0 >= C.hold_s then
+    if R.state == "hold" and not R.wait and now - R.t0 >= C.hold_s then
         local okP = pcall(function() R.rig:SetPlayRate(R.rate or C.rate) end)
         if not pcall(function() if not R.rig:IsPlaying() then R.rig:Play(false) end end) then okP = false end
         R.state, R.t1, R.playing = "rising", now, true

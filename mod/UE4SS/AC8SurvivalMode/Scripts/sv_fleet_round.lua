@@ -199,7 +199,9 @@ local function p2Rise(P, now)                            -- her spawn across GEO
     local cine = p2c().cine
     local hooks = (type(cine) == "table" and cine.enabled ~= false) and { keys = cine.keys, letterbox = cine.letterbox, beats = cine.beats } or nil
     local okR, r, no = pcall(TANI.roundRise, x, y, face, "round 30's phase 2",
-        function(t) split(P, string.format("her bow's breach (+%.1f s into her rise)", t)) end, hooks)
+        function(t) split(P, string.format("her bow's breach (+%.1f s into her rise)", t)) end, hooks,
+        { wait = n(p2c().release_s, 2.5) > 0 })                 -- ((0.74.148) held under the sea release_s: her spawn's hitch first)
+    P.releaseAt = now + n(p2c().release_s, 2.5)
     r = okR and tonumber(r) or -5
     rlog(string.format("phase 2: the TANACORN under GEOFON (%.0f, %.0f) facing %.0f (across its keel, her bow's breach at its midships): %s",
         x, y, face, r > 0 and "spawned, rising" or ("NOT spawned (" .. tostring(okR and no or r) .. "): GEOFON splits now")))
@@ -318,6 +320,11 @@ local function p2Tick(now)
         return
     end
     if P.state == "rise" then
+        if P.releaseAt and now >= P.releaseAt then
+            P.releaseAt = nil
+            local okL = TANI.riseRelease and pcall(TANI.riseRelease, "round 30: her spawn's hitch passed")
+            rlog("phase 2: her rise released" .. (okL and "" or " (NOT: no TANI.riseRelease)"))
+        end
         hideHalves(P, now)
         local st = TANI.riseState and TANI.riseState() or nil
         if st == nil or now - P.riseAt >= n(c.rise_max_s, 40) then
