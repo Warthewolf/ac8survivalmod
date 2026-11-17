@@ -3516,3 +3516,23 @@ game. The work was split by file between agents; the builds ran in sequence in t
   0.74.91 (backup: build/backup/install_before_0.74.103); 107 files verified; her settings, map notes, subtitles (the repo's)
   and the launcher's toggle kept. The ZFA-44 container's 347-byte .pak, which package_dev.sh doesn't stage (package_release.sh
   does), was removed by the copy and put back from the backup (the same as build/zfa44/out's).
+
+## 0.74.104-0.74.105 (2026-11-17; test builds, staged, not installed): the beam wider, AC8's own thunder, no HUD in the surfacing, round 30's slower dawn (feature/fleet-lasers)
+- "make the Laser Mesh thicker slightly so its more visible": li_beam_w 1.5 (sv_config.lua; sv_escort_li.lua's beam(): the
+  BeamLength Y / Z x it, the end's thinning too; every carrier's). escort_test checks the shipped value.
+- "we need to change the audio of the Thunder, its wrong": AC8's SE bank (DA_SoundDB_AKB_GameSe) has Mission 12's thunder
+  events with no event asset (AKE_Ms12_ENV_OBJ_Thunder_Play, AKE_Environment_Thunder_Play,
+  AKE_GEN_ENV_AMB_ThunderCloud_Inside_Lightning_Play, AKE_Ms12_ENV_AMB_DistantThunder_Play / _Stop ...): 3D sounds, which the
+  0.74.92 posts by name with no place played at the world's origin. sv_fleet_storm.lua posts a bare name ON your camera
+  (LiveSoundBlueprintLibrary.PostEventAtActorByName on the PlayerCameraManager), logged with its playing id; the storm's
+  clap Mission 12's thunder, its bed Mission 12's distant thunder loop (stopped as it clears), each bolt's near / far
+  thunder those events (sv_fleet.lua storm.sound / storm.thunder). Not heard yet (AC8 was in use).
+- "during the cutscenes of the tanacorn and invinicble fleet rising we need to disable the HUD": run 20261116_222923's rise
+  pictures had the game's HUD up although sv_cine.lua logged it hidden by distortion. sv_cine.lua: a route cheatnew (a
+  LiveCheatManager made on your player controller, ChangeHUDType EverythingDisabled / RestoreToDefault), the routes'
+  order widgets, cheatnew, cheat, showhud, distortion (last); CINE.hudHide / hudShow / hudTry for other parts; the fleet's
+  surfacing (sv_fleet.lua IFSURF) holds Survival's HUD and the game's (target boxes too) from its start to its end. The
+  autotest hudprobe (each route alone, the cheat manager's switches, the surfacing, pictures) waits for the game to close.
+- "move the sunrise so it's slower during round 30, it gets light too quickly": sv_sky.lua SKY.fightSlow (x round_s while
+  set), round 30 sets it to CFG.specials.fleet.round.sky_slow 5 (the drift toward the dawn over ~20 min, not 4), cleared at
+  its end; the break finishes the step as before. Tests: fleet, sky, thunder, cine (its route order), escort, zip leak.

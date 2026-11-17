@@ -193,7 +193,11 @@ CFG.specials.fleet = {
     sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 3, sunrise_rounds = 3,
                                                          night_over = { exposure = { 2.3, 4.0, 0.6 } } },
             storm = { enabled = true, until_round = 35, out_s = 0.6, hold_s = 0.8, in_s = 1.2,
-                      sound = { clap = "AKE_Weapon_SuperLongMainGun_Explosion_Air_Play" },
+                      -- ((2026-11-17) the user: "we need to change the audio of the Thunder, its wrong") AC8's own thunder
+                      -- (its SE bank's Mission 12 events, by name on your camera: sv_fleet_storm.lua): the storm's arrival
+                      -- clap, Mission 12's distant thunder all through the storm (a loop: its _Stop as it clears)
+                      sound = { clap = "AKE_Ms12_ENV_OBJ_Thunder_Play", distant = "AKE_Ms12_ENV_AMB_DistantThunder_Play",
+                                distant_stop = "AKE_Ms12_ENV_AMB_DistantThunder_Stop" },
                       -- (cells: (2026-11-17) the user's Mission 12: "they visibly appear to light the clouds with blue lighting":
                       -- its Mission012_Phase01_VFX's 19 NS_CloudLightning in its cloud towers (Mission 12's layout is the
                       -- storm's), each spot's scale as there, drawn after the clouds (sort 100, as there; at the default 0
@@ -211,10 +215,8 @@ CFG.specials.fleet = {
                                          { 121258, -1369681, 636631, 0.75 }, { -613885, -1941399, 636631, 0.95 }, { -1887114, -3717666, 636631, 1 }, { -3416988, -3257279, 764355, 1 },
                                          { -3050114, -3086835, 764355, 1 }, { -2865498, -224223, 764355, 1 }, { -2275497, -433174, 764355, 1 } } },
                       thunder = { enabled = true, chance = 0.7, near_km = 6, s_per_km = 2.9, max_s = 6,
-                                  near = { "/Game/WwiseAssets/Events/SFX/AKE_Weapon_SuperLongMainGun_Explosion_Air_Play",
-                                           "/Game/WwiseAssets/Events/SFX/AKE_Environment_Depot_Explosion_Play" },
-                                  far = { "/Game/WwiseAssets/OBJ_M09_CLOUDBOMB_EXP",
-                                          "/Game/WwiseAssets/Events/CS_AceLive_SE/Events_General/PLAYER/AIR/SE_GEN_PLAYER_AIR/AKE_GEN_PLAYER_AIR_Cloud_Rumble_CameraShake_Play" } },
+                                  near = { "AKE_Ms12_ENV_OBJ_Thunder_Play", "AKE_Environment_Thunder_Play" },
+                                  far = { "AKE_GEN_ENV_AMB_ThunderCloud_Inside_Lightning_Play", "AKE_Environment_Thunder_Play" } },
                       -- ((2026-11-17) the bolts you see: THUNDER.bolt's (sv_anomalies_dev.lua), AC8's bolt meshes in the
                       -- game's cloud lightning material, a bolt each flash, the rain warmed up behind the fade (warm_fx);
                       -- cloud: Survival's own cloud light at some flashes (hard rule 70; 0.8-2M: 165k-365k unseen in the user's 0.74.91 flight,
@@ -252,7 +254,9 @@ CFG.specials.fleet = {
     -- sv_fleet_lasers.lua: a TANI=1 build's Aegis mounts (BP_SV_IF_Aegis) put at spots { ahead m, right m, up m, yaw } in the
     -- hull's frame (none: the build's) and handed to AC7's LaserInterceptor (CFG.allies.carrier.zfa's volley and rest)
     lasers = { enabled = true, spots = { LASER_BOW = { 69, 0, 9.0, 0 }, LASER_AFT = { -64, 0, 4.1, 180 } } },
-    round = { enabled = true, round = 30, fighter_share = 0.25, reward = 50000, turret = 300,
+    -- ((2026-11-17) the user: "move the sunrise so it's slower during round 30, it gets light too quickly") sky_slow: the
+    -- arc's drift toward the dawn through its fight x this slower (sv_sky.lua SKY.fightSlow: 240 s x 5, ~20 min)
+    round = { enabled = true, round = 30, fighter_share = 0.25, reward = 50000, turret = 300, sky_slow = 5,
               pay = { ford = 6000, aegis = 1600, krov = 1400, udal = 1000, grig = 1000, gors = 1000, boat = 600 },
               music = { enabled = true, track = "AKE_Bgm_Online_ACE04_Invincible_Fleet_Play", len_s = 265.832 },
               text = { sub = "INVINCIBLE FLEET", warn = "INVINCIBLE FLEET", warn_sub = "THE AEGIR FLEET IS UNDER WAY",
@@ -1772,8 +1776,13 @@ function IFSURF.start(F)
     S.overAt = last + n(c.length_s, 15) + n(c.end_pad_s, 1)
     F.nextAt, F.burst = math.huge, #(F.queue or {})        -- (the real fleet held, then up at once under the fade)
     S.said = playerHold(true)
-    slog(string.format("%d ships rise over %.1f s (waves %s), %d shots; %s", #S.ships, S.overAt, "pickets first, GEOFON last",
-        #(c.shots or {}), S.said))
+    -- ((2026-11-17) the user: "during the cutscenes ... we need to disable the HUD") Survival's HUD (callouts after) and the
+    -- game's (sv_cine.lua's routes, the target boxes too) held off till it's over
+    local hh = HUD and HUD.hold and select(2, pcall(HUD.hold, true, "the fleet's surfacing"))
+    local okG, gh = false, nil
+    if CINE and CINE.hudHide then okG, gh = pcall(CINE.hudHide, "the fleet's surfacing", S.overAt + 10) end
+    slog(string.format("%d ships rise over %.1f s (waves %s), %d shots; %s; the HUD held (Survival's %s, the game's %s)", #S.ships,
+        S.overAt, "pickets first, GEOFON last", #(c.shots or {}), S.said, tostring(hh), okG and tostring(gh) or "no sv_cine"))
     return true
 end
 local function shipTick(sh, now)
@@ -1839,6 +1848,8 @@ local function over(why)
     end
     slog(string.format("over (%s): %d doubles taken off, the real fleet up; %d breach and %d slam waters; %s%s", why, nD, b, sl, back,
         #failed > 0 and ("; NOT: " .. table.concat(failed, ", ")) or ""))
+    if HUD and HUD.hold then pcall(HUD.hold, false, "the fleet's surfacing") end
+    if CINE and CINE.hudShow then pcall(CINE.hudShow, "the fleet's surfacing", "the surfacing over") end
     S = nil
 end
 function IFSURF.state() return S and { phase = S.phase, ships = #S.ships, shot = S.shot, t = os.clock() - S.t0 } or nil end

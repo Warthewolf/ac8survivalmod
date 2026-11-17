@@ -153,6 +153,7 @@ function IFROUND.spawn(now)
     local no = IFLEET.launch("round " .. tostring(D.round))
     if no then rlog("the fleet didn't come (" .. tostring(no) .. "): a normal round"); return false end
     RUN.fleetRound = true
+    if SKY then SKY.fightSlow = n(rc().sky_slow, 5) end   -- ((2026-11-17) the dawn x5 slower through its fight: sv_sky.lua)
     R = { F = IFLEET.cur, paid = {}, parts = {}, t0 = now }
     D.special.state, D.special.at = "fleet", now
     rlog(string.format("round %d: the fleet's %d ships coming (the surfacing first); music: %s", D.round, #R.F.ships, musicStart()))
@@ -168,6 +169,7 @@ function IFROUND.over(now, s)
     local F = R.F
     local won = IFLEET.cur == F and afloatN(F) == 0
     rlog("music: " .. musicStop())
+    if SKY then SKY.fightSlow = nil end
     if won then
         local reward = n(rc().reward, 50000)
         if type(addCredits) == "function" then addCredits(reward, "INVINCIBLE FLEET destroyed") end
@@ -259,7 +261,7 @@ testKey("F", "fleet round", function()
     rlog(string.format("Ctrl+F: the run set from round %s's break to round %d's: round %d, the fleet's, next", tostring(was), r - 1, r))
 end)
 if type(LEVEL_DROPS) == "table" then                       -- (the level's objects went with it; the music hold: sv_main's)
-    LEVEL_DROPS["fleet round"] = function() R = nil end
+    LEVEL_DROPS["fleet round"] = function() R = nil; if SKY then SKY.fightSlow = nil end end
 end
 end
 -- TEST ONLY END

@@ -266,7 +266,7 @@ check(type(cineTick) == "function" and type(keys.D) == "function" and type(keys.
 local mk = find("^cine: keys %(loaded%)")
 check(mk ~= nil and has(mk, "today's camera (the file missing), made at the director's first use; at 0, 5, 9, 15 s")
     and has(mk, "director speed 0.35, blend smooth, enter 1 s, callouts on, boxes hide")
-    and has(mk, "the game's HUD by distortion, widgets, cheat, showhud"), "missing: today's camera: " .. tostring(mk))
+    and has(mk, "the game's HUD by widgets, cheatnew, cheat, showhud, distortion"), "missing: today's camera: " .. tostring(mk))
 check(fileText(C.file) == nil, "the file not made at start (a TESTER zip's config untouched until the director is used)")
 CINE.load("test", true)
 local K = CINE.keys
@@ -274,7 +274,7 @@ check(#K == 4 and K[1].t == 0 and K[1].at[1] == 700 and K[1].at[2] == -650 and K
     and K[1].look[3] == 40 and K[4].t == 15 and K[4].at[2] == -720 and K[4].look[1] == 40 and K[2].fov == 55,
     "the defaults: RISE_CAM (t, place, look point; UE's y as starboard), fov 55")
 local made = fileText(C.file)
-check(has(made, "director_speed = 0.35\nblend = smooth\nenter_blend = 1\ncallouts = on\nboxes = hide\nhud = distortion widgets cheat showhud\n")
+check(has(made, "director_speed = 0.35\nblend = smooth\nenter_blend = 1\ncallouts = on\nboxes = hide\nhud = widgets cheatnew cheat showhud distortion\n")
     and has(made, "\n0        700      -650     12       300      0        40       55\n")
     and has(made, "\n15       600      -720     18       40       0        10       55\n"), "made at the first use: its settings and a key a line")
 do
@@ -285,7 +285,7 @@ do
         same = same and a.t == b.t and a.fov == b.fov and a.roll == nil and a.cut == nil
         for j = 1, 3 do same = same and a.at[j] == b.at[j] and a.look[j] == b.look[j] end
     end
-    check(same and #bad2 == 0 and set2.blend == "smooth" and #set2.hud == 4 and set2.callouts == true and set2.boxes == "hide",
+    check(same and #bad2 == 0 and set2.blend == "smooth" and #set2.hud == 5 and set2.callouts == true and set2.boxes == "hide",
         "text -> parse: the same keys and settings")
 end
 local edited = table.concat({
@@ -664,8 +664,8 @@ CINE.play(hullR(), hooks)
 CINE.stop("test")
 check(cmCalls[1] == 2 and cmCalls[2] == 3 and hudA.bShowHUD == true, "with a cheat manager: EverythingDisabled, then RestoreToDefault")
 pc.CheatManager = nil
-print("the HUD's own blackout (route distortion, the default)")
-setFile({ boxes = "keep" })
+print("the HUD's own blackout (route distortion; last from 2026-11-17: it took but hid nothing on screen)")
+setFile({ boxes = "keep", hud = "distortion" })
 dists = {}
 n0 = #logs
 cams = {}

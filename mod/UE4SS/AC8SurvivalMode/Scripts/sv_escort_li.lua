@@ -292,6 +292,7 @@ local function aimNote(r)
         .. "pitch %+.0f; the beam active %s, visible %s", math.deg(math.acos(c)), d / 100000, math.deg(math.asin(f.Z / fl)), act, vis)
 end
 local function beam(r, yz)
+    yz = yz * math.max(0, num(zc().li_beam_w, 1))               -- ((2026-11-17) its width: li_beam_w x)
     if ac8fx() then
         local c = r.fxBeam
         if not (c and liveObj(c)) then return end

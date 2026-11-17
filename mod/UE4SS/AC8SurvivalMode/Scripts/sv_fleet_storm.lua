@@ -51,14 +51,38 @@ end)
 -- the thunder (stc().thunder, sv_fleet.lua's note): AC8's booms and rumble, loaded and pinned (as the Anomaly's sounds),
 -- one queued after a strike's distance and played at your camera with Wwise's PostEventAtLocation on the event itself
 -- (the way Survival's heard sounds go: sv_escort_laser.lua, sv_fleet.lua's GEOFON; 0.74.92-0.74.93 posted them by name,
--- LiveSoundBlueprintLibrary.PostEventByName, and the user heard none, run 77); Ctrl+J plays each in turn
+-- LiveSoundBlueprintLibrary.PostEventByName, and the user heard none, run 77); Ctrl+J plays each in turn.
+-- ((2026-11-17) the user: "we need to change the audio of the Thunder, its wrong") AC8's own thunder: its SE bank
+-- (AKB_GameSe, DA_SoundDB_AKB_GameSe) has Mission 12's thunder events with no event asset of their own (so loading them
+-- found nothing); a bare name (no "/") is posted by name ON your camera (LiveSoundBlueprintLibrary.PostEventAtActorByName on
+-- the PlayerCameraManager: these are 3D sounds, and the 0.74.92 posts by name had no place, so played at the world's
+-- origin, out of earshot), logged with its playing id (0: Wwise didn't know it)
 local TH = { q = {}, got = {}, ev = {} }
 local function thName(path) return path:match("([^/]+)$") end
+local function thBank(name) return type(name) == "string" and name ~= "" and not name:find("/", 1, true) end
+local function idOf(r)
+    if type(r) == "number" then return r end
+    for _, f in ipairs({ "PlayingID", "PlayingId", "ID", "Id", "Value" }) do
+        local ok, v = pcall(function() return r[f] end)
+        if ok and type(v) == "number" then return v end
+    end
+    return tostring(r)
+end
+local function thPost(name)                                -- (a bank event by name on your camera)
+    local lib = StaticFindObject("/Script/Live.Default__LiveSoundBlueprintLibrary")
+    local cam
+    pcall(function() cam = survivalPC.PlayerCameraManager end)
+    if not (valid(lib) and cam and valid(cam)) then return "NOT posted (no sound library or camera)" end
+    local ok, r = pcall(function() return lib:PostEventAtActorByName(FName(name), cam) end)
+    if not ok then return "NOT posted (" .. tostring(r):sub(1, 100) .. ")" end
+    return "posted on your camera (playing id " .. tostring(idOf(r)) .. ")"
+end
 local function thLoad(c)
     local k = 0
     for _, list in ipairs({ c.near or {}, c.far or {} }) do
         for _, path in ipairs(list) do
             local name = thName(path)
+            if thBank(path) then TH.got[name] = true end   -- (a bank event: nothing to load)
             if not TH.got[name] then
                 local o = loadObject(path .. "." .. name)
                 if o then pin(o, name); TH.got[name], TH.ev[name] = true, o end
@@ -82,6 +106,7 @@ local function thQueue(at, now)
     return string.format("; thunder %s in %.1f s (%.1f km)", name, d, km)
 end
 local function thPlay(name)                                -- (two signatures tried, the first that works kept)
+    if thBank(name) and not TH.ev[name] then return thPost(name) end
     local ev, ak = name and TH.ev[name], StaticFindObject("/Script/AkAudio.Default__AkGameplayStatics")
     if not ev then return "NOT played (" .. tostring(name) .. " not loaded)" end
     local L
@@ -103,7 +128,7 @@ local function thTick(now)
         if now >= TH.q[i].at then
             local r = thPlay(TH.q[i].name)
             TH.n = (TH.n or 0) + 1
-            if TH.n <= 3 or r ~= "played" then log(string.format("fleet storm: thunder %d: %s %s", TH.n, TH.q[i].name, tostring(r))) end
+            if TH.n <= 3 or not (r == "played" or tostring(r):find("^posted")) then log(string.format("fleet storm: thunder %d: %s %s", TH.n, TH.q[i].name, tostring(r))) end
             table.remove(TH.q, i)
         end
     end
@@ -256,7 +281,8 @@ local function trTick(now)
         end
         if not t.on and IFSKY.leaving then IFSKY.leaving = nil; IFSKY.step(nil) end   -- (Ctrl+S's day, unseen)
         local okL, what = pcall(THUNDER.layoutSet, t.on, t.on and "INVINCIBLE FLEET's night storm" or "INVINCIBLE FLEET's storm clearing")
-        pcall(THUNDER.post, t.on and snd.distant or snd.distant_stop)
+        local amb = t.on and snd.distant or snd.distant_stop   -- ((2026-11-17) Mission 12's distant thunder, on your camera)
+        if thBank(amb) then log("fleet storm: " .. amb .. ": " .. thPost(amb)) else pcall(THUNDER.post, amb) end
         if t.on and snd.clap then pcall(thPlay, snd.clap) end
         t.phase, t.at, t.what = "hold", now + n(c.hold_s, 0.8), okL and what or ("error " .. tostring(what))
     elseif t.phase == "hold" then
