@@ -3934,6 +3934,52 @@ SUITES.ravenecm = function()
     A.do_(function() ST.check(ST.plane() ~= nil and D ~= nil, "still flying after it") end)
 end
 
+-- ((0.74.164) GEOFON's capture, solo on your own plane (IFCAP.test): the lock, the takeover to the gate, the line down to the
+-- deck, the trap, your plane given back; the user's rules: invincible and untargeted while RAVEN flies you, given back after
+SUITES.capture = function()
+    intoRun()
+    local C = {}
+    A.do_(function()
+        if not ST.check(IFLEET ~= nil and IFCAP ~= nil, "the fleet and its capture are in this build") then return "abort" end
+        ST.marks.c0 = ST.n
+        ST.press("N")
+    end)
+    A.log_("fleet: up: RAVEN", 60, "c0", true, function(l) ST.check(l ~= nil, "the fleet up (RAVEN)", l) end)
+    A.wait(10)
+    A.do_(function()
+        ST.marks.c1 = ST.n
+        local ok, why = IFCAP.test(4)
+        ST.check(ok == true, "a capture on your plane (IFCAP.test)", tostring(why))
+    end)
+    A.wait(1); A.do_(function() ST.shot("capture_lock") end)
+    A.log_("capture: seq %d+: taken over", 10, "c1", false, function(l) ST.check(l ~= nil, "taken over after the lock", l) end)
+    A.wait(2)
+    A.do_(function()
+        local pl = ST.plane()
+        local inv, lim = nil, nil
+        pcall(function() inv = pl.bIsInvincible end)
+        pcall(function() lim = pl.MaxPursuitAttackers end)
+        ST.check(inv == true and lim == 0, "while RAVEN flies you: invincible, no enemy targets you", tostring(inv) .. " / pursuers " .. tostring(lim))
+        ST.shot("capture_taken")
+    end)
+    for i = 1, 6 do A.wait(15); A.do_(function() ST.shot("capture_fly_" .. i); ST.info("capture: state " .. tostring(IFCAP.state())) end) end
+    A.log_("capture: seq %d+: at the gate", 120, "c1", false, function(l) ST.check(l ~= nil, "at GEOFON's gate", l) end)
+    A.wait(5); A.do_(function() ST.shot("capture_final") end)
+    A.log_("capture: seq %d+: trapped on GEOFON's deck", 120, "c1", false, function(l) ST.check(l ~= nil, "trapped on GEOFON's deck", l) end)
+    A.wait(1); A.do_(function() ST.shot("capture_deck") end)
+    A.log_("capture: seq %d+: captured on GEOFON", 15, "c1", false, function(l) ST.check(l ~= nil, "captured (solo: given back)", l) end)
+    A.wait(3)
+    A.do_(function()
+        local pl = ST.plane()
+        local inv, lim = nil, nil
+        pcall(function() inv = pl.bIsInvincible end)
+        pcall(function() lim = pl.MaxPursuitAttackers end)
+        ST.check(inv == false and lim ~= 0, "after it: targetable again", tostring(inv) .. " / pursuers " .. tostring(lim))
+        ST.shot("capture_after")
+        ST.check(ST.plane() ~= nil and D ~= nil, "still in the run after it")
+    end)
+end
+
 SUITES.aegislasers = function()
     intoRun()
     local C = {}
