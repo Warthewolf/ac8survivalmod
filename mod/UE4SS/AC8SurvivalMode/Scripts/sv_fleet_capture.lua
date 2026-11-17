@@ -35,7 +35,11 @@ if CFG.specials and CFG.specials.fleet and not CFG.specials.fleet.capture then
         -- or within land_m of the deck's height over its mark) held land_hold_s, then the explosion and DOWN. Past the deck
         -- without touching it: the old end over it. land = false: the old approach, never under floor_m)
         land = true, land_m = 6, land_hold_s = 2, land_pass_m = 150,
-        deck = { fwd_m = -40, right_m = 8, up_m = 22 },     -- (the deck's touchdown spot from GEOFON's root, metres)
+        deck = { fwd_m = -40, right_m = 0, up_m = 20 },     -- (the deck's touchdown spot from GEOFON's root, metres)
+        -- ((0.74.177) the user: "Why not just make the deck have collision??": GEOFON's hull stops no trace (0.74.176's
+        -- probe: 24 of 24 through it to the sea), so an invisible box of ours on it at its deck's height, blocking all: the
+        -- deck's length and width, its top top_m over GEOFON's root, its centre fwd_m / right_m from it (metres)
+        slab = { enabled = true, len_m = 330, wid_m = 76, thick_m = 4, top_m = 20, fwd_m = 0, right_m = 0 },
         text = { lock = "CAPTURE LOCK", lock_sub = "GET CLEAR OR DESTROY RAVEN'S EW MAST",
                  lock_other = "CAPTURE LOCK ON %s", taken = "AIRCRAFT CAPTURED", taken_sub = "RAVEN HAS YOUR CONTROLS",
                  taken_other = "%s IS BEING TAKEN TO GEOFON", broken = "CAPTURE BROKEN", captured_other = "%s CAPTURED",
@@ -138,6 +142,47 @@ local function deckProbe(g, dk)
     end
     return table.concat(out, "; ")
 end
+-- ((0.74.177) GEOFON's own collision read (each primitive component's: enabled, object type, its answer to a Pawn), and the
+-- deck's slab: a BoxComponent of ours on it (AddComponentByClass, as VALKA's X-02S: hard rule 46), blocking every channel
+local function hullCollision(o)
+    local out = {}
+    pcall(function()
+        local cls = StaticFindObject("/Script/Engine.PrimitiveComponent")
+        o:K2_GetComponentsByClass(cls):ForEach(function(_, el)
+            local c = el:get()
+            local nm, en, ot, pr = "?", "?", "?", "?"
+            pcall(function() nm = c:GetFName():ToString() end)
+            pcall(function() en = tostring(c:GetCollisionEnabled()) end)
+            pcall(function() ot = tostring(c:GetCollisionObjectType()) end)
+            pcall(function() pr = tostring(c:GetCollisionResponseToChannel(2)) end)
+            if #out < 12 then out[#out + 1] = string.format("%s enabled %s type %s pawn %s", nm, en, ot, pr) end
+        end)
+    end)
+    return #out > 0 and table.concat(out, "; ") or "none read"
+end
+local SLAB = nil
+local function deckSlab(o)
+    local d = cc().slab or {}
+    if d.enabled == false or not liveObj(o) then return nil, "off" end
+    if SLAB and SLAB.a == addrOf(o) and SLAB.name == nameOf(o) and liveObj(SLAB.c) then return SLAB.c, "there already" end
+    local cls = StaticFindObject("/Script/Engine.BoxComponent")
+    if not valid(cls) then return nil, "no BoxComponent class" end
+    local th = n(d.thick_m, 4) * 100
+    local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 },
+                Translation = { X = n(d.fwd_m, 0) * 100, Y = n(d.right_m, 0) * 100, Z = n(d.top_m, 20) * 100 - th / 2 },
+                Scale3D = { X = 1, Y = 1, Z = 1 } }
+    local ok, c = pcall(function() return o:AddComponentByClass(cls, false, t, false) end)
+    if not (ok and valid(c)) then return nil, "AddComponentByClass " .. (ok and "gave nothing" or tostring(c)) end
+    local steps = {}
+    local function step(nm, f) if not pcall(f) then steps[#steps + 1] = nm .. " FAILED" end end
+    step("SetBoxExtent", function() c:SetBoxExtent({ X = n(d.len_m, 330) * 50, Y = n(d.wid_m, 76) * 50, Z = th / 2 }, true) end)
+    step("SetCollisionObjectType", function() c:SetCollisionObjectType(0) end)        -- (WorldStatic)
+    step("SetCollisionEnabled", function() c:SetCollisionEnabled(3) end)             -- (QueryAndPhysics)
+    step("SetCollisionResponseToAllChannels", function() c:SetCollisionResponseToAllChannels(2) end)   -- (Block)
+    step("SetHiddenInGame", function() c:SetHiddenInGame(true, false) end)
+    SLAB = { a = addrOf(o), name = nameOf(o), c = c }
+    return c, #steps > 0 and table.concat(steps, ", ") or "every setting took"
+end
 local function busyScene()
     return (CINE and CINE.active and CINE.active()) or (IFSURF and IFSURF.state and IFSURF.state()) ~= nil
 end
@@ -193,6 +238,22 @@ local function lockHere(seq, solo)
 end
 local function takeHere(seq)
     if not (L and L.seq == seq) then L = { seq = seq, at = os.clock() } end
+    do                                                    -- ((0.74.177) GEOFON's collision read, and its deck's slab
+        local o = nil
+        if IFLEET and IFLEET.cur and IFLEET.cur.ships and IFLEET.cur.ships[1] and IFLEET.cur.ships[1].hull then o = IFLEET.cur.ships[1].hull.obj end
+        if not o and COOP and COOP.copiesOf then
+            local first = (((CFG.specials or {}).fleet or {}).ships or {})[1]
+            for _, x in ipairs(first and COOP.copiesOf("SV_Unit_IF" .. first.key) or {}) do
+                if not (nameOf(x) or ""):lower():find("mk15", 1, true) then o = o or x end
+            end
+        end
+        if o and liveObj(o) then
+            local okH, h = pcall(hullCollision, o)
+            clog("GEOFON's own collision: " .. (okH and h or ("error " .. tostring(h))))
+            local okS, c, why = pcall(deckSlab, o)
+            clog("the deck's slab: " .. ((okS and c) and ("up (" .. tostring(why) .. ")") or ("NOT up: " .. tostring(okS and why or c))))
+        end
+    end
     L.state, L.at = "fly", os.clock()
     local said = shielded(true)
     hudCallout(tx().taken or "AIRCRAFT CAPTURED", tx().taken_sub or "")
