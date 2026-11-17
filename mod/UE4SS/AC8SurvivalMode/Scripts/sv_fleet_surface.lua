@@ -311,6 +311,17 @@ local function hit(sh, what)                              -- a breach or slam: i
         S.shakes = S.shakes + 1
         said = big and ", the big shake" or ", a shake"
     end
+    -- ((0.74.136) the user: "Keep going", the night's sprays faint in run 20261117_182008's pictures) a big ship's breach
+    -- near the camera lit by a strike beside it (IFSKY.strike: its bolt, its cloud flash, the storm's light on your camera)
+    local st = (c.water or {}).strike or {}
+    if what == "breach" and st.enabled ~= false and (st.kinds or {})[sh.kind] and IFSKY and IFSKY.strike
+        and nearCam(sh.spot, n(st.near_m, 3000)) and os.clock() >= (S.strikeAt or 0) then
+        S.strikeAt = os.clock() + n(st.gap_s, 1.5)
+        local o = st.off_m or { -600, -900 }
+        local okS, okK = pcall(IFSKY.strike, off({ X = sh.spot.X, Y = sh.spot.Y, Z = 0 }, S.u, S.r, { n(o[1], -600) * sh.sc * 2, n(o[2], -900), n(st.up_m, 3000) }), HOLD)
+        S.strikes = (S.strikes or 0) + ((okS and okK) and 1 or 0)
+        said = said .. ((okS and okK) and ", a strike beside it" or "")
+    end
     local sp = c.splash or {}
     if what == "breach" and sp.sound and nearCam(sh.spot, n(sp.near_m, 2500)) and S.sounds < n(sp.max, 12) then
         S.sounds = S.sounds + 1
@@ -394,8 +405,8 @@ local function over(why)
         if sh.failed then failed[#failed + 1] = (sh.name or sh.key) .. ": " .. sh.failed end
     end
     slog(string.format("over (%s): %d doubles taken off, the real fleet up; %d breach and %d slam waters, %d of %d climb / fall / keel / "
-        .. "settle waters (%d held back at the live cap), %d shakes, %d roars, %d beats; %s%s",
-        why, nD, b, sl, wu, wo, S.capped or 0, S.shakes, S.sounds, S.beat, back, #failed > 0 and ("; NOT: " .. table.concat(failed, ", ")) or ""))
+        .. "settle waters (%d held back at the live cap), %d strikes at breaches, %d shakes, %d roars, %d beats; %s%s",
+        why, nD, b, sl, wu, wo, S.capped or 0, S.strikes or 0, S.shakes, S.sounds, S.beat, back, #failed > 0 and ("; NOT: " .. table.concat(failed, ", ")) or ""))
     if HUD and HUD.hold then pcall(HUD.hold, false, HOLD) end
     if CINE and CINE.hudShow then pcall(CINE.hudShow, HOLD, "the surfacing over") end
     S = nil

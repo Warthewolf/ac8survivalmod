@@ -3719,3 +3719,16 @@ game. The work was split by file between agents; the builds ran in sequence in t
   bigger ships; at most max_live 150 up at once. Run 20261117_182008 (epic 25/25): 193 more waters, 272 held back at the cap;
   52 fps that minute, 30 frames over 100 ms (the test's HighResShots among them). At night the sprays read faint.
 - phase2 on 0.74.135: 24/25 (the one FAIL the suite's own pattern: its `+` unescaped; the V's line shows +25 / -15).
+
+## 0.74.136-0.74.137 (2026-11-17): strikes light the big ships' breaches; WP13, the fleet shells the airfield (feature/geofon-rise); staged
+- The user: "Keep going", "Keep working until I say stop".
+- The surfacing (sv_fleet_surface.lua hit): a big ship's breach (surface.water.strike.kinds: ford, aegis, krov, udal) within
+  near_m 3 km of the camera gets a storm strike beside it (IFSKY.strike: its bolt, cloud flash and light), at most one every
+  gap_s 1.5. Run 20261117_183636 (epic 25/25): 3 strikes at breaches, 189 more waters (270 held at the live cap).
+- WP13 (sv_fleet_round.lua shellTick; CFG.specials.fleet.shell): each ship afloat of kinds (aegis, krov, gors, udal) within
+  shell_km 20 of the runway: a salvo every every_s 25 (staggered), its muzzle flash (Mission 10's NS_Maingun_Muzzle),
+  flight_s 6 later `rounds` 3 of Mission 25's explosions on the runway and `damage` 3 off the airfield (AF.bomb), the
+  impact's sound and a small shake within 6 km; the callout THE FLEET IS SHELLING THE AIRFIELD / SINK THE SHIPS IN RANGE and
+  CONTROL's line once a round; none while it's down, paused, in the STORE or the surfacing. Run 20261117_183853 (shell 10/10,
+  the gun line set to 60 km for the test): every gun ship shelling, 250 -> 211 in ~40 s; the fireballs on the lit runway.
+- 0.74.136 (staged) had the strikes only: its autotest was stopped for low memory, cleaned up by hand, retried as 0.74.137.

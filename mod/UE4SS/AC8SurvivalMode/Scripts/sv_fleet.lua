@@ -121,6 +121,19 @@ CFG.specials.fleet = {
     -- the course in and the runway's centre (survival_events_fleet.py IF_YAW, IF_RUNWAY), for the lines
     formation = { per_step = 3, gap_s = 0.5, settle_s = 2, go_s = 15, moved_m = 50, every_s = 10, guns_s = 2, clear_s = 8,
                   course_yaw = 45, runway_cm = { 1610476, -436143 } },
+    -- ((0.74.137) WP13, round 30: the fleet shells the airfield (sv_fleet_round.lua shellTick): each ship afloat of kinds within
+    -- shell_km of the runway a salvo every every_s (staggered), its muzzle flash, flight_s on its damage off the airfield and
+    -- its rounds of AC8's explosions on the runway (spread_m along it at runway_yaw, across_m across); none while it's down,
+    -- paused, in the STORE or in the surfacing. Tuned: ~10 ships in range take its 250 in ~3.5 min
+    shell = { enabled = true, shell_km = 20, every_s = 25, damage = 3, flight_s = 6, rounds = 3, spread_m = 600, across_m = 60,
+              runway_yaw = -23, ground_cm = 500, kinds = { aegis = true, krov = true, gors = true, udal = true },
+              muzzle = { "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_Maingun_Muzzle", 2 },
+              impact = { { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 2.5 },
+                         { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_SandSmoke001", 2 } },
+              sound = "AKE_Weapon_SuperLongMainGun_Explosion_Ground_Play",
+              shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactSmall", shake_scale = 0.6, shake_km = 6,
+              text = { shelling = "THE FLEET IS SHELLING THE AIRFIELD", shelling_sub = "SINK THE SHIPS IN RANGE" },
+              radio = { shelling = { "CTRL|Incoming! Naval gunfire on the airfield! The fleet's in range!" } } },
     -- (2026-11-12, stage 4: docs/re/TANICORN.md "Railguns and railcannon") THE TANACORN's bow railcannon, its charged shot at
     -- the airfield (sv_tanicorn_rail.lua; Ctrl+H on Ctrl+L's live hull, WP11's phase 2 later; WP13): its Deploy over deploy_s
     -- (AS_SV_Tani_RAILCANNON_Deploy, 3.33 s), then a charge of charge_s, the shot, and the next charge every_s after the last
@@ -316,7 +329,14 @@ CFG.specials.fleet = {
               -- part of hers is down (her railcannon and railguns among them), each paid part_pay; then she's finished off,
               -- reward_tani paid and the round won as phase 1's. Her railcannon's cycle on the airfield from rail_after_s
               -- after the rise (TANI.rcStart). Lines drafted (the user edits them)
+              -- ((0.74.137) sink: her death (sv_tanicorn.lua TANI.liveSink): explosions along her, bow-down and under)
               phase2 = { enabled = true, rise_after_s = 0, split_max_s = 6, rise_max_s = 40,
+                         sink = { sink_s = 40, sink_m = 160, bow_deg = 12, roll_deg = 6, booms = 28, boom_every_s = 0.6,
+                                  fx = { { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 3 },
+                                         { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsFireL001", 3 },
+                                         { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion002", 2.5 },
+                                         { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsSmokeS001", 4 },
+                                         { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsPillarL001", 2 } } },
                          part_pay = 500, reward_tani = 60000, rail_after_s = 20,
                          text = { rises = "THE TANACORN RISES", rises_sub = "SHOOT DOWN ALL HER GUNS", row = "TANACORN: %d OF %d GUNS",
                                   beaten = "THE TANACORN IS SILENCED", beaten_sub = "+%s ZOLLARS" },
@@ -370,7 +390,10 @@ CFG.specials.fleet = {
                           climb = { { "SURF2", 0.6 }, { "MIST", 0.6 }, { "FORD_SPLASH", 0.8 }, { "SURF3", 0.6 } },
                           fall_every_s = 0.45, fall = { { "FORD_SPLASH", 0.9 }, { "AB_LAND_L", 0.7 }, { "AB_LAND_R", 0.7 }, { "SURF4", 0.6 } },
                           keel_spots = 6, keel = { { "FORD_PILLAR", 0.7 }, { "FORD_SPLASH", 0.8 } },
-                          settle_s = 4, settle_every_s = 0.7, settle = { "FORD_FOAM", 1 } },
+                          settle_s = 4, settle_every_s = 0.7, settle = { "FORD_FOAM", 1 },
+                          -- ((0.74.136) a strike beside a big ship's breach near the camera: its light on the spray)
+                          strike = { enabled = true, kinds = { ford = true, aegis = true, krov = true, udal = true }, near_m = 3000,
+                                     gap_s = 1.5, off_m = { -600, -900 }, up_m = 3000 } },
                 slam = { { "ALCN_BLAST", 1 }, { "FORD_SPLASH", 2 }, { "FOAM_IGC", 1 }, { "FORD_PILLAR", 1 } },
                 -- ((2026-11-17) the user: "make the Ships Rising out of the sea cutscene more cinematic? like go epic with it";
                 -- sv_fleet_surface.lua) lead_s of empty sea before the pickets; each shot a move from `from` to `to`

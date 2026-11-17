@@ -240,14 +240,15 @@ local function p2Fight(P, now)
     end
     if not P.halfSaid and down * 2 >= of then P.halfSaid = true; say("half", c.radio) end
     if up == 0 then
-        local okD, how = false, nil
-        if TANI.liveDown then okD, how = TANI.liveDown("round 30: all her guns down") end
+        local okD, how = false, nil                     -- ((0.74.137) her death: explosions, then she goes under bow first)
+        if TANI.liveSink then okD, how = TANI.liveSink("round 30: all her guns down", c.sink) end
+        if not okD and TANI.liveDown then okD, how = TANI.liveDown("round 30: all her guns down") end
         local v = pay(n(c.reward_tani, 60000), "the TANACORN silenced")
         hudCallout(tx2().beaten or "THE TANACORN IS SILENCED", string.format(tx2().beaten_sub or "+%s ZOLLARS", zl(v)))
         say("beaten", c.radio)
         P.state = "beaten"
         rlog(string.format("phase 2: the TANACORN beaten at +%.0f s (all %d guns down): %s zollars; her hull %s", now - P.fightAt, of,
-            tostring(v), okD and ("down (" .. tostring(how) .. ")") or "NOT finished off"))
+            tostring(v), okD and (how and ("down (" .. tostring(how) .. ")") or "sinking") or "NOT finished off"))
     end
 end
 local function p2Tick(now)
@@ -327,6 +328,110 @@ local function p2Tick(now)
     if P.state == "fight" then p2Fight(P, now) end
 end
 local function p2Busy() return R ~= nil and R.p2 ~= nil and (R.p2.state == "fall" or R.p2.state == "rise" or R.p2.state == "fight") end
+
+---------------------------------------------------------------------------------------------------- the shelling (WP13)
+-- ((0.74.137) the user, 2026-11-10: near Comona, the fleet shells the airfield; "Keep working until I say stop") every
+-- ship afloat of shell.kinds within shell.shell_km of the runway: a salvo every every_s (staggered by its place in the
+-- fleet): its muzzle flash, then flight_s on `damage` off the airfield (AF.bomb, as the festival's missiles and the
+-- railcannon), AC8's explosions at `rounds` random spots on the runway (spread_m along it, across_m across), the impact's
+-- sound on your camera and a shake within shake_km; the callout once a round (text.shelling) and its radio; none while
+-- the airfield is down, paused or in the STORE. The TANACORN's railcannon is hers (sv_tanicorn_rail.lua). Log:
+-- `fleet round: shelling: ...`
+local function shc() return (CFG.specials and CFG.specials.fleet or {}).shell or {} end
+local function runway()
+    local f = ((CFG.specials and CFG.specials.fleet or {}).formation or {}).runway_cm or { 1610476, -436143 }
+    return { X = n(f[1], 1610476), Y = n(f[2], -436143), Z = 0 }
+end
+local function shipAt(sh)
+    if not (sh.hull and alive(sh.hull)) then return nil end
+    local ok, v = pcall(function() local w = sh.hull.obj:K2_GetActorLocation(); return { X = w.X, Y = w.Y, Z = w.Z } end)
+    return ok and v or nil
+end
+local function fxHere(path, at, sc)                       -- one of AC8's effects at a place, its own life (auto-destroyed)
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    local sys = type(path) == "string" and loadObject(path .. "." .. (path:match("[^/]+$") or "")) or nil
+    if not (sys and valid(lib) and liveObj(survivalPC)) then return false end
+    return pcall(function()
+        lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = sc, Y = sc, Z = sc }, true, true, 0, false)
+    end)
+end
+local SHAKE = {}
+local function shellShake(path, scale)
+    if type(path) ~= "string" or not liveObj(survivalPC) then return false end
+    if not (SHAKE[path] and liveObj(SHAKE[path])) then SHAKE[path] = loadObject(path .. "." .. path:match("[^/]+$") .. "_C") end
+    local cls = SHAKE[path]
+    if not cls then return false end
+    return pcall(function() survivalPC:ClientStartCameraShake(cls, scale or 1, 0, { Pitch = 0, Yaw = 0, Roll = 0 }) end)
+end
+local function shellLand(Sx, s)                          -- a salvo's rounds on the runway: the damage, the effects
+    local c = shc()
+    local rw = runway()
+    local yaw = math.rad(n(c.runway_yaw, -23))
+    local ok = 0
+    for i = 1, math.max(1, math.floor(n(c.rounds, 3))) do
+        local a, b = (math.random() * 2 - 1) * n(c.spread_m, 600) * 100, (math.random() * 2 - 1) * n(c.across_m, 60) * 100
+        local at = { X = rw.X + math.cos(yaw) * a - math.sin(yaw) * b, Y = rw.Y + math.sin(yaw) * a + math.cos(yaw) * b, Z = n(c.ground_cm, 500) }
+        for _, e in ipairs(c.impact or {}) do if fxHere(e[1], at, n(e[2], 1)) then ok = ok + 1 end end
+    end
+    local dmg, said = math.floor(n(c.damage, 6)), ""
+    if not AF or AF.down or not AF.bomb then said = "the airfield is down: no damage"
+    else
+        AF.bomb = AF.bomb + dmg
+        said = string.format("-%d airfield (health before %s)", dmg, tostring(AF.hp))
+    end
+    local you, near = playerLocation(), false
+    if you then near = math.sqrt((you.X - rw.X) ^ 2 + (you.Y - rw.Y) ^ 2) <= n(c.shake_km, 6) * 100000 end
+    local shook = near and shellShake(c.shake, n(c.shake_scale, 0.6))
+    if near and c.sound and IFSKY and IFSKY.post then pcall(IFSKY.post, c.sound) end
+    Sx.landed, Sx.dealt = Sx.landed + 1, Sx.dealt + (said:find("^%-") and dmg or 0)
+    if Sx.landed <= 3 or Sx.landed % 10 == 0 then
+        rlog(string.format("shelling: %s's salvo landed: %s; %d effects%s", s.name, said, ok, shook and ", a shake" or ""))
+    end
+end
+local function shellTick(now)
+    local c = shc()
+    if c.enabled == false or not R then return end
+    local Sx = R.shell
+    if not Sx then Sx = { ships = {}, inAir = {}, salvos = 0, landed = 0, dealt = 0 }; R.shell = Sx end
+    for i = #Sx.inAir, 1, -1 do                          -- (rounds in flight land on their time, the airfield up or not)
+        local s = Sx.inAir[i]
+        if now >= s.at then table.remove(Sx.inAir, i); shellLand(Sx, s) end
+    end
+    if (type(gamePaused) == "function" and gamePaused(survivalPC) == true) or (OFF and OFF.store and OFF.store()) then return end
+    if AF and AF.down then return end
+    if IFSURF and IFSURF.state and IFSURF.state() then return end
+    local rw = runway()
+    local kinds = c.kinds or {}
+    for i, sh in ipairs(R.F.ships) do
+        if not sh.sunk and kinds[sh.kind] then
+            local p = shipAt(sh)
+            if p then
+                local km = math.sqrt((p.X - rw.X) ^ 2 + (p.Y - rw.Y) ^ 2) / 100000
+                local e = Sx.ships[sh.key]
+                if km <= n(c.shell_km, 20) then
+                    if not e then
+                        e = { next = now + (i % 6) * n(c.every_s, 20) / 6 }
+                        Sx.ships[sh.key] = e
+                        rlog(string.format("shelling: %s (%s) at the gun line, %.1f km from the runway: shelling every %g s", IFLEET.label(sh), sh.kind, km, n(c.every_s, 20)))
+                        if not Sx.said then
+                            Sx.said = true
+                            hudCallout((c.text or {}).shelling or "THE FLEET IS SHELLING THE AIRFIELD", (c.text or {}).shelling_sub or "SINK THE SHIPS IN RANGE")
+                            say("shelling", c.radio)
+                        end
+                    end
+                    if now >= e.next then
+                        e.next = now + n(c.every_s, 20)
+                        Sx.salvos = Sx.salvos + 1
+                        if c.muzzle then fxHere(c.muzzle[1], { X = p.X, Y = p.Y, Z = p.Z + 2500 }, n(c.muzzle[2], 3)) end
+                        Sx.inAir[#Sx.inAir + 1] = { at = now + n(c.flight_s, 6), name = IFLEET.label(sh) }
+                    end
+                elseif e then
+                    Sx.ships[sh.key] = nil
+                end
+            end
+        end
+    end
+end
 
 -- the kind (sv_rounds.lua SPC; THE ESCORT's and the Spaceport's hooks)
 function IFROUND.spawn(now)
@@ -425,6 +530,8 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet round", fn = function(now)
     pcall(musicTick)
     local okP, errP = pcall(p2Tick, now)
     if not okP and not R.p2err then R.p2err = true; rlog("phase 2: error " .. tostring(errP)) end
+    local okS, errS = pcall(shellTick, now)
+    if not okS and not R.shellErr then R.shellErr = true; rlog("shelling: error " .. tostring(errS)) end
     if not R.sightedSaid and #R.F.queue == 0 and not (IFSURF and IFSURF.state and IFSURF.state()) then
         R.sightedSaid = true
         say("sighted")
