@@ -359,25 +359,34 @@ end
 SUITES.pin = function()
     intoRun()
     A.wait(8)
+    local P = {}
     A.do_(function()
         local pl = ST.plane()
-        if not ST.check(pl ~= nil and type(SV_Pin) == "function", "your plane and SV_Pin (runtime 0.32.38)") then return end
+        if not ST.check(pl ~= nil and type(SV_Pin) == "function" and type(SV_PinInfo) == "function", "your plane and SV_Pin / SV_PinInfo (runtime 0.32.38)") then return end
         local l, r = pl:K2_GetActorLocation(), pl:K2_GetActorRotation()
         local yaw = math.rad(r.Yaw)
         local v = 1250                                    -- (cm/s: 45 km/h)
-        ST.marks.pin = ST.n
-        local rc = SV_Pin(pl, l.X, l.Y, l.Z, math.cos(yaw) * v, math.sin(yaw) * v, r.Yaw, 30)
+        local rc = SV_Pin(addrOf(pl) or 0, l.X, l.Y, l.Z, math.cos(yaw) * v, math.sin(yaw) * v, r.Yaw, 30)   -- (the runtime takes its address)
+        P.on = rc == 1
         ST.check(rc == 1, "SV_Pin on your plane", tostring(rc))
     end)
-    A.log_("pin: on plane", 5, "pin", true, function(l) ST.check(l ~= nil, "pinned (its route)", l) end)
-    A.wait(3); A.do_(function() ST.shot("pin_3s") end)
+    A.wait(2)
+    A.do_(function()
+        local i = type(SV_PinInfo) == "function" and SV_PinInfo() or ""
+        ST.check(i:sub(1, 1) == "1", "pinned 2 s on (SV_PinInfo: on,moves,refused,mean,worst,read)", i)
+    end)
+    A.wait(1); A.do_(function() ST.shot("pin_3s") end)
     A.wait(10); A.do_(function() ST.shot("pin_13s") end)
     A.wait(10); A.do_(function() ST.shot("pin_23s") end)
-    A.log_("pin: over", 15, "pin", true, function(l)
-        local mean, worst = l and tonumber(l:match("mean (%-?%d+) cm")), l and tonumber(l:match("worst (%-?%d+) cm"))
-        ST.info("pin: " .. tostring(l))
-        ST.check(l ~= nil and l:find(" 0 refused", 1, true) ~= nil, "every move taken", l)
-        ST.check(mean ~= nil and mean < 200, "the drift between moves small (mean under 2 m): the flight model doesn't fight it", tostring(mean) .. " / worst " .. tostring(worst))
+    A.wait(9)
+    A.do_(function()
+        local i = type(SV_PinInfo) == "function" and SV_PinInfo() or ""
+        local on, moves, fails, mean, worst = i:match("^(%-?%d+),(%-?%d+),(%-?%d+),(%-?%d+),(%-?%d+)")
+        ST.info("pin: " .. i)
+        ST.check(on == "0" and tonumber(moves or "0") > 100, "over after 30 s, moved every input build", i)
+        ST.check(fails == "0", "every move taken", i)
+        ST.check(tonumber(mean or "1e9") < 200, "the drift between moves small (mean under 2 m): the flight model doesn't fight it",
+            tostring(mean) .. " / worst " .. tostring(worst))
     end)
     A.wait(3)
     A.do_(function() ST.check(ST.plane() ~= nil and D ~= nil, "still flying after it") end)
