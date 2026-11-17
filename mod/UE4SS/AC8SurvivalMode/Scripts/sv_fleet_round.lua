@@ -670,7 +670,8 @@ local function crewPlay(key, now)
     end
     K.lastStyle, K.last = st, key
     K.said[key] = true
-    K.busyUntil = now + crewDur(key) * (st == "B" and 1.6 or (st == "C" and 1.3 or 1)) + n(c.gap_s, 4)
+    K.busyUntil = now + crewDur(key) * (st == "B" and 1.6 or (st == "C" and 1.3 or 1)) + (st == "C" and n(c.c_tail_s, 3.5) or 0)
+        + n(c.gap_s, 4)                                   -- ((0.74.154) style C's echoes and tail: the user, "thats perfect")
     if SUB and SUB.say then pcall(SUB.say, (c.speakers or {})[l[1]] or l[1], l[2]) end
     rlog(string.format("crew: %s (%s, style %s)", key, l[1], st))
     return true

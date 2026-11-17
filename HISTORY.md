@@ -3822,3 +3822,4 @@ game. The work was split by file between agents; the builds ran in sequence in t
   stages, the split's oath, her release, the fight, her half, her death, the shelling) and ambient lines every 45-90 s from the
   sighting, one at a time, subtitled INTERCEPT: TORRES / ALICORN CREW. Autotest phase2 on 0.74.153: 33/34 (the oath's last
   line queued past the test's end). Then: db 2 -> 14, styles C only, gap_s 2 (not yet built).
+- 0.74.154 (2026-11-17): the crew in style C only (the user: "choose option C for all"; C made "more echoey": three repeats 0.34 s apart and a 3 s tail, tools/ac7_voice_fx.py; "thats perfect"), +14 dB, each line's echo let finish (c_tail_s 3.5). Autotest phase2 34/34 (run 20261117_213215): every crew line style C, in order.
