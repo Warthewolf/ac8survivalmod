@@ -652,7 +652,7 @@ if CFG.specials and CFG.specials.fleet and CFG.specials.fleet.round and not CFG.
     CFG.specials.fleet.round.crew = {
         enabled = true, db = 10, styles = { "C" }, every_s = { 45, 90 }, gap_s = 2, s_per_word = 0.42, pad_s = 1.0,
         speakers = { TORRES = "INTERCEPT: TORRES", CREW = "INTERCEPT: ALICORN CREW" },
-        no_subs = { TORRES = true },                      -- ((0.74.159) the user: "Remove the subtitles for torres": heard, not shown)
+        no_subs = { TORRES = true, CREW = true },         -- ((0.74.159) the user: "Remove the subtitles for torres", "If theres any subtitles for the crew, remove them too": heard, not shown)
         moments = { sighted = { "v6157_6001_alt1" }, stage1 = { "v6001_6032" }, stage2 = { "v6001_6030_alt1" },
                     split = { "v6349_6001", "v6350_6001", "v6351_6001" }, release = { "v6001_6103" },
                     fight = { "v6001_6051_alt1" }, half = { "v6001_6112_alt1" }, beaten = { "v6001_6002", "v6001_6116_alt1" },
