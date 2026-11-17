@@ -378,6 +378,9 @@ Copy a working stock pattern before inventing a new one.
     test of 0.74.34 (2026-11-08) a special's F-15E and Su-47 took dead ZFA-44s' addresses and were fitted with AC7's laser
     (sv_escort_li.lua checked the address alone). An object kept between ticks must still have the name it was captured
     with (ESC.same, sv_escort_laser.lua) before anything is done to it, above all before it's damaged or finished off.
+    Loaded assets kept in Lua too: the user's crash of 0.74.138 (2026-11-17) handed Cloudly a LiveSetPauseTimerExecution
+    as its cloud layout, the storm's cached CVC_ms12 freed and its address reused (liveObj passed); 0.74.139 keeps every
+    cached asset with its name and loads it again when the name differs (sv_anomalies_dev.lua lyAsset).
 
 60. A LiveLightningVolume spawned from Lua never struck the player in Survival's level: about 50 s inside one in the user's
     test of 0.74.34 (2026-11-08), nothing on the plane or the HUD. The pause menu hides the HUD, which Lua took for a strike:
