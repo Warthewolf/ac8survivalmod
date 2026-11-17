@@ -21,8 +21,11 @@ mkdir -p "$OUT"
 SCRIPT="$(pwd -W 2>/dev/null || pwd)/tools/stormfx/ue_flash.py"
 echo "stormfx: building NS_SV_CloudFlash (log: $OUT/ue_flash.log)"
 rm -f "$OUT/ue_flash.log"
-"$CMD" "$PROJ/Live.uproject" -run=pythonscript -script="$SCRIPT" -EnablePlugins=CascadeToNiagaraConverter \
-    -unattended -nop4 -nosplash -stdout > "$OUT/ue_flash_stdout.log" 2>&1 || true
+# (the full editor, not -run=pythonscript: the converter's AddEmptyEmitter builds Niagara's editor view models, which need
+# Slate; the commandlet crashed in FNiagaraEmitterHandleViewModel::Initialize, 2026-11-17. SV_QUIT=1 closes it at the end)
+SV_QUIT=1 timeout 1800 "$UE/Engine/Binaries/Win64/UnrealEditor.exe" "$PROJ/Live.uproject" -ExecutePythonScript="$SCRIPT" \
+    -EnablePlugins=CascadeToNiagaraConverter -unattended -nop4 -nosplash -log -stdout -FullStdOutLogOutput \
+    > "$OUT/ue_flash_stdout.log" 2>&1 || true
 [ "$(tail -1 "$OUT/ue_flash.log" 2>/dev/null)" = "done" ] || { echo "stormfx: the flash didn't build ($OUT/ue_flash.log, $OUT/ue_flash_stdout.log)"; exit 1; }
 echo "stormfx: cooking (log: $OUT/cook.log)"
 rm -rf "$PROJ/Saved/Cooked"

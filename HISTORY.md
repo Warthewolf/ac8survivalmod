@@ -3555,3 +3555,23 @@ game. The work was split by file between agents; the builds ran in sequence in t
   it's /Game/OnlineMode/Blueprint/IGC/CameraShake/; RAVEN's shot 35 m off her bow saw her breach out of frame; the wide
   shot from 3 km made specks), 0.74.107 25/25 (run 20261117_133728_claude: 6 moves, 9 beats, 9 shakes, 8 roars, 15 of 15
   doubles, the real fleet up). Not heard yet: the roars and the cued thunder (the autotest has no ears).
+
+## 0.74.108-0.74.111 (2026-11-17; test builds, staged, not installed): the storm's cloud flash in step with the bolts (feature/cloud-flash)
+- The user: "the cloud flashing isn't appearing with each lightning bolt"; "extract or reverse engineer how ace combat 8 gets
+  it to work"; "start looking into all options". Run burstwatch (20261117_140335): Mission 12's NS_CloudLightning switched
+  on lit nothing for 14 s, then flashed: why the stock glow pool almost never flashed with a bolt.
+- Route A, our own (tools/stormfx/build.sh, ue_flash.py): Epic's CascadeToNiagaraConverter crashed as a commandlet
+  (FNiagaraEmitterHandleViewModel::Initialize needs Slate): run in the full editor (UnrealEditor.exe -ExecutePythonScript,
+  SV_QUIT=1 closes it); RichCurveKeyBP has no interp_mode in 5.4 (linear is the default). NS_SV_CloudFlash cooked
+  (SurvivalMode_StormFx_P) and LOADED in AC8 with no crash (0.74.108): the first Niagara system of our own UE in the game.
+  It drew far too big and bright (2.6 km sprites x6 on AC8's material, whose MI_NearCloudLightning001 is emissive 5000
+  with a 0.5-3 km far fade): white-outs with blocky bloom.
+- Route B, AC8's own (tools/stormfx/burst.py): NS_CloudLightning copied as NS_SV_CloudBurst (SurvivalMode_StormBurst_P)
+  with the seven spawn literals of its system update script (export 34 at 4440-4480: 0.08 0.22 0.5 0.15 0.1 0.4 0.05)
+  raised: left on it lit from its first frame (burstwatch). Its particles die when it's switched off
+  (bCanDieWhenEmitterDeactivates): x20 off at 0.25 s drew nothing (0.74.109); on 0.5 s it lit the clouds from behind at
+  5 km (0.74.110) but whited out the sky within a few km; 0.74.111: x5, none within 6 km (bolt_glow.flash[1].min_km):
+  no lit frame in the pictures (sub-second flickers between the autotest's pictures). Not yet seen by eye.
+- sv_fleet_storm.lua: bolt_glow.flash, candidates in order (the burst, our own), the first that loads; IFSKY.strike.
+  build_all.sh stages SurvivalMode_Storm*_P with TANI=1; every zip drops them (package_release / package_test /
+  package_dev without TANI; zip_leak_test checks). Autotest suites flash, burstwatch (tools/ac8-autotest).

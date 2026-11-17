@@ -175,11 +175,32 @@ end
 -- a glow in the cloud over each bolt (cells.bolt_glow): a pool of the cells' glow, spawned inactive and drawn after the clouds
 -- as they are, the oldest moved over the new bolt's top and restarted, off life_s on
 local GLOW = { pool = {}, i = 0 }
+-- ((2026-11-17) tools/stormfx) our own flash, NS_SV_CloudFlash (bolt_glow.flash: a burst at each Activate / ResetSystem,
+-- so it flashes WITH the bolt; the stock NS_CloudLightning's spawn-rate loops flash at a random moment) when its container
+-- is installed (TANI=1 dev builds), else the stock glow as before; looked for once a level (GLOW.flash: false = not there)
+-- g.flash: candidates { path, scale, life_s } in order (AC8's own patched NS_SV_CloudBurst, tools/stormfx/burst.py; our
+-- NS_SV_CloudFlash), the first that loads; GLOW.fe its entry
+local function flashSys(g)
+    if GLOW.flash == nil then
+        GLOW.flash, GLOW.fe = false, nil
+        local tried = {}
+        for _, e in ipairs(type(g.flash) == "table" and g.flash or {}) do
+            local o = type(e.path) == "string" and loadObject(e.path) or nil
+            if o then GLOW.flash, GLOW.fe = o, e; break end
+            tried[#tried + 1] = tostring(e.path)
+        end
+        log("fleet storm: the bolts' cloud flash: " .. (GLOW.fe and ("our own " .. GLOW.fe.path) or
+            ("the stock glow (" .. (#tried > 0 and table.concat(tried, ", ") or "none set") .. " not in this build)")))
+    end
+    return GLOW.flash or nil
+end
 local function glowNew(c, at)
     local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
-    local sys = type(c.system) == "string" and loadObject(c.system) or nil
+    local g = c.bolt_glow or {}
+    local own = flashSys(g)
+    local sys = own or (type(c.system) == "string" and loadObject(c.system) or nil)
     if not (lib and valid(lib) and sys and liveObj(survivalPC)) then return nil end
-    local pri, sc = math.floor(n(c.sort, 100)), n((c.bolt_glow or {}).scale, 1)
+    local pri, sc = math.floor(n(c.sort, 100)), own and n(GLOW.fe and GLOW.fe.scale, 1) or n(g.scale, 1)
     local ok, comp = pcall(function() return lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 },
         { X = sc, Y = sc, Z = sc }, false, false, 0, false) end)
     if not (ok and comp) then return nil end
@@ -193,6 +214,17 @@ local function glowAt(top, now)
     local g = c.bolt_glow
     if type(top) ~= "table" or type(g) ~= "table" or g.enabled == false or c.enabled == false then return "" end
     local at = { X = top.X, Y = top.Y, Z = top.Z + n(g.up_m, 300) * 100 }
+    -- ((2026-11-17) run 20261117_140748: AC8's flash (emissive 5000, made for Mission 12's far cells) whited the sky out
+    -- within a few km of the camera: none nearer than the flash's min_km)
+    flashSys(g)
+    local mk = GLOW.fe and n(GLOW.fe.min_km, 0) or 0
+    if mk > 0 then
+        local L
+        pcall(function() local v = survivalPC.PlayerCameraManager:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+        if L and math.sqrt((L.X - at.X) ^ 2 + (L.Y - at.Y) ^ 2 + (L.Z - at.Z) ^ 2) < mk * 100000 then
+            return string.format("; no glow (within %.0f km of you)", mk)
+        end
+    end
     GLOW.i = GLOW.i % math.max(1, math.floor(n(g.pool, 12))) + 1
     local e = GLOW.pool[GLOW.i]
     if not cellOk(e) then e = glowNew(c, at); GLOW.pool[GLOW.i] = e end
@@ -200,7 +232,7 @@ local function glowAt(top, now)
     pcall(function() e.o:SetWorldLocation(at, false, {}, true) end)
     pcall(function() e.o:ResetSystem() end)
     pcall(function() e.o:Activate(true) end)
-    e.offAt = now + n(g.life_s, 1.5)
+    e.offAt = now + n(GLOW.fe and GLOW.flash and GLOW.fe.life_s or g.life_s, 1.5)   -- (the burst: switched off at once, its particles finish)
     return string.format("; a glow %.1f km up", at.Z / 100000)
 end
 local function glowTick(now)
@@ -376,7 +408,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet storm", fn = function(now)
     if SW.on and not SW.tr then lightTick(now) end
 end }
 if type(LEVEL_DROPS) == "table" then                       -- (the level's: its Cloudly actor and lights went with it)
-    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving, TH.q, TH.got, TH.ev, CELLS = nil, nil, {}, {}, {}, {}; GLOW.pool, GLOW.i = {}, 0 end
+    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving, TH.q, TH.got, TH.ev, CELLS = nil, nil, {}, {}, {}, {}; GLOW.pool, GLOW.i, GLOW.flash, GLOW.fe = {}, 0, nil, nil end
 end
 end
 -- TEST ONLY END

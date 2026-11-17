@@ -89,6 +89,9 @@ fi
 # never in any zip made here, ZFA=1 and TESTER=1 included. Until 2026-11-11 this line sat in the no-ZFA branch above, so
 # a ZFA=1 zip packed after a TANI=1 build_all.sh would have carried it (tools/checks/zip_leak_test.sh)
 [ "$TANIZIP" = 1 ] || rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*
+# ((2026-11-17) tools/stormfx: the storms' own cloud flash, the fleet's and the Thunder Anomaly's: the user's dev install
+# only, never in any zip made here, a TESTER one included)
+rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Storm*_P.*
 # TESTER=1: a tester's build (user, 2026-11-03: "give me a tester version for alyssa"): the test keys (force a special,
 # zollars, ...) and the diagnostic loggers KEPT, everything else as the friends' zip; named ..._<version>_TESTER_...
 # Only for the tester the user names: every other zip strips them (user, 2026-10-23: test keys out of releases).

@@ -207,7 +207,15 @@ CFG.specials.fleet = {
                       -- the same glow, the oldest moved up_m over each bolt's top (into the cloud it comes out of) and
                       -- restarted, off life_s on; run 87: scale 1 unseen at 2-5 km at night, 3-6 lit the cloud blue, so 4, and the 19 x3)
                       cells = { enabled = true, sort = 100, scale_x = 3,
-                                bolt_glow = { enabled = true, pool = 12, life_s = 2.5, up_m = 300, scale = 4 },
+                                bolt_glow = { enabled = true, pool = 12, life_s = 2.5, up_m = 300, scale = 4,
+                                              -- ((2026-11-17) the flash with the bolt, tools/stormfx (TANI=1 dev builds), the
+                                              -- first that loads: AC8's own cloud lightning with its spawn literals raised
+                                              -- (burst.py; switched off life_s on, its particles finish), our own cooked one;
+                                              -- else the stock glow above)
+                                              flash = { { path = "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudBurst.NS_SV_CloudBurst",
+                                                          scale = 0.3, life_s = 0.5, min_km = 6 },   -- (burstwatch: on 0.5 s, its particles die with it; none within 6 km: run 140748's whiteouts)
+                                                        { path = "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudFlash.NS_SV_CloudFlash",
+                                                          scale = 1, life_s = 2.0 } } },
                                 system = "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning.NS_CloudLightning",
                                 spots = { { 2389746, -1425882, 636631, 1 }, { 2050221, -1352135, 639884, 1 }, { -2275497, 226132, 764355, 1 }, { -3067967, 383275, 764355, 1 },
                                          { -3159850, 3790150, 764355, 1 }, { -3159850, 4575129, 764355, 1 }, { -1165562, 2039202, 764355, 1 }, { 1798205, 1440965, 727172, 0.9 },

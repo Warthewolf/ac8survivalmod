@@ -107,6 +107,19 @@ if [ "$TANI" = 1 ]; then
     [ -f "$TA/SurvivalMode_Tani_P.utoc" ] || { echo "TANI=1: no Tanicorn container in $TA (sh tools/tanicorn/build.sh)"; exit 1; }
     cp "$TA/SurvivalMode_Tani_P.utoc" "$TA/SurvivalMode_Tani_P.ucas" build/install/SurvivalMode/
     echo "staged the Tanicorn's parts ($TA/SurvivalMode_Tani_P; dev only)"
+    # ((2026-11-17) the storms' own cloud flash, tools/stormfx (NS_SV_CloudFlash): the fleet's storm draws it in step with
+    # each bolt (sv_fleet_storm.lua), the stock glow when it isn't here; dev only, as the Tanicorn's (no zip keeps it)
+    # (SurvivalMode_StormFx_P: our own NS_SV_CloudFlash, tools/stormfx/build.sh; SurvivalMode_StormBurst_P: AC8's own
+    # NS_CloudLightning as NS_SV_CloudBurst, its spawn literals raised, tools/stormfx/burst.py)
+    SF="$(dirname "$TA")/../stormfx/out"
+    for c in SurvivalMode_StormFx_P SurvivalMode_StormBurst_P; do
+        if [ -f "$SF/$c.utoc" ]; then
+            cp "$SF/$c.utoc" "$SF/$c.ucas" build/install/SurvivalMode/
+            echo "staged the storms' cloud flash ($SF/$c; dev only)"
+        else
+            echo "no $c (tools/stormfx): the fleet's storm keeps the stock glow unless another flash is in"
+        fi
+    done
 fi
 # (2026-11-11, WP2 step 2) a TANI=1 build's world data imports the Tanicorn container's blueprints (THE TANACORN's live parts:
 # tools/build_survival.py check_tanicorn_build writes build/out/tani_wd.txt): its marker staged beside the two mod folders

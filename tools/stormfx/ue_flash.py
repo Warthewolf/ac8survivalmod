@@ -1,8 +1,11 @@
 """ue_flash.py : NS_SV_CloudFlash, Survival's own lightning flash in the clouds, in the AC8 template project (UE 5.4,
 $AC8_LIVE_PROJECT), under /Game/Mods/SurvivalMode/StormFx (tools/stormfx/README.md). Run by tools/stormfx/build.sh:
 
-  UnrealEditor-Cmd.exe $AC8_LIVE_PROJECT/Live.uproject -run=pythonscript -script=tools/stormfx/ue_flash.py
+  UnrealEditor.exe $AC8_LIVE_PROJECT/Live.uproject -ExecutePythonScript=tools/stormfx/ue_flash.py
       -EnablePlugins=CascadeToNiagaraConverter
+  (the full editor, not -run=pythonscript: the converter's AddEmptyEmitter builds Niagara's editor view models, which need
+  Slate; the commandlet crashed in FNiagaraEmitterHandleViewModel::Initialize, 2026-11-17. SV_QUIT=1: the editor closed
+  at the end, done or not)
 
 Built through Epic's CascadeToNiagaraConverter scripting API (FXConverterUtilitiesLibrary): an empty emitter, Niagara's
 own modules and their inputs, curve inputs, the sprite renderer, then the system's compile. Why our own: Mission 12's
@@ -106,7 +109,10 @@ def key(t, v):
     k = unreal.RichCurveKeyBP()
     k.set_editor_property('time', t)
     k.set_editor_property('value', v)
-    k.set_editor_property('interp_mode', unreal.RichCurveInterpMode.RCIM_LINEAR)
+    try:                                # (linear is FRichCurveKey's default; RichCurveKeyBP doesn't expose InterpMode in 5.4)
+        k.set_editor_property('interp_mode', unreal.RichCurveInterpMode.RCIM_LINEAR)
+    except Exception:
+        pass
     return k
 
 
@@ -198,3 +204,5 @@ except Exception as e:                  # (the log's last line says so; build.sh
     say('FAILED: ' + repr(e))
     for ln in traceback.format_exc().splitlines():
         say('  ' + ln)
+if os.environ.get('SV_QUIT') == '1':    # (the full editor's run: closed once it's written)
+    unreal.SystemLibrary.quit_editor()

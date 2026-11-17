@@ -77,7 +77,7 @@ if [ "$TANI" = 1 ]; then
     python -I tools/tani_container.py verify "$st/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.utoc" build/install/tani_wd.txt || exit 1
     echo "TANI=1: the Tanicorn's container staged (Ctrl+T in a run: its test mount)"
 else
-    rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*
+    rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Storm*_P.*   # (the storms' cloud flash too: TANI=1's)
 fi
 # NOSPACEPORT=1: without the Spaceport Assault and its Retake (tools/nospaceport.py, as NOSPACEPORT=1 package_release.sh)
 if [ "$NOSPACEPORT" = 1 ]; then python -X utf8 -I tools/nospaceport.py "$mod" > /dev/null; fi

@@ -31,7 +31,7 @@ mkdir -p "$F/build/install/AC8SurvivalMode/dlls"
 echo "made-up main.dll" > "$F/build/install/AC8SurvivalMode/dlls/main.dll"
 cp "$F/build/install/AC8SurvivalMode/dlls/main.dll" "$F/build/runtime/main.dll"
 echo "/* made up */" > "$F/build/runtime/submit_cfg.h"
-for c in SurvivalMode_P SurvivalMode_ZFA44_P SurvivalMode_Laser7_P SurvivalMode_Tani_P SurvivalMode_Valka_P; do
+for c in SurvivalMode_P SurvivalMode_ZFA44_P SurvivalMode_Laser7_P SurvivalMode_Tani_P SurvivalMode_Valka_P SurvivalMode_StormFx_P SurvivalMode_StormBurst_P; do
     for x in utoc ucas; do echo "$c.$x" > "$F/build/install/SurvivalMode/$c.$x"; done
 done
 
@@ -65,6 +65,8 @@ one() {
         if [ -z "$z" ]; then check 1 "$label: a zip made ($glob)"; return; fi
         holds "$z" SurvivalMode_Tani_P && r=1 || r=0
         check $r "$label: no Tanicorn container"
+        holds "$z" SurvivalMode_StormFx_P || holds "$z" SurvivalMode_StormBurst_P && r=1 || r=0
+        check $r "$label: no storm cloud-flash container (tools/stormfx)"
         devfree "$z" && r=0 || r=1
         check $r "$label: no dev-install-only Lua (DEV ONLY blocks, the Tanicorn's test)"
         case "$label" in *TESTER*|test*) ;; *)
