@@ -633,6 +633,7 @@ ZFA=1):
   - AC7's fire control: an enemy missile within li_activation_m 1200 of the plane starts a volley of li_volley_s 6
     (the root turned back to the gun's line, EndLaser off, MainLaser's BeamLength (li_range_m x 10, 1, 1) in AC7's
     units, MainLaser shown and SetActive(true, reset): AC7's charge-up, flash and beam); li_rest_s 8 after its end;
+    (2026-11-17, the user: "increase the LaserInterceptor Alive time for 20 seconds and 10 seconds cooldown": Survival ships li_volley_s 20, li_rest_s 10 for every carrier.)
   - each li_search_s 0.5 of a volley, the laser in state 0 takes the nearest enemy missile (sv_escort_laser.lua's enemy
     test) within li_range_m 1240 in li_angle of the plane's nose that no other laser is on: SV_LaserBegin. The class
     swings onto it (AC7's curve over li_intercept_s 1) and kills it (the game's "Intercepted" effect); Lua plays the

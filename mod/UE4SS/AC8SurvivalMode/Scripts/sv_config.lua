@@ -1143,7 +1143,10 @@ CFG = {
                                  -- ((2026-11-10) the user: "up the swing speed for the laser interceptors", 0.5 s for
                                  -- these and round 30's fleet: one swing a missile in half the time; was AC7's 1.0. A swing
                                  -- curve that isn't at its end by then is cleared at the spawn: sv_escort_li.lua curveFit)
-                                 li_intercept_s = 0.5, li_volley_s = 6.0, li_rest_s = 8.0, li_end_s = 0.2, li_beam_x = 0,
+                                 -- ((2026-11-17) the user: "increase the LaserInterceptor Alive time for 20 seconds and 10
+                                 -- seconds cooldown": every carrier's (the ZFA-44s', the TANACORN's and the fleet's); was
+                                 -- AC7's 6 / 8)
+                                 li_intercept_s = 0.5, li_volley_s = 20.0, li_rest_s = 10.0, li_end_s = 0.2, li_beam_x = 0,
                                  li_sure = true, li_sure_s = 0.6, li_log_n = 60,
                                  -- ((2026-11-08) Alyssa's run of 0.74.30: its first volley stopped the game in the
                                  -- renderer's translucency pass (the RHI thread, UECC AceCombat8.exe+0x34a8d68): AC7's
