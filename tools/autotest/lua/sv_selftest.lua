@@ -3887,6 +3887,53 @@ end
 -- (2026-11-17) aegislasers: the fleet's Aegis lasers (sv_fleet_lasers.lua, BP_SV_IF_Aegis: the user, "2 Lasers Interceptors
 -- one on the Aft and the Bow, targettable"): Ctrl+N; every Aegis's two mounts handed to AC7's LaserInterceptor and each one
 -- carrying its laser; RAVEN's bow and stern close up; one mount shot off (finishUnpaid): its laser gone. Pictures.
+-- ((0.74.164) the user: "Have the Raven use ECM too": RAVEN's Mk 15 slot carries the Alicorn's ECM part) the fleet up
+-- (Ctrl+N), RAVEN's parts read (an alcn_ecm part among them), pictured; your plane put 3 km off RAVEN (SV_Respawn's move)
+-- and the cockpit pictured (its jamming on your HUD?)
+SUITES.ravenecm = function()
+    intoRun()
+    local C = {}
+    A.do_(function()
+        if not ST.check(IFLEET ~= nil, "the fleet is in this build") then return "abort" end
+        ST.marks.r0 = ST.n
+        ST.press("N")
+    end)
+    A.log_("fleet: up: RAVEN", 60, "r0", true, function(l)
+        ST.check(l ~= nil and l:find("alcn_ecm", 1, true) ~= nil, "RAVEN up with the Alicorn's ECM among its parts", l)
+    end)
+    A.wait(6)
+    A.do_(function()
+        for _, sh in ipairs(IFLEET.cur and IFLEET.cur.ships or {}) do
+            if sh.name == "RAVEN" and sh.hull and valid(sh.hull.obj) then C.sh = sh end
+        end
+        if not C.sh then ST.info("ravenecm: RAVEN not found"); return end
+        for _, e in ipairs(C.sh.parts) do
+            ST.info(string.format("ravenecm: RAVEN part %s health %s", e.cls, tostring(ST.healthOf(e.obj))))
+            if e.cls:find("ecm", 1, true) then C.ecm = e end
+        end
+        ST.check(C.ecm ~= nil, "RAVEN's ECM part found", C.ecm and C.ecm.cls or "none")
+    end)
+    local function ecmObj() return C.ecm and valid(C.ecm.obj) and C.ecm.obj or (C.sh and C.sh.hull and C.sh.hull.obj) end
+    A.picture("raven_ecm_close", function() local o = ecmObj(); return o and ST.off(ST.at(o), 2500, 3000, 1500) end,
+        function() local o = ecmObj(); return o and ST.at(o) end, 40)
+    A.picture("raven_side", function() local o = C.sh and C.sh.hull and C.sh.hull.obj; return o and ST.frame(o, 0, 13000, 4000) end,
+        function() local o = C.sh and C.sh.hull and C.sh.hull.obj; return o and ST.at(o) end, 60)
+    A.do_(function()
+        local o = C.sh and C.sh.hull and C.sh.hull.obj
+        local pl = ST.plane()
+        if not (o and pl and type(SV_Respawn) == "function") then ST.info("ravenecm: no move (RAVEN, plane or SV_Respawn missing)"); return end
+        if type(SV_Down) == "function" then pcall(SV_Down, 0) end
+        local r = ST.at(o)
+        local x, y, z = r.X - 300000, r.Y, 80000                 -- (3 km west of her, 800 m up, facing her)
+        local rc = SV_Respawn(addrOf(pl) or 0, x, y, z, 0, 0, 0)
+        ST.info("ravenecm: your plane moved 3 km off RAVEN: SV_Respawn " .. tostring(rc))
+    end)
+    A.wait(3); A.do_(function() ST.shot("raven_ecm_cockpit_3s") end)
+    A.wait(5); A.do_(function() ST.shot("raven_ecm_cockpit_8s") end)
+    A.wait(5)
+    A.do_(function() ST.check(ST.plane() ~= nil and D ~= nil, "still flying after it") end)
+end
+
 SUITES.aegislasers = function()
     intoRun()
     local C = {}
