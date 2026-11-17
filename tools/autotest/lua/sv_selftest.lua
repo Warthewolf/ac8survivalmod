@@ -1195,6 +1195,70 @@ SUITES.round30 = function()
     A.wait(2)
     A.do_(function() ST.shot("r30_after"); IFSKY.step(nil) end)
 end
+-- (2026-11-17) the epic surfacing (sv_fleet_surface.lua; the user: "make the Ships Rising out of the sea cutscene more
+-- cinematic? like go epic with it"): round30's storm and Ctrl+N, a picture every 1.5 s of its ~30 s, then its log: 6 shots
+-- each a move, the 9 beats (3 radio lines, the cued strikes, the title card), the letterbox, the hand-held shake, shakes
+-- at the breaches and GEOFON's big one, the real fleet up after
+SUITES.epic = function()
+    intoRun()
+    A.do_(function()
+        if not ST.check(IFSKY ~= nil and IFSURF ~= nil and IFSURF.quiet ~= nil and IFSKY.strike ~= nil,
+            "the epic surfacing is in this build (IFSURF.quiet, IFSKY.strike)") then return "abort" end
+        IFSKY.step(2)
+    end)
+    A.wait(8)
+    A.do_(function() IFSKY.step(5) end)
+    A.wait(8)
+    A.do_(function()
+        local w = IFSKY.storm()
+        ST.check(w.on, "round 30's pre-dawn, the storm on", string.format("storm %s, %d flashes", tostring(w.on), w.flashes or 0))
+        ST.marks.s0 = ST.n
+        ST.press("N")
+    end)
+    A.log_("fleet surfacing: %d+ ships rise over", 10, "s0", false, function(l)
+        if not ST.check(l ~= nil, "the surfacing started", l) then return "abort" end
+        ST.check(l:find("letterbox 2.39", 1, true) ~= nil and l:find("6 shots, 9 beats", 1, true) ~= nil,
+            "its letterbox, 6 shots and 9 beats", l)
+        ST.check(l:find("hand-held shake on", 1, true) ~= nil, "the hand-held shake on", l)
+        ST.check(l:find("Survival's true", 1, true) ~= nil, "Survival's HUD held", l)
+    end)
+    for i = 1, 22 do
+        A.wait(1.5)
+        A.do_(function() ST.shot(string.format("epic_%02d", i)) end)
+    end
+    A.log_("fleet surfacing: the rise over", 20, "s0", true, function(l)
+        local up, of = nil, nil
+        if l then up, of = l:match("(%d+) of (%d+) doubles up") end
+        ST.check(up ~= nil and up == of and tonumber(of) >= 15, "every ship's double rose", l)
+    end)
+    A.log_("fleet surfacing: over", 10, "s0", true, function(l)
+        ST.check(l ~= nil and not l:find("NOT:", 1, true), "the swap and your view back", l)
+        local sk, bt = nil, nil
+        if l then sk, bt = l:match("(%d+) shakes, %d+ roars, (%d+) beats") end
+        ST.check(tonumber(sk or 0) >= 1 and tonumber(bt or 0) == 9, "shakes at the breaches, all 9 beats", l)
+        for i = 1, 6 do
+            local s6 = ST.findLog("fleet surfacing: shot " .. i .. " at", ST.marks.s0, true)
+            ST.check(s6 ~= nil and s6:find("move", 1, true) ~= nil and not s6:find("NOT taken", 1, true), "shot " .. i .. ", a move", s6)
+        end
+        local big = ST.findLog("GEOFON slams down, the big shake", ST.marks.s0, true)
+        ST.check(big ~= nil, "GEOFON's slam: the big shake", big)
+        for _, w in ipairs({ "KASKA says", "CTRL says", "the title card", "a strike by GEOFON" }) do
+            local b = ST.findLog(w, ST.marks.s0, true)
+            ST.check(b ~= nil, "beat: " .. w, b)
+        end
+        local st = ST.findLog("a strike by PicketA", ST.marks.s0, true)
+        ST.info("the first cued strike: " .. tostring(st))
+    end)
+    for i = 1, 3 do
+        A.wait(0.7)
+        A.do_(function() ST.shot(string.format("epic_over_%d", i)) end)
+    end
+    A.log_("fleet: Ctrl%+N: %d+ of %d+ ships up", 30, "s0", false, function(l)
+        ST.check(l ~= nil, "the real fleet up after the surfacing", l)
+    end)
+    A.wait(2)
+    A.do_(function() ST.shot("epic_after"); IFSKY.step(nil) end)
+end
 -- (2026-11-16) the storm's lightning bolt as drawn (round30 run 45: a checkered sheet by the plane: a ribbon with the
 -- default material?): THUNDER.cloudFlash's bolt (NS_CloudLightning x bolt_scale) and its cloud light, each spawned at 3, 6
 -- and 12 km in front of a fixed camera over the airfield, by day, the game's own shot a moment after
