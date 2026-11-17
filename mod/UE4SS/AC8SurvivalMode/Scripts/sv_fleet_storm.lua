@@ -431,6 +431,8 @@ local function slFlash(at, now)
     local d = math.sqrt(dx * dx + dy * dy + dz * dz)
     if d > n(c.max_km, 15) * 100000 then return "" end
     if SL.steps and SL.d and d > SL.d then return "" end           -- (one at a time: a nearer one wins)
+    if not SL.steps and now < (SL.next or 0) then return "" end    -- ((0.74.126) one every gap_s at most)
+    SL.next = now + n(c.gap_s, 0)
     local a, why = slMake()
     if not a then return "; no strike light (" .. tostring(why) .. ")" end
     local yaw, pitch = math.deg(math.atan(dy, dx)), math.deg(math.atan(dz, math.sqrt(dx * dx + dy * dy)))

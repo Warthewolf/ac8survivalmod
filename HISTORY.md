@@ -3618,3 +3618,13 @@ game. The work was split by file between agents; the builds ran in sequence in t
   package_dev.sh now refuses unless build/install's VERSION is the source's.
 - 0.74.125 INSTALLED 2026-11-17 for the user ("install"), over 0.74.123 (backup: build/backup/install_before_0.74.125);
   112 files verified; her config, subtitles (the same as the repo's) and the launcher's toggle kept.
+
+## 0.74.126-0.74.127 (2026-11-17): a darker night (feature/cloud-flash); 0.74.127 INSTALLED
+- The user, 0.74.125's round 29 break and round 30: "the aircraft is far to bright for night time", "its the exposure".
+- 0.74.126: the strike's point light on your plane (sv_fleet_storm.lua slFlash) 4000 -> 800, within 8 km (was 15), one
+  every plane_light.gap_s 2.5 s at most, a short flicker (steps 1 / 0.3 / 0): the storm's 2-3 strikes a second had kept it lit.
+- 0.74.127: the night's exposure 2.3 / 4.0 / +0.6 -> 4.0 / 6.0 / -0.5, the dawn's 10 / 14 / -1 -> 12 / 14 / -2
+  (CFG.specials.fleet.sky.profile night_over / dawn_exposure). 0.74.126 was staged, never installed.
+- 0.74.127 INSTALLED 2026-11-17 for the user ("package and install 0.74.127"), over 0.74.125 (backup:
+  build/backup/install_before_0.74.127); 112 files verified; her config, subtitles (the same as the repo's) and the
+  launcher's toggle kept. Build hash 9ad11586d028 registered. Untested in game: the night's brightness, the flicker.

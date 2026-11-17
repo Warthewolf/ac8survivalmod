@@ -190,8 +190,12 @@ CFG.specials.fleet = {
     -- thunder: AC8 has no thunder event (the storm's AKE_Environment_Thunder_Play and Ms12 distant thunder were never
     -- AC8's: nothing was heard); its booms and rumble stand in, near within near_km, far beyond, a strike's chance, after
     -- its distance's delay (s_per_km, at most max_s), loaded and pinned under the storm's fade; Ctrl+J plays each in turn)
+    -- ((0.74.127) the user, 0.74.125's round 29 break and round 30: "the aircraft is far to bright for night time", "its the
+    -- exposure", the whole picture: the night's exposure 2.3 / 4.0 / +0.6 -> 4.0 / 6.0 / -0.5, the dawn's 10 / 14 / -1 ->
+    -- 12 / 14 / -2 (a higher floor: the dark scene brightened less))
     sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 3, sunrise_rounds = 3,
-                                                         night_over = { exposure = { 2.3, 4.0, 0.6 } } },
+                                                         night_over = { exposure = { 4.0, 6.0, -0.5 } },
+                                                         dawn_exposure = { 12.0, 14.0, -2.0 } },
             storm = { enabled = true, until_round = 35, out_s = 0.6, hold_s = 0.8, in_s = 1.2,
                       -- ((2026-11-17) the user: "we need to change the audio of the Thunder, its wrong") AC8's own thunder
                       -- (its SE bank's Mission 12 events, by name on your camera: sv_fleet_storm.lua): the storm's arrival
@@ -237,9 +241,11 @@ CFG.specials.fleet = {
                                     -- near_km down to fade_x at max_km; sv_fleet_storm.lua's slFlash)
                                     -- (kind "point": a point light offset_m from you on the strike's side, radius_m reach;
                                     -- "directional" lit nothing in AC8: run 20261117_150341)
-                                    plane_light = { enabled = true, kind = "point", intensity = 4000, offset_m = 300, radius_m = 1500,
-                                                    falloff = 2, near_km = 3, max_km = 15, fade_x = 0.25,
-                                                    steps = { 1, 0.25, 0.8, 0.3, 0 }, color = { 200, 215, 255 } },
+                                    -- ((0.74.126) the user, 0.74.125: "the aircraft is far to bright for night time": the storm's 2-3 strikes a
+                                    -- second within 15 km kept it lit; 800, within 8 km, one every gap_s at most, a short flicker)
+                                    plane_light = { enabled = true, kind = "point", intensity = 800, offset_m = 300, radius_m = 1500,
+                                                    falloff = 2, near_km = 3, max_km = 8, fade_x = 0.25, gap_s = 2.5,
+                                                    steps = { 1, 0.3, 0 }, color = { 200, 215, 255 } },
                                     cloud = { enabled = false, chance = 0.5, every_s = { 0.6, 1.6 }, alt_m = { 2000, 4500 }, radius_m = 5000,
                                               brightness = { 800000, 2000000 }, max_brightness = 3000000, color = { 215, 225, 255 }, steps = { 1, 0.3, 0.9, 0.2, 0 } },
                                     bolts = { enabled = true, pool = 10, height_m = { 1800, 4500 }, length_m = { 2500, 7000 },
