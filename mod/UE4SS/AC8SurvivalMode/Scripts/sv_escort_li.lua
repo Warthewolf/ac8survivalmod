@@ -299,6 +299,10 @@ local function beam(r, yz)
         local len = num(zc().li_range_m, 1240) * 100              -- (AC8's own units: cm)
         pcall(function() c:SetVariableVec3(FName("User.BeamLength"), { X = len, Y = yz, Z = yz }) end)
         pcall(function() c:SetVariableVec3(FName("BeamLength"), { X = len, Y = yz, Z = yz }) end)
+        -- ((2026-11-17) the user: the x1.5 width "weren't affected": AC8's beam doesn't take BeamLength's Y / Z as its
+        -- thickness) the beam's component itself scaled across (Y / Z x li_beam_w), its length (X) as it is
+        local w = math.max(0.01, num(zc().li_beam_w, 1))
+        pcall(function() c:SetRelativeScale3D({ X = 1, Y = w, Z = w }) end)
         return
     end
     pcall(function() r.li.MainLaser:SetVectorParameter(FName("BeamLength"), { X = beamX(), Y = yz, Z = yz }) end)

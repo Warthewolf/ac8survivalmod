@@ -200,10 +200,12 @@ local function setting(set, k, v)
         local l = {}
         for w in v:lower():gmatch("[%a]+") do
             if w ~= "none" then
-                if not ROUTES[w] then return false, "hud routes are distortion, widgets, cheat, showhud (or none): not " .. w end
+                if not ROUTES[w] then return false, "hud routes are widgets, cheatnew, cheat, showhud, distortion (or none): not " .. w end
                 l[#l + 1] = w
             end
         end
+        -- ((0.74.124) a file saved before 0.74.105 has the old default order: the new one (cheatnew, widgets first)
+        if table.concat(l, " ") == "distortion widgets cheat showhud" then l = { table.unpack(cfg.hud) } end
         set.hud = l
     else
         return false, "no setting " .. k
@@ -736,6 +738,9 @@ end
 local function ghudHide(holder, o)
     o = o or {}
     GH.holders[holder] = true
+    -- ((0.74.124) the user's 0.74.123 run: the fleet's surfacing hid the HUD and the cine tick put it back the same second,
+    -- "the run's over": S.run was set only by the cinematic itself. A hold belongs to the run it's made in)
+    S.run = D
     local set = S.set or defaultSet()
     if set.boxes ~= "keep" and not GH.her then herOff(o.her) end
     if set.boxes == "hide" and not GH.boxes then boxesOff() end

@@ -68,14 +68,44 @@ local function idOf(r)
     end
     return tostring(r)
 end
-local function thPost(name)                                -- (a bank event by name on your camera)
+-- ((2026-11-17) the user: "is it possible to spawn the thunder sound at the lightning's point? it sounds way to close when
+-- its attached to the aircraft") a strike's thunder on a marker of ours (a TargetPoint, a pool of 4) toward the strike, at
+-- its distance but no further than thunder.at_max_m (AC8's thunder is 3D: out of its reach a far strike would be silent)
+local MARK = { pool = {}, i = 0 }
+local function markAt(at)
+    local L
+    pcall(function() local v = survivalPC.PlayerCameraManager:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+    if not (L and type(at) == "table") then return nil end
+    local dx, dy, dz = at.X - L.X, at.Y - L.Y, (at.Z or L.Z) - L.Z
+    local d = math.sqrt(dx * dx + dy * dy + dz * dz)
+    if d < 1 then return nil end
+    local k = math.min(d, n((stc().thunder or {}).at_max_m, 2500) * 100) / d
+    local spot = { X = L.X + dx * k, Y = L.Y + dy * k, Z = L.Z + dz * k }
+    MARK.i = MARK.i % 4 + 1
+    local e = MARK.pool[MARK.i]
+    if not (e and e.a ~= nil and liveAddr(e.o) == e.a and nameOf(e.o) == e.name) then
+        local gs, cls = StaticFindObject("/Script/Engine.Default__GameplayStatics"), StaticFindObject("/Script/Engine.TargetPoint")
+        if not (valid(gs) and valid(cls) and liveObj(survivalPC)) then return nil end
+        local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = spot, Scale3D = { X = 1, Y = 1, Z = 1 } }
+        local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(survivalPC, cls, t, 1, nil, 1) end)
+        if not (okB and x and valid(x)) then return nil end
+        pcall(function() gs:FinishSpawningActor(x, t, 1) end)
+        e = { o = x, a = liveAddr(x), name = nameOf(x) }
+        MARK.pool[MARK.i] = e
+    end
+    pcall(function() e.o:K2_SetActorLocation(spot, false, {}, true) end)
+    return e.o, k * d
+end
+local function thPost(name, at)                            -- (a bank event by name at the strike's marker, else your camera)
     local lib = StaticFindObject("/Script/Live.Default__LiveSoundBlueprintLibrary")
-    local cam
-    pcall(function() cam = survivalPC.PlayerCameraManager end)
-    if not (valid(lib) and cam and valid(cam)) then return "NOT posted (no sound library or camera)" end
-    local ok, r = pcall(function() return lib:PostEventAtActorByName(FName(name), cam) end)
+    local where, how, m = nil, "on your camera", nil
+    if at then where, m = markAt(at) end
+    if where then how = string.format("%.1f km toward the strike", (m or 0) / 100000) end
+    if not where then pcall(function() where = survivalPC.PlayerCameraManager end) end
+    if not (valid(lib) and where and valid(where)) then return "NOT posted (no sound library or camera)" end
+    local ok, r = pcall(function() return lib:PostEventAtActorByName(FName(name), where) end)
     if not ok then return "NOT posted (" .. tostring(r):sub(1, 100) .. ")" end
-    return "posted on your camera (playing id " .. tostring(idOf(r)) .. ")"
+    return "posted " .. how .. " (playing id " .. tostring(idOf(r)) .. ")"
 end
 local function thLoad(c)
     local k = 0
@@ -102,11 +132,11 @@ local function thQueue(at, now, sure)                     -- (sure: always, a cu
     if type(list) ~= "table" or #list == 0 then return "" end
     local name = thName(list[math.random(#list)])
     local d = math.min(n(c.max_s, 6), km * n(c.s_per_km, 2.9))
-    TH.q[#TH.q + 1] = { at = now + d, name = name }
+    TH.q[#TH.q + 1] = { at = now + d, name = name, pos = { X = at.X, Y = at.Y, Z = at.Z } }
     return string.format("; thunder %s in %.1f s (%.1f km)", name, d, km)
 end
-local function thPlay(name)                                -- (two signatures tried, the first that works kept)
-    if thBank(name) and not TH.ev[name] then return thPost(name) end
+local function thPlay(name, pos)                           -- (two signatures tried, the first that works kept)
+    if thBank(name) and not TH.ev[name] then return thPost(name, pos) end
     local ev, ak = name and TH.ev[name], StaticFindObject("/Script/AkAudio.Default__AkGameplayStatics")
     if not ev then return "NOT played (" .. tostring(name) .. " not loaded)" end
     local L
@@ -126,7 +156,7 @@ end
 local function thTick(now)
     for i = #TH.q, 1, -1 do
         if now >= TH.q[i].at then
-            local r = thPlay(TH.q[i].name)
+            local r = thPlay(TH.q[i].name, TH.q[i].pos)
             TH.n = (TH.n or 0) + 1
             if TH.n <= 3 or not (r == "played" or tostring(r):find("^posted")) then log(string.format("fleet storm: thunder %d: %s %s", TH.n, TH.q[i].name, tostring(r))) end
             table.remove(TH.q, i)
@@ -506,7 +536,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet storm", fn = function(now)
     if SW.on and not SW.tr then lightTick(now) end
 end }
 if type(LEVEL_DROPS) == "table" then                       -- (the level's: its Cloudly actor and lights went with it)
-    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving, TH.q, TH.got, TH.ev, CELLS = nil, nil, {}, {}, {}, {}; GLOW.pool, GLOW.i, GLOW.flash, GLOW.fe = {}, 0, nil, nil; SL = { a = nil } end
+    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving, TH.q, TH.got, TH.ev, CELLS = nil, nil, {}, {}, {}, {}; GLOW.pool, GLOW.i, GLOW.flash, GLOW.fe = {}, 0, nil, nil; SL = { a = nil }; MARK = { pool = {}, i = 0 } end
 end
 end
 -- TEST ONLY END

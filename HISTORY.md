@@ -3602,3 +3602,17 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - 0.74.123 INSTALLED 2026-11-17 for the user ("install 0.74.122", "im home, i want to test it now"), over 0.74.103
   (backup: build/backup/install_before_0.74.123); 112 files verified; her config, subtitles (the same as the repo's) and the
   launcher's toggle kept.
+
+## 0.74.124-0.74.125 (2026-11-17; staged, not installed): the user's 0.74.123 flight fixed (feature/cloud-flash)
+- "the lightning bolts didn't appear at all": the bolts on 0.74.123's cooked copy MI_SV_StormBolt drew nothing (a renamed
+  instance; its sprites on the cloud flash had drawn). The stock material again, made brighter on each bolt by a dynamic
+  instance (bolts.mid: Emissive_Intensity 15000, FarFade_Start 3000000, FarFade_Distance 1000000).
+- "the laser beams weren't affected" (li_beam_w 1.5): AC8's beam (NS_UAVTLS_Muzzleflash01) doesn't take User.BeamLength's
+  Y / Z as its thickness; the beam's component scaled across (SetRelativeScale3D 1, w, w).
+- "spawn the thunder sound at the lightning's point? it sounds way to close": each clap on a TargetPoint toward its strike,
+  at its distance up to thunder.at_max_m 2500 (AC8's thunder is 3D); the distant rumble bed stays on the camera.
+- "the HUD is still on": the surfacing's hold was dropped the same second by the cine tick ("the run's over": S.run was
+  set by the cinematic alone): ghudHide sets it. The user's config\rise_camera.txt, saved before 0.74.105, listed the old
+  route order (no cheatnew): that exact old default is read as the new one.
+- 0.74.124's build stopped on the size check (sv_anomalies_dev.lua) and package_dev.sh staged the old build again:
+  package_dev.sh now refuses unless build/install's VERSION is the source's.

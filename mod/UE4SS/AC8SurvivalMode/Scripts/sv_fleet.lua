@@ -222,7 +222,9 @@ CFG.specials.fleet = {
                                          { 1278704, 1440965, 727172, 0.5 }, { 1442013, 1743569, 727172, 0.5 }, { 4357787, 2892324, 727172, 1 }, { 2618538, -950632, 636631, 1 },
                                          { 121258, -1369681, 636631, 0.75 }, { -613885, -1941399, 636631, 0.95 }, { -1887114, -3717666, 636631, 1 }, { -3416988, -3257279, 764355, 1 },
                                          { -3050114, -3086835, 764355, 1 }, { -2865498, -224223, 764355, 1 }, { -2275497, -433174, 764355, 1 } } },
-                      thunder = { enabled = true, chance = 0.7, near_km = 6, s_per_km = 2.9, max_s = 6,
+                      -- (at_max_m: (2026-11-17) the thunder posted toward its strike, no further than this: AC8's
+                      -- thunder is 3D, a far one would be out of earshot)
+                      thunder = { enabled = true, chance = 0.7, near_km = 6, s_per_km = 2.9, max_s = 6, at_max_m = 2500,
                                   near = { "AKE_Ms12_ENV_OBJ_Thunder_Play", "AKE_Environment_Thunder_Play" },
                                   far = { "AKE_GEN_ENV_AMB_ThunderCloud_Inside_Lightning_Play", "AKE_Environment_Thunder_Play" } },
                       -- ((2026-11-17) the bolts you see: THUNDER.bolt's (sv_anomalies_dev.lua), AC8's bolt meshes in the
@@ -243,8 +245,10 @@ CFG.specials.fleet = {
                                     bolts = { enabled = true, pool = 10, height_m = { 1800, 4500 }, length_m = { 2500, 7000 },
                                               alt_m = { 2500, 5500 },
                                               material = "/Game/VFX/Environment/Common/Lightning/CloudLightning/MI_NearCloudLightning001.MI_NearCloudLightning001",
-                                              -- ((2026-11-17) "increase the brightness of the lightning bolt": burst.py's copy, x3, no fade)
-                                              material_bright = "/Game/Mods/SurvivalMode/StormFx/MI_SV_StormBolt.MI_SV_StormBolt",
+                                              -- ((2026-11-17) "increase the brightness of the lightning bolt": a dynamic instance of
+                                              -- the material on each bolt with these values (0.74.123's cooked copy, MI_SV_StormBolt,
+                                              -- drew no bolt at all): x3 the light, its far fade 0.5-3.5 km pushed out to 30 km)
+                                              mid = { Emissive_Intensity = 15000, FarFade_Start = 3000000, FarFade_Distance = 1000000 },
                                               meshes = { "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder001_IE03.SM_Thunder001_IE03",
                                                          "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder006_IE04.SM_Thunder006_IE04",
                                                          "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder002_IE03.SM_Thunder002_IE03",

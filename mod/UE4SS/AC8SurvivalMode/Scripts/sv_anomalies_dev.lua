@@ -1258,8 +1258,8 @@ local function boltNew(c, mesh)                             -- (one pooled actor
     pcall(function() gs:FinishSpawningActor(a, t, 1) end)
     pcall(function() comp:SetCollisionEnabled(0) end)
     pcall(function() comp:SetCastShadow(false) end)
-    BOLT.mat = (BOLT.mat and liveObj(BOLT.mat)) and BOLT.mat or (type(c.material_bright) == "string" and loadObject(c.material_bright)) or loadObject(c.material)   -- (material_bright: sv_fleet.lua's note)
-    if BOLT.mat then pcall(function() comp:SetMaterial(0, BOLT.mat) end) end
+    BOLT.mat = (BOLT.mat and liveObj(BOLT.mat)) and BOLT.mat or loadObject(c.material); if BOLT.mat then pcall(function() comp:SetMaterial(0, BOLT.mat) end) end
+    if BOLT.mat and type(c.mid) == "table" then pcall(function() local m = comp:CreateDynamicMaterialInstance(0, BOLT.mat, FName("")); for k, v in pairs(c.mid) do m:SetScalarParameterValue(FName(k), v) end end) end   -- (c.mid: sv_fleet.lua's note)
     pcall(function() a:SetActorHiddenInGame(true) end)
     return { a = a, c = comp }
 end
