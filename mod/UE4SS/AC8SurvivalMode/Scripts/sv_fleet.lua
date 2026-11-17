@@ -337,8 +337,10 @@ CFG.specials.fleet = {
                                     "AUDREY|Fourteen escorts and the carrier... GEOFON. But no flagship." },
                         tanager = { "AUDREY|The Tanager is missing? Where could it be?",
                                     "VALKA|I feel its presence close. The captain's soul is hurting." },
-                        stage1 = { "AUDREY|Stars, GEOFON's burning! Keep pouring it on, pilots!" },
-                        stage2 = { "VALKA|Something's climbing up under the carrier, Audrey. It's coming through the void.",
+                        stage1 = { "AUDREY|Stars, GEOFON's burning! Keep pouring it on, pilots!",   -- ((the user: Valka alludes to her under GEOFON)
+                                   "VALKA|Stop looking for the Tanager on the water, Audrey. Look under it.",
+                                   "AUDREY|Under what, Val? ...Val?" },
+                        stage2 = { "VALKA|The carrier's hurting her, Audrey. She's pressed right up underneath it, trying to get out.",
                                    "AUDREY|Under it? ...Pilots, watch the water around GEOFON!" },
                         half = { "CTRL|Half of the fleet's on the bottom. Keep at them!" },
                         geofon = { "CTRL|GEOFON is going down! The carrier's finished!" },
