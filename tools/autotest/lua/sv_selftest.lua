@@ -3991,12 +3991,12 @@ SUITES.capture = function()
     A.wait(2)
     A.do_(function()
         local pl = ST.plane()
-        local inv, nl, nf = nil, nil, nil
+        local inv, fa, mp = nil, nil, nil
         pcall(function() inv = pl.bIsInvincible end)
-        pcall(function() nl = pl.bIsNotLockonTarget end)
-        pcall(function() nf = pl.bIsNotFCSTargets end)
-        ST.check(inv == true and nl == true and nf == true, "while RAVEN flies you: invincible, no enemy targets you",
-            string.format("invincible %s, not a lock-on target %s, not an FCS target %s", tostring(inv), tostring(nl), tostring(nf)))
+        pcall(function() fa = pl.Faction end)
+        pcall(function() mp = pl.MaxPursuitAttackers end)
+        ST.check(inv == true and fa == 0 and mp == 0, "while RAVEN flies you: invincible, no enemy targets you",
+            string.format("invincible %s, faction %s, pursuers %s", tostring(inv), tostring(fa), tostring(mp)))
         ST.shot("capture_taken")
     end)
     for i = 1, 6 do A.wait(15); A.do_(function() ST.shot("capture_fly_" .. i); ST.info("capture: state " .. tostring(IFCAP.state())) end) end
@@ -4008,12 +4008,12 @@ SUITES.capture = function()
     A.wait(3)
     A.do_(function()
         local pl = ST.plane()
-        local inv, nl, nf = nil, nil, nil
+        local inv, fa, mp = nil, nil, nil
         pcall(function() inv = pl.bIsInvincible end)
-        pcall(function() nl = pl.bIsNotLockonTarget end)
-        pcall(function() nf = pl.bIsNotFCSTargets end)
-        ST.check(inv == false and nl == false and nf == false, "after it: mortal and targetable again",
-            string.format("invincible %s, not a lock-on target %s, not an FCS target %s", tostring(inv), tostring(nl), tostring(nf)))
+        pcall(function() fa = pl.Faction end)
+        pcall(function() mp = pl.MaxPursuitAttackers end)
+        ST.check(inv == false and fa == 1 and mp ~= 0, "after it: mortal and targetable again",
+            string.format("invincible %s, faction %s, pursuers %s", tostring(inv), tostring(fa), tostring(mp)))
         ST.apOff = nil
         ST.shot("capture_after")
         ST.check(ST.plane() ~= nil and D ~= nil, "still in the run after it")
