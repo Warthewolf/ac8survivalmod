@@ -1478,6 +1478,77 @@ function TANI.livePartsUp()
     end
     return up, of
 end
+-- ((0.74.137) WP11 M5, her death as a boss's: "Keep working until I say stop") TANI.liveSink(why, c): explosions and fires
+-- along her (c.booms of c.fx every c.boom_every_s), her HullMesh (every part rides it) tipped bow-down c.bow_deg and rolled
+-- c.roll_deg while it goes c.sink_m down over c.sink_s (a transform with its turn a quaternion, as GEOFON's V: 0.74.135),
+-- then her hull finished off (TANI.liveDown) and hidden. -> true, or false and why. Log: `tanicorn: sink ...`
+local function relBase(c)
+    local b = { X = 0, Y = 0, Z = 0, P = 0, Yw = 0, R = 0 }
+    pcall(function() local v = c.RelativeLocation; b.X, b.Y, b.Z = tonumber(v.X) or 0, tonumber(v.Y) or 0, tonumber(v.Z) or 0 end)
+    pcall(function() local r = c.RelativeRotation; b.P, b.Yw, b.R = tonumber(r.Pitch) or 0, tonumber(r.Yaw) or 0, tonumber(r.Roll) or 0 end)
+    return b
+end
+function TANI.liveSink(why, c)
+    local W = LV
+    if not (W and W.o and same(W)) then return false, "no live hull of ours" end
+    if W.sink then return false, "already sinking" end
+    local mesh = hullMesh(W)
+    if not mesh then return false, "no HullMesh" end
+    W.sink = { t0 = os.clock(), why = why, c = c or {}, mesh = mesh, base = relBase(mesh), booms = 0, nextBoom = 0, ok = 0, of = 0 }
+    log(string.format("tanicorn: sink (%s): her HullMesh from (%.0f, %.0f, %.0f) pitch %.1f: %g deg bow-down, %g m under over %g s, %d explosions",
+        tostring(why), W.sink.base.X, W.sink.base.Y, W.sink.base.Z, W.sink.base.P, tonumber((c or {}).bow_deg) or 12,
+        tonumber((c or {}).sink_m) or 160, tonumber((c or {}).sink_s) or 40, tonumber((c or {}).booms) or 25))
+    return true
+end
+local function sinkTick(W, now)
+    local S, c = W.sink, W.sink.c
+    if S.done then return end
+    local sink_s = tonumber(c.sink_s) or 40
+    local f = math.min(1, (now - S.t0) / math.max(1, sink_s))
+    local e = f * f * (3 - 2 * f)                          -- (smooth: slow to start, slow at the end)
+    local b = S.base
+    local rot = { Pitch = b.P - (tonumber(c.bow_deg) or 12) * e, Yaw = b.Yw, Roll = b.R + (tonumber(c.roll_deg) or 6) * e }
+    local loc = { X = b.X, Y = b.Y, Z = b.Z - (tonumber(c.sink_m) or 160) * 100 * (f ^ 1.6) }
+    if liveObj(S.mesh) then
+        local ok = false
+        if CINE and CINE.quat then
+            ok = pcall(function() S.mesh:K2_SetRelativeTransform({ Rotation = CINE.quat(rot), Translation = loc, Scale3D = { X = 1, Y = 1, Z = 1 } }, false, {}, true) end)
+        end
+        if not ok then
+            pcall(function() S.mesh:K2_SetRelativeLocation(loc, false, {}, true) end)
+            pcall(function() S.mesh:K2_SetRelativeRotation(rot, false, {}, true) end)
+        end
+    end
+    if S.booms < (tonumber(c.booms) or 25) and now >= S.nextBoom and f < 0.85 then   -- (explosions and fires along her)
+        S.nextBoom = now + (tonumber(c.boom_every_s) or 0.6) * (0.5 + math.random())
+        S.booms = S.booms + 1
+        local p, fw
+        pcall(function() local v = W.o:K2_GetActorLocation(); p = { X = v.X, Y = v.Y, Z = v.Z } end)
+        pcall(function() local v = W.o:GetActorForwardVector(); fw = { X = v.X, Y = v.Y } end)
+        local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+        local list = c.fx or {}
+        local fx = list[(S.booms - 1) % math.max(1, #list) + 1]
+        if p and fw and fx and valid(lib) and liveObj(survivalPC) then
+            local along = (math.random() * 2 - 1) * 300 * 100
+            local at = { X = p.X + fw.X * along + fw.Y * (math.random() * 2 - 1) * 3000, Y = p.Y + fw.Y * along - fw.X * (math.random() * 2 - 1) * 3000,
+                         Z = 2000 - (tonumber(c.sink_m) or 160) * 100 * (f ^ 1.6) * 0.5 }
+            local sys = loadObject(fx[1] .. "." .. (fx[1]:match("[^/]+$") or ""))
+            local sc = tonumber(fx[2]) or 1
+            S.of = S.of + 1
+            if sys and pcall(function() lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = sc, Y = sc, Z = sc }, true, true, 0, false) end) then
+                S.ok = S.ok + 1
+            end
+        end
+    end
+    if f >= 1 and not S.done then
+        S.done = true
+        local okD, how = TANI.liveDown(S.why .. ": under")
+        pcall(function() S.mesh:SetVisibility(false, true) end)
+        log(string.format("tanicorn: sink over at +%.0f s: %d of %d explosions came up; her hull %s; hidden", now - S.t0, S.ok, S.of,
+            okD and ("down (" .. tostring(how) .. ")") or "NOT finished off"))
+    end
+end
+function TANI.liveSinking() return LV ~= nil and LV.sink ~= nil and not LV.sink.done end
 function TANI.liveDown(why)
     local W = LV
     if not (W and W.o and same(W)) then return false, "no live hull of ours" end
@@ -1602,6 +1673,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn live hull", fn = function(now)
         end
     end
     if not W.armourDone and same(W) then liveArmour(W, now) end   -- ((2026-11-12) TANI.armour, from the first tick)
+    if W.sink and same(W) then pcall(sinkTick, W, now) end   -- ((0.74.137) her death: TANI.liveSink)
     if not same(W) then
         keep(W)                                          -- ((2026-11-12) its parts kept for Ctrl+L's guard)
         local up = keptAlive()

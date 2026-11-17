@@ -3732,3 +3732,15 @@ game. The work was split by file between agents; the builds ran in sequence in t
   CONTROL's line once a round; none while it's down, paused, in the STORE or the surfacing. Run 20261117_183853 (shell 10/10,
   the gun line set to 60 km for the test): every gun ship shelling, 250 -> 211 in ~40 s; the fireballs on the lit runway.
 - 0.74.136 (staged) had the strikes only: its autotest was stopped for low memory, cleaned up by hand, retried as 0.74.137.
+
+## 0.74.138 (2026-11-17): the TANACORN's death, WP11 M5 (feature/geofon-rise); INSTALLED
+- sv_tanicorn.lua TANI.liveSink (CFG.specials.fleet.round.phase2.sink; the round calls it when her last gun is down): 28
+  explosions, fires, smoke and pillars along her (Mission 25's explosions, AC8's vessel fires), her HullMesh (every part rides
+  it) tipped 12 deg bow-down and rolled 6 while it goes 160 m under over 40 s (a quaternion transform, as GEOFON's V), then
+  her hull finished off (TANI.liveDown) and hidden. Its round's call and settings went in with 0.74.137's commit.
+- Autotest phase2 (run 20261117_184309): 27/27: GEOFON's V reared, her guns down, her reward, her sinking from start to
+  "sink over at +40 s: 28 of 28 explosions came up; her hull down".
+- INSTALLED 2026-11-17 for the user ("install it when it's done"), over 0.74.130 (backup: build/backup/install_before_0.74.138);
+  112 files verified; her config, subtitles (the same as the repo's) and the launcher's toggle kept. The user's install gets
+  everything since 0.74.130: the restart fix, the lighter cloud burst, round 30's phase 2 (GEOFON's stages and V, the
+  TANACORN's rise with its own camera work, her guns, her death), the surfacing's water and strikes, the shelling.
