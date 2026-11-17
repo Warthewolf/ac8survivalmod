@@ -275,6 +275,7 @@ function specialFor(round) return nil end                 -- sv_spawn.lua's as t
 dofile(MOD .. "/Scripts/sv_fleet_round.lua")
 dofile(MOD .. "/Scripts/sv_fleet_lasers.lua")             -- ((2026-11-17) the Aegis lasers, the piece after)
 dofile(MOD .. "/Scripts/sv_fleet_surface.lua")            -- ((2026-11-17) the surfacing, the piece after)
+dofile(MOD .. "/Scripts/sv_fleet_capture.lua")            -- ((0.74.164) GEOFON's capture, the piece after)
 local C = CFG.specials.fleet and CFG.specials.fleet.geofon
 local function same(a, b)
     if type(a) ~= type(b) then return false end
@@ -287,9 +288,9 @@ check(C ~= nil and C.unit == FORD and #C.stages == 2 and C.look.bow.pitch == 25 
     "CFG.specials.fleet.geofon: the Ford, two stages, the V's angles")
 check(CFG_DEFAULTS.specials.fleet ~= CFG.specials.fleet and same(CFG_DEFAULTS.specials.fleet, CFG.specials.fleet),
     "the same in CFG_DEFAULTS (a copy): shipped, no edit")
-check(type(keys.B) == "function" and type(keys.G) == "function" and type(keys.N) == "function" and #TEST_TICKS == 6
+check(type(keys.B) == "function" and type(keys.G) == "function" and type(keys.N) == "function" and #TEST_TICKS == 7
     and TEST_TICKS[2].name == "fleet ships" and TEST_TICKS[3].name == "fleet storm" and TEST_TICKS[4].name == "fleet round"
-    and TEST_TICKS[5].name == "fleet co-op" and TEST_TICKS[6].name == "fleet surfacing" and type(LEVEL_DROPS["fleet round"]) == "function"
+    and TEST_TICKS[5].name == "fleet co-op" and TEST_TICKS[6].name == "fleet surfacing" and TEST_TICKS[7].name == "fleet capture" and type(LEVEL_DROPS["fleet round"]) == "function"
     and type(LEVEL_DROPS.fleet) == "function" and type(LEVEL_DROPS["fleet ships"]) == "function"
     and type(LEVEL_DROPS["fleet storm"]) == "function" and type(LEVEL_DROPS["fleet surfacing"]) == "function",
     "Ctrl+B, Ctrl+G, Ctrl+N, their ticks (the storm's and the surfacing's, 2026-11-16; co-op's, 0.74.160) and level drops")
@@ -949,12 +950,12 @@ if grep -n '^IFLEET = \|^IFSKY = \|^IFLASER = \|^GEO = \|^TANI = \|^CINE = \|tes
     echo "  FAIL the dev install's keys or globals left in a TESTER copy (above)"; exit 1
 fi
 echo "  ok   no IFLEET, GEO, TANI or CINE and none of their keys (Ctrl+N, B, T, D ...) in any part of it"
-for p in sv_fleet sv_fleet_storm sv_fleet_round sv_fleet_lasers sv_fleet_surface sv_tanicorn sv_tanicorn_rise sv_tanicorn_hits sv_tanicorn_rail sv_cine; do
+for p in sv_fleet sv_fleet_storm sv_fleet_round sv_fleet_lasers sv_fleet_surface sv_fleet_capture sv_tanicorn sv_tanicorn_rise sv_tanicorn_hits sv_tanicorn_rail sv_cine; do
     if grep -v '^--' "$W/tester/Scripts/$p.lua" | grep -q '[^[:space:]]'; then echo "  FAIL $p.lua: code left"; exit 1; fi
     # ((2026-11-12) a split part's first line is tools/lua_split_part.py's family note: its own name within the first three)
     if ! head -3 "$W/tester/Scripts/$p.lua" | grep -q "^-- $p.lua"; then echo "  FAIL $p.lua: its header gone"; exit 1; fi
 done
-echo "  ok   sv_fleet.lua, sv_fleet_storm.lua, sv_fleet_round.lua, sv_fleet_lasers.lua, sv_fleet_surface.lua, sv_tanicorn.lua, sv_tanicorn_rise.lua, sv_tanicorn_hits.lua, sv_tanicorn_rail.lua and sv_cine.lua only their headers"
+echo "  ok   sv_fleet.lua, sv_fleet_storm.lua, sv_fleet_round.lua, sv_fleet_lasers.lua, sv_fleet_surface.lua, sv_fleet_capture.lua, sv_tanicorn.lua, sv_tanicorn_rise.lua, sv_tanicorn_hits.lua, sv_tanicorn_rail.lua and sv_cine.lua only their headers"
 n=$(grep -c 'TEST ONLY BEGIN' "$W"/tester/Scripts/*.lua | awk -F: '{s+=$2} END {print s}')
 if [ "$n" -lt 10 ] || ! grep -q 'testKey("F12"' "$W/tester/Scripts/sv_festival.lua"; then
     echo "  FAIL a tester's own test keys gone too ($n test blocks left)"; exit 1

@@ -608,6 +608,17 @@ end
 
 -- Back in the fight (revived, the run started over, a test): the loiter off, the plane as it was, the view yours,
 -- repaired (the stock repair and the health written), safe_s invincible, where the loiter left you or "native"
+-- ((0.74.164) DOWN on purpose: GEOFON's capture (sv_fleet_capture.lua) ends with its captive DOWN on the deck, revivable
+-- as any. Only in a co-op room, not DOWN already. -> true, or false and why
+function DOWN.capture(why)
+    if St.down then return false, "down already" end
+    local pawn = pawnOf()
+    if not (valid(pawn) and rc().enabled == true and inRoom()) then return false, "not in a co-op room (or DOWN off)" end
+    local okH, h = pcall(function() return pawn.HealthInternal end)
+    log("down: " .. tostring(why) .. ": DOWN now")
+    goDown(pawn, (okH and type(h) == "number") and h or 1)
+    return true
+end
 function DOWN.back(how, respawn)
     if not St.down then return end
     local pawn = pawnOf()

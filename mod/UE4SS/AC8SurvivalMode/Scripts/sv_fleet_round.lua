@@ -986,6 +986,10 @@ function IFCOOP.onHost(f)
     if not D then return false, "not in a run here" end
     local what = f[2]
     if what == "crew" then return CREW.here(f[3], f[4]) end
+    if what == "cap" or what == "capgo" or what == "capoff" then   -- ((0.74.164) GEOFON's capture: sv_fleet_capture.lua)
+        if not (IFCAP and IFCAP.onHost) then return false, "no capture in this build" end
+        return IFCAP.onHost(f)
+    end
     if what == "surf" then                                -- (the fleet's surfacing cutscene, the host's seed)
         local seed = tonumber(f[3])
         if not (finiteN(seed, 2147483648) and seed >= 0) then return false, "bad seed" end

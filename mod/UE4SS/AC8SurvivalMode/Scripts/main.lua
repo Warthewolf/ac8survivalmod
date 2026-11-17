@@ -43,6 +43,7 @@ local MODULES = {
     "sv_fleet_round",              -- (sv_fleet.lua's next piece: round 30, the fleet's round, test builds only)
     "sv_fleet_lasers",             -- (sv_fleet.lua's next piece: the Aegis lasers, test builds only)
     "sv_fleet_surface",            -- (sv_fleet.lua's next piece: the fleet's surfacing cutscene, test builds only)
+    "sv_fleet_capture", -- (sv_fleet.lua's next piece: GEOFON's capture, the dev install's: docs/design/INVINCIBLE_FLEET.md WP14)
     "sv_cine",                     -- THE TANACORN's rise cinematic and its director, test builds only (docs/re/CINEMATIC.md)
     "sv_flights",
     "sv_shop",
