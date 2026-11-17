@@ -15,8 +15,9 @@ IFROUND = {}
 IFCOOP = {}                                               -- ((0.74.160) round 30 in co-op: the host's "if" messages, here
 if SPC then                                               -- ((0.74.160) a joiner's copies of round 30 taken off at its end
     SPC.UNITS_OF = SPC.UNITS_OF or {}                     -- (SPC.clientClean): every ship's unit and her live hull's
-    SPC.UNITS_OF.fleet = function()
-        local out = {}
+    SPC.UNITS_OF.fleet = function()                       -- (a joiner's only: the host's own end is the fleet's, her sink's:
+        local out = {}                                    -- 0.74.160's list on the host recycled her 7 s into her sinking)
+        if not (COOP and COOP.client and COOP.client()) then return out end
         for _, c in ipairs(((CFG.specials or {}).fleet or {}).ships or {}) do if c.key then out[#out + 1] = "SV_Unit_IF" .. c.key end end
         if TANI and TANI.live and TANI.live.unit then out[#out + 1] = TANI.live.unit end
         return out
