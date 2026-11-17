@@ -51,6 +51,16 @@ IF_KINDS = {
     'boat':  dict(src=('tr6', SP_BOAT_SOURCE[1]), hull=None, model=None, shape=None, z=0.0, parts=SP_BOAT_PARTS,
                   label='missile boat'),
 }
+# ((2026-11-17) the user: "I want the Aegis Ships in the Invincible Fleet Round to Carry 2 Lasers Interceptors one on the
+# Aft and the Bow, targettable"; the mount: "TANACORN's LASER turret") With TANI=1 (TANI_WD) only: each Aegis on
+# BP_SV_IF_Aegis (tools/tanicorn/spec.py: a child of the stock BP_VE002_aegs_CP with two LiveChildActorComponents of
+# THE TANACORN's LASER mount, IF_AEGIS_LASERS), its model row's blueprint; two more parts <obj>_LASER_BOW / _LASER_AFT on the
+# LASER mount's rows (TANI_MOUNTS' LASER: box, health, its aim-only fire control), each handed to AC7's LaserInterceptor by
+# Scripts/sv_fleet_lasers.lua. Without TANI=1 the Aegis is the stock one (nothing of the container imported).
+IF_AEGIS_BP = '/Game/Mods/SurvivalMode/Tanicorn/BP_SV_IF_Aegis'
+IF_AEGIS_BP_CLASS = 'BP_SV_IF_Aegis_C'
+IF_AEGIS_LASERS = ('LASER_BOW', 'LASER_AFT')
+IF_AEGIS_LASER = [m for m in TANI_MOUNTS if m['part'] == 'LASER'][0]
 # Mission 22's ships' parts by their component (the world data's ComponentFieldName), renamed by place (their names end in
 # digits, _01 / _02: hard rule 17), and the GrandChildrens' (the Kirov's gun mount's Artillery) after their parent's
 IF_M22_PLACES = {'BP_VE007_udal_ak130_01': 'Gun', 'BP_VE007_udal_ak130_02': 'Art',
@@ -211,6 +221,8 @@ def if_fleet():
                  model=(IF_MODEL + key) if named else None, name_key=(IF_NAME_KEY + key) if named else None,
                  up=f'SV_IFUp{key}', go=f'RE_SV_IFGo{key}')
         s['parts'] = [f"{s['obj']}_{p}" for p in K['parts']]
+        if kind == 'aegis' and TANI_WD:                         # ((2026-11-17) its two lasers, TANI=1 only)
+            s['parts'] += [f"{s['obj']}_{c}" for c in IF_AEGIS_LASERS]
         out.append(s)
     assert out[0]['key'] == 'Geofon' and len({s['key'] for s in out}) == len(out)
     for s in out:                                               # the coast (WP7: "never nearer the coast")

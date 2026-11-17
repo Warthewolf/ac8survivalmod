@@ -180,9 +180,13 @@ local function planes(fitted)
     end
     -- ((2026-11-11) other carriers: ZLI.extra(), the TANACORN's LASER mounts (sv_tanicorn.lua's test block, the user: "the
     -- LASERS have to be Laser Interceptors"): { o, a, unit, body, socket, foe }, each checked by ZLI.extra itself against
-    -- the name it was captured with (hard rule 59); foe "players": they shoot down the players' missiles, not the enemies')
-    if type(ZLI.extra) == "function" then
-        local okX, list = pcall(ZLI.extra)
+    -- the name it was captured with (hard rule 59); foe "players": they shoot down the players' missiles, not the enemies');
+    -- ((2026-11-17) and ZLI.extras, a list of them by name (another part's carriers beside the first); one at an address once)
+    local provs = {}
+    if type(ZLI.extra) == "function" then provs[#provs + 1] = ZLI.extra end
+    for _, f in pairs(ZLI.extras or {}) do if type(f) == "function" then provs[#provs + 1] = f end end
+    for _, prov in ipairs(provs) do
+        local okX, list = pcall(prov)
         if okX and type(list) == "table" then
             for _, e in ipairs(list) do
                 why.seen = why.seen + 1

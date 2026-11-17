@@ -284,6 +284,25 @@ def hull_bp(parts_on, rig=None, live=None, name='HULL'):
                     'bIgnoreMeshOptimize': 'True', 'bIgnoreSetAutoSkipUpdateTransform': 'True', **HULL_CDO}}
 
 
+# ((2026-11-17) the user: "I want the Aegis Ships in the Invincible Fleet Round to Carry 2 Lasers Interceptors one on the
+# Aft and the Bow, targettable"; the mount: "TANACORN's LASER turret") BP_SV_IF_Aegis: the fleet's Aegis
+# (tools/survival_events_fleet.py IF_AEGIS_*, TANI=1 builds' model rows) = the stock campaign Aegis BP_VE002_aegs_CP (a stub
+# at its path here, never packed: the game's own loads in its place, its hull, parts and death as they are) with two
+# LiveChildActorComponents of the LASER mount on its root (the hull mesh's frame: VesselMesh sits at the root's origin).
+# Their spots in the hull's frame (cm; the hull -8663 .. +8623 long, its Mk 45 at +5334 / 856 up, its Mk 15 aft at -7327 /
+# 403 up facing aft): the bow ahead of the Mk 45, the stern on the fantail ahead of the Mk 15. Scripts/sv_fleet_lasers.lua
+# can move them (CFG.specials.fleet.lasers) without a rebuild.
+AEGIS_STOCK = '/Game/Blueprints/Vehicle/AI/Vessels/VE002_aegs/CP/BP_VE002_aegs_CP'
+AEGIS_LASERS = (('LASER_BOW', (6900, 0, 900), 0), ('LASER_AFT', (-6400, 0, 410), 180))
+
+
+def aegis_bp():
+    scs = [{'name': n, 'class': 'LiveChildActorComponent', 'parent': '',
+            'props': {'RelativeLocation': f'(X={x},Y={y},Z={z})', 'RelativeRotation': f'(Pitch=0,Yaw={yaw},Roll=0)'},
+            'child_class': f'{obj(f"{DEST}/BP_SV_Tani_LASER")}_C'} for n, (x, y, z), yaw in AEGIS_LASERS]
+    return {'path': f'{DEST}/BP_SV_IF_Aegis', 'parent': f'{obj(AEGIS_STOCK)}_C', 'scs': scs, 'cdo': {}}
+
+
 # milestone 0's mount: the Mk45's fire control, but searching the air (it's to track and fire at the player)
 T5_FCS = {'search': 'AIR_ONLY', 'yaw': (40, -180, 180), 'pitch': (40, 0, 80), 'capture_cm': 600000, 'cone': 180,
           'activation': 2, 'triggering': 4, 'interval': 1, 'resting': 2, 'trigger_count': 1,
@@ -494,6 +513,11 @@ def main():
         for n in kids:                                 # (each child's blueprint built before the hull's, in this spec)
             assert n['child_class'].rsplit('.', 1)[0] in made, (n['name'], n['child_class'])
         spec['blueprints'].append(lb)
+    if any(b['path'].endswith('/BP_SV_Tani_LASER') for b in spec['blueprints']):
+        # ((2026-11-17) the fleet's Aegis with two LASER mounts: its stub first (the stock Aegis, never packed), then it)
+        spec['stubs'].append({'path': AEGIS_STOCK, 'parent': 'LiveAIVessels'})
+        spec['blueprints'].append(aegis_bp())
+        live_said += f'; BP_SV_IF_Aegis: the stock Aegis + {", ".join(n for n, _, _ in AEGIS_LASERS)}'
         live_said = (f'; BP_SV_Tani_HULLLIVE: {len(kids)} live parts ({", ".join(n["name"] for n in kids)}), '
                      f'{len(lb["scs"]) - len(kids) - (2 if rig else 1)} drawn')
     out = os.path.join(BUILD, 'tani.spec.json')

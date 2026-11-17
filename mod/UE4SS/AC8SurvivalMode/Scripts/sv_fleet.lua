@@ -248,6 +248,10 @@ CFG.specials.fleet = {
     -- fully repaired. music: Online Mode's AC04 track from the round's start, again at its length, the music player's
     -- clock held meanwhile. radio: Survival's own lines, drafted for the user to edit here (dev install only: never in
     -- config/subtitles.ini, which every release ships). GEOFON sinks like any ship until WP5 / WP6 (its fall, the rise)
+    -- ((2026-11-17) the user: two LaserInterceptors on each Aegis, bow and aft, targetable; the mount THE TANACORN's LASER)
+    -- sv_fleet_lasers.lua: a TANI=1 build's Aegis mounts (BP_SV_IF_Aegis) put at spots { ahead m, right m, up m, yaw } in the
+    -- hull's frame (none: the build's) and handed to AC7's LaserInterceptor (CFG.allies.carrier.zfa's volley and rest)
+    lasers = { enabled = true, spots = { LASER_BOW = { 69, 0, 9.0, 0 }, LASER_AFT = { -64, 0, 4.1, 180 } } },
     round = { enabled = true, round = 30, fighter_share = 0.25, reward = 50000, turret = 300,
               pay = { ford = 6000, aegis = 1600, krov = 1400, udal = 1000, grig = 1000, gors = 1000, boat = 600 },
               music = { enabled = true, track = "AKE_Bgm_Online_ACE04_Invincible_Fleet_Play", len_s = 265.832 },
@@ -1122,7 +1126,7 @@ end
 -- IFLEET.onLaunch: sv_weaponlog.lua's word on each launch.
 IFLEET = { cur = nil, rowsOk = nil }
 do
-local TURRET = { "mk15", "mk41", "mk45", "artillery", "_sam", "aagun", "ak130", "ak630", "a190", "a192", "3r14", "palma",
+local TURRET = { "tani_laser", "mk15", "mk41", "mk45", "artillery", "_sam", "aagun", "ak130", "ak630", "a190", "a192", "3r14", "palma",
                  "kashtan", "s300" }
 local function fc() return CFG.specials.fleet end
 local function fm() return CFG.specials.fleet.formation end
@@ -1313,6 +1317,7 @@ local function settle(F, sh)
         sh.max and string.format("%.0f", sh.max) or "?", #sh.parts, #sh.parts == 1 and "" or "s",
         #cls > 0 and table.concat(cls, ", ") or "none", #hulls > 1 and string.format(" (%d more objects not turrets: %s first)",
         #hulls - 1, sh.hull.cls) or "", sh.name ~= "" and (sh.name .. " / " .. tostring(fc().classes[sh.kind])) or "its class's (unnamed)"))
+    if IFLEET.onSettle then pcall(IFLEET.onSettle, F, sh) end   -- ((2026-11-17) an Aegis's lasers: sv_fleet_lasers.lua)
 end
 
 local function partsUp(sh)

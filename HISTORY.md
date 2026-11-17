@@ -3486,3 +3486,24 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - Run 89 (0.74.99, fleet30 14/14): AC04's track posted at round 30's start, the song back at the win; but the autotest's
   first break played nothing and named the main menu's track, which came back: 0.74.100 gives back only a song that was
   playing. Run 90 (0.74.100, 14/14): "its song: none", at the win only the clock let go. fleet_test checks the hand-back.
+
+## 0.74.101-0.74.102 (2026-11-17; test builds, staged, not installed): the LaserInterceptor 20 s / 10 s; the fleet's Aegis lasers (feature/fleet-lasers)
+- The user: "increase the LaserInterceptor Alive time for 20 seconds and 10 seconds cooldown" (sv_config.lua li_volley_s
+  20, li_rest_s 10: every carrier's, the ZFA-44s', THE TANACORN's and the fleet's; escort_test checks the shipped values,
+  its timeline still AC7's 6 / 8) and "I want the Aegis Ships in the Invincible Fleet Round to Carry 2 Lasers Interceptors
+  one on the Aft and the Bow, targettable" (the mount: "TANACORN's LASER turret").
+- tools/tanicorn/spec.py: BP_SV_IF_Aegis, a child of the stock campaign Aegis BP_VE002_aegs_CP (a stub on LiveAIVessels at
+  its path, never packed) with two LiveChildActorComponents of BP_SV_Tani_LASER on its root: LASER_BOW (69 m ahead, 9 m up)
+  and LASER_AFT (64 m astern on the fantail, 4.1 m up, facing aft); build.sh counts every `child actor` line (37).
+  TANI=1 builds only (survival_events_fleet.py IF_AEGIS_*): each Aegis's model row on it, its hull row's ChildNPCId /
+  ChildNPCComponentNames + the two, two more child descs (its Mk 15's copy: <obj>_LASER_BOW / _AFT on the LASER mount's rows
+  sv_tani_laser: TGT box, 150 health, its aim-only fire control), so the fleet has 58 parts, each ordered.
+- sv_fleet_lasers.lua (a dev-only piece after sv_fleet_round.lua; dev_only.py, IFLASER): as an Aegis settles its mounts
+  are put at CFG.specials.fleet.lasers spots (no rebuild to move them) and handed to AC7's LaserInterceptor through
+  sv_escort_li.lua's new carrier lists (ZLI.extras, beside ZLI.extra), on the players' missiles; a mount at health 0, gone
+  or its ship sunk drops out. fleet_test: 11 checks (handed over, placed, shot off, sunk, another class, a stock Aegis).
+- Runs 91-92 (aegislasers, Ctrl+N): 15 ships with 58 parts; `fleet lasers: <SHIP>: 2 mounts handed ... a volley 20.0 s, a
+  rest 10.0 s` for all 5; 10 `zfa li: BP_SV_Tani_LASER ... carries AC7's LaserInterceptor`; RAVEN's mounts measured at 69 m
+  ahead / 9 m up and 64 m astern / 4.1 m up; one finished: its laser removed. Run 92 9/9. Their beams at the players'
+  missiles weren't tried (the autotest can't fire them); the pictures missed the mounts (the camera didn't take its spot).
+  Their boxes read TANACORN LASER (THE TANACORN's rows).
