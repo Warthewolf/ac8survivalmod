@@ -439,7 +439,8 @@ local function volleyOn(s, r, clock, why)
                 if x then tint(r, x); r.fxExtra[#r.fxExtra + 1] = x end
             end
         end
-        how = r.fxBeam and "AC8's beam" or "no beam drawn"
+        how = r.fxBeam and ("AC8's beam" .. (#r.fxExtra > 0 and string.format(" + %d copies round it (li_beam_w)", #r.fxExtra) or ""))
+            or "no beam drawn"
         beam(r, 1)
     else
         pcall(function() r.li.EndLaser:SetActive(false, false) end)
