@@ -3789,3 +3789,10 @@ game. The work was split by file between agents; the builds ran in sequence in t
   1.3 s hitch in her rise, the rise over at ~12 s of its clock, the title's beat at 11.4 never fired).
 - Autotests: epic 25/25 on 0.74.146 (RESURFACED); phase2 29/30 on 0.74.146 (the title beat: fixed in 0.74.147).
 - Autotest phase2 on 0.74.147 (run 20261117_194634): 30/30; the lines in order: the warning, KASKA's surfacing, the sighting, the Tanager's (+10 s), GEOFON's stages, Valka at the break, the title and KASKA at 11.5 / 12.3 s, her half, her death, the dawn.
+
+## 0.74.148 (2026-11-17): her spawn's hitch out of her rise's cinematic (feature/geofon-rise); staged
+- sv_tanicorn_rise.lua TANI.roundRise opts.wait / TANI.riseRelease: she's found and put under the sea in her spawn's call,
+  then held there (no play, no cinematic) until the round releases her phase2.release_s 2.5 s on: her spawn's hitch (1.3 s
+  in run 20261117_193828, inside the cinematic) lands while GEOFON sits whole. split_max_s 9, rise_max_s 45.
+- Autotest phase2 (run 20261117_202226): 31/31: spawned 20:24:31, released 20:24:33 with the cinematic, the split at +1.1 s;
+  the worst frame that minute 354 ms. Its first try was stopped for low memory (cleaned up, retried after 5 min).
