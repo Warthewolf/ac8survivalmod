@@ -4039,6 +4039,59 @@ SUITES.capture = function()
     end)
 end
 
+-- ((0.74.182) where GEOFON's hull really is against its root: its bounds and its meshes' places, pictured from above its root
+-- and above its bounds' centre (the capture's deck mark and slab are placed from the root)
+SUITES.geofondeck = function()
+    intoRun()
+    local C = {}
+    A.do_(function()
+        if not ST.check(IFLEET ~= nil, "the fleet is in this build") then return "abort" end
+        ST.marks.g0 = ST.n
+        ST.press("N")
+    end)
+    A.log_("fleet: up: GEOFON", 60, "g0", true, function(l) ST.check(l ~= nil, "GEOFON up", l) end)
+    A.wait(8)
+    A.do_(function()
+        local sh = IFLEET.cur and IFLEET.cur.ships and IFLEET.cur.ships[1]
+        local o = sh and sh.hull and sh.hull.obj
+        if not ST.check(o ~= nil and valid(o), "GEOFON's hull") then return end
+        C.o = o
+        local r = ST.at(o)
+        local okB, ori, ext = pcall(function()
+            local a, b = {}, {}
+            o:GetActorBounds(false, a, b, false)
+            return a, b
+        end)
+        C.root = r
+        if okB and ori and ori.X then
+            C.ctr = { X = ori.X, Y = ori.Y, Z = ori.Z }
+            ST.info(string.format("geofondeck: root (%.0f, %.0f, %.0f) cm; bounds centre (%+.0f, %+.0f, %+.0f) m from it, extent (%.0f, %.0f, %.0f) m",
+                r.X, r.Y, r.Z, (ori.X - r.X) / 100, (ori.Y - r.Y) / 100, (ori.Z - r.Z) / 100, ext.X / 100, ext.Y / 100, ext.Z / 100))
+        else
+            ST.info("geofondeck: bounds not read (" .. tostring(ori) .. ")")
+        end
+        pcall(function()
+            local cls = StaticFindObject("/Script/Engine.StaticMeshComponent")
+            o:K2_GetComponentsByClass(cls):ForEach(function(_, el)
+                local c = el:get()
+                local nm, l, e = "?", nil, nil
+                pcall(function() nm = c:GetFName():ToString() end)
+                pcall(function() local v = c:K2_GetComponentLocation(); l = { X = v.X, Y = v.Y, Z = v.Z } end)
+                pcall(function() local b = c.Bounds; e = { X = b.BoxExtent.X, Y = b.BoxExtent.Y, Z = b.BoxExtent.Z }; l = { X = b.Origin.X, Y = b.Origin.Y, Z = b.Origin.Z } end)
+                if l then
+                    ST.info(string.format("geofondeck: mesh %s at (%+.0f, %+.0f, %+.0f) m from the root%s", nm, (l.X - r.X) / 100, (l.Y - r.Y) / 100,
+                        (l.Z - r.Z) / 100, e and string.format(", extent (%.0f, %.0f, %.0f) m", e.X / 100, e.Y / 100, e.Z / 100) or ""))
+                end
+            end)
+        end)
+    end)
+    A.picture("geofon_above_root", function() return C.root and ST.off(C.root, 0, 1, 60000) end, function() return C.root end, 60)
+    A.picture("geofon_above_bounds", function() local c = C.ctr or C.root; return c and ST.off(c, 0, 1, 60000) end,
+        function() return C.ctr or C.root end, 60)
+    A.picture("geofon_side", function() local c = C.ctr or C.root; return c and ST.off(c, -30000, 30000, 8000) end,
+        function() return C.ctr or C.root end, 50)
+end
+
 SUITES.aegislasers = function()
     intoRun()
     local C = {}
