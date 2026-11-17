@@ -46,6 +46,10 @@ MI_VALUES = {42: (5000.0, 150.0),   # (2500 in 0.74.114-0.74.115, 800 in 0.74.11
 # ((0.74.118) the user, 2026-11-17: "I think the cloud burst is too big, i liked the vanilla look": AC8's own instances as
 # they are (its brightness and its fade), only the timing patched; the copies above stay for a later choice
 VANILLA = True
+# ((2026-11-17) the user: "need to increase the brightness of the lightning bolt") the bolts' own copy of the near instance
+# (sv_fleet.lua bolts.material_bright), built whatever VANILLA says: brighter, its fade pushed out to 30 km
+BOLT_MI = '/Game/Mods/SurvivalMode/StormFx/MI_SV_StormBolt'
+BOLT_VALUES = {42: (5000.0, 15000.0), 79: (300000.0, 1000000.0), 116: (50000.0, 3000000.0)}
 WORK = os.path.join(MAIN, 'build', 'stormfx', 'burst')
 OUT = os.path.join(MAIN, 'build', 'stormfx', 'out')
 
@@ -122,6 +126,7 @@ def main():
     if mi is not None:
         open(os.path.join(content, MI_NEW[len('/Game/'):] + '.uasset'), 'wb').write(mi)
         open(os.path.join(content, MIF_NEW[len('/Game/'):] + '.uasset'), 'wb').write(mif)
+    open(os.path.join(content, BOLT_MI[len('/Game/'):] + '.uasset'), 'wb').write(instance(MI_OLD, BOLT_MI, BOLT_VALUES))
     print(f'burst: {NEW} ({len(data)} bytes): {len(LITERALS)} spawn literals {sorted(set(LITERALS.values()))} -> {BURST}')
     os.makedirs(OUT, exist_ok=True)
     r = subprocess.run([sys.executable, '-I', os.path.join(TOOLS, 'pack.py'), '--name', 'SurvivalMode_StormBurst_P',

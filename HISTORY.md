@@ -3588,3 +3588,17 @@ game. The work was split by file between agents; the builds ran in sequence in t
   they are, only the timing patched), the storm's burst scale 0.1, on 0.8 s, x20. 0.74.118 with min_km 3: a strike's
   glow 2 km up and 4 km ahead whited the screen out and it stayed white (cause not found); 0.74.119 min_km 6: no white-out
   in the strikes or the storm (run 20261117_145251), the far flashes logged.
+
+## 0.74.120-0.74.123 (2026-11-17): the strike's light on your plane, brighter bolts; 0.74.123 INSTALLED (feature/cloud-flash)
+- The user: "why does the plane not light up from the lightning burst effects?" AC8's lightning only glows (emissive
+  sprites and meshes). sv_fleet_storm.lua slFlash: a light of ours at each strike within max_km. A second directional light
+  lit nothing at any intensity (ladder 20-2000, run 20261117_150341: AC8 draws with its one sun); a point light (kind
+  "point") offset_m 300 from your camera toward the strike, kept there each tick, radius 1.5 km, unitless: intensity 10000
+  lit the plane white (run 20261117_150659); 0.74.122: 4000, its first step at the strike (not a tick late).
+- "need to increase the brightness of the lightning bolt": the bolts on MI_SV_StormBolt (burst.py: the stock near
+  instance, emissive 5000 -> 15000, no fade before 30 km; bolts.material_bright, the stock material its fallback).
+- 0.74.122's build_all.sh stopped on the size check (sv_anomalies_dev.lua 2003 lines) and package_dev.sh staged the old
+  build under its name: never installed; 0.74.123 is the same changes built clean.
+- 0.74.123 INSTALLED 2026-11-17 for the user ("install 0.74.122", "im home, i want to test it now"), over 0.74.103
+  (backup: build/backup/install_before_0.74.123); 112 files verified; her config, subtitles (the same as the repo's) and the
+  launcher's toggle kept.

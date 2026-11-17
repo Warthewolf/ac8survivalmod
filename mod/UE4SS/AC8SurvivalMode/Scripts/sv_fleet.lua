@@ -230,11 +230,21 @@ CFG.specials.fleet = {
                       -- cloud: Survival's own cloud light at some flashes (hard rule 70; 0.8-2M: 165k-365k unseen in the user's 0.74.91 flight,
                       -- 4M and 8M at 5 km round blacked nothing out in run 75; 4M at 50 km did in run 68))
                       lightning = { enabled = true, every_s = { 0.3, 0.8 }, dist_km = { 2, 25 }, alt_m = { 1500, 7000 },
+                                    -- ((2026-11-17) a strike's light on your plane, the ships and the sea: our directional
+                                    -- light from the strike, intensity x steps a tick, strikes within max_km, full at
+                                    -- near_km down to fade_x at max_km; sv_fleet_storm.lua's slFlash)
+                                    -- (kind "point": a point light offset_m from you on the strike's side, radius_m reach;
+                                    -- "directional" lit nothing in AC8: run 20261117_150341)
+                                    plane_light = { enabled = true, kind = "point", intensity = 4000, offset_m = 300, radius_m = 1500,
+                                                    falloff = 2, near_km = 3, max_km = 15, fade_x = 0.25,
+                                                    steps = { 1, 0.25, 0.8, 0.3, 0 }, color = { 200, 215, 255 } },
                                     cloud = { enabled = false, chance = 0.5, every_s = { 0.6, 1.6 }, alt_m = { 2000, 4500 }, radius_m = 5000,
                                               brightness = { 800000, 2000000 }, max_brightness = 3000000, color = { 215, 225, 255 }, steps = { 1, 0.3, 0.9, 0.2, 0 } },
                                     bolts = { enabled = true, pool = 10, height_m = { 1800, 4500 }, length_m = { 2500, 7000 },
                                               alt_m = { 2500, 5500 },
                                               material = "/Game/VFX/Environment/Common/Lightning/CloudLightning/MI_NearCloudLightning001.MI_NearCloudLightning001",
+                                              -- ((2026-11-17) "increase the brightness of the lightning bolt": burst.py's copy, x3, no fade)
+                                              material_bright = "/Game/Mods/SurvivalMode/StormFx/MI_SV_StormBolt.MI_SV_StormBolt",
                                               meshes = { "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder001_IE03.SM_Thunder001_IE03",
                                                          "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder006_IE04.SM_Thunder006_IE04",
                                                          "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder002_IE03.SM_Thunder002_IE03",

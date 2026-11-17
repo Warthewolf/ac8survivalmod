@@ -252,6 +252,7 @@ local function glowOff()
 end
 local function cellsOff()
     glowOff()
+    if IFSKY.slOff then pcall(IFSKY.slOff) end                -- (the strike light: defined further down)
     local k = 0
     for _, e in ipairs(CELLS) do
         if cellOk(e) then pcall(function() e.o:DestroyComponent() end); k = k + 1 end
@@ -349,6 +350,94 @@ local function centres()                                   -- (the airfield, and
 end
 -- a flash at `at` (its cloud flash, a bolt under it, the bolt's glow and its thunder): what it showed. sure: the thunder
 -- always (a cued strike's); inView: the bolt out in your camera's shot (THUNDER.bolt's)
+-- ((2026-11-17) the user: "why does the plane not light up from the lightning burst effects?") AC8's lightning only glows
+-- (emissive sprites and meshes: no light leaves them), and Cloudly's clouds take only its cloud light. A strike's light on
+-- everything else: a directional light of ours (shadowless, movable, never the atmosphere's sun: Cloudly drives the level's
+-- own sun every frame, hard rule 56), turned from the strike toward your camera and flickered a tick at a time
+-- (lightning.plane_light: intensity x steps, strikes within max_km; at most one at a time, the nearest wins)
+local SL = { a = nil }
+local function slOk() return SL.a ~= nil and SL.aa ~= nil and liveAddr(SL.a) == SL.aa and nameOf(SL.a) == SL.an end
+-- ((0.74.121) kind "point": a second directional light lit nothing at any intensity (the ladder 20-2000 of run
+-- 20261117_150341: AC8 draws with its one sun): a point light offset_m from your camera toward the strike, kept there each tick,
+-- its reach radius_m, unitless (no inverse-square falloff))
+local function slKind() return (((stc().lightning or {}).plane_light) or {}).kind or "point" end
+local function slMake()
+    if slOk() then return SL.a end
+    local point = slKind() == "point"
+    local gs, cls = StaticFindObject("/Script/Engine.Default__GameplayStatics"),
+        StaticFindObject(point and "/Script/Engine.PointLight" or "/Script/Engine.DirectionalLight")
+    if not (valid(gs) and valid(cls) and liveObj(survivalPC)) then return nil, "no GameplayStatics / DirectionalLight" end
+    local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+    local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(survivalPC, cls, t, 1, nil, 1) end)
+    if not (okB and x and valid(x)) then return nil, "its spawn failed" end
+    local l
+    pcall(function() l = x.LightComponent end)
+    if l then
+        pcall(function() l:SetMobility(2) end)                    -- (Movable: lit at run time)
+        if not point then
+            pcall(function() l.bAtmosphereSunLight = false end)   -- (never the sky's sun)
+            pcall(function() l.AtmosphereSunLightIndex = 1 end)
+        else
+            local c = (stc().lightning or {}).plane_light or {}
+            pcall(function() l.bUseInverseSquaredFalloff = false end)
+            pcall(function() l:SetAttenuationRadius(n(c.radius_m, 1500) * 100) end)
+            pcall(function() l.LightFalloffExponent = n(c.falloff, 2) end)
+        end
+        pcall(function() l:SetCastShadows(false) end)
+        pcall(function() l:SetIntensity(0) end)
+    end
+    pcall(function() gs:FinishSpawningActor(x, t, 1) end)
+    SL.a, SL.aa, SL.an, SL.l = x, liveAddr(x), nameOf(x), l
+    return x
+end
+local slTick                                               -- (below; slFlash runs its first step)
+local function slFlash(at, now)
+    local c = (stc().lightning or {}).plane_light
+    if type(c) ~= "table" or c.enabled == false or type(at) ~= "table" then return "" end
+    local L
+    pcall(function() local v = survivalPC.PlayerCameraManager:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+    if not L then return "" end
+    local dx, dy, dz = L.X - at.X, L.Y - at.Y, L.Z - (at.Z or 300000)
+    local d = math.sqrt(dx * dx + dy * dy + dz * dz)
+    if d > n(c.max_km, 15) * 100000 then return "" end
+    if SL.steps and SL.d and d > SL.d then return "" end           -- (one at a time: a nearer one wins)
+    local a, why = slMake()
+    if not a then return "; no strike light (" .. tostring(why) .. ")" end
+    local yaw, pitch = math.deg(math.atan(dy, dx)), math.deg(math.atan(dz, math.sqrt(dx * dx + dy * dy)))
+    pcall(function() a:K2_SetActorRotation({ Pitch = pitch, Yaw = yaw, Roll = 0 }, false) end)
+    SL.dir = { X = -dx / d, Y = -dy / d, Z = -dz / d }               -- (toward the strike, for the point light's spot)
+    SL.off = n(c.offset_m, 300) * 100
+    local k = type(c.color) == "table" and c.color or { 200, 215, 255 }
+    pcall(function() SL.l:SetLightColor({ R = k[1] / 255, G = k[2] / 255, B = k[3] / 255, A = 1 }, false) end)
+    -- (nearer, brighter: full at near_km, falling to fade_x at max_km)
+    local f = math.max(0, math.min(1, (d / 100000 - n(c.near_km, 3)) / math.max(0.1, n(c.max_km, 15) - n(c.near_km, 3))))
+    SL.b, SL.d = n(c.intensity, 6) * (1 - f * (1 - n(c.fade_x, 0.25))), d
+    SL.steps, SL.i = c.steps or { 1, 0.25, 0.8, 0.3, 0 }, 0
+    SL.n = (SL.n or 0) + 1
+    slTick()                                                     -- (its first step now, with the bolt: not a tick late)
+    if SL.n <= 3 then log(string.format("fleet storm: strike light %d: %.1f km off, intensity %.2f, from yaw %.0f pitch %.0f", SL.n, d / 100000, SL.b, yaw, pitch)) end
+    return string.format("; its light %.2f (%.1f km)", SL.b, d / 100000)
+end
+slTick = function()
+    if not SL.steps then return end
+    SL.i = SL.i + 1
+    local k = SL.steps[SL.i]
+    if k == nil then SL.steps, SL.d, k = nil, nil, 0 end
+    if SL.dir and slOk() and slKind() == "point" then          -- (kept beside your camera, on the strike's side)
+        local L
+        pcall(function() local v = survivalPC.PlayerCameraManager:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
+        if L then
+            local o = SL.off or 30000
+            pcall(function() SL.a:K2_SetActorLocation({ X = L.X + SL.dir.X * o, Y = L.Y + SL.dir.Y * o, Z = L.Z + SL.dir.Z * o }, false, {}, true) end)
+        end
+    end
+    if slOk() and SL.l then pcall(function() SL.l:SetIntensity(k * (SL.b or 0)) end) else SL.steps = nil end
+end
+local function slOff()
+    if slOk() then pcall(function() SL.a:K2_DestroyActor() end) end
+    SL = { a = nil }
+end
+IFSKY.slOff = slOff
 local function strike(at, now, why, sure, inView)
     local c = stc().lightning or {}
     local how, cl = "bolt", c.cloud                          -- (a cloud flash at some: Survival's own light, hard rule 70)
@@ -365,6 +454,8 @@ local function strike(at, now, why, sure, inView)
             what = what .. (okG and gw or ("; glow error " .. tostring(gw)))
         end
     end
+    local okL, lw = pcall(slFlash, at, now)
+    what = tostring(what) .. (okL and lw or ("; strike light error " .. tostring(lw)))
     local okT, th = pcall(thQueue, at, now, sure)
     return ok, tostring(what) .. (okT and th or ("; thunder error " .. tostring(th)))
 end
@@ -405,6 +496,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet storm", fn = function(now)
     trTick(now)
     pcall(thTick, now)
     pcall(glowTick, now)
+    pcall(slTick)
     if THUNDER and THUNDER.cloudTick then pcall(THUNDER.cloudTick, now) end
     local w = wanted()
     if w ~= SW.on and not SW.tr then
@@ -414,7 +506,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet storm", fn = function(now)
     if SW.on and not SW.tr then lightTick(now) end
 end }
 if type(LEVEL_DROPS) == "table" then                       -- (the level's: its Cloudly actor and lights went with it)
-    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving, TH.q, TH.got, TH.ev, CELLS = nil, nil, {}, {}, {}, {}; GLOW.pool, GLOW.i, GLOW.flash, GLOW.fe = {}, 0, nil, nil end
+    LEVEL_DROPS["fleet storm"] = function() SW = { on = false }; IFSKY.k, IFSKY.leaving, TH.q, TH.got, TH.ev, CELLS = nil, nil, {}, {}, {}, {}; GLOW.pool, GLOW.i, GLOW.flash, GLOW.fe = {}, 0, nil, nil; SL = { a = nil } end
 end
 end
 -- TEST ONLY END

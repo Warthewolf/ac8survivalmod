@@ -1258,7 +1258,7 @@ local function boltNew(c, mesh)                             -- (one pooled actor
     pcall(function() gs:FinishSpawningActor(a, t, 1) end)
     pcall(function() comp:SetCollisionEnabled(0) end)
     pcall(function() comp:SetCastShadow(false) end)
-    BOLT.mat = (BOLT.mat and liveObj(BOLT.mat)) and BOLT.mat or loadObject(c.material)
+    BOLT.mat = (BOLT.mat and liveObj(BOLT.mat)) and BOLT.mat or (type(c.material_bright) == "string" and loadObject(c.material_bright)) or loadObject(c.material)   -- (material_bright: sv_fleet.lua's note)
     if BOLT.mat then pcall(function() comp:SetMaterial(0, BOLT.mat) end) end
     pcall(function() a:SetActorHiddenInGame(true) end)
     return { a = a, c = comp }
