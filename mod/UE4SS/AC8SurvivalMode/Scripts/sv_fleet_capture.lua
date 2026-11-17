@@ -34,7 +34,7 @@ if CFG.specials and CFG.specials.fleet and not CFG.specials.fleet.capture then
         -- brake to landing speed (runtime SV_CapLand), its line down to the deck itself; on the deck (the game's IsOnGround,
         -- or within land_m of the deck's height over its mark) held land_hold_s, then the explosion and DOWN. Past the deck
         -- without touching it: the old end over it. land = false: the old approach, never under floor_m)
-        land = true, land_m = 3, land_hold_s = 2, clear_m = 15, press_m = 5,
+        land = true, land_m = 3, land_hold_s = 2, clear_m = 3, press_m = 10,   -- ((0.74.180) clear 15 -> 3, press 5 -> 10: 0.74.179 tracked within ~8 m but crossed the deck 20 m up: the deck is ~4 s long at landing speed)
         deck = { fwd_m = -40, right_m = 0, up_m = 20 },     -- (the deck's touchdown spot from GEOFON's root, metres)
         -- ((0.74.177) the user: "Why not just make the deck have collision??": GEOFON's hull stops no trace (0.74.176's
         -- probe: 24 of 24 through it to the sea), so an invisible box of ours on it at its deck's height, blocking all: the
