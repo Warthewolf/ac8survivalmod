@@ -3211,6 +3211,86 @@ SUITES.fleet30 = function()
     end)
     A.wait(3)
 end
+-- (2026-11-17) aegislasers: the fleet's Aegis lasers (sv_fleet_lasers.lua, BP_SV_IF_Aegis: the user, "2 Lasers Interceptors
+-- one on the Aft and the Bow, targettable"): Ctrl+N; every Aegis's two mounts handed to AC7's LaserInterceptor and each one
+-- carrying its laser; RAVEN's bow and stern close up; one mount shot off (finishUnpaid): its laser gone. Pictures.
+SUITES.aegislasers = function()
+    intoRun()
+    local C = {}
+    local function raven()
+        for _, sh in ipairs(IFLEET.cur and IFLEET.cur.ships or {}) do
+            if sh.name == "RAVEN" and sh.hull and valid(sh.hull.obj) then return sh end
+        end
+    end
+    A.do_(function()
+        if not ST.check(IFLEET ~= nil and IFLASER ~= nil, "the fleet's lasers are in this build (sv_fleet_lasers)") then return "abort" end
+        ST.marks.m0 = ST.n
+        ST.press("N")
+    end)
+    A.log_("fleet: Ctrl%+N: %d+ of %d+ ships up", 60, "m0", false, function(l)
+        ST.check(l ~= nil and l:find("58 parts", 1, true) ~= nil, "every ship up, 58 parts (each Aegis 4 + its 2 lasers)", l)
+    end)
+    A.wait(8)
+    A.do_(function()
+        local n, lines = 0, {}
+        for i = ST.marks.m0 + 1, ST.n do
+            local l = ST.lines[i]
+            if l and l:find("^fleet lasers: ") then n = n + 1; lines[#lines + 1] = l end
+        end
+        ST.check(n == 5 and table.concat(lines, "\n"):find("NOT", 1, true) == nil and table.concat(lines, "\n"):find("2 mounts handed", 1, true) ~= nil,
+            "every Aegis (5): its 2 mounts handed to AC7's LaserInterceptor", lines[1])
+        local carry = 0
+        for i = ST.marks.m0 + 1, ST.n do
+            local l = ST.lines[i]
+            if l and l:find("carries AC7's LaserInterceptor", 1, true) and l:find("Tani_LASER", 1, true) then carry = carry + 1 end
+        end
+        ST.check(carry >= 10, "each of the 10 mounts carries its laser (sv_escort_li.lua)", carry .. " lines")
+        local sh = raven()
+        C.sh = sh
+        if not sh then ST.info("aegislasers: RAVEN not found"); return end
+        for _, e in ipairs(sh.parts) do
+            if e.cls:find("Tani_LASER", 1, true) then C.mount = C.mount or e end
+            ST.info(string.format("aegislasers: RAVEN part %s %s health %s", e.cls, e.name:match("([^%.:]+)$") or "?", tostring(ST.healthOf(e.obj))))
+        end
+    end)
+    local function hull() return C.sh and C.sh.hull and C.sh.hull.obj end
+    A.picture("aegis_side", function() return ST.frame(hull(), 0, 13000, 4000) end, function() return ST.at(hull()) end, 60)
+    -- ((run 91: framed off the hull, the pictures missed the mounts) each mount looked at itself, from its side and above)
+    local function mountAt(where)
+        for _, e in ipairs(C.sh and C.sh.parts or {}) do
+            local nm
+            pcall(function() nm = e.obj.RootComponent:GetAttachParent():GetFName():ToString() end)
+            if nm == where and valid(e.obj) then return e.obj end
+        end
+    end
+    A.picture("aegis_bow", function() local m = mountAt("LASER_BOW"); return m and ST.off(ST.at(m), 2500, 3500, 1800) end,
+        function() local m = mountAt("LASER_BOW"); return m and ST.at(m) end, 35)
+    A.picture("aegis_stern", function() local m = mountAt("LASER_AFT"); return m and ST.off(ST.at(m), -2500, 3500, 1800) end,
+        function() local m = mountAt("LASER_AFT"); return m and ST.at(m) end, 35)
+    A.do_(function()
+        for _, w in ipairs({ "LASER_BOW", "LASER_AFT" }) do
+            local m = mountAt(w)
+            local h = C.sh and C.sh.hull and C.sh.hull.obj
+            if m and h then
+                local mp, hp = ST.at(m), ST.at(h)
+                ST.info(string.format("aegislasers: RAVEN %s at %.0f / %.0f / %.0f cm from its hull's origin (world)", w, mp.X - hp.X, mp.Y - hp.Y, mp.Z - hp.Z))
+            end
+        end
+    end)
+    A.do_(function()
+        if not (C.mount and valid(C.mount.obj)) then ST.info("aegislasers: no mount to shoot off"); return end
+        C.before = #(IFLASER.carriers and IFLASER.carriers() or {})
+        local okF, dead = pcall(finishUnpaid, C.mount.obj)
+        ST.info(string.format("aegislasers: a mount finished: %s %s (carriers before %d)", tostring(okF), tostring(dead), C.before))
+    end)
+    A.wait(3)
+    A.do_(function()
+        local after = #(IFLASER.carriers and IFLASER.carriers() or {})
+        ST.check(C.before ~= nil and after == C.before - 1, "a mount shot off: its laser gone", tostring(C.before) .. " -> " .. after)
+        ST.shot("aegis_mount_down")
+    end)
+    A.wait(2)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
