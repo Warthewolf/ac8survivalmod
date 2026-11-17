@@ -433,6 +433,67 @@ local function shellTick(now)
     end
 end
 
+---------------------------------------------------------------------------------------------------- the scars (WP8)
+-- ((0.74.140) the user, 2026-11-10: every fleet ship scarred from its spawn, the TANACORN never; "Keep working until I say
+-- stop") every ship of the fleet up (IFLEET.cur: the round's and Ctrl+N's), its hull and its parts: each mesh component's
+-- material slots on dimmed copies of their own _DAM instances (sv_fleet.lua GEO.scarComp: route D, AB.L..IN's dead look),
+-- per_tick components a tick, each checked still the object captured (hard rule 59); a slot with no _DAM of its own left
+-- as it is. The fleet's list has no TANACORN in it. Log: `fleet: scars: ...`
+local SC = { F = nil, q = {}, done = {}, n = 0, slots = 0, of = 0 }
+local function scC() return (CFG.specials and CFG.specials.fleet or {}).scars or {} end
+local SCAR_CLASSES = { "/Script/Engine.StaticMeshComponent", "/Script/Engine.SkeletalMeshComponent", "/Script/Engine.PoseableMeshComponent" }
+local function scarQueue(sh)
+    local objs = { sh.hull }
+    for _, e in ipairs(sh.parts or {}) do objs[#objs + 1] = e end
+    local k = 0
+    for _, e in ipairs(objs) do
+        if e and alive(e) and SPC and SPC.V and SPC.V.comps then
+            for _, cls in ipairs(SCAR_CLASSES) do
+                local ok, list = pcall(SPC.V.comps, e.obj, cls)
+                for _, c in ipairs(ok and type(list) == "table" and list or {}) do
+                    SC.q[#SC.q + 1] = { c = c, e = e, ship = IFLEET.label(sh) }
+                    k = k + 1
+                end
+            end
+        end
+    end
+    return k
+end
+local function scarsTick()
+    local c = scC()
+    if c.enabled == false or not (IFLEET and GEO and GEO.scarComp) then return end
+    local F = IFLEET.cur
+    if F ~= SC.F then SC.F, SC.q, SC.done, SC.n, SC.slots, SC.of, SC.said, SC.lines = F, {}, {}, 0, 0, 0, nil, 0 end
+    if not F then return end
+    if IFSURF and IFSURF.state and IFSURF.state() then return end   -- (the real fleet only once the surfacing's over)
+    for _, sh in ipairs(F.ships) do
+        if sh.hull and not SC.done[sh.key] and not sh.sunk then
+            SC.done[sh.key] = true
+            local k = scarQueue(sh)
+            if k > 0 then SC.n = SC.n + 1 end
+        end
+    end
+    local per = math.max(1, math.floor(n(c.per_tick, 6)))
+    for _ = 1, per do
+        local j = table.remove(SC.q, 1)
+        if not j then break end
+        if alive(j.e) and liveObj(j.c) then
+            local okS, set, of, said = pcall(GEO.scarComp, j.c, n(c.embers, 0.05))
+            if okS and type(set) == "number" then SC.slots, SC.of = SC.slots + set, SC.of + (tonumber(of) or 0) end
+            SC.lines = SC.lines or 0
+            if okS and SC.lines < 4 and (tonumber(of) or 0) > 0 then   -- (the first few components' slots, what each got)
+                SC.lines = SC.lines + 1
+                log("fleet: scars: " .. tostring(j.ship) .. ": " .. tostring(said):sub(1, 400))
+            end
+        end
+    end
+    if #SC.q == 0 and SC.n > 0 and SC.said ~= SC.n then
+        SC.said = SC.n
+        log(string.format("fleet: scars: %d ships, %d of %d material slots on their dimmed _DAM (embers x%g; the rest have none of their own)",
+            SC.n, SC.slots, SC.of, n(c.embers, 0.05)))
+    end
+end
+
 -- the kind (sv_rounds.lua SPC; THE ESCORT's and the Spaceport's hooks)
 function IFROUND.spawn(now)
     if not ready(D and D.round) then rlog("round " .. tostring(D and D.round) .. ": not ready: a normal round"); return false end
@@ -524,6 +585,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet round", fn = function(now)
         hudCallout(tx().warn or "INVINCIBLE FLEET", tx().warn_sub or "")
         rlog(string.format("round %d's break: the warning (%d radio lines)", D.round, say("warn")))
     end
+    pcall(scarsTick)                                      -- ((0.74.140) WP8: any fleet up, the round's or Ctrl+N's)
     if not R then return end
     if IFLEET.cur ~= R.F then return end
     pcall(turretsTick)

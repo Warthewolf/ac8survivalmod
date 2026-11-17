@@ -3755,3 +3755,15 @@ game. The work was split by file between agents; the builds ran in sequence in t
   the bolts' cached meshes and material (BOLT.mesh, BOLT.mat) and the storm's cloud flash system (sv_fleet_storm.lua
   GLOW.flash). sv_anomalies_dev.lua stays at 1,999 lines (edited in place).
 - Autotest restart129 (run 20261117_190223): 17/17, the layout CVC_ms04 -> CVC_ms12 and back.
+
+## 0.74.140-0.74.143 (2026-11-17): WP8, every fleet ship scarred; GetPathName fixed everywhere it was used (feature/geofon-rise); staged
+- WP8 (sv_fleet_round.lua scarsTick, CFG.specials.fleet.scars; sv_fleet.lua GEO.scarComp): every ship of any fleet up (the
+  round's and Ctrl+N's), once the surfacing's over: each mesh component (static, skeletal, poseable) of its hull and parts,
+  per_tick 6 a tick, its slots on dimmed copies of their own _DAM instances (embers x0.05), a slot with none of its own left;
+  never the TANACORN (not in the fleet's list).
+- GetPathName isn't callable from UE4SS's Lua ("attempt to call a TrivialObject value (method 'GetPathName')", the probe of
+  0.74.142, run 20261117_191507): every _DAM walk failed at its first step, the pcall hid it: 0.74.140-0.74.141 scarred 0 of
+  177 slots, GEOFON's stage 2 only worked by its Ford-numbered fallback, and AB.L..IN's dead look (sv_anomalies.lua, in
+  releases) found 1 of 13 (2026-10-23). 0.74.143 reads the path from GetFullName ("Class /Game/.../MI_x.MI_x") in both.
+- Autotest shell on 0.74.143 (run 20261117_191946): 15 ships, 131 of 177 slots on their _DAM (RAVEN's picture: charred,
+  embers), 55 fps that minute; the shelling 250 -> lower as before. (Its one FAIL: the suite read the first detail line.)

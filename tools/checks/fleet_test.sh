@@ -141,6 +141,7 @@ function loadObject(path)
     if not assets[path] then
         local a = obj("Asset " .. path)
         a.GetPathName = function() return path end
+        a.GetFullName = function() return "MaterialInstanceConstant " .. path end   -- ((0.74.143) the game's code reads this)
         assets[path] = a
     end
     return assets[path]
@@ -149,6 +150,7 @@ local function mat(n)
     local nm = string.format("MI_VE004_grfd_%02d", n)
     local m = obj("MaterialInstanceConstant " .. MATS .. nm .. "." .. nm)
     m.GetPathName = function() return MATS .. nm .. "." .. nm end
+    m.GetFullName = function() return "MaterialInstanceConstant " .. MATS .. nm .. "." .. nm end
     return m
 end
 

@@ -121,6 +121,9 @@ CFG.specials.fleet = {
     -- the course in and the runway's centre (survival_events_fleet.py IF_YAW, IF_RUNWAY), for the lines
     formation = { per_step = 3, gap_s = 0.5, settle_s = 2, go_s = 15, moved_m = 50, every_s = 10, guns_s = 2, clear_s = 8,
                   course_yaw = 45, runway_cm = { 1610476, -436143 } },
+    -- ((0.74.140) WP8: every fleet ship scarred from its spawn (sv_fleet_round.lua scarsTick): its slots on dimmed copies of their
+    -- own _DAM instances, per_tick components a tick; embers: their glow x this (a look only: never ranked against)
+    scars = { enabled = true, per_tick = 6, embers = 0.05 },
     -- ((0.74.137) WP13, round 30: the fleet shells the airfield (sv_fleet_round.lua shellTick): each ship afloat of kinds within
     -- shell_km of the runway a salvo every every_s (staggered), its muzzle flash, flight_s on its damage off the airfield and
     -- its rounds of AC8's explosions on the runway (spread_m along it at runway_yaw, across_m across); none while it's down,
@@ -822,12 +825,21 @@ local function xyz(q) return q and string.format("(%.1f, %.1f, %.1f)", r1(q.x), 
 
 -- the material slots of mesh m on their _DAM instances: route "dam" (the instances) or "dim" (dynamic copies of them, their
 -- Charred_Embers_Brightness x embers, as sv_zfa44.lua makes its instances); slots set, slots, what each got
-local function damFor(comp, i)                            -- (slot i's own _DAM: its material's asset + "_DAM")
+local function damFor(comp, i, strict)                    -- (slot i's own _DAM: its material's asset + "_DAM"; strict: no Ford fallback)
     local dam, src
-    pcall(function()
+    local dbg = {}                                         -- ((0.74.142) what the walk saw, when it finds nothing)
+    local okW, errW = pcall(function()
         local m = comp:GetMaterial(i)
+        dbg[#dbg + 1] = "mat " .. type(m) .. " " .. tostring(m ~= nil and valid(m))
         for _ = 1, 4 do
-            local pkg, obj = m:GetPathName():match("^(/Game/[^%.:]+)%.([^%.:]+)$")
+            pcall(function() dbg[#dbg + 1] = "full " .. tostring(m:GetFullName()) end)
+            -- ((0.74.143) its path from its full name ("Class /Game/.../MI_x.MI_x"): GetPathName isn't callable from UE4SS's
+            -- Lua (run 20261117_191507: "attempt to call a TrivialObject value (method 'GetPathName')"), so until now every
+            -- walk failed at its first step: 0 of 177 fleet slots, GEOFON's stage 2 only by its number; a run-time copy
+            -- ("...:PersistentLevel...MID_...") isn't an asset: its Parent next)
+            local okF, full = pcall(function() return m:GetFullName() end)
+            local pn = (okF and type(full) == "string" and full:match("^%S+ (/Game/[^%s:]+)$")) or ""
+            local pkg, obj = pn:match("^(/Game/[^%.:]+)%.([^%.:]+)$")
             if pkg then
                 src = obj
                 dam = obj:find("_DAM$") and m or loadObject(pkg .. "_DAM." .. obj .. "_DAM")
@@ -837,7 +849,9 @@ local function damFor(comp, i)                            -- (slot i's own _DAM:
             if not (m and valid(m)) then break end
         end
     end)
-    if not (dam and valid(dam)) then
+    if not okW then dbg[#dbg + 1] = "error " .. tostring(errW) end
+    if not src then src = "? [" .. table.concat(dbg, "; "):sub(1, 300) .. "]" end
+    if not (dam and valid(dam)) and not strict then
         local n = string.format("MI_VE004_grfd_%02d_DAM", i + 1)
         dam = loadObject(gc().mats .. n .. "." .. n)
         src = (src or "?") .. " (by its number)"
@@ -852,7 +866,7 @@ local function damSlots(m, route, embers)
     local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
     local done, said = 0, {}
     for i = 0, n - 1 do
-        local dam, src = damFor(comp, i)
+        local dam, src = damFor(comp, i, m.strict)
         if dam then
             local put, how = false, "_DAM"
             if route == "dim" then
@@ -1265,6 +1279,13 @@ function GEO.fallHide(G)
     end
     fxOff(G, 3)
     return n
+end
+-- ((0.74.140) WP8, the fleet's scars, sv_fleet_round.lua) every material slot of a component on a dimmed copy of its own
+-- _DAM instance (embers x embers), none where it has none -> slots set, slots, what each got
+function GEO.scarComp(comp, embers)
+    local e = keep(comp, true)
+    if not e then return 0, 0, "gone" end
+    return damSlots({ e = e, strict = true }, "dim", embers)
 end
 function GEO.where(G)
     if not (G and G.hull and same(G.hull)) then return nil end
