@@ -3831,3 +3831,8 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - Then (unbuilt): no KASKA in round 30 (the user: "it's not Kaska's Navy at all, it's an Anomaly caused by Emblem Direct";
   "Valka is connected to the void so she knows whats happening already"): VALKA tells AUDREY; lines in the reworked
   subtitles.ini's voices (AUDREY "Val", "Stars"); CHARLENE's lines to CTRL (she isn't in round 30).
+- 0.74.158: every cinematic camera's pitch and roll on its camera component as a quaternion relative transform (the actor's
+  pitch never took: every camera faced level, off by its own pitch; the user's "camera high into the sky"); phase2 checks
+  every camera within 10 deg: passed. Valka's hints at GEOFON's stages; Charlene (with Comona Control) on the surfacing.
+- 0.74.159: Torres's and the crew's voices heard, never subtitled (the user). Autotest epic 26/26, phase2 39/40 (the one
+  an old check expecting Torres subtitled, taken out; "no subtitle for Torres or the crew" passed).
