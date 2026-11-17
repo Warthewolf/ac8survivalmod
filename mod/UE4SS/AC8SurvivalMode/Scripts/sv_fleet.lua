@@ -1333,7 +1333,7 @@ local function allUp(F)
     local you, rw = playerLocation(), fm().runway_cm
     local km, brg = nil, nil
     if g and you then km, brg = d2(g, you) / 1e5, compass(g.X - you.X, g.Y - you.Y) end
-    log(string.format("fleet: Ctrl+N: %d of %d ships up with %d parts at their course start%s; %s", up, #F.ships, nParts,
+    log(string.format("fleet: %s: %d of %d ships up with %d parts at their course start%s; %s", F.round and "the round" or "Ctrl+N", up, #F.ships, nParts,
         g and string.format(" (GEOFON %.1f km from the runway, bearing %03.0f from it)", d2(g, { X = rw[1], Y = rw[2] }) / 1e5,
             compass(g.X - rw[1], g.Y - rw[2])) or "",
         km and string.format("GEOFON %.1f km from you, bearing %03.0f: fly there", km, brg) or "GEOFON's place NOT read"))

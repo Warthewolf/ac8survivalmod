@@ -3458,3 +3458,22 @@ game. The work was split by file between agents; the builds ran in sequence in t
 ## 0.74.97 (2026-11-17; a test build, staged, not installed): the glows sized for the night (feature/fleet-storm)
 - storm.cells.scale_x 3 (Mission 12's 19), bolt_glow.scale 4 and life_s 2.5 (the glow builds over its first second):
   run 87's scale 1 was unseen at 2-5 km at night. Config only; fleet_test passes; not run in game yet.
+
+## 0.74.98 (2026-11-17; a test build, staged, not installed): round 30 is INVINCIBLE FLEET's (WP10 step 1, feature/fleet-round)
+- The user: "Phase 1 now", the surfacing "Yes, at round start". sv_fleet_round.lua (a dev-only piece after
+  sv_fleet_storm.lua; dev_only.py cuts it from a TESTER zip, IFROUND in its globals): specialFor answers "fleet" for round
+  30 (never drawn, once a run; sv_spawn.lua's schedule untouched, as THE FESTIVAL's roundIs); SPC.kinds.fleet (THE
+  ESCORT's and the Spaceport's hooks): round 29's break warns (callout INVINCIBLE FLEET / THE AEGIR FLEET IS UNDER WAY, COMONA
+  CONTROL's lines), round 30's callout SPECIAL ROUND 30 / INVINCIBLE FLEET, the fleet from IFLEET.launch (Ctrl+N's spawn,
+  made a function) with the surfacing first, a quarter of the round's own fighters, each ship paid once as it sinks
+  (IFLEET.onSunk from sv_fleet.lua's sinking: by kind, double the Spaceport's, x the special's and the tier's as its pay)
+  and each turret as it's shot off, the round held while one's afloat (no time limit), Online Mode's AC04 "Invincible
+  Fleet" from its start (again at its length, the music player's clock held), the NEXT row FLEET: n AFLOAT  CARRIER:
+  GEOFON; won: 50,000, the airfield fully repaired (its health to its top, the landing open, ALLY.repairAll), THE AEGIR
+  FLEET IS DESTROYED, the wrecks taken off. The radio lines are drafted in sv_fleet.lua's CFG (dev only: never in
+  config/subtitles.ini, which every release ships). GEOFON sinks like any ship until WP5 / WP6; co-op is the host's (WP12).
+- fleet_test: 15 round 30 checks (picked, warned once, spawned, once a run, held, the row, each ship paid once: 22,600
+  base, the win, the airfield, the fleet taken off). Run 88 (fleet30: the run set to round 29's break, the ships and the
+  round's fighters finished by the test): the warning, SPECIAL ROUND 30, the music posted, the surfacing, 15 of 15 up,
+  each sunk paid once (GEOFON 24,000 at round 30's x4; the fleet 90,400), the win at +43 s: 50,000, the airfield repaired,
+  the fleet taken off. Its one FAIL was the test's own 6,000 (fixed). Pictures sent.
