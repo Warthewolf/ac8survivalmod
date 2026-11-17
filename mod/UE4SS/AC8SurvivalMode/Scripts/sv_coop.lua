@@ -1141,6 +1141,7 @@ function hostSync(to)
     if M.vmood then sendTo(to, true, "vm", 1) end            -- ((0.73.76) VALKA's mood and her model, if she's up)
     if M.vrev then sendTo(to, true, "vr", M.vrev) end
     sendTo(to, true, "rz", n)
+    if IFCOOP and IFCOOP.syncTo then pcall(IFCOOP.syncTo, to) end   -- ((0.74.172) round 30's state, to one who links later
     -- (everything's health again with the next second's: a copy spawned again there has its stock health till then)
     for _, e in pairs(M.byId) do e.sentHp = nil end
     M.nextHp = 0

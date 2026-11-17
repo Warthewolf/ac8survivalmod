@@ -958,6 +958,20 @@ local function jlog(s) log("fleet round: " .. s) end
 function IFCOOP.send(what, ...)                          -- (the host's word, to every joiner)
     if COOP and COOP.host and COOP.host() and COOP.msg then pcall(COOP.msg, nil, "if", what, ...) end
 end
+-- ((0.74.172) to one who links (or links back) during round 30: where its phase 2 is (GEOFON watched, broken, split, its
+-- halves hidden; her core open; her sinking), 12 s on, its copies spawned there first (sv_coop.lua's hostSync)
+function IFCOOP.syncTo(to)
+    local P = R and R.p2
+    if not (P and P.sh and COOP and COOP.msg) then return end
+    local words = { { "watch", P.sh.unit } }
+    if P.state ~= "watch" then words[#words + 1] = { "break" } end
+    if P.split then words[#words + 1] = { "split" } end
+    if P.hidden then words[#words + 1] = { "hide" } end
+    if (P.phase or 0) >= 3 then words[#words + 1] = { "core" } end
+    if P.state == "beaten" then words[#words + 1] = { "sink" } end
+    IFCOOP.pending = IFCOOP.pending or {}                -- (sent from the co-op tick: no timers of our own, sv_main.lua's rule)
+    IFCOOP.pending[#IFCOOP.pending + 1] = { to = to, at = os.clock() + 12, words = words }
+end
 -- a joiner's GEOFON and TANACORN, from the host's word: J = { unit, G (GEO's on the copy), split, hidden }
 local J = nil
 local function jGeo()
@@ -1062,6 +1076,17 @@ function IFCOOP.onHost(f)
 end
 -- a joiner's GEOFON stepped each tick: its stages' looks (from the copy's own health: the host's "hp"), then its V
 TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet co-op", fn = function(now)
+    local pend = IFCOOP.pending                           -- (the host's: round 30's state to one who linked, its 12 s up)
+    if pend and #pend > 0 and COOP and COOP.msg then
+        for i = #pend, 1, -1 do
+            local q = pend[i]
+            if now >= q.at then
+                table.remove(pend, i)
+                for _, w in ipairs(q.words) do pcall(COOP.msg, q.to, "if", table.unpack(w)) end
+                jlog(string.format("co-op: round 30's state to slot %s: %d words", tostring(q.to), #q.words))
+            end
+        end
+    end
     if not (J and COOP and COOP.client and COOP.client()) then return end
     if not D then J = nil; return end
     local G = J.G
