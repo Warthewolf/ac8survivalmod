@@ -74,6 +74,22 @@ function IFLASER.onSettle(F, sh)
         on and "" or string.format(": the laser is NOT on (mode %s: a ZFA=1 build's main menu turns it on)", tostring(ZLI and ZLI.mode))))
 end
 if IFLEET then IFLEET.onSettle = IFLASER.onSettle end
+-- ((0.74.165) WP9: the first missile a fleet laser shoots down in a round: LASER DEFENCE ONLINE and Control's line, once)
+local saidRound = nil
+if ZLI then
+    ZLI.onKill = function(r)
+        if not (IFLEET and IFLEET.cur and D and D.round) or saidRound == D.round then return end
+        if not tostring(r and r.name or ""):find("Tani_LASER", 1, true) then return end
+        saidRound = D.round
+        local t = lc().text or {}
+        hudCallout(t.online or "LASER DEFENCE ONLINE", t.online_sub or "SHOOT THE LASER MOUNTS FIRST")
+        if SUB and SUB.say then
+            local sp = ((CFG.hud or {}).subs or {}).speakers or {}
+            pcall(SUB.say, sp.CTRL or "CTRL", t.online_radio or "Their lasers are burning our missiles down! Take out the laser mounts first!")
+        end
+        llog("LASER DEFENCE ONLINE: the first missile a fleet laser shot down this round (" .. tostring(r.name) .. ")")
+    end
+end
 if type(LEVEL_DROPS) == "table" then                       -- (the level's objects went with it)
     LEVEL_DROPS["fleet lasers"] = function() L = {}; if ZLI and ZLI.extras then ZLI.extras.fleet = nil end end
 end

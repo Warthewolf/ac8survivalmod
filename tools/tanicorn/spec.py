@@ -296,6 +296,25 @@ AEGIS_STOCK = '/Game/Blueprints/Vehicle/AI/Vessels/VE002_aegs/CP/BP_VE002_aegs_C
 AEGIS_LASERS = (('LASER_BOW', (6900, 0, 900), 0), ('LASER_AFT', (-6400, 0, 410), 180))
 
 
+# ((2026-11-18) the user: "Have the Raven use ECM too") BP_SV_IF_Raven: the fleet's Aegis (its two lasers) and, on its mast,
+# the Alicorn's ECM part (EB_002's BP_BA002_alcn_ecm_Base: a stub at its stock path here, never packed) as one more
+# LiveChildActorComponent, ECM_MAST: the 0.74.164 try (the ECM's class on its Mk 15's child) kept the Mk 15's body, its
+# class the stock Aegis BP's own component's. Its spot (cm, the hull's frame) on the forward mast; sv_fleet_lasers.lua can
+# move it (CFG.specials.fleet.ecm) without a rebuild.
+RAVEN_ECM_STOCK = '/Game/OnlineMode/Blueprint/AI/Actors/Submarine/alcn/Hatch/BP_BA002_alcn_ecm_Base'
+RAVEN_ECM = ('ECM_MAST', (1800, 0, 2700), 0)
+
+
+def raven_bp():
+    b = aegis_bp()
+    n, (x, y, z), yaw = RAVEN_ECM
+    b['scs'] = b['scs'] + [{'name': n, 'class': 'LiveChildActorComponent', 'parent': '',
+                            'props': {'RelativeLocation': f'(X={x},Y={y},Z={z})', 'RelativeRotation': f'(Pitch=0,Yaw={yaw},Roll=0)'},
+                            'child_class': f'{obj(RAVEN_ECM_STOCK)}_C'}]
+    b['path'] = f'{DEST}/BP_SV_IF_Raven'
+    return b
+
+
 def aegis_bp():
     scs = [{'name': n, 'class': 'LiveChildActorComponent', 'parent': '',
             'props': {'RelativeLocation': f'(X={x},Y={y},Z={z})', 'RelativeRotation': f'(Pitch=0,Yaw={yaw},Roll=0)'},
@@ -518,6 +537,9 @@ def main():
         spec['stubs'].append({'path': AEGIS_STOCK, 'parent': 'LiveAIVessels'})
         spec['blueprints'].append(aegis_bp())
         live_said += f'; BP_SV_IF_Aegis: the stock Aegis + {", ".join(n for n, _, _ in AEGIS_LASERS)}'
+        spec['stubs'].append({'path': RAVEN_ECM_STOCK, 'parent': 'LiveAIGroundVehicleObject'})   # ((2026-11-18) RAVEN's ECM)
+        spec['blueprints'].append(raven_bp())
+        live_said += f'; BP_SV_IF_Raven: BP_SV_IF_Aegis + {RAVEN_ECM[0]} (the Alicorn\'s ECM)'
         live_said = (f'; BP_SV_Tani_HULLLIVE: {len(kids)} live parts ({", ".join(n["name"] for n in kids)}), '
                      f'{len(lb["scs"]) - len(kids) - (2 if rig else 1)} drawn')
     out = os.path.join(BUILD, 'tani.spec.json')

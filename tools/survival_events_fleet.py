@@ -64,8 +64,12 @@ IF_AEGIS_LASERS = ('LASER_BOW', 'LASER_AFT')
 # Mk 15 slot carries the Alicorn's ECM part (EB_002's `ecm` child: BP_BA002_alcn_ecm_Base, its jammer BP_wp_ecm_ON) on
 # its row alcn_ecm_01 (the Alicorn's rows, added at the main menu), as the Ladons' CIWS slots carry the Arsenal Bird's
 # pods (hard rule 38): its class imported from EB_002's world data, the hull row's child for that slot the ECM's row
-IF_RAVEN_ECM = {'ship': 'RAVEN', 'slot': 'BP_VE002_aegs_mk15_Base', 'part': 'ecm', 'npc': 'alcn_ecm_01',
-                'wd': '/Game/OnlineMode/Maps/EmergencyCall/EB_002/WD_EB_002', 'src_unit': 'Boss_0'}
+# ((2026-11-18) its own component instead, on its own blueprint BP_SV_IF_Raven (tools/tanicorn/spec.py raven_bp: the Aegis's
+# + ECM_MAST): 0.74.164's class on the Mk 15's child kept the Mk 15's body (its class the stock BP's component's), the
+# ECM's row on it. TANI=1 only, as the lasers: the blueprint is the Tanicorn container's)
+IF_RAVEN_ECM = {'ship': 'RAVEN', 'comp': 'ECM_MAST', 'part': 'ecm', 'npc': 'alcn_ecm_01', 'row': 'alcn_ecm_01',
+                'wd': '/Game/OnlineMode/Maps/EmergencyCall/EB_002/WD_EB_002', 'src_unit': 'Boss_0',
+                'bp': '/Game/Mods/SurvivalMode/Tanicorn/BP_SV_IF_Raven', 'bp_class': 'BP_SV_IF_Raven_C'}
 IF_AEGIS_LASER = [m for m in TANI_MOUNTS if m['part'] == 'LASER'][0]
 # Mission 22's ships' parts by their component (the world data's ComponentFieldName), renamed by place (their names end in
 # digits, _01 / _02: hard rule 17), and the GrandChildrens' (the Kirov's gun mount's Artillery) after their parent's
@@ -229,6 +233,8 @@ def if_fleet():
         s['parts'] = [f"{s['obj']}_{p}" for p in K['parts']]
         if kind == 'aegis' and TANI_WD:                         # ((2026-11-17) its two lasers, TANI=1 only)
             s['parts'] += [f"{s['obj']}_{c}" for c in IF_AEGIS_LASERS]
+            if name == IF_RAVEN_ECM['ship']:                    # ((2026-11-18) RAVEN's ECM mast)
+                s['parts'].append(f"{s['obj']}_{IF_RAVEN_ECM['comp']}")
         out.append(s)
     assert out[0]['key'] == 'Geofon' and len({s['key'] for s in out}) == len(out)
     for s in out:                                               # the coast (WP7: "never nearer the coast")

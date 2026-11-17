@@ -1865,7 +1865,18 @@ function IFLEET.tick(now)
     if not F then return end
     local dt = math.min(1, math.max(0, now - (F.last or now)))
     F.last = now
-    if paused() or OFF.store() then return end           -- (the STORE's time not counted either: review finding 4)
+    if paused() or OFF.store() then                      -- (the STORE's time not counted either: review finding 4)
+        -- ((0.74.165) said when it's held 3 s and more (twice the autotest's phase2 saw the fleet stop with no word: a
+        -- pause from the game's window losing focus?), and when it goes on again
+        F.heldFor = (F.heldFor or 0) + dt
+        if F.heldFor >= 3 and not F.heldSaid then
+            F.heldSaid = true
+            log(string.format("fleet: held at +%.0f s (%s): the ships' clock stopped", F.t, paused() and "the game paused" or "the STORE"))
+        end
+        return
+    end
+    if F.heldSaid then log(string.format("fleet: going again at +%.0f s after %.0f s held", F.t, F.heldFor)) end
+    F.heldFor, F.heldSaid = 0, nil
     F.t = F.t + dt
     local c = fm()
     if F.left and F.t >= (F.leftAt or 0) then clearTick(F, c) end

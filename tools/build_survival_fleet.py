@@ -155,8 +155,8 @@ def fleet_units(units, used_ids, z, top_number, v):
             retag_turrets(kids, obj, aegis_rows, used_ids, z)
             if se.TANI_WD:                     # ((2026-11-17) its two lasers, bow and aft: TANI=1 only)
                 kids += aegis_lasers(z, used_ids, obj, kids)
-            if s['name'] == se.IF_RAVEN_ECM['ship']:   # ((2026-11-17) RAVEN's EW mast: the Alicorn's ECM in its Mk 15 slot
-                raven_ecm(z, kids)
+            if se.TANI_WD and s['name'] == se.IF_RAVEN_ECM['ship']:   # ((2026-11-18) RAVEN's EW mast: the Alicorn's ECM
+                kids += raven_ecm(z, used_ids, obj, kids)
         elif kind == 'boat':                   # Training006's (an enemy already), its SAM launcher on the Spaceport's row
             names = port_unit(units, used_ids, z, src_boat, unit, obj, row, [s['point']], s['yaw'], top_number, tgt=True)
             u = unit_named(units, unit)
@@ -205,10 +205,11 @@ def fleet_units(units, used_ids, z, top_number, v):
              f'{len(z.imports) - was_imports} imports added ({was_imports} -> {len(z.imports)})'))
 
 
-def raven_ecm(z, kids):
-    """((2026-11-17) the user: "Have the Raven use ECM too") RAVEN's Mk 15 child given the Alicorn's ECM part's class (EB_002's
-    `ecm` child's hard import, imported here: import_from), as the Ladons' CIWS slots got the Arsenal Bird's pods; its row
-    is the hull row's (fleet_npc_rows: alcn_ecm_01 for that slot)."""
+def raven_ecm(z, used_ids, obj, kids):
+    """((2026-11-18) the user: "Have the Raven use ECM too") RAVEN's ECM part on BP_SV_IF_Raven's ECM_MAST component, made as
+    the Aegis's lasers are (aegis_lasers): a deep copy of its own Mk 15 child (no grandchildren), named <obj>_ECM_MAST, a new
+    UniqueID, our world data's name, the Alicorn's ECM mission row (alcn_ecm_01: NPC_IMPORT), a TGT mark, no tags, its Class
+    EB_002's `ecm` child's hard import (import_from), the template's dropped (hard rule 34)."""
     se = survival_events
     E = se.IF_RAVEN_ECM
     ebz = ZenPkg(stock(E['wd']))
@@ -220,14 +221,26 @@ def raven_ecm(z, kids):
         if field_of_list(data, 'ComponentFieldName')[1] == E['part']:
             ref = field_of_list(data, 'Class')
     assert ref and ref[0] == 'obj' and ref[1] < 0, ('the Alicorn ECM part\'s class import not found', ref)
-    n = 0
-    for ch in kids:
-        data = field_of(ch, 'Data')[2]
-        if field_of_list(data, 'ComponentFieldName') == ('name', E['slot'], 0):
-            data[:] = [(q[0], q[1], False, import_from(z, ebz, ref)) if q[1] == 'Class' and q[3] is not None else q for q in data]
-            n += 1
-    assert n == 1, ('RAVEN: its Mk 15 slot', n)
-    print(f'  invincible fleet: RAVEN\'s Mk 15 slot carries the Alicorn\'s ECM ({E["npc"]}, its class from {E["wd"].rsplit("/", 1)[1]})')
+    cls = import_from(z, ebz, ref)
+    tmpl = [ch for ch in kids if field_of(field_of(ch, 'Data'), 'ComponentFieldName') == ('name', 'BP_VE002_aegs_mk15_Base', 0)]
+    assert len(tmpl) == 1 and field_of(tmpl[0], 'GrandChildrens') == ('arr', []), (obj, 'its Mk 15 child changed')
+    ch = copy.deepcopy(tmpl[0])
+    data = field_of(ch, 'Data')[2]
+    put(data, 'LiveChildAIObjectData', 'MissionNpcID', ('name', E['row'], 0))
+    put(data, 'LiveChildAIObjectData', 'ComponentFieldName', se.fname(E['comp']))
+    put(data, 'LiveChildAIObjectData', 'Class', cls)
+    put(data, 'LiveChildAIObjectData', 'TargetMarkType', ('enum', 'ELiveTargetMarkType', ('raw', 'Byte', b'\x01')))
+    put(data, 'LiveChildAIObjectData', 'Tags', ('arr', []))
+    name = f'{obj}_{E["comp"]}'
+    put(ch[2], 'LiveChildAIObjectDesc', 'Name', se.fname(name))
+    put(ch[2], 'LiveChildAIObjectDesc', 'UniqueID', ('raw', 'UInt32', new_unique_id(used_ids, 'AC8SurvivalMode:' + name)))
+    put(ch[2], 'LiveChildAIObjectDesc', 'WorldDataName', ('name', 'WD_SurvivalMode_global', 0))
+    put(ch[2], 'LiveChildAIObjectDesc', 'GrandChildrens', ('arr', []))
+    bad = [x for x in obj_refs(ch) if x != cls]
+    assert not bad, (name, 'a foreign object reference kept (hard rule 34)', bad)
+    for nm in names_in(ch) + [E['row'], E['comp']]: z.nb.add(nm)
+    print(f'  invincible fleet: RAVEN\'s ECM_MAST carries the Alicorn\'s ECM ({E["npc"]}, its class from {E["wd"].rsplit("/", 1)[1]})')
+    return [ch]
 
 
 def field_of_list(data, name):                           # (a property list's value by name, or None)
@@ -304,15 +317,12 @@ def fleet_npc_rows(rows, m22):
         row = copy_row(se.IF_KINDS[sh['kind']]['hull'])
         set_prop(row[2], idx['ModelId'], 'ModelId', ('name', sh['model'], 0))
         set_prop(row[2], idx['GameObjectDisplayName02'], 'GameObjectDisplayName02', s(se.IF_CLASS_KEY + sh['kind'].title()))
-        if sh['name'] == se.IF_RAVEN_ECM['ship']:   # ((2026-11-17) its Mk 15 slot's child row: the Alicorn's ECM
-            comps = [q for q in row[2] if q[1] == 'ChildNPCComponentNames'][0][3][1]
-            ecm = ('name', se.IF_RAVEN_ECM['npc'], 0)
-            row[2][:] = [(q[0], q[1], q[2], ('arr', [ecm if shown(c) == se.IF_RAVEN_ECM['slot'] else k
-                                                      for c, k in zip(comps, q[3][1])])) if q[1] == 'ChildNPCId' else q for q in row[2]]
-            assert sum(1 for k in [q for q in row[2] if q[1] == 'ChildNPCId'][0][3][1] if k == ecm) == 1, 'RAVEN: its ECM row'
         if sh['kind'] == 'aegis' and se.TANI_WD:   # ((2026-11-17) its lasers' rows by their components, as a stock ship's)
-            for name, add in (('ChildNPCId', [('name', se.IF_AEGIS_LASER['npc'], 0)] * len(se.IF_AEGIS_LASERS)),
-                              ('ChildNPCComponentNames', [se.fname(c) for c in se.IF_AEGIS_LASERS])):
+            ecm = sh['name'] == se.IF_RAVEN_ECM['ship']   # ((2026-11-18) and RAVEN's ECM mast's)
+            for name, add in (('ChildNPCId', [('name', se.IF_AEGIS_LASER['npc'], 0)] * len(se.IF_AEGIS_LASERS)
+                               + ([('name', se.IF_RAVEN_ECM['npc'], 0)] if ecm else [])),
+                              ('ChildNPCComponentNames', [se.fname(c) for c in se.IF_AEGIS_LASERS]
+                               + ([se.fname(se.IF_RAVEN_ECM['comp'])] if ecm else []))):
                 i = [k for k, q in enumerate(row[2]) if q[1] == name][0]
                 q = row[2][i]
                 row[2][i] = (q[0], q[1], q[2], ('arr', list(q[3][1] if q[3] else []) + add))
@@ -344,7 +354,10 @@ def fleet_model_rows(crow, idx):
         row = copy.deepcopy(crow[(f[1], f[2])])
         set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(sh['name_key']))
         if sh['kind'] == 'aegis' and se.TANI_WD:   # ((2026-11-17) on BP_SV_IF_Aegis: its two lasers' components)
-            row[2][:] = [(q[0], q[1], q[2], ('soft', ('name', se.IF_AEGIS_BP, 0), ('name', se.IF_AEGIS_BP_CLASS, 0), ''))
+            bp, bpc = se.IF_AEGIS_BP, se.IF_AEGIS_BP_CLASS
+            if sh['name'] == se.IF_RAVEN_ECM['ship']:   # ((2026-11-18) RAVEN's own: the Aegis's + its ECM mast)
+                bp, bpc = se.IF_RAVEN_ECM['bp'], se.IF_RAVEN_ECM['bp_class']
+            row[2][:] = [(q[0], q[1], q[2], ('soft', ('name', bp, 0), ('name', bpc, 0), ''))
                          if q[1] == 'BlueprintClass' else q for q in row[2]]
         assert se.fname(sh['model'])[2] == 0, sh['model']
         out.append(((sh['model'], 0), row))

@@ -1378,7 +1378,7 @@ NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_commo
               # they come with its DT_NPC row's ChildNPCId)
               ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission016', []),
               # the Alicorn's own mission row (its parts name none): Online Mode's EB_002
-              ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_EB_002_ON', ['alcn_01']),
+              ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_EB_002_ON', ['alcn_01', 'alcn_ecm_01']),   # (+ RAVEN's ECM, 2026-11-18)
               # the Spaceport Retake's rockets and their debris (survival_events.SP_ROCKET_ROWS: (Survival's name,
               # Mission 19's), Mission 19's names end in a numeric tail: copied under Survival's)
               ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission019', survival_events.SP_ROCKET_ROWS)] + list(

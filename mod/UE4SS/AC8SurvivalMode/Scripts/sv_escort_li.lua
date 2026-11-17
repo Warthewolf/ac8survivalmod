@@ -556,6 +556,7 @@ local function claimsTick(s, clock)
                 if ZLAS.sound then ZLAS.sound(z.li_hit_sound or z.laser_hit_sound, m.zAt) end
                 say("%s's laser shot down %s (from %s; %d so far); %s", c.r.name, c.name, tostring(m.from or "?"), s.kills,
                     c.r.li and aimNote(c.r) or "")
+                if ZLI and ZLI.onKill then pcall(ZLI.onKill, c.r, m) end   -- ((0.74.165) a kill's hook: round 30's callout)
             else
                 s.lost = s.lost + 1
                 say("%s went down %.2f s into %s's swing: it hit something first", c.name, clock - c.at, c.r.name)
