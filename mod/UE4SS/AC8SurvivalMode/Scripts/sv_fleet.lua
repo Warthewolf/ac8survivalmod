@@ -1620,6 +1620,16 @@ local function spawnShip(F, sh)
     log(string.format("fleet: %s (%s, %s): %s at its course start; %d objects made", label(sh), sh.unit, sh.kind, said, #sh.raw))
 end
 
+-- ((0.74.160) a joiner: a ship of the host's from its copies here (its hull: the one object not a turret's class) ->
+-- { unit, hull, parts }, or nil
+function IFLEET.shipFrom(unit, objs)
+    local sh = { unit = unit, parts = {} }
+    for _, o in ipairs(objs or {}) do
+        local e = keep(o)
+        if e then if turretClass(e.cls) then sh.parts[#sh.parts + 1] = e elseif not sh.hull then sh.hull = e end end
+    end
+    return sh.hull and sh or nil
+end
 -- settle_s after its spawn: its hull (its one object that isn't a turret's class) and parts, its up line
 local function settle(F, sh)
     sh.settled = true

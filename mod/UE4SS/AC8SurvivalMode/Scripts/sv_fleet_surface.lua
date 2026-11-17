@@ -271,14 +271,19 @@ local function beat(b)
     end
     return "an empty beat"
 end
-function IFSURF.start(F)
+-- ((0.74.160) a joiner: IFSURF.start({}, the host's seed) from the host's word ("if|surf"): the same ships rising the same
+-- way (its stand-ins are its own, not the fleet), the same shots and beats; the real fleet comes from the host's spawns
+function IFSURF.start(F, joinSeed)
     local c = cs()
-    if c.enabled == false or (COOP and COOP.client and COOP.client() == true) then return false end   -- (the host's: WP12 brings joiners)
+    local joiner = COOP and COOP.client and COOP.client() == true
+    if c.enabled == false or (joiner and not joinSeed) then return false end
     local mesh, anim = loadObject(c.rig), loadObject(c.anim)
     if not (mesh and anim) then slog("her rig or its rise didn't load (a build without the Tanicorn container?): the fleet as before"); return false end
     local G, u, r, yaw = frame()
     S = { F = F, t0 = os.clock(), G = G, u = u, r = r, yaw = yaw, ships = {}, spots = {}, fx = {}, mesh = mesh, anim = anim,
-          shot = 0, beat = 0, cams = {}, phase = "rise", seed = math.floor(os.clock() * 1000) % 100000, shakes = 0, sounds = 0 }
+          shot = 0, beat = 0, cams = {}, phase = "rise", seed = tonumber(joinSeed) or (math.floor(os.clock() * 1000) % 100000),
+          shakes = 0, sounds = 0, joiner = joiner or nil }
+    if not joiner and IFCOOP and IFCOOP.send then IFCOOP.send("surf", string.format("%d", S.seed)) end
     local x = S.seed
     local function rnd() x = (x * 1103515245 + 12345) % 2147483648; return x / 2147483648 end
     local last, lead = 0, n(c.lead_s, 0)
@@ -427,7 +432,7 @@ function IFSURF.state() return S and { phase = S.phase, ships = #S.ships, shot =
 TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet surfacing", fn = function(now)
     if not S then return end
     if not D or (levelTorn and levelTorn()) then S = nil; return end
-    if not (IFLEET and IFLEET.cur == S.F) then over("the fleet taken off"); return end
+    if not S.joiner and not (IFLEET and IFLEET.cur == S.F) then over("the fleet taken off"); return end
     local c = cs()
     local t = now - S.t0
     for i = #S.fx, 1, -1 do                               -- (each water stopped at its life: AC8's IGC waters never stop)

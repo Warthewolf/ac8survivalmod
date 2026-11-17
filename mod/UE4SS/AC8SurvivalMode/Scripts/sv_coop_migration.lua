@@ -922,6 +922,12 @@ local function onJoinerMessage(f)
             local okR, errR = pcall(SPORT.rkFromHost, { f[1], short(f[2], 2), short(f[3], 12), short(f[4], 12) })
             if not okR then once("rk", "coop: the host's rocket state not read: " .. tostring(errR)) end
         end
+    elseif k == "if" and COOP.client() then              -- ((0.74.160) round 30's host word: sv_fleet_round.lua IFCOOP (dev)
+        if IFCOOP and IFCOOP.onHost and levelReady() then
+            local okI, errI = pcall(IFCOOP.onHost, { f[1], short(f[2], 12), short(f[3], 40), short(f[4], 40), short(f[5], 40),
+                                                     short(f[6], 40), short(f[7], 40) })
+            if not okI then once("if", "coop: the host's round 30 word not read: " .. tostring(errI)) end
+        end
     elseif k == "es" and COOP.client() then              -- ((2026-11-06) THE ESCORT's state, the ZFA-44 carriers: sv_escort.lua
         if ESC and ESC.onHost then
             local okE, errE = pcall(ESC.onHost, f)
@@ -1098,6 +1104,24 @@ local function mirrored(fn, ...)                    -- the host's own round logi
     local ok, err = pcall(fn, ...)
     M.mirror = M.mirror - 1
     if not ok then error(err, 0) end
+end
+-- ((0.74.160) round 30's ticks (TEST_TICKS, outside roundsTick: dev parts) run as the host's round logic too: their pay
+-- split and sent (the user: "Split like other specials"), their callouts and subtitles to every game; on a joiner or solo
+-- as they were. Wrapped here, the last of the parts that register them having loaded already
+function COOP.asRound(fn, ...)
+    if COOP.host() then return mirrored(fn, ...) end
+    return fn(...)
+end
+-- (not the surfacing's: every game plays it from the host's word, its beats its own)
+local ROUND_TICKS = { ["fleet"] = true, ["fleet ships"] = true, ["fleet round"] = true,
+                      ["tanicorn rail"] = true, ["tanicorn rise"] = true, ["tanicorn live hull"] = true }
+local TT = rawget(_G, "TEST_TICKS")                      -- (none in a release: its test-only parts cut; raw, bounded)
+for i = 1, type(TT) == "table" and rawlen(TT) or 0 do
+    local t = rawget(TT, i)
+    if type(t) == "table" and ROUND_TICKS[t.name] and type(t.fn) == "function" and not t.asRound then
+        local fn = t.fn
+        t.fn, t.asRound = function(now) return COOP.asRound(fn, now) end, true
+    end
 end
 roundsTick = function(now)
     if COOP.client() then return clientRounds(now) end

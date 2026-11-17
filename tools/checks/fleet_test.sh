@@ -287,12 +287,12 @@ check(C ~= nil and C.unit == FORD and #C.stages == 2 and C.look.bow.pitch == 25 
     "CFG.specials.fleet.geofon: the Ford, two stages, the V's angles")
 check(CFG_DEFAULTS.specials.fleet ~= CFG.specials.fleet and same(CFG_DEFAULTS.specials.fleet, CFG.specials.fleet),
     "the same in CFG_DEFAULTS (a copy): shipped, no edit")
-check(type(keys.B) == "function" and type(keys.G) == "function" and type(keys.N) == "function" and #TEST_TICKS == 5
+check(type(keys.B) == "function" and type(keys.G) == "function" and type(keys.N) == "function" and #TEST_TICKS == 6
     and TEST_TICKS[2].name == "fleet ships" and TEST_TICKS[3].name == "fleet storm" and TEST_TICKS[4].name == "fleet round"
-    and TEST_TICKS[5].name == "fleet surfacing" and type(LEVEL_DROPS["fleet round"]) == "function"
+    and TEST_TICKS[5].name == "fleet co-op" and TEST_TICKS[6].name == "fleet surfacing" and type(LEVEL_DROPS["fleet round"]) == "function"
     and type(LEVEL_DROPS.fleet) == "function" and type(LEVEL_DROPS["fleet ships"]) == "function"
     and type(LEVEL_DROPS["fleet storm"]) == "function" and type(LEVEL_DROPS["fleet surfacing"]) == "function",
-    "Ctrl+B, Ctrl+G, Ctrl+N, their four ticks (the storm's and the surfacing's, 2026-11-16) and level drops")
+    "Ctrl+B, Ctrl+G, Ctrl+N, their ticks (the storm's and the surfacing's, 2026-11-16; co-op's, 0.74.160) and level drops")
 check(CFG.specials.fleet.surface and CFG.specials.fleet.surface.enabled == true and type(IFSURF) == "table" and type(IFSURF.start) == "function",
     "the fleet's surfacing on (CFG.specials.fleet.surface), IFSURF")
 -- ((2026-11-17) the epic surfacing, sv_fleet_surface.lua) every shot a move in order on a ship of the fleet, the beats in

@@ -435,6 +435,7 @@ local TYPES = {
     -- the joiner's (onJoinerMessage and the parts it hands them to)
     { "join", "cf", { "cf", "1", "1", "@CF" } },
     { "join", "fx", { "fx", "2", "m:11:0" } },
+    { "join", "if", { "if", "crew", "v6001_6002", "C" } },   -- ((0.74.160) round 30's host word: sv_fleet_round.lua IFCOOP
     { "join", "ak", { "ak", "1", "BUILT" } },
     { "join", "ax", { "ax", "1", "NO" } },
     { "join", "ar", { "ar", "4000", "NEVER TOOK OFF" } },
@@ -697,6 +698,7 @@ local EFFECT = {
     ["join spx"] = function() return SPORT.hostRow and SPORT.hostRow.kind == "a" end,
     ["join rk"] = function() return called("SV_Event", "RE_SV_SpRocketEndA") end,
     ["join es"] = function() return ESC.host and ESC.host.state == "route" end,
+    ["join if"] = function() return IFCOOP and IFCOOP.last and IFCOOP.last.what == "crew" end,
     ["join vm"] = function() return M.vmHere == true end,
     ["join vr"] = function() return M.vr ~= nil end,
     ["join rz"] = function() return true end,

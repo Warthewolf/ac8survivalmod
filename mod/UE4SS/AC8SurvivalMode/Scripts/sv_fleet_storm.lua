@@ -379,6 +379,10 @@ local function centres()                                   -- (the airfield, and
             if ok and l then out[#out + 1] = { X = l.X, Y = l.Y, Z = l.Z }; break end
         end
     end
+    if #out < 2 and IFCOOP and IFCOOP.flagAt then         -- ((0.74.160) a joiner: its copy of the host's flagship)
+        local okJ, l = pcall(IFCOOP.flagAt)
+        if okJ and l then out[#out + 1] = l end
+    end
     return out
 end
 -- a flash at `at` (its cloud flash, a bolt under it, the bolt's glow and its thunder): what it showed. sure: the thunder

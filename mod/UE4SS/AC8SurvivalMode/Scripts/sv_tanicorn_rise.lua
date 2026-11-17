@@ -331,6 +331,18 @@ function TANI.riseRelease(why)
     if R.cineLater then R.cineLater = nil; riseCine(R) end
     return true
 end
+-- ((0.74.160) a joiner: her rise on the host's copy of her here (no spawn of ours: the host's comes through co-op's spawn
+-- mirror), held under the sea until the host's release (TANI.riseRelease), the same cinematic; GEOFON's split is the host's word
+function TANI.joinRise(x, y, face, why, cineHooks)
+    if RISE and not RISE.back then riseBack(RISE, "a new rise (" .. tostring(why) .. ")"); RISE = nil end
+    RISE = { x = x, y = y, z = TANI.live.z_cm, before = {}, anim = riseAsset(TANI.rise.anim), at = os.clock(), state = "finding",
+             next = 0, why = why, cineHooks = cineHooks, wait = true, joiner = true }
+    log(string.format("tanicorn: %s: her rise on the host's copy at (%.0f, %.0f) facing %.0f, held for the host's release",
+        tostring(why), x, y, face))
+    return true
+end
+-- ((0.74.160) a joiner: her hull here (the host's copy), nil when there's none
+function TANI.anyHull() local o = nil; for _, h in ipairs(ourHulls()) do o = h end; return o end
 function TANI.roundRise(x, y, face, why, onBreach, cineHooks, opts)
     if RISE and not RISE.back then riseBack(RISE, "a new rise (" .. tostring(why) .. ")"); RISE = nil end
     local before = {}

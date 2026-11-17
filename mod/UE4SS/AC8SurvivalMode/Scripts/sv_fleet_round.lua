@@ -12,6 +12,16 @@
 -- Ctrl+F in a break: round 30 next (test).
 -- TEST ONLY BEGIN (INVINCIBLE FLEET's round: test builds only, the user's dev install)
 IFROUND = {}
+IFCOOP = {}                                               -- ((0.74.160) round 30 in co-op: the host's "if" messages, here
+if SPC then                                               -- ((0.74.160) a joiner's copies of round 30 taken off at its end
+    SPC.UNITS_OF = SPC.UNITS_OF or {}                     -- (SPC.clientClean): every ship's unit and her live hull's
+    SPC.UNITS_OF.fleet = function()
+        local out = {}
+        for _, c in ipairs(((CFG.specials or {}).fleet or {}).ships or {}) do if c.key then out[#out + 1] = "SV_Unit_IF" .. c.key end end
+        if TANI and TANI.live and TANI.live.unit then out[#out + 1] = TANI.live.unit end
+        return out
+    end
+end
 do
 local R = nil                                             -- (this round's: { F, paid, parts, t0, mus, ... })
 local function n(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
@@ -179,6 +189,7 @@ end
 local function split(P, why)                              -- GEOFON torn open: its V rears, its halves part
     if P.split then return end
     P.split, P.splitAt = true, os.clock()
+    IFCOOP.send("split")
     if not P.G then rlog("phase 2: her breach (" .. why .. "): GEOFON was already gone, no V"); return end
     local okF, err = pcall(GEO.fall, P.G)
     rlog(string.format("phase 2: GEOFON split in two by %s (%s)", why, okF and "its V rearing" or ("its V FAILED: " .. tostring(err))))
@@ -208,10 +219,12 @@ local function p2Rise(P, now)                            -- her spawn across GEO
         x, y, face, r > 0 and "spawned, rising" or ("NOT spawned (" .. tostring(okR and no or r) .. "): GEOFON splits now")))
     if r <= 0 then split(P, "its own break (no TANACORN)"); P.state = "skipped"; return end
     P.state, P.riseAt = "rise", now
+    IFCOOP.send("rise", string.format("%.0f", x), string.format("%.0f", y), string.format("%.1f", face))
 end
 local function hideHalves(P, now)
     if P.G and P.split and not P.hidden and now - P.splitAt >= n(fallC().hide_s, 50) then
         P.hidden = true
+        IFCOOP.send("hide")
         local okH, k = pcall(GEO.fallHide, P.G)
         rlog(string.format("phase 2: GEOFON's halves hidden %.0f s after the split (%s of 2)", now - P.splitAt, okH and tostring(k) or "error"))
     end
@@ -249,6 +262,7 @@ local function openCore(P, why)
     local floor = P.coreMax * n(c.core_floor, 0.02)
     P.coreFloor = floor
     local okM = pcall(function() o:SetMinHealth(floor / 10) end)
+    IFCOOP.send("core")
     hudCallout(tx2().core or "HER CORE IS EXPOSED", tx2().core_sub or "SINK THE TANACORN")
     say("core", c.radio)
     CREW.say("core")
@@ -332,6 +346,7 @@ local function p2Tick(now)
             return
         end
         R.p2 = { state = "watch", G = G, sh = sh, paid = 0 }
+        IFCOOP.send("watch", sh.unit)
         rlog(string.format("phase 2: GEOFON watched (its stages at %s; held at %.0f %% from %.0f %%, broken there)", stagesSaid(),
             n(fl.break_at, 0.03) * 100, n(fl.watch_hp, 0.15) * 100))
         return
@@ -368,6 +383,7 @@ local function p2Tick(now)
                 pcall(function() G.hull.obj[f] = v end)
             end
             sh.sunk = true
+            IFCOOP.send("break")
             if IFLEET.onSunk then pcall(IFLEET.onSunk, F, sh, "broken by the TANACORN") end
             P.state, P.t0 = "fall", now
             rlog(string.format("phase 2: GEOFON at its break (%.0f %%): held whole and stopped; the TANACORN under it %g s on, "
@@ -387,6 +403,7 @@ local function p2Tick(now)
         if P.releaseAt and now >= P.releaseAt then
             P.releaseAt = nil
             local okL = TANI.riseRelease and pcall(TANI.riseRelease, "round 30: her spawn's hitch passed")
+            IFCOOP.send("release")
             rlog("phase 2: her rise released" .. (okL and "" or " (NOT: no TANI.riseRelease)"))
             CREW.say("release")
         end
@@ -733,6 +750,7 @@ local function crewPlay(key, now)
     end
     K.lastStyle, K.last = st, key
     K.said[key] = true
+    if COOP and COOP.host and COOP.host() and COOP.msg then pcall(COOP.msg, nil, "if", "crew", key, st) end   -- (0.74.160)
     K.busyUntil = now + crewDur(key) * (st == "B" and 1.6 or (st == "C" and 1.3 or 1)) + (st == "C" and n(c.c_tail_s, 3.5) or 0)
         + n(c.gap_s, 4)                                   -- ((0.74.154) style C's echoes and tail: the user, "thats perfect")
     if SUB and SUB.say and not (c.no_subs or {})[l[1]] then pcall(SUB.say, (c.speakers or {})[l[1]] or l[1], l[2]) end
@@ -765,6 +783,18 @@ function CREW.tick(now)
     if #pool > 0 then crewPlay(pool[math.random(#pool)], now) end
     local e = c.every_s or { 45, 90 }
     K.nextAt = now + n(e[1], 45) + math.random() * math.max(0, n(e[2], 90) - n(e[1], 45))
+end
+-- ((0.74.160) a joiner: the host's crew line played here too (sound only), a line of crew.lines in one of crew.styles only
+function CREW.here(key, st)
+    local c = cc()
+    if c.enabled == false or not (SND and SND.play) then return false end
+    if type(key) ~= "string" or not (c.lines or {})[key] then return false end
+    local okS = false
+    for _, x in ipairs(c.styles or {}) do if x == st then okS = true end end
+    if not okS then st = (c.styles or { "C" })[1] end
+    local h = SND.play({ file = "tanacorn/" .. st .. "_" .. key .. ".wav", db = n(c.db, 2) })
+    rlog(string.format("crew: %s (the host's, style %s)%s", key, st, h and "" or ": didn't play"))
+    return h ~= nil and h ~= false
 end
 function CREW.reset() K.q, K.busyUntil, K.nextAt, K.said, K.last, K.lastStyle = {}, 0, nil, {}, nil, nil end
 end
@@ -920,4 +950,110 @@ if type(LEVEL_DROPS) == "table" then                       -- (the level's objec
     LEVEL_DROPS["fleet round"] = function() R = nil; if SKY then SKY.fightSlow = nil end end
 end
 end
+-- ((0.74.160) a joiner: the host's word on round 30 ("if", sv_coop_migration.lua; fields cut and checked there): only in
+-- round 30's fleet round here, each kind its own handler
+local function jlog(s) log("fleet round: " .. s) end
+function IFCOOP.send(what, ...)                          -- (the host's word, to every joiner)
+    if COOP and COOP.host and COOP.host() and COOP.msg then pcall(COOP.msg, nil, "if", what, ...) end
+end
+-- a joiner's GEOFON and TANACORN, from the host's word: J = { unit, G (GEO's on the copy), split, hidden }
+local J = nil
+local function jGeo()
+    if J.G then return J.G end
+    local objs = (COOP and COOP.copiesOf) and COOP.copiesOf(J.unit) or {}
+    local sh = IFLEET.shipFrom and IFLEET.shipFrom(J.unit, objs) or nil
+    if not sh then return nil, string.format("no copy of %s here (%d objects)", tostring(J.unit), #objs) end
+    local G, why = GEO.attach(sh)
+    if not G then return nil, why end
+    J.G = G
+    jlog(string.format("co-op: GEOFON's copy here watched (%s, %d parts)", tostring(J.unit), #sh.parts))
+    return G
+end
+-- a joiner: its copy of the host's flagship (GEOFON, the fleet's first ship) where it is now, nil when there's none here
+function IFCOOP.flagAt()
+    if not (COOP and COOP.client and COOP.client() and COOP.copiesOf) then return nil end
+    local first = (((CFG.specials or {}).fleet or {}).ships or {})[1]
+    if not (first and first.key) then return nil end
+    local o = (J and J.G and J.G.hull and J.G.hull.obj) or COOP.copiesOf("SV_Unit_IF" .. first.key)[1]
+    if not (o and liveObj(o)) then return nil end
+    local ok, l = pcall(function() return o:K2_GetActorLocation() end)
+    return (ok and l) and { X = l.X, Y = l.Y, Z = l.Z } or nil
+end
+local function finiteN(v, most) return type(v) == "number" and v == v and v > -most and v < most end
+function IFCOOP.onHost(f)
+    IFCOOP.last = { what = f[2], at = os.clock() }        -- (the last word read: the co-op guard test's)
+    if not D then return false, "not in a run here" end
+    local what = f[2]
+    if what == "crew" then return CREW.here(f[3], f[4]) end
+    if what == "surf" then                                -- (the fleet's surfacing cutscene, the host's seed)
+        local seed = tonumber(f[3])
+        if not (finiteN(seed, 2147483648) and seed >= 0) then return false, "bad seed" end
+        if not (IFSURF and IFSURF.start) then return false, "no surfacing in this build" end
+        local okS, r = pcall(IFSURF.start, {}, math.floor(seed))
+        jlog("co-op: the fleet's surfacing (the host's, seed " .. math.floor(seed) .. "): " .. ((okS and r) and "playing" or "NOT played"))
+        return okS and r
+    end
+    if what == "watch" then
+        J = { unit = f[3] }
+        local G, why = jGeo()
+        if not G then jlog("co-op: GEOFON's copy not watched yet (" .. tostring(why) .. "): again at its break") end
+        return true
+    end
+    if not J then return false, "no GEOFON watched here" end
+    if what == "break" then                               -- (the host's held whole and stopped there)
+        local G = jGeo()
+        if G then
+            local h = G.hull.obj
+            pcall(function() h:SetIsInvincible(true) end)
+            for k, v in pairs({ bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true }) do pcall(function() h[k] = v end) end
+        end
+        jlog("co-op: GEOFON's break (the host's)" .. (G and "" or ": no copy here"))
+        return true
+    end
+    if what == "split" then
+        local G = jGeo()
+        J.split = true
+        local okF = G ~= nil and pcall(GEO.fall, G)
+        jlog("co-op: GEOFON split (the host's): " .. (okF and "its V rearing" or "no V here"))
+        return true
+    end
+    if what == "hide" then
+        local okH, k = false, 0
+        if J.G then okH, k = pcall(GEO.fallHide, J.G) end
+        jlog("co-op: GEOFON's halves hidden (the host's): " .. (okH and tostring(k) or "none here"))
+        return true
+    end
+    if what == "rise" then
+        local x, y, face = tonumber(f[3]), tonumber(f[4]), tonumber(f[5])
+        if not (finiteN(x, 1e9) and finiteN(y, 1e9) and finiteN(face, 720)) then return false, "bad place" end
+        local cine = (((CFG.specials and CFG.specials.fleet or {}).round or {}).phase2 or {}).cine
+        local hooks = (type(cine) == "table" and cine.enabled ~= false) and { keys = cine.keys, letterbox = cine.letterbox, beats = cine.beats } or nil
+        if not (TANI and TANI.joinRise) then return false, "no TANACORN in this build" end
+        return TANI.joinRise(x, y, face % 360, "round 30 (the host's)", hooks)
+    end
+    if what == "release" then
+        if not (TANI and TANI.riseRelease) then return false, "no TANACORN in this build" end
+        return TANI.riseRelease("the host's release")
+    end
+    if what == "core" then                               -- (her hull boxed and lockable here: your hits go to the host's)
+        local o = TANI and TANI.anyHull and TANI.anyHull() or nil
+        if o then
+            for k, v in pairs({ bShowHUDBox = true, bIsNotLockonTarget = false, bIsNotFCSTargets = false, TargetMarkType = 1 }) do
+                pcall(function() o[k] = v end)
+            end
+        end
+        jlog("co-op: her core open (the host's)" .. (o and "" or ": no copy of her here"))
+        return true
+    end
+    return false, "unknown: " .. tostring(what)
+end
+-- a joiner's GEOFON stepped each tick: its stages' looks (from the copy's own health: the host's "hp"), then its V
+TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet co-op", fn = function(now)
+    if not (J and COOP and COOP.client and COOP.client()) then return end
+    if not D then J = nil; return end
+    local G = J.G
+    if not G then return end
+    if J.split then pcall(GEO.fallStep, G, now) elseif not G.down then pcall(GEO.stagesStep, G, now) end
+end }
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["fleet co-op"] = function() J = nil end end   -- (the level's copies went with it)
 -- TEST ONLY END
