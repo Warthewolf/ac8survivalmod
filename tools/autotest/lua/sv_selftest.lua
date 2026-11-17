@@ -2660,7 +2660,10 @@ SUITES.shell = function()
             if ST.look({ X = p.X - 150000, Y = p.Y + 60000, Z = 30000 }, p, 50) then ST.shot(string.format("shell_runway_%d", i)) end
         end)
     end
-    A.wait(20)
+    A.log_("fleet round: deck: launch 1 off GEOFON's bow", 40, "s0", true, function(l)   -- ((0.74.144) GEOFON's deck)
+        ST.check(l ~= nil, "GEOFON launched a flight off its deck", l)
+    end)
+    A.wait(6)
     A.do_(function()
         ST.lookBack()
         local hp = AF and AF.hp
