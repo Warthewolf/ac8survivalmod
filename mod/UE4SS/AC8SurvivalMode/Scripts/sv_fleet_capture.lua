@@ -25,7 +25,11 @@ if CFG.specials and CFG.specials.fleet and not CFG.specials.fleet.capture then
         -- ((0.74.167) final_m 250 -> 800 and floor_m: the autotest's captive of 0.74.166 flew its glide into the sea short of the
         -- deck (invincible doesn't stop a crash: the retry menu), so the line never goes under the deck + floor_m and the
         -- move onto the deck comes from final_m out)
-        gate_km = 3, gate_alt_m = 300, glide_deg = 3.5, die_after_s = 3, final_m = 800, floor_m = 80, give_up_s = 240,
+        -- ((0.74.168) no move onto the deck: SV_Respawn's put the captive on GEOFON's deck at flying speed and it crashed at
+        -- once (autotest 0.74.167). Flown in low down GEOFON's line, never under the deck + floor_m; over its mark (within
+        -- final_m) an explosion on the deck and, in co-op, DOWN at once (hidden, revivable): the crash onto the deck)
+        gate_km = 3, gate_alt_m = 300, glide_deg = 3.5, final_m = 300, floor_m = 70, give_up_s = 240,
+        boom_fx = { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 3 },
         deck = { fwd_m = -40, right_m = 8, up_m = 22 },     -- (the deck's touchdown spot from GEOFON's root, metres)
         text = { lock = "CAPTURE LOCK", lock_sub = "GET CLEAR OR DESTROY RAVEN'S EW MAST",
                  lock_other = "CAPTURE LOCK ON %s", taken = "AIRCRAFT CAPTURED", taken_sub = "RAVEN HAS YOUR CONTROLS",
@@ -47,7 +51,9 @@ end
 local ATTACKERS = { "MaxPlaneAttackerMissiles", "MaxPursuitAttackers", "MaxNonPlaneAttackerMissiles" }
 -- ((0.74.166) the attack limits didn't hold (autotest capture of 0.74.165: MaxPursuitAttackers read 12 after it was set
 -- 0): no enemy targets you by the flags the fleet's parts hide from the game's targeting with, as well)
-local UNTARGETED = { bIsNotLockonTarget = true, bIsNotFCSTargets = true }
+-- ((0.74.168) those two aren't a player plane's (they read back as objects: the probe of 0.74.167); its Faction is (1, the
+-- players'): neutral (0) while RAVEN flies you, so no side's fire control picks you, put back after)
+local UNTARGETED = { Faction = 0 }
 
 -- GEOFON here (the host's own ship, a joiner's copy of it): its place and heading, or nil
 local function geofon()
@@ -106,6 +112,7 @@ end
 ---------------------------------------------------------------------------------------------------- this game's own capture
 -- L: { seq, state ("lock" | "fly" | "final" | "trap" | "done"), at, limits, solo }
 local L = nil
+local trapTick                                            -- (below: flyTick ends a capture through it)
 local function pawnNow() return liveObj(survivalPC) and survivalPC.Pawn or nil end
 local function shielded(on)                               -- (the user's rule: invincible, no enemy targets you; given back)
     local pawn = pawnNow()
@@ -178,32 +185,47 @@ local function flyTick(now)
         local alt = dk.Z / 100 + math.max(n(c.floor_m, 80), behind * math.tan(math.rad(n(c.glide_deg, 3.5))))
         local rc = type(SV_Capture) == "function" and SV_Capture(addrOf(pawn) or 0, dk.X, dk.Y, math.max(50, alt), dk.yaw) or -1
         if type(rc) == "number" and rc < 0 then giveBack("SV_Capture refused (" .. tostring(rc) .. ")") return end
-        if dist <= n(c.final_m, 250) or along > 0 then
-            if type(SV_Capture) == "function" then pcall(SV_Capture, 0) end
-            local okR, r = false, nil
-            if type(SV_Respawn) == "function" then okR, r = pcall(SV_Respawn, addrOf(pawn) or 0, dk.X, dk.Y, dk.Z, 0, dk.yaw, 0) end
+        if dist <= n(c.final_m, 300) or along > 0 then
             L.state, L.at = "trap", now
-            hudCallout("TRAPPED ON GEOFON", "")
-            clog(string.format("seq %s: trapped on GEOFON's deck (%.0f m off its mark; SV_Respawn %s)", tostring(L.seq), dist,
-                okR and tostring(r) or "FAILED"))
+            clog(string.format("seq %s: trapped on GEOFON's deck (over its mark, %.0f m off it, %.0f m up)", tostring(L.seq), dist,
+                (me.Z - dk.Z) / 100))
+            trapTick(now)
+            return
         end
     end
     if now - L.at > n(c.give_up_s, 240) then giveBack("not at the deck in " .. n(c.give_up_s, 240) .. " s") end
 end
-local function trapTick(now)
-    if now - L.at < n(cc().die_after_s, 3) then shielded(true); return end
+local function deckBoom(at)                               -- (the crash onto the deck: an explosion at its mark)
+    local fx = cc().boom_fx or {}
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    if not (fx[1] and valid(lib) and liveObj(survivalPC)) then return false end
+    local sys = loadObject(fx[1] .. "." .. (fx[1]:match("[^/]+$") or ""))
+    local sc = tonumber(fx[2]) or 1
+    return sys ~= nil and pcall(function()
+        lib:SpawnSystemAtLocation(survivalPC, sys, { X = at.X, Y = at.Y, Z = at.Z }, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = sc, Y = sc, Z = sc },
+            true, true, 0, false)
+    end)
+end
+trapTick = function(now)
     local seq, solo = L.seq, L.solo
     L.state = "done"
-    shielded(false)
+    if type(SV_Capture) == "function" then pcall(SV_Capture, 0) end   -- (the takeover off first: DOWN's own autopilot, or yours)
+    if playerLocationDirty then playerLocationDirty() end
     local g = geofon()
-    if g and SPC and SPC.boom then pcall(SPC.boom, deckOf(g)) end
+    local boomed = g and deckBoom(deckOf(g)) or false
+    hudCallout("CAPTURED", "TRAPPED ON GEOFON")
+    shielded(false)
     if solo or not (DOWN and DOWN.capture) then
-        clog(string.format("seq %s: captured on GEOFON (solo test: your plane given back, no DOWN)", tostring(seq)))
+        local pawn = pawnNow()                            -- (the solo test: climbed out round GEOFON, not left 70 m over the sea)
+        if solo and valid(pawn) and g and type(SV_Down) == "function" then pcall(SV_Down, addrOf(pawn) or 0, g.X, g.Y, 1500, 4000) end
+        clog(string.format("seq %s: captured on GEOFON (solo test: your plane given back, no DOWN); the deck's explosion %s",
+            tostring(seq), boomed and "up" or "NOT up"))
         L = nil
         return
     end
     local okD, r = pcall(DOWN.capture, "captured on GEOFON")
-    clog(string.format("seq %s: captured on GEOFON: DOWN (%s)", tostring(seq), okD and tostring(r) or "FAILED"))
+    clog(string.format("seq %s: captured on GEOFON: DOWN (%s); the deck's explosion %s", tostring(seq), okD and tostring(r) or "FAILED",
+        boomed and "up" or "NOT up"))
     L = nil
 end
 
@@ -239,6 +261,11 @@ local function hostTick(now)
     local sh, mast = raven()
     if H.cur then
         local k = H.cur
+        if k.state == "taken" then                         -- (over once its captive is DOWN, or the solo test's capture done)
+            local over = k.solo and L == nil
+            for _, p in ipairs(COOP and COOP.players and COOP.players() or {}) do if p.slot == k.slot and p.down then over = true end end
+            if over then H.cur = nil; clog(string.format("seq %d: slot %d captured: over", k.seq, k.slot)); return end
+        end
         if not g then hostEnd("GEOFON sunk", true); return end
         if k.state == "lock" then
             if not mast then hostEnd("RAVEN's EW mast destroyed", true); return end
@@ -317,8 +344,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet capture", fn = function(now)
     if not D then if L then giveBack("the run's over") end; H.cur, H.nextAt = nil, nil; return end
     if not (COOP and COOP.client and COOP.client()) then pcall(hostTick, now) end
     if L then
-        if L.state == "fly" or L.state == "final" then flyTick(now)
-        elseif L.state == "trap" then trapTick(now) end
+        if L.state == "fly" or L.state == "final" then flyTick(now) end
     end
 end }
 if type(LEVEL_DROPS) == "table" then
