@@ -28,7 +28,7 @@ if CFG.specials and CFG.specials.fleet and not CFG.specials.fleet.capture then
         -- ((0.74.168) no move onto the deck: SV_Respawn's put the captive on GEOFON's deck at flying speed and it crashed at
         -- once (autotest 0.74.167). Flown in low down GEOFON's line, never under the deck + floor_m; over its mark (within
         -- final_m) an explosion on the deck and, in co-op, DOWN at once (hidden, revivable): the crash onto the deck)
-        gate_km = 3, gate_alt_m = 300, glide_deg = 3.5, final_m = 300, floor_m = 70, give_up_s = 240,
+        gate_km = 3, gate_alt_m = 300, glide_deg = 3.5, final_m = 300, floor_m = 110, give_up_s = 240,   -- (floor 70 -> 110: 0.74.168 sagged 40 m under it, to 28 m)
         boom_fx = { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 3 },
         deck = { fwd_m = -40, right_m = 8, up_m = 22 },     -- (the deck's touchdown spot from GEOFON's root, metres)
         text = { lock = "CAPTURE LOCK", lock_sub = "GET CLEAR OR DESTROY RAVEN'S EW MAST",
