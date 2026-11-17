@@ -426,6 +426,12 @@ Copy a working stock pattern before inventing a new one.
     1 of 13. The probe of 0.74.142 (run 20261117_191507) found it; 0.74.143 scarred 131 of 177 (2026-11-17). Let a pcall
     that finds nothing say why (its error), or the next one stays hidden too. (65-70: the autotest branch's.)
 
+72. Never index a game TArray past its end from UE4SS Lua, not even inside a pcall: `arms[i]` for i over the array's
+    length reads whatever memory is there, and the game crashes (no Lua error to catch). 0.74.170 walked a railgun's
+    FireControlSystemComponent.AllArms[1..4] on a two-arm array: the autotest's game crashed (access violation at 0x10) the
+    moment RAILGUN_L deployed (run 20261118_012602); the same walk with `AllArms:ForEach(function(i, el) ... el:get() ...)`
+    ran clean (0.74.171, run 20261118_013043, 40/40). Walk game arrays with ForEach (or read their length first).
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
