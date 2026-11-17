@@ -3902,3 +3902,12 @@ game. The work was split by file between agents; the builds ran in sequence in t
   over the deck (the explosion, DOWN). Capture 16/16 on 0.74.174 and 0.74.176. Round 30's subtitles in their own file
   (config/subtitles_dev.ini, made by the game on 0.74.175's run, never zipped; tools/subtitles.py all / split for the
   user's friend: build/subtitles_all.ini, 496 lines).
+- 0.74.177-0.74.183 (2026-11-18): the capture lands on GEOFON (the user: "Why not just make the deck have collision??",
+  "Yeah go for it"). GEOFON's own parts have no collision (read: none); an invisible BoxComponent of ours on it at its
+  deck's height (330 x 76 m, top 20 m over its root, blocking all): the deck probe's traces hit it at 20 m from 0.74.177.
+  Runtime 0.32.41 holds the landing's height firmly (flight_test's landing at 75 m/s within 3.7 m of the glide), 0.32.42
+  lets the capture's height go under 50 m (it had been clamped at 50 in the Lua and the runtime: the landing was never asked
+  lower). The approach at the deck's height at its stern edge, pressed into it over it. GEOFON's facing = its travel
+  (45 deg; the fleet log's 135 is a compass heading); its bounds centred on its root (geofondeck suite). 0.74.183's two capture
+  runs: both touched down ~115 m before the mark, held on the deck 2 s, captured over the mark (runs 20261118_100236,
+  _100627; 16/16 each, never died).
