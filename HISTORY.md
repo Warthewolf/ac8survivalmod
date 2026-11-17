@@ -3837,3 +3837,27 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - 0.74.159: Torres's and the crew's voices heard, never subtitled (the user). Autotest epic 26/26, phase2 39/40 (the one
   an old check expecting Torres subtitled, taken out; "no subtitle for Torres or the crew" passed).
 - 0.74.159 INSTALLED 2026-11-17 (the user: "install it"), over 0.74.138 (backup build/backup/install_before_0.74.159); 235 files verified, her config, subtitles and the launcher's toggle kept.
+
+## 0.74.160-0.74.163 (2026-11-17; test builds, not installed): round 30 in co-op, the capture's first pieces, the lasers' width (feature/fleet-coop)
+- The user: "continue with getting this working for COOP, along with the Controlling Players plan"; co-op choices: every
+  player sees the cinematics at once, held safe; round 30's pay split like the other specials.
+- Co-op (untested in game: two linked games with the same dev build): round 30's ticks run as the host's round logic
+  (COOP.asRound: pay split and sent, callouts and subtitles to every game); the host's word "if|..." (sv_fleet_round.lua
+  IFCOOP: crew, surf, watch, break, split, hide, rise, release, core) plays the crew's voices, the surfacing cutscene (the
+  host's seed), GEOFON's stages / V / halves on a joiner's copies (COOP.copiesOf, IFLEET.shipFrom) and her rise on the
+  host's copy (TANI.joinRise); a joiner's clean-up of the fleet (SPC.UNITS_OF, a joiner's only: on the host it recycled
+  her 7 s into her sinking, 0.74.161's phase2); the storm's flashes on a joiner's GEOFON copy; the cinematics never undo
+  DOWN, a DOWN player watches them. Tests: fleet, coop_guard (an "if" row), lua_load (a stripped copy: the tick list
+  read raw and bounded: an ipairs over the load test's stand-in never ended), coop_revive, cine, coop_settings.
+- A crash fixed (0.74.160's autotest phase2, 23:01:28, UE4SS access violation): sv_tanicorn.lua's stock-shell log read a
+  shell freed since its NotifyOnNewObject (hard rule 59): each shell kept with its name, skipped when it differs. In every
+  build since 0.74.61.
+- The capture (WP14): runtime 0.32.38 SV_Pin / SV_PinInfo (the pin test: your plane moved along a point at 45 km/h each
+  input build, its drift read; autotest suite pin), down_ctl.c's gate (DownGate: a moving gate flown to and lined up on;
+  flight_test 79/79 with 12 gate flights from behind, beside and ahead, every heading), SV_Capture (the gate on DOWN's
+  takeover; SV_Down over it gives the gate up).
+- The lasers (the user: their width "didn't seem to be affected again"): AC8's NS_UAVTLS beam has only User.BeamColor /
+  BeamLength / BeamLifeTime and is a world-space mesh particle, so neither BeamLength's Y / Z nor the component's scale
+  widens it: li_beam_bundle (4) copies drawn round each beam, (li_beam_w - 1) x 2 x li_beam_off_cm (35) across its axis.
+- Autotests: 0.74.161 epic 26/26; 0.74.162 phase2 39/39 (once 38/39: the fleet's tick stopped after the rise's cinematic,
+  no error, not seen again), aegislasers 9/9.
