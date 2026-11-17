@@ -2459,6 +2459,133 @@ SUITES.whiteout = function()
     end
     A.do_(function() ST.check(IFSKY.storm().on == true, "the storm still on", tostring(IFSKY.storm().flashes) .. " flashes") end)
 end
+-- (2026-11-17) phase2: round 30's phase 2 (sv_fleet_round.lua p2Tick, 0.74.131: the user, "GEOFON falls, Tanacorn rises",
+-- beaten "All her guns down"). fleet30's way into round 30; then GEOFON's health taken down in steps (ModifyHealth on its
+-- hull, as the players' hits): its stage 1 at 66 %, stage 2 at 33 %, the hold at 15 %, the break at 3 % (the V, paid as
+-- sunk); pictures of each; the TANACORN spawned in the gap as it splits (no fade), her rise; then her guns finished one by one (her
+-- live watch's parts, finishUnpaid): paid, the half line, all down: beaten, her reward; the rest of the fleet and the
+-- round's aircraft finished: the win.
+SUITES.phase2 = function()
+    intoRun()
+    local C = {}
+    local function geo() local F = IFLEET and IFLEET.cur; return F and F.ships[1] end
+    local function cut(to)                               -- GEOFON's health to share `to` of its maximum (ModifyHealth, health)
+        local g = geo()
+        if not (g and g.hull) then return "no GEOFON" end
+        local o = g.hull.obj
+        local h, mx
+        pcall(function() h = o.HealthInternal; mx = o.MaxHealth * 10 end)
+        if not (h and mx and mx > 0) then return "its health unread" end
+        local amount = (h - to * mx) / 10
+        if amount <= 0 then return string.format("already at %.0f %%", 100 * h / mx) end
+        local ok = pcall(function() o:ModifyHealth(-amount, nil, true) end)
+        local h1
+        pcall(function() h1 = o.HealthInternal end)
+        return string.format("%.0f %% -> %s (ModifyHealth %s)", 100 * h / mx, h1 and string.format("%.1f %%", 100 * h1 / mx) or "?",
+            ok and "ok" or "FAILED")
+    end
+    A.do_(function()
+        if not ST.check(IFROUND ~= nil and GEO ~= nil and GEO.attach ~= nil and TANI ~= nil and TANI.roundRise ~= nil,
+            "round 30's phase 2 is in this build") then return "abort" end
+        ST.marks.p0 = ST.n
+        D.round = 29
+        C.cr = RUN.credits
+        ST.info("phase2: the run set to round 29's break (credits " .. tostring(RUN.credits) .. ")")
+    end)
+    A.log_("fleet round: round 30: the fleet's 15 ships coming", 120, "p0", true, function(l)
+        if not ST.check(l ~= nil, "round 30 started", l) then return "abort" end
+    end)
+    A.log_("15 of 15 ships up", 70, "p0", true, function(l) ST.check(l ~= nil, "the fleet up after the surfacing", l) end)
+    A.log_("fleet round: phase 2: GEOFON watched", 20, "p0", true, function(l) ST.check(l ~= nil, "phase 2 watches GEOFON", l) end)
+    A.do_(function() ST.marks.p1 = ST.n; ST.info("phase2: GEOFON " .. cut(0.6)) end)
+    A.log_("geofon: stage 1 at 66", 10, "p1", true, function(l) ST.check(l ~= nil, "GEOFON's stage 1 (fires, smoke, list)", l) end)
+    A.wait(2)
+    A.do_(function() ST.shot("p2_stage1"); ST.near(2500, "stage1") end)
+    A.do_(function() ST.marks.p2 = ST.n; ST.info("phase2: GEOFON " .. cut(0.3)) end)
+    A.log_("geofon: stage 2 at 33", 10, "p2", true, function(l) ST.check(l ~= nil, "GEOFON's stage 2 (more fires, its _DAM look)", l) end)
+    A.wait(2)
+    A.do_(function() ST.shot("p2_stage2") end)
+    A.do_(function() ST.marks.p3 = ST.n; ST.info("phase2: GEOFON " .. cut(0.10)) end)
+    A.log_("fleet round: phase 2: GEOFON at", 10, "p3", true, function(l) ST.check(l ~= nil and l:find("SetMinHealth", 1, true) and
+        not l:find("FAILED", 1, true), "GEOFON held at its break (SetMinHealth)", l) end)
+    A.do_(function() ST.marks.p4 = ST.n; ST.info("phase2: GEOFON a killing blow: " .. cut(0.0)) end)
+    A.log_("fleet round: phase 2: GEOFON at its break", 10, "p4", true, function(l)
+        if not ST.check(l ~= nil, "GEOFON held whole at its break (not sunk outright)", l) then return "abort" end
+    end)
+    A.log_("fleet round: GEOFON (ford) sunk", 5, "p4", true, function(l) ST.check(l ~= nil, "GEOFON paid as sunk", l) end)
+    A.log_("fleet round: phase 2: the TANACORN under GEOFON", 5, "p4", true, function(l)
+        if not ST.check(l ~= nil and l:find("spawned, rising", 1, true) ~= nil, "the TANACORN spawned in the gap", l) then return "abort" end
+    end)
+    A.log_("the rise's find at once after her spawn", 10, "p4", true, function(l)
+        ST.check(l ~= nil and l:find("her state hold", 1, true) ~= nil, "found and put under the sea in her spawn's call (no tick on the surface)", l)
+    end)
+    for i = 1, 4 do                                   -- (her bow breaks the surface ~2.3 s in: pictures through it)
+        A.wait(0.8)
+        A.do_(function() ST.shot(string.format("p2_breach_%d", i)) end)
+    end
+    A.log_("fleet round: phase 2: GEOFON split in two by her bow", 8, "p4", true, function(l)
+        ST.check(l ~= nil and l:find("its V rearing", 1, true) ~= nil, "GEOFON split by her bow's breach (its V rearing)", l)
+    end)
+    for i = 1, 10 do
+        A.wait(1.5)
+        A.do_(function() ST.shot(string.format("p2_rise_%02d", i)) end)
+    end
+    A.log_("fleet round: phase 2: the TANACORN up and fighting", 40, "p4", true, function(l)
+        if not ST.check(l ~= nil, "her rise over: fighting", l) then return "abort" end
+    end)
+    A.wait(2)
+    A.do_(function()
+        ST.shot("p2_fight")
+        local up, of = TANI.livePartsUp()
+        ST.check(up ~= nil and of ~= nil and of > 0, "her parts counted", string.format("%s of %s up", tostring(up), tostring(of)))
+        ST.info("phase2: the row: " .. tostring(IFROUND.row(D.special, {})))
+        ST.marks.p5 = ST.n
+        local seen, k = TANI.liveSeen() or {}, 0
+        for s, e in pairs(seen) do
+            if liveAddr(e.o) == e.a and nameOf(e.o) == e.name and k < 18 then
+                if pcall(finishUnpaid, e.o) then k = k + 1 end
+            end
+        end
+        C.firstK = k
+        ST.info("phase2: " .. k .. " of her guns finished")
+    end)
+    A.log_("fleet round: phase 2: %d+ of her guns shot down", 6, "p5", false, function(l) ST.check(l ~= nil, "her guns paid as they go down", l) end)
+    A.wait(3)
+    A.do_(function()
+        ST.shot("p2_half")
+        ST.marks.p6 = ST.n
+        local seen, k = TANI.liveSeen() or {}, 0
+        for s, e in pairs(seen) do
+            if liveAddr(e.o) == e.a and nameOf(e.o) == e.name then if pcall(finishUnpaid, e.o) then k = k + 1 end end
+        end
+        ST.info("phase2: the rest of her guns finished: " .. k)
+    end)
+    A.log_("fleet round: phase 2: the TANACORN beaten", 15, "p5", true, function(l)
+        ST.check(l ~= nil, "all her guns down: beaten, her reward", l)
+    end)
+    A.wait(3)
+    A.do_(function()
+        ST.shot("p2_beaten")
+        local F = IFLEET and IFLEET.cur
+        local k = 0
+        for i = 2, #(F and F.ships or {}) do
+            local sh = F.ships[i]
+            if sh.hull then if pcall(finishUnpaid, sh.hull.obj) then k = k + 1 end end
+        end
+        for _, pl in ipairs(planes or {}) do
+            if pl.unit and D.up and D.up[pl.unit] and pl.obj then pcall(finishUnpaid, pl.obj) end
+        end
+        ST.marks.p7 = ST.n
+        ST.info("phase2: the rest of the fleet finished: " .. k)
+    end)
+    A.log_("fleet round: won at", 60, "p7", true, function(l) ST.check(l ~= nil, "won after her", l) end)
+    A.do_(function()
+        ST.shot("p2_won")
+        ST.info(string.format("phase2: credits %s -> %s", tostring(C.cr), tostring(RUN.credits)))
+        ST.check(RUN.credits - (C.cr or 0) >= 50000 + 60000, "paid: the fleet's win (50,000) and hers (60,000) at least")
+    end)
+    A.wait(2)
+end
 SUITES.stormkey = function()
     intoRun()
     A.do_(function()
