@@ -3668,3 +3668,5 @@ game. The work was split by file between agents; the builds ran in sequence in t
   Build hash 7cf1301b3fdf registered. Untested in game: a real pause-menu restart in round 30.
 - 0.74.129 (staged only) had the restart fix and DIM 300; one autotest run was stopped by Claude Code for low memory and
   its clean-up done by hand (kit.py restore, the saves unchanged).
+- 0.74.130 INSTALLED 2026-11-17 for the user ("Yes continhe"), over 0.74.128 (backup: build/backup/install_before_0.74.130);
+  112 files verified; her config, subtitles (the same as the repo's) and the launcher's toggle kept.
