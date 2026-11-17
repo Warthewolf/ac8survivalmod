@@ -3628,3 +3628,16 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - 0.74.127 INSTALLED 2026-11-17 for the user ("package and install 0.74.127"), over 0.74.125 (backup:
   build/backup/install_before_0.74.127); 112 files verified; her config, subtitles (the same as the repo's) and the
   launcher's toggle kept. Build hash 9ad11586d028 registered. Untested in game: the night's brightness, the flicker.
+
+## 0.74.128 (2026-11-17): the fleet's night is THE FESTIVAL's, round 30 a night round; INSTALLED (feature/cloud-flash)
+- The user, 0.74.127: "its like the night mode settings that you used in the festival are no longer working, even the
+  runway lights aren't on anymore", "make it so that it's still a night time round, then the next round transitions
+  normally into day time over a few rounds, the same as the fesitival does".
+- CFG.specials.fleet.sky.profile: no night_over / dawn_exposure / sunrise_rounds of its own (THE FESTIVAL's night, dawn
+  and 4-round sunrise), night_rounds 4: sunset 26, night 27-30, dawn 31, rising 31-34, midday 35 (the storm's until_round).
+  The fleet round's sky_slow 5 -> 1 (round 30 no longer the dawn). The plane light of 0.74.126 kept.
+- Possible side effect: the night's top exposure is the festival's 10 again (the cap of 4 was there so the camera
+  wouldn't stop down for a cloud flash). Untested in game.
+- Checks: lua_check, fleet_test, arc_rounds_test, sky_test passed; build hash 003ecff669fd registered.
+- INSTALLED 2026-11-17 ("install it when it's done"), over 0.74.127 (backup: build/backup/install_before_0.74.128); 112
+  files verified; her config, subtitles (the same as the repo's) and the launcher's toggle kept.

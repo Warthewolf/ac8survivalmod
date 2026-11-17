@@ -176,7 +176,7 @@ CFG.specials.fleet = {
     -- (2026-11-16) the fleet's own night (the user: "another day night cycle for this Special Round, using the same method
     -- we use for The Festival", the sun setting from round 25, "Night can last for 3 rounds before Round 30", the fleet "at
     -- Early Morning, just before the sun rises"): sv_sky.lua's arc owned from from_round with profile over CFG.sky.arc (no
-    -- sinking round: the sunset at round 26, night 27-29, the pre-dawn at 30, sunrise over 31-33). Its storm (the user:
+    -- sinking round: the sunset at round 26, night 27-29, the pre-dawn at 30, sunrise over 31-33; from 0.74.128 night 27-30, see below). Its storm (the user:
     -- "swap the new cloud layer in at the moment the Night Sky Appears, add a lot of lightning in the area too, like a lot a
     -- lot a lot"; seen and heard only; it "can clear with a fade to black on round 35", "to hide the sudden swap of the
     -- clouds back to normal"): from the arc's first moon (the sunset's break, its darkest point) to until_round, Distant
@@ -193,9 +193,12 @@ CFG.specials.fleet = {
     -- ((0.74.127) the user, 0.74.125's round 29 break and round 30: "the aircraft is far to bright for night time", "its the
     -- exposure", the whole picture: the night's exposure 2.3 / 4.0 / +0.6 -> 4.0 / 6.0 / -0.5, the dawn's 10 / 14 / -1 ->
     -- 12 / 14 / -2 (a higher floor: the dark scene brightened less))
-    sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 3, sunrise_rounds = 3,
-                                                         night_over = { exposure = { 4.0, 6.0, -0.5 } },
-                                                         dawn_exposure = { 12.0, 14.0, -2.0 } },
+    -- ((0.74.128) the user, 0.74.127: "its like the night mode settings that you used in the festival are no longer working,
+    -- even the runway lights aren't on anymore", "make it so that it's still a night time round, then the next round
+    -- transitions normally into day time over a few rounds, the same as the festival does": no night_over / dawn_exposure
+    -- of its own (THE FESTIVAL's night, dawn and sunrise_rounds, CFG.sky.arc / CFG.sky.night), round 30 a night round:
+    -- the sunset at 26, night 27-30, the dawn at 31, rising over 31-34 as the festival's, midday from 35)
+    sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 4 },
             storm = { enabled = true, until_round = 35, out_s = 0.6, hold_s = 0.8, in_s = 1.2,
                       -- ((2026-11-17) the user: "we need to change the audio of the Thunder, its wrong") AC8's own thunder
                       -- (its SE bank's Mission 12 events, by name on your camera: sv_fleet_storm.lua): the storm's arrival
@@ -284,7 +287,8 @@ CFG.specials.fleet = {
     lasers = { enabled = true, spots = { LASER_BOW = { 69, 0, 9.0, 0 }, LASER_AFT = { -64, 0, 4.1, 180 } } },
     -- ((2026-11-17) the user: "move the sunrise so it's slower during round 30, it gets light too quickly") sky_slow: the
     -- arc's drift toward the dawn through its fight x this slower (sv_sky.lua SKY.fightSlow: 240 s x 5, ~20 min)
-    round = { enabled = true, round = 30, fighter_share = 0.25, reward = 50000, turret = 300, sky_slow = 5,
+    -- ((0.74.128) 1: round 30 is a night round now, its drift toward the dawn as the festival's last night round)
+    round = { enabled = true, round = 30, fighter_share = 0.25, reward = 50000, turret = 300, sky_slow = 1,
               pay = { ford = 6000, aegis = 1600, krov = 1400, udal = 1000, grig = 1000, gors = 1000, boat = 600 },
               music = { enabled = true, track = "AKE_Bgm_Online_ACE04_Invincible_Fleet_Play", len_s = 265.832 },
               text = { sub = "INVINCIBLE FLEET", warn = "INVINCIBLE FLEET", warn_sub = "THE AEGIR FLEET IS UNDER WAY",
