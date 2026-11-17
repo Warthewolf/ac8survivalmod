@@ -1242,7 +1242,7 @@ SUITES.epic = function()
         end
         local big = ST.findLog("GEOFON slams down, the big shake", ST.marks.s0, true)
         ST.check(big ~= nil, "GEOFON's slam: the big shake", big)
-        for _, w in ipairs({ "KASKA says", "CTRL says", "the title card", "a strike by GEOFON" }) do
+        for _, w in ipairs({ "CHARLENE says", "CTRL says", "VALKA says", "the title card", "a strike by GEOFON" }) do
             local b = ST.findLog(w, ST.marks.s0, true)
             ST.check(b ~= nil, "beat: " .. w, b)
         end
