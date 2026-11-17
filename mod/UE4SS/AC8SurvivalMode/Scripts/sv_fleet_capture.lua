@@ -34,7 +34,7 @@ if CFG.specials and CFG.specials.fleet and not CFG.specials.fleet.capture then
         -- brake to landing speed (runtime SV_CapLand), its line down to the deck itself; on the deck (the game's IsOnGround,
         -- or within land_m of the deck's height over its mark) held land_hold_s, then the explosion and DOWN. Past the deck
         -- without touching it: the old end over it. land = false: the old approach, never under floor_m)
-        land = true, land_m = 6, land_hold_s = 2, land_pass_m = 150,
+        land = true, land_m = 3, land_hold_s = 2, clear_m = 15, press_m = 5,
         deck = { fwd_m = -40, right_m = 0, up_m = 20 },     -- (the deck's touchdown spot from GEOFON's root, metres)
         -- ((0.74.177) the user: "Why not just make the deck have collision??": GEOFON's hull stops no trace (0.74.176's
         -- probe: 24 of 24 through it to the sea), so an invisible box of ours on it at its deck's height, blocking all: the
@@ -293,11 +293,26 @@ local function flyTick(now)
             clog(string.format("seq %s: deck probe (metres over GEOFON's root, along/across from the mark at %.1f m): %s",
                 tostring(L.seq), (dk.Z - g.Z) / 100, okP and txt or ("error " .. tostring(txt))))
         end
-        local alt = dk.Z / 100 + math.max(landing and 0 or n(c.floor_m, 80), behind * math.tan(math.rad(n(c.glide_deg, 3.5))))
+        -- ((0.74.178) over the slab's length only: 0.74.177's captive sagged under the deck's height behind it (the autopilot
+        -- flies ~10-40 m under the height asked when slow) and "touched down" 12 m under it, off the ship. Behind the slab:
+        -- clear_m over its edge plus the glide; over it: press_m into it (contact); a touchdown only over it)
+        local sl = c.slab or {}
+        local mark = n((c.deck or {}).fwd_m, -40)
+        local aft = n(sl.fwd_m, 0) - n(sl.len_m, 330) / 2 - mark          -- (metres along from the mark: the slab's ends)
+        local fore = n(sl.fwd_m, 0) + n(sl.len_m, 330) / 2 - mark
+        local am = along / 100
+        local overSlab = am >= aft and am <= fore
+        local alt
+        if landing then
+            alt = overSlab and (dk.Z / 100 - n(c.press_m, 5))
+                or (dk.Z / 100 + n(c.clear_m, 15) + math.max(0, aft - am) * math.tan(math.rad(n(c.glide_deg, 3.5))))
+        else
+            alt = dk.Z / 100 + math.max(n(c.floor_m, 80), behind * math.tan(math.rad(n(c.glide_deg, 3.5))))
+        end
         if landing then
             local up = (me.Z - dk.Z) / 100
             local okG, og = pcall(function() return pawn:IsOnGround() end)
-            local onDeck = (okG and og == true) or (dist <= 200 and up <= n(c.land_m, 6))
+            local onDeck = (okG and og == true) or (overSlab and up <= n(c.land_m, 3) and up >= -2)
             if onDeck and not L.touchAt then
                 L.touchAt = now
                 clog(string.format("seq %s: touched down on GEOFON's deck (%.0f m off its mark, %.0f m over it; IsOnGround %s)",
@@ -309,7 +324,7 @@ local function flyTick(now)
                 trapTick(now)
                 return
             end
-            if not L.touchAt and along / 100 > n(c.land_pass_m, 150) then
+            if not L.touchAt and am > fore then
                 L.state, L.at = "trap", now
                 clog(string.format("seq %s: trapped on GEOFON's deck (passed over it, %.0f m up: no touchdown)", tostring(L.seq), up))
                 trapTick(now)
