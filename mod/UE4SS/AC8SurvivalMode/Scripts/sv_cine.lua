@@ -475,12 +475,19 @@ local function spawnCam(F, k)
     if not (okB and a and valid(a)) then return nil, "the spawn gave nothing (" .. tostring(okB and a or "error") .. ")" end
     pcall(function() gs:FinishSpawningActor(a, t, 1) end)
     if not valid(a) then return nil, "not finished" end
-    local okR = pcall(function() a:K2_SetActorRotation(rot, true) end)
+    local okR = pcall(function() a:K2_SetActorRotation({ Pitch = 0, Yaw = rot.Yaw, Roll = 0 }, true) end)
+    -- ((0.74.158) the actor's pitch never took (every camera level: read back off by its own pitch, 36.3 and 18.8 deg in
+    -- runs 20261117_213215 / _214722; the user: "one of the cameras goes high into the sky"): the camera component's
+    -- pitch and roll as a quaternion relative transform, the one way a pitch took on the V too (place())
+    pcall(function()
+        a.CameraComponent:K2_SetRelativeTransform({ Rotation = CINE.quat({ Pitch = rot.Pitch, Yaw = 0, Roll = rot.Roll or 0 }),
+            Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }, false, {}, false)
+    end)
     pcall(function() a.CameraComponent.bConstrainAspectRatio = false end)
     local okF = pcall(function() a.CameraComponent:SetFieldOfView(k.fov) end)
-    local off = "?"                                       -- (its forward read back against where it should look)
+    local off = "?"                                       -- (the view's forward, its camera component's, against its look)
     pcall(function()
-        local v, n = a:GetActorForwardVector(), math.sqrt(dx * dx + dy * dy + dz * dz)
+        local v, n = a.CameraComponent:GetForwardVector(), math.sqrt(dx * dx + dy * dy + dz * dz)
         local c = (v.X * dx + v.Y * dy + v.Z * dz) / n
         off = string.format("%.1f", math.deg(math.acos(math.max(-1, math.min(1, c)))))
     end)

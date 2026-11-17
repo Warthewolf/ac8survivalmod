@@ -119,6 +119,14 @@ gs.BeginDeferredActorSpawnFromClass = function(_, _, cls, t)
     c.CameraComponent.SetFieldOfView = function(self, v) self.fov = v end
     c.K2_SetActorRotation = function(self, r) self.rot = { Pitch = r.Pitch, Yaw = r.Yaw, Roll = r.Roll } end
     c.GetActorForwardVector = function(self) return self.rot and fwdOfRot(self.rot) or fwdOfQuat(self.t.Rotation) end
+    -- ((0.74.158) the pitch and roll on the camera component, a quaternion relative transform; its forward: that turned by the
+    -- actor's yaw)
+    c.CameraComponent.K2_SetRelativeTransform = function(self, t) self.rel = t.Rotation end
+    c.CameraComponent.GetForwardVector = function(self)
+        local f = self.rel and fwdOfQuat(self.rel) or { X = 1, Y = 0, Z = 0 }
+        local y = math.rad(c.rot and c.rot.Yaw or 0)
+        return { X = f.X * math.cos(y) - f.Y * math.sin(y), Y = f.X * math.sin(y) + f.Y * math.cos(y), Z = f.Z }
+    end
     c.K2_GetActorLocation = function(self) return self.loc end
     c.K2_DestroyActor = function(self) self.destroyed = true; free(self) end
     cams[#cams + 1] = c
@@ -416,9 +424,9 @@ do
     local w, lk = CINE.world(F, k1.at), CINE.world(F, k1.look)
     local dx, dy, dz = lk.X - w.X, lk.Y - w.Y, lk.Z - w.Z
     local n = math.sqrt(dx * dx + dy * dy + dz * dz)
-    local f, q = c1:GetActorForwardVector(), fwdOfQuat(c1.t.Rotation)
+    local f, q = c1.CameraComponent:GetForwardVector(), fwdOfQuat(c1.t.Rotation)
     check(near(c1.loc.X, w.X) and near(c1.loc.Y, w.Y) and near(c1.loc.Z, w.Z) and c1.finished, "camera 1 at key 1's spot, finished")
-    check(near(f.X, dx / n, 1e-9) and near(f.Y, dy / n, 1e-9) and near(f.Z, dz / n, 1e-9), "turned onto its look point (K2_SetActorRotation)")
+    check(near(f.X, dx / n, 1e-9) and near(f.Y, dy / n, 1e-9) and near(f.Z, dz / n, 1e-9), "turned onto its look point (the actor's yaw, the camera component's pitch)")
     check(near(q.X, dx / n, 1e-9) and near(q.Y, dy / n, 1e-9) and near(q.Z, dz / n, 1e-9), "the spawn's quaternion the same way")
     check(c1.CameraComponent.fov == 55 and c1.CameraComponent.bConstrainAspectRatio == false, "its FOV 55, no aspect bars")
     local p6 = CINE.world(F, { CINE.pchip({ 0, 5, 9, 15 }, { 700, 680, 640, 600 }, 2.5), CINE.pchip({ 0, 5, 9, 15 }, { -650, -660, -700, -720 }, 2.5),
@@ -836,7 +844,7 @@ check(H.widget.vis == VIS.HitTestInvisible and H.round.op == 0 and H.banner.op ~
     "the HUD off but its callout (the rows at opacity 0)")
 check(mainFlight.vis == VIS.Hidden and hull.bShowHUDBox == false, "the game's HUD hidden, her box off")
 keys.V(); keys.V()
-check(cams[3].rot.Roll == 20 and said[#said].text == "KEY 3 OF 6 AT 6.5 S", "key 3's camera rolled 20 degrees")
+check(cams[3].CameraComponent.rel and near(math.abs(upOfQuat(cams[3].CameraComponent.rel).Y), math.sin(math.rad(20)), 1e-6) and said[#said].text == "KEY 3 OF 6 AT 6.5 S", "key 3's camera rolled 20 degrees")
 keys.D()
 check(pc.vt == pawn and S.pv == nil and CINE.director() ~= nil and said[#said].text == "CAMERA PREVIEW OVER" and mainFlight.vis == 3
     and hull.bShowHUDBox == true, "Ctrl+D in a preview: over, your plane back (director mode as it was)")

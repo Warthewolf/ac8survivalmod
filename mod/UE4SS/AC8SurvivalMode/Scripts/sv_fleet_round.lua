@@ -652,6 +652,7 @@ if CFG.specials and CFG.specials.fleet and CFG.specials.fleet.round and not CFG.
     CFG.specials.fleet.round.crew = {
         enabled = true, db = 10, styles = { "C" }, every_s = { 45, 90 }, gap_s = 2, s_per_word = 0.42, pad_s = 1.0,
         speakers = { TORRES = "INTERCEPT: TORRES", CREW = "INTERCEPT: ALICORN CREW" },
+        no_subs = { TORRES = true },                      -- ((0.74.159) the user: "Remove the subtitles for torres": heard, not shown)
         moments = { sighted = { "v6157_6001_alt1" }, stage1 = { "v6001_6032" }, stage2 = { "v6001_6030_alt1" },
                     split = { "v6349_6001", "v6350_6001", "v6351_6001" }, release = { "v6001_6103" },
                     fight = { "v6001_6051_alt1" }, half = { "v6001_6112_alt1" }, beaten = { "v6001_6002", "v6001_6116_alt1" },
@@ -734,7 +735,7 @@ local function crewPlay(key, now)
     K.said[key] = true
     K.busyUntil = now + crewDur(key) * (st == "B" and 1.6 or (st == "C" and 1.3 or 1)) + (st == "C" and n(c.c_tail_s, 3.5) or 0)
         + n(c.gap_s, 4)                                   -- ((0.74.154) style C's echoes and tail: the user, "thats perfect")
-    if SUB and SUB.say then pcall(SUB.say, (c.speakers or {})[l[1]] or l[1], l[2]) end
+    if SUB and SUB.say and not (c.no_subs or {})[l[1]] then pcall(SUB.say, (c.speakers or {})[l[1]] or l[1], l[2]) end
     rlog(string.format("crew: %s (%s, style %s)", key, l[1], st))
     return true
 end
