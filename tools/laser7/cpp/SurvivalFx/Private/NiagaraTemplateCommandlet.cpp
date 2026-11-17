@@ -17,8 +17,8 @@ UNiagaraTemplateCommandlet::UNiagaraTemplateCommandlet()
 
 int32 UNiagaraTemplateCommandlet::Main(const FString& Params)
 {
-	FString LogPath;
-	FParse::Value(*Params, TEXT("log="), LogPath);
+	FString NtLogPath;
+	FParse::Value(*Params, TEXT("log="), NtLogPath);
 	FString Out;
 	auto Say = [&Out](const FString& S) { Out += S + TEXT("\n"); UE_LOG(LogTemp, Display, TEXT("NiagaraTemplate: %s"), *S); };
 	const FString Path = TEXT("/Niagara/DefaultAssets/Templates/CascadeConversion/CompletelyEmpty");
@@ -54,6 +54,6 @@ int32 UNiagaraTemplateCommandlet::Main(const FString& Params)
 		}
 	}
 	Say(FString::Printf(TEXT("done (%d)"), Rc));
-	if (!LogPath.IsEmpty()) FFileHelper::SaveStringToFile(Out, *LogPath);
+	if (!NtLogPath.IsEmpty()) FFileHelper::SaveStringToFile(Out, *NtLogPath);
 	return Rc;
 }
