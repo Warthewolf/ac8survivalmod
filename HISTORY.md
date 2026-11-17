@@ -3861,3 +3861,28 @@ game. The work was split by file between agents; the builds ran in sequence in t
   widens it: li_beam_bundle (4) copies drawn round each beam, (li_beam_w - 1) x 2 x li_beam_off_cm (35) across its axis.
 - Autotests: 0.74.161 epic 26/26; 0.74.162 phase2 39/39 (once 38/39: the fleet's tick stopped after the rise's cinematic,
   no error, not seen again), aegislasers 9/9.
+
+## 0.74.164-0.74.169 (2026-11-18, overnight; test builds, not installed): RAVEN's ECM, GEOFON's capture, the laser callout (feature/fleet-coop)
+- The user (2026-11-17, before bed): "Have the Raven use ECM too"; the TANACORN's railgun lines on the minimap; the captive
+  "invincible to enemy fire", "Enemies should stop targeting the player who is affected, if they're saved ... targeted",
+  "They can't die until they land on the geofon"; "take screenshots of everything"; "continue with the rest of the
+  Invincible Fleet plan".
+- RAVEN's ECM: 0.74.164 put the Alicorn's ECM class on its Mk 15 child: the part kept the Mk 15's body (its class the stock
+  BP's component's), only the ECM's row. 0.74.165: its own blueprint BP_SV_IF_Raven (tools/tanicorn/spec.py raven_bp: the
+  Aegis's + ECM_MAST, the ECM's stub at its stock path), its model row on it, a child desc on ECM_MAST (EB_002's ecm class
+  imported, mission row alcn_ecm_01 imported with alcn_01), the hull row's child. Autotest ravenecm 8/8:
+  BP_BA002_alcn_ecm_Base up on RAVEN (health 5000), and near it the HUD's ECM DETECTED and its noise (run 20261118_003839).
+  (tools/laser7 NiagaraTemplateCommandlet's log path renamed: a C4459 stopped the container build.)
+- GEOFON's capture (sv_fleet_capture.lua, a new dev-only piece; dev_only.py, fleet_test.sh, AGENTS.md): the host's pick (co-op,
+  never the last one flying), the lock (RAVEN's ECM down or escape_km breaks it), the takeover (runtime SV_Capture: the
+  gate behind GEOFON on its line), down its line, over the deck's mark an explosion and DOWN at once (DOWN.capture; the
+  solo test climbs out and is given back). The pin test (0.74.163) showed the local plane takes no per-frame teleport, and
+  0.74.167's one SV_Respawn onto the deck crashed it at flying speed: no move onto the deck. While RAVEN flies you:
+  invincible, Faction 0 (neutral; the player plane's own field, the probe's), the attack limits 0 with sv_spweapons.lua's
+  ATK held off (ATK.hold: it put the chasers back to 12 every 2 s; DOWN takes the hold too). Autotest capture 14/14 on
+  0.74.169: at the gate in 35 s, over the deck at ~60 s, the shield and targeting given back (run 20261118_010731).
+- WP9: LASER DEFENCE ONLINE and Control's line at a round's first missile a fleet laser shoots down (ZLI.onKill).
+- Co-op: her sinking on a joiner's copy (if|sink: TANI.joinSink).
+- The fleet's tick says when it's held (twice phase2's fleet stopped with no word: a pause from the window losing focus?).
+- Autotests: phase2 39/39 (0.74.165, 0.74.168), epic 26/26, ravenecm 8/8, capture 14/14. Several runs stopped for low memory
+  and were run again 5 minutes later (the user's rule).
