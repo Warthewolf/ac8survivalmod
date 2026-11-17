@@ -3788,3 +3788,4 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - sv_cine.lua CINE.stop: a title or radio beat not reached when the cinematic ends is played then (run 20261117_193828: a
   1.3 s hitch in her rise, the rise over at ~12 s of its clock, the title's beat at 11.4 never fired).
 - Autotests: epic 25/25 on 0.74.146 (RESURFACED); phase2 29/30 on 0.74.146 (the title beat: fixed in 0.74.147).
+- Autotest phase2 on 0.74.147 (run 20261117_194634): 30/30; the lines in order: the warning, KASKA's surfacing, the sighting, the Tanager's (+10 s), GEOFON's stages, Valka at the break, the title and KASKA at 11.5 / 12.3 s, her half, her death, the dawn.
