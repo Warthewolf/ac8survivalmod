@@ -2629,7 +2629,19 @@ SUITES.shell = function()
         if not ST.check(l ~= nil, "round 30 started", l) then return "abort" end
     end)
     A.log_("15 of 15 ships up", 70, "s0", true, function(l) ST.check(l ~= nil, "the fleet up after the surfacing", l) end)
+    A.log_("fleet: scars: %d+ ships", 60, "s0", false, function(l)        -- ((0.74.140) WP8; the summary line)
+        local k, set = nil, nil
+        if l then k, set = l:match("scars: (%d+) ships, (%d+) of") end
+        ST.check(k ~= nil and tonumber(k) >= 14 and tonumber(set) > 0, "every fleet ship scarred (its _DAM slots)", l)
+    end)
     A.do_(function()
+        local F = IFLEET and IFLEET.cur
+        local g = F and F.ships[2] and F.ships[2].hull and F.ships[2].hull.obj
+        if g and ST.look(ST.frame(g, 60000, 30000, 6000), ST.frame(g, 0, 0, 1500), 40) then ST.shot("scars_raven") end
+    end)
+    A.wait(2)
+    A.do_(function()
+        ST.lookBack()
         C.km = CFG.specials.fleet.shell.shell_km
         CFG.specials.fleet.shell.shell_km = 60
         C.hp = AF and AF.hp
