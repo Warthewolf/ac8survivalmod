@@ -3291,6 +3291,53 @@ SUITES.aegislasers = function()
     end)
     A.wait(2)
 end
+-- (2026-11-17) hudprobe: which way really hides the game's HUD (the user: "during the cutscenes ... we need to disable the
+-- HUD"; run 20261116_222923: distortion "took" and hid nothing). Each of sv_cine.lua's routes alone (CINE.hudTry) and the
+-- cheat manager's other switches, a picture each; then the fleet's surfacing (Ctrl+N), pictures mid-way: the HUD held.
+SUITES.hudprobe = function()
+    intoRun()
+    A.wait(3)
+    A.do_(function()
+        if not ST.check(CINE ~= nil and CINE.hudTry ~= nil, "sv_cine's HUD routes are in this build") then return "abort" end
+        ST.shot("hud_00_base")
+    end)
+    for i, r in ipairs({ "widgets", "cheatnew", "showhud", "distortion" }) do
+        A.do_(function() local ok, why = CINE.hudTry(r, 20); ST.info(string.format("hudprobe: %s: %s %s", r, tostring(ok), tostring(why))) end)
+        A.wait(1.5)
+        A.do_(function() ST.shot(string.format("hud_%02d_%s", i, r)) end)
+        A.do_(function() CINE.hudShow("probe", "the probe's next") end)
+        A.wait(1.5)
+    end
+    local CM = {}
+    for i, call in ipairs({ { "SetDisplayHUD", false, true }, { "SetShowHUDAll", false, true }, { "ChangeHUDType", 8, 3 }, { "ToggleDisplayHUD" } }) do
+        A.do_(function()
+            CM.o = CINE.cheatMake and CINE.cheatMake()
+            if not CM.o then ST.info("hudprobe: no cheat manager made"); return end
+            local ok, err = pcall(function() if call[2] == nil then CM.o[call[1]](CM.o) else CM.o[call[1]](CM.o, call[2]) end end)
+            ST.info(string.format("hudprobe: cheat manager %s(%s): %s %s", call[1], tostring(call[2]), tostring(ok), tostring(err)))
+        end)
+        A.wait(1.5)
+        A.do_(function() ST.shot(string.format("hud_%02d_cm_%s", 10 + i, call[1])) end)
+        A.do_(function()
+            if CM.o then pcall(function() if call[3] == nil then CM.o[call[1]](CM.o) else CM.o[call[1]](CM.o, call[3]) end end) end
+        end)
+        A.wait(1.5)
+    end
+    A.do_(function() ST.shot("hud_20_back"); ST.marks.s0 = ST.n; ST.press("N") end)
+    A.log_("fleet surfacing: %d+ ships rise over", 20, "s0", false, function(l)
+        ST.check(l ~= nil and l:find("the HUD held", 1, true) ~= nil, "the surfacing holds the HUD", l)
+    end)
+    for i = 1, 4 do
+        A.wait(4)
+        A.do_(function() ST.shot(string.format("hud_3%d_surfacing", i)) end)
+    end
+    A.log_("fleet surfacing: over", 40, "s0", false, function(l) ST.check(l ~= nil, "the surfacing over", l) end)
+    A.wait(3)
+    A.do_(function()
+        ST.shot("hud_40_after")
+        ST.check(ST.findLog("hud: the fleet's surfacing let go", ST.marks.s0, true) ~= nil, "Survival's HUD let go after it")
+    end)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
