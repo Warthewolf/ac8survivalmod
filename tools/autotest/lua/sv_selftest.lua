@@ -3316,9 +3316,10 @@ end
 SUITES.burstwatch = function()
     intoRun()
     local W = {}
-    local LIST = { { "stock", "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning.NS_CloudLightning", 1 },
-                   { "burst", "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudBurst.NS_SV_CloudBurst", 1 },
-                   { "own", "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudFlash.NS_SV_CloudFlash", 0.25 } }
+    -- ((0.74.112) as the storm uses them: each switched on 0.5 s (its scale), off, every 2 s, 8 times, at 7 and 10 km; pictures
+    -- at 0.1 / 0.25 / 0.4 s inside each; AC8's burst (x5) and our own flash (800 m, x0.6))
+    local LIST = { { "burst", "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudBurst.NS_SV_CloudBurst", 0.1 },
+                   { "own", "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudFlash.NS_SV_CloudFlash", 1 } }
     local function L() return ((((CFG.specials or {}).fleet or {}).sky or {}).storm or {}).lightning or {} end
     A.do_(function()
         if not ST.check(IFSKY ~= nil and THUNDER ~= nil, "the storm is in this build") then return "abort" end
@@ -3331,31 +3332,50 @@ SUITES.burstwatch = function()
     end)
     A.wait(4)
     for _, e in ipairs(LIST) do
-        A.do_(function()
-            local me = playerLocation and playerLocation()
-            if not me then ST.info("burstwatch: no plane spot"); return end
-            W.cam = { X = me.X, Y = me.Y, Z = me.Z + 50000 }
-            W.spot = { X = me.X + 500000, Y = me.Y, Z = 300000 }
-            ST.look(W.cam, W.spot, 50)
-            local lib, sys = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary"), loadObject(e[2])
-            if not sys then ST.info("burstwatch " .. e[1] .. ": NOT loaded"); return end
-            local sc = e[3]
-            local ok, comp = pcall(function() return lib:SpawnSystemAtLocation(survivalPC, sys, W.spot, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = sc, Y = sc, Z = sc }, false, false, 0, false) end)
-            if ok and comp then
-                pcall(function() comp.bOverrideSeparateTranslucencySortPriority = true end)
-                pcall(function() comp.SeparateTranslucencySortPriority = 100 end)
-                pcall(function() comp:SetTranslucentSortPriority(100) end)
-                pcall(function() comp:Activate(true) end)
-                W.comp = comp
+        for _, km in ipairs(e[1] == "burst" and { 4, 7, 10 } or { 4 }) do
+            A.do_(function()
+                local me = playerLocation and playerLocation()
+                if not me then ST.info("burstwatch: no plane spot"); return end
+                W.cam = { X = me.X, Y = me.Y, Z = me.Z + 50000 }
+                W.spot = { X = me.X + km * 100000, Y = me.Y, Z = 400000 }
+                ST.look(W.cam, W.spot, 50)
+                local lib, sys = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary"), loadObject(e[2])
+                if not sys then ST.info("burstwatch " .. e[1] .. ": NOT loaded"); return end
+                local sc = e[3]
+                local ok, comp = pcall(function() return lib:SpawnSystemAtLocation(survivalPC, sys, W.spot, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = sc, Y = sc, Z = sc }, false, false, 0, false) end)
+                if ok and comp then
+                    pcall(function() comp.bOverrideSeparateTranslucencySortPriority = true end)
+                    pcall(function() comp.SeparateTranslucencySortPriority = 100 end)
+                    pcall(function() comp:SetTranslucentSortPriority(100) end)
+                    W.comp = comp
+                end
+                ST.info(string.format("burstwatch %s %d km: %s (scale %s)", e[1], km, (ok and comp) and "spawned" or "NOT spawned", tostring(sc)))
+            end)
+            for k = 1, 5 do
+                A.do_(function()                                     -- ((0.74.116) a fresh system each flash, as the storm's)
+                    if W.comp then pcall(function() W.comp:DestroyComponent() end); W.comp = nil end
+                    local lib, sys = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary"), loadObject(e[2])
+                    local sc = e[3]
+                    local ok, comp = pcall(function() return lib:SpawnSystemAtLocation(survivalPC, sys, W.spot, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = sc, Y = sc, Z = sc }, false, false, 0, false) end)
+                    if ok and comp then
+                        pcall(function() comp.bOverrideSeparateTranslucencySortPriority = true end)
+                        pcall(function() comp.SeparateTranslucencySortPriority = 100 end)
+                        pcall(function() comp:SetTranslucentSortPriority(100) end)
+                        pcall(function() comp:Activate(true) end)
+                        W.comp = comp
+                    end
+                end)
+                for q, w in ipairs({ 0.1, 0.15, 0.15, 0.2, 0.15 }) do       -- ((0.74.115) on 0.8 s, as the storm's)
+                    A.wait(w)
+                    A.do_(function() ST.shot(string.format("bw_%s_%dkm_%d_%d", e[1], km, k, q)) end)
+                end
+                A.wait(0.05)
+                A.do_(function() if W.comp then pcall(function() W.comp:Deactivate() end) end end)
+                A.wait(1.5)
             end
-            ST.info(string.format("burstwatch %s: %s at 5 km ahead, 3 km up (scale %s)", e[1], (ok and comp) and "spawned, on" or "NOT spawned", tostring(sc)))
-        end)
-        for i = 1, 32 do
-            A.wait(0.5)
-            A.do_(function() ST.shot(string.format("bw_%s_%02d", e[1], i)) end)
+            A.do_(function() if W.comp then pcall(function() W.comp:DestroyComponent() end); W.comp = nil end; ST.lookBack() end)
+            A.wait(1)
         end
-        A.do_(function() if W.comp then pcall(function() W.comp:DestroyComponent() end); W.comp = nil end; ST.lookBack() end)
-        A.wait(2)
     end
     A.do_(function() L().enabled = W.on end)
     A.wait(1)
