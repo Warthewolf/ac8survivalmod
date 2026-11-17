@@ -3836,3 +3836,4 @@ game. The work was split by file between agents; the builds ran in sequence in t
   every camera within 10 deg: passed. Valka's hints at GEOFON's stages; Charlene (with Comona Control) on the surfacing.
 - 0.74.159: Torres's and the crew's voices heard, never subtitled (the user). Autotest epic 26/26, phase2 39/40 (the one
   an old check expecting Torres subtitled, taken out; "no subtitle for Torres or the crew" passed).
+- 0.74.159 INSTALLED 2026-11-17 (the user: "install it"), over 0.74.138 (backup build/backup/install_before_0.74.159); 235 files verified, her config, subtitles and the launcher's toggle kept.
