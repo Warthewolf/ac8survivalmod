@@ -3886,3 +3886,12 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - The fleet's tick says when it's held (twice phase2's fleet stopped with no word: a pause from the window losing focus?).
 - Autotests: phase2 39/39 (0.74.165, 0.74.168), epic 26/26, ravenecm 8/8, capture 14/14. Several runs stopped for low memory
   and were run again 5 minutes later (the user's rule).
+- 0.74.170-0.74.173 (2026-11-18, overnight): the TANACORN's railgun line: a display arm (BP_FCS_SV_TaniRailDisp, a
+  TripleRailCannon never firing, row SV_FCS_TaniRailDisp on each railgun's NpcFCSId1) is built and its row in, but the game
+  makes ONE arm a railgun part (slot 0's). Experiment 0.74.172 (slots swapped, not committed): the TripleRailCannon in slot
+  0 draws the red line on the minimap (run 20261118_013752, picture 03; the BoneControl run has none), but that arm doesn't
+  turn her barrels (2026-11-16) and the run ended in a GPU crash at the railcannon's second charge: the choice is the user's.
+  0.74.170's walk of AllArms[1..4] crashed the game (hard rule 72); ForEach since 0.74.171. The capture's floor 110 m. Co-op:
+  round 30's state replayed to one who links later (IFCOOP.syncTo); coop_guard's rows for every round-30 word (24683
+  hostile variants, no error). Autotests on 0.74.173: phase2 39/39, epic 26/26, capture 14/14 (runs 20261118_014752,
+  _015134, _015400).
