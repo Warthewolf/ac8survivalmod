@@ -3823,3 +3823,11 @@ game. The work was split by file between agents; the builds ran in sequence in t
   sighting, one at a time, subtitled INTERCEPT: TORRES / ALICORN CREW. Autotest phase2 on 0.74.153: 33/34 (the oath's last
   line queued past the test's end). Then: db 2 -> 14, styles C only, gap_s 2 (not yet built).
 - 0.74.154 (2026-11-17): the crew in style C only (the user: "choose option C for all"; C made "more echoey": three repeats 0.34 s apart and a 3 s tail, tools/ac7_voice_fx.py; "thats perfect"), +14 dB, each line's echo let finish (c_tail_s 3.5). Autotest phase2 34/34 (run 20261117_213215): every crew line style C, in order.
+- 0.74.156 (2026-11-17): THE TANACORN's phases (the user: "Her phases and core"): 1 her guns; 2 at 60% of them down her
+  railcannon rises and charges at the airfield; 3 the railcannon down (or 95%): her core open (armour off, box, 30 of your
+  missiles, held at 2% by SetMinHealth), destroyed: her reward and sinking. Autotest phase2 36/36.
+- 0.74.157: the rise's high shot (7.1 s, 250 m up, its 36 deg pitch never took: the user, "one of the cameras goes high
+  into the sky") at 90 m, ~12 deg; phase2 checks every camera's read-back within 10 deg: 37/38 (key 4, 18.8 deg, open).
+- Then (unbuilt): no KASKA in round 30 (the user: "it's not Kaska's Navy at all, it's an Anomaly caused by Emblem Direct";
+  "Valka is connected to the void so she knows whats happening already"): VALKA tells AUDREY; lines in the reworked
+  subtitles.ini's voices (AUDREY "Val", "Stars"); CHARLENE's lines to CTRL (she isn't in round 30).

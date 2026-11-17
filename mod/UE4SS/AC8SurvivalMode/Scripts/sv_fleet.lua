@@ -137,7 +137,7 @@ CFG.specials.fleet = {
               shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactSmall", shake_scale = 0.6, shake_km = 6,
               text = { shelling = "THE FLEET IS SHELLING THE AIRFIELD", shelling_sub = "SINK THE SHIPS IN RANGE" },
               radio = { shelling = { "CTRL|Incoming! Naval gunfire on the airfield! The fleet's in range!",
-                                     "AUDREY|Shells on the runway! Valka, get down! Pilots, sink those gunships!" } } },
+                                     "AUDREY|Shells on the runway! Val, head down! Pilots, sink those gunships!" } } },
     -- (2026-11-12, stage 4: docs/re/TANICORN.md "Railguns and railcannon") THE TANACORN's bow railcannon, its charged shot at
     -- the airfield (sv_tanicorn_rail.lua; Ctrl+H on Ctrl+L's live hull, WP11's phase 2 later; WP13): its Deploy over deploy_s
     -- (AS_SV_Tani_RAILCANNON_Deploy, 3.33 s), then a charge of charge_s, the shot, and the next charge every_s after the last
@@ -324,23 +324,26 @@ CFG.specials.fleet = {
               -- taking damage or wondering where the Tanager is", with her two lines (tanager); the rest drafted for her to edit:
               -- tanager tanager_after_s after the sighting, stage1 / stage2 at GEOFON's stages)
               tanager_after_s = 10,
+              -- ((0.74.158) the user: "it's not Kaska's Navy at all, it's an Anomaly caused by Emblem Direct": no KASKA line in
+              -- round 30; the fleet and the TANACORN are an Anomaly Emblem Direct caused; VALKA knows it (she's connected to the void)
+              -- and tells AUDREY; written in the voices of the reworked subtitles.ini (AUDREY: "Val", "Stars"; no CHARLENE here)
               radio = { warn = { "CTRL|All units, Comona Control. Long-range radar has a surface group under way, bearing three-one-five.",
                                  "CTRL|Fifteen contacts in formation. It's the Aegir Fleet, and it's coming straight for us.",
-                                 "AUDREY|The Aegir Fleet... Kaska's navy. Valka, stay by the hangar tonight.",
-                                 "VALKA|The sea feels wrong, Audrey. Something under it is waking up." },
+                                 "AUDREY|A whole fleet, coming at us? Val, inside. Now.",
+                                 "VALKA|It's not a fleet, Audrey. It's an Anomaly. Emblem Direct opened a door, and the void is pushing them through." },
                         sighted = { "CTRL|They came up out of the sea... the whole fleet. Break them before they reach the airfield.",
-                                    "VALKA|They were sleeping down there. All of them.",
+                                    "VALKA|The void let them go, Auds. All of them at once.",
                                     "AUDREY|Fourteen escorts and the carrier... GEOFON. But no flagship." },
                         tanager = { "AUDREY|The Tanager is missing? Where could it be?",
                                     "VALKA|I feel its presence close. The captain's soul is hurting." },
-                        stage1 = { "AUDREY|GEOFON's burning amidships! Keep pouring it on, pilots!" },
-                        stage2 = { "VALKA|The carrier is crying out, Audrey. Something underneath it is pushing up.",
-                                   "AUDREY|Underneath? ...Pilots, watch the water around GEOFON!" },
+                        stage1 = { "AUDREY|Stars, GEOFON's burning! Keep pouring it on, pilots!" },
+                        stage2 = { "VALKA|Something's climbing up under the carrier, Audrey. It's coming through the void.",
+                                   "AUDREY|Under it? ...Pilots, watch the water around GEOFON!" },
                         half = { "CTRL|Half of the fleet's on the bottom. Keep at them!" },
                         geofon = { "CTRL|GEOFON is going down! The carrier's finished!" },
                         won = { "CTRL|That's the last of them. The Aegir Fleet is destroyed. Ground crews, get that runway back in shape.",
                                 "VALKA|Audrey, look. The sun's coming up.",
-                                "AUDREY|I see it. It's over, Valka. Hold my hand." } },
+                                "AUDREY|I see it. It's over, Val. Hold my hand." } },
               -- ((0.74.131) phase 2, the user 2026-11-17: "GEOFON falls, Tanacorn rises"; beaten "All her guns down") GEOFON
               -- breaks in a V at its fall's break_at (CFG.specials.fleet.geofon.fall); rise_after_s into the break (0: at it;
               -- the user: no fade, "she spawns as the Geofon is splitting apart") the TANACORN spawned in the gap across its
@@ -352,7 +355,10 @@ CFG.specials.fleet = {
               deck = { enabled = true, first_s = 30, every_s = 30, size = 2, max_up = 3, max_flights = 6, ahead_m = 600, alt_m = 1100 },
               -- ((0.74.137) sink: her death (sv_tanicorn.lua TANI.liveSink): explosions along her, bow-down and under)
               -- ((0.74.148) release_s: she's held under the sea this long after her spawn (its ~1.3 s hitch with GEOFON still whole)
+              -- ((0.74.156) her phases (sv_fleet_round.lua p2Fight): her railcannon at phase2_share of her parts down, her core
+              -- open when it's down or at core_share: core_missiles of your missiles (+core_per_player), held at core_floor)
               phase2 = { enabled = true, rise_after_s = 0, release_s = 2.5, split_max_s = 9, rise_max_s = 45,
+                         phase2_share = 0.6, core_share = 0.95, core_missiles = 30, core_per_player = 0.5, core_floor = 0.02,
                          sink = { sink_s = 40, sink_m = 160, bow_deg = 12, roll_deg = 6, booms = 28, boom_every_s = 0.6,
                                   fx = { { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 3 },
                                          { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsFireL001", 3 },
@@ -360,7 +366,9 @@ CFG.specials.fleet = {
                                          { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsSmokeS001", 4 },
                                          { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsPillarL001", 2 } } },
                          part_pay = 500, reward_tani = 60000, rail_after_s = 20,
-                         text = { rises = "THE TANACORN RISES", rises_sub = "SHOOT DOWN ALL HER GUNS", row = "TANACORN: %d OF %d GUNS",
+                         text = { rises = "THE TANACORN RISES", rises_sub = "SHOOT DOWN HER GUNS", row = "TANACORN: %d OF %d GUNS",
+                                  phase2 = "HER RAILCANNON IS RISING", phase2_sub = "SHOOT IT DOWN BEFORE IT FIRES",
+                                  core = "HER CORE IS EXPOSED", core_sub = "SINK THE TANACORN", core_row = "TANACORN CORE: %d%%",
                                   beaten = "THE TANACORN IS SILENCED", beaten_sub = "+%s ZOLLARS" },
                          -- ((0.74.134) the user: "make the Rise of the Tanacorn more Cinematic with the Camera work") her
                          -- rise's own shots (sv_cine.lua CINE.play hooks): keys in her rest frame (metres: f forward along her
@@ -374,8 +382,10 @@ CFG.specials.fleet = {
                                            { t = 3.2, at = { 320, 190, 8 }, look = { 70, 0, 115 }, fov = 68 },
                                            { t = 3.6, cut = true, at = { -120, -660, 40 }, look = { 120, 0, 85 }, fov = 50 },
                                            { t = 6.6, at = { -20, -580, 70 }, look = { 150, 0, 60 }, fov = 48 },
-                                           { t = 7.1, cut = true, at = { 430, 170, 250 }, look = { 200, 0, 40 }, fov = 55 },
-                                           { t = 8.5, at = { 400, 150, 200 }, look = { 150, 0, 15 }, fov = 58 },
+                                           -- ((0.74.157) the user: "one of the cameras goes high into the sky": this one stood 250 m up
+                                           -- to look 36 deg down, its pitch never took (36.3 off, run 20261117_213215): 90 m now, ~12 deg)
+                                           { t = 7.1, cut = true, at = { 380, 200, 90 }, look = { 180, 0, 50 }, fov = 55 },
+                                           { t = 8.5, at = { 360, 190, 70 }, look = { 150, 0, 25 }, fov = 58 },
                                            { t = 8.7, cut = true, at = { 80, 240, 5 }, look = { 0, 0, 14 }, fov = 75 },
                                            { t = 10.8, at = { 60, 260, 9 }, look = { -20, 0, 18 }, fov = 72 },
                                            { t = 11.0, cut = true, at = { -430, 540, 70 }, look = { 60, 0, 30 }, fov = 55 },
@@ -384,11 +394,15 @@ CFG.specials.fleet = {
                                             { t = 1.3, shake = { "/Game/OnlineMode/Blueprint/IGC/CameraShake/BP_CamShake_HandShake_A", 0.6 } },
                                             { t = 9.0, shake = { "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpact", 1.0 } },
                                             { t = 11.4, title = { text = "THE TANACORN", sub = "SHE HAS RISEN" } },
-                                            { t = 12.2, say = "KASKA|Tanacorn, the fleet is yours. Burn their airfield to the ground." } } },
+                                            { t = 12.2, say = "VALKA|That's her. The heart of it. Emblem Direct tore the door open, and she came through." } } },
                          radio = { fall = { "CTRL|GEOFON's breaking in two! Something's... coming up between the halves!",
                                             "VALKA|There. That's what I felt. That's the Tanager." },
                                    rises = { "CTRL|That's not a ship. That's the TANACORN! All units, take out her guns!",
-                                             "AUDREY|That's not the Tanager anymore, Valka. Kaska... what did you do to it?" },
+                                             "AUDREY|That's not the Tanager anymore, Val. What the hell did Emblem Direct do?" },
+                                   phase2 = { "CTRL|Her bow is opening... that's a railcannon! It's aiming at the airfield!",
+                                              "AUDREY|It's aiming at the airfield, Val. Hold on to me." },
+                                   core = { "CTRL|Her core is exposed! Everything you've got, right now!",
+                                            "VALKA|Her heart is open. The captain is waiting." },
                                    half = { "CTRL|Half her guns are gone. Keep hammering her!",
                                             "VALKA|She's hurting, Audrey. Her captain is still inside her." },
                                    beaten = { "CTRL|Her guns are silent. She's going under!",
@@ -453,11 +467,11 @@ CFG.specials.fleet = {
                           { t = 22.5, ship = "GEOFON", from = { at = { 750, 420, 70 }, look = { 0, 0, 30 }, fov = 60 },
                                                     to = { at = { 1600, 1000, 280 }, look = { -400, 0, 0 }, fov = 60 } } },
                 beats = { { t = 0.6, bolt = { ship = "PicketA", fwd_m = 2500, right_m = -600 } },
-                          { t = 0.8, say = "KASKA|Aegir Fleet, surface. All ships, battle stations." },
+                          { t = 0.8, say = "CTRL|All units, Comona Control. Something's moving under the sea. A lot of somethings." },
                           { t = 6.5, say = "CTRL|Contacts surfacing! Multiple contacts, they're coming up out of the sea!" },
                           { t = 7.0, bolt = { ship = "HERNE", fwd_m = 0, right_m = -2500 } },
                           { t = 13.5, bolt = { ship = "GEOFON", fwd_m = -1500, right_m = -2500 } },
-                          { t = 15.5, say = "KASKA|Geofon, take the lead. Let them see the Invincible Fleet." },
+                          { t = 15.5, say = "VALKA|They're all waking up, Audrey. The void doesn't want them anymore." },
                           { t = 18.5, bolt = { ship = "GEOFON", fwd_m = -800, right_m = -2800 } },
                           { t = 24.0, title = true },
                           { t = 24.2, bolt = { ship = "GEOFON", fwd_m = -3000, right_m = -1500 } } } },

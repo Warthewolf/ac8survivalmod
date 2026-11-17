@@ -216,22 +216,62 @@ local function hideHalves(P, now)
         rlog(string.format("phase 2: GEOFON's halves hidden %.0f s after the split (%s of 2)", now - P.splitAt, okH and tostring(k) or "error"))
     end
 end
+-- ((0.74.156) WP11 M4, her phases (the user, 2026-11-17: "Her phases and core"): 1, her guns fight, the railcannon stowed
+-- and shielded; 2, at phase2_share of her parts down, the railcannon rises and charges at the airfield (TANI.rcStart); 3, the
+-- railcannon down (TANI.coreOpen, sv_tanicorn_rail.lua's hook) or core_share of her parts down: her core opens: her hull's
+-- armour off, its box and lock-on on, its health core_missiles of your standard missiles (+ core_per_player each other
+-- player; only ever lowered), held at core_floor of it (SetMinHealth: never the game's own death); there: beaten, her sinking
+local function hullHp(o)
+    local ok, h = pcall(function() return o.HealthInternal end)
+    return (ok and type(h) == "number") and h or nil
+end
+local function openCore(P, why)
+    local c, o = p2c(), TANI and TANI.liveHull and TANI.liveHull() or nil
+    P.phase, P.coreAt = 3, os.clock()
+    if not o then rlog("phase 2: her core NOT opened (" .. tostring(why) .. "): her hull isn't up"); return end
+    pcall(function() o:SetIsInvincible(false) end)
+    for f, v in pairs({ bIsInvincible = false, bCanBeDamaged = true, bShowHUDBox = true, bIsNotLockonTarget = false,
+                        bIsNotFCSTargets = false, TargetMarkType = 1 }) do
+        pcall(function() o[f] = v end)
+    end
+    local d
+    if SPC and type(SPC.playerMissileDamage) == "function" then local ok, v = pcall(SPC.playerMissileDamage); if ok then d = tonumber(v) end end
+    local players = 1
+    if COOP and type(COOP.players) == "function" then local ok, l = pcall(COOP.players); if ok and type(l) == "table" then players = math.max(1, #l) end end
+    local h0 = hullHp(o)
+    local miss = n(c.core_missiles, 30) * (1 + n(c.core_per_player, 0.5) * (players - 1))
+    local sized = "its row's health (your missile's damage unread)"
+    if d and d > 0 and h0 then
+        local want = math.floor(miss * d * 10 + 0.5)
+        if want < h0 and pcall(function() o.HealthInternal = want end) then sized = string.format("%.0f of your missiles (%d)", miss, want) end
+    end
+    P.coreMax = hullHp(o) or h0 or 1
+    local floor = P.coreMax * n(c.core_floor, 0.02)
+    P.coreFloor = floor
+    local okM = pcall(function() o:SetMinHealth(floor / 10) end)
+    hudCallout(tx2().core or "HER CORE IS EXPOSED", tx2().core_sub or "SINK THE TANACORN")
+    say("core", c.radio)
+    CREW.say("core")
+    rlog(string.format("phase 2: her core open (%s): her hull's armour off, its box and lock-on on; health %s, held at %.0f (SetMinHealth %s)",
+        tostring(why), sized, floor, okM and "set" or "FAILED"))
+end
+if TANI then                                              -- (sv_tanicorn_rail.lua calls it as her railcannon goes down)
+    TANI.coreOpen = function(why)
+        if R and R.p2 and R.p2.state == "fight" and (R.p2.phase or 1) < 3 then R.p2.coreReq = tostring(why or "the railcannon down") end
+    end
+end
 local function p2Fight(P, now)
     local c = p2c()
     hideHalves(P, now)
-    if P.railAt and now >= P.railAt then
-        P.railAt = nil
-        local okC, err = false, "no TANI.rcStart"
-        if TANI and TANI.rcStart then okC, err = pcall(TANI.rcStart, "round 30's phase 2") end
-        rlog("phase 2: her railcannon's cycle on the airfield " .. (okC and "started" or ("NOT started: " .. tostring(err))))
-    end
+    P.phase = P.phase or 1
+    if P.coreReq and P.phase < 3 then local w = P.coreReq; P.coreReq = nil; openCore(P, w) end
     if now < (P.countAt or 0) then return end
     P.countAt = now + 1
     local up, of = nil, nil
     if TANI and TANI.livePartsUp then up, of = TANI.livePartsUp() end
     if up == nil then
         P.state = "skipped"
-        rlog("phase 2: her live hull is gone (not beaten by her guns): phase 2 over without her reward")
+        rlog("phase 2: her live hull is gone (not beaten): phase 2 over without her reward")
         return
     end
     P.up, P.of = up, of
@@ -242,17 +282,38 @@ local function p2Fight(P, now)
         P.paid = down
     end
     if not P.halfSaid and down * 2 >= of then P.halfSaid = true; say("half", c.radio); CREW.say("half") end
-    if up == 0 then
-        local okD, how = false, nil                     -- ((0.74.137) her death: explosions, then she goes under bow first)
-        if TANI.liveSink then okD, how = TANI.liveSink("round 30: all her guns down", c.sink) end
-        if not okD and TANI.liveDown then okD, how = TANI.liveDown("round 30: all her guns down") end
-        local v = pay(n(c.reward_tani, 60000), "the TANACORN silenced")
-        hudCallout(tx2().beaten or "THE TANACORN IS SILENCED", string.format(tx2().beaten_sub or "+%s ZOLLARS", zl(v)))
-        say("beaten", c.radio)
-        CREW.say("beaten")
-        P.state = "beaten"
-        rlog(string.format("phase 2: the TANACORN beaten at +%.0f s (all %d guns down): %s zollars; her hull %s", now - P.fightAt, of,
-            tostring(v), okD and (how and ("down (" .. tostring(how) .. ")") or "sinking") or "NOT finished off"))
+    if P.phase == 1 and of > 0 and down / of >= n(c.phase2_share, 0.6) then
+        P.phase = 2
+        local okC, err = false, "no TANI.rcStart"
+        if TANI and TANI.rcStart then                  -- (its answer read: false and why when it refuses)
+            local okP, r1, r2 = pcall(TANI.rcStart, "round 30: her phase 2")
+            okC, err = okP and r1 ~= false, okP and r2 or r1
+        end
+        hudCallout(tx2().phase2 or "HER RAILCANNON IS RISING", tx2().phase2_sub or "SHOOT IT DOWN BEFORE IT FIRES")
+        say("phase2", c.radio)
+        CREW.say("phase2")
+        rlog(string.format("phase 2: her phase 2 at %d of %d guns down: her railcannon's cycle on the airfield %s", down, of,
+            okC and "started" or ("NOT started: " .. tostring(err))))
+    end
+    if P.phase < 3 and of > 0 and (down / of >= n(c.core_share, 0.95) or up == 0) then
+        openCore(P, string.format("%d of %d of her guns down", down, of))
+    end
+    if P.phase == 3 then
+        local o = TANI.liveHull and TANI.liveHull() or nil
+        local h = o and hullHp(o) or nil
+        P.corePct = (h and P.coreMax and P.coreMax > 0) and math.max(0, math.floor(100 * (h - (P.coreFloor or 0)) / math.max(1, P.coreMax - (P.coreFloor or 0)) + 0.5)) or P.corePct
+        if not o or (h and h <= (P.coreFloor or 0) + 1) then
+            local okD, how = false, nil                 -- ((0.74.137) her death: explosions, then she goes under bow first)
+            if o and TANI.liveSink then okD, how = TANI.liveSink("round 30: her core destroyed", c.sink) end
+            if not okD and o and TANI.liveDown then okD, how = TANI.liveDown("round 30: her core destroyed") end
+            local v = pay(n(c.reward_tani, 60000), "the TANACORN sunk")
+            hudCallout(tx2().beaten or "THE TANACORN IS SILENCED", string.format(tx2().beaten_sub or "+%s ZOLLARS", zl(v)))
+            say("beaten", c.radio)
+            CREW.say("beaten")
+            P.state = "beaten"
+            rlog(string.format("phase 2: the TANACORN beaten at +%.0f s (her core destroyed, %d of %d guns down): %s zollars; her hull %s",
+                now - P.fightAt, down, of, tostring(v), okD and (how and ("down (" .. tostring(how) .. ")") or "sinking") or "NOT finished off"))
+        end
     end
 end
 local function p2Tick(now)
@@ -332,7 +393,7 @@ local function p2Tick(now)
         hideHalves(P, now)
         local st = TANI.riseState and TANI.riseState() or nil
         if st == nil or now - P.riseAt >= n(c.rise_max_s, 40) then
-            P.state, P.fightAt, P.railAt = "fight", now, now + n(c.rail_after_s, 20)
+            P.state, P.fightAt, P.phase = "fight", now, 1             -- ((0.74.156) her railcannon at her phase 2)
             hudCallout(tx2().rises or "THE TANACORN RISES", tx2().rises_sub or "")
             say("rises", c.radio)
             CREW.say("fight")
@@ -594,7 +655,7 @@ if CFG.specials and CFG.specials.fleet and CFG.specials.fleet.round and not CFG.
         moments = { sighted = { "v6157_6001_alt1" }, stage1 = { "v6001_6032" }, stage2 = { "v6001_6030_alt1" },
                     split = { "v6349_6001", "v6350_6001", "v6351_6001" }, release = { "v6001_6103" },
                     fight = { "v6001_6051_alt1" }, half = { "v6001_6112_alt1" }, beaten = { "v6001_6002", "v6001_6116_alt1" },
-                    shelling = { "v6001_6087_alt1" } },
+                    phase2 = { "v6001_6087_alt1" }, core = { "v6001_6044" } },
         lines = {
         v6001_6002 = { "TORRES", "It's a requiem." },
         v6001_6007_alt2 = { "TORRES", "Fools..." },
@@ -755,6 +816,9 @@ function IFROUND.over(now, s)
 end
 function IFROUND.row(s, t)
     if not R then return nil end
+    if R.p2 and R.p2.state == "fight" and R.p2.phase == 3 then
+        return string.format(tx2().core_row or "TANACORN CORE: %d%%", R.p2.corePct or 100)
+    end
     if R.p2 and R.p2.state == "fight" and R.p2.of then
         return string.format(tx2().row or "TANACORN: %d OF %d GUNS", R.p2.up or 0, R.p2.of)
     end
