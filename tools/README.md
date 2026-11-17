@@ -99,6 +99,7 @@ release keys below join in a test build: a key bound twice logs `test: Ctrl+<key
 | Ctrl+G | GEOFON's stages (T2): the Ford 4 km ahead; again: 20 % of its health off a press, its fires, smoke and list at 66 % and 33 % (test) | sv_fleet.lua |
 | Ctrl+S | INVINCIBLE FLEET's night storm now (the fleet's arc at its night: the moon up, the storm and its lightning under a fade); again: the round's own sky back (test; dev install only) | sv_fleet_storm.lua |
 | Ctrl+J | INVINCIBLE FLEET's storm thunder sounds, one a press in turn (near, then far), to pick by ear (test; dev install only) | sv_fleet_storm.lua |
+| Ctrl+F | INVINCIBLE FLEET's round next: in a break between rounds, the run set to round 29's break (its warning), so round 30, the fleet's, comes next (test; dev install only) | sv_fleet_round.lua |
 | Ctrl+N | INVINCIBLE FLEET's fleet (WP7): its 15 ships at their course start ~30 km north-west of the runway, in formation, sailing in; their lines every 10 s; again: off (test) | sv_fleet.lua |
 
 THE ESCORT's T0 and carrier keys were Ctrl+F1 / F2 (the tactical items' keys: both ran on a press) and THE DECOY's were

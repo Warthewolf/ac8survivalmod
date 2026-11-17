@@ -54,7 +54,10 @@ local cfg = {
     -- cut; today's riseCine blends TANI.rise.blend_s, 1 s); Survival's callouts over it; the target boxes (hide: all,
     -- hers: only hers, keep); the routes tried in order to hide the game's HUD
     director_speed = 0.35, blend = "smooth", enter_blend = 1.0, callouts = true, boxes = "hide",
-    hud = { "distortion", "widgets", "cheat", "showhud" },
+    -- ((2026-11-17) the user: "during the cutscenes ... we need to disable the HUD"; run 20261116_222923's pictures:
+    -- distortion "took" and the radar, the weapons, SPEED / ALT stayed on screen: last now; cheatnew: a LiveCheatManager
+    -- made here, the game's own HUD modes through it)
+    hud = { "widgets", "cheatnew", "cheat", "showhud", "distortion" },
     blend_exp = 2.0,                   -- (the ease blends' exponent)
     back_blend_s = 1.0,                -- (the last key back to your plane, as the rise's own camera did)
     late_blend_s = 0.25,               -- (a camera whose time has passed already: reached this fast)
@@ -86,7 +89,7 @@ CINE.DEFAULTS = {
     { t = 15, at = { 600, -720, 18 }, look = { 40, 0, 10 }, fov = 55 },
 }
 local BLEND = { smooth = 0, linear = 0, cubic = 1, easein = 2, easeout = 3, easeinout = 4 }   -- (smooth: linear, sampled)
-local ROUTES = { distortion = true, widgets = true, cheat = true, showhud = true }
+local ROUTES = { distortion = true, widgets = true, cheat = true, cheatnew = true, showhud = true }
 local BOXES = { hide = true, hers = true, keep = true }
 local HOLD_CINE, HOLD_PV = "the rise's cinematic", "the camera preview"
 -- play: the cinematic; R: the rise kept for Ctrl+E (play's, or a director rise's); pv: the preview; trash: cameras to go;
@@ -589,6 +592,23 @@ function TRY.cheat()
     GH.cheat = { o = cm, name = nameOf(cm) }
     return true, "LiveCheatManager ChangeHUDType EverythingDisabled"
 end
+-- ((2026-11-17) cheatnew) a shipping game makes no cheat manager, but the class is there: one made on your player
+-- controller (kept for the level), its ChangeHUDType(EverythingDisabled), RestoreToDefault after (as `cheat`)
+local CM = nil
+function CINE.cheatMake()
+    if CM and valid(CM) then return CM end
+    local cls = StaticFindObject("/Script/Live.LiveCheatManager")
+    if not (valid(cls) and liveObj(survivalPC)) then return nil end
+    pcall(function() CM = StaticConstructObject(cls, survivalPC) end)
+    return CM and valid(CM) and CM or nil
+end
+function TRY.cheatnew()
+    local cm = CINE.cheatMake()
+    if not cm then return false, "no LiveCheatManager made" end
+    if not pcall(function() cm:ChangeHUDType(2) end) then return false, "ChangeHUDType failed" end   -- (EverythingDisabled)
+    GH.cheat = { o = cm, name = nameOf(cm) }
+    return true, "a LiveCheatManager of ours: ChangeHUDType EverythingDisabled"
+end
 function TRY.showhud()
     local hud = hudActor()
     if not hud then return false, "no HUD actor" end
@@ -793,6 +813,18 @@ end
 local function ghudShow(holder, why)
     GH.holders[holder] = nil
     if next(GH.holders) == nil and GH.route then ghudPut(why or holder) end
+end
+-- ((2026-11-17) for other parts: the fleet's surfacing, sv_fleet.lua) the game's HUD (and the target boxes) held off by
+-- `holder` for about need s, let go by it; and a probe's one route alone (CINE.hudTry, then CINE.hudShow)
+function CINE.hudHide(holder, need) return ghudHide(holder, { need = need }) end
+function CINE.hudShow(holder, why) return ghudShow(holder, why) end
+function CINE.hudTry(route, need)
+    if not TRY[route] then return false, "no route " .. tostring(route) end
+    if GH.route then return false, "held already by " .. tostring(GH.route) end
+    local okC, a, b = pcall(TRY[route], { need = need or 30 })
+    if okC and a then GH.route, GH.holders.probe = route, true end
+    log(string.format("cine: probe %s: %s", route, okC and (tostring(a) .. ", " .. tostring(b)) or ("error " .. tostring(a))))
+    return okC and a, b
 end
 local function ghudKeep()                                 -- hidden again if the game showed it
     for _, e in ipairs(GH.items or {}) do

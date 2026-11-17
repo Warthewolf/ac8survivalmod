@@ -9,6 +9,7 @@
 -- fighters, each ship paid once as it sinks (sv_fleet.lua's sinking) and each turret as it's shot off, the round held while a ship
 -- is afloat (no time limit), its music, its radio, the NEXT row; won: the reward and the airfield fully repaired. Round
 -- 29's break: its warning. GEOFON sinks like any ship until WP5 / WP6. Co-op: the host's only (WP12). Log: `fleet round:`.
+-- Ctrl+F in a break: round 30 next (test).
 -- TEST ONLY BEGIN (INVINCIBLE FLEET's round: test builds only, the user's dev install)
 IFROUND = {}
 do
@@ -152,6 +153,7 @@ function IFROUND.spawn(now)
     local no = IFLEET.launch("round " .. tostring(D.round))
     if no then rlog("the fleet didn't come (" .. tostring(no) .. "): a normal round"); return false end
     RUN.fleetRound = true
+    if SKY then SKY.fightSlow = n(rc().sky_slow, 5) end   -- ((2026-11-17) the dawn x5 slower through its fight: sv_sky.lua)
     R = { F = IFLEET.cur, paid = {}, parts = {}, t0 = now }
     D.special.state, D.special.at = "fleet", now
     rlog(string.format("round %d: the fleet's %d ships coming (the surfacing first); music: %s", D.round, #R.F.ships, musicStart()))
@@ -167,6 +169,7 @@ function IFROUND.over(now, s)
     local F = R.F
     local won = IFLEET.cur == F and afloatN(F) == 0
     rlog("music: " .. musicStop())
+    if SKY then SKY.fightSlow = nil end
     if won then
         local reward = n(rc().reward, 50000)
         if type(addCredits) == "function" then addCredits(reward, "INVINCIBLE FLEET destroyed") end
@@ -238,8 +241,27 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet round", fn = function(now)
         say("sighted")
     end
 end }
+-- ((2026-11-17) the user: "can I have a test key") Ctrl+F: the fleet's round next. In a break between rounds the run is set to
+-- the break before it (round 29's: its warning), so the next round is round 30, the fleet's; in a round, or had this run:
+-- said, nothing changed. Log: `fleet round: Ctrl+F: ...`
+testKey("F", "fleet round", function()
+    local r = math.floor(n(rc().round, 30))
+    if not (D and RUN) then rlog("Ctrl+F: no run"); return end
+    if D.state ~= "wait" then
+        hudCallout("TEST: FLEET ROUND", "IN A BREAK ONLY")
+        rlog(string.format("Ctrl+F: in round %s (%s): only in a break between rounds", tostring(D.round), tostring(D.state)))
+        return
+    end
+    if RUN.fleetRound then hudCallout("TEST: FLEET ROUND", "HAD THIS RUN ALREADY"); rlog("Ctrl+F: had this run already"); return end
+    if not ready(r) then hudCallout("TEST: FLEET ROUND", "NOT READY"); rlog("Ctrl+F: not ready (its rows, or a joiner)"); return end
+    local was = D.round
+    D.round = r - 1
+    RUN.fleetWarned, RUN.fleetPick = nil, nil
+    hudCallout("TEST: FLEET ROUND", string.format("ROUND %d NEXT", r))
+    rlog(string.format("Ctrl+F: the run set from round %s's break to round %d's: round %d, the fleet's, next", tostring(was), r - 1, r))
+end)
 if type(LEVEL_DROPS) == "table" then                       -- (the level's objects went with it; the music hold: sv_main's)
-    LEVEL_DROPS["fleet round"] = function() R = nil end
+    LEVEL_DROPS["fleet round"] = function() R = nil; if SKY then SKY.fightSlow = nil end end
 end
 end
 -- TEST ONLY END

@@ -151,7 +151,10 @@ def fleet_units(units, used_ids, z, top_number, v):
             names = copy_unit(units, used_ids, z, K['src'][1], unit, 1, top_number, obj, row)
             u = unit_named(units, unit)
             clear_flags(u, ('bIsAttackTargetsException',))
-            retag_turrets(field_of(objects_of(u)[0], 'ChildAIObjectDescs')[1], obj, aegis_rows, used_ids, z)
+            kids = field_of(objects_of(u)[0], 'ChildAIObjectDescs')[1]
+            retag_turrets(kids, obj, aegis_rows, used_ids, z)
+            if se.TANI_WD:                     # ((2026-11-17) its two lasers, bow and aft: TANI=1 only)
+                kids += aegis_lasers(z, used_ids, obj, kids)
         elif kind == 'boat':                   # Training006's (an enemy already), its SAM launcher on the Spaceport's row
             names = port_unit(units, used_ids, z, src_boat, unit, obj, row, [s['point']], s['yaw'], top_number, tgt=True)
             u = unit_named(units, unit)
@@ -200,6 +203,39 @@ def fleet_units(units, used_ids, z, top_number, v):
              f'{len(z.imports) - was_imports} imports added ({was_imports} -> {len(z.imports)})'))
 
 
+def aegis_lasers(z, used_ids, obj, kids):
+    """((2026-11-17) the user: two LaserInterceptors on each Aegis, bow and aft, targetable) An Aegis's two laser parts
+    (survival_events.IF_AEGIS_LASERS on BP_SV_IF_Aegis's components), as THE TANACORN's live parts are made
+    (build_survival_world.tanicorn_live_unit): a deep copy of its own Mk 15 child (no grandchildren), named <obj>_<component>,
+    a new UniqueID, our world data's name, the LASER mount's mission row, a TGT mark, no tags, its Class a hard import of the
+    mount's blueprint in the Tanicorn container (hard rule 7), the template's class import dropped (hard rule 34)."""
+    se = survival_events
+    L = se.IF_AEGIS_LASER
+    tmpl = [ch for ch in kids if field_of(field_of(ch, 'Data'), 'ComponentFieldName') == ('name', 'BP_VE002_aegs_mk15_Base', 0)]
+    assert len(tmpl) == 1 and field_of(tmpl[0], 'GrandChildrens') == ('arr', []), (obj, 'its Mk 15 child changed')
+    cls = import_class(z, L['bp'], L['bp_class'])
+    out = []
+    for comp in se.IF_AEGIS_LASERS:
+        ch = copy.deepcopy(tmpl[0])
+        data = field_of(ch, 'Data')[2]
+        put(data, 'LiveChildAIObjectData', 'MissionNpcID', ('name', L['row'], 0))
+        put(data, 'LiveChildAIObjectData', 'ComponentFieldName', se.fname(comp))
+        put(data, 'LiveChildAIObjectData', 'Class', cls)
+        put(data, 'LiveChildAIObjectData', 'TargetMarkType', ('enum', 'ELiveTargetMarkType', ('raw', 'Byte', b'\x01')))
+        put(data, 'LiveChildAIObjectData', 'Tags', ('arr', []))
+        name = f'{obj}_{comp}'
+        assert not name.rpartition('_')[2].isdigit(), name                  # (hard rule 17)
+        put(ch[2], 'LiveChildAIObjectDesc', 'Name', se.fname(name))
+        put(ch[2], 'LiveChildAIObjectDesc', 'UniqueID', ('raw', 'UInt32', new_unique_id(used_ids, 'AC8SurvivalMode:' + name)))
+        put(ch[2], 'LiveChildAIObjectDesc', 'WorldDataName', ('name', 'WD_SurvivalMode_global', 0))
+        put(ch[2], 'LiveChildAIObjectDesc', 'GrandChildrens', ('arr', []))
+        bad = [x for x in obj_refs(ch) if x != cls]
+        assert not bad, (name, 'a foreign object reference kept (hard rule 34)', bad)
+        for n in names_in(ch) + [L['bp'], L['bp_class'], L['row'], comp]: z.nb.add(n)
+        out.append(ch)
+    return out
+
+
 def fleet_npc_rows(rows, m22):
     """DT_SV_NpcRows' fleet rows: Mission 22's ships' turrets (IF_TURRETS: copies of their stock rows, a child (the Kirov's
     gun mount's artillery) on the fleet's copy) and each named ship's hull (its class's stock hull row on its own model row,
@@ -235,6 +271,12 @@ def fleet_npc_rows(rows, m22):
         row = copy_row(se.IF_KINDS[sh['kind']]['hull'])
         set_prop(row[2], idx['ModelId'], 'ModelId', ('name', sh['model'], 0))
         set_prop(row[2], idx['GameObjectDisplayName02'], 'GameObjectDisplayName02', s(se.IF_CLASS_KEY + sh['kind'].title()))
+        if sh['kind'] == 'aegis' and se.TANI_WD:   # ((2026-11-17) its lasers' rows by their components, as a stock ship's)
+            for name, add in (('ChildNPCId', [('name', se.IF_AEGIS_LASER['npc'], 0)] * len(se.IF_AEGIS_LASERS)),
+                              ('ChildNPCComponentNames', [se.fname(c) for c in se.IF_AEGIS_LASERS])):
+                i = [k for k, q in enumerate(row[2]) if q[1] == name][0]
+                q = row[2][i]
+                row[2][i] = (q[0], q[1], q[2], ('arr', list(q[3][1] if q[3] else []) + add))
         assert se.fname(sh['npc'])[2] == 0, sh['npc']
         out.append(((sh['npc'], 0), row))
     print(f'  invincible fleet: {len(out)} DT_SV_NpcRows rows ({len(se.IF_TURRETS)} turrets of Mission 22\'s ships, '
@@ -262,6 +304,9 @@ def fleet_model_rows(crow, idx):
         assert (f[1], f[2]) in crow, sh['kind']
         row = copy.deepcopy(crow[(f[1], f[2])])
         set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(sh['name_key']))
+        if sh['kind'] == 'aegis' and se.TANI_WD:   # ((2026-11-17) on BP_SV_IF_Aegis: its two lasers' components)
+            row[2][:] = [(q[0], q[1], q[2], ('soft', ('name', se.IF_AEGIS_BP, 0), ('name', se.IF_AEGIS_BP_CLASS, 0), ''))
+                         if q[1] == 'BlueprintClass' else q for q in row[2]]
         assert se.fname(sh['model'])[2] == 0, sh['model']
         out.append(((sh['model'], 0), row))
     return out

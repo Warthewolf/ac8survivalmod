@@ -86,10 +86,10 @@ import json, sys
 s = json.load(open(sys.argv[1]))
 print(sum(1 for b in s['blueprints'] for n in b.get('scs', []) if 'child_class' in n))
 " "$OUT/tani.spec.json" | tr -d '\r')
-glive=$(grep -c "^child actor Part_" "$OUT/tanibuild.log" || true)
+glive=$(grep -c "^child actor " "$OUT/tanibuild.log" || true)   # ((2026-11-17) + BP_SV_IF_Aegis's LASER_BOW / _AFT)
 [ "$glive" = "$nlive" ] || { echo "tanicorn: TaniBuild made $glive child actors for the spec's $nlive live parts ($OUT/tanibuild.log)"; grep "child actor\|child class" "$OUT/tanibuild.log" | head; exit 1; }
-echo "tanicorn: $glive live parts made child actors (BP_SV_Tani_HULLLIVE):"
-grep "^child actor Part_" "$OUT/tanibuild.log" | sed 's/^/  /'
+echo "tanicorn: $glive live parts made child actors (BP_SV_Tani_HULLLIVE, BP_SV_IF_Aegis):"
+grep "^child actor " "$OUT/tanibuild.log" | sed 's/^/  /'
 # 6. the cook
 echo "tanicorn: cooking (log: $OUT/cook.log)"
 rm -rf "$PROJ/Saved/Cooked"

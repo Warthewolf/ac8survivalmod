@@ -1148,7 +1148,11 @@ local function arcPlace(now, F)
         return k, b.u0 + (1 - b.u0) * t, "the break"
     end
     ARC.roundAt[r] = ARC.roundAt[r] or now
-    return k, cap * math.min(1, math.max(0, now - ARC.roundAt[r]) / math.max(1, n(c.round_s, 240))), "the fight"
+    -- ((2026-11-17) the user: "move the sunrise so it's slower during round 30") SKY.fightSlow: a special round's own part
+    -- sets it (x round_s while its fight lasts); the break still finishes the step by the next round's start
+    local slow = math.max(1, n(SKY.fightSlow, 1))
+    return k, cap * math.min(1, math.max(0, now - ARC.roundAt[r]) / math.max(1, n(c.round_s, 240) * slow)),
+        slow > 1 and string.format("the fight, x%g slower", slow) or "the fight"
 end
 
 local MPC_KEYS = { { "em", "mpc|env|Ctrl_Scene_EmissiveScale" }, { "vfx", "mpc|vfx|VFXEmissiveEV" },

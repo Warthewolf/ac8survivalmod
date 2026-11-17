@@ -3486,3 +3486,72 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - Run 89 (0.74.99, fleet30 14/14): AC04's track posted at round 30's start, the song back at the win; but the autotest's
   first break played nothing and named the main menu's track, which came back: 0.74.100 gives back only a song that was
   playing. Run 90 (0.74.100, 14/14): "its song: none", at the win only the clock let go. fleet_test checks the hand-back.
+
+## 0.74.101-0.74.102 (2026-11-17; test builds, staged, not installed): the LaserInterceptor 20 s / 10 s; the fleet's Aegis lasers (feature/fleet-lasers)
+- The user: "increase the LaserInterceptor Alive time for 20 seconds and 10 seconds cooldown" (sv_config.lua li_volley_s
+  20, li_rest_s 10: every carrier's, the ZFA-44s', THE TANACORN's and the fleet's; escort_test checks the shipped values,
+  its timeline still AC7's 6 / 8) and "I want the Aegis Ships in the Invincible Fleet Round to Carry 2 Lasers Interceptors
+  one on the Aft and the Bow, targettable" (the mount: "TANACORN's LASER turret").
+- tools/tanicorn/spec.py: BP_SV_IF_Aegis, a child of the stock campaign Aegis BP_VE002_aegs_CP (a stub on LiveAIVessels at
+  its path, never packed) with two LiveChildActorComponents of BP_SV_Tani_LASER on its root: LASER_BOW (69 m ahead, 9 m up)
+  and LASER_AFT (64 m astern on the fantail, 4.1 m up, facing aft); build.sh counts every `child actor` line (37).
+  TANI=1 builds only (survival_events_fleet.py IF_AEGIS_*): each Aegis's model row on it, its hull row's ChildNPCId /
+  ChildNPCComponentNames + the two, two more child descs (its Mk 15's copy: <obj>_LASER_BOW / _AFT on the LASER mount's rows
+  sv_tani_laser: TGT box, 150 health, its aim-only fire control), so the fleet has 58 parts, each ordered.
+- sv_fleet_lasers.lua (a dev-only piece after sv_fleet_round.lua; dev_only.py, IFLASER): as an Aegis settles its mounts
+  are put at CFG.specials.fleet.lasers spots (no rebuild to move them) and handed to AC7's LaserInterceptor through
+  sv_escort_li.lua's new carrier lists (ZLI.extras, beside ZLI.extra), on the players' missiles; a mount at health 0, gone
+  or its ship sunk drops out. fleet_test: 11 checks (handed over, placed, shot off, sunk, another class, a stock Aegis).
+- Runs 91-92 (aegislasers, Ctrl+N): 15 ships with 58 parts; `fleet lasers: <SHIP>: 2 mounts handed ... a volley 20.0 s, a
+  rest 10.0 s` for all 5; 10 `zfa li: BP_SV_Tani_LASER ... carries AC7's LaserInterceptor`; RAVEN's mounts measured at 69 m
+  ahead / 9 m up and 64 m astern / 4.1 m up; one finished: its laser removed. Run 92 9/9. Their beams at the players'
+  missiles weren't tried (the autotest can't fire them); the pictures missed the mounts (the camera didn't take its spot).
+  Their boxes read TANACORN LASER (THE TANACORN's rows).
+
+## 0.74.103 (2026-11-17; staged): Ctrl+F, the fleet's round next (feature/fleet-lasers)
+- The user: "can I have a test key". sv_fleet_round.lua Ctrl+F: in a break between rounds the run is set to round 29's
+  break (its warning), so round 30, INVINCIBLE FLEET's, comes next; in a round, or had this run: a callout, nothing changed
+  (`fleet round: Ctrl+F: ...`). fleet_test: 3 checks; the TESTER copy has no Ctrl+F (dev_only.py).
+- 0.74.103 INSTALLED 2026-11-17 for the user ("install 0.74.103"; "I just want to see the invincible fleet for myself"), over
+  0.74.91 (backup: build/backup/install_before_0.74.103); 107 files verified; her settings, map notes, subtitles (the repo's)
+  and the launcher's toggle kept. The ZFA-44 container's 347-byte .pak, which package_dev.sh doesn't stage (package_release.sh
+  does), was removed by the copy and put back from the backup (the same as build/zfa44/out's).
+
+## 0.74.104-0.74.105 (2026-11-17; test builds, staged, not installed): the beam wider, AC8's own thunder, no HUD in the surfacing, round 30's slower dawn (feature/fleet-lasers)
+- "make the Laser Mesh thicker slightly so its more visible": li_beam_w 1.5 (sv_config.lua; sv_escort_li.lua's beam(): the
+  BeamLength Y / Z x it, the end's thinning too; every carrier's). escort_test checks the shipped value.
+- "we need to change the audio of the Thunder, its wrong": AC8's SE bank (DA_SoundDB_AKB_GameSe) has Mission 12's thunder
+  events with no event asset (AKE_Ms12_ENV_OBJ_Thunder_Play, AKE_Environment_Thunder_Play,
+  AKE_GEN_ENV_AMB_ThunderCloud_Inside_Lightning_Play, AKE_Ms12_ENV_AMB_DistantThunder_Play / _Stop ...): 3D sounds, which the
+  0.74.92 posts by name with no place played at the world's origin. sv_fleet_storm.lua posts a bare name ON your camera
+  (LiveSoundBlueprintLibrary.PostEventAtActorByName on the PlayerCameraManager), logged with its playing id; the storm's
+  clap Mission 12's thunder, its bed Mission 12's distant thunder loop (stopped as it clears), each bolt's near / far
+  thunder those events (sv_fleet.lua storm.sound / storm.thunder). Not heard yet (AC8 was in use).
+- "during the cutscenes of the tanacorn and invinicble fleet rising we need to disable the HUD": run 20261116_222923's rise
+  pictures had the game's HUD up although sv_cine.lua logged it hidden by distortion. sv_cine.lua: a route cheatnew (a
+  LiveCheatManager made on your player controller, ChangeHUDType EverythingDisabled / RestoreToDefault), the routes'
+  order widgets, cheatnew, cheat, showhud, distortion (last); CINE.hudHide / hudShow / hudTry for other parts; the fleet's
+  surfacing (sv_fleet.lua IFSURF) holds Survival's HUD and the game's (target boxes too) from its start to its end. The
+  autotest hudprobe (each route alone, the cheat manager's switches, the surfacing, pictures) waits for the game to close.
+- "move the sunrise so it's slower during round 30, it gets light too quickly": sv_sky.lua SKY.fightSlow (x round_s while
+  set), round 30 sets it to CFG.specials.fleet.round.sky_slow 5 (the drift toward the dawn over ~20 min, not 4), cleared at
+  its end; the break finishes the step as before. Tests: fleet, sky, thunder, cine (its route order), escort, zip leak.
+
+## 0.74.106-0.74.107 (2026-11-17; test builds, staged, not installed): INVINCIBLE FLEET's surfacing made epic (feature/fleet-lasers)
+- The user: "can you please make the Ships Rising out of the sea cutscene more cinematic? like go epic with it"; the radio
+  "Yes, use the drafts", "No slow motion". The surfacing (IFSURF) moved out of sv_fleet.lua (1,904 lines) into its own
+  dev-only piece, sv_fleet_surface.lua (main.lua MODULES after sv_fleet_lasers; dev_only.py, fleet_test.sh, AGENTS.md).
+- CFG.specials.fleet.surface: lead_s 3 s of empty storm sea first; six shots, each a camera move (two CameraActors, the cut
+  to `from`, SetViewTargetWithBlend to `to` over the shot): a push across the waves, low on the pickets, a dolly along
+  HERNE, RAVEN's bow from off her quarter, the push-in on GEOFON through her slam, the pull-back over the fleet. Letterbox
+  2.39 (the cameras' own bConstrainAspectRatio); Online Mode's IGC hand-held shake (BP_CamShake_HandShake_A) all through;
+  BombImpactSmall / BombImpact at breaches and slams within 1.5 km of the camera, BombImpactHelios at GEOFON's slam; the
+  water's roar (AKE_Environment_Splash_WaterPiller_Play on the camera) at breaches within 2.5 km.
+- Beats on the clock: four strikes on cue (sv_fleet_storm.lua's new IFSKY.strike: the cloud flash, a bolt, its glow and
+  sure thunder; lightTick's own strikes x storm_quiet_x 4 further apart while it films), KASKA / COMONA CONTROL / KASKA's
+  lines (SUB.say; Survival's HUD held with callouts let through), the INVINCIBLE FLEET title card at +24 s. Banners waiting
+  when it starts are dropped.
+- Autotest suite `epic` (tools/autotest, branch tools/ac8-autotest): 0.74.106 24/25 (the hand-held shake's path wrong:
+  it's /Game/OnlineMode/Blueprint/IGC/CameraShake/; RAVEN's shot 35 m off her bow saw her breach out of frame; the wide
+  shot from 3 km made specks), 0.74.107 25/25 (run 20261117_133728_claude: 6 moves, 9 beats, 9 shakes, 8 roars, 15 of 15
+  doubles, the real fleet up). Not heard yet: the roars and the cued thunder (the autotest has no ears).
