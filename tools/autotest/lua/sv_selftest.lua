@@ -366,6 +366,7 @@ SUITES.pin = function()
         local l, r = pl:K2_GetActorLocation(), pl:K2_GetActorRotation()
         local yaw = math.rad(r.Yaw)
         local v = 1250                                    -- (cm/s: 45 km/h)
+        if type(SV_Down) == "function" then pcall(SV_Down, 0) end   -- (intoRun's autopilot round the airfield off first)
         local rc = SV_Pin(addrOf(pl) or 0, l.X, l.Y, l.Z, math.cos(yaw) * v, math.sin(yaw) * v, r.Yaw, 30)   -- (the runtime takes its address)
         P.on = rc == 1
         ST.check(rc == 1, "SV_Pin on your plane", tostring(rc))
@@ -3939,6 +3940,19 @@ SUITES.aegislasers = function()
         function() local m = mountAt("LASER_BOW"); return m and ST.at(m) end, 35)
     A.picture("aegis_stern", function() local m = mountAt("LASER_AFT"); return m and ST.off(ST.at(m), -2500, 3500, 1800) end,
         function() local m = mountAt("LASER_AFT"); return m and ST.at(m) end, 35)
+    -- ((0.74.162) the beams' width: every laser's volley on command (Ctrl+['s ESC.testLaser), the bow's beams pictured)
+    A.do_(function()
+        ST.marks.lz = ST.n
+        if not ST.check(ESC ~= nil and ESC.testLaser ~= nil, "the lasers' volley on command (ESC.testLaser)") then return end
+        pcall(ESC.testLaser)
+    end)
+    A.log_("fires a volley", 5, "lz", true, function(l)
+        ST.check(l ~= nil and l:find("copies round it", 1, true) ~= nil, "a volley's beam drawn with its copies round it (li_beam_w)", l)
+    end)
+    A.picture("aegis_beam_bow", function() local m = mountAt("LASER_BOW"); return m and ST.off(ST.at(m), 1500, 2500, 900) end,
+        function() local m = mountAt("LASER_BOW"); return m and ST.at(m) end, 40)
+    A.picture("aegis_beam_far", function() local m = mountAt("LASER_BOW"); return m and ST.off(ST.at(m), 6000, 9000, 3000) end,
+        function() local m = mountAt("LASER_BOW"); return m and ST.at(m) end, 40)
     A.do_(function()
         for _, w in ipairs({ "LASER_BOW", "LASER_AFT" }) do
             local m = mountAt(w)
