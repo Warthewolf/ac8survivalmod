@@ -30,6 +30,11 @@ if CFG.specials and CFG.specials.fleet and not CFG.specials.fleet.capture then
         -- final_m) an explosion on the deck and, in co-op, DOWN at once (hidden, revivable): the crash onto the deck)
         gate_km = 3, gate_alt_m = 300, glide_deg = 3.5, final_m = 300, floor_m = 110, give_up_s = 240,   -- (floor 70 -> 110: 0.74.168 sagged 40 m under it, to 28 m)
         boom_fx = { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 3 },
+        -- ((0.74.174) the user: "Yeah give that a try": the autopilot lands it on GEOFON's deck: in its final, gear down and the
+        -- brake to landing speed (runtime SV_CapLand), its line down to the deck itself; on the deck (the game's IsOnGround,
+        -- or within land_m of the deck's height over its mark) held land_hold_s, then the explosion and DOWN. Past the deck
+        -- without touching it: the old end over it. land = false: the old approach, never under floor_m)
+        land = true, land_m = 6, land_hold_s = 2, land_pass_m = 150,
         deck = { fwd_m = -40, right_m = 8, up_m = 22 },     -- (the deck's touchdown spot from GEOFON's root, metres)
         text = { lock = "CAPTURE LOCK", lock_sub = "GET CLEAR OR DESTROY RAVEN'S EW MAST",
                  lock_other = "CAPTURE LOCK ON %s", taken = "AIRCRAFT CAPTURED", taken_sub = "RAVEN HAS YOUR CONTROLS",
@@ -142,6 +147,8 @@ end
 local function giveBack(why)                              -- (any end: the controls, the shield; never left taken)
     if not L then return end
     if L.state == "fly" or L.state == "final" then
+        local pw = pawnNow()                              -- (the landing's gear back up, the brake off: a plane given back flies)
+        if L.landOn and valid(pw) and type(SV_CapLand) == "function" then pcall(SV_CapLand, addrOf(pw) or 0, 0) end
         if type(SV_Capture) == "function" then pcall(SV_Capture, 0) end
         if playerLocationDirty then playerLocationDirty() end
     end
@@ -184,10 +191,39 @@ local function flyTick(now)
         if type(rc) == "number" and rc < 0 then giveBack("SV_Capture refused (" .. tostring(rc) .. ")") return end
     elseif L.state == "final" then
         local behind = math.max(0, -along / 100)
-        local alt = dk.Z / 100 + math.max(n(c.floor_m, 80), behind * math.tan(math.rad(n(c.glide_deg, 3.5))))
+        local landing = c.land ~= false and type(SV_CapLand) == "function"
+        if landing and not L.landOn then
+            L.landOn = true
+            local okL, r = pcall(SV_CapLand, addrOf(pawn) or 0, 1)
+            clog(string.format("seq %s: the landing: gear down, slowing (SV_CapLand %s)", tostring(L.seq), okL and tostring(r) or "FAILED"))
+        end
+        if landing and now >= (L.landAgain or 0) then L.landAgain = now + 1; pcall(SV_CapLand, addrOf(pawn) or 0, 1) end
+        local alt = dk.Z / 100 + math.max(landing and 0 or n(c.floor_m, 80), behind * math.tan(math.rad(n(c.glide_deg, 3.5))))
+        if landing then
+            local up = (me.Z - dk.Z) / 100
+            local okG, og = pcall(function() return pawn:IsOnGround() end)
+            local onDeck = (okG and og == true) or (dist <= 200 and up <= n(c.land_m, 6))
+            if onDeck and not L.touchAt then
+                L.touchAt = now
+                clog(string.format("seq %s: touched down on GEOFON's deck (%.0f m off its mark, %.0f m over it; IsOnGround %s)",
+                    tostring(L.seq), dist, up, tostring(okG and og)))
+            end
+            if L.touchAt and now - L.touchAt >= n(c.land_hold_s, 2) then
+                L.state, L.at = "trap", now
+                clog(string.format("seq %s: trapped on GEOFON's deck (landed, %.0f m off its mark)", tostring(L.seq), dist))
+                trapTick(now)
+                return
+            end
+            if not L.touchAt and along / 100 > n(c.land_pass_m, 150) then
+                L.state, L.at = "trap", now
+                clog(string.format("seq %s: trapped on GEOFON's deck (passed over it, %.0f m up: no touchdown)", tostring(L.seq), up))
+                trapTick(now)
+                return
+            end
+        end
         local rc = type(SV_Capture) == "function" and SV_Capture(addrOf(pawn) or 0, dk.X, dk.Y, math.max(50, alt), dk.yaw) or -1
         if type(rc) == "number" and rc < 0 then giveBack("SV_Capture refused (" .. tostring(rc) .. ")") return end
-        if dist <= n(c.final_m, 300) or along > 0 then
+        if not landing and (dist <= n(c.final_m, 300) or along > 0) then
             L.state, L.at = "trap", now
             clog(string.format("seq %s: trapped on GEOFON's deck (over its mark, %.0f m off it, %.0f m up)", tostring(L.seq), dist,
                 (me.Z - dk.Z) / 100))
@@ -211,6 +247,8 @@ end
 trapTick = function(now)
     local seq, solo = L.seq, L.solo
     L.state = "done"
+    local pawn0 = pawnNow()
+    if L.landOn and valid(pawn0) and type(SV_CapLand) == "function" then pcall(SV_CapLand, addrOf(pawn0) or 0, 0) end
     if type(SV_Capture) == "function" then pcall(SV_Capture, 0) end   -- (the takeover off first: DOWN's own autopilot, or yours)
     if playerLocationDirty then playerLocationDirty() end
     local g = geofon()

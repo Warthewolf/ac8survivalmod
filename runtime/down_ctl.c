@@ -131,6 +131,7 @@ typedef struct {
     /* (runtime 0.32.38, GEOFON's capture: DownGate) a gate to fly to instead of the circle: (gx, gy) cm, the line it's
      * flown along (ghd deg: the ship's heading), arrived once within CP_ARRIVE_M of it, on its line and at its height   */
     int    gate, arrived, onLine;
+    int    land;                             /* (0.32.39) the capture's landing: the brake held over CP_LAND_MS        */
     double gx, gy, ghd, cross;
 } DownCtl;
 #define CP_ARRIVE_M     500.0  /* m: arrived within this behind the gate (to 200 m past it) ...                       */
@@ -142,6 +143,7 @@ typedef struct {
 #define CP_LEAD_MAX     5000.0 /* m: the aim point behind the gate along its line                                    */
 #define CP_AWAY_M       4000.0 /* m behind the gate at least to turn onto its line facing away from it              */
 #define CP_LOW_M        150.0  /* m: under this the gate's turns are shallow (DN_BANK_LOW), as DOWN's are low       */
+#define CP_LAND_MS      75.0   /* m/s (270 km/h): (0.32.39) landing, the brake held above this speed                */
 
 static double DnWrap(double a) { while (a > 180.0) a -= 360.0; while (a < -180.0) a += 360.0; return a; }
 static double DnClamp(double v, double lo, double hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -376,7 +378,7 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
         c->lastTurn = wH;                                      /* (its side kept through ~180 deg errors) */
         double wV = DnClamp(DN_KV * (gammaWant - gamma) - 0.1 * c->rth, -DN_CLIMB_MAX, DN_CLIMB_MAX);
         /* (0.32.38) the gate is low (300 m): its turns flown at full bank, the low limit only under CP_LOW_M */
-        int low = c->gate ? h < CP_LOW_M : (h < DN_LOW_M || h < c->alt - 600.0);
+        int low = c->gate ? (h < CP_LOW_M && !c->land) : (h < DN_LOW_M || h < c->alt - 600.0);   /* (landing: its low line) */
         double off = CoAtan2(CoAbs(wH), -wV) / D2R;            /* (how far the wanted direction is from straight down) */
         if (wV >= 0.0 || low) c->push = 0;
         else if (off < DN_PUSH_IN) c->push = 1;
@@ -416,6 +418,10 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
     c->oR = DnSlew(c->oR, tR, step);
     c->oP = DnSlew(c->oP, tP, step);
     c->out[0] = (float)c->oP; c->out[1] = 0.0f; c->out[2] = (float)c->oR; c->out[3] = 0.0f; c->out[4] = 0.0f;
+    if (c->land && c->haveRates) {                             /* (0.32.39) slowed to landing speed by the brake */
+        double sp = CoSqrt(c->v[0] * c->v[0] + c->v[1] * c->v[1] + c->v[2] * c->v[2]) / 100.0;
+        c->out[4] = sp > CP_LAND_MS ? 1.0f : 0.0f;
+    }
     memcpy(out, c->out, sizeof(c->out));
     return 1;
 }

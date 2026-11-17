@@ -485,7 +485,7 @@ static int L_Down(void* lua)
     if (!g_nextBuildInput) return Ret(lua, SV_ERR_NO_GAME);
     if (!LiveObject(plane) || CoKind(plane) != 2) { Log(L"down: refused: %p isn't a player plane", plane); return Ret(lua, SV_ERR_BAD_ARGS); }
     if (DN.on && CoRefGet(&DN.ref) == plane) {                 /* on already: a new circle, the same flight */
-        if (DN.c.gate) { DN.c.gate = DN.c.arrived = DN.c.onLine = 0; Log(L"down: the capture's gate given up: circling"); }   /* (0.32.38) */
+        if (DN.c.gate) { DN.c.gate = DN.c.arrived = DN.c.onLine = DN.c.land = 0; Log(L"down: the capture's gate given up: circling"); }   /* (0.32.38) */
         DN.c.cx = cx; DN.c.cy = cy; DN.c.alt = alt; DN.c.radius = rad;
         return Ret(lua, 1);
     }
@@ -546,6 +546,24 @@ static int L_Capture(void* lua)
     Log(L"capture: autopilot on plane %p: to the gate (%d, %d) m at %d m along %d; the plane at (%d, %d) m, %d m high, heading %d",
         plane, (int32_t)(gx / 100), (int32_t)(gy / 100), (int32_t)alt, (int32_t)hd, (int32_t)(p[0] / 100), (int32_t)(p[1] / 100),
         (int32_t)(p[2] / 100), (int32_t)r[1]);
+    return Ret(lua, 1);
+}
+
+/* SV_CapLand(plane, on) -> 1, SV_ERR_*: (0.32.39) the capture's landing on the plane the capture flies: its gear down
+ * (both flight engines', FlGear) and the brake held over landing speed (down_ctl.c CP_LAND_MS); off: gear up, no brake.
+ * Again each call (the game may raise the gear). */
+static int FlGear(uint8_t* plane, int down);
+static int L_CapLand(void* lua)
+{
+    uint8_t* plane = ArgObject(lua);
+    double on = 0;
+    if (!plane || !ArgNumber(lua, &on)) return Ret(lua, SV_ERR_BAD_ARGS);
+    if (!(DN.on && CoRefGet(&DN.ref) == plane && DN.c.gate)) return Ret(lua, SV_ERR_BAD_ARGS);
+    int was = DN.c.land;
+    DN.c.land = on != 0;
+    int g = FlGear(plane, DN.c.land);
+    if (was != DN.c.land)
+        Log(L"capture: landing %s on plane %p (gear %s: %d)", DN.c.land ? L"on" : L"off", plane, DN.c.land ? L"down" : L"up", g);
     return Ret(lua, 1);
 }
 
