@@ -3744,3 +3744,14 @@ game. The work was split by file between agents; the builds ran in sequence in t
   112 files verified; her config, subtitles (the same as the repo's) and the launcher's toggle kept. The user's install gets
   everything since 0.74.130: the restart fix, the lighter cloud burst, round 30's phase 2 (GEOFON's stages and V, the
   TANACORN's rise with its own camera work, her guns, her death), the surfacing's water and strikes, the shelling.
+
+## 0.74.139 (2026-11-17): the storm's crash of 0.74.138 fixed (feature/geofon-rise); staged
+- The user's crash in 0.74.138 (18:59:45, EXCEPTION_ACCESS_VIOLATION reading 0xffffffffffffffff in the game's own code,
+  no UE4SS on the stack): Ctrl+F at round 1's break brought round 30's night storm in, and its layout swap logged `the
+  layout CVC_ms04_20251216 -> LiveSetPauseTimerExecution_2147356082`: the storm's cached CVC_ms12 (LY.cvc) had been freed
+  and its address given to an event node, which liveObj (the address alone) passed; Cloudly drew from it. sv_anomalies_dev.lua
+  lyAsset / lySet: the cached layout and the swapped-out one kept with their names and taken only while still the same
+  object and a cloud layout ("CVC_"), else loaded again (hard rule 59); LY.cvc dropped with the level. The same check on
+  the bolts' cached meshes and material (BOLT.mesh, BOLT.mat) and the storm's cloud flash system (sv_fleet_storm.lua
+  GLOW.flash). sv_anomalies_dev.lua stays at 1,999 lines (edited in place).
+- Autotest restart129 (run 20261117_190223): 17/17, the layout CVC_ms04 -> CVC_ms12 and back.

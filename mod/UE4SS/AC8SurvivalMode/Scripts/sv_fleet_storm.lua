@@ -211,12 +211,15 @@ local GLOW = { pool = {}, i = 0 }
 -- g.flash: candidates { path, scale, life_s } in order (AC8's own patched NS_SV_CloudBurst, tools/stormfx/burst.py; our
 -- NS_SV_CloudFlash), the first that loads; GLOW.fe its entry
 local function flashSys(g)
+    -- ((0.74.139) the user's crash of 0.74.138: a kept asset whose address the game gave to another object (the storm's layout
+    -- became a LiveSetPauseTimerExecution); each use checks it's still the one found, by its name (hard rule 59))
+    if GLOW.flash and not (liveObj(GLOW.flash) and nameOf(GLOW.flash) == GLOW.flashN) then GLOW.flash = nil end
     if GLOW.flash == nil then
         GLOW.flash, GLOW.fe = false, nil
         local tried = {}
         for _, e in ipairs(type(g.flash) == "table" and g.flash or {}) do
             local o = type(e.path) == "string" and loadObject(e.path) or nil
-            if o then GLOW.flash, GLOW.fe = o, e; break end
+            if o then GLOW.flash, GLOW.fe, GLOW.flashN = o, e, nameOf(o); break end
             tried[#tried + 1] = tostring(e.path)
         end
         log("fleet storm: the bolts' cloud flash: " .. (GLOW.fe and ("our own " .. GLOW.fe.path) or

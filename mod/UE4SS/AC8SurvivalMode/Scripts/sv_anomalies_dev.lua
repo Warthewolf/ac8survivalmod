@@ -851,9 +851,9 @@ local LY = { on = false }
 local function lc() return (bc().sky or {}).layout or {} end
 local function lyCdo() local o = StaticFindObject("/Script/Cloudly.Default__CloudlyActor"); return (o ~= nil and valid(o)) and o or nil end
 local function lyAsset()
-    if LY.cvc ~= nil and liveObj(LY.cvc) then return LY.cvc end
+    if LY.cvc ~= nil and liveObj(LY.cvc) and nameOf(LY.cvc) == LY.cvcN then return LY.cvc end   -- ((0.74.139) hard rule 59)
     local o, why = loadObject(lc().asset)
-    LY.cvc = (o ~= nil and liveObj(o)) and o or nil
+    LY.cvc = (o ~= nil and liveObj(o) and nameOf(o):find("CVC_", 1, true)) and o or nil; LY.cvcN = LY.cvc and nameOf(LY.cvc) or nil
     return LY.cvc, why
 end
 local function lyCounts(a)
@@ -898,14 +898,14 @@ local function lySet(on, why, steps)
         if not o then return "the storm's layout not loaded" end
         if not LY.was then
             local okW, w = pcall(function() return a.CloudlyVolumeComponentsAsset end)
-            LY.was = okW and w or nil
+            LY.was = (okW and w ~= nil and liveObj(w) and nameOf(w):find("CVC_", 1, true)) and w or nil; LY.wasN = LY.was and nameOf(LY.was) or nil
             if LY.was ~= nil and liveObj(LY.was) then pcall(pin, LY.was, "Survival's own cloud layout (swapped out)") end
         end
         local ok, err = pcall(function() a.CloudlyVolumeComponentsAsset = o end)
         parts[#parts + 1] = ok and ("the layout " .. lyName(LY.was) .. " -> " .. lyName(o)) or ("the layout NOT set: " .. tostring(err))
         LY.on = ok
     else
-        if not LY.was then return "never swapped" end
+        if not (LY.was and liveObj(LY.was) and nameOf(LY.was) == LY.wasN) then LY.was = nil; return "never swapped (or the layout swapped out is gone)" end
         local ok, err = pcall(function() a.CloudlyVolumeComponentsAsset = LY.was end)
         parts[#parts + 1] = ok and ("the layout back to " .. lyName(LY.was)) or ("the layout NOT put back: " .. tostring(err))
         if ok then LY.on = false end
@@ -1235,7 +1235,7 @@ local BOLT = { pool = {}, mesh = {}, ext = {} }
 local function boltRng(r, d) r = type(r) == "table" and r or d; return r[1] + math.random() * (r[2] - r[1]) end
 local function boltMesh(path)
     local m = BOLT.mesh[path]
-    if m and liveObj(m) then return m end
+    if m and liveObj(m) and nameOf(m):find(path:match("([^/%.]+)$") or "?", 1, true) then return m end   -- ((0.74.139) hard rule 59)
     m = loadObject(path)
     BOLT.mesh[path] = m
     if m then
@@ -1258,7 +1258,7 @@ local function boltNew(c, mesh)                             -- (one pooled actor
     pcall(function() gs:FinishSpawningActor(a, t, 1) end)
     pcall(function() comp:SetCollisionEnabled(0) end)
     pcall(function() comp:SetCastShadow(false) end)
-    BOLT.mat = (BOLT.mat and liveObj(BOLT.mat)) and BOLT.mat or loadObject(c.material); if BOLT.mat then pcall(function() comp:SetMaterial(0, BOLT.mat) end) end
+    BOLT.mat = (BOLT.mat and liveObj(BOLT.mat) and nameOf(BOLT.mat):find(c.material:match("([^/%.]+)$") or "?", 1, true)) and BOLT.mat or loadObject(c.material); if BOLT.mat then pcall(function() comp:SetMaterial(0, BOLT.mat) end) end
     if BOLT.mat and type(c.mid) == "table" then pcall(function() local m = comp:CreateDynamicMaterialInstance(0, BOLT.mat, FName("")); for k, v in pairs(c.mid) do m:SetScalarParameterValue(FName(k), v) end end) end   -- (c.mid: sv_fleet.lua's note)
     pcall(function() a:SetActorHiddenInGame(true) end)
     return { a = a, c = comp }
@@ -1883,7 +1883,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "thunder", fn = function(now)
             THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
             SK.inside, SK.noiseUntil, SK.upsetUntil, SK.upsetOn, SK.pawn, SK.zone = false, nil, nil, false, nil, nil
             BU, SF.list, SF.ws, SF.rainWas, TR, SF.unsafeAt = nil, nil, nil, nil, nil, nil
-            LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LP.i = false, nil, nil, nil, false, 0
+            LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LP.i, LY.cvc = false, nil, nil, nil, false, 0, nil
             CL.q, CL.light, CL.own, CL.steps, CLP.i = {}, nil, nil, nil, 0
         end
         return
@@ -1916,7 +1916,7 @@ end }
 if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["thunder"] = function()
         BU, SF.list, SF.ws, SF.rainWas, SK.zone, SK.inside, PB.i, PB.w, TR, SF.unsafeAt = nil, nil, nil, nil, nil, false, 0, nil, nil, nil
-        LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LP.i = false, nil, nil, nil, false, 0
+        LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LP.i, LY.cvc = false, nil, nil, nil, false, 0, nil
         CL.q, CL.light, CL.own, CL.steps, CLP.i = {}, nil, nil, nil, 0
         BOLT.pool, BOLT.mat, BOLT.warm = {}, nil, nil                     -- (the level took the pooled bolts with it)
         THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
