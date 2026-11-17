@@ -3135,6 +3135,82 @@ SUITES.glow96 = function()
     A.do_(function() local L = cfg(); L.enabled = C.on; clear(); say("TEST: DONE", "THANK YOU") end)
     A.wait(2)
 end
+-- (2026-11-17) fleet30: WP10 step 1 (sv_fleet_round.lua) played: the run set to round 29 in its first break: the warning;
+-- round 30 the fleet's: its callout, the surfacing, the fleet up; GEOFON sunk (finishUnpaid on its hull): 6,000 and its
+-- callout; the rest sunk and the round's own fighters finished: the win, 50,000, the airfield fully repaired. Pictures.
+SUITES.fleet30 = function()
+    intoRun()
+    local C = {}
+    A.do_(function()
+        if not ST.check(IFROUND ~= nil and SPC and SPC.kinds and SPC.kinds.fleet ~= nil, "round 30's fleet is in this build") then return "abort" end
+        ST.marks.k0 = ST.n
+        ST.check(D and D.state == "wait", "the run's first break", tostring(D and D.state))
+        D.round = 29
+        C.cr = RUN.credits
+        ST.info("fleet30: the run set to round 29's break (credits " .. tostring(RUN.credits) .. ")")
+    end)
+    A.log_("fleet round: round 29's break: the warning", 10, "k0", true, function(l) ST.check(l ~= nil, "round 29's break: the warning", l) end)
+    A.log_("fleet round: round 30 is the fleet's", 10, "k0", true, function(l) ST.check(l ~= nil, "round 30 picked as the fleet's", l) end)
+    A.do_(function() ST.shot("f30_warning") end)
+    A.log_("fleet round: round 30: the fleet's 15 ships coming", 120, "k0", true, function(l)
+        ST.check(l ~= nil, "round 30 started: the fleet coming, its music", l)
+    end)
+    for i = 1, 6 do
+        A.wait(4)
+        A.do_(function() ST.shot(string.format("f30_surfacing_%d", i)) end)
+    end
+    A.log_("15 of 15 ships up", 60, "k0", true, function(l) ST.check(l ~= nil, "the fleet up after the surfacing", l) end)
+    A.wait(3)
+    A.do_(function()
+        ST.shot("f30_fleet_up")
+        local F = IFLEET and IFLEET.cur
+        local g = F and F.ships[1]
+        if not (g and g.hull) then ST.info("fleet30: GEOFON's hull not kept"); return end
+        ST.marks.k1 = ST.n
+        local okF, dead, h, how = pcall(finishUnpaid, g.hull.obj)
+        ST.info(string.format("fleet30: GEOFON finished: %s %s %s %s", tostring(okF), tostring(dead), tostring(h), tostring(how)))
+    end)
+    A.log_("fleet round: GEOFON (ford) sunk", 15, "k1", true, function(l)
+        local z = l and tonumber(l:match(": (%d+) zollars"))   -- (6,000 x the special's and the tier's, as the Spaceport's pay: run 88's 24,000)
+        ST.check(z ~= nil and z >= 6000, "GEOFON sunk: 6,000 at least (x the special and the tier)", l)
+    end)
+    A.wait(2)
+    A.do_(function()
+        ST.shot("f30_geofon_sunk")
+        local F = IFLEET and IFLEET.cur
+        local k = 0
+        for i = 2, #(F and F.ships or {}) do
+            local sh = F.ships[i]
+            if sh.hull then local okF = pcall(finishUnpaid, sh.hull.obj); if okF then k = k + 1 end end
+        end
+        ST.info("fleet30: " .. k .. " more hulls finished")
+    end)
+    A.wait(8)
+    A.do_(function()
+        local F = IFLEET and IFLEET.cur
+        local afloat = 0
+        for _, sh in ipairs(F and F.ships or {}) do if (sh.r or 0) > 0 and not sh.sunk then afloat = afloat + 1 end end
+        ST.info("fleet30: afloat now " .. afloat .. ", row " .. tostring(IFROUND.row and IFROUND.row(D.special, {})))
+        ST.marks.k2 = ST.n
+        local k = 0
+        for _, pl in ipairs(planes or {}) do
+            if pl.unit and D.up and D.up[pl.unit] and pl.obj then if pcall(finishUnpaid, pl.obj) then k = k + 1 end end
+        end
+        ST.info("fleet30: the round's own aircraft finished: " .. k)
+    end)
+    A.log_("fleet round: won at", 60, "k2", true, function(l)
+        ST.check(l ~= nil and l:find("15 ships sunk", 1, true) ~= nil and l:find("health", 1, true) ~= nil, "won: every ship sunk, the airfield repaired", l)
+    end)
+    A.wait(1)
+    A.do_(function()
+        ST.shot("f30_won")
+        ST.info(string.format("fleet30: credits %s -> %s; the airfield %s / %s, closed %s", tostring(C.cr), tostring(RUN.credits),
+            tostring(AF and AF.hp), tostring(AF and AF.full), tostring(AF and AF.closed)))
+        ST.check(RUN.credits - (C.cr or 0) >= 50000 + 22600, "paid: the fleet (22,600 at least, before the tier) and the win (50,000)")
+        ST.check(IFLEET.cur == nil, "the fleet taken off")
+    end)
+    A.wait(3)
+end
 SUITES.fleet = function()
     intoRun()
     A.do_(function()
