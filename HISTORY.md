@@ -3895,3 +3895,10 @@ game. The work was split by file between agents; the builds ran in sequence in t
   round 30's state replayed to one who links later (IFCOOP.syncTo); coop_guard's rows for every round-30 word (24683
   hostile variants, no error). Autotests on 0.74.173: phase2 39/39, epic 26/26, capture 14/14 (runs 20261118_014752,
   _015134, _015400).
+- 0.74.174-0.74.176 (2026-11-18 morning): the capture's landing (the user: "Yeah give that a try"): runtime 0.32.39 SV_CapLand
+  (gear down via FlGear), 0.32.40 holds 250-290 km/h (throttle under, brake over; the brake alone stalled it at 177 km/h).
+  The deck probe (24 straight-down traces round the mark, run 20261118_075813) went through GEOFON to the sea (3 m over its
+  root) every time: its hull has no collision a plane could rest on, so no real touchdown; the capture ends in a low pass
+  over the deck (the explosion, DOWN). Capture 16/16 on 0.74.174 and 0.74.176. Round 30's subtitles in their own file
+  (config/subtitles_dev.ini, made by the game on 0.74.175's run, never zipped; tools/subtitles.py all / split for the
+  user's friend: build/subtitles_all.ini, 496 lines).
