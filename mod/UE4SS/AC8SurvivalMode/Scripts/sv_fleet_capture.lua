@@ -110,6 +110,34 @@ local function ravenAt(sh)
     local ok, l = pcall(function() local v = sh.hull.obj:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
     return ok and l or nil
 end
+-- ((0.74.176) the deck probe: straight-down traces round the deck's mark along and across GEOFON's line, each hit's height
+-- over GEOFON's root and what it hit, logged once a capture (0.74.174's landing came in 14 m under the guessed mark)
+local KS = nil
+local function deckProbe(g, dk)
+    if not valid(KS) then KS = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary") end
+    if not (valid(KS) and liveObj(survivalPC)) then return "no trace library" end
+    local y = math.rad(g.yaw)
+    local ux, uy, rx, ry = math.cos(y), math.sin(y), -math.sin(y), math.cos(y)
+    local out = {}
+    for _, a in ipairs({ -200, -150, -100, -50, 0, 50, 100, 150 }) do
+        for _, c in ipairs({ -30, 0, 30 }) do
+            local x, yy = dk.X + ux * a * 100 + rx * c * 100, dk.Y + uy * a * 100 + ry * c * 100
+            local hit, z, who = {}, nil, "?"
+            pcall(function()
+                KS:LineTraceSingle(survivalPC, { X = x, Y = yy, Z = g.Z + 20000 }, { X = x, Y = yy, Z = g.Z - 5000 }, 0, true, {}, 0,
+                    hit, true, { R = 0, G = 0, B = 0, A = 0 }, { R = 0, G = 0, B = 0, A = 0 }, 0)
+            end)
+            pcall(function()
+                local h = hit.OutHit or hit
+                local l = h.ImpactPoint or h.Location
+                if l and l.Z then z = l.Z end
+                pcall(function() who = (nameOf(h.HitObjectHandle.Actor):match("([^%.:]+)$")) or "?" end)
+            end)
+            out[#out + 1] = string.format("%+d/%+d: %s", a, c, z and string.format("%.1f m (%s)", (z - g.Z) / 100, who) or "none")
+        end
+    end
+    return table.concat(out, "; ")
+end
 local function busyScene()
     return (CINE and CINE.active and CINE.active()) or (IFSURF and IFSURF.state and IFSURF.state()) ~= nil
 end
@@ -198,6 +226,12 @@ local function flyTick(now)
             clog(string.format("seq %s: the landing: gear down, slowing (SV_CapLand %s)", tostring(L.seq), okL and tostring(r) or "FAILED"))
         end
         if landing and now >= (L.landAgain or 0) then L.landAgain = now + 1; pcall(SV_CapLand, addrOf(pawn) or 0, 1) end
+        if not L.probed and dist <= 2500 then
+            L.probed = true
+            local okP, txt = pcall(deckProbe, g, dk)
+            clog(string.format("seq %s: deck probe (metres over GEOFON's root, along/across from the mark at %.1f m): %s",
+                tostring(L.seq), (dk.Z - g.Z) / 100, okP and txt or ("error " .. tostring(txt))))
+        end
         local alt = dk.Z / 100 + math.max(landing and 0 or n(c.floor_m, 80), behind * math.tan(math.rad(n(c.glide_deg, 3.5))))
         if landing then
             local up = (me.Z - dk.Z) / 100

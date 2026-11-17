@@ -144,6 +144,8 @@ typedef struct {
 #define CP_AWAY_M       4000.0 /* m behind the gate at least to turn onto its line facing away from it              */
 #define CP_LOW_M        150.0  /* m: under this the gate's turns are shallow (DN_BANK_LOW), as DOWN's are low       */
 #define CP_LAND_MS      75.0   /* m/s (270 km/h): (0.32.39) landing, the brake held above this speed                */
+#define CP_LAND_HI      80.0   /* m/s: (0.32.40) the brake over this ...                                            */
+#define CP_LAND_LO      70.0   /* m/s: ... the throttle under this (0.32.39's brake alone stalled it at 49 m/s)      */
 
 static double DnWrap(double a) { while (a > 180.0) a -= 360.0; while (a < -180.0) a += 360.0; return a; }
 static double DnClamp(double v, double lo, double hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -420,7 +422,8 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
     c->out[0] = (float)c->oP; c->out[1] = 0.0f; c->out[2] = (float)c->oR; c->out[3] = 0.0f; c->out[4] = 0.0f;
     if (c->land && c->haveRates) {                             /* (0.32.39) slowed to landing speed by the brake */
         double sp = CoSqrt(c->v[0] * c->v[0] + c->v[1] * c->v[1] + c->v[2] * c->v[2]) / 100.0;
-        c->out[4] = sp > CP_LAND_MS ? 1.0f : 0.0f;
+        c->out[4] = sp > CP_LAND_HI ? 1.0f : 0.0f;
+        c->out[3] = sp < CP_LAND_LO ? 1.0f : 0.0f;
     }
     memcpy(out, c->out, sizeof(c->out));
     return 1;
