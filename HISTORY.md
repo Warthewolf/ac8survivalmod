@@ -3805,3 +3805,4 @@ game. The work was split by file between agents; the builds ran in sequence in t
   146). 0.74.151: a ship's components walked one ship a tick: the walks 0.0 ms, the sets 5.1 / 134 for 3 parts (the game's
   own work: the _DAM's first load, the mesh's render state). 0.74.152: scars.per_tick 1 (spread over ~40 s).
 - Autotests shell 12/12 on 0.74.149, 0.74.150, 0.74.151 (15 ships, 131 of 177 slots scarred each time).
+- 0.74.152 (2026-11-17): autotests phase2 31/31, epic 25/25, shell 12/12 (runs 20261117_204024 / _204401 / _204619): every round 30 piece since the 0.74.138 install together.
