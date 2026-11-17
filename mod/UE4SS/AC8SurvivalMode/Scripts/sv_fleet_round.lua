@@ -586,9 +586,10 @@ end
 -- crew: ...`
 CREW = {}
 if CFG.specials and CFG.specials.fleet and CFG.specials.fleet.round and not CFG.specials.fleet.round.crew then
-    -- ((0.74.154) the user: "The Voices need to be turned up a bit and the choose option C for all": db 2 -> 14, styles C only)
+    -- ((0.74.154) the user: "The Voices need to be turned up a bit and the choose option C for all": db 2 -> 14, styles C only;
+    -- (0.74.155) "voices could be a little quieter": db 14 -> 10)
     CFG.specials.fleet.round.crew = {
-        enabled = true, db = 14, styles = { "C" }, every_s = { 45, 90 }, gap_s = 2, s_per_word = 0.42, pad_s = 1.0,
+        enabled = true, db = 10, styles = { "C" }, every_s = { 45, 90 }, gap_s = 2, s_per_word = 0.42, pad_s = 1.0,
         speakers = { TORRES = "INTERCEPT: TORRES", CREW = "INTERCEPT: ALICORN CREW" },
         moments = { sighted = { "v6157_6001_alt1" }, stage1 = { "v6001_6032" }, stage2 = { "v6001_6030_alt1" },
                     split = { "v6349_6001", "v6350_6001", "v6351_6001" }, release = { "v6001_6103" },
