@@ -252,7 +252,20 @@ end
 -- hard rule 45 on its arm: the minimap line and the RAILGUN HUD (a TripleRailCannon's fields), read back
 local function railHud(e)
     local lm, cls = nil, "?"
-    pcall(function() lm = e.o.FireControlSystemComponent.AllArms[1].LauncherModule end)
+    -- ((2026-11-18) the minimap's red line: the display arm (a TripleRailCannon, NpcFCSId1: SV_FCS_TaniRailDisp) when it's there)
+    pcall(function()
+        local arms = e.o.FireControlSystemComponent.AllArms
+        for i = 1, 4 do
+            local m = nil
+            pcall(function() m = arms[i].LauncherModule end)
+            if m then
+                local c = "?"
+                pcall(function() c = m:GetClass():GetFName():ToString() end)
+                if c == "LiveFCSModule_LauncherTripleRailCannon" then lm = m end
+            end
+        end
+    end)
+    if lm == nil then pcall(function() lm = e.o.FireControlSystemComponent.AllArms[1].LauncherModule end) end
     if lm == nil then return "not written: no arm / launcher read", false end
     pcall(function() cls = lm:GetClass():GetFName():ToString() end)
     -- ((2026-11-16) a BoneControl arm, the build's since the TripleRailCannon never turned its barrels: no railgun HUD fields

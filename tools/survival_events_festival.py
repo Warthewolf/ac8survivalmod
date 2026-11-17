@@ -142,6 +142,11 @@ TANI_RAIL_FCS = 'SV_FCS_TaniRail'
 TANI_RAIL_PARTS = {'RAILCANNON': ('Railcannon', None, 1000.0), 'RAILGUN_L': ('RailgunL', TANI_RAIL_FCS, 400.0),
                    'RAILGUN_R': ('RailgunR', TANI_RAIL_FCS, 400.0)}
 TANI_RAIL_ARM = '/Game/Mods/SurvivalMode/Weapons/BP_FCS_SV_TaniRail'
+# ((2026-11-18) the user: "the tanacorn doesn't currently have the railgun warning red lines on the minimap") her railguns'
+# arm is a BoneControl (it turns her barrels) with no minimap fields: a second arm, a TripleRailCannon that never fires,
+# its minimap line and RAILGUN HUD on (hard rule 45's fields cooked in), on each railgun's NpcFCSId1
+TANI_RAIL_DISP_FCS = 'SV_FCS_TaniRailDisp'
+TANI_RAIL_DISP_ARM = '/Game/Mods/SurvivalMode/Weapons/BP_FCS_SV_TaniRailDisp'
 TANI_RAIL_ARM_SOURCE = '/Game/Blueprints/Weapons/BP_FCS/CP/BP_FCS_Vessel_Artillery_00'
 TANI_RAIL_OLD_WEAPON = '/Game/Blueprints/Weapons/Artillery/BP_wp_artillery_vesselgun'
 TANI_RAIL_ROUND = '/Game/OnlineMode/Blueprint/Weapons/BP_wp_emls_alcn'
@@ -158,7 +163,8 @@ def tani_rail(part):
     return {'part': part, 'tag': tag, 'obj': f'SV_Obj_Tani{tag}', 'row': f'sv_tani_{tag.lower()}',
             'npc': f'SV_Npc_Tani{tag}', 'model': f'SV_Model_Tani{tag}',
             'bp': f'/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_{part}', 'bp_class': f'BP_SV_Tani_{part}_C',
-            'fcs': fcs, 'name_key': f'SV_Tani{tag}_Name', 'health': health, 'cannon': part == 'RAILCANNON', 'test': False}
+            'fcs': fcs, 'fcs1': TANI_RAIL_DISP_FCS if fcs else None,   # ((2026-11-18) the railguns' minimap line)
+            'name_key': f'SV_Tani{tag}_Name', 'health': health, 'cannon': part == 'RAILCANNON', 'test': False}
 
 
 TANI_RAIL = [tani_rail(p) for p in TANI_RAIL_PARTS]

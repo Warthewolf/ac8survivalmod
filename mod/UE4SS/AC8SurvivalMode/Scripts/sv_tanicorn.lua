@@ -159,7 +159,8 @@ for _, k in ipairs(TANI.vls) do TANI.live.row_health[k.key] = k.health end   -- 
 -- DT_SV_TaniFCS (rail_fcs: its arm a TripleRailCannon firing the Alicorn's BP_wp_emls_alcn), copied whole into DT_NPC_FCS at
 -- the main menu (never cloned: hard rule 29); the bow RAILCANNON, armless, its TurretMesh a SkeletalMeshComponent playing
 -- its Deploy (cannon). Each { rail, tag } gives its names as survival_events.tani_rail makes them; none has a unit of its own
-TANI.rail_fcs = { fcs = "SV_FCS_TaniRail", table = "/Game/Mods/SurvivalMode/Data/DT_SV_TaniFCS.DT_SV_TaniFCS" }
+-- ((2026-11-18) disp: the railguns' second row, a TripleRailCannon that never fires: their red line on the minimap)
+TANI.rail_fcs = { fcs = "SV_FCS_TaniRail", table = "/Game/Mods/SurvivalMode/Data/DT_SV_TaniFCS.DT_SV_TaniFCS", disp = "SV_FCS_TaniRailDisp" }
 TANI.rail = {}
 for _, p in ipairs({ { rail = "RAILCANNON", tag = "Railcannon", cannon = true }, { rail = "RAILGUN_L", tag = "RailgunL" },
                      { rail = "RAILGUN_R", tag = "RailgunR" } }) do
@@ -270,7 +271,10 @@ function rowsIn()                                  -- the model first: the row n
             if k.fcs and not made[k.fcs] then            -- copied whole: sv_tanicorn_rail.lua TANI.railRow)
                 made[k.fcs] = true
                 if not k.fcs_table then fcsRow(fcs, k)
-                elseif TANI.railRow then TANI.railRow(fcs, k)
+                elseif TANI.railRow then
+                    TANI.railRow(fcs, k)
+                    local d = TANI.rail_fcs.disp
+                    if d and not made[d] then made[d] = true; TANI.railRow(fcs, { fcs = d, fcs_table = k.fcs_table }) end
                 else log("tanicorn: fire control row " .. k.fcs .. " NOT in: no sv_tanicorn_rail.lua") end
             end
         end

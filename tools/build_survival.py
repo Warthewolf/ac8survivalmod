@@ -694,7 +694,8 @@ def build_npc_rows():
         for name, value in (('WeaponDurabilityId', ('name', se.FISH_DURABILITY[0], 0)),
                             ('ExplosionDurabilityId', ('name', se.FISH_DURABILITY[1], 0)),
                             ('ModelId', ('name', m['model'], 0)),
-                            *([('NpcFCSId0', se.fname(m['fcs']))] if m['fcs'] else [])):
+                            *([('NpcFCSId0', se.fname(m['fcs']))] if m['fcs'] else []),
+                            *([('NpcFCSId1', se.fname(m['fcs1']))] if m.get('fcs1') else [])):   # ((2026-11-18) the display arm)
             set_prop(row[2], [k for k, (n, t) in schema.items() if n == name][0], name, value)
         out.append(((m['npc'], 0), row))
     # (0.74.60) the hull's row (se.TANI_HULL_*): the shoal's row again on TANI_HULL_MODEL, no fire control (its parts draw only)
