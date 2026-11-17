@@ -2599,10 +2599,62 @@ SUITES.phase2 = function()
         ST.info("phase2: the rest of the fleet finished: " .. k)
     end)
     A.log_("fleet round: won at", 60, "p7", true, function(l) ST.check(l ~= nil, "won after her", l) end)
+    A.log_("tanicorn: sink (", 5, "p5", true, function(l) ST.check(l ~= nil, "her death: her sinking started", l) end)
+    for i = 1, 3 do
+        A.wait(4)
+        A.do_(function() ST.shot(string.format("p2_sink_%d", i)) end)
+    end
+    A.log_("tanicorn: sink over", 50, "p5", true, function(l)
+        ST.check(l ~= nil and l:find("down (", 1, true) ~= nil, "she went under and her hull was finished off", l)
+    end)
     A.do_(function()
         ST.shot("p2_won")
         ST.info(string.format("phase2: credits %s -> %s", tostring(C.cr), tostring(RUN.credits)))
         ST.check(RUN.credits - (C.cr or 0) >= 50000 + 60000, "paid: the fleet's win (50,000) and hers (60,000) at least")
+    end)
+    A.wait(2)
+end
+-- (2026-11-17) shell: WP13 (sv_fleet_round.lua shellTick, 0.74.137): round 30 as fleet30 starts it; the gun line set out to
+-- 60 km so every ship in range is shelling at once; its callout, each ship at its gun line, salvos landing on the runway
+-- (-3 each), the airfield's health falling; pictures of the runway from 1.5 km off; then the gun line back to 20 km.
+SUITES.shell = function()
+    intoRun()
+    local C = {}
+    A.do_(function()
+        if not ST.check(IFROUND ~= nil and CFG.specials.fleet.shell ~= nil, "round 30's shelling is in this build") then return "abort" end
+        ST.marks.s0 = ST.n
+        D.round = 29
+    end)
+    A.log_("fleet round: round 30: the fleet's 15 ships coming", 120, "s0", true, function(l)
+        if not ST.check(l ~= nil, "round 30 started", l) then return "abort" end
+    end)
+    A.log_("15 of 15 ships up", 70, "s0", true, function(l) ST.check(l ~= nil, "the fleet up after the surfacing", l) end)
+    A.do_(function()
+        C.km = CFG.specials.fleet.shell.shell_km
+        CFG.specials.fleet.shell.shell_km = 60
+        C.hp = AF and AF.hp
+        ST.marks.s1 = ST.n
+        ST.info("shell: the gun line out to 60 km for the test; the airfield's health " .. tostring(C.hp))
+    end)
+    A.log_("fleet round: shelling: .- at the gun line", 15, "s1", false, function(l) ST.check(l ~= nil, "ships at the gun line, shelling", l) end)
+    A.log_("fleet round: shelling: .-'s salvo landed: %-3 airfield", 40, "s1", false, function(l)
+        ST.check(l ~= nil, "a salvo landed: -3 on the airfield", l)
+    end)
+    local rw = function() local f = CFG.specials.fleet.formation.runway_cm; return { X = f[1], Y = f[2], Z = 500 } end
+    for i = 1, 4 do
+        A.wait(4)
+        A.do_(function()
+            local p = rw()
+            if ST.look({ X = p.X - 150000, Y = p.Y + 60000, Z = 30000 }, p, 50) then ST.shot(string.format("shell_runway_%d", i)) end
+        end)
+    end
+    A.wait(20)
+    A.do_(function()
+        ST.lookBack()
+        local hp = AF and AF.hp
+        ST.check(C.hp and hp and hp < C.hp, "the airfield's health fell under the shelling", string.format("%s -> %s", tostring(C.hp), tostring(hp)))
+        CFG.specials.fleet.shell.shell_km = C.km
+        ST.info("shell: the gun line back to " .. tostring(C.km) .. " km")
     end)
     A.wait(2)
 end
