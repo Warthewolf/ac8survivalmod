@@ -326,7 +326,8 @@ CFG.specials.fleet = {
               tanager_after_s = 10,
               -- ((0.74.158) the user: "it's not Kaska's Navy at all, it's an Anomaly caused by Emblem Direct": no KASKA line in
               -- round 30; the fleet and the TANACORN are an Anomaly Emblem Direct caused; VALKA knows it (she's connected to the void)
-              -- and tells AUDREY; written in the voices of the reworked subtitles.ini (AUDREY: "Val", "Stars"; no CHARLENE here)
+              -- and tells AUDREY; written in the voices of the reworked subtitles.ini (AUDREY: "Val", "Stars"). CHARLENE is with
+              -- Comona Control (the user), never beside AUDREY and VALKA: she talks on Control's channel and never answers them
               radio = { warn = { "CTRL|All units, Comona Control. Long-range radar has a surface group under way, bearing three-one-five.",
                                  "CTRL|Fifteen contacts in formation. It's the Aegir Fleet, and it's coming straight for us.",
                                  "AUDREY|A whole fleet, coming at us? Val, inside. Now.",
@@ -467,7 +468,7 @@ CFG.specials.fleet = {
                           { t = 22.5, ship = "GEOFON", from = { at = { 750, 420, 70 }, look = { 0, 0, 30 }, fov = 60 },
                                                     to = { at = { 1600, 1000, 280 }, look = { -400, 0, 0 }, fov = 60 } } },
                 beats = { { t = 0.6, bolt = { ship = "PicketA", fwd_m = 2500, right_m = -600 } },
-                          { t = 0.8, say = "CTRL|All units, Comona Control. Something's moving under the sea. A lot of somethings." },
+                          { t = 0.8, say = "CHARLENE|Comona, Charlene. Kokoda's instruments are screaming. There's an Anomaly under the sea." },
                           { t = 6.5, say = "CTRL|Contacts surfacing! Multiple contacts, they're coming up out of the sea!" },
                           { t = 7.0, bolt = { ship = "HERNE", fwd_m = 0, right_m = -2500 } },
                           { t = 13.5, bolt = { ship = "GEOFON", fwd_m = -1500, right_m = -2500 } },

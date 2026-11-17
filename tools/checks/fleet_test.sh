@@ -309,12 +309,12 @@ do
     for _, b in ipairs(c.beats) do
         okB = okB and b.t >= last; last = b.t
         if b.bolt then bolts = bolts + 1; okB = okB and names[b.bolt.ship] == true end
-        if b.say then lines = lines + 1; local code = b.say:match("^([^|]+)|.+$"); okB = okB and (code == "VALKA" or code == "CTRL") end
+        if b.say then lines = lines + 1; local code = b.say:match("^([^|]+)|.+$"); okB = okB and (code == "VALKA" or code == "CHARLENE" or code == "CTRL") end
         if b.title then title = title + 1 end
     end
     check(okS and #c.shots == 6, "the surfacing's 6 shots: moves (from, to) in order, each on a ship of the fleet")
     check(okB and lines == 3 and bolts >= 4 and title == 1 and c.lead_s == 3.0,
-        "its beats in order: CONTROL and VALKA: 3 lines (no KASKA: an Anomaly Emblem Direct caused), the cued strikes on ships, the title card; 3 s of sea first")
+        "its beats in order: CHARLENE (with Control), CONTROL and VALKA: 3 lines (no KASKA: an Anomaly Emblem Direct caused), the cued strikes on ships, the title card; 3 s of sea first")
     check(c.letterbox.enabled == true and c.letterbox.aspect == 2.39 and c.shake.geofon[1]:find("BombImpactHelios", 1, true)
         and type(IFSURF.quiet) == "function" and IFSURF.quiet() == 1 and type(IFSKY.strike) == "function" and type(IFSKY.post) == "function",
         "its letterbox (2.39), GEOFON's slam shake, the storm's cue hooks (IFSKY.strike / post) and IFSURF.quiet (1 while it isn't on)")
