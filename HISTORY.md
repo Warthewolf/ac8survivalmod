@@ -3477,3 +3477,12 @@ game. The work was split by file between agents; the builds ran in sequence in t
   round's fighters finished by the test): the warning, SPECIAL ROUND 30, the music posted, the surfacing, 15 of 15 up,
   each sunk paid once (GEOFON 24,000 at round 30's x4; the fleet 90,400), the win at +43 s: 50,000, the airfield repaired,
   the fleet taken off. Its one FAIL was the test's own 6,000 (fixed). Pictures sent.
+
+## 0.74.99-0.74.100 (2026-11-17; test builds, staged, not installed): round 30's music handed back (feature/fleet-round)
+- The user: "keep it" (round 30's pay, x the special's and the tier's as the Spaceport's), "hand the music back after round
+  completed", "all good on subtitles". sv_fleet_round.lua notes the music player's song at the round's start
+  (SV_BGMNames' track, only when something plays: SV_BGM(0) not 0) and at its end plays it again and lets the player's
+  clock go (log `fleet round: music: the music player's song back: <track> ...` or `... clock let go`).
+- Run 89 (0.74.99, fleet30 14/14): AC04's track posted at round 30's start, the song back at the win; but the autotest's
+  first break played nothing and named the main menu's track, which came back: 0.74.100 gives back only a song that was
+  playing. Run 90 (0.74.100, 14/14): "its song: none", at the win only the clock let go. fleet_test checks the hand-back.

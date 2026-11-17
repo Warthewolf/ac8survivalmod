@@ -54,14 +54,25 @@ end
 local function zl(v) return tostring(specialPay and specialPay(v) or v) end
 
 -- the music: Online Mode's AC04 track from the round's start, again at its length on the fleet's clock (held while paused and
--- in the STORE), the music player's own clock held meanwhile (taken back once the STORE lets it go)
+-- in the STORE), the music player's own clock held meanwhile (taken back once the STORE lets it go); (the user, 2026-11-17:
+-- "hand the music back after round completed") at the round's end the song the music player was on is played again and its
+-- clock let go: the music player goes on from it
 local function musicStart()
     local m = rc().music or {}
     if m.enabled == false or type(SV_PlayBGM) ~= "function" or type(m.track) ~= "string" then return "off" end
+    local before = nil
+    if type(SV_BGMNames) == "function" then
+        local okN, names = pcall(SV_BGMNames)
+        before = okN and type(names) == "string" and names:match("^([^|]*)") or nil
+        if before == "" or before == m.track then before = nil end
+        -- (nothing playing: no song to give back; run 89's first break had the main menu's track named, id 0 playing)
+        if before and type(SV_BGM) == "function" then local okI, id = pcall(SV_BGM, 0); if okI and id == 0 then before = nil end end
+    end
     local okP, r = pcall(SV_PlayBGM, m.track)
     if type(SV_MusicHold) == "function" and (D.musicHold or 0) ~= 1 then pcall(SV_MusicHold, 1) end
-    R.mus = { at = R.F.t or 0, track = m.track, len = n(m.len_s, 265.832), heldAt = os.clock() }
-    return string.format("%s (SV_PlayBGM %s), the music player's clock held", m.track, okP and tostring(r) or "error")
+    R.mus = { at = R.F.t or 0, track = m.track, len = n(m.len_s, 265.832), heldAt = os.clock(), before = before }
+    return string.format("%s (SV_PlayBGM %s), the music player's clock held (its song: %s)", m.track, okP and tostring(r) or "error",
+        tostring(before or "none"))
 end
 local function musicTick()
     local M = R and R.mus
@@ -76,9 +87,16 @@ local function musicTick()
     end
 end
 local function musicStop()
-    if not (R and R.mus) then return end
+    if not (R and R.mus) then return "" end
+    local before = R.mus.before
     R.mus = nil
+    local back = "the music player's clock let go"
+    if before and type(SV_PlayBGM) == "function" then
+        local okP, r = pcall(SV_PlayBGM, before)
+        back = string.format("the music player's song back: %s (SV_PlayBGM %s), its clock let go", before, okP and tostring(r) or "error")
+    end
     if type(SV_MusicHold) == "function" and (D.musicHold or 0) ~= 1 then pcall(SV_MusicHold, 0) end
+    return back
 end
 
 -- the airfield fully repaired (the STORE's repair to its top, the reopen's landing back, ALLY.repairAll's allies and
@@ -148,7 +166,7 @@ function IFROUND.over(now, s)
     if not R then return end
     local F = R.F
     local won = IFLEET.cur == F and afloatN(F) == 0
-    musicStop()
+    rlog("music: " .. musicStop())
     if won then
         local reward = n(rc().reward, 50000)
         if type(addCredits) == "function" then addCredits(reward, "INVINCIBLE FLEET destroyed") end

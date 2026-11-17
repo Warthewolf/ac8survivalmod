@@ -785,6 +785,11 @@ TEST_TICKS[5].fn(clock); TEST_TICKS[5].fn(clock)
 check(#callouts == c0 + 1 and callouts[#callouts] == "INVINCIBLE FLEET / THE AEGIR FLEET IS UNDER WAY" and RUN.fleetWarned == true,
     "round 29's break: the warning, once")
 D.round, D.state, D.special = 30, "fighting", { kind = "fleet", state = "pending" }
+local bgm, holds = {}, {}                                 -- (its music: the song before it played again at its end)
+function SV_BGMNames() return "AKE_Bgm_Player_Song_Play|AKE_Bgm_Player_Song_Stop|x" end
+function SV_PlayBGM(t) bgm[#bgm + 1] = t; return 1 end
+function SV_MusicHold(h) holds[#holds + 1] = h; return 0 end
+function SV_BGM() return 77 end
 check(K.spawn(clock) == true and IFLEET.cur ~= nil and IFLEET.cur.round == true and RUN.fleetRound == true and D.special.state == "fleet",
     "spawned: the fleet up as round 30's")
 check(K.ready(30) == false, "once a run")
@@ -812,6 +817,10 @@ check(RUN.credits - cr2 == 50000 and find("fleet round: won at %+") ~= nil, "won
 check(AF.hp == 1000 and AF.full == 1000 and AF.base == 7 and AF.bombBase == 3 and AF.closed == false and opened and repaired,
     "the airfield fully repaired (its health to its top, the landing open, ALLY.repairAll)")
 check(IFLEET.cur == nil and D.special.state == "done" and find("fleet round: its wrecks and parts taken off") ~= nil, "the fleet taken off, the special done")
+check(bgm[1] == "AKE_Bgm_Online_ACE04_Invincible_Fleet_Play" and holds[1] == 1 and bgm[#bgm] == "AKE_Bgm_Player_Song_Play"
+    and holds[#holds] == 0 and find("fleet round: music: the music player's song back: AKE_Bgm_Player_Song_Play") ~= nil,
+    "its music: AC04's track from the start, the music player's clock held; at the end its song back, the clock let go")
+SV_BGMNames, SV_PlayBGM, SV_MusicHold, SV_BGM = nil, nil, nil, nil
 D, RUN = Dwas, RUNwas
 -- a row missing at the main menu: no Ctrl+N fleet; a text the game refuses (SV_SetText raising): the rest set (finding 5)
 IFLEET.setupDone, IFLEET.rowsOk = nil, nil
