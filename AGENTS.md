@@ -413,6 +413,12 @@ Copy a working stock pattern before inventing a new one.
     with her still on the runway. A one-shot host event that matters is checked by its effect and fired again once the
     STORE is shut (sv_rounds_shuttle.lua SPC.storeShut: the shuttle's liftoff, its removal, the Spaceport's launch).
 
+71. UObject:GetPathName() isn't callable from UE4SS's Lua ("attempt to call a TrivialObject value (method 'GetPathName')"):
+    read an asset's path from GetFullName ("Class /Game/.../Name.Name"). Every _DAM walk (sv_fleet.lua damFor, sv_anomalies.lua's
+    dead look) failed on it inside a pcall that hid the error: the fleet's scars found 0 of 177 slots, AB.L..IN's dead look
+    1 of 13. The probe of 0.74.142 (run 20261117_191507) found it; 0.74.143 scarred 131 of 177 (2026-11-17). Let a pcall
+    that finds nothing say why (its error), or the next one stays hidden too. (65-70: the autotest branch's.)
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
