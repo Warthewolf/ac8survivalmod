@@ -248,6 +248,12 @@ local function takeHere(seq)
             end
         end
         if o and liveObj(o) then
+            pcall(function()                              -- ((0.74.182) its facing against its travel: the line's heading
+                local r, v = o:K2_GetActorRotation(), o:GetVelocity()
+                local fwd = o:GetActorForwardVector()
+                clog(string.format("GEOFON: actor yaw %.1f, forward (%.2f, %.2f) = %.1f deg, travel %.1f deg at %.0f km/h", r.Yaw, fwd.X,
+                    fwd.Y, math.deg(math.atan(fwd.Y, fwd.X)), math.deg(math.atan(v.Y, v.X)), math.sqrt(v.X * v.X + v.Y * v.Y) * 0.036))
+            end)
             local okH, h = pcall(hullCollision, o)
             clog("GEOFON's own collision: " .. (okH and h or ("error " .. tostring(h))))
             local okS, c, why = pcall(deckSlab, o)
