@@ -51,6 +51,13 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   LaserInterceptor (wp_LaserInterceptor: its values, its swing curve CUR_LaserInterceptorSwingRate, its beam effects
   FX_UAV_TLS_Muzzleflash01/02 with their meshes, materials and textures, and its sounds) for the ZFA-44s' anti-missile
   laser, on AC8's native ALiveLaserInterceptor. Never AC7 voice lines. See docs/re/LASER_INTERCEPTOR.md.
+- A third AC7 exception, at the user's request (2026-11-17: "extract some voice lines from Ace Combat 7's WWise Bank,
+  particularly the Alicorn's Crew speeches, run them through a voice filter that makes them sound distorted and horrific",
+  "Yeah you've got the go ahead", e.g. "Salvation is nigh!" and the crew's oath; "I want to hear each of your custom work on
+  the voice lines before they go in"): the Alicorn crew's radio lines (Captain Torres and the Sub crew of AC7's DLC
+  missions ex01-ex03), distorted (tools/ac7_voice.py, tools/ac7_voice_fx.py), for THE TANACORN only, in the user's dev install
+  only (never a friends', Nexus or TESTER zip), and each line heard by the user before it goes in. No other AC7 voice line.
+
 - No other mod's files, assets, tables, values or text go into Survival's build, mod/, tools/, this repo (docs and
   commit messages included) or a release zip, and nothing here names or credits another mod as the source of an enemy
   change (user, 2026-11-06). Survival's enemy changes are its own: designed from AC8's tables and tuned in Survival's
