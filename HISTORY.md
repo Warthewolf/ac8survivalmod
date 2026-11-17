@@ -3616,3 +3616,5 @@ game. The work was split by file between agents; the builds ran in sequence in t
   route order (no cheatnew): that exact old default is read as the new one.
 - 0.74.124's build stopped on the size check (sv_anomalies_dev.lua) and package_dev.sh staged the old build again:
   package_dev.sh now refuses unless build/install's VERSION is the source's.
+- 0.74.125 INSTALLED 2026-11-17 for the user ("install"), over 0.74.123 (backup: build/backup/install_before_0.74.125);
+  112 files verified; her config, subtitles (the same as the repo's) and the launcher's toggle kept.
