@@ -42,6 +42,9 @@ local function nameOf_(slot)
     return (ok and type(nm) == "string" and nm ~= "") and nm:upper() or ("PLAYER " .. tostring(slot))
 end
 local ATTACKERS = { "MaxPlaneAttackerMissiles", "MaxPursuitAttackers", "MaxNonPlaneAttackerMissiles" }
+-- ((0.74.166) the attack limits didn't hold (autotest capture of 0.74.165: MaxPursuitAttackers read 12 after it was set
+-- 0): no enemy targets you by the flags the fleet's parts hide from the game's targeting with, as well)
+local UNTARGETED = { bIsNotLockonTarget = true, bIsNotFCSTargets = true }
 
 -- GEOFON here (the host's own ship, a joiner's copy of it): its place and heading, or nil
 local function geofon()
@@ -107,6 +110,11 @@ local function shielded(on)                               -- (the user's rule: i
     if on then
         pcall(function() pawn:SetIsInvincible(true) end)
         L.limits = L.limits or {}
+        L.flags = L.flags or {}
+        for f, v in pairs(UNTARGETED) do
+            local okR, was = pcall(function() return pawn[f] end)
+            if okR and L.flags[f] == nil and pcall(function() pawn[f] = v end) then L.flags[f] = was end
+        end
         for _, f in ipairs(ATTACKERS) do
             local okR, v = pcall(function() return pawn[f] end)
             if okR and type(v) == "number" and L.limits[f] == nil and pcall(function() pawn[f] = 0 end) then L.limits[f] = v end
@@ -115,7 +123,8 @@ local function shielded(on)                               -- (the user's rule: i
     end
     if not (DOWN and DOWN.me and DOWN.me()) then pcall(function() pawn:SetIsInvincible(false) end) end
     for f, v in pairs(L and L.limits or {}) do pcall(function() pawn[f] = v end) end
-    if L then L.limits = nil end
+    for f, v in pairs(L and L.flags or {}) do pcall(function() pawn[f] = v end) end
+    if L then L.limits, L.flags = nil, nil end
     return "targetable again"
 end
 local function giveBack(why)                              -- (any end: the controls, the shield; never left taken)
