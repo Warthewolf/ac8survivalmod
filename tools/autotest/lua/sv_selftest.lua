@@ -105,6 +105,7 @@ local HOLD = { inv = 0, ap = 0, apOn = nil, ground = false }
 local function holdPlane(now)
     local pawn = ST.plane()
     if not pawn then return end
+    if ST.apOff then return end                           -- ((0.74.166) a suite that flies your plane itself: capture, pin)
     if now >= HOLD.inv then
         HOLD.inv = now + 2
         if ST.conf.plane == "floor" then                  -- (shootable, never down: a health floor, not invincible)
@@ -3946,6 +3947,19 @@ SUITES.capture = function()
     end)
     A.log_("fleet: up: RAVEN", 60, "c0", true, function(l) ST.check(l ~= nil, "the fleet up (RAVEN)", l) end)
     A.wait(10)
+    A.do_(function()                                       -- (the harness's own autopilot and shield off; your plane put 10 km
+        ST.apOff = true                                    -- behind GEOFON at 1500 m, facing along its way)
+        if type(SV_Down) == "function" then pcall(SV_Down, 0) end
+        local sh = IFLEET.cur and IFLEET.cur.ships and IFLEET.cur.ships[1]
+        local pl = ST.plane()
+        if sh and sh.hull and valid(sh.hull.obj) and pl and type(SV_Respawn) == "function" then
+            local l, r = sh.hull.obj:K2_GetActorLocation(), sh.hull.obj:K2_GetActorRotation()
+            local y = math.rad(r.Yaw)
+            local rc = SV_Respawn(addrOf(pl) or 0, l.X - math.cos(y) * 1000000, l.Y - math.sin(y) * 1000000, 150000, 0, r.Yaw, 0)
+            ST.info("capture: your plane put 10 km behind GEOFON: SV_Respawn " .. tostring(rc))
+        end
+    end)
+    A.wait(3)
     A.do_(function()
         ST.marks.c1 = ST.n
         local ok, why = IFCAP.test(4)
@@ -3956,10 +3970,12 @@ SUITES.capture = function()
     A.wait(2)
     A.do_(function()
         local pl = ST.plane()
-        local inv, lim = nil, nil
+        local inv, nl, nf = nil, nil, nil
         pcall(function() inv = pl.bIsInvincible end)
-        pcall(function() lim = pl.MaxPursuitAttackers end)
-        ST.check(inv == true and lim == 0, "while RAVEN flies you: invincible, no enemy targets you", tostring(inv) .. " / pursuers " .. tostring(lim))
+        pcall(function() nl = pl.bIsNotLockonTarget end)
+        pcall(function() nf = pl.bIsNotFCSTargets end)
+        ST.check(inv == true and nl == true and nf == true, "while RAVEN flies you: invincible, no enemy targets you",
+            string.format("invincible %s, not a lock-on target %s, not an FCS target %s", tostring(inv), tostring(nl), tostring(nf)))
         ST.shot("capture_taken")
     end)
     for i = 1, 6 do A.wait(15); A.do_(function() ST.shot("capture_fly_" .. i); ST.info("capture: state " .. tostring(IFCAP.state())) end) end
@@ -3971,10 +3987,13 @@ SUITES.capture = function()
     A.wait(3)
     A.do_(function()
         local pl = ST.plane()
-        local inv, lim = nil, nil
+        local inv, nl, nf = nil, nil, nil
         pcall(function() inv = pl.bIsInvincible end)
-        pcall(function() lim = pl.MaxPursuitAttackers end)
-        ST.check(inv == false and lim ~= 0, "after it: targetable again", tostring(inv) .. " / pursuers " .. tostring(lim))
+        pcall(function() nl = pl.bIsNotLockonTarget end)
+        pcall(function() nf = pl.bIsNotFCSTargets end)
+        ST.check(inv == false and nl == false and nf == false, "after it: mortal and targetable again",
+            string.format("invincible %s, not a lock-on target %s, not an FCS target %s", tostring(inv), tostring(nl), tostring(nf)))
+        ST.apOff = nil
         ST.shot("capture_after")
         ST.check(ST.plane() ~= nil and D ~= nil, "still in the run after it")
     end)
