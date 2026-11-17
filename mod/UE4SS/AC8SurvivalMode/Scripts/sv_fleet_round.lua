@@ -494,6 +494,65 @@ local function scarsTick()
     end
 end
 
+---------------------------------------------------------------------------------------------------- GEOFON's deck (WP5)
+-- ((0.74.144) the design's WP5: "its deck launches stay the Spaceport's (a pool flight with a pose off its bow)"; "Keep
+-- working until I say stop") while GEOFON is afloat in round 30 (not broken, not in the surfacing), a free pool flight of
+-- deck.size (not up, not one of the round's own, not a probe or a role flight sitting out) spawned off its bow (ahead_m
+-- along its heading, alt_m up): first_s after the fleet's up, then every every_s, at most max_up up and max_flights a round;
+-- not while you're down at the airfield with nobody flying. Log: `fleet round: deck: ...`
+local function deckC() return rc().deck or {} end
+local function deckFlight(size)
+    local opts = {}
+    for _, u in ipairs(CFG.pool or {}) do
+        if flightSize(u) == size and not (D.up and D.up[u]) and not PROBE_OF[u] and poolIndex(u) ~= nil
+            and not ROLE.sitsOut(u) and not (D.taken and D.taken[u]) and ALIVE.ask(u, D.now) <= 0 then
+            opts[#opts + 1] = u
+        end
+    end
+    return #opts > 0 and opts[math.random(#opts)] or nil
+end
+local function deckTick(now)
+    local dk = deckC()
+    if dk.enabled == false or not R or not D then return end
+    local g = R.F.ships[1]
+    if not (g and g.hull and alive(g.hull)) or g.sunk then return end
+    if IFSURF and IFSURF.state and IFSURF.state() then return end
+    local K = R.deck
+    if not K then
+        K = { left = math.floor(n(dk.max_flights, 6)), next = now + n(dk.first_s, 30), up = {}, n = 0 }
+        R.deck = K
+        rlog(string.format("deck: GEOFON launches up to %d flights this round, the first in %g s", K.left, n(dk.first_s, 30)))
+    end
+    if K.left <= 0 or now < K.next then return end
+    local up = 0
+    for u in pairs(K.up) do if ALIVE.ask(u, now) > 0 then up = up + 1 end end
+    if up >= n(dk.max_up, 3) then K.next = now + 2; return end
+    if playerOnAirfield() and othersFlying() == 0 then K.next = now + 1; return end
+    local u = deckFlight(math.floor(n(dk.size, 2)))
+    if not u then
+        if not K.noneSaid then K.noneSaid = true; rlog("deck: no free fighter pair to launch") end
+        K.next = now + 5
+        return
+    end
+    local at, yaw
+    pcall(function() local v = g.hull.obj:K2_GetActorLocation(); at = { X = v.X, Y = v.Y, Z = v.Z } end)
+    pcall(function() local f = g.hull.obj:GetActorForwardVector(); yaw = math.atan(f.Y, f.X) end)
+    if not (at and yaw) then K.next = now + 5; return end
+    local ahead = n(dk.ahead_m, 600) * 100
+    local pose = { x = at.X + math.cos(yaw) * ahead, y = at.Y + math.sin(yaw) * ahead, z = math.max(at.Z, 0) + n(dk.alt_m, 1100) * 100,
+                   yaw = math.deg(yaw) % 360, why = "GEOFON's deck" }
+    local r = spawnFlight(u, nil, pose)
+    ALIVE.spawned(u, r)
+    if r > 0 then
+        K.up[u], K.n, K.left, K.next = true, K.n + 1, K.left - 1, now + n(dk.every_s, 30)
+        for i = #(D.spare or {}), 1, -1 do if D.spare[i] == u then table.remove(D.spare, i) end end
+        rlog(string.format("deck: launch %d off GEOFON's bow: %s, %d aircraft at %.0f m, %d left this round", K.n, u, r, pose.z / 100, K.left))
+    else
+        K.next = now + 5
+        rlog(string.format("deck: %s didn't launch (%s)", u, (SV_ERR and SV_ERR[r]) or tostring(r)))
+    end
+end
+
 -- the kind (sv_rounds.lua SPC; THE ESCORT's and the Spaceport's hooks)
 function IFROUND.spawn(now)
     if not ready(D and D.round) then rlog("round " .. tostring(D and D.round) .. ": not ready: a normal round"); return false end
@@ -592,6 +651,8 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet round", fn = function(now)
     pcall(musicTick)
     local okP, errP = pcall(p2Tick, now)
     if not okP and not R.p2err then R.p2err = true; rlog("phase 2: error " .. tostring(errP)) end
+    local okK, errK = pcall(deckTick, now)
+    if not okK and not R.deckErr then R.deckErr = true; rlog("deck: error " .. tostring(errK)) end
     local okS, errS = pcall(shellTick, now)
     if not okS and not R.shellErr then R.shellErr = true; rlog("shelling: error " .. tostring(errS)) end
     if not R.sightedSaid and #R.F.queue == 0 and not (IFSURF and IFSURF.state and IFSURF.state()) then

@@ -3767,3 +3767,10 @@ game. The work was split by file between agents; the builds ran in sequence in t
   releases) found 1 of 13 (2026-10-23). 0.74.143 reads the path from GetFullName ("Class /Game/.../MI_x.MI_x") in both.
 - Autotest shell on 0.74.143 (run 20261117_191946): 15 ships, 131 of 177 slots on their _DAM (RAVEN's picture: charred,
   embers), 55 fps that minute; the shelling 250 -> lower as before. (Its one FAIL: the suite read the first detail line.)
+
+## 0.74.144 (2026-11-17): GEOFON's deck launches (WP5) (feature/geofon-rise); staged
+- sv_fleet_round.lua deckTick (CFG.specials.fleet.round.deck): while GEOFON is afloat in round 30 (not broken, not in the
+  surfacing) a free pool pair (not up, not the round's own, no probe or sitting-out role flight) spawned off its bow
+  (ahead_m 600 along its heading, alt_m 1100), first_s 30 after the fleet's up, every every_s 30, max_up 3, max_flights 6;
+  not while you're down at the airfield with nobody flying. As the Spaceport's Ford's deck.
+- Autotest shell (run 20261117_192511): 12/12: the scars (15 ships, 131 of 177), the deck's launch 1 at +30 s, the shelling.

@@ -332,6 +332,8 @@ CFG.specials.fleet = {
               -- part of hers is down (her railcannon and railguns among them), each paid part_pay; then she's finished off,
               -- reward_tani paid and the round won as phase 1's. Her railcannon's cycle on the airfield from rail_after_s
               -- after the rise (TANI.rcStart). Lines drafted (the user edits them)
+              -- ((0.74.144) deck: GEOFON's launches while it's afloat (sv_fleet_round.lua deckTick), as the Spaceport's Ford)
+              deck = { enabled = true, first_s = 30, every_s = 30, size = 2, max_up = 3, max_flights = 6, ahead_m = 600, alt_m = 1100 },
               -- ((0.74.137) sink: her death (sv_tanicorn.lua TANI.liveSink): explosions along her, bow-down and under)
               phase2 = { enabled = true, rise_after_s = 0, split_max_s = 6, rise_max_s = 40,
                          sink = { sink_s = 40, sink_m = 160, bow_deg = 12, roll_deg = 6, booms = 28, boom_every_s = 0.6,
