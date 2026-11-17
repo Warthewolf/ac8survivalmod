@@ -9,7 +9,7 @@ numpy only (no ffmpeg / sox on the build machine). Styles:
   B  possessed: down 5 semitones, a ring modulator at 47 Hz, the voice doubled an octave lower under it, saturated, a
      long cavernous reverb
   C  drowned ghost: a reversed reverb swelling into each word, a slow wavering pitch, a reversed whisper under it, muffled
-     as if under water
+     as if under water; repeating echoes after it and a long reverb tail (the user: "more echoey")
 Writes <out>/<name>__<style>.wav (16-bit, the input's rate, mono).
 """
 import argparse, os, sys, wave
@@ -118,9 +118,23 @@ def style_c(x, sr, seed):
     n = len(swell)
     pad = lambda a: np.pad(a, (n - len(a), 0)) if len(a) < n else a[-n:]
     mix = 0.75 * pad(lowpass(y, sr, 2200)) + 0.45 * swell / (np.max(np.abs(swell)) or 1) + 0.18 * pad(whisper)
-    return np.tanh(mix * 1.6)
+    mix = np.tanh(mix * 1.6)
+    # ((2026-11-17) the user: "can you make C more echoey?") repeating echoes (ECHO_S apart, each ECHO_FB of the last,
+    # darker each time) and a long reverb tail after it
+    tail = int(sr * (ECHO_S * ECHO_N + REVERB_S))
+    out = np.pad(mix, (0, tail))
+    d = int(sr * ECHO_S)
+    tap = mix.copy()
+    for k in range(1, ECHO_N + 1):
+        tap = lowpass(tap, sr, 3000 - 500 * k) * ECHO_FB
+        out[k * d:k * d + len(tap)] += tap
+    wet = fftconv(out, reverb_ir(sr, REVERB_S, seed + 1, 0.7))[:len(out)]
+    out = out + REVERB_WET * wet / (np.max(np.abs(wet)) or 1)
+    return np.tanh(out * 1.2)
 
 
+ECHO_S, ECHO_N, ECHO_FB = 0.34, 3, 0.55               # (style C's echoes: apart, how many, each of the last)
+REVERB_S, REVERB_WET = 3.0, 0.5                         # (style C's reverb tail)
 STYLES = {'A': style_a, 'B': style_b, 'C': style_c}
 
 
