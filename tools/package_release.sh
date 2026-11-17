@@ -95,6 +95,7 @@ rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Storm*_P.*
 # ((2026-11-17) THE TANACORN's crew voices: AC7's Alicorn crew, distorted, the user's dev install only (AGENTS.md's AC7 voice
 # exception): never in any zip made here, a TESTER TANACORN one included)
 rm -rf "$mod/Sounds/tanacorn"
+rm -f "$mod/config/subtitles_dev.ini"                  # ((2026-11-18) round 30's subtitles: the user's dev install only)
 # TESTER=1: a tester's build (user, 2026-11-03: "give me a tester version for alyssa"): the test keys (force a special,
 # zollars, ...) and the diagnostic loggers KEPT, everything else as the friends' zip; named ..._<version>_TESTER_...
 # Only for the tester the user names: every other zip strips them (user, 2026-10-23: test keys out of releases).

@@ -50,6 +50,7 @@ fi
 # script didn't take them out at all: tools/checks/zip_leak_test.sh); the storms' cloud flash (tools/stormfx) neither
 rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Storm*_P.*
 rm -rf "$mod/Sounds/tanacorn"                       # ((2026-11-17) THE TANACORN's crew voices: the user's dev install only)
+rm -f "$mod/config/subtitles_dev.ini"                  # ((2026-11-18) round 30's subtitles: the user's dev install only)
 # the test-only cheats (TEST ONLY BEGIN ... END in Scripts/*.lua: the +5000 zollars key) never ship, nor the default
 # ini's test-only sections (the lightning Anomaly's, 2026-11-07; each leaves a lone ";" line)
 python -I tools/strip_test_only.py "$mod"/Scripts/*.lua "$mod"/config/survival.default.ini

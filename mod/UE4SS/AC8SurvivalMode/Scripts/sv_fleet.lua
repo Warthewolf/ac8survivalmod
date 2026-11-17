@@ -479,6 +479,9 @@ CFG.specials.fleet = {
                           { t = 24.0, title = true },
                           { t = 24.2, bolt = { ship = "GEOFON", fwd_m = -3000, right_m = -1500 } } } },
 }
+-- ((2026-11-18) the user: "I want all the subtitles in the subtitle file please including round 30") its lines from the dev
+-- install's config\subtitles_dev.ini (made from these when it's missing; never in a zip), before the defaults are taken
+if SUBT and SUBT.file then pcall(SUBT.file, "subtitles_dev.ini", { specials = { fleet = CFG.specials.fleet } }) end
 -- (set after sv_config_ini.lua took CFG_DEFAULTS: shipped as it is, so no difference the leaderboard's LB.edited or the
 -- co-op settings sync would see)
 if type(CFG_DEFAULTS) == "table" and type(CFG_DEFAULTS.specials) == "table" and type(deepCopy) == "function" then
