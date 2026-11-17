@@ -485,6 +485,7 @@ end
 -- your plane out of the fight; what it had, for the way back
 local function outOfFight(pawn)
     local s, parts = { inputs = {}, attackers = {} }, {}
+    if ATK and ATK.hold then ATK.hold("down", true) end   -- ((0.74.168) sv_spweapons.lua's limits not put back meanwhile)
     pcall(function() pawn:SetIsInvincible(true) end)
     parts[#parts + 1] = pcall(function() pawn:SetActorHiddenInGame(true) end) and "hidden" or "hidden FAILED"
     parts[#parts + 1] = pcall(function() pawn:SetActorEnableCollision(false) end) and "no collision" or "collision FAILED"
@@ -516,6 +517,7 @@ end
 -- will lock their fcs"). Shazzy's revive of 13:00:17, down in the air with the gear up, fired at once.) Returns what
 -- arm() changed and whether DisableWeaponSystem(false) ran.
 local function backInFight(pawn, s)
+    if ATK and ATK.hold then ATK.hold("down", false) end
     if not liveObj(pawn) then return {}, false end
     pcall(function() pawn:SetActorHiddenInGame(false) end)
     pcall(function() pawn:SetActorEnableCollision(true) end)
@@ -703,6 +705,7 @@ end
 -- the loiter off; on a new level, which a restart is too, the plane and view put back at the first pass with the level's
 -- player, restoreAfter): nothing down, no revives
 function DOWN.reset(why, newLevel)
+    if ATK and ATK.hold then ATK.hold("down", false) end   -- ((0.74.168) never left held past a reset)
     if St.down and newLevel then
         if why == "a new level" then
             St.restore = { addr = St.loiterAddr, saved = St.saved, home = St.home, watch = St.watch and St.watch.addr,

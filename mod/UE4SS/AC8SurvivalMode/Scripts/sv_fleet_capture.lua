@@ -129,12 +129,14 @@ local function shielded(on)                               -- (the user's rule: i
             local okR, v = pcall(function() return pawn[f] end)
             if okR and type(v) == "number" and L.limits[f] == nil and pcall(function() pawn[f] = 0 end) then L.limits[f] = v end
         end
+        if ATK and ATK.hold then ATK.hold("capture", true) end   -- (sv_spweapons.lua's limits held off meanwhile)
         return "invincible, no enemy targets you"
     end
     if not (DOWN and DOWN.me and DOWN.me()) then pcall(function() pawn:SetIsInvincible(false) end) end
     for f, v in pairs(L and L.limits or {}) do pcall(function() pawn[f] = v end) end
     for f, v in pairs(L and L.flags or {}) do pcall(function() pawn[f] = v end) end
     if L then L.limits, L.flags = nil, nil end
+    if ATK and ATK.hold then ATK.hold("capture", false) end
     return "targetable again"
 end
 local function giveBack(why)                              -- (any end: the controls, the shield; never left taken)
@@ -348,7 +350,10 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet capture", fn = function(now)
     end
 end }
 if type(LEVEL_DROPS) == "table" then
-    LEVEL_DROPS["fleet capture"] = function() L, H.cur, H.nextAt = nil, nil, nil end   -- (the level's plane went with it)
+    LEVEL_DROPS["fleet capture"] = function()                 -- (the level's plane went with it)
+        L, H.cur, H.nextAt = nil, nil, nil
+        if ATK and ATK.hold then ATK.hold("capture", false) end
+    end
 end
 end
 -- TEST ONLY END
