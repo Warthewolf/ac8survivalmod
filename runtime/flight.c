@@ -472,6 +472,7 @@ static int L_Down(void* lua)
     if (!g_nextBuildInput) return Ret(lua, SV_ERR_NO_GAME);
     if (!LiveObject(plane) || CoKind(plane) != 2) { Log(L"down: refused: %p isn't a player plane", plane); return Ret(lua, SV_ERR_BAD_ARGS); }
     if (DN.on && CoRefGet(&DN.ref) == plane) {                 /* on already: a new circle, the same flight */
+        if (DN.c.gate) { DN.c.gate = DN.c.arrived = DN.c.onLine = 0; Log(L"down: the capture's gate given up: circling"); }   /* (0.32.38) */
         DN.c.cx = cx; DN.c.cy = cy; DN.c.alt = alt; DN.c.radius = rad;
         return Ret(lua, 1);
     }
@@ -491,6 +492,47 @@ static int L_Down(void* lua)
         g_dnKnown ? L"input signs known (checked again in flight)"
         : p[2] / 100.0 < DN_PROBE_MIN_M ? L"low: circling at once on AC8's input signs (roll +1, pitch -1), checked in flight"
         : L"learning the input signs first (about 5 s of small roll and pitch inputs; AC8's roll +1, pitch -1 kept if they tell nothing)");
+    return Ret(lua, 1);
+}
+
+/* ---- SV_Capture (runtime 0.32.38; GEOFON's capture, docs/design/INVINCIBLE_FLEET.md WP14 3) ------------------------
+ * DOWN's autopilot flying the local plane to a gate instead of round a circle (down_ctl.c DownGate): (gx, gy) cm at
+ * alt m, lined up along hdg (the ship's heading), each call moving it (the ship sails). The stick does nothing meanwhile
+ * (DOWN's takeover). -> 1 flying there, 2 arrived (on its line, at its height: the landing's start), SV_ERR_*; SV_Capture(0)
+ * -> 1: off, the player flies again (as SV_Down(0)). */
+static int L_Capture(void* lua)
+{
+    uint8_t* plane = ArgObject(lua);
+    if (!plane) { if (DN.c.gate) DownStop(L"capture off (Lua)"); return Ret(lua, 1); }
+    double gx = 0, gy = 0, alt = 0, hd = 0;
+    if (!ArgNumber(lua, &gx) || !ArgNumber(lua, &gy) || !ArgNumber(lua, &alt) || !ArgNumber(lua, &hd)) return Ret(lua, SV_ERR_BAD_ARGS);
+    if (!(gx > -1e9 && gx < 1e9 && gy > -1e9 && gy < 1e9 && alt >= 50 && alt <= 15000 && hd > -720 && hd < 720)) {
+        Log(L"capture: refused: gate (%d, %d) m, altitude %d m, heading %d", (int32_t)(gx / 100), (int32_t)(gy / 100), (int32_t)alt,
+            (int32_t)hd);
+        return Ret(lua, SV_ERR_BAD_ARGS);
+    }
+    if (!g_nextBuildInput) return Ret(lua, SV_ERR_NO_GAME);
+    if (DN.on && CoRefGet(&DN.ref) == plane) {             /* on already: the gate moved */
+        if (!DN.c.gate) Log(L"capture: DOWN's circle turned into the gate");
+        DownGate(&DN.c, gx, gy, hd, alt);
+        return Ret(lua, DN.c.arrived ? 2 : 1);
+    }
+    if (!LiveObject(plane) || CoKind(plane) != 2) { Log(L"capture: refused: %p isn't a player plane", plane); return Ret(lua, SV_ERR_BAD_ARGS); }
+    if (PN.on) { Log(L"capture: refused: SV_Pin holds the plane"); return Ret(lua, SV_ERR_BAD_ARGS); }
+    int64_t err = 0;
+    uint8_t* me = FlLocal(&err);
+    if (!me) return Ret(lua, err);
+    if (me != plane) { Log(L"capture: refused: %p isn't the local player's plane (%p)", plane, me); return Ret(lua, SV_ERR_NOT_LOCAL); }
+    DownInit(&DN.c, gx, gy, alt, 4000.0, g_dnKnown, g_dnSRoll, g_dnSPitch);
+    DownGate(&DN.c, gx, gy, hd, alt);
+    CoRefSet(&DN.ref, plane);
+    DN.on = 1; DN.okBits = g_dnKnown ? (DN_LEARNED_ROLL | DN_LEARNED_PITCH) : 0; DN.said = 0;
+    DN.startAt = DN.lastLog = CoNow();
+    double p[3] = { 0, 0, 0 }, r[3] = { 0, 0, 0 };
+    CoReadPose(plane, p, r);
+    Log(L"capture: autopilot on plane %p: to the gate (%d, %d) m at %d m along %d; the plane at (%d, %d) m, %d m high, heading %d",
+        plane, (int32_t)(gx / 100), (int32_t)(gy / 100), (int32_t)alt, (int32_t)hd, (int32_t)(p[0] / 100), (int32_t)(p[1] / 100),
+        (int32_t)(p[2] / 100), (int32_t)r[1]);
     return Ret(lua, 1);
 }
 
