@@ -183,6 +183,7 @@ local function split(P, why)                              -- GEOFON torn open: i
     local okF, err = pcall(GEO.fall, P.G)
     rlog(string.format("phase 2: GEOFON split in two by %s (%s)", why, okF and "its V rearing" or ("its V FAILED: " .. tostring(err))))
     say("fall", p2c().radio)
+    CREW.say("split")
 end
 local function p2Rise(P, now)                            -- her spawn across GEOFON's keel, her bow's breach at its midships
     local at, yaw = P.at, P.yaw or 0
@@ -240,7 +241,7 @@ local function p2Fight(P, now)
         rlog(string.format("phase 2: %d of her guns shot down (%d of %d down): %s zollars", down - P.paid, down, of, tostring(v)))
         P.paid = down
     end
-    if not P.halfSaid and down * 2 >= of then P.halfSaid = true; say("half", c.radio) end
+    if not P.halfSaid and down * 2 >= of then P.halfSaid = true; say("half", c.radio); CREW.say("half") end
     if up == 0 then
         local okD, how = false, nil                     -- ((0.74.137) her death: explosions, then she goes under bow first)
         if TANI.liveSink then okD, how = TANI.liveSink("round 30: all her guns down", c.sink) end
@@ -248,6 +249,7 @@ local function p2Fight(P, now)
         local v = pay(n(c.reward_tani, 60000), "the TANACORN silenced")
         hudCallout(tx2().beaten or "THE TANACORN IS SILENCED", string.format(tx2().beaten_sub or "+%s ZOLLARS", zl(v)))
         say("beaten", c.radio)
+        CREW.say("beaten")
         P.state = "beaten"
         rlog(string.format("phase 2: the TANACORN beaten at +%.0f s (all %d guns down): %s zollars; her hull %s", now - P.fightAt, of,
             tostring(v), okD and (how and ("down (" .. tostring(how) .. ")") or "sinking") or "NOT finished off"))
@@ -287,6 +289,7 @@ local function p2Tick(now)
         if (G.stage or 0) > (P.stageSaid or 0) then             -- ((0.74.146) each stage of GEOFON's: its radio (stage1 / stage2)
             P.stageSaid = G.stage
             say("stage" .. G.stage)
+            CREW.say("stage" .. G.stage)
         end
         local h = hpOf(G.hull)
         local share = (h and G.max and G.max > 0) and h / G.max or 1
@@ -324,6 +327,7 @@ local function p2Tick(now)
             P.releaseAt = nil
             local okL = TANI.riseRelease and pcall(TANI.riseRelease, "round 30: her spawn's hitch passed")
             rlog("phase 2: her rise released" .. (okL and "" or " (NOT: no TANI.riseRelease)"))
+            CREW.say("release")
         end
         hideHalves(P, now)
         local st = TANI.riseState and TANI.riseState() or nil
@@ -331,6 +335,7 @@ local function p2Tick(now)
             P.state, P.fightAt, P.railAt = "fight", now, now + n(c.rail_after_s, 20)
             hudCallout(tx2().rises or "THE TANACORN RISES", tx2().rises_sub or "")
             say("rises", c.radio)
+            CREW.say("fight")
             rlog(string.format("phase 2: the TANACORN up and fighting at +%.0f s from the break (her rise %s)", now - P.t0,
                 st == nil and "over" or ("cut at " .. n(c.rise_max_s, 40) .. " s: " .. tostring(st))))
         end
@@ -428,6 +433,7 @@ local function shellTick(now)
                             Sx.said = true
                             hudCallout((c.text or {}).shelling or "THE FLEET IS SHELLING THE AIRFIELD", (c.text or {}).shelling_sub or "SINK THE SHIPS IN RANGE")
                             say("shelling", c.radio)
+                            CREW.say("shelling")
                         end
                     end
                     if now >= e.next then
@@ -569,6 +575,136 @@ local function deckTick(now)
     end
 end
 
+---------------------------------------------------------------------------------------------------- the crew's voices
+-- ((0.74.153) the user, 2026-11-17: AC7's Alicorn crew lines "distorted and horrific" (AGENTS.md's AC7 voice exception: the
+-- TANACORN only, her dev install only, each heard by her first), "use style A,B,C", "I want them to play throughout the
+-- entire mission", none of Torres's replies nor the duty officer's) CREW.say(moment): a moment's lines (crew.moments) in
+-- order; between, from the fleet's sighting to the round's end, one of crew.ambient every crew.every_s; each line once a
+-- round where it can be, a random style of crew.styles a play, never the last one's; never over a line still playing
+-- (its time from its words: crew.s_per_word, crew.pad_s); its subtitle under crew.speakers' name. The files: build_all.sh
+-- stages them (TANI=1) as Sounds/tanacorn/<style>_<voice ID>.wav; none there: nothing plays, said once. Log: `fleet round:
+-- crew: ...`
+CREW = {}
+if CFG.specials and CFG.specials.fleet and CFG.specials.fleet.round and not CFG.specials.fleet.round.crew then
+    -- ((0.74.154) the user: "The Voices need to be turned up a bit and the choose option C for all": db 2 -> 14, styles C only)
+    CFG.specials.fleet.round.crew = {
+        enabled = true, db = 14, styles = { "C" }, every_s = { 45, 90 }, gap_s = 2, s_per_word = 0.42, pad_s = 1.0,
+        speakers = { TORRES = "INTERCEPT: TORRES", CREW = "INTERCEPT: ALICORN CREW" },
+        moments = { sighted = { "v6157_6001_alt1" }, stage1 = { "v6001_6032" }, stage2 = { "v6001_6030_alt1" },
+                    split = { "v6349_6001", "v6350_6001", "v6351_6001" }, release = { "v6001_6103" },
+                    fight = { "v6001_6051_alt1" }, half = { "v6001_6112_alt1" }, beaten = { "v6001_6002", "v6001_6116_alt1" },
+                    shelling = { "v6001_6087_alt1" } },
+        lines = {
+        v6001_6002 = { "TORRES", "It's a requiem." },
+        v6001_6007_alt2 = { "TORRES", "Fools..." },
+        v6001_6017_alt1 = { "TORRES", "Full speed ahead!" },
+        v6001_6030_alt1 = { "TORRES", "So use your imagination, my fellow submariners! A single shell will save ten million lives!" },
+        v6001_6032 = { "TORRES", "Picture it!" },
+        v6001_6033 = { "TORRES", "Salvation!" },
+        v6001_6037_alt1 = { "TORRES", "Two, worth a million lives each..." },
+        v6001_6041 = { "TORRES", "Three Strikes... He lacks the drive." },
+        v6001_6042 = { "TORRES", "Imagine you're just about to be killed. Why am I going to be killed, you ask." },
+        v6001_6043 = { "TORRES", "Because they wanted to steal from you, to torment you, to burn you, to cut you apart." },
+        v6001_6044 = { "TORRES", "It was for your sins, your actions, and your vengeance! There has to be a reason!" },
+        v6001_6045 = { "TORRES", "Three Strikes has none of that. I do." },
+        v6001_6050_alt1 = { "TORRES", "Don't you see?" },
+        v6001_6051_alt1 = { "TORRES", "Come if you dare, Three Strikes." },
+        v6001_6054_alt1 = { "TORRES", "Let me know when the bodies... I mean the debris stops raining." },
+        v6001_6082_alt1 = { "TORRES", "To take the lives of one million people, 5,000 kilometers away, with my very own hands!" },
+        v6001_6087_alt1 = { "TORRES", "Commence firing!" },
+        v6001_6103 = { "TORRES", "Mfh! Heh heh heh!" },
+        v6001_6104 = { "TORRES", "Heh heh heh... heh heh heh..." },
+        v6001_6112_alt1 = { "TORRES", "Don't you see? One million! One million lives!" },
+        v6001_6113_alt4 = { "TORRES", "Ha ha ha..." },
+        v6001_6116_alt1 = { "TORRES", "*sigh*..." },
+        v6001_6139_alt3 = { "TORRES", "Mfh heh heh heh!" },
+        v6154_6003_alt1 = { "CREW", "Target coordinates acquired." },
+        v6156_6002_alt1 = { "CREW", "I hereby swear that." },
+        v6156_6002_alt2 = { "CREW", "I will be a proud, brave, and vigilant soldier." },
+        v6156_6005_alt1 = { "CREW", "Captain--" },
+        v6156_6005_alt2 = { "CREW", "Our salvation--" },
+        v6157_6001_alt1 = { "CREW", "Salvation is nigh--" },
+        v6157_6001_alt2 = { "CREW", "Salvation--" },
+        v6159_6002_alt1 = { "CREW", "For salv--" },
+        v6272_6002 = { "CREW", "Keep firing!" },
+        v6272_6003 = { "CREW", "Fire again!" },
+        v6273_6001 = { "CREW", "The next round is ready to fire!" },
+        v6273_6003 = { "CREW", "The last shell has been fired!" },
+        v6334_6001_alt1 = { "CREW", "Main guns, commence fire!" },
+        v6338_6001 = { "CREW", "Ready to fire!" },
+        v6339_6002_alt1 = { "CREW", "It'll be a while before we sink!" },
+        v6349_6001 = { "CREW", "I hereby swear that I will be a proud, brave, and vigilant soldier." },
+        v6350_6001 = { "CREW", "To submit to the orders of my superiors." },
+        v6351_6001 = { "CREW", "To uphold the honor of our nation and its military." },
+        },
+    }
+    -- (the shipped settings' copy too, as sv_fleet.lua's own: CFG_DEFAULTS is taken before this piece loads)
+    local function copy(t) if type(t) ~= "table" then return t end local r = {} for k, v in pairs(t) do r[k] = copy(v) end return r end
+    local d = CFG_DEFAULTS and CFG_DEFAULTS.specials and CFG_DEFAULTS.specials.fleet and CFG_DEFAULTS.specials.fleet.round
+    if type(d) == "table" and d.crew == nil then d.crew = copy(CFG.specials.fleet.round.crew) end
+end
+do
+local K = { q = {}, busyUntil = 0, nextAt = nil, said = {}, last = nil, lastStyle = nil, missing = false }
+local function cc() return rc().crew or {} end
+local function crewDur(key)
+    local l = (cc().lines or {})[key]
+    local words = 0
+    for _ in tostring(l and l[2] or ""):gmatch("%S+") do words = words + 1 end
+    return math.max(1.5, words * n(cc().s_per_word, 0.42) + n(cc().pad_s, 1.2))
+end
+local function crewPlay(key, now)
+    local c = cc()
+    local l = (c.lines or {})[key]
+    if not l or not (SND and SND.play) then return false end
+    local styles = c.styles or { "A" }
+    local st = styles[math.random(#styles)]
+    if #styles > 1 then
+        local tries = 0
+        while st == K.lastStyle and tries < 8 do st = styles[math.random(#styles)]; tries = tries + 1 end
+    end
+    local file = "tanacorn/" .. st .. "_" .. key .. ".wav"
+    local h = SND.play({ file = file, db = n(c.db, 2) })
+    if not h then
+        if not K.missing then K.missing = true; rlog("crew: " .. file .. " didn't play (TANI=1's Sounds/tanacorn not staged?): the crew silent this round") end
+        return false
+    end
+    K.lastStyle, K.last = st, key
+    K.said[key] = true
+    K.busyUntil = now + crewDur(key) * (st == "B" and 1.6 or (st == "C" and 1.3 or 1)) + n(c.gap_s, 4)
+    if SUB and SUB.say then pcall(SUB.say, (c.speakers or {})[l[1]] or l[1], l[2]) end
+    rlog(string.format("crew: %s (%s, style %s)", key, l[1], st))
+    return true
+end
+function CREW.say(moment)
+    if cc().enabled == false or not R then return end
+    for _, k in ipairs((cc().moments or {})[moment] or {}) do K.q[#K.q + 1] = k end
+end
+function CREW.tick(now)
+    local c = cc()
+    if c.enabled == false or not R or K.missing then return end
+    if now < K.busyUntil then return end
+    local k = table.remove(K.q, 1)
+    if k then crewPlay(k, now); return end
+    if not R.sightedAt then return end                    -- (ambient from the fleet's sighting on)
+    if not K.nextAt then K.nextAt = now + n((c.every_s or {})[1], 45) end
+    if now < K.nextAt then return end
+    local inMoment = {}
+    for _, l in pairs(c.moments or {}) do for _, x in ipairs(l) do inMoment[x] = true end end
+    local fresh, any = {}, {}
+    for key in pairs(c.lines or {}) do
+        if not inMoment[key] and key ~= K.last then
+            any[#any + 1] = key
+            if not K.said[key] then fresh[#fresh + 1] = key end
+        end
+    end
+    local pool = #fresh > 0 and fresh or any
+    if #pool > 0 then crewPlay(pool[math.random(#pool)], now) end
+    local e = c.every_s or { 45, 90 }
+    K.nextAt = now + n(e[1], 45) + math.random() * math.max(0, n(e[2], 90) - n(e[1], 45))
+end
+function CREW.reset() K.q, K.busyUntil, K.nextAt, K.said, K.last, K.lastStyle = {}, 0, nil, {}, nil, nil end
+end
+
 -- the kind (sv_rounds.lua SPC; THE ESCORT's and the Spaceport's hooks)
 function IFROUND.spawn(now)
     if not ready(D and D.round) then rlog("round " .. tostring(D and D.round) .. ": not ready: a normal round"); return false end
@@ -577,6 +713,7 @@ function IFROUND.spawn(now)
     RUN.fleetRound = true
     if SKY then SKY.fightSlow = n(rc().sky_slow, 1) end   -- ((2026-11-17) the dawn x5 slower through its fight: sv_sky.lua)
     R = { F = IFLEET.cur, paid = {}, parts = {}, t0 = now }
+    CREW.reset()                                          -- ((0.74.153) the crew's voices: a new round's
     D.special.state, D.special.at = "fleet", now
     rlog(string.format("round %d: the fleet's %d ships coming (the surfacing first); music: %s", D.round, #R.F.ships, musicStart()))
     return true
@@ -678,10 +815,12 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet round", fn = function(now)
     t0 = os.clock()
     local okS, errS = pcall(shellTick, now)
     share("shelling", t0)
+    t0 = os.clock(); pcall(CREW.tick, now); share("crew", t0)   -- ((0.74.153) the crew's voices
     if not okS and not R.shellErr then R.shellErr = true; rlog("shelling: error " .. tostring(errS)) end
     if not R.sightedSaid and #R.F.queue == 0 and not (IFSURF and IFSURF.state and IFSURF.state()) then
         R.sightedSaid, R.sightedAt = true, now
         say("sighted")
+        CREW.say("sighted")
     end
     -- ((0.74.146) the user: "Add more subtitles from Audrey and Valka ... wondering where the Tanager is") tanager_after_s
     -- after the sighting: AUDREY and VALKA on the missing flagship

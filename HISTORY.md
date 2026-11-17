@@ -3806,3 +3806,19 @@ game. The work was split by file between agents; the builds ran in sequence in t
   own work: the _DAM's first load, the mesh's render state). 0.74.152: scars.per_tick 1 (spread over ~40 s).
 - Autotests shell 12/12 on 0.74.149, 0.74.150, 0.74.151 (15 ships, 131 of 177 slots scarred each time).
 - 0.74.152 (2026-11-17): autotests phase2 31/31, epic 25/25, shell 12/12 (runs 20261117_204024 / _204401 / _204619): every round 30 piece since the 0.74.138 install together.
+
+## 0.74.153 (2026-11-17): THE TANACORN's crew voices (feature/geofon-rise); staged, the user listening first
+- The user: AC7's Alicorn crew lines "distorted and horrific" (AGENTS.md's AC7 voice exception), "Salvation is nigh!" and the
+  oath; "play throughout the entire mission"; none of Torres's replies nor the duty officer's; "use style A,B,C", then "choose
+  option C for all", "turned up a bit"; she hears them all outside the game first (build/ac7/voice_alicorn).
+- AC7's English text from its localization .dat files (tools/acloc.py, the AC8 decoder: D:'s DATDecrypt/Data, A.dat English):
+  Torres is v6001 (not v022: Count), the duty officer v6003, the crew v6156-v6159 / v6349-v6351 / the gun crew; 41 lines
+  chosen (23 Torres, 18 crew), none a reply. tools/ac7_voice.py: radio rows -> <voice ID>[_altN]_Play events -> media
+  (voice.bnk / voice_update.bnk, voice_update_en.pck) -> WAVs; tools/ac7_voice_fx.py: styles A / B / C.
+- build_all.sh stages them with TANI=1 as Sounds/tanacorn/<style>_<voice ID>.wav (123); package_release.sh and
+  package_test.sh drop Sounds/tanacorn from every zip; zip_leak_test.sh checks every zip (the TESTER TANACORN one too).
+- Runtime 0.32.37: SND_MAX_SOUNDS 64 -> 192.
+- sv_fleet_round.lua CREW (CFG.specials.fleet.round.crew, set by the piece, CFG_DEFAULTS too): moments (sighted, GEOFON's
+  stages, the split's oath, her release, the fight, her half, her death, the shelling) and ambient lines every 45-90 s from the
+  sighting, one at a time, subtitled INTERCEPT: TORRES / ALICORN CREW. Autotest phase2 on 0.74.153: 33/34 (the oath's last
+  line queued past the test's end). Then: db 2 -> 14, styles C only, gap_s 2 (not yet built).

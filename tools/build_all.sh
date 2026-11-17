@@ -167,4 +167,20 @@ LIST
 else
     echo "no AC7 railgun sounds (python -I tools/ac7_sfx.py): VALKA plays AC8's own"
 fi
+# THE TANACORN's crew (the user's AC7 voice exception of 2026-11-17, AGENTS.md: the Alicorn crew's lines, distorted, her
+# dev install only, each heard by her first): tools/ac7_voice.py + tools/ac7_voice_fx.py into build/ac7/voice_alicorn
+# (never in git); staged only with TANI=1 as Sounds/tanacorn/<style>_<voice ID>.wav (A / B / C); every zip drops them
+# (package_release.sh, package_test.sh; tools/checks/zip_leak_test.sh)
+VA=build/ac7/voice_alicorn
+rm -rf build/install/AC8SurvivalMode/Sounds/tanacorn
+if [ "${TANI:-}" = 1 ] && [ -d "$VA/A" ]; then
+    TV=build/install/AC8SurvivalMode/Sounds/tanacorn
+    mkdir -p "$TV"
+    for st in A B C; do
+        for f in "$VA/$st"/*.wav; do
+            b=$(basename "$f" .wav); cp "$f" "$TV/${st}_${b%__$st}.wav"
+        done
+    done
+    echo "staged THE TANACORN's crew voices ($(ls "$TV" | wc -l) in AC8SurvivalMode/Sounds/tanacorn; TANI=1, dev installs only)"
+fi
 echo "staged build/install/SurvivalMode and build/install/AC8SurvivalMode"

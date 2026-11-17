@@ -23,7 +23,7 @@ _Static_assert(sizeof(SndXBuffer) == 44, "XAUDIO2_BUFFER layout");
 _Static_assert(sizeof(SndXState) == 20, "XAUDIO2_VOICE_STATE layout");
 
 #define SND_VT(o, i)          (((void**)*(void**)(o))[i])
-#define SND_MAX_SOUNDS        64
+#define SND_MAX_SOUNDS        192                  /* ((0.32.37) THE TANACORN's crew: 41 lines x 3 styles beside VALKA's 12) */
 #define SND_MAX_VOICES        48
 #define SND_END_OF_STREAM     0x40u
 #define SND_LOOP_INFINITE     255u
