@@ -794,6 +794,15 @@ function SV_BGM() return 77 end
 check(K.spawn(clock) == true and IFLEET.cur ~= nil and IFLEET.cur.round == true and RUN.fleetRound == true and D.special.state == "fleet",
     "spawned: the fleet up as round 30's")
 check(K.ready(30) == false, "once a run")
+local dr, ds = D.round, D.state
+D.state = "wait"; keys.F()
+check(D.round == dr and find("fleet round: Ctrl%+F: had this run already") ~= nil, "Ctrl+F: had this run: nothing changed")
+RUN.fleetRound = nil; D.round = 12; keys.F()
+check(D.round == 29 and RUN.fleetWarned == nil and find("Ctrl%+F: the run set from round 12's break to round 29's") ~= nil,
+    "Ctrl+F in a break: round 29's break, round 30 next")
+D.state = "fighting"; D.round = 14; keys.F()
+check(D.round == 14 and find("Ctrl%+F: in round 14 %(fighting%): only in a break") ~= nil, "Ctrl+F in a round: refused")
+D.round, D.state, RUN.fleetRound, RUN.fleetWarned = dr, ds, true, true
 check(K.busy(D.special) == true, "the round held while the fleet's afloat (queued)")
 local F2 = IFLEET.cur
 F2.queue = {}
@@ -905,7 +914,7 @@ echo "a TESTER zip's copy (tools/dev_only.py, as package_release.sh TESTER=1)"
 mkdir -p "$W/tester"
 cp -r "$SRC/Scripts" "$SRC/config" "$W/tester/"
 if ! OUT=$(python -X utf8 -I "$HERE/../dev_only.py" "$W/tester" 2>&1); then echo "$OUT"; echo "  FAIL dev_only.py refused the copy"; exit 1; fi
-if grep -n '^IFLEET = \|^IFSKY = \|^IFLASER = \|^GEO = \|^TANI = \|^CINE = \|testKey("N"\|testKey("B"\|testKey("S"\|testKey("J"\|testKey("T"\|testKey("D"' "$W"/tester/Scripts/*.lua; then
+if grep -n '^IFLEET = \|^IFSKY = \|^IFLASER = \|^GEO = \|^TANI = \|^CINE = \|testKey("N"\|testKey("F"\|testKey("B"\|testKey("S"\|testKey("J"\|testKey("T"\|testKey("D"' "$W"/tester/Scripts/*.lua; then
     echo "  FAIL the dev install's keys or globals left in a TESTER copy (above)"; exit 1
 fi
 echo "  ok   no IFLEET, GEO, TANI or CINE and none of their keys (Ctrl+N, B, T, D ...) in any part of it"

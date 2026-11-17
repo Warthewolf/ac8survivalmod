@@ -3507,3 +3507,8 @@ game. The work was split by file between agents; the builds ran in sequence in t
   ahead / 9 m up and 64 m astern / 4.1 m up; one finished: its laser removed. Run 92 9/9. Their beams at the players'
   missiles weren't tried (the autotest can't fire them); the pictures missed the mounts (the camera didn't take its spot).
   Their boxes read TANACORN LASER (THE TANACORN's rows).
+
+## 0.74.103 (2026-11-17; staged): Ctrl+F, the fleet's round next (feature/fleet-lasers)
+- The user: "can I have a test key". sv_fleet_round.lua Ctrl+F: in a break between rounds the run is set to round 29's
+  break (its warning), so round 30, INVINCIBLE FLEET's, comes next; in a round, or had this run: a callout, nothing changed
+  (`fleet round: Ctrl+F: ...`). fleet_test: 3 checks; the TESTER copy has no Ctrl+F (dev_only.py).
