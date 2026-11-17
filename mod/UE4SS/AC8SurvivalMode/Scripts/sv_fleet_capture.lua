@@ -22,7 +22,10 @@ IFCAP = {}
 if CFG.specials and CFG.specials.fleet and not CFG.specials.fleet.capture then
     CFG.specials.fleet.capture = {
         enabled = true, coop_only = true, first_s = 120, every_s = 180, per_player_s = 300, lock_s = 10, escape_km = 12,
-        gate_km = 3, gate_alt_m = 300, glide_deg = 3.5, die_after_s = 3, final_m = 250, give_up_s = 240,
+        -- ((0.74.167) final_m 250 -> 800 and floor_m: the autotest's captive of 0.74.166 flew its glide into the sea short of the
+        -- deck (invincible doesn't stop a crash: the retry menu), so the line never goes under the deck + floor_m and the
+        -- move onto the deck comes from final_m out)
+        gate_km = 3, gate_alt_m = 300, glide_deg = 3.5, die_after_s = 3, final_m = 800, floor_m = 80, give_up_s = 240,
         deck = { fwd_m = -40, right_m = 8, up_m = 22 },     -- (the deck's touchdown spot from GEOFON's root, metres)
         text = { lock = "CAPTURE LOCK", lock_sub = "GET CLEAR OR DESTROY RAVEN'S EW MAST",
                  lock_other = "CAPTURE LOCK ON %s", taken = "AIRCRAFT CAPTURED", taken_sub = "RAVEN HAS YOUR CONTROLS",
@@ -172,7 +175,7 @@ local function flyTick(now)
         if type(rc) == "number" and rc < 0 then giveBack("SV_Capture refused (" .. tostring(rc) .. ")") return end
     elseif L.state == "final" then
         local behind = math.max(0, -along / 100)
-        local alt = dk.Z / 100 + behind * math.tan(math.rad(n(c.glide_deg, 3.5)))
+        local alt = dk.Z / 100 + math.max(n(c.floor_m, 80), behind * math.tan(math.rad(n(c.glide_deg, 3.5))))
         local rc = type(SV_Capture) == "function" and SV_Capture(addrOf(pawn) or 0, dk.X, dk.Y, math.max(50, alt), dk.yaw) or -1
         if type(rc) == "number" and rc < 0 then giveBack("SV_Capture refused (" .. tostring(rc) .. ")") return end
         if dist <= n(c.final_m, 250) or along > 0 then
