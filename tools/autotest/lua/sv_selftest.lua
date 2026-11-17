@@ -2526,10 +2526,30 @@ SUITES.phase2 = function()
     A.log_("fleet round: phase 2: GEOFON split in two by her bow", 8, "p4", true, function(l)
         ST.check(l ~= nil and l:find("its V rearing", 1, true) ~= nil, "GEOFON split by her bow's breach (its V rearing)", l)
     end)
-    for i = 1, 10 do
-        A.wait(1.5)
+    A.log_("cine: cinematic of 12 keys", 5, "p4", true, function(l)
+        ST.check(l ~= nil and l:find("a cut", 1, true) ~= nil, "her rise's own shot list (12 keys, its cuts)", l)
+    end)
+    A.log_("geofon: break look %+%d+ s: bow .-pitch [+-]?[1-9]", 8, "p4", false, function(l)
+        ST.check(l ~= nil, "GEOFON's V reared (its halves' pitch read back off 0)", l)
+    end)
+    A.do_(function() local g = geo(); C.g = g and g.hull and g.hull.obj or nil; ST.info("phase2: GEOFON's hull kept for its pictures: " .. tostring(C.g ~= nil)) end)
+    for i = 1, 12 do
+        A.wait(1.0)
         A.do_(function() ST.shot(string.format("p2_rise_%02d", i)) end)
+        if i % 4 == 0 then                            -- (GEOFON's halves from 700 m off its starboard side, 60 m up: aimed and shot
+            A.wait(0.6)                                -- in one step, the rise's cinematic takes the view back each tick)
+            A.do_(function()
+                if not (C.g and valid(C.g)) then ST.info("phase2: GEOFON's hull gone: no picture"); return end
+                local okA, at = pcall(ST.frame, C.g, -8000, 70000, 6000)
+                local okL, look = pcall(ST.frame, C.g, 0, 0, 1500)
+                if okA and okL and ST.look(at, look, 45) then ST.shot(string.format("p2_geofon_%02d", i)) end
+            end)
+        end
     end
+    A.do_(function() ST.lookBack() end)
+    A.log_("cine: beat 4 at", 20, "p4", true, function(l)
+        ST.check(l ~= nil and l:find("THE TANACORN", 1, true) ~= nil, "her title card on its beat", l)
+    end)
     A.log_("fleet round: phase 2: the TANACORN up and fighting", 40, "p4", true, function(l)
         if not ST.check(l ~= nil, "her rise over: fighting", l) then return "abort" end
     end)
