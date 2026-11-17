@@ -3512,3 +3512,7 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - The user: "can I have a test key". sv_fleet_round.lua Ctrl+F: in a break between rounds the run is set to round 29's
   break (its warning), so round 30, INVINCIBLE FLEET's, comes next; in a round, or had this run: a callout, nothing changed
   (`fleet round: Ctrl+F: ...`). fleet_test: 3 checks; the TESTER copy has no Ctrl+F (dev_only.py).
+- 0.74.103 INSTALLED 2026-11-17 for the user ("install 0.74.103"; "I just want to see the invincible fleet for myself"), over
+  0.74.91 (backup: build/backup/install_before_0.74.103); 107 files verified; her settings, map notes, subtitles (the repo's)
+  and the launcher's toggle kept. The ZFA-44 container's 347-byte .pak, which package_dev.sh doesn't stage (package_release.sh
+  does), was removed by the copy and put back from the backup (the same as build/zfa44/out's).
