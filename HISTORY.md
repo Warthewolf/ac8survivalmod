@@ -3536,3 +3536,22 @@ game. The work was split by file between agents; the builds ran in sequence in t
 - "move the sunrise so it's slower during round 30, it gets light too quickly": sv_sky.lua SKY.fightSlow (x round_s while
   set), round 30 sets it to CFG.specials.fleet.round.sky_slow 5 (the drift toward the dawn over ~20 min, not 4), cleared at
   its end; the break finishes the step as before. Tests: fleet, sky, thunder, cine (its route order), escort, zip leak.
+
+## 0.74.106-0.74.107 (2026-11-17; test builds, staged, not installed): INVINCIBLE FLEET's surfacing made epic (feature/fleet-lasers)
+- The user: "can you please make the Ships Rising out of the sea cutscene more cinematic? like go epic with it"; the radio
+  "Yes, use the drafts", "No slow motion". The surfacing (IFSURF) moved out of sv_fleet.lua (1,904 lines) into its own
+  dev-only piece, sv_fleet_surface.lua (main.lua MODULES after sv_fleet_lasers; dev_only.py, fleet_test.sh, AGENTS.md).
+- CFG.specials.fleet.surface: lead_s 3 s of empty storm sea first; six shots, each a camera move (two CameraActors, the cut
+  to `from`, SetViewTargetWithBlend to `to` over the shot): a push across the waves, low on the pickets, a dolly along
+  HERNE, RAVEN's bow from off her quarter, the push-in on GEOFON through her slam, the pull-back over the fleet. Letterbox
+  2.39 (the cameras' own bConstrainAspectRatio); Online Mode's IGC hand-held shake (BP_CamShake_HandShake_A) all through;
+  BombImpactSmall / BombImpact at breaches and slams within 1.5 km of the camera, BombImpactHelios at GEOFON's slam; the
+  water's roar (AKE_Environment_Splash_WaterPiller_Play on the camera) at breaches within 2.5 km.
+- Beats on the clock: four strikes on cue (sv_fleet_storm.lua's new IFSKY.strike: the cloud flash, a bolt, its glow and
+  sure thunder; lightTick's own strikes x storm_quiet_x 4 further apart while it films), KASKA / COMONA CONTROL / KASKA's
+  lines (SUB.say; Survival's HUD held with callouts let through), the INVINCIBLE FLEET title card at +24 s. Banners waiting
+  when it starts are dropped.
+- Autotest suite `epic` (tools/autotest, branch tools/ac8-autotest): 0.74.106 24/25 (the hand-held shake's path wrong:
+  it's /Game/OnlineMode/Blueprint/IGC/CameraShake/; RAVEN's shot 35 m off her bow saw her breach out of frame; the wide
+  shot from 3 km made specks), 0.74.107 25/25 (run 20261117_133728_claude: 6 moves, 9 beats, 9 shakes, 8 roars, 15 of 15
+  doubles, the real fleet up). Not heard yet: the roars and the cued thunder (the autotest has no ears).

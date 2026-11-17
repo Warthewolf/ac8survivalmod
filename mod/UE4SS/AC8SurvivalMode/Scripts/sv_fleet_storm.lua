@@ -92,9 +92,9 @@ local function thLoad(c)
     end
     return k
 end
-local function thQueue(at, now)
+local function thQueue(at, now, sure)                     -- (sure: always, a cued strike's)
     local c = stc().thunder or {}
-    if c.enabled == false or math.random() > n(c.chance, 0.7) then return "" end
+    if c.enabled == false or (not sure and math.random() > n(c.chance, 0.7)) then return "" end
     local L
     pcall(function() local v = survivalPC.PlayerCameraManager:GetCameraLocation(); L = { X = v.X, Y = v.Y, Z = v.Z } end)
     local km = L and math.sqrt((L.X - at.X) ^ 2 + (L.Y - at.Y) ^ 2 + (L.Z - at.Z) ^ 2) / 100000 or 10
@@ -309,33 +309,49 @@ local function centres()                                   -- (the airfield, and
     end
     return out
 end
+-- a flash at `at` (its cloud flash, a bolt under it, the bolt's glow and its thunder): what it showed. sure: the thunder
+-- always (a cued strike's); inView: the bolt out in your camera's shot (THUNDER.bolt's)
+local function strike(at, now, why, sure, inView)
+    local c = stc().lightning or {}
+    local how, cl = "bolt", c.cloud                          -- (a cloud flash at some: Survival's own light, hard rule 70)
+    if type(cl) == "table" and cl.enabled ~= false and now >= (SW.lightAt or 0) and math.random() < (tonumber(cl.chance) or 0.5) then
+        how, SW.lightAt, at.Z = "effect", now + pick(cl.every_s, { 0.6, 1.6 }), pick(cl.alt_m, { 2000, 4500 }) * 100
+    end
+    local ok, what = false, "no THUNDER"
+    if THUNDER and THUNDER.cloudFlash then ok, what = pcall(THUNDER.cloudFlash, at, how, why, cl) end
+    if THUNDER and THUNDER.bolt and c.bolts then
+        local okB, seen, whyB, top = pcall(THUNDER.bolt, { X = at.X, Y = at.Y, Z = 0 }, c.bolts, why, inView)
+        what = tostring(what) .. "; " .. (okB and (seen or ("no bolt: " .. tostring(whyB))) or ("bolt error " .. tostring(seen)))
+        if okB and seen then
+            local okG, gw = pcall(glowAt, top, now)
+            what = what .. (okG and gw or ("; glow error " .. tostring(gw)))
+        end
+    end
+    local okT, th = pcall(thQueue, at, now, sure)
+    return ok, tostring(what) .. (okT and th or ("; thunder error " .. tostring(th)))
+end
+-- ((2026-11-17) the epic surfacing, sv_fleet_surface.lua) a strike on its cue at `at` (X, Y: the bolt's foot; Z: the
+-- flash's height, 3 km if none), its thunder sure; and a sound of the SE bank by name on your camera
+function IFSKY.strike(at, why)
+    if type(at) ~= "table" or not (at.X and at.Y) then return false, "no spot" end
+    return strike({ X = at.X, Y = at.Y, Z = at.Z or 300000 }, os.clock(), why or "a cue", true, false)
+end
+function IFSKY.post(name) return thPost(name) end
 local function lightTick(now)
     local c = stc().lightning or {}
     if c.enabled == false or now < (SW.nextAt or 0) then return end
-    SW.nextAt = now + pick(c.every_s, { 0.3, 0.8 })
+    -- (while the surfacing films, its own strikes on cue: the storm's x IFSURF.quiet() further apart, so the cued ones read)
+    local q = IFSURF and IFSURF.quiet and tonumber(IFSURF.quiet()) or 1
+    SW.nextAt = now + pick(c.every_s, { 0.3, 0.8 }) * math.max(1, q)
     local cs = centres()
     if #cs == 0 then return end
     local ce = cs[math.random(#cs)]
     local d = pick(c.dist_km, { 2, 25 }) * 100000
     local ang = math.random() * 2 * math.pi
     local at = { X = ce.X + math.cos(ang) * d, Y = ce.Y + math.sin(ang) * d, Z = pick(c.alt_m, { 1500, 7000 }) * 100 }
-    local how, cl = "bolt", c.cloud                          -- (a cloud flash at some: Survival's own light, hard rule 70)
-    if type(cl) == "table" and cl.enabled ~= false and now >= (SW.lightAt or 0) and math.random() < (tonumber(cl.chance) or 0.5) then
-        how, SW.lightAt, at.Z = "effect", now + pick(cl.every_s, { 0.6, 1.6 }), pick(cl.alt_m, { 2000, 4500 }) * 100
-    end
     SW.n = (SW.n or 0) + 1
-    local ok, what = pcall(THUNDER.cloudFlash, at, how, "the fleet's storm", cl)
-    if THUNDER.bolt and c.bolts then
-        local okB, seen, why, top = pcall(THUNDER.bolt, { X = at.X, Y = at.Y, Z = 0 }, c.bolts, "the fleet's storm",
-            IFSURF and IFSURF.state and IFSURF.state() and true)   -- (while the surfacing films: in its shot)
-        what = tostring(what) .. "; " .. (okB and (seen or ("no bolt: " .. tostring(why))) or ("bolt error " .. tostring(seen)))
-        if okB and seen then
-            local okG, gw = pcall(glowAt, top, now)
-            what = what .. (okG and gw or ("; glow error " .. tostring(gw)))
-        end
-    end
-    local okT, th = pcall(thQueue, at, now)
-    what = tostring(what) .. (okT and th or ("; thunder error " .. tostring(th)))
+    local ok, what = strike(at, now, "the fleet's storm", false,
+        IFSURF and IFSURF.state and IFSURF.state() and true)   -- (while the surfacing films: in its shot)
     if SW.n <= 3 or SW.n % 100 == 0 then
         log(string.format("fleet storm: flash %d (%.0f km off its centre, %.1f km up): %s", SW.n, d / 100000, at.Z / 100000,
             ok and tostring(what) or ("error " .. tostring(what))))

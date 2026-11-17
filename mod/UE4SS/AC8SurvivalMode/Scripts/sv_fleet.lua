@@ -282,15 +282,45 @@ CFG.specials.fleet = {
                 waves = { boat = 0.0, grig = 2.0, gors = 2.5, udal = 4.0, krov = 4.5, aegis = 6.0, ford = 9.0 },
                 breach = { { "SURF1", 1 }, { "FORD_PILLAR", 1 }, { "MIST", 1 } },
                 slam = { { "ALCN_BLAST", 1 }, { "FORD_SPLASH", 2 }, { "FOAM_IGC", 1 }, { "FORD_PILLAR", 1 } },
-                -- ((0.74.86) the autotest's run 43: the first cut's cameras too far, the last wide into the sun: closer, GEOFON
-                -- longer, the wide from ahead looking back)
-                shots = { { t = 0.0, ship = "PicketA", at = { -600, 500, 60 }, look = { 200, 0, 20 }, fov = 55 },
-                          { t = 2.5, ship = "HERNE", at = { -120, 220, 15 }, look = { 0, 0, 25 }, fov = 50 },
-                          { t = 4.5, ship = "KOLGA", at = { 150, -260, 20 }, look = { 0, 0, 30 }, fov = 50 },
-                          { t = 6.5, ship = "RAVEN", at = { 250, 200, 15 }, look = { 0, 0, 40 }, fov = 50 },
-                          { t = 9.5, ship = "GEOFON", at = { 500, 180, 12 }, look = { 0, 0, 90 }, fov = 60 },
-                          { t = 14.0, ship = "GEOFON", at = { -50, -700, 60 }, look = { 0, 0, 60 }, fov = 55 },
-                          { t = 19.5, ship = "GEOFON", at = { 2500, 1500, 500 }, look = { -500, 0, 0 }, fov = 60 } } },
+                -- ((2026-11-17) the user: "make the Ships Rising out of the sea cutscene more cinematic? like go epic with it";
+                -- sv_fleet_surface.lua) lead_s of empty sea before the pickets; each shot a move from `from` to `to`
+                -- ({ at = { ahead m, right m, up m }, look = { ... }, fov } in its ship's frame), cut at t, blended (blend_fn:
+                -- EViewTargetBlendFunction, 0 linear) to the next shot's t; letterboxed (the cameras' aspect); shakes at a
+                -- breach / slam within shake.near_m of the camera (GEOFON's slam the big one, always), the hand-held one all
+                -- through; the water's roar at a breach within splash.near_m; storm_quiet_x: the storm's own strikes that much
+                -- further apart; beats on the clock: bolt { ship, fwd_m, right_m } a strike on cue, say "CODE|text", title the
+                -- card (the user, 2026-11-17: the radio "Yes, use the drafts", "No slow motion")
+                -- ((0.74.107, the autotest's run of 0.74.106) RAVEN from off her bow quarter (35 m off, she breached out of
+                -- the frame), the wide shot nearer (from 3 km the fleet was specks), the hand-held shake Online Mode's
+                lead_s = 3.0, blend_fn = 0, storm_quiet_x = 4,
+                letterbox = { enabled = true, aspect = 2.39 },
+                shake = { near_m = 1500, breach = { "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactSmall", 1.0 },
+                          slam = { "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpact", 0.8 },
+                          geofon = { "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios", 0.7 },
+                          hand = { "/Game/OnlineMode/Blueprint/IGC/CameraShake/BP_CamShake_HandShake_A", 0.6 } },   -- (Online Mode's cutscenes')
+                splash = { sound = "AKE_Environment_Splash_WaterPiller_Play", near_m = 2500, max = 12 },
+                title = { text = "INVINCIBLE FLEET", sub = "THE AEGIR FLEET HAS SURFACED", big = 1.5 },
+                shots = { { t = 0.0, ship = "PicketA", from = { at = { -450, 320, 22 }, look = { 300, 0, 4 }, fov = 60 },
+                                                    to = { at = { -200, 220, 16 }, look = { 200, 0, 6 }, fov = 55 } },
+                          { t = 3.5, ship = "PicketA", from = { at = { -70, 120, 5 }, look = { 0, 0, 14 }, fov = 55 },
+                                                    to = { at = { -150, 190, 9 }, look = { 0, 0, 16 }, fov = 58 } },
+                          { t = 6.5, ship = "HERNE", from = { at = { -260, 230, 14 }, look = { -80, 0, 22 }, fov = 50 },
+                                                  to = { at = { 260, 230, 14 }, look = { 80, 0, 26 }, fov = 50 } },
+                          { t = 9.5, ship = "RAVEN", from = { at = { 150, 140, 4 }, look = { 40, 0, 10 }, fov = 50 },
+                                                  to = { at = { 170, 160, 40 }, look = { 30, 0, 35 }, fov = 55 } },
+                          { t = 12.5, ship = "GEOFON", from = { at = { 650, 260, 10 }, look = { 0, 0, 40 }, fov = 55 },
+                                                    to = { at = { 420, 170, 16 }, look = { 0, 0, 60 }, fov = 60 } },
+                          { t = 22.5, ship = "GEOFON", from = { at = { 750, 420, 70 }, look = { 0, 0, 30 }, fov = 60 },
+                                                    to = { at = { 1600, 1000, 280 }, look = { -400, 0, 0 }, fov = 60 } } },
+                beats = { { t = 0.6, bolt = { ship = "PicketA", fwd_m = 2500, right_m = -600 } },
+                          { t = 0.8, say = "KASKA|Aegir Fleet, surface. All ships, battle stations." },
+                          { t = 6.5, say = "CTRL|Contacts surfacing! Multiple contacts, they're coming up out of the sea!" },
+                          { t = 7.0, bolt = { ship = "HERNE", fwd_m = 0, right_m = -2500 } },
+                          { t = 13.5, bolt = { ship = "GEOFON", fwd_m = -1500, right_m = -2500 } },
+                          { t = 15.5, say = "KASKA|Geofon, take the lead. Let them see the Invincible Fleet." },
+                          { t = 18.5, bolt = { ship = "GEOFON", fwd_m = -800, right_m = -2800 } },
+                          { t = 24.0, title = true },
+                          { t = 24.2, bolt = { ship = "GEOFON", fwd_m = -3000, right_m = -1500 } } } },
 }
 -- (set after sv_config_ini.lua took CFG_DEFAULTS: shipped as it is, so no difference the leaderboard's LB.edited or the
 -- co-op settings sync would see)
@@ -1636,269 +1666,5 @@ if type(LEVEL_DROPS) == "table" then                       -- (the level's objec
 end
 end
 
--- ---- INVINCIBLE FLEET's surfacing (2026-11-16; CFG.specials.fleet.surface's note) ------------------------------------
--- IFSURF.start(F) at Ctrl+N (the real fleet's queue held: F.nextAt), its tick: each ship's rig measured at its rest the
--- tick after its spawn and moved so its double settles on the ship's spot, the double attached to SOC_Hull, the rise at
--- its wave's time, the water at its breach and slam, the cameras' cuts; then the fade, the swap, your view back.
--- Log: `fleet surfacing: ...`.
-IFSURF = {}
-do
-local S = nil
-local ATTACKERS = { "MaxPlaneAttackerMissiles", "MaxPursuitAttackers", "MaxNonPlaneAttackerMissiles" }
-local function n(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
-local function cs() return (CFG.specials and CFG.specials.fleet or {}).surface or {} end
-local function quat(yaw) local h = math.rad(yaw) / 2; return { X = 0, Y = 0, Z = math.sin(h), W = math.cos(h) } end
-local function slog(s2) log("fleet surfacing: " .. s2) end
-local function same(e) return e ~= nil and e.a ~= nil and liveAddr(e.o) == e.a and nameOf(e.o) == e.name end
-local function kept(o) return { o = o, a = addrOf(o), name = nameOf(o) } end
-local function frame()                                    -- GEOFON's spot, the course's forward and right, its yaw
-    local f = (CFG.specials.fleet or {}).formation or {}
-    local rw = f.runway_cm or { 1610476, -436143 }
-    local yaw = n(f.course_yaw, 45)
-    local a = math.rad(yaw)
-    local ux, uy = math.cos(a), math.sin(a)
-    local d = n(cs().start_km, 30.5) * 100000
-    return { X = rw[1] - ux * d, Y = rw[2] - uy * d }, { X = ux, Y = uy }, { X = -uy, Y = ux }, yaw
-end
-local function spotOf(G, u, r, c)                         -- a ship's spot from its formation offsets (sv_fleet.lua fleetList's)
-    local f, rr = n(c.fwd_m, 0) * 100, n(c.right_m, 0) * 100
-    return { X = G.X + u.X * f + r.X * rr, Y = G.Y + u.Y * f + r.Y * rr, Z = 0 }
-end
-local function off(p, u, r, m)                            -- metres { forward, right, up } off p, in the course's frame
-    return { X = p.X + (u.X * m[1] + r.X * m[2]) * 100, Y = p.Y + (u.Y * m[1] + r.Y * m[2]) * 100, Z = (p.Z or 0) + m[3] * 100 }
-end
-local function spawnDeferred(cls, at, yaw, sc)
-    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
-    if not (valid(gs) and valid(cls) and liveObj(survivalPC)) then return nil end
-    local t = { Rotation = quat(yaw), Translation = at, Scale3D = { X = sc, Y = sc, Z = sc } }
-    local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(survivalPC, cls, t, 1, nil, 1) end)
-    if not (okB and x and valid(x)) then return nil end
-    return x, t, gs
-end
-local function fxAt(name, at, sc)                         -- one of TANI.rise.FX's waters, kept to be stopped at its life
-    local FX = TANI and TANI.rise and TANI.rise.FX or {}
-    local path = FX[name]
-    if not path then return false end
-    local sys = loadObject(path .. "." .. (path:match("[^/]+$") or ""))
-    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
-    if not (sys and valid(lib) and liveObj(survivalPC)) then return false end
-    local okS, comp = pcall(function()
-        return lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = sc, Y = sc, Z = sc }, true, true, 0, false)
-    end)
-    if not (okS and comp) then return false end
-    S.fx[#S.fx + 1] = { e = kept(comp), off = os.clock() + n(cs().fx_life_s, 8) }
-    return true
-end
-local function water(sh, list)
-    local up, of = 0, 0
-    local sc = math.max(0.3, sh.sc * n(cs().fx_x, 2))
-    for _, w in ipairs(type(list) == "table" and list or {}) do
-        of = of + 1
-        if fxAt(w[1], { X = sh.spot.X, Y = sh.spot.Y, Z = 0 }, sc * n(w[2], 1)) then up = up + 1 end
-    end
-    return up, of
-end
-local function view(cam)
-    if not (cam and valid(cam) and liveObj(survivalPC)) then return false end
-    return pcall(function() survivalPC:SetViewTargetWithBlend(cam, 0, 0, 0, false) end)
-end
-local function camTo(sh0)                                 -- the camera at a shot (a cut)
-    local G, u, r = S.G, S.u, S.r
-    local p = S.spots[sh0.ship] or G
-    local at, look = off(p, u, r, sh0.at), off(p, u, r, sh0.look)
-    local dx, dy, dz = look.X - at.X, look.Y - at.Y, look.Z - at.Z
-    local yaw, pitch = math.deg(math.atan(dy, dx)), math.deg(math.atan(dz, math.sqrt(dx * dx + dy * dy)))
-    if not (S.cam and valid(S.cam)) then
-        local x, t, gs = spawnDeferred(StaticFindObject("/Script/Engine.CameraActor"), at, yaw, 1)
-        if not x then return false end
-        pcall(function() gs:FinishSpawningActor(x, t, 1) end)
-        pcall(function() x.CameraComponent.bConstrainAspectRatio = false end)
-        S.cam = x
-    end
-    pcall(function() S.cam:K2_SetActorLocationAndRotation(at, { Pitch = pitch, Yaw = yaw, Roll = 0 }, false, {}, true) end)
-    pcall(function() S.cam.CameraComponent:SetFieldOfView(n(sh0.fov, 55)) end)
-    return view(S.cam)
-end
-local function playerHold(on)
-    local pawn = liveObj(survivalPC) and survivalPC.Pawn or nil
-    if not valid(pawn) then return "no plane of yours" end
-    if on then
-        local me = playerLocation()
-        local c = cs()
-        local alt = math.max(n(c.autopilot_alt_m, 1500), me and me.Z / 100 or 0)
-        if type(SV_Down) == "function" and me then pcall(SV_Down, addrOf(pawn) or 0, me.X, me.Y, alt, n(c.autopilot_radius_m, 3500)) end
-        playerLocationDirty()
-        pcall(function() pawn:SetIsInvincible(true) end)
-        S.limits = {}
-        for _, f in ipairs(ATTACKERS) do
-            local okR, v = pcall(function() return pawn[f] end)
-            if okR and type(v) == "number" and pcall(function() pawn[f] = 0 end) then S.limits[f] = v end
-        end
-        return "your plane invincible on the autopilot, the attack limits at 0"
-    end
-    pcall(function() survivalPC:SetViewTargetWithBlend(pawn, 0, 0, 0, false) end)
-    pcall(function() pawn:SetIsInvincible(false) end)
-    for f, v in pairs(S.limits or {}) do pcall(function() pawn[f] = v end) end
-    if type(SV_Down) == "function" then pcall(SV_Down, 0); playerLocationDirty() end
-    return "your view and plane back"
-end
-local function clearDoubles()
-    local nD = 0
-    for _, sh in ipairs(S.ships) do
-        if sh.d and same(sh.d) then pcall(function() sh.d.o:K2_DestroyActor() end); nD = nD + 1 end
-        if sh.rig and same(sh.rig) then pcall(function() sh.rig.o:K2_DestroyActor() end) end
-        sh.d, sh.rig = nil, nil
-    end
-    return nD
-end
-function IFSURF.start(F)
-    local c = cs()
-    if c.enabled == false or (COOP and COOP.client and COOP.client() == true) then return false end   -- (the host's: WP12 brings joiners)
-    local mesh, anim = loadObject(c.rig), loadObject(c.anim)
-    if not (mesh and anim) then slog("her rig or its rise didn't load (a build without the Tanicorn container?): the fleet as before"); return false end
-    local G, u, r, yaw = frame()
-    S = { F = F, t0 = os.clock(), G = G, u = u, r = r, yaw = yaw, ships = {}, spots = {}, fx = {}, mesh = mesh, anim = anim,
-          shot = 0, phase = "rise", seed = math.floor(os.clock() * 1000) % 100000 }
-    local x = S.seed
-    local function rnd() x = (x * 1103515245 + 12345) % 2147483648; return x / 2147483648 end
-    local last = 0
-    for _, sc0 in ipairs((CFG.specials.fleet or {}).ships or {}) do
-        local cl = (c.classes or {})[sc0.kind]
-        if cl then
-            local sh = { key = sc0.key, name = sc0.name, kind = sc0.kind, spot = spotOf(G, u, r, sc0), cls = cl[1],
-                         sc = n(cl[2], 150) / n(c.tani_m, 650), at = n((c.waves or {})[sc0.kind], 0) + rnd() * n(c.jitter_s, 1) }
-            S.spots[sc0.key] = sh.spot
-            if sc0.name and sc0.name ~= "" then S.spots[sc0.name] = sh.spot end
-            S.ships[#S.ships + 1] = sh
-            last = math.max(last, sh.at)
-        end
-    end
-    S.overAt = last + n(c.length_s, 15) + n(c.end_pad_s, 1)
-    F.nextAt, F.burst = math.huge, #(F.queue or {})        -- (the real fleet held, then up at once under the fade)
-    S.said = playerHold(true)
-    -- ((2026-11-17) the user: "during the cutscenes ... we need to disable the HUD") Survival's HUD (callouts after) and the
-    -- game's (sv_cine.lua's routes, the target boxes too) held off till it's over
-    local hh = HUD and HUD.hold and select(2, pcall(HUD.hold, true, "the fleet's surfacing"))
-    local okG, gh = false, nil
-    if CINE and CINE.hudHide then okG, gh = pcall(CINE.hudHide, "the fleet's surfacing", S.overAt + 10) end
-    slog(string.format("%d ships rise over %.1f s (waves %s), %d shots; %s; the HUD held (Survival's %s, the game's %s)", #S.ships,
-        S.overAt, "pickets first, GEOFON last", #(c.shots or {}), S.said, tostring(hh), okG and tostring(gh) or "no sv_cine"))
-    return true
-end
-local function shipTick(sh, now)
-    local c = cs()
-    local t = now - S.t0
-    if not sh.rig then                                    -- its rig, at its rest pose (measured next tick)
-        local x, tr, gs = spawnDeferred(StaticFindObject("/Script/Engine.SkeletalMeshActor"), { X = sh.spot.X, Y = sh.spot.Y, Z = 0 }, S.yaw, sh.sc)
-        if not x then sh.failed = "its rig didn't spawn"; return end
-        local m = x.SkeletalMeshComponent
-        pcall(function() m:SetSkeletalMeshAsset(S.mesh) end)
-        pcall(function() m.VisibilityBasedAnimTickOption = 0 end)
-        pcall(function() m.bEnableUpdateRateOptimizations = false end)
-        pcall(function() gs:FinishSpawningActor(x, tr, 1) end)
-        pcall(function() m:SetAnimationMode(1, true) end)
-        pcall(function() m:SetAnimation(S.anim) end)
-        pcall(function() m:SetPosition(n(c.length_s, 15), false) end)
-        sh.rig, sh.m, sh.state = kept(x), m, "measure"
-        return
-    end
-    if not same(sh.rig) then sh.failed = sh.failed or "its rig gone"; return end
-    if sh.state == "measure" then                         -- its rest's SOC_Hull onto the spot, then its start pose and its double
-        local okS, sk = pcall(function() return sh.m:GetSocketLocation(FName("SOC_Hull")) end)
-        local okL, rl = pcall(function() return sh.rig.o:K2_GetActorLocation() end)
-        if okS and okL and sk and rl then
-            local to = { X = rl.X + sh.spot.X - sk.X, Y = rl.Y + sh.spot.Y - sk.Y, Z = rl.Z - sk.Z }
-            pcall(function() sh.rig.o:K2_SetActorLocation(to, false, {}, true) end)
-            sh.moved = string.format("%.0f m", math.sqrt((sh.spot.X - sk.X) ^ 2 + (sh.spot.Y - sk.Y) ^ 2) / 100)
-        end
-        pcall(function() sh.m:SetPosition(0, false) end)
-        local cls = loadObject(sh.cls .. "." .. (sh.cls:match("[^/]+$") or "") .. "_C")
-        local d, tr, gs = spawnDeferred(cls, { X = sh.spot.X, Y = sh.spot.Y, Z = -30000 }, S.yaw, 1)
-        if d then
-            pcall(function() gs:FinishSpawningActor(d, tr, 1) end)
-            pcall(function() d:K2_AttachToComponent(sh.m, FName("SOC_Hull"), 2, 2, 1, true) end)
-            sh.d = kept(d)
-        else
-            sh.failed = "its double didn't spawn (" .. tostring(sh.cls) .. ")"
-        end
-        sh.state = "wait"
-        return
-    end
-    if sh.state == "wait" and t >= sh.at then
-        pcall(function() sh.m:Play(false) end)
-        sh.state, sh.t0 = "rise", now
-        return
-    end
-    if sh.state == "rise" then
-        local r0 = now - sh.t0
-        if not sh.breach and r0 >= n(c.breach_s, 0.8) then sh.breach = true; sh.bUp, sh.bOf = water(sh, c.breach) end
-        if not sh.slam and r0 >= n(c.slam_s, 9) then sh.slam = true; sh.sUp, sh.sOf = water(sh, c.slam) end
-        if r0 >= n(c.length_s, 15) then sh.state = "rest" end
-    end
-end
-local function over(why)
-    local nD = clearDoubles()
-    if S.F and IFLEET and IFLEET.cur == S.F then S.F.nextAt = S.F.t end   -- (the real fleet up now, at once: F.burst)
-    if S.cam and valid(S.cam) then pcall(function() S.cam:K2_DestroyActor() end) end
-    local back = playerHold(false)
-    local b, sl, failed = 0, 0, {}
-    for _, sh in ipairs(S.ships) do
-        b, sl = b + (sh.bUp or 0), sl + (sh.sUp or 0)
-        if sh.failed then failed[#failed + 1] = (sh.name or sh.key) .. ": " .. sh.failed end
-    end
-    slog(string.format("over (%s): %d doubles taken off, the real fleet up; %d breach and %d slam waters; %s%s", why, nD, b, sl, back,
-        #failed > 0 and ("; NOT: " .. table.concat(failed, ", ")) or ""))
-    if HUD and HUD.hold then pcall(HUD.hold, false, "the fleet's surfacing") end
-    if CINE and CINE.hudShow then pcall(CINE.hudShow, "the fleet's surfacing", "the surfacing over") end
-    S = nil
-end
-function IFSURF.state() return S and { phase = S.phase, ships = #S.ships, shot = S.shot, t = os.clock() - S.t0 } or nil end
-TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet surfacing", fn = function(now)
-    if not S then return end
-    if not D or (levelTorn and levelTorn()) then S = nil; return end
-    if not (IFLEET and IFLEET.cur == S.F) then over("the fleet taken off"); return end
-    local c = cs()
-    local t = now - S.t0
-    for i = #S.fx, 1, -1 do                               -- (each water stopped at its life: AC8's IGC waters never stop)
-        local w = S.fx[i]
-        if now >= w.off then
-            if same(w.e) then pcall(function() w.e.o:Deactivate() end) end
-            table.remove(S.fx, i)
-        end
-    end
-    if S.phase == "rise" then
-        for _, sh in ipairs(S.ships) do if not sh.failed then shipTick(sh, now) end end
-        local shots = c.shots or {}
-        while shots[S.shot + 1] and t >= n(shots[S.shot + 1].t, 0) do
-            S.shot = S.shot + 1
-            local ok = camTo(shots[S.shot])
-            slog(string.format("shot %d at +%.1f s: %s%s", S.shot, t, tostring(shots[S.shot].ship), ok and "" or " (the view NOT taken)"))
-        end
-        if S.cam and valid(S.cam) and liveObj(survivalPC) then  -- (the view kept on the camera: a flash or the game may take it)
-            local okV, vt = pcall(function() return survivalPC:GetViewTarget() end)
-            if okV and vt and addrOf(vt) ~= addrOf(S.cam) then S.reverts = (S.reverts or 0) + 1; view(S.cam) end
-        end
-        if t >= S.overAt then
-            local f = c.fade or {}
-            local okF = THUNDER and THUNDER.camFade and pcall(THUNDER.camFade, 0, 1, n(f.out_s, 0.8), true)
-            S.phase, S.at = "out", now + (okF and n(f.out_s, 0.8) or 0)
-            local ups = 0
-            for _, sh in ipairs(S.ships) do if sh.d and same(sh.d) then ups = ups + 1 end end
-            slog(string.format("the rise over at +%.1f s: %d of %d doubles up, %d view reverts kept back; the fade", t, ups, #S.ships, S.reverts or 0))
-        end
-    elseif S.phase == "out" and now >= S.at then
-        local f = c.fade or {}
-        clearDoubles()
-        if S.F then S.F.nextAt = S.F.t end
-        S.phase, S.at = "hold", now + n(f.hold_s, 0.8)
-    elseif S.phase == "hold" and now >= S.at then
-        local f = c.fade or {}
-        if THUNDER and THUNDER.camFade then pcall(THUNDER.camFade, 1, 0, n(f.in_s, 1.2), false) end
-        over("the rise ended")
-    end
-end }
-if type(LEVEL_DROPS) == "table" then
-    LEVEL_DROPS["fleet surfacing"] = function() S = nil end
-end
-end
+-- (INVINCIBLE FLEET's surfacing, IFSURF: sv_fleet_surface.lua, the piece after sv_fleet_lasers.lua)
 -- TEST ONLY END
