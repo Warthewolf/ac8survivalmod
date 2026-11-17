@@ -128,7 +128,20 @@ typedef struct {
     double diveGamma;                        /* (0.32.21) the steepest climb angle of that dive (deg)                 */
     float  out[5];
     double dist, headErr, bankWant, gamma;   /* for the log                                                           */
+    /* (runtime 0.32.38, GEOFON's capture: DownGate) a gate to fly to instead of the circle: (gx, gy) cm, the line it's
+     * flown along (ghd deg: the ship's heading), arrived once within CP_ARRIVE_M of it, on its line and at its height   */
+    int    gate, arrived, onLine;
+    double gx, gy, ghd, cross;
 } DownCtl;
+#define CP_ARRIVE_M     500.0  /* m: arrived within this behind the gate (to 200 m past it) ...                       */
+#define CP_ARRIVE_X     200.0  /* m: ... this close to its line ...                                                   */
+#define CP_ARRIVE_DEG   20.0   /* deg: ... heading along it this closely ...                                          */
+#define CP_LINE_M       1500.0 /* m: the line's capture: the heading off it by atan(cross / this)                     */
+#define CP_TURN_M       1200.0 /* m behind the gate at least to fly its line (a turn's room at AC8's ~8 deg/s)       */
+#define CP_ARRIVE_ALT   200.0  /* m: ... and this close to its height                                                 */
+#define CP_LEAD_MAX     5000.0 /* m: the aim point behind the gate along its line                                    */
+#define CP_AWAY_M       4000.0 /* m behind the gate at least to turn onto its line facing away from it              */
+#define CP_LOW_M        150.0  /* m: under this the gate's turns are shallow (DN_BANK_LOW), as DOWN's are low       */
 
 static double DnWrap(double a) { while (a > 180.0) a -= 360.0; while (a < -180.0) a += 360.0; return a; }
 static double DnClamp(double v, double lo, double hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -148,6 +161,12 @@ static void DownInit(DownCtl* c, double cx, double cy, double alt, double radius
     c->sPitch = sPitch < 0 ? -1 : 1;
     c->phase = DN_START;
     c->dir = 1;
+}
+
+/* (runtime 0.32.38) the gate: fly to (gx, gy) at alt, lined up along ghd (deg); again each frame as it moves. */
+static void DownGate(DownCtl* c, double gx, double gy, double ghd, double alt)
+{
+    c->gate = 1; c->gx = gx; c->gy = gy; c->ghd = ghd; c->alt = alt;
 }
 
 /* The way round that needs the smaller turn from the plane's track (deg); right-hand near the centre. */
@@ -304,6 +323,24 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
         if (CoAbs(rr - R) < 0.5 * R) c->radI = DnClamp(c->radI + 4.0 * (rr - R) / R * dt, -30.0, 45.0);
         double delta = DnClamp(90.0 * (rr - R) / R + c->radI, -45.0, 80.0);
         double want = rr < 1.0 ? track : CoAtan2(y, x) / D2R + c->dir * (90.0 + delta);
+        if (c->gate) {                                         /* (0.32.38) the gate: an aim point on its line behind it */
+            double ux = Cos(c->ghd * D2R), uy = Sin(c->ghd * D2R);
+            double gxm = (pos[0] - c->gx) / 100.0, gym = (pos[1] - c->gy) / 100.0;
+            double gd = CoSqrt(gxm * gxm + gym * gym), along = gxm * ux + gym * uy;
+            c->cross = -gxm * uy + gym * ux;
+            /* behind the gate, well inside its approach: onto its line and along it (the heading off the line by
+             * atan(cross / CP_LINE_M): it closes on the line without crossing it); ahead of it or beside it: round to a
+             * point CP_LEAD_MAX behind it first */
+            /* (on its line it stays there to the gate: off it only past the gate or far off to its side) */
+            if (c->onLine) { if (along > 300.0 || CoAbs(c->cross) > 4000.0) c->onLine = 0; }   /* (room for a U-turn onto it) */
+            else if (along < -(CoAbs(DnWrap(track - c->ghd)) > 90.0 ? CP_AWAY_M : CP_TURN_M) && CoAbs(c->cross) < 3000.0)
+                c->onLine = 1;                                 /* (facing away: from further back, its U-turn's room) */
+            if (c->onLine) want = c->ghd - CoAtan2(c->cross, CP_LINE_M) / D2R;
+            else want = CoAtan2(-uy * CP_LEAD_MAX - gym, -ux * CP_LEAD_MAX - gxm) / D2R;
+            rr = gd; R = 1e9;                                  /* (no circle: nothing of its turn fed forward) */
+            c->arrived = along > -CP_ARRIVE_M && along < 200.0 && CoAbs(c->cross) < CP_ARRIVE_X &&
+                         CoAbs(DnWrap(track - c->ghd)) < CP_ARRIVE_DEG && CoAbs(h - c->alt) < CP_ARRIVE_ALT;
+        }
         double e = DnWrap(want - track);
         /* the climb angle wanted from the altitude error (and its integral, slowly: the sag in a banked turn) */
         double eh = c->alt - h;
@@ -338,7 +375,8 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
         if (CoAbs(e) > 150.0 && c->lastTurn != 0.0 && (wH > 0) != (c->lastTurn > 0)) wH = c->lastTurn > 0 ? DN_TURN_MAX : -DN_TURN_MAX;
         c->lastTurn = wH;                                      /* (its side kept through ~180 deg errors) */
         double wV = DnClamp(DN_KV * (gammaWant - gamma) - 0.1 * c->rth, -DN_CLIMB_MAX, DN_CLIMB_MAX);
-        int low = h < DN_LOW_M || h < c->alt - 600.0;
+        /* (0.32.38) the gate is low (300 m): its turns flown at full bank, the low limit only under CP_LOW_M */
+        int low = c->gate ? h < CP_LOW_M : (h < DN_LOW_M || h < c->alt - 600.0);
         double off = CoAtan2(CoAbs(wH), -wV) / D2R;            /* (how far the wanted direction is from straight down) */
         if (wV >= 0.0 || low) c->push = 0;
         else if (off < DN_PUSH_IN) c->push = 1;

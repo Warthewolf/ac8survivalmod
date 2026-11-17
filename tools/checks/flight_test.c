@@ -307,6 +307,43 @@ static int Fly(const Start* s, int sr, int sp, int kind, int known, int pauseInP
     return ok;
 }
 
+/* (runtime 0.32.38) GEOFON's capture: the gate 3 km behind a ship sailing at 45 km/h, at 300 m, lined up with it (DownGate,
+ * again every frame as it moves): the AC8-like plane from each start must get there, on its line and at its height,
+ * within 240 s, never under 120 m on the way */
+static int FlyGate(const Start* s, double shipHd, const char* what)
+{
+    DownCtl c;
+    DownInit(&c, 0, 0, 300.0, 4000.0, 1, 1, -1);
+    Model m = { s->x, s->y, s->z, s->th, s->ps, s->ph, 0, 0 };
+    const double dt = 1.0 / 60.0, D = CO_PI / 180.0, V = 12.5;
+    double t = 100.0, minZ = 1e9, shipX = 0, shipY = 0;
+    static float late[64][5];
+    static const float none[5] = { 0, 0, 0, 0, 0 };
+    int k = 0, arrivedAt = -1;
+    for (; k < (int)(240.0 / dt); ++k) {
+        shipX += cos(shipHd * D) * V * dt; shipY += sin(shipHd * D) * V * dt;
+        double gx = shipX - cos(shipHd * D) * 3000.0, gy = shipY - sin(shipHd * D) * 3000.0;
+        DownGate(&c, gx * 100, gy * 100, shipHd, 300.0);
+        double pos[3] = { m.x * 100, m.y * 100, m.z * 100 }, rot[3] = { m.th, m.ps, m.ph };
+        float out[5];
+        DownStep(&c, t, pos, rot, out);
+        memcpy(late[k % 64], out, sizeof(out));
+        ModelStep(&m, k >= 21 ? late[(k - 21) % 64] : none, 1, -1, 4, dt);
+        t += dt;
+        if (k * dt > 5.0 && m.z < minZ) minZ = m.z;
+        if (g_trace && k % 300 == 0)
+            printf("    %3.0f s: %5.0f m from the gate, %5.0f off its line, %4.0f m high; heading %4.0f (err %4.0f), bank %4.0f (want %4.0f), climb %3.0f\n",
+                   k * dt, c.dist, c.cross, m.z, m.ps, c.headErr, m.ph, c.bankWant, c.gamma);
+        if (c.arrived) { arrivedAt = k; break; }
+    }
+    int ok = arrivedAt >= 0 && minZ > 120.0;
+    printf("gate %s, the ship heading %.0f: %s at %.0f s (%.0f m from the gate, %.0f m off its line, %.0f m high; lowest %.0f m): %s\n",
+           s->name, shipHd, arrivedAt >= 0 ? "arrived" : "NOT there", k * dt, c.dist, c.cross, m.z, minZ, ok ? "ok" : "FAILED");
+    (void)what;
+    if (!ok) g_fail = 1;
+    return ok;
+}
+
 int main(void)
 {
     FlagsTest();
@@ -349,6 +386,14 @@ int main(void)
     for (int sr = -1; sr <= 1; sr += 2)
         for (int sp = -1; sp <= 1; sp += 2)
             if (sr != 1 || sp != -1) { ++runs; good += Fly(&ac8[0], sr, sp, 4, 0, 0, 0); }
+    /* (0.32.38) the capture's gate: behind, beside and ahead of the ship, every way it heads */
+    static const Start gs[] = {
+        { "from behind", -9000, 500, 1500, 10, 0, 0, 300, 0 },
+        { "from beside", 1000, 8000, 2500, -100, 0, 0, 300, 0 },
+        { "from ahead, facing it", 9000, -800, 2000, 180, 0, 0, 300, 0 },
+    };
+    for (int st = 0; st < 3; ++st)
+        for (int hd = 0; hd < 360; hd += 90) { ++runs; good += FlyGate(&gs[st], (double)hd, ""); }
     printf("down: %d of %d flights ok\n", good, runs);
     printf(g_fail ? "flight test: FAILED\n" : "flight test: passed\n");
     return g_fail ? 1 : 0;

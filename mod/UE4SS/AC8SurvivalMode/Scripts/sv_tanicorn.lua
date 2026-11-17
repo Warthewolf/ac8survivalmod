@@ -512,7 +512,9 @@ if type(NotifyOnNewObject) == "function" then
     for _, c in ipairs(SHELL_CLASSES) do
         local short = c:match("Live%.(.+)$")
         pcall(NotifyOnNewObject, c, function(o)
-            if #NEWSHELL < 32 then NEWSHELL[#NEWSHELL + 1] = { o = o, t = os.clock(), c = short } end
+            -- ((0.74.161) its name kept: a shell freed before it's read and its address used again is another object (hard
+            -- rule 59): 0.74.160's autotest phase2 crashed reading one, 23:01:28 of run 20261117_225914, the 12th stock shell)
+            if #NEWSHELL < 32 then NEWSHELL[#NEWSHELL + 1] = { o = o, t = os.clock(), c = short, name = nameOf(o) } end
         end)
     end
 end
@@ -534,11 +536,12 @@ local function hangs(w)                                   -- an attached weapon'
 end
 
 -- (0.74.61) the first 12 of each weapon class (s.c) a session that aren't ours
+local function stillShell(s) return s.o ~= nil and valid(s.o) and s.name ~= nil and nameOf(s.o) == s.name end
 local function stockShells(list, now)
     for _, s in ipairs(list) do
         pcall(function()
             local o = s.o
-            if not valid(o) then return end
+            if not stillShell(s) then return end
             local ow = o:GetOwner()
             if valid(ow) and nameOf(ow):find("Tani", 1, true) then return end
             local c = s.c or "?"
@@ -562,6 +565,7 @@ local function shells(now)
     local aims, all = {}, nil
     for _, s in ipairs(list) do
         local mount, k
+        if not stillShell(s) then goto nextShell end          -- (gone, or its address another object's now)
         pcall(function()
             local ow = s.o:GetOwner()
             if valid(ow) and nameOf(ow):find("Tani", 1, true) then mount = ow end
@@ -602,6 +606,7 @@ local function shells(now)
                 log("tanicorn: " .. k.key .. " " .. (ok and line or ("a shell, not read: " .. tostring(line))))
             end
         end
+        ::nextShell::
     end
 end
 
