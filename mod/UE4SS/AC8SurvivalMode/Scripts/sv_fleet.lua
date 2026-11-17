@@ -417,7 +417,7 @@ CFG.specials.fleet = {
                           geofon = { "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios", 0.7 },
                           hand = { "/Game/OnlineMode/Blueprint/IGC/CameraShake/BP_CamShake_HandShake_A", 0.6 } },   -- (Online Mode's cutscenes')
                 splash = { sound = "AKE_Environment_Splash_WaterPiller_Play", near_m = 2500, max = 12 },
-                title = { text = "INVINCIBLE FLEET", sub = "THE AEGIR FLEET HAS SURFACED", big = 1.5 },
+                title = { text = "INVINCIBLE FLEET", sub = "THE AEGIR FLEET HAS RESURFACED", big = 1.5 },
                 shots = { { t = 0.0, ship = "PicketA", from = { at = { -450, 320, 22 }, look = { 300, 0, 4 }, fov = 60 },
                                                     to = { at = { -200, 220, 16 }, look = { 200, 0, 6 }, fov = 55 } },
                           { t = 3.5, ship = "PicketA", from = { at = { -70, 120, 5 }, look = { 0, 0, 14 }, fov = 55 },
