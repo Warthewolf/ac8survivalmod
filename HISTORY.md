@@ -3945,3 +3945,26 @@ game. The work was split by file between agents; the builds ran in sequence in t
   sv_tactical.lua's new INS.floors (other parts' floors by name, the highest held); INS.tick now writes a floor back to 0 once
   it's off (before, a pass with no floor returned first and would have left the last one on). capture_test 68/68; in game run
   20261118_120809: 16/16, the floor on at the lock and off at the trap, a touchdown (seven landings of seven).
+
+## 0.74.194-0.74.195-coop2mp.287: everyone's zips with round 30 (2026-11-18, runtime 0.32.42)
+- feature/fleet-coop merged into dev (the user's yes: c62cce4); this release from branch tools/friends-0.74.194 off it.
+- Distant Thunder's round retired (the user: "The Distant Thunder Round needs to be cut as we're not going to be using it
+  anymore, so you can remove the test keys for it", "It was replaced by Invincible Fleet instead"): its round, its storm on a
+  joiner's copy, the storm test and its 8 test keys cut from sv_anomalies_dev.lua; its storm pieces stay for the fleet's
+  night storm; thunder_test rewritten; AGENTS.md and docs/re/THUNDER.md say so.
+- 0.74.194 (ZFA=1, no Tanacorn): AC8SurvivalMode_COOP2MP_0.74.194_Online_COOP_ZFA44.zip (47 MB, build 3ca072d72570...,
+  registered), smoke 5/5 in game. Superseded the same day by the user's call that everyone gets round 30: not handed out.
+- The user: "Everyone gets the invincible fleet level", "But only alyssa has the keys that activate it for everyone", "The
+  AC7 lines that you created go in also", "Make sure that the lines are the Option C we picked". Packaging:
+  FRIENDS=1 TANI=1 (tools/no_test_keys.py: staged as a tester's, sv_main.lua's test keys cut, testKey() binds nothing,
+  its Ctrl+F11 off); the crew voices and round 30's subtitles in every zip with THE TANACORN, only the style round 30 plays
+  (C); zip_leak_test covers it all. AGENTS.md's AC7 voice and Tanacorn rules updated.
+- 0.74.195 (TANI=1 ZFA=1, one build, two zips, the same version so they link in co-op):
+  - Alyssa: AC8SurvivalMode_COOP2MP_0.74.195_TESTER_Online_COOP_ZFA44_TANACORN.zip (108 MB, build 225e3df59415...),
+    test keys on; build/release/AC8SurvivalMode_0.74.195_TESTER_KEYS.txt lists them.
+  - Friends: AC8SurvivalMode_COOP2MP_0.74.195_Online_COOP_ZFA44_TANACORN.zip (108 MB, build fa0b19c07a54...), test keys
+    off; round 30 comes at a run's round 30.
+  - Both: her container, the fleet, the capture, round 30's subtitles, the 41 crew lines byte for byte the approved echoey
+    C take (none of A, B or the pre-echo C); no Distant Thunder round, no storm cloud-flash containers (as before).
+  - In game on their exact stages: friends' smoke 5/5; Alyssa's smoke 5/5 and capture 16/16 (a touchdown, 3 m off the
+    mark). Round 30 has still never been played by two real players.
