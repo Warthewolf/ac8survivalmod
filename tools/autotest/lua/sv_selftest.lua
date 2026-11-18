@@ -4187,10 +4187,10 @@ SUITES.fleetat = function()
                 local o2 = ship(2)
                 local l2 = o2 and ST.at(o2)
                 local d2 = l2 and math.sqrt((l2.X - l.X) ^ 2 + (l2.Y - l.Y) ^ 2) / 100
-                ST.info(string.format("fleetat: %02d +%d s: GEOFON %s m along (want ~%d), heading %.0f; a part %s m from its hull; ship 2 %s m from it",
+                ST.info(string.format("fleetat: %02d +%d s: GEOFON %s m along (want ~%.0f), heading %.0f; a part %s m from its hull; ship 2 %s m from it",
                     kk, t, m and string.format("%.0f", m) or "OFF the course", want, o:K2_GetActorRotation().Yaw,
                     pd and string.format("%.0f", pd) or "?", d2 and string.format("%.0f", d2) or "?"))
-                if t == 2 then ST.check(m ~= nil and math.abs(m - want) < 400, string.format("%02d: GEOFON at ~%d m along", kk, want), m) end
+                if t == 2 then ST.check(m ~= nil and math.abs(m - want) < 400, string.format("%02d: GEOFON at ~%.0f m along", kk, want), m) end
                 if t == 20 then
                     ST.check(m ~= nil and C.prev ~= nil and m > C.prev + 50, string.format("%02d: sailing on forward along its lane", kk),
                         string.format("%s -> %s", tostring(C.prev), tostring(m)))
