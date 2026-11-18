@@ -46,7 +46,6 @@ do                                    -- (the runtime's paths are Windows ones: 
     io.open = function(p, m) return rawOpen((tostring(p):gsub("\\", "/")), m) end
 end
 writeAll(WORK .. "/config/survival.default.ini", readAll(MOD .. "/config/survival.default.ini"))
-
 local clock = 1000
 os.clock = function() return clock end           -- luacheck: ignore
 math.randomseed(7)
@@ -108,6 +107,7 @@ function valid(o) return type(o) == "table" and not o.gone end
 function nameOf(o) return type(o) == "table" and (o.full or "?") or "?" end
 function addrOf(o) return type(o) == "table" and o.addr or nil end
 part("sv_config.lua")
+CFG.specials.escort.solo, CFG.specials.escort.attack.solo, CFG.specials.escort.waves.solo = nil, nil, nil   -- (the round's own numbers: solo_test.sh has its solo ones)
 math.randomseed(7)                                  -- (again: sv_config_ini.lua seeds from os.time() as it loads)
 part("sv_rows.lua"); part("sv_ai.lua"); part("sv_hud.lua"); part("sv_spawn.lua"); part("sv_rounds.lua")
 part("sv_flights.lua"); part("sv_shop.lua"); part("sv_allies.lua"); part("sv_tactical.lua")

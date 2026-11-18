@@ -253,7 +253,7 @@ local function openCore(P, why)
     local players = 1
     if COOP and type(COOP.players) == "function" then local ok, l = pcall(COOP.players); if ok and type(l) == "table" then players = math.max(1, #l) end end
     local h0 = hullHp(o)
-    local miss = n(c.core_missiles, 30) * (1 + n(c.core_per_player, 0.5) * (players - 1))
+    local miss = n(soloVal(c, "core_missiles"), 30) * (1 + n(c.core_per_player, 0.5) * (players - 1))   -- (solo: (2026-11-18) 20)
     local sized = "its row's health (your missile's damage unread)"
     if d and d > 0 and h0 then
         local want = math.floor(miss * d * 10 + 0.5)
@@ -480,7 +480,7 @@ local function shellLand(Sx, s)                          -- a salvo's rounds on 
         local at = { X = rw.X + math.cos(yaw) * a - math.sin(yaw) * b, Y = rw.Y + math.sin(yaw) * a + math.cos(yaw) * b, Z = n(c.ground_cm, 500) }
         for _, e in ipairs(c.impact or {}) do if fxHere(e[1], at, n(e[2], 1)) then ok = ok + 1 end end
     end
-    local dmg, said = math.floor(n(c.damage, 6)), ""
+    local dmg, said = math.floor(n(soloVal(c, "damage"), 6)), ""   -- (solo: (2026-11-18) 2)
     if not AF or AF.down or not AF.bomb then said = "the airfield is down: no damage"
     else
         AF.bomb = AF.bomb + dmg

@@ -631,6 +631,9 @@ CFG.specials = {
                -- her health x health_x once she's up (the B-1B's 130 is two missiles' worth); the escorts are scaled as
                -- the STORE's allied aircraft (CFG.allies.aircraft.scale)
                health_x = 4.0,
+               -- ((2026-11-18) the user: "the Escort Mission" needs "a nerf for solo rounds") solo: these over the table's
+               -- (sv_core.lua soloVal: while one player flies); attack.solo and waves.solo below too
+               solo = { health_x = 6.0 },
                -- (each escort: its unit, name key and record prefix <rec><Go|Orbit|Final|Roll|Taxi|Stop|...>, whose tail
                -- names its leg and slot flags, SV_EscLeg<Name> / SV_TaxiSlot<Name>; right_m / up_m: its start beside
                -- her, right_m to her right (negative: left) across her way to the approach fix and up_m above her, as
@@ -659,7 +662,7 @@ CFG.specials = {
                -- jammer's or a raid escort) up after_s, `share` of them (at most `max` at once) get each plane's
                -- EngagementOrderOverride onto her (Normal, TargetFirst), again every again_s, kept out of the squad
                -- director's and co-op's hunts; back on you once she's on the ground or lost
-               attack = { enabled = true, share = 0.6, max = 4, after_s = 4, again_s = 10 },
+               attack = { enabled = true, share = 0.6, max = 4, after_s = 4, again_s = 10, solo = { share = 0.4, max = 2 } },
                -- ((2026-11-09) the user: "we need to scale the enemies by players") in co-op the host's room gets more:
                -- attack.max, waves.min_n / max_n and waves.max_up x co-op's aircraft_per_player for each player past the
                -- first (COOP.more; max_up within [coop] max_up), as a round's aircraft are; false: as a solo run's
@@ -673,6 +676,7 @@ CFG.specials = {
                -- wave's nor one next to it (km out, its flights spread_deg apart, alt_m up); held while max_up enemy
                -- aircraft are up; max_waves 0: no limit. Each goes after her (attack)
                waves = { enabled = true, first_s = 20, every_s = 45, min_n = 4, max_n = 12, max_up = 24, max_waves = 0,
+                         solo = { every_s = 60, min_n = 2, max_n = 8, max_up = 14 },
                          km = { 12, 16 }, spread_deg = 12, alt_m = { 2500, 4000 } },
                -- the escorts on her attackers: every every_s each escort's planes onto an enemy near her (within km of her).
                -- records: from the first enemy within km of her on, each escort on its route also flies the build's

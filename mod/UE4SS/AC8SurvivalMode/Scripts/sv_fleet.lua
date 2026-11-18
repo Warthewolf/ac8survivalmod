@@ -120,7 +120,7 @@ CFG.specials.fleet = {
     -- waits for ships still up from before to go after RE_SV_IFFleetRemove (the Spaceport's CLEAR_S). course_yaw, runway_cm:
     -- the course in and the runway's centre (survival_events_fleet.py IF_YAW, IF_RUNWAY), for the lines
     formation = { per_step = 3, gap_s = 0.5, settle_s = 2, go_s = 15, moved_m = 50, every_s = 10, guns_s = 2, clear_s = 8,
-                  course_yaw = 45, runway_cm = { 1610476, -436143 }, hull_x = 1, hull_per_player = 0.25, geofon_x = 1.5 },   -- (hull_x: each hull's health x, +per player past 1; (2026-11-18) the user: "make it so the geofon would last 3 minutes": 89 s at x1 with 5 players, so x2 at 5)
+                  course_yaw = 45, runway_cm = { 1610476, -436143 }, hull_x = 1, hull_per_player = 0.25, geofon_x = 1.5, solo = { hull_x = 0.7 } },   -- (hull_x: each hull's health x, +per player past 1; (2026-11-18) the user: "make it so the geofon would last 3 minutes": 89 s at x1 with 5 players, so x2 at 5)
     -- ((0.74.140) WP8: every fleet ship scarred from its spawn (sv_fleet_round.lua scarsTick): its slots on dimmed copies of their
     -- own _DAM instances, per_tick components a tick; embers: their glow x this (a look only: never ranked against)
     scars = { enabled = true, per_tick = 1, embers = 0.05 },   -- ((0.74.152) 1: the game's own work, ~45 ms a part at worst (run 20261117_203608: the walks 0.0 ms, the sets 134 ms for 3))
@@ -128,7 +128,7 @@ CFG.specials.fleet = {
     -- shell_km of the runway a salvo every every_s (staggered), its muzzle flash, flight_s on its damage off the airfield and
     -- its rounds of AC8's explosions on the runway (spread_m along it at runway_yaw, across_m across); none while it's down,
     -- paused, in the STORE or in the surfacing. Tuned: ~10 ships in range take its 250 in ~3.5 min
-    shell = { enabled = true, shell_km = 20, every_s = 25, damage = 3, flight_s = 6, rounds = 3, spread_m = 600, across_m = 60,
+    shell = { enabled = true, shell_km = 20, every_s = 25, damage = 3, solo = { damage = 2 }, flight_s = 6, rounds = 3, spread_m = 600, across_m = 60,
               runway_yaw = -23, ground_cm = 500, kinds = { aegis = true, krov = true, gors = true, udal = true },
               muzzle = { "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_Maingun_Muzzle", 2 },
               impact = { { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 2.5 },
@@ -160,7 +160,7 @@ CFG.specials.fleet = {
     -- (SOC_Gun_01 at least raised_cm up in its mesh as drawn: stowed ~1567, up ~3454) or it's played again redeploys times,
     -- then left stowed and shielded with no charge; your missile's damage read size_tries times for its health
     railcannon = {
-        enabled = true, deploy_s = 3.4, charge_s = 30, every_s = 90, damage = 100, damage_of_max = true,
+        enabled = true, deploy_s = 3.4, charge_s = 30, every_s = 90, damage = 100, damage_of_max = true, solo = { damage = 60, every_s = 120 },
         missiles = 8, per_player = 0.5, raised_cm = 2500, redeploys = 1, size_tries = 5,
         speed_kms = 11.1, flight_min_s = 0.5, flight_lands = true,
         runway = { 1609574, -435747, 500, -23 }, spread_m = 600, across_m = 15, max_off_deg = 180,
@@ -361,7 +361,7 @@ CFG.specials.fleet = {
               -- ((0.74.156) her phases (sv_fleet_round.lua p2Fight): her railcannon at phase2_share of her parts down, her core
               -- open when it's down or at core_share: core_missiles of your missiles (+core_per_player), held at core_floor)
               phase2 = { enabled = true, rise_after_s = 0, release_s = 2.5, split_max_s = 9, rise_max_s = 45,
-                         phase2_share = 0.6, core_share = 0.95, core_missiles = 30, core_per_player = 0.5, core_floor = 0.02,
+                         phase2_share = 0.6, core_share = 0.95, core_missiles = 30, core_per_player = 0.5, core_floor = 0.02, solo = { core_missiles = 20 },
                          sink = { sink_s = 40, sink_m = 160, bow_deg = 12, roll_deg = 6, booms = 28, boom_every_s = 0.6,
                                   fx = { { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 3 },
                                          { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsFireL001", 3 },
@@ -1651,7 +1651,7 @@ local function settle(F, sh)
     -- waits for the host's kill)
     if sh.hull and type(scaleHealth) == "function" and not (COOP and COOP.client and COOP.client()) then
         local np = (COOP and COOP.open and COOP.players) and math.max(1, #COOP.players()) or 1
-        local x = num(fm().hull_x, 1) * (1 + num(fm().hull_per_player, 0) * (np - 1))
+        local x = num(soloVal(fm(), "hull_x"), 1) * (1 + num(fm().hull_per_player, 0) * (np - 1))   -- (solo: (2026-11-18) x0.7)
         if sh == (F.ships or {})[1] then x = x * num(fm().geofon_x, 1) end   -- ((2026-11-18) the user: GEOFON "the hardest to destroy", "3 times")
         local h0, h1 = scaleHealth(sh.hull.obj, x)
         if h1 then log(string.format("fleet: %s's hull health x%.2f (%d players): %d -> %d", label(sh), x, np, h0, h1)) end
