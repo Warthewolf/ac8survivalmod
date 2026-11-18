@@ -340,5 +340,14 @@ def build_fleet(g, flag, stock_ep):
         g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
         for s_ in fleet:                                 # ((0.74.189) the object form: the unit form moved nothing)
             g.execute(t_ptel, ev, {0: s_['obj'], 2: str(ii)})
+    # ((0.74.191) a probe: by point the ships still sail back to their old next point (fleetat of 0.74.190). Each variant on
+    # GEOFON: to point 2, then its lane again with one of the path record's unnamed args changed (arg 7 ObjectSetting ->
+    # NotSnap / Snap; arg 12 or arg 14 0 -> 2): RE_SV_IFVar<A-D>
+    geo = fleet[0]
+    for tag, ch in (('A', {7: 'NotSnap'}), ('B', {7: 'Snap'}), ('C', {12: '2'}), ('D', {14: '2'})):
+        ev = f'RE_SV_IFVar{tag}'
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_ptel, ev, {0: geo['obj'], 2: '2'})
+        g.execute(t_spath, ev, {**{0: geo['obj'], 2: geo['path'], 4: IF_SPEED}, **ch}, delay=0.5)
     print(f'  invincible fleet: {len(fleet)} ships (SV_IFUp<Key> / RE_SV_IFGo<Key>: each on its lane at {IF_SPEED} km/h, '
           f'Normal; {parts // 2} parts ordered Normal / {IF_PART_PRIORITY}), RE_SV_IFFleetRemove')
