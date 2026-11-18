@@ -200,13 +200,15 @@ local function shielded(on)                               -- (the user's rule: i
         pcall(function() pawn:SetIsInvincible(true) end)
         L.limits = L.limits or {}
         L.flags = L.flags or {}
+        -- ((0.74.186) written every tick, the first value kept to give back: until now a field once recorded was never
+        -- written again, so the game putting it back went unanswered (capture_test.lua))
         for f, v in pairs(UNTARGETED) do
             local okR, was = pcall(function() return pawn[f] end)
-            if okR and L.flags[f] == nil and pcall(function() pawn[f] = v end) then L.flags[f] = was end
+            if okR and was ~= v and pcall(function() pawn[f] = v end) and L.flags[f] == nil then L.flags[f] = was end
         end
         for _, f in ipairs(ATTACKERS) do
             local okR, v = pcall(function() return pawn[f] end)
-            if okR and type(v) == "number" and L.limits[f] == nil and pcall(function() pawn[f] = 0 end) then L.limits[f] = v end
+            if okR and type(v) == "number" and v ~= 0 and pcall(function() pawn[f] = 0 end) and L.limits[f] == nil then L.limits[f] = v end
         end
         if ATK and ATK.hold then ATK.hold("capture", true) end   -- (sv_spweapons.lua's limits held off meanwhile)
         return "invincible, no enemy targets you"
@@ -409,6 +411,7 @@ local function hostEnd(why, broken)
     local k = H.cur
     if not k then return end
     H.cur = nil
+    H.nextAt = math.max(H.nextAt or 0, os.clock() + n(cc().every_s, 180) / 2)   -- ((0.74.186) a rest after any end)
     hostSend("capoff", tostring(k.slot), tostring(k.seq), why)
     if k.slot == (COOP and COOP.slot or 0) or k.solo then IFCAP.onHost({ "if", "capoff", tostring(k.slot), tostring(k.seq), why }) end
     if broken then hudCallout(tx().broken or "CAPTURE BROKEN", why:upper()) end
@@ -434,10 +437,17 @@ local function hostTick(now)
     local sh, mast = raven()
     if H.cur then
         local k = H.cur
+        -- ((0.74.186) the captive gone from the game (left, dropped): ended. The captive's own game may end a capture the host
+        -- never hears of (GEOFON gone there, its give_up_s): a takeover not over give_up_s + 60 s on is ended too, or the host
+        -- held it "taken" for good and never picked again)
+        local here = k.solo
+        for _, p in ipairs(COOP and COOP.players and COOP.players() or {}) do if p.slot == k.slot then here = true end end
+        if not here then hostEnd("the player left"); return end
         if k.state == "taken" then                         -- (over once its captive is DOWN, or the solo test's capture done)
             local over = k.solo and L == nil
             for _, p in ipairs(COOP and COOP.players and COOP.players() or {}) do if p.slot == k.slot and p.down then over = true end end
             if over then H.cur = nil; clog(string.format("seq %d: slot %d captured: over", k.seq, k.slot)); return end
+            if now - (k.takenAt or now) > n(c.give_up_s, 240) + 60 then hostEnd("never brought down: given up"); return end
         end
         if not g then hostEnd("GEOFON sunk", true); return end
         if k.state == "lock" then
@@ -455,7 +465,7 @@ local function hostTick(now)
                 local ra = sh and ravenAt(sh)
                 local d = (at and ra) and math.sqrt((at.X - ra.X) ^ 2 + (at.Y - ra.Y) ^ 2) / 100000 or 0
                 if d > n(k.escape, n(c.escape_km, 12)) then hostEnd(string.format("%.1f km clear of RAVEN", d), true); return end
-                k.state = "taken"
+                k.state, k.takenAt = "taken", now
                 hostSend("capgo", tostring(k.slot), tostring(k.seq))
                 if k.slot == (COOP and COOP.slot or 0) or k.solo then IFCAP.onHost({ "if", "capgo", tostring(k.slot), tostring(k.seq) }) end
                 if not k.solo then hudCallout(string.format(tx().taken_other or "%s IS BEING TAKEN TO GEOFON", nameOf_(k.slot)), "") end
@@ -528,6 +538,8 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet capture", fn = function(now)
 end }
 if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["fleet capture"] = function()                 -- (the level's plane went with it)
+        -- ((0.74.186) the takeover off too: the runtime's capture would wait for a plane that's gone)
+        if L and (L.state == "fly" or L.state == "final") and type(SV_Capture) == "function" then pcall(SV_Capture, 0) end
         L, H.cur, H.nextAt = nil, nil, nil
         if ATK and ATK.hold then ATK.hold("capture", false) end
     end
