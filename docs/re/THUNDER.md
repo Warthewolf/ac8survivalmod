@@ -1,5 +1,7 @@
 # IFF FATAL ERROR / DI..ANT TH..D..R: the lightning Anomaly, and the storm test (0.74.0, test builds only)
 
+**Retired, 2026-11-18.** The user: "The Distant Thunder Round needs to be cut as we're not going to be using it anymore, so you can remove the test keys for it", "It was replaced by Invincible Fleet instead". Its round (the A-10, its special kind, its storm on it and on a joiner's copy), the storm test and its 8 test keys are gone from Scripts/sv_anomalies_dev.lua. Its storm pieces stay for INVINCIBLE FLEET's night storm (THUNDER.layoutSet, camFade, post, cloudReady, cloudOff, cloudFlash, cloudTick, bolt, boltWarm, boltHide) with its tick; the build-up, the storm volumes and the strikes have no way in any more. The rest of this page is the Anomaly as it was.
+
 The user, 2026-11-06: "another Anomaly, one that uses Lightning Against you", "The Aircraft is an A-10 and the name of the
 Anomaly is IFF FATAL ERROR / DI..ANT TH..D..R", "Strikes should only black out and disorient you", "Make it so that it can
 only be spawned with the test key".

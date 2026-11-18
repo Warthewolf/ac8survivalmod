@@ -95,6 +95,8 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   package_release.sh` on a TANI=1 build keeps her container, the Tanicorn world data, sv_tanicorn / sv_fleet whole and the
   DEV ONLY blocks (the rise director sv_cine still cut), only when the staged container holds every blueprint the world
   data names; the zip is named ..._TANACORN. TANI=1 is refused without TESTER=1: never in a friends' or Nexus zip.
+- DISTANT THUNDER's round is retired (user, 2026-11-18: "It was replaced by Invincible Fleet instead"): its round and test
+  keys are cut; only its storm pieces stay, for the fleet's night storm (docs/re/THUNDER.md).
 - Nothing of DISTANT THUNDER (the lightning Anomaly, docs/re/THUNDER.md) or THE TANACORN (and her INVINCIBLE FLEET) goes
   into a release build, friends' or Nexus (user, 2026-11-14: "Anything that has to do with Distant Thunder or Tanacorn
   does not go into the release build"). Their Lua stays in TEST ONLY / DEV ONLY blocks or test-only pieces, their assets
