@@ -3992,3 +3992,15 @@ game. The work was split by file between agents; the builds ran in sequence in t
   strikes every 0.4-1.0 s (was 0.3-0.8), the fleet's night exposure bias 0.6 -> 0.8 (cressendo's report: the flashes, night
   disorienting). Zips: TESTER d7135278bd11..., friends 326f9a37d86b... (registered), contents checked. Not run in game.
   Open: no hit feedback on the TANACORN's core (cressendo).
+
+## 0.74.199 (-coop2mp.291, runtime 0.32.42; branch tools/friends-0.74.194, 2026-11-18)
+A solo nerf (the user: "the Invincible Fleet needs a nerf for solo rounds and so does the Escort Mission"; she picked
+Medium for both). sv_core.lua soloVal: a config table's `solo` values while one player flies (solo, a co-op room of one),
+read where used (a joiner mid-round brings co-op's back). Co-op unchanged.
+- Round 30 solo: hulls x0.7 (GEOFON x1.05), shelling 2 a salvo (3), the railcannon 60 every 120 s (100 every 90), THE
+  TANACORN's core 20 missiles (30).
+- THE ESCORT solo: CHARLENE's health x6 (x4), 40 % of the flights after her, 2 at most (60 %, 4), waves of 2-8 every 60 s
+  (4-12, 45 s), 14 up at most (24).
+- tools/checks/solo_test.sh (new); escort_test / tani_rail_test test the round's own numbers.
+Zips: ..._0.74.199_TESTER_Online_COOP_ZFA44_TANACORN.zip (Alyssa's, keys) and ..._0.74.199_Online_COOP_ZFA44_TANACORN.zip
+(friends', no keys), both registered. Not run in game.
