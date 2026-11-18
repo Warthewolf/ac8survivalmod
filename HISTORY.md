@@ -3969,3 +3969,16 @@ game. The work was split by file between agents; the builds ran in sequence in t
   - In game on their exact stages: friends' smoke 5/5; Alyssa's smoke 5/5 and capture 16/16 (a touchdown, 3 m off the
     mark). Round 30 has still never been played by two real players.
 - 0.74.195 INSTALLED 2026-11-18 (the user: "install it now please", to match her friends), the TESTER zip's stage over 0.74.159 (backup build/backup/install_before_0.74.195); 150 files verified, her survival.ini and the launcher's enabled.txt kept. 0.74.159's StormFx / StormBurst containers stay in her install (0.74.195 doesn't ship them), so her round 25-30 storm keeps its cloud bursts.
+- 0.74.196-0.74.197-coop2mp.289 (2026-11-18): the friends' first co-op sessions on 0.74.195.
+  - 0.74.196: the fleet storm's cloud bursts (StormFx, StormBurst) in every zip with THE TANACORN (the user's round 27: "the
+    cloud burst lighting mustn't be working"); burstwatch 6/6 and smoke 5/5 on its stages. Never handed out.
+  - 0.74.197: + the Tanacorn's shell probe off unless TANI.shell_probe (NewYorkFentWarrior's host crashed in round 27, reading
+    0xffffffffffffffff, 6 s after the probe's 12th stock flak shell, the allied Aegis they bought firing its Mk 45); + a
+    joiner's airfield repair made by the host (a joiner's log: REPAIR AIRFIELD bought 4 times in 3 s, each put back by the
+    host's "af"). Both zips (TESTER: build 18efd68e039d..., friends: e46005dd2abd..., registered) checked: storm containers,
+    the 41 C voices, keys as meant, the probe off, the repair asked of the host. Not run in game (the user was playing).
+  - The user's hot join (her 13:57, the host's 22:27): copies of the host's 11 flights spawned but none bound to its ids; the
+    host's log: her link scored 10408 against the others' 49-345, lost and back 6 times in 2 minutes, the whole picture sent
+    7 s before a drop. cressendo's game bound every copy all session. Her game stalled 10 s+ and used 19.7 GB at the level's
+    load; her crash at 14:08 (0.2 s after the fleet storm's layout swap, no crash report) unexplained. Proposed: the binds sent
+    again at each link back.
