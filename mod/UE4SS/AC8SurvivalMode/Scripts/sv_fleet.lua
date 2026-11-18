@@ -1650,7 +1650,8 @@ local function settle(F, sh)
     -- 15 in 6.5 min, GEOFON in 89 s. The host's hulls x hull_x (+hull_per_player a player past the first); a joiner's copy
     -- waits for the host's kill)
     if sh.hull and type(scaleHealth) == "function" and not (COOP and COOP.client and COOP.client()) then
-        local np = (COOP and COOP.open and COOP.players) and math.max(1, #COOP.players()) or 1
+        local okP, l = pcall(function() return COOP and COOP.open and COOP.players() end)
+        local np = (okP and type(l) == "table") and math.max(1, #l) or 1
         local x = num(soloVal(fm(), "hull_x"), 1) * (1 + num(fm().hull_per_player, 0) * (np - 1))   -- (solo: (2026-11-18) x0.7)
         if sh == (F.ships or {})[1] then x = x * num(fm().geofon_x, 1) end   -- ((2026-11-18) the user: GEOFON "the hardest to destroy", "3 times")
         local h0, h1 = scaleHealth(sh.hull.obj, x)

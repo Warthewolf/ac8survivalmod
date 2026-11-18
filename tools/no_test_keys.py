@@ -12,6 +12,8 @@ import re
 import sys
 
 BLOCK = re.compile(r'[ \t]*-- TEST ONLY BEGIN[^\n]*\n.*?-- TEST ONLY END[^\n]*\n', re.S)
+# (the leftover check below: DEV ONLY blocks too, kept in a zip with THE TANACORN)
+ANY_BLOCK = re.compile(r'[ \t]*-- (TEST|DEV) ONLY BEGIN[^\n]*\n.*?-- \1 ONLY END[^\n]*\n', re.S)
 KEYS_ANCHOR = 'local TEST_SPECIALS = {'
 TESTKEY = 'function testKey(name, who, fn)\n'
 TESTKEY_OFF = TESTKEY + '    do return false end                                   -- (no test keys in this zip: tools/no_test_keys.py)\n'
@@ -52,7 +54,7 @@ def main(mod):
         t = read(os.path.join(scripts, name))
         if name == 'sv_core.lua':                         # (its two: switched off by the exact replacements above)
             continue
-        for m in BLOCK.finditer(t):
+        for m in ANY_BLOCK.finditer(t):
             b = m.group(0)
             if re.search(r'pcall\(RegisterKeyBind|RegisterKeyBind\(', b):
                 bad.append(f'{name}:{t.count(chr(10), 0, m.start()) + 1}: a test-only block still binds a key')

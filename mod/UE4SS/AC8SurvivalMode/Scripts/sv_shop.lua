@@ -660,12 +660,13 @@ function shopBuildFor(slot, name, price, kind, asked)
         return ok, msg
     end
     if it.repair and not kind and asked then              -- ((2026-11-18) a joiner's airfield repair: made here, for everyone
-        local o = offer(name)
-        if not o.price then return false, o.why or "NOT AVAILABLE RIGHT NOW." end
-        if (tonumber(price) or 0) < o.price then
+        -- (the airfield's own price and state: offer() would resolve the combined row by this game's own aircraft)
+        if not AF.hp or AF.down then return false, "THE AIRFIELD IS DOWN." end
+        local roomPrice = shopPrice(name)
+        if (tonumber(price) or 0) < roomPrice then
             log(string.format("shop: player %s's %s at %d refused: the room's price is %d", slot and tostring(slot + 1) or "?", name,
-                tonumber(price) or 0, o.price))
-            return false, string.format("THE PRICE IS NOW %d", o.price)
+                tonumber(price) or 0, roomPrice))
+            return false, string.format("THE PRICE IS NOW %d", roomPrice)
         end
         local top = AF.max or CFG.airfield.hp
         if (AF.hp or 0) >= top then return false, "THE AIRFIELD IS AT FULL HEALTH" end
@@ -819,7 +820,7 @@ function shopBuy(name)
         RUN.defences.built = RUN.defences.built + 1
         RUN.defences.bought[o.kind] = (RUN.defences.bought[o.kind] or 0) + 1
         return done(string.format("%s BUILT for %d (%s).", o.def.label, price, o.unit))
-    elseif COOP and COOP.client and COOP.client() and it.repair and not o.unit then
+    elseif COOP and COOP.client and COOP.client() and it.repair and o.role == "airfield" and not o.unit then
         -- ((2026-11-18) the user: "Airbase Repair is apparently not working": a joiner's repair was made in its own game only,
         -- and the host's airfield ("af", every change) put it back at once, the zollars gone. The airfield is the host's: the
         -- host repairs it (shopBuildFor), its "af" brings it to every game; paid now, refunded on a refusal or no answer)

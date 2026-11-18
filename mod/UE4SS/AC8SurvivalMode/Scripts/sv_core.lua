@@ -1369,6 +1369,11 @@ function soloVal(t, key)
         if COOP and COOP.open and type(COOP.players) == "function" then
             local ok, l = pcall(COOP.players)
             if ok and type(l) == "table" then p = #l end
+            -- (COOP.players leaves your own plane out while it isn't there (down, respawning): the linked peers count too)
+            if type(COOP.linked) == "function" then
+                local okL, nL = pcall(COOP.linked)
+                if okL and type(nL) == "number" then p = math.max(p, 1 + nL) end
+            end
         end
         if p <= 1 then return s[key] end
     end

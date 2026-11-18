@@ -568,7 +568,7 @@ end
 -- (0.74.61) each of our shells against the mount that made it (its owner; 0.74.55-0.74.60's the first T5 found), the first 12
 -- of each mount type a spawn: `tanicorn: <T5|T16|CIWS|LASER> shell N: ...`
 local function shells(now)
-    if not TANI.shell_probe then NEWSHELL = {}; return end
+    if not TANI.shell_probe then return end                -- (off: the hooks keep nothing, NEWSHELL stays empty)
     if #NEWSHELL == 0 then return end
     local list = NEWSHELL
     NEWSHELL = {}
@@ -1570,7 +1570,7 @@ local function sinkTick(W, now)
             how = how .. "; off the HUD, the radar and lock-on here, hidden"
         end
         log(string.format("tanicorn: sink over at +%.0f s: %d of %d explosions came up; her hull %s; hidden", now - S.t0, S.ok, S.of,
-            okD and ("down (" .. tostring(how) .. ")") or "NOT finished off"))
+            okD and ("down (" .. tostring(how) .. ")") or (W.joiner and tostring(how)) or "NOT finished off"))
     end
 end
 function TANI.liveSinking() return LV ~= nil and LV.sink ~= nil and not LV.sink.done end
