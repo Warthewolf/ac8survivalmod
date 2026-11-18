@@ -249,6 +249,7 @@ local function lockHere(seq, solo)
     L = { seq = seq, state = "lock", at = os.clock(), solo = solo }
     hudCallout(tx().lock or "CAPTURE LOCK", tx().lock_sub or "")
     L.static = hudStatic(true, n(cc().lock_s, 10) + 1)
+    clog(string.format("seq %d: the lock's HUD static %s", seq, L.static and "on" or "NOT on (no HUD)"))
     clog(string.format("seq %s: CAPTURE LOCK on you (%s s)", tostring(seq), tostring(n(cc().lock_s, 10))))
 end
 local function takeHere(seq)
@@ -443,7 +444,9 @@ local function hostTick(now)
             if not mast then hostEnd("RAVEN's EW mast destroyed", true); return end
             if now >= (k.pingAt or 0) and type(SV_Event) == "function" then   -- (RAVEN on everyone's minimap: forwarded)
                 k.pingAt = now + 3
-                pcall(SV_Event, "RE_SV_IFRavenPing")
+                local okP, r = pcall(SV_Event, "RE_SV_IFRavenPing")
+                k.pings = (k.pings or 0) + 1
+                if k.pings == 1 then clog(string.format("seq %d: RAVEN pinged on the minimap (RE_SV_IFRavenPing: %s)", k.seq, okP and tostring(r) or ("error " .. tostring(r)))) end
             end
             if now >= k.until_ then
                 local at = nil
