@@ -87,6 +87,8 @@ D, RUN = { round = 30 }, {}
 CFG = { specials = { fleet = { ships = { { key = "Geofon", name = "GEOFON" }, { key = "Raven", name = "RAVEN" } } } } }
 CFG_DEFAULTS = { specials = { fleet = { ships = CFG.specials.fleet.ships } } }
 TEST_TICKS, LEVEL_DROPS = {}, {}
+INS = { floors = {}, tick = function() end }              -- (sv_tactical.lua's: the floors it holds)
+local function floorNow() local f = INS.floors.capture; return f and f() or 0 end
 local PICK = 1
 math.random = function(n) return math.min(PICK, n) end
 
@@ -175,10 +177,12 @@ w = untilSent("^cap|", C.every_s + 5)
 check(w ~= nil and w:find("^cap|0|"), "every_s on: the next pick isn't slot 1 again (per_player_s): the host", w)
 check(IFCAP.state() == "lock" and HUDO.on and HUDO.secs == C.lock_s + 1 and said("^CAPTURE LOCK|"),
     "locked here: CAPTURE LOCK, the HUD's static for the lock", tostring(IFCAP.state()) .. " " .. tostring(HUDO.on))
+check(floorNow() == C.floor_hp, "the lock: a floor of floor_hp under your health (\"They can't die until they land\")", floorNow())
 MAST.HealthInternal = 0
 run(1, 0.25)
 check(sentWord("^capoff|0|") and IFCAP.state() == nil and not HUDO.on and said("CAPTURE BROKEN"),
     "RAVEN's EW mast destroyed: broken, the static off, nothing taken", sentWord("^capoff"))
+check(floorNow() == 0, "broken: the floor off", floorNow())
 check(shieldOff(), "never shielded (the lock only)")
 -- the mast down: said once, no more picks
 sent = {}
@@ -209,6 +213,7 @@ check(IFCAP.state() == "lock", "the host locked")
 run(C.lock_s, 0.25)
 check(sentWord("^capgo|0|") and IFCAP.state() == "fly" and not HUDO.on, "the lock out, in reach: \"capgo\", taken, the static off")
 check(shieldOn(), "invincible, untargeted (Faction 0), the attack limits 0, sv_spweapons' held")
+check(floorNow() == C.floor_hp, "the floor held while RAVEN flies you", floorNow())
 local last = caps[#caps]
 local gk = C.gate_km * 100000
 local dk = { X = C.deck.fwd_m * 100, Y = 0, Z = C.deck.up_m * 100 }
@@ -239,6 +244,7 @@ run(1, 0.25)
 check(IFCAP.state() == nil and #downs == 1 and logged("trapped on GEOFON's deck %(landed"), "held land_hold_s: trapped, DOWN (captured)")
 check(caps[#caps].addr == 0 and not CAP_ON and lands[#lands].on == 0 and said("^CAPTURED|"), "the takeover off, the landing off, CAPTURED")
 check(not PAWN.inv and PAWN.Faction == 1 and PAWN.MaxPursuitAttackers == 12 and holds.capture == nil, "the shield given back (DOWN's own from there)")
+check(floorNow() == 0, "trapped: the floor off (DOWN's from there)", floorNow())
 PLAYERS[1].down = true
 run(1, 0.25)
 check(logged("captured: over") ~= nil, "the host: slot 0 down, the capture over")
@@ -265,7 +271,7 @@ end
 check(takenHere(), "taken")
 SHIPS[1].sunk = true
 run(0.5, 0.25)
-check(IFCAP.state() == nil and caps[#caps].addr == 0 and shieldOff() and #downs == 0, "GEOFON sunk mid-flight: free, never DOWN")
+check(IFCAP.state() == nil and caps[#caps].addr == 0 and shieldOff() and #downs == 0 and floorNow() == 0, "GEOFON sunk mid-flight: free, never DOWN, the floor off")
 check(sentWord("^capoff|0|") ~= nil, "the host's capoff")
 check(takenHere(), "taken again")
 D = nil

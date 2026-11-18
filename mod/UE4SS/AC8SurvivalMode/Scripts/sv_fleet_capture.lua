@@ -34,6 +34,7 @@ if CFG.specials and CFG.specials.fleet and not CFG.specials.fleet.capture then
         -- brake to landing speed (runtime SV_CapLand), its line down to the deck itself; on the deck (the game's IsOnGround,
         -- or within land_m of the deck's height over its mark) held land_hold_s, then the explosion and DOWN. Past the deck
         -- without touching it: the old end over it. land = false: the old approach, never under floor_m)
+        floor_hp = 1,                                     -- ((2026-11-18) the lock's and the takeover's floor under your health
         land = true, land_m = 4, land_hold_s = 2, clear_m = 0, press_m = 20,   -- ((0.74.180) clear 15 -> 3, press 5 -> 10: 0.74.179 tracked within ~8 m but crossed the deck 20 m up: the deck is ~4 s long at landing speed; (0.74.183) clear 0, press 20, land_m 4: 0.74.181-182 touched once in three)
         deck = { fwd_m = -40, right_m = 0, up_m = 20 },     -- (the deck's touchdown spot from GEOFON's root, metres)
         -- ((0.74.177) the user: "Why not just make the deck have collision??": GEOFON's hull stops no trace (0.74.176's
@@ -246,9 +247,20 @@ hudStatic = function(on, secs)
     end
     return pcall(function() h:EndHUDDistortionLightning() end)
 end
+-- ((2026-11-18) the user: "They can't die until they land on the geofon": from the lock's start (0.74.192's autotest plane was
+-- shelled to death during its lock, before the takeover's shield) a floor of floor_hp under its health, through
+-- sv_tactical.lua's INS.floors (read every pass, written back to 0 once it's off). Hits still hurt in the lock
+local function capFloor()
+    if L and (L.state == "lock" or L.state == "fly" or L.state == "final") then return n(cc().floor_hp, 1) end
+    return 0
+end
+local function floorHook() if INS and INS.floors then INS.floors.capture = capFloor end end
+floorHook()
 local function lockHere(seq, solo)
     if L then giveBack("a new lock") end
     L = { seq = seq, state = "lock", at = os.clock(), solo = solo }
+    floorHook()
+    if INS and INS.tick then pcall(INS.tick, os.clock()) end   -- (the floor at once, not at the next pass)
     hudCallout(tx().lock or "CAPTURE LOCK", tx().lock_sub or "")
     L.static = hudStatic(true, n(cc().lock_s, 10) + 1)
     clog(string.format("seq %s: the lock's HUD static %s", tostring(seq), L.static and "on" or "NOT on (no HUD)"))

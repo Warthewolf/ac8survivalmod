@@ -543,11 +543,17 @@ end
 -- STORE's repair, and its health written), invulnerable for safe_s, and the SECOND CHANCE is used up.
 -- Co-op's revives (sv_down.lua, CFG.coop.revive) hold a floor of their own under it, always while they're on: the higher
 -- of the two is set, and theirs is read back and set again every pass (the game puts MinHealth back on a restore).
-INS = {}
+-- ((2026-11-18) INS.floors: other parts' floors by name, each a function giving HP (0: none); the highest held. A floor that
+-- goes back to 0 is written back to 0 once (before, a pass with no floor returned first and left the last one on)
+INS = { floors = {} }
 function INS.tick(now)
     local c = CFG.insurance
     local fl = (DOWN and DOWN.floor) and DOWN.floor() or 0        -- (co-op's floor_hp, or 0: solo as ever)
-    if not (D and (c.enabled or fl > 0)) then return end
+    for _, f in pairs(INS.floors) do
+        local okF, v = pcall(f)
+        if okF and type(v) == "number" and v > fl then fl = v end
+    end
+    if not (D and (c.enabled or fl > 0 or (INS.min or 0) > 0)) then return end
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not valid(pawn) then return end
     if INS.safeUntil and now >= INS.safeUntil then
@@ -580,7 +586,7 @@ function INS.tick(now)
             end
         else
             log(string.format("insurance: your aircraft's floor %.1f HP (%s)%s", want, insured and "SECOND CHANCE held"
-                or (fl > 0 and "co-op's revives" or "none"), ok and "" or " (NOT set)"))
+                or (fl > 0 and "co-op's revives or another part's" or "none"), ok and "" or " (NOT set)"))
         end
         INS.min, INS.pawn = want, addrOf(pawn)
     end
