@@ -3172,3 +3172,776 @@ game. The work was split by file between agents; the builds ran in sequence in t
   AC8SurvivalMode_COOP2MP_0.74.70_Online_COOP_ZFA44.zip (46.9 MB, 102 files; SurvivalMode_P, Valka, ZFA44, Laser7
   containers), build hash 0aea0a694202..., registered; zip_leak_test passed (no Tanicorn, DEV ONLY, TEST ONLY or
   Distant Thunder). Not installed. Not yet run in game.
+
+## 0.74.72-coop2mp.164: THE TANACORN's railguns line, tested in game by the autotest (2026-11-16, runtime 0.32.36)
+- feature/tanacorn-railguns (stage 4: the sub-railguns and the bow railcannon, f9f0d70 and before) with dev merged
+  (0.74.69-0.74.70: PRs #5-#7, WEAPON BAYS, the STORE crash fix); 0.74.68 was never built, 0.74.71 is the soak build:
+  this one is 0.74.72. `TANI=1 ZFA=1 sh tools/build_all.sh` (tani_container 3f59134b2690...: all 17 classes, the hull
+  importing its 16 parts; the leaderboard address in), `TANI=1 VALKA=1 ZFA=1 sh tools/package_dev.sh 0.74.72` ->
+  build/release/stage_dev_0.74.72, build hash 5d276bcd63e1..., registered. Not installed for play.
+- Run unattended by tools/autotest (branch tools/ac8-autotest; the user's yes of 2026-11-16) on her PC: smoke 5/5, the
+  tanacorn suite 28/35 (docs/re/TANICORN.md "The first in-game test"): her armour and no death chain WORK (a T5 and a VLS
+  block finished off, nothing else hurt, the hull 50000 throughout: the tester's "everything immediately dies" fixed); the
+  railcannon's whole cycle WORKS (Deploy drawn +19.0 m, charge with the RAILGUN WARNING, the shot, the airfield 250 -> 150,
+  shot down mid-charge: no impact, TANACORN RAILCANNON DOWN); the railguns DON'T: the Lua-written lift reads back up but
+  SOC_Gun_01 stays stowed as drawn, so neither is ordered (route (i) fails; route (iv) next). The fleet suite: see below.
+- Fixed after the run (Lua, for the next build): the railcannon's charge RTPC (AC8's AkGameplayStatics.SetRTPCValue takes
+  no RTPC name: the name now goes to her AkComponent, UAkGameObject::SetRTPCValue), the radio line's log says why it wasn't
+  said; tani_rail_test's stubs to AC8's signatures (all passed, the release copy too).
+- INVINCIBLE FLEET's first in-game run (WP7, Ctrl+N, the autotest's fleet suite on 0.74.72: 12/12): the 13 named ships'
+  rows in at the main menu; all 15 ships up with their 48 parts at the course start, GEOFON 30.5 km north-west of the
+  runway (bearing 315); every box named (GEOFON / CARRIER, RAVEN / AEGIS, BELUGA / BATTLECRUISER, KOLGA / DESTROYER, the
+  frigates; the pickets their class's); every ship under way at 45 km/h heading 135, the rings at 0.6 / 1.5 / 3.5 / 5 km
+  from GEOFON and every ship within 29 m of its spot after a minute; the artillery firing (vessel guns, BELUGA's howitzer)
+  (at the runway's target points, BP_GR000_dummy_CP, as the weapons lines say: corrected 2026-11-16; only the Aegis's
+  Mk 41 VLS fired at the player); Ctrl+N again took the fleet off (15 units, RE_SV_IFFleetRemove 1, 15 of 63 objects finished
+  off) with no crash (WP7's risk: the take-off's destroy on objects just killed). Run folder
+  build/autotest/runs/20261116_195346_claude.
+
+## 0.74.73-coop2mp.165: the railguns' pose ticked always (a test), the RTPC through her AkComponent (2026-11-16, runtime 0.32.36)
+- Lua only on 0.74.72 (the Tanicorn container unchanged, 3f59134b2690...): the railcannon's charge RTPC on her AkComponent
+  by name, the radio line's why, and (a test of a guess) the railguns' TurretPoseableMesh set to tick its pose always
+  (TANI.railgun.tick_always: VisibilityBasedAnimTickOption 0, bEnableUpdateRateOptimizations false) before the deploy's
+  writes. `TANI=1 ZFA=1 build_all.sh`, `TANI=1 VALKA=1 ZFA=1 package_dev.sh 0.74.73` -> stage_dev_0.74.73 (b364f448bfd0...,
+  registered). Not installed for play.
+- The autotest's tanacorn suite on it: 29/31 (run 20261116_200051_claude). New: a 500-point ModifyHealth on her hull with
+  its damage event, her invincibility on: 50000 -> 50000. The RTPC now `set` and stepping 50 -> 100 (fixed). The radio:
+  `not said (between rounds)` (the tells hold between rounds; the test's round 1 is an hour away: not a bug). The
+  railguns: still not drawn raised with the pose ticked always (read back 0): the guess is out, Lua's bone writes on that
+  mesh don't reach its drawn pose. The user's choice (2026-11-16): split the mesh (route (iv)): the hatches and lift their
+  own animated mesh (the railcannon's way, which draws), the gun riding on it.
+
+## 0.74.74-coop2mp.166: the railguns' route (iv) (2026-11-16, runtime 0.32.36; the Tanicorn container re-cooked)
+- The user's pick after 0.74.73 ("Split the mesh"): each sub-railgun's lift and hatches their own animated mesh, the house
+  riding its SOC_Lift (docs/re/TANICORN.md "The railguns' route (iv)"): export_tanacorn.py (deploying()'s skip / extra,
+  riding()), spec.py railgun_mount() and the drawn hull, check_export / ue_import / build.sh's kinds, sv_tanicorn_rail.lua
+  (LiftMesh's Deploy played, the muzzle read over the part), tani_rail_test rewritten (all passed). tools/tanicorn/build.sh:
+  CHECK ALL OK (20 parts), the cook clean, container 03d0e1d72cd6... (17 classes); TANI=1 build_all, stage_dev_0.74.74
+  (168e0046f163..., registered).
+- The autotest on it (run 20261116_202907_claude): 34/36. Both railguns deployed (`SOC_Gun_01 z 404 cm over the part (up),
+  its Deploy at 2.17 s`), ordered, and FIRED the Alicorn's round (LiveEMLBullet_BattleShip at ~11,060 m/s from the raised
+  muzzle). The two failures: their barrels never turned (yaw 80.3 / pitch 0, her own heading, through 4 orders; the rounds
+  left ~180 deg off them). LiveFCSModule_LauncherTripleRailCannon has FixAngleYaw / FixAnglePitch: the x40a's plane-fixed
+  railgun, the plane aims. The stock Alicorn's sub-railguns fly LauncherAlicornRailgun, a bare LauncherBoneControl
+  subclass (no railgun HUD fields). So TANI_RAIL_LAUNCHER 'bone' for 0.74.75 (the T16's tracking BoneControl, the
+  Alicorn's round; Lua's railgun HUD write skipped on a BoneControl arm).
+- Pictures from now on (the user: "Screenshots would be good"): the autotest's A.picture (its camera on the whole ship, a
+  raised railgun, the railcannon charging, its impact, the fleet); run 20261116_203637_claude has four plus the game's own
+  HighResShot copies. The parts' boxes said TANICORN (T5 / 16-INCH / CIWS / LASER): now TANACORN, the user's spelling.
+
+## 0.74.75-0.74.76 (2026-11-16, runtime 0.32.36; Lua and the arm only, the Tanicorn container 0.74.74's)
+- 0.74.75: TANI_RAIL_LAUNCHER 'bone' (the T16's BoneControl firing the Alicorn's round), Lua's railgun HUD write skipped
+  on a BoneControl arm, the parts' boxes TANACORN. Autotest 33/36 (run 20261116_204316_claude): deployed and ordered, but
+  the barrels never turned and never fired.
+- 0.74.76: the T5's kind read strictly (`k.vls == true`: TANI.vls is the list of VLS kinds, so the T5 read as a VLS
+  block, "no TurretMesh found"), the rail piece's two kind checks too. Autotest run 20 with a shootable plane and a tick
+  probe: none of her live mounts' barrels ever moves, ticks on or off, invincible or not (docs/re/TANICORN.md "Her live
+  mounts don't aim"): the open problem now, before the railguns' own.
+
+## 0.74.77-coop2mp.169 (2026-11-16, runtime 0.32.36; world data and events, the Tanicorn container 0.74.74's): her guns on you
+- The cause of "her live mounts don't aim" (a research pass over every autotest log): they did aim and fire, at the
+  runway's target points (BP_GR000_dummy_CP) and only when she spawned within ~1.5 km of them: her hull's unit is
+  Mission 13's scored dummy and kept its area (RadiusInMeter 1500, MinAltitudeInMeter 500); her parts engage only inside
+  it, and their order (Mission 16's PlayerFirst) picks the runway's points. The user, 2026-11-16: "They were aiming before
+  we started working on the railgun" (she flew close). INVINCIBLE FLEET's guns had shelled the runway's points the same way.
+- Fixed: her unit the ships' area (unit_area 45 km, 0-15 km high: build_survival_world.py tanicorn_live_unit); her
+  parts' orders and the railguns' PlayerOnlyNoLimit (TANI_LIVE_PRIORITY); the fleet's parts the same (IF_PART_PRIORITY).
+  The airfield's shelling stays WP13's (from the gun line) and the railcannon's.
+- Autotest run 23 (20261116_211717_claude, plane=floor): 37/40, the 3 fails the suite's own barrel check (a barrel held
+  on you read as still: fixed in the suite). Her T16's first shell at you (not the runway), T16_FWD at 154 (rest ~73),
+  the test plane at 60 % damage; both railguns turned (yaw 85.7 -> 143.4 / 142.4, pitch 0 -> 35.7 / 36.5) and fired
+  (LiveEMLBullet_BattleShip at 11,089 m/s); armour, no death chain, the hull's 50,000 untouched; the railcannon's whole
+  cycle (charge, shot, impact -100, shot down in its second charge, no impact). Pictures in its shots/.
+
+## 0.74.78-0.74.80 (2026-11-16, runtime 0.32.36; events, Lua; the Tanicorn container 0.74.74's): the fleet on you, the Spear's impact
+- 0.74.78: INVINCIBLE FLEET's unit-level ship order (Mission 22's, its priority Default) PlayerOnlyNoLimit too. The
+  autotest's new rounds-in-flight sampler (tools/autotest A.rounds: each round's TargetToHome after the orders; a gun's
+  first launch comes 1-2 s after its ship's spawn, before its order) read run 25 (0.74.77): 5 at you / 20 at the runway's
+  points; run 26 (0.74.78): 21 at you (the Aegis VLS) / 12 at the runway (the Aegis Mk 45, BELUGA's howitzer).
+- 0.74.79: each fleet unit air-only at its appearance (Mission 22's LiveAIChangeEnemySearchType AIR_ONLY, as the pool's
+  fighters; check_fleet_build knows the record): run 28, 14/14, 73 rounds at you (Mk 45 x51, VLS x15, KOLGA's AK-130,
+  the Gorshkov's gun, BELUGA's howitzer), none at the runway. The airfield's shelling stays WP13's (GROUND_ONLY at the
+  gun line). The railguns' re-orders 4 -> 10 (run 27: a barrel started turning after +33 s; at yaw 66 / pitch 39 by
+  +85 s). Run 29 (THE TANACORN): 40/40, 73 of her rounds at you, both railguns turned 8 s after their order and fired.
+- 0.74.80: the railcannon's impact is Mission 25 day 1's Tonitrus Spear strike as its cutscene draws it (the user,
+  2026-11-16, with a picture of it: "This is what the Railcannon Hit Impact should look like", "Rocky Island Day 1"):
+  PL_Mission025 (day 1) loads IGC_Ms250010, whose Shot0030 spawns NS_IGCVFX_Ms250010_Explosion001 / 002 / 005,
+  ShockWave001 / 002 (the two rings), SandSmoke001 and RingSmoke001 (day 2, PL_Mission025_2, loads Ms250020-40: no
+  strike). The GR036 main cannon's blast and her EML burst out; impact_life_s 25 (the dust; the rest fx_life_s 6).
+  tani_rail_test: the set pinned, 7 of 7 up, the dust still up 7.5 s on, all stopped after their life.
+- 0.74.81: the Spear strike's set at x12. Its cutscene sizes it by camera and by its particles' user parameters (CamOff,
+  ExpVelocityMax / Min, SmokeAlpha on each NiagaraComponent of Shot0030's spawnables; their transform tracks' scale 1-2),
+  not readable cleanly from the package; spawned bare at x1 its two shock rings come out at their cutscene size (~0.5 and
+  ~2 km up) and the fireball a small puff on the ground. The autotest's spear suite (run 31: x1 / x4 / x8 / x12 over the
+  runway's impact point, pictured from ~4.3 km and 1.3 km up): at x12 the fireball fills the space between its rings as in
+  the user's picture. (Its dust skirt is under Comona's low cloud deck from there.)
+- 0.74.82: the railcannon's impact plays the cutscene's VFX layer itself (the user, 2026-11-16, with the picture again:
+  "that explosion needs to look EXACTLY like this"). Found by the autotest's seq suite (runs 33-34): a LevelSequencePlayer
+  of ours (LevelSequencePlayer.CreateLevelSequencePlayer on /Game/Sequencer/IGC/IGC_Ms250010/VFX/
+  CLS_IGC_Ms250010_Shot0030_VFX, 330 frames at 60 fps) plays it in Survival's level; it spawns 11 NiagaraActors at the
+  cutscene's own scales and places (Explosion001 x35.3, Explosion002 x25.11, RingSmoke001 x35.3, ShockWave001 / 002 x20,
+  Explosion005 / SandSmoke001 x1, the rod's trail falling in, three rains on its camera); the actor's
+  DefaultInstanceData.TransformOrigin (bOverrideInstanceData) moves every piece by exactly its offset; they go when the
+  sequence ends (5.5 s) unless it's held at its last frame (bPauseAtEnd: 11 still up at +8 s, 0 once stopped). Pictured
+  under Comona's cloud deck it is the cutscene's strike: the billowing fireball between its two shock rings, the dust at
+  its base. In Survival (sv_tanicorn_rail.lua seqImpact, CFG railcannon.impact_seq): Explosion002 (605172, -533159, -5879
+  in the sequence's space) put where the round lands, the rains and the rod's trail hidden, stopped impact_life_s on; any
+  failure (no player, the origin refused: never played at the cutscene's own spot) falls back to its systems at x12.
+- THE TANACORN's rise (Ctrl+R, WP4) autotested for the first time (0.74.82, the rise suite, run 36: 13/13): her RiseRig
+  found and scrubbed to 0, played at rate 1; the hull from 200.8 m under the sea to +0.9 m in 32 readings, the bow up 35.0
+  deg, its tip ~120 m at most; the breach's 10 of 10 effects and its sound, the slam's 13 foam, 26 pillars and 12 big
+  splashes and its shake, 97 of 97 effects in all (each stopped 8 s on); the rise over with your view, autopilot,
+  invincibility and the attack limits put back. Its cinematic pictured through its own camera.
+- Her rise with her guns live (Ctrl+L then Ctrl+R; the riselive suite, run 37: 15/15): the live hull already up rises
+  where it is on the same rig (200.8 m under to +0.9 m), all 35 parts still there after it and each on its socket (70
+  live-watch readings), her armour holds, and her T16's rounds in flight home on you after it (10 of 10, none at the runway).
+
+## 0.74.83-0.74.84 (2026-11-16; Lua, test builds only for the fleet's parts): INVINCIBLE FLEET's night and storm (feature/fleet-storm)
+- The user: "another day night cycle for this Special Round, using the same method we use for The Festival", the sun
+  setting from round 25, "Night can last for 3 rounds before Round 30", the fleet "at Early Morning, just before the sun
+  rises", "swap the new cloud layer in at the moment the Night Sky Appears, add a lot of lightning", seen and heard only,
+  the storm clearing "with a fade to black on round 35" ("to hide the sudden swap of the clouds back to normal").
+- sv_sky.lua (ships): the arc's owners and profiles (SKY.arcOwners / arcProfiles / arcOwner / arcState; the latest start
+  owns it; sink_rounds; GONE FISHIN''s F and THE FESTIVAL untouched: sky_test's checks, the Festival's arc as it was).
+- sv_fleet.lua (its TEST ONLY block): IFSKY owns the arc from round 25 (no sinking round: the sunset at 26, night 27-29,
+  the pre-dawn at 30, sunrise 31-33); the storm from its first moon to round 35, each way under a fade to black: Distant
+  Thunder's storm cloud layout (Mission 12's CVC_ms12_250708; sv_anomalies_dev.lua exports lySet / camFade / post), its
+  distant thunder and a clap, cloud lightning every 0.3-0.8 s within 25 km of the airfield and the fleet (a cloud light
+  every 2-4 s, bolts between, the thunder after its distance's delay).
+- Autotest fleetnight (run 38, 0.74.83: 14/16): every step on the fleet's arc, the storm in at the moon under a fade
+  (CVC_ms04_20251216 -> CVC_ms12_250708), 130 flashes, the fleet up in the pre-dawn storm; the storm never cleared (the
+  arc's step capped at midday's hold): SKY.arcState's kRaw, fixed in 0.74.84. Its pictures from 1.2 km were inside the
+  storm's cloud deck (black, then grey): the suite's camera at 400 m now, a bolt forced in view before a shot.
+
+## 0.74.85-0.74.86 (2026-11-16; test builds only): INVINCIBLE FLEET surfaces, filmed (feature/fleet-storm)
+- The user: "when the Invincible Fleet first spawns, they should all Surface out of the sea the same way the Tanacorn does.
+  I want it to look cinematic as possible, so add multiple camera angles to that cutscene when they do surface."
+- The autotest's probes: THE TANACORN's rise rig (SK_SV_Tani_RIG, AS_SV_Tani_RIG_Rise) plays in a bare SkeletalMeshActor
+  (run 39-40); a live AI ship attached to its SOC_Hull never leaves the water (run 40: 0.2-0.9 m through the rise, its own
+  movement holds it, as hard rule 39's planes); a bare spawn of the ship's own blueprint class (no unit, no AI orders) and
+  a StaticMeshActor both ride it exactly, from -100 m to the surface (run 42, 14/14).
+- IFSURF (sv_fleet.lua, CFG.specials.fleet.surface): at Ctrl+N a double of each ship's own blueprint (every turret on) on
+  the rig, scaled by its length to her 650 m, measured at its rest and moved so it settles on the ship's spot, risen in
+  waves (pickets, frigates, Udaloy / Kirov, the Aegis cruisers, GEOFON last), TANI.rise.FX's waters at each breach and
+  slam, seven camera cuts (kept on screen), your plane invincible on the loiter autopilot with the attack limits at 0;
+  then a fade to black, the doubles off and the real fleet up on the same spots under it (F.burst), your view back. Run 43
+  (0.74.85, daylight): 9/9, 15 of 15 doubles up, 45 breach and 60 slam waters, 0 view reverts, the real fleet up after.
+- The storm night brighter (a profile's night_over: exposure 1.3 / 10 / +1.6): run 44's sea and coast visible under the
+  storm. At night a cloud light took the view back to the plane (runs 41, 44): bolts only while the surfacing films.
+- 0.74.86: the cameras closer (run 43's were far, the last wide into the sun), bolts only during it.
+
+
+## 0.74.87-0.74.88 (2026-11-17; test builds only): the fleet's storm draws lightning bolts (feature/fleet-storm)
+- The user's storm wants "a lot of lightning", seen and heard. Until now nothing of it was seen: the autotest's probes
+  (runs 46-60, the storm night) found NS_CloudLightning draws only a faint teal glow at any size or Color; Mission 12's
+  strike effects are plane-sized; the Online Alicorn's arc stays red sparks; the stock cloud lights have a 10 m radius (and
+  ramp up over seconds in their own colours with more), engine point lights don't light Cloudly's clouds, and the level's
+  Cloudly actor has no EffectLight (hard rule 70). The bare bolt meshes drew nothing in runs 50-51 only because their mesh
+  was set after the spawn finished; set before it, AC8's SM_Thunder* bolts draw, and the game's MI_NearCloudLightning001
+  makes them white with a blue edge (runs 59-60, hard rule 69).
+- THUNDER.bolt (sv_anomalies_dev.lua): a pool of 10 Movable StaticMeshActors, a bolt mesh each flash (standing from the sea
+  1.8-4.5 km tall, or lying in the clouds), a random turn, a flicker a tick (1 0 1, 1, 1 0 1 0 1); meshes under 20 m are
+  skipped (SM_Lightning002 is half a metre: x12859 for a 6 km bolt in run 61). The fleet's storm makes one at each flash
+  (2-3 a second, 2-25 km round the airfield or GEOFON) with the glow and its thunder; no cloud lights any more. Under the
+  storm's fade to black the pool and the rain on your camera are shown once, so their first draw (run 45's checkered
+  sheet by the plane, most likely the rain's) is hidden.
+- 0.74.87: run 61 (stormview, 7/7): the warm-up's 10 bolts, the first bolt 2 s after the fade, bolts seen from your plane;
+  run 62 (round30, 10/10): the surfacing in the storm as before, no checker, but its cameras caught no bolt.
+- 0.74.88: while the surfacing films, each bolt strikes 4-14 km out in the camera's shot. Run 63 (round30, 10/10): bolts in
+  its shots (frames 3 and 14 of 18, pictures every 1.5 s), blue-white against the pre-dawn storm.
+
+
+## 0.74.89 (2026-11-17; a test build only): cloud flashes in the fleet's storm (feature/fleet-storm)
+- The user: "Can you try to find out why the clouds don't light up please". Cloudly lights its clouds from ONE effect light
+  that only an ALiveCloudLight drives (its own fields -> the sky asset's EffectLightTransientParams -> the drawn copy a tick
+  later); engine lights never reach the clouds, and no level has the Cloudly actor's EffectLight component. The storm's cloud
+  light was Mission 9's (its curve peaks near 15: nothing), the earlier probes pictured Mission 12's and 22's before their
+  curves began (4.1 s, 5 s), and the plane flies in the storm's cloud layer (ICING UP), whose white-outs and exposure swings
+  read as "lit" in runs 65-66. From a still camera under the cloud base with the eye adaptation frozen (run 68): 40,000
+  shows nothing, 400,000 (radius 5 km) turns the cloud base white within 0.6 s and lingers 0.6 s+; 4,000,000 with a 50 km
+  radius blacks the picture out for seconds. Hard rule 70 rewritten (the autotest branch).
+- THUNDER's "effect" way (sv_anomalies_dev.lua) is now Survival's own cloud light: one BP_CloudLight_Base (no timeline)
+  kept, moved to the flash and driven a tick at a time (steps x brightness, at most max_brightness), never spawned while
+  the surfacing films (a cloud light's spawn took the view back in runs 41 and 44); THUNDER.cloudReady spawns it under the
+  storm's fade, THUNDER.cloudOff takes it off when the storm clears (hard rule 59's same-object check on it). The fleet's
+  storm: lightning.cloud (chance 0.5, every 0.6-1.6 s, 2-4.5 km up, 150k-400k, radius 5 km, blue-white, steps 1 0.3 0.9
+  0.2 0). thunder_test's Ctrl+\ probe 4 checks the driven light.
+- Runs: 69 (cloudstorm, 7/7): the light up under the fade, a cloud flash every ~1.5 s; 70 (cloudview, 6/6): flashes put
+  4-10 km ahead of your camera at 400k-1M, 5-10 km round: no clear change in your own view's pictures (auto exposure on,
+  the view turning); 71 (round30, 10/10): the surfacing with the flashes on, 0 view reverts. The glow from your own view is
+  not confirmed yet.
+- INSTALLED 2026-11-17 for the user to fly ("I'll fly it myself this time"), over 0.74.66 (backup:
+  build/backup/install_before_0.74.89); her survival.ini, profile, map notes and the Mod Launcher's toggle kept, her
+  subtitles.ini the same as the repo's. The storm comes with the fleet's night (round ~27, the arc from round 25) and
+  clears at round 35; Ctrl+\ four times puts Survival's own cloud flash 5 km ahead of you in any round.
+
+
+## 0.74.90-0.74.91 (2026-11-17; test builds only): Ctrl+S, the fleet's night storm now (feature/fleet-storm)
+- The user: "yeah make a test key that goes into night storm". Ctrl+S in a run (sv_fleet.lua, test only, dev install
+  only): the fleet's arc at its night (IFSKY.step(3)), the storm in under its fade with its cloud light and flashes;
+  again: the round's own sky back; a new level forgets a test's step. tools/README.md's Ctrl key table has it.
+- 0.74.90, run 72 (stormkey, 14/14): on, off and on again as logged; but its picture 0.4 s after the off press showed the
+  day sky with the storm's clouds still in: the test step dropped at the press put the day back at once, a second before
+  the storm's fade to black. 0.74.91: the off press only asks the storm out (IFSKY.leaving: the storm not wanted), and
+  the day comes back under its black (trTick's out phase), as the cloud swap does. Staged; its test (stormkey with
+  pictures right after the off press) waits for the game to be closed (the user flying 0.74.89).
+- 0.74.91 INSTALLED 2026-11-17 for the user ("install it"; "no dont run a test i can do that": its autotest, run 73, was
+  cancelled through the gate 16 s in, before the suite ran, and her install restored), over 0.74.89 (backup:
+  build/backup/install_before_0.74.91); her settings, map notes, subtitles and the launcher's toggle (on) kept.
+
+
+## 0.74.92 (2026-11-17; a test build): the storm night as THE FESTIVAL's, real thunder, flashes not cancelled (feature/fleet-storm)
+- The user flying 0.74.91: "night time is too bright, also the sea is back to green again which we fixed in the festival
+  rounds, and theres no spawning cloud lights or thunder, only the lightning bolts spawn".
+- The night: 0.74.86's brighter storm night (night_over exposure 1.3 / 10 / +1.6, sky light x1.2e-4) undid 0.74.25's
+  green-sea fix; the fleet's night is THE FESTIVAL's again (CFG.sky.night: 2.3 / 10 / +0.6, x4e-5), only its top exposure
+  capped at 4 (night_over exposure 2.3 / 4 / 0.6) so the camera can't stop down for a cloud flash: her log had 25 cloud
+  flashes in 30 s at 165k-365k, none seen (runs 67 and 70: the auto exposure cancelled them).
+- The thunder: AC8 has no AKE_Environment_Thunder_Play or Ms12 distant thunder (no such event in the game's files; nothing
+  was ever heard). Its booms and rumble stand in (storm.thunder: near within 6 km AKE_Weapon_SuperLongMainGun_Explosion_Air
+  / AKE_Environment_Depot_Explosion, far OBJ_M09_CLOUDBOMB_EXP / AKE_GEN_PLAYER_AIR_Cloud_Rumble_CameraShake; 70 % of
+  strikes, after the distance's delay), loaded and pinned under the storm's fade (as the Anomaly's sounds); the start's
+  clap is the air explosion. Ctrl+J plays each in turn so she can pick by ear. Log: `fleet storm: thunder N: ...`.
+- sv_fleet.lua (at 2,000 lines) split: its night and storm are sv_fleet_storm.lua, the next piece (dev only: dev_only.py,
+  IFSKY in its globals; fleet_test loads it; zip_leak_test and thunder_test check its release header). Three doubled
+  carriage returns in sv_fleet.lua's config gone with it.
+- Run 74 (storm92 on 0.74.92, 13/13): the warm-up's cloud light and 4 of 4 thunder sounds loaded, thunder posted from 7 s,
+  Ctrl+J's four posted (heard or not: the user's ears); the night much darker (your view ~5 of 255, no bright teal);
+  a 300k flash 6 km out from the still camera under the cloud base: no change (the exposure cap wasn't it). Run 75
+  (flash92): 1M-8M at 5 km round, 2M at 10 km: no blackout (run 68's was 4M at 50 km), and no change either, but that
+  camera saw the airfield's lights below the cloud base, no cloud: inconclusive.
+
+## 0.74.93 (2026-11-17; a test build, staged, not installed): the storm's cloud flashes 0.8-2M (feature/fleet-storm)
+- storm.lightning.cloud.brightness 0.8-2M (max 3M), radius 5 km: 165k-365k were unseen in the user's flight of 0.74.91.
+  Run 76 (storm92, 13/13 as run 74): flashes of 1.2-1.9M fired, no blackout from your view or the still camera; their
+  glow still not seen in the pictures. The install into her game was stopped by auto mode's check: waits for her word.
+
+## 0.74.94 (2026-11-17; a test build, staged, not installed): the thunder played as Survival's heard sounds (feature/fleet-storm)
+- The user watched runs 77-83 on screen ("Keep testing and I'll watch the screen").
+- Run 77 (watch93, 0.74.93): none of 9 cloud flashes (0.4M-8M, 1.5-6 km ahead) lit a cloud; none of the 4 thunder sounds was
+  heard: 0.74.92-0.74.93 posted them by name (LiveSoundBlueprintLibrary.PostEventByName), which plays only what the game
+  registers. 0.74.94 keeps the loaded events and plays them with AkGameplayStatics.PostEventAtLocation at your camera, the
+  way Survival's heard sounds go (sv_escort_laser.lua, GEOFON's); run 78: all four "played" (the user wasn't listening).
+- Run 78 also flashed the whole sky five ways; the moonlight x30 with the sky light x30 lit the cloud round the plane
+  grey-blue. The user: "you need to be having the cloud light work, not changing the moonlight or anything": not used.
+- Cloudly's effect light, its values reaching the drawn copy every tick, lit nothing in Survival's level in any of: its
+  position in cm, m or km and radius to match (run 79); with ForceUpdate / ForceUpdateAO / ForceUpdateShadows /
+  ClearReprojectionHistory every tick, and Mission 12's own light so (run 80); by day, orange, our light and Mission 12's
+  (run 81); r.Cloudly.QualityLevel 0-4 (the game runs 1; run 82); every sg.* at 3 and Cloudly at 3, day and storm night
+  (the game runs sg 1; run 83). Survival's Cloudly actor (Mission 4's lighting sublevel) is set like Missions 9, 12 and
+  22's. Open: whether AC8's own cloud lights show in their own missions (Mission 12's Podarge, Mission 22's shuttle).
+
+## 0.74.95 (2026-11-17; a test build, staged, not installed): Mission 12's cloud lightning in the storm (feature/fleet-storm)
+- The user's Mission 12 screenshot: "in Mission 12 they visibly appear to light the clouds with blue lighting". That is
+  Mission012_Phase01_VFX's 19 NiagaraActors of NS_CloudLightning, scale 0.5-1, 6.4-7.6 km up in its cloud towers, each
+  drawn after the clouds (TranslucencySortPriority 100, bOverrideSeparateTranslucencySortPriority with 100). Ours were at
+  scale 12 with the default priority 0, under the clouds: the faint teal glow of runs 46-58.
+- storm.cells: the same 19 spots and scales, spawned inactive under the storm's fade, sort 100 set, then activated; taken
+  off as it clears (hard rule 59's address and name kept). storm.lightning.cloud (Survival's own effect light) off: it lit
+  nothing in runs 77-83. Run 84 (listen94): the STORE beep and the four thunder sounds played (the user wasn't listening).
+  Run 85 (cells95, 7/7): `fleet storm: cloud lightning: 19 of 19 up (19 of them drawn after the clouds, sort 100)`; the
+  still camera onto the towers never took the view, so whether they glow is for the user's eyes.
+
+## 0.74.96 (2026-11-17; a test build, staged, not installed): a cloud glow over every bolt (feature/fleet-storm)
+- The user: "Is it possible to have more than 19? Like have them draw where the lightning bolts are?". THUNDER.bolt now
+  hands back the bolt's top (standing: its foot + its height; lying: its altitude; in the surfacing's shot too), and the
+  storm keeps a pool of 12 of the cells' glow (NS_CloudLightning, sort 100 as Mission 12's, scale 1): at each bolt the
+  oldest is moved up_m 300 over its top (into the cloud it comes out of), restarted, and switched off life_s 1.5 s on.
+  Mission 12's 19 stay as the background. Log: `fleet storm: flash N ...; a glow X km up`.
+- Run 86 (round30, 10/10, 0 view reverts): glows placed 3.6-4.1 km up over the bolts, the 19 cells up; the surfacing's
+  frames show the bolts but no glow round their tops at 4-14 km (frames 16-18's lilac is the pre-dawn sky, as in run 71).
+  Whether the glows read is for the user's eyes in game.
+- Run 87 (glow96, 0.74.96, 6/6): the glow put 2 and 5 km ahead of your camera at night: scale 1 showed nothing; scale 3 and
+  6 lit the cloud there blue from inside over the first second (picture brightness 5 -> 7.4, blue over red 0.3 -> 2.2 at
+  2 km). Bolts struck 3-6 km out in your view with a glow at scale 3 over each top: no clear change at those distances.
+
+## 0.74.97 (2026-11-17; a test build, staged, not installed): the glows sized for the night (feature/fleet-storm)
+- storm.cells.scale_x 3 (Mission 12's 19), bolt_glow.scale 4 and life_s 2.5 (the glow builds over its first second):
+  run 87's scale 1 was unseen at 2-5 km at night. Config only; fleet_test passes; not run in game yet.
+
+## 0.74.98 (2026-11-17; a test build, staged, not installed): round 30 is INVINCIBLE FLEET's (WP10 step 1, feature/fleet-round)
+- The user: "Phase 1 now", the surfacing "Yes, at round start". sv_fleet_round.lua (a dev-only piece after
+  sv_fleet_storm.lua; dev_only.py cuts it from a TESTER zip, IFROUND in its globals): specialFor answers "fleet" for round
+  30 (never drawn, once a run; sv_spawn.lua's schedule untouched, as THE FESTIVAL's roundIs); SPC.kinds.fleet (THE
+  ESCORT's and the Spaceport's hooks): round 29's break warns (callout INVINCIBLE FLEET / THE AEGIR FLEET IS UNDER WAY, COMONA
+  CONTROL's lines), round 30's callout SPECIAL ROUND 30 / INVINCIBLE FLEET, the fleet from IFLEET.launch (Ctrl+N's spawn,
+  made a function) with the surfacing first, a quarter of the round's own fighters, each ship paid once as it sinks
+  (IFLEET.onSunk from sv_fleet.lua's sinking: by kind, double the Spaceport's, x the special's and the tier's as its pay)
+  and each turret as it's shot off, the round held while one's afloat (no time limit), Online Mode's AC04 "Invincible
+  Fleet" from its start (again at its length, the music player's clock held), the NEXT row FLEET: n AFLOAT  CARRIER:
+  GEOFON; won: 50,000, the airfield fully repaired (its health to its top, the landing open, ALLY.repairAll), THE AEGIR
+  FLEET IS DESTROYED, the wrecks taken off. The radio lines are drafted in sv_fleet.lua's CFG (dev only: never in
+  config/subtitles.ini, which every release ships). GEOFON sinks like any ship until WP5 / WP6; co-op is the host's (WP12).
+- fleet_test: 15 round 30 checks (picked, warned once, spawned, once a run, held, the row, each ship paid once: 22,600
+  base, the win, the airfield, the fleet taken off). Run 88 (fleet30: the run set to round 29's break, the ships and the
+  round's fighters finished by the test): the warning, SPECIAL ROUND 30, the music posted, the surfacing, 15 of 15 up,
+  each sunk paid once (GEOFON 24,000 at round 30's x4; the fleet 90,400), the win at +43 s: 50,000, the airfield repaired,
+  the fleet taken off. Its one FAIL was the test's own 6,000 (fixed). Pictures sent.
+
+## 0.74.99-0.74.100 (2026-11-17; test builds, staged, not installed): round 30's music handed back (feature/fleet-round)
+- The user: "keep it" (round 30's pay, x the special's and the tier's as the Spaceport's), "hand the music back after round
+  completed", "all good on subtitles". sv_fleet_round.lua notes the music player's song at the round's start
+  (SV_BGMNames' track, only when something plays: SV_BGM(0) not 0) and at its end plays it again and lets the player's
+  clock go (log `fleet round: music: the music player's song back: <track> ...` or `... clock let go`).
+- Run 89 (0.74.99, fleet30 14/14): AC04's track posted at round 30's start, the song back at the win; but the autotest's
+  first break played nothing and named the main menu's track, which came back: 0.74.100 gives back only a song that was
+  playing. Run 90 (0.74.100, 14/14): "its song: none", at the win only the clock let go. fleet_test checks the hand-back.
+
+## 0.74.101-0.74.102 (2026-11-17; test builds, staged, not installed): the LaserInterceptor 20 s / 10 s; the fleet's Aegis lasers (feature/fleet-lasers)
+- The user: "increase the LaserInterceptor Alive time for 20 seconds and 10 seconds cooldown" (sv_config.lua li_volley_s
+  20, li_rest_s 10: every carrier's, the ZFA-44s', THE TANACORN's and the fleet's; escort_test checks the shipped values,
+  its timeline still AC7's 6 / 8) and "I want the Aegis Ships in the Invincible Fleet Round to Carry 2 Lasers Interceptors
+  one on the Aft and the Bow, targettable" (the mount: "TANACORN's LASER turret").
+- tools/tanicorn/spec.py: BP_SV_IF_Aegis, a child of the stock campaign Aegis BP_VE002_aegs_CP (a stub on LiveAIVessels at
+  its path, never packed) with two LiveChildActorComponents of BP_SV_Tani_LASER on its root: LASER_BOW (69 m ahead, 9 m up)
+  and LASER_AFT (64 m astern on the fantail, 4.1 m up, facing aft); build.sh counts every `child actor` line (37).
+  TANI=1 builds only (survival_events_fleet.py IF_AEGIS_*): each Aegis's model row on it, its hull row's ChildNPCId /
+  ChildNPCComponentNames + the two, two more child descs (its Mk 15's copy: <obj>_LASER_BOW / _AFT on the LASER mount's rows
+  sv_tani_laser: TGT box, 150 health, its aim-only fire control), so the fleet has 58 parts, each ordered.
+- sv_fleet_lasers.lua (a dev-only piece after sv_fleet_round.lua; dev_only.py, IFLASER): as an Aegis settles its mounts
+  are put at CFG.specials.fleet.lasers spots (no rebuild to move them) and handed to AC7's LaserInterceptor through
+  sv_escort_li.lua's new carrier lists (ZLI.extras, beside ZLI.extra), on the players' missiles; a mount at health 0, gone
+  or its ship sunk drops out. fleet_test: 11 checks (handed over, placed, shot off, sunk, another class, a stock Aegis).
+- Runs 91-92 (aegislasers, Ctrl+N): 15 ships with 58 parts; `fleet lasers: <SHIP>: 2 mounts handed ... a volley 20.0 s, a
+  rest 10.0 s` for all 5; 10 `zfa li: BP_SV_Tani_LASER ... carries AC7's LaserInterceptor`; RAVEN's mounts measured at 69 m
+  ahead / 9 m up and 64 m astern / 4.1 m up; one finished: its laser removed. Run 92 9/9. Their beams at the players'
+  missiles weren't tried (the autotest can't fire them); the pictures missed the mounts (the camera didn't take its spot).
+  Their boxes read TANACORN LASER (THE TANACORN's rows).
+
+## 0.74.103 (2026-11-17; staged): Ctrl+F, the fleet's round next (feature/fleet-lasers)
+- The user: "can I have a test key". sv_fleet_round.lua Ctrl+F: in a break between rounds the run is set to round 29's
+  break (its warning), so round 30, INVINCIBLE FLEET's, comes next; in a round, or had this run: a callout, nothing changed
+  (`fleet round: Ctrl+F: ...`). fleet_test: 3 checks; the TESTER copy has no Ctrl+F (dev_only.py).
+- 0.74.103 INSTALLED 2026-11-17 for the user ("install 0.74.103"; "I just want to see the invincible fleet for myself"), over
+  0.74.91 (backup: build/backup/install_before_0.74.103); 107 files verified; her settings, map notes, subtitles (the repo's)
+  and the launcher's toggle kept. The ZFA-44 container's 347-byte .pak, which package_dev.sh doesn't stage (package_release.sh
+  does), was removed by the copy and put back from the backup (the same as build/zfa44/out's).
+
+## 0.74.104-0.74.105 (2026-11-17; test builds, staged, not installed): the beam wider, AC8's own thunder, no HUD in the surfacing, round 30's slower dawn (feature/fleet-lasers)
+- "make the Laser Mesh thicker slightly so its more visible": li_beam_w 1.5 (sv_config.lua; sv_escort_li.lua's beam(): the
+  BeamLength Y / Z x it, the end's thinning too; every carrier's). escort_test checks the shipped value.
+- "we need to change the audio of the Thunder, its wrong": AC8's SE bank (DA_SoundDB_AKB_GameSe) has Mission 12's thunder
+  events with no event asset (AKE_Ms12_ENV_OBJ_Thunder_Play, AKE_Environment_Thunder_Play,
+  AKE_GEN_ENV_AMB_ThunderCloud_Inside_Lightning_Play, AKE_Ms12_ENV_AMB_DistantThunder_Play / _Stop ...): 3D sounds, which the
+  0.74.92 posts by name with no place played at the world's origin. sv_fleet_storm.lua posts a bare name ON your camera
+  (LiveSoundBlueprintLibrary.PostEventAtActorByName on the PlayerCameraManager), logged with its playing id; the storm's
+  clap Mission 12's thunder, its bed Mission 12's distant thunder loop (stopped as it clears), each bolt's near / far
+  thunder those events (sv_fleet.lua storm.sound / storm.thunder). Not heard yet (AC8 was in use).
+- "during the cutscenes of the tanacorn and invinicble fleet rising we need to disable the HUD": run 20261116_222923's rise
+  pictures had the game's HUD up although sv_cine.lua logged it hidden by distortion. sv_cine.lua: a route cheatnew (a
+  LiveCheatManager made on your player controller, ChangeHUDType EverythingDisabled / RestoreToDefault), the routes'
+  order widgets, cheatnew, cheat, showhud, distortion (last); CINE.hudHide / hudShow / hudTry for other parts; the fleet's
+  surfacing (sv_fleet.lua IFSURF) holds Survival's HUD and the game's (target boxes too) from its start to its end. The
+  autotest hudprobe (each route alone, the cheat manager's switches, the surfacing, pictures) waits for the game to close.
+- "move the sunrise so it's slower during round 30, it gets light too quickly": sv_sky.lua SKY.fightSlow (x round_s while
+  set), round 30 sets it to CFG.specials.fleet.round.sky_slow 5 (the drift toward the dawn over ~20 min, not 4), cleared at
+  its end; the break finishes the step as before. Tests: fleet, sky, thunder, cine (its route order), escort, zip leak.
+
+## 0.74.106-0.74.107 (2026-11-17; test builds, staged, not installed): INVINCIBLE FLEET's surfacing made epic (feature/fleet-lasers)
+- The user: "can you please make the Ships Rising out of the sea cutscene more cinematic? like go epic with it"; the radio
+  "Yes, use the drafts", "No slow motion". The surfacing (IFSURF) moved out of sv_fleet.lua (1,904 lines) into its own
+  dev-only piece, sv_fleet_surface.lua (main.lua MODULES after sv_fleet_lasers; dev_only.py, fleet_test.sh, AGENTS.md).
+- CFG.specials.fleet.surface: lead_s 3 s of empty storm sea first; six shots, each a camera move (two CameraActors, the cut
+  to `from`, SetViewTargetWithBlend to `to` over the shot): a push across the waves, low on the pickets, a dolly along
+  HERNE, RAVEN's bow from off her quarter, the push-in on GEOFON through her slam, the pull-back over the fleet. Letterbox
+  2.39 (the cameras' own bConstrainAspectRatio); Online Mode's IGC hand-held shake (BP_CamShake_HandShake_A) all through;
+  BombImpactSmall / BombImpact at breaches and slams within 1.5 km of the camera, BombImpactHelios at GEOFON's slam; the
+  water's roar (AKE_Environment_Splash_WaterPiller_Play on the camera) at breaches within 2.5 km.
+- Beats on the clock: four strikes on cue (sv_fleet_storm.lua's new IFSKY.strike: the cloud flash, a bolt, its glow and
+  sure thunder; lightTick's own strikes x storm_quiet_x 4 further apart while it films), KASKA / COMONA CONTROL / KASKA's
+  lines (SUB.say; Survival's HUD held with callouts let through), the INVINCIBLE FLEET title card at +24 s. Banners waiting
+  when it starts are dropped.
+- Autotest suite `epic` (tools/autotest, branch tools/ac8-autotest): 0.74.106 24/25 (the hand-held shake's path wrong:
+  it's /Game/OnlineMode/Blueprint/IGC/CameraShake/; RAVEN's shot 35 m off her bow saw her breach out of frame; the wide
+  shot from 3 km made specks), 0.74.107 25/25 (run 20261117_133728_claude: 6 moves, 9 beats, 9 shakes, 8 roars, 15 of 15
+  doubles, the real fleet up). Not heard yet: the roars and the cued thunder (the autotest has no ears).
+
+## 0.74.108-0.74.111 (2026-11-17; test builds, staged, not installed): the storm's cloud flash in step with the bolts (feature/cloud-flash)
+- The user: "the cloud flashing isn't appearing with each lightning bolt"; "extract or reverse engineer how ace combat 8 gets
+  it to work"; "start looking into all options". Run burstwatch (20261117_140335): Mission 12's NS_CloudLightning switched
+  on lit nothing for 14 s, then flashed: why the stock glow pool almost never flashed with a bolt.
+- Route A, our own (tools/stormfx/build.sh, ue_flash.py): Epic's CascadeToNiagaraConverter crashed as a commandlet
+  (FNiagaraEmitterHandleViewModel::Initialize needs Slate): run in the full editor (UnrealEditor.exe -ExecutePythonScript,
+  SV_QUIT=1 closes it); RichCurveKeyBP has no interp_mode in 5.4 (linear is the default). NS_SV_CloudFlash cooked
+  (SurvivalMode_StormFx_P) and LOADED in AC8 with no crash (0.74.108): the first Niagara system of our own UE in the game.
+  It drew far too big and bright (2.6 km sprites x6 on AC8's material, whose MI_NearCloudLightning001 is emissive 5000
+  with a 0.5-3 km far fade): white-outs with blocky bloom.
+- Route B, AC8's own (tools/stormfx/burst.py): NS_CloudLightning copied as NS_SV_CloudBurst (SurvivalMode_StormBurst_P)
+  with the seven spawn literals of its system update script (export 34 at 4440-4480: 0.08 0.22 0.5 0.15 0.1 0.4 0.05)
+  raised: left on it lit from its first frame (burstwatch). Its particles die when it's switched off
+  (bCanDieWhenEmitterDeactivates): x20 off at 0.25 s drew nothing (0.74.109); on 0.5 s it lit the clouds from behind at
+  5 km (0.74.110) but whited out the sky within a few km; 0.74.111: x5, none within 6 km (bolt_glow.flash[1].min_km):
+  no lit frame in the pictures (sub-second flickers between the autotest's pictures). Not yet seen by eye.
+- sv_fleet_storm.lua: bolt_glow.flash, candidates in order (the burst, our own), the first that loads; IFSKY.strike.
+  build_all.sh stages SurvivalMode_Storm*_P with TANI=1; every zip drops them (package_release / package_test /
+  package_dev without TANI; zip_leak_test checks). Autotest suites flash, burstwatch (tools/ac8-autotest).
+
+## 0.74.112-0.74.119 (2026-11-17; test builds, staged, not installed): the cloud flash tuned (feature/cloud-flash)
+- tools/stormfx/build.sh wiped build/stormfx/out whole, the burst container with it (0.74.112 had none): it removes only
+  its own now.
+- Our own flash at 800 m x0.6 (0.74.112) and x2 (0.74.113): unseen at 4-10 km. AC8's near instance fades its sprites out
+  0.5-3.5 km from the camera (MI_NearCloudLightning001: emissive 5000 at byte 42, fade length 300000 at 79, start 50000
+  at 116; MI_CloudLightning001: emissive 5000, no fade). burst.py can copy both with those changed (MI_SV_CloudFlashNear /
+  Far, retargeted imports): 0.74.114-0.74.117 lit the sky behind the clouds at 7-10 km, saturated white even at 800.
+- Each flash a fresh system (0.74.116): AC8's burst reset and switched on again stayed dark after its first flash.
+- The user: "I think the cloud burst is too big, i liked the vanilla look": burst.py VANILLA (AC8's own instances as
+  they are, only the timing patched), the storm's burst scale 0.1, on 0.8 s, x20. 0.74.118 with min_km 3: a strike's
+  glow 2 km up and 4 km ahead whited the screen out and it stayed white (cause not found); 0.74.119 min_km 6: no white-out
+  in the strikes or the storm (run 20261117_145251), the far flashes logged.
+
+## 0.74.120-0.74.123 (2026-11-17): the strike's light on your plane, brighter bolts; 0.74.123 INSTALLED (feature/cloud-flash)
+- The user: "why does the plane not light up from the lightning burst effects?" AC8's lightning only glows (emissive
+  sprites and meshes). sv_fleet_storm.lua slFlash: a light of ours at each strike within max_km. A second directional light
+  lit nothing at any intensity (ladder 20-2000, run 20261117_150341: AC8 draws with its one sun); a point light (kind
+  "point") offset_m 300 from your camera toward the strike, kept there each tick, radius 1.5 km, unitless: intensity 10000
+  lit the plane white (run 20261117_150659); 0.74.122: 4000, its first step at the strike (not a tick late).
+- "need to increase the brightness of the lightning bolt": the bolts on MI_SV_StormBolt (burst.py: the stock near
+  instance, emissive 5000 -> 15000, no fade before 30 km; bolts.material_bright, the stock material its fallback).
+- 0.74.122's build_all.sh stopped on the size check (sv_anomalies_dev.lua 2003 lines) and package_dev.sh staged the old
+  build under its name: never installed; 0.74.123 is the same changes built clean.
+- 0.74.123 INSTALLED 2026-11-17 for the user ("install 0.74.122", "im home, i want to test it now"), over 0.74.103
+  (backup: build/backup/install_before_0.74.123); 112 files verified; her config, subtitles (the same as the repo's) and the
+  launcher's toggle kept.
+
+## 0.74.124-0.74.125 (2026-11-17; staged, not installed): the user's 0.74.123 flight fixed (feature/cloud-flash)
+- "the lightning bolts didn't appear at all": the bolts on 0.74.123's cooked copy MI_SV_StormBolt drew nothing (a renamed
+  instance; its sprites on the cloud flash had drawn). The stock material again, made brighter on each bolt by a dynamic
+  instance (bolts.mid: Emissive_Intensity 15000, FarFade_Start 3000000, FarFade_Distance 1000000).
+- "the laser beams weren't affected" (li_beam_w 1.5): AC8's beam (NS_UAVTLS_Muzzleflash01) doesn't take User.BeamLength's
+  Y / Z as its thickness; the beam's component scaled across (SetRelativeScale3D 1, w, w).
+- "spawn the thunder sound at the lightning's point? it sounds way to close": each clap on a TargetPoint toward its strike,
+  at its distance up to thunder.at_max_m 2500 (AC8's thunder is 3D); the distant rumble bed stays on the camera.
+- "the HUD is still on": the surfacing's hold was dropped the same second by the cine tick ("the run's over": S.run was
+  set by the cinematic alone): ghudHide sets it. The user's config\rise_camera.txt, saved before 0.74.105, listed the old
+  route order (no cheatnew): that exact old default is read as the new one.
+- 0.74.124's build stopped on the size check (sv_anomalies_dev.lua) and package_dev.sh staged the old build again:
+  package_dev.sh now refuses unless build/install's VERSION is the source's.
+- 0.74.125 INSTALLED 2026-11-17 for the user ("install"), over 0.74.123 (backup: build/backup/install_before_0.74.125);
+  112 files verified; her config, subtitles (the same as the repo's) and the launcher's toggle kept.
+
+## 0.74.126-0.74.127 (2026-11-17): a darker night (feature/cloud-flash); 0.74.127 INSTALLED
+- The user, 0.74.125's round 29 break and round 30: "the aircraft is far to bright for night time", "its the exposure".
+- 0.74.126: the strike's point light on your plane (sv_fleet_storm.lua slFlash) 4000 -> 800, within 8 km (was 15), one
+  every plane_light.gap_s 2.5 s at most, a short flicker (steps 1 / 0.3 / 0): the storm's 2-3 strikes a second had kept it lit.
+- 0.74.127: the night's exposure 2.3 / 4.0 / +0.6 -> 4.0 / 6.0 / -0.5, the dawn's 10 / 14 / -1 -> 12 / 14 / -2
+  (CFG.specials.fleet.sky.profile night_over / dawn_exposure). 0.74.126 was staged, never installed.
+- 0.74.127 INSTALLED 2026-11-17 for the user ("package and install 0.74.127"), over 0.74.125 (backup:
+  build/backup/install_before_0.74.127); 112 files verified; her config, subtitles (the same as the repo's) and the
+  launcher's toggle kept. Build hash 9ad11586d028 registered. Untested in game: the night's brightness, the flicker.
+
+## 0.74.128 (2026-11-17): the fleet's night is THE FESTIVAL's, round 30 a night round; INSTALLED (feature/cloud-flash)
+- The user, 0.74.127: "its like the night mode settings that you used in the festival are no longer working, even the
+  runway lights aren't on anymore", "make it so that it's still a night time round, then the next round transitions
+  normally into day time over a few rounds, the same as the fesitival does".
+- CFG.specials.fleet.sky.profile: no night_over / dawn_exposure / sunrise_rounds of its own (THE FESTIVAL's night, dawn
+  and 4-round sunrise), night_rounds 4: sunset 26, night 27-30, dawn 31, rising 31-34, midday 35 (the storm's until_round).
+  The fleet round's sky_slow 5 -> 1 (round 30 no longer the dawn). The plane light of 0.74.126 kept.
+- Possible side effect: the night's top exposure is the festival's 10 again (the cap of 4 was there so the camera
+  wouldn't stop down for a cloud flash). Untested in game.
+- Checks: lua_check, fleet_test, arc_rounds_test, sky_test passed; build hash 003ecff669fd registered.
+- INSTALLED 2026-11-17 ("install it when it's done"), over 0.74.127 (backup: build/backup/install_before_0.74.128); 112
+  files verified; her config, subtitles (the same as the repo's) and the launcher's toggle kept.
+
+## 0.74.129-0.74.130 (2026-11-17): the restart crash fixed, the storm's cloud burst lighter (feature/cloud-flash); staged, not installed
+- The user's crash of 0.74.128 (15:56:28, EXCEPTION_ACCESS_VIOLATION reading 0x1080000037 at AceCombat8.exe+0x5761b98,
+  called from UE4SS Lua): she died in round 30, restarted from the pause menu, Ctrl+F'd back to the fleet round; 8 s after
+  the storm came in, the crash. A pause-menu restart reloads the mission in the same world (the teardown gate watched the
+  same world 1706878B20 before and after), so levelGate never closed and LEVEL_DROPS never ran: the fleet's parts kept the
+  old mission's objects (the 15 old ships "sunk (its hull gone)" and paid, +65,000 Z, at 15:56:24). The exact call wasn't
+  in the dump (no call stack).
+- sv_core.lua levelRestartDrop (RESTART_DROPS, RESTART_PUTBACK): on a restart (sv_main.lua sets D.restarted where it sees
+  the event flags drop; the level-load reset calls it after ESC.restart) the drops of the parts named in RESTART_DROPS run,
+  after each RESTART_PUTBACK. Only the dev parts register (sv_fleet_storm.lua's TEST ONLY block: fleet, fleet ships /
+  lasers / round / storm / surfacing, thunder, tanicorn armour / live / hits / rail / rise fx, cine); every other part
+  keeps its own restart handling (the shuttle's pad, the sky's put-back, ESC.restart). The fleet storm's put-back: the
+  level's Cloudly layout back, the strike light off. Log: `restart: the mission's reload took these parts' objects: ...`.
+  tools/checks/restart_drop_test.sh (dev parts and a release copy: nothing named, nothing left of them).
+- The cloud burst (the user, 0.74.128: "we'll need to tone down the cloud burst brightness, but the Lighting we have
+  right now is correct"; her picture: the sky whited out over a cloud bank). Autotest whiteout runs (24 pictures each over
+  ~36 s of Ctrl+S's storm): the strike light off still whited out; the cells off, the bolts off (no glow on their tops),
+  the burst off (the stock glow) and no glow all had 0 of 24. It was NS_SV_CloudBurst: 0.74.129's DIM 300 (emissive
+  1/16, both instances, AC8's fades kept) changed nothing; 0.74.130's spawn literals 20 -> 4 with DIM 40: 0 of 24
+  whited out, the flash a blue glow lighting the clouds behind the bolt (run 20261117_163054). tools/stormfx/burst.py DIM.
+- 0.74.130 autotests: restart129 17/17 (a restart as sv_main.lua makes it, the storm's layout back, then the storm again:
+  77 flashes in 60 s, the strike light, no ghost ship paid; the test can't press the pause menu's RESTART, so the
+  mission wasn't really reloaded), whiteout 7/7 (1 of 24 pictures 3.9 % white: a strike close by lighting the plane).
+  Build hash 7cf1301b3fdf registered. Untested in game: a real pause-menu restart in round 30.
+- 0.74.129 (staged only) had the restart fix and DIM 300; one autotest run was stopped by Claude Code for low memory and
+  its clean-up done by hand (kit.py restore, the saves unchanged).
+- 0.74.130 INSTALLED 2026-11-17 for the user ("Yes continhe"), over 0.74.128 (backup: build/backup/install_before_0.74.130);
+  112 files verified; her config, subtitles (the same as the repo's) and the launcher's toggle kept.
+
+## 0.74.131-0.74.132 (2026-11-17): round 30's phase 2, GEOFON falls and the TANACORN rises (feature/geofon-rise, from feature/cloud-flash); staged, not installed
+- The user: "Continue building everything", then "GEOFON falls, Tanacorn rises" (WP5 + WP6 in the round), beaten "All her
+  guns down"; on 0.74.131's draft: "do not add a fade to black during her spawn, she spawns as the Geofon is splitting
+  apart" and "It has to look like the Tanacorn rising has split her in half".
+- sv_fleet_round.lua p2Tick (R.p2: watch, fall, rise, fight, beaten / skipped): the round's GEOFON gets T2's stages
+  (sv_fleet.lua GEO.attach / stagesStep: fires and smoke at 66 %, more and its dimmed _DAM slots at 33 %, the list); from
+  geofon.fall.watch_hp 15 % its health held at break_at 3 % (SetMinHealth); there it's held whole, stopped (its tick off),
+  off the targets and paid as sunk; the TANACORN spawned under it at once (TANI.roundRise: TANI.liveSpawn with Ctrl+L's
+  watch, then the rise's tick run in the same call so she's found and put under the sea before a frame on the surface),
+  across its keel with her bow's breach point (TANI.rise.breach_m) at its midships; her rise calls back at her breach
+  (RISE.onBreach) and GEOFON splits there: T1's V (GEO.fall / fallStep) rearing from flat over fall.rear_s 1.2, the halves
+  parted 110 m each way and sunk, hidden at hide_s; no breach in split_max_s 6: it splits anyway. After her rise: her
+  callout (THE TANACORN RISES / SHOOT DOWN ALL HER GUNS), the row TANACORN: n OF m GUNS, her railcannon's cycle from
+  rail_after_s 20; each gun paid part_pay 500 (x the tier), the half line; none up: TANI.liveDown, reward_tani 60,000 (x the
+  tier), THE TANACORN IS SILENCED; the round won only after her. Radio lines drafted in CFG.specials.fleet.round.phase2.
+- sv_tanicorn.lua TANI.liveSpawn / livePartsUp / liveDown; sv_tanicorn_rise.lua TANI.roundRise / riseState (the rise's tick
+  named riseTick). sv_fleet.lua's T1 / T2 code takes any record (poseAt's g: the V's rear, L.cfg; the test keys unchanged).
+- 0.74.131 (staged, never handed over) had a fade to black over her spawn 8 s into the break: taken out.
+- Autotest phase2 on 0.74.132 (run 20261117_175859): 22/22: round 30 from round 29's break, the fleet up, GEOFON's stage
+  1 and 2, its hold, held whole at 3 % and paid (24,000 at round 30), the TANACORN under it found in her spawn's call
+  ("her state hold"), GEOFON split by her bow's breach at +1.1 s of her rise, her rise over at +19 s, 35 of 35 guns counted,
+  paid as they went down (18: 36,000), beaten (240,000 at round 30's tier), the win after her. Two earlier runs were
+  stopped by Claude Code for low memory (their clean-up done by hand). fleet_test, restart_drop_test, lua_load_test pass.
+  Untested in game by the user: how the split looks from her own plane and the cinematic; the pay's size at round 30
+  (her 60,000 x4 = 240,000).
+
+## 0.74.133-0.74.135 (2026-11-17): GEOFON's V seen and reared, her rise's own camera work, more water on every ship's surfacing (feature/geofon-rise); staged, not installed
+- The user on 0.74.132's pictures: "Wheres the geofon in those photos" (its halves were 40 m under 5 s after the split),
+  "That looks like the tanacorn"; then "make the Rise of the Tanacorn more Cinematic with the Camera work" and "go over
+  the VFX used for the Invincible fleets rise out of the ocean also, it could use more VFX work on all the ships".
+- GEOFON's halves stand in their V and part over fall.part_s 20, sink only from sink_after_s 22 over sink_s 40 (poseAt's
+  sink on its own clock, c.fs), hidden at hide_s 65. The V never reared in game: its copies' z moved but their pitch read 0
+  after K2_SetRelativeLocationAndRotation (0.74.132-0.74.133) and after K2_SetRelativeRotation (0.74.134), though the
+  list's roll took through the latter; 0.74.135 sets each copy by K2_SetRelativeTransform with its turn a quaternion
+  (CINE.quat, as sv_cine.lua spawns its cameras): pitch +25 / -15 read back (run 20261117_181721). The pitch is read from
+  the copy's forward vector first (a rotator read 0).
+- Her rise's own shots (CFG.specials.fleet.round.phase2.cine; sv_cine.lua CINE.play hooks keys / letterbox / beats,
+  sv_tanicorn_rise.lua TANI.roundRise's cineHooks): 12 keys in her rest frame, 6 cuts (GEOFON whole pushing in, the tear
+  from the water looking up, her climb, her profile out of the wreck, above her bow as she falls, the waterline at the
+  slam, the pull-back reveal), letterbox 2.39, beats: the Helios shake at her breach, the hand-held shake, the slam's,
+  the title THE TANACORN / SHE HAS RISEN, KASKA's line. Run 20261117_181303: all 5 beats on time, 12 keys, 34 cameras.
+  The director's file (Ctrl+D / E / V / W) still drives Ctrl+R's rise.
+- The fleet's surfacing water (CFG.specials.fleet.surface.water; sv_fleet_surface.lua shipWater / keelSlam): each ship's
+  breach at its bow's breach point (breach_m x its scale; was its midships) with 6 waters; sprays round its bow as it
+  climbs, along its hull as it falls, rows of pillars and splashes along its keel at the slam, foam as it settles; denser on
+  bigger ships; at most max_live 150 up at once. Run 20261117_182008 (epic 25/25): 193 more waters, 272 held back at the cap;
+  52 fps that minute, 30 frames over 100 ms (the test's HighResShots among them). At night the sprays read faint.
+- phase2 on 0.74.135: 24/25 (the one FAIL the suite's own pattern: its `+` unescaped; the V's line shows +25 / -15).
+
+## 0.74.136-0.74.137 (2026-11-17): strikes light the big ships' breaches; WP13, the fleet shells the airfield (feature/geofon-rise); staged
+- The user: "Keep going", "Keep working until I say stop".
+- The surfacing (sv_fleet_surface.lua hit): a big ship's breach (surface.water.strike.kinds: ford, aegis, krov, udal) within
+  near_m 3 km of the camera gets a storm strike beside it (IFSKY.strike: its bolt, cloud flash and light), at most one every
+  gap_s 1.5. Run 20261117_183636 (epic 25/25): 3 strikes at breaches, 189 more waters (270 held at the live cap).
+- WP13 (sv_fleet_round.lua shellTick; CFG.specials.fleet.shell): each ship afloat of kinds (aegis, krov, gors, udal) within
+  shell_km 20 of the runway: a salvo every every_s 25 (staggered), its muzzle flash (Mission 10's NS_Maingun_Muzzle),
+  flight_s 6 later `rounds` 3 of Mission 25's explosions on the runway and `damage` 3 off the airfield (AF.bomb), the
+  impact's sound and a small shake within 6 km; the callout THE FLEET IS SHELLING THE AIRFIELD / SINK THE SHIPS IN RANGE and
+  CONTROL's line once a round; none while it's down, paused, in the STORE or the surfacing. Run 20261117_183853 (shell 10/10,
+  the gun line set to 60 km for the test): every gun ship shelling, 250 -> 211 in ~40 s; the fireballs on the lit runway.
+- 0.74.136 (staged) had the strikes only: its autotest was stopped for low memory, cleaned up by hand, retried as 0.74.137.
+
+## 0.74.138 (2026-11-17): the TANACORN's death, WP11 M5 (feature/geofon-rise); INSTALLED
+- sv_tanicorn.lua TANI.liveSink (CFG.specials.fleet.round.phase2.sink; the round calls it when her last gun is down): 28
+  explosions, fires, smoke and pillars along her (Mission 25's explosions, AC8's vessel fires), her HullMesh (every part rides
+  it) tipped 12 deg bow-down and rolled 6 while it goes 160 m under over 40 s (a quaternion transform, as GEOFON's V), then
+  her hull finished off (TANI.liveDown) and hidden. Its round's call and settings went in with 0.74.137's commit.
+- Autotest phase2 (run 20261117_184309): 27/27: GEOFON's V reared, her guns down, her reward, her sinking from start to
+  "sink over at +40 s: 28 of 28 explosions came up; her hull down".
+- INSTALLED 2026-11-17 for the user ("install it when it's done"), over 0.74.130 (backup: build/backup/install_before_0.74.138);
+  112 files verified; her config, subtitles (the same as the repo's) and the launcher's toggle kept. The user's install gets
+  everything since 0.74.130: the restart fix, the lighter cloud burst, round 30's phase 2 (GEOFON's stages and V, the
+  TANACORN's rise with its own camera work, her guns, her death), the surfacing's water and strikes, the shelling.
+
+## 0.74.139 (2026-11-17): the storm's crash of 0.74.138 fixed (feature/geofon-rise); staged
+- The user's crash in 0.74.138 (18:59:45, EXCEPTION_ACCESS_VIOLATION reading 0xffffffffffffffff in the game's own code,
+  no UE4SS on the stack): Ctrl+F at round 1's break brought round 30's night storm in, and its layout swap logged `the
+  layout CVC_ms04_20251216 -> LiveSetPauseTimerExecution_2147356082`: the storm's cached CVC_ms12 (LY.cvc) had been freed
+  and its address given to an event node, which liveObj (the address alone) passed; Cloudly drew from it. sv_anomalies_dev.lua
+  lyAsset / lySet: the cached layout and the swapped-out one kept with their names and taken only while still the same
+  object and a cloud layout ("CVC_"), else loaded again (hard rule 59); LY.cvc dropped with the level. The same check on
+  the bolts' cached meshes and material (BOLT.mesh, BOLT.mat) and the storm's cloud flash system (sv_fleet_storm.lua
+  GLOW.flash). sv_anomalies_dev.lua stays at 1,999 lines (edited in place).
+- Autotest restart129 (run 20261117_190223): 17/17, the layout CVC_ms04 -> CVC_ms12 and back.
+
+## 0.74.140-0.74.143 (2026-11-17): WP8, every fleet ship scarred; GetPathName fixed everywhere it was used (feature/geofon-rise); staged
+- WP8 (sv_fleet_round.lua scarsTick, CFG.specials.fleet.scars; sv_fleet.lua GEO.scarComp): every ship of any fleet up (the
+  round's and Ctrl+N's), once the surfacing's over: each mesh component (static, skeletal, poseable) of its hull and parts,
+  per_tick 6 a tick, its slots on dimmed copies of their own _DAM instances (embers x0.05), a slot with none of its own left;
+  never the TANACORN (not in the fleet's list).
+- GetPathName isn't callable from UE4SS's Lua ("attempt to call a TrivialObject value (method 'GetPathName')", the probe of
+  0.74.142, run 20261117_191507): every _DAM walk failed at its first step, the pcall hid it: 0.74.140-0.74.141 scarred 0 of
+  177 slots, GEOFON's stage 2 only worked by its Ford-numbered fallback, and AB.L..IN's dead look (sv_anomalies.lua, in
+  releases) found 1 of 13 (2026-10-23). 0.74.143 reads the path from GetFullName ("Class /Game/.../MI_x.MI_x") in both.
+- Autotest shell on 0.74.143 (run 20261117_191946): 15 ships, 131 of 177 slots on their _DAM (RAVEN's picture: charred,
+  embers), 55 fps that minute; the shelling 250 -> lower as before. (Its one FAIL: the suite read the first detail line.)
+
+## 0.74.144 (2026-11-17): GEOFON's deck launches (WP5) (feature/geofon-rise); staged
+- sv_fleet_round.lua deckTick (CFG.specials.fleet.round.deck): while GEOFON is afloat in round 30 (not broken, not in the
+  surfacing) a free pool pair (not up, not the round's own, no probe or sitting-out role flight) spawned off its bow
+  (ahead_m 600 along its heading, alt_m 1100), first_s 30 after the fleet's up, every every_s 30, max_up 3, max_flights 6;
+  not while you're down at the airfield with nobody flying. As the Spaceport's Ford's deck.
+- Autotest shell (run 20261117_192511): 12/12: the scars (15 ships, 131 of 177), the deck's launch 1 at +30 s, the shelling.
+
+## 0.74.145-0.74.147 (2026-11-17): her railguns wait for her rise, the surfacing 6x cheaper, Audrey and Valka in round 30 (feature/geofon-rise); staged
+- sv_tanicorn_rail.lua: a railgun seen while she rises (TANI.riseState) held in "wait" (run 20261117_192818's deployed and
+  fired 7 s into her rise), deploying once she's down: run 20261117_193828 "RAILGUN_L held while she rises".
+- sv_fleet_surface.lua sysOf: each water's Niagara system loaded once, kept with its name (hard rule 59): the surfacing's
+  part of the tick 9.4 ms -> 1.6 ms (runs 20261117_182008 / _194214).
+- The title card THE AEGIR FLEET HAS RESURFACED (the user).
+- Audrey and Valka (the user: "Add more subtitles from Audrey and Valka, especially around notable bits like the Geofon taking
+  damage or wondering where the Tanager is", her two lines): round 30's radio (warn, sighted, tanager tanager_after_s 10
+  after the sighting while GEOFON's whole, stage1 / stage2 at GEOFON's stages, won) and phase 2's (fall, rises, half,
+  beaten), the shelling's; drafted for her to edit in sv_fleet.lua (round 30 is dev only: not in subtitles.ini).
+- sv_cine.lua CINE.stop: a title or radio beat not reached when the cinematic ends is played then (run 20261117_193828: a
+  1.3 s hitch in her rise, the rise over at ~12 s of its clock, the title's beat at 11.4 never fired).
+- Autotests: epic 25/25 on 0.74.146 (RESURFACED); phase2 29/30 on 0.74.146 (the title beat: fixed in 0.74.147).
+- Autotest phase2 on 0.74.147 (run 20261117_194634): 30/30; the lines in order: the warning, KASKA's surfacing, the sighting, the Tanager's (+10 s), GEOFON's stages, Valka at the break, the title and KASKA at 11.5 / 12.3 s, her half, her death, the dawn.
+
+## 0.74.148 (2026-11-17): her spawn's hitch out of her rise's cinematic (feature/geofon-rise); staged
+- sv_tanicorn_rise.lua TANI.roundRise opts.wait / TANI.riseRelease: she's found and put under the sea in her spawn's call,
+  then held there (no play, no cinematic) until the round releases her phase2.release_s 2.5 s on: her spawn's hitch (1.3 s
+  in run 20261117_193828, inside the cinematic) lands while GEOFON sits whole. split_max_s 9, rise_max_s 45.
+- Autotest phase2 (run 20261117_202226): 31/31: spawned 20:24:31, released 20:24:33 with the cinematic, the split at +1.1 s;
+  the worst frame that minute 354 ms. Its first try was stopped for low memory (cleaned up, retried after 5 min).
+
+## 0.74.149-0.74.152 (2026-11-17): round 30's tick measured by piece; the scars spread out (feature/geofon-rise); staged
+- sv_fleet_round.lua: the round's tick timed by piece on the perf line (PERF.add "fleet round/scars", "/turrets",
+  "/phase 2", "/deck", "/shelling"; "/scars walk" and "/scars set"). Run 20261117_202734: the round 4.9 ms a tick, the scars
+  4.6 of it (176 ms the worst tick), everything else under 0.2.
+- 0.74.150: one dimmed copy a _DAM material shared by its slots (GEO.scarComp, SCARMID, kept by name): no change (5.1 /
+  146). 0.74.151: a ship's components walked one ship a tick: the walks 0.0 ms, the sets 5.1 / 134 for 3 parts (the game's
+  own work: the _DAM's first load, the mesh's render state). 0.74.152: scars.per_tick 1 (spread over ~40 s).
+- Autotests shell 12/12 on 0.74.149, 0.74.150, 0.74.151 (15 ships, 131 of 177 slots scarred each time).
+- 0.74.152 (2026-11-17): autotests phase2 31/31, epic 25/25, shell 12/12 (runs 20261117_204024 / _204401 / _204619): every round 30 piece since the 0.74.138 install together.
+
+## 0.74.153 (2026-11-17): THE TANACORN's crew voices (feature/geofon-rise); staged, the user listening first
+- The user: AC7's Alicorn crew lines "distorted and horrific" (AGENTS.md's AC7 voice exception), "Salvation is nigh!" and the
+  oath; "play throughout the entire mission"; none of Torres's replies nor the duty officer's; "use style A,B,C", then "choose
+  option C for all", "turned up a bit"; she hears them all outside the game first (build/ac7/voice_alicorn).
+- AC7's English text from its localization .dat files (tools/acloc.py, the AC8 decoder: D:'s DATDecrypt/Data, A.dat English):
+  Torres is v6001 (not v022: Count), the duty officer v6003, the crew v6156-v6159 / v6349-v6351 / the gun crew; 41 lines
+  chosen (23 Torres, 18 crew), none a reply. tools/ac7_voice.py: radio rows -> <voice ID>[_altN]_Play events -> media
+  (voice.bnk / voice_update.bnk, voice_update_en.pck) -> WAVs; tools/ac7_voice_fx.py: styles A / B / C.
+- build_all.sh stages them with TANI=1 as Sounds/tanacorn/<style>_<voice ID>.wav (123); package_release.sh and
+  package_test.sh drop Sounds/tanacorn from every zip; zip_leak_test.sh checks every zip (the TESTER TANACORN one too).
+- Runtime 0.32.37: SND_MAX_SOUNDS 64 -> 192.
+- sv_fleet_round.lua CREW (CFG.specials.fleet.round.crew, set by the piece, CFG_DEFAULTS too): moments (sighted, GEOFON's
+  stages, the split's oath, her release, the fight, her half, her death, the shelling) and ambient lines every 45-90 s from the
+  sighting, one at a time, subtitled INTERCEPT: TORRES / ALICORN CREW. Autotest phase2 on 0.74.153: 33/34 (the oath's last
+  line queued past the test's end). Then: db 2 -> 14, styles C only, gap_s 2 (not yet built).
+- 0.74.154 (2026-11-17): the crew in style C only (the user: "choose option C for all"; C made "more echoey": three repeats 0.34 s apart and a 3 s tail, tools/ac7_voice_fx.py; "thats perfect"), +14 dB, each line's echo let finish (c_tail_s 3.5). Autotest phase2 34/34 (run 20261117_213215): every crew line style C, in order.
+- 0.74.156 (2026-11-17): THE TANACORN's phases (the user: "Her phases and core"): 1 her guns; 2 at 60% of them down her
+  railcannon rises and charges at the airfield; 3 the railcannon down (or 95%): her core open (armour off, box, 30 of your
+  missiles, held at 2% by SetMinHealth), destroyed: her reward and sinking. Autotest phase2 36/36.
+- 0.74.157: the rise's high shot (7.1 s, 250 m up, its 36 deg pitch never took: the user, "one of the cameras goes high
+  into the sky") at 90 m, ~12 deg; phase2 checks every camera's read-back within 10 deg: 37/38 (key 4, 18.8 deg, open).
+- Then (unbuilt): no KASKA in round 30 (the user: "it's not Kaska's Navy at all, it's an Anomaly caused by Emblem Direct";
+  "Valka is connected to the void so she knows whats happening already"): VALKA tells AUDREY; lines in the reworked
+  subtitles.ini's voices (AUDREY "Val", "Stars"); CHARLENE's lines to CTRL (she isn't in round 30).
+- 0.74.158: every cinematic camera's pitch and roll on its camera component as a quaternion relative transform (the actor's
+  pitch never took: every camera faced level, off by its own pitch; the user's "camera high into the sky"); phase2 checks
+  every camera within 10 deg: passed. Valka's hints at GEOFON's stages; Charlene (with Comona Control) on the surfacing.
+- 0.74.159: Torres's and the crew's voices heard, never subtitled (the user). Autotest epic 26/26, phase2 39/40 (the one
+  an old check expecting Torres subtitled, taken out; "no subtitle for Torres or the crew" passed).
+- 0.74.159 INSTALLED 2026-11-17 (the user: "install it"), over 0.74.138 (backup build/backup/install_before_0.74.159); 235 files verified, her config, subtitles and the launcher's toggle kept.
+
+## 0.74.160-0.74.163 (2026-11-17; test builds, not installed): round 30 in co-op, the capture's first pieces, the lasers' width (feature/fleet-coop)
+- The user: "continue with getting this working for COOP, along with the Controlling Players plan"; co-op choices: every
+  player sees the cinematics at once, held safe; round 30's pay split like the other specials.
+- Co-op (untested in game: two linked games with the same dev build): round 30's ticks run as the host's round logic
+  (COOP.asRound: pay split and sent, callouts and subtitles to every game); the host's word "if|..." (sv_fleet_round.lua
+  IFCOOP: crew, surf, watch, break, split, hide, rise, release, core) plays the crew's voices, the surfacing cutscene (the
+  host's seed), GEOFON's stages / V / halves on a joiner's copies (COOP.copiesOf, IFLEET.shipFrom) and her rise on the
+  host's copy (TANI.joinRise); a joiner's clean-up of the fleet (SPC.UNITS_OF, a joiner's only: on the host it recycled
+  her 7 s into her sinking, 0.74.161's phase2); the storm's flashes on a joiner's GEOFON copy; the cinematics never undo
+  DOWN, a DOWN player watches them. Tests: fleet, coop_guard (an "if" row), lua_load (a stripped copy: the tick list
+  read raw and bounded: an ipairs over the load test's stand-in never ended), coop_revive, cine, coop_settings.
+- A crash fixed (0.74.160's autotest phase2, 23:01:28, UE4SS access violation): sv_tanicorn.lua's stock-shell log read a
+  shell freed since its NotifyOnNewObject (hard rule 59): each shell kept with its name, skipped when it differs. In every
+  build since 0.74.61.
+- The capture (WP14): runtime 0.32.38 SV_Pin / SV_PinInfo (the pin test: your plane moved along a point at 45 km/h each
+  input build, its drift read; autotest suite pin), down_ctl.c's gate (DownGate: a moving gate flown to and lined up on;
+  flight_test 79/79 with 12 gate flights from behind, beside and ahead, every heading), SV_Capture (the gate on DOWN's
+  takeover; SV_Down over it gives the gate up).
+- The lasers (the user: their width "didn't seem to be affected again"): AC8's NS_UAVTLS beam has only User.BeamColor /
+  BeamLength / BeamLifeTime and is a world-space mesh particle, so neither BeamLength's Y / Z nor the component's scale
+  widens it: li_beam_bundle (4) copies drawn round each beam, (li_beam_w - 1) x 2 x li_beam_off_cm (35) across its axis.
+- Autotests: 0.74.161 epic 26/26; 0.74.162 phase2 39/39 (once 38/39: the fleet's tick stopped after the rise's cinematic,
+  no error, not seen again), aegislasers 9/9.
+
+## 0.74.164-0.74.169 (2026-11-18, overnight; test builds, not installed): RAVEN's ECM, GEOFON's capture, the laser callout (feature/fleet-coop)
+- The user (2026-11-17, before bed): "Have the Raven use ECM too"; the TANACORN's railgun lines on the minimap; the captive
+  "invincible to enemy fire", "Enemies should stop targeting the player who is affected, if they're saved ... targeted",
+  "They can't die until they land on the geofon"; "take screenshots of everything"; "continue with the rest of the
+  Invincible Fleet plan".
+- RAVEN's ECM: 0.74.164 put the Alicorn's ECM class on its Mk 15 child: the part kept the Mk 15's body (its class the stock
+  BP's component's), only the ECM's row. 0.74.165: its own blueprint BP_SV_IF_Raven (tools/tanicorn/spec.py raven_bp: the
+  Aegis's + ECM_MAST, the ECM's stub at its stock path), its model row on it, a child desc on ECM_MAST (EB_002's ecm class
+  imported, mission row alcn_ecm_01 imported with alcn_01), the hull row's child. Autotest ravenecm 8/8:
+  BP_BA002_alcn_ecm_Base up on RAVEN (health 5000), and near it the HUD's ECM DETECTED and its noise (run 20261118_003839).
+  (tools/laser7 NiagaraTemplateCommandlet's log path renamed: a C4459 stopped the container build.)
+- GEOFON's capture (sv_fleet_capture.lua, a new dev-only piece; dev_only.py, fleet_test.sh, AGENTS.md): the host's pick (co-op,
+  never the last one flying), the lock (RAVEN's ECM down or escape_km breaks it), the takeover (runtime SV_Capture: the
+  gate behind GEOFON on its line), down its line, over the deck's mark an explosion and DOWN at once (DOWN.capture; the
+  solo test climbs out and is given back). The pin test (0.74.163) showed the local plane takes no per-frame teleport, and
+  0.74.167's one SV_Respawn onto the deck crashed it at flying speed: no move onto the deck. While RAVEN flies you:
+  invincible, Faction 0 (neutral; the player plane's own field, the probe's), the attack limits 0 with sv_spweapons.lua's
+  ATK held off (ATK.hold: it put the chasers back to 12 every 2 s; DOWN takes the hold too). Autotest capture 14/14 on
+  0.74.169: at the gate in 35 s, over the deck at ~60 s, the shield and targeting given back (run 20261118_010731).
+- WP9: LASER DEFENCE ONLINE and Control's line at a round's first missile a fleet laser shoots down (ZLI.onKill).
+- Co-op: her sinking on a joiner's copy (if|sink: TANI.joinSink).
+- The fleet's tick says when it's held (twice phase2's fleet stopped with no word: a pause from the window losing focus?).
+- Autotests: phase2 39/39 (0.74.165, 0.74.168), epic 26/26, ravenecm 8/8, capture 14/14. Several runs stopped for low memory
+  and were run again 5 minutes later (the user's rule).
+- 0.74.170-0.74.173 (2026-11-18, overnight): the TANACORN's railgun line: a display arm (BP_FCS_SV_TaniRailDisp, a
+  TripleRailCannon never firing, row SV_FCS_TaniRailDisp on each railgun's NpcFCSId1) is built and its row in, but the game
+  makes ONE arm a railgun part (slot 0's). Experiment 0.74.172 (slots swapped, not committed): the TripleRailCannon in slot
+  0 draws the red line on the minimap (run 20261118_013752, picture 03; the BoneControl run has none), but that arm doesn't
+  turn her barrels (2026-11-16) and the run ended in a GPU crash at the railcannon's second charge: the choice is the user's.
+  0.74.170's walk of AllArms[1..4] crashed the game (hard rule 72); ForEach since 0.74.171. The capture's floor 110 m. Co-op:
+  round 30's state replayed to one who links later (IFCOOP.syncTo); coop_guard's rows for every round-30 word (24683
+  hostile variants, no error). Autotests on 0.74.173: phase2 39/39, epic 26/26, capture 14/14 (runs 20261118_014752,
+  _015134, _015400).
+- 0.74.174-0.74.176 (2026-11-18 morning): the capture's landing (the user: "Yeah give that a try"): runtime 0.32.39 SV_CapLand
+  (gear down via FlGear), 0.32.40 holds 250-290 km/h (throttle under, brake over; the brake alone stalled it at 177 km/h).
+  The deck probe (24 straight-down traces round the mark, run 20261118_075813) went through GEOFON to the sea (3 m over its
+  root) every time: its hull has no collision a plane could rest on, so no real touchdown; the capture ends in a low pass
+  over the deck (the explosion, DOWN). Capture 16/16 on 0.74.174 and 0.74.176. Round 30's subtitles in their own file
+  (config/subtitles_dev.ini, made by the game on 0.74.175's run, never zipped; tools/subtitles.py all / split for the
+  user's friend: build/subtitles_all.ini, 496 lines).
+- 0.74.177-0.74.183 (2026-11-18): the capture lands on GEOFON (the user: "Why not just make the deck have collision??",
+  "Yeah go for it"). GEOFON's own parts have no collision (read: none); an invisible BoxComponent of ours on it at its
+  deck's height (330 x 76 m, top 20 m over its root, blocking all): the deck probe's traces hit it at 20 m from 0.74.177.
+  Runtime 0.32.41 holds the landing's height firmly (flight_test's landing at 75 m/s within 3.7 m of the glide), 0.32.42
+  lets the capture's height go under 50 m (it had been clamped at 50 in the Lua and the runtime: the landing was never asked
+  lower). The approach at the deck's height at its stern edge, pressed into it over it. GEOFON's facing = its travel
+  (45 deg; the fleet log's 135 is a compass heading); its bounds centred on its root (geofondeck suite). 0.74.183's two capture
+  runs: both touched down ~115 m before the mark, held on the deck 2 s, captured over the mark (runs 20261118_100236,
+  _100627; 16/16 each, never died).
+- 0.74.184-0.74.185 (2026-11-18): GEOFON's capture, WP14 2. The CAPTURE LOCK puts the game's own HUD static on the locked
+  player (LiveHUD BeginHUDDistortionLightning, as the lightning Anomaly's strike; off at the lock's end, a takeover or a
+  give-back), and RAVEN is pinged on every player's minimap every 3 s of a lock (RE_SV_IFRavenPing: Mission 22's
+  LiveBattleNavigationExecution on RAVEN's unit, as the raid pings; forwarded to joiners). Runs 20261118_104940 and _105521:
+  16/16 each, the static on (the lock picture's HUD warped), the ping taken (SV_Event 1), both touched down on the deck
+  (four landings of four since 0.74.183). Not yet in co-op: the static on a joiner's own HUD (the lock word reaches it).
+- 0.74.186 (2026-11-18): GEOFON's capture, B7: tools/checks/capture_test.sh (+ .lua, 62 checks on the piece alone: the picks,
+  the lock and its ends, the shield, the landing, every end giving the controls back, the host's words). Fixes it found: the
+  shield is written every tick (a field the game put back went unanswered: the "held every tick" comment wasn't so); the
+  host never holds a capture its captive's game ended unheard (the player gone, or not DOWN in give_up_s + 60 s: ended, picks
+  go on); the runtime's capture off at a level drop; a rest of every_s / 2 after any end. In game, run 20261118_110438: 16/16,
+  the static and the ping, a touchdown (five landings of five).
+- 0.74.187-0.74.192 (2026-11-18): round 30 co-op, A6 (a rejoiner's fleet), and three fixes lua_check had been warning about
+  (its warnings were hidden under the last line I read).
+  - Fixed: IFCOOP.syncTo read the round's state R outside the block that declares it (a nil global), so a rejoiner was never
+    sent GEOFON's or her state (watch, break, split, hide, core, sink): now through IFROUND.state(). The airfield shelling's
+    STORE hold read sv_fleet.lua's local OFF (nil there: the shelling never held in the STORE): now IFLEET.inStore. The
+    capture's host words take whole numbers only (coop_guard_test's 1.5 raised in a log line's %d).
+  - A6 tried and dropped: a rejoiner's fleet copies spawn at the course's start (the host's may be 10 km on). Lua can't move a
+    ship (autotest shipmove: K2_SetActorLocation undone, as hard rule 39). Mission 13's LiveAIPathTeleportByDistanceExecution
+    (metres from the path's first point) and Mission 10's LiveAIPathTeleportByPointExecution (counted from 0), object form
+    only (the unit form moved nothing), put every ship exactly there, parts and formation with it (fleetat of 0.74.189-190),
+    but each then sails back to the point it was heading for; its lane given again (also with the path record's args 7, 12
+    or 14 changed: fleetvar of 0.74.191) sends it to the lane's first point. Worse than leaving it, so out. What it would
+    take: lanes starting further along (path descs), or ships moved from the host's stream (native).
+  - Kept: IFCOOP.COURSE / coursePts / alongOf / alongNow (GEOFON's metres along its lane; the generator checks the course's
+    numbers, the projection read back 10 points of the Python course exactly, laps included) and the host's "if|at|<m>" to a
+    rejoiner, which logs how far its own copy is behind ("co-op: the fleet here ... km behind").
+- 0.74.193 (2026-11-18): the capture's health floor (the user: "They can't die until they land on the geofon"). 0.74.192's
+  autotest plane was shelled to death by the fleet's guns in its 4 s lock, before the takeover's shield. From the lock's start
+  to the trap a floor of floor_hp (1 HP) holds under your health (hits still hurt in the lock; you can't die), through
+  sv_tactical.lua's new INS.floors (other parts' floors by name, the highest held); INS.tick now writes a floor back to 0 once
+  it's off (before, a pass with no floor returned first and would have left the last one on). capture_test 68/68; in game run
+  20261118_120809: 16/16, the floor on at the lock and off at the trap, a touchdown (seven landings of seven).

@@ -191,7 +191,10 @@ local function riseBack(R, why)                          -- your view, plane and
     if CINE and CINE.stop then pcall(CINE.stop, why) end -- ((0.74.65) the director's cameras off first: its locked blend kept)
     local parts = {}
     local pawn = liveObj(survivalPC) and survivalPC.Pawn or nil
-    if R.cine then
+    if R.cine and DOWN and DOWN.me and DOWN.me() then           -- ((0.74.160) DOWN keeps its own: never made mortal, given controls or a view
+        parts[#parts + 1] = "you're DOWN: your plane, controls and spectator view left to DOWN"
+        if R.cam then pcall(function() R.cam:K2_DestroyActor() end) end
+    elseif R.cine then
         if valid(pawn) then
             parts[#parts + 1] = pcall(function() survivalPC:SetViewTargetWithBlend(pawn, TANI.rise.blend_s, 0, 0, false) end)
                 and "view back on your plane" or "view back FAILED"
@@ -208,6 +211,8 @@ end
 local function riseCine(R)                               -- the cinematic: autopilot, invincible, limits, the view
     local C, pawn = TANI.rise, liveObj(survivalPC) and survivalPC.Pawn or nil
     if not valid(pawn) then log("tanicorn: rise cinematic: no plane of yours"); return end
+    R.cine = true
+    if DOWN and DOWN.me and DOWN.me() then R.limits = {}; return end   -- ((0.74.160) DOWN: already safe, held, its own autopilot)
     local me = playerLocation()
     local alt = math.max(C.autopilot_alt_m, me and me.Z / 100 or 0)
     local okD, rD = false, "no SV_Down"
@@ -221,7 +226,9 @@ local function riseCine(R)                               -- the cinematic: autop
     end
     R.cine = true
     if CINE and CINE.play then                            -- ((0.74.65) the director's keyed cameras; the rig's SOC_Cam the fallback)
-        local okP, okC, whyC = pcall(CINE.play, R, { rate = R.rate or C.rate })
+        local hk = { rate = R.rate or C.rate }               -- ((0.74.134) a caller's own shots, bars and beats: TANI.roundRise)
+        for k, v in pairs(type(R.cineHooks) == "table" and R.cineHooks or {}) do hk[k] = v end
+        local okP, okC, whyC = pcall(CINE.play, R, hk)
         if okP and okC then log("tanicorn: rise cinematic: sv_cine.lua's keyed cameras (" .. tostring(whyC) .. ")"); return end
         log("tanicorn: rise cinematic: sv_cine.lua's cameras not made (" .. tostring(okP and whyC or ("error " .. tostring(okC)))
             .. "): the rig's SOC_Cam camera")
@@ -305,7 +312,52 @@ testKey("R", "sv_tanicorn.lua's rise test", function()
     if r > 0 then armourHulls("Ctrl+R") end              -- ((2026-11-12) her hull can't be damaged: TANI.armour)
     if r > 0 then RISE = { x = x, y = y, z = H.z_cm, before = before, anim = anim, at = os.clock(), state = "finding", next = 0 } end
 end)
-TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
+-- ((0.74.131) round 30's phase 2, sv_fleet_round.lua) TANI.roundRise(x, y, face, why): her live hull spawned there
+-- (TANI.liveSpawn: Ctrl+L's watch) and risen as Ctrl+R raises a new hull (found, scrubbed under the sea, the cinematic,
+-- played) -> r (> 0: up), why not. The rise's tick runs at once after the spawn (the user, 2026-11-17: no fade, "she spawns
+-- as the Geofon is splitting apart"): she's found and put under the sea in the same call, never a tick on the surface.
+-- TANI.riseState(): the rise's state ("finding", "hold", "rising"), nil when there's none.
+-- onBreach (optional): called with her rise's time the moment her bow breaks the surface (the round splits GEOFON there);
+-- cineHooks (optional): CINE.play's keys / letterbox / beats for her cinematic (the round's own shots)
+local riseTick
+-- opts.wait (optional, (0.74.148)): found and put under the sea at once, then held there (no cinematic, no play) until
+-- TANI.riseRelease(why): her spawn's hitch (~1.3 s, run 20261117_193828) lands before her rise, not inside its cinematic
+function TANI.riseRelease(why)
+    local R = RISE
+    if not (R and not R.back and R.wait) then return false end
+    R.wait = nil
+    R.t0 = os.clock()                                     -- (her hold_s from now)
+    log("tanicorn: rise: released (" .. tostring(why) .. ")" .. (R.cineLater and ": the cinematic now" or ""))
+    if R.cineLater then R.cineLater = nil; riseCine(R) end
+    return true
+end
+-- ((0.74.160) a joiner: her rise on the host's copy of her here (no spawn of ours: the host's comes through co-op's spawn
+-- mirror), held under the sea until the host's release (TANI.riseRelease), the same cinematic; GEOFON's split is the host's word
+function TANI.joinRise(x, y, face, why, cineHooks)
+    if RISE and not RISE.back then riseBack(RISE, "a new rise (" .. tostring(why) .. ")"); RISE = nil end
+    RISE = { x = x, y = y, z = TANI.live.z_cm, before = {}, anim = riseAsset(TANI.rise.anim), at = os.clock(), state = "finding",
+             next = 0, why = why, cineHooks = cineHooks, wait = true, joiner = true }
+    log(string.format("tanicorn: %s: her rise on the host's copy at (%.0f, %.0f) facing %.0f, held for the host's release",
+        tostring(why), x, y, face))
+    return true
+end
+-- ((0.74.160) a joiner: her hull here (the host's copy), nil when there's none
+function TANI.anyHull() local o = nil; for _, h in ipairs(ourHulls()) do o = h end; return o end
+function TANI.roundRise(x, y, face, why, onBreach, cineHooks, opts)
+    if RISE and not RISE.back then riseBack(RISE, "a new rise (" .. tostring(why) .. ")"); RISE = nil end
+    local before = {}
+    for _, o in ipairs(ourHulls()) do before[addrOf(o) or 0] = true end
+    local r, no = TANI.liveSpawn(x, y, face, why)
+    if (tonumber(r) or 0) <= 0 then return r, no end      -- (her armour: the live watch's, from the tick it finds her)
+    RISE = { x = x, y = y, z = TANI.live.z_cm, before = before, anim = riseAsset(TANI.rise.anim), at = os.clock(), state = "finding",
+             next = 0, why = why, onBreach = onBreach, cineHooks = cineHooks, wait = type(opts) == "table" and opts.wait == true or nil }
+    local okT, err = pcall(riseTick, os.clock())
+    log(string.format("tanicorn: %s: the rise's find at once after her spawn: %s", tostring(why), okT and ("her state " ..
+        tostring(RISE and RISE.state or "none")) or ("error " .. tostring(err))))
+    return r
+end
+function TANI.riseState() return RISE and not RISE.back and RISE.state or nil end
+riseTick = function(now)
     local R, C = RISE, TANI.rise
     if not R or R.back then return end
     if not D or (levelTorn and levelTorn()) then riseBack(R, "the run's over"); RISE = nil; return end
@@ -346,6 +398,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
             if CINE and CINE.director then local okD, d = pcall(CINE.director); if okD then dir = d end end
             R.rate = dir and dir.speed or C.rate
             if dir then pcall(CINE.play, R, { rate = R.rate })
+            elseif C.cinematic and R.wait then R.cineLater = true    -- ((0.74.148) held: its cinematic at its release)
             elseif C.cinematic then riseCine(R) end
         elseif now - R.at > C.find_s then
             log(string.format("tanicorn: rise: %s after %d s (an old hull without the rise rig? a build before it)",
@@ -355,7 +408,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
         return
     end
     if liveAddr(R.o) == nil or nameOf(R.o) ~= R.name then riseBack(R, "the hull is gone"); RISE = nil; return end
-    if R.state == "hold" and now - R.t0 >= C.hold_s then
+    if R.state == "hold" and not R.wait and now - R.t0 >= C.hold_s then
         local okP = pcall(function() R.rig:SetPlayRate(R.rate or C.rate) end)
         if not pcall(function() if not R.rig:IsPlaying() then R.rig:Play(false) end end) then okP = false end
         R.state, R.t1, R.playing = "rising", now, true
@@ -399,6 +452,10 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
     end
     if not R.breached and t >= C.breach_s then
         R.breached = true
+        if R.onBreach then
+            local okB, errB = pcall(R.onBreach, t)
+            if not okB then log("tanicorn: rise: its breach's caller: error " .. tostring(errB)) end
+        end
         local up = list(C.breach, C.breach_m, 0)
         log(string.format("tanicorn: rise breach at +%.1f s: %d of %d effects up (%.0f m forward of her rest midships), the sound %s",
             t, up, #C.breach, C.breach_m, riseSound(C.breach_sound, spot(C.breach_m, 0)) and "played" or "FAILED"))
@@ -469,6 +526,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now)
         riseLook(R, t)
     end
     if R.ended and now - R.endAt >= C.end_pad_s then riseBack(R, "the rise ended"); RISE = nil end
-end }
+end
+TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn rise", fn = function(now) riseTick(now) end }
 end
 -- DEV ONLY END

@@ -30,8 +30,13 @@ cp -r mod/UE4SS/AC8SurvivalMode "$F/build/install/"
 mkdir -p "$F/build/install/AC8SurvivalMode/dlls"
 echo "made-up main.dll" > "$F/build/install/AC8SurvivalMode/dlls/main.dll"
 cp "$F/build/install/AC8SurvivalMode/dlls/main.dll" "$F/build/runtime/main.dll"
+# ((2026-11-17) a made-up crew voice, as a TANI=1 build stages them: no zip may carry it, a TESTER TANACORN one included)
+mkdir -p "$F/build/install/AC8SurvivalMode/Sounds/tanacorn" && echo "made-up voice" > "$F/build/install/AC8SurvivalMode/Sounds/tanacorn/A_v6157_6001_alt1.wav"
+mkdir -p "$F/build/install/AC8SurvivalMode/config" && printf '[specials.fleet.radio.warn]
+CTRL|made up
+' > "$F/build/install/AC8SurvivalMode/config/subtitles_dev.ini"   # ((2026-11-18) round 30's subtitles: never zipped)
 echo "/* made up */" > "$F/build/runtime/submit_cfg.h"
-for c in SurvivalMode_P SurvivalMode_ZFA44_P SurvivalMode_Laser7_P SurvivalMode_Tani_P SurvivalMode_Valka_P; do
+for c in SurvivalMode_P SurvivalMode_ZFA44_P SurvivalMode_Laser7_P SurvivalMode_Tani_P SurvivalMode_Valka_P SurvivalMode_StormFx_P SurvivalMode_StormBurst_P; do
     for x in utoc ucas; do echo "$c.$x" > "$F/build/install/SurvivalMode/$c.$x"; done
 done
 
@@ -54,6 +59,10 @@ pat = re.compile(r'thunder|IFF FATAL ERROR|DI\.\.ANT|Lightninig|LightningVolume'
 bad = [n for n in z.namelist() if n.endswith(('.lua', '.ini')) and pat.search(z.read(n).decode('utf-8', 'replace'))]
 print(*bad, sep=chr(10)) if bad else None
 sys.exit(1 if bad else 0)" "$1"; }
+# novoice <zip>: 0 when no file of the zip is under Sounds/tanacorn/ (THE TANACORN's crew voices: AC7's, the user's dev install only)
+novoice() { python -I -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(1 if any('/Sounds/tanacorn/' in x for x in n) else 0)" "$1"; }
+# nodevsubs <zip>: 0 when the zip has no config/subtitles_dev.ini (round 30's subtitles: the user's dev install only)
+nodevsubs() { python -I -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(1 if any(x.endswith('subtitles_dev.ini') for x in n) else 0)" "$1"; }
 # holds <zip> <container>: 0 when the zip carries that container's .utoc
 holds() { python -I -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(0 if any(x.endswith('/' + sys.argv[2] + '.utoc') for x in n) else 1)" "$1" "$2"; }
 # one <label> <zip glob> <zfa: 1 kept / 0 out> <command...>: packs one zip, then what it carries
@@ -65,8 +74,14 @@ one() {
         if [ -z "$z" ]; then check 1 "$label: a zip made ($glob)"; return; fi
         holds "$z" SurvivalMode_Tani_P && r=1 || r=0
         check $r "$label: no Tanicorn container"
+        holds "$z" SurvivalMode_StormFx_P || holds "$z" SurvivalMode_StormBurst_P && r=1 || r=0
+        check $r "$label: no storm cloud-flash container (tools/stormfx)"
         devfree "$z" && r=0 || r=1
         check $r "$label: no dev-install-only Lua (DEV ONLY blocks, the Tanicorn's test)"
+        novoice "$z" && r=0 || r=1
+        check $r "$label: no TANACORN crew voices (AC7's, Sounds/tanacorn)"
+        nodevsubs "$z" && r=0 || r=1
+        check $r "$label: no round 30 subtitles (config/subtitles_dev.ini)"
         case "$label" in *TESTER*|test*) ;; *)
             thunderfree "$z" > "$T/$label.thunder.txt" && r=0 || r=1
             check $r "$label: no Distant Thunder (the lightning Anomaly) in its Lua or ini"
@@ -116,6 +131,8 @@ check $r "TESTER=1 TANI=1: packaged as ..._TESTER_Online_ZFA44_TANACORN.zip"
 if [ -n "$z" ]; then
     holds "$z" SurvivalMode_Tani_P && holds "$z" SurvivalMode_P && r=0 || r=1
     check $r "TESTER=1 TANI=1: her container and Survival's own in it"
+    novoice "$z" && r=0 || r=1
+    check $r "TESTER=1 TANI=1: no TANACORN crew voices (AC7's: the user's dev install only)"
     grep -q "is the container the build checked" "$T/tani_tester.txt" && r=0 || r=1
     check $r "TESTER=1 TANI=1: the container verified against the build's marker (tools/tani_container.py)"
 fi

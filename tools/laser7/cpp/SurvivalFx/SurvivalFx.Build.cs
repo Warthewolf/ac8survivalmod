@@ -10,7 +10,8 @@ public class SurvivalFx : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
-			"Core", "CoreUObject", "Engine", "Json", "UnrealEd", "Kismet", "KismetCompiler", "BlueprintGraph", "Live"
+			"Core", "CoreUObject", "Engine", "Json", "UnrealEd", "Kismet", "KismetCompiler", "BlueprintGraph", "Live",
+			"Niagara", "NiagaraEditor"   // ((2026-11-17) tools/stormfx: NiagaraTemplateCommandlet)
 		});
 	}
 }

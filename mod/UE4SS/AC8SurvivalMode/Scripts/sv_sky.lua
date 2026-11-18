@@ -762,7 +762,15 @@ end
 --   SKY.arcEnd()           the last round of the arc (k): the round before midday is held
 --   SKY.arcTick(now)       every tick of a run, every game (sv_main.lua probeTickB)
 --   SKY.arcReset(why)      put back now and forgotten (a restart, the run's end)
+-- ((2026-11-16) the user: INVINCIBLE FLEET's own day-night cycle "using the same method we use for The Festival": the sun
+-- setting from round 25, the night ending by round 30) the arc's owner: GONE FISHIN''s F, or a special's own start
+-- (SKY.arcOwners[name] = function() -> its F or nil), the latest start winning; an owner's profile (SKY.arcProfiles[name]:
+-- settings over CFG.sky.arc, e.g. fewer sinking rounds: #sink_el is their count) shapes its arc. SKY.arcF stays GONE
+-- FISHIN''s alone (THE FESTIVAL's round and the schedule read it). SKY.arcState(): the arc's step, place and mode now.
+--   SKY.arcOwner()         F, profile name (nil: GONE FISHIN''s)
 ARC = { on = false, base = nil, last = nil, roundAt = {}, said = {} }
+SKY.arcOwners = SKY.arcOwners or {}
+SKY.arcProfiles = SKY.arcProfiles or {}
 do
 -- ((2026-11-08) Mission 9's night, docs/re/NIGHT_SKY.md 5: spec the light's specular, ms / msap the night sky's
 -- multiple scattering, mfd / meter / ice the cockpit's glow, nav the planes' own lights, lrad r.MinScreenRadiusForLights)
@@ -771,7 +779,18 @@ local FIELDS = { "el", "az", "factor", "r", "g", "b", "disc", "moon", "mel", "ma
 local LOG_FIELDS = { factor = true, em = true, sl_x = true, mfd = true, meter = true, ice = true, lrad = true }   -- (brightness: log space)
 local MODE_FIELDS = { el = true, az = true, factor = true, r = true, g = true, b = true, disc = true, moon = true,
                       mel = true, maz = true, spec = true }
-local function acfg() return (CFG.sky or {}).arc or {} end
+local function acfg()                                     -- (CFG.sky.arc, with the owner's profile over it)
+    local b = (CFG.sky or {}).arc or {}
+    local p = ARC.profile and SKY.arcProfiles[ARC.profile]
+    if type(p) ~= "table" then return b end
+    local pc = ARC.pcache
+    if pc and pc.p == p and pc.b == b then return pc.m end
+    local m = {}
+    for k, v in pairs(b) do m[k] = v end
+    for k, v in pairs(p) do m[k] = v end
+    ARC.pcache = { p = p, b = b, m = m }
+    return m
+end
 local function n(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
 local function lerp(a, b, t) return a + (b - a) * t end
 local function lerpLog(a, b, t)
@@ -794,7 +813,25 @@ function SKY.arcF()
     return nil
 end
 local function nightRounds() return math.max(1, math.floor(n(acfg().night_rounds, 3))) end
-function SKY.arcEnd() return 7 + nightRounds() + math.max(1, math.floor(n(acfg().sunrise_rounds, 4))) - 1 end
+local function sinkRounds()                               -- (the sinking steps before the sunset: sink_rounds (0 or more),
+    local c = acfg()                                      -- else #sink_el, 5 for GONE FISHIN''s)
+    local sr = tonumber(c.sink_rounds)
+    if sr then return math.max(0, math.floor(sr)) end
+    local se = c.sink_el
+    return (type(se) == "table" and #se > 0) and #se or 5
+end
+function SKY.arcEnd() return sinkRounds() + 2 + nightRounds() + math.max(1, math.floor(n(acfg().sunrise_rounds, 4))) - 1 end
+function SKY.arcOwner()
+    local F, prof = SKY.arcF(), nil
+    for name, fn in pairs(SKY.arcOwners) do
+        local ok, f2 = pcall(fn)
+        f2 = ok and tonumber(f2) or nil
+        if f2 and f2 >= -20 and f2 == math.floor(f2) and (not F or f2 > F) then F, prof = f2, name end
+    end
+    return F, prof
+end
+function SKY.arcState() return { on = ARC.on, k = ARC.k, kRaw = ARC.kRaw, u = ARC.u, mode = ARC.mode, profile = ARC.profile, sink = sinkRounds(),
+                                 night = nightRounds() } end
 function SKY.arcSet(F, why)
     F = tonumber(F)
     if not (RUN and F and F >= -20) then return false end
@@ -908,23 +945,30 @@ end
 -- the sky at the start of round F + k, on the stock sky `base`
 function SKY.arcAnchor(k, base)
     local c, ng = acfg(), (CFG.sky or {}).night or {}
+    if type(c.night_over) == "table" then              -- ((2026-11-16) a profile's own night: its settings over CFG.sky.night)
+        local m = {}
+        for f, v in pairs(ng) do m[f] = v end
+        for f, v in pairs(c.night_over) do m[f] = v end
+        ng = m
+    end
     local a = copy(base)
     a.mode, a.set_el, a.stars = "sun", nil, 0
     local R = math.max(1, math.floor(n(c.sunrise_rounds, 4)))
     local function exp(t) a.ex_min, a.ex_max, a.ex_bias = trip(t, { base.ex_min, base.ex_max, base.ex_bias }) end
     if k <= 0 then return a end
     local sinkEl, sinkAz = c.sink_el or {}, c.sink_az or {}
-    if k <= 5 then
+    local S = sinkRounds()
+    if k <= S then
         a.el, a.az = n(sinkEl[k], base.el), n(sinkAz[k], base.az)
         local dx1, dx2, dx3 = trip(c.dusk_exposure, { 11, 14, -0.5 })
-        local t = k / 5
+        local t = k / S
         a.ex_min, a.ex_max, a.ex_bias = lerp(base.ex_min, dx1, t), lerp(base.ex_max, dx2, t), lerp(base.ex_bias, dx3, t)
         a.stars = 1
-    elseif k == 6 then
+    elseif k == S + 1 then
         a.el, a.az, a.set_el = n(c.sunset_el, 1), n(c.sunset_az, 160), n(c.set_el, -3)
         exp(c.sunset_exposure)
         a.sl_x, a.em, a.vfx, a.stars = n(c.sunset_skylight, 0.5), n(c.sunset_emissive, 100), n(c.sunset_vfx_ev, 8), 1
-    elseif k <= 6 + nightRounds() then              -- (the night: the same sky each of its rounds)
+    elseif k <= S + 1 + nightRounds() then          -- (the night: the same sky each of its rounds)
         a.mode = "moon"
         a.el, a.az, a.factor = n(ng.sun_el, 35), n(ng.sun_az, -130), n(ng.factor, 0.5)
         a.r, a.g, a.b = trip(ng.rgb, { 0.89, 0.96, 1 })
@@ -947,7 +991,7 @@ function SKY.arcAnchor(k, base)
         local mid = copy(base)
         mid.el, mid.az = n(c.midday_el, 52.9), n(c.midday_az, 180)
         mid.ex_min, mid.ex_max, mid.ex_bias = trip(c.day_exposure, { 13, 14, 0 })
-        local t = math.min(1, (k - 7 - nightRounds()) / R)
+        local t = math.min(1, (k - S - 2 - nightRounds()) / R)
         -- ((2026-11-07) the user at round F+9: "sun is currently up in the sky but it's not back to normal brightness
         -- yet") the light (exposure, sky light, glow, the effects' EV) back to the day's sunrise_light_x times as fast as
         -- the sun climbs: by the sunrise's middle with 2
@@ -1104,7 +1148,11 @@ local function arcPlace(now, F)
         return k, b.u0 + (1 - b.u0) * t, "the break"
     end
     ARC.roundAt[r] = ARC.roundAt[r] or now
-    return k, cap * math.min(1, math.max(0, now - ARC.roundAt[r]) / math.max(1, n(c.round_s, 240))), "the fight"
+    -- ((2026-11-17) the user: "move the sunrise so it's slower during round 30") SKY.fightSlow: a special round's own part
+    -- sets it (x round_s while its fight lasts); the break still finishes the step by the next round's start
+    local slow = math.max(1, n(SKY.fightSlow, 1))
+    return k, cap * math.min(1, math.max(0, now - ARC.roundAt[r]) / math.max(1, n(c.round_s, 240) * slow)),
+        slow > 1 and string.format("the fight, x%g slower", slow) or "the fight"
 end
 
 local MPC_KEYS = { { "em", "mpc|env|Ctrl_Scene_EmissiveScale" }, { "vfx", "mpc|vfx|VFXEmissiveEV" },
@@ -1253,10 +1301,18 @@ function SKY.arcTick(now)
     local c, sc = acfg(), CFG.sky or {}
     if sc.enabled == false or c.enabled == false or not D then return end
     if levelTorn and levelTorn() then return end
-    local F = SKY.arcF()
+    local F, prof = SKY.arcOwner()
     if not F then
         if ARC.on then SKY.arcReset("the run has no GONE FISHIN' now") end
         return
+    end
+    if prof ~= ARC.profile then                           -- (another owner: its arc blended in from the sky written last)
+        if ARC.on then
+            log(string.format("sky: arc: %s's arc from round %d now (was %s's)", prof or "GONE FISHIN'", F, ARC.profile or "GONE FISHIN'"))
+            if ARC.last then ARC.blendFrom, ARC.blendAt = copy(ARC.last), nil end
+        end
+        ARC.profile, ARC.pcache = prof, nil
+        c = acfg()
     end
     -- TEST ONLY BEGIN (the sky test's steps 2-4 write the sky themselves: the arc waits)
     if SKY.test and SKY.test.step and SKY.test.step >= 2 and SKY.test.step <= 4 then return end
@@ -1283,7 +1339,9 @@ function SKY.arcTick(now)
         if first then ARC.blendFrom, ARC.blendAt = copy(ARC.base), nil end
     end
     local k, u, why = arcPlace(now, F)
+    ARC.kRaw = k                                          -- (the round past F, before midday's hold caps it)
     if k > SKY.arcEnd() + 1 then k, u, why = SKY.arcEnd() + 1, 0, "midday, held" end
+    ARC.k, ARC.u = k, u
     local s = SKY.arcAt(k, u, ARC.base)
     -- (a blend in: a new level, a late joiner, a step of the test key)
     if ARC.blendFrom then

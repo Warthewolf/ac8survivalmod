@@ -1,9 +1,11 @@
 -- tani_vls_test.lua <Scripts dir> (run by tools/checks/tani_vls_test.sh): THE TANACORN's VLS blocks in Scripts/sv_tanicorn.lua
 -- (2026-11-12, WP1's VLS route: docs/re/TANICORN.md "VLS"), the part alone with the game stubbed:
 --   the types: TANI.vls (9: VLSD, VLSS_L1..R4), their names as survival_events.tani_vls makes them, two with units (Ctrl+K's),
---     every type a KINDS entry (TANI.live's 32 parts, each type's row health);
+--     every type a KINDS entry (TANI.live's 35 parts: (stage 4) the railcannon and the two railguns last, each type's
+--     row health);
 --   the rows: SV_FCS_TaniVLS cloned once from NPC_FCS_VesselVLSmk41 (SlotNum 8, the fcs_set fields, no turn speeds), each
---     type's model and DT_NPC row added;
+--     type's model and DT_NPC row added; ((stage 4) the rail parts' too, and SV_FCS_TaniRail copied whole from the build's
+--     DT_SV_TaniFCS into DT_NPC_FCS, never cloned; the railcannon has no fire control row);
 --   Ctrl+K: refused outside a run and on a joiner; in one, the two test blocks spawned across your path, each turned so its
 --     cells launch toward you (180 / 270 deg), the VLS watch on;
 --   the watch: its first look only learns; a launch by a block (a pooled missile hidden -> shown, its OwningGameObject the
@@ -99,7 +101,10 @@ local TABLES = { ["/DT_NPC"] = table_({}), ["/DT_SV_NpcRows"] = table_({}), ["/D
                                                                     RestingTime = 10 },
                                             NPC_FCS_FlakGun000 = { SlotNum = 1, MagazineCapacity = 10 },
                                             NPC_FCS_VesselArtillery000 = { SlotNum = 1, MagazineCapacity = 1 },
-                                            NPC_FCS_VesselCIWS000 = { SlotNum = 1, MagazineCapacity = 1 } }) }
+                                            NPC_FCS_VesselCIWS000 = { SlotNum = 1, MagazineCapacity = 1 } }),
+                 -- ((stage 4) the build's own table of the railguns' row: copied whole, its soft class never read)
+                 ["/Game/Mods/SurvivalMode/Data/DT_SV_TaniFCS.DT_SV_TaniFCS"] = table_({ SV_FCS_TaniRail = { SlotNum = 1,
+                     MagazineCapacity = 1, ReloadTime = 10, FCSBlueprintClass = "(a soft class: never read)" } }) }
 local ANIMS, CLASSES = {}, {}
 function loadObject(path)
     if TABLES[path] then return TABLES[path] end
@@ -190,6 +195,7 @@ print("sv_tanicorn.lua's VLS blocks")
 dofile(DIR .. "sv_tanicorn.lua")
 dofile(DIR .. "sv_tanicorn_rise.lua")                 -- ((2026-11-12) the rise: its piece since the split)
 dofile(DIR .. "sv_tanicorn_hits.lua")              -- ((2026-11-12) the hit probe: its piece)
+dofile(DIR .. "sv_tanicorn_rail.lua")              -- ((stage 4) the railguns and the railcannon: its piece, quiet here)
 
 -- the types and their names
 check(type(TANI.vls) == "table" and #TANI.vls == 9, "TANI.vls: 9 block types (" .. tostring(TANI.vls and #TANI.vls) .. ")")
@@ -207,10 +213,30 @@ check(byKey.VLSS_R4 and not byKey.VLSS_R4.test and byKey.VLSS_R4.unit == nil and
 local allFcs = true
 for _, k in ipairs(TANI.vls or {}) do allFcs = allFcs and k.fcs == "SV_FCS_TaniVLS" and k.fcs_speed == nil and k.vls end
 check(allFcs, "every type on SV_FCS_TaniVLS, no turn speeds")
-check(#TANI.live.parts == 32 and TANI.live.parts[17][1] == "VLSD_1" and TANI.live.parts[32][2] == "VLSS_R4",
-    "TANI.live: 32 parts, the VLS blocks last (" .. #TANI.live.parts .. ")")
+check(#TANI.live.parts == 35 and TANI.live.parts[17][1] == "VLSD_1" and TANI.live.parts[32][2] == "VLSS_R4",
+    "TANI.live: 35 parts, the VLS blocks after the mounts (" .. #TANI.live.parts .. ")")
+local P3 = TANI.live.parts
+check(P3[33] and P3[33][1] == "RAILCANNON" and P3[33][2] == "RAILCANNON" and P3[34] and P3[34][1] == "RAILGUN_L"
+    and P3[34][2] == "RAILGUN_L" and P3[35] and P3[35][1] == "RAILGUN_R" and P3[35][2] == "RAILGUN_R",
+    "(stage 4) the railcannon and the two railguns last, each socket its own type")
+local RK = {}
+for _, k in ipairs(TANI.rail or {}) do RK[k.key] = k end
+check(#(TANI.rail or {}) == 3 and RK.RAILCANNON and RK.RAILCANNON.cannon and RK.RAILCANNON.fcs == nil
+    and RK.RAILCANNON.npc == "SV_Npc_TaniRailcannon" and RK.RAILCANNON.model == "SV_Model_TaniRailcannon"
+    and RK.RAILCANNON.name_key == "SV_TaniRailcannon_Name" and RK.RAILCANNON.name == "TANACORN RAILCANNON"
+    and RK.RAILCANNON.class_path == "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_RAILCANNON.BP_SV_Tani_RAILCANNON_C"
+    and RK.RAILCANNON.anim == "/Game/Mods/SurvivalMode/Tanicorn/Model/AS_SV_Tani_RAILCANNON_Deploy.AS_SV_Tani_RAILCANNON_Deploy",
+    "TANI.rail: the railcannon's names (tag Railcannon), no fire control row, its Deploy")
+check(RK.RAILGUN_L and not RK.RAILGUN_L.cannon and RK.RAILGUN_L.npc == "SV_Npc_TaniRailgunL" and RK.RAILGUN_L.fcs == "SV_FCS_TaniRail"
+    and RK.RAILGUN_L.fcs_table == "/Game/Mods/SurvivalMode/Data/DT_SV_TaniFCS.DT_SV_TaniFCS" and RK.RAILGUN_L.class == "BP_SV_Tani_RAILGUN_L_C"
+    and RK.RAILGUN_R and RK.RAILGUN_R.model == "SV_Model_TaniRailgunR" and RK.RAILGUN_R.name == "TANACORN RAILGUN"
+    and RK.RAILGUN_R.unit == nil, "TANI.rail: the railguns' names (RailgunL / RailgunR), on SV_FCS_TaniRail, no unit")
+check(TANI.rail_fcs and TANI.rail_fcs.fcs == "SV_FCS_TaniRail", "TANI.rail_fcs names the build's row")
 check(TANI.live.row_health.VLSD == 200 and TANI.live.row_health.VLSS_R2 == 200 and TANI.live.row_health.T5 == 200
-    and TANI.live.row_health.T16 == 400, "each VLS type's row health 200, the T5's 200, the T16's 400 (2026-11-12: x5)")
+    and TANI.live.row_health.T16 == 400 and TANI.live.row_health.RAILGUN_L == 400 and TANI.live.row_health.RAILGUN_R == 400
+    and TANI.live.row_health.RAILCANNON == 1000,
+    "each VLS type's row health 200, the T5's 200, the T16's 400 (2026-11-12: x5); the railguns' 400, the railcannon's 1000")
+check(KEYS.H ~= nil, "(stage 4) Ctrl+H bound (the railcannon)")
 check(KEYS.K ~= nil and KEYS.L ~= nil, "Ctrl+K and Ctrl+L bound")
 check(NEW["/Script/Live.LiveVLSMissile"] ~= nil, "the VLS missiles kept as the game makes them (NotifyOnNewObject)")
 
@@ -234,6 +260,10 @@ for _, k in ipairs(TANI.vls) do
     TABLES["/DT_SV_ModelRows"].rows[k.model] = { MaxHealth = k.health }
     TABLES["/DT_SV_NpcRows"].rows[k.npc] = { ModelId = k.model }
 end
+for _, k in ipairs(TANI.rail) do                     -- ((stage 4) the rail parts' rows, as the build makes them)
+    TABLES["/DT_SV_ModelRows"].rows[k.model] = { MaxHealth = k.health }
+    TABLES["/DT_SV_NpcRows"].rows[k.npc] = { ModelId = k.model }
+end
 local SPAWNS = {}
 function SV_Spawn(unit, x, y, z, face) SPAWNS[#SPAWNS + 1] = { unit = unit, x = x, y = y, z = z, face = face }; return 1 end
 local pawn = obj("pawn", { K2_GetActorRotation = function() return { Yaw = 30 } end })
@@ -253,6 +283,16 @@ local rowsLine = logged("the 9 VLS block types' rows: 9 in", n0 + 1)
 check(rowsLine ~= nil, "every type's model and DT_NPC row added")
 check(TABLES["/DT_NPC_Model"].rows.SV_Model_TaniVLSSR3Side ~= nil and TABLES["/DT_NPC"].rows.SV_Npc_TaniVLSDeck ~= nil,
     "the rows in the game's tables")
+check(logged("the 3 rail part types' rows: 3 in", n0 + 1) ~= nil and TABLES["/DT_NPC_Model"].rows.SV_Model_TaniRailcannon ~= nil
+    and TABLES["/DT_NPC"].rows.SV_Npc_TaniRailgunR ~= nil, "(stage 4) the rail parts' model and DT_NPC rows added")
+local rf = TABLES["/DT_NPC_FCS"].rows.SV_FCS_TaniRail
+local nR = 0
+for _, c in ipairs(CLONES) do if c == "SV_FCS_TaniRail" then nR = nR + 1 end end
+check(rf ~= nil and rf.ReloadTime == 10 and rf.FCSBlueprintClass ~= nil and nR == 0
+    and logged("fire control row SV_FCS_TaniRail from DT_SV_TaniFCS: in (copied whole", n0 + 1) ~= nil,
+    "(stage 4) SV_FCS_TaniRail copied whole from DT_SV_TaniFCS into DT_NPC_FCS, never cloned (" .. tostring(logged("SV_FCS_TaniRail")) .. ")")
+check(logged("NOT in: no sv_tanicorn_rail.lua", n0 + 1) == nil and logged("SV_FCS_TaniRailcannon", n0 + 1) == nil,
+    "(stage 4) the railcannon's missing fire control row skipped, the railguns' made once")
 check(#SPAWNS == 2 and SPAWNS[1].unit == "SV_Unit_TaniVLSDeck" and SPAWNS[2].unit == "SV_Unit_TaniVLSSL1Side",
     "the two test blocks spawned")
 check(SPAWNS[1] and math.abs(SPAWNS[1].face - 210) < 1e-6 and SPAWNS[2] and math.abs(SPAWNS[2].face - 300) < 1e-6,
@@ -441,7 +481,7 @@ check((logged("Part_VLSD_2 (VLSD) hp 150 -> 0/40 (-150) DOWN", n0 + 1)) ~= nil, 
 check(logged("HULL hull_", n0 + 1) == nil, "the hull's health never moved: no line")
 h1.parts.VLSD_2.HealthInternal = 400                     -- (back up for the guard's checks below)
 for _ = 1, 30 do tick() end
-check(logged("tanicorn: armour: 2 of 32 parts at +") ~= nil, "armour: its count line once armour_s is up (2 of 32 here)")
+check(logged("tanicorn: armour: 2 of 35 parts at +") ~= nil, "armour: its count line once armour_s is up (2 of 35 here)")
 sink(h1)
 -- (the review of 2026-11-12) a press before the watch's tick has seen the hull go: the handler keeps the parts itself
 n0 = #LOG

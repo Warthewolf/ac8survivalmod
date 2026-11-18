@@ -128,7 +128,27 @@ typedef struct {
     double diveGamma;                        /* (0.32.21) the steepest climb angle of that dive (deg)                 */
     float  out[5];
     double dist, headErr, bankWant, gamma;   /* for the log                                                           */
+    /* (runtime 0.32.38, GEOFON's capture: DownGate) a gate to fly to instead of the circle: (gx, gy) cm, the line it's
+     * flown along (ghd deg: the ship's heading), arrived once within CP_ARRIVE_M of it, on its line and at its height   */
+    int    gate, arrived, onLine;
+    int    land;                             /* (0.32.39) the capture's landing: the brake held over CP_LAND_MS        */
+    double gx, gy, ghd, cross;
 } DownCtl;
+#define CP_ARRIVE_M     500.0  /* m: arrived within this behind the gate (to 200 m past it) ...                       */
+#define CP_ARRIVE_X     200.0  /* m: ... this close to its line ...                                                   */
+#define CP_ARRIVE_DEG   20.0   /* deg: ... heading along it this closely ...                                          */
+#define CP_LINE_M       1500.0 /* m: the line's capture: the heading off it by atan(cross / this)                     */
+#define CP_TURN_M       1200.0 /* m behind the gate at least to fly its line (a turn's room at AC8's ~8 deg/s)       */
+#define CP_ARRIVE_ALT   200.0  /* m: ... and this close to its height                                                 */
+#define CP_LEAD_MAX     5000.0 /* m: the aim point behind the gate along its line                                    */
+#define CP_AWAY_M       4000.0 /* m behind the gate at least to turn onto its line facing away from it              */
+#define CP_LOW_M        150.0  /* m: under this the gate's turns are shallow (DN_BANK_LOW), as DOWN's are low       */
+#define CP_LAND_MS      75.0   /* m/s (270 km/h): (0.32.39) landing, the brake held above this speed                */
+#define CP_LAND_HI      80.0   /* m/s: (0.32.40) the brake over this ...                                            */
+#define CP_LAND_LO      70.0   /* m/s: ... the throttle under this (0.32.39's brake alone stalled it at 49 m/s)      */
+#define CP_LAND_KH      0.25   /* deg of climb a metre of height error, landing (0.04 otherwise)                  */
+#define CP_LAND_SINK    6.0    /* deg: the steepest descent asked, landing                                         */
+#define CP_LAND_BANK    30.0   /* deg: the steepest bank, landing (the line's small corrections only)             */
 
 static double DnWrap(double a) { while (a > 180.0) a -= 360.0; while (a < -180.0) a += 360.0; return a; }
 static double DnClamp(double v, double lo, double hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -148,6 +168,12 @@ static void DownInit(DownCtl* c, double cx, double cy, double alt, double radius
     c->sPitch = sPitch < 0 ? -1 : 1;
     c->phase = DN_START;
     c->dir = 1;
+}
+
+/* (runtime 0.32.38) the gate: fly to (gx, gy) at alt, lined up along ghd (deg); again each frame as it moves. */
+static void DownGate(DownCtl* c, double gx, double gy, double ghd, double alt)
+{
+    c->gate = 1; c->gx = gx; c->gy = gy; c->ghd = ghd; c->alt = alt;
 }
 
 /* The way round that needs the smaller turn from the plane's track (deg); right-hand near the centre. */
@@ -304,11 +330,32 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
         if (CoAbs(rr - R) < 0.5 * R) c->radI = DnClamp(c->radI + 4.0 * (rr - R) / R * dt, -30.0, 45.0);
         double delta = DnClamp(90.0 * (rr - R) / R + c->radI, -45.0, 80.0);
         double want = rr < 1.0 ? track : CoAtan2(y, x) / D2R + c->dir * (90.0 + delta);
+        if (c->gate) {                                         /* (0.32.38) the gate: an aim point on its line behind it */
+            double ux = Cos(c->ghd * D2R), uy = Sin(c->ghd * D2R);
+            double gxm = (pos[0] - c->gx) / 100.0, gym = (pos[1] - c->gy) / 100.0;
+            double gd = CoSqrt(gxm * gxm + gym * gym), along = gxm * ux + gym * uy;
+            c->cross = -gxm * uy + gym * ux;
+            /* behind the gate, well inside its approach: onto its line and along it (the heading off the line by
+             * atan(cross / CP_LINE_M): it closes on the line without crossing it); ahead of it or beside it: round to a
+             * point CP_LEAD_MAX behind it first */
+            /* (on its line it stays there to the gate: off it only past the gate or far off to its side) */
+            if (c->onLine) { if (along > 300.0 || CoAbs(c->cross) > 4000.0) c->onLine = 0; }   /* (room for a U-turn onto it) */
+            else if (along < -(CoAbs(DnWrap(track - c->ghd)) > 90.0 ? CP_AWAY_M : CP_TURN_M) && CoAbs(c->cross) < 3000.0)
+                c->onLine = 1;                                 /* (facing away: from further back, its U-turn's room) */
+            if (c->onLine) want = c->ghd - CoAtan2(c->cross, CP_LINE_M) / D2R;
+            else want = CoAtan2(-uy * CP_LEAD_MAX - gym, -ux * CP_LEAD_MAX - gxm) / D2R;
+            rr = gd; R = 1e9;                                  /* (no circle: nothing of its turn fed forward) */
+            c->arrived = along > -CP_ARRIVE_M && along < 200.0 && CoAbs(c->cross) < CP_ARRIVE_X &&
+                         CoAbs(DnWrap(track - c->ghd)) < CP_ARRIVE_DEG && CoAbs(h - c->alt) < CP_ARRIVE_ALT;
+        }
         double e = DnWrap(want - track);
         /* the climb angle wanted from the altitude error (and its integral, slowly: the sag in a banked turn) */
         double eh = c->alt - h;
         c->altI = DnClamp(c->altI + eh * dt, -3000.0, 3000.0);
         double gammaWant = DnClamp(0.04 * eh + 0.0015 * c->altI, -12.0, 15.0);
+        /* (0.32.41) landing: the height held hard (0.32.40's 0.04 deg a metre left the capture 30-40 m off it: it crossed
+         * GEOFON's deck 32 m up), a gentle sink at most and its integral faster, so it follows the line down to the deck */
+        if (c->land) gammaWant = DnClamp(CP_LAND_KH * eh + DnClamp(0.01 * c->altI, -2.0, 2.0) - 0.3 * c->rth, -CP_LAND_SINK, 10.0);
         double vt = CoSqrt(vh * vh + vz * vz);
         double gamma = vt > 20.0 ? CoAtan2(vz, vh) / D2R : rot[0];
         /* the dive backstop: a steep dive the climb wanted doesn't pull it out of (a wrong pitch sign the check can't see
@@ -338,7 +385,8 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
         if (CoAbs(e) > 150.0 && c->lastTurn != 0.0 && (wH > 0) != (c->lastTurn > 0)) wH = c->lastTurn > 0 ? DN_TURN_MAX : -DN_TURN_MAX;
         c->lastTurn = wH;                                      /* (its side kept through ~180 deg errors) */
         double wV = DnClamp(DN_KV * (gammaWant - gamma) - 0.1 * c->rth, -DN_CLIMB_MAX, DN_CLIMB_MAX);
-        int low = h < DN_LOW_M || h < c->alt - 600.0;
+        /* (0.32.38) the gate is low (300 m): its turns flown at full bank, the low limit only under CP_LOW_M */
+        int low = c->gate ? (h < CP_LOW_M && !c->land) : (h < DN_LOW_M || h < c->alt - 600.0);   /* (landing: its low line) */
         double off = CoAtan2(CoAbs(wH), -wV) / D2R;            /* (how far the wanted direction is from straight down) */
         if (wV >= 0.0 || low) c->push = 0;
         else if (off < DN_PUSH_IN) c->push = 1;
@@ -346,7 +394,7 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
         double bankWant;
         if (c->push) bankWant = CoAtan2(-wH, -wV) / D2R;       /* (pushed: the bank the other way, under DN_PUSH_OUT) */
         else {
-            double bmax = low ? DN_BANK_LOW : DN_BANK_MAX;
+            double bmax = c->land ? CP_LAND_BANK : low ? DN_BANK_LOW : DN_BANK_MAX;
             bankWant = DnClamp(CoAtan2(wH, wV < 0.0 && low ? 0.0 : wV) / D2R, -bmax, bmax);
         }
         c->bankF += DnWrap(bankWant - c->bankF) * DnClamp(dt / DN_BANK_TAU, 0.0, 1.0);   /* (smoothed: AC8 answers late) */
@@ -378,6 +426,11 @@ static int DownStep(DownCtl* c, double t, const double* pos, const double* rot, 
     c->oR = DnSlew(c->oR, tR, step);
     c->oP = DnSlew(c->oP, tP, step);
     c->out[0] = (float)c->oP; c->out[1] = 0.0f; c->out[2] = (float)c->oR; c->out[3] = 0.0f; c->out[4] = 0.0f;
+    if (c->land && c->haveRates) {                             /* (0.32.39) slowed to landing speed by the brake */
+        double sp = CoSqrt(c->v[0] * c->v[0] + c->v[1] * c->v[1] + c->v[2] * c->v[2]) / 100.0;
+        c->out[4] = sp > CP_LAND_HI ? 1.0f : 0.0f;
+        c->out[3] = sp < CP_LAND_LO ? 1.0f : 0.0f;
+    }
     memcpy(out, c->out, sizeof(c->out));
     return 1;
 }

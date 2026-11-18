@@ -44,6 +44,12 @@ from `.env`; `TANI_PARTS=T5,HULL` for some parts only; `TANI_STOP=export` to sto
    `child actor Part_...` lines (Part_VLSD_1..8, Part_VLSS_L1..R4), only the railcannon and sub-railguns drawn. The cook
    checks each block's BP_SV_Tani_<part> with its mesh, skeleton, wreck and Open. In a run: Ctrl+K (the VLSD and VLSS_L1
    test blocks 3 km ahead), Ctrl+L (all of them live on the hull).
+   (2026-11-12, stage 4: docs/re/TANICORN.md "Railguns and railcannon") and the Alicorn's armaments: BP_SV_Tani_RAILGUN_L /
+   _R (`mount()` on their own rig, TurretPoseableMesh, the stowed rest pose Lua raises; their arm in game the row
+   SV_FCS_TaniRail's, the generator's BP_FCS_SV_TaniRail: the Alicorn's round from a TripleRailCannon) and
+   BP_SV_Tani_RAILCANNON (`railcannon_mount()`: a skeletal TurretMesh holding AS_SV_Tani_RAILCANNON_Deploy at 0, no arms, two
+   hit spheres, one on SOC_Gun_01). HULLLIVE: 35 `child actor Part_...` lines, nothing drawn; the cook checks each one's
+   blueprint with its mesh, skeleton, wreck and Deploy.
 6. Cook (VERSIONED, hard rule 42); 7. `retoc to-zen` of `/Game/Mods/SurvivalMode/Tanicorn` only; 8. `pad.py`.
 The first 5-inch mount (milestone 0) came through `prepare_part.py` from `build/tanicorn/src.blend` (`bl_import.py`);
 the export gives the same T5 (the same pivot and muzzles) and build.sh no longer calls them. Logs to read after a

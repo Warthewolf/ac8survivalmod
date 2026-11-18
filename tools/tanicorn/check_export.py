@@ -3,7 +3,8 @@ and their places; a VLS block's lids swing as the json says; a deploying part (t
 the end of its Deploy has every bone turned and placed, and every bone's meshes where the export says (its json's anim)"""
 import bpy, sys, os, json, math
 from mathutils import Vector
-DEPLOY = ("railcannon", "railgun")      # export_tanacorn.py deploying()
+DEPLOY = ("railcannon", "railgun_lift")      # export_tanacorn.py deploying() ((2026-11-16, route (iv)) a sub-railgun's
+                                              # lift; its house, kind railgun, riding(): no animation, checked as a turret)
 root = sys.argv[sys.argv.index("--") + 1]
 parts = json.load(open(os.path.join(root, "parts.json")))
 bad = 0

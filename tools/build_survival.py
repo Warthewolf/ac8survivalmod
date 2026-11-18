@@ -687,12 +687,15 @@ def build_npc_rows():
     out.append(((se.TANI_NPC, 0), row))
     # (0.74.61) the other gun mounts' rows (se.TANI_MOUNTS: T16, CIWS, LASER), as the T5's: each on its own model row and its
     # own fire control row (Scripts/sv_tanicorn.lua clones it at the main menu from a stock row, as SV_FCS_TaniT5);
-    # (2026-11-12) and the VLS blocks' (se.TANI_VLS: each type its own model row, all on SV_FCS_TaniVLS)
-    for m in se.TANI_MOUNTS + se.TANI_VLS:
+    # (2026-11-12) and the VLS blocks' (se.TANI_VLS: each type its own model row, all on SV_FCS_TaniVLS); (stage 4) and the
+    # rail parts' (se.TANI_RAIL: the railguns on SV_FCS_TaniRail, the railcannon on the shoal's own empty fire control)
+    for m in se.TANI_MOUNTS + se.TANI_VLS + se.TANI_RAIL:
         row = copy.deepcopy(rows[(f[1], f[2])])
         for name, value in (('WeaponDurabilityId', ('name', se.FISH_DURABILITY[0], 0)),
                             ('ExplosionDurabilityId', ('name', se.FISH_DURABILITY[1], 0)),
-                            ('ModelId', ('name', m['model'], 0)), ('NpcFCSId0', se.fname(m['fcs']))):
+                            ('ModelId', ('name', m['model'], 0)),
+                            *([('NpcFCSId0', se.fname(m['fcs']))] if m['fcs'] else []),
+                            *([('NpcFCSId1', se.fname(m['fcs1']))] if m.get('fcs1') else [])):   # ((2026-11-18) the display arm)
             set_prop(row[2], [k for k, (n, t) in schema.items() if n == name][0], name, value)
         out.append(((m['npc'], 0), row))
     # (0.74.60) the hull's row (se.TANI_HULL_*): the shoal's row again on TANI_HULL_MODEL, no fire control (its parts draw only)
@@ -1270,14 +1273,24 @@ def check_tanicorn_build():
     ex = [ep_dump.fields(e) for e in E if show(ep_dump.fields(e)['ConnectionEventName']) == se.TANI_HULL_LIVE_UP]
     assert all(show(f['ExecutionClass']) == 'LiveAIEngagementOrder' for f in ex), [show(f['ExecutionClass']) for f in ex]
     ordered = [show(ep_dump.fields(f['ArgsInfo'][1][0])['Value']) for f in ex]
-    assert sorted(ordered) == sorted(p['obj'] for p in se.TANI_LIVE), ordered
+    assert sorted(ordered) == sorted(p['obj'] for p in se.TANI_LIVE if not p['rail']), ordered
     assert all(abs(float(show(f['Delay'])) - se.TANI_LIVE_ORDER_S) < 1e-4 for f in ex), 'each order 2.5 s after the hull'
+    # ((2026-11-12, stage 4) each railgun ordered by its own remote event only (Lua fires it once it's raised), the
+    # railcannon never: no order names either rail part anywhere else)
+    for p in [p for p in se.TANI_LIVE if p['rail']]:
+        names_it = [ep_dump.fields(e) for e in E if show(ep_dump.fields(e)['ExecutionClass']) == 'LiveAIEngagementOrder'
+                    and show(ep_dump.fields(ep_dump.fields(e)['ArgsInfo'][1][0])['Value']) == p['obj']]
+        ev = se.TANI_RAIL_ORDER_EVENTS.get(p['part'])
+        assert [show(f['ConnectionEventName']) for f in names_it] == ([ev] if ev else []), (p['obj'], names_it and
+                                                                                         [show(f['ConnectionEventName']) for f in names_it])
+        if ev:
+            assert len([t for t in T if show(ep_dump.fields(t)['EventName']) == ev]) == 1, (ev, 'its remote event trigger')
     # Scripts/sv_tanicorn.lua's names (TANI.live: its rows, its class, its name key, its parts { "<socket>", "<type>" })
     lua = open(os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'sv_tanicorn.lua'), encoding='utf-8').read()
     for want in [f'unit = "{se.TANI_HULL_LIVE_UNIT}"', f'npc = "{se.TANI_HULL_LIVE_NPC}"', f'model = "{se.TANI_HULL_LIVE_MODEL}"',
                  f'class_path = "{se.TANI_HULL_LIVE_BP}.{se.TANI_HULL_LIVE_BP_CLASS}"', f'name_key = "{se.TANI_HULL_LIVE_NAME_KEY}"']:
         assert want in lua, f'Scripts/sv_tanicorn.lua: no {want}'
-    lua_parts = re.findall(r'\{ "([A-Z0-9_]+)", "(T16|T5|CIWS|LASER|VLSD|VLSS_[LR][1-4])" \}', lua)
+    lua_parts = re.findall(r'\{ "([A-Z0-9_]+)", "(T16|T5|CIWS|LASER|VLSD|VLSS_[LR][1-4]|RAILCANNON|RAILGUN_[LR])" \}', lua)
     assert lua_parts == [(p['socket'], p['part']) for p in se.TANI_LIVE], ('Scripts/sv_tanicorn.lua TANI.live.parts', lua_parts)
     vls_said = check_tanicorn_vls(lua, table, zw, w, T, E, show)
     if not se.TANI_WD:                         # the lock
@@ -1366,7 +1379,7 @@ NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_commo
               # they come with its DT_NPC row's ChildNPCId)
               ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission016', []),
               # the Alicorn's own mission row (its parts name none): Online Mode's EB_002
-              ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_EB_002_ON', ['alcn_01']),
+              ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_EB_002_ON', ['alcn_01', 'alcn_ecm_01']),   # (+ RAVEN's ECM, 2026-11-18)
               # the Spaceport Retake's rockets and their debris (survival_events.SP_ROCKET_ROWS: (Survival's name,
               # Mission 19's), Mission 19's names end in a numeric tail: copied under Survival's)
               ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission019', survival_events.SP_ROCKET_ROWS)] + list(
@@ -1388,7 +1401,8 @@ NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a 
     # (2026-11-11) and its hull with the gun mounts live (survival_events.TANI_HULL_LIVE_*: Ctrl+L)
     (survival_events.TANI_HULL_LIVE_ROW, survival_events.FISH_ROW_TEMPLATE, survival_events.TANI_HULL_LIVE_NPC),
     # (0.74.61) and its other gun mounts (survival_events.TANI_MOUNTS: T16, CIWS, LASER); (2026-11-12) its VLS blocks (TANI_VLS)
-    *[(m['row'], survival_events.FISH_ROW_TEMPLATE, m['npc']) for m in survival_events.TANI_MOUNTS + survival_events.TANI_VLS],
+    *[(m['row'], survival_events.FISH_ROW_TEMPLATE, m['npc'])
+      for m in survival_events.TANI_MOUNTS + survival_events.TANI_VLS + survival_events.TANI_RAIL],
 ] + [  # the fighter roles' behaviour rows (survival_events.ROLE_ROW, P1): DT_NPC rows Scripts/sv_rows.lua rolesSetup makes
     (row, 'f16c_common', npc) for row, npc in survival_events.ROLE_NPC.items()]
 # Enemy search (main.lua CFG.search): for each of these rows a copy <row>_sv whose NpcId is <its NpcId>_SV, the DT_NPC
@@ -1703,6 +1717,7 @@ if __name__ == '__main__':
     build_shop_rows()
     build_rows()
     build_zfa_laser()                    # (2026-11-07: the ZFA-44s' anti-missile laser's arm and its fire-control row)
+    build_tani_rail()                    # (2026-11-12: THE TANACORN's railguns' arm and its fire-control row)
     check_no_certain_kill()              # (0.73.77, G1: after the NPC tables it reads are saved)
     try:
         build_menu_pages()
@@ -1722,5 +1737,6 @@ if __name__ == '__main__':
     check_escort_decoy_build()           # (2026-11-06: THE ESCORT, its cargo ships and THE DECOY read back the same way)
     check_zfa_laser_build()              # (2026-11-07: the ZFA-44s' laser: its arm, rows and interception count)
     check_tanicorn_build()               # (2026-11-11: THE TANACORN's live parts, and the TANI=1 gate on the world data)
+    check_tani_rail_build()              # (2026-11-12: her railguns' arm, its row, the rail parts' rows and Lua's names)
     check_fleet_build()                  # (2026-11-12: THE INVINCIBLE FLEET's ships, lanes, records and rows)
     print('player start', tuple(round(x) for x in START), 'yaw', RUNWAY_YAW)

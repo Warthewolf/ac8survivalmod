@@ -113,6 +113,10 @@ local function comp(fn, parent, owner)
         self.RelativeRotation = { Pitch = r.Pitch, Yaw = r.Yaw, Roll = r.Roll }
     end
     c.K2_SetRelativeRotation = function(self, r) self.RelativeRotation = { Pitch = r.Pitch, Yaw = r.Yaw, Roll = r.Roll } end
+    c.K2_SetRelativeLocation = function(self, l)         -- ((0.74.134) the V's place and turn set apart: sv_fleet.lua place)
+        sets = sets + 1
+        self.RelativeLocation = { X = l.X, Y = l.Y, Z = l.Z }
+    end
     c.K2_GetComponentLocation = function(self)
         local f, o = inActor(self), self.owner
         local a = math.rad(o.yaw)
@@ -137,6 +141,7 @@ function loadObject(path)
     if not assets[path] then
         local a = obj("Asset " .. path)
         a.GetPathName = function() return path end
+        a.GetFullName = function() return "MaterialInstanceConstant " .. path end   -- ((0.74.143) the game's code reads this)
         assets[path] = a
     end
     return assets[path]
@@ -145,6 +150,7 @@ local function mat(n)
     local nm = string.format("MI_VE004_grfd_%02d", n)
     local m = obj("MaterialInstanceConstant " .. MATS .. nm .. "." .. nm)
     m.GetPathName = function() return MATS .. nm .. "." .. nm end
+    m.GetFullName = function() return "MaterialInstanceConstant " .. MATS .. nm .. "." .. nm end
     return m
 end
 
@@ -263,6 +269,13 @@ TEST_TICKS, LEVEL_DROPS = {}, {}
 function testKey(name, who, fn) keys[name] = fn; return true end
 
 dofile(MOD .. "/Scripts/sv_fleet.lua")
+dofile(MOD .. "/Scripts/sv_fleet_storm.lua")              -- ((2026-11-17) its night storm, the next piece)
+SPC.kinds = SPC.kinds or {}                               -- ((2026-11-17) round 30, the piece after: sv_rounds.lua's and
+function specialFor(round) return nil end                 -- sv_spawn.lua's as the round piece finds them)
+dofile(MOD .. "/Scripts/sv_fleet_round.lua")
+dofile(MOD .. "/Scripts/sv_fleet_lasers.lua")             -- ((2026-11-17) the Aegis lasers, the piece after)
+dofile(MOD .. "/Scripts/sv_fleet_surface.lua")            -- ((2026-11-17) the surfacing, the piece after)
+dofile(MOD .. "/Scripts/sv_fleet_capture.lua")            -- ((0.74.164) GEOFON's capture, the piece after)
 local C = CFG.specials.fleet and CFG.specials.fleet.geofon
 local function same(a, b)
     if type(a) ~= type(b) then return false end
@@ -275,9 +288,39 @@ check(C ~= nil and C.unit == FORD and #C.stages == 2 and C.look.bow.pitch == 25 
     "CFG.specials.fleet.geofon: the Ford, two stages, the V's angles")
 check(CFG_DEFAULTS.specials.fleet ~= CFG.specials.fleet and same(CFG_DEFAULTS.specials.fleet, CFG.specials.fleet),
     "the same in CFG_DEFAULTS (a copy): shipped, no edit")
-check(type(keys.B) == "function" and type(keys.G) == "function" and type(keys.N) == "function" and #TEST_TICKS == 2
-    and TEST_TICKS[2].name == "fleet ships" and type(LEVEL_DROPS.fleet) == "function" and type(LEVEL_DROPS["fleet ships"]) == "function",
-    "Ctrl+B, Ctrl+G, Ctrl+N, their two ticks and level drops")
+check(type(keys.B) == "function" and type(keys.G) == "function" and type(keys.N) == "function" and #TEST_TICKS == 7
+    and TEST_TICKS[2].name == "fleet ships" and TEST_TICKS[3].name == "fleet storm" and TEST_TICKS[4].name == "fleet round"
+    and TEST_TICKS[5].name == "fleet co-op" and TEST_TICKS[6].name == "fleet surfacing" and TEST_TICKS[7].name == "fleet capture" and type(LEVEL_DROPS["fleet round"]) == "function"
+    and type(LEVEL_DROPS.fleet) == "function" and type(LEVEL_DROPS["fleet ships"]) == "function"
+    and type(LEVEL_DROPS["fleet storm"]) == "function" and type(LEVEL_DROPS["fleet surfacing"]) == "function",
+    "Ctrl+B, Ctrl+G, Ctrl+N, their ticks (the storm's and the surfacing's, 2026-11-16; co-op's, 0.74.160) and level drops")
+check(CFG.specials.fleet.surface and CFG.specials.fleet.surface.enabled == true and type(IFSURF) == "table" and type(IFSURF.start) == "function",
+    "the fleet's surfacing on (CFG.specials.fleet.surface), IFSURF")
+-- ((2026-11-17) the epic surfacing, sv_fleet_surface.lua) every shot a move in order on a ship of the fleet, the beats in
+-- order (bolts on ships, lines "CODE|text" of known speakers, the title), its letterbox, shakes and the storm's cue hooks
+do
+    local c, names, okS, okB = CFG.specials.fleet.surface, {}, true, true
+    for _, s in ipairs(CFG.specials.fleet.ships) do names[s.key] = true; if s.name ~= "" then names[s.name] = true end end
+    local last = -1
+    for _, s in ipairs(c.shots) do
+        okS = okS and names[s.ship] and s.t > last and s.from and s.to and #s.from.at == 3 and #s.to.look == 3; last = s.t
+    end
+    last = -1
+    local lines, bolts, title = 0, 0, 0
+    for _, b in ipairs(c.beats) do
+        okB = okB and b.t >= last; last = b.t
+        if b.bolt then bolts = bolts + 1; okB = okB and names[b.bolt.ship] == true end
+        if b.say then lines = lines + 1; local code = b.say:match("^([^|]+)|.+$"); okB = okB and (code == "VALKA" or code == "CHARLENE" or code == "CTRL") end
+        if b.title then title = title + 1 end
+    end
+    check(okS and #c.shots == 6, "the surfacing's 6 shots: moves (from, to) in order, each on a ship of the fleet")
+    check(okB and lines == 3 and bolts >= 4 and title == 1 and c.lead_s == 3.0,
+        "its beats in order: CHARLENE (with Control), CONTROL and VALKA: 3 lines (no KASKA: an Anomaly Emblem Direct caused), the cued strikes on ships, the title card; 3 s of sea first")
+    check(c.letterbox.enabled == true and c.letterbox.aspect == 2.39 and c.shake.geofon[1]:find("BombImpactHelios", 1, true)
+        and type(IFSURF.quiet) == "function" and IFSURF.quiet() == 1 and type(IFSKY.strike) == "function" and type(IFSKY.post) == "function",
+        "its letterbox (2.39), GEOFON's slam shake, the storm's cue hooks (IFSKY.strike / post) and IFSURF.quiet (1 while it isn't on)")
+end
+CFG.specials.fleet.surface.enabled = false                -- (the formation's checks below: the fleet spawned at once, as before)
 local tick = TEST_TICKS[1].fn
 local function run(secs) for _ = 1, math.floor(secs / 0.25 + 0.5) do clock = clock + 0.25; tick(clock) end end
 
@@ -754,6 +797,73 @@ alive2.SV_Unit_IFPicketB, stuck.SV_Unit_IFPicketB = 0, nil
 keys.N()
 LEVEL_DROPS["fleet ships"]("test")
 check(IFLEET.cur == nil, "forgotten when the level goes")
+
+-- ((2026-11-17) WP10 step 1, sv_fleet_round.lua) round 30, the fleet's: picked, warned, spawned, each ship paid once, held
+-- while one's afloat, won: the reward, the airfield fully repaired, the fleet taken off
+print("round 30, the fleet's round")
+local Dwas, RUNwas = D, RUN
+local K = SPC.kinds.fleet
+check(type(K) == "table" and type(K.spawn) == "function" and type(K.busy) == "function" and type(K.over) == "function"
+    and type(K.row) == "function" and K.sub() == "INVINCIBLE FLEET", "SPC.kinds.fleet: its hooks, its callout's line")
+D = { now = 5, round = 29, state = "wait" }
+RUN = { credits = 0, earned = 0 }
+CFG.specials.enabled = true
+local paidFor = {}
+function addCredits(n, why) RUN.credits = RUN.credits + n; paidFor[#paidFor + 1] = why end
+check(specialFor(30) == "fleet" and specialFor(29) == nil and specialFor(31) == nil and find("fleet round: round 30 is the fleet's$") ~= nil,
+    "round 30 is the fleet's (29 and 31 not)")
+check(K.budget(20) == 6, "a few of the round's own fighters (a quarter: 20 -> 6): " .. tostring(K.budget(20)))
+local c0 = #callouts
+TEST_TICKS[4].fn(clock); TEST_TICKS[4].fn(clock)       -- (the round's tick: 4th since the surfacing moved after it, 2026-11-17)
+check(#callouts == c0 + 1 and callouts[#callouts] == "INVINCIBLE FLEET / THE AEGIR FLEET IS UNDER WAY" and RUN.fleetWarned == true,
+    "round 29's break: the warning, once")
+D.round, D.state, D.special = 30, "fighting", { kind = "fleet", state = "pending" }
+local bgm, holds = {}, {}                                 -- (its music: the song before it played again at its end)
+function SV_BGMNames() return "AKE_Bgm_Player_Song_Play|AKE_Bgm_Player_Song_Stop|x" end
+function SV_PlayBGM(t) bgm[#bgm + 1] = t; return 1 end
+function SV_MusicHold(h) holds[#holds + 1] = h; return 0 end
+function SV_BGM() return 77 end
+check(K.spawn(clock) == true and IFLEET.cur ~= nil and IFLEET.cur.round == true and RUN.fleetRound == true and D.special.state == "fleet",
+    "spawned: the fleet up as round 30's")
+check(K.ready(30) == false, "once a run")
+local dr, ds = D.round, D.state
+D.state = "wait"; keys.F()
+check(D.round == dr and find("fleet round: Ctrl%+F: had this run already") ~= nil, "Ctrl+F: had this run: nothing changed")
+RUN.fleetRound = nil; D.round = 12; keys.F()
+check(D.round == 29 and RUN.fleetWarned == nil and find("Ctrl%+F: the run set from round 12's break to round 29's") ~= nil,
+    "Ctrl+F in a break: round 29's break, round 30 next")
+D.state = "fighting"; D.round = 14; keys.F()
+check(D.round == 14 and find("Ctrl%+F: in round 14 %(fighting%): only in a break") ~= nil, "Ctrl+F in a round: refused")
+D.round, D.state, RUN.fleetRound, RUN.fleetWarned = dr, ds, true, true
+check(K.busy(D.special) == true, "the round held while the fleet's afloat (queued)")
+local F2 = IFLEET.cur
+F2.queue = {}
+for _, sh in ipairs(F2.ships) do sh.r = 1 end
+check(K.row(D.special, {}) == "FLEET: 15 AFLOAT  CARRIER: GEOFON", "its NEXT row: " .. tostring(K.row(D.special, {})))
+local cr = RUN.credits
+F2.ships[1].sunk = true; IFLEET.onSunk(F2, F2.ships[1], "test"); IFLEET.onSunk(F2, F2.ships[1], "test")
+check(RUN.credits - cr == 6000 and callouts[#callouts] == "GEOFON SUNK / +6000 ZOLLARS" and paidFor[#paidFor] == "INVINCIBLE FLEET: GEOFON sunk",
+    "GEOFON sunk: 6,000 once, its callout")
+for i = 2, #F2.ships do F2.ships[i].sunk = true; IFLEET.onSunk(F2, F2.ships[i], "test") end
+check(RUN.credits - cr == 22600, "every ship paid once by its kind (6,000 + 5 x 1,600 + 1,400 + 6 x 1,000 + 2 x 600 = 22,600): "
+    .. tostring(RUN.credits - cr))
+check(K.busy(D.special) == false and K.row(D.special, {}) == "FLEET: 0 AFLOAT  CARRIER: SUNK", "all sunk: the round can end")
+AF = { hp = 100, full = 500, max = 1000, hits = 7, bomb = 3, closed = true, down = false }
+local repaired = false
+ALLY.repairAll = function() repaired = true end
+local ev0, cr2 = #events, RUN.credits
+K.over(clock, D.special)
+local opened = false
+for i = ev0 + 1, #events do if events[i] == "RE_SV_AirfieldOpen" then opened = true end end
+check(RUN.credits - cr2 == 50000 and find("fleet round: won at %+") ~= nil, "won: 50,000")
+check(AF.hp == 1000 and AF.full == 1000 and AF.base == 7 and AF.bombBase == 3 and AF.closed == false and opened and repaired,
+    "the airfield fully repaired (its health to its top, the landing open, ALLY.repairAll)")
+check(IFLEET.cur == nil and D.special.state == "done" and find("fleet round: its wrecks and parts taken off") ~= nil, "the fleet taken off, the special done")
+check(bgm[1] == "AKE_Bgm_Online_ACE04_Invincible_Fleet_Play" and holds[1] == 1 and bgm[#bgm] == "AKE_Bgm_Player_Song_Play"
+    and holds[#holds] == 0 and find("fleet round: music: the music player's song back: AKE_Bgm_Player_Song_Play") ~= nil,
+    "its music: AC04's track from the start, the music player's clock held; at the end its song back, the clock let go")
+SV_BGMNames, SV_PlayBGM, SV_MusicHold, SV_BGM = nil, nil, nil, nil
+D, RUN = Dwas, RUNwas
 -- a row missing at the main menu: no Ctrl+N fleet; a text the game refuses (SV_SetText raising): the rest set (finding 5)
 IFLEET.setupDone, IFLEET.rowsOk = nil, nil
 T.npc.rows, T.mine.rows.SV_IF_Kolga = {}, nil
@@ -765,6 +875,51 @@ check(IFLEET.rowsOk == false and find("; 19 names and classes set; MISSING: SV_I
     "a row missing: said, and no fleet; a text refused: the other 19 set")
 keys.N()
 check(IFLEET.cur == nil and find("rows aren't in the game's tables %(the `fleet: rows at the main menu` line says which%)", n0) ~= nil, "Ctrl+N refused")
+
+-- ((2026-11-17) sv_fleet_lasers.lua) an Aegis's two LASER mounts: put at their spots, handed to the LaserInterceptor (the
+-- fleet's carrier list) on the players' missiles; another class, a mount shot off or its ship sunk: none
+print("the Aegis lasers")
+check(IFLEET.onSettle == IFLASER.onSettle and type(LEVEL_DROPS["fleet lasers"]) == "function", "the settle hook and its level drop")
+ZLI, HIT = { on = function() return true end }, {}
+local moved = {}
+local function slot(name)
+    return obj("LiveChildActorComponent " .. name, { GetFName = function() return { ToString = function() return name end } end,
+        K2_SetRelativeLocationAndRotation = function(self, l, r) moved[name] = { l = l, r = r } end })
+end
+local function mount(name)
+    local c = slot(name)
+    return obj("BP_SV_Tani_LASER_C " .. name, { RootComponent = { GetAttachParent = function() return c end },
+        TurretPoseableMesh = obj("PoseableMeshComponent TurretPoseableMesh") })
+end
+local mb, ma, gun = mount("LASER_BOW"), mount("LASER_AFT"), obj("BP_VE002_aegs_mk45_Base_C x")
+local function part(o, cls) return { obj = o, addr = o.__addr, name = o.__name, cls = cls } end
+local shA = { name = "RAVEN", kind = "aegis", unit = "SV_Unit_IFRaven",
+              parts = { part(gun, "BP_VE002_aegs_mk45_Base_C"), part(mb, "BP_SV_Tani_LASER_C"), part(ma, "BP_SV_Tani_LASER_C") } }
+local l0 = #logs
+IFLEET.onSettle({}, shA)
+local cs = ZLI.extras and ZLI.extras.fleet and ZLI.extras.fleet() or {}
+check(#cs == 2 and cs[1].socket == "SOC_Gun_01" and cs[1].foe == "players" and cs[1].unit == "SV_Unit_IFRaven" and cs[1].body ~= nil
+    and HIT.wantMine == true, "both mounts handed to the LaserInterceptor: its muzzle, the players' missiles, its ship's unit")
+check(moved.LASER_BOW and moved.LASER_BOW.l.X == 6900 and moved.LASER_BOW.l.Z == 900 and moved.LASER_AFT.r.Yaw == 180
+    and find("fleet lasers: .*: 2 mounts handed to AC7's LaserInterceptor %(LASER_BOW 69.0 m ahead, 9.0 m up, yaw 0; LASER_AFT", l0) ~= nil,
+    "each put at its spot (CFG.specials.fleet.lasers, in cm), logged")
+ma.HealthInternal = 0
+check(#ZLI.extras.fleet() == 1, "a mount shot off (health 0, run 91): its laser gone")
+free(mb)
+check(#ZLI.extras.fleet() == 0, "a mount gone: its laser gone")
+shA.parts[2], shA.parts[3] = part(mount("LASER_BOW"), "BP_SV_Tani_LASER_C"), part(mount("LASER_AFT"), "BP_SV_Tani_LASER_C")
+IFLEET.onSettle({}, shA)
+check(#ZLI.extras.fleet() == 2, "(two more up)")
+shA.sunk = true
+check(#ZLI.extras.fleet() == 0, "its ship sunk: none")
+local l1 = #logs
+IFLEET.onSettle({}, { name = "BELUGA", kind = "krov", unit = "SV_Unit_IFBeluga", parts = { part(mount("LASER_BOW"), "BP_SV_Tani_LASER_C") } })
+check(#ZLI.extras.fleet() == 0 and #logs == l1, "another class: never")
+IFLEET.onSettle({}, { name = "CONDOR", kind = "aegis", unit = "SV_Unit_IFCondor", parts = { part(obj("BP_VE002_aegs_mk15_Base_C y"), "BP_VE002_aegs_mk15_Base_C") } })
+check(find("fleet lasers: .*: no laser mounts among its 1 parts %(a build without TANI=1", l1) ~= nil, "a stock Aegis (no TANI=1): said")
+LEVEL_DROPS["fleet lasers"]("test")
+check(ZLI.extras.fleet == nil, "the level gone: the list dropped")
+ZLI, HIT = nil, nil
 
 if fails > 0 then print("fleet test: " .. fails .. " FAILED"); os.exit(1) end
 print("fleet test: all passed")
@@ -791,16 +946,16 @@ echo "a TESTER zip's copy (tools/dev_only.py, as package_release.sh TESTER=1)"
 mkdir -p "$W/tester"
 cp -r "$SRC/Scripts" "$SRC/config" "$W/tester/"
 if ! OUT=$(python -X utf8 -I "$HERE/../dev_only.py" "$W/tester" 2>&1); then echo "$OUT"; echo "  FAIL dev_only.py refused the copy"; exit 1; fi
-if grep -n '^IFLEET = \|^GEO = \|^TANI = \|^CINE = \|testKey("N"\|testKey("B"\|testKey("T"\|testKey("D"' "$W"/tester/Scripts/*.lua; then
+if grep -n '^IFLEET = \|^IFSKY = \|^IFLASER = \|^GEO = \|^TANI = \|^CINE = \|testKey("N"\|testKey("F"\|testKey("B"\|testKey("S"\|testKey("J"\|testKey("T"\|testKey("D"' "$W"/tester/Scripts/*.lua; then
     echo "  FAIL the dev install's keys or globals left in a TESTER copy (above)"; exit 1
 fi
 echo "  ok   no IFLEET, GEO, TANI or CINE and none of their keys (Ctrl+N, B, T, D ...) in any part of it"
-for p in sv_fleet sv_tanicorn sv_tanicorn_rise sv_tanicorn_hits sv_cine; do
+for p in sv_fleet sv_fleet_storm sv_fleet_round sv_fleet_lasers sv_fleet_surface sv_fleet_capture sv_tanicorn sv_tanicorn_rise sv_tanicorn_hits sv_tanicorn_rail sv_cine; do
     if grep -v '^--' "$W/tester/Scripts/$p.lua" | grep -q '[^[:space:]]'; then echo "  FAIL $p.lua: code left"; exit 1; fi
     # ((2026-11-12) a split part's first line is tools/lua_split_part.py's family note: its own name within the first three)
     if ! head -3 "$W/tester/Scripts/$p.lua" | grep -q "^-- $p.lua"; then echo "  FAIL $p.lua: its header gone"; exit 1; fi
 done
-echo "  ok   sv_fleet.lua, sv_tanicorn.lua, sv_tanicorn_rise.lua, sv_tanicorn_hits.lua and sv_cine.lua only their headers"
+echo "  ok   sv_fleet.lua, sv_fleet_storm.lua, sv_fleet_round.lua, sv_fleet_lasers.lua, sv_fleet_surface.lua, sv_fleet_capture.lua, sv_tanicorn.lua, sv_tanicorn_rise.lua, sv_tanicorn_hits.lua, sv_tanicorn_rail.lua and sv_cine.lua only their headers"
 n=$(grep -c 'TEST ONLY BEGIN' "$W"/tester/Scripts/*.lua | awk -F: '{s+=$2} END {print s}')
 if [ "$n" -lt 10 ] || ! grep -q 'testKey("F12"' "$W/tester/Scripts/sv_festival.lua"; then
     echo "  FAIL a tester's own test keys gone too ($n test blocks left)"; exit 1

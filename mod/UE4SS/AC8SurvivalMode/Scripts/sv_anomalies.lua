@@ -338,7 +338,8 @@ local function glitchDeadLook(c, o)
                     -- test of 2026-10-23: 1 of 13 slots found its _DAM by the slot's own name)
                     local m = comp:GetMaterial(i)
                     for _ = 1, 4 do
-                        local path = m:GetPathName()
+                        local okF, full = pcall(function() return m:GetFullName() end)   -- ((0.74.143) GetPathName isn't callable
+                        local path = (okF and type(full) == "string" and full:match("^%S+ (/Game/[^%s:]+)$")) or ""   -- from Lua
                         local pkg, obj = path:match("^(/Game/[^%.:]+)%.([^%.:]+)$")   -- (an asset, not a run-time copy)
                         if pkg then
                             src = obj

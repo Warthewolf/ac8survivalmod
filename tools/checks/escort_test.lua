@@ -1812,6 +1812,8 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     D = D or {}
     local ev0 = #events
     from = #logs + 1
+    check(ZC.li_volley_s == 20.0 and ZC.li_rest_s == 10.0 and ZC.li_beam_w == 1.5, "the LaserInterceptor's volley 20 s, its rest 10 s, its beam x1.5 wide (shipped: the user, 2026-11-17)")
+    local shipV, shipR, shipW = ZC.li_volley_s, ZC.li_rest_s, ZC.li_beam_w; ZC.li_volley_s, ZC.li_rest_s, ZC.li_beam_w = 6.0, 8.0, 1   -- (this block's: AC7's)
     local t0 = clock
     ZLAS.tick()
     local li = spawnedL[1]
@@ -1975,10 +1977,9 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     clock = t1 + 1.2; ZLAS.tick()
     check(ml.gone == true, "the mount gone from ZLI.extra: its laser removed")
     ZLI.extra, HIT.minePool = nil, nil
-    -- put back for the rest of the test
-    ZLI.mode, HIT.msl = "tls", keepMsl
+    ZLI.mode, HIT.msl = "tls", keepMsl                                    -- (put back for the rest of the test)
     statics["/Script/Engine.Default__GameplayStatics"], AK.PostEventAtLocation = keepGS, keepPost
-    SV_LaserBegin, SV_LaserState, SV_Intercept, SV_LaserKills = nil, nil, nil, nil
+    SV_LaserBegin, SV_LaserState, SV_Intercept, SV_LaserKills = nil, nil, nil, nil; ZC.li_volley_s, ZC.li_rest_s, ZC.li_beam_w = shipV, shipR, shipW
 end)()
 ---------------------------------------------------------------------------------------------------- the dressing
 print("the ZFA-44 dressing (sv_zfa44.lua)")

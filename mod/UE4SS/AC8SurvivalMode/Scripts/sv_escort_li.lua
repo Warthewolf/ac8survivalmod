@@ -180,9 +180,13 @@ local function planes(fitted)
     end
     -- ((2026-11-11) other carriers: ZLI.extra(), the TANACORN's LASER mounts (sv_tanicorn.lua's test block, the user: "the
     -- LASERS have to be Laser Interceptors"): { o, a, unit, body, socket, foe }, each checked by ZLI.extra itself against
-    -- the name it was captured with (hard rule 59); foe "players": they shoot down the players' missiles, not the enemies')
-    if type(ZLI.extra) == "function" then
-        local okX, list = pcall(ZLI.extra)
+    -- the name it was captured with (hard rule 59); foe "players": they shoot down the players' missiles, not the enemies');
+    -- ((2026-11-17) and ZLI.extras, a list of them by name (another part's carriers beside the first); one at an address once)
+    local provs = {}
+    if type(ZLI.extra) == "function" then provs[#provs + 1] = ZLI.extra end
+    for _, f in pairs(ZLI.extras or {}) do if type(f) == "function" then provs[#provs + 1] = f end end
+    for _, prov in ipairs(provs) do
+        local okX, list = pcall(prov)
         if okX and type(list) == "table" then
             for _, e in ipairs(list) do
                 why.seen = why.seen + 1
@@ -218,12 +222,12 @@ local function fxAsset(path)
     return nil
 end
 -- an AC8 effect on the laser's root (it swings with it), or nil
-local function fxOn(r, path, life)
+local function fxOn(r, path, life, at)
     local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
     local sys = fxAsset(path)
     if not (valid(lib) and sys and r.li and liveLaser(r)) then return nil end
     local ok, comp = pcall(function()                     -- (EAttachLocation 0, KeepRelativeOffset: at its root, as AC7's)
-        return lib:SpawnSystemAttached(sys, r.li:K2_GetRootComponent(), FName("None"), { X = 0, Y = 0, Z = 0 },
+        return lib:SpawnSystemAttached(sys, r.li:K2_GetRootComponent(), FName("None"), at or { X = 0, Y = 0, Z = 0 },
             { Pitch = 0, Yaw = 0, Roll = 0 }, 0, true, true, 0, true)
     end)
     if not (ok and comp and comp:IsValid()) then
@@ -288,12 +292,20 @@ local function aimNote(r)
         .. "pitch %+.0f; the beam active %s, visible %s", math.deg(math.acos(c)), d / 100000, math.deg(math.asin(f.Z / fl)), act, vis)
 end
 local function beam(r, yz)
+    yz = yz * math.max(0, num(zc().li_beam_w, 1))               -- ((2026-11-17) its width: li_beam_w x)
     if ac8fx() then
         local c = r.fxBeam
         if not (c and liveObj(c)) then return end
         local len = num(zc().li_range_m, 1240) * 100              -- (AC8's own units: cm)
+        for _, x in ipairs(r.fxExtra or {}) do                     -- ((0.74.162) its bundle's copies the same length)
+            if liveObj(x) then pcall(function() x:SetVariableVec3(FName("User.BeamLength"), { X = len, Y = yz, Z = yz }) end) end
+        end
         pcall(function() c:SetVariableVec3(FName("User.BeamLength"), { X = len, Y = yz, Z = yz }) end)
         pcall(function() c:SetVariableVec3(FName("BeamLength"), { X = len, Y = yz, Z = yz }) end)
+        -- ((2026-11-17) the user: the x1.5 width "weren't affected": AC8's beam doesn't take BeamLength's Y / Z as its
+        -- thickness) the beam's component itself scaled across (Y / Z x li_beam_w), its length (X) as it is
+        local w = math.max(0.01, num(zc().li_beam_w, 1))
+        pcall(function() c:SetRelativeScale3D({ X = 1, Y = w, Z = w }) end)
         return
     end
     pcall(function() r.li.MainLaser:SetVectorParameter(FName("BeamLength"), { X = beamX(), Y = yz, Z = yz }) end)
@@ -411,7 +423,24 @@ local function volleyOn(s, r, clock, why)
         if r.fxBeam and liveObj(r.fxBeam) then pcall(function() r.fxBeam:Deactivate() end) end
         r.fxBeam = fxOn(r, z.li_fx_beam, num(z.li_volley_s, 6.0) + num(z.li_intercept_s, 1.0) + num(z.li_end_s, 0.2))
         tint(r, r.fxBeam)                                 -- ((2026-11-11) li_color: red, AC7's)
-        how = r.fxBeam and "AC8's beam" or "no beam drawn"
+        -- ((0.74.162) the user: the lasers' width "didn't seem to be affected again": AC8's beam is a world-space mesh
+        -- particle, and its system has no width (User.BeamColor / BeamLength / BeamLifeTime only), so neither BeamLength's Y / Z
+        -- nor its component's scale widens it. li_beam_bundle copies of it around it, li_beam_off_cm across its axis: one
+        -- beam that reads li_beam_w x as wide; 0 copies when li_beam_w is 1 or less)
+        for _, x in ipairs(r.fxExtra or {}) do if liveObj(x) then pcall(function() x:Deactivate() end) end end
+        r.fxExtra = {}
+        if num(z.li_beam_w, 1) > 1 then
+            local o = num(z.li_beam_off_cm, 35) * (num(z.li_beam_w, 1) - 1) * 2
+            local spots = { { 0, o, 0 }, { 0, -o, 0 }, { 0, 0, o }, { 0, 0, -o } }
+            for k = 1, math.min(#spots, math.max(0, math.floor(num(z.li_beam_bundle, 4)))) do
+                local sp = spots[k]
+                local x = fxOn(r, z.li_fx_beam, num(z.li_volley_s, 6.0) + num(z.li_intercept_s, 1.0) + num(z.li_end_s, 0.2),
+                    { X = sp[1], Y = sp[2], Z = sp[3] })
+                if x then tint(r, x); r.fxExtra[#r.fxExtra + 1] = x end
+            end
+        end
+        how = r.fxBeam and ("AC8's beam" .. (#r.fxExtra > 0 and string.format(" + %d copies round it (li_beam_w)", #r.fxExtra) or ""))
+            or "no beam drawn"
         beam(r, 1)
     else
         pcall(function() r.li.EndLaser:SetActive(false, false) end)
@@ -441,6 +470,8 @@ local function beamOff(r, clock)
     if ac8fx() then
         if r.fxBeam and liveObj(r.fxBeam) then pcall(function() r.fxBeam:Deactivate() end) end
         r.fxBeam = nil
+        for _, x in ipairs(r.fxExtra or {}) do if liveObj(x) then pcall(function() x:Deactivate() end) end end
+        r.fxExtra = nil
     else
         pcall(function() r.li.MainLaser:Deactivate() end)
         pcall(function() r.li.MainLaser:SetVisibility(false, false) end)
@@ -525,6 +556,7 @@ local function claimsTick(s, clock)
                 if ZLAS.sound then ZLAS.sound(z.li_hit_sound or z.laser_hit_sound, m.zAt) end
                 say("%s's laser shot down %s (from %s; %d so far); %s", c.r.name, c.name, tostring(m.from or "?"), s.kills,
                     c.r.li and aimNote(c.r) or "")
+                if ZLI and ZLI.onKill then pcall(ZLI.onKill, c.r, m) end   -- ((0.74.165) a kill's hook: round 30's callout)
             else
                 s.lost = s.lost + 1
                 say("%s went down %.2f s into %s's swing: it hit something first", c.name, clock - c.at, c.r.name)

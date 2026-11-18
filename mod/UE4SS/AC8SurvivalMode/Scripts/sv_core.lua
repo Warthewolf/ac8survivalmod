@@ -673,6 +673,36 @@ function levelDrop(why)
     table.sort(names)
     return names
 end
+-- ((0.74.129) the user's crash of 0.74.128, 2026-11-17 15:56:28: a restart from the pause menu reloads the mission in
+-- the same world, so the gate above never closes, and parts that held the old mission's objects went on using them (a
+-- special's units paid as kills, then the game crashed in a call of ours: EXCEPTION_ACCESS_VIOLATION,
+-- AceCombat8.exe+0x5761b98 from UE4SS). On a restart (sv_main.lua's level-load reset) the drops named in RESTART_DROPS
+-- run too: a part whose objects the mission's reload takes adds its LEVEL_DROPS name there. Every other part keeps its
+-- own restart handling (a restart keeps the level: the shuttle's hidden pad, the sky's put-back, ESC.restart ...). A
+-- part that must put something of the level back first does it in RESTART_PUTBACK.
+RESTART_DROPS = {}             -- LEVEL_DROPS names that run on a mission restart too
+RESTART_PUTBACK = {}           -- name -> function(why): what the level keeps, put back before the drops (the level stays)
+function levelRestartDrop(why)
+    local put, names = {}, {}
+    for name, fn in pairs(RESTART_PUTBACK) do
+        local ok, err = pcall(fn, why)
+        if ok then put[#put + 1] = name else log("restart: " .. tostring(name) .. "'s put-back error " .. tostring(err)) end
+    end
+    local list = {}
+    for name in pairs(RESTART_DROPS) do list[#list + 1] = name end
+    table.sort(list)
+    for _, name in ipairs(list) do
+        local fn = LEVEL_DROPS[name]
+        if fn then
+            local ok, err = pcall(fn, why)
+            if ok then names[#names + 1] = name else log("restart: " .. tostring(name) .. "'s drop error " .. tostring(err)) end
+        end
+    end
+    table.sort(put)
+    log(string.format("restart: the mission's reload took these parts' objects: dropped, never touched (%s); put back first: %s",
+        #names > 0 and table.concat(names, ", ") or "none here", #put > 0 and table.concat(put, ", ") or "none"))
+    return names
+end
 function levelGate()
     levelGateStep()
     -- (CFG.recycle.destroy_after_s to the runtime, once a session: F2b)

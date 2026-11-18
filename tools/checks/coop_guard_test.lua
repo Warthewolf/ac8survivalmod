@@ -435,6 +435,7 @@ local TYPES = {
     -- the joiner's (onJoinerMessage and the parts it hands them to)
     { "join", "cf", { "cf", "1", "1", "@CF" } },
     { "join", "fx", { "fx", "2", "m:11:0" } },
+    { "join", "if", { "if", "crew", "v6001_6002", "C" } },   -- ((0.74.160) round 30's host word: sv_fleet_round.lua IFCOOP
     { "join", "ak", { "ak", "1", "BUILT" } },
     { "join", "ax", { "ax", "1", "NO" } },
     { "join", "ar", { "ar", "4000", "NEVER TOOK OFF" } },
@@ -484,6 +485,20 @@ local TYPES = {
     { "host", "fx", { "fx", "p:5:0:1,2,3;g:5:0;e:0:0" }, extra = true },
     { "host", "lb", { "lb", "r", HEX, "60", "1" }, extra = true },
     { "join", "lb", { "lb", "p", HEX, "sid76561198000000002,1,3,1,0,f16c,Bob;slot2:Cara,2,0,0,1,su33,Cara" }, extra = true },
+    -- ((0.74.164) round 30's host words on a joiner: each with hostile values (sv_fleet_round.lua IFCOOP, sv_fleet_capture.lua IFCAP)
+    { "join", "if", { "if", "surf", "12345" }, extra = true },
+    { "join", "if", { "if", "watch", "SV_Unit_IFGeofon" }, extra = true },
+    { "join", "if", { "if", "break" }, extra = true },
+    { "join", "if", { "if", "split" }, extra = true },
+    { "join", "if", { "if", "hide" }, extra = true },
+    { "join", "if", { "if", "rise", "100", "200", "45.0" }, extra = true },
+    { "join", "if", { "if", "release" }, extra = true },
+    { "join", "if", { "if", "core" }, extra = true },
+    { "join", "if", { "if", "sink" }, extra = true },
+    { "join", "if", { "if", "at", "12345" }, extra = true },        -- ((2026-11-18) A6: the host's fleet, metres along its lane)
+    { "join", "if", { "if", "cap", "1", "3" }, extra = true },
+    { "join", "if", { "if", "capgo", "1", "3" }, extra = true },
+    { "join", "if", { "if", "capoff", "1", "3", "RAVEN's EW mast destroyed" }, extra = true },
     { "join", "lb", { "lb", "s", HEX, "1,valka,5,120,1;2,decoy,10,300,0" }, extra = true },
     { "join", "lb", { "lb", "x", HEX }, extra = true },
     { "join", "hl", { "hl", "51", "left" }, extra = true },        -- ((2026-11-11) the host left its run: COOP.hostLeaving)
@@ -697,6 +712,7 @@ local EFFECT = {
     ["join spx"] = function() return SPORT.hostRow and SPORT.hostRow.kind == "a" end,
     ["join rk"] = function() return called("SV_Event", "RE_SV_SpRocketEndA") end,
     ["join es"] = function() return ESC.host and ESC.host.state == "route" end,
+    ["join if"] = function() return IFCOOP and IFCOOP.last and IFCOOP.last.what == "crew" end,
     ["join vm"] = function() return M.vmHere == true end,
     ["join vr"] = function() return M.vr ~= nil end,
     ["join rz"] = function() return true end,

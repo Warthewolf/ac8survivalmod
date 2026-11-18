@@ -263,34 +263,39 @@ function SUBT.text(root)
     return table.concat(out, "\r\n") .. "\r\n"
 end
 
--- at start: the file over CFG's own lines, or the file written from them
+-- ((2026-11-18) a file of lines over root's, or written from them when it's missing: config\<name>. SUBT.file(name, root):
+-- at start config\subtitles.ini over CFG; a dev install's own lines (round 30's, config\subtitles_dev.ini: never in a zip)
+-- from the dev part that makes them, once they exist -> its counts, or nil)
 local dir = type(SCRIPT_DIR) == "string" and (SCRIPT_DIR .. "..\\config\\") or nil
-if dir then
-    local f = io.open(dir .. "subtitles.ini", "rb")
+function SUBT.file(name, root)
+    if not dir then return nil end
+    local f = io.open(dir .. name, "rb")
     if f then
         local text = f:read("a") or ""
         f:close()
-        local ok, st = pcall(SUBT.apply, text)
+        local ok, st = pcall(SUBT.apply, text, root)
         if not ok then
-            log("subtitles: config\\subtitles.ini couldn't be read (" .. tostring(st) .. "): the game's own lines")
-        else
-            log(string.format("subtitles: config\\subtitles.ini: %d lists, %d lines, %d named lines%s%s%s", st.sections, st.lines,
-                st.keys, st.added > 0 and string.format(", %d exchanges added", st.added) or "",
-                st.removed > 0 and string.format(", %d taken out", st.removed) or "",
-                #st.bad > 0 and string.format(" (%d mistakes skipped)", #st.bad) or ""))
-            for i = 1, math.min(#st.bad, 20) do log("subtitles: " .. st.bad[i]) end
-            SUBT.loaded = st
+            log("subtitles: config\\" .. name .. " couldn't be read (" .. tostring(st) .. "): the game's own lines")
+            return nil
         end
-    else
-        local ok, text = pcall(SUBT.text)
-        local w = ok and io.open(dir .. "subtitles.ini", "wb") or nil
-        if w then
-            w:write(text)
-            w:close()
-            log("subtitles: made config\\subtitles.ini from the game's own lines")
-        elseif not ok then
-            log("subtitles: config\\subtitles.ini couldn't be made (" .. tostring(text) .. ")")
-        end
+        log(string.format("subtitles: config\\%s: %d lists, %d lines, %d named lines%s%s%s", name, st.sections, st.lines,
+            st.keys, st.added > 0 and string.format(", %d exchanges added", st.added) or "",
+            st.removed > 0 and string.format(", %d taken out", st.removed) or "",
+            #st.bad > 0 and string.format(" (%d mistakes skipped)", #st.bad) or ""))
+        for i = 1, math.min(#st.bad, 20) do log("subtitles: " .. st.bad[i]) end
+        return st
     end
+    local ok, text = pcall(SUBT.text, root)
+    local w = ok and io.open(dir .. name, "wb") or nil
+    if w then
+        w:write(text)
+        w:close()
+        log("subtitles: made config\\" .. name .. " from the game's own lines")
+    elseif not ok then
+        log("subtitles: config\\" .. name .. " couldn't be made (" .. tostring(text) .. ")")
+    end
+    return nil
 end
+-- at start: the file over CFG's own lines, or the file written from them
+SUBT.loaded = SUBT.file("subtitles.ini", CFG)
 end

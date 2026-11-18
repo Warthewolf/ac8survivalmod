@@ -307,6 +307,14 @@ end
 -- (a joiner) copy o's health scaled here (sv_ai.lua enemyLate: CFG.late, a Skirmisher's x0.75, as the host scales its
 -- own): what it's expected to have moves with it, so clientTick sends the host only the hits since (code review of
 -- 2026-10-29: a joiner's x0.75 went to the host as that player's hit, x0.5 there). Whether o is a bound copy.
+-- ((0.74.160) a joiner: the host's unit's copies here, still each one (hard rule 59): round 30's GEOFON (sv_fleet_round.lua)
+function COOP.copiesOf(unit)
+    local out = {}
+    for _, c in pairs(M.copies) do
+        if c.unit == unit and c.obj ~= nil and liveAddr(c.obj) == c.addr then out[#out + 1] = c.obj end
+    end
+    return out
+end
 function COOP.copyScaled(o, h0, h1)
     if not (COOP.client() and type(h0) == "number" and type(h1) == "number") then return false end
     local a = addrOf(o)

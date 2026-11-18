@@ -62,10 +62,14 @@ local function letter(k) return string.char(65 + k) end
 -- CFG.attackers ([attackers]): your plane's own (an instance: the stock table stays as it is) set to plane_missiles /
 -- nonplane_missiles / pursuers (0: the game's) every check_s, again when the game puts them back (logged once a plane).
 -- Each player's own plane on their own game (co-op too).
-ATK = {}
+ATK = { holds = {} }
+-- ((0.74.168) a hold on these writes while something else keeps the limits at 0 (GEOFON's capture, DOWN, a cinematic): the
+-- autotest's captive of 0.74.168 read 12 chasers 2 s after the capture set 0, put back by this tick). ATK.hold(name, on)
+function ATK.hold(name, on) ATK.holds[tostring(name)] = on and true or nil end
 function ATK.tick(now)
     local c = CFG.attackers
     if type(c) ~= "table" or c.enabled == false or not now or now < (ATK.nextAt or 0) then return end
+    if next(ATK.holds) ~= nil then return end
     ATK.nextAt = now + (tonumber(c.check_s) or 2)
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
     if not (pawn and valid(pawn)) then return end

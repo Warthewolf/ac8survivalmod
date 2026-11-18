@@ -701,15 +701,11 @@ check(P(actor).CloudlyVolumeComponentsAsset == cvcMine and cl.rem[#cl.rem] == cv
 -- ((2026-11-08) "how can we get lightning to play inside the clouds?") Ctrl+\: the cloud lightning probe; the storm's flashes
 print("cloud lightning (Ctrl+backslash, the storm's flashes)")
 local LT = B.lightning
+local BASE = "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Base.BP_CloudLight_Base_C"
 for _, path in ipairs({ LT.class, "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms012_PodargeDead.BP_CloudLight_Ms012_PodargeDead_C",
-                        "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms022_ShuttleLaunch.BP_CloudLight_Ms022_ShuttleLaunch_C" }) do
+                        "/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms022_ShuttleLaunch.BP_CloudLight_Ms022_ShuttleLaunch_C", BASE }) do
     statics[path] = obj("BlueprintGeneratedClass " .. path)
 end
-local eff = { int = {}, at = nil }
-local effLight = obj("PointLightComponent EffectLight", { Intensity = 1000, AttenuationRadius = 5000,
-    SetWorldLocation = function(self, l) eff.at = l end, SetIntensity = function(self, v) eff.int[#eff.int + 1] = v; P(self).Intensity = v end,
-    SetAttenuationRadius = function(self, v) P(self).AttenuationRadius = v end, SetLightColor = function() end })
-P(actor).EffectLight, P(actor).bUseEffectLight = effLight, false
 P(pawn).GetActorForwardVector = function() return { X = 1, Y = 0, Z = 0 } end
 from = #logs + 1
 local nv, nf, np = #vols, #fxs, #posts
@@ -726,11 +722,18 @@ check(found("cloud lightning (probe 2: Mission 12's Podarge light): skipped (the
     == statics["/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms012_PodargeDead.BP_CloudLight_Ms012_PodargeDead_C"], "probe 2: Mission 12's light (the last one taken off first)")
 press("OEM_FIVE")
 check(P(vols[#vols]).spawnCls == statics["/Game/Blueprints/Cloudly/CloudLight/BP_CloudLight_Ms022_ShuttleLaunch.BP_CloudLight_Ms022_ShuttleLaunch_C"], "probe 3: Mission 22's light")
+nv = #vols
 press("OEM_FIVE")
-check(P(actor).bUseEffectLight == true and eff.at and eff.at.X == P(pawn).loc.X + 500000, "probe 4: Cloudly's effect light on, moved to the spot")
-for _ = 1, 6 do gtick(0.25) end
-check(#eff.int >= 5 and eff.int[1] == LT.effect_intensity and eff.int[#eff.int] == 1000 and P(actor).bUseEffectLight == false,
-    "... its intensity in steps, then put back (" .. table.concat(eff.int, ", ") .. ")")
+local v4 = vols[nv + 1]
+check(v4 and P(v4).spawnCls == statics[BASE] and P(v4).WorldPosition and P(v4).WorldPosition.X == P(pawn).loc.X + 500000
+    and P(v4).AttenuationRadius == 500000 and P(v4).LightFalloffExponent == 4 and P(v4).bUseInverseSquaredFalloff == false,
+    "probe 4: Survival's own cloud light (the bare one, hard rule 70) at the spot, 5 km round")
+local seen = {}
+for _ = 1, 6 do gtick(0.25); seen[#seen + 1] = tostring(P(v4).LightBrightness) end
+check(seen[1] == tostring(300000) and seen[#seen] == "0" and #vols == nv + 1,
+    "... driven a tick at a time, then dark, the one light kept (" .. table.concat(seen, ", ") .. ")")
+THUNDER.cloudOff()
+check(not LIVE[rawget(v4, "addr")], "THUNDER.cloudOff: the light gone")
 nv = #vols
 press("OEM_FIVE")
 check(#vols == nv and has(callouts[#callouts], "THE BOLT ALONE"), "probe 5: the bolt alone")

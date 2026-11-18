@@ -20,18 +20,12 @@
 --                     gap G m`: each copy's origin read back in the ship's frame (x along the keel, bow +, y across, z up
 --                     from the ship's origin, its waterline), and G the gap at the waterline between the two flight decks
 --                     (deck_m up in each copy) along the keel. A second Ctrl+B takes it off (OFF.down, below).
---                     (RISE_FORD.md 1.5's "15 m apart, 215 m parted" are along each copy's own keel: in the ship's frame
---                     the two decks meet the water ~0 m apart at the break, ~200-220 m once parted 100 m each way and sunk.)
 --   Ctrl+G in a run   T2, GEOFON's stages (RISE_FORD.md 4.2 (a)): the Ford alone 4 km ahead, broadside, its deck off, mortal;
---                     each further Ctrl+G takes `hit` (20 %) of its health off (ModifyHealth, as the Spaceport's
---                     finishParts). At 66 % (stage 1) AC8's vessel fire NS_VesselsFireL001 and smoke NS_VesselsSmokeS001
---                     attached to VesselMesh on the deck and the island, a list (VesselMesh's relative roll ramped over
---                     list_s, list_step_max a tick at most) and the Ford's own secondary blast sound; at 33 % (stage 2) more
---                     fire and its hull's slots on dynamic copies of its _DAM instances with Charred_Embers_Brightness x
---                     `embers` (materials "dim"; "dam": the _DAM instances themselves). A system that ends by itself is
---                     spawned again (refire). Logged: `geofon: up: ...`, `geofon: stage N at P % (health H %): F fires, S
---                     smoke, list R deg over T s, M material slots (<route>)`, every 5 s `geofon: +T s: health ...`, and
---                     `geofon: down at +T s (<why>)`; its fires off fx_off_s after.
+--                     each further Ctrl+G takes `hit` (20 %) of its health off. At 66 % AC8's vessel fire and smoke on the
+--                     deck and the island, a list (VesselMesh's roll over list_s) and its secondary blast sound; at 33 % more
+--                     fire and its hull on dynamic copies of its _DAM instances (embers x `embers`); a system that ends is
+--                     spawned again. Logged: `geofon: up: ...`, `geofon: stage N at P % (health H %): ...`, every 5 s
+--                     `geofon: +T s: health ...`, `geofon: down at +T s (<why>)`; its fires off fx_off_s after.
 -- The fleet (WP7's first test, 2026-11-12; docs/design/INVINCIBLE_FLEET_WP7.md): its own units SV_Unit_IF<Key> (never the
 -- Spaceport's), each ship on its lane from its course start ~30 km north-west of the runway (tools/survival_events_fleet.py):
 --   Ctrl+N in a run   the whole fleet (CFG.specials.fleet.ships: GEOFON, RAVEN, the four Aegis, Mission 22's seven cruisers
@@ -43,19 +37,14 @@
 --                     speed, heading, health, parts up; the others: km from GEOFON, m off their formation spot, speed,
 --                     heading, health, parts up) and `fleet: +T s weapons (since the last line): <ship> <part class>
 --                     <weapon> xN; ...; N of M parts fired`; a sunk ship once. Again: the fleet taken off (RE_SV_IFFleetRemove,
---                     then OFF.down). Its rows go into the game's tables at the main menu (sv_main.lua calls the setup:
---                     `fleet: rows at the main menu: ...`): with any missing, Ctrl+N refuses. A unit still up from before:
---                     RE_SV_IFFleetRemove and the fleet held up to clear_s for it, never spawned beside it.
+--                     then OFF.down). Its rows go in at the main menu (`fleet: rows at the main menu: ...`; one missing:
+--                     Ctrl+N refuses); a unit still up from before: RE_SV_IFFleetRemove, the fleet held up to clear_s for it.
+--   Ctrl+S in a run   the fleet's night storm now; again: the round's own sky back (sv_fleet_storm.lua, the next piece).
 -- Taking a test's ships off (OFF.down; the review of 8ca3195): never off the spawner's list by force with their objects up
--- (0.74.11's crash D, 0.74.48's STORE crash: a unit actor destroyed under its living objects), but the way every special's
--- leftovers go (sv_rounds.lua SPC.cleanUp): each object finished off (else switched off), each unit looked at 2 s on and
--- taken off the list then, one with nothing of it alive one each 0.5 s (SPC.cleanTick, SPC.recycleLater). A key that would
--- spawn a unit still being taken off, or still up, refuses (again in a few seconds). The three keys refuse in the landing
--- STORE (its minigame holds the world's AI: a spawn or a removal there was 0.74.11's and 0.74.48's case), and the fleet's
--- clock waits there as it does while paused.
--- Each kept object (the hull, its meshes, its parts, the effects) is checked to be the one captured (its address and its
--- name, hard rule 59) before anything is done to it; nothing moves while the game is paused (hard rule 60); every call
--- into the game is in a pcall and a failure is logged (these are look tests: a call the game doesn't take must say so).
+-- (0.74.11's crash D, 0.74.48's STORE crash), but the way every special's leftovers go (SPC.cleanUp, SPC.cleanTick); a key
+-- that would spawn a unit still going or up refuses, and the keys refuse in the landing STORE (its minigame holds the AI).
+-- Each kept object is checked to be the one captured (address and name, hard rule 59) before anything is done to it;
+-- nothing moves while paused (hard rule 60); every call into the game is in a pcall, a failure logged.
 -- TEST ONLY BEGIN (INVINCIBLE FLEET's tests: test builds only; docs/design/INVINCIBLE_FLEET_RISE_FORD.md 5, T1 and T2)
 CFG.specials.fleet = {
     geofon = {
@@ -83,6 +72,15 @@ CFG.specials.fleet = {
               roll_deg = 5, list_s = 30, materials = "dim", embers = 0.2 },
         },
         test = { ahead_cm = 400000, hit = 0.20, fx_scale = 1, list_step_max = 0.1, refire = true, every_s = 5, fx_off_s = 30 },
+        -- ((0.74.131) round 30's phase 2: GEOFON's fall, sv_fleet_round.lua) its health held at break_at from watch_hp down
+        -- (SetMinHealth: no one hit takes it past the break); at break_at held whole and stopped, the TANACORN under it;
+        -- ((0.74.132) the user: "It has to look like the Tanacorn rising has split her in half") split the moment her bow
+        -- breaks the surface at its midships: T1's V (bow and stern as look's) rearing from flat over rear_s, the halves
+        -- parted part_m each way and sunk sink_m { bow, stern } over part_s from part_after_s, hidden at hide_s
+        -- ((0.74.133) the user on 0.74.132's pictures: "Wheres the geofon in those photos": its halves were 40 m under 5 s
+        -- after the split; they now stand in their V and part over part_s, and sink only from sink_after_s over sink_s)
+        fall = { watch_hp = 0.15, break_at = 0.03, rear_s = 1.2, part_after_s = 0.3, part_m = 110, part_s = 20,
+                 sink_after_s = 22, sink_s = 40, sink_m = { 120, 100 }, hide_s = 65, every_s = 2.5, log_s = 70 },
     },
     -- (2026-11-12) WP7, the fleet (Ctrl+N; docs/design/INVINCIBLE_FLEET_WP7.md). The ships as the build makes them
     -- (tools/survival_events_fleet.py IF_SHIPS, which the build checks this table against): the name on its box ("" an
@@ -123,7 +121,367 @@ CFG.specials.fleet = {
     -- the course in and the runway's centre (survival_events_fleet.py IF_YAW, IF_RUNWAY), for the lines
     formation = { per_step = 3, gap_s = 0.5, settle_s = 2, go_s = 15, moved_m = 50, every_s = 10, guns_s = 2, clear_s = 8,
                   course_yaw = 45, runway_cm = { 1610476, -436143 } },
+    -- ((0.74.140) WP8: every fleet ship scarred from its spawn (sv_fleet_round.lua scarsTick): its slots on dimmed copies of their
+    -- own _DAM instances, per_tick components a tick; embers: their glow x this (a look only: never ranked against)
+    scars = { enabled = true, per_tick = 1, embers = 0.05 },   -- ((0.74.152) 1: the game's own work, ~45 ms a part at worst (run 20261117_203608: the walks 0.0 ms, the sets 134 ms for 3))
+    -- ((0.74.137) WP13, round 30: the fleet shells the airfield (sv_fleet_round.lua shellTick): each ship afloat of kinds within
+    -- shell_km of the runway a salvo every every_s (staggered), its muzzle flash, flight_s on its damage off the airfield and
+    -- its rounds of AC8's explosions on the runway (spread_m along it at runway_yaw, across_m across); none while it's down,
+    -- paused, in the STORE or in the surfacing. Tuned: ~10 ships in range take its 250 in ~3.5 min
+    shell = { enabled = true, shell_km = 20, every_s = 25, damage = 3, flight_s = 6, rounds = 3, spread_m = 600, across_m = 60,
+              runway_yaw = -23, ground_cm = 500, kinds = { aegis = true, krov = true, gors = true, udal = true },
+              muzzle = { "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_Maingun_Muzzle", 2 },
+              impact = { { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 2.5 },
+                         { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_SandSmoke001", 2 } },
+              sound = "AKE_Weapon_SuperLongMainGun_Explosion_Ground_Play",
+              shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactSmall", shake_scale = 0.6, shake_km = 6,
+              text = { shelling = "THE FLEET IS SHELLING THE AIRFIELD", shelling_sub = "SINK THE SHIPS IN RANGE" },
+              radio = { shelling = { "CTRL|Incoming! Naval gunfire on the airfield! The fleet's in range!",
+                                     "AUDREY|Shells on the runway! Val, head down! Pilots, sink those gunships!" } } },
+    -- (2026-11-12, stage 4: docs/re/TANICORN.md "Railguns and railcannon") THE TANACORN's bow railcannon, its charged shot at
+    -- the airfield (sv_tanicorn_rail.lua; Ctrl+H on Ctrl+L's live hull, WP11's phase 2 later; WP13): its Deploy over deploy_s
+    -- (AS_SV_Tani_RAILCANNON_Deploy, 3.33 s), then a charge of charge_s, the shot, and the next charge every_s after the last
+    -- one STARTED (a shot every 90 s); damage on the airfield where the round lands, of its CFG.airfield.hp (250) scaled to the
+    -- menu's AIRFIELD HEALTH (damage_of_max); its health missiles of your standard missiles, +per_player of them for each
+    -- other player (8 solo, 12 for two), never above its row's 1000. Its round flies speed_kms (the stock railgun shell's) to
+    -- a spot on the runway (x, y, z cm, its yaw: sv_down.lua's) spread_m along it and across_m across; one in flight when
+    -- it's shot down still lands (flight_lands). The clock holds while paused, in the STORE, while you're landed with nobody
+    -- else flying, and (before a charge) while the airfield is down (hold). Its effects are AC8's own (hard rule 58), each
+    -- { path, scale } stopped fx_life_s after its spawn (its charge at the shot): the charge her discharge on SOC_Gun_01
+    -- (spawned again every refire_s if it ended), the muzzle the GR036 main gun's and her long discharge, the streak a beam
+    -- (AC8's player TLS, User.BeamLength: "the players tls worked", 0.74.65) or a trail (the main gun's bullet trail every
+    -- step_km as the round passes), the impact Mission 25 day 1's Tonitrus Spear strike as its cutscene draws it (IGC
+    -- Ms250010's Shot0030: its three fireballs, its two shock rings, the sand skirt and the ring smoke; the user, 2026-11-16,
+    -- with its picture: "This is what the Railcannon Hit Impact should look like"), at x12 (the autotest's spear suite
+    -- compared x1 / x4 / x8 / x12: at x12 the fireball fills the two rings as in the cutscene), kept impact_life_s for its
+    -- dust; her
+    -- cannon's charge sounds (by name, on the railcannon: BA002_alcn's Cannon bank) with the RTPC rtpc_from -> rtpc_to over
+    -- charge_sound_s; max_off_deg under 180 holds the shot until her bow points within it. Its Deploy must show up
+    -- (SOC_Gun_01 at least raised_cm up in its mesh as drawn: stowed ~1567, up ~3454) or it's played again redeploys times,
+    -- then left stowed and shielded with no charge; your missile's damage read size_tries times for its health
+    railcannon = {
+        enabled = true, deploy_s = 3.4, charge_s = 30, every_s = 90, damage = 100, damage_of_max = true,
+        missiles = 8, per_player = 0.5, raised_cm = 2500, redeploys = 1, size_tries = 5,
+        speed_kms = 11.1, flight_min_s = 0.5, flight_lands = true,
+        runway = { 1609574, -435747, 500, -23 }, spread_m = 600, across_m = 15, max_off_deg = 180,
+        alert = { enabled = true, off_after_s = 3 }, warn_left_s = 10, radio = true,
+        hold = { paused = true, store = true, landed_alone = true, af_down = true },
+        fx_life_s = 6, impact_life_s = 25, refire = true, refire_s = 2,
+        -- (2026-11-16) the impact as Mission 25 day 1's cutscene plays it (the user, with its picture: "that explosion needs to
+        -- look EXACTLY like this"): its own VFX layer (Shot0030's: every piece at its own scale, place, timing and settings)
+        -- played by a LevelSequencePlayer of ours, its transform origin moved so its ground explosion (Explosion002, at
+        -- anchor in the sequence's space) stands where the round lands; the cutscene camera's rains and the Spear rod's trail
+        -- (hide) hidden; held at its last frame for impact_life_s, then stopped. Off, or failing: fx.impact instead
+        impact_seq = { enabled = true, path = "/Game/Sequencer/IGC/IGC_Ms250010/VFX/CLS_IGC_Ms250010_Shot0030_VFX",
+                       anchor = { 605172, -533159, -5879 }, key = "Ms250010", hide = { "Rain", "BulletTrail" } },
+        fx = {
+            charge = { "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_alcn_RailCannonDischarge_ON", 1 },
+            muzzle = { { "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_Maingun_Muzzle", 3 },
+                       { "/Game/OnlineMode/VFX/Vehicles/Boss/BA002_alcn/Niagara/NS_alcn_RailGunDischarge_Long_ON", 1 } },
+            streak = { mode = "beam", fx = "/Game/VFX/Vehicles/Weapon/TLS/NS_TLS_Muzzleflash01", life_s = 0.8,
+                       trail = "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_Maingun_BulletTrail", step_km = 1 },
+            impact = { { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 12 },
+                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion002", 12 },
+                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion005", 12 },
+                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_ShockWave001", 12 },
+                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_ShockWave002", 12 },
+                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_SandSmoke001", 12 },
+                       { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_RingSmoke001", 12 } },
+        },
+        sound = { rtpc_init = "AKE_BA002_alcn_Cannon_RTPC_Init", charge = "AKE_BA002_alcn_Cannon_Charge_Play",
+                  charge_end = "AKE_BA002_alcn_Cannon_Charge_End_Play", charge_stop = "AKE_BA002_alcn_Cannon_Charge_Stop",
+                  charge_sound_s = 20, rtpc = "EX03_CANNON_CHARGE", rtpc_from = 50, rtpc_to = 100,
+                  shot = "/Game/WwiseAssets/Events/SFX/AKE_GR036_ldbs1_Railgun_Shot",
+                  pass = "/Game/WwiseAssets/Events/CS_AceLive_SE/Events_General/AMMO/AIR/SE_GEN_AMMO_AIR/AKE_GEN_AMMO_AIR_ldbs_RailGun_Pass_Play",
+                  impact = "/Game/WwiseAssets/Events/SFX/AKE_Weapon_SuperLongMainGun_Explosion_Ground_Play" },
+        shake = "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios", shake_km = 8,
+        text = { aim = "THE TANACORN IS AIMING AT THE AIRFIELD", aim_sub = "RAILCANNON CHARGING: %d S",
+                 soon = "RAILCANNON FIRING IN %d S", hit = "THE AIRFIELD IS HIT", hit_sub = "TANACORN RAILCANNON: -%d",
+                 down = "TANACORN RAILCANNON DOWN", down_sub = "THE AIRFIELD IS SAFE" },
+    },
+    -- (2026-11-16) the fleet's own night (the user: "another day night cycle for this Special Round, using the same method
+    -- we use for The Festival", the sun setting from round 25, "Night can last for 3 rounds before Round 30", the fleet "at
+    -- Early Morning, just before the sun rises"): sv_sky.lua's arc owned from from_round with profile over CFG.sky.arc (no
+    -- sinking round: the sunset at round 26, night 27-29, the pre-dawn at 30, sunrise over 31-33; from 0.74.128 night 27-30, see below). Its storm (the user:
+    -- "swap the new cloud layer in at the moment the Night Sky Appears, add a lot of lightning in the area too, like a lot a
+    -- lot a lot"; seen and heard only; it "can clear with a fade to black on round 35", "to hide the sudden swap of the
+    -- clouds back to normal"): from the arc's first moon (the sunset's break, its darkest point) to until_round, Distant
+    -- Thunder's storm cloud layout (Mission 12's) in and back under a fade to black (out_s, hold_s, in_s), its distant
+    -- thunder and a clap, and cloud lightning every every_s within dist_km of the airfield or the fleet, alt_m up: a cloud
+    -- light every light_every_s (one up at a time), bolts (x bolt_scale) between, the thunder after its distance's delay
+    -- (night_over: (2026-11-17) the user flying 0.74.91: "night time is too bright, also the sea is back to green again
+    -- which we fixed in the festival rounds": 0.74.86's brighter storm night (exposure 1.3 / 10 / +1.6, sky light x1.2e-4)
+    -- was what turned it, as 0.74.25's; THE FESTIVAL's night now (CFG.sky.night: 2.3 / 10 / +0.6), only its top exposure
+    -- capped at 4 so the camera can't stop down for a cloud flash (runs 67, 70: the auto exposure cancelled them out).
+    -- thunder: AC8 has no thunder event (the storm's AKE_Environment_Thunder_Play and Ms12 distant thunder were never
+    -- AC8's: nothing was heard); its booms and rumble stand in, near within near_km, far beyond, a strike's chance, after
+    -- its distance's delay (s_per_km, at most max_s), loaded and pinned under the storm's fade; Ctrl+J plays each in turn)
+    -- ((0.74.127) the user, 0.74.125's round 29 break and round 30: "the aircraft is far to bright for night time", "its the
+    -- exposure", the whole picture: the night's exposure 2.3 / 4.0 / +0.6 -> 4.0 / 6.0 / -0.5, the dawn's 10 / 14 / -1 ->
+    -- 12 / 14 / -2 (a higher floor: the dark scene brightened less))
+    -- ((0.74.128) the user, 0.74.127: "its like the night mode settings that you used in the festival are no longer working,
+    -- even the runway lights aren't on anymore", "make it so that it's still a night time round, then the next round
+    -- transitions normally into day time over a few rounds, the same as the festival does": no night_over / dawn_exposure
+    -- of its own (THE FESTIVAL's night, dawn and sunrise_rounds, CFG.sky.arc / CFG.sky.night), round 30 a night round:
+    -- the sunset at 26, night 27-30, the dawn at 31, rising over 31-34 as the festival's, midday from 35)
+    sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 4 },
+            storm = { enabled = true, until_round = 35, out_s = 0.6, hold_s = 0.8, in_s = 1.2,
+                      -- ((2026-11-17) the user: "we need to change the audio of the Thunder, its wrong") AC8's own thunder
+                      -- (its SE bank's Mission 12 events, by name on your camera: sv_fleet_storm.lua): the storm's arrival
+                      -- clap, Mission 12's distant thunder all through the storm (a loop: its _Stop as it clears)
+                      sound = { clap = "AKE_Ms12_ENV_OBJ_Thunder_Play", distant = "AKE_Ms12_ENV_AMB_DistantThunder_Play",
+                                distant_stop = "AKE_Ms12_ENV_AMB_DistantThunder_Stop" },
+                      -- (cells: (2026-11-17) the user's Mission 12: "they visibly appear to light the clouds with blue lighting":
+                      -- its Mission012_Phase01_VFX's 19 NS_CloudLightning in its cloud towers (Mission 12's layout is the
+                      -- storm's), each spot's scale as there, drawn after the clouds (sort 100, as there; at the default 0
+                      -- the clouds covered ours: the faint teal glow of runs 46-58); spawned under the storm's fade, taken
+                      -- off as it clears. cloud (Survival's own effect light) off: it lit nothing in runs 77-83)
+                      -- (bolt_glow: (2026-11-17) the user: "Like have them draw where the lightning bolts are?": a pool of
+                      -- the same glow, the oldest moved up_m over each bolt's top (into the cloud it comes out of) and
+                      -- restarted, off life_s on; run 87: scale 1 unseen at 2-5 km at night, 3-6 lit the cloud blue, so 4, and the 19 x3)
+                      cells = { enabled = true, sort = 100, scale_x = 3,
+                                bolt_glow = { enabled = true, pool = 12, life_s = 2.5, up_m = 300, scale = 4,
+                                              -- ((2026-11-17) the flash with the bolt, tools/stormfx (TANI=1 dev builds), the
+                                              -- first that loads: AC8's own cloud lightning with its spawn literals raised
+                                              -- (burst.py; switched off life_s on, its particles finish), our own cooked one;
+                                              -- else the stock glow above)
+                                              flash = { { path = "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudBurst.NS_SV_CloudBurst",
+                                                          scale = 0.1, life_s = 0.8, min_km = 6 },   -- (burstwatch: on 0.5 s, its particles die with it; none within 3 km: run 140748's white-outs; 0.74.114: its near sprites on MI_SV_CloudFlashNear, no fade before 30 km)
+                                                        { path = "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudFlash.NS_SV_CloudFlash",
+                                                          scale = 1, life_s = 2.0 } } },
+                                system = "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning.NS_CloudLightning",
+                                spots = { { 2389746, -1425882, 636631, 1 }, { 2050221, -1352135, 639884, 1 }, { -2275497, 226132, 764355, 1 }, { -3067967, 383275, 764355, 1 },
+                                         { -3159850, 3790150, 764355, 1 }, { -3159850, 4575129, 764355, 1 }, { -1165562, 2039202, 764355, 1 }, { 1798205, 1440965, 727172, 0.9 },
+                                         { 1278704, 1440965, 727172, 0.5 }, { 1442013, 1743569, 727172, 0.5 }, { 4357787, 2892324, 727172, 1 }, { 2618538, -950632, 636631, 1 },
+                                         { 121258, -1369681, 636631, 0.75 }, { -613885, -1941399, 636631, 0.95 }, { -1887114, -3717666, 636631, 1 }, { -3416988, -3257279, 764355, 1 },
+                                         { -3050114, -3086835, 764355, 1 }, { -2865498, -224223, 764355, 1 }, { -2275497, -433174, 764355, 1 } } },
+                      -- (at_max_m: (2026-11-17) the thunder posted toward its strike, no further than this: AC8's
+                      -- thunder is 3D, a far one would be out of earshot)
+                      thunder = { enabled = true, chance = 0.7, near_km = 6, s_per_km = 2.9, max_s = 6, at_max_m = 2500,
+                                  near = { "AKE_Ms12_ENV_OBJ_Thunder_Play", "AKE_Environment_Thunder_Play" },
+                                  far = { "AKE_GEN_ENV_AMB_ThunderCloud_Inside_Lightning_Play", "AKE_Environment_Thunder_Play" } },
+                      -- ((2026-11-17) the bolts you see: THUNDER.bolt's (sv_anomalies_dev.lua), AC8's bolt meshes in the
+                      -- game's cloud lightning material, a bolt each flash, the rain warmed up behind the fade (warm_fx);
+                      -- cloud: Survival's own cloud light at some flashes (hard rule 70; 0.8-2M: 165k-365k unseen in the user's 0.74.91 flight,
+                      -- 4M and 8M at 5 km round blacked nothing out in run 75; 4M at 50 km did in run 68))
+                      lightning = { enabled = true, every_s = { 0.3, 0.8 }, dist_km = { 2, 25 }, alt_m = { 1500, 7000 },
+                                    -- ((2026-11-17) a strike's light on your plane, the ships and the sea: our directional
+                                    -- light from the strike, intensity x steps a tick, strikes within max_km, full at
+                                    -- near_km down to fade_x at max_km; sv_fleet_storm.lua's slFlash)
+                                    -- (kind "point": a point light offset_m from you on the strike's side, radius_m reach;
+                                    -- "directional" lit nothing in AC8: run 20261117_150341)
+                                    -- ((0.74.126) the user, 0.74.125: "the aircraft is far to bright for night time": the storm's 2-3 strikes a
+                                    -- second within 15 km kept it lit; 800, within 8 km, one every gap_s at most, a short flicker)
+                                    plane_light = { enabled = true, kind = "point", intensity = 800, offset_m = 300, radius_m = 1500,
+                                                    falloff = 2, near_km = 3, max_km = 8, fade_x = 0.25, gap_s = 2.5,
+                                                    steps = { 1, 0.3, 0 }, color = { 200, 215, 255 } },
+                                    cloud = { enabled = false, chance = 0.5, every_s = { 0.6, 1.6 }, alt_m = { 2000, 4500 }, radius_m = 5000,
+                                              brightness = { 800000, 2000000 }, max_brightness = 3000000, color = { 215, 225, 255 }, steps = { 1, 0.3, 0.9, 0.2, 0 } },
+                                    bolts = { enabled = true, pool = 10, height_m = { 1800, 4500 }, length_m = { 2500, 7000 },
+                                              alt_m = { 2500, 5500 },
+                                              material = "/Game/VFX/Environment/Common/Lightning/CloudLightning/MI_NearCloudLightning001.MI_NearCloudLightning001",
+                                              -- ((2026-11-17) "increase the brightness of the lightning bolt": a dynamic instance of
+                                              -- the material on each bolt with these values (0.74.123's cooked copy, MI_SV_StormBolt,
+                                              -- drew no bolt at all): x3 the light, its far fade 0.5-3.5 km pushed out to 30 km)
+                                              mid = { Emissive_Intensity = 15000, FarFade_Start = 3000000, FarFade_Distance = 1000000 },
+                                              meshes = { "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder001_IE03.SM_Thunder001_IE03",
+                                                         "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder006_IE04.SM_Thunder006_IE04",
+                                                         "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder002_IE03.SM_Thunder002_IE03",
+                                                         "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder003_IE03.SM_Thunder003_IE03",
+                                                         "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder005_IE03.SM_Thunder005_IE03",
+                                                         "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder004_IE03.SM_Thunder004_IE03" } },
+                                    warm_fx = { "/Game/VFX/Environment/Common/Rain/NS_RainDroplets.NS_RainDroplets" } } } },
+    -- (2026-11-16) the fleet surfaces as it comes (the user: "when the Invincible Fleet first spawns, they should all Surface
+    -- out of the sea the same way the Tanacorn does. I want it to look cinematic as possible, so add multiple camera
+    -- angles"): THE TANACORN's rise rig (rig, anim: her container's; the autotest's surface probes, runs 40-42: a live AI ship
+    -- won't ride it, its own movement holds it; a bare spawn of its blueprint does, every turret on) under a double of each
+    -- ship, scaled by its length to her tani_m, placed so the double settles on the ship's spot (start_km out from the
+    -- runway along the course, the formation's offsets), its rise started at waves[kind] s (+ up to jitter_s), the water at
+    -- its breach_s and slam_s (TANI.rise.FX's names, x its scale x fx_x), the cameras' shots (each from `t` s: a cut, at / look
+    -- in metres off a ship's spot: forward along the course, right, up; fov), your plane invincible on the loiter autopilot;
+    -- then a fade to black (fade), the doubles gone and the real fleet up on the same spots under it, your view back
+    -- (2026-11-17, WP10 step 1, sv_fleet_round.lua; the user: "Phase 1 now", the surfacing "at round start") round 30 is
+    -- the fleet's (never drawn, once a run): the surfacing, then it sails in; a few of the round's own fighters
+    -- (fighter_share of a normal round's); no time limit; each ship paid once as sunk (pay by kind: double the Spaceport's),
+    -- a turret shot off `turret`; won when every ship is sunk and the round's aircraft are down: `reward`, the airfield
+    -- fully repaired. music: Online Mode's AC04 track from the round's start, again at its length, the music player's
+    -- clock held meanwhile. radio: Survival's own lines, drafted for the user to edit here (dev install only: never in
+    -- config/subtitles.ini, which every release ships). GEOFON sinks like any ship until WP5 / WP6 (its fall, the rise)
+    -- ((2026-11-17) the user: two LaserInterceptors on each Aegis, bow and aft, targetable; the mount THE TANACORN's LASER)
+    -- sv_fleet_lasers.lua: a TANI=1 build's Aegis mounts (BP_SV_IF_Aegis) put at spots { ahead m, right m, up m, yaw } in the
+    -- hull's frame (none: the build's) and handed to AC7's LaserInterceptor (CFG.allies.carrier.zfa's volley and rest)
+    lasers = { enabled = true, spots = { LASER_BOW = { 69, 0, 9.0, 0 }, LASER_AFT = { -64, 0, 4.1, 180 } } },
+    -- ((2026-11-17) the user: "move the sunrise so it's slower during round 30, it gets light too quickly") sky_slow: the
+    -- arc's drift toward the dawn through its fight x this slower (sv_sky.lua SKY.fightSlow: 240 s x 5, ~20 min)
+    -- ((0.74.128) 1: round 30 is a night round now, its drift toward the dawn as the festival's last night round)
+    round = { enabled = true, round = 30, fighter_share = 0.25, reward = 50000, turret = 300, sky_slow = 1,
+              pay = { ford = 6000, aegis = 1600, krov = 1400, udal = 1000, grig = 1000, gors = 1000, boat = 600 },
+              music = { enabled = true, track = "AKE_Bgm_Online_ACE04_Invincible_Fleet_Play", len_s = 265.832 },
+              text = { sub = "INVINCIBLE FLEET", warn = "INVINCIBLE FLEET", warn_sub = "THE AEGIR FLEET IS UNDER WAY",
+                       row = "FLEET: %d AFLOAT  CARRIER: %s", sunk = "%s SUNK", won = "THE AEGIR FLEET IS DESTROYED",
+                       won_sub = "+%s ZOLLARS", restored = "AIRFIELD RESTORED", restored_sub = "ITS HEALTH, DEFENCES AND ALLIES" },
+              -- ((0.74.146) the user: "Add more subtitles from Audrey and Valka, especially around notable bits like the Geofon
+              -- taking damage or wondering where the Tanager is", with her two lines (tanager); the rest drafted for her to edit:
+              -- tanager tanager_after_s after the sighting, stage1 / stage2 at GEOFON's stages)
+              tanager_after_s = 10,
+              -- ((0.74.158) the user: "it's not Kaska's Navy at all, it's an Anomaly caused by Emblem Direct": no KASKA line in
+              -- round 30; the fleet and the TANACORN are an Anomaly Emblem Direct caused; VALKA knows it (she's connected to the void)
+              -- and tells AUDREY; written in the voices of the reworked subtitles.ini (AUDREY: "Val", "Stars"). CHARLENE is with
+              -- Comona Control (the user), never beside AUDREY and VALKA: she talks on Control's channel and never answers them
+              radio = { warn = { "CTRL|All units, Comona Control. Long-range radar has a surface group under way, bearing three-one-five.",
+                                 "CTRL|Fifteen contacts in formation. It's the Aegir Fleet, and it's coming straight for us.",
+                                 "AUDREY|A whole fleet, coming at us? Val, inside. Now.",
+                                 "VALKA|It's not a fleet, Audrey. It's an Anomaly. Emblem Direct opened a door, and the void is pushing them through." },
+                        sighted = { "CTRL|They came up out of the sea... the whole fleet. Break them before they reach the airfield.",
+                                    "VALKA|The void let them go, Auds. All of them at once.",
+                                    "AUDREY|Fourteen escorts and the carrier... GEOFON. But no flagship." },
+                        tanager = { "AUDREY|The Tanager is missing? Where could it be?",
+                                    "VALKA|I feel its presence close. The captain's soul is hurting." },
+                        stage1 = { "AUDREY|Stars, GEOFON's burning! Keep pouring it on, pilots!",   -- ((the user: Valka alludes to her under GEOFON)
+                                   "VALKA|Stop looking for the Tanager on the water, Audrey. Look under it.",
+                                   "AUDREY|Under what, Val? ...Val?" },
+                        stage2 = { "VALKA|The carrier's hurting her, Audrey. She's pressed right up underneath it, trying to get out.",
+                                   "AUDREY|Under it? ...Pilots, watch the water around GEOFON!" },
+                        half = { "CTRL|Half of the fleet's on the bottom. Keep at them!" },
+                        geofon = { "CTRL|GEOFON is going down! The carrier's finished!" },
+                        won = { "CTRL|That's the last of them. The Aegir Fleet is destroyed. Ground crews, get that runway back in shape.",
+                                "VALKA|Audrey, look. The sun's coming up.",
+                                "AUDREY|I see it. It's over, Val. Hold my hand." } },
+              -- ((0.74.131) phase 2, the user 2026-11-17: "GEOFON falls, Tanacorn rises"; beaten "All her guns down") GEOFON
+              -- breaks in a V at its fall's break_at (CFG.specials.fleet.geofon.fall); rise_after_s into the break (0: at it;
+              -- the user: no fade, "she spawns as the Geofon is splitting apart") the TANACORN spawned in the gap across its
+              -- keel (yaw + 90), put under the sea in the same call and risen with her cinematic; the round held until every
+              -- part of hers is down (her railcannon and railguns among them), each paid part_pay; then she's finished off,
+              -- reward_tani paid and the round won as phase 1's. Her railcannon's cycle on the airfield from rail_after_s
+              -- after the rise (TANI.rcStart). Lines drafted (the user edits them)
+              -- ((0.74.144) deck: GEOFON's launches while it's afloat (sv_fleet_round.lua deckTick), as the Spaceport's Ford)
+              deck = { enabled = true, first_s = 30, every_s = 30, size = 2, max_up = 3, max_flights = 6, ahead_m = 600, alt_m = 1100 },
+              -- ((0.74.137) sink: her death (sv_tanicorn.lua TANI.liveSink): explosions along her, bow-down and under)
+              -- ((0.74.148) release_s: she's held under the sea this long after her spawn (its ~1.3 s hitch with GEOFON still whole)
+              -- ((0.74.156) her phases (sv_fleet_round.lua p2Fight): her railcannon at phase2_share of her parts down, her core
+              -- open when it's down or at core_share: core_missiles of your missiles (+core_per_player), held at core_floor)
+              phase2 = { enabled = true, rise_after_s = 0, release_s = 2.5, split_max_s = 9, rise_max_s = 45,
+                         phase2_share = 0.6, core_share = 0.95, core_missiles = 30, core_per_player = 0.5, core_floor = 0.02,
+                         sink = { sink_s = 40, sink_m = 160, bow_deg = 12, roll_deg = 6, booms = 28, boom_every_s = 0.6,
+                                  fx = { { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 3 },
+                                         { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsFireL001", 3 },
+                                         { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion002", 2.5 },
+                                         { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsSmokeS001", 4 },
+                                         { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsPillarL001", 2 } } },
+                         part_pay = 500, reward_tani = 60000, rail_after_s = 20,
+                         text = { rises = "THE TANACORN RISES", rises_sub = "SHOOT DOWN HER GUNS", row = "TANACORN: %d OF %d GUNS",
+                                  phase2 = "HER RAILCANNON IS RISING", phase2_sub = "SHOOT IT DOWN BEFORE IT FIRES",
+                                  core = "HER CORE IS EXPOSED", core_sub = "SINK THE TANACORN", core_row = "TANACORN CORE: %d%%",
+                                  beaten = "THE TANACORN IS SILENCED", beaten_sub = "+%s ZOLLARS" },
+                         -- ((0.74.134) the user: "make the Rise of the Tanacorn more Cinematic with the Camera work") her
+                         -- rise's own shots (sv_cine.lua CINE.play hooks): keys in her rest frame (metres: f forward along her
+                         -- axis from her rest midships, s starboard, u up; GEOFON lies across her at f 116, its bow toward -s),
+                         -- t on her rise's clock (her bow out ~1 s, the top ~5 s, the slam 9 s, at rest 15 s), cut = a cut,
+                         -- else blended from the key before; letterboxed; beats: shakes, the title card, a radio line
+                         cine = { enabled = true, letterbox = 2.39,
+                                  keys = { { t = 0.0, cut = true, at = { 536, -60, 18 }, look = { 116, 0, 25 }, fov = 45 },
+                                           { t = 0.9, at = { 470, -50, 15 }, look = { 116, 0, 32 }, fov = 40 },
+                                           { t = 1.3, cut = true, at = { 300, 150, 3 }, look = { 110, 0, 70 }, fov = 65 },
+                                           { t = 3.2, at = { 320, 190, 8 }, look = { 70, 0, 115 }, fov = 68 },
+                                           { t = 3.6, cut = true, at = { -120, -660, 40 }, look = { 120, 0, 85 }, fov = 50 },
+                                           { t = 6.6, at = { -20, -580, 70 }, look = { 150, 0, 60 }, fov = 48 },
+                                           -- ((0.74.157) the user: "one of the cameras goes high into the sky": this one stood 250 m up
+                                           -- to look 36 deg down, its pitch never took (36.3 off, run 20261117_213215): 90 m now, ~12 deg)
+                                           { t = 7.1, cut = true, at = { 380, 200, 90 }, look = { 180, 0, 50 }, fov = 55 },
+                                           { t = 8.5, at = { 360, 190, 70 }, look = { 150, 0, 25 }, fov = 58 },
+                                           { t = 8.7, cut = true, at = { 80, 240, 5 }, look = { 0, 0, 14 }, fov = 75 },
+                                           { t = 10.8, at = { 60, 260, 9 }, look = { -20, 0, 18 }, fov = 72 },
+                                           { t = 11.0, cut = true, at = { -430, 540, 70 }, look = { 60, 0, 30 }, fov = 55 },
+                                           { t = 15.0, at = { -900, 1100, 240 }, look = { 40, 0, 10 }, fov = 55 } },
+                                  beats = { { t = 0.9, shake = { "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios", 0.8 } },
+                                            { t = 1.3, shake = { "/Game/OnlineMode/Blueprint/IGC/CameraShake/BP_CamShake_HandShake_A", 0.6 } },
+                                            { t = 9.0, shake = { "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpact", 1.0 } },
+                                            { t = 11.4, title = { text = "THE TANACORN", sub = "SHE HAS RISEN" } },
+                                            { t = 12.2, say = "VALKA|That's her. The heart of it. Emblem Direct tore the door open, and she came through." } } },
+                         radio = { fall = { "CTRL|GEOFON's breaking in two! Something's... coming up between the halves!",
+                                            "VALKA|There. That's what I felt. That's the Tanager." },
+                                   rises = { "CTRL|That's not a ship. That's the TANACORN! All units, take out her guns!",
+                                             "AUDREY|That's not the Tanager anymore, Val. What the hell did Emblem Direct do?" },
+                                   phase2 = { "CTRL|Her bow is opening... that's a railcannon! It's aiming at the airfield!",
+                                              "AUDREY|It's aiming at the airfield, Val. Hold on to me." },
+                                   core = { "CTRL|Her core is exposed! Everything you've got, right now!",
+                                            "VALKA|Her heart is open. The captain is waiting." },
+                                   half = { "CTRL|Half her guns are gone. Keep hammering her!",
+                                            "VALKA|She's hurting, Audrey. Her captain is still inside her." },
+                                   beaten = { "CTRL|Her guns are silent. She's going under!",
+                                              "VALKA|...She's quiet now. The captain can rest.",
+                                              "AUDREY|Rest easy, Tanager." } } } },
+    surface = { enabled = true, rig = "/Game/Mods/SurvivalMode/Tanicorn/Model/SK_SV_Tani_RIG.SK_SV_Tani_RIG",
+                anim = "/Game/Mods/SurvivalMode/Tanicorn/Model/AS_SV_Tani_RIG_Rise.AS_SV_Tani_RIG_Rise", length_s = 15.0,
+                tani_m = 650, start_km = 30.5, breach_s = 0.8, slam_s = 9.0, fx_x = 2.0, fx_life_s = 8, jitter_s = 1.0, end_pad_s = 1.0,
+                autopilot_alt_m = 1500, autopilot_radius_m = 3500, fade = { out_s = 0.8, hold_s = 0.8, in_s = 1.2 },
+                classes = { ford = { "/Game/Blueprints/Vehicle/AI/Vessels/VE004_grfd/CP/BP_VE004_grfd_CP", 333 },
+                            aegis = { "/Game/Blueprints/Vehicle/AI/Vessels/VE002_aegs/CP/BP_VE002_aegs_CP", 173 },
+                            krov = { "/Game/Blueprints/Vehicle/AI/Vessels/VE005_krov/CP/BP_VE005_krov_CP", 252 },
+                            udal = { "/Game/Blueprints/Vehicle/AI/Vessels/VE007_udal/CP/BP_VE007_udal_CP", 163 },
+                            gors = { "/Game/Blueprints/Vehicle/AI/Vessels/VE001_gors/CP/BP_VE001_gors_CP", 135 },
+                            grig = { "/Game/Blueprints/Vehicle/AI/Vessels/VE015_grig/CP/BP_VE015_grig_CP", 125 },
+                            boat = { "/Game/Blueprints/Vehicle/AI/Vessels/VE011_mslb/CP/BP_VE011_mslb_CP", 56 } },
+                waves = { boat = 0.0, grig = 2.0, gors = 2.5, udal = 4.0, krov = 4.5, aegis = 6.0, ford = 9.0 },
+                breach = { { "SURF1", 1 }, { "FORD_PILLAR", 1 }, { "MIST", 1 }, { "AB_LAND_L", 0.8 }, { "AB_LAND_R", 0.8 }, { "SURF2", 0.8 } },
+                -- ((0.74.134) the user: "go over the VFX used for the Invincible fleets rise out of the ocean also, it could use
+                -- more VFX work on all the ships") sv_fleet_surface.lua's water: the breach (above) at each ship's bow's
+                -- breach point; climb: round its bow every climb_every_s until climb_until_s (ring_m out, x its scale); fall:
+                -- down along its hull from its bow to the slam; keel: at the slam keel_spots along its keel, both sides;
+                -- settle: foam for settle_s; denser on bigger ships (dens x its scale, at least min_dens); max_live waters up
+                water = { enabled = true, breach_m = 115.8, max_live = 150, dens = 3, min_dens = 0.35,
+                          climb_until_s = 5.5, climb_every_s = 0.5, ring_m = { 25, 60 },
+                          climb = { { "SURF2", 0.6 }, { "MIST", 0.6 }, { "FORD_SPLASH", 0.8 }, { "SURF3", 0.6 } },
+                          fall_every_s = 0.45, fall = { { "FORD_SPLASH", 0.9 }, { "AB_LAND_L", 0.7 }, { "AB_LAND_R", 0.7 }, { "SURF4", 0.6 } },
+                          keel_spots = 6, keel = { { "FORD_PILLAR", 0.7 }, { "FORD_SPLASH", 0.8 } },
+                          settle_s = 4, settle_every_s = 0.7, settle = { "FORD_FOAM", 1 },
+                          -- ((0.74.136) a strike beside a big ship's breach near the camera: its light on the spray)
+                          strike = { enabled = true, kinds = { ford = true, aegis = true, krov = true, udal = true }, near_m = 3000,
+                                     gap_s = 1.5, off_m = { -600, -900 }, up_m = 3000 } },
+                slam = { { "ALCN_BLAST", 1 }, { "FORD_SPLASH", 2 }, { "FOAM_IGC", 1 }, { "FORD_PILLAR", 1 } },
+                -- ((2026-11-17) the user: "make the Ships Rising out of the sea cutscene more cinematic? like go epic with it";
+                -- sv_fleet_surface.lua) lead_s of empty sea before the pickets; each shot a move from `from` to `to`
+                -- ({ at = { ahead m, right m, up m }, look = { ... }, fov } in its ship's frame), cut at t, blended (blend_fn:
+                -- EViewTargetBlendFunction, 0 linear) to the next shot's t; letterboxed (the cameras' aspect); shakes at a
+                -- breach / slam within shake.near_m of the camera (GEOFON's slam the big one, always), the hand-held one all
+                -- through; the water's roar at a breach within splash.near_m; storm_quiet_x: the storm's own strikes that much
+                -- further apart; beats on the clock: bolt { ship, fwd_m, right_m } a strike on cue, say "CODE|text", title the
+                -- card (the user, 2026-11-17: the radio "Yes, use the drafts", "No slow motion")
+                -- ((0.74.107, the autotest's run of 0.74.106) RAVEN from off her bow quarter (35 m off, she breached out of
+                -- the frame), the wide shot nearer (from 3 km the fleet was specks), the hand-held shake Online Mode's
+                lead_s = 3.0, blend_fn = 0, storm_quiet_x = 4,
+                letterbox = { enabled = true, aspect = 2.39 },
+                shake = { near_m = 1500, breach = { "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactSmall", 1.0 },
+                          slam = { "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpact", 0.8 },
+                          geofon = { "/Game/Blueprints/Vehicle/PLAYER/Camera/CameraShake/BP_CamShake_BombImpactHelios", 0.7 },
+                          hand = { "/Game/OnlineMode/Blueprint/IGC/CameraShake/BP_CamShake_HandShake_A", 0.6 } },   -- (Online Mode's cutscenes')
+                splash = { sound = "AKE_Environment_Splash_WaterPiller_Play", near_m = 2500, max = 12 },
+                title = { text = "INVINCIBLE FLEET", sub = "THE AEGIR FLEET HAS RESURFACED", big = 1.5 },
+                shots = { { t = 0.0, ship = "PicketA", from = { at = { -450, 320, 22 }, look = { 300, 0, 4 }, fov = 60 },
+                                                    to = { at = { -200, 220, 16 }, look = { 200, 0, 6 }, fov = 55 } },
+                          { t = 3.5, ship = "PicketA", from = { at = { -70, 120, 5 }, look = { 0, 0, 14 }, fov = 55 },
+                                                    to = { at = { -150, 190, 9 }, look = { 0, 0, 16 }, fov = 58 } },
+                          { t = 6.5, ship = "HERNE", from = { at = { -260, 230, 14 }, look = { -80, 0, 22 }, fov = 50 },
+                                                  to = { at = { 260, 230, 14 }, look = { 80, 0, 26 }, fov = 50 } },
+                          { t = 9.5, ship = "RAVEN", from = { at = { 150, 140, 4 }, look = { 40, 0, 10 }, fov = 50 },
+                                                  to = { at = { 170, 160, 40 }, look = { 30, 0, 35 }, fov = 55 } },
+                          { t = 12.5, ship = "GEOFON", from = { at = { 650, 260, 10 }, look = { 0, 0, 40 }, fov = 55 },
+                                                    to = { at = { 420, 170, 16 }, look = { 0, 0, 60 }, fov = 60 } },
+                          { t = 22.5, ship = "GEOFON", from = { at = { 750, 420, 70 }, look = { 0, 0, 30 }, fov = 60 },
+                                                    to = { at = { 1600, 1000, 280 }, look = { -400, 0, 0 }, fov = 60 } } },
+                beats = { { t = 0.6, bolt = { ship = "PicketA", fwd_m = 2500, right_m = -600 } },
+                          { t = 0.8, say = "CHARLENE|Comona, Charlene. Kokoda's instruments are screaming. There's an Anomaly under the sea." },
+                          { t = 6.5, say = "CTRL|Contacts surfacing! Multiple contacts, they're coming up out of the sea!" },
+                          { t = 7.0, bolt = { ship = "HERNE", fwd_m = 0, right_m = -2500 } },
+                          { t = 13.5, bolt = { ship = "GEOFON", fwd_m = -1500, right_m = -2500 } },
+                          { t = 15.5, say = "VALKA|They're all waking up, Audrey. The void doesn't want them anymore." },
+                          { t = 18.5, bolt = { ship = "GEOFON", fwd_m = -800, right_m = -2800 } },
+                          { t = 24.0, title = true },
+                          { t = 24.2, bolt = { ship = "GEOFON", fwd_m = -3000, right_m = -1500 } } } },
 }
+-- ((2026-11-18) the user: "I want all the subtitles in the subtitle file please including round 30") its lines from the dev
+-- install's config\subtitles_dev.ini (made from these when it's missing; never in a zip), before the defaults are taken
+if SUBT and SUBT.file then pcall(SUBT.file, "subtitles_dev.ini", { specials = { fleet = CFG.specials.fleet } }) end
 -- (set after sv_config_ini.lua took CFG_DEFAULTS: shipped as it is, so no difference the leaderboard's LB.edited or the
 -- co-op settings sync would see)
 if type(CFG_DEFAULTS) == "table" and type(CFG_DEFAULTS.specials) == "table" and type(deepCopy) == "function" then
@@ -422,11 +780,13 @@ local function rotP(x, z, deg)
     return x * c - z * s, x * s + z * c
 end
 -- the two copies' poses at move fraction f, in the ship's frame (cm, deg): bow, stern
-local function poseAt(f)
-    local c = gc().look
+local function poseAt(f, c)
+    c = c or gc().look
+    local g = num(c.g, 1)                                 -- ((0.74.132) how far the V has reared: 0 flat (whole), 1 the V)
     local sink, part = c.sink_m or { 0, 0 }, num(c.part_m, 0) * 100 * f
-    return { x = part, y = 0, z = -(num(c.bow.down_m, 21) + num(sink[1], 0) * f) * 100, p = num(c.bow.pitch, 25) },
-           { x = -part, y = 0, z = -(num(c.stern.down_m, 23) + num(sink[2], 0) * f) * 100, p = num(c.stern.pitch, -15) }
+    if c.sink_s then f = num(c.fs, 0) end                 -- ((0.74.133) the sink on its own clock: c.fs, lookTick's)
+    return { x = part, y = 0, z = -(num(c.bow.down_m, 21) * g + num(sink[1], 0) * f) * 100, p = num(c.bow.pitch, 25) * g },
+           { x = -part, y = 0, z = -(num(c.stern.down_m, 23) * g + num(sink[2], 0) * f) * 100, p = num(c.stern.pitch, -15) * g }
 end
 -- mesh m put at pose q on its home; on the other copy's frame when it hangs on it (o at oq)
 local function place(m, q, o, oq)
@@ -439,13 +799,28 @@ local function place(m, q, o, oq)
     else
         loc, rot = { X = tx, Y = ty, Z = tz }, { Pitch = tp, Yaw = m.base.Yw, Roll = m.base.R }
     end
-    local ok, err = pcall(function() m.e.obj:K2_SetRelativeLocationAndRotation(loc, rot, false, {}, true) end)
-    if not ok then logOnce("geofon place " .. m.name, "geofon: " .. m.name .. " not posed (K2_SetRelativeLocationAndRotation): " .. tostring(err)) end
-    return ok
+    -- ((0.74.134) apart: run 20261117_180650's V never reared, its copies' z moved and their pitch read 0, while the list's
+    -- K2_SetRelativeRotation took (0.7 deg read back))
+    -- ((0.74.135) as a transform with its turn a quaternion, as sv_cine.lua spawns its cameras: run 20261117_181303's V read
+    -- pitch 0 after K2_SetRelativeRotation too (the list's roll took there); the two calls apart are the fallback)
+    local ok, err, okR, errR = false, nil, false, nil
+    if CINE and CINE.quat then
+        ok, err = pcall(function()
+            m.e.obj:K2_SetRelativeTransform({ Rotation = CINE.quat(rot), Translation = loc, Scale3D = { X = 1, Y = 1, Z = 1 } }, false, {}, true)
+        end)
+        okR, errR = ok, err
+    end
+    if not ok then
+        ok, err = pcall(function() m.e.obj:K2_SetRelativeLocation(loc, false, {}, true) end)
+        okR, errR = pcall(function() m.e.obj:K2_SetRelativeRotation(rot, false, {}, true) end)
+    end
+    if not (ok and okR) then logOnce("geofon place " .. m.name, "geofon: " .. m.name .. " not posed (" .. (ok and "" or ("K2_SetRelativeLocation: " .. tostring(err) .. " "))
+        .. (okR and "" or ("K2_SetRelativeRotation: " .. tostring(errR))) .. ")") end
+    return ok and okR
 end
 -- both copies at move fraction f; whether each was put ("root": it's the actor's own, never moved)
 local function posePair(L, f)
-    local qb, qs = poseAt(f)
+    local qb, qs = poseAt(f, L.cfg)
     local b, s = L.m.DamagedStaticMesh, L.m.VesselMesh
     local okB, okS = "not found", "not found"
     if s then okS = s.isRoot and "root" or (same(s.e) and place(s, qs, b, qb)) end
@@ -468,13 +843,14 @@ local function inFrame(c, l, yaw)
     local a = math.rad(yaw)
     local dx, dy = v.X - l.X, v.Y - l.Y
     local p, r
-    pcall(function() local w = c:K2_GetComponentRotation(); p, r = tonumber(w.Pitch), tonumber(w.Roll) end)
+    pcall(function()                                      -- ((0.74.133) its +X as a vector first: the round's run of 0.74.132
+        local f = c:GetForwardVector()                    -- read every rotator's pitch as 0 while the copies' z moved as posed
+        local n = math.sqrt(f.X * f.X + f.Y * f.Y + f.Z * f.Z)
+        if n > 1e-6 then p = math.deg(math.asin(math.max(-1, math.min(1, f.Z / n)))) end
+    end)
+    pcall(function() local w = c:K2_GetComponentRotation(); r = tonumber(w.Roll); if p == nil then p = tonumber(w.Pitch) end end)
     if p == nil then                                      -- ((0.74.63) the user's run of 0.74.62: every pitch "?": rotators
-        pcall(function()                                  -- don't read from Lua (0.74.55); its +X as a vector does
-            local f = c:GetForwardVector()
-            local n = math.sqrt(f.X * f.X + f.Y * f.Y + f.Z * f.Z)
-            if n > 1e-6 then p = math.deg(math.asin(math.max(-1, math.min(1, f.Z / n)))) end
-        end)
+        p = nil                                           -- don't read from Lua (0.74.55))
     end
     return { x = (dx * math.cos(a) + dy * math.sin(a)) / 100, y = (-dx * math.sin(a) + dy * math.cos(a)) / 100, z = (v.Z - l.Z) / 100,
              p = p, r = r }
@@ -493,12 +869,21 @@ local function xyz(q) return q and string.format("(%.1f, %.1f, %.1f)", r1(q.x), 
 
 -- the material slots of mesh m on their _DAM instances: route "dam" (the instances) or "dim" (dynamic copies of them, their
 -- Charred_Embers_Brightness x embers, as sv_zfa44.lua makes its instances); slots set, slots, what each got
-local function damFor(comp, i)                            -- (slot i's own _DAM: its material's asset + "_DAM")
+local function damFor(comp, i, strict)                    -- (slot i's own _DAM: its material's asset + "_DAM"; strict: no Ford fallback)
     local dam, src
-    pcall(function()
+    local dbg = {}                                         -- ((0.74.142) what the walk saw, when it finds nothing)
+    local okW, errW = pcall(function()
         local m = comp:GetMaterial(i)
+        dbg[#dbg + 1] = "mat " .. type(m) .. " " .. tostring(m ~= nil and valid(m))
         for _ = 1, 4 do
-            local pkg, obj = m:GetPathName():match("^(/Game/[^%.:]+)%.([^%.:]+)$")
+            pcall(function() dbg[#dbg + 1] = "full " .. tostring(m:GetFullName()) end)
+            -- ((0.74.143) its path from its full name ("Class /Game/.../MI_x.MI_x"): GetPathName isn't callable from UE4SS's
+            -- Lua (run 20261117_191507: "attempt to call a TrivialObject value (method 'GetPathName')"), so until now every
+            -- walk failed at its first step: 0 of 177 fleet slots, GEOFON's stage 2 only by its number; a run-time copy
+            -- ("...:PersistentLevel...MID_...") isn't an asset: its Parent next)
+            local okF, full = pcall(function() return m:GetFullName() end)
+            local pn = (okF and type(full) == "string" and full:match("^%S+ (/Game/[^%s:]+)$")) or ""
+            local pkg, obj = pn:match("^(/Game/[^%.:]+)%.([^%.:]+)$")
             if pkg then
                 src = obj
                 dam = obj:find("_DAM$") and m or loadObject(pkg .. "_DAM." .. obj .. "_DAM")
@@ -508,7 +893,9 @@ local function damFor(comp, i)                            -- (slot i's own _DAM:
             if not (m and valid(m)) then break end
         end
     end)
-    if not (dam and valid(dam)) then
+    if not okW then dbg[#dbg + 1] = "error " .. tostring(errW) end
+    if not src then src = "? [" .. table.concat(dbg, "; "):sub(1, 300) .. "]" end
+    if not (dam and valid(dam)) and not strict then
         local n = string.format("MI_VE004_grfd_%02d_DAM", i + 1)
         dam = loadObject(gc().mats .. n .. "." .. n)
         src = (src or "?") .. " (by its number)"
@@ -523,7 +910,7 @@ local function damSlots(m, route, embers)
     local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
     local done, said = 0, {}
     for i = 0, n - 1 do
-        local dam, src = damFor(comp, i)
+        local dam, src = damFor(comp, i, m.strict)
         if dam then
             local put, how = false, "_DAM"
             if route == "dim" then
@@ -560,7 +947,7 @@ end
 -- (T1, at settle_s) the hull invincible, its parts and antennas hidden, the bow copy shown, the stern copy's slots _DAM,
 -- the V posed; the once line
 local function lookSetup(L)
-    local c = gc().look
+    local c = L.cfg or gc().look
     local h = L.hull
     local inv = pcall(function() h.obj:SetIsInvincible(true) end)
     pcall(function() h.obj.bIsInvincible = true end)
@@ -596,7 +983,7 @@ local function lookSetup(L)
         c.move and string.format("move: %g m each way and %s m down over %g s from +%g s, a step every %.2f s", num(c.part_m, 0),
             table.concat(c.sink_m or { 0, 0 }, " / "), num(c.part_s, 25), num(c.move_after_s, 0), num(c.step_s, 0.25)) or "no move",
         b and (b.onOther and "on VesselMesh" or "on its own parent") or "?", s and (s.onOther and "on DamagedStaticMesh" or "on its own parent") or "?"))
-    hudCallout("TEST: GEOFON V-BREAK", "3.5 KM AHEAD")
+    if not L.round then hudCallout("TEST: GEOFON V-BREAK", "3.5 KM AHEAD") end
 end
 
 -- (every every_s) the two copies read back: where they are, their gap at the waterline; a copy the game put back posed
@@ -609,7 +996,7 @@ local function lookLine(L)
     local h = num(gc().deck_m, 21)
     local xb, xs = waterX(qb, h), waterX(qs, h)
     local notes = {}
-    local wb, ws = poseAt(L.f or 0)
+    local wb, ws = poseAt(L.f or 0, L.cfg)
     for _, k in ipairs({ { qb, wb, b, "bow" }, { qs, ws, s, "stern" } }) do
         local q, w, m = k[1], k[2], k[3]
         local put = m and m.home and (m.home.P + w.p)
@@ -631,14 +1018,14 @@ local function lookLine(L)
         qs and qs.p and string.format("%+.1f", qs.p) or "?", #notes > 0 and ("; " .. table.concat(notes, "; ")) or ""))
 end
 
-local function lookTick(now)
-    local L = GEO.look
+local function lookTick(now, L0)
+    local L = L0 or GEO.look
     if not L then return end
     local dt = math.min(1, math.max(0, now - (L.last or now)))
     L.last = now
     if paused() then return end
     L.t = L.t + dt
-    local c = gc().look
+    local c = L.cfg or gc().look
     if not L.posed then
         local ok = settled(L, "break look")
         if ok == false then                               -- (given up: what it made taken off, never left up)
@@ -649,22 +1036,35 @@ local function lookTick(now)
         if not L.posed then return end
     end
     if not same(L.hull) then
-        GEO.look = nil
+        if L == GEO.look then GEO.look = nil end
+        L.over = true
         log(string.format("geofon: break look over at +%.0f s: its hull is gone (the rest taken off: %s)", L.t,
             takeOff(L, "its hull gone")))
         return
     end
-    local moveEnd = L.poseT + num(c.move_after_s, 0) + num(c.part_s, 25)
+    if c.rear_s and num(c.g, 1) < 1 then                  -- ((0.74.132) the V rearing (round 30: torn open by her bow)
+        c.g = math.min(1, (L.t - L.poseT) / math.max(0.1, num(c.rear_s, 1)))
+        posePair(L, L.f or 0)
+    end
+    local moveEnd = L.poseT + math.max(num(c.move_after_s, 0) + num(c.part_s, 25),
+        c.sink_s and (num(c.sink_after_s, 0) + num(c.sink_s, 0)) or 0)
     if c.move and not L.moveDone then
         local mt = L.t - L.poseT - num(c.move_after_s, 0)
         if mt >= 0 and L.t >= (L.nextStep or 0) then
             L.nextStep = L.t + num(c.step_s, 0.25) - 0.05     -- (one step a tick at the ticks' 0.25 s)
             local f = math.min(1, mt / math.max(1, num(c.part_s, 25)))
+            local sinking = false
+            if c.sink_s then                              -- ((0.74.133) the sink after sink_after_s, over sink_s)
+                c.fs = math.min(1, math.max(0, (L.t - L.poseT - num(c.sink_after_s, 0)) / math.max(1, num(c.sink_s, 30))))
+                sinking = c.fs < 1
+                if c.fs > 0 and not L.sinkSaid then L.sinkSaid = true; log(string.format("geofon: break look +%.0f s: the halves sink", L.t)) end
+            end
             if not L.moveSaid then L.moveSaid = true; log(string.format("geofon: break look +%.0f s: the halves part", L.t)) end
             posePair(L, f)
-            if f >= 1 then
+            if f >= 1 and not sinking then
                 L.moveDone = true
-                log(string.format("geofon: break look +%.0f s: parted (%g m each way), held there", L.t, num(c.part_m, 0)))
+                log(string.format("geofon: break look +%.0f s: parted (%g m each way)%s, held there", L.t, num(c.part_m, 0),
+                    c.sink_s and " and sunk" or ""))
             end
         end
     elseif L.repose then
@@ -765,7 +1165,7 @@ local function stageOn(G, k, st, share)
     end
     log(string.format("geofon: stage %d at %d %% (health %.0f %%): %d fires, %d smoke, %s, %d material slots (%s); its sound %s",
         k, math.floor(num(st.at, 0) * 100 + 0.5), share * 100, nF, nS, listSaid, nM, route, snd))
-    hudCallout("TEST: GEOFON STAGE " .. k, string.format("%.0f %% HEALTH", share * 100))
+    if not G.round then hudCallout("TEST: GEOFON STAGE " .. k, string.format("%.0f %% HEALTH", share * 100)) end
 end
 
 local function down(G, why)
@@ -774,8 +1174,8 @@ local function down(G, why)
         why, G.stage or 0, #(gc().stages or {}), lit(G), #G.fx, num(gc().test.fx_off_s, 30)))
 end
 
-local function stagesTick(now)
-    local G = GEO.cur
+local function stagesTick(now, G0)
+    local G = G0 or GEO.cur
     if not G then return end
     local dt = math.min(1, math.max(0, now - (G.last or now)))
     G.last = now
@@ -876,6 +1276,98 @@ local function hit(G)
         h1 and string.format("%.0f %%", 100 * h1 / G.max) or "?", way))
 end
 
+---------------------------------------------------------------------------------------------------- round 30's GEOFON
+-- ((0.74.131) round 30's phase 2, sv_fleet_round.lua: docs/design INVINCIBLE_FLEET_RISE_FORD.md 4.2 (a), (d)) the fleet's
+-- own GEOFON given T2's stages and T1's V as it falls (its settings CFG.specials.fleet.geofon.fall):
+--   GEO.attach(sh)       a record for the fleet's GEOFON (its hull and parts as the fleet keeps them; its meshes captured:
+--                        the `geofon: up` line) -> G, or nil and why
+--   GEO.stagesStep(G, now) its stages at 66 / 33 %, the list, its fires kept burning (T2's tick on it)
+--   GEO.fall(G)          its fall: the hull invincible and off the targets, its parts and antennas hidden, the V posed,
+--                        then the halves part and sink over fall.part_s (T1's on it, with fall's settings)
+--   GEO.fallStep(G, now) the fall's tick (T1's); G.over once the hull's gone
+--   GEO.fallHide(G)      both halves hidden (under the sea by then), its fires off
+--   GEO.where(G)         its hull's place and yaw (the TANACORN rises there)
+function GEO.attach(sh)
+    if not (sh and sh.hull and same(sh.hull)) then return nil, "its hull isn't up" end
+    local G = { kept = { sh.hull }, raw = {}, t = 0, tries = 0, last = os.clock(), fx = {}, done = {}, roll = 0, refired = 0,
+                round = true, ready = true }
+    for _, e in ipairs(sh.parts or {}) do G.kept[#G.kept + 1] = e end
+    local ok, why = capture(G)
+    if not ok then return nil, why end
+    return G
+end
+function GEO.stagesStep(G, now) stagesTick(now, G) end
+function GEO.fall(G)
+    local c = gc().fall or {}
+    G.cfg = { bow = c.bow or gc().look.bow, stern = c.stern or gc().look.stern, parts_off = true, move = true,
+              g = 0, rear_s = num(c.rear_s, 1.2),
+              move_after_s = num(c.part_after_s, 2), part_m = num(c.part_m, 110), part_s = num(c.part_s, 40),
+              sink_after_s = num(c.sink_after_s, 20), sink_s = num(c.sink_s, 40),
+              sink_m = c.sink_m or { 120, 100 }, step_s = 0.25, every_s = num(c.every_s, 5), log_s = num(c.log_s, 45) }
+    G.down = G.down or G.t                                -- (its stages' tick stops: T2's down, no line)
+    local h = G.hull.obj
+    for f, v in pairs(SPC and SPC.V and SPC.V.PART_FLAGS or { bShowHUDBox = false, bIsNotLockonTarget = true,
+                                                                bIsNotFCSTargets = true }) do
+        if f ~= "bIsInvincible" then pcall(function() h[f] = v end) end
+    end
+    G.t, G.last = 0, os.clock()
+    lookSetup(G)
+    G.nextLine = 0
+end
+function GEO.fallStep(G, now) lookTick(now, G) end
+function GEO.fallHide(G)
+    local n = 0
+    for _, k in ipairs({ "DamagedStaticMesh", "VesselMesh" }) do
+        local m = G.m and G.m[k]
+        if m and same(m.e) and pcall(function() m.e.obj:SetVisibility(false, true) end) then n = n + 1 end
+    end
+    fxOff(G, 3)
+    return n
+end
+-- ((0.74.140) WP8, the fleet's scars, sv_fleet_round.lua) every material slot of a component on a dimmed copy of its own
+-- _DAM instance (embers x embers), none where it has none -> slots set, slots, what each got
+-- ((0.74.150) one dimmed copy a _DAM material, shared by every slot that uses it (kept with its name, hard rule 59): run
+-- 20261117_202734's scars cost 4.6 ms a tick (176 the worst) making a copy a slot, 177 of them)
+local SCARMID = {}
+function GEO.scarComp(comp, embers)
+    local e = keep(comp, true)
+    if not e then return 0, 0, "gone" end
+    local okN, n = pcall(function() return comp:GetNumMaterials() end)
+    n = (okN and type(n) == "number") and n or 0
+    local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
+    local set, said = 0, {}
+    for i = 0, n - 1 do
+        local dam, src = damFor(comp, i, true)
+        if dam then
+            local key = nameOf(dam)
+            local c = SCARMID[key]
+            if not (c and liveObj(c.o) and nameOf(c.o) == c.n) then
+                c = nil
+                if valid(kml) and liveObj(survivalPC) then
+                    local okK, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, dam, FName("None"), 0) end)
+                    if okK and mid and valid(mid) then
+                        local b
+                        pcall(function() b = mid:K2_GetScalarParameterValue(FName("Charred_Embers_Brightness")) end)
+                        pcall(function() mid:SetScalarParameterValue(FName("Charred_Embers_Brightness"), (type(b) == "number" and b > 0 and b or 650000) * num(embers, 0.05)) end)
+                        c = { o = mid, n = nameOf(mid) }
+                        SCARMID[key] = c
+                    end
+                end
+            end
+            local m = c and c.o or dam
+            if pcall(function() comp:SetMaterial(i, m) end) then set = set + 1 end
+            said[#said + 1] = string.format("slot %d %s -> %s%s", i, src, short(dam), c and " (shared copy)" or "")
+        else
+            said[#said + 1] = string.format("slot %d %s: no _DAM", i, src)
+        end
+    end
+    return set, n, #said > 0 and table.concat(said, ", ") or "no slots"
+end
+function GEO.where(G)
+    if not (G and G.hull and same(G.hull)) then return nil end
+    return frame(G.hull.obj)
+end
+
 ---------------------------------------------------------------------------------------------------- the keys
 local function canRun(key)
     if not (D and D.now) or not nativeReady() then log("geofon: " .. key .. " outside a Survival run"); return false end
@@ -960,9 +1452,10 @@ end
 -- fired, guns, firedParts (since the last weapons line), left / clearUntil (units still up from before it waits for) };
 -- each sh { raw (the objects caught at its spawn), kept (each kept as SV_Spawn returned), hull, parts, ... }.
 -- IFLEET.onLaunch: sv_weaponlog.lua's word on each launch.
-IFLEET = { cur = nil, rowsOk = nil }
+IFLEET = { cur = nil, rowsOk = nil, inStore = OFF.store }   -- (inStore: (2026-11-18) the round's shelling held there too)
 do
-local TURRET = { "mk15", "mk41", "mk45", "artillery", "_sam", "aagun", "ak130", "ak630", "a190", "a192", "3r14", "palma",
+-- ((0.74.164) "alcn_ecm": RAVEN's ECM part, the Alicorn's (its EW mast), a part, never its hull)
+local TURRET = { "tani_laser", "alcn_ecm", "mk15", "mk41", "mk45", "artillery", "_sam", "aagun", "ak130", "ak630", "a190", "a192", "3r14", "palma",
                  "kashtan", "s300" }
 local function fc() return CFG.specials.fleet end
 local function fm() return CFG.specials.fleet.formation end
@@ -1131,6 +1624,16 @@ local function spawnShip(F, sh)
     log(string.format("fleet: %s (%s, %s): %s at its course start; %d objects made", label(sh), sh.unit, sh.kind, said, #sh.raw))
 end
 
+-- ((0.74.160) a joiner: a ship of the host's from its copies here (its hull: the one object not a turret's class) ->
+-- { unit, hull, parts }, or nil
+function IFLEET.shipFrom(unit, objs)
+    local sh = { unit = unit, parts = {} }
+    for _, o in ipairs(objs or {}) do
+        local e = keep(o)
+        if e then if turretClass(e.cls) then sh.parts[#sh.parts + 1] = e elseif not sh.hull then sh.hull = e end end
+    end
+    return sh.hull and sh or nil
+end
 -- settle_s after its spawn: its hull (its one object that isn't a turret's class) and parts, its up line
 local function settle(F, sh)
     sh.settled = true
@@ -1153,6 +1656,7 @@ local function settle(F, sh)
         sh.max and string.format("%.0f", sh.max) or "?", #sh.parts, #sh.parts == 1 and "" or "s",
         #cls > 0 and table.concat(cls, ", ") or "none", #hulls > 1 and string.format(" (%d more objects not turrets: %s first)",
         #hulls - 1, sh.hull.cls) or "", sh.name ~= "" and (sh.name .. " / " .. tostring(fc().classes[sh.kind])) or "its class's (unnamed)"))
+    if IFLEET.onSettle then pcall(IFLEET.onSettle, F, sh) end   -- ((2026-11-17) an Aegis's lasers: sv_fleet_lasers.lua)
 end
 
 local function partsUp(sh)
@@ -1173,11 +1677,12 @@ local function allUp(F)
     local you, rw = playerLocation(), fm().runway_cm
     local km, brg = nil, nil
     if g and you then km, brg = d2(g, you) / 1e5, compass(g.X - you.X, g.Y - you.Y) end
-    log(string.format("fleet: Ctrl+N: %d of %d ships up with %d parts at their course start%s; %s", up, #F.ships, nParts,
+    log(string.format("fleet: %s: %d of %d ships up with %d parts at their course start%s; %s", F.round and "the round" or "Ctrl+N", up, #F.ships, nParts,
         g and string.format(" (GEOFON %.1f km from the runway, bearing %03.0f from it)", d2(g, { X = rw[1], Y = rw[2] }) / 1e5,
             compass(g.X - rw[1], g.Y - rw[2])) or "",
         km and string.format("GEOFON %.1f km from you, bearing %03.0f: fly there", km, brg) or "GEOFON's place NOT read"))
-    hudCallout("TEST: INVINCIBLE FLEET", km and string.format("%d SHIPS %.0f KM, BEARING %03.0f", up, km, brg) or string.format("%d SHIPS UP", up))
+    hudCallout(F.round and "INVINCIBLE FLEET" or "TEST: INVINCIBLE FLEET", km and string.format("%d SHIPS %.0f KM, BEARING %03.0f", up, km, brg)
+        or string.format("%d SHIPS UP", up))
 end
 
 local function sunkTick(F, sh)
@@ -1191,6 +1696,7 @@ local function sunkTick(F, sh)
     if why then
         sh.sunk = true
         log(string.format("fleet: +%.0f s %s sunk (%s); %d of its %d parts still up", F.t, label(sh), why, partsUp(sh), #sh.parts))
+        if IFLEET.onSunk then pcall(IFLEET.onSunk, F, sh, why) end   -- (round 30's pay: sv_fleet_round.lua)
     end
 end
 
@@ -1362,12 +1868,23 @@ function IFLEET.tick(now)
     if not F then return end
     local dt = math.min(1, math.max(0, now - (F.last or now)))
     F.last = now
-    if paused() or OFF.store() then return end           -- (the STORE's time not counted either: review finding 4)
+    if paused() or OFF.store() then                      -- (the STORE's time not counted either: review finding 4)
+        -- ((0.74.165) said when it's held 3 s and more (twice the autotest's phase2 saw the fleet stop with no word: a
+        -- pause from the game's window losing focus?), and when it goes on again
+        F.heldFor = (F.heldFor or 0) + dt
+        if F.heldFor >= 3 and not F.heldSaid then
+            F.heldSaid = true
+            log(string.format("fleet: held at +%.0f s (%s): the ships' clock stopped", F.t, paused() and "the game paused" or "the STORE"))
+        end
+        return
+    end
+    if F.heldSaid then log(string.format("fleet: going again at +%.0f s after %.0f s held", F.t, F.heldFor)) end
+    F.heldFor, F.heldSaid = 0, nil
     F.t = F.t + dt
     local c = fm()
     if F.left and F.t >= (F.leftAt or 0) then clearTick(F, c) end
     if not F.left and #F.queue > 0 and F.t >= F.nextAt then
-        for _ = 1, math.max(1, math.floor(num(c.per_step, 3))) do
+        for _ = 1, math.max(1, F.burst or math.floor(num(c.per_step, 3))) do
             local sh = table.remove(F.queue, 1)
             if not sh then break end
             spawnShip(F, sh)
@@ -1421,38 +1938,49 @@ testKey("N", "sv_fleet.lua's INVINCIBLE FLEET formation test (WP7)", function()
         hudCallout("TEST: INVINCIBLE FLEET", "OFF")
         return
     end
-    if not canRun() then return end
+    local no = IFLEET.launch("Ctrl+N")
+    if no == "busy" then hudCallout("TEST: INVINCIBLE FLEET", "STILL GOING: AGAIN IN A FEW SECONDS") end
+    if not no then hudCallout("TEST: INVINCIBLE FLEET", string.format("%d SHIPS COMING UP", #IFLEET.cur.ships)) end
+end)
+-- the fleet up (Ctrl+N's, and round 30's: sv_fleet_round.lua, why "round 30"): its ships queued at their course start, the
+-- surfacing first; nil, or why not ("busy": the fleet before still being taken off)
+function IFLEET.launch(why)
+    if not canRun() then return "it can't run (the line above)" end
     local ships = fleetList()
     local busy = {}                                       -- (the fleet before still being taken off: OFF.down's)
     for _, sh in ipairs(ships) do if OFF.queued(sh.unit) then busy[#busy + 1] = label(sh) end end
     if #busy > 0 then
-        log(string.format("fleet: Ctrl+N: the fleet before is still being taken off (%d units: %s): not spawned, again in a few seconds",
-            #busy, table.concat(busy, ", ")))
-        hudCallout("TEST: INVINCIBLE FLEET", "STILL GOING: AGAIN IN A FEW SECONDS")
-        return
+        log(string.format("fleet: %s: the fleet before is still being taken off (%d units: %s): not spawned, again in a few seconds",
+            why, #busy, table.concat(busy, ", ")))
+        return "busy"
     end
     local q, left, names = {}, {}, {}
     for _, sh in ipairs(ships) do
         q[#q + 1] = sh
         if OFF.alive(sh.unit) > 0 then left[sh.unit] = true; names[#names + 1] = label(sh) end
     end
-    F = { t = 0, queue = q, ships = ships, by = {}, fired = {}, guns = {}, firedParts = {}, nextAt = 0 }
+    local F = { t = 0, queue = q, ships = ships, by = {}, fired = {}, guns = {}, firedParts = {}, nextAt = 0,
+                round = why ~= "Ctrl+N" or nil }
     if #names > 0 then                                    -- (still up from before: taken off, the fleet held for them)
         for u in pairs(left) do if COOP and COOP.takenOff then pcall(COOP.takenOff, u) end end
         F.left, F.clearUntil = left, num(fm().clear_s, 8)
-        log(string.format("fleet: Ctrl+N: %d of the fleet's ships still up from before (%s): taken off (RE_SV_IFFleetRemove %s); "
-            .. "the fleet waits up to %g s for them, never spawned beside them", #names, table.concat(names, ", "),
-            removeFire("Ctrl+N: still up from before"), F.clearUntil))
+        log(string.format("fleet: %s: %d of the fleet's ships still up from before (%s): taken off (RE_SV_IFFleetRemove %s); "
+            .. "the fleet waits up to %g s for them, never spawned beside them", why, #names, table.concat(names, ", "),
+            removeFire(why .. ": still up from before"), F.clearUntil))
     end
     IFLEET.cur = F
-    log(string.format("fleet: Ctrl+N: %d ships coming up at their course start, %d every %g s (their lanes in from north-west of "
-        .. "the runway; again: taken off)", #ships, math.floor(num(fm().per_step, 3)), num(fm().gap_s, 0.5)))
-    hudCallout("TEST: INVINCIBLE FLEET", string.format("%d SHIPS COMING UP", #ships))
-end)
+    if IFSURF and IFSURF.start then pcall(IFSURF.start, F) end   -- (the surfacing first: the real fleet once it's over)
+    log(string.format("fleet: %s: %d ships coming up at their course start, %d every %g s (their lanes in from north-west of "
+        .. "the runway; again: taken off)", why, #ships, math.floor(num(fm().per_step, 3)), num(fm().gap_s, 0.5)))
+    return nil
+end
+IFLEET.takeOff, IFLEET.partsUp, IFLEET.label = takeOff, partsUp, label
 
 TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet ships", fn = function(now) IFLEET.tick(now) end }
 if type(LEVEL_DROPS) == "table" then                       -- (the level's objects: forgotten, none of them touched)
     LEVEL_DROPS["fleet ships"] = function() IFLEET.cur = nil end
 end
 end
+
+-- (INVINCIBLE FLEET's surfacing, IFSURF: sv_fleet_surface.lua, the piece after sv_fleet_lasers.lua)
 -- TEST ONLY END

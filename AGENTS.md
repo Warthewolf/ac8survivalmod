@@ -51,6 +51,13 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   LaserInterceptor (wp_LaserInterceptor: its values, its swing curve CUR_LaserInterceptorSwingRate, its beam effects
   FX_UAV_TLS_Muzzleflash01/02 with their meshes, materials and textures, and its sounds) for the ZFA-44s' anti-missile
   laser, on AC8's native ALiveLaserInterceptor. Never AC7 voice lines. See docs/re/LASER_INTERCEPTOR.md.
+- A third AC7 exception, at the user's request (2026-11-17: "extract some voice lines from Ace Combat 7's WWise Bank,
+  particularly the Alicorn's Crew speeches, run them through a voice filter that makes them sound distorted and horrific",
+  "Yeah you've got the go ahead", e.g. "Salvation is nigh!" and the crew's oath; "I want to hear each of your custom work on
+  the voice lines before they go in"): the Alicorn crew's radio lines (Captain Torres and the Sub crew of AC7's DLC
+  missions ex01-ex03), distorted (tools/ac7_voice.py, tools/ac7_voice_fx.py), for THE TANACORN only, in the user's dev install
+  only (never a friends', Nexus or TESTER zip), and each line heard by the user before it goes in. No other AC7 voice line.
+
 - No other mod's files, assets, tables, values or text go into Survival's build, mod/, tools/, this repo (docs and
   commit messages included) or a release zip, and nothing here names or credits another mod as the source of an enemy
   change (user, 2026-11-06). Survival's enemy changes are its own: designed from AC8's tables and tuned in Survival's
@@ -76,7 +83,7 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   INVINCIBLE FLEET, whose boss it is (docs/design/INVINCIBLE_FLEET.md), is the user's dev install only too (user,
   2026-11-10: "Keep it dev install only"): its Lua in DEV ONLY blocks, never in a release or TESTER zip
   (tools/strip_test_only.py takes them out of every zip; package_dev.sh keeps them; THE TANICORN's test mount too;
-  tools/dev_only.py cuts sv_tanicorn (and its pieces _rise, _hits) / sv_fleet / sv_cine to their headers in a TESTER zip). Its live parts' world data
+  tools/dev_only.py cuts sv_tanicorn (and its pieces _rise, _hits) / sv_fleet (and its pieces _storm, _round, _lasers, _surface, _capture) / sv_cine to their headers in a TESTER zip). Its live parts' world data
   (child descs importing the container's blueprints) is built with TANI=1 only: such a build leaves build/install/tani_wd.txt,
   and package_release.sh / package_test.sh refuse it (package_dev.sh takes it with TANI=1 only, and TANI=1 only with it).
   Run tools/tanicorn/build.sh to the end BEFORE `TANI=1 build_all.sh`: build_all stages the container it finds, and a
@@ -378,6 +385,9 @@ Copy a working stock pattern before inventing a new one.
     test of 0.74.34 (2026-11-08) a special's F-15E and Su-47 took dead ZFA-44s' addresses and were fitted with AC7's laser
     (sv_escort_li.lua checked the address alone). An object kept between ticks must still have the name it was captured
     with (ESC.same, sv_escort_laser.lua) before anything is done to it, above all before it's damaged or finished off.
+    Loaded assets kept in Lua too: the user's crash of 0.74.138 (2026-11-17) handed Cloudly a LiveSetPauseTimerExecution
+    as its cloud layout, the storm's cached CVC_ms12 freed and its address reused (liveObj passed); 0.74.139 keeps every
+    cached asset with its name and loads it again when the name differs (sv_anomalies_dev.lua lyAsset).
 
 60. A LiveLightningVolume spawned from Lua never struck the player in Survival's level: about 50 s inside one in the user's
     test of 0.74.34 (2026-11-08), nothing on the plane or the HUD. The pause menu hides the HUD, which Lua took for a strike:
@@ -409,6 +419,18 @@ Copy a working stock pattern before inventing a new one.
     shuttle's T-4 and T (SV_ShuttleLaunched never set) and a flight's appearance orders were lost; events after it took
     with her still on the runway. A one-shot host event that matters is checked by its effect and fired again once the
     STORE is shut (sv_rounds_shuttle.lua SPC.storeShut: the shuttle's liftoff, its removal, the Spaceport's launch).
+
+71. UObject:GetPathName() isn't callable from UE4SS's Lua ("attempt to call a TrivialObject value (method 'GetPathName')"):
+    read an asset's path from GetFullName ("Class /Game/.../Name.Name"). Every _DAM walk (sv_fleet.lua damFor, sv_anomalies.lua's
+    dead look) failed on it inside a pcall that hid the error: the fleet's scars found 0 of 177 slots, AB.L..IN's dead look
+    1 of 13. The probe of 0.74.142 (run 20261117_191507) found it; 0.74.143 scarred 131 of 177 (2026-11-17). Let a pcall
+    that finds nothing say why (its error), or the next one stays hidden too. (65-70: the autotest branch's.)
+
+72. Never index a game TArray past its end from UE4SS Lua, not even inside a pcall: `arms[i]` for i over the array's
+    length reads whatever memory is there, and the game crashes (no Lua error to catch). 0.74.170 walked a railgun's
+    FireControlSystemComponent.AllArms[1..4] on a two-arm array: the autotest's game crashed (access violation at 0x10) the
+    moment RAILGUN_L deployed (run 20261118_012602); the same walk with `AllArms:ForEach(function(i, el) ... el:get() ...)`
+    ran clean (0.74.171, run 20261118_013043, 40/40). Walk game arrays with ForEach (or read their length first).
 
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,

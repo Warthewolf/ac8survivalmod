@@ -351,6 +351,95 @@ static void DownStop(const wchar_t* why)
     memset(&DN.ref, 0, sizeof(DN.ref));
 }
 
+/* ---- SV_Pin (runtime 0.32.38; GEOFON's capture, docs/design/INVINCIBLE_FLEET.md WP14 4: its first test) ----------
+ * Does the local plane's flight model or camera fight a per-frame teleport? While it's on, every input build (2-3 a
+ * frame) moves your plane to a point moving at (vx, vy) cm/s from (x, y, z) since it began, facing yaw (pitch and roll
+ * 0), as coop.c's moves do (CoTeleport: TeleportTo + the flight reset), the stick zeroed; before each move it reads where
+ * the plane got to since the last one (the drift: what the flight model did in between). Logged every 5 s and at its
+ * end: moves, refused, the drift's mean and worst (cm). It ends after secs, the plane gone, or SV_Pin(0). */
+static struct {
+    int on, moves, fails, drifts;
+    CoRef ref;
+    double x, y, z, vx, vy, yaw, t0, until, lastLog, set[3], driftSum, driftMax;
+    int haveSet;
+} PN;
+
+static void PinLog(const wchar_t* why)
+{
+    Log(L"pin: %s: %d s, %d moves, %d refused; the drift between moves: mean %d cm, worst %d cm (%d read)", why,
+        (int32_t)(CoNow() - PN.t0), PN.moves, PN.fails, PN.drifts ? (int32_t)(PN.driftSum / PN.drifts) : 0,
+        (int32_t)PN.driftMax, PN.drifts);
+}
+
+static void PinStop(const wchar_t* why)
+{
+    if (!PN.on) return;
+    PinLog(why);
+    PN.on = 0;
+    memset(&PN.ref, 0, sizeof(PN.ref));
+}
+
+static void PinApply(uint8_t* plane, float* out)
+{
+    double now = CoNow();
+    if (now >= PN.until) { PinStop(L"over"); return; }
+    double p[3], r[3];
+    if (PN.haveSet && CoReadPose(plane, p, r)) {
+        double dx = p[0] - PN.set[0], dy = p[1] - PN.set[1], dz = p[2] - PN.set[2];
+        double d = CoSqrt(dx * dx + dy * dy + dz * dz);
+        PN.driftSum += d; ++PN.drifts;
+        if (d > PN.driftMax) PN.driftMax = d;
+    }
+    double t = now - PN.t0;
+    double pos[3] = { PN.x + PN.vx * t, PN.y + PN.vy * t, PN.z }, rot[3] = { 0.0, PN.yaw, 0.0 };
+    if (CoTeleport(plane, pos, rot)) { ++PN.moves; memcpy(PN.set, pos, 24); PN.haveSet = 1; } else ++PN.fails;
+    for (int i = 0; i < 6; ++i) out[i] = 0.0f;
+    if (now - PN.lastLog >= 5.0) { PN.lastLog = now; PinLog(L"pinned"); }
+}
+
+/* SV_PinInfo() -> "on,moves,refused,drift mean cm,drift worst cm,drifts read" (the autotest's read of it) */
+static int L_PinInfo(void* lua)
+{
+    static char out[160];
+    CoBuf b = { out, out + sizeof(out) - 1 };
+    CoPutI(&b, PN.on); CoPutS(&b, ","); CoPutI(&b, PN.moves); CoPutS(&b, ","); CoPutI(&b, PN.fails); CoPutS(&b, ",");
+    CoPutI(&b, PN.drifts ? (int64_t)(PN.driftSum / PN.drifts) : 0); CoPutS(&b, ","); CoPutI(&b, (int64_t)PN.driftMax);
+    CoPutS(&b, ","); CoPutI(&b, PN.drifts);
+    *b.p = 0;
+    U.luaSetString(lua, out, (size_t)(b.p - out));
+    return 1;
+}
+
+/* SV_Pin(plane, x_cm, y_cm, z_cm, vx_cms, vy_cms, yaw_deg, secs) -> 1, SV_ERR_BAD_ARGS, SV_ERR_NO_GAME, SV_ERR_NOT_LOCAL;
+ * SV_Pin(0) -> 1: off. Never while DOWN's autopilot flies the plane. */
+static int L_Pin(void* lua)
+{
+    uint8_t* plane = ArgObject(lua);
+    if (!plane) { PinStop(L"off (Lua)"); return Ret(lua, 1); }
+    double a[7];
+    for (int i = 0; i < 7; ++i) if (!ArgNumber(lua, &a[i])) return Ret(lua, SV_ERR_BAD_ARGS);
+    if (!(a[0] > -1e9 && a[0] < 1e9 && a[1] > -1e9 && a[1] < 1e9 && a[2] > -1e6 && a[2] < 2e6 && a[3] > -1e5 && a[3] < 1e5 &&
+          a[4] > -1e5 && a[4] < 1e5 && a[5] > -720 && a[5] < 720 && a[6] > 0 && a[6] <= 120)) {
+        Log(L"pin: refused: bad arguments (a speed up to 1000 m/s, a height up to 20 km, 120 s at most)");
+        return Ret(lua, SV_ERR_BAD_ARGS);
+    }
+    if (!g_nextBuildInput) return Ret(lua, SV_ERR_NO_GAME);
+    if (!LiveObject(plane) || CoKind(plane) != 2) { Log(L"pin: refused: %p isn't a player plane", plane); return Ret(lua, SV_ERR_BAD_ARGS); }
+    int64_t err = 0;
+    uint8_t* me = FlLocal(&err);
+    if (!me) return Ret(lua, err);
+    if (me != plane) { Log(L"pin: refused: %p isn't the local player's plane (%p)", plane, me); return Ret(lua, SV_ERR_NOT_LOCAL); }
+    if (DN.on) { Log(L"pin: refused: DOWN's autopilot flies the plane"); return Ret(lua, SV_ERR_BAD_ARGS); }
+    memset(&PN, 0, sizeof(PN));
+    PN.x = a[0]; PN.y = a[1]; PN.z = a[2]; PN.vx = a[3]; PN.vy = a[4]; PN.yaw = a[5];
+    CoRefSet(&PN.ref, plane);
+    PN.on = 1; PN.t0 = PN.lastLog = CoNow(); PN.until = PN.t0 + a[6];
+    Log(L"pin: on plane %p: from (%d, %d) m at %d m, moving %d, %d cm/s, facing %d, for %d s (moves %s)", plane,
+        (int32_t)(a[0] / 100), (int32_t)(a[1] / 100), (int32_t)(a[2] / 100), (int32_t)a[3], (int32_t)a[4], (int32_t)a[5],
+        (int32_t)a[6], CoQuietSites() ? L"TeleportTo + the flight reset" : L"the vtable teleport (the quiet route not found)");
+    return Ret(lua, 1);
+}
+
 static void FdLog(void);                                /* COOP2MP's fed plane (below) */
 static void FlNetLog(void);                             /* and the other players' real planes (T3) */
 static void FnLog(void);                                /* and their launches (T4b) */
@@ -365,6 +454,11 @@ static void FlightInputHook(uint8_t* plane, float* out)
         uint8_t* o = CoRefGet(&DN.ref);
         if (!o) DownStop(L"autopilot off: the plane is gone");
         else if (o == plane) DownApply(o, out);
+    }
+    if (PN.on) {                                          /* (0.32.38) SV_Pin: the capture's first test */
+        uint8_t* o = CoRefGet(&PN.ref);
+        if (!o) PinStop(L"off: the plane is gone");
+        else if (o == plane) PinApply(o, out);
     }
     FlRecordInput(plane, out);
     FdLog();
@@ -391,6 +485,7 @@ static int L_Down(void* lua)
     if (!g_nextBuildInput) return Ret(lua, SV_ERR_NO_GAME);
     if (!LiveObject(plane) || CoKind(plane) != 2) { Log(L"down: refused: %p isn't a player plane", plane); return Ret(lua, SV_ERR_BAD_ARGS); }
     if (DN.on && CoRefGet(&DN.ref) == plane) {                 /* on already: a new circle, the same flight */
+        if (DN.c.gate) { DN.c.gate = DN.c.arrived = DN.c.onLine = DN.c.land = 0; Log(L"down: the capture's gate given up: circling"); }   /* (0.32.38) */
         DN.c.cx = cx; DN.c.cy = cy; DN.c.alt = alt; DN.c.radius = rad;
         return Ret(lua, 1);
     }
@@ -410,6 +505,65 @@ static int L_Down(void* lua)
         g_dnKnown ? L"input signs known (checked again in flight)"
         : p[2] / 100.0 < DN_PROBE_MIN_M ? L"low: circling at once on AC8's input signs (roll +1, pitch -1), checked in flight"
         : L"learning the input signs first (about 5 s of small roll and pitch inputs; AC8's roll +1, pitch -1 kept if they tell nothing)");
+    return Ret(lua, 1);
+}
+
+/* ---- SV_Capture (runtime 0.32.38; GEOFON's capture, docs/design/INVINCIBLE_FLEET.md WP14 3) ------------------------
+ * DOWN's autopilot flying the local plane to a gate instead of round a circle (down_ctl.c DownGate): (gx, gy) cm at
+ * alt m, lined up along hdg (the ship's heading), each call moving it (the ship sails). The stick does nothing meanwhile
+ * (DOWN's takeover). -> 1 flying there, 2 arrived (on its line, at its height: the landing's start), SV_ERR_*; SV_Capture(0)
+ * -> 1: off, the player flies again (as SV_Down(0)). */
+static int L_Capture(void* lua)
+{
+    uint8_t* plane = ArgObject(lua);
+    if (!plane) { if (DN.c.gate) DownStop(L"capture off (Lua)"); return Ret(lua, 1); }
+    double gx = 0, gy = 0, alt = 0, hd = 0;
+    if (!ArgNumber(lua, &gx) || !ArgNumber(lua, &gy) || !ArgNumber(lua, &alt) || !ArgNumber(lua, &hd)) return Ret(lua, SV_ERR_BAD_ARGS);
+    if (!(gx > -1e9 && gx < 1e9 && gy > -1e9 && gy < 1e9 && alt >= 0 && alt <= 15000 && hd > -720 && hd < 720)) {
+        Log(L"capture: refused: gate (%d, %d) m, altitude %d m, heading %d", (int32_t)(gx / 100), (int32_t)(gy / 100), (int32_t)alt,
+            (int32_t)hd);
+        return Ret(lua, SV_ERR_BAD_ARGS);
+    }
+    if (!g_nextBuildInput) return Ret(lua, SV_ERR_NO_GAME);
+    if (DN.on && CoRefGet(&DN.ref) == plane) {             /* on already: the gate moved */
+        if (!DN.c.gate) Log(L"capture: DOWN's circle turned into the gate");
+        DownGate(&DN.c, gx, gy, hd, alt);
+        return Ret(lua, DN.c.arrived ? 2 : 1);
+    }
+    if (!LiveObject(plane) || CoKind(plane) != 2) { Log(L"capture: refused: %p isn't a player plane", plane); return Ret(lua, SV_ERR_BAD_ARGS); }
+    if (PN.on) { Log(L"capture: refused: SV_Pin holds the plane"); return Ret(lua, SV_ERR_BAD_ARGS); }
+    int64_t err = 0;
+    uint8_t* me = FlLocal(&err);
+    if (!me) return Ret(lua, err);
+    if (me != plane) { Log(L"capture: refused: %p isn't the local player's plane (%p)", plane, me); return Ret(lua, SV_ERR_NOT_LOCAL); }
+    DownInit(&DN.c, gx, gy, alt, 4000.0, g_dnKnown, g_dnSRoll, g_dnSPitch);
+    DownGate(&DN.c, gx, gy, hd, alt);
+    CoRefSet(&DN.ref, plane);
+    DN.on = 1; DN.okBits = g_dnKnown ? (DN_LEARNED_ROLL | DN_LEARNED_PITCH) : 0; DN.said = 0;
+    DN.startAt = DN.lastLog = CoNow();
+    double p[3] = { 0, 0, 0 }, r[3] = { 0, 0, 0 };
+    CoReadPose(plane, p, r);
+    Log(L"capture: autopilot on plane %p: to the gate (%d, %d) m at %d m along %d; the plane at (%d, %d) m, %d m high, heading %d",
+        plane, (int32_t)(gx / 100), (int32_t)(gy / 100), (int32_t)alt, (int32_t)hd, (int32_t)(p[0] / 100), (int32_t)(p[1] / 100),
+        (int32_t)(p[2] / 100), (int32_t)r[1]);
+    return Ret(lua, 1);
+}
+
+/* SV_CapLand(plane, on) -> 1, SV_ERR_*: (0.32.39) the capture's landing on the plane the capture flies: its gear down
+ * (both flight engines', FlGear) and the brake held over landing speed (down_ctl.c CP_LAND_MS); off: gear up, no brake.
+ * Again each call (the game may raise the gear). */
+static int FlGear(uint8_t* plane, int down);
+static int L_CapLand(void* lua)
+{
+    uint8_t* plane = ArgObject(lua);
+    double on = 0;
+    if (!plane || !ArgNumber(lua, &on)) return Ret(lua, SV_ERR_BAD_ARGS);
+    if (!(DN.on && CoRefGet(&DN.ref) == plane && DN.c.gate)) return Ret(lua, SV_ERR_BAD_ARGS);
+    int was = DN.c.land;
+    DN.c.land = on != 0;
+    int g = FlGear(plane, DN.c.land);
+    if (was != DN.c.land)
+        Log(L"capture: landing %s on plane %p (gear %s: %d)", DN.c.land ? L"on" : L"off", plane, DN.c.land ? L"down" : L"up", g);
     return Ret(lua, 1);
 }
 

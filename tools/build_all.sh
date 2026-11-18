@@ -34,6 +34,7 @@ tools/get_stock.sh \
   Maps/Ingame/MIssion006/EP_Mission006_global.uasset \
   Maps/Ingame/Training001/EP_Training001_global.uasset \
   Blueprints/Weapons/BP_FCS/CP/BP_FCS_Vessel_CIWS_00.uasset Blueprints/Weapons/BP_FCS/CP/BP_FCS_ECM_00.uasset Blueprints/Weapons/CIWS/Vessel/BP_wp_ciws_vessel.uasset Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForMSL.uasset Maps/Ingame/Mission029/EP_Mission029_global.uasset Datatables/AI/NPC/FCS/DT_NPC_FCS.uasset \
+  Blueprints/Weapons/BP_FCS/CP/BP_FCS_Vessel_Artillery_00.uasset Blueprints/Weapons/Artillery/BP_wp_artillery_vesselgun.uasset OnlineMode/Blueprint/Weapons/BP_wp_emls_alcn.uasset Blueprints/Vehicle/AI/Plane/OP1016_x40a/Base/BP_OP1016_x40a_RG_Base.uasset \
   OnlineMode/DataTables/AI/NPC/DT_NPC_Model_ON.uasset \
   Datatables/Sound/DT_SoundMusicPlayerBGM.uasset OnlineMode/DataTables/Information/JukeBox/DT_JukeBoxMusic.uasset WwiseAssets/Database/DA_SoundDB_AKB_BGM_Campaign.uasset WwiseAssets/Database/DA_SoundDB_AKB_BGM_Online.uasset \
   Datatables/UI/Menu/IngameMenu/IngameHangar/DT_LiveMenuIngameHangarCommands.uasset   Datatables/UI/Menu/IngameMenu/IngameHangar/DA_LiveMenuIngameHangarSettings.uasset   Datatables/UI/Menu/IngameMenu/DT_IngameMenuSettingData.uasset   Blueprints/UI/Menu/Ingame/IngameHangar/WBP_Menu_IngameHangar_Confirmation_000.uasset
@@ -106,6 +107,19 @@ if [ "$TANI" = 1 ]; then
     [ -f "$TA/SurvivalMode_Tani_P.utoc" ] || { echo "TANI=1: no Tanicorn container in $TA (sh tools/tanicorn/build.sh)"; exit 1; }
     cp "$TA/SurvivalMode_Tani_P.utoc" "$TA/SurvivalMode_Tani_P.ucas" build/install/SurvivalMode/
     echo "staged the Tanicorn's parts ($TA/SurvivalMode_Tani_P; dev only)"
+    # ((2026-11-17) the storms' own cloud flash, tools/stormfx (NS_SV_CloudFlash): the fleet's storm draws it in step with
+    # each bolt (sv_fleet_storm.lua), the stock glow when it isn't here; dev only, as the Tanicorn's (no zip keeps it)
+    # (SurvivalMode_StormFx_P: our own NS_SV_CloudFlash, tools/stormfx/build.sh; SurvivalMode_StormBurst_P: AC8's own
+    # NS_CloudLightning as NS_SV_CloudBurst, its spawn literals raised, tools/stormfx/burst.py)
+    SF="$(dirname "$TA")/../stormfx/out"
+    for c in SurvivalMode_StormFx_P SurvivalMode_StormBurst_P; do
+        if [ -f "$SF/$c.utoc" ]; then
+            cp "$SF/$c.utoc" "$SF/$c.ucas" build/install/SurvivalMode/
+            echo "staged the storms' cloud flash ($SF/$c; dev only)"
+        else
+            echo "no $c (tools/stormfx): the fleet's storm keeps the stock glow unless another flash is in"
+        fi
+    done
 fi
 # (2026-11-11, WP2 step 2) a TANI=1 build's world data imports the Tanicorn container's blueprints (THE TANACORN's live parts:
 # tools/build_survival.py check_tanicorn_build writes build/out/tani_wd.txt): its marker staged beside the two mod folders
@@ -152,5 +166,21 @@ LIST
     echo "staged VALKA's railgun sounds ($(ls "$SND" | wc -l) in AC8SurvivalMode/Sounds/valka)"
 else
     echo "no AC7 railgun sounds (python -I tools/ac7_sfx.py): VALKA plays AC8's own"
+fi
+# THE TANACORN's crew (the user's AC7 voice exception of 2026-11-17, AGENTS.md: the Alicorn crew's lines, distorted, her
+# dev install only, each heard by her first): tools/ac7_voice.py + tools/ac7_voice_fx.py into build/ac7/voice_alicorn
+# (never in git); staged only with TANI=1 as Sounds/tanacorn/<style>_<voice ID>.wav (A / B / C); every zip drops them
+# (package_release.sh, package_test.sh; tools/checks/zip_leak_test.sh)
+VA=build/ac7/voice_alicorn
+rm -rf build/install/AC8SurvivalMode/Sounds/tanacorn
+if [ "${TANI:-}" = 1 ] && [ -d "$VA/A" ]; then
+    TV=build/install/AC8SurvivalMode/Sounds/tanacorn
+    mkdir -p "$TV"
+    for st in A B C; do
+        for f in "$VA/$st"/*.wav; do
+            b=$(basename "$f" .wav); cp "$f" "$TV/${st}_${b%__$st}.wav"
+        done
+    done
+    echo "staged THE TANACORN's crew voices ($(ls "$TV" | wc -l) in AC8SurvivalMode/Sounds/tanacorn; TANI=1, dev installs only)"
 fi
 echo "staged build/install/SurvivalMode and build/install/AC8SurvivalMode"

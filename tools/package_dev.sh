@@ -8,6 +8,11 @@ set -e
 cd "$(dirname "$0")/.."
 name=${1:-dev}
 st=build/release/stage_dev_$name
+# ((2026-11-17) twice today build_all.sh stopped (the size check) and this staged the build before it under the new name:
+# the staged build must be the source's version)
+built=$(grep -h '^VERSION' build/install/AC8SurvivalMode/Scripts/main.lua 2>/dev/null || true)
+src=$(grep -h '^VERSION' mod/UE4SS/AC8SurvivalMode/Scripts/main.lua)
+[ "$built" = "$src" ] || { echo "package_dev: build/install is $built, the source $src: build_all.sh didn't finish (rerun it)"; exit 1; }
 mod=$st/ue4ss/Mods/AC8SurvivalMode
 # ((2026-11-07) the dev installs had no leaderboard address either, and the user hosts ranked co-op runs, which only the
 # host sends) the same check as package_release.sh's Online one; LB_OPTIONAL=1 stages it without
@@ -77,7 +82,7 @@ if [ "$TANI" = 1 ]; then
     python -I tools/tani_container.py verify "$st/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.utoc" build/install/tani_wd.txt || exit 1
     echo "TANI=1: the Tanicorn's container staged (Ctrl+T in a run: its test mount)"
 else
-    rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*
+    rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Storm*_P.*   # (the storms' cloud flash too: TANI=1's)
 fi
 # NOSPACEPORT=1: without the Spaceport Assault and its Retake (tools/nospaceport.py, as NOSPACEPORT=1 package_release.sh)
 if [ "$NOSPACEPORT" = 1 ]; then python -X utf8 -I tools/nospaceport.py "$mod" > /dev/null; fi

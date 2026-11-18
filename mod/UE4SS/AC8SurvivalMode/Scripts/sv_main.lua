@@ -456,6 +456,7 @@ local function probeTick(tick)
         if FISH and FISH.boatOff then pcall(FISH.boatOff, "the run starts over") end
         if SUB and SUB.cardOff then pcall(SUB.cardOff) end
         if ESC and ESC.restart then pcall(ESC.restart, "the run starts over") end
+        if D and D.restarted and type(levelRestartDrop) == "function" then pcall(levelRestartDrop, "the mission restarted") end
         planes, lastAlive, lastFlags = {}, nil, nil
         presetCache.at = -100                 -- the difficulty may have changed since the last run
         if type(SV_Reset) == "function" then SV_Reset() end
@@ -585,6 +586,7 @@ local function probeTick(tick)
                         if (D.maxFlags[k] or 0) > 0 and v < D.maxFlags[k] then
                             log(string.format("mission restarted in round %d (%s %d -> %d): the run starts over", D.round, k, D.maxFlags[k], v))
                             levelTick = -1         -- the level-load reset below, on the next tick
+                            D.restarted = true     -- ((0.74.129) the reset drops the parts the reload took: levelRestartDrop)
                             local okL, errL = pcall(LB.finish, "restart")          -- (its error mustn't stop the reset)
                             if not okL then log("leaderboard: error " .. tostring(errL)) end
                         end

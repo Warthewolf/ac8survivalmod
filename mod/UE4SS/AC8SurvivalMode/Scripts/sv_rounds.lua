@@ -254,6 +254,9 @@ function SPC.cleanUnitsOf(kind)
             add("SV_Unit_Fest" .. g)
             for k = 1, 3 do add("SV_Unit_FestCM_" .. g .. k) end
         end
+    elseif type(SPC.UNITS_OF) == "table" and type(SPC.UNITS_OF[kind]) == "function" then   -- ((0.74.160) a kind its own
+        local okU, l = pcall(SPC.UNITS_OF[kind])                                                 -- part lists (round 30's)
+        if okU and type(l) == "table" then for _, x in ipairs(l) do add(str(x)) end end
     end
     return out
 end

@@ -26,6 +26,10 @@
 --                          game's hidden (the first route of the file's `hud` that takes) and the target boxes (boxes).
 --                          -> true, "keyed"; false, why (no camera made: the caller's own then). In director mode it only
 --                          keeps the rise's frame and clock for Ctrl+E -> false, "director".
+--                          ((0.74.134) round 30's rise, the user: "make the Rise of the Tanacorn more Cinematic with the
+--                          Camera work") hooks.keys: its own shot list in place of the file's (cut keys jump, the others
+--                          blend); hooks.letterbox: the cameras' aspect held (the engine's black bars); hooks.beats: on the
+--                          rise's clock, each { t, shake = { path, scale } | title = { text, sub } | say = "CODE|text" } once.
 --   CINE.stop(why)         the view back on your plane, both HUDs and the boxes back, the cameras destroyed once the view
 --                          is off them (the level torn down: CINE.leave's, nothing touched).
 --   CINE.leave(why)        the level left (sv_main.lua runLeft): what can outlive it put back at once (the game's HUD
@@ -54,7 +58,10 @@ local cfg = {
     -- cut; today's riseCine blends TANI.rise.blend_s, 1 s); Survival's callouts over it; the target boxes (hide: all,
     -- hers: only hers, keep); the routes tried in order to hide the game's HUD
     director_speed = 0.35, blend = "smooth", enter_blend = 1.0, callouts = true, boxes = "hide",
-    hud = { "distortion", "widgets", "cheat", "showhud" },
+    -- ((2026-11-17) the user: "during the cutscenes ... we need to disable the HUD"; run 20261116_222923's pictures:
+    -- distortion "took" and the radar, the weapons, SPEED / ALT stayed on screen: last now; cheatnew: a LiveCheatManager
+    -- made here, the game's own HUD modes through it)
+    hud = { "widgets", "cheatnew", "cheat", "showhud", "distortion" },
     blend_exp = 2.0,                   -- (the ease blends' exponent)
     back_blend_s = 1.0,                -- (the last key back to your plane, as the rise's own camera did)
     late_blend_s = 0.25,               -- (a camera whose time has passed already: reached this fast)
@@ -86,7 +93,7 @@ CINE.DEFAULTS = {
     { t = 15, at = { 600, -720, 18 }, look = { 40, 0, 10 }, fov = 55 },
 }
 local BLEND = { smooth = 0, linear = 0, cubic = 1, easein = 2, easeout = 3, easeinout = 4 }   -- (smooth: linear, sampled)
-local ROUTES = { distortion = true, widgets = true, cheat = true, showhud = true }
+local ROUTES = { distortion = true, widgets = true, cheat = true, cheatnew = true, showhud = true }
 local BOXES = { hide = true, hers = true, keep = true }
 local HOLD_CINE, HOLD_PV = "the rise's cinematic", "the camera preview"
 -- play: the cinematic; R: the rise kept for Ctrl+E (play's, or a director rise's); pv: the preview; trash: cameras to go;
@@ -197,10 +204,12 @@ local function setting(set, k, v)
         local l = {}
         for w in v:lower():gmatch("[%a]+") do
             if w ~= "none" then
-                if not ROUTES[w] then return false, "hud routes are distortion, widgets, cheat, showhud (or none): not " .. w end
+                if not ROUTES[w] then return false, "hud routes are widgets, cheatnew, cheat, showhud, distortion (or none): not " .. w end
                 l[#l + 1] = w
             end
         end
+        -- ((0.74.124) a file saved before 0.74.105 has the old default order: the new one (cheatnew, widgets first)
+        if table.concat(l, " ") == "distortion widgets cheat showhud" then l = { table.unpack(cfg.hud) } end
         set.hud = l
     else
         return false, "no setting " .. k
@@ -466,16 +475,53 @@ local function spawnCam(F, k)
     if not (okB and a and valid(a)) then return nil, "the spawn gave nothing (" .. tostring(okB and a or "error") .. ")" end
     pcall(function() gs:FinishSpawningActor(a, t, 1) end)
     if not valid(a) then return nil, "not finished" end
-    local okR = pcall(function() a:K2_SetActorRotation(rot, true) end)
+    local okR = pcall(function() a:K2_SetActorRotation({ Pitch = 0, Yaw = rot.Yaw, Roll = 0 }, true) end)
+    -- ((0.74.158) the actor's pitch never took (every camera level: read back off by its own pitch, 36.3 and 18.8 deg in
+    -- runs 20261117_213215 / _214722; the user: "one of the cameras goes high into the sky"): the camera component's
+    -- pitch and roll as a quaternion relative transform, the one way a pitch took on the V too (place())
+    pcall(function()
+        a.CameraComponent:K2_SetRelativeTransform({ Rotation = CINE.quat({ Pitch = rot.Pitch, Yaw = 0, Roll = rot.Roll or 0 }),
+            Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }, false, {}, false)
+    end)
     pcall(function() a.CameraComponent.bConstrainAspectRatio = false end)
     local okF = pcall(function() a.CameraComponent:SetFieldOfView(k.fov) end)
-    local off = "?"                                       -- (its forward read back against where it should look)
+    local off = "?"                                       -- (the view's forward, its camera component's, against its look)
     pcall(function()
-        local v, n = a:GetActorForwardVector(), math.sqrt(dx * dx + dy * dy + dz * dz)
+        local v, n = a.CameraComponent:GetForwardVector(), math.sqrt(dx * dx + dy * dy + dz * dz)
         local c = (v.X * dx + v.Y * dy + v.Z * dz) / n
         off = string.format("%.1f", math.deg(math.acos(math.max(-1, math.min(1, c)))))
     end)
     return { o = a, name = nameOf(a), at = at, rot = rot, off = off, rotOk = okR, fovOk = okF }
+end
+-- ((0.74.134) a beat on the rise's clock: the game's camera shake on your camera, the title card (the callout), a radio line
+local SHAKES = {}
+local function beatShake(spec)
+    if type(spec) ~= "table" or type(spec[1]) ~= "string" or not liveObj(survivalPC) then return false end
+    local path = spec[1]
+    local cls = SHAKES[path]
+    if not (cls and liveObj(cls)) then cls = loadObject(path .. "." .. path:match("[^/]+$") .. "_C"); SHAKES[path] = cls end
+    if not cls then return false end
+    local rot, sc = { Pitch = 0, Yaw = 0, Roll = 0 }, tonumber(spec[2]) or 1
+    if pcall(function() survivalPC:ClientStartCameraShake(cls, sc, 0, rot) end) then return true end
+    return pcall(function() survivalPC.PlayerCameraManager:StartCameraShake(cls, sc, 0, rot) end)
+end
+local function beatsTick(T, t)
+    for i, b in ipairs(T.hooks.beats) do
+        if not T.beatsDone[i] and t >= (tonumber(b.t) or 0) then
+            T.beatsDone[i] = true
+            local what
+            if b.shake then what = "shake " .. tostring((b.shake[1] or ""):match("[^/]+$")) .. (beatShake(b.shake) and "" or " NOT started")
+            elseif b.title and type(hudCallout) == "function" then
+                pcall(hudCallout, tostring(b.title.text or ""), tostring(b.title.sub or "")); what = "the title " .. tostring(b.title.text)
+            elseif b.say and SUB and SUB.say then
+                local code, text = tostring(b.say):match("^([^|]+)|(.+)$")
+                local sp = ((CFG.hud or {}).subs or {}).speakers or {}
+                if code then pcall(SUB.say, sp[code] or code, text) end
+                what = "a radio line (" .. tostring(code) .. ")"
+            end
+            log(string.format("cine: beat %d at %.1f s: %s", i, t, tostring(what or "nothing")))
+        end
+    end
 end
 local function trash(c, after)
     if c then S.trash[#S.trash + 1] = { o = c.o, name = c.name, at = os.clock() + (after or 0) } end
@@ -588,6 +634,23 @@ function TRY.cheat()
     if not pcall(function() cm:ChangeHUDType(2) end) then return false, "ChangeHUDType failed" end   -- (EverythingDisabled)
     GH.cheat = { o = cm, name = nameOf(cm) }
     return true, "LiveCheatManager ChangeHUDType EverythingDisabled"
+end
+-- ((2026-11-17) cheatnew) a shipping game makes no cheat manager, but the class is there: one made on your player
+-- controller (kept for the level), its ChangeHUDType(EverythingDisabled), RestoreToDefault after (as `cheat`)
+local CM = nil
+function CINE.cheatMake()
+    if CM and valid(CM) then return CM end
+    local cls = StaticFindObject("/Script/Live.LiveCheatManager")
+    if not (valid(cls) and liveObj(survivalPC)) then return nil end
+    pcall(function() CM = StaticConstructObject(cls, survivalPC) end)
+    return CM and valid(CM) and CM or nil
+end
+function TRY.cheatnew()
+    local cm = CINE.cheatMake()
+    if not cm then return false, "no LiveCheatManager made" end
+    if not pcall(function() cm:ChangeHUDType(2) end) then return false, "ChangeHUDType failed" end   -- (EverythingDisabled)
+    GH.cheat = { o = cm, name = nameOf(cm) }
+    return true, "a LiveCheatManager of ours: ChangeHUDType EverythingDisabled"
 end
 function TRY.showhud()
     local hud = hudActor()
@@ -716,6 +779,9 @@ end
 local function ghudHide(holder, o)
     o = o or {}
     GH.holders[holder] = true
+    -- ((0.74.124) the user's 0.74.123 run: the fleet's surfacing hid the HUD and the cine tick put it back the same second,
+    -- "the run's over": S.run was set only by the cinematic itself. A hold belongs to the run it's made in)
+    S.run = D
     local set = S.set or defaultSet()
     if set.boxes ~= "keep" and not GH.her then herOff(o.her) end
     if set.boxes == "hide" and not GH.boxes then boxesOff() end
@@ -793,6 +859,18 @@ end
 local function ghudShow(holder, why)
     GH.holders[holder] = nil
     if next(GH.holders) == nil and GH.route then ghudPut(why or holder) end
+end
+-- ((2026-11-17) for other parts: the fleet's surfacing, sv_fleet.lua) the game's HUD (and the target boxes) held off by
+-- `holder` for about need s, let go by it; and a probe's one route alone (CINE.hudTry, then CINE.hudShow)
+function CINE.hudHide(holder, need) return ghudHide(holder, { need = need }) end
+function CINE.hudShow(holder, why) return ghudShow(holder, why) end
+function CINE.hudTry(route, need)
+    if not TRY[route] then return false, "no route " .. tostring(route) end
+    if GH.route then return false, "held already by " .. tostring(GH.route) end
+    local okC, a, b = pcall(TRY[route], { need = need or 30 })
+    if okC and a then GH.route, GH.holders.probe = route, true end
+    log(string.format("cine: probe %s: %s", route, okC and (tostring(a) .. ", " .. tostring(b)) or ("error " .. tostring(a))))
+    return okC and a, b
 end
 local function ghudKeep()                                 -- hidden again if the game showed it
     for _, e in ipairs(GH.items or {}) do
@@ -945,6 +1023,22 @@ function CINE.stop(why)
         if S.R then S.R = nil; log("cine: the rise's frame let go (" .. tostring(why) .. ")") end
         return false
     end
+    -- ((0.74.147) the beats not reached yet: a title or a radio line still played (a shake not); run 20261117_193828's rise
+    -- ended at ~12 s of its clock after a 1.3 s hitch, before the title's beat at 11.4 s)
+    if type(P.hooks) == "table" and type(P.hooks.beats) == "table" and P.beatsDone then
+        for i, b in ipairs(P.hooks.beats) do
+            if not P.beatsDone[i] and (b.title or b.say) then
+                P.beatsDone[i] = true
+                if b.title and type(hudCallout) == "function" then pcall(hudCallout, tostring(b.title.text or ""), tostring(b.title.sub or "")) end
+                if b.say and SUB and SUB.say then
+                    local code, text = tostring(b.say):match("^([^|]+)|(.+)$")
+                    local sp = ((CFG.hud or {}).subs or {}).speakers or {}
+                    if code then pcall(SUB.say, sp[code] or code, text) end
+                end
+                log(string.format("cine: beat %d (%s) played as the cinematic ends", i, b.title and "the title" or "a radio line"))
+            end
+        end
+    end
     S.play, S.R = nil, nil
     local down = isDown()
     local back = (not down) and viewBack(cfg.back_blend_s)
@@ -991,7 +1085,7 @@ function CINE.play(R, hooks)
     if not F then log("cine: no cinematic: " .. tostring(whyF)); return false, whyF end
     local set = S.set
     local smooth = set.blend == "smooth"
-    T.keys = copyKeys(S.keys)
+    T.keys = copyKeys(type(hooks.keys) == "table" and #hooks.keys > 0 and hooks.keys or S.keys)
     T.path, T.step = CINE.path(T.keys, smooth, cfg.sample_s)
     T.fn = BLEND[set.blend] or 0
     T.cams, T.cur, T.reverts, T.at, T.blends, T.holds, T.worst, T.cuts = {}, 1, 0, os.clock(), {}, 0, 0, 0
@@ -1012,6 +1106,13 @@ function CINE.play(R, hooks)
                 p.key, num(p.t), i, c.at.X, c.at.Y, c.at.Z, c.rot.Yaw, c.rot.Pitch, c.rot.Roll, num(p.fov), p.cut and ", a cut" or "")
         end
     end
+    if tonumber(hooks.letterbox) then                     -- ((0.74.134) the black bars, as the fleet's surfacing)
+        for _, c in ipairs(T.cams) do
+            pcall(function() c.o.CameraComponent.bConstrainAspectRatio = true end)
+            pcall(function() c.o.CameraComponent.AspectRatio = tonumber(hooks.letterbox) end)
+        end
+    end
+    T.beatsDone = {}
     local enter = (T.keys[1] and T.keys[1].cut) and 0 or set.enter_blend
     local okV = viewOn(T.cams[1].o, enter, false, 1)
     S.play, S.R = T, T
@@ -1330,6 +1431,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "cine", fn = function(now)
     if T then
         local t = clockOf(T)
         if t then drive(T, t) end
+        if t and type(T.hooks.beats) == "table" then beatsTick(T, t) end
         local cam = T.cams[T.cur]
         if not sameObj(cam.o, cam.name) then
             CINE.stop("camera " .. T.cur .. " is gone")

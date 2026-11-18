@@ -33,6 +33,8 @@
 --                     aim every 5 s for 2 minutes, a line when one goes down (TANI=1 builds: the world data has the parts).
 --                     (2026-11-12) and her 16 VLS blocks live too (32 parts), their lids watched as Ctrl+K's. Refused
 --                     while no hull of ours is up but a part of the last one still lives (`tanicorn: Ctrl+L refused: ...`).
+--                     (2026-11-12, stage 4) and the Alicorn's armaments (35 parts): the sub-railguns RAILGUN_L / _R deploy
+--                     and are ordered once read back, the bow RAILCANNON's cycle on Ctrl+H (sv_tanicorn_rail.lua, TANI.rail).
 --   Ctrl+K in a run   (2026-11-12) THE TANACORN's VLS test blocks (TANI.vls: the deck block VLSD and the side block VLSS_L1),
 --                     each on its own rows and the fire control row SV_FCS_TaniVLS (the Aegis Mk 41's, cloned at the main
 --                     menu), 3 km ahead across your path; logged as Ctrl+U's mounts, their missiles as the shells
@@ -42,7 +44,7 @@
 TANI = { unit = "SV_Unit_TaniTest", npc = "SV_Npc_TaniMount", model = "SV_Model_TaniMount",
          class = "BP_SV_Tani_T5_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5.BP_SV_Tani_T5_C",
          cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T5.Default__BP_SV_Tani_T5_C",
-         dummy = "BP_GR000_dummy_CP_C", name_key = "SV_TaniMount_Name", name = "TANICORN MOUNT",
+         dummy = "BP_GR000_dummy_CP_C", name_key = "SV_TaniMount_Name", name = "TANACORN MOUNT",
          fcs = "SV_FCS_TaniT5", fcs_src = "NPC_FCS_FlakGun000", fcs_slots = 2,   -- (0.74.59; survival_events.TANI_FCS)
          -- (0.74.60) the row's turn speeds: the stock flak gun's 360 deg/s jumped about (the user's run of 0.74.59: "it
          -- tracks but not as smoothly as it was previously kinda jumps around like the stock flak cannon"); our arm's 40
@@ -70,19 +72,19 @@ TANI.mounts = {
     { key = "T16", unit = "SV_Unit_TaniT16Gun", npc = "SV_Npc_TaniT16Gun", model = "SV_Model_TaniT16Gun",
       class = "BP_SV_Tani_T16_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T16.BP_SV_Tani_T16_C",
       cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_T16.Default__BP_SV_Tani_T16_C",
-      name_key = "SV_TaniT16Gun_Name", name = "TANICORN 16-INCH",
+      name_key = "SV_TaniT16Gun_Name", name = "TANACORN 16-INCH",
       fcs = "SV_FCS_TaniT16", fcs_src = "NPC_FCS_VesselArtillery000", fcs_slots = 3, fcs_speed = { 12, 8 },
       yaw = { -150, 150 }, pitch = { -2, 45 } },
     { key = "CIWS", unit = "SV_Unit_TaniCIWS", npc = "SV_Npc_TaniCIWS", model = "SV_Model_TaniCIWS",
       class = "BP_SV_Tani_CIWS_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_CIWS.BP_SV_Tani_CIWS_C",
       cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_CIWS.Default__BP_SV_Tani_CIWS_C",
-      name_key = "SV_TaniCIWS_Name", name = "TANICORN CIWS",
+      name_key = "SV_TaniCIWS_Name", name = "TANACORN CIWS",
       fcs = "SV_FCS_TaniCIWS", fcs_src = "NPC_FCS_VesselCIWS000", fcs_slots = 1, fcs_speed = { 120, 100 },
       yaw = { -180, 180 }, pitch = { -10, 85 } },
     { key = "LASER", unit = "SV_Unit_TaniLASER", npc = "SV_Npc_TaniLASER", model = "SV_Model_TaniLASER",
       class = "BP_SV_Tani_LASER_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_LASER.BP_SV_Tani_LASER_C",
       cdo_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_LASER.Default__BP_SV_Tani_LASER_C",
-      name_key = "SV_TaniLASER_Name", name = "TANICORN LASER",
+      name_key = "SV_TaniLASER_Name", name = "TANACORN LASER",
       fcs = "SV_FCS_TaniLASER", fcs_src = "NPC_FCS_VesselCIWS000", fcs_slots = 1, fcs_speed = { 120, 100 },   -- (its aim)
       yaw = { -180, 180 }, pitch = { -10, 85 },
       -- (2026-11-11) the user: "the LASERS have to be Laser Interceptors": AC7's LaserInterceptor at its muzzle (li: handed
@@ -95,10 +97,10 @@ TANI.mount_gap_cm = 40000                                -- (Ctrl+U: the three a
 -- Ctrl+L (survival_events.TANI_HULL_LIVE_* / TANI_LIVE): BP_SV_Tani_HULLLIVE, the drawn hull's rise rig and hull mesh with
 -- each gun mount's socket a LiveChildActorComponent (Part_<socket>) whose child is that mount's own blueprint, made a live
 -- part of the hull's AI object by the world data (TANI=1 builds only): its own rows (the test mounts'), health, box and
--- TGT, fire control row, and its order 2.5 s after the hull appears. The VLS blocks, railcannon and sub-railguns drawn as
--- on BP_SV_Tani_HULL. parts: { socket, mount type } in the build's order (tools/build_survival.py check_tanicorn_build
--- reads them here); row_health: each type's model row's MaxHealth (TANI_HEALTH, TANI_MOUNT_PARTS), to tell whether the
--- part took its row
+-- TGT, fire control row, and its order 2.5 s after the hull appears ((2026-11-12) the VLS blocks live too; stage 4: the
+-- railcannon and sub-railguns, TANI.rail, never ordered then). parts: { socket, mount type } in the build's order
+-- (tools/build_survival.py check_tanicorn_build reads them here); row_health: each type's model row's MaxHealth
+-- (TANI_HEALTH, TANI_MOUNT_PARTS), to tell whether the part took its row
 TANI.live = { unit = "SV_Unit_TaniHullLive", npc = "SV_Npc_TaniHullLive", model = "SV_Model_TaniHullLive",
               class = "BP_SV_Tani_HULLLIVE_C", class_path = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_HULLLIVE.BP_SV_Tani_HULLLIVE_C",
               name_key = "SV_TaniHullLive_Name", name = "TANACORN", ahead_cm = 500000, z_cm = 0,
@@ -114,6 +116,8 @@ TANI.live = { unit = "SV_Unit_TaniHullLive", npc = "SV_Npc_TaniHullLive", model 
                   { "VLSD_5", "VLSD" }, { "VLSD_6", "VLSD" }, { "VLSD_7", "VLSD" }, { "VLSD_8", "VLSD" },
                   { "VLSS_L1", "VLSS_L1" }, { "VLSS_L2", "VLSS_L2" }, { "VLSS_L3", "VLSS_L3" }, { "VLSS_L4", "VLSS_L4" },
                   { "VLSS_R1", "VLSS_R1" }, { "VLSS_R2", "VLSS_R2" }, { "VLSS_R3", "VLSS_R3" }, { "VLSS_R4", "VLSS_R4" },
+                  -- ((2026-11-12, stage 4) the Alicorn's armaments: each socket its own type, TANI.rail)
+                  { "RAILCANNON", "RAILCANNON" }, { "RAILGUN_L", "RAILGUN_L" }, { "RAILGUN_R", "RAILGUN_R" },
               } }
 -- (2026-11-12, WP1's VLS route: docs/re/TANICORN.md "VLS") THE TANACORN's VLS blocks (survival_events.TANI_VLS): the deck
 -- block VLSD (one blueprint for its 8 sockets VLSD_1..8) and the side blocks VLSS_L1..L4 / R1..R4 (each its own mesh and
@@ -149,6 +153,27 @@ for _, p in ipairs({
         face = p.part == "VLSD" and 180 or 270 }
 end
 for _, k in ipairs(TANI.vls) do TANI.live.row_health[k.key] = k.health end   -- (survival_events.TANI_VLS_HEALTH)
+-- (2026-11-12, stage 4: docs/re/TANICORN.md "Railguns and railcannon") the Alicorn's armaments on her live hull
+-- (survival_events.TANI_RAIL_PARTS; their play is sv_tanicorn_rail.lua's): the sub-railguns RAILGUN_L / _R, mounts on their
+-- TurretPoseableMesh (stowed at rest: the lift 6 m down) on one fire control row of the build's, SV_FCS_TaniRail in
+-- DT_SV_TaniFCS (rail_fcs: its arm a TripleRailCannon firing the Alicorn's BP_wp_emls_alcn), copied whole into DT_NPC_FCS at
+-- the main menu (never cloned: hard rule 29); the bow RAILCANNON, armless, its TurretMesh a SkeletalMeshComponent playing
+-- its Deploy (cannon). Each { rail, tag } gives its names as survival_events.tani_rail makes them; none has a unit of its own
+-- ((2026-11-18) disp: the railguns' second row, a TripleRailCannon that never fires: their red line on the minimap)
+TANI.rail_fcs = { fcs = "SV_FCS_TaniRail", table = "/Game/Mods/SurvivalMode/Data/DT_SV_TaniFCS.DT_SV_TaniFCS", disp = "SV_FCS_TaniRailDisp" }
+TANI.rail = {}
+for _, p in ipairs({ { rail = "RAILCANNON", tag = "Railcannon", cannon = true }, { rail = "RAILGUN_L", tag = "RailgunL" },
+                     { rail = "RAILGUN_R", tag = "RailgunR" } }) do
+    local bp, cls = "/Game/Mods/SurvivalMode/Tanicorn/BP_SV_Tani_" .. p.rail, "BP_SV_Tani_" .. p.rail .. "_C"
+    local anim = "/Game/Mods/SurvivalMode/Tanicorn/Model/AS_SV_Tani_" .. p.rail .. "_Deploy"
+    TANI.rail[#TANI.rail + 1] = {
+        key = p.rail, cannon = p.cannon == true, npc = "SV_Npc_Tani" .. p.tag, model = "SV_Model_Tani" .. p.tag,
+        name_key = "SV_Tani" .. p.tag .. "_Name", name = p.cannon and "TANACORN RAILCANNON" or "TANACORN RAILGUN",
+        class = cls, class_path = bp .. "." .. cls, cdo_path = bp .. ".Default__" .. cls, anim = anim .. "." .. anim:match("[^/]+$"),
+        health = p.cannon and 1000 or 400, fcs = not p.cannon and TANI.rail_fcs.fcs or nil,
+        fcs_table = not p.cannon and TANI.rail_fcs.table or nil }
+end
+for _, k in ipairs(TANI.rail) do TANI.live.row_health[k.key] = k.health end
 -- (2026-11-12) THE TANACORN takes damage like the Alicorn (the user, after a tester's "if the Tanacorn is hit, everything
 -- immediately dies" on 0.74.65; docs/re/TANICORN.md "Damage"): hull, her hull can't be damaged (the Alicorn's hull:
 -- bCanBeDamaged False; here SetIsInvincible too, GEOFON's route, which sv_core.lua finishUnpaid undoes: hard rule 63);
@@ -164,6 +189,7 @@ local T = { rows = nil, next = 0, seen = {}, until_ = 0, checks = {}, shells = {
 local KINDS = { TANI }                                   -- every gun mount type (the T5 and TANI.mounts): its key and class
 for _, k in ipairs(TANI.mounts) do KINDS[#KINDS + 1] = k end
 for _, k in ipairs(TANI.vls) do KINDS[#KINDS + 1] = k end   -- ((2026-11-12) and every VLS block type: k.vls)
+for _, k in ipairs(TANI.rail) do KINDS[#KINDS + 1] = k end  -- ((stage 4) the railguns as mounts; the railcannon, k.cannon, a TurretMesh)
 
 local function kindOf(o)                                 -- the mount type of one of our mounts (by its class), or nil
     local cls = "?"
@@ -241,8 +267,16 @@ function rowsIn()                                  -- the model first: the row n
     if fcs then
         pin(fcs, nameOf(fcs))
         local made = {}                                  -- ((2026-11-12) every VLS type on one row: made and logged once)
-        for _, k in ipairs(KINDS) do
-            if not made[k.fcs] then made[k.fcs] = true; fcsRow(fcs, k) end
+        for _, k in ipairs(KINDS) do                     -- ((stage 4) the railcannon has none; the railguns' is the build's,
+            if k.fcs and not made[k.fcs] then            -- copied whole: sv_tanicorn_rail.lua TANI.railRow)
+                made[k.fcs] = true
+                if not k.fcs_table then fcsRow(fcs, k)
+                elseif TANI.railRow then
+                    TANI.railRow(fcs, k)
+                    local d = TANI.rail_fcs.disp
+                    if d and not made[d] then made[d] = true; TANI.railRow(fcs, { fcs = d, fcs_table = k.fcs_table }) end
+                else log("tanicorn: fire control row " .. k.fcs .. " NOT in: no sv_tanicorn_rail.lua") end
+            end
         end
     end
     local m = addRow(mt, mr, TANI.model)
@@ -266,12 +300,21 @@ function rowsIn()                                  -- the model first: the row n
     end
     more[#more + 1] = string.format("the %d VLS block types' rows: %d in%s", #TANI.vls, vIn,
         #vOut > 0 and (", NOT added: " .. table.concat(vOut, ", ")) or "")
+    local rIn, rOut = 0, {}                                  -- ((stage 4) the rail parts' (TANI.rail), as the VLS types')
+    for _, k in ipairs(TANI.rail) do
+        local km, kn = addRow(mt, mr, k.model), addRow(npc, mine, k.npc)
+        allIn = allIn and km and kn
+        if km and kn then rIn = rIn + 1 else rOut[#rOut + 1] = k.model .. " / " .. k.npc end
+    end
+    more[#more + 1] = string.format("the %d rail part types' rows: %d in%s", #TANI.rail, rIn,
+        #rOut > 0 and (", NOT added: " .. table.concat(rOut, ", ")) or "")
     if type(SV_SetText) == "function" then
         pcall(SV_SetText, TANI.name_key, TANI.name)
         pcall(SV_SetText, TANI.hull.name_key, TANI.hull.name)
         pcall(SV_SetText, TANI.live.name_key, TANI.live.name)
         for _, k in ipairs(TANI.mounts) do pcall(SV_SetText, k.name_key, k.name) end
         for _, k in ipairs(TANI.vls) do pcall(SV_SetText, k.name_key, k.name) end
+        for _, k in ipairs(TANI.rail) do pcall(SV_SetText, k.name_key, k.name) end
     end
     T.rows = m and n and hm and hn and lm and ln and allIn
     return T.rows, string.format("%s %s, %s %s; %s %s, %s %s; %s %s, %s %s; %s", TANI.model, m and "in DT_NPC_Model" or "NOT added",
@@ -350,7 +393,9 @@ local function vlsMesh(o)
     end
     return nil
 end
-local function partMesh(o, k) if k and k.vls then return vlsMesh(o) end return turretMesh(o) end
+-- ((2026-11-16) `== true`: the T5's kind is TANI itself, whose .vls is the list of VLS block types: the autotest's live lines
+-- read the T5 as a VLS block, "no TurretMesh (SkeletalMeshComponent) found")
+local function partMesh(o, k) if k and (k.vls == true or k.cannon == true) then return vlsMesh(o) end return turretMesh(o) end
 
 -- (0.74.54) what the engine sees of a mount's muzzle (0.74.50-0.74.53: every shell, AA stream or flak, left the turret
 -- mesh's origin, under the mount, along its forward: SOC_Gun_01 never found): the mesh, its asset (and the deprecated
@@ -446,7 +491,12 @@ local function lidLine(o)
     end)
     return string.format("lids at %s s (playing %s, rate %s)%s", pos, playing, rate, cell)
 end
-local function aimOf(o, k) if k and k.vls then return lidLine(o) end return (aim(o)) end
+local function aimOf(o, k)
+    if k and k.cannon == true then return TANI.rcLine and TANI.rcLine(o) or "no sv_tanicorn_rail.lua" end   -- ((stage 4) its cycle)
+    if k and k.vls == true then return lidLine(o) end
+    return (aim(o))
+end
+TANI.partMesh, TANI.aim = partMesh, aim                   -- ((stage 4) sv_tanicorn_rail.lua's: their meshes, a barrel's aim)
 
 -- (0.74.55) every flak shell the game makes while a mount is watched (NotifyOnNewObject, as ALLY's ESM fields: the actor
 -- at its construction, before it has a place), then at the next tick its place and velocity run back over its age to
@@ -460,12 +510,15 @@ local function aimOf(o, k) if k and k.vls then return lidLine(o) end return (aim
 -- attached: its start comes from its place and velocity) and the CIWS / LASER's gun (BP_wp_ciws_vessel, a
 -- LiveAttachedInterceptorWeapon: it hangs where the flak gun does, its socket the line to read)
 local NEWSHELL = {}
-local SHELL_CLASSES = { "/Script/Live.LiveFlakGun", "/Script/Live.LiveArtillery", "/Script/Live.LiveAttachedInterceptorWeapon" }
+local SHELL_CLASSES = { "/Script/Live.LiveFlakGun", "/Script/Live.LiveArtillery", "/Script/Live.LiveAttachedInterceptorWeapon",
+                        "/Script/Live.LiveEMLBullet_BattleShip" }   -- ((stage 4) the railguns' BP_wp_emls_alcn rounds)
 if type(NotifyOnNewObject) == "function" then
     for _, c in ipairs(SHELL_CLASSES) do
         local short = c:match("Live%.(.+)$")
         pcall(NotifyOnNewObject, c, function(o)
-            if #NEWSHELL < 32 then NEWSHELL[#NEWSHELL + 1] = { o = o, t = os.clock(), c = short } end
+            -- ((0.74.161) its name kept: a shell freed before it's read and its address used again is another object (hard
+            -- rule 59): 0.74.160's autotest phase2 crashed reading one, 23:01:28 of run 20261117_225914, the 12th stock shell)
+            if #NEWSHELL < 32 then NEWSHELL[#NEWSHELL + 1] = { o = o, t = os.clock(), c = short, name = nameOf(o) } end
         end)
     end
 end
@@ -487,11 +540,12 @@ local function hangs(w)                                   -- an attached weapon'
 end
 
 -- (0.74.61) the first 12 of each weapon class (s.c) a session that aren't ours
+local function stillShell(s) return s.o ~= nil and valid(s.o) and s.name ~= nil and nameOf(s.o) == s.name end
 local function stockShells(list, now)
     for _, s in ipairs(list) do
         pcall(function()
             local o = s.o
-            if not valid(o) then return end
+            if not stillShell(s) then return end
             local ow = o:GetOwner()
             if valid(ow) and nameOf(ow):find("Tani", 1, true) then return end
             local c = s.c or "?"
@@ -515,6 +569,7 @@ local function shells(now)
     local aims, all = {}, nil
     for _, s in ipairs(list) do
         local mount, k
+        if not stillShell(s) then goto nextShell end          -- (gone, or its address another object's now)
         pcall(function()
             local ow = s.o:GetOwner()
             if valid(ow) and nameOf(ow):find("Tani", 1, true) then mount = ow end
@@ -555,6 +610,7 @@ local function shells(now)
                 log("tanicorn: " .. k.key .. " " .. (ok and line or ("a shell, not read: " .. tostring(line))))
             end
         end
+        ::nextShell::
     end
 end
 
@@ -657,9 +713,9 @@ local function watch(now)
             T.seen[id] = true
             log(string.format("tanicorn: %s mount %s up at %s: fire control arms %s, health %s/%s", k.key, nameOf(o), at(o),
                 armsOf(o), tostring(h), tostring(mx)))
-            log("tanicorn: " .. k.key .. " muzzle: " .. muzzleProbe(partMesh(o, k), k.vls and VLS_CELL or nil))
+            log("tanicorn: " .. k.key .. " muzzle: " .. muzzleProbe(partMesh(o, k), k.vls == true and VLS_CELL or nil))
             if k.li then liCarry(o, k) end               -- ((2026-11-11) the LASER: AC7's LaserInterceptor)
-            if not k.vls and not T.stockSaid then        -- (once a key press: the same for every gun mount)
+            if k.vls ~= true and not T.stockSaid then        -- (once a key press: the same for every gun mount)
                 T.stockSaid = true
                 log("tanicorn: a stock turret's muzzle: " .. stockProbe(o))
             end
@@ -713,7 +769,7 @@ testKey("T", "sv_tanicorn.lua's mount test", function()
         log("tanicorn: straight spawn of our class 300 m from the spot: " .. whyD)
         if d then list[#list + 1] = d end
     end
-    hudCallout("TEST: TANICORN MOUNT", r > 0 and "3 KM AHEAD" or "NOT SPAWNED")
+    hudCallout("TEST: TANACORN MOUNT", r > 0 and "3 KM AHEAD" or "NOT SPAWNED")
     local now = os.clock()
     T.checks[#T.checks + 1] = { at = now + 1, tag = "+1 s", made = list, k = TANI, x = x, y = y }
     T.checks[#T.checks + 1] = { at = now + 4, tag = "+4 s", made = list, k = TANI, x = x, y = y }
@@ -752,7 +808,7 @@ testKey("U", "sv_tanicorn.lua's mounts test", function()
         T.checks[#T.checks + 1] = { at = now + 4, tag = "+4 s", made = list, k = k, x = x, y = y }
         T.shells[k.key] = 0
     end
-    hudCallout("TEST: TANICORN MOUNTS", #up > 0 and (table.concat(up, ", ") .. " 3 KM AHEAD") or "NOT SPAWNED")
+    hudCallout("TEST: TANACORN MOUNTS", #up > 0 and (table.concat(up, ", ") .. " 3 KM AHEAD") or "NOT SPAWNED")
     T.next, T.until_, T.stockSaid = 0, now + TANI.watch_s, nil
 end)
 TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn mount watch", fn = watch }
@@ -1047,7 +1103,7 @@ end
 -- its spawn (Ctrl+Y / Ctrl+R: the key's own look; Ctrl+L: the watch's first tick), each live part the first tick its child
 -- actor is there (Ctrl+L's watch, before its +2 s look). Every object once by its address and name (hard rule 59); every
 -- write read back. Logged: `tanicorn: armour (<key>): the hull <name> can't be damaged (the Alicorn's way): SetIsInvincible
--- called; read back bIsInvincible true, bCanBeDamaged false, ...` and, on Ctrl+L, `tanicorn: armour: N of 32 parts at +T s
+-- called; read back bIsInvincible true, bCanBeDamaged false, ...` and, on Ctrl+L, `tanicorn: armour: N of 35 parts at +T s
 -- ...` with the first part of each type's read-back (its induced explosion's values). TANI.armoured: the hulls armoured this
 -- level { o, a, name, why } (sv_tanicorn_hits.lua watches their health); forgotten with the level.
 local ARMOUR = {}
@@ -1185,7 +1241,7 @@ end }
 -- F: N up`; at +2 s and +8 s a line a part, `tanicorn: live +2 s: Part_T5_1 (T5): BP_SV_Tani_T5_C <name>, health H/M (its
 -- row's 40), 0.0 m from Mount_T5_1, on Part_T5_1 (attached to the hull true), a child of the hull true (its
 -- AttachedParentGameObject <the hull>)` (on: its root's attach parent; a child: in the hull's AttachedChildGameObjects),
--- then `tanicorn: live +2 s: N of 32 parts up ...`; the first part of each type its fire control arms and muzzle (as Ctrl+T's
+-- then `tanicorn: live +2 s: N of 35 parts up ...`; the first part of each type its fire control arms and muzzle (as Ctrl+T's
 -- / Ctrl+U's / Ctrl+K's mount lines: a VLS block's SOC_Vls_01 on its TurretMesh); each LASER part handed to AC7's
 -- LaserInterceptor (liCarry: `tanicorn: LASER mount ... handed to ...`, then sv_escort_li.lua's `zfa li:`); every every_s
 -- for watch_s `tanicorn: live +T s: Part_T5_1 (T5) hp H/M, barrel yaw Y pitch P, muzzle (...) from the mount; D m from its
@@ -1300,7 +1356,7 @@ local function partLine(W, s, key, kids)
         if k and not W.kinds[key] then                   -- (the first of each type: as the mounts' up and muzzle lines)
             W.kinds[key] = true
             log(string.format("tanicorn: live %s %s: fire control arms %s", key, cn, armsOf(ch)))
-            log("tanicorn: live " .. key .. " muzzle: " .. muzzleProbe(partMesh(ch, k), k.vls and VLS_CELL or nil))
+            log("tanicorn: live " .. key .. " muzzle: " .. muzzleProbe(partMesh(ch, k), k.vls == true and VLS_CELL or nil))
         end
         if k and k.li then liCarry(ch, k, TANI.live.unit .. " " .. cn) end   -- (the LASER: AC7's LaserInterceptor, as Ctrl+U's)
     end
@@ -1388,6 +1444,142 @@ local function liveArmour(W, now)
     end
 end
 function TANI.liveSeen() return LV and LV.seen or nil end
+function TANI.liveHull() if LV and LV.o and same(LV) then return LV.o end return nil end   -- ((stage 4) Ctrl+H's)
+-- ((0.74.131) round 30's phase 2, sv_fleet_round.lua) TANI.liveSpawn(x, y, face, why): her live hull spawned there with
+-- Ctrl+L's watch (her armour, her parts' records and downs) -> r (> 0: up), why not. TANI.livePartsUp(): her parts still
+-- up, of how many (nil: no live hull of ours watched); a part the watch's looks never found counts as down once they're
+-- done. TANI.liveDown(why): her hull finished off (finishUnpaid takes her armour off first) -> down, how.
+function TANI.liveSpawn(x, y, face, why)
+    local C = TANI.live
+    local cls, err = loadObject(C.class_path)
+    if not cls then return -5, "her class didn't load (" .. tostring(err) .. ")" end
+    pin(cls, "tanicorn live hull class")
+    if LV then keep(LV) end
+    local orphans = keptAlive()
+    if #orphans > 0 then return -5, string.format("%d part(s) of the last hull still up (hard rule 16)", #orphans) end
+    local before = {}
+    for _, o in ipairs(FindAllOf(C.class) or {}) do before[addrOf(o) or 0] = true end
+    local r
+    if FISH and FISH.spawn then r = FISH.spawn(C.unit, x, y, C.z_cm, face) else r = SV_Spawn(C.unit, x, y, C.z_cm, face) end
+    r = tonumber(r) or -5
+    local okR, rows = rowsIn()
+    log(string.format("tanicorn: %s: %s at (%.0f, %.0f, %d) facing %.0f: %s%s", tostring(why), C.unit, x, y, C.z_cm, face,
+        r > 0 and (r .. " up") or ("not spawned (" .. tostring(SV_ERR and SV_ERR[r] or r) .. ")"), okR and "" or ("; rows: " .. rows)))
+    if r <= 0 then return r, "not spawned" end
+    local now = os.clock()
+    local W = { t0 = now, before = before, parts = {}, kinds = {}, comps = {}, looks = {}, why = why }
+    for _, s in ipairs(C.looks_s) do W.looks[#W.looks + 1] = { at = now + s, tag = "+" .. s .. " s" } end
+    W.next, W.until_ = now + C.looks_s[#C.looks_s] + C.every_s, now + C.watch_s
+    for _, k in ipairs(KINDS) do T.shells[k.key] = 0 end
+    LV = W
+    lidWatch(now, tostring(why))
+    return r
+end
+function TANI.livePartsUp()
+    local W = LV
+    if not (W and W.o and same(W)) then return nil end
+    local up, of = 0, 0
+    for _, pr in ipairs(TANI.live.parts) do
+        of = of + 1
+        local e = W.parts[pr[1]]
+        if e then if e.alive then up = up + 1 end
+        elseif #W.looks > 0 then up = up + 1 end          -- (not looked at yet: counted up until the looks are done)
+    end
+    return up, of
+end
+-- ((0.74.137) WP11 M5, her death as a boss's: "Keep working until I say stop") TANI.liveSink(why, c): explosions and fires
+-- along her (c.booms of c.fx every c.boom_every_s), her HullMesh (every part rides it) tipped bow-down c.bow_deg and rolled
+-- c.roll_deg while it goes c.sink_m down over c.sink_s (a transform with its turn a quaternion, as GEOFON's V: 0.74.135),
+-- then her hull finished off (TANI.liveDown) and hidden. -> true, or false and why. Log: `tanicorn: sink ...`
+local function relBase(c)
+    local b = { X = 0, Y = 0, Z = 0, P = 0, Yw = 0, R = 0 }
+    pcall(function() local v = c.RelativeLocation; b.X, b.Y, b.Z = tonumber(v.X) or 0, tonumber(v.Y) or 0, tonumber(v.Z) or 0 end)
+    pcall(function() local r = c.RelativeRotation; b.P, b.Yw, b.R = tonumber(r.Pitch) or 0, tonumber(r.Yaw) or 0, tonumber(r.Roll) or 0 end)
+    return b
+end
+function TANI.liveSink(why, c)
+    local W = LV
+    if not (W and W.o and same(W)) then return false, "no live hull of ours" end
+    if W.sink then return false, "already sinking" end
+    local mesh = hullMesh(W)
+    if not mesh then return false, "no HullMesh" end
+    W.sink = { t0 = os.clock(), why = why, c = c or {}, mesh = mesh, base = relBase(mesh), booms = 0, nextBoom = 0, ok = 0, of = 0 }
+    log(string.format("tanicorn: sink (%s): her HullMesh from (%.0f, %.0f, %.0f) pitch %.1f: %g deg bow-down, %g m under over %g s, %d explosions",
+        tostring(why), W.sink.base.X, W.sink.base.Y, W.sink.base.Z, W.sink.base.P, tonumber((c or {}).bow_deg) or 12,
+        tonumber((c or {}).sink_m) or 160, tonumber((c or {}).sink_s) or 40, tonumber((c or {}).booms) or 25))
+    return true
+end
+local function sinkTick(W, now)
+    local S, c = W.sink, W.sink.c
+    if S.done then return end
+    local sink_s = tonumber(c.sink_s) or 40
+    local f = math.min(1, (now - S.t0) / math.max(1, sink_s))
+    local e = f * f * (3 - 2 * f)                          -- (smooth: slow to start, slow at the end)
+    local b = S.base
+    local rot = { Pitch = b.P - (tonumber(c.bow_deg) or 12) * e, Yaw = b.Yw, Roll = b.R + (tonumber(c.roll_deg) or 6) * e }
+    local loc = { X = b.X, Y = b.Y, Z = b.Z - (tonumber(c.sink_m) or 160) * 100 * (f ^ 1.6) }
+    if liveObj(S.mesh) then
+        local ok = false
+        if CINE and CINE.quat then
+            ok = pcall(function() S.mesh:K2_SetRelativeTransform({ Rotation = CINE.quat(rot), Translation = loc, Scale3D = { X = 1, Y = 1, Z = 1 } }, false, {}, true) end)
+        end
+        if not ok then
+            pcall(function() S.mesh:K2_SetRelativeLocation(loc, false, {}, true) end)
+            pcall(function() S.mesh:K2_SetRelativeRotation(rot, false, {}, true) end)
+        end
+    end
+    if S.booms < (tonumber(c.booms) or 25) and now >= S.nextBoom and f < 0.85 then   -- (explosions and fires along her)
+        S.nextBoom = now + (tonumber(c.boom_every_s) or 0.6) * (0.5 + math.random())
+        S.booms = S.booms + 1
+        local p, fw
+        pcall(function() local v = W.o:K2_GetActorLocation(); p = { X = v.X, Y = v.Y, Z = v.Z } end)
+        pcall(function() local v = W.o:GetActorForwardVector(); fw = { X = v.X, Y = v.Y } end)
+        local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+        local list = c.fx or {}
+        local fx = list[(S.booms - 1) % math.max(1, #list) + 1]
+        if p and fw and fx and valid(lib) and liveObj(survivalPC) then
+            local along = (math.random() * 2 - 1) * 300 * 100
+            local at = { X = p.X + fw.X * along + fw.Y * (math.random() * 2 - 1) * 3000, Y = p.Y + fw.Y * along - fw.X * (math.random() * 2 - 1) * 3000,
+                         Z = 2000 - (tonumber(c.sink_m) or 160) * 100 * (f ^ 1.6) * 0.5 }
+            local sys = loadObject(fx[1] .. "." .. (fx[1]:match("[^/]+$") or ""))
+            local sc = tonumber(fx[2]) or 1
+            S.of = S.of + 1
+            if sys and pcall(function() lib:SpawnSystemAtLocation(survivalPC, sys, at, { Pitch = 0, Yaw = 0, Roll = 0 }, { X = sc, Y = sc, Z = sc }, true, true, 0, false) end) then
+                S.ok = S.ok + 1
+            end
+        end
+    end
+    if f >= 1 and not S.done then
+        S.done = true
+        local okD, how = false, "a joiner's copy: the host's"
+        if not W.joiner then okD, how = TANI.liveDown(S.why .. ": under") end
+        pcall(function() S.mesh:SetVisibility(false, true) end)
+        log(string.format("tanicorn: sink over at +%.0f s: %d of %d explosions came up; her hull %s; hidden", now - S.t0, S.ok, S.of,
+            okD and ("down (" .. tostring(how) .. ")") or "NOT finished off"))
+    end
+end
+function TANI.liveSinking() return LV ~= nil and LV.sink ~= nil and not LV.sink.done end
+-- ((0.74.165) a joiner: her sinking on the host's copy of her here (the host's word "if|sink"): a watch of the copy alone
+-- (no armour, no parts' looks or downs: the host's), the same sink, and at its end hidden, never finished off here (the
+-- host's "dn" does that)
+function TANI.joinSink(why, c)
+    local o = nil
+    for _, h in ipairs(ourHulls()) do o = h end
+    if not o then return false, "no copy of her here" end
+    if not (LV and LV.o == o) then
+        LV = { o = o, a = addrOf(o), name = nameOf(o), t0 = os.clock(), looks = {}, parts = {}, kinds = {}, comps = {}, before = {},
+               armourDone = true, joiner = true, downAt = math.huge, until_ = 0, next = math.huge }
+    end
+    return TANI.liveSink(why, c)
+end
+function TANI.liveDown(why)
+    local W = LV
+    if not (W and W.o and same(W)) then return false, "no live hull of ours" end
+    local ok, h, how = finishUnpaid(W.o)
+    log(string.format("tanicorn: live hull finished off (%s): %s, its health %s", tostring(why), ok and ("down by " .. tostring(how))
+        or "NOT down", tostring(h)))
+    return ok, how
+end
 -- ((2026-11-12, the review) the watch and the kept parts forgotten with the level: a test tick never runs between the gate
 -- closing and the next run's D, so their own `not D` checks can't)
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["tanicorn live"] = function() LV, KEPT = nil, nil end end
@@ -1504,6 +1696,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn live hull", fn = function(now)
         end
     end
     if not W.armourDone and same(W) then liveArmour(W, now) end   -- ((2026-11-12) TANI.armour, from the first tick)
+    if W.sink and same(W) then pcall(sinkTick, W, now) end   -- ((0.74.137) her death: TANI.liveSink)
     if not same(W) then
         keep(W)                                          -- ((2026-11-12) its parts kept for Ctrl+L's guard)
         local up = keptAlive()

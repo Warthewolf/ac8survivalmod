@@ -342,3 +342,169 @@ values; the parts' rows x5 (T5 200, CIWS 150, LASER 150, VLS 200, T16 400); a hi
 game: whether these writes after spawn take (the probe's start lines read them back), whether bCanBeDamaged False is
 honoured on an AI hull of ours. TANI.armour off skips only the run-time layer: an A/B of the chain needs a container cooked
 without spec.py's PART_IES / PART_CDO / HULL_CDO. Next: her core, then the Alicorn's weapons.
+
+## Railguns and railcannon (2026-11-12)
+Stage 4, the Lua half (Scripts/sv_tanicorn_rail.lua, test builds only: cut to its header in every zip but a TESTER=1 TANI=1
+one; tools/checks/tani_rail_test.sh). The generator half builds BP_SV_Tani_RAILGUN_L / _R (mount() on SK_SV_Tani_RAILGUN_*,
+a TurretPoseableMesh resting STOWED: the lift 6 m down, the hatches shut), BP_SV_Tani_RAILCANNON (an armless TurretMesh
+SkeletalMeshComponent holding AS_SV_Tani_RAILCANNON_Deploy at 0), their rows, the railguns' fire control row SV_FCS_TaniRail
+in DT_SV_TaniFCS (a TripleRailCannon firing BP_wp_emls_alcn) and the remote events RE_SV_TaniRailOrderL / R. Live parts 33-35
+on HULLLIVE (Part_RAILCANNON, Part_RAILGUN_L, Part_RAILGUN_R); none is ordered at the hull's +2.5 s.
+- Data (sv_tanicorn.lua): TANI.rail { RAILCANNON (cannon, no fire control row), RAILGUN_L, RAILGUN_R }, TANI.rail_fcs; KINDS
+  takes them (the railcannon's mesh found as a VLS block's TurretMesh); rowsIn adds their model / DT_NPC rows and names and
+  copies SV_FCS_TaniRail WHOLE from DT_SV_TaniFCS into DT_NPC_FCS (TANI.railRow: never read, never cloned: hard rule 29);
+  the live watch's 5 s lines read the railcannon through TANI.rcLine; the railguns' rounds (LiveEMLBullet_BattleShip) join
+  the shell lines.
+- The railguns (route (i)): 3 s after Ctrl+L's watch sees one (its armour on), Lua writes the Deploy's end pose on its
+  TurretPoseableMesh in component space (SetBoneTransformByName, EBoneSpaces 1) as quaternion transforms, stepped over 2.2 s:
+  the lift (0, 0, -600) -> (0, 0, 0) cm, Hatch_n / Hatch_p 105 deg about X ((-+0.79335, 0, 0, 0.60876)) at (0, +-460, -30).
+  Then it reads the lift back (GetBoneLocationByName, component space: what was written) and SOC_Gun_01's height
+  (GetSocketTransform, RTS_Component 2: what's drawn, where its fire control fires from; stowed -196 cm, raised +404). Only
+  with the lift within 50 cm of 0 AND SOC_Gun_01 at least 300 cm up as drawn is it ordered (never from inside the hull) (its remote event, host or solo; held while the STORE is open), its arm's railgun HUD written first (hard rule 45)
+  and read back. A lift that reads down, or a muzzle that stays down as drawn, is written once more, then never ordered; a lift or a
+  muzzle that can't be read: never ordered.
+  Hard rule 64: a barrel that hasn't moved 8 s after its order (yaw / pitch within 2 deg, from the shell lines' aim) is
+  ordered again, up to 4 times, the check put off until 8 s after the STORE shuts. The lift is read every 5 s after and
+  written again if it fell back. The fire control owns yaw and pitch: the design's 35 / 22 deg ready pose isn't written.
+- The railcannon (Ctrl+H; WP11's phase 2 trigger to come: TANI.rcStart(why)): shielded from the first tick it's seen
+  (SPC.V.PART_FLAGS and SetIsInvincible, read back). Ctrl+H plays its Deploy (the VLS lids' calls); at deploy_s 3.4 the
+  shield comes off and its health is sized in your standard missiles (8, +50 % of them a further player, only lowered:
+  capped at the row's 1000); then charges of 30 s, one every 90 s from the last one's start: RE_SV_AlcnAlertOn, the callout,
+  the Alicorn's railgun radio (alcn_rail_first / alcn_rail), NS_alcn_RailCannonDischarge_ON on SOC_Gun_01 (its root if the
+  socket is refused; spawned again if it ends), RTPC_Init, Charge_Play 20 s before the shot, EX03_CANNON_CHARGE 50 -> 100;
+  the shot (NS_Maingun_Muzzle, the long discharge, a TLS beam of the shot's length or a bullet trail), the round on the runway
+  at 11.1 km/s, AF.bomb += 100 x AF.max / 250 there (the host's; none with the airfield down or off), the impact effects
+  (the GR036 blast, her railcannon's, DECOY's ground set), its sound and shake, RE_SV_AlcnAlertOff 3 s on. Every effect is
+  kept by address and name and stopped after 6 s (the charge at the shot). The clock holds while paused (hard rule 60), in
+  the STORE, while you're landed with nobody else flying and, before a charge, while the airfield is down. Shot down
+  mid-charge: Charge_Stop, its effect off, the warning off, TANACORN RAILCANNON DOWN, TANI.coreOpen("the railcannon down"),
+  no impact (a round already in flight still lands). Ctrl+H again: stowed (played back) and shielded. A new run, the hull
+  gone, another object at its address (hard rule 59) or the level's drop end it. Settings: CFG.specials.fleet.railcannon.
+- Log lines (the user's test: Ctrl+L, wait for the railguns, then Ctrl+H):
+  `tanicorn: fire control row SV_FCS_TaniRail from DT_SV_TaniFCS: in (copied whole: its arm never read) (...)` (main menu);
+  `tanicorn rail: RAILGUN_L Part_RAILGUN_L <name> seen: deploying in 3 s ...`; `tanicorn rail: RAILGUN_L deploying at +3.0 s
+  over 2.2 s: lift z -600 cm, SOC_Gun_01 z -196 cm in the mesh ...`; `tanicorn rail: RAILGUN_L deployed: lift z 0 cm (up),
+  SOC_Gun_01 z 404 cm in the mesh (raised ~+404)`; `tanicorn rail: RAILGUN_L RE_SV_TaniRailOrderL fired (try 1, its deploy
+  read back); railgun HUD LiveFCSModule_LauncherTripleRailCannon: written; read back IsDispRadarMap true, ForceAlertDisp
+  true, HUDControl 1`; `tanicorn rail: RAILGUN_L its barrel moves (yaw a -> b, pitch c -> d) 8 s after the order: it took`;
+  `tanicorn: RAILGUN_L shell 1 (LiveEMLBullet_BattleShip): started (...) from the mount ... at ~11111 m/s ...`;
+  `tanicorn rc: Part_RAILCANNON <name> seen: shielded while stowed (4 flags written, SetIsInvincible(true) called; read back
+  ...)`; `tanicorn rc: Ctrl+H: deploying (AS_SV_Tani_RAILCANNON_Deploy 3.33 s on TurretMesh, from 0.00 s; SOC_Gun_01 z 1567
+  cm in the mesh) ...`; `tanicorn rc: deployed at +3.5 s: position 3.33 of 3.33 s, SOC_Gun_01 z 3454 cm in the mesh (from
+  1567: +18.9 m ...), the barrel D deg off the line to the runway (R km); shield off (...); health set to 8.0 missiles (...)`;
+  `tanicorn rc: charge 1 at +3.5 s (30 s): RAILGUN WARNING RE_SV_AlcnAlertOn fired; NS_alcn_RailCannonDischarge_ON up on
+  SOC_Gun_01; RTPC_Init posted (id N); radio said`; `tanicorn rc: RTPC EX03_CANNON_CHARGE: set ...`; every 5 s `tanicorn rc:
+  charge 1 +T/30 s: health H/M, RTPC EX03_CANNON_CHARGE V (set), the barrel D deg off the runway`; `tanicorn rc:
+  Charge_Play posted (id N) at +13.5 s`; `tanicorn rc: SHOT 1 at +33.5 s: muzzle (x, y, z) km -> runway (16.1, -4.4) km, R
+  km, the round there in F s; muzzle fx 2 of 2 up; streak beam 1 of 1 up; shot sound posted`; `tanicorn rc: impact 1 at +T
+  s: -100 airfield (AF.bomb B -> B2; health before H); impact fx 6 of 6 up, its sound posted, the shake ...`, then the
+  game's `airfield: hit (...)`; `tanicorn rc: charge 2 at +93.5 s ...`; `tanicorn rc: cycle over (<why>) ...`.
+- The review of 2026-11-12 (both halves, before 0.74.68): a railgun's order isn't forwarded to the joiners (sv_coop.lua
+  KEEP_EVENTS ^RE_SV_TaniRailOrder, in a DEV ONLY block: a joiner's copy is never raised); its railgun HUD is written BEFORE
+  its order and again at the next until it's written; its orders and barrel checks hold while paused (hard rule 60), and its
+  orders, the warning's off and the held events through the landing minigames too (SPC.storeShut on the rounds' clock,
+  D.now: down at the airfield before this visit's STORE and 3 s after; hard rule 64). The railcannon: its Deploy must show
+  up (SOC_Gun_01 at least raised_cm 2500 up in its mesh as drawn) or it's played again (redeploys 1), then left stowed,
+  shielded, with no charge; its first charge waits for a tick nothing holds (the STORE, the landing, landed alone, the
+  airfield down); gone with her hull up it counts as shot down (the Alicorn's parts' rule: the callout, TANI.coreOpen,
+  nothing done to what's at its address now); your missile's damage read again every 2 s (size_tries 5). Its hit is a chain
+  of 7 m spheres (one at its root, seven back along the barrel on SOC_Gun_01): its first cook's two 25 m spheres covered the
+  side VLS blocks VLSS_L1-L3 / R1-R3, so the stowed (shielded) railcannon took their hits. check_tani_rail_build reads Lua's
+  railgun events and the rail parts' health against the generator's. Left as they are: the railguns' row keeps its AI
+  module Turret500 (a turret's search, 30 km: they likely track from there and fire inside the arm's 18 km), the railguns
+  aren't shielded while stowed (lockable for the ~5 s before Lua raises them).
+- Open (only the game can say): whether SetBoneTransformByName from UE4SS takes on AC8's PoseableMeshComponent and redraws
+  (the deployed line's SOC_Gun_01 z: 404 is drawn, -196 not), whether a moved lift survives the native ControlBones (the
+  lift read every 5 s, the shells' start), whether a row-named TripleRailCannon arm fires on our part (the arms line, the
+  shell lines at ~11 km/s), whether a Lua-played animation plays on a child actor's mesh (the railcannon's deployed line,
+  position 3.33 and +18.9 m), whether the shield flags hold on our part (`tanicorn hits:` lines for it while stowed),
+  whether her discharge shows at our scale on SOC_Gun_01 and loops 30 s, the Cannon bank's events in Survival's level (ids
+  above 0), the RTPC's signature, the beam at 10-50 km, and the TGT mark while it's shielded. Co-op: the joiners see the
+  RAILGUN WARNING (forwarded) but none of the effects (TANI.rcFx, for a co-op message later: WP12).
+
+## The first in-game test (2026-11-16, 0.74.72, unattended: tools/autotest's tanacorn suite)
+The build 0.74.72 (feature/tanacorn-railguns + dev, TANI=1; the Tanicorn container 3f59134b2690...), run by the autotest
+gate on the user's PC with nobody at the controls (the fast path: OpenLevel from the main menu, your plane invincible on the
+DOWN autopilot, round 1 an hour away). 28 of 35 checks passed; the 7 failures are one cause. The run's folder:
+build/autotest/runs/20261116_194448_claude (verdict.txt, Survival's logs).
+- **Ctrl+L**: the live hull up (36 objects), all 35 live parts seen, the armour on every part at +0.1 s (`35 of 35 parts
+  ... no death blast, none set off by a neighbour's`), the hull bCanBeDamaged false / bIsInvincible true read back.
+- **No death chain (the tester's "if the Tanacorn is hit, everything immediately dies")**: Part_T5_1 finished off, 4 s on
+  no other part hurt and the hull at 50000 / 50000; the same for Part_VLSS_L1. Stage 1 / 2 work in game.
+- **The railguns: route (i) fails.** Both lifts read back z 0 cm (up) after the writes, but SOC_Gun_01 stayed at -196 cm
+  as drawn (stowed) after two writes: `RAILGUN_L NOT ordered: SOC_Gun_01 still z -196 cm in the mesh as drawn after 2
+  writes, its lift z 0 cm (written, not drawn?)`. Lua's SetBoneTransformByName on the TurretPoseableMesh reads back what
+  it wrote in the same tick, but the drawn pose doesn't take it (the arm's LauncherBoneControl poses that mesh every frame
+  [I]). No gun ordered, none fired (the safety rule held: a gun inside the hull isn't ordered). Next: route (iv).
+- **The railcannon (Ctrl+H) works whole**: its Deploy played on the skeletal TurretMesh moved the DRAWN socket (SOC_Gun_01
+  1559 -> 3454 cm, +19.0 m: a Lua-played animation on a child actor's skeletal mesh does redraw), the shield off, health 8
+  missiles (3200), charge 1 with the RAILGUN WARNING and its discharge on SOC_Gun_01, SHOT 1 at +33.8 s (muzzle fx 2 of 2,
+  the streak beam), impact 1 on the runway 0.5 s later (AF.bomb 0 -> 100, the airfield 250 -> 150, impact fx 6 of 6, the
+  shake), charge 2 at +93.9 s, finished off in it: `TANACORN RAILCANNON DOWN / THE AIRFIELD IS SAFE`, its warning and
+  effects off, no impact from that charge, the cycle over. The hull's health 50000 through the whole test.
+- **Errors found** (fixed on this branch after the run, or for the plan):
+  1. `RTPC EX03_CANNON_CHARGE: SetRTPCValue failed: sv_tanicorn_rail.lua:530: [UFunction::set ...`: AC8's
+     UAkGameplayStatics::SetRTPCValue takes (UAkRtpc*, float Value, int32 InterpolationTimeMs, AActor*) (the header dump:
+     build/liveproject/Source/AkAudio/Public/AkGameplayStatics.h:90), no RTPC name: the call passed five.
+  2. `radio not said` at both charges: TELL.say("alcn_rail_first" / "alcn_rail") gave nothing in this run.
+  3. The barrel 179 deg off the line to the runway: Ctrl+L spawns her broadside to you, and her railcannon is fixed along
+     her bow, so the test's shot leaves the muzzle away from the airfield (the round is scripted to the runway anyway). In
+     round 30 the fleet's course points her bow at the airfield (WP7); for the test only, not a bug.
+
+## The railguns' route (iv) (2026-11-16, after the first in-game test; the user's pick: "Split the mesh")
+0.74.73 confirmed route (i) out: with the TurretPoseableMesh set to tick its pose always (VisibilityBasedAnimTickOption read
+back 0) the Lua-written lift still read back up and SOC_Gun_01 still drew stowed (-196 cm). The railcannon's Lua-played
+Deploy on a skeletal mesh had drawn its +19 m, so the railgun's lift and hatches became a mesh of their own:
+- export_tanacorn.py: each RAILGUN_<side> two parts. RAILGUN_<side>_LIFT, kind railgun_lift (deploying(): Body > lift,
+  Hatch_n / Hatch_p; its Deploy 2.167 s: the lift 6.00 m up, both hatches 105 deg; SOC_Lift on the lift at the house's
+  stowed place, (0, 0, 0) from the lift bone), the house's subtree skipped. RAILGUN_<side>, kind railgun (riding(): the
+  house on BN_turret_yaw, the rails on BN_turret_pitch at (-199, 0, 404) cm, SOC_Gun_01 1074.6 cm ahead on it; no
+  animation; its origin SOC_Lift's). CHECK ALL OK (20 parts).
+- spec.py railgun_mount(): LiftMesh (SkeletalMeshComponent, single node on AS_SV_Tani_RAILGUN_<side>_LIFT_Deploy at 0,
+  AlwaysTickPoseAndRefreshBones), TurretPoseableMesh on LiftMesh's SOC_Lift (the arm's LauncherBoneControl as before), the
+  hit sphere on the turret, both meshes hidden and both wrecks shown at death; the drawn hull (BP_SV_Tani_HULL) hangs each
+  drawn house on its drawn lift, the live hull draws no lift whose railgun is live. ue_import / check_export / build.sh's
+  cook checks take the two kinds.
+- sv_tanicorn_rail.lua: after_s on, LiftMesh plays its Deploy (SetPosition 0, SetPlayRate 1, Play); deploy_s (2.6) on,
+  SOC_Gun_01's height over the part's actor (as drawn: stowed ~-196, raised ~+404) must be at least raised_cm (300) to
+  order it; played again up to `writes` (2) times, then NOT ordered; every check_s the muzzle read again and the Deploy
+  played again if it fell back; no LiftMesh (a container cooked before this): NOT ordered. tani_rail_test rewritten for it
+  (all passed, the release copy too).
+
+## Her live mounts don't aim (2026-11-16, the autotest's runs 12-20): her unit's area, not the parts
+- THE ANSWER (a research pass over every run's log, 2026-11-16): her parts aim and fire. In run 20261116_202906_claude
+  (0.74.74, everything of stage 4 in) T16_FWD turned to yaw 179.3 (rest 71-75), CIWS_1 to -101.2 (rest 175-179), CIWS_2 to
+  -102.3, 23 T16 shells and 336 VLS launches went off (the `weapons:` lines), every one at BP_GR000_dummy_CP, the
+  runway's target points; none at the player. Her hull's unit is Mission 13's scored dummy (tanicorn_live_unit,
+  port_unit), and it kept that unit's area: RadiusInMeter 1500, MinAltitudeInMeter 500. Her parts engage only inside it
+  (as every ship's: unit_area's note): that run's hull spawned 1.31 km from the runway, the other six 1.71-2.04 km, and
+  the autotest's plane circles ~5 km off. Their order (Mission 16's PlayerFirst) let them pick the runway's points.
+  The user flew close to her (and the test mounts, the same 1.5 km unit) and saw them aim (2026-11-16: "They were aiming
+  before we started working on the railgun"). So the notes below (bone posing not taking, the ticks) were wrong.
+- The fix (0.74.77): the ships' area on her unit (unit_area 45 km, 0-15 km high: build_survival_world.py
+  tanicorn_live_unit) and her parts' orders PlayerOnlyNoLimit (TANI_LIVE_PRIORITY, the railguns' too): the airfield's
+  shelling is WP13's, from the gun line, and the railcannon's. INVINCIBLE FLEET's parts the same (IF_PART_PRIORITY):
+  their guns had shelled the runway's points too.
+- The old notes, for the record:
+- In every run on her live hull (Ctrl+L) every gun mount's barrel sat at its rest angle the whole run (T16_FWD yaw ~74
+  pitch 0, CIWS_1 ~178 / -29.1, LASER_FWD_L 99 / 15.8: the same at every 5 s line) and no T5 / T16 / CIWS / LASER shell
+  was seen, whether your plane was invincible (runs 12-18) or shootable with a health floor (run 19: plane=floor).
+- The same blueprints as standalone test mounts (Ctrl+U, the user's flight of 2026-11-11 23:00) turned onto her (CIWS
+  -59.8 -> -64.3 / +5.9, LASER -46 -> -33.4 / 49.3) and the CIWS fired.
+- The railguns: a TripleRailCannon arm (fixed-angle: it needs no bones) FIRED its round on their order (run 16); a
+  BoneControl arm (runs 18-19) never fired (its barrel never aligns) and never turned.
+- So on her child-actor parts a PoseableMeshComponent's bone posing doesn't take: the fire control's yaw / pitch (and
+  route (i)'s Lua-written lift before), while a skeletal mesh's animation does (the railcannon's Deploy, the railguns'
+  LiftMesh). Next: the parts' actor / mesh ticks read and switched on from Lua (the autotest's tick probe), then the
+  fix where it shows (spec.py's part template, or Lua at the watch's first tick).
+- The live lines' "Part_T5_2 (T5) ... no TurretMesh (SkeletalMeshComponent) found": the aim reader looks for a VLS-style
+  TurretMesh on the T5 (a Lua lookup to fix: its mesh is TurretPoseableMesh).
+- Runs 18-20 (0.74.75-0.74.76): the BoneControl railgun arm (the stock Alicorn's kind) neither turned nor fired; a
+  shootable plane (plane=floor: MinHealth 45 of 113, not invincible) changed nothing; the tick probe found the
+  PoseableMesh tick OFF on CIWS / LASER / RAILGUN_L (on on T16) and the actor ticks on; with every tick switched on no
+  barrel moved either (T16 73.2, T5 73.3 (its aim read since the kind fix), CIWS 176.9 / -29.1, LASER 100.7 / 15.8,
+  RAILGUN_L 86.6: unchanged for 50 s). The fleet's STOCK child turrets aim and fire (run 14: the Aegis vessel guns,
+  KOLGA's AK-130s, BELUGA's howitzer), and the same T16 / CIWS / LASER blueprints aim as standalone test mounts (the
+  user's flight of 2026-11-11). So what's missing is in how her parts hang under her hull: the hull blueprint (an armless
+  native ALiveAIGroundVehicleObject), the child descs (Mission 22's Aegis mk15 child as their template), or the parts'
+  orders by name. Next: compare a stock ship's child part and hull (desc, CDO, AI and fire control) with hers.

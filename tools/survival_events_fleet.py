@@ -51,6 +51,26 @@ IF_KINDS = {
     'boat':  dict(src=('tr6', SP_BOAT_SOURCE[1]), hull=None, model=None, shape=None, z=0.0, parts=SP_BOAT_PARTS,
                   label='missile boat'),
 }
+# ((2026-11-17) the user: "I want the Aegis Ships in the Invincible Fleet Round to Carry 2 Lasers Interceptors one on the
+# Aft and the Bow, targettable"; the mount: "TANACORN's LASER turret") With TANI=1 (TANI_WD) only: each Aegis on
+# BP_SV_IF_Aegis (tools/tanicorn/spec.py: a child of the stock BP_VE002_aegs_CP with two LiveChildActorComponents of
+# THE TANACORN's LASER mount, IF_AEGIS_LASERS), its model row's blueprint; two more parts <obj>_LASER_BOW / _LASER_AFT on the
+# LASER mount's rows (TANI_MOUNTS' LASER: box, health, its aim-only fire control), each handed to AC7's LaserInterceptor by
+# Scripts/sv_fleet_lasers.lua. Without TANI=1 the Aegis is the stock one (nothing of the container imported).
+IF_AEGIS_BP = '/Game/Mods/SurvivalMode/Tanicorn/BP_SV_IF_Aegis'
+IF_AEGIS_BP_CLASS = 'BP_SV_IF_Aegis_C'
+IF_AEGIS_LASERS = ('LASER_BOW', 'LASER_AFT')
+# ((2026-11-17) the user: "Have the Raven use ECM too"; docs/design/INVINCIBLE_FLEET.md WP14's EW mast, route 1) RAVEN's
+# Mk 15 slot carries the Alicorn's ECM part (EB_002's `ecm` child: BP_BA002_alcn_ecm_Base, its jammer BP_wp_ecm_ON) on
+# its row alcn_ecm_01 (the Alicorn's rows, added at the main menu), as the Ladons' CIWS slots carry the Arsenal Bird's
+# pods (hard rule 38): its class imported from EB_002's world data, the hull row's child for that slot the ECM's row
+# ((2026-11-18) its own component instead, on its own blueprint BP_SV_IF_Raven (tools/tanicorn/spec.py raven_bp: the Aegis's
+# + ECM_MAST): 0.74.164's class on the Mk 15's child kept the Mk 15's body (its class the stock BP's component's), the
+# ECM's row on it. TANI=1 only, as the lasers: the blueprint is the Tanicorn container's)
+IF_RAVEN_ECM = {'ship': 'RAVEN', 'comp': 'ECM_MAST', 'part': 'ecm', 'npc': 'alcn_ecm_01', 'row': 'alcn_ecm_01',
+                'wd': '/Game/OnlineMode/Maps/EmergencyCall/EB_002/WD_EB_002', 'src_unit': 'Boss_0',
+                'bp': '/Game/Mods/SurvivalMode/Tanicorn/BP_SV_IF_Raven', 'bp_class': 'BP_SV_IF_Raven_C'}
+IF_AEGIS_LASER = [m for m in TANI_MOUNTS if m['part'] == 'LASER'][0]
 # Mission 22's ships' parts by their component (the world data's ComponentFieldName), renamed by place (their names end in
 # digits, _01 / _02: hard rule 17), and the GrandChildrens' (the Kirov's gun mount's Artillery) after their parent's
 IF_M22_PLACES = {'BP_VE007_udal_ak130_01': 'Gun', 'BP_VE007_udal_ak130_02': 'Art',
@@ -122,6 +142,8 @@ IF_TURN_KM, IF_LEG_KM, IF_LAPS = 2.0, 8.0, 2
 IF_STEP_KM, IF_ARC_DEG = 2.0, 20.0
 IF_SPEED = '45.0'                                # km/h, every ship (the path record's speed)
 IF_LEAD_M = 500.0
+IF_PART_PRIORITY = 'PlayerOnlyNoLimit'   # (2026-11-16) each part's order: PlayerFirst shelled the runway's target points; the
+                                         # airfield's shelling is WP13's, from the gun line
 IF_AREA_M, IF_ALT_M = SP_SHIP_AREA_M, SP_SHIP_ALT_M   # each unit's area (45 km: the whole course and the airfield)
 IF_COAST_KM = 3.0                                # no lane point nearer a land tile (COMONA_MAP.md 3's 22 tiles)
 IF_LAND_TILES = ['B14', 'B15', 'B16', 'C12', 'C13', 'C14', 'C15', 'D05', 'D06', 'D10', 'D11', 'D12', 'D13',
@@ -209,6 +231,10 @@ def if_fleet():
                  model=(IF_MODEL + key) if named else None, name_key=(IF_NAME_KEY + key) if named else None,
                  up=f'SV_IFUp{key}', go=f'RE_SV_IFGo{key}')
         s['parts'] = [f"{s['obj']}_{p}" for p in K['parts']]
+        if kind == 'aegis' and TANI_WD:                         # ((2026-11-17) its two lasers, TANI=1 only)
+            s['parts'] += [f"{s['obj']}_{c}" for c in IF_AEGIS_LASERS]
+            if name == IF_RAVEN_ECM['ship']:                    # ((2026-11-18) RAVEN's ECM mast)
+                s['parts'].append(f"{s['obj']}_{IF_RAVEN_ECM['comp']}")
         out.append(s)
     assert out[0]['key'] == 'Geofon' and len({s['key'] for s in out}) == len(out)
     for s in out:                                               # the coast (WP7: "never nearer the coast")
@@ -253,6 +279,11 @@ def build_fleet(g, flag, stock_ep):
     t_spath = g.exec_template('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[0] == 'AC_Obj_01_Ship1_aegs_0')
     t_upath = g.exec_template('LiveAIPathExecution', 'RE_Wave01_Start', lambda a, e: a[1] == 'AC_Unit_01_Ship1')
     t_remove = g.exec_template('LiveDestroyUnitExecution', 'Debug_Destroy_Shuttle')
+    # ((2026-11-16) the pool's air-only switch (Mission 22's appearance record: arg 1 the unit, arg 3 AIR_ONLY): with the
+    # PlayerOnlyNoLimit orders the ships' missiles homed on you, their guns (the Aegis Mk 45, BELUGA's howitzer) still on
+    # the runway's target points (autotest run 26: 21 / 12); the airfield's shelling is WP13's (GROUND_ONLY at the gun line)
+    t_search = g.exec_template('LiveAIChangeEnemySearchType', '01_E_AreaA_ReinforcementAppearance_0')
+    assert arg_values(t_search)[3] == 'AIR_ONLY', arg_values(t_search)
     assert arg_values(t_seng)[3] == 'Normal' and arg_values(t_part)[3] == 'Normal' and arg_values(t_part)[6] == 'PlayerFirst'
     assert arg_values(t_spath)[1] == 'NoneSelect' and arg_values(t_upath)[0] == 'NoneSelect', (arg_values(t_spath), arg_values(t_upath))
     float(arg_values(t_spath)[4]); float(arg_values(t_upath)[4])          # (arg 4: the speed, km/h)
@@ -263,12 +294,37 @@ def build_fleet(g, flag, stock_ep):
         for ev in (s['up'], s['go']):
             g.execute(t_spath, ev, {0: s['obj'], 2: s['path'], 4: IF_SPEED}, delay=1.0)
             g.execute(t_upath, ev, {1: s['unit'], 2: s['path'], 4: IF_SPEED}, delay=1.0)
-            g.execute(t_seng, ev, {0: 'NoneSelect', 1: s['unit']}, delay=2.0)
-            for p in s['parts']:
-                g.execute(t_part, ev, {0: p}, delay=2.5)
+            # ((2026-11-16) its priority too: Mission 22's ship order says Default, and with it 20 of 25 rounds in flight
+            # still homed on the runway's points after the parts' PlayerOnlyNoLimit (autotest run 25); her hull has none)
+            g.execute(t_seng, ev, {0: 'NoneSelect', 1: s['unit'], 6: IF_PART_PRIORITY}, delay=2.0)
+            g.execute(t_search, ev, {1: s['unit']}, delay=2.0)
+            for p in s['parts']:                                         # ((2026-11-16) the players only:
+                g.execute(t_part, ev, {0: p, 6: IF_PART_PRIORITY}, delay=2.5)   # PlayerFirst shelled the runway's points)
                 parts += 1
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_IFFleetRemove')
     for s in fleet:
         g.execute(t_remove, 'RE_SV_IFFleetRemove', {0: 'NoneSelect', 1: s['unit'], 2: 'NoneSelect'})
+    # ((2026-11-18) GEOFON's capture, WP14 2: RAVEN's EW mast pinged on the minimap while a CAPTURE LOCK runs:
+    # RE_SV_IFRavenPing, Mission 22's "look here" on RAVEN's unit (as RE_SV_RaidPing_NN); sv_fleet_capture.lua fires it)
+    t_nav = g.exec_template('LiveBattleNavigationExecution', 'Default_PreRadioEvent_28')
+    assert arg_values(t_nav)[1:] == ['AA_Unit_01_Ground0', 'Quadruple', 'false'], arg_values(t_nav)
+    raven = [x for x in fleet if x['name'] == IF_RAVEN_ECM['ship']]
+    assert len(raven) == 1, 'no RAVEN in the fleet'
+    assert '"RE_SV_IFRavenPing"' in lua, 'Scripts/sv_fleet_capture.lua never fires RE_SV_IFRavenPing'
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_IFRavenPing')
+    g.execute(t_nav, 'RE_SV_IFRavenPing', {1: raven[0]['unit']})
+    # ((2026-11-18) A6, a co-op rejoiner's fleet: its copies spawn at the course's start while the host's may be 10 km on. Tried
+    # and dropped (0.74.186-0.74.191, autotests shipmove, shipprobe, fleetat, fleetvar): K2_SetActorLocation is undone (as hard
+    # rule 39); Mission 13's path teleport by distance and Mission 10's by point put every ship exactly there (the distance in
+    # metres from its path's first point, the point counted from 0, parts and the formation with it) but each then sails back
+    # to the point it was heading for, and its lane given again (any of args 7, 12, 14 changed) sends it to the lane's first
+    # point: worse than leaving it. What it would take: lanes starting further along, or the ships moved from the host's stream.
+    # Kept: the Lua's course (sv_fleet_round.lua IFCOOP.COURSE, checked here) and the host's "if|at|<m>" (logged on a joiner)
+    m = re.search(r'IFCOOP\.COURSE = \{([^}]*)\}', lua)              # (its course: the same as if_course's)
+    assert m, 'Scripts/sv_fleet_round.lua has no IFCOOP.COURSE'
+    kv = {k: float(v) for k, v in re.findall(r'(\w+) = (-?[\d.]+)', m.group(1))}
+    want = {'start_km': IF_START_KM, 'hold_km': IF_HOLD_KM, 'turn_km': IF_TURN_KM, 'leg_km': IF_LEG_KM, 'laps': IF_LAPS,
+            'lead_m': IF_LEAD_M, 'speed_kmh': float(IF_SPEED)}
+    assert kv == want and IF_STEP_KM == 2.0 and IF_ARC_DEG == 20.0, ('sv_fleet_round.lua IFCOOP.COURSE differs from the course', kv, want)
     print(f'  invincible fleet: {len(fleet)} ships (SV_IFUp<Key> / RE_SV_IFGo<Key>: each on its lane at {IF_SPEED} km/h, '
-          f'Normal; {parts // 2} parts ordered Normal / PlayerFirst), RE_SV_IFFleetRemove')
+          f'Normal; {parts // 2} parts ordered Normal / {IF_PART_PRIORITY}), RE_SV_IFFleetRemove')

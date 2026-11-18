@@ -414,6 +414,7 @@ function DOWN.nextView(why)
 end
 -- each pass while DOWN: the one watched still there, the view still on it
 local function spectateTick(now)
+    if (CINE and CINE.active and CINE.active()) or (IFSURF and IFSURF.state and IFSURF.state()) then return end   -- ((0.74.160) round 30's cinematics: watched, then back)
     local w, l = St.watch, nil
     if w then
         l = watchable()
@@ -484,6 +485,7 @@ end
 -- your plane out of the fight; what it had, for the way back
 local function outOfFight(pawn)
     local s, parts = { inputs = {}, attackers = {} }, {}
+    if ATK and ATK.hold then ATK.hold("down", true) end   -- ((0.74.168) sv_spweapons.lua's limits not put back meanwhile)
     pcall(function() pawn:SetIsInvincible(true) end)
     parts[#parts + 1] = pcall(function() pawn:SetActorHiddenInGame(true) end) and "hidden" or "hidden FAILED"
     parts[#parts + 1] = pcall(function() pawn:SetActorEnableCollision(false) end) and "no collision" or "collision FAILED"
@@ -515,6 +517,7 @@ end
 -- will lock their fcs"). Shazzy's revive of 13:00:17, down in the air with the gear up, fired at once.) Returns what
 -- arm() changed and whether DisableWeaponSystem(false) ran.
 local function backInFight(pawn, s)
+    if ATK and ATK.hold then ATK.hold("down", false) end
     if not liveObj(pawn) then return {}, false end
     pcall(function() pawn:SetActorHiddenInGame(false) end)
     pcall(function() pawn:SetActorEnableCollision(true) end)
@@ -607,6 +610,17 @@ end
 
 -- Back in the fight (revived, the run started over, a test): the loiter off, the plane as it was, the view yours,
 -- repaired (the stock repair and the health written), safe_s invincible, where the loiter left you or "native"
+-- ((0.74.164) DOWN on purpose: GEOFON's capture (sv_fleet_capture.lua) ends with its captive DOWN on the deck, revivable
+-- as any. Only in a co-op room, not DOWN already. -> true, or false and why
+function DOWN.capture(why)
+    if St.down then return false, "down already" end
+    local pawn = pawnOf()
+    if not (valid(pawn) and rc().enabled == true and inRoom()) then return false, "not in a co-op room (or DOWN off)" end
+    local okH, h = pcall(function() return pawn.HealthInternal end)
+    log("down: " .. tostring(why) .. ": DOWN now")
+    goDown(pawn, (okH and type(h) == "number") and h or 1)
+    return true
+end
 function DOWN.back(how, respawn)
     if not St.down then return end
     local pawn = pawnOf()
@@ -691,6 +705,7 @@ end
 -- the loiter off; on a new level, which a restart is too, the plane and view put back at the first pass with the level's
 -- player, restoreAfter): nothing down, no revives
 function DOWN.reset(why, newLevel)
+    if ATK and ATK.hold then ATK.hold("down", false) end   -- ((0.74.168) never left held past a reset)
     if St.down and newLevel then
         if why == "a new level" then
             St.restore = { addr = St.loiterAddr, saved = St.saved, home = St.home, watch = St.watch and St.watch.addr,
