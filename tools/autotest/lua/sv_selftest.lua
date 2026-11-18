@@ -4162,11 +4162,13 @@ SUITES.fleetat = function()
         ST.info(string.format("fleetat: GEOFON %.0f m along its lane before (alongNow)", m or -1))
         ST.check(m ~= nil and m < 1500, "alongNow near the start before", m)
     end)
-    for _, kk in ipairs({ 2, 8 }) do
-        local want = kk * 2000
+    for _, kk in ipairs({ 2, 15 }) do                    -- ((0.74.190) by point: point kk, 0 the lane's first)
+        local P = IFCOOP.coursePts()
+        local want = P[kk + 1][3]
         A.do_(function()
-            local r = SV_Event(string.format("RE_SV_IFAt_%02d", kk))
-            ST.info(string.format("fleetat: RE_SV_IFAt_%02d fired (%s): %d m", kk, tostring(r), want))
+            local r = SV_Event(string.format("RE_SV_IFPt_%02d", kk))
+            ST.info(string.format("fleetat: RE_SV_IFPt_%02d fired (%s): point %d is %.0f m along counted from 0, %.0f m from 1", kk, tostring(r),
+                kk, want, P[kk][3]))
             C.t0, C.prev = os.clock(), nil
             local o, sh = ship(1)
             C.part = nil
