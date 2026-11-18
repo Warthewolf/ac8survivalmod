@@ -4094,6 +4094,53 @@ SUITES.shipmove = function()
         function() return C.o and valid(C.o) and ST.at(C.o) end, 60)
 end
 
+-- ((0.74.187) A6: Mission 13's LiveAIPathTeleportByDistanceExecution on GEOFON (RE_SV_IFProbeNear: Set 3000, _Far: Set
+-- 300000): where it puts the hull (the distance's unit), and whether it sails on from there
+SUITES.shipprobe = function()
+    intoRun()
+    local C = {}
+    A.do_(function()
+        if not ST.check(IFLEET ~= nil, "the fleet is in this build") then return "abort" end
+        ST.marks.s0 = ST.n
+        ST.press("N")
+    end)
+    A.log_("fleet: up: GEOFON", 60, "s0", true, function(l) ST.check(l ~= nil, "GEOFON up", l) end)
+    A.wait(10)
+    local function hull()
+        local sh = IFLEET.cur and IFLEET.cur.ships and IFLEET.cur.ships[1]
+        return sh and sh.hull and valid(sh.hull.obj) and sh.hull.obj or nil
+    end
+    for _, ev in ipairs({ "RE_SV_IFProbeNear", "RE_SV_IFProbeFar" }) do
+        A.do_(function()
+            local o = hull()
+            if not ST.check(o ~= nil, "GEOFON's hull before " .. ev) then return end
+            C.o, C.a = o, ST.at(o)
+            C.yaw = o:K2_GetActorRotation().Yaw
+            local r = SV_Event(ev)
+            ST.info(string.format("shipprobe: %s fired (%s) at (%.0f, %.0f) m, heading %.0f", ev, tostring(r), C.a.X / 100, C.a.Y / 100, C.yaw))
+            C.t0 = os.clock()
+        end)
+        for _, t in ipairs({ 1, 4, 10 }) do
+            A.do_(function() C.waitTo = C.t0 + t end)
+            A.until_(function() return os.clock() >= C.waitTo end, t + 5)
+            A.do_(function()
+                local o = hull()
+                if not o then ST.info("shipprobe: no hull"); return end
+                local l = ST.at(o)
+                local dx, dy = (l.X - C.a.X) / 100, (l.Y - C.a.Y) / 100
+                local y = math.rad(C.yaw)
+                local along = dx * math.cos(y) + dy * math.sin(y)
+                local v = o:GetVelocity()
+                ST.info(string.format("shipprobe: %s +%d s: moved %.0f m (along its heading %+.0f m), heading now %.0f, %.0f km/h%s", ev, t,
+                    math.sqrt(dx * dx + dy * dy), along, o:K2_GetActorRotation().Yaw, math.sqrt(v.X * v.X + v.Y * v.Y) * 0.036,
+                    o ~= C.o and " (another object)" or ""))
+            end)
+        end
+        A.picture("shipprobe_" .. ev:sub(12), function() local o = hull(); return o and ST.off(ST.at(o), -40000, 30000, 15000) end,
+            function() local o = hull(); return o and ST.at(o) end, 60)
+    end
+end
+
 SUITES.geofondeck = function()
     intoRun()
     local C = {}
