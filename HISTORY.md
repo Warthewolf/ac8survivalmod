@@ -3982,3 +3982,4 @@ game. The work was split by file between agents; the builds ran in sequence in t
     7 s before a drop. cressendo's game bound every copy all session. Her game stalled 10 s+ and used 19.7 GB at the level's
     load; her crash at 14:08 (0.2 s after the fleet storm's layout swap, no crash report) unexplained. Proposed: the binds sent
     again at each link back.
+- 0.74.197 INSTALLED 2026-11-18 (the user: "install it"), the TESTER zip's stage over 0.74.195 (backup build/backup/install_before_0.74.197); 154 files verified, her survival.ini and enabled.txt kept.
