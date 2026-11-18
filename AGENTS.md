@@ -55,8 +55,9 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   particularly the Alicorn's Crew speeches, run them through a voice filter that makes them sound distorted and horrific",
   "Yeah you've got the go ahead", e.g. "Salvation is nigh!" and the crew's oath; "I want to hear each of your custom work on
   the voice lines before they go in"): the Alicorn crew's radio lines (Captain Torres and the Sub crew of AC7's DLC
-  missions ex01-ex03), distorted (tools/ac7_voice.py, tools/ac7_voice_fx.py), for THE TANACORN only, in the user's dev install
-  only (never a friends', Nexus or TESTER zip), and each line heard by the user before it goes in. No other AC7 voice line.
+  missions ex01-ex03), distorted (tools/ac7_voice.py, tools/ac7_voice_fx.py), for THE TANACORN only, and each line heard by
+  the user before it goes in. No other AC7 voice line. Where they go (user, 2026-11-18: "The AC7 lines that you created go in
+  also"): the dev install and every zip WITH THE TANACORN (TESTER=1 TANI=1, FRIENDS=1 TANI=1); never a Nexus zip or one without her.
 
 - No other mod's files, assets, tables, values or text go into Survival's build, mod/, tools/, this repo (docs and
   commit messages included) or a release zip, and nothing here names or credits another mod as the source of an enemy
@@ -94,7 +95,10 @@ A round-based survival mode mod for Ace Combat 8 (PC).
   One exception, the TESTER zip (user, 2026-11-12: "nah nah add the tanacorn and the fleet"): `TESTER=1 TANI=1
   package_release.sh` on a TANI=1 build keeps her container, the Tanicorn world data, sv_tanicorn / sv_fleet whole and the
   DEV ONLY blocks (the rise director sv_cine still cut), only when the staged container holds every blueprint the world
-  data names; the zip is named ..._TANACORN. TANI=1 is refused without TESTER=1: never in a friends' or Nexus zip.
+  data names; the zip is named ..._TANACORN. Everyone plays round 30 (user, 2026-11-18: "Everyone gets the invincible fleet
+  level", "But only alyssa has the keys that activate it for everyone"): `FRIENDS=1 TANI=1 package_release.sh` makes the
+  friends' ..._TANACORN zip from the same TANI=1 build as hers, staged as a tester's with its test keys off
+  (tools/no_test_keys.py); same build, same version, so they link in co-op. TANI=1 needs TESTER=1 or FRIENDS=1: never a Nexus zip.
 - DISTANT THUNDER's round is retired (user, 2026-11-18: "It was replaced by Invincible Fleet instead"): its round and test
   keys are cut; only its storm pieces stay, for the fleet's night storm (docs/re/THUNDER.md).
 - Nothing of DISTANT THUNDER (the lightning Anomaly, docs/re/THUNDER.md) or THE TANACORN (and her INVINCIBLE FLEET) goes

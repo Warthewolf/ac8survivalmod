@@ -47,9 +47,16 @@ fi
 # and the fleet (her container, the Tanicorn world data, sv_tanicorn / sv_fleet whole and the DEV ONLY blocks; the rise
 # director still cut); named ..._TANACORN. Only with TESTER=1, and only on a TANI=1 build whose container holds every
 # blueprint its world data imports (the weapons reviews of 2026-11-12). Never a friends' or Nexus zip.
+# ((2026-11-18) the user: "Everyone gets the invincible fleet level", "But only alyssa has the keys that activate it for
+# everyone", "The AC7 lines that you created go in also") FRIENDS=1 TANI=1: the friends' zip WITH THE TANACORN and the fleet,
+# staged as a tester's and its test keys then switched off (tools/no_test_keys.py); named ..._TANACORN without _TESTER.
+# Packed from the same TANI=1 build as the tester's, it has the same version: the two link in co-op. Never a Nexus zip:
+# TANI=1 still needs TESTER=1 or FRIENDS=1, never both.
 TANIZIP=
+[ "$FRIENDS" = 1 ] && [ "$TANI" != 1 ] && { echo "package_release.sh: FRIENDS=1 only with TANI=1 (the friends' zip with THE TANACORN)"; exit 1; }
+[ "$FRIENDS" = 1 ] && [ "$TESTER" = 1 ] && { echo "package_release.sh: FRIENDS=1 or TESTER=1, not both"; exit 1; }
 if [ "$TANI" = 1 ]; then
-    [ "$TESTER" = 1 ] || { echo "package_release.sh: TANI=1 only with TESTER=1 (a friends' or Nexus zip never carries THE TANACORN)"; exit 1; }
+    [ "$TESTER" = 1 ] || [ "$FRIENDS" = 1 ] || { echo "package_release.sh: TANI=1 only with TESTER=1 or FRIENDS=1 (a Nexus zip never carries THE TANACORN)"; exit 1; }
     [ -f build/install/tani_wd.txt ] || { echo "package_release.sh: TANI=1 needs a TANI=1 build (ZFA=1 TANI=1 sh tools/build_all.sh)"; exit 1; }
     tc=build/install/SurvivalMode/SurvivalMode_Tani_P.utoc
     [ -f "$tc" ] || { echo "package_release.sh: TANI=1: no Tanicorn container staged ($tc)"; exit 1; }
@@ -92,20 +99,28 @@ fi
 # ((2026-11-17) tools/stormfx: the storms' own cloud flash, the fleet's and the Thunder Anomaly's: the user's dev install
 # only, never in any zip made here, a TESTER one included)
 rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Storm*_P.*
-# ((2026-11-17) THE TANACORN's crew voices: AC7's Alicorn crew, distorted, the user's dev install only (AGENTS.md's AC7 voice
-# exception): never in any zip made here, a TESTER TANACORN one included)
-rm -rf "$mod/Sounds/tanacorn"
-rm -f "$mod/config/subtitles_dev.ini"                  # ((2026-11-18) round 30's subtitles: the user's dev install only)
+# ((2026-11-17) THE TANACORN's crew voices: AC7's Alicorn crew, distorted (AGENTS.md's AC7 voice exception), and round 30's
+# subtitles: only in a zip WITH THE TANACORN (the user, 2026-11-18: "The AC7 lines that you created go in also"), never in
+# any other zip made here
+if [ "$TANIZIP" != 1 ]; then
+    rm -rf "$mod/Sounds/tanacorn"
+    rm -f "$mod/config/subtitles_dev.ini"
+fi
 # TESTER=1: a tester's build (user, 2026-11-03: "give me a tester version for alyssa"): the test keys (force a special,
 # zollars, ...) and the diagnostic loggers KEPT, everything else as the friends' zip; named ..._<version>_TESTER_...
 # Only for the tester the user names: every other zip strips them (user, 2026-10-23: test keys out of releases).
-if [ "$TESTER" = 1 ]; then
+if [ "$TESTER" = 1 ] || [ "$FRIENDS" = 1 ]; then
     # ((2026-11-12, the review of the fleet's first build, finding 2) but round 30's INVINCIBLE FLEET and THE TANICORN, the
     # user's dev install only (AGENTS.md): their parts sv_fleet / sv_tanicorn / sv_cine cut to their headers, as a release
     # has them (tools/dev_only.py; their units and rows are in every build, spawned by nothing then). Until then a TESTER
     # zip kept them whole: Ctrl+N would have spawned the whole fleet in a tester's game.)
     python -X utf8 -I tools/dev_only.py ${TANIZIP:+--keep-tani} "$mod" || exit 1
+    if [ "$FRIENDS" = 1 ]; then
+        python -X utf8 -I tools/no_test_keys.py "$mod" || exit 1
+        echo "FRIENDS=1: round 30 and the diagnostic loggers kept, the test keys off ($(grep -c 'TEST ONLY BEGIN' "$mod"/Scripts/*.lua | awk -F: '{s+=$2} END {print s}') test blocks)"
+    else
     echo "TESTER=1: test keys and the diagnostic loggers kept ($(grep -c 'TEST ONLY BEGIN' "$mod"/Scripts/*.lua | awk -F: '{s+=$2} END {print s}') test blocks)"
+    fi
     # (DEV ONLY blocks: the user's dev install only, never in a TESTER zip either: THE TANICORN's test, the fleet; user, 2026-11-11;
     # kept with TANI=1: they hold only THE TANICORN's and the fleet's setup, user 2026-11-12)
     if [ "$TANIZIP" = 1 ]; then echo "TANI=1: DEV ONLY blocks kept (THE TANICORN, the fleet)"
