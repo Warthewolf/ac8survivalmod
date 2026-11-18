@@ -4023,7 +4023,13 @@ SUITES.capture = function()
             string.format("invincible %s, faction %s, pursuers %s", tostring(inv), tostring(fa), tostring(mp)))
         ST.apOff = nil
         ST.shot("capture_deck")
-        ST.check(ST.findLog("death: round", ST.marks.c1, true) == nil, "never shot down or crashed while RAVEN flew it")
+        -- ((0.74.193) up to the capture's end only: the solo test gives your plane back over the fleet, whose guns may down
+        -- it after (0.74.193's run: shot down 9 s after the trap, the touchdown pictures holding this check 10 s)
+        local _, di = ST.findLog("death: round", ST.marks.c1, true)
+        local _, ei = ST.findLog("captured on GEOFON", ST.marks.c1, true)
+        if not ei then _, ei = ST.findLog("given back", ST.marks.c1, true) end
+        ST.check(di == nil or (ei ~= nil and di > ei), "never shot down or crashed while RAVEN flew it",
+            di and string.format("a death at log line %d, the capture's end at %s", di, tostring(ei)) or nil)
     end)
     A.log_("capture: seq %d+: at the gate", 5, "c1", false, function(l) ST.check(l ~= nil, "at GEOFON's gate", l) end)
     A.log_("capture: seq %d+: trapped on GEOFON's deck", 5, "c1", false, function(l) ST.check(l ~= nil, "trapped on GEOFON's deck", l) end)
