@@ -106,6 +106,23 @@ if [ "$TANIZIP" != 1 ]; then
     rm -rf "$mod/Sounds/tanacorn"
     rm -f "$mod/config/subtitles_dev.ini"
 fi
+# ((2026-11-18) the user: "Make sure that the lines are the Option C we picked") a zip with her carries only the crew styles
+# round 30 plays (sv_fleet_round.lua CREW's styles: C, the echoey take she called perfect); the others the build stages for
+# the dev install (A, B) stay out
+if [ "$TANIZIP" = 1 ] && [ -d "$mod/Sounds/tanacorn" ]; then
+    python -I -c "
+import os, re, sys
+d, lua = sys.argv[1], open(sys.argv[2], encoding='utf-8').read()
+m = re.search(r'styles = \{([^}]*)\}', lua)
+keep = re.findall(r'\"(\w)\"', m.group(1)) if m else []
+if not keep: sys.exit('package_release.sh: no crew styles in sv_fleet_round.lua: voices not filtered')
+gone = [f for f in os.listdir(d) if f.split('_', 1)[0] not in keep]
+for f in gone: os.remove(os.path.join(d, f))
+left = os.listdir(d)
+if not left: sys.exit('package_release.sh: no crew voice of style ' + '/'.join(keep) + ' staged')
+print('crew voices: style ' + '/'.join(keep) + ' only (' + str(len(left)) + ' lines; ' + str(len(gone)) + ' of other styles out)')
+" "$mod/Sounds/tanacorn" "$mod/Scripts/sv_fleet_round.lua" || exit 1
+fi
 # TESTER=1: a tester's build (user, 2026-11-03: "give me a tester version for alyssa"): the test keys (force a special,
 # zollars, ...) and the diagnostic loggers KEPT, everything else as the friends' zip; named ..._<version>_TESTER_...
 # Only for the tester the user names: every other zip strips them (user, 2026-10-23: test keys out of releases).

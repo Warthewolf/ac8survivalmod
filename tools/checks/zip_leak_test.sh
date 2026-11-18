@@ -33,6 +33,7 @@ cp "$F/build/install/AC8SurvivalMode/dlls/main.dll" "$F/build/runtime/main.dll"
 # ((2026-11-17) a made-up crew voice, as a TANI=1 build stages them, and round 30's subtitles: only a zip WITH THE TANACORN
 # carries them (the user, 2026-11-18: "The AC7 lines that you created go in also"), no other
 mkdir -p "$F/build/install/AC8SurvivalMode/Sounds/tanacorn" && echo "made-up voice" > "$F/build/install/AC8SurvivalMode/Sounds/tanacorn/A_v6157_6001_alt1.wav"
+echo "made-up voice" > "$F/build/install/AC8SurvivalMode/Sounds/tanacorn/C_v6157_6001_alt1.wav"   # (the style round 30 plays)
 mkdir -p "$F/build/install/AC8SurvivalMode/config" && printf '[specials.fleet.radio.warn]
 CTRL|made up
 ' > "$F/build/install/AC8SurvivalMode/config/subtitles_dev.ini"   # ((2026-11-18) round 30's subtitles: never zipped)
@@ -64,6 +65,12 @@ sys.exit(1 if bad else 0)" "$1"; }
 novoice() { python -I -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(1 if any('/Sounds/tanacorn/' in x for x in n) else 0)" "$1"; }
 # nodevsubs <zip>: 0 when the zip has no config/subtitles_dev.ini (round 30's subtitles: the user's dev install only)
 nodevsubs() { python -I -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(1 if any(x.endswith('subtitles_dev.ini') for x in n) else 0)" "$1"; }
+# onlyc <zip>: 0 when the zip's crew voices are all style C (the user, 2026-11-18: "Make sure that the lines are the Option C
+# we picked"; sv_fleet_round.lua CREW's styles)
+onlyc() { python -I -c "
+import sys, zipfile
+v = [x.rsplit('/', 1)[1] for x in zipfile.ZipFile(sys.argv[1]).namelist() if '/Sounds/tanacorn/' in x and not x.endswith('/')]
+sys.exit(0 if v and all(x.startswith('C_') for x in v) else 1)" "$1"; }
 # keysoff <zip>: 0 when the zip's test keys are off (tools/no_test_keys.py: sv_main.lua's test keys' block gone, testKey()
 # returning before it binds)
 keysoff() { python -I -c "
@@ -141,6 +148,8 @@ if [ -n "$z" ]; then
     check $r "TESTER=1 TANI=1: her container and Survival's own in it"
     novoice "$z" && r=1 || r=0
     check $r "TESTER=1 TANI=1: THE TANACORN's crew voices in it (the user, 2026-11-18)"
+    onlyc "$z" && r=0 || r=1
+    check $r "TESTER=1 TANI=1: style C only (the take she picked)"
     nodevsubs "$z" && r=1 || r=0
     check $r "TESTER=1 TANI=1: round 30's subtitles in it"
     keysoff "$z" && r=1 || r=0
@@ -161,6 +170,8 @@ if [ -n "$z" ]; then
     check $r "FRIENDS=1 TANI=1: her container and Survival's own in it"
     novoice "$z" && r=1 || r=0
     check $r "FRIENDS=1 TANI=1: THE TANACORN's crew voices in it"
+    onlyc "$z" && r=0 || r=1
+    check $r "FRIENDS=1 TANI=1: style C only (the take she picked)"
     nodevsubs "$z" && r=1 || r=0
     check $r "FRIENDS=1 TANI=1: round 30's subtitles in it"
     keysoff "$z" && r=0 || r=1
