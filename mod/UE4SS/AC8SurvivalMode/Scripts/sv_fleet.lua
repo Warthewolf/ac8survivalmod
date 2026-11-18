@@ -120,7 +120,7 @@ CFG.specials.fleet = {
     -- waits for ships still up from before to go after RE_SV_IFFleetRemove (the Spaceport's CLEAR_S). course_yaw, runway_cm:
     -- the course in and the runway's centre (survival_events_fleet.py IF_YAW, IF_RUNWAY), for the lines
     formation = { per_step = 3, gap_s = 0.5, settle_s = 2, go_s = 15, moved_m = 50, every_s = 10, guns_s = 2, clear_s = 8,
-                  course_yaw = 45, runway_cm = { 1610476, -436143 }, hull_x = 2, hull_per_player = 0.25 },   -- (hull_x: each hull's health x, +per player past 1)
+                  course_yaw = 45, runway_cm = { 1610476, -436143 }, hull_x = 1, hull_per_player = 0.25 },   -- (hull_x: each hull's health x, +per player past 1; (2026-11-18) the user: "make it so the geofon would last 3 minutes": 89 s at x1 with 5 players, so x2 at 5)
     -- ((0.74.140) WP8: every fleet ship scarred from its spawn (sv_fleet_round.lua scarsTick): its slots on dimmed copies of their
     -- own _DAM instances, per_tick components a tick; embers: their glow x this (a look only: never ranked against)
     scars = { enabled = true, per_tick = 1, embers = 0.05 },   -- ((0.74.152) 1: the game's own work, ~45 ms a part at worst (run 20261117_203608: the walks 0.0 ms, the sets 134 ms for 3))
