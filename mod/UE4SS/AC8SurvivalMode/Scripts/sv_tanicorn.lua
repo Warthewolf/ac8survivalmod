@@ -1561,6 +1561,14 @@ local function sinkTick(W, now)
         local okD, how = false, "a joiner's copy: the host's"
         if not W.joiner then okD, how = TANI.liveDown(S.why .. ": under") end
         pcall(function() S.mesh:SetVisibility(false, true) end)
+        if W.joiner and W.o and same(W) then                -- ((2026-11-18) a friend: "after being destroyed it still appears on iff":
+            for f0, v in pairs({ bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true }) do   -- the copy waits
+                pcall(function() W.o[f0] = v end)          -- for the host's kill (co-op's): off the HUD, the radar and lock-on here
+            end
+            pcall(function() W.o:SetActorHiddenInGame(true) end)
+            pcall(function() W.o:SetActorEnableCollision(false) end)
+            how = how .. "; off the HUD, the radar and lock-on here, hidden"
+        end
         log(string.format("tanicorn: sink over at +%.0f s: %d of %d explosions came up; her hull %s; hidden", now - S.t0, S.ok, S.of,
             okD and ("down (" .. tostring(how) .. ")") or "NOT finished off"))
     end
