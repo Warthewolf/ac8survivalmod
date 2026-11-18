@@ -3939,3 +3939,9 @@ game. The work was split by file between agents; the builds ran in sequence in t
   - Kept: IFCOOP.COURSE / coursePts / alongOf / alongNow (GEOFON's metres along its lane; the generator checks the course's
     numbers, the projection read back 10 points of the Python course exactly, laps included) and the host's "if|at|<m>" to a
     rejoiner, which logs how far its own copy is behind ("co-op: the fleet here ... km behind").
+- 0.74.193 (2026-11-18): the capture's health floor (the user: "They can't die until they land on the geofon"). 0.74.192's
+  autotest plane was shelled to death by the fleet's guns in its 4 s lock, before the takeover's shield. From the lock's start
+  to the trap a floor of floor_hp (1 HP) holds under your health (hits still hurt in the lock; you can't die), through
+  sv_tactical.lua's new INS.floors (other parts' floors by name, the highest held); INS.tick now writes a floor back to 0 once
+  it's off (before, a pass with no floor returned first and would have left the last one on). capture_test 68/68; in game run
+  20261118_120809: 16/16, the floor on at the lock and off at the trap, a touchdown (seven landings of seven).
