@@ -142,7 +142,7 @@ IF_TURN_KM, IF_LEG_KM, IF_LAPS = 2.0, 8.0, 2
 IF_STEP_KM, IF_ARC_DEG = 2.0, 20.0
 IF_SPEED = '45.0'                                # km/h, every ship (the path record's speed)
 IF_LEAD_M = 500.0
-IF_AT_STEP_KM, IF_AT_STEPS = 2.0, 20                # (2026-11-18) a rejoiner's catch-up: RE_SV_IFAt_00-20, 0-40 km along
+IF_AT_POINTS = 35                                   # (2026-11-18) a rejoiner's catch-up: RE_SV_IFPt_00-35, its lane's points to ~40 km
 IF_PART_PRIORITY = 'PlayerOnlyNoLimit'   # (2026-11-16) each part's order: PlayerFirst shelled the runway's target points; the
                                          # airfield's shelling is WP13's, from the gun line
 IF_AREA_M, IF_ALT_M = SP_SHIP_AREA_M, SP_SHIP_ALT_M   # each unit's area (45 km: the whole course and the airfield)
@@ -320,23 +320,25 @@ def build_fleet(g, flag, stock_ep):
     # path's first point}: the probe of 0.74.187 moved GEOFON to 3006 m for Set 3000). As Mission 10's restart: its path
     # given first, then the teleport, on one event. RE_SV_IFAt_<kk>: every ship to kk * IF_AT_STEP_KM along its lane (they
     # all have its length); sv_fleet_round.lua fires the step nearest the host's GEOFON for a rejoiner
-    m13 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission013', 'EP_Mission013_global.uasset')
-    t_ptel = g.foreign_template(m13, 'LiveAIPathTeleportByDistanceExecution', 'Debug_LCAC_SpeedUP')
-    assert arg_values(t_ptel)[1:3] == ['NoneSelect', 'Set'], arg_values(t_ptel)
-    assert '"RE_SV_IFAt_%02d"' in lua, 'Scripts/sv_fleet_round.lua never fires RE_SV_IFAt_<kk>'
+    # ((0.74.190) by point instead (Mission 10's LiveAIPathTeleportByPointExecution {0 object, 1 unit, 2 the point}, alone as
+    # Mission 19's): by distance put every ship there but it sailed back to its lane's start (fleetat of 0.74.189: the path
+    # given again resets its next point, and without it the probe of 0.74.187 turned back too). RE_SV_IFPt_<ii>: every ship
+    # to its lane's point ii (its lane's points are the course's, one for one)
+    m10 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission010', 'EP_Mission010_global.uasset')
+    t_ptel = g.foreign_template(m10, 'LiveAIPathTeleportByPointExecution', 'Debug_SkipPhase_2')
+    assert arg_values(t_ptel)[1:] == ['NoneSelect', '2'], arg_values(t_ptel)
+    assert '"RE_SV_IFPt_%02d"' in lua, 'Scripts/sv_fleet_round.lua never fires RE_SV_IFPt_<ii>'
     m = re.search(r'IFCOOP\.COURSE = \{([^}]*)\}', lua)              # (its course: the same as if_course's)
     assert m, 'Scripts/sv_fleet_round.lua has no IFCOOP.COURSE'
     kv = {k: float(v) for k, v in re.findall(r'(\w+) = (-?[\d.]+)', m.group(1))}
     want = {'start_km': IF_START_KM, 'hold_km': IF_HOLD_KM, 'turn_km': IF_TURN_KM, 'leg_km': IF_LEG_KM, 'laps': IF_LAPS,
-            'lead_m': IF_LEAD_M, 'speed_kmh': float(IF_SPEED), 'at_step_km': IF_AT_STEP_KM, 'at_steps': IF_AT_STEPS}
+            'lead_m': IF_LEAD_M, 'speed_kmh': float(IF_SPEED), 'pt_max': IF_AT_POINTS}
     assert kv == want and IF_STEP_KM == 2.0 and IF_ARC_DEG == 20.0, ('sv_fleet_round.lua IFCOOP.COURSE differs from the course', kv, want)
-    for kk in range(IF_AT_STEPS + 1):
-        ev = f'RE_SV_IFAt_{kk:02d}'
+    assert all(len(s_['lane']) == len(if_course()) for s_ in fleet) and IF_AT_POINTS < len(if_course())
+    for ii in range(IF_AT_POINTS + 1):
+        ev = f'RE_SV_IFPt_{ii:02d}'
         g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        for s_ in fleet:
-            # ((0.74.189) the object form, Mission 13's: the unit form moved nothing (autotest fleetat of 0.74.188: GEOFON
-            # stayed at its lane's start, only the path taken), the probe's object form moved it
-            g.execute(t_spath, ev, {0: s_['obj'], 2: s_['path'], 4: IF_SPEED})
-            g.execute(t_ptel, ev, {0: s_['obj'], 3: f'{kk * IF_AT_STEP_KM * 1000:.1f}'})
+        for s_ in fleet:                                 # ((0.74.189) the object form: the unit form moved nothing)
+            g.execute(t_ptel, ev, {0: s_['obj'], 2: str(ii)})
     print(f'  invincible fleet: {len(fleet)} ships (SV_IFUp<Key> / RE_SV_IFGo<Key>: each on its lane at {IF_SPEED} km/h, '
           f'Normal; {parts // 2} parts ordered Normal / {IF_PART_PRIORITY}), RE_SV_IFFleetRemove')
