@@ -4143,6 +4143,43 @@ end
 
 -- ((0.74.188) A6: the rejoiner's catch-up RE_SV_IFAt_<kk> (every ship's lane path again, then Mission 13's path teleport by
 -- distance to kk * 2 km): GEOFON there, sailing on forward along its lane, its parts with it, the formation's next ship too
+-- ((0.74.191) A6 probe: RE_SV_IFVar<A-D> (GEOFON to point 2, then its lane again with one path arg changed): which one sails on
+SUITES.fleetvar = function()
+    intoRun()
+    local C = {}
+    A.do_(function()
+        if not ST.check(IFLEET ~= nil and IFCOOP and IFCOOP.alongOf, "the fleet is in this build") then return "abort" end
+        ST.marks.s0 = ST.n
+        ST.press("N")
+    end)
+    A.log_("fleet: up: GEOFON", 60, "s0", true, function(l) ST.check(l ~= nil, "GEOFON up", l) end)
+    A.wait(10)
+    local function geo() local sh = IFLEET.cur and IFLEET.cur.ships and IFLEET.cur.ships[1]; return sh and sh.hull and valid(sh.hull.obj) and sh.hull.obj or nil end
+    for _, tag in ipairs({ "A", "B", "C", "D" }) do
+        A.do_(function()
+            local r = SV_Event("RE_SV_IFVar" .. tag)
+            C.t0, C.m = os.clock(), {}
+            ST.info(string.format("fleetvar: %s fired (%s)", tag, tostring(r)))
+        end)
+        for _, t in ipairs({ 3, 9, 18 }) do
+            A.do_(function() C.waitTo = C.t0 + t end)
+            A.until_(function() return os.clock() >= C.waitTo end, t + 5)
+            A.do_(function()
+                local o = geo()
+                if not o then return end
+                local l = ST.at(o)
+                local m = IFCOOP.alongOf(l.X, l.Y, 4000)
+                C.m[t] = m
+                ST.info(string.format("fleetvar: %s +%d s: %s m along, heading %.0f", tag, t, m and string.format("%.0f", m) or "off", o:K2_GetActorRotation().Yaw))
+                if t == 18 then
+                    local fwd = C.m[3] and m and m > C.m[3] + 50
+                    ST.info(string.format("fleetvar: %s %s", tag, fwd and "SAILS ON FORWARD" or "back or stopped"))
+                end
+            end)
+        end
+    end
+end
+
 SUITES.fleetat = function()
     intoRun()
     local C = {}
