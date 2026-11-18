@@ -509,6 +509,12 @@ TANI.partMesh, TANI.aim = partMesh, aim                   -- ((stage 4) sv_tanic
 -- (0.74.61) and the other mounts' weapons as they're made: the T16's artillery shells (LiveArtillery, a shell in flight, not
 -- attached: its start comes from its place and velocity) and the CIWS / LASER's gun (BP_wp_ciws_vessel, a
 -- LiveAttachedInterceptorWeapon: it hangs where the flak gun does, its socket the line to read)
+-- ((2026-11-18) off unless TANI.shell_probe: a friend's co-op host of 0.74.195 crashed (access violation reading
+-- 0xffffffffffffffff, round 27, no Tanacorn up) 6 s after this probe's 12th stock flak shell, the allied Aegis they bought
+-- firing its Mk 45; 0.74.160's autotest crashed at the 12th stock shell too. A debug probe of 0.74.55-0.74.61 (her mounts'
+-- muzzles) that kept every flak shell, artillery round and point-defence gun the game made, all session, and read them a tick
+-- later: shells live a second or two and the game reuses their addresses. Off, the hooks keep and read nothing)
+TANI.shell_probe = false
 local NEWSHELL = {}
 local SHELL_CLASSES = { "/Script/Live.LiveFlakGun", "/Script/Live.LiveArtillery", "/Script/Live.LiveAttachedInterceptorWeapon",
                         "/Script/Live.LiveEMLBullet_BattleShip" }   -- ((stage 4) the railguns' BP_wp_emls_alcn rounds)
@@ -518,7 +524,7 @@ if type(NotifyOnNewObject) == "function" then
         pcall(NotifyOnNewObject, c, function(o)
             -- ((0.74.161) its name kept: a shell freed before it's read and its address used again is another object (hard
             -- rule 59): 0.74.160's autotest phase2 crashed reading one, 23:01:28 of run 20261117_225914, the 12th stock shell)
-            if #NEWSHELL < 32 then NEWSHELL[#NEWSHELL + 1] = { o = o, t = os.clock(), c = short, name = nameOf(o) } end
+            if TANI.shell_probe and #NEWSHELL < 32 then NEWSHELL[#NEWSHELL + 1] = { o = o, t = os.clock(), c = short, name = nameOf(o) } end
         end)
     end
 end
@@ -562,6 +568,7 @@ end
 -- (0.74.61) each of our shells against the mount that made it (its owner; 0.74.55-0.74.60's the first T5 found), the first 12
 -- of each mount type a spawn: `tanicorn: <T5|T16|CIWS|LASER> shell N: ...`
 local function shells(now)
+    if not TANI.shell_probe then NEWSHELL = {}; return end
     if #NEWSHELL == 0 then return end
     local list = NEWSHELL
     NEWSHELL = {}
