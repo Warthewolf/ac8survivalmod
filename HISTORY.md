@@ -3923,3 +3923,19 @@ game. The work was split by file between agents; the builds ran in sequence in t
   host never holds a capture its captive's game ended unheard (the player gone, or not DOWN in give_up_s + 60 s: ended, picks
   go on); the runtime's capture off at a level drop; a rest of every_s / 2 after any end. In game, run 20261118_110438: 16/16,
   the static and the ping, a touchdown (five landings of five).
+- 0.74.187-0.74.192 (2026-11-18): round 30 co-op, A6 (a rejoiner's fleet), and three fixes lua_check had been warning about
+  (its warnings were hidden under the last line I read).
+  - Fixed: IFCOOP.syncTo read the round's state R outside the block that declares it (a nil global), so a rejoiner was never
+    sent GEOFON's or her state (watch, break, split, hide, core, sink): now through IFROUND.state(). The airfield shelling's
+    STORE hold read sv_fleet.lua's local OFF (nil there: the shelling never held in the STORE): now IFLEET.inStore. The
+    capture's host words take whole numbers only (coop_guard_test's 1.5 raised in a log line's %d).
+  - A6 tried and dropped: a rejoiner's fleet copies spawn at the course's start (the host's may be 10 km on). Lua can't move a
+    ship (autotest shipmove: K2_SetActorLocation undone, as hard rule 39). Mission 13's LiveAIPathTeleportByDistanceExecution
+    (metres from the path's first point) and Mission 10's LiveAIPathTeleportByPointExecution (counted from 0), object form
+    only (the unit form moved nothing), put every ship exactly there, parts and formation with it (fleetat of 0.74.189-190),
+    but each then sails back to the point it was heading for; its lane given again (also with the path record's args 7, 12
+    or 14 changed: fleetvar of 0.74.191) sends it to the lane's first point. Worse than leaving it, so out. What it would
+    take: lanes starting further along (path descs), or ships moved from the host's stream (native).
+  - Kept: IFCOOP.COURSE / coursePts / alongOf / alongNow (GEOFON's metres along its lane; the generator checks the course's
+    numbers, the projection read back 10 points of the Python course exactly, laps included) and the host's "if|at|<m>" to a
+    rejoiner, which logs how far its own copy is behind ("co-op: the fleet here ... km behind").
