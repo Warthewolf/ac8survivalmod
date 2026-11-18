@@ -63,68 +63,8 @@ local function myPlane()
     if ok and p ~= nil and liveObj(p) then return p end
     return nil
 end
-local function motion(p)                                 -- km/h and pitch (degrees), or nil
-    if not p then return nil, nil end
-    local okV, v = pcall(function() local x = p:GetVelocity(); return { X = x.X, Y = x.Y, Z = x.Z } end)
-    local okR, r = pcall(function() return p:K2_GetActorRotation().Pitch end)
-    local kmh = okV and v and math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z) * 0.036 or nil
-    return kmh, okR and type(r) == "number" and r or nil
-end
 
-local function hookHud()
-    if THUNDER.hooked ~= nil then return THUNDER.hooked end
-    THUNDER.hooked = false
-    if type(RegisterHook) ~= "function" then log("thunder: no RegisterHook: the HUD's lightning calls aren't watched"); return false end
-    local h = THUNDER.hook
-    local okB, errB = pcall(RegisterHook, "/Script/Live.LiveHUD:BeginHUDDistortionLightning", function(_, t)
-        h.n, h.at = h.n + 1, os.clock()
-        local okT, v = pcall(function() return t:get() end)
-        h.recover = okT and v or nil
-    end)
-    local okE, errE = pcall(RegisterHook, "/Script/Live.LiveHUD:EndHUDDistortionLightning", function()
-        h.ends, h.endAt = h.ends + 1, os.clock()
-    end)
-    THUNDER.hooked = okB or okE
-    log(string.format("thunder: the HUD's BeginHUDDistortionLightning %s, EndHUDDistortionLightning %s (a strike calls them from "
-        .. "C++: a hook sees only calls through ProcessEvent)", okB and "hooked" or ("NOT hooked: " .. tostring(errB)),
-        okE and "hooked" or ("NOT hooked: " .. tostring(errE))))
-    return THUNDER.hooked
-end
 
----------------------------------------------------------------------------------------------------- the storm
-local function stormClass()
-    local c = cfg().storm
-    if THUNDER.cls ~= nil and liveObj(THUNDER.cls) then return THUNDER.cls end
-    local o, why = loadObject(c.class)
-    THUNDER.cls = o
-    return o, why
-end
--- (the volume's strike chance curves, CUR_LightningWeight: the game instance's soft reference; loaded and kept, so the
--- observer finds MS_12, else it falls back on count % a roll)
-local function curveTable()
-    if THUNDER.curves ~= nil then return THUNDER.curves end
-    local o, why = loadObject(cfg().storm.curve_table)
-    THUNDER.curves = o ~= nil and valid(o) or false
-    if o ~= nil and valid(o) then pcall(pin, o, "CUR_LightningWeight") end
-    log("thunder: the strike chance curves (CUR_LightningWeight) " .. (THUNDER.curves and "loaded" or ("NOT loaded: " .. tostring(why))))
-    return THUNDER.curves
-end
-local function shakeMgr(st)
-    if THUNDER.mgr ~= nil and liveObj(THUNDER.mgr) then return THUNDER.mgr end    -- (kept between storms while it's live)
-    THUNDER.mgr = nil
-    if os.clock() < (st.mgrAt or 0) or (st.mgrTries or 0) >= 3 then return nil end      -- (a walk: 3 at most a storm)
-    if walkHold and walkHold() then return nil end
-    st.mgrAt, st.mgrTries = os.clock() + 10, (st.mgrTries or 0) + 1
-    for _, cn in ipairs({ "LiveCameraShakeManager", "BP_CameraShakeManager_C" }) do   -- (the class, else its blueprint's)
-        for _, o in ipairs(THUNDER.mgr == nil and FindAllOf(cn) or {}) do
-            if THUNDER.mgr == nil and liveObj(o) and not nameOf(o):find("Default__", 1, true) then THUNDER.mgr = o end
-        end
-    end
-    local m = THUNDER.mgr
-    say("mgr" .. (m and "1" or "0"), "thunder: the camera shake manager " .. (m and ("found (" .. nameOf(m) .. "): a "
-        .. "lightning shake in its ActiveShakeList counts as a strike") or "NOT found (looked for 3 times a storm, 10 s apart)"))
-    return m
-end
 -- the lightning shakes playing (how many, the first one's name), nil when the list can't be read
 local function shakes(mgr)
     local n, name = 0, nil
@@ -146,207 +86,7 @@ local function hudOf()
     if ok and h ~= nil and liveObj(h) then return h end
     return nil
 end
--- what Lua can see of a strike now: the volume's flash (its point light), a lightning camera shake, the HUD widget
-local function sense(st)
-    local s = {}
-    local okL, pl = pcall(function() return st.vol.LightningPointLight end)
-    if okL and pl ~= nil and liveObj(pl) then s.flash = num(pl, "Intensity") end
-    local mgr = shakeMgr(st)
-    if mgr then s.shake, s.shakeName = shakes(mgr) end
-    local hud = hudOf()
-    if hud then
-        local okW, w = pcall(function() return hud.HudWidget end)
-        if okW and w ~= nil and liveObj(w) then
-            local okV, v = pcall(function() return w:GetVisibility() end)
-            local okO, op = pcall(function() return w:GetRenderOpacity() end)
-            s.vis = okV and v or nil
-            s.op = (okO and type(op) == "number") and op or nil
-        end
-        local okS, sh = pcall(function() return hud.bShowHUD end)
-        if okS and type(sh) == "boolean" then s.show = sh end
-    end
-    return s
-end
--- the AI planes inside storm st: { addr = health } and how many
-local function aiInside(st)
-    local out, n = {}, 0
-    local at = st.center
-    if not at then return out, 0 end
-    for _, q in ipairs(planes) do
-        if not q.down and liveObj(q.obj) then
-            local l = where(q.obj)
-            if l and km(l, at) * 100000 <= st.radius then
-                local a = addrOf(q.obj)
-                if a then out[a], n = { h = num(q.obj, "HealthInternal"), name = q.name or nameOf(q.obj) }, n + 1 end
-            end
-        end
-    end
-    return out, n
-end
--- A strike seen (any of the signals coming on), logged with your health, speed and pitch and the AI planes inside, and
--- FOLLOW_S later what changed (the stall flag's upset: your speed and pitch; your health must not move; an AI plane's
--- health that moved). label: the log's ("storm test", "thunder")
-local function watch(st, now, label, pawn)
-    if gamePaused and gamePaused(survivalPC) then return {} end   -- ((2026-11-08) the pause menu hid the HUD: not a strike)
-    local s = sense(st)
-    if not st.base then
-        st.base = { vis = s.vis, op = s.op, show = s.show }
-        log(string.format("%s: what a strike may show, at the start: flash %s, lightning shakes %s, HUD widget visibility %s, "
-            .. "opacity %s, bShowHUD %s", label, fmt(s.flash), tostring(s.shake), tostring(s.vis), fmt(s.op), tostring(s.show)))
-    end
-    local b, h, by = st.base, THUNDER.hook, {}
-    if h.n > (st.hookN or h.n) then by[#by + 1] = string.format("the HUD's BeginHUDDistortionLightning (noise %s s)", fmt(h.recover, "%.1f")) end
-    if h.ends > (st.hookE or h.ends) then
-        log(string.format("%s: the HUD's EndHUDDistortionLightning: the noise over%s", label,
-            h.at and string.format(" after %.1f s", os.clock() - h.at) or ""))
-    end
-    st.hookN, st.hookE = h.n, h.ends
-    local shake = (s.shake or 0) > 0
-    if shake and not st.shake then by[#by + 1] = "a lightning camera shake (" .. tostring(s.shakeName) .. ")" end
-    st.shake = shake
-    local hidden = (s.vis ~= nil and b.vis ~= nil and s.vis ~= b.vis) or (s.show ~= nil and b.show ~= nil and s.show ~= b.show)
-        or (s.op ~= nil and b.op ~= nil and s.op < b.op - 0.25)
-    if hidden and not st.hidden then
-        st.hiddenAt = now
-        by[#by + 1] = string.format("the HUD hidden (visibility %s, opacity %s, bShowHUD %s)", tostring(s.vis), fmt(s.op), tostring(s.show))
-    elseif st.hidden and not hidden and st.hiddenAt then
-        local k = st.strikes[#st.strikes]
-        if k and not k.blackout then k.blackout = now - st.hiddenAt end
-        log(string.format("%s: the HUD back after %.2f s", label, now - st.hiddenAt))
-    end
-    st.hidden = hidden
-    local flash = (s.flash or 0) > 0
-    if flash and not st.flash then
-        st.flashes = st.flashes + 1
-        if label ~= "thunder" or logVerbose() then log(string.format("%s: a flash (its point light %s) at +%.1f s", label, fmt(s.flash, "%.0f"), now - st.at)) end
-    end
-    st.flash = flash
-    if #by > 0 then
-        local last = st.strikes[#st.strikes]
-        if last and now - last.at < STRIKE_GAP_S then
-            for _, x in ipairs(by) do last.by[#last.by + 1] = x end
-        else
-            st.n = st.n + 1
-            local kmh, pitch = motion(pawn)
-            local ai, nAi = aiInside(st)
-            local k = { n = st.n, at = now, by = by, hp = pawn and num(pawn, "HealthInternal"), kmh = kmh, pitch = pitch, ai = ai }
-            if #st.strikes >= 200 then table.remove(st.strikes, 1) end
-            st.strikes[#st.strikes + 1] = k
-            log(string.format("%s: strike %d at +%.1f s (seen by %s); your health %s, %s km/h, pitch %s deg; %d AI planes inside "
-                .. "the storm", label, k.n, now - st.at, table.concat(by, ", "), tostring(k.hp), fmt(kmh, "%.0f"), fmt(pitch, "%.1f"), nAi))
-        end
-    end
-    for _, k in ipairs(st.strikes) do
-        if not k.done and now - k.at >= FOLLOW_S then
-            k.done = true
-            local kmh, pitch = motion(pawn)
-            local hp = pawn and num(pawn, "HealthInternal")
-            local moved = {}
-            for a, e in pairs(k.ai) do
-                for _, q in ipairs(planes) do
-                    if q.addr == a or addrOf(q.obj) == a then
-                        local h1 = liveObj(q.obj) and num(q.obj, "HealthInternal") or 0
-                        if h1 ~= e.h then moved[#moved + 1] = string.format("%s %s -> %s", tostring(e.name), tostring(e.h), tostring(h1)) end
-                    end
-                end
-            end
-            local nAi = 0
-            for _ in pairs(k.ai) do nAi = nAi + 1 end
-            log(string.format("%s: strike %d, %.1f s on: seen by %s; your health %s -> %s (%s); %s -> %s km/h, pitch %s -> %s deg; "
-                .. "the HUD %s; %d AI planes were inside: %s", label, k.n, FOLLOW_S, table.concat(k.by, ", "), tostring(k.hp), tostring(hp),
-                (k.hp ~= nil and hp == k.hp) and "unchanged" or "MOVED", fmt(k.kmh, "%.0f"), fmt(kmh, "%.0f"), fmt(k.pitch, "%.1f"),
-                fmt(pitch, "%.1f"), k.blackout and string.format("hidden %.2f s", k.blackout) or "not seen hidden from Lua", nAi,
-                #moved > 0 and ("health moved on " .. table.concat(moved, "; ") .. " (a hit? the stock storm strikes player planes only)")
-                    or "no health moved (the stock storm strikes player planes only)"))
-        end
-    end
-    return s
-end
 
--- A storm of `owner` ("test", "boss": the host's Anomaly, "copy": a joiner's copy of it) at `at`, radiusM round it: the
--- stock volume spawned deferred, its radius (cm), intervals and curve set before it begins play. The storm, or nil and why.
-function THUNDER.stormUp(owner, at, radiusM)
-    local c = cfg().storm
-    if THUNDER.storm then return nil, "a storm is up already (" .. tostring(THUNDER.storm.owner) .. "'s)" end
-    if torn() then return nil, "the level is going" end
-    if (cfg().strike or {}).stock ~= true then           -- ((2026-11-08) the stock volume never struck: Survival's own strikes)
-        local st = { owner = owner, at = os.clock(), radius = radiusM * 100, center = at, n = 0, flashes = 0, strikes = {}, moves = 0,
-                     own = true }
-        THUNDER.storm = st
-        log(string.format("thunder: storm up for the %s at (%.0f, %.0f, %.0f), %.1f km round it: Survival's own strikes (no stock volume)",
-            owner, at.X, at.Y, at.Z, radiusM / 1000))
-        crumb("thunder: storm up for the " .. owner)
-        return st
-    end
-    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
-    if not (gs and valid(gs)) then return nil, "GameplayStatics not found" end
-    if not liveObj(survivalPC) then return nil, "no player controller" end
-    local cls, why = stormClass()
-    if not cls then return nil, "its class didn't load (" .. tostring(why) .. ")" end
-    curveTable()
-    local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = at.X, Y = at.Y, Z = at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
-    local okB, x = pcall(function() return gs:BeginDeferredActorSpawnFromClass(survivalPC, cls, t, 1, nil, 1) end)  -- (AlwaysSpawn)
-    if not okB or x == nil or not valid(x) then return nil, "no actor (" .. tostring(x) .. ")" end
-    local set = {}
-    set[#set + 1] = pcall(function() x.Radius = radiusM * 100 end) and "radius" or "radius NOT set"
-    if (tonumber(c.min_interval_s) or 0) > 0 then set[#set + 1] = pcall(function() x.MinStrikeInterval = c.min_interval_s end) and "min interval" or "min interval NOT set" end
-    if (tonumber(c.max_interval_s) or 0) > 0 then set[#set + 1] = pcall(function() x.MaxStrikeInterval = c.max_interval_s end) and "max interval" or "max interval NOT set" end
-    if type(c.curve) == "string" and c.curve ~= "" then set[#set + 1] = pcall(function() x.WeightCurveName = FName(c.curve) end) and "curve" or "curve NOT set" end
-    local okF, a = pcall(function() return gs:FinishSpawningActor(x, t, 1) end)
-    if not okF or a == nil or not valid(a) then
-        pcall(function() x:K2_DestroyActor() end)        -- (never began play: nothing can be inside it)
-        return nil, "its spawn didn't finish (" .. tostring(a) .. ")"
-    end
-    local st = { vol = a, addr = addrOf(a), owner = owner, at = os.clock(), radius = radiusM * 100, center = at, n = 0,
-                 flashes = 0, strikes = {}, moves = 0 }
-    THUNDER.storm = st
-    hookHud()
-    local okP, pl = pcall(function() return a.LightningPointLight end)
-    log(string.format("thunder: storm up for the %s at (%.0f, %.0f, %.0f), %.1f km round it (%s): reads back Radius %s cm, "
-        .. "strike rolls every %s-%s s, curve %s, bEnableCollision %s, bTestPlayer %s, bTestEnemy %s, its flash light %s (%s)",
-        owner, at.X, at.Y, at.Z, radiusM / 1000, table.concat(set, ", "), fmt(num(a, "Radius"), "%.0f"), fmt(num(a, "MinStrikeInterval"), "%.1f"),
-        fmt(num(a, "MaxStrikeInterval"), "%.1f"), field(a, "WeightCurveName"), field(a, "bEnableCollision"), field(a, "bTestPlayer"),
-        field(a, "bTestEnemy"), (okP and pl ~= nil and liveObj(pl)) and "there" or "none", nameOf(a)))
-    crumb("thunder: storm up for the " .. owner)
-    return st
-end
-function THUNDER.stormMove(st, at)
-    if st and at and st.own then st.center, st.moves = at, st.moves + 1; return true end
-    if not (st and at and liveObj(st.vol)) then return false end
-    local ok = pcall(function() st.vol:K2_SetActorLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true) end)
-    if ok then st.center, st.moves = at, st.moves + 1 end
-    return ok
-end
--- The storm taken off (why: the log's): shrunk to 1 cm where it is, destroyed once nothing's inside (parkTick); a level
--- going away: forgotten, not touched.
-function THUNDER.stormDown(why)
-    local st = THUNDER.storm
-    THUNDER.storm = nil
-    if not st then return false end
-    local up = os.clock() - st.at
-    if THUNDER.strikesOff then THUNDER.strikesOff("its storm is off") end
-    if st.own then
-        log(string.format("thunder: the %s's storm off (%s) after %.0f s: %d strikes on you", st.owner, tostring(why), up, (THUNDER.sk and THUNDER.sk.n) or 0))
-        crumb("thunder: storm off (" .. st.owner .. ")")
-        return true
-    end
-    if torn() then
-        log(string.format("thunder: the %s's storm forgotten with the level (%s), not touched", st.owner, tostring(why)))
-        return true
-    end
-    if not liveObj(st.vol) then
-        log(string.format("thunder: the %s's storm was gone already (%s)", st.owner, tostring(why)))
-        return true
-    end
-    local ok = pcall(function() st.vol.Radius = PARK_RADIUS end)
-    st.parkAt, st.empty, st.why = os.clock(), 0, why
-    THUNDER.parked[#THUNDER.parked + 1] = st
-    log(string.format("thunder: the %s's storm off (%s) after %.0f s: %d strikes and %d flashes seen, moved %d times; %s",
-        st.owner, tostring(why), up, st.n, st.flashes, st.moves, ok and "shrunk to 1 cm, destroyed once nothing's inside it"
-            or "its radius NOT shrunk: kept until nothing's inside it"))
-    crumb("thunder: storm off (" .. st.owner .. ")")
-    return true
-end
 local function parkTick()
     local keep = {}
     for _, st in ipairs(THUNDER.parked) do
@@ -659,7 +399,6 @@ local function cellsFor(s, seed, centre, onYou)
     return out, { X = math.cos(wa), Y = math.sin(wa) }
 end
 function THUNDER.cells() return BU and not BU.clearing and BU.cells or nil end
-function THUNDER.buildup() return BU end
 
 -- the sky's fields: every candidate of Survival's sky asset that Mission 12's storm sky has otherwise (read once a level)
 local SKY_PATHS = { "CloudDensityExtintionBalance", "CloudSkyAmbientLightIntensity", "CloudSkyAmbientLightFadeToGray",
@@ -908,33 +647,6 @@ local function lyTick(now)
         if LY.actor and liveObj(LY.actor) then log(string.format("storm layout: 2 s after (%s): %s", tostring(LY.checkWhy), lyCounts(LY.actor))) end
     end
 end
--- Ctrl+; the layout probe: 1 load and preload (both pointers logged), 2 the main pointer, 3 ForceUpdate, 4 SetResources,
--- 5 everything back
-local LP = { i = 0 }
-local LP_STEPS = { "load the storm's layout", "point the layout at it", "ForceUpdate", "SetResources", "everything back" }
-function THUNDER.layoutStep()
-    LP.i = LP.i % #LP_STEPS + 1
-    local V = skyView()
-    local a = V and V.actor
-    local what
-    if LP.i == 1 then
-        local interp = "?"
-        if a and liveObj(a) then local ok, x = pcall(function() return a.CloudlyInterpolatedVolumeComponentsAsset end); interp = ok and lyName(x) or "unreadable" end
-        local main = "?"
-        if a and liveObj(a) then local ok, x = pcall(function() return a.CloudlyVolumeComponentsAsset end); main = ok and lyName(x) or "unreadable" end
-        what = lyPreload() .. string.format("; the actor's layout %s, its interpolated layout %s; %s", main, interp, a and lyCounts(a) or "no actor")
-        log("storm layout: probe 1: " .. what)
-    elseif LP.i == 2 then what = lySet(true, "probe 2", { force = false, resources = false })
-    elseif LP.i == 3 then what = lyForce(); LY.checkAt, LY.checkWhy, LY.actor = os.clock() + 2, "probe 3", a; log("storm layout: probe 3: " .. what .. "; " .. (a and lyCounts(a) or ""))
-    elseif LP.i == 4 then what = a and lyResources(a) or "no actor"; LY.checkAt, LY.checkWhy, LY.actor = os.clock() + 2, "probe 4", a; log("storm layout: probe 4: " .. what .. "; " .. (a and lyCounts(a) or ""))
-    else
-        what = lySet(false, "probe 5", { force = true, resources = true })
-        local cdo, o = lyCdo(), LY.cvc
-        if cdo and o and liveObj(o) then pcall(function() cdo:RemovePreloadedCloudTextures(o) end) end
-        LY.preloaded = false
-    end
-    hudCallout(string.format("LAYOUT PROBE %d/%d: %s", LP.i, #LP_STEPS, string.upper(LP_STEPS[LP.i])), nil)
-end
 THUNDER.layoutTick = lyTick
 THUNDER.layout = LY
 
@@ -1083,25 +795,6 @@ local function probeTick(now)
         w.of, now, why and (" (" .. why .. ")") or ""))
     w.k = w.k + 1
     if w.k > w.of then PB.w = nil else w.at = now + (tonumber(c.gap_s) or 1) end
-end
-function THUNDER.probeStep(now)
-    local c = cfg().probe or {}
-    if PB.i > 0 then
-        local n = probeWrite(PB.i, true)
-        log(string.format("sky probe: group %d (%s) put back: %d values at %.2f", PB.i, PROBE[PB.i][1], n, now))
-    end
-    PB.i, PB.w = PB.i + 1, nil
-    if PB.i > #PROBE then
-        PB.i = 0
-        hudCallout("SKY PROBE: ALL BACK", "PRESS AGAIN TO START OVER")
-        log("sky probe: every group back as it was")
-        return
-    end
-    local of = math.max(1, math.floor(tonumber(c.writes) or 3))
-    PB.w = { g = PB.i, k = 1, of = of, at = now }
-    hudCallout(string.format("SKY PROBE %d/%d: %s", PB.i, #PROBE, string.upper(PROBE[PB.i][1])),
-        string.format("WATCH THE SKY: %d WRITES, %.0f S APART", of, tonumber(c.gap_s) or 1))
-    probeTick(now)
 end
 THUNDER.probeTick = probeTick
 
@@ -1377,22 +1070,6 @@ local function clStorm(B, now)
     end
     flash(at, c.method == "effect" and "effect" or (c.class or CL_PROBE[1][2]), "stage " .. B.stage)
 end
--- Ctrl+\: the probe, 5 km ahead of you, 3 km up
-local CLP = { i = 0 }
-function THUNDER.cloudProbe()
-    local pawn = myPlane()
-    local you = playerLocation()
-    if not (pawn and you) then log("cloud lightning: Ctrl+\\: no plane of yours"); return end
-    CLP.i = CLP.i % #CL_PROBE + 1
-    local p = CL_PROBE[CLP.i]
-    local fwd = { X = 1, Y = 0 }
-    pcall(function() local f = pawn:GetActorForwardVector(); local n = math.sqrt(f.X * f.X + f.Y * f.Y); if n > 0 then fwd = { X = f.X / n, Y = f.Y / n } end end)
-    local at = { X = you.X + fwd.X * 500000, Y = you.Y + fwd.Y * 500000, Z = 300000 }
-    if CL.light and liveObj(CL.light) then pcall(function() CL.light:K2_DestroyActor() end); CL.light = nil end
-    local what = flash(at, p[2], "probe " .. CLP.i .. ": " .. p[1])
-    hudCallout(string.format("CLOUD LIGHTNING PROBE %d/%d", CLP.i, #CL_PROBE), string.upper(p[1]))
-    return what
-end
 
 local function hostOrSolo() return not joiner() end
 local function stageOf(B)
@@ -1552,8 +1229,8 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "thunder", fn = function(now)
             THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
             SK.inside, SK.noiseUntil, SK.upsetUntil, SK.upsetOn, SK.pawn, SK.zone = false, nil, nil, false, nil, nil
             BU, SF.list, SF.ws, SF.rainWas, TR, SF.unsafeAt = nil, nil, nil, nil, nil, nil
-            LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LP.i, LY.cvc = false, nil, nil, nil, false, 0, nil
-            CL.q, CL.light, CL.own, CL.steps, CLP.i = {}, nil, nil, nil, 0
+            LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LY.cvc = false, nil, nil, nil, false, nil
+            CL.q, CL.light, CL.own, CL.steps = {}, nil, nil, nil
         end
         return
     end
@@ -1574,8 +1251,8 @@ end }
 if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["thunder"] = function()
         BU, SF.list, SF.ws, SF.rainWas, SK.zone, SK.inside, PB.i, PB.w, TR, SF.unsafeAt = nil, nil, nil, nil, nil, false, 0, nil, nil, nil
-        LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LP.i, LY.cvc = false, nil, nil, nil, false, 0, nil
-        CL.q, CL.light, CL.own, CL.steps, CLP.i = {}, nil, nil, nil, 0
+        LY.on, LY.was, LY.actor, LY.checkAt, LY.preloaded, LY.cvc = false, nil, nil, nil, false, nil
+        CL.q, CL.light, CL.own, CL.steps = {}, nil, nil, nil
         BOLT.pool, BOLT.mat, BOLT.warm = {}, nil, nil                     -- (the level took the pooled bolts with it)
         THUNDER.storm, THUNDER.parked, THUNDER.test, THUNDER.fx, THUNDER.named = nil, {}, nil, {}, {}
         THUNDER.cls, THUNDER.copyHp, THUNDER.mgr = nil, nil, nil
