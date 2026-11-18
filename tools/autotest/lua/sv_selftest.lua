@@ -4041,6 +4041,59 @@ end
 
 -- ((0.74.182) where GEOFON's hull really is against its root: its bounds and its meshes' places, pictured from above its root
 -- and above its bounds' centre (the capture's deck mark and slab are placed from the root)
+-- ((0.74.186) A6: can Lua move a ship (a co-op rejoiner's fleet copies start at the course's start)? GEOFON's hull moved
+-- 2 km along its course by K2_SetActorLocation (teleport), then where it and a part of it are, and its speed, over 15 s
+SUITES.shipmove = function()
+    intoRun()
+    local C = {}
+    A.do_(function()
+        if not ST.check(IFLEET ~= nil, "the fleet is in this build") then return "abort" end
+        ST.marks.s0 = ST.n
+        ST.press("N")
+    end)
+    A.log_("fleet: up: GEOFON", 60, "s0", true, function(l) ST.check(l ~= nil, "GEOFON up", l) end)
+    A.wait(10)
+    A.do_(function()
+        local sh = IFLEET.cur and IFLEET.cur.ships and IFLEET.cur.ships[1]
+        local o = sh and sh.hull and sh.hull.obj
+        if not ST.check(o ~= nil and valid(o), "GEOFON's hull") then return end
+        C.o = o
+        for _, e in ipairs(sh.parts or {}) do if valid(e.obj) then C.p = e.obj; C.pn = e.name; break end end
+        local r = ST.at(o)
+        local yaw = o:K2_GetActorRotation().Yaw
+        C.at0, C.yaw = r, yaw
+        C.to = { X = r.X + math.cos(math.rad(yaw)) * 200000, Y = r.Y + math.sin(math.rad(yaw)) * 200000, Z = r.Z }
+        C.p0 = C.p and ST.at(C.p)
+        local hit = {}
+        local ok, err = pcall(function() o:K2_SetActorLocation(C.to, false, hit, true) end)
+        ST.info(string.format("shipmove: from (%.0f, %.0f) to (%.0f, %.0f) along %.0f deg: K2_SetActorLocation %s", r.X / 100, r.Y / 100,
+            C.to.X / 100, C.to.Y / 100, yaw, ok and "called" or ("FAILED " .. tostring(err))))
+        C.t0 = os.clock()
+    end)
+    for _, t in ipairs({ 0.5, 2, 6, 15 }) do
+        A.do_(function() C.waitTo = C.t0 + t end)
+        A.until_(function() return os.clock() >= C.waitTo end, t + 5)
+        A.do_(function()
+            if not valid(C.o) then ST.info("shipmove: the hull's gone"); return end
+            local l = ST.at(C.o)
+            local v = C.o:GetVelocity()
+            local dTo = math.sqrt((l.X - C.to.X) ^ 2 + (l.Y - C.to.Y) ^ 2) / 100
+            local dFrom = math.sqrt((l.X - C.at0.X) ^ 2 + (l.Y - C.at0.Y) ^ 2) / 100
+            local pl = C.p and valid(C.p) and ST.at(C.p)
+            local pOff = pl and C.p0 and math.sqrt((pl.X - l.X - (C.p0.X - C.at0.X)) ^ 2 + (pl.Y - l.Y - (C.p0.Y - C.at0.Y)) ^ 2) / 100
+            ST.info(string.format("shipmove: +%.1f s: the hull %.0f m from the new spot, %.0f m from the old; %.0f km/h; part %s %s",
+                t, dTo, dFrom, math.sqrt(v.X * v.X + v.Y * v.Y) * 0.036, tostring(C.pn),
+                pOff and string.format("%.0f m off its place on the hull", pOff) or "not read"))
+            if t == 15 then
+                ST.check(dTo < 1000, "the hull stayed at the new spot (within 1 km after 15 s)", string.format("%.0f m", dTo))
+                ST.check(pOff == nil or pOff < 50, "its part went with it", pOff and string.format("%.0f m", pOff))
+            end
+        end)
+    end
+    A.picture("shipmove_after", function() return C.o and valid(C.o) and ST.off(ST.at(C.o), -40000, 30000, 15000) end,
+        function() return C.o and valid(C.o) and ST.at(C.o) end, 60)
+end
+
 SUITES.geofondeck = function()
     intoRun()
     local C = {}
