@@ -1020,7 +1020,7 @@ end
 
 local function lookTick(now, L0)
     local L = L0 or GEO.look
-    if not L then return end
+    if not L or L.over then return end                    -- ((2026-11-18) over: never again (every joiner looped ~2670 times)
     local dt = math.min(1, math.max(0, now - (L.last or now)))
     L.last = now
     if paused() then return end
@@ -1036,10 +1036,12 @@ local function lookTick(now, L0)
         if not L.posed then return end
     end
     if not same(L.hull) then
-        if L == GEO.look then GEO.look = nil end
+        local test = not L.round                          -- ((2026-11-18) only a test's own Ford is taken off as the test's: round
+        if L == GEO.look then GEO.look = nil end          -- 30's GEOFON (GEO.attach: a joiner's copy above all) its effects off
         L.over = true
-        log(string.format("geofon: break look over at +%.0f s: its hull is gone (the rest taken off: %s)", L.t,
-            takeOff(L, "its hull gone")))
+        local how = "its effects off"
+        if test then how = takeOff(L, "its hull gone") else pcall(fxOff, L, 0); pcall(fxGone, L, true) end
+        log(string.format("geofon: break look over at +%.0f s: its hull is gone (the rest %s)", L.t, test and ("taken off: " .. how) or how))
         return
     end
     if c.rear_s and num(c.g, 1) < 1 then                  -- ((0.74.132) the V rearing (round 30: torn open by her bow)

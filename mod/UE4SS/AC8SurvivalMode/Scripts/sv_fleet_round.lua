@@ -190,8 +190,8 @@ end
 local function split(P, why)                              -- GEOFON torn open: its V rears, its halves part
     if P.split then return end
     P.split, P.splitAt = true, os.clock()
-    IFCOOP.send("split")
     if not P.G then rlog("phase 2: her breach (" .. why .. "): GEOFON was already gone, no V"); return end
+    IFCOOP.send("split")                                  -- ((2026-11-18) only when there's a GEOFON to split: the joiners ran a V on theirs)
     local okF, err = pcall(GEO.fall, P.G)
     rlog(string.format("phase 2: GEOFON split in two by %s (%s)", why, okF and "its V rearing" or ("its V FAILED: " .. tostring(err))))
     say("fall", p2c().radio)
