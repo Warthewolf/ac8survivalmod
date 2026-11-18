@@ -334,7 +334,9 @@ def build_fleet(g, flag, stock_ep):
         ev = f'RE_SV_IFAt_{kk:02d}'
         g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
         for s_ in fleet:
-            g.execute(t_upath, ev, {1: s_['unit'], 2: s_['path'], 4: IF_SPEED})
-            g.execute(t_ptel, ev, {0: 'NoneSelect', 1: s_['unit'], 3: f'{kk * IF_AT_STEP_KM * 1000:.1f}'})
+            # ((0.74.189) the object form, Mission 13's: the unit form moved nothing (autotest fleetat of 0.74.188: GEOFON
+            # stayed at its lane's start, only the path taken), the probe's object form moved it
+            g.execute(t_spath, ev, {0: s_['obj'], 2: s_['path'], 4: IF_SPEED})
+            g.execute(t_ptel, ev, {0: s_['obj'], 3: f'{kk * IF_AT_STEP_KM * 1000:.1f}'})
     print(f'  invincible fleet: {len(fleet)} ships (SV_IFUp<Key> / RE_SV_IFGo<Key>: each on its lane at {IF_SPEED} km/h, '
           f'Normal; {parts // 2} parts ordered Normal / {IF_PART_PRIORITY}), RE_SV_IFFleetRemove')
