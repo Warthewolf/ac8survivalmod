@@ -120,7 +120,7 @@ CFG.specials.fleet = {
     -- waits for ships still up from before to go after RE_SV_IFFleetRemove (the Spaceport's CLEAR_S). course_yaw, runway_cm:
     -- the course in and the runway's centre (survival_events_fleet.py IF_YAW, IF_RUNWAY), for the lines
     formation = { per_step = 3, gap_s = 0.5, settle_s = 2, go_s = 15, moved_m = 50, every_s = 10, guns_s = 2, clear_s = 8,
-                  course_yaw = 45, runway_cm = { 1610476, -436143 } },
+                  course_yaw = 45, runway_cm = { 1610476, -436143 }, hull_x = 2, hull_per_player = 0.25 },   -- (hull_x: each hull's health x, +per player past 1)
     -- ((0.74.140) WP8: every fleet ship scarred from its spawn (sv_fleet_round.lua scarsTick): its slots on dimmed copies of their
     -- own _DAM instances, per_tick components a tick; embers: their glow x this (a look only: never ranked against)
     scars = { enabled = true, per_tick = 1, embers = 0.05 },   -- ((0.74.152) 1: the game's own work, ~45 ms a part at worst (run 20261117_203608: the walks 0.0 ms, the sets 134 ms for 3))
@@ -1644,6 +1644,15 @@ local function settle(F, sh)
         end
     end
     sh.hull = hulls[1]
+    -- ((2026-11-18) the user: "an enemy buff to their health is advised for the invincible fleet ships": five players sank all
+    -- 15 in 6.5 min, GEOFON in 89 s. The host's hulls x hull_x (+hull_per_player a player past the first); a joiner's copy
+    -- waits for the host's kill)
+    if sh.hull and type(scaleHealth) == "function" and not (COOP and COOP.client and COOP.client()) then
+        local np = (COOP and COOP.open and COOP.players) and math.max(1, #COOP.players()) or 1
+        local x = num(fm().hull_x, 1) * (1 + num(fm().hull_per_player, 0) * (np - 1))
+        local h0, h1 = scaleHealth(sh.hull.obj, x)
+        if h1 then log(string.format("fleet: %s's hull health x%.2f (%d players): %d -> %d", label(sh), x, np, h0, h1)) end
+    end
     for _, e in ipairs(sh.parts) do F.by[e.addr] = { sh = sh, cls = e.cls, e = e } end
     if sh.hull then F.by[sh.hull.addr] = { sh = sh, cls = "hull", e = sh.hull } end
     local p = sh.hull and at(sh.hull)

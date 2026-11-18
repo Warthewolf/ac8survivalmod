@@ -348,6 +348,17 @@ local function p2Tick(now)
             return
         end
         R.p2 = { state = "watch", G = G, sh = sh, paid = 0 }
+        -- ((2026-11-18) held from now, not from watch_hp: the user's co-op round 30 of 0.74.197, five players, took GEOFON from
+        -- over 15 % to 0 between two ticks 89 s in (sunk, no V); the field written (SetMinHealth keeps whole points only), the
+        -- joiners' hits are ModifyHealth's, clamped at it)
+        do
+            local floor = (G.max or 0) / 10 * n(fl.break_at, 0.03)
+            local okF = pcall(function() G.hull.obj.MinHealth = floor end)
+            if not okF then okF = pcall(function() G.hull.obj:SetMinHealth(math.ceil(floor)) end) end
+            R.p2.held = okF
+            rlog(string.format("phase 2: GEOFON held at %.0f %% from the start (MinHealth %.1f %s)", n(fl.break_at, 0.03) * 100, floor,
+                okF and "set" or "NOT set"))
+        end
         IFCOOP.send("watch", sh.unit)
         rlog(string.format("phase 2: GEOFON watched (its stages at %s; held at %.0f %% from %.0f %%, broken there)", stagesSaid(),
             n(fl.break_at, 0.03) * 100, n(fl.watch_hp, 0.15) * 100))

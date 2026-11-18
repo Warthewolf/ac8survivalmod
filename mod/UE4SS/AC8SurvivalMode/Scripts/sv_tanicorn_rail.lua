@@ -975,10 +975,11 @@ function TANI.rcLine(o)
 end
 -- Ctrl+H's start (and WP11's phase 2 later: why), or its stop when the cycle's on: true, or false and why not
 function TANI.rcStart(why)
-    if RC then rcEnd(why .. " again", { stow = true }); hudCallout("TEST: TANACORN RAILCANNON", "STOWED"); return true, "stopped" end
+    local isKey = tostring(why):sub(1, 5) == "Ctrl+"       -- ((2026-11-18) the TEST: callouts the key's only, not round 30's
+    if RC then rcEnd(why .. " again", { stow = true }); if isKey then hudCallout("TEST: TANACORN RAILCANNON", "STOWED") end; return true, "stopped" end
     local function no(msg, sub)
         rcLog(why .. " refused: " .. msg)
-        hudCallout("TEST: TANACORN RAILCANNON", sub)
+        if isKey then hudCallout("TEST: TANACORN RAILCANNON", sub) end
         return false, msg
     end
     if not (D and D.now) or not nativeReady() then return no("outside a Survival run", "NOT IN A RUN") end
@@ -1019,7 +1020,7 @@ function TANI.rcStart(why)
     rcLog(string.format("%s: deploying (AS_SV_Tani_RAILCANNON_Deploy %s s on TurretMesh, from %s s; SOC_Gun_01 z %s cm in the mesh%s); "
         .. "the shield off and the first charge at +%.1f s", why, len, pos, cm(z0), #fails > 0 and ("; " .. table.concat(fails, ", ")) or "",
         num(c.deploy_s, 3.4)))
-    hudCallout("TEST: TANACORN RAILCANNON", "DEPLOYING")
+    if isKey then hudCallout("TEST: TANACORN RAILCANNON", "DEPLOYING") end
     return true, "deploying"
 end
 testKey("H", "sv_tanicorn_rail.lua's railcannon test", function() TANI.rcStart("Ctrl+H") end)
