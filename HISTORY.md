@@ -4004,3 +4004,4 @@ read where used (a joiner mid-round brings co-op's back). Co-op unchanged.
 - tools/checks/solo_test.sh (new); escort_test / tani_rail_test test the round's own numbers.
 Zips: ..._0.74.199_TESTER_Online_COOP_ZFA44_TANACORN.zip (Alyssa's, keys) and ..._0.74.199_Online_COOP_ZFA44_TANACORN.zip
 (friends', no keys), both registered. Not run in game.
+- 0.74.199 INSTALLED 2026-11-18 (the user: "install it"), the TESTER zip over 0.74.197 (backup build/backup/install_before_0.74.199); 154 files verified, her survival.ini, subtitles.ini (unedited) and enabled.txt kept.
