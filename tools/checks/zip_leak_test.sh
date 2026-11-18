@@ -150,6 +150,8 @@ if [ -n "$z" ]; then
     check $r "TESTER=1 TANI=1: THE TANACORN's crew voices in it (the user, 2026-11-18)"
     onlyc "$z" && r=0 || r=1
     check $r "TESTER=1 TANI=1: style C only (the take she picked)"
+    holds "$z" SurvivalMode_StormFx_P && holds "$z" SurvivalMode_StormBurst_P && r=0 || r=1
+    check $r "TESTER=1 TANI=1: the fleet storm's cloud bursts in it (StormFx, StormBurst)"
     nodevsubs "$z" && r=1 || r=0
     check $r "TESTER=1 TANI=1: round 30's subtitles in it"
     keysoff "$z" && r=1 || r=0
@@ -172,6 +174,8 @@ if [ -n "$z" ]; then
     check $r "FRIENDS=1 TANI=1: THE TANACORN's crew voices in it"
     onlyc "$z" && r=0 || r=1
     check $r "FRIENDS=1 TANI=1: style C only (the take she picked)"
+    holds "$z" SurvivalMode_StormFx_P && holds "$z" SurvivalMode_StormBurst_P && r=0 || r=1
+    check $r "FRIENDS=1 TANI=1: the fleet storm's cloud bursts in it (StormFx, StormBurst)"
     nodevsubs "$z" && r=1 || r=0
     check $r "FRIENDS=1 TANI=1: round 30's subtitles in it"
     keysoff "$z" && r=0 || r=1

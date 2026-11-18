@@ -98,7 +98,9 @@ fi
 [ "$TANIZIP" = 1 ] || rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Tani_P.*
 # ((2026-11-17) tools/stormfx: the storms' own cloud flash, the fleet's and the Thunder Anomaly's: the user's dev install
 # only, never in any zip made here, a TESTER one included)
-rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Storm*_P.*
+# ((2026-11-18) the user's round 27 on 0.74.195: "the cloud burst lighting mustn't be working": the fleet's night storm
+# (rounds 25-30) ships with it now, so its cloud bursts go in every zip WITH THE TANACORN; any other zip leaves them out)
+[ "$TANIZIP" = 1 ] || rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Storm*_P.*
 # ((2026-11-17) THE TANACORN's crew voices: AC7's Alicorn crew, distorted (AGENTS.md's AC7 voice exception), and round 30's
 # subtitles: only in a zip WITH THE TANACORN (the user, 2026-11-18: "The AC7 lines that you created go in also"), never in
 # any other zip made here
