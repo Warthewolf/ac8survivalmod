@@ -225,7 +225,7 @@ CFG.specials.fleet = {
     -- of its own (THE FESTIVAL's night, dawn and sunrise_rounds, CFG.sky.arc / CFG.sky.night), round 30 a night round:
     -- the sunset at 26, night 27-30, the dawn at 31, rising over 31-34 as the festival's, midday from 35)
     sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 4 },
-            storm = { enabled = true, until_round = 35, out_s = 0.6, hold_s = 0.8, in_s = 1.2,
+            storm = { enabled = true, until_round = 32, out_s = 0.6, hold_s = 0.8, in_s = 1.2,   -- ((2026-11-18) the user: "have the storm clear on round 32"; was 35)
                       -- ((2026-11-17) the user: "we need to change the audio of the Thunder, its wrong") AC8's own thunder
                       -- (its SE bank's Mission 12 events, by name on your camera: sv_fleet_storm.lua): the storm's arrival
                       -- clap, Mission 12's distant thunder all through the storm (a loop: its _Stop as it clears)
