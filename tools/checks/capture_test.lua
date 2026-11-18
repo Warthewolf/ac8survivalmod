@@ -302,7 +302,7 @@ check(untilSent("^cap|", C.every_s) ~= nil, "the host picks again after a rest")
 ---------------------------------------------------------------------------------------------------- the words
 print("the host's words")
 fresh({ up(0), up(1) })
-for _, f in ipairs({ { "if", "cap", "-1", "1" }, { "if", "cap", "64", "1" }, { "if", "cap", "0", "x" }, { "if", "cap", "0", "1e9" },
+for _, f in ipairs({ { "if", "cap", "-1", "1" }, { "if", "cap", "64", "1" }, { "if", "cap", "0", "x" }, { "if", "cap", "0", "1e9" }, { "if", "cap", "0", "1.5" }, { "if", "cap", "0.5", "1" },
                      { "if", "cap", nil, nil } }) do
     local ok = IFCAP.onHost(f)
     check(ok == false and IFCAP.state() == nil, "refused: cap " .. tostring(f[3]) .. " " .. tostring(f[4]))

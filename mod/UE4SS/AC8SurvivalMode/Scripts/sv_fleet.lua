@@ -1452,7 +1452,7 @@ end
 -- fired, guns, firedParts (since the last weapons line), left / clearUntil (units still up from before it waits for) };
 -- each sh { raw (the objects caught at its spawn), kept (each kept as SV_Spawn returned), hull, parts, ... }.
 -- IFLEET.onLaunch: sv_weaponlog.lua's word on each launch.
-IFLEET = { cur = nil, rowsOk = nil }
+IFLEET = { cur = nil, rowsOk = nil, inStore = OFF.store }   -- (inStore: (2026-11-18) the round's shelling held there too)
 do
 -- ((0.74.164) "alcn_ecm": RAVEN's ECM part, the Alicorn's (its EW mast), a part, never its hull)
 local TURRET = { "tani_laser", "alcn_ecm", "mk15", "mk41", "mk45", "artillery", "_sam", "aagun", "ak130", "ak630", "a190", "a192", "3r14", "palma",

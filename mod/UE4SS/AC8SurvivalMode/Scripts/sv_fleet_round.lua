@@ -493,7 +493,7 @@ local function shellTick(now)
         local s = Sx.inAir[i]
         if now >= s.at then table.remove(Sx.inAir, i); shellLand(Sx, s) end
     end
-    if (type(gamePaused) == "function" and gamePaused(survivalPC) == true) or (OFF and OFF.store and OFF.store()) then return end
+    if (type(gamePaused) == "function" and gamePaused(survivalPC) == true) or (IFLEET.inStore and IFLEET.inStore()) then return end   -- ((2026-11-18) OFF is sv_fleet.lua's local: was nil here
     if AF and AF.down then return end
     if IFSURF and IFSURF.state and IFSURF.state() then return end
     local rw = runway()
@@ -802,6 +802,9 @@ function CREW.reset() K.q, K.busyUntil, K.nextAt, K.said, K.last, K.lastStyle = 
 end
 
 -- the kind (sv_rounds.lua SPC; THE ESCORT's and the Spaceport's hooks)
+-- ((2026-11-18) this round's state for IFCOOP.syncTo, which is outside this block: until now it read R there as a global
+-- (always nil), so a rejoiner was never sent GEOFON's or her state (lua_check's "unknown global R", missed under its last line)
+function IFROUND.state() return R end
 function IFROUND.spawn(now)
     if not ready(D and D.round) then rlog("round " .. tostring(D and D.round) .. ": not ready: a normal round"); return false end
     local no = IFLEET.launch("round " .. tostring(D.round))
@@ -960,9 +963,86 @@ function IFCOOP.send(what, ...)                          -- (the host's word, to
 end
 -- ((0.74.172) to one who links (or links back) during round 30: where its phase 2 is (GEOFON watched, broken, split, its
 -- halves hidden; her core open; her sinking), 12 s on, its copies spawned there first (sv_coop.lua's hostSync)
+-- ((2026-11-18) A6: a rejoiner's fleet. Its copies spawn at the course's start, the host's may be 10 km on: the host sends
+-- GEOFON's metres along its lane ("if|at|<m>", worked out as the word goes), the joiner fires RE_SV_IFAt_<kk> (every ship to
+-- kk * at_step_km along its lane: Mission 13's path teleport by distance, survival_events_fleet.py) once its copies are up.
+-- The course's shape is survival_events_fleet.py if_course's (the generator checks these numbers against its own)
+IFCOOP.COURSE = { start_km = 30, hold_km = 16, turn_km = 2, leg_km = 8, laps = 2, lead_m = 500, speed_kmh = 45, at_step_km = 2, at_steps = 20 }
+local COURSE_PTS = nil
+local function coursePts()                                -- GEOFON's course (cm) and each point's metres along it
+    if COURSE_PTS then return COURSE_PTS end
+    local K, fl = IFCOOP.COURSE, (CFG.specials or {}).fleet or {}
+    local a = math.rad(tonumber(fl.course_yaw) or 45)
+    local rw = fl.runway_cm or { 1610476, -436143 }
+    local x, y, h = rw[1] - math.cos(a) * K.start_km * 1e5, rw[2] - math.sin(a) * K.start_km * 1e5, a
+    local pts, R_ = { { x, y, 0 } }, K.turn_km * 1e5
+    local function add(nx, ny)
+        local q = pts[#pts]
+        pts[#pts + 1] = { nx, ny, q[3] + math.sqrt((nx - q[1]) ^ 2 + (ny - q[2]) ^ 2) / 100 }
+        x, y = nx, ny
+    end
+    local function straight(d)
+        local k_n = math.max(1, math.ceil(d / 2e5 - 1e-9))
+        local x0, y0 = x, y
+        for k = 1, k_n do add(x0 + math.cos(h) * d * k / k_n, y0 + math.sin(h) * d * k / k_n) end
+    end
+    local function turn(deg, right)
+        local sg = right and 1 or -1
+        local cx, cy = x + math.cos(h + sg * math.pi / 2) * R_, y + math.sin(h + sg * math.pi / 2) * R_
+        local a0, tot = math.atan(y - cy, x - cx), math.rad(deg)
+        local k_n = math.max(1, math.ceil(deg / 20 - 1e-9))
+        for k = 1, k_n do local t = a0 + sg * tot * k / k_n; add(cx + math.cos(t) * R_, cy + math.sin(t) * R_) end
+        h = h + sg * tot
+    end
+    local far = K.hold_km + 2 * K.turn_km
+    straight((K.start_km - far - K.turn_km) * 1e5)
+    turn(90, true)
+    straight((K.leg_km / 2 - K.turn_km) * 1e5)
+    for _ = 1, K.laps do turn(180, false); straight(K.leg_km * 1e5); turn(180, false); straight(K.leg_km * 1e5) end
+    COURSE_PTS = pts
+    return pts
+end
+IFCOOP.coursePts = coursePts
+-- metres along the course of a point (cm) near it: of its places within 400 m of the course, the nearest (with `guess`
+-- metres picking the lap: the course laps, so a place is on it more than once); nil when it's nowhere near
+function IFCOOP.alongOf(px, py, guess)
+    local pts, best, bestErr = coursePts(), nil, math.huge
+    for i = 2, #pts do
+        local a, b = pts[i - 1], pts[i]
+        local dx, dy = b[1] - a[1], b[2] - a[2]
+        local L2 = dx * dx + dy * dy
+        local t = L2 > 0 and math.max(0, math.min(1, ((px - a[1]) * dx + (py - a[2]) * dy) / L2)) or 0
+        local qx, qy = a[1] + dx * t, a[2] + dy * t
+        local off = math.sqrt((px - qx) ^ 2 + (py - qy) ^ 2) / 100
+        if off <= 400 then                                -- (scored: off the course, then a tenth of off the guess: the laps
+            local m = a[3] + (b[3] - a[3]) * t             -- are 16 km apart, a turn's segments metres)
+            local e = off + 0.1 * math.abs(m - (guess or m))
+            if e < bestErr then best, bestErr = m, e end
+        end
+    end
+    return best
+end
+-- the host's GEOFON: metres along its lane now (its place on the course; its sailing time picks among the laps), or nil
+function IFCOOP.alongNow()
+    local F = IFLEET and IFLEET.cur
+    local sh = F and F.ships and F.ships[1]
+    if not (sh and not sh.sunk and sh.hull and liveObj(sh.hull.obj)) then return nil end
+    local ok, l = pcall(function() return sh.hull.obj:K2_GetActorLocation() end)
+    if not (ok and l) then return nil end
+    local K = IFCOOP.COURSE
+    local guess = (tonumber(F.t) or 0) * K.speed_kmh / 3.6 - K.lead_m
+    return IFCOOP.alongOf(l.X, l.Y, guess) or math.max(0, guess)
+end
+
 function IFCOOP.syncTo(to)
-    local P = R and R.p2
-    if not (P and P.sh and COOP and COOP.msg) then return end
+    if not (COOP and COOP.msg) then return end
+    if IFLEET and IFLEET.cur then                         -- (the fleet's place: worked out as the word goes, below)
+        IFCOOP.pending = IFCOOP.pending or {}
+        IFCOOP.pending[#IFCOOP.pending + 1] = { to = to, at = os.clock() + 12, words = { { "at" } } }
+    end
+    local RS = IFROUND and IFROUND.state and IFROUND.state()
+    local P = RS and RS.p2
+    if not (P and P.sh) then return end
     local words = { { "watch", P.sh.unit } }
     if P.state ~= "watch" then words[#words + 1] = { "break" } end
     if P.split then words[#words + 1] = { "split" } end
@@ -1004,6 +1084,13 @@ function IFCOOP.onHost(f)
     if what == "cap" or what == "capgo" or what == "capoff" then   -- ((0.74.164) GEOFON's capture: sv_fleet_capture.lua)
         if not (IFCAP and IFCAP.onHost) then return false, "no capture in this build" end
         return IFCAP.onHost(f)
+    end
+    if what == "at" then                                  -- ((2026-11-18) A6: the host's GEOFON, metres along its lane
+        local m = tonumber(f[3])
+        if not finiteN(m, 1e6) or m < 0 then return false, "bad metres" end
+        IFCOOP.atWant = { m = m, at = os.clock() }
+        jlog(string.format("co-op: the host's fleet %.0f m along its lane: this game's copies follow once they're up", m))
+        return true
     end
     if what == "surf" then                                -- (the fleet's surfacing cutscene, the host's seed)
         local seed = tonumber(f[3])
@@ -1082,9 +1169,35 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet co-op", fn = function(now)
             local q = pend[i]
             if now >= q.at then
                 table.remove(pend, i)
-                for _, w in ipairs(q.words) do pcall(COOP.msg, q.to, "if", table.unpack(w)) end
+                for _, w in ipairs(q.words) do
+                    if w[1] == "at" and not w[2] then          -- (GEOFON's metres now, not 12 s ago)
+                        local m = IFCOOP.alongNow()
+                        w = m and { "at", string.format("%.0f", m) } or nil
+                        jlog(string.format("co-op: slot %s's fleet to %s", tostring(q.to), m and string.format("%.0f m along its lane", m) or "nowhere (GEOFON not up)"))
+                    end
+                    if w then pcall(COOP.msg, q.to, "if", table.unpack(w)) end
+                end
                 jlog(string.format("co-op: round 30's state to slot %s: %d words", tostring(q.to), #q.words))
             end
+        end
+    end
+    local A6 = IFCOOP.atWant                              -- (a joiner: the host's fleet place, once its own copies are up)
+    if A6 and COOP and COOP.client and COOP.client() and D then
+        local first = (((CFG.specials or {}).fleet or {}).ships or {})[1]
+        local up = false
+        for _, o in ipairs((first and COOP.copiesOf) and COOP.copiesOf("SV_Unit_IF" .. first.key) or {}) do if liveObj(o) then up = true end end
+        if up then A6.seen = A6.seen or now end
+        if A6.seen and now - A6.seen >= 3 then
+            IFCOOP.atWant = nil
+            local K = IFCOOP.COURSE
+            local m = A6.m + (now - A6.at) * K.speed_kmh / 3.6
+            local kk = math.max(0, math.min(K.at_steps, math.floor(m / (K.at_step_km * 1000) + 0.5)))
+            local r = type(SV_Event) == "function" and SV_Event(string.format("RE_SV_IFAt_%02d", kk)) or -5
+            jlog(string.format("co-op: the fleet here put %d km along its lane (the host's %.0f m now; RE_SV_IFAt_%02d: %s)",
+                kk * K.at_step_km, m, kk, tostring(r)))
+        elseif now - A6.at > 60 then
+            IFCOOP.atWant = nil
+            jlog("co-op: the host's fleet place dropped: no copy of GEOFON here in 60 s")
         end
     end
     if not (J and COOP and COOP.client and COOP.client()) then return end
@@ -1093,5 +1206,5 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet co-op", fn = function(now)
     if not G then return end
     if J.split then pcall(GEO.fallStep, G, now) elseif not G.down then pcall(GEO.stagesStep, G, now) end
 end }
-if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["fleet co-op"] = function() J = nil end end   -- (the level's copies went with it)
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["fleet co-op"] = function() J, IFCOOP.atWant = nil, nil end end   -- (the level's copies went with it)
 -- TEST ONLY END

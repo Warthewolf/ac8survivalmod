@@ -142,6 +142,7 @@ IF_TURN_KM, IF_LEG_KM, IF_LAPS = 2.0, 8.0, 2
 IF_STEP_KM, IF_ARC_DEG = 2.0, 20.0
 IF_SPEED = '45.0'                                # km/h, every ship (the path record's speed)
 IF_LEAD_M = 500.0
+IF_AT_STEP_KM, IF_AT_STEPS = 2.0, 20                # (2026-11-18) a rejoiner's catch-up: RE_SV_IFAt_00-20, 0-40 km along
 IF_PART_PRIORITY = 'PlayerOnlyNoLimit'   # (2026-11-16) each part's order: PlayerFirst shelled the runway's target points; the
                                          # airfield's shelling is WP13's, from the gun line
 IF_AREA_M, IF_ALT_M = SP_SHIP_AREA_M, SP_SHIP_ALT_M   # each unit's area (45 km: the whole course and the airfield)
@@ -313,16 +314,27 @@ def build_fleet(g, flag, stock_ep):
     assert '"RE_SV_IFRavenPing"' in lua, 'Scripts/sv_fleet_capture.lua never fires RE_SV_IFRavenPing'
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_IFRavenPing')
     g.execute(t_nav, 'RE_SV_IFRavenPing', {1: raven[0]['unit']})
-    # ((2026-11-18) A6, a co-op rejoiner's fleet: Lua can't move a ship (autotest shipmove: K2_SetActorLocation undone, as
-    # hard rule 39). Mission 13's LiveAIPathTeleportByDistanceExecution (its LCACs: {0 object, 1 unit, 2 Set, 3 distance})
-    # puts a unit that far along its path. A probe first, its distance's unit unknown (Mission 10 has 889900 on a land
-    # battleship and 1900-8100 on a landing craft): GEOFON at Set 3000 and Set 300000 (RE_SV_IFProbeNear / _Far)
+    # ((2026-11-18) A6, a co-op rejoiner's fleet: its copies spawn at the course's start, the host's maybe 10 km on. Lua can't
+    # move a ship (autotest shipmove: K2_SetActorLocation undone, as hard rule 39); Mission 13's
+    # LiveAIPathTeleportByDistanceExecution puts a unit that far along its path ({0 object, 1 unit, 2 Set, 3 metres from the
+    # path's first point}: the probe of 0.74.187 moved GEOFON to 3006 m for Set 3000). As Mission 10's restart: its path
+    # given first, then the teleport, on one event. RE_SV_IFAt_<kk>: every ship to kk * IF_AT_STEP_KM along its lane (they
+    # all have its length); sv_fleet_round.lua fires the step nearest the host's GEOFON for a rejoiner
     m13 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission013', 'EP_Mission013_global.uasset')
     t_ptel = g.foreign_template(m13, 'LiveAIPathTeleportByDistanceExecution', 'Debug_LCAC_SpeedUP')
     assert arg_values(t_ptel)[1:3] == ['NoneSelect', 'Set'], arg_values(t_ptel)
-    geo = fleet[0]
-    for ev, dist in (('RE_SV_IFProbeNear', '3000.0'), ('RE_SV_IFProbeFar', '300000.0')):
+    assert '"RE_SV_IFAt_%02d"' in lua, 'Scripts/sv_fleet_round.lua never fires RE_SV_IFAt_<kk>'
+    m = re.search(r'IFCOOP\.COURSE = \{([^}]*)\}', lua)              # (its course: the same as if_course's)
+    assert m, 'Scripts/sv_fleet_round.lua has no IFCOOP.COURSE'
+    kv = {k: float(v) for k, v in re.findall(r'(\w+) = (-?[\d.]+)', m.group(1))}
+    want = {'start_km': IF_START_KM, 'hold_km': IF_HOLD_KM, 'turn_km': IF_TURN_KM, 'leg_km': IF_LEG_KM, 'laps': IF_LAPS,
+            'lead_m': IF_LEAD_M, 'speed_kmh': float(IF_SPEED), 'at_step_km': IF_AT_STEP_KM, 'at_steps': IF_AT_STEPS}
+    assert kv == want and IF_STEP_KM == 2.0 and IF_ARC_DEG == 20.0, ('sv_fleet_round.lua IFCOOP.COURSE differs from the course', kv, want)
+    for kk in range(IF_AT_STEPS + 1):
+        ev = f'RE_SV_IFAt_{kk:02d}'
         g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t_ptel, ev, {0: geo['obj'], 3: dist})
+        for s_ in fleet:
+            g.execute(t_upath, ev, {1: s_['unit'], 2: s_['path'], 4: IF_SPEED})
+            g.execute(t_ptel, ev, {0: 'NoneSelect', 1: s_['unit'], 3: f'{kk * IF_AT_STEP_KM * 1000:.1f}'})
     print(f'  invincible fleet: {len(fleet)} ships (SV_IFUp<Key> / RE_SV_IFGo<Key>: each on its lane at {IF_SPEED} km/h, '
           f'Normal; {parts // 2} parts ordered Normal / {IF_PART_PRIORITY}), RE_SV_IFFleetRemove')

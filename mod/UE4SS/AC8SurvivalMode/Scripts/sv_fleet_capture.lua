@@ -251,7 +251,7 @@ local function lockHere(seq, solo)
     L = { seq = seq, state = "lock", at = os.clock(), solo = solo }
     hudCallout(tx().lock or "CAPTURE LOCK", tx().lock_sub or "")
     L.static = hudStatic(true, n(cc().lock_s, 10) + 1)
-    clog(string.format("seq %d: the lock's HUD static %s", seq, L.static and "on" or "NOT on (no HUD)"))
+    clog(string.format("seq %s: the lock's HUD static %s", tostring(seq), L.static and "on" or "NOT on (no HUD)"))
     clog(string.format("seq %s: CAPTURE LOCK on you (%s s)", tostring(seq), tostring(n(cc().lock_s, 10))))
 end
 local function takeHere(seq)
@@ -496,7 +496,9 @@ end
 ---------------------------------------------------------------------------------------------------- the host's word, here
 function IFCAP.onHost(f)
     local what, slot, seq = f[2], tonumber(f[3]), tonumber(f[4])
-    if not (slot and seq and slot >= 0 and slot < 64 and seq >= 0 and seq < 1e6) then return false, "bad slot / seq" end
+    if not (slot and seq and slot >= 0 and slot < 64 and seq >= 0 and seq < 1e6 and slot == math.floor(slot) and seq == math.floor(seq)) then
+        return false, "bad slot / seq"                    -- ((2026-11-18) whole numbers only: coop_guard_test's 1.5)
+    end
     local mine = slot == (COOP and COOP.slot or 0) or (H.cur and H.cur.solo)
     if what == "cap" then
         if mine then lockHere(seq, H.cur and H.cur.solo) else hudCallout(string.format(tx().lock_other or "CAPTURE LOCK ON %s", nameOf_(slot)), "") end

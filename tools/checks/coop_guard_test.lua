@@ -495,6 +495,7 @@ local TYPES = {
     { "join", "if", { "if", "release" }, extra = true },
     { "join", "if", { "if", "core" }, extra = true },
     { "join", "if", { "if", "sink" }, extra = true },
+    { "join", "if", { "if", "at", "12345" }, extra = true },        -- ((2026-11-18) A6: the host's fleet, metres along its lane)
     { "join", "if", { "if", "cap", "1", "3" }, extra = true },
     { "join", "if", { "if", "capgo", "1", "3" }, extra = true },
     { "join", "if", { "if", "capoff", "1", "3", "RAVEN's EW mast destroyed" }, extra = true },
