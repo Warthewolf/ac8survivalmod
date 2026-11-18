@@ -3968,3 +3968,4 @@ game. The work was split by file between agents; the builds ran in sequence in t
     C take (none of A, B or the pre-echo C); no Distant Thunder round, no storm cloud-flash containers (as before).
   - In game on their exact stages: friends' smoke 5/5; Alyssa's smoke 5/5 and capture 16/16 (a touchdown, 3 m off the
     mark). Round 30 has still never been played by two real players.
+- 0.74.195 INSTALLED 2026-11-18 (the user: "install it now please", to match her friends), the TESTER zip's stage over 0.74.159 (backup build/backup/install_before_0.74.195); 150 files verified, her survival.ini and the launcher's enabled.txt kept. 0.74.159's StormFx / StormBurst containers stay in her install (0.74.195 doesn't ship them), so her round 25-30 storm keeps its cloud bursts.

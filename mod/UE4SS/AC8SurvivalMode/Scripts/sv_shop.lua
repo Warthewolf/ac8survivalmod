@@ -659,6 +659,24 @@ function shopBuildFor(slot, name, price, kind, asked)
         if ok and room then RUN.bought[name], RUN.dirty = (RUN.bought[name] or 0) + 1, true end
         return ok, msg
     end
+    if it.repair and not kind and asked then              -- ((2026-11-18) a joiner's airfield repair: made here, for everyone
+        local o = offer(name)
+        if not o.price then return false, o.why or "NOT AVAILABLE RIGHT NOW." end
+        if (tonumber(price) or 0) < o.price then
+            log(string.format("shop: player %s's %s at %d refused: the room's price is %d", slot and tostring(slot + 1) or "?", name,
+                tonumber(price) or 0, o.price))
+            return false, string.format("THE PRICE IS NOW %d", o.price)
+        end
+        local top = AF.max or CFG.airfield.hp
+        if (AF.hp or 0) >= top then return false, "THE AIRFIELD IS AT FULL HEALTH" end
+        local was = AF.hp or 0
+        AF.full, AF.base, AF.bombBase = math.min(top, was + it.repair), AF.hits, AF.bomb
+        AF.hp = AF.full
+        pcall(ALLY.repairDefences)
+        RUN.bought[name], RUN.dirty = (RUN.bought[name] or 0) + 1, true
+        log(string.format("shop: player %s repaired the airfield: %d -> %d", slot and tostring(slot + 1) or "?", was, AF.hp))
+        return true, string.format("AIRFIELD REPAIRED (%d -> %d)", was, AF.hp)
+    end
     local d = CFG.shop.items.Airfield.defences
     if not (kind and type(d[kind]) == "table" and d[kind].units) then
         kind = (type(d[role]) == "table" and d[role].units) and role or nil
@@ -801,6 +819,14 @@ function shopBuy(name)
         RUN.defences.built = RUN.defences.built + 1
         RUN.defences.bought[o.kind] = (RUN.defences.bought[o.kind] or 0) + 1
         return done(string.format("%s BUILT for %d (%s).", o.def.label, price, o.unit))
+    elseif COOP and COOP.client and COOP.client() and it.repair and not o.unit then
+        -- ((2026-11-18) the user: "Airbase Repair is apparently not working": a joiner's repair was made in its own game only,
+        -- and the host's airfield ("af", every change) put it back at once, the zollars gone. The airfield is the host's: the
+        -- host repairs it (shopBuildFor), its "af" brings it to every game; paid now, refunded on a refusal or no answer)
+        local ok, msg = COOP.askBuild(name, price, nil)
+        if not ok then return done(msg) end
+        RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
+        return done(msg)
     elseif o.role == "ammo" then
         local k = it.kind
         if not (A and A.applied and A.caps and A.caps[k]) then return done("NOT AVAILABLE YET.") end

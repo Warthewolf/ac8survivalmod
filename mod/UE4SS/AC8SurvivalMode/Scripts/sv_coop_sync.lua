@@ -1201,7 +1201,7 @@ local function buildDone(b, msg)
         RUN.defences = RUN.defences or { built = 0, bought = {} }
         RUN.defences.built = RUN.defences.built + 1
         RUN.defences.bought[b.kind] = (RUN.defences.bought[b.kind] or 0) + 1
-    elseif LB and LB.stat then pcall(LB.stat, "allies", 1) end
+    elseif LB and LB.stat and not (((CFG.shop or {}).items or {})[b.name] or {}).repair then pcall(LB.stat, "allies", 1) end   -- (a repair isn't an ally)
 end
 local function refundHere(price, name, why)
     if not RUN or type(price) ~= "number" or price <= 0 then return end
