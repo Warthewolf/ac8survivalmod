@@ -13,14 +13,14 @@ what Survival must keep so that an update doesn't silently break every add-on.
   in an environment of its own (an allow-list: `docs/ADDONS.md`, "Your add-on's environment"), and gives each the
   `SVP` API (special rounds, targets and pay, callouts, music and HUD hand-off). With no `AC8SurvivalAddons` folder it
   doesn't even look (one `io.open`), and Survival plays exactly as before.
-- Line 2 of `sv_plugins.lua` is `-- add-on API <major>.<minor>` (now `2.0`). Native mods read it before Lua runs.
+- Line 2 of `sv_plugins.lua` is `-- add-on API <major>.<minor>` (now `2.1`). Native mods read it before Lua runs.
   Keep that form on line 2.
 - Survival's zip has no `AC8SurvivalAddons` folder; an add-on's installer makes it (beside Survival's own folder, so
   an update that deletes Survival's folder keeps the add-ons). It must never look like a UE4SS mod (no
   `Scripts\main.lua`, no `enabled.txt`, no `mods.txt` line), or UE4SS runs it by itself outside the framework; the
   loader says so in the log. An add-on's assets live in its own IoStore container, never in Survival's.
-- Tests: `tools/checks/plugins_test.lua` (+ `.sh`; `tools/checks/run_all.sh` runs it with every other suite), the
-  example add-on `examples/addons/target_practice/`.
+- Tests: `tools/checks/plugins_test.lua` and `plugins_coop_test.lua` (+ `.sh`; `tools/checks/run_all.sh` runs
+  them with every other suite), the example add-on `examples/addons/target_practice/`.
 
 ## The hooks in Survival's own files (keep them when you edit these files)
 | file | hook | why |
@@ -58,7 +58,7 @@ environment.
   default object).
 - **The walks' hold:** `walkHold()` (sv_core.lua) and `levelGoing()`: the add-ons' `FindFirstOf` / `FindAllOf` /
   `StaticFindObject` / `NotifyOnNewObject`, and `SVP.widget` (UE4SS's `StaticConstructObject`, widget classes in a
-  widget tree only; also refused with co-op open), refuse while either holds. The add-ons' `FindFirstOf` / `FindAllOf` /
+  widget tree only; also refused with co-op open while the room's add-ons don't match), refuse while either holds. The add-ons' `FindFirstOf` / `FindAllOf` /
   `StaticFindObject` and the API's own finds (`PLUGINS.find`) also wait on `walkBusy()` (the runtime's `SV_GcBusy`):
   if a new runtime loses `SV_GcBusy`, those walks are no longer held during a purge.
 - **UMG:** `SVP.widget` takes UMG's concrete widget classes by name (`WIDGET_OK`) or a widget blueprint's (its parents
@@ -120,17 +120,52 @@ environment.
     Survival's tables writable (`readOnly`). The framework itself still uses `debug.sethook` for its guard (rule 2).
 
 ## Versions
-- `SVP.api = { major = 2, minor = 0 }`. Add a call: bump the minor. Change or remove one: bump the major.
+- `SVP.api = { major = 2, minor = 1 }`. Add a call: bump the minor. Change or remove one: bump the major.
 - An add-on declares `def.api = "2.0"`. Survival serves its own major and a minor up to its own; anything else, and
   an add-on with no `def.api`, is refused with one log line.
 - `def.requires = { "SV_Something", ... }`: native functions it needs; one missing means not loaded, one line.
 - Update `docs/ADDONS.md` and line 2 of `sv_plugins.lua` with every API change.
 
-## Co-op
-- 2.0 is single player. While `COOP.open` is true (as soon as the host opens co-op, before anyone joins, and on every
-  joiner) an add-on's round never comes (its `ready` and its `spawn` refuse), none of its jobs run, and every API call
-  that changes the game refuses. `plugins_test` checks it. A friend on plain Survival sees plain Survival.
-- Co-op for add-ons comes later, as its own change.
+## Co-op (API 2.1)
+- Having an add-on installed is the opt-in. Each game's list (an add-on a line: folder in lower case, `def.ver`, a
+  FNV-1a 64 hash of every file it installs: its .lua by name and bytes, every other file in its folder and every
+  container its paks.txt names by name and size; `PLUGINS.addonHash`, sv_plugins_env.lua) is compared as a joiner
+  links: "hi" (the joiner's, in pieces) and "hl" (the host's answer), sv_plugins_api.lua `sysIn`.
+  - Any difference refuses the join on both games: callouts on both, every difference in both logs. The joiner calls
+    `COOP.refuseJoin` (sv_coop_migration.lua: `closeCoop`).
+  - The joiner's run picture ("jn") waits for the match: sv_coop_migration.lua's `askPicture` asks `PLUGINS.joinHeld`
+    first, and the API sends the "jn" itself once the lists match.
+  - Until the lists match (and with co-op open on a game that's neither host nor joiner), `coopShut` keeps every
+    add-on's jobs and game-changing calls shut, 2.0's rule (`plugins_test` checks it).
+  - Co-op's version string check (coop.c) stays as it is and comes first: games of another Survival build never link.
+- The host is the round's truth. On a joiner, `PLUGINS.hostOnly` refuses `SVP.target` / `kill` / `pay`, and
+  `PLUGINS.joinerSpawn` lets `SVP.spawn` through only inside the host's round of that add-on there (taken off at its
+  end, `remoteEnd`).
+- A switch-off is every game's. `PLUGINS.switchOff` calls `remoteOff`: a joiner sends "of" to the host, and the host to
+  every joiner but the one it heard it from. A joiner whose host's round goes quiet (QUIET_S, 15 s) treats it as a
+  desync and switches the add-on off. `plugins_coop_test` shows Survival's own messages and a second add-on going on.
+- Player-facing rules: `docs/ADDONS.md` "Co-op".
+- What co-op's code must keep for it (change one: update `sv_plugins.lua` in the same change, run
+  `tools/checks/plugins_coop_test.sh`, two to four games simulated on one link):
+  - `askPicture` and `COOP.refuseJoin` in `sv_coop_migration.lua` (above).
+  - `SV_CoopRecv` called BY NAME in `sv_coop_migration.lua`'s receive loop: the framework wraps that global and takes
+    its own messages (`px|...`) out before Survival's dispatch. A local copy of it there would bypass the wrap.
+  - The tag `px` stays unused by Survival, and `onHostMessage` / `onJoinerMessage` keep dropping a tag they don't know
+    (that is what a game without the framework does with an add-on's message).
+  - `sendTo(to, reliable, ...)` (sv_coop.lua: `|` cleaned, `to` nil = every joiner / the host), `COOP.host()`,
+    `COOP.client()`, `COOP.slots()`, `COOP.slot`, `COOP.role`, `playerName(slot)`.
+  - `COOP.M.mirror`: the host's pay goes through Survival's co-op pay path (`addCredits` wrapped in
+    `sv_coop_migration.lua`: shared and sent to the joiners only while `M.mirror > 0`). The framework raises it around
+    an add-on's pay so a claim handler's pay is shared like a special's.
+  - `COOP.M.peers[slot].obj`: each joiner's plane on the host (`SVP.players`).
+  - `COOP.M.nextId` (the host's co-op id counter, `% 65535 + 1` as hostPlane takes one) and the runtime's
+    `SV_CoopTrack(id, plane)` / `SV_CoopBind(id, plane)` (0 lets go): `SVP.net.track` / `follow` put an add-on's AI
+    planes on Survival's own enemy stream with ids from the same counter.
+  - sv_core.lua's `planes` and `pending` lists (records with `obj` / `addr`): on a joiner `SVP.net.own` takes an
+    add-on's planes out of them, so `strayTick` (sv_coop_joiner.lua: an enemy AI plane not bound to the host's is torn
+    down 15 s on) and Survival's sweeps leave them alone. If strayTick starts reading another list, update `own`.
+  - The shots' replay by stream id (sv_coop_sync.lua `idOfAddr`: `M.byId` / `M.copies`): an add-on's units aren't in
+    them, so a joiner's missiles at them fly unguided on the host; add-ons send claims instead (docs/ADDONS.md).
 
 ## Leaderboard
 A run with any add-on found in `AC8SurvivalAddons` is unranked (`LB.edited`). Don't change that without the
