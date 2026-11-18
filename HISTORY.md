@@ -3983,3 +3983,12 @@ game. The work was split by file between agents; the builds ran in sequence in t
     load; her crash at 14:08 (0.2 s after the fleet storm's layout swap, no crash report) unexplained. Proposed: the binds sent
     again at each link back.
 - 0.74.197 INSTALLED 2026-11-18 (the user: "install it"), the TESTER zip's stage over 0.74.195 (backup build/backup/install_before_0.74.197); 154 files verified, her survival.ini and enabled.txt kept.
+- 0.74.198-coop2mp.290 (2026-11-18): after the user's first 5-player co-op round 30 (0.74.197) and her friends' logs and
+  report. The fleet's hulls x1 +25 % a player past the first, GEOFON x1.5 on top (x3 / x2 with 5); GEOFON held at 3 % from
+  the start (it sank from >15 % to 0 between two ticks, 89 s in); no "split" when GEOFON's already gone, a finished break
+  look never ticked again, round 30's GEOFON never taken off as the test Ford (each joiner looped ~2670 times); a joiner's
+  sunk TANACORN off its HUD, radar and lock-on, hidden (a friend: "still appears on iff"); the railcannon's TEST: callouts
+  the key's only; RAVEN's mast "down" only after it was up; the storm clears at round 32 (was 35), its bursts 0.1 -> 0.08,
+  strikes every 0.4-1.0 s (was 0.3-0.8), the fleet's night exposure bias 0.6 -> 0.8 (cressendo's report: the flashes, night
+  disorienting). Zips: TESTER d7135278bd11..., friends 326f9a37d86b... (registered), contents checked. Not run in game.
+  Open: no hit feedback on the TANACORN's core (cressendo).
