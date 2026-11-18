@@ -4141,6 +4141,67 @@ SUITES.shipprobe = function()
     end
 end
 
+-- ((0.74.188) A6: the rejoiner's catch-up RE_SV_IFAt_<kk> (every ship's lane path again, then Mission 13's path teleport by
+-- distance to kk * 2 km): GEOFON there, sailing on forward along its lane, its parts with it, the formation's next ship too
+SUITES.fleetat = function()
+    intoRun()
+    local C = {}
+    A.do_(function()
+        if not ST.check(IFLEET ~= nil and IFCOOP and IFCOOP.alongOf, "the fleet and IFCOOP.alongOf are in this build") then return "abort" end
+        ST.marks.s0 = ST.n
+        ST.press("N")
+    end)
+    A.log_("fleet: up: GEOFON", 60, "s0", true, function(l) ST.check(l ~= nil, "GEOFON up", l) end)
+    A.wait(10)
+    local function ship(i)
+        local sh = IFLEET.cur and IFLEET.cur.ships and IFLEET.cur.ships[i]
+        return sh and sh.hull and valid(sh.hull.obj) and sh.hull.obj or nil, sh
+    end
+    A.do_(function()
+        local m = IFCOOP.alongNow()
+        ST.info(string.format("fleetat: GEOFON %.0f m along its lane before (alongNow)", m or -1))
+        ST.check(m ~= nil and m < 1500, "alongNow near the start before", m)
+    end)
+    for _, kk in ipairs({ 2, 8 }) do
+        local want = kk * 2000
+        A.do_(function()
+            local r = SV_Event(string.format("RE_SV_IFAt_%02d", kk))
+            ST.info(string.format("fleetat: RE_SV_IFAt_%02d fired (%s): %d m", kk, tostring(r), want))
+            C.t0, C.prev = os.clock(), nil
+            local o, sh = ship(1)
+            C.part = nil
+            for _, e in ipairs(sh and sh.parts or {}) do if valid(e.obj) then C.part = e.obj; break end end
+        end)
+        for _, t in ipairs({ 2, 8, 20 }) do
+            A.do_(function() C.waitTo = C.t0 + t end)
+            A.until_(function() return os.clock() >= C.waitTo end, t + 5)
+            A.do_(function()
+                local o = ship(1)
+                if not o then ST.info("fleetat: no GEOFON"); return end
+                local l = ST.at(o)
+                local m = IFCOOP.alongOf(l.X, l.Y, want)
+                local pl = C.part and valid(C.part) and ST.at(C.part)
+                local pd = pl and math.sqrt((pl.X - l.X) ^ 2 + (pl.Y - l.Y) ^ 2) / 100
+                local o2 = ship(2)
+                local l2 = o2 and ST.at(o2)
+                local d2 = l2 and math.sqrt((l2.X - l.X) ^ 2 + (l2.Y - l.Y) ^ 2) / 100
+                ST.info(string.format("fleetat: %02d +%d s: GEOFON %s m along (want ~%d), heading %.0f; a part %s m from its hull; ship 2 %s m from it",
+                    kk, t, m and string.format("%.0f", m) or "OFF the course", want, o:K2_GetActorRotation().Yaw,
+                    pd and string.format("%.0f", pd) or "?", d2 and string.format("%.0f", d2) or "?"))
+                if t == 2 then ST.check(m ~= nil and math.abs(m - want) < 400, string.format("%02d: GEOFON at ~%d m along", kk, want), m) end
+                if t == 20 then
+                    ST.check(m ~= nil and C.prev ~= nil and m > C.prev + 50, string.format("%02d: sailing on forward along its lane", kk),
+                        string.format("%s -> %s", tostring(C.prev), tostring(m)))
+                    ST.check(pd == nil or pd < 300, string.format("%02d: its part with it", kk), pd)
+                end
+                C.prev = m
+            end)
+        end
+        A.picture("fleetat_" .. kk, function() local o = ship(1); return o and ST.off(ST.at(o), -40000, 30000, 15000) end,
+            function() local o = ship(1); return o and ST.at(o) end, 60)
+    end
+end
+
 SUITES.geofondeck = function()
     intoRun()
     local C = {}
