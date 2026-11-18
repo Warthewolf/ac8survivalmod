@@ -313,5 +313,16 @@ def build_fleet(g, flag, stock_ep):
     assert '"RE_SV_IFRavenPing"' in lua, 'Scripts/sv_fleet_capture.lua never fires RE_SV_IFRavenPing'
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_IFRavenPing')
     g.execute(t_nav, 'RE_SV_IFRavenPing', {1: raven[0]['unit']})
+    # ((2026-11-18) A6, a co-op rejoiner's fleet: Lua can't move a ship (autotest shipmove: K2_SetActorLocation undone, as
+    # hard rule 39). Mission 13's LiveAIPathTeleportByDistanceExecution (its LCACs: {0 object, 1 unit, 2 Set, 3 distance})
+    # puts a unit that far along its path. A probe first, its distance's unit unknown (Mission 10 has 889900 on a land
+    # battleship and 1900-8100 on a landing craft): GEOFON at Set 3000 and Set 300000 (RE_SV_IFProbeNear / _Far)
+    m13 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission013', 'EP_Mission013_global.uasset')
+    t_ptel = g.foreign_template(m13, 'LiveAIPathTeleportByDistanceExecution', 'Debug_LCAC_SpeedUP')
+    assert arg_values(t_ptel)[1:3] == ['NoneSelect', 'Set'], arg_values(t_ptel)
+    geo = fleet[0]
+    for ev, dist in (('RE_SV_IFProbeNear', '3000.0'), ('RE_SV_IFProbeFar', '300000.0')):
+        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
+        g.execute(t_ptel, ev, {0: geo['obj'], 3: dist})
     print(f'  invincible fleet: {len(fleet)} ships (SV_IFUp<Key> / RE_SV_IFGo<Key>: each on its lane at {IF_SPEED} km/h, '
           f'Normal; {parts // 2} parts ordered Normal / {IF_PART_PRIORITY}), RE_SV_IFFleetRemove')
