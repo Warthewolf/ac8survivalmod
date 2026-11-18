@@ -142,7 +142,6 @@ IF_TURN_KM, IF_LEG_KM, IF_LAPS = 2.0, 8.0, 2
 IF_STEP_KM, IF_ARC_DEG = 2.0, 20.0
 IF_SPEED = '45.0'                                # km/h, every ship (the path record's speed)
 IF_LEAD_M = 500.0
-IF_AT_POINTS = 35                                   # (2026-11-18) a rejoiner's catch-up: RE_SV_IFPt_00-35, its lane's points to ~40 km
 IF_PART_PRIORITY = 'PlayerOnlyNoLimit'   # (2026-11-16) each part's order: PlayerFirst shelled the runway's target points; the
                                          # airfield's shelling is WP13's, from the gun line
 IF_AREA_M, IF_ALT_M = SP_SHIP_AREA_M, SP_SHIP_ALT_M   # each unit's area (45 km: the whole course and the airfield)
@@ -314,40 +313,18 @@ def build_fleet(g, flag, stock_ep):
     assert '"RE_SV_IFRavenPing"' in lua, 'Scripts/sv_fleet_capture.lua never fires RE_SV_IFRavenPing'
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_IFRavenPing')
     g.execute(t_nav, 'RE_SV_IFRavenPing', {1: raven[0]['unit']})
-    # ((2026-11-18) A6, a co-op rejoiner's fleet: its copies spawn at the course's start, the host's maybe 10 km on. Lua can't
-    # move a ship (autotest shipmove: K2_SetActorLocation undone, as hard rule 39); Mission 13's
-    # LiveAIPathTeleportByDistanceExecution puts a unit that far along its path ({0 object, 1 unit, 2 Set, 3 metres from the
-    # path's first point}: the probe of 0.74.187 moved GEOFON to 3006 m for Set 3000). As Mission 10's restart: its path
-    # given first, then the teleport, on one event. RE_SV_IFAt_<kk>: every ship to kk * IF_AT_STEP_KM along its lane (they
-    # all have its length); sv_fleet_round.lua fires the step nearest the host's GEOFON for a rejoiner
-    # ((0.74.190) by point instead (Mission 10's LiveAIPathTeleportByPointExecution {0 object, 1 unit, 2 the point}, alone as
-    # Mission 19's): by distance put every ship there but it sailed back to its lane's start (fleetat of 0.74.189: the path
-    # given again resets its next point, and without it the probe of 0.74.187 turned back too). RE_SV_IFPt_<ii>: every ship
-    # to its lane's point ii (its lane's points are the course's, one for one)
-    m10 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission010', 'EP_Mission010_global.uasset')
-    t_ptel = g.foreign_template(m10, 'LiveAIPathTeleportByPointExecution', 'Debug_SkipPhase_2')
-    assert arg_values(t_ptel)[1:] == ['NoneSelect', '2'], arg_values(t_ptel)
-    assert '"RE_SV_IFPt_%02d"' in lua, 'Scripts/sv_fleet_round.lua never fires RE_SV_IFPt_<ii>'
+    # ((2026-11-18) A6, a co-op rejoiner's fleet: its copies spawn at the course's start while the host's may be 10 km on. Tried
+    # and dropped (0.74.186-0.74.191, autotests shipmove, shipprobe, fleetat, fleetvar): K2_SetActorLocation is undone (as hard
+    # rule 39); Mission 13's path teleport by distance and Mission 10's by point put every ship exactly there (the distance in
+    # metres from its path's first point, the point counted from 0, parts and the formation with it) but each then sails back
+    # to the point it was heading for, and its lane given again (any of args 7, 12, 14 changed) sends it to the lane's first
+    # point: worse than leaving it. What it would take: lanes starting further along, or the ships moved from the host's stream.
+    # Kept: the Lua's course (sv_fleet_round.lua IFCOOP.COURSE, checked here) and the host's "if|at|<m>" (logged on a joiner)
     m = re.search(r'IFCOOP\.COURSE = \{([^}]*)\}', lua)              # (its course: the same as if_course's)
     assert m, 'Scripts/sv_fleet_round.lua has no IFCOOP.COURSE'
     kv = {k: float(v) for k, v in re.findall(r'(\w+) = (-?[\d.]+)', m.group(1))}
     want = {'start_km': IF_START_KM, 'hold_km': IF_HOLD_KM, 'turn_km': IF_TURN_KM, 'leg_km': IF_LEG_KM, 'laps': IF_LAPS,
-            'lead_m': IF_LEAD_M, 'speed_kmh': float(IF_SPEED), 'pt_max': IF_AT_POINTS}
+            'lead_m': IF_LEAD_M, 'speed_kmh': float(IF_SPEED)}
     assert kv == want and IF_STEP_KM == 2.0 and IF_ARC_DEG == 20.0, ('sv_fleet_round.lua IFCOOP.COURSE differs from the course', kv, want)
-    assert all(len(s_['lane']) == len(if_course()) for s_ in fleet) and IF_AT_POINTS < len(if_course())
-    for ii in range(IF_AT_POINTS + 1):
-        ev = f'RE_SV_IFPt_{ii:02d}'
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        for s_ in fleet:                                 # ((0.74.189) the object form: the unit form moved nothing)
-            g.execute(t_ptel, ev, {0: s_['obj'], 2: str(ii)})
-    # ((0.74.191) a probe: by point the ships still sail back to their old next point (fleetat of 0.74.190). Each variant on
-    # GEOFON: to point 2, then its lane again with one of the path record's unnamed args changed (arg 7 ObjectSetting ->
-    # NotSnap / Snap; arg 12 or arg 14 0 -> 2): RE_SV_IFVar<A-D>
-    geo = fleet[0]
-    for tag, ch in (('A', {7: 'NotSnap'}), ('B', {7: 'Snap'}), ('C', {12: '2'}), ('D', {14: '2'})):
-        ev = f'RE_SV_IFVar{tag}'
-        g.trigger('RE_SpawnEnemy_kokatu_1st', ev)
-        g.execute(t_ptel, ev, {0: geo['obj'], 2: '2'})
-        g.execute(t_spath, ev, {**{0: geo['obj'], 2: geo['path'], 4: IF_SPEED}, **ch}, delay=0.5)
     print(f'  invincible fleet: {len(fleet)} ships (SV_IFUp<Key> / RE_SV_IFGo<Key>: each on its lane at {IF_SPEED} km/h, '
           f'Normal; {parts // 2} parts ordered Normal / {IF_PART_PRIORITY}), RE_SV_IFFleetRemove')

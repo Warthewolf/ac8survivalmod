@@ -964,10 +964,10 @@ end
 -- ((0.74.172) to one who links (or links back) during round 30: where its phase 2 is (GEOFON watched, broken, split, its
 -- halves hidden; her core open; her sinking), 12 s on, its copies spawned there first (sv_coop.lua's hostSync)
 -- ((2026-11-18) A6: a rejoiner's fleet. Its copies spawn at the course's start, the host's may be 10 km on: the host sends
--- GEOFON's metres along its lane ("if|at|<m>", worked out as the word goes), the joiner fires RE_SV_IFPt_<ii> (every ship to
--- its lane's point ii, the one nearest: Mission 10's path teleport by point, survival_events_fleet.py) once its copies are up.
--- The course's shape is survival_events_fleet.py if_course's (the generator checks these numbers against its own)
-IFCOOP.COURSE = { start_km = 30, hold_km = 16, turn_km = 2, leg_km = 8, laps = 2, lead_m = 500, speed_kmh = 45, pt_max = 35 }
+-- GEOFON's metres along its lane ("if|at|<m>", worked out as the word goes) and the joiner logs how far its own copy is from
+-- it, once its copies are up. Not caught up: survival_events_fleet.py build_fleet says why (a ship teleported along its lane
+-- sails back to the point it was heading for). The course's shape is if_course's (the generator checks these numbers)
+IFCOOP.COURSE = { start_km = 30, hold_km = 16, turn_km = 2, leg_km = 8, laps = 2, lead_m = 500, speed_kmh = 45 }
 local COURSE_PTS = nil
 local function coursePts()                                -- GEOFON's course (cm) and each point's metres along it
     if COURSE_PTS then return COURSE_PTS end
@@ -1003,15 +1003,6 @@ local function coursePts()                                -- GEOFON's course (cm
     return pts
 end
 IFCOOP.coursePts = coursePts
--- the lane's point nearest m metres along (0 its first), at most COURSE.pt_max
-function IFCOOP.pointNear(m)
-    local pts, best, bestD = coursePts(), 0, math.huge
-    for i = 1, math.min(#pts, IFCOOP.COURSE.pt_max + 1) do
-        local d = math.abs(pts[i][3] - m)
-        if d < bestD then best, bestD = i - 1, d end
-    end
-    return best
-end
 -- metres along the course of a point (cm) near it: of its places within 400 m of the course, the nearest (with `guess`
 -- metres picking the lap: the course laps, so a place is on it more than once); nil when it's nowhere near
 function IFCOOP.alongOf(px, py, guess)
@@ -1200,10 +1191,15 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet co-op", fn = function(now)
             IFCOOP.atWant = nil
             local K = IFCOOP.COURSE
             local m = A6.m + (now - A6.at) * K.speed_kmh / 3.6
-            local ii = IFCOOP.pointNear(m)
-            local r = type(SV_Event) == "function" and SV_Event(string.format("RE_SV_IFPt_%02d", ii)) or -5
-            jlog(string.format("co-op: the fleet here put on its lane's point %d, %.0f m along (the host's %.0f m now; RE_SV_IFPt_%02d: %s)",
-                ii, IFCOOP.coursePts()[ii + 1][3], m, ii, tostring(r)))
+            local mine = nil
+            for _, o in ipairs(COOP.copiesOf("SV_Unit_IF" .. first.key)) do
+                if liveObj(o) and not mine then
+                    local okL, l = pcall(function() return o:K2_GetActorLocation() end)
+                    if okL and l then mine = IFCOOP.alongOf(l.X, l.Y, 0) end
+                end
+            end
+            jlog(string.format("co-op: the fleet here %s m along its lane, the host's %.0f m now: %s", mine and string.format("%.0f", mine) or "?",
+                m, mine and string.format("%.1f km behind (not caught up: a teleported ship sails back)", (m - mine) / 1000) or "this copy's place unread"))
         elseif now - A6.at > 60 then
             IFCOOP.atWant = nil
             jlog("co-op: the host's fleet place dropped: no copy of GEOFON here in 60 s")
