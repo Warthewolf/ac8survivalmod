@@ -304,5 +304,14 @@ def build_fleet(g, flag, stock_ep):
     g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_IFFleetRemove')
     for s in fleet:
         g.execute(t_remove, 'RE_SV_IFFleetRemove', {0: 'NoneSelect', 1: s['unit'], 2: 'NoneSelect'})
+    # ((2026-11-18) GEOFON's capture, WP14 2: RAVEN's EW mast pinged on the minimap while a CAPTURE LOCK runs:
+    # RE_SV_IFRavenPing, Mission 22's "look here" on RAVEN's unit (as RE_SV_RaidPing_NN); sv_fleet_capture.lua fires it)
+    t_nav = g.exec_template('LiveBattleNavigationExecution', 'Default_PreRadioEvent_28')
+    assert arg_values(t_nav)[1:] == ['AA_Unit_01_Ground0', 'Quadruple', 'false'], arg_values(t_nav)
+    raven = [x for x in fleet if x['name'] == IF_RAVEN_ECM['ship']]
+    assert len(raven) == 1, 'no RAVEN in the fleet'
+    assert '"RE_SV_IFRavenPing"' in lua, 'Scripts/sv_fleet_capture.lua never fires RE_SV_IFRavenPing'
+    g.trigger('RE_SpawnEnemy_kokatu_1st', 'RE_SV_IFRavenPing')
+    g.execute(t_nav, 'RE_SV_IFRavenPing', {1: raven[0]['unit']})
     print(f'  invincible fleet: {len(fleet)} ships (SV_IFUp<Key> / RE_SV_IFGo<Key>: each on its lane at {IF_SPEED} km/h, '
           f'Normal; {parts // 2} parts ordered Normal / {IF_PART_PRIORITY}), RE_SV_IFFleetRemove')

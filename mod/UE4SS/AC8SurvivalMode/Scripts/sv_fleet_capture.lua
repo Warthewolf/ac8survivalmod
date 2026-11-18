@@ -191,6 +191,7 @@ end
 -- L: { seq, state ("lock" | "fly" | "final" | "trap" | "done"), at, limits, solo }
 local L = nil
 local trapTick                                            -- (below: flyTick ends a capture through it)
+local hudStatic                                           -- (below: giveBack ends the lock's static through it)
 local function pawnNow() return liveObj(survivalPC) and survivalPC.Pawn or nil end
 local function shielded(on)                               -- (the user's rule: invincible, no enemy targets you; given back)
     local pawn = pawnNow()
@@ -219,6 +220,7 @@ local function shielded(on)                               -- (the user's rule: i
 end
 local function giveBack(why)                              -- (any end: the controls, the shield; never left taken)
     if not L then return end
+    if L.static then hudStatic(false); L.static = nil end
     if L.state == "fly" or L.state == "final" then
         local pw = pawnNow()                              -- (the landing's gear back up, the brake off: a plane given back flies)
         if L.landOn and valid(pw) and type(SV_CapLand) == "function" then pcall(SV_CapLand, addrOf(pw) or 0, 0) end
@@ -229,15 +231,29 @@ local function giveBack(why)                              -- (any end: the contr
     clog(string.format("seq %s given back (%s): your controls, %s", tostring(L.seq), tostring(why), said))
     L = nil
 end
+-- ((0.74.184) WP14 2: the lock's HUD flicker on the locked player (the game's own static, as the lightning Anomaly's
+-- BeginHUDDistortionLightning), off at the lock's end either way
+hudStatic = function(on, secs)
+    local h = nil
+    pcall(function() h = survivalPC.MyHUD end)
+    if not (h and liveObj(h)) then return false end
+    if on then
+        local info = { NeedUpdateDistortion = true, MinDistortionScale = 0.2, MaxDistortionScale = 0.6, HideContainerTime = 0,
+                       ShowContainerTime = 0, UseHideHUD = false, BeginHideHUDTime = 0, HideHUDTime = 0, DistortionMask = 0 }
+        return pcall(function() h:BeginHUDDistortionLightning(secs, info) end)
+    end
+    return pcall(function() h:EndHUDDistortionLightning() end)
+end
 local function lockHere(seq, solo)
     if L then giveBack("a new lock") end
     L = { seq = seq, state = "lock", at = os.clock(), solo = solo }
     hudCallout(tx().lock or "CAPTURE LOCK", tx().lock_sub or "")
-    if SND and SND.beep then pcall(SND.beep) end
+    L.static = hudStatic(true, n(cc().lock_s, 10) + 1)
     clog(string.format("seq %s: CAPTURE LOCK on you (%s s)", tostring(seq), tostring(n(cc().lock_s, 10))))
 end
 local function takeHere(seq)
     if not (L and L.seq == seq) then L = { seq = seq, at = os.clock() } end
+    if L.static then hudStatic(false); L.static = nil end
     do                                                    -- ((0.74.177) GEOFON's collision read, and its deck's slab
         local o = nil
         if IFLEET and IFLEET.cur and IFLEET.cur.ships and IFLEET.cur.ships[1] and IFLEET.cur.ships[1].hull then o = IFLEET.cur.ships[1].hull.obj end
@@ -425,6 +441,10 @@ local function hostTick(now)
         if not g then hostEnd("GEOFON sunk", true); return end
         if k.state == "lock" then
             if not mast then hostEnd("RAVEN's EW mast destroyed", true); return end
+            if now >= (k.pingAt or 0) and type(SV_Event) == "function" then   -- (RAVEN on everyone's minimap: forwarded)
+                k.pingAt = now + 3
+                pcall(SV_Event, "RE_SV_IFRavenPing")
+            end
             if now >= k.until_ then
                 local at = nil
                 for _, p in ipairs(COOP and COOP.players and COOP.players() or {}) do if p.slot == k.slot then at = p.at end end
