@@ -3911,3 +3911,9 @@ game. The work was split by file between agents; the builds ran in sequence in t
   (45 deg; the fleet log's 135 is a compass heading); its bounds centred on its root (geofondeck suite). 0.74.183's two capture
   runs: both touched down ~115 m before the mark, held on the deck 2 s, captured over the mark (runs 20261118_100236,
   _100627; 16/16 each, never died).
+- 0.74.184-0.74.185 (2026-11-18): GEOFON's capture, WP14 2. The CAPTURE LOCK puts the game's own HUD static on the locked
+  player (LiveHUD BeginHUDDistortionLightning, as the lightning Anomaly's strike; off at the lock's end, a takeover or a
+  give-back), and RAVEN is pinged on every player's minimap every 3 s of a lock (RE_SV_IFRavenPing: Mission 22's
+  LiveBattleNavigationExecution on RAVEN's unit, as the raid pings; forwarded to joiners). Runs 20261118_104940 and _105521:
+  16/16 each, the static on (the lock picture's HUD warped), the ping taken (SV_Event 1), both touched down on the deck
+  (four landings of four since 0.74.183). Not yet in co-op: the static on a joiner's own HUD (the lock word reaches it).
