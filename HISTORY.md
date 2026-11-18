@@ -3917,3 +3917,9 @@ game. The work was split by file between agents; the builds ran in sequence in t
   LiveBattleNavigationExecution on RAVEN's unit, as the raid pings; forwarded to joiners). Runs 20261118_104940 and _105521:
   16/16 each, the static on (the lock picture's HUD warped), the ping taken (SV_Event 1), both touched down on the deck
   (four landings of four since 0.74.183). Not yet in co-op: the static on a joiner's own HUD (the lock word reaches it).
+- 0.74.186 (2026-11-18): GEOFON's capture, B7: tools/checks/capture_test.sh (+ .lua, 62 checks on the piece alone: the picks,
+  the lock and its ends, the shield, the landing, every end giving the controls back, the host's words). Fixes it found: the
+  shield is written every tick (a field the game put back went unanswered: the "held every tick" comment wasn't so); the
+  host never holds a capture its captive's game ended unheard (the player gone, or not DOWN in give_up_s + 60 s: ended, picks
+  go on); the runtime's capture off at a level drop; a rest of every_s / 2 after any end. In game, run 20261118_110438: 16/16,
+  the static and the ping, a touchdown (five landings of five).
