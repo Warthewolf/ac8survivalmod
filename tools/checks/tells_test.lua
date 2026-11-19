@@ -132,7 +132,8 @@ do
             if not ev:match("^RE_SV_Radio%a+$") then bad[#bad + 1] = id .. ": " .. ev end
             events0[ev] = true
         end
-        if not (type(e.radio) == "table" and #e.radio > 0) then bad[#bad + 1] = id .. ": no radio line" end
+        local silent = id == "hunt" or id == "reaper_in"         -- ((2026-11-19) their lines cut at the user's word)
+        if not (type(e.radio) == "table" and (#e.radio > 0 or silent)) then bad[#bad + 1] = id .. ": no radio line" end
         for k in pairs(e) do if not KEYS[k] then bad[#bad + 1] = id .. ": key " .. tostring(k) end end
         if e.chain and not C.list[e.chain] then bad[#bad + 1] = id .. ": chain " .. e.chain end
         if C.cooldown_s[id] == nil then bad[#bad + 1] = id .. ": no cooldown_s" end
@@ -218,10 +219,12 @@ do
     D.now = 132
     check(TELL.say("alcn_rail") == true, "... 2 s on: said (the ALICORN's own timing puts it there: sv_alicorn.lua)")
     D.now = 133
+    CFG.tells.list.hunt.radio = { "RE_SV_RadioHuntX" }          -- (a line for the gap's checks: it ships with none)
     local okH, _, kH = TELL.say("hunt")
     check(not okH and kH == "gap", "the hunt 1 s after it: its gap")
     D.now = 134.5
     check(TELL.say("hunt") == true, "... 2.5 s after it: said")
+    CFG.tells.list.hunt.radio = {}
     -- pick, chain
     D.now = 200; events = {}
     check(TELL.say("clock", nil, 6) and events[1] == "RE_SV_RadioClockF", "clock 6: the 6th line (pick a)")
@@ -389,7 +392,9 @@ do
     ACE.movesTick(150, D)
     check(events[1] == "RE_SV_AceKulbit_13" and #events == 1, "tells off: the move at once, no line (as before)")
     reset()
-    -- the hunt (sv_ai.lua ACE.hunt -> TELL.hunted)
+    -- the hunt (sv_ai.lua ACE.hunt -> TELL.hunted): ((2026-11-19) it ships with no line; one put in for the checks)
+    check(#CFG.tells.list.hunt.radio == 0 and #CFG.tells.list.reaper_in.radio == 0, "the hunt and reaper_in tells ship with no line (cut 2026-11-19)")
+    CFG.tells.list.hunt.radio = { "RE_SV_RadioHuntX" }
     D.now = 200; callouts = {}; events = {}
     R.dist = 12
     pcall(ACE.hunt, R)
@@ -409,6 +414,7 @@ do
     pcall(ACE.hunt, R)
     check(count(events, "^RE_SV_RadioHunt") == 1, "on a co-op joiner: none (the host's planes hunt the host)")
     CFG.coop.enabled, COOP.open, COOP.role = false, false, nil
+    CFG.tells.list.hunt.radio = {}
     planes = {}
 
     -- the ALICORN (sv_alicorn.lua SPC.alicornTick)

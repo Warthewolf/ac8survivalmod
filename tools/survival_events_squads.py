@@ -26,9 +26,8 @@ TELL_LINES = [
     # ace reversal / kulbit (ACE.movesTick)
     ('SV_Radio_TurnA', 'v0001_1928', 'LIVE_AWACS', {'now': True}),        # "That's a sudden turn - coming straight at you!" (ST_ms029 418)
     ('SV_Radio_TurnB', 'v0417_0002', 'Common_Enemy_Fighter_A', {'now': True}),   # "He's mine!" (PByP 3071, Shadow 160th's)
-    # a hunting tier's flight closing in (ACE.hunt)
-    ('SV_Radio_HuntA', 'v1236_0019', 'ms12_Enemy_Commander', {}),         # "Hunt down the Wings of Theve, and I promise you a war medal!" (ST_ms012 408)
-    ('SV_Radio_HuntB', 'v0929_0001', 'Common_Enemy_Fighter_A', {}),       # "I see our prey." (PByP 3397, Shadow 150th's)
+    # (a hunting tier's flight closing in, ACE.hunt: its two lines, "Hunt down the Wings of Theve..." and "I see our
+    # prey.", cut at the user's word, 2026-11-19: "Get rid of the i see our prey too")
     # a raid / strike on the airfield (Mission 22's airfield is "the eastern airfield")
     ('SV_Radio_RaidA', 'v0001_2784', 'LIVE_AWACS', {}),                   # "Joker Flight, enemy aircraft approaching the eastern airfield." (ST_ms022 123)
     ('SV_Radio_RaidB', 'v0001_2240', 'LIVE_AWACS', {}),                   # "Enemy attackers closing on the base." (ST_ms004 499)
