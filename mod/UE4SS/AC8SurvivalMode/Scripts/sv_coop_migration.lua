@@ -4,6 +4,13 @@
 -- another part uses is a global of this mod's Lua state, its own helpers stay local.
 do  -- (sv_coop.lua's do block, continued: this piece's own helpers stay local to it)
 local M = COOP.M                                   -- (sv_coop.lua's M, handed on)
+-- (a joiner) the host's picture asked ("jn"), but not before the add-on API has matched this game's add-ons with the
+-- host's (sv_plugins_api.lua PLUGINS.joinHeld: it sends the "jn" itself once they match; a mismatch refuses the join)
+local function askPicture()
+    M.jnAt = os.clock()
+    if PLUGINS and PLUGINS.joinHeld and PLUGINS.joinHeld() then return end
+    send(true, "jn")
+end
 -- ((2026-11-11) the ranges a host's round state ("rnd") and the runtime's "sys|slot" must be in: tools/checks/coop_guard_test.lua)
 local RND_MAX = { round = 9999, secs = 86400, waves = 256, alive = 100000, players = (MAX_SLOT or 23) + 1 }
 local SPAWNQ_MAX = 256                                -- (different units waiting for a joiner's level: "sp"; ~150 units)
@@ -993,7 +1000,7 @@ local function onSys(from, what, f)
     elseif what == "paired" or what == "restart" then      -- (joiner) the host; (either) a game started over
         if from == 0 then M.hostLostAt, M.hostLeft = nil, nil end   -- (host migration: the host's back, or a new one)
         sendHi()
-        if COOP.client() and D then killAllCopies("new link"); M.jnAt = os.clock(); send(true, "jn") end
+        if COOP.client() and D then killAllCopies("new link"); askPicture() end
         if COOP.host() and what == "restart" then
             M.roster[from] = nil
             -- ((0.73.77, plan C1) their game started over: back in another aircraft, their plane here goes; the joiners too)
@@ -1032,7 +1039,7 @@ local function onSys(from, what, f)
             if gone then
                 log(string.format("coop: the host's link back, but it left its run in round %d: the copies here kept, no picture asked; "
                     .. "the migration goes on", M.hostLeft.round))
-            elseif COOP.client() and D then killAllCopies("link back"); M.jnAt = os.clock(); send(true, "jn") end
+            elseif COOP.client() and D then killAllCopies("link back"); askPicture() end
         end
     elseif what == "left" then
         callout(string.upper(playerName(from)) .. " LEFT", nil)
@@ -1398,6 +1405,8 @@ local function closeCoop(why)
     pcall(COOP.focusPause, false, "co-op closed")
     log("coop: closed (" .. why .. ")")
 end
+-- (add-on API 2.1, sv_plugins_api.lua) a joiner whose add-ons aren't the host's: its co-op closed here, why logged
+function COOP.refuseJoin(why) closeCoop(tostring(why)) end
 
 -- Each player's name on their plane's target box (user, 2026-10-26: "we need to get player names working on the HUD
 -- always"): the stand-ins SV_Unit_CoopPeer<A-X> carry the callsign key SV_CoopName_<A-X> (NAME_KEYS;
@@ -1682,7 +1691,7 @@ function COOP.tick(tick)
             -- ((0.73.73) "rs|n": the host's new run, which a joiner starts over with; "rs|m" a host by migration's level, the
             -- same run: a joiner keeps its money and nobody DOWN comes back)
             if COOP.host() then send(true, "rs", (M.mig and M.mig.hosting) and "m" or "n")
-            else M.jnAt = os.clock(); send(true, "jn") end
+            else askPicture() end
             log("coop: in Survival's level as " .. (COOP.host() and "the host" or ("player " .. tostring((COOP.slot or -1) + 1))))
             if COOP.client() and M.state ~= "linked" then
                 callout(M.auto and "CO-OP: LOOKING FOR A HOST" or "CO-OP: WAITING FOR THE HOST",

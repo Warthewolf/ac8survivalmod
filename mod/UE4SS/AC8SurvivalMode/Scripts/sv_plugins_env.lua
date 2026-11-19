@@ -140,7 +140,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         return notifyCls[cls]
     end
     function PLUGINS.notifyTick()
-        if walkHeld() or coopOpen() then notifyQ = {}; return end
+        if walkHeld() then notifyQ = {}; return end
         local q0 = notifyQ
         notifyQ = {}
         for cls, q in pairs(q0) do
@@ -165,7 +165,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
                 local k = ok and keyOf(o) or nil
                 if k ~= nil then if seen[k] then ok = false else seen[k] = true end end
                 if ok and c then local okA, isA = pcall(function() return o:IsA(c) end); ok = okA and isA == true end
-                if ok then for i = 1, n do local e = l[i]; if not e.p.off then e.fn(o) end end end
+                if ok then for i = 1, n do local e = l[i]; if not e.p.off and not coopShut(e.p) then e.fn(o) end end end
             end
         end
     end
@@ -281,6 +281,21 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         return code == 2
     end
     PLUGINS.folderMissing = folderMissing
+    -- (co-op's add-on check: every file it installs) the folder's other files, its subfolders' too, "<sub>/<name>"
+    local function othersOf(node, prefix, out, depth)
+        if type(node) ~= "table" or depth > 6 or #out >= 2000 then return out end
+        for _, f in pairs(type(node.__files) == "table" and node.__files or {}) do
+            local okN, name = pcall(function() return f.__name end)
+            local okP, path = pcall(function() return f.__absolute_path end)
+            if okN and okP and type(name) == "string" and not (prefix == "" and name:lower():match("%.lua$")) then
+                out[#out + 1] = { name = prefix .. name, path = tostring(path) }
+            end
+        end
+        for k, v in pairs(node) do
+            if type(k) == "string" and k:sub(1, 2) ~= "__" and type(v) == "table" then othersOf(v, prefix .. k .. "/", out, depth + 1) end
+        end
+        return out
+    end
     local function luaOf(node)
         local out, natives = {}, nil
         for _, f in pairs(type(node) == "table" and type(node.__files) == "table" and node.__files or {}) do
@@ -292,7 +307,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
             end
         end
         table.sort(out, function(a, b) return a.name:lower() < b.name:lower() end)
-        return out, natives
+        return out, natives, othersOf(node, "", {}, 0)
     end
     local function addonFolders()
         if folderMissing(addonsDir():sub(1, -2)) then return {}, "no AC8SurvivalAddons folder" end
@@ -318,8 +333,8 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         local out = {}
         for k, v in pairs(node) do
             if type(k) == "string" and k:sub(1, 2) ~= "__" and type(v) == "table" then
-                local files, natives = luaOf(v)
-                out[#out + 1] = { name = k, files = files, natives = natives }
+                local files, natives, others = luaOf(v)
+                out[#out + 1] = { name = k, files = files, natives = natives, others = others }
             end
         end
         table.sort(out, function(a, b) return a.name:lower() < b.name:lower() end)
@@ -375,7 +390,7 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
     local function loadFailed(p, why)
         local rot = CFG.specials.rotation
         for _, k in ipairs(p.kinds) do
-            SPC.kinds[k], PLUGINS.kinds[k], CFG.specials[k] = nil, nil, nil
+            SPC.kinds[k], PLUGINS.kinds[k], CFG.specials[k], PLUGINS.coop[k] = nil, nil, nil, nil
             if p.addedRot and p.addedRot[k] and type(rot) == "table" then
                 for i = #rot, 1, -1 do if rot[i] == k then table.remove(rot, i) end end
             end
@@ -414,6 +429,64 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
             table.concat(p.kinds, ", ")))
     end
 
+    -- (co-op's add-on check, sv_plugins_api.lua) FNV-1a 64 of a text, 16 hex digits. An add-on's: over every file it
+    -- installs, in name order: its .lua files by name (lower case) and bytes; every other file in its folder (its
+    -- subfolders' too) and every container its paks.txt names (a path under Mods a line: its IoStore container's
+    -- .utoc / .ucas / .pak) by name and size, so a big asset costs no read. "?" when a .lua can't be read; an asset
+    -- that isn't there counts as size -1. The same files, the same hash
+    local function fnv(s, h)
+        for i = 1, #s, 4096 do
+            local b = { s:byte(i, math.min(#s, i + 4095)) }
+            for j = 1, #b do h = (h ~ b[j]) * 0x100000001b3 end
+        end
+        return h
+    end
+    function PLUGINS.hashText(s) return string.format("%016x", fnv(tostring(s), 0xcbf29ce484222325)) end
+    function PLUGINS.addonHash(p)
+        local fs = {}
+        for _, f in ipairs(p.files or {}) do fs[#fs + 1] = f end
+        table.sort(fs, function(a, b) return tostring(a.name):lower() < tostring(b.name):lower() end)
+        local h = 0xcbf29ce484222325
+        for _, f in ipairs(fs) do
+            local fh = io.open(f.path, "rb")
+            if not fh then return "?" end
+            local src = fh:read("a")
+            fh:close()
+            h = fnv(src or "", fnv(tostring(f.name):lower() .. "\0", h))
+        end
+        local function size(path)
+            local fh = io.open(path, "rb")
+            if not fh then return -1 end
+            local n = fh:seek("end")
+            fh:close()
+            return n or -1
+        end
+        local os_ = {}
+        for _, f in ipairs(p.others or {}) do os_[#os_ + 1] = f end
+        table.sort(os_, function(a, b) return tostring(a.name):lower() < tostring(b.name):lower() end)
+        local paks
+        for _, f in ipairs(os_) do
+            h = fnv(tostring(f.name):lower() .. "\0" .. size(f.path) .. "\0", h)
+            if tostring(f.name):lower() == "paks.txt" then paks = f.path end
+        end
+        if paks then
+            local fh = io.open(paks, "rb")
+            local text = fh and fh:read("a") or ""
+            if fh then fh:close() end
+            local l = {}
+            for line in text:gmatch("[^\r\n]+") do
+                line = line:gsub("^%s+", ""):gsub("%s+$", "")
+                if line ~= "" and not line:match("^[#;]") and not line:find("..", 1, true) and not line:match("^[/\\]")
+                    and not line:find(":", 1, true) and #line <= 200 then l[#l + 1] = line end
+            end
+            table.sort(l, function(a, b) return a:lower() < b:lower() end)
+            for _, rel in ipairs(l) do
+                h = fnv("pak:" .. rel:lower():gsub("/", "\\") .. "\0" .. size(addonsDir() .. "..\\" .. rel:gsub("/", "\\")) .. "\0", h)
+            end
+        end
+        return string.format("%016x", h)
+    end
+
     function PLUGINS.load()
         playerRotation()                                   -- (the player's own rotation or not: before any add-on)
         local found, why = addonFolders()
@@ -426,7 +499,10 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         if mod then log("plugins: AC8SurvivalAddons looks like a UE4SS mod (" .. mod .. "): UE4SS may run it by itself, outside the framework; take that out") end
         local ps = {}
         for _, a in ipairs(found) do                       -- (all of them listed first: PLUGINS.loaded)
-            local p = { name = a.name, folder = a.name, files = a.files, nativesPath = a.natives, kinds = {} }
+            local p = { name = a.name, folder = a.name, files = a.files, nativesPath = a.natives, others = a.others or {}, kinds = {} }
+            p.ns = a.name:lower()                      -- (its co-op channel's name, SVP.net: its folder's, the same on every game)
+            local okH, h = pcall(PLUGINS.addonHash, p)      -- (co-op's add-on check: its files' hash)
+            p.hash = okH and h or "?"
             PLUGINS.loaded[#PLUGINS.loaded + 1] = p
             ps[#ps + 1] = p
             if not a.name:match("^[%w_%-]+$") or #a.name > 40 then p.badName = true end
