@@ -4005,3 +4005,13 @@ read where used (a joiner mid-round brings co-op's back). Co-op unchanged.
 Zips: ..._0.74.199_TESTER_Online_COOP_ZFA44_TANACORN.zip (Alyssa's, keys) and ..._0.74.199_Online_COOP_ZFA44_TANACORN.zip
 (friends', no keys), both registered. Not run in game.
 - 0.74.199 INSTALLED 2026-11-18 (the user: "install it"), the TESTER zip over 0.74.197 (backup build/backup/install_before_0.74.199); 154 files verified, her survival.ini, subtitles.ini (unedited) and enabled.txt kept.
+
+## 0.74.200 (-coop2mp.292, runtime 0.32.42; branch tools/friends-0.74.194, 2026-11-19)
+The code review of dev...HEAD and a cleanup (8f18f77, ce7036b): a joiner's airfield repair priced and checked as the
+airfield's own on the host, and asked only when the row sells it; soloVal counts the linked peers too (a respawning host
+read a co-op room as solo); the fleet's player count in a pcall; a joiner's sink log says its copy was hidden; shells()
+allocates nothing with the probe off; no_test_keys.py checks DEV ONLY blocks too; 327 lines of DISTANT THUNDER's dead
+code out of sv_anomalies_dev.lua (its own storm volume, THUNDER.buildup, the layout / sky / cloud probes). Left for the
+user: the friends' TANACORN zip keeps the diagnostic loggers; joiners' fleet copies unscaled; MinHealth's units.
+Zips: ..._0.74.200_TESTER_..._TANACORN.zip (Alyssa's, keys) and ..._0.74.200_Online_COOP_ZFA44_TANACORN.zip (friends'),
+both registered. Not run in game.
