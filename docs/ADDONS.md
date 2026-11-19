@@ -1,4 +1,4 @@
-# Add-on sorties for AC8 Survival Mode (add-on API 2.0)
+# Add-on sorties for AC8 Survival Mode (add-on API 2.1)
 
 An add-on adds a special round of its own to Survival: its units, its targets and pay, its callouts, radio and music.
 It runs inside Survival's Lua state, in an environment of its own, through the API Survival gives it (`SVP`).
@@ -16,6 +16,9 @@ Mods/AC8SurvivalAddons/<your_addon>/*.lua          the add-on's Lua: Survival ru
                                                    order, all in the add-on's one environment
 Mods/AC8SurvivalAddons/<your_addon>/natives.txt    the native functions it may call, if it has a native mod (below)
 Mods/AC8SurvivalAddons/<your_addon>/<subfolder>/   its data files, if it has any (SVP.dir() .. "<subfolder>\\...")
+Mods/AC8SurvivalAddons/<your_addon>/paks.txt       the containers it installs outside its folder, a path under Mods
+                                                   a line (e.g. IoStoreLoaderMod\MyAddon\MyAddon_P.utoc): co-op
+                                                   compares them (Co-op); nothing else reads it
 Mods/<your C++ mod>/                               its native mod, if it needs one (optional)
 <your IoStore container>                           its assets (load them with SVP.load); never in Survival's own
 ```
@@ -92,7 +95,8 @@ own tables):
   replaces it. 64 classes in all, every add-on's together. The callback isn't called inside the game's construction
   of the object (UE4SS calls back on the thread that constructs it): the object is kept, and your callback gets it,
   once, at Survival's next tick, if it's still live and of that class, guarded like every other callback (an error or
-  a stall switches the add-on off). Objects waiting at a tick that finds the walks held, or co-op open, are dropped;
+  a stall switches the add-on off). Objects waiting at a tick that finds the walks held are dropped (with co-op open,
+  none while co-op is open and the room's add-ons don't match);
   256 of a class wait a tick at most, the rest are dropped (said in the log). Ask for as narrow a class as you can: a
   class stays registered with UE4SS for the session, and a broad one (`Actor`, `Object`) queues every object of it.
   The callback is dropped when your add-on is switched off and at every level's teardown: ask again in the next level
@@ -119,7 +123,7 @@ gave you. A Lua table of your own is refused (false, nil) and never read: its me
 API outside your callbacks.
 
 ## Versions
-- `SVP.api` = `{ major = 2, minor = 0 }`; `SVP.version` = 2 (the major). A minor version only adds calls; a major one
+- `SVP.api` = `{ major = 2, minor = 1 }` (2.1 added co-op, below; a 2.0 add-on is served unchanged); `SVP.version` = 2 (the major). A minor version only adds calls; a major one
   may change them.
 - `def.api = "2.0"`: the version your add-on is written for (a string or a number; each part six digits at most).
   Survival serves an add-on of its own major and a minor up to its own; anything else is refused with one log line:
@@ -173,21 +177,23 @@ first runs on the next.
 | `SVP.target(actor, opts)` | an id; the actor is watched each tick of the round: gone, its address another object's now, or no health = down, paid `opts.pay` (x the round's tier, unless `opts.flat`), a ground kill (`opts.class = "air"`: air), `opts.onDown(id, why)`. Survival leaves it alone while it's your target: not counted or paid by Survival, and none of Survival's enemy settings on it (skill tier / PilotRank, post-stall manoeuvres, spikes, the tail watch). Never a player's plane (nil). Only in your own round, from its `spawn` to its `over` / `abort` (the round's tick is what watches them): anywhere else (`SVP.every`, `SVP.on`, another round) nil, said once. 256 targets an add-on at most (one more: nil, said once). Every target is dropped, unpaid, at its run's end and when the level goes |
 | `SVP.untarget(id)` / `SVP.kill(id, why)` / `SVP.alive(id)` | off the watch, unpaid / down now, paid / still up. Your own targets only (another add-on's id: nothing, false). A target taken off while it's still up (untarget, your round's end, your add-on switched off) is Survival's again: its later death is counted and paid as Survival's own |
 | `SVP.pay(n, why)` | credits. Pay (here and a target's) is rounded to a whole number and kept to 0..1,000,000; a value that isn't a finite number pays nothing |
-| `SVP.load(path)` | an object of your container (Survival's own loader: UE4SS `LoadAsset` can't load a mod's new packages) |
+| `SVP.load(path)` | an object of your container (Survival's own loader: UE4SS `LoadAsset` can't load a mod's new packages). By its path first, through the engine's soft-reference loader: ~1 ms and no walk of the object list, against 10-16 ms for a `StaticFindObject` of a wave |
 | `SVP.spawn(cls, at, yaw)` / `SVP.move(a, at, yaw)` / `SVP.despawn(a)` | an actor (a class or its path) at `at` (cm), turned `yaw` degrees / teleported / taken off: a game object (an `ALiveGameObject`) by its own death, unpaid, anything else destroyed (a target: off, unpaid). What you spawn is taken off the same way if your add-on is switched off (at Survival's next tick). Not an actor another add-on spawned or targeted first (known by its address and full name, whichever handle you have of it), never a player's plane (yours, or any of the player planes' class) |
 | `SVP.retire(a)` | the game kills your unit through its damage path; nothing counted or paid (a target: off, unpaid, once its death is dealt; a unit the game won't let die stays your target, and the call answers false). A unit already down when you call it keeps its kill: Survival's to count, or your target's pay |
 | `SVP.hurt(a, n, causer)` | `n` damage (MaxHealth units). `causer` nil = no one's kill: counted and paid to no one (a target it kills: off, unpaid) |
 | `SVP.killPlayer(why)` | the player's plane destroyed (Survival's own sure kill) |
 | `SVP.playerPlane()` | `{ a, X, Y, Z, VX, VY, VZ, health, down }` or nil |
-| `SVP.players()` | `{ { slot, X, Y, Z } }` |
+| `SVP.players()` | `{ { slot, X, Y, Z, a, down } }`: you; on a co-op host every player (2.1). `a` = their plane actor here (your pawn, a joiner's stand-in), nil if none live; `down = true` when shot down: still listed, skip it to aim at players |
 | `SVP.pad()` / `SVP.runway()` | the spaceport's shuttle pad / Comona Airport's runway, cm |
 | `SVP.clock()` / `SVP.round()` / `SVP.run()` | the rounds' clock / the round / a token of the run in progress |
 | `SVP.levelGoing()` | the level is being torn down: touch nothing |
+| `SVP.busy()` | why the API's walks, loads and sound starts wait right now (a string), or nil: go. Ask it before your own calls on objects you hold (a component's move) |
 | `SVP.callout(text, sub)` / `SVP.say(who, text, secs)` / `SVP.log(msg)` | the round callout / the subtitle strip / Survival's log, your name first |
 | `SVP.play2d(path, vol)` / `SVP.hold2d(path)` | a 2D sound for you alone (ok, length, its audio component) / one held ready, played with no lookup |
 | `SVP.sound(path, at)` / `SVP.fx(path, at, scale, rot, floats)` | a Wwise event at a spot / a Niagara system (its component) |
+| `SVP.play3d(path, at, vol, att)` | a sound wave of yours heard in the world at `at` (ok, length, its audio component: `:Stop()` ends it, `:K2_SetWorldLocation(at, false, {}, true)` moves it). `att`: a SoundAttenuation of your container, by path, for the falloff (AC8 ships none: its own sounds are Wwise); nil = the wave's own settings |
 
-These four, and `SVP.load`, start or hand out nothing while the engine is freeing objects (a garbage collection's
+These five, and `SVP.load`, start or hand out nothing while the engine is freeing objects (a garbage collection's
 purge, as the finds above): false or nil, "try again". An asset you play is kept by the API only between plays in Lua,
 which the engine doesn't see; one nothing plays can be condemned by a collection and still be found during the purge,
 and a sound started on it then plays a freed object (a crash). An asset found or loaded that the collection has
@@ -204,12 +210,13 @@ tick.
 | `SVP.intercept(m)` | shoots down the missile `m` the game's own way: Survival's runtime calls `ALiveWeaponBase::Intercepted`, the kill an interceptor makes (AC7's anti-missile laser's: the missile is destroyed in the air, no hit and no explosion on its target). `1` shot down, `0` not (it isn't in flight: down already, or back in its pool), nil when it can't be asked (`m` not a live `LiveWeaponBase`, no `SV_Intercept` in this Survival's runtime, the level going, co-op open, your add-on switched off). Nothing is paid or counted for it |
 | `SVP.pin(o, why)` | keeps the object `o` loaded (an asset you need between ticks: held in the GameInstance's `ReferencedObjects`, Survival's own way) until your add-on is switched off, your run ends or the level goes, whichever comes first; then the API lets every pin go itself. 64 pins an add-on at most (one more: false, one log line). `true` pinned (or already), `false` not An object of the level (an actor, a component, a widget: kept through a level load it would keep the old level) is refused: assets only |
 | `SVP.provide(name, fn)` | give the API what your native mod has: `"hurtPlayer"` = `fn(playerAddress, -healthPoints, causerAddress)` -> 1 (the player's damage through the game's own health path). Survival's own function wins when it has one |
-| `SVP.isHost()` / `SVP.inCoop()` | co-op state (2.0 is single player: see Co-op) |
-| `SVP.net` | co-op's add-on channel: not in 2.0 (a stub: `SVP.net.ready` false) |
+| `SVP.isHost()` / `SVP.inCoop()` | not a co-op joiner (solo is a host) / co-op open (see Co-op) |
+| `SVP.net` | co-op's add-on channel (2.1; `SVP.net.ready` true): see Co-op |
 
 Every call that touches the game (spawn, move, despawn, hurt, retire, target, kill, pay, killPlayer, bgm, hud, sound,
 fx, play2d, hold2d, callout, say, load, playerPlane, players, pc, intercept, pin) refuses while the level is going,
-and the ones that change it while co-op is open or once your add-on is switched off.
+and the ones that change it once your add-on is switched off, or while co-op is open and the room's add-ons don't
+match (see Co-op).
 
 ## Rules (each one learned from a crash)
 - `LoopAsync`, `ExecuteInGameThread`, `ExecuteWithDelay` and `RegisterKeyBind` aren't in your environment: they run Lua
@@ -262,15 +269,78 @@ and the ones that change it while co-op is open or once your add-on is switched 
 - A run with any add-on found in `AC8SurvivalAddons` (loaded or not) isn't ranked on the leaderboard (`LB.edited` lists
   it). An add-on can't reach that list.
 
-## Co-op
-API 2.0 is single player. While co-op is open (from the moment a host opens it, and on every joiner) no add-on's round
-comes, none of its jobs (`SVP.every`, `SVP.on`, `SVP.going`) run, and every API call that changes the game refuses. A
-friend without the add-on sees plain Survival. Co-op support for add-ons is planned for a later API version, in its
-own change.
+## Co-op (API 2.1)
+Survival's co-op is the host's: its rounds, kills and pay; the joiners' games mirror them. Add-ons follow the same
+rule.
+- **Having an add-on installed is the opt-in.** Every player in a co-op room must have the same add-ons: the same
+  folders in `Mods\AC8SurvivalAddons`, each at the same version (`def.ver`) with the same files. The fingerprint covers
+  every file the add-on installs: its .lua files by their bytes, and every other file in its folder (subfolders too)
+  plus every container its `paks.txt` names, by name and size. List your IoStore container's `.utoc` / `.ucas` in
+  `paks.txt`. There's no field to set.
+- **The check, as a joiner links.** The joiner's game sends its list to the host, and the host answers with its own.
+  - Any difference refuses the join on both games before the joiner's run joins the host's. The joiner's co-op is
+    closed and it plays on alone.
+  - The callout says "MISMATCHED ADD-ONS" (on the joiner) or "REFUSED NAME" (on the host), with the first
+    difference. The log has every one: an add-on missing on one side, an extra one, another version, or other files (another .lua, or an asset of another
+    size).
+  - A host that doesn't answer the check within 30 s refuses the join the same way.
+  - While a refused player is still in the room, no add-on round comes.
+- **Matched, every add-on runs in co-op.** Its jobs and callbacks run on every game, and its rounds come on the host.
+  - The host runs the kind's callbacks as in solo.
+  - Each joiner runs your add-on's client side: `def.remote` (optional) gets `start(now, round)`, `tick(now)` (every tick
+    while the host's round is on), `over(now, result)` and `abort(why)`, from the host's word. Give it your sounds,
+    HUD, looks and local actors, fed by your own messages (`SVP.net`).
+  - The joiner's round is also aborted if its own run or level ends, or the room changes hands.
+  - Music and HUD taken there (`SVP.bgm`, `SVP.hud`) are given back as in solo.
+- `def.joined(slot)` (optional, the host): a player came during your round, and their round has been started. Send them
+  what they need to catch up with `SVP.net.sendTo`.
+- **Host only** (refused on a joiner, one line): `SVP.target`, `SVP.untarget`'s targets, `SVP.kill`, `SVP.pay`.
+  - Pay on the host goes through Survival's co-op pay, so every player gets their share as for Survival's own specials.
+  - Everything else is local to each game: sounds, effects, callouts, music, `SVP.playerPlane`, and `SVP.hurt` /
+    `SVP.retire` of that game's own actors (a joiner's local copies of your units).
+- **A joiner spawns** (`SVP.spawn`) only while the host's round of your add-on is on there. Those are your client side's
+  own actors, local to that game and never targets; when that round ends there, they're taken off.
+- **A switch-off is everyone's.** An error in any of your callbacks (`def.remote`'s too) switches your add-on off for the
+  session, as in solo, and in co-op on every game in the room. So does a desync: the host's round quiet for 15 s on a
+  joiner, with the room still up.
+  - The host's round of it ends and every joiner's is aborted.
+  - An add-on already off on one game (it failed its load there) is switched off on the others as they match.
+  - Survival's own co-op, and every other add-on, go on.
+- **`SVP.net`** is your add-on's channel, on Survival's own co-op link:
+  - `SVP.net.send(event, ...)`: the host's goes to every joiner, a joiner's to the host. `SVP.net.sendTo(slot, event,
+    ...)`: the host to one player.
+  - Fields: numbers, booleans (as "1" / "0"), strings of 200 bytes at most; `|` becomes `/`. A message is 400 bytes at
+    most, 20 a second for each add-on. Over the limit, a send is refused (false and why), never cut short.
+  - `SVP.net.on(event, fn)`: `fn(fromSlot, ...)`, with its fields as strings. A joiner hears only the host. Guarded as
+    every callback.
+  - `SVP.net.peers()`: `{ { slot, name, same } }`, the other players and whether their add-ons matched (a joiner sees
+    the host). `SVP.net.slot()`: this game's slot.
+  - `SVP.net.stream(event, ...)` / `streamTo(slot, ...)`: the same, but unreliable (a message may be lost or come out
+    of order): for state the next message replaces. Same limits.
+- **Your AI planes' positions** can ride Survival's own stream (the runtime's: 15 Hz, interpolated on the joiner; what
+  Survival's own enemies use).
+  - On the host, `id = SVP.net.track(plane)`; send the id in a message of yours.
+  - On each joiner, after spawning its copy, `SVP.net.follow(id, copy)`: the runtime moves the copy every frame.
+  - AI planes only: `follow` refuses anything else (false, why).
+  - `SVP.net.untrack(id)` lets one go. At your round's end (or its abort, the level going, the room changing), the API
+    lets every one go.
+- **A joiner's own AI planes:** Survival's co-op takes down an enemy AI plane on a joiner's game that it can't match to
+  the host's, 15 s on, and asks the host for its whole picture. `SVP.net.own(plane)` (a joiner; `follow` does it too)
+  keeps Survival's co-op and its sweeps off your plane there. Own every AI plane you spawn on a joiner.
+- **A joiner's shots at your units:** Survival replays a player's missiles on the other games by its own unit ids, which
+  your units don't have, so on the host they fly unguided. Count a joiner's hits on its copies yourself and send them
+  to the host as claims (`SVP.net.send`). The host applies them to its own unit (`SVP.hurt`) and pays through its
+  target.
+- **Damage to a joiner:** the host decides it (it has every player's plane, `SVP.players`) and sends it; the joiner
+  hurts its own plane (`SVP.hurt(SVP.playerPlane().a, n)`), so each player's death stays their game's own.
 
 ## Log lines to look for
 `plugin <name>: kind <kind> registered (...)`, `plugin <name>: loaded (...)`, `plugin <name>: not loaded: ...`,
-`plugin <name>: its round skipped: <why>`, `plugin <name>: <what>: the add-on is switched off for this session`,
+`plugin <name>: its round skipped: <why>`, `plugin <name>: its round skipped in co-op: <why>`,
+`plugins: co-op: player N (NAME) has the same add-ons (...): they run in co-op`, `plugins: co-op: player N (NAME) refused: mismatched add-ons: ...`,
+`plugins: co-op: the join is refused: ...`, `plugin <name>: switched off on player N (NAME)'s game (...)`,
+`plugin <name>: the host's <kind> round <n> here`, `plugin <name>: co-op desync: the host's <kind> round went quiet for 15 s: the add-on is switched off for this session`,
+`plugin <name>: <what>: the add-on is switched off for this session`,
 `plugin <name>: Survival's music given back (...)`, `plugin <name>: <n> of its <m> pins let go (...)`, `plugins: none (...)`,
 `plugins: AC8SurvivalAddons looks like a UE4SS mod (...)`, `plugin <name>: SVP.target outside its own round: refused ...`,
 `plugin <name>: NotifyOnNewObject <class>: UE4SS refused it (...)`, `plugin <name>: <n> targets dropped (...)`.

@@ -36,7 +36,7 @@ specials, the crumbs' last line, crash folders, the checklist of known problems.
   STORE, landing minigame, teardown, quit)?
 - Search the code for the last crumb's text and for the crash address in docs/re (`grep -rn "0x7a8dc81" docs/re`):
   many addresses are already known (the music list's, the renderer's, the target search's).
-- Check the hard rules in AGENTS.md: freed addresses reused (59), events lost in the STORE (64), the teardown gate,
+- Check the hard rules in docs/rules/ (AGENTS.md section 4 says which file): freed addresses reused (59), events lost in the STORE (64), the teardown gate,
   `%` specifiers the runtime's formatter doesn't take (43).
 - Grep HISTORY.md for the symptom: it may be fixed in a later build than the player had. Compare their version
   (the report's Build section) with the newest.

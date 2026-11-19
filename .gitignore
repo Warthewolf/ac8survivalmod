@@ -49,6 +49,6 @@ testing/builds/
 !art/tanicorn/**/*.ucas
  origin/main
 
-# (2026-11-10) task plans are local working notes (AGENTS.md "How to work", step 3); the agents' worktrees
+# (2026-11-10) task plans are local working notes (AGENTS.md section 2, step 3); the agents' worktrees
 docs/design/*_PLAN.md
 .claude/worktrees/

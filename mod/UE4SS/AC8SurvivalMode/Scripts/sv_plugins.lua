@@ -1,5 +1,5 @@
 -- sv_plugins.lua: other mods' special rounds (add-ons, folders in Mods\AC8SurvivalAddons), their API (SVP) and loader.
--- add-on API 2.0
+-- add-on API 2.1
 -- (the line above: the API's version for a native mod to read from this file before Lua runs; kept equal to API below
 -- by tools/checks/plugins_test.lua. Its form stays "-- add-on API <major>.<minor>" on line 2)
 -- (sv_plugins.lua is the first of 3 pieces, split by tools/lua_split_part.py: sv_plugins_api.lua, sv_plugins_env.lua go
@@ -33,8 +33,8 @@
 --                               round (its spawn to its over / abort: that round's tick watches it), 256 at most
 --   SVP.untarget(id)            taken off the watch, no pay; SVP.kill(id, why) down now, paid; SVP.alive(id): its own
 --   SVP.pay(n, why)             zollars (addCredits): a whole number, 0 to 1,000,000; anything else is refused
---   SVP.load(path)              an object of the add-on's own container by its path (sv_core.lua loadObject: hard
---                               rule 9), or nil and why
+--   SVP.load(path)              an object of the add-on's own container by its path (the engine's soft-reference
+--                               loader first, no object walk; else sv_core.lua loadObject: hard rule 9), or nil and why
 --   SVP.hold2d(path)            a 2D sound of the add-on's container held ready (its audio component, not playing,
 --                               kept for the level): play2d then plays it with no lookup and no spawn
 --   SVP.spawn(cls, at, yaw)     an actor of class `cls` (a class or its path, "/Game/Mods/<its own>/...C") at `at`
@@ -45,16 +45,23 @@
 --   SVP.move(a, at, yaw)        moves (teleports) an add-on's actor; SVP.despawn(a) takes it off: a game object (an
 --                               ALiveGameObject) by its own death, unpaid (never destroyed by hand: that crashes AC8
 --                               at the next unit death), anything else destroyed (a target: off, unpaid)
---   SVP.players()               { { slot, X, Y, Z } }: you
+--   SVP.players()               { { slot, X, Y, Z, a, down } }: you, and on a co-op host every player (API 2.1): a =
+--                               their plane actor here, down = shot down (still listed)
 --   SVP.pad()                   the Comona spaceport's shuttle pad (Mission 22's AA_Obj_01_Ground0_Shuttle_0), cm
 --   SVP.runway()                Comona Airport's runway, the spawn anchor (AIRFIELD), cm
 --   SVP.clock()                 the rounds' clock (D.now: game time, stops while paused)
 --   SVP.round()                 the round number; SVP.run() a token of the run in progress (new each run)
 --   SVP.levelGoing()            the level is going away (sv_core.lua levelGoing): touch no object then. Every call
 --                               below that touches a game object refuses while it's true
+--   SVP.busy()                  why the API's walks, loads and sound starts wait now (a string), or nil: go
 --   SVP.callout(text, sub)      the round callout (hudCallout); SVP.say(who, text, secs) the subtitle strip (SUB.say)
 --   SVP.log(msg)                Survival's log, the add-on's name first
---   SVP.isHost(), SVP.inCoop()  API 2.0 is single player: while co-op is open (COOP.open) no add-on round comes, no
+--   SVP.isHost(), SVP.inCoop()  not a co-op joiner (solo is a host) / co-op open. Co-op (API 2.1): having an add-on
+--                               installed is the opt-in. A joiner's add-ons (folder, version, a hash of its .lua
+--                               files) are compared with the host's as it links: any difference refuses the join on
+--                               both games ("MISMATCHED ADD-ONS"); matched, every add-on runs in co-op, its rounds on
+--                               the host, def.remote (optional) its client side on the joiners. Until the room's
+--                               add-ons match (and with co-op open on a game that is neither host nor joiner) no
 --                               add-on job runs and every call that changes the game refuses
 --   SVP.every(fn)               fn(now) on the game thread from Survival's own tick (about every 250 ms; the main menu
 --                               before the first run too, not from a quit to the next Survival level: going then,
@@ -67,7 +74,11 @@
 --                               "roundStart" (round: the first tick D.round has a new number), "roundEnd" (round: the
 --                               first tick it's changed again or the run is gone), "runEnd" (its last round: the first
 --                               tick the run is gone or replaced), "levelGoing" (as SVP.going)
---   SVP.net                     co-op's add-on channel: not in API 2.0 (stubs answering false; SVP.net.ready false)
+--   SVP.net                     co-op's add-on channel (API 2.1): send(event, ...) (the host's to every joiner, a
+--                               joiner's to the host), sendTo(slot, event, ...) (the host), stream / streamTo (the
+--                               same, unreliable), on(event, fn) (fn(from, ...)), peers() ({ slot, name, same }: who
+--                               has this add-on), slot(), track / follow / own / untrack (an add-on's AI planes on
+--                               Survival's own position stream); ready = true
 --   SVP.provide(name, fn)       what an add-on's native mod gives the API: "hurtPlayer"
 --   SVP.widget(cls, outer, name) a UMG widget of the add-on's own in outer (a WidgetTree): UMG's concrete classes or a
 --                               widget blueprint's, its name made unique; no StaticConstructObject in the environment
@@ -80,7 +91,8 @@
 --                               and lines wait, not lost); always given back, 60 s at most
 --   SVP.sound(path, at)         a Wwise event at a spot; SVP.fx(path, at, scale, rot, floats) a Niagara system (the
 --                               component back); SVP.play2d(path, vol) a sound wave heard by you alone (ok, length s,
---                               its audio component: :Stop() cuts it short)
+--                               its audio component: :Stop() cuts it short); SVP.play3d(path, at, vol, att) one heard
+--                               in the world at `at` (att: the add-on's SoundAttenuation path; the same three back)
 --   SVP.playerPlane()           { a, X, Y, Z, VX, VY, VZ, health, down } of your plane, or nil
 --   SVP.retire(a)               the game kills one of the add-on's units (finishUnpaid): freed as a stock unit is,
 --                               nothing counted or paid for it (a target: off, unpaid)
@@ -100,12 +112,12 @@
 -- as with survival_config.lua. PLUGINS.loaded is filled before any add-on runs, and no add-on can reach it.
 
 PLUGINS = { loaded = {}, kinds = {}, targets = {}, nextId = 0, marks = {}, ids = {}, owners = {}, tkeys = {}, level = 0,
-            calls = 0 }
+            calls = 0, coop = {} }
 
 do
     -- the add-on API's version: an add-on declares the lowest it needs (def.api = "2.0"); a minor version only adds
     -- calls, so every add-on of a lower minor keeps working
-    local API = { major = 2, minor = 0 }
+    local API = { major = 2, minor = 1 }
     -- Mission 22's shuttle (AA_Obj_01_Ground0_Shuttle_0), x / y / z cm: docs/re/SPECIAL_ROUNDS.md "The shuttle"
     SHUTTLE_PAD = { X = -1324937.0, Y = 59740.0, Z = 6343.0 }
     local NAME_MAX = 15
@@ -321,13 +333,15 @@ PLUGINS.pcall = pcall                              -- (pcall, handed to sv_plugi
         PLUGINS.targets, PLUGINS.tkeys = {}, {}
     end
 
-    -- API 2.0 is single player: while co-op is open (a host waiting or playing, a joiner) nothing of an add-on runs
+    -- API 2.0 is single player: while co-op is open (a host waiting or playing, a joiner) nothing of an add-on runs.
+    -- API 2.1: co-op open and this game's add-ons not (yet) matched with the room's (sv_plugins_api.lua coopMatched)
     function coopOpen() return COOP ~= nil and COOP.open == true end
+    function coopShut(p) return coopOpen() and not (PLUGINS.coopMatched and PLUGINS.coopMatched()) end
     -- why an add-on's call that touches the game is refused now, or nil. A call with no add-on attached (not from its
     -- load or a guarded callback of it) is refused too: nothing of an add-on's acts outside the guard
     function refused(p)
         if SVP.levelGoing() then return "the level is going" end
-        if coopOpen() then return "co-op is open" end
+        if coopShut(p) then return "co-op is open and the room's add-ons aren't matched (yet)" end
         if not p then return "no add-on is calling (only from its load or its callbacks)" end
         if p.off then return "switched off" end
         return nil
@@ -346,6 +360,9 @@ PLUGINS.pcall = pcall                              -- (pcall, handed to sv_plugi
         hudBack(p, "switched off")
         if PLUGINS.unpinAll then PLUGINS.unpinAll(p, "switched off") end
         if PLUGINS.dropNotify then PLUGINS.dropNotify(p) end
+        if p.liveKind and PLUGINS.coopEnd then PLUGINS.coopEnd(p.liveKind, "ab", "the host's add-on was switched off") end
+        if PLUGINS.remoteOff then PLUGINS.remoteOff(p, "switched off") end
+        if PLUGINS.coopRelease then PLUGINS.coopRelease(p, "switched off") end
     end                                                    -- (a switch-off can come from inside Survival's own code)
     -- (PLUGINS.tick, the game thread, not while the level goes) what a switched-off add-on spawned, taken off: only one
     -- still known by its address and full name; a game unit by its own death, never destroyed (PLUGINS.takeOff)
@@ -599,7 +616,7 @@ PLUGINS.pcall = pcall                              -- (pcall, handed to sv_plugi
         if pay > 0 and not o.flat and TIER and TIER.pay then
             pay = money(TIER.pay(pay * TIER.specialX(), D and D.round and TIER.index(D.round))) or 0
         end
-        if pay > 0 then addCredits(pay, string.format("%s: %s down", tostring(t.p.name), str(o.label or ("target " .. id)))) end
+        if pay > 0 then PLUGINS.payRoom(pay, string.format("%s: %s down", tostring(t.p.name), str(o.label or ("target " .. id)))) end
         if LB and LB.stat then LB.stat(o.class == "air" and "air" or "ground", 1) end
         plog(t.p, string.format("target %d (%s) down (%s; +%d)", id, str(o.label or "?"), why, pay))
         if type(o.onDown) == "function" then guard(t.p, "onDown", o.onDown)(id, why) end
@@ -736,7 +753,7 @@ PLUGINS.pcall = pcall                              -- (pcall, handed to sv_plugi
         p.entry = e
         e.tick = function(now, s)
             if levelGoing and levelGoing() then return end     -- (the round-over rule: no tick while the level goes)
-            if p.off or coopOpen() then return end
+            if p.off or coopShut(p) then return end
             -- (only in its round: from its spawn to its over. Survival ticks a special from its round's start, while its
             -- spawn waits for the spawns' hold, and on through the break after its over)
             if p.liveRun ~= D or p.liveKind ~= kind then return end
@@ -751,7 +768,17 @@ PLUGINS.pcall = pcall                              -- (pcall, handed to sv_plugi
         end
         e.busy = function(s) if p.off then return false end return busy and busy(s) == true or false end
         e.ready = function(round, forced)
-            if p.off or coopOpen() then return false end            -- (API 2.0: single player)
+            if p.off then return false end
+            if coopOpen() then
+                -- (co-op, API 2.1: on the host, every player's add-ons matched with its own; else its round skipped,
+                -- said once a run for each reason)
+                local okC, whyC = PLUGINS.coopReady(p, kind)
+                if not okC then
+                    local key = tostring(D) .. "|" .. str(whyC)
+                    if p.coopSaid ~= key then p.coopSaid = key; plog(p, "its round skipped in co-op: " .. str(whyC)) end
+                    return false
+                end
+            end
             -- (Survival's specials bag asks with no round (sv_spawn.lua bagFill): the round in play, else 0. Survival keeps a
             -- kind out before its from_round itself (sv_spawn.lua specialReady), so ready answers what else rules it out
             -- now: a no keeps it out of the bag, as Survival's own once-a-run kinds)
@@ -770,11 +797,12 @@ PLUGINS.pcall = pcall                              -- (pcall, handed to sv_plugi
             return true
         end
         e.spawn = function(now)
-            if p.off or coopOpen() then return false end            -- (never in co-op: ready says so first)
+            if p.off or coopShut(p) then return false end           -- (co-op: the room's add-ons matched, ready says so first)
             -- (the run this round belongs to, set before its spawn: SVP.target works from there; PLUGINS.tick's run-over
             -- check; its kind: only that one's abort / over when its run ends)
             p.liveRun, p.liveKind = D, kind
             local ok = spawn and spawn(now) == true or false
+            if ok then PLUGINS.coopStart(p, kind, now) end   -- (co-op: the host's word to the joiners' games)
             if not ok then                              -- (no round: what it took for one given back)
                 p.liveRun, p.liveKind = nil, nil
                 bgmBack(p, "its round didn't start")
@@ -786,6 +814,7 @@ PLUGINS.pcall = pcall                              -- (pcall, handed to sv_plugi
         local over, abort = e.over, e.abort
         e.over = function(now, s)
             p.liveRun, p.liveKind = nil, nil
+            PLUGINS.coopEnd(kind, "ov", type(s) == "table" and str(rawget(s, "result") or "done") or "done")
             local r = { n = 0 }
             if levelGoing and levelGoing() then            -- (touch nothing: only abort, told why)
                 if abort then abort("the level is going") end
@@ -827,6 +856,7 @@ PLUGINS.pcall = pcall                              -- (pcall, handed to sv_plugi
             if p.liveRun ~= nil and (D ~= p.liveRun or goingNow) then
                 local why = going and "the level is going" or (D == nil and "the run is over" or "a new run")
                 local k = p.liveKind
+                if k then PLUGINS.coopEnd(k, "ab", why) end
                 p.liveRun, p.liveKind = nil, nil
                 dropTargets(p)
                 plog(p, "its round's run ended (" .. why .. "): round taken off")
@@ -955,7 +985,12 @@ PLUGINS.pcall = pcall                              -- (pcall, handed to sv_plugi
             table.sort(unused)
             plog(p, "kind " .. kind .. ": " .. table.concat(unused, ", ") .. " left out (not a field Survival uses)")
         end
-        p.ver, p.coop, p.api = str(def.ver or "?"):sub(1, 20), false, str(def.api)
+        p.ver, p.api = str(def.ver or "?"):sub(1, 20), str(def.api)
+        -- (co-op, API 2.1: every kind comes in co-op once the room's add-ons match. def.remote (a table, optional): its
+        -- client side on a joiner's game while the host's round is on; def.joined(slot): the host told a player came
+        -- during its round. Raw copies, as def's)
+        PLUGINS.coop[kind] = { remote = type(def.remote) == "table" and rawCopy(def.remote) or {},
+                               joined = type(def.joined) == "function" and def.joined or nil }
         local c = plainCfg(p, kind, def.cfg)
         if c.enabled == nil then c.enabled = true end
         local n = iniOver(kind, c)
