@@ -173,7 +173,7 @@ first runs on the next.
 | `SVP.target(actor, opts)` | an id; the actor is watched each tick of the round: gone, its address another object's now, or no health = down, paid `opts.pay` (x the round's tier, unless `opts.flat`), a ground kill (`opts.class = "air"`: air), `opts.onDown(id, why)`. Survival leaves it alone while it's your target: not counted or paid by Survival, and none of Survival's enemy settings on it (skill tier / PilotRank, post-stall manoeuvres, spikes, the tail watch). Never a player's plane (nil). Only in your own round, from its `spawn` to its `over` / `abort` (the round's tick is what watches them): anywhere else (`SVP.every`, `SVP.on`, another round) nil, said once. 256 targets an add-on at most (one more: nil, said once). Every target is dropped, unpaid, at its run's end and when the level goes |
 | `SVP.untarget(id)` / `SVP.kill(id, why)` / `SVP.alive(id)` | off the watch, unpaid / down now, paid / still up. Your own targets only (another add-on's id: nothing, false). A target taken off while it's still up (untarget, your round's end, your add-on switched off) is Survival's again: its later death is counted and paid as Survival's own |
 | `SVP.pay(n, why)` | credits. Pay (here and a target's) is rounded to a whole number and kept to 0..1,000,000; a value that isn't a finite number pays nothing |
-| `SVP.load(path)` | an object of your container (Survival's own loader: UE4SS `LoadAsset` can't load a mod's new packages) |
+| `SVP.load(path)` | an object of your container (Survival's own loader: UE4SS `LoadAsset` can't load a mod's new packages). By its path first, through the engine's soft-reference loader: ~1 ms and no walk of the object list, against 10-16 ms for a `StaticFindObject` of a wave |
 | `SVP.spawn(cls, at, yaw)` / `SVP.move(a, at, yaw)` / `SVP.despawn(a)` | an actor (a class or its path) at `at` (cm), turned `yaw` degrees / teleported / taken off: a game object (an `ALiveGameObject`) by its own death, unpaid, anything else destroyed (a target: off, unpaid). What you spawn is taken off the same way if your add-on is switched off (at Survival's next tick). Not an actor another add-on spawned or targeted first (known by its address and full name, whichever handle you have of it), never a player's plane (yours, or any of the player planes' class) |
 | `SVP.retire(a)` | the game kills your unit through its damage path; nothing counted or paid (a target: off, unpaid, once its death is dealt; a unit the game won't let die stays your target, and the call answers false). A unit already down when you call it keeps its kill: Survival's to count, or your target's pay |
 | `SVP.hurt(a, n, causer)` | `n` damage (MaxHealth units). `causer` nil = no one's kill: counted and paid to no one (a target it kills: off, unpaid) |
@@ -183,11 +183,13 @@ first runs on the next.
 | `SVP.pad()` / `SVP.runway()` | the spaceport's shuttle pad / Comona Airport's runway, cm |
 | `SVP.clock()` / `SVP.round()` / `SVP.run()` | the rounds' clock / the round / a token of the run in progress |
 | `SVP.levelGoing()` | the level is being torn down: touch nothing |
+| `SVP.busy()` | why the API's walks, loads and sound starts wait right now (a string), or nil: go. Ask it before your own calls on objects you hold (a component's move) |
 | `SVP.callout(text, sub)` / `SVP.say(who, text, secs)` / `SVP.log(msg)` | the round callout / the subtitle strip / Survival's log, your name first |
 | `SVP.play2d(path, vol)` / `SVP.hold2d(path)` | a 2D sound for you alone (ok, length, its audio component) / one held ready, played with no lookup |
 | `SVP.sound(path, at)` / `SVP.fx(path, at, scale, rot, floats)` | a Wwise event at a spot / a Niagara system (its component) |
+| `SVP.play3d(path, at, vol, att)` | a sound wave of yours heard in the world at `at` (ok, length, its audio component: `:Stop()` ends it, `:K2_SetWorldLocation(at, false, {}, true)` moves it). `att`: a SoundAttenuation of your container, by path, for the falloff (AC8 ships none: its own sounds are Wwise); nil = the wave's own settings |
 
-These four, and `SVP.load`, start or hand out nothing while the engine is freeing objects (a garbage collection's
+These five, and `SVP.load`, start or hand out nothing while the engine is freeing objects (a garbage collection's
 purge, as the finds above): false or nil, "try again". An asset you play is kept by the API only between plays in Lua,
 which the engine doesn't see; one nothing plays can be condemned by a collection and still be found during the purge,
 and a sound started on it then plays a freed object (a crash). An asset found or loaded that the collection has

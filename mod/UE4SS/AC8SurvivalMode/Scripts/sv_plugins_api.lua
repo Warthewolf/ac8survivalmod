@@ -156,6 +156,22 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         return nil, "condemned by the GC: try again"
     end
     PLUGINS.condemned = condemned
+    -- An asset of an add-on's container loaded by its path FIRST, through the engine's soft-reference loader
+    -- (KismetSystemLibrary: MakeSoftObjectPath -> LoadAsset_Blocking): the engine resolves the path through its name
+    -- hash, so nothing walks the object array, and an asset already in memory comes back at once. Measured on a mod's
+    -- run on this line (20261113-155628, 15 waves): that load 1 ms median (0-1), against StaticFindObject's walk: 16 ms
+    -- for one not in memory, and still 10 ms for one just loaded (new objects sit at the array's end: the walk reaches
+    -- them last). The walk is also what a purge's freed objects can fault (round 12 P1's crash). nil when there's no
+    -- such asset (or no library object yet): the find + loadObject way below, as before.
+    local KSL = "/Script/Engine.Default__KismetSystemLibrary"
+    local function softLoad(full)
+        local ks = find(KSL)
+        if not valid(ks) then return nil end
+        local ok, o = pcall(function() return ks:LoadAsset_Blocking(ks:Conv_SoftObjPathToSoftObjRef(ks:MakeSoftObjectPath(full))) end)
+        if ok and valid(o) then return o end
+        return nil
+    end
+    PLUGINS.softLoad = softLoad
     function SVP.load(path)
         if type(path) ~= "string" then return nil, "a path" end
         if SVP.levelGoing() then return nil, "the level is going away" end
@@ -164,6 +180,11 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         if m and os.clock() - m < 30 then return nil, "not found (kept 30 s)" end   -- (a miss isn't loaded again at once)
         local h = assetHit[path]
         if h and kept(h) then return h end               -- (StaticFindObject by path costs 12-37 ms too: kept)
+        local s = softLoad(path)                         -- (by its path first: no walk)
+        if s ~= nil then
+            if not liveObj(s) then return condemned(path) end
+            loadMiss[path] = nil; assetHit[path] = keep(s); return s
+        end
         local okF, f = pcall(find, path)     -- (already in memory: found, not loaded again)
         if okF and valid(f) then
             if not liveObj(f) then return condemned(path) end
@@ -696,6 +717,11 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         -- (LoadObject takes 14-20 ms even for a wave already in memory: an asset that's loaded is
         -- found first (StaticFindObject, well under 1 ms), so a plugin can load its assets ahead and play them cheaply)
         if PLUGINS.walksBusy and PLUGINS.walksBusy() then plWhy = "busy"; return nil end   -- (its callers wait too)
+        local s = softLoad(full)                         -- (by its path first: no walk, ~1 ms; SVP.load's comment)
+        if s ~= nil then
+            if not liveObj(s) then plWhy = "condemned"; condemned(full); return nil end
+            assetHit[full], assetMiss[full] = keep(s), nil; plWhy = "by path"; return s
+        end
         local okF, f = pcall(find, full)
         if okF and valid(f) then
             if not liveObj(f) then plWhy = "condemned"; condemned(full); return nil end
@@ -715,6 +741,15 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
     -- freed a moment later: the audio task faulted on it (UE's virtual-loop test, IsLooping on the freed sound).
     -- So: false / nil, "try again", as the walks do)
     local function startsWait() return PLUGINS.walksBusy ~= nil and PLUGINS.walksBusy() == true end
+    -- SVP.busy(): why the API's walks, loads and sound / effect starts wait right now (a string), or nil: go. For an
+    -- add-on's own calls on objects it holds (a component's move, a sound it starts itself): the same hold as the
+    -- API's, so it needn't guess from a nil
+    function SVP.busy()
+        if SVP.levelGoing() then return "the level is going away" end
+        if PLUGINS.walkHeld and PLUGINS.walkHeld() then return "the object walks are held" end
+        if startsWait() then return "the engine is freeing objects" end
+        return nil
+    end
     local soundWay = nil                            -- (PostEventAtLocation's two signatures: the first that works kept)
     function SVP.sound(path, at)
         at = posOf(at)
@@ -825,6 +860,34 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
             plWhy, (t2 - t1) * 1000, (t3 - t2) * 1000, (t4 - t3) * 1000, (os.clock() - t4) * 1000))
         -- (the audio component third: comp:Stop() cuts the sound short)
         return ok, (okD and type(d) == "number" and d > 0) and d or nil, ok and comp or nil
+    end
+    -- SVP.play3d(path, at, vol, att): a sound wave (or cue) of the add-on's heard IN THE WORLD at `at` (GameplayStatics.
+    -- SpawnSoundAtLocation, auto-destroyed at its end): ok, its length in s, its audio component (comp:Stop() ends it;
+    -- comp:K2_SetWorldLocation(at, false, {}, true) moves it, e.g. a loop kept at a beam's nearest point). att: a
+    -- SoundAttenuation of the add-on's container (its path, loaded as the wave is) for the distance falloff; nil = the
+    -- wave's own settings (AC8's own sounds are Wwise: it ships no SoundAttenuation to borrow). Waits as play2d does
+    local att3d = {}
+    function SVP.play3d(path, at, vol, att)
+        at = posOf(at)
+        if not at or refused(PLUGINS.running or PLUGINS.current) or startsWait() then return false end
+        local sw = plAsset(path)
+        local a = nil
+        if att ~= nil then
+            if type(att) ~= "string" then return false end
+            a = plAsset(att)
+            if not a then
+                if not att3d[att] then att3d[att] = true; log("plugins: play3d's attenuation " .. att .. " not loaded: not played") end
+                return false
+            end
+        end
+        if not valid(gsObj) then gsObj = find("/Script/Engine.Default__GameplayStatics") end
+        if not (sw and valid(gsObj) and liveObj(survivalPC)) then return false end
+        local loc = { X = tonumber(rawget(at, "X")) or 0, Y = tonumber(rawget(at, "Y")) or 0, Z = tonumber(rawget(at, "Z")) or 0 }
+        local ok, comp = pcall(function()
+            return gsObj:SpawnSoundAtLocation(survivalPC, sw, loc, { Pitch = 0, Yaw = 0, Roll = 0 }, tonumber(vol) or 1.0, 1.0, 0.0, a, nil, true)
+        end)
+        local okD, d = pcall(function() return sw.Duration end)
+        return ok and comp ~= nil, (okD and type(d) == "number" and d > 0) and d or nil, ok and comp or nil
     end
     -- your plane: { a = the pawn, X, Y, Z (cm), VX, VY, VZ (cm/s), health (HealthInternal: health x 10), down }
     local function myPawn()
