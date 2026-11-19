@@ -937,6 +937,9 @@ if debug and debug.getinfo then PLUGINS.ownSrc[debug.getinfo(1, "S").source] = t
         if joiner() then
             purgeOwned()
             ownedTick(now)
+            -- ((2026-11-19) the wait starts at the link: COOP JOIN picked while the host's game was still starting closed
+            -- co-op 30 s on as "MISMATCHED ADD-ONS", with no add-on anywhere)
+            if type(COOP.linked) == "function" and (tonumber(COOP.linked()) or 0) < 1 then N.linkAt = now end
             if N.hostList == nil and N.matched == nil and now - (N.linkAt or now) > LIST_WAIT_S then
                 return refuseHere({}, "the host never answered the add-on check (" .. LIST_WAIT_S .. " s)")
             end

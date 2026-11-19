@@ -332,6 +332,13 @@ do
     Q.coop("join"); Q.env.D = { round = 1, now = 1 }
     step(65, 0.5)
     check(Q.refused and Q.said("the host never answered the add-on check (30 s)") and not Q.sentJn(), "a host that never answers: the join refused 30 s on, no picture asked")
+    local W = game(1, {})                                  -- ((2026-11-19) COOP JOIN picked, the host's game not up yet)
+    local up = 0
+    W.env.COOP.linked = function() return up end
+    W.coop("join"); step(80, 0.5)
+    check(not W.refused, "no host linked yet (40 s): still waiting, nothing refused")
+    up = 1; step(65, 0.5)
+    check(W.refused and W.said("the host never answered the add-on check (30 s)"), "linked, then no answer: refused 30 s after the link")
     net.games = saved
 end
 
