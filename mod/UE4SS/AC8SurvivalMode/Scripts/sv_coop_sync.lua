@@ -192,7 +192,10 @@ function COOP.ammoRead()
     for k = 2, 3 do                                        -- (the special weapons: an ESM's use shows only here)
         local v = SV_Ammo(k)
         local was = S.spLast and S.spLast[k]
-        if on("missiles") and type(v) == "number" and v >= 0 and was and v < was and not S.spDropAt then S.spDropAt = now end
+        if on("missiles") and type(v) == "number" and v >= 0 and was and v < was then
+            if not S.spDropAt then S.spDropAt = now end
+            if COOP.client and COOP.client() and M.spMark then pcall(M.spMark) end   -- ((2026-11-19) the EML's hit yours: sv_coop_joiner.lua)
+        end
     end
 end
 -- (COOP.tick, after ammoTick) the counts the next read goes by

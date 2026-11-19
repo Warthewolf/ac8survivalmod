@@ -286,12 +286,40 @@ end
 local function cellsOff()
     glowOff()
     if IFSKY.slOff then pcall(IFSKY.slOff) end                -- (the strike light: defined further down)
-    local k = 0
+    local k, lost, why = 0, 0, {}
     for _, e in ipairs(CELLS) do
-        if cellOk(e) then pcall(function() e.o:DestroyComponent() end); k = k + 1 end
+        if cellOk(e) then pcall(function() e.o:DestroyComponent() end); k = k + 1
+        else
+            lost = lost + 1
+            local a = e and liveAddr(e.o)
+            local w = not (e and e.a) and "never had an address" or a == nil and "its address not live"
+                or a ~= e.a and "its address changed" or ("its name now " .. tostring(nameOf(e.o)))
+            why[w] = (why[w] or 0) + 1
+        end
     end
     CELLS = {}
-    return k
+    -- ((2026-11-19) Saint Alessia's 43-minute storm of 0.74.199: "lightning stayed after the clouds dissapeared": all 19
+    -- failed the check above (22:50:43 "0 taken off") and kept flashing in a clear sky. The ones not taken off are found
+    -- by what they are, the stock NS_CloudLightning's components (only the storm spawns it here), and switched off)
+    local swept = 0
+    if lost > 0 then
+        local okF, all = pcall(FindAllOf, "NiagaraComponent")
+        if okF and type(all) == "table" then
+            for _, comp in ipairs(all) do
+                pcall(function()
+                    local as = comp.Asset
+                    if as and as:IsValid() and tostring(as:GetFName():ToString()) == "NS_CloudLightning" then
+                        comp:Deactivate(); comp:DestroyComponent(); swept = swept + 1
+                    end
+                end)
+            end
+        end
+        local parts = {}
+        for w, c in pairs(why) do parts[#parts + 1] = string.format("%d %s", c, w) end
+        log(string.format("fleet storm: cloud lightning: %d not ours any more (%s): %d found by their system and taken off",
+            lost, table.concat(parts, ", "), swept))
+    end
+    return k + swept
 end
 local function wanted()
     local c = stc()
@@ -336,6 +364,38 @@ local function warmOff()
     for _, comp in ipairs(WARM.fx or {}) do pcall(function() comp:DestroyComponent() end) end
     WARM.fx = {}
 end
+-- ((2026-11-19) Saint Alessia's run of 0.74.199: "storm still dark af", "raising clowd level by 500-1000 meters and maybe
+-- dispersing them a bit"; the user: raise, thin, lighter) the storm's clouds (stc().clouds): the sky asset's layers 0 and 1
+-- raised by raise_km (0.586 / 3.71 km in Survival's sky) and their density x density_x, written under the storm's own fade
+-- to black (a height's change blacks the sky out, hard rule 61), the originals back as it clears; SKY.writeKey keeps each
+-- original, so SKY.restore puts them back at the run's end too (hard rule 56). Log: `fleet storm: clouds ...`.
+local CLOUD_F = {
+    { "if_l0_h", "CloudLayer0.StartHeightInKm", "raise", 1 }, { "if_l1_h", "CloudLayer1.StartHeightInKm", "raise", 2 },
+    { "if_l0_d", "CloudLayer0.CloudDensity", "dens" }, { "if_l0_db", "CloudLayer0.CloudDensityBottom", "dens" },
+    { "if_l1_d", "CloudLayer1.CloudDensity", "dens" }, { "if_l1_db", "CloudLayer1.CloudDensityBottom", "dens" },
+}
+for _, f in ipairs(CLOUD_F) do if SKY and SKY.addField then SKY.addField(f[1], f[2]) end end
+local function cloudsSet(on)
+    local c = stc().clouds
+    if type(c) ~= "table" or c.enabled == false or not (SKY and SKY.writeKey and SKY.slot and SKY.viewCached) then return "off" end
+    local V = SKY.viewCached(os.clock(), nil)
+    if not (V and V.asset) then return "no sky view" end
+    local nOk, said = 0, {}
+    for _, f in ipairs(CLOUD_F) do
+        local key = "asset|" .. f[1]
+        local base = SKY.orig and SKY.orig[key]
+        if base == nil then local get = SKY.slot(V, key); base = get and get() end
+        if type(base) == "number" then
+            local v = base
+            if on and f[3] == "raise" then v = base + n(type(c.raise_km) == "table" and c.raise_km[f[4]] or c.raise_km, 0)
+            elseif on then v = base * n(c.density_x, 1) end
+            local _, ok = SKY.writeKey(V, key, v)
+            if ok then nOk = nOk + 1 end
+            if f[3] == "raise" then said[#said + 1] = string.format("layer %d %.2f km", f[4] - 1, v) end
+        end
+    end
+    return string.format("%s: %d of %d written (%s)", on and "raised and thinned" or "back", nOk, #CLOUD_F, table.concat(said, ", "))
+end
 local function trTick(now)
     local t = SW.tr
     if not t or now < t.at then return end
@@ -343,6 +403,8 @@ local function trTick(now)
     local snd = c.sound or {}
     if t.phase == "out" then
         if t.on then warmUp() elseif THUNDER.cloudOff then pcall(THUNDER.cloudOff) end   -- (under the black)
+        local okCl, cl = pcall(cloudsSet, t.on)
+        log("fleet storm: clouds " .. (okCl and tostring(cl) or ("error " .. tostring(cl))))
         if t.on then
             local okC, k, why = pcall(cellsOn, stc().cells)
             log(string.format("fleet storm: cloud lightning: %s of %d up%s", okC and tostring(k) or ("error " .. tostring(k)),

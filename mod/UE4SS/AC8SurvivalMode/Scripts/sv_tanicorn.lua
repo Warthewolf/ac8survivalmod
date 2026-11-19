@@ -836,7 +836,10 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn mount watch", fn = watch }
 -- its nearest cell SOC_Vls_0K D m off, flying yaw Y pitch P at V m/s (seen within a look of its launch); its target <you|...>`,
 -- and at its end `tanicorn: VLS watch over (...): N launches by our blocks (<type> n, ...), ...`. A block is kept by its
 -- address AND the name it was captured with, checked before anything is done to it (hard rule 59).
-TANI.lid = { close_s = 6, parts_s = 2, walk_s = 10, watch_s = 180 }
+-- ((2026-11-19) Saint Alessia's round 30 of 0.74.199: "tanicorn vls lids" 19.7 ms a tick over its 180 s, the top cost of the
+-- round (286 frames over 100 ms): every VLS missile of every ship read each tick. Now every tick_s, a shown missile's
+-- owner read again only owner_s on (a launch is a hidden one shown, or a new owner), the blocks looked for every parts_s)
+TANI.lid = { close_s = 6, parts_s = 6, walk_s = 10, watch_s = 180, tick_s = 0.5, owner_s = 2 }
 local lidWatch
 do
 local VNEW = {}
@@ -1003,6 +1006,8 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn vls lids", fn = function(now)
         return
     end
     if walkBusy and walkBusy() then return end           -- (the walks wait while the engine frees objects, as WLOG's)
+    if now < (LW.tickAt or 0) then return end
+    LW.tickAt = now + (TANI.lid.tick_s or 0)
     lidParts(now)
     for _, o in ipairs(VNEW) do local a = liveAddr(o); if a then LW.pool[a] = o end end
     VNEW = {}
@@ -1019,11 +1024,15 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn vls lids", fn = function(now)
         else
             local okH, hid = pcall(function() return o.bHidden end)
             local shown = (not okH) or hid == false      -- (unreadable: shown, so a new one or a new owner still counts)
-            local ow = shown and ownerOf(o) or nil
-            local oa = ow and addrOf(ow) or nil
             local prev = LW.state[a]
-            if LW.primed and shown and (not prev or not prev.shown or prev.owner ~= oa) then launched(o, ow, now) end
-            cur[a] = { shown = shown, owner = oa }
+            local ow, oa, oAt = nil, nil, nil
+            if shown and prev and prev.shown and prev.ownerAt and now - prev.ownerAt < (TANI.lid.owner_s or 0) then
+                oa, oAt = prev.owner, prev.ownerAt             -- (still up, its owner read lately: the same flight)
+            elseif shown then
+                ow = ownerOf(o); oa, oAt = ow and addrOf(ow) or nil, now
+            end
+            if LW.primed and shown and oAt == now and (not prev or not prev.shown or prev.owner ~= oa) then launched(o, ow, now) end
+            cur[a] = { shown = shown, owner = oa, ownerAt = oAt }
         end
     end
     LW.state = cur

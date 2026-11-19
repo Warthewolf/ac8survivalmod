@@ -427,7 +427,7 @@ function COOP.levelDrop(why)
     for _ in pairs(M.copies or {}) do n = n + 1 end
     M.copies, M.cunits, M.spawnQ, M.holdQ, M.rep, M.pendBind = {}, {}, {}, nil, nil, nil
     M.objsOf = {}
-    M.mslAt, M.mslEnd, M.gunAtT, M.shotTgt = {}, {}, {}, {}   -- ((0.73.79) your shots by the copy they went for)
+    M.mslAt, M.mslEnd, M.gunAtT, M.shotTgt, M.spAtT = {}, {}, {}, {}, {}   -- ((0.73.79) your shots by the copy they went for)
     local p = 0
     for _, P in pairs(M.peers or {}) do
         if type(P) == "table" and P.obj ~= nil then P.obj, P.addr = nil, nil; p = p + 1 end
@@ -1062,8 +1062,18 @@ end
 -- whose own planes never go through the floor (its game was normal). Now your missiles and gun aim are kept here, by
 -- the copy they went for: the missile's target (FiredExplosiveWeapons' TargetToHome, as each is launched and when it's
 -- gone) and the gun's (SV_PlayerTarget while it fires).
-M.mslAt, M.mslEnd, M.gunAtT, M.shotTgt = {}, {}, {}, {}
+M.mslAt, M.mslEnd, M.gunAtT, M.shotTgt, M.spAtT = {}, {}, {}, {}, {}
 local FIRED_MSL_S, FIRED_GUN_S, MSL_END_S, FLOOR_RESEND_S = 25, 1.5, 2, 2
+-- ((2026-11-19) Saint Alessia's run of 0.74.199: "clients reporting EML not killing things even after 5 shots": a special
+-- weapon's shot (the EML, a bullet special) was neither a missile nor the gun here, so the hit that took a copy to its floor
+-- was sent as nothing when its map didn't show it, and the copy's health put back: your target as a special's ammo drops
+-- (sv_coop_sync.lua) counts as your missile's for FIRED_SP_S)
+local FIRED_SP_S = 3
+function M.spMark()
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    local t = (pawn and valid(pawn) and type(SV_PlayerTarget) == "function") and SV_PlayerTarget(addrOf(pawn)) or 0
+    if type(t) == "number" and t > 0 then M.spAtT[t] = os.clock() end
+end
 function M.shotMark(a, ta) M.mslAt[ta] = os.clock(); M.shotTgt[a] = ta end
 function M.shotEnd(a)
     local ta = M.shotTgt[a]
@@ -1074,15 +1084,16 @@ function M.gunMark(t) M.gunAtT[t] = os.clock() end
 -- "msl" one of your missiles went for addr in the last FIRED_MSL_S, "gun" your gun is firing at it, or nil
 function M.firedAt(addr, now)
     if not addr then return nil end
-    local m, g = M.mslAt[addr], M.gunAtT[addr]
+    local m, g, sp = M.mslAt[addr], M.gunAtT[addr], M.spAtT and M.spAtT[addr]
     if m and now - m <= FIRED_MSL_S then return "msl" end
+    if sp and now - sp <= FIRED_SP_S then return "sp" end
     if g and now - g <= FIRED_GUN_S then return "gun" end
     return nil
 end
 local function shotsPrune(now)
     if now < (M.shotPruneAt or 0) then return end
     M.shotPruneAt = now + 10
-    for _, t in ipairs({ M.mslAt, M.mslEnd, M.gunAtT }) do
+    for _, t in ipairs({ M.mslAt, M.mslEnd, M.gunAtT, M.spAtT or {} }) do
         for k, at in pairs(t) do if now - at > 60 then t[k] = nil end end
     end
     local n = 0
@@ -1095,7 +1106,7 @@ end
 function M.floorLoss(c, own, loss, now, others)
     if own and own >= c.exp then return own end           -- (the map has your whole hit)
     local f = M.firedAt(c.addr, now)
-    if f == "msl" then                                     -- (your missile went for it: the hit is yours, whole)
+    if f == "msl" or f == "sp" then                        -- (your missile or special weapon went for it: the hit is yours, whole)
         M.cnt.floorMsl = (M.cnt.floorMsl or 0) + 1
         if not (own and own > 0) then
             once("floormsl", string.format("coop: a copy taken to the floor by your missile (its map has %s of yours): sent "
@@ -1114,6 +1125,9 @@ function M.floorLoss(c, own, loss, now, others)
     end
     if own == nil and loss > 0 then return c.exp end       -- (as 0.73.76: unread, it's yours)
     if f == "gun" then return c.exp end                    -- (your gun on it this second)
+    M.cnt.floorNone = (M.cnt.floorNone or 0) + 1
+    once("floornone", string.format("coop: a copy taken to the floor with none of your shots on it and nothing of yours in its "
+        .. "map: not sent (%.1f lost here); its health put back (logged once)", math.max(0, loss) / 10))
     return 0                                               -- (not yours: an ally's copy, a ship's, a crash)
 end
 

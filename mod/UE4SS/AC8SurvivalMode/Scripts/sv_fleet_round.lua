@@ -678,9 +678,10 @@ end
 CREW = {}
 if CFG.specials and CFG.specials.fleet and CFG.specials.fleet.round and not CFG.specials.fleet.round.crew then
     -- ((0.74.154) the user: "The Voices need to be turned up a bit and the choose option C for all": db 2 -> 14, styles C only;
-    -- (0.74.155) "voices could be a little quieter": db 14 -> 10)
+    -- (0.74.155) "voices could be a little quieter": db 14 -> 10; (2026-11-19) Saint Alessia's run of 0.74.199: "the tanacorn ghostly
+    -- wailing is pretty quiet, hard to notice sometimes", the user: 13 dB)
     CFG.specials.fleet.round.crew = {
-        enabled = true, db = 10, styles = { "C" }, every_s = { 45, 90 }, gap_s = 2, s_per_word = 0.42, pad_s = 1.0,
+        enabled = true, db = 13, styles = { "C" }, every_s = { 45, 90 }, gap_s = 2, s_per_word = 0.42, pad_s = 1.0,
         speakers = { TORRES = "INTERCEPT: TORRES", CREW = "INTERCEPT: ALICORN CREW" },
         no_subs = { TORRES = true, CREW = true },         -- ((0.74.159) the user: "Remove the subtitles for torres", "If theres any subtitles for the crew, remove them too": heard, not shown)
         moments = { sighted = { "v6157_6001_alt1" }, stage1 = { "v6001_6032" }, stage2 = { "v6001_6030_alt1" },
@@ -897,6 +898,21 @@ if type(specialFor) == "function" then
                     or " NOT (its rows missing, a joiner, or had this run): a normal round's draw"))
             end
             if RUN.fleetPick[round] then return "fleet" end
+        end
+        -- ((2026-11-19) the user, Saint Alessia's run of 0.74.199 ("Valka showed up in the storm": round 27's dice): "No
+        -- specials in storm": from the fleet's sunset round (its sky's from_round + 1, the storm's) to the round before
+        -- hers, no special is drawn; a captured Spaceport's retake still comes (its round isn't drawn)
+        local sk = (CFG.specials.fleet or {}).sky or {}
+        local fr = n(c.round, 30)
+        if type(round) == "number" and c.enabled ~= false and sk.enabled ~= false and type(sk.storm) == "table"
+            and sk.storm.enabled ~= false and round > n(sk.from_round, 25) and round < fr
+            and not (RUN and RUN.sport and RUN.sport.retakeRound == round) then
+            RUN.stormNoSpecial = RUN.stormNoSpecial or {}
+            if not RUN.stormNoSpecial[round] then
+                RUN.stormNoSpecial[round] = true
+                rlog(string.format("round %d: the storm's, before the fleet's round %d: no special drawn", round, fr))
+            end
+            return nil
         end
         return rawFor(round)
     end

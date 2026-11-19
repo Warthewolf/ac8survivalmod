@@ -420,7 +420,10 @@ local function clientTick(s)
         if not e.gone then
             if e.ending then endStep(e, now)
             elseif not up(e) then e.gone = true
-            elseif D.round >= (e.round or D.round) + 3 then        -- (the host's "b" / "e" never came: its own end)
+            -- ((2026-11-19) Saint Alessia's run of 0.74.199, "Vamps still not despawning": the host's ended each one; a joiner
+            -- that missed its dive's messages (a late joiner) kept its own 3 rounds: now the round after the dive's (held at
+            -- the carrier's leaving, the dive the next round), as the host's ends)
+            elseif D.round >= (e.round or D.round) + 2 then        -- (the host's "b" / "e" never came: its own end)
                 e.ending = "the host's dive never ended here"
                 endStep(e, now)
             elseif d and d.on and now - (e.orderedAt or 0) >= num(dc().reorder_s, 2) then
@@ -512,8 +515,16 @@ function ZDIVE.fromHost(f)
             end
             d.units, d.on = {}, false
         end
-        log(string.format("dive: the host's dive %s over after %d blasts here; %d of this game's own finished off, %d units off the list once none is up",
-            tostring(id or "?"), s.blasts, n, q))
+        -- ((2026-11-19) a joiner whose own held planes have no dive the host named (a late joiner: no "h" for it) ends
+        -- them with the host's dive too, not 3 rounds on)
+        local orphans = 0
+        for _, e in ipairs(s.held) do
+            if not e.gone and not e.ending and (e.dive == nil or s.dives[e.dive] == nil) then
+                e.ending = "the host's dive over (of no dive here)"; endStep(e, os.clock()); orphans = orphans + 1
+            end
+        end
+        log(string.format("dive: the host's dive %s over after %d blasts here; %d of this game's own finished off (%d of no dive here), %d units off the list once none is up",
+            tostring(id or "?"), s.blasts, n + orphans, orphans, q))
     end
 end
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the ZFA-44s' dive"] = function() ZDIVE.d = nil end end
