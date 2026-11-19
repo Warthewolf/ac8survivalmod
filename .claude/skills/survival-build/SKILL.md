@@ -29,7 +29,7 @@ build inputs; link or copy them from the main tree (`git rev-parse --git-common-
   (PowerShell: `New-Item -ItemType Junction -Path <wt>\build\stock -Target <main>\build\stock`);
 - copies: `.env`, `tools/scriptobjs.pkl`, `build/checks/lua.exe`.
 - LLVM's `bin` (under `tools/llvm/LLVM/bin`) on PATH for `runtime/build.sh` (llvm-dlltool).
-No machine path ever goes into a file in the repo (AGENTS.md "How to work" 4).
+No machine path ever goes into a file in the repo (AGENTS.md section 5, "No machine path").
 
 ## 2. Version
 `python -I tools/bump_version.py` BEFORE build_all (`--minor` for a new feature line). It bumps main.lua's VERSION
@@ -57,7 +57,7 @@ header in a release (`sv_soak.lua`, `sv_anomalies_dev.lua`).
 ## 5. Hand over
 - **Never install into her game until she says so.** Stage only; tell her the path.
 - A note at the END of HISTORY.md: the version, the branch and commits, what changed, what's untested in game.
-  Never in AGENTS.md (it's loaded every session); a lesson a test confirmed goes there as a hard rule.
+  Never in AGENTS.md (it's loaded every session); a lesson a test confirmed goes into the right docs/rules/ file as a hard rule.
 - Commit (`[claude] <version>: ...`, noreply email, the attribution lines). Ask before any push or merge into `dev`.
 - Tell her: version, where it is, what's in it, what passed / failed / couldn't run, what's untested in game, and
   what she should look for when she plays it.

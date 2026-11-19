@@ -2,6 +2,20 @@
 
 Where to look. Project rules for the AI agents stay in `../AGENTS.md` (read first); the player guide is `../release/README.txt`.
 
+## rules/ — hard rules and standing rules, by area (read the ones for your task)
+| File | Read it to know |
+|---|---|
+| `rules/containers_assets.md` | packages, containers, materials, ported units (rules 7 8 31 32 34 42 44 58) |
+| `rules/lua_runtime.md` | Lua code and UE4SS Lua limits (9 10 11 21 23 27 30 47 63) |
+| `rules/native_runtime.md` | the C runtime (14 19 25 28 43 55) |
+| `rules/ai_spawning_behaviour.md` | events, paths, spawning, AI, damage (1-6 15 16 17 20 22 26 35-41 45 46 54 59 64) |
+| `rules/ui_menu_hud.md` | menus, HUD, radio, music (12 13 18 24 29 33 52 57) |
+| `rules/coop.md` | co-op (48-51 53) |
+| `rules/sky_weather_vfx.md` | sky, clouds, lightning (56 60-62) |
+| `rules/leaderboard.md` | the leaderboard, build registration |
+| `rules/layout.md` | how Lua / C / Python sources are split, the subtitles file, build lines |
+| `rules/sources_and_toolchain.md` | allowed outside sources, what never ships in a release, the toolchain |
+
 ## design/ — what we build
 | File | Read it to know |
 | --- | --- |

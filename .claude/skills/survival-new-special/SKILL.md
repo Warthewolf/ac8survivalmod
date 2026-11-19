@@ -15,7 +15,7 @@ never sees it, a test key in a friend's zip). Copy the nearest existing special 
 - A plan in `docs/design/<SPECIAL>_PLAN.md` (git-ignored, never cited): what the player sees, phases, units, weapons,
   win / lose, co-op behaviour, solo vs co-op scaling. Propose it to her; she decides the design.
 - docs/design/MISSION_REFERENCE.md: the stock mission that already does it. Copy its event nodes.
-- Asset limits: stock files only, except her named exceptions (AGENTS.md Toolchain). Never AC7 voice lines.
+- Asset limits: stock files only, except her named exceptions (docs/rules/sources_and_toolchain.md). Never AC7 voice lines but the Tanacorn crew's.
 
 ## 1. Build side (Python, `tools/`)
 - Events: a builder in the right `survival_events_*.py` part (remote events `RE_SV_<Name>...`, records copied from the

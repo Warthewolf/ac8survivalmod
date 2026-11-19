@@ -1,4 +1,4 @@
-"""paths_check.py : no machine path in the repo (AGENTS.md "How to work", step 4).
+"""paths_check.py : no machine path in the repo (AGENTS.md section 5, "No machine path").
 A path that differs from one machine to another belongs in .env (tools/env.sh, tools/env.py), never in a tool, a doc or
 a script. tools/build_all.sh runs this; it fails the build on a drive-letter path or a user's home folder.
 
@@ -43,7 +43,7 @@ def main():
             if MARKER not in line and HIT.search(line):
                 bad.append((p, n, line.strip()))
     if bad:
-        print(f'paths check: {len(bad)} machine path(s) in the repo (read them from .env: AGENTS.md "How to work", step 4):')
+        print(f'paths check: {len(bad)} machine path(s) in the repo (read them from .env: AGENTS.md section 5, "No machine path"):')
         for p, n, line in bad:
             print(f'  {p}:{n}: {line[:140]}')
         return 1
