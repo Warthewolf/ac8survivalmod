@@ -4988,7 +4988,7 @@ do
     -- is MI_TrainingRingGlow flat (no fresnel) with EmissiveFresnelFalloff near 0? Three planes overlapping, each 35 % on)
     local PLANE, RING = "/Engine/BasicShapes/Plane", "/Game/VFX/Mission/Traning/MI_TrainingRing"
     local GLOW = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow"
-    local ST3 = { 3, -3, 90, 25 }
+    local ST3 = { 3, 70, -2, 30 }                         -- (each copy 70 m right, 30 m up, 2 m nearer the camera)
     for _, m in ipairs({
         { "lay_ring_op100", RING, { Color = { 1, 0.6, 0.2, 1 }, Opacity = 1 } },
         { "lay_ring_op30", RING, { Color = { 1, 0.6, 0.2, 1 }, Opacity = 0.3 } },
@@ -4998,7 +4998,7 @@ do
         { "lay_glow_inv", GLOW, { Color = { 1, 0.6, 0.2, 1 }, EmissiveIntensity = 2, Opacity = 0.3, EmissiveFresnelInverseHardness = 0 } },
         { "lay_glow_default", GLOW, { Color = { 1, 0.6, 0.2, 1 }, EmissiveIntensity = 2, Opacity = 0.3 } },
     }) do
-        PP_PIECES[#PP_PIECES + 1] = { m[1], "mesh", PLANE, m[2], 200, 1, FACE, m[3], twice = true, stack = ST3 }
+        PP_PIECES[#PP_PIECES + 1] = { m[1], "mesh", PLANE, m[2], 200, 1, { Pitch = 0, Yaw = 0, Roll = -90 }, m[3], twice = true, stack = ST3 }   -- (its face to the camera: -Y)
     end
 end
 local function ppAll(only)
