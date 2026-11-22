@@ -5848,6 +5848,41 @@ SUITES.scalerprobe = function()
     end)
 end
 
+-- ((2026-11-22) the SOLG's pitch came back 0: which way of tilting it sticks (read from its nose's direction, now and on))
+local function spPitch(a)
+    local ok, v = pcall(function() local f = a:GetActorForwardVector(); return math.deg(math.asin(math.max(-1, math.min(1, f.Z)))) end)
+    return ok and v or nil
+end
+SUITES.solgpitch = function()
+    intoRun()
+    local SPt = {}
+    local ways = {
+        { "actor K2_SetActorRotation", function(a, b) a:K2_SetActorRotation({ Pitch = -45, Yaw = 30, Roll = 0 }, true) end },
+        { "body K2_SetWorldRotation", function(a, b) b:K2_SetWorldRotation({ Pitch = -45, Yaw = 30, Roll = 0 }, false, {}, true) end },
+        { "actor SetActorLocationAndRotation again", function(a, b) a:K2_SetActorLocationAndRotation(a:K2_GetActorLocation(), { Pitch = -45, Yaw = 30, Roll = 0 }, false, {}, true) end },
+        { "body SetWorldRotation by quaternion", function(a, b) b:K2_SetWorldTransform({ Rotation = { X = 0.0991, Y = 0.3696, Z = 0.2391, W = 0.8924 }, Translation = a:K2_GetActorLocation(), Scale3D = { X = 1, Y = 1, Z = 1 } }, false, {}, true) end },
+    }
+    for i, w in ipairs(ways) do
+        A.do_(function()
+            SOLG.spawn(solgSpot(), 0, { X = 3000, Y = 0, Z = -1000 })
+            ST.info(string.format("way %d (%s): at spawn the game's pitch %s", i, w[1], tostring(SOLG.pitchNow)))
+            SPt.a, SPt.b = nil, nil
+            for _, c in ipairs(FindAllOf("SkeletalMeshComponent") or {}) do   -- (the SOLG's body: its mesh SK_SV_SOLG)
+                local okN, nm = pcall(function() return c:GetSkeletalMeshAsset():GetFName():ToString() end)
+                if not okN then okN, nm = pcall(function() return c.SkeletalMesh:GetFName():ToString() end) end
+                if okN and nm == "SK_SV_SOLG" and valid(c) then SPt.b = c; pcall(function() SPt.a = c:GetOwner() end) end
+            end
+            if SPt.a then
+                local ok, err = pcall(w[2], SPt.a, SPt.b)
+                ST.info(string.format("way %d (%s): %s; pitch now %s", i, w[1], ok and "called" or ("error " .. tostring(err)), tostring(spPitch(SPt.a))))
+            else ST.info("way " .. i .. ": no actor") end
+        end)
+        A.wait(1.5)
+        A.do_(function() if SPt.a then ST.info(string.format("way %d (%s): 1.5 s on, pitch %s", i, w[1], tostring(spPitch(SPt.a)))) end end)
+    end
+    A.do_(function() SOLG.stop("pitch probe over") end)
+end
+
 -- ---- the tick ----------------------------------------------------------------------------------------------------
 local started, t0, finished = false, nil, false
 local function finish(why)
