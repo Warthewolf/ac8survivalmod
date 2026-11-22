@@ -456,6 +456,15 @@ local function placeAll(t, got, on, mirror)
         local bone = bones[k]
         if bone and valid(o) then
             local att = pcall(function() o:K2_AttachToComponent(S.body, FName(bone), 2, 2, 1, false) end)
+            -- ((2026-11-22) the user: "all the target boxes were on the top of the radar tower not at its base which
+            -- threw the targetting off") its lock point (HitCenterOffset, the tower's top) put on the bone, not its base
+            if att and not t.laser then
+                local okH, hx, hy, hz = pcall(function() local h = o.HitCenterOffset; return h.X, h.Y, h.Z end)
+                if okH and tonumber(hx) then
+                    pcall(function() o:K2_SetRelativeLocation({ X = -hx, Y = -hy, Z = -hz }, false, {}, true) end)
+                    if not S.hitOffSaid then S.hitOffSaid = true; sl(string.format("targets: lock point %.0f, %.0f, %.0f cm off the base: put on the bones", hx, hy, hz)) end
+                end
+            end
             if not mirror then
                 pcall(function() o.MaxHealth = hp; o.HealthInternal = math.floor(hp * 10 + 0.5) end)
                 pcall(function() o.MinHealth = n(SOLG.C.floor, 1) end)
@@ -700,6 +709,13 @@ local function targetsTick()
                 local L = boneAt(S.body, e.bone)
                 if L then pcall(function() e.o:K2_SetActorLocation(L, false, {}, true) end) end
             end
+            if liveObj(e.o) and addrOf(e.o) == e.a then        -- (its damaged state's mesh hidden again, as the host's)
+                local ok, h = pcall(function() return e.o.HealthInternal end)
+                if ok and tonumber(h) and h ~= e.lastH then
+                    if e.lastH and not e.t.laser then hideOwn(e.o) elseif e.lastH and SOLG.C.laser_hide ~= false then hideOwn(e.o, false) end
+                    e.lastH = h
+                end
+            end
         elseif e.live then
             if not liveObj(e.o) or addrOf(e.o) ~= e.a then breakTarget(e, "gone")
             else
@@ -708,6 +724,12 @@ local function targetsTick()
                     if L then pcall(function() e.o:K2_SetActorLocation(L, false, {}, true) end) end
                 end
                 local ok, h = pcall(function() return e.o.HealthInternal end)
+                -- ((2026-11-22) the user: "weird radar towers models on everything": hit, AC8's destructible base
+                -- shows its damaged state's mesh, visible again: hidden again whenever its health moves)
+                if ok and tonumber(h) and h ~= e.lastH then
+                    if e.lastH and not e.t.laser then hideOwn(e.o) elseif e.lastH and SOLG.C.laser_hide ~= false then hideOwn(e.o, false) end
+                    e.lastH = h
+                end
                 if ok and tonumber(h) and h <= floorIn then breakTarget(e, "shot down") end
             end
         end
