@@ -312,7 +312,8 @@ CFG.specials = {
                  -- hold_s later over close_s (max_s at most open); face_you: the whole hole turns to you each tick (its
                  -- lensed arcs face whoever looks); the disk's layers turn spin_dps x their spin, inner faster.
                  -- A piece: { mesh, mat, params (the material's Color...), abs, size, flat, tilt (90: facing you; 5: the
-                 -- disk, tipped 5 deg towards you: -5, the run of 14:08 had +5 show its underside), spin } or a Niagara one { fx, scale, at ("open"/"burst"/"close") }.
+                 -- disk, tipped 5 deg towards you: -5, the run of 14:08 had +5 show its underside; the arcs -90, their broad
+                 -- side up: 90 put it underneath, 14:17), spin } or a Niagara one { fx, scale, at ("open"/"burst"/"close") }.
                  -- fallback: the stock pieces' portal (the portalprobe runs: training-ring glows on the engine's shapes),
                  -- if its own aren't in (a build without the container)
                  portal = { enabled = true, size_m = 250, open_s = 3.0, hold_s = 4.0, close_s = 3.0, max_s = 30, spin_dps = 25,
@@ -322,8 +323,8 @@ CFG.specials = {
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, mat = "/Engine/BasicShapes/BasicShapeMaterial", params = { Color = { 0, 0, 0, 1 } } },
                                 -- the photon ring and the lensed arcs: white-hot to gold
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHPhotonRing", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.92, 0.8, 1 } } },
-                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloInner", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.78, 0.5, 1 } } },
-                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloOuter", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.9, 0.42, 0.12, 1 } } },
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloInner", abs = true, tilt = -90, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.62, 0.3, 1 } } },
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloOuter", abs = true, tilt = -90, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.9, 0.4, 0.1, 1 } } },
                                 -- the disk: hot, warm, cool, turning (inner faster), and its brighter approaching side
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskHot", abs = true, tilt = -5, spin = 1.0, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
                                   params = { Color = { 1.0, 0.7, 0.38, 1 } } },
@@ -350,7 +351,7 @@ CFG.specials = {
                                   parts = {
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, mat = "/Engine/BasicShapes/BasicShapeMaterial", params = { Color = { 0, 0, 0, 1 } } },
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHPhotonRing", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.92, 0.8, 1 } } },
-                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloInner", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.78, 0.5, 1 } } },
+                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloInner", abs = true, tilt = -90, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.62, 0.3, 1 } } },
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskHot", abs = true, tilt = -5, spin = 1.0, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
                                         params = { Color = { 1.0, 0.7, 0.38, 1 } } },
                                       { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 2, at = "burst" } },
