@@ -5862,42 +5862,37 @@ SUITES.solgpitch = function()
         local x = gs:BeginDeferredActorSpawnFromClass(survivalPC, StaticFindObject("/Script/Engine.Actor"), t, 1, nil, 1)
         return gs:FinishSpawningActor(x, t, 1)
     end
-    local function pitchOf(c) local ok, v = pcall(function() local f = c:GetForwardVector(); return math.deg(math.asin(f.Z)) end); return ok and v or nil end
-    local R = { Pitch = -45, Yaw = 30, Roll = 0 }
+    local function dirs(c)
+        local o = {}
+        pcall(function() local f = c:GetForwardVector(); o[#o + 1] = string.format("fwd (%.2f, %.2f, %.2f)", f.X, f.Y, f.Z) end)
+        pcall(function() local u = c:GetUpVector(); o[#o + 1] = string.format("up (%.2f, %.2f, %.2f)", u.X, u.Y, u.Z) end)
+        return table.concat(o, " ")
+    end
+    local h = math.rad(-45) / 2
     local cases = {
-        { "static mesh", "/Script/Engine.StaticMeshComponent", function(c) c:SetStaticMesh(SPC.V.asset("/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow")) end },
-        { "SOLG skeletal mesh", "/Script/Engine.SkeletalMeshComponent", function(c) c:SetSkeletalMeshAsset(loadObject("/Game/Mods/SurvivalMode/SOLG/Model/SK_SV_SOLG.SK_SV_SOLG")) end },
-        { "SOLG skeletal mesh, spin playing", "/Script/Engine.SkeletalMeshComponent", function(c)
-            c:SetSkeletalMeshAsset(loadObject("/Game/Mods/SurvivalMode/SOLG/Model/SK_SV_SOLG.SK_SV_SOLG"))
-            c:PlayAnimation(loadObject("/Game/Mods/SurvivalMode/SOLG/Model/A_SV_SOLG_Spin.A_SV_SOLG_Spin"), true) end },
+        { "roll 45", function(c) c:K2_SetWorldRotation({ Pitch = 0, Yaw = 0, Roll = 45 }, false, {}, true) end },
+        { "pitch -45", function(c) c:K2_SetWorldRotation({ Pitch = -45, Yaw = 0, Roll = 0 }, false, {}, true) end },
+        { "pitch -45 by a transform's quaternion", function(c) c:K2_SetWorldTransform({ Rotation = { X = 0, Y = -math.sin(h), Z = 0, W = math.cos(h) },
+            Translation = c:K2_GetComponentLocation(), Scale3D = { X = 1, Y = 1, Z = 1 } }, false, {}, true) end },
+        { "pitch -45 added", function(c) c:K2_AddWorldRotation({ Pitch = -45, Yaw = 0, Roll = 0 }, false, {}, true) end },
+        { "pitch -45 added local", function(c) c:K2_AddLocalRotation({ Pitch = -45, Yaw = 0, Roll = 0 }, false, {}, true) end },
+        { "pitch -45 relative", function(c) c:K2_SetRelativeRotation({ Pitch = -45, Yaw = 0, Roll = 0 }, false, {}, true) end },
     }
     A.do_(function()
         local you = playerLocation()
         for i, cs in ipairs(cases) do
-            local at = { X = you.X + 500000 * i, Y = you.Y, Z = you.Z + 300000 }
+            local at = { X = you.X + 300000 * i, Y = you.Y, Z = you.Z + 300000 }
             local okA, a = pcall(fresh, at)
-            local c = okA and a:AddComponentByClass(StaticFindObject(cs[2]), false, { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }, false)
+            local c = okA and a:AddComponentByClass(StaticFindObject("/Script/Engine.StaticMeshComponent"), false, { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }, false)
             if c then
-                local okS, eS = pcall(cs[3], c)
-                local isRoot = false
-                pcall(function() isRoot = addrOf(a.RootComponent) == addrOf(c) end)
-                local r = {}
-                pcall(function() c:K2_SetWorldRotation(R, false, {}, true) end); r[1] = pitchOf(c)
-                pcall(function() c:K2_SetWorldLocationAndRotation(at, R, false, {}, true) end); r[2] = pitchOf(c)
-                pcall(function() a:K2_SetActorRotation(R, true) end); r[3] = pitchOf(c)
-                local rr = nil
-                pcall(function() local q = c:K2_GetComponentRotation(); rr = string.format("%.1f/%.1f/%.1f", q.Pitch, q.Yaw, q.Roll) end)
-                ST.info(string.format("case %d (%s): set %s, its root %s; pitch after SetWorldRotation %s, after SetWorldLocationAndRotation %s, after actor SetActorRotation %s; its rotation %s",
-                    i, cs[1], okS and "ok" or tostring(eS), tostring(isRoot), tostring(r[1]), tostring(r[2]), tostring(r[3]), tostring(rr)))
-                T[i] = { a = a, c = c }
+                local ok, er = pcall(cs[2], c)
+                ST.info(string.format("case %d (%s): %s; %s", i, cs[1], ok and "called" or ("error " .. tostring(er)), dirs(c)))
+                T[i] = a
             end
         end
     end)
-    A.wait(1.5)
-    A.do_(function()
-        for i, x in pairs(T) do ST.info(string.format("case %d 1.5 s on: pitch %s", i, tostring(pitchOf(x.c)))) end
-        for _, x in pairs(T) do pcall(function() x.a:K2_DestroyActor() end) end
-    end)
+    A.wait(0.5)
+    A.do_(function() for _, a in pairs(T) do pcall(function() a:K2_DestroyActor() end) end end)
 end
 
 -- ---- the tick ----------------------------------------------------------------------------------------------------
