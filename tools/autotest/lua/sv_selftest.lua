@@ -101,10 +101,21 @@ function ST.openSurvival()
     return ok, ok and ("OpenLevel " .. LEVEL .. " with " .. (pc and "the player controller" or "the game instance"))
         or tostring(err)
 end
-local HOLD = { inv = 0, ap = 0, apOn = nil, ground = false }
+local HOLD = { inv = 0, ap = 0, apOn = nil, ground = false, unpaused = 0 }
 local function holdPlane(now)
     local pawn = ST.plane()
     if not pawn then return end
+    -- ((2026-11-22) the valka run of 13:12 paused at 13:20:42 ("hud: hidden (paused)": the game's window lost its focus,
+    -- a desktop notification likely) and its world stood still to the end: the game unpaused, each time logged)
+    if gamePaused and gamePaused(ST.pc()) then
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        if valid(gs) and pcall(function() gs:SetGamePaused(ST.pc(), false) end) then
+            HOLD.unpaused = HOLD.unpaused + 1
+            if HOLD.unpaused <= 5 or HOLD.unpaused % 20 == 0 then
+                ST.info("the game had paused (its window's focus lost?): unpaused (" .. HOLD.unpaused .. ")")
+            end
+        end
+    end
     if ST.apOff then return end                           -- ((0.74.166) a suite that flies your plane itself: capture, pin)
     if now >= HOLD.inv then
         HOLD.inv = now + 2
