@@ -6038,6 +6038,12 @@ SUITES.solgcrash = function()
             ST.findLog("hit: ", 0, true))
         pcall(SOLG.stop, "crash test over")
     end)
+    A.do_(function()                                      -- (every weapon locks it while it's up; put back after)
+        local on = ST.findLog("all weapons: ", 0, true)
+        local n = on and tonumber(on:match("all weapons: (%d+) air or ground")) or 0
+        ST.check(n > 0, string.format("air and ground only weapons lock both while it's up (%d)", n), on)
+        ST.check(ST.findLog("put back as they were", 0, true) ~= nil, "they're put back as it goes", ST.findLog("put back as they were", 0, true))
+    end)
 end
 
 -- ---- the tick ----------------------------------------------------------------------------------------------------
