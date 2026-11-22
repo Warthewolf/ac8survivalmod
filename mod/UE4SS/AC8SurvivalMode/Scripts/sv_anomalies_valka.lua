@@ -794,6 +794,7 @@ function SPC.valkaTick(now, s)
             if type(c.portal) == "table" and c.portal.enabled then
                 local okP, errP = pcall(V.portalOpen, c, s, s.emlAt, s.emlYaw, now)
                 if not okP then log("special: VALKA's portal error " .. tostring(errP)) end
+                if okP and s.portal and COOP and COOP.valkaPortal then pcall(COOP.valkaPortal, s.emlAt, s.emlYaw, "o") end
             end
             local fx = V.flareStart(c, s, s.emlAt, now)      -- AC7 M18's lens flash; Mission 23's flash if it can't
             if fx == 0 then
@@ -833,7 +834,10 @@ function SPC.valkaTick(now, s)
         if now < s.revealAt then return end
         -- ((2026-11-22) with her portal up: a little behind its face, so she flies out through it)
         local from = s.portal and V.portalExit(c, s.emlAt, s.emlYaw) or s.emlAt
-        if s.portal then pcall(V.portalThrough, c, s, now) end
+        if s.portal then
+            pcall(V.portalThrough, c, s, now)
+            if COOP and COOP.valkaPortal then pcall(COOP.valkaPortal, s.emlAt, s.emlYaw, "t") end
+        end
         if not SPC.valkaArrive(now, from, s.emlYaw) then
             s.state = "done"
             V.event("RE_SV_ValkaEnd")                   -- (the WARNING off)

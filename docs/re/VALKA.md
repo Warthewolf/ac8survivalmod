@@ -85,3 +85,24 @@ RE_SV_ValkaEnd (the WARNING and noise off, ATTACK_BASE, SV_ValkaUp 0), RE_SV_Val
 while a game's landing STORE is open run nothing there (hard rule 64): the host fires them again once its STORE is shut
 (SV_ValkaUp read back; an Off dropped when its On came after it; the band's newer preset fired again after a late end,
 which puts ATTACK_BASE back), a joiner holds the forwarded ones until its own is shut: docs/re/COOP.md section 13.
+
+## 7. Why she fought in one spot, and what she flies now (2026-11-22; the valka autotest suite)
+The user: "she seems to fight in one place, she doesn't seem to take the fight anywhere and just flies around in one
+spot", "She needs to be more active". Measured with tools/ac8-autotest's `valka` suite (her disguise off; your plane on
+the DOWN autopilot round the airfield, then a 30 km leg west, then round there; `valka-track:` every 0.5 s,
+tools/autotest/valka_track.py: numbers and a top-down SVG). Baseline 0.74.201 (run 20261122_130001_claude) [V]:
+- she flew NLID_SV_Fighter (every row searchSetup touches, hers too) at the x40a row's PilotRank 2 and stock speeds;
+- her orders were given again every 5 s (64 in 5 minutes) and LastTGT every 6 s (54); LastTGT is a 20 s
+  PursuerTarget 200 m behind you whose close-range mode, inside ~3 km and nose-on, copies your heading
+  (docs/re/BEHAVIOUR_NATIVE_MOVE.md section 2, a5 / a6) and whose closure drops her to min speed when the aim point is
+  behind her: re-asked every 6 s she never left it;
+- result: from 15 km she closed at your speed (12.5 km mean over the first 80 s); then, wherever you flew, she sat
+  3.1 km behind you (median 3.1, max 3.4 km round the second circle), at your speed, nose on you 79 % of the time,
+  firing her railgun every ~17 s and a post-stall every ~20 s: she mirrored your circle at 3 km. Her fight's centre moved
+  54 % as far as yours (she trails, she never leads or passes).
+0.74.202 (CFG.specials.valka): her row flies `luaset` NLID_SV_Lancer (slashing passes, zoom climbs) at `pilot_rank` 5,
+speed / cruise / acceleration x `speed_x` / `cruise_x` / `accel_x`, turn rates + `turn_add` (sv_rows.lua, at the main
+menu: hard rule 20); LastTGT only when you sit behind her (turn_every_s 0, behind_gap_s 12); her orders every 20 s;
+post-stalls a 50 % chance every 25 s within 1.5 km; farther than chase_km 6 for 4 s she blinks onto your six (ring E,
+2.5 km; chase_gap_s 15); hit, 2 blinks onto your six or across your nose (rings D 1.5 km / E 2.5 km, attack_ahead 0.4).
+Her portal (section 8). [T] each in the next runs.
