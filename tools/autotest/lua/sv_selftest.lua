@@ -4868,13 +4868,15 @@ local function ppActor(at)
 end
 -- a mesh piece: mesh `mesh` sized size_m across (its bounds' sphere), squashed by flat (its Z scale x flat), turned by
 -- rot (Pitch, Yaw, Roll), its material(s) `mat` (nil: its own) as a dynamic instance with params set
-local function ppMesh(name, mesh, mat, size_m, flat, rot, params)
+local function ppMesh(name, mesh, mat, size_m, flat, rot, params, stack)
     ppClear()
     local at = ppSpot()
     local a = ppActor(at)
     if not valid(a) then ST.info("portal piece " .. name .. ": no actor"); return end
     PP.actor = a
     local smc = StaticFindObject("/Script/Engine.StaticMeshComponent")
+    local nStack = stack and tonumber(stack[1]) or 1
+    for si = 1, nStack do
     local comp = a:AddComponentByClass(smc, false, { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 },
         Scale3D = { X = 1, Y = 1, Z = 1 } }, false)
     local m, why = loadObject(ppPath(mesh))
@@ -4885,7 +4887,10 @@ local function ppMesh(name, mesh, mat, size_m, flat, rot, params)
     local k = (size_m * 100 / 2) / math.max(1, r)
     pcall(function() comp:SetCollisionEnabled(0) end)
     pcall(function() comp:SetWorldScale3D({ X = k, Y = k, Z = k * (flat or 1) }) end)
-    pcall(function() comp:K2_SetWorldLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true) end)
+    local o = (si - 1)
+    local sx, sy, sz = stack and (tonumber(stack[2]) or 0) * 100 * o or 0, stack and (tonumber(stack[3]) or 0) * 100 * o or 0,
+        stack and (tonumber(stack[4]) or 0) * 100 * o or 0
+    pcall(function() comp:K2_SetWorldLocation({ X = at.X + sx, Y = at.Y + sy, Z = at.Z + sz }, false, {}, true) end)
     if rot then pcall(function() comp:K2_SetWorldRotation(rot, false, {}, true) end) end
     local nmat = 0
     pcall(function() nmat = comp:GetNumMaterials() end)
@@ -4910,8 +4915,11 @@ local function ppMesh(name, mesh, mat, size_m, flat, rot, params)
         else said = "its own (" .. mat:match("[^/]+$") .. " NOT loaded: " .. tostring(whyM) .. ")" end
     end
     for i = 0, nmat - 1 do pcall(function() local mm = comp:GetMaterial(i); if mm and i == 0 then ppMatParams(mm, "slot 0 of " .. name) end end) end
-    ST.info(string.format("portal piece %s: %s (bounds radius %.0f cm, x%.1f -> %d m), %d material slot(s), %s", name,
-        mesh:match("[^/]+$"), r, k, size_m, nmat, said))
+    if si == 1 then
+        ST.info(string.format("portal piece %s: %s (bounds radius %.0f cm, x%.1f -> %d m), %d material slot(s), %s%s", name,
+            mesh:match("[^/]+$"), r, k, size_m, nmat, said, nStack > 1 and (", " .. nStack .. " overlapping copies") or ""))
+    end
+    end
 end
 local function ppNiagara(name, sys, scale)
     local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
@@ -4976,6 +4984,22 @@ do
     }) do
         PP_PIECES[#PP_PIECES + 1] = { m[1], "mesh", DISK, m[2], 260, 1, FACE, m[3], twice = true }
     end
+    -- ((2026-11-22) the black hole's glow in layers: is MI_TrainingRing see-through with Opacity, do its overlaps add up;
+    -- is MI_TrainingRingGlow flat (no fresnel) with EmissiveFresnelFalloff near 0? Three planes overlapping, each 35 % on)
+    local PLANE, RING = "/Engine/BasicShapes/Plane", "/Game/VFX/Mission/Traning/MI_TrainingRing"
+    local GLOW = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow"
+    local ST3 = { 3, -3, 90, 25 }
+    for _, m in ipairs({
+        { "lay_ring_op100", RING, { Color = { 1, 0.6, 0.2, 1 }, Opacity = 1 } },
+        { "lay_ring_op30", RING, { Color = { 1, 0.6, 0.2, 1 }, Opacity = 0.3 } },
+        { "lay_ring_op10", RING, { Color = { 1, 0.6, 0.2, 1 }, Opacity = 0.1 } },
+        { "lay_glow_flat", GLOW, { Color = { 1, 0.6, 0.2, 1 }, EmissiveIntensity = 2, Opacity = 0.3, EmissiveFresnelFalloff = 0.01 } },
+        { "lay_glow_flat_dim", GLOW, { Color = { 1, 0.6, 0.2, 1 }, EmissiveIntensity = 1, Opacity = 0.12, EmissiveFresnelFalloff = 0.01 } },
+        { "lay_glow_inv", GLOW, { Color = { 1, 0.6, 0.2, 1 }, EmissiveIntensity = 2, Opacity = 0.3, EmissiveFresnelInverseHardness = 0 } },
+        { "lay_glow_default", GLOW, { Color = { 1, 0.6, 0.2, 1 }, EmissiveIntensity = 2, Opacity = 0.3 } },
+    }) do
+        PP_PIECES[#PP_PIECES + 1] = { m[1], "mesh", PLANE, m[2], 200, 1, FACE, m[3], twice = true, stack = ST3 }
+    end
 end
 local function ppAll(only)
     local want = nil
@@ -4984,7 +5008,7 @@ local function ppAll(only)
         local name = p[1]
         if not want or want[name] then
             if p[2] == "mesh" then
-                A.do_(function() ST.look(ppCam(-900, 60), ppSpot(), 45); ppMesh(name, p[3], p[4], p[5], p[6], p[7], p[8]) end)
+                A.do_(function() ST.look(ppCam(-900, 60), ppSpot(), 45); ppMesh(name, p[3], p[4], p[5], p[6], p[7], p[8], p.stack) end)
                 A.wait(2)
                 A.do_(function() ST.shot("portal_" .. name) end)
                 A.wait(2.5)
