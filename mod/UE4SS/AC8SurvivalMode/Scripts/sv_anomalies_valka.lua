@@ -719,6 +719,7 @@ function SPC.valkaTick(now, s)
     if s.portal then V.portalTick(c, s, now) end         -- ((2026-11-22) her portal: open, hold, close)
     if VCINE and VCINE.tick then VCINE.tick(c, s, now) end    -- (its cutscene: sv_valka_cine.lua)
     if SOLG and SOLG.tick then SOLG.tick(now) end             -- (her SOLG: sv_solg.lua)
+    if VSOLG and VSOLG.strikesTick then pcall(VSOLG.strikesTick, now) end   -- (its strike, stopped in time even once she's down)
     if s.bportals then V.blinkPortalsTick(c, s, now) end  -- (and her blinks' small ones)
     -- ((0.73.80) no walk for her rounds after a shot any more (every tick for 3-3.5 s, none ever found in the 31-round
     -- run): their life, single rounds and the opener's no-damage are on the round's class default, SPC.V.roundDefaults)

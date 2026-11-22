@@ -257,7 +257,7 @@ CFG.specials = {
                                            { "AUDREY|Valka? Valka. Yes. It's me. I've got you now.",
                                              "C|Signal lost. Comona Control, logging it as... nothing." } },
                                   down_charlene = { { "CHARLENE|...Whoever she was, I think someone just took her home." } },
-                                  -- ((2026-11-22) her SOLG (docs/design SOLG plan): at 20 % she calls it in (solg), it's destroyed
+                                  -- ((2026-11-22) her SOLG (docs/re/SOLG.md): at 20 % she calls it in (solg), it's destroyed
                                   -- (solg_down, as she comes back) or it hits the spaceport (solg_hit). AUDREY worked at the
                                   -- Sudentor, there when its control system was taken down: she knows it)
                                   solg = { { "VALKA|Enough.",

@@ -7,7 +7,7 @@
 #   4. retoc to-zen       only /Game/Mods/SurvivalMode/SOLG (never the stub of AC8's M_Live_Base) -> the container
 #   5. pad.py             hard rule 8 (tools/x02s/pad.py)
 # AC:I assets are allowed for the SOLG round only (the user, 2026-11-03). Nothing built here is committed.
-# (2026-11-22: kept from the parked SOLG; step 2 of docs/design SOLG plan rewrites it: no stubbed material, hard rule 58)
+# (2026-11-22: kept from the parked SOLG; docs/re/SOLG.md section 6 rewrites it: no stubbed material, hard rule 58)
 set -e
 cd "$(dirname "$0")/../.."
 . tools/env.sh

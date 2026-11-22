@@ -105,6 +105,7 @@ local function arrive(c, s, G, now)
     local back = n(g.portal_back_m, 1500) * 100
     local r = math.rad(yaw)
     local from = { X = at.X - math.cos(r) * back, Y = at.Y - math.sin(r) * back, Z = at.Z }
+    vel = { X = (pad.X - from.X) / T, Y = (pad.Y - from.Y) / T, Z = (pad.Z - from.Z) / T }   -- (from its start: on the pad at T)
     local okS, up = pcall(SOLG.spawn, from, yaw, vel)
     if not (okS and up) then
         sl("the SOLG didn't come up (" .. tostring(up) .. "): she comes back now")
@@ -243,6 +244,10 @@ function VSOLG.tick(c, s, o, now)
     end
     if not G then
         if s.solgDone or not o then return false end
+        if not s.solgFloor then                           -- (her floor at at_pct till then: no big hit kills her past it)
+            local okF = pcall(function() o.MinHealth = math.max(1, n(o.MaxHealth, 0) * n(g.at_pct, 20) / 100) end)
+            s.solgFloor = okF
+        end
         local p = pctOf(o)
         if p and p <= n(g.at_pct, 20) then VSOLG.start(c, s, o, now); return true end
         return false
@@ -286,6 +291,7 @@ end
 -- her round over (shot down, the level gone): the SOLG with it
 function VSOLG.stop(s, why)
     if SCOOP then pcall(SCOOP.stop) end
+    SOLG.onBreak, SOLG.onPhase = nil, nil                 -- (a later run's, or this game as a joiner, never calls them)
     if s and s.solg and s.solg.ph then pcall(SPC.V.portalStop, s.solg.ph) end
     if SOLG and SOLG.up and SOLG.up() then pcall(SOLG.stop, why) end
     if s then s.solg = nil end

@@ -10,7 +10,8 @@
 --   vg|1 / vg|0           VALKA gone through a portal / back (her copy here hidden / shown)
 --   st                    taken down (its wreck gone, her round over)
 -- A joiner who links mid-fight gets the picture (SCOOP.syncTo from hostSync): its portal, the SOLG where it is now, its
--- phase and every piece broken so far. The lines: SUB.say's own "sb"; the airfield: "af". Log lines `solg coop: ...`.
+-- phase and every piece broken so far. The lines: SUB.say's own "sb"; the airfield: "af"; the pay: the host's, sent as
+-- "cr" (sv_coop_migration.lua's addCredits, the round mirrored). Log lines `solg coop: ...`.
 SCOOP = SCOOP or {}
 
 local function sl(s) log("solg coop: " .. s) end
@@ -29,14 +30,14 @@ function SCOOP.portal(at, yaw, size_m)
     say("po", m(at.X), m(at.Y), m(at.Z), string.format("%.0f", yaw or 0), string.format("%.0f", size_m or 0))
 end
 function SCOOP.up(from, yaw, vel, T)
-    H.up, H.broken, H.phase = { from = from, yaw = yaw, vel = vel, T = T, t = os.clock() }, {}, 1
+    H.up, H.broken, H.phase, H.po = { from = from, yaw = yaw, vel = vel, T = T, t = os.clock() }, {}, 1, nil
     say("up", m(from.X), m(from.Y), m(from.Z), string.format("%.0f", yaw or 0), string.format("%.0f", vel.X),
         string.format("%.0f", vel.Y), string.format("%.0f", vel.Z), string.format("%.0f", T or 0), "0")
 end
 function SCOOP.phase(ph) H.phase = ph; say("ph", string.format("%d", ph)) end
 function SCOOP.broke(bone) H.broken[#H.broken + 1] = bone; say("b", bone) end
 function SCOOP.destroyed() H.dn = true; say("dn") end
-function SCOOP.hit(P) H.up = nil; say("hit", m(P.X), m(P.Y), m(P.Z)) end
+function SCOOP.hit(P) H.up, H.po = nil, nil; say("hit", m(P.X), m(P.Y), m(P.Z)) end
 function SCOOP.gone(on) H.gone = on == true; say("vg", on and "1" or "0") end
 function SCOOP.stop() if H.up or H.po or H.gone then say("st") end; H = { broken = {}, gone = false } end
 -- (hostSync) a joiner linking now: the picture as it stands
@@ -106,16 +107,11 @@ function SCOOP.fromHost(f)
         if ph and ph >= 1 and ph <= 9 then SOLG.mirrorPhase(ph) end
     elseif k == "b" then
         local bone = tostring(f[3] or ""):match("^[%w_]+$")
-        if bone and #bone <= 16 then             -- (each player paid for it, as the host is: team pay)
-            local okB, done, pay, key = pcall(SOLG.breakBone, bone)
-            if okB and done and pay and pay > 0 and addCredits then addCredits(pay, "the SOLG's " .. tostring(key) .. " (the host's word)") end
-        end
+        if bone and #bone <= 16 then SOLG.breakBone(bone) end   -- (its pay: the host's own, sent as "cr" with the round's)
     elseif k == "dn" then
         local L = SOLG.where and SOLG.where()
         if L and fxAt then fxAt(SOLG.C.fx, L, n(SOLG.C.fx_scale.SOLG, 12), 10) end
         pcall(SOLG.fall)
-        local pay = n(c.solg and c.solg.reward, 0)
-        if pay > 0 and addCredits then addCredits(pay, "the SOLG destroyed (the host's word)") end
         J.wreckUntil = now + n(c.solg and c.solg.wreck_s, 25)
         sl("the host's SOLG destroyed: falling apart here")
     elseif k == "hit" then
@@ -149,6 +145,7 @@ function SCOOP.clientTick(now)
         if J.phOut and now >= J.phOut then J.phOut = nil; pcall(SPC.V.portalThrough, c, J.ph, now) end
     end
     if SOLG and SOLG.tick then SOLG.tick(now) end
+    if VSOLG and VSOLG.strikesTick then pcall(VSOLG.strikesTick, now) end   -- (the host's spaceport strike here: stopped in time)
     if J.wreckUntil and now >= J.wreckUntil then J.wreckUntil = nil; pcall(SOLG.stop, "its wreck's gone") end
     if J.gone and now >= (J.hideAt or 0) then J.hideAt = now + 1; hideValka(true) end   -- (a copy of her made since)
 end

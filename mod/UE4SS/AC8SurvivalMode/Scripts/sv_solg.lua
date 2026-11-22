@@ -1,7 +1,6 @@
 -- sv_solg.lua : the SOLG, VALKA's last move (the user, 2026-11-22: "When Valka reaches 20% health ... Valka Calls in
 -- the SOLG. The SOLG spawns at high altitude out of another Portal ... and begins to travel towards the space centre";
--- "the SOLG cannot use any boss from the game it needs to be it's own custom thing"; docs/re/SOLG.md, the plan in
--- docs/design). Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order: a name another part uses is a
+-- "the SOLG cannot use any boss from the game it needs to be it's own custom thing"; docs/re/SOLG.md). Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order: a name another part uses is a
 -- global of this mod's Lua state, its own helpers stay local.
 -- This piece: the SOLG's own body, no game unit under it: an actor of ours whose root is AC:I's SOLG as our skeletal
 -- mesh (tools/solg: SK_SV_SOLG, a bone per piece and its wreck <bone>_W, RING_1 / RING_2 carrying their pieces),
@@ -546,7 +545,7 @@ local function phaseOn(ph)
     end
     local nOn = openUp()
     sl(string.format("phase %d: %d targets lockable", ph, nOn))
-    if SOLG.onPhase then pcall(SOLG.onPhase, ph, nOn) end
+    if SOLG.onPhase and not S.mirror then pcall(SOLG.onPhase, ph, nOn) end
 end
 SOLG.phaseOn = phaseOn
 breakTarget = function(e, why)
@@ -564,7 +563,8 @@ breakTarget = function(e, why)
     pcall(function() e.o:K2_SetActorLocation({ X = 0, Y = 0, Z = -5000000 }, false, {}, true) end)   -- (out of the way)
     S.broken = S.broken or {}
     S.down = (S.down or 0) + 1
-    if SOLG.onBreak and why ~= "its arm's gone" then pcall(SOLG.onBreak, e.key, e.bone, e.t.pay, why) end
+    if why == "gone" then sl(string.format("%s gone without being shot down: broken, unpaid", e.bone)) end
+    if SOLG.onBreak and not S.mirror and why ~= "its arm's gone" and why ~= "gone" then pcall(SOLG.onBreak, e.key, e.bone, e.t.pay, why) end
     openUp()                                              -- (what waited on it: Gould's wing rows, an arm's MAG panels)
     if e.t.optional or e.optional then return end         -- (a laser, an optional panel: the phases go on without it)
     if e.arm then                                         -- (its arm's last target: the arm breaks off)
@@ -573,8 +573,11 @@ breakTarget = function(e, why)
             if x.arm == e.arm then pieces[#pieces + 1] = x.bone; if x.live then left = left + 1 end end
         end
         if left == 0 then
-            for _, x in ipairs(S.targets) do                  -- (its lasers go down with it)
-                if x.onArm == e.arm and x.live then breakTarget(x, "its arm's gone") end
+            for _, x in ipairs(S.targets) do                  -- (its riders, MAG panels and lasers, go down with it)
+                if x.onArm == e.arm then
+                    if x.live then breakTarget(x, "its arm's gone") end
+                    if not x.t.laser then pieces[#pieces + 1] = x.bone end   -- (their wrecks off the body: the arm's mesh has them)
+                end
             end
             SOLG.breakArm(e.arm, pieces)
         end
