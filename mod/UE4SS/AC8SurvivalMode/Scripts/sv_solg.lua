@@ -25,6 +25,24 @@ SOLG = { C = {
     spin_rate = 1.0,                        -- the spin animation's play rate (1: AC:I's, a ring's turn in 40 s)
     -- a wing shot off: pushed out from the barrel (m/s), down (m/s), its tumble (deg/s, each axis up to), gone after
     fall = { out_mps = 35, down_mps = 15, tumble_dps = 40, gravity = 1.0, life_s = 30 },
+    -- its targets (docs/re/SOLG.md 5: AC:I's types, counts and health): each type a unit of ours on AC8's GENERIC
+    -- destructible base (tools/survival_events_specials.py SOLG_*: Mission 4's radar tower ported, no boss), its objects
+    -- held on the SOLG's bones (its own mesh hidden: you see the SOLG's piece), their health AC:I's x health_x, held at
+    -- floor HP so the game never breaks one its own way (a radar tower's wreck in the sky): at the floor the SOLG breaks
+    -- it (the piece hidden, its wreck shown, a wing falling, an explosion, pay). AC:I's phases: 1 the wings (SAW) and
+    -- the MAG panels, 2 the KEW shells, 3 the core units, 4 the SP shell; a phase's targets are lockable only then.
+    targets = {
+        { key = "SAW", unit = "SV_Unit_SOLG_SAW", phase = 1, health = 900, pay = 300, bones = { "SG04_%02d", 6, "SG05_%02d", 12 } },
+        { key = "MAG", unit = "SV_Unit_SOLG_MAG", phase = 1, health = 600, pay = 200, bones = { "SG07_%02d", 32 } },
+        { key = "KEW", unit = "SV_Unit_SOLG_KEW", phase = 2, health = 1000, pay = 400, bones = { "KEW_%02d", 36 } },
+        { key = "CORE", unit = "SV_Unit_SOLG_CORE", phase = 3, health = 1500, pay = 800, bones = { "SG03_%02d", 4 } },
+        { key = "SP", unit = "SV_Unit_SOLG_SP", phase = 4, health = 2500, pay = 3000, bones = { "CORE_%02d", 1 } },
+    },
+    health_x = 0.25,                        -- (AC:I's health is a 4-player raid's: a first guess, every hit logged)
+    floor = 1,                              -- a live target's HP floor: it breaks there
+    hold_s = 0.0,                           -- targets put back on their bones every tick (0) or this often
+    fx = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" },
+    fx_scale = { SAW = 3, MAG = 2, KEW = 3, CORE = 5, SP = 8, SOLG = 12 },
 } }
 do
 local S = nil                                             -- the SOLG up: { actor, body, move, panels = {...} }
@@ -204,6 +222,11 @@ function SOLG.panelAt(k)
 end
 function SOLG.stop(why)
     if not S then return end
+    if S.targets then
+        for _, t in ipairs(SOLG.C.targets) do
+            if SPC and SPC.cleanUp then pcall(SPC.cleanUp, { t.unit }, "the SOLG gone", true, os.clock()) end
+        end
+    end
     for _, p in ipairs(S.panels) do if liveObj(p.actor) then pcall(function() p.actor:K2_DestroyActor() end) end end
     if liveObj(S.actor) then pcall(function() S.actor:K2_DestroyActor() end) end
     sl("taken down (" .. tostring(why) .. ")")
@@ -212,6 +235,7 @@ end
 function SOLG.tick(now)
     if not S then return end
     if (levelTorn and levelTorn()) or not D then S = nil; return end
+    if SOLG.targetsTick then pcall(SOLG.targetsTick) end
     local clock = os.clock()
     for i = #S.panels, 1, -1 do
         local p = S.panels[i]
@@ -221,5 +245,136 @@ function SOLG.tick(now)
         end
     end
 end
-if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the SOLG"] = function() S = nil end end
+-- ---- its targets ----
+local FLAGS_ON = { bShowHUDBox = true, bIsNotLockonTarget = false, bIsNotFCSTargets = false, bIsInvincible = false }
+local FLAGS_OFF = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
+local CAPTURE = nil                                       -- the objects SV_Spawn makes while it runs
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
+    if CAPTURE and #CAPTURE < 200 then CAPTURE[#CAPTURE + 1] = o end
+end)
+local function flags(o, f) for k, v in pairs(f) do pcall(function() o[k] = v end) end end
+local function hideOwn(o)                                 -- the radar tower's own meshes off (its box and lock stay)
+    local nh = 0
+    for _, cls in ipairs({ "/Script/Engine.StaticMeshComponent", "/Script/Engine.SkeletalMeshComponent" }) do
+        local c = StaticFindObject(cls)
+        local ok, list = pcall(function() return o:K2_GetComponentsByClass(c) end)
+        if ok and list then
+            pcall(function() list:ForEach(function(_, e) local m = e:get(); if pcall(function() m:SetVisibility(false, true) end) then nh = nh + 1 end end) end)
+        end
+    end
+    return nh
+end
+local function bonesOf(t)
+    local out, b = {}, t.bones
+    for i = 1, #b, 2 do for k = 1, b[i + 1] do out[#out + 1] = string.format(b[i], k) end end
+    return out
+end
+-- every target type's unit up, its objects on their bones; the first phase's lockable
+function SOLG.targetsUp()
+    if not (S and liveObj(S.body)) then return 0 end
+    S.targets, S.phase = {}, 1
+    local total, said = 0, {}
+    for _, t in ipairs(SOLG.C.targets) do
+        local bones = bonesOf(t)
+        CAPTURE = {}
+        spawningUnit = t.unit
+        local r = SV_Spawn(t.unit, S.at0.X, S.at0.Y, S.at0.Z, 0)
+        spawningUnit = nil
+        local got = CAPTURE
+        CAPTURE = nil
+        local hp = n(t.health, 1000) * n(SOLG.C.health_x, 0.25)
+        local placed = 0
+        for k, o in ipairs(got) do
+            local bone = bones[k]
+            if bone and valid(o) then
+                local att = pcall(function() o:K2_AttachToComponent(S.body, FName(bone), 2, 2, 1, false) end)
+                pcall(function() o.MaxHealth = hp; o.HealthInternal = math.floor(hp * 10 + 0.5) end)
+                pcall(function() o.MinHealth = n(SOLG.C.floor, 1) end)
+                hideOwn(o)
+                flags(o, t.phase == 1 and FLAGS_ON or FLAGS_OFF)
+                S.targets[#S.targets + 1] = { o = o, a = addrOf(o), key = t.key, bone = bone, t = t, hp = hp, attached = att, live = true }
+                placed = placed + 1
+            end
+        end
+        total = total + placed
+        said[#said + 1] = string.format("%s %d of %d (%s)", t.key, placed, #bones, r > 0 and (r .. " up") or (SV_ERR and SV_ERR[r] or tostring(r)))
+    end
+    local att = 0
+    for _, e in ipairs(S.targets) do if e.attached then att = att + 1 end end
+    sl(string.format("targets up: %s; %d attached to their bones, %d held by hand; phase 1", table.concat(said, ", "), att, total - att))
+    return total
+end
+local function phaseOn(ph)
+    S.phase = ph
+    local nOn = 0
+    for _, e in ipairs(S.targets) do
+        if e.live and e.t.phase == ph and liveObj(e.o) then flags(e.o, FLAGS_ON); nOn = nOn + 1 end
+    end
+    sl(string.format("phase %d: %d targets lockable", ph, nOn))
+    if SOLG.onPhase then pcall(SOLG.onPhase, ph, nOn) end
+end
+local function breakTarget(e, why)
+    e.live = false
+    flags(e.o, FLAGS_OFF)
+    local L = boneAt(S.body, e.bone)
+    if e.key == "SAW" then SOLG.breakPanel(e.bone)
+    else
+        pcall(function() S.body:HideBoneByName(FName(e.bone), 0) end)
+        pcall(function() S.body:UnHideBoneByName(FName(e.bone .. "_W")) end)
+    end
+    if L and fxAt then pcall(fxAt, SOLG.C.fx, L, n(SOLG.C.fx_scale[e.key], 3), 6) end
+    pcall(function() e.o:K2_DetachFromActor(1, 1, 1) end)
+    pcall(function() e.o:K2_SetActorLocation({ X = 0, Y = 0, Z = -5000000 }, false, {}, true) end)   -- (out of the way)
+    S.broken = S.broken or {}
+    S.down = (S.down or 0) + 1
+    if SOLG.onBreak then pcall(SOLG.onBreak, e.key, e.bone, e.t.pay, why) end
+    -- the phase over: the next one's on (AC:I's); the last one: the SOLG destroyed
+    for _, x in ipairs(S.targets) do if x.live and x.t.phase == S.phase then return end end
+    local nextPh = nil
+    for _, x in ipairs(S.targets) do if x.live and (not nextPh or x.t.phase < nextPh) then nextPh = x.t.phase end end
+    if nextPh then phaseOn(nextPh)
+    else
+        sl("every target down: the SOLG destroyed")
+        S.destroyed = true
+        if SOLG.onDestroyed then pcall(SOLG.onDestroyed) end
+    end
+end
+-- (the tests': a target's HP straight to its floor, as a hit would)
+function SOLG.hurt(key, k)
+    if not S or not S.targets then return false end
+    local i = 0
+    for _, e in ipairs(S.targets) do
+        if e.key == key and e.live then
+            i = i + 1
+            if i == (k or 1) then pcall(function() e.o.HealthInternal = math.floor(n(SOLG.C.floor, 1) * 10) end); return true end
+        end
+    end
+    return false
+end
+function SOLG.state()
+    if not S then return nil end
+    local live, perKey = 0, {}
+    for _, e in ipairs(S.targets or {}) do if e.live then live = live + 1; perKey[e.key] = (perKey[e.key] or 0) + 1 end end
+    return { phase = S.phase, live = live, per = perKey, destroyed = S.destroyed, down = S.down or 0 }
+end
+-- each tick: unattached targets put on their bones; health read; at the floor, broken
+local function targetsTick()
+    if not (S and S.targets) then return end
+    local floorIn = n(SOLG.C.floor, 1) * 10 + 0.5
+    for _, e in ipairs(S.targets) do
+        if e.live then
+            if not liveObj(e.o) or addrOf(e.o) ~= e.a then breakTarget(e, "gone")
+            else
+                if not e.attached then
+                    local L = boneAt(S.body, e.bone)
+                    if L then pcall(function() e.o:K2_SetActorLocation(L, false, {}, true) end) end
+                end
+                local ok, h = pcall(function() return e.o.HealthInternal end)
+                if ok and tonumber(h) and h <= floorIn then breakTarget(e, "shot down") end
+            end
+        end
+    end
+end
+SOLG.targetsTick = targetsTick
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the SOLG"] = function() S = nil; CAPTURE = nil end end
 end

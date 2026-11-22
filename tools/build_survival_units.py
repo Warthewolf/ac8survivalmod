@@ -695,6 +695,25 @@ def valka_unit(units, used_ids, z, top_number):
     print(f'  valka: {names[0]} in {survival_events.VALKA_UNIT} ({lead}_sv), {parts} parts: {survival_events.VALKA_PARTS}')
 
 
+M04 = '/Game/Maps/Ingame/Mission004/'
+
+
+def solg_units(units, used_ids, z, top_number):
+    """VALKA's SOLG's targets (survival_events.SOLG_*): a unit per target type, each Mission 4's single BPD radar
+    tower unit with as many objects as AC:I's SOLG has of that type, on the row SOLG_TARGET_ROW, its area over the whole
+    zone; a target box and TGT mark on each. Scripts/sv_solg.lua spawns them and holds them on the SOLG's bones."""
+    m04z = ZenPkg(stock(M04 + 'WD_Mission004_global'))
+    m04, _ = props_of(m04z, m04z.export_index('WD_Mission004_global'), 'LiveWorldData')
+    src = desc_named(m04, 'UnitDescList', survival_events.SOLG_TARGET_SOURCE_UNIT)
+    for t, nn in survival_events.SOLG_TARGETS:
+        pts = [(100.0 * k, 0.0, 300000.0) for k in range(nn)]
+        names = port_unit(units, used_ids, z, src, survival_events.SOLG_UNITS[t], survival_events.SOLG_OBJS[t],
+                          survival_events.SOLG_TARGET_ROW, pts, 0.0, top_number, tgt=True, clone_first=True)
+        u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.SOLG_UNITS[t]][0]
+        zone_area(u)
+        print(f'  solg: {survival_events.SOLG_UNITS[t]}: {len(names)} {t} targets ({names[0]} ..)')
+
+
 def valka_eml_unit(units, used_ids, z, top_number):
     """VALKA's opener railgun (survival_events.VALKA_EML_*): AC7 Mission 18 fires its opener from a hidden dummy
     railgun of its own (ms18_dummy_eml_p1, an AITurret_Pawn), not from Mihaly. Ours: the x40a's RailGun part alone

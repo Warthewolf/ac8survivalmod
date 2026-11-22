@@ -388,6 +388,17 @@ def glitch_blinks():
 # parts, ported as the Ladon is) until the X-02S model is built.
 # Scripts/main.lua CFG.specials.valka drives it (SPC.V.*); keep VALKA_SPOTS in step with its `spots`.
 VALKA_SOURCE_UNIT = 'EI_Unit_01_Air0'          # Mission 26's x40a ("Nightmare") and its parts
+# ((2026-11-22) VALKA's SOLG (Scripts/sv_solg.lua, docs/re/SOLG.md): its targets, each type its own unit on AC8's
+# GENERIC destructible-object base (the user: "the SOLG cannot use any boss from the game"; her yes to the base):
+# Mission 4's single radar tower unit ported (build_survival_units.py solg_units), its objects on one mission row
+# copied from Mission 4's (SOLG_TARGET_ROW), held on the SOLG's bones by Lua; AC:I's types and counts)
+SOLG_TARGET_ROW = 'sv_solg_target'
+SOLG_TARGET_SOURCE_ROW = 'RadarTower02_common'                 # (DT_NPC_Mission004: NpcId BPD_RadarTower02_01)
+SOLG_TARGET_SOURCE_UNIT = 'AA_Unit_01_ground0'                 # (WD_Mission004_global: one BPD radar tower)
+SOLG_TARGETS = [('SAW', 18), ('MAG', 32), ('KEW', 36), ('CORE', 4), ('SP', 1)]
+SOLG_UNITS = {t: 'SV_Unit_SOLG_' + t for t, _ in SOLG_TARGETS}
+SOLG_OBJS = {t: 'SV_Obj_SOLG_' + t for t, _ in SOLG_TARGETS}
+
 VALKA_UNIT = 'SV_Unit_Valka'
 VALKA_OBJ = None                               # her AI object name, set by build_survival.py valka_unit
 VALKA_PARTS = {}                               # component -> its object name (RailGun, RailGunCK, RailGunPF, LaserPod)

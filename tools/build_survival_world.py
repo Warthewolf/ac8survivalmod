@@ -911,6 +911,7 @@ def build_wd_global():
     alcn_units(units, used_ids, z, top_number, v)
     valka_unit(units, used_ids, z, top_number)
     valka_eml_unit(units, used_ids, z, top_number)
+    solg_units(units, used_ids, z, top_number)              # VALKA's SOLG's targets (survival_events.SOLG_*)
     fishing_units(units, used_ids, z, top_number)          # GONE FISHIN' (survival_events.FISH_* / SAL_BOAT_*)
     tanicorn_units(units, used_ids, z, top_number)         # THE TANICORN's test mount (survival_events.TANI_*)
     festival_units(units, used_ids, z, top_number, v)      # THE FESTIVAL (survival_events.FEST_*)

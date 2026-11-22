@@ -1372,7 +1372,9 @@ NPC_ROWS = set()           # its row names, filled by build_npc_table
 NPC_SOURCE = {}            # (0.73.77) each Survival row whose DT_NPC row Lua makes -> the mission row it was copied from
 # Rows copied whole from other missions' NPC tables (names and values only, no object references): the heavy bombers
 # of Mission 4 (Milestone 3). Their blueprints are loaded by the spawner from the NpcId's DT_NPC row.
-NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_common', 'tu95_common']),
+NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_common', 'tu95_common',
+                                                                     # VALKA's SOLG's targets: its radar tower row
+                                                                     (survival_events.SOLG_TARGET_ROW, survival_events.SOLG_TARGET_SOURCE_ROW)]),
               # the amphibious assault's landing craft and troops (survival_events.LCAC_*), Mission 13's
               ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission013', ['lcac_common', 'btr9_common']),
               # the Ladons' own rows (survival_events.LADON*: LADON_SOURCE_ROW's copies; its parts name no mission row:

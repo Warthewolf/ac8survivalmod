@@ -32,6 +32,7 @@ import ndp3, ntp3, skel                      # noqa: E402
 OUT = os.path.join(ROOT, 'build', 'solg')
 PAC, ENTRY = 'DATA01', 213
 MODELS = ['s_solg'] + ['s_sg%02d' % i for i in range(1, 10)]
+CUT = 429                                    # (DATA01: the SOLG's arrival cutscene: where its KEW shells sit)
 NAME = {'s_solg': 'SM_SV_SOLG_Body', **{'s_sg%02d' % i: 'SM_SV_SOLG_SG%02d' % i for i in range(1, 10)}}
 
 
@@ -329,6 +330,41 @@ def main():
         bones.append((key + '_W', R, p)); pieces.append((len(bones) - 1, cache[(mt['model'], 'd1')]))
     for n, pos in sorted(layout['rings'].items()):
         bones.append(('RING_' + n[-1], I3, np.array(pos)))
+    # ((2026-11-22) its KEW shells (s_sg06, AC:I's KEW SHELL targets): on no plan node of the body; where they sit comes
+    # from the arrival cutscene (DATA01 429, cut 0, frame 0: Tdemo__s_sg06_t1__NN, tools/solg/kfm1.py), each shell's
+    # place and turn relative to the body's (Tdemo__s_solg_t1__01), in the body's own frame; on the nearer ring)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # (-I: the script's folder isn't on the path)
+    import kfm1
+    dc = DPL(os.path.join(os.environ['ACI_USRDIR'], PAC + '.PAC')).read(CUT)
+    cch = list(flat(fhm_tree(dc)))
+    first = {}
+    for c in cch:
+        if c[1] != b'MOP2' or c[3] < 32:
+            continue
+        for nm_, kb in skel.clips(dc[c[2]:c[2] + c[3]]).items():
+            if nm_.startswith('Tdemo__s_') and nm_ not in first:
+                first[nm_] = kfm1.decode(kb)[1]
+    def pose(tr):
+        pp = next(t for t in tr if t['type'] == 0x0503)['vals'][0]
+        qq = next(t for t in tr if t['type'] == 0x0704)['vals'][0]
+        return np.array(pp, np.float64), qmat(qq)
+    bp, bR = pose(first['Tdemo__s_solg_t1__01'])
+    kew = sorted(k for k in first if k.startswith('Tdemo__s_sg06_t1__'))
+    layout['kew'] = []
+    for i, k in enumerate(kew):
+        pp, R = pose(first[k])
+        rel = bR.T @ (pp - bp)                   # in the body's AC:I frame
+        Rrel = bR.T @ R
+        key = 'KEW_%02d' % (i + 1)
+        ring = 'RING_1' if abs(rel[2] - 714.3) <= abs(rel[2] - 791.5) else 'RING_2'
+        Rt, pt = TURN @ Rrel @ TURN.T, turned(rel)
+        bones.append((key, Rt, pt)); pieces.append((len(bones) - 1, cache[('s_sg06', 'l1')]))
+        bones.append((key + '_W', Rt, pt)); pieces.append((len(bones) - 1, cache[('s_sg06', 'd1')]))
+        layout['kew'].append({'bone': key, 'cut_clip': k, 'aci_pos_m': np.round(rel, 2).tolist(), 'ring': ring})
+    print('KEW shells: %d from %s (radius %.0f-%.0f m from the barrel, AC:I z %.0f-%.0f)' % (
+        len(kew), 'DATA01 %d' % CUT, min(np.hypot(e['aci_pos_m'][0], e['aci_pos_m'][1]) for e in layout['kew']),
+        max(np.hypot(e['aci_pos_m'][0], e['aci_pos_m'][1]) for e in layout['kew']),
+        min(e['aci_pos_m'][2] for e in layout['kew']), max(e['aci_pos_m'][2] for e in layout['kew'])))
     # ((2026-11-22) its animation, AC:I's own (tools/solg/kfm1.py, docs/re/SOLG.md section 10): the body's `auta`
     # turns ring auta1 (RING_1) and auta2 (RING_2) the opposite ways about the barrel (AC:I z = glTF x), 0.3 degrees a
     # frame each (one turn in 1,200 frames, 40 s at 30 fps). The pieces on a ring are that ring's bone's children; the
@@ -339,6 +375,8 @@ def main():
     for mt in layout['mounts']:
         key = 'CORE_%02d' % mt['index'] if mt['model'] == 'f_sgc1' else '%s_%02d' % (mt['model'][2:].upper(), mt['index'])
         owner[key] = owner[key + '_W'] = ringof.get(mt['parent'])
+    for e in layout['kew']:
+        owner[e['bone']] = owner[e['bone'] + '_W'] = e['ring']
     bn = [b[0] for b in bones]
     parents = [-1] + [bn.index(owner[b]) if owner.get(b) else 0 for b in bn[1:]]
     spin = {'name': 'A_SV_SOLG_Spin', 'length_s': 40.0, 'keys': 160,
