@@ -1561,6 +1561,7 @@ function SPC.V.blinkPortal(c, s, at, yaw, now)
     h.portal.closeAt = now + (tonumber(bp.open_s) or 0.3) + (tonumber(bp.hold_s) or 0.6)
     s.bportals[#s.bportals + 1] = h
     SPC.V.portalFx(c, h, "burst")
+    if COOP and COOP.valkaBlinkPortal and COOP.host and COOP.host() then pcall(COOP.valkaBlinkPortal, at, yaw) end
     return true
 end
 function SPC.V.blinkPortalsTick(c, s, now)

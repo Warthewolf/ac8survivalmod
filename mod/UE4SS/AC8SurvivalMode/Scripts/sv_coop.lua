@@ -185,6 +185,12 @@ function COOP.valkaPortal(at, yaw, what)
     log(string.format("coop: VALKA's portal (%s) sent to every joiner (%d linked)", what == "o" and "open" or "she's through",
         M.linkedPeers or 0))
 end
+-- (her blinks' small portals: "vp|...|b", each joiner opens its own there; not logged, a blink is frequent)
+function COOP.valkaBlinkPortal(at, yaw)
+    if not (COOP.host() and at) then return end
+    send(false, "vp", math.floor(at.X / 100 + 0.5), math.floor(at.Y / 100 + 0.5), math.floor(at.Z / 100 + 0.5),
+        math.floor((yaw or 0) + 0.5), "b")
+end
 -- (0.73.77, plan D2) a joiner's VALKA mood (the host's "vm"), and taken off here when the host's run starts over or a new
 -- host's level comes ("rs"), a new run or level starts here, or this game becomes the host (a migration): never left
 -- red or playing with nobody left to say off. why: "the host's" for the host's own word.
@@ -204,7 +210,10 @@ function M.valkaHere(on, why)
     end
     local was = M.vmHere
     M.vmHere, M.vr = nil, nil
-    if M.vportal and SPC and SPC.V and SPC.V.portalStop then pcall(SPC.V.portalStop, M.vportal) end   -- ((2026-11-22) her portal)
+    if M.vportal and SPC and SPC.V and SPC.V.portalStop then   -- ((2026-11-22) her portal and her blinks' small ones)
+        pcall(SPC.V.portalStop, M.vportal)
+        pcall(SPC.V.blinkPortalsStop, M.vportal)
+    end
     pcall(hudRed, false)                                     -- (faded by redTick, which drops a sky whose level is gone)
     if c then pcall(function() SND.songFade(c.song and c.song.out_s or 5) end) end
     if why == "the host's" then log("coop: the host's VALKA mood off: the sky and her song fading")

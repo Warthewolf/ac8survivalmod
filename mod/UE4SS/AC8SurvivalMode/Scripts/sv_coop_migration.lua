@@ -952,6 +952,9 @@ local function onJoinerMessage(f)
             if not okP then once("vp", "coop: the host's VALKA portal not drawn: " .. tostring(errP)) end
         elseif ok and what == "t" and M.vportal then
             pcall(SPC.V.portalThrough, c, M.vportal, os.clock())
+        elseif ok and what == "b" then                    -- (a blink's small one)
+            M.vportal = M.vportal or {}
+            pcall(SPC.V.blinkPortal, c, M.vportal, { X = x * 100, Y = y * 100, Z = z * 100 }, yaw, os.clock())
         end
     elseif k == "vr" and COOP.client() then              -- ((0.73.76) she shows: her X-02S on this game's copy of her)
         local unit = short(f[2], 96)
@@ -1548,6 +1551,7 @@ end
 -- wing sweep each tick, as her round does on the host
 function COOP.valkaTick()
     if M.vportal and M.vportal.portal then pcall(SPC.V.portalTick, CFG.specials.valka, M.vportal, os.clock()) end   -- ((2026-11-22))
+    if M.vportal and M.vportal.bportals then pcall(SPC.V.blinkPortalsTick, CFG.specials.valka, M.vportal, os.clock()) end
     local v = M.vr
     if not (v and D and COOP.client()) then return end
     local cu = M.cunits[v.unit]
