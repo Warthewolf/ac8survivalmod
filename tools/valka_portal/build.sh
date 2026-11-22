@@ -1,6 +1,7 @@
 #!/bin/sh
 # build.sh : VALKA's portal (docs/re/VALKA.md section 8) -> build/valka_portal/out/SurvivalMode_ValkaPortal_P.utoc / .ucas
-#   1. make_portal.py  Blender 3.3: the black hole's pieces from numbers -> build/valka_portal/src/SM_SV_BH*.glb
+#   1. make_portal.py  Blender 3.3: the black hole's pieces from numbers, one design (PORTAL_DESIGN, default detailed)
+#                      -> build/valka_portal/src/<design>/SM_SV_BH*.glb and its manifest.json (the pieces, their colours)
 #   2. ue_import.py    in the AC8 template project ($AC8_LIVE_PROJECT, UE 5.4): static meshes under
 #                      /Game/Mods/SurvivalMode/ValkaPortal/Model, each on the engine's BasicShapeMaterial (AC8 has it; no
 #                      material of ours: hard rule 58)
@@ -25,11 +26,13 @@ if tasklist 2>/dev/null | grep -qi "AceCombat8.exe"; then echo "valka_portal: AC
 # 1. the pieces
 WIN_OUT=$(cd "$OUT" && (pwd -W 2>/dev/null || pwd))
 echo "valka_portal: modelling the pieces (log: $OUT/make.log)"
-"$BLENDER" -b -P tools/valka_portal/make_portal.py -- "$WIN_OUT/src" > "$OUT/make.log" 2>&1 || true
+DESIGN=${PORTAL_DESIGN:-detailed}
+rm -rf "$OUT/src/$DESIGN"
+"$BLENDER" -b -P tools/valka_portal/make_portal.py -- "$WIN_OUT/src" "$DESIGN" > "$OUT/make.log" 2>&1 || true
 grep "^portal:" "$OUT/make.log" | sed 's/ -> .*//'
 grep -q "^portal: done" "$OUT/make.log" || { echo "valka_portal: the model failed ($OUT/make.log)"; exit 1; }
 # 2. the import
-export SV_PORTAL_SRC="$WIN_OUT/src" SV_PORTAL_LOG="$WIN_OUT/ue_import.log"
+export SV_PORTAL_SRC="$WIN_OUT/src/$DESIGN" SV_PORTAL_LOG="$WIN_OUT/ue_import.log"
 SCRIPT="$(pwd -W 2>/dev/null || pwd)/tools/valka_portal/ue_import.py"
 echo "valka_portal: importing them (log: $OUT/ue_import.log)"
 rm -f "$OUT/ue_import.log"
@@ -41,9 +44,10 @@ echo "valka_portal: cooking (log: $OUT/cook.log)"
 rm -rf "$PROJ/Saved/Cooked"
 "$CMD" "$PROJ/Live.uproject" -run=cook -targetplatform=Windows -unattended -nop4 -nosplash -stdout > "$OUT/cook.log" 2>&1 || true
 COOKED="$PROJ/Saved/Cooked/Windows/Live/Content/Mods/SurvivalMode/ValkaPortal"
-for n in Shadow PhotonRing HaloInner HaloOuter DiskHot DiskWarm DiskCool DiskBright; do
-    [ -f "$COOKED/Model/SM_SV_BH$n.uasset" ] || { echo "valka_portal: SM_SV_BH$n not cooked ($OUT/cook.log)"; grep -i "error" "$OUT/cook.log" | tail -5; exit 1; }
+for n in $(python -I tools/valka_portal/parts_lua.py --names "$OUT/src/$DESIGN/manifest.json"); do
+    [ -f "$COOKED/Model/$n.uasset" ] || { echo "valka_portal: $n not cooked ($OUT/cook.log)"; grep -i "error" "$OUT/cook.log" | tail -5; exit 1; }
 done
+cp "$OUT/src/$DESIGN/manifest.json" "$OUT/manifest.json"     # (the pieces cooked: tools/valka_portal/parts_lua.py)
 # 4-5. the container: our folder only
 rm -rf "$OUT/stage" "$OUT/out" && mkdir -p "$OUT/stage/Live/Content/Mods/SurvivalMode" "$OUT/out"
 cp -r "$COOKED" "$OUT/stage/Live/Content/Mods/SurvivalMode/"

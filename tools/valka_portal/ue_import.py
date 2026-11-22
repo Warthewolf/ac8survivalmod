@@ -1,11 +1,12 @@
 """ue_import.py : VALKA's portal meshes (tools/valka_portal/make_portal.py's glTFs) into the AC8 template project, UE 5.4.
 
 Run by tools/valka_portal/build.sh: UnrealEditor-Cmd <Live.uproject> -run=pythonscript -script=<this>. Reads SV_PORTAL_SRC
-(the glTFs) and SV_PORTAL_LOG; makes /Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_Portal* static meshes, each slot on
+(one design's glTFs and its manifest.json: the pieces) and SV_PORTAL_LOG; makes /Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_Portal* static meshes, each slot on
 the engine's /Engine/BasicShapes/BasicShapeMaterial (in AC8's own files: Survival colours them in game with AC8's glow
 materials, hard rule 58: no material of ours), no collision, no Nanite, no lightmap UVs needed (never lit from a map).
 The log ends with `done` when every mesh is in and saved.
 """
+import json
 import os
 
 import unreal
@@ -13,8 +14,8 @@ import unreal
 SRC = os.environ.get('SV_PORTAL_SRC', '')
 LOG = os.environ.get('SV_PORTAL_LOG', os.path.join(SRC, '..', 'ue_import.log'))
 DEST = '/Game/Mods/SurvivalMode/ValkaPortal/Model'
-NAMES = ['SM_SV_BHShadow', 'SM_SV_BHPhotonRing', 'SM_SV_BHHaloInner', 'SM_SV_BHHaloOuter', 'SM_SV_BHDiskHot',
-         'SM_SV_BHDiskWarm', 'SM_SV_BHDiskCool', 'SM_SV_BHDiskBright']
+with open(os.path.join(SRC, 'manifest.json'), encoding='utf-8') as _fh:
+    NAMES = [p['name'] for p in json.load(_fh)['pieces']]
 EAL = unreal.EditorAssetLibrary
 AT = unreal.AssetToolsHelpers.get_asset_tools()
 lines = []
@@ -82,6 +83,25 @@ def main():
             sm.set_editor_property('nanite_settings', nan)
         except Exception as e:
             say(f'{name}: nanite setting left ({e})')
+        # ((2026-11-22) the detailed design is ~630k triangles: three LODs, so it costs little 14 km out or as her blinks'
+        # small holes; the commandlet has no StaticMeshEditorSubsystem (the cook of 14:47): EditorStaticMeshLibrary then)
+        opts = unreal.StaticMeshReductionOptions()
+        opts.set_editor_property('auto_compute_lod_screen_size', False)
+        opts.set_editor_property('reduction_settings', [
+            unreal.StaticMeshReductionSettings(1.0, 1.0), unreal.StaticMeshReductionSettings(0.35, 0.3),
+            unreal.StaticMeshReductionSettings(0.1, 0.1)])
+        how = []
+        for what in ('StaticMeshEditorSubsystem', 'EditorStaticMeshLibrary'):
+            try:
+                if what == 'StaticMeshEditorSubsystem':
+                    lods = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem).set_lods_with_notification(sm, opts, True)
+                else:
+                    lods = unreal.EditorStaticMeshLibrary.set_lods(sm, opts)
+                how.append(f'{what}: {lods}')
+                break
+            except Exception as e:
+                how.append(f'{what}: {e}')
+        say(f'{name}: LODs: ' + '; '.join(how))
         EAL.save_loaded_asset(sm)
         b = sm.get_bounds()
         say(f'{name}: {len(slots)} slot(s) on BasicShapeMaterial, bounds radius {b.sphere_radius:.1f} cm, '
