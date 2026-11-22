@@ -128,6 +128,9 @@ function SOLG.spawn(at, yaw, vel)
     pcall(function() body:SetCollisionEnabled(0) end)
     pcall(function() body:SetCastShadow(false) end)
     local okM = pcall(function() body:SetSkeletalMeshAsset(sk) end) or pcall(function() body:SetSkeletalMesh(sk, true) end)
+    -- ((2026-11-22, run 17:58) a bare actor has no root: its spawn place went with the first component, the SOLG lay at the
+    -- world's origin on the sea. Put where it's wanted once its mesh is its root)
+    pcall(function() a:K2_SetActorLocationAndRotation({ X = at.X, Y = at.Y, Z = at.Z }, { Pitch = 0, Yaw = yaw or 0, Roll = 0 }, false, {}, true) end)
     step("painting")
     local painted = paint(body)
     step("hiding its wrecks")
@@ -168,7 +171,7 @@ function SOLG.breakPanel(bone)
     if not c then sl("break " .. bone .. ": its falling mesh NOT made"); return false end
     pcall(function() c:SetCollisionEnabled(0) end)
     pcall(function() c:SetSkeletalMeshAsset(sk) end)
-    pcall(function() a:K2_SetActorRotation(R, false) end)
+    pcall(function() a:K2_SetActorLocationAndRotation(L, R, false, {}, true) end)   -- (its root now: run 17:58)
     paint(c)
     pcall(function() c:HideBoneByName(FName("PANEL"), 0) end)   -- (its wreck falls)
     -- its push: away from the barrel (the body's axis through its middle), down, and the body's own velocity
