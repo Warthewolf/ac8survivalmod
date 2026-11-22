@@ -5262,6 +5262,21 @@ SUITES.valkasolg = function()
         if pass == 1 then
             A.log_("special: VALKA's round: solg said", 5, "s" .. pass, true, function(l) ST.check(l ~= nil, "her and AUDREY's lines", l) end)
         end
+        -- ((0.75.17) its portal's opening pictured (the scalers: smooth or not, it must show), from 7 km off its face
+        A.log_("special: VALKA's SOLG: its portal opens", 15, "s" .. pass, true, function(l) end)
+        for k = 1, 4 do
+            A.do_(function()
+                local G = D.special and D.special.solg
+                local P = G and G.ph and G.ph.portal
+                if P then
+                    local r = math.rad(P.yaw or 0)
+                    ST.look({ X = P.at.X + math.cos(r) * 700000, Y = P.at.Y + math.sin(r) * 700000, Z = P.at.Z + 60000 }, P.at, 40)
+                end
+            end)
+            A.wait(0.3)
+            A.do_(function() ST.shot(string.format("vsolg%d_0open_%d", pass, k)) end)
+            A.wait(0.9)
+        end
         A.log_("special: VALKA's SOLG: out of the corner", 15, "s" .. pass, true, function(l)
             if not ST.check(l ~= nil and l:find("91 targets", 1, true) ~= nil, "the SOLG out of a corner with its 91 targets", l) then return "abort" end
             local pl = ST.findLog("special: VALKA's SOLG: its portal opens", ST.marks["s" .. pass])
@@ -5290,7 +5305,7 @@ SUITES.valkasolg = function()
                 ST.check(l ~= nil, "the SOLG destroyed: pay, AUDREY's lines", l)
                 ST.check(ST.findLog("solg: falling", ST.marks.z0) ~= nil, "it falls apart", ST.findLog("solg: falling", ST.marks.z0))
                 local arms = 0
-                for k = 1, 4 do if ST.findLog(string.format("solg: SG01_%02d broken off with its 9 pieces", k), ST.marks.s1) then arms = arms + 1 end end
+                for k = 1, 4 do if ST.findLog(string.format("solg: SG01_%02d broken off with its ", k), ST.marks.s1, true) then arms = arms + 1 end end
                 ST.check(arms == 4, string.format("each autoloader broke off once its 9 KEW shells were down (%d of 4)", arms),
                     ST.findLog("broken off with its", ST.marks.s1))
                 ST.check(ST.findLog("on the arms: SG01_01 9, SG01_02 9, SG01_03 9, SG01_04 9", ST.marks.s1) ~= nil,
