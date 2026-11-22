@@ -96,7 +96,7 @@ local function portalUp(c, s, G, now)
         sl(string.format("its portal %s, %.0f m across%s", okP and up and "opens" or ("NOT up (" .. tostring(up) .. ")"), pc.size_m,
             wait > 0 and string.format(": the SOLG through it once it's full size, in %.1f s", wait) or ""))
     end
-    G.state, G.spawnAt, G.portalAt = "portal", now + wait, now
+    G.state, G.spawnAt, G.portalAt = "portal", math.max(now + wait, G.callAt or 0), now   -- (held open till its time)
 end
 
 -- the SOLG out of its (full-size) portal, on its way down
@@ -273,7 +273,10 @@ function VSOLG.tick(c, s, o, now)
         end
     end
     if G.state == "call" then
-        if now >= G.callAt then portalUp(c, s, G, now) end
+        -- ((2026-11-23) the user: "During Audrey's Briefing, feel free to have the SOLG's Black Hole appear and stay present
+        -- until the SOLG spawns and then have the black hole close") its portal open portal_at_s into her lines, the SOLG
+        -- through it at callAt (portalUp holds it till then), the portal closing once it's through
+        if now >= (G.callAt - n(c.solg.call_s, 62) + n(c.solg.portal_at_s, 4)) then portalUp(c, s, G, now) end
         return true
     end
     if G.state == "portal" then
