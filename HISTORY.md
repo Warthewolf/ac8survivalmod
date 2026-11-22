@@ -4141,3 +4141,11 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   onto feature/solg-own-unit). Smoke 5/5 on both. 0.75.41 INSTALLED 2026-11-23 (backup build/backup/install_before_0.75.41;
   164 files verified). The storm's clear not yet seen in game. Leaderboard: not registered (D1's free daily reads used
   up; the Worker's fix deployed 2026-11-23 on fix/leaderboard-reads).
+- 0.75.42-0.75.44 (2026-11-23): the SOLG's collision. Its import keeps the physics asset (PA_SV_SOLG); its body cut into 160
+  slice bones (10 along, 16 round: prepare.py) so its fitted shapes hug the walls and its shaft is hollow (the user: "Can't we
+  add a tunnel mesh or something?"); BlockAll, its stand-ins ignored as it moves, its mover started again if a plane stops
+  it; a broken piece's shape terminated (PBO_Term), the body wreck's at spawn. A Lua distance query (GetDistanceToCollision)
+  isn't callable. Traces (autotest solgcrash): the shaft open 15-47 m from its axis from 350 to 800 m in, the rear hatch
+  closing its mouth, thin seams between slices at 0/90/180/270 deg 650 m in; flown into it, the game's own collision hit.
+  Every weapon locks it while it's up (DT_WeaponSettings: 1 row only; QAAM/LASM not confirmed in game). Its black hole open
+  4 s into Audrey's briefing and held till it comes through (call_s 62). Tests: solgcrash 11/11, valkasolg 38/38, smoke 5/5.
