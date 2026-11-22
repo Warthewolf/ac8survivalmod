@@ -396,6 +396,9 @@ SOLG_TARGET_ROW = 'sv_solg_target'
 SOLG_TARGET_SOURCE_ROW = 'RadarTower02_common'                 # (DT_NPC_Mission004: NpcId BPD_RadarTower02_01)
 SOLG_TARGET_SOURCE_UNIT = 'AA_Unit_01_ground0'                 # (WD_Mission004_global: one BPD radar tower)
 SOLG_TARGETS = [('SAW', 18), ('MAG', 32), ('KEW', 36), ('CORE', 4), ('SP', 1),
+                # ((2026-11-22) its rear hatch (s_sg08, the disc over its shaft's mouth): the user, "the rear hatch that
+                # has to be destroyed"; between the core units and the SP shell)
+                ('HATCH', 1),
                 # ((2026-11-22) its laser turrets, AC:I's f_111t (tools/solg/lasers.py): 16 on the arms (LSRA), 12 round
                 # the barrel (LSRB); not on the radar tower but on AC8's land Phalanx, firing our own laser (SOLG_TLS_*)
                 # (SOLG -Gould-: the barrel's tail 4 up with the arms', its front 8 with the core units)

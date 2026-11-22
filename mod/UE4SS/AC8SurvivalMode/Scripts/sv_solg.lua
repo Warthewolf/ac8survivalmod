@@ -35,13 +35,17 @@ SOLG = { C = {
     -- held on the SOLG's bones (its own mesh hidden: you see the SOLG's piece), their health AC:I's x health_x, held at
     -- floor HP so the game never breaks one its own way (a radar tower's wreck in the sky): at the floor the SOLG breaks
     -- it (the piece hidden, its wreck shown, a wing falling, an explosion, pay). AC:I's phases: 1 the wings (SAW) and
-    -- the MAG panels, 2 the KEW shells, 3 the core units, 4 the SP shell; a phase's targets are lockable only then.
+    -- the MAG panels, 2 the KEW shells, 3 the core units, 4 the rear hatch, 5 the SP shell; a phase's targets are
+    -- lockable only then.
     targets = {
         { key = "SAW", unit = "SV_Unit_SOLG_SAW", phase = 1, health = 900, pay = 40, bones = { "SG04_%02d", 6, "SG05_%02d", 12 } },
         { key = "MAG", unit = "SV_Unit_SOLG_MAG", phase = 1, health = 600, pay = 25, bones = { "SG07_%02d", 32 } },
         { key = "KEW", unit = "SV_Unit_SOLG_KEW", phase = 2, health = 1000, pay = 50, bones = { "KEW_%02d", 36 } },
         { key = "CORE", unit = "SV_Unit_SOLG_CORE", phase = 3, health = 1500, pay = 200, bones = { "SG03_%02d", 4 } },
-        { key = "SP", unit = "SV_Unit_SOLG_SP", phase = 4, health = 2500, pay = 800, bones = { "CORE_%02d", 1 } },
+        -- ((2026-11-22) the user: "the rear hatch that has to be destroyed": AC:I's s_sg08, the disc closing its shaft
+        -- (CONT_UNKNOWN in AC:I's data, 1 HP there: its health here a guess); the SP shell behind it, down the shaft)
+        { key = "HATCH", unit = "SV_Unit_SOLG_HATCH", phase = 4, health = 2000, pay = 150, bones = { "SG08_%02d", 1 } },
+        { key = "SP", unit = "SV_Unit_SOLG_SP", phase = 5, health = 2500, pay = 800, bones = { "CORE_%02d", 1 } },
         -- ((2026-11-22) its laser turrets (AC:I's f_111t, CONT_LASER UNIT, 850: tools/solg/lasers.py), on AC8's land
         -- Phalanx firing our own laser (BP_SV_SolgTLS, 5 a hit: tools/build_survival_solg.py): up with their phase
         -- (the arms' with the KEW shells, the barrel's with the core units, as AC:I's TLS), shot down for pay, never
@@ -66,12 +70,12 @@ SOLG = { C = {
     laser_model_row = "SV_Model_SOLG_LSR",
     -- their boxes: "SOLG" over each type's AC:I name (texts by key: tools/survival_events_specials.py SOLG_*)
     model_row = "SV_Model_SOLG", name_key = "SV_SOLG_Name", name = "SOLG",
-    names = { SAW = "SOLAR ARRAY WING", MAG = "MAG PANEL", KEW = "KEW SHELL", CORE = "CORE UNIT", SP = "SP SHELL",
+    names = { SAW = "SOLAR ARRAY WING", MAG = "MAG PANEL", KEW = "KEW SHELL", CORE = "CORE UNIT", HATCH = "REAR HATCH", SP = "SP SHELL",
               LSRA = "LASER UNIT", LSRB = "LASER UNIT", LSRC = "LASER UNIT" },
     health_x = 0.25,                        -- (AC:I's health is a 4-player raid's: a first guess, every hit logged)
     floor = 1,                              -- a live target's HP floor: it breaks there
     fx = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" },
-    fx_scale = { SAW = 3, MAG = 2, KEW = 3, CORE = 5, SP = 8, SOLG = 12, ARM = 6, LSRA = 2, LSRB = 2, LSRC = 2 },
+    fx_scale = { SAW = 3, MAG = 2, KEW = 3, CORE = 5, HATCH = 6, SP = 8, SOLG = 12, ARM = 6, LSRA = 2, LSRB = 2, LSRC = 2 },
 } }
 do
 local S = nil                                             -- the SOLG up: { actor, body, move, panels = {...} }

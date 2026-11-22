@@ -739,7 +739,7 @@ CFG.hud = {
         solg_eta          = "%d S TO IMPACT",
         solg_down         = "SOLG DESTROYED",
         solg_down_sub     = "+%s",
-        solg_phase        = { [2] = "KEW SHELLS EXPOSED", [3] = "CORE UNITS EXPOSED", [4] = "SP SHELL EXPOSED" },
+        solg_phase        = { [2] = "KEW SHELLS EXPOSED", [3] = "CORE UNITS EXPOSED", [4] = "REAR HATCH EXPOSED", [5] = "SP SHELL EXPOSED" },
         airfield_up       = "AIRFIELD REPAIRED",
         airfield_up_sub   = "CLEARED TO LAND",
         start        = "ROUND %d",

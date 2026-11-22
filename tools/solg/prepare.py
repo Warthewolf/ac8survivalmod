@@ -235,6 +235,13 @@ def write_skinned(name, pieces, bones, parents=None, anims=None):
             T = T.astype(np.uint32)
             if front_facing(Pw, Nw, T) < 0:
                 T = T[:, [0, 2, 1]]
+            # ((2026-11-22) the user: "the internal hallway of the SOLG isn't visible and neither is the rear hatch": AC:I
+            # draws the SOLG from both sides; AC8 culls back faces, so its inner shaft's walls (facing out) and the flat
+            # hatch (s_sg08) showed from one side only. Every face doubled, the copy turned round with its normals:
+            # a two-sided material can't be had, ours being a stand-in for AC8's M_Live_Base (its shaders would ship))
+            nv = len(Pw)
+            Pw, Nw, UV = np.concatenate([Pw, Pw]), np.concatenate([Nw, -Nw]), np.concatenate([np.asarray(UV), np.asarray(UV)])
+            T = np.concatenate([T, T[:, [0, 2, 1]] + nv]).astype(np.uint32)
             m = 't%08x' % tex
             if m not in matidx:
                 matidx[m] = len(mats)
