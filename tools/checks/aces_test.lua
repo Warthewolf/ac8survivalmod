@@ -619,7 +619,9 @@ check(D.squad[U].op == "kulbit", "Harvest's first flight: the kulbit opener")
 plane(U, 0, KM(2.45, 0.3), DIRV(-1, 0), tierOf("Reaper"))       -- (its lead head-on: no reversal, no blink for it)
 plane(U, 1, KM(2.4, 0), DIRV(1, 0), tierOf("Reaper"))           -- (you 2.4 km on this one's six: a reversal's range)
 from_ = #logs + 1
+CFG.tells.list.reaper_in.radio = { "RE_SV_RadioHuntX" }           -- (a line for this check: it ships with none, 2026-11-19)
 tickTo(100, 100.25, true)
+CFG.tells.list.reaper_in.radio = {}
 check(evs("^RE_SV_RadioHunt") ~= "" and noTell() and evs("^RE_SV_AceTurn") == "" and D.aceMoveAt[U] >= 101.5,
       "met at 2.4 km: its tell; the reversal held until the opener's gone (" .. tostring(D.aceMoveAt[U]) .. ")")
 tickTo(100.5, 112.25, true)
@@ -785,10 +787,10 @@ COOP.open, COOP.role, COOP.slot = false, nil, nil
 print("the squadron tells: radio lines only (the clean up of 2026-10-29)")
 fresh(28, "Reaper")
 callouts, events = {}, {}
-check(TELL.play("reaper_in") == true and evs("^RE_SV_RadioHunt") ~= "" and noTell(), "reaper_in: a hunt line, no callout")
+check(TELL.play("reaper_in") == false and evs("^RE_SV_Radio") == "" and noTell(), "reaper_in: no line (the hunt lines cut, 2026-11-19), no callout")
 for _, id in ipairs({ "mercenary_in", "legend_in", "demon_in", "phantom_in", "reaper_in" }) do
     local e = CFG.tells.list[id]
-    check(e and e.sure == true and e.hud == nil and e.urgent == nil and e.args == nil and #e.radio > 0, id .. ": sure, its lines, nothing for the HUD")
+    check(e and e.sure == true and e.hud == nil and e.urgent == nil and e.args == nil and (#e.radio > 0 or id == "reaper_in"), id .. ": sure, its lines, nothing for the HUD")
 end
 
 ---------------------------------------------------------------------------------------------------- (0.73.78) health

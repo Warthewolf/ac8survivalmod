@@ -417,7 +417,7 @@ trapTick = function(now)
 end
 
 ---------------------------------------------------------------------------------------------------- the host's picks
-local H = { seq = 0, nextAt = nil, last = {}, cur = nil, mastSaid = false }
+local H = { seq = 0, nextAt = nil, last = {}, cur = nil, mastSaid = false, mastSeen = false }
 local function hostSend(what, ...) if IFCOOP and IFCOOP.send then IFCOOP.send(what, ...) end end
 local function hostEnd(why, broken)
     local k = H.cur
@@ -444,9 +444,10 @@ local function hostTick(now)
     local c = cc()
     local solo = not (COOP and COOP.open)
     if c.enabled == false or (c.coop_only ~= false and solo and not (H.cur and H.cur.solo)) then return end
-    if not (IFLEET and IFLEET.cur) then H.nextAt = nil; if H.cur then hostEnd("the fleet's gone") end; return end
+    if not (IFLEET and IFLEET.cur) then H.nextAt, H.mastSeen, H.mastSaid = nil, false, false; if H.cur then hostEnd("the fleet's gone") end; return end
     local g = geofon()
     local sh, mast = raven()
+    if mast then H.mastSeen = true end                    -- ((2026-11-18) "down" said only after it was up)
     if H.cur then
         local k = H.cur
         -- ((0.74.186) the captive gone from the game (left, dropped): ended. The captive's own game may end a capture the host
@@ -488,7 +489,7 @@ local function hostTick(now)
     end
     if solo then return end
     if not mast then
-        if sh and not H.mastSaid then H.mastSaid = true; hudCallout(tx().mast_down or "RAVEN'S EW MAST DOWN", tx().mast_down_sub or ""); clog("RAVEN's EW mast down: no more captures") end
+        if sh and H.mastSeen and not H.mastSaid then H.mastSaid = true; hudCallout(tx().mast_down or "RAVEN'S EW MAST DOWN", tx().mast_down_sub or ""); clog("RAVEN's EW mast down: no more captures") end
         return
     end
     if not g or busyScene() then return end
@@ -554,7 +555,7 @@ if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["fleet capture"] = function()                 -- (the level's plane went with it)
         -- ((0.74.186) the takeover off too: the runtime's capture would wait for a plane that's gone)
         if L and (L.state == "fly" or L.state == "final") and type(SV_Capture) == "function" then pcall(SV_Capture, 0) end
-        L, H.cur, H.nextAt = nil, nil, nil
+        L, H.cur, H.nextAt, H.mastSeen, H.mastSaid = nil, nil, nil, false, false
         if ATK and ATK.hold then ATK.hold("capture", false) end
     end
 end

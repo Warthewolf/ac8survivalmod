@@ -3945,3 +3945,132 @@ game. The work was split by file between agents; the builds ran in sequence in t
   sv_tactical.lua's new INS.floors (other parts' floors by name, the highest held); INS.tick now writes a floor back to 0 once
   it's off (before, a pass with no floor returned first and would have left the last one on). capture_test 68/68; in game run
   20261118_120809: 16/16, the floor on at the lock and off at the trap, a touchdown (seven landings of seven).
+
+## 0.74.194-0.74.195-coop2mp.287: everyone's zips with round 30 (2026-11-18, runtime 0.32.42)
+- feature/fleet-coop merged into dev (the user's yes: c62cce4); this release from branch tools/friends-0.74.194 off it.
+- Distant Thunder's round retired (the user: "The Distant Thunder Round needs to be cut as we're not going to be using it
+  anymore, so you can remove the test keys for it", "It was replaced by Invincible Fleet instead"): its round, its storm on a
+  joiner's copy, the storm test and its 8 test keys cut from sv_anomalies_dev.lua; its storm pieces stay for the fleet's
+  night storm; thunder_test rewritten; AGENTS.md and docs/re/THUNDER.md say so.
+- 0.74.194 (ZFA=1, no Tanacorn): AC8SurvivalMode_COOP2MP_0.74.194_Online_COOP_ZFA44.zip (47 MB, build 3ca072d72570...,
+  registered), smoke 5/5 in game. Superseded the same day by the user's call that everyone gets round 30: not handed out.
+- The user: "Everyone gets the invincible fleet level", "But only alyssa has the keys that activate it for everyone", "The
+  AC7 lines that you created go in also", "Make sure that the lines are the Option C we picked". Packaging:
+  FRIENDS=1 TANI=1 (tools/no_test_keys.py: staged as a tester's, sv_main.lua's test keys cut, testKey() binds nothing,
+  its Ctrl+F11 off); the crew voices and round 30's subtitles in every zip with THE TANACORN, only the style round 30 plays
+  (C); zip_leak_test covers it all. AGENTS.md's AC7 voice and Tanacorn rules updated.
+- 0.74.195 (TANI=1 ZFA=1, one build, two zips, the same version so they link in co-op):
+  - Alyssa: AC8SurvivalMode_COOP2MP_0.74.195_TESTER_Online_COOP_ZFA44_TANACORN.zip (108 MB, build 225e3df59415...),
+    test keys on; build/release/AC8SurvivalMode_0.74.195_TESTER_KEYS.txt lists them.
+  - Friends: AC8SurvivalMode_COOP2MP_0.74.195_Online_COOP_ZFA44_TANACORN.zip (108 MB, build fa0b19c07a54...), test keys
+    off; round 30 comes at a run's round 30.
+  - Both: her container, the fleet, the capture, round 30's subtitles, the 41 crew lines byte for byte the approved echoey
+    C take (none of A, B or the pre-echo C); no Distant Thunder round, no storm cloud-flash containers (as before).
+  - In game on their exact stages: friends' smoke 5/5; Alyssa's smoke 5/5 and capture 16/16 (a touchdown, 3 m off the
+    mark). Round 30 has still never been played by two real players.
+- 0.74.195 INSTALLED 2026-11-18 (the user: "install it now please", to match her friends), the TESTER zip's stage over 0.74.159 (backup build/backup/install_before_0.74.195); 150 files verified, her survival.ini and the launcher's enabled.txt kept. 0.74.159's StormFx / StormBurst containers stay in her install (0.74.195 doesn't ship them), so her round 25-30 storm keeps its cloud bursts.
+- 0.74.196-0.74.197-coop2mp.289 (2026-11-18): the friends' first co-op sessions on 0.74.195.
+  - 0.74.196: the fleet storm's cloud bursts (StormFx, StormBurst) in every zip with THE TANACORN (the user's round 27: "the
+    cloud burst lighting mustn't be working"); burstwatch 6/6 and smoke 5/5 on its stages. Never handed out.
+  - 0.74.197: + the Tanacorn's shell probe off unless TANI.shell_probe (NewYorkFentWarrior's host crashed in round 27, reading
+    0xffffffffffffffff, 6 s after the probe's 12th stock flak shell, the allied Aegis they bought firing its Mk 45); + a
+    joiner's airfield repair made by the host (a joiner's log: REPAIR AIRFIELD bought 4 times in 3 s, each put back by the
+    host's "af"). Both zips (TESTER: build 18efd68e039d..., friends: e46005dd2abd..., registered) checked: storm containers,
+    the 41 C voices, keys as meant, the probe off, the repair asked of the host. Not run in game (the user was playing).
+  - The user's hot join (her 13:57, the host's 22:27): copies of the host's 11 flights spawned but none bound to its ids; the
+    host's log: her link scored 10408 against the others' 49-345, lost and back 6 times in 2 minutes, the whole picture sent
+    7 s before a drop. cressendo's game bound every copy all session. Her game stalled 10 s+ and used 19.7 GB at the level's
+    load; her crash at 14:08 (0.2 s after the fleet storm's layout swap, no crash report) unexplained. Proposed: the binds sent
+    again at each link back.
+- 0.74.197 INSTALLED 2026-11-18 (the user: "install it"), the TESTER zip's stage over 0.74.195 (backup build/backup/install_before_0.74.197); 154 files verified, her survival.ini and enabled.txt kept.
+- 0.74.198-coop2mp.290 (2026-11-18): after the user's first 5-player co-op round 30 (0.74.197) and her friends' logs and
+  report. The fleet's hulls x1 +25 % a player past the first, GEOFON x1.5 on top (x3 / x2 with 5); GEOFON held at 3 % from
+  the start (it sank from >15 % to 0 between two ticks, 89 s in); no "split" when GEOFON's already gone, a finished break
+  look never ticked again, round 30's GEOFON never taken off as the test Ford (each joiner looped ~2670 times); a joiner's
+  sunk TANACORN off its HUD, radar and lock-on, hidden (a friend: "still appears on iff"); the railcannon's TEST: callouts
+  the key's only; RAVEN's mast "down" only after it was up; the storm clears at round 32 (was 35), its bursts 0.1 -> 0.08,
+  strikes every 0.4-1.0 s (was 0.3-0.8), the fleet's night exposure bias 0.6 -> 0.8 (cressendo's report: the flashes, night
+  disorienting). Zips: TESTER d7135278bd11..., friends 326f9a37d86b... (registered), contents checked. Not run in game.
+  Open: no hit feedback on the TANACORN's core (cressendo).
+
+## 0.74.199 (-coop2mp.291, runtime 0.32.42; branch tools/friends-0.74.194, 2026-11-18)
+A solo nerf (the user: "the Invincible Fleet needs a nerf for solo rounds and so does the Escort Mission"; she picked
+Medium for both). sv_core.lua soloVal: a config table's `solo` values while one player flies (solo, a co-op room of one),
+read where used (a joiner mid-round brings co-op's back). Co-op unchanged.
+- Round 30 solo: hulls x0.7 (GEOFON x1.05), shelling 2 a salvo (3), the railcannon 60 every 120 s (100 every 90), THE
+  TANACORN's core 20 missiles (30).
+- THE ESCORT solo: CHARLENE's health x6 (x4), 40 % of the flights after her, 2 at most (60 %, 4), waves of 2-8 every 60 s
+  (4-12, 45 s), 14 up at most (24).
+- tools/checks/solo_test.sh (new); escort_test / tani_rail_test test the round's own numbers.
+Zips: ..._0.74.199_TESTER_Online_COOP_ZFA44_TANACORN.zip (Alyssa's, keys) and ..._0.74.199_Online_COOP_ZFA44_TANACORN.zip
+(friends', no keys), both registered. Not run in game.
+- 0.74.199 INSTALLED 2026-11-18 (the user: "install it"), the TESTER zip over 0.74.197 (backup build/backup/install_before_0.74.199); 154 files verified, her survival.ini, subtitles.ini (unedited) and enabled.txt kept.
+
+## 0.74.200 (-coop2mp.292, runtime 0.32.42; branch tools/friends-0.74.194, 2026-11-19)
+The code review of dev...HEAD and a cleanup (8f18f77, ce7036b): a joiner's airfield repair priced and checked as the
+airfield's own on the host, and asked only when the row sells it; soloVal counts the linked peers too (a respawning host
+read a co-op room as solo); the fleet's player count in a pcall; a joiner's sink log says its copy was hidden; shells()
+allocates nothing with the probe off; no_test_keys.py checks DEV ONLY blocks too; 327 lines of DISTANT THUNDER's dead
+code out of sv_anomalies_dev.lua (its own storm volume, THUNDER.buildup, the layout / sky / cloud probes). Left for the
+user: the friends' TANACORN zip keeps the diagnostic loggers; joiners' fleet copies unscaled; MinHealth's units.
+Zips: ..._0.74.200_TESTER_..._TANACORN.zip (Alyssa's, keys) and ..._0.74.200_Online_COOP_ZFA44_TANACORN.zip (friends'),
+both registered. Not run in game.
+
+## 0.74.201-0.74.210 (-coop2mp.293-302, runtime 0.32.42; branch feature/valka-active, 2026-11-22): VALKA more active, her black hole
+The user: "do an automated test on Valka's round", "look into why she seems to fight in one place ... She needs to be more
+active", "try to build a 3D Portal, an event horizon that she spawns out of", "Can you make custom 3D assets for this in
+Blender and Unreal Engine Editor please", "I want the portal to look like an event horizon from a black hole", "Needs to
+be a 3D model, not a png floating in the air". Test builds only (VALKA=1 dev stages), each run through the autotest gate;
+nothing installed in her game, nothing pushed.
+- Tests: tools/ac8-autotest's new `valka` suite (her disguise off; your plane round the airfield, a 30 km leg west,
+  round there; `valka-track:` every 0.5 s; two small hits for her blinks; pictures of her, her portal, your own view)
+  and `portalprobe` (stock pieces spawned and photographed); tools/autotest/valka_track.py (numbers, an SVG map,
+  --compare), contact_sheet.py. The kit copies a Mod Loader in for a run when the game has none (.env AUTOTEST_LOADER:
+  her IoStoreLoaderMod was out of the game since 2026-11-21) and takes it out after; the self-test unpauses a game AC8
+  paused ("Your controller has been disconnected": a gamepad dropping, twice) and hides that box.
+- Why she fought in one spot (baseline 0.74.201): LastTGT every 6 s kept her 3.1 km behind you at your speed (hard
+  rule 73); her orders re-given every 5 s; post-stalls every 9 s. Now (CFG.specials.valka, survival.ini): her row flies
+  NLID_SV_Lancer at pilot rank 5, speed x1.0 / cruise x1.15 / acceleration x1.3, turn +60/+120/+20; LastTGT only after
+  you've sat 3 s on her tail, ended after 6 s (RE_SV_ValkaTurnEnd: Mission 6's LiveAIResetUniqueAction on her object);
+  orders every 20 s; post-stalls a 50 % chance every 25 s within 1.5 km; past 6 km for 4 s she blinks onto your six
+  (ring E, 2.5 km; not in her first 20 s); hit, 2 blinks onto your six or across your nose (rings D 1.5 km / E 2.5 km);
+  railgun range 8 km. Result (0.74.205 on): 1,150-1,600 km/h, 0.5-2.8 km from you, 43-56 km flown a phase, her fight
+  following yours 94-97 % (baseline 54 %), 15 railgun shots. 0.74.204 at speed x1.3 averaged 2,400 km/h: toned down.
+- Her portal, a black hole (docs/re/VALKA.md section 8): tools/valka_portal (Blender pieces from numbers, cooked in
+  UE 5.4 into SurvivalMode_ValkaPortal_P; AC8's glow materials colour them, hard rule 58), opening where her opener
+  fires from as it charges, her shot and then she coming out of its shadow, closing 4 s on; it faces the camera you see
+  through, its disk turning; small ones for her blinks; co-op: the host's "vp" (open, through, blink), each joiner draws
+  its own (not run in co-op yet). The stock-piece portal (training-ring glows on the engine's shapes) is its fallback.
+  Her opener's lens flash dimmed (x0.3) and halved while it's up. Hard rule 74 (Pitch from Lua doesn't take).
+- One run (0.74.203) hung loading Survival's level with 23 GB in use, no crash report; 0.74.204 with the same data loaded
+  fine: not reproduced.
+- Checks: lua_check, ini_check, bosses_test (her preload carries the portal's pieces), coop_guard / coop_rejoin, paths
+  and size checks, every build_all.sh. Autotest runs 20261122_130001 (baseline) to the 0.74.210 run: 19/19 from 0.74.204.
+
+## 0.74.211-0.74.216 (-coop2mp.303-308, runtime 0.32.42; branch feature/valka-active, 2026-11-22): VALKA's arrival cutscene, her spawn in her portal, the detailed black hole
+The user: "See if it's also possible to change Valka's spawn location to the inside of the Portal", "Have a Portal
+Opening animation too where it opens and have a closing animation too", "Create a cutscene similar to the Invincible
+Fleets Arrival of the Portal Opening, and Valka coming out of it", "Does it have to have the lines styling on the
+disc? Can't you give me several different designs", "Remodel the 3D Event Horizon Black Hole, I want it as detailed as
+you can make it". Test builds only (VALKA=1 dev stages, the autotest gate); nothing installed, nothing pushed.
+- Her spawn: her plane and her opener railgun's sit 3 km over their unit's point in the world data and SV_Spawn keeps
+  that offset (every run of the day had her 3.0 km over the portal): CFG unit_up_m 3000 taken off at both spawns; she
+  comes out 21-23 m from the portal's middle, checked by the valka suite (`special: VALKA comes out N m ...`).
+- The portal's opening and closing animated piece by piece (open / close windows, flare, spin-up), a shimmer (pulse);
+  no lens flash with it up.
+- Her arrival cutscene (sv_valka_cine.lua, CFG.specials.valka.cine, in every build that has her): six letterboxed
+  shots from the opening till she's past (the fleet's camera-actor way), your plane invincible on a 25 km autopilot
+  circle, the game's HUD and Survival's held, the event's focus camera skipped, the fade; her charge 8.5 s meanwhile.
+  The view is kept by where the screen's camera is (GetViewTarget's pcall always failed). Joiners run it from the
+  host's "vp" (not run in co-op).
+- The black hole remodelled (tools/valka_portal design `detailed`, docs/re/VALKA.md section 9): ~3,500 noise-shaped
+  wisps in eight bands, the arch made from the disk's far side bent over the shadow, 621,936 triangles in 36 pieces;
+  the five other designs kept and sent to the user as Blender previews (soft, smooth, glow, silk, hybrid); manifest.json
+  drives the import, the cook check and tools/valka_portal/parts_lua.py (the game's parts). No LODs (the commandlet
+  can't make them).
+- Found on the way: MI_TrainingRing adds light and never quite covers (a probe of three overlapping planes);
+  MI_TrainingRingGlow with EmissiveFresnelFalloff 0.01 is a flat see-through glow; the engine's BasicShapeMaterial is
+  lit (the sun's broad highlight on the shadow). The autotest's window grabs come up to 8 s late: grabs after the
+  cutscene had ended looked like it losing the view (contact_sheet.py --hires uses the game's own pictures).
+- Checks: lua_check, every build_all.sh (bosses_test, coop_guard, paths, sizes). Autotest valka 22/22 on 0.74.212 to
+  0.74.215 (runs 20261122_154542 to 161940).

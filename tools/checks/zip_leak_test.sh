@@ -18,7 +18,7 @@ trap 'rm -rf "$T"' EXIT
 F="$T/root"
 mkdir -p "$F/tools/checks" "$F/runtime" "$F/release" "$F/build/runtime" "$F/build/install/SurvivalMode" "$F/out"
 for f in package_release.sh package_test.sh release_dir.sh env.sh zip_guard.sh strip_test_only.py quiet_logs.py edition.py \
-         coop_edition.py novalka.py nospaceport.py build_hash.py lb_register.py lua_parts.py dev_only.py \
+         coop_edition.py novalka.py nospaceport.py build_hash.py lb_register.py lua_parts.py dev_only.py no_test_keys.py \
          tani_container.py zenpkg.py; do
     cp "tools/$f" "$F/tools/"
 done
@@ -30,8 +30,10 @@ cp -r mod/UE4SS/AC8SurvivalMode "$F/build/install/"
 mkdir -p "$F/build/install/AC8SurvivalMode/dlls"
 echo "made-up main.dll" > "$F/build/install/AC8SurvivalMode/dlls/main.dll"
 cp "$F/build/install/AC8SurvivalMode/dlls/main.dll" "$F/build/runtime/main.dll"
-# ((2026-11-17) a made-up crew voice, as a TANI=1 build stages them: no zip may carry it, a TESTER TANACORN one included)
+# ((2026-11-17) a made-up crew voice, as a TANI=1 build stages them, and round 30's subtitles: only a zip WITH THE TANACORN
+# carries them (the user, 2026-11-18: "The AC7 lines that you created go in also"), no other
 mkdir -p "$F/build/install/AC8SurvivalMode/Sounds/tanacorn" && echo "made-up voice" > "$F/build/install/AC8SurvivalMode/Sounds/tanacorn/A_v6157_6001_alt1.wav"
+echo "made-up voice" > "$F/build/install/AC8SurvivalMode/Sounds/tanacorn/C_v6157_6001_alt1.wav"   # (the style round 30 plays)
 mkdir -p "$F/build/install/AC8SurvivalMode/config" && printf '[specials.fleet.radio.warn]
 CTRL|made up
 ' > "$F/build/install/AC8SurvivalMode/config/subtitles_dev.ini"   # ((2026-11-18) round 30's subtitles: never zipped)
@@ -63,6 +65,19 @@ sys.exit(1 if bad else 0)" "$1"; }
 novoice() { python -I -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(1 if any('/Sounds/tanacorn/' in x for x in n) else 0)" "$1"; }
 # nodevsubs <zip>: 0 when the zip has no config/subtitles_dev.ini (round 30's subtitles: the user's dev install only)
 nodevsubs() { python -I -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(1 if any(x.endswith('subtitles_dev.ini') for x in n) else 0)" "$1"; }
+# onlyc <zip>: 0 when the zip's crew voices are all style C (the user, 2026-11-18: "Make sure that the lines are the Option C
+# we picked"; sv_fleet_round.lua CREW's styles)
+onlyc() { python -I -c "
+import sys, zipfile
+v = [x.rsplit('/', 1)[1] for x in zipfile.ZipFile(sys.argv[1]).namelist() if '/Sounds/tanacorn/' in x and not x.endswith('/')]
+sys.exit(0 if v and all(x.startswith('C_') for x in v) else 1)" "$1"; }
+# keysoff <zip>: 0 when the zip's test keys are off (tools/no_test_keys.py: sv_main.lua's test keys' block gone, testKey()
+# returning before it binds)
+keysoff() { python -I -c "
+import sys, zipfile
+z = zipfile.ZipFile(sys.argv[1])
+r = lambda end: next((z.read(n).decode('utf-8', 'replace') for n in z.namelist() if n.endswith(end)), '')
+sys.exit(0 if 'TEST_SPECIALS' not in r('/Scripts/sv_main.lua') and 'do return false end' in r('/Scripts/sv_core.lua') else 1)" "$1"; }
 # holds <zip> <container>: 0 when the zip carries that container's .utoc
 holds() { python -I -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); sys.exit(0 if any(x.endswith('/' + sys.argv[2] + '.utoc') for x in n) else 1)" "$1" "$2"; }
 # one <label> <zip glob> <zfa: 1 kept / 0 out> <command...>: packs one zip, then what it carries
@@ -131,11 +146,47 @@ check $r "TESTER=1 TANI=1: packaged as ..._TESTER_Online_ZFA44_TANACORN.zip"
 if [ -n "$z" ]; then
     holds "$z" SurvivalMode_Tani_P && holds "$z" SurvivalMode_P && r=0 || r=1
     check $r "TESTER=1 TANI=1: her container and Survival's own in it"
-    novoice "$z" && r=0 || r=1
-    check $r "TESTER=1 TANI=1: no TANACORN crew voices (AC7's: the user's dev install only)"
+    novoice "$z" && r=1 || r=0
+    check $r "TESTER=1 TANI=1: THE TANACORN's crew voices in it (the user, 2026-11-18)"
+    onlyc "$z" && r=0 || r=1
+    check $r "TESTER=1 TANI=1: style C only (the take she picked)"
+    holds "$z" SurvivalMode_StormFx_P && holds "$z" SurvivalMode_StormBurst_P && r=0 || r=1
+    check $r "TESTER=1 TANI=1: the fleet storm's cloud bursts in it (StormFx, StormBurst)"
+    nodevsubs "$z" && r=1 || r=0
+    check $r "TESTER=1 TANI=1: round 30's subtitles in it"
+    keysoff "$z" && r=1 || r=0
+    check $r "TESTER=1 TANI=1: its test keys kept"
     grep -q "is the container the build checked" "$T/tani_tester.txt" && r=0 || r=1
     check $r "TESTER=1 TANI=1: the container verified against the build's marker (tools/tani_container.py)"
 fi
+# ((2026-11-18) the friends' zip WITH THE TANACORN (FRIENDS=1 TANI=1): her container, the voices, round 30's subtitles,
+# no test keys; FRIENDS=1 without TANI=1, or with TESTER=1: refused
+rm -f "$F/out"/*.zip
+(cd "$F" && env RELEASE_DIR="$F/out" SV_LB_REGISTER=0 BUILD_NAME=COOP2MP COOP=1 FRIENDS=1 TANI=1 ZFA=1 sh tools/package_release.sh online 9.9.9) \
+    > "$T/tani_friends.txt" 2>&1 && r=0 || r=1
+z=$(ls "$F/out"/AC8SurvivalMode_COOP2MP_9.9.9_Online_COOP_ZFA44_TANACORN.zip 2>/dev/null | head -n 1)
+[ -n "$z" ] || { r=1; tail -n 8 "$T/tani_friends.txt"; }
+check $r "FRIENDS=1 TANI=1: packaged as ..._Online_COOP_ZFA44_TANACORN.zip (no _TESTER)"
+if [ -n "$z" ]; then
+    holds "$z" SurvivalMode_Tani_P && holds "$z" SurvivalMode_P && r=0 || r=1
+    check $r "FRIENDS=1 TANI=1: her container and Survival's own in it"
+    novoice "$z" && r=1 || r=0
+    check $r "FRIENDS=1 TANI=1: THE TANACORN's crew voices in it"
+    onlyc "$z" && r=0 || r=1
+    check $r "FRIENDS=1 TANI=1: style C only (the take she picked)"
+    holds "$z" SurvivalMode_StormFx_P && holds "$z" SurvivalMode_StormBurst_P && r=0 || r=1
+    check $r "FRIENDS=1 TANI=1: the fleet storm's cloud bursts in it (StormFx, StormBurst)"
+    nodevsubs "$z" && r=1 || r=0
+    check $r "FRIENDS=1 TANI=1: round 30's subtitles in it"
+    keysoff "$z" && r=0 || r=1
+    check $r "FRIENDS=1 TANI=1: no test keys (sv_main.lua's cut, testKey() binds nothing)"
+fi
+for v in "FRIENDS=1" "FRIENDS=1 TESTER=1 TANI=1"; do
+    rm -f "$F/out"/*.zip
+    (cd "$F" && env RELEASE_DIR="$F/out" SV_LB_REGISTER=0 $v ZFA=1 sh tools/package_release.sh online 9.9.10) > "$T/friends_bad.txt" 2>&1 && r=1 || r=0
+    [ -z "$(ls "$F/out"/*.zip 2>/dev/null)" ] || r=1
+    check $r "$v: refused, no zip"
+done
 # the same build with its container changed after the build checked it (tools/tanicorn/build.sh run again, a copy from
 # elsewhere): refused, no zip
 printf 'x' >> "$F/build/install/SurvivalMode/SurvivalMode_Tani_P.ucas"

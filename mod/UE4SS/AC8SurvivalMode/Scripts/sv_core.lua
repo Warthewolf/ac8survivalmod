@@ -1358,3 +1358,24 @@ function km(a, b)
     local dx, dy, dz = a.X - b.X, a.Y - b.Y, a.Z - b.Z
     return math.sqrt(dx * dx + dy * dy + dz * dz) / 100000
 end
+-- ((2026-11-18) the user: "the Invincible Fleet needs a nerf for solo rounds and so does the Escort Mission") a config
+-- table's value for the room: t.solo[key] while one player flies (solo, or a co-op room of one), else t[key]. Read where
+-- it's used, so a player joining mid-round gets co-op's from then on
+function soloVal(t, key)
+    if type(t) ~= "table" then return nil end
+    local s = t.solo
+    if type(s) == "table" and s[key] ~= nil then
+        local p = 1
+        if COOP and COOP.open and type(COOP.players) == "function" then
+            local ok, l = pcall(COOP.players)
+            if ok and type(l) == "table" then p = #l end
+            -- (COOP.players leaves your own plane out while it isn't there (down, respawning): the linked peers count too)
+            if type(COOP.linked) == "function" then
+                local okL, nL = pcall(COOP.linked)
+                if okL and type(nL) == "number" then p = math.max(p, 1 + nL) end
+            end
+        end
+        if p <= 1 then return s[key] end
+    end
+    return t[key]
+end

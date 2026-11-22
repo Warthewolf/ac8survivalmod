@@ -85,3 +85,95 @@ RE_SV_ValkaEnd (the WARNING and noise off, ATTACK_BASE, SV_ValkaUp 0), RE_SV_Val
 while a game's landing STORE is open run nothing there (hard rule 64): the host fires them again once its STORE is shut
 (SV_ValkaUp read back; an Off dropped when its On came after it; the band's newer preset fired again after a late end,
 which puts ATTACK_BASE back), a joiner holds the forwarded ones until its own is shut: docs/re/COOP.md section 13.
+
+## 7. Why she fought in one spot, and what she flies now (2026-11-22; the valka autotest suite)
+The user: "she seems to fight in one place, she doesn't seem to take the fight anywhere and just flies around in one
+spot", "She needs to be more active". Measured with tools/ac8-autotest's `valka` suite (her disguise off; your plane on
+the DOWN autopilot round the airfield, then a 30 km leg west, then round there; `valka-track:` every 0.5 s,
+tools/autotest/valka_track.py: numbers and a top-down SVG). Baseline 0.74.201 (run 20261122_130001_claude) [V]:
+- she flew NLID_SV_Fighter (every row searchSetup touches, hers too) at the x40a row's PilotRank 2 and stock speeds;
+- her orders were given again every 5 s (64 in 5 minutes) and LastTGT every 6 s (54); LastTGT is a 20 s
+  PursuerTarget 200 m behind you whose close-range mode, inside ~3 km and nose-on, copies your heading
+  (docs/re/BEHAVIOUR_NATIVE_MOVE.md section 2, a5 / a6) and whose closure drops her to min speed when the aim point is
+  behind her: re-asked every 6 s she never left it;
+- result: from 15 km she closed at your speed (12.5 km mean over the first 80 s); then, wherever you flew, she sat
+  3.1 km behind you (median 3.1, max 3.4 km round the second circle), at your speed, nose on you 79 % of the time,
+  firing her railgun every ~17 s and a post-stall every ~20 s: she mirrored your circle at 3 km. Her fight's centre moved
+  54 % as far as yours (she trails, she never leads or passes).
+0.74.202 (CFG.specials.valka): her row flies `luaset` NLID_SV_Lancer (slashing passes, zoom climbs) at `pilot_rank` 5,
+speed / cruise / acceleration x `speed_x` / `cruise_x` / `accel_x`, turn rates + `turn_add` (sv_rows.lua, at the main
+menu: hard rule 20); LastTGT only when you sit behind her (turn_every_s 0, behind_gap_s 12); her orders every 20 s;
+post-stalls a 50 % chance every 25 s within 1.5 km; farther than chase_km 6 for 4 s she blinks onto your six (ring E,
+2.5 km; chase_gap_s 15); hit, 2 blinks onto your six or across your nose (rings D 1.5 km / E 2.5 km, attack_ahead 0.4).
+Her portal (section 8). [T] each in the next runs.
+
+## 8. Her portal (2026-11-22; sv_anomalies_valka.lua SPC.V.portal*, CFG.specials.valka.portal)
+The user: "try to build a 3D Portal, an event horizon that she spawns out of". Built at run time from the game's own
+pieces (no container): one actor of ours with StaticMeshComponents (AddComponentByClass) and dynamic material
+instances, plus Niagara systems at moments. It opens where her opener fires from as the railgun charges (facing you,
+each mesh grown from nothing over open_s), her shot comes out of it, she spawns exit_back_m behind its face and flies
+out (a burst), and it closes hold_s later. Co-op: the host's "vp" (open / she's through), each joiner draws its own.
+The portalprobe pieces (autotest run 20261122_131212_claude, each 220 m across 9 km north of the runway) [V]:
+- draw against the sky: the engine's /Engine/BasicShapes Cylinder / Sphere with BasicShapeMaterial (its `Color`
+  vector: a solid black disc); /Game/VFX/Mission/Traning/MI_TrainingRing (M_TrainingRing: a solid glow, `Color`,
+  `Opacity`) on a ring mesh; MI_TrainingRingGlow (M_TrainingRingGlow: see-through, brightest at its edges; `Color`,
+  `EmissiveIntensity` 2, `Opacity` 0.05, `EmissiveFresnelFalloff`, `EmissiveFresnelInverseHardness`) faint as stock;
+  the ring meshes SM_MGF_MagneticControlRingParts001_I07 (finned) and SM_UNI_OrbitElevatorRing002_I22 (plain) lie flat
+  (their axis Z); Mission 27's NS_MGF_CoreDest1st_CoreElectricPlasma draws a column of light;
+- draw nothing against the sky: MI_CoreDest_ShockDomeRefraction001, MI_CoreDest_AfterExitBlackSmokeMesh,
+  /Game/VFX/Vehicles/Weapon/UAV/Barrier/MI_Distortion (refraction / depth materials), NS_ElectricDischargeM001 at x20,
+  Mission 10's main-gun charge systems; MI_TrainingRingGlow on SM_MGF_MagneticControlRing002_I07 drew it black;
+- the IGC "ShockWave" systems (Ms25, Ms29) are huge dust / smoke clouds, not rings.
+- The autotest's own camera (ST.look) showed every picture level, whatever its pitch [T: the read-back added].
+The black hole (0.74.207+; the user: "I want the portal to look like an event horizon from a black hole", "Needs to be a
+3D model, not a png floating in the air"): tools/valka_portal/build.sh makes eight pieces in Blender 3.3 from numbers
+(make_portal.py: the shadow sphere, the photon ring, the lensed arcs inner / outer, the disk's hot / warm / cool streak
+layers, its brighter approaching side; preview.py renders them as the game holds them), imports them into the AC8
+template project (ue_import.py: each slot on /Engine/BasicShapes/BasicShapeMaterial, AC8 has it), cooks VERSIONED and
+packs /Game/Mods/SurvivalMode/ValkaPortal into SurvivalMode_ValkaPortal_P (build_all.sh stages it with her X-02S; the
+builds without her drop it). In game each piece is coloured by a dynamic instance of AC8's MI_TrainingRing (its Color;
+BasicShapeMaterial's Color 0 for the shadow, MI_TrainingRingGlow for the haze), sized as one model (`abs`: 1 unit =
+the shadow's diameter = size_m), the arcs and the shadow facing you, the disk tipped 5 degrees towards you, the whole
+hole turned to you each tick (`face_you`), the disk's layers turning (inner faster). [V] in game, runs
+20261122_140649 / 141607 / 142542: it draws at full scale (250 m shadow, 1.6 km disk) from your own view at her reveal
+14 km out and from off its axis; hard rule 74 for its rolls. Her blinks open small ones (28 m) where she goes and comes
+back. Her opener's lens flash is dimmed (flare.portal_x 0.3) and halved while the hole is up (its beam covered it).
+
+## 9. The detailed black hole and her arrival cutscene (2026-11-22, 0.74.211-0.74.215)
+The user: "Remodel the 3D Event Horizon Black Hole, I want it as detailed as you can make it" (after a picture of an
+Interstellar-style hole: a broad white-hot arch over the shadow, a thin photon ring, the disk a bright band across it),
+"Create a cutscene similar to the Invincible Fleets Arrival of the Portal Opening, and Valka coming out of it", "See if
+it's also possible to change Valka's spawn location to the inside of the Portal", "Have a Portal Opening animation too".
+- The model: tools/valka_portal/make_portal.py design `detailed` (the others kept: soft, smooth, glow, silk, hybrid,
+  lines; `<design>/manifest.json` lists each piece's kind, colour, opacity, spin). ~3,500 wisps shaped by Blender's
+  noise (each wobbling, pinched, tapering to points, spiralling in; spiral-arm wisps faster) in eight bands from r 0.55
+  to 3.8 (the shadow 1.0 across), white-hot to orange, with hot knots and dark lanes, the disk thicker outwards; the
+  arch is the disk's own far side bent over the shadow (each wisp from its ring of the disk, swept out to the disk's
+  radius at the horizon on both sides, broadest and hotter on the approaching side) and a thin second image under it;
+  noisy infall streams; sparks. 621,936 triangles in 36 pieces; LODs not made (the commandlet has neither
+  StaticMeshEditorSubsystem nor a working EditorStaticMeshLibrary.set_lods: -1). build.sh cooks the design in
+  PORTAL_DESIGN; parts_lua.py writes CFG.specials.valka.portal.parts and blink_portal.parts from its manifest.
+- AC8's materials on it [V, probe run 20261122_153632: three overlapping planes each]: MI_TrainingRing is see-through
+  and blends (overlaps more solid, not brighter; at Opacity 1 the clouds still show through); MI_TrainingRingGlow with
+  EmissiveFresnelFalloff 0.01 is a flat see-through glow; EmissiveFresnelInverseHardness 0 draws nothing. The engine's
+  BasicShapeMaterial is lit: the shadow ball mirrored the sea and the sunset, so three unlit blacks (MI_TrainingRing,
+  Color 0) lie over it, drawn first of the see-through pieces (`sort`, SetTranslucentSortPriority), the ball beneath
+  still hiding what's behind it. Haze layers (flat sheets in the glow material) read as pale plates: left out.
+- Its opening and closing (portalTick): each piece in its own window of open_s / close_s (`open` / `close`): a pinpoint
+  and the photon ring first (`flare`: bright as it opens and as it snaps shut), the shadow, the disk from the inside
+  out, the arch last; closing, the outside falls in first; the disk spins up as it opens and faster as it drains;
+  `pulse` { amount, Hz } a shimmer on the arch and the photon ring.
+- Her spawn: her plane and her opener railgun's sit 3 km over their unit's point in the world data
+  (build_survival_units.py, (0, 0, 300000)) and SV_Spawn keeps that offset: every run showed her 3.0 km over her
+  portal. CFG unit_up_m 3000 is taken off at both spawns: she comes out 21-23 m from its middle [V, runs from 15:13].
+- The cutscene (sv_valka_cine.lua, CFG.specials.valka.cine; in every build that has her): from the portal's opening
+  till she's out, two camera actors and the engine's blend (the fleet's way, sv_fleet_surface.lua, which is test-only),
+  letterboxed 2.39, six shots in the portal's frame (far off as it opens; low under its disk; a long lens into the
+  shadow; beside her way out; her coming at the camera; a fly-by as she streaks past), your plane invincible on a 25 km
+  autopilot circle (on a 3.5 km one its bank showed in the pictures), the game's HUD widgets and Survival's HUD held
+  (callouts and subtitles through), the event's focus camera not fired, a shake at the opening and her shot, the fade.
+  Her opener charges cine.charge_s (8.5) meanwhile. The view is kept by where the screen's camera is (the camera
+  manager's place against ours: GetViewTarget's pcall failed every time); a line each second says who has it [V: ours
+  throughout, runs 20261122_160748 on]. Joiners run it from the host's "vp" open (not run in co-op).
+- The autotest's window grabs come when job.py reads the SHOT line, late (up to 8 s): the grabs after the cutscene
+  looked like it losing the view to your plane. contact_sheet.py --hires uses the game's own HighResShot pictures.

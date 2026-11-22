@@ -120,7 +120,7 @@ CFG.specials.fleet = {
     -- waits for ships still up from before to go after RE_SV_IFFleetRemove (the Spaceport's CLEAR_S). course_yaw, runway_cm:
     -- the course in and the runway's centre (survival_events_fleet.py IF_YAW, IF_RUNWAY), for the lines
     formation = { per_step = 3, gap_s = 0.5, settle_s = 2, go_s = 15, moved_m = 50, every_s = 10, guns_s = 2, clear_s = 8,
-                  course_yaw = 45, runway_cm = { 1610476, -436143 } },
+                  course_yaw = 45, runway_cm = { 1610476, -436143 }, hull_x = 1, hull_per_player = 0.25, geofon_x = 1.5, solo = { hull_x = 0.7 } },   -- (hull_x: each hull's health x, +per player past 1; (2026-11-18) the user: "make it so the geofon would last 3 minutes": 89 s at x1 with 5 players, so x2 at 5)
     -- ((0.74.140) WP8: every fleet ship scarred from its spawn (sv_fleet_round.lua scarsTick): its slots on dimmed copies of their
     -- own _DAM instances, per_tick components a tick; embers: their glow x this (a look only: never ranked against)
     scars = { enabled = true, per_tick = 1, embers = 0.05 },   -- ((0.74.152) 1: the game's own work, ~45 ms a part at worst (run 20261117_203608: the walks 0.0 ms, the sets 134 ms for 3))
@@ -128,7 +128,7 @@ CFG.specials.fleet = {
     -- shell_km of the runway a salvo every every_s (staggered), its muzzle flash, flight_s on its damage off the airfield and
     -- its rounds of AC8's explosions on the runway (spread_m along it at runway_yaw, across_m across); none while it's down,
     -- paused, in the STORE or in the surfacing. Tuned: ~10 ships in range take its 250 in ~3.5 min
-    shell = { enabled = true, shell_km = 20, every_s = 25, damage = 3, flight_s = 6, rounds = 3, spread_m = 600, across_m = 60,
+    shell = { enabled = true, shell_km = 20, every_s = 25, damage = 3, solo = { damage = 2 }, flight_s = 6, rounds = 3, spread_m = 600, across_m = 60,
               runway_yaw = -23, ground_cm = 500, kinds = { aegis = true, krov = true, gors = true, udal = true },
               muzzle = { "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_Maingun_Muzzle", 2 },
               impact = { { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 2.5 },
@@ -160,7 +160,7 @@ CFG.specials.fleet = {
     -- (SOC_Gun_01 at least raised_cm up in its mesh as drawn: stowed ~1567, up ~3454) or it's played again redeploys times,
     -- then left stowed and shielded with no charge; your missile's damage read size_tries times for its health
     railcannon = {
-        enabled = true, deploy_s = 3.4, charge_s = 30, every_s = 90, damage = 100, damage_of_max = true,
+        enabled = true, deploy_s = 3.4, charge_s = 30, every_s = 90, damage = 100, damage_of_max = true, solo = { damage = 60, every_s = 120 },
         missiles = 8, per_player = 0.5, raised_cm = 2500, redeploys = 1, size_tries = 5,
         speed_kms = 11.1, flight_min_s = 0.5, flight_lands = true,
         runway = { 1609574, -435747, 500, -23 }, spread_m = 600, across_m = 15, max_off_deg = 180,
@@ -224,8 +224,8 @@ CFG.specials.fleet = {
     -- transitions normally into day time over a few rounds, the same as the festival does": no night_over / dawn_exposure
     -- of its own (THE FESTIVAL's night, dawn and sunrise_rounds, CFG.sky.arc / CFG.sky.night), round 30 a night round:
     -- the sunset at 26, night 27-30, the dawn at 31, rising over 31-34 as the festival's, midday from 35)
-    sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 4 },
-            storm = { enabled = true, until_round = 35, out_s = 0.6, hold_s = 0.8, in_s = 1.2,
+    sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 4, night_over = { exposure = { 2.3, 10.0, 1.1 } } },   -- ((2026-11-18) the user: "very very slightly increase exposure": bias 0.6 -> 0.8, the fleet's night only; (2026-11-19) "storm still dark af": 0.8 -> 1.1)
+            storm = { enabled = true, until_round = 32, out_s = 0.6, hold_s = 0.8, in_s = 1.2, clouds = { enabled = true, raise_km = { 1.0, 1.0 }, density_x = 0.65 },   -- ((2026-11-18) the user: "have the storm clear on round 32"; was 35; clouds: (2026-11-19) sv_fleet_storm.lua cloudsSet)
                       -- ((2026-11-17) the user: "we need to change the audio of the Thunder, its wrong") AC8's own thunder
                       -- (its SE bank's Mission 12 events, by name on your camera: sv_fleet_storm.lua): the storm's arrival
                       -- clap, Mission 12's distant thunder all through the storm (a loop: its _Stop as it clears)
@@ -246,7 +246,7 @@ CFG.specials.fleet = {
                                               -- (burst.py; switched off life_s on, its particles finish), our own cooked one;
                                               -- else the stock glow above)
                                               flash = { { path = "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudBurst.NS_SV_CloudBurst",
-                                                          scale = 0.1, life_s = 0.8, min_km = 6 },   -- (burstwatch: on 0.5 s, its particles die with it; none within 3 km: run 140748's white-outs; 0.74.114: its near sprites on MI_SV_CloudFlashNear, no fade before 30 km)
+                                                          scale = 0.08, life_s = 0.8, min_km = 6 },   -- ((2026-11-18) "slightly reduce the cloud bursts": 0.1 -> 0.08)   -- (burstwatch: on 0.5 s, its particles die with it; none within 3 km: run 140748's white-outs; 0.74.114: its near sprites on MI_SV_CloudFlashNear, no fade before 30 km)
                                                         { path = "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudFlash.NS_SV_CloudFlash",
                                                           scale = 1, life_s = 2.0 } } },
                                 system = "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning.NS_CloudLightning",
@@ -264,7 +264,7 @@ CFG.specials.fleet = {
                       -- game's cloud lightning material, a bolt each flash, the rain warmed up behind the fade (warm_fx);
                       -- cloud: Survival's own cloud light at some flashes (hard rule 70; 0.8-2M: 165k-365k unseen in the user's 0.74.91 flight,
                       -- 4M and 8M at 5 km round blacked nothing out in run 75; 4M at 50 km did in run 68))
-                      lightning = { enabled = true, every_s = { 0.3, 0.8 }, dist_km = { 2, 25 }, alt_m = { 1500, 7000 },
+                      lightning = { enabled = true, every_s = { 0.4, 1.0 }, dist_km = { 2, 25 },   -- ((2026-11-18) the flashes slightly fewer: { 0.3, 0.8 } before; a friend: "the constant lightning flashes") alt_m = { 1500, 7000 },
                                     -- ((2026-11-17) a strike's light on your plane, the ships and the sea: our directional
                                     -- light from the strike, intensity x steps a tick, strikes within max_km, full at
                                     -- near_km down to fade_x at max_km; sv_fleet_storm.lua's slFlash)
@@ -361,7 +361,7 @@ CFG.specials.fleet = {
               -- ((0.74.156) her phases (sv_fleet_round.lua p2Fight): her railcannon at phase2_share of her parts down, her core
               -- open when it's down or at core_share: core_missiles of your missiles (+core_per_player), held at core_floor)
               phase2 = { enabled = true, rise_after_s = 0, release_s = 2.5, split_max_s = 9, rise_max_s = 45,
-                         phase2_share = 0.6, core_share = 0.95, core_missiles = 30, core_per_player = 0.5, core_floor = 0.02,
+                         phase2_share = 0.6, core_share = 0.95, core_missiles = 30, core_per_player = 0.5, core_floor = 0.02, solo = { core_missiles = 20 },
                          sink = { sink_s = 40, sink_m = 160, bow_deg = 12, roll_deg = 6, booms = 28, boom_every_s = 0.6,
                                   fx = { { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001", 3 },
                                          { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsFireL001", 3 },
@@ -1020,7 +1020,7 @@ end
 
 local function lookTick(now, L0)
     local L = L0 or GEO.look
-    if not L then return end
+    if not L or L.over then return end                    -- ((2026-11-18) over: never again (every joiner looped ~2670 times)
     local dt = math.min(1, math.max(0, now - (L.last or now)))
     L.last = now
     if paused() then return end
@@ -1036,10 +1036,12 @@ local function lookTick(now, L0)
         if not L.posed then return end
     end
     if not same(L.hull) then
-        if L == GEO.look then GEO.look = nil end
+        local test = not L.round                          -- ((2026-11-18) only a test's own Ford is taken off as the test's: round
+        if L == GEO.look then GEO.look = nil end          -- 30's GEOFON (GEO.attach: a joiner's copy above all) its effects off
         L.over = true
-        log(string.format("geofon: break look over at +%.0f s: its hull is gone (the rest taken off: %s)", L.t,
-            takeOff(L, "its hull gone")))
+        local how = "its effects off"
+        if test then how = takeOff(L, "its hull gone") else pcall(fxOff, L, 0); pcall(fxGone, L, true) end
+        log(string.format("geofon: break look over at +%.0f s: its hull is gone (the rest %s)", L.t, test and ("taken off: " .. how) or how))
         return
     end
     if c.rear_s and num(c.g, 1) < 1 then                  -- ((0.74.132) the V rearing (round 30: torn open by her bow)
@@ -1644,6 +1646,17 @@ local function settle(F, sh)
         end
     end
     sh.hull = hulls[1]
+    -- ((2026-11-18) the user: "an enemy buff to their health is advised for the invincible fleet ships": five players sank all
+    -- 15 in 6.5 min, GEOFON in 89 s. The host's hulls x hull_x (+hull_per_player a player past the first); a joiner's copy
+    -- waits for the host's kill)
+    if sh.hull and type(scaleHealth) == "function" and not (COOP and COOP.client and COOP.client()) then
+        local okP, l = pcall(function() return COOP and COOP.open and COOP.players() end)
+        local np = (okP and type(l) == "table") and math.max(1, #l) or 1
+        local x = num(soloVal(fm(), "hull_x"), 1) * (1 + num(fm().hull_per_player, 0) * (np - 1))   -- (solo: (2026-11-18) x0.7)
+        if sh == (F.ships or {})[1] then x = x * num(fm().geofon_x, 1) end   -- ((2026-11-18) the user: GEOFON "the hardest to destroy", "3 times")
+        local h0, h1 = scaleHealth(sh.hull.obj, x)
+        if h1 then log(string.format("fleet: %s's hull health x%.2f (%d players): %d -> %d", label(sh), x, np, h0, h1)) end
+    end
     for _, e in ipairs(sh.parts) do F.by[e.addr] = { sh = sh, cls = e.cls, e = e } end
     if sh.hull then F.by[sh.hull.addr] = { sh = sh, cls = "hull", e = sh.hull } end
     local p = sh.hull and at(sh.hull)

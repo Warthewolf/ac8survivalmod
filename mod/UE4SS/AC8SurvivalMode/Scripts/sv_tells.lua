@@ -290,6 +290,6 @@ function TELL.hunted(p)
     D.tellHunt = D.tellHunt or {}
     if D.tellHunt[p.unit] == D.round then return end
     local said, _, kind = TELL.say("hunt")
-    if said or kind == "cooldown" then D.tellHunt[p.unit] = D.round end
+    if said or kind == "cooldown" or kind == "empty" then D.tellHunt[p.unit] = D.round end   -- (empty: its lines cut, 2026-11-19)
 end
 end

@@ -509,6 +509,12 @@ TANI.partMesh, TANI.aim = partMesh, aim                   -- ((stage 4) sv_tanic
 -- (0.74.61) and the other mounts' weapons as they're made: the T16's artillery shells (LiveArtillery, a shell in flight, not
 -- attached: its start comes from its place and velocity) and the CIWS / LASER's gun (BP_wp_ciws_vessel, a
 -- LiveAttachedInterceptorWeapon: it hangs where the flak gun does, its socket the line to read)
+-- ((2026-11-18) off unless TANI.shell_probe: a friend's co-op host of 0.74.195 crashed (access violation reading
+-- 0xffffffffffffffff, round 27, no Tanacorn up) 6 s after this probe's 12th stock flak shell, the allied Aegis they bought
+-- firing its Mk 45; 0.74.160's autotest crashed at the 12th stock shell too. A debug probe of 0.74.55-0.74.61 (her mounts'
+-- muzzles) that kept every flak shell, artillery round and point-defence gun the game made, all session, and read them a tick
+-- later: shells live a second or two and the game reuses their addresses. Off, the hooks keep and read nothing)
+TANI.shell_probe = false
 local NEWSHELL = {}
 local SHELL_CLASSES = { "/Script/Live.LiveFlakGun", "/Script/Live.LiveArtillery", "/Script/Live.LiveAttachedInterceptorWeapon",
                         "/Script/Live.LiveEMLBullet_BattleShip" }   -- ((stage 4) the railguns' BP_wp_emls_alcn rounds)
@@ -518,7 +524,7 @@ if type(NotifyOnNewObject) == "function" then
         pcall(NotifyOnNewObject, c, function(o)
             -- ((0.74.161) its name kept: a shell freed before it's read and its address used again is another object (hard
             -- rule 59): 0.74.160's autotest phase2 crashed reading one, 23:01:28 of run 20261117_225914, the 12th stock shell)
-            if #NEWSHELL < 32 then NEWSHELL[#NEWSHELL + 1] = { o = o, t = os.clock(), c = short, name = nameOf(o) } end
+            if TANI.shell_probe and #NEWSHELL < 32 then NEWSHELL[#NEWSHELL + 1] = { o = o, t = os.clock(), c = short, name = nameOf(o) } end
         end)
     end
 end
@@ -562,6 +568,7 @@ end
 -- (0.74.61) each of our shells against the mount that made it (its owner; 0.74.55-0.74.60's the first T5 found), the first 12
 -- of each mount type a spawn: `tanicorn: <T5|T16|CIWS|LASER> shell N: ...`
 local function shells(now)
+    if not TANI.shell_probe then return end                -- (off: the hooks keep nothing, NEWSHELL stays empty)
     if #NEWSHELL == 0 then return end
     local list = NEWSHELL
     NEWSHELL = {}
@@ -829,7 +836,10 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn mount watch", fn = watch }
 -- its nearest cell SOC_Vls_0K D m off, flying yaw Y pitch P at V m/s (seen within a look of its launch); its target <you|...>`,
 -- and at its end `tanicorn: VLS watch over (...): N launches by our blocks (<type> n, ...), ...`. A block is kept by its
 -- address AND the name it was captured with, checked before anything is done to it (hard rule 59).
-TANI.lid = { close_s = 6, parts_s = 2, walk_s = 10, watch_s = 180 }
+-- ((2026-11-19) Saint Alessia's round 30 of 0.74.199: "tanicorn vls lids" 19.7 ms a tick over its 180 s, the top cost of the
+-- round (286 frames over 100 ms): every VLS missile of every ship read each tick. Now every tick_s, a shown missile's
+-- owner read again only owner_s on (a launch is a hidden one shown, or a new owner), the blocks looked for every parts_s)
+TANI.lid = { close_s = 6, parts_s = 6, walk_s = 10, watch_s = 180, tick_s = 0.5, owner_s = 2 }
 local lidWatch
 do
 local VNEW = {}
@@ -996,6 +1006,8 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn vls lids", fn = function(now)
         return
     end
     if walkBusy and walkBusy() then return end           -- (the walks wait while the engine frees objects, as WLOG's)
+    if now < (LW.tickAt or 0) then return end
+    LW.tickAt = now + (TANI.lid.tick_s or 0)
     lidParts(now)
     for _, o in ipairs(VNEW) do local a = liveAddr(o); if a then LW.pool[a] = o end end
     VNEW = {}
@@ -1012,11 +1024,15 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "tanicorn vls lids", fn = function(now)
         else
             local okH, hid = pcall(function() return o.bHidden end)
             local shown = (not okH) or hid == false      -- (unreadable: shown, so a new one or a new owner still counts)
-            local ow = shown and ownerOf(o) or nil
-            local oa = ow and addrOf(ow) or nil
             local prev = LW.state[a]
-            if LW.primed and shown and (not prev or not prev.shown or prev.owner ~= oa) then launched(o, ow, now) end
-            cur[a] = { shown = shown, owner = oa }
+            local ow, oa, oAt = nil, nil, nil
+            if shown and prev and prev.shown and prev.ownerAt and now - prev.ownerAt < (TANI.lid.owner_s or 0) then
+                oa, oAt = prev.owner, prev.ownerAt             -- (still up, its owner read lately: the same flight)
+            elseif shown then
+                ow = ownerOf(o); oa, oAt = ow and addrOf(ow) or nil, now
+            end
+            if LW.primed and shown and oAt == now and (not prev or not prev.shown or prev.owner ~= oa) then launched(o, ow, now) end
+            cur[a] = { shown = shown, owner = oa, ownerAt = oAt }
         end
     end
     LW.state = cur
@@ -1554,8 +1570,16 @@ local function sinkTick(W, now)
         local okD, how = false, "a joiner's copy: the host's"
         if not W.joiner then okD, how = TANI.liveDown(S.why .. ": under") end
         pcall(function() S.mesh:SetVisibility(false, true) end)
+        if W.joiner and W.o and same(W) then                -- ((2026-11-18) a friend: "after being destroyed it still appears on iff":
+            for f0, v in pairs({ bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true }) do   -- the copy waits
+                pcall(function() W.o[f0] = v end)          -- for the host's kill (co-op's): off the HUD, the radar and lock-on here
+            end
+            pcall(function() W.o:SetActorHiddenInGame(true) end)
+            pcall(function() W.o:SetActorEnableCollision(false) end)
+            how = how .. "; off the HUD, the radar and lock-on here, hidden"
+        end
         log(string.format("tanicorn: sink over at +%.0f s: %d of %d explosions came up; her hull %s; hidden", now - S.t0, S.ok, S.of,
-            okD and ("down (" .. tostring(how) .. ")") or "NOT finished off"))
+            okD and ("down (" .. tostring(how) .. ")") or (W.joiner and tostring(how)) or "NOT finished off"))
     end
 end
 function TANI.liveSinking() return LV ~= nil and LV.sink ~= nil and not LV.sink.done end

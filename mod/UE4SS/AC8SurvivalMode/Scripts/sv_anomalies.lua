@@ -784,6 +784,35 @@ function SPC.V.blinkSpot(c, s, you)
         end
     end
 end
+-- ((2026-11-22) the user: she "doesn't seem to take the fight anywhere") a blink onto your six (mode "six"), across your
+-- nose ("ahead": head-on, her railgun's cone), or either (nil: attack_ahead of them ahead), attack_deg either side of
+-- the line, on `ring` or one of c.blink_rings, never under the ground's clearance (as blinkSpot); its event, point,
+-- bearing and what it was ("onto your six" / "across your nose"); blinkSpot's round you if none fits
+function SPC.V.attackSpot(c, s, you, mode, ring)
+    local h = SPC.V.heading() or math.random() * 360
+    local ahead = mode == "ahead" or (mode == nil and math.random() < (tonumber(c.attack_ahead) or 0))
+    local spread = tonumber(c.attack_deg) or 40
+    local want = (ahead and h or h + 180) + (math.random() * 2 - 1) * spread
+    local rings = ring and { ring } or {}
+    if not ring then
+        for _, r in ipairs(c.blink_rings) do rings[#rings + 1] = r end
+        if #rings > 1 and math.random() < 0.5 then rings[1], rings[#rings] = rings[#rings], rings[1] end
+    end
+    local under = groundAt(you.X, you.Y)
+    local clear = c.ground_clear_m * 100
+    if under then clear = math.max(0, math.min(clear, (you.Z - under) * 0.8)) end
+    for _, off in ipairs({ 0, 30, -30, 60, -60 }) do
+        for _, rg in ipairs(rings) do
+            local ev, to, deg = SPC.V.spot(c, rg, want + off, you)
+            local ground = to and groundAt(to.X, to.Y)
+            if ev and (not ground or to.Z >= ground + clear) then
+                return ev, to, deg, (ahead and "across your nose" or "onto your six") .. " at ring " .. rg
+            end
+        end
+    end
+    local ev, to, deg = SPC.V.blinkSpot(c, s, you)
+    return ev, to, deg, "round you (no attack spot clear)"
+end
 -- ((0.73.80) the 31-round co-op run of 2026-11-03, testing/logs/2026-11-04/R30_FINDINGS.json specials 2 / perf 6: on the
 -- host ~0.74 s at her opener, ~0.7 s at her reveal, and 30 walks for her rounds that found none. singleShot, emlWeapon and
 -- radar each walked every object for her railguns' modules (35-50 ms a walk, 6-7 in one tick at her opener, its shot and
@@ -1215,6 +1244,10 @@ function SPC.V.flareStart(c, s, at, now)
     -- ((0.73.77) D5: each element's screen share x flash_size_x, [specials.valka]; 1 = AC7's own sizes)
     local kx = tonumber(c.flash_size_x) or 1
     if not (kx > 0 and kx <= 4) then kx = 1 end
+    -- ((2026-11-22) with her black hole up there, the flash smaller and dimmer (flare.portal_size_x / portal_x): its white
+    -- beam and frame covered the hole, the autotest's run of 14:08)
+    fl.dim = s.portal and (tonumber(f.portal_x) or 1) or 1
+    if s.portal then kx = kx * (tonumber(f.portal_size_x) or 1) end
     for _, e in ipairs(f.elements) do
         local p = f.path .. e[1]
         local mi, why = SPC.V.asset(p)                  -- ((0.73.80) kept from the break's preload: no load, no find here)
@@ -1249,7 +1282,7 @@ function SPC.V.flareTick(c, s, now)
         if k >= p[1] and k <= q[1] then alpha = p[2] + (q[2] - p[2]) * (k - p[1]) / math.max(1e-6, q[1] - p[1]) end
     end
     for _, m in ipairs(fl.mids) do
-        pcall(function() m.mid:SetScalarParameterValue(FName("Emissive_Intensity"), m.base * c.flare.intensity_x * alpha) end)
+        pcall(function() m.mid:SetScalarParameterValue(FName("Emissive_Intensity"), m.base * c.flare.intensity_x * alpha * (fl.dim or 1)) end)
     end
 end
 function SPC.V.flareStop(s)
@@ -1284,6 +1317,7 @@ function SPC.V.cleanup(s)
     if s.redOn or s.moodOn then SPC.V.moodOff(nil, s) end  -- (0.73.76) never left red or playing (the run over, the level left)
     SPC.V.sndStop(s)
     SPC.V.flareStop(s)
+    if SPC.V.portalStop then SPC.V.portalStop(s) end    -- ((2026-11-22) her portal: sv_anomalies_valka.lua)
     s.passAt = nil
     if SPC.V.RC.mode then pcall(SPC.V.roundDefaults, CFG.specials.valka, "off") end   -- ((0.73.80) her round's class default back)
 end

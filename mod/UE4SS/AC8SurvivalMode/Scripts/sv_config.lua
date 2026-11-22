@@ -222,7 +222,9 @@ CFG = {
         list = {
             reversal        = { radio = { "RE_SV_RadioTurnA", "RE_SV_RadioTurnB" } },
             kulbit          = { radio = { "RE_SV_RadioTurnA", "RE_SV_RadioTurnB" } },
-            hunt            = { radio = { "RE_SV_RadioHuntA", "RE_SV_RadioHuntB" } },
+            -- ((2026-11-19) the user: "Get rid of the i see our prey too": the hunt lines, "Hunt down the Wings of Theve..."
+            -- and "I see our prey.", played every few minutes in late rounds (Saint Alessia's run of 0.74.199); no line now)
+            hunt            = { radio = {} },
             raid            = { radio = { "RE_SV_RadioRaidA", "RE_SV_RadioRaidB", "RE_SV_RadioRaidC" } },
             jammer          = { radio = { "RE_SV_RadioJam" } },
             jammer_down     = { radio = { "RE_SV_RadioJamDown" } },
@@ -262,7 +264,7 @@ CFG = {
             legend_in       = { radio = { "RE_SV_RadioEnLureA", "RE_SV_RadioEnLureB" }, sure = true },
             demon_in        = { radio = { "RE_SV_RadioTurnA", "RE_SV_RadioTurnB" }, sure = true },
             phantom_in      = { radio = { "RE_SV_RadioSixA", "RE_SV_RadioSixB", "RE_SV_RadioSixC", "RE_SV_RadioSixD" }, sure = true },
-            reaper_in       = { radio = { "RE_SV_RadioHuntA", "RE_SV_RadioHuntB" }, sure = true },
+            reaper_in       = { radio = {}, sure = true },           -- (the hunt lines were its; cut 2026-11-19)
             blink           = { radio = { "RE_SV_RadioSixA", "RE_SV_RadioSixB", "RE_SV_RadioSixC", "RE_SV_RadioSixD" } },
         },
     },

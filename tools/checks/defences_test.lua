@@ -612,6 +612,13 @@ do
           and next(ALLY.state().up) == nil, "joiner: WINGMEN asks the host too, no flight of its own queued here")
     shop("ShipAegis")
     check(#spawned == 0 and asked[3] and asked[3].name == "ShipAegis", "joiner: the AEGIS asks the host too")
+    -- ((2026-11-18) the user: "Airbase Repair is apparently not working": a joiner's repair was its own game's only, the host's
+    -- "af" putting it back; now asked of the host, paid now, nothing repaired here)
+    AF.max, AF.full, AF.hp, AF.hits, AF.bomb, AF.base, AF.bombBase = 250, 100, 100, 0, 0, 0, 0
+    local cr0 = RUN.credits
+    shop("RepairAirfield")
+    check(asked[4] and asked[4].name == "RepairAirfield" and asked[4].kind == nil and RUN.credits < cr0 and AF.hp == 100,
+          "joiner: REPAIR AIRFIELD asks the host (no kind), paid now, nothing repaired here (" .. tostring(RUN.msg.RepairAirfield) .. ")")
     -- the host: builds it with nothing charged
     COOP.client = function() return false end
     COOP.host = function() return true end
@@ -640,6 +647,18 @@ do
     local aaPrice = math.floor(DEF.aa.price * DEF.aa.raise ^ aa0 / 10 + 0.5) * 10
     okR, msgR = shopBuildFor(2, "AAGun", aaPrice, nil, true)
     check(okR and RUN.defences.bought.aa == aa0 + 1, "host: ... at it: built and counted in the room's (" .. tostring(msgR) .. ")")
+    -- ((2026-11-18) a joiner's airfield repair: made here at the room's price, counted; under it or at full health refused
+    AF.max, AF.full, AF.hp, AF.hits, AF.bomb, AF.base, AF.bombBase = 250, 100, 100, 0, 0, 0, 0
+    local rp = CFG.shop.items.RepairAirfield
+    local b0 = RUN.bought.RepairAirfield or 0
+    okR, msgR = shopBuildFor(2, "RepairAirfield", 1, nil, true)
+    check(not okR and has(msgR, "THE PRICE IS NOW ") and AF.hp == 100, "host: a joiner's airfield repair under the room's price refused (" .. tostring(msgR) .. ")")
+    okR, msgR = shopBuildFor(2, "RepairAirfield", 999999, nil, true)
+    check(okR and AF.hp == 100 + rp.repair and AF.full == AF.hp and (RUN.bought.RepairAirfield or 0) == b0 + 1,
+          "host: a joiner's airfield repair made here, +" .. rp.repair .. ", counted (" .. tostring(msgR) .. ")")
+    AF.full, AF.hp = 250, 250
+    okR, msgR = shopBuildFor(2, "RepairAirfield", 999999, nil, true)
+    check(not okR, "host: a joiner's airfield repair at full health refused, refunded there (" .. tostring(msgR) .. ")")
     -- their flight: takes off once they're airborne, whatever the host is doing
     ok, msg = shopBuildFor(2, "Wingmen", 5000, nil)
     local wu

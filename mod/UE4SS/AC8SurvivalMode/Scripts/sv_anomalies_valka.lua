@@ -135,6 +135,9 @@ function SPC.V.preloadList(c, client)
     if client then return out end
     if c.eml_weapon and c.eml_weapon ~= "" then add(c.eml_weapon, c.eml_weapon:match("[^/]+$") .. "_C") end
     add(c.flash); add(c.smoke)                          -- (her opener shot's flash, her blinks' smoke: fxAt)
+    if type(c.portal) == "table" and c.portal.enabled then  -- ((2026-11-22) her portal's pieces)
+        for _, part in ipairs(c.portal.parts or {}) do add(part.mesh); add(part.mat); add(part.fx) end
+    end
     local f = c.flare
     if type(f) == "table" and f.enabled and type(f.path) == "string" then
         for _, e in ipairs(f.elements or {}) do add(f.path .. e[1]) end
@@ -590,7 +593,7 @@ function SPC.V.emlSpawn(c)
     SPC.V.emlActor = nil
     SPC.V.modMark(c.eml_unit)
     spawningUnit = c.eml_unit
-    local r = SV_Spawn(c.eml_unit, at.X, at.Y, at.Z, yaw)
+    local r = SV_Spawn(c.eml_unit, at.X, at.Y, at.Z - (tonumber(c.unit_up_m) or 0) * 100, yaw)   -- (as hers: valkaArrive)
     spawningUnit = nil
     SPC.V.modRecord()                                   -- ((0.73.80) its modules kept as they're made, not walked for)
     at.km = math.sqrt((at.X - you.X) ^ 2 + (at.Y - you.Y) ^ 2 + (at.Z - you.Z) ^ 2) / 100000
@@ -645,7 +648,10 @@ function SPC.valkaArrive(now, at, yaw)
     if not at then pcall(SPC.V.roundDefaults, c, "hers") end
     SPC.V.modMark(c.unit)
     spawningUnit = c.unit
-    local r = SV_Spawn(c.unit, x, y, z, heading)
+    -- ((2026-11-22) the user: "change Valka's spawn location to the inside of the Portal": her plane sits unit_up_m over
+    -- her unit's point in the world data (build_survival_units.py valka_unit: (0, 0, 300000)) and SV_Spawn moves the
+    -- point, keeping that; every run of the day showed her 3.0 km over her portal. Taken off: she's at z, in its middle)
+    local r = SV_Spawn(c.unit, x, y, z - (tonumber(c.unit_up_m) or 0) * 100, heading)
     spawningUnit = nil
     SPC.V.modRecord()
     log(string.format("special: VALKA as %s (%s set), %s, heading %.0f, %.1f km up: %s", row, tostring(set),
@@ -710,6 +716,9 @@ end
 function SPC.valkaTick(now, s)
     local c, t, V = CFG.specials.valka, CFG.hud.text, SPC.V
     V.flareTick(c, s, now)
+    if s.portal then V.portalTick(c, s, now) end         -- ((2026-11-22) her portal: open, hold, close)
+    if VCINE and VCINE.tick then VCINE.tick(c, s, now) end    -- (its cutscene: sv_valka_cine.lua)
+    if s.bportals then V.blinkPortalsTick(c, s, now) end  -- (and her blinks' small ones)
     -- ((0.73.80) no walk for her rounds after a shot any more (every tick for 3-3.5 s, none ever found in the 31-round
     -- run): their life, single rounds and the opener's no-damage are on the round's class default, SPC.V.roundDefaults)
     if s.alertOffAt and now >= s.alertOffAt then        -- the railgun alert off again after a shot
@@ -782,11 +791,28 @@ function SPC.valkaTick(now, s)
             log(string.format("special: %s's railguns on the minimap: %d launchers (style %d)", c.name, V.radar(c), c.radar_hud or 1))
             V.event("RE_SV_ValkaAlertOn")
             s.chargeAt = now + c.charge_s
-            V.event("RE_SV_ValkaWarnOn")                -- WARNING until she's down (no banner of ours: no tells)
+            V.event("RE_SV_ValkaWarnOn")
+            -- ((2026-11-22) the user: "Create a cutscene similar to the Invincible Fleets Arrival of the Portal Opening, and
+            -- Valka coming out of it": sv_valka_cine.lua, from now till she's out; her charge cine.charge_s meanwhile)
+            if type(c.portal) == "table" and c.portal.enabled and VCINE and VCINE.start then
+                local okV, onV = pcall(VCINE.start, c, s, s.emlAt, s.emlYaw, now)
+                if not okV then log("special: VALKA's cutscene error " .. tostring(onV)) end
+                if okV and onV then s.chargeAt = now + (tonumber(c.cine and c.cine.charge_s) or c.charge_s) end
+            end                -- WARNING until she's down (no banner of ours: no tells)
             V.event("RE_SV_ValkaEmlChargeOn")
             V.sndCharge(s, s.emlAt, now)
-            local fx = V.flareStart(c, s, s.emlAt, now)      -- AC7 M18's lens flash; Mission 23's flash if it can't
-            if fx == 0 then
+            -- ((2026-11-22) the user: "a 3D Portal, an event horizon that she spawns out of") it opens where her
+            -- opener fires from, facing you; her shot comes out of it, then she does
+            if type(c.portal) == "table" and c.portal.enabled then
+                local okP, errP = pcall(V.portalOpen, c, s, s.emlAt, s.emlYaw, now)
+                if not okP then log("special: VALKA's portal error " .. tostring(errP)) end
+                if okP and s.portal and COOP and COOP.valkaPortal then pcall(COOP.valkaPortal, s.emlAt, s.emlYaw, "o") end
+            end
+            -- ((2026-11-22) the user: "Get rid of the flash png thing": no lens flash, nor Mission 23's flash, with her black
+            -- hole up (portal.flash = true brings them back))
+            local noFlash = s.portal and not (type(c.portal) == "table" and c.portal.flash)
+            local fx = noFlash and 0 or V.flareStart(c, s, s.emlAt, now)   -- AC7 M18's lens flash; Mission 23's flash if it can't
+            if fx == 0 and not noFlash then
                 local flashes = {}
                 for i = 1, c.flash_layers or 1 do flashes[i] = c.flash end
                 fx = fxAt(flashes, s.emlAt, c.flash_scale, c.flash_s)
@@ -801,11 +827,16 @@ function SPC.valkaTick(now, s)
         V.singleShot(c)                                 -- (in case its module came late; (0.73.80) the kept ones: no walk)
         V.emlWeapon(c)
         V.radar(c)
-        V.event("RE_SV_ValkaEmlShot")
+        -- ((2026-11-22) the runs of 15:13, 15:45 and 15:57: as her opener's round came at you the game cut to your plane
+        -- (a black frame, then your chase view, its bank on it) in the middle of her cutscene. While it films, the shot
+        -- is only heard (its charge, its crack): no round at you; the cutscene shows her coming out instead)
+        local filmed = VCINE and VCINE.active and VCINE.active() and not (c.cine and c.cine.shoot)
+        if filmed then log(string.format("special: %s's opener round held: her cutscene films", c.name))
+        else V.event("RE_SV_ValkaEmlShot") end
         V.event("RE_SV_ValkaEmlChargeOff")
         V.sndShot(s, s.emlAt, now)
         s.alertOffAt = now + (c.alert_off_s or 3)
-        do
+        if not (s.portal and not (type(c.portal) == "table" and c.portal.flash)) then   -- ((2026-11-22) none with her hole up)
             local flashes = {}
             for i = 1, c.flash_layers or 1 do flashes[i] = c.flash end
             fxAt(flashes, s.emlAt, c.flash_scale, c.flash_s)
@@ -821,7 +852,13 @@ function SPC.valkaTick(now, s)
     end
     if s.state == "shot" then                           -- reveal_s after the shot she's there, where it came from
         if now < s.revealAt then return end
-        if not SPC.valkaArrive(now, s.emlAt, s.emlYaw) then
+        -- ((2026-11-22) with her portal up: a little behind its face, so she flies out through it)
+        local from = s.portal and V.portalExit(c, s.emlAt, s.emlYaw) or s.emlAt
+        if s.portal then
+            pcall(V.portalThrough, c, s, now)
+            if COOP and COOP.valkaPortal then pcall(COOP.valkaPortal, s.emlAt, s.emlYaw, "t") end
+        end
+        if not SPC.valkaArrive(now, from, s.emlYaw) then
             s.state = "done"
             V.event("RE_SV_ValkaEnd")                   -- (the WARNING off)
             pcall(V.roundDefaults, c, "off")             -- ((0.73.80) her round class as it was)
@@ -842,7 +879,14 @@ function SPC.valkaTick(now, s)
         local hp = c.health * hx
         local okH = pcall(function() o.MaxHealth = hp; o.HealthInternal = math.floor(hp * 10 + 0.5) end)
         local okB = pcall(function() o.bShowHUDBox = true end)               -- (her desc's tgt too: build_survival.py)
-        V.model(c, s, o)                                                     -- her X-02S
+        V.model(c, s, o)                                                     -- her X-02S
+        if s.portal and s.portal.at then                -- ((2026-11-22) out of her portal's middle? unit_up_m)
+            pcall(function()
+                local h, P = o:K2_GetActorLocation(), s.portal.at
+                log(string.format("special: %s comes out %.0f m from her portal's middle (%.0f m over it; its shadow %.0f m across)",
+                    c.name, math.sqrt((h.X - P.X) ^ 2 + (h.Y - P.Y) ^ 2 + (h.Z - P.Z) ^ 2) / 100, (h.Z - P.Z) / 100, s.portal.size / 100))
+            end)
+        end
         if COOP and COOP.valkaReveal then pcall(COOP.valkaReveal, c.unit) end   -- (0.73.76) on every joiner's copy too
         V.modSaid(c, c.unit, "her")                     -- ((0.73.80) her railguns' modules kept as the game made them)
         s.singleN = V.singleShot(c)                     -- her own railguns ((0.73.76) always: the opener's set it to 1 first,
@@ -854,17 +898,18 @@ function SPC.valkaTick(now, s)
         end
         local cam = 1
         for k, n in ipairs(ANOMALY_CAMERAS) do if n == c.camera then cam = k end end
-        V.event("RE_SV_ValkaCam_" .. string.char(64 + cam))
+        local filmed = VCINE and VCINE.active and VCINE.active()
+        if not filmed then V.event("RE_SV_ValkaCam_" .. string.char(64 + cam)) end   -- (the cutscene's cameras on her instead)
         V.event("RE_SV_ValkaReveal")
         s.state, s.revealedAt = "hunt", now
-        s.railAt, s.turnAt, s.psAt, s.invertAt = now + c.railgun_every_s, now + c.turn_every_s, now + c.post_stall_every_s,
+        s.railAt, s.turnAt, s.psAt, s.invertAt = now + c.railgun_every_s, V.turnClock(c, now), now + c.post_stall_every_s,
             now + c.invert_every_s
         hudCallout(c.anomaly_line or t.valka_sub, nil)   -- what's happening, then her name big
         hudCallout(c.name:upper(), nil, c.big_x)
         V.subs(c, "reveal")                             -- ((2026-11-07) Comona can't see where she came from;
         V.subs(c, "reveal_charlene", true)              -- nor can CHARLENE)
         log(string.format("special: %s shows, %.0f HP (x%.2f)%s, target box %s; camera %s", c.name, hp, hx,
-            okH and "" or " (health NOT set)", okB and "on" or "NOT set", ANOMALY_CAMERAS[cam]))
+            okH and "" or " (health NOT set)", okB and "on" or "NOT set", filmed and "the cutscene's" or ANOMALY_CAMERAS[cam]))
         return
     end
     -- ((0.73.77) liveObj, not valid(): the clean-up may take her unit off the native list while the wreck falls)
@@ -874,7 +919,7 @@ function SPC.valkaTick(now, s)
     end
     if s.state ~= "hunt" then return end
     V.mood(c, s)                                        -- (0.73.76) red and her song, if her round had no lurk
-    s.railAt, s.turnAt = s.railAt or now + c.railgun_every_s, s.turnAt or now + c.turn_every_s   -- (no opener: no reveal)
+    s.railAt, s.turnAt = s.railAt or now + c.railgun_every_s, s.turnAt or V.turnClock(c, now)   -- (no opener: no reveal)
     s.psAt, s.invertAt = s.psAt or now + c.post_stall_every_s, s.invertAt or now + c.invert_every_s
     if SV_UnitAlive(c.unit) <= 0 then
         s.state = "done"
@@ -885,6 +930,8 @@ function SPC.valkaTick(now, s)
         if s.chargeAt then V.event("RE_SV_ValkaChargeOff") end
         V.event("RE_SV_ValkaAlertOff")
         V.flareStop(s)
+        V.portalStop(s)
+        V.blinkPortalsStop(s)
         V.sndStop(s)
         ANOM.cleanFx(now, true)
         -- ((0.73.77) D4 / the white square left on the minimap: her railguns' forced minimap display off, and what's
@@ -906,8 +953,9 @@ function SPC.valkaTick(now, s)
         hudCallout(string.format(t.anomaly_down, c.name:upper()), string.format(t.anomaly_down_sub, specialPay(pay)))   -- ((0.73.78) C3)
         V.subs(c, "down")                               -- ((2026-11-07) AUDREY takes her home)
         V.subs(c, "down_charlene", true)
-        log(string.format("special: round %d, %s shot down %.0f s after she showed (%d railgun shots, %d blinks, %d turns, %d scrambles)",
-            D.round, c.name, now - (s.revealedAt or s.at), s.shots or 0, s.blinks or 0, s.turns or 0, s.scrambles or 0))
+        log(string.format("special: round %d, %s shot down %.0f s after she showed (%d railgun shots, %d blinks, %d chases, %d turns, "
+            .. "%d post-stalls, %d scrambles)", D.round, c.name, now - (s.revealedAt or s.at), s.shots or 0, s.blinks or 0,
+            s.chases or 0, s.turns or 0, s.stalls or 0, s.scrambles or 0))
         return
     end
     if not o then return end
@@ -937,30 +985,63 @@ function SPC.valkaTick(now, s)
         s.invertAt = now + c.invert_every_s
         if math.random() < c.invert_chance then s.scrambles = (s.scrambles or 0) + 1; V.invert(c, s, true, now) end
     end
-    -- blinks: a hit outside a spell (and its cooldown) starts blink_s of them
+    -- blinks: a hit outside a spell (and its cooldown) starts blink_count of them ((2026-11-22) before: blink_s of them)
     local okH, hpNow = pcall(function() return o.HealthInternal end)
     hpNow = okH and type(hpNow) == "number" and hpNow or nil
     if hpNow and s.lastHp and hpNow < s.lastHp - 0.5 and not s.blinkUntil and now >= (s.blinkCool or 0) then
-        s.blinkUntil, s.nextBlink = now + c.blink_s, now
-        log(string.format("special: %s hit (%.0f -> %.0f): blinking for %.0f s", c.name, s.lastHp, hpNow, c.blink_s))
+        local n = tonumber(c.blink_count)
+        s.blinkLeft = n and n > 0 and math.floor(n) or nil
+        s.blinkUntil = now + (s.blinkLeft and (s.blinkLeft * (c.blink_every_s or 1) + 1) or c.blink_s)
+        s.nextBlink = now
+        log(string.format("special: %s hit (%.0f -> %.0f): %s", c.name, s.lastHp, hpNow, s.blinkLeft
+            and string.format("%d blinks onto your six or across your nose", s.blinkLeft) or string.format("blinking for %.0f s", c.blink_s)))
     end
     s.lastHp = hpNow or s.lastHp
-    if s.vanished then                                  -- back, round you, nose on you
-        local ev, to, deg
-        if you then ev, to, deg = V.blinkSpot(c, s, you) end
+    if not (s.dist and s.dist > (c.chase_km or 6)) then s.farSince = nil end   -- (her chase's clock: only while she's far)
+    if s.vanished then                                  -- back: round you, onto your six or across your nose; nose on you
+        local ev, to, deg, how
+        if you then
+            if s.blinkWhy == "chase" then ev, to, deg, how = V.attackSpot(c, s, you, "six", c.chase_ring)
+            elseif type(c.blink_rings) == "table" and #c.blink_rings > 0 then ev, to, deg, how = V.attackSpot(c, s, you)
+            else ev, to, deg = V.blinkSpot(c, s, you); how = "round you" end
+        end
         if ev then
             s.lastDeg, s.blinks = deg, (s.blinks or 0) + 1
             V.event(ev)
+            if to and deg then pcall(V.blinkPortal, c, s, to, (deg + 180) % 360, now) end   -- (she comes out facing you)
             if to and fxAt({ c.smoke }, to, c.smoke_scale, c.smoke_s) == 0 and not s.smokeSaid then
                 s.smokeSaid = true; log("special: VALKA's smoke " .. c.smoke .. " didn't spawn")
+            end
+            if s.blinks <= 6 or s.blinks % 10 == 0 then
+                log(string.format("special: %s blink %d (%s): %s, %s", c.name, s.blinks, s.blinkWhy or "hit", tostring(how), ev))
             end
         end
         setGone(o, false); V.partsGone(c, s, o, false)
         s.vanished, s.nextBlink = false, now + c.blink_every_s
+        if s.blinkLeft then
+            s.blinkLeft = s.blinkLeft - 1
+            if s.blinkLeft <= 0 then s.blinkLeft, s.blinkUntil = nil, now end   -- (the spell's over: its cooldown next tick)
+        end
+        if s.blinkWhy == "chase" then s.blinkWhy = nil; s.blinkUntil = nil end
+    elseif c.chase and not s.blinkUntil and not s.chargeAt and s.dist and s.dist > (c.chase_km or 6)
+        and now - (s.revealedAt or s.at or now) >= (tonumber(c.chase_after_s) or 0) then
+        -- ((2026-11-22) she takes the fight to you: farther than chase_km for chase_s, onto your six, chase_gap_s apart)
+        s.farSince = s.farSince or now
+        if now - s.farSince >= (c.chase_s or 4) and now >= (s.chaseAt or 0) then
+            s.farSince, s.chaseAt, s.chases = nil, now + (c.chase_gap_s or 15), (s.chases or 0) + 1
+            log(string.format("special: %s chases you: %.1f km away for %.0f s, onto your six (chase %d)", c.name, s.dist,
+                c.chase_s or 4, s.chases))
+            if at then fxAt({ c.smoke }, at, c.smoke_scale, c.smoke_s) end
+            if at and you then pcall(V.blinkPortal, c, s, at, math.deg(math.atan(you.Y - at.Y, you.X - at.X)), now) end
+            setGone(o, true); V.partsGone(c, s, o, true, true)
+            s.vanished, s.blinkWhy, s.blinkUntil = true, "chase", now + 5
+            return
+        end
     elseif s.blinkUntil and now >= s.blinkUntil then
         s.blinkUntil, s.blinkCool = nil, now + c.blink_cooldown_s
     elseif s.blinkUntil and now >= s.nextBlink and not s.chargeAt then   -- gone in a puff (back next tick)
         if at then fxAt({ c.smoke }, at, c.smoke_scale, c.smoke_s) end
+        if at and you then pcall(V.blinkPortal, c, s, at, math.deg(math.atan(you.Y - at.Y, you.X - at.X)), now) end
         setGone(o, true); V.partsGone(c, s, o, true, true)
         s.vanished = true
         return
@@ -991,12 +1072,23 @@ function SPC.valkaTick(now, s)
         V.sndCharge(s, function() return valid(o) and where(o) or nil end, now)
         hudCallout(t.valka_charge, t.valka_charge_sub)
     end
+    if s.turnEndAt and now >= s.turnEndAt then          -- ((2026-11-22) her LastTGT's turn-in over: her own flying again
+        s.turnEndAt = nil
+        V.event("RE_SV_ValkaTurnEnd")
+    end
     -- LastTGT: every turn_every_s, and at once (behind_gap_s apart) when you're behind her within behind_km
     local behind = offNose and offNose > 110 and s.dist and s.dist <= c.behind_km
+    -- ((2026-11-22) only once you've sat behind her behind_hold_s: right after a pass of hers you're behind her too, and
+    -- an instant LastTGT then turned her back onto you every time, so she never ran out of a pass)
+    if behind then s.behindSince = s.behindSince or now else s.behindSince = nil end
+    behind = behind and now - s.behindSince >= (tonumber(c.behind_hold_s) or 0)
     if (now >= s.turnAt) or (behind and now >= (s.behindAt or 0)) then
-        s.turnAt, s.behindAt, s.turns = now + c.turn_every_s, now + c.behind_gap_s, (s.turns or 0) + 1
-        s.psAt = math.max(s.psAt, now + 3)                -- (not straight into a post-stall)
+        s.turnAt, s.behindAt, s.turns = V.turnClock(c, now), now + c.behind_gap_s, (s.turns or 0) + 1
+        -- ((2026-11-22) a turn-in, not a 20 s tail chase: reset turn_hold_s on; 0 keeps it whole)
+        local hold = tonumber(c.turn_hold_s) or 0
+        s.psAt = math.max(s.psAt, now + math.max(3, hold + 1))   -- (not straight into a post-stall, nor one its reset cuts)
         V.event("RE_SV_ValkaTurn")
+        s.turnEndAt = hold > 0 and now + hold or nil
         if s.turns <= 5 or s.turns % 10 == 0 then
             log(string.format("special: %s LastTGT %d%s, %.1f km from you", c.name, s.turns, behind and " (you behind her)" or "",
                 s.dist or -1))
@@ -1008,8 +1100,16 @@ function SPC.valkaTick(now, s)
             pcall(function() o.bCanManeuverPugachevsCobra = true; o.bCanManeuverKulbit = true end)
         end
         local moves = c.post_stall_moves or {}
-        if #moves > 0 then V.event("RE_SV_Valka" .. moves[math.random(#moves)]) end
+        if #moves > 0 and math.random() < (tonumber(c.post_stall_chance) or 1) then   -- ((2026-11-22) a chance, not each time)
+            s.stalls = (s.stalls or 0) + 1
+            V.event("RE_SV_Valka" .. moves[math.random(#moves)])
+        end
     end
+end
+-- ((2026-11-22) LastTGT on a clock only when turn_every_s > 0) her next clock LastTGT
+function SPC.V.turnClock(c, now)
+    local e = tonumber(c.turn_every_s) or 0
+    return e > 0 and now + e or math.huge
 end
 
 -- ((0.73.80) her assets loaded with her sounds (sv_sound.lua, a part before this one): SND.preloadValka, asked in the
@@ -1311,5 +1411,283 @@ function ANOM.clientGlitch(now)
     local p = liveCopy(c.unit)                         -- ((0.73.77) a live copy only: not a wreck, health above 0)
     local o = p and p.obj
     if o then pcall(glitchPodsOff, c, cs, o) end
+end
+
+-- ((2026-11-22) the user: "try to build a 3D Portal, an event horizon that she spawns out of") VALKA's portal
+-- (CFG.specials.valka.portal): one actor of ours where she comes out, its parts the game's own pieces (portal.parts:
+-- meshes, the engine's basic shapes and stock rings with the game's VFX materials, and Niagara systems), facing along
+-- her way out (yaw): it opens over open_s (each mesh part grown from nothing, eased), turns (spin), holds until she's
+-- through, then closes over close_s and is taken away. A mesh part: { mesh, mat (nil: its own), size (x size_m), flat
+-- (its thickness x), axis ("z": the mesh's Z along her way out; "x"), spin (x spin_dps), params (the material's scalars
+-- and vectors) }; a Niagara part: { fx, scale, at ("open" / "burst" / "close"), rim (copies round its rim), rim_r (x
+-- size_m), life }. Visual only: nothing hits it, nobody locks it.
+SPC.V.PORTAL_STATS = { opened = 0, parts = 0, fx = 0, failed = 0 }
+local function portalFrame(yaw)
+    local r = math.rad(yaw or 0)
+    return { X = math.cos(r), Y = math.sin(r), Z = 0 }, { X = -math.sin(r), Y = math.cos(r), Z = 0 }
+end
+local function portalRot(part, yaw)
+    if part.axis == "x" then return { Pitch = 0, Yaw = yaw, Roll = 0 } end
+    -- (its local Z along her way out: rolled up, then turned. (2026-11-22) a Pitch of -89.9 never took (the run of 13:26:
+    -- the portal lay flat), a Roll did (the probe's standing rings); the disc's two faces are alike, so Z along +-her way)
+    -- ((2026-11-22) the black hole: `tilt`, the roll: 90 its face towards you (the shadow, the photon ring, the lensed arcs),
+    -- 5 the disk lying nearly flat, tipped that much towards you)
+    return { Pitch = 0, Yaw = (yaw or 0) + 90, Roll = tonumber(part.tilt) or 90 }
+end
+local function portalMesh(pc, P, part, a, smc, kml)
+    local m = SPC.V.asset(part.mesh)
+    if not m then return nil end
+    local okC, comp = pcall(function()
+        return a:AddComponentByClass(smc, false, { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 },
+            Scale3D = { X = 1, Y = 1, Z = 1 } }, false)
+    end)
+    if not (okC and valid(comp)) then return nil end
+    pcall(function() comp:SetStaticMesh(m) end)
+    pcall(function() comp:SetCollisionEnabled(0) end)
+    pcall(function() comp:SetCastShadow(false) end)
+    -- ((2026-11-22) `sort`: its place among the see-through pieces (lower first): the black over the shadow's glossy ball
+    -- first, so the disk's near side draws over it)
+    if part.sort then pcall(function() comp:SetTranslucentSortPriority(math.floor(tonumber(part.sort) or 0)) end) end
+    local r = 100
+    pcall(function() r = m:GetBounds().SphereRadius end)
+    -- ((2026-11-22) `abs`: a piece of one model (tools/valka_portal: 1 unit, 100 cm, the black hole's shadow across), sized
+    -- size_m x size for that unit, so the pieces keep their places; else sized by its own bounds)
+    local k = part.abs and (P.size / 100) * (part.size or 1) or (P.size * (part.size or 1) / 2) / math.max(1, r)
+    -- (`turn`: degrees round its own axis from the start: the lensed arcs' broad side up, 180: the runs of 14:17 and 14:26)
+    local e = { comp = comp, k = k, flat = part.flat or 1, part = part, spun = tonumber(part.turn) or 0,
+                spin = (part.spin or 0) * (tonumber(pc.spin_dps) or 0), axis = part.axis }
+    if part.mat then
+        local mi = SPC.V.asset(part.mat)
+        local okM, mid = false, nil
+        if mi and valid(kml) then okM, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, mi, FName("None"), 0) end) end
+        if okM and valid(mid) then
+            for pn, v in pairs(part.params or {}) do
+                if type(v) == "number" then pcall(function() mid:SetScalarParameterValue(FName(pn), v) end)
+                elseif type(v) == "table" then pcall(function() mid:SetVectorParameterValue(FName(pn), { R = v[1], G = v[2], B = v[3], A = v[4] or 1 }) end) end
+            end
+            local n = 1
+            pcall(function() n = comp:GetNumMaterials() end)
+            for k = 0, math.max(0, n - 1) do pcall(function() comp:SetMaterial(k, mid) end) end
+            e.mid = mid
+            -- ((2026-11-22) the user: "animated to show it moving": `pulse` { amount, Hz }, its Color's brightness
+            -- flickering on two waves out of step (AC8's animated materials don't move on a mesh: the probe of 14:43)
+            if part.params and type(part.params.Color) == "table" and (type(part.pulse) == "table" or part.flare) then
+                e.color, e.ph = part.params.Color, math.random() * 6.283
+                if type(part.pulse) == "table" then e.pulse = part.pulse end
+            end
+        end
+    end
+    pcall(function() comp:K2_SetWorldLocation({ X = P.at.X, Y = P.at.Y, Z = P.at.Z }, false, {}, true) end)
+    pcall(function() comp:K2_SetWorldRotation(portalRot(part, P.yaw), false, {}, true) end)
+    if e.spun ~= 0 then pcall(function() comp:K2_AddLocalRotation({ Pitch = 0, Yaw = e.spun, Roll = 0 }, false, {}, true) end) end
+    pcall(function() comp:SetWorldScale3D({ X = 0.001, Y = 0.001, Z = 0.001 }) end)
+    return e
+end
+-- the portal at `at` (cm) facing `yaw`; true if it came up
+-- (pc: another portal's settings, her blinks' small ones: blink_portal; quiet: not logged)
+function SPC.V.portalOpen(c, s, at, yaw, now, pc, quiet)
+    pc = pc or c.portal
+    SPC.V.portalStop(s)
+    if not (type(pc) == "table" and pc.enabled and at) then return false end
+    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+    local actorCls, smc = StaticFindObject("/Script/Engine.Actor"), StaticFindObject("/Script/Engine.StaticMeshComponent")
+    local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
+    if not (valid(gs) and valid(actorCls) and valid(smc) and valid(survivalPC)) then return false end
+    local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = at.X, Y = at.Y, Z = at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+    local okA, a = pcall(function()
+        local x = gs:BeginDeferredActorSpawnFromClass(survivalPC, actorCls, t, 1, nil, 1)
+        return gs:FinishSpawningActor(x, t, 1)
+    end)
+    if not (okA and valid(a)) then log("special: VALKA's portal: no actor (" .. tostring(a) .. ")"); return false end
+    local P = { actor = a, at = { X = at.X, Y = at.Y, Z = at.Z }, yaw = yaw or 0, from = now, phase = "open", meshes = {},
+                fired = {}, size = (tonumber(pc.size_m) or 250) * 100, pc = pc }
+    local said = {}
+    -- ((2026-11-22) its own pieces (SurvivalMode_ValkaPortal_P) missing: the stock pieces' portal, `fallback`)
+    local parts = pc.parts or {}
+    if pc.fallback and parts[1] and parts[1].mesh and not SPC.V.asset(parts[1].mesh) then
+        parts = pc.fallback
+        if not quiet then log("special: VALKA's portal: its own pieces aren't in (" .. parts[1].mesh .. "...): the stock pieces' portal") end
+    end
+    P.parts = parts
+    for _, part in ipairs(parts) do
+        if part.mesh then
+            local okE, e = pcall(portalMesh, pc, P, part, a, smc, kml)
+            local nm = (part.mesh:match("[^/]+$") or "?") .. (part.mat and ("/" .. (part.mat:match("[^/]+$") or "?")) or "")
+            if okE and e then P.meshes[#P.meshes + 1] = e; said[#said + 1] = nm
+            else SPC.V.PORTAL_STATS.failed = SPC.V.PORTAL_STATS.failed + 1; said[#said + 1] = nm .. " NOT up" end
+        end
+    end
+    s.portal = P
+    SPC.V.PORTAL_STATS.opened = SPC.V.PORTAL_STATS.opened + 1
+    SPC.V.PORTAL_STATS.parts = SPC.V.PORTAL_STATS.parts + #P.meshes
+    if not quiet then log(string.format("special: VALKA's portal opens at (%.1f, %.1f) km, %.1f km up, facing %.0f, %.0f m across: %d mesh parts (%s)",
+        at.X / 100000, at.Y / 100000, at.Z / 100000, P.yaw, P.size / 100, #P.meshes, table.concat(said, ", "))) end
+    SPC.V.portalFx(c, s, "open")
+    return true
+end
+-- its Niagara parts for moment `when` ("open", "burst", "close"), once each; how many came up
+function SPC.V.portalFx(c, s, when)
+    local P = s.portal
+    local pc = P and P.pc or c.portal
+    if not (P and pc) or P.fired[when] then return 0 end
+    P.fired[when] = true
+    local _, r = portalFrame(P.yaw)
+    local n = 0
+    for _, part in ipairs(P.parts or pc.parts or {}) do
+        if part.fx and (part.at or "open") == when then
+            local copies = math.max(1, part.rim or 1)
+            for k = 1, copies do
+                local p = P.at
+                if (part.rim or 0) > 0 then
+                    local th = 2 * math.pi * (k - 1) / copies
+                    local rad = P.size * (part.rim_r or 0.5)
+                    p = { X = P.at.X + rad * math.cos(th) * r.X, Y = P.at.Y + rad * math.cos(th) * r.Y, Z = P.at.Z + rad * math.sin(th) }
+                end
+                n = n + fxAt({ part.fx }, p, part.scale or 1, part.life or ((pc.open_s or 3) + (pc.hold_s or 2) + 4))
+            end
+        end
+    end
+    SPC.V.PORTAL_STATS.fx = SPC.V.PORTAL_STATS.fx + n
+    if pc == c.portal then log(string.format("special: VALKA's portal: %d effect(s) at its %s", n, when)) end
+    return n
+end
+-- every tick: open (grow), hold, close (shrink), gone; the rings turning
+function SPC.V.portalTick(c, s, now)
+    local P = s.portal
+    local pc = P and P.pc or c.portal
+    if not P then return end
+    if not liveObj(P.actor) then s.portal = nil; return end
+    local open, close = math.max(0.1, tonumber(pc.open_s) or 3), math.max(0.1, tonumber(pc.close_s) or 2)
+    -- ((2026-11-22) the user: "Have a Portal Opening animation too where it opens and have a closing animation too")
+    -- each piece grows in its own window of the opening (part.open = { from, to }, shares of open_s: a pinpoint of
+    -- light first, the shadow out of it, the disk unfurling ring by ring from the inside, the lensed arcs last) and
+    -- collapses in its own window of the closing (part.close: the outer disk first, falling inwards, the shadow, the
+    -- photon ring snapping shut last); the disk spins up as it opens (x0.15 -> 1) and faster as it drains (-> x4);
+    -- `flare` pieces burn bright as it opens and once more as it shuts
+    local x, y = 1, nil                                  -- (the opening's share done; the closing's)
+    if P.phase == "open" or P.phase == "hold" then
+        x = math.min(1, (now - P.from) / open)
+        if x >= 1 and P.phase == "open" then P.phase = "hold" end
+        if P.closeAt and now >= P.closeAt then P.phase, P.closeFrom = "close", now; SPC.V.portalFx(c, s, "close") end
+        if not P.closeAt and now - P.from > (tonumber(pc.max_s) or 30) then P.closeAt = now end   -- (never left open)
+    end
+    if P.phase == "close" then
+        y = math.min(1, (now - (P.closeFrom or now)) / close)
+        if y >= 1 then
+            SPC.V.portalStop(s)
+            if pc == c.portal then log("special: VALKA's portal closed") end
+            return
+        end
+    end
+    local dt = math.min(0.5, now - (P.lastTick or now))
+    P.lastTick = now
+    -- ((2026-11-22) `face_you`: the whole hole turned to you each tick (its lensed arcs always face whoever looks), each
+    -- piece set again and turned by its own spin so far)
+    local turn = false
+    if pc.face_you then
+        -- (the camera you see through, not your plane: her reveal's focus camera looks from beside, the run of 14:26
+        -- showed the arcs edge-on there; your plane's place when the camera can't be read)
+        local you = nil
+        pcall(function()
+            local v = survivalPC.PlayerCameraManager:GetCameraLocation()
+            if v and v.X then you = { X = v.X, Y = v.Y, Z = v.Z } end
+        end)
+        you = you or (playerLocation and playerLocation())
+        if you then
+            local yaw = math.deg(math.atan(you.Y - P.at.Y, you.X - P.at.X))
+            if math.abs(((yaw - P.yaw + 540) % 360) - 180) > 0.3 then P.yaw, turn = yaw, true end
+        end
+    end
+    local spinK = y and (1 + 3 * y) or (0.15 + 0.85 * x)
+    for _, e in ipairs(P.meshes) do
+        if liveObj(e.comp) then
+            local gi, bright = 1, 1
+            if y then
+                local w = e.part.close
+                local z = w and (y - w[1]) / math.max(0.01, w[2] - w[1]) or y
+                z = math.max(0, math.min(1, z))
+                gi = 1 - z * z                           -- (falling in faster and faster)
+                if e.part.flare then bright = 1 + 4 * math.max(0, math.min(1, (y - 0.55) / 0.35)) end
+            else
+                local w = e.part.open
+                local z = w and (x - w[1]) / math.max(0.01, w[2] - w[1]) or x
+                z = math.max(0, math.min(1, z))
+                gi = 1 - (1 - z) ^ 3                     -- (out fast, settling)
+                if e.part.flare then bright = 1 + 3 * (1 - math.max(0, math.min(1, x / 0.45))) end
+            end
+            local k = math.max(0.001, e.k * gi)
+            pcall(function() e.comp:SetWorldScale3D({ X = k, Y = k, Z = k * e.flat }) end)
+            if e.mid and e.color and (e.pulse or bright ~= 1) then
+                local f = bright
+                if e.pulse then
+                    local amp, hz = tonumber(e.pulse[1]) or 0, tonumber(e.pulse[2]) or 1
+                    f = f * (1 + amp * (0.6 * math.sin(6.283 * hz * now + e.ph) + 0.4 * math.sin(6.283 * hz * 2.37 * now + 1.7 * e.ph)))
+                end
+                local cc = e.color
+                pcall(function() e.mid:SetVectorParameterValue(FName("Color"), { R = cc[1] * f, G = cc[2] * f, B = cc[3] * f, A = cc[4] or 1 }) end)
+            end
+            if e.spin ~= 0 and dt > 0 then e.spun = (e.spun + e.spin * spinK * dt) % 360 end
+            if turn then
+                pcall(function()
+                    e.comp:K2_SetWorldRotation(portalRot(e.part, P.yaw), false, {}, true)
+                    if e.spun ~= 0 then e.comp:K2_AddLocalRotation({ Pitch = 0, Yaw = e.spun, Roll = 0 }, false, {}, true) end
+                end)
+            elseif e.spin ~= 0 and dt > 0 then
+                local d = e.spin * spinK * dt
+                pcall(function()
+                    if e.axis == "x" then e.comp:K2_AddLocalRotation({ Pitch = 0, Yaw = 0, Roll = d }, false, {}, true)
+                    else e.comp:K2_AddLocalRotation({ Pitch = 0, Yaw = d, Roll = 0 }, false, {}, true) end
+                end)
+            end
+        end
+    end
+end
+-- she's through: its burst now, closed hold_s later
+function SPC.V.portalThrough(c, s, now)
+    local P = s.portal
+    if not P then return end
+    SPC.V.portalFx(c, s, "burst")
+    P.closeAt = now + (tonumber(P.pc and P.pc.hold_s or c.portal.hold_s) or 2)
+end
+-- ((2026-11-22) her blinks through small portals, CFG.specials.valka.blink_portal: one where she vanishes, one where she
+-- comes back, each opening, holding hold_s and closing on its own) one at `at` facing `yaw`
+function SPC.V.blinkPortal(c, s, at, yaw, now)
+    local bp = c.blink_portal
+    if not (type(bp) == "table" and bp.enabled and at) then return false end
+    s.bportals = s.bportals or {}
+    if #s.bportals >= 6 then return false end            -- (never a pile of them)
+    local h = {}
+    local ok, up = pcall(SPC.V.portalOpen, c, h, at, yaw, now, bp, true)
+    if not (ok and up and h.portal) then return false end
+    h.portal.closeAt = now + (tonumber(bp.open_s) or 0.3) + (tonumber(bp.hold_s) or 0.6)
+    s.bportals[#s.bportals + 1] = h
+    SPC.V.portalFx(c, h, "burst")
+    if COOP and COOP.valkaBlinkPortal and COOP.host and COOP.host() then pcall(COOP.valkaBlinkPortal, at, yaw) end
+    return true
+end
+function SPC.V.blinkPortalsTick(c, s, now)
+    if not s.bportals then return end
+    local keep = {}
+    for _, h in ipairs(s.bportals) do
+        pcall(SPC.V.portalTick, c, h, now)
+        if h.portal then keep[#keep + 1] = h end
+    end
+    s.bportals = #keep > 0 and keep or nil
+end
+function SPC.V.blinkPortalsStop(s)
+    for _, h in ipairs(s and s.bportals or {}) do pcall(SPC.V.portalStop, h) end
+    if s then s.bportals = nil end
+end
+-- where she comes out of it: exit_back_m behind its face, so she flies out through it
+function SPC.V.portalExit(c, at, yaw)
+    local f = portalFrame(yaw)
+    local back = (tonumber(c.portal and c.portal.exit_back_m) or 150) * 100
+    return { X = at.X - f.X * back, Y = at.Y - f.Y * back, Z = at.Z, km = at.km }
+end
+function SPC.V.portalStop(s)
+    local P = s and s.portal
+    if not P then return end
+    if not (levelTorn and levelTorn()) and liveObj(P.actor) then pcall(function() P.actor:K2_DestroyActor() end) end
+    s.portal = nil
 end
 end

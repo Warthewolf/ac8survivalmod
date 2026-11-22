@@ -431,7 +431,7 @@ local function attackTick(S, now, o)
     for _, u in ipairs(units) do
         S.seen[u] = S.seen[u] or now
         if S.decided[u] == nil and now - S.seen[u] >= num(a.after_s, 4) then
-            local want = attackOk(u) and n < ESC.roomMore(num(a.max, 4)) and (S.reinf.units[u] or math.random() < num(a.share, 0.6))
+            local want = attackOk(u) and n < ESC.roomMore(num(soloVal(a, "max"), 4)) and (S.reinf.units[u] or math.random() < num(soloVal(a, "share"), 0.6))
             S.decided[u] = want and true or false
             if want then
                 local k, total = orderPlanes(u, o, PRIO_TARGET_FIRST)
@@ -491,9 +491,9 @@ local function wavesTick(S, now)
     if not (A.r and A.r.at and A.r.hdg) then S.reinf.at = now + 2; return end
     local up = 0
     for _, p in ipairs(planes or {}) do if not p.down and not KIND[p.unit] then up = up + 1 end end
-    local lo = 2 * math.ceil(math.max(2, ESC.roomMore(math.floor(num(w.min_n, 4)))) / 2)   -- (even: (2026-11-11) 2-3 players made it 5, a wave of 6 one over max_up)
-    local hi = math.max(lo, ESC.roomMore(math.floor(num(w.max_n, 12))))
-    local maxUp = ESC.roomMore(math.floor(num(w.max_up, 24)), "max_up")
+    local lo = 2 * math.ceil(math.max(2, ESC.roomMore(math.floor(num(soloVal(w, "min_n"), 4)))) / 2)   -- (even: (2026-11-11) 2-3 players made it 5, a wave of 6 one over max_up)
+    local hi = math.max(lo, ESC.roomMore(math.floor(num(soloVal(w, "max_n"), 12))))
+    local maxUp = ESC.roomMore(math.floor(num(soloVal(w, "max_up"), 24)), "max_up")
     local room = maxUp - up
     if room < lo then
         S.reinf.at = now + 5
@@ -546,7 +546,7 @@ local function wavesTick(S, now)
     local opts = (#fresh > 0 and fresh) or (#other > 0 and other) or (#inside > 0 and inside) or any
     local sec = opts[math.random(#opts)]
     local base = (A.r.hdg + (sec - 1) * 45) % 360                     -- (the compass bearing from her to the wave)
-    S.reinf.n, S.reinf.sector, S.reinf.at = S.reinf.n + 1, sec, now + num(w.every_s, 45)
+    S.reinf.n, S.reinf.sector, S.reinf.at = S.reinf.n + 1, sec, now + num(soloVal(w, "every_s"), 45)
     S.reinf.dir = COMPASS[math.floor(((base + 22.5) % 360) / 45) + 1]   -- (its subtitle's {dir}: sv_escort_subs.lua)
     local nUp, said = 0, {}
     for i, u in ipairs(list) do
@@ -569,7 +569,7 @@ local function wavesTick(S, now)
         end
     end
     log(string.format("escort: wave %d: %d aircraft (%d asked, %d-%d%s) %s of CHARLENE, from the %s, %.1f km out: %s (%d enemy aircraft were up)",
-        S.reinf.n, nUp, want, lo, hi, (maxUp ~= math.floor(num(w.max_up, 24))) and string.format(", max_up %d for the room", maxUp) or "",
+        S.reinf.n, nUp, want, lo, hi, (maxUp ~= math.floor(num(soloVal(w, "max_up"), 24))) and string.format(", max_up %d for the room", maxUp) or "",
         SECTOR[sec], COMPASS[math.floor(((base + 22.5) % 360) / 45) + 1], km, table.concat(said, ", "), up))
 end
 -- the escorts' planes onto the enemies nearest her
@@ -693,7 +693,7 @@ local function stepAc(S, A, now)
         A.seen = true
         if A.her and S.test then pcall(function() o:SetIsInvincible(true) end) end   -- (the test: nothing may end it)
         if A.her and not S.test then
-            local x = num(ec().health_x, 1)
+            local x = num(soloVal(ec(), "health_x"), 1)   -- (solo: (2026-11-18) x6)
             local okH, h0, h1 = pcall(scaleHealth, o, x)
             log(string.format("escort: %s up: her health x%.2f (%s -> %s)", A.name, x, okH and tostring(h0) or "?", okH and tostring(h1) or "?"))
         end

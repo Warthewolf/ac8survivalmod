@@ -192,7 +192,10 @@ function COOP.ammoRead()
     for k = 2, 3 do                                        -- (the special weapons: an ESM's use shows only here)
         local v = SV_Ammo(k)
         local was = S.spLast and S.spLast[k]
-        if on("missiles") and type(v) == "number" and v >= 0 and was and v < was and not S.spDropAt then S.spDropAt = now end
+        if on("missiles") and type(v) == "number" and v >= 0 and was and v < was then
+            if not S.spDropAt then S.spDropAt = now end
+            if COOP.client and COOP.client() and M.spMark then pcall(M.spMark) end   -- ((2026-11-19) the EML's hit yours: sv_coop_joiner.lua)
+        end
     end
 end
 -- (COOP.tick, after ammoTick) the counts the next read goes by
@@ -1201,7 +1204,7 @@ local function buildDone(b, msg)
         RUN.defences = RUN.defences or { built = 0, bought = {} }
         RUN.defences.built = RUN.defences.built + 1
         RUN.defences.bought[b.kind] = (RUN.defences.bought[b.kind] or 0) + 1
-    elseif LB and LB.stat then pcall(LB.stat, "allies", 1) end
+    elseif LB and LB.stat and not (((CFG.shop or {}).items or {})[b.name] or {}).repair then pcall(LB.stat, "allies", 1) end   -- (a repair isn't an ally)
 end
 local function refundHere(price, name, why)
     if not RUN or type(price) ~= "number" or price <= 0 then return end

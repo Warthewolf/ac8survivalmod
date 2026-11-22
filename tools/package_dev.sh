@@ -48,7 +48,7 @@ rm -f "$mod"/config/survival.ini* "$mod"/*.log "$mod"/config/pending_runs.txt "$
 # without VALKA (tools/novalka.py, as NOVALKA=1 package_release.sh); VALKA=1 keeps her (the user's own build only:
 # her X-02S and AC7 sounds are never in a friends' zip; user, 2026-11-02: "add her to a special build for me only")
 if [ "$VALKA" != 1 ]; then
-rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Valka_P.*
+rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Valka_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ValkaPortal_P.*
 rm -rf "$mod/Sounds/valka"
 rmdir "$mod/Sounds" 2>/dev/null || true
 python -X utf8 -I tools/novalka.py "$mod" > /dev/null

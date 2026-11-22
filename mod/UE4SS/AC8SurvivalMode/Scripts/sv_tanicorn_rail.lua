@@ -583,7 +583,7 @@ local function rtpc(c, v)
     return false, tostring(err):sub(1, 80)
 end
 local function damageOf(c)                                -- the shot's damage: of the airfield's CFG.airfield.hp, scaled to its max
-    local d = num(c.damage, 100)
+    local d = num(soloVal(c, "damage"), 100)               -- (solo: (2026-11-18) 60)
     local base = CFG and CFG.airfield and num(CFG.airfield.hp, 0) or 0
     if c.damage_of_max ~= false and AF and tonumber(AF.max) and base > 0 then d = d * AF.max / base end
     return math.floor(d + 0.5)
@@ -872,7 +872,7 @@ local function deployEnd()
         .. "the barrel %s deg off the line to the runway (%s km); shield off (%s); %s", R.t, pos, len, cm(z1), cm(R.z0),
         (z1 and R.z0) and string.format("%+.1f", (z1 - R.z0) / 100) or "?", off and string.format("%.0f", off) or "?",
         km_ and string.format("%.1f", km_) or "?", sh, sizeHealth(c)))
-    R.state, R.chargeAt, R.sizeAt = "wait", R.t - num(c.every_s, 90), R.t + 2   -- ((finding 6) the first charge at the next
+    R.state, R.chargeAt, R.sizeAt = "wait", R.t - num(soloVal(c, "every_s"), 90), R.t + 2   -- ((finding 6) the first charge at the next
 end                                                       -- tick nothing holds: the STORE, landed alone, the airfield down)
 local function holdWhy(c)                                 -- why the cycle's clock waits now, or nil
     local H = c.hold or {}
@@ -953,7 +953,7 @@ local function rcTick(now, dt)
     elseif R.state == "flight" then
         if R.t >= R.impactAt then impact() end
     elseif R.state == "wait" then
-        if R.t >= R.chargeAt + num(c.every_s, 90) then chargeStart() end
+        if R.t >= R.chargeAt + num(soloVal(c, "every_s"), 90) then chargeStart() end
     end
 end
 -- one line for the live watch (sv_tanicorn.lua aimOf: its every-5 s lines): its Deploy's place, its muzzle, its cycle
@@ -967,7 +967,7 @@ function TANI.rcLine(o)
     if RC and RC.a == addrOf(o) then
         local c = rcc() or {}
         if RC.state == "charge" then st = string.format("charge %d +%.0f/%s s", RC.n, RC.t - RC.chargeAt, g(num(c.charge_s, 30)))
-        elseif RC.state == "wait" then st = string.format("the next charge in %.0f s", RC.chargeAt + num(c.every_s, 90) - RC.t)
+        elseif RC.state == "wait" then st = string.format("the next charge in %.0f s", RC.chargeAt + num(soloVal(c, "every_s"), 90) - RC.t)
         else st = RC.state end
         if RC.held then st = st .. " (held: " .. RC.held .. ")" end
     end
@@ -975,10 +975,11 @@ function TANI.rcLine(o)
 end
 -- Ctrl+H's start (and WP11's phase 2 later: why), or its stop when the cycle's on: true, or false and why not
 function TANI.rcStart(why)
-    if RC then rcEnd(why .. " again", { stow = true }); hudCallout("TEST: TANACORN RAILCANNON", "STOWED"); return true, "stopped" end
+    local isKey = tostring(why):sub(1, 5) == "Ctrl+"       -- ((2026-11-18) the TEST: callouts the key's only, not round 30's
+    if RC then rcEnd(why .. " again", { stow = true }); if isKey then hudCallout("TEST: TANACORN RAILCANNON", "STOWED") end; return true, "stopped" end
     local function no(msg, sub)
         rcLog(why .. " refused: " .. msg)
-        hudCallout("TEST: TANACORN RAILCANNON", sub)
+        if isKey then hudCallout("TEST: TANACORN RAILCANNON", sub) end
         return false, msg
     end
     if not (D and D.now) or not nativeReady() then return no("outside a Survival run", "NOT IN A RUN") end
@@ -1019,7 +1020,7 @@ function TANI.rcStart(why)
     rcLog(string.format("%s: deploying (AS_SV_Tani_RAILCANNON_Deploy %s s on TurretMesh, from %s s; SOC_Gun_01 z %s cm in the mesh%s); "
         .. "the shield off and the first charge at +%.1f s", why, len, pos, cm(z0), #fails > 0 and ("; " .. table.concat(fails, ", ")) or "",
         num(c.deploy_s, 3.4)))
-    hudCallout("TEST: TANACORN RAILCANNON", "DEPLOYING")
+    if isKey then hudCallout("TEST: TANACORN RAILCANNON", "DEPLOYING") end
     return true, "deploying"
 end
 testKey("H", "sv_tanicorn_rail.lua's railcannon test", function() TANI.rcStart("Ctrl+H") end)

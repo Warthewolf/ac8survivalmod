@@ -80,6 +80,13 @@ if [ -f build/x02s/out/SurvivalMode_Valka_P.utoc ]; then
 else
     echo "no VALKA X-02S container (tools/x02s/build.sh): she flies the x40a"
 fi
+# ((2026-11-22) her portal, a black hole: our own 3D pieces, tools/valka_portal/build.sh; with her, as her X-02S)
+if [ -f build/valka_portal/out/SurvivalMode_ValkaPortal_P.utoc ]; then
+    cp build/valka_portal/out/SurvivalMode_ValkaPortal_P.utoc build/valka_portal/out/SurvivalMode_ValkaPortal_P.ucas build/install/SurvivalMode/
+    echo "staged VALKA's portal (build/valka_portal/out/SurvivalMode_ValkaPortal_P)"
+else
+    echo "no VALKA portal container (tools/valka_portal/build.sh): her portal from stock pieces"
+fi
 # the ZFA-44 (the user's own model, cooked in UE 5.4 by tools/zfa44/build.sh; no UE needed here): the user's dev builds
 # only, so staged with ZFA=1 only (package_dev.sh keeps it with ZFA=1; package_release.sh never ships it)
 if [ "$ZFA" = 1 ]; then

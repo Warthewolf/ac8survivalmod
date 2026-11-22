@@ -942,6 +942,26 @@ local function onJoinerMessage(f)
         end
     elseif k == "vm" and COOP.client() then              -- ((0.73.76) the host's VALKA mood: the red sky and her song here too)
         M.valkaHere(f[2] == "1", "the host's")           -- ((0.73.77) said when it can't be here too: D2)
+    elseif k == "vp" and COOP.client() then              -- ((2026-11-22) the host's VALKA portal: drawn here too
+        local x, y, z, yaw, what = tonumber(f[2]), tonumber(f[3]), tonumber(f[4]), tonumber(f[5]), short(f[6], 2)
+        local c = CFG.specials and CFG.specials.valka
+        local ok = D and c and x and y and z and yaw and math.abs(x) < 200000 and math.abs(y) < 200000 and math.abs(z) < 30000
+        if ok and what == "o" then
+            M.vportal = M.vportal or {}
+            local okP, errP = pcall(SPC.V.portalOpen, c, M.vportal, { X = x * 100, Y = y * 100, Z = z * 100 }, yaw, os.clock())
+            if not okP then once("vp", "coop: the host's VALKA portal not drawn: " .. tostring(errP)) end
+            -- (its cutscene here too, on this game's clock: sv_valka_cine.lua; untested in co-op, 2026-11-22)
+            if okP and M.vportal.portal and VCINE and VCINE.start then
+                M.vportal.state = "opener"
+                pcall(VCINE.start, c, M.vportal, { X = x * 100, Y = y * 100, Z = z * 100 }, yaw, os.clock())
+            end
+        elseif ok and what == "t" and M.vportal then
+            M.vportal.state = "shot"
+            pcall(SPC.V.portalThrough, c, M.vportal, os.clock())
+        elseif ok and what == "b" then                    -- (a blink's small one)
+            M.vportal = M.vportal or {}
+            pcall(SPC.V.blinkPortal, c, M.vportal, { X = x * 100, Y = y * 100, Z = z * 100 }, yaw, os.clock())
+        end
     elseif k == "vr" and COOP.client() then              -- ((0.73.76) she shows: her X-02S on this game's copy of her)
         local unit = short(f[2], 96)
         if D and unit == (CFG.specials.valka and CFG.specials.valka.unit) then M.vr = { unit = unit, at = os.clock(), st = {} } end
@@ -1536,6 +1556,9 @@ end
 -- (0.73.76) a joiner's VALKA: her X-02S and paint on its copy of her once it's here (up to 30 s after "vr"), then its
 -- wing sweep each tick, as her round does on the host
 function COOP.valkaTick()
+    if M.vportal and M.vportal.portal then pcall(SPC.V.portalTick, CFG.specials.valka, M.vportal, os.clock()) end   -- ((2026-11-22))
+    if M.vportal and VCINE and VCINE.tick then pcall(VCINE.tick, CFG.specials.valka, M.vportal, os.clock()) end
+    if M.vportal and M.vportal.bportals then pcall(SPC.V.blinkPortalsTick, CFG.specials.valka, M.vportal, os.clock()) end
     local v = M.vr
     if not (v and D and COOP.client()) then return end
     local cu = M.cunits[v.unit]

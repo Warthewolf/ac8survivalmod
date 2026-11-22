@@ -190,8 +190,8 @@ end
 local function split(P, why)                              -- GEOFON torn open: its V rears, its halves part
     if P.split then return end
     P.split, P.splitAt = true, os.clock()
-    IFCOOP.send("split")
     if not P.G then rlog("phase 2: her breach (" .. why .. "): GEOFON was already gone, no V"); return end
+    IFCOOP.send("split")                                  -- ((2026-11-18) only when there's a GEOFON to split: the joiners ran a V on theirs)
     local okF, err = pcall(GEO.fall, P.G)
     rlog(string.format("phase 2: GEOFON split in two by %s (%s)", why, okF and "its V rearing" or ("its V FAILED: " .. tostring(err))))
     say("fall", p2c().radio)
@@ -253,7 +253,7 @@ local function openCore(P, why)
     local players = 1
     if COOP and type(COOP.players) == "function" then local ok, l = pcall(COOP.players); if ok and type(l) == "table" then players = math.max(1, #l) end end
     local h0 = hullHp(o)
-    local miss = n(c.core_missiles, 30) * (1 + n(c.core_per_player, 0.5) * (players - 1))
+    local miss = n(soloVal(c, "core_missiles"), 30) * (1 + n(c.core_per_player, 0.5) * (players - 1))   -- (solo: (2026-11-18) 20)
     local sized = "its row's health (your missile's damage unread)"
     if d and d > 0 and h0 then
         local want = math.floor(miss * d * 10 + 0.5)
@@ -348,6 +348,17 @@ local function p2Tick(now)
             return
         end
         R.p2 = { state = "watch", G = G, sh = sh, paid = 0 }
+        -- ((2026-11-18) held from now, not from watch_hp: the user's co-op round 30 of 0.74.197, five players, took GEOFON from
+        -- over 15 % to 0 between two ticks 89 s in (sunk, no V); the field written (SetMinHealth keeps whole points only), the
+        -- joiners' hits are ModifyHealth's, clamped at it)
+        do
+            local floor = (G.max or 0) / 10 * n(fl.break_at, 0.03)
+            local okF = pcall(function() G.hull.obj.MinHealth = floor end)
+            if not okF then okF = pcall(function() G.hull.obj:SetMinHealth(math.ceil(floor)) end) end
+            R.p2.held = okF
+            rlog(string.format("phase 2: GEOFON held at %.0f %% from the start (MinHealth %.1f %s)", n(fl.break_at, 0.03) * 100, floor,
+                okF and "set" or "NOT set"))
+        end
         IFCOOP.send("watch", sh.unit)
         rlog(string.format("phase 2: GEOFON watched (its stages at %s; held at %.0f %% from %.0f %%, broken there)", stagesSaid(),
             n(fl.break_at, 0.03) * 100, n(fl.watch_hp, 0.15) * 100))
@@ -469,7 +480,7 @@ local function shellLand(Sx, s)                          -- a salvo's rounds on 
         local at = { X = rw.X + math.cos(yaw) * a - math.sin(yaw) * b, Y = rw.Y + math.sin(yaw) * a + math.cos(yaw) * b, Z = n(c.ground_cm, 500) }
         for _, e in ipairs(c.impact or {}) do if fxHere(e[1], at, n(e[2], 1)) then ok = ok + 1 end end
     end
-    local dmg, said = math.floor(n(c.damage, 6)), ""
+    local dmg, said = math.floor(n(soloVal(c, "damage"), 6)), ""   -- (solo: (2026-11-18) 2)
     if not AF or AF.down or not AF.bomb then said = "the airfield is down: no damage"
     else
         AF.bomb = AF.bomb + dmg
@@ -667,9 +678,10 @@ end
 CREW = {}
 if CFG.specials and CFG.specials.fleet and CFG.specials.fleet.round and not CFG.specials.fleet.round.crew then
     -- ((0.74.154) the user: "The Voices need to be turned up a bit and the choose option C for all": db 2 -> 14, styles C only;
-    -- (0.74.155) "voices could be a little quieter": db 14 -> 10)
+    -- (0.74.155) "voices could be a little quieter": db 14 -> 10; (2026-11-19) Saint Alessia's run of 0.74.199: "the tanacorn ghostly
+    -- wailing is pretty quiet, hard to notice sometimes", the user: 13 dB)
     CFG.specials.fleet.round.crew = {
-        enabled = true, db = 10, styles = { "C" }, every_s = { 45, 90 }, gap_s = 2, s_per_word = 0.42, pad_s = 1.0,
+        enabled = true, db = 13, styles = { "C" }, every_s = { 45, 90 }, gap_s = 2, s_per_word = 0.42, pad_s = 1.0,
         speakers = { TORRES = "INTERCEPT: TORRES", CREW = "INTERCEPT: ALICORN CREW" },
         no_subs = { TORRES = true, CREW = true },         -- ((0.74.159) the user: "Remove the subtitles for torres", "If theres any subtitles for the crew, remove them too": heard, not shown)
         moments = { sighted = { "v6157_6001_alt1" }, stage1 = { "v6001_6032" }, stage2 = { "v6001_6030_alt1" },
@@ -886,6 +898,21 @@ if type(specialFor) == "function" then
                     or " NOT (its rows missing, a joiner, or had this run): a normal round's draw"))
             end
             if RUN.fleetPick[round] then return "fleet" end
+        end
+        -- ((2026-11-19) the user, Saint Alessia's run of 0.74.199 ("Valka showed up in the storm": round 27's dice): "No
+        -- specials in storm": from the fleet's sunset round (its sky's from_round + 1, the storm's) to the round before
+        -- hers, no special is drawn; a captured Spaceport's retake still comes (its round isn't drawn)
+        local sk = (CFG.specials.fleet or {}).sky or {}
+        local fr = n(c.round, 30)
+        if type(round) == "number" and c.enabled ~= false and sk.enabled ~= false and type(sk.storm) == "table"
+            and sk.storm.enabled ~= false and round > n(sk.from_round, 25) and round < fr
+            and not (RUN and RUN.sport and RUN.sport.retakeRound == round) then
+            RUN.stormNoSpecial = RUN.stormNoSpecial or {}
+            if not RUN.stormNoSpecial[round] then
+                RUN.stormNoSpecial[round] = true
+                rlog(string.format("round %d: the storm's, before the fleet's round %d: no special drawn", round, fr))
+            end
+            return nil
         end
         return rawFor(round)
     end

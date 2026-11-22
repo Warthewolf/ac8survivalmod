@@ -90,10 +90,10 @@ Hard rules are numbered lessons from real tests; old notes cite them as "hard ru
 | packages, containers, materials, ported units | `docs/rules/containers_assets.md` | 7 8 31 32 34 42 44 58 |
 | Lua code and UE4SS Lua limits | `docs/rules/lua_runtime.md` | 9 10 11 21 23 27 30 47 63 71 72 |
 | native C runtime | `docs/rules/native_runtime.md` | 14 19 25 28 43 55 |
-| spawning, events, paths, AI, damage | `docs/rules/ai_spawning_behaviour.md` | 1-6 15 16 17 20 22 26 35-41 45 46 54 59 64 |
+| spawning, events, paths, AI, damage | `docs/rules/ai_spawning_behaviour.md` | 1-6 15 16 17 20 22 26 35-41 45 46 54 59 64 73 |
 | menus, HUD, radio, music | `docs/rules/ui_menu_hud.md` | 12 13 18 24 29 33 52 57 |
 | co-op | `docs/rules/coop.md` | 48-51 53 |
-| sky, clouds, lightning, VFX | `docs/rules/sky_weather_vfx.md` | 56 60-62 |
+| sky, clouds, lightning, VFX | `docs/rules/sky_weather_vfx.md` | 56 60-62 74 75 |
 | leaderboard | `docs/rules/leaderboard.md` | |
 | source layout, how files are split, subtitles | `docs/rules/layout.md` | |
 | allowed sources, release exclusions, toolchain | `docs/rules/sources_and_toolchain.md` | |
@@ -108,7 +108,8 @@ build's notes: `HISTORY.md` (grep it).
   user's yes, each one. Never AC7 voice lines, but for the Tanacorn crew's distorted lines (the exception there).
 - **Release builds exclude** everything of DISTANT THUNDER and THE TANACORN (and her INVINCIBLE FLEET): their Lua stays
   in `TEST ONLY` / `DEV ONLY` blocks, their assets in their own containers (`tools/checks/zip_leak_test.sh` fails a zip
-  that leaks them). Test keys never ship.
+  that leaks them). Test keys never ship. The one exception: the ..._TANACORN zips for her tester and friends
+  (`TESTER=1` / `FRIENDS=1` with `TANI=1`, round 30 for everyone; `docs/rules/sources_and_toolchain.md`), never Nexus.
 - **No machine path in the repo.** A path that differs per machine (game, UE, AC7 exports, work folder, tool exe, main
   tree) is never written into a tool, script, doc or this file. Tools read it from `.env` (from `.env.example`; shell:
   `. tools/env.sh` then `sv_need NAME "what"`; Python: `env.need('NAME', 'what')`); paths inside the repo come from git

@@ -294,7 +294,10 @@ check(allAc8, "every effect AC8's own (no system of ours: hard rule 58)")
 local spear = RCC.fx and RCC.fx.impact and #RCC.fx.impact == 7
 for _, e in ipairs(RCC.fx and RCC.fx.impact or {}) do spear = spear and e[1]:find("^/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_") ~= nil end
 check(spear and RCC.impact_life_s == 25, "its impact Mission 25 day 1's Spear strike (IGC Ms250010 Shot0030's 7 systems), 25 s")
+check(type(RCC.solo) == "table" and RCC.solo.damage == 60 and RCC.solo.every_s == 120,
+    "solo (2026-11-18): 60 damage every 120 s (sv_core.lua soloVal)")
 CFG.specials.fleet = { railcannon = RCC }
+function soloVal(t, k) return t[k] end                    -- (sv_core.lua's isn't loaded here: the round's own numbers below)
 
 print("sv_tanicorn_rail.lua loaded with its family")
 dofile(DIR .. "sv_tanicorn.lua")
