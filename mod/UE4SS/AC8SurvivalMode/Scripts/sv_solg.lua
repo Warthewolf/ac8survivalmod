@@ -66,6 +66,11 @@ SOLG = { C = {
     mag_required = { 1, 2, 5, 6, 11, 12, 13, 14, 19, 20, 21, 22, 29, 30, 31, 32 },
     wing_rows = { { "SG04_%02d", 1 }, { "SG04_%02d", 4 }, { "SG05_%02d", 1 }, { "SG05_%02d", 4 }, { "SG05_%02d", 7 }, { "SG05_%02d", 10 } },
     pause_s = { [1] = 15, [2] = 15, [3] = 30 },
+    -- ((2026-11-22) the user: "make it so that the KEW Shells have a chain reaction"; her picks: "Damage neighbours",
+    -- "The shooter, full pay") a KEW shell destroyed: hop_s later every live shell within reach_m (an arm's are 40 m
+    -- apart in a line: its one or two neighbours) loses damage_pct of its health; one brought down blows the same way
+    -- (its normal pay: the team's, as any shot down). Ours (AC:I has none; AC8's induced explosion reaches 20 m)
+    kew_chain = { enabled = true, reach_m = 45, damage_pct = 60, hop_s = 0.4 },
     fcs_table = "/Game/Mods/SurvivalMode/Data/DT_SV_SolgFCS.DT_SV_SolgFCS", fcs_row = "SV_FCS_SolgTLS",
     laser_model_row = "SV_Model_SOLG_LSR",
     -- their boxes: "SOLG" over each type's AC:I name (texts by key: tools/survival_events_specials.py SOLG_*)
@@ -592,6 +597,19 @@ breakTarget = function(e, why)
         pcall(function() S.body:UnHideBoneByName(FName(e.bone .. "_W")) end)
     end
     if L and fxAt then pcall(fxAt, SOLG.C.fx, L, n(SOLG.C.fx_scale[e.key], 3), 6) end
+    local kc = SOLG.C.kew_chain
+    if e.key == "KEW" and L and kc and kc.enabled ~= false and not S.mirror and why ~= "gone" and why ~= "its arm's gone" then
+        local reach, at = n(kc.reach_m, 45) * 100, os.clock() + n(kc.hop_s, 0.4)
+        S.chain = S.chain or {}
+        for _, x in ipairs(S.targets) do
+            if x.live and x.key == "KEW" and x ~= e then
+                local B = boneAt(S.body, x.bone)
+                if B and math.sqrt((B.X - L.X) ^ 2 + (B.Y - L.Y) ^ 2 + (B.Z - L.Z) ^ 2) <= reach then
+                    S.chain[#S.chain + 1] = { e = x, at = at, from = e.bone }
+                end
+            end
+        end
+    end
     pcall(function() e.o:K2_DetachFromActor(1, 1, 1) end)
     pcall(function() e.o:K2_SetActorLocation({ X = 0, Y = 0, Z = -5000000 }, false, {}, true) end)   -- (out of the way)
     S.broken = S.broken or {}
@@ -659,6 +677,22 @@ end
 local function targetsTick()
     if not (S and S.targets) then return end
     local floorIn = n(SOLG.C.floor, 1) * 10 + 0.5
+    if S.chain and #S.chain > 0 and not S.mirror then       -- (the KEW shells' chain: its blasts due now)
+        local now, keep = os.clock(), {}
+        for _, c in ipairs(S.chain) do
+            if c.at > now then keep[#keep + 1] = c
+            elseif c.e.live and liveObj(c.e.o) then
+                local ok, h, mx = pcall(function() return c.e.o.HealthInternal, c.e.o.MaxHealth end)
+                if ok and tonumber(h) and tonumber(mx) then
+                    local to = math.max(math.floor(n(SOLG.C.floor, 1) * 10), h - mx * 10 * n(SOLG.C.kew_chain.damage_pct, 60) / 100)
+                    pcall(function() c.e.o.HealthInternal = to end)
+                    sl(string.format("KEW chain: %s's blast on %s: %.0f%% left%s", c.from, c.e.bone, 100 * to / (mx * 10),
+                        to <= floorIn and " (it blows)" or ""))
+                end
+            end
+        end
+        S.chain = keep
+    end
     if S.mirror and SOLG.adoptTick then pcall(SOLG.adoptTick) end
     for _, e in ipairs(S.targets) do
         if e.live and S.mirror then                       -- (a joiner: its copies only held on their bones)
