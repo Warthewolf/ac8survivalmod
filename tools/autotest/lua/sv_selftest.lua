@@ -6027,14 +6027,24 @@ SUITES.solgcrash = function()
         local moved = (C2.p0 and p1) and (p1.X - C2.p0.X) / 100 or 0
         ST.check(moved > 250, string.format("it keeps moving with its stand-ins on it (%.0f m in 3 s)", moved))
         pcall(function() C2.h0 = ST.plane().HealthInternal end)
+        -- ((2026-11-23) its shaft hollow: you on its axis 500 m along it (the shaft, nose side; its yaw 0: along +X))
         local you = playerLocation()
-        pcall(function() SOLG.debugActor():K2_SetActorLocation(you, false, {}, true) end)
+        pcall(function() SOLG.debugActor():K2_SetActorLocation({ X = you.X - 50000, Y = you.Y, Z = you.Z }, false, {}, true) end)
     end)
     A.wait(1.5)
     A.do_(function()
         local h1 = nil
         pcall(function() h1 = ST.plane().HealthInternal end)
-        ST.check(h1 and C2.h0 and h1 < C2.h0, string.format("moved onto you, it hits you (health %s -> %s)", tostring(C2.h0), tostring(h1)),
+        ST.check(h1 and C2.h0 and h1 >= C2.h0, string.format("inside its shaft, nothing hits you (health %s -> %s)", tostring(C2.h0), tostring(h1)))
+        C2.h0 = h1
+        local you = playerLocation()                   -- (now in its wall: 52 m off the axis)
+        pcall(function() SOLG.debugActor():K2_SetActorLocation({ X = you.X - 50000, Y = you.Y - 5200, Z = you.Z }, false, {}, true) end)
+    end)
+    A.wait(1.5)
+    A.do_(function()
+        local h1 = nil
+        pcall(function() h1 = ST.plane().HealthInternal end)
+        ST.check(h1 and C2.h0 and h1 < C2.h0, string.format("in its wall, it hits you (health %s -> %s)", tostring(C2.h0), tostring(h1)),
             ST.findLog("hit: ", 0, true))
         pcall(SOLG.stop, "crash test over")
     end)
