@@ -33,19 +33,32 @@ def block(kb, o, size):
 def decode(kb):
     assert kb[:4] == b'KFM1', kb[:4]
     rs, re_ = struct.unpack_from('>II', kb, 0x18)
-    frames, asz, aoff, bsz, boff = struct.unpack_from('>IIIII', kb, re_)
+    frames = struct.unpack_from('>I', kb, re_)[0]
     recs = []
     for r in range(rs, re_, 32):
         h, u0, bone, typ, u1, slot, width = struct.unpack_from('>IHHHHHH', kb, r)
         recs.append((bone, typ))
-    A, B = block(kb, aoff, asz), block(kb, boff, bsz)
-    ents = A + B
+    # the blocks: (size, offset) pairs after the frame count (a longer clip has a flags word first and one animated
+    # block a track: the body's `auta`, 400 frames); each offset points at 'cdab'
+    words = struct.unpack_from('>%dI' % 12, kb, re_ + 4) if re_ + 4 + 48 <= len(kb) else ()
+    ents, A, i = [], [], 0
+    while i + 1 < len(words):
+        size, off = words[i], words[i + 1]
+        if 0 < off + 2 <= len(kb) and kb[off:off + 2] == bytes((0xcd, 0xab)) and size:
+            bl = block(kb, off, size)
+            if not ents:
+                A = bl
+            ents += bl
+            i += 2
+        else:
+            i += 1
+    B = ents[len(A):]
     tracks = []
     for (bone, typ), ent in zip(recs, ents):
         times, vo, nk = ent
         c = comps(typ)
         vals = [struct.unpack_from('>%df' % c, kb, vo + k * 4 * c) for k in range(nk)]
-        tracks.append(dict(bone=bone, type=typ, times=times, vals=vals, animated=ent in B))
+        tracks.append(dict(bone=bone, type=typ, times=times, vals=vals, animated=nk > 1))
     return frames, tracks
 
 

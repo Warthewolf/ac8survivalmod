@@ -23,6 +23,7 @@ local MODULES = {
     "sv_anomalies",
     "sv_anomalies_valka",          -- (sv_anomalies.lua's next piece: tools/lua_split_part.py)
     "sv_valka_cine",               -- VALKA's arrival cutscene: her portal opening, her out of it
+    "sv_solg",                     -- VALKA's SOLG: AC:I's satellite, its own body (docs/re/SOLG.md)
     "sv_anomalies_dev",            -- (sv_anomalies.lua's next piece: tools/lua_split_part.py)
     "sv_rounds",
     "sv_rounds_shuttle",           -- (sv_rounds.lua's next piece: the shuttle's liftoff replayed, its removal again)

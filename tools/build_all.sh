@@ -87,6 +87,14 @@ if [ -f build/valka_portal/out/SurvivalMode_ValkaPortal_P.utoc ]; then
 else
     echo "no VALKA portal container (tools/valka_portal/build.sh): her portal from stock pieces"
 fi
+# ((2026-11-22) her SOLG: AC:I's model and its spin, our own skeletal meshes (tools/solg/build.sh; the user's AC:I
+# exception); with her, as her X-02S)
+if [ -f build/solg/out/SurvivalMode_SOLG_P.utoc ]; then
+    cp build/solg/out/SurvivalMode_SOLG_P.utoc build/solg/out/SurvivalMode_SOLG_P.ucas build/install/SurvivalMode/
+    echo "staged VALKA's SOLG (build/solg/out/SurvivalMode_SOLG_P)"
+else
+    echo "no SOLG container (tools/solg/build.sh): her SOLG can't come"
+fi
 # the ZFA-44 (the user's own model, cooked in UE 5.4 by tools/zfa44/build.sh; no UE needed here): the user's dev builds
 # only, so staged with ZFA=1 only (package_dev.sh keeps it with ZFA=1; package_release.sh never ships it)
 if [ "$ZFA" = 1 ]; then

@@ -153,7 +153,7 @@ python -X utf8 -I tools/quiet_logs.py "$mod"
 fi
 suffix=
 if [ "$NOVALKA" = 1 ]; then
-    rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Valka_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ValkaPortal_P.*
+    rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Valka_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ValkaPortal_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_SOLG_P.*
     rm -rf "$mod/Sounds/valka"
     rmdir "$mod/Sounds" 2>/dev/null || true
     python -X utf8 -I tools/novalka.py "$mod"

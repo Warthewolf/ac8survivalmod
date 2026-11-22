@@ -195,11 +195,12 @@ def sockets(body, mounts, rings, M):
 STATIC = False
 
 
-def import_skeletal(layout, mis):
+def import_skeletal(layout, mis, sk_name=None, skel_name=None, anim_names=None):
     """SK_SV_SOLG (+ SKEL_SV_SOLG): the whole SOLG, a bone per piece (prepare.py write_skinned); its slots our
     instances (by slot name: t<texture id>); no physics asset (no collision: the carrier's parts take the hits).
     The reference pose's bones logged against layout.json (the UE frame: (AC.z, -AC.x, AC.y) x 100)."""
-    sk_name = layout['skeletal']['mesh']
+    sk_name = sk_name or layout['skeletal']['mesh']
+    skel_name = skel_name or 'SKEL_SV_SOLG'
     before = set(EAL.list_assets(DEST, recursive=True))
     import_file(os.path.join(SRC, sk_name + '.gltf'), DEST + '/Model')
     made = sorted(set(EAL.list_assets(DEST, recursive=True)) - before)
@@ -210,10 +211,22 @@ def import_skeletal(layout, mis):
             kinds.setdefault(unreal.load_asset(a).get_class().get_name(), []).append(a)
     say(f'skeletal glTF import: { {k: len(v) for k, v in kinds.items()} }')
     assert len(kinds.get('SkeletalMesh', [])) == 1, kinds
-    for cls, nm in (('SkeletalMesh', sk_name), ('Skeleton', 'SKEL_SV_SOLG')):
+    for cls, nm in (('SkeletalMesh', sk_name), ('Skeleton', skel_name)):
         p = kinds[cls][0]
         if p != f'{DEST}/Model/{nm}':
             EAL.rename_asset(p, f'{DEST}/Model/{nm}')
+    # ((2026-11-22) its animations (prepare.py: AC:I's own ring spin, A_SV_SOLG_Spin), named as the glTF names them)
+    for k, p in enumerate(sorted(kinds.get('AnimSequence', []))):
+        want = (anim_names or [])[k] if anim_names and k < len(anim_names) else None
+        if want and p != f'{DEST}/Model/{want}':
+            EAL.rename_asset(p, f'{DEST}/Model/{want}')
+            p = f'{DEST}/Model/{want}'
+        a = unreal.load_asset(p)
+        try:
+            say(f'{p.rsplit("/", 1)[-1]}: an animation of {a.get_editor_property("sequence_length"):.1f} s')
+        except Exception as ex:
+            say(f'{p.rsplit("/", 1)[-1]}: an animation ({ex})')
+        EAL.save_loaded_asset(a)
     sk = unreal.load_asset(f'{DEST}/Model/{sk_name}')
     skel = sk.get_editor_property('skeleton')
     try:
@@ -276,7 +289,9 @@ def main():
             bs.set_editor_property('collision_trace_flag', unreal.CollisionTraceFlag.CTF_USE_SIMPLE_AS_COMPLEX)
             return 'body setup simple-as-complex (no helper)'
         return 'none to remove'
-    import_skeletal(layout, mis)
+    import_skeletal(layout, mis, anim_names=['A_SV_SOLG_Spin'])
+    for nm in layout.get('panels', []):              # ((2026-11-22) the solar array wings on their own: they fall)
+        import_skeletal(layout, mis, nm, 'SKEL_' + nm[3:])
     for name, info in sorted(layout['meshes'].items()):
         if not STATIC:
             break

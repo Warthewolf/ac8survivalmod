@@ -170,7 +170,34 @@ def rquat(R):
     q = np.array([x, y, z, w]); return q / np.linalg.norm(q)
 
 
-def write_skinned(name, pieces, bones):
+def anim_gltf(a, bones, parents, W, add):
+    """a = {'name', 'length_s', 'keys', 'bones': {bone name: (axis (3,), turns over length_s)}}: each listed bone turned
+    about its own axis (in its own frame) from its rest; LINEAR quaternion keys"""
+    names = [b[0] for b in bones]
+    t = np.linspace(0.0, a['length_s'], a['keys'] + 1).astype(np.float32)
+    samplers, channels = [], []
+    tin = add(t, None, 'SCALAR', 5126, False)
+    accessors_minmax = (float(t.min()), float(t.max()))
+    for bn, (axis, turns) in a['bones'].items():
+        k = names.index(bn)
+        L = np.linalg.inv(W[parents[k]]) @ W[k]
+        rest = rquat(L[:3, :3])
+        ax = np.asarray(axis, np.float64) / np.linalg.norm(axis)
+        out = []
+        for ti in t:
+            ang = 2 * math.pi * turns * ti / a['length_s']
+            q = np.array([*(ax * math.sin(ang / 2)), math.cos(ang / 2)])
+            x1, y1, z1, w1 = rest
+            x2, y2, z2, w2 = q                       # rest . spin (the spin in the bone's own frame)
+            out.append([w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2, w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+                        w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2, w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2])
+        o = add(np.asarray(out, np.float32), None, 'VEC4', 5126, False)
+        samplers.append({'input': tin, 'output': o, 'interpolation': 'LINEAR'})
+        channels.append({'sampler': len(samplers) - 1, 'target': {'node': k + 1, 'path': 'rotation'}})
+    return {'name': a['name'], 'samplers': samplers, 'channels': channels, '_minmax': accessors_minmax}
+
+
+def write_skinned(name, pieces, bones, parents=None, anims=None):
     """The whole SOLG as one skinned glTF (the cooked static meshes crashed AC8's renderer in test T0, 2026-11-03; a
     skeletal mesh added at run time is proven: VALKA, hard rule 46). bones: [(name, R, p)] in the turned frame, the
     first the root (identity); pieces: [(bone index, [(P, N, UV, T, tex)] in that bone's frame)]. Each vertex is put
@@ -211,22 +238,33 @@ def write_skinned(name, pieces, bones):
                                          'TEXCOORD_0': add(UV.astype(np.float32), 34962, 'VEC2', 5126),
                                          'JOINTS_0': add(J, 34962, 'VEC4', 5123), 'WEIGHTS_0': add(Wt, 34962, 'VEC4', 5126)},
                           'indices': add(T.reshape(-1), 34963, 'SCALAR', 5125), 'material': matidx[m], 'mode': 4})
-    # joints: node 1 the root, every other a child of it (its transform = its bind pose: the root is identity)
+    # joints: node 1 the root; parents[k] = bone k's parent (default the root); a joint's transform = its bind pose
+    # in its parent's frame ((2026-11-22) the rings' pieces are their ring's children, so they turn with it)
+    parents = parents or [-1] + [0] * (len(bones) - 1)
     nodes = [{'name': name, 'mesh': 0, 'skin': 0}]
+    W = [mat4(R, p) for _, R, p in bones]
     for k, (bn, R, p) in enumerate(bones):
         nd = {'name': bn}
         if k > 0:
-            nd['translation'] = [float(v) for v in p]
-            nd['rotation'] = [float(v) for v in rquat(R)]
+            L = np.linalg.inv(W[parents[k]]) @ W[k]
+            nd['translation'] = [float(v) for v in L[:3, 3]]
+            nd['rotation'] = [float(v) for v in rquat(L[:3, :3])]
         nodes.append(nd)
-    nodes[1]['children'] = list(range(2, len(bones) + 1))
+    for k in range(1, len(bones)):
+        nodes[parents[k] + 1].setdefault('children', []).append(k + 1)
     ibm = np.stack([np.linalg.inv(mat4(R, p)).T.reshape(-1) for _, R, p in bones]).astype(np.float32)   # column-major
     g = {'asset': {'version': '2.0', 'generator': 'AC8 Survival Mode tools/solg/prepare.py'},
          'scene': 0, 'scenes': [{'nodes': [0, 1]}], 'nodes': nodes,
          'skins': [{'name': name + '_Skin', 'joints': list(range(1, len(bones) + 1)), 'skeleton': 1,
                     'inverseBindMatrices': add(ibm, None, 'MAT4', 5126)}],
          'meshes': [{'name': name, 'primitives': prims}], 'materials': mats,
+         **({'animations': [anim_gltf(a, bones, parents, W, add) for a in anims]} if anims else {}),
          'buffers': [{'uri': name + '.bin', 'byteLength': len(blob)}], 'bufferViews': views, 'accessors': accessors}
+    for an in g.get('animations', []):
+        lo, hi = an.pop('_minmax')
+        for sm in an['samplers']:
+            accessors[sm['input']]['min'] = [lo]
+            accessors[sm['input']]['max'] = [hi]
     open(os.path.join(OUT, name + '.bin'), 'wb').write(bytes(blob))
     json.dump(g, open(os.path.join(OUT, name + '.gltf'), 'w'))
     return len(prims), sum(a['count'] for a in accessors if a['type'] == 'VEC3' and 'min' in a)
@@ -291,7 +329,30 @@ def main():
         bones.append((key + '_W', R, p)); pieces.append((len(bones) - 1, cache[(mt['model'], 'd1')]))
     for n, pos in sorted(layout['rings'].items()):
         bones.append(('RING_' + n[-1], I3, np.array(pos)))
-    nprim, nvert = write_skinned('SK_SV_SOLG', pieces, bones)
+    # ((2026-11-22) its animation, AC:I's own (tools/solg/kfm1.py, docs/re/SOLG.md section 10): the body's `auta`
+    # turns ring auta1 (RING_1) and auta2 (RING_2) the opposite ways about the barrel (AC:I z = glTF x), 0.3 degrees a
+    # frame each (one turn in 1,200 frames, 40 s at 30 fps); each arm's own `auta` turns it about its AC:I x (glTF -z
+    # in its frame), here slowed to a turn in 10 s (AC:I's 50 frames a turn: 1.7 s at 30 fps). The pieces on a ring
+    # are that ring's bone's children)
+    ringof = {'auta1': 'RING_1', 'auta2': 'RING_2'}
+    owner = {}
+    for mt in layout['mounts']:
+        key = 'CORE_%02d' % mt['index'] if mt['model'] == 'f_sgc1' else '%s_%02d' % (mt['model'][2:].upper(), mt['index'])
+        owner[key] = owner[key + '_W'] = ringof.get(mt['parent'])
+    bn = [b[0] for b in bones]
+    parents = [-1] + [bn.index(owner[b]) if owner.get(b) else 0 for b in bn[1:]]
+    spin = {'name': 'A_SV_SOLG_Spin', 'length_s': 40.0, 'keys': 160,
+            'bones': {'RING_1': ((1, 0, 0), -1), 'RING_2': ((1, 0, 0), 1)}}
+    for b in bn:
+        if b.startswith('SG01_'):
+            spin['bones'][b] = ((0, 0, -1), 4)
+    nprim, nvert = write_skinned('SK_SV_SOLG', pieces, bones, parents, [spin])
+    # the solar array wings on their own (each its live and its wreck bone at its origin): when one's shot off, it's
+    # hidden on the body and one of these falls (Scripts/sv_solg.lua)
+    for mdl, nm in (('s_sg04', 'SK_SV_SOLG_SAW4'), ('s_sg05', 'SK_SV_SOLG_SAW5')):
+        write_skinned(nm, [(0, cache[(mdl, 'l1')]), (1, cache[(mdl, 'd1')])], [('PANEL', I3, np.zeros(3)), ('PANEL_W', I3, np.zeros(3))])
+    layout['panels'] = ['SK_SV_SOLG_SAW4', 'SK_SV_SOLG_SAW5']
+    layout['parents'] = {b: (bn[parents[k]] if parents[k] >= 0 else None) for k, b in enumerate(bn)}
     layout['skeletal'] = {'mesh': 'SK_SV_SOLG', 'bones': [b[0] for b in bones], 'primitives': nprim, 'vertices': nvert}
     print('SK_SV_SOLG: %d bones, %d primitives, %d vertices' % (len(bones), nprim, nvert))
     # textures: every texture in the package as <id>.png, then the ones the meshes use renamed
