@@ -5711,6 +5711,80 @@ SUITES.solgjoiner = function()
     end)
 end
 
+-- ((2026-11-22) the portal's scalers (0.75.18: the pieces didn't grow or shrink): a portal opened in front of you, its
+-- first scaler read each tick (its bone B's scale, play rate, position, playing, its anim tick option); then remedies one
+-- at a time on its pieces' scalers: A the anim tick option set again, B huge bounds (never culled), C SetPosition and
+-- rate again after a tick; each logged with the bone's scale after. Pictures.
+local function spBone(sc)
+    local r = {}
+    pcall(function() local t = sc:GetSocketTransform(FName("B"), 0); r.s = t.Scale3D.X end)
+    pcall(function() r.rate = sc:GetPlayRate() end)
+    pcall(function() r.pos = sc:GetPosition() end)
+    pcall(function() r.play = sc:IsPlaying() end)
+    pcall(function() r.opt = sc.VisibilityBasedAnimTickOption end)
+    pcall(function() r.mode = sc:GetAnimationMode() end)
+    pcall(function() r.vis = sc:IsVisible() end)
+    return string.format("bone scale %s, rate %s, pos %s, playing %s, tick option %s, mode %s, visible %s",
+        tostring(r.s), tostring(r.rate), tostring(r.pos), tostring(r.play), tostring(r.opt), tostring(r.mode), tostring(r.vis)), r.s
+end
+SUITES.scalerprobe = function()
+    intoRun()
+    local SP = {}
+    A.do_(function()
+        local c = CFG.specials.valka
+        local you = playerLocation()
+        local f = ST.plane() and ST.plane():GetActorForwardVector()
+        SP.at = { X = you.X + f.X * 600000, Y = you.Y + f.Y * 600000, Z = you.Z + 40000 }
+        SP.h = {}
+        local ok = SPC.V.portalOpen(c, SP.h, SP.at, math.deg(math.atan(-f.Y, -f.X)), os.clock())
+        local P = SP.h.portal
+        local n = 0
+        for _, e in ipairs(P and P.meshes or {}) do if e.sc then n = n + 1 end end
+        ST.check(ok and n > 0, string.format("a portal up, %d pieces on scalers", n))
+        SP.e = P and P.meshes[1]
+        if SP.e and SP.e.sc then ST.info("scaler at once: " .. spBone(SP.e.sc)) end
+    end)
+    for k = 1, 6 do                                       -- (its own ticks: the portal ticked as her round would)
+        A.do_(function()
+            pcall(SPC.V.portalTick, CFG.specials.valka, SP.h, os.clock())
+            if SP.e and SP.e.sc then ST.info(string.format("scaler tick %d: %s", k, (spBone(SP.e.sc)))) end
+        end)
+        A.wait(0.5)
+    end
+    A.do_(function() local P = SP.h.portal; if P then ST.look({ X = P.at.X + 300000, Y = P.at.Y, Z = P.at.Z + 30000 }, P.at, 50) end end)
+    A.wait(0.4)
+    A.do_(function() ST.shot("scalerprobe_1_after_open") end)
+    -- the remedies
+    local REM = {
+        { "A tick option 0 again", function(sc) sc.VisibilityBasedAnimTickOption = 0 end },
+        { "B bounds x1e6 and fixed bounds off", function(sc) sc:SetBoundsScale(1000000); sc.bComponentUseFixedSkelBounds = false end },
+        { "C replayed: grow, rate 1", function(sc) sc:PlayAnimation(SPC.V.asset(SPC.V.PORTAL_GROW), false); sc:SetPlayRate(1) end },
+        { "D refresh bone transforms", function(sc) sc:RefreshBoneTransforms(nil) end },
+        { "E update every frame", function(sc) sc.bEnableUpdateRateOptimizations = false; sc.bNoSkeletonUpdate = false end },
+    }
+    for _, rm in ipairs(REM) do
+        A.do_(function()
+            local P = SP.h.portal
+            local okR, err = 0, nil
+            for _, e in ipairs(P and P.meshes or {}) do
+                if e.sc then
+                    local ok, er = pcall(rm[2], e.sc)
+                    if ok then okR = okR + 1 else err = er end
+                end
+            end
+            ST.info(string.format("remedy %s: on %d scalers%s", rm[1], okR, err and (" (error " .. tostring(err) .. ")") or ""))
+        end)
+        A.wait(1.2)
+        A.do_(function() if SP.e and SP.e.sc then ST.info(string.format("after remedy %s: %s", rm[1], (spBone(SP.e.sc)))) end end)
+    end
+    A.do_(function() ST.shot("scalerprobe_2_after_remedies") end)
+    A.wait(0.5)
+    A.do_(function()
+        ST.lookBack()
+        SPC.V.portalStop(SP.h)
+    end)
+end
+
 -- ---- the tick ----------------------------------------------------------------------------------------------------
 local started, t0, finished = false, nil, false
 local function finish(why)
