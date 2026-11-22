@@ -28,7 +28,7 @@ SOLG = { C = {
                           DamegedNormal_Intencity = 0, PlayerPlane_Damage = 0 } },
     spin_rate = 1.0,                        -- the spin animation's play rate (1: AC:I's, a ring's turn in 40 s)
     -- a wing shot off: pushed out from the barrel (m/s), down (m/s), its tumble (deg/s, each axis up to), gone after
-    pitch_min_deg = 45,                     -- its nose down at least this much as it falls (its path's angle if steeper; 20 read flat)
+    pitch_min_deg = 20,                     -- its nose down at least this much as it falls (the user: 45 "way too angled down", "go to 20")
     fall = { out_mps = 35, down_mps = 15, tumble_dps = 40, gravity = 1.0, life_s = 30, body_gravity = 0.35, body_tumble_dps = 4 },
     -- its targets (docs/re/SOLG.md 5: AC:I's types, counts and health): each type a unit of ours on AC8's GENERIC
     -- destructible base (tools/survival_events_specials.py SOLG_*: Mission 4's radar tower ported, no boss), its objects
