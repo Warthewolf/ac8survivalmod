@@ -5217,6 +5217,10 @@ SUITES.valkasolg = function()
     A.log_("special: VALKA shows", 150, "v0", true, function(l) if not ST.check(l ~= nil, "VALKA shows", l) then return "abort" end end)
     A.wait(4)
     for pass = 1, 2 do
+        if pass == 2 then                                 -- (the first one's wreck and units gone first: once a round in play)
+            A.log_("solg: taken down (its wreck's gone)", 40, "z0", true, function(l) ST.check(l ~= nil, "its wreck gone, its units taken off", l) end)
+            A.wait(3)
+        end
         A.do_(function()
             local s = D.special
             if pass == 2 and s then s.solgDone, s.solg = nil, nil end      -- (once more: the spaceport hit this time)
@@ -5229,7 +5233,9 @@ SUITES.valkasolg = function()
             local okI, inv = pcall(function() return o.bIsInvincible end)
             ST.check(okI and inv == true, "her plane untouchable", tostring(inv))
         end)
-        A.log_("special: VALKA's round: solg said", 5, "s" .. pass, true, function(l) ST.check(l ~= nil, "her and AUDREY's lines", l) end)
+        if pass == 1 then
+            A.log_("special: VALKA's round: solg said", 5, "s" .. pass, true, function(l) ST.check(l ~= nil, "her and AUDREY's lines", l) end)
+        end
         A.log_("special: VALKA's SOLG: out of the corner", 15, "s" .. pass, true, function(l)
             if not ST.check(l ~= nil and l:find("91 targets", 1, true) ~= nil, "the SOLG out of a corner with its 91 targets", l) then return "abort" end
             ST.check(ST.findLog("special: VALKA's SOLG: its portal opens", ST.marks["s" .. pass]) ~= nil, "its portal opens",
