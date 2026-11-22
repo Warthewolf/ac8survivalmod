@@ -4119,3 +4119,9 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
 - 0.75.29: tester zip (keys) and friends' zip (no keys), TANI=1 ZFA=1, one build: AC8SurvivalMode_COOP2MP_0.75.29_...
   TANACORN.zip; both registered. INSTALLED 2026-11-22 (the tester stage over 0.75.13; backup
   build/backup/install_before_0.75.29; 163 files verified). Friends' smoke 5/5 on 0.75.28 (one number apart).
+- 0.75.30-0.75.31 (2026-11-22): VALKA parked 40 km past the spaceport, 15 km up while her SOLG is up (the user: "shes
+  still attacking the players while invisible"); every SOLG face doubled (its inner shaft in s_solg and the rear hatch
+  s_sg08 faced one way: AC8 culls back faces; "the internal hallway ... isn't visible and neither is the rear hatch");
+  the rear hatch a target (phase 4, 2000 x 0.25, pay 150), the SP shell phase 5. 0.75.31 INSTALLED 2026-11-22 (backup
+  build/backup/install_before_0.75.31); not tested in game (her game was running). Friends' 0.75.31 zip built too.
+  Next (committed, not built): the KEW shells' chain reaction (her picks: neighbours within 45 m lose 60 %, 0.4 s on).
