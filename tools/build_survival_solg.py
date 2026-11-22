@@ -27,7 +27,10 @@ SOLG_TLS_ROW_VALUES = {'CaptureDistance': 1200.0, 'CaptureAngleRange': 180.0, 'A
                        'FireRate': 4, 'MagazineCapacity': 1, 'ReloadTime': 5.0,
                        'YawSpeed': 120.0, 'YawAngleMin': -180.0, 'YawAngleMax': 180.0,
                        'PitchSpeed': 120.0, 'PitchAngleMin': -90.0, 'PitchAngleMax': 90.0}
-SOLG_TLS_ROW_CLEAR = ('NpcWeaponId', 'PredictionOffsetTime', 'ActivationRandomTimeMin', 'ActivationRandomTimeMax')
+# ((2026-11-22) 'bLimitAmmo' cleared: the copied row (the ZFA's aim-only CIWS) limits ammo to AmmoCount 0, so each turret
+# fired one burst and never again (the autotest: 20 shots in the first second, then none for 45 s; the user: "they were
+# like rapid firing" then "stopped firing")
+SOLG_TLS_ROW_CLEAR = ('NpcWeaponId', 'PredictionOffsetTime', 'ActivationRandomTimeMin', 'ActivationRandomTimeMax', 'bLimitAmmo')
 SOLG_TLS_SEARCH_CM = (120000.0, 132000.0)
 SOLG_TLS_LIFE_S = 10.0                                 # (its beam: Gould's 10 s burst; stock 7)
 SOLG_TLS_SOUNDS = TLS_SOUNDS                            # (build_survival_world.py: the TLS's shooting sound)
@@ -121,6 +124,8 @@ def check_solg_laser_build():
     fcs = table(se.SOLG_TLS_FCS_TABLE, 'LiveNpcFCSDataTable')
     assert se.SOLG_TLS_FCS_ROW in fcs, fcs.keys()
     assert fcs[se.SOLG_TLS_FCS_ROW]['FCSBlueprintClass'][1] == ('name', se.SOLG_TLS_FCS_PKG, 0)
+    lim = fcs[se.SOLG_TLS_FCS_ROW].get('bLimitAmmo')
+    assert lim is None or lim[-1] in (bytes(1), False, 0), ('the lasers ammo still limited', lim)
     npc = table(DATA + 'DT_SV_NpcRows', 'LiveNpcDataTable')
     for t in se.SOLG_LASER_TYPES:
         r = npc[se.SOLG_NPC[t]]

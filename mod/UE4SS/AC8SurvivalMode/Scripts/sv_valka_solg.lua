@@ -110,6 +110,7 @@ local function arrive(c, s, G, now)
     local r = math.rad(yaw)
     local from = { X = at.X - math.cos(r) * back, Y = at.Y - math.sin(r) * back, Z = at.Z }
     vel = { X = (pad.X - from.X) / T, Y = (pad.Y - from.Y) / T, Z = (pad.Z - from.Z) / T }   -- (from its start: on the pad at T)
+    SOLG.spawnRound = D and D.round                       -- (taken down once her round is over)
     local okS, up = pcall(SOLG.spawn, from, yaw, vel)
     if not (okS and up) then
         sl("the SOLG didn't come up (" .. tostring(up) .. "): she comes back now")

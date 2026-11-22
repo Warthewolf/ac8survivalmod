@@ -100,6 +100,7 @@ function SCOOP.fromHost(f)
         if not (fin(x, 2e5) and fin(y, 2e5) and fin(z, 4e4) and fin(yaw, 720) and fin(vx, 1e6) and fin(vy, 1e6) and fin(vz, 1e6)
             and fin(T, 3600) and fin(age, 3600)) then return end
         local at = { X = x * 100 + vx * age, Y = y * 100 + vy * age, Z = z * 100 + vz * age }
+        SOLG.spawnRound = D and D.round                   -- (taken down once the round's over here too)
         local ok = SOLG.spawn(at, yaw, { X = vx, Y = vy, Z = vz })
         local placed = ok and SOLG.mirrorUp() or 0
         J.up = ok

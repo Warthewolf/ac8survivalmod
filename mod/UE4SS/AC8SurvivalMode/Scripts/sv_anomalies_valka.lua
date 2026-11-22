@@ -975,16 +975,17 @@ function SPC.valkaTick(now, s)
     -- fight; her yes to "cap how much of Valka's health she can lose per second ... 10 %") her health floor (the
     -- engine's MinHealth: every hit, a joiner's too, stops there) moved each second to her health then less hit_cap_pct
     -- of her max, never under the SOLG's floor while it waits; 0 once that's under 0 (she can die)
-    local cap = n(c.hit_cap_pct, 0)
+    local num = function(v, d) return tonumber(v) or d end   -- (this file has no n helper)
+    local cap = num(c.hit_cap_pct, 0)
     if cap > 0 and not (s.solg and s.solg.state ~= "done") then
-        local okH, h, mx = pcall(function() return n(o.HealthInternal, 0) / 10, n(o.MaxHealth, 0) end)
+        local okH, h, mx = pcall(function() return num(o.HealthInternal, 0) / 10, num(o.MaxHealth, 0) end)
         if okH and mx > 0 then
             if now >= (s.capAt or 0) then s.capAt, s.capFrom = now + 1, h end
             local g = c.solg
-            local base = (g and g.enabled ~= false and not s.solgDone) and mx * n(g.at_pct, 20) / 100 or 0
+            local base = (g and g.enabled ~= false and not s.solgDone) and mx * num(g.at_pct, 20) / 100 or 0
             local fl = math.max(base, (s.capFrom or h) - mx * cap / 100)
             if fl <= 0 then fl = base end
-            pcall(function() if math.abs(n(o.MinHealth, 0) - fl) > 0.5 then o.MinHealth = fl end end)
+            pcall(function() if math.abs(num(o.MinHealth, 0) - fl) > 0.5 then o.MinHealth = fl end end)
             if not s.capSaid then s.capSaid = true; log(string.format("special: VALKA's hits capped: at most %d%% of her health (%.0f) a second", cap, mx * cap / 100)) end
             if h <= fl + 0.5 and fl > base and not s.capHitSaid then
                 s.capHitSaid = true

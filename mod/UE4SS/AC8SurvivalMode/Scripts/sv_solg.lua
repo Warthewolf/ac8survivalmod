@@ -70,7 +70,17 @@ SOLG = { C = {
     -- "The shooter, full pay") a KEW shell destroyed: hop_s later every live shell within reach_m (an arm's are 40 m
     -- apart in a line: its one or two neighbours) loses damage_pct of its health; one brought down blows the same way
     -- (its normal pay: the team's, as any shot down). Ours (AC:I has none; AC8's induced explosion reaches 20 m)
-    ping = { enabled = true, every_s = 20 },   -- (its minimap alert: RE_SV_SolgPing on its SP shell's unit)
+    ping = { enabled = true, every_s = 20 },
+    -- ((2026-11-22) the user: "some black smoke that pours off the sides of the SOLG after things have been destroyed,
+    -- and VFX for the splash down of its objects") a ship's black smoke on the bone of each piece shot off (its wreck's
+    -- place on the body), at most max; a falling wing, arm or the SOLG itself at the sea or the ground: a water pillar
+    -- and a sea burst there (land: a ground burst), then it's gone
+    smoke = { enabled = true, max = 30, scale = 4, keys = { SAW = true, MAG = true, KEW = true, CORE = true, HATCH = true, SP = true, ARM = true },
+              fx = "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsSmokeS001" },
+    splash = { enabled = true, sea_z = 350, scale = 3, body_scale = 8, life_s = 20, fall_life_s = 150,
+               sea = { "/Game/VFX/Vehicles/Vessels/FX_Vessels_Explosion/NS_VesselsPillarL001",
+                       "/Game/VFX/Environment/Common/Explosion/GroundExplosion/groundExplosionA001/NS_groundExplosionASmallSea003" },
+               land = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" } },   -- (its minimap alert: RE_SV_SolgPing on its SP shell's unit)
     kew_chain = { enabled = true, reach_m = 45, damage_pct = 60, hop_s = 0.4 },
     fcs_table = "/Game/Mods/SurvivalMode/Data/DT_SV_SolgFCS.DT_SV_SolgFCS", fcs_row = "SV_FCS_SolgTLS",
     laser_model_row = "SV_Model_SOLG_LSR",
@@ -233,7 +243,8 @@ function SOLG.spawn(at, yaw, vel)
     if spun then pcall(function() body:SetPlayRate(n(SOLG.C.spin_rate, 1)) end) end
     step("its mover")
     local mv = vel and mover(a, vel, 0) or nil
-    S = { actor = a, body = body, move = mv, panels = {}, at0 = at, yaw = yaw, broken = {} }
+    S = { actor = a, body = body, move = mv, panels = {}, at0 = at, yaw = yaw, broken = {}, round = SOLG.spawnRound }
+    SOLG.spawnRound = nil                                 -- (a test's own SOLG: no round of its own)
     sl(string.format("up at (%.1f, %.1f) km, %.1f km up, nose %.0f deg, %.0f deg down (the game's pitch %s): mesh %s, %s, %d wrecks hidden, spin %s, mover %s",
         at.X / 100000, at.Y / 100000, at.Z / 100000, yaw or 0, pitch, pitchNow and string.format("%.1f", pitchNow) or "?", okM and "on" or "NOT set", painted, hid,
         spun and "playing" or (valid(anim) and "NOT played" or "NOT loaded"), mv and "on" or (vel and "NOT made" or "none")))
@@ -276,7 +287,7 @@ function SOLG.breakPanel(bone)
     if rot then
         pcall(function() rot.RotationRate = { Pitch = (math.random() * 2 - 1) * t, Yaw = (math.random() * 2 - 1) * t, Roll = (math.random() * 2 - 1) * t } end)
     end
-    S.panels[#S.panels + 1] = { actor = a, gone = os.clock() + n(f.life_s, 30) }
+    S.panels[#S.panels + 1] = { actor = a, gone = os.clock() + n(SOLG.C.splash.fall_life_s, 150) }   -- (gone at its splash)
     sl(string.format("%s shot off: falling (%s, tumble %s)", bone, pm and "a mover" or "NO mover", rot and "on" or "off"))
     return true
 end
@@ -327,7 +338,8 @@ function SOLG.breakArm(armBone, pieces)
     local rot = addComp(a, "/Script/Engine.RotatingMovementComponent")
     local t = n(f.tumble_dps, 40) * 0.3
     if rot then pcall(function() rot.RotationRate = { Pitch = (math.random() * 2 - 1) * t, Yaw = (math.random() * 2 - 1) * t, Roll = (math.random() * 2 - 1) * t } end) end
-    S.panels[#S.panels + 1] = { actor = a, gone = os.clock() + n(f.life_s, 30) * 1.5 }
+    S.panels[#S.panels + 1] = { actor = a, gone = os.clock() + n(SOLG.C.splash.fall_life_s, 150), big = true }
+    if SOLG.smokeOn then SOLG.smokeOn(armBone) end        -- (its stump smokes)
     if fxAt then pcall(fxAt, SOLG.C.fx, L, n(SOLG.C.fx_scale.ARM, 6), 8) end
     sl(string.format("%s broken off with its %d pieces: falling (%s, tumble %s)", armBone, #(pieces or {}), pm and "a mover" or "NO mover", rot and "on" or "off"))
     return true
@@ -339,8 +351,59 @@ function SOLG.panelAt(k)
     local ok, L = pcall(function() local v = p.actor:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
     return ok and L or nil
 end
+-- a black smoke on the body at `bone` (once a bone, at most smoke.max)
+local function smokeOn(bone)
+    local sm = SOLG.C.smoke
+    if not (sm and sm.enabled ~= false and S and liveObj(S.body)) then return end
+    S.smokes = S.smokes or {}
+    if S.smokes[bone] or (S.nSmoke or 0) >= n(sm.max, 30) then return end
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    local sys = SPC and SPC.V and SPC.V.asset(sm.fx)
+    if not (valid(lib) and sys) then return end
+    local ok, c = pcall(function()
+        return lib:SpawnSystemAttached(sys, S.body, FName(bone), { X = 0, Y = 0, Z = 0 }, { Pitch = 0, Yaw = 0, Roll = 0 }, 0, false, true, 0, true)
+    end)
+    if ok and c then
+        local k = n(sm.scale, 4)
+        pcall(function() c:SetWorldScale3D({ X = k, Y = k, Z = k }) end)
+        S.smokes[bone], S.nSmoke = c, (S.nSmoke or 0) + 1
+        if S.nSmoke == 1 then sl("smoke pouring off it (" .. bone .. ")") end
+    end
+end
+SOLG.smokeOn = smokeOn
+-- the ground (or sea) under x, y
+local kis = nil
+local function groundZ(x, y)
+    if not valid(kis) then kis = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary") end
+    if not (valid(kis) and valid(survivalPC)) then return nil end
+    local hit, z = {}, nil
+    pcall(function()
+        kis:LineTraceSingle(survivalPC, { X = x, Y = y, Z = 1000000 }, { X = x, Y = y, Z = -100000 }, 0, true, {}, 0,
+            hit, true, { R = 0, G = 0, B = 0, A = 0 }, { R = 0, G = 0, B = 0, A = 0 }, 0)
+    end)
+    pcall(function() local h = hit.OutHit or hit; local l = h.ImpactPoint or h.Location; if l and l.Z then z = l.Z end end)
+    return z
+end
+-- a falling actor at the surface: its splash (true: it's there)
+local function splashed(a, scale)
+    local sp = SOLG.C.splash
+    if not (sp and sp.enabled ~= false and liveObj(a)) then return false end
+    local ok, L = pcall(function() local v = a:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    if not (ok and L) then return false end
+    local sea = n(sp.sea_z, 350)
+    if L.Z > sea + 150000 then return false end           -- (high up still: no trace)
+    local gz = groundZ(L.X, L.Y)
+    local land = gz and gz > sea + 500
+    local surf = land and gz or sea
+    if L.Z > surf + 3000 then return false end
+    if fxAt then pcall(fxAt, land and sp.land or sp.sea, { X = L.X, Y = L.Y, Z = surf }, scale, n(sp.life_s, 20)) end
+    S.splashes = (S.splashes or 0) + 1
+    if S.splashes == 1 then sl(string.format("a piece came down in the %s: its splash", land and "land" or "sea")) end
+    return true
+end
 function SOLG.stop(why)
     if not S then return end
+    for _, c in pairs(S.smokes or {}) do pcall(function() c:DestroyComponent() end) end
     if S.targets and not S.mirror then                    -- (a joiner's are the host's copies: co-op takes them down)
         for _, t in ipairs(SOLG.C.targets) do
             if SPC and SPC.cleanUp then pcall(SPC.cleanUp, { t.unit }, "the SOLG gone", true, os.clock()) end
@@ -376,6 +439,16 @@ function SOLG.tick(now)
                     okP and r == 1 and "fired" or ("NOT fired: " .. tostring(r)), n(pg.every_s, 20)))
             end
         end
+    end
+    -- ((2026-11-22) the user: "make sure that all the solg pieces are successfully deleted after the round is completed")
+    if D and S.round and D.round ~= S.round then SOLG.stop("its round is over"); return end
+    for i = #S.panels, 1, -1 do                           -- (a falling piece at the surface: its splash, then gone)
+        local p = S.panels[i]
+        if not p.down and splashed(p.actor, n(SOLG.C.splash.scale, 3) * (p.big and 2 or 1)) then p.down = true; p.gone = math.min(p.gone, clock + 1) end
+    end
+    if S.falling and not S.bodyDown and splashed(S.actor, n(SOLG.C.splash.body_scale, 8)) then
+        S.bodyDown = true
+        pcall(function() S.body:SetVisibility(false, true) end)
     end
     for i = #S.panels, 1, -1 do
         local p = S.panels[i]
@@ -478,7 +551,8 @@ local function placeAll(t, got, on, mirror)
             if att and not t.laser then
                 local okH, hx, hy, hz = pcall(function() local h = o.HitCenterOffset; return h.X, h.Y, h.Z end)
                 if okH and tonumber(hx) then
-                    pcall(function() o:K2_SetRelativeLocation({ X = -hx, Y = -hy, Z = -hz }, false, {}, true) end)
+                    local okR = pcall(function() o:K2_SetActorRelativeLocation({ X = -hx, Y = -hy, Z = -hz }, false, {}, true) end)
+                    if not okR then pcall(function() o.RootComponent:K2_SetRelativeLocation({ X = -hx, Y = -hy, Z = -hz }, false, {}, true) end) end
                     if not S.hitOffSaid then S.hitOffSaid = true; sl(string.format("targets: lock point %.0f, %.0f, %.0f cm off the base: put on the bones", hx, hy, hz)) end
                 end
             end
@@ -623,6 +697,7 @@ breakTarget = function(e, why)
         pcall(function() S.body:UnHideBoneByName(FName(e.bone .. "_W")) end)
     end
     if L and fxAt then pcall(fxAt, SOLG.C.fx, L, n(SOLG.C.fx_scale[e.key], 3), 6) end
+    if SOLG.C.smoke and SOLG.C.smoke.keys[e.key] and why ~= "gone" then smokeOn(e.bone) end
     local kc = SOLG.C.kew_chain
     if e.key == "KEW" and L and kc and kc.enabled ~= false and not S.mirror and why ~= "gone" and why ~= "its arm's gone" then
         local reach, at = n(kc.reach_m, 45) * 100, os.clock() + n(kc.hop_s, 0.4)
