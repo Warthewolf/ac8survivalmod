@@ -37,7 +37,8 @@ CUT = 429                                    # (DATA01: the SOLG's arrival cutsc
 SKINS = {'gould': ('DATA92', 528, {0x20004c40: 0x200055ff, 0x20004c3d: 0x20005600, 0x200051da: 0x20005601,
                                    0x20004c3f: 0x20005603, 0x20004c43: 0x20005605, 0x20004e4d: 0x20005606,
                                    0x20004c3e: 0x20005607, 0x20004fa9: 0x20005608, 0x20004dae: 0x20005609,
-                                   0x2000520c: 0x2000560a, 0x20004c42: 0x2000560b})}
+                                   0x2000520c: 0x2000560a, 0x20004c42: 0x2000560b,
+                                   0x20004fa4: 0x20005604, 0x200051db: 0x20005602})}   # (the panels' second textures)
 NAME = {'s_solg': 'SM_SV_SOLG_Body', **{'s_sg%02d' % i: 'SM_SV_SOLG_SG%02d' % i for i in range(1, 10)}}
 
 
