@@ -367,13 +367,17 @@ pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
     if CAPTURE and #CAPTURE < 200 then CAPTURE[#CAPTURE + 1] = o end
 end)
 local function flags(o, f) for k, v in pairs(f) do pcall(function() o[k] = v end) end end
-local function hideOwn(o)                                 -- the radar tower's own meshes off (its box and lock stay)
+-- the base's own meshes off (its box and lock stay). ((2026-11-22) the user: "I don't see any of the red laser beams":
+-- a laser turret's meshes only, never what's attached to them (`deep` false: its muzzle's laser fires from there);
+-- SOLG.C.laser_hide = false: the Phalanx shown, for a look)
+local function hideOwn(o, deep)
     local nh = 0
+    if deep == nil then deep = true end
     for _, cls in ipairs({ "/Script/Engine.StaticMeshComponent", "/Script/Engine.SkeletalMeshComponent" }) do
         local c = StaticFindObject(cls)
         local ok, list = pcall(function() return o:K2_GetComponentsByClass(c) end)
         if ok and list then
-            pcall(function() list:ForEach(function(_, e) local m = e:get(); if pcall(function() m:SetVisibility(false, true) end) then nh = nh + 1 end end) end)
+            pcall(function() list:ForEach(function(_, e) local m = e:get(); if pcall(function() m:SetVisibility(false, deep) end) then nh = nh + 1 end end) end)
         end
     end
     return nh
@@ -405,7 +409,7 @@ local function typeUp(t, on)
                 local att = pcall(function() o:K2_AttachToComponent(S.body, FName(bone), 2, 2, 1, false) end)
                 pcall(function() o.MaxHealth = hp; o.HealthInternal = math.floor(hp * 10 + 0.5) end)
                 pcall(function() o.MinHealth = n(SOLG.C.floor, 1) end)
-                hideOwn(o)
+                if not t.laser then hideOwn(o) elseif SOLG.C.laser_hide ~= false then hideOwn(o, false) end
                 flags(o, on and FLAGS_ON or FLAGS_OFF)
                 S.targets[#S.targets + 1] = { o = o, a = addrOf(o), key = t.key, bone = bone, t = t, hp = hp, attached = att, live = true }
                 placed = placed + 1
