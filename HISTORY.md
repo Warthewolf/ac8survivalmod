@@ -4015,3 +4015,34 @@ code out of sv_anomalies_dev.lua (its own storm volume, THUNDER.buildup, the lay
 user: the friends' TANACORN zip keeps the diagnostic loggers; joiners' fleet copies unscaled; MinHealth's units.
 Zips: ..._0.74.200_TESTER_..._TANACORN.zip (Alyssa's, keys) and ..._0.74.200_Online_COOP_ZFA44_TANACORN.zip (friends'),
 both registered. Not run in game.
+
+## 0.74.201-0.74.210 (-coop2mp.293-302, runtime 0.32.42; branch feature/valka-active, 2026-11-22): VALKA more active, her black hole
+The user: "do an automated test on Valka's round", "look into why she seems to fight in one place ... She needs to be more
+active", "try to build a 3D Portal, an event horizon that she spawns out of", "Can you make custom 3D assets for this in
+Blender and Unreal Engine Editor please", "I want the portal to look like an event horizon from a black hole", "Needs to
+be a 3D model, not a png floating in the air". Test builds only (VALKA=1 dev stages), each run through the autotest gate;
+nothing installed in her game, nothing pushed.
+- Tests: tools/ac8-autotest's new `valka` suite (her disguise off; your plane round the airfield, a 30 km leg west,
+  round there; `valka-track:` every 0.5 s; two small hits for her blinks; pictures of her, her portal, your own view)
+  and `portalprobe` (stock pieces spawned and photographed); tools/autotest/valka_track.py (numbers, an SVG map,
+  --compare), contact_sheet.py. The kit copies a Mod Loader in for a run when the game has none (.env AUTOTEST_LOADER:
+  her IoStoreLoaderMod was out of the game since 2026-11-21) and takes it out after; the self-test unpauses a game AC8
+  paused ("Your controller has been disconnected": a gamepad dropping, twice) and hides that box.
+- Why she fought in one spot (baseline 0.74.201): LastTGT every 6 s kept her 3.1 km behind you at your speed (hard
+  rule 73); her orders re-given every 5 s; post-stalls every 9 s. Now (CFG.specials.valka, survival.ini): her row flies
+  NLID_SV_Lancer at pilot rank 5, speed x1.0 / cruise x1.15 / acceleration x1.3, turn +60/+120/+20; LastTGT only after
+  you've sat 3 s on her tail, ended after 6 s (RE_SV_ValkaTurnEnd: Mission 6's LiveAIResetUniqueAction on her object);
+  orders every 20 s; post-stalls a 50 % chance every 25 s within 1.5 km; past 6 km for 4 s she blinks onto your six
+  (ring E, 2.5 km; not in her first 20 s); hit, 2 blinks onto your six or across your nose (rings D 1.5 km / E 2.5 km);
+  railgun range 8 km. Result (0.74.205 on): 1,150-1,600 km/h, 0.5-2.8 km from you, 43-56 km flown a phase, her fight
+  following yours 94-97 % (baseline 54 %), 15 railgun shots. 0.74.204 at speed x1.3 averaged 2,400 km/h: toned down.
+- Her portal, a black hole (docs/re/VALKA.md section 8): tools/valka_portal (Blender pieces from numbers, cooked in
+  UE 5.4 into SurvivalMode_ValkaPortal_P; AC8's glow materials colour them, hard rule 58), opening where her opener
+  fires from as it charges, her shot and then she coming out of its shadow, closing 4 s on; it faces the camera you see
+  through, its disk turning; small ones for her blinks; co-op: the host's "vp" (open, through, blink), each joiner draws
+  its own (not run in co-op yet). The stock-piece portal (training-ring glows on the engine's shapes) is its fallback.
+  Her opener's lens flash dimmed (x0.3) and halved while it's up. Hard rule 74 (Pitch from Lua doesn't take).
+- One run (0.74.203) hung loading Survival's level with 23 GB in use, no crash report; 0.74.204 with the same data loaded
+  fine: not reproduced.
+- Checks: lua_check, ini_check, bosses_test (her preload carries the portal's pieces), coop_guard / coop_rejoin, paths
+  and size checks, every build_all.sh. Autotest runs 20261122_130001 (baseline) to the 0.74.210 run: 19/19 from 0.74.204.

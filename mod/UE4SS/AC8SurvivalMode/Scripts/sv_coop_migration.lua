@@ -950,7 +950,13 @@ local function onJoinerMessage(f)
             M.vportal = M.vportal or {}
             local okP, errP = pcall(SPC.V.portalOpen, c, M.vportal, { X = x * 100, Y = y * 100, Z = z * 100 }, yaw, os.clock())
             if not okP then once("vp", "coop: the host's VALKA portal not drawn: " .. tostring(errP)) end
+            -- (its cutscene here too, on this game's clock: sv_valka_cine.lua; untested in co-op, 2026-11-22)
+            if okP and M.vportal.portal and VCINE and VCINE.start then
+                M.vportal.state = "opener"
+                pcall(VCINE.start, c, M.vportal, { X = x * 100, Y = y * 100, Z = z * 100 }, yaw, os.clock())
+            end
         elseif ok and what == "t" and M.vportal then
+            M.vportal.state = "shot"
             pcall(SPC.V.portalThrough, c, M.vportal, os.clock())
         elseif ok and what == "b" then                    -- (a blink's small one)
             M.vportal = M.vportal or {}
@@ -1551,6 +1557,7 @@ end
 -- wing sweep each tick, as her round does on the host
 function COOP.valkaTick()
     if M.vportal and M.vportal.portal then pcall(SPC.V.portalTick, CFG.specials.valka, M.vportal, os.clock()) end   -- ((2026-11-22))
+    if M.vportal and VCINE and VCINE.tick then pcall(VCINE.tick, CFG.specials.valka, M.vportal, os.clock()) end
     if M.vportal and M.vportal.bportals then pcall(SPC.V.blinkPortalsTick, CFG.specials.valka, M.vportal, os.clock()) end
     local v = M.vr
     if not (v and D and COOP.client()) then return end
