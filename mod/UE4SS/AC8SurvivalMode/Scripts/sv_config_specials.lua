@@ -312,7 +312,7 @@ CFG.specials = {
                  -- hold_s later over close_s (max_s at most open); face_you: the whole hole turns to you each tick (its
                  -- lensed arcs face whoever looks); the disk's layers turn spin_dps x their spin, inner faster.
                  -- A piece: { mesh, mat, params (the material's Color...), abs, size, flat, tilt (90: facing you; 5: the
-                 -- disk, tipped 5 deg towards you), spin } or a Niagara one { fx, scale, at ("open"/"burst"/"close") }.
+                 -- disk, tipped 5 deg towards you: -5, the run of 14:08 had +5 show its underside), spin } or a Niagara one { fx, scale, at ("open"/"burst"/"close") }.
                  -- fallback: the stock pieces' portal (the portalprobe runs: training-ring glows on the engine's shapes),
                  -- if its own aren't in (a build without the container)
                  portal = { enabled = true, size_m = 250, open_s = 3.0, hold_s = 4.0, close_s = 3.0, max_s = 30, spin_dps = 25,
@@ -325,16 +325,16 @@ CFG.specials = {
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloInner", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.78, 0.5, 1 } } },
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloOuter", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.9, 0.42, 0.12, 1 } } },
                                 -- the disk: hot, warm, cool, turning (inner faster), and its brighter approaching side
-                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskHot", abs = true, tilt = 5, spin = 1.0, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskHot", abs = true, tilt = -5, spin = 1.0, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
                                   params = { Color = { 1.0, 0.7, 0.38, 1 } } },
-                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskWarm", abs = true, tilt = 5, spin = 0.6, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskWarm", abs = true, tilt = -5, spin = 0.6, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
                                   params = { Color = { 0.85, 0.35, 0.08, 1 } } },
-                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskCool", abs = true, tilt = 5, spin = 0.35, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskCool", abs = true, tilt = -5, spin = 0.35, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
                                   params = { Color = { 0.45, 0.13, 0.03, 1 } } },
-                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskBright", abs = true, tilt = 5, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskBright", abs = true, tilt = -5, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
                                   params = { Color = { 1.0, 0.92, 0.8, 1 } } },
                                 -- a faint glow over the disk
-                                { mesh = "/Engine/BasicShapes/Sphere", abs = true, size = 6.6, flat = 0.05, tilt = 5, mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow",
+                                { mesh = "/Engine/BasicShapes/Sphere", abs = true, size = 6.6, flat = 0.05, tilt = -5, mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow",
                                   params = { Color = { 1, 0.45, 0.12, 1 }, EmissiveIntensity = 2, Opacity = 0.08 } },
                                 { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 6, at = "burst" } },
                             fallback = {
@@ -351,13 +351,13 @@ CFG.specials = {
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, mat = "/Engine/BasicShapes/BasicShapeMaterial", params = { Color = { 0, 0, 0, 1 } } },
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHPhotonRing", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.92, 0.8, 1 } } },
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloInner", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.78, 0.5, 1 } } },
-                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskHot", abs = true, tilt = 5, spin = 1.0, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
+                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskHot", abs = true, tilt = -5, spin = 1.0, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
                                         params = { Color = { 1.0, 0.7, 0.38, 1 } } },
                                       { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 2, at = "burst" } },
                                   fallback = {
                                       { mesh = "/Engine/BasicShapes/Sphere", mat = "/Engine/BasicShapes/BasicShapeMaterial", params = { Color = { 0, 0, 0, 1 } }, size = 3.1, flat = 0.32 },
                                       { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07", mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.35, 0.02, 0.8, 1 } }, size = 3.9, spin = 1 } } },
-                 flare = { enabled = true, life_s = 7, intensity_x = 6,
+                 flare = { enabled = true, life_s = 7, intensity_x = 6, portal_x = 0.3, portal_size_x = 0.5,
                            path = "/Game/Mods/SurvivalMode/Valka/Flare/MI_SV_ValkaFlare_",
                            elements = { { "Glare", 1.6 }, { "Ring", 1.2 }, { "Shine", 0.9 }, { "Bokeh", 0.4 } },
                            curve = { { 0, 1 }, { 0.1, 1 }, { 0.831, 0.84 }, { 1, 0 } } },

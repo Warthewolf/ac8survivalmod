@@ -1244,6 +1244,10 @@ function SPC.V.flareStart(c, s, at, now)
     -- ((0.73.77) D5: each element's screen share x flash_size_x, [specials.valka]; 1 = AC7's own sizes)
     local kx = tonumber(c.flash_size_x) or 1
     if not (kx > 0 and kx <= 4) then kx = 1 end
+    -- ((2026-11-22) with her black hole up there, the flash smaller and dimmer (flare.portal_size_x / portal_x): its white
+    -- beam and frame covered the hole, the autotest's run of 14:08)
+    fl.dim = s.portal and (tonumber(f.portal_x) or 1) or 1
+    if s.portal then kx = kx * (tonumber(f.portal_size_x) or 1) end
     for _, e in ipairs(f.elements) do
         local p = f.path .. e[1]
         local mi, why = SPC.V.asset(p)                  -- ((0.73.80) kept from the break's preload: no load, no find here)
@@ -1278,7 +1282,7 @@ function SPC.V.flareTick(c, s, now)
         if k >= p[1] and k <= q[1] then alpha = p[2] + (q[2] - p[2]) * (k - p[1]) / math.max(1e-6, q[1] - p[1]) end
     end
     for _, m in ipairs(fl.mids) do
-        pcall(function() m.mid:SetScalarParameterValue(FName("Emissive_Intensity"), m.base * c.flare.intensity_x * alpha) end)
+        pcall(function() m.mid:SetScalarParameterValue(FName("Emissive_Intensity"), m.base * c.flare.intensity_x * alpha * (fl.dim or 1)) end)
     end
 end
 function SPC.V.flareStop(s)

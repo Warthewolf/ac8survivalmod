@@ -126,7 +126,7 @@ def shadow():
 def photon_ring():
     bm = bmesh.new()
     uv = bm.loops.layers.uv.verify()
-    R, tube, segs, rings = 0.515, 0.0055, 192, 10
+    R, tube, segs, rings = 0.515, 0.009, 192, 10        # ((2026-11-22) 0.0055 a hair in game)
     grid = [[bm.verts.new(((R + tube * math.cos(TAU * i / rings)) * math.cos(TAU * j / segs),
                            (R + tube * math.cos(TAU * i / rings)) * math.sin(TAU * j / segs),
                            tube * math.sin(TAU * i / rings))) for j in range(segs)] for i in range(rings)]
@@ -145,9 +145,9 @@ def halo_inner():
     """the lensed image: 7 streaks from r 0.53, broad over the top (+Y, which faces up in game), thin underneath"""
     bm = bmesh.new()
     uv = bm.loops.layers.uv.verify()
-    for k in range(9):                                # (the preview of 14:05: too thin: 9 streaks, ~0.3 broad on top)
-        r0 = 0.525 + 0.03 * k + random.uniform(0, 0.008)
-        top = random.uniform(0.022, 0.036) * (1.2 - 0.07 * k)
+    for k in range(9):                                # (the preview of 14:05: too thin: 9 streaks, ~0.3 broad on top;
+        r0 = 0.525 + 0.034 * k + random.uniform(0, 0.006)   # in game, 14:08, still thin lines: twice as broad)
+        top = random.uniform(0.045, 0.07) * (1.2 - 0.07 * k)
         bottom = top * random.uniform(0.12, 0.25) * (1.0 if k < 4 else 0.0) + 0.0015
 
         def width(a, top=top, bottom=bottom):
