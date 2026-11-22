@@ -5309,7 +5309,7 @@ end
 -- shootable but never down), pictures; then the KEW shells broken: the barrel's lasers up, the arms' down with the arms
 local LSR = { ours = 0, stock = 0, drops = {}, last = nil }
 pcall(NotifyOnNewObject, "/Script/Live.LiveTLSSwingforPlane", function(o)
-    local okP, full = pcall(function() return o:GetFullName() end)
+    local okP, full = pcall(function() return o:GetClass():GetFullName() end)
     full = okP and tostring(full) or ""
     if full:find("Default__", 1, true) then return end
     if full:find("BP_SV_SolgTLS", 1, true) then LSR.ours = LSR.ours + 1 else LSR.stock = LSR.stock + 1 end
@@ -5368,9 +5368,12 @@ SUITES.solglaser = function()
             LSR.ours, LSR.stock, #LSR.drops, table.concat(sizes, ", "), LSR.first and (" first:" .. LSR.first) or ""))
         ST.check(LSR.ours > 0, string.format("the SOLG's lasers fired (%d shots of BP_SV_SolgTLS)", LSR.ours))
         ST.check(LSR.stock == 0, "no stock laser fired meanwhile (ours is its own blueprint)", tostring(LSR.stock))
-        local five = 0
-        for _, d in ipairs(LSR.drops) do if math.abs(d / 50 - math.floor(d / 50 + 0.5)) < 0.05 then five = five + 1 end end
-        ST.check(#LSR.drops > 0 and five == #LSR.drops, string.format("each hit took 5 health (%d of %d drops in fives)", five, #LSR.drops))
+        local one = nil                                   -- (a hit: the smallest drop; every drop a whole number of them)
+        for _, d in ipairs(LSR.drops) do one = (not one or d < one) and d or one end
+        local whole = 0
+        for _, d in ipairs(LSR.drops) do if one and math.abs(d / one - math.floor(d / one + 0.5)) < 0.08 then whole = whole + 1 end end
+        ST.check(#LSR.drops > 0 and whole == #LSR.drops, string.format("every hit the same: %.1f health a hit (weapon 5, the game's own "
+            .. "scaling for your plane: x%.2f); %d of %d drops whole hits", (one or 0) / 10, (one or 0) / 50, whole, #LSR.drops))
         ST.marks.l1 = ST.n
         for k = 1, 40 do SOLG.hurt("KEW", 1); pcall(SOLG.tick, os.clock()) end
     end)
