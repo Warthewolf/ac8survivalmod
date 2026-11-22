@@ -570,7 +570,6 @@ breakTarget = function(e, why)
     if SOLG.onBreak and why ~= "its arm's gone" then pcall(SOLG.onBreak, e.key, e.bone, e.t.pay, why) end
     openUp()                                              -- (what waited on it: Gould's wing rows, an arm's MAG panels)
     if e.t.optional or e.optional then return end         -- (a laser, an optional panel: the phases go on without it)
-    if S.mirror then return end                           -- (a joiner: the next phase and the end are the host's word)
     if e.arm then                                         -- (its arm's last target: the arm breaks off)
         local left, pieces = 0, {}
         for _, x in ipairs(S.targets) do
@@ -583,6 +582,7 @@ breakTarget = function(e, why)
             SOLG.breakArm(e.arm, pieces)
         end
     end
+    if S.mirror then return end                           -- (a joiner: the next phase and the end are the host's word)
     -- the phase over: the next one's on (AC:I's); the last one: the SOLG destroyed
     if S.pauseUntil then return end
     for _, x in ipairs(S.targets) do if x.live and not x.t.optional and not x.optional and x.t.phase == S.phase then return end end
