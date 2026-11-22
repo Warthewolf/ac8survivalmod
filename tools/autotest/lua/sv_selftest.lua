@@ -5743,6 +5743,7 @@ SUITES.scalerprobe = function()
         ST.check(ok and n > 0, string.format("a portal up, %d pieces on scalers", n))
         SP.e = P and P.meshes[1]
         if SP.e and SP.e.sc then ST.info("scaler at once: " .. spBone(SP.e.sc)) end
+        SP.e1 = SP.e
     end)
     for k = 1, 6 do                                       -- (its own ticks: the portal ticked as her round would)
         A.do_(function()
@@ -5754,6 +5755,25 @@ SUITES.scalerprobe = function()
     A.do_(function() local P = SP.h.portal; if P then ST.look({ X = P.at.X + 300000, Y = P.at.Y, Z = P.at.Z + 30000 }, P.at, 50) end end)
     A.wait(0.4)
     A.do_(function() ST.shot("scalerprobe_1_after_open") end)
+    -- ((0.75.21: "it doesn't have an closing animation") its closing, now: the bone must fall back
+    A.do_(function() local P = SP.h.portal; if P then P.closeAt = os.clock() end; SP.closeAt = os.clock() end)
+    for k = 1, 8 do
+        A.do_(function()
+            pcall(SPC.V.portalTick, CFG.specials.valka, SP.h, os.clock())
+            if SP.e and SP.e.sc and SP.h.portal then
+                local txt, sc0 = spBone(SP.e.sc)
+                ST.info(string.format("closing tick %d: %s", k, txt))
+                SP.closeMin = math.min(SP.closeMin or 1e9, tonumber(sc0) or 1e9)
+            end
+        end)
+        A.wait(0.4)
+    end
+    A.do_(function()
+        ST.check((SP.closeMin or 1e9) < 50 or SP.h.portal == nil, string.format("the closing shrinks its pieces (bone down to %s)", tostring(SP.closeMin)))
+        SP.h = {}
+        SPC.V.portalOpen(CFG.specials.valka, SP.h, SP.at, 0, os.clock())
+        SP.e = SP.h.portal and SP.h.portal.meshes[1]
+    end)
     -- the remedies
     local REM = {
         { "A tick option 0 again", function(sc) sc.VisibilityBasedAnimTickOption = 0 end },
