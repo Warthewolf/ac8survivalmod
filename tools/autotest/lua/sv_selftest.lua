@@ -5918,6 +5918,57 @@ SUITES.solgpitch = function()
     A.do_(function() for _, a in pairs(T) do pcall(function() a:K2_DestroyActor() end) end end)
 end
 
+-- ((2026-11-22) the user: "make the solg pieces targetable by air weapons too": which GameObjectCategory a target can
+-- carry so both an AIR_ONLY and a GROUND_ONLY weapon select it. The SOLG 1.5 km ahead, one SAW target; your plane's
+-- weapons' LockOnTargetType set to each type in turn, the target's category to each in turn, SelectTarget forced on it)
+SUITES.airprobe = function()
+    intoRun()
+    local P = {}
+    A.do_(function()
+        local you, pl = playerLocation(), ST.plane()
+        local f = pl:GetActorForwardVector()
+        SOLG.C.pause_s = {}
+        local at = { X = you.X + f.X * 150000, Y = you.Y + f.Y * 150000, Z = you.Z + 20000 }
+        ST.check(SOLG.spawn(at, math.deg(math.atan(f.Y, f.X)), nil) == true, "the SOLG ahead of you")
+    end)
+    A.wait(1)
+    A.do_(function()
+        SOLG.targetsUp()
+        for _, e in ipairs(SOLG.debugTargets()) do if e.key == "SAW" and e.open then P.e = e; break end end
+        ST.check(P.e ~= nil, "an open SAW target", P.e and P.e.bone)
+        local pl = ST.plane()
+        P.sel = nil
+        pcall(function()
+            local list = pl:K2_GetComponentsByClass(StaticFindObject("/Script/Live.LiveTargetSelectionComponent"))
+            list:ForEach(function(_, c) P.sel = P.sel or c:get() end)
+        end)
+        P.w = {}
+        for _, w in ipairs(FindAllOf("LiveWeaponBase") or {}) do
+            local okO, own = pcall(function() return w:GetOwner() end)
+            if okO and own and addrOf(own) == addrOf(pl) then P.w[#P.w + 1] = w end
+        end
+        ST.info(string.format("selection component %s, your weapons %d", tostring(P.sel ~= nil), #P.w))
+        pcall(function() ST.info("the target's category now: " .. tostring(P.e.o.GameObjectCategory)) end)
+    end)
+    local CATS = { 1, 2, 3, 4, 5, 6, 7, 8, 9 }
+    local TYPES = { 0, 1, 2 }
+    for _, ty in ipairs(TYPES) do
+        for _, cat in ipairs(CATS) do
+            A.do_(function()
+                if not (P.e and P.sel) then return end
+                for _, w in ipairs(P.w) do pcall(function() w.LockOnTargetType = ty end) end
+                pcall(function() P.e.o.GameObjectCategory = cat end)
+                local okS, got = pcall(function() return P.sel:SelectTarget(true, P.e.o, false) end)
+                local cur = nil
+                pcall(function() cur = P.sel:GetSelectedTarget() end)
+                local hit = (okS and got and addrOf(got) == addrOf(P.e.o)) or (cur and addrOf(cur) == addrOf(P.e.o))
+                ST.info(string.format("lock type %d, category %d: %s", ty, cat, hit and "SELECTED" or "not selected"))
+            end)
+            A.wait(0.3)
+        end
+    end
+end
+
 -- ---- the tick ----------------------------------------------------------------------------------------------------
 local started, t0, finished = false, nil, false
 local function finish(why)
