@@ -5937,16 +5937,30 @@ SUITES.airprobe = function()
         for _, e in ipairs(SOLG.debugTargets()) do if e.key == "SAW" and e.open then P.e = e; break end end
         ST.check(P.e ~= nil, "an open SAW target", P.e and P.e.bone)
         local pl = ST.plane()
-        P.sel = nil
-        pcall(function()
-            local list = pl:K2_GetComponentsByClass(StaticFindObject("/Script/Live.LiveTargetSelectionComponent"))
-            list:ForEach(function(_, c) P.sel = P.sel or c:get() end)
-        end)
-        P.w = {}
-        for _, w in ipairs(FindAllOf("LiveWeaponBase") or {}) do
-            local okO, own = pcall(function() return w:GetOwner() end)
-            if okO and own and addrOf(own) == addrOf(pl) then P.w[#P.w + 1] = w end
+        local pa = addrOf(pl)
+        local pc = nil
+        pcall(function() pc = pl:GetController() end)
+        local function ownerName(x) local ok, o = pcall(function() return x:GetOwner() end); return ok and o and (o:GetFullName():match("[^%.:]+$") or "?") or "none" end
+        local function mineOrYours(x)
+            local ok, o = pcall(function() return x:GetOwner() end)
+            if not (ok and o) then return false end
+            if addrOf(o) == pa or (pc and addrOf(o) == addrOf(pc)) then return true end
+            local ok2, o2 = pcall(function() return o:GetOwner() end)
+            return ok2 and o2 and addrOf(o2) == pa or false
         end
+        local sels = FindAllOf("LiveTargetSelectionComponent") or {}
+        for k, c in ipairs(sels) do
+            if k <= 6 then ST.info("selection component " .. k .. ": owner " .. ownerName(c)) end
+            if not P.sel and mineOrYours(c) then P.sel = c end
+        end
+        P.sel = P.sel or sels[1]
+        P.w = {}
+        local ws = FindAllOf("LiveWeaponBase") or {}
+        for k, w in ipairs(ws) do
+            if mineOrYours(w) then P.w[#P.w + 1] = w end
+        end
+        ST.info(string.format("%d selection components, %d weapons in all", #sels, #ws))
+        for k = 1, math.min(5, #ws) do ST.info("weapon " .. k .. ": " .. (ws[k]:GetFullName():match("[^%.:]+$") or "?") .. ", owner " .. ownerName(ws[k])) end
         ST.info(string.format("selection component %s, your weapons %d", tostring(P.sel ~= nil), #P.w))
         pcall(function() ST.info("the target's category now: " .. tostring(P.e.o.GameObjectCategory)) end)
     end)
