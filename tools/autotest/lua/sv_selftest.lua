@@ -5001,6 +5001,20 @@ do
     }) do
         PP_PIECES[#PP_PIECES + 1] = { m[1], "mesh", PLANE, m[2], 200, 1, { Pitch = 0, Yaw = 0, Roll = -90 }, m[3], twice = true, stack = ST3 }   -- (its face to the camera: -Y)
     end
+    -- ((2026-11-22) her black hole's shadow: the engine's BasicShapeMaterial is lit (the sun's broad highlight on it in
+    -- every run), MI_TrainingRing adds light (a black of it changed nothing, run of 16:19): an unlit black?)
+    local SH = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow"
+    local BLACK = { Color = { 0, 0, 0, 1 }, BaseColor = { 0, 0, 0, 1 }, EmissiveColor = { 0, 0, 0, 1 }, Emissive = { 0, 0, 0, 1 },
+                    Tint = { 0, 0, 0, 1 }, TintColor = { 0, 0, 0, 1 }, EmissiveIntensity = 0, Brightness = 0, Intensity = 0 }
+    for _, m in ipairs({
+        { "shade_basic", "/Engine/BasicShapes/BasicShapeMaterial", { Color = { 0, 0, 0, 1 } } },
+        { "shade_envunlit", "/Game/Base/Material/Environment/Special/M_Env_Unlit", BLACK },
+        { "shade_envunlit_raw", "/Game/Base/Material/Environment/Special/M_Env_Unlit", {} },
+        { "shade_billboard", "/Game/OnlineMode/Environment/Common_Nimbus/Prop/Materials/Prop_BillBoard_EA_Unlit_Inst", BLACK },
+        { "shade_ring_black", "/Game/VFX/Mission/Traning/MI_TrainingRing", { Color = { 0, 0, 0, 1 }, Opacity = 1 } },
+    }) do
+        PP_PIECES[#PP_PIECES + 1] = { m[1], "mesh", SH, m[2], 260, 1, nil, m[3], twice = true }
+    end
 end
 local function ppAll(only)
     local want = nil
