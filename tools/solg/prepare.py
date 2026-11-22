@@ -332,7 +332,35 @@ def main():
     # shell's place, no mesh of its own) and RING_1 / RING_2 (no mesh)
     I3 = np.eye(3)
     bones = [('SOLG', I3, np.zeros(3)), ('SOLG_W', I3, np.zeros(3))]
-    pieces = [(0, cache[('s_solg', 'l1')]), (1, cache[('s_solg', 'd1')])]
+    # ((2026-11-23) the user: "Can't we add a tunnel mesh or something?" for its shaft, solid to its collision) the live body
+    # cut into BODY_<seg>_<sector> bones: SEGS along the barrel, SECTORS round it, each triangle by its centre. Unreal fits
+    # one shape a bone (ue_import.py keep_physics: PA_SV_SOLG), so the barrel's shapes hug its walls and its shaft is open.
+    # Every slice the body's child (no ring's): drawn as before. Its wreck stays one bone (never shown: its shape terminated)
+    pieces = [(1, cache[('s_solg', 'd1')])]
+    SEGS, SECTORS = 10, 16
+    groups = {}
+    for P, N, UV, T, tex in cache[('s_solg', 'l1')]:
+        P = np.asarray(P, np.float64); T = np.asarray(T).reshape(-1, 3)
+        c = P[T].mean(1)
+        lo, hi = P[:, 0].min(), P[:, 0].max()
+        seg = np.clip(((c[:, 0] - lo) / max(1e-6, hi - lo) * SEGS).astype(int), 0, SEGS - 1)
+        ang = np.clip(((np.arctan2(c[:, 2], c[:, 1]) + np.pi) / (2 * np.pi) * SECTORS).astype(int), 0, SECTORS - 1)
+        for key in set(zip(seg.tolist(), ang.tolist())):
+            sel = (seg == key[0]) & (ang == key[1])
+            groups.setdefault(key, []).append((P, np.asarray(N), np.asarray(UV), T[sel], tex))
+    nslice = 0
+    for (sg, an), parts in sorted(groups.items()):
+        vs = np.concatenate([P[np.unique(Ts.reshape(-1))] for P, N, UV, Ts, tex in parts])
+        pv = vs.mean(0)
+        local = []
+        for P, N, UV, Ts, tex in parts:
+            used = np.unique(Ts.reshape(-1))
+            remap = np.full(len(P), -1, np.int64); remap[used] = np.arange(len(used))
+            local.append((P[used] - pv, N[used], UV[used], remap[Ts].astype(np.uint32), tex))
+        bones.append(('BODY_%02d_%02d' % (sg, an), I3, pv))
+        pieces.append((len(bones) - 1, local))
+        nslice += 1
+    print('body: %d slices (%d along x %d round) for its hollow shaft' % (nslice, SEGS, SECTORS))
     for mt in layout['mounts']:
         R, p = np.array(mt['rot_m']), np.array(mt['pos_m'])
         if mt['model'] == 'f_sgc1':
