@@ -195,7 +195,7 @@ def sockets(body, mounts, rings, M):
 STATIC = False
 
 
-def import_skeletal(layout, mis, sk_name=None, skel_name=None, anim_names=None):
+def import_skeletal(layout, mis, sk_name=None, skel_name=None, anim_names=None, keep_physics=False):
     """SK_SV_SOLG (+ SKEL_SV_SOLG): the whole SOLG, a bone per piece (prepare.py write_skinned); its slots our
     instances (by slot name: t<texture id>); no physics asset (no collision: the carrier's parts take the hits).
     The reference pose's bones logged against layout.json (the UE frame: (AC.z, -AC.x, AC.y) x 100)."""
@@ -229,11 +229,35 @@ def import_skeletal(layout, mis, sk_name=None, skel_name=None, anim_names=None):
         EAL.save_loaded_asset(a)
     sk = unreal.load_asset(f'{DEST}/Model/{sk_name}')
     skel = sk.get_editor_property('skeleton')
-    try:
-        sk.set_editor_property('physics_asset', None)
-    except Exception as ex:
-        say(f'physics asset not cleared: {ex}')
-    for a in kinds.get('PhysicsAsset', []) + kinds.get('Material', []) + kinds.get('MaterialInstanceConstant', []) + kinds.get('Texture2D', []):
+    # ((2026-11-23) the user: "why haven't we set up the SOLG with collision yet?") keep_physics: the importer's physics asset
+    # kept (PA_SV_SOLG: a body per bone, fitted to its piece; each kinematic, never simulated): Scripts/sv_solg.lua turns
+    # its collision on, so a plane can't fly through it. Else (the falling wings and arms) none, as before.
+    pas = kinds.get('PhysicsAsset', [])
+    if keep_physics and pas:
+        want = f'{DEST}/Model/PA_SV_SOLG'
+        if pas[0] != want:
+            EAL.rename_asset(pas[0], want)
+        pa = unreal.load_asset(want)
+        n_b = 0
+        try:
+            for b in pa.get_editor_property('skeletal_body_setups'):
+                try:
+                    b.set_editor_property('physics_type', unreal.PhysicsType.PHYS_TYPE_KINEMATIC)
+                except Exception as ex:
+                    say(f'a body not made kinematic: {ex}')
+                n_b += 1
+        except Exception as ex:
+            say(f'its bodies not read: {ex}')
+        sk.set_editor_property('physics_asset', pa)
+        EAL.save_loaded_asset(pa)
+        say(f'{sk_name}: its physics asset kept as PA_SV_SOLG, {n_b} bodies, kinematic')
+        pas = pas[1:]
+    else:
+        try:
+            sk.set_editor_property('physics_asset', None)
+        except Exception as ex:
+            say(f'physics asset not cleared: {ex}')
+    for a in pas + kinds.get('Material', []) + kinds.get('MaterialInstanceConstant', []) + kinds.get('Texture2D', []):
         if EAL.does_asset_exist(a):
             EAL.delete_asset(a)
     mats = list(sk.get_editor_property('materials'))
@@ -289,7 +313,7 @@ def main():
             bs.set_editor_property('collision_trace_flag', unreal.CollisionTraceFlag.CTF_USE_SIMPLE_AS_COMPLEX)
             return 'body setup simple-as-complex (no helper)'
         return 'none to remove'
-    import_skeletal(layout, mis, anim_names=['A_SV_SOLG_Spin'])
+    import_skeletal(layout, mis, anim_names=['A_SV_SOLG_Spin'], keep_physics=True)   # (its collision: 2026-11-23)
     for nm in layout.get('panels', []):              # ((2026-11-22) the solar array wings on their own: they fall)
         import_skeletal(layout, mis, nm, 'SKEL_' + nm[3:])
     for name, info in sorted(layout['meshes'].items()):

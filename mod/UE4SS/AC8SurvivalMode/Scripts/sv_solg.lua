@@ -71,6 +71,12 @@ SOLG = { C = {
     -- apart in a line: its one or two neighbours) loses damage_pct of its health; one brought down blows the same way
     -- (its normal pay: the team's, as any shot down). Ours (AC:I has none; AC8's induced explosion reaches 20 m)
     ping = { enabled = true, every_s = 20 },
+    -- ((2026-11-23) the user: "why haven't we set up the SOLG with collision yet?") its pieces' own shapes (PA_SV_SOLG, a body
+    -- per bone: tools/solg/ue_import.py keep_physics) switched on for queries only (nothing in the engine bumps into them,
+    -- so its mover is never stopped by a plane); each tick your plane's distance to them asked (GetDistanceToCollision, at
+    -- your place and halfway since the last tick, never tunnelled): within radius_m, you crash into it (the game's own
+    -- death; a test plane's floor and invincibility kept). A piece shot off takes its shape with it.
+    collision = { enabled = true, radius_m = 8, near_km = 2.5 },
     -- ((2026-11-23) the autotest: each turret fires its first burst, then never again (1-4 hits in 50 s, held still or
     -- moving; its ammo not limited): the land CIWS's cycle never comes round again on our turrets. Every rearm_s (Gould's
     -- 10 s of fire, 5 s rest) each live laser is switched off and on, which starts its cycle (and a burst) afresh)
@@ -227,7 +233,12 @@ function SOLG.spawn(at, yaw, vel)
     step("its skeletal mesh")
     local body = addComp(a, "/Script/Engine.SkeletalMeshComponent")
     if not body then sl("no SkeletalMeshComponent"); pcall(function() a:K2_DestroyActor() end); return false end
-    pcall(function() body:SetCollisionEnabled(0) end)
+    if SOLG.C.collision and SOLG.C.collision.enabled ~= false then
+        pcall(function() body:SetCollisionResponseToAllChannels(0) end)   -- (ignored by everything: queries only)
+        pcall(function() body:SetCollisionEnabled(1) end)                  -- (QueryOnly)
+    else
+        pcall(function() body:SetCollisionEnabled(0) end)
+    end
     pcall(function() body:SetCastShadow(false) end)
     local okM = pcall(function() body:SetSkeletalMeshAsset(sk) end) or pcall(function() body:SetSkeletalMesh(sk, true) end)
     -- ((2026-11-22, run 17:58) a bare actor has no root: its spawn place went with the first component, the SOLG lay at the
@@ -273,7 +284,7 @@ function SOLG.breakPanel(bone)
     local L, R = boneAt(S.body, bone)
     if not (path and L and R) then sl("break " .. bone .. ": not a panel, or its bone not found"); return false end
     S.broken[bone] = true
-    pcall(function() S.body:HideBoneByName(FName(bone), 0) end)
+    pcall(function() S.body:HideBoneByName(FName(bone), 1) end)   -- (its shape gone too: PBO_Term)
     local sk = obj(path)
     local a = valid(sk) and newActor(L, R) or nil
     local c = a and addComp(a, "/Script/Engine.SkeletalMeshComponent")
@@ -323,10 +334,10 @@ function SOLG.breakArm(armBone, pieces)
     local L, R = boneAt(S.body, armBone)
     if not (L and R) then sl("break " .. armBone .. ": its bone not found"); return false end
     S.broken[armBone] = true
-    for _, b in ipairs({ armBone, armBone .. "_W" }) do pcall(function() S.body:HideBoneByName(FName(b), 0) end) end
+    for _, b in ipairs({ armBone, armBone .. "_W" }) do pcall(function() S.body:HideBoneByName(FName(b), 1) end) end
     for _, b in ipairs(pieces or {}) do
-        pcall(function() S.body:HideBoneByName(FName(b), 0) end)
-        pcall(function() S.body:HideBoneByName(FName(b .. "_W"), 0) end)
+        pcall(function() S.body:HideBoneByName(FName(b), 1) end)
+        pcall(function() S.body:HideBoneByName(FName(b .. "_W"), 1) end)
     end
     local sk = obj(SOLG.C.arm)
     local a = valid(sk) and newActor(L, R) or nil
@@ -473,6 +484,40 @@ local function splashed(a, scale)
     return true
 end
 -- its laser turrets now (sv_solg_laser.lua's): { o, bone, live, open }; nil with no SOLG
+-- your plane into its shapes: a crash (SOLG.C.collision)
+function SOLG.crashTick()
+    local c = SOLG.C.collision
+    if not (c and c.enabled ~= false and S and liveObj(S.body)) then return end
+    local pawn = nil
+    pcall(function() pawn = survivalPC.Pawn end)
+    if not (pawn and liveObj(pawn)) then S.lastYou = nil; return end
+    local okY, you = pcall(function() local v = pawn:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    if not (okY and you) then return end
+    local last = S.lastYou
+    S.lastYou = you
+    local okA, at = pcall(function() local v = S.actor:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    if not (okA and at) then return end
+    local far = math.sqrt((you.X - at.X) ^ 2 + (you.Y - at.Y) ^ 2 + (you.Z - at.Z) ^ 2)
+    if far > n(c.near_km, 2.5) * 100000 then return end      -- (nowhere near: no asking)
+    local pts = { you }
+    if last then pts[2] = { X = (you.X + last.X) / 2, Y = (you.Y + last.Y) / 2, Z = (you.Z + last.Z) / 2 } end
+    local r = n(c.radius_m, 8) * 100
+    for _, p in ipairs(pts) do
+        local okD, d = pcall(function() return S.body:GetDistanceToCollision(p, {}) end)
+        d = okD and tonumber(d) or nil
+        if d and not S.collSaid then S.collSaid = true; sl(string.format("its collision answers: you %.0f m from its shapes", d / 100)) end
+        if d and d >= 0 and d <= r then
+            if S.crashedAt and os.clock() - S.crashedAt < 3 then return end
+            S.crashedAt = os.clock()
+            local h0 = nil
+            pcall(function() h0 = pawn.HealthInternal end)
+            local how, h1 = "no hurt", nil
+            if SLAS and SLAS.hurt then how, h1 = SLAS.hurt(pawn, 100000, S.actor, h0) end
+            sl(string.format("you flew into it (%.0f m from its shapes): your health %s -> %s (%s)", d / 100, tostring(h0), tostring(h1), tostring(how)))
+            return
+        end
+    end
+end
 function SOLG.laserTurrets()
     if not (S and S.targets) or S.destroyed then return nil end
     local out = {}
@@ -504,6 +549,10 @@ function SOLG.tick(now)
         if not okL and not S.slasErr then S.slasErr = true; sl("its lasers: error " .. tostring(errL)) end
     end
     if not S then return end
+    if SOLG.crashTick then
+        local okC, errC = pcall(SOLG.crashTick)
+        if not okC and not S.crashErr then S.crashErr = true; sl("its collision: error " .. tostring(errC)) end
+    end
     if S and S.pauseUntil and os.clock() >= S.pauseUntil then
         local ph = S.pauseNext
         S.pauseUntil, S.pauseNext = nil, nil
@@ -778,9 +827,9 @@ breakTarget = function(e, why)
     flags(e.o, FLAGS_OFF)
     local L = boneAt(S.body, e.bone)
     if e.key == "SAW" then SOLG.breakPanel(e.bone)
-    elseif e.t.laser then pcall(function() S.body:HideBoneByName(FName(e.bone), 0) end)   -- (AC:I has no wreck for it)
+    elseif e.t.laser then pcall(function() S.body:HideBoneByName(FName(e.bone), 1) end)   -- (AC:I has no wreck for it)
     else
-        pcall(function() S.body:HideBoneByName(FName(e.bone), 0) end)
+        pcall(function() S.body:HideBoneByName(FName(e.bone), 1) end)        -- (its shape off; its wreck's stays)
         pcall(function() S.body:UnHideBoneByName(FName(e.bone .. "_W")) end)
     end
     if L and fxAt then pcall(fxAt, SOLG.C.fx, L, n(SOLG.C.fx_scale[e.key], 3), 6) end
