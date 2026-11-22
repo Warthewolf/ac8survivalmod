@@ -4125,3 +4125,13 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   the rear hatch a target (phase 4, 2000 x 0.25, pay 150), the SP shell phase 5. 0.75.31 INSTALLED 2026-11-22 (backup
   build/backup/install_before_0.75.31); not tested in game (her game was running). Friends' 0.75.31 zip built too.
   Next (committed, not built): the KEW shells' chain reaction (her picks: neighbours within 45 m lose 60 %, 0.4 s on).
+- 0.75.32-0.75.39 (2026-11-22/23): KEW chain (neighbours within 45 m lose 60 %), target lock points on the bones
+  (HitCenterOffset 35 m: K2_SetActorRelativeLocation), damaged-state tower meshes re-hidden on each hit, SOLG minimap
+  ping (RE_SV_SolgPing every 20 s), VALKA deactivated while parked (off radar, no fire) and her hits capped at 10 % a
+  second (MinHealth moved each second), smoke off broken pieces, splashes where falling pieces land, the SOLG taken down
+  when its round is over. Lasers: the game's own turret firing fired once ever (ammo, reload, trigger count 999 and
+  off/on all tried; the struct overwrite K2_OverwritePerformance crashed); now Survival's own (sv_solg_laser.lua: 10 s on
+  / 5 s rest, at most 3 on you, a hit every 2 s at 50 %, 5 a hit, written to HealthInternal since ModifyHealth on a
+  player's plane is ignored). "VALKA CALLS FORTH THE SOLG" on its arrival (countdowns keep SOLG INBOUND). The user's
+  Audrey SOLG lines merged into config/subtitles.ini. Tests on 0.75.37-0.75.39: solglaser 15/15 still and moving,
+  valkasolg 38/38, friends' smoke 5/5. Leaderboard: 0.75.32-0.75.39 NOT registered (HTTP 500 from the server).
