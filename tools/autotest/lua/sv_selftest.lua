@@ -5369,6 +5369,8 @@ pcall(NotifyOnNewObject, "/Script/Live.LiveTLSSwingforPlane", function(o)
     if full:find("Default__", 1, true) then return end
     if full:find("BP_SV_SolgTLS", 1, true) then
         LSR.ours = LSR.ours + 1
+        LSR.times = LSR.times or {}
+        LSR.times[#LSR.times + 1] = os.clock()
         LSR.new = LSR.new or {}
         if #LSR.new < 40 then LSR.new[#LSR.new + 1] = { o = o, at = os.clock() } end
     else LSR.stock = LSR.stock + 1 end
@@ -5447,8 +5449,12 @@ SUITES.solglaser = function()
                     if okA and a and valid(a) then LSR.actor = a; break end
                 end
             end
+            -- ((2026-11-22) the user: "as soon as the solg started moving they stopped firing or they were like rapid
+            -- firing") --conf move=1: the SOLG sweeps past you at 120 m/s (its fall's speed), 500 m up, from 2.4 km back
+            local dx = 0
+            if ST.conf.move == 1 then dx = (-2400 + 120 * (now - t0)) * 100 end
             if LSR.actor and valid(LSR.actor) then
-                pcall(function() LSR.actor:K2_SetActorLocation({ X = you.X, Y = you.Y, Z = you.Z + 50000 }, false, {}, true) end)
+                pcall(function() LSR.actor:K2_SetActorLocation({ X = you.X + dx, Y = you.Y, Z = you.Z + 50000 }, false, {}, true) end)
             end
         end
         for _, e in ipairs(LSR.new or {}) do
@@ -5491,6 +5497,13 @@ SUITES.solglaser = function()
         ST.info(string.format("lasers: %d of ours, %d stock swing lasers; your health dropped %d times (HealthInternal: %s)%s",
             LSR.ours, LSR.stock, #LSR.drops, table.concat(sizes, ", "), LSR.first and (" first:" .. LSR.first) or ""))
         ST.check(LSR.ours > 0, string.format("the SOLG's lasers fired (%d shots of BP_SV_SolgTLS)", LSR.ours))
+        do                                                -- (each second's shots: a steady fire or bursts)
+            local per, t1 = {}, (LSR.times or {})[1]
+            for _, t in ipairs(LSR.times or {}) do local k = math.floor(t - t1); per[k] = (per[k] or 0) + 1 end
+            local row = {}
+            for k = 0, 45 do row[#row + 1] = tostring(per[k] or 0) end
+            ST.info("laser shots a second" .. (ST.conf.move == 1 and " (the SOLG moving)" or "") .. ": " .. table.concat(row, " "))
+        end
         ST.check(LSR.stock == 0, "no stock laser fired meanwhile (ours is its own blueprint)", tostring(LSR.stock))
         local one = nil                                   -- (a hit: the smallest drop but the last (the floor cuts it); every other a whole number)
         if #LSR.drops > 1 then table.remove(LSR.drops) end
