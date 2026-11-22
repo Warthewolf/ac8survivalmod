@@ -6045,6 +6045,21 @@ SUITES.solgcrash = function()
         local h1, d1, b1 = trace(at(500, 0), at(500, 120))
         ST.check(h1 and d1 and d1 > 20 and d1 < 50 and tostring(b1):find("BODY_", 1, true) ~= nil,
             string.format("its shaft hollow: from its axis 500 m in, its wall %s m out (%s)", tostring(d1 and math.floor(d1)), tostring(b1)))
+        do                                                -- (its walls all round: 16 ways out at 4 places along the shaft)
+            local U = { X = F.Y * R.Z - F.Z * R.Y, Y = F.Z * R.X - F.X * R.Z, Z = F.X * R.Y - F.Y * R.X }
+            for _, fw in ipairs({ 350, 500, 650, 800 }) do
+                local row, gaps = {}, 0
+                for k = 0, 15 do
+                    local th = k * math.pi / 8
+                    local c0 = at(fw, 0)
+                    local dx = { X = R.X * math.cos(th) + U.X * math.sin(th), Y = R.Y * math.cos(th) + U.Y * math.sin(th), Z = R.Z * math.cos(th) + U.Z * math.sin(th) }
+                    local hh, dd = trace(c0, { X = c0.X + dx.X * 12000, Y = c0.Y + dx.Y * 12000, Z = c0.Z + dx.Z * 12000 })
+                    row[#row + 1] = hh and tostring(math.floor(dd or 0)) or "-"
+                    if not hh then gaps = gaps + 1 end
+                end
+                ST.info(string.format("its walls %d m in (16 ways, m out; - none within 120 m): %s; %d gaps", fw, table.concat(row, " "), gaps))
+            end
+        end
         local h2, d2, b2 = trace(at(400, 0), at(400, -120))
         ST.check(h2 and d2 and d2 > 20 and d2 < 50, string.format("... and on its other side (%s m, %s)", tostring(d2 and math.floor(d2)), tostring(b2)))
         local h3, d3, b3 = trace(at(1100, 0), at(600, 0))
