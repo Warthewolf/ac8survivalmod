@@ -72,6 +72,46 @@ local function beamOn(t, from, to, life)
 end
 -- every live, open laser turret of this game's SOLG (SOLG.laserTurrets: { o, bone, live, open })
 local T = {}                                               -- (per turret, by its bone: its cycle)
+-- `dmg` of your health off (x 10 in HealthInternal). ((2026-11-23) the run of 08:07: ModifyHealth on a player's plane is
+-- ignored (1130 -> 1130 every hit, as coop.md's hard rules found for a player's damage). GameplayStatics.ApplyDamage first,
+-- read back; else HealthInternal written (never under its MinHealth floor, never while invincible); a lethal hit through
+-- ApplyDamage with a big number, so the game's own death runs. -> how, the health after
+function SLAS.hurt(pawn, dmg, causer, h0)
+    h0 = tonumber(h0)
+    if not h0 then return "unread", nil end
+    local inv = false
+    pcall(function() inv = pawn.bIsInvincible == true end)
+    if inv then return "invincible", h0 end
+    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+    if SLAS.way ~= "write" and valid(gs) then
+        pcall(function() gs:ApplyDamage(pawn, dmg, nil, causer, nil) end)
+        local h1 = nil
+        pcall(function() h1 = tonumber(pawn.HealthInternal) end)
+        if h1 and h1 < h0 then SLAS.way = "apply"; return "ApplyDamage", h1 end
+        if SLAS.way == "apply" then return "ApplyDamage (no change)", h1 end
+    end
+    SLAS.way = "write"
+    local fl = 0
+    pcall(function() fl = (tonumber(pawn.MinHealth) or 0) * 10 end)
+    local want = h0 - dmg * 10
+    if want <= 0 and fl <= 0 then
+        if valid(gs) then pcall(function() gs:ApplyDamage(pawn, 100000.0, nil, causer, nil) end) end
+        local h1 = nil
+        pcall(function() h1 = tonumber(pawn.HealthInternal) end)
+        if h1 and h1 > 0 then pcall(function() pawn.HealthInternal = 0 end); pcall(function() h1 = tonumber(pawn.HealthInternal) end) end
+        return "lethal", h1
+    end
+    want = math.max(want, fl, 1)
+    pcall(function() pawn.HealthInternal = want end)
+    local h1 = nil
+    pcall(function() h1 = tonumber(pawn.HealthInternal) end)
+    return "HealthInternal", h1
+end
+function SLAS.firing()                                    -- (beams on you now)
+    local k = 0
+    for _, t in pairs(T) do if t.comp then k = k + 1 end end
+    return k
+end
 function SLAS.stop()
     for _, t in pairs(T) do beamOff(t) end
     T = {}
@@ -105,15 +145,20 @@ function SLAS.tick(now)
             else
                 aimBeam(t, from, you)
                 if d <= reach * 1.1 and now >= (t.hitAt or 0) then
-                    t.hitAt = now + num(c.hit_s, 1)
-                    local dmg = num(c.damage, 5)
-                    local okD = pcall(function() pawn:ModifyHealth(-dmg, e.o, true) end)
-                    if not okD then pcall(function() pawn:ModifyHealth(-dmg, nil, true) end) end
-                    SLAS.hits = (SLAS.hits or 0) + 1
-                    if SLAS.hits == 1 or SLAS.hits % 25 == 0 then sl(string.format("%d hits on you (%s, %.1f km, %d a hit)", SLAS.hits, e.bone, d / 100000, dmg)) end
+                    t.hitAt = now + num(c.hit_s, 2)
+                    if math.random() < num(c.hit_chance, 1) then
+                        local dmg = num(c.damage, 5)
+                        local h0 = nil
+                        pcall(function() h0 = pawn.HealthInternal end)
+                        local how, h1 = SLAS.hurt(pawn, dmg, e.o, h0)
+                        SLAS.hits = (SLAS.hits or 0) + 1
+                        if SLAS.hits == 1 or SLAS.hits % 25 == 0 then
+                            sl(string.format("%d hits on you (%s, %.1f km, %d a hit; your health %s -> %s, by %s)", SLAS.hits, e.bone, d / 100000, dmg, tostring(h0), tostring(h1), tostring(how)))
+                        end
+                    end
                 end
             end
-        elseif now >= t.nextAt and you and not (downNow and downNow()) then
+        elseif now >= t.nextAt and you and not (downNow and downNow()) and SLAS.firing() < num(c.max_at_you, 3) then
             local d = math.sqrt((you.X - from.X) ^ 2 + (you.Y - from.Y) ^ 2 + (you.Z - from.Z) ^ 2)
             if d <= reach then
                 local life = num(c.fire_s, 10)

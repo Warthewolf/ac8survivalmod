@@ -78,7 +78,10 @@ SOLG = { C = {
     laser_perf = { enabled = false, trigger_count = 999 },   -- (off: the game's own firing is left alone, own_laser fires)
     -- ((2026-11-23) its lasers are Survival's own (Scripts/sv_solg_laser.lua): Gould's 10 s on a player within reach, 5 s
     -- rest; AC8's player TLS beam (the ZFA-44's), its shooting sound, `damage` a hit every hit_s)
-    own_laser = { enabled = true, reach_m = 1500, fire_s = 10, rest_s = 5, hit_s = 1, first_hit_s = 0.5, damage = 5,
+    -- ((2026-11-23) the first run: every turret in reach at once, a hit a second each: 275 hits in 21 s) at most max_at_you
+    -- beams on you at a time, a hit every hit_s at hit_chance
+    own_laser = { enabled = true, reach_m = 1500, fire_s = 10, rest_s = 5, hit_s = 2, first_hit_s = 1, damage = 5,
+                  max_at_you = 3, hit_chance = 0.5,
                   beam_fx = "/Game/VFX/Vehicles/Weapon/TLS/NS_TLS_Muzzleflash01",
                   sound = "AKE_GEN_PLAYER_ARMS_SPWeapon_TLS_Emit_Play", sound_stop = "AKE_GEN_PLAYER_ARMS_SPWeapon_TLS_Emit_Stop" },
     -- ((2026-11-22) the user: "some black smoke that pours off the sides of the SOLG after things have been destroyed,
