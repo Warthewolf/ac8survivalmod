@@ -195,6 +195,13 @@ function SOLG.breakPanel(bone)
     sl(string.format("%s shot off: falling (%s, tumble %s)", bone, pm and "a mover" or "NO mover", rot and "on" or "off"))
     return true
 end
+-- where the k-th falling wing is now (the tests' cameras)
+function SOLG.panelAt(k)
+    local p = S and S.panels[k or 1]
+    if not (p and liveObj(p.actor)) then return nil end
+    local ok, L = pcall(function() local v = p.actor:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    return ok and L or nil
+end
 function SOLG.stop(why)
     if not S then return end
     for _, p in ipairs(S.panels) do if liveObj(p.actor) then pcall(function() p.actor:K2_DestroyActor() end) end end
