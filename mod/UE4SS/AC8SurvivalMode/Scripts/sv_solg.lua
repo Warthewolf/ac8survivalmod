@@ -389,7 +389,8 @@ local function flags(o, f) for k, v in pairs(f) do pcall(function() o[k] = v end
 local function hideOwn(o, deep)
     local nh = 0
     if deep == nil then deep = true end
-    for _, cls in ipairs({ "/Script/Engine.StaticMeshComponent", "/Script/Engine.SkeletalMeshComponent" }) do
+    -- ((0.75.12's pictures: the Phalanx's turret showed) its TurretPoseableMesh too (a PoseableMesh, not a SkeletalMesh)
+    for _, cls in ipairs({ "/Script/Engine.StaticMeshComponent", "/Script/Engine.SkeletalMeshComponent", "/Script/Engine.PoseableMeshComponent" }) do
         local c = StaticFindObject(cls)
         local ok, list = pcall(function() return o:K2_GetComponentsByClass(c) end)
         if ok and list then
