@@ -5778,6 +5778,42 @@ SUITES.scalerprobe = function()
         A.do_(function() if SP.e and SP.e.sc then ST.info(string.format("after remedy %s: %s", rm[1], (spBone(SP.e.sc)))) end end)
     end
     A.do_(function() ST.shot("scalerprobe_2_after_remedies") end)
+    -- (2) a fresh actor, the scaler its ROOT (as the SOLG's body), grow played at rate 1; and one looping; its bones' names
+    A.do_(function()
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = SP.at, Scale3D = { X = 1, Y = 1, Z = 1 } }
+        SP.roots = {}
+        for i, loop in ipairs({ false, true }) do
+            local okA, a2 = pcall(function() local x = gs:BeginDeferredActorSpawnFromClass(survivalPC, StaticFindObject("/Script/Engine.Actor"), t, 1, nil, 1); return gs:FinishSpawningActor(x, t, 1) end)
+            local sc = okA and a2:AddComponentByClass(StaticFindObject("/Script/Engine.SkeletalMeshComponent"), false, t, false)
+            if sc then
+                pcall(function() sc:SetSkeletalMeshAsset(SPC.V.asset(SPC.V.PORTAL_SCALER)) end)
+                pcall(function() sc:PlayAnimation(SPC.V.asset(SPC.V.PORTAL_GROW), loop) end)
+                SP.roots[i] = { a = a2, sc = sc, loop = loop }
+                local names = {}
+                pcall(function() for k = 0, sc:GetNumBones() - 1 do names[#names + 1] = sc:GetBoneName(k):ToString() end end)
+                local okR, isRoot = pcall(function() return a2.RootComponent == sc end)
+                ST.info(string.format("root scaler %d (loop %s): root %s, bones [%s], %s", i, tostring(loop), tostring(okR and isRoot), table.concat(names, ","), (spBone(sc))))
+            end
+        end
+    end)
+    for k = 1, 3 do
+        A.wait(0.6)
+        A.do_(function() for i, r in ipairs(SP.roots or {}) do ST.info(string.format("root scaler %d +%d: %s", i, k, (spBone(r.sc)))) end end)
+    end
+    A.do_(function()                                    -- (and a portal piece's scaler: its bones, the component's own tick)
+        local e = SP.e
+        if e and e.sc then
+            local names = {}
+            pcall(function() for k = 0, e.sc:GetNumBones() - 1 do names[#names + 1] = e.sc:GetBoneName(k):ToString() end end)
+            local tk = {}
+            pcall(function() tk[#tk + 1] = "tick enabled " .. tostring(e.sc:IsComponentTickEnabled()) end)
+            pcall(function() tk[#tk + 1] = "active " .. tostring(e.sc:IsActive()) end)
+            pcall(function() tk[#tk + 1] = "registered " .. tostring(e.sc:IsRegistered()) end)
+            ST.info("piece scaler: bones [" .. table.concat(names, ",") .. "], " .. table.concat(tk, ", "))
+        end
+        for _, r in ipairs(SP.roots or {}) do pcall(function() r.a:K2_DestroyActor() end) end
+    end)
     A.wait(0.5)
     A.do_(function()
         ST.lookBack()
