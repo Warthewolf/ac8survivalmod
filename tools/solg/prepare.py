@@ -349,12 +349,21 @@ def main():
         qq = next(t for t in tr if t['type'] == 0x0704)['vals'][0]
         return np.array(pp, np.float64), qmat(qq)
     bp, bR = pose(first['Tdemo__s_solg_t1__01'])
+    # ((2026-11-22) ring 1 has turned in that frame (its arms 11.4 degrees on from the plan nodes'): turned back, so each
+    # shell lies along its arm as in AC:I (a check against the cutscene: on the arm's line, 160-480 m out, 4 x 9))
+    cut_arms = sorted(math.degrees(math.atan2(*(bR.T @ (pose(first[k])[0] - bp))[1::-1]))
+                      for k in first if k.startswith('Tdemo__s_sg01_t1__'))
+    plan_arms = sorted(math.degrees(math.atan2(m['aci_pos_m'][1], m['aci_pos_m'][0])) for m in layout['mounts'] if m['model'] == 's_sg01')
+    d_ring = np.mean([((c_ - p_ + 180) % 360) - 180 for c_, p_ in zip(cut_arms, plan_arms)]) if len(cut_arms) == 4 else 0.0
+    cz, sz = math.cos(math.radians(-d_ring)), math.sin(math.radians(-d_ring))
+    unring = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]], np.float64)
+    print('KEW shells: ring 1 turned %.1f deg in the cutscene frame: turned back' % d_ring)
     kew = sorted(k for k in first if k.startswith('Tdemo__s_sg06_t1__'))
     layout['kew'] = []
     for i, k in enumerate(kew):
         pp, R = pose(first[k])
-        rel = bR.T @ (pp - bp)                   # in the body's AC:I frame
-        Rrel = bR.T @ R
+        rel = unring @ (bR.T @ (pp - bp))        # in the body's AC:I frame, ring 1 at its plan pose
+        Rrel = unring @ bR.T @ R
         key = 'KEW_%02d' % (i + 1)
         ring = 'RING_1' if abs(rel[2] - 714.3) <= abs(rel[2] - 791.5) else 'RING_2'
         Rt, pt = TURN @ Rrel @ TURN.T, turned(rel)
@@ -387,6 +396,28 @@ def main():
     for mdl, nm in (('s_sg04', 'SK_SV_SOLG_SAW4'), ('s_sg05', 'SK_SV_SOLG_SAW5')):
         write_skinned(nm, [(0, cache[(mdl, 'l1')]), (1, cache[(mdl, 'd1')])], [('PANEL', I3, np.zeros(3)), ('PANEL_W', I3, np.zeros(3))])
     layout['panels'] = ['SK_SV_SOLG_SAW4', 'SK_SV_SOLG_SAW5']
+    # ((2026-11-22) the user: "Each of its autoloaders falls off after each has had all of its targets destroyed") an arm
+    # on its own: arm 4 (SG01_04, at 0 degrees) with the wrecks of the 8 MAG panels and 9 KEW shells along it (each
+    # within 15 degrees of it about the barrel), in the arm's own frame. The four arms are alike, 90 degrees apart: the
+    # same mesh falls from whichever arm breaks (Scripts/sv_solg.lua SOLG.breakArm); ARM_W its wreck (hidden at first)
+    bi = {b_[0]: k for k, b_ in enumerate(bones)}
+    Ra, pa = bones[bi['SG01_04']][1], bones[bi['SG01_04']][2]
+    def on_arm4(v):
+        return math.hypot(v[0], v[1]) > 50 and abs(math.degrees(math.atan2(v[1], v[0]))) < 15
+    mine = ['SG07_%02d' % m['index'] for m in layout['mounts'] if m['model'] == 's_sg07' and on_arm4(m['aci_pos_m'])]
+    mine += [e['bone'] for e in layout['kew'] if on_arm4(e['aci_pos_m'])]
+    assert len(mine) == 17, ('arm 4 carries', mine)
+    abones = [('ARM', I3, np.zeros(3)), ('ARM_W', I3, np.zeros(3))]
+    apieces = [(0, cache[('s_sg01', 'l1')]), (1, cache[('s_sg01', 'd1')])]
+    for nm_ in mine:
+        R_, p_ = bones[bi[nm_]][1], bones[bi[nm_]][2]
+        model_ = 's_sg06' if nm_.startswith('KEW') else 's_sg07'
+        abones.append(('P_' + nm_, Ra.T @ R_, Ra.T @ (p_ - pa)))
+        apieces.append((len(abones) - 1, cache[(model_, 'd1')]))
+    write_skinned('SK_SV_SOLG_ARM', apieces, abones)
+    layout['panels'].append('SK_SV_SOLG_ARM')
+    layout['arm'] = {'from': 'SG01_04', 'pieces': mine}
+    print('SK_SV_SOLG_ARM: the arm and the wrecks of its %d pieces (%s)' % (len(mine), ', '.join(mine)))
     layout['parents'] = {b: (bn[parents[k]] if parents[k] >= 0 else None) for k, b in enumerate(bn)}
     layout['skeletal'] = {'mesh': 'SK_SV_SOLG', 'bones': [b[0] for b in bones], 'primitives': nprim, 'vertices': nvert}
     print('SK_SV_SOLG: %d bones, %d primitives, %d vertices' % (len(bones), nprim, nvert))

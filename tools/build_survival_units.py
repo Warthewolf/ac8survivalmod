@@ -710,6 +710,7 @@ def solg_units(units, used_ids, z, top_number):
         names = port_unit(units, used_ids, z, src, survival_events.SOLG_UNITS[t], survival_events.SOLG_OBJS[t],
                           survival_events.SOLG_ROWS[t], pts, 0.0, top_number, tgt=True, clone_first=True)
         u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.SOLG_UNITS[t]][0]
+        enemy_unit(u)                       # ((2026-11-22) the user: "Target boxes have to be enemy": Faction 2, a TGT mark
         zone_area(u)
         print(f'  solg: {survival_events.SOLG_UNITS[t]}: {len(names)} {t} targets ({names[0]} ..)')
 

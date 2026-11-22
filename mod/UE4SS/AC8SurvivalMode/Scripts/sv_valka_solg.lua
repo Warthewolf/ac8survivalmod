@@ -72,12 +72,12 @@ function VSOLG.start(c, s, o, now)
     sl(string.format("her health at %.0f %%: invincible, gone through a portal; the SOLG in %.0f s", pctOf(o) or -1, n(g.call_s, 18)))
 end
 
--- the SOLG out of its portal, on its way down
-local function arrive(c, s, G, now)
+-- its portal opens at a corner (the user: "The portal has to spawn at full size before letting the SOLG spawn in")
+local function portalUp(c, s, G, now)
     local g = c.solg
     local at, yaw, vel, pad, corner, T = VSOLG.course(g)
-    G.pad, G.T = pad, T
-    -- its portal: hers, sized to it, facing the way it comes
+    G.pad, G.T, G.course = pad, T, { at = at, yaw = yaw, vel = vel, corner = corner }
+    local wait = 0
     if type(c.portal) == "table" and c.portal.enabled then
         local pc = {}
         for k, v in pairs(c.portal) do pc[k] = v end
@@ -85,9 +85,19 @@ local function arrive(c, s, G, now)
         pc.face_you = false
         G.ph = {}
         local okP, up = pcall(SPC.V.portalOpen, c, G.ph, at, yaw, now, pc, true)
-        G.ph.out = now + n(pc.open_s, 4.5)
-        sl(string.format("its portal %s, %.0f m across", okP and up and "opens" or ("NOT up (" .. tostring(up) .. ")"), pc.size_m))
+        if okP and up then wait = n(pc.open_s, 4.5) + n(g.portal_full_s, 0.5) end
+        sl(string.format("its portal %s, %.0f m across%s", okP and up and "opens" or ("NOT up (" .. tostring(up) .. ")"), pc.size_m,
+            wait > 0 and string.format(": the SOLG through it once it's full size, in %.1f s", wait) or ""))
     end
+    G.state, G.spawnAt, G.portalAt = "portal", now + wait, now
+end
+
+-- the SOLG out of its (full-size) portal, on its way down
+local function arrive(c, s, G, now)
+    local g = c.solg
+    local at, yaw, vel, corner = G.course.at, G.course.yaw, G.course.vel, G.course.corner
+    local pad, T = G.pad, G.T
+    if G.ph and G.ph.portal then G.ph.out = now + n(g.through_s, 6) end   -- (it closes once the SOLG's through)
     -- the SOLG behind its face, coming through as it opens
     local back = n(g.portal_back_m, 1500) * 100
     local r = math.rad(yaw)
@@ -111,7 +121,10 @@ end
 -- it hit the spaceport: the Rocky Island blast, the airfield down for a round
 local function impact(c, s, G, now)
     local g, t = c.solg, CFG.hud.text
-    local n0 = fxAt(g.hit_fx or {}, { X = G.pad.X, Y = G.pad.Y, Z = G.pad.Z + n(g.hit_fx_up_m, 0) * 100 }, n(g.hit_fx_scale, 1), n(g.hit_fx_s, 20))
+    local P = { X = G.pad.X, Y = G.pad.Y, Z = G.pad.Z + n(g.hit_fx_up_m, 0) * 100 }
+    local okQ, what = VSOLG.strike(g.hit_seq, P, n(g.hit_fx_s, 20))
+    local n0 = okQ and 1 or fxAt(g.hit_fx or {}, P, n(g.hit_fx_scale, 12), n(g.hit_fx_s, 20))
+    if not okQ then what = "its cutscene layer NOT played (" .. tostring(what) .. "): " .. n0 .. " systems instead" end
     pcall(SOLG.stop, "it hit the spaceport")
     if SND and SND.event and CFG.sound and CFG.sound.valka and CFG.sound.valka.solg_hit then pcall(SND.event, CFG.sound.valka.solg_hit, nil) end
     local closed = false
@@ -123,7 +136,7 @@ local function impact(c, s, G, now)
     end
     SPC.V.subs(c, "solg_hit")
     LB.stat("solg_hit", 1)
-    sl(string.format("it hit the spaceport %.0f s after it came: %d effect(s), the airfield %s", now - G.from, n0,
+    sl(string.format("it hit the spaceport %.0f s after it came: %s, the airfield %s", now - G.from, tostring(what),
         closed and ("down until after round " .. D.round + 1) or "already down / off"))
     G.state, G.backAt = "back", now + n(g.back_s, 12)
 end
@@ -144,10 +157,75 @@ local function destroyed(c, s, G, now)
     G.state, G.backAt, G.wreckUntil = "back", now + n(g.back_s, 12), now + n(g.wreck_s, 25)
 end
 
+-- the Rocky Island Day 1 strike as Mission 25's cutscene plays it (the method of 0.74.82's railcannon impact, HISTORY.md:
+-- a LevelSequencePlayer of ours on the cutscene's VFX layer, its transform origin moved so its ground explosion (anchor,
+-- in the sequence's space) stands at P, held at its last frame, its camera rains and the rod's trail hidden, stopped
+-- life s on): true, what or false, why
+local STRIKES = {}
+function VSOLG.strike(q, P, life)
+    if not (type(q) == "table" and q.enabled ~= false and type(q.path) == "string") then return false, "off" end
+    local seq = SPC.V.asset(q.path)
+    if not seq then return false, "its sequence didn't load" end
+    local lsp = StaticFindObject("/Script/LevelSequence.Default__LevelSequencePlayer")
+    if not (valid(lsp) and liveObj(survivalPC)) then return false, "no LevelSequencePlayer / player controller" end
+    local an = type(q.anchor) == "table" and q.anchor or {}
+    local o = { X = P.X - n(an[1], 0), Y = P.Y - n(an[2], 0), Z = P.Z - n(an[3], 0) }
+    local settings = { bAutoPlay = false, LoopCount = { Value = 0 }, PlayRate = 1.0, StartTime = 0.0, bRandomStartTime = false,
+        bRestoreState = false, bDisableMovementInput = false, bDisableLookAtInput = false, bHidePlayer = false, bHideHud = false,
+        bDisableCameraCuts = true, bPauseAtEnd = true }
+    local okC, pl = pcall(function() return lsp:CreateLevelSequencePlayer(survivalPC, seq, settings, {}) end)
+    if not (okC and pl and valid(pl)) then return false, "CreateLevelSequencePlayer: " .. tostring(pl) end
+    local act
+    pcall(function() act = pl:GetOuter() end)
+    local okO = act ~= nil and valid(act) and pcall(function()
+        act.bOverrideInstanceData = true
+        act.DefaultInstanceData.TransformOrigin = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = o, Scale3D = { X = 1, Y = 1, Z = 1 } }
+    end)
+    if not okO then                                       -- (never played at the cutscene's own spot)
+        if act ~= nil then pcall(function() act:K2_DestroyActor() end) end
+        return false, "its origin not set"
+    end
+    if not pcall(function() pl:Play() end) then pcall(function() act:K2_DestroyActor() end); return false, "Play refused" end
+    local t0 = os.clock()
+    STRIKES[#STRIKES + 1] = { pl = pl, a = addrOf(pl), act = act, aa = addrOf(act), key = q.key or "Ms250010",
+        hide = type(q.hide) == "table" and q.hide or {}, hides = { t0 + 0.2, t0 + 1.0 }, stopAt = t0 + life }
+    return true, string.format("Mission 25's strike played (its cutscene layer), held %.0f s", life)
+end
+local function strikeHide(e)                              -- its camera rains and the rod's trail hidden and off
+    local okF, list = pcall(FindAllOf, "NiagaraActor")
+    for _, a in ipairs(okF and list or {}) do
+        local path = ""
+        pcall(function() path = a.NiagaraComponent.Asset:GetFullName() end)
+        if path:find(e.key, 1, true) then
+            for _, h in ipairs(e.hide) do
+                if path:find(h, 1, true) then
+                    pcall(function() a:SetActorHiddenInGame(true) end)
+                    pcall(function() a.NiagaraComponent:Deactivate() end)
+                    break
+                end
+            end
+        end
+    end
+end
+function VSOLG.strikesTick(now)
+    if #STRIKES == 0 then return end
+    local left = {}
+    for _, e in ipairs(STRIKES) do
+        while e.hides[1] and now >= e.hides[1] do table.remove(e.hides, 1); pcall(strikeHide, e) end
+        if now >= e.stopAt or (levelTorn and levelTorn()) then
+            if liveObj(e.pl) and addrOf(e.pl) == e.a then pcall(function() e.pl:Stop() end) end
+            if liveObj(e.act) and addrOf(e.act) == e.aa then pcall(function() e.act:K2_DestroyActor() end) end
+        else left[#left + 1] = e end
+    end
+    STRIKES = left
+end
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["VALKA's SOLG strikes"] = function() STRIKES = {} end end
+
 -- every tick of her hunt: true while the SOLG's part of her round runs (the rest of her tick waits)
 function VSOLG.tick(c, s, o, now)
     local g = c.solg
     if not (type(g) == "table" and g.enabled) then return false end
+    pcall(VSOLG.strikesTick, now)
     local G = s.solg
     if G and G.ph and G.ph.portal then
         pcall(SPC.V.portalTick, c, G.ph, now)
@@ -163,7 +241,11 @@ function VSOLG.tick(c, s, o, now)
     if G.state == "done" then return false end
     if valid(o) then pcall(function() o.bIsInvincible = true end) end   -- (gone: setGone's, kept on)
     if G.state == "call" then
-        if now >= G.callAt then arrive(c, s, G, now) end
+        if now >= G.callAt then portalUp(c, s, G, now) end
+        return true
+    end
+    if G.state == "portal" then
+        if now >= G.spawnAt then arrive(c, s, G, now) end
         return true
     end
     if G.state == "falling" then
@@ -202,5 +284,6 @@ end
 function VSOLG.state(s)
     local G = s and s.solg
     if not G then return nil end
-    return { state = G.state, eta = G.hitAt and math.max(0, G.hitAt - os.clock()) or nil, phase = G.phase, broken = G.broken or 0 }
+    return { state = G.state, eta = G.hitAt and math.max(0, G.hitAt - os.clock()) or nil, phase = G.phase, broken = G.broken or 0,
+             portal_to_solg_s = G.from and G.portalAt and (G.from - G.portalAt) or nil }
 end

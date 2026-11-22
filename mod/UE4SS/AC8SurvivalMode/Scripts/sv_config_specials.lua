@@ -454,7 +454,11 @@ CFG.specials = {
                                      "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion005",
                                      "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_ShockWave001",
                                      "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_ShockWave002" },
-                          hit_fx_scale = 1, hit_fx_s = 25, hit_fx_up_m = 0 },
+                          hit_fx_scale = 12, hit_fx_s = 25, hit_fx_up_m = 0, portal_full_s = 0.5, through_s = 6,
+                          -- ((2026-11-22) the strike as Mission 25's cutscene plays it (the method 0.74.82 found for the
+                          -- railcannon); off or failing: hit_fx at hit_fx_scale (x12: its fireball between its rings)
+                          hit_seq = { enabled = true, path = "/Game/Sequencer/IGC/IGC_Ms250010/VFX/CLS_IGC_Ms250010_Shot0030_VFX",
+                                      anchor = { 605172, -533159, -5879 }, key = "Ms250010", hide = { "Rain", "BulletTrail" } } },
                  cine = { enabled = true, charge_s = 8.5, end_s = 14.6, max_s = 25, blend_fn = 0, letterbox = 2.39, shoot = true,
                           -- ((2026-11-22) the run of 15:13: on a 3.5 km circle your plane banked hard and the game put its bank
                           -- on our cameras (the pictures rolled 35-70 degrees): a 25 km one, your plane flying out level)

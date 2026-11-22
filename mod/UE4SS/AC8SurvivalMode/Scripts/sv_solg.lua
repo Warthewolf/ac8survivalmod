@@ -15,6 +15,11 @@ SOLG = { C = {
     mesh = "/Game/Mods/SurvivalMode/SOLG/Model/SK_SV_SOLG",
     spin = "/Game/Mods/SurvivalMode/SOLG/Model/A_SV_SOLG_Spin",
     panels = { SG04 = "/Game/Mods/SurvivalMode/SOLG/Model/SK_SV_SOLG_SAW4", SG05 = "/Game/Mods/SurvivalMode/SOLG/Model/SK_SV_SOLG_SAW5" },
+    -- ((2026-11-22) the user: "Each of its autoloaders falls off after each has had all of its targets destroyed") an arm
+    -- (SG01_01..04) with its 8 MAG panels and 9 KEW shells (the targets nearest it): when the last is down it breaks
+    -- off, this mesh (the arm and its pieces' wrecks: tools/solg/prepare.py) falling in its place
+    arm = "/Game/Mods/SurvivalMode/SOLG/Model/SK_SV_SOLG_ARM", arms = { "SG01_01", "SG01_02", "SG01_03", "SG01_04" },
+    arm_keys = { MAG = true, KEW = true },
     tex = "/Game/Mods/SurvivalMode/SOLG/Textures/T_SV_SOLG_",
     paint = { parent = "/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear",
               tex = { Livemap = "rt:0,0.75,1", Normalmap = "/Engine/EngineMaterials/DefaultNormal",
@@ -45,7 +50,7 @@ SOLG = { C = {
     floor = 1,                              -- a live target's HP floor: it breaks there
     hold_s = 0.0,                           -- targets put back on their bones every tick (0) or this often
     fx = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" },
-    fx_scale = { SAW = 3, MAG = 2, KEW = 3, CORE = 5, SP = 8, SOLG = 12 },
+    fx_scale = { SAW = 3, MAG = 2, KEW = 3, CORE = 5, SP = 8, SOLG = 12, ARM = 6 },
 } }
 do
 local S = nil                                             -- the SOLG up: { actor, body, move, panels = {...} }
@@ -229,6 +234,45 @@ function SOLG.fall()
     sl("falling (gravity " .. (S.move and "on" or "NO mover") .. ", tumble " .. (rot and "on" or "off") .. ")")
     return true
 end
+-- an arm broken off (all its targets down): hidden on the body with every piece on it, its own mesh falls away
+function SOLG.breakArm(armBone, pieces)
+    if not (S and liveObj(S.body)) or S.broken[armBone] then return false end
+    local L, R = boneAt(S.body, armBone)
+    if not (L and R) then sl("break " .. armBone .. ": its bone not found"); return false end
+    S.broken[armBone] = true
+    for _, b in ipairs({ armBone, armBone .. "_W" }) do pcall(function() S.body:HideBoneByName(FName(b), 0) end) end
+    for _, b in ipairs(pieces or {}) do
+        pcall(function() S.body:HideBoneByName(FName(b), 0) end)
+        pcall(function() S.body:HideBoneByName(FName(b .. "_W"), 0) end)
+    end
+    local sk = obj(SOLG.C.arm)
+    local a = valid(sk) and newActor(L, R.Yaw) or nil
+    local c = a and addComp(a, "/Script/Engine.SkeletalMeshComponent")
+    if not c then sl("break " .. armBone .. ": its falling mesh NOT made"); return false end
+    pcall(function() c:SetCollisionEnabled(0) end)
+    pcall(function() c:SetSkeletalMeshAsset(sk) end)
+    pcall(function() a:K2_SetActorLocationAndRotation(L, R, false, {}, true) end)
+    paint(c)
+    pcall(function() c:HideBoneByName(FName("ARM"), 0) end)      -- (its wreck falls, its pieces' wrecks on it)
+    local B = SOLG.where() or L
+    local f = SOLG.C.fall
+    local ox, oy, oz = L.X - B.X, L.Y - B.Y, L.Z - B.Z
+    local okF, F = pcall(function() local v = S.actor:GetActorForwardVector(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    if okF and F then local d = ox * F.X + oy * F.Y + oz * F.Z; ox, oy, oz = ox - F.X * d, oy - F.Y * d, oz - F.Z * d end
+    local len = math.max(1, math.sqrt(ox * ox + oy * oy + oz * oz))
+    local bv = { X = 0, Y = 0, Z = 0 }
+    pcall(function() local v = S.move.Velocity; bv = { X = v.X, Y = v.Y, Z = v.Z } end)
+    local out, down = n(f.out_mps, 35) * 100 * 0.6, n(f.down_mps, 15) * 100
+    local pm = mover(a, { X = bv.X + ox / len * out, Y = bv.Y + oy / len * out, Z = bv.Z + oz / len * out - down }, n(f.gravity, 1))
+    local rot = addComp(a, "/Script/Engine.RotatingMovementComponent")
+    local t = n(f.tumble_dps, 40) * 0.3
+    if rot then pcall(function() rot.RotationRate = { Pitch = (math.random() * 2 - 1) * t, Yaw = (math.random() * 2 - 1) * t, Roll = (math.random() * 2 - 1) * t } end) end
+    S.panels[#S.panels + 1] = { actor = a, gone = os.clock() + n(f.life_s, 30) * 1.5 }
+    if fxAt then pcall(fxAt, SOLG.C.fx, L, n(SOLG.C.fx_scale.ARM, 6), 8) end
+    sl(string.format("%s broken off with its %d pieces: falling (%s, tumble %s)", armBone, #(pieces or {}), pm and "a mover" or "NO mover", rot and "on" or "off"))
+    if SOLG.onArm then pcall(SOLG.onArm, armBone) end
+    return true
+end
 -- where the k-th falling wing is now (the tests' cameras)
 function SOLG.panelAt(k)
     local p = S and S.panels[k or 1]
@@ -342,7 +386,27 @@ function SOLG.targetsUp()
     end
     local att = 0
     for _, e in ipairs(S.targets) do if e.attached then att = att + 1 end end
-    sl(string.format("targets up: %s; %d attached to their bones, %d held by hand; phase 1", table.concat(said, ", "), att, total - att))
+    -- each MAG panel's and KEW shell's arm: the nearest (they sit along it)
+    S.armOf = {}
+    local armAt = {}
+    for _, ab in ipairs(SOLG.C.arms or {}) do armAt[ab] = boneAt(S.body, ab) end
+    local perArm = {}
+    for _, e in ipairs(S.targets) do
+        if (SOLG.C.arm_keys or {})[e.key] then
+            local L, best, bd = boneAt(S.body, e.bone), nil, nil
+            for ab, A in pairs(armAt) do
+                if L and A then
+                    local d = (L.X - A.X) ^ 2 + (L.Y - A.Y) ^ 2 + (L.Z - A.Z) ^ 2
+                    if not bd or d < bd then best, bd = ab, d end
+                end
+            end
+            if best then e.arm = best; perArm[best] = (perArm[best] or 0) + 1 end
+        end
+    end
+    local pa = {}
+    for _, ab in ipairs(SOLG.C.arms or {}) do pa[#pa + 1] = ab .. " " .. (perArm[ab] or 0) end
+    sl(string.format("targets up: %s; %d attached to their bones, %d held by hand; phase 1; on the arms: %s", table.concat(said, ", "),
+        att, total - att, table.concat(pa, ", ")))
     return total
 end
 local function phaseOn(ph)
@@ -369,6 +433,13 @@ local function breakTarget(e, why)
     S.broken = S.broken or {}
     S.down = (S.down or 0) + 1
     if SOLG.onBreak then pcall(SOLG.onBreak, e.key, e.bone, e.t.pay, why) end
+    if e.arm then                                         -- (its arm's last target: the arm breaks off)
+        local left, pieces = 0, {}
+        for _, x in ipairs(S.targets) do
+            if x.arm == e.arm then pieces[#pieces + 1] = x.bone; if x.live then left = left + 1 end end
+        end
+        if left == 0 then SOLG.breakArm(e.arm, pieces) end
+    end
     -- the phase over: the next one's on (AC:I's); the last one: the SOLG destroyed
     for _, x in ipairs(S.targets) do if x.live and x.t.phase == S.phase then return end end
     local nextPh = nil
