@@ -257,6 +257,22 @@ function VCINE.tick(c, s, now)
             end
         end
         gameHudKeep()
+        -- ((2026-11-22) the run of 15:13 showed your plane's view from her shot on, and our cameras rolled, with no view
+        -- revert seen: what the screen's camera is, each second (the view target, the camera manager's place and turn,
+        -- ours), so the next run says who has it)
+        if not S.diagAt or now >= S.diagAt then
+            S.diagAt = now + 1
+            pcall(function()
+                local pcm = survivalPC.PlayerCameraManager
+                local vt = survivalPC:GetViewTarget()
+                local L, R = pcm:GetCameraLocation(), pcm:GetCameraRotation()
+                local mine = S.riding and S.cams.a or (S.last and S.cams[S.last])
+                local m = mine and valid(mine) and mine:K2_GetActorLocation() or nil
+                cl(string.format("+%.1f s view %s (ours: %s) at (%.2f, %.2f, %.2f) km turned (%.0f, %.0f, %.0f); our camera at %s",
+                    t, vt and nameOf(vt) or "?", tostring(onCams(vt)), L.X / 100000, L.Y / 100000, L.Z / 100000, R.Pitch, R.Yaw,
+                    R.Roll, m and string.format("(%.2f, %.2f, %.2f) km", m.X / 100000, m.Y / 100000, m.Z / 100000) or "none"))
+            end)
+        end
         if t >= n(k.end_s, 14) then
             local f = k.fade or {}
             local okF = fade(0, 1, n(f.out_s, 0.6), true)
