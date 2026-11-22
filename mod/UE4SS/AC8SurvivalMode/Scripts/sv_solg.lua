@@ -28,7 +28,7 @@ SOLG = { C = {
                           DamegedNormal_Intencity = 0, PlayerPlane_Damage = 0 } },
     spin_rate = 1.0,                        -- the spin animation's play rate (1: AC:I's, a ring's turn in 40 s)
     -- a wing shot off: pushed out from the barrel (m/s), down (m/s), its tumble (deg/s, each axis up to), gone after
-    pitch_min_deg = 20,                     -- its nose down at least this much as it falls (its path's angle if steeper)
+    pitch_min_deg = 45,                     -- its nose down at least this much as it falls (its path's angle if steeper; 20 read flat)
     fall = { out_mps = 35, down_mps = 15, tumble_dps = 40, gravity = 1.0, life_s = 30, body_gravity = 0.35, body_tumble_dps = 4 },
     -- its targets (docs/re/SOLG.md 5: AC:I's types, counts and health): each type a unit of ours on AC8's GENERIC
     -- destructible base (tools/survival_events_specials.py SOLG_*: Mission 4's radar tower ported, no boss), its objects
@@ -186,6 +186,8 @@ function SOLG.spawn(at, yaw, vel)
         pitch = math.max(path, n(SOLG.C.pitch_min_deg, 20))
     end
     pcall(function() a:K2_SetActorLocationAndRotation({ X = at.X, Y = at.Y, Z = at.Z }, { Pitch = -pitch, Yaw = yaw or 0, Roll = 0 }, false, {}, true) end)
+    local okP, pitchNow = pcall(function() return a:K2_GetActorRotation().Pitch end)   -- (as the game has it: logged)
+    SOLG.pitchNow = okP and pitchNow or nil
     step("painting")
     local painted = paint(body)
     step("hiding its wrecks")
@@ -204,8 +206,8 @@ function SOLG.spawn(at, yaw, vel)
     step("its mover")
     local mv = vel and mover(a, vel, 0) or nil
     S = { actor = a, body = body, move = mv, panels = {}, at0 = at, yaw = yaw, broken = {} }
-    sl(string.format("up at (%.1f, %.1f) km, %.1f km up, nose %.0f deg, %.0f deg down: mesh %s, %s, %d wrecks hidden, spin %s, mover %s",
-        at.X / 100000, at.Y / 100000, at.Z / 100000, yaw or 0, pitch, okM and "on" or "NOT set", painted, hid,
+    sl(string.format("up at (%.1f, %.1f) km, %.1f km up, nose %.0f deg, %.0f deg down (the game's pitch %s): mesh %s, %s, %d wrecks hidden, spin %s, mover %s",
+        at.X / 100000, at.Y / 100000, at.Z / 100000, yaw or 0, pitch, okP and string.format("%.1f", pitchNow) or "?", okM and "on" or "NOT set", painted, hid,
         spun and "playing" or (valid(anim) and "NOT played" or "NOT loaded"), mv and "on" or (vel and "NOT made" or "none")))
     return true
 end
