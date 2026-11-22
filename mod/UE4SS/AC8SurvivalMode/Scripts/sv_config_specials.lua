@@ -452,7 +452,12 @@ CFG.specials = {
                  -- speed_x on her top and turning speeds, cruise_x on her normal speed, accel_x on her acceleration,
                  -- turn_add on her pitch / roll / yaw rates (deg/s). (2026-11-22, run 13:26 with speed x1.3, cruise x1.4: she
                  -- averaged 1,900-2,400 km/h in her passes, the x40a's own speed is Mach 2: back to x1.0 / x1.15)
-                 luaset = "NLID_SV_Lancer", pilot_rank = 5, speed_x = 1.0, cruise_x = 1.15, accel_x = 1.3,
+                 -- ((2026-11-22) the user: "make Valka use Toprak's AI", "his fight from mission 28 thousand points of
+                 -- light": Mission 28's su57_Toplak row (DT_NPC OP1021_su57_02): the aces' set NLID_0400_CP, pilot rank 3,
+                 -- provoke NPID_02, KDS NKID_00 (on: alone, every KDS phase on you is hers), pursuit NSPID_00; her own
+                 -- airframe's speeds and turn rates kept. Was NLID_SV_Lancer at rank 5)
+                 luaset = "NLID_0400_CP", pilot_rank = 3, speed_x = 1.0, cruise_x = 1.15, accel_x = 1.3,
+                 ai_ids = { ProvokeId = "NPID_02", KDSId = "NKID_00", SurroundPursuitId = "NSPID_00" },
                  turn_add = { pitch = 60, roll = 120, yaw = 20 },
                  -- (2026-11-22) her LastTGT (a 20 s tail chase 200 m behind you, which slows her to a crawl whenever
                  -- she overshoots: docs/re/BEHAVIOUR_NATIVE_MOVE.md section 2) only when you sit behind her (behind_km,
