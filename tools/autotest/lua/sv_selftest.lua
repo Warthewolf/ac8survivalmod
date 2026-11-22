@@ -5312,9 +5312,44 @@ pcall(NotifyOnNewObject, "/Script/Live.LiveTLSSwingforPlane", function(o)
     local okP, full = pcall(function() return o:GetClass():GetFullName() end)
     full = okP and tostring(full) or ""
     if full:find("Default__", 1, true) then return end
-    if full:find("BP_SV_SolgTLS", 1, true) then LSR.ours = LSR.ours + 1 else LSR.stock = LSR.stock + 1 end
+    if full:find("BP_SV_SolgTLS", 1, true) then
+        LSR.ours = LSR.ours + 1
+        LSR.new = LSR.new or {}
+        if #LSR.new < 40 then LSR.new[#LSR.new + 1] = { o = o, at = os.clock() } end
+    else LSR.stock = LSR.stock + 1 end
     if LSR.ours + LSR.stock <= 3 then LSR.first = (LSR.first or "") .. " " .. full end
 end)
+local function lsrLook(e, now)                        -- a laser's state: where, hidden, its Niagara parts
+    local o = e.o
+    if not (o and pcall(function() return o:IsValid() end) and o:IsValid()) then return "gone" end
+    local r = {}
+    local okL, L = pcall(function() local v = o:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    local you = playerLocation()
+    if okL and L and you then
+        r[#r + 1] = string.format("%.1f km from you", math.sqrt((L.X - you.X) ^ 2 + (L.Y - you.Y) ^ 2 + (L.Z - you.Z) ^ 2) / 100000)
+        e.L = L
+    end
+    pcall(function() r[#r + 1] = "hidden " .. tostring(o.bHidden) end)
+    pcall(function()
+        local root = o.RootComponent
+        local par = root:GetAttachParent()
+        r[#r + 1] = "attached to " .. (par and par:IsValid() and (par:GetFullName():match("[^%.:]+$") or "?") .. " visible " .. tostring(par:IsVisible()) or "nothing")
+    end)
+    local nc = StaticFindObject("/Script/Niagara.NiagaraComponent")
+    local okC, list = pcall(function() return o:K2_GetComponentsByClass(nc) end)
+    if okC and list then
+        pcall(function() list:ForEach(function(_, x)
+            local c = x:get()
+            local nm, vis, act, asset = "?", "?", "?", "?"
+            pcall(function() nm = c:GetFName():ToString() end)
+            pcall(function() vis = tostring(c:IsVisible()) end)
+            pcall(function() act = tostring(c:IsActive()) end)
+            pcall(function() asset = c.Asset:GetFName():ToString() end)
+            r[#r + 1] = string.format("[%s: %s, visible %s, active %s]", nm, asset, vis, act)
+        end) end)
+    else r[#r + 1] = "no Niagara parts read" end
+    return table.concat(r, ", ")
+end
 local function lsrHealth()
     local p = ST.plane()
     local ok, h = pcall(function() return p.HealthInternal end)
@@ -5346,6 +5381,26 @@ SUITES.solglaser = function()
     A.until_(function()                                   -- 40 s of it: the SOLG held, your health's drops
         t0 = t0 or os.clock()
         pcall(SOLG.tick, os.clock())
+        local now = os.clock()
+        for _, e in ipairs(LSR.new or {}) do
+            if not e.seen1 and now - e.at >= 0.6 then e.seen1 = true; ST.info("laser +0.6 s: " .. lsrLook(e, now)) end
+            if not e.seen2 and now - e.at >= 1.5 then
+                e.seen2 = true
+                ST.info("laser +1.5 s: " .. lsrLook(e, now))
+                local you = playerLocation()
+                if e.L and you and (LSR.pics or 0) < 6 and now >= (LSR.picAt or 0) then   -- (from beside the beam)
+                    LSR.pics, LSR.picAt = (LSR.pics or 0) + 1, now + 3
+                    local mx, my, mz = (e.L.X + you.X) / 2, (e.L.Y + you.Y) / 2, (e.L.Z + you.Z) / 2
+                    local dx, dy = you.X - e.L.X, you.Y - e.L.Y
+                    local d = math.max(1, math.sqrt(dx * dx + dy * dy))
+                    ST.look({ X = mx - dy / d * 250000, Y = my + dx / d * 250000, Z = mz + 30000 }, { X = mx, Y = my, Z = mz }, 70)
+                    LSR.shotAt = now + 0.35
+                end
+            end
+        end
+        if LSR.shotAt and now >= LSR.shotAt then LSR.shotAt = nil; ST.shot("solglaser_beam_" .. (LSR.pics or 0)) end
+        if LSR.backAt and now >= LSR.backAt then LSR.backAt = nil; ST.lookBack() end
+        if LSR.shotAt == nil and (LSR.pics or 0) > 0 and not LSR.backAt and now >= (LSR.picAt or 0) - 2 then LSR.backAt = now + 0.3 end
         local h = lsrHealth()
         if h and LSR.last and h < LSR.last - 0.5 then LSR.drops[#LSR.drops + 1] = LSR.last - h end
         LSR.last = h or LSR.last
