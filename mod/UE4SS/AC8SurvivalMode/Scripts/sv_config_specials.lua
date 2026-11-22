@@ -302,61 +302,61 @@ CFG.specials = {
                  -- elements { name, size (fraction of the screen) } on AC8's own flare, faded over life_s along AC7's
                  -- alpha curve (time fraction, alpha), intensity_x times the stock flare's brightness. If it doesn't
                  -- load, the flash above shows instead.
-                 -- ((2026-11-22) the user: "try to build a 3D Portal, an event horizon that she spawns out of") her
-                 -- portal (sv_anomalies_valka.lua SPC.V.portalOpen): it opens where her opener fires from as it charges,
-                 -- facing you, over open_s; her shot comes out of it, then she does (exit_back_m behind its face), and
-                 -- it closes hold_s later over close_s (max_s at most open); size_m across; its rings turn spin_dps.
-                 -- parts: the game's own pieces (meshes with its VFX materials, Niagara systems; see the comment there)
-                 portal = { enabled = true, size_m = 320, open_s = 3.0, hold_s = 2.5, close_s = 2.5, max_s = 30, spin_dps = 45,
-                            exit_back_m = 150,
-                            -- (the portalprobe run of 2026-11-22 13:12: what draws against the sky: the engine's basic
-                            -- shapes with BasicShapeMaterial's Color (a black disc), the training mission's rings'
-                            -- materials (MI_TrainingRing: a solid glow, its Color; MI_TrainingRingGlow: a see-through
-                            -- glow brightest at its edges, Color / EmissiveIntensity / Opacity); the refraction and smoke
-                            -- materials drew nothing against the sky)
+                 -- ((2026-11-22) the user: "try to build a 3D Portal, an event horizon that she spawns out of", "I want the
+                 -- portal to look like an event horizon from a black hole", "Needs to be a 3D model, not a png floating
+                 -- in the air") her portal, a black hole (sv_anomalies_valka.lua SPC.V.portalOpen): our own 3D pieces
+                 -- (tools/valka_portal: Blender, cooked in UE 5.4 into SurvivalMode_ValkaPortal_P; `abs`: sized as one
+                 -- model, size_m its shadow across), coloured with AC8's own glow materials (hard rule 58: none of ours).
+                 -- It opens where her opener fires from as it charges (each piece grown from nothing over open_s), her
+                 -- shot comes out of it, then she does, out of its shadow (exit_back_m behind its middle), and it closes
+                 -- hold_s later over close_s (max_s at most open); face_you: the whole hole turns to you each tick (its
+                 -- lensed arcs face whoever looks); the disk's layers turn spin_dps x their spin, inner faster.
+                 -- A piece: { mesh, mat, params (the material's Color...), abs, size, flat, tilt (90: facing you; 5: the
+                 -- disk, tipped 5 deg towards you), spin } or a Niagara one { fx, scale, at ("open"/"burst"/"close") }.
+                 -- fallback: the stock pieces' portal (the portalprobe runs: training-ring glows on the engine's shapes),
+                 -- if its own aren't in (a build without the container)
+                 portal = { enabled = true, size_m = 250, open_s = 3.0, hold_s = 4.0, close_s = 3.0, max_s = 30, spin_dps = 25,
+                            exit_back_m = 0, face_you = true,
                             parts = {
-                                -- the event horizon: a black lens, deeper than the glowing one round it, so its middle
-                                -- shows through (the run of 13:36: a flat black disc inside the glow was covered by it)
-                                { mesh = "/Engine/BasicShapes/Sphere", mat = "/Engine/BasicShapes/BasicShapeMaterial",
-                                  params = { Color = { 0, 0, 0, 1 } }, size = 0.8, flat = 0.32 },
-                                -- round it a glowing lens, brightest at its rim
-                                -- (the second probe, 13:26: Color over 1 washes to pink in the bloom, EmissiveIntensity 60
-                                -- on the lens a white blob; 13:36: 8 still a white-pink disc over the black: an edge glow now)
-                                { mesh = "/Engine/BasicShapes/Sphere", mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow",
-                                  params = { Color = { 0.45, 0.02, 1.0, 1 }, EmissiveIntensity = 3, Opacity = 0.12, EmissiveFresnelFalloff = 6 },
-                                  size = 0.95, flat = 0.22 },
-                                -- three finned rings turning: violet inside, red, dark red outside
-                                { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07",
-                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.35, 0.02, 0.8, 1 } },
-                                  size = 1.0, spin = 1 },
-                                { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07",
-                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.7, 0.01, 0.06, 1 } },
-                                  size = 1.25, spin = -0.7 },
-                                { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07",
-                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.4, 0.0, 0.03, 1 } },
-                                  size = 1.55, spin = 0.35 },
-                                -- a faint red halo far round it
-                                { mesh = "/Engine/BasicShapes/Sphere", mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow",
-                                  params = { Color = { 1, 0.08, 0.25, 1 }, EmissiveIntensity = 4, Opacity = 0.15 }, size = 2.1, flat = 0.06 },
-                                -- (Niagara, the same probe: Mission 27's core plasma draws a column of light; the
-                                -- discharge drew nothing at x20, the "shockwave" systems are dust and smoke clouds)
-                                { fx = "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma", scale = 6, at = "open" },
-                                { fx = "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma", scale = 3, at = "open",
-                                  rim = 4, rim_r = 0.6 },
-                                { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 8, at = "burst" } } },
-                 -- ((2026-11-22) her blinks through small portals: one where she vanishes, one where she comes back,
-                 -- facing you; size_m across, open_s, hold_s, close_s; parts as portal's)
-                 blink_portal = { enabled = true, size_m = 110, open_s = 0.25, hold_s = 0.8, close_s = 0.9, spin_dps = 120,
+                                -- the shadow: black, flat (AC8's basic shape material, Color 0)
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, mat = "/Engine/BasicShapes/BasicShapeMaterial", params = { Color = { 0, 0, 0, 1 } } },
+                                -- the photon ring and the lensed arcs: white-hot to gold
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHPhotonRing", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.92, 0.8, 1 } } },
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloInner", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.78, 0.5, 1 } } },
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloOuter", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.9, 0.42, 0.12, 1 } } },
+                                -- the disk: hot, warm, cool, turning (inner faster), and its brighter approaching side
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskHot", abs = true, tilt = 5, spin = 1.0, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
+                                  params = { Color = { 1.0, 0.7, 0.38, 1 } } },
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskWarm", abs = true, tilt = 5, spin = 0.6, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
+                                  params = { Color = { 0.85, 0.35, 0.08, 1 } } },
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskCool", abs = true, tilt = 5, spin = 0.35, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
+                                  params = { Color = { 0.45, 0.13, 0.03, 1 } } },
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskBright", abs = true, tilt = 5, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
+                                  params = { Color = { 1.0, 0.92, 0.8, 1 } } },
+                                -- a faint glow over the disk
+                                { mesh = "/Engine/BasicShapes/Sphere", abs = true, size = 6.6, flat = 0.05, tilt = 5, mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow",
+                                  params = { Color = { 1, 0.45, 0.12, 1 }, EmissiveIntensity = 2, Opacity = 0.08 } },
+                                { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 6, at = "burst" } },
+                            fallback = {
+                                { mesh = "/Engine/BasicShapes/Sphere", mat = "/Engine/BasicShapes/BasicShapeMaterial", params = { Color = { 0, 0, 0, 1 } }, size = 2.9, flat = 0.32 },
+                                { mesh = "/Engine/BasicShapes/Sphere", mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", size = 3.4, flat = 0.22,
+                                  params = { Color = { 0.45, 0.02, 1.0, 1 }, EmissiveIntensity = 3, Opacity = 0.12, EmissiveFresnelFalloff = 6 } },
+                                { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07", mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.35, 0.02, 0.8, 1 } }, size = 3.6, spin = 1 },
+                                { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07", mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.7, 0.01, 0.06, 1 } }, size = 4.5, spin = -0.7 },
+                                { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 6, at = "burst" } } },
+                 -- ((2026-11-22) her blinks through small black holes: one where she vanishes, one where she comes back;
+                 -- as portal's, size_m its shadow across)
+                 blink_portal = { enabled = true, size_m = 28, open_s = 0.25, hold_s = 0.8, close_s = 0.9, spin_dps = 90, face_you = true,
                                   parts = {
-                                      { mesh = "/Engine/BasicShapes/Sphere", mat = "/Engine/BasicShapes/BasicShapeMaterial",
-                                        params = { Color = { 0, 0, 0, 1 } }, size = 0.8, flat = 0.32 },
-                                      { mesh = "/Engine/BasicShapes/Sphere", mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow",
-                                        params = { Color = { 0.45, 0.02, 1.0, 1 }, EmissiveIntensity = 3, Opacity = 0.12, EmissiveFresnelFalloff = 6 },
-                                        size = 0.95, flat = 0.22 },
-                                      { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07",
-                                        mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.35, 0.02, 0.8, 1 } },
-                                        size = 1.0, spin = 1 },
-                                      { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 2, at = "burst" } } },
+                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, mat = "/Engine/BasicShapes/BasicShapeMaterial", params = { Color = { 0, 0, 0, 1 } } },
+                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHPhotonRing", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.92, 0.8, 1 } } },
+                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloInner", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.78, 0.5, 1 } } },
+                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskHot", abs = true, tilt = 5, spin = 1.0, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
+                                        params = { Color = { 1.0, 0.7, 0.38, 1 } } },
+                                      { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 2, at = "burst" } },
+                                  fallback = {
+                                      { mesh = "/Engine/BasicShapes/Sphere", mat = "/Engine/BasicShapes/BasicShapeMaterial", params = { Color = { 0, 0, 0, 1 } }, size = 3.1, flat = 0.32 },
+                                      { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07", mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.35, 0.02, 0.8, 1 } }, size = 3.9, spin = 1 } } },
                  flare = { enabled = true, life_s = 7, intensity_x = 6,
                            path = "/Game/Mods/SurvivalMode/Valka/Flare/MI_SV_ValkaFlare_",
                            elements = { { "Glare", 1.6 }, { "Ring", 1.2 }, { "Shine", 0.9 }, { "Bokeh", 0.4 } },

@@ -1403,7 +1403,9 @@ local function portalRot(part, yaw)
     if part.axis == "x" then return { Pitch = 0, Yaw = yaw, Roll = 0 } end
     -- (its local Z along her way out: rolled up, then turned. (2026-11-22) a Pitch of -89.9 never took (the run of 13:26:
     -- the portal lay flat), a Roll did (the probe's standing rings); the disc's two faces are alike, so Z along +-her way)
-    return { Pitch = 0, Yaw = (yaw or 0) + 90, Roll = 90 }
+    -- ((2026-11-22) the black hole: `tilt`, the roll: 90 its face towards you (the shadow, the photon ring, the lensed arcs),
+    -- 5 the disk lying nearly flat, tipped that much towards you)
+    return { Pitch = 0, Yaw = (yaw or 0) + 90, Roll = tonumber(part.tilt) or 90 }
 end
 local function portalMesh(pc, P, part, a, smc, kml)
     local m = SPC.V.asset(part.mesh)
@@ -1418,7 +1420,10 @@ local function portalMesh(pc, P, part, a, smc, kml)
     pcall(function() comp:SetCastShadow(false) end)
     local r = 100
     pcall(function() r = m:GetBounds().SphereRadius end)
-    local e = { comp = comp, k = (P.size * (part.size or 1) / 2) / math.max(1, r), flat = part.flat or 1,
+    -- ((2026-11-22) `abs`: a piece of one model (tools/valka_portal: 1 unit, 100 cm, the black hole's shadow across), sized
+    -- size_m x size for that unit, so the pieces keep their places; else sized by its own bounds)
+    local k = part.abs and (P.size / 100) * (part.size or 1) or (P.size * (part.size or 1) / 2) / math.max(1, r)
+    local e = { comp = comp, k = k, flat = part.flat or 1, part = part, spun = 0,
                 spin = (part.spin or 0) * (tonumber(pc.spin_dps) or 0), axis = part.axis }
     if part.mat then
         local mi = SPC.V.asset(part.mat)
@@ -1459,7 +1464,14 @@ function SPC.V.portalOpen(c, s, at, yaw, now, pc, quiet)
     local P = { actor = a, at = { X = at.X, Y = at.Y, Z = at.Z }, yaw = yaw or 0, from = now, phase = "open", meshes = {},
                 fired = {}, size = (tonumber(pc.size_m) or 250) * 100, pc = pc }
     local said = {}
-    for _, part in ipairs(pc.parts or {}) do
+    -- ((2026-11-22) its own pieces (SurvivalMode_ValkaPortal_P) missing: the stock pieces' portal, `fallback`)
+    local parts = pc.parts or {}
+    if pc.fallback and parts[1] and parts[1].mesh and not SPC.V.asset(parts[1].mesh) then
+        parts = pc.fallback
+        if not quiet then log("special: VALKA's portal: its own pieces aren't in (" .. parts[1].mesh .. "...): the stock pieces' portal") end
+    end
+    P.parts = parts
+    for _, part in ipairs(parts) do
         if part.mesh then
             local okE, e = pcall(portalMesh, pc, P, part, a, smc, kml)
             local nm = (part.mesh:match("[^/]+$") or "?") .. (part.mat and ("/" .. (part.mat:match("[^/]+$") or "?")) or "")
@@ -1483,7 +1495,7 @@ function SPC.V.portalFx(c, s, when)
     P.fired[when] = true
     local _, r = portalFrame(P.yaw)
     local n = 0
-    for _, part in ipairs(pc.parts or {}) do
+    for _, part in ipairs(P.parts or pc.parts or {}) do
         if part.fx and (part.at or "open") == when then
             local copies = math.max(1, part.rim or 1)
             for k = 1, copies do
@@ -1527,11 +1539,27 @@ function SPC.V.portalTick(c, s, now)
     end
     local dt = math.min(0.5, now - (P.lastTick or now))
     P.lastTick = now
+    -- ((2026-11-22) `face_you`: the whole hole turned to you each tick (its lensed arcs always face whoever looks), each
+    -- piece set again and turned by its own spin so far)
+    local turn = false
+    if pc.face_you then
+        local you = playerLocation and playerLocation()
+        if you then
+            local yaw = math.deg(math.atan(you.Y - P.at.Y, you.X - P.at.X))
+            if math.abs(((yaw - P.yaw + 540) % 360) - 180) > 0.3 then P.yaw, turn = yaw, true end
+        end
+    end
     for _, e in ipairs(P.meshes) do
         if liveObj(e.comp) then
             local k = math.max(0.001, e.k * g)
             pcall(function() e.comp:SetWorldScale3D({ X = k, Y = k, Z = k * e.flat }) end)
-            if e.spin ~= 0 and dt > 0 then
+            if e.spin ~= 0 and dt > 0 then e.spun = (e.spun + e.spin * dt) % 360 end
+            if turn then
+                pcall(function()
+                    e.comp:K2_SetWorldRotation(portalRot(e.part, P.yaw), false, {}, true)
+                    if e.spun ~= 0 then e.comp:K2_AddLocalRotation({ Pitch = 0, Yaw = e.spun, Roll = 0 }, false, {}, true) end
+                end)
+            elseif e.spin ~= 0 and dt > 0 then
                 local d = e.spin * dt
                 pcall(function()
                     if e.axis == "x" then e.comp:K2_AddLocalRotation({ Pitch = 0, Yaw = 0, Roll = d }, false, {}, true)
