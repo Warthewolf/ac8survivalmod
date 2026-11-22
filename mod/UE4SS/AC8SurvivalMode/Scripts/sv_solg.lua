@@ -83,15 +83,24 @@ local function obj(path) return loadObject(path .. "." .. path:match("[^/]+$")) 
 -- an actor of ours at `at`, turned `rot` (a number: a yaw; a table: { Pitch, Yaw, Roll }). ((2026-11-22) its whole
 -- rotation in its spawn transform: a rotation set afterwards never took (the pitch probe of 0.75.26: pitch 0.0 after
 -- K2_SetActorRotation, 1.5 s on too), only the spawn's (the yaw always worked): "the solg didn't look angled downwards")
+-- a { Pitch, Yaw, Roll } as a quaternion (UE's FRotator::Quaternion). (hard rule 76: a rotator's Pitch handed from Lua
+-- is dropped by the engine call, its Yaw and Roll kept: a tilt goes through a transform's quaternion)
+local function quatOf(rot)
+    local p, y, r = math.rad(n(rot.Pitch, 0)) / 2, math.rad(n(rot.Yaw, 0)) / 2, math.rad(n(rot.Roll, 0)) / 2
+    local SP, CP, SY, CY, SR, CR = math.sin(p), math.cos(p), math.sin(y), math.cos(y), math.sin(r), math.cos(r)
+    return { X = CR * SP * SY - SR * CP * CY, Y = -CR * SP * CY - SR * CP * SY, Z = CR * CP * SY - SR * SP * CY, W = CR * CP * CY + SR * SP * SY }
+end
+-- component c put at L turned rot (whole: through its transform's quaternion)
+local function placeAt(c, L, rot)
+    return pcall(function() c:K2_SetWorldTransform({ Rotation = quatOf(rot), Translation = { X = L.X, Y = L.Y, Z = L.Z },
+        Scale3D = { X = 1, Y = 1, Z = 1 } }, false, {}, true) end)
+end
 local function newActor(at, rot)
     local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
     local cls = StaticFindObject("/Script/Engine.Actor")
     if not (valid(gs) and valid(cls) and liveObj(survivalPC)) then return nil end
     if type(rot) ~= "table" then rot = { Pitch = 0, Yaw = rot or 0, Roll = 0 } end
-    local p, y, r = math.rad(n(rot.Pitch, 0)) / 2, math.rad(n(rot.Yaw, 0)) / 2, math.rad(n(rot.Roll, 0)) / 2
-    local SP, CP, SY, CY, SR, CR = math.sin(p), math.cos(p), math.sin(y), math.cos(y), math.sin(r), math.cos(r)
-    local q = { X = CR * SP * SY - SR * CP * CY, Y = -CR * SP * CY - SR * CP * SY, Z = CR * CP * SY - SR * SP * CY, W = CR * CP * CY + SR * SP * SY }
-    local t = { Rotation = q, Translation = { X = at.X, Y = at.Y, Z = at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+    local t = { Rotation = quatOf(rot), Translation = { X = at.X, Y = at.Y, Z = at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
     local ok, a = pcall(function()
         local x = gs:BeginDeferredActorSpawnFromClass(survivalPC, cls, t, 1, nil, 1)
         return gs:FinishSpawningActor(x, t, 1)
@@ -193,7 +202,7 @@ function SOLG.spawn(at, yaw, vel)
     pcall(function() a:K2_SetActorLocationAndRotation({ X = at.X, Y = at.Y, Z = at.Z }, { Pitch = -pitch, Yaw = yaw or 0, Roll = 0 }, false, {}, true) end)
     -- (as the game has it, from its nose's direction: logged; a rotation's read came back empty, 0.75.25)
     -- (and on its body itself, the mesh you see: whether or not the actor has it as its root, read back from it)
-    pcall(function() body:K2_SetWorldLocationAndRotation({ X = at.X, Y = at.Y, Z = at.Z }, { Pitch = -pitch, Yaw = yaw or 0, Roll = 0 }, false, {}, true) end)
+    placeAt(body, at, { Pitch = -pitch, Yaw = yaw or 0, Roll = 0 })   -- (its tilt: hard rule 76)
     local okP, pitchNow = pcall(function() local f = body:GetForwardVector(); return math.deg(math.asin(math.max(-1, math.min(1, f.Z)))) end)
     pitchNow = okP and tonumber(pitchNow) or nil
     SOLG.pitchNow = pitchNow
@@ -237,7 +246,7 @@ function SOLG.breakPanel(bone)
     if not c then sl("break " .. bone .. ": its falling mesh NOT made"); return false end
     pcall(function() c:SetCollisionEnabled(0) end)
     pcall(function() c:SetSkeletalMeshAsset(sk) end)
-    pcall(function() a:K2_SetActorLocationAndRotation(L, R, false, {}, true) end)   -- (its root now: run 17:58)
+    placeAt(c, L, R)                                      -- (its bone's whole rotation: hard rule 76)   -- (its root now: run 17:58)
     paint(c)
     pcall(function() c:HideBoneByName(FName("PANEL"), 0) end)   -- (its wreck falls)
     -- its push: away from the barrel (the body's axis through its middle), down, and the body's own velocity
@@ -291,7 +300,7 @@ function SOLG.breakArm(armBone, pieces)
     if not c then sl("break " .. armBone .. ": its falling mesh NOT made"); return false end
     pcall(function() c:SetCollisionEnabled(0) end)
     pcall(function() c:SetSkeletalMeshAsset(sk) end)
-    pcall(function() a:K2_SetActorLocationAndRotation(L, R, false, {}, true) end)
+    placeAt(c, L, R)                                      -- (its bone's whole rotation: hard rule 76)
     paint(c)
     pcall(function() c:HideBoneByName(FName("ARM"), 0) end)      -- (its wreck falls, its pieces' wrecks on it)
     for k = 13, 16 do pcall(function() c:HideBoneByName(FName(string.format("P_LSR_%02d", k)), 0) end) end   -- (its lasers: down)

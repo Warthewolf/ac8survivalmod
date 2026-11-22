@@ -50,3 +50,11 @@ Moved verbatim from AGENTS.md (2026-11-14). Rule numbers are unchanged: other no
     FireControlSystemComponent.AllArms[1..4] on a two-arm array: the autotest's game crashed (access violation at 0x10) the
     moment RAILGUN_L deployed (run 20261118_012602); the same walk with `AllArms:ForEach(function(i, el) ... el:get() ...)`
     ran clean (0.74.171, run 20261118_013043, 40/40). Walk game arrays with ForEach (or read their length first).
+
+76. A rotator (`{ Pitch, Yaw, Roll }`) handed from UE4SS Lua to an engine call loses its Pitch: Yaw and Roll arrive,
+    Pitch is dropped, silently (no error). The autotest's solgpitch probe (0.75.27, run of 2026-11-22 22:35, a fresh actor's
+    static mesh): K2_SetWorldRotation, K2_AddWorldRotation, K2_AddLocalRotation and K2_SetRelativeRotation with Pitch -45
+    each left its forward vector level; Roll 45 turned it; K2_SetWorldTransform with the same turn as a quaternion pitched
+    it 45 degrees. VALKA's SOLG flew flat through four builds for it ("its angle was still flat"). Tilt through a
+    transform's quaternion (Scripts/sv_solg.lua quatOf / placeAt), or an actor's spawn transform; never trust a pitch
+    set by rotator, and read a turn back (forward vector) when it matters.
