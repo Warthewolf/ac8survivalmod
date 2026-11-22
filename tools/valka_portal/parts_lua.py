@@ -90,12 +90,21 @@ def part(p, small=False):
 SKIP = ('SM_SV_BHDiskHaze',)   # (the run of 15:45: the disk's haze read as a flat pale plate in the wide shots)
 
 
+# ((2026-11-22) the run of 15:57: the engine's BasicShapeMaterial is lit, so the shadow was a glossy black ball mirroring
+# the sea and the sunset. An unlit black over it (MI_TrainingRing, Color 0, Opacity 1, 0.4 % larger), drawn first of the
+# see-through pieces (sort -10): the disk's near side over it, the ball beneath still hiding what's behind it)
+SHADE = ('{ mesh = "' + BH + 'SM_SV_BHShadow", abs = true, size = 1.004, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, sort = -10, '
+         'mat = "' + MAT['ring'] + '", params = { Color = { 0, 0, 0, 1 }, Opacity = 1 } }')
+
+
 def block(pieces, indent, small=False):
     lines = []
     for p in pieces:
         if (small and p['name'] not in SMALL) or p['name'].startswith(SKIP):
             continue
         lines.append(' ' * indent + part(p, small) + ',')
+        if p['name'] == 'SM_SV_BHShadow':
+            lines.append(' ' * indent + SHADE + ',')
     return lines
 
 

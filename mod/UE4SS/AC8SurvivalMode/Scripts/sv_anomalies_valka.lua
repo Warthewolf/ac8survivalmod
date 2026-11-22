@@ -827,7 +827,12 @@ function SPC.valkaTick(now, s)
         V.singleShot(c)                                 -- (in case its module came late; (0.73.80) the kept ones: no walk)
         V.emlWeapon(c)
         V.radar(c)
-        V.event("RE_SV_ValkaEmlShot")
+        -- ((2026-11-22) the runs of 15:13, 15:45 and 15:57: as her opener's round came at you the game cut to your plane
+        -- (a black frame, then your chase view, its bank on it) in the middle of her cutscene. While it films, the shot
+        -- is only heard (its charge, its crack): no round at you; the cutscene shows her coming out instead)
+        local filmed = VCINE and VCINE.active and VCINE.active() and not (c.cine and c.cine.shoot)
+        if filmed then log(string.format("special: %s's opener round held: her cutscene films", c.name))
+        else V.event("RE_SV_ValkaEmlShot") end
         V.event("RE_SV_ValkaEmlChargeOff")
         V.sndShot(s, s.emlAt, now)
         s.alertOffAt = now + (c.alert_off_s or 3)
@@ -1440,6 +1445,9 @@ local function portalMesh(pc, P, part, a, smc, kml)
     pcall(function() comp:SetStaticMesh(m) end)
     pcall(function() comp:SetCollisionEnabled(0) end)
     pcall(function() comp:SetCastShadow(false) end)
+    -- ((2026-11-22) `sort`: its place among the see-through pieces (lower first): the black over the shadow's glossy ball
+    -- first, so the disk's near side draws over it)
+    if part.sort then pcall(function() comp:SetTranslucentSortPriority(math.floor(tonumber(part.sort) or 0)) end) end
     local r = 100
     pcall(function() r = m:GetBounds().SphereRadius end)
     -- ((2026-11-22) `abs`: a piece of one model (tools/valka_portal: 1 unit, 100 cm, the black hole's shadow across), sized

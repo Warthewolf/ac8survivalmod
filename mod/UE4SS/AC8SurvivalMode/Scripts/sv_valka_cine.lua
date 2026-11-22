@@ -264,15 +264,16 @@ function VCINE.tick(c, s, now)
         while shots[S.shot + 1] and t >= n(shots[S.shot + 1].t, 0) do
             S.shot = S.shot + 1
             local ok, dur, how = shotGo(S.shot)
+            S.cutAt = now
             cl(string.format("shot %d at +%.1f s: %s, %.1f s%s", S.shot, t, tostring(how), dur, ok and "" or " (the view NOT taken)"))
         end
         local cam = S.last and S.cams[S.last]
         if S.riding then cam = S.cams.a end
         if cam and valid(cam) and liveObj(survivalPC) then   -- (the view kept on the cameras: the game may take it)
             local off, P = povOff()
-            if off and off > 300 then
+            if off and off > 300 and now - (S.cutAt or -1e9) > 0.5 then
                 S.reverts = S.reverts + 1
-                if S.reverts <= 3 then
+                if S.reverts <= 8 then
                     local okV, vt = pcall(function() return survivalPC.PlayerCameraManager.ViewTarget.Target end)
                     cl(string.format("+%.1f s the screen's camera is %.0f m off ours (at (%.2f, %.2f, %.2f) km, view target %s, her state %s): taken back",
                         t, off, P.X / 100000, P.Y / 100000, P.Z / 100000, okV and vt and nameOf(vt) or "?", tostring(s.state)))
@@ -289,12 +290,12 @@ function VCINE.tick(c, s, now)
             local okD, errD = pcall(function()
                 local pcm = survivalPC.PlayerCameraManager
                 local okT, vt = pcall(function() return pcm.ViewTarget.Target end)
-                local okR, R = pcall(function() local r = pcm:GetCameraRotation(); return { P = r.Pitch, Y = r.Yaw, R = r.Roll } end)
+                local okR, R = pcall(function() local r = pcm:GetCameraRotation(); return { P = tonumber(r.Pitch), Y = tonumber(r.Yaw), R = tonumber(r.Roll) } end)
                 local off, P = povOff()
                 cl(string.format("+%.1f s the screen's camera %s m off ours%s, turned %s; view target %s",
                     t, off and string.format("%.0f", off) or "?",
                     P and string.format(" (at %.2f, %.2f, %.2f km)", P.X / 100000, P.Y / 100000, P.Z / 100000) or "",
-                    okR and R and string.format("(%.0f, %.0f, %.0f)", R.P, R.Y, R.R) or "?",
+                    okR and R and R.P and string.format("(%.0f, %.0f, %.0f)", R.P, R.Y or 0, R.R or 0) or "?",
                     okT and vt and (nameOf(vt) .. (onCams(vt) and " (ours)" or "")) or "?"))
             end)
             if not okD and not S.diagErr then S.diagErr = true; cl("the view's line not read: " .. tostring(errD)) end
