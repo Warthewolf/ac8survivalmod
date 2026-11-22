@@ -6026,61 +6026,38 @@ SUITES.solgcrash = function()
         local p1 = SOLG.where()
         local moved = (C2.p0 and p1) and (p1.X - C2.p0.X) / 100 or 0
         ST.check(moved > 250, string.format("it keeps moving with its stand-ins on it (%.0f m in 3 s)", moved))
-        pcall(function() C2.h0 = ST.plane().HealthInternal end)
-        -- ((2026-11-23) its shaft hollow: you on its axis 500 m along it (the shaft, nose side; its yaw 0: along +X))
-        -- (along its own axis: it's pitched nose down, so "ahead" is its forward vector, not +X)
-        local you = playerLocation()
+        -- (its shapes, by line traces along its own (pitched) axis: the test plane flies on, so where it is can't say)
         local a = SOLG.debugActor()
-        pcall(function() local f = a:GetActorForwardVector(); C2.F = { X = f.X, Y = f.Y, Z = f.Z } end)
-        pcall(function() local r = a:GetActorRightVector(); C2.R = { X = r.X, Y = r.Y, Z = r.Z } end)
-        local F = C2.F or { X = 1, Y = 0, Z = 0 }
-        -- (where its shapes are: line traces along its axis and out from it at 500 m, what each hits first)
-        do
-            local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
-            local R = C2.R or { X = 0, Y = 1, Z = 0 }
-            local O = SOLG.where()
-            local function at(fw, rt) return { X = O.X + F.X * fw * 100 + R.X * rt * 100, Y = O.Y + F.Y * fw * 100 + R.Y * rt * 100, Z = O.Z + F.Z * fw * 100 + R.Z * rt * 100 } end
-            local function trace(from, to, what)
-                local hit = {}
-                local okT, got = pcall(function() return ks:LineTraceSingle(survivalPC, from, to, 0, true, {}, 0, hit, true, { R = 0, G = 0, B = 0, A = 0 }, { R = 0, G = 0, B = 0, A = 0 }, 0) end)
-                local d, comp, bone = nil, nil, nil
-                pcall(function() local h = hit.OutHit or hit; d = h.Distance end)
-                pcall(function()
-                    local h = hit.OutHit or hit
-                    local c = h.Component
-                    pcall(function() c = c:get() end)
-                    local own = nil
-                    pcall(function() own = c:GetOwner():GetFullName():match("[^%.:]+$") end)
-                    comp = (c and c:GetFullName():match("[^%.:]+$") or "?") .. " of " .. tostring(own)
-                end)
-                pcall(function() local h = hit.OutHit or hit; bone = h.BoneName:ToString() end)
-                ST.info(string.format("trace %s: %s%s", what, (okT and got) and "HIT" or "clear",
-                    (okT and got) and string.format(" at %.0f m (%s, bone %s)", (d or 0) / 100, tostring(comp), tostring(bone)) or ""))
-            end
-            trace(at(-1100, 0), at(1100, 0), "along its axis, tail to nose")
-            trace(at(1100, 0), at(-1100, 0), "along its axis, nose to tail")
-            trace(at(500, 0), at(500, 120), "out from the axis at 500 m (right)")
-            trace(at(500, 120), at(500, 0), "in to the axis at 500 m (right)")
-            trace(at(0, 0), at(0, 120), "out from the axis at its middle")
+        local F, R = { X = 1, Y = 0, Z = 0 }, { X = 0, Y = 1, Z = 0 }
+        pcall(function() local f = a:GetActorForwardVector(); F = { X = f.X, Y = f.Y, Z = f.Z } end)
+        pcall(function() local r = a:GetActorRightVector(); R = { X = r.X, Y = r.Y, Z = r.Z } end)
+        local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+        local O = SOLG.where()
+        local function at(fw, rt) return { X = O.X + F.X * fw * 100 + R.X * rt * 100, Y = O.Y + F.Y * fw * 100 + R.Y * rt * 100, Z = O.Z + F.Z * fw * 100 + R.Z * rt * 100 } end
+        local function trace(from, to)
+            local hit = {}
+            local okT, got = pcall(function() return ks:LineTraceSingle(survivalPC, from, to, 0, true, {}, 0, hit, true, { R = 0, G = 0, B = 0, A = 0 }, { R = 0, G = 0, B = 0, A = 0 }, 0) end)
+            local d, bone = nil, nil
+            pcall(function() local h = hit.OutHit or hit; d = h.Distance / 100 end)
+            pcall(function() local h = hit.OutHit or hit; bone = h.BoneName:ToString() end)
+            return okT and got, d, bone
         end
-        pcall(function() a:K2_SetActorLocation({ X = you.X - F.X * 50000, Y = you.Y - F.Y * 50000, Z = you.Z - F.Z * 50000 }, false, {}, true) end)
+        local h1, d1, b1 = trace(at(500, 0), at(500, 120))
+        ST.check(h1 and d1 and d1 > 20 and d1 < 50 and tostring(b1):find("BODY_", 1, true) ~= nil,
+            string.format("its shaft hollow: from its axis 500 m in, its wall %s m out (%s)", tostring(d1 and math.floor(d1)), tostring(b1)))
+        local h2, d2, b2 = trace(at(400, 0), at(400, -120))
+        ST.check(h2 and d2 and d2 > 20 and d2 < 50, string.format("... and on its other side (%s m, %s)", tostring(d2 and math.floor(d2)), tostring(b2)))
+        local h3, d3, b3 = trace(at(1100, 0), at(600, 0))
+        ST.check(h3 and tostring(b3):find("SG08", 1, true) ~= nil, string.format("its rear hatch closes the shaft's mouth (%s at %s m)", tostring(b3), tostring(d3 and math.floor(d3))))
+        pcall(function() C2.h0 = ST.plane().HealthInternal end)
+        local you = playerLocation()                       -- (then onto you: its middle, solid)
+        pcall(function() a:K2_SetActorLocation(you, false, {}, true) end)
     end)
     A.wait(1.5)
     A.do_(function()
         local h1 = nil
         pcall(function() h1 = ST.plane().HealthInternal end)
-        ST.check(h1 and C2.h0 and h1 >= C2.h0, string.format("inside its shaft, nothing hits you (health %s -> %s)", tostring(C2.h0), tostring(h1)))
-        C2.h0 = h1
-        local you = playerLocation()                   -- (now in its wall: 40 m off the axis, its walls there 36-45 m out)
-        local F, R = C2.F or { X = 1, Y = 0, Z = 0 }, C2.R or { X = 0, Y = 1, Z = 0 }
-        pcall(function() SOLG.debugActor():K2_SetActorLocation({ X = you.X - F.X * 50000 - R.X * 4000, Y = you.Y - F.Y * 50000 - R.Y * 4000,
-            Z = you.Z - F.Z * 50000 - R.Z * 4000 }, false, {}, true) end)
-    end)
-    A.wait(1.5)
-    A.do_(function()
-        local h1 = nil
-        pcall(function() h1 = ST.plane().HealthInternal end)
-        ST.check(h1 and C2.h0 and h1 < C2.h0, string.format("in its wall, it hits you (health %s -> %s)", tostring(C2.h0), tostring(h1)),
+        ST.check(h1 and C2.h0 and h1 < C2.h0, string.format("flown into it, it hits you (health %s -> %s)", tostring(C2.h0), tostring(h1)),
             ST.findLog("hit: ", 0, true))
         pcall(SOLG.stop, "crash test over")
     end)
