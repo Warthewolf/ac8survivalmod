@@ -5116,6 +5116,78 @@ SUITES.solg = function()
     end)
 end
 
+-- ((2026-11-22) T2 of the SOLG: its targets (each type a unit on AC8's generic destructible base, held on its bones):
+-- up and counted, held (their distance from their bones), boxes in the pictures, then every phase's targets brought to
+-- their floor (SOLG.hurt, as hits would) and broken by the SOLG in AC:I's order to its destruction)
+local function solgTick(sec)                              -- (no VALKA round here: the suite ticks the SOLG itself)
+    local t0 = nil
+    A.until_(function()
+        t0 = t0 or os.clock()
+        pcall(SOLG.tick, os.clock())
+        return os.clock() - t0 >= sec
+    end, sec + 5)
+end
+SUITES.solg2 = function()
+    intoRun()
+    A.do_(function()
+        local ok = SOLG.spawn(solgSpot(), 0, { X = 3000, Y = 0, Z = 0 })
+        ST.check(ok == true, "the SOLG up", ST.findLog("solg: up at", 0))
+    end)
+    A.wait(1)
+    A.do_(function()
+        local nT = SOLG.targetsUp()
+        ST.check(nT == 91, "its 91 targets up on their bones (SAW 18, MAG 32, KEW 36, CORE 4, SP 1)",
+            ST.findLog("solg: targets up", 0))
+        local st = SOLG.state()
+        ST.check(st and st.phase == 1, "phase 1 on (the wings and MAG panels)", st and ("phase " .. tostring(st.phase)))
+    end)
+    solgTick(3)
+    A.do_(function()                                      -- (held: each target's distance from its bone)
+        local worst, nn = 0, 0
+        for _, e in ipairs(SOLG.debugTargets and SOLG.debugTargets() or {}) do
+            local okL, L = pcall(function() return e.o:K2_GetActorLocation() end)
+            local okB, B = pcall(function() return SOLG.boneLoc(e.bone) end)
+            if okL and okB and L and B then
+                local d = math.sqrt((L.X - B.X) ^ 2 + (L.Y - B.Y) ^ 2 + (L.Z - B.Z) ^ 2) / 100
+                worst, nn = math.max(worst, d), nn + 1
+            end
+        end
+        ST.check(nn > 80 and worst < 30, string.format("targets held on their bones (%d read, worst %.1f m off)", nn, worst))
+    end)
+    for k, v in ipairs({ { 0, -3000, 200, 50, "boxes_side" }, { 700, -1600, 300, 50, "boxes_arms" } }) do
+        A.do_(function() local at, look = solgCam(v[1], v[2], v[3]); ST.look(at, look, v[4]) end)
+        A.wait(0.6)
+        A.do_(function() ST.shot("solg2_" .. k .. "_" .. v[5]) end)
+        A.wait(1.5)
+    end
+    -- every phase, in turn
+    for _, ph in ipairs({ { "SAW", 18, "MAG", 32, 2 }, { "KEW", 36, nil, 0, 3 }, { "CORE", 4, nil, 0, 4 }, { "SP", 1, nil, 0, nil } }) do
+        A.do_(function()
+            for k = 1, ph[2] do SOLG.hurt(ph[1], 1) ; pcall(SOLG.tick, os.clock()) end
+            if ph[3] then for k = 1, ph[4] do SOLG.hurt(ph[3], 1); pcall(SOLG.tick, os.clock()) end end
+        end)
+        solgTick(1.5)
+        A.do_(function()
+            local st = SOLG.state()
+            if ph[5] then
+                ST.check(st and st.phase == ph[5], string.format("%s down: phase %d on", ph[1], ph[5]),
+                    ST.findLog("solg: phase " .. ph[5], 0) or (st and ("phase " .. tostring(st.phase) .. ", " .. st.live .. " live")))
+            else
+                ST.check(st and st.destroyed, "the SP shell down: the SOLG destroyed", ST.findLog("solg: every target down", 0))
+            end
+        end)
+        A.do_(function() local at, look = solgCam(300, -2200, 300); ST.look(at, look, 55) end)
+        A.wait(0.5)
+        A.do_(function() ST.shot("solg2_after_" .. ph[1]) end)
+        A.wait(1.2)
+    end
+    A.do_(function()
+        SOLG.stop("T2 over")
+        ST.lookBack()
+        ST.check(not SOLG.up(), "the SOLG and its targets taken down", ST.findLog("solg: taken down", 0))
+    end)
+end
+
 -- ---- the tick ----------------------------------------------------------------------------------------------------
 local started, t0, finished = false, nil, false
 local function finish(why)
