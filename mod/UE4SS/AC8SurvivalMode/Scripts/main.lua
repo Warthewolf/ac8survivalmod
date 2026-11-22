@@ -24,6 +24,7 @@ local MODULES = {
     "sv_anomalies_valka",          -- (sv_anomalies.lua's next piece: tools/lua_split_part.py)
     "sv_valka_cine",               -- VALKA's arrival cutscene: her portal opening, her out of it
     "sv_solg",                     -- VALKA's SOLG: AC:I's satellite, its own body (docs/re/SOLG.md)
+    "sv_solg_laser",               -- its lasers: Survival's own beams (the game's turret fired once)
     "sv_valka_solg",               -- VALKA calls in the SOLG at 20 %: its portal, its fall on the spaceport
     "sv_solg_coop",                -- her SOLG in co-op: the host's word, each joiner's own SOLG
     "sv_anomalies_dev",            -- (sv_anomalies.lua's next piece: tools/lua_split_part.py)

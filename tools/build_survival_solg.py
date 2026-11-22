@@ -22,9 +22,12 @@ from build_survival_world import (ZFA_TLS_ROLES, NULL_IMPORT, zfa_tls_u64, zfa_t
                                    tls_sound_swap, TLS_SOUNDS)
 
 # (SOLG -Gould-'s laser handlers, docs/re/SOLG.md 13: 10 s at players within 1200 m, then 5 s)
-# ((2026-11-23) TriggerCount 999, not Gould's 1: in AC8 it's the bursts a turret ever fires (the autotest: one burst, then none))
-SOLG_TLS_ROW_VALUES = {'CaptureDistance': 1200.0, 'CaptureAngleRange': 180.0, 'ActivationTime': 1.0,
-                       'TriggeringTime': 10.0, 'TriggerCount': 999, 'ShotIntervalTime': 15.0, 'RestingTime': 5.0,
+# ((2026-11-23) TriggerCount 999 tried: its launcher then came up with fire rate 5994 and magazine 999 and sprayed 40 beams at
+# once, hitting nothing; back to 1. The SOLG's lasers are Survival's own since (Scripts/sv_solg_laser.lua): this row aims them)
+# ((2026-11-23) CaptureDistance 1 m: the game's own firing never starts (it fired one stray burst at the start, then none):
+# Scripts/sv_solg_laser.lua fires the SOLG's lasers; the row only keeps the turrets as they are)
+SOLG_TLS_ROW_VALUES = {'CaptureDistance': 100.0, 'CaptureAngleRange': 180.0, 'ActivationTime': 1.0,
+                       'TriggeringTime': 10.0, 'TriggerCount': 1, 'ShotIntervalTime': 15.0, 'RestingTime': 5.0,
                        'FireRate': 4, 'MagazineCapacity': 1, 'ReloadTime': 5.0,
                        'YawSpeed': 120.0, 'YawAngleMin': -180.0, 'YawAngleMax': 180.0,
                        'PitchSpeed': 120.0, 'PitchAngleMin': -90.0, 'PitchAngleMax': 90.0}

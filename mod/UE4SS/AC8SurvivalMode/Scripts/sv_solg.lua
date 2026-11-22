@@ -75,7 +75,12 @@ SOLG = { C = {
     -- moving; its ammo not limited): the land CIWS's cycle never comes round again on our turrets. Every rearm_s (Gould's
     -- 10 s of fire, 5 s rest) each live laser is switched off and on, which starts its cycle (and a burst) afresh)
     laser_rearm_s = 0,                     -- (off: switching them off and on didn't bring a second burst)
-    laser_perf = { enabled = true, magazine = 1, reload_s = 5, trigger_count = 999 },
+    laser_perf = { enabled = false, trigger_count = 999 },   -- (off: the game's own firing is left alone, own_laser fires)
+    -- ((2026-11-23) its lasers are Survival's own (Scripts/sv_solg_laser.lua): Gould's 10 s on a player within reach, 5 s
+    -- rest; AC8's player TLS beam (the ZFA-44's), its shooting sound, `damage` a hit every hit_s)
+    own_laser = { enabled = true, reach_m = 1500, fire_s = 10, rest_s = 5, hit_s = 1, first_hit_s = 0.5, damage = 5,
+                  beam_fx = "/Game/VFX/Vehicles/Weapon/TLS/NS_TLS_Muzzleflash01",
+                  sound = "AKE_GEN_PLAYER_ARMS_SPWeapon_TLS_Emit_Play", sound_stop = "AKE_GEN_PLAYER_ARMS_SPWeapon_TLS_Emit_Stop" },
     -- ((2026-11-22) the user: "some black smoke that pours off the sides of the SOLG after things have been destroyed,
     -- and VFX for the splash down of its objects") a ship's black smoke on the bone of each piece shot off (its wreck's
     -- place on the body), at most max; a falling wing, arm or the SOLG itself at the sea or the ground: a water pillar
@@ -464,8 +469,18 @@ local function splashed(a, scale)
     if S.splashes == 1 then sl(string.format("a piece came down in the %s: its splash", land and "land" or "sea")) end
     return true
 end
+-- its laser turrets now (sv_solg_laser.lua's): { o, bone, live, open }; nil with no SOLG
+function SOLG.laserTurrets()
+    if not (S and S.targets) or S.destroyed then return nil end
+    local out = {}
+    for _, e in ipairs(S.targets) do
+        if e.t.laser then out[#out + 1] = { o = e.o, bone = e.bone, live = e.live, open = e.open } end
+    end
+    return out
+end
 function SOLG.stop(why)
     if not S then return end
+    if SLAS and SLAS.stop then pcall(SLAS.stop) end
     for _, c in pairs(S.smokes or {}) do pcall(function() c:DestroyComponent() end) end
     if S.targets and not S.mirror then                    -- (a joiner's are the host's copies: co-op takes them down)
         for _, t in ipairs(SOLG.C.targets) do
@@ -481,6 +496,11 @@ function SOLG.tick(now)
     if not S then return end
     if (levelTorn and levelTorn()) or not D then S = nil; return end
     if SOLG.targetsTick then pcall(SOLG.targetsTick) end
+    if S and SLAS and SLAS.tick then
+        local okL, errL = pcall(SLAS.tick, os.clock())
+        if not okL and not S.slasErr then S.slasErr = true; sl("its lasers: error " .. tostring(errL)) end
+    end
+    if not S then return end
     if S and S.pauseUntil and os.clock() >= S.pauseUntil then
         local ph = S.pauseNext
         S.pauseUntil, S.pauseNext = nil, nil
