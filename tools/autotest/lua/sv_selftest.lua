@@ -5522,7 +5522,12 @@ SUITES.solglaser = function()
         for i = 1, math.min(12, #LSR.drops) do sizes[#sizes + 1] = string.format("%.0f", LSR.drops[i]) end
         ST.info(string.format("lasers: %d of ours, %d stock swing lasers; your health dropped %d times (HealthInternal: %s)%s",
             LSR.ours, LSR.stock, #LSR.drops, table.concat(sizes, ", "), LSR.first and (" first:" .. LSR.first) or ""))
-        ST.check(LSR.ours > 0, string.format("the SOLG's lasers fired (%d shots of BP_SV_SolgTLS)", LSR.ours))
+        -- ((2026-11-23) its lasers are Survival's own now (sv_solg_laser.lua): their bursts from the log; the game's own
+        -- turret firing kept off (its row's capture 1 m))
+        local nb = SLAS and SLAS.bursts or 0
+        ST.check(nb > 0, string.format("the SOLG's own lasers fired (%d bursts, %d hits on you)", nb, SLAS and SLAS.hits or 0),
+            ST.findLog("solg laser: burst", ST.marks.l0, true))
+        ST.check(LSR.ours == 0, "the game's own turret laser never fired (kept off)", tostring(LSR.ours))
         do                                                -- (each second's shots: a steady fire or bursts)
             local per, t1 = {}, (LSR.times or {})[1]
             for _, t in ipairs(LSR.times or {}) do local k = math.floor(t - t1); per[k] = (per[k] or 0) + 1 end
@@ -5536,8 +5541,8 @@ SUITES.solglaser = function()
         for _, d in ipairs(LSR.drops) do one = (not one or d < one) and d or one end
         local whole = 0
         for _, d in ipairs(LSR.drops) do if one and math.abs(d / one - math.floor(d / one + 0.5)) < 0.08 then whole = whole + 1 end end
-        ST.check(#LSR.drops > 0 and whole == #LSR.drops, string.format("every hit the same: %.1f health a hit (weapon 5, the game's own "
-            .. "scaling for your plane: x%.2f); %d of %d drops whole hits", (one or 0) / 10, (one or 0) / 50, whole, #LSR.drops))
+        ST.check(#LSR.drops > 0 and one and math.abs(one / 10 - 5) < 0.6, string.format("each hit 5 of your health (%.1f a hit); %d of %d drops whole hits",
+            (one or 0) / 10, whole, #LSR.drops))
         ST.marks.l1 = ST.n
         for k = 1, 40 do SOLG.hurt("KEW", 1); pcall(SOLG.tick, os.clock()) end
     end)
