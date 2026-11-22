@@ -20,13 +20,15 @@ import struct
 from build_survival import *  # noqa: F401,F403 (build_survival's names; it imports this part at its end)
 from build_survival_world import (ZFA_TLS_ROLES, NULL_IMPORT, zfa_tls_u64, zfa_tls_value, zfa_tls_set)  # noqa: E402
 
-SOLG_TLS_ROW_VALUES = {'CaptureDistance': 6000.0, 'CaptureAngleRange': 180.0, 'ActivationTime': 1.0,
-                       'TriggeringTime': 7.0, 'TriggerCount': 1, 'ShotIntervalTime': 10.0, 'RestingTime': 3.0,
-                       'FireRate': 6, 'MagazineCapacity': 1, 'ReloadTime': 3.0,
+# (SOLG -Gould-'s laser handlers, docs/re/SOLG.md 13: 10 s at players within 1200 m, then 5 s)
+SOLG_TLS_ROW_VALUES = {'CaptureDistance': 1200.0, 'CaptureAngleRange': 180.0, 'ActivationTime': 1.0,
+                       'TriggeringTime': 10.0, 'TriggerCount': 1, 'ShotIntervalTime': 15.0, 'RestingTime': 5.0,
+                       'FireRate': 4, 'MagazineCapacity': 1, 'ReloadTime': 5.0,
                        'YawSpeed': 120.0, 'YawAngleMin': -180.0, 'YawAngleMax': 180.0,
                        'PitchSpeed': 120.0, 'PitchAngleMin': -90.0, 'PitchAngleMax': 90.0}
 SOLG_TLS_ROW_CLEAR = ('NpcWeaponId', 'PredictionOffsetTime', 'ActivationRandomTimeMin', 'ActivationRandomTimeMax')
-SOLG_TLS_SEARCH_CM = (600000.0, 660000.0)
+SOLG_TLS_SEARCH_CM = (120000.0, 132000.0)
+SOLG_TLS_LIFE_S = 10.0                                 # (its beam: Gould's 10 s burst; stock 7)
 
 
 def build_solg_laser():
@@ -42,6 +44,7 @@ def build_solg_laser():
         ('BP_SwingTLS_ForPlane changed', have['damage'], have['SlipDamage'])
     for f in ('damage', 'SlipDamage'):
         zfa_tls_set(v[2], 'LiveTLSSwingforPlane', f, ('raw', 'Float', struct.pack('<f', se.SOLG_TLS_DAMAGE)))
+    zfa_tls_set(v[2], 'LiveTLSSwingforPlane', 'LifeTime', ('raw', 'Float', struct.pack('<f', SOLG_TLS_LIFE_S)))
     w.payloads[cdo] = bytearray(uprop.write_struct(uprop.W(w.names), v) + p[o:])
     w.rename(se.SOLG_TLS_WEAPON_SOURCE, se.SOLG_TLS_WEAPON)
     assert se.SOLG_TLS_WEAPON in w.names and se.SOLG_TLS_WEAPON_SOURCE not in w.names

@@ -398,8 +398,9 @@ SOLG_TARGET_SOURCE_UNIT = 'AA_Unit_01_ground0'                 # (WD_Mission004_
 SOLG_TARGETS = [('SAW', 18), ('MAG', 32), ('KEW', 36), ('CORE', 4), ('SP', 1),
                 # ((2026-11-22) its laser turrets, AC:I's f_111t (tools/solg/lasers.py): 16 on the arms (LSRA), 12 round
                 # the barrel (LSRB); not on the radar tower but on AC8's land Phalanx, firing our own laser (SOLG_TLS_*)
-                ('LSRA', 16), ('LSRB', 12)]
-SOLG_LASER_TYPES = ('LSRA', 'LSRB')
+                # (SOLG -Gould-: the barrel's tail 4 up with the arms', its front 8 with the core units)
+                ('LSRA', 16), ('LSRB', 4), ('LSRC', 8)]
+SOLG_LASER_TYPES = ('LSRA', 'LSRB', 'LSRC')
 SOLG_TLS_WEAPON_SOURCE = '/Game/Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForPlane'   # AC8's anti-aircraft sweep
 SOLG_TLS_WEAPON = '/Game/Mods/SurvivalMode/Weapons/BP_SV_SolgTLS'                         # ours: 5 a hit (the user)
 SOLG_TLS_DAMAGE = 5.0

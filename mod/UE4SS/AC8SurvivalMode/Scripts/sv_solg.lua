@@ -19,7 +19,7 @@ SOLG = { C = {
     -- (SG01_01..04) with its 8 MAG panels and 9 KEW shells (the targets nearest it): when the last is down it breaks
     -- off, this mesh (the arm and its pieces' wrecks: tools/solg/prepare.py) falling in its place
     arm = "/Game/Mods/SurvivalMode/SOLG/Model/SK_SV_SOLG_ARM", arms = { "SG01_01", "SG01_02", "SG01_03", "SG01_04" },
-    arm_keys = { MAG = true, KEW = true },
+    arm_keys = { KEW = true }, arm_riders = { MAG = true },   -- (Gould: an arm waits for its 9 KEW shells alone)
     tex = "/Game/Mods/SurvivalMode/SOLG/Textures/T_SV_SOLG_",
     paint = { parent = "/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear",
               tex = { Livemap = "rt:0,0.75,1", Normalmap = "/Engine/EngineMaterials/DefaultNormal",
@@ -48,20 +48,31 @@ SOLG = { C = {
         -- needed for the next phase (`optional`); an arm's go down with it
         { key = "LSRA", unit = "SV_Unit_SOLG_LSRA", phase = 2, health = 850, pay = 60, bones = { "LSR_%02d", 16 },
           optional = true, laser = true },
-        { key = "LSRB", unit = "SV_Unit_SOLG_LSRB", phase = 3, health = 850, pay = 60, bones = { "LSR_%02d", 12, 17 },
+        -- ((2026-11-22) SOLG -Gould-'s rules, AC:I's DATA92 529, docs/re/SOLG.md 13: the barrel's tail 4 with the arms',
+        -- its front 8 with the core units (Gould's sweep in its fighters' phase, cut here: the user, "SOLG pieces only"))
+        { key = "LSRB", unit = "SV_Unit_SOLG_LSRB", phase = 2, health = 850, pay = 60, bones = { "LSR_%02d", 4, 25 },
+          optional = true, laser = true },
+        { key = "LSRC", unit = "SV_Unit_SOLG_LSRC", phase = 3, health = 850, pay = 60, bones = { "LSR_%02d", 8, 17 },
           optional = true, laser = true },
     },
+    -- ((2026-11-22) the user: "SOLG -Gould- is the one we want", "Follow Gould exactly" (no aircraft phases)) Gould's
+    -- rules (docs/re/SOLG.md 13): phase 1 needs 16 MAG panels (mag_required, 4 an arm), each arm's other 4 open once
+    -- its 4 are down and are optional; each row of 3 wings opens from its third: wait_for (bone -> the bone that must
+    -- be down first); a pause after each phase (pause_s, by the phase just done) before the next one's targets open
+    mag_required = { 1, 2, 5, 6, 11, 12, 13, 14, 19, 20, 21, 22, 29, 30, 31, 32 },
+    wing_rows = { { "SG04_%02d", 1 }, { "SG04_%02d", 4 }, { "SG05_%02d", 1 }, { "SG05_%02d", 4 }, { "SG05_%02d", 7 }, { "SG05_%02d", 10 } },
+    pause_s = { [1] = 15, [2] = 15, [3] = 30 },
     fcs_table = "/Game/Mods/SurvivalMode/Data/DT_SV_SolgFCS.DT_SV_SolgFCS", fcs_row = "SV_FCS_SolgTLS",
     laser_model_row = "SV_Model_SOLG_LSR",
     -- their boxes: "SOLG" over each type's AC:I name (texts by key: tools/survival_events_specials.py SOLG_*)
     model_row = "SV_Model_SOLG", name_key = "SV_SOLG_Name", name = "SOLG",
     names = { SAW = "SOLAR ARRAY WING", MAG = "MAG PANEL", KEW = "KEW SHELL", CORE = "CORE UNIT", SP = "SP SHELL",
-              LSRA = "LASER UNIT", LSRB = "LASER UNIT" },
+              LSRA = "LASER UNIT", LSRB = "LASER UNIT", LSRC = "LASER UNIT" },
     health_x = 0.25,                        -- (AC:I's health is a 4-player raid's: a first guess, every hit logged)
     floor = 1,                              -- a live target's HP floor: it breaks there
     hold_s = 0.0,                           -- targets put back on their bones every tick (0) or this often
     fx = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" },
-    fx_scale = { SAW = 3, MAG = 2, KEW = 3, CORE = 5, SP = 8, SOLG = 12, ARM = 6, LSRA = 2, LSRB = 2 },
+    fx_scale = { SAW = 3, MAG = 2, KEW = 3, CORE = 5, SP = 8, SOLG = 12, ARM = 6, LSRA = 2, LSRB = 2, LSRC = 2 },
 } }
 do
 local S = nil                                             -- the SOLG up: { actor, body, move, panels = {...} }
@@ -308,6 +319,11 @@ function SOLG.tick(now)
     if not S then return end
     if (levelTorn and levelTorn()) or not D then S = nil; return end
     if SOLG.targetsTick then pcall(SOLG.targetsTick) end
+    if S and S.pauseUntil and os.clock() >= S.pauseUntil then
+        local ph = S.pauseNext
+        S.pauseUntil, S.pauseNext = nil, nil
+        if ph and SOLG.phaseOn then pcall(SOLG.phaseOn, ph) end
+    end
     local clock = os.clock()
     for i = #S.panels, 1, -1 do
         local p = S.panels[i]
@@ -422,7 +438,7 @@ local function armsOf(list)
     local armAt = {}
     for _, ab in ipairs(SOLG.C.arms or {}) do armAt[ab] = boneAt(S.body, ab) end
     for _, e in ipairs(list) do
-        if (SOLG.C.arm_keys or {})[e.key] or e.t.laser then
+        if (SOLG.C.arm_keys or {})[e.key] or e.t.laser or (SOLG.C.arm_riders or {})[e.key] then
             local L, best, bd = boneAt(S.body, e.bone), nil, nil
             for ab, A in pairs(armAt) do
                 if L and A then
@@ -431,19 +447,57 @@ local function armsOf(list)
                 end
             end
             if best and bd < (400 * 100) ^ 2 then                  -- (the barrel's lasers: on no arm)
-                if e.t.laser then e.onArm = best else e.arm = best end
+                if (SOLG.C.arm_keys or {})[e.key] then e.arm = best else e.onArm = best end
             end
         end
     end
 end
 -- every target type's unit up (the lasers' with their phase), its objects on their bones; the first phase's lockable
+-- (Gould) a target's own rules: optional MAG panels, its wait (bones that must be down first)
+local function gouldRules()
+    local C = SOLG.C
+    local req, byBone = {}, {}
+    for _, k in ipairs(C.mag_required or {}) do req[string.format("SG07_%02d", k)] = true end
+    for _, e in ipairs(S.targets) do byBone[e.bone] = e end
+    for _, row in ipairs(C.wing_rows or {}) do      -- (its third opens first, then its second, then its first)
+        local a, b, c = string.format(row[1], row[2]), string.format(row[1], row[2] + 1), string.format(row[1], row[2] + 2)
+        if byBone[b] then byBone[b].wait = { c } end
+        if byBone[a] then byBone[a].wait = { b } end
+    end
+    if next(req) then
+        local reqOnArm = {}
+        for _, e in ipairs(S.targets) do
+            if e.key == "MAG" and req[e.bone] and e.onArm then reqOnArm[e.onArm] = reqOnArm[e.onArm] or {}; table.insert(reqOnArm[e.onArm], e.bone) end
+        end
+        for _, e in ipairs(S.targets) do
+            if e.key == "MAG" and not req[e.bone] then e.optional, e.wait = true, reqOnArm[e.onArm or ""] or {} end
+        end
+    end
+end
+local function waitDone(e)
+    for _, b in ipairs(e.wait or {}) do
+        for _, x in ipairs(S.targets) do if x.bone == b and x.live then return false end end
+    end
+    return true
+end
+-- the open ones (their phase on, their wait done) lockable; how many newly
+local function openUp()
+    local n0 = 0
+    for _, e in ipairs(S.targets) do
+        if e.live and not e.open and e.t.phase <= (S.phase or 0) and not S.pauseUntil and waitDone(e) and liveObj(e.o) then
+            e.open = true; flags(e.o, FLAGS_ON); n0 = n0 + 1
+        end
+    end
+    return n0
+end
+SOLG.openUp = function() return S and openUp() or 0 end
 function SOLG.targetsUp()
     if not (S and liveObj(S.body)) then return 0 end
     S.targets, S.phase = {}, 1
     local total, said = 0, {}
     for _, t in ipairs(SOLG.C.targets) do
         if not t.laser then
-            local placed, note = typeUp(t, t.phase == 1)
+            local placed, note = typeUp(t, false)
             total = total + placed
             said[#said + 1] = note
         end
@@ -451,12 +505,16 @@ function SOLG.targetsUp()
     local att = 0
     for _, e in ipairs(S.targets) do if e.attached then att = att + 1 end end
     armsOf(S.targets)
+    gouldRules()
+    local opened = openUp()
     local perArm = {}
     for _, e in ipairs(S.targets) do if e.arm then perArm[e.arm] = (perArm[e.arm] or 0) + 1 end end
     local pa = {}
     for _, ab in ipairs(SOLG.C.arms or {}) do pa[#pa + 1] = ab .. " " .. (perArm[ab] or 0) end
-    sl(string.format("targets up: %s; %d attached to their bones, %d held by hand; phase 1; on the arms: %s", table.concat(said, ", "),
-        att, total - att, table.concat(pa, ", ")))
+    local nOpt = 0
+    for _, e in ipairs(S.targets) do if e.optional and not e.t.optional then nOpt = nOpt + 1 end end
+    sl(string.format("targets up: %s; %d attached to their bones, %d held by hand; phase 1, %d open (%d MAG optional); on the arms: %s",
+        table.concat(said, ", "), att, total - att, opened, nOpt, table.concat(pa, ", ")))
     return total
 end
 local breakTarget                                         -- (below; phaseOn's too)
@@ -465,7 +523,7 @@ local function phaseOn(ph)
     for _, t in ipairs(SOLG.C.targets) do                 -- (its lasers up now: they fire from now on)
         if t.laser and t.phase == ph then
             local first = #S.targets + 1
-            local placed, note = typeUp(t, true)
+            local placed, note = typeUp(t, false)
             local new = {}
             for i = first, #S.targets do new[#new + 1] = S.targets[i] end
             armsOf(new)
@@ -476,13 +534,11 @@ local function phaseOn(ph)
             sl(string.format("phase %d: its lasers up: %s, %d on the arms", ph, note, onArm))
         end
     end
-    local nOn = 0
-    for _, e in ipairs(S.targets) do
-        if e.live and e.t.phase == ph and liveObj(e.o) then flags(e.o, FLAGS_ON); nOn = nOn + 1 end
-    end
+    local nOn = openUp()
     sl(string.format("phase %d: %d targets lockable", ph, nOn))
     if SOLG.onPhase then pcall(SOLG.onPhase, ph, nOn) end
 end
+SOLG.phaseOn = phaseOn
 breakTarget = function(e, why)
     e.live = false
     flags(e.o, FLAGS_OFF)
@@ -499,7 +555,8 @@ breakTarget = function(e, why)
     S.broken = S.broken or {}
     S.down = (S.down or 0) + 1
     if SOLG.onBreak and why ~= "its arm's gone" then pcall(SOLG.onBreak, e.key, e.bone, e.t.pay, why) end
-    if e.t.optional then return end                       -- (a laser: the phases go on without it)
+    openUp()                                              -- (what waited on it: Gould's wing rows, an arm's MAG panels)
+    if e.t.optional or e.optional then return end         -- (a laser, an optional panel: the phases go on without it)
     if e.arm then                                         -- (its arm's last target: the arm breaks off)
         local left, pieces = 0, {}
         for _, x in ipairs(S.targets) do
@@ -513,12 +570,18 @@ breakTarget = function(e, why)
         end
     end
     -- the phase over: the next one's on (AC:I's); the last one: the SOLG destroyed
-    for _, x in ipairs(S.targets) do if x.live and not x.t.optional and x.t.phase == S.phase then return end end
+    if S.pauseUntil then return end
+    for _, x in ipairs(S.targets) do if x.live and not x.t.optional and not x.optional and x.t.phase == S.phase then return end end
     local nextPh = nil
     for _, x in ipairs(S.targets) do
-        if x.live and not x.t.optional and (not nextPh or x.t.phase < nextPh) then nextPh = x.t.phase end
+        if x.live and not x.t.optional and not x.optional and (not nextPh or x.t.phase < nextPh) then nextPh = x.t.phase end
     end
-    if nextPh then phaseOn(nextPh)
+    local pause = nextPh and n((SOLG.C.pause_s or {})[S.phase], 0) or 0
+    if nextPh and pause > 0 then                          -- (Gould's pause before the next phase opens)
+        S.pauseUntil, S.pauseNext = os.clock() + pause, nextPh
+        sl(string.format("phase %d done: phase %d in %.0f s", S.phase, nextPh, pause))
+        if SOLG.onPause then pcall(SOLG.onPause, S.phase, nextPh, pause) end
+    elseif nextPh then phaseOn(nextPh)
     else
         sl("every target down: the SOLG destroyed")
         S.destroyed = true
@@ -542,7 +605,10 @@ function SOLG.state()
     if not S then return nil end
     local live, perKey = 0, {}
     for _, e in ipairs(S.targets or {}) do if e.live then live = live + 1; perKey[e.key] = (perKey[e.key] or 0) + 1 end end
-    return { phase = S.phase, live = live, per = perKey, destroyed = S.destroyed, down = S.down or 0 }
+    local open = 0
+    for _, e in ipairs(S.targets or {}) do if e.live and e.open then open = open + 1 end end
+    return { phase = S.phase, live = live, per = perKey, destroyed = S.destroyed, down = S.down or 0, open = open,
+             pause = S.pauseUntil and math.max(0, S.pauseUntil - os.clock()) or nil, next = S.pauseNext }
 end
 -- each tick: unattached targets put on their bones; health read; at the floor, broken
 local function targetsTick()
