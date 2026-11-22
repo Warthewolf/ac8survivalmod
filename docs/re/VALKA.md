@@ -106,3 +106,22 @@ menu: hard rule 20); LastTGT only when you sit behind her (turn_every_s 0, behin
 post-stalls a 50 % chance every 25 s within 1.5 km; farther than chase_km 6 for 4 s she blinks onto your six (ring E,
 2.5 km; chase_gap_s 15); hit, 2 blinks onto your six or across your nose (rings D 1.5 km / E 2.5 km, attack_ahead 0.4).
 Her portal (section 8). [T] each in the next runs.
+
+## 8. Her portal (2026-11-22; sv_anomalies_valka.lua SPC.V.portal*, CFG.specials.valka.portal)
+The user: "try to build a 3D Portal, an event horizon that she spawns out of". Built at run time from the game's own
+pieces (no container): one actor of ours with StaticMeshComponents (AddComponentByClass) and dynamic material
+instances, plus Niagara systems at moments. It opens where her opener fires from as the railgun charges (facing you,
+each mesh grown from nothing over open_s), her shot comes out of it, she spawns exit_back_m behind its face and flies
+out (a burst), and it closes hold_s later. Co-op: the host's "vp" (open / she's through), each joiner draws its own.
+The portalprobe pieces (autotest run 20261122_131212_claude, each 220 m across 9 km north of the runway) [V]:
+- draw against the sky: the engine's /Engine/BasicShapes Cylinder / Sphere with BasicShapeMaterial (its `Color`
+  vector: a solid black disc); /Game/VFX/Mission/Traning/MI_TrainingRing (M_TrainingRing: a solid glow, `Color`,
+  `Opacity`) on a ring mesh; MI_TrainingRingGlow (M_TrainingRingGlow: see-through, brightest at its edges; `Color`,
+  `EmissiveIntensity` 2, `Opacity` 0.05, `EmissiveFresnelFalloff`, `EmissiveFresnelInverseHardness`) faint as stock;
+  the ring meshes SM_MGF_MagneticControlRingParts001_I07 (finned) and SM_UNI_OrbitElevatorRing002_I22 (plain) lie flat
+  (their axis Z); Mission 27's NS_MGF_CoreDest1st_CoreElectricPlasma draws a column of light;
+- draw nothing against the sky: MI_CoreDest_ShockDomeRefraction001, MI_CoreDest_AfterExitBlackSmokeMesh,
+  /Game/VFX/Vehicles/Weapon/UAV/Barrier/MI_Distortion (refraction / depth materials), NS_ElectricDischargeM001 at x20,
+  Mission 10's main-gun charge systems; MI_TrainingRingGlow on SM_MGF_MagneticControlRing002_I07 drew it black;
+- the IGC "ShockWave" systems (Ms25, Ms29) are huge dust / smoke clouds, not rings.
+- The autotest's own camera (ST.look) showed every picture level, whatever its pitch [T: the read-back added].

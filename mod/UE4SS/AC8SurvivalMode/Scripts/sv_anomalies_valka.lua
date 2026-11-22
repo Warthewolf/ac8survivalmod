@@ -1046,6 +1046,10 @@ function SPC.valkaTick(now, s)
     end
     -- LastTGT: every turn_every_s, and at once (behind_gap_s apart) when you're behind her within behind_km
     local behind = offNose and offNose > 110 and s.dist and s.dist <= c.behind_km
+    -- ((2026-11-22) only once you've sat behind her behind_hold_s: right after a pass of hers you're behind her too, and
+    -- an instant LastTGT then turned her back onto you every time, so she never ran out of a pass)
+    if behind then s.behindSince = s.behindSince or now else s.behindSince = nil end
+    behind = behind and now - s.behindSince >= (tonumber(c.behind_hold_s) or 0)
     if (now >= s.turnAt) or (behind and now >= (s.behindAt or 0)) then
         s.turnAt, s.behindAt, s.turns = V.turnClock(c, now), now + c.behind_gap_s, (s.turns or 0) + 1
         -- ((2026-11-22) a turn-in, not a 20 s tail chase: reset turn_hold_s on; 0 keeps it whole)

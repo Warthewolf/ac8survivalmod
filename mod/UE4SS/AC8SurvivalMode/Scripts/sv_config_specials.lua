@@ -378,7 +378,8 @@ CFG.specials = {
                  -- behind_gap_s apart), not on a clock (turn_every_s 0; it was 6 s); her orders again every
                  -- engage_every_s (was 5: each time a fresh attack)
                  -- (a LastTGT ended turn_hold_s after it starts: a turn-in onto you, then her own flying; 0: its 20 s)
-                 turn_every_s = 0, behind_km = 3, behind_gap_s = 12, turn_hold_s = 6, engage_every_s = 20,
+                 -- (behind_hold_s: you've sat behind her that long first; right after her pass you're behind her too)
+                 turn_every_s = 0, behind_km = 3, behind_hold_s = 3, behind_gap_s = 12, turn_hold_s = 6, engage_every_s = 20,
                  -- (2026-11-22) a post-stall now and then (was every 9 s within 3 km: each one stopped her in the air)
                  post_stall = true, post_stall_every_s = 25, post_stall_range_km = 1.5, post_stall_chance = 0.5,
                  post_stall_moves = { "Kulbit", "KulbitB", "Cobra" },
