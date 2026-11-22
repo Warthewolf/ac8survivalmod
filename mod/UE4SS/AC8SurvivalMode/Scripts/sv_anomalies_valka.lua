@@ -107,7 +107,14 @@ function SPC.V.asset(path, obj)
     SPC.V.assets[full] = nil
     local why
     o, why = loadObject(full)
-    if o ~= nil and valid(o) then SPC.V.assets[full] = o; return o end
+    if o ~= nil and valid(o) then
+        SPC.V.assets[full] = o
+        -- ((2026-11-22) a crash at her return blink (0.75.26: a call on a freed object, from Lua): kept only in this cache,
+        -- an asset no portal held any more was freed and its address reused (hard rule 59), and her next portal handed the
+        -- stale one to the engine. Pinned now (GameInstance.ReferencedObjects): never freed while the game runs)
+        if pin then pcall(pin, o, "VALKA's " .. (full:match("[^/%.]+$") or full)) end
+        return o
+    end
     return nil, why
 end
 -- what she loads at her opener and her reveal: { path, object }, each once (her X-02S and its sweep, her paint variant's
@@ -718,6 +725,8 @@ function SPC.valkaTick(now, s)
     V.flareTick(c, s, now)
     if s.portal then V.portalTick(c, s, now) end         -- ((2026-11-22) her portal: open, hold, close)
     if VCINE and VCINE.tick then VCINE.tick(c, s, now) end    -- (its cutscene: sv_valka_cine.lua)
+    if SOLG and SOLG.tick then SOLG.tick(now) end             -- (her SOLG: sv_solg.lua)
+    if VSOLG and VSOLG.strikesTick then pcall(VSOLG.strikesTick, now) end   -- (its strike, stopped in time even once she's down)
     if s.bportals then V.blinkPortalsTick(c, s, now) end  -- (and her blinks' small ones)
     -- ((0.73.80) no walk for her rounds after a shot any more (every tick for 3-3.5 s, none ever found in the 31-round
     -- run): their life, single rounds and the opener's no-damage are on the round's class default, SPC.V.roundDefaults)
@@ -932,6 +941,7 @@ function SPC.valkaTick(now, s)
         V.flareStop(s)
         V.portalStop(s)
         V.blinkPortalsStop(s)
+        if VSOLG and VSOLG.stop then pcall(VSOLG.stop, s, "her death") end
         V.sndStop(s)
         ANOM.cleanFx(now, true)
         -- ((0.73.77) D4 / the white square left on the minimap: her railguns' forced minimap display off, and what's
@@ -961,6 +971,34 @@ function SPC.valkaTick(now, s)
     if not o then return end
     V.modelTick(s, o, now)
     pcall(V.subsHealth, c, s, o)                         -- ((2026-11-07) AUDREY breaks in as her health falls)
+    -- ((2026-11-22) the user's co-op run: one TLS beam took her 1,600 in one go, 100 % to her 20 % floor, skipping her
+    -- fight; her yes to "cap how much of Valka's health she can lose per second ... 10 %") her health floor (the
+    -- engine's MinHealth: every hit, a joiner's too, stops there) moved each second to her health then less hit_cap_pct
+    -- of her max, never under the SOLG's floor while it waits; 0 once that's under 0 (she can die)
+    local num = function(v, d) return tonumber(v) or d end   -- (this file has no n helper)
+    local cap = num(c.hit_cap_pct, 0)
+    if cap > 0 and not (s.solg and s.solg.state ~= "done") then
+        local okH, h, mx = pcall(function() return num(o.HealthInternal, 0) / 10, num(o.MaxHealth, 0) end)
+        if okH and mx > 0 then
+            if now >= (s.capAt or 0) then s.capAt, s.capFrom = now + 1, h end
+            local g = c.solg
+            local base = (g and g.enabled ~= false and not s.solgDone) and mx * num(g.at_pct, 20) / 100 or 0
+            local fl = math.max(base, (s.capFrom or h) - mx * cap / 100)
+            if fl <= 0 then fl = base end
+            pcall(function() if math.abs(num(o.MinHealth, 0) - fl) > 0.5 then o.MinHealth = fl end end)
+            if not s.capSaid then s.capSaid = true; log(string.format("special: VALKA's hits capped: at most %d%% of her health (%.0f) a second", cap, mx * cap / 100)) end
+            if h <= fl + 0.5 and fl > base and not s.capHitSaid then
+                s.capHitSaid = true
+                log(string.format("special: VALKA's cap held a hit: %.0f of her health left, no more this second", h))
+            end
+        end
+    end
+    if VSOLG and VSOLG.tick then                         -- ((2026-11-22) at 20 % her SOLG: sv_valka_solg.lua; the rest waits)
+        local okS, busy = pcall(VSOLG.tick, c, s, o, now)
+        if not okS then
+            if not s.solgErr then s.solgErr = true; log("special: VALKA's SOLG: error " .. tostring(busy)) end
+        elseif busy then return end
+    end
     if now >= (s.holdAt or 0) then                       -- her parts held (EvadeOnly), again every hold_s
         s.holdAt = now + (c.hold_s or 5)
         V.event("RE_SV_ValkaHold")
@@ -1477,11 +1515,81 @@ local function portalMesh(pc, P, part, a, smc, kml)
             end
         end
     end
+    -- ((2026-11-22) the user: "the portal opening and closing is so laggy its not smooth at all": Lua sets things 4 times
+    -- a second) each piece on its own scaler (SK_SV_PortalScaler: tools/valka_portal/scaler.py), whose one bone B the
+    -- engine scales every frame as it plays A_SV_PortalGrow (held at 0.001 till its window; backwards as it closes), spun by an
+    -- engine RotatingMovementComponent; the tick only starts them (portalTick). No scaler (an older container): as before
+    local sk = P.scaler ~= false and SPC.V.asset(SPC.V.PORTAL_SCALER) or nil
+    local grow = sk and SPC.V.asset(SPC.V.PORTAL_GROW) or nil
+    local sc = nil
+    if sk and grow then
+        local okS, x = pcall(function()
+            return a:AddComponentByClass(StaticFindObject("/Script/Engine.SkeletalMeshComponent"), false,
+                { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }, false)
+        end)
+        if okS and valid(x) then sc = x end
+    end
+    if sc then
+        local okM = pcall(function() sc:SetSkeletalMeshAsset(sk) end) or pcall(function() sc:SetSkeletalMesh(sk, true) end)
+        pcall(function() sc:SetCollisionEnabled(0) end)
+        pcall(function() sc:SetCastShadow(false) end)
+        pcall(function() sc.VisibilityBasedAnimTickOption = 0 end)   -- (its bone moved even off screen: AlwaysTickPoseAndRefreshBones)
+        pcall(function() sc:K2_SetWorldLocationAndRotation({ X = P.at.X, Y = P.at.Y, Z = P.at.Z }, portalRot(part, P.yaw), false, {}, true) end)
+        -- ((0.75.17's pictures: the pieces turned and stretched) the piece put where it belongs at full size first, the
+        -- scaler's bone still at rest, and attached keeping that (its bone's own frame is the importer's, turned from
+        -- glTF's): the bone's scale then shrinks and grows it about the portal's middle, nothing else
+        pcall(function() comp:K2_SetWorldLocation({ X = P.at.X, Y = P.at.Y, Z = P.at.Z }, false, {}, true) end)
+        pcall(function() comp:K2_SetWorldRotation(portalRot(part, P.yaw), false, {}, true) end)
+        if e.spun ~= 0 then pcall(function() comp:K2_AddLocalRotation({ Pitch = 0, Yaw = e.spun, Roll = 0 }, false, {}, true) end) end
+        pcall(function() comp:SetWorldScale3D({ X = e.k, Y = e.k, Z = e.k * e.flat }) end)
+        local okA = okM and pcall(function() comp:K2_AttachToComponent(sc, FName("B"), 1, 1, 1, false) end)
+        if okA then
+            -- (held at its start, 0.001, till its window. (2026-11-22) not paused at rate 0: a paused animation isn't run, its
+            -- bone stayed at full size till its window ("the black hole ... is already at full size"): a creep instead)
+            pcall(function() sc:PlayAnimation(grow, false) end)
+            pcall(function() sc:SetPosition(0, false) end)
+            pcall(function() sc:SetPlayRate(SPC.V.PORTAL_CREEP) end)
+            -- (0.75.20's probe: its bone at full size till the engine first runs the animation, a frame on: the piece
+            -- hidden till the portal's first tick, then shown, small)
+            pcall(function() comp:SetVisibility(false, false) end)
+            e.sc, e.hold = sc, true
+            if e.spin ~= 0 then
+                local okR, rot = pcall(function() return a:AddComponentByClass(StaticFindObject("/Script/Engine.RotatingMovementComponent"), false,
+                    { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }, false) end)
+                if okR and valid(rot) then
+                    pcall(function() rot:SetUpdatedComponent(comp) end)
+                    pcall(function() rot.bRotationInLocalSpace = true end)
+                    e.rot = rot
+                    SPC.V.portalSpin(e, 0.15)
+                end
+            end
+            return e
+        end
+        pcall(function() sc:K2_DestroyComponent(sc) end)     -- (not on it: the old way below)
+    end
     pcall(function() comp:K2_SetWorldLocation({ X = P.at.X, Y = P.at.Y, Z = P.at.Z }, false, {}, true) end)
     pcall(function() comp:K2_SetWorldRotation(portalRot(part, P.yaw), false, {}, true) end)
     if e.spun ~= 0 then pcall(function() comp:K2_AddLocalRotation({ Pitch = 0, Yaw = e.spun, Roll = 0 }, false, {}, true) end) end
     pcall(function() comp:SetWorldScale3D({ X = 0.001, Y = 0.001, Z = 0.001 }) end)
     return e
+end
+SPC.V.PORTAL_CREEP = 0.0001                       -- (a waiting piece's grow: run, but nothing in a minute)
+SPC.V.PORTAL_SCALER = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SK_SV_PortalScaler"
+SPC.V.PORTAL_GROW = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SK_SV_PortalScaler_Anim"   -- (its grow: the importer's name, never renamed)
+-- a piece's engine spin at its rate x k (the portal's spin-up as it opens, faster as it drains)
+function SPC.V.portalSpin(e, k)
+    if not e.rot then return end
+    local d = e.spin * k
+    if e.spinK and math.abs(d - e.spinK) < 0.5 then return end
+    e.spinK = d
+    pcall(function() e.rot.RotationRate = e.axis == "x" and { Pitch = 0, Yaw = 0, Roll = d } or { Pitch = 0, Yaw = d, Roll = 0 } end)
+end
+-- a piece's scaler: its animation started at the rate that fills `secs`
+local function scalerGo(e, anim, secs, fresh)
+    local okP = true
+    if fresh then okP = pcall(function() e.sc:PlayAnimation(anim, false) end) end
+    pcall(function() e.sc:SetPlayRate(1 / math.max(0.05, secs)) end)
+    return okP
 end
 -- the portal at `at` (cm) facing `yaw`; true if it came up
 -- (pc: another portal's settings, her blinks' small ones: blink_portal; quiet: not logged)
@@ -1499,6 +1607,13 @@ function SPC.V.portalOpen(c, s, at, yaw, now, pc, quiet)
         return gs:FinishSpawningActor(x, t, 1)
     end)
     if not (okA and valid(a)) then log("special: VALKA's portal: no actor (" .. tostring(a) .. ")"); return false end
+    -- ((2026-11-22) an empty root first: a new component goes on the actor's root, and the first piece (the black hole's
+    -- shadow) was the root, so every scaler hung off it and it couldn't go on its own: "the Black Hole did not move")
+    pcall(function()
+        local root = a:AddComponentByClass(StaticFindObject("/Script/Engine.SceneComponent"), false,
+            { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }, false)
+        root:K2_SetWorldLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true)
+    end)
     local P = { actor = a, at = { X = at.X, Y = at.Y, Z = at.Z }, yaw = yaw or 0, from = now, phase = "open", meshes = {},
                 fired = {}, size = (tonumber(pc.size_m) or 250) * 100, pc = pc }
     local said = {}
@@ -1520,8 +1635,11 @@ function SPC.V.portalOpen(c, s, at, yaw, now, pc, quiet)
     s.portal = P
     SPC.V.PORTAL_STATS.opened = SPC.V.PORTAL_STATS.opened + 1
     SPC.V.PORTAL_STATS.parts = SPC.V.PORTAL_STATS.parts + #P.meshes
-    if not quiet then log(string.format("special: VALKA's portal opens at (%.1f, %.1f) km, %.1f km up, facing %.0f, %.0f m across: %d mesh parts (%s)",
-        at.X / 100000, at.Y / 100000, at.Z / 100000, P.yaw, P.size / 100, #P.meshes, table.concat(said, ", "))) end
+    local onSc = 0
+    for _, e in ipairs(P.meshes) do if e.sc then onSc = onSc + 1 end end
+    P.onScalers = onSc
+    if not quiet then log(string.format("special: VALKA's portal opens at (%.1f, %.1f) km, %.1f km up, facing %.0f, %.0f m across: %d mesh parts, %d on their scalers (the engine's every frame) (%s)",
+        at.X / 100000, at.Y / 100000, at.Z / 100000, P.yaw, P.size / 100, #P.meshes, onSc, table.concat(said, ", "))) end
     SPC.V.portalFx(c, s, "open")
     return true
 end
@@ -1600,7 +1718,46 @@ function SPC.V.portalTick(c, s, now)
     end
     local spinK = y and (1 + 3 * y) or (0.15 + 0.85 * x)
     for _, e in ipairs(P.meshes) do
-        if liveObj(e.comp) then
+        if e.sc and liveObj(e.comp) then                -- (on its scaler: the engine scales and spins it every frame)
+            -- (shown once into its window and 0.3 s on: the engine has run its grow by then (0.75.23's probe: full size before))
+            if e.hold and e.grown and now > P.from + 0.3 then e.hold = nil; pcall(function() e.comp:SetVisibility(true, false) end) end
+            if e.hold and y then e.hold = nil end         -- (closing before it was ever shown: left hidden)
+            if y then
+                local w = e.part.close
+                local from = (P.closeFrom or now) + (w and w[1] or 0) * close
+                if not e.shrunk and now >= from then       -- (its grow played backwards from where it is: falling in)
+                    e.shrunk = true
+                    -- ((2026-11-22) "it doesn't have an closing animation": a grow that had ended was stopped, and a rate
+                    -- alone never restarts it: played again, backwards, from where it is)
+                    local pos = 1
+                    pcall(function() pos = e.sc:GetPosition() end)
+                    if not pos or pos <= 0.0001 then pos = 1 end
+                    pcall(function() e.sc:SetPosition(math.min(1, pos), false) end)
+                    pcall(function() e.sc:SetPlayRate(-1 / math.max(0.05, ((w and (w[2] - w[1])) or 1) * close)) end)
+                    pcall(function() e.sc:Play(false) end)
+                end
+            elseif not e.grown then
+                local w = e.part.open
+                if now >= P.from + (w and w[1] or 0) * open then
+                    e.grown = true
+                    scalerGo(e, nil, ((w and (w[2] - w[1])) or 1) * open, false)
+                end
+            end
+            SPC.V.portalSpin(e, spinK)
+            local bright = 1
+            if y and e.part.flare then bright = 1 + 4 * math.max(0, math.min(1, (y - 0.55) / 0.35))
+            elseif not y and e.part.flare then bright = 1 + 3 * (1 - math.max(0, math.min(1, x / 0.45))) end
+            if e.mid and e.color and (e.pulse or bright ~= 1) then
+                local f = bright
+                if e.pulse then
+                    local amp, hz = tonumber(e.pulse[1]) or 0, tonumber(e.pulse[2]) or 1
+                    f = f * (1 + amp * (0.6 * math.sin(6.283 * hz * now + e.ph) + 0.4 * math.sin(6.283 * hz * 2.37 * now + 1.7 * e.ph)))
+                end
+                local cc = e.color
+                pcall(function() e.mid:SetVectorParameterValue(FName("Color"), { R = cc[1] * f, G = cc[2] * f, B = cc[3] * f, A = cc[4] or 1 }) end)
+            end
+            if turn then pcall(function() e.sc:K2_SetWorldRotation(portalRot(e.part, P.yaw), false, {}, true) end) end
+        elseif liveObj(e.comp) then
             local gi, bright = 1, 1
             if y then
                 local w = e.part.close

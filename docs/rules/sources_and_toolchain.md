@@ -13,6 +13,11 @@ Moved verbatim from AGENTS.md (2026-11-14). The exceptions and the user's quotes
   LaserInterceptor (wp_LaserInterceptor: its values, its swing curve CUR_LaserInterceptorSwingRate, its beam effects
   FX_UAV_TLS_Muzzleflash01/02 with their meshes, materials and textures, and its sounds) for the ZFA-44s' anti-missile
   laser, on AC8's native ALiveLaserInterceptor. Never AC7 voice lines. See docs/re/LASER_INTERCEPTOR.md.
+- Ace Combat Infinity, at the user's request (2026-11-03: "pull the Satellite Interception Mission from ACI"; again
+  2026-11-22: "making the SOLG again but as a custom asset using the Infinity Model, it's animations have to work"):
+  the SOLG special may use AC:I's SOLG model, its textures and its animations (the user's own AC:I install, $ACI (.env)
+  outside the repo, nothing of it committed). Never AC:I voice lines, map or cutscene; never a stock AC8 boss under
+  it ("the SOLG cannot use any boss from the game"). See docs/re/SOLG.md.
 - A third AC7 exception, at the user's request (2026-11-17: "extract some voice lines from Ace Combat 7's WWise Bank,
   particularly the Alicorn's Crew speeches, run them through a voice filter that makes them sound distorted and horrific",
   "Yeah you've got the go ahead", e.g. "Salvation is nigh!" and the crew's oath; "I want to hear each of your custom work on

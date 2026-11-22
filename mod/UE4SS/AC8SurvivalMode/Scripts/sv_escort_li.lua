@@ -413,8 +413,24 @@ local function spawn(p)
         (fin ~= nil and addrOf(fin) ~= addrOf(a)) and string.format("; FinishSpawningActor answered %s, not the laser", tostring(addrOf(fin))) or "")
 end
 
+-- ((2026-11-22) its shooting sound: the TLS's, on the laser (or its carrier) by name; started and stopped in pairs)
+local function liSound(r, on)
+    local z = zc()
+    local name = on and z.li_fire_sound or z.li_fire_stop
+    if type(name) ~= "string" or name == "" then return end
+    if not on and not r.sndOn then return end
+    local lib = StaticFindObject("/Script/Live.Default__LiveSoundBlueprintLibrary")
+    if not (lib and valid(lib)) then return end
+    local who = (r.li and liveAddr(r.li)) and r.li or ((r.o and liveAddr(r.o)) and r.o or r.sndWho)
+    if not who then r.sndOn = nil; return end
+    local ok = pcall(function() lib:PostEventAtActorByName(FName(name), who) end)
+    r.sndOn, r.sndWho = on and ok or nil, on and who or nil
+    if not ok and not S.sndSaid then S.sndSaid = true; say("its shooting sound %s couldn't be posted", name) end
+end
+ZLI.sound = liSound
 local function volleyOn(s, r, clock, why)
     local z = zc()
+    liSound(r, true)
     r.phase, r.from, r.to = "volley", clock, clock + num(z.li_volley_s, 6.0)
     r.nextSearch = clock + num(z.li_search_s, 0.5)       -- (AC7's first search: SearchInterval after the weapon's birth)
     pcall(function() r.li:K2_GetRootComponent():K2_SetRelativeRotation({ Pitch = 0, Yaw = 0, Roll = 0 }, false, {}, false) end)
@@ -476,6 +492,7 @@ local function beamOff(r, clock)
         pcall(function() r.li.MainLaser:Deactivate() end)
         pcall(function() r.li.MainLaser:SetVisibility(false, false) end)
     end
+    liSound(r, false)                                     -- (its shooting sound stopped with its beam)
     r.phase, r.restUntil = "rest", clock + num(zc().li_rest_s, 8.0)
 end
 

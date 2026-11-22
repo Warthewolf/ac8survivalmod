@@ -233,6 +233,7 @@ CFG.specials = {
     -- enabled = false: she never comes, whatever `rotation` says (a build without her X-02S and AC7 sounds:
     -- tools/package_release.sh novalka)
     valka    = { enabled = true, name = "VALKA", squadron = "MIHALY'S SHADOW", unit = "SV_Unit_Valka", health = 2000,
+                 hit_cap_pct = 10,   -- (at most this % of her health lost a second, whoever's hits: the user, 2026-11-22)
                  health_per_round = 0.04, health_max_x = 2.5, reward = 9000, reward_per_round = 300, ai_level = 5,
                  disguise = true, decoy_share = 0.5, decoy_min = 2, decoy_max = 6, lurk_s = 4,
                  anomaly_line = "CATASTROPHIC LEVEL ANOMALY", big_x = 2.0,
@@ -256,7 +257,29 @@ CFG.specials = {
                                              "C|The contact's gone. Signal lost. ...Whoever that was." },
                                            { "AUDREY|Valka? Valka. Yes. It's me. I've got you now.",
                                              "C|Signal lost. Comona Control, logging it as... nothing." } },
-                                  down_charlene = { { "CHARLENE|...Whoever she was, I think someone just took her home." } } } },
+                                  down_charlene = { { "CHARLENE|...Whoever she was, I think someone just took her home." } },
+                                  -- ((2026-11-22) her SOLG (docs/re/SOLG.md): at 20 % she calls it in (solg), it's destroyed
+                                  -- (solg_down, as she comes back) or it hits the spaceport (solg_hit). AUDREY worked at the
+                                  -- Sudentor, there when its control system was taken down: she knows it)
+                                  solg = { { "VALKA|Enough.",
+                                             "AUDREY|Val? Val, talk to me. You're hurt. Come down, I'll get you out.",
+                                             "VALKA|Out to what, Auds? It just keeps going. All of it.",
+                                             "AUDREY|Then let it keep going. With you in it. Please.",
+                                             "VALKA|I'm tired. I'm going to make it quiet.",
+                                             "AUDREY|Val, no. Whatever you're thinking, don't. There are people down there.",
+                                             "VALKA|There always are. Rest well, all of you.",
+                                             "C|New contact, high altitude, out of nowhere. It's... huge. It's coming down.",
+                                             "AUDREY|No. No, no, no. That's the SOLG. We buried that thing. I watched its control system die in that tunnel.",
+                                             "AUDREY|Val, where did you get it?! ...Stars, she's not listening.",
+                                             "AUDREY|Pilots, it's falling on the spaceport. Strip the solar arrays and the panels first, then the shells, then the cores. Shoot it apart!" } },
+                                  solg_down = { { "AUDREY|It's breaking up... It's gone. You did it.",
+                                                  "VALKA|...You stopped it.",
+                                                  "AUDREY|They did, Val. It's over. Come home.",
+                                                  "VALKA|Not yet." } },
+                                  solg_hit = { { "C|Impact at the spaceport! The shockwave's hit the airfield. Runways closed!",
+                                                 "AUDREY|Twice. I watched that thing fall twice...",
+                                                 "AUDREY|Val... what have you done.",
+                                                 "VALKA|What I said I would." } } } },
                  spawn_km = { 6, 9 }, arrive_s = 1.0,
                  -- opener_bearing: the compass bearing it's on from you (270 = always west; user, 2026-10-24: "have
                  -- it always at the west"); nil = straight ahead of you
@@ -418,6 +441,27 @@ CFG.specials = {
                  -- (shoot: her opener's round fired at you while it films too; off: only heard. The runs of 15:13-16:08
                  -- seemed to cut to your plane as it came: the test's window grabs were late, the game's own pictures
                  -- showed the cutscene whole)
+                 -- ((2026-11-22) her SOLG (sv_valka_solg.lua; the SOLG: sv_solg.lua, docs/re/SOLG.md): at at_pct of her
+                 -- health she's invincible, says her lines (text.say.solg) and leaves through a portal; call_s on the SOLG
+                 -- comes out of a portal of hers portal_size_m across at a corner of the map (the spaceport's pad pad_cm
+                 -- +- corner_km), alt_km up, and falls on the pad in travel_s. Destroyed: reward, solg_down; on the pad:
+                 -- Mission 25's blast (hit_fx), the airfield down for a round, solg_hit. Either way she's back back_s on
+                 -- (onto your six through a portal) at at_pct, to be shot down
+                 -- ((2026-11-23) call_s 62 (was 18): the user's Audrey briefing is 16 lines (~4 s each): the SOLG comes once she's done
+                 solg = { enabled = true, at_pct = 20, call_s = 62, corner_km = 30, alt_km = 12, travel_s = 360,   -- (Gould's 6 min)
+                          pad_cm = { -1325196, 59778, 0 }, portal_size_m = 2600, portal_back_m = 1500, portal_max_s = 120, portal_at_s = 4,
+                          park_km = { -40, 0, 15 },   -- (where she waits while it's up: from the pad, km along x, y, up)
+                          reward = 3000, back_s = 12, wreck_s = 25, marker = true,   -- (its pieces ~4,900 more: sv_solg.lua)
+                          hit_fx = { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001",
+                                     "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion002",
+                                     "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion005",
+                                     "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_ShockWave001",
+                                     "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_ShockWave002" },
+                          hit_fx_scale = 12, hit_fx_s = 25, hit_fx_up_m = 0, portal_full_s = 0.5, through_s = 6,
+                          -- ((2026-11-22) the strike as Mission 25's cutscene plays it (the method 0.74.82 found for the
+                          -- railcannon); off or failing: hit_fx at hit_fx_scale (x12: its fireball between its rings)
+                          hit_seq = { enabled = true, path = "/Game/Sequencer/IGC/IGC_Ms250010/VFX/CLS_IGC_Ms250010_Shot0030_VFX",
+                                      anchor = { 605172, -533159, -5879 }, key = "Ms250010", hide = { "Rain", "BulletTrail" } } },
                  cine = { enabled = true, charge_s = 8.5, end_s = 14.6, max_s = 25, blend_fn = 0, letterbox = 2.39, shoot = true,
                           -- ((2026-11-22) the run of 15:13: on a 3.5 km circle your plane banked hard and the game put its bank
                           -- on our cameras (the pictures rolled 35-70 degrees): a 25 km one, your plane flying out level)

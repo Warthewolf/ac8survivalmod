@@ -388,6 +388,47 @@ def glitch_blinks():
 # parts, ported as the Ladon is) until the X-02S model is built.
 # Scripts/main.lua CFG.specials.valka drives it (SPC.V.*); keep VALKA_SPOTS in step with its `spots`.
 VALKA_SOURCE_UNIT = 'EI_Unit_01_Air0'          # Mission 26's x40a ("Nightmare") and its parts
+# ((2026-11-22) VALKA's SOLG (Scripts/sv_solg.lua, docs/re/SOLG.md): its targets, each type its own unit on AC8's
+# GENERIC destructible-object base (the user: "the SOLG cannot use any boss from the game"; her yes to the base):
+# Mission 4's single radar tower unit ported (build_survival_units.py solg_units), its objects on one mission row
+# copied from Mission 4's (SOLG_TARGET_ROW), held on the SOLG's bones by Lua; AC:I's types and counts)
+SOLG_TARGET_ROW = 'sv_solg_target'
+SOLG_TARGET_SOURCE_ROW = 'RadarTower02_common'                 # (DT_NPC_Mission004: NpcId BPD_RadarTower02_01)
+SOLG_TARGET_SOURCE_UNIT = 'AA_Unit_01_ground0'                 # (WD_Mission004_global: one BPD radar tower)
+SOLG_TARGETS = [('SAW', 18), ('MAG', 32), ('KEW', 36), ('CORE', 4), ('SP', 1),
+                # ((2026-11-22) its rear hatch (s_sg08, the disc over its shaft's mouth): the user, "the rear hatch that
+                # has to be destroyed"; between the core units and the SP shell)
+                ('HATCH', 1),
+                # ((2026-11-22) its laser turrets, AC:I's f_111t (tools/solg/lasers.py): 16 on the arms (LSRA), 12 round
+                # the barrel (LSRB); not on the radar tower but on AC8's land Phalanx, firing our own laser (SOLG_TLS_*)
+                # (SOLG -Gould-: the barrel's tail 4 up with the arms', its front 8 with the core units)
+                ('LSRA', 16), ('LSRB', 4), ('LSRC', 8)]
+SOLG_LASER_TYPES = ('LSRA', 'LSRB', 'LSRC')
+SOLG_TLS_WEAPON_SOURCE = '/Game/Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForPlane'   # AC8's anti-aircraft sweep
+SOLG_TLS_WEAPON = '/Game/Mods/SurvivalMode/Weapons/BP_SV_SolgTLS'                         # ours: 5 a hit (the user)
+SOLG_TLS_DAMAGE = 5.0
+SOLG_TLS_FCS_PKG = '/Game/Mods/SurvivalMode/Weapons/BP_FCS_SV_SolgTLS'
+SOLG_TLS_FCS_TABLE = '/Game/Mods/SurvivalMode/Data/DT_SV_SolgFCS'
+SOLG_TLS_FCS_ROW = 'SV_FCS_SolgTLS'
+SOLG_LSR_NPC_SOURCE = 'GR033_ciws_01'                  # (AC8's land Phalanx, enemy: DT_NPC, its model GR033_ciws)
+SOLG_LSR_MODEL_SOURCE = 'GR033_ciws'
+SOLG_LSR_MODEL_SV = 'SV_Model_SOLG_LSR'
+SOLG_UNITS = {t: 'SV_Unit_SOLG_' + t for t, _ in SOLG_TARGETS}
+SOLG_OBJS = {t: 'SV_Obj_SOLG_' + t for t, _ in SOLG_TARGETS}
+# their boxes (the run of 18:16: "RADAR TOWER" on every one): "SOLG" over each type's AC:I name. Line 1 the model row's
+# name: SOLG_MODEL_SV, the radar tower's model row but its name key (DT_SV_ModelRows); line 2 each type's own DT_NPC row
+# (SOLG_NPC: the radar tower's NPC row on SOLG_MODEL_SV with that type's key, DT_SV_NpcRows), on its own mission row
+# (SOLG_ROWS: Mission 4's radar tower row, its NpcId that type's); Scripts/sv_solg.lua SOLG.rowsIn adds the rows and
+# sets the texts (CFG SOLG.C.names) at the main menu
+SOLG_MODEL_SOURCE = 'BPD_RadarTower02'
+SOLG_MODEL_SV = 'SV_Model_SOLG'
+SOLG_NAME_KEY = 'SV_SOLG_Name'
+SOLG_NPC_SOURCE = 'BPD_RadarTower02_01'
+SOLG_NPC = {t: 'SV_SOLG_' + t for t, _ in SOLG_TARGETS}
+SOLG_SUB_KEYS = {t: 'SV_SOLG_Sub_' + t for t, _ in SOLG_TARGETS}
+SOLG_ROWS = {t: 'sv_solg_' + t.lower() for t, _ in SOLG_TARGETS}
+SOLG_MISSION_TABLE = '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004'
+
 VALKA_UNIT = 'SV_Unit_Valka'
 VALKA_OBJ = None                               # her AI object name, set by build_survival.py valka_unit
 VALKA_PARTS = {}                               # component -> its object name (RailGun, RailGunCK, RailGunPF, LaserPod)

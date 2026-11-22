@@ -33,7 +33,7 @@ tools/get_stock.sh \
   Maps/Ingame/Mission018/EP_Mission018_global.uasset \
   Maps/Ingame/MIssion006/EP_Mission006_global.uasset \
   Maps/Ingame/Training001/EP_Training001_global.uasset \
-  Blueprints/Weapons/BP_FCS/CP/BP_FCS_Vessel_CIWS_00.uasset Blueprints/Weapons/BP_FCS/CP/BP_FCS_ECM_00.uasset Blueprints/Weapons/CIWS/Vessel/BP_wp_ciws_vessel.uasset Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForMSL.uasset Maps/Ingame/Mission029/EP_Mission029_global.uasset Datatables/AI/NPC/FCS/DT_NPC_FCS.uasset \
+  Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForPlane.uasset WwiseAssets/Events/CS_AceLive_SE/Events_General/ARMS/SKY/SE_GEN_ARMS_SKY_OP0024_uavn/AKE_GEN_ARMS_SKY_OP0024_uavn_PulseLaser_Fire_Play.uasset WwiseAssets/Events/CS_AceLive_SE/Events_General/ARMS/SKY/SE_GEN_ARMS_SKY_OP0024_uavn/AKE_GEN_ARMS_SKY_OP0024_uavn_PulseLaser_Fire_Stop.uasset WwiseAssets/Events/CS_AceLive_SE/Events_General/PLAYER/ARMS/SE_GEN_PLAYER_ARMS_SPWeapon/AKE_GEN_PLAYER_ARMS_SPWeapon_TLS_Emit_Play.uasset WwiseAssets/Events/CS_AceLive_SE/Events_General/PLAYER/ARMS/SE_GEN_PLAYER_ARMS_SPWeapon/AKE_GEN_PLAYER_ARMS_SPWeapon_TLS_Emit_Stop.uasset Blueprints/Weapons/BP_FCS/CP/BP_FCS_Vessel_CIWS_00.uasset Blueprints/Weapons/BP_FCS/CP/BP_FCS_ECM_00.uasset Blueprints/Weapons/CIWS/Vessel/BP_wp_ciws_vessel.uasset Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForMSL.uasset Maps/Ingame/Mission029/EP_Mission029_global.uasset Datatables/AI/NPC/FCS/DT_NPC_FCS.uasset \
   Blueprints/Weapons/BP_FCS/CP/BP_FCS_Vessel_Artillery_00.uasset Blueprints/Weapons/Artillery/BP_wp_artillery_vesselgun.uasset OnlineMode/Blueprint/Weapons/BP_wp_emls_alcn.uasset Blueprints/Vehicle/AI/Plane/OP1016_x40a/Base/BP_OP1016_x40a_RG_Base.uasset \
   OnlineMode/DataTables/AI/NPC/DT_NPC_Model_ON.uasset \
   Datatables/Sound/DT_SoundMusicPlayerBGM.uasset OnlineMode/DataTables/Information/JukeBox/DT_JukeBoxMusic.uasset WwiseAssets/Database/DA_SoundDB_AKB_BGM_Campaign.uasset WwiseAssets/Database/DA_SoundDB_AKB_BGM_Online.uasset \
@@ -86,6 +86,14 @@ if [ -f build/valka_portal/out/SurvivalMode_ValkaPortal_P.utoc ]; then
     echo "staged VALKA's portal (build/valka_portal/out/SurvivalMode_ValkaPortal_P)"
 else
     echo "no VALKA portal container (tools/valka_portal/build.sh): her portal from stock pieces"
+fi
+# ((2026-11-22) her SOLG: AC:I's model and its spin, our own skeletal meshes (tools/solg/build.sh; the user's AC:I
+# exception); with her, as her X-02S)
+if [ -f build/solg/out/SurvivalMode_SOLG_P.utoc ]; then
+    cp build/solg/out/SurvivalMode_SOLG_P.utoc build/solg/out/SurvivalMode_SOLG_P.ucas build/install/SurvivalMode/
+    echo "staged VALKA's SOLG (build/solg/out/SurvivalMode_SOLG_P)"
+else
+    echo "no SOLG container (tools/solg/build.sh): her SOLG can't come"
 fi
 # the ZFA-44 (the user's own model, cooked in UE 5.4 by tools/zfa44/build.sh; no UE needed here): the user's dev builds
 # only, so staged with ZFA=1 only (package_dev.sh keeps it with ZFA=1; package_release.sh never ships it)

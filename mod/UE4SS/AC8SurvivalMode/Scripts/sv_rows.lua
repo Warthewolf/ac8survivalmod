@@ -456,6 +456,10 @@ function searchSetup()
         end
         log(string.format("aces: %d rows in DT_NPC, %d names set%s", nAces, names,
             #lost > 0 and ("; missing from DT_SV_NpcRows: " .. table.concat(lost, ", ")) or ""))
+        if SOLG and SOLG.rowsIn then                    -- ((2026-11-22) VALKA's SOLG's targets: their rows and names
+            local okS, why = pcall(SOLG.rowsIn, npc, mine)
+            log("solg: rows: " .. (okS and tostring(why) or ("error " .. tostring(why))))
+        end
     end
     SR.levels = SR.levels or {}
     local nLevels = CFG.spikes.enabled and math.min(#CFG.spikes.levels, #SPIKE_SUFFIX) or 0

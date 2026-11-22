@@ -185,6 +185,30 @@ function COOP.valkaPortal(at, yaw, what)
     log(string.format("coop: VALKA's portal (%s) sent to every joiner (%d linked)", what == "o" and "open" or "she's through",
         M.linkedPeers or 0))
 end
+-- ((2026-11-22) her SOLG (sv_solg_coop.lua): "vs|<kind>|..." to every joiner, each step of it)
+function COOP.valkaSolg(kind, ...)
+    if not COOP.host() then return end
+    send(true, "vs", kind, ...)
+    if kind ~= "b" then log(string.format("coop: VALKA's SOLG (%s) sent to every joiner (%d linked)", tostring(kind), M.linkedPeers or 0)) end
+end
+-- (a joiner) this game's copies of the host's unit: its ships / vehicles / parts in the order they were made here (their
+-- keys' class#n), and its planes (by their order)
+function COOP.groundCopies(unit)
+    local cu, out = M.cunits[unit], {}
+    if not (cu and cu.gobjs) then return out end
+    local list = {}
+    for key, o in pairs(cu.gobjs) do
+        if valid(o) then list[#list + 1] = { n = tonumber(tostring(key):match("#(%d+)$")) or 0, o = o } end
+    end
+    table.sort(list, function(a, b) return a.n < b.n end)
+    for _, e in ipairs(list) do out[#out + 1] = e.o end
+    return out
+end
+function COOP.planeCopies(unit)
+    local cu, out = M.cunits[unit], {}
+    for _, o in pairs(cu and cu.planes or {}) do if valid(o) then out[#out + 1] = o end end
+    return out
+end
 -- (her blinks' small portals: "vp|...|b", each joiner opens its own there; not logged, a blink is frequent)
 function COOP.valkaBlinkPortal(at, yaw)
     if not (COOP.host() and at) then return end
@@ -1144,6 +1168,10 @@ function hostSync(to)
     crumb("coop: player " .. tostring((to or 0) + 1) .. " asked for the whole picture: sent (rs|j)")
     sendTo(to, true, "rs", "j")
     sendRoster(to)
+    if SCOOP and SCOOP.syncTo then                           -- ((2026-11-22) VALKA's SOLG as it stands: sv_solg_coop.lua
+        local okV, errV = pcall(SCOOP.syncTo, to)
+        if not okV then log("coop: the SOLG's picture not sent: " .. tostring(errV)) end
+    end
     local n = 0
     for unit, u in pairs(M.units) do
         n = n + 1

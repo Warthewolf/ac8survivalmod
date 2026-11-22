@@ -31,6 +31,8 @@ rm -rf "$OUT/src/$DESIGN"
 "$BLENDER" -b -P tools/valka_portal/make_portal.py -- "$WIN_OUT/src" "$DESIGN" > "$OUT/make.log" 2>&1 || true
 grep "^portal:" "$OUT/make.log" | sed 's/ -> .*//'
 grep -q "^portal: done" "$OUT/make.log" || { echo "valka_portal: the model failed ($OUT/make.log)"; exit 1; }
+# ((2026-11-22) its scaler: one bone, three scale animations the engine plays smoothly: tools/valka_portal/scaler.py)
+python -I tools/valka_portal/scaler.py "$WIN_OUT/src/$DESIGN"
 # 2. the import
 export SV_PORTAL_SRC="$WIN_OUT/src/$DESIGN" SV_PORTAL_LOG="$WIN_OUT/ue_import.log"
 SCRIPT="$(pwd -W 2>/dev/null || pwd)/tools/valka_portal/ue_import.py"
@@ -46,6 +48,9 @@ rm -rf "$PROJ/Saved/Cooked"
 COOKED="$PROJ/Saved/Cooked/Windows/Live/Content/Mods/SurvivalMode/ValkaPortal"
 for n in $(python -I tools/valka_portal/parts_lua.py --names "$OUT/src/$DESIGN/manifest.json"); do
     [ -f "$COOKED/Model/$n.uasset" ] || { echo "valka_portal: $n not cooked ($OUT/cook.log)"; grep -i "error" "$OUT/cook.log" | tail -5; exit 1; }
+done
+for n in SK_SV_PortalScaler SK_SV_PortalScaler_Skeleton SK_SV_PortalScaler_Anim; do
+    [ -f "$COOKED/Model/$n.uasset" ] || { echo "valka_portal: $n not cooked ($OUT/cook.log)"; exit 1; }
 done
 cp "$OUT/src/$DESIGN/manifest.json" "$OUT/manifest.json"     # (the pieces cooked: tools/valka_portal/parts_lua.py)
 # 4-5. the container: our folder only

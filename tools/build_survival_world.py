@@ -911,6 +911,7 @@ def build_wd_global():
     alcn_units(units, used_ids, z, top_number, v)
     valka_unit(units, used_ids, z, top_number)
     valka_eml_unit(units, used_ids, z, top_number)
+    solg_units(units, used_ids, z, top_number)              # VALKA's SOLG's targets (survival_events.SOLG_*)
     fishing_units(units, used_ids, z, top_number)          # GONE FISHIN' (survival_events.FISH_* / SAL_BOAT_*)
     tanicorn_units(units, used_ids, z, top_number)         # THE TANICORN's test mount (survival_events.TANI_*)
     festival_units(units, used_ids, z, top_number, v)      # THE FESTIVAL (survival_events.FEST_*)
@@ -1031,6 +1032,35 @@ ZFA_TLS_ROW_VALUES = {'FireRate': 8, 'MagazineCapacity': 1, 'ReloadTime': 1.0, '
                       'YawAngleMax': 180.0, 'PitchSpeed': 360.0, 'PitchAngleMin': -90.0, 'PitchAngleMax': 90.0}
 ZFA_TLS_ROW_CLEAR = ('NpcAIModuleId', 'NpcWeaponId', 'PredictionOffsetTime', 'ActivationRandomTimeMin', 'ActivationRandomTimeMax')
 NULL_IMPORT = 0xFFFFFFFFFFFFFFFF
+# the TLS's own shooting sound (AC8's enemy and player TLS, BP_wp_tls_x0 / BP_plwp_tls_x0) in place of the Nightmare
+# UAV's PulseLaser_Fire pair its swing lasers (BP_SwingTLS_ForMSL / _ForPlane) come with: Survival's copies of them
+_E = '/Game/WwiseAssets/Events/CS_AceLive_SE/Events_General/'
+TLS_SOUNDS = [(_E + 'ARMS/SKY/SE_GEN_ARMS_SKY_OP0024_uavn/AKE_GEN_ARMS_SKY_OP0024_uavn_PulseLaser_Fire_' + x,
+               _E + 'PLAYER/ARMS/SE_GEN_PLAYER_ARMS_SPWeapon/AKE_GEN_PLAYER_ARMS_SPWeapon_TLS_Emit_' + x) for x in ('Play', 'Stop')]
+
+
+def tls_sound_swap(w):
+    """A swing laser's package (ZenPkg) w: each import of the PulseLaser_Fire events onto the TLS_Emit ones."""
+    for old, new in TLS_SOUNDS:
+        ozz, nzz = ZenPkg(stock(old)), ZenPkg(stock(new))
+        oh = [zfa_tls_u64(e, 56) for e in ozz.exports if zfa_tls_u64(e, 56)]
+        nh = [zfa_tls_u64(e, 56) for e in nzz.exports if zfa_tls_u64(e, 56)]
+        assert len(oh) == 1 and len(nh) == 1, (old, oh, new, nh)
+        k = w.imp_pkgs.index(old)
+        hit = [i for i, x in enumerate(w.imports) if x >> 62 == 2 and (x >> 32) & 0x3fffffff == k]
+        assert len(hit) == 1 and w.imp_hashes[w.imports[hit[0]] & 0xffffffff] == oh[0], (old, hit)
+        w.imp_hashes[w.imports[hit[0]] & 0xffffffff] = nh[0]
+        w.set_imported_package(old, new)
+
+
+def build_zfa_tls_weapon():
+    """BP_SV_ZfaSwingTLS: AC8's BP_SwingTLS_ForMSL whole but its sound (tls_sound_swap); its objects keep their names."""
+    se = survival_events
+    w = ZenPkg(stock(se.ZFA_TLS_WEAPON_SOURCE))
+    tls_sound_swap(w)
+    w.rename(se.ZFA_TLS_WEAPON_SOURCE, se.ZFA_TLS_WEAPON)
+    assert se.ZFA_TLS_WEAPON in w.names and se.ZFA_TLS_WEAPON_SOURCE not in w.names
+    save(w, se.ZFA_TLS_WEAPON)
 
 
 def zfa_tls_u64(e, at):
@@ -1063,7 +1093,8 @@ def build_zfa_laser():
     of the ZFA-44 host (build_npc_rows) names that row in its gun's slot (ZFA_TLS_SLOT)."""
     se = survival_events
     z = ZenPkg(stock(se.ZFA_TLS_FCS_SOURCE))
-    old_w, new_w, ecm = (ZenPkg(stock(p)) for p in (se.ZFA_TLS_OLD_WEAPON, se.ZFA_TLS_WEAPON, se.ZFA_TLS_LAUNCHER_SOURCE))
+    build_zfa_tls_weapon()                                  # ((2026-11-22) its weapon: our copy, the TLS's sound)
+    old_w, new_w, ecm = (ZenPkg(stock(p)) for p in (se.ZFA_TLS_OLD_WEAPON, se.ZFA_TLS_WEAPON_SOURCE, se.ZFA_TLS_LAUNCHER_SOURCE))
     pub = lambda zz: {zfa_tls_u64(e, 56): zz.export_name(i) for i, e in enumerate(zz.exports) if zfa_tls_u64(e, 56)}
     old_pub, new_pub = pub(old_w), {n: h for h, n in pub(new_w).items()}
     assert sorted(old_pub.values()) == sorted(ZFA_TLS_ROLES), ('the CIWS weapon changed', sorted(old_pub.values()))

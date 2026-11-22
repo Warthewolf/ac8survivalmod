@@ -295,7 +295,10 @@ ZFA_FALLBACK_N, ZFA_FALLBACK_UP_CM, ZFA_GAP_CM = 4, 30000.0, 6000.0
 ZFA_TLS_FCS_SOURCE = '/Game/Blueprints/Weapons/BP_FCS/CP/BP_FCS_Vessel_CIWS_00'
 ZFA_TLS_FCS_PKG = '/Game/Mods/SurvivalMode/Weapons/BP_FCS_SV_ZfaTLS'
 ZFA_TLS_OLD_WEAPON = '/Game/Blueprints/Weapons/CIWS/Vessel/BP_wp_ciws_vessel'       # the CIWS arm's weapon
-ZFA_TLS_WEAPON = '/Game/Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForMSL'      # ours (stock, unchanged)
+ZFA_TLS_WEAPON_SOURCE = '/Game/Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForMSL'   # AC8's anti-missile laser
+# ((2026-11-22) a copy of it under Survival's path with the TLS's shooting sound in place of the Nightmare UAV's
+# PulseLaser_Fire pair (the user: "check that the ZFA, and Tanacorn Lasers are also using the correct laser sounds")
+ZFA_TLS_WEAPON = '/Game/Mods/SurvivalMode/Weapons/BP_SV_ZfaSwingTLS'
 ZFA_TLS_LAUNCHER_SOURCE = '/Game/Blueprints/Weapons/BP_FCS/CP/BP_FCS_ECM_00'       # its LauncherCommon's class ids
 ZFA_TLS_FCS_TABLE = '/Game/Mods/SurvivalMode/Data/DT_SV_NpcFCS'
 ZFA_TLS_FCS_ROW, ZFA_TLS_FCS_ROW_SOURCE = 'SV_FCS_ZfaTLS', 'NPC_FCS_VesselCIWS000'
@@ -411,11 +414,16 @@ ESCORT_DECOY_MISSION_ROWS = (
 ESCORT_ALLIED_ROWS = {ESC_CHAR_ROW, ZFA_ROW, ZFA_DRONE_ROW, *ESC_ROWS, *(c[3] for c in CARGO_SHIPS)}
 # the DT_NPC rows (DT_SV_NpcRows; build_survival.py build_npc_rows), which Lua adds to DT_NPC at the main menu:
 # (row, its stock DT_NPC source, the model or None (the source's), fly MOONCHILD's set, drop its weapons, name key, full speed)
+ESCORT_DECOY_MISSION_ROWS += [(SOLG_ROWS[t], SOLG_MISSION_TABLE, SOLG_TARGET_SOURCE_ROW, SOLG_NPC[t], None)
+                              for t, _ in SOLG_TARGETS]   # ((2026-11-22) VALKA's SOLG's targets, each type's own row)
 ESCORT_DECOY_NPC_ROWS = (
     [(npc, src, model, True, False, None, False) for npc, src, model in ESC_ROWS.values()]
     + [(ZFA_NPC, ZFA_NPC_SOURCE, ZFA_MODEL, True, False, ZFA_NAME_KEY, True),
        (ZFA_DRONE_NPC, ZFA_DRONE_NPC_SOURCE, ZFA_DRONE_MODEL, True, False, ZFA_NAME_KEY, True),
-       (DECOY_UAV_NPC, DECOY_UAV_NPC_SOURCE, None, False, True, None, False)])
+       (DECOY_UAV_NPC, DECOY_UAV_NPC_SOURCE, None, False, True, None, False)]
+    # ((2026-11-22) VALKA's SOLG's targets: the radar tower's row, unarmed, each type's name key (its model: build_survival)
+    + [(SOLG_NPC[t], SOLG_LSR_NPC_SOURCE if t in SOLG_LASER_TYPES else SOLG_NPC_SOURCE, None, False,
+        t not in SOLG_LASER_TYPES, SOLG_SUB_KEYS[t], False) for t, _ in SOLG_TARGETS])
 INT_FLAGS += ([a['leg'] for a in esc_aircraft()] + [a['slot'] for a in esc_aircraft()] + ['SV_EscortSlots', DECOY_HIT_FLAG])
 INT_FLAGS += [ZFA_TLS_FLAG]                    # (the ZFA-44s' laser's interceptions: build_escort)
 
@@ -738,6 +746,10 @@ def build_decoy(g, flag, stock_ep):
     assert arg_values(t_nav)[1:] == ['AA_Unit_01_Ground0', 'Quadruple', 'false'], arg_values(t_nav)
     remote('RE_SV_DecoyBaitPing')
     g.execute(t_nav, 'RE_SV_DecoyBaitPing', {1: DECOY_BAIT_UNIT})
+    # ((2026-11-22) the user: "add a minimap alert ping as to where the SOLG spawns"): on its SP shell's unit, up from
+    # its arrival to its end (Scripts/sv_solg.lua fires it on each game: SOLG.C.ping)
+    remote('RE_SV_SolgPing')
+    g.execute(t_nav, 'RE_SV_SolgPing', {1: SOLG_UNITS['SP']})
     for nn, unit, obj, munit, mobj in decoy_uavs():
         up = f'SV_DecoyUavUp_{nn:02d}'
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: unit})

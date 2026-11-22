@@ -4080,3 +4080,64 @@ The user: "Yeah push it to main". dev (feature/valka-active merged, PRs #8-#10, 
 AC8SurvivalMode_0.75.0_Online.zip (the public Nexus build: no ZFA-44, no co-op tag, Distant Thunder / the Tanacorn
 / the fleet out, zip_leak_test passed), registered on the leaderboard. Notes RELEASE_NOTES_0.75.0.md in the release
 folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Release made by tools/release_push.sh.
+
+## 0.75.3-0.75.9 (2026-11-22, branch feature/solg-own-unit; dev installs not made: autotest only)
+- VALKA's SOLG, its own body (AC:I's model, docs/re/SOLG.md): 0.75.3 T1 (textured, flying, rings spinning, wings
+  falling: 9/9); the arm spin taken off (the user: "The autoloaders are tumbling").
+- 0.75.4: its targets (solg2 13/13). 0.75.5-0.75.6: in VALKA's round (sv_valka_solg.lua): at 20 % she's invincible,
+  says her lines and leaves through a portal; the SOLG out of a portal of hers 2.6 km across at a map corner, falling on
+  the spaceport (travel_s 300); destroyed: 3,000 + ~4,900 for its pieces, AUDREY; on the pad: the airfield down for a
+  round; she's back either way (valkasolg 26/26).
+- 0.75.7: KEW shells along their arms, arms breaking off, enemy boxes, the portal full size first, the spaceport strike
+  as Mission 25's cutscene plays it (0.74.82's method in VSOLG.strike): valkasolg 30/30.
+- 0.75.8: the 28 lasers (solglaser: they fire, 3.8 a hit on the test plane). 0.75.9: their beams unhidden (untested).
+- Open: the beams (the user saw none), SOLG -Gould-'s black skin (prepare.py SKINS, not cooked yet) and its phase
+  rules, co-op (the SOLG drawn on joiners: not built).
+- 0.75.10-0.75.13: SOLG -Gould- (DATA92 528-530): its black skin, its phase rules without its aircraft (the user: "SOLG
+  pieces only", "Follow Gould exactly"), its lasers at 1.2 km for 10 s then 5 s, a 6-minute fall; the lasers' beams shown
+  (their Phalanx's meshes hidden alone); the TLS's shooting sound on the SOLG's, the ZFA-44s' and the TANACORN's lasers
+  (AC7's LaserInterceptor fired silent; the ZFA-44's backup laser had the Nightmare UAV's PulseLaser pair). Autotests on
+  0.75.11-0.75.13: solg2 16/17 (a test slip), solglaser 13/13 (20 shots, 3.8 a hit on the test plane), valkasolg 30/30,
+  zfasound 9/10 (a test slip). Dev stages before 0.75.13 were packed without ZFA=1 (no ZFA-44 / Laser7 containers).
+- 0.75.13 INSTALLED 2026-11-22 (the user: "build a test version and install it on my PC"): stage_dev_valka_0.75.13
+  (VALKA=1 ZFA=1) into her game, which had no Survival and no Mod Loader in it (moved out 2026-11-21): the Mod Loader's
+  dlls/main.dll and enabled.txt put back from .env's AUTOTEST_LOADER, ProjectRVNG untouched; 116 files verified; backup
+  note build/backup/install_before_0.75.13. Test key for her: Ctrl+8 (VALKA's round next; the SOLG at her 20 %).
+- 0.75.14-0.75.15 (2026-11-22): VALKA's SOLG in co-op (the user: "you need to start on it pronto"): docs/re/SOLG.md 14.
+  solgjoiner 17/17 (0.75.14 15/17: a joiner's arms didn't break, its early return before the arm check), valkasolg 30/30,
+  coop_guard passed with "vs". Clean-up: the SOLG's unused hooks (onDestroyed, onPause, onArm) and hold_s taken out.
+  Untested: two linked games.
+- 0.75.16-0.75.29 (2026-11-22): the code review's 9 fixes (0.75.16); VALKA's portal smooth (the user: "the portal opening
+  and closing is so laggy"): each piece on its own scaler (SK_SV_PortalScaler: one bone, one grow animation the engine plays
+  every frame; closing = the grow played backwards) and an engine RotatingMovementComponent; on the way: the importer's
+  animations lost their skeleton on any rename (imported names kept, one animation a file), a paused animation isn't run
+  (a creep rate), an ended one never restarts on a rate (played again), the black hole's shadow was the actor's root (an
+  empty root first), pieces hidden till their window. scalerprobe / valkasolg 34/34 on 0.75.24. The SOLG nose down
+  (the user: "angled downwards as if its falling"; 45 "way too angled", 20): a rotator's Pitch from Lua is dropped
+  (hard rule 76): its spawn transform and its body by quaternion; the game's pitch -45.0 read back on 0.75.28. A crash at
+  VALKA's return blink (0.75.26: a freed scaler asset's reused address): her assets pinned.
+- 0.75.29: tester zip (keys) and friends' zip (no keys), TANI=1 ZFA=1, one build: AC8SurvivalMode_COOP2MP_0.75.29_...
+  TANACORN.zip; both registered. INSTALLED 2026-11-22 (the tester stage over 0.75.13; backup
+  build/backup/install_before_0.75.29; 163 files verified). Friends' smoke 5/5 on 0.75.28 (one number apart).
+- 0.75.30-0.75.31 (2026-11-22): VALKA parked 40 km past the spaceport, 15 km up while her SOLG is up (the user: "shes
+  still attacking the players while invisible"); every SOLG face doubled (its inner shaft in s_solg and the rear hatch
+  s_sg08 faced one way: AC8 culls back faces; "the internal hallway ... isn't visible and neither is the rear hatch");
+  the rear hatch a target (phase 4, 2000 x 0.25, pay 150), the SP shell phase 5. 0.75.31 INSTALLED 2026-11-22 (backup
+  build/backup/install_before_0.75.31); not tested in game (her game was running). Friends' 0.75.31 zip built too.
+  Next (committed, not built): the KEW shells' chain reaction (her picks: neighbours within 45 m lose 60 %, 0.4 s on).
+- 0.75.32-0.75.39 (2026-11-22/23): KEW chain (neighbours within 45 m lose 60 %), target lock points on the bones
+  (HitCenterOffset 35 m: K2_SetActorRelativeLocation), damaged-state tower meshes re-hidden on each hit, SOLG minimap
+  ping (RE_SV_SolgPing every 20 s), VALKA deactivated while parked (off radar, no fire) and her hits capped at 10 % a
+  second (MinHealth moved each second), smoke off broken pieces, splashes where falling pieces land, the SOLG taken down
+  when its round is over. Lasers: the game's own turret firing fired once ever (ammo, reload, trigger count 999 and
+  off/on all tried; the struct overwrite K2_OverwritePerformance crashed); now Survival's own (sv_solg_laser.lua: 10 s on
+  / 5 s rest, at most 3 on you, a hit every 2 s at 50 %, 5 a hit, written to HealthInternal since ModifyHealth on a
+  player's plane is ignored). "VALKA CALLS FORTH THE SOLG" on its arrival (countdowns keep SOLG INBOUND). The user's
+  Audrey SOLG lines merged into config/subtitles.ini. Tests on 0.75.37-0.75.39: solglaser 15/15 still and moving,
+  valkasolg 38/38, friends' smoke 5/5. Leaderboard: 0.75.32-0.75.39 NOT registered (HTTP 500 from the server).
+- 0.75.40-0.75.41 (2026-11-23): the user's latest subtitles (Audrey's "what have you done?"); the fleet storm's leftover
+  cloud lightning swept every time it clears (Kiriya's 0.74.200 co-op run: "cloud lightning: 0 taken off", 19
+  NS_CloudLightning flashing purple over the day sky to round 33 until they landed; branch fix/storm-cloud-sweep, picked
+  onto feature/solg-own-unit). Smoke 5/5 on both. 0.75.41 INSTALLED 2026-11-23 (backup build/backup/install_before_0.75.41;
+  164 files verified). The storm's clear not yet seen in game. Leaderboard: not registered (D1's free daily reads used
+  up; the Worker's fix deployed 2026-11-23 on fix/leaderboard-reads).
