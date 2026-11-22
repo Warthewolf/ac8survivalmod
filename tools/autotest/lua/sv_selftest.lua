@@ -5409,6 +5409,19 @@ SUITES.solglaser = function()
         t0 = t0 or os.clock()
         pcall(SOLG.tick, os.clock())
         local now = os.clock()
+        -- ((0.75.12: Gould's lasers reach 1.2 km, your circle is farther) the SOLG kept 500 m over you, its arms' in reach
+        local you = playerLocation()
+        if you then
+            if not LSR.actor then
+                for _, e in ipairs(SOLG.debugTargets() or {}) do
+                    local okA, a = pcall(function() return e.o.RootComponent:GetAttachParent():GetOwner() end)
+                    if okA and a and valid(a) then LSR.actor = a; break end
+                end
+            end
+            if LSR.actor and valid(LSR.actor) then
+                pcall(function() LSR.actor:K2_SetActorLocation({ X = you.X, Y = you.Y, Z = you.Z + 50000 }, false, {}, true) end)
+            end
+        end
         for _, e in ipairs(LSR.new or {}) do
             if not e.seen1 and now - e.at >= 0.6 then e.seen1 = true; ST.info("laser +0.6 s: " .. lsrLook(e, now)) end
             if not e.seen2 and now - e.at >= 1.5 then
