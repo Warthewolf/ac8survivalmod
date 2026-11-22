@@ -118,6 +118,27 @@ local function ride(cam, her, m, fov)
     pcall(function() cam.CameraComponent:SetFieldOfView(n(fov, 58)) end)
     return ok
 end
+-- ((2026-11-22) a fly-by: `flyby` = { ahead m, right m, up m } of her (her nose ahead) where she is as it starts, the
+-- camera still, its look from her to where she'll be by the shot's end (her speed, `lead` x): she streaks past it)
+local function flyby(her, m, fov, dur)
+    local okL, L = pcall(function() local v = her:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    local okF, F = pcall(function() local v = her:GetActorForwardVector(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    if not (okL and L and okF and F) then return false end
+    local okV, V = pcall(function() local v = her:GetVelocity(); return math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z) end)
+    local speed = (okV and tonumber(V) and V > 1000) and V or 30000     -- (cm/s; 300 m/s when it can't be read)
+    local h = math.sqrt(F.X * F.X + F.Y * F.Y)
+    local fx, fy = h > 0.01 and F.X / h or 1, h > 0.01 and F.Y / h or 0
+    local rx, ry = -fy, fx
+    local at = { X = L.X + (fx * n(m[1], 900) + rx * n(m[2], 120)) * 100, Y = L.Y + (fy * n(m[1], 900) + ry * n(m[2], 120)) * 100,
+                 Z = L.Z + n(m[3], 30) * 100 }
+    local go = speed * dur * n(m[4], 1.0)
+    local to = { X = L.X + F.X * go, Y = L.Y + F.Y * go, Z = L.Z + F.Z * go }
+    for _, k in ipairs({ "a", "b" }) do pcall(function() S.cams[k]:K2_DetachFromActor(1, 1, 1) end) end
+    pcall(function() S.cams.a:K2_SetActorLocationAndRotation(at, rotTo(at, L), false, {}, true) end)
+    pcall(function() S.cams.b:K2_SetActorLocationAndRotation(at, rotTo(at, to), false, {}, true) end)
+    for _, k in ipairs({ "a", "b" }) do pcall(function() S.cams[k].CameraComponent:SetFieldOfView(n(fov, 45)) end) end
+    return true
+end
 local function shotGo(i)
     local shots = cc().shots or {}
     local sh = shots[i]
@@ -127,6 +148,16 @@ local function shotGo(i)
     end
     local dur = math.max(0.1, n(shots[i + 1] and shots[i + 1].t, n(cc().end_s, 14)) - n(sh.t, 0))
     S.shotEnd = S.t0 + n(sh.t, 0) + dur
+    if sh.flyby then
+        local her = glitchActor and glitchActor(CFG.specials.valka) or nil
+        if her and liveObj(her) and flyby(her, sh.flyby, sh.from and sh.from.fov, dur) then
+            S.riding = false
+            local okA = view(S.cams.a, 0)
+            local okB = view(S.cams.b, dur)
+            S.last = "b"
+            return okA and okB, dur, "a fly-by"
+        end
+    end
     if sh.chase then
         local her = glitchActor and glitchActor(CFG.specials.valka) or nil
         if her and liveObj(her) and ride(S.cams.a, her, sh.chase, sh.from and sh.from.fov) then

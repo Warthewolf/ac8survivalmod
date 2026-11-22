@@ -24,7 +24,7 @@ BH = '/Game/Mods/SurvivalMode/ValkaPortal/Model/'
 MAT = {'ring': '/Game/VFX/Mission/Traning/MI_TrainingRing', 'haze': '/Game/VFX/Mission/Traning/MI_TrainingRingGlow',
        'shadow': '/Engine/BasicShapes/BasicShapeMaterial'}
 DISK_TILT = -11
-SMALL = {'SM_SV_BHShadow', 'SM_SV_BHPhotonRing', 'SM_SV_BHArch3', 'SM_SV_BHArchHaze1', 'SM_SV_BHDisk1', 'SM_SV_BHDisk2',
+SMALL = {'SM_SV_BHShadow', 'SM_SV_BHPhotonRing', 'SM_SV_BHArch2', 'SM_SV_BHArch3', 'SM_SV_BHDisk1', 'SM_SV_BHDisk2',
          'SM_SV_BHInfall'}   # (her blinks' small holes: ~100k triangles, up to 6 at once)
 
 
@@ -87,14 +87,17 @@ def part(p, small=False):
     return '{ ' + ', '.join(bits) + ' }'
 
 
-SKIP = ('SM_SV_BHDiskHaze',)   # (the run of 15:45: the disk's haze read as a flat pale plate in the wide shots)
+SKIP = ('SM_SV_BHDiskHaze', 'SM_SV_BHArchHaze')   # (the runs of 15:45 / 16:08: the haze read as flat pale plates)
 
 
 # ((2026-11-22) the run of 15:57: the engine's BasicShapeMaterial is lit, so the shadow was a glossy black ball mirroring
 # the sea and the sunset. An unlit black over it (MI_TrainingRing, Color 0, Opacity 1, 0.4 % larger), drawn first of the
 # see-through pieces (sort -10): the disk's near side over it, the ball beneath still hiding what's behind it)
-SHADE = ('{ mesh = "' + BH + 'SM_SV_BHShadow", abs = true, size = 1.004, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, sort = -10, '
-         'mat = "' + MAT['ring'] + '", params = { Color = { 0, 0, 0, 1 }, Opacity = 1 } }')
+# (three of them, 0.2 % apart: MI_TrainingRing at Opacity 1 still let the clouds through in the probe of 15:36, and one
+# left the ball's red sheen in the run of 16:08)
+SHADES = [('{ mesh = "' + BH + 'SM_SV_BHShadow", abs = true, size = %s, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, sort = %d, '
+           'mat = "' + MAT['ring'] + '", params = { Color = { 0, 0, 0, 1 }, Opacity = 1 } }') % (sz, so)
+          for sz, so in (('1.002', -12), ('1.004', -11), ('1.006', -10))]
 
 
 def block(pieces, indent, small=False):
@@ -104,7 +107,7 @@ def block(pieces, indent, small=False):
             continue
         lines.append(' ' * indent + part(p, small) + ',')
         if p['name'] == 'SM_SV_BHShadow':
-            lines.append(' ' * indent + SHADE + ',')
+            lines += [' ' * indent + sh + ',' for sh in SHADES]
     return lines
 
 

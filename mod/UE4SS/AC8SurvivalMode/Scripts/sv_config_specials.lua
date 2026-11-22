@@ -324,7 +324,9 @@ CFG.specials = {
                             parts = {
                                 -- (the detailed design, 36 pieces, 621936 triangles: tools/valka_portal/parts_lua.py)
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, mat = "/Engine/BasicShapes/BasicShapeMaterial", params = { Color = { 0, 0, 0, 1 } } },
-                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, size = 1.004, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, sort = -10, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0, 0, 0, 1 }, Opacity = 1 } },
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, size = 1.002, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, sort = -12, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0, 0, 0, 1 }, Opacity = 1 } },
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, size = 1.004, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, sort = -11, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0, 0, 0, 1 }, Opacity = 1 } },
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, size = 1.006, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, sort = -10, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0, 0, 0, 1 }, Opacity = 1 } },
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHPhotonRing", abs = true, open = { 0, 0.3 }, close = { 0.75, 1 }, flare = true, pulse = { 0.2, 3.1 }, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 0.96, 0.9, 1 }, Opacity = 1 } },
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHArch1", abs = true, open = { 0.55, 0.85 }, close = { 0.25, 0.6 }, tilt = -90, turn = 180, pulse = { 0.1, 0.8 }, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 1, 0.97, 1 }, Opacity = 0.92 } },
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHArch2", abs = true, open = { 0.59, 0.875 }, close = { 0.2, 0.55 }, tilt = -90, turn = 180, pulse = { 0.1, 1.1 }, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 0.93, 0.8, 1 }, Opacity = 0.85 } },
@@ -353,8 +355,6 @@ CFG.specials = {
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHKnots7", abs = true, open = { 0.51, 0.81 }, close = { 0.05, 0.4 }, tilt = -11, spin = 0.113, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 0.52, 0.18, 1 }, Opacity = 0.52 } },
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDisk8", abs = true, open = { 0.83, 1 }, close = { -0.1, 0.25 }, tilt = -11, spin = 0.079, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.88, 0.28, 0.08, 1 }, Opacity = 0.24 } },
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHKnots8", abs = true, open = { 0.57, 0.87 }, close = { 0, 0.35 }, tilt = -11, spin = 0.079, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 0.44, 0.14, 1 }, Opacity = 0.44 } },
-                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHArchHaze1", abs = true, open = { 0.55, 0.85 }, close = { 0.05, 0.4 }, tilt = -90, turn = 180, mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", params = { Color = { 1, 0.97, 0.92, 1 }, EmissiveIntensity = 1.5, Opacity = 0.16, EmissiveFresnelFalloff = 0.01 } },
-                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHArchHaze2", abs = true, open = { 0.59, 0.875 }, close = { 0, 0.35 }, tilt = -90, turn = 180, mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", params = { Color = { 1, 0.58, 0.22, 1 }, EmissiveIntensity = 1.5, Opacity = 0.09, EmissiveFresnelFalloff = 0.01 } },
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHInfall", abs = true, open = { 0.3, 0.7 }, close = { 0.45, 0.85 }, tilt = -11, spin = 1.6, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 0.86, 0.62, 1 }, Opacity = 0.8 } },
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHSparks", abs = true, open = { 0.5, 0.9 }, close = { 0, 0.3 }, tilt = -11, spin = 0.5, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 0.94, 0.8, 1 }, Opacity = 1 } },
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHSparksArch", abs = true, open = { 0.5, 0.9 }, close = { 0, 0.3 }, tilt = -90, turn = 180, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 0.9, 0.7, 1 }, Opacity = 1 } },
@@ -370,12 +370,14 @@ CFG.specials = {
                  blink_portal = { enabled = true, size_m = 28, open_s = 0.45, hold_s = 0.7, close_s = 0.8, spin_dps = 120, face_you = true,
                                   parts = {
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, mat = "/Engine/BasicShapes/BasicShapeMaterial", params = { Color = { 0, 0, 0, 1 } } },
-                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, size = 1.004, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, sort = -10, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0, 0, 0, 1 }, Opacity = 1 } },
+                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, size = 1.002, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, sort = -12, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0, 0, 0, 1 }, Opacity = 1 } },
+                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, size = 1.004, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, sort = -11, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0, 0, 0, 1 }, Opacity = 1 } },
+                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, size = 1.006, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, sort = -10, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0, 0, 0, 1 }, Opacity = 1 } },
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHPhotonRing", abs = true, open = { 0, 0.3 }, close = { 0.75, 1 }, flare = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 0.96, 0.9, 1 }, Opacity = 1 } },
+                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHArch2", abs = true, open = { 0.59, 0.875 }, close = { 0.2, 0.55 }, tilt = -90, turn = 180, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 0.93, 0.8, 1 }, Opacity = 0.85 } },
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHArch3", abs = true, open = { 0.63, 0.9 }, close = { 0.15, 0.5 }, tilt = -90, turn = 180, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 0.82, 0.56, 1 }, Opacity = 0.78 } },
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDisk1", abs = true, open = { 0.55, 0.85 }, close = { 0.25, 0.6 }, tilt = -11, spin = 1, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 0.98, 0.94, 1 }, Opacity = 0.92 } },
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDisk2", abs = true, open = { 0.59, 0.875 }, close = { 0.2, 0.55 }, tilt = -11, spin = 0.735, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 0.92, 0.78, 1 }, Opacity = 0.88 } },
-                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHArchHaze1", abs = true, open = { 0.55, 0.85 }, close = { 0.05, 0.4 }, tilt = -90, turn = 180, mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", params = { Color = { 1, 0.97, 0.92, 1 }, EmissiveIntensity = 1.5, Opacity = 0.16, EmissiveFresnelFalloff = 0.01 } },
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHInfall", abs = true, open = { 0.3, 0.7 }, close = { 0.45, 0.85 }, tilt = -11, spin = 1.6, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1, 0.86, 0.62, 1 }, Opacity = 0.8 } },
                                       },
                                   fallback = {
@@ -419,9 +421,10 @@ CFG.specials = {
                  -- camera riding on her (none of her: the pose instead). Her opener charges charge_s meanwhile (the shot
                  -- at the end of it, she's out reveal_s later); the fade at end_s; shakes { path, scale } at the opening
                  -- and her shot; max_s: stopped whatever happens)
-                 -- (shoot: her opener's round fired at you while it films too; off: the game cuts to your plane as it
-                 -- comes, the runs of 15:13-15:57)
-                 cine = { enabled = true, charge_s = 8.5, end_s = 14.6, max_s = 25, blend_fn = 0, letterbox = 2.39, shoot = false,
+                 -- (shoot: her opener's round fired at you while it films too; off: only heard. The runs of 15:13-16:08
+                 -- seemed to cut to your plane as it came: the test's window grabs were late, the game's own pictures
+                 -- showed the cutscene whole)
+                 cine = { enabled = true, charge_s = 8.5, end_s = 14.6, max_s = 25, blend_fn = 0, letterbox = 2.39, shoot = true,
                           -- ((2026-11-22) the run of 15:13: on a 3.5 km circle your plane banked hard and the game put its bank
                           -- on our cameras (the pictures rolled 35-70 degrees): a 25 km one, your plane flying out level)
                           autopilot_alt_m = 1500, autopilot_radius_m = 25000, fade = { out_s = 0.6, hold_s = 0.3, in_s = 0.9 },
@@ -441,8 +444,9 @@ CFG.specials = {
                               { t = 8.2, from = { at = { 1350, 520, 40 }, look = { 0, 0, 0 }, fov = 44 } },
                               { t = 9.3, from = { at = { 1350, 520, 40 }, look = { 0, 0, 0 }, fov = 44 },
                                          to = { at = { 1350, 520, 40 }, look = { 700, 0, 0 }, fov = 40 } },
-                              -- riding with her
-                              { t = 11.6, chase = { 42, 0, 9 }, from = { at = { 900, -60, 25 }, look = { 1600, 0, 0 }, fov = 58 } },
+                              -- she streaks past (flyby = { ahead m, right m, up m, how far the look leads x }; none of her:
+                              -- the pose)
+                              { t = 11.6, flyby = { 700, 90, 25, 1.0 }, from = { at = { 900, -60, 25 }, look = { 1600, 0, 0 }, fov = 50 } },
                           } },
                  -- she comes after you more (user, 2026-10-24: "adjust her behaviours so that she tries to follow you
                  -- more often"): LastTGT every turn_every_s and at once when you're behind her within behind_km, and her
