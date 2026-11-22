@@ -109,7 +109,7 @@ The KEW shell's record (816 B) holds a second object with gravity 9.8, launch an
 TLS turrets than KEW mounts (the wiki: "multiple defensive TLS turrets along its barrel and ammunition storage
 units"). Not decoded further.
 
-## 6. Built (2026-11-03, branch feature/solg in worktree E:\ACE8 SM solg; not committed)
+## 6. Built (2026-11-03, branch feature/solg in a worktree; not committed)
 - `tools/solg/` (prepare.py, ue_import.py, build.sh): build/solg/out/SurvivalMode_SOLG_P (44 packages, 9.5 MB, padded),
   /Game/Mods/SurvivalMode/SOLG: SM_SV_SOLG_Body (+_Wreck), SM_SV_SOLG_SG01..SG09 (+_Wreck), 11 textures
   T_SV_SOLG_<id> + flat normal / Livemap, MI_SV_SOLG_<id> on AC8's M_Live_Base (stubbed, never packed; Stonehenge's
