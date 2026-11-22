@@ -24,7 +24,7 @@ BH = '/Game/Mods/SurvivalMode/ValkaPortal/Model/'
 MAT = {'ring': '/Game/VFX/Mission/Traning/MI_TrainingRing', 'haze': '/Game/VFX/Mission/Traning/MI_TrainingRingGlow',
        'shadow': '/Engine/BasicShapes/BasicShapeMaterial'}
 DISK_TILT = -11
-SMALL = {'SM_SV_BHShadow', 'SM_SV_BHPhotonRing', 'SM_SV_BHArch3', 'SM_SV_BHArchHaze1', 'SM_SV_BHDisk1', 'SM_SV_BHDiskHaze1',
+SMALL = {'SM_SV_BHShadow', 'SM_SV_BHPhotonRing', 'SM_SV_BHArch3', 'SM_SV_BHArchHaze1', 'SM_SV_BHDisk1', 'SM_SV_BHDisk2',
          'SM_SV_BHInfall'}   # (her blinks' small holes: ~100k triangles, up to 6 at once)
 
 
@@ -87,10 +87,13 @@ def part(p, small=False):
     return '{ ' + ', '.join(bits) + ' }'
 
 
+SKIP = ('SM_SV_BHDiskHaze',)   # (the run of 15:45: the disk's haze read as a flat pale plate in the wide shots)
+
+
 def block(pieces, indent, small=False):
     lines = []
     for p in pieces:
-        if small and p['name'] not in SMALL:
+        if (small and p['name'] not in SMALL) or p['name'].startswith(SKIP):
             continue
         lines.append(' ' * indent + part(p, small) + ',')
     return lines

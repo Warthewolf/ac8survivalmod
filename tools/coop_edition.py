@@ -10,7 +10,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lua_parts
 
-COOP_TAG = '-coop2mp.304'
+COOP_TAG = '-coop2mp.305'
 
 
 def sub(s, old, new, what):

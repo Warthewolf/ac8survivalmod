@@ -475,9 +475,10 @@ DISK_BANDS = [(0.55, 0.68, 170, (1.0, 0.98, 0.94), (1.0, 1.0, 1.0)),
               (0.82, 1.08, 210, (1.0, 0.82, 0.56), (1.0, 0.94, 0.8)),
               (1.04, 1.38, 210, (1.0, 0.68, 0.34), (1.0, 0.86, 0.6)),
               (1.33, 1.78, 160, (1.0, 0.52, 0.18), (1.0, 0.74, 0.42)),
-              (1.72, 2.32, 115, (0.8, 0.32, 0.09), (1.0, 0.56, 0.22)),
-              (2.25, 3.0, 85, (0.55, 0.18, 0.07), (0.9, 0.4, 0.13)),
-              (2.9, 3.8, 60, (0.32, 0.09, 0.07), (0.7, 0.26, 0.09))]
+              (1.72, 2.32, 115, (1.0, 0.44, 0.13), (1.0, 0.62, 0.26)),
+              (2.25, 3.0, 85, (0.96, 0.36, 0.1), (1.0, 0.52, 0.18)),
+              (2.9, 3.8, 60, (0.88, 0.28, 0.08), (1.0, 0.44, 0.14))]
+DISK_OPACITY = [0.92, 0.88, 0.8, 0.7, 0.55, 0.42, 0.32, 0.24]   # (the outer bands faint: the shadow black through them)
 R_IN, R_OUT = 0.55, 3.8
 LANES = [(0.93, 0.03), (1.2, 0.025), (1.47, 0.05), (2.05, 0.08), (2.7, 0.1)]   # (radius, half-width): the disk's darker lanes
 
@@ -526,8 +527,8 @@ def disk_band(k, spec):
                  lambda a, t, w0=w0: 1.8 * w0 * spindle(t, 0.5), lambda a, t, zf=z_fn: zf(a, tk) + 0.0005, seg_for(r0))
     mid = (r_lo + r_hi) / 2
     spin = round((mid / 0.615) ** -1.5, 3)                    # (an orbit's speed: the inner ones much faster)
-    finish(f'SM_SV_BHDisk{k + 1}', bm, 'ring', rgb, opacity=round(0.9 - 0.06 * k, 2), spin=spin, band=k)
-    finish(f'SM_SV_BHKnots{k + 1}', bk, 'ring', hot, opacity=1.0, spin=spin, band=k)
+    finish(f'SM_SV_BHDisk{k + 1}', bm, 'ring', rgb, opacity=DISK_OPACITY[k], spin=spin, band=k)
+    finish(f'SM_SV_BHKnots{k + 1}', bk, 'ring', hot, opacity=min(1.0, DISK_OPACITY[k] + 0.2), spin=spin, band=k)
 
 
 ARCH_RGB = [(1.0, 1.0, 0.97), (1.0, 0.93, 0.8), (1.0, 0.82, 0.56), (1.0, 0.66, 0.3), (0.95, 0.48, 0.16), (0.72, 0.3, 0.1)]

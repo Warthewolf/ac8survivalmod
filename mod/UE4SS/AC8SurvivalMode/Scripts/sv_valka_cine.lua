@@ -149,6 +149,25 @@ local function onCams(vt)
     local a = addrOf(vt)
     return a ~= nil and (a == addrOf(S.cams.a) or a == addrOf(S.cams.b))
 end
+-- ((2026-11-22) the runs of 15:13 and 15:45: from her shot on the screen showed your plane, though no view revert was
+-- seen (GetViewTarget's pcall failed every time). The screen's camera (the camera manager's place) against ours: further
+-- than 300 m from the line between our two cameras (a blend runs along it) or from the riding one, it isn't ours)
+local function at(o)
+    local okL, L = pcall(function() return o:K2_GetActorLocation() end)
+    return okL and L and { X = L.X, Y = L.Y, Z = L.Z } or nil
+end
+local function povOff()
+    local okP, P = pcall(function() local v = survivalPC.PlayerCameraManager:GetCameraLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+    if not (okP and P) then return nil end
+    local a = S.cams.a and valid(S.cams.a) and at(S.cams.a)
+    local b = (not S.riding) and S.last == "b" and S.cams.b and valid(S.cams.b) and at(S.cams.b) or a
+    if not a then return nil end
+    local dx, dy, dz = b.X - a.X, b.Y - a.Y, b.Z - a.Z
+    local L2 = dx * dx + dy * dy + dz * dz
+    local u = L2 > 0 and math.max(0, math.min(1, ((P.X - a.X) * dx + (P.Y - a.Y) * dy + (P.Z - a.Z) * dz) / L2)) or 0
+    local cx, cy, cz = a.X + dx * u, a.Y + dy * u, a.Z + dz * u
+    return math.sqrt((P.X - cx) ^ 2 + (P.Y - cy) ^ 2 + (P.Z - cz) ^ 2) / 100, P
+end
 local SHAKES = {}
 local function shake(spec)                                -- spec { path, scale }: the game's camera shake on your camera
     if type(spec) ~= "table" or type(spec[1]) ~= "string" or not liveObj(survivalPC) then return false end
@@ -250,9 +269,14 @@ function VCINE.tick(c, s, now)
         local cam = S.last and S.cams[S.last]
         if S.riding then cam = S.cams.a end
         if cam and valid(cam) and liveObj(survivalPC) then   -- (the view kept on the cameras: the game may take it)
-            local okV, vt = pcall(function() return survivalPC:GetViewTarget() end)
-            if okV and vt and not onCams(vt) then
+            local off, P = povOff()
+            if off and off > 300 then
                 S.reverts = S.reverts + 1
+                if S.reverts <= 3 then
+                    local okV, vt = pcall(function() return survivalPC.PlayerCameraManager.ViewTarget.Target end)
+                    cl(string.format("+%.1f s the screen's camera is %.0f m off ours (at (%.2f, %.2f, %.2f) km, view target %s, her state %s): taken back",
+                        t, off, P.X / 100000, P.Y / 100000, P.Z / 100000, okV and vt and nameOf(vt) or "?", tostring(s.state)))
+                end
                 view(cam, S.riding and 0 or math.max(0, (S.shotEnd or now) - now))
             end
         end
@@ -262,16 +286,18 @@ function VCINE.tick(c, s, now)
         -- ours), so the next run says who has it)
         if not S.diagAt or now >= S.diagAt then
             S.diagAt = now + 1
-            pcall(function()
+            local okD, errD = pcall(function()
                 local pcm = survivalPC.PlayerCameraManager
-                local vt = survivalPC:GetViewTarget()
-                local L, R = pcm:GetCameraLocation(), pcm:GetCameraRotation()
-                local mine = S.riding and S.cams.a or (S.last and S.cams[S.last])
-                local m = mine and valid(mine) and mine:K2_GetActorLocation() or nil
-                cl(string.format("+%.1f s view %s (ours: %s) at (%.2f, %.2f, %.2f) km turned (%.0f, %.0f, %.0f); our camera at %s",
-                    t, vt and nameOf(vt) or "?", tostring(onCams(vt)), L.X / 100000, L.Y / 100000, L.Z / 100000, R.Pitch, R.Yaw,
-                    R.Roll, m and string.format("(%.2f, %.2f, %.2f) km", m.X / 100000, m.Y / 100000, m.Z / 100000) or "none"))
+                local okT, vt = pcall(function() return pcm.ViewTarget.Target end)
+                local okR, R = pcall(function() local r = pcm:GetCameraRotation(); return { P = r.Pitch, Y = r.Yaw, R = r.Roll } end)
+                local off, P = povOff()
+                cl(string.format("+%.1f s the screen's camera %s m off ours%s, turned %s; view target %s",
+                    t, off and string.format("%.0f", off) or "?",
+                    P and string.format(" (at %.2f, %.2f, %.2f km)", P.X / 100000, P.Y / 100000, P.Z / 100000) or "",
+                    okR and R and string.format("(%.0f, %.0f, %.0f)", R.P, R.Y, R.R) or "?",
+                    okT and vt and (nameOf(vt) .. (onCams(vt) and " (ours)" or "")) or "?"))
             end)
+            if not okD and not S.diagErr then S.diagErr = true; cl("the view's line not read: " .. tostring(errD)) end
         end
         if t >= n(k.end_s, 14) then
             local f = k.fade or {}
