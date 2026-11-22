@@ -6034,6 +6034,26 @@ SUITES.solgcrash = function()
         pcall(function() local f = a:GetActorForwardVector(); C2.F = { X = f.X, Y = f.Y, Z = f.Z } end)
         pcall(function() local r = a:GetActorRightVector(); C2.R = { X = r.X, Y = r.Y, Z = r.Z } end)
         local F = C2.F or { X = 1, Y = 0, Z = 0 }
+        -- (where its shapes are: line traces along its axis and out from it at 500 m, what each hits first)
+        do
+            local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+            local R = C2.R or { X = 0, Y = 1, Z = 0 }
+            local O = SOLG.where()
+            local function at(fw, rt) return { X = O.X + F.X * fw * 100 + R.X * rt * 100, Y = O.Y + F.Y * fw * 100 + R.Y * rt * 100, Z = O.Z + F.Z * fw * 100 + R.Z * rt * 100 } end
+            local function trace(from, to, what)
+                local hit = {}
+                local okT, got = pcall(function() return ks:LineTraceSingle(survivalPC, from, to, 0, true, {}, 0, hit, true, { R = 0, G = 0, B = 0, A = 0 }, { R = 0, G = 0, B = 0, A = 0 }, 0) end)
+                local d, comp, bone = nil, nil, nil
+                pcall(function() local h = hit.OutHit or hit; d = h.Distance; comp = h.Component and h.Component:GetFullName():match("[^%.:]+$"); bone = h.BoneName and h.BoneName:ToString() end)
+                ST.info(string.format("trace %s: %s%s", what, (okT and got) and "HIT" or "clear",
+                    (okT and got) and string.format(" at %.0f m (%s, bone %s)", (d or 0) / 100, tostring(comp), tostring(bone)) or ""))
+            end
+            trace(at(-1100, 0), at(1100, 0), "along its axis, tail to nose")
+            trace(at(1100, 0), at(-1100, 0), "along its axis, nose to tail")
+            trace(at(500, 0), at(500, 120), "out from the axis at 500 m (right)")
+            trace(at(500, 120), at(500, 0), "in to the axis at 500 m (right)")
+            trace(at(0, 0), at(0, 120), "out from the axis at its middle")
+        end
         pcall(function() a:K2_SetActorLocation({ X = you.X - F.X * 50000, Y = you.Y - F.Y * 50000, Z = you.Z - F.Z * 50000 }, false, {}, true) end)
     end)
     A.wait(1.5)
