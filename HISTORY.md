@@ -4080,3 +4080,16 @@ The user: "Yeah push it to main". dev (feature/valka-active merged, PRs #8-#10, 
 AC8SurvivalMode_0.75.0_Online.zip (the public Nexus build: no ZFA-44, no co-op tag, Distant Thunder / the Tanacorn
 / the fleet out, zip_leak_test passed), registered on the leaderboard. Notes RELEASE_NOTES_0.75.0.md in the release
 folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Release made by tools/release_push.sh.
+
+## 0.75.3-0.75.9 (2026-11-22, branch feature/solg-own-unit; dev installs not made: autotest only)
+- VALKA's SOLG, its own body (AC:I's model, docs/re/SOLG.md): 0.75.3 T1 (textured, flying, rings spinning, wings
+  falling: 9/9); the arm spin taken off (the user: "The autoloaders are tumbling").
+- 0.75.4: its targets (solg2 13/13). 0.75.5-0.75.6: in VALKA's round (sv_valka_solg.lua): at 20 % she's invincible,
+  says her lines and leaves through a portal; the SOLG out of a portal of hers 2.6 km across at a map corner, falling on
+  the spaceport (travel_s 300); destroyed: 3,000 + ~4,900 for its pieces, AUDREY; on the pad: the airfield down for a
+  round; she's back either way (valkasolg 26/26).
+- 0.75.7: KEW shells along their arms, arms breaking off, enemy boxes, the portal full size first, the spaceport strike
+  as Mission 25's cutscene plays it (0.74.82's method in VSOLG.strike): valkasolg 30/30.
+- 0.75.8: the 28 lasers (solglaser: they fire, 3.8 a hit on the test plane). 0.75.9: their beams unhidden (untested).
+- Open: the beams (the user saw none), SOLG -Gould-'s black skin (prepare.py SKINS, not cooked yet) and its phase
+  rules, co-op (the SOLG drawn on joiners: not built).

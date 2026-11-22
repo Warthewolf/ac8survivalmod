@@ -196,3 +196,39 @@ order. [V: the decoded values are rotations of exactly 7.2 degrees a key and pos
   The 9.8-gravity blocks in the mission graph (DATA92 529) are weapon rounds (speeds 1000-6000, lives), not panels.
   So AC:I's game code breaks the panels off; ours does it with the engine's physics on the panel's own mesh (its wreck
   mesh, tumbling down), said so to the user.
+
+## 11. Its targets, arms and lasers (2026-11-22; Scripts/sv_solg.lua, sv_valka_solg.lua)
+- Targets: a unit per type on AC8's generic destructible base (Mission 4's radar tower, ported; the user's yes to the
+  base, never a boss): SAW 18, MAG 32, KEW 36, CORE 4, SP 1, held on the SOLG's bones (K2_AttachToComponent, the bone as
+  socket), their meshes hidden, their health AC:I's x0.25 at a floor (MinHealth): at the floor the SOLG breaks the
+  piece (its wreck shown, a wing falling). Enemy units (Faction 2, TGT mark: the user, "Target boxes have to be enemy");
+  their boxes "SOLG" over AC:I's name (their own model row SV_Model_SOLG, NPC rows SV_SOLG_<type>, mission rows
+  sv_solg_<type>). Autotest solg2: 13/13.
+- Placement checked against AC:I's arrival cutscene (DATA01 429): the 32 MAG panels match; the 36 KEW shells were 11.4
+  degrees off (ring 1 had turned in that frame) and lie along their arms now, 9 an arm, 160-480 m out.
+- The arms (autoloaders, s_sg01): each carries 8 MAG panels and 9 KEW shells; when the last is down it breaks off
+  (the user: "Each of its autoloaders falls off after each has had all of its targets destroyed"): SK_SV_SOLG_ARM (arm
+  4 with its pieces' wrecks and lasers in its own frame; the four arms are alike) falls in its place.
+- Lasers (AC:I's TLS turrets; decoded by a helper from DATA92 529, tools/solg/lasers.py): model f_111t (crc
+  0xef2cd596, a ~15.6 m dome, no wreck mesh), HUD CONT_LASER UNIT, health 850; its type record at graph offset 144736
+  (type pointer 0x80023560), the only SOLG type with weapon blocks (offsets 145072 / 145184: ~10 km, ~10 s cycle, one
+  shot; a 1.2 km burst-of-20 block). 28 placements (record 56 bytes before each pointer use: +4 position, +16 Euler
+  radians Rz@Ry@Rx, +28 name crc): 16 on the arms (4 an arm, in the arm's frame, riding ring 1), 12 round the barrel
+  (r 52 m, z 170 .. -868). Phases inferred, not decoded: arms' with the KEW shells (2), barrel's with the core units (3).
+  Ours: LSR_01..28 on the rig; target types LSRA (16, phase 2) / LSRB (12, phase 3), optional (no phase waits on them),
+  up with their phase, an arm's down with its arm; on AC8's land Phalanx (GR033_ciws_01) firing our own laser
+  BP_SV_SolgTLS (a copy of AC8's anti-aircraft swing TLS BP_SwingTLS_ForPlane, damage and SlipDamage 5: the user, "a
+  custom blueprint ... damage them for 5 health every hit") through its own arm BP_FCS_SV_SolgTLS (the ships' CIWS arm,
+  its weapon swapped, after aircraft within 6 km) and row SV_FCS_SolgTLS (DT_SV_SolgFCS): tools/build_survival_solg.py.
+  Autotest solglaser (0.75.8): 16 shots of BP_SV_SolgTLS, no stock laser; a hit took 3.8 health off the test plane
+  (5 x the game's own scaling, ~0.76). Beams NOT seen by the user: 0.75.9 hides the Phalanx's meshes alone (not what's
+  attached to them); untested.
+
+## 12. The versions' skins (2026-11-22)
+Each SOLG package carries a re-skin of the same meshes (its own texture ids; the meshes name the first set's):
+DATA01 216 and 219 near the first grey, DATA92 528 near black with red lights. The user: "SOLG -Gould- is the one we
+want, the black texture too". prepare.py SKINS['gould'] (matched by size and shape: edges of the grey images, 11 at
+0.68-1.00): 20004c40<-200055ff, 20004c3d<-20005600, 200051da<-20005601, 20004c3f<-20005603, 20004c43<-20005605,
+20004e4d<-20005606, 20004c3e<-20005607, 20004fa9<-20005608, 20004dae<-20005609, 2000520c<-2000560a,
+20004c42<-2000560b. 20005602 / 20005604 (two more wing-panel variants) not placed. Which set is Gould, and its own
+phase rules: being decoded.

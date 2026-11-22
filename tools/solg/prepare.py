@@ -33,6 +33,11 @@ OUT = os.path.join(ROOT, 'build', 'solg')
 PAC, ENTRY = 'DATA01', 213
 MODELS = ['s_solg'] + ['s_sg%02d' % i for i in range(1, 10)]
 CUT = 429                                    # (DATA01: the SOLG's arrival cutscene: where its KEW shells sit)
+# the versions' skins (main(): SOLG_SKIN): package, entry, {the first set's texture id: the skin's}
+SKINS = {'gould': ('DATA92', 528, {0x20004c40: 0x200055ff, 0x20004c3d: 0x20005600, 0x200051da: 0x20005601,
+                                   0x20004c3f: 0x20005603, 0x20004c43: 0x20005605, 0x20004e4d: 0x20005606,
+                                   0x20004c3e: 0x20005607, 0x20004fa9: 0x20005608, 0x20004dae: 0x20005609,
+                                   0x2000520c: 0x2000560a, 0x20004c42: 0x2000560b})}
 NAME = {'s_solg': 'SM_SV_SOLG_Body', **{'s_sg%02d' % i: 'SM_SV_SOLG_SG%02d' % i for i in range(1, 10)}}
 
 
@@ -459,6 +464,25 @@ def main():
     for f in os.listdir(tmp):
         os.remove(os.path.join(tmp, f))
     os.rmdir(tmp)
+    # ((2026-11-22) the user: "SOLG -Gould- is the one we want, the black texture too") its skin: each SOLG version's
+    # package carries a re-skin of the same meshes (its own texture ids, the meshes naming the first set's); Gould's,
+    # DATA92 528, is near black with red lights. SKINS: which of its textures takes each texture's place (matched by
+    # size and shape, docs/re/SOLG.md section 12). SOLG_SKIN (env): gould (default) or base (the first set's grey)
+    skin = os.environ.get('SOLG_SKIN', 'gould')
+    if skin in SKINS:
+        spac, sentry, swap = SKINS[skin]
+        ds = DPL(os.path.join(os.environ['ACI_USRDIR'], spac + '.PAC')).read(sentry)
+        sg = export_textures(ds, list(flat(fhm_tree(ds))), tmp)
+        done = []
+        for t, r in sorted(swap.items()):
+            if ('t%08x' % t) in layout['textures'] and sg.get(r):
+                os.replace(sg[r][0], os.path.join(OUT, 'T_SV_SOLG_%08x.png' % t))
+                done.append('%08x<-%08x' % (t, r))
+        for f in os.listdir(tmp):
+            os.remove(os.path.join(tmp, f))
+        os.rmdir(tmp)
+        layout['skin'] = {'name': skin, 'source': '%s:%d' % (spac, sentry), 'swapped': done}
+        print('skin %s (%s:%d): %d textures swapped (%s)' % (skin, spac, sentry, len(done), ', '.join(done)))
     # flat maps for AC8's M_Live_Base (tools/solg/ue_import.py): a neutral normal and a neutral Livemap
     from PIL import Image
     Image.new('RGBA', (4, 4), (128, 128, 255, 255)).save(os.path.join(OUT, 'T_SV_SOLG_FlatN.png'))
