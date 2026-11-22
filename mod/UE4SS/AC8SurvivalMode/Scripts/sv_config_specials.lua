@@ -233,6 +233,7 @@ CFG.specials = {
     -- enabled = false: she never comes, whatever `rotation` says (a build without her X-02S and AC7 sounds:
     -- tools/package_release.sh novalka)
     valka    = { enabled = true, name = "VALKA", squadron = "MIHALY'S SHADOW", unit = "SV_Unit_Valka", health = 2000,
+                 hit_cap_pct = 10,   -- (at most this % of her health lost a second, whoever's hits: the user, 2026-11-22)
                  health_per_round = 0.04, health_max_x = 2.5, reward = 9000, reward_per_round = 300, ai_level = 5,
                  disguise = true, decoy_share = 0.5, decoy_min = 2, decoy_max = 6, lurk_s = 4,
                  anomaly_line = "CATASTROPHIC LEVEL ANOMALY", big_x = 2.0,

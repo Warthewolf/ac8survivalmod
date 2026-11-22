@@ -971,6 +971,27 @@ function SPC.valkaTick(now, s)
     if not o then return end
     V.modelTick(s, o, now)
     pcall(V.subsHealth, c, s, o)                         -- ((2026-11-07) AUDREY breaks in as her health falls)
+    -- ((2026-11-22) the user's co-op run: one TLS beam took her 1,600 in one go, 100 % to her 20 % floor, skipping her
+    -- fight; her yes to "cap how much of Valka's health she can lose per second ... 10 %") her health floor (the
+    -- engine's MinHealth: every hit, a joiner's too, stops there) moved each second to her health then less hit_cap_pct
+    -- of her max, never under the SOLG's floor while it waits; 0 once that's under 0 (she can die)
+    local cap = n(c.hit_cap_pct, 0)
+    if cap > 0 and not (s.solg and s.solg.state ~= "done") then
+        local okH, h, mx = pcall(function() return n(o.HealthInternal, 0) / 10, n(o.MaxHealth, 0) end)
+        if okH and mx > 0 then
+            if now >= (s.capAt or 0) then s.capAt, s.capFrom = now + 1, h end
+            local g = c.solg
+            local base = (g and g.enabled ~= false and not s.solgDone) and mx * n(g.at_pct, 20) / 100 or 0
+            local fl = math.max(base, (s.capFrom or h) - mx * cap / 100)
+            if fl <= 0 then fl = base end
+            pcall(function() if math.abs(n(o.MinHealth, 0) - fl) > 0.5 then o.MinHealth = fl end end)
+            if not s.capSaid then s.capSaid = true; log(string.format("special: VALKA's hits capped: at most %d%% of her health (%.0f) a second", cap, mx * cap / 100)) end
+            if h <= fl + 0.5 and fl > base and not s.capHitSaid then
+                s.capHitSaid = true
+                log(string.format("special: VALKA's cap held a hit: %.0f of her health left, no more this second", h))
+            end
+        end
+    end
     if VSOLG and VSOLG.tick then                         -- ((2026-11-22) at 20 % her SOLG: sv_valka_solg.lua; the rest waits)
         local okS, busy = pcall(VSOLG.tick, c, s, o, now)
         if not okS then
