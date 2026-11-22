@@ -5060,6 +5060,58 @@ SUITES.portalprobe = function()
     A.do_(function() ST.check(true, "every portal piece tried (see the INFO lines and the pictures)") end)
 end
 
+-- ((2026-11-22) T1 of the SOLG (Scripts/sv_solg.lua, docs/re/SOLG.md): AC:I's SOLG as its own actor (no game unit),
+-- 9 km north of the runway, 3.5 km up, nose east, flying east at 120 m/s: does it draw (painted, not black), its
+-- rings turn (AC:I's spin), three solar array wings shot off fall away tumbling. Pictures from off its side and nose.)
+local SOLGT = { at = nil }
+local function solgSpot() return { X = AIRFIELD.X, Y = AIRFIELD.Y - 900000, Z = 350000 } end
+local function solgCam(fwd_m, side_m, up_m)               -- metres from the SOLG where it is now (its nose along +X)
+    local L = (SOLG and SOLG.where and SOLG.where()) or solgSpot()
+    return { X = L.X + fwd_m * 100, Y = L.Y + side_m * 100, Z = L.Z + (up_m or 0) * 100 }, { X = L.X, Y = L.Y, Z = L.Z }
+end
+SUITES.solg = function()
+    intoRun()
+    A.do_(function()
+        local ok = SOLG and SOLG.spawn and SOLG.spawn(solgSpot(), 0, { X = 12000, Y = 0, Z = 0 })
+        ST.check(ok == true, "the SOLG up (its own actor, AC:I's mesh)", ST.findLog("solg: up at", 0) or ST.findLog("solg: ", 0))
+    end)
+    A.wait(1.5)
+    for k, v in ipairs({ { 0, -4200, 300, 55, "side" }, { 2600, -2600, 500, 50, "nose" }, { -2400, -1800, 200, 55, "tail" } }) do
+        A.do_(function() local at, look = solgCam(v[1], v[2], v[3]); ST.look(at, look, v[4]) end)
+        A.wait(0.6)
+        A.do_(function() ST.shot("solg_" .. k .. "_" .. v[5]) end)
+        A.wait(2.4)
+    end
+    -- its spin: the same view 5 s apart
+    A.do_(function() local at, look = solgCam(1200, -2400, 0); ST.look(at, look, 50) end)
+    A.wait(0.6)
+    A.do_(function() ST.shot("solg_spin_a") end)
+    A.wait(5)
+    A.do_(function() local at, look = solgCam(1200, -2400, 0); ST.look(at, look, 50) end)
+    A.wait(0.4)
+    A.do_(function() ST.shot("solg_spin_b") end)
+    A.wait(1)
+    -- three wings shot off, filmed falling
+    A.do_(function() local at, look = solgCam(-600, -2200, 200); ST.look(at, look, 55) end)
+    A.wait(0.5)
+    for _, b in ipairs({ "SG04_01", "SG05_03", "SG05_07" }) do
+        A.do_(function() ST.check(SOLG.breakPanel(b) == true, b .. " shot off: it falls", ST.findLog("solg: " .. b, 0)) end)
+        A.wait(0.3)
+    end
+    for k = 1, 5 do
+        A.do_(function() local at, look = solgCam(-600, -2200, 200); ST.look(at, { X = look.X - 60000, Y = look.Y, Z = look.Z - 20000 }, 60) end)
+        A.wait(0.3)
+        A.do_(function() ST.shot("solg_fall_" .. k) end)
+        A.wait(1.6)
+    end
+    A.do_(function()
+        ST.info(tostring(ST.findLog("solg: up at", 0)))
+        SOLG.stop("T1 over")
+        ST.lookBack()
+        ST.check(not SOLG.up(), "the SOLG taken down", ST.findLog("solg: taken down", 0))
+    end)
+end
+
 -- ---- the tick ----------------------------------------------------------------------------------------------------
 local started, t0, finished = false, nil, false
 local function finish(why)
