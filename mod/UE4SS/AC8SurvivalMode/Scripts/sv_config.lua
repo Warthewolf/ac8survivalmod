@@ -1176,7 +1176,13 @@ CFG = {
                                  -- shows: li_color_how "v4" / "v3" writes it as a Vec4 / Vec3, "lc" as a LinearColor
                                  -- (0.74.62's, which hides it); Ctrl+[ (dev) cycles the candidates, other beams too)
                                  li_color = {}, li_color_how = "v4",
-                                 li_hit_sound = "/Game/WwiseAssets/Events/SFX/SPWP_OTH_TLS_HIT" },
+                                 li_hit_sound = "/Game/WwiseAssets/Events/SFX/SPWP_OTH_TLS_HIT",
+                                 -- ((2026-11-22) the user: "check that the ZFA, and Tanacorn Lasers are also using the correct
+                                 -- laser sounds": AC7's class plays none, so they fired silent) the TLS's own shooting sound,
+                                 -- AC8's TLS's (BP_wp_tls_x0 / BP_plwp_tls_x0), posted by name on the laser (else its
+                                 -- carrier) as a volley starts, its stop as the beam ends; "" for none
+                                 li_fire_sound = "AKE_GEN_PLAYER_ARMS_SPWeapon_TLS_Emit_Play",
+                                 li_fire_stop = "AKE_GEN_PLAYER_ARMS_SPWeapon_TLS_Emit_Stop" },
                          text = { on_station = "%s ON STATION", on_station_sub = "ITS ZFA-44S LAUNCH IN %d S",
                                   launch = "ZFA-44S LAUNCHED", launch_sub = "FROM %s",
                                   leaving = "%s LEAVING", leaving_sub = "%d ROUNDS SERVED: THE STORE CAN CALL ANOTHER",

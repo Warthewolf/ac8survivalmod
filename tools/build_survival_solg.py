@@ -18,7 +18,8 @@ import copy
 import struct
 
 from build_survival import *  # noqa: F401,F403 (build_survival's names; it imports this part at its end)
-from build_survival_world import (ZFA_TLS_ROLES, NULL_IMPORT, zfa_tls_u64, zfa_tls_value, zfa_tls_set)  # noqa: E402
+from build_survival_world import (ZFA_TLS_ROLES, NULL_IMPORT, zfa_tls_u64, zfa_tls_value, zfa_tls_set,  # noqa: E402
+                                   tls_sound_swap, TLS_SOUNDS)
 
 # (SOLG -Gould-'s laser handlers, docs/re/SOLG.md 13: 10 s at players within 1200 m, then 5 s)
 SOLG_TLS_ROW_VALUES = {'CaptureDistance': 1200.0, 'CaptureAngleRange': 180.0, 'ActivationTime': 1.0,
@@ -29,9 +30,7 @@ SOLG_TLS_ROW_VALUES = {'CaptureDistance': 1200.0, 'CaptureAngleRange': 180.0, 'A
 SOLG_TLS_ROW_CLEAR = ('NpcWeaponId', 'PredictionOffsetTime', 'ActivationRandomTimeMin', 'ActivationRandomTimeMax')
 SOLG_TLS_SEARCH_CM = (120000.0, 132000.0)
 SOLG_TLS_LIFE_S = 10.0                                 # (its beam: Gould's 10 s burst; stock 7)
-_E = '/Game/WwiseAssets/Events/CS_AceLive_SE/Events_General/'
-SOLG_TLS_SOUNDS = [(_E + 'ARMS/SKY/SE_GEN_ARMS_SKY_OP0024_uavn/AKE_GEN_ARMS_SKY_OP0024_uavn_PulseLaser_Fire_' + x,
-                    _E + 'PLAYER/ARMS/SE_GEN_PLAYER_ARMS_SPWeapon/AKE_GEN_PLAYER_ARMS_SPWeapon_TLS_Emit_' + x) for x in ('Play', 'Stop')]
+SOLG_TLS_SOUNDS = TLS_SOUNDS                            # (build_survival_world.py: the TLS's shooting sound)
 
 
 def build_solg_laser():
@@ -52,16 +51,7 @@ def build_solg_laser():
     # its sound (the user: "Switch the sound to TLS shooting sound"): the Nightmare UAV's PulseLaser_Fire pair it came
     # with -> the TLS's own shooting pair (AC8's enemy and player TLS, BP_wp_tls_x0 / BP_plwp_tls_x0, both fire it):
     # each import of the old event onto the new event package's one public export
-    for old, new in SOLG_TLS_SOUNDS:
-        ozz, nzz = ZenPkg(stock(old)), ZenPkg(stock(new))
-        oh = [zfa_tls_u64(e, 56) for e in ozz.exports if zfa_tls_u64(e, 56)]
-        nh = [zfa_tls_u64(e, 56) for e in nzz.exports if zfa_tls_u64(e, 56)]
-        assert len(oh) == 1 and len(nh) == 1, (old, oh, new, nh)
-        k = w.imp_pkgs.index(old)
-        hit = [i for i, x in enumerate(w.imports) if x >> 62 == 2 and (x >> 32) & 0x3fffffff == k]
-        assert len(hit) == 1 and w.imp_hashes[w.imports[hit[0]] & 0xffffffff] == oh[0], (old, hit)
-        w.imp_hashes[w.imports[hit[0]] & 0xffffffff] = nh[0]
-        w.set_imported_package(old, new)
+    tls_sound_swap(w)
     w.rename(se.SOLG_TLS_WEAPON_SOURCE, se.SOLG_TLS_WEAPON)
     assert se.SOLG_TLS_WEAPON in w.names and se.SOLG_TLS_WEAPON_SOURCE not in w.names
     chk, _ = uprop.read_struct(uprop.Ctx(bytes(w.payloads[cdo]), w.names), 0, 'LiveTLSSwingforPlane')

@@ -1126,14 +1126,15 @@ def check_zfa_laser_build():
     load = lambda path: ZenPkg(data=open(os.path.join(OUT, path[len('/Game/'):]) + '.uasset', 'rb').read())
     u64 = lambda e, at: struct.unpack_from('<Q', e, at)[0]
     z = load(se.ZFA_TLS_FCS_PKG)
-    tls, ecm = ZenPkg(stock(se.ZFA_TLS_WEAPON)), ZenPkg(stock(se.ZFA_TLS_LAUNCHER_SOURCE))
+    tls, ecm = load(se.ZFA_TLS_WEAPON), ZenPkg(stock(se.ZFA_TLS_LAUNCHER_SOURCE))
+    assert all(new in tls.imp_pkgs and old not in tls.imp_pkgs for old, new in TLS_SOUNDS), ('its sound', tls.imp_pkgs)
     tls_pub = sorted(u64(e, 56) for e in tls.exports if u64(e, 56))
     assert z.names[z.name_idx] == se.ZFA_TLS_FCS_PKG and z.imp_pkgs == [se.ZFA_TLS_WEAPON], (z.names[z.name_idx], z.imp_pkgs)
     got = sorted(z.imp_hashes[x & 0xffffffff] for x in z.imports if x >> 62 == 2)
     assert got == tls_pub and len(z.imp_hashes) == len(tls_pub), ('the laser imports', [hex(h) for h in got])
     wc = dict((q[1], q[3]) for q in props_of(z, z.export_index('LiveFCSModule_ProjectileCommon_0'), 'LiveFCSModule_ProjectileCommon')[0][2])
     w = z.imports[-wc['WeaponClass'][1] - 1]
-    assert w >> 62 == 2 and z.imp_hashes[w & 0xffffffff] == export_hash(se.ZFA_TLS_WEAPON.rsplit('/', 1)[1] + '_C'), wc
+    assert w >> 62 == 2 and z.imp_hashes[w & 0xffffffff] == export_hash(se.ZFA_TLS_WEAPON_SOURCE.rsplit('/', 1)[1] + '_C'), wc
     li = z.export_index('LiveFCSModule_LauncherBoneControl_0')
     el = ecm.export_index('LiveFCSModule_LauncherCommon_0')
     assert (u64(z.exports[li], 32), u64(z.exports[li], 48)) == (u64(ecm.exports[el], 32), u64(ecm.exports[el], 48)), 'launcher class'

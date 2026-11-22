@@ -295,7 +295,10 @@ ZFA_FALLBACK_N, ZFA_FALLBACK_UP_CM, ZFA_GAP_CM = 4, 30000.0, 6000.0
 ZFA_TLS_FCS_SOURCE = '/Game/Blueprints/Weapons/BP_FCS/CP/BP_FCS_Vessel_CIWS_00'
 ZFA_TLS_FCS_PKG = '/Game/Mods/SurvivalMode/Weapons/BP_FCS_SV_ZfaTLS'
 ZFA_TLS_OLD_WEAPON = '/Game/Blueprints/Weapons/CIWS/Vessel/BP_wp_ciws_vessel'       # the CIWS arm's weapon
-ZFA_TLS_WEAPON = '/Game/Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForMSL'      # ours (stock, unchanged)
+ZFA_TLS_WEAPON_SOURCE = '/Game/Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForMSL'   # AC8's anti-missile laser
+# ((2026-11-22) a copy of it under Survival's path with the TLS's shooting sound in place of the Nightmare UAV's
+# PulseLaser_Fire pair (the user: "check that the ZFA, and Tanacorn Lasers are also using the correct laser sounds")
+ZFA_TLS_WEAPON = '/Game/Mods/SurvivalMode/Weapons/BP_SV_ZfaSwingTLS'
 ZFA_TLS_LAUNCHER_SOURCE = '/Game/Blueprints/Weapons/BP_FCS/CP/BP_FCS_ECM_00'       # its LauncherCommon's class ids
 ZFA_TLS_FCS_TABLE = '/Game/Mods/SurvivalMode/Data/DT_SV_NpcFCS'
 ZFA_TLS_FCS_ROW, ZFA_TLS_FCS_ROW_SOURCE = 'SV_FCS_ZfaTLS', 'NPC_FCS_VesselCIWS000'
