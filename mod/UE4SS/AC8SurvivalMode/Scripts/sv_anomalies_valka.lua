@@ -1515,9 +1515,11 @@ local function portalMesh(pc, P, part, a, smc, kml)
         pcall(function() comp:SetWorldScale3D({ X = e.k, Y = e.k, Z = e.k * e.flat }) end)
         local okA = okM and pcall(function() comp:K2_AttachToComponent(sc, FName("B"), 1, 1, 1, false) end)
         if okA then
-            pcall(function() sc:PlayAnimation(grow, false) end)   -- (held at its start, 0.001: grown in its window)
-            pcall(function() sc:SetPlayRate(0) end)
+            -- (held at its start, 0.001, till its window. (2026-11-22) not paused at rate 0: a paused animation isn't run, its
+            -- bone stayed at full size till its window ("the black hole ... is already at full size"): a creep instead)
+            pcall(function() sc:PlayAnimation(grow, false) end)
             pcall(function() sc:SetPosition(0, false) end)
+            pcall(function() sc:SetPlayRate(SPC.V.PORTAL_CREEP) end)
             -- (0.75.20's probe: its bone at full size till the engine first runs the animation, a frame on: the piece
             -- hidden till the portal's first tick, then shown, small)
             pcall(function() comp:SetVisibility(false, false) end)
@@ -1542,6 +1544,7 @@ local function portalMesh(pc, P, part, a, smc, kml)
     pcall(function() comp:SetWorldScale3D({ X = 0.001, Y = 0.001, Z = 0.001 }) end)
     return e
 end
+SPC.V.PORTAL_CREEP = 0.0001                       -- (a waiting piece's grow: run, but nothing in a minute)
 SPC.V.PORTAL_SCALER = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SK_SV_PortalScaler"
 SPC.V.PORTAL_GROW = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SK_SV_PortalScaler_Anim"   -- (its grow: the importer's name, never renamed)
 -- a piece's engine spin at its rate x k (the portal's spin-up as it opens, faster as it drains)
@@ -1686,7 +1689,14 @@ function SPC.V.portalTick(c, s, now)
                 local from = (P.closeFrom or now) + (w and w[1] or 0) * close
                 if not e.shrunk and now >= from then       -- (its grow played backwards from where it is: falling in)
                     e.shrunk = true
+                    -- ((2026-11-22) "it doesn't have an closing animation": a grow that had ended was stopped, and a rate
+                    -- alone never restarts it: played again, backwards, from where it is)
+                    local pos = 1
+                    pcall(function() pos = e.sc:GetPosition() end)
+                    if not pos or pos <= 0.0001 then pos = 1 end
+                    pcall(function() e.sc:SetPosition(math.min(1, pos), false) end)
                     pcall(function() e.sc:SetPlayRate(-1 / math.max(0.05, ((w and (w[2] - w[1])) or 1) * close)) end)
+                    pcall(function() e.sc:Play(false) end)
                 end
             elseif not e.grown then
                 local w = e.part.open
