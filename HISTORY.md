@@ -4135,3 +4135,9 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   player's plane is ignored). "VALKA CALLS FORTH THE SOLG" on its arrival (countdowns keep SOLG INBOUND). The user's
   Audrey SOLG lines merged into config/subtitles.ini. Tests on 0.75.37-0.75.39: solglaser 15/15 still and moving,
   valkasolg 38/38, friends' smoke 5/5. Leaderboard: 0.75.32-0.75.39 NOT registered (HTTP 500 from the server).
+- 0.75.40-0.75.41 (2026-11-23): the user's latest subtitles (Audrey's "what have you done?"); the fleet storm's leftover
+  cloud lightning swept every time it clears (Kiriya's 0.74.200 co-op run: "cloud lightning: 0 taken off", 19
+  NS_CloudLightning flashing purple over the day sky to round 33 until they landed; branch fix/storm-cloud-sweep, picked
+  onto feature/solg-own-unit). Smoke 5/5 on both. 0.75.41 INSTALLED 2026-11-23 (backup build/backup/install_before_0.75.41;
+  164 files verified). The storm's clear not yet seen in game. Leaderboard: not registered (D1's free daily reads used
+  up; the Worker's fix deployed 2026-11-23 on fix/leaderboard-reads).
