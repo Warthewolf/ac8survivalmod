@@ -101,7 +101,37 @@ function ST.openSurvival()
     return ok, ok and ("OpenLevel " .. LEVEL .. " with " .. (pc and "the player controller" or "the game instance"))
         or tostring(err)
 end
-local HOLD = { inv = 0, ap = 0, apOn = nil, ground = false, unpaused = 0 }
+local HOLD = { inv = 0, ap = 0, apOn = nil, ground = false, unpaused = 0, hidAt = -100 }
+-- ((2026-11-22) the pause of the valka runs was AC8's "Your controller has been disconnected" box (a gamepad on this PC
+-- dropping): unpaused, the box stayed over every picture after. Its TextBlock found by its text, the widgets above it
+-- climbed to the one in the viewport, and that one hidden (Collapsed))
+local function hideDisconnect(now)
+    if now - HOLD.hidAt < 2 then return end
+    HOLD.hidAt = now
+    local uw = StaticFindObject("/Script/UMG.UserWidget")
+    local n = 0
+    for _, t in ipairs(FindAllOf("TextBlock") or {}) do
+        local txt = ""
+        pcall(function() txt = t:GetText():ToString() end)
+        if txt:lower():find("controller has been disconnected", 1, true) then
+            local o, top = t, nil
+            for _ = 1, 12 do
+                local okO, up = pcall(function() return o:GetOuter() end)
+                if not (okO and up and valid(up)) then break end
+                o = up
+                local isW = false
+                pcall(function() isW = o:IsA(uw) end)
+                if isW then
+                    local inVp = false
+                    pcall(function() inVp = o:IsInViewport() end)
+                    if inVp then top = o; break end
+                end
+            end
+            if top and pcall(function() top:SetVisibility(1) end) then n = n + 1 end
+        end
+    end
+    if n > 0 then ST.info("the controller-disconnected box hidden (" .. n .. ")") end
+end
 local function holdPlane(now)
     local pawn = ST.plane()
     if not pawn then return end
@@ -115,7 +145,9 @@ local function holdPlane(now)
                 ST.info("the game had paused (its window's focus lost?): unpaused (" .. HOLD.unpaused .. ")")
             end
         end
+        HOLD.boxUntil = now + 10                          -- (the box comes with the pause: looked for a while)
     end
+    if HOLD.boxUntil and now < HOLD.boxUntil then pcall(hideDisconnect, now) end
     if ST.apOff then return end                           -- ((0.74.166) a suite that flies your plane itself: capture, pin)
     if now >= HOLD.inv then
         HOLD.inv = now + 2
