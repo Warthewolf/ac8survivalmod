@@ -371,6 +371,32 @@ local function smokeOn(bone)
     end
 end
 SOLG.smokeOn = smokeOn
+-- ((2026-11-22) the autotest: each turret fired one burst, then none for 45 s, with the row's ammo limit off too) their
+-- fire control's projectile module carries its own bLimitAmmo / AmmoCount (the ZFA's aim-only arm we copied: 0 rounds):
+-- unlimited on each of these turrets' modules, what they had logged once
+function SOLG.lasersArmed(list)
+    local mine = {}
+    for _, e in ipairs(list or {}) do
+        local okN, nm = pcall(function() return e.o:GetFName():ToString() end)
+        if okN and nm then mine[#mine + 1] = nm end
+    end
+    if #mine == 0 then return 0 end
+    local nn, was = 0, nil
+    for _, m in ipairs(FindAllOf("LiveFCSModule_ProjectileCommon") or {}) do
+        local okF, full = pcall(function() return m:GetFullName() end)
+        if okF and full then
+            for _, nm in ipairs(mine) do
+                if full:find(nm, 1, true) then
+                    if not was then pcall(function() was = string.format("bLimitAmmo %s, AmmoCount %s", tostring(m.bLimitAmmo), tostring(m.AmmoCount)) end) end
+                    if pcall(function() m.bLimitAmmo = false; m.AmmoCount = 99999 end) then nn = nn + 1 end
+                    break
+                end
+            end
+        end
+    end
+    sl(string.format("lasers: %d of %d turrets' fire control given unlimited ammo (they had %s)", nn, #mine, tostring(was)))
+    return nn
+end
 -- the ground (or sea) under x, y
 local kis = nil
 local function groundZ(x, y)
@@ -679,6 +705,7 @@ local function phaseOn(ph)
                 if e.onArm and S.broken[e.onArm] then breakTarget(e, "its arm's gone") elseif e.onArm then onArm = onArm + 1 end
             end
             sl(string.format("phase %d: its lasers up: %s, %d on the arms", ph, note, onArm))
+            if SOLG.lasersArmed then pcall(SOLG.lasersArmed, new) end
         end
     end
     local nOn = openUp()
