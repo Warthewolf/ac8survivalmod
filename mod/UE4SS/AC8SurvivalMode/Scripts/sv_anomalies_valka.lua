@@ -1690,7 +1690,9 @@ function SPC.V.portalTick(c, s, now)
     local spinK = y and (1 + 3 * y) or (0.15 + 0.85 * x)
     for _, e in ipairs(P.meshes) do
         if e.sc and liveObj(e.comp) then                -- (on its scaler: the engine scales and spins it every frame)
-            if e.hold and now > P.from + 0.05 then e.hold = nil; pcall(function() e.comp:SetVisibility(true, false) end) end
+            -- (shown once into its window and 0.3 s on: the engine has run its grow by then (0.75.23's probe: full size before))
+            if e.hold and e.grown and now > P.from + 0.3 then e.hold = nil; pcall(function() e.comp:SetVisibility(true, false) end) end
+            if e.hold and y then e.hold = nil end         -- (closing before it was ever shown: left hidden)
             if y then
                 local w = e.part.close
                 local from = (P.closeFrom or now) + (w and w[1] or 0) * close
