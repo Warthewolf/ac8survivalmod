@@ -71,6 +71,10 @@ SOLG = { C = {
     -- apart in a line: its one or two neighbours) loses damage_pct of its health; one brought down blows the same way
     -- (its normal pay: the team's, as any shot down). Ours (AC:I has none; AC8's induced explosion reaches 20 m)
     ping = { enabled = true, every_s = 20 },
+    -- ((2026-11-23) the autotest: each turret fires its first burst, then never again (1-4 hits in 50 s, held still or
+    -- moving; its ammo not limited): the land CIWS's cycle never comes round again on our turrets. Every rearm_s (Gould's
+    -- 10 s of fire, 5 s rest) each live laser is switched off and on, which starts its cycle (and a burst) afresh)
+    laser_rearm_s = 15,
     -- ((2026-11-22) the user: "some black smoke that pours off the sides of the SOLG after things have been destroyed,
     -- and VFX for the splash down of its objects") a ship's black smoke on the bone of each piece shot off (its wreck's
     -- place on the body), at most max; a falling wing, arm or the SOLG itself at the sea or the ground: a water pillar
@@ -805,6 +809,25 @@ end
 local function targetsTick()
     if not (S and S.targets) then return end
     local floorIn = n(SOLG.C.floor, 1) * 10 + 0.5
+    local rr = n(SOLG.C.laser_rearm_s, 0)
+    if rr > 0 and not S.mirror then                       -- (its lasers' cycle started afresh: see laser_rearm_s)
+        local now = os.clock()
+        if S.rearmOff then                                -- (switched off last tick: on again now)
+            for _, e in ipairs(S.rearmOff) do if e.live and liveObj(e.o) then pcall(function() e.o.bIsActivated = true end) end end
+            S.rearmOff = nil
+        elseif now >= (S.rearmAt or 0) then
+            S.rearmAt = now + rr
+            local off = {}
+            for _, e in ipairs(S.targets) do
+                if e.t.laser and e.live and e.open and liveObj(e.o) and pcall(function() e.o.bIsActivated = false end) then off[#off + 1] = e end
+            end
+            if #off > 0 then
+                S.rearmOff = off
+                S.rearms = (S.rearms or 0) + 1
+                if S.rearms <= 2 then sl(string.format("lasers rearmed: %d turrets' cycle started afresh (every %d s)", #off, rr)) end
+            end
+        end
+    end
     if S.chain and #S.chain > 0 and not S.mirror then       -- (the KEW shells' chain: its blasts due now)
         local now, keep = os.clock(), {}
         for _, c in ipairs(S.chain) do
