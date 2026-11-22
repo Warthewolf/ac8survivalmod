@@ -4074,3 +4074,9 @@ you can make it". Test builds only (VALKA=1 dev stages, the autotest gate); noth
   cutscene had ended looked like it losing the view (contact_sheet.py --hires uses the game's own pictures).
 - Checks: lua_check, every build_all.sh (bosses_test, coop_guard, paths, sizes). Autotest valka 22/22 on 0.74.212 to
   0.74.215 (runs 20261122_154542 to 161940).
+
+## 0.75.0 (-coop2mp.310, runtime 0.32.42; dev 97ac76e, 2026-11-22): the release to main
+The user: "Yeah push it to main". dev (feature/valka-active merged, PRs #8-#10, fleet-coop) built as 0.75.0:
+AC8SurvivalMode_0.75.0_Online.zip (the public Nexus build: no ZFA-44, no co-op tag, Distant Thunder / the Tanacorn
+/ the fleet out, zip_leak_test passed), registered on the leaderboard. Notes RELEASE_NOTES_0.75.0.md in the release
+folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Release made by tools/release_push.sh.
