@@ -315,25 +315,26 @@ CFG.specials = {
                             -- glow brightest at its edges, Color / EmissiveIntensity / Opacity); the refraction and smoke
                             -- materials drew nothing against the sky)
                             parts = {
-                                -- the event horizon: a black disc
-                                { mesh = "/Engine/BasicShapes/Cylinder", mat = "/Engine/BasicShapes/BasicShapeMaterial",
-                                  params = { Color = { 0, 0, 0, 1 } }, size = 0.78, flat = 0.02 },
+                                -- the event horizon: a black lens, deeper than the glowing one round it, so its middle
+                                -- shows through (the run of 13:36: a flat black disc inside the glow was covered by it)
+                                { mesh = "/Engine/BasicShapes/Sphere", mat = "/Engine/BasicShapes/BasicShapeMaterial",
+                                  params = { Color = { 0, 0, 0, 1 } }, size = 0.8, flat = 0.32 },
                                 -- round it a glowing lens, brightest at its rim
                                 -- (the second probe, 13:26: Color over 1 washes to pink in the bloom, EmissiveIntensity 60
-                                -- on the lens a white blob: both toned down)
+                                -- on the lens a white blob; 13:36: 8 still a white-pink disc over the black: an edge glow now)
                                 { mesh = "/Engine/BasicShapes/Sphere", mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow",
-                                  params = { Color = { 0.55, 0.05, 1.0, 1 }, EmissiveIntensity = 8, Opacity = 0.35, EmissiveFresnelFalloff = 3 },
+                                  params = { Color = { 0.45, 0.02, 1.0, 1 }, EmissiveIntensity = 3, Opacity = 0.12, EmissiveFresnelFalloff = 6 },
                                   size = 0.95, flat = 0.22 },
-                                -- two finned rings turning opposite ways: violet inside, red outside; a plain red one round them
+                                -- three finned rings turning: violet inside, red, dark red outside
                                 { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07",
-                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.7, 0.05, 1.0, 1 } },
+                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.35, 0.02, 0.8, 1 } },
                                   size = 1.0, spin = 1 },
                                 { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07",
-                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.04, 0.12, 1 } },
+                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.7, 0.01, 0.06, 1 } },
                                   size = 1.25, spin = -0.7 },
-                                { mesh = "/Game/Environments/City/Unique/Map15/Mesh/SM_UNI_OrbitElevatorRing002_I22",
-                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.9, 0.02, 0.08, 1 } },
-                                  size = 1.55, spin = 0.3 },
+                                { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07",
+                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.4, 0.0, 0.03, 1 } },
+                                  size = 1.55, spin = 0.35 },
                                 -- a faint red halo far round it
                                 { mesh = "/Engine/BasicShapes/Sphere", mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow",
                                   params = { Color = { 1, 0.08, 0.25, 1 }, EmissiveIntensity = 4, Opacity = 0.15 }, size = 2.1, flat = 0.06 },
@@ -343,6 +344,19 @@ CFG.specials = {
                                 { fx = "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma", scale = 3, at = "open",
                                   rim = 4, rim_r = 0.6 },
                                 { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 8, at = "burst" } } },
+                 -- ((2026-11-22) her blinks through small portals: one where she vanishes, one where she comes back,
+                 -- facing you; size_m across, open_s, hold_s, close_s; parts as portal's)
+                 blink_portal = { enabled = true, size_m = 110, open_s = 0.25, hold_s = 0.8, close_s = 0.9, spin_dps = 120,
+                                  parts = {
+                                      { mesh = "/Engine/BasicShapes/Sphere", mat = "/Engine/BasicShapes/BasicShapeMaterial",
+                                        params = { Color = { 0, 0, 0, 1 } }, size = 0.8, flat = 0.32 },
+                                      { mesh = "/Engine/BasicShapes/Sphere", mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow",
+                                        params = { Color = { 0.45, 0.02, 1.0, 1 }, EmissiveIntensity = 3, Opacity = 0.12, EmissiveFresnelFalloff = 6 },
+                                        size = 0.95, flat = 0.22 },
+                                      { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07",
+                                        mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.35, 0.02, 0.8, 1 } },
+                                        size = 1.0, spin = 1 },
+                                      { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 2, at = "burst" } } },
                  flare = { enabled = true, life_s = 7, intensity_x = 6,
                            path = "/Game/Mods/SurvivalMode/Valka/Flare/MI_SV_ValkaFlare_",
                            elements = { { "Glare", 1.6 }, { "Ring", 1.2 }, { "Shine", 0.9 }, { "Bokeh", 0.4 } },

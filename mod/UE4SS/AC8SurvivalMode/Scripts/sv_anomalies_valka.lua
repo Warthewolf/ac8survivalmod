@@ -714,6 +714,7 @@ function SPC.valkaTick(now, s)
     local c, t, V = CFG.specials.valka, CFG.hud.text, SPC.V
     V.flareTick(c, s, now)
     if s.portal then V.portalTick(c, s, now) end         -- ((2026-11-22) her portal: open, hold, close)
+    if s.bportals then V.blinkPortalsTick(c, s, now) end  -- (and her blinks' small ones)
     -- ((0.73.80) no walk for her rounds after a shot any more (every tick for 3-3.5 s, none ever found in the 31-round
     -- run): their life, single rounds and the opener's no-damage are on the round's class default, SPC.V.roundDefaults)
     if s.alertOffAt and now >= s.alertOffAt then        -- the railgun alert off again after a shot
@@ -903,6 +904,7 @@ function SPC.valkaTick(now, s)
         V.event("RE_SV_ValkaAlertOff")
         V.flareStop(s)
         V.portalStop(s)
+        V.blinkPortalsStop(s)
         V.sndStop(s)
         ANOM.cleanFx(now, true)
         -- ((0.73.77) D4 / the white square left on the minimap: her railguns' forced minimap display off, and what's
@@ -979,6 +981,7 @@ function SPC.valkaTick(now, s)
         if ev then
             s.lastDeg, s.blinks = deg, (s.blinks or 0) + 1
             V.event(ev)
+            if to and deg then pcall(V.blinkPortal, c, s, to, (deg + 180) % 360, now) end   -- (she comes out facing you)
             if to and fxAt({ c.smoke }, to, c.smoke_scale, c.smoke_s) == 0 and not s.smokeSaid then
                 s.smokeSaid = true; log("special: VALKA's smoke " .. c.smoke .. " didn't spawn")
             end
@@ -1002,6 +1005,7 @@ function SPC.valkaTick(now, s)
             log(string.format("special: %s chases you: %.1f km away for %.0f s, onto your six (chase %d)", c.name, s.dist,
                 c.chase_s or 4, s.chases))
             if at then fxAt({ c.smoke }, at, c.smoke_scale, c.smoke_s) end
+            if at and you then pcall(V.blinkPortal, c, s, at, math.deg(math.atan(you.Y - at.Y, you.X - at.X)), now) end
             setGone(o, true); V.partsGone(c, s, o, true, true)
             s.vanished, s.blinkWhy, s.blinkUntil = true, "chase", now + 5
             return
@@ -1010,6 +1014,7 @@ function SPC.valkaTick(now, s)
         s.blinkUntil, s.blinkCool = nil, now + c.blink_cooldown_s
     elseif s.blinkUntil and now >= s.nextBlink and not s.chargeAt then   -- gone in a puff (back next tick)
         if at then fxAt({ c.smoke }, at, c.smoke_scale, c.smoke_s) end
+        if at and you then pcall(V.blinkPortal, c, s, at, math.deg(math.atan(you.Y - at.Y, you.X - at.X)), now) end
         setGone(o, true); V.partsGone(c, s, o, true, true)
         s.vanished = true
         return
@@ -1436,8 +1441,9 @@ local function portalMesh(pc, P, part, a, smc, kml)
     return e
 end
 -- the portal at `at` (cm) facing `yaw`; true if it came up
-function SPC.V.portalOpen(c, s, at, yaw, now)
-    local pc = c.portal
+-- (pc: another portal's settings, her blinks' small ones: blink_portal; quiet: not logged)
+function SPC.V.portalOpen(c, s, at, yaw, now, pc, quiet)
+    pc = pc or c.portal
     SPC.V.portalStop(s)
     if not (type(pc) == "table" and pc.enabled and at) then return false end
     local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
@@ -1451,7 +1457,7 @@ function SPC.V.portalOpen(c, s, at, yaw, now)
     end)
     if not (okA and valid(a)) then log("special: VALKA's portal: no actor (" .. tostring(a) .. ")"); return false end
     local P = { actor = a, at = { X = at.X, Y = at.Y, Z = at.Z }, yaw = yaw or 0, from = now, phase = "open", meshes = {},
-                fired = {}, size = (tonumber(pc.size_m) or 250) * 100 }
+                fired = {}, size = (tonumber(pc.size_m) or 250) * 100, pc = pc }
     local said = {}
     for _, part in ipairs(pc.parts or {}) do
         if part.mesh then
@@ -1464,14 +1470,15 @@ function SPC.V.portalOpen(c, s, at, yaw, now)
     s.portal = P
     SPC.V.PORTAL_STATS.opened = SPC.V.PORTAL_STATS.opened + 1
     SPC.V.PORTAL_STATS.parts = SPC.V.PORTAL_STATS.parts + #P.meshes
-    log(string.format("special: VALKA's portal opens at (%.1f, %.1f) km, %.1f km up, facing %.0f, %.0f m across: %d mesh parts (%s)",
-        at.X / 100000, at.Y / 100000, at.Z / 100000, P.yaw, P.size / 100, #P.meshes, table.concat(said, ", ")))
+    if not quiet then log(string.format("special: VALKA's portal opens at (%.1f, %.1f) km, %.1f km up, facing %.0f, %.0f m across: %d mesh parts (%s)",
+        at.X / 100000, at.Y / 100000, at.Z / 100000, P.yaw, P.size / 100, #P.meshes, table.concat(said, ", "))) end
     SPC.V.portalFx(c, s, "open")
     return true
 end
 -- its Niagara parts for moment `when` ("open", "burst", "close"), once each; how many came up
 function SPC.V.portalFx(c, s, when)
-    local P, pc = s.portal, c.portal
+    local P = s.portal
+    local pc = P and P.pc or c.portal
     if not (P and pc) or P.fired[when] then return 0 end
     P.fired[when] = true
     local _, r = portalFrame(P.yaw)
@@ -1491,12 +1498,13 @@ function SPC.V.portalFx(c, s, when)
         end
     end
     SPC.V.PORTAL_STATS.fx = SPC.V.PORTAL_STATS.fx + n
-    log(string.format("special: VALKA's portal: %d effect(s) at its %s", n, when))
+    if pc == c.portal then log(string.format("special: VALKA's portal: %d effect(s) at its %s", n, when)) end
     return n
 end
 -- every tick: open (grow), hold, close (shrink), gone; the rings turning
 function SPC.V.portalTick(c, s, now)
-    local P, pc = s.portal, c.portal
+    local P = s.portal
+    local pc = P and P.pc or c.portal
     if not P then return end
     if not liveObj(P.actor) then s.portal = nil; return end
     local open, close = math.max(0.1, tonumber(pc.open_s) or 3), math.max(0.1, tonumber(pc.close_s) or 2)
@@ -1511,7 +1519,11 @@ function SPC.V.portalTick(c, s, now)
     if P.phase == "close" then
         local x = math.min(1, (now - (P.closeFrom or now)) / close)
         g = (1 - x) ^ 2
-        if x >= 1 then SPC.V.portalStop(s); log("special: VALKA's portal closed"); return end
+        if x >= 1 then
+            SPC.V.portalStop(s)
+            if pc == c.portal then log("special: VALKA's portal closed") end
+            return
+        end
     end
     local dt = math.min(0.5, now - (P.lastTick or now))
     P.lastTick = now
@@ -1534,7 +1546,35 @@ function SPC.V.portalThrough(c, s, now)
     local P = s.portal
     if not P then return end
     SPC.V.portalFx(c, s, "burst")
-    P.closeAt = now + (tonumber(c.portal.hold_s) or 2)
+    P.closeAt = now + (tonumber(P.pc and P.pc.hold_s or c.portal.hold_s) or 2)
+end
+-- ((2026-11-22) her blinks through small portals, CFG.specials.valka.blink_portal: one where she vanishes, one where she
+-- comes back, each opening, holding hold_s and closing on its own) one at `at` facing `yaw`
+function SPC.V.blinkPortal(c, s, at, yaw, now)
+    local bp = c.blink_portal
+    if not (type(bp) == "table" and bp.enabled and at) then return false end
+    s.bportals = s.bportals or {}
+    if #s.bportals >= 6 then return false end            -- (never a pile of them)
+    local h = {}
+    local ok, up = pcall(SPC.V.portalOpen, c, h, at, yaw, now, bp, true)
+    if not (ok and up and h.portal) then return false end
+    h.portal.closeAt = now + (tonumber(bp.open_s) or 0.3) + (tonumber(bp.hold_s) or 0.6)
+    s.bportals[#s.bportals + 1] = h
+    SPC.V.portalFx(c, h, "burst")
+    return true
+end
+function SPC.V.blinkPortalsTick(c, s, now)
+    if not s.bportals then return end
+    local keep = {}
+    for _, h in ipairs(s.bportals) do
+        pcall(SPC.V.portalTick, c, h, now)
+        if h.portal then keep[#keep + 1] = h end
+    end
+    s.bportals = #keep > 0 and keep or nil
+end
+function SPC.V.blinkPortalsStop(s)
+    for _, h in ipairs(s and s.bportals or {}) do pcall(SPC.V.portalStop, h) end
+    if s then s.bportals = nil end
 end
 -- where she comes out of it: exit_back_m behind its face, so she flies out through it
 function SPC.V.portalExit(c, at, yaw)
