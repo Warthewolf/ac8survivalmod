@@ -4093,3 +4093,13 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
 - 0.75.8: the 28 lasers (solglaser: they fire, 3.8 a hit on the test plane). 0.75.9: their beams unhidden (untested).
 - Open: the beams (the user saw none), SOLG -Gould-'s black skin (prepare.py SKINS, not cooked yet) and its phase
   rules, co-op (the SOLG drawn on joiners: not built).
+- 0.75.10-0.75.13: SOLG -Gould- (DATA92 528-530): its black skin, its phase rules without its aircraft (the user: "SOLG
+  pieces only", "Follow Gould exactly"), its lasers at 1.2 km for 10 s then 5 s, a 6-minute fall; the lasers' beams shown
+  (their Phalanx's meshes hidden alone); the TLS's shooting sound on the SOLG's, the ZFA-44s' and the TANACORN's lasers
+  (AC7's LaserInterceptor fired silent; the ZFA-44's backup laser had the Nightmare UAV's PulseLaser pair). Autotests on
+  0.75.11-0.75.13: solg2 16/17 (a test slip), solglaser 13/13 (20 shots, 3.8 a hit on the test plane), valkasolg 30/30,
+  zfasound 9/10 (a test slip). Dev stages before 0.75.13 were packed without ZFA=1 (no ZFA-44 / Laser7 containers).
+- 0.75.13 INSTALLED 2026-11-22 (the user: "build a test version and install it on my PC"): stage_dev_valka_0.75.13
+  (VALKA=1 ZFA=1) into her game, which had no Survival and no Mod Loader in it (moved out 2026-11-21): the Mod Loader's
+  dlls/main.dll and enabled.txt put back from .env's AUTOTEST_LOADER, ProjectRVNG untouched; 116 files verified; backup
+  note build/backup/install_before_0.75.13. Test key for her: Ctrl+8 (VALKA's round next; the SOLG at her 20 %).
