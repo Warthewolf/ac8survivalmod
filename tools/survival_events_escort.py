@@ -419,7 +419,8 @@ ESCORT_DECOY_NPC_ROWS = (
        (ZFA_DRONE_NPC, ZFA_DRONE_NPC_SOURCE, ZFA_DRONE_MODEL, True, False, ZFA_NAME_KEY, True),
        (DECOY_UAV_NPC, DECOY_UAV_NPC_SOURCE, None, False, True, None, False)]
     # ((2026-11-22) VALKA's SOLG's targets: the radar tower's row, unarmed, each type's name key (its model: build_survival)
-    + [(SOLG_NPC[t], SOLG_NPC_SOURCE, None, False, True, SOLG_SUB_KEYS[t], False) for t, _ in SOLG_TARGETS])
+    + [(SOLG_NPC[t], SOLG_LSR_NPC_SOURCE if t in SOLG_LASER_TYPES else SOLG_NPC_SOURCE, None, False,
+        t not in SOLG_LASER_TYPES, SOLG_SUB_KEYS[t], False) for t, _ in SOLG_TARGETS])
 INT_FLAGS += ([a['leg'] for a in esc_aircraft()] + [a['slot'] for a in esc_aircraft()] + ['SV_EscortSlots', DECOY_HIT_FLAG])
 INT_FLAGS += [ZFA_TLS_FLAG]                    # (the ZFA-44s' laser's interceptions: build_escort)
 

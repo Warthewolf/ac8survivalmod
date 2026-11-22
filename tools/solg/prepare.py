@@ -374,6 +374,22 @@ def main():
         len(kew), 'DATA01 %d' % CUT, min(np.hypot(e['aci_pos_m'][0], e['aci_pos_m'][1]) for e in layout['kew']),
         max(np.hypot(e['aci_pos_m'][0], e['aci_pos_m'][1]) for e in layout['kew']),
         min(e['aci_pos_m'][2] for e in layout['kew']), max(e['aci_pos_m'][2] for e in layout['kew'])))
+    # ((2026-11-22) its laser turrets, AC:I's (tools/solg/lasers.py, docs/re/SOLG.md section 11): f_111t x28, 16 on the
+    # arms (4 each, on ring 1) and 12 round the barrel (the body); LSR_01..28, no wreck mesh in AC:I (a broken one hidden)
+    import lasers
+    lparts = meshes_of(d, ch, 'f_111t', 'l1')
+    cache[('f_111t', 'l1')] = lparts
+    texids.update(p_[4] for p_ in lparts)
+    tl = lasers.turrets(layout, lasers.graph(DPL, fhm_tree, flat))
+    tl.sort(key=lambda t: (t['set'], t['arm'] or 0, -t['pos'][2]))
+    layout['lasers'] = []
+    for i, t in enumerate(tl):
+        key = 'LSR_%02d' % (i + 1)
+        bones.append((key, TURN @ t['R'] @ TURN.T, turned(t['pos']))); pieces.append((len(bones) - 1, lparts))
+        layout['lasers'].append({'bone': key, 'set': t['set'], 'arm': 'SG01_%02d' % t['arm'] if t['arm'] else None,
+                                 'aci_pos_m': np.round(t['pos'], 2).tolist()})
+    print('lasers: %d f_111t turrets (%d on the arms, %d on the barrel)' % (len(tl), sum(1 for t in tl if t['set'] == 'A'),
+          sum(1 for t in tl if t['set'] == 'B')))
     # ((2026-11-22) its animation, AC:I's own (tools/solg/kfm1.py, docs/re/SOLG.md section 10): the body's `auta`
     # turns ring auta1 (RING_1) and auta2 (RING_2) the opposite ways about the barrel (AC:I z = glTF x), 0.3 degrees a
     # frame each (one turn in 1,200 frames, 40 s at 30 fps). The pieces on a ring are that ring's bone's children; the
@@ -386,6 +402,8 @@ def main():
         owner[key] = owner[key + '_W'] = ringof.get(mt['parent'])
     for e in layout['kew']:
         owner[e['bone']] = owner[e['bone'] + '_W'] = e['ring']
+    for e in layout['lasers']:
+        owner[e['bone']] = 'RING_1' if e['set'] == 'A' else None
     bn = [b[0] for b in bones]
     parents = [-1] + [bn.index(owner[b]) if owner.get(b) else 0 for b in bn[1:]]
     spin = {'name': 'A_SV_SOLG_Spin', 'length_s': 40.0, 'keys': 160,
@@ -407,6 +425,8 @@ def main():
     mine = ['SG07_%02d' % m['index'] for m in layout['mounts'] if m['model'] == 's_sg07' and on_arm4(m['aci_pos_m'])]
     mine += [e['bone'] for e in layout['kew'] if on_arm4(e['aci_pos_m'])]
     assert len(mine) == 17, ('arm 4 carries', mine)
+    guns = [e['bone'] for e in layout['lasers'] if e['arm'] == 'SG01_04']
+    assert len(guns) == 4, ('arm 4 lasers', guns)
     abones = [('ARM', I3, np.zeros(3)), ('ARM_W', I3, np.zeros(3))]
     apieces = [(0, cache[('s_sg01', 'l1')]), (1, cache[('s_sg01', 'd1')])]
     for nm_ in mine:
@@ -414,9 +434,13 @@ def main():
         model_ = 's_sg06' if nm_.startswith('KEW') else 's_sg07'
         abones.append(('P_' + nm_, Ra.T @ R_, Ra.T @ (p_ - pa)))
         apieces.append((len(abones) - 1, cache[(model_, 'd1')]))
+    for nm_ in guns:                                       # (its lasers: as they are, hidden on the falling arm if broken)
+        R_, p_ = bones[bi[nm_]][1], bones[bi[nm_]][2]
+        abones.append(('P_' + nm_, Ra.T @ R_, Ra.T @ (p_ - pa)))
+        apieces.append((len(abones) - 1, cache[('f_111t', 'l1')]))
     write_skinned('SK_SV_SOLG_ARM', apieces, abones)
     layout['panels'].append('SK_SV_SOLG_ARM')
-    layout['arm'] = {'from': 'SG01_04', 'pieces': mine}
+    layout['arm'] = {'from': 'SG01_04', 'pieces': mine, 'lasers': guns}
     print('SK_SV_SOLG_ARM: the arm and the wrecks of its %d pieces (%s)' % (len(mine), ', '.join(mine)))
     layout['parents'] = {b: (bn[parents[k]] if parents[k] >= 0 else None) for k, b in enumerate(bn)}
     layout['skeletal'] = {'mesh': 'SK_SV_SOLG', 'bones': [b[0] for b in bones], 'primitives': nprim, 'vertices': nvert}

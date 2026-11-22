@@ -395,7 +395,20 @@ VALKA_SOURCE_UNIT = 'EI_Unit_01_Air0'          # Mission 26's x40a ("Nightmare")
 SOLG_TARGET_ROW = 'sv_solg_target'
 SOLG_TARGET_SOURCE_ROW = 'RadarTower02_common'                 # (DT_NPC_Mission004: NpcId BPD_RadarTower02_01)
 SOLG_TARGET_SOURCE_UNIT = 'AA_Unit_01_ground0'                 # (WD_Mission004_global: one BPD radar tower)
-SOLG_TARGETS = [('SAW', 18), ('MAG', 32), ('KEW', 36), ('CORE', 4), ('SP', 1)]
+SOLG_TARGETS = [('SAW', 18), ('MAG', 32), ('KEW', 36), ('CORE', 4), ('SP', 1),
+                # ((2026-11-22) its laser turrets, AC:I's f_111t (tools/solg/lasers.py): 16 on the arms (LSRA), 12 round
+                # the barrel (LSRB); not on the radar tower but on AC8's land Phalanx, firing our own laser (SOLG_TLS_*)
+                ('LSRA', 16), ('LSRB', 12)]
+SOLG_LASER_TYPES = ('LSRA', 'LSRB')
+SOLG_TLS_WEAPON_SOURCE = '/Game/Blueprints/Weapons/Laser/Tls/UAVN/BP_SwingTLS_ForPlane'   # AC8's anti-aircraft sweep
+SOLG_TLS_WEAPON = '/Game/Mods/SurvivalMode/Weapons/BP_SV_SolgTLS'                         # ours: 5 a hit (the user)
+SOLG_TLS_DAMAGE = 5.0
+SOLG_TLS_FCS_PKG = '/Game/Mods/SurvivalMode/Weapons/BP_FCS_SV_SolgTLS'
+SOLG_TLS_FCS_TABLE = '/Game/Mods/SurvivalMode/Data/DT_SV_SolgFCS'
+SOLG_TLS_FCS_ROW = 'SV_FCS_SolgTLS'
+SOLG_LSR_NPC_SOURCE = 'GR033_ciws_01'                  # (AC8's land Phalanx, enemy: DT_NPC, its model GR033_ciws)
+SOLG_LSR_MODEL_SOURCE = 'GR033_ciws'
+SOLG_LSR_MODEL_SV = 'SV_Model_SOLG_LSR'
 SOLG_UNITS = {t: 'SV_Unit_SOLG_' + t for t, _ in SOLG_TARGETS}
 SOLG_OBJS = {t: 'SV_Obj_SOLG_' + t for t, _ in SOLG_TARGETS}
 # their boxes (the run of 18:16: "RADAR TOWER" on every one): "SOLG" over each type's AC:I name. Line 1 the model row's

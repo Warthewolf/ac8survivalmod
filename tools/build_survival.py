@@ -750,7 +750,10 @@ def build_npc_rows():
             set_prop(row[2], model_idx, 'ModelId', ('name', zfa_twin[0], 0))
             set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(survival_events.ZFA_SUB_KEY))
         if npc in survival_events.SOLG_NPC.values():     # ((2026-11-22) "SOLG" on its box's first line: its own model row
-            set_prop(row[2], model_idx, 'ModelId', ('name', survival_events.SOLG_MODEL_SV, 0))
+            laser = npc in [survival_events.SOLG_NPC[t] for t in survival_events.SOLG_LASER_TYPES]
+            set_prop(row[2], model_idx, 'ModelId', ('name', survival_events.SOLG_LSR_MODEL_SV if laser else survival_events.SOLG_MODEL_SV, 0))
+            if laser:                                    # (its gun's slot: our laser's arm, survival_events.SOLG_TLS_*)
+                set_prop(row[2], sidx('NpcFCSId0'), 'NpcFCSId0', ('name', survival_events.SOLG_TLS_FCS_ROW, 0))
         out.append(((npc, 0), row))
         if zfa_twin:                            # (2026-11-07) ... and its twin with the anti-missile laser in the gun's slot
             slot = f'NpcFCSId{survival_events.ZFA_TLS_SLOT}'   # ((0.74.12) the user: "swap the guns out for the Laser Interceptor")
@@ -1095,7 +1098,7 @@ def check_escort_decoy_build():
         assert not unarmed or not any(k.startswith('NpcFCSId') and v for k, v in r.items()), row
         assert r['LuaSetId'] is None or plain(r['LuaSetId']) != 'NLID_0400_CP', row   # (the SOLG's radar tower rows: none)
         if row in se.SOLG_NPC.values():
-            assert plain(r['ModelId']) == se.SOLG_MODEL_SV, (row, r['ModelId'])
+            assert plain(r['ModelId']) in (se.SOLG_MODEL_SV, se.SOLG_LSR_MODEL_SV), (row, r['ModelId'])
     # ((2026-11-07) "ZFA-44" on its box, never "SU-47": both host rows on SV_Model_Zfa, named ZFA_NAME_KEY there, and
     # ZFA_SUB_KEY under it)
     zm = table(DATA + 'DT_SV_ModelRows', 'LiveModelDataTable')
@@ -1704,13 +1707,15 @@ def build_lua_scripts():
 # ---------------------------------------------------------------- the parts (this file's docstring)
 # Each imports every name above (from build_survival import *) and comes back here whole. A part already loaded on its
 # own would come back empty: import build_survival, never a part.
-for _part in ('build_survival_rows', 'build_survival_units', 'build_survival_world', 'build_survival_fleet'):
+for _part in ('build_survival_rows', 'build_survival_units', 'build_survival_world', 'build_survival_fleet',
+              'build_survival_solg'):
     assert _part not in sys.modules, f'import build_survival (it loads its parts), not {_part} on its own'
 del _part
 from build_survival_rows import *    # noqa: E402,F401,F403  the radio table, the mission / menu rows, the model rows
 from build_survival_units import *   # noqa: E402,F401,F403  the level, MC, phases; unit / path helpers; older specials
 from build_survival_world import *   # noqa: E402,F401,F403  the newer rounds' units; the world data, flags and events
 from build_survival_fleet import *   # noqa: E402,F401,F403  THE INVINCIBLE FLEET's units, lanes and rows (WP7)
+from build_survival_solg import *    # noqa: E402,F401,F403  VALKA's SOLG's lasers: its weapon, arm and row
 
 
 if __name__ == '__main__':
@@ -1721,6 +1726,7 @@ if __name__ == '__main__':
     build_shop_rows()
     build_rows()
     build_zfa_laser()                    # (2026-11-07: the ZFA-44s' anti-missile laser's arm and its fire-control row)
+    build_solg_laser()                   # (2026-11-22: VALKA's SOLG's lasers: their own weapon (5 a hit), arm and row)
     build_tani_rail()                    # (2026-11-12: THE TANACORN's railguns' arm and its fire-control row)
     check_no_certain_kill()              # (0.73.77, G1: after the NPC tables it reads are saved)
     try:
@@ -1740,6 +1746,7 @@ if __name__ == '__main__':
     check_fishing_build()                # (2026-11-06: GONE FISHIN' and THE FESTIVAL read back from the saved packages)
     check_escort_decoy_build()           # (2026-11-06: THE ESCORT, its cargo ships and THE DECOY read back the same way)
     check_zfa_laser_build()              # (2026-11-07: the ZFA-44s' laser: its arm, rows and interception count)
+    check_solg_laser_build()             # (2026-11-22: VALKA's SOLG's lasers)
     check_tanicorn_build()               # (2026-11-11: THE TANACORN's live parts, and the TANI=1 gate on the world data)
     check_tani_rail_build()              # (2026-11-12: her railguns' arm, its row, the rail parts' rows and Lua's names)
     check_fleet_build()                  # (2026-11-12: THE INVINCIBLE FLEET's ships, lanes, records and rows)

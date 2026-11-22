@@ -42,15 +42,26 @@ SOLG = { C = {
         { key = "KEW", unit = "SV_Unit_SOLG_KEW", phase = 2, health = 1000, pay = 50, bones = { "KEW_%02d", 36 } },
         { key = "CORE", unit = "SV_Unit_SOLG_CORE", phase = 3, health = 1500, pay = 200, bones = { "SG03_%02d", 4 } },
         { key = "SP", unit = "SV_Unit_SOLG_SP", phase = 4, health = 2500, pay = 800, bones = { "CORE_%02d", 1 } },
+        -- ((2026-11-22) its laser turrets (AC:I's f_111t, CONT_LASER UNIT, 850: tools/solg/lasers.py), on AC8's land
+        -- Phalanx firing our own laser (BP_SV_SolgTLS, 5 a hit: tools/build_survival_solg.py): up with their phase
+        -- (the arms' with the KEW shells, the barrel's with the core units, as AC:I's TLS), shot down for pay, never
+        -- needed for the next phase (`optional`); an arm's go down with it
+        { key = "LSRA", unit = "SV_Unit_SOLG_LSRA", phase = 2, health = 850, pay = 60, bones = { "LSR_%02d", 16 },
+          optional = true, laser = true },
+        { key = "LSRB", unit = "SV_Unit_SOLG_LSRB", phase = 3, health = 850, pay = 60, bones = { "LSR_%02d", 12, 17 },
+          optional = true, laser = true },
     },
+    fcs_table = "/Game/Mods/SurvivalMode/Data/DT_SV_SolgFCS.DT_SV_SolgFCS", fcs_row = "SV_FCS_SolgTLS",
+    laser_model_row = "SV_Model_SOLG_LSR",
     -- their boxes: "SOLG" over each type's AC:I name (texts by key: tools/survival_events_specials.py SOLG_*)
     model_row = "SV_Model_SOLG", name_key = "SV_SOLG_Name", name = "SOLG",
-    names = { SAW = "SOLAR ARRAY WING", MAG = "MAG PANEL", KEW = "KEW SHELL", CORE = "CORE UNIT", SP = "SP SHELL" },
+    names = { SAW = "SOLAR ARRAY WING", MAG = "MAG PANEL", KEW = "KEW SHELL", CORE = "CORE UNIT", SP = "SP SHELL",
+              LSRA = "LASER UNIT", LSRB = "LASER UNIT" },
     health_x = 0.25,                        -- (AC:I's health is a 4-player raid's: a first guess, every hit logged)
     floor = 1,                              -- a live target's HP floor: it breaks there
     hold_s = 0.0,                           -- targets put back on their bones every tick (0) or this often
     fx = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" },
-    fx_scale = { SAW = 3, MAG = 2, KEW = 3, CORE = 5, SP = 8, SOLG = 12, ARM = 6 },
+    fx_scale = { SAW = 3, MAG = 2, KEW = 3, CORE = 5, SP = 8, SOLG = 12, ARM = 6, LSRA = 2, LSRB = 2 },
 } }
 do
 local S = nil                                             -- the SOLG up: { actor, body, move, panels = {...} }
@@ -254,6 +265,7 @@ function SOLG.breakArm(armBone, pieces)
     pcall(function() a:K2_SetActorLocationAndRotation(L, R, false, {}, true) end)
     paint(c)
     pcall(function() c:HideBoneByName(FName("ARM"), 0) end)      -- (its wreck falls, its pieces' wrecks on it)
+    for k = 13, 16 do pcall(function() c:HideBoneByName(FName(string.format("P_LSR_%02d", k)), 0) end) end   -- (its lasers: down)
     local B = SOLG.where() or L
     local f = SOLG.C.fall
     local ox, oy, oz = L.X - B.X, L.Y - B.Y, L.Z - B.Z
@@ -312,10 +324,26 @@ function SOLG.rowsIn(npc, mine)
     local mt, mr = loadObject(ACE.model_table), loadObject(ACE.model_rows)
     if not (mt and mr and npc and mine) then return "the tables didn't load" end
     for _, t in ipairs({ mt, mr }) do pin(t, nameOf(t)) end
-    local _, have = dtCall(mt, "FindRow", C.model_row)
-    if have == nil then
-        local _, r = dtCall(mr, "FindRow", C.model_row)
-        if r ~= nil then dtCall(mt, "AddRow", C.model_row, r); _, have = dtCall(mt, "FindRow", C.model_row) end
+    local have = true
+    for _, m in ipairs({ C.model_row, C.laser_model_row }) do
+        local _, h = dtCall(mt, "FindRow", m)
+        if h == nil then
+            local _, r = dtCall(mr, "FindRow", m)
+            if r ~= nil then dtCall(mt, "AddRow", m, r); _, h = dtCall(mt, "FindRow", m) end
+        end
+        if h == nil then have = nil end
+    end
+    -- the lasers' fire-control row (passed on whole: its soft class never read, hard rule 29)
+    local fcsT, mineF = loadObject(FCS_TABLE), loadObject(C.fcs_table)
+    local fcsIn = false
+    if fcsT and mineF then
+        for _, t in ipairs({ fcsT, mineF }) do pin(t, nameOf(t)) end
+        local _, f = dtCall(fcsT, "FindRow", C.fcs_row)
+        if f == nil then
+            local _, r = dtCall(mineF, "FindRow", C.fcs_row)
+            if r ~= nil then dtCall(fcsT, "AddRow", C.fcs_row, r); _, f = dtCall(fcsT, "FindRow", C.fcs_row) end
+        end
+        fcsIn = f ~= nil
     end
     local nIn = 0
     for _, t in ipairs(C.targets) do
@@ -329,7 +357,8 @@ function SOLG.rowsIn(npc, mine)
         if type(SV_SetText) == "function" then SV_SetText("SV_SOLG_Sub_" .. t.key, C.names[t.key] or t.key) end
     end
     if type(SV_SetText) == "function" then SV_SetText(C.name_key, C.name) end
-    return string.format("model row %s, %d of %d target rows in", have ~= nil and "in" or "NOT in", nIn, #C.targets)
+    return string.format("model rows %s, %d of %d target rows in, the lasers' fire control %s %s", have ~= nil and "in" or "NOT in",
+        nIn, #C.targets, C.fcs_row, fcsIn and "in DT_NPC_FCS" or "NOT in (they won't fire)")
 end
 local FLAGS_ON = { bShowHUDBox = true, bIsNotLockonTarget = false, bIsNotFCSTargets = false, bIsInvincible = false }
 local FLAGS_OFF = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
@@ -351,15 +380,16 @@ local function hideOwn(o)                                 -- the radar tower's o
 end
 local function bonesOf(t)
     local out, b = {}, t.bones
-    for i = 1, #b, 2 do for k = 1, b[i + 1] do out[#out + 1] = string.format(b[i], k) end end
+    local i = 1
+    while i <= #b do
+        local from = type(b[i + 2]) == "number" and b[i + 2] or 1   -- ({ fmt, count[, first] } ...)
+        for k = from, from + b[i + 1] - 1 do out[#out + 1] = string.format(b[i], k) end
+        i = i + (type(b[i + 2]) == "number" and 3 or 2)
+    end
     return out
 end
--- every target type's unit up, its objects on their bones; the first phase's lockable
-function SOLG.targetsUp()
-    if not (S and liveObj(S.body)) then return 0 end
-    S.targets, S.phase = {}, 1
-    local total, said = 0, {}
-    for _, t in ipairs(SOLG.C.targets) do
+-- one target type's unit up, its objects on their bones: how many, its note
+local function typeUp(t, on)
         local bones = bonesOf(t)
         CAPTURE = {}
         spawningUnit = t.unit
@@ -376,23 +406,19 @@ function SOLG.targetsUp()
                 pcall(function() o.MaxHealth = hp; o.HealthInternal = math.floor(hp * 10 + 0.5) end)
                 pcall(function() o.MinHealth = n(SOLG.C.floor, 1) end)
                 hideOwn(o)
-                flags(o, t.phase == 1 and FLAGS_ON or FLAGS_OFF)
+                flags(o, on and FLAGS_ON or FLAGS_OFF)
                 S.targets[#S.targets + 1] = { o = o, a = addrOf(o), key = t.key, bone = bone, t = t, hp = hp, attached = att, live = true }
                 placed = placed + 1
             end
         end
-        total = total + placed
-        said[#said + 1] = string.format("%s %d of %d (%s)", t.key, placed, #bones, r > 0 and (r .. " up") or (SV_ERR and SV_ERR[r] or tostring(r)))
-    end
-    local att = 0
-    for _, e in ipairs(S.targets) do if e.attached then att = att + 1 end end
-    -- each MAG panel's and KEW shell's arm: the nearest (they sit along it)
-    S.armOf = {}
+        return placed, string.format("%s %d of %d (%s)", t.key, placed, #bones, r > 0 and (r .. " up") or (SV_ERR and SV_ERR[r] or tostring(r)))
+end
+-- each arm-borne target's arm: the nearest arm bone (they sit along it); lasers on .onArm (they don't hold it up)
+local function armsOf(list)
     local armAt = {}
     for _, ab in ipairs(SOLG.C.arms or {}) do armAt[ab] = boneAt(S.body, ab) end
-    local perArm = {}
-    for _, e in ipairs(S.targets) do
-        if (SOLG.C.arm_keys or {})[e.key] then
+    for _, e in ipairs(list) do
+        if (SOLG.C.arm_keys or {})[e.key] or e.t.laser then
             local L, best, bd = boneAt(S.body, e.bone), nil, nil
             for ab, A in pairs(armAt) do
                 if L and A then
@@ -400,17 +426,52 @@ function SOLG.targetsUp()
                     if not bd or d < bd then best, bd = ab, d end
                 end
             end
-            if best then e.arm = best; perArm[best] = (perArm[best] or 0) + 1 end
+            if best and bd < (400 * 100) ^ 2 then                  -- (the barrel's lasers: on no arm)
+                if e.t.laser then e.onArm = best else e.arm = best end
+            end
         end
     end
+end
+-- every target type's unit up (the lasers' with their phase), its objects on their bones; the first phase's lockable
+function SOLG.targetsUp()
+    if not (S and liveObj(S.body)) then return 0 end
+    S.targets, S.phase = {}, 1
+    local total, said = 0, {}
+    for _, t in ipairs(SOLG.C.targets) do
+        if not t.laser then
+            local placed, note = typeUp(t, t.phase == 1)
+            total = total + placed
+            said[#said + 1] = note
+        end
+    end
+    local att = 0
+    for _, e in ipairs(S.targets) do if e.attached then att = att + 1 end end
+    armsOf(S.targets)
+    local perArm = {}
+    for _, e in ipairs(S.targets) do if e.arm then perArm[e.arm] = (perArm[e.arm] or 0) + 1 end end
     local pa = {}
     for _, ab in ipairs(SOLG.C.arms or {}) do pa[#pa + 1] = ab .. " " .. (perArm[ab] or 0) end
     sl(string.format("targets up: %s; %d attached to their bones, %d held by hand; phase 1; on the arms: %s", table.concat(said, ", "),
         att, total - att, table.concat(pa, ", ")))
     return total
 end
+local breakTarget                                         -- (below; phaseOn's too)
 local function phaseOn(ph)
     S.phase = ph
+    for _, t in ipairs(SOLG.C.targets) do                 -- (its lasers up now: they fire from now on)
+        if t.laser and t.phase == ph then
+            local first = #S.targets + 1
+            local placed, note = typeUp(t, true)
+            local new = {}
+            for i = first, #S.targets do new[#new + 1] = S.targets[i] end
+            armsOf(new)
+            local onArm = 0
+            for _, e in ipairs(new) do
+                if e.onArm and S.broken[e.onArm] then breakTarget(e, "its arm's gone") elseif e.onArm then onArm = onArm + 1 end
+            end
+            sl(string.format("phase %d: its lasers up: %s, %d on the arms", ph, note, onArm))
+        end
+    end
     local nOn = 0
     for _, e in ipairs(S.targets) do
         if e.live and e.t.phase == ph and liveObj(e.o) then flags(e.o, FLAGS_ON); nOn = nOn + 1 end
@@ -418,11 +479,12 @@ local function phaseOn(ph)
     sl(string.format("phase %d: %d targets lockable", ph, nOn))
     if SOLG.onPhase then pcall(SOLG.onPhase, ph, nOn) end
 end
-local function breakTarget(e, why)
+breakTarget = function(e, why)
     e.live = false
     flags(e.o, FLAGS_OFF)
     local L = boneAt(S.body, e.bone)
     if e.key == "SAW" then SOLG.breakPanel(e.bone)
+    elseif e.t.laser then pcall(function() S.body:HideBoneByName(FName(e.bone), 0) end)   -- (AC:I has no wreck for it)
     else
         pcall(function() S.body:HideBoneByName(FName(e.bone), 0) end)
         pcall(function() S.body:UnHideBoneByName(FName(e.bone .. "_W")) end)
@@ -432,22 +494,31 @@ local function breakTarget(e, why)
     pcall(function() e.o:K2_SetActorLocation({ X = 0, Y = 0, Z = -5000000 }, false, {}, true) end)   -- (out of the way)
     S.broken = S.broken or {}
     S.down = (S.down or 0) + 1
-    if SOLG.onBreak then pcall(SOLG.onBreak, e.key, e.bone, e.t.pay, why) end
+    if SOLG.onBreak and why ~= "its arm's gone" then pcall(SOLG.onBreak, e.key, e.bone, e.t.pay, why) end
+    if e.t.optional then return end                       -- (a laser: the phases go on without it)
     if e.arm then                                         -- (its arm's last target: the arm breaks off)
         local left, pieces = 0, {}
         for _, x in ipairs(S.targets) do
             if x.arm == e.arm then pieces[#pieces + 1] = x.bone; if x.live then left = left + 1 end end
         end
-        if left == 0 then SOLG.breakArm(e.arm, pieces) end
+        if left == 0 then
+            for _, x in ipairs(S.targets) do                  -- (its lasers go down with it)
+                if x.onArm == e.arm and x.live then breakTarget(x, "its arm's gone") end
+            end
+            SOLG.breakArm(e.arm, pieces)
+        end
     end
     -- the phase over: the next one's on (AC:I's); the last one: the SOLG destroyed
-    for _, x in ipairs(S.targets) do if x.live and x.t.phase == S.phase then return end end
+    for _, x in ipairs(S.targets) do if x.live and not x.t.optional and x.t.phase == S.phase then return end end
     local nextPh = nil
-    for _, x in ipairs(S.targets) do if x.live and (not nextPh or x.t.phase < nextPh) then nextPh = x.t.phase end end
+    for _, x in ipairs(S.targets) do
+        if x.live and not x.t.optional and (not nextPh or x.t.phase < nextPh) then nextPh = x.t.phase end
+    end
     if nextPh then phaseOn(nextPh)
     else
         sl("every target down: the SOLG destroyed")
         S.destroyed = true
+        for _, x in ipairs(S.targets) do if x.live then breakTarget(x, "its arm's gone") end end   -- (its lasers with it)
         if SOLG.onDestroyed then pcall(SOLG.onDestroyed) end
     end
 end
