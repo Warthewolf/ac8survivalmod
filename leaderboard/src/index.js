@@ -567,6 +567,10 @@ async function ensureSchema(env) {
       catch (e) { if (!/duplicate column/i.test(String(e && e.message))) throw e; }
     }
   }
+  // ((2026-11-23) the admin page counts each build's runs: without this index, a full scan of runs for every build, every
+  // registration; with dozens of builds registered it used up D1's free 5M row reads a day and every call failed. Made
+  // after the columns above: build and mod_version are added to an older runs table by them)
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS runs_build ON runs (build, mod_version)").run();
   haveSchema = true;
 }
 
@@ -872,7 +876,7 @@ async function adminStatus(env) {
     env.DB.prepare("SELECT COUNT(*) AS n FROM specials"),
     env.DB.prepare(`SELECT b.mod AS mod, b.build AS build, b.note AS note, b.added AS added,
        (SELECT COUNT(*) FROM runs r WHERE r.build = b.build AND r.mod_version = b.mod) AS runs
-       FROM builds b ORDER BY b.added DESC`),
+       FROM builds b ORDER BY b.added DESC LIMIT 50`),                     // (the latest 50: each one counted)
     env.DB.prepare(`SELECT s.mod AS mod, s.build AS build, s.first AS first, s.last AS last, s.n AS n, s.pilot AS pilot
        FROM builds_seen s WHERE NOT EXISTS (SELECT 1 FROM builds b WHERE b.mod = s.mod AND b.build = s.build)
        ORDER BY s.last DESC LIMIT 20`),

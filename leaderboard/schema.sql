@@ -39,6 +39,7 @@ CREATE INDEX IF NOT EXISTS runs_score ON runs (difficulty, score DESC);
 CREATE INDEX IF NOT EXISTS runs_pilot ON runs (pilot);
 CREATE INDEX IF NOT EXISTS runs_ip ON runs (ip_hash, submitted);
 CREATE INDEX IF NOT EXISTS runs_week ON runs (submitted);
+CREATE INDEX IF NOT EXISTS runs_build ON runs (build, mod_version);
 
 CREATE TABLE IF NOT EXISTS specials (
   run_id   TEXT NOT NULL,
