@@ -1423,7 +1423,8 @@ local function portalMesh(pc, P, part, a, smc, kml)
     -- ((2026-11-22) `abs`: a piece of one model (tools/valka_portal: 1 unit, 100 cm, the black hole's shadow across), sized
     -- size_m x size for that unit, so the pieces keep their places; else sized by its own bounds)
     local k = part.abs and (P.size / 100) * (part.size or 1) or (P.size * (part.size or 1) / 2) / math.max(1, r)
-    local e = { comp = comp, k = k, flat = part.flat or 1, part = part, spun = 0,
+    -- (`turn`: degrees round its own axis from the start: the lensed arcs' broad side up, 180: the runs of 14:17 and 14:26)
+    local e = { comp = comp, k = k, flat = part.flat or 1, part = part, spun = tonumber(part.turn) or 0,
                 spin = (part.spin or 0) * (tonumber(pc.spin_dps) or 0), axis = part.axis }
     if part.mat then
         local mi = SPC.V.asset(part.mat)
@@ -1442,6 +1443,7 @@ local function portalMesh(pc, P, part, a, smc, kml)
     end
     pcall(function() comp:K2_SetWorldLocation({ X = P.at.X, Y = P.at.Y, Z = P.at.Z }, false, {}, true) end)
     pcall(function() comp:K2_SetWorldRotation(portalRot(part, P.yaw), false, {}, true) end)
+    if e.spun ~= 0 then pcall(function() comp:K2_AddLocalRotation({ Pitch = 0, Yaw = e.spun, Roll = 0 }, false, {}, true) end) end
     pcall(function() comp:SetWorldScale3D({ X = 0.001, Y = 0.001, Z = 0.001 }) end)
     return e
 end
@@ -1543,7 +1545,14 @@ function SPC.V.portalTick(c, s, now)
     -- piece set again and turned by its own spin so far)
     local turn = false
     if pc.face_you then
-        local you = playerLocation and playerLocation()
+        -- (the camera you see through, not your plane: her reveal's focus camera looks from beside, the run of 14:26
+        -- showed the arcs edge-on there; your plane's place when the camera can't be read)
+        local you = nil
+        pcall(function()
+            local v = survivalPC.PlayerCameraManager:GetCameraLocation()
+            if v and v.X then you = { X = v.X, Y = v.Y, Z = v.Z } end
+        end)
+        you = you or (playerLocation and playerLocation())
         if you then
             local yaw = math.deg(math.atan(you.Y - P.at.Y, you.X - P.at.X))
             if math.abs(((yaw - P.yaw + 540) % 360) - 180) > 0.3 then P.yaw, turn = yaw, true end

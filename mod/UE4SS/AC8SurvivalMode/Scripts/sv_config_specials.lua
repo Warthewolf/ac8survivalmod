@@ -323,8 +323,8 @@ CFG.specials = {
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, mat = "/Engine/BasicShapes/BasicShapeMaterial", params = { Color = { 0, 0, 0, 1 } } },
                                 -- the photon ring and the lensed arcs: white-hot to gold
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHPhotonRing", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.92, 0.8, 1 } } },
-                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloInner", abs = true, tilt = -90, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.62, 0.3, 1 } } },
-                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloOuter", abs = true, tilt = -90, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.9, 0.4, 0.1, 1 } } },
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloInner", abs = true, tilt = -90, turn = 180, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.62, 0.3, 1 } } },
+                                { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloOuter", abs = true, tilt = -90, turn = 180, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.9, 0.4, 0.1, 1 } } },
                                 -- the disk: hot, warm, cool, turning (inner faster), and its brighter approaching side
                                 { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskHot", abs = true, tilt = -5, spin = 1.0, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
                                   params = { Color = { 1.0, 0.7, 0.38, 1 } } },
@@ -351,7 +351,7 @@ CFG.specials = {
                                   parts = {
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHShadow", abs = true, mat = "/Engine/BasicShapes/BasicShapeMaterial", params = { Color = { 0, 0, 0, 1 } } },
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHPhotonRing", abs = true, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.92, 0.8, 1 } } },
-                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloInner", abs = true, tilt = -90, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.62, 0.3, 1 } } },
+                                      { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHHaloInner", abs = true, tilt = -90, turn = 180, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.62, 0.3, 1 } } },
                                       { mesh = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskHot", abs = true, tilt = -5, spin = 1.0, mat = "/Game/VFX/Mission/Traning/MI_TrainingRing",
                                         params = { Color = { 1.0, 0.7, 0.38, 1 } } },
                                       { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 2, at = "burst" } },
