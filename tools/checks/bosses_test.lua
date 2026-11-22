@@ -1545,8 +1545,19 @@ end
 print("VALKA without walks (0.73.80, R30 specials 2 / perf 6: her railgun modules kept as made, her round's class default, her assets in the break)")
 local function valkaNoWalks()                              -- (a function of its own: its locals off the main chunk's 200)
     local VA = SP.valka
-    local keepVA = { invert_chance = VA.invert_chance, disguise = VA.disguise }
-    VA.invert_chance, VA.disguise = 0, true
+    local keepVA = { invert_chance = VA.invert_chance, disguise = VA.disguise, portal = VA.portal }
+    -- ((2026-11-22) her portal's pieces are in her preload too: checked here, then the portal off for the counts below)
+    do
+        local names, want, got = {}, 0, 0
+        for _, a in ipairs(SPC.V.preloadList(VA)) do names[a.path] = true end
+        for _, part in ipairs(type(VA.portal) == "table" and VA.portal.parts or {}) do
+            for _, k in ipairs({ "mesh", "mat", "fx" }) do
+                if part[k] then want = want + 1; if names[part[k]] then got = got + 1 end end
+            end
+        end
+        check(want > 0 and got == want, "her preload carries her portal's pieces (" .. got .. " of " .. want .. ")")
+    end
+    VA.invert_chance, VA.disguise, VA.portal = 0, true, nil
     local LAUNCHER = "/Script/Live.LiveFCSModule_LauncherTripleRailCannon"
     local PCOMMON, PMULTI = "/Script/Live.LiveFCSModule_ProjectileCommon", "/Script/Live.LiveFCSModule_ProjectileMulti"
     local KML, KRL = "/Script/Engine.Default__KismetMaterialLibrary", "/Script/Engine.Default__KismetRenderingLibrary"
@@ -1831,7 +1842,7 @@ local function valkaNoWalks()                              -- (a function of its
     for full in pairs(assets) do OBJ[full] = nil end
     OBJ[KML], OBJ[KRL], OBJ[NFL] = nil, nil, nil
     GI.ReferencedObjects = nil
-    VA.invert_chance, VA.disguise = keepVA.invert_chance, keepVA.disguise
+    VA.invert_chance, VA.disguise, VA.portal = keepVA.invert_chance, keepVA.disguise, keepVA.portal
     SPC.V.assets, SPC.V.MOD.L, SPC.V.MOD.P = {}, {}, {}
     planes, pending, D.special = {}, {}, nil
     alive[VA.unit], alive[VA.eml_unit] = nil, nil

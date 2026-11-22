@@ -302,6 +302,25 @@ CFG.specials = {
                  -- elements { name, size (fraction of the screen) } on AC8's own flare, faded over life_s along AC7's
                  -- alpha curve (time fraction, alpha), intensity_x times the stock flare's brightness. If it doesn't
                  -- load, the flash above shows instead.
+                 -- ((2026-11-22) the user: "try to build a 3D Portal, an event horizon that she spawns out of") her
+                 -- portal (sv_anomalies_valka.lua SPC.V.portalOpen): it opens where her opener fires from as it charges,
+                 -- facing you, over open_s; her shot comes out of it, then she does (exit_back_m behind its face), and
+                 -- it closes hold_s later over close_s (max_s at most open); size_m across; its rings turn spin_dps.
+                 -- parts: the game's own pieces (meshes with its VFX materials, Niagara systems; see the comment there)
+                 portal = { enabled = true, size_m = 320, open_s = 3.0, hold_s = 2.5, close_s = 2.5, max_s = 30, spin_dps = 45,
+                            exit_back_m = 150,
+                            parts = {
+                                { mesh = "/Engine/BasicShapes/Sphere", mat = "/Game/VFX/Mission/Mission027/CoreDestroy/MI_CoreDest_ShockDomeRefraction001",
+                                  size = 1.15, flat = 0.35 },
+                                { mesh = "/Engine/BasicShapes/Cylinder", mat = "/Game/VFX/Mission/Mission027/CoreDestroy/MI_CoreDest_AfterExitBlackSmokeMesh",
+                                  size = 0.9, flat = 0.04, spin = -0.5 },
+                                { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRing002_I07",
+                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", size = 1.0, spin = 1 },
+                                { fx = "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma", scale = 4, at = "open" },
+                                { fx = "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricDischargeM001", scale = 25,
+                                  at = "open", rim = 6, rim_r = 0.5 },
+                                { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 3, at = "burst" },
+                                { fx = "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_ShockWave001", scale = 4, at = "burst" } } },
                  flare = { enabled = true, life_s = 7, intensity_x = 6,
                            path = "/Game/Mods/SurvivalMode/Valka/Flare/MI_SV_ValkaFlare_",
                            elements = { { "Glare", 1.6 }, { "Ring", 1.2 }, { "Shine", 0.9 }, { "Bokeh", 0.4 } },
@@ -329,13 +348,34 @@ CFG.specials = {
                  -- she comes after you more (user, 2026-10-24: "adjust her behaviours so that she tries to follow you
                  -- more often"): LastTGT every turn_every_s and at once when you're behind her within behind_km, and her
                  -- orders (search and attack: you only) given again every engage_every_s
-                 turn_every_s = 6, behind_km = 3, behind_gap_s = 2.5, engage_every_s = 5,
-                 post_stall = true, post_stall_every_s = 9, post_stall_range_km = 3,
+                 -- ((2026-11-22) the user: "she seems to fight in one place, she doesn't seem to take the fight anywhere
+                 -- and just flies around in one spot", "She needs to be more active"; docs/re/VALKA.md section 7) her
+                 -- own flying: her row's behaviour set `luaset` (CFG.behaviour_sets; NLID_SV_Lancer: slashing passes and
+                 -- zoom climbs, never a turning fight; "" keeps the fighters' set), her pilot_rank (the x40a row's is 2),
+                 -- speed_x on her top and turning speeds, cruise_x on her normal speed, accel_x on her acceleration,
+                 -- turn_add on her pitch / roll / yaw rates (deg/s)
+                 luaset = "NLID_SV_Lancer", pilot_rank = 5, speed_x = 1.3, cruise_x = 1.4, accel_x = 1.5,
+                 turn_add = { pitch = 60, roll = 120, yaw = 20 },
+                 -- (2026-11-22) her LastTGT (a 20 s tail chase 200 m behind you, which slows her to a crawl whenever
+                 -- she overshoots: docs/re/BEHAVIOUR_NATIVE_MOVE.md section 2) only when you sit behind her (behind_km,
+                 -- behind_gap_s apart), not on a clock (turn_every_s 0; it was 6 s); her orders again every
+                 -- engage_every_s (was 5: each time a fresh attack)
+                 turn_every_s = 0, behind_km = 3, behind_gap_s = 12, engage_every_s = 20,
+                 -- (2026-11-22) a post-stall now and then (was every 9 s within 3 km: each one stopped her in the air)
+                 post_stall = true, post_stall_every_s = 25, post_stall_range_km = 1.5, post_stall_chance = 0.5,
                  post_stall_moves = { "Kulbit", "KulbitB", "Cobra" },
-                 blink_s = 4, blink_every_s = 1.0, blink_turn_deg = 60, ground_clear_m = 150, blink_cooldown_s = 8,
+                 -- (2026-11-22) she takes the fight to you: farther than chase_km for chase_s, she blinks onto your six
+                 -- (chase_ring, chase_gap_s apart): wherever you fly, she comes
+                 chase = true, chase_km = 6, chase_s = 4, chase_gap_s = 15, chase_ring = "E",
+                 -- her blinks when hit: blink_count of them (blink_every_s apart), each onto your six or across your nose
+                 -- (attack_ahead: the share across your nose, attack_deg wide) on the blink_rings, then blink_cooldown_s
+                 -- (was 4 s of blinks a second round you at 500-800 m: the fight never moved)
+                 blink_count = 2, blink_rings = { "D", "E" }, attack_ahead = 0.4, attack_deg = 40,
+                 blink_s = 4, blink_every_s = 1.2, blink_turn_deg = 60, ground_clear_m = 150, blink_cooldown_s = 8,
                  smoke = "/Game/VFX/Vehicles/Aircraft/Common/Bailout/NS_BailoutSmoke001", smoke_scale = 4.0,
                  smoke_s = 3.0,
-                 railgun_every_s = 15, railgun_charge_s = 2.5, railgun_range_km = 5, railgun_cone_deg = 25,
+                 -- ((2026-11-22) range 5 -> 8 km: her passes start farther out)
+                 railgun_every_s = 15, railgun_charge_s = 2.5, railgun_range_km = 8, railgun_cone_deg = 25,
                  single_shot = 1,
                  -- weapons added to her row's empty slots (slot = fire-control row): the x40a row carries flares and
                  -- missiles only; both on MINDRIPPER's quick fire control
@@ -343,8 +383,8 @@ CFG.specials = {
                  invert = "random", invert_every_s = 20, invert_chance = 0.35, invert_s = 8, fade_s = 1.0,
                  random_fx = { "pitch", "roll", "yaw", "swap", "throttle" }, random_min = 1, random_max = 2,
                  -- her teleport rings (tools/survival_events.py VALKA_SPOTS; keep in step, not an ini setting):
-                 -- { ring, metres, step deg }: her blinks
-                 spots = { { "B", 500, 30 }, { "C", 800, 30 } } },
+                 -- { ring, metres, step deg }: her blinks ((2026-11-22) D and E: her attack blinks and her chase)
+                 spots = { { "B", 500, 30 }, { "C", 800, 30 }, { "D", 1500, 30 }, { "E", 2500, 30 } } },
     -- "ladon" = two Ladons, KOT and MISHKA (tools/survival_events.py LADON*; user, 2026-10-23): from the far west
     -- along a long route and over the airfield, then round it again and again, bombing it (bomb_damage) on every
     -- pass, until both are down. Nothing else flies in their round. Their rows: health_add HP on the Ladon's

@@ -498,6 +498,35 @@ function searchSetup()
                                 okE and "" or ("; NOT applied: " .. tostring(errE))))
                         end
                     end
+                    -- ((2026-11-22) the user: VALKA "flies around in one spot", "She needs to be more active") her rank,
+                    -- speeds and turn rates (CFG.specials.valka pilot_rank, speed_x, cruise_x, accel_x, turn_add): the
+                    -- x40a row is Mission 26's boss at rank 2 and stock speeds
+                    if a == ACE.row("valka", "x40a", "l") then
+                        local va = CFG.specials.valka
+                        local okE, errE = pcall(function()           -- (a failure keeps the row, as stock)
+                            if tonumber(va.pilot_rank) then r.PilotRank = math.max(1, math.min(5, math.floor(va.pilot_rank))) end
+                            for f, x in pairs({ SpeedMaxCoefficient = va.speed_x, SpeedTurnCoefficient = va.speed_x,
+                                                SpeedNormalCoefficient = va.cruise_x, AccelerationCoefficient = va.accel_x }) do
+                                if tonumber(x) and x > 0 then
+                                    local v = r[f]
+                                    r[f] = ((type(v) == "number" and v > 0) and v or 1.0) * x
+                                end
+                            end
+                            local ta = va.turn_add
+                            if type(ta) == "table" then
+                                r.PitchSpeedDifference = (r.PitchSpeedDifference or 0) + (tonumber(ta.pitch) or 0)
+                                r.RollSpeedDifference = (r.RollSpeedDifference or 0) + (tonumber(ta.roll) or 0)
+                                r.YawSpeedDifference = (r.YawSpeedDifference or 0) + (tonumber(ta.yaw) or 0)
+                            end
+                        end)
+                        if level == 0 then
+                            local ta = type(va.turn_add) == "table" and va.turn_add or {}
+                            log(string.format("special: %s's row %s: pilot rank %s, speed x%s, cruise x%s, acceleration x%s, turn "
+                                .. "+%s/+%s/+%s%s", va.name, svNpc, tostring(va.pilot_rank), tostring(va.speed_x), tostring(va.cruise_x),
+                                tostring(va.accel_x), tostring(ta.pitch or 0), tostring(ta.roll or 0), tostring(ta.yaw or 0),
+                                okE and "" or ("; NOT applied: " .. tostring(errE))))
+                        end
+                    end
                     local ft = a:match("^sv_ace_(%a+)_")                    -- a tier's squadron: CFG.aces.flight
                     local fl = ft and CFG.aces.flight and CFG.aces.flight[ft]
                     -- (only a tier that flies beyond stock: P9 gave every squadron an entry, its roles and openers)
@@ -601,6 +630,15 @@ function searchSetup()
                         log("special: the Anomaly's guards keep " .. tostring(set) .. " (their set " .. gs .. " isn't in)")
                     end
                     if gs and set == gs and level == 0 then log("special: the Anomaly's guards (" .. svNpc .. ") fly " .. gs .. " (its pack)") end
+                    -- ((2026-11-22) VALKA's own set, CFG.specials.valka.luaset: NLID_SV_Lancer's passes and zoom climbs,
+                    -- not the fighters' turning fight; never NLID_0400_CP, hard rule 22)
+                    local vs = a == ACE.row("valka", "x40a", "l") and type(CFG.specials.valka.luaset) == "string"
+                        and CFG.specials.valka.luaset ~= "" and CFG.specials.valka.luaset or nil
+                    if vs and CFG.behaviour_sets[vs] and BS.ready[vs] then set = vs
+                    elseif vs and level == 0 then
+                        log("special: VALKA keeps " .. tostring(set) .. " (her set " .. vs .. " isn't in)")
+                    end
+                    if vs and set == vs and level == 0 then log("special: VALKA (" .. svNpc .. ") flies " .. vs) end
                     if set then r.LuaSetId = FName(set) end
                 end)
                 if not okR then error(svNpc .. ": " .. tostring(whyR)) end

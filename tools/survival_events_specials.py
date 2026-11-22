@@ -400,7 +400,7 @@ VALKA_EML_NPC = 'OP1016_x40a_RG'
 VALKA_MISS_UP_M = 250                           # the opener's aim: a dummy this high above the player (it has to miss)
 VALKA_DUMMY = 'A_Obj_01_dummyN0'                # Mission 22's dummy (Unit_dummyN0, in Survival's world data, unused)
 # teleport rings for her blinks: (ring letter, metres, step deg)
-VALKA_SPOTS = (('B', 500, 30), ('C', 800, 30))
+VALKA_SPOTS = (('B', 500, 30), ('C', 800, 30), ('D', 1500, 30), ('E', 2500, 30))   # (D / E: 2026-11-22, her attack blinks and chase)
 VALKA_CHARGE_SOUND = 'AKE_Ms29_ARMS_SKY_OP1016_x40a_Railgun_Charge_'      # + Play / Stop: the x40a railgun's charge
 VALKA_POST_STALL = (('Turn', 'LastTGT'), ('Kulbit', 'Shadow_Kulbit'), ('KulbitB', 'Toprak_Kulbit'), ('Cobra', 'Tasha_Cobra'))
 
