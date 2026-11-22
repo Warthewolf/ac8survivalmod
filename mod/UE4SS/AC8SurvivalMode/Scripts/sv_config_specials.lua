@@ -448,6 +448,7 @@ CFG.specials = {
                  -- (onto your six through a portal) at at_pct, to be shot down
                  solg = { enabled = true, at_pct = 20, call_s = 18, corner_km = 30, alt_km = 12, travel_s = 360,   -- (Gould's 6 min)
                           pad_cm = { -1325196, 59778, 0 }, portal_size_m = 2600, portal_back_m = 1500, portal_max_s = 40,
+                          park_km = { -40, 0, 15 },   -- (where she waits while it's up: from the pad, km along x, y, up)
                           reward = 3000, back_s = 12, wreck_s = 25, marker = true,   -- (its pieces ~4,900 more: sv_solg.lua)
                           hit_fx = { "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion001",
                                      "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_Explosion002",

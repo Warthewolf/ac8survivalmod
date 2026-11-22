@@ -70,6 +70,10 @@ function VSOLG.start(c, s, o, now)
     pcall(function() o.MinHealth = math.max(1, (n(o.MaxHealth, 0)) * n(g.at_pct, 20) / 100) end)
     V.subs(c, "solg")
     G.callAt = now + n(g.call_s, 18)                     -- (the SOLG after her lines' first half)
+    -- ((2026-11-22) the user: "shes still attacking the players while invisible": her AI flew and fired on) parked far out
+    -- of the fight (park_km from the spaceport's pad: along x, along y, up) and held there every tick till she's back
+    local pk = type(g.park_km) == "table" and g.park_km or { -40, 0, 15 }
+    G.park = { X = n(g.pad_cm[1], 0) + n(pk[1], -40) * 100000, Y = n(g.pad_cm[2], 0) + n(pk[2], 0) * 100000, Z = n(pk[3], 15) * 100000 }
     hooks(c, s, G)
     sl(string.format("her health at %.0f %%: invincible, gone through a portal; the SOLG in %.0f s", pctOf(o) or -1, n(g.call_s, 18)))
 end
@@ -254,6 +258,14 @@ function VSOLG.tick(c, s, o, now)
     end
     if G.state == "done" then return false end
     if valid(o) then pcall(function() o.bIsInvincible = true end) end   -- (gone: setGone's, kept on)
+    if valid(o) and G.park and G.state ~= "done" then     -- (parked: nobody in her reach)
+        local okP = pcall(function() o:K2_SetActorLocation(G.park, false, {}, true) end)
+        if not G.parkSaid then
+            G.parkSaid = true
+            sl(string.format("she's parked out of the fight%s: (%.0f, %.0f) km, %.0f km up", okP and "" or " (NOT moved)",
+                G.park.X / 100000, G.park.Y / 100000, G.park.Z / 100000))
+        end
+    end
     if G.state == "call" then
         if now >= G.callAt then portalUp(c, s, G, now) end
         return true
