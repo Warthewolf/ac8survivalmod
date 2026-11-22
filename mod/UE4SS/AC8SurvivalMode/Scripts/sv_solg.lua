@@ -77,6 +77,11 @@ SOLG = { C = {
     -- turrets, attached to it, are ignored as it moves; a mover stopped by a plane is started again (its velocity kept).
     -- A piece shot off takes its shape with it.
     collision = { enabled = true, profile = "BlockAll" },
+    -- ((2026-11-23) the user: "Air weapons and ground weapons as well need to work on the solg") its pieces are one kind of
+    -- target (a ground object's), and a weapon locks air only, ground only or both (DT_WeaponSettings' LockOnTargetType:
+    -- 0 both, 1 air, 2 ground). While it's up, every player weapon that's air or ground only locks both; put back as it
+    -- goes (each game its own table)
+    all_weapons = { enabled = true, table = "/Game/Datatables/PLAYER/DT_WeaponSettings.DT_WeaponSettings" },
     -- ((2026-11-23) the autotest: each turret fires its first burst, then never again (1-4 hits in 50 s, held still or
     -- moving; its ammo not limited): the land CIWS's cycle never comes round again on our turrets. Every rearm_s (Gould's
     -- 10 s of fire, 5 s rest) each live laser is switched off and on, which starts its cycle (and a burst) afresh)
@@ -270,6 +275,7 @@ function SOLG.spawn(at, yaw, vel)
     S = { actor = a, body = body, move = mv, panels = {}, at0 = at, yaw = yaw, broken = {}, round = SOLG.spawnRound,
           vel = vel and { X = vel.X, Y = vel.Y, Z = vel.Z } or nil }
     SOLG.spawnRound = nil                                 -- (a test's own SOLG: no round of its own)
+    pcall(SOLG.weaponsAll, true)
     sl(string.format("up at (%.1f, %.1f) km, %.1f km up, nose %.0f deg, %.0f deg down (the game's pitch %s): mesh %s, %s, %d wrecks hidden, spin %s, mover %s",
         at.X / 100000, at.Y / 100000, at.Z / 100000, yaw or 0, pitch, pitchNow and string.format("%.1f", pitchNow) or "?", okM and "on" or "NOT set", painted, hid,
         spun and "playing" or (valid(anim) and "NOT played" or "NOT loaded"), mv and "on" or (vel and "NOT made" or "none")))
@@ -497,6 +503,42 @@ function SOLG.crashTick()
         if S.restarts <= 3 then sl(string.format("its mover started again (%.0f of %.0f m/s: something it hit stopped it)", sp / 100, want / 100)) end
     end
 end
+-- the player's weapons: air / ground only -> both while it's up (on), as they were (off)
+local WPN = { was = nil }
+function SOLG.weaponsAll(on)
+    local c = SOLG.C.all_weapons
+    if not (c and c.enabled ~= false) then return 0 end
+    local dt = loadObject(c.table)
+    if not valid(dt) then sl("all weapons: no " .. tostring(c.table)); return 0 end
+    if on and WPN.was then return 0 end
+    if not on and not WPN.was then return 0 end
+    local nn = 0
+    if on then
+        WPN.was, WPN.dt = {}, dt
+        if pin then pcall(pin, dt, "the weapons' settings (the SOLG's)") end
+        for _, name in ipairs(rowList and rowList(dt) or {}) do
+            local okR, r = dtCall(dt, "FindRow", name)
+            local t = nil
+            if r ~= nil then pcall(function() t = tonumber(r.LockOnTargetType) end) end
+            if t == 1 or t == 2 then
+                pcall(function() r.LockOnTargetType = 0 end)
+                if dtCall(dt, "AddRow", name, r) then WPN.was[name] = t; nn = nn + 1 end
+            end
+        end
+        sl(string.format("all weapons: %d air or ground only weapons lock both while it's up", nn))
+    else
+        for name, t in pairs(WPN.was) do
+            local okR, r = dtCall(dt, "FindRow", name)
+            if r ~= nil then
+                pcall(function() r.LockOnTargetType = t end)
+                if dtCall(dt, "AddRow", name, r) then nn = nn + 1 end
+            end
+        end
+        WPN.was = nil
+        sl(string.format("all weapons: %d put back as they were", nn))
+    end
+    return nn
+end
 function SOLG.laserTurrets()
     if not (S and S.targets) or S.destroyed then return nil end
     local out = {}
@@ -506,6 +548,7 @@ function SOLG.laserTurrets()
     return out
 end
 function SOLG.stop(why)
+    pcall(SOLG.weaponsAll, false)                        -- (the weapons as they were, whatever happens below)
     if not S then return end
     if SLAS and SLAS.stop then pcall(SLAS.stop) end
     for _, c in pairs(S.smokes or {}) do pcall(function() c:DestroyComponent() end) end
