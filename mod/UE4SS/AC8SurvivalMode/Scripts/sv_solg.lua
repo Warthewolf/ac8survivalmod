@@ -305,7 +305,7 @@ function SOLG.panelAt(k)
 end
 function SOLG.stop(why)
     if not S then return end
-    if S.targets then
+    if S.targets and not S.mirror then                    -- (a joiner's are the host's copies: co-op takes them down)
         for _, t in ipairs(SOLG.C.targets) do
             if SPC and SPC.cleanUp then pcall(SPC.cleanUp, { t.unit }, "the SOLG gone", true, os.clock()) end
         end
@@ -410,29 +410,38 @@ local function bonesOf(t)
     return out
 end
 -- one target type's unit up, its objects on their bones: how many, its note
+local breakTarget                                         -- (below; openUp's and phaseOn's too)
+-- type t's objects (in the order they were made) onto its bones; mirror: a co-op joiner's copies of the host's (their
+-- health the host's, held by co-op: never set here)
+local function placeAll(t, got, on, mirror)
+    local bones = bonesOf(t)
+    local hp = n(t.health, 1000) * n(SOLG.C.health_x, 0.25)
+    local placed = 0
+    for k, o in ipairs(got) do
+        local bone = bones[k]
+        if bone and valid(o) then
+            local att = pcall(function() o:K2_AttachToComponent(S.body, FName(bone), 2, 2, 1, false) end)
+            if not mirror then
+                pcall(function() o.MaxHealth = hp; o.HealthInternal = math.floor(hp * 10 + 0.5) end)
+                pcall(function() o.MinHealth = n(SOLG.C.floor, 1) end)
+            end
+            if not t.laser then hideOwn(o) elseif SOLG.C.laser_hide ~= false then hideOwn(o, false) end
+            flags(o, on and FLAGS_ON or FLAGS_OFF)
+            S.targets[#S.targets + 1] = { o = o, a = addrOf(o), key = t.key, bone = bone, t = t, hp = hp, attached = att, live = true }
+            placed = placed + 1
+        end
+    end
+    return placed, #bones
+end
 local function typeUp(t, on)
-        local bones = bonesOf(t)
         CAPTURE = {}
         spawningUnit = t.unit
         local r = SV_Spawn(t.unit, S.at0.X, S.at0.Y, S.at0.Z, 0)
         spawningUnit = nil
         local got = CAPTURE
         CAPTURE = nil
-        local hp = n(t.health, 1000) * n(SOLG.C.health_x, 0.25)
-        local placed = 0
-        for k, o in ipairs(got) do
-            local bone = bones[k]
-            if bone and valid(o) then
-                local att = pcall(function() o:K2_AttachToComponent(S.body, FName(bone), 2, 2, 1, false) end)
-                pcall(function() o.MaxHealth = hp; o.HealthInternal = math.floor(hp * 10 + 0.5) end)
-                pcall(function() o.MinHealth = n(SOLG.C.floor, 1) end)
-                if not t.laser then hideOwn(o) elseif SOLG.C.laser_hide ~= false then hideOwn(o, false) end
-                flags(o, on and FLAGS_ON or FLAGS_OFF)
-                S.targets[#S.targets + 1] = { o = o, a = addrOf(o), key = t.key, bone = bone, t = t, hp = hp, attached = att, live = true }
-                placed = placed + 1
-            end
-        end
-        return placed, string.format("%s %d of %d (%s)", t.key, placed, #bones, r > 0 and (r .. " up") or (SV_ERR and SV_ERR[r] or tostring(r)))
+        local placed, nb = placeAll(t, got, on, false)
+        return placed, string.format("%s %d of %d (%s)", t.key, placed, nb, r > 0 and (r .. " up") or (SV_ERR and SV_ERR[r] or tostring(r)))
 end
 -- each arm-borne target's arm: the nearest arm bone (they sit along it); lasers on .onArm (they don't hold it up)
 local function armsOf(list)
@@ -485,6 +494,7 @@ end
 local function openUp()
     local n0 = 0
     for _, e in ipairs(S.targets) do
+        if e.live and S.lateBroken and S.lateBroken[e.bone] then S.lateBroken[e.bone] = nil; breakTarget(e, "the host's") end
         if e.live and not e.open and e.t.phase <= (S.phase or 0) and not S.pauseUntil and waitDone(e) and liveObj(e.o) then
             e.open = true; flags(e.o, FLAGS_ON); n0 = n0 + 1
         end
@@ -518,11 +528,13 @@ function SOLG.targetsUp()
         table.concat(said, ", "), att, total - att, opened, nOpt, table.concat(pa, ", ")))
     return total
 end
-local breakTarget                                         -- (below; phaseOn's too)
 local function phaseOn(ph)
     S.phase = ph
     for _, t in ipairs(SOLG.C.targets) do                 -- (its lasers up now: they fire from now on)
-        if t.laser and t.phase == ph then
+        if t.laser and t.phase == ph and S.mirror then    -- (a joiner: the host's copies, adopted as they come)
+            S.pend = S.pend or {}
+            S.pend[t.key] = os.clock() + 20
+        elseif t.laser and t.phase == ph then
             local first = #S.targets + 1
             local placed, note = typeUp(t, false)
             local new = {}
@@ -558,6 +570,7 @@ breakTarget = function(e, why)
     if SOLG.onBreak and why ~= "its arm's gone" then pcall(SOLG.onBreak, e.key, e.bone, e.t.pay, why) end
     openUp()                                              -- (what waited on it: Gould's wing rows, an arm's MAG panels)
     if e.t.optional or e.optional then return end         -- (a laser, an optional panel: the phases go on without it)
+    if S.mirror then return end                           -- (a joiner: the next phase and the end are the host's word)
     if e.arm then                                         -- (its arm's last target: the arm breaks off)
         local left, pieces = 0, {}
         for _, x in ipairs(S.targets) do
@@ -615,8 +628,14 @@ end
 local function targetsTick()
     if not (S and S.targets) then return end
     local floorIn = n(SOLG.C.floor, 1) * 10 + 0.5
+    if S.mirror and SOLG.adoptTick then pcall(SOLG.adoptTick) end
     for _, e in ipairs(S.targets) do
-        if e.live then
+        if e.live and S.mirror then                       -- (a joiner: its copies only held on their bones)
+            if liveObj(e.o) and addrOf(e.o) == e.a and not e.attached then
+                local L = boneAt(S.body, e.bone)
+                if L then pcall(function() e.o:K2_SetActorLocation(L, false, {}, true) end) end
+            end
+        elseif e.live then
             if not liveObj(e.o) or addrOf(e.o) ~= e.a then breakTarget(e, "gone")
             else
                 if not e.attached then
@@ -630,6 +649,58 @@ local function targetsTick()
     end
 end
 SOLG.targetsTick = targetsTick
+-- ---- co-op: a joiner's SOLG (sv_solg_coop.lua) ----
+-- its targets: this game's copies of the host's units (COOP.groundCopies), placed as they come (the lasers' with the
+-- host's phase); breaks and phases from the host's word
+function SOLG.mirrorUp()
+    if not (S and liveObj(S.body)) then return 0 end
+    S.targets, S.phase, S.mirror, S.pend = {}, 1, true, {}
+    for _, t in ipairs(SOLG.C.targets) do if not t.laser then S.pend[t.key] = os.clock() + 20 end end
+    return SOLG.adoptTick()
+end
+function SOLG.adoptTick()
+    if not (S and S.mirror and S.pend and COOP and COOP.groundCopies) then return 0 end
+    local placedAll = 0
+    for key, untilAt in pairs(S.pend) do
+        local t
+        for _, x in ipairs(SOLG.C.targets) do if x.key == key then t = x end end
+        local got = t and COOP.groundCopies(t.unit) or {}
+        local nb = t and #bonesOf(t) or 0
+        if t and (#got >= nb or (#got > 0 and os.clock() >= untilAt)) then
+            local first = #S.targets + 1
+            local placed = placeAll(t, got, false, true)
+            local new = {}
+            for i = first, #S.targets do new[#new + 1] = S.targets[i] end
+            armsOf(new)
+            if not t.laser then gouldRules() end
+            S.pend[key] = nil
+            placedAll = placedAll + placed
+            sl(string.format("co-op: the host's %s copies placed: %d of %d", key, placed, nb))
+            for _, e in ipairs(new) do                    -- (an arm already gone here: its lasers with it)
+                if e.onArm and S.broken[e.onArm] then breakTarget(e, "its arm's gone") end
+            end
+            openUp()
+        elseif t and os.clock() >= untilAt then
+            S.pend[key] = nil
+            sl(string.format("co-op: the host's %s copies never came (%d of %d)", key, #got, nb))
+        end
+    end
+    return placedAll
+end
+-- the host's word: piece `bone` broken; phase `ph` on
+function SOLG.breakBone(bone)
+    if not (S and S.targets) then return false end
+    for _, e in ipairs(S.targets) do
+        if e.bone == bone and e.live then breakTarget(e, "the host's"); return true, n(e.t.pay, 0), e.key end
+    end
+    S.lateBroken = S.lateBroken or {}                     -- (its copy not placed yet: broken once it is)
+    S.lateBroken[bone] = true
+    return false
+end
+function SOLG.mirrorPhase(ph)
+    if not (S and S.mirror) then return end
+    if (S.phase or 0) < ph then phaseOn(ph) end
+end
 function SOLG.debugTargets() return S and S.targets or {} end          -- (the tests')
 function SOLG.boneLoc(bone) if S and liveObj(S.body) then return (boneAt(S.body, bone)) end end
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the SOLG"] = function() S = nil; CAPTURE = nil end end

@@ -38,11 +38,13 @@ local function hooks(c, s, G)
     SOLG.onBreak = function(key, bone, pay)
         G.broken = (G.broken or 0) + 1
         if pay and pay > 0 and addCredits then addCredits(pay, "the SOLG's " .. key) end
+        if SCOOP then pcall(SCOOP.broke, bone) end
     end
     SOLG.onPhase = function(ph, nOn)
         G.phase = ph
         local t = CFG.hud.text
         if t and t.solg_phase and t.solg_phase[ph] then hudCallout(t.solg_phase[ph], nil) end
+        if SCOOP then pcall(SCOOP.phase, ph) end
     end
     SOLG.onDestroyed = function() G.destroyedAt = G.destroyedAt or os.clock() end
 end
@@ -62,6 +64,7 @@ function VSOLG.start(c, s, o, now)
         pcall(V.blinkPortal, c, s, here, you and math.deg(math.atan(you.Y - here.Y, you.X - here.X)) or 0, now)
     end
     setGone(o, true); pcall(V.partsGone, c, s, o, true, true)
+    if SCOOP then pcall(SCOOP.gone, true) end             -- (her copies hidden on every joiner's game too)
     s.vanished, s.blinkUntil, s.blinkLeft = false, nil, nil
     if s.chargeAt then s.chargeAt = nil; V.event("RE_SV_ValkaChargeOff") end
     if s.invertUntil then pcall(V.invert, c, s, false, now) end
@@ -86,6 +89,7 @@ local function portalUp(c, s, G, now)
         G.ph = {}
         local okP, up = pcall(SPC.V.portalOpen, c, G.ph, at, yaw, now, pc, true)
         if okP and up then wait = n(pc.open_s, 4.5) + n(g.portal_full_s, 0.5) end
+        if okP and up and SCOOP then pcall(SCOOP.portal, at, yaw, pc.size_m) end   -- (every joiner's too: sv_solg_coop.lua)
         sl(string.format("its portal %s, %.0f m across%s", okP and up and "opens" or ("NOT up (" .. tostring(up) .. ")"), pc.size_m,
             wait > 0 and string.format(": the SOLG through it once it's full size, in %.1f s", wait) or ""))
     end
@@ -112,7 +116,7 @@ local function arrive(c, s, G, now)
     G.targets = okT and nT or 0
     G.state, G.from, G.hitAt = "falling", now, now + T
     if c.solg.marker and hudCallout then hudCallout(CFG.hud.text.solg_inbound, CFG.hud.text.solg_inbound_sub) end
-    if COOP and COOP.valkaSolg and COOP.host and COOP.host() then pcall(COOP.valkaSolg, corner, now) end
+    if SCOOP then pcall(SCOOP.up, from, yaw, vel, T) end   -- (every joiner's too: sv_solg_coop.lua)
     sl(string.format("out of the corner %d at (%.1f, %.1f) km, %.1f km up, %.0f km from the spaceport, there in %.0f s: %d targets",
         corner, at.X / 100000, at.Y / 100000, at.Z / 100000,
         math.sqrt((pad.X - at.X) ^ 2 + (pad.Y - at.Y) ^ 2 + (pad.Z - at.Z) ^ 2) / 100000, T, G.targets))
@@ -126,6 +130,7 @@ local function impact(c, s, G, now)
     local n0 = okQ and 1 or fxAt(g.hit_fx or {}, P, n(g.hit_fx_scale, 12), n(g.hit_fx_s, 20))
     if not okQ then what = "its cutscene layer NOT played (" .. tostring(what) .. "): " .. n0 .. " systems instead" end
     pcall(SOLG.stop, "it hit the spaceport")
+    if SCOOP then pcall(SCOOP.hit, G.pad) end
     if SND and SND.event and CFG.sound and CFG.sound.valka and CFG.sound.valka.solg_hit then pcall(SND.event, CFG.sound.valka.solg_hit, nil) end
     local closed = false
     if CFG.airfield and CFG.airfield.enabled and AF and not AF.down and not (COOP and type(COOP.client) == "function" and COOP.client() == true) then
@@ -147,6 +152,7 @@ local function destroyed(c, s, G, now)
     local L = SOLG.where and SOLG.where()
     if L then fxAt(SOLG.C.fx, L, n(SOLG.C.fx_scale.SOLG, 12), 10) end
     pcall(SOLG.fall)
+    if SCOOP then pcall(SCOOP.destroyed) end
     local pay = n(g.reward, 0)
     if pay > 0 then addCredits(pay, "the SOLG destroyed") end
     if hudCallout then hudCallout(CFG.hud.text.solg_down, CFG.hud.text.solg_down_sub and string.format(CFG.hud.text.solg_down_sub, specialPay and specialPay(pay) or pay)) end
@@ -231,7 +237,11 @@ function VSOLG.tick(c, s, o, now)
         pcall(SPC.V.portalTick, c, G.ph, now)
         if G.ph.out and now >= G.ph.out then G.ph.out = nil; pcall(SPC.V.portalThrough, c, G.ph, now) end
     end
-    if G and G.wreckUntil and now >= G.wreckUntil then G.wreckUntil = nil; pcall(SOLG.stop, "its wreck's gone") end
+    if G and G.wreckUntil and now >= G.wreckUntil then
+        G.wreckUntil = nil
+        pcall(SOLG.stop, "its wreck's gone")
+        if SCOOP then pcall(SCOOP.stop) end
+    end
     if not G then
         if s.solgDone or not o then return false end
         local p = pctOf(o)
@@ -265,6 +275,7 @@ function VSOLG.tick(c, s, o, now)
         -- back on your six through a portal (her hunt's own way back: a chase blink), damageable again at 20 %
         G.state = "done"
         pcall(function() o.MinHealth = 0 end)
+        if SCOOP then pcall(SCOOP.gone, false) end
         s.vanished, s.blinkWhy, s.blinkUntil = true, "chase", now + 5
         s.railAt = now + n(c.railgun_every_s, 20)
         sl("she's back")
@@ -275,6 +286,7 @@ end
 
 -- her round over (shot down, the level gone): the SOLG with it
 function VSOLG.stop(s, why)
+    if SCOOP then pcall(SCOOP.stop) end
     if s and s.solg and s.solg.ph then pcall(SPC.V.portalStop, s.solg.ph) end
     if SOLG and SOLG.up and SOLG.up() then pcall(SOLG.stop, why) end
     if s then s.solg = nil end

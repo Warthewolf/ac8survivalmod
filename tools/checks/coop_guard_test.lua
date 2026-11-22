@@ -479,6 +479,7 @@ local TYPES = {
     { "join", "es", { "es", "route", "1", "4", "80", "12.5", "0", "1", "0", "1" } },
     { "join", "vm", { "vm", "1" } },
     { "join", "vr", { "vr", "@VALKA" } },
+    { "join", "vs", { "vs", "po", "-15000", "8000", "6000", "90", "2600" } },   -- ((2026-11-22) VALKA's SOLG: sv_solg_coop.lua)
     { "join", "rz", { "rz", "1" } },
     { "join", "rs", { "rs", "j" } },
     -- the same types' other forms (fed the same way; the effect checked above is the first form's)
@@ -510,6 +511,16 @@ local TYPES = {
     { "join", "zd", { "zd", "h", "1", "5" }, extra = true },              -- (an older host's: no dive id)
     { "join", "zd", { "zd", "v", "3" }, extra = true },
     { "join", "zd", { "zd", "e" }, extra = true },
+    -- ((2026-11-22) VALKA's SOLG's other words: up (where, its velocity, its time, its age), a phase, a piece, its end)
+    { "join", "vs", { "vs", "up", "-15000", "8000", "6000", "90", "1200", "-300", "-1600", "360", "12.5" }, extra = true },
+    { "join", "vs", { "vs", "ph", "2" }, extra = true },
+    { "join", "vs", { "vs", "b", "SG04_03" }, extra = true },
+    { "join", "vs", { "vs", "b", "KEW_01" }, extra = true },
+    { "join", "vs", { "vs", "dn" }, extra = true },
+    { "join", "vs", { "vs", "hit", "-13252", "598", "0" }, extra = true },
+    { "join", "vs", { "vs", "vg", "1" }, extra = true },
+    { "join", "vs", { "vs", "vg", "0" }, extra = true },
+    { "join", "vs", { "vs", "st" }, extra = true },
     { "join", "ev", { "ev", "RE_SV_AlcnOpenCore", U1 }, extra = true },
     -- ((2026-11-11) the Alicorn: rnd field 16 shut and dived; the host's health for ids not bound here yet, M.pendHp)
     { "join", "rnd", { "rnd", "6", "fighting", "30", "2", "3", "4", "1", "2", "m1w0s0", "alicorn", "alicorn:sail", "0", "Wingmen:1;", "0", "2:s:1" }, extra = true },
@@ -715,6 +726,7 @@ local EFFECT = {
     ["join if"] = function() return IFCOOP and IFCOOP.last and IFCOOP.last.what == "crew" end,
     ["join vm"] = function() return M.vmHere == true end,
     ["join vr"] = function() return M.vr ~= nil end,
+    ["join vs"] = function() return logHas("^solg coop: the host's portal opens") end,   -- ((2026-11-22) sv_solg_coop.lua)
     ["join rz"] = function() return true end,
     ["join rs"] = function() return M.rep ~= nil end,                        -- (rs|j: a repair, the host's picture to come)
 }

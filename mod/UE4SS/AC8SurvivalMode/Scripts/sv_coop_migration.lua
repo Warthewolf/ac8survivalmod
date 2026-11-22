@@ -962,6 +962,12 @@ local function onJoinerMessage(f)
             M.vportal = M.vportal or {}
             pcall(SPC.V.blinkPortal, c, M.vportal, { X = x * 100, Y = y * 100, Z = z * 100 }, yaw, os.clock())
         end
+    elseif k == "vs" and COOP.client() then              -- ((2026-11-22) the host's VALKA SOLG: sv_solg_coop.lua
+        if SCOOP and SCOOP.fromHost and levelReady() then
+            local okV, errV = pcall(SCOOP.fromHost, { f[1], short(f[2], 4), short(f[3], 24), short(f[4], 24), short(f[5], 24),
+                short(f[6], 24), short(f[7], 24), short(f[8], 24), short(f[9], 24), short(f[10], 24), short(f[11], 24) })
+            if not okV then once("vs", "coop: the host's SOLG word not read: " .. tostring(errV)) end
+        end
     elseif k == "vr" and COOP.client() then              -- ((0.73.76) she shows: her X-02S on this game's copy of her)
         local unit = short(f[2], 96)
         if D and unit == (CFG.specials.valka and CFG.specials.valka.unit) then M.vr = { unit = unit, at = os.clock(), st = {} } end
@@ -1559,6 +1565,7 @@ function COOP.valkaTick()
     if M.vportal and M.vportal.portal then pcall(SPC.V.portalTick, CFG.specials.valka, M.vportal, os.clock()) end   -- ((2026-11-22))
     if M.vportal and VCINE and VCINE.tick then pcall(VCINE.tick, CFG.specials.valka, M.vportal, os.clock()) end
     if M.vportal and M.vportal.bportals then pcall(SPC.V.blinkPortalsTick, CFG.specials.valka, M.vportal, os.clock()) end
+    if SCOOP and SCOOP.clientTick and COOP.client() then pcall(SCOOP.clientTick, os.clock()) end   -- ((2026-11-22) her SOLG
     local v = M.vr
     if not (v and D and COOP.client()) then return end
     local cu = M.cunits[v.unit]
