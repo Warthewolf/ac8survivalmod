@@ -4949,7 +4949,29 @@ local PP_PIECES = {
     { "shock1", "fx", "/Game/VFX/IGC/Ms10/Ms100010/NS_IGCVFX_Ms100010_Shock1", 6 },
     { "spark29", "fx", "/Game/VFX/IGC/Ms29/Ms290025/NS_IGCVFX_Ms290025_Spark001", 10 },
     { "plasma_big", "fx", "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma", 10 },
+    -- ((2026-11-22) the user: "isn't there like a moving texture we could use?" (no material of ours: hard rule 58) AC8's
+    -- animated materials on our own disk (tools/valka_portal), facing the camera: does a texture move on it?)
 }
+do
+    local DISK = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SM_SV_BHDiskHot"
+    local FACE = { Pitch = 0, Yaw = 0, Roll = 90 }
+    for _, m in ipairs({
+        { "mat_pyro", "/Game/VFX/Mission/Mission027/CoreDestroy/MI_CoreDest_AfterExitBlackSmokeMesh",
+          { DistScroll_U = 0.6, DistScroll_V = 0.1, ColorEmissiveScale = 20, SunLightIlluminance = 2 } },
+        { "mat_pyro_exit", "/Game/VFX/Mission/Mission027/CoreDestroy/MI_MGF_DestExitSmokeVS", { ColorEmissiveScale = 20 } },
+        { "mat_laser10", "/Game/VFX/Mission/Mission010/GR036/MainCannon/MI_SearchLaserBeam001", {} },
+        { "mat_laser29", "/Game/VFX/IGC/Ms29/Ms290010/MI_IGCVFX_Ms290010_SearchLaserBeam001", {} },
+        { "mat_chargetrail", "/Game/VFX/Vehicles/Weapon/Cannon/MI_ChargeLightningBeamTrail", {} },
+        { "mat_vaporring", "/Game/VFX/IGC/Ms29/Ms290010/MI_IGCVFX_Ms290010_VaporTrailRing001", {} },
+        { "mat_electric", "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/MI_Electric", {} },
+        { "mat_glowpom", "/Game/VFX/Mission/Mission010/GR036/MainCannon/MI_Glow05", {} },
+        { "mat_lightning27", "/Game/VFX/Mission/Mission027/CoreDestroy/MI_Lightning003", {} },
+        { "mat_elevator_vat", "/Game/VFX/Mission/Mission020/Material/MI_UNI_OrbitElevatorRing004_I22_VAT", {} },
+        { "mat_heat", "/Game/VFX/Common/Materials/HeatDistortion/MI_Heat_Distortion05_01", {} },
+    }) do
+        PP_PIECES[#PP_PIECES + 1] = { m[1], "mesh", DISK, m[2], 260, 1, FACE, m[3], twice = true }
+    end
+end
 local function ppAll(only)
     local want = nil
     if only and only ~= "" then want = {}; for n in tostring(only):gmatch("[^,]+") do want[n] = true end end
@@ -4961,10 +4983,15 @@ local function ppAll(only)
                 A.wait(2)
                 A.do_(function() ST.shot("portal_" .. name) end)
                 A.wait(2.5)
-                A.do_(function() ST.look(ppCam(-700, 450), ppSpot(), 45) end)   -- (from above and the side: its depth)
-                A.wait(1)
-                A.do_(function() ST.shot("portal_" .. name .. "_above") end)
-                A.wait(2.5)
+                if p.twice then                                   -- (the same view 2.5 s on: does its texture move?)
+                    A.do_(function() ST.shot("portal_" .. name .. "_later") end)
+                    A.wait(2.5)
+                else
+                    A.do_(function() ST.look(ppCam(-700, 450), ppSpot(), 45) end)   -- (from above and the side: its depth)
+                    A.wait(1)
+                    A.do_(function() ST.shot("portal_" .. name .. "_above") end)
+                    A.wait(2.5)
+                end
                 A.do_(ppClear)
             else
                 A.do_(function() ST.look(ppCam(-900, 60), ppSpot(), 45) end)
