@@ -4706,44 +4706,49 @@ SUITES.valka = function()
             ST.check(l ~= nil, "her portal opens with her opener's charge", l)
         end
     end)
+    -- ((2026-11-22) the user: "Create a cutscene similar to the Invincible Fleets Arrival of the Portal Opening, and Valka
+    -- coming out of it": sv_valka_cine.lua films it; pictures through it 0.8 s apart, no camera of ours)
     A.do_(function()
-        local P = vtPortal()
-        if P then ST.look(vtPortalCam(3600, 600, 0), P.at, 45) end   -- (level: the camera keeps no pitch)
+        if VCINE then VCINE.after = function() HOLD.ap, HOLD.apOn = 0, nil end end   -- (our autopilot back after it)
+        local on = VCINE and VCINE.active and VCINE.active()
+        ST.marks.cine = on or nil
+        ST.check(on == true, "her cutscene films her portal's opening", ST.findLog("special: VALKA's cutscene: starts", ST.marks.v0))
     end)
-    A.wait(1.0)
-    vtPortalShot("portal_a_opening")
-    vtPortalShot("portal_b_open")
-    A.do_(function()                                      -- ((2026-11-22) off its axis: the black hole's depth, a 3D model)
-        local P = vtPortal()
-        if P then ST.look(vtPortalCam(2300, 2000, 0), P.at, 50) end
-    end)
-    A.wait(0.4)
-    vtPortalShot("portal_b2_oblique")
+    for k = 1, 19 do
+        A.do_(function()
+            local st = VCINE and VCINE.state and VCINE.state()
+            if st then ST.shot(string.format("cine_%02d_shot%d", k, st.shot or 0))
+            elseif k == 1 then ST.shot("portal_nocine") end
+        end)
+        A.wait(0.8)
+    end
     A.log_("special: VALKA's opener shot from", 40, "v0", true, function(l) ST.check(l ~= nil, "her opener's shot", l) end)
-    A.do_(function() ST.shot("portal_c_shot") end)
     A.log_("special: VALKA shows", 30, "v0", true, function(l)
         if not ST.check(l ~= nil, "VALKA shows (her reveal)", l) then return "abort" end
         VT.phase = "R"
-        if not vtPortal() then ST.shot("valka_reveal_view") end   -- (no portal: what you see, her reveal's focus camera)
     end)
-    A.do_(function() if vtPortal() then ST.lookBack() end end)   -- (what you see: the game's own camera on her)
-    A.wait(0.8)
-    vtPortalShot("portal_d_yourview")
-    A.do_(function()
+    A.log_("special: VALKA comes out", 5, "v0", true, function(l)
+        local m = l and tonumber(l:match("comes out (%d+) m"))
+        ST.check(m ~= nil and m < 1000, "she comes out of her portal's middle (within 1 km of it at her reveal)", l)
+    end)
+    A.log_("special: VALKA's cutscene: over", 20, "v0", true, function(l)
+        ST.check(l ~= nil and l:find("your view and plane back", 1, true) ~= nil, "her cutscene ends, your view and plane back", l)
+    end)
+    A.wait(0.5)
+    A.do_(function() ST.shot("cine_after_yourview") end)
+    A.do_(function()                                      -- (its closing, if it's still closing: from in front)
         local P = vtPortal()
-        if P then ST.look(vtPortalCam(2000, -2000, 0), P.at, 55) end   -- (beside it: her coming out)
+        if P then ST.look(vtPortalCam(3600, 600, 0), P.at, 45) end
     end)
-    A.wait(0.6)
-    vtPortalShot("portal_e_exit")
+    A.wait(0.3)
+    for k = 1, 2 do
+        A.do_(function() if vtPortal() then ST.shot("portal_close_" .. k) end end)
+        A.wait(0.9)
+    end
+    A.do_(function() ST.lookBack() end)
+    A.wait(2.5)
     A.do_(function()
-        local P = vtPortal()
-        ST.info("her portal now: " .. (P and (P.phase .. ", " .. #P.meshes .. " mesh parts") or "gone") .. "; " ..
-            tostring(ST.findLog("special: VALKA's portal: %d+ effect", ST.marks.v0)))
-        ST.lookBack()
-    end)
-    A.wait(4)
-    A.do_(function()
-        ST.check(vtPortal() == nil or vtPortal().phase == "close", "her portal closes after she's through",
+        ST.check(vtPortal() == nil, "her portal closed after she was through",
             ST.findLog("special: VALKA's portal closed", ST.marks.v0, true) or (vtPortal() and vtPortal().phase))
     end)
     A.do_(function() VT.phase = "A"; ST.doing = "phase A: round the airfield"; ST.info("phase A: your plane round the airfield, " .. aS .. " s") end)
