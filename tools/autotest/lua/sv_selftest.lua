@@ -158,6 +158,10 @@ function ST.look(at, look, fov)
     if not (okB and a and valid(a)) then return false, "the camera's spawn gave nothing" end
     pcall(function() gs:FinishSpawningActor(a, t, 1) end)
     pcall(function() a:K2_SetActorRotation({ Pitch = pitch, Yaw = yaw, Roll = 0 }, true) end)
+    -- ((2026-11-22) the valka runs' pictures were all level, whatever the pitch asked: the camera component's own world
+    -- rotation set too, and what the camera manager shows read back at the shot, ST.shot)
+    pcall(function() a.CameraComponent:K2_SetWorldRotation({ Pitch = pitch, Yaw = yaw, Roll = 0 }, false, {}, true) end)
+    ST.camWant = { pitch = pitch, yaw = yaw }
     pcall(function() a.CameraComponent.bConstrainAspectRatio = false end)
     pcall(function() a.CameraComponent:SetFieldOfView(fov or 50) end)
     if CAM and valid(CAM) then pcall(function() CAM:K2_DestroyActor() end) end
@@ -174,7 +178,13 @@ end
 function ST.shot(name)
     local ks, pc = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary"), ST.pc()
     local ok = valid(ks) and pc and pcall(function() ks:ExecuteConsoleCommand(pc, "HighResShot 1", pc) end)
-    say("SHOT " .. name .. " (HighResShot " .. (ok and "asked" or "NOT asked") .. ")")
+    local view = ""
+    pcall(function()
+        local r = pc.PlayerCameraManager:GetCameraRotation()
+        view = string.format("; view pitch %.0f yaw %.0f", r.Pitch, r.Yaw)
+        if CAM and ST.camWant then view = view .. string.format(" (asked %.0f / %.0f)", ST.camWant.pitch, ST.camWant.yaw) end
+    end)
+    say("SHOT " .. name .. " (HighResShot " .. (ok and "asked" or "NOT asked") .. view .. ")")
 end
 function ST.at(o) local v = o:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end
 function ST.off(p, dx, dy, dz) return { X = p.X + dx, Y = p.Y + dy, Z = p.Z + dz } end
@@ -4865,6 +4875,16 @@ local PP_PIECES = {
     { "shockwave29", "fx", "/Game/VFX/IGC/Ms29/Ms290030/NS_IGCVFX_Ms290030_ShockWave001", 3 },
     { "discharge", "fx", "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricDischargeM001", 20 },
     { "farflash", "fx", "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", 2 },
+    -- (2026-11-22, the second probe: the materials' colours, and arcs / lightning for the rim)
+    { "ring_training_red", "mesh", "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07", "/Game/VFX/Mission/Traning/MI_TrainingRing",
+      220, 1, { Pitch = 0, Yaw = 0, Roll = 90 }, { Color = { 5, 0.2, 0.4, 1 } } },
+    { "lens_purple", "mesh", "/Engine/BasicShapes/Sphere", "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", 200, 0.22,
+      { Pitch = 0, Yaw = 0, Roll = 90 }, { Color = { 0.75, 0.1, 1.0, 1 }, EmissiveIntensity = 60, Opacity = 0.5, EmissiveFresnelFalloff = 3 } },
+    { "sign", "fx", "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricSign001", 40 },
+    { "lightning", "fx", "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning", 3 },
+    { "shock1", "fx", "/Game/VFX/IGC/Ms10/Ms100010/NS_IGCVFX_Ms100010_Shock1", 6 },
+    { "spark29", "fx", "/Game/VFX/IGC/Ms29/Ms290025/NS_IGCVFX_Ms290025_Spark001", 10 },
+    { "plasma_big", "fx", "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma", 10 },
 }
 local function ppAll(only)
     local want = nil
