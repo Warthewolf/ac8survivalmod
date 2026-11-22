@@ -107,6 +107,14 @@ Moved verbatim from AGENTS.md (2026-11-14). Rule numbers are unchanged: other no
     with her still on the runway. A one-shot host event that matters is checked by its effect and fired again once the
     STORE is shut (sv_rounds_shuttle.lua SPC.storeShut: the shuttle's liftoff, its removal, the Spaceport's launch).
 
+73. A LastTGT asked on a clock pins an ace in a tail chase that goes nowhere: Mission 6's LiveAIRequestUniqueAction
+    LastTGT runs ~20 s of PursuerTarget 200 m behind you, whose close-range mode copies your heading and speed, so VALKA,
+    asked every 6 s, sat 3.1 km behind the player at their speed round every circle and along a 30 km leg (the valka
+    autotest, 2026-11-22, run 20261122_130001: median 3.1 km, 55 LastTGTs in 5 minutes). Ask it only when the player
+    has sat on the ace's tail a few seconds (right after its pass the player is behind it too), and end it with Mission
+    6's LiveAIResetUniqueAction on the ace's object after a few seconds (a unit-only reset does nothing): a turn-in,
+    not a 20 s chase (0.74.204-0.74.209: she ranged 0.5-2.8 km at 1,150-1,600 km/h and followed the leg 94-97 %).
+
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:

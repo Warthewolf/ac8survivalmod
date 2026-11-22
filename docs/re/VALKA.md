@@ -125,3 +125,16 @@ The portalprobe pieces (autotest run 20261122_131212_claude, each 220 m across 9
   Mission 10's main-gun charge systems; MI_TrainingRingGlow on SM_MGF_MagneticControlRing002_I07 drew it black;
 - the IGC "ShockWave" systems (Ms25, Ms29) are huge dust / smoke clouds, not rings.
 - The autotest's own camera (ST.look) showed every picture level, whatever its pitch [T: the read-back added].
+The black hole (0.74.207+; the user: "I want the portal to look like an event horizon from a black hole", "Needs to be a
+3D model, not a png floating in the air"): tools/valka_portal/build.sh makes eight pieces in Blender 3.3 from numbers
+(make_portal.py: the shadow sphere, the photon ring, the lensed arcs inner / outer, the disk's hot / warm / cool streak
+layers, its brighter approaching side; preview.py renders them as the game holds them), imports them into the AC8
+template project (ue_import.py: each slot on /Engine/BasicShapes/BasicShapeMaterial, AC8 has it), cooks VERSIONED and
+packs /Game/Mods/SurvivalMode/ValkaPortal into SurvivalMode_ValkaPortal_P (build_all.sh stages it with her X-02S; the
+builds without her drop it). In game each piece is coloured by a dynamic instance of AC8's MI_TrainingRing (its Color;
+BasicShapeMaterial's Color 0 for the shadow, MI_TrainingRingGlow for the haze), sized as one model (`abs`: 1 unit =
+the shadow's diameter = size_m), the arcs and the shadow facing you, the disk tipped 5 degrees towards you, the whole
+hole turned to you each tick (`face_you`), the disk's layers turning (inner faster). [V] in game, runs
+20261122_140649 / 141607 / 142542: it draws at full scale (250 m shadow, 1.6 km disk) from your own view at her reveal
+14 km out and from off its axis; hard rule 74 for its rolls. Her blinks open small ones (28 m) where she goes and comes
+back. Her opener's lens flash is dimmed (flare.portal_x 0.3) and halved while the hole is up (its beam covered it).

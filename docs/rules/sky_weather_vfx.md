@@ -32,3 +32,10 @@ Moved verbatim from AGENTS.md (2026-11-14). Rule numbers are unchanged: other no
     at 10 km) and pointing it back took them away, with the ~0.1 s black blink of rule 61 at each swap; ForceUpdate and
     SetResources weren't needed and blinked nothing. The user's layout-probe recording of 0.74.41 (2026-11-08 22-05-44).
     Swap it only behind a fade (sv_anomalies_dev.lua), never the sky params pointer (sv_sky.lua writes through it).
+
+74. From Lua, a rotation's Pitch didn't take on our own spawned components or cameras, Yaw and Roll did: VALKA's portal
+    (K2_SetWorldRotation, Pitch -89.9) lay flat, and every autotest picture (a CameraActor, Pitch set in its spawn
+    transform and by K2_SetActorRotation) came out level (2026-11-22, the valka runs of 13:12-13:46). Stand a piece up
+    with Roll and turn it with Yaw (sv_anomalies_valka.lua portalRot: { Pitch 0, Yaw yaw + 90, Roll tilt }); a Roll of -90
+    turns a mesh's +Z towards the yaw and its +Y up, -5 tips its +Z up and 5 degrees towards the yaw (the runs of 14:08 and
+    14:17: +90 put the arcs' top underneath, +5 showed the disk's underside). Keep cameras level with what they show.
