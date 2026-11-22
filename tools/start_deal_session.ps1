@@ -5,7 +5,7 @@
   Run it from your ac8survivalmod folder (the main checkout, the one with .env), after `git pull`:
       powershell -ExecutionPolicy Bypass -File .\tools\start_deal_session.ps1
   Or name the folder:
-      powershell -ExecutionPolicy Bypass -File .\tools\start_deal_session.ps1 -Repo "D:\path\to\ac8survivalmod"
+      powershell -ExecutionPolicy Bypass -File .\tools\start_deal_session.ps1 -Repo "<repo>"
   -Remote  starts it as `claude remote-control` instead, so you can follow it from the Claude app too.
 #>
 param(
