@@ -39,3 +39,11 @@ Moved verbatim from AGENTS.md (2026-11-14). Rule numbers are unchanged: other no
     with Roll and turn it with Yaw (sv_anomalies_valka.lua portalRot: { Pitch 0, Yaw yaw + 90, Roll tilt }); a Roll of -90
     turns a mesh's +Z towards the yaw and its +Y up, -5 tips its +Z up and 5 degrees towards the yaw (the runs of 14:08 and
     14:17: +90 put the arcs' top underneath, +5 showed the disk's underside). Keep cameras level with what they show.
+
+75. AC8's own materials on our meshes, as the probes found them (2026-11-22, autotest runs 20261122_153632 and 162800):
+    MI_TrainingRing ADDS light (its Color, scaled by Opacity: a black of it draws nothing, at Opacity 1 the sky still
+    shows through), so layer it for glow, never to cover; MI_TrainingRingGlow with EmissiveFresnelFalloff 0.01 is a flat
+    see-through glow, with EmissiveFresnelInverseHardness 0 nothing; the engine's /Engine/BasicShapes/BasicShapeMaterial
+    is lit (Color 0 still shows the sun's broad highlight and the sky round its rim); /Game/Base/Material/Environment/
+    Special/M_Env_Unlit with none of its parameters set draws pure, unlit black (setting Color / Emissive names gave it a
+    rim). VALKA's black hole: its shadow on M_Env_Unlit, everything else on MI_TrainingRing (tools/valka_portal/parts_lua.py).

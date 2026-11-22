@@ -129,7 +129,11 @@ local function flyby(her, m, fov, dur)
     local h = math.sqrt(F.X * F.X + F.Y * F.Y)
     local fx, fy = h > 0.01 and F.X / h or 1, h > 0.01 and F.Y / h or 0
     local rx, ry = -fy, fx
-    local at = { X = L.X + (fx * n(m[1], 900) + rx * n(m[2], 120)) * 100, Y = L.Y + (fy * n(m[1], 900) + ry * n(m[2], 120)) * 100,
+    -- (ahead 0: where she'll be half way through the shot, so she passes it mid-shot: the run of 16:19's 700 m left the
+    -- look on empty sky)
+    local ahead = n(m[1], 0) * 100
+    if ahead <= 0 then ahead = speed * dur * 0.5 end
+    local at = { X = L.X + fx * ahead + rx * n(m[2], 220) * 100, Y = L.Y + fy * ahead + ry * n(m[2], 220) * 100,
                  Z = L.Z + n(m[3], 30) * 100 }
     local go = speed * dur * n(m[4], 1.0)
     local to = { X = L.X + F.X * go, Y = L.Y + F.Y * go, Z = L.Z + F.Z * go }

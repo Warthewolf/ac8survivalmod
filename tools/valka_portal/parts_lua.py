@@ -21,8 +21,10 @@ MAIN = os.path.dirname(subprocess.run(['git', 'rev-parse', '--path-format=absolu
 MANIFEST = os.path.join(MAIN, 'build', 'valka_portal', 'manifest.json')
 CFG = os.path.join(ROOT, 'mod', 'UE4SS', 'AC8SurvivalMode', 'Scripts', 'sv_config_specials.lua')
 BH = '/Game/Mods/SurvivalMode/ValkaPortal/Model/'
+# (the shadow: AC8's M_Env_Unlit with no parameters set draws pure black, unlit; the engine's BasicShapeMaterial is lit:
+# the sun's broad highlight on it in every run; the shade probe of 16:28, hard rule 75)
 MAT = {'ring': '/Game/VFX/Mission/Traning/MI_TrainingRing', 'haze': '/Game/VFX/Mission/Traning/MI_TrainingRingGlow',
-       'shadow': '/Engine/BasicShapes/BasicShapeMaterial'}
+       'shadow': '/Game/Base/Material/Environment/Special/M_Env_Unlit'}
 DISK_TILT = -11
 SMALL = {'SM_SV_BHShadow', 'SM_SV_BHPhotonRing', 'SM_SV_BHArch2', 'SM_SV_BHArch3', 'SM_SV_BHDisk1', 'SM_SV_BHDisk2',
          'SM_SV_BHInfall'}   # (her blinks' small holes: ~100k triangles, up to 6 at once)
@@ -78,7 +80,7 @@ def part(p, small=False):
         bits.append(f'pulse = {{ {g(float(p["pulse"][0]))}, {g(float(p["pulse"][1]))} }}')
     rgb = ', '.join(g(float(v)) for v in p['rgb'])
     if kind == 'shadow':
-        params = '{ Color = { 0, 0, 0, 1 } }'
+        params = '{}'                                           # (M_Env_Unlit untouched: any of ours gave it a rim)
     elif kind == 'haze':
         params = f'{{ Color = {{ {rgb}, 1 }}, EmissiveIntensity = 1.5, Opacity = {g(float(p["opacity"]))}, EmissiveFresnelFalloff = 0.01 }}'
     else:
@@ -90,14 +92,6 @@ def part(p, small=False):
 SKIP = ('SM_SV_BHDiskHaze', 'SM_SV_BHArchHaze')   # (the runs of 15:45 / 16:08: the haze read as flat pale plates)
 
 
-# ((2026-11-22) the run of 15:57: the engine's BasicShapeMaterial is lit, so the shadow was a glossy black ball mirroring
-# the sea and the sunset. An unlit black over it (MI_TrainingRing, Color 0, Opacity 1, 0.4 % larger), drawn first of the
-# see-through pieces (sort -10): the disk's near side over it, the ball beneath still hiding what's behind it)
-# (three of them, 0.2 % apart: MI_TrainingRing at Opacity 1 still let the clouds through in the probe of 15:36, and one
-# left the ball's red sheen in the run of 16:08)
-SHADES = [('{ mesh = "' + BH + 'SM_SV_BHShadow", abs = true, size = %s, open = { 0.08, 0.4 }, close = { 0.55, 0.92 }, sort = %d, '
-           'mat = "' + MAT['ring'] + '", params = { Color = { 0, 0, 0, 1 }, Opacity = 1 } }') % (sz, so)
-          for sz, so in (('1.002', -12), ('1.004', -11), ('1.006', -10))]
 
 
 def block(pieces, indent, small=False):
@@ -106,8 +100,7 @@ def block(pieces, indent, small=False):
         if (small and p['name'] not in SMALL) or p['name'].startswith(SKIP):
             continue
         lines.append(' ' * indent + part(p, small) + ',')
-        if p['name'] == 'SM_SV_BHShadow':
-            lines += [' ' * indent + sh + ',' for sh in SHADES]
+        # (no black over it: MI_TrainingRing adds light, its black changed nothing, the run of 16:19)
     return lines
 
 

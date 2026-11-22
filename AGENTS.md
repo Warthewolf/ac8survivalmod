@@ -93,7 +93,7 @@ Hard rules are numbered lessons from real tests; old notes cite them as "hard ru
 | spawning, events, paths, AI, damage | `docs/rules/ai_spawning_behaviour.md` | 1-6 15 16 17 20 22 26 35-41 45 46 54 59 64 73 |
 | menus, HUD, radio, music | `docs/rules/ui_menu_hud.md` | 12 13 18 24 29 33 52 57 |
 | co-op | `docs/rules/coop.md` | 48-51 53 |
-| sky, clouds, lightning, VFX | `docs/rules/sky_weather_vfx.md` | 56 60-62 74 |
+| sky, clouds, lightning, VFX | `docs/rules/sky_weather_vfx.md` | 56 60-62 74 75 |
 | leaderboard | `docs/rules/leaderboard.md` | |
 | source layout, how files are split, subtitles | `docs/rules/layout.md` | |
 | allowed sources, release exclusions, toolchain | `docs/rules/sources_and_toolchain.md` | |

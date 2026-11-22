@@ -4046,3 +4046,31 @@ nothing installed in her game, nothing pushed.
   fine: not reproduced.
 - Checks: lua_check, ini_check, bosses_test (her preload carries the portal's pieces), coop_guard / coop_rejoin, paths
   and size checks, every build_all.sh. Autotest runs 20261122_130001 (baseline) to the 0.74.210 run: 19/19 from 0.74.204.
+
+## 0.74.211-0.74.216 (-coop2mp.303-308, runtime 0.32.42; branch feature/valka-active, 2026-11-22): VALKA's arrival cutscene, her spawn in her portal, the detailed black hole
+The user: "See if it's also possible to change Valka's spawn location to the inside of the Portal", "Have a Portal
+Opening animation too where it opens and have a closing animation too", "Create a cutscene similar to the Invincible
+Fleets Arrival of the Portal Opening, and Valka coming out of it", "Does it have to have the lines styling on the
+disc? Can't you give me several different designs", "Remodel the 3D Event Horizon Black Hole, I want it as detailed as
+you can make it". Test builds only (VALKA=1 dev stages, the autotest gate); nothing installed, nothing pushed.
+- Her spawn: her plane and her opener railgun's sit 3 km over their unit's point in the world data and SV_Spawn keeps
+  that offset (every run of the day had her 3.0 km over the portal): CFG unit_up_m 3000 taken off at both spawns; she
+  comes out 21-23 m from the portal's middle, checked by the valka suite (`special: VALKA comes out N m ...`).
+- The portal's opening and closing animated piece by piece (open / close windows, flare, spin-up), a shimmer (pulse);
+  no lens flash with it up.
+- Her arrival cutscene (sv_valka_cine.lua, CFG.specials.valka.cine, in every build that has her): six letterboxed
+  shots from the opening till she's past (the fleet's camera-actor way), your plane invincible on a 25 km autopilot
+  circle, the game's HUD and Survival's held, the event's focus camera skipped, the fade; her charge 8.5 s meanwhile.
+  The view is kept by where the screen's camera is (GetViewTarget's pcall always failed). Joiners run it from the
+  host's "vp" (not run in co-op).
+- The black hole remodelled (tools/valka_portal design `detailed`, docs/re/VALKA.md section 9): ~3,500 noise-shaped
+  wisps in eight bands, the arch made from the disk's far side bent over the shadow, 621,936 triangles in 36 pieces;
+  the five other designs kept and sent to the user as Blender previews (soft, smooth, glow, silk, hybrid); manifest.json
+  drives the import, the cook check and tools/valka_portal/parts_lua.py (the game's parts). No LODs (the commandlet
+  can't make them).
+- Found on the way: MI_TrainingRing adds light and never quite covers (a probe of three overlapping planes);
+  MI_TrainingRingGlow with EmissiveFresnelFalloff 0.01 is a flat see-through glow; the engine's BasicShapeMaterial is
+  lit (the sun's broad highlight on the shadow). The autotest's window grabs come up to 8 s late: grabs after the
+  cutscene had ended looked like it losing the view (contact_sheet.py --hires uses the game's own pictures).
+- Checks: lua_check, every build_all.sh (bosses_test, coop_guard, paths, sizes). Autotest valka 22/22 on 0.74.212 to
+  0.74.215 (runs 20261122_154542 to 161940).

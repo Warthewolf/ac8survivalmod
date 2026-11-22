@@ -138,3 +138,42 @@ hole turned to you each tick (`face_you`), the disk's layers turning (inner fast
 20261122_140649 / 141607 / 142542: it draws at full scale (250 m shadow, 1.6 km disk) from your own view at her reveal
 14 km out and from off its axis; hard rule 74 for its rolls. Her blinks open small ones (28 m) where she goes and comes
 back. Her opener's lens flash is dimmed (flare.portal_x 0.3) and halved while the hole is up (its beam covered it).
+
+## 9. The detailed black hole and her arrival cutscene (2026-11-22, 0.74.211-0.74.215)
+The user: "Remodel the 3D Event Horizon Black Hole, I want it as detailed as you can make it" (after a picture of an
+Interstellar-style hole: a broad white-hot arch over the shadow, a thin photon ring, the disk a bright band across it),
+"Create a cutscene similar to the Invincible Fleets Arrival of the Portal Opening, and Valka coming out of it", "See if
+it's also possible to change Valka's spawn location to the inside of the Portal", "Have a Portal Opening animation too".
+- The model: tools/valka_portal/make_portal.py design `detailed` (the others kept: soft, smooth, glow, silk, hybrid,
+  lines; `<design>/manifest.json` lists each piece's kind, colour, opacity, spin). ~3,500 wisps shaped by Blender's
+  noise (each wobbling, pinched, tapering to points, spiralling in; spiral-arm wisps faster) in eight bands from r 0.55
+  to 3.8 (the shadow 1.0 across), white-hot to orange, with hot knots and dark lanes, the disk thicker outwards; the
+  arch is the disk's own far side bent over the shadow (each wisp from its ring of the disk, swept out to the disk's
+  radius at the horizon on both sides, broadest and hotter on the approaching side) and a thin second image under it;
+  noisy infall streams; sparks. 621,936 triangles in 36 pieces; LODs not made (the commandlet has neither
+  StaticMeshEditorSubsystem nor a working EditorStaticMeshLibrary.set_lods: -1). build.sh cooks the design in
+  PORTAL_DESIGN; parts_lua.py writes CFG.specials.valka.portal.parts and blink_portal.parts from its manifest.
+- AC8's materials on it [V, probe run 20261122_153632: three overlapping planes each]: MI_TrainingRing is see-through
+  and blends (overlaps more solid, not brighter; at Opacity 1 the clouds still show through); MI_TrainingRingGlow with
+  EmissiveFresnelFalloff 0.01 is a flat see-through glow; EmissiveFresnelInverseHardness 0 draws nothing. The engine's
+  BasicShapeMaterial is lit: the shadow ball mirrored the sea and the sunset, so three unlit blacks (MI_TrainingRing,
+  Color 0) lie over it, drawn first of the see-through pieces (`sort`, SetTranslucentSortPriority), the ball beneath
+  still hiding what's behind it. Haze layers (flat sheets in the glow material) read as pale plates: left out.
+- Its opening and closing (portalTick): each piece in its own window of open_s / close_s (`open` / `close`): a pinpoint
+  and the photon ring first (`flare`: bright as it opens and as it snaps shut), the shadow, the disk from the inside
+  out, the arch last; closing, the outside falls in first; the disk spins up as it opens and faster as it drains;
+  `pulse` { amount, Hz } a shimmer on the arch and the photon ring.
+- Her spawn: her plane and her opener railgun's sit 3 km over their unit's point in the world data
+  (build_survival_units.py, (0, 0, 300000)) and SV_Spawn keeps that offset: every run showed her 3.0 km over her
+  portal. CFG unit_up_m 3000 is taken off at both spawns: she comes out 21-23 m from its middle [V, runs from 15:13].
+- The cutscene (sv_valka_cine.lua, CFG.specials.valka.cine; in every build that has her): from the portal's opening
+  till she's out, two camera actors and the engine's blend (the fleet's way, sv_fleet_surface.lua, which is test-only),
+  letterboxed 2.39, six shots in the portal's frame (far off as it opens; low under its disk; a long lens into the
+  shadow; beside her way out; her coming at the camera; a fly-by as she streaks past), your plane invincible on a 25 km
+  autopilot circle (on a 3.5 km one its bank showed in the pictures), the game's HUD widgets and Survival's HUD held
+  (callouts and subtitles through), the event's focus camera not fired, a shake at the opening and her shot, the fade.
+  Her opener charges cine.charge_s (8.5) meanwhile. The view is kept by where the screen's camera is (the camera
+  manager's place against ours: GetViewTarget's pcall failed every time); a line each second says who has it [V: ours
+  throughout, runs 20261122_160748 on]. Joiners run it from the host's "vp" open (not run in co-op).
+- The autotest's window grabs come when job.py reads the SHOT line, late (up to 8 s): the grabs after the cutscene
+  looked like it losing the view to your plane. contact_sheet.py --hires uses the game's own HighResShot pictures.
