@@ -1022,7 +1022,8 @@ def check_escort_decoy_build():
     events += [se.zfa_tls_event(s_, n) for s_ in se.CARGO_ARMS for n, _, _ in se.CARGO_ARMS[s_]] + [se.zfa_tls_event(f[0]) for f in se.ZFA_FALLBACK]
     events += [se.zfa_cover_event(s_, n) for s_ in se.CARGO_ARMS for n, _, _ in se.CARGO_ARMS[s_]] + [se.zfa_cover_event(f[0]) for f in se.ZFA_FALLBACK]
     events += [f'RE_SV_CargoRemove_{c[0]}' for c in se.CARGO_SHIPS] + [f'RE_SV_ZfaGo{f[0]}' for f in se.ZFA_FALLBACK]
-    events += ['RE_SV_DecoyBaitLaser', 'RE_SV_DecoyBaitLaserOff', 'RE_SV_DecoyBaitPing', 'RE_SV_DecoyKill', 'SV_DecoySpearImpact']
+    events += ['RE_SV_DecoyBaitLaser', 'RE_SV_DecoyBaitLaserOff', 'RE_SV_DecoyBaitPing', 'RE_SV_DecoyKill', 'SV_DecoySpearImpact',
+               'RE_SV_SolgPing']
     events += [f'RE_SV_DecoySpear_{k + 1}' for k in range(len(se.DECOY_SPEARS))]
     events += [f'RE_SV_Decoy{x}_{nn:02d}' for nn, *_ in se.decoy_uavs() for x in ('LaserOn', 'LaserOff', 'MarkOnMe', 'Ping')]
     events += [ev for _, ev, _, _, _ in se.decoy_radio()]

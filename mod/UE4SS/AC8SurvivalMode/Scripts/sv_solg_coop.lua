@@ -70,7 +70,10 @@ end
 local function hideValka(on)
     local nn = 0
     for _, o in ipairs(valkaCopies()) do
-        if valid(o) then pcall(setGone, o, on); nn = nn + 1 end
+        if valid(o) then
+            pcall(setGone, o, on); nn = nn + 1
+            pcall(function() o.bIsActivated = not on end)   -- (off the radar and out of the fight, as the host's: 2026-11-22)
+        end
     end
     return nn
 end

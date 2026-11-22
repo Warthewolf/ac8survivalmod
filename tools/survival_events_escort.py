@@ -746,6 +746,10 @@ def build_decoy(g, flag, stock_ep):
     assert arg_values(t_nav)[1:] == ['AA_Unit_01_Ground0', 'Quadruple', 'false'], arg_values(t_nav)
     remote('RE_SV_DecoyBaitPing')
     g.execute(t_nav, 'RE_SV_DecoyBaitPing', {1: DECOY_BAIT_UNIT})
+    # ((2026-11-22) the user: "add a minimap alert ping as to where the SOLG spawns"): on its SP shell's unit, up from
+    # its arrival to its end (Scripts/sv_solg.lua fires it on each game: SOLG.C.ping)
+    remote('RE_SV_SolgPing')
+    g.execute(t_nav, 'RE_SV_SolgPing', {1: SOLG_UNITS['SP']})
     for nn, unit, obj, munit, mobj in decoy_uavs():
         up = f'SV_DecoyUavUp_{nn:02d}'
         g.trigger('01_E_AreaA_ReinforcementAppearance_0', up, arg_changes={0: unit})

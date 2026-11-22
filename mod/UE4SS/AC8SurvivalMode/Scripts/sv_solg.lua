@@ -70,6 +70,7 @@ SOLG = { C = {
     -- "The shooter, full pay") a KEW shell destroyed: hop_s later every live shell within reach_m (an arm's are 40 m
     -- apart in a line: its one or two neighbours) loses damage_pct of its health; one brought down blows the same way
     -- (its normal pay: the team's, as any shot down). Ours (AC:I has none; AC8's induced explosion reaches 20 m)
+    ping = { enabled = true, every_s = 20 },   -- (its minimap alert: RE_SV_SolgPing on its SP shell's unit)
     kew_chain = { enabled = true, reach_m = 45, damage_pct = 60, hop_s = 0.4 },
     fcs_table = "/Game/Mods/SurvivalMode/Data/DT_SV_SolgFCS.DT_SV_SolgFCS", fcs_row = "SV_FCS_SolgTLS",
     laser_model_row = "SV_Model_SOLG_LSR",
@@ -360,6 +361,22 @@ function SOLG.tick(now)
         if ph and SOLG.phaseOn then pcall(SOLG.phaseOn, ph) end
     end
     local clock = os.clock()
+    -- ((2026-11-22) the user: "add a minimap alert ping as to where the SOLG spawns") Mission 22's "look here" on its
+    -- SP shell's unit (RE_SV_SolgPing), on this game's own copy: at once, then every every_s while it's up
+    local pg = SOLG.C.ping
+    if pg and pg.enabled ~= false and S.targets and not S.destroyed and type(SV_Event) == "function" and clock >= (S.pingAt or 0) then
+        local sp = nil
+        for _, e in ipairs(S.targets) do if e.key == "SP" and e.live then sp = e end end
+        if sp then
+            S.pingAt = clock + n(pg.every_s, 20)
+            local okP, r = pcall(SV_Event, "RE_SV_SolgPing")
+            S.pings = (S.pings or 0) + 1
+            if S.pings == 1 or not (okP and r == 1) then
+                sl(string.format("pinged on the minimap (RE_SV_SolgPing %s; every %d s while it's up)",
+                    okP and r == 1 and "fired" or ("NOT fired: " .. tostring(r)), n(pg.every_s, 20)))
+            end
+        end
+    end
     for i = #S.panels, 1, -1 do
         local p = S.panels[i]
         if clock >= p.gone or not liveObj(p.actor) then

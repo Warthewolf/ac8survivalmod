@@ -260,6 +260,11 @@ function VSOLG.tick(c, s, o, now)
     if valid(o) then pcall(function() o.bIsInvincible = true end) end   -- (gone: setGone's, kept on)
     if valid(o) and G.park and G.state ~= "done" then     -- (parked: nobody in her reach)
         local okP = pcall(function() o:K2_SetActorLocation(G.park, false, {}, true) end)
+        -- ((2026-11-22, the user's co-op run: parked 50 km out she still fired 86 missiles, "she still comes back into
+        -- the map") off the radar and out of the fight: deactivated (as a downed co-op player's plane), every tick in case
+        -- the game puts her back on; on again when she's back
+        local okD, act = pcall(function() if o.bIsActivated ~= false then o.bIsActivated = false end; return o.bIsActivated end)
+        if not G.offSaid then G.offSaid = true; sl("she's off the radar: " .. (okD and act == false and "deactivated" or "NOT deactivated (" .. tostring(act) .. ")")) end
         if not G.parkSaid then
             G.parkSaid = true
             sl(string.format("she's parked out of the fight%s: (%.0f, %.0f) km, %.0f km up", okP and "" or " (NOT moved)",
@@ -291,6 +296,7 @@ function VSOLG.tick(c, s, o, now)
         -- back on your six through a portal (her hunt's own way back: a chase blink), damageable again at 20 %
         G.state = "done"
         pcall(function() o.MinHealth = 0 end)
+        pcall(function() o.bIsActivated = true end)          -- (back on the radar, in the fight)
         if SCOOP then pcall(SCOOP.gone, false) end
         s.vanished, s.blinkWhy, s.blinkUntil = true, "chase", now + 5
         s.railAt = now + n(c.railgun_every_s, 20)
