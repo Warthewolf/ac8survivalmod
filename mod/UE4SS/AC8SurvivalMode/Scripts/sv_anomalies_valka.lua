@@ -1486,11 +1486,71 @@ local function portalMesh(pc, P, part, a, smc, kml)
             end
         end
     end
+    -- ((2026-11-22) the user: "the portal opening and closing is so laggy its not smooth at all": Lua sets things 4 times
+    -- a second) each piece on its own scaler (SK_SV_PortalScaler: tools/valka_portal/scaler.py), whose one bone B the
+    -- engine scales every frame as it plays A_SV_PortalGrow / _Shrink (held at 0.001 till its window), and spun by an
+    -- engine RotatingMovementComponent; the tick only starts them (portalTick). No scaler (an older container): as before
+    local sk = P.scaler ~= false and SPC.V.asset(SPC.V.PORTAL_SCALER) or nil
+    local grow = sk and SPC.V.asset(SPC.V.PORTAL_GROW) or nil
+    local sc = nil
+    if sk and grow then
+        local okS, x = pcall(function()
+            return a:AddComponentByClass(StaticFindObject("/Script/Engine.SkeletalMeshComponent"), false,
+                { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }, false)
+        end)
+        if okS and valid(x) then sc = x end
+    end
+    if sc then
+        local okM = pcall(function() sc:SetSkeletalMeshAsset(sk) end) or pcall(function() sc:SetSkeletalMesh(sk, true) end)
+        pcall(function() sc:SetCollisionEnabled(0) end)
+        pcall(function() sc:SetCastShadow(false) end)
+        pcall(function() sc.VisibilityBasedAnimTickOption = 0 end)   -- (its bone moved even off screen: AlwaysTickPoseAndRefreshBones)
+        pcall(function() sc:K2_SetWorldLocationAndRotation({ X = P.at.X, Y = P.at.Y, Z = P.at.Z }, portalRot(part, P.yaw), false, {}, true) end)
+        pcall(function() sc:PlayAnimation(grow, false) end)
+        pcall(function() sc:SetPlayRate(0) end)
+        pcall(function() sc:SetPosition(0, false) end)
+        local okA = okM and pcall(function() comp:K2_AttachToComponent(sc, FName("B"), 2, 2, 0, false) end)
+        if okA then
+            pcall(function() comp:SetRelativeScale3D({ X = e.k, Y = e.k, Z = e.k * e.flat }) end)
+            pcall(function() comp:K2_SetRelativeRotation({ Pitch = 0, Yaw = e.spun, Roll = 0 }, false, {}, true) end)
+            e.sc = sc
+            if e.spin ~= 0 then
+                local okR, rot = pcall(function() return a:AddComponentByClass(StaticFindObject("/Script/Engine.RotatingMovementComponent"), false,
+                    { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }, false) end)
+                if okR and valid(rot) then
+                    pcall(function() rot:SetUpdatedComponent(comp) end)
+                    pcall(function() rot.bRotationInLocalSpace = true end)
+                    e.rot = rot
+                    SPC.V.portalSpin(e, 0.15)
+                end
+            end
+            return e
+        end
+        pcall(function() sc:K2_DestroyComponent(sc) end)     -- (not on it: the old way below)
+    end
     pcall(function() comp:K2_SetWorldLocation({ X = P.at.X, Y = P.at.Y, Z = P.at.Z }, false, {}, true) end)
     pcall(function() comp:K2_SetWorldRotation(portalRot(part, P.yaw), false, {}, true) end)
     if e.spun ~= 0 then pcall(function() comp:K2_AddLocalRotation({ Pitch = 0, Yaw = e.spun, Roll = 0 }, false, {}, true) end) end
     pcall(function() comp:SetWorldScale3D({ X = 0.001, Y = 0.001, Z = 0.001 }) end)
     return e
+end
+SPC.V.PORTAL_SCALER = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SK_SV_PortalScaler"
+SPC.V.PORTAL_GROW = "/Game/Mods/SurvivalMode/ValkaPortal/Model/A_SV_PortalGrow"
+SPC.V.PORTAL_SHRINK = "/Game/Mods/SurvivalMode/ValkaPortal/Model/A_SV_PortalShrink"
+-- a piece's engine spin at its rate x k (the portal's spin-up as it opens, faster as it drains)
+function SPC.V.portalSpin(e, k)
+    if not e.rot then return end
+    local d = e.spin * k
+    if e.spinK and math.abs(d - e.spinK) < 0.5 then return end
+    e.spinK = d
+    pcall(function() e.rot.RotationRate = e.axis == "x" and { Pitch = 0, Yaw = 0, Roll = d } or { Pitch = 0, Yaw = d, Roll = 0 } end)
+end
+-- a piece's scaler: its animation started at the rate that fills `secs`
+local function scalerGo(e, anim, secs, fresh)
+    local okP = true
+    if fresh then okP = pcall(function() e.sc:PlayAnimation(anim, false) end) end
+    pcall(function() e.sc:SetPlayRate(1 / math.max(0.05, secs)) end)
+    return okP
 end
 -- the portal at `at` (cm) facing `yaw`; true if it came up
 -- (pc: another portal's settings, her blinks' small ones: blink_portal; quiet: not logged)
@@ -1529,8 +1589,11 @@ function SPC.V.portalOpen(c, s, at, yaw, now, pc, quiet)
     s.portal = P
     SPC.V.PORTAL_STATS.opened = SPC.V.PORTAL_STATS.opened + 1
     SPC.V.PORTAL_STATS.parts = SPC.V.PORTAL_STATS.parts + #P.meshes
-    if not quiet then log(string.format("special: VALKA's portal opens at (%.1f, %.1f) km, %.1f km up, facing %.0f, %.0f m across: %d mesh parts (%s)",
-        at.X / 100000, at.Y / 100000, at.Z / 100000, P.yaw, P.size / 100, #P.meshes, table.concat(said, ", "))) end
+    local onSc = 0
+    for _, e in ipairs(P.meshes) do if e.sc then onSc = onSc + 1 end end
+    P.onScalers = onSc
+    if not quiet then log(string.format("special: VALKA's portal opens at (%.1f, %.1f) km, %.1f km up, facing %.0f, %.0f m across: %d mesh parts, %d on their scalers (the engine's every frame) (%s)",
+        at.X / 100000, at.Y / 100000, at.Z / 100000, P.yaw, P.size / 100, #P.meshes, onSc, table.concat(said, ", "))) end
     SPC.V.portalFx(c, s, "open")
     return true
 end
@@ -1609,7 +1672,36 @@ function SPC.V.portalTick(c, s, now)
     end
     local spinK = y and (1 + 3 * y) or (0.15 + 0.85 * x)
     for _, e in ipairs(P.meshes) do
-        if liveObj(e.comp) then
+        if e.sc and liveObj(e.comp) then                -- (on its scaler: the engine scales and spins it every frame)
+            if y then
+                local w = e.part.close
+                local from = (P.closeFrom or now) + (w and w[1] or 0) * close
+                if not e.shrunk and now >= from then
+                    e.shrunk = true
+                    scalerGo(e, SPC.V.asset(SPC.V.PORTAL_SHRINK), ((w and (w[2] - w[1])) or 1) * close, true)
+                end
+            elseif not e.grown then
+                local w = e.part.open
+                if now >= P.from + (w and w[1] or 0) * open then
+                    e.grown = true
+                    scalerGo(e, nil, ((w and (w[2] - w[1])) or 1) * open, false)
+                end
+            end
+            SPC.V.portalSpin(e, spinK)
+            local bright = 1
+            if y and e.part.flare then bright = 1 + 4 * math.max(0, math.min(1, (y - 0.55) / 0.35))
+            elseif not y and e.part.flare then bright = 1 + 3 * (1 - math.max(0, math.min(1, x / 0.45))) end
+            if e.mid and e.color and (e.pulse or bright ~= 1) then
+                local f = bright
+                if e.pulse then
+                    local amp, hz = tonumber(e.pulse[1]) or 0, tonumber(e.pulse[2]) or 1
+                    f = f * (1 + amp * (0.6 * math.sin(6.283 * hz * now + e.ph) + 0.4 * math.sin(6.283 * hz * 2.37 * now + 1.7 * e.ph)))
+                end
+                local cc = e.color
+                pcall(function() e.mid:SetVectorParameterValue(FName("Color"), { R = cc[1] * f, G = cc[2] * f, B = cc[3] * f, A = cc[4] or 1 }) end)
+            end
+            if turn then pcall(function() e.sc:K2_SetWorldRotation(portalRot(e.part, P.yaw), false, {}, true) end) end
+        elseif liveObj(e.comp) then
             local gi, bright = 1, 1
             if y then
                 local w = e.part.close

@@ -51,6 +51,58 @@ def import_glb(name):
     return meshes
 
 
+# ((2026-11-22) the user: "the portal opening and closing is so laggy") its scaler (tools/valka_portal/scaler.py): a
+# skeletal mesh of one bone and three scale animations the engine plays every frame, each piece hung on one in game
+SCALER, SCALER_ANIMS = 'SK_SV_PortalScaler', ['A_SV_PortalGrow', 'A_SV_PortalHold', 'A_SV_PortalShrink']
+
+
+def import_scaler(mat):
+    src = os.path.join(SRC, SCALER + '.gltf')
+    assert os.path.exists(src), 'no ' + src + ' (scaler.py)'
+    before = set(EAL.list_assets(DEST, recursive=True))
+    t = unreal.AssetImportTask()
+    t.set_editor_property('filename', src)
+    t.set_editor_property('destination_path', DEST)
+    t.set_editor_property('automated', True)
+    t.set_editor_property('replace_existing', True)
+    t.set_editor_property('save', True)
+    AT.import_asset_tasks([t])
+    kinds = {}
+    for q in sorted(set(EAL.list_assets(DEST, recursive=True)) - before):
+        a = q.split('.')[0]
+        if EAL.does_asset_exist(a):
+            kinds.setdefault(unreal.load_asset(a).get_class().get_name(), []).append(a)
+    say(f'scaler import: { {k: len(v) for k, v in kinds.items()} }')
+    assert len(kinds.get('SkeletalMesh', [])) == 1 and len(kinds.get('AnimSequence', [])) == 3, kinds
+    for cls in ('Material', 'MaterialInstanceConstant', 'Texture2D', 'PhysicsAsset'):
+        for a in kinds.get(cls, []):
+            EAL.delete_asset(a)                      # (the importer's own: never ours in the game)
+    for cls, nm in (('SkeletalMesh', SCALER), ('Skeleton', 'SKEL_SV_PortalScaler')):
+        q = kinds[cls][0]
+        if q != f'{DEST}/{nm}':
+            EAL.rename_asset(q, f'{DEST}/{nm}')
+    for q in kinds['AnimSequence']:
+        want = [w for w in SCALER_ANIMS if w in q.rsplit('/', 1)[-1]]
+        assert len(want) == 1, (q, want)
+        if q != f'{DEST}/{want[0]}':
+            EAL.rename_asset(q, f'{DEST}/{want[0]}')
+        an = unreal.load_asset(f'{DEST}/{want[0]}')
+        EAL.save_loaded_asset(an)
+        say(f'{want[0]}: an animation of {an.get_editor_property("sequence_length"):.2f} s')
+    sk = unreal.load_asset(f'{DEST}/{SCALER}')
+    mats = list(sk.get_editor_property('materials'))
+    for m in mats:
+        m.set_editor_property('material_interface', mat)
+    sk.set_editor_property('materials', mats)
+    try:
+        sk.set_editor_property('physics_asset', None)
+    except Exception as e:
+        say(f'scaler: physics asset left ({e})')
+    EAL.save_loaded_asset(sk)
+    EAL.save_loaded_asset(sk.get_editor_property('skeleton'))
+    say(f'{SCALER}: {len(mats)} slot(s) on BasicShapeMaterial, its skeleton SKEL_SV_PortalScaler')
+
+
 def main():
     say(f'source {SRC}')
     mat = unreal.load_asset('/Engine/BasicShapes/BasicShapeMaterial')
@@ -106,6 +158,7 @@ def main():
         b = sm.get_bounds()
         say(f'{name}: {len(slots)} slot(s) on BasicShapeMaterial, bounds radius {b.sphere_radius:.1f} cm, '
             f'{sm.get_num_triangles(0) if hasattr(sm, "get_num_triangles") else "?"} tris')
+    import_scaler(mat)
     say('done')
 
 
