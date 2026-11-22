@@ -5161,7 +5161,13 @@ SUITES.solg2 = function()
         local worst, nn = 0, 0
         for _, e in ipairs(SOLG.debugTargets and SOLG.debugTargets() or {}) do
             if not e.live then goto skip end                  -- (one shot down is moved out of the way)
-            local okL, L = pcall(function() return e.o:K2_GetActorLocation() end)
+            -- ((2026-11-22) its lock point (HitCenterOffset off its base, in its own frame), where its box shows)
+            local okL, L = pcall(function()
+                local P, h = e.o:K2_GetActorLocation(), e.o.HitCenterOffset
+                local F, R, U = e.o:GetActorForwardVector(), e.o:GetActorRightVector(), e.o:GetActorUpVector()
+                return { X = P.X + F.X * h.X + R.X * h.Y + U.X * h.Z, Y = P.Y + F.Y * h.X + R.Y * h.Y + U.Y * h.Z,
+                         Z = P.Z + F.Z * h.X + R.Z * h.Y + U.Z * h.Z }
+            end)
             local okB, B = pcall(function() return SOLG.boneLoc(e.bone) end)
             if okL and okB and L and B then
                 local d = math.sqrt((L.X - B.X) ^ 2 + (L.Y - B.Y) ^ 2 + (L.Z - B.Z) ^ 2) / 100
@@ -5169,7 +5175,7 @@ SUITES.solg2 = function()
             end
             ::skip::
         end
-        ST.check(nn > 80 and worst < 30, string.format("targets held on their bones (%d read, worst %.1f m off)", nn, worst))
+        ST.check(nn > 80 and worst < 30, string.format("targets' lock points held on their bones (%d read, worst %.1f m off)", nn, worst))
     end)
     for k, v in ipairs({ { 0, -3000, 200, 50, "boxes_side" }, { 700, -1600, 300, 50, "boxes_arms" } }) do
         A.do_(function() local at, look = solgCam(v[1], v[2], v[3]); ST.look(at, look, v[4]) end)
