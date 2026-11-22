@@ -5748,7 +5748,12 @@ SUITES.scalerprobe = function()
     for k = 1, 6 do                                       -- (its own ticks: the portal ticked as her round would)
         A.do_(function()
             pcall(SPC.V.portalTick, CFG.specials.valka, SP.h, os.clock())
-            if SP.e and SP.e.sc then ST.info(string.format("scaler tick %d: %s", k, (spBone(SP.e.sc)))) end
+            if SP.e and SP.e.sc then
+                local okW, w = pcall(function() return SP.e.comp:K2_GetComponentScale().X end)
+                local nm = ""
+                pcall(function() nm = SP.e.part.mesh:match("[^/]+$") end)
+                ST.info(string.format("scaler tick %d: %s; the piece (%s) world scale %s", k, (spBone(SP.e.sc)), nm, okW and string.format("%.3f", w) or "?"))
+            end
         end)
         A.wait(0.5)
     end
