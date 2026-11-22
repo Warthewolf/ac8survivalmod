@@ -5471,6 +5471,68 @@ SUITES.solglaser = function()
     A.do_(function() SOLG.stop("laser test over") end)
 end
 
+-- ((2026-11-22) the ZFA-44s' lasers' sound (the user: "check that the ZFA, and Tanacorn Lasers are also using the
+-- correct laser sounds"): a carrier sent (ESC.testCarrier, Ctrl+DEL's), its ZFA-44s out and each carrying AC7's
+-- LaserInterceptor; every laser's volley on command (ESC.testLaser, Ctrl+['s); the TLS's shooting sound posted on each
+-- laser (ZLI.sound: on, then its stop), none refused; pictures of a ZFA-44 firing. (The sound itself: the user's ears.)
+local function zfaLasers()
+    local out = {}
+    for _, x in ipairs(FindAllOf("BP_SV_LaserInterceptor_C") or {}) do
+        if valid(x) and not tostring(x:GetFullName()):find("Default__", 1, true) then out[#out + 1] = x end
+    end
+    return out
+end
+SUITES.zfasound = function()
+    intoRun()
+    A.do_(function()
+        local z = CFG.allies.carrier.zfa
+        ST.check(z.li_fire_sound == "AKE_GEN_PLAYER_ARMS_SPWeapon_TLS_Emit_Play" and z.li_fire_stop == "AKE_GEN_PLAYER_ARMS_SPWeapon_TLS_Emit_Stop",
+            "the LaserInterceptor's shooting sound is the TLS's (on and stop)", tostring(z.li_fire_sound))
+        ST.marks.z0 = ST.n
+        if not ST.check(ESC and ESC.testCarrier and ESC.testLaser, "the carrier and laser test hooks are in this build") then return "abort" end
+        ESC.testCarrier()
+    end)
+    A.log_("carries AC7's LaserInterceptor", 240, "z0", true, function(l)
+        if not ST.check(l ~= nil, "a ZFA-44 carries AC7's LaserInterceptor", l) then return "abort" end
+    end)
+    A.wait(6)
+    A.do_(function()
+        ST.marks.z1 = ST.n
+        ESC.testLaser()
+    end)
+    A.log_("fires a volley", 5, "z1", true, function(l) ST.check(l ~= nil, "the lasers fire a volley on command", l) end)
+    for k = 1, 4 do
+        A.do_(function()
+            local L = zfaLasers()[1]
+            local at = L and ST.at(L)
+            if at then ST.look({ X = at.X - 8000, Y = at.Y - 12000, Z = at.Z + 3000 }, at, 45) end
+        end)
+        A.wait(0.4)
+        A.do_(function() ST.shot("zfasound_volley_" .. k) end)
+        A.wait(1.0)
+    end
+    A.do_(function()
+        ST.lookBack()
+        local L = zfaLasers()
+        local on, off = 0, 0
+        for _, x in ipairs(L) do                          -- (the sound posted on each laser, then stopped)
+            local r = { li = x }
+            ZLI.sound(r, true)
+            if r.sndOn then on = on + 1 end
+            ZLI.sound(r, false)
+            if not r.sndOn then off = off + 1 end
+        end
+        ST.check(#L > 0 and on == #L and off == #L, string.format("the TLS shooting sound posted on each of %d lasers and stopped (%d / %d)", #L, on, off))
+        ST.check(ST.findLog("shooting sound", ST.marks.z0, true) == nil, "no laser's sound refused", ST.findLog("shooting sound", ST.marks.z0, true))
+    end)
+    A.wait(8)
+    A.do_(function()
+        local n = 0
+        for i = ST.marks.z1 + 1, ST.n do if (ST.lines[i] or ""):find("fires a volley", 1, true) then n = n + 1 end end
+        ST.info(string.format("zfasound: %d volleys fired on command; their sound on with each, off with its beam", n))
+    end)
+end
+
 -- ---- the tick ----------------------------------------------------------------------------------------------------
 local started, t0, finished = false, nil, false
 local function finish(why)
