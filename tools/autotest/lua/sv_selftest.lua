@@ -160,6 +160,7 @@ local function holdPlane(now)
             pcall(function() pawn:SetIsInvincible(true) end)
         end
     end
+    if VCINE and VCINE.active and VCINE.active() then return end   -- ((2026-11-22) her cutscene flies your plane meanwhile)
     local a = addrOf(pawn)
     -- ((2026-11-22) ST.apCentre { X, Y } (cm), the valka suite's: the circle's centre elsewhere, so your plane flies a
     -- leg there; nil: round the airfield)
