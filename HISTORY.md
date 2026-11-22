@@ -4107,3 +4107,15 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   solgjoiner 17/17 (0.75.14 15/17: a joiner's arms didn't break, its early return before the arm check), valkasolg 30/30,
   coop_guard passed with "vs". Clean-up: the SOLG's unused hooks (onDestroyed, onPause, onArm) and hold_s taken out.
   Untested: two linked games.
+- 0.75.16-0.75.29 (2026-11-22): the code review's 9 fixes (0.75.16); VALKA's portal smooth (the user: "the portal opening
+  and closing is so laggy"): each piece on its own scaler (SK_SV_PortalScaler: one bone, one grow animation the engine plays
+  every frame; closing = the grow played backwards) and an engine RotatingMovementComponent; on the way: the importer's
+  animations lost their skeleton on any rename (imported names kept, one animation a file), a paused animation isn't run
+  (a creep rate), an ended one never restarts on a rate (played again), the black hole's shadow was the actor's root (an
+  empty root first), pieces hidden till their window. scalerprobe / valkasolg 34/34 on 0.75.24. The SOLG nose down
+  (the user: "angled downwards as if its falling"; 45 "way too angled", 20): a rotator's Pitch from Lua is dropped
+  (hard rule 76): its spawn transform and its body by quaternion; the game's pitch -45.0 read back on 0.75.28. A crash at
+  VALKA's return blink (0.75.26: a freed scaler asset's reused address): her assets pinned.
+- 0.75.29: tester zip (keys) and friends' zip (no keys), TANI=1 ZFA=1, one build: AC8SurvivalMode_COOP2MP_0.75.29_...
+  TANACORN.zip; both registered. INSTALLED 2026-11-22 (the tester stage over 0.75.13; backup
+  build/backup/install_before_0.75.29; 163 files verified). Friends' smoke 5/5 on 0.75.28 (one number apart).
