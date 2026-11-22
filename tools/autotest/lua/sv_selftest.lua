@@ -5547,6 +5547,145 @@ SUITES.zfasound = function()
     end)
 end
 
+-- ((2026-11-22) the SOLG on a co-op JOINER (sv_solg_coop.lua), on one PC: COOP.client made true only while the suite
+-- hands the joiner's side the host's words ("vs|...") and ticks it; the host's units' copies stood in for by the units
+-- spawned here (COOP.groundCopies served from them, as co-op serves a joiner its copies). Its portal, its SOLG up on the
+-- host's course, its pieces' copies placed (the lasers' with phase 2), every piece broken by the host's word (the arms
+-- off after their KEW shells, the lasers with them), destroyed (falling, the team's pay), then once more: the spaceport
+-- hit (Mission 25's strike). Pictures of each.
+local SJ = { cap = nil, copies = {} }
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o) if SJ.cap and #SJ.cap < 200 then SJ.cap[#SJ.cap + 1] = o end end)
+local function asJoiner(fn)
+    local was = COOP.client
+    COOP.client = function() return true end
+    local ok, e = pcall(fn)
+    COOP.client = was
+    if not ok then ST.info("solgjoiner: error " .. tostring(e)) end
+end
+local function sjWord(...)
+    local f = { "vs", ... }
+    asJoiner(function() SCOOP.fromHost(f) end)
+end
+local function sjCopies(t)                                -- (the host's copies of type t: its unit spawned here)
+    SJ.cap = {}
+    spawningUnit = t.unit
+    pcall(SV_Spawn, t.unit, SJ.at.X, SJ.at.Y, SJ.at.Z, 0)
+    spawningUnit = nil
+    SJ.copies[t.unit], SJ.cap = SJ.cap, nil
+    return #SJ.copies[t.unit]
+end
+local function sjTick(sec)
+    local t0 = nil
+    A.until_(function()
+        t0 = t0 or os.clock()
+        asJoiner(function() SCOOP.clientTick(os.clock()) end)
+        return os.clock() - t0 >= sec
+    end, sec + 5)
+end
+local function sjCam(fwd, side, up)                       -- (metres from where the SOLG is now)
+    local L = SOLG.where and SOLG.where()
+    if not L then return nil end
+    return { X = L.X + fwd * 100, Y = L.Y + side * 100, Z = L.Z + up * 100 }, L
+end
+local function sjShot(name, fwd, side, up, fov)
+    A.do_(function() local at, look = sjCam(fwd, side, up); if at then ST.look(at, look, fov or 55) end end)
+    A.wait(0.5)
+    A.do_(function() ST.shot("solgjoiner_" .. name) end)
+    A.wait(1.0)
+end
+SUITES.solgjoiner = function()
+    intoRun()
+    A.do_(function()
+        if not ST.check(SCOOP ~= nil and SCOOP.fromHost ~= nil and COOP ~= nil, "the SOLG's co-op part is in this build") then return "abort" end
+        SOLG.C.pause_s = {}
+        SJ.wasGC = COOP.groundCopies
+        COOP.groundCopies = function(unit) return SJ.copies[unit] or {} end
+        SJ.at = { X = AIRFIELD.X + 300000, Y = AIRFIELD.Y - 900000, Z = 400000 }
+        ST.marks.j0 = ST.n
+        sjWord("po", string.format("%.0f", SJ.at.X / 100), string.format("%.0f", SJ.at.Y / 100), string.format("%.0f", SJ.at.Z / 100), "0", "2600")
+        ST.check(ST.findLog("solg coop: the host's portal opens", ST.marks.j0, true) ~= nil, "the host's portal opens here",
+            ST.findLog("solg coop:", ST.marks.j0, true))
+    end)
+    sjTick(5.5)
+    sjShot("1_portal", -6000, 0, 800, 60)
+    A.do_(function()                                      -- (the host's copies come: its pieces' units)
+        local got = {}
+        for _, t in ipairs(SOLG.C.targets) do if not t.laser then got[#got + 1] = t.key .. " " .. sjCopies(t) end end
+        ST.info("solgjoiner: the host's copies stood in: " .. table.concat(got, ", "))
+        sjWord("up", string.format("%.0f", SJ.at.X / 100 - 1500), string.format("%.0f", SJ.at.Y / 100), string.format("%.0f", SJ.at.Z / 100),
+            "0", "3000", "0", "-300", "360", "0")
+        ST.check(ST.findLog("solg coop: the host's SOLG up here", ST.marks.j0, true) ~= nil, "the host's SOLG up here",
+            ST.findLog("solg coop: the host's SOLG", ST.marks.j0, true))
+    end)
+    sjTick(2)
+    A.do_(function()
+        local per = {}
+        for _, key in ipairs({ "SAW", "MAG", "KEW", "CORE", "SP" }) do
+            per[#per + 1] = ST.findLog("co-op: the host's " .. key .. " copies placed: ", ST.marks.j0, true) and key or nil
+        end
+        ST.check(#per == 5, "its pieces' copies placed on its bones (SAW, MAG, KEW, CORE, SP)", ST.findLog("copies placed", ST.marks.j0, true))
+        local st = SOLG.state()
+        ST.check(st and st.open == 22, "Gould's opening here too: 22 lockable", st and tostring(st.open))
+    end)
+    sjShot("2_up", 0, -3200, 400, 55)
+    A.do_(function()                                      -- (the host's phase 2: its lasers' copies come)
+        ST.marks.j1 = ST.n
+        sjWord("ph", "2")
+        for _, t in ipairs(SOLG.C.targets) do if t.laser and t.phase == 2 then sjCopies(t) end end
+    end)
+    sjTick(2)
+    A.do_(function()
+        ST.check(ST.findLog("co-op: the host's LSRA copies placed: 16 of 16", ST.marks.j1, true) ~= nil, "phase 2: the arms' laser copies placed",
+            ST.findLog("LSRA copies", ST.marks.j1, true))
+        ST.marks.j2 = ST.n
+        for k = 1, 6 do sjWord("b", string.format("SG04_%02d", k)) end
+        for k = 1, 12 do sjWord("b", string.format("SG05_%02d", k)) end
+        for k = 1, 32 do sjWord("b", string.format("SG07_%02d", k)) end
+        for k = 1, 36 do sjWord("b", string.format("KEW_%02d", k)) end
+    end)
+    sjTick(2)
+    A.do_(function()
+        local arms = 0
+        for k = 1, 4 do if ST.findLog(string.format("solg: SG01_%02d broken off", k), ST.marks.j2) then arms = arms + 1 end end
+        ST.check(arms == 4, string.format("the host's breaks: wings falling, the 4 arms off after their KEW shells (%d)", arms))
+        local st = SOLG.state()
+        ST.check(st and (st.per.LSRA or 0) == 0, "the arms' lasers down with them", st and tostring(st.per.LSRA))
+        ST.check(ST.findLog("credits: +", ST.marks.j2, true) ~= nil, "each piece paid here too (team pay)", ST.findLog("credits: +", ST.marks.j2, true))
+    end)
+    sjShot("3_broken", 300, -2600, 500, 55)
+    A.do_(function()
+        ST.marks.j3 = ST.n
+        sjWord("ph", "3"); sjWord("b", "SG03_01"); sjWord("b", "SG03_02"); sjWord("b", "SG03_03"); sjWord("b", "SG03_04")
+        sjWord("ph", "4"); sjWord("b", "CORE_01"); sjWord("dn")
+        ST.check(ST.findLog("solg coop: the host's SOLG destroyed", ST.marks.j3, true) ~= nil and ST.findLog("solg: falling", ST.marks.j3, true) ~= nil,
+            "the host's word: destroyed, falling apart here", ST.findLog("solg coop:", ST.marks.j3, true))
+    end)
+    sjTick(2)
+    sjShot("4_down", 300, -3000, 600, 60)
+    A.do_(function()                                      -- (once more: its spaceport hit)
+        sjWord("st")
+        for _, t in ipairs(SOLG.C.targets) do if SPC and SPC.cleanUp then pcall(SPC.cleanUp, { t.unit }, "solgjoiner", true, os.clock()) end end
+        SJ.copies = {}
+        ST.marks.j4 = ST.n
+        local pad = CFG.specials.valka.solg.pad_cm
+        sjWord("hit", string.format("%.0f", pad[1] / 100), string.format("%.0f", pad[2] / 100), "0")
+        ST.check(ST.findLog("solg coop: the host's SOLG hit the spaceport", ST.marks.j4, true) ~= nil, "the host's hit: Mission 25's strike here",
+            ST.findLog("solg coop:", ST.marks.j4, true))
+        ST.look({ X = pad[1] - 900000, Y = pad[2] - 900000, Z = 250000 }, { X = pad[1], Y = pad[2], Z = 0 }, 50)
+    end)
+    sjTick(3)
+    A.do_(function() ST.shot("solgjoiner_5_hit") end)
+    A.wait(1)
+    A.do_(function()
+        ST.lookBack()
+        sjWord("vg", "1"); sjWord("vg", "0"); sjWord("st")
+        ST.check(ST.findLog("solg coop: VALKA gone through a portal here", ST.marks.j4, true) ~= nil and ST.findLog("solg coop: VALKA back here", ST.marks.j4, true) ~= nil,
+            "VALKA gone and back here (the host's word)", ST.findLog("solg coop: VALKA", ST.marks.j4, true))
+        COOP.groundCopies = SJ.wasGC
+        ST.check(not (SOLG.up and SOLG.up()), "all taken down", tostring(SOLG.up and SOLG.up()))
+    end)
+end
+
 -- ---- the tick ----------------------------------------------------------------------------------------------------
 local started, t0, finished = false, nil, false
 local function finish(why)
