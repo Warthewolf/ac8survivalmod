@@ -70,7 +70,6 @@ SOLG = { C = {
               LSRA = "LASER UNIT", LSRB = "LASER UNIT", LSRC = "LASER UNIT" },
     health_x = 0.25,                        -- (AC:I's health is a 4-player raid's: a first guess, every hit logged)
     floor = 1,                              -- a live target's HP floor: it breaks there
-    hold_s = 0.0,                           -- targets put back on their bones every tick (0) or this often
     fx = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" },
     fx_scale = { SAW = 3, MAG = 2, KEW = 3, CORE = 5, SP = 8, SOLG = 12, ARM = 6, LSRA = 2, LSRB = 2, LSRC = 2 },
 } }
@@ -293,7 +292,6 @@ function SOLG.breakArm(armBone, pieces)
     S.panels[#S.panels + 1] = { actor = a, gone = os.clock() + n(f.life_s, 30) * 1.5 }
     if fxAt then pcall(fxAt, SOLG.C.fx, L, n(SOLG.C.fx_scale.ARM, 6), 8) end
     sl(string.format("%s broken off with its %d pieces: falling (%s, tumble %s)", armBone, #(pieces or {}), pm and "a mover" or "NO mover", rot and "on" or "off"))
-    if SOLG.onArm then pcall(SOLG.onArm, armBone) end
     return true
 end
 -- where the k-th falling wing is now (the tests' cameras)
@@ -501,7 +499,6 @@ local function openUp()
     end
     return n0
 end
-SOLG.openUp = function() return S and openUp() or 0 end
 function SOLG.targetsUp()
     if not (S and liveObj(S.body)) then return 0 end
     S.targets, S.phase = {}, 1
@@ -594,13 +591,11 @@ breakTarget = function(e, why)
     if nextPh and pause > 0 then                          -- (Gould's pause before the next phase opens)
         S.pauseUntil, S.pauseNext = os.clock() + pause, nextPh
         sl(string.format("phase %d done: phase %d in %.0f s", S.phase, nextPh, pause))
-        if SOLG.onPause then pcall(SOLG.onPause, S.phase, nextPh, pause) end
     elseif nextPh then phaseOn(nextPh)
     else
         sl("every target down: the SOLG destroyed")
         S.destroyed = true
         for _, x in ipairs(S.targets) do if x.live then breakTarget(x, "its arm's gone") end end   -- (its lasers with it)
-        if SOLG.onDestroyed then pcall(SOLG.onDestroyed) end
     end
 end
 -- (the tests': a target's HP straight to its floor, as a hit would)

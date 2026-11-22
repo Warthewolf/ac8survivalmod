@@ -232,3 +232,27 @@ want, the black texture too". prepare.py SKINS['gould'] (matched by size and sha
 20004e4d<-20005606, 20004c3e<-20005607, 20004fa9<-20005608, 20004dae<-20005609, 2000520c<-2000560a,
 20004c42<-2000560b. 20005602 / 20005604 (two more wing-panel variants) not placed. Which set is Gould, and its own
 phase rules: being decoded.
+
+## 13. SOLG -Gould-'s rules (2026-11-22; decoded by a helper from DATA92 529, the graph's 355 objects and 244 signals)
+Gould = DATA92 528 / 529 / 530 (DATA94 entry 3: strings 3841-3843 Schroeter / Oort / Lexell, 3846 Gould; the four
+packages DATA01 213 / 216 / 219, DATA92 528 by timestamps and enemy models). Its phase counter V62 (crc 75c5487c):
+1 all 34 of V80 (the 18 wings + object 189's 16 MAG panels) + 15 s; 2 the 36 KEW shells + 15 s; 3 eight o_37s1 (+12 s);
+4 the FA-45 (+15 s; 18 UAVs with it); 5 the 4 core units + 30 s; then the SP shell. Time limit 360 s (V64). Each wing
+row of 3 opens from its third (T7 waits on its neighbour's death signal, objects 171-188); objects 190-193 (4 MAG panels
+each, one per arm by their part index 109-142) wait on their arm's 4 of object 189's. An arm (s_sg01) waits for its 9
+KEW shells, sheds 8 debris and is removed. Lasers: the arms' 16 fire 10 s at players within 1200 m, then 5 s, from
+counter 1; the barrel's tail 4 (objects 333-339) from 1; its front 8 (317-331) sweep at 2, fire from 4.
+Ours (the user: "SOLG pieces only", "Follow Gould exactly"): its aircraft phases cut; mag_required (by part index rank),
+wing_rows, pause_s 15 / 15 / 30, arm_keys KEW only, LSRA (16, phase 2) / LSRB (barrel tail 4, phase 2) / LSRC (front 8,
+phase 3), the laser row 1.2 km, 10 s, 15 s; travel_s 360. Autotest solg2: 16/17 (a test slip, fixed).
+
+## 14. Co-op (2026-11-22; Scripts/sv_solg_coop.lua)
+Her round runs on the host; the SOLG's pieces are units, so co-op mirrors them already (each joiner's copies, their hits
+"ht" to the host, its health "hp" back). The host's word "vs|<kind>|...": po (its portal), up (the SOLG's course: where,
+its velocity, T, its age), ph (a phase), b (a piece broken), dn, hit, vg (VALKA gone / back), st; SCOOP.syncTo gives a
+player linking mid-fight the picture. Each joiner draws its own portal and SOLG on the host's course and places its
+copies (COOP.groundCopies, in the order they were made) on the bones (SOLG.mirrorUp / adoptTick: the lasers' with the
+host's phase); breaks and phases are the host's word (S.mirror: no break on its own, the same wing / arm / laser rules);
+each player paid for each piece and the kill (team pay). The lines: SUB.say's "sb"; the airfield: "af".
+Tests: coop_guard covers "vs" (19,493 messages, clean); autotest solgjoiner (one PC: COOP.client true only while the
+joiner's side is handed the host's words, the copies stood in by units spawned there): 17/17. Two linked games: untested.

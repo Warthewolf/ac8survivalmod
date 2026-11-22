@@ -4103,3 +4103,7 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   (VALKA=1 ZFA=1) into her game, which had no Survival and no Mod Loader in it (moved out 2026-11-21): the Mod Loader's
   dlls/main.dll and enabled.txt put back from .env's AUTOTEST_LOADER, ProjectRVNG untouched; 116 files verified; backup
   note build/backup/install_before_0.75.13. Test key for her: Ctrl+8 (VALKA's round next; the SOLG at her 20 %).
+- 0.75.14-0.75.15 (2026-11-22): VALKA's SOLG in co-op (the user: "you need to start on it pronto"): docs/re/SOLG.md 14.
+  solgjoiner 17/17 (0.75.14 15/17: a joiner's arms didn't break, its early return before the arm check), valkasolg 30/30,
+  coop_guard passed with "vs". Clean-up: the SOLG's unused hooks (onDestroyed, onPause, onArm) and hold_s taken out.
+  Untested: two linked games.

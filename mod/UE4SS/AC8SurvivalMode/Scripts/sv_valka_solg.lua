@@ -46,7 +46,6 @@ local function hooks(c, s, G)
         if t and t.solg_phase and t.solg_phase[ph] then hudCallout(t.solg_phase[ph], nil) end
         if SCOOP then pcall(SCOOP.phase, ph) end
     end
-    SOLG.onDestroyed = function() G.destroyedAt = G.destroyedAt or os.clock() end
 end
 
 -- she calls it in: invincible, her lines, out through a portal, the SOLG out of its own at a corner
