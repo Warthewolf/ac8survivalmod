@@ -376,5 +376,7 @@ local function targetsTick()
     end
 end
 SOLG.targetsTick = targetsTick
+function SOLG.debugTargets() return S and S.targets or {} end          -- (the tests')
+function SOLG.boneLoc(bone) if S and liveObj(S.body) then return (boneAt(S.body, bone)) end end
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the SOLG"] = function() S = nil; CAPTURE = nil end end
 end
