@@ -186,8 +186,10 @@ function SOLG.spawn(at, yaw, vel)
         pitch = math.max(path, n(SOLG.C.pitch_min_deg, 20))
     end
     pcall(function() a:K2_SetActorLocationAndRotation({ X = at.X, Y = at.Y, Z = at.Z }, { Pitch = -pitch, Yaw = yaw or 0, Roll = 0 }, false, {}, true) end)
-    local okP, pitchNow = pcall(function() return a:K2_GetActorRotation().Pitch end)   -- (as the game has it: logged)
-    SOLG.pitchNow = okP and pitchNow or nil
+    -- (as the game has it, from its nose's direction: logged; a rotation's read came back empty, 0.75.25)
+    local okP, pitchNow = pcall(function() local f = a:GetActorForwardVector(); return math.deg(math.asin(math.max(-1, math.min(1, f.Z)))) end)
+    pitchNow = okP and tonumber(pitchNow) or nil
+    SOLG.pitchNow = pitchNow
     step("painting")
     local painted = paint(body)
     step("hiding its wrecks")
@@ -207,7 +209,7 @@ function SOLG.spawn(at, yaw, vel)
     local mv = vel and mover(a, vel, 0) or nil
     S = { actor = a, body = body, move = mv, panels = {}, at0 = at, yaw = yaw, broken = {} }
     sl(string.format("up at (%.1f, %.1f) km, %.1f km up, nose %.0f deg, %.0f deg down (the game's pitch %s): mesh %s, %s, %d wrecks hidden, spin %s, mover %s",
-        at.X / 100000, at.Y / 100000, at.Z / 100000, yaw or 0, pitch, okP and string.format("%.1f", pitchNow) or "?", okM and "on" or "NOT set", painted, hid,
+        at.X / 100000, at.Y / 100000, at.Z / 100000, yaw or 0, pitch, pitchNow and string.format("%.1f", pitchNow) or "?", okM and "on" or "NOT set", painted, hid,
         spun and "playing" or (valid(anim) and "NOT played" or "NOT loaded"), mv and "on" or (vel and "NOT made" or "none")))
     return true
 end
