@@ -49,7 +49,7 @@ COOKED="$PROJ/Saved/Cooked/Windows/Live/Content/Mods/SurvivalMode/ValkaPortal"
 for n in $(python -I tools/valka_portal/parts_lua.py --names "$OUT/src/$DESIGN/manifest.json"); do
     [ -f "$COOKED/Model/$n.uasset" ] || { echo "valka_portal: $n not cooked ($OUT/cook.log)"; grep -i "error" "$OUT/cook.log" | tail -5; exit 1; }
 done
-for n in SK_SV_PortalScaler SKEL_SV_PortalScaler A_SV_PortalGrow; do
+for n in SK_SV_PortalScaler SK_SV_PortalScaler_Skeleton SK_SV_PortalScaler_Anim; do
     [ -f "$COOKED/Model/$n.uasset" ] || { echo "valka_portal: $n not cooked ($OUT/cook.log)"; exit 1; }
 done
 cp "$OUT/src/$DESIGN/manifest.json" "$OUT/manifest.json"     # (the pieces cooked: tools/valka_portal/parts_lua.py)

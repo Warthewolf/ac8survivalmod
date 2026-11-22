@@ -77,28 +77,18 @@ def import_scaler(mat):
     for cls in ('Material', 'MaterialInstanceConstant', 'Texture2D'):
         for a in kinds.get(cls, []):
             EAL.delete_asset(a)                      # (the importer's own: never ours in the game)
-    # ((2026-11-22) the animations renamed first, the skeleton last: renamed first, the animations lost it ("Unable to
-    # retrieve target USkeleton") and never played)
-    for q in kinds['AnimSequence']:
-        want = [w for w in SCALER_ANIMS if w in q.rsplit('/', 1)[-1]]
-        if not want and len(SCALER_ANIMS) == 1:       # (one animation: the importer names it after the mesh, <mesh>_Anim)
-            want = SCALER_ANIMS[:]
-        assert len(want) == 1, (q, want)
-        if q != f'{DEST}/{want[0]}':
-            EAL.rename_asset(q, f'{DEST}/{want[0]}')
-        an = unreal.load_asset(f'{DEST}/{want[0]}')
-        EAL.save_loaded_asset(an)
-        skel = an.get_editor_property('skeleton')
-        # ((2026-11-22) the first scaler's came in with no skeleton: it never played in game)
-        assert skel is not None, f'{want[0]}: no skeleton (it would never play)'
-        say(f'{want[0]}: an animation of {an.get_editor_property("sequence_length"):.2f} s on {skel.get_name()}')
-    for cls, nm in (('SkeletalMesh', SCALER), ('Skeleton', 'SKEL_SV_PortalScaler')):
-        q = kinds[cls][0]
-        if q != f'{DEST}/{nm}':
-            EAL.rename_asset(q, f'{DEST}/{nm}')
-    for w in SCALER_ANIMS:                           # (each still on it, after the skeleton's rename)
-        skel = unreal.load_asset(f'{DEST}/{w}').get_editor_property('skeleton')
-        assert skel is not None and skel.get_name() == 'SKEL_SV_PortalScaler', (w, skel)
+    # ((2026-11-22) nothing renamed: each rename (the animation's, the skeleton's) left the animation with no skeleton
+    # ("Unable to retrieve target USkeleton"; None in the editor; frozen in game). The importer's own names, as
+    # Scripts/sv_anomalies_valka.lua names them: the mesh, <mesh>_Skeleton, <mesh>_Anim
+    assert kinds['SkeletalMesh'][0] == f'{DEST}/{SCALER}', kinds['SkeletalMesh']
+    an_path = kinds['AnimSequence'][0]
+    assert an_path == f'{DEST}/{SCALER}_Anim', kinds['AnimSequence']
+    an = unreal.load_asset(an_path)
+    skel = an.get_editor_property('skeleton')
+    msk = unreal.load_asset(f'{DEST}/{SCALER}').get_editor_property('skeleton')
+    assert skel is not None and msk is not None and skel.get_path_name() == msk.get_path_name(), (an_path, skel, msk)
+    EAL.save_loaded_asset(an)
+    say(f'{SCALER}_Anim: an animation of {an.get_editor_property("sequence_length"):.2f} s on {skel.get_name()}')
     sk = unreal.load_asset(f'{DEST}/{SCALER}')
     mats = list(sk.get_editor_property('materials'))
     for m in mats:
@@ -110,7 +100,7 @@ def import_scaler(mat):
         say(f'scaler: physics asset left ({e})')
     EAL.save_loaded_asset(sk)
     EAL.save_loaded_asset(sk.get_editor_property('skeleton'))
-    say(f'{SCALER}: {len(mats)} slot(s) on BasicShapeMaterial, its skeleton SKEL_SV_PortalScaler')
+    say(f'{SCALER}: {len(mats)} slot(s) on BasicShapeMaterial, its skeleton {sk.get_editor_property("skeleton").get_name()}')
 
 
 def main():

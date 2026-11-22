@@ -1540,7 +1540,7 @@ local function portalMesh(pc, P, part, a, smc, kml)
     return e
 end
 SPC.V.PORTAL_SCALER = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SK_SV_PortalScaler"
-SPC.V.PORTAL_GROW = "/Game/Mods/SurvivalMode/ValkaPortal/Model/A_SV_PortalGrow"
+SPC.V.PORTAL_GROW = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SK_SV_PortalScaler_Anim"   -- (its grow: the importer's name, never renamed)
 -- a piece's engine spin at its rate x k (the portal's spin-up as it opens, faster as it drains)
 function SPC.V.portalSpin(e, k)
     if not e.rot then return end
