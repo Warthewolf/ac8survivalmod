@@ -807,6 +807,10 @@ def build_valka(g, flag, t_search, t_engage, stock_ep):
     m_miss = re.search(r'opener_miss_up_m = (\d+)', lua)
     assert m_miss and int(m_miss.group(1)) == VALKA_MISS_UP_M, "main.lua opener_miss_up_m != VALKA_MISS_UP_M"
     t_req = g.foreign_template(m06, 'LiveAIRequestUniqueAction', 'EnemyBehind_LastTGT')
+    # ((2026-11-22) her LastTGT runs its ~20 s tail chase 200 m behind you once asked: Mission 6's own reset, on her object,
+    # cuts it to a turn-in (main.lua CFG.specials.valka.turn_hold_s; docs/re/UNIQUE_ACTIONS.md section 3)
+    t_reset = g.foreign_template(m06, 'LiveAIResetUniqueAction')
+    assert len(arg_values(t_reset)) >= 4, arg_values(t_reset)
     t_warn_on = g.foreign_template(m15, 'LiveSetForceWarinigMessageExecution', '01_Start_Enemy_Attack')
     t_warn_off = g.foreign_template(m15, 'LiveSetForceWarinigMessageExecution', 'Green_SpeedUp_0')
     t_noise = g.foreign_template(m15, 'LiveStartHUDRaderMapNoiseExecution', 'RadarNoise_02')
@@ -905,6 +909,8 @@ def build_valka(g, flag, t_search, t_engage, stock_ep):
         remote(ev)
         g.execute(t_req, ev, {0: 'NoneSelect', 1: VALKA_UNIT, 2: '', 3: action, 4: 'OneShot', 5: 'Below_Return',
                               6: 'NoneSelect', 7: 'false'})
+    remote('RE_SV_ValkaTurnEnd')                           # (2026-11-22) her LastTGT ended: her own flying again
+    g.execute(t_reset, 'RE_SV_ValkaTurnEnd', {0: VALKA_OBJ, 1: 'NoneSelect', 3: 'false'})
     down = 'SV_ValkaDown'
     g.trigger('UnitDamage_Ship_Destroy_0', down, arg_changes={0: VALKA_UNIT})
     for ev in (down, 'RE_SV_ValkaEnd'):

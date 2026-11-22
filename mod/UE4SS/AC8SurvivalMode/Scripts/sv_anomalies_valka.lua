@@ -993,7 +993,8 @@ function SPC.valkaTick(now, s)
             if s.blinkLeft <= 0 then s.blinkLeft, s.blinkUntil = nil, now end   -- (the spell's over: its cooldown next tick)
         end
         if s.blinkWhy == "chase" then s.blinkWhy = nil; s.blinkUntil = nil end
-    elseif c.chase and not s.blinkUntil and not s.chargeAt and s.dist and s.dist > (c.chase_km or 6) then
+    elseif c.chase and not s.blinkUntil and not s.chargeAt and s.dist and s.dist > (c.chase_km or 6)
+        and now - (s.revealedAt or s.at or now) >= (tonumber(c.chase_after_s) or 0) then
         -- ((2026-11-22) she takes the fight to you: farther than chase_km for chase_s, onto your six, chase_gap_s apart)
         s.farSince = s.farSince or now
         if now - s.farSince >= (c.chase_s or 4) and now >= (s.chaseAt or 0) then
@@ -1039,12 +1040,19 @@ function SPC.valkaTick(now, s)
         V.sndCharge(s, function() return valid(o) and where(o) or nil end, now)
         hudCallout(t.valka_charge, t.valka_charge_sub)
     end
+    if s.turnEndAt and now >= s.turnEndAt then          -- ((2026-11-22) her LastTGT's turn-in over: her own flying again
+        s.turnEndAt = nil
+        V.event("RE_SV_ValkaTurnEnd")
+    end
     -- LastTGT: every turn_every_s, and at once (behind_gap_s apart) when you're behind her within behind_km
     local behind = offNose and offNose > 110 and s.dist and s.dist <= c.behind_km
     if (now >= s.turnAt) or (behind and now >= (s.behindAt or 0)) then
         s.turnAt, s.behindAt, s.turns = V.turnClock(c, now), now + c.behind_gap_s, (s.turns or 0) + 1
-        s.psAt = math.max(s.psAt, now + 3)                -- (not straight into a post-stall)
+        -- ((2026-11-22) a turn-in, not a 20 s tail chase: reset turn_hold_s on; 0 keeps it whole)
+        local hold = tonumber(c.turn_hold_s) or 0
+        s.psAt = math.max(s.psAt, now + math.max(3, hold + 1))   -- (not straight into a post-stall, nor one its reset cuts)
         V.event("RE_SV_ValkaTurn")
+        s.turnEndAt = hold > 0 and now + hold or nil
         if s.turns <= 5 or s.turns % 10 == 0 then
             log(string.format("special: %s LastTGT %d%s, %.1f km from you", c.name, s.turns, behind and " (you behind her)" or "",
                 s.dist or -1))

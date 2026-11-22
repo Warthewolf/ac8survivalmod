@@ -309,18 +309,35 @@ CFG.specials = {
                  -- parts: the game's own pieces (meshes with its VFX materials, Niagara systems; see the comment there)
                  portal = { enabled = true, size_m = 320, open_s = 3.0, hold_s = 2.5, close_s = 2.5, max_s = 30, spin_dps = 45,
                             exit_back_m = 150,
+                            -- (the portalprobe run of 2026-11-22 13:12: what draws against the sky: the engine's basic
+                            -- shapes with BasicShapeMaterial's Color (a black disc), the training mission's rings'
+                            -- materials (MI_TrainingRing: a solid glow, its Color; MI_TrainingRingGlow: a see-through
+                            -- glow brightest at its edges, Color / EmissiveIntensity / Opacity); the refraction and smoke
+                            -- materials drew nothing against the sky)
                             parts = {
-                                { mesh = "/Engine/BasicShapes/Sphere", mat = "/Game/VFX/Mission/Mission027/CoreDestroy/MI_CoreDest_ShockDomeRefraction001",
-                                  size = 1.15, flat = 0.35 },
-                                { mesh = "/Engine/BasicShapes/Cylinder", mat = "/Game/VFX/Mission/Mission027/CoreDestroy/MI_CoreDest_AfterExitBlackSmokeMesh",
-                                  size = 0.9, flat = 0.04, spin = -0.5 },
-                                { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRing002_I07",
-                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", size = 1.0, spin = 1 },
-                                { fx = "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma", scale = 4, at = "open" },
-                                { fx = "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricDischargeM001", scale = 25,
-                                  at = "open", rim = 6, rim_r = 0.5 },
-                                { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 3, at = "burst" },
-                                { fx = "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_ShockWave001", scale = 4, at = "burst" } } },
+                                -- the event horizon: a black disc
+                                { mesh = "/Engine/BasicShapes/Cylinder", mat = "/Engine/BasicShapes/BasicShapeMaterial",
+                                  params = { Color = { 0, 0, 0, 1 } }, size = 0.78, flat = 0.02 },
+                                -- round it a glowing lens, brightest at its rim
+                                { mesh = "/Engine/BasicShapes/Sphere", mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow",
+                                  params = { Color = { 0.75, 0.1, 1.0, 1 }, EmissiveIntensity = 60, Opacity = 0.5, EmissiveFresnelFalloff = 3 },
+                                  size = 0.95, flat = 0.22 },
+                                -- two rings turning opposite ways: magenta inside, red outside
+                                { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07",
+                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 4, 0.3, 3, 1 } },
+                                  size = 1.05, spin = 1 },
+                                { mesh = "/Game/Environments/City/Unique/Map15/Mesh/SM_UNI_OrbitElevatorRing002_I22",
+                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 5, 0.2, 0.4, 1 } },
+                                  size = 1.45, spin = -0.6 },
+                                -- a faint red halo far round it
+                                { mesh = "/Engine/BasicShapes/Sphere", mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow",
+                                  params = { Color = { 1, 0.1, 0.3, 1 }, EmissiveIntensity = 25, Opacity = 0.2 }, size = 1.9, flat = 0.08 },
+                                -- (Niagara, the same probe: Mission 27's core plasma draws a column of light; the
+                                -- discharge drew nothing at x20, the "shockwave" systems are dust and smoke clouds)
+                                { fx = "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma", scale = 6, at = "open" },
+                                { fx = "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma", scale = 3, at = "open",
+                                  rim = 4, rim_r = 0.6 },
+                                { fx = "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", scale = 8, at = "burst" } } },
                  flare = { enabled = true, life_s = 7, intensity_x = 6,
                            path = "/Game/Mods/SurvivalMode/Valka/Flare/MI_SV_ValkaFlare_",
                            elements = { { "Glare", 1.6 }, { "Ring", 1.2 }, { "Shine", 0.9 }, { "Bokeh", 0.4 } },
@@ -360,13 +377,15 @@ CFG.specials = {
                  -- she overshoots: docs/re/BEHAVIOUR_NATIVE_MOVE.md section 2) only when you sit behind her (behind_km,
                  -- behind_gap_s apart), not on a clock (turn_every_s 0; it was 6 s); her orders again every
                  -- engage_every_s (was 5: each time a fresh attack)
-                 turn_every_s = 0, behind_km = 3, behind_gap_s = 12, engage_every_s = 20,
+                 -- (a LastTGT ended turn_hold_s after it starts: a turn-in onto you, then her own flying; 0: its 20 s)
+                 turn_every_s = 0, behind_km = 3, behind_gap_s = 12, turn_hold_s = 6, engage_every_s = 20,
                  -- (2026-11-22) a post-stall now and then (was every 9 s within 3 km: each one stopped her in the air)
                  post_stall = true, post_stall_every_s = 25, post_stall_range_km = 1.5, post_stall_chance = 0.5,
                  post_stall_moves = { "Kulbit", "KulbitB", "Cobra" },
                  -- (2026-11-22) she takes the fight to you: farther than chase_km for chase_s, she blinks onto your six
                  -- (chase_ring, chase_gap_s apart): wherever you fly, she comes
-                 chase = true, chase_km = 6, chase_s = 4, chase_gap_s = 15, chase_ring = "E",
+                 -- (no sooner than chase_after_s after she shows: her flight out of her portal first)
+                 chase = true, chase_km = 6, chase_s = 4, chase_gap_s = 15, chase_ring = "E", chase_after_s = 20,
                  -- her blinks when hit: blink_count of them (blink_every_s apart), each onto your six or across your nose
                  -- (attack_ahead: the share across your nose, attack_deg wide) on the blink_rings, then blink_cooldown_s
                  -- (was 4 s of blinks a second round you at 500-800 m: the fight never moved)
