@@ -1488,7 +1488,7 @@ local function portalMesh(pc, P, part, a, smc, kml)
     end
     -- ((2026-11-22) the user: "the portal opening and closing is so laggy its not smooth at all": Lua sets things 4 times
     -- a second) each piece on its own scaler (SK_SV_PortalScaler: tools/valka_portal/scaler.py), whose one bone B the
-    -- engine scales every frame as it plays A_SV_PortalGrow / _Shrink (held at 0.001 till its window), and spun by an
+    -- engine scales every frame as it plays A_SV_PortalGrow (held at 0.001 till its window; backwards as it closes), spun by an
     -- engine RotatingMovementComponent; the tick only starts them (portalTick). No scaler (an older container): as before
     local sk = P.scaler ~= false and SPC.V.asset(SPC.V.PORTAL_SCALER) or nil
     local grow = sk and SPC.V.asset(SPC.V.PORTAL_GROW) or nil
@@ -1541,7 +1541,6 @@ local function portalMesh(pc, P, part, a, smc, kml)
 end
 SPC.V.PORTAL_SCALER = "/Game/Mods/SurvivalMode/ValkaPortal/Model/SK_SV_PortalScaler"
 SPC.V.PORTAL_GROW = "/Game/Mods/SurvivalMode/ValkaPortal/Model/A_SV_PortalGrow"
-SPC.V.PORTAL_SHRINK = "/Game/Mods/SurvivalMode/ValkaPortal/Model/A_SV_PortalShrink"
 -- a piece's engine spin at its rate x k (the portal's spin-up as it opens, faster as it drains)
 function SPC.V.portalSpin(e, k)
     if not e.rot then return end
@@ -1681,9 +1680,9 @@ function SPC.V.portalTick(c, s, now)
             if y then
                 local w = e.part.close
                 local from = (P.closeFrom or now) + (w and w[1] or 0) * close
-                if not e.shrunk and now >= from then
+                if not e.shrunk and now >= from then       -- (its grow played backwards from where it is: falling in)
                     e.shrunk = true
-                    scalerGo(e, SPC.V.asset(SPC.V.PORTAL_SHRINK), ((w and (w[2] - w[1])) or 1) * close, true)
+                    pcall(function() e.sc:SetPlayRate(-1 / math.max(0.05, ((w and (w[2] - w[1])) or 1) * close)) end)
                 end
             elseif not e.grown then
                 local w = e.part.open

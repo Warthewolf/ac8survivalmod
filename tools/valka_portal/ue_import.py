@@ -53,7 +53,7 @@ def import_glb(name):
 
 # ((2026-11-22) the user: "the portal opening and closing is so laggy") its scaler (tools/valka_portal/scaler.py): a
 # skeletal mesh of one bone and three scale animations the engine plays every frame, each piece hung on one in game
-SCALER, SCALER_ANIMS = 'SK_SV_PortalScaler', ['A_SV_PortalGrow', 'A_SV_PortalHold', 'A_SV_PortalShrink']
+SCALER, SCALER_ANIMS = 'SK_SV_PortalScaler', ['A_SV_PortalGrow']   # (one: the importer gives only a file's first its skeleton)
 
 
 def import_scaler(mat):
@@ -73,22 +73,32 @@ def import_scaler(mat):
         if EAL.does_asset_exist(a):
             kinds.setdefault(unreal.load_asset(a).get_class().get_name(), []).append(a)
     say(f'scaler import: { {k: len(v) for k, v in kinds.items()} }')
-    assert len(kinds.get('SkeletalMesh', [])) == 1 and len(kinds.get('AnimSequence', [])) == 3, kinds
-    for cls in ('Material', 'MaterialInstanceConstant', 'Texture2D', 'PhysicsAsset'):
+    assert len(kinds.get('SkeletalMesh', [])) == 1 and len(kinds.get('AnimSequence', [])) == len(SCALER_ANIMS), kinds
+    for cls in ('Material', 'MaterialInstanceConstant', 'Texture2D'):
         for a in kinds.get(cls, []):
             EAL.delete_asset(a)                      # (the importer's own: never ours in the game)
-    for cls, nm in (('SkeletalMesh', SCALER), ('Skeleton', 'SKEL_SV_PortalScaler')):
-        q = kinds[cls][0]
-        if q != f'{DEST}/{nm}':
-            EAL.rename_asset(q, f'{DEST}/{nm}')
+    # ((2026-11-22) the animations renamed first, the skeleton last: renamed first, the animations lost it ("Unable to
+    # retrieve target USkeleton") and never played)
     for q in kinds['AnimSequence']:
         want = [w for w in SCALER_ANIMS if w in q.rsplit('/', 1)[-1]]
+        if not want and len(SCALER_ANIMS) == 1:       # (one animation: the importer names it after the mesh, <mesh>_Anim)
+            want = SCALER_ANIMS[:]
         assert len(want) == 1, (q, want)
         if q != f'{DEST}/{want[0]}':
             EAL.rename_asset(q, f'{DEST}/{want[0]}')
         an = unreal.load_asset(f'{DEST}/{want[0]}')
         EAL.save_loaded_asset(an)
-        say(f'{want[0]}: an animation of {an.get_editor_property("sequence_length"):.2f} s')
+        skel = an.get_editor_property('skeleton')
+        # ((2026-11-22) the first scaler's came in with no skeleton: it never played in game)
+        assert skel is not None, f'{want[0]}: no skeleton (it would never play)'
+        say(f'{want[0]}: an animation of {an.get_editor_property("sequence_length"):.2f} s on {skel.get_name()}')
+    for cls, nm in (('SkeletalMesh', SCALER), ('Skeleton', 'SKEL_SV_PortalScaler')):
+        q = kinds[cls][0]
+        if q != f'{DEST}/{nm}':
+            EAL.rename_asset(q, f'{DEST}/{nm}')
+    for w in SCALER_ANIMS:                           # (each still on it, after the skeleton's rename)
+        skel = unreal.load_asset(f'{DEST}/{w}').get_editor_property('skeleton')
+        assert skel is not None and skel.get_name() == 'SKEL_SV_PortalScaler', (w, skel)
     sk = unreal.load_asset(f'{DEST}/{SCALER}')
     mats = list(sk.get_editor_property('materials'))
     for m in mats:
