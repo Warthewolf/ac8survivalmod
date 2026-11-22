@@ -286,9 +286,9 @@ end
 local function cellsOff()
     glowOff()
     if IFSKY.slOff then pcall(IFSKY.slOff) end                -- (the strike light: defined further down)
-    local k, lost, why = 0, 0, {}
+    local k, lost, why, done = 0, 0, {}, {}
     for _, e in ipairs(CELLS) do
-        if cellOk(e) then pcall(function() e.o:DestroyComponent() end); k = k + 1
+        if cellOk(e) then pcall(function() e.o:DestroyComponent() end); k = k + 1; done[e.a] = true
         else
             lost = lost + 1
             local a = e and liveAddr(e.o)
@@ -301,12 +301,16 @@ local function cellsOff()
     -- ((2026-11-19) Saint Alessia's 43-minute storm of 0.74.199: "lightning stayed after the clouds dissapeared": all 19
     -- failed the check above (22:50:43 "0 taken off") and kept flashing in a clear sky. The ones not taken off are found
     -- by what they are, the stock NS_CloudLightning's components (only the storm spawns it here), and switched off)
+    -- ((2026-11-23) Kiriya's co-op run of 0.74.200: "the lightning after round 30 is still persisting", purple over a day
+    -- sky to round 33 until they landed: the storm cleared with "0 taken off", its list empty, not lost, so this sweep never
+    -- ran. Now it runs every time the storm clears: whatever the list says, no NS_CloudLightning is left behind)
     local swept = 0
-    if lost > 0 then
+    do
         local okF, all = pcall(FindAllOf, "NiagaraComponent")
         if okF and type(all) == "table" then
             for _, comp in ipairs(all) do
                 pcall(function()
+                    if done[liveAddr(comp)] then return end      -- (one of ours, just taken off above)
                     local as = comp.Asset
                     if as and as:IsValid() and tostring(as:GetFName():ToString()) == "NS_CloudLightning" then
                         comp:Deactivate(); comp:DestroyComponent(); swept = swept + 1
@@ -316,8 +320,10 @@ local function cellsOff()
         end
         local parts = {}
         for w, c in pairs(why) do parts[#parts + 1] = string.format("%d %s", c, w) end
-        log(string.format("fleet storm: cloud lightning: %d not ours any more (%s): %d found by their system and taken off",
-            lost, table.concat(parts, ", "), swept))
+        if lost > 0 or swept > 0 then
+            log(string.format("fleet storm: cloud lightning: %d not ours any more (%s): %d found by their system and taken off",
+                lost, table.concat(parts, ", "), swept))
+        end
     end
     return k + swept
 end
