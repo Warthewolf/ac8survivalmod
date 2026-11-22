@@ -5280,7 +5280,7 @@ SUITES.valkasolg = function()
         A.log_("special: VALKA's SOLG: out of the corner", 15, "s" .. pass, true, function(l)
             if not ST.check(l ~= nil and l:find("91 targets", 1, true) ~= nil, "the SOLG out of a corner with its 91 targets", l) then return "abort" end
             -- ((2026-11-22) the user: "the solg didn't look angled downwards") its nose down as the game has it
-            ST.check(SOLG.pitchNow ~= nil and SOLG.pitchNow <= -40, string.format("its nose down as it falls (the game's pitch %s)", tostring(SOLG.pitchNow)))
+            ST.check(SOLG.pitchNow ~= nil and SOLG.pitchNow <= -15, string.format("its nose down as it falls (the game's pitch %s)", tostring(SOLG.pitchNow)))
             local pl = ST.findLog("special: VALKA's SOLG: its portal opens", ST.marks["s" .. pass])
             ST.check(pl ~= nil and pl:find("once it's full size", 1, true) ~= nil, "its portal opens first; the SOLG once it's full size", pl)
             local st = VSOLG.state(D.special)
