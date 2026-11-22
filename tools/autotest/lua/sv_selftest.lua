@@ -5136,7 +5136,7 @@ SUITES.solg2 = function()
     A.wait(1)
     A.do_(function()
         local nT = SOLG.targetsUp()
-        ST.check(nT == 91, "its 91 targets up on their bones (SAW 18, MAG 32, KEW 36, CORE 4, SP 1)",
+        ST.check(nT == 92, "its 92 targets up on their bones (SAW 18, MAG 32, KEW 36, CORE 4, HATCH 1, SP 1)",
             ST.findLog("solg: targets up", 0))
         local st = SOLG.state()
         ST.check(st and st.phase == 1, "phase 1 on (the wings and MAG panels)", st and ("phase " .. tostring(st.phase)))
@@ -5178,7 +5178,7 @@ SUITES.solg2 = function()
         A.wait(1.5)
     end
     -- every phase, in turn (the first with Gould's 15 s pause, the rest without)
-    for _, ph in ipairs({ { "SAW", 18, "MAG", 32, 2, 17 }, { "KEW", 36, nil, 0, 3 }, { "CORE", 4, nil, 0, 4 }, { "SP", 1, nil, 0, nil } }) do
+    for _, ph in ipairs({ { "SAW", 18, "MAG", 32, 2, 17 }, { "KEW", 36, nil, 0, 3 }, { "CORE", 4, nil, 0, 4 }, { "HATCH", 1, nil, 0, 5 }, { "SP", 1, nil, 0, nil } }) do
         if ph[1] == "KEW" then A.do_(function() SOLG.C.pause_s = {} end) end
         A.do_(function()
             for k = 1, ph[2] do SOLG.hurt(ph[1], 1) ; pcall(SOLG.tick, os.clock()) end
@@ -5278,7 +5278,7 @@ SUITES.valkasolg = function()
             A.wait(0.9)
         end
         A.log_("special: VALKA's SOLG: out of the corner", 15, "s" .. pass, true, function(l)
-            if not ST.check(l ~= nil and l:find("91 targets", 1, true) ~= nil, "the SOLG out of a corner with its 91 targets", l) then return "abort" end
+            if not ST.check(l ~= nil and l:find("92 targets", 1, true) ~= nil, "the SOLG out of a corner with its 92 targets", l) then return "abort" end
             -- ((2026-11-22) the user: "the solg didn't look angled downwards") its nose down as the game has it
             ST.check(SOLG.pitchNow ~= nil and SOLG.pitchNow <= -15, string.format("its nose down as it falls (the game's pitch %s)", tostring(SOLG.pitchNow)))
             -- ((2026-11-22) the user: "shes still attacking the players while invisible") parked out of reach meanwhile
@@ -5649,10 +5649,10 @@ SUITES.solgjoiner = function()
     sjTick(2)
     A.do_(function()
         local per = {}
-        for _, key in ipairs({ "SAW", "MAG", "KEW", "CORE", "SP" }) do
+        for _, key in ipairs({ "SAW", "MAG", "KEW", "CORE", "HATCH", "SP" }) do
             per[#per + 1] = ST.findLog("co-op: the host's " .. key .. " copies placed: ", ST.marks.j0, true) and key or nil
         end
-        ST.check(#per == 5, "its pieces' copies placed on its bones (SAW, MAG, KEW, CORE, SP)", ST.findLog("copies placed", ST.marks.j0, true))
+        ST.check(#per == 6, "its pieces' copies placed on its bones (SAW, MAG, KEW, CORE, HATCH, SP)", ST.findLog("copies placed", ST.marks.j0, true))
         local st = SOLG.state()
         ST.check(st and st.open == 22, "Gould's opening here too: 22 lockable", st and tostring(st.open))
     end)
