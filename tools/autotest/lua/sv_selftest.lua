@@ -5140,8 +5140,23 @@ SUITES.solg2 = function()
             ST.findLog("solg: targets up", 0))
         local st = SOLG.state()
         ST.check(st and st.phase == 1, "phase 1 on (the wings and MAG panels)", st and ("phase " .. tostring(st.phase)))
+        ST.check(st and st.open == 22, "Gould's opening: 22 lockable (each wing row's third, the 16 required MAG panels)",
+            st and tostring(st.open))
+        ST.check(ST.findLog("(16 MAG optional)", 0, true) ~= nil, "16 MAG panels optional (4 an arm, opening after their arm's 4)",
+            ST.findLog("solg: targets up", 0))
     end)
     solgTick(3)
+    A.do_(function()                                      -- (a wing row: its third down, its second opens)
+        local open0 = SOLG.state().open
+        for _, e in ipairs(SOLG.debugTargets()) do
+            if e.bone == "SG04_03" then pcall(function() e.o.HealthInternal = 10 end) end
+        end
+        pcall(SOLG.tick, os.clock())
+        local st = SOLG.state()
+        local second = false
+        for _, e in ipairs(SOLG.debugTargets()) do if e.bone == "SG04_02" then second = e.open == true end end
+        ST.check(second and st.open == open0, "SG04_03 down: SG04_02 opens (open " .. st.open .. ")")
+    end)
     A.do_(function()                                      -- (held: each target's distance from its bone)
         local worst, nn = 0, 0
         for _, e in ipairs(SOLG.debugTargets and SOLG.debugTargets() or {}) do
@@ -5160,13 +5175,21 @@ SUITES.solg2 = function()
         A.do_(function() ST.shot("solg2_" .. k .. "_" .. v[5]) end)
         A.wait(1.5)
     end
-    -- every phase, in turn
-    for _, ph in ipairs({ { "SAW", 18, "MAG", 32, 2 }, { "KEW", 36, nil, 0, 3 }, { "CORE", 4, nil, 0, 4 }, { "SP", 1, nil, 0, nil } }) do
+    -- every phase, in turn (the first with Gould's 15 s pause, the rest without)
+    for _, ph in ipairs({ { "SAW", 18, "MAG", 32, 2, 17 }, { "KEW", 36, nil, 0, 3 }, { "CORE", 4, nil, 0, 4 }, { "SP", 1, nil, 0, nil } }) do
+        if ph[1] == "KEW" then A.do_(function() SOLG.C.pause_s = {} end) end
         A.do_(function()
             for k = 1, ph[2] do SOLG.hurt(ph[1], 1) ; pcall(SOLG.tick, os.clock()) end
             if ph[3] then for k = 1, ph[4] do SOLG.hurt(ph[3], 1); pcall(SOLG.tick, os.clock()) end end
         end)
-        solgTick(1.5)
+        if ph[6] then
+            A.do_(function()
+                local st = SOLG.state()
+                ST.check(st and st.pause and st.pause > 10 and st.phase == 1, string.format("phase 1 done: a %.0f s pause before phase 2",
+                    st and st.pause or -1), ST.findLog("phase 1 done", 0))
+            end)
+        end
+        solgTick(ph[6] or 1.5)
         A.do_(function()
             local st = SOLG.state()
             if ph[5] then
@@ -5206,6 +5229,7 @@ end
 SUITES.valkasolg = function()
     intoRun()
     A.do_(function()
+        SOLG.C.pause_s = {}                               -- (Gould's pauses: solg2's; here the flow)
         local c = CFG.specials.valka
         if not ST.check(c and type(c.solg) == "table" and c.solg.enabled and VSOLG ~= nil, "her SOLG is in this build",
             c and c.solg and ("travel_s " .. tostring(c.solg.travel_s) .. ", call_s " .. tostring(c.solg.call_s))) then return "abort" end
@@ -5264,11 +5288,11 @@ SUITES.valkasolg = function()
                 ST.check(l ~= nil, "the SOLG destroyed: pay, AUDREY's lines", l)
                 ST.check(ST.findLog("solg: falling", ST.marks.z0) ~= nil, "it falls apart", ST.findLog("solg: falling", ST.marks.z0))
                 local arms = 0
-                for k = 1, 4 do if ST.findLog(string.format("solg: SG01_%02d broken off with its 17 pieces", k), ST.marks.s1) then arms = arms + 1 end end
-                ST.check(arms == 4, string.format("each autoloader broke off with its 17 pieces once they were down (%d of 4)", arms),
+                for k = 1, 4 do if ST.findLog(string.format("solg: SG01_%02d broken off with its 9 pieces", k), ST.marks.s1) then arms = arms + 1 end end
+                ST.check(arms == 4, string.format("each autoloader broke off once its 9 KEW shells were down (%d of 4)", arms),
                     ST.findLog("broken off with its", ST.marks.s1))
-                ST.check(ST.findLog("on the arms: SG01_01 17, SG01_02 17, SG01_03 17, SG01_04 17", ST.marks.s1) ~= nil,
-                    "17 targets on each arm (8 MAG panels, 9 KEW shells)", ST.findLog("solg: targets up", ST.marks.s1))
+                ST.check(ST.findLog("on the arms: SG01_01 9, SG01_02 9, SG01_03 9, SG01_04 9", ST.marks.s1) ~= nil,
+                    "9 KEW shells hold each arm (Gould)", ST.findLog("solg: targets up", ST.marks.s1))
             end)
             for k = 1, 3 do
                 A.do_(function() local at, look = vsCam(); if at then ST.look(at, look, 60) end end)
@@ -5358,6 +5382,7 @@ end
 SUITES.solglaser = function()
     intoRun()
     A.do_(function()
+        SOLG.C.pause_s = {}
         local you = playerLocation()
         local at = { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = (you and you.Z or 150000) + 60000 }
         local ok = SOLG.spawn(at, 0, nil)
@@ -5433,8 +5458,10 @@ SUITES.solglaser = function()
         for k = 1, 40 do SOLG.hurt("KEW", 1); pcall(SOLG.tick, os.clock()) end
     end)
     A.log_("solg: phase 3: its lasers up", 10, "l1", true, function(l)
-        ST.check(l ~= nil and l:find("LSRB 12 of 12", 1, true) ~= nil and l:find("0 on the arms", 1, true) ~= nil,
-            "phase 3: the barrel's 12 lasers up", l)
+        ST.check(l ~= nil and l:find("LSRC 8 of 8", 1, true) ~= nil and l:find("0 on the arms", 1, true) ~= nil,
+            "phase 3: the barrel's front 8 lasers up", l)
+        ST.check(ST.findLog("LSRB 4 of 4", ST.marks.l0, true) ~= nil, "phase 2: the barrel's tail 4 up with the arms'",
+            ST.findLog("LSRB", ST.marks.l0, true))
         local st = SOLG.state()
         ST.check(st and (st.per.LSRA or 0) == 0, "the arms' lasers went down with their arms", st and tostring(st.per.LSRA))
     end)
