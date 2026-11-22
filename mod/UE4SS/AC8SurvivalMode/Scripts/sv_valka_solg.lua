@@ -120,7 +120,7 @@ local function arrive(c, s, G, now)
     local okT, nT = pcall(SOLG.targetsUp)
     G.targets = okT and nT or 0
     G.state, G.from, G.hitAt = "falling", now, now + T
-    if c.solg.marker and hudCallout then hudCallout(CFG.hud.text.solg_inbound, CFG.hud.text.solg_inbound_sub) end
+    if c.solg.marker and hudCallout then hudCallout(CFG.hud.text.solg_called or CFG.hud.text.solg_inbound, CFG.hud.text.solg_inbound_sub) end
     if SCOOP then pcall(SCOOP.up, from, yaw, vel, T) end   -- (every joiner's too: sv_solg_coop.lua)
     sl(string.format("out of the corner %d at (%.1f, %.1f) km, %.1f km up, %.0f km from the spaceport, there in %.0f s: %d targets",
         corner, at.X / 100000, at.Y / 100000, at.Z / 100000,

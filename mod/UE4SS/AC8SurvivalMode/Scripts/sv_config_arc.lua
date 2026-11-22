@@ -734,7 +734,8 @@ CFG.hud = {
         airfield_down     = "AIRFIELD DOWN",
         airfield_down_sub = "NO LANDING UNTIL AFTER ROUND %d",
         -- ((2026-11-22) VALKA's SOLG: sv_valka_solg.lua)
-        solg_inbound      = "VALKA CALLS FORTH THE SOLG",   -- (the user, 2026-11-23: was "SOLG INBOUND")
+        solg_called       = "VALKA CALLS FORTH THE SOLG",   -- (its arrival: the user, 2026-11-23, was "SOLG INBOUND")
+        solg_inbound      = "SOLG INBOUND",                -- (the countdown warnings: kept, the user)
         solg_inbound_sub  = "DESTROY IT BEFORE IT HITS THE SPACEPORT",
         solg_eta          = "%d S TO IMPACT",
         solg_down         = "SOLG DESTROYED",
