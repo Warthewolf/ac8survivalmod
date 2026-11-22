@@ -5485,9 +5485,27 @@ SUITES.solglaser = function()
         if LSR.backAt and now >= LSR.backAt then LSR.backAt = nil; ST.lookBack() end
         if LSR.shotAt == nil and (LSR.pics or 0) > 0 and not LSR.backAt and now >= (LSR.picAt or 0) - 2 then LSR.backAt = now + 0.3 end
         local h = lsrHealth()
-        if h and LSR.last and h < LSR.last - 0.5 then LSR.drops[#LSR.drops + 1] = LSR.last - h end
+        if h and LSR.last and h < LSR.last - 0.5 then
+            LSR.drops[#LSR.drops + 1] = LSR.last - h
+            LSR.dropT = LSR.dropT or {}
+            LSR.dropT[#LSR.dropT + 1] = now - t0
+            -- ((2026-11-23) back to full after each hit: at its floor a hit no longer shows)
+            pcall(function() local p = ST.plane(); p.HealthInternal = (tonumber(p.MaxHealth) or 113) * 10 end)
+            h = lsrHealth()
+        end
         LSR.last = h or LSR.last
-        return os.clock() - t0 >= 40
+        if os.clock() - t0 >= 60 then                     -- (hits each 10 s: bursts coming round again or not)
+            local per = {}
+            for _, t in ipairs(LSR.dropT or {}) do local k = math.floor(t / 10); per[k] = (per[k] or 0) + 1 end
+            local row = {}
+            for k = 0, 5 do row[#row + 1] = tostring(per[k] or 0) end
+            ST.info("hits on you each 10 s" .. (ST.conf.move == 1 and " (the SOLG moving)" or "") .. ": " .. table.concat(row, " "))
+            local later = 0
+            for k = 2, 5 do later = later + (per[k] or 0) end
+            ST.check(later > 0, "the lasers hit you again after the first 20 s (bursts come round)", tostring(later))
+            return true
+        end
+        return false
     end, 50)
     for k = 1, 4 do
         A.do_(function()
