@@ -107,7 +107,14 @@ function SPC.V.asset(path, obj)
     SPC.V.assets[full] = nil
     local why
     o, why = loadObject(full)
-    if o ~= nil and valid(o) then SPC.V.assets[full] = o; return o end
+    if o ~= nil and valid(o) then
+        SPC.V.assets[full] = o
+        -- ((2026-11-22) a crash at her return blink (0.75.26: a call on a freed object, from Lua): kept only in this cache,
+        -- an asset no portal held any more was freed and its address reused (hard rule 59), and her next portal handed the
+        -- stale one to the engine. Pinned now (GameInstance.ReferencedObjects): never freed while the game runs)
+        if pin then pcall(pin, o, "VALKA's " .. (full:match("[^/%.]+$") or full)) end
+        return o
+    end
     return nil, why
 end
 -- what she loads at her opener and her reveal: { path, object }, each once (her X-02S and its sweep, her paint variant's

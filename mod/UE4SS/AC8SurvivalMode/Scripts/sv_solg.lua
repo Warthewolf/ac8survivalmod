@@ -80,13 +80,18 @@ local function sl(s) log("solg: " .. s) end
 local function n(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
 local function obj(path) return loadObject(path .. "." .. path:match("[^/]+$")) end
 
-local function newActor(at, yaw)
+-- an actor of ours at `at`, turned `rot` (a number: a yaw; a table: { Pitch, Yaw, Roll }). ((2026-11-22) its whole
+-- rotation in its spawn transform: a rotation set afterwards never took (the pitch probe of 0.75.26: pitch 0.0 after
+-- K2_SetActorRotation, 1.5 s on too), only the spawn's (the yaw always worked): "the solg didn't look angled downwards")
+local function newActor(at, rot)
     local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
     local cls = StaticFindObject("/Script/Engine.Actor")
     if not (valid(gs) and valid(cls) and liveObj(survivalPC)) then return nil end
-    local h = math.rad(yaw or 0) / 2
-    local t = { Rotation = { X = 0, Y = 0, Z = math.sin(h), W = math.cos(h) }, Translation = { X = at.X, Y = at.Y, Z = at.Z },
-                Scale3D = { X = 1, Y = 1, Z = 1 } }
+    if type(rot) ~= "table" then rot = { Pitch = 0, Yaw = rot or 0, Roll = 0 } end
+    local p, y, r = math.rad(n(rot.Pitch, 0)) / 2, math.rad(n(rot.Yaw, 0)) / 2, math.rad(n(rot.Roll, 0)) / 2
+    local SP, CP, SY, CY, SR, CR = math.sin(p), math.cos(p), math.sin(y), math.cos(y), math.sin(r), math.cos(r)
+    local q = { X = CR * SP * SY - SR * CP * CY, Y = -CR * SP * CY - SR * CP * SY, Z = CR * CP * SY - SR * SP * CY, W = CR * CP * CY + SR * SP * SY }
+    local t = { Rotation = q, Translation = { X = at.X, Y = at.Y, Z = at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
     local ok, a = pcall(function()
         local x = gs:BeginDeferredActorSpawnFromClass(survivalPC, cls, t, 1, nil, 1)
         return gs:FinishSpawningActor(x, t, 1)
@@ -167,7 +172,15 @@ function SOLG.spawn(at, yaw, vel)
     local sk = obj(SOLG.C.mesh)
     if not valid(sk) then sl("SK_SV_SOLG not loaded: is SurvivalMode_SOLG_P installed?"); return false end
     step("its actor")
-    local a = newActor(at, yaw)
+    -- ((2026-11-22) the user: "make it so that the Solg is angled downwards as if its falling ... it just looks like its falling
+    -- flat") its nose down along its fall: its path's angle, at least pitch_min_deg (AC:I's Gould starts it 11 degrees down)
+    local pitch = 0
+    if vel then
+        local hz = math.sqrt(n(vel.X, 0) ^ 2 + n(vel.Y, 0) ^ 2)
+        local path = math.deg(math.atan(-n(vel.Z, 0), math.max(1, hz)))
+        pitch = math.max(path, n(SOLG.C.pitch_min_deg, 20))
+    end
+    local a = newActor(at, { Pitch = -pitch, Yaw = yaw or 0, Roll = 0 })
     if not a then sl("no actor"); return false end
     step("its skeletal mesh")
     local body = addComp(a, "/Script/Engine.SkeletalMeshComponent")
@@ -177,17 +190,11 @@ function SOLG.spawn(at, yaw, vel)
     local okM = pcall(function() body:SetSkeletalMeshAsset(sk) end) or pcall(function() body:SetSkeletalMesh(sk, true) end)
     -- ((2026-11-22, run 17:58) a bare actor has no root: its spawn place went with the first component, the SOLG lay at the
     -- world's origin on the sea. Put where it's wanted once its mesh is its root)
-    -- ((2026-11-22) the user: "make it so that the Solg is angled downwards as if its falling ... it just looks like its falling
-    -- flat") its nose down along its fall: its path's angle, at least pitch_min_deg (AC:I's Gould starts it 11 degrees down)
-    local pitch = 0
-    if vel then
-        local hz = math.sqrt(n(vel.X, 0) ^ 2 + n(vel.Y, 0) ^ 2)
-        local path = math.deg(math.atan(-n(vel.Z, 0), math.max(1, hz)))
-        pitch = math.max(path, n(SOLG.C.pitch_min_deg, 20))
-    end
     pcall(function() a:K2_SetActorLocationAndRotation({ X = at.X, Y = at.Y, Z = at.Z }, { Pitch = -pitch, Yaw = yaw or 0, Roll = 0 }, false, {}, true) end)
     -- (as the game has it, from its nose's direction: logged; a rotation's read came back empty, 0.75.25)
-    local okP, pitchNow = pcall(function() local f = a:GetActorForwardVector(); return math.deg(math.asin(math.max(-1, math.min(1, f.Z)))) end)
+    -- (and on its body itself, the mesh you see: whether or not the actor has it as its root, read back from it)
+    pcall(function() body:K2_SetWorldLocationAndRotation({ X = at.X, Y = at.Y, Z = at.Z }, { Pitch = -pitch, Yaw = yaw or 0, Roll = 0 }, false, {}, true) end)
+    local okP, pitchNow = pcall(function() local f = body:GetForwardVector(); return math.deg(math.asin(math.max(-1, math.min(1, f.Z)))) end)
     pitchNow = okP and tonumber(pitchNow) or nil
     SOLG.pitchNow = pitchNow
     step("painting")
@@ -225,7 +232,7 @@ function SOLG.breakPanel(bone)
     S.broken[bone] = true
     pcall(function() S.body:HideBoneByName(FName(bone), 0) end)
     local sk = obj(path)
-    local a = valid(sk) and newActor(L, R.Yaw) or nil
+    local a = valid(sk) and newActor(L, R) or nil
     local c = a and addComp(a, "/Script/Engine.SkeletalMeshComponent")
     if not c then sl("break " .. bone .. ": its falling mesh NOT made"); return false end
     pcall(function() c:SetCollisionEnabled(0) end)
@@ -279,7 +286,7 @@ function SOLG.breakArm(armBone, pieces)
         pcall(function() S.body:HideBoneByName(FName(b .. "_W"), 0) end)
     end
     local sk = obj(SOLG.C.arm)
-    local a = valid(sk) and newActor(L, R.Yaw) or nil
+    local a = valid(sk) and newActor(L, R) or nil
     local c = a and addComp(a, "/Script/Engine.SkeletalMeshComponent")
     if not c then sl("break " .. armBone .. ": its falling mesh NOT made"); return false end
     pcall(function() c:SetCollisionEnabled(0) end)
