@@ -72,11 +72,11 @@ SOLG = { C = {
     -- (its normal pay: the team's, as any shot down). Ours (AC:I has none; AC8's induced explosion reaches 20 m)
     ping = { enabled = true, every_s = 20 },
     -- ((2026-11-23) the user: "why haven't we set up the SOLG with collision yet?") its pieces' own shapes (PA_SV_SOLG, a body
-    -- per bone: tools/solg/ue_import.py keep_physics) switched on for queries only (nothing in the engine bumps into them,
-    -- so its mover is never stopped by a plane); each tick your plane's distance to them asked (GetDistanceToCollision, at
-    -- your place and halfway since the last tick, never tunnelled): within radius_m, you crash into it (the game's own
-    -- death; a test plane's floor and invincibility kept). A piece shot off takes its shape with it.
-    collision = { enabled = true, radius_m = 8, near_km = 2.5 },
+    -- per bone: tools/solg/ue_import.py keep_physics) block as the world does (`profile`): a plane flown into it takes the
+    -- game's own collision (the first try, a query from Lua, isn't callable: GetDistanceToCollision). Its stand-ins and
+    -- turrets, attached to it, are ignored as it moves; a mover stopped by a plane is started again (its velocity kept).
+    -- A piece shot off takes its shape with it.
+    collision = { enabled = true, profile = "BlockAll" },
     -- ((2026-11-23) the autotest: each turret fires its first burst, then never again (1-4 hits in 50 s, held still or
     -- moving; its ammo not limited): the land CIWS's cycle never comes round again on our turrets. Every rearm_s (Gould's
     -- 10 s of fire, 5 s rest) each live laser is switched off and on, which starts its cycle (and a burst) afresh)
@@ -234,8 +234,8 @@ function SOLG.spawn(at, yaw, vel)
     local body = addComp(a, "/Script/Engine.SkeletalMeshComponent")
     if not body then sl("no SkeletalMeshComponent"); pcall(function() a:K2_DestroyActor() end); return false end
     if SOLG.C.collision and SOLG.C.collision.enabled ~= false then
-        pcall(function() body:SetCollisionResponseToAllChannels(0) end)   -- (ignored by everything: queries only)
-        pcall(function() body:SetCollisionEnabled(1) end)                  -- (QueryOnly)
+        pcall(function() body:SetCollisionProfileName(FName(SOLG.C.collision.profile or "BlockAll"), true) end)
+        pcall(function() body:SetCollisionEnabled(3) end)                  -- (QueryAndPhysics: it blocks)
     else
         pcall(function() body:SetCollisionEnabled(0) end)
     end
@@ -267,7 +267,8 @@ function SOLG.spawn(at, yaw, vel)
     if spun then pcall(function() body:SetPlayRate(n(SOLG.C.spin_rate, 1)) end) end
     step("its mover")
     local mv = vel and mover(a, vel, 0) or nil
-    S = { actor = a, body = body, move = mv, panels = {}, at0 = at, yaw = yaw, broken = {}, round = SOLG.spawnRound }
+    S = { actor = a, body = body, move = mv, panels = {}, at0 = at, yaw = yaw, broken = {}, round = SOLG.spawnRound,
+          vel = vel and { X = vel.X, Y = vel.Y, Z = vel.Z } or nil }
     SOLG.spawnRound = nil                                 -- (a test's own SOLG: no round of its own)
     sl(string.format("up at (%.1f, %.1f) km, %.1f km up, nose %.0f deg, %.0f deg down (the game's pitch %s): mesh %s, %s, %d wrecks hidden, spin %s, mover %s",
         at.X / 100000, at.Y / 100000, at.Z / 100000, yaw or 0, pitch, pitchNow and string.format("%.1f", pitchNow) or "?", okM and "on" or "NOT set", painted, hid,
@@ -484,46 +485,16 @@ local function splashed(a, scale)
     return true
 end
 -- its laser turrets now (sv_solg_laser.lua's): { o, bone, live, open }; nil with no SOLG
--- your plane into its shapes: a crash (SOLG.C.collision)
+-- its mover kept going: a plane it hit (its collision) stops a ProjectileMovementComponent (no bounce): started again
 function SOLG.crashTick()
-    local c = SOLG.C.collision
-    if not (c and c.enabled ~= false and S and liveObj(S.body)) then return end
-    local pawn = nil
-    pcall(function() pawn = survivalPC.Pawn end)
-    if not (pawn and liveObj(pawn)) then S.lastYou = nil; return end
-    local okY, you = pcall(function() local v = pawn:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
-    if not (okY and you) then return end
-    local last = S.lastYou
-    S.lastYou = you
-    local okA, at = pcall(function() local v = S.actor:K2_GetActorLocation(); return { X = v.X, Y = v.Y, Z = v.Z } end)
-    if not (okA and at) then return end
-    local far = math.sqrt((you.X - at.X) ^ 2 + (you.Y - at.Y) ^ 2 + (you.Z - at.Z) ^ 2)
-    if far > n(c.near_km, 2.5) * 100000 then return end      -- (nowhere near: no asking)
-    local pts = { you }
-    if last then pts[2] = { X = (you.X + last.X) / 2, Y = (you.Y + last.Y) / 2, Z = (you.Z + last.Z) / 2 } end
-    local r = n(c.radius_m, 8) * 100
-    for _, p in ipairs(pts) do
-        local okD, d = pcall(function() return S.body:GetDistanceToCollision(p, {}) end)
-        if not S.collAsked then                           -- (once: what the query gave, and its shapes)
-            S.collAsked = true
-            local pa, ce = nil, nil
-            pcall(function() local x = S.body:GetPhysicsAsset(); pa = x and x:IsValid() and x:GetFName():ToString() or "none" end)
-            pcall(function() ce = S.body:GetCollisionEnabled() end)
-            sl(string.format("its collision asked: %s %s (physics asset %s, collision enabled %s)", okD and "answer" or "ERROR",
-                tostring(d), tostring(pa), tostring(ce)))
-        end
-        d = okD and tonumber(d) or nil
-        if d and not S.collSaid then S.collSaid = true; sl(string.format("its collision answers: you %.0f m from its shapes", d / 100)) end
-        if d and d >= 0 and d <= r then
-            if S.crashedAt and os.clock() - S.crashedAt < 3 then return end
-            S.crashedAt = os.clock()
-            local h0 = nil
-            pcall(function() h0 = pawn.HealthInternal end)
-            local how, h1 = "no hurt", nil
-            if SLAS and SLAS.hurt then how, h1 = SLAS.hurt(pawn, 100000, S.actor, h0) end
-            sl(string.format("you flew into it (%.0f m from its shapes): your health %s -> %s (%s)", d / 100, tostring(h0), tostring(h1), tostring(how)))
-            return
-        end
+    if not (S and S.move and S.vel and liveObj(S.move) and liveObj(S.actor)) or S.falling then return end
+    local okV, sp = pcall(function() local v = S.move.Velocity; return math.sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z) end)
+    local want = math.sqrt(S.vel.X ^ 2 + S.vel.Y ^ 2 + S.vel.Z ^ 2)
+    if okV and sp and sp < want * 0.5 then
+        pcall(function() S.move:SetUpdatedComponent(S.actor.RootComponent) end)
+        pcall(function() S.move.Velocity = { X = S.vel.X, Y = S.vel.Y, Z = S.vel.Z } end)
+        S.restarts = (S.restarts or 0) + 1
+        if S.restarts <= 3 then sl(string.format("its mover started again (%.0f of %.0f m/s: something it hit stopped it)", sp / 100, want / 100)) end
     end
 end
 function SOLG.laserTurrets()
@@ -689,6 +660,7 @@ local function placeAll(t, got, on, mirror)
         local bone = bones[k]
         if bone and valid(o) then
             local att = pcall(function() o:K2_AttachToComponent(S.body, FName(bone), 2, 2, 1, false) end)
+            pcall(function() S.body:IgnoreActorWhenMoving(o, true) end)   -- (its own stand-ins never block its fall)
             -- ((2026-11-22) the user: "all the target boxes were on the top of the radar tower not at its base which
             -- threw the targetting off") its lock point (HitCenterOffset, the tower's top) put on the bone, not its base
             if att and not t.laser then
