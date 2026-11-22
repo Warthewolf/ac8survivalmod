@@ -5281,6 +5281,10 @@ SUITES.valkasolg = function()
             if not ST.check(l ~= nil and l:find("91 targets", 1, true) ~= nil, "the SOLG out of a corner with its 91 targets", l) then return "abort" end
             -- ((2026-11-22) the user: "the solg didn't look angled downwards") its nose down as the game has it
             ST.check(SOLG.pitchNow ~= nil and SOLG.pitchNow <= -15, string.format("its nose down as it falls (the game's pitch %s)", tostring(SOLG.pitchNow)))
+            -- ((2026-11-22) the user: "shes still attacking the players while invisible") parked out of reach meanwhile
+            local o, you = vsHer(), playerLocation()
+            local okD, d = pcall(function() local L = o:K2_GetActorLocation(); return math.sqrt((L.X - you.X) ^ 2 + (L.Y - you.Y) ^ 2 + (L.Z - you.Z) ^ 2) / 100000 end)
+            ST.check(okD and d > 20, string.format("VALKA parked out of the fight while it's up (%.1f km from you)", okD and d or -1))
             local pl = ST.findLog("special: VALKA's SOLG: its portal opens", ST.marks["s" .. pass])
             ST.check(pl ~= nil and pl:find("once it's full size", 1, true) ~= nil, "its portal opens first; the SOLG once it's full size", pl)
             local st = VSOLG.state(D.special)
