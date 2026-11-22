@@ -5463,7 +5463,8 @@ SUITES.solglaser = function()
             LSR.ours, LSR.stock, #LSR.drops, table.concat(sizes, ", "), LSR.first and (" first:" .. LSR.first) or ""))
         ST.check(LSR.ours > 0, string.format("the SOLG's lasers fired (%d shots of BP_SV_SolgTLS)", LSR.ours))
         ST.check(LSR.stock == 0, "no stock laser fired meanwhile (ours is its own blueprint)", tostring(LSR.stock))
-        local one = nil                                   -- (a hit: the smallest drop; every drop a whole number of them)
+        local one = nil                                   -- (a hit: the smallest drop but the last (the floor cuts it); every other a whole number)
+        if #LSR.drops > 1 then table.remove(LSR.drops) end
         for _, d in ipairs(LSR.drops) do one = (not one or d < one) and d or one end
         local whole = 0
         for _, d in ipairs(LSR.drops) do if one and math.abs(d / one - math.floor(d / one + 0.5)) < 0.08 then whole = whole + 1 end end
@@ -5536,7 +5537,7 @@ SUITES.zfasound = function()
             if not r.sndOn then off = off + 1 end
         end
         ST.check(#L > 0 and on == #L and off == #L, string.format("the TLS shooting sound posted on each of %d lasers and stopped (%d / %d)", #L, on, off))
-        ST.check(ST.findLog("shooting sound", ST.marks.z0, true) == nil, "no laser's sound refused", ST.findLog("shooting sound", ST.marks.z0, true))
+        ST.check(ST.findLog("couldn't be posted", ST.marks.z0, true) == nil, "no laser's sound refused", ST.findLog("couldn't be posted", ST.marks.z0, true))
     end)
     A.wait(8)
     A.do_(function()
