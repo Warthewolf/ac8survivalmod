@@ -109,6 +109,62 @@ def load_order_back(st):
     return 0
 
 
+LOADER_FILES = (('dlls', 'main.dll'), ('enabled.txt',))
+
+
+def loader_in(st):
+    """((2026-11-22) the user's game had no Mod Loader in it: her IoStoreLoaderMod moved out on 2026-11-21 while she worked
+    on another mod, and the first valka run's SurvivalMode_P never mounted ("Survival Mode's tables could not be
+    loaded"), so the OpenLevel crashed the game.) With no Mods/IoStoreLoaderMod/dlls/main.dll, the loader in .env's
+    AUTOTEST_LOADER (a folder holding dlls/main.dll) is copied in for the run, each file and folder it adds recorded and
+    taken out again by restore (loader_out), so the game ends as it was."""
+    root = os.path.join(C.mods_dir(), 'IoStoreLoaderMod')
+    if os.path.isfile(os.path.join(root, 'dlls', 'main.dll')):
+        return
+    src = C.env.get('AUTOTEST_LOADER')
+    if not (src and os.path.isfile(os.path.join(src, 'dlls', 'main.dll'))):
+        raise SystemExit('kit: the game has no Mod Loader (Mods/IoStoreLoaderMod/dlls/main.dll) and .env has no '
+                         'AUTOTEST_LOADER (a folder holding dlls/main.dll): Survival\'s containers could never mount')
+    added = {'files': [], 'dirs': []}
+    for d in (root, os.path.join(root, 'dlls')):
+        if not os.path.isdir(d):
+            os.makedirs(d)
+            added['dirs'].append(d)
+    for rel in LOADER_FILES:
+        s, t = os.path.join(src, *rel), os.path.join(root, *rel)
+        if os.path.exists(t):
+            continue
+        if os.path.isfile(s):
+            shutil.copy2(s, t)
+        else:
+            open(t, 'w').close()
+        added['files'].append({'path': t, 'sha256': C.sha256(t)})
+    st['loader'] = added
+    save_state(st)
+    print('kit: the game had no Mod Loader: %s copied in for the run (%d files, taken out again by restore)' % (
+        src, len(added['files'])))
+
+
+def loader_out(st):
+    added = st.get('loader')
+    if not added:
+        return 0
+    bad = 0
+    for f in added['files']:
+        if not os.path.isfile(f['path']):
+            continue
+        if C.sha256(f['path']) != f['sha256']:
+            print('kit: %s changed during the run: LEFT ALONE (look at it)' % f['path'])
+            bad += 1
+            continue
+        os.remove(f['path'])
+    for d in reversed(added['dirs']):
+        if os.path.isdir(d) and not os.listdir(d):
+            os.rmdir(d)
+    print('kit: the Mod Loader copied in for the run taken out' + (' (%d problem(s))' % bad if bad else ''))
+    return bad
+
+
 def cmd_install(a):
     if C.game_running():
         raise SystemExit('kit: the game is running: nothing installed')
@@ -131,6 +187,7 @@ def cmd_install(a):
             raise SystemExit('kit: %s is on another drive than build/autotest: moving it aside would be a copy' % tgt)
         plan.append((name, tgt, src))
     save_state(st)
+    loader_in(st)
     for name, tgt, src in plan:                       # the user's folders aside first (each move recorded at once)
         if os.path.exists(tgt):
             if os.path.exists(os.path.join(tgt, MARKER)):
@@ -210,6 +267,7 @@ def cmd_restore(_):
         shutil.rmtree(tgt)
         print('kit: the test %s removed' % i['name'])
     bad += load_order_back(st)
+    bad += loader_out(st)
     aside = C.state_dir('aside')
     for m in reversed(st.get('moved', [])):
         src = os.path.join(aside, m['name'])

@@ -118,15 +118,24 @@ local function holdPlane(now)
         end
     end
     local a = addrOf(pawn)
-    if a and type(SV_Down) == "function" and (a ~= HOLD.apOn or now >= HOLD.ap) then
+    -- ((2026-11-22) ST.apCentre { X, Y } (cm), the valka suite's: the circle's centre elsewhere, so your plane flies a
+    -- leg there; nil: round the airfield)
+    local cx, cy = AIRFIELD.X, AIRFIELD.Y
+    if ST.apCentre then cx, cy = ST.apCentre.X, ST.apCentre.Y end
+    local key = string.format("%.0f,%.0f", cx, cy)
+    if a and type(SV_Down) == "function" and (a ~= HOLD.apOn or now >= HOLD.ap or key ~= HOLD.apKey) then
         HOLD.ap = now + 30
         if playerOnAirfield and playerOnAirfield() then
             if not HOLD.ground then HOLD.ground = true; ST.info("your plane is on the airfield: the autopilot waits") end
             return
         end
-        local okD, r = pcall(SV_Down, a, AIRFIELD.X, AIRFIELD.Y, 2500, 5000)
+        local okD, r = pcall(SV_Down, a, cx, cy, 2500, 5000)
         if playerLocationDirty then playerLocationDirty() end
-        if a ~= HOLD.apOn then ST.info("the autopilot round the airfield: " .. (okD and tostring(r) or ("error " .. tostring(r)))) end
+        if a ~= HOLD.apOn or key ~= HOLD.apKey then
+            ST.info(string.format("the autopilot round %s: %s", ST.apCentre and string.format("(%.1f, %.1f) km", cx / 100000,
+                cy / 100000) or "the airfield", okD and tostring(r) or ("error " .. tostring(r))))
+        end
+        HOLD.apKey = key
         if okD and r == 1 then HOLD.apOn = a else HOLD.apOn = nil end
     end
 end
@@ -4504,6 +4513,317 @@ SUITES.fleet = function()
         ST.check(l ~= nil, "Ctrl+N again: the fleet taken off", l)
     end)
     A.wait(12)
+end
+
+-- ((2026-11-22) the user: "do an automated test on Valka's round", "look into why she seems to fight in one place, she
+-- doesn't seem to take the fight anywhere and just flies around in one spot", "screenshots of everything") VALKA's round
+-- forced (her disguise off: config_valka.lua, so she comes at once, alone), her fight tracked every 0.5 s
+-- (`valka-track:` lines; her events `valka-ev:`; tools/autotest/valka_track.py reads them): phase A your plane round the
+-- airfield, B a 30 km leg west (ST.apCentre: does she take the fight with you?), C round there; pictures in each phase.
+-- conf valka_a_s / valka_c_s: the circling phases' lengths (s); valka_leg_km: phase B's leg.
+local VT = { n = 0, ev = {}, at = -1, from = nil, phase = "-", samples = 0, hooked = false, d = {} }
+local function vtVel(x)
+    local ok, v = pcall(function() local q = x:GetVelocity(); return { X = q.X, Y = q.Y, Z = q.Z } end)
+    return ok and v or nil
+end
+local function vtKmh(v) return v and math.sqrt(v.X ^ 2 + v.Y ^ 2 + v.Z ^ 2) * 0.036 or -1 end
+local function vtHer() return glitchActor and glitchActor(CFG.specials.valka) or nil end
+local function vtSample(now, s)
+    if now - VT.at < 0.5 then return end
+    VT.at = now
+    local o = vtHer()
+    local you = playerLocation and playerLocation()
+    local pl = ST.plane()
+    local her = o and where(o)
+    if not her and not (s and s.state) then return end
+    VT.from = VT.from or now
+    local nose = -1
+    if o and her and you then
+        local okF, f = pcall(function() local q = o:GetActorForwardVector(); return { X = q.X, Y = q.Y, Z = q.Z } end)
+        local tx, ty, tz = you.X - her.X, you.Y - her.Y, you.Z - her.Z
+        local n = math.sqrt(tx * tx + ty * ty + tz * tz)
+        if okF and n > 0 then nose = math.deg(math.acos(math.max(-1, math.min(1, (f.X * tx + f.Y * ty + f.Z * tz) / n)))) end
+        VT.d[VT.phase] = VT.d[VT.phase] or { n = 0, sum = 0 }
+        VT.d[VT.phase].n, VT.d[VT.phase].sum = VT.d[VT.phase].n + 1, VT.d[VT.phase].sum + n / 100000
+    end
+    local function p3(p) return p and string.format("%.0f %.0f %.0f", p.X / 100, p.Y / 100, p.Z / 100) or "- - -" end
+    VT.samples = VT.samples + 1
+    local hp = nil
+    if o then hp = ST.healthOf(o) end
+    log(string.format("valka-track: %.1f %s %s her %s v %.0f you %s v %.0f nose %.0f hp %s", now - VT.from, VT.phase,
+        tostring(s and s.state), p3(her), vtKmh(o and vtVel(o)), p3(you), vtKmh(pl and vtVel(pl)), nose, tostring(hp)))
+end
+local function vtHook()
+    if VT.hooked then return true end
+    if not (SPC and SPC.valkaTick and SPC.V and SPC.V.event) then return false end
+    VT.hooked = true
+    local origTick, origEv = SPC.valkaTick, SPC.V.event
+    SPC.valkaTick = function(now, s, ...)
+        local r = origTick(now, s, ...)
+        local ok, err = pcall(vtSample, os.clock(), s)
+        if not ok and not VT.errSaid then VT.errSaid = true; ST.info("valka track error " .. tostring(err)) end
+        return r
+    end
+    SPC.V.event = function(ev, ...)
+        local e = tostring(ev)
+        local k = e:find("^RE_SV_ValkaTp_") and "Tp" or e:gsub("^RE_SV_Valka", "")
+        VT.ev[k] = (VT.ev[k] or 0) + 1
+        VT.n = VT.n + 1
+        log(string.format("valka-ev: %.1f %s %s", os.clock() - (VT.from or os.clock()), VT.phase, e))
+        return origEv(ev, ...)
+    end
+    return true
+end
+local function vtCounts()
+    local t = {}
+    for k, v in pairs(VT.ev) do t[#t + 1] = k .. " " .. v end
+    table.sort(t)
+    return table.concat(t, ", ")
+end
+-- the pictures of her: chase (behind her), wide (beside the two of you), top (over the fight)
+local function vtPictures(tag)
+    local function her() return vtHer() end
+    local function mid()
+        local h, y = ST.at(her()), playerLocation()
+        return { X = (h.X + y.X) / 2, Y = (h.Y + y.Y) / 2, Z = (h.Z + y.Z) / 2 }
+    end
+    A.picture("valka_" .. tag .. "_chase", function() return ST.frame(her(), -9000, 1500, 2000) end,
+        function() return ST.at(her()) end, 55)
+    A.picture("valka_" .. tag .. "_wide", function()
+        local h, y, m = ST.at(her()), playerLocation(), mid()
+        local dx, dy = y.X - h.X, y.Y - h.Y
+        local n = math.max(1, math.sqrt(dx * dx + dy * dy))
+        local side = math.max(150000, n * 0.9)
+        return { X = m.X - dy / n * side, Y = m.Y + dx / n * side, Z = m.Z + 40000 }
+    end, mid, 60)
+    A.picture("valka_" .. tag .. "_top", function()
+        local m, h, y = mid(), ST.at(her()), playerLocation()
+        local n = math.sqrt((y.X - h.X) ^ 2 + (y.Y - h.Y) ^ 2)
+        return { X = m.X + 100, Y = m.Y, Z = m.Z + math.max(400000, n * 1.6) }
+    end, mid, 70)
+end
+SUITES.valka = function()
+    intoRun()
+    local aS, cS = tonumber(ST.conf.valka_a_s) or 90, tonumber(ST.conf.valka_c_s) or 60
+    local legKm = tonumber(ST.conf.valka_leg_km) or 30
+    A.do_(function()
+        local c = CFG.specials and CFG.specials.valka
+        if not ST.check(c ~= nil and c.enabled ~= false and SPC and SPC.valkaTick ~= nil, "VALKA is in this build") then return "abort" end
+        ST.check(c.disguise == false, "her disguise off (config_valka.lua): she comes at once, alone", tostring(c.disguise))
+        ST.check(vtHook(), "her round's tick and events watched (valka-track / valka-ev lines)")
+        ST.info(string.format("her settings: engage_every_s %s, turn_every_s %s, post_stall_every_s %s (within %s km), blink_s %s "
+            .. "every %s, spots %s, railgun_every_s %s within %s km", tostring(c.engage_every_s), tostring(c.turn_every_s),
+            tostring(c.post_stall_every_s), tostring(c.post_stall_range_km), tostring(c.blink_s), tostring(c.blink_every_s),
+            c.spots and #c.spots or 0, tostring(c.railgun_every_s), tostring(c.railgun_range_km)))
+        ST.marks.v0 = ST.n
+        D.forceSpecial = "valka"                          -- (Ctrl+8's own: the next round hers, in 3 s)
+        if D.state == "wait" then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+        ST.info(string.format("her round forced: round %d, state %s", (D.round or 0) + 1, tostring(D.state)))
+        ST.doing = "VALKA's opener"
+    end)
+    A.log_("special: VALKA's railgun up", 90, "v0", true, function(l) ST.check(l ~= nil, "her opener's railgun up", l) end)
+    A.log_("special: VALKA's opener shot from", 40, "v0", true, function(l) ST.check(l ~= nil, "her opener's shot", l) end)
+    A.log_("special: VALKA shows", 30, "v0", true, function(l)
+        if not ST.check(l ~= nil, "VALKA shows (her reveal)", l) then return "abort" end
+        VT.phase = "R"
+        ST.shot("valka_reveal_view")                      -- (what you see: her reveal's focus camera)
+    end)
+    A.wait(4)
+    A.do_(function() VT.phase = "A"; ST.doing = "phase A: round the airfield"; ST.info("phase A: your plane round the airfield, " .. aS .. " s") end)
+    A.wait(8)
+    vtPictures("a")
+    A.wait(math.max(5, aS - 30))
+    A.do_(function()
+        ST.info("phase A over: her events " .. vtCounts())
+        VT.phase = "B"
+        ST.apCentre = { X = AIRFIELD.X - legKm * 100000, Y = AIRFIELD.Y }
+        ST.doing = "phase B: a leg west"
+        ST.info(string.format("phase B: your plane's circle moved %d km west: a leg there", legKm))
+    end)
+    A.wait(25)
+    vtPictures("b")
+    A.until_(function()
+        local y = playerLocation()
+        return y and math.sqrt((y.X - ST.apCentre.X) ^ 2 + (y.Y - ST.apCentre.Y) ^ 2) < 700000
+    end, 200, function(v)
+        ST.info("phase B over: " .. (v and "your plane at the new circle" or "200 s, not there yet") .. "; her events " .. vtCounts())
+        VT.phase = "C"
+        ST.doing = "phase C: round the new spot"
+    end)
+    A.wait(10)
+    vtPictures("c")
+    A.wait(math.max(5, cS - 20))
+    A.do_(function()
+        local s = D and D.special
+        ST.info("phase C over: her events " .. vtCounts())
+        local parts = {}
+        for _, ph in ipairs({ "A", "B", "C" }) do
+            local d = VT.d[ph]
+            parts[#parts + 1] = string.format("%s %s", ph, d and d.n > 0 and string.format("%.1f km", d.sum / d.n) or "-")
+        end
+        ST.info("her mean distance from you by phase: " .. table.concat(parts, ", "))
+        ST.check(VT.samples >= 100, "her fight tracked", VT.samples .. " samples")
+        ST.check(vtHer() ~= nil, "she's still up at the end (nobody shoots her in this test)", s and tostring(s.state))
+        ST.apCentre = nil
+    end)
+end
+
+-- ((2026-11-22) the user: "try to build a 3D Portal, an event horizon that she spawns out of") the game's own pieces a
+-- portal could be made of, one at a time at a spot 9 km north of the runway, 3 km up, photographed by a camera of ours
+-- and taken away: meshes (the engine's basic shapes, rings) with the game's VFX materials (each instance's parameters
+-- logged: `portal-mat:`), and Niagara systems (a picture as each starts and one 2.5 s on). conf portal_only: a comma
+-- list of piece names (the others skipped).
+local PP = { at = nil, actor = nil, fx = {} }
+local function ppPath(p) return p:find("%.") and p or (p .. "." .. p:match("[^/]+$")) end
+local function ppSpot() return { X = AIRFIELD.X, Y = AIRFIELD.Y - 900000, Z = 300000 } end
+local function ppCam(dist_m, up_m) local s = ppSpot(); return { X = s.X, Y = s.Y + dist_m * 100, Z = s.Z + (up_m or 0) * 100 } end
+local function ppMatParams(mi, name)
+    local parts = {}
+    for _, k in ipairs({ "ScalarParameterValues", "VectorParameterValues", "TextureParameterValues" }) do
+        pcall(function()
+            mi[k]:ForEach(function(_, e)
+                local v = e:get()
+                local n = "?"
+                pcall(function() n = v.ParameterInfo.Name:ToString() end)
+                local val = "?"
+                if k == "ScalarParameterValues" then pcall(function() val = string.format("%.3g", v.ParameterValue) end)
+                elseif k == "VectorParameterValues" then pcall(function() local c = v.ParameterValue; val = string.format("(%.2g %.2g %.2g %.2g)", c.R, c.G, c.B, c.A) end)
+                else pcall(function() val = (v.ParameterValue:GetFullName():match("([^%./ ]+)$") or "?") end) end
+                parts[#parts + 1] = k:sub(1, 1) .. ":" .. n .. "=" .. val
+            end)
+        end)
+    end
+    local parent = "?"
+    pcall(function() parent = mi.Parent:GetFullName():match("([^%./ ]+)$") or "?" end)
+    log(string.format("portal-mat: %s (parent %s): %s", name, parent, #parts > 0 and table.concat(parts, ", ") or "no overrides read"))
+end
+local function ppClear()
+    if PP.actor and valid(PP.actor) then pcall(function() PP.actor:K2_DestroyActor() end) end
+    PP.actor = nil
+    for _, c in ipairs(PP.fx) do pcall(function() c:DeactivateImmediate() end); pcall(function() c:K2_DestroyComponent(c) end) end
+    PP.fx = {}
+end
+local function ppActor(at)
+    local gs, cls = StaticFindObject("/Script/Engine.Default__GameplayStatics"), StaticFindObject("/Script/Engine.Actor")
+    local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = at.X, Y = at.Y, Z = at.Z }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+    local a = gs:BeginDeferredActorSpawnFromClass(ST.pc(), cls, t, 1, nil, 1)
+    return gs:FinishSpawningActor(a, t, 1)
+end
+-- a mesh piece: mesh `mesh` sized size_m across (its bounds' sphere), squashed by flat (its Z scale x flat), turned by
+-- rot (Pitch, Yaw, Roll), its material(s) `mat` (nil: its own) as a dynamic instance with params set
+local function ppMesh(name, mesh, mat, size_m, flat, rot, params)
+    ppClear()
+    local at = ppSpot()
+    local a = ppActor(at)
+    if not valid(a) then ST.info("portal piece " .. name .. ": no actor"); return end
+    PP.actor = a
+    local smc = StaticFindObject("/Script/Engine.StaticMeshComponent")
+    local comp = a:AddComponentByClass(smc, false, { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 },
+        Scale3D = { X = 1, Y = 1, Z = 1 } }, false)
+    local m, why = loadObject(ppPath(mesh))
+    if not valid(m) then ST.info("portal piece " .. name .. ": mesh not loaded (" .. tostring(why) .. ")"); return end
+    pcall(function() comp:SetStaticMesh(m) end)
+    local r = 100
+    pcall(function() r = m:GetBounds().SphereRadius end)
+    local k = (size_m * 100 / 2) / math.max(1, r)
+    pcall(function() comp:SetCollisionEnabled(0) end)
+    pcall(function() comp:SetWorldScale3D({ X = k, Y = k, Z = k * (flat or 1) }) end)
+    pcall(function() comp:K2_SetWorldLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true) end)
+    if rot then pcall(function() comp:K2_SetWorldRotation(rot, false, {}, true) end) end
+    local nmat = 0
+    pcall(function() nmat = comp:GetNumMaterials() end)
+    local own = {}
+    for i = 0, nmat - 1 do pcall(function() own[#own + 1] = comp:GetMaterial(i):GetFullName():match("([^%./ ]+)$") end) end
+    local said = "its own (" .. table.concat(own, ", ") .. ")"
+    if mat then
+        local mi, whyM = loadObject(ppPath(mat))
+        if valid(mi) then
+            ppMatParams(mi, mat:match("[^/]+$"))
+            local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
+            local okM, mid = pcall(function() return kml:CreateDynamicMaterialInstance(ST.pc(), mi, FName("None"), 0) end)
+            if okM and valid(mid) then
+                for pn, v in pairs(params or {}) do
+                    if type(v) == "number" then pcall(function() mid:SetScalarParameterValue(FName(pn), v) end)
+                    elseif type(v) == "table" then pcall(function() mid:SetVectorParameterValue(FName(pn), { R = v[1], G = v[2], B = v[3], A = v[4] or 1 }) end)
+                    else local tx = loadObject(ppPath(v)); if valid(tx) then pcall(function() mid:SetTextureParameterValue(FName(pn), tx) end) end end
+                end
+                for i = 0, math.max(0, nmat - 1) do pcall(function() comp:SetMaterial(i, mid) end) end
+                said = mat:match("[^/]+$")
+            else said = "its own (" .. mat:match("[^/]+$") .. "'s instance NOT made)" end
+        else said = "its own (" .. mat:match("[^/]+$") .. " NOT loaded: " .. tostring(whyM) .. ")" end
+    end
+    for i = 0, nmat - 1 do pcall(function() local mm = comp:GetMaterial(i); if mm and i == 0 then ppMatParams(mm, "slot 0 of " .. name) end end) end
+    ST.info(string.format("portal piece %s: %s (bounds radius %.0f cm, x%.1f -> %d m), %d material slot(s), %s", name,
+        mesh:match("[^/]+$"), r, k, size_m, nmat, said))
+end
+local function ppNiagara(name, sys, scale)
+    local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
+    local s, why = loadObject(ppPath(sys))
+    if not valid(s) then ST.info("portal piece " .. name .. ": system not loaded (" .. tostring(why) .. ")"); return end
+    local ok, comp = pcall(function()
+        return lib:SpawnSystemAtLocation(ST.pc(), s, ppSpot(), { Pitch = 0, Yaw = 0, Roll = 0 }, { X = scale, Y = scale, Z = scale },
+            true, true, 0, true)
+    end)
+    if ok and comp then PP.fx[#PP.fx + 1] = comp end
+    ST.info(string.format("portal piece %s: %s x%.1f %s", name, sys:match("[^/]+$"), scale, ok and comp and "spawned" or ("NOT spawned: " .. tostring(comp))))
+end
+local PP_PIECES = {
+    { "ring_mgf", "mesh", "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRing002_I07", nil, 220 },
+    { "ring_mgf_glow", "mesh", "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRing002_I07", "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", 220 },
+    { "ring_elevator", "mesh", "/Game/Environments/City/Unique/Map15/Mesh/SM_UNI_OrbitElevatorRing002_I22", nil, 220 },
+    { "ring_elevator_glow", "mesh", "/Game/Environments/City/Unique/Map15/Mesh/SM_UNI_OrbitElevatorRing002_I22", "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", 220 },
+    { "ring_training", "mesh", "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07", "/Game/VFX/Mission/Traning/MI_TrainingRing", 220 },
+    { "sphere_refraction", "mesh", "/Engine/BasicShapes/Sphere", "/Game/VFX/Mission/Mission027/CoreDestroy/MI_CoreDest_ShockDomeRefraction001", 180 },
+    { "sphere_blacksmoke", "mesh", "/Engine/BasicShapes/Sphere", "/Game/VFX/Mission/Mission027/CoreDestroy/MI_CoreDest_AfterExitBlackSmokeMesh", 180 },
+    { "sphere_barrier", "mesh", "/Engine/BasicShapes/Sphere", "/Game/VFX/Vehicles/Weapon/UAV/Barrier/MI_Distortion", 180 },
+    { "disc_black", "mesh", "/Engine/BasicShapes/Cylinder", "/Engine/BasicShapes/BasicShapeMaterial", 180, 0.03, { Pitch = 0, Yaw = 0, Roll = 90 }, { Color = { 0, 0, 0, 1 } } },
+    { "disc_glow", "mesh", "/Engine/BasicShapes/Cylinder", "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", 180, 0.03, { Pitch = 0, Yaw = 0, Roll = 90 } },
+    { "circle_glow", "mesh", "/Game/VFX/ResourceAsset/Mesh/Splash/SM_Circle002_IE03", "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", 220, 1, { Pitch = 0, Yaw = 0, Roll = 90 } },
+    { "plasma", "fx", "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma", 3 },
+    { "maingun_charge", "fx", "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_Maingun_Charge_Electric_1set", 6 },
+    { "maingun_base", "fx", "/Game/VFX/Mission/Mission010/GR036/MainCannon/NS_Maingun_Charge_Base", 6 },
+    { "charge_electric", "fx", "/Game/VFX/IGC/Ms10/Ms100010/NS_IGCVFX_Ms100010_ChargeElectric001", 6 },
+    { "shockwave25", "fx", "/Game/VFX/IGC/Ms25/Ms250010/NS_IGCVFX_Ms250010_ShockWave001", 3 },
+    { "shockwave29", "fx", "/Game/VFX/IGC/Ms29/Ms290030/NS_IGCVFX_Ms290030_ShockWave001", 3 },
+    { "discharge", "fx", "/Game/VFX/Vehicles/Aircraft/Common/ElectricDischarge/NS_ElectricDischargeM001", 20 },
+    { "farflash", "fx", "/Game/VFX/Mission/Mission023/NS_ms23FarFlash", 2 },
+}
+local function ppAll(only)
+    local want = nil
+    if only and only ~= "" then want = {}; for n in tostring(only):gmatch("[^,]+") do want[n] = true end end
+    for _, p in ipairs(PP_PIECES) do
+        local name = p[1]
+        if not want or want[name] then
+            if p[2] == "mesh" then
+                A.do_(function() ST.look(ppCam(-900, 60), ppSpot(), 45); ppMesh(name, p[3], p[4], p[5], p[6], p[7], p[8]) end)
+                A.wait(2)
+                A.do_(function() ST.shot("portal_" .. name) end)
+                A.wait(2.5)
+                A.do_(function() ST.look(ppCam(-700, 450), ppSpot(), 45) end)   -- (from above and the side: its depth)
+                A.wait(1)
+                A.do_(function() ST.shot("portal_" .. name .. "_above") end)
+                A.wait(2.5)
+                A.do_(ppClear)
+            else
+                A.do_(function() ST.look(ppCam(-900, 60), ppSpot(), 45) end)
+                A.wait(1)
+                A.do_(function() ppNiagara(name, p[3], p[4]) end)
+                A.wait(0.4)
+                A.do_(function() ST.shot("portal_" .. name .. "_start") end)
+                A.wait(2.6)
+                A.do_(function() ST.shot("portal_" .. name .. "_3s") end)
+                A.wait(2.5)
+                A.do_(ppClear)
+            end
+        end
+    end
+    A.do_(function() ST.lookBack() end)
+end
+SUITES.portalprobe = function()
+    intoRun()
+    A.do_(function() ST.info(string.format("the portal's pieces at (%.1f, %.1f) km, 3 km up", ppSpot().X / 100000, ppSpot().Y / 100000)) end)
+    ppAll(ST.conf.portal_only)
+    A.do_(function() ST.check(true, "every portal piece tried (see the INFO lines and the pictures)") end)
 end
 
 -- ---- the tick ----------------------------------------------------------------------------------------------------
