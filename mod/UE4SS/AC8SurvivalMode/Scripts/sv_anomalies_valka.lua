@@ -1506,13 +1506,18 @@ local function portalMesh(pc, P, part, a, smc, kml)
         pcall(function() sc:SetCastShadow(false) end)
         pcall(function() sc.VisibilityBasedAnimTickOption = 0 end)   -- (its bone moved even off screen: AlwaysTickPoseAndRefreshBones)
         pcall(function() sc:K2_SetWorldLocationAndRotation({ X = P.at.X, Y = P.at.Y, Z = P.at.Z }, portalRot(part, P.yaw), false, {}, true) end)
-        pcall(function() sc:PlayAnimation(grow, false) end)
-        pcall(function() sc:SetPlayRate(0) end)
-        pcall(function() sc:SetPosition(0, false) end)
-        local okA = okM and pcall(function() comp:K2_AttachToComponent(sc, FName("B"), 2, 2, 0, false) end)
+        -- ((0.75.17's pictures: the pieces turned and stretched) the piece put where it belongs at full size first, the
+        -- scaler's bone still at rest, and attached keeping that (its bone's own frame is the importer's, turned from
+        -- glTF's): the bone's scale then shrinks and grows it about the portal's middle, nothing else
+        pcall(function() comp:K2_SetWorldLocation({ X = P.at.X, Y = P.at.Y, Z = P.at.Z }, false, {}, true) end)
+        pcall(function() comp:K2_SetWorldRotation(portalRot(part, P.yaw), false, {}, true) end)
+        if e.spun ~= 0 then pcall(function() comp:K2_AddLocalRotation({ Pitch = 0, Yaw = e.spun, Roll = 0 }, false, {}, true) end) end
+        pcall(function() comp:SetWorldScale3D({ X = e.k, Y = e.k, Z = e.k * e.flat }) end)
+        local okA = okM and pcall(function() comp:K2_AttachToComponent(sc, FName("B"), 1, 1, 1, false) end)
         if okA then
-            pcall(function() comp:SetRelativeScale3D({ X = e.k, Y = e.k, Z = e.k * e.flat }) end)
-            pcall(function() comp:K2_SetRelativeRotation({ Pitch = 0, Yaw = e.spun, Roll = 0 }, false, {}, true) end)
+            pcall(function() sc:PlayAnimation(grow, false) end)   -- (held at its start, 0.001: grown in its window)
+            pcall(function() sc:SetPlayRate(0) end)
+            pcall(function() sc:SetPosition(0, false) end)
             e.sc = sc
             if e.spin ~= 0 then
                 local okR, rot = pcall(function() return a:AddComponentByClass(StaticFindObject("/Script/Engine.RotatingMovementComponent"), false,
