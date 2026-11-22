@@ -256,7 +256,29 @@ CFG.specials = {
                                              "C|The contact's gone. Signal lost. ...Whoever that was." },
                                            { "AUDREY|Valka? Valka. Yes. It's me. I've got you now.",
                                              "C|Signal lost. Comona Control, logging it as... nothing." } },
-                                  down_charlene = { { "CHARLENE|...Whoever she was, I think someone just took her home." } } } },
+                                  down_charlene = { { "CHARLENE|...Whoever she was, I think someone just took her home." } },
+                                  -- ((2026-11-22) her SOLG (docs/design SOLG plan): at 20 % she calls it in (solg), it's destroyed
+                                  -- (solg_down, as she comes back) or it hits the spaceport (solg_hit). AUDREY worked at the
+                                  -- Sudentor, there when its control system was taken down: she knows it)
+                                  solg = { { "VALKA|Enough.",
+                                             "AUDREY|Val? Val, talk to me. You're hurt. Come down, I'll get you out.",
+                                             "VALKA|Out to what, Auds? It just keeps going. All of it.",
+                                             "AUDREY|Then let it keep going. With you in it. Please.",
+                                             "VALKA|I'm tired. I'm going to make it quiet.",
+                                             "AUDREY|Val, no. Whatever you're thinking, don't. There are people down there.",
+                                             "VALKA|There always are. Rest well, all of you.",
+                                             "C|New contact, high altitude, out of nowhere. It's... huge. It's coming down.",
+                                             "AUDREY|No. No, no, no. That's the SOLG. We buried that thing. I watched its control system die in that tunnel.",
+                                             "AUDREY|Val, where did you get it?! ...Stars, she's not listening.",
+                                             "AUDREY|Pilots, it's falling on the spaceport. Strip the solar arrays and the panels first, then the shells, then the cores. Shoot it apart!" } },
+                                  solg_down = { { "AUDREY|It's breaking up... It's gone. You did it.",
+                                                  "VALKA|...You stopped it.",
+                                                  "AUDREY|They did, Val. It's over. Come home.",
+                                                  "VALKA|Not yet." } },
+                                  solg_hit = { { "C|Impact at the spaceport! The shockwave's hit the airfield. Runways closed!",
+                                                 "AUDREY|Twice. I watched that thing fall twice...",
+                                                 "AUDREY|Val... what have you done.",
+                                                 "VALKA|What I said I would." } } } },
                  spawn_km = { 6, 9 }, arrive_s = 1.0,
                  -- opener_bearing: the compass bearing it's on from you (270 = always west; user, 2026-10-24: "have
                  -- it always at the west"); nil = straight ahead of you
