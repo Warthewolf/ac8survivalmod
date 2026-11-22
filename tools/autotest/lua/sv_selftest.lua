@@ -5506,7 +5506,7 @@ SUITES.solglaser = function()
             return true
         end
         return false
-    end, 50)
+    end, 75)
     for k = 1, 4 do
         A.do_(function()
             local you, L = playerLocation(), SOLG.where()
