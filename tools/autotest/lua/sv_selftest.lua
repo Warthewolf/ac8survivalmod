@@ -6008,6 +6008,52 @@ SUITES.airprobe = function()
     end
 end
 
+-- ((2026-11-23) the SOLG's collision: its shapes answer, a plane flown into it crashes (its floor here: shootable, never down)
+SUITES.solgcrash = function()
+    intoRun()
+    local C2 = {}
+    A.do_(function()
+        local you = playerLocation()
+        SOLG.C.pause_s = {}
+        C2.at = { X = you.X + 300000, Y = you.Y, Z = you.Z + 20000 }
+        ST.check(SOLG.spawn(C2.at, 0, nil) == true, "the SOLG up 3 km ahead")
+    end)
+    A.wait(2)
+    A.do_(function() pcall(SOLG.tick, os.clock()) end)
+    A.wait(0.5)
+    A.do_(function()
+        ST.check(ST.findLog("its collision answers", 0, true) ~= nil, "its shapes answer a distance query",
+            ST.findLog("its collision answers", 0, true))
+        local pl = ST.plane()
+        pcall(function() C2.h0 = pl.HealthInternal end)
+        -- into its barrel: the SOLG's middle
+        local okL, L = pcall(function() local v = SOLG.where(); return { X = v.X, Y = v.Y, Z = v.Z } end)
+        if okL and L then pcall(function() pl:K2_SetActorLocation(L, false, {}, true) end) end
+        ST.info("your plane moved into its barrel; health before " .. tostring(C2.h0))
+    end)
+    A.wait(0.3)
+    A.do_(function() pcall(SOLG.tick, os.clock()) end)
+    A.wait(0.5)
+    A.do_(function()
+        local l = ST.findLog("you flew into it", 0, true)
+        local h1 = nil
+        pcall(function() h1 = ST.plane().HealthInternal end)
+        ST.check(l ~= nil and h1 and C2.h0 and h1 < C2.h0, string.format("flown into it, you crash (health %s -> %s)", tostring(C2.h0), tostring(h1)), l)
+    end)
+    A.do_(function()
+        local pl = ST.plane()
+        local you = playerLocation()
+        pcall(function() pl.HealthInternal = (tonumber(pl.MaxHealth) or 113) * 10 end)
+        pcall(function() pl:K2_SetActorLocation({ X = C2.at.X - 600000, Y = C2.at.Y, Z = C2.at.Z }, false, {}, true) end)
+        C2.mark = ST.n
+    end)
+    A.wait(1.5)
+    A.do_(function()
+        ST.check(ST.findLog("you flew into it", C2.mark, true) == nil, "6 km clear of it: no crash")
+        pcall(SOLG.stop, "crash test over")
+    end)
+end
+
 -- ---- the tick ----------------------------------------------------------------------------------------------------
 local started, t0, finished = false, nil, false
 local function finish(why)
