@@ -5098,8 +5098,12 @@ SUITES.solg = function()
         A.do_(function() ST.check(SOLG.breakPanel(b) == true, b .. " shot off: it falls", ST.findLog("solg: " .. b, 0)) end)
         A.wait(0.3)
     end
-    for k = 1, 5 do
-        A.do_(function() local at, look = solgCam(-600, -2200, 200); ST.look(at, { X = look.X - 60000, Y = look.Y, Z = look.Z - 20000 }, 60) end)
+    for k = 1, 5 do                                       -- (on the first wing falling, from 700 m off its side)
+        A.do_(function()
+            local P = SOLG.panelAt(1)
+            if P then ST.look({ X = P.X + 30000, Y = P.Y - 60000, Z = P.Z + 15000 }, P, 50) end
+            ST.info(P and string.format("the first wing falling at %.2f km up", P.Z / 100000) or "the first wing: gone")
+        end)
         A.wait(0.3)
         A.do_(function() ST.shot("solg_fall_" .. k) end)
         A.wait(1.6)
