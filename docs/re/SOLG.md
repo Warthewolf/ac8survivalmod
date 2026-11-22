@@ -177,3 +177,20 @@ plane carries any look, and its parts, moved onto its bones every 0.5 s, stay th
 2. The phases (5 above) in Lua: targets switched on phase by phase (bShowHUDBox / bIsNotLockonTarget / invincibility,
    SPC.V.PART_FLAGS), the TLS lasers, broken-off pieces falling back.
 3. The round: a SPC kind, an impact countdown on the HUD; impact = the airfield down for 2 rounds; co-op.
+
+## 10. Its animations, from AC:I's own data (2026-11-22; tools/solg/kfm1.py)
+The user: "it's animations have to work, that means it's solar panels falling off too". MOP2 clips are KFM1, now
+decoded whole (the kit read only the base pose): 32-byte track records (bone, type 0x0503 position / 0x0704
+quaternion xyzw / 0x0001 a value), then the frame count and the (size, offset) of a CONSTANT block and an ANIMATED
+block; each block 'cdab', a header of 8 + 8 a track (key count, first frame-number index, values offset), the u16
+frame numbers, then the values. The records list the constant tracks first, then the animated ones, in the blocks'
+order. [V: the decoded values are rotations of exactly 7.2 degrees a key and positions in metres]
+- `auta` (the mission model, DATA01 213: on the body's 68-node tree and on each arm s_sg01): the rings' spin, 51
+  quaternion keys about the ring bone's local X, 7.2 degrees each: one full turn in 50 frames, a loop. In.
+- The solar panels' fall: NOT an animation in AC:I. The mission model has no clip but `basepose` and `auta`; the three
+  cutscene packages (DATA01 429 / 431 / 433: Tdemo__<piece>_t1__NN, a world-space track per piece, two cuts each)
+  are the SOLG's ARRIVAL: every panel (s_sg04 x6, s_sg05 x12) keeps its exact offset from the body through both cuts
+  (tools: a per-cut offset check), only the ring-borne pieces (s_sg06, s_sg01, s_sg02, s_sg07) circle the barrel.
+  The 9.8-gravity blocks in the mission graph (DATA92 529) are weapon rounds (speeds 1000-6000, lives), not panels.
+  So AC:I's game code breaks the panels off; ours does it with the engine's physics on the panel's own mesh (its wreck
+  mesh, tumbling down), said so to the user.
