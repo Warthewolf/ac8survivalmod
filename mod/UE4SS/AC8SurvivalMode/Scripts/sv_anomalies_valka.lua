@@ -1396,7 +1396,9 @@ local function portalFrame(yaw)
 end
 local function portalRot(part, yaw)
     if part.axis == "x" then return { Pitch = 0, Yaw = yaw, Roll = 0 } end
-    return { Pitch = -89.9, Yaw = yaw, Roll = 0 }        -- (its local Z along her way out)
+    -- (its local Z along her way out: rolled up, then turned. (2026-11-22) a Pitch of -89.9 never took (the run of 13:26:
+    -- the portal lay flat), a Roll did (the probe's standing rings); the disc's two faces are alike, so Z along +-her way)
+    return { Pitch = 0, Yaw = (yaw or 0) + 90, Roll = 90 }
 end
 local function portalMesh(pc, P, part, a, smc, kml)
     local m = SPC.V.asset(part.mesh)

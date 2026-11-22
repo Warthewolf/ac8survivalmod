@@ -319,19 +319,24 @@ CFG.specials = {
                                 { mesh = "/Engine/BasicShapes/Cylinder", mat = "/Engine/BasicShapes/BasicShapeMaterial",
                                   params = { Color = { 0, 0, 0, 1 } }, size = 0.78, flat = 0.02 },
                                 -- round it a glowing lens, brightest at its rim
+                                -- (the second probe, 13:26: Color over 1 washes to pink in the bloom, EmissiveIntensity 60
+                                -- on the lens a white blob: both toned down)
                                 { mesh = "/Engine/BasicShapes/Sphere", mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow",
-                                  params = { Color = { 0.75, 0.1, 1.0, 1 }, EmissiveIntensity = 60, Opacity = 0.5, EmissiveFresnelFalloff = 3 },
+                                  params = { Color = { 0.55, 0.05, 1.0, 1 }, EmissiveIntensity = 8, Opacity = 0.35, EmissiveFresnelFalloff = 3 },
                                   size = 0.95, flat = 0.22 },
-                                -- two rings turning opposite ways: magenta inside, red outside
+                                -- two finned rings turning opposite ways: violet inside, red outside; a plain red one round them
                                 { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07",
-                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 4, 0.3, 3, 1 } },
-                                  size = 1.05, spin = 1 },
+                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.7, 0.05, 1.0, 1 } },
+                                  size = 1.0, spin = 1 },
+                                { mesh = "/Game/Environments/MegaFloat/Base/Mesh/SM_MGF_MagneticControlRingParts001_I07",
+                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 1.0, 0.04, 0.12, 1 } },
+                                  size = 1.25, spin = -0.7 },
                                 { mesh = "/Game/Environments/City/Unique/Map15/Mesh/SM_UNI_OrbitElevatorRing002_I22",
-                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 5, 0.2, 0.4, 1 } },
-                                  size = 1.45, spin = -0.6 },
+                                  mat = "/Game/VFX/Mission/Traning/MI_TrainingRing", params = { Color = { 0.9, 0.02, 0.08, 1 } },
+                                  size = 1.55, spin = 0.3 },
                                 -- a faint red halo far round it
                                 { mesh = "/Engine/BasicShapes/Sphere", mat = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow",
-                                  params = { Color = { 1, 0.1, 0.3, 1 }, EmissiveIntensity = 25, Opacity = 0.2 }, size = 1.9, flat = 0.08 },
+                                  params = { Color = { 1, 0.08, 0.25, 1 }, EmissiveIntensity = 4, Opacity = 0.15 }, size = 2.1, flat = 0.06 },
                                 -- (Niagara, the same probe: Mission 27's core plasma draws a column of light; the
                                 -- discharge drew nothing at x20, the "shockwave" systems are dust and smoke clouds)
                                 { fx = "/Game/VFX/Mission/Mission027/CoreDestroy/NS_MGF_CoreDest1st_CoreElectricPlasma", scale = 6, at = "open" },
@@ -370,8 +375,9 @@ CFG.specials = {
                  -- own flying: her row's behaviour set `luaset` (CFG.behaviour_sets; NLID_SV_Lancer: slashing passes and
                  -- zoom climbs, never a turning fight; "" keeps the fighters' set), her pilot_rank (the x40a row's is 2),
                  -- speed_x on her top and turning speeds, cruise_x on her normal speed, accel_x on her acceleration,
-                 -- turn_add on her pitch / roll / yaw rates (deg/s)
-                 luaset = "NLID_SV_Lancer", pilot_rank = 5, speed_x = 1.3, cruise_x = 1.4, accel_x = 1.5,
+                 -- turn_add on her pitch / roll / yaw rates (deg/s). (2026-11-22, run 13:26 with speed x1.3, cruise x1.4: she
+                 -- averaged 1,900-2,400 km/h in her passes, the x40a's own speed is Mach 2: back to x1.0 / x1.15)
+                 luaset = "NLID_SV_Lancer", pilot_rank = 5, speed_x = 1.0, cruise_x = 1.15, accel_x = 1.3,
                  turn_add = { pitch = 60, roll = 120, yaw = 20 },
                  -- (2026-11-22) her LastTGT (a 20 s tail chase 200 m behind you, which slows her to a crawl whenever
                  -- she overshoots: docs/re/BEHAVIOUR_NATIVE_MOVE.md section 2) only when you sit behind her (behind_km,
