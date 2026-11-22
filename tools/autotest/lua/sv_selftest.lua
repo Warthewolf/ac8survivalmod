@@ -5238,8 +5238,11 @@ SUITES.valkasolg = function()
         end
         A.log_("special: VALKA's SOLG: out of the corner", 15, "s" .. pass, true, function(l)
             if not ST.check(l ~= nil and l:find("91 targets", 1, true) ~= nil, "the SOLG out of a corner with its 91 targets", l) then return "abort" end
-            ST.check(ST.findLog("special: VALKA's SOLG: its portal opens", ST.marks["s" .. pass]) ~= nil, "its portal opens",
-                ST.findLog("special: VALKA's SOLG: its portal", ST.marks["s" .. pass], true))
+            local pl = ST.findLog("special: VALKA's SOLG: its portal opens", ST.marks["s" .. pass])
+            ST.check(pl ~= nil and pl:find("once it's full size", 1, true) ~= nil, "its portal opens first; the SOLG once it's full size", pl)
+            local st = VSOLG.state(D.special)
+            local dt = st and st.portal_to_solg_s
+            ST.check(dt ~= nil and dt >= 4, string.format("the SOLG came through %.1f s after its portal began to open", dt or -1))
         end)
         for k = 1, 4 do
             A.do_(function() local at, look = vsCam(); if at then ST.look(at, look, 55) end end)
@@ -5260,6 +5263,12 @@ SUITES.valkasolg = function()
             A.log_("special: VALKA's SOLG: destroyed", 8, "z0", true, function(l)
                 ST.check(l ~= nil, "the SOLG destroyed: pay, AUDREY's lines", l)
                 ST.check(ST.findLog("solg: falling", ST.marks.z0) ~= nil, "it falls apart", ST.findLog("solg: falling", ST.marks.z0))
+                local arms = 0
+                for k = 1, 4 do if ST.findLog(string.format("solg: SG01_%02d broken off with its 17 pieces", k), ST.marks.s1) then arms = arms + 1 end end
+                ST.check(arms == 4, string.format("each autoloader broke off with its 17 pieces once they were down (%d of 4)", arms),
+                    ST.findLog("broken off with its", ST.marks.s1))
+                ST.check(ST.findLog("on the arms: SG01_01 17, SG01_02 17, SG01_03 17, SG01_04 17", ST.marks.s1) ~= nil,
+                    "17 targets on each arm (8 MAG panels, 9 KEW shells)", ST.findLog("solg: targets up", ST.marks.s1))
             end)
             for k = 1, 3 do
                 A.do_(function() local at, look = vsCam(); if at then ST.look(at, look, 60) end end)
