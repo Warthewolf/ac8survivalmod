@@ -1578,6 +1578,13 @@ function SPC.V.portalOpen(c, s, at, yaw, now, pc, quiet)
         return gs:FinishSpawningActor(x, t, 1)
     end)
     if not (okA and valid(a)) then log("special: VALKA's portal: no actor (" .. tostring(a) .. ")"); return false end
+    -- ((2026-11-22) an empty root first: a new component goes on the actor's root, and the first piece (the black hole's
+    -- shadow) was the root, so every scaler hung off it and it couldn't go on its own: "the Black Hole did not move")
+    pcall(function()
+        local root = a:AddComponentByClass(StaticFindObject("/Script/Engine.SceneComponent"), false,
+            { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }, false)
+        root:K2_SetWorldLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true)
+    end)
     local P = { actor = a, at = { X = at.X, Y = at.Y, Z = at.Z }, yaw = yaw or 0, from = now, phase = "open", meshes = {},
                 fired = {}, size = (tonumber(pc.size_m) or 250) * 100, pc = pc }
     local said = {}
