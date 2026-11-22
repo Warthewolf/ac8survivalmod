@@ -331,9 +331,9 @@ def main():
         bones.append(('RING_' + n[-1], I3, np.array(pos)))
     # ((2026-11-22) its animation, AC:I's own (tools/solg/kfm1.py, docs/re/SOLG.md section 10): the body's `auta`
     # turns ring auta1 (RING_1) and auta2 (RING_2) the opposite ways about the barrel (AC:I z = glTF x), 0.3 degrees a
-    # frame each (one turn in 1,200 frames, 40 s at 30 fps); each arm's own `auta` turns it about its AC:I x (glTF -z
-    # in its frame), here slowed to a turn in 10 s (AC:I's 50 frames a turn: 1.7 s at 30 fps). The pieces on a ring
-    # are that ring's bone's children)
+    # frame each (one turn in 1,200 frames, 40 s at 30 fps). The pieces on a ring are that ring's bone's children; the
+    # arms (the autoloaders, s_sg01) only ride ring 1: the small `auta` clips in the package are o_de01..05's, not the
+    # SOLG's (the user, 2026-11-22: "The autoloaders are tumbling", when they had been given that spin))
     ringof = {'auta1': 'RING_1', 'auta2': 'RING_2'}
     owner = {}
     for mt in layout['mounts']:
@@ -343,9 +343,6 @@ def main():
     parents = [-1] + [bn.index(owner[b]) if owner.get(b) else 0 for b in bn[1:]]
     spin = {'name': 'A_SV_SOLG_Spin', 'length_s': 40.0, 'keys': 160,
             'bones': {'RING_1': ((1, 0, 0), -1), 'RING_2': ((1, 0, 0), 1)}}
-    for b in bn:
-        if b.startswith('SG01_'):
-            spin['bones'][b] = ((0, 0, -1), 4)
     nprim, nvert = write_skinned('SK_SV_SOLG', pieces, bones, parents, [spin])
     # the solar array wings on their own (each its live and its wreck bone at its origin): when one's shot off, it's
     # hidden on the body and one of these falls (Scripts/sv_solg.lua)

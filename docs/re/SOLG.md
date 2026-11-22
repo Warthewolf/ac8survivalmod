@@ -185,7 +185,9 @@ quaternion xyzw / 0x0001 a value), then the frame count and the (size, offset) o
 block; each block 'cdab', a header of 8 + 8 a track (key count, first frame-number index, values offset), the u16
 frame numbers, then the values. The records list the constant tracks first, then the animated ones, in the blocks'
 order. [V: the decoded values are rotations of exactly 7.2 degrees a key and positions in metres]
-- `auta` (the mission model, DATA01 213: on the body's 68-node tree and on each arm s_sg01): the rings' spin, 51
+- `auta` on the body's 68-node tree (MOP2 #978, 400 frames): ring auta1 and auta2 turning the opposite ways about the
+  barrel, 0.3 degrees a frame each. In. The small `auta` clips (#213-317, 51 keys, a turn in 50 frames) belong to
+  o_de01..05, NOT the SOLG's arms (first given to the arms: "The autoloaders are tumbling", the user). Was: the rings' spin, 51
   quaternion keys about the ring bone's local X, 7.2 degrees each: one full turn in 50 frames, a loop. In.
 - The solar panels' fall: NOT an animation in AC:I. The mission model has no clip but `basepose` and `auta`; the three
   cutscene packages (DATA01 429 / 431 / 433: Tdemo__<piece>_t1__NN, a world-space track per piece, two cuts each)
