@@ -1518,7 +1518,10 @@ local function portalMesh(pc, P, part, a, smc, kml)
             pcall(function() sc:PlayAnimation(grow, false) end)   -- (held at its start, 0.001: grown in its window)
             pcall(function() sc:SetPlayRate(0) end)
             pcall(function() sc:SetPosition(0, false) end)
-            e.sc = sc
+            -- (0.75.20's probe: its bone at full size till the engine first runs the animation, a frame on: the piece
+            -- hidden till the portal's first tick, then shown, small)
+            pcall(function() comp:SetVisibility(false, false) end)
+            e.sc, e.hold = sc, true
             if e.spin ~= 0 then
                 local okR, rot = pcall(function() return a:AddComponentByClass(StaticFindObject("/Script/Engine.RotatingMovementComponent"), false,
                     { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }, false) end)
@@ -1677,6 +1680,7 @@ function SPC.V.portalTick(c, s, now)
     local spinK = y and (1 + 3 * y) or (0.15 + 0.85 * x)
     for _, e in ipairs(P.meshes) do
         if e.sc and liveObj(e.comp) then                -- (on its scaler: the engine scales and spins it every frame)
+            if e.hold and now > P.from + 0.05 then e.hold = nil; pcall(function() e.comp:SetVisibility(true, false) end) end
             if y then
                 local w = e.part.close
                 local from = (P.closeFrom or now) + (w and w[1] or 0) * close
