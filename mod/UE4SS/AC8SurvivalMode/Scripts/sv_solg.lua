@@ -504,6 +504,14 @@ function SOLG.crashTick()
     local r = n(c.radius_m, 8) * 100
     for _, p in ipairs(pts) do
         local okD, d = pcall(function() return S.body:GetDistanceToCollision(p, {}) end)
+        if not S.collAsked then                           -- (once: what the query gave, and its shapes)
+            S.collAsked = true
+            local pa, ce = nil, nil
+            pcall(function() local x = S.body:GetPhysicsAsset(); pa = x and x:IsValid() and x:GetFName():ToString() or "none" end)
+            pcall(function() ce = S.body:GetCollisionEnabled() end)
+            sl(string.format("its collision asked: %s %s (physics asset %s, collision enabled %s)", okD and "answer" or "ERROR",
+                tostring(d), tostring(pa), tostring(ce)))
+        end
         d = okD and tonumber(d) or nil
         if d and not S.collSaid then S.collSaid = true; sl(string.format("its collision answers: you %.0f m from its shapes", d / 100)) end
         if d and d >= 0 and d <= r then
@@ -1036,6 +1044,7 @@ function SOLG.mirrorPhase(ph)
     if (S.phase or 0) < ph then phaseOn(ph) end
 end
 function SOLG.debugTargets() return S and S.targets or {} end          -- (the tests')
+function SOLG.debugActor() return S and S.actor or nil end                    -- (the tests')
 function SOLG.boneLoc(bone) if S and liveObj(S.body) then return (boneAt(S.body, bone)) end end
 if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the SOLG"] = function() S = nil; CAPTURE = nil end end
 end

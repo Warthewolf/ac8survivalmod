@@ -447,7 +447,8 @@ CFG.specials = {
                  -- +- corner_km), alt_km up, and falls on the pad in travel_s. Destroyed: reward, solg_down; on the pad:
                  -- Mission 25's blast (hit_fx), the airfield down for a round, solg_hit. Either way she's back back_s on
                  -- (onto your six through a portal) at at_pct, to be shot down
-                 solg = { enabled = true, at_pct = 20, call_s = 18, corner_km = 30, alt_km = 12, travel_s = 360,   -- (Gould's 6 min)
+                 -- ((2026-11-23) call_s 62 (was 18): the user's Audrey briefing is 16 lines (~4 s each): the SOLG comes once she's done
+                 solg = { enabled = true, at_pct = 20, call_s = 62, corner_km = 30, alt_km = 12, travel_s = 360,   -- (Gould's 6 min)
                           pad_cm = { -1325196, 59778, 0 }, portal_size_m = 2600, portal_back_m = 1500, portal_max_s = 40,
                           park_km = { -40, 0, 15 },   -- (where she waits while it's up: from the pad, km along x, y, up)
                           reward = 3000, back_s = 12, wreck_s = 25, marker = true,   -- (its pieces ~4,900 more: sv_solg.lua)
