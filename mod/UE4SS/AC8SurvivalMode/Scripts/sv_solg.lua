@@ -74,7 +74,8 @@ SOLG = { C = {
     -- ((2026-11-23) the autotest: each turret fires its first burst, then never again (1-4 hits in 50 s, held still or
     -- moving; its ammo not limited): the land CIWS's cycle never comes round again on our turrets. Every rearm_s (Gould's
     -- 10 s of fire, 5 s rest) each live laser is switched off and on, which starts its cycle (and a burst) afresh)
-    laser_rearm_s = 15,
+    laser_rearm_s = 0,                     -- (off: switching them off and on didn't bring a second burst)
+    laser_perf = { enabled = true, magazine = 1, reload_s = 5, trigger_count = 999 },
     -- ((2026-11-22) the user: "some black smoke that pours off the sides of the SOLG after things have been destroyed,
     -- and VFX for the splash down of its objects") a ship's black smoke on the bone of each piece shot off (its wreck's
     -- place on the body), at most max; a falling wing, arm or the SOLG itself at the sea or the ground: a water pillar
@@ -399,6 +400,48 @@ function SOLG.lasersArmed(list)
         end
     end
     sl(string.format("lasers: %d of %d turrets' fire control given unlimited ammo (they had %s)", nn, #mine, tostring(was)))
+    -- ((2026-11-23) still one burst: their launcher's performance and fire control, logged once and overwritten: reload not
+    -- held for the fired weapon (bPendingReloadByAttachedWeapon: our borrowed plane laser may never report it's done), a
+    -- magazine, trigger_count bursts)
+    local lp = SOLG.C.laser_perf or {}
+    local said, np = false, 0
+    for _, m in ipairs(FindAllOf("LiveFCSModule_LauncherCommon") or {}) do
+        local okF, full = pcall(function() return m:GetFullName() end)
+        local hit = false
+        if okF and full then for _, nm in ipairs(mine) do if full:find(nm, 1, true) then hit = true; break end end end
+        if hit then
+            local okP, pf = pcall(function() return m:K2_GetCurrentPerformance() end)
+            local okC, fc = pcall(function() return m:K2_GetCurrentFireControl() end)
+            if not said then
+                said = true
+                local t = {}
+                pcall(function() t[#t + 1] = string.format("performance: fire rate %s, magazine %s, reload %s s, reload held for its weapon %s, slots %s",
+                    tostring(pf.FireRate), tostring(pf.MagazineCapacity), tostring(pf.ReloadTime), tostring(pf.bPendingReloadByAttachedWeapon), tostring(pf.SlotNum)) end)
+                pcall(function() t[#t + 1] = string.format("fire control: capture %s cm, angle %s, activation %s s, triggering %s s, trigger count %s, interval %s s, resting %s s",
+                    tostring(fc.CaptureDistance), tostring(fc.CaptureAngleRange), tostring(fc.ActivationTime), tostring(fc.TriggeringTime),
+                    tostring(fc.TriggerCount), tostring(fc.ShotIntervalTime), tostring(fc.RestingTime)) end)
+                sl("lasers: their launcher had " .. table.concat(t, "; "))
+            end
+            local okW = false
+            if okP and pf and lp.enabled ~= false then
+                okW = pcall(function()
+                    pf.bPendingReloadByAttachedWeapon = false
+                    pf.MagazineCapacity = math.max(n(pf.MagazineCapacity, 1), n(lp.magazine, 1))
+                    pf.ReloadTime = n(lp.reload_s, 5)
+                    m:K2_OverwritePerformance(pf)
+                end)
+            end
+            if okC and fc and lp.enabled ~= false then
+                pcall(function()
+                    fc.TriggerCount = n(lp.trigger_count, 999)
+                    fc.CaptureDistance = n(lp.reach_cm, n(fc.CaptureDistance, 120000))
+                    m:K2_OverwriteFireControl(fc)
+                end)
+            end
+            if okW then np = np + 1 end
+        end
+    end
+    sl(string.format("lasers: %d launchers' performance overwritten (reload not held, trigger count %d)", np, n(lp.trigger_count, 999)))
     return nn
 end
 -- the ground (or sea) under x, y
