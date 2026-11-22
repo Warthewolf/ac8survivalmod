@@ -28,6 +28,7 @@ SOLG = { C = {
                           DamegedNormal_Intencity = 0, PlayerPlane_Damage = 0 } },
     spin_rate = 1.0,                        -- the spin animation's play rate (1: AC:I's, a ring's turn in 40 s)
     -- a wing shot off: pushed out from the barrel (m/s), down (m/s), its tumble (deg/s, each axis up to), gone after
+    pitch_min_deg = 20,                     -- its nose down at least this much as it falls (its path's angle if steeper)
     fall = { out_mps = 35, down_mps = 15, tumble_dps = 40, gravity = 1.0, life_s = 30, body_gravity = 0.35, body_tumble_dps = 4 },
     -- its targets (docs/re/SOLG.md 5: AC:I's types, counts and health): each type a unit of ours on AC8's GENERIC
     -- destructible base (tools/survival_events_specials.py SOLG_*: Mission 4's radar tower ported, no boss), its objects
@@ -176,7 +177,15 @@ function SOLG.spawn(at, yaw, vel)
     local okM = pcall(function() body:SetSkeletalMeshAsset(sk) end) or pcall(function() body:SetSkeletalMesh(sk, true) end)
     -- ((2026-11-22, run 17:58) a bare actor has no root: its spawn place went with the first component, the SOLG lay at the
     -- world's origin on the sea. Put where it's wanted once its mesh is its root)
-    pcall(function() a:K2_SetActorLocationAndRotation({ X = at.X, Y = at.Y, Z = at.Z }, { Pitch = 0, Yaw = yaw or 0, Roll = 0 }, false, {}, true) end)
+    -- ((2026-11-22) the user: "make it so that the Solg is angled downwards as if its falling ... it just looks like its falling
+    -- flat") its nose down along its fall: its path's angle, at least pitch_min_deg (AC:I's Gould starts it 11 degrees down)
+    local pitch = 0
+    if vel then
+        local hz = math.sqrt(n(vel.X, 0) ^ 2 + n(vel.Y, 0) ^ 2)
+        local path = math.deg(math.atan(-n(vel.Z, 0), math.max(1, hz)))
+        pitch = math.max(path, n(SOLG.C.pitch_min_deg, 20))
+    end
+    pcall(function() a:K2_SetActorLocationAndRotation({ X = at.X, Y = at.Y, Z = at.Z }, { Pitch = -pitch, Yaw = yaw or 0, Roll = 0 }, false, {}, true) end)
     step("painting")
     local painted = paint(body)
     step("hiding its wrecks")
@@ -195,8 +204,8 @@ function SOLG.spawn(at, yaw, vel)
     step("its mover")
     local mv = vel and mover(a, vel, 0) or nil
     S = { actor = a, body = body, move = mv, panels = {}, at0 = at, yaw = yaw, broken = {} }
-    sl(string.format("up at (%.1f, %.1f) km, %.1f km up, nose %.0f deg: mesh %s, %s, %d wrecks hidden, spin %s, mover %s",
-        at.X / 100000, at.Y / 100000, at.Z / 100000, yaw or 0, okM and "on" or "NOT set", painted, hid,
+    sl(string.format("up at (%.1f, %.1f) km, %.1f km up, nose %.0f deg, %.0f deg down: mesh %s, %s, %d wrecks hidden, spin %s, mover %s",
+        at.X / 100000, at.Y / 100000, at.Z / 100000, yaw or 0, pitch, okM and "on" or "NOT set", painted, hid,
         spun and "playing" or (valid(anim) and "NOT played" or "NOT loaded"), mv and "on" or (vel and "NOT made" or "none")))
     return true
 end
