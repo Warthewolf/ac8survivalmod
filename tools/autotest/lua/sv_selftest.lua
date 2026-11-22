@@ -5160,12 +5160,14 @@ SUITES.solg2 = function()
     A.do_(function()                                      -- (held: each target's distance from its bone)
         local worst, nn = 0, 0
         for _, e in ipairs(SOLG.debugTargets and SOLG.debugTargets() or {}) do
+            if not e.live then goto skip end                  -- (one shot down is moved out of the way)
             local okL, L = pcall(function() return e.o:K2_GetActorLocation() end)
             local okB, B = pcall(function() return SOLG.boneLoc(e.bone) end)
             if okL and okB and L and B then
                 local d = math.sqrt((L.X - B.X) ^ 2 + (L.Y - B.Y) ^ 2 + (L.Z - B.Z) ^ 2) / 100
                 worst, nn = math.max(worst, d), nn + 1
             end
+            ::skip::
         end
         ST.check(nn > 80 and worst < 30, string.format("targets held on their bones (%d read, worst %.1f m off)", nn, worst))
     end)
