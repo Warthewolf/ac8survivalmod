@@ -6044,7 +6044,16 @@ SUITES.solgcrash = function()
                 local hit = {}
                 local okT, got = pcall(function() return ks:LineTraceSingle(survivalPC, from, to, 0, true, {}, 0, hit, true, { R = 0, G = 0, B = 0, A = 0 }, { R = 0, G = 0, B = 0, A = 0 }, 0) end)
                 local d, comp, bone = nil, nil, nil
-                pcall(function() local h = hit.OutHit or hit; d = h.Distance; comp = h.Component and h.Component:GetFullName():match("[^%.:]+$"); bone = h.BoneName and h.BoneName:ToString() end)
+                pcall(function() local h = hit.OutHit or hit; d = h.Distance end)
+                pcall(function()
+                    local h = hit.OutHit or hit
+                    local c = h.Component
+                    pcall(function() c = c:get() end)
+                    local own = nil
+                    pcall(function() own = c:GetOwner():GetFullName():match("[^%.:]+$") end)
+                    comp = (c and c:GetFullName():match("[^%.:]+$") or "?") .. " of " .. tostring(own)
+                end)
+                pcall(function() local h = hit.OutHit or hit; bone = h.BoneName:ToString() end)
                 ST.info(string.format("trace %s: %s%s", what, (okT and got) and "HIT" or "clear",
                     (okT and got) and string.format(" at %.0f m (%s, bone %s)", (d or 0) / 100, tostring(comp), tostring(bone)) or ""))
             end
