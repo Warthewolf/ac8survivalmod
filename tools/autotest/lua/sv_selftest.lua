@@ -4709,6 +4709,27 @@ SUITES.valka = function()
     end)
     A.wait(10)
     vtPictures("c")
+    -- ((2026-11-22) her blinks start when she's hit: two small hits (10 HP of her health each), 20 s apart)
+    for k = 1, 2 do
+        A.do_(function()
+            local o = vtHer()
+            local h = o and ST.healthOf(o)
+            if h and h > 200 then pcall(function() o.HealthInternal = h - 100 end) end
+            ST.marks["hit" .. k] = ST.n
+            ST.info(string.format("a hit on her (%s -> %s)", tostring(h), tostring(o and ST.healthOf(o))))
+        end)
+        A.log_("special: VALKA hit", 3, "hit" .. k, true, function(l) ST.check(l ~= nil, "she blinks when hit (" .. k .. ")", l) end)
+        A.wait(6)
+        A.do_(function()
+            local b = {}
+            for i = ST.marks["hit" .. k] + 1, ST.n do
+                local s = ST.lines[i]
+                if s and s:find("^special: VALKA blink") then b[#b + 1] = s:gsub("^special: ", "") end
+            end
+            ST.check(#b > 0, "her blinks after hit " .. k .. " put her somewhere new", table.concat(b, " | "))
+        end)
+        A.wait(10)
+    end
     A.wait(math.max(5, cS - 20))
     A.do_(function()
         local s = D and D.special

@@ -253,11 +253,51 @@ def svg(rows, evs, S, label, out):
         fh.write('\n'.join(o))
 
 
+def compare(paths, labels):
+    """--compare A B: the numbers that say whether she takes the fight anywhere, side by side."""
+    rows = []
+    for p in paths:
+        log = find_log(p)
+        r, e = read(log) if log else ([], [])
+        rows.append({s['phase']: s for s in summary(r, e)} if r else {})
+    keys = [('her mean speed km/h', lambda s: s['her_kmh_mean']), ('her time under 500 km/h %', lambda s: 100 * (s['her_slow_share'] or 0)),
+            ('her distance from you, median km', lambda s: s['dist_median_km']), ('her distance from you, max km', lambda s: s['dist_max_km']),
+            ('she flew km', lambda s: s['her_path_km']), ('her track spread km', lambda s: s['her_spread_km']),
+            ('you within 30 deg of her nose %', lambda s: 100 * (s['nose_on_share'] or 0))]
+    out = ['phase | what | ' + ' | '.join(labels)]
+    for ph in ('A', 'B', 'C'):
+        for name, f in keys:
+            vals = []
+            for R in rows:
+                s = R.get(ph)
+                v = f(s) if s else None
+                vals.append('-' if v is None else ('%.1f' % v if abs(v) < 100 else '%.0f' % v))
+            out.append(f'{ph} | {name} | ' + ' | '.join(vals))
+        for R in rows:
+            pass
+    for i, R in enumerate(rows):
+        if 'A' in R and 'C' in R:
+            hm = dist(R['A']['her_centre'], R['C']['her_centre']) / 1000
+            ym = dist(R['A']['you_centre'], R['C']['you_centre']) / 1000
+            out.append(f'{labels[i]}: the fight moved, yours {ym:.1f} km, hers {hm:.1f} km')
+        ev = {}
+        for ph in R.values():
+            for k, v in ph['events'].items():
+                ev[k] = ev.get(k, 0) + v
+        out.append(f'{labels[i]}: events ' + ', '.join(f'{k} {v}' for k, v in sorted(ev.items())))
+    return '\n'.join(out)
+
+
 def main():
     args = sys.argv[1:]
     if not args or args[0] in ('-h', '--help'):
         print(__doc__)
         return 2
+    if args[0] == '--compare':
+        paths = [a for a in args[1:] if not a.startswith('label=')]
+        labels = [a[6:] for a in args[1:] if a.startswith('label=')] or [os.path.basename(os.path.normpath(p)) for p in paths]
+        print(compare(paths, labels))
+        return 0
     out = None
     label = os.path.basename(os.path.normpath(args[0]))
     if '-o' in args:
