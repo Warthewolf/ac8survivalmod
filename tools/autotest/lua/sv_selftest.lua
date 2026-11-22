@@ -5303,6 +5303,87 @@ SUITES.valkasolg = function()
     end
 end
 
+-- ((2026-11-22) the SOLG's lasers (sv_solg.lua LSRA / LSRB on AC8's land Phalanx, firing BP_SV_SolgTLS, 5 a hit;
+-- tools/build_survival_solg.py): the SOLG parked over your circle, its first phase broken, its arm lasers up; shots of
+-- our laser counted (its objects as they come), your health's drops read (config_solglaser.lua: plane = "floor",
+-- shootable but never down), pictures; then the KEW shells broken: the barrel's lasers up, the arms' down with the arms
+local LSR = { ours = 0, stock = 0, drops = {}, last = nil }
+pcall(NotifyOnNewObject, "/Script/Live.LiveTLSSwingforPlane", function(o)
+    local okP, full = pcall(function() return o:GetFullName() end)
+    full = okP and tostring(full) or ""
+    if full:find("Default__", 1, true) then return end
+    if full:find("BP_SV_SolgTLS", 1, true) then LSR.ours = LSR.ours + 1 else LSR.stock = LSR.stock + 1 end
+    if LSR.ours + LSR.stock <= 3 then LSR.first = (LSR.first or "") .. " " .. full end
+end)
+local function lsrHealth()
+    local p = ST.plane()
+    local ok, h = pcall(function() return p.HealthInternal end)
+    return ok and tonumber(h) or nil
+end
+SUITES.solglaser = function()
+    intoRun()
+    A.do_(function()
+        local you = playerLocation()
+        local at = { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = (you and you.Z or 150000) + 60000 }
+        local ok = SOLG.spawn(at, 0, nil)
+        ST.check(ok == true, "the SOLG up over your circle", ST.findLog("solg: up at", 0))
+        ST.check(ST.findLog("the lasers' fire control SV_FCS_SolgTLS in DT_NPC_FCS", 0) ~= nil, "its lasers' fire control row in the game's table",
+            ST.findLog("solg: rows:", 0))
+    end)
+    A.wait(1)
+    A.do_(function()
+        ST.marks.l0 = ST.n
+        SOLG.targetsUp()
+        for _, key in ipairs({ "SAW", "MAG" }) do for k = 1, 40 do SOLG.hurt(key, 1); pcall(SOLG.tick, os.clock()) end end
+    end)
+    A.log_("solg: phase 2: its lasers up", 10, "l0", true, function(l)
+        ST.check(l ~= nil and l:find("LSRA 16 of 16", 1, true) ~= nil and l:find("16 on the arms", 1, true) ~= nil,
+            "phase 2: the arms' 16 lasers up (4 an arm)", l)
+        LSR.ours, LSR.stock, LSR.drops, LSR.last = 0, 0, {}, lsrHealth()
+        ST.info("your health at the lasers' start: " .. tostring(LSR.last))
+    end)
+    local t0 = nil
+    A.until_(function()                                   -- 40 s of it: the SOLG held, your health's drops
+        t0 = t0 or os.clock()
+        pcall(SOLG.tick, os.clock())
+        local h = lsrHealth()
+        if h and LSR.last and h < LSR.last - 0.5 then LSR.drops[#LSR.drops + 1] = LSR.last - h end
+        LSR.last = h or LSR.last
+        return os.clock() - t0 >= 40
+    end, 50)
+    for k = 1, 4 do
+        A.do_(function()
+            local you, L = playerLocation(), SOLG.where()
+            if you and L then ST.look({ X = you.X - (L.X - you.X) * 0.15, Y = you.Y - (L.Y - you.Y) * 0.15, Z = you.Z + 20000 }, L, 60) end
+        end)
+        A.wait(0.4)
+        A.do_(function() ST.shot("solglaser_" .. k) end)
+        A.wait(2.0)
+    end
+    A.do_(function()
+        ST.lookBack()
+        local sizes = {}
+        for i = 1, math.min(12, #LSR.drops) do sizes[#sizes + 1] = string.format("%.0f", LSR.drops[i]) end
+        ST.info(string.format("lasers: %d of ours, %d stock swing lasers; your health dropped %d times (HealthInternal: %s)%s",
+            LSR.ours, LSR.stock, #LSR.drops, table.concat(sizes, ", "), LSR.first and (" first:" .. LSR.first) or ""))
+        ST.check(LSR.ours > 0, string.format("the SOLG's lasers fired (%d shots of BP_SV_SolgTLS)", LSR.ours))
+        ST.check(LSR.stock == 0, "no stock laser fired meanwhile (ours is its own blueprint)", tostring(LSR.stock))
+        local five = 0
+        for _, d in ipairs(LSR.drops) do if math.abs(d / 50 - math.floor(d / 50 + 0.5)) < 0.05 then five = five + 1 end end
+        ST.check(#LSR.drops > 0 and five == #LSR.drops, string.format("each hit took 5 health (%d of %d drops in fives)", five, #LSR.drops))
+        ST.marks.l1 = ST.n
+        for k = 1, 40 do SOLG.hurt("KEW", 1); pcall(SOLG.tick, os.clock()) end
+    end)
+    A.log_("solg: phase 3: its lasers up", 10, "l1", true, function(l)
+        ST.check(l ~= nil and l:find("LSRB 12 of 12", 1, true) ~= nil and l:find("0 on the arms", 1, true) ~= nil,
+            "phase 3: the barrel's 12 lasers up", l)
+        local st = SOLG.state()
+        ST.check(st and (st.per.LSRA or 0) == 0, "the arms' lasers went down with their arms", st and tostring(st.per.LSRA))
+    end)
+    A.wait(2)
+    A.do_(function() SOLG.stop("laser test over") end)
+end
+
 -- ---- the tick ----------------------------------------------------------------------------------------------------
 local started, t0, finished = false, nil, false
 local function finish(why)
