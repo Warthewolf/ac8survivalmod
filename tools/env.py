@@ -114,6 +114,7 @@ SETTINGS = [
     ('UE', 'Unreal Engine 5.4 (VALKA\'s X-02S assets, tools/x02s/build.sh)', 'optional', True),
     ('AC8_LIVE_PROJECT', "the AC8 template project's folder (Live.uproject; tools/laser7/build.sh)", 'optional', True),
     ('BLENDER', "Blender 3.3's blender.exe (tools/tanicorn/build.sh)", 'optional', True),
+    ('ACI', "the user's Ace Combat Infinity folder, with aci_kit and NPUB31347/USRDIR (tools/solg, the SOLG)", 'optional', True),
     ('EXE_CACHE', "where tools/re/exe.py caches AceCombat8.exe's tables (default build/re/exe_cache.pkl)", 'optional', True),
     ('UMODEL', "AC7's UModel exe (tools/x02s/build.sh)", 'optional', True),
     ('AC7', "AC7's exported assets (tools/x02s/build.sh)", 'optional', True),
