@@ -22,8 +22,9 @@ from build_survival_world import (ZFA_TLS_ROLES, NULL_IMPORT, zfa_tls_u64, zfa_t
                                    tls_sound_swap, TLS_SOUNDS)
 
 # (SOLG -Gould-'s laser handlers, docs/re/SOLG.md 13: 10 s at players within 1200 m, then 5 s)
+# ((2026-11-23) TriggerCount 999, not Gould's 1: in AC8 it's the bursts a turret ever fires (the autotest: one burst, then none))
 SOLG_TLS_ROW_VALUES = {'CaptureDistance': 1200.0, 'CaptureAngleRange': 180.0, 'ActivationTime': 1.0,
-                       'TriggeringTime': 10.0, 'TriggerCount': 1, 'ShotIntervalTime': 15.0, 'RestingTime': 5.0,
+                       'TriggeringTime': 10.0, 'TriggerCount': 999, 'ShotIntervalTime': 15.0, 'RestingTime': 5.0,
                        'FireRate': 4, 'MagazineCapacity': 1, 'ReloadTime': 5.0,
                        'YawSpeed': 120.0, 'YawAngleMin': -180.0, 'YawAngleMax': 180.0,
                        'PitchSpeed': 120.0, 'PitchAngleMin': -90.0, 'PitchAngleMax': 90.0}

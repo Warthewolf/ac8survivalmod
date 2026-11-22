@@ -422,26 +422,16 @@ function SOLG.lasersArmed(list)
                     tostring(fc.TriggerCount), tostring(fc.ShotIntervalTime), tostring(fc.RestingTime)) end)
                 sl("lasers: their launcher had " .. table.concat(t, "; "))
             end
+            -- ((2026-11-23) K2_OverwritePerformance / K2_OverwriteFireControl with the struct handed back from Lua crashed the
+            -- game (run 004237): the one field written in place on the module's own FireControl instead)
             local okW = false
-            if okP and pf and lp.enabled ~= false then
-                okW = pcall(function()
-                    pf.bPendingReloadByAttachedWeapon = false
-                    pf.MagazineCapacity = math.max(n(pf.MagazineCapacity, 1), n(lp.magazine, 1))
-                    pf.ReloadTime = n(lp.reload_s, 5)
-                    m:K2_OverwritePerformance(pf)
-                end)
-            end
-            if okC and fc and lp.enabled ~= false then
-                pcall(function()
-                    fc.TriggerCount = n(lp.trigger_count, 999)
-                    fc.CaptureDistance = n(lp.reach_cm, n(fc.CaptureDistance, 120000))
-                    m:K2_OverwriteFireControl(fc)
-                end)
+            if lp.enabled ~= false then
+                okW = pcall(function() m.FireControl.TriggerCount = n(lp.trigger_count, 999) end)
             end
             if okW then np = np + 1 end
         end
     end
-    sl(string.format("lasers: %d launchers' performance overwritten (reload not held, trigger count %d)", np, n(lp.trigger_count, 999)))
+    sl(string.format("lasers: %d launchers' trigger count set to %d", np, n(lp.trigger_count, 999)))
     return nn
 end
 -- the ground (or sea) under x, y
