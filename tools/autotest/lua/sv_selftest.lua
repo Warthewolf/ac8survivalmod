@@ -5324,6 +5324,14 @@ SUITES.valkasolg = function()
             local o = vsHer()
             local okI, inv = pcall(function() return o.bIsInvincible end)
             ST.check(okI and inv == false, "she's damageable again (after her way back)", tostring(inv))
+            -- ((2026-11-22) the user: "when Valka came back in, she was invisible with no target box")
+            local okV, hid, box = pcall(function() return o.bHidden, o.bShowHUDBox end)
+            ST.check(okV and hid == false and box == true, "she's seen again, her target box on", string.format("hidden %s, box %s", tostring(hid), tostring(box)))
+            local sp = D and D.special
+            if sp and sp.modelComp then
+                local okM, vis = pcall(function() return sp.modelComp:IsVisible() end)
+                ST.check(okM and vis == true, "her X-02S shown", tostring(vis))
+            end
         end)
         A.wait(2)
     end
@@ -5650,7 +5658,9 @@ SUITES.solgjoiner = function()
         ST.check(arms == 4, string.format("the host's breaks: wings falling, the 4 arms off after their KEW shells (%d)", arms))
         local st = SOLG.state()
         ST.check(st and (st.per.LSRA or 0) == 0, "the arms' lasers down with them", st and tostring(st.per.LSRA))
-        ST.check(ST.findLog("credits: +", ST.marks.j2, true) ~= nil, "each piece paid here too (team pay)", ST.findLog("credits: +", ST.marks.j2, true))
+        -- (the code review: a joiner's pay is the host's own, sent as "cr": never paid again here by the host's word)
+        ST.check(ST.findLog("(the host's word)", ST.marks.j2, true) == nil, "no second pay here for the host's breaks (the host's \"cr\" pays)",
+            ST.findLog("(the host's word)", ST.marks.j2, true))
     end)
     sjShot("3_broken", 300, -2600, 500, 55)
     A.do_(function()
