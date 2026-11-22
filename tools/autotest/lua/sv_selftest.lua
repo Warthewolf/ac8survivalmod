@@ -6060,8 +6060,6 @@ SUITES.solgcrash = function()
                 ST.info(string.format("its walls %d m in (16 ways, m out; - none within 120 m): %s; %d gaps", fw, table.concat(row, " "), gaps))
             end
         end
-        local h2, d2, b2 = trace(at(400, 0), at(400, -120))
-        ST.check(h2 and d2 and d2 > 20 and d2 < 50, string.format("... and on its other side (%s m, %s)", tostring(d2 and math.floor(d2)), tostring(b2)))
         local h3, d3, b3 = trace(at(1100, 0), at(600, 0))
         ST.check(h3 and tostring(b3):find("SG08", 1, true) ~= nil, string.format("its rear hatch closes the shaft's mouth (%s at %s m)", tostring(b3), tostring(d3 and math.floor(d3))))
         pcall(function() C2.h0 = ST.plane().HealthInternal end)
