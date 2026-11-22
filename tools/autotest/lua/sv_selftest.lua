@@ -4596,11 +4596,27 @@ local function vtPictures(tag)
         local side = math.max(150000, n * 0.9)
         return { X = m.X - dy / n * side, Y = m.Y + dx / n * side, Z = m.Z + 40000 }
     end, mid, 60)
-    A.picture("valka_" .. tag .. "_top", function()
-        local m, h, y = mid(), ST.at(her()), playerLocation()
-        local n = math.sqrt((y.X - h.X) ^ 2 + (y.Y - h.Y) ^ 2)
-        return { X = m.X + 100, Y = m.Y, Z = m.Z + math.max(400000, n * 1.6) }
+    -- (high behind you, both in view: the run of 13:00 showed a straight-down camera keeps a level view)
+    A.picture("valka_" .. tag .. "_high", function()
+        local h, y = ST.at(her()), playerLocation()
+        local dx, dy = y.X - h.X, y.Y - h.Y
+        local n = math.max(1, math.sqrt(dx * dx + dy * dy))
+        local back = math.max(150000, n * 0.6)
+        return { X = y.X + dx / n * back, Y = y.Y + dy / n * back, Z = y.Z + math.max(80000, n * 0.5) }
     end, mid, 70)
+end
+-- her portal (CFG.specials.valka.portal, D.special.portal): a spot dist_m in front of its face, side_m to its right, up_m
+local function vtPortal() local s = D and D.special; return s and s.portal end
+local function vtPortalCam(dist_m, side_m, up_m)
+    local P = vtPortal()
+    if not P then return nil end
+    local r = math.rad(P.yaw)
+    return { X = P.at.X + math.cos(r) * dist_m * 100 - math.sin(r) * side_m * 100,
+             Y = P.at.Y + math.sin(r) * dist_m * 100 + math.cos(r) * side_m * 100, Z = P.at.Z + up_m * 100 }
+end
+local function vtPortalShot(name)
+    A.do_(function() ST.shot(name) end)
+    A.wait(2.2)
 end
 SUITES.valka = function()
     intoRun()
@@ -4612,9 +4628,17 @@ SUITES.valka = function()
         ST.check(c.disguise == false, "her disguise off (config_valka.lua): she comes at once, alone", tostring(c.disguise))
         ST.check(vtHook(), "her round's tick and events watched (valka-track / valka-ev lines)")
         ST.info(string.format("her settings: engage_every_s %s, turn_every_s %s, post_stall_every_s %s (within %s km), blink_s %s "
-            .. "every %s, spots %s, railgun_every_s %s within %s km", tostring(c.engage_every_s), tostring(c.turn_every_s),
+            .. "every %s, spots %s, railgun_every_s %s within %s km; luaset %s, pilot_rank %s, speed_x %s, chase %s, portal %s",
+            tostring(c.engage_every_s), tostring(c.turn_every_s),
             tostring(c.post_stall_every_s), tostring(c.post_stall_range_km), tostring(c.blink_s), tostring(c.blink_every_s),
-            c.spots and #c.spots or 0, tostring(c.railgun_every_s), tostring(c.railgun_range_km)))
+            c.spots and #c.spots or 0, tostring(c.railgun_every_s), tostring(c.railgun_range_km), tostring(c.luaset),
+            tostring(c.pilot_rank), tostring(c.speed_x), tostring(c.chase), tostring(type(c.portal) == "table" and c.portal.enabled)))
+        local row = ST.findLog("special: VALKA (", 0, true) or ST.findLog("special: VALKA keeps", 0, true)
+        if c.luaset then ST.check(row ~= nil and row:find("flies", 1, true) ~= nil, "her row flies her own behaviour set", row) end
+        ST.info("her row: " .. tostring(ST.findLog("special: VALKA's row", 0, true)))
+    end)
+    if ST.conf.portal_probe and ST.ppAll then ST.ppAll(ST.conf.portal_only) end   -- (the portal's pieces first: portalprobe)
+    A.do_(function()
         ST.marks.v0 = ST.n
         D.forceSpecial = "valka"                          -- (Ctrl+8's own: the next round hers, in 3 s)
         if D.state == "wait" then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
@@ -4622,13 +4646,46 @@ SUITES.valka = function()
         ST.doing = "VALKA's opener"
     end)
     A.log_("special: VALKA's railgun up", 90, "v0", true, function(l) ST.check(l ~= nil, "her opener's railgun up", l) end)
+    -- ((2026-11-22) her portal: open with the opener's charge, her shot and she come out of it, it closes)
+    A.log_("special: VALKA's portal opens", 12, "v0", true, function(l)
+        ST.marks.portal = l and true or nil
+        if type(CFG.specials.valka.portal) == "table" and CFG.specials.valka.portal.enabled then
+            ST.check(l ~= nil, "her portal opens with her opener's charge", l)
+        end
+    end)
+    A.do_(function()
+        local P = vtPortal()
+        if P then ST.look(vtPortalCam(1600, 500, 200), P.at, 45) end
+    end)
+    A.wait(1.0)
+    vtPortalShot("portal_a_opening")
+    vtPortalShot("portal_b_open")
     A.log_("special: VALKA's opener shot from", 40, "v0", true, function(l) ST.check(l ~= nil, "her opener's shot", l) end)
+    A.do_(function() ST.shot("portal_c_shot") end)
     A.log_("special: VALKA shows", 30, "v0", true, function(l)
         if not ST.check(l ~= nil, "VALKA shows (her reveal)", l) then return "abort" end
         VT.phase = "R"
-        ST.shot("valka_reveal_view")                      -- (what you see: her reveal's focus camera)
+        if not vtPortal() then ST.shot("valka_reveal_view") end   -- (no portal: what you see, her reveal's focus camera)
+    end)
+    A.wait(1.2)
+    A.do_(function()
+        local P = vtPortal()
+        if P then ST.look(vtPortalCam(700, -900, 250), P.at, 55) end   -- (beside it: her coming out)
+    end)
+    A.wait(0.6)
+    vtPortalShot("portal_d_exit")
+    vtPortalShot("portal_e_after")
+    A.do_(function()
+        local P = vtPortal()
+        ST.info("her portal now: " .. (P and (P.phase .. ", " .. #P.meshes .. " mesh parts") or "gone") .. "; " ..
+            tostring(ST.findLog("special: VALKA's portal: %d+ effect", ST.marks.v0)))
+        ST.lookBack()
     end)
     A.wait(4)
+    A.do_(function()
+        ST.check(vtPortal() == nil or vtPortal().phase == "close", "her portal closes after she's through",
+            ST.findLog("special: VALKA's portal closed", ST.marks.v0, true) or (vtPortal() and vtPortal().phase))
+    end)
     A.do_(function() VT.phase = "A"; ST.doing = "phase A: round the airfield"; ST.info("phase A: your plane round the airfield, " .. aS .. " s") end)
     A.wait(8)
     vtPictures("a")
@@ -4819,6 +4876,7 @@ local function ppAll(only)
     end
     A.do_(function() ST.lookBack() end)
 end
+ST.ppAll = ppAll                                          -- (the valka suite's conf portal_probe=1)
 SUITES.portalprobe = function()
     intoRun()
     A.do_(function() ST.info(string.format("the portal's pieces at (%.1f, %.1f) km, 3 km up", ppSpot().X / 100000, ppSpot().Y / 100000)) end)
