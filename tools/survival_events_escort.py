@@ -411,11 +411,15 @@ ESCORT_DECOY_MISSION_ROWS = (
 ESCORT_ALLIED_ROWS = {ESC_CHAR_ROW, ZFA_ROW, ZFA_DRONE_ROW, *ESC_ROWS, *(c[3] for c in CARGO_SHIPS)}
 # the DT_NPC rows (DT_SV_NpcRows; build_survival.py build_npc_rows), which Lua adds to DT_NPC at the main menu:
 # (row, its stock DT_NPC source, the model or None (the source's), fly MOONCHILD's set, drop its weapons, name key, full speed)
+ESCORT_DECOY_MISSION_ROWS += [(SOLG_ROWS[t], SOLG_MISSION_TABLE, SOLG_TARGET_SOURCE_ROW, SOLG_NPC[t], None)
+                              for t, _ in SOLG_TARGETS]   # ((2026-11-22) VALKA's SOLG's targets, each type's own row)
 ESCORT_DECOY_NPC_ROWS = (
     [(npc, src, model, True, False, None, False) for npc, src, model in ESC_ROWS.values()]
     + [(ZFA_NPC, ZFA_NPC_SOURCE, ZFA_MODEL, True, False, ZFA_NAME_KEY, True),
        (ZFA_DRONE_NPC, ZFA_DRONE_NPC_SOURCE, ZFA_DRONE_MODEL, True, False, ZFA_NAME_KEY, True),
-       (DECOY_UAV_NPC, DECOY_UAV_NPC_SOURCE, None, False, True, None, False)])
+       (DECOY_UAV_NPC, DECOY_UAV_NPC_SOURCE, None, False, True, None, False)]
+    # ((2026-11-22) VALKA's SOLG's targets: the radar tower's row, unarmed, each type's name key (its model: build_survival)
+    + [(SOLG_NPC[t], SOLG_NPC_SOURCE, None, False, True, SOLG_SUB_KEYS[t], False) for t, _ in SOLG_TARGETS])
 INT_FLAGS += ([a['leg'] for a in esc_aircraft()] + [a['slot'] for a in esc_aircraft()] + ['SV_EscortSlots', DECOY_HIT_FLAG])
 INT_FLAGS += [ZFA_TLS_FLAG]                    # (the ZFA-44s' laser's interceptions: build_escort)
 

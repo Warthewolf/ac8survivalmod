@@ -359,6 +359,12 @@ def build_model_rows():
     set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.ZFA_NAME_KEY))
     assert survival_events.fname(survival_events.ZFA_MODEL_SV)[2] == 0
     out.append(((survival_events.ZFA_MODEL_SV, 0), row))
+    # ((2026-11-22) VALKA's SOLG's targets: the radar tower's model row whole but its name, SOLG_NAME_KEY ("SOLG", Lua's text)
+    f = survival_events.fname(survival_events.SOLG_MODEL_SOURCE)
+    assert (f[1], f[2]) in crow, survival_events.SOLG_MODEL_SOURCE
+    row = copy.deepcopy(crow[(f[1], f[2])])
+    set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.SOLG_NAME_KEY))
+    out.append(((survival_events.SOLG_MODEL_SV, 0), row))
     # ((2026-11-07) the launched ZFA-44s on Mission 16's allied container drone) its model row: the drone's whole but its name
     # (ZFA_NAME_KEY) and its health (ZFA_DRONE_HEALTH, the Su-47's, not the drone's 6)
     f = survival_events.fname(survival_events.ZFA_DRONE_MODEL)

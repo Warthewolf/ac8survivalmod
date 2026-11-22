@@ -933,6 +933,7 @@ function SPC.valkaTick(now, s)
         V.flareStop(s)
         V.portalStop(s)
         V.blinkPortalsStop(s)
+        if VSOLG and VSOLG.stop then pcall(VSOLG.stop, s, "her death") end
         V.sndStop(s)
         ANOM.cleanFx(now, true)
         -- ((0.73.77) D4 / the white square left on the minimap: her railguns' forced minimap display off, and what's
@@ -962,6 +963,12 @@ function SPC.valkaTick(now, s)
     if not o then return end
     V.modelTick(s, o, now)
     pcall(V.subsHealth, c, s, o)                         -- ((2026-11-07) AUDREY breaks in as her health falls)
+    if VSOLG and VSOLG.tick then                         -- ((2026-11-22) at 20 % her SOLG: sv_valka_solg.lua; the rest waits)
+        local okS, busy = pcall(VSOLG.tick, c, s, o, now)
+        if not okS then
+            if not s.solgErr then s.solgErr = true; log("special: VALKA's SOLG: error " .. tostring(busy)) end
+        elseif busy then return end
+    end
     if now >= (s.holdAt or 0) then                       -- her parts held (EvadeOnly), again every hold_s
         s.holdAt = now + (c.hold_s or 5)
         V.event("RE_SV_ValkaHold")

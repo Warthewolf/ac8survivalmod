@@ -708,7 +708,7 @@ def solg_units(units, used_ids, z, top_number):
     for t, nn in survival_events.SOLG_TARGETS:
         pts = [(100.0 * k, 0.0, 300000.0) for k in range(nn)]
         names = port_unit(units, used_ids, z, src, survival_events.SOLG_UNITS[t], survival_events.SOLG_OBJS[t],
-                          survival_events.SOLG_TARGET_ROW, pts, 0.0, top_number, tgt=True, clone_first=True)
+                          survival_events.SOLG_ROWS[t], pts, 0.0, top_number, tgt=True, clone_first=True)
         u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.SOLG_UNITS[t]][0]
         zone_area(u)
         print(f'  solg: {survival_events.SOLG_UNITS[t]}: {len(names)} {t} targets ({names[0]} ..)')

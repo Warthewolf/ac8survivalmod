@@ -24,7 +24,7 @@ SOLG = { C = {
                           DamegedNormal_Intencity = 0, PlayerPlane_Damage = 0 } },
     spin_rate = 1.0,                        -- the spin animation's play rate (1: AC:I's, a ring's turn in 40 s)
     -- a wing shot off: pushed out from the barrel (m/s), down (m/s), its tumble (deg/s, each axis up to), gone after
-    fall = { out_mps = 35, down_mps = 15, tumble_dps = 40, gravity = 1.0, life_s = 30 },
+    fall = { out_mps = 35, down_mps = 15, tumble_dps = 40, gravity = 1.0, life_s = 30, body_gravity = 0.35, body_tumble_dps = 4 },
     -- its targets (docs/re/SOLG.md 5: AC:I's types, counts and health): each type a unit of ours on AC8's GENERIC
     -- destructible base (tools/survival_events_specials.py SOLG_*: Mission 4's radar tower ported, no boss), its objects
     -- held on the SOLG's bones (its own mesh hidden: you see the SOLG's piece), their health AC:I's x health_x, held at
@@ -32,12 +32,15 @@ SOLG = { C = {
     -- it (the piece hidden, its wreck shown, a wing falling, an explosion, pay). AC:I's phases: 1 the wings (SAW) and
     -- the MAG panels, 2 the KEW shells, 3 the core units, 4 the SP shell; a phase's targets are lockable only then.
     targets = {
-        { key = "SAW", unit = "SV_Unit_SOLG_SAW", phase = 1, health = 900, pay = 300, bones = { "SG04_%02d", 6, "SG05_%02d", 12 } },
-        { key = "MAG", unit = "SV_Unit_SOLG_MAG", phase = 1, health = 600, pay = 200, bones = { "SG07_%02d", 32 } },
-        { key = "KEW", unit = "SV_Unit_SOLG_KEW", phase = 2, health = 1000, pay = 400, bones = { "KEW_%02d", 36 } },
-        { key = "CORE", unit = "SV_Unit_SOLG_CORE", phase = 3, health = 1500, pay = 800, bones = { "SG03_%02d", 4 } },
-        { key = "SP", unit = "SV_Unit_SOLG_SP", phase = 4, health = 2500, pay = 3000, bones = { "CORE_%02d", 1 } },
+        { key = "SAW", unit = "SV_Unit_SOLG_SAW", phase = 1, health = 900, pay = 40, bones = { "SG04_%02d", 6, "SG05_%02d", 12 } },
+        { key = "MAG", unit = "SV_Unit_SOLG_MAG", phase = 1, health = 600, pay = 25, bones = { "SG07_%02d", 32 } },
+        { key = "KEW", unit = "SV_Unit_SOLG_KEW", phase = 2, health = 1000, pay = 50, bones = { "KEW_%02d", 36 } },
+        { key = "CORE", unit = "SV_Unit_SOLG_CORE", phase = 3, health = 1500, pay = 200, bones = { "SG03_%02d", 4 } },
+        { key = "SP", unit = "SV_Unit_SOLG_SP", phase = 4, health = 2500, pay = 800, bones = { "CORE_%02d", 1 } },
     },
+    -- their boxes: "SOLG" over each type's AC:I name (texts by key: tools/survival_events_specials.py SOLG_*)
+    model_row = "SV_Model_SOLG", name_key = "SV_SOLG_Name", name = "SOLG",
+    names = { SAW = "SOLAR ARRAY WING", MAG = "MAG PANEL", KEW = "KEW SHELL", CORE = "CORE UNIT", SP = "SP SHELL" },
     health_x = 0.25,                        -- (AC:I's health is a 4-player raid's: a first guess, every hit logged)
     floor = 1,                              -- a live target's HP floor: it breaks there
     hold_s = 0.0,                           -- targets put back on their bones every tick (0) or this often
@@ -213,6 +216,19 @@ function SOLG.breakPanel(bone)
     sl(string.format("%s shot off: falling (%s, tumble %s)", bone, pm and "a mover" or "NO mover", rot and "on" or "off"))
     return true
 end
+-- destroyed: the whole of it falls, slowly turning over (gravity on its mover, a tumble)
+function SOLG.fall()
+    if not (S and liveObj(S.actor)) or S.falling then return false end
+    S.falling = true
+    local f = SOLG.C.fall
+    if S.move then pcall(function() S.move.ProjectileGravityScale = n(f.body_gravity, 0.35) end) end
+    local rot = addComp(S.actor, "/Script/Engine.RotatingMovementComponent")
+    local t = n(f.body_tumble_dps, 4)
+    if rot then pcall(function() rot.RotationRate = { Pitch = t, Yaw = t * 0.3, Roll = t * 0.6 } end) end
+    pcall(function() S.body:SetPlayRate(0.2) end)       -- (its rings winding down)
+    sl("falling (gravity " .. (S.move and "on" or "NO mover") .. ", tumble " .. (rot and "on" or "off") .. ")")
+    return true
+end
 -- where the k-th falling wing is now (the tests' cameras)
 function SOLG.panelAt(k)
     local p = S and S.panels[k or 1]
@@ -246,6 +262,31 @@ function SOLG.tick(now)
     end
 end
 -- ---- its targets ----
+-- at the main menu (sv_rows.lua): its model row into DT_NPC_Model, each type's row into DT_NPC, their names
+function SOLG.rowsIn(npc, mine)
+    local C = SOLG.C
+    local mt, mr = loadObject(ACE.model_table), loadObject(ACE.model_rows)
+    if not (mt and mr and npc and mine) then return "the tables didn't load" end
+    for _, t in ipairs({ mt, mr }) do pin(t, nameOf(t)) end
+    local _, have = dtCall(mt, "FindRow", C.model_row)
+    if have == nil then
+        local _, r = dtCall(mr, "FindRow", C.model_row)
+        if r ~= nil then dtCall(mt, "AddRow", C.model_row, r); _, have = dtCall(mt, "FindRow", C.model_row) end
+    end
+    local nIn = 0
+    for _, t in ipairs(C.targets) do
+        local row = "SV_SOLG_" .. t.key
+        local _, h = dtCall(npc, "FindRow", row)
+        if h == nil then
+            local _, r = dtCall(mine, "FindRow", row)
+            if r ~= nil then dtCall(npc, "AddRow", row, r); _, h = dtCall(npc, "FindRow", row) end
+        end
+        if h ~= nil then nIn = nIn + 1 end
+        if type(SV_SetText) == "function" then SV_SetText("SV_SOLG_Sub_" .. t.key, C.names[t.key] or t.key) end
+    end
+    if type(SV_SetText) == "function" then SV_SetText(C.name_key, C.name) end
+    return string.format("model row %s, %d of %d target rows in", have ~= nil and "in" or "NOT in", nIn, #C.targets)
+end
 local FLAGS_ON = { bShowHUDBox = true, bIsNotLockonTarget = false, bIsNotFCSTargets = false, bIsInvincible = false }
 local FLAGS_OFF = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
 local CAPTURE = nil                                       -- the objects SV_Spawn makes while it runs

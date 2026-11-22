@@ -733,6 +733,13 @@ CFG.hud = {
         under_attack = "AIRFIELD UNDER ATTACK",
         airfield_down     = "AIRFIELD DOWN",
         airfield_down_sub = "NO LANDING UNTIL AFTER ROUND %d",
+        -- ((2026-11-22) VALKA's SOLG: sv_valka_solg.lua)
+        solg_inbound      = "SOLG INBOUND",
+        solg_inbound_sub  = "DESTROY IT BEFORE IT HITS THE SPACEPORT",
+        solg_eta          = "%d S TO IMPACT",
+        solg_down         = "SOLG DESTROYED",
+        solg_down_sub     = "+%s",
+        solg_phase        = { [2] = "KEW SHELLS EXPOSED", [3] = "CORE UNITS EXPOSED", [4] = "SP SHELL EXPOSED" },
         airfield_up       = "AIRFIELD REPAIRED",
         airfield_up_sub   = "CLEARED TO LAND",
         start        = "ROUND %d",

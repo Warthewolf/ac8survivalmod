@@ -749,6 +749,8 @@ def build_npc_rows():
             # the name is the model row's (GameObjectDisplayName01): Survival's copy of its host's, ZFA_MODEL_SV / _DRONE_)
             set_prop(row[2], model_idx, 'ModelId', ('name', zfa_twin[0], 0))
             set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(survival_events.ZFA_SUB_KEY))
+        if npc in survival_events.SOLG_NPC.values():     # ((2026-11-22) "SOLG" on its box's first line: its own model row
+            set_prop(row[2], model_idx, 'ModelId', ('name', survival_events.SOLG_MODEL_SV, 0))
         out.append(((npc, 0), row))
         if zfa_twin:                            # (2026-11-07) ... and its twin with the anti-missile laser in the gun's slot
             slot = f'NpcFCSId{survival_events.ZFA_TLS_SLOT}'   # ((0.74.12) the user: "swap the guns out for the Laser Interceptor")
@@ -1091,7 +1093,9 @@ def check_escort_decoy_build():
         assert model is None or plain(r['ModelId']) == want_model, (row, r['ModelId'])
         assert not fly_ally or plain(r['LuaSetId']) == 'NLID_0003_CP', (row, r['LuaSetId'])
         assert not unarmed or not any(k.startswith('NpcFCSId') and v for k, v in r.items()), row
-        assert plain(r['LuaSetId']) != 'NLID_0400_CP', row
+        assert r['LuaSetId'] is None or plain(r['LuaSetId']) != 'NLID_0400_CP', row   # (the SOLG's radar tower rows: none)
+        if row in se.SOLG_NPC.values():
+            assert plain(r['ModelId']) == se.SOLG_MODEL_SV, (row, r['ModelId'])
     # ((2026-11-07) "ZFA-44" on its box, never "SU-47": both host rows on SV_Model_Zfa, named ZFA_NAME_KEY there, and
     # ZFA_SUB_KEY under it)
     zm = table(DATA + 'DT_SV_ModelRows', 'LiveModelDataTable')
@@ -1372,9 +1376,7 @@ NPC_ROWS = set()           # its row names, filled by build_npc_table
 NPC_SOURCE = {}            # (0.73.77) each Survival row whose DT_NPC row Lua makes -> the mission row it was copied from
 # Rows copied whole from other missions' NPC tables (names and values only, no object references): the heavy bombers
 # of Mission 4 (Milestone 3). Their blueprints are loaded by the spawner from the NpcId's DT_NPC row.
-NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_common', 'tu95_common',
-                                                                     # VALKA's SOLG's targets: its radar tower row
-                                                                     (survival_events.SOLG_TARGET_ROW, survival_events.SOLG_TARGET_SOURCE_ROW)]),
+NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_common', 'tu95_common']),
               # the amphibious assault's landing craft and troops (survival_events.LCAC_*), Mission 13's
               ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission013', ['lcac_common', 'btr9_common']),
               # the Ladons' own rows (survival_events.LADON*: LADON_SOURCE_ROW's copies; its parts name no mission row:

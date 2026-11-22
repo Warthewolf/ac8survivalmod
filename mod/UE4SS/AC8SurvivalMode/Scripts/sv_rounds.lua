@@ -530,6 +530,7 @@ function SPC.endTick(now, s, why, force)
             nq, s.kind, RECYCLE_GAP_S, RECYCLE_AFTER_S))
     end
     if s.kind == "valka" and SPC.V and SPC.V.radarOff then pcall(SPC.V.radarOff) end
+    if s.kind == "valka" and VSOLG and VSOLG.stop then pcall(VSOLG.stop, s, why or "her round over") end
 end
 -- (a co-op joiner, from sv_coop.lua's clientRounds) the host's special: once it's over there, this game's copies of its
 -- units are switched off CLIENT_AFTER_S on (the host's "dn" first takes its planes down the normal way); VALKA's

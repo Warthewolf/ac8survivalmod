@@ -398,6 +398,19 @@ SOLG_TARGET_SOURCE_UNIT = 'AA_Unit_01_ground0'                 # (WD_Mission004_
 SOLG_TARGETS = [('SAW', 18), ('MAG', 32), ('KEW', 36), ('CORE', 4), ('SP', 1)]
 SOLG_UNITS = {t: 'SV_Unit_SOLG_' + t for t, _ in SOLG_TARGETS}
 SOLG_OBJS = {t: 'SV_Obj_SOLG_' + t for t, _ in SOLG_TARGETS}
+# their boxes (the run of 18:16: "RADAR TOWER" on every one): "SOLG" over each type's AC:I name. Line 1 the model row's
+# name: SOLG_MODEL_SV, the radar tower's model row but its name key (DT_SV_ModelRows); line 2 each type's own DT_NPC row
+# (SOLG_NPC: the radar tower's NPC row on SOLG_MODEL_SV with that type's key, DT_SV_NpcRows), on its own mission row
+# (SOLG_ROWS: Mission 4's radar tower row, its NpcId that type's); Scripts/sv_solg.lua SOLG.rowsIn adds the rows and
+# sets the texts (CFG SOLG.C.names) at the main menu
+SOLG_MODEL_SOURCE = 'BPD_RadarTower02'
+SOLG_MODEL_SV = 'SV_Model_SOLG'
+SOLG_NAME_KEY = 'SV_SOLG_Name'
+SOLG_NPC_SOURCE = 'BPD_RadarTower02_01'
+SOLG_NPC = {t: 'SV_SOLG_' + t for t, _ in SOLG_TARGETS}
+SOLG_SUB_KEYS = {t: 'SV_SOLG_Sub_' + t for t, _ in SOLG_TARGETS}
+SOLG_ROWS = {t: 'sv_solg_' + t.lower() for t, _ in SOLG_TARGETS}
+SOLG_MISSION_TABLE = '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004'
 
 VALKA_UNIT = 'SV_Unit_Valka'
 VALKA_OBJ = None                               # her AI object name, set by build_survival.py valka_unit
