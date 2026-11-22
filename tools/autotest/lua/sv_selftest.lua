@@ -5188,6 +5188,106 @@ SUITES.solg2 = function()
     end)
 end
 
+-- ((2026-11-22) T3 of the SOLG: in VALKA's round (sv_valka_solg.lua). Her round forced, her health put under 20 %:
+-- invincible, gone through a portal, her lines, the SOLG out of its own portal at a corner with its targets, every target
+-- broken: destroyed, falling, pay, she's back; then once more, left alone: it hits the spaceport (Mission 25's blast), the
+-- airfield down, she's back. config_valkasolg.lua: call_s 4, travel_s 45, corner_km 12 (a short fall to watch))
+local function vsHer() return glitchActor(CFG.specials.valka) end
+local function vsLow()                                    -- her health under at_pct
+    local o = vsHer()
+    local ok = o and pcall(function() o.HealthInternal = math.floor(o.MaxHealth * 10 * 0.19) end)
+    return ok and true or false
+end
+local function vsCam()                                    -- from 4 km off its side, a little above, looking at it
+    local L = SOLG.where and SOLG.where()
+    if not L then return nil end
+    return { X = L.X - 150000, Y = L.Y - 400000, Z = L.Z + 80000 }, L
+end
+SUITES.valkasolg = function()
+    intoRun()
+    A.do_(function()
+        local c = CFG.specials.valka
+        if not ST.check(c and type(c.solg) == "table" and c.solg.enabled and VSOLG ~= nil, "her SOLG is in this build",
+            c and c.solg and ("travel_s " .. tostring(c.solg.travel_s) .. ", call_s " .. tostring(c.solg.call_s))) then return "abort" end
+        ST.marks.v0 = ST.n
+        D.forceSpecial = "valka"
+        if D.state == "wait" then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+        ST.doing = "VALKA's round"
+    end)
+    A.log_("special: VALKA shows", 150, "v0", true, function(l) if not ST.check(l ~= nil, "VALKA shows", l) then return "abort" end end)
+    A.wait(4)
+    for pass = 1, 2 do
+        A.do_(function()
+            local s = D.special
+            if pass == 2 and s then s.solgDone, s.solg = nil, nil end      -- (once more: the spaceport hit this time)
+            ST.marks["s" .. pass] = ST.n
+            ST.check(vsLow(), string.format("pass %d: her health put at 19 %%", pass))
+        end)
+        A.log_("special: VALKA's SOLG: her health at", 10, "s" .. pass, true, function(l)
+            ST.check(l ~= nil and l:find("invincible", 1, true) ~= nil, "she's invincible and gone through a portal", l)
+            local o = vsHer()
+            local okI, inv = pcall(function() return o.bIsInvincible end)
+            ST.check(okI and inv == true, "her plane untouchable", tostring(inv))
+        end)
+        A.log_("special: VALKA's round: solg said", 5, "s" .. pass, true, function(l) ST.check(l ~= nil, "her and AUDREY's lines", l) end)
+        A.log_("special: VALKA's SOLG: out of the corner", 15, "s" .. pass, true, function(l)
+            if not ST.check(l ~= nil and l:find("91 targets", 1, true) ~= nil, "the SOLG out of a corner with its 91 targets", l) then return "abort" end
+            ST.check(ST.findLog("special: VALKA's SOLG: its portal opens", ST.marks["s" .. pass]) ~= nil, "its portal opens",
+                ST.findLog("special: VALKA's SOLG: its portal", ST.marks["s" .. pass], true))
+        end)
+        for k = 1, 4 do
+            A.do_(function() local at, look = vsCam(); if at then ST.look(at, look, 55) end end)
+            A.wait(0.5)
+            A.do_(function() ST.shot(string.format("vsolg%d_%d_out", pass, k)) end)
+            A.wait(2.0)
+        end
+        if pass == 1 then
+            A.do_(function()                              -- every target broken, phase by phase (as hits would)
+                for _, key in ipairs({ "SAW", "MAG" }) do for k = 1, 40 do SOLG.hurt(key, 1); pcall(SOLG.tick, os.clock()) end end
+            end)
+            A.wait(1.5)
+            A.do_(function() for k = 1, 40 do SOLG.hurt("KEW", 1); pcall(SOLG.tick, os.clock()) end end)
+            A.wait(1.5)
+            A.do_(function() for k = 1, 5 do SOLG.hurt("CORE", 1); pcall(SOLG.tick, os.clock()) end end)
+            A.wait(1.5)
+            A.do_(function() ST.marks.z0 = ST.n; SOLG.hurt("SP", 1) end)
+            A.log_("special: VALKA's SOLG: destroyed", 8, "z0", true, function(l)
+                ST.check(l ~= nil, "the SOLG destroyed: pay, AUDREY's lines", l)
+                ST.check(ST.findLog("solg: falling", ST.marks.z0) ~= nil, "it falls apart", ST.findLog("solg: falling", ST.marks.z0))
+            end)
+            for k = 1, 3 do
+                A.do_(function() local at, look = vsCam(); if at then ST.look(at, look, 60) end end)
+                A.wait(0.4)
+                A.do_(function() ST.shot("vsolg1_down_" .. k) end)
+                A.wait(2.5)
+            end
+        else
+            A.do_(function() ST.lookBack(); ST.doing = "the SOLG falling on the spaceport" end)
+            A.log_("special: VALKA's SOLG: it hit the spaceport", 80, "s2", true, function(l)
+                ST.check(l ~= nil and not l:find(": 0 effect", 1, true), "it hits the spaceport: Mission 25's blast", l)
+                ST.check(AF and AF.down == true, "the airfield down for a round", AF and tostring(AF.down))
+                local pad = CFG.specials.valka.solg.pad_cm
+                ST.look({ X = pad[1] - 900000, Y = pad[2] - 900000, Z = 250000 }, { X = pad[1], Y = pad[2], Z = 0 }, 50)
+            end)
+            for k = 1, 6 do
+                A.do_(function() ST.shot("vsolg2_hit_" .. k) end)
+                A.wait(1.2)
+            end
+            A.do_(function() ST.lookBack() end)
+        end
+        A.log_("special: VALKA's SOLG: she's back", 20, "s" .. pass, true, function(l)
+            ST.check(l ~= nil, string.format("pass %d: she's back", pass), l)
+        end)
+        A.wait(1.5)
+        A.do_(function()
+            local o = vsHer()
+            local okI, inv = pcall(function() return o.bIsInvincible end)
+            ST.check(okI and inv == false, "she's damageable again (after her way back)", tostring(inv))
+        end)
+        A.wait(2)
+    end
+end
+
 -- ---- the tick ----------------------------------------------------------------------------------------------------
 local started, t0, finished = false, nil, false
 local function finish(why)
