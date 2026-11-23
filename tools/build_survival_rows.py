@@ -139,6 +139,13 @@ def build_radio():
     for n in names_in(voiced) + [vgrp]: z.nb.add(n)
     keep.append(((vgrp, 0), voiced))
     have.add(vgrp)
+    cgrp = survival_events.DEAL_RADIO_CONTROL[0]      # (the control: the voiced line with no Yes / No)
+    ctrl = copy.deepcopy(voiced)
+    setf(ctrl, 'RadioGroupID', survival_events.fname(cgrp))
+    ctrl[2][:] = [q for q in ctrl[2] if q[1] not in ('YesNoID', 'bUseYesNoSubtitle')]
+    for n in names_in(ctrl) + [cgrp]: z.nb.add(n)
+    keep.append(((cgrp, 0), ctrl))
+    have.add(cgrp)
     print(f'  radio: THE DEAL\'s question {grp} (text only, {flags_on} mission flags on) and {vgrp} ({full(field(voiced, "TextID"))})')
     # ((2026-11-11) the user: "Use the Mission 22 radio lines for the rocket warning") the Spaceport rockets' lines
     # (survival_events.SP_RADIO), each a group of its own with LimitPlayCount 0 (a stock ms022 row's 1 would leave it

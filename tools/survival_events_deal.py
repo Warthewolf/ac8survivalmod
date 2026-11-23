@@ -37,6 +37,10 @@ DEAL_RADIO_SOURCE = ('/Game/Datatables/Radio/DT_Rdo_ST_ms008', '497', '01_D_Aegi
 # the tells' template row 382. And a voiced twin, the user's "try the box with a real voice line, or a silent one":
 # SV_DealRadio_AskV, the same row with its own stock voice (AWACS, v0001_1460), fired by RE_SV_DealAskV (the test's)
 DEAL_RADIO_VOICED = ('SV_DealRadio_AskV', 'RE_SV_DealAskV')
+# ((2026-11-23, the 6th autotest: neither line played, a DECOY line did) the voiced twin played by Survival's own radio
+# node (Mission 22's CompositeEvent_CountDown_1, THE DECOY's) with its Yes / No activated at once; and a control,
+# SV_DealRadio_AskN (RE_SV_DealAskN): the same line with no YesNoID, to see whether naming a Yes / No stops a line playing
+DEAL_RADIO_CONTROL = ('SV_DealRadio_AskN', 'RE_SV_DealAskN')
 # WAR & HAYTHORN's F/A-18F (the user: "War and Haythorn's Super Hornet will appear randomly ... between rounds. They appear
 # as an allied aircraft and the player gets the event zoom in on their aircraft when they appear"; "after each deal has
 # been made, War and Haythorn turn around and exit the combat zone and despawn"): an allied unit as the ESCORT's KMG
@@ -112,12 +116,15 @@ def build_deal(g, flag, stock_ep):
     post = 'SV_DealAskPosted'
     g.trigger(None, post, template=t_post, arg_changes={0: DEAL_RADIO_GROUP})
     g.execute(t_ask, post, {0: DEAL_QUESTION})
+    t_radio22 = g.exec_template('LiveRadioPlayExecution', 'CompositeEvent_CountDown_1')
     vgrp, vev = DEAL_RADIO_VOICED
     g.trigger('RE_SpawnEnemy_kokatu_1st', vev)
     flag(vev, DEAL_FLAG, 'Set', 0)
-    g.execute(t_radio, vev, {0: vgrp}, delay=0.1)
-    g.trigger(None, 'SV_DealAskVPosted', template=t_post, arg_changes={0: vgrp})
-    g.execute(t_ask, 'SV_DealAskVPosted', {0: DEAL_QUESTION})
+    g.execute(t_ask, vev, {0: DEAL_QUESTION})
+    g.execute(t_radio22, vev, {0: vgrp}, delay=0.1)
+    cgrp, cev = DEAL_RADIO_CONTROL
+    g.trigger('RE_SpawnEnemy_kokatu_1st', cev)
+    g.execute(t_radio22, cev, {0: cgrp}, delay=0.1)
     for stock_trig, button, name, value in DEAL_ANSWERS:
         t = g.foreign_trig_template(m8, stock_trig)
         assert arg_values(t) == ['ms08_01_Question_Detonation', button], (stock_trig, arg_values(t))  # noqa: F405
