@@ -809,7 +809,8 @@ function ULY.roundTick(now, s)
             U.bigSent = true
             local b = cfg().big
             local x = launch({ from_km = b.from_km, alt_m = b.alt_m, speed_kmh = b.speed_kmh, mesh = b.mesh, scale = b.scale,
-                               spin_dps = b.spin_dps, health = b.health, solo_x = b.solo_x },
+                               spin_dps = b.spin_dps, health = b.health, solo_x = b.solo_x,
+                               dive_deg = b.dive_deg, from_deg = b.from_deg, spread_deg = b.spread_deg },   -- (AC:I's 45 degrees)
                              { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 0 }, "airfield", true)
             if x then U.list[#U.list + 1] = x end
             if hudCallout then hudCallout(cfg().text.big, cfg().text.big_sub) end
