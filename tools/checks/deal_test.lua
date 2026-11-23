@@ -81,16 +81,16 @@ function SV_Spawn(unit, x, y, z, yaw)
     spawns[#spawns + 1] = { unit, x, y, z, yaw }
     if unit == "SV_Unit_DealHornet" then return HORNET_OK and 1 or -2 end
     local l = {}
-    if unit == "SV_Unit_DealCargo" then
-        for k = 1, 3 do l[#l + 1] = mkObj("BP_OP0054_c130_CP_C_" .. k, true); mkObj("c130_part_a" .. k); mkObj("c130_part_b" .. k) end
-    elseif unit == "SV_Unit_DealPodarge" then
-        l[1] = mkObj("BP_OP0044_norn_MS12_01_CP_C_1", true); mkObj("norn_Turret_L1"); mkObj("norn_Wing_L1"); mkObj("norn_VLS_L1")
+    if unit:find("^SV_Unit_DealCargo") then           -- (a flight of four C-130s, each with 2 parts)
+        for k = 1, 4 do l[#l + 1] = mkObj("BP_OP0054_c130_CP_C_" .. unit .. k, true); mkObj("c130_part_a" .. k); mkObj("c130_part_b" .. k) end
+    elseif unit:find("^SV_Unit_DealPodarge") then
+        l[1] = mkObj("BP_OP0044_norn_MS12_01_CP_C_" .. unit, true); mkObj("norn_Turret_L1"); mkObj("norn_Wing_L1"); mkObj("norn_VLS_L1")
     else
         l[1] = mkObj("BP_VE_hull_" .. unit); mkObj("BP_Mk15_turret_" .. unit)
     end
     MADE[unit] = l
     ALIVE[unit] = #l
-    return unit == "SV_Unit_DealCargo" and 9 or (unit == "SV_Unit_DealPodarge" and 4 or 2)
+    return unit:find("^SV_Unit_DealCargo") and 12 or (unit:find("^SV_Unit_DealPodarge") and 4 or 2)
 end
 function SV_UnitAlive(unit) return ALIVE[unit] or -7 end
 local events = {}
@@ -202,20 +202,21 @@ check(fired("RE_SV_DealLeave") and logged("the Hornet turns away"), "the Hornet 
 runD(C.hornet.leave_s)
 check(#recycles == 1 and recycles[1] == "SV_Unit_DealHornet", "the Hornet taken off leave_s after")
 nextRound(); runD(C.targets_after_s - 2)
-check(not spawned("SV_Unit_DealPodarge"), "not before targets_after_s into round 7")
+check(not spawned("SV_Unit_DealPodargeA"), "not before targets_after_s into round 7")
 runD(3)
-check(spawned("SV_Unit_DealPodarge") and DEAL.T.state == "up" and lastCallout() == "PODARGE INBOUND", "the Podarge up, its callout")
+check(spawned("SV_Unit_DealPodargeA") and spawned("SV_Unit_DealPodargeG") and DEAL.T.state == "up" and lastCallout() == "PODARGES INBOUND",
+    "the 7 Podarges up (A-G), their callout")
 runD(1.5)
-check(fired("RE_SV_DealPodargeGo"), "onto its route")
-check(has(DEAL.row(), "PODARGE 0 / 1 DOWN"), "the row: " .. tostring(DEAL.row()))
-check(DEAL.T.total == 1 and logged("SV_Unit_DealPodarge 4 objects, 1 body"), "one target: the Podarge's body (its parts not counted)")
+check(fired("RE_SV_DealPodargeGo"), "onto their routes")
+check(has(DEAL.row(), "PODARGES 0 / 7 DOWN"), "the row: " .. tostring(DEAL.row()))
+check(DEAL.T.total == 7 and logged("SV_Unit_DealPodargeA 4 objects, 1 body"), "seven targets: each Podarge's body (its parts not counted)")
 credits = {}
-MADE.SV_Unit_DealPodarge[1].HealthInternal = 0
+for _, k in ipairs({ "A", "B", "C", "D", "E", "F", "G" }) do MADE["SV_Unit_DealPodarge" .. k][1].HealthInternal = 0 end
 runD(3)
-check(credits[1] and credits[1][1] == 6000 + 300 * 7 and credits[2] and credits[2][1] == 3000 + 150 * 7,
-    "paid: 6000 + 300 x 7 for the Podarge, the bonus 3000 + 150 x 7")
+check(#credits == 8 and credits[1][1] == 2500 + 120 * 7 and credits[8][1] == 3000 + 150 * 7,
+    "paid: 2500 + 120 x 7 for each Podarge (7), the bonus 3000 + 150 x 7")
 check(DEAL.T == nil or DEAL.T.state == "done", "the deal's over")
-check(logged("podarge over (all down): 1 of 1 down") and lastCallout() == "THE DEAL PAID", "logged, THE DEAL PAID")
+check(logged("podarge over (all down): 7 of 7 down") and lastCallout() == "THE DEAL PAID", "logged, THE DEAL PAID")
 
 -- the C-130s, one escaping at the round's end
 reset(); ROLL = 0.1; C.deals = { podarge = 0, fleet = 0, cargo = 1 }; newBreak(8)
@@ -223,15 +224,15 @@ runD(C.offer_after_s + 7)
 check(DEAL.V and DEAL.V.kind == "cargo", "the C-130s offered")
 binds[65](); runD(0.25)
 nextRound(); runD(C.targets_after_s + 2)
-check(spawned("SV_Unit_DealCargo") and DEAL.T.total == 3, "three C-130s up (3 bodies of 9 objects)")
+check(spawned("SV_Unit_DealCargoA") and spawned("SV_Unit_DealCargoC") and DEAL.T.total == 12, "twelve C-130s up (3 flights of 4)")
 credits = {}
-MADE.SV_Unit_DealCargo[1].HealthInternal = 0
-MADE.SV_Unit_DealCargo[2].gone = true
+MADE.SV_Unit_DealCargoA[1].HealthInternal = 0
+MADE.SV_Unit_DealCargoB[2].gone = true
 runD(3)
-check(credits[1] and credits[1][1] == 2000 + 100 * 9 and credits[2] and credits[2][1] == 2000 + 100 * 9 and DEAL.T.down == 2,
-    "two down (one at 0 health, one gone): each paid 2000 + 100 x 9")
+check(credits[1] and credits[1][1] == 1000 + 50 * 9 and credits[2] and credits[2][1] == 1000 + 50 * 9 and DEAL.T.down == 2,
+    "two down (one at 0 health, one gone): each paid 1000 + 50 x 9")
 D.state = "wait"; runD(0.5)
-check(logged("cargo over (the round's over): 2 of 3 down, 1 left") and recycles[#recycles] == "SV_Unit_DealCargo" and
+check(logged("cargo over (the round's over): 2 of 12 down, 10 left") and recycles[#recycles]:find("^SV_Unit_DealCargo") and
     lastCallout() == "THE DEAL: TARGET ESCAPED", "the round's over: the last one taken off unpaid, TARGET ESCAPED")
 
 -- the fleet: the first two groups' ships

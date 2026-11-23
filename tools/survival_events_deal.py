@@ -57,36 +57,56 @@ _AF = (1609639.0, -436414.0)                # the airfield, cm (survival_events.
 def _af(dx_km, dy_km, alt_cm): return (_AF[0] + dx_km * 1e5, _AF[1] + dy_km * 1e5, alt_cm)
 
 
-# the Podarge: Mission 12's Norn (AC8's Podarge: Mission 25 day 2's "It's a Podarge!"; Mission 12's PodargeDead light),
+# the Podarges: Mission 12's Norn (AC8's Podarge: Mission 25 day 2's "It's a Podarge!"; Mission 12's PodargeDead light),
 # EAUnit01_Norn0 with its 16 parts (its Cargo1 slot, a carried ldbs3a_A, left out), ported as the Ladons are
 # (build_survival_units.py deal_units); its mission rows Mission 12's (build_survival.py NPC_IMPORT), the body's under
-# Survival's name. West to east, ~9 km south of the runway
+# Survival's name. ((2026-11-23) the user: "make it so theres 7 podarge units to shoot down that travel from north to
+# south") seven, a unit each (A-G: letters, hard rule 17), in a wedge north to south 6 km east of the runway, the
+# lead in front, the others 1.5 km apart either side and 0.9 km further back each step out
 DEAL_PODARGE_WD = '/Game/Maps/Ingame/Mission012/WD_Mission012_global'
 DEAL_PODARGE_SOURCE, DEAL_PODARGE_SOURCE_ROW = 'EAUnit01_Norn0', 'norn_01'
-DEAL_PODARGE_UNIT, DEAL_PODARGE_OBJ, DEAL_PODARGE_ROW = 'SV_Unit_DealPodarge', 'SV_Obj_DealPodarge', 'sv_deal_podarge'
+DEAL_PODARGE_ROW = 'sv_deal_podarge'
+DEAL_PODARGE_KEYS = 'ABCDEFG'
+DEAL_PODARGE_UNITS = [f'SV_Unit_DealPodarge{k}' for k in DEAL_PODARGE_KEYS]
+DEAL_PODARGE_OBJS = [f'SV_Obj_DealPodarge{k}' for k in DEAL_PODARGE_KEYS]
+DEAL_PODARGE_PATHS = [f'SV_Path_DealPodarge{k}' for k in DEAL_PODARGE_KEYS]
 DEAL_PODARGE_DROP = ('Cargo1',)
 DEAL_PODARGE_PART_ROWS = (['norn_LargeEngine_L1', 'norn_LargeEngine_R1', 'norn_LeftAirIntake', 'norn_RightAirIntake',
                            'norn_Turret_L1', 'norn_Turret_R1', 'norn_VLS_L1', 'norn_VLS_R1']
                           + [f'norn_Wing_{s}{k}' for s in 'LR' for k in range(1, 5)])
-DEAL_PODARGE_PATH, DEAL_PODARGE_GO, DEAL_PODARGE_SPEED = 'SV_Path_DealPodarge', 'RE_SV_DealPodargeGo', '450.0'
-DEAL_PODARGE_PTS = [_af(-38, 12, 280000.0), _af(-20, 10, 280000.0), _af(0, 9, 280000.0), _af(20, 7, 280000.0),
-                    _af(40, 4, 280000.0)]
-# Emblem Direct's cargo: three C-130s (AC8's OP0054_c130_01), a copy of Survival's heavy flight (EA_Unit_01_Air2, as
-# THE FESTIVAL's) on a row of Mission 4's Tu-160 (NLID_1000: a large aircraft); north to south past the runway's east,
-# a lane each 600 m apart
-DEAL_CARGO_UNIT, DEAL_CARGO_OBJ, DEAL_CARGO_ROW = 'SV_Unit_DealCargo', 'SV_Obj_DealCargo', 'sv_deal_cargo'
-DEAL_CARGO_SOURCE, DEAL_CARGO_NPC, DEAL_CARGO_N = 'EA_Unit_01_Air2', 'OP0054_c130_01', 3
-DEAL_CARGO_OBJS = [f'{DEAL_CARGO_OBJ}_{k}' for k in range(DEAL_CARGO_N)]
+DEAL_PODARGE_GO, DEAL_PODARGE_SPEED = 'RE_SV_DealPodargeGo', '450.0'
+
+
+def deal_podarge_route(i):
+    """The i-th Podarge's (0-6) route: the wedge's slot (the lead, i 3, in the middle), north to south."""
+    step = i - 3
+    x, back = 6 + step * 1.5, abs(step) * 0.9
+    return [_af(x, -38 - back, 280000.0), _af(x, -19 - back, 280000.0), _af(x, 0 - back, 280000.0),
+            _af(x, 19 - back, 280000.0), _af(x, 38 - back, 280000.0)]
+
+
+# Emblem Direct's cargo: C-130s (AC8's OP0054_c130_01), copies of Survival's heavy flight (EA_Unit_01_Air2, as THE
+# FESTIVAL's: four aircraft a unit at most) on a row of Mission 4's Tu-160 (NLID_1000: a large aircraft). ((2026-11-23)
+# the user: "add in 12 C-130's to shoot down that Travel from North to South") three flights of four (A-C), side by side
+# 3 km apart 8 km west of the runway, each aircraft its own lane 600 m from the next, north to south
+DEAL_CARGO_ROW, DEAL_CARGO_NPC = 'sv_deal_cargo', 'OP0054_c130_01'
+DEAL_CARGO_SOURCE, DEAL_CARGO_PER = 'EA_Unit_01_Air2', 4
+DEAL_CARGO_FLIGHTS = 'ABC'
+DEAL_CARGO_UNITS = [f'SV_Unit_DealCargo{f}' for f in DEAL_CARGO_FLIGHTS]
+DEAL_CARGO_OBJ = {f: f'SV_Obj_DealCargo{f}' for f in DEAL_CARGO_FLIGHTS}
+DEAL_CARGO_OBJS = {f: [f'SV_Obj_DealCargo{f}_{k}' for k in range(DEAL_CARGO_PER)] for f in DEAL_CARGO_FLIGHTS}
+DEAL_CARGO_PATHS = {f: [f'SV_Path_DealCargo{f}{l}' for l in 'ABCD'] for f in DEAL_CARGO_FLIGHTS}
 DEAL_CARGO_GO, DEAL_CARGO_SPEED = 'RE_SV_DealCargoGo', '420.0'
-DEAL_CARGO_LANES = [('A', 0.0), ('B', -0.6), ('C', 0.6)]
 
 
-def deal_cargo_route(side_km):
-    return [_af(-6 + side_km, -36, 220000.0), _af(2 + side_km, -18, 220000.0), _af(10 + side_km, 0, 220000.0),
-            _af(16 + side_km, 18, 220000.0), _af(22 + side_km, 38, 220000.0)]
+def deal_cargo_route(fi, k):
+    """Flight fi's (0-2) aircraft k's (0-3) route, north to south."""
+    x = -8 + (fi - 1) * 3 + (k - 1.5) * 0.6
+    back = (k % 2) * 0.4
+    return [_af(x, -37 - back, 220000.0), _af(x, -18 - back, 220000.0), _af(x, 0 - back, 220000.0),
+            _af(x, 18 - back, 220000.0), _af(x, 37 - back, 220000.0)]
 
 
-DEAL_CARGO_PATHS = [f'SV_Path_DealCargo{t}' for t, _ in DEAL_CARGO_LANES]
 DEAL_TARGET_AREA_M, DEAL_TARGET_ALT_M = 90000.0, (0.0, 12000.0)
 ESCORT_DECOY_MISSION_ROWS += [(DEAL_CARGO_ROW, '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', 't160_common',  # noqa: F405
                                DEAL_CARGO_NPC, None)]
@@ -127,9 +147,11 @@ def build_deal(g, flag, stock_ep):
     g.execute(t_path, DEAL_LEAVE, {0: DEAL_OBJ, 2: DEAL_PATH_OUT, 4: DEAL_OUT_SPEED})
     # the targets onto their routes
     g.trigger('RE_SpawnEnemy_kokatu_1st', DEAL_PODARGE_GO)
-    g.execute(t_path, DEAL_PODARGE_GO, {0: DEAL_PODARGE_OBJ, 2: DEAL_PODARGE_PATH, 4: DEAL_PODARGE_SPEED}, delay=0.5)
+    for o, path in zip(DEAL_PODARGE_OBJS, DEAL_PODARGE_PATHS):
+        g.execute(t_path, DEAL_PODARGE_GO, {0: o, 2: path, 4: DEAL_PODARGE_SPEED}, delay=0.5)
     g.trigger('RE_SpawnEnemy_kokatu_1st', DEAL_CARGO_GO)
-    for o, path in zip(DEAL_CARGO_OBJS, DEAL_CARGO_PATHS):
-        g.execute(t_path, DEAL_CARGO_GO, {0: o, 2: path, 4: DEAL_CARGO_SPEED}, delay=0.5)
+    for f in DEAL_CARGO_FLIGHTS:
+        for o, path in zip(DEAL_CARGO_OBJS[f], DEAL_CARGO_PATHS[f]):
+            g.execute(t_path, DEAL_CARGO_GO, {0: o, 2: path, 4: DEAL_CARGO_SPEED}, delay=0.5)
     print(f'  the deal: {DEAL_ASK} opens AC8\'s Yes / No ({DEAL_ASK_ID}); its answer in {DEAL_FLAG} '
           f'(1 YES / 2 NO / 3 silence): {len(g.trig) - n_trig} triggers, {len(g.ex) - n_ex} executions')
