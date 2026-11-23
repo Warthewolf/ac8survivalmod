@@ -786,10 +786,17 @@ local function ynEntry(id)
     if not found then return nil, string.format("not in its map (%d entries)", n) end
     return found, n
 end
-function DEAL.yesnoTime(on)
+-- (findOnly: from the world's construction, where nothing may be loaded: the table only if it's in memory already)
+function DEAL.yesnoTime(on, findOnly, why)
     local p = cfg().prompt
     if not (p and p.stock_id and p.stock_row) or on == YT.on then return end
-    local dt = loadObject("/Game/Datatables/YesOrNo/DT_YesNo.DT_YesNo")
+    local path = "/Game/Datatables/YesOrNo/DT_YesNo.DT_YesNo"
+    local dt = StaticFindObject(path)
+    if not (dt and valid(dt)) then dt = (not findOnly) and loadObject(path) or nil end
+    if not dt then
+        if findOnly then log("deal: DT_YesNo isn't loaded as Survival's world is made: the answer time at the run's start") end
+        return
+    end
     local said = {}
     if dt then
         local _, r = dtCall(dt, "FindRow", p.stock_row)
@@ -829,7 +836,8 @@ function DEAL.yesnoTime(on)
         said[#said + 1] = "the Yes / No system's map: " .. tostring(why)
     end
     YT.on = on
-    log(string.format("deal: %s's answer time %s: %s", p.stock_id, on and "lengthened for the run" or "back to the shipped", table.concat(said, "; ")))
+    log(string.format("deal: %s's answer time %s (%s): %s", p.stock_id, on and "lengthened for the run" or "back to the shipped",
+        tostring(why or "the run"), table.concat(said, "; ")))
 end
 -- (sv_main.lua, at the main menu: before the level loads, as the DT_NPC rows) the question's row (DT_SV_YesNo) into
 -- the game's DT_YesNo: AC8's Yes / No shows only a question it has a row for (the autotest of 2026-11-23)
@@ -895,7 +903,7 @@ end
 function DEAL.tick(clock)
     if not cfg().enabled then return end
     if not D then
-        if YT.on then pcall(DEAL.yesnoTime, false) end
+        if YT.on then pcall(DEAL.yesnoTime, false, false, "the run ended") end
         if S.hornetUp then S.hornetUp = false end
         DEAL.V, DEAL.J, DEAL.T, DEAL.ANG, S.round, S.noHornetSaid = nil, nil, nil, {}, nil, false
         S.last, S.D, S.hornetOffAt, S.camAt = nil, nil, nil, nil
@@ -906,7 +914,7 @@ function DEAL.tick(clock)
         S.D, DEAL.V, DEAL.J, DEAL.T, DEAL.ANG, S.round, S.hornetOffAt, S.camAt = D, nil, nil, nil, {}, nil, nil, nil
         if S.hornetUp then hornetOff("a new run") end
     end
-    if not YT.on then pcall(DEAL.yesnoTime, true) end
+    if not YT.on then pcall(DEAL.yesnoTime, true, false, "the run started") end
     local dt = S.last and math.max(0, math.min(1, clock - S.last)) or 0
     S.last = clock
     if not paused() then S.clock = S.clock + dt end
@@ -948,7 +956,17 @@ if cfg().enabled then
 end
 if TEST_TICKS then TEST_TICKS[#TEST_TICKS + 1] = { name = "deal", fn = function(now) DEAL.tick(now) end } end
 if type(LEVEL_DROPS) == "table" then
-    LEVEL_DROPS["the deal's answer time"] = function() if YT.on then pcall(DEAL.yesnoTime, false) end end
+    LEVEL_DROPS["the deal's answer time"] = function() if YT.on then pcall(DEAL.yesnoTime, false, false, "the level dropped") end end
 end
+-- ((2026-11-23, the autotest: the table at 26 s from the run's start, the box still shut at 4 s) the Yes / No system
+-- copies DT_YesNo as the level's world is made: the time set as Survival's world is constructed (before that)
+pcall(NotifyOnNewObject, "/Script/Engine.World", function(w)
+    if not cfg().enabled then return end
+    local n = nameOf(w)
+    if n:find("PL_SurvivalMode", 1, true) and not YT.on then
+        local ok, err = pcall(DEAL.yesnoTime, true, true, "as Survival's world is made")
+        if not ok then log("deal: the answer time at the world's making: error " .. tostring(err)) end
+    end
+end)
 end
 -- DEV ONLY END

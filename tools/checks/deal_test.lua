@@ -62,7 +62,7 @@ local ALIVE = {}
 -- the game's objects: NotifyOnNewObject's callback gets each one a spawn makes (a plane each C-130 and its 2 parts; the
 -- Podarge's body and 3 parts; a ship's hull and a turret), each with its address, name and health
 local newObj
-function NotifyOnNewObject(cls, fn) newObj = fn end
+function NotifyOnNewObject(cls, fn) if cls == "/Script/Live.LiveAIGameObject" then newObj = fn end end
 local OBJS = {}
 local nextAddr = 1000
 local function mkObj(name, plane)
