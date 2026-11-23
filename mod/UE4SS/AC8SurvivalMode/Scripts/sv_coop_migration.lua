@@ -972,6 +972,13 @@ local function onJoinerMessage(f)
             M.vportal = M.vportal or {}
             pcall(SPC.V.blinkPortal, c, M.vportal, { X = x * 100, Y = y * 100, Z = z * 100 }, yaw, os.clock())
         end
+    elseif k == "ul" and COOP.client() then              -- ((2026-11-23) the host's ULYSSES: sv_ulysses.lua ULY.fromHost
+        if ULY and ULY.fromHost and levelReady() then
+            local okU, errU = pcall(ULY.fromHost, { f[1], short(f[2], 4), short(f[3], 24), short(f[4], 24), short(f[5], 24),
+                short(f[6], 24), short(f[7], 24), short(f[8], 24), short(f[9], 24), short(f[10], 24), short(f[11], 24), short(f[12], 24),
+                short(f[13], 24) })
+            if not okU then once("ul", "coop: the host's ULYSSES word not read: " .. tostring(errU)) end
+        end
     elseif k == "vs" and COOP.client() then              -- ((2026-11-22) the host's VALKA SOLG: sv_solg_coop.lua
         if SCOOP and SCOOP.fromHost and levelReady() then
             local okV, errV = pcall(SCOOP.fromHost, { f[1], short(f[2], 4), short(f[3], 24), short(f[4], 24), short(f[5], 24),

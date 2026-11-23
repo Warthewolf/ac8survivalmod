@@ -486,6 +486,7 @@ local TYPES = {
     { "join", "vm", { "vm", "1" } },
     { "join", "vr", { "vr", "@VALKA" } },
     { "join", "vs", { "vs", "po", "-15000", "8000", "6000", "90", "2600" } },   -- ((2026-11-22) VALKA's SOLG: sv_solg_coop.lua)
+    { "join", "ul", { "ul", "r", "1" } },                     -- ((2026-11-23) ULYSSES: sv_ulysses.lua ULY.fromHost)
     { "join", "rz", { "rz", "1" } },
     { "join", "rs", { "rs", "j" } },
     -- the same types' other forms (fed the same way; the effect checked above is the first form's)
@@ -527,6 +528,11 @@ local TYPES = {
     { "join", "vs", { "vs", "vg", "1" }, extra = true },
     { "join", "vs", { "vs", "vg", "0" }, extra = true },
     { "join", "vs", { "vs", "st" }, extra = true },
+    -- ((2026-11-23) ULYSSES' other words: a fragment (id, mesh, where, velocity, scale, spin, big), shot down, landed, its end)
+    { "join", "ul", { "ul", "f", "3", "C", "-15000", "8000", "11000", "-30000", "12000", "-9000", "250", "40", "0" }, extra = true },
+    { "join", "ul", { "ul", "s", "3" }, extra = true },
+    { "join", "ul", { "ul", "l", "3", "0" }, extra = true },
+    { "join", "ul", { "ul", "e", "1" }, extra = true },
     { "join", "ev", { "ev", "RE_SV_AlcnOpenCore", U1 }, extra = true },
     -- ((2026-11-11) the Alicorn: rnd field 16 shut and dived; the host's health for ids not bound here yet, M.pendHp)
     { "join", "rnd", { "rnd", "6", "fighting", "30", "2", "3", "4", "1", "2", "m1w0s0", "alicorn", "alicorn:sail", "0", "Wingmen:1;", "0", "2:s:1" }, extra = true },
@@ -736,6 +742,7 @@ local EFFECT = {
     ["join vm"] = function() return M.vmHere == true end,
     ["join vr"] = function() return M.vr ~= nil end,
     ["join vs"] = function() return logHas("^solg coop: the host's portal opens") end,   -- ((2026-11-22) sv_solg_coop.lua)
+    ["join ul"] = function() return logHas("^ulysses: the host's round: phase 1") end,   -- ((2026-11-23) sv_ulysses.lua)
     ["join rz"] = function() return true end,
     ["join rs"] = function() return M.rep ~= nil end,                        -- (rs|j: a repair, the host's picture to come)
 }

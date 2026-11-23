@@ -185,6 +185,11 @@ function COOP.valkaPortal(at, yaw, what)
     log(string.format("coop: VALKA's portal (%s) sent to every joiner (%d linked)", what == "o" and "open" or "she's through",
         M.linkedPeers or 0))
 end
+-- ((2026-11-23) ULYSSES (sv_ulysses.lua): "ul|<kind>|..." to every joiner: its round, each fragment's launch, its end)
+function COOP.ulysses(kind, ...)
+    if not COOP.host() then return end
+    send(true, "ul", kind, ...)
+end
 -- ((2026-11-22) her SOLG (sv_solg_coop.lua): "vs|<kind>|..." to every joiner, each step of it)
 function COOP.valkaSolg(kind, ...)
     if not COOP.host() then return end

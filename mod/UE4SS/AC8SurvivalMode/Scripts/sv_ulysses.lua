@@ -23,6 +23,10 @@ local function span(t, d1, d2)
     return n(t, d1)
 end
 local function host() return not (COOP and COOP.client and COOP.client()) end
+-- ((2026-11-23) co-op: "ul|<kind>|..." to every joiner (sv_coop.lua COOP.ulysses), each joiner draws its own copies:
+--   r|phase   its round (the fade and card at phase 1, the film look)   e|last   its end (home again when last)
+--   f|id|key|x|y|z|vx|vy|vz|scale100|spin|big   a fragment launched (metres; cm/s)   s|id   shot down   l|id|land   landed)
+local function tell(...) if COOP and COOP.ulysses and COOP.host and COOP.host() then pcall(COOP.ulysses, ...) end end
 
 ---------------------------------------------------------------------------------------------------- its rounds
 -- the arc's first dawn round: F + 7 (its night's first round) + night_rounds (sv_config_arc.lua CFG.sky.arc), + offset
@@ -438,9 +442,15 @@ local function launch(spec, P, what, big)
     local v = span(spec.speed_kmh, 1200) / 3.6 * 100                 -- (cm/s)
     local T = d / v
     local key = type(spec.meshes) == "table" and spec.meshes[math.random(1, #spec.meshes)] or spec.mesh or "C"
-    local r = rock(key, start, { X = dx / T, Y = dy / T, Z = dz / T }, span(spec.scale, 1), span(spec.spin_dps, 20))
+    local sc, sp = span(spec.scale, 1), span(spec.spin_dps, 20)
+    local r = rock(key, start, { X = dx / T, Y = dy / T, Z = dz / T }, sc, sp)
     if not r then return nil end
-    local f = { r = r, P = P, what = what, big = big, hitAt = os.clock() + T, born = os.clock(), key = key }
+    U.lastScale, U.lastSpin = sc, sp
+    U.nextId = (U.nextId or 0) + 1
+    local f = { r = r, P = P, what = what, big = big, hitAt = os.clock() + T, born = os.clock(), key = key, id = U.nextId }
+    tell("f", tostring(f.id), key, string.format("%.0f", start.X / 100), string.format("%.0f", start.Y / 100), string.format("%.0f", start.Z / 100),
+        string.format("%.0f", dx / T), string.format("%.0f", dy / T), string.format("%.0f", dz / T), string.format("%.0f", (U.lastScale or 1) * 100),
+        string.format("%.0f", U.lastSpin or 20), big and "1" or "0")
     local hp = n(spec.health, 300) * (players() <= 1 and n(spec.solo_x, 1) or 1)
     f.e = arm(big and U.poolBig or U.pool, r, hp)
     local s = cfg().sounds or {}
@@ -486,6 +496,7 @@ local function land(f, now)
         if s.boom and SND and SND.play then pcall(SND.play, s.boom, W) end
     end
     f.where = (isLand and "land" or "sea") .. " (" .. how .. ")"
+    tell("l", tostring(f.id), isLand and "1" or "0")
     if f.snd and SND and SND.stop then pcall(SND.stop, f.snd) end
     disarm(f.e)
     rockOff(f.r)
@@ -513,6 +524,7 @@ local function shot(f, now)
     pay = specialPay and specialPay(pay) or pay
     if pay > 0 and addCredits then addCredits(pay, f.big and "the Ulysses core down" or "a Ulysses fragment down") end
     U.shot = U.shot + 1
+    tell("s", tostring(f.id))
     if f.big and hudCallout then hudCallout(cfg().text.big_down, nil) end
     if LB and LB.stat then pcall(LB.stat, f.big and "ulysses_core" or "ulysses_fragment", 1) end
     ul(string.format("%s shot down %.0f s before it would have hit (%.1f km up), paid %d", f.big and "the core" or "a fragment",
@@ -562,6 +574,7 @@ function ULY.spawn(now)
         if phase >= 2 and cfg().big.enabled ~= false then U.bigAt = now + n(cfg().big.at_s, 45) end
     end
     s.state, s.at = "shower", now
+    tell("r", tostring(phase))
     local sh = cfg().shift or {}
     if phase == 1 then
         fade(1, 0, n(sh.fade_s, 1.2) * 2, false)              -- (in from white: the time shift)
@@ -598,6 +611,7 @@ local function skyTick(now)
     local r = rock(key, start, vel, span(c.scale, 3), rnd(20, 90))
     if r then SKYM.list[#SKYM.list + 1] = { r = r, dieAt = now + n(c.life_s, 18) } end
 end
+local J = { on = false, rocks = {} }               -- (a joiner: the host's round on, its rocks drawn here by id)
 local function skyOff()
     for _, m in ipairs(SKYM.list) do rockOff(m.r) end
     SKYM.list = {}
@@ -651,6 +665,7 @@ function ULY.roundOver(now, s)
         U.sent + (U.bigSent and 1 or 0), U.landedAirfield, U.landedTown, U.bigSent and "" or ""))
     if host() then boxTexts(false) end
     local last = U.phase >= math.max(1, math.floor(n(cfg().rounds, 2)))
+    tell("e", last and "1" or "0")
     if last then
         filmOff(now)
         skyOff()
@@ -671,13 +686,69 @@ end
 function ULY.tick(now)
     filmTick(now)
     local s = D and D.special
-    local on = s and s.kind == "ulysses" and (D.state == "fighting" or D.state == "spawning")
+    local on = (s and s.kind == "ulysses" and (D.state == "fighting" or D.state == "spawning")) or J.on
     if on then skyTick(now)
     elseif #SKYM.list > 0 and not (U and U.phase) then
         local nextIs = D and ULY.roundIs(D.round + 1)
         if not nextIs then skyOff() end
     end
     if not D and FILM.v then filmOff(now) end
+end
+
+-- ---- a joiner: the host's word (sv_coop_migration.lua "ul"); each value checked, as SCOOP.fromHost's ----
+local function fin(v, lim) v = tonumber(v); return v ~= nil and v == v and math.abs(v) <= lim end
+local KEYS = { A = true, C = true, D = true }
+function ULY.fromHost(f)
+    if host() or not D then return end
+    local k = f[2]
+    if k == "r" then
+        local ph = tonumber(f[3])
+        if not (fin(ph, 10) and ph >= 1 and ph == math.floor(ph)) then return end
+        J.on = true
+        if ph == 1 then
+            local sh = cfg().shift or {}
+            fade(1, 0, n(sh.fade_s, 1.2) * 2, false)
+            if hudCallout then hudCallout(sh.card or "JULY 1999", sh.card_sub) end
+        end
+        ul(string.format("the host's round: phase %d; the film look %s", ph, filmOn()))
+    elseif k == "f" then
+        local id, key = f[3], f[4]
+        local x, y, z, vx, vy, vz, sc, sp = tonumber(f[5]), tonumber(f[6]), tonumber(f[7]), tonumber(f[8]), tonumber(f[9]), tonumber(f[10]), tonumber(f[11]), tonumber(f[12])
+        if not (KEYS[key] and fin(id, 1e6) and tonumber(id) == math.floor(tonumber(id)) and fin(x, 3e5) and fin(y, 3e5) and fin(z, 6e4) and fin(vx, 5e5) and fin(vy, 5e5)
+            and fin(vz, 5e5) and fin(sc, 5000) and sc > 0 and fin(sp, 3600)) then return end
+        if J.rocks[id] then rockOff(J.rocks[id]) end
+        local r = rock(key, { X = x * 100, Y = y * 100, Z = z * 100 }, { X = vx, Y = vy, Z = vz }, sc / 100, sp)
+        if r then
+            J.rocks[id] = r
+            pcall(function() r.a:SetLifeSpan(600) end)
+        end
+    elseif k == "s" or k == "l" then
+        local r = J.rocks[f[3]]
+        if not r then return end
+        J.rocks[f[3]] = nil
+        local at = rockAt(r)
+        if at then
+            if k == "s" then boom(at, n((cfg().fx_scale or {}).shot, 4))
+            elseif f[4] == "1" then boom(at, n((cfg().fx_scale or {}).land, 10))
+            else
+                local sc = cfg().sea or {}
+                if fxAt then pcall(fxAt, sc.fx or {}, { X = at.X, Y = at.Y, Z = n(sc.sea_z, 350) }, n(sc.scale, 1.5), 20) end
+            end
+        end
+        rockOff(r)
+    elseif k == "e" then
+        for _, r in pairs(J.rocks) do rockOff(r) end
+        J.rocks = {}
+        J.on = false
+        if f[3] == "1" then
+            filmOff(os.clock())
+            skyOff()
+            local sh = cfg().shift or {}
+            fade(1, 0, n(sh.fade_s, 1.2) * 2, false)
+            if hudCallout then hudCallout(sh.home or "PRESENT DAY", sh.home_sub) end
+        end
+        ul("the host's round over" .. (f[3] == "1" and ": home again" or ""))
+    end
 end
 
 -- the special's kind (sv_anomalies_valka.lua SPC.kinds): no fighters of its own, busy while fragments fall
