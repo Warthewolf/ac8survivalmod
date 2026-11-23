@@ -6351,6 +6351,116 @@ SUITES.ulysses = function()
     A.wait(3)
 end
 
+-- ((2026-11-24) ULYSSES from its first round: the fade and JULY 1999, impacts up close (the sea's splash, the land's
+-- blast), then its second round: the core onto the airfield (its damage), PRESENT DAY and the look gone. Its config
+-- (config_ulysses2.lua) brings the fragments in close and fast, so each lands within ~25 s.
+SUITES.ulysses2 = function()
+    intoRun()
+    local function live()
+        local U = ULY and ULY.debug and select(1, ULY.debug())
+        local out = {}
+        for _, x in ipairs(U and U.list or {}) do if not x.done and x.r and x.r.a and x.hitAt then out[#out + 1] = x end end
+        return out
+    end
+    -- the next to land (big or not), its aim point and how far off it is
+    local function nextLand(big)
+        local best
+        for _, x in ipairs(live()) do
+            if (x.big == true) == big and (not best or x.hitAt < best.hitAt) then best = x end
+        end
+        return best
+    end
+    local function onLand(name, big, back_m, up_m)
+        local W = {}
+        A.until_(function()
+            local x = nextLand(big)
+            if x and D and D.now and x.hitAt - D.now < 1.8 and x.hitAt - D.now > 0.6 then W.x = x; return true end
+            return false
+        end, 120, function(v) ST.info(name .. ": " .. (v and "one about to land" or "none landing")) end)
+        A.picture(name, function()
+            local x = W.x
+            if not x then return nil end
+            local P = x.P
+            return { X = P.X - back_m * 100, Y = P.Y - back_m * 40, Z = (P.Z or 0) + up_m * 100 }
+        end, function() return W.x and { X = W.x.P.X, Y = W.x.P.Y, Z = (W.x.P.Z or 0) + 3000 } end, 60)
+    end
+    A.do_(function()
+        if not ST.check(ULY ~= nil and SPC.kinds.ulysses ~= nil, "ULYSSES is in this build") then return "abort" end
+        ST.marks.v0 = ST.n
+        ULY.forcedPhase = 1
+        D.forceSpecial = "ulysses"
+        if D.state == "wait" then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+        ST.doing = "ULYSSES round 1"
+    end)
+    A.log_("ulysses: round %d+: phase 1 of 2", 60, "v0", false, function(l)
+        if not ST.check(l ~= nil, "its first round started (phase 1: the shower)", l) then return "abort" end
+    end)
+    A.wait(0.6)
+    A.do_(function() ST.shot("v_fade_white") end)
+    A.wait(2.5)
+    A.do_(function() ST.shot("v_july_1999") end)
+    A.until_(function() return #live() >= 1 end, 30, function(v) ST.check(v ~= nil, "fragments falling in round 1", #live() .. " up") end)
+    onLand("v_impact_1", false, 1500, 500)
+    A.wait(2)
+    A.do_(function() ST.shot("v_after_impact_1") end)
+    onLand("v_impact_2", false, 1500, 500)
+    A.log_("ulysses: a fragment landed", 60, "v0", true, function(l)
+        ST.check(l ~= nil, "a fragment landed in round 1", l)
+        if l and l:find("in the sea", 1, true) then
+            ST.check(l:find("harmless", 1, true) ~= nil, "a sea landing is harmless (no town or airfield damage)", l)
+        end
+    end)
+    A.do_(function()                                     -- (round 1 over sooner: the rest finished off)
+        ST.marks.v1 = ST.n
+        for _, x in ipairs(live()) do pcall(function() x.e.o.HealthInternal = 10 end) end
+        local U = ULY.debug and ULY.debug()
+        if U then U.todo = U.sent end
+    end)
+    A.log_("ulysses: round %d+ over", 60, "v1", false, function(l)
+        ST.check(l ~= nil, "round 1 over", l)
+        ST.check(l ~= nil and l:find("in the sea", 1, true) ~= nil, "its line counts the sea's", l)
+    end)
+    A.wait(2)
+    A.do_(function()
+        ST.shot("v_between_rounds")
+        ST.marks.v2 = ST.n
+        ULY.forcedPhase = 2
+        D.forceSpecial = "ulysses"
+        ST.doing = "ULYSSES round 2"
+    end)
+    A.until_(function()                                  -- (the next round sooner, once the break has begun)
+        if D.state ~= "wait" then return false end
+        D.at, D.announced = math.min(D.at or D.now, D.now + 3), false
+        return true
+    end, 60, function(v) ST.info("the break shortened: " .. tostring(v ~= nil)) end)
+    A.log_("ulysses: round %d+: phase 2 of 2", 120, "v2", false, function(l)
+        if not ST.check(l ~= nil, "its second round started (phase 2: the core)", l) then return "abort" end
+    end)
+    A.log_("ulysses: the core inbound: up", 60, "v2", true, function(l) ST.check(l ~= nil, "the core inbound", l) end)
+    onLand("v_core_impact", true, 4000, 1500)
+    A.wait(2)
+    A.do_(function() ST.shot("v_core_after") end)
+    A.log_("ulysses: the core landed", 30, "v2", true, function(l)
+        ST.check(l ~= nil and l:find("the airfield -", 1, true) ~= nil, "the core landed, the airfield hit", l)
+    end)
+    A.do_(function()
+        ST.marks.v3 = ST.n
+        for _, x in ipairs(live()) do pcall(function() x.e.o.HealthInternal = 10 end) end
+        local U = ULY.debug and ULY.debug()
+        if U then U.todo = U.sent end
+    end)
+    A.log_("ulysses: round %d+ over", 90, "v3", false, function(l) ST.check(l ~= nil, "round 2 over", l) end)
+    A.wait(1)
+    A.do_(function() ST.shot("v_present_day_1") end)
+    A.wait(3)
+    A.do_(function()
+        ST.shot("v_present_day_2")
+        local _, SK = ULY.debug()
+        ST.check(SK and #SK.list == 0 or false, "the sky's meteors gone after the last round", SK and (#SK.list .. " up") or "?")
+    end)
+    A.wait(3)
+end
+
 local function tick()
     if finished then return end
     local now = os.clock()
