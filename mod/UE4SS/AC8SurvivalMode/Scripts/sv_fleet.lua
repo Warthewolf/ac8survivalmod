@@ -224,7 +224,7 @@ CFG.specials.fleet = {
     -- transitions normally into day time over a few rounds, the same as the festival does": no night_over / dawn_exposure
     -- of its own (THE FESTIVAL's night, dawn and sunrise_rounds, CFG.sky.arc / CFG.sky.night), round 30 a night round:
     -- the sunset at 26, night 27-30, the dawn at 31, rising over 31-34 as the festival's, midday from 35)
-    sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 4, night_over = { exposure = { 2.3, 10.0, 1.1 } } },   -- ((2026-11-18) the user: "very very slightly increase exposure": bias 0.6 -> 0.8, the fleet's night only; (2026-11-19) "storm still dark af": 0.8 -> 1.1)
+    sky = { enabled = true, from_round = 25, profile = { sink_rounds = 0, night_rounds = 4, night_over = { exposure = { 2.3, 10.0, 1.3 } } },   -- ((2026-11-18) the user: "very very slightly increase exposure": bias 0.6 -> 0.8, the fleet's night only; (2026-11-19) "storm still dark af": 0.8 -> 1.1)
             storm = { enabled = true, until_round = 32, out_s = 0.6, hold_s = 0.8, in_s = 1.2, clouds = { enabled = true, raise_km = { 1.0, 1.0 }, density_x = 0.65 },   -- ((2026-11-18) the user: "have the storm clear on round 32"; was 35; clouds: (2026-11-19) sv_fleet_storm.lua cloudsSet)
                       -- ((2026-11-17) the user: "we need to change the audio of the Thunder, its wrong") AC8's own thunder
                       -- (its SE bank's Mission 12 events, by name on your camera: sv_fleet_storm.lua): the storm's arrival
@@ -239,16 +239,16 @@ CFG.specials.fleet = {
                       -- (bolt_glow: (2026-11-17) the user: "Like have them draw where the lightning bolts are?": a pool of
                       -- the same glow, the oldest moved up_m over each bolt's top (into the cloud it comes out of) and
                       -- restarted, off life_s on; run 87: scale 1 unseen at 2-5 km at night, 3-6 lit the cloud blue, so 4, and the 19 x3)
-                      cells = { enabled = true, sort = 100, scale_x = 3,
-                                bolt_glow = { enabled = true, pool = 12, life_s = 2.5, up_m = 300, scale = 4,
+                      cells = { enabled = true, sort = 100, scale_x = 2.6,   -- ((2026-11-23) "turn the brightness of the cloud lightning down a bit": every part ~20 % down, the exposure 1.1 -> 1.3)
+                                bolt_glow = { enabled = true, pool = 12, life_s = 2.5, up_m = 300, scale = 3.4,
                                               -- ((2026-11-17) the flash with the bolt, tools/stormfx (TANI=1 dev builds), the
                                               -- first that loads: AC8's own cloud lightning with its spawn literals raised
                                               -- (burst.py; switched off life_s on, its particles finish), our own cooked one;
                                               -- else the stock glow above)
                                               flash = { { path = "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudBurst.NS_SV_CloudBurst",
-                                                          scale = 0.08, life_s = 0.8, min_km = 6 },   -- ((2026-11-18) "slightly reduce the cloud bursts": 0.1 -> 0.08)   -- (burstwatch: on 0.5 s, its particles die with it; none within 3 km: run 140748's white-outs; 0.74.114: its near sprites on MI_SV_CloudFlashNear, no fade before 30 km)
+                                                          scale = 0.07, life_s = 0.8, min_km = 6 },   -- ((2026-11-18) "slightly reduce the cloud bursts": 0.1 -> 0.08)   -- (burstwatch: on 0.5 s, its particles die with it; none within 3 km: run 140748's white-outs; 0.74.114: its near sprites on MI_SV_CloudFlashNear, no fade before 30 km)
                                                         { path = "/Game/Mods/SurvivalMode/StormFx/NS_SV_CloudFlash.NS_SV_CloudFlash",
-                                                          scale = 1, life_s = 2.0 } } },
+                                                          scale = 0.85, life_s = 2.0 } } },
                                 system = "/Game/VFX/Environment/Common/Lightning/CloudLightning/NS_CloudLightning.NS_CloudLightning",
                                 spots = { { 2389746, -1425882, 636631, 1 }, { 2050221, -1352135, 639884, 1 }, { -2275497, 226132, 764355, 1 }, { -3067967, 383275, 764355, 1 },
                                          { -3159850, 3790150, 764355, 1 }, { -3159850, 4575129, 764355, 1 }, { -1165562, 2039202, 764355, 1 }, { 1798205, 1440965, 727172, 0.9 },
@@ -283,7 +283,7 @@ CFG.specials.fleet = {
                                               -- ((2026-11-17) "increase the brightness of the lightning bolt": a dynamic instance of
                                               -- the material on each bolt with these values (0.74.123's cooked copy, MI_SV_StormBolt,
                                               -- drew no bolt at all): x3 the light, its far fade 0.5-3.5 km pushed out to 30 km)
-                                              mid = { Emissive_Intensity = 15000, FarFade_Start = 3000000, FarFade_Distance = 1000000 },
+                                              mid = { Emissive_Intensity = 12000, FarFade_Start = 3000000, FarFade_Distance = 1000000 },
                                               meshes = { "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder001_IE03.SM_Thunder001_IE03",
                                                          "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder006_IE04.SM_Thunder006_IE04",
                                                          "/Game/VFX/ResourceAsset/Mesh/Lightning/SM_Thunder002_IE03.SM_Thunder002_IE03",
