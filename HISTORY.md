@@ -4233,3 +4233,7 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   the fleet storm's cloud bursts dimmer and its lightning and flashes rarer (0.75.66's notes). Not in it: Survival's
   own Wwise sounds (feature/wwise-banks) and the co-op pause wait (fix/pause-menu-coop-unpause). Public zip
   AC8SurvivalMode_0.75.68_Online.zip (PUBLIC=1 TANI=1 ZFA=1 COOP=1), build a6ce5e4e, registered; zip_leak_test all passed.
+- 0.75.69 (2026-11-23, released): 0.75.68 plus fix/pause-menu-coop-unpause (the user: "Add the pause fix into it too"):
+  a co-op host's world goes on only once the pause page is up (or CFG.coop.pause_page_wait_s 1.0 s on), the pause probe
+  logs the view and the room. Untested in game. Public zip AC8SurvivalMode_0.75.69_Online.zip, build a6be673d,
+  registered; zip_leak_test all passed.
