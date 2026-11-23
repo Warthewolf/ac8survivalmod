@@ -596,6 +596,24 @@ function PAUSE.pageUp()
     end
     return false
 end
+-- ((2026-11-23) ULYSSES' film look: AC8's view is its camera manager's, a post-process volume of ours never showed (the
+-- autotest of 0.75.71)) HUD.film(a, rgb): a full-screen image on the HUD's canvas, under its rows (ZOrder -1000), clicks
+-- through, tinted rgb at opacity a (0: hidden); false when the HUD isn't up
+function HUD.film(a, rgb)
+    if not (H and H.canvas and liveObj(H.widget)) then return false end
+    if not (H.film and liveWidget(H.film)) then
+        local ok, img = pcall(newWidget, "Image", "SvFilm")
+        if not (ok and img) then return false end
+        H.filmSlot = slotIn(H.canvas, img, { 0, 0 }, { 1, 1 }, { 0, 0, 0, 0 }, { 0, 0 }, false)
+        pcall(function() H.filmSlot:SetZOrder(-1000) end)
+        pcall(function() img:SetVisibility(3) end)                -- (HitTestInvisible)
+        H.film = img
+    end
+    rgb = rgb or { 0.45, 0.32, 0.15 }
+    pcall(function() H.film:SetColorAndOpacity({ R = rgb[1], G = rgb[2], B = rgb[3], A = math.max(0, math.min(1, a or 0)) }) end)
+    pcall(function() H.film:SetVisibility((a or 0) > 0.001 and 3 or 1) end)
+    return true
+end
 local function pauseProbe()
     H.pauseLogs = (H.pauseLogs or 0) + 1
     if H.pauseLogs > 20 then return end

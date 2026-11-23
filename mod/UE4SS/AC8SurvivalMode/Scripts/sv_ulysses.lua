@@ -94,20 +94,45 @@ local function paintMid()
     ul(string.format("paint: the rock's instance made, %d textures in", nT))
     return mid
 end
+function ULY.tailMid()
+    if PAINT.tail ~= nil then return PAINT.tail or nil end
+    local P = (cfg().tail or {}).paint or {}
+    local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
+    local parent = P.parent and loadObject(P.parent .. "." .. P.parent:match("[^/]+$"))
+    if not (valid(kml) and parent and valid(parent)) then PAINT.tail = false; ul("tail paint: its parent didn't load"); return nil end
+    local ok, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, parent, FName("None"), 0) end)
+    if not (ok and valid(mid)) then PAINT.tail = false; return nil end
+    for slot, path in pairs(P.tex or {}) do
+        local t = loadObject(path .. "." .. path:match("[^/]+$"))
+        if t and valid(t) then pcall(function() mid:SetTextureParameterValue(FName(slot), t) end) end
+    end
+    for k, v in pairs(P.scalars or {}) do pcall(function() mid:SetScalarParameterValue(FName(k), v) end) end
+    for k, v in pairs(P.vectors or {}) do pcall(function() mid:SetVectorParameterValue(FName(k), { R = v[1], G = v[2], B = v[3], A = v[4] or 1 }) end) end
+    PAINT.tail = mid
+    ul("tail paint: its instance made")
+    return mid
+end
 -- a rock: actor, AC:I's mesh at `scale` (skeletal, painted), a spin, a fire trail, an engine mover at `vel` (cm/s)
+local function placeAt(c, L, rot)                         -- (a whole rotation through its quaternion: hard rule 76)
+    return pcall(function() c:K2_SetWorldTransform({ Rotation = quatOf(rot), Translation = { X = L.X, Y = L.Y, Z = L.Z },
+        Scale3D = c:GetComponentScale() }, false, {}, true) end)
+end
 local function rock(key, at, vel, scale, spin)
     local m = mesh(key)
-    local a = newActor(at, { Pitch = 0, Yaw = math.random(0, 359), Roll = 0 })
+    -- ((2026-11-23) its own streak behind it: the rock faces along its fall (+X forward), its spin a roll about that line)
+    local hz = math.sqrt(vel.X * vel.X + vel.Y * vel.Y)
+    local face = { Pitch = math.deg(math.atan(vel.Z, math.max(1, hz))), Yaw = math.deg(math.atan(vel.Y, vel.X)), Roll = math.random(0, 359) }
+    local a = newActor(at, face)
     if not a then return nil end
     local c = addComp(a, "/Script/Engine.SkeletalMeshComponent")
     if not c then pcall(function() a:K2_DestroyActor() end); return nil end
-    if m and not pcall(function() c:SetSkeletalMeshAsset(m) end) then pcall(function() c:SetSkeletalMesh(m, true) end) end
+    local okSet = m and pcall(function() c:SetSkeletalMeshAsset(m) end)
+    if m and not okSet then okSet = pcall(function() c:SetSkeletalMesh(m, true) end) and "SetSkeletalMesh" or false else okSet = okSet and "SetSkeletalMeshAsset" or false end
     -- (a bare actor has no root: its spawn place went with the first component, at the world's origin (the SOLG's run of
     -- 2026-11-22 17:58, and this one's autotest of 2026-11-23: rocks 1.5 km under the sea). Put where it's wanted once its
     -- mesh is its root, the mesh itself too)
-    local rot = { Pitch = 0, Yaw = math.random(0, 359), Roll = 0 }
-    pcall(function() a:K2_SetActorLocationAndRotation({ X = at.X, Y = at.Y, Z = at.Z }, rot, false, {}, true) end)
-    pcall(function() c:K2_SetWorldLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true) end)
+    pcall(function() a:K2_SetActorLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true) end)
+    placeAt(c, at, face)
     local mid = paintMid()
     if mid then
         local slots = 1
@@ -118,7 +143,31 @@ local function rock(key, at, vel, scale, spin)
     pcall(function() c:SetWorldScale3D({ X = scale, Y = scale, Z = scale }) end)
     pcall(function() c:SetCastShadow(true) end)
     local rm = addComp(a, "/Script/Engine.RotatingMovementComponent")
-    if rm then pcall(function() rm.RotationRate = { Pitch = spin * 0.6, Yaw = spin, Roll = spin * 0.3 } end) end
+    if rm then pcall(function() rm.RotationRate = { Pitch = 0, Yaw = 0, Roll = spin } end) end
+    -- its own streak (SK_SV_Ulysses_Tail, tools/ulysses): behind it along -X, glowing (tail.paint), scaled with the rock
+    local T = cfg().tail or {}
+    local static = T.component == "static"
+    local tm = nil
+    if T.enabled ~= false then
+        if static then
+            local path = cfg().mesh_path:gsub("SK_SV_", "SM_SV_") .. (T.mesh or "Tail")
+            tm = loadObject(path .. "." .. path:match("[^/]+$"))
+        else tm = mesh(T.mesh or "Tail") end
+    end
+    if tm and valid(tm) then
+        local tc = addComp(a, static and "/Script/Engine.StaticMeshComponent" or "/Script/Engine.SkeletalMeshComponent")
+        if tc then
+            if static then pcall(function() tc:SetStaticMesh(tm) end)
+            elseif not pcall(function() tc:SetSkeletalMeshAsset(tm) end) then pcall(function() tc:SetSkeletalMesh(tm, true) end) end
+            pcall(function() tc:SetCollisionEnabled(0) end)
+            pcall(function() tc:SetCastShadow(false) end)
+            pcall(function() tc:K2_AttachToComponent(c, FName("None"), 2, 2, 1, false) end)
+            local ts = n(T.scale, 1) * scale
+            pcall(function() tc:SetRelativeScale3D({ X = ts * n(T.length_x, 1), Y = ts, Z = ts }) end)
+            local tmid = T.paint and ULY.tailMid and ULY.tailMid()
+            if tmid then pcall(function() tc:SetMaterial(0, tmid) end) end
+        end
+    end
     local pm = addComp(a, "/Script/Engine.ProjectileMovementComponent")
     if pm then
         pcall(function() pm:SetUpdatedComponent(a.RootComponent) end)
@@ -128,11 +177,28 @@ local function rock(key, at, vel, scale, spin)
         pcall(function() pm.Velocity = { X = vel.X, Y = vel.Y, Z = vel.Z } end)
     end
     local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
-    local sys = SPC and SPC.V and SPC.V.asset and SPC.V.asset(cfg().trail)
-    if valid(lib) and sys then
-        local ts = n(cfg().trail_scale, 6) * math.max(0.5, scale)
-        pcall(function() lib:SpawnSystemAttached(sys, c, FName("None"), { X = 0, Y = 0, Z = 0 }, { Pitch = 0, Yaw = 0, Roll = 0 },
-            { X = ts, Y = ts, Z = ts }, 0, true, 0, true) end)
+    TRAILOK = 0
+    for _, t in ipairs(cfg().trails or {}) do                  -- (its smoke, its fire, the rod's streak)
+        local sys = SPC and SPC.V and SPC.V.asset and SPC.V.asset(t.path)
+        if valid(lib) and sys then
+            local ts = n(t.scale, 6) * math.max(0.5, scale)
+            local tc = nil
+            if pcall(function() tc = lib:SpawnSystemAttached(sys, c, FName("None"), { X = 0, Y = 0, Z = 0 }, { Pitch = 0, Yaw = 0, Roll = 0 },
+                { X = ts, Y = ts, Z = ts }, 0, true, 0, true) end) and valid(tc) then TRAILOK = TRAILOK + 1 end
+        end
+    end
+    -- ((2026-11-23, the autotest of 0.75.71: boxes right, no rock seen) the first rocks' state, for the next run
+    ROCKLOG = (ROCKLOG or 0) + 1
+    if ROCKLOG <= 3 then
+        local function q(f) local ok, v = pcall(f); return ok and tostring(v) or "?" end
+        local okL, L = pcall(function() return c:K2_GetComponentLocation() end)
+        local okA, A2 = pcall(function() return a:K2_GetActorLocation() end)
+        ul(string.format("rock %d (%s, x%.1f): mesh %s by %s, asset read %s, visible %s, hidden %s, registered %s, bounds %s m, comp at %s, actor at %s, root is it %s, trail %s",
+            ROCKLOG, tostring(key), scale, m and nameOf(m) or "NONE", tostring(okSet), q(function() return nameOf(c:GetSkinnedAsset()) end), q(function() return c:IsVisible() end),
+            q(function() return c.bHiddenInGame end), q(function() return c:IsRegistered() end), q(function() return math.floor(c.Bounds.SphereRadius / 100) end),
+            okL and L and string.format("(%.1f, %.1f, %.1f km)", L.X / 100000, L.Y / 100000, L.Z / 100000) or "?",
+            okA and A2 and string.format("(%.1f, %.1f, %.1f km)", A2.X / 100000, A2.Y / 100000, A2.Z / 100000) or "?",
+            q(function() return addrOf(a.RootComponent) == addrOf(c) end), tostring(TRAILOK)))
     end
     return { a = a, c = c, pm = pm }
 end
@@ -286,21 +352,31 @@ local function filmOn()
             FILM.cams[#FILM.cams + 1] = { cam = cam, saved = saved, w = w }
         end) end)
     end
+    local vt = liveObj(survivalPC) and select(2, pcall(function() return survivalPC:GetViewTarget() end))
+    local pcm = liveObj(survivalPC) and survivalPC.PlayerCameraManager
+    FILM.view = string.format("view on %s, camera manager %s", valid(vt) and nameOf(vt) or "?", valid(pcm) and nameOf(pcm):match("[^%.:]+$") or "?")
     local camW = 0
     for _, x in ipairs(FILM.cams) do camW = camW + x.w end
     FILM.v, FILM.from, FILM.to, FILM.at = v, 0, 1, os.clock()
-    return string.format("on (%d of %d settings written, grain read back %s; on %d camera(s) of your plane, %d settings)", nOk, #sets,
-        okR and tostring(back) or "?", #FILM.cams, camW)
+    return string.format("on (%d of %d settings written, grain read back %s; on %d camera(s) of your plane, %d settings; %s)", nOk, #sets,
+        okR and tostring(back) or "?", #FILM.cams, camW, FILM.view or "?")
 end
 local function filmOff(now)
-    if FILM.v and liveObj(FILM.v) then FILM.from, FILM.to, FILM.at = FILM.cur or 1, 0, now or os.clock() end
+    if FILM.v and liveObj(FILM.v) then FILM.from, FILM.to, FILM.at = FILM.cur or 1, 0, os.clock() end
 end
 local function filmTick(now)
+    now = os.clock()                                      -- (FILM.at is os.clock's: the tick's own clock is the game's)
     if not (FILM.v and liveObj(FILM.v)) then return end
     local fs = math.max(0.1, n((cfg().film or {}).fade_s, 2))
     local u = math.min(1, (now - (FILM.at or now)) / fs)
     FILM.cur = FILM.from + (FILM.to - FILM.from) * u
     filmSet(FILM.cur)
+    local f = cfg().film or {}                            -- (the HUD's sepia wash: what shows, AC8's grading aside)
+    if HUD and HUD.film then
+        local fl = 1 + (math.random() * 2 - 1) * n(f.flicker, 0.04) / math.max(0.01, n(f.overlay_a, 0.26))
+        local okF, r = pcall(HUD.film, n(f.overlay_a, 0.26) * FILM.cur * fl, f.overlay)
+        if not FILM.said and FILM.cur > 0.5 then FILM.said = true; ul("film overlay: HUD.film " .. tostring(okF) .. " " .. tostring(r) .. ", opacity " .. string.format("%.2f", n(f.overlay_a, 0.26) * FILM.cur)) end
+    end
     for _, x in ipairs(FILM.cams or {}) do                 -- (the camera's: its blend scaled the same way)
         if valid(x.cam) then pcall(function() x.cam.PostProcessSettings.FilmGrainIntensity = n((cfg().film or {}).grain, 0.45) * FILM.cur end) end
     end
@@ -314,6 +390,7 @@ local function filmTick(now)
             end
         end
         FILM.cams = {}
+        if HUD and HUD.film then pcall(HUD.film, 0) end
         pcall(function() FILM.v:K2_DestroyActor() end); FILM.v = nil
     end
 end
@@ -372,15 +449,49 @@ local function launch(spec, P, what, big)
     end
     return f
 end
+-- land or sea where P is: a trace down (near you only: hard rule 27); none: land when within sea.land_m of where it aimed
+local kis = nil
+local function onLand(P, what)
+    local sc = cfg().sea or {}
+    local seaZ = n(sc.sea_z, 350)
+    if not valid(kis) then kis = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary") end
+    local hit, z = {}, nil
+    if valid(kis) and valid(survivalPC) then
+        pcall(function() kis:LineTraceSingle(survivalPC, { X = P.X, Y = P.Y, Z = 1000000 }, { X = P.X, Y = P.Y, Z = -100000 }, 0, true, {}, 0,
+            hit, true, { R = 0, G = 0, B = 0, A = 0 }, { R = 0, G = 0, B = 0, A = 0 }, 0) end)
+        pcall(function() local h = hit.OutHit or hit; local l = h.ImpactPoint or h.Location; if l and l.Z then z = l.Z end end)
+    end
+    if z then return z > seaZ + 500, z, "traced" end
+    local base = what == "airfield" and AIRFIELD or nil
+    if what == "town" then
+        local best = nil
+        for _, t in ipairs(cfg().towns or {}) do
+            local d = (t.X - P.X) ^ 2 + (t.Y - P.Y) ^ 2
+            if not best or d < best then best, base = d, t end
+        end
+    end
+    local near = base and math.sqrt((base.X - P.X) ^ 2 + (base.Y - P.Y) ^ 2) <= n(sc.land_m, 1200) * 100
+    return near, nil, "by its aim"
+end
 local function land(f, now)
     local at = rockAt(f.r) or f.P
-    boom(f.P, n((cfg().fx_scale or {})[f.big and "big_land" or "land"], 10))
+    local sc = cfg().sea or {}
+    local isLand, gz, how = onLand(f.P, f.what)
+    if isLand then
+        boom({ X = f.P.X, Y = f.P.Y, Z = gz or f.P.Z }, n((cfg().fx_scale or {})[f.big and "big_land" or "land"], 10))
+    else                                                  -- (the Spear's splash at the sea's level)
+        local W = { X = f.P.X, Y = f.P.Y, Z = n(sc.sea_z, 350) }
+        if fxAt then pcall(fxAt, sc.fx or {}, W, n(f.big and sc.big_scale or sc.scale, 1.5), 20) end
+        local s = cfg().sounds or {}
+        if s.boom and SND and SND.play then pcall(SND.play, s.boom, W) end
+    end
+    f.where = (isLand and "land" or "sea") .. " (" .. how .. ")"
     if f.snd and SND and SND.stop then pcall(SND.stop, f.snd) end
     disarm(f.e)
     rockOff(f.r)
     local dmg = f.big and n(cfg().big.airfield_damage, 120) or n(cfg().fragments.airfield_damage, 8)
     local d = math.sqrt((f.P.X - AIRFIELD.X) ^ 2 + (f.P.Y - AIRFIELD.Y) ^ 2)
-    if f.what == "airfield" or f.big or d < 400000 then
+    if f.big or (isLand and (f.what == "airfield" or d < 400000)) then
         if AF and type(AF.bomb) == "number" then AF.bomb = AF.bomb + dmg end
         U.landedAirfield = U.landedAirfield + 1
     else
@@ -388,8 +499,8 @@ local function land(f, now)
         if (U.townSaid or 0) + 20 < now and hudCallout then U.townSaid = now; hudCallout(cfg().text.town_hit, nil) end
     end
     if f.big and hudCallout then hudCallout(cfg().text.big_hit, nil) end
-    ul(string.format("%s landed on the %s (%.1f, %.1f km)%s", f.big and "the core" or "a fragment", f.what, f.P.X / 100000,
-        f.P.Y / 100000, (f.what == "airfield" or f.big) and string.format(": the airfield -%d", dmg) or ""))
+    ul(string.format("%s landed on the %s (%.1f, %.1f km), in the %s%s", f.big and "the core" or "a fragment", f.what, f.P.X / 100000,
+        f.P.Y / 100000, f.where or "?", (f.big or (isLand and (f.what == "airfield" or d < 400000))) and string.format(": the airfield -%d", dmg) or ""))
     return at
 end
 local function shot(f, now)
@@ -408,6 +519,34 @@ local function shot(f, now)
         f.hitAt - now, at and at.Z / 100000 or -1, pay))
 end
 
+-- ((2026-11-23) the autotest's A/B: rocks unseen in 0.75.71) debug_ab: two still rocks 500 m ahead of you, 60 m apart:
+-- the skeletal one as the round's (rock()) and a StaticMeshComponent with the SM_ twin, both painted; logged
+local function debugAB()
+    local me = playerLocation and playerLocation()
+    local pawn = liveObj(survivalPC) and survivalPC.Pawn
+    if not (me and valid(pawn)) then return "no plane" end
+    local okF, F = pcall(function() return pawn:GetActorForwardVector() end)
+    local okR, Rv = pcall(function() return pawn:GetActorRightVector() end)
+    if not (okF and okR) then return "no axes" end
+    local P = { X = me.X + F.X * 50000, Y = me.Y + F.Y * 50000, Z = me.Z + F.Z * 50000 + 3000 }
+    ULY.abAt = P
+    local sk = rock("C", { X = P.X - Rv.X * 3000, Y = P.Y - Rv.Y * 3000, Z = P.Z }, { X = 0, Y = 0, Z = -1 }, 4, 20)
+    local sm = loadObject(cfg().mesh_path:gsub("SK_SV_", "SM_SV_") .. "C." .. ("SM_SV_Ulysses_C"))
+    local a = newActor({ X = P.X + Rv.X * 3000, Y = P.Y + Rv.Y * 3000, Z = P.Z }, { Pitch = 0, Yaw = 0, Roll = 0 })
+    local c = a and addComp(a, "/Script/Engine.StaticMeshComponent")
+    local okS = c and sm and pcall(function() c:SetStaticMesh(sm) end)
+    if c then
+        pcall(function() c:SetCollisionEnabled(0) end)
+        pcall(function() c:SetWorldScale3D({ X = 4, Y = 4, Z = 4 }) end)
+        pcall(function() a:K2_SetActorLocation({ X = P.X + Rv.X * 3000, Y = P.Y + Rv.Y * 3000, Z = P.Z }, false, {}, true) end)
+        local mid = paintMid()
+        if mid then pcall(function() c:SetMaterial(0, mid) end) end
+    end
+    if a then pcall(function() a:SetLifeSpan(60) end) end
+    if sk and sk.a then pcall(function() sk.a:SetLifeSpan(60) end) end
+    return string.format("A/B 500 m ahead: skeletal (left) %s; static (right) %s, mesh %s, set %s", sk and "up" or "NOT up", a and "up" or "NOT up",
+        sm and nameOf(sm) or "NOT loaded", tostring(okS))
+end
 function ULY.spawn(now)
     local s = D and D.special
     if not s then return false end
@@ -431,6 +570,7 @@ function ULY.spawn(now)
     ul(string.format("round %d: phase %d of %d, %d fragments%s; the film look %s", D.round, phase, n(cfg().rounds, 2), U.todo,
         U.bigAt and ", the core at +" .. n(cfg().big.at_s, 45) .. " s" or "", filmOn()))
     say((cfg().text.say or {}).start)
+    if cfg().debug_ab then ul(debugAB()) end
     local snd = (cfg().sounds or {}).encounter
     if snd and SND and SND.play then pcall(SND.play, snd, nil) end
     return true

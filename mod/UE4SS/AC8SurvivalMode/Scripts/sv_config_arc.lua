@@ -431,8 +431,32 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
                       Blend_Dameged_Normalmap = "/Engine/EngineMaterials/DefaultNormal" },
               scalars = { Ctrl_All_Emissive = 0, Turbine_speed = 0, DNormal_Strength = 0, DamegedNormal_Intencity = 0,
                           PlayerPlane_Damage = 0 } },
-    trail = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeFireNPC001", trail_scale = 6,
+    -- ((2026-11-23) the user: "The meteor fragments have to have a smoke trail and fire VFX too") on each rock: AC8's smoke
+    -- trail and its fire, each at its scale x the rock's; ((2026-11-23) "Don't use the Rod's Streak, come up with your own")
+    -- the streak is our own: tail (SK_SV_Ulysses_Tail, tools/ulysses: a glowing taper behind the rock along its fall)
+    trails = { { path = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeNPC001", scale = 8 },
+               { path = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeFireNPC001", scale = 6 } },
+    -- our own streak: SM_SV_Ulysses_Tail (tools/ulysses: a 25 m teardrop behind the rock along -X, U along its length) on
+    -- AC8's cloud lightning material (MI_NearCloudLightning001: emissive, translucent, static meshes only: the fleet's
+    -- bolts' proven way) with the tail's own gradient T_SV_Ulysses_Tail_D (white-hot, orange, deep red, dark); component
+    -- "static" (the A/B of 2026-11-23 decides it) or "skeletal" (SK_ twin, painted, no glow)
+    -- ((2026-11-23, the A/B run: both rocks drew, the static tail on the cloud lightning material didn't) skeletal, on the
+    -- rocks' gear material with its gradient, the gear's light-emissive slots tried for a glow (EmissiveLightMap on UV 1)
+    tail = { enabled = true, mesh = "Tail", component = "skeletal", scale = 1.0, length_x = 1.6,
+             paint = { parent = "/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear",
+                       tex = { Basecolor = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Tail_D",
+                               EmissiveLightMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Tail_D",
+                               Normalmap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_FlatN",
+                               Livemap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Rock_L" },
+                       scalars = { Ctrl_All_Emissive = 1, Ctrl_LandinglightEmissive = 1, Landinglight_Emissive_Intensity = 400,
+                                   Turbine_speed = 0, PlayerPlane_Damage = 0 },
+                       vectors = { Landinglight_Emissive_Color = { 1.0, 0.55, 0.15 } } } },
     fx = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" },
+    -- ((2026-11-23) the user: "if they hit the ocean they should have the tonitrus spear water impact") into the sea: the
+    -- Spear's splash (THE DECOY's rods: VFX/Vehicles/Weapon/Rog/Splash) at the sea's level; on land: fx. Land or sea by a
+    -- trace down (only near you: hard rule 27); none: land when it fell within land_m of the airfield / town it aimed at
+    sea = { fx = { "/Game/VFX/Vehicles/Weapon/Rog/Splash/NS_Mission11Splash", "/Game/VFX/Vehicles/Weapon/Rog/Splash/NS_SplashRain" },
+            scale = 1.5, big_scale = 5, sea_z = 350, land_m = 1200 },
     fx_scale = { shot = 4, land = 10, big_shot = 18, big_land = 30 },
     -- the borrowed target units (the SOLG's) and their boxes while ULYSSES has them
     target_units = { small = "SV_Unit_SOLG_KEW", big = "SV_Unit_SOLG_MAG" },
@@ -441,7 +465,10 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     shift = { fade_s = 1.2, hold_s = 0.8, card = "JULY 1999", card_sub = "ASTEROID 1994XF04 ULYSSES HAS BROKEN UP",
               home = "PRESENT DAY", home_sub = "COMONA" },
     -- the film look in 1999 (a post-process volume of ours, unbound): saturation, tint, grain, vignette; fade_s in / out
-    film = { enabled = true, saturation = 0.55, tint = { 1.0, 0.9, 0.72 }, grain = 0.45, vignette = 0.55, fade_s = 2.0 },
+    film = { enabled = true, saturation = 0.55, tint = { 1.0, 0.9, 0.72 }, grain = 0.45, vignette = 0.55, fade_s = 2.0,
+             -- ((2026-11-23) the volume never showed: AC8's view is its camera manager's) the look on Survival's HUD: a
+             -- full-screen sepia wash (overlay rgb at overlay_a), flickering by flicker like old film (sv_hud.lua HUD.film)
+             overlay = { 0.45, 0.32, 0.15 }, overlay_a = 0.26, flicker = 0.04 },
     -- the sounds (Sounds/ulysses: AC:I's Stardust set, tools/ulysses sounds)
     sounds = { fall = { file = "ulysses/fall_small.wav", db = 4, loop = true, curve = { max = 600000, shape = "exp1" } },
                fall_big = { file = "ulysses/fall_big.wav", db = 8, loop = true, curve = { max = 1500000, shape = "exp1" } },
