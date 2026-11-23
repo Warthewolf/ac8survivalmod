@@ -6275,6 +6275,8 @@ SUITES.ulysses = function()
     end)
     A.wait(3)
     A.do_(function() ST.shot("u_start_your_view") end)
+    A.picture("u_ab_rocks", function() local P = ULY.abAt; return P and { X = P.X - 25000, Y = P.Y, Z = P.Z + 4000 } end,
+        function() return ULY.abAt end, 50)                -- (the A/B: skeletal left, static right of where you flew)
     A.log_("ulysses: paint: the rock's instance made", 30, "u0", true, function(l)
         ST.check(l ~= nil, "the rocks painted (the x40a's gear material with the rock's textures)", l)
     end)
