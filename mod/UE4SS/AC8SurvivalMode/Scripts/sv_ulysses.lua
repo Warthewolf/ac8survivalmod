@@ -72,16 +72,29 @@ end
 local MESH = {}
 local function mesh(key)
     local path = cfg().mesh_path .. tostring(key)
-    if MESH[path] ~= nil and (MESH[path] == false or valid(MESH[path])) then return MESH[path] or nil end
+    if MESH[path] ~= nil and (MESH[path] == false or liveObj(MESH[path])) then return MESH[path] or nil end
     local o = loadObject(path .. "." .. path:match("[^/]+$"))
     MESH[path] = (o ~= nil and valid(o)) and o or false
+    if MESH[path] and pin then pcall(pin, o, "ULYSSES' mesh " .. tostring(key)) end   -- (kept loaded between its rounds)
     if not MESH[path] then ul("mesh " .. path .. " didn't load (is SurvivalMode_Ulysses_P installed?)") end
     return MESH[path] or nil
 end
 -- the rock's paint: one dynamic instance of the x40a's gear material with the rock's textures (as sv_solg.lua paint)
 local PAINT = {}
+-- ((2026-11-24, the ulysses2 autotest: a crash at round 2's start after a minute's break, every rock gone) a paint made
+-- once and kept is the game's to collect when nothing draws with it: a kept one is used only while still live and still
+-- named as when made (hard rule 59), else made again
+local function paintKept(key)
+    local m = PAINT[key]
+    if m == nil or m == false then return m end
+    local nm = PAINT[key .. "#name"]
+    if liveObj(m) and (not nm or not nameOf or select(2, pcall(nameOf, m)) == nm) then return m end
+    ul("paint " .. key .. ": the kept one was collected (nothing drew with it): made again")
+    PAINT[key] = nil
+    return nil
+end
 local function paintMid()
-    if PAINT.mid ~= nil then return PAINT.mid or nil end
+    if paintKept("mid") ~= nil then return PAINT.mid or nil end
     local P = cfg().paint or {}
     local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
     local parent = P.parent and loadObject(P.parent .. "." .. P.parent:match("[^/]+$"))
@@ -95,13 +108,15 @@ local function paintMid()
     end
     for k, v in pairs(P.scalars or {}) do pcall(function() mid:SetScalarParameterValue(FName(k), v) end) end
     PAINT.mid = mid
+    PAINT["mid#name"] = nameOf and nameOf(mid) or nil
+    if pin then pcall(pin, mid, "ULYSSES' rock paint") end   -- (kept: VALKA's assets' way, sv_anomalies_valka.lua)
     ul(string.format("paint: the rock's instance made, %d textures in", nT))
     return mid
 end
 function ULY.tailMid(which)
     which = which or "paint"
     local key = which == "paint" and "tail" or ("tail_" .. which)
-    if PAINT[key] ~= nil then return PAINT[key] or nil end
+    if paintKept(key) ~= nil then return PAINT[key] or nil end
     local P = (cfg().tail or {})[which] or {}
     local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
     local parent = P.parent and loadObject(P.parent .. "." .. P.parent:match("[^/]+$"))
@@ -115,6 +130,8 @@ function ULY.tailMid(which)
     for k, v in pairs(P.scalars or {}) do pcall(function() mid:SetScalarParameterValue(FName(k), v) end) end
     for k, v in pairs(P.vectors or {}) do pcall(function() mid:SetVectorParameterValue(FName(k), { R = v[1], G = v[2], B = v[3], A = v[4] or 1 }) end) end
     PAINT[key] = mid
+    PAINT[key .. "#name"] = nameOf and nameOf(mid) or nil
+    if pin then pcall(pin, mid, "ULYSSES' streak " .. which) end
     ul("tail " .. which .. ": its instance made")
     return mid
 end
