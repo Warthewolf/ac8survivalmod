@@ -5943,25 +5943,32 @@ SUITES.deal = function()
     end)
     A.wait(1.5); A.do_(function() ST.shot("deal_zoom") end)
     A.log_("deal: AC8's Yes / No asked", 25, "deal", true)
+    local GAP = {}
     A.do_(function()
+        GAP.ask = os.clock()
         local l = ST.findLog("deal: AC8's Yes / No asked", ST.marks.deal, true)
         ST.check(l and l:find("fired", 1, true) and not l:find("NOT", 1, true), "AC8's Yes / No asked (RE_SV_DealAsk fired)", l)
         ST.check(ST.findLog("deal: vote %d+ open") ~= nil, "the vote open", ST.findLog("deal: vote", ST.marks.deal, true))
     end)
     A.wait(2); A.do_(function() ST.shot("deal_prompt") end)
     A.wait(10); A.do_(function() ST.shot("deal_prompt_12s") end)
+    A.until_(function()
+        if ST.findLog("no answer on AC8's Yes / No", ST.marks.deal, true) then GAP.how = "the box's time out" end
+        if not GAP.how and ST.findLog("closed (", ST.marks.deal, true) then GAP.how = "the vote's close" end
+        if GAP.how then GAP.at = os.clock(); return true end
+        return false
+    end, 45)
+    A.do_(function()
+        local gap = (GAP.at and GAP.ask) and (GAP.at - GAP.ask) or nil
+        ST.check(gap ~= nil and (GAP.how == "the vote's close" or gap >= 20),
+            "the box open 20 s or more after the question (not 4)", string.format("%s after %.0f s", tostring(GAP.how), gap or -1))
+    end)
     A.log_("closed (", 45, "deal", true)
     A.do_(function()
         local l = ST.findLog("closed (", ST.marks.deal, true)
         ST.check(l and l:find("YES 0, NO 0", 1, true), "the vote closed with nobody answering", l)
         local lt = ST.findLog("_Yes_No_Q's answer time lengthened", 0, true)
         ST.check(lt ~= nil and lt:find("26", 1, true) ~= nil, "Mission 22's question's answer time lengthened for the run", lt)
-        local _, iAsk = ST.findLog("deal: AC8's Yes / No asked", ST.marks.deal, true)
-        local sl, iSil = ST.findLog("no answer on AC8's Yes / No", ST.marks.deal, true)
-        local tAsk = iAsk and tonumber((ST.lines[iAsk] or ""):match("(%d+):(%d+):(%d+)") and 0)
-        local function secs(i) local h, m, x = (ST.lines[i] or ""):match("(%d+):(%d+):(%d+)"); return h and (h * 3600 + m * 60 + x) or nil end
-        local gap = (iAsk and iSil and secs(iAsk) and secs(iSil)) and (secs(iSil) - secs(iAsk)) or nil
-        ST.check(gap == nil or gap >= 20, "the box's time out 20 s or more after the question (not 4)", tostring(gap) .. " s")
         local s = ST.findLog("on AC8's Yes / No", ST.marks.deal, true)
         ST.info("the prompt's own answer: " .. tostring(s or "none read back before the close (its time out is longer than the vote, or not read)"))
         ST.info("flag SV_DealAns now " .. tostring((svFlags and svFlags() or {}).SV_DealAns))
