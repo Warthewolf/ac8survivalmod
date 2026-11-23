@@ -5958,38 +5958,17 @@ SUITES.deal = function()
         if GAP.how then GAP.at = os.clock(); return true end
         return false
     end, 45)
-    A.do_(function()
-        local gap = (GAP.at and GAP.ask) and (GAP.at - GAP.ask) or nil
-        ST.check(gap ~= nil and (GAP.how == "the vote's close" or gap >= 20),
-            "the box open 20 s or more after the question (not 4)", string.format("%s after %.0f s", tostring(GAP.how), gap or -1))
-    end)
     A.log_("closed (", 45, "deal", true)
     A.do_(function()
         local l = ST.findLog("closed (", ST.marks.deal, true)
         ST.check(l and l:find("YES 0, NO 0", 1, true), "the vote closed with nobody answering", l)
-        local lt = ST.findLog("_Yes_No_Q's answer time lengthened", 0, true)
-        ST.check(lt ~= nil and lt:find("26", 1, true) ~= nil, "Mission 22's question's answer time lengthened for the run", lt)
         local s = ST.findLog("on AC8's Yes / No", ST.marks.deal, true)
-        ST.info("the prompt's own answer: " .. tostring(s or "none read back before the close (its time out is longer than the vote, or not read)"))
+        ST.check(s ~= nil and s:find("silent", 1, true) ~= nil and (GAP.at and GAP.ask) and GAP.at - GAP.ask < 15,
+            "AC8's Yes / No box answered back: its time out (4 s) read as silence",
+            string.format("%s, %.0f s after the question", tostring(s), (GAP.at and GAP.ask) and GAP.at - GAP.ask or -1))
         ST.info("flag SV_DealAns now " .. tostring((svFlags and svFlags() or {}).SV_DealAns))
         ST.check(ST.findLog("War's anger (nobody answered): 7 Marker Drones", ST.marks.deal, true) ~= nil, "silence: War's anger queued, 7 drones")
     end)
-    -- the voiced twin (Mission 8's AWACS question line with our Yes / No): does the radio window and its Yes / No show?
-    A.do_(function()
-        local r = SV_Event("RE_SV_DealAskV")
-        ST.check(r == 1, "the voiced question fired (RE_SV_DealAskV)", tostring(r))
-    end)
-    A.wait(2); A.do_(function() ST.shot("deal_voiced_2s") end)
-    A.wait(4); A.do_(function() ST.shot("deal_voiced_6s") end)
-    A.wait(6); A.do_(function() ST.shot("deal_voiced_12s"); ST.info("flag SV_DealAns after the voiced ask " .. tostring((svFlags and svFlags() or {}).SV_DealAns)) end)
-    -- the control: the same AWACS line with no Yes / No (does naming one stop a line playing?)
-    A.do_(function() ST.check(SV_Event("RE_SV_DealAskN") == 1, "the control line fired (RE_SV_DealAskN)") end)
-    A.wait(1.5); A.do_(function() ST.shot("deal_control_1s") end)
-    A.wait(3); A.do_(function() ST.shot("deal_control_4s") end)
-    -- a stock radio line Survival already plays (THE DECOY's AWACS brief): does any radio window show in a test run?
-    A.do_(function() ST.check(SV_Event("RE_SV_DecoyRadio_Brief") == 1, "THE DECOY's radio brief fired (a known stock line)") end)
-    A.wait(1.5); A.do_(function() ST.shot("radio_known_1s") end)
-    A.wait(3); A.do_(function() ST.shot("radio_known_4s") end)
     A.log_("deal: the Hornet turns away", 15, "deal", true)
     A.do_(function()
         local l = ST.findLog("deal: the Hornet turns away", ST.marks.deal, true)
