@@ -15,9 +15,11 @@ from survival_events import *  # noqa: F401,F403 (survival_events' names; it imp
 DEAL_QUESTION = 'SV_Deal_Question'          # (our question's id: the prompt and its triggers match on it)
 DEAL_ASK = 'RE_SV_DealAsk'
 DEAL_FLAG = 'SV_DealAns'
-DEAL_ANSWERS = (('areaB_YesNoEvent', 'Left', 'SV_DealYes', 1),
-                ('areaB_YesNoEvent_0', 'Right', 'SV_DealNo', 2),
-                ('areaB_YesNoEvent_1', 'TimeOut', 'SV_DealSilent', 3))
+# ((2026-11-23, the 9th autotest: the box shown, no answer back) Mission 22's own triggers, in our package: Mission 8's,
+# copied in, named their Left / Right / TimeOut from Mission 8's name table, so they never matched
+DEAL_ANSWERS = (('01_Wave05_YesNoEvent', 'Left', 'SV_DealYes', 1),
+                ('01_Wave05_YesNoEvent_No', 'Right', 'SV_DealNo', 2),
+                ('01_Wave05_YesNoEvent_TimeOut', 'TimeOut', 'SV_DealSilent', 3))
 INT_FLAGS += [DEAL_FLAG]  # noqa: F405
 # ((2026-11-23, the autotest: no prompt showed) a question id is a row of DT_YesNo (LiveYesNoDataTable: YesNoID, its
 # AnswerTimeLimit, the YES / NO buttons' texts; Mission 8's 4 s, Mission 12's 3 s; the question itself is the radio
@@ -132,8 +134,8 @@ def build_deal(g, flag, stock_ep):
     g.trigger('RE_SpawnEnemy_kokatu_1st', cev)
     g.execute(t_radio22, cev, {0: cgrp}, delay=0.1)
     for stock_trig, button, name, value in DEAL_ANSWERS:
-        t = g.foreign_trig_template(m8, stock_trig)
-        assert arg_values(t) == ['ms08_01_Question_Detonation', button], (stock_trig, arg_values(t))  # noqa: F405
+        t = g.trig_template(stock_trig)
+        assert arg_values(t) == ['ms22_01_AWACS_Yes_No_Q', button], (stock_trig, arg_values(t))  # noqa: F405
         g.trigger(None, name, template=t, arg_changes={0: DEAL_ASK_ID})
         flag(name, DEAL_FLAG, 'Set', value)
     # the Hornet's event zoom and its way out
