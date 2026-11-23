@@ -4183,3 +4183,10 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   test keys), registered (fec35f3e). INSTALLED 2026-11-23 (the user: "package a release build and install it on my
   system too"; backup build/backup/install_before_0.75.58, the dev containers Laser7 / StormBurst / StormFx / Tani /
   ZFA44 moved into it; 112 files verified). Not pushed to main yet.
+- 0.75.59-0.75.61 (2026-11-23): the fleet storm's cloud lightning ~20 % dimmer and its flash / burst on 3 strikes in 4, 1.2 s
+  apart at least (the user); THE TANACORN and her fleet in the public release (the user: "tanacorn gets merged into the
+  public release", "Everything of hers", Iowa hull and AC7 crew voices included) and the ZFA-44 too ("the ZFA-44 NEEDS to be
+  on there"): PUBLIC=1 TANI=1 ZFA=1 package_release.sh. 0.75.59 / 0.75.60 built and registered, never published (the
+  first without her, the second without the ZFA-44). 0.75.61: AC8SurvivalMode_0.75.61_Online.zip (42a36ee3) and the
+  friends' / tester's ..._TANACORN zips (595daae6 / f5716f91), registered; zip_leak_test all passed. INSTALLED 2026-11-23
+  (the public zip; backup build/backup/install_before_0.75.61; 164 files verified). Pushed to main as v0.75.61.
