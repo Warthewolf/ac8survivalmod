@@ -50,7 +50,9 @@ CFG.specials.deal = {
                rows = "/Game/Mods/SurvivalMode/Data/DT_SV_YesNo.DT_SV_YesNo", table = "/Game/Datatables/YesOrNo/DT_YesNo.DT_YesNo" },
     result_row_s = 8,
     leave_after_s = 7,
-    hornet = { unit = "SV_Unit_DealHornet", name_key = "SV_DealHornet", name = "WAR & HAYTHORN", row = "",
+    -- (dt_npc: its DT_NPC row, DT_SV_NpcRows' allied F/A-18F, added at the main menu: without it the unit spawns no plane,
+    -- "up, 0 aircraft" (the user, 2026-11-23: "War and Haythorns Super Hornet never appears"))
+    hornet = { unit = "SV_Unit_DealHornet", name_key = "SV_DealHornet", name = "WAR & HAYTHORN", row = "", dt_npc = "SV_Deal_F18f",
                ahead_m = 1500, side_m = 700, up_m = 150, up_landed_m = 700, leave_s = 25,
                cam_event = "RE_SV_DealCam", cam_after_s = 1.0, leave_event = "RE_SV_DealLeave" },
     targets_after_s = 15,                     -- into the deal's round
@@ -779,6 +781,20 @@ function DEAL.setup()
     end
     DEAL.rowOk = have ~= nil
     log(string.format("deal: the question's row %s %s", p.question, DEAL.rowOk and "in DT_YesNo" or "NOT added: AC8's Yes / No won't show"))
+    -- the Hornet's plane: its DT_NPC row (as ESC.setup's escorts')
+    local hr = cfg().hornet.dt_npc
+    local npc, rows = loadObject(PROBE_TABLES[2].path), loadObject(CFG.specials.shuttle.npc_rows)
+    if type(hr) == "string" and npc and rows then
+        local _, h = dtCall(npc, "FindRow", hr)
+        if h == nil then
+            local _, r = dtCall(rows, "FindRow", hr)
+            if r ~= nil then dtCall(npc, "AddRow", hr, r); _, h = dtCall(npc, "FindRow", hr) end
+        end
+        DEAL.hornetRowOk = h ~= nil
+        log(string.format("deal: the Hornet's row %s %s", hr, DEAL.hornetRowOk and "in DT_NPC" or "NOT added: its unit will spawn no plane"))
+    else
+        log("deal: the Hornet's row: DT_NPC or DT_SV_NpcRows didn't load")
+    end
 end
 
 -- the NEXT row (sv_hud.lua): the offer while it's open, the result a little after; else nil
