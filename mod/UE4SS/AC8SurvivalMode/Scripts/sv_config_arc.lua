@@ -449,13 +449,14 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     -- "static" (the A/B of 2026-11-23 decides it) or "skeletal" (SK_ twin, painted, no glow)
     -- ((2026-11-23, the A/B run: both rocks drew, the static tail on the cloud lightning material didn't) skeletal, on the
     -- rocks' gear material with its gradient, the gear's light-emissive slots tried for a glow (EmissiveLightMap on UV 1)
+    -- ((2026-11-24) Ctrl_All_Emissive 1 -> 60: the gear master's EmissiveLightMap (UV 1: our gradient) times it, to glow
     tail = { enabled = true, mesh = "Tail", component = "skeletal", scale = 1.0, length_x = 4.5,
              paint = { parent = "/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear",
                        tex = { Basecolor = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Tail_D",
                                EmissiveLightMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Tail_D",
                                Normalmap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_FlatN",
                                Livemap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Rock_L" },
-                       scalars = { Ctrl_All_Emissive = 1, Ctrl_LandinglightEmissive = 1, Landinglight_Emissive_Intensity = 400,
+                       scalars = { Ctrl_All_Emissive = 60, Ctrl_LandinglightEmissive = 1, Landinglight_Emissive_Intensity = 400,
                                    Turbine_speed = 0, PlayerPlane_Damage = 0 },
                        vectors = { Landinglight_Emissive_Color = { 1.0, 0.55, 0.15 } } },
              -- ((2026-11-24) a fire glow round the streak: the same mesh radius_x wider, on AC8's additive glow (VALKA's portal
