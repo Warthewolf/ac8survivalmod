@@ -181,6 +181,49 @@ if [ -n "$z" ]; then
     keysoff "$z" && r=0 || r=1
     check $r "FRIENDS=1 TANI=1: no test keys (sv_main.lua's cut, testKey() binds nothing)"
 fi
+# ((2026-11-23) the public zip WITH THE TANACORN (PUBLIC=1 TANI=1, the user: "Everything of hers"): her container, the
+# voices, the storm, round 30's subtitles and her lasers' Laser7, no ZFA-44, no test keys, no Distant Thunder, the public name
+rm -f "$F/out"/*.zip
+(cd "$F" && env RELEASE_DIR="$F/out" SV_LB_REGISTER=0 PUBLIC=1 TANI=1 sh tools/package_release.sh online 9.9.11) \
+    > "$T/tani_public.txt" 2>&1 && r=0 || r=1
+z=$(ls "$F/out"/AC8SurvivalMode_9.9.11_Online.zip 2>/dev/null | head -n 1)
+[ -n "$z" ] || { r=1; tail -n 8 "$T/tani_public.txt"; }
+check $r "PUBLIC=1 TANI=1: packaged under the public name, AC8SurvivalMode_9.9.11_Online.zip"
+if [ -n "$z" ]; then
+    holds "$z" SurvivalMode_Tani_P && holds "$z" SurvivalMode_P && holds "$z" SurvivalMode_Laser7_P && r=0 || r=1
+    check $r "PUBLIC=1 TANI=1: her container, Survival's own and her lasers' Laser7 in it"
+    holds "$z" SurvivalMode_ZFA44_P && r=1 || r=0
+    check $r "PUBLIC=1 TANI=1: no ZFA-44 container"
+    novoice "$z" && r=1 || r=0
+    check $r "PUBLIC=1 TANI=1: THE TANACORN's crew voices in it"
+    onlyc "$z" && r=0 || r=1
+    check $r "PUBLIC=1 TANI=1: style C only"
+    holds "$z" SurvivalMode_StormFx_P && holds "$z" SurvivalMode_StormBurst_P && r=0 || r=1
+    check $r "PUBLIC=1 TANI=1: the fleet storm's cloud bursts in it"
+    keysoff "$z" && r=0 || r=1
+    check $r "PUBLIC=1 TANI=1: no test keys"
+    # (its Lua keeps the storm pieces the fleet's storm calls (sv_anomalies_dev.lua's THUNDER bolts and clouds, the round
+    # cut since 2026-11-18): no way to start the round, and nothing of it a player sees in the ini)
+    python -I -c "
+import re, sys, zipfile
+z = zipfile.ZipFile(sys.argv[1])
+r = lambda end: next((z.read(n).decode('utf-8', 'replace') for n in z.namelist() if n.endswith(end)), '')
+ini = r('/config/survival.default.ini')
+lua = ''.join(z.read(n).decode('utf-8', 'replace') for n in z.namelist() if n.endswith('.lua'))
+bad = []
+if re.search(r'^\s*\[thunder\]|IFF FATAL ERROR|DI\.\.ANT', ini, re.M): bad.append('the ini names it')
+if re.search(r'SPC\.kinds\.thunder\s*=', lua): bad.append('its round kind is registered')
+print(*bad, sep=chr(10)) if bad else None
+sys.exit(1 if bad else 0)" "$z" > "$T/tani_public.thunder.txt" && r=0 || r=1
+    check $r "PUBLIC=1 TANI=1: no Distant Thunder round or ini section (only the fleet storm's pieces)"
+    [ $r = 0 ] || cat "$T/tani_public.thunder.txt"
+fi
+for v in "PUBLIC=1" "PUBLIC=1 FRIENDS=1 TANI=1" "PUBLIC=1 TESTER=1 TANI=1"; do
+    rm -f "$F/out"/*.zip
+    (cd "$F" && env RELEASE_DIR="$F/out" SV_LB_REGISTER=0 $v sh tools/package_release.sh online 9.9.12) > "$T/public_bad.txt" 2>&1 && r=1 || r=0
+    [ -z "$(ls "$F/out"/*.zip 2>/dev/null)" ] || r=1
+    check $r "$v: refused, no zip"
+done
 for v in "FRIENDS=1" "FRIENDS=1 TESTER=1 TANI=1"; do
     rm -f "$F/out"/*.zip
     (cd "$F" && env RELEASE_DIR="$F/out" SV_LB_REGISTER=0 $v ZFA=1 sh tools/package_release.sh online 9.9.10) > "$T/friends_bad.txt" 2>&1 && r=1 || r=0

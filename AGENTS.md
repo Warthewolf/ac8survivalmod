@@ -106,10 +106,11 @@ build's notes: `HISTORY.md` (grep it).
   mod as the source of an enemy change. The exceptions the user granted are listed in
   `docs/rules/sources_and_toolchain.md`: read it before using any outside asset. Other people's pull requests need the
   user's yes, each one. Never AC7 voice lines, but for the Tanacorn crew's distorted lines (the exception there).
-- **Release builds exclude** everything of DISTANT THUNDER and THE TANACORN (and her INVINCIBLE FLEET): their Lua stays
-  in `TEST ONLY` / `DEV ONLY` blocks, their assets in their own containers (`tools/checks/zip_leak_test.sh` fails a zip
-  that leaks them). Test keys never ship. The one exception: the ..._TANACORN zips for her tester and friends
-  (`TESTER=1` / `FRIENDS=1` with `TANI=1`, round 30 for everyone; `docs/rules/sources_and_toolchain.md`), never Nexus.
+- **Release builds exclude** everything of DISTANT THUNDER (retired): its Lua stays in `TEST ONLY` / `DEV ONLY` blocks
+  (`tools/checks/zip_leak_test.sh` fails a zip that leaks it). Test keys never ship. THE TANACORN and her INVINCIBLE
+  FLEET are in every release since 0.75.60 (the user, 2026-11-23: "Everything of hers", the Iowa hull and the AC7 crew
+  voices included): the public zip is `PUBLIC=1 TANI=1 package_release.sh` on a `TANI=1` build; the tester's and
+  friends' zips as before (`docs/rules/sources_and_toolchain.md`).
 - **No machine path in the repo.** A path that differs per machine (game, UE, AC7 exports, work folder, tool exe, main
   tree) is never written into a tool, script, doc or this file. Tools read it from `.env` (from `.env.example`; shell:
   `. tools/env.sh` then `sv_need NAME "what"`; Python: `env.need('NAME', 'what')`); paths inside the repo come from git
@@ -128,16 +129,16 @@ build's notes: `HISTORY.md` (grep it).
 ## 6. Release (what "make a release" means)
 When the user says "release", "publish", "make the zip" or "ship it", do all of this, in order, without asking again:
 1. On `dev`, everything merged, `git status` clean (finish Step 8 for any open branch first).
-2. `python -I tools/bump_version.py`, then `sh tools/build_all.sh` (must pass).
-3. `sh tools/package_release.sh online <version>` (friends' co-op zip: `BUILD_NAME=COOP2MP COOP=1 ...`, with `ZFA=1`
+2. `python -I tools/bump_version.py`, then `TANI=1 ZFA=1 sh tools/build_all.sh` (must pass; tools/tanicorn/build.sh first).
+3. `PUBLIC=1 TANI=1 sh tools/package_release.sh online <version>` (friends' co-op zip: `BUILD_NAME=COOP2MP COOP=1 ...`, with `ZFA=1`
    `SONG=1` as the build has them; the user's own install: `sh tools/package_dev.sh <version>`, which never pushes).
    The zip goes to the main tree's `build/release`; `<zip>.buildhash.txt` is registered on the leaderboard by the script.
    Say clearly if the registration was skipped.
 4. **Write the release notes** in `<release folder>/RELEASE_NOTES_<version>.md` (the folder is where the zip went; not in
    the repo). They are public, for players: a short plain description of what changed since the last release, in
    groups (New / Changed / Fixed), a line each, no file names, no internal jargon. Build them from
-   `git log v<previous version>..dev` and this build's entry in `HISTORY.md`. Never mention Distant Thunder, THE
-   TANACORN, the Invincible Fleet or anything dev-only (the script refuses notes that do), nor another mod.
+   `git log v<previous version>..dev` and this build's entry in `HISTORY.md`. Never mention Distant Thunder or
+   anything dev-only (the script refuses Distant Thunder), nor another mod.
 5. **Push to `main` and publish: `sh tools/release_push.sh <version>`.** It refuses unless the tree is clean, you are
    on `dev`, the notes and the zip exist and the version is new; then it pushes `dev`, puts `dev` on `main`
    (fast-forward only), tags `v<version>`, and creates the GitHub Release (the Releases section) with the notes and the

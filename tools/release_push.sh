@@ -47,11 +47,13 @@ notes="$REL/RELEASE_NOTES_$ver.md"
 [ -s "$notes" ] || fail "no release notes: write what changed (plain words) in $notes first (AGENTS.md section 6)"
 # (one -E pattern: Git for Windows' grep aborts (exit 134) on -i with several -e, which `if grep` read as "not found")
 set +e
-grep -n -i -E 'thunder|tanicorn|tanacorn|invincible fleet' "$notes"
+# ((2026-11-23) the user: "tanacorn gets merged into the public release", "Everything of hers": THE TANACORN and her fleet
+# are in the public release; only DISTANT THUNDER (retired) never is)
+grep -n -i -E 'distant thunder|lightning anomaly' "$notes"
 rc=$?
 set -e
-[ "$rc" -eq 0 ] && fail "the notes name Distant Thunder / Tanacorn / the Fleet: they are never in a release (AGENTS.md section 5); take them out"
-[ "$rc" -eq 1 ] || fail "the check of the notes for Distant Thunder / Tanacorn failed (grep exit $rc): nothing pushed"
+[ "$rc" -eq 0 ] && fail "the notes name Distant Thunder: it is never in a release (AGENTS.md section 5); take it out"
+[ "$rc" -eq 1 ] || fail "the check of the notes for Distant Thunder failed (grep exit $rc): nothing pushed"
 tag="v$ver"
 git rev-parse -q --verify "refs/tags/$tag" >/dev/null && fail "tag $tag already exists: a new build needs a new version (tools/bump_version.py)"
 
