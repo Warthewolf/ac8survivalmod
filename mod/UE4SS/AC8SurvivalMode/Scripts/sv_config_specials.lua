@@ -268,15 +268,20 @@ CFG.specials = {
                                              "VALKA|I'm tired. I'm going to make it quiet.",
                                              "AUDREY|Val, no. Whatever you're thinking, don't. There are people down there.",
                                              "VALKA|There always are. Rest well, all of you.",
-                                             "C|New contact, high altitude, out of nowhere. It's... huge. It's coming down.",
-                                             "AUDREY|No. No, no, no. That's the SOLG. We buried that thing. I watched its control system die in that tunnel.",
+                                             "C|New contact, high altitude, out of nowhere.",
+                                             "C|It's... huge. It's coming down.",
+                                             "AUDREY|No. No, no, no. That's the SOLG. We buried that thing.",
+                                             "AUDREY|I watched its control system die in that tunnel.",
                                              "AUDREY|Val, where did you get it?! ...Stars, she's not listening.",
-                                             "AUDREY|Pilots, it's falling on the spaceport. Strip the solar arrays and the panels first, then the shells, then the cores. Shoot it apart!" } },
+                                             "AUDREY|Pilots, it's falling on the spaceport.",
+                                             "AUDREY|Strip the solar arrays and the panels first,",
+                                             "AUDREY|then the shells, then the cores. Shoot it apart!" } },
                                   solg_down = { { "AUDREY|It's breaking up... It's gone. You did it.",
                                                   "VALKA|...You stopped it.",
                                                   "AUDREY|They did, Val. It's over. Come home.",
                                                   "VALKA|Not yet." } },
-                                  solg_hit = { { "C|Impact at the spaceport! The shockwave's hit the airfield. Runways closed!",
+                                  solg_hit = { { "C|Impact at the spaceport! The shockwave's hit the airfield.",
+                                                 "C|Runways closed!",
                                                  "AUDREY|Twice. I watched that thing fall twice...",
                                                  "AUDREY|Val... what have you done.",
                                                  "VALKA|What I said I would." } } } },
@@ -447,8 +452,9 @@ CFG.specials = {
                  -- +- corner_km), alt_km up, and falls on the pad in travel_s. Destroyed: reward, solg_down; on the pad:
                  -- Mission 25's blast (hit_fx), the airfield down for a round, solg_hit. Either way she's back back_s on
                  -- (onto your six through a portal) at at_pct, to be shot down
-                 -- ((2026-11-23) call_s 62 (was 18): the user's Audrey briefing is 16 lines (~4 s each): the SOLG comes once she's done
-                 solg = { enabled = true, at_pct = 20, call_s = 62, corner_km = 30, alt_km = 12, travel_s = 360,   -- (Gould's 6 min)
+                 -- ((2026-11-23) call_s 62 (was 18): the user's Audrey briefing is 16 lines (~4 s each): the SOLG comes once she's done;
+                 -- 78 since its 4 longest lines were split to fit the strip (70 characters): 4 more lines, 16 s
+                 solg = { enabled = true, at_pct = 20, call_s = 78, corner_km = 30, alt_km = 12, travel_s = 360,   -- (Gould's 6 min)
                           pad_cm = { -1325196, 59778, 0 }, portal_size_m = 2600, portal_back_m = 1500, portal_max_s = 120, portal_at_s = 4,
                           park_km = { -40, 0, 15 },   -- (where she waits while it's up: from the pad, km along x, y, up)
                           reward = 3000, back_s = 12, wreck_s = 25, marker = true,   -- (its pieces ~4,900 more: sv_solg.lua)
