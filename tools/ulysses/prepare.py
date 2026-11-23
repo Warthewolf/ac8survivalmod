@@ -49,7 +49,9 @@ COLOUR, RELIEF = 0x2000457c, 0x2000460f
 # where the rock's centre sits; it tapers to a point TAIL_M behind. U runs along it (0 head, 1 tail), V round it.
 TAIL_M, HEAD_R, SIDES, RINGS, CAP = 24.0, 1.0, 16, 12, 3
 # its colour along U (sRGB values; alpha 1 at the head to 0 at the tail, for a translucent parent)
-TAIL_KEYS = [(0.0, (1.0, 0.97, 0.9)), (0.25, (1.0, 0.6, 0.15)), (0.6, (0.6, 0.08, 0.02)), (1.0, (0.02, 0.005, 0.0))]
+# ((2026-11-24, the 0.75.76 shots: the heads read as solid cream tubes) a burning head: yellow-orange, not white
+TAIL_KEYS = [(0.0, (1.0, 0.82, 0.42)), (0.15, (1.0, 0.55, 0.12)), (0.45, (0.85, 0.2, 0.03)), (0.75, (0.35, 0.05, 0.01)),
+             (1.0, (0.03, 0.01, 0.0))]
 
 
 def tail_mesh():
