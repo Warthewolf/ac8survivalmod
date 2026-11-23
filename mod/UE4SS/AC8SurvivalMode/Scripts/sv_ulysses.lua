@@ -140,7 +140,7 @@ local function placeAt(c, L, rot)                         -- (a whole rotation t
     return pcall(function() c:K2_SetWorldTransform({ Rotation = quatOf(rot), Translation = { X = L.X, Y = L.Y, Z = L.Z },
         Scale3D = c:GetComponentScale() }, false, {}, true) end)
 end
-local function rock(key, at, vel, scale, spin, tailX)
+local function rock(key, at, vel, scale, spin, tailX, trails)
     local m = mesh(key)
     -- ((2026-11-23) its own streak behind it: the rock faces along its fall (+X forward), its spin a roll about that line)
     local hz = math.sqrt(vel.X * vel.X + vel.Y * vel.Y)
@@ -217,7 +217,7 @@ local function rock(key, at, vel, scale, spin, tailX)
     end
     local lib = StaticFindObject("/Script/Niagara.Default__NiagaraFunctionLibrary")
     TRAILOK = 0
-    for _, t in ipairs(cfg().trails or {}) do                  -- (its smoke, its fire, the rod's streak)
+    for _, t in ipairs(trails or cfg().trails or {}) do        -- (its smoke and its fire; trails: a test's own)
         local sys = SPC and SPC.V and SPC.V.asset and SPC.V.asset(t.path)
         if valid(lib) and sys then
             local ts = n(t.scale, 6) * math.max(0.5, scale)
@@ -852,6 +852,9 @@ end
 function ULY.debug() return U, SKYM, FILM end                  -- (the tests')
 
 -- TEST ONLY BEGIN (ULYSSES' test key: test builds only)
+-- ((2026-11-24, the user: "Shouldn't their smoke trail be thicker") the autotest's trail line-up: one rock a candidate
+ULY.testRock = function(key, at, vel, scale, trails) return rock(key, at, vel, scale, 20, 1, trails) end
+ULY.testRockOff = function(r) rockOff(r) end
 -- Ctrl+Q: the next round is ULYSSES (phase 1; again: phase 2, then off); its log says which
 testKey("Q", "sv_ulysses.lua's ULYSSES round", function()
     if not D then log("test: Ctrl+Q: no run"); return end
