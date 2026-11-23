@@ -4190,3 +4190,8 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   first without her, the second without the ZFA-44). 0.75.61: AC8SurvivalMode_0.75.61_Online.zip (42a36ee3) and the
   friends' / tester's ..._TANACORN zips (595daae6 / f5716f91), registered; zip_leak_test all passed. INSTALLED 2026-11-23
   (the public zip; backup build/backup/install_before_0.75.61; 164 files verified). Pushed to main as v0.75.61.
+- 0.75.62 (2026-11-23): THE DEAL in every build (the user: "put war and haythorn into the public build. it worked"; its
+  co-op to be tried by her): its DEV ONLY markers off, its setup and kept event outside the Tanacorn's blocks, dev_only.py no
+  longer cuts it, deal_test checks every copy keeps it whole. AC8SurvivalMode_0.75.62_Online.zip (d8ca05c6; THE DEAL, the
+  Tanacorn, the ZFA-44) and the friends' / tester's ..._TANACORN zips (45732c5e / f6fccbcf), registered. INSTALLED 2026-11-23
+  (backup build/backup/install_before_0.75.62; 164 files verified). Pushed to main as v0.75.62.
