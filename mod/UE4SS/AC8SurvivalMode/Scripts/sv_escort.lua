@@ -737,6 +737,22 @@ local function stepAc(S, A, now)
             log(string.format("escort: %s %.1f km from the touchdown: her route at 600 km/h (%sCruiseSlow %s), %d escorts on their routes with her",
                 A.name, d2(r.at, td) / 1000, A.rec, ok and "fired" or "NOT fired", n))
         end
+        -- ((2026-11-23) the user: "Charlene bugged out": her 4-player run of 0.75.64 left her route ~35 km out and flew
+        -- 15 minutes off it, 27 km aside) her route watched: no nearer the approach fix by stall_m in stall_s, the route
+        -- given again (<rec>CruiseSlow: the same path at the same speed, which an aircraft goes on along), at most
+        -- reroute_max times; her place logged every track_route_s, for the next report
+        if S.t >= (A.routeLogAt or 0) then
+            A.routeLogAt = S.t + num(L.track_route_s, 10)
+            log(string.format("escort: route: %s %s, %.1f km from the approach fix", A.name, where(A), A.iafD / 1000))
+        end
+        if not A.progAt or A.iafD < A.progD - num(L.stall_m, 1500) then A.progD, A.progAt = A.iafD, S.t end
+        if S.t - A.progAt >= num(L.stall_s, 40) and (A.rerouted or 0) < num(L.reroute_max, 6) then
+            A.rerouted, A.progD, A.progAt = (A.rerouted or 0) + 1, A.iafD, S.t
+            local ev = A.rec .. "CruiseSlow"
+            log(string.format("escort: %s off her route (no %.1f km nearer the approach fix in %d s, %.1f km from it): %s %s, "
+                .. "her route given again (%d of %d); %s", A.name, num(L.stall_m, 1500) / 1000, math.floor(num(L.stall_s, 40)),
+                A.iafD / 1000, ev, fire(ev, A.name) and "fired" or "NOT fired", A.rerouted, math.floor(num(L.reroute_max, 6)), where(A)))
+        end
         local passed = prevIaf and A.iafD > prevIaf + 1 and A.iafD <= 4000
         if A.iafD <= num(L.final_at_m, 2000) or passed or S.t - A.since >= num(L.route_max_s, 900) then
             goStep(S, A, "final", A.iafD <= num(L.final_at_m, 2000) and string.format("%.0f m from the approach fix", A.iafD)

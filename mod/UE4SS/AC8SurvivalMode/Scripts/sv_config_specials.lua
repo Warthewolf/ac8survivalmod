@@ -853,8 +853,9 @@ CFG.specials = {
                -- go_delay_s after its spawn
                start = { x = -4110000, y = 3140000, z = 300000, heading = 55, go_delay_s = 1.0 },
                reward = 8000, reward_per_round = 300,
-               -- the round's enemy aircraft x budget_x
-               budget_x = 1.0,
+               -- the round's enemy aircraft x budget_x ((2026-11-23) the user: "Theres still way too many ai that spawn
+               -- in the escort mission", her pick "clearly fewer": 1.0 -> 0.75; her 4-player run had 26 up at the median)
+               budget_x = 0.75,
                -- enemy flights sent after her: of the round's fighter flights (not an ace squadron's, a bomber, the
                -- jammer's or a raid escort) up after_s, `share` of them (at most `max` at once) get each plane's
                -- EngagementOrderOverride onto her (Normal, TargetFirst), again every again_s, kept out of the squad
@@ -871,8 +872,10 @@ CFG.specials = {
                -- a wave every every_s (the first first_s after her spawn) of min_n .. max_n aircraft (free pool flights:
                -- 2-, 4- and 6-ships, one shot down flies again), from one of eight directions round her, never the last
                -- wave's nor one next to it (km out, its flights spread_deg apart, alt_m up); held while max_up enemy
-               -- aircraft are up; max_waves 0: no limit. Each goes after her (attack)
-               waves = { enabled = true, first_s = 20, every_s = 45, min_n = 4, max_n = 12, max_up = 24, max_waves = 0,
+               -- aircraft are up; max_waves 0: no limit. Each goes after her (attack). ((2026-11-23) the user: "way too
+               -- many ai", her pick "clearly fewer": every_s 45 -> 75, max_n 12 -> 7, max_up 24 -> 16; with 4 players
+               -- (COOP.more) waves of 6-10 (were 6-17) and 23 up at most (were 30: her run sat at the cap); solo as before)
+               waves = { enabled = true, first_s = 20, every_s = 75, min_n = 4, max_n = 7, max_up = 16, max_waves = 0,
                          solo = { every_s = 60, min_n = 2, max_n = 8, max_up = 14 },
                          km = { 12, 16 }, spread_deg = 12, alt_m = { 2500, 4000 } },
                -- the escorts on her attackers: every every_s each escort's planes onto an enemy near her (within km of her).
@@ -915,9 +918,17 @@ CFG.specials = {
                -- she's landed, each one still up counted as landed (switched off when flying) and the escort won; one
                -- landed that flies again (climb_off_m over the runway or faster than climb_off_kmh: CHARLENE had climbed
                -- away from her taxi to 925 m) switched off
+               -- ((2026-11-23) the user: "Charlene bugged out": her 4-player run of 0.75.64 left her route ~35 km out
+               -- under attack and flew 15 minutes off it (27 km aside, 5.4 km up) until route_max_s, then circled up to
+               -- ~12 km on her final until everyone was down) Her route watched: no nearer the approach fix by stall_m
+               -- in stall_s, her route given again (<rec>CruiseSlow: the same path at the same speed, which an aircraft
+               -- goes on along), at most reroute_max times; her place logged every track_route_s on her route; route_max_s
+               -- 900 -> 480 (her route took 297 s in the run of 15:01 that landed) and land_timeout_s 480 -> 300 (that
+               -- final took 132 s), so a lost route can't hold the round for 20 minutes
                landing = { final_at_m = 2000, roll_at_m = 350, taxi_at_m = 150, taxi_kmh = 70, stop_at_m = 60,
                            landed_kmh = 5, landed_hold_s = 2, roll_max_s = 90, taxi_max_s = 90, stop_max_s = 20,
-                           land_timeout_s = 480, route_max_s = 900, max_s = 1500, release_gap_s = 15, inbound_max_s = 120,
+                           land_timeout_s = 300, route_max_s = 480, max_s = 1500, release_gap_s = 15, inbound_max_s = 120,
+                           stall_m = 1500, stall_s = 40, reroute_max = 6, track_route_s = 10,
                            ahead_deg = 60, hold_max_s = 0, circuit_min_m = 800, circuit_max_m = 6000,
                            circuit_nose_deg = 50, circuit_hdg_deg = 75, final_leg_m = 700, close_km = 5, reopen_s = 5,
                            track_s = 3, recover_m = 800, recover_gap_s = 20, recover_max = 3,
