@@ -103,9 +103,15 @@ def build_radio():
     src_t, src_k, src_g = survival_events.DEAL_RADIO_SOURCE
     z8 = ZenPkg(stock(src_t))
     d8, _ = dtx.parse(uprop.Ctx(bytes(z8.payloads[0]), z8.names), 0, 'LiveRadioTable')
-    row = copy.deepcopy(dict(d8['rows'])[(src_k, 0)])
-    assert full(field(row, 'RadioGroupID')) == src_g and field(row, 'bUseYesNoSubtitle') == ('raw', 'Bool', b'\x01'), src_k
-    assert not any(q[3] and q[3][0] == 'obj' for q in row[2]), 'the question row holds an object'
+    q8 = dict(d8['rows'])[(src_k, 0)]
+    assert full(field(q8, 'RadioGroupID')) == src_g and field(q8, 'bUseYesNoSubtitle') == ('raw', 'Bool', b'\x01'), src_k
+    # ((2026-11-23, the 5th autotest: Mission 8's row cloned never played; THE DECOY's lines, on row 382, did) the tells'
+    # row 382 with only the question's own fields (YesNoID, bUseYesNoSubtitle: Mission 8's question row's) and its line
+    row = copy.deepcopy(tpl)
+    setf(row, 'TextID', field(q8, 'TextID'))
+    ridx = {n: k for k, (n, t) in uprop.U.schema('LiveRadioTable').items()}
+    def put(r, n, v): set_prop(r[2], ridx[n], n, v)           # (a field row 382 may not carry: added)
+    put(row, 'bUseYesNoSubtitle', ('raw', 'Bool', b'\x01'))
     grp = survival_events.DEAL_RADIO_GROUP
     assert grp not in have
     voiced = copy.deepcopy(row)
@@ -115,7 +121,8 @@ def build_radio():
     flags_on = sum(1 for q in row[2] if q[1].startswith('bM') and q[1][2:].isdigit() and q[3] == ('raw', 'Bool', b'\x01'))
     setf(row, 'RadioGroupID', survival_events.fname(grp))
     setf(row, 'TextID', survival_events.fname(survival_events.DEAL_RADIO_TEXT))
-    setf(row, 'YesNoID', survival_events.fname(survival_events.DEAL_QUESTION))
+    put(row, 'YesNoID', survival_events.fname(survival_events.DEAL_QUESTION))
+    assert field(row, 'YesNoID') == survival_events.fname(survival_events.DEAL_QUESTION) and field(row, 'bUseYesNoSubtitle') == ('raw', 'Bool', b'\x01')
     setf(row, 'LimitPlayCount', ('raw', 'Int8', b'\x00'))
     for n in names_in(row) + [grp, survival_events.DEAL_RADIO_TEXT, survival_events.DEAL_QUESTION]: z.nb.add(n)
     keep.append(((grp, 0), row))
@@ -125,7 +132,8 @@ def build_radio():
         if q[1].startswith('bM') and q[1][2:].isdigit():
             setf(voiced, q[1], q[3])
     setf(voiced, 'RadioGroupID', survival_events.fname(vgrp))
-    setf(voiced, 'YesNoID', survival_events.fname(survival_events.DEAL_QUESTION))
+    put(voiced, 'YesNoID', survival_events.fname(survival_events.DEAL_QUESTION))
+    assert field(voiced, 'YesNoID') == survival_events.fname(survival_events.DEAL_QUESTION) and field(voiced, 'bUseYesNoSubtitle') == ('raw', 'Bool', b'\x01')
     setf(voiced, 'LimitPlayCount', ('raw', 'Int8', b'\x00'))
     assert full(field(voiced, 'TextID')) + '_Play' in voice, 'the voiced twin has no voice'
     for n in names_in(voiced) + [vgrp]: z.nb.add(n)
