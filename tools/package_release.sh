@@ -183,7 +183,9 @@ if [ "$NOSPACEPORT" = 1 ]; then
     python -X utf8 -I tools/nospaceport.py "$mod"
     suffix=${suffix}_NoSpaceport
 fi
-[ "$ZFA" = 1 ] && suffix=${suffix}_ZFA44
+# ((2026-11-23) the user: "why did the ZFA-44 stay out!!??": the public zip carries her own ZFA-44 too: PUBLIC=1 TANI=1
+# ZFA=1, under the public name, no _ZFA44)
+[ "$ZFA" = 1 ] && [ "$PUBLIC" != 1 ] && suffix=${suffix}_ZFA44
 sed "s/{EDITION}/$Ed/; s/{DATE}/$(date +%Y-%m-%d)/; s/{LUA}/$lua/; s/{RT}/$rt/" release/README.txt > "$st/README.txt"
 if [ "$COOP" = 1 ]; then
     python -X utf8 -I tools/coop_edition.py "$st" "$mod"
