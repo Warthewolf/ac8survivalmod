@@ -1,0 +1,68 @@
+# ULYSSES: a special round back in July 1999 (2026-11-23)
+
+The user: "Recreate the Ulysses Event from Strangereal, I want it to be A Special Round where we go back in time for a few
+rounds". Her picks: pure meteor defence (no enemy aircraft), 2 rounds, a time-shift transition, a film look, AC:I's
+meteors and Stardust sounds (her exception: docs/rules/sources_and_toolchain.md), "Meteors that fly over head a high
+altitude during the mission too", "directly after the Festival Night during the early morning just as the Sun is rising".
+Code: Scripts/sv_ulysses.lua (CFG.specials.ulysses in sv_config_arc.lua). Assets: tools/ulysses (build.sh, prepare.py,
+ue_import.py: the container SurvivalMode_Ulysses_P; sounds.py: Sounds/ulysses). Test: tools/checks/ulysses_test.sh.
+Tags: [D] decoded / in code, [I] inferred, [T] needs an in-game test.
+
+## 1. When
+Never drawn (sv_spawn.lua specialFor, right after THE FESTIVAL's): the day-night arc's first dawn rounds, F + 7 +
+CFG.sky.arc.night_rounds (+ dawn_offset), `rounds` (2) of them. With GONE FISHIN' in round 9 (F) and 3 night rounds:
+the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the core) [D: ulysses_test].
+
+## 2. The round
+- No fighters (`alone`, aircraft 0): only fragments. busy until every fragment is shot down or landed (and the core sent).
+- Fragments: round1 16 / round2 20 (solo x0.8; co-op + 0.15 a player past the first, at most 34), one every 4-8 s (the
+  first 8 s in), at most 6 falling; each from 26-34 km out, 9-12 km up, at 1100-1500 km/h onto the airfield (60 %) or a
+  town (40 %), 2.5 km spread.
+- Round 2's core: o_meta (~97 m) 45 s in, from 48 km, 16 km up, 650 km/h onto the airfield; 4000 HP (solo x0.7).
+- Shot down (its target at its floor, MinHealth 1: read back, hard rule 63's way): blown up, paid (fragments.pay 300 /
+  big.pay 6000, x specialPay), LB stat ulysses_fragment / ulysses_core. Landed: blown up where it hits; the airfield's
+  damage through AF.bomb (8 a fragment, 120 the core), a town's: a callout.
+- The sky's meteors (scenery): one every 1.5-4 s, 15-25 km up, crossing the sky past you at 9000-16000 km/h, 18 s each.
+- The time shift: a fade in from white and the card JULY 1999 at round 1; at round 2's end the fade, PRESENT DAY.
+- The film look: a PostProcessVolume of ours (unbound, priority 1000): saturation 0.55, a warm tint, film grain 0.45,
+  vignette 0.55, faded in / out over 2 s [T: whether AC8's own post-process lets it through; its line says how many of
+  its 4 settings were written].
+- Lines (subtitles.ini specials.ulysses.text.say.*): COMONA CONTROL at the start, the core, home.
+
+## 3. How a fragment is made [D in code, T in game]
+- An Actor of ours (the SOLG's newActor), a SkeletalMeshComponent with SK_SV_Ulysses_<A|C|D> (one bone ROCK; a static mesh of
+  ours crashed the SOLG's test T0, a skeletal one drew), painted at run time: one dynamic instance of the x40a's gear
+  material with T_SV_Ulysses_Rock_D / _N / _L (as sv_solg.lua paint), a RotatingMovement spin, a ProjectileMovement at
+  its velocity (no gravity: its fall needs no tick), AC8's NS_DamagedSmokeFireNPC001 attached as its fire trail.
+- Its target box: one of the SOLG's target objects (SV_Unit_SOLG_KEW for fragments, SV_Unit_SOLG_MAG for the core:
+  Mission 4's radar tower base, enemy, TGT mark) spawned at the round's start, its meshes hidden, parked, its flags off;
+  attached to the rock when it falls (its lock point onto the rock), its flags on, its health set; off and parked again
+  when it's done. Its boxes read "ULYSSES" / "FRAGMENT" / "ULYSSES CORE" (SV_SetText on the SOLG's keys; the SOLG's own
+  put back at the round's end: the two never come together). sv_rounds.lua finishes the two units off at its end.
+- Assets (tools/ulysses, from AC:I): SK/SM_SV_Ulysses_A (o_meta 96.9 x 68.1 x 53.5 m), _C (o_metc 5.8 x 6.5 x 6.4 m),
+  _D (o_metd 2.9 x 3.2 x 3.2 m), 644 triangles each (the same rock at three sizes). o_metb has no mesh in AC:I (a node
+  tree and cutscene clips), o_metx a one-triangle placeholder, o_metc_d1..d4 the whole rock again: none built.
+- Sounds (tools/ulysses/sounds.py, Survival's own XAudio2 player): fall_small (OBJ_FALL_STARTDUST_SMALL, looped on each
+  fragment, moving), fall_big (the core's), explosion (Stardust_EXPL_*), encounter (Stardust_Encounter, at the start).
+
+## 4. Co-op
+The host's (or solo): the fragments, their targets, pay and damage. Joiners see the borrowed targets (the host's units)
+and run their own sky meteors and film look; the rocks themselves are drawn on the host only (to do: an "ul" message for
+each fragment's spawn so each game draws it).
+
+## 5. Log lines
+`ulysses: round N: phase P of 2, K fragments[, the core at +45 s]; the film look on (4 of 4 settings written)`,
+`ulysses: targets: SV_Unit_SOLG_KEW up, 36 objects borrowed`, `ulysses: paint: the rock's instance made, 5 textures in`,
+`ulysses: a fragment shot down X s before it would have hit (Z km up), paid N`,
+`ulysses: a fragment landed on the airfield (x, y km): the airfield -8`, `ulysses: the core inbound: up, lands in T s`,
+`ulysses: round N over: S of T fragments shot down, A landed on the airfield, B on the town`.
+Test key: Ctrl+Q (TEST ONLY): the next round ULYSSES, phase 1; again phase 2; again off.
+
+## 6. Test checklist (her run)
+1. Ctrl+Q, the next round: the white fade, JULY 1999, the film look (washed-out, warm, grainy), Comona Control's lines.
+2. Fragments: rocks visible and painted, a fire trail, falling toward the airfield / town, a target box FRAGMENT on each,
+   lockable, shot down (an explosion, pay); one left alone lands (an explosion, the airfield's health down).
+3. Overhead: meteors streaking high across the sky.
+4. Ctrl+Q twice, the next round: phase 2, the core 45 s in (ULYSSES CORE box), shot down or landing.
+5. The round's end: the fade, PRESENT DAY, the film look gone, the sky's meteors gone.
+6. In a run, round 19-20 after the festival's night: it comes by itself at dawn.

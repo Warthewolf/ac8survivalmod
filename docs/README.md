@@ -35,7 +35,7 @@ Where to look. Project rules for the AI agents stay in `../AGENTS.md` (read firs
 | Co-op | `COOP`, `COOP2MP`, `NETCODE_REPORT` |
 | Map, sky, night | `COMONA_MAP`, `WEATHER_DAYNIGHT`, `NIGHT_SKY`, `NIGHT_SEA_LIGHTS` |
 | Audio, radio, look | `MUSIC_RADIO_CAMERA`, `MUSIC_BANKS`, `RADIO_LOCALISATION`, `HELIOS_VFX`, `AIRCRAFT_MATERIALS`, `FALKEN_MATERIALS` |
-| Special rounds | `SPACEPORT_ASSAULT`, `ESCORT`, `DECOY`, `FISHING` (also the day-night arc and THE FESTIVAL), `THUNDER` |
+| Special rounds | `SPACEPORT_ASSAULT`, `ESCORT`, `DECOY`, `FISHING` (also the day-night arc and THE FESTIVAL), `THUNDER`, `ULYSSES` |
 | Bosses and ports | `ALICORN`, `VALKA`, `ZFA44`, `LASER_INTERCEPTOR`, `TANICORN` (our own ship boss: assembly, moving parts, weapon mounts, build plan) |
 | Native runtime | `STONEHENGE_MAIN_DLL`, `LAG` (the host's cost over a long run: the spawner's lookups, ALIVE's budget, the round clear's repair, the ESM fields, the log bundle's UE4SS.log copy) |
 
