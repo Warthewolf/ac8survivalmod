@@ -6,7 +6,7 @@
 --   ULY.roundIs(round)      its rounds: the arc's first dawn rounds (F + 7 + night_rounds + dawn_offset), `rounds` of them
 --   SPC.kinds.ulysses       its kind (no fighters; busy until every fragment is down or landed; over: home again)
 --   ULY.tick(now)           every tick (sv_main.lua): fragments, the big one, the sky's meteors, the film look
--- A fragment: an actor of ours (the SOLG's way: sv_solg.lua) with AC:I's meteor mesh (SM_SV_Ulysses_<A|B|C|D|X>), an
+-- A fragment: an actor of ours (the SOLG's way: sv_solg.lua) with AC:I's meteor mesh (SK_SV_Ulysses_<A|C|D>, painted), an
 -- engine mover (ProjectileMovement: its fall needs no tick), a spin, a fire trail (AC8's), and a target box: one of the
 -- SOLG's KEW / MAG targets (Mission 4's radar tower base, hidden, held on it; the two never come together), its box
 -- "ULYSSES" over box.small / box.big while ULYSSES has them. At its floor (MinHealth: hard rule 63's way, read back) it's
@@ -74,14 +74,40 @@ local function mesh(key)
     if not MESH[path] then ul("mesh " .. path .. " didn't load (is SurvivalMode_Ulysses_P installed?)") end
     return MESH[path] or nil
 end
--- a rock: actor, AC:I's mesh at `scale`, a spin, a fire trail, an engine mover at `vel` (cm/s); -> { a, c, pm }
+-- the rock's paint: one dynamic instance of the x40a's gear material with the rock's textures (as sv_solg.lua paint)
+local PAINT = {}
+local function paintMid()
+    if PAINT.mid ~= nil then return PAINT.mid or nil end
+    local P = cfg().paint or {}
+    local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
+    local parent = P.parent and loadObject(P.parent .. "." .. P.parent:match("[^/]+$"))
+    if not (valid(kml) and parent and valid(parent)) then PAINT.mid = false; ul("paint: its parent didn't load: the rocks unpainted"); return nil end
+    local ok, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, parent, FName("None"), 0) end)
+    if not (ok and valid(mid)) then PAINT.mid = false; return nil end
+    local nT = 0
+    for slot, path in pairs(P.tex or {}) do
+        local t = loadObject(path .. "." .. path:match("[^/]+$"))
+        if t and valid(t) and pcall(function() mid:SetTextureParameterValue(FName(slot), t) end) then nT = nT + 1 end
+    end
+    for k, v in pairs(P.scalars or {}) do pcall(function() mid:SetScalarParameterValue(FName(k), v) end) end
+    PAINT.mid = mid
+    ul(string.format("paint: the rock's instance made, %d textures in", nT))
+    return mid
+end
+-- a rock: actor, AC:I's mesh at `scale` (skeletal, painted), a spin, a fire trail, an engine mover at `vel` (cm/s)
 local function rock(key, at, vel, scale, spin)
     local m = mesh(key)
     local a = newActor(at, { Pitch = 0, Yaw = math.random(0, 359), Roll = 0 })
     if not a then return nil end
-    local c = addComp(a, "/Script/Engine.StaticMeshComponent")
+    local c = addComp(a, "/Script/Engine.SkeletalMeshComponent")
     if not c then pcall(function() a:K2_DestroyActor() end); return nil end
-    if m then pcall(function() c:SetStaticMesh(m) end) end
+    if m and not pcall(function() c:SetSkeletalMeshAsset(m) end) then pcall(function() c:SetSkeletalMesh(m, true) end) end
+    local mid = paintMid()
+    if mid then
+        local slots = 1
+        pcall(function() slots = c:GetNumMaterials() end)
+        for i = 0, math.max(0, slots - 1) do pcall(function() c:SetMaterial(i, mid) end) end
+    end
     pcall(function() c:SetCollisionEnabled(0) end)
     pcall(function() c:SetWorldScale3D({ X = scale, Y = scale, Z = scale }) end)
     pcall(function() c:SetCastShadow(true) end)
@@ -341,6 +367,7 @@ function ULY.spawn(now)
     local s = D and D.special
     if not s then return false end
     if not mesh("C") then ul("its meshes aren't in this build: a normal round"); return false end
+    pcall(paintMid)
     local phase = ULY.forcedPhase or ULY.phaseOf(D.round)
     U = { phase = phase, list = {}, todo = fragmentsFor(phase), sent = 0, shot = 0, landedAirfield = 0, landedTown = 0,
           nextAt = now + n(cfg().fragments.first_s, 8), startAt = now, bigAt = nil, bigSent = false }

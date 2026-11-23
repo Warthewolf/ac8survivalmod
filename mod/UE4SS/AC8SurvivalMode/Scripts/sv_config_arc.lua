@@ -408,7 +408,7 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
                   every_s = { 4, 8 }, first_s = 8, at_once = 6,
                   -- where they come from (km from where they land, m up) and how fast (km/h, along their line)
                   from_km = { 26, 34 }, alt_m = { 9000, 12000 }, speed_kmh = { 1100, 1500 },
-                  meshes = { "C", "D", "C", "B" }, scale = { 1.0, 1.6 }, spin_dps = { 10, 45 },
+                  meshes = { "C", "C", "D" }, scale = { 1.8, 3.2 }, spin_dps = { 10, 45 },
                   health = 350, pay = 300, airfield_damage = 8,
                   aim = { airfield = 0.6, town = 0.4 }, spread_m = 2500 },
     big = { enabled = true, mesh = "A", scale = 1.0, at_s = 45, from_km = 48, alt_m = 16000, speed_kmh = 650, spin_dps = 4,
@@ -417,9 +417,20 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     towns = { { X = 1250000, Y = -320000 }, { X = 2350000, Y = -700000 } },
     -- scenery meteors high up, crossing the sky (every_s apart, alt_m up, speed_kmh, life_s)
     sky = { enabled = true, every_s = { 1.5, 4 }, alt_m = { 15000, 25000 }, from_km = { 25, 60 }, speed_kmh = { 9000, 16000 },
-            life_s = 18, meshes = { "D", "C" }, scale = { 2, 5 } },
-    -- the meshes (tools/ulysses: AC:I's o_meta / o_metb / o_metc / o_metd / o_metx)
-    mesh_path = "/Game/Mods/SurvivalMode/Ulysses/SM_SV_Ulysses_",
+            life_s = 18, meshes = { "D", "C" }, scale = { 4, 10 } },
+    -- the meshes (tools/ulysses: AC:I's o_meta ~97 m (A), o_metc ~6.5 m (C), o_metd ~3 m (D); o_metb / o_metx have no mesh in
+    -- AC:I): its one-bone skeletal copies SK_SV_Ulysses_<K> (a static mesh of ours crashed the SOLG's test T0, a skeletal
+    -- one drew: docs/re/SOLG.md 8), painted at run time as the SOLG is (paint: its rock texture as Basecolor on the x40a's
+    -- gear material, its normal and livemap in their slots)
+    mesh_path = "/Game/Mods/SurvivalMode/Ulysses/Model/SK_SV_Ulysses_",
+    paint = { parent = "/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear",
+              tex = { Basecolor = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Rock_D",
+                      Normalmap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Rock_N",
+                      Livemap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Rock_L",
+                      Detail_Normal = "/Engine/EngineMaterials/DefaultNormal",
+                      Blend_Dameged_Normalmap = "/Engine/EngineMaterials/DefaultNormal" },
+              scalars = { Ctrl_All_Emissive = 0, Turbine_speed = 0, DNormal_Strength = 0, DamegedNormal_Intencity = 0,
+                          PlayerPlane_Damage = 0 } },
     trail = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeFireNPC001", trail_scale = 6,
     fx = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" },
     fx_scale = { shot = 4, land = 10, big_shot = 18, big_land = 30 },

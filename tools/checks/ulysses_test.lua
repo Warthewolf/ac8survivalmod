@@ -79,7 +79,7 @@ check(count(2) <= f.max_n, "24 players: at most max_n")
 -- its sounds, meshes and boxes named
 local c = CFG.specials.ulysses
 check(c.sounds.fall.file == "ulysses/fall_small.wav" and c.sounds.boom.file == "ulysses/explosion.wav", "its sounds (Sounds/ulysses, tools/ulysses/sounds.py)")
-check(c.mesh_path == "/Game/Mods/SurvivalMode/Ulysses/SM_SV_Ulysses_", "its meshes (SurvivalMode_Ulysses_P, tools/ulysses)")
+check(c.mesh_path == "/Game/Mods/SurvivalMode/Ulysses/Model/SK_SV_Ulysses_", "its meshes (SurvivalMode_Ulysses_P, tools/ulysses)")
 check(c.target_units.small == "SV_Unit_SOLG_KEW" and c.target_units.big == "SV_Unit_SOLG_MAG", "its boxes: the SOLG's KEW / MAG units borrowed")
 check(src:find("TEST ONLY BEGIN", 1, true) and src:find("TEST ONLY END", 1, true), "its test key inside TEST ONLY")
 

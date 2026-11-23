@@ -102,6 +102,14 @@ if [ -f build/ulysses/out/SurvivalMode_Ulysses_P.utoc ]; then
 else
     echo "no ULYSSES container (sh tools/ulysses/build.sh): its meteors can't come"
 fi
+# its sounds (AC:I's Stardust set, python tools/ulysses/sounds.py into build/ulysses/sounds; never in git)
+if ls build/ulysses/sounds/*.wav >/dev/null 2>&1; then
+    mkdir -p build/install/AC8SurvivalMode/Sounds/ulysses
+    cp build/ulysses/sounds/*.wav build/install/AC8SurvivalMode/Sounds/ulysses/
+    echo "staged ULYSSES' sounds ($(ls build/ulysses/sounds/*.wav | wc -l) in AC8SurvivalMode/Sounds/ulysses)"
+else
+    echo "no ULYSSES sounds (python tools/ulysses/sounds.py): its fragments fall silent"
+fi
 # the ZFA-44 (the user's own model, cooked in UE 5.4 by tools/zfa44/build.sh; no UE needed here): the user's dev builds
 # only, so staged with ZFA=1 only (package_dev.sh keeps it with ZFA=1; package_release.sh never ships it)
 if [ "$ZFA" = 1 ]; then
