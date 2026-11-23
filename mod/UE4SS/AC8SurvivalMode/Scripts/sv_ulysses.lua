@@ -271,11 +271,21 @@ local FLAGS_ON = { bShowHUDBox = true, bIsNotLockonTarget = false, bIsNotFCSTarg
 local FLAGS_OFF = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
 local function flags(o, f) for k, v in pairs(f) do pcall(function() o[k] = v end) end end
 local function hideOwn(o)
-    for _, cls in ipairs({ "/Script/Engine.StaticMeshComponent", "/Script/Engine.SkeletalMeshComponent" }) do
+    local nh, seen = 0, 0
+    for _, cls in ipairs({ "/Script/Engine.StaticMeshComponent", "/Script/Engine.SkeletalMeshComponent", "/Script/Engine.PoseableMeshComponent" }) do
         local c = StaticFindObject(cls)
         local ok, list = pcall(function() return o:K2_GetComponentsByClass(c) end)
-        if ok and list then pcall(function() list:ForEach(function(_, e) pcall(function() e:get():SetVisibility(false, true) end) end) end) end
+        if ok and list then
+            pcall(function() list:ForEach(function(_, e)
+                seen = seen + 1
+                if pcall(function() e:get():SetVisibility(false, true) end) then nh = nh + 1 end
+            end) end)
+        end
     end
+    -- ((2026-11-24, an autotest close-up: Mission 4's radar tower hanging under a fragment) its components aren't found by
+    -- class (0 of 0 above: the tower's meshes never hidden): the whole actor hidden, as the Anomaly's planes are
+    local hid = pcall(function() o:SetActorHiddenInGame(true) end)
+    return nh, seen, hid
 end
 local CAPTURE = nil
 pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
@@ -325,9 +335,29 @@ local function arm(pool, r, hp)
                 pcall(function() e.o:K2_SetActorRelativeLocation({ X = -hx, Y = -hy, Z = -hz }, false, {}, true) end)
             end
             pcall(function() e.o.MaxHealth = hp; e.o.HealthInternal = math.floor(hp * 10 + 0.5); e.o.MinHealth = 1 end)
-            hideOwn(e.o)
+            local nh, seen, hid = hideOwn(e.o)
             flags(e.o, FLAGS_ON)
             e.attached = att
+            -- ((2026-11-24, an autotest close-up: a radar tower under a fragment) what the borrowed target is made of, once
+            ARMLOG = (ARMLOG or 0) + 1
+            if ARMLOG <= 2 then
+                ul(string.format("target hidden: %d of %d mesh parts, the actor %s", nh, seen, hid and "hidden" or "NOT hidden"))
+                local parts = {}
+                pcall(function()
+                    local list = e.o:K2_GetComponentsByClass(StaticFindObject("/Script/Engine.SceneComponent"))
+                    list:ForEach(function(_, x)
+                        local m = x:get()
+                        local cn = "?"
+                        pcall(function() cn = m:GetClass():GetFName():ToString() end)
+                        local vis = "?"
+                        pcall(function() vis = tostring(m:IsVisible()) end)
+                        parts[#parts + 1] = cn .. ":" .. vis
+                    end)
+                end)
+                local kids = 0
+                pcall(function() local arr = {}; e.o:GetAttachedActors(arr, true, true); kids = #arr end)
+                ul(string.format("target %s: %d parts [%s], %d attached actors", tostring(e.name), #parts, table.concat(parts, " "), kids))
+            end
             return e
         end
     end
