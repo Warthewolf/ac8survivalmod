@@ -176,7 +176,7 @@ local function rock(key, at, vel, scale, spin, tailX)
         -- ((2026-11-24, the 0.75.76 shots: the streaks read as solid cream tubes) a glow round it: the same mesh a little
         -- wider and longer, on AC8's additive MI_TrainingRingGlow (VALKA's portal haze), so it burns rather than shines
         local G = T.glow
-        local gmid = G and ULY.tailMid and ULY.tailMid("glow")
+        local gmid = G and G.enabled ~= false and ULY.tailMid and ULY.tailMid("glow")
         local gc = gmid and addComp(a, static and "/Script/Engine.StaticMeshComponent" or "/Script/Engine.SkeletalMeshComponent")
         if gc then
             if static then pcall(function() gc:SetStaticMesh(tm) end)
