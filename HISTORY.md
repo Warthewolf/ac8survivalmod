@@ -4227,3 +4227,9 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   passed. Not yet seen in game: whether a route given again brings a B-1B knocked off it back. Built (TANI=1 ZFA=1
   build_all.sh passed, leaderboard address in, runtime 0.32.43 unchanged); the friends' co-op zip not yet packed (the
   packing was refused by Claude Code's permission check: the user packs it).
+- 0.75.68 (2026-11-23, released): dev with fix/escort-enemies-and-route and fix/storm-cloud-bursts-dimmer merged (the
+  user: "build a public release with the Storm and Escort Fix inside"; 0.75.66 / 0.75.67 were test builds of their own
+  branch, so the release skips past them). THE ESCORT clearly fewer enemies and CHARLENE's route watch (0.75.65's notes);
+  the fleet storm's cloud bursts dimmer and its lightning and flashes rarer (0.75.66's notes). Not in it: Survival's
+  own Wwise sounds (feature/wwise-banks) and the co-op pause wait (fix/pause-menu-coop-unpause). Public zip
+  AC8SurvivalMode_0.75.68_Online.zip (PUBLIC=1 TANI=1 ZFA=1 COOP=1), build a6ce5e4e, registered; zip_leak_test all passed.
