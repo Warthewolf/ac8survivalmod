@@ -779,7 +779,8 @@ skyOne = function(c, now, cx, cy)
     local dip = type(c.dip) == "table" and rnd(n(c.dip[1], 0.05), n(c.dip[2], 0.2)) or rnd(0.05, 0.2)
     local vel = { X = math.cos(across) * v, Y = math.sin(across) * v, Z = -v * dip }
     local key = type(c.meshes) == "table" and c.meshes[math.random(1, #c.meshes)] or "D"
-    local r = rock(key, start, vel, span(c.scale, 3), rnd(20, 90), n(c.tail_x, 1), c.no_trails and {} or cfg().sky_trails, c.look)
+    local r = rock(key, start, vel, span(c.scale, 3), rnd(20, 90), (c.look and c.look.mesh) and n(c.streak_x, 0.12) or n(c.tail_x, 1),
+        c.no_trails and {} or cfg().sky_trails, c.look)
     -- ((2026-11-24) falling now: burnt out before floor_m (out of any fighter's reach), or at life_s)
     local life = n(c.life_s, 18)
     if c.floor_m and vel.Z < -1 then life = math.min(life, (alt - n(c.floor_m, 16000) * 100) / -vel.Z) end

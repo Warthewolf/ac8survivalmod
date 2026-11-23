@@ -423,7 +423,7 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     -- ((2026-11-24, the user: "more fake meteors at high altitude streaking across the sky at Sunrise, like it's truly about
     -- to rain hell upon the world") was one every 1.5-4 s, 4-10x: now bursts of 2-5 every 0.4-1.2 s, up to max_up at once,
     -- bigger, their streaks longer still (tail_x on the tail's length)
-    sky = { enabled = true, every_s = { 0.4, 1.2 }, burst = { 3, 7 }, max_up = 100, alt_m = { 28000, 34000 }, from_km = { 25, 60 }, dip = { 0.22, 0.4 }, floor_m = 16000,
+    sky = { enabled = true, every_s = { 0.4, 1.2 }, burst = { 3, 7 }, max_up = 100, alt_m = { 28000, 34000 }, from_km = { 25, 60 }, dip = { 0.8, 1.0 }, floor_m = 16000,
             speed_kmh = { 8000, 14000 }, life_s = 14, meshes = { "D", "C", "C" }, scale = { 8, 22 }, tail_x = 1.5,
             -- ((2026-11-24, the user: "high altitude so that the player can't reach them, like very very high") 45-65 km up (was
             -- 12-28; 45-65 km, 0.75.80, drew nothing: past what the game draws), 24-34 km, dipping at most 2 % of their speed (was
@@ -437,7 +437,9 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
             -- ((2026-11-24, the user's Lost Butterfly reference) AC:I's sky meteors: thin glowing lines, no body, no smoke. The
             -- ulylines autotest: AC8's additive MI_TrainingRing on the streak's static twin draws exactly that (on the skinned
             -- one it fell back to a dark grey); the rock hidden, no trails
-            look = { paint = "line_ring", hide_rock = true, tail_r = 0.3 }, no_trails = true },
+            -- ((2026-11-24, "Try making it like infinities") AC:I's own trail sprite on our card (the ulylines autotest: the flare
+            -- glows from Emissive_Intensity ~600 up; ~3 km long, ~200 m wide 30 km out, as its emitters 24 km out)
+            look = { paint = "streak", mesh = "Streak", hide_rock = true, tail_r = 0.9 }, streak_x = 0.12, no_trails = true },
     -- the meshes (tools/ulysses: AC:I's o_meta ~97 m (A), o_metc ~6.5 m (C), o_metd ~3 m (D); o_metb / o_metx have no mesh in
     -- AC:I): its one-bone skeletal copies SK_SV_Ulysses_<K> (a static mesh of ours crashed the SOLG's test T0, a skeletal
     -- one drew: docs/re/SOLG.md 8), painted at run time as the SOLG is (paint: its rock texture as Basecolor on the x40a's
@@ -491,11 +493,11 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
              streak = { parent = "/Game/VFX/Mission/Mission023/MI_ms23FarExp_Flare",
                         tex = { EmissiveMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Streak",
                                 MaskMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Streak" },
-                        scalars = { Emissive_Intensity = 20, Emissive_Power = 1 }, vectors = { EmissiveColor = { 1.0, 0.92, 0.8 } } },
+                        scalars = { Emissive_Intensity = 2000, Emissive_Power = 1 }, vectors = { EmissiveColor = { 1.0, 0.92, 0.8 } } },
              streak_b = { parent = "/Game/VFX/Mission/Mission023/MI_ms23FarExp_Flare",
                         tex = { EmissiveMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Streak",
                                 MaskMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Streak" },
-                        scalars = { Emissive_Intensity = 80, Emissive_Power = 1 }, vectors = { EmissiveColor = { 1.0, 0.92, 0.8 } } },
+                        scalars = { Emissive_Intensity = 6000, Emissive_Power = 1 }, vectors = { EmissiveColor = { 1.0, 0.92, 0.8 } } },
              line_haze = { parent = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", scalars = { EmissiveIntensity = 3, Opacity = 1,
                            EmissiveFresnelFalloff = 0.01 }, vectors = { Color = { 3.0, 2.3, 1.3 } } },
              glow = { enabled = false, parent = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", radius_x = 1.8, length_x = 1.15,
