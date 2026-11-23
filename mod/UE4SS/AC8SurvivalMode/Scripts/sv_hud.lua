@@ -580,6 +580,44 @@ local function holdRows(on)                      -- (a "rows" hold: all but the 
     if not on then H.rowsOp = {} end
 end
 
+-- ((2026-11-23) the user: "my pause menu isnt opening now" ... "nothing appears": the game paused (hud: hidden (paused)),
+-- no menu drawn, after it had worked) at each pause: the in-game menu manager's stack (LiveMenuManager.MenuStack: what
+-- holds the menu) and the pause page's widgets, once a pause, at most 20 a run:
+-- `pause: menu stack <n> [<menus>], root <r>; pause pages <class> in viewport / visibility ...`
+local function pauseProbe()
+    H.pauseLogs = (H.pauseLogs or 0) + 1
+    if H.pauseLogs > 20 then return end
+    local parts = {}
+    for _, m in ipairs(FindAllOf("LiveMenuManager") or {}) do
+        if liveObj(m) and not nameOf(m):find("Default__", 1, true) then
+            local ok, txt = pcall(function()
+                local st = m.MenuStack
+                local l, names = st.StackMenus, {}
+                local n = l:GetArrayNum()
+                for i = 1, math.min(n, 8) do
+                    local w = l[i].Menu
+                    local okV, v = pcall(function() return w:GetVisibility() end)
+                    names[#names + 1] = (valid(w) and (nameOf(w):match("([%w_]+)_C_%d+$") or nameOf(w)) or "nil") .. (okV and ("/vis " .. tostring(v)) or "")
+                end
+                local r = st.RootMenu
+                return string.format("menu stack %d [%s], root %s", n, table.concat(names, ", "), valid(r) and (nameOf(r):match("([%w_]+)_C_%d+$") or nameOf(r)) or "none")
+            end)
+            parts[#parts + 1] = ok and txt or ("menu stack unreadable: " .. tostring(txt))
+        end
+    end
+    for _, cls in ipairs({ "WBP_Menu_PauseTop_000_C", "WBP_Menu_Pause_Boot_C" }) do
+        local ws = {}
+        for _, w in ipairs(FindAllOf(cls) or {}) do
+            if liveWidget(w) then
+                local okI, inV = pcall(function() return w:IsInViewport() end)
+                local okV, v = pcall(function() return w:GetVisibility() end)
+                ws[#ws + 1] = string.format("in viewport %s, visibility %s", okI and tostring(inV) or "?", okV and tostring(v) or "?")
+            end
+        end
+        parts[#parts + 1] = cls .. ": " .. (#ws > 0 and table.concat(ws, "; ") or "none")
+    end
+    log("pause: " .. table.concat(parts, "; "))
+end
 function hudTick(now, paused, pc)
     if hudOff or not CFG.hud.enabled or not D then return end
     if not (H and liveObj(H.widget)) then                     -- (0.73.73: liveObj, kept between ticks)
@@ -616,6 +654,10 @@ function hudTick(now, paused, pc)
         if show then H.rowsAt = 0 end                  -- (the rows read at once: a peek waiting for it starts now)
         log("hud: " .. (show and "shown" or ("hidden (" .. (paused and "paused" or (not pawnOk and "no player aircraft")
             or (hold == "all" and ("held: " .. holders)) or "game HUD off") .. ")")))
+        if paused and not show then
+            local okP, errP = pcall(pauseProbe)
+            if not okP then hudLog("pauseprobe", "pause probe error " .. tostring(errP)) end
+        end
     end
     pcall(holdRows, show and hold == "rows")
     pcall(hideGameInfo, now)
