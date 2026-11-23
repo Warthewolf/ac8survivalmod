@@ -38,6 +38,7 @@ local MODULES = {
     "sv_spaceport",                -- the Spaceport Assault and its retake (docs/re/SPACEPORT_ASSAULT.md)
     "sv_fishing",                  -- GONE FISHIN': the shoals and SAL's boat (docs/re/FISHING.md 1-4)
     "sv_festival",                 -- THE FESTIVAL: the cruise missiles and the siren (docs/re/FISHING.md 6)
+    "sv_ulysses",                  -- ULYSSES: back in July 1999, the meteor shower (docs/re/ULYSSES.md)
     "sv_decoy",                    -- THE DECOY: the bait, the Spear UAVs' locks and the Tonitrus Spear (docs/re/DECOY.md)
     "sv_tanicorn",                 -- THE TANICORN's test mount, test builds only (docs/re/TANICORN.md)
     "sv_tanicorn_rise",            -- (sv_tanicorn.lua's next piece: tools/lua_split_part.py)

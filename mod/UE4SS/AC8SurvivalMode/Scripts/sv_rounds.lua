@@ -246,6 +246,8 @@ function SPC.cleanUnitsOf(kind)
     elseif kind == "ladon" then for _, x in ipairs(LADON_UNITS) do add(x) end
     elseif kind == "alicorn" then add(ALICORN_UNIT)
     elseif kind == "decoy" and DECOY and DECOY.cleanUnits then for _, x in ipairs(DECOY.cleanUnits()) do add(x) end
+    -- ((2026-11-23) ULYSSES' borrowed targets (the SOLG's KEW / MAG units): finished off and off the list at its end
+    elseif kind == "ulysses" and type(c.ulysses) == "table" then for _, x in pairs(c.ulysses.target_units or {}) do add(str(x)) end
     -- ((0.74.0) GONE FISHIN''s shoals, THE FESTIVAL's formations and missiles: finished off at their end; SAL's boat and
     -- the searchlights are allies, switched off by their own parts, never finished off)
     elseif kind == "fishing" and type(c.fishing) == "table" then for _, x in ipairs(c.fishing.units or {}) do add(str(x)) end

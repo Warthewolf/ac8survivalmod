@@ -390,6 +390,58 @@ CFG.specials.festival = { enabled = true, name = "THE FESTIVAL", round_after = 6
                                         "ALI|First time I've seen Comona dance. I could get used to it.",
                                         "DANIELLE|Somebody save me a seat by the stage. I'm landing hungry.",
                                         "ROCK|Tell the band to play something loud. We're coming in." } } }
+
+-- "ulysses" = ULYSSES (Scripts/sv_ulysses.lua, docs/re/ULYSSES.md; the user, 2026-11-23: "Recreate the Ulysses Event from
+-- Strangereal, I want it to be A Special Round where we go back in time for a few rounds"; her picks: pure meteor
+-- defence, 2 rounds, a time-shift transition, a film look, AC:I's meteors and Stardust sounds; "Meteors that fly over
+-- head a high altitude during the mission too", "directly after the Festival Night during the early morning just as
+-- the Sun is rising"). Never drawn: its rounds are the day-night arc's first dawn rounds (GONE FISHIN''s round F + 7 +
+-- the arc's night_rounds, + dawn_offset), `rounds` of them, no fighters (pure meteor defence). Round 1 the shower,
+-- round 2 the shower and the big one. Fragments: AC:I's meteors (the container SurvivalMode_Ulysses_P, tools/ulysses)
+-- falling from far out onto the airfield or the town (aim), each with a target box (the SOLG's KEW / MAG units borrowed,
+-- their boxes "ULYSSES" / sub_*, as the two never come together), shot down: pay (x the round's specialPay); landed:
+-- the airfield takes `airfield_damage` (the town: a callout), the big one big.airfield_damage. Overhead: scenery meteors
+-- high up (sky). The film look (film: a post-process volume of ours) and the time shift (fade, the card) while in 1999.
+CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offset = 0,
+    -- each round's fragments (co-op: x (1 + per_player a player past the first), at most max_n); solo x solo_x
+    fragments = { round1 = 16, round2 = 20, per_player = 0.15, max_n = 34, solo_x = 0.8,
+                  every_s = { 4, 8 }, first_s = 8, at_once = 6,
+                  -- where they come from (km from where they land, m up) and how fast (km/h, along their line)
+                  from_km = { 26, 34 }, alt_m = { 9000, 12000 }, speed_kmh = { 1100, 1500 },
+                  meshes = { "C", "D", "C", "B" }, scale = { 1.0, 1.6 }, spin_dps = { 10, 45 },
+                  health = 350, pay = 300, airfield_damage = 8,
+                  aim = { airfield = 0.6, town = 0.4 }, spread_m = 2500 },
+    big = { enabled = true, mesh = "A", scale = 1.0, at_s = 45, from_km = 48, alt_m = 16000, speed_kmh = 650, spin_dps = 4,
+            health = 4000, solo_x = 0.7, pay = 6000, airfield_damage = 120 },
+    -- the towns it aims at besides the airfield (cm; the airport key's town, docs/re/COMONA_MAP.md)
+    towns = { { X = 1250000, Y = -320000 }, { X = 2350000, Y = -700000 } },
+    -- scenery meteors high up, crossing the sky (every_s apart, alt_m up, speed_kmh, life_s)
+    sky = { enabled = true, every_s = { 1.5, 4 }, alt_m = { 15000, 25000 }, from_km = { 25, 60 }, speed_kmh = { 9000, 16000 },
+            life_s = 18, meshes = { "D", "C" }, scale = { 2, 5 } },
+    -- the meshes (tools/ulysses: AC:I's o_meta / o_metb / o_metc / o_metd / o_metx)
+    mesh_path = "/Game/Mods/SurvivalMode/Ulysses/SM_SV_Ulysses_",
+    trail = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeFireNPC001", trail_scale = 6,
+    fx = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" },
+    fx_scale = { shot = 4, land = 10, big_shot = 18, big_land = 30 },
+    -- the borrowed target units (the SOLG's) and their boxes while ULYSSES has them
+    target_units = { small = "SV_Unit_SOLG_KEW", big = "SV_Unit_SOLG_MAG" },
+    box = { name = "ULYSSES", small = "FRAGMENT", big = "ULYSSES CORE" },
+    -- going back and coming home: a fade (s) and the cards
+    shift = { fade_s = 1.2, hold_s = 0.8, card = "JULY 1999", card_sub = "ASTEROID 1994XF04 ULYSSES HAS BROKEN UP",
+              home = "PRESENT DAY", home_sub = "COMONA" },
+    -- the film look in 1999 (a post-process volume of ours, unbound): saturation, tint, grain, vignette; fade_s in / out
+    film = { enabled = true, saturation = 0.55, tint = { 1.0, 0.9, 0.72 }, grain = 0.45, vignette = 0.55, fade_s = 2.0 },
+    -- the sounds (Sounds/ulysses: AC:I's Stardust set, tools/ulysses sounds)
+    sounds = { fall = { file = "ulysses/fall_small.wav", db = 4, loop = true, curve = { max = 600000, shape = "exp1" } },
+               fall_big = { file = "ulysses/fall_big.wav", db = 8, loop = true, curve = { max = 1500000, shape = "exp1" } },
+               boom = { file = "ulysses/explosion.wav", db = 6, curve = { max = 1500000, shape = "exp1" } },
+               encounter = { file = "ulysses/encounter.wav", db = 0 } },
+    text = { sub = "SHOOT DOWN THE ULYSSES FRAGMENTS", big = "THE ULYSSES CORE", big_sub = "SHOOT IT DOWN BEFORE IT HITS COMONA",
+             town_hit = "A FRAGMENT HIT THE TOWN", big_hit = "ULYSSES HAS STRUCK COMONA", big_down = "THE ULYSSES CORE IS DOWN",
+             say = { start = { "COMONA CONTROL|All units, the sky is falling. Ulysses fragments inbound, many of them.",
+                               "COMONA CONTROL|Shoot down anything that's headed for the airfield or the town." },
+                     big = { "COMONA CONTROL|Radar has a large body, very large. That one cannot be allowed to land." },
+                     home = { "COMONA CONTROL|...Comona Control. Skies are clear. Welcome back." } } } }
 -- TEST ONLY BEGIN (the lightning Anomaly and the storm test: test builds only, docs/re/THUNDER.md)
 -- "thunder" = IFF FATAL ERROR / DI..ANT TH..D..R (user, 2026-11-06: "another Anomaly, one that uses Lightning Against
 -- you", "The Aircraft is an A-10", "Strikes should only black out and disorient you", "it can only be spawned with
