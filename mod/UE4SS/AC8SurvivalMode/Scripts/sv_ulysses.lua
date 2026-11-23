@@ -696,7 +696,7 @@ skyOne = function(c, now, cx, cy)
     local dip = type(c.dip) == "table" and rnd(n(c.dip[1], 0.05), n(c.dip[2], 0.2)) or rnd(0.05, 0.2)
     local vel = { X = math.cos(across) * v, Y = math.sin(across) * v, Z = -v * dip }
     local key = type(c.meshes) == "table" and c.meshes[math.random(1, #c.meshes)] or "D"
-    local r = rock(key, start, vel, span(c.scale, 3), rnd(20, 90), n(c.tail_x, 1))
+    local r = rock(key, start, vel, span(c.scale, 3), rnd(20, 90), n(c.tail_x, 1), cfg().sky_trails)
     if r then SKYM.list[#SKYM.list + 1] = { r = r, dieAt = now + n(c.life_s, 18) } end
 end
 local J = { on = false, rocks = {} }               -- (a joiner: the host's round on, its rocks drawn here by id)

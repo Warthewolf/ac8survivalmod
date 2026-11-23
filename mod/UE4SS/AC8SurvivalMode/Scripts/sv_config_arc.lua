@@ -444,8 +444,13 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     -- trail and its fire, each at its scale x the rock's; ((2026-11-23) "Don't use the Rod's Streak, come up with your own")
     -- the streak is our own: tail (SK_SV_Ulysses_Tail, tools/ulysses: a glowing taper behind the rock along its fall)
     -- ((2026-11-24, the user: "I want those fireball trails longer") smoke 8 -> 14, fire 6 -> 11, the streak 1.6 -> 4.5 long
-    trails = { { path = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeNPC001", scale = 14 },
+    -- ((2026-11-24, the user: "Shouldn't their smoke trail be thicker", with a falling-meteor reference: a thick billowing
+    -- column) the trail line-up autotest (ulytrails): the Climber's fall smoke (Mission 20's, IGC) by far the thickest,
+    -- black and billowing with fire at its head; Ladon's and Mission 3's cinematic trails draw nothing outside their scenes
+    trails = { { path = "/Game/VFX/IGC/Ms20/Ms200030/NS_IGCVFX_Ms200030_ClimberFallSmoke001", scale = 3 },
                { path = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeFireNPC001", scale = 11 } },
+    -- the sky's meteors (up to 100 at once): the light smoke only, the heavy column's cost kept to the fragments
+    sky_trails = { { path = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeNPC001", scale = 14 } },
     -- our own streak: SM_SV_Ulysses_Tail (tools/ulysses: a 25 m teardrop behind the rock along -X, U along its length) on
     -- AC8's cloud lightning material (MI_NearCloudLightning001: emissive, translucent, static meshes only: the fleet's
     -- bolts' proven way) with the tail's own gradient T_SV_Ulysses_Tail_D (white-hot, orange, deep red, dark); component
