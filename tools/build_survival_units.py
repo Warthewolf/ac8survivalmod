@@ -643,6 +643,7 @@ def deal_units(units, used_ids, z, top_number, v):
     parts = 0
     for i, (unit, obj, pname) in enumerate(zip(se.DEAL_PODARGE_UNITS, se.DEAL_PODARGE_OBJS, se.DEAL_PODARGE_PATHS)):
         pts = se.deal_podarge_route(i)
+        assert se.deal_in_zone(pts), (unit, 'a route point outside the combat zone')
         yaw = math.degrees(math.atan2(pts[1][1] - pts[0][1], pts[1][0] - pts[0][0]))
         names = port_unit(units, used_ids, z, src, unit, obj, se.DEAL_PODARGE_ROW, [pts[0]], yaw, top_number)
         assert names == [obj], names
@@ -663,6 +664,7 @@ def deal_units(units, used_ids, z, top_number, v):
         assert names == se.DEAL_CARGO_OBJS[f], names
         cu = [x for x in units if uname(x) == unit][0]
         lanes = [se.deal_cargo_route(fi, k) for k in range(se.DEAL_CARGO_PER)]
+        assert all(se.deal_in_zone(r) for r in lanes), (unit, 'a route point outside the combat zone')
         cyaw = math.degrees(math.atan2(lanes[0][1][1] - lanes[0][0][1], lanes[0][1][0] - lanes[0][0][0]))
         cargo.append((cu, cyaw, lanes, se.DEAL_CARGO_PATHS[f]))
     return parts, cargo, paths, src_path

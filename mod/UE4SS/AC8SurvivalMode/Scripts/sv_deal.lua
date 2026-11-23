@@ -68,7 +68,8 @@ CFG.specials.deal = {
         -- (traced: nothing above sea_z + 5 m) clear_km all round it, a random heading; its groups group_km apart, each laid
         -- out as the Spaceport's (Aegis 1.5 km ahead 450 m aside, boats 4 km ahead 350 m aside); no spot in `tries`:
         -- where the Spaceport has them
-        fleet = { groups = 2, per = 1200, per_round = 60, ring_km = { 15, 34 }, clear_km = 3, tries = 40, sea_z = 350,
+        fleet = { groups = 2, per = 1200, per_round = 60, ring_km = { 15, 34 }, clear_km = 3, tries = 60, sea_z = 350,
+                  zone_edge_km = 6,
                   group_km = 3, z = { wasp = 0, aegis = 300, boat = 0 },
                   lay = { aegis = { 1.5, 0.45 }, boat = { 4.0, 0.35 } } },
     },
@@ -334,6 +335,12 @@ local function groundZ(x, y)
     return z
 end
 local function atSea(x, y, f)
+    -- ((2026-11-23) the user: "the fleet spawned out of the combat zone": it went 29 km out at (42.3, 8.0) km, past the
+    -- zone's east edge) the whole formation inside the combat zone (sv_ai.lua ZONE, its margin in), zone_edge_km of it round
+    -- the spot, before any trace
+    local z = ZONE or { X = -707336.0, Y = -261895.0, HALF = 3700000.0 }
+    local room = z.HALF - num(f.zone_edge_km, 6) * 100000
+    if math.abs(x - z.X) > room or math.abs(y - z.Y) > room then return false end
     local top = num(f.sea_z, 350) + 500
     local r = num(f.clear_km, 3) * 100000
     for k = 0, 8 do

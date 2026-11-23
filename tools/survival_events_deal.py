@@ -81,8 +81,10 @@ def deal_podarge_route(i):
     """The i-th Podarge's (0-6) route: the wedge's slot (the lead, i 3, in the middle), north to south."""
     step = i - 3
     x, back = 6 + step * 1.5, abs(step) * 0.9
-    return [_af(x, -38 - back, 280000.0), _af(x, -19 - back, 280000.0), _af(x, 0 - back, 280000.0),
-            _af(x, 19 - back, 280000.0), _af(x, 38 - back, 280000.0)]
+    # ((2026-11-23) inside the combat zone, its 3 km margin (ZONE_KM): from 32 km north of the runway to 34 km south;
+    # was 38 / 38, which began past its north edge)
+    return [_af(x, -32 - back, 280000.0), _af(x, -16 - back, 280000.0), _af(x, 0 - back, 280000.0),
+            _af(x, 17 - back, 280000.0), _af(x, 34 - back, 280000.0)]
 
 
 # Emblem Direct's cargo: C-130s (AC8's OP0054_c130_01), copies of Survival's heavy flight (EA_Unit_01_Air2, as THE
@@ -103,8 +105,14 @@ def deal_cargo_route(fi, k):
     """Flight fi's (0-2) aircraft k's (0-3) route, north to south."""
     x = -8 + (fi - 1) * 3 + (k - 1.5) * 0.6
     back = (k % 2) * 0.4
-    return [_af(x, -37 - back, 220000.0), _af(x, -18 - back, 220000.0), _af(x, 0 - back, 220000.0),
-            _af(x, 18 - back, 220000.0), _af(x, 37 - back, 220000.0)]
+    return [_af(x, -32 - back, 220000.0), _af(x, -16 - back, 220000.0), _af(x, 0 - back, 220000.0),
+            _af(x, 17 - back, 220000.0), _af(x, 34 - back, 220000.0)]   # (inside the zone: as the Podarges')
+
+
+def deal_in_zone(pts):
+    """Every point of a route inside the combat zone less its margin (ZONE_KM, Scripts/sv_ai.lua ZONE)."""
+    (cx, cy), half = ZONE_KM  # noqa: F405
+    return all(abs(p[0] / 1e5 - cx) <= half and abs(p[1] / 1e5 - cy) <= half for p in pts)
 
 
 DEAL_TARGET_AREA_M, DEAL_TARGET_ALT_M = 90000.0, (0.0, 12000.0)
