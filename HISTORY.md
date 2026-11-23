@@ -4172,3 +4172,14 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   ms22_01_AWACS_Yes_No_Q (4 s to answer: every stock question is 2.2-4 s) and Mission 22's own Left / Right / TimeOut
   triggers answer it; Ctrl+A / Ctrl+X still vote for the rest of the 30 s. Its time out confirmed in game; a press of
   Left / Right not yet (the test can't press the game's buttons). Test-only rows: the voiced twin and the control line.
+- 0.75.58 (2026-11-23, dev 4eb28fe; runtime 0.32.42): the release build after the code review (10 findings, 8 fixed:
+  THE DEAL offered only once a run (`x and nil or T`), the SOLG's DT_WeaponSettings change left on a torn-down level,
+  a joiner's SOLG portal shut ~10 s in, War's anger trap running into the next round, the ZFA-44 laser's sound left
+  looping, coop_guard's stale "join dr", start_deal_session.ps1 gone, .env.example's ACI note; left: the storm's
+  NS_CloudLightning sweep (cosmetic overlap with MINDRIPPER's flashes), DefaultEngine.ini's AndroidFileServer block
+  (UE's own, not committed)). subtitles.ini's briefing (it replaces the Lua lines) had one 3-strip-line line: split,
+  call_s 66 (78 was counted on the Lua lines). Tests: all but lb_contract's "fleet" (the Worker doesn't know the fleet
+  round; failing on main's 0.75.0 too). AC8SurvivalMode_0.75.58_Online.zip (public: no THE DEAL, Tanacorn, ZFA-44 or
+  test keys), registered (fec35f3e). INSTALLED 2026-11-23 (the user: "package a release build and install it on my
+  system too"; backup build/backup/install_before_0.75.58, the dev containers Laser7 / StormBurst / StormFx / Tani /
+  ZFA44 moved into it; 112 files verified). Not pushed to main yet.
