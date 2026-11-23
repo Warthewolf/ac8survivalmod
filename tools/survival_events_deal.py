@@ -41,6 +41,12 @@ DEAL_RADIO_VOICED = ('SV_DealRadio_AskV', 'RE_SV_DealAskV')
 # node (Mission 22's CompositeEvent_CountDown_1, THE DECOY's) with its Yes / No activated at once; and a control,
 # SV_DealRadio_AskN (RE_SV_DealAskN): the same line with no YesNoID, to see whether naming a Yes / No stops a line playing
 DEAL_RADIO_CONTROL = ('SV_DealRadio_AskN', 'RE_SV_DealAskN')
+# ((2026-11-23, the 8th autotest: War's line shown in the question's [[ ]] marks, no buttons, the time out never came)
+# Mission 22 (Survival's own base) asks with the radio line alone: 01_AWACS_Yes_No_Q's row names the question, no
+# LiveActivateYesNoExecution, then its YesNoEvent triggers. The question the radio rows and the triggers name:
+# DEAL_ASK_ID, Mission 22's own stock row (4 s) while Survival's own (DT_SV_YesNo's SV_Deal_Question, AddRow'd at the
+# main menu) is in doubt; SV_Deal_Question again once that's shown to work
+DEAL_ASK_ID = 'ms22_01_AWACS_Yes_No_Q'
 # WAR & HAYTHORN's F/A-18F (the user: "War and Haythorn's Super Hornet will appear randomly ... between rounds. They appear
 # as an allied aircraft and the player gets the event zoom in on their aircraft when they appear"; "after each deal has
 # been made, War and Haythorn turn around and exit the combat zone and despawn"): an allied unit as the ESCORT's KMG
@@ -117,23 +123,18 @@ def build_deal(g, flag, stock_ep):
     g.trigger('RE_SpawnEnemy_kokatu_1st', DEAL_ASK)              # (a remote event: Lua's SV_Event fires it)
     flag(DEAL_ASK, DEAL_FLAG, 'Set', 0)                        # (asked: no answer yet)
     g.execute(t_radio, DEAL_ASK, {0: DEAL_RADIO_GROUP}, delay=0.1)      # War's question on the radio, the Yes / No under it
-    post = 'SV_DealAskPosted'
-    g.trigger(None, post, template=t_post, arg_changes={0: DEAL_RADIO_GROUP})
-    g.execute(t_ask, post, {0: DEAL_QUESTION})
     t_radio22 = t_radio
     vgrp, vev = DEAL_RADIO_VOICED
     g.trigger('RE_SpawnEnemy_kokatu_1st', vev)
     flag(vev, DEAL_FLAG, 'Set', 0)
     g.execute(t_radio22, vev, {0: vgrp}, delay=0.1)
-    g.trigger(None, 'SV_DealAskVPosted', template=t_post, arg_changes={0: vgrp})
-    g.execute(t_ask, 'SV_DealAskVPosted', {0: DEAL_QUESTION})
     cgrp, cev = DEAL_RADIO_CONTROL
     g.trigger('RE_SpawnEnemy_kokatu_1st', cev)
     g.execute(t_radio22, cev, {0: cgrp}, delay=0.1)
     for stock_trig, button, name, value in DEAL_ANSWERS:
         t = g.foreign_trig_template(m8, stock_trig)
         assert arg_values(t) == ['ms08_01_Question_Detonation', button], (stock_trig, arg_values(t))  # noqa: F405
-        g.trigger(None, name, template=t, arg_changes={0: DEAL_QUESTION})
+        g.trigger(None, name, template=t, arg_changes={0: DEAL_ASK_ID})
         flag(name, DEAL_FLAG, 'Set', value)
     # the Hornet's event zoom and its way out
     t_cam_on = g.exec_template('LiveEventFocusCameraExecution', 'RE_ShuttleFocusCamera', lambda a, e: a[0] == SHUTTLE)  # noqa: F405
