@@ -6590,12 +6590,12 @@ end
 SUITES.ulylines = function()
     intoRun()
     local ROWS = {
-        { "now: the lit gradient tube with its rock", nil },
-        { "the gradient, no rock, thin", { hide_rock = true, tail_r = 0.25 } },
-        { "MI_TrainingRing (additive), no rock, thin", { paint = "line_ring", hide_rock = true, tail_r = 0.25 } },
-        { "MI_TrainingRing (additive), no rock, thicker", { paint = "line_ring", hide_rock = true, tail_r = 0.6 } },
-        { "the ring's haze (flat), no rock, thin", { paint = "line_haze", hide_rock = true, tail_r = 0.25 } },
-        { "the ring's haze (flat), no rock, thicker", { paint = "line_haze", hide_rock = true, tail_r = 0.6 } },
+        { "now: MI_TrainingRing line", { paint = "line_ring", hide_rock = true, tail_r = 0.3 } },
+        { "AC:I's sprite card, flare x20", { paint = "streak", mesh = "Streak", hide_rock = true, tail_r = 1 } },
+        { "AC:I's sprite card, flare x80", { paint = "streak_b", mesh = "Streak", hide_rock = true, tail_r = 1 } },
+        { "AC:I's sprite card, flare x20, wide", { paint = "streak", mesh = "Streak", hide_rock = true, tail_r = 3 } },
+        { "AC:I's sprite card, flare x80, wide", { paint = "streak_b", mesh = "Streak", hide_rock = true, tail_r = 3 } },
+        { "AC:I's sprite card, flare x80, wider", { paint = "streak_b", mesh = "Streak", hide_rock = true, tail_r = 6 } },
     }
     local T = { rocks = {} }
     A.wait(8)
