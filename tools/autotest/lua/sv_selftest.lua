@@ -5901,6 +5901,122 @@ local function spPitch(a)
     local ok, v = pcall(function() local f = a:GetActorForwardVector(); return math.deg(math.asin(math.max(-1, math.min(1, f.Z)))) end)
     return ok and v or nil
 end
+-- ((2026-11-23) THE DEAL, sv_deal.lua, a dev build) Ctrl+H's offer (DEAL.offerNow) in the long break before round 1: the
+-- Hornet up and its event zoom, AC8's Yes / No asked and let run (no answer: silence), the vote's close, War's anger
+-- queued, the Hornet away and off; then the deals' units on their own: the Podarge (Mission 12's Norn) and the C-130s
+-- spawned and sent on their routes (moving?), taken off; War's anger's drones (DECOY.angerStart) up.
+local function aias()
+    local out = {}
+    for _, o in ipairs(FindAllOf("LiveAIAiasClassPlane") or {}) do
+        local ok, v = pcall(function() return o:K2_GetActorLocation() end)
+        if ok and v then out[#out + 1] = { o = o, X = v.X, Y = v.Y, Z = v.Z, name = nameOf(o) } end
+    end
+    return out
+end
+SUITES.deal = function()
+    intoRun()
+    A.wait(5)
+    A.mark("deal")
+    A.do_(function()
+        if not ST.check(type(DEAL) == "table" and type(DEAL.offerNow) == "function", "THE DEAL's part loaded (a dev build)") then return "abort" end
+        ST.info(string.format("run state %s, round %s, D.at in %.0f s", tostring(D.state), tostring(D.round), (D.at or 0) - (D.now or 0)))
+        DEAL.offerNow()
+    end)
+    A.log_("deal: offered in the break", 5, "deal", true)
+    A.do_(function()
+        ST.check(ST.findLog("deal: offered in the break", ST.marks.deal, true) ~= nil, "Ctrl+H: offered",
+            ST.findLog("deal: offered", ST.marks.deal, true))
+        ST.check(ST.findLog("deal: the Hornet: SV_Unit_DealHornet up", ST.marks.deal, true) ~= nil, "the Hornet spawned",
+            ST.findLog("deal: the Hornet", ST.marks.deal, true))
+    end)
+    A.log_("deal: the event zoom onto the Hornet", 5, "deal", true)
+    A.do_(function()
+        local l = ST.findLog("deal: the event zoom onto the Hornet", ST.marks.deal, true)
+        ST.check(l and l:find("fired", 1, true) and not l:find("NOT", 1, true), "its event zoom fired (RE_SV_DealCam)", l)
+    end)
+    A.wait(1.5); A.do_(function() ST.shot("deal_zoom") end)
+    A.log_("deal: AC8's Yes / No asked", 25, "deal", true)
+    A.do_(function()
+        local l = ST.findLog("deal: AC8's Yes / No asked", ST.marks.deal, true)
+        ST.check(l and l:find("fired", 1, true) and not l:find("NOT", 1, true), "AC8's Yes / No asked (RE_SV_DealAsk fired)", l)
+        ST.check(ST.findLog("deal: vote %d+ open") ~= nil, "the vote open", ST.findLog("deal: vote", ST.marks.deal, true))
+    end)
+    A.wait(2); A.do_(function() ST.shot("deal_prompt") end)
+    A.wait(10); A.do_(function() ST.shot("deal_prompt_12s") end)
+    A.log_("closed (", 45, "deal", true)
+    A.do_(function()
+        local l = ST.findLog("closed (", ST.marks.deal, true)
+        ST.check(l and l:find("YES 0, NO 0", 1, true), "the vote closed with nobody answering", l)
+        local s = ST.findLog("on AC8's Yes / No", ST.marks.deal, true)
+        ST.info("the prompt's own answer: " .. tostring(s or "none read back before the close (its time out is longer than the vote, or not read)"))
+        ST.info("flag SV_DealAns now " .. tostring((svFlags and svFlags() or {}).SV_DealAns))
+        ST.check(ST.findLog("War's anger (nobody answered): 7 Marker Drones", ST.marks.deal, true) ~= nil, "silence: War's anger queued, 7 drones")
+    end)
+    A.log_("deal: the Hornet turns away", 15, "deal", true)
+    A.do_(function()
+        local l = ST.findLog("deal: the Hornet turns away", ST.marks.deal, true)
+        ST.check(l and l:find("fired", 1, true) and not l:find("NOT", 1, true), "the Hornet turns away (RE_SV_DealLeave fired)", l)
+    end)
+    A.log_("deal: the Hornet taken off", 35, "deal", true)
+    A.do_(function() ST.check(ST.findLog("deal: the Hornet taken off", ST.marks.deal, true) ~= nil, "the Hornet taken off") end)
+    -- the Podarge on its own
+    local P = {}
+    A.do_(function()
+        local r = SV_Spawn("SV_Unit_DealPodarge")
+        ST.check(tonumber(r) and r > 0, "the Podarge spawned (SV_Unit_DealPodarge)", tostring(SV_ERR and SV_ERR[r] or r))
+    end)
+    A.wait(2)
+    A.do_(function()
+        ST.check(SV_Event("RE_SV_DealPodargeGo") == 1, "RE_SV_DealPodargeGo fired")
+        P.a = aias()
+        ST.info(string.format("Aias-class planes: %d (%s)", #P.a, P.a[1] and P.a[1].name or "-"))
+        ST.check(#P.a >= 1, "the Podarge's body there (a LiveAIAiasClassPlane)", #P.a)
+        ST.info("SV_UnitAlive Podarge " .. tostring(SV_UnitAlive("SV_Unit_DealPodarge")))
+    end)
+    A.wait(15)
+    A.do_(function()
+        local b = aias()
+        local m = 0
+        if P.a[1] and b[1] then m = math.sqrt((b[1].X - P.a[1].X) ^ 2 + (b[1].Y - P.a[1].Y) ^ 2) / 100 end
+        ST.check(m > 500, "the Podarge moving (15 s on)", string.format("%.0f m; at (%.1f, %.1f) km, alt %.1f km", m,
+            (b[1] or {}).X and b[1].X / 1e5 or 0, (b[1] or {}).Y and b[1].Y / 1e5 or 0, (b[1] or {}).Z and b[1].Z / 1e5 or 0))
+        local parts = 0
+        pcall(function() for _ in pairs(SPC.CLEAN_OBJ["SV_Unit_DealPodarge"] or {}) do parts = parts + 1 end end)
+        ST.info("the Podarge's objects seen: " .. parts)
+        if b[1] then
+            local o = b[1].o
+            pcall(function() ST.look(ST.off(ST.at(o), -15000, 6000, 4000), ST.at(o), 60) end)
+        end
+    end)
+    A.wait(0.5); A.do_(function() ST.shot("deal_podarge"); ST.lookBack() end)
+    A.do_(function() ST.check(tonumber(SV_Recycle("SV_Unit_DealPodarge", 1)) ~= nil, "the Podarge taken off") end)
+    -- the C-130s
+    A.do_(function()
+        local r = SV_Spawn("SV_Unit_DealCargo")
+        ST.check(tonumber(r) == 3, "three C-130s spawned (SV_Unit_DealCargo)", tostring(SV_ERR and SV_ERR[r] or r))
+    end)
+    A.wait(2)
+    A.do_(function() ST.check(SV_Event("RE_SV_DealCargoGo") == 1, "RE_SV_DealCargoGo fired") end)
+    A.wait(10)
+    A.do_(function()
+        ST.check(tonumber(SV_UnitAlive("SV_Unit_DealCargo")) == 3, "the C-130s still up 10 s on", tostring(SV_UnitAlive("SV_Unit_DealCargo")))
+        SV_Recycle("SV_Unit_DealCargo", 1)
+    end)
+    -- War's anger's drones
+    A.mark("anger")
+    A.do_(function() ST.check(DECOY and DECOY.angerStart and DECOY.angerStart(2, "the autotest") == true, "DECOY.angerStart(2)") end)
+    A.log_("THE DECOY's UAV %d+ up", 30, "anger")
+    A.do_(function()
+        ST.check(ST.findLog("THE DECOY's UAV %d+ up", ST.marks.anger) ~= nil, "a Spear UAV up for War's anger",
+            ST.findLog("THE DECOY's UAV", ST.marks.anger, true))
+    end)
+    A.wait(20)
+    A.do_(function()
+        ST.info("decoy lines: " .. tostring(ST.findLog("lock", ST.marks.anger, true)))
+        ST.check(ST.plane() ~= nil and D ~= nil, "still in the run")
+    end)
+end
+
 SUITES.solgpitch = function()
     intoRun()
     local T = {}
