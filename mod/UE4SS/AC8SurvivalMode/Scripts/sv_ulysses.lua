@@ -222,15 +222,26 @@ local function rock(key, at, vel, scale, spin, tailX)
             okA and A2 and string.format("(%.1f, %.1f, %.1f km)", A2.X / 100000, A2.Y / 100000, A2.Z / 100000) or "?",
             q(function() return addrOf(a.RootComponent) == addrOf(c) end), tostring(TRAILOK)))
     end
-    return { a = a, c = c, pm = pm }
+    return { a = a, c = c, pm = pm, name = nameOf and nameOf(a) or nil }
+end
+-- ((2026-11-24, the ulysses2 autotest's crash at round 2's start, a minute's break after round 1) still ours: its address
+-- live AND still named as when made (hard rule 59: a freed address is soon another object's)
+local function rockLive(r)
+    if not (r and r.a and liveObj(r.a)) then return false end
+    if r.name and nameOf then
+        local ok, nm = pcall(nameOf, r.a)
+        if not ok or nm ~= r.name then return false end
+    end
+    return true
 end
 local function rockAt(r)
-    if not (r and liveObj(r.a)) then return nil end
+    if not rockLive(r) then return nil end
     local ok, L = pcall(function() return r.a:K2_GetActorLocation() end)
     return ok and L and { X = L.X, Y = L.Y, Z = L.Z } or nil
 end
 local function rockOff(r)
-    if r and liveObj(r.a) then pcall(function() r.a:K2_DestroyActor() end) end
+    if rockLive(r) then pcall(function() r.a:K2_DestroyActor() end) end
+    if r then r.a = nil end
 end
 local function boom(at, scale)
     if at and fxAt then pcall(fxAt, cfg().fx, at, scale, 8) end
@@ -627,12 +638,16 @@ end
 
 local SKYM = { list = {}, nextAt = 0 }
 local skyOne                                          -- (one of the sky's meteors: below)
-local function skyTick(now)
-    local c = cfg().sky or {}
+-- the sky's meteors past their time (or gone) taken away: every tick, the round's or the break's (the ulysses2 autotest's
+-- crash: through a minute's break they flew on untouched, hundreds of km, and round 2 touched what the game had freed)
+local function skyClean(now)
     for i = #SKYM.list, 1, -1 do
         local m = SKYM.list[i]
-        if now >= m.dieAt or not liveObj(m.r.a) then rockOff(m.r); table.remove(SKYM.list, i) end
+        if now >= m.dieAt or not rockLive(m.r) then rockOff(m.r); table.remove(SKYM.list, i) end
     end
+end
+local function skyTick(now)
+    local c = cfg().sky or {}
     if c.enabled == false or now < SKYM.nextAt then return end
     SKYM.nextAt = now + span(c.every_s, 2.5)
     local me = playerLocation and playerLocation()
@@ -743,6 +758,7 @@ function ULY.tick(now)
     filmTick(now)
     local s = D and D.special
     local on = (s and s.kind == "ulysses" and (D.state == "fighting" or D.state == "spawning")) or J.on
+    skyClean(now)
     if on then skyTick(now)
     elseif #SKYM.list > 0 and not (U and U.phase) then
         local nextIs = D and ULY.roundIs(D.round + 1)
