@@ -974,7 +974,6 @@ check(RUN.credits == 30000 and has(RUN.msg.ZfaCarrier, "BOTH CARRIERS ARE OUT"),
 check(ESC.hulls.SV_Unit_Cargo1 == nil, "the hull found in the tick, not in the callback")
 run(0.5)
 check(ESC.hulls.SV_Unit_Cargo1 ~= nil and has(line("carrier: SV_Unit_Cargo1's hull"), "ctslf"), "ship 1's hull found as it spawned")
-
 ---------------------------------------------------------------------------------------------------- launches
 print("launches")
 K.launch_wait_s = 10                                -- (this section's timings: the 0.74.11 wait)
