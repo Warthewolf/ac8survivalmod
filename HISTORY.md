@@ -4211,5 +4211,5 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   (RE_SV_ZfaFree_*: they circled at their 3 km cover area's edge); a pause probe (each pause logs the in-game menu
   stack and the pause page's widgets: her pause menu stopped drawing mid-run, then the game failed and restarted the
   mission in place at round 22 and nothing spawned after). Zips: public c7838608, friends' 11fe43d3, tester's
-  005ed7b2, packed with SV_LB_REGISTER=0 (NOT registered yet: register by hand). INSTALLED 2026-11-23: the friends'
+  005ed7b2, packed with SV_LB_REGISTER=0, then all three registered by hand (lb_register.py, the user). INSTALLED 2026-11-23: the friends'
   co-op zip (backup build/backup/install_before_0.75.64; 164 files verified). Not yet seen in game: all of the above.
