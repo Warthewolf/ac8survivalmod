@@ -6254,8 +6254,11 @@ SUITES.ulysses = function()
             pcall(function() vx, vy, vz = v.X, v.Y, v.Z end)
             local m = math.sqrt(vx * vx + vy * vy + vz * vz)
             if m < 1 then m = 1 end
-            return { X = f.L.X - vx / m * back * 100 + side * 100, Y = f.L.Y - vy / m * back * 100, Z = f.L.Z - vz / m * back * 100 + 3000 }
-        end, function() local f = pick(big); return f and f.L end
+            -- (where it'll be when the picture's taken, 1.5 s on: the camera behind that spot, looking at it)
+            local A = { X = f.L.X + vx * 1.6, Y = f.L.Y + vy * 1.6, Z = f.L.Z + vz * 1.6 }
+            AHEAD = A
+            return { X = A.X - vx / m * back * 100 + side * 100, Y = A.Y - vy / m * back * 100, Z = A.Z - vz / m * back * 100 + 3000 }
+        end, function() return AHEAD end
     end
     A.do_(function()
         if not ST.check(ULY ~= nil and SPC.kinds.ulysses ~= nil, "ULYSSES is in this build") then return "abort" end
