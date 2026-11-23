@@ -263,7 +263,8 @@ function SOLG.spawn(at, yaw, vel)
         local nb = body:GetNumBones()
         for i = 0, nb - 1 do
             local bn = body:GetBoneName(i):ToString()
-            if bn:match("_W$") and pcall(function() body:HideBoneByName(FName(bn), 0) end) then hid = hid + 1 end
+            -- ((2026-11-23) the body's own wreck, never shown, its shape terminated too (PBO_Term): a solid one in its hollow shaft)
+            if bn:match("_W$") and pcall(function() body:HideBoneByName(FName(bn), bn == "SOLG_W" and 1 or 0) end) then hid = hid + 1 end
         end
     end)
     step("its spin")
