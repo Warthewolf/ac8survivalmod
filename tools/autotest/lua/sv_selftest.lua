@@ -6496,7 +6496,7 @@ SUITES.ulytrails = function()
         T.F, T.R = f, r
         T.look = { X = T.C.X + f.X * 500000, Y = T.C.Y + f.Y * 500000, Z = T.C.Z }
         for i, row in ipairs(ROWS) do
-            local at = { X = T.look.X - r.X * 250000, Y = T.look.Y - r.Y * 250000, Z = T.C.Z + (#ROWS / 2 - i) * 60000 }
+            local at = { X = T.look.X - r.X * 250000, Y = T.look.Y - r.Y * 250000, Z = T.C.Z + (#ROWS / 2 - i) * 45000 }
             local rk = ULY.testRock("C", at, { X = r.X * 25000, Y = r.Y * 25000, Z = 0 }, 3, row[2])
             T.rocks[#T.rocks + 1] = rk
             ST.info(string.format("row %d (top first): %s: %s", i, row[1], rk and "up" or "NOT up"))
