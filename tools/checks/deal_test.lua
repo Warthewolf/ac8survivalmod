@@ -241,6 +241,14 @@ nextRound(); runD(C.targets_after_s + 2)
 check(spawned("SV_Unit_SpWaspA") and spawned("SV_Unit_SpWaspB") and not spawned("SV_Unit_SpWaspC") and not spawned("SV_Unit_SpFord"),
     "the fleet: groups A and B's ships, not the Ford")
 check(DEAL.T.total == 2, "a body each: its hull, not its turret (" .. tostring(DEAL.T.total) .. ")")
+do
+    local moved = 0
+    for _, x in ipairs(spawns) do if x[1]:find("^SV_Unit_SpWasp") and x[2] and x[5] then moved = moved + 1 end end
+    check(moved == 2 and logged("the fleet's spot at sea:") and has(lastCallout() and callouts[#callouts][2], " KM"),
+        "the fleet moved to a spot at sea (each ship's pose given), its place on the callout: " .. tostring(callouts[#callouts][2]))
+    local a, b = spawns[#spawns - 1], spawns[#spawns]
+    check(a and b and math.abs(math.sqrt((a[2] - b[2]) ^ 2 + (a[3] - b[3]) ^ 2) - 300000) < 1, "its two groups 3 km apart")
+end
 MADE.SV_Unit_SpWaspA[1].HealthInternal = 0
 credits = {}
 runD(3)

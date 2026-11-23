@@ -57,7 +57,14 @@ CFG.specials.deal = {
     targets = {
         podarge = { units = { "SV_Unit_DealPodarge" }, go = "RE_SV_DealPodargeGo", per = 6000, per_round = 300 },
         cargo = { units = { "SV_Unit_DealCargo" }, go = "RE_SV_DealCargoGo", per = 2000, per_round = 100 },
-        fleet = { groups = 2, per = 1200, per_round = 60 },   -- (SPORT.fleet's first groups: a Wasp, 2 Aegis, 2 boats each)
+        -- ((2026-11-23) the user: "you're also supposed to spawn a fleet in a random ocean location") SPORT.fleet's first
+        -- groups (a Wasp, 2 Aegis, 2 boats each) moved to a random spot at sea: ring_km from the airfield, open water
+        -- (traced: nothing above sea_z + 5 m) clear_km all round it, a random heading; its groups group_km apart, each laid
+        -- out as the Spaceport's (Aegis 1.5 km ahead 450 m aside, boats 4 km ahead 350 m aside); no spot in `tries`:
+        -- where the Spaceport has them
+        fleet = { groups = 2, per = 1200, per_round = 60, ring_km = { 15, 34 }, clear_km = 3, tries = 40, sea_z = 350,
+                  group_km = 3, z = { wasp = 0, aegis = 300, boat = 0 },
+                  lay = { aegis = { 1.5, 0.45 }, boat = { 4.0, 0.35 } } },
     },
     pay = { all_bonus = 3000, all_bonus_per_round = 150 },
     anger = { no_chance = 0.20, no_drones = 5, silent_drones = 7, silent_rounds = 2, after_s = 20 },
@@ -67,7 +74,7 @@ CFG.specials.deal = {
              row_target = "THE DEAL: %s %d / %d DOWN",
              name = { podarge = "PODARGE", fleet = "ENEMY FLEET", cargo = "EMBLEM DIRECT CARGO" },
              arrive = { podarge = "PODARGE INBOUND", fleet = "ENEMY FLEET SPOTTED", cargo = "EMBLEM DIRECT CARGO INBOUND" },
-             arrive_sub = { podarge = "WAR'S TIP: A PODARGE FROM THE WEST", fleet = "WAR'S TIP: SHIPS OFF THE SPACEPORT",
+             arrive_sub = { podarge = "WAR'S TIP: A PODARGE FROM THE WEST", fleet = "WAR'S TIP: AN ENEMY FLEET AT SEA, %s, %d KM",
                             cargo = "WAR'S TIP: 3 C-130s FROM THE NORTH" },
              paid = "THE DEAL PAID", paid_sub = "+%d ZOLLARS",
              escaped = "THE DEAL: TARGET ESCAPED", escaped_sub = "%d OF %d DOWN",
@@ -107,7 +114,7 @@ CFG.specials.deal = {
                   { "HAYTHORN|WAR & HAYTHORN leaving the area. Good hunting." },
                   { "WAR|We're off. Haythorn has a thing.", "HAYTHORN|Fuel. The thing is fuel." } },
         arrive_podarge = { { "WAR|There's your Podarge, as promised. Coming in from the west. Go get it." } },
-        arrive_fleet = { { "WAR|The fleet's off the spaceport, right where I said. Happy hunting." } },
+        arrive_fleet = { { "WAR|The fleet's out at sea, right where I said it'd be. Happy hunting." } },
         arrive_cargo = { { "WAR|Emblem Direct's C-130s, from the north, right on time. Make sure they're late." } },
         paid = { { "WAR|Contract fulfilled. The money's in your account. Pleasure, as always." },
                  { "WAR|Told you it'd pay. Money's sent. War out." } },
@@ -288,10 +295,11 @@ local function bodyUp(e)
     local ok, h = pcall(function() return e.o.HealthInternal end)
     return not (ok and type(h) == "number" and h <= 0)
 end
-local function spawnCaught(u)
+local function spawnCaught(u, pose)
     CAP = {}
     spawningUnit = u
-    local ok, r = pcall(SV_Spawn, u)
+    local ok, r
+    if pose then ok, r = pcall(SV_Spawn, u, pose.X, pose.Y, pose.Z, pose.yaw) else ok, r = pcall(SV_Spawn, u) end
     spawningUnit = nil
     local objs = CAP
     CAP = nil
@@ -303,7 +311,74 @@ local function unitsOf(kind)
     if kind ~= "fleet" then return t.units or {} end
     local out, want = {}, {}
     for i, g in ipairs(SPORT.GROUPS or {}) do if i <= num(t.groups, 2) then want[g] = true end end
-    for _, sh in ipairs(SPORT.fleet()) do if sh.kind ~= "ford" and want[sh.group] then out[#out + 1] = sh.unit end end
+    for _, sh in ipairs(SPORT.fleet()) do if sh.kind ~= "ford" and want[sh.group] then out[#out + 1] = sh end end
+    return out
+end
+-- the fleet's spot at sea: the ground's height under (x, y) (nil: nothing hit, open water), as sv_solg.lua's
+local kis
+local function groundZ(x, y)
+    if not valid(kis) then kis = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary") end
+    if not (valid(kis) and valid(survivalPC)) then return nil end
+    local hit, z = {}, nil
+    pcall(function()
+        kis:LineTraceSingle(survivalPC, { X = x, Y = y, Z = 1000000 }, { X = x, Y = y, Z = -100000 }, 0, true, {}, 0,
+            hit, true, { R = 0, G = 0, B = 0, A = 0 }, { R = 0, G = 0, B = 0, A = 0 }, 0)
+    end)
+    pcall(function() local h = hit.OutHit or hit; local l = h.ImpactPoint or h.Location; if l and l.Z then z = l.Z end end)
+    return z
+end
+local function atSea(x, y, f)
+    local top = num(f.sea_z, 350) + 500
+    local r = num(f.clear_km, 3) * 100000
+    for k = 0, 8 do
+        local a = k * math.pi / 4
+        local px, py = x + (k == 0 and 0 or math.cos(a) * r), y + (k == 0 and 0 or math.sin(a) * r)
+        local z = groundZ(px, py)
+        if z and z > top then return false end
+    end
+    return true
+end
+local COMPASS = { "NORTH", "NORTH EAST", "EAST", "SOUTH EAST", "SOUTH", "SOUTH WEST", "WEST", "NORTH WEST" }
+-- { x, y, yaw, tries, where (compass from the airfield), km } or nil
+local function seaSpot()
+    local f = cfg().targets.fleet or {}
+    local af = AIRFIELD or { X = 1609639.0, Y = -436414.0 }
+    local lo, hi = num((f.ring_km or {})[1], 15), num((f.ring_km or {})[2], 34)
+    for t = 1, math.max(1, math.floor(num(f.tries, 40))) do
+        local a, d = math.random() * 2 * math.pi, (lo + (hi - lo) * math.random()) * 100000
+        local x, y = af.X + math.cos(a) * d, af.Y + math.sin(a) * d
+        if atSea(x, y, f) then
+            local deg = (math.deg(math.atan(x - af.X, -(y - af.Y))) + 360) % 360     -- (north is -y)
+            return { x = x, y = y, yaw = math.random() * 360, tries = t, where = COMPASS[math.floor((deg + 22.5) / 45) % 8 + 1],
+                     km = math.floor(d / 100000 + 0.5) }
+        end
+    end
+    return nil
+end
+-- each fleet ship's pose round the spot: a group's Wasp at its centre, its Aegis and boats ahead either side
+local function fleetPoses(spot, units)
+    local f = cfg().targets.fleet or {}
+    local yr = math.rad(spot.yaw)
+    local ux, uy = math.cos(yr), math.sin(yr)                  -- (ahead; aside is (-uy, ux))
+    local out, gi, side = {}, {}, {}
+    local groups = {}
+    for _, sh in ipairs(units) do
+        if not gi[sh.group] then groups[#groups + 1] = sh.group; gi[sh.group] = #groups end
+    end
+    for _, sh in ipairs(units) do
+        local g = gi[sh.group]
+        local off = (g - (#groups + 1) / 2) * num(f.group_km, 3) * 100000   -- (the groups abreast)
+        local cx, cy = spot.x - uy * off, spot.y + ux * off
+        local ahead, aside = 0, 0
+        local lay = (f.lay or {})[sh.kind]
+        if lay then
+            local key = sh.group .. sh.kind
+            side[key] = (side[key] or 0) + 1
+            ahead, aside = num(lay[1], 0) * 100000, num(lay[2], 0) * 100000 * (side[key] % 2 == 1 and 1 or -1)
+        end
+        out[sh.unit] = { X = cx + ux * ahead - uy * aside, Y = cy + uy * ahead + ux * aside,
+                         Z = num((f.z or {})[sh.kind], 0), yaw = spot.yaw }
+    end
     return out
 end
 -- a deal to offer: by the weights, the fleet only when its ships' rows are in
@@ -416,8 +491,24 @@ local function targetsUp(T)
     end
     local said = {}
     T.bodies = {}
+    local poses, spot = {}, nil
+    if T.kind == "fleet" then
+        spot = seaSpot()
+        if spot then
+            poses = fleetPoses(spot, units)
+            T.where, T.km = spot.where, spot.km
+            log(string.format("deal: the fleet's spot at sea: (%.1f, %.1f) km, %s of the airfield %d km, heading %.0f (try %d)",
+                spot.x / 100000, spot.y / 100000, spot.where, spot.km, spot.yaw, spot.tries))
+        else
+            log("deal: no open water found for the fleet: where the Spaceport has its ships")
+            T.where, T.km = "OFF THE SPACEPORT", 0
+        end
+        local l = {}
+        for _, sh in ipairs(units) do l[#l + 1] = sh.unit end
+        units = l
+    end
     for _, u in ipairs(units) do
-        local r, objs = spawnCaught(u)
+        local r, objs = spawnCaught(u, poses[u])
         local b = (r > 0) and bodiesOf(objs) or {}
         said[#said + 1] = string.format("%s %s", u, r > 0 and string.format("%d objects, %d bod%s", r, #b, #b == 1 and "y" or "ies")
             or ("not spawned: " .. tostring(SV_ERR and SV_ERR[r] or r)))
@@ -431,7 +522,11 @@ local function targetsUp(T)
     T.state, T.at, T.goAt, T.watchAt = (T.total > 0) and "up" or "done", S.clock, S.clock + 1.0, S.clock + 3
     log(string.format("deal: round %d: %s up (%d): %s", D.round, T.kind, T.total, table.concat(said, ", ")))
     if T.total > 0 then
-        hudCallout(c.text.arrive[T.kind] or "THE DEAL", c.text.arrive_sub[T.kind] or "")
+        local sub = c.text.arrive_sub[T.kind] or ""
+        if T.kind == "fleet" then
+            sub = T.km and T.km > 0 and string.format(sub, T.where or "?", T.km) or "WAR'S TIP: AN ENEMY FLEET OFF THE SPACEPORT"
+        end
+        hudCallout(c.text.arrive[T.kind] or "THE DEAL", sub)
         say("arrive", c.lines["arrive_" .. T.kind] or {})
     end
 end
