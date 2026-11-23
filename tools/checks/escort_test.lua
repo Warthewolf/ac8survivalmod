@@ -1994,7 +1994,6 @@ local nl = #logs
 local okD2 = ZFA.dress(o, { paint = 3 })
 check(okD2 == false and #logs == nl, "... not tried again within a minute")
 check(ZFA.undress(o) == false and ZFA.dressedCount() == 0, "nothing to undress")
-
 logFile:close()
 print(fails == 0 and "escort test: all passed" or ("escort test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

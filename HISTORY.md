@@ -4213,3 +4213,15 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   mission in place at round 22 and nothing spawned after). Zips: public c7838608, friends' 11fe43d3, tester's
   005ed7b2, packed with SV_LB_REGISTER=0, then all three registered by hand (lb_register.py, the user). INSTALLED 2026-11-23: the friends'
   co-op zip (backup build/backup/install_before_0.75.64; 164 files verified). Not yet seen in game: all of the above.
+- 0.75.65 (2026-11-23, branch fix/escort-enemies-and-route): THE ESCORT clearly fewer enemies (the user: "Theres still
+  way too many ai that spawn in the escort mission", her pick "clearly fewer"; her 4-player run of 0.75.64 had 26 up at
+  the median, 32 at most, 20 waves in 20 minutes, 10 held at the cap): waves every 75 s (45), max_n 7 (12), max_up 16
+  (24), the round's own aircraft x0.75 (1.0); with 4 players waves of 6-10 (6-17), 23 up at most (30), 16 round fighters
+  (20); solo as before (every 60 s, 2-8, 14 up: now more often than co-op's). CHARLENE kept on her route (the user:
+  "Charlene bugged out": in that run she left her route ~35 km out, never came within 25 km of the touchdown, took her
+  final by route_max_s after 900 s 43 km out, 27 km aside and 5.4 km up, then climbed to ~12 km on it, 3 recovers spent,
+  until every player was down 20 minutes into the round): no 1.5 km nearer the approach fix in 40 s, her route given
+  again (RE_SV_CharCruiseSlow: the same path at the same speed), at most 6 times (`escort: CHARLENE off her route`); her
+  place logged every 10 s on her route (`escort: route: CHARLENE ...`); route_max_s 480 (900; her route took 297 s in the
+  run of 15:01 that landed), land_timeout_s 300 (480; that final took 132 s). escort_test / solo_test updated, all
+  passed. Not yet seen in game: whether a route given again brings a B-1B knocked off it back.
