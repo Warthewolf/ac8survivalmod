@@ -243,6 +243,9 @@ CARGO_AREA_M, CARGO_ALT_M = ALLY_SHIP_AREA_M, ALLY_SHIP_ALT_M
 # its hit spheres x1.25) and the one AC7 flew the ZFA-44EL's flight table on (the False Mihaly Su-47's boost table)
 ZFA_ROW, ZFA_NPC, ZFA_NPC_SOURCE, ZFA_MODEL = 'sv_zfa_ally', 'SV_Zfa_Ally', 'OP1026_su47_01', 'OP1026_su47_Ally'
 ZFA_NAME_KEY = 'SV_Zfa44'
+# ((2026-11-23) the user: "raise their speed": they flew 800-1,400 km/h and fell behind) the ZFA-44 rows' speed multipliers
+# (DT_NPC ...Coefficient; "full speed" sets every one 1.0 first), the TLS twins with them
+ZFA_SPEED_X = {'SpeedNormalCoefficient': 1.3, 'SpeedMaxCoefficient': 1.4, 'AccelerationCoefficient': 1.3}
 # ((2026-11-07) the user's screenshot: the boxes read "SU-47" over "ZFA-44": "remove that and change its aircraft name to
 # ZFA-44") the box's first line is the model row's name (DT_NPC_Model GameObjectDisplayName01): the host row on
 # ZFA_MODEL_SV, Survival's copy of ZFA_MODEL with ZFA_NAME_KEY for it (DT_SV_ModelRows; Lua adds it to DT_NPC_Model at the

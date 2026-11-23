@@ -742,6 +742,9 @@ def build_npc_rows():
         if full:                                             # (the plain Su-47 flies at x0.8; its hit spheres kept)
             for q in [q for q in row[2] if q[1].endswith('Coefficient') and q[1] != 'SphereCollisionRadiusCoefficient']:
                 set_prop(row[2], q[0], q[1], ('raw', 'Float', struct.pack('<f', 1.0)))
+            if npc in (survival_events.ZFA_NPC, survival_events.ZFA_DRONE_NPC):   # ((2026-11-23) the VAMPIRES faster)
+                for n, x in survival_events.ZFA_SPEED_X.items():
+                    set_prop(row[2], sidx(n), n, ('raw', 'Float', struct.pack('<f', x)))
         assert survival_events.fname(npc)[2] == 0, npc
         zfa_twin = {survival_events.ZFA_NPC: (survival_events.ZFA_MODEL_SV, survival_events.ZFA_TLS_NPC),
                     survival_events.ZFA_DRONE_NPC: (survival_events.ZFA_DRONE_MODEL_SV, survival_events.ZFA_DRONE_TLS_NPC)}.get(npc)
