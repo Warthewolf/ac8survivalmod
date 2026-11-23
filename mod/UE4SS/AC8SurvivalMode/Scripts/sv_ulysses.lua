@@ -121,7 +121,7 @@ local function placeAt(c, L, rot)                         -- (a whole rotation t
     return pcall(function() c:K2_SetWorldTransform({ Rotation = quatOf(rot), Translation = { X = L.X, Y = L.Y, Z = L.Z },
         Scale3D = c:GetComponentScale() }, false, {}, true) end)
 end
-local function rock(key, at, vel, scale, spin)
+local function rock(key, at, vel, scale, spin, tailX)
     local m = mesh(key)
     -- ((2026-11-23) its own streak behind it: the rock faces along its fall (+X forward), its spin a roll about that line)
     local hz = math.sqrt(vel.X * vel.X + vel.Y * vel.Y)
@@ -167,7 +167,7 @@ local function rock(key, at, vel, scale, spin)
             pcall(function() tc:SetCastShadow(false) end)
             pcall(function() tc:K2_AttachToComponent(c, FName("None"), 2, 2, 1, false) end)
             local ts = n(T.scale, 1) * scale
-            pcall(function() tc:SetRelativeScale3D({ X = ts * n(T.length_x, 1), Y = ts, Z = ts }) end)
+            pcall(function() tc:SetRelativeScale3D({ X = ts * n(T.length_x, 1) * (tailX or 1), Y = ts, Z = ts }) end)
             local tmid = T.paint and ULY.tailMid and ULY.tailMid()
             if tmid then pcall(function() tc:SetMaterial(0, tmid) end) end
         end
@@ -593,6 +593,7 @@ function ULY.spawn(now)
 end
 
 local SKYM = { list = {}, nextAt = 0 }
+local skyOne                                          -- (one of the sky's meteors: below)
 local function skyTick(now)
     local c = cfg().sky or {}
     for i = #SKYM.list, 1, -1 do
@@ -603,6 +604,13 @@ local function skyTick(now)
     SKYM.nextAt = now + span(c.every_s, 2.5)
     local me = playerLocation and playerLocation()
     local cx, cy = me and me.X or AIRFIELD.X, me and me.Y or AIRFIELD.Y
+    local burst = math.floor(span(c.burst, 1) + 0.5)
+    for _ = 1, math.max(1, burst) do
+        if #SKYM.list >= n(c.max_up, 70) then break end
+        skyOne(c, now, cx, cy)
+    end
+end
+skyOne = function(c, now, cx, cy)
     local b = math.random() * 2 * math.pi
     local d = span(c.from_km, 40) * 100000
     local alt = span(c.alt_m, 20000) * 100
@@ -611,7 +619,7 @@ local function skyTick(now)
     local v = span(c.speed_kmh, 12000) / 3.6 * 100
     local vel = { X = math.cos(across) * v, Y = math.sin(across) * v, Z = -v * rnd(0.05, 0.2) }
     local key = type(c.meshes) == "table" and c.meshes[math.random(1, #c.meshes)] or "D"
-    local r = rock(key, start, vel, span(c.scale, 3), rnd(20, 90))
+    local r = rock(key, start, vel, span(c.scale, 3), rnd(20, 90), n(c.tail_x, 1))
     if r then SKYM.list[#SKYM.list + 1] = { r = r, dieAt = now + n(c.life_s, 18) } end
 end
 local J = { on = false, rocks = {} }               -- (a joiner: the host's round on, its rocks drawn here by id)

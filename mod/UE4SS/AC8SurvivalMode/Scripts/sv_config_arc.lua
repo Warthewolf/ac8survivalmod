@@ -416,8 +416,11 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     -- the towns it aims at besides the airfield (cm; the airport key's town, docs/re/COMONA_MAP.md)
     towns = { { X = 1250000, Y = -320000 }, { X = 2350000, Y = -700000 } },
     -- scenery meteors high up, crossing the sky (every_s apart, alt_m up, speed_kmh, life_s)
-    sky = { enabled = true, every_s = { 1.5, 4 }, alt_m = { 15000, 25000 }, from_km = { 25, 60 }, speed_kmh = { 9000, 16000 },
-            life_s = 18, meshes = { "D", "C" }, scale = { 4, 10 } },
+    -- ((2026-11-24, the user: "more fake meteors at high altitude streaking across the sky at Sunrise, like it's truly about
+    -- to rain hell upon the world") was one every 1.5-4 s, 4-10x: now bursts of 2-5 every 0.4-1.2 s, up to max_up at once,
+    -- bigger, their streaks longer still (tail_x on the tail's length)
+    sky = { enabled = true, every_s = { 0.4, 1.2 }, burst = { 2, 5 }, max_up = 70, alt_m = { 12000, 28000 }, from_km = { 20, 70 },
+            speed_kmh = { 8000, 16000 }, life_s = 16, meshes = { "D", "C", "C" }, scale = { 5, 16 }, tail_x = 1.5 },
     -- the meshes (tools/ulysses: AC:I's o_meta ~97 m (A), o_metc ~6.5 m (C), o_metd ~3 m (D); o_metb / o_metx have no mesh in
     -- AC:I): its one-bone skeletal copies SK_SV_Ulysses_<K> (a static mesh of ours crashed the SOLG's test T0, a skeletal
     -- one drew: docs/re/SOLG.md 8), painted at run time as the SOLG is (paint: its rock texture as Basecolor on the x40a's
@@ -434,15 +437,16 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     -- ((2026-11-23) the user: "The meteor fragments have to have a smoke trail and fire VFX too") on each rock: AC8's smoke
     -- trail and its fire, each at its scale x the rock's; ((2026-11-23) "Don't use the Rod's Streak, come up with your own")
     -- the streak is our own: tail (SK_SV_Ulysses_Tail, tools/ulysses: a glowing taper behind the rock along its fall)
-    trails = { { path = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeNPC001", scale = 8 },
-               { path = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeFireNPC001", scale = 6 } },
+    -- ((2026-11-24, the user: "I want those fireball trails longer") smoke 8 -> 14, fire 6 -> 11, the streak 1.6 -> 4.5 long
+    trails = { { path = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeNPC001", scale = 14 },
+               { path = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeFireNPC001", scale = 11 } },
     -- our own streak: SM_SV_Ulysses_Tail (tools/ulysses: a 25 m teardrop behind the rock along -X, U along its length) on
     -- AC8's cloud lightning material (MI_NearCloudLightning001: emissive, translucent, static meshes only: the fleet's
     -- bolts' proven way) with the tail's own gradient T_SV_Ulysses_Tail_D (white-hot, orange, deep red, dark); component
     -- "static" (the A/B of 2026-11-23 decides it) or "skeletal" (SK_ twin, painted, no glow)
     -- ((2026-11-23, the A/B run: both rocks drew, the static tail on the cloud lightning material didn't) skeletal, on the
     -- rocks' gear material with its gradient, the gear's light-emissive slots tried for a glow (EmissiveLightMap on UV 1)
-    tail = { enabled = true, mesh = "Tail", component = "skeletal", scale = 1.0, length_x = 1.6,
+    tail = { enabled = true, mesh = "Tail", component = "skeletal", scale = 1.0, length_x = 4.5,
              paint = { parent = "/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear",
                        tex = { Basecolor = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Tail_D",
                                EmissiveLightMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Tail_D",
