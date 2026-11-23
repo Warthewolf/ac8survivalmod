@@ -6442,6 +6442,7 @@ SUITES.ulysses2 = function()
     A.do_(function() ST.shot("v_core_after") end)
     A.log_("ulysses: the core landed", 30, "v2", true, function(l)
         ST.check(l ~= nil and l:find("the airfield -", 1, true) ~= nil, "the core landed, the airfield hit", l)
+        ST.check(l ~= nil and l:find("in the land", 1, true) ~= nil, "the runway read as land (not the sea)", l)
     end)
     A.do_(function()
         ST.marks.v3 = ST.n
