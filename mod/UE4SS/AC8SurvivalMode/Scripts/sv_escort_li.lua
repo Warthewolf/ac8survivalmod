@@ -142,6 +142,8 @@ local function st()
 end
 local function liveLaser(r) return r.li ~= nil and liveAddr(r.li) == r.liA end
 local function remove(r, why)
+    -- ((the code review of 2026-11-23) its shooting sound's Stop first: posted on the carrier, it looped on after)
+    if r.sndOn and ZLI.sound then pcall(ZLI.sound, r, false) end
     if liveLaser(r) then pcall(function() r.li:K2_DestroyActor() end) end
     r.li, r.liA = nil, nil
     say("%s's laser removed (%s)", r.name, why)

@@ -91,7 +91,9 @@ function SCOOP.fromHost(f)
             pc.size_m, pc.max_s, pc.face_you = size, n(c.solg and c.solg.portal_max_s, 40), false
             J.ph = {}
             pcall(SPC.V.portalOpen, c, J.ph, { X = x * 100, Y = y * 100, Z = z * 100 }, yaw, now, pc, true)
-            J.phOut = now + n(pc.open_s, 4.5) + 6
+            -- ((the code review of 2026-11-23) held open as the host's is, through Audrey's briefing: closed through_s
+            -- after the host's "up" (the SOLG through it), portal_max_s at most; was open_s + 6, ~10 s)
+            J.phOut = now + n(pc.max_s, 120)
         end
         sl(string.format("the host's portal opens at (%.1f, %.1f) km, %.0f m across", x / 1000, y / 1000, size))
     elseif k == "up" then
@@ -102,6 +104,7 @@ function SCOOP.fromHost(f)
         local at = { X = x * 100 + vx * age, Y = y * 100 + vy * age, Z = z * 100 + vz * age }
         SOLG.spawnRound = D and D.round                   -- (taken down once the round's over here too)
         local ok = SOLG.spawn(at, yaw, { X = vx, Y = vy, Z = vz })
+        if J.ph and J.phOut then J.phOut = now + n(c.solg and c.solg.through_s, 6) end   -- (its portal closes once it's through)
         local placed = ok and SOLG.mirrorUp() or 0
         J.up = ok
         sl(string.format("the host's SOLG %s (%.0f s in, %d of its pieces placed so far: the rest as their copies come)",

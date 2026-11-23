@@ -548,12 +548,13 @@ local function targetsOver(T, why)
         hudCallout(c.text.escaped, string.format(c.text.escaped_sub, T.down, T.total))
         say("escaped", c.lines.escaped)
     end
-    if LB and LB.special then pcall(LB.special, "deal_" .. T.kind, T.total > 0 and T.down >= T.total, S.clock - (T.at or S.clock)) end
+    -- (no LB.special: a dev-install part the leaderboard's Worker doesn't know, lb_contract_test)
     log(string.format("deal: %s over (%s): %d of %d down, %d left (taken off unpaid), +%d paid", T.kind, why, T.down, T.total, left, T.paid))
 end
 local function targetsTick()
     local T, c = DEAL.T, cfg()
-    if not T or T.state == "done" then DEAL.T = (T and T.state == "done") and nil or T; return end
+    if not T then return end
+    if T.state == "done" then DEAL.T = nil; return end          -- (the code review of 2026-11-23: `x and nil or T` kept it)
     local fighting = D.state ~= "wait" and D.round == T.round
     if T.state == "due" then
         if D.round > T.round then log(string.format("deal: round %d passed without its %s: dropped", T.round, T.kind)); DEAL.T = nil; return end

@@ -509,10 +509,11 @@ local WPN = { was = nil }
 function SOLG.weaponsAll(on)
     local c = SOLG.C.all_weapons
     if not (c and c.enabled ~= false) then return 0 end
-    local dt = loadObject(c.table)
-    if not valid(dt) then sl("all weapons: no " .. tostring(c.table)); return 0 end
     if on and WPN.was then return 0 end
     if not on and not WPN.was then return 0 end
+    -- (putting them back: the table already held, pinned, so nothing is loaded while a level is torn down)
+    local dt = (not on and WPN.dt and valid(WPN.dt)) and WPN.dt or loadObject(c.table)
+    if not valid(dt) then sl("all weapons: no " .. tostring(c.table)); return 0 end
     local nn = 0
     if on then
         WPN.was, WPN.dt = {}, dt
@@ -565,7 +566,7 @@ function SOLG.stop(why)
 end
 function SOLG.tick(now)
     if not S then return end
-    if (levelTorn and levelTorn()) or not D then S = nil; return end
+    if (levelTorn and levelTorn()) or not D then pcall(SOLG.weaponsAll, false); S = nil; return end   -- (the code review of 2026-11-23: never left on)
     if SOLG.targetsTick then pcall(SOLG.targetsTick) end
     if S and SLAS and SLAS.tick then
         local okL, errL = pcall(SLAS.tick, os.clock())
@@ -1062,5 +1063,5 @@ end
 function SOLG.debugTargets() return S and S.targets or {} end          -- (the tests')
 function SOLG.debugActor() return S and S.actor or nil end                    -- (the tests')
 function SOLG.boneLoc(bone) if S and liveObj(S.body) then return (boneAt(S.body, bone)) end end
-if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the SOLG"] = function() S = nil; CAPTURE = nil end end
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["the SOLG"] = function() pcall(SOLG.weaponsAll, false); S = nil; CAPTURE = nil end end
 end

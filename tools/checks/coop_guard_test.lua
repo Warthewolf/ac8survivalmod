@@ -724,7 +724,7 @@ local EFFECT = {
     ["join zd"] = function() return true end,
     ["join sb"] = function() return true end,
     ["join dl"] = function() return not DEAL or (DEAL.J and DEAL.J.id == 1 and DEAL.J.phase == "open") end,
-    ["join dr"] = function() return not DEAL or (DEAL.J and DEAL.J.phase == "closed" and DEAL.won ~= nil) end,
+    ["join dr"] = function() return not DEAL or (DEAL.J and DEAL.J.phase == "closed" and DEAL.J.taken ~= nil) end,
     ["join fh"] = function() return FISH.cl.haul[1] ~= nil end,
     ["join fsx"] = function() return FISH.cl.rows.fishing ~= nil end,
     ["join fw"] = function() return FISH.cl.weigh[1] ~= nil end,
