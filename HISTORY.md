@@ -4203,3 +4203,13 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   ..._TANACORN zips 84a7a317 / 17cc9896. INSTALLED 2026-11-23: the friends' co-op zip (the same build; backup
   build/backup/install_before_0.75.63; 164 files verified). Not yet seen in game: the formations, the frame rate with
   seven Podarges. Pushed to main as v0.75.63.
+- 0.75.64 (2026-11-23): runtime 0.32.43 (OnPlaneEw no longer reads a freed plane: the co-op crash at main.dll+0x4d144);
+  THE DEAL: the fleet kept inside the combat zone, the Podarges and C-130s spawn inside it and fly their routes, War
+  less often (chance 0.15, 4 breaks apart), the deal explained before the vote; the VAMPIRES: escort re-aimed every
+  2 s (was 6), their player kept unless another is 30 % nearer, the TLS's reach 4 km (was 2), the ZFA-44 rows' cruise
+  x1.3, top speed x1.4, acceleration x1.3, their final dive frees their area to the whole zone first
+  (RE_SV_ZfaFree_*: they circled at their 3 km cover area's edge); a pause probe (each pause logs the in-game menu
+  stack and the pause page's widgets: her pause menu stopped drawing mid-run, then the game failed and restarted the
+  mission in place at round 22 and nothing spawned after). Zips: public c7838608, friends' 11fe43d3, tester's
+  005ed7b2, packed with SV_LB_REGISTER=0 (NOT registered yet: register by hand). INSTALLED 2026-11-23: the friends'
+  co-op zip (backup build/backup/install_before_0.75.64; 164 files verified). Not yet seen in game: all of the above.
