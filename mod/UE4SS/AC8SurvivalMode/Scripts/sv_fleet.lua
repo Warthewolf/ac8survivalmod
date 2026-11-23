@@ -240,7 +240,7 @@ CFG.specials.fleet = {
                       -- the same glow, the oldest moved up_m over each bolt's top (into the cloud it comes out of) and
                       -- restarted, off life_s on; run 87: scale 1 unseen at 2-5 km at night, 3-6 lit the cloud blue, so 4, and the 19 x3)
                       cells = { enabled = true, sort = 100, scale_x = 2.6,   -- ((2026-11-23) "turn the brightness of the cloud lightning down a bit": every part ~20 % down, the exposure 1.1 -> 1.3)
-                                bolt_glow = { enabled = true, pool = 12, life_s = 2.5, up_m = 300, scale = 3.4, chance = 0.75, gap_s = 1.2,   -- (chance / gap_s: (2026-11-23) "cloud flash/burst needs to happen slightly less often as its almost seizure inducing")
+                                bolt_glow = { enabled = true, pool = 12, life_s = 2.5, up_m = 300, scale = 3.4, chance = 0.5, gap_s = 3.0,   -- (chance / gap_s: (2026-11-23) "cloud flash/burst needs to happen slightly less often as its almost seizure inducing"; again "the flashing needs to be less frequent": 0.75 / 1.2 s -> 0.5 / 3.0 s)
                                               -- ((2026-11-17) the flash with the bolt, tools/stormfx (TANI=1 dev builds), the
                                               -- first that loads: AC8's own cloud lightning with its spawn literals raised
                                               -- (burst.py; switched off life_s on, its particles finish), our own cooked one;
@@ -264,7 +264,7 @@ CFG.specials.fleet = {
                       -- game's cloud lightning material, a bolt each flash, the rain warmed up behind the fade (warm_fx);
                       -- cloud: Survival's own cloud light at some flashes (hard rule 70; 0.8-2M: 165k-365k unseen in the user's 0.74.91 flight,
                       -- 4M and 8M at 5 km round blacked nothing out in run 75; 4M at 50 km did in run 68))
-                      lightning = { enabled = true, every_s = { 0.4, 1.0 }, dist_km = { 2, 25 },   -- ((2026-11-18) the flashes slightly fewer: { 0.3, 0.8 } before; a friend: "the constant lightning flashes") alt_m = { 1500, 7000 },
+                      lightning = { enabled = true, every_s = { 1.0, 2.5 }, dist_km = { 2, 25 },   -- ((2026-11-18) the flashes slightly fewer: { 0.3, 0.8 } before; a friend: "the constant lightning flashes"; (2026-11-23) "the flashing needs to be less frequent": { 0.4, 1.0 } -> { 1.0, 2.5 }) alt_m = { 1500, 7000 },
                                     -- ((2026-11-17) a strike's light on your plane, the ships and the sea: our directional
                                     -- light from the strike, intensity x steps a tick, strikes within max_km, full at
                                     -- near_km down to fade_x at max_km; sv_fleet_storm.lua's slFlash)
