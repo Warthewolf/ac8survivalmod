@@ -727,7 +727,10 @@ skyOne = function(c, now, cx, cy)
     local vel = { X = math.cos(across) * v, Y = math.sin(across) * v, Z = -v * dip }
     local key = type(c.meshes) == "table" and c.meshes[math.random(1, #c.meshes)] or "D"
     local r = rock(key, start, vel, span(c.scale, 3), rnd(20, 90), n(c.tail_x, 1), cfg().sky_trails)
-    if r then SKYM.list[#SKYM.list + 1] = { r = r, dieAt = now + n(c.life_s, 18) } end
+    -- ((2026-11-24) falling now: burnt out before floor_m (out of any fighter's reach), or at life_s)
+    local life = n(c.life_s, 18)
+    if c.floor_m and vel.Z < -1 then life = math.min(life, (alt - n(c.floor_m, 16000) * 100) / -vel.Z) end
+    if r then SKYM.list[#SKYM.list + 1] = { r = r, dieAt = now + math.max(1, life) } end
 end
 local J = { on = false, rocks = {} }               -- (a joiner: the host's round on, its rocks drawn here by id)
 local function skyOff()

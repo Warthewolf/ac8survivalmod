@@ -419,16 +419,17 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     -- ((2026-11-24, the user: "more fake meteors at high altitude streaking across the sky at Sunrise, like it's truly about
     -- to rain hell upon the world") was one every 1.5-4 s, 4-10x: now bursts of 2-5 every 0.4-1.2 s, up to max_up at once,
     -- bigger, their streaks longer still (tail_x on the tail's length)
-    sky = { enabled = true, every_s = { 0.4, 1.2 }, burst = { 3, 7 }, max_up = 100, alt_m = { 24000, 34000 }, from_km = { 25, 60 }, dip = { 0, 0.02 },
-            speed_kmh = { 8000, 16000 }, life_s = 20, meshes = { "D", "C", "C" }, scale = { 8, 22 }, tail_x = 1.5,
+    sky = { enabled = true, every_s = { 0.4, 1.2 }, burst = { 3, 7 }, max_up = 100, alt_m = { 28000, 34000 }, from_km = { 25, 60 }, dip = { 0.22, 0.4 }, floor_m = 16000,
+            speed_kmh = { 8000, 14000 }, life_s = 14, meshes = { "D", "C", "C" }, scale = { 8, 22 }, tail_x = 1.5,
             -- ((2026-11-24, the user: "high altitude so that the player can't reach them, like very very high") 45-65 km up (was
             -- 12-28; 45-65 km, 0.75.80, drew nothing: past what the game draws), 24-34 km, dipping at most 2 % of their speed (was
             -- 5-20 %: they came down to fighter heights), 8-22x
             -- (the user, 2026-11-24: "East to West": from the east (0 = +X), within 12 degrees of due west; "spread out more
             -- than 60km": lateral_km either side of you, 150 (300 km north to south), bursts and max_up raised to keep them thick)
-            -- ((2026-11-24, the user: "Why are the meteors moving the wrong way?") from_deg 0 (+X) flew them west to east:
-            -- +X isn't east (COMONA_MAP.md's compass was unconfirmed); 180 (-X), checked against the dawn sun by the autotest
-            from_deg = 180, lateral_km = 150, spread_deg = 12 },
+            -- ((2026-11-24, the user: "Why are the meteors moving the wrong way?") the autotest's compass: +X IS east (the
+            -- plane's yaw 26.7 = the minimap's south-east, the dawn sun to the east-south-east): from_deg 0 kept. What read
+            -- wrong: flying level 24-34 km up, from a fighter below they looked to climb; now they fall (dip), see alt_m
+            from_deg = 0, lateral_km = 150, spread_deg = 12 },
     -- the meshes (tools/ulysses: AC:I's o_meta ~97 m (A), o_metc ~6.5 m (C), o_metd ~3 m (D); o_metb / o_metx have no mesh in
     -- AC:I): its one-bone skeletal copies SK_SV_Ulysses_<K> (a static mesh of ours crashed the SOLG's test T0, a skeletal
     -- one drew: docs/re/SOLG.md 8), painted at run time as the SOLG is (paint: its rock texture as Basecolor on the x40a's
