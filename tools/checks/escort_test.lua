@@ -342,7 +342,7 @@ check(k.ready() == false and has(line("escort: no ESCORT special in this build")
 alive.SV_Unit_EscRock = nil
 clock = clock + 31
 check(k.ready() == true, "ready with every unit there (SV_UnitAlive -7: not spawned)")
-check(k.budget(20) == 20 and k.budget(3) >= 2, "its round's budget x budget_x, whole 2-ships")
+check(k.budget(20) == 16 and k.budget(3) >= 2, "its round's budget x budget_x (0.75 since 2026-11-23: 20 -> 16), whole 2-ships")
 
 ---------------------------------------------------------------------------------------------------- spawn and route
 print("spawn and route")
@@ -613,7 +613,7 @@ do
     for u, v in pairs(D.up) do busy[u] = v end
     for u in pairs(busy) do D.up[u] = nil end
     run(0.25)
-    check(#wavesOf() == n0 + 1 and has(line("escort: wave " .. (n0 + 1) .. ":"), "max_up 30 for the room"),
+    check(#wavesOf() == n0 + 1 and has(line("escort: wave " .. (n0 + 1) .. ":"), "max_up " .. ESC.roomMore(C.waves.max_up, "max_up") .. " for the room"),
           "co-op: a wave sent with max_up enemy aircraft up (the room's max_up is higher), logged")
     for u, v in pairs(busy) do if D.up[u] == nil then D.up[u] = v end end
     CFG.specials.escort.coop_scale = false
@@ -651,7 +651,8 @@ do                                                  -- (at the zone's corner, he
     check(math.abs(mid.x - ZONE.X) < m - 1 and math.abs(mid.y - ZONE.Y) < m - 1 and w.sec ~= prev.sec,
           "at her start (the combat zone's corner) a wave from a direction inside the zone")
 end
-
+function HER_A() for _, A in ipairs(ESC.S.ac) do if A.her then return A end end return {} end   -- (her route watch, 2026-11-23)
+check(HER_A().rerouted == C.landing.reroute_max and has(line("escort: CHARLENE off her route"), "her route given again (" .. C.landing.reroute_max .. " of " .. C.landing.reroute_max .. ")") and has(line("escort: route: CHARLENE"), "km from the approach fix"), "her route watched: held still on her route (the waves' checks), her route given again (RE_SV_CharCruiseSlow), reroute_max times and no more, her place logged")
 ---------------------------------------------------------------------------------------------------- her landing
 print("her landing")
 local fromLand = #logs + 1
@@ -679,7 +680,7 @@ check(nFired("RE_SV_CharFinal") == 2 and has(line("escort: CHARLENE off her appr
       "off her approach (1.5 km farther out than her closest): her path given again")
 run(1)
 check(nFired("RE_SV_CharFinal") == 2, "... not again within recover_gap_s")
-check(nFired("RE_SV_CharCruiseSlow") == 2 and has(line("escort: CHARLENE's final at 600 km/h"), "RE_SV_CharCruiseSlow fired"),
+check(nFired("RE_SV_CharCruiseSlow") == 2 + (HER_A().rerouted or 0) and has(line("escort: CHARLENE's final at 600 km/h"), "RE_SV_CharCruiseSlow fired"),
       "her final at 450 a second after her Final record (her route given again at its 450: final_fast), the gear down")
 local CS = g.circuit_start
 pose(Y, before(CS, 247, 3000, CS[3], 500))         -- (YORKE holding, the circuit's start 3 km ahead, heading 247)
@@ -1993,7 +1994,6 @@ local nl = #logs
 local okD2 = ZFA.dress(o, { paint = 3 })
 check(okD2 == false and #logs == nl, "... not tried again within a minute")
 check(ZFA.undress(o) == false and ZFA.dressedCount() == 0, "nothing to undress")
-
 logFile:close()
 print(fails == 0 and "escort test: all passed" or ("escort test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

@@ -43,8 +43,8 @@ if esc then
         "solo: 40 % of the flights after her, 2 at most (60 %, 4 in co-op)")
     local w = esc.waves
     check(soloVal(w, "min_n") == 2 and soloVal(w, "max_n") == 8 and soloVal(w, "every_s") == 60 and soloVal(w, "max_up") == 14
-        and soloVal(w, "first_s") == 20 and w.min_n == 4 and w.max_n == 12 and w.every_s == 45 and w.max_up == 24,
-        "solo: waves of 2-8 every 60 s, 14 up at most (4-12, 45 s, 24 in co-op)")
+        and soloVal(w, "first_s") == 20 and w.min_n == 4 and w.max_n == 7 and w.every_s == 75 and w.max_up == 16,
+        "solo: waves of 2-8 every 60 s, 14 up at most (4-7, 75 s, 16 in co-op since 2026-11-23)")
 end
 
 -- the fleet's, in sv_fleet.lua's text and where they're read
