@@ -523,7 +523,11 @@ local function land(f, now)
     rockOff(f.r)
     local dmg = f.big and n(cfg().big.airfield_damage, 120) or n(cfg().fragments.airfield_damage, 8)
     local d = math.sqrt((f.P.X - AIRFIELD.X) ^ 2 + (f.P.Y - AIRFIELD.Y) ^ 2)
-    if f.big or (isLand and (f.what == "airfield" or d < 400000)) then
+    -- ((2026-11-24, the 0.75.72 shots: "A FRAGMENT HIT THE TOWN" for one in the sea) the sea takes it: no damage, no
+    -- callout (the core's still the airfield's, wherever it comes down)
+    if not f.big and not isLand then
+        U.landedSea = (U.landedSea or 0) + 1
+    elseif f.big or (isLand and (f.what == "airfield" or d < 400000)) then
         if AF and type(AF.bomb) == "number" then AF.bomb = AF.bomb + dmg end
         U.landedAirfield = U.landedAirfield + 1
     else
@@ -532,7 +536,8 @@ local function land(f, now)
     end
     if f.big and hudCallout then hudCallout(cfg().text.big_hit, nil) end
     ul(string.format("%s landed on the %s (%.1f, %.1f km), in the %s%s", f.big and "the core" or "a fragment", f.what, f.P.X / 100000,
-        f.P.Y / 100000, f.where or "?", (f.big or (isLand and (f.what == "airfield" or d < 400000))) and string.format(": the airfield -%d", dmg) or ""))
+        f.P.Y / 100000, f.where or "?", (f.big or (isLand and (f.what == "airfield" or d < 400000))) and string.format(": the airfield -%d", dmg)
+        or (not isLand and ": harmless" or "")))
     return at
 end
 local function shot(f, now)
@@ -702,8 +707,8 @@ end
 function ULY.roundOver(now, s)
     if not U then return end
     for _, x in ipairs(U.list) do if not x.done then x.done = true; disarm(x.e); rockOff(x.r) end end
-    ul(string.format("round %d over: %d of %d fragments shot down, %d landed on the airfield, %d on the town%s", D.round, U.shot,
-        U.sent + (U.bigSent and 1 or 0), U.landedAirfield, U.landedTown, U.bigSent and "" or ""))
+    ul(string.format("round %d over: %d of %d fragments shot down, %d landed on the airfield, %d on the town, %d in the sea", D.round,
+        U.shot, U.sent + (U.bigSent and 1 or 0), U.landedAirfield, U.landedTown, U.landedSea or 0))
     if host() then boxTexts(false) end
     local last = U.phase >= math.max(1, math.floor(n(cfg().rounds, 2)))
     tell("e", last and "1" or "0")
