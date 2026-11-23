@@ -1,68 +1,68 @@
-# THE DEAL: WAR & HAYTHORN's Yes / No vote (2026-11-12; the user's dev install only; not yet run in game)
+# THE DEAL: WAR & HAYTHORN's offers between rounds (the user's dev install only; not yet run in game)
 
-The user's design (2026-11-11 / 2026-11-12): by chance, on some specials, an allied, marked F/A-18F Super Hornet named
-**WAR & HAYTHORN** joins the players. War (she; no flight experience, the WSO seat) asks whether they want to cut a deal:
-carry on the special with higher stakes (YES) or not (NO). Every player votes, solo too; the most votes win, a tie is NO.
-Then the Hornet leaves, with subtitles saying so. A deal taken pays extra cash. Subtitles only, no voice.
+The user's design (2026-11-23; it replaced the first draft of 2026-11-12, a vote on raising a special's stakes).
+Code: `mod/UE4SS/AC8SurvivalMode/Scripts/sv_deal.lua` (one DEV ONLY block: cut from every release and TESTER zip by
+`tools/strip_test_only.py` / `tools/dev_only.py`), its events in `tools/survival_events_deal.py`, its units in
+`tools/build_survival_world.py` (the Hornet) and `tools/build_survival_units.py` `deal_units` (the targets). War's anger
+uses THE DECOY's trap (`sv_decoy.lua` `DECOY.angerStart`). Test: `tools/checks/deal_test.sh`.
 
-Code: `Scripts/sv_deal.lua` (one DEV ONLY block: out of every release and TESTER zip, TANACORN ones too:
-tools/strip_test_only.py, tools/dev_only.py); its hooks: the NEXT row (sv_hud.lua) and the messages
-(sv_coop_migration.lua), each in a DEV ONLY block. Settings: `CFG.specials.deal` (in sv_deal.lua while it's the dev
-install's; set in CFG_DEFAULTS too, so it's no edit for the leaderboard and no difference the co-op host sends).
+Characters: War (back seat, does the talking, the main character) and Haythorn (flies). Subtitles only, no voice.
 
 ## 1. How a deal runs
-| Step | What | Settings |
-| --- | --- | --- |
-| roll | once a round, offer_after_s into a special's round (never in your STORE: SPC.storeShut), the special's kind rolled against its chance; a kind not listed never | `kinds` (D1: which kinds and chances are still the user's call), `offer_after_s` 45 |
-| offer | the Hornet spawned ahead and to the right of you, flying your way; War's introduction (an exchange) | `hornet` |
-| open | War asks; the callout THE DEAL; the NEXT row `THE DEAL: CTRL+A YES / CTRL+X NO   YES y  NO n   0:30   YOU: YES` | `vote_s` 30, `keys`, `intro_max_s` |
-| close | the clock out, or every player answered; YES wins only with more votes; a tie, or nobody: NO | `allow_change` (the last answer counts) |
-| result | War's line for YES / NO / a tie / nobody; the result on the row result_row_s | `result_row_s` 8 |
-| leave | leave_after_s later the leaving lines; the Hornet taken off leave_s after them (SV_Recycle, on a timer: hard rule 4) | `leave_after_s` 7, `hornet.leave_s` 25 |
-| pay | YES only, at the round's clear: what this game earned from the close to the clear again x (kills_x - 1) (its own: COOP.payOwn), and the host's bonus to everyone (addCredits: co-op's "cr", split as a special's pay); a round moving on uncleared: nothing | `pay` (kills_x 2, bonus 5000 + 250 a round: a proposal) |
-| stakes | what YES does to the round itself | `stakes` (D2: the user's call, none yet) |
+1. **The offer.** In a break between rounds (`D.state == "wait"`), `offer_after_s` in, never while you're in the
+   STORE, a roll against `chance` (0.35; the user: 35 %). Once a break. Not while a deal's target is still to come.
+2. **The Hornet.** `SV_Unit_DealHornet` (an allied F/A-18F: the escort fighters' pattern, MOONCHILD's unit copied, its
+   DT_NPC row `SV_Deal_F18f` a copy of `OP1024_f18f_01` on the allied model `OP1024_f18f_Ally`, callsign key
+   `SV_DealHornet` = WAR & HAYTHORN) is spawned 1.5 km ahead and 0.7 km right of you, 150 m up (700 m when you're on
+   the ground). A second on, the event zoom: `RE_SV_DealCam` (Mission 22's shuttle focus camera,
+   `LookAt_Event_Camera_ms22-01`, onto `SV_Obj_DealHornet`, off after 4 s).
+3. **The question.** War's introduction, then the vote: AC8's own Yes / No (Mission 8's
+   `LiveActivateYesNoExecution` and its three `YesNoEvent` triggers, cloned: `RE_SV_DealAsk` opens it on each game, the
+   answer in the int flag `SV_DealAns`: 1 YES (Left), 2 NO (Right), 3 silence (TimeOut)). Ctrl+A / Ctrl+X still vote.
+   `vote_s` 30 s. The most votes win; a tie is NO; nobody voting is silence.
+4. **The break is held** while the deal's on (`hold_break`): the next round's start (`D.at`) is pushed back to the
+   vote's end and the result.
+5. **The result**, then the Hornet turns away (`RE_SV_DealLeave`: the path `SV_Path_DealHornetOut`, far north east) and
+   is recycled `hornet.leave_s` (25 s) later.
 
-The clock holds while the game is paused. A new run drops a deal that was on.
-
-## 2. Co-op (host-authoritative)
-| Message | From, to | Fields | Guards (tools/checks/coop_guard_test.lua: host "vt", joiner "dl", "dr") |
+## 2. The deals (one offered each time, by `deals` weights; their target comes in the NEXT round)
+| deal | units | built from | pay (`targets.*`) |
 | --- | --- | --- | --- |
-| `dl` | host, everyone | id, kind, secs left, yes, no | id whole 1-1e6; kind a word of 16 or fewer; secs 0-120; counts 0-24 |
-| `vt` | joiner, host | id, 1 / 0 | a slot in range and not the host's; the open vote's id; 0 or 1 only; nothing after the close |
-| `dr` | host, everyone | id, yes, no, 1 / 0 | as dl's |
-`dl` goes reliable as the vote opens and as a vote comes in, unreliable every resend_s (a player linking mid-vote gets it).
-War's lines go to the joiners as the host's other subtitles do ("sb"), the Hornet as its spawns do, the callout as "co".
-A joiner drops a vote with no result 10 s after its close (the host gone).
+| podarge | `SV_Unit_DealPodarge` (`SV_Obj_DealPodarge`), route `SV_Path_DealPodarge` west to east ~9 km south of the runway, 2.8 km up, 450 km/h | Mission 12's Norn `EAUnit01_Norn0` (AC8's Podarge: Mission 25 day 2's "It's a Podarge!") with its 16 parts (its Cargo1 slot left out); its rows Mission 12's (`norn_01` as `sv_deal_podarge`, the parts' under their own names) | 6000 + 300 x round |
+| cargo | `SV_Unit_DealCargo` (`SV_Obj_DealCargo_0..2`), three lanes `SV_Path_DealCargoA/B/C` north to south east of the runway, 2.2 km up, 420 km/h | a copy of the heavy flight `EA_Unit_01_Air2` on `sv_deal_cargo` (Mission 4's `t160_common`, NpcId `OP0054_c130_01`) | 2000 + 100 x round each |
+| fleet | the Spaceport round's ships, its first 2 groups (a Wasp, 2 Aegis, 2 boats each), where they sit | `sv_spaceport.lua` `SPORT.fleet`; only when `ALLY.fleetReady` (their turrets' rows); never in the Spaceport round itself (it waits a round) | 1200 + 60 x round each |
+The target comes `targets_after_s` (15 s) into its round, with a callout and War's line, and `RE_SV_DealPodargeGo` /
+`RE_SV_DealCargoGo` put it onto its route. Each target down pays (`SV_UnitAlive` watched every 2 s); all of them
+down adds `pay.all_bonus` (3000 + 150 x round), THE DEAL PAID. One still up at the round's end or `targets_s` (420 s)
+on is taken off unpaid: TARGET ESCAPED. The pay is the host's `addCredits` (shared in co-op as every special's).
 
-## 3. Still to do
-- **R (the game's own Yes / No).** `LiveActivateYesNoExecution` (Mission 8) and `ULiveYesNoRadioWorldSubsystem`: its args,
-  how the answer comes back, its buttons (a pad!), whether it opens more than once a level and in co-op. Needs the
-  game's paks (tools/checks/ep_dump.py on Mission 8's event package). Until then the keys are UE4SS's: keyboard only.
-- **The Hornet's unit.** `SV_Unit_DealHornet` (an allied F/A-18F, the campaign's f18f, flying MOONCHILD's set, not the
-  aces': hard rule 22) with its name key `SV_DealHornet`, ALLY-marked with a target box (hard rule 32): world data and
-  rows as VOID WATCHER 1's (tools/survival_events.py AWACS_*, build_survival_units.py). Until a build has it, the deal goes
-  on without the plane (`deal: the Hornet: ... not spawned (no such unit or aircraft)`).
-- D1 (which kinds, their chances), D2 (what YES does, how much it pays), D3 (whether a vote can change).
-- When it ships: the lines into config/subtitles.ini (`python -I tools/subtitles.py merge`), its settings into survival.ini.
+## 3. War's anger
+- NO (or a tie): `anger.no_chance` (0.20): 5 Marker Drones in the next round.
+- Nobody answering: 7 Marker Drones, a new flight in each of the next 2 rounds.
+- The drones come `anger.after_s` (20 s) into the round: `DECOY.angerStart(n)`, THE DECOY's trap alone (its Spear UAVs
+  lock the nearest player; 8 s to shoot one down before its Tonitrus Spear; `DECOY.cap` the count; unpaid). Never in
+  THE DECOY's own round, nor while the last drones are up (both wait a round). WAR IS ANGRY.
 
-## 4. Log lines
-`deal: offered on round R (<kind>, chance C, rolled X): the Hornet up|not up, the vote opens in N s`,
-`deal: round R (<kind>): no offer (rolled X, chance C)`, `deal: the Hornet: <unit> up 1.5 km ahead of you (WAR & HAYTHORN)`,
-`deal: vote N open for 30 s (P players)`, `deal: player S votes YES|NO`, `deal: vote N closed (the clock ran out | everyone
-answered): YES y, NO n: TAKEN|REFUSED (the most votes | a tie is no | nobody answered: no)`, `deal: the stakes for <kind>:
-none yet`, `deal: round R cleared with the deal: +X (earned E x 1.00 more) + bonus B`, `deal: the Hornet taken off (...)`;
-a joiner: `deal: the host's vote N open (<kind>, S s left)`, `deal: your vote on N: YES (sent to the host)`, `deal: the
-host's vote N closed: ...`.
+## 4. Co-op (host-authoritative)
+- `dl|id|kind|secs left|yes|no` (the open vote), `vt|id|1/0` (a joiner's answer), `dr|id|yes|no|taken` (the result).
+- `RE_SV_DealAsk` is each game's own (`sv_coop.lua` KEEP_EVENTS, a DEV ONLY line); the camera, the leave path and the
+  targets' routes are the host's, forwarded. The Hornet, the targets and the drones reach the joiners as the host's
+  spawns do; War's lines as its subtitles, the callouts as "co".
 
-## 5. Test checklist (dev install)
-1. Solo, Ctrl+H in a round: the Hornet ahead and right (its box WAR & HAYTHORN, allied), War's two lines, then her ask,
-   the callout, the NEXT row counting down from 0:30.
-2. Ctrl+A: closed at once, TAKEN, War's yes line, the row's result; 7 s on the leaving lines; 25 s later the Hornet gone.
-3. Clear the round: `deal: round R cleared with the deal` and THE DEAL PAID's callout.
-4. Ctrl+H again next round, Ctrl+X: REFUSED; once more, no answer: NO after 30 s.
-5. Pause during a vote: the clock holds.
-6. Co-op, two players: the joiner sees the Hornet, the lines, the row; its Ctrl+A / Ctrl+X reaches the host (`deal: player 2
-   votes ...`); one YES, one NO: a tie, REFUSED; both YES: TAKEN, each game paid its own extra, the bonus on both.
-7. Ctrl+A / Ctrl+X do nothing in the game itself (UE4SS doesn't take the key from the game).
-Checks without the game: `sh tools/checks/deal_test.sh` (the part, a release's and TESTER's copies) and
-`sh tools/checks/coop_guard_test.sh`.
+## 5. Log lines
+`deal: the break after round R: no offer (rolled ...)`, `deal: offered in the break after round R (<kind>, ...): its
+target in round N`, `deal: the Hornet: ... up`, `deal: the event zoom onto the Hornet (RE_SV_DealCam fired)`,
+`deal: AC8's Yes / No asked for vote N`, `deal: you answered YES|NO`, `deal: vote N closed (<why>): YES y, NO n: ...`,
+`deal: the break held for the deal`, `deal: War's anger (...): n Marker Drones in round(s) ...`, `deal: round R: <kind>
+up (n): ...`, `deal: <kind> onto its route`, `deal: <kind>: n down`, `deal: <kind> over (<why>): d of t down, l left`,
+`decoy: War's anger (...)`, `deal: the Hornet turns away`, `deal: the Hornet taken off`.
+
+## 6. Test checklist (dev install; Ctrl+H offers one now)
+1. The Hornet appears beside you with the zoom onto it; WAR & HAYTHORN on its box; it doesn't attack you.
+2. AC8's Yes / No shows; Left = YES, Right = NO; letting it run out = silence.
+3. The next round waits for the vote.
+4. YES on each deal: the Podarge (its parts, its turrets and VLS fire?), the C-130s (three lanes), the fleet off the
+   spaceport; each pays as it goes down; the leftovers vanish at the round's end.
+5. NO a few times: sometimes 5 drones next round; silence: 7 drones in each of the next 2 rounds.
+6. The Hornet flies off north east and disappears.
+7. Co-op: each player gets the prompt; the vote counts both; the joiner sees the Hornet, the targets and the drones.

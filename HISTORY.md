@@ -4149,3 +4149,14 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   closing its mouth, thin seams between slices at 0/90/180/270 deg 650 m in; flown into it, the game's own collision hit.
   Every weapon locks it while it's up (DT_WeaponSettings: 1 row only; QAAM/LASM not confirmed in game). Its black hole open
   4 s into Audrey's briefing and held till it comes through (call_s 62). Tests: solgcrash 11/11, valkasolg 38/38, smoke 5/5.
+- 0.75.45 (2026-11-23, branch feature/the-deal, dev install only): THE DEAL as the user designed it (docs/re/DEAL.md).
+  In a break, 35 %: WAR & HAYTHORN's allied F/A-18F (SV_Unit_DealHornet, OP1024_f18f_01 on the allied model) beside you,
+  the event zoom onto it (RE_SV_DealCam: Mission 22's shuttle camera); War offers one deal on AC8's own Yes / No
+  (Mission 8's prompt cloned: RE_SV_DealAsk / SV_DealAns), the break held for the vote; after it the Hornet turns away
+  north east (RE_SV_DealLeave) and is recycled. The deals' targets come in the next round, paid per target down plus an
+  all-down bonus, the rest escaping unpaid at the round's end: a Podarge (Mission 12's Norn EAUnit01_Norn0 with its parts,
+  ported as the Ladons, its Cargo1 slot left out; Mission 12's rows), Emblem Direct's 3 C-130s (a heavy-flight copy on
+  Mission 4's t160_common, OP0054_c130_01), or the Spaceport round's ships (groups A and B). NO: 20 % War's anger, 5
+  Marker Drones next round; nobody answering: 7 in each of the next 2 (sv_decoy.lua DECOY.angerStart: THE DECOY's trap
+  alone, unpaid). deal_test 72/72 (and its release / TESTER copies). Leaderboard: 32e2cf32 registered. NOT run in game:
+  the prompt, the Hornet, the Norn's port (its turrets / VLS), the C-130s' paths, the drones outside THE DECOY's round.
