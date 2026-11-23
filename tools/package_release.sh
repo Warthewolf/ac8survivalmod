@@ -191,7 +191,9 @@ if [ "$COOP" = 1 ]; then
     python -X utf8 -I tools/coop_edition.py "$st" "$mod"
     lua=$(grep -m1 -E '^(local )?VERSION = ' "$mod/Scripts/main.lua" | sed 's/.*"\(.*\)".*/\1/')
     sed -i "s/(Lua [^,]*, runtime/(Lua $lua, runtime/" "$st/README.txt"
-    suffix="_COOP$suffix"
+    # ((2026-11-23) the user: "public build needs COOP": PUBLIC=1 COOP=1, Host / Join in the public zip, its version the
+    # friends' (they link), under the public name: no _COOP)
+    [ "$PUBLIC" = 1 ] || suffix="_COOP$suffix"
 fi
 python -I tools/edition.py "$ed" "$mod"/Scripts/*.lua "$mod/config/survival.default.ini" "$st/README.txt"
 python -X utf8 -I tools/checks/lua_check.py "$mod"/Scripts/*.lua
