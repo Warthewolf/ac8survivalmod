@@ -185,7 +185,7 @@ fi
 # voices, the storm, round 30's subtitles and her lasers' Laser7, the ZFA-44 (ZFA=1), no test keys, no Distant Thunder, the
 # public name
 rm -f "$F/out"/*.zip
-(cd "$F" && env RELEASE_DIR="$F/out" SV_LB_REGISTER=0 PUBLIC=1 TANI=1 ZFA=1 sh tools/package_release.sh online 9.9.11) \
+(cd "$F" && env RELEASE_DIR="$F/out" SV_LB_REGISTER=0 PUBLIC=1 TANI=1 ZFA=1 COOP=1 sh tools/package_release.sh online 9.9.11) \
     > "$T/tani_public.txt" 2>&1 && r=0 || r=1
 z=$(ls "$F/out"/AC8SurvivalMode_9.9.11_Online.zip 2>/dev/null | head -n 1)
 [ -n "$z" ] || { r=1; tail -n 8 "$T/tani_public.txt"; }
@@ -203,6 +203,12 @@ if [ -n "$z" ]; then
     check $r "PUBLIC=1 TANI=1: the fleet storm's cloud bursts in it"
     keysoff "$z" && r=0 || r=1
     check $r "PUBLIC=1 TANI=1: no test keys"
+    python -I -c "
+import sys, zipfile
+z = zipfile.ZipFile(sys.argv[1])
+m = next(z.read(n).decode('utf-8', 'replace') for n in z.namelist() if n.endswith('/Scripts/main.lua'))
+sys.exit(0 if '-coop' in m.split('VERSION = ', 1)[1].split(chr(10), 1)[0] else 1)" "$z" && r=0 || r=1
+    check $r "PUBLIC=1 COOP=1: the co-op edition (Host / Join; its VERSION tagged as the friends')"
     # (its Lua keeps the storm pieces the fleet's storm calls (sv_anomalies_dev.lua's THUNDER bolts and clouds, the round
     # cut since 2026-11-18): no way to start the round, and nothing of it a player sees in the ini)
     python -I -c "
