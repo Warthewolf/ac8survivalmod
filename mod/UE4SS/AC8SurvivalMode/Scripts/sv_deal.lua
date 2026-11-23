@@ -1,8 +1,7 @@
--- sv_deal.lua: THE DEAL, WAR & HAYTHORN's offers between rounds (the user's design of 2026-11-23; the user's dev install
--- only for now). Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order after sv_audit: a name another
--- part uses is a global of this mod's Lua state, its own helpers stay local. The whole part is one dev-install-only block
--- (its markers below), which tools/strip_test_only.py takes out of every release zip and tools/dev_only.py out of every
--- TESTER zip (TANACORN ones too): only this header is left there, its settings (CFG.specials.deal) with it.
+-- sv_deal.lua: THE DEAL, WAR & HAYTHORN's offers between rounds (the user's design of 2026-11-23; in every build since
+-- 0.75.62, the user: "put war and haythorn into the public build. it worked"). Part of AC8 Survival Mode's runtime, run
+-- by main.lua in MODULES' order after sv_audit: a name another part uses is a global of this mod's Lua state, its own
+-- helpers stay local. Its test key (Ctrl+H) is a test build's only, as every test key.
 --
 -- How it plays (the user, 2026-11-23):
 --   * In a break between rounds, by chance (chance, 35 %), WAR & HAYTHORN's allied F/A-18F (SV_Unit_DealHornet) comes up
@@ -31,7 +30,7 @@
 -- `deal: vote N closed (<why>): YES y, NO n: TAKEN|REFUSED (<rule>)`, `deal: round R: <kind> up ...`, `deal: <kind>:
 -- target down ...`, `deal: <kind> over (...)`, `deal: War's anger ...`, `deal: the Hornet taken off (...)`.
 -- Test key (dev): Ctrl+H, the deal offered now (a break or a round).
--- DEV ONLY BEGIN (THE DEAL: the user's dev install only; docs/re/DEAL.md)
+-- ((2026-11-23) in every build: the user, "put war and haythorn into the public build. it worked"; docs/re/DEAL.md)
 CFG.specials.deal = {
     enabled = true,
     chance = 0.35,                            -- a break's chance of a deal (the user: 35 %)
@@ -857,4 +856,3 @@ if cfg().enabled then
 end
 if TEST_TICKS then TEST_TICKS[#TEST_TICKS + 1] = { name = "deal", fn = function(now) DEAL.tick(now) end } end
 end
--- DEV ONLY END
