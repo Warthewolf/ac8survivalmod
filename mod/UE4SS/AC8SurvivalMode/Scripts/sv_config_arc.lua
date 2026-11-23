@@ -419,8 +419,10 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     -- ((2026-11-24, the user: "more fake meteors at high altitude streaking across the sky at Sunrise, like it's truly about
     -- to rain hell upon the world") was one every 1.5-4 s, 4-10x: now bursts of 2-5 every 0.4-1.2 s, up to max_up at once,
     -- bigger, their streaks longer still (tail_x on the tail's length)
-    sky = { enabled = true, every_s = { 0.4, 1.2 }, burst = { 2, 5 }, max_up = 70, alt_m = { 12000, 28000 }, from_km = { 20, 70 },
-            speed_kmh = { 8000, 16000 }, life_s = 16, meshes = { "D", "C", "C" }, scale = { 5, 16 }, tail_x = 1.5 },
+    sky = { enabled = true, every_s = { 0.4, 1.2 }, burst = { 2, 5 }, max_up = 70, alt_m = { 12000, 28000 }, from_km = { 25, 55 },
+            speed_kmh = { 8000, 16000 }, life_s = 16, meshes = { "D", "C", "C" }, scale = { 5, 16 }, tail_x = 1.5,
+            -- (the user, 2026-11-24: "East to West": from the east (0 = +X), 60 km across, within 12 degrees of due west)
+            from_deg = 0, lateral_km = 60, spread_deg = 12 },
     -- the meshes (tools/ulysses: AC:I's o_meta ~97 m (A), o_metc ~6.5 m (C), o_metd ~3 m (D); o_metb / o_metx have no mesh in
     -- AC:I): its one-bone skeletal copies SK_SV_Ulysses_<K> (a static mesh of ours crashed the SOLG's test T0, a skeletal
     -- one drew: docs/re/SOLG.md 8), painted at run time as the SOLG is (paint: its rock texture as Basecolor on the x40a's

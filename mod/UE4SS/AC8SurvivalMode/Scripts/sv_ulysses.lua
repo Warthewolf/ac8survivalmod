@@ -611,11 +611,22 @@ local function skyTick(now)
     end
 end
 skyOne = function(c, now, cx, cy)
-    local b = math.random() * 2 * math.pi
+    -- ((2026-11-24, the user: "They should not go from all directions but East to West") from_deg's side of you (the world's
+    -- angle: 0 = east, +X; north is -Y, COMONA_MAP.md), spread lateral_km across, flying the other way within spread_deg;
+    -- no from_deg: all directions, as before
     local d = span(c.from_km, 40) * 100000
     local alt = span(c.alt_m, 20000) * 100
-    local start = { X = cx + math.cos(b) * d, Y = cy + math.sin(b) * d, Z = alt }
-    local across = b + math.pi + rnd(-0.6, 0.6)                         -- (across the sky, past you, dipping)
+    local start, across
+    if c.from_deg ~= nil then
+        local b = math.rad(n(c.from_deg, 0))
+        local lat = rnd(-1, 1) * n(c.lateral_km, 40) * 100000
+        start = { X = cx + math.cos(b) * d - math.sin(b) * lat, Y = cy + math.sin(b) * d + math.cos(b) * lat, Z = alt }
+        across = b + math.pi + math.rad(rnd(-1, 1) * n(c.spread_deg, 10))
+    else
+        local b = math.random() * 2 * math.pi
+        start = { X = cx + math.cos(b) * d, Y = cy + math.sin(b) * d, Z = alt }
+        across = b + math.pi + rnd(-0.6, 0.6)                         -- (across the sky, past you, dipping)
+    end
     local v = span(c.speed_kmh, 12000) / 3.6 * 100
     local vel = { X = math.cos(across) * v, Y = math.sin(across) * v, Z = -v * rnd(0.05, 0.2) }
     local key = type(c.meshes) == "table" and c.meshes[math.random(1, #c.meshes)] or "D"
