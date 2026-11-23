@@ -327,3 +327,23 @@ function VSOLG.state(s)
     return { state = G.state, eta = G.hitAt and math.max(0, G.hitAt - os.clock()) or nil, phase = G.phase, broken = G.broken or 0,
              portal_to_solg_s = G.from and G.portalAt and (G.from - G.portalAt) or nil }
 end
+
+-- TEST ONLY BEGIN (Survival's own Wwise bank, test of 2026-11-23: tools/wwise, the sound project AC8_WWISE_PROJECT)
+-- Ctrl+O: Play_SV_SolgBreakBig (AC:I's SOLG_BREAK_BIG_01, the user's exception of 2026-11-23) 500 m ahead of you, through
+-- AC8's own Wwise (PostEventAtLocation): its event asset carries its bank (bulk data), routed to AC8's "sfx" bus by
+-- name. To hear: it plays, it fades with distance (fly away and press again), the game's SFX volume and pause act on it.
+testKey("O", "sv_valka_solg.lua's Wwise sound test", function()
+    local path = "/Game/Mods/SurvivalMode/Wwise/Events/Default_Work_Unit/Play_SV_SolgBreakBig.Play_SV_SolgBreakBig"
+    local ev, ak = SPC.V.asset(path), StaticFindObject("/Script/AkAudio.Default__AkGameplayStatics")
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    if not (ev and valid(ak) and pawn and valid(pawn)) then
+        log("wwise test: NOT played (" .. (ev and "no Wwise or no plane" or "its event didn't load: is SurvivalMode_Wwise_P installed?") .. ")")
+        return
+    end
+    local at, f = pawn:K2_GetActorLocation(), pawn:GetActorForwardVector()
+    local where = { X = at.X + f.X * 50000, Y = at.Y + f.Y * 50000, Z = at.Z + f.Z * 50000 }
+    local ok, id = pcall(function() return ak:PostEventAtLocation(ev, where, { Pitch = 0, Yaw = 0, Roll = 0 }, survivalPC) end)
+    log(string.format("wwise test: Play_SV_SolgBreakBig %s (playing id %s) 500 m ahead at (%.0f, %.0f, %.0f)",
+        ok and "posted" or "NOT posted", tostring(ok and id or id), where.X, where.Y, where.Z))
+end)
+-- TEST ONLY END
