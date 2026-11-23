@@ -6281,6 +6281,25 @@ SUITES.ulysses = function()
     end)
     A.wait(3)
     A.do_(function() ST.shot("u_start_your_view") end)
+    A.wait(4)
+    A.do_(function()                                     -- ((2026-11-24) "the wrong way": the sky's meteors from the sun's side
+        local sun
+        local ok, list = pcall(FindAllOf, "DirectionalLightComponent")
+        for _, l in ipairs(ok and list or {}) do
+            local okF, f = pcall(function() return l:GetForwardVector() end)
+            local okI, it = pcall(function() return l.Intensity end)
+            if okF and f and (not sun or (okI and tonumber(it) and it > sun.i)) then sun = { X = -f.X, Y = -f.Y, Z = -f.Z, i = okI and tonumber(it) or 0 } end
+        end
+        local _, SK = ULY.debug()
+        local m = SK and SK.list and SK.list[1]
+        local v
+        pcall(function() local x = m.r.pm.Velocity; v = { X = x.X, Y = x.Y } end)
+        if not (sun and v) then ST.info("sun / meteor not read: " .. tostring(sun ~= nil) .. " " .. tostring(v ~= nil)); return end
+        local hs = math.sqrt(sun.X ^ 2 + sun.Y ^ 2); local hv = math.sqrt(v.X ^ 2 + v.Y ^ 2)
+        local dot = (sun.X * v.X + sun.Y * v.Y) / math.max(1e-6, hs * hv)
+        ST.info(string.format("the sun lies toward (%.2f, %.2f, %.2f) (+X, +Y, up); a sky meteor flies (%.0f, %.0f) cm/s", sun.X, sun.Y, sun.Z, v.X, v.Y))
+        ST.check(dot < -0.5, "the sky's meteors fly away from the dawn sun (from the east)", string.format("cos %.2f", dot))
+    end)
     A.picture("u_ab_rocks", function() local P = ULY.abAt; return P and { X = P.X - 25000, Y = P.Y, Z = P.Z + 4000 } end,
         function() return ULY.abAt end, 50)                -- (the A/B: skeletal left, static right of where you flew)
     A.log_("ulysses: paint: the rock's instance made", 30, "u0", true, function(l)
