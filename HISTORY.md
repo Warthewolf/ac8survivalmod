@@ -4244,3 +4244,14 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   (o_meta) in round 20, the sky's meteors, the white fade and JULY 1999 / PRESENT DAY, the film look (a post-process
   volume), AC:I's Stardust sounds (Sounds/ulysses). TEST ONLY Ctrl+Q. ulysses_test 20/20. Staged as
   build/release/stage_dev_0.75.70 (dev, test keys kept), not registered, NOT installed. Not yet seen in game: all of it.
+- 0.75.71 / 0.75.72 / 0.75.73 (2026-11-23/24, branch feature/ulysses): ULYSSES made to show in game, through the autotest
+  (suite ulysses, 14/14 each run): the rocks put where they fall once their mesh is their root (0.75.71: they lay under
+  the sea at the origin); an A/B run showed both our skeletal and static rocks draw and a static mesh of ours doesn't
+  crash; the rocks face their fall; smoke and fire trails (AC8's NS_DamagedSmoke(Fire)NPC001); our own streak behind
+  each rock (SK_SV_Ulysses_Tail, the user: "Don't use the Rod's Streak, come up with your own"); the Spear's sea
+  splash (the user: "tonitrus spear water impact"); the film look as a HUD wash (AC8 ignores our post-process volume),
+  its fade on os.clock (it stuck at half); landing times on the round's clock (0.75.72's rocks landed late, under the
+  ground); co-op: "ul" messages (round, fragment, shot down, landed, end) so joiners draw the rocks, splashes and cards,
+  coop_guard_test rows. Screenshots sent to the user (rocks up close, the streaks far off, the film look, PRESENT DAY).
+  Staged as build/release/stage_dev_0.75.7x (dev, test keys kept), not registered, NOT installed. Not yet seen: the
+  streak's glow up close, a co-op game.

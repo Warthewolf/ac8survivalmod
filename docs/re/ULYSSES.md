@@ -24,16 +24,24 @@ the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the
   damage through AF.bomb (8 a fragment, 120 the core), a town's: a callout.
 - The sky's meteors (scenery): one every 1.5-4 s, 15-25 km up, crossing the sky past you at 9000-16000 km/h, 18 s each.
 - The time shift: a fade in from white and the card JULY 1999 at round 1; at round 2's end the fade, PRESENT DAY.
-- The film look: a PostProcessVolume of ours (unbound, priority 1000): saturation 0.55, a warm tint, film grain 0.45,
-  vignette 0.55, faded in / out over 2 s [T: whether AC8's own post-process lets it through; its line says how many of
-  its 4 settings were written].
+- The film look: a full-screen warm wash over the picture (sv_hud.lua HUD.film: an Image on Survival's HUD canvas,
+  behind its text; film.overlay / overlay_a, a slight flicker), faded in / out over 2 s on os.clock. The
+  PostProcessVolume of ours is still made (saturation, tint, grain, vignette) but AC8's camera manager ignores it (the
+  view is the plane's, no CameraComponent): the 0.75.72 autotest showed the wash, not the volume [D].
 - Lines (subtitles.ini specials.ulysses.text.say.*): COMONA CONTROL at the start, the core, home.
 
 ## 3. How a fragment is made [D in code, T in game]
 - An Actor of ours (the SOLG's newActor), a SkeletalMeshComponent with SK_SV_Ulysses_<A|C|D> (one bone ROCK; a static mesh of
   ours crashed the SOLG's test T0, a skeletal one drew), painted at run time: one dynamic instance of the x40a's gear
   material with T_SV_Ulysses_Rock_D / _N / _L (as sv_solg.lua paint), a RotatingMovement spin, a ProjectileMovement at
-  its velocity (no gravity: its fall needs no tick), AC8's NS_DamagedSmokeFireNPC001 attached as its fire trail.
+  its velocity (no gravity: its fall needs no tick), facing its fall. Trails (cfg trails): AC8's NS_DamagedSmokeNPC001
+  (smoke) and NS_DamagedSmokeFireNPC001 (fire) attached. Its streak (the user: "Don't use the Rod's Streak, come up with
+  your own"): SK_SV_Ulysses_Tail, a 25 m teardrop along -X of ours (tools/ulysses/prepare.py), behind the rock, painted
+  as the rock is (the x40a gear material) with its white-orange-red gradient T_SV_Ulysses_Tail_D, its light-emissive
+  slots tried for a glow [T: the glow]. Landing times on the round's clock (D.now, the game's), never os.clock: the
+  0.75.72 run's rocks landed late, under the ground, when the two drifted apart [D].
+- Landing: a trace down at the aim point; land: AC8's air explosion and the airfield's / town's damage; the sea:
+  the Tonitrus Spear's splash (NS_Mission11Splash + NS_SplashRain, the user: "tonitrus spear water impact").
 - Its target box: one of the SOLG's target objects (SV_Unit_SOLG_KEW for fragments, SV_Unit_SOLG_MAG for the core:
   Mission 4's radar tower base, enemy, TGT mark) spawned at the round's start, its meshes hidden, parked, its flags off;
   attached to the rock when it falls (its lock point onto the rock), its flags on, its health set; off and parked again
@@ -47,15 +55,23 @@ the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the
 
 ## 4. Co-op
 The host's (or solo): the fragments, their targets, pay and damage. Joiners see the borrowed targets (the host's units)
-and run their own sky meteors and film look; the rocks themselves are drawn on the host only (to do: an "ul" message for
-each fragment's spawn so each game draws it).
+and draw the rest from the host's word, "ul|<kind>|..." (sv_coop.lua COOP.ulysses, sv_coop_migration.lua, ULY.fromHost),
+every value checked (coop_guard_test rows):
+- `r|phase` its round: the fade and JULY 1999 at phase 1; the sky's meteors run while it's on;
+- `f|id|key|x|y|z|vx|vy|vz|scale100|spin|big` a fragment launched (metres, cm/s): the same rock, trails and tail here;
+- `s|id` shot down (its explosion), `l|id|land` landed (the explosion, or the sea splash);
+- `e|last` its end (the rocks gone; at the last, the film look and sky off, PRESENT DAY).
+[T: a co-op game.]
 
 ## 5. Log lines
 `ulysses: round N: phase P of 2, K fragments[, the core at +45 s]; the film look on (4 of 4 settings written)`,
 `ulysses: targets: SV_Unit_SOLG_KEW up, 36 objects borrowed`, `ulysses: paint: the rock's instance made, 5 textures in`,
 `ulysses: a fragment shot down X s before it would have hit (Z km up), paid N`,
 `ulysses: a fragment landed on the airfield (x, y km): the airfield -8`, `ulysses: the core inbound: up, lands in T s`,
-`ulysses: round N over: S of T fragments shot down, A landed on the airfield, B on the town`.
+`ulysses: round N over: S of T fragments shot down, A landed on the airfield, B on the town`,
+`ulysses: film overlay: HUD.film true true, opacity X`, `ulysses: tail paint: its instance made`,
+a joiner's: `ulysses: the host's round: phase P; the film look ...`, `ulysses: the host's round over[: home again]`,
+`coop: the host's ULYSSES word not read: ...` (once).
 Test key: Ctrl+Q (TEST ONLY): the next round ULYSSES, phase 1; again phase 2; again off.
 
 ## 6. Test checklist (her run)
