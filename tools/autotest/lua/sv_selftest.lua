@@ -6328,6 +6328,18 @@ SUITES.ulysses = function()
     unhold()
     A.picture("u_fragment_trail", beside(false, 600, 200))
     unhold()
+    -- ((2026-11-24) its smoke as it flies (held still, the close-ups show a puff): a fragment kept moving, the camera on
+    -- its path 2.5 km ahead and 400 m aside, looking at where it'll be when the picture's taken (1.6 s on)
+    local OC = {}
+    A.picture("u_fragment_oncoming", function()
+        local f = pick(false)
+        if not f then return nil end
+        local vx, vy, vz = 0, 0, -1
+        pcall(function() local v = f.x.r.pm.Velocity; vx, vy, vz = v.X, v.Y, v.Z end)
+        local m = math.max(1, math.sqrt(vx * vx + vy * vy + vz * vz))
+        OC.at = { X = f.L.X + vx * 1.6, Y = f.L.Y + vy * 1.6, Z = f.L.Z + vz * 1.6 }
+        return { X = OC.at.X + vx / m * 250000 - vy / m * 40000, Y = OC.at.Y + vy / m * 250000 + vx / m * 40000, Z = OC.at.Z + vz / m * 250000 + 20000 }
+    end, function() return OC.at end, 50)
     A.do_(function() ST.shot("u_your_view_2") end)
     A.picture("u_sky_from_airfield", function() return { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 60000 } end,
         function()
