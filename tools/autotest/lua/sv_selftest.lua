@@ -6266,7 +6266,7 @@ SUITES.ulysses = function()
         ST.info(string.format("ULYSSES forced: round %d (phase 2), state %s", (D.round or 0) + 1, tostring(D.state)))
         ST.doing = "ULYSSES' start"
     end)
-    A.log_("ulysses: round %d+: phase 2 of 2", 60, "u0", true, function(l)
+    A.log_("ulysses: round %d+: phase 2 of 2", 60, "u0", false, function(l)
         if not ST.check(l ~= nil, "its round started (phase 2: the shower and the core)", l) then return "abort" end
         ST.check(l:find("4 of 4 settings written", 1, true) ~= nil, "the film look: its 4 settings written", l)
     end)
@@ -6318,7 +6318,7 @@ SUITES.ulysses = function()
         for _, f in ipairs(frags()) do pcall(function() f.x.e.o.HealthInternal = 10 end) end
         if ULY.debug then local U = ULY.debug(); if U then U.todo = U.sent; U.bigSent = true end end
     end)
-    A.log_("ulysses: round %d+ over", 60, "u2", true, function(l)
+    A.log_("ulysses: round %d+ over", 60, "u2", false, function(l)
         ST.check(l ~= nil, "its round over", l)
     end)
     A.wait(2)
