@@ -453,8 +453,9 @@ CFG.specials = {
                  -- Mission 25's blast (hit_fx), the airfield down for a round, solg_hit. Either way she's back back_s on
                  -- (onto your six through a portal) at at_pct, to be shot down
                  -- ((2026-11-23) call_s 62 (was 18): the user's Audrey briefing is 16 lines (~4 s each): the SOLG comes once she's done;
-                 -- 78 since its 4 longest lines were split to fit the strip (70 characters): 4 more lines, 16 s
-                 solg = { enabled = true, at_pct = 20, call_s = 78, corner_km = 30, alt_km = 12, travel_s = 360,   -- (Gould's 6 min)
+                 -- 66: subtitles.ini's briefing (it replaces these lines) is 17 lines since its 3-strip-line one was
+                 -- split in two (2026-11-23); 78 was counted on the Lua lines, which subtitles.ini replaces
+                 solg = { enabled = true, at_pct = 20, call_s = 66, corner_km = 30, alt_km = 12, travel_s = 360,   -- (Gould's 6 min)
                           pad_cm = { -1325196, 59778, 0 }, portal_size_m = 2600, portal_back_m = 1500, portal_max_s = 120, portal_at_s = 4,
                           park_km = { -40, 0, 15 },   -- (where she waits while it's up: from the pad, km along x, y, up)
                           reward = 3000, back_s = 12, wreck_s = 25, marker = true,   -- (its pieces ~4,900 more: sv_solg.lua)

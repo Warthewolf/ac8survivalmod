@@ -1083,7 +1083,7 @@ check(s1 and s2 and s3 and s4 and s1 < s2 and s2 < s4 and s4 < s3, "sv_spawn.lua
 check(has(spawnSrc, 'if role == "wolf" and ace.opener == "trap" then') and has(spawnSrc, 'WOLF.spawned(unit, n, D.now, type(t) == "table" and t.hold_max_s or nil)'),
       "ROLE.spawned: a trap squadron holds its trap until first contact")
 check(has(roundsSrc, "ROLE.pickRound(nWant, pick, aceKey or D.roundTier ~= nil)"), "sv_rounds.lua: an ace round draws by its tier's key")
-check(readAll(MOD .. "/Scripts/main.lua"):match('\nVERSION = "0%.74%.%d+"') ~= nil, "main.lua VERSION 0.74.x (tools/bump_version.py)")
+check(readAll(MOD .. "/Scripts/main.lua"):match('\nVERSION = "0%.7%d%.%d+"') ~= nil, "main.lua VERSION 0.7x.y (tools/bump_version.py)")
 
 logFile:close()
 print(fails == 0 and "aces test: all passed" or ("aces test: " .. fails .. " FAILED"))

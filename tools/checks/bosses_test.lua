@@ -1614,10 +1614,11 @@ local function valkaNoWalks()                              -- (a function of its
     SND.tick()
     check(#loads == 1 and sndCalls.tick == tick0 + 1 and #SPC.V.PRE.q == #list - 1, "SND.tick: one asset a tick, the sounds' tick as before")
     for _ = 2, #list do SND.tick() end
-    check(SPC.V.PRE.q == nil and #loads == #list and #GI.ReferencedObjects == nGame
+    -- ((2026-11-22) every asset of hers pinned once found, /Game/ or not (her return's crash: a freed one reused))
+    check(SPC.V.PRE.q == nil and #loads == #list and #GI.ReferencedObjects == #list
           and has(line("special: VALKA's assets loaded before her fight:", f), #list .. " of " .. #list),
-          "all " .. #list .. " in " .. #list .. " ticks, each /Game/ one kept loaded (pinned: " .. #GI.ReferencedObjects .. " of "
-          .. nGame .. "): " .. tostring(line("special: VALKA's assets loaded", f)))
+          "all " .. #list .. " in " .. #list .. " ticks, each kept loaded (pinned: " .. #GI.ReferencedObjects .. " of "
+          .. #list .. ", " .. nGame .. " of them /Game/): " .. tostring(line("special: VALKA's assets loaded", f)))
     clock = clock + 20
     SND.preloadValka()
     check(SPC.V.PRE.q == nil and #loads == #list, "asked again with every asset kept (\"rnd\" on a joiner, her round's start): nothing queued")

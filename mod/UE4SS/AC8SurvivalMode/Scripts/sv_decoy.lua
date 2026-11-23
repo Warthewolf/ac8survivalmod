@@ -1497,7 +1497,7 @@ function DECOY.angerStart(n, why)
     if not DECOY.unitsHere() then log("decoy: War's anger: THE DECOY's units aren't here"); return false end
     local c, now = cfg(), clockNow()
     local s = { anger = true, state = "trap", at = now, trapAt = now, nextSpawnAt = now + 2, u = {}, used = {}, spawned = 0,
-                down = 0, seq = 0, locks = 0 }
+                down = 0, seq = 0, locks = 0, round = D.round }
     DECOY.cap = math.max(1, math.min(maxUavs(), math.floor(num(n, 5))))
     for i = 1, math.max(1, math.floor(num(c.spears, 4))) do spawnUnit(DECOY.spear(i)) end
     DECOY.A = s
@@ -1508,6 +1508,9 @@ end
 function DECOY.angerTick(now)
     local s = DECOY.A
     if not s then return end
+    -- ((the code review of 2026-11-23) over with its round: never on into the next, THE DECOY's own above all, whose
+    -- trap shares its UAVs, DECOY.G's locks and DECOY.cap)
+    if s.state == "trap" and D and (D.state == "wait" or D.round ~= s.round) then endTrap(now, s, "the round's over") end
     if s.state == "trap" then DECOY.hostTick(now, s) end
     if s.state ~= "trap" then DECOY.A = nil end
 end

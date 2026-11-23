@@ -315,7 +315,8 @@ function VSOLG.stop(s, why)
     if SCOOP then pcall(SCOOP.stop) end
     SOLG.onBreak, SOLG.onPhase = nil, nil                 -- (a later run's, or this game as a joiner, never calls them)
     if s and s.solg and s.solg.ph then pcall(SPC.V.portalStop, s.solg.ph) end
-    if SOLG and SOLG.up and SOLG.up() then pcall(SOLG.stop, why) end
+    if SOLG and SOLG.up and SOLG.up() then pcall(SOLG.stop, why)
+    elseif SOLG and SOLG.weaponsAll then pcall(SOLG.weaponsAll, false) end      -- (the weapons put back whatever else)
     if s then s.solg = nil end
 end
 
