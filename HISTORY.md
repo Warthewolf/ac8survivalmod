@@ -4267,3 +4267,14 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   up drew nothing (0.75.80: past what the game draws); 24-34 km, dipping at most 2 % of their speed, 8-22x (0.75.81):
   seen overhead from the fighters' heights, hidden below the cloud deck. Autotest 14/14 both. Staged
   build/release/stage_dev_0.75.81, not registered, NOT installed.
+- 0.75.82 - 0.75.85 (2026-11-24, branch feature/ulysses): the ulysses2 autotest (round 1 from its start: the white fade,
+  JULY 1999; impacts up close; a minute's break; round 2's core onto the airfield; PRESENT DAY), 17/17 on 0.75.85, and
+  the original suite 14/14. Found and fixed: (1) every impact read as the sea (Comona's runway and terrain trace at
+  3.9-5 m, under the old sea_z + 5 m), so the airfield never took a fragment's damage: land or sea now by the mesh the
+  trace hit (*_Env_Sea is the sea); (2) a fragment in the sea counted as the town's ("A FRAGMENT HIT THE TOWN"): harmless
+  now, counted as the sea's; (3) a CRASH at round 20's start after a minute's break (0x38 / 0xffff... reads): the rocks'
+  paint and meshes, kept by Lua only, were collected while no rock drew with them (hard rule 59): pinned now
+  (GameInstance.ReferencedObjects, VALKA's assets' way) and checked by name before reuse; the sky's meteors cleaned
+  every tick, the break's too. A 5 s break (the first suite's) never showed it. Staged build/release/stage_dev_0.75.85,
+  not registered, NOT installed. run_all: 4 checks fail on dev too (fleet_test, tani_vls_test, lb_contract_test,
+  thunder_test: older expectations, not ULYSSES'), left for the user's say.

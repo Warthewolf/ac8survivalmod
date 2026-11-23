@@ -53,6 +53,12 @@ the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the
 - Sounds (tools/ulysses/sounds.py, Survival's own XAudio2 player): fall_small (OBJ_FALL_STARTDUST_SMALL, looped on each
   fragment, moving), fall_big (the core's), explosion (Stardust_EXPL_*), encounter (Stardust_Encounter, at the start).
 
+- Kept between its rounds: its meshes and paints are pinned (GameInstance.ReferencedObjects) and checked by name
+  before reuse: kept by Lua only, they were collected through a minute's break with no rock up, and round 2 crashed
+  (the ulysses2 autotest, 0.75.83/84). Land or sea: by the mesh the trace hits (`*_Env_Sea`), not its height (the
+  runway traces at ~5 m). A fragment in the sea is harmless. The sky's meteors: 24-34 km up, east to west, 300 km
+  across (her calls).
+
 ## 4. Co-op
 The host's (or solo): the fragments, their targets, pay and damage. Joiners see the borrowed targets (the host's units)
 and draw the rest from the host's word, "ul|<kind>|..." (sv_coop.lua COOP.ulysses, sv_coop_migration.lua, ULY.fromHost),
