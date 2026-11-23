@@ -429,7 +429,11 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
             -- ((2026-11-24, the user: "Why are the meteors moving the wrong way?") the autotest's compass: +X IS east (the
             -- plane's yaw 26.7 = the minimap's south-east, the dawn sun to the east-south-east): from_deg 0 kept. What read
             -- wrong: flying level 24-34 km up, from a fighter below they looked to climb; now they fall (dip), see alt_m
-            from_deg = 0, lateral_km = 150, spread_deg = 12 },
+            from_deg = 0, lateral_km = 150, spread_deg = 12,
+            -- ((2026-11-24, the user's Lost Butterfly reference) AC:I's sky meteors: thin glowing lines, no body, no smoke. The
+            -- ulylines autotest: AC8's additive MI_TrainingRing on the streak's static twin draws exactly that (on the skinned
+            -- one it fell back to a dark grey); the rock hidden, no trails
+            look = { paint = "line_ring", hide_rock = true, tail_r = 0.3 }, no_trails = true },
     -- the meshes (tools/ulysses: AC:I's o_meta ~97 m (A), o_metc ~6.5 m (C), o_metd ~3 m (D); o_metb / o_metx have no mesh in
     -- AC:I): its one-bone skeletal copies SK_SV_Ulysses_<K> (a static mesh of ours crashed the SOLG's test T0, a skeletal
     -- one drew: docs/re/SOLG.md 8), painted at run time as the SOLG is (paint: its rock texture as Basecolor on the x40a's
@@ -477,7 +481,7 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
              -- with an effect drawn on it) light-only streaks to try: AC8's additive MI_TrainingRing (VALKA's portal rings: it
              -- adds its Color x Opacity) and its haze (fresnel off: flat)
              line_ring = { parent = "/Game/VFX/Mission/Traning/MI_TrainingRing", scalars = { Opacity = 1 },
-                           vectors = { Color = { 3.0, 2.3, 1.3 } } },
+                           vectors = { Color = { 2.6, 2.2, 1.6 } } },
              line_haze = { parent = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", scalars = { EmissiveIntensity = 3, Opacity = 1,
                            EmissiveFresnelFalloff = 0.01 }, vectors = { Color = { 3.0, 2.3, 1.3 } } },
              glow = { enabled = false, parent = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", radius_x = 1.8, length_x = 1.15,

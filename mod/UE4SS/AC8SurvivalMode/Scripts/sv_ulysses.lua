@@ -197,7 +197,9 @@ local function rock(key, at, vel, scale, spin, tailX, trails, look)
     if rm then pcall(function() rm.RotationRate = { Pitch = 0, Yaw = 0, Roll = spin } end) end
     -- its own streak (SK_SV_Ulysses_Tail, tools/ulysses): behind it along -X, glowing (tail.paint), scaled with the rock
     local T = cfg().tail or {}
-    local static = T.component == "static"
+    -- ((2026-11-24, the ulylines autotest: every glow row drew dark grey) AC8's effect materials aren't made for skinned
+    -- meshes (the engine's fallback material drawn instead): a light-only look is drawn on the static twin of the streak
+    local static = T.component == "static" or (look and look.paint ~= nil and look.paint ~= "paint")
     local tm = nil
     if T.enabled ~= false then
         if static then
@@ -756,7 +758,7 @@ skyOne = function(c, now, cx, cy)
     local dip = type(c.dip) == "table" and rnd(n(c.dip[1], 0.05), n(c.dip[2], 0.2)) or rnd(0.05, 0.2)
     local vel = { X = math.cos(across) * v, Y = math.sin(across) * v, Z = -v * dip }
     local key = type(c.meshes) == "table" and c.meshes[math.random(1, #c.meshes)] or "D"
-    local r = rock(key, start, vel, span(c.scale, 3), rnd(20, 90), n(c.tail_x, 1), cfg().sky_trails)
+    local r = rock(key, start, vel, span(c.scale, 3), rnd(20, 90), n(c.tail_x, 1), c.no_trails and {} or cfg().sky_trails, c.look)
     -- ((2026-11-24) falling now: burnt out before floor_m (out of any fighter's reach), or at life_s)
     local life = n(c.life_s, 18)
     if c.floor_m and vel.Z < -1 then life = math.min(life, (alt - n(c.floor_m, 16000) * 100) / -vel.Z) end
