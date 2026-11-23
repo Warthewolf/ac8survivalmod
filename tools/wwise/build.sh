@@ -7,7 +7,7 @@
 #   1. waapi-server     WwiseConsole (WWISE, .env) with WAAPI on local HTTP; waapi_build.py makes the objects from
 #                       SPEC (a json: bus "sfx" = AC8's own sfx bus by name, sounds, attenuations, events) and the bank
 #                       SV_Sounds (every event in it), then generates it (Windows, JSON metadata)
-#   2. reconcile        UnrealEditor-Cmd -run=WwiseReconcileCommandlet -modes=create,update: the AkAudioEvent assets under
+#   2. reconcile        UnrealEditor-Cmd -run=WwiseReconcileCommandlet -modes=all (stale ones deleted): the AkAudioEvent assets under
 #                       /Game/Mods/SurvivalMode/Wwise (AkSettings DefaultAssetCreationPath; RootOutputPath ../<wproj dir>/
 #                       GeneratedSoundBanks, relative to Content)
 #   3. cook             Windows, VERSIONED (hard rule 42); each event's bank comes inside its asset (bulk data)
@@ -34,7 +34,7 @@ trap 'kill $SRV 2>/dev/null || true' EXIT
 python -I tools/wwise/waapi_build.py "$PORT" "$SPEC" --wait --bank SV_Sounds
 kill $SRV 2>/dev/null || true
 echo "wwise: reconcile (log: $OUT/reconcile.log)"
-"$CMD" "$PROJ/AC8Sound.uproject" -run=WwiseReconcileCommandlet -modes=create,update -unattended -nop4 -nosplash \
+"$CMD" "$PROJ/AC8Sound.uproject" -run=WwiseReconcileCommandlet -modes=all -unattended -nop4 -nosplash \
     -stdout > "$OUT/reconcile.log" 2>&1
 echo "wwise: cooking (log: $OUT/cook.log)"
 rm -rf "$PROJ/Saved/Cooked"

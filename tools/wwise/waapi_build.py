@@ -6,7 +6,7 @@ WAAPI over local HTTP (Python's standard library only; WwiseConsole waapi-server
 
 spec.json (machine paths stay out of the repo: the spec is written per run, sources from .env's folders):
     {"bus": "sfx",
-     "attenuations": [{"name": "SV_Att_Far", "radius_max": 800000}],
+     "attenuations": [{"name": "SV_Att_Far", "radius_max": 300000, "curve": [[0, 0], [500, -10], [1500, -25], [3000, -200]]}],
      "sounds": [{"name": "SV_SolgBreakBig", "wav": "<path>", "attenuation": "SV_Att_Far", "volume": 0}],
      "events": [{"name": "Play_SV_SolgBreakBig", "play": "SV_SolgBreakBig"}]}
 
@@ -54,11 +54,15 @@ att = {}
 for a in SPEC.get('attenuations', []):
     o = call('ak.wwise.core.object.create', {'parent': atw['id'], 'type': 'Attenuation', 'name': a['name'], 'onNameConflict': 'merge'})
     call('ak.wwise.core.object.setProperty', {'object': o['id'], 'property': 'RadiusMax', 'value': a['radius_max']})
+    if a.get('curve'):                                   # [[metres, dB], ...]: the volume over distance (game units = cm)
+        pts = [{'x': m * 100.0, 'y': db, 'shape': 'Linear'} for m, db in a['curve']]
+        call('ak.wwise.core.object.setAttenuationCurve', {'object': o['id'], 'curveType': 'VolumeDryUsage', 'use': 'Custom',
+                                                         'points': pts})
     att[a['name']] = o['id']
     print('attenuation', a['name'], o['id'], 'radius', a['radius_max'])
 snd = {}
 for s in SPEC.get('sounds', []):
-    r = call('ak.wwise.core.audio.import', {'importOperation': 'replaceExisting', 'default': {'importLanguage': 'SFX'},
+    r = call('ak.wwise.core.audio.import', {'importOperation': 'useExisting', 'default': {'importLanguage': 'SFX'},
                                              'imports': [{'audioFile': s['wav'], 'objectPath': amh['path'] + '\\<Sound SFX>' + s['name']}]},
              {'return': ['id', 'name', 'type']})
     o = next(x for x in r['objects'] if x.get('type') == 'Sound')
@@ -74,8 +78,17 @@ for s in SPEC.get('sounds', []):
     snd[s['name']] = sid
     print('sound', s['name'], sid, '-> bus', SPEC['bus'])
 for e in SPEC.get('events', []):
-    o = call('ak.wwise.core.object.create', {'parent': evw['id'], 'type': 'Event', 'name': e['name'], 'onNameConflict': 'replace',
-                                             'children': [{'type': 'Action', 'name': '', '@ActionType': 1, '@Target': snd[e['play']]}]})
+    # (kept, never replaced: a new GUID orphans its Unreal asset, which reconcile then refuses to overwrite)
+    have = first('$ from type Event where name = "%s"' % e['name'])
+    if have:
+        o = have
+        acts = call('ak.wwise.core.object.get', {'from': {'id': [o['id']]}, 'transform': [{'select': ['children']}]},
+                    {'return': ['id']})['return']
+        for a in acts:
+            call('ak.wwise.core.object.setReference', {'object': a['id'], 'reference': 'Target', 'value': snd[e['play']]})
+    else:
+        o = call('ak.wwise.core.object.create', {'parent': evw['id'], 'type': 'Event', 'name': e['name'], 'onNameConflict': 'fail',
+                                                 'children': [{'type': 'Action', 'name': '', '@ActionType': 1, '@Target': snd[e['play']]}]})
     print('event', e['name'], o['id'], 'plays', e['play'])
 if BANK:
     sbw = first('$ from type WorkUnit where name = "Default Work Unit" and parent.name = "SoundBanks"')
