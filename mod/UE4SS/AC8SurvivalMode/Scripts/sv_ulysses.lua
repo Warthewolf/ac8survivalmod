@@ -447,7 +447,10 @@ local function launch(spec, P, what, big)
     if not r then return nil end
     U.lastScale, U.lastSpin = sc, sp
     U.nextId = (U.nextId or 0) + 1
-    local f = { r = r, P = P, what = what, big = big, hitAt = os.clock() + T, born = os.clock(), key = key, id = U.nextId }
+    -- ((2026-11-23, the autotest of 0.75.72: rocks landed late, under the ground) the round's clock (the game's, sv_flights.lua
+    -- roundClock: the one roundTick's now is, and the one the mover flies on), never os.clock: the two drift apart
+    local t0 = (D and D.now) or os.clock()
+    local f = { r = r, P = P, what = what, big = big, hitAt = t0 + T, born = t0, key = key, id = U.nextId }
     tell("f", tostring(f.id), key, string.format("%.0f", start.X / 100), string.format("%.0f", start.Y / 100), string.format("%.0f", start.Z / 100),
         string.format("%.0f", dx / T), string.format("%.0f", dy / T), string.format("%.0f", dz / T), string.format("%.0f", (U.lastScale or 1) * 100),
         string.format("%.0f", U.lastSpin or 20), big and "1" or "0")
