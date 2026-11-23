@@ -4278,3 +4278,16 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   every tick, the break's too. A 5 s break (the first suite's) never showed it. Staged build/release/stage_dev_0.75.85,
   not registered, NOT installed. run_all: 4 checks fail on dev too (fleet_test, tani_vls_test, lb_contract_test,
   thunder_test: older expectations, not ULYSSES'), left for the user's say.
+- 0.75.86 - 0.75.93 (2026-11-24, branch feature/ulysses), her calls: "Shouldn't their smoke trail be thicker" (the trail
+  line-up autotest ulytrails: of 8 stock trails the Climber's fall smoke (Mission 20's IGC) is the thick billowing
+  column; the fragments wear it, the sky's meteors not); the streak's gradient warmer (a burning head, tools/ulysses);
+  "Why are the meteors moving the wrong way?" / "travelling backwards": the autotest measured every rock's front at
+  -0.96 of its way: K2_SetWorldTransform failed silently on a Scale3D read back from the engine (hard rule 78); a
+  plain scale: 1.00. The compass checked in game: +X is east (the minimap and the dawn sun). The sky's meteors now fall
+  (dip 0.22-0.4) and burn out above 16 km. Her Lost Butterfly references (AC:I): its sky meteors are o_metx, an 8 cm
+  marker with a dummy texture and an effect drawn on it: thin glowing lines; ours are now that: MI_TrainingRing on the
+  streak's static twin, no rock, no smoke (the ulylines autotest; on the skinned streak it fell back to dark grey: hard
+  rule 77). Borrowed targets hidden whole (SetActorHiddenInGame: their meshes aren't found by class; an autotest
+  close-up showed Mission 4's radar tower under a fragment). AC:I search: o_metc in 7 more mission packages (Lost
+  Butterfly's family, the Godzilla event), Stardust_Ambient unused, no streak texture (its effects not found). Autotest
+  15/15 on 0.75.93. Staged build/release/stage_dev_0.75.93, not registered, NOT installed.

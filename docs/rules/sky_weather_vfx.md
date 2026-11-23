@@ -47,3 +47,8 @@ Moved verbatim from AGENTS.md (2026-11-14). Rule numbers are unchanged: other no
     is lit (Color 0 still shows the sun's broad highlight and the sky round its rim); /Game/Base/Material/Environment/
     Special/M_Env_Unlit with none of its parameters set draws pure, unlit black (setting Color / Emissive names gave it a
     rim). VALKA's black hole: its shadow on M_Env_Unlit, everything else on MI_TrainingRing (tools/valka_portal/parts_lua.py).
+77. AC8's effect materials (MI_TrainingRing, MI_TrainingRingGlow, the cloud lightning's) draw only on static meshes: on a
+    SkeletalMeshComponent the engine falls back to its default material, a dull dark grey, silently. ULYSSES' streak
+    (the ulylines autotest of 2026-11-24): every glow row on the skinned streak drew dark grey, the same rows on its
+    static twin (SM_SV_Ulysses_Tail) drew AC:I's glowing white lines. An effect material goes on a StaticMeshComponent;
+    a skinned mesh of ours takes the aircraft gear material (MI_PP0016_x40a_Gear) only.
