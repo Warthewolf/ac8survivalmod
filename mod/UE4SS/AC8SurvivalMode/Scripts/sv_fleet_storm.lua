@@ -258,6 +258,11 @@ local function glowAt(top, now)
             return string.format("; no glow (within %.0f km of you)", mk)
         end
     end
+    -- ((2026-11-23) the user: "cloud flash/burst needs to happen slightly less often as its almost seizure inducing")
+    -- only `chance` of the strikes get one, gap_s at least between two (the bolts and their thunder as before)
+    if math.random() > n(g.chance, 1) then return "; no glow (its chance)" end
+    if now and now < (GLOW.nextAt or 0) then return "; no glow (too soon after the last)" end
+    GLOW.nextAt = now and now + n(g.gap_s, 0) or nil
     GLOW.i = GLOW.i % math.max(1, math.floor(n(g.pool, 12))) + 1
     local e = GLOW.pool[GLOW.i]
     -- ((0.74.116) our flashes: a fresh system each time (burstwatch of 0.74.115: AC8's burst reset and switched on again
