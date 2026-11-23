@@ -109,6 +109,10 @@ def build_deal(g, flag, stock_ep):
     assert arg_values(t_radio)[0] == '01_Question_Detonation', arg_values(t_radio)  # noqa: F405
     t_post = g.foreign_trig_template(m8, 'Default_PostRadioEvent_55')
     assert arg_values(t_post)[0] == '01_Question_Detonation', arg_values(t_post)  # noqa: F405
+    # ((2026-11-23, the 7th autotest) Mission 8's radio node never played a line here; Survival's own (Mission 22's
+    # CompositeEvent_CountDown_1, THE DECOY's) did, the question in the Yes / No's [[ ]] marks. The Yes / No activated
+    # on the line's post, as Mission 8 does (activated with the line, no buttons came)
+    t_radio = g.exec_template('LiveRadioPlayExecution', 'CompositeEvent_CountDown_1')
     n_trig, n_ex = len(g.trig), len(g.ex)
     g.trigger('RE_SpawnEnemy_kokatu_1st', DEAL_ASK)              # (a remote event: Lua's SV_Event fires it)
     flag(DEAL_ASK, DEAL_FLAG, 'Set', 0)                        # (asked: no answer yet)
@@ -116,12 +120,13 @@ def build_deal(g, flag, stock_ep):
     post = 'SV_DealAskPosted'
     g.trigger(None, post, template=t_post, arg_changes={0: DEAL_RADIO_GROUP})
     g.execute(t_ask, post, {0: DEAL_QUESTION})
-    t_radio22 = g.exec_template('LiveRadioPlayExecution', 'CompositeEvent_CountDown_1')
+    t_radio22 = t_radio
     vgrp, vev = DEAL_RADIO_VOICED
     g.trigger('RE_SpawnEnemy_kokatu_1st', vev)
     flag(vev, DEAL_FLAG, 'Set', 0)
-    g.execute(t_ask, vev, {0: DEAL_QUESTION})
     g.execute(t_radio22, vev, {0: vgrp}, delay=0.1)
+    g.trigger(None, 'SV_DealAskVPosted', template=t_post, arg_changes={0: vgrp})
+    g.execute(t_ask, 'SV_DealAskVPosted', {0: DEAL_QUESTION})
     cgrp, cev = DEAL_RADIO_CONTROL
     g.trigger('RE_SpawnEnemy_kokatu_1st', cev)
     g.execute(t_radio22, cev, {0: cgrp}, delay=0.1)
