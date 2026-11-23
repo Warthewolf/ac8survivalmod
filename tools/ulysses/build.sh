@@ -3,7 +3,7 @@
 #   1. prepare.py         the user's AC:I install (.env ACI) + its kit -> glTF meshes (static and one-bone skeletal),
 #                         the rock textures, layout.json (tools/solg/prepare.py's readers)
 #   2. ue_import.py       in UE 5.4 (.env UE, project ue/Live): textures, MI_SV_Ulysses_Rock on M_Live_Base (stubbed,
-#                         never packed), SM_SV_Ulysses_<K> and SK_SV_Ulysses_<K> (K = A, C, D)
+#                         never packed), SM_SV_Ulysses_<K> and SK_SV_Ulysses_<K> (K = A, C, D, Tail: the streak, ours)
 #   3. cook               Windows, VERSIONED (hard rule 42), loose packages (ue/Live/Saved/Cooked/Windows/Live/Content)
 #   4. retoc to-zen       only /Game/Mods/SurvivalMode/Ulysses (never the stub of AC8's M_Live_Base) -> the container
 #   5. pad.py             hard rule 8 (tools/x02s/pad.py)

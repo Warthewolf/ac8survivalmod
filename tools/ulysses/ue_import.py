@@ -6,8 +6,10 @@ Builds AC:I's meteors under /Game/Mods/SurvivalMode/Ulysses from build/ulysses (
   Materials/MI_SV_Ulysses_Rock             an instance on AC8's M_Live_Base (T_Basecolor / T_Normalmap / T_Livemap),
                                            as the SOLG's MI_SV_SOLG_<id>: M_Live_Base is stood in for by a stub at its
                                            own path, which build.sh never packs (hard rules 42 / 58: no master of ours)
-  Model/SM_SV_Ulysses_A / _C / _D          static meshes, no collision
-  Model/SK_SV_Ulysses_A / _C / _D          the same rocks as one-bone skeletal meshes (+ SKEL_SV_Ulysses_<K>), no
+  Textures/T_SV_Ulysses_Tail_D, _FlatN     the streak's gradient (sRGB, alpha) and a flat normal
+  Materials/MI_SV_Ulysses_Tail             the streak's instance on the same stub (the game repaints it at run time)
+  Model/SM_SV_Ulysses_A / _C / _D / _Tail  static meshes, no collision (_Tail: the streak, ours, prepare.py)
+  Model/SK_SV_Ulysses_A / _C / _D / _Tail  the same as one-bone skeletal meshes (+ SKEL_SV_Ulysses_<K>), no
                                            physics asset: the route AC8 is proven to draw (docs/re/SOLG.md 8)
 """
 import json, os
@@ -171,8 +173,13 @@ def main():
     d = texture('T_SV_Ulysses_Rock_D', True, unreal.TextureCompressionSettings.TC_DEFAULT)
     n = texture('T_SV_Ulysses_Rock_N', False, unreal.TextureCompressionSettings.TC_NORMALMAP)
     lm = texture('T_SV_Ulysses_Rock_L', False, unreal.TextureCompressionSettings.TC_DEFAULT)
-    mi = instance('MI_SV_Ulysses_Rock', base, (('T_Basecolor', d), ('T_Normalmap', n), ('T_Livemap', lm)))
+    mis = {'Rock': instance('MI_SV_Ulysses_Rock', base, (('T_Basecolor', d), ('T_Normalmap', n), ('T_Livemap', lm)))}
+    # ((2026-11-23) the streak, ours: its gradient on the same stub; the game paints it at run time)
+    td = texture('T_SV_Ulysses_Tail_D', True, unreal.TextureCompressionSettings.TC_DEFAULT)
+    fn = texture('T_SV_Ulysses_FlatN', False, unreal.TextureCompressionSettings.TC_NORMALMAP)
+    mis['Tail'] = instance('MI_SV_Ulysses_Tail', base, (('T_Basecolor', td), ('T_Normalmap', fn), ('T_Livemap', lm)))
     for name, info in sorted(layout['meshes'].items()):
+        mi = mis[info.get('mi', 'Rock')]
         static(name, info, mi)
         skeletal(info['skeletal'], mi)
     for a in sorted(x.split('.')[0] for x in EAL.list_assets(DEST, recursive=True)):
