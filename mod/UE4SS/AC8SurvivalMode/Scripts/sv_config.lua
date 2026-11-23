@@ -1143,7 +1143,7 @@ CFG = {
                                  li_mesh = "PlaneBodyMesh", li_socket = "SOC_Gun_01",
                                  -- ((2026-11-08) the user: 2 km, for the reach; was AC7's 1240 / 1200 m: missiles at the
                                  -- player 1.5-2 km from a ZFA-44 got through in Alyssa's run of 0.74.31)
-                                 li_range_m = 4000, li_activation_m = 4000,   -- ((2026-11-23) 2000: one volley in a round) li_angle = 180, li_search_s = 0.5,
+                                 li_range_m = 4000, li_activation_m = 4000, li_angle = 180, li_search_s = 0.5,   -- ((2026-11-23) the reach 4 km: 2 km gave one volley a round)
                                  -- ((2026-11-10) the user: "up the swing speed for the laser interceptors", 0.5 s for
                                  -- these and round 30's fleet: one swing a missile in half the time; was AC7's 1.0. A swing
                                  -- curve that isn't at its end by then is cleared at the spawn: sv_escort_li.lua curveFit)
