@@ -4195,3 +4195,11 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   longer cuts it, deal_test checks every copy keeps it whole. AC8SurvivalMode_0.75.62_Online.zip (d8ca05c6; THE DEAL, the
   Tanacorn, the ZFA-44) and the friends' / tester's ..._TANACORN zips (45732c5e / f6fccbcf), registered. INSTALLED 2026-11-23
   (backup build/backup/install_before_0.75.62; 164 files verified). Pushed to main as v0.75.62.
+- 0.75.63 (2026-11-23): THE DEAL's Podarge job 7 Podarges (a wedge, a unit each, A-G) and its C-130 job 12 C-130s (3 flights
+  of 4, a lane each), all north to south (the user); pay a target 2500 + 120 / round and 1000 + 50. World data: 7 Norns
+  (252 parts), 3 x 4 C-130s, 19 paths. The public zip is the CO-OP edition from now on (the user: "public build needs
+  COOP"; PUBLIC=1 TANI=1 ZFA=1 COOP=1): AC8SurvivalMode_0.75.63_Online.zip, 0.75.63-coop2mp.373 as the friends' (they
+  link), registered 752b14fb (its first packing without co-op, affc4a0f, never handed out); the friends' / tester's
+  ..._TANACORN zips 84a7a317 / 17cc9896. INSTALLED 2026-11-23: the friends' co-op zip (the same build; backup
+  build/backup/install_before_0.75.63; 164 files verified). Not yet seen in game: the formations, the frame rate with
+  seven Podarges. Pushed to main as v0.75.63.
