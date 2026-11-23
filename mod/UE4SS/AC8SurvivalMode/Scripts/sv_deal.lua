@@ -40,14 +40,21 @@ CFG.specials.deal = {
     offer_after_s = 4,                        -- into the break (never while you're in the STORE)
     hold_break = true,                        -- the next round waits for the deal's vote and result
     deals = { podarge = 1, fleet = 1, cargo = 1 },   -- each deal's weight (0: never offered)
-    intro_max_s = 14,                         -- the vote opens once War's introduction is said, this long at most
+    -- ((2026-11-23) the user: "the Subtitles lines that tell you what the deal is show up after the Yes Or No prompt appears
+    -- so no one knows what theyre voting for") War's question said straight after her introduction, the vote (AC8's
+    -- box with it) opened once both are said, this long at most; the radio line above the box names the deal
+    intro_max_s = 20,
     vote_s = 30,
     allow_change = true,
     resend_s = 2,
     keys = { yes = "A", no = "X", ctrl = true },
     -- (radio_key / radio_text: the radio line War's question is asked with, AC8's Yes / No under it; text only)
     prompt = { enabled = true, event = "RE_SV_DealAsk", flag = "SV_DealAns",
-               radio_key = "SV_Radio_DealAsk", radio_text = "WAR: Do we have a deal? YES or NO." },
+               radio_key = "SV_Radio_DealAsk",
+               radio_text = { podarge = "WAR: 7 Podarges cross your sector next round. Take the deal?",
+                              cargo = "WAR: 12 Emblem Direct C-130s fly through next round. Take the deal?",
+                              fleet = "WAR: An enemy fleet sails nearby next round. Want the tip-off?",
+                              default = "WAR: Do we have a deal? YES or NO." } },
     result_row_s = 8,
     leave_after_s = 7,
     -- (dt_npc: its DT_NPC row, DT_SV_NpcRows' allied F/A-18F, added at the main menu: without it the unit spawns no plane,
@@ -419,6 +426,7 @@ local function offer(kind, why)
     S.rolled = true
     local plane = hornetUp()
     say("intro", c.lines.intro)
+    say("ask", c.lines["ask_" .. kind] or {})          -- (what the deal is, before the vote: after the introduction)
     local left = (SUB and SUB.left) and num(SUB.left(D.now or S.clock), 0) or 0
     V.openAt = S.clock + math.min(c.intro_max_s, left + 0.5)
     log(string.format("deal: offered in the break after round %d (%s, %s): its target in round %d; the Hornet %s, the vote opens in %.0f s",
@@ -427,7 +435,6 @@ end
 
 local function openVote(V)
     local c = cfg()
-    say("ask", c.lines["ask_" .. V.kind] or {})
     V.phase, V.closeAt = "open", S.clock + c.vote_s
     hudCallout(c.text.callout, c.text.callout_sub)
     log(string.format("deal: vote %d open for %d s (%d player%s)", V.id, c.vote_s, players(), players() == 1 and "" or "s"))
@@ -752,7 +759,9 @@ local function promptTick()
     local open = V and V.phase == "open"
     if not open then ASK.id = nil; return end
     if ASK.id ~= V.id then                               -- (a new vote: asked)
-        if p.radio_key and type(SV_SetText) == "function" then pcall(SV_SetText, p.radio_key, p.radio_text or "") end
+        local rt = p.radio_text
+        if type(rt) == "table" then rt = rt[V.kind] or rt.default end
+        if p.radio_key and type(SV_SetText) == "function" then pcall(SV_SetText, p.radio_key, tostring(rt or "")) end
         local r = SV_Event(p.event)
         ASK.id, ASK.sawZero, ASK.done = V.id, false, false
         log(string.format("deal: AC8's Yes / No asked for vote %d (%s %s)", V.id, p.event, r == 1 and "fired" or ("NOT fired: " .. tostring(SV_ERR and SV_ERR[r] or r))))
