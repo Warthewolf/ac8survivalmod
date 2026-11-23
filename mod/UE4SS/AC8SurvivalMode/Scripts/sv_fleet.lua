@@ -240,7 +240,7 @@ CFG.specials.fleet = {
                       -- the same glow, the oldest moved up_m over each bolt's top (into the cloud it comes out of) and
                       -- restarted, off life_s on; run 87: scale 1 unseen at 2-5 km at night, 3-6 lit the cloud blue, so 4, and the 19 x3)
                       cells = { enabled = true, sort = 100, scale_x = 2.6,   -- ((2026-11-23) "turn the brightness of the cloud lightning down a bit": every part ~20 % down, the exposure 1.1 -> 1.3)
-                                bolt_glow = { enabled = true, pool = 12, life_s = 2.5, up_m = 300, scale = 3.4,
+                                bolt_glow = { enabled = true, pool = 12, life_s = 2.5, up_m = 300, scale = 3.4, chance = 0.75, gap_s = 1.2,   -- (chance / gap_s: (2026-11-23) "cloud flash/burst needs to happen slightly less often as its almost seizure inducing")
                                               -- ((2026-11-17) the flash with the bolt, tools/stormfx (TANI=1 dev builds), the
                                               -- first that loads: AC8's own cloud lightning with its spawn literals raised
                                               -- (burst.py; switched off life_s on, its particles finish), our own cooked one;
