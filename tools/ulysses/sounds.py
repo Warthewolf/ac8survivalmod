@@ -10,6 +10,7 @@ the CRI banks (ACB + AWB) cut out of their DPL entries at their @UTF, each strea
   fall_big.wav    stream 72: OBJ_FALL_STARTDUST_LARGE / _MID (with the Aigaion's fall)
   explosion.wav   the Stardust mission's bank (DATA01 #24) stream 5: Stardust_EXPL_CLOSE_0 / _MID / _FAR
   encounter.wav   its stream 1: Stardust_Encounter
+  ambient.wav     its stream 4: Stardust_Ambient (38.5 s; the user, 2026-11-24: under the whole round)
 """
 import os
 import re
@@ -32,7 +33,7 @@ from fhm import DPL                                            # noqa: E402 (the
 OUT = os.path.join(REPO, 'build', 'ulysses', 'sounds')
 # (bank: pac, entry, the @UTF offset in its entry (acbscan.py's), {stream: out name})
 BANKS = [('DATA94', 18, 76, {71: 'fall_small.wav', 72: 'fall_big.wav'}),
-         ('DATA01', 24, 30961145, {5: 'explosion.wav', 1: 'encounter.wav'})]
+         ('DATA01', 24, 30961145, {5: 'explosion.wav', 1: 'encounter.wav', 4: 'ambient.wav'})]
 
 
 def main():

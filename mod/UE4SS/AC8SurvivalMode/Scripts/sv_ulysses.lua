@@ -685,6 +685,18 @@ local function debugAB()
     return string.format("A/B 500 m ahead: skeletal (left) %s; static (right) %s, mesh %s, set %s", sk and "up" or "NOT up", a and "up" or "NOT up",
         sm and nameOf(sm) or "NOT loaded", tostring(okS))
 end
+-- Stardust_Ambient's rumble under both rounds (and the break between), looped; off at the last round's end
+local AMB = {}
+local function ambOn()
+    local l = (cfg().sounds or {}).ambient
+    if AMB.h or not (l and SND and SND.play) then return end
+    local ok, h = pcall(SND.play, l, nil)
+    AMB.h = ok and h or nil
+end
+local function ambOff()
+    if AMB.h and SND and SND.stop then pcall(SND.stop, AMB.h, 2) end
+    AMB.h = nil
+end
 function ULY.spawn(now)
     local s = D and D.special
     if not s then return false end
@@ -701,6 +713,7 @@ function ULY.spawn(now)
     end
     s.state, s.at = "shower", now
     tell("r", tostring(phase))
+    ambOn()
     local sh = cfg().shift or {}
     if phase == 1 then
         fade(1, 0, n(sh.fade_s, 1.2) * 2, false)              -- (in from white: the time shift)
@@ -822,6 +835,7 @@ function ULY.roundOver(now, s)
     if last then
         filmOff(now)
         skyOff()
+        ambOff()
         local sh = cfg().shift or {}
         fade(1, 0, n(sh.fade_s, 1.2) * 2, false)
         if hudCallout then hudCallout(sh.home or "PRESENT DAY", sh.home_sub) end
@@ -847,6 +861,7 @@ function ULY.tick(now)
         if not nextIs then skyOff() end
     end
     if not D and FILM.v then filmOff(now) end
+    if not D and AMB.h then ambOff() end
 end
 
 -- ---- a joiner: the host's word (sv_coop_migration.lua "ul"); each value checked, as SCOOP.fromHost's ----
@@ -859,6 +874,7 @@ function ULY.fromHost(f)
         local ph = tonumber(f[3])
         if not (fin(ph, 10) and ph >= 1 and ph == math.floor(ph)) then return end
         J.on = true
+        ambOn()
         if ph == 1 then
             local sh = cfg().shift or {}
             fade(1, 0, n(sh.fade_s, 1.2) * 2, false)
@@ -897,6 +913,7 @@ function ULY.fromHost(f)
         if f[3] == "1" then
             filmOff(os.clock())
             skyOff()
+            ambOff()
             local sh = cfg().shift or {}
             fade(1, 0, n(sh.fade_s, 1.2) * 2, false)
             if hudCallout then hudCallout(sh.home or "PRESENT DAY", sh.home_sub) end

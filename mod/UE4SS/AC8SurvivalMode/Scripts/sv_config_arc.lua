@@ -508,7 +508,9 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     sounds = { fall = { file = "ulysses/fall_small.wav", db = 4, loop = true, curve = { max = 600000, shape = "exp1" } },
                fall_big = { file = "ulysses/fall_big.wav", db = 8, loop = true, curve = { max = 1500000, shape = "exp1" } },
                boom = { file = "ulysses/explosion.wav", db = 6, curve = { max = 1500000, shape = "exp1" } },
-               encounter = { file = "ulysses/encounter.wav", db = 0 } },
+               encounter = { file = "ulysses/encounter.wav", db = 0 },
+               -- ((2026-11-24, the user: yes to AC:I's Stardust_Ambient) its rumble under both rounds, looped, everywhere
+               ambient = { file = "ulysses/ambient.wav", db = -3, loop = true } },
     text = { sub = "SHOOT DOWN THE ULYSSES FRAGMENTS", big = "THE ULYSSES CORE", big_sub = "SHOOT IT DOWN BEFORE IT HITS COMONA",
              town_hit = "A FRAGMENT HIT THE TOWN", big_hit = "ULYSSES HAS STRUCK COMONA", big_down = "THE ULYSSES CORE IS DOWN",
              say = { start = { "COMONA CONTROL|All units, the sky is falling. Ulysses fragments inbound, many of them.",
