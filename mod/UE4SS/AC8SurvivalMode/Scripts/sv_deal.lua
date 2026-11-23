@@ -47,6 +47,11 @@ CFG.specials.deal = {
     -- (radio_key / radio_text: the radio line War's question is asked with, AC8's Yes / No under it; text only)
     prompt = { enabled = true, event = "RE_SV_DealAsk", flag = "SV_DealAns", question = "SV_Deal_Question",
                radio_key = "SV_Radio_DealAsk", radio_text = "WAR: Do we have a deal? YES or NO.",
+               -- ((2026-11-23) the user: "Change Mission 22's entry from 4 to 30 seconds while a Survival run is on")
+               -- the stock question War's line names (ms22_01_AWACS_Yes_No_Q, DT_YesNo's NewRow_19, 4 s): its
+               -- AnswerTimeLimit answer_s while a run is on (the box shut a little before the vote), the shipped 4 s
+               -- back as the run ends or the level goes; in the table and in the Yes / No system's own map
+               stock_id = "ms22_01_AWACS_Yes_No_Q", stock_row = "NewRow_19", answer_s = 26,
                rows = "/Game/Mods/SurvivalMode/Data/DT_SV_YesNo.DT_SV_YesNo", table = "/Game/Datatables/YesOrNo/DT_YesNo.DT_YesNo" },
     result_row_s = 8,
     leave_after_s = 7,
@@ -757,6 +762,65 @@ local function promptTick()
     end
 end
 DEAL.promptTick = promptTick
+
+-- Mission 22's question's time while a run is on (cfg().prompt.stock_*, answer_s), put back after
+local YT = { on = false, orig = nil, map = nil }
+local function sameId(v, want)
+    local ok, sv = pcall(function() return v:ToString() end)
+    if not ok then sv = tostring(v) end
+    return sv == want
+end
+-- the Yes / No system's own entry for the question (LiveYesNoRadioWorldSubsystem.YesNoDataMap_), or nil and why
+local function ynEntry(id)
+    local ss = FindFirstOf and FindFirstOf("LiveYesNoRadioWorldSubsystem")
+    if not (ss and valid(ss)) then return nil, "no Yes / No system" end
+    local found, n = nil, 0
+    local ok, err = pcall(function()
+        ss.YesNoDataMap_:ForEach(function(k, v)
+            n = n + 1
+            local okK, key = pcall(function() return k:get() end)
+            if okK and sameId(key, id) then found = v:get() end
+        end)
+    end)
+    if not ok then return nil, "its map not read: " .. tostring(err) end
+    if not found then return nil, string.format("not in its map (%d entries)", n) end
+    return found, n
+end
+function DEAL.yesnoTime(on)
+    local p = cfg().prompt
+    if not (p and p.stock_id and p.stock_row) or on == YT.on then return end
+    local dt = loadObject("/Game/Datatables/YesOrNo/DT_YesNo.DT_YesNo")
+    local said = {}
+    if dt then
+        local _, r = dtCall(dt, "FindRow", p.stock_row)
+        if r ~= nil and sameId(r.YesNoID, p.stock_id) then
+            if on then YT.orig = YT.orig or r.AnswerTimeLimit end
+            local want = on and num(p.answer_s, 26) or (YT.orig or 4)
+            r.AnswerTimeLimit = want
+            dtCall(dt, "RemoveRow", p.stock_row)
+            dtCall(dt, "AddRow", p.stock_row, r)
+            local _, back = dtCall(dt, "FindRow", p.stock_row)
+            said[#said + 1] = string.format("DT_YesNo %s %s s", p.stock_row, tostring(back and back.AnswerTimeLimit))
+        else
+            said[#said + 1] = "DT_YesNo's " .. p.stock_row .. " isn't " .. p.stock_id .. ": not changed"
+        end
+    else
+        said[#said + 1] = "DT_YesNo not loaded"
+    end
+    local e, why = ynEntry(p.stock_id)
+    if e then
+        local ok = pcall(function()
+            if on then YT.mapOrig = YT.mapOrig or e.AnswerTimeLimit end
+            e.AnswerTimeLimit = on and num(p.answer_s, 26) or (YT.mapOrig or 4)
+        end)
+        local okB, b = pcall(function() return e.AnswerTimeLimit end)
+        said[#said + 1] = string.format("the Yes / No system's map %s (%d entries)", ok and (tostring(okB and b or "?") .. " s") or "not written", why)
+    else
+        said[#said + 1] = "the Yes / No system's map: " .. tostring(why)
+    end
+    YT.on = on
+    log(string.format("deal: %s's answer time %s: %s", p.stock_id, on and "lengthened for the run" or "back to the shipped", table.concat(said, "; ")))
+end
 -- (sv_main.lua, at the main menu: before the level loads, as the DT_NPC rows) the question's row (DT_SV_YesNo) into
 -- the game's DT_YesNo: AC8's Yes / No shows only a question it has a row for (the autotest of 2026-11-23)
 function DEAL.setup()
@@ -821,6 +885,7 @@ end
 function DEAL.tick(clock)
     if not cfg().enabled then return end
     if not D then
+        if YT.on then pcall(DEAL.yesnoTime, false) end
         if S.hornetUp then S.hornetUp = false end
         DEAL.V, DEAL.J, DEAL.T, DEAL.ANG, S.round, S.noHornetSaid = nil, nil, nil, {}, nil, false
         S.last, S.D, S.hornetOffAt, S.camAt = nil, nil, nil, nil
@@ -831,6 +896,7 @@ function DEAL.tick(clock)
         S.D, DEAL.V, DEAL.J, DEAL.T, DEAL.ANG, S.round, S.hornetOffAt, S.camAt = D, nil, nil, nil, {}, nil, nil, nil
         if S.hornetUp then hornetOff("a new run") end
     end
+    if not YT.on then pcall(DEAL.yesnoTime, true) end
     local dt = S.last and math.max(0, math.min(1, clock - S.last)) or 0
     S.last = clock
     if not paused() then S.clock = S.clock + dt end
@@ -871,5 +937,8 @@ if cfg().enabled then
     if testKey then testKey("H", "sv_deal.lua's offer now", DEAL.offerNow) end
 end
 if TEST_TICKS then TEST_TICKS[#TEST_TICKS + 1] = { name = "deal", fn = function(now) DEAL.tick(now) end } end
+if type(LEVEL_DROPS) == "table" then
+    LEVEL_DROPS["the deal's answer time"] = function() if YT.on then pcall(DEAL.yesnoTime, false) end end
+end
 end
 -- DEV ONLY END
