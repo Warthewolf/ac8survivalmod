@@ -4224,4 +4224,6 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   again (RE_SV_CharCruiseSlow: the same path at the same speed), at most 6 times (`escort: CHARLENE off her route`); her
   place logged every 10 s on her route (`escort: route: CHARLENE ...`); route_max_s 480 (900; her route took 297 s in the
   run of 15:01 that landed), land_timeout_s 300 (480; that final took 132 s). escort_test / solo_test updated, all
-  passed. Not yet seen in game: whether a route given again brings a B-1B knocked off it back.
+  passed. Not yet seen in game: whether a route given again brings a B-1B knocked off it back. Built (TANI=1 ZFA=1
+  build_all.sh passed, leaderboard address in, runtime 0.32.43 unchanged); the friends' co-op zip not yet packed (the
+  packing was refused by Claude Code's permission check: the user packs it).
