@@ -25,6 +25,14 @@ INT_FLAGS += [DEAL_FLAG]  # noqa: F405
 # DT_YesNo at the main menu (sv_deal.lua dealSetup; a world subsystem's, read as the level loads), its time the vote's
 DEAL_YESNO_TABLE = 'DT_SV_YesNo'
 DEAL_ANSWER_S = 30.0                        # (sv_deal.lua vote_s)
+# ((2026-11-23, the 2nd autotest: the row in, still no prompt) Mission 8 asks over the radio: its question is a radio row
+# (DT_Rdo_ST_ms008, e.g. row 497, AWACS's "01_D_Aegis_CIWS_Defense") naming the question (YesNoID, bUseYesNoSubtitle:
+# the Yes / No under the line in the com window), played by LiveRadioPlayExecution (Default_PostRadioEvent_54), and the
+# line's post (type 25, Default_PostRadioEvent_55) activates it. Survival's: DT_SV_Radio's group SV_DealRadio_Ask, that
+# row cloned with our question and a text-only line, TextID SV_Radio_DealAsk (no voice: War is subtitles only; its text
+# set by Lua, SV_SetText; docs/re/RADIO_LOCALISATION.md 2c's text-only route, first tried here)
+DEAL_RADIO_GROUP, DEAL_RADIO_TEXT = 'SV_DealRadio_Ask', 'SV_Radio_DealAsk'
+DEAL_RADIO_SOURCE = ('/Game/Datatables/Radio/DT_Rdo_ST_ms008', '497', '01_D_Aegis_CIWS_Defense')
 # WAR & HAYTHORN's F/A-18F (the user: "War and Haythorn's Super Hornet will appear randomly ... between rounds. They appear
 # as an allied aircraft and the player gets the event zoom in on their aircraft when they appear"; "after each deal has
 # been made, War and Haythorn turn around and exit the combat zone and despawn"): an allied unit as the ESCORT's KMG
@@ -89,10 +97,17 @@ def build_deal(g, flag, stock_ep):
     m8 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission008', 'EP_Mission008_global.uasset')
     t_ask = g.foreign_template(m8, 'LiveActivateYesNoExecution', 'Default_PostRadioEvent_55')
     assert arg_values(t_ask) == ['ms08_01_Question_Detonation'], arg_values(t_ask)  # noqa: F405
+    t_radio = g.foreign_template(m8, 'LiveRadioPlayExecution', 'Default_PostRadioEvent_54')
+    assert arg_values(t_radio)[0] == '01_Question_Detonation', arg_values(t_radio)  # noqa: F405
+    t_post = g.foreign_trig_template(m8, 'Default_PostRadioEvent_55')
+    assert arg_values(t_post)[0] == '01_Question_Detonation', arg_values(t_post)  # noqa: F405
     n_trig, n_ex = len(g.trig), len(g.ex)
     g.trigger('RE_SpawnEnemy_kokatu_1st', DEAL_ASK)              # (a remote event: Lua's SV_Event fires it)
     flag(DEAL_ASK, DEAL_FLAG, 'Set', 0)                        # (asked: no answer yet)
-    g.execute(t_ask, DEAL_ASK, {0: DEAL_QUESTION}, delay=0.1)
+    g.execute(t_radio, DEAL_ASK, {0: DEAL_RADIO_GROUP}, delay=0.1)      # War's question on the radio, the Yes / No under it
+    post = 'SV_DealAskPosted'
+    g.trigger(None, post, template=t_post, arg_changes={0: DEAL_RADIO_GROUP})
+    g.execute(t_ask, post, {0: DEAL_QUESTION})
     for stock_trig, button, name, value in DEAL_ANSWERS:
         t = g.foreign_trig_template(m8, stock_trig)
         assert arg_values(t) == ['ms08_01_Question_Detonation', button], (stock_trig, arg_values(t))  # noqa: F405

@@ -44,7 +44,9 @@ CFG.specials.deal = {
     allow_change = true,
     resend_s = 2,
     keys = { yes = "A", no = "X", ctrl = true },
+    -- (radio_key / radio_text: the radio line War's question is asked with, AC8's Yes / No under it; text only)
     prompt = { enabled = true, event = "RE_SV_DealAsk", flag = "SV_DealAns", question = "SV_Deal_Question",
+               radio_key = "SV_Radio_DealAsk", radio_text = "WAR: Do we have a deal? YES or NO.",
                rows = "/Game/Mods/SurvivalMode/Data/DT_SV_YesNo.DT_SV_YesNo", table = "/Game/Datatables/YesOrNo/DT_YesNo.DT_YesNo" },
     result_row_s = 8,
     leave_after_s = 7,
@@ -733,6 +735,7 @@ local function promptTick()
     local open = V and V.phase == "open"
     if not open then ASK.id = nil; return end
     if ASK.id ~= V.id then                               -- (a new vote: asked)
+        if p.radio_key and type(SV_SetText) == "function" then pcall(SV_SetText, p.radio_key, p.radio_text or "") end
         local r = SV_Event(p.event)
         ASK.id, ASK.sawZero, ASK.done = V.id, false, false
         log(string.format("deal: AC8's Yes / No asked for vote %d (%s %s)", V.id, p.event, r == 1 and "fired" or ("NOT fired: " .. tostring(SV_ERR and SV_ERR[r] or r))))

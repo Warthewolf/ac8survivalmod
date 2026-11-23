@@ -98,6 +98,23 @@ def build_radio():
         keep.append(((grp, 0), row))
         have.add(grp)
         tells += 1
+    # ((2026-11-23) THE DEAL's question (survival_events.DEAL_RADIO_*): Mission 8's question row, our group, a text-only
+    # line (TextID SV_Radio_DealAsk: Lua sets its text) naming our Yes / No (YesNoID SV_Deal_Question, bUseYesNoSubtitle)
+    src_t, src_k, src_g = survival_events.DEAL_RADIO_SOURCE
+    z8 = ZenPkg(stock(src_t))
+    d8, _ = dtx.parse(uprop.Ctx(bytes(z8.payloads[0]), z8.names), 0, 'LiveRadioTable')
+    row = copy.deepcopy(dict(d8['rows'])[(src_k, 0)])
+    assert full(field(row, 'RadioGroupID')) == src_g and field(row, 'bUseYesNoSubtitle') == ('raw', 'Bool', b'\x01'), src_k
+    assert not any(q[3] and q[3][0] == 'obj' for q in row[2]), 'the question row holds an object'
+    grp = survival_events.DEAL_RADIO_GROUP
+    assert grp not in have
+    setf(row, 'RadioGroupID', survival_events.fname(grp))
+    setf(row, 'TextID', survival_events.fname(survival_events.DEAL_RADIO_TEXT))
+    setf(row, 'YesNoID', survival_events.fname(survival_events.DEAL_QUESTION))
+    setf(row, 'LimitPlayCount', ('raw', 'Int8', b'\x00'))
+    for n in names_in(row) + [grp, survival_events.DEAL_RADIO_TEXT, survival_events.DEAL_QUESTION]: z.nb.add(n)
+    keep.append(((grp, 0), row))
+    have.add(grp)
     # ((2026-11-11) the user: "Use the Mission 22 radio lines for the rocket warning") the Spaceport rockets' lines
     # (survival_events.SP_RADIO), each a group of its own with LimitPlayCount 0 (a stock ms022 row's 1 would leave it
     # silent once the shuttle round's countdown had played it): a 'group' its ms022 rows copied in their order (Baxter's
