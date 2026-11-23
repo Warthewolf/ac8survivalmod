@@ -108,6 +108,11 @@ def build_radio():
     assert not any(q[3] and q[3][0] == 'obj' for q in row[2]), 'the question row holds an object'
     grp = survival_events.DEAL_RADIO_GROUP
     assert grp not in have
+    voiced = copy.deepcopy(row)
+    for q in tpl[2]:                                   # (every mission flag on, as the tells' row 382)
+        if q[1].startswith('bM') and q[1][2:].isdigit():
+            setf(row, q[1], q[3])
+    flags_on = sum(1 for q in row[2] if q[1].startswith('bM') and q[1][2:].isdigit() and q[3] == ('raw', 'Bool', b'\x01'))
     setf(row, 'RadioGroupID', survival_events.fname(grp))
     setf(row, 'TextID', survival_events.fname(survival_events.DEAL_RADIO_TEXT))
     setf(row, 'YesNoID', survival_events.fname(survival_events.DEAL_QUESTION))
@@ -115,6 +120,18 @@ def build_radio():
     for n in names_in(row) + [grp, survival_events.DEAL_RADIO_TEXT, survival_events.DEAL_QUESTION]: z.nb.add(n)
     keep.append(((grp, 0), row))
     have.add(grp)
+    vgrp = survival_events.DEAL_RADIO_VOICED[0]       # (the voiced twin: the row's own stock line and voice)
+    for q in tpl[2]:
+        if q[1].startswith('bM') and q[1][2:].isdigit():
+            setf(voiced, q[1], q[3])
+    setf(voiced, 'RadioGroupID', survival_events.fname(vgrp))
+    setf(voiced, 'YesNoID', survival_events.fname(survival_events.DEAL_QUESTION))
+    setf(voiced, 'LimitPlayCount', ('raw', 'Int8', b'\x00'))
+    assert full(field(voiced, 'TextID')) + '_Play' in voice, 'the voiced twin has no voice'
+    for n in names_in(voiced) + [vgrp]: z.nb.add(n)
+    keep.append(((vgrp, 0), voiced))
+    have.add(vgrp)
+    print(f'  radio: THE DEAL\'s question {grp} (text only, {flags_on} mission flags on) and {vgrp} ({full(field(voiced, "TextID"))})')
     # ((2026-11-11) the user: "Use the Mission 22 radio lines for the rocket warning") the Spaceport rockets' lines
     # (survival_events.SP_RADIO), each a group of its own with LimitPlayCount 0 (a stock ms022 row's 1 would leave it
     # silent once the shuttle round's countdown had played it): a 'group' its ms022 rows copied in their order (Baxter's

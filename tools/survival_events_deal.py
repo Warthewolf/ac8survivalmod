@@ -33,6 +33,10 @@ DEAL_ANSWER_S = 30.0                        # (sv_deal.lua vote_s)
 # set by Lua, SV_SetText; docs/re/RADIO_LOCALISATION.md 2c's text-only route, first tried here)
 DEAL_RADIO_GROUP, DEAL_RADIO_TEXT = 'SV_DealRadio_Ask', 'SV_Radio_DealAsk'
 DEAL_RADIO_SOURCE = ('/Game/Datatables/Radio/DT_Rdo_ST_ms008', '497', '01_D_Aegis_CIWS_Defense')
+# ((2026-11-23, the 3rd autotest: no radio window) the row's mission flags (bM01...) are Mission 8's: every one set, as
+# the tells' template row 382. And a voiced twin, the user's "try the box with a real voice line, or a silent one":
+# SV_DealRadio_AskV, the same row with its own stock voice (AWACS, v0001_1460), fired by RE_SV_DealAskV (the test's)
+DEAL_RADIO_VOICED = ('SV_DealRadio_AskV', 'RE_SV_DealAskV')
 # WAR & HAYTHORN's F/A-18F (the user: "War and Haythorn's Super Hornet will appear randomly ... between rounds. They appear
 # as an allied aircraft and the player gets the event zoom in on their aircraft when they appear"; "after each deal has
 # been made, War and Haythorn turn around and exit the combat zone and despawn"): an allied unit as the ESCORT's KMG
@@ -108,6 +112,12 @@ def build_deal(g, flag, stock_ep):
     post = 'SV_DealAskPosted'
     g.trigger(None, post, template=t_post, arg_changes={0: DEAL_RADIO_GROUP})
     g.execute(t_ask, post, {0: DEAL_QUESTION})
+    vgrp, vev = DEAL_RADIO_VOICED
+    g.trigger('RE_SpawnEnemy_kokatu_1st', vev)
+    flag(vev, DEAL_FLAG, 'Set', 0)
+    g.execute(t_radio, vev, {0: vgrp}, delay=0.1)
+    g.trigger(None, 'SV_DealAskVPosted', template=t_post, arg_changes={0: vgrp})
+    g.execute(t_ask, 'SV_DealAskVPosted', {0: DEAL_QUESTION})
     for stock_trig, button, name, value in DEAL_ANSWERS:
         t = g.foreign_trig_template(m8, stock_trig)
         assert arg_values(t) == ['ms08_01_Question_Detonation', button], (stock_trig, arg_values(t))  # noqa: F405
