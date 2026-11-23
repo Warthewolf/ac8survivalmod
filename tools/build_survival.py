@@ -1397,7 +1397,10 @@ NPC_IMPORT = [('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', ['t160_commo
               ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission030', [(survival_events.FEST_CM_ROW, survival_events.FEST_CM_SOURCE_ROW)]),
               # its searchlights (survival_events.FEST_LIGHT_*): Online Mode C_011's vehicle and its light, under Survival's
               # names (their DT_NPC_ON rows ride in the Alicorn's tables: build_alicorn_rows)
-              ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_C_011_ON', survival_events.FEST_LIGHT_ROWS)]
+              ('/Game/OnlineMode/DataTables/AI/NPC/Mission/DT_NPC_Mission_C_011_ON', survival_events.FEST_LIGHT_ROWS),
+              # THE DEAL's Podarge (survival_events.DEAL_PODARGE_*): Mission 12's Norn, its body's row under Survival's name
+              ('/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission012', [(survival_events.DEAL_PODARGE_ROW,
+               survival_events.DEAL_PODARGE_SOURCE_ROW)] + survival_events.DEAL_PODARGE_PART_ROWS)]
 LADON_TABLE_NOTE = 'DT_NPC_Mission016'
 NPC_EXTRA = [   # (new row, copy of Mission 22's row, NpcId)  - names without a numeric tail (hard rule 17)
     ('sv_probe_pkg', 'm29a_common', 'SV_m29a_ProbePkg'),   # behaviour probe (main.lua): packaged script

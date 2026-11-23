@@ -623,6 +623,45 @@ def ladon_units(units, used_ids, z, top_number, v):
               f'{len(arc_a)} + {len(arc_b)}')
 
 
+def deal_units(units, used_ids, z, top_number, v):
+    """THE DEAL's targets (survival_events.DEAL_PODARGE_* / DEAL_CARGO_*): Mission 12's Norn (the Podarge) with its
+    parts but its cargo slot, ported as the Ladons; the three C-130s, a copy of the heavy flight; their routes (smooth
+    aircraft paths on Mission 16's Ladon path). Spawned by Lua (sv_deal.lua) in the round after a deal is taken."""
+    se = survival_events
+    import math
+    m16z = ZenPkg(stock(M16 + 'WD_Mission016_global'))
+    m16, _ = props_of(m16z, m16z.export_index('WD_Mission016_global'), 'LiveWorldData')
+    src_path = desc_named(m16, 'AIPathDescList', se.LADON_SOURCE_PATH)
+    paths = [p for p in v[2] if p[1] == 'AIPathDescList'][0][3][1]
+    m12z = ZenPkg(stock(se.DEAL_PODARGE_WD))
+    m12, _ = props_of(m12z, m12z.export_index(se.DEAL_PODARGE_WD.rsplit('/', 1)[1]), 'LiveWorldData')
+    src = desc_named(m12, 'UnitDescList', se.DEAL_PODARGE_SOURCE)
+    pts = se.DEAL_PODARGE_PTS
+    yaw = math.degrees(math.atan2(pts[1][1] - pts[0][1], pts[1][0] - pts[0][0]))
+    names = port_unit(units, used_ids, z, src, se.DEAL_PODARGE_UNIT, se.DEAL_PODARGE_OBJ, se.DEAL_PODARGE_ROW, [pts[0]],
+                      yaw, top_number)
+    assert names == [se.DEAL_PODARGE_OBJ], names
+    uname = lambda x: [p for p in x[2] if p[1] == 'Name'][0][3][1]
+    u = [x for x in units if uname(x) == se.DEAL_PODARGE_UNIT][0]
+    ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
+    kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
+    data = lambda ch: [p for p in ch[2] if p[1] == 'Data'][0][3][2]
+    field = lambda ch, n: [q for q in data(ch) if q[1] == n][0][3][1]
+    kids[:] = [ch for ch in kids if field(ch, 'ComponentFieldName') not in se.DEAL_PODARGE_DROP]
+    rows = {field(ch, 'MissionNpcID') for ch in kids}
+    assert rows == set(se.DEAL_PODARGE_PART_ROWS), rows ^ set(se.DEAL_PODARGE_PART_ROWS)
+    parts = retag_parts(kids, se.DEAL_PODARGE_OBJ, used_ids, z, m12z)
+    unit_area(u, se.DEAL_TARGET_AREA_M, se.DEAL_TARGET_ALT_M)
+    paths.append(make_path(z, used_ids, src_path, se.DEAL_PODARGE_PATH, pts, smooth=True))
+    names = copy_unit(units, used_ids, z, se.DEAL_CARGO_SOURCE, se.DEAL_CARGO_UNIT, se.DEAL_CARGO_N, top_number,
+                      se.DEAL_CARGO_OBJ, se.DEAL_CARGO_ROW)
+    assert names == se.DEAL_CARGO_OBJS, names
+    cu = [x for x in units if uname(x) == se.DEAL_CARGO_UNIT][0]
+    lanes = [se.deal_cargo_route(side) for _, side in se.DEAL_CARGO_LANES]
+    cyaw = math.degrees(math.atan2(lanes[0][1][1] - lanes[0][0][1], lanes[0][1][0] - lanes[0][0][0]))
+    return parts, cu, cyaw, lanes, paths, src_path
+
+
 def heavy_paths(used_ids, z, v):
     """The heavy bombers' routes in and their figure-8s over the runway (survival_events.heavy_routes): smooth aircraft
     paths on Mission 16's Ladon path, as the Ladons'; the route runs on into its loop, the loop (it ends over the runway

@@ -1,70 +1,76 @@
--- sv_deal.lua: THE DEAL, a Yes / No vote that steers a special round (the user's design of 2026-11-11; the user's dev
--- install only for now). Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order after sv_audit (its
--- addCredits wrap is the outermost): a name another part uses is a global of this mod's Lua state, its own helpers stay
--- local. The whole part is one dev-install-only block (its markers below), which tools/strip_test_only.py takes out of every release zip and
--- tools/dev_only.py out of every TESTER zip (TANACORN ones too): only this header is left there, its settings
--- (CFG.specials.deal) with it.
+-- sv_deal.lua: THE DEAL, WAR & HAYTHORN's offers between rounds (the user's design of 2026-11-23; the user's dev install
+-- only for now). Part of AC8 Survival Mode's runtime, run by main.lua in MODULES' order after sv_audit: a name another
+-- part uses is a global of this mod's Lua state, its own helpers stay local. The whole part is one dev-install-only block
+-- (its markers below), which tools/strip_test_only.py takes out of every release zip and tools/dev_only.py out of every
+-- TESTER zip (TANACORN ones too): only this header is left there, its settings (CFG.specials.deal) with it.
 --
--- How it plays (the user, 2026-11-11 / 2026-11-12):
---   * By chance, on some specials only (CFG.specials.deal.kinds: a chance per special kind; a kind not listed never gets
---     it), offer_after_s into the special's round, WAR & HAYTHORN's allied F/A-18F joins the players (War in the back
---     seat, no flight experience, does the talking; Haythorn flies). War offers a deal: the special goes on with higher
---     stakes (YES) or as it is (NO).
---   * Every player votes, solo too: Ctrl+A YES, Ctrl+X NO (CFG.specials.deal.keys; UE4SS's binds are keyboard only), for
---     vote_s (30 s). The NEXT row shows the offer, the tally and the clock. The vote closes when everyone has answered or
---     the clock runs out. The most votes win; a tie is NO; no answer isn't counted (nobody answering: NO).
---   * War calls the result, then the Hornet leaves, with subtitles saying so; it's taken off leave_s after
---     (SV_Recycle: on a timer, hard rule 4, not at a path's end).
---   * A deal taken pays extra (the user: "It'll pay extra cash"): when the round is cleared, each game is paid the
---     zollars it earned from the deal's close to the clear again x (pay.kills_x - 1), its own (COOP.payOwn), and the
---     host's bonus (pay.bonus + pay.bonus_per_round x the round) goes to everyone (addCredits: co-op's "cr").
---     What YES does to the round itself is the user's call still (CFG.specials.deal.stakes: none yet).
--- Voices: subtitles only (the user), speakers WAR and HAYTHORN. Their lines live here while the part is the dev
--- install's; when it ships they move to config/subtitles.ini (python -I tools/subtitles.py merge).
--- The Yes / No prompt is Survival's own (the HUD's NEXT row and two key binds). The game's own Yes / No radio prompt
--- (LiveActivateYesNoExecution, Mission 8; ULiveYesNoRadioWorldSubsystem) is still to be read from the game's files: it
--- may replace the keys once its answer can be read back (docs/re/DEAL.md 3).
--- The Hornet: CFG.specials.deal.hornet.unit, an allied world-data unit with its name key, still to be built
--- (tools/survival_events*.py, as VOID WATCHER 1's): until a build has it, SV_Spawn answers "no such unit" and the deal
--- goes on without the plane (logged once a run).
+-- How it plays (the user, 2026-11-23):
+--   * In a break between rounds, by chance (chance, 35 %), WAR & HAYTHORN's allied F/A-18F (SV_Unit_DealHornet) comes up
+--     beside you, with the event zoom onto it (RE_SV_DealCam). War (back seat, does the talking) offers ONE deal, its
+--     target coming in the NEXT round: a Podarge transport (SV_Unit_DealPodarge, Mission 12's Norn), a tip-off on an
+--     enemy fleet (the Spaceport round's own ships, sv_spaceport.lua SPORT.fleet), or three C-130s carrying goods for
+--     Emblem Direct (SV_Unit_DealCargo). The break is held while the deal is on (D.at pushed back).
+--   * Everyone answers on AC8's own Yes / No (Mission 8's, tools/survival_events_deal.py: RE_SV_DealAsk, the answer in
+--     the flag SV_DealAns), on each player's game; Ctrl+A / Ctrl+X still work. The most votes win; a tie is NO.
+--   * YES: the target comes deals_after_s into the next round, paid per target down and a bonus for all of them
+--     (pay.*; the host's addCredits, shared in co-op); one left at the round's end, or targets_s on, escapes unpaid.
+--   * NO: a 20 % chance War is pissed off (anger.no_chance): 5 Marker Drones (THE DECOY's Spear UAVs, sv_decoy.lua
+--     DECOY.angerStart) come in the next round. Nobody answering: 7 of them, a new flight in each of the next 2 rounds.
+--   * After the result, the Hornet turns away out of the area (RE_SV_DealLeave) and is taken off leave_s on.
+-- Voices: subtitles only, speakers WAR and HAYTHORN; their lines live here while the part is the dev install's.
 --
 -- Co-op (host-authoritative; AGENTS.md "Guards on what other games send"):
 --   "dl|<id>|<kind>|<secs left>|<yes>|<no>"   the host's open vote, to everyone: reliable as it opens and as a vote
 --                                             comes in, every resend_s unreliable
---   "vt|<id>|<1 yes / 0 no>"                  a joiner's answer, to the host (the last one before the close counts while
---                                             allow_change; else the first)
+--   "vt|<id>|<1 yes / 0 no>"                  a joiner's answer, to the host
 --   "dr|<id>|<yes>|<no>|<1 taken / 0 not>"     the host's result, to everyone, reliable
---   The host's War lines reach the joiners as its other subtitles do (SUB.say's "sb"), the Hornet as its spawns do.
--- Log lines: `deal: offered on round R (<kind>, chance C): ...`, `deal: the Hornet: ...`, `deal: vote N open for S s
--- (P players)`, `deal: player S votes YES|NO`, `deal: vote N closed (<why>): YES y, NO n: TAKEN|REFUSED (<rule>)`,
--- `deal: round R cleared with the deal: +X (earned E x ...) + bonus B`, `deal: the Hornet taken off (...)`.
--- Test key (dev): Ctrl+H, the deal offered now, any round, any special (none needed).
+--   The host's lines reach the joiners as its subtitles do, its callouts as "co", the Hornet, the targets and the drones
+--   as its spawns do; RE_SV_DealAsk is each game's own (sv_coop.lua KEEP_EVENTS), the camera and the paths are the host's,
+--   forwarded.
+-- Log lines: `deal: offered in the break after round R (<kind>, ...)`, `deal: the Hornet: ...`, `deal: vote N open ...`,
+-- `deal: vote N closed (<why>): YES y, NO n: TAKEN|REFUSED (<rule>)`, `deal: round R: <kind> up ...`, `deal: <kind>:
+-- target down ...`, `deal: <kind> over (...)`, `deal: War's anger ...`, `deal: the Hornet taken off (...)`.
+-- Test key (dev): Ctrl+H, the deal offered now (a break or a round).
 -- DEV ONLY BEGIN (THE DEAL: the user's dev install only; docs/re/DEAL.md)
 CFG.specials.deal = {
     enabled = true,
-    -- (D1, the user: "Only some", "It comes by chance"; which kinds and their chances are still the user's call)
-    kinds = { anomaly = 0.35, ladon = 0.35, alicorn = 0.35, glitch = 0.35, valka = 0.35, spaceport = 0.35 },
-    offer_after_s = 45,                       -- into the special's round (its first fighting)
+    chance = 0.35,                            -- a break's chance of a deal (the user: 35 %)
+    from_round = 1,                           -- the first break that can have one (after this round)
+    offer_after_s = 4,                        -- into the break (never while you're in the STORE)
+    hold_break = true,                        -- the next round waits for the deal's vote and result
+    deals = { podarge = 1, fleet = 1, cargo = 1 },   -- each deal's weight (0: never offered)
     intro_max_s = 14,                         -- the vote opens once War's introduction is said, this long at most
-    vote_s = 30,                              -- (D3, the user)
-    allow_change = true,                      -- (D3: open; a player's last answer before the close counts)
+    vote_s = 30,
+    allow_change = true,
     resend_s = 2,
     keys = { yes = "A", no = "X", ctrl = true },
-    -- ((2026-11-23) the user: "theres a Yes or No system already built into ACE8") the game's own prompt, Mission 8's
-    -- (tools/survival_events_deal.py: RE_SV_DealAsk opens it; Left YES, Right NO, its time out silence, back in the flag
-    -- SV_DealAns), on each player's own game as the vote opens; the keys stay as a fallback
     prompt = { enabled = true, event = "RE_SV_DealAsk", flag = "SV_DealAns" },
-    result_row_s = 8,                         -- the result on the NEXT row this long
-    leave_after_s = 7,                        -- the leaving lines this long after the result
-    hornet = { unit = "SV_Unit_DealHornet", name_key = "SV_DealHornet", name = "WAR & HAYTHORN",
-               row = "",                      -- (an NPC mission row for SV_SetAircraft; "": the unit's own F/A-18F)
-               ahead_m = 1500, side_m = 700, up_m = 150, leave_s = 25 },
-    pay = { kills_x = 2.0, bonus = 5000, bonus_per_round = 250 },    -- (D2: extra cash; the amounts a proposal)
-    stakes = {},                              -- (D2: what YES does to each special kind: the user's call, none yet)
+    result_row_s = 8,
+    leave_after_s = 7,
+    hornet = { unit = "SV_Unit_DealHornet", name_key = "SV_DealHornet", name = "WAR & HAYTHORN", row = "",
+               ahead_m = 1500, side_m = 700, up_m = 150, up_landed_m = 700, leave_s = 25,
+               cam_event = "RE_SV_DealCam", cam_after_s = 1.0, leave_event = "RE_SV_DealLeave" },
+    targets_after_s = 15,                     -- into the deal's round
+    targets_s = 420,                          -- a target still up this long after it came escapes
+    watch_s = 2,
+    targets = {
+        podarge = { units = { "SV_Unit_DealPodarge" }, go = "RE_SV_DealPodargeGo", per = 6000, per_round = 300 },
+        cargo = { units = { "SV_Unit_DealCargo" }, go = "RE_SV_DealCargoGo", per = 2000, per_round = 100 },
+        fleet = { groups = 2, per = 1200, per_round = 60 },   -- (SPORT.fleet's first groups: a Wasp, 2 Aegis, 2 boats each)
+    },
+    pay = { all_bonus = 3000, all_bonus_per_round = 150 },
+    anger = { no_chance = 0.20, no_drones = 5, silent_drones = 7, silent_rounds = 2, after_s = 20 },
     text = { row_open = "THE DEAL: CTRL+%s YES / CTRL+%s NO   YES %d  NO %d   %s%s", you = "   YOU: %s",
              taken = "THE DEAL: TAKEN (YES %d / NO %d)", refused = "THE DEAL: REFUSED (YES %d / NO %d)",
-             callout = "THE DEAL", callout_sub = "WAR & HAYTHORN: YES OR NO? CTRL+%s / CTRL+%s",
-             paid = "THE DEAL PAID", paid_sub = "+%d ZOLLARS" },
+             callout = "THE DEAL", callout_sub = "WAR & HAYTHORN: YES OR NO?",
+             row_target = "THE DEAL: %s %d / %d DOWN",
+             name = { podarge = "PODARGE", fleet = "ENEMY FLEET", cargo = "EMBLEM DIRECT CARGO" },
+             arrive = { podarge = "PODARGE INBOUND", fleet = "ENEMY FLEET SPOTTED", cargo = "EMBLEM DIRECT CARGO INBOUND" },
+             arrive_sub = { podarge = "WAR'S TIP: A PODARGE FROM THE WEST", fleet = "WAR'S TIP: SHIPS OFF THE SPACEPORT",
+                            cargo = "WAR'S TIP: 3 C-130s FROM THE NORTH" },
+             paid = "THE DEAL PAID", paid_sub = "+%d ZOLLARS",
+             escaped = "THE DEAL: TARGET ESCAPED", escaped_sub = "%d OF %d DOWN",
+             anger = "WAR IS ANGRY", anger_sub = "MARKER DRONES INBOUND: SHOOT THEM DOWN" },
     colors = { WAR = { 1.0, 0.48, 0.30 }, HAYTHORN = { 0.62, 0.86, 0.66 } },
     -- (subtitles only, the user: "SPEAKER|text"; each list one exchange or one line; once a run each, as every speaker's)
     lines = {
@@ -76,24 +82,35 @@ CFG.specials.deal = {
                     "WAR|I'm the one with the clipboard. Well. Tablet. Same thing." },
                   { "WAR|Is this thing on? It's War. Haythorn's driving, I'm talking.",
                     "HAYTHORN|That's the arrangement." } },
-        ask = { { "WAR|So. You're winning this anyway. Want to make it interesting? Higher stakes, bigger payout. Yes or no?" },
-                { "WAR|Here's my offer: we raise the stakes on this fight, and you get paid extra for it. Do we have a deal?" },
-                { "WAR|I've got a proposition. It gets harder, you get richer. Vote now. Haythorn has all day, I don't." },
-                { "WAR|Quick one, pilots: carry on as it is, or up the stakes for a fatter paycheck? Yes or no." } },
-        yes = { { "WAR|Ha! Deal. Stakes are up, the pay's up. Try not to die, it voids the contract." },
+        ask_podarge = { { "WAR|Here's a tip. A Podarge transport crosses your sector next round, slow and full of somebody else's money. Want its route?" },
+                        { "WAR|A Podarge is moving cargo through here next round. Big, fat, badly escorted. Yes or no?" } },
+        ask_fleet = { { "WAR|I know where an enemy fleet will be next round. Lots of ships, all very sinkable. Want the tip-off?" },
+                      { "WAR|Haythorn spotted a fleet forming up off the spaceport. I can point you at it next round. Deal?" } },
+        ask_cargo = { { "WAR|Three C-130s with goods for Emblem Direct pass through next round. They don't have to arrive. Interested?" },
+                      { "WAR|Emblem Direct has a delivery coming: three C-130s, next round. I hate their shipping department. Yes or no?" } },
+        yes = { { "WAR|Deal! It'll be there next round. Don't keep it waiting." },
                 { "WAR|That's a yes! Haythorn, write it down.", "HAYTHORN|I'm flying the plane, War." },
-                { "WAR|Pleasure doing business. It's going to get loud out there. Loud means money." } },
+                { "WAR|Pleasure doing business. Next round, it's all yours." } },
         no = { { "WAR|No? Fine. Safe and boring. I respect it. I don't like it, but I respect it." },
                { "WAR|No deal. Haythorn, they said no.", "HAYTHORN|I heard." },
                { "WAR|Your loss. The offer's off the table." } },
         tie = { { "WAR|Split crew? Then it's no deal. I don't do coin flips, I do contracts." },
                 { "WAR|A tie. Ties go to no. House rules. My house." } },
-        none = { { "WAR|Nobody? Really? I'll take the silence as a no." } },
+        none = { { "WAR|Nobody? Really? Silence is rude, pilots. I'll remember this." } },
+        angry_no = { { "WAR|You know what? No. Haythorn, send them the drones.", "HAYTHORN|War...", "WAR|Send. Them. The drones." },
+                     { "WAR|You turned me down. I don't take that well. Look up next round." } },
+        angry_silent = { { "WAR|Ignoring me? Fine. I have friends with lasers. They'll visit you for the next two rounds." } },
+        anger_up = { { "WAR|Remember me? Those drones are mine. Shoot them down before they paint you." },
+                     { "HAYTHORN|Marker drones inbound. War's still upset." } },
         leave = { { "HAYTHORN|That's our cue. Hornet's breaking off.", "WAR|Bye! I'm waving! ...Can they see me waving?" },
                   { "HAYTHORN|WAR & HAYTHORN leaving the area. Good hunting." },
                   { "WAR|We're off. Haythorn has a thing.", "HAYTHORN|Fuel. The thing is fuel." } },
+        arrive_podarge = { { "WAR|There's your Podarge, as promised. Coming in from the west. Go get it." } },
+        arrive_fleet = { { "WAR|The fleet's off the spaceport, right where I said. Happy hunting." } },
+        arrive_cargo = { { "WAR|Emblem Direct's C-130s, from the north, right on time. Make sure they're late." } },
         paid = { { "WAR|Contract fulfilled. The money's in your account. Pleasure, as always." },
                  { "WAR|Told you it'd pay. Money's sent. War out." } },
+        escaped = { { "WAR|And it got away. I gave you a perfectly good target, pilots." } },
     },
 }
 -- (shipped defaults, as if they'd been in CFG when CFG_DEFAULTS was taken: not a setting edited for the leaderboard, not a
@@ -115,7 +132,9 @@ do
 local function cfg() return CFG.specials.deal end
 local function num(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
 local MAX_SLOTS = 24
-local S = { round = nil, roundAt = nil, rolled = false, clock = 0, last = nil, noHornetSaid = false, sendAt = 0 }
+local S = { round = nil, roundAt = nil, rolled = false, clock = 0, last = nil, noHornetSaid = false, sendAt = 0,
+            breakRound = nil, breakAt = nil }
+DEAL.T, DEAL.ANG = nil, {}                 -- (the host's: the deal's targets; War's anger to come, by round)
 local function isHost() return not (COOP and COOP.client and COOP.client()) end   -- (solo: this game is the room)
 local function linked() return COOP and COOP.host and COOP.host() and COOP.msg end
 local function mySlot() return (COOP and COOP.open and COOP.slot) or 0 end
@@ -173,13 +192,16 @@ local function hornetUp()
     local h = cfg().hornet
     if type(SV_Spawn) ~= "function" then return false end
     local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
-    local at, yaw = nil, 0
+    local at, yaw, kmh = nil, 0, 0
     if pawn and valid(pawn) then
         pcall(function()
             local v, r = pawn:K2_GetActorLocation(), pawn:K2_GetActorRotation()
             at, yaw = { X = v.X, Y = v.Y, Z = v.Z }, r.Yaw or 0
+            local w = pawn:GetVelocity()
+            kmh = math.sqrt(w.X * w.X + w.Y * w.Y + w.Z * w.Z) * 0.036
         end)
     end
+    local up = (kmh < 120) and num(h.up_landed_m, 700) or num(h.up_m, 150)      -- (on the ground: well above the runway)
     if type(SV_SetText) == "function" then pcall(SV_SetText, h.name_key, h.name) end
     if h.row and h.row ~= "" and type(SV_SetAircraft) == "function" then pcall(SV_SetAircraft, h.unit, h.row) end
     if ALLY and ALLY.unit then ALLY.unit[h.unit] = "air" end         -- (an ally's: no kill credit, as VOID WATCHER 1)
@@ -189,13 +211,13 @@ local function hornetUp()
         local fx, fy = math.cos(a), math.sin(a)                          -- (ahead; right is (-fy, fx))
         local x = at.X + fx * h.ahead_m * 100 - fy * h.side_m * 100
         local y = at.Y + fy * h.ahead_m * 100 + fx * h.side_m * 100
-        okS, r = pcall(SV_Spawn, h.unit, x, y, at.Z + h.up_m * 100, yaw % 360)
+        okS, r = pcall(SV_Spawn, h.unit, x, y, at.Z + up * 100, yaw % 360)
     else
         okS, r = pcall(SV_Spawn, h.unit)
     end
     r = okS and tonumber(r) or -4
     if r > 0 then
-        S.hornetUp = true
+        S.hornetUp, S.camAt = true, S.clock + num(h.cam_after_s, 1)
         log(string.format("deal: the Hornet: %s up%s (%s)", h.unit, at and string.format(" %.1f km ahead of you", h.ahead_m / 1000) or "",
             h.name))
         return true
@@ -216,52 +238,102 @@ local function sendOpen(V, reliable)
     if reliable then COOP.msg(nil, "dl", V.id, V.kind, string.format("%.0f", left), y, n)
     elseif sendTo then sendTo(nil, false, "dl", V.id, V.kind, string.format("%.0f", left), y, n) end
 end
+local function fire(ev)
+    if type(SV_Event) ~= "function" or not ev then return "no SV_Event" end
+    local ok, r = pcall(SV_Event, ev)
+    return ok and (r == 1 and "fired" or ("NOT fired: " .. tostring(SV_ERR and SV_ERR[r] or r))) or ("error " .. tostring(r))
+end
+local function aliveOf(unit)
+    if type(SV_UnitAlive) ~= "function" then return nil end
+    local ok, n = pcall(SV_UnitAlive, unit)
+    n = ok and tonumber(n) or nil
+    if n == -7 then return 0 end                            -- (SV_NOT_SPAWNED: none up)
+    return (n and n >= 0) and n or nil
+end
+local function fleetReady() return SPORT and type(SPORT.fleet) == "function" and ALLY and ALLY.fleetReady == true end
+-- the deal's units: { unit, ... } for its kind
+local function unitsOf(kind)
+    local t = cfg().targets[kind] or {}
+    if kind ~= "fleet" then return t.units or {} end
+    local out, want = {}, {}
+    for i, g in ipairs(SPORT.GROUPS or {}) do if i <= num(t.groups, 2) then want[g] = true end end
+    for _, sh in ipairs(SPORT.fleet()) do if sh.kind ~= "ford" and want[sh.group] then out[#out + 1] = sh.unit end end
+    return out
+end
+-- a deal to offer: by the weights, the fleet only when its ships' rows are in
+local function pickDeal()
+    local c, bag, sum = cfg(), {}, 0
+    for _, k in ipairs({ "podarge", "fleet", "cargo" }) do
+        local w = num(c.deals[k], 0)
+        if w > 0 and (k ~= "fleet" or fleetReady()) then bag[#bag + 1], sum = { k, w }, sum + w end
+    end
+    if sum <= 0 then return nil end
+    local r = math.random() * sum
+    for _, e in ipairs(bag) do r = r - e[2]; if r <= 0 then return e[1] end end
+    return bag[#bag][1]
+end
 
--- (the host) the offer: the Hornet up, War's introduction; the vote opens after it (openTick)
+-- (the host) the offer: the Hornet up, War's introduction; the vote opens after it
 local function offer(kind, why)
     local c = cfg()
     DEAL.nextId = DEAL.nextId + 1
-    local V = { id = DEAL.nextId, round = D.round, kind = kind, phase = "intro", at = S.clock, votes = {} }
+    local target = D.round + 1                -- (the NEXT round: in a break D.round is the one just cleared)
+    local V = { id = DEAL.nextId, round = target, kind = kind, phase = "intro", at = S.clock, votes = {} }
     DEAL.V = V
     S.rolled = true
     local plane = hornetUp()
     say("intro", c.lines.intro)
     local left = (SUB and SUB.left) and num(SUB.left(D.now or S.clock), 0) or 0
     V.openAt = S.clock + math.min(c.intro_max_s, left + 0.5)
-    log(string.format("deal: offered on round %d (%s, %s): the Hornet %s, the vote opens in %.0f s", D.round, tostring(kind),
-        why, plane and "up" or "not up", V.openAt - S.clock))
+    log(string.format("deal: offered in the break after round %d (%s, %s): its target in round %d; the Hornet %s, the vote opens in %.0f s",
+        D.round, tostring(kind), why, target, plane and "up" or "not up", V.openAt - S.clock))
 end
 
 local function openVote(V)
     local c = cfg()
-    say("ask", c.lines.ask)
+    say("ask", c.lines["ask_" .. V.kind] or {})
     V.phase, V.closeAt = "open", S.clock + c.vote_s
-    hudCallout(c.text.callout, string.format(c.text.callout_sub, c.keys.yes, c.keys.no))
+    hudCallout(c.text.callout, c.text.callout_sub)
     log(string.format("deal: vote %d open for %d s (%d player%s)", V.id, c.vote_s, players(), players() == 1 and "" or "s"))
     sendOpen(V, true)
     S.sendAt = S.clock + c.resend_s
+end
+
+-- War's anger: n drones in each of `rounds` rounds from `from`
+local function angerLater(from, n, rounds, why)
+    for k = 0, math.max(1, rounds) - 1 do DEAL.ANG[#DEAL.ANG + 1] = { round = from + k, n = n, why = why } end
+    log(string.format("deal: War's anger (%s): %d Marker Drones in round%s %d%s", why, n, rounds > 1 and "s" or "", from,
+        rounds > 1 and string.format(" to %d", from + rounds - 1) or ""))
 end
 
 local function closeVote(V, why)
     local c = cfg()
     local y, n = count(V.votes)
     local taken = y > n
-    local rule = (y == 0 and n == 0) and "nobody answered: no" or (y == n) and "a tie is no" or "the most votes"
+    local silent = y == 0 and n == 0
+    local rule = silent and "nobody answered" or (y == n) and "a tie is no" or "the most votes"
     V.phase, V.yes, V.no, V.taken, V.resultUntil = "closed", y, n, taken, S.clock + c.result_row_s
     log(string.format("deal: vote %d closed (%s): YES %d, NO %d: %s (%s)", V.id, why, y, n, taken and "TAKEN" or "REFUSED", rule))
     if linked() then COOP.msg(nil, "dr", V.id, y, n, taken and 1 or 0) end
+    local a = c.anger
     if taken then
         say("yes", c.lines.yes)
-        DEAL.won = { round = V.round, id = V.id, earned = 0 }
-        local st = c.stakes[V.kind]
-        log(string.format("deal: the stakes for %s: %s", tostring(V.kind), st and "applied" or "none yet (the user's call)"))
+        DEAL.T = { kind = V.kind, round = V.round, state = "due", id = V.id }
+    elseif silent then
+        say("angry_silent", c.lines.angry_silent)
+        angerLater(V.round, math.floor(num(a.silent_drones, 7)), math.floor(num(a.silent_rounds, 2)), "nobody answered")
     else
-        say((y == 0 and n == 0) and "none" or (y == n) and "tie" or "no", (y == 0 and n == 0) and c.lines.none
-            or (y == n) and c.lines.tie or c.lines.no)
+        say((y == n) and "tie" or "no", (y == n) and c.lines.tie or c.lines.no)
+        local roll = math.random()
+        if roll < num(a.no_chance, 0.2) then
+            V.angry = true
+            angerLater(V.round, math.floor(num(a.no_drones, 5)), 1, string.format("refused, rolled %.2f", roll))
+        else
+            log(string.format("deal: refused; War lets it go (rolled %.2f, chance %.2f)", roll, num(a.no_chance, 0.2)))
+        end
     end
     V.leaveAt = S.clock + c.leave_after_s
 end
-
 -- (the host) a vote: slot's answer (1 yes, 0 no) to the open vote id
 local function record(slot, id, v)
     local V = DEAL.V
@@ -274,10 +346,130 @@ local function record(slot, id, v)
     return true
 end
 
+---------------------------------------------------------------------------------------------------- the targets
+local function recycle(unit)
+    if type(SV_Recycle) ~= "function" then return "no SV_Recycle" end
+    local ok, v = pcall(SV_Recycle, unit, 1)
+    return ok and tostring(v) or ("error " .. tostring(v))
+end
+local function payFor(t, n) return math.max(0, math.floor((num(t.per, 0) + num(t.per_round, 0) * (D.round or 0)) * n + 0.5)) end
+local function targetsUp(T)
+    local c = cfg()
+    local units = unitsOf(T.kind)
+    T.units, T.alive, T.total, T.down, T.paid = {}, {}, 0, 0, 0
+    if T.kind == "fleet" and not fleetReady() then
+        log("deal: the fleet's ships' rows aren't in (ALLY.fleetReady): no fleet this time")
+        T.state = "done"
+        return
+    end
+    if T.kind == "fleet" and D.special and D.special.kind == "spaceport" then
+        log("deal: the fleet's ships are the Spaceport round's: the tip-off waits for the next round")
+        T.round = D.round + 1
+        T.state = "due"
+        return
+    end
+    local said = {}
+    for _, u in ipairs(units) do
+        local ok, r = pcall(SV_Spawn, u)
+        r = ok and tonumber(r) or -4
+        said[#said + 1] = string.format("%s %s", u, r > 0 and (r .. " up") or ("not spawned: " .. tostring(SV_ERR and SV_ERR[r] or r)))
+        if r > 0 then T.units[#T.units + 1], T.alive[u], T.total = u, r, T.total + r end
+    end
+    T.state, T.at, T.goAt, T.watchAt = (T.total > 0) and "up" or "done", S.clock, S.clock + 1.0, S.clock + 3
+    log(string.format("deal: round %d: %s up (%d): %s", D.round, T.kind, T.total, table.concat(said, ", ")))
+    if T.total > 0 then
+        hudCallout(c.text.arrive[T.kind] or "THE DEAL", c.text.arrive_sub[T.kind] or "")
+        say("arrive", c.lines["arrive_" .. T.kind] or {})
+    end
+end
+local function targetsOver(T, why)
+    local c = cfg()
+    T.state = "done"
+    local left = 0
+    for _, u in ipairs(T.units or {}) do
+        if (T.alive[u] or 0) > 0 then left = left + T.alive[u]; recycle(u) end
+    end
+    if T.total > 0 and T.down >= T.total then
+        local bonus = math.floor(num(c.pay.all_bonus, 0) + num(c.pay.all_bonus_per_round, 0) * (D.round or 0) + 0.5)
+        if bonus > 0 then addCredits(bonus, "the deal's bonus (" .. T.kind .. " all down)") end
+        local sum = T.paid + bonus
+        hudCallout(c.text.paid, string.format(c.text.paid_sub, specialPay and specialPay(sum) or sum))
+        say("paid", c.lines.paid)
+    elseif T.total > 0 then
+        hudCallout(c.text.escaped, string.format(c.text.escaped_sub, T.down, T.total))
+        say("escaped", c.lines.escaped)
+    end
+    if LB and LB.special then pcall(LB.special, "deal_" .. T.kind, T.total > 0 and T.down >= T.total, S.clock - (T.at or S.clock)) end
+    log(string.format("deal: %s over (%s): %d of %d down, %d left (taken off unpaid), +%d paid", T.kind, why, T.down, T.total, left, T.paid))
+end
+local function targetsTick()
+    local T, c = DEAL.T, cfg()
+    if not T or T.state == "done" then DEAL.T = (T and T.state == "done") and nil or T; return end
+    local fighting = D.state ~= "wait" and D.round == T.round
+    if T.state == "due" then
+        if D.round > T.round then log(string.format("deal: round %d passed without its %s: dropped", T.round, T.kind)); DEAL.T = nil; return end
+        if fighting then
+            S.roundAt = S.roundAt or S.clock
+            if S.clock - S.roundAt >= num(c.targets_after_s, 15) then targetsUp(T) end
+        end
+        return
+    end
+    if T.goAt and S.clock >= T.goAt then
+        T.goAt = nil
+        local go = (c.targets[T.kind] or {}).go
+        if go then log(string.format("deal: %s onto its route (%s %s)", T.kind, go, fire(go))) end
+    end
+    if not fighting then targetsOver(T, "the round's over"); return end
+    if S.clock - T.at >= num(c.targets_s, 420) then targetsOver(T, "its time ran out"); return end
+    if S.clock < T.watchAt then return end
+    T.watchAt = S.clock + math.max(1, num(c.watch_s, 2))
+    local t = c.targets[T.kind] or {}
+    for _, u in ipairs(T.units) do
+        local was, now = T.alive[u] or 0, aliveOf(u)
+        if now and now < was then
+            local n = was - now
+            T.alive[u], T.down = now, T.down + n
+            local p = payFor(t, n)
+            if p > 0 then addCredits(p, "the deal's " .. T.kind .. " target down"); T.paid = T.paid + p end
+            log(string.format("deal: %s: %d down (%s; %d of %d), +%d", T.kind, n, u, T.down, T.total, p))
+        end
+    end
+    if T.down >= T.total then targetsOver(T, "all down") end
+end
+local function angerTick()
+    local c = cfg()
+    if D.state == "wait" or #DEAL.ANG == 0 then return end
+    S.roundAt = S.roundAt or S.clock
+    for i = #DEAL.ANG, 1, -1 do
+        local A = DEAL.ANG[i]
+        if A.round < D.round then
+            table.remove(DEAL.ANG, i)
+            log(string.format("deal: War's anger for round %d dropped (passed)", A.round))
+        elseif A.round == D.round and S.clock - S.roundAt >= num(c.anger.after_s, 20) then
+            if D.special and D.special.kind == "decoy" then
+                A.round = D.round + 1
+                log("deal: War's anger waits: this round is THE DECOY's own")
+            elseif not (DECOY and DECOY.angerStart) then
+                table.remove(DEAL.ANG, i)
+                log("deal: War's anger dropped: no DECOY part")
+            elseif DECOY.A then
+                A.round = D.round + 1
+                log("deal: War's anger waits: her last drones are still up")
+            else
+                table.remove(DEAL.ANG, i)
+                if DECOY.angerStart(A.n, A.why) then
+                    hudCallout(c.text.anger, c.text.anger_sub)
+                    say("anger_up", c.lines.anger_up)
+                end
+            end
+        end
+    end
+end
+
 local function hostTick()
     local c = cfg()
     if D.round ~= S.round then S.round, S.roundAt, S.rolled = D.round, nil, false end
-    if not S.roundAt and D.state ~= "wait" and D.special then S.roundAt = S.clock end
+    if not S.roundAt and D.state ~= "wait" then S.roundAt = S.clock end
     local V = DEAL.V
     if V and V.phase == "intro" and S.clock >= V.openAt then openVote(V)
     elseif V and V.phase == "open" then
@@ -287,26 +479,44 @@ local function hostTick()
         elseif S.clock >= S.sendAt then S.sendAt = S.clock + c.resend_s; sendOpen(V, false) end
     elseif V and V.phase == "closed" and V.leaveAt and S.clock >= V.leaveAt then
         V.leaveAt = nil
-        say("leave", c.lines.leave)
-        if S.hornetUp then S.hornetOffAt = S.clock + c.hornet.leave_s end
+        if S.hornetUp then
+            say("leave", c.lines.leave)
+            log(string.format("deal: the Hornet turns away (%s %s)", c.hornet.leave_event, fire(c.hornet.leave_event)))
+            S.hornetOffAt = S.clock + c.hornet.leave_s
+        end
     end
-    if S.hornetOffAt and S.clock >= S.hornetOffAt then hornetOff("its leave_s after the leaving lines") end
-    -- the offer: once a round, on a special the dice let have it, offer_after_s into its round, never in the STORE
-    if V and V.phase ~= "closed" then return end
-    if S.rolled or not (D.special and S.roundAt) or D.state == "wait" then return end
-    if S.clock - S.roundAt < c.offer_after_s then return end
+    if S.camAt and S.clock >= S.camAt then
+        S.camAt = nil
+        log(string.format("deal: the event zoom onto the Hornet (%s %s)", c.hornet.cam_event, fire(c.hornet.cam_event)))
+    end
+    if S.hornetOffAt and S.clock >= S.hornetOffAt then hornetOff("its leave_s after it turned away") end
+    -- the break held while the deal's on (the next round's start pushed back; D.at is the round clock's)
+    if c.hold_break and V and D.state == "wait" and D.at and D.now and (V.phase ~= "closed" or (V.leaveAt and S.clock < V.leaveAt)) then
+        local need = (V.phase == "intro" and (V.openAt - S.clock) + c.vote_s or V.phase == "open" and (V.closeAt - S.clock)
+            or (V.leaveAt - S.clock)) + 4
+        if D.at < D.now + need then
+            if not V.heldSaid then V.heldSaid = true; log(string.format("deal: the break held for the deal (%.0f s more)", D.now + need - D.at)) end
+            D.at = D.now + need
+        end
+    end
+    pcall(targetsTick)
+    pcall(angerTick)
+    -- the offer: once a break, by chance, offer_after_s into it, never in the STORE, never with a deal or its target on
+    if D.state ~= "wait" then S.breakRound, S.breakAt = nil, nil; return end
+    if S.breakRound ~= D.round then S.breakRound, S.breakAt, S.rolled = D.round, S.clock, false end
+    if S.rolled or (V and V.phase ~= "closed") or DEAL.T then return end
+    if D.round < num(c.from_round, 1) or S.clock - S.breakAt < c.offer_after_s then return end
     if SPC and SPC.storeShut and not SPC.storeShut(D.now or S.clock) then return end
     S.rolled = true
-    local kind = D.special.kind
-    local chance = num(c.kinds[kind], 0)
     local roll = math.random()
-    if roll >= chance then
-        if chance > 0 then log(string.format("deal: round %d (%s): no offer (rolled %.2f, chance %.2f)", D.round, kind, roll, chance)) end
+    if roll >= num(c.chance, 0.35) then
+        log(string.format("deal: the break after round %d: no offer (rolled %.2f, chance %.2f)", D.round, roll, num(c.chance, 0.35)))
         return
     end
-    offer(kind, string.format("chance %.2f, rolled %.2f", chance, roll))
+    local kind = pickDeal()
+    if not kind then log("deal: no deal to offer (every weight 0)"); return end
+    offer(kind, string.format("chance %.2f, rolled %.2f", num(c.chance, 0.35), roll))
 end
-
 ---------------------------------------------------------------------------------------------------- a joiner's view
 local function joinerTick()
     local J = DEAL.J
@@ -339,7 +549,6 @@ function DEAL.fromHost(k, f)
         if not J or J.id ~= id then J = { id = id }; DEAL.J = J end
         if J.phase == "closed" then return end
         J.phase, J.yes, J.no, J.taken, J.resultUntil = "closed", y, n, t == 1, S.clock + cfg().result_row_s
-        if J.taken then DEAL.won = { round = D.round, id = id, earned = 0 } end
         log(string.format("deal: the host's vote %d closed: YES %d, NO %d: %s", id, y, n, J.taken and "TAKEN" or "REFUSED"))
     end
 end
@@ -400,6 +609,8 @@ DEAL.promptTick = promptTick
 function DEAL.row()
     local c = cfg()
     if not (D and c.enabled) then return nil end
+    local T = isHost() and DEAL.T
+    if T and T.state == "up" then return string.format(c.text.row_target, c.text.name[T.kind] or T.kind, T.down, T.total) end
     local V = isHost() and DEAL.V or DEAL.J
     if not V then return nil end
     if V.phase == "open" then
@@ -413,60 +624,19 @@ function DEAL.row()
     return nil
 end
 
----------------------------------------------------------------------------------------------------- the pay
--- every game: what it earns while a deal it took is on, the round's own clear bonus and the deal's own pay left out
-local rawAdd = addCredits
-addCredits = function(n, why)
-    local W = DEAL.won
-    if W and D and D.round == W.round and D.state ~= "wait" and type(n) == "number" and n > 0 then
-        local w = tostring(why or "")
-        if not (w:find("cleared", 1, true) or w:find("the deal", 1, true)) then W.earned = W.earned + n end
-    end
-    return rawAdd(n, why)
-end
-local function payTick()
-    local W = DEAL.won
-    if not (W and D) then return end
-    if D.round ~= W.round then
-        log(string.format("deal: round %d never cleared with the deal on (now round %s): not paid", W.round, tostring(D.round)))
-        DEAL.won = nil
-        return
-    end
-    if D.state ~= "wait" then return end
-    DEAL.won = nil
-    local p = cfg().pay
-    local extra = math.floor(W.earned * (num(p.kills_x, 1) - 1) + 0.5)
-    local bonus = isHost() and math.floor(num(p.bonus, 0) + num(p.bonus_per_round, 0) * W.round) or 0
-    if extra > 0 then
-        if COOP and COOP.payOwn and COOP.open then COOP.payOwn(extra, "the deal's extra") else rawAdd(extra, "the deal's extra") end
-    end
-    if bonus > 0 then addCredits(bonus, "the deal's bonus") end
-    log(string.format("deal: round %d cleared with the deal: +%d (earned %d x %.2f more) + bonus %d%s", W.round, extra, W.earned,
-        num(p.kills_x, 1) - 1, bonus, isHost() and "" or " (the host's, sent)"))
-    local c = cfg()
-    if isHost() then
-        say("paid", c.lines.paid)
-        -- (this game's own sum: each joiner shows its own)
-        local show = (COOP and COOP.open and COOP.localCallout) or hudCallout
-        show(c.text.paid, string.format(c.text.paid_sub, extra + bonus))
-    elseif COOP and COOP.localCallout and extra > 0 then
-        COOP.localCallout(c.text.paid, string.format(c.text.paid_sub, extra))
-    end
-end
-
 ---------------------------------------------------------------------------------------------------- the tick and the keys
 -- (sv_main.lua's test ticks, every game, in a run) the clock holds while the game is paused
 function DEAL.tick(clock)
     if not cfg().enabled then return end
     if not D then
         if S.hornetUp then S.hornetUp = false end
-        DEAL.V, DEAL.J, DEAL.won, S.round, S.noHornetSaid = nil, nil, nil, nil, false
-        S.last, S.D, S.hornetOffAt = nil, nil, nil
+        DEAL.V, DEAL.J, DEAL.T, DEAL.ANG, S.round, S.noHornetSaid = nil, nil, nil, {}, nil, false
+        S.last, S.D, S.hornetOffAt, S.camAt = nil, nil, nil, nil
         return
     end
     if S.D ~= D then                                    -- (a new run: nothing of the last one's carried over)
-        if S.D ~= nil and (DEAL.V or DEAL.J or DEAL.won) then log("deal: a new run: the last run's deal dropped") end
-        S.D, DEAL.V, DEAL.J, DEAL.won, S.round, S.hornetOffAt = D, nil, nil, nil, nil, nil
+        if S.D ~= nil and (DEAL.V or DEAL.J or DEAL.T) then log("deal: a new run: the last run's deal dropped") end
+        S.D, DEAL.V, DEAL.J, DEAL.T, DEAL.ANG, S.round, S.hornetOffAt, S.camAt = D, nil, nil, nil, {}, nil, nil, nil
         if S.hornetUp then hornetOff("a new run") end
     end
     local dt = S.last and math.max(0, math.min(1, clock - S.last)) or 0
@@ -474,15 +644,14 @@ function DEAL.tick(clock)
     if not paused() then S.clock = S.clock + dt end
     if isHost() then hostTick() else joinerTick() end
     pcall(promptTick)
-    payTick()
 end
 -- (the test key) the deal offered now, whatever the round
 function DEAL.offerNow()
     if not D then log("deal: Ctrl+H outside a Survival run"); return end
     if not isHost() then log("deal: Ctrl+H on a joiner: the host offers the deal"); return end
     if DEAL.V and DEAL.V.phase ~= "closed" then log("deal: Ctrl+H: a deal is on already"); return end
-    S.round = D.round
-    offer(D.special and D.special.kind or "none", "Ctrl+H")
+    S.round, S.rolled = D.round, true
+    offer(pickDeal() or "podarge", "Ctrl+H")
 end
 
 local function bind(name, fn)

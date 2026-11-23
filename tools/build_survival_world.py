@@ -916,6 +916,15 @@ def build_wd_global():
     lcac_units(units, used_ids, z, top_number, v)
     spaceport_units(units, used_ids, z, top_number, v)
     ladon_units(units, used_ids, z, top_number, v)
+    # (THE DEAL's targets, 2026-11-23: the units in build_survival_units.deal_units; placed here, where place() is)
+    parts, cu, cyaw, lanes, dpaths, dsrc = deal_units(units, used_ids, z, top_number, v)
+    place(cu, lanes[0][0], cyaw, [r[0] for r in lanes])
+    unit_area(cu, survival_events.DEAL_TARGET_AREA_M, survival_events.DEAL_TARGET_ALT_M)
+    for name, route in zip(survival_events.DEAL_CARGO_PATHS, lanes):
+        dpaths.append(make_path(z, used_ids, dsrc, name, route, smooth=True))
+    print(f'  the deal: {survival_events.DEAL_PODARGE_UNIT} (Mission 12 {survival_events.DEAL_PODARGE_SOURCE}, {parts} parts), '
+          f'{survival_events.DEAL_CARGO_UNIT} ({survival_events.DEAL_CARGO_N} x {survival_events.DEAL_CARGO_NPC}), '
+          f'{1 + len(lanes)} paths')
     heavy_paths(used_ids, z, v)
     alcn_units(units, used_ids, z, top_number, v)
     valka_unit(units, used_ids, z, top_number)

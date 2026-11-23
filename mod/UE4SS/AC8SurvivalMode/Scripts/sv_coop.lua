@@ -504,6 +504,8 @@ local KEEP_EVENTS = {
     -- DEV ONLY BEGIN ((2026-11-12) THE TANACORN's railguns, sv_tanicorn_rail.lua: each ordered on the host once ITS copy
     -- reads raised; a joiner's copy is never raised, and ordered it would fire from inside her hull. Kept where that part is)
     "^RE_SV_TaniRailOrder",
+    -- ((2026-11-23) THE DEAL, sv_deal.lua: AC8's Yes / No, asked on each game by its own vote; dev install only)
+    "^RE_SV_DealAsk$",
     -- DEV ONLY END
 }                              -- ((code review of 2026-11-07, finding 1) the carriers' RE_SV_CargoLaunch_<s>_<n> is
                                -- forwarded for the look: each joiner's copy of the ship launches ZFA-44s of its own, which

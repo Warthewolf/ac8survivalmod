@@ -1,17 +1,13 @@
 -- deal_test.lua <mod dir> (run by tools/checks/deal_test.sh): THE DEAL (Scripts/sv_deal.lua) on its own, the game, the
--- subtitles, the HUD and co-op stubbed. Covered:
---   solo: no offer on a kind it isn't listed for, nor when the dice say no (logged), nor in the STORE (later, once it's
---     shut), nor before offer_after_s; the offer: the Hornet up ahead of you (its name set, an ally's unit), War's
---     introduction, the vote opening after it with its callout; the NEXT row (keys, tally, clock, your vote); Ctrl+A /
---     Ctrl+X; one player answering closes it; YES taken; NO refused; nobody answering by the clock: NO; the clock held
---     while paused; the leaving lines, the Hornet taken off leave_s after; the pay at the round's clear (what was
---     earned while it was on x (kills_x - 1), the round's own bonus and the deal's own pay left out, plus the bonus), and
---     none when the round moves on uncleared;
---   co-op host: "dl" sent reliable as it opens and as a vote comes in, unreliable every resend_s; a joiner's "vt"; a tie is
---     NO; everyone answering closes it; "dr" sent with the result; allow_change (the last answer counts; off: the first);
---     hostile "vt"s (slot, id, value, a closed vote, the host's own slot) ignored;
---   co-op joiner: the host's "dl" opens its view, the keys send "vt" to the host (not recorded here), "dr" closes it and a
---     deal taken pays this game's own extra only (COOP.payOwn), hostile "dl" / "dr" ignored, a vote with no result dropped;
+-- subtitles, the HUD and co-op stubbed (the design of 2026-11-23: an offer between rounds). Covered:
+--   solo: an offer only in a break, by the dice (logged when they say no), once a break, offer_after_s in, never in the
+--     STORE; the Hornet up ahead of you (higher on the ground), its name, an ally's unit, its event zoom; War's
+--     introduction, the vote and its question for the deal offered; the break held for it; YES: the target (Podarge,
+--     C-130s, the fleet's ships) up targets_after_s into the next round, onto its route, paid per target down and the
+--     bonus for all; one left at the round's end taken off unpaid; NO: War's anger (20 %: 5 drones next round) or not;
+--     nobody answering: 7 drones in each of the next 2 rounds; the Hornet turning away, taken off leave_s after;
+--   co-op host: "dl" reliable as it opens, unreliable every resend_s; hostile "vt"s ignored; a tie is NO; "dr" sent;
+--     allow_change; co-op joiner: the host's "dl" / "dr", "vt" sent, hostile ones ignored, never an offer;
 --   Ctrl+H: offered now (host), refused on a joiner and with a deal on.
 local MOD = arg[1]
 local fails = 0
@@ -58,15 +54,37 @@ function valid(o) return o ~= nil end
 local pawn = {
     K2_GetActorLocation = function() return { X = 100000, Y = 200000, Z = 300000 } end,
     K2_GetActorRotation = function() return { Yaw = 0 } end,
+    GetVelocity = function() return { X = 0, Y = 0, Z = 0 } end,
 }
 survivalPC = { Pawn = pawn }
 local HORNET_OK = true
-function SV_Spawn(unit, x, y, z, yaw) spawns[#spawns + 1] = { unit, x, y, z, yaw }; return HORNET_OK and 1 or -2 end
+local ALIVE = {}
+function SV_Spawn(unit, x, y, z, yaw)
+    spawns[#spawns + 1] = { unit, x, y, z, yaw }
+    if unit == "SV_Unit_DealHornet" then return HORNET_OK and 1 or -2 end
+    local n = unit == "SV_Unit_DealCargo" and 3 or 1
+    ALIVE[unit] = n
+    return n
+end
+function SV_UnitAlive(unit) return ALIVE[unit] or -7 end
+local events = {}
+function SV_Event(ev) events[#events + 1] = ev; return 1 end
+local function fired(ev) for _, e in ipairs(events) do if e == ev then return true end end return false end
+local function spawned(u) for _, x in ipairs(spawns) do if x[1] == u then return true end end return false end
+SPORT = { GROUPS = { "A", "B", "C", "D" } }
+function SPORT.fleet()
+    local out = { { kind = "ford", unit = "SV_Unit_SpFord", group = "Ford" } }
+    for _, g in ipairs(SPORT.GROUPS) do out[#out + 1] = { kind = "wasp", unit = "SV_Unit_SpWasp" .. g, group = g } end
+    return out
+end
+local angers = {}
+DECOY = { angerStart = function(n, why) angers[#angers + 1] = { n, why }; return true end }
+function specialPay(n) return n end
 local texts = {}
 function SV_SetText(k, v) texts[k] = v; return 1 end
 function SV_Recycle(u, n) recycles[#recycles + 1] = u; return 1 end
 SV_ERR = { [-2] = "no such unit or aircraft" }
-ALLY = { unit = {} }
+ALLY = { unit = {}, fleetReady = true }
 local STORE_SHUT = true
 SPC = { storeShut = function() return STORE_SHUT end }
 local raw = function(n, why) credits[#credits + 1] = { n, why } end
@@ -106,183 +124,198 @@ local function reset()
     D = nil
     run(0.25)
     logs, callouts, said, spawns, recycles, sent, credits, own = {}, {}, {}, {}, {}, {}, {}, {}
-    isUsed = {}
+    isUsed, events, angers, ALIVE = {}, {}, {}, {}
 end
-local function newRound(kind, round)
-    D = { round = round or 5, state = "fighting", special = kind and { kind = kind } or nil, now = clock }
+-- a break after `round` (D.at: the next round's start, `gap` s on)
+local function newBreak(round, gap)
+    D = { round = round or 5, state = "wait", now = clock, at = clock + (gap or 20) }
 end
+local function nextRound() D.round, D.state, D.special = D.round + 1, "fighting", nil end
+local function keepNow() if D then D.now = clock end end
+local function runD(secs) local n = math.floor(secs / 0.25 + 0.5); for _ = 1, n do run(0.25); keepNow() end end
+local function lastCallout() return callouts[#callouts] and callouts[#callouts][1] end
 
 print("solo")
--- a kind not listed: never
-reset(); newRound("shuttle")
-run(C.offer_after_s + 5)
-check(DEAL.V == nil and #spawns == 0 and not logged("deal:"), "a kind not in kinds (shuttle): no offer, nothing logged")
--- the dice say no
-reset(); ROLL = 0.9; newRound("ladon")
-run(C.offer_after_s + 5)
+reset(); D = { round = 5, state = "fighting", now = clock }
+runD(C.offer_after_s + 5)
+check(DEAL.V == nil and #spawns == 0, "in a round: no offer")
+reset(); ROLL = 0.9; newBreak(5)
+runD(C.offer_after_s + 1)
 check(DEAL.V == nil and logged("no offer (rolled 0.90, chance 0.35)"), "the dice say no: no offer, logged")
-run(C.offer_after_s + 5)
-check(#spawns == 0, "rolled once a round only")
--- the STORE: later, once it's shut
-reset(); ROLL = 0.1; STORE_SHUT = false; newRound("ladon", 6)
-run(C.offer_after_s - 5)
+runD(5)
+check(#spawns == 0, "rolled once a break only")
+reset(); ROLL = 0.1; STORE_SHUT = false; newBreak(6)
+runD(C.offer_after_s - 1)
 check(DEAL.V == nil, "not before offer_after_s")
-run(20)
+runD(5)
 check(DEAL.V == nil, "not while the STORE's open")
 STORE_SHUT = true
-run(0.5)
+runD(0.5)
 local V = DEAL.V
-check(V and V.phase == "intro" and logged("offered on round 6 (ladon"), "offered once the STORE's shut (logged)")
+check(V and V.phase == "intro" and V.kind == "podarge" and V.round == 7 and logged("offered in the break after round 6 (podarge"),
+    "offered once the STORE's shut: the Podarge (the weights), its target in round 7")
 check(#spawns == 1 and spawns[1][1] == "SV_Unit_DealHornet" and math.abs(spawns[1][2] - 250000) < 1 and
-    math.abs(spawns[1][3] - 270000) < 1 and spawns[1][4] == 315000, "the Hornet up 1.5 km ahead, 0.7 km right, 150 m up")
+    math.abs(spawns[1][3] - 270000) < 1 and spawns[1][4] == 370000, "the Hornet up 1.5 km ahead, 0.7 km right, 700 m up (on the ground)")
 check(texts.SV_DealHornet == "WAR & HAYTHORN" and ALLY.unit.SV_Unit_DealHornet == "air", "its name WAR & HAYTHORN, an ally's unit")
+runD(1.25)
+check(fired("RE_SV_DealCam") and logged("the event zoom onto the Hornet"), "the event zoom onto it")
 check(#said == 2 and has(said[1] .. said[2], "WAR|"), "War's introduction said (an exchange of two)")
-check(DEAL.row() == nil, "no row before the vote opens")
-run(6.5)
-check(V.phase == "open" and has(said[3], "WAR|"), "the vote opens after the introduction, War asks")
-check(callouts[1] and callouts[1][1] == "THE DEAL" and has(callouts[1][2], "CTRL+A / CTRL+X"), "its callout")
+check(D.at >= clock + C.vote_s and logged("the break held for the deal"), "the break held for the vote")
+runD(6)
+check(V.phase == "open" and has(said[3], "Podarge"), "the vote opens, War asks about the Podarge")
+check(callouts[1] and callouts[1][1] == "THE DEAL", "its callout")
 local row = DEAL.row()
-check(has(row, "CTRL+A YES / CTRL+X NO") and has(row, "YES 0  NO 0") and has(row, "0:30"), "the NEXT row: " .. tostring(row))
-PAUSED = true
-run(10)
-check(has(DEAL.row(), "0:30") and V.phase == "open", "the clock holds while paused")
-PAUSED = false
+check(has(row, "CTRL+A YES / CTRL+X NO") and has(row, "YES 0  NO 0"), "the NEXT row: " .. tostring(row))
 binds[65]()
-run(0.25)
-check(V.phase == "closed" and V.taken and logged("YES 1, NO 0: TAKEN (the most votes)") and logged("everyone answered"),
-    "Ctrl+A: YES, one player: closed at once, TAKEN")
-check(has(DEAL.row(), "THE DEAL: TAKEN (YES 1 / NO 0)"), "the result on the row")
-check(logged("the stakes for ladon: none yet"), "the stakes: none yet (the user's call), logged")
+runD(0.25)
+check(V.phase == "closed" and V.taken and logged("YES 1, NO 0: TAKEN (the most votes)"), "Ctrl+A: YES, one player: TAKEN")
+check(DEAL.T and DEAL.T.kind == "podarge" and DEAL.T.round == 7 and DEAL.T.state == "due", "the Podarge due in round 7")
 check(#sent == 0, "solo: nothing sent")
-addCredits(100, "kill: F-16C")
-addCredits(250 * 6, "round 6 cleared")
-check(DEAL.won and DEAL.won.earned == 100, "earned while it's on counted, the round's clear bonus not")
-run(C.result_row_s + 1)
-check(DEAL.row() == nil, "the row cleared result_row_s after")
-check(logged("deal:") and #said >= 5, "the leaving lines")
-run(C.hornet.leave_s)
-check(#recycles == 1 and recycles[1] == "SV_Unit_DealHornet" and logged("the Hornet taken off"), "the Hornet taken off leave_s after")
+runD(C.leave_after_s + 0.5)
+check(fired("RE_SV_DealLeave") and logged("the Hornet turns away"), "the Hornet turns away")
+runD(C.hornet.leave_s)
+check(#recycles == 1 and recycles[1] == "SV_Unit_DealHornet", "the Hornet taken off leave_s after")
+nextRound(); runD(C.targets_after_s - 2)
+check(not spawned("SV_Unit_DealPodarge"), "not before targets_after_s into round 7")
+runD(3)
+check(spawned("SV_Unit_DealPodarge") and DEAL.T.state == "up" and lastCallout() == "PODARGE INBOUND", "the Podarge up, its callout")
+runD(1.5)
+check(fired("RE_SV_DealPodargeGo"), "onto its route")
+check(has(DEAL.row(), "PODARGE 0 / 1 DOWN"), "the row: " .. tostring(DEAL.row()))
 credits = {}
-D.state = "wait"
-run(0.25)
-check(credits[1] and credits[1][1] == 100 and credits[1][2] == "the deal's extra", "paid: the earned 100 again (kills_x 2)")
-check(credits[2] and credits[2][1] == 5000 + 250 * 6 and credits[2][2] == "the deal's bonus", "and the bonus 5000 + 250 x round 6")
-check(DEAL.won == nil and logged("round 6 cleared with the deal: +100"), "paid once, logged")
-check(callouts[#callouts][1] == "THE DEAL PAID" and has(callouts[#callouts][2], "+6600"), "its callout: +6600")
+ALIVE.SV_Unit_DealPodarge = 0
+runD(3)
+check(credits[1] and credits[1][1] == 6000 + 300 * 7 and credits[2] and credits[2][1] == 3000 + 150 * 7,
+    "paid: 6000 + 300 x 7 for the Podarge, the bonus 3000 + 150 x 7")
+check(DEAL.T == nil or DEAL.T.state == "done", "the deal's over")
+check(logged("podarge over (all down): 1 of 1 down") and lastCallout() == "THE DEAL PAID", "logged, THE DEAL PAID")
 
--- NO, and nobody answering
-reset(); newRound("valka", 7)
-run(C.offer_after_s + 7)
-check(DEAL.V and DEAL.V.phase == "open", "valka: open")
-binds[88]()
-run(0.25)
-check(DEAL.V.phase == "closed" and not DEAL.V.taken and logged("REFUSED (the most votes)") and DEAL.won == nil, "Ctrl+X: NO, refused")
-reset(); newRound("alicorn", 8)
-run(C.offer_after_s + 7)
-run(C.vote_s + 0.5)
-check(DEAL.V.phase == "closed" and not DEAL.V.taken and logged("the clock ran out") and logged("nobody answered: no"),
-    "nobody answers by the clock: NO")
--- taken, then the round moves on uncleared
-reset(); newRound("glitch", 9)
-run(C.offer_after_s + 7)
-binds[65](); run(0.25)
-D.round = 10
-run(0.25)
-check(DEAL.won == nil and logged("never cleared with the deal on") and #credits == 0, "the round moved on uncleared: not paid")
+-- the C-130s, one escaping at the round's end
+reset(); ROLL = 0.1; C.deals = { podarge = 0, fleet = 0, cargo = 1 }; newBreak(8)
+runD(C.offer_after_s + 7)
+check(DEAL.V and DEAL.V.kind == "cargo", "the C-130s offered")
+binds[65](); runD(0.25)
+nextRound(); runD(C.targets_after_s + 2)
+check(spawned("SV_Unit_DealCargo") and DEAL.T.total == 3, "three C-130s up")
+credits = {}
+ALIVE.SV_Unit_DealCargo = 1
+runD(3)
+check(credits[1] and credits[1][1] == 2 * (2000 + 100 * 9) and DEAL.T.down == 2, "two down: paid 2 x (2000 + 100 x 9)")
+D.state = "wait"; runD(0.5)
+check(logged("cargo over (the round's over): 2 of 3 down, 1 left") and recycles[#recycles] == "SV_Unit_DealCargo" and
+    lastCallout() == "THE DEAL: TARGET ESCAPED", "the round's over: the last one taken off unpaid, TARGET ESCAPED")
+
+-- the fleet: the first two groups' ships
+reset(); C.deals = { podarge = 0, fleet = 1, cargo = 0 }; newBreak(10)
+runD(C.offer_after_s + 7); binds[65](); runD(0.25)
+nextRound(); runD(C.targets_after_s + 2)
+check(spawned("SV_Unit_SpWaspA") and spawned("SV_Unit_SpWaspB") and not spawned("SV_Unit_SpWaspC") and not spawned("SV_Unit_SpFord"),
+    "the fleet: groups A and B's ships, not the Ford")
+reset(); ALLY.fleetReady = false; newBreak(12)
+runD(C.offer_after_s + 2)
+check(DEAL.V == nil and logged("no deal to offer"), "no fleet rows: the fleet never offered")
+ALLY.fleetReady = true
+C.deals = { podarge = 1, fleet = 1, cargo = 1 }
+
+-- NO: War's anger by the dice; nobody answering: 7 drones in the next 2 rounds
+reset(); ROLL = 0.1; newBreak(14)
+runD(C.offer_after_s + 7)
+binds[88](); runD(0.25)
+check(DEAL.V.phase == "closed" and not DEAL.V.taken and logged("War's anger (refused, rolled 0.10): 5 Marker Drones in round 15"),
+    "Ctrl+X: NO, rolled 0.10 < 0.20: 5 drones next round")
+nextRound(); runD(C.anger.after_s + 1)
+check(angers[1] and angers[1][1] == 5 and lastCallout() == "WAR IS ANGRY", "round 15: 5 drones, WAR IS ANGRY")
+reset(); ROLL = 0.5; newBreak(16)
+runD(C.offer_after_s + 7)
+check(DEAL.V == nil, "rolled 0.50 for the offer: none (0.35)")
+ROLL = 0.1; testKeys.H(); runD(7); ROLL = 0.5; binds[88](); runD(0.25)
+check(logged("War lets it go") and #DEAL.ANG == 0, "NO, rolled 0.50: War lets it go")
+reset(); ROLL = 0.1; newBreak(18)
+runD(C.offer_after_s + 7)
+runD(C.vote_s + 0.5)
+check(DEAL.V.phase == "closed" and logged("nobody answered") and logged("7 Marker Drones in rounds 19 to 20"), "nobody answers: 7 drones in rounds 19 and 20")
+nextRound(); runD(C.anger.after_s + 1)
+D.state = "wait"; runD(1); nextRound(); runD(C.anger.after_s + 1)
+check(#angers == 2 and angers[1][1] == 7 and angers[2][1] == 7, "7 drones in each")
+
 -- no Hornet in this build
-reset(); HORNET_OK = false; newRound("ladon", 11)
-run(C.offer_after_s + 1)
-check(DEAL.V and logged("not spawned (no such unit or aircraft): the deal goes on without the plane"), "no Hornet unit: goes on, logged")
-run(7); binds[65](); run(C.leave_after_s + C.hornet.leave_s + 1)
-check(#recycles == 0, "and nothing to take off")
+reset(); HORNET_OK = false; newBreak(22)
+runD(C.offer_after_s + 1)
+check(DEAL.V and logged("the deal goes on without the plane"), "no Hornet unit: goes on, logged")
 HORNET_OK = true
-
 -- a new run with a vote open: dropped
-reset(); newRound("ladon", 12)
-run(C.offer_after_s + 7)
-check(DEAL.V and DEAL.V.phase == "open", "open")
-clearLogs(); newRound("ladon", 1)
-run(0.25)
+reset(); newBreak(24)
+runD(C.offer_after_s + 7)
+clearLogs(); newBreak(1)
+runD(0.25)
 check(DEAL.V == nil and logged("the last run's deal dropped") and #recycles == 1, "a new run: the last run's vote dropped, its Hornet off")
 
 print("co-op host")
 reset(); COOP.open, COOP.role, COOP.slot, COOP.peers = true, "host", 0, 2
-newRound("spaceport", 12)
-run(C.offer_after_s + 7)
+newBreak(12)
+runD(C.offer_after_s + 7)
 V = DEAL.V
 local function sentOf(k, rel) local n = 0; for _, m in ipairs(sent) do if m.f[1] == k and (rel == nil or m.reliable == rel) then n = n + 1 end end return n end
-check(V.phase == "open" and sentOf("dl", true) == 1 and sent[1].to == nil and sent[1].f[2] == V.id and sent[1].f[3] == "spaceport",
+check(V.phase == "open" and sentOf("dl", true) == 1 and sent[1].to == nil and sent[1].f[2] == V.id and sent[1].f[3] == V.kind,
     "\"dl\" to everyone, reliable, as it opens")
-run(C.resend_s + 0.25)
+runD(C.resend_s + 0.25)
 check(sentOf("dl", false) >= 1, "\"dl\" again unreliable every resend_s")
--- hostile votes
 local id = tostring(V.id)
 for _, bad in ipairs({ { 1, { "vt", "999", "1" } }, { 1, { "vt", id, "2" } }, { 1, { "vt", id, "nan" } }, { 1, { "vt", id, "0.5" } },
                        { 1, { "vt", id } }, { 1, { "vt" } }, { 30, { "vt", id, "1" } }, { -1, { "vt", id, "1" } },
                        { 0, { "vt", id, "1" } }, { 1.5, { "vt", id, "1" } }, { "x", { "vt", id, "1" } } }) do
     DEAL.onVote(bad[1], bad[2])
 end
-check(next(V.votes) == nil, "hostile \"vt\"s ignored (a wrong id, value, slot, the host's own slot, cut short)")
+check(next(V.votes) == nil, "hostile \"vt\"s ignored")
 binds[65]()
 check(V.votes[0] == 1 and V.phase == "open", "the host's YES: still open (2 players)")
 DEAL.onVote(1, { "vt", id, "1" })
 DEAL.onVote(1, { "vt", id, "0" })
 check(V.votes[1] == 0, "allow_change: the joiner's last answer counts")
-run(0.25)
+runD(0.25)
 check(V.phase == "closed" and not V.taken and logged("YES 1, NO 1: REFUSED (a tie is no)"), "everyone answered: a tie is NO")
 local dr
 for _, m in ipairs(sent) do if m.f[1] == "dr" then dr = m end end
 check(dr and dr.reliable and dr.f[2] == V.id and dr.f[3] == 1 and dr.f[4] == 1 and dr.f[5] == 0, "\"dr\" sent: 1, 1, not taken")
-DEAL.onVote(1, { "vt", id, "1" })
-check(V.votes[1] == 0, "a vote after the close ignored")
--- allow_change off
-reset(); C.allow_change = false; newRound("ladon", 13)
-run(C.offer_after_s + 7)
+reset(); C.allow_change = false; newBreak(13)
+runD(C.offer_after_s + 7)
 V = DEAL.V
 DEAL.onVote(2, { "vt", tostring(V.id), "1" }); DEAL.onVote(2, { "vt", tostring(V.id), "0" })
 check(V.votes[2] == 1, "allow_change off: the first answer counts")
 C.allow_change = true
--- Ctrl+H
-reset(); newRound(nil, 14)
+reset(); D = { round = 14, state = "fighting", now = clock }
 testKeys.H()
-check(DEAL.V and DEAL.V.phase == "intro" and logged("offered on round 14 (none, Ctrl+H)"), "Ctrl+H: offered now, no special needed")
+check(DEAL.V and DEAL.V.phase == "intro" and logged("Ctrl+H"), "Ctrl+H: offered now, in a round too")
 clearLogs(); testKeys.H()
 check(logged("a deal is on already"), "Ctrl+H again with a deal on: refused")
 
 print("co-op joiner")
 reset(); COOP.role, COOP.slot = "join", 1
-newRound("ladon", 15)
-run(C.offer_after_s + 7)
+newBreak(15)
+runD(C.offer_after_s + 7)
 check(DEAL.V == nil and #spawns == 0, "a joiner never offers")
-for _, bad in ipairs({ { "dl" }, { "dl", "0", "ladon", "30", "0", "0" }, { "dl", "1.5", "ladon", "30", "0", "0" },
-                       { "dl", "1", "lad on!", "30", "0", "0" }, { "dl", "1", "ladon", "inf", "0", "0" },
-                       { "dl", "1", "ladon", "500", "0", "0" }, { "dl", "1", "ladon", "30", "25", "0" },
-                       { "dl", "1", "ladon", "30", "-1", "0" }, { "dl", "1", string.rep("a", 400), "30", "0", "0" } }) do
+for _, bad in ipairs({ { "dl" }, { "dl", "0", "cargo", "30", "0", "0" }, { "dl", "1.5", "cargo", "30", "0", "0" },
+                       { "dl", "1", "car go!", "30", "0", "0" }, { "dl", "1", "cargo", "inf", "0", "0" },
+                       { "dl", "1", "cargo", "500", "0", "0" }, { "dl", "1", "cargo", "30", "25", "0" },
+                       { "dl", "1", "cargo", "30", "-1", "0" }, { "dl", "1", string.rep("a", 400), "30", "0", "0" } }) do
     DEAL.fromHost("dl", bad)
 end
 check(DEAL.J == nil, "hostile \"dl\"s ignored")
-DEAL.fromHost("dl", { "dl", "4", "ladon", "30", "1", "0" })
+DEAL.fromHost("dl", { "dl", "4", "cargo", "30", "1", "0" })
 row = DEAL.row()
 check(DEAL.J and has(row, "YES 1  NO 0") and has(row, "0:30"), "the host's \"dl\": the row " .. tostring(row))
 binds[88]()
 check(sent[#sent].to == 0 and sent[#sent].f[1] == "vt" and sent[#sent].f[2] == 4 and sent[#sent].f[3] == 0, "Ctrl+X: \"vt\" to the host")
 check(has(DEAL.row(), "YOU: NO"), "your vote on the row")
-local n0 = #sent
-binds[88]()
-check(#sent == n0, "the same answer again: not sent again")
 for _, bad in ipairs({ { "dr", "4", "1", "0", "2" }, { "dr", "4", "x", "0", "1" }, { "dr", "4", "1", "99", "1" }, { "dr", "x", "1", "0", "1" } }) do
     DEAL.fromHost("dr", bad)
 end
 check(DEAL.J.phase == "open", "hostile \"dr\"s ignored")
 DEAL.fromHost("dr", { "dr", "4", "2", "1", "1" })
-check(DEAL.J.phase == "closed" and DEAL.J.taken and has(DEAL.row(), "TAKEN (YES 2 / NO 1)") and DEAL.won, "\"dr\": taken, on the row")
-addCredits(300, "kill: Su-33")
-D.state = "wait"
-run(0.25)
-check(own[1] and own[1][1] == 300 and #credits == 1, "a joiner: its own extra (COOP.payOwn), no bonus of its own (the host's, sent)")
-reset(); newRound("ladon", 16); run(0.25)
-DEAL.fromHost("dl", { "dl", "5", "ladon", "30", "0", "0" })
-run(41)
+check(DEAL.J.phase == "closed" and DEAL.J.taken and has(DEAL.row(), "TAKEN (YES 2 / NO 1)"), "\"dr\": taken, on the row")
+reset(); newBreak(16); runD(0.25)
+DEAL.fromHost("dl", { "dl", "5", "cargo", "30", "0", "0" })
+runD(41)
 check(DEAL.J == nil and logged("no result from the host"), "a vote with no result 10 s after its close: dropped")
 clearLogs(); testKeys.H()
 check(logged("on a joiner"), "Ctrl+H on a joiner: refused")

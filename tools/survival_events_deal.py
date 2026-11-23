@@ -34,6 +34,50 @@ DEAL_PATH_OUT = 'SV_Path_DealHornetOut'
 DEAL_OUT_SPEED = '950.0'                    # km/h
 DEAL_OUT_PTS = [(5500000.0, 2600000.0, 350000.0), (9000000.0, 4200000.0, 350000.0)]   # cm: ~45 km NE of the airfield, on out, 3.5 km up
 
+# The deals' targets (the user: "a Podarge transport flight that the players can go and destroy", "a tip-off on a large
+# enemy fleet", "C-130s nearby carrying goods for Emblem Direct"; "The Target will arrive in the next round"): Lua
+# (sv_deal.lua) spawns them as that round starts and orders them onto their routes (RE_SV_DealPodargeGo /
+# RE_SV_DealCargoGo); the fleet is the Spaceport round's own enemy ships (sv_spaceport.lua SPORT.fleet), no new unit.
+_AF = (1609639.0, -436414.0)                # the airfield, cm (survival_events.AIRFIELD_KM); north is -y
+
+
+def _af(dx_km, dy_km, alt_cm): return (_AF[0] + dx_km * 1e5, _AF[1] + dy_km * 1e5, alt_cm)
+
+
+# the Podarge: Mission 12's Norn (AC8's Podarge: Mission 25 day 2's "It's a Podarge!"; Mission 12's PodargeDead light),
+# EAUnit01_Norn0 with its 16 parts (its Cargo1 slot, a carried ldbs3a_A, left out), ported as the Ladons are
+# (build_survival_units.py deal_units); its mission rows Mission 12's (build_survival.py NPC_IMPORT), the body's under
+# Survival's name. West to east, ~9 km south of the runway
+DEAL_PODARGE_WD = '/Game/Maps/Ingame/Mission012/WD_Mission012_global'
+DEAL_PODARGE_SOURCE, DEAL_PODARGE_SOURCE_ROW = 'EAUnit01_Norn0', 'norn_01'
+DEAL_PODARGE_UNIT, DEAL_PODARGE_OBJ, DEAL_PODARGE_ROW = 'SV_Unit_DealPodarge', 'SV_Obj_DealPodarge', 'sv_deal_podarge'
+DEAL_PODARGE_DROP = ('Cargo1',)
+DEAL_PODARGE_PART_ROWS = (['norn_LargeEngine_L1', 'norn_LargeEngine_R1', 'norn_LeftAirIntake', 'norn_RightAirIntake',
+                           'norn_Turret_L1', 'norn_Turret_R1', 'norn_VLS_L1', 'norn_VLS_R1']
+                          + [f'norn_Wing_{s}{k}' for s in 'LR' for k in range(1, 5)])
+DEAL_PODARGE_PATH, DEAL_PODARGE_GO, DEAL_PODARGE_SPEED = 'SV_Path_DealPodarge', 'RE_SV_DealPodargeGo', '450.0'
+DEAL_PODARGE_PTS = [_af(-38, 12, 280000.0), _af(-20, 10, 280000.0), _af(0, 9, 280000.0), _af(20, 7, 280000.0),
+                    _af(40, 4, 280000.0)]
+# Emblem Direct's cargo: three C-130s (AC8's OP0054_c130_01), a copy of Survival's heavy flight (EA_Unit_01_Air2, as
+# THE FESTIVAL's) on a row of Mission 4's Tu-160 (NLID_1000: a large aircraft); north to south past the runway's east,
+# a lane each 600 m apart
+DEAL_CARGO_UNIT, DEAL_CARGO_OBJ, DEAL_CARGO_ROW = 'SV_Unit_DealCargo', 'SV_Obj_DealCargo', 'sv_deal_cargo'
+DEAL_CARGO_SOURCE, DEAL_CARGO_NPC, DEAL_CARGO_N = 'EA_Unit_01_Air2', 'OP0054_c130_01', 3
+DEAL_CARGO_OBJS = [f'{DEAL_CARGO_OBJ}_{k}' for k in range(DEAL_CARGO_N)]
+DEAL_CARGO_GO, DEAL_CARGO_SPEED = 'RE_SV_DealCargoGo', '420.0'
+DEAL_CARGO_LANES = [('A', 0.0), ('B', -0.6), ('C', 0.6)]
+
+
+def deal_cargo_route(side_km):
+    return [_af(-6 + side_km, -36, 220000.0), _af(2 + side_km, -18, 220000.0), _af(10 + side_km, 0, 220000.0),
+            _af(16 + side_km, 18, 220000.0), _af(22 + side_km, 38, 220000.0)]
+
+
+DEAL_CARGO_PATHS = [f'SV_Path_DealCargo{t}' for t, _ in DEAL_CARGO_LANES]
+DEAL_TARGET_AREA_M, DEAL_TARGET_ALT_M = 90000.0, (0.0, 12000.0)
+ESCORT_DECOY_MISSION_ROWS += [(DEAL_CARGO_ROW, '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004', 't160_common',  # noqa: F405
+                               DEAL_CARGO_NPC, None)]
+
 
 def build_deal(g, flag, stock_ep):
     m8 = os.path.join(os.path.dirname(os.path.dirname(stock_ep)), 'Mission008', 'EP_Mission008_global.uasset')
@@ -60,5 +104,11 @@ def build_deal(g, flag, stock_ep):
     assert arg_values(t_path)[:5] == ['B_Obj_01_Air0_Ladon0', 'NoneSelect', '01_Air0_Ladon_Path2', 'NoneSelect', '2000.0'], arg_values(t_path)  # noqa: F405
     g.trigger('RE_SpawnEnemy_kokatu_1st', DEAL_LEAVE)
     g.execute(t_path, DEAL_LEAVE, {0: DEAL_OBJ, 2: DEAL_PATH_OUT, 4: DEAL_OUT_SPEED})
+    # the targets onto their routes
+    g.trigger('RE_SpawnEnemy_kokatu_1st', DEAL_PODARGE_GO)
+    g.execute(t_path, DEAL_PODARGE_GO, {0: DEAL_PODARGE_OBJ, 2: DEAL_PODARGE_PATH, 4: DEAL_PODARGE_SPEED}, delay=0.5)
+    g.trigger('RE_SpawnEnemy_kokatu_1st', DEAL_CARGO_GO)
+    for o, path in zip(DEAL_CARGO_OBJS, DEAL_CARGO_PATHS):
+        g.execute(t_path, DEAL_CARGO_GO, {0: o, 2: path, 4: DEAL_CARGO_SPEED}, delay=0.5)
     print(f'  the deal: {DEAL_ASK} opens AC8\'s Yes / No ({DEAL_QUESTION}); its answer in {DEAL_FLAG} '
           f'(1 YES / 2 NO / 3 silence): {len(g.trig) - n_trig} triggers, {len(g.ex) - n_ex} executions')
