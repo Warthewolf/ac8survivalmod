@@ -491,6 +491,16 @@ local function onLand(P, what)
         pcall(function() kis:LineTraceSingle(survivalPC, { X = P.X, Y = P.Y, Z = 1000000 }, { X = P.X, Y = P.Y, Z = -100000 }, 0, true, {}, 0,
             hit, true, { R = 0, G = 0, B = 0, A = 0 }, { R = 0, G = 0, B = 0, A = 0 }, 0) end)
         pcall(function() local h = hit.OutHit or hit; local l = h.ImpactPoint or h.Location; if l and l.Z then z = l.Z end end)
+        local what2 = "?"
+        pcall(function()
+            local h = hit.OutHit or hit
+            local c = h.Component and h.Component:Get() or h.Component
+            what2 = c and c:GetFullName() or what2
+        end)
+        LANDTRACE = string.format("z %.1f m on %s", (z or -1e5) / 100, tostring(what2):match("([^/%.:]+)%.[^/]*$") or tostring(what2):sub(1, 60))
+        -- ((2026-11-24, the ulysses2 autotest: Comona's runway and terrain trace at 3.9-5 m, under the old sea_z + 5 m:
+        -- every hit read as the sea) what it hit says it: the level's sea is a mesh named *_Env_Sea (Mission022_Common_Env_Sea)
+        if z and what2 ~= "?" then return not tostring(what2):find("_Env_Sea", 1, true), z, "traced" end
     end
     if z then return z > seaZ + 500, z, "traced" end
     local base = what == "airfield" and AIRFIELD or nil
@@ -536,7 +546,7 @@ local function land(f, now)
     end
     if f.big and hudCallout then hudCallout(cfg().text.big_hit, nil) end
     ul(string.format("%s landed on the %s (%.1f, %.1f km), in the %s%s", f.big and "the core" or "a fragment", f.what, f.P.X / 100000,
-        f.P.Y / 100000, f.where or "?", (f.big or (isLand and (f.what == "airfield" or d < 400000))) and string.format(": the airfield -%d", dmg)
+        f.P.Y / 100000, (f.where or "?") .. (LANDTRACE and (" [" .. LANDTRACE .. "]") or ""), (f.big or (isLand and (f.what == "airfield" or d < 400000))) and string.format(": the airfield -%d", dmg)
         or (not isLand and ": harmless" or "")))
     return at
 end
