@@ -156,6 +156,28 @@ local function rock(key, at, vel, scale, spin, tailX, trails)
     -- mesh is its root, the mesh itself too)
     pcall(function() a:K2_SetActorLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true) end)
     placeAt(c, at, face)
+    -- ((2026-11-24, the user: "The meteors look like they're travelling backwards"; the autotest measured every rock's front
+    -- at -0.96 / -0.88 of its way: its height right, its heading turned round, as a pitch read as 180 - pitch) its front read
+    -- back and, if it points away from its way, turned through 180 - pitch; still wrong: the plain opposite
+    local function along()
+        local ok, f = pcall(function() return c:GetForwardVector() end)
+        local m = math.sqrt(vel.X ^ 2 + vel.Y ^ 2 + vel.Z ^ 2)
+        if not (ok and f and m > 1) then return 1 end
+        return (f.X * vel.X + f.Y * vel.Y + f.Z * vel.Z) / m
+    end
+    local d0 = along()
+    if d0 < 0.9 then
+        local f1 = { Pitch = 180 - face.Pitch, Yaw = face.Yaw, Roll = face.Roll }
+        placeAt(c, at, f1)
+        local d1 = along()
+        if d1 < 0.9 then
+            local f2 = { Pitch = -face.Pitch, Yaw = face.Yaw + 180, Roll = face.Roll }
+            placeAt(c, at, f2)
+            if along() < d1 then placeAt(c, at, f1) end
+        end
+        FACELOG = (FACELOG or 0) + 1
+        if FACELOG <= 3 then ul(string.format("a rock's front: %.2f along its way as asked, %.2f turned", d0, along())) end
+    end
     local mid = paintMid()
     if mid then
         local slots = 1
