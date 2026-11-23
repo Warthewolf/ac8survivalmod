@@ -6300,6 +6300,24 @@ SUITES.ulysses = function()
         ST.info(string.format("the sun lies toward (%.2f, %.2f, %.2f) (+X, +Y, up); a sky meteor flies (%.0f, %.0f) cm/s", sun.X, sun.Y, sun.Z, v.X, v.Y))
         ST.info(string.format("the sky's meteors vs the sun's side: cos %.2f (negative: away from the sun)", dot))
     end)
+    A.do_(function()                                     -- ((2026-11-24) "travelling backwards": each rock's front vs its way
+        local function facing(r)
+            local okF, f = pcall(function() return r.c:GetForwardVector() end)
+            local okV, v = pcall(function() return r.pm.Velocity end)
+            if not (okF and f and okV and v) then return nil end
+            local m = math.max(1e-6, math.sqrt(v.X ^ 2 + v.Y ^ 2 + v.Z ^ 2))
+            return (f.X * v.X + f.Y * v.Y + f.Z * v.Z) / m
+        end
+        local _, SK = ULY.debug()
+        local U = ULY.debug()
+        local sky = SK and SK.list and SK.list[1] and facing(SK.list[1].r)
+        local frag
+        for _, x in ipairs(U and U.list or {}) do if not x.done and x.r then frag = facing(x.r); break end end
+        ST.info(string.format("facing: a sky meteor's front along its way %s, a fragment's %s (1 = forward, -1 = backwards)",
+            tostring(sky), tostring(frag)))
+        ST.check(sky ~= nil and sky > 0.9 and frag ~= nil and frag > 0.9, "the rocks fly front first (their streak behind them)",
+            tostring(sky) .. " / " .. tostring(frag))
+    end)
     A.do_(function()                                     -- (the compass: the plane's heading now, the minimap in the picture)
         local yaw, L = nil, nil
         pcall(function() yaw = survivalPC:GetControlRotation().Yaw end)
