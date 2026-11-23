@@ -4237,3 +4237,10 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   a co-op host's world goes on only once the pause page is up (or CFG.coop.pause_page_wait_s 1.0 s on), the pause probe
   logs the view and the room. Untested in game. Public zip AC8SurvivalMode_0.75.69_Online.zip, build a6be673d,
   registered; zip_leak_test all passed.
+- 0.75.70 (2026-11-23, branch feature/ulysses): ULYSSES, a special round back in July 1999 (the user: "Recreate the
+  Ulysses Event from Strangereal ... go back in time for a few rounds"; docs/re/ULYSSES.md): rounds 19-20 (the arc's
+  first dawn rounds after THE FESTIVAL's night), pure meteor defence, AC:I's meteors (SurvivalMode_Ulysses_P: SK_SV_Ulysses
+  A / C / D, tools/ulysses) falling with fire trails and FRAGMENT boxes (the SOLG's KEW / MAG units borrowed), the core
+  (o_meta) in round 20, the sky's meteors, the white fade and JULY 1999 / PRESENT DAY, the film look (a post-process
+  volume), AC:I's Stardust sounds (Sounds/ulysses). TEST ONLY Ctrl+Q. ulysses_test 20/20. Staged as
+  build/release/stage_dev_0.75.70 (dev, test keys kept), not registered, NOT installed. Not yet seen in game: all of it.
