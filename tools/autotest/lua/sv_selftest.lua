@@ -6466,6 +6466,51 @@ SUITES.ulysses2 = function()
     A.wait(3)
 end
 
+-- ((2026-11-24, the user: "Shouldn't their smoke trail be thicker") stock smoke trails side by side: a column of rocks,
+-- each with one candidate (the top row first), flying across the view for 10 s, then pictured side on and from behind
+SUITES.ulytrails = function()
+    intoRun()
+    local V = "/Game/VFX/"
+    local ROWS = {
+        { "now: smoke 14 + fire 11", { { path = V .. "Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeNPC001", scale = 14 },
+                                        { path = V .. "Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeFireNPC001", scale = 11 } } },
+        { "Ladon's smoke trail", { { path = V .. "Vehicles/Aircraft/OP/OP0045_ladn/NS_Ladn_SmokeTrail001", scale = 6 } } },
+        { "the Climber's fall smoke 1", { { path = V .. "IGC/Ms20/Ms200030/NS_IGCVFX_Ms200030_ClimberFallSmoke001", scale = 2 } } },
+        { "the Climber's fall smoke 2", { { path = V .. "IGC/Ms20/Ms200030/NS_IGCVFX_Ms200030_ClimberFallSmoke002", scale = 2 } } },
+        { "Ms03 debris smoke trail 1", { { path = V .. "Cinematics/Ms030010/NS_CinVFX_Ms030010_DebrisSmokeTrail001", scale = 6 } } },
+        { "Ms03 debris fire trail 1", { { path = V .. "Cinematics/Ms030010/NS_CinVFX_Ms030010_DebrisFireTrail001", scale = 6 } } },
+        { "ship debris smoke trail", { { path = V .. "Cinematics/Ms030010/NS_ShipDebrisSmokeTrail1st_add_smoke_001", scale = 6 } } },
+        { "the failed engine's fire trail", { { path = V .. "Cinematics/Ms140010/NS_CinVFX_LastFailedEngineFireSmokeTrail_MainPC", scale = 6 } } },
+    }
+    local T = { rocks = {} }
+    A.wait(8)
+    A.do_(function()
+        if not ST.check(ULY ~= nil and ULY.testRock ~= nil, "ULYSSES' test rock is in this build") then return "abort" end
+        local me = playerLocation and playerLocation()
+        local pc = survivalPC
+        local yaw = 0
+        pcall(function() yaw = pc:GetControlRotation().Yaw end)
+        local f = { X = math.cos(math.rad(yaw)), Y = math.sin(math.rad(yaw)) }
+        local r = { X = -f.Y, Y = f.X }
+        T.C = { X = me.X, Y = me.Y, Z = me.Z + 200000 }
+        T.F, T.R = f, r
+        T.look = { X = T.C.X + f.X * 500000, Y = T.C.Y + f.Y * 500000, Z = T.C.Z }
+        for i, row in ipairs(ROWS) do
+            local at = { X = T.look.X - r.X * 250000, Y = T.look.Y - r.Y * 250000, Z = T.C.Z + (#ROWS / 2 - i) * 60000 }
+            local rk = ULY.testRock("C", at, { X = r.X * 25000, Y = r.Y * 25000, Z = 0 }, 3, row[2])
+            T.rocks[#T.rocks + 1] = rk
+            ST.info(string.format("row %d (top first): %s: %s", i, row[1], rk and "up" or "NOT up"))
+        end
+    end)
+    A.wait(8)
+    A.picture("t_side_on", function() return T.C end, function() return T.look end, 70)
+    A.picture("t_from_behind", function()
+        return T.C and { X = T.look.X + T.R.X * 250000 - T.F.X * 120000, Y = T.look.Y + T.R.Y * 250000 - T.F.Y * 120000, Z = T.C.Z + 20000 }
+    end, function() return T.look and { X = T.look.X - T.R.X * 400000, Y = T.look.Y - T.R.Y * 400000, Z = T.C.Z } end, 60)
+    A.do_(function() for _, rk in ipairs(T.rocks) do pcall(ULY.testRockOff, rk) end end)
+    A.wait(2)
+end
+
 local function tick()
     if finished then return end
     local now = os.clock()
