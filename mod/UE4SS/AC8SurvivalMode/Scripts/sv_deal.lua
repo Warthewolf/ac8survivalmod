@@ -50,6 +50,10 @@ CFG.specials.deal = {
     allow_change = true,                      -- (D3: open; a player's last answer before the close counts)
     resend_s = 2,
     keys = { yes = "A", no = "X", ctrl = true },
+    -- ((2026-11-23) the user: "theres a Yes or No system already built into ACE8") the game's own prompt, Mission 8's
+    -- (tools/survival_events_deal.py: RE_SV_DealAsk opens it; Left YES, Right NO, its time out silence, back in the flag
+    -- SV_DealAns), on each player's own game as the vote opens; the keys stay as a fallback
+    prompt = { enabled = true, event = "RE_SV_DealAsk", flag = "SV_DealAns" },
     result_row_s = 8,                         -- the result on the NEXT row this long
     leave_after_s = 7,                        -- the leaving lines this long after the result
     hornet = { unit = "SV_Unit_DealHornet", name_key = "SV_DealHornet", name = "WAR & HAYTHORN",
@@ -363,6 +367,35 @@ function DEAL.vote(v)
     log(string.format("deal: your vote on %d: %s (sent to the host)", J.id, v == 1 and "YES" or "NO"))
 end
 
+-- AC8's own Yes / No on this game: asked once a vote, its answer read back (cfg().prompt)
+local ASK = { id = nil }
+local function promptTick()
+    local p = cfg().prompt
+    if not (p and p.enabled ~= false and type(SV_Event) == "function") then return end
+    local V = isHost() and DEAL.V or DEAL.J
+    local open = V and V.phase == "open"
+    if not open then ASK.id = nil; return end
+    if ASK.id ~= V.id then                               -- (a new vote: asked)
+        local r = SV_Event(p.event)
+        ASK.id, ASK.sawZero, ASK.done = V.id, false, false
+        log(string.format("deal: AC8's Yes / No asked for vote %d (%s %s)", V.id, p.event, r == 1 and "fired" or ("NOT fired: " .. tostring(SV_ERR and SV_ERR[r] or r))))
+        return
+    end
+    if ASK.done then return end
+    local a = (svFlags and svFlags() or {})[p.flag]
+    if a == nil then return end
+    if a == 0 then ASK.sawZero = true; return end        -- (asked, no answer yet: an old answer never read as this one's)
+    if not ASK.sawZero then return end
+    ASK.done = true
+    if a == 1 or a == 2 then
+        log(string.format("deal: you answered %s on AC8's Yes / No (vote %d)", a == 1 and "YES" or "NO", V.id))
+        DEAL.vote(a == 1 and 1 or 0)
+    else
+        log(string.format("deal: no answer on AC8's Yes / No (vote %d): silent", V.id))
+    end
+end
+DEAL.promptTick = promptTick
+
 -- the NEXT row (sv_hud.lua): the offer while it's open, the result a little after; else nil
 function DEAL.row()
     local c = cfg()
@@ -440,6 +473,7 @@ function DEAL.tick(clock)
     S.last = clock
     if not paused() then S.clock = S.clock + dt end
     if isHost() then hostTick() else joinerTick() end
+    pcall(promptTick)
     payTick()
 end
 -- (the test key) the deal offered now, whatever the round
