@@ -307,7 +307,7 @@ local function planeSweep(slot)
                     provoke_time_s = 1.0 / math.max(1, an.aggression or 1), surround_m = an.surround_m }
                     or (ft and CFG.tiers.list[ft])
                 if not own then pcall(enemySpike, p, D and D.round, tierFor) end
-                if D and not (p.unit and p.unit:find("^SV_Unit_FestCM_")) then pcall(enemyLate, p, D.round) end   -- (CFG.late)
+                if D and not (p.unit and (p.unit:find("^SV_Unit_FestCM_") or p.unit:find("^SV_Unit_Deal"))) then pcall(enemyLate, p, D.round) end   -- (CFG.late)
                 pcall(probeTrack, p); pcall(ACE.hunt, p); pcall(aiWatch, p, you or nil)
                 pcall(KILL.read, p)                                                -- (who's hurt it so far)
                 p.addr = p.addr or addrOf(p.obj)                                   -- (KILL.fired's key)
