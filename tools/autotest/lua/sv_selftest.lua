@@ -6359,6 +6359,23 @@ SUITES.ulysses = function()
         return { X = OC.at.X + vx / m * 250000 - vy / m * 40000, Y = OC.at.Y + vy / m * 250000 + vx / m * 40000, Z = OC.at.Z + vz / m * 250000 + 20000 }
     end, function() return OC.at end, 50)
     A.do_(function() ST.shot("u_your_view_2") end)
+    A.do_(function()                                     -- ((2026-11-24) its target box still there, the tower hidden whole:
+        local f = pick(false)                            -- a fragment held 2 km ahead of the plane, the plane's own view
+        local P = survivalPC and survivalPC.Pawn
+        local okL, L = pcall(function() return P:K2_GetActorLocation() end)
+        local okF, F = pcall(function() return P:GetActorForwardVector() end)
+        if not (f and okL and okF) then ST.info("box check: no fragment / plane"); return end
+        pcall(function() f.x.r.pm.Velocity = { X = 0, Y = 0, Z = 0 } end)
+        HELD = { f = f.x, v = { X = 0, Y = 0, Z = -1 }, t = os.clock() }
+        pcall(function() local v = f.x.r.pm.Velocity end)
+        local at = { X = L.X + F.X * 200000, Y = L.Y + F.Y * 200000, Z = L.Z + F.Z * 200000 + 5000 }
+        pcall(function() f.x.r.a:K2_SetActorLocation(at, false, {}, true) end)
+        ST.info("box check: a fragment held 2 km ahead of the plane")
+    end)
+    A.wait(1.5)
+    A.do_(function() ST.shot("u_box_ahead") end)
+    A.wait(2)
+    unhold()
     A.picture("u_sky_from_airfield", function() return { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 60000 } end,
         function()
             local _, SK = ULY.debug()
