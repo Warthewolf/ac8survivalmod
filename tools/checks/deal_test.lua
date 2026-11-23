@@ -206,8 +206,9 @@ check(not spawned("SV_Unit_DealPodargeA"), "not before targets_after_s into roun
 runD(3)
 check(spawned("SV_Unit_DealPodargeA") and spawned("SV_Unit_DealPodargeG") and DEAL.T.state == "up" and lastCallout() == "PODARGES INBOUND",
     "the 7 Podarges up (A-G), their callout")
-runD(1.5)
-check(fired("RE_SV_DealPodargeGo"), "onto their routes")
+check(not fired("RE_SV_DealPodargeGo"), "their route order not at once (3 s: a Norn's 38 parts)")
+runD(3.5)
+check(fired("RE_SV_DealPodargeGo"), "onto their routes 3 s on")
 check(has(DEAL.row(), "PODARGES 0 / 7 DOWN"), "the row: " .. tostring(DEAL.row()))
 check(DEAL.T.total == 7 and logged("SV_Unit_DealPodargeA 4 objects, 1 body"), "seven targets: each Podarge's body (its parts not counted)")
 credits = {}

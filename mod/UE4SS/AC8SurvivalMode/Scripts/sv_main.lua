@@ -299,7 +299,8 @@ local function planeSweep(slot)
                 pcall(planeUnit, p)
                 local own = p.unit and (p.unit:find("^SV_Unit_Ladon")             -- (the Ladons: their own tuning;
                     or (DECOY and DECOY.isUnit and DECOY.isUnit(p.unit))           -- THE DECOY's UAVs: their orbit;
-                    or p.unit:find("^SV_Unit_FestCM_"))                           -- (0.74.0) THE FESTIVAL's cruise missiles: stock)
+                    or p.unit:find("^SV_Unit_FestCM_")                            -- (0.74.0) THE FESTIVAL's cruise missiles: stock)
+                    or p.unit:find("^SV_Unit_Deal"))                              -- ((2026-11-23) THE DEAL's Podarges, C-130s, Hornet: on their routes)
                 if not own then pcall(enemyTier, p, D and D.round, ft); pcall(enemyManeuvers, p, D and D.round) end
                 local an = CFG.specials.anomaly
                 local tierFor = (p.unit == an.unit) and { provoke_cone_deg = an.provoke_cone_deg,

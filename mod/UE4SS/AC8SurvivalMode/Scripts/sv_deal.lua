@@ -532,7 +532,8 @@ local function targetsUp(T)
         end
     end
     T.total = #T.bodies
-    T.state, T.at, T.goAt, T.watchAt = (T.total > 0) and "up" or "done", S.clock, S.clock + 1.0, S.clock + 3
+    T.state, T.at, T.goAt, T.watchAt = (T.total > 0) and "up" or "done", S.clock, S.clock + 3.0, S.clock + 3
+    T.go2At = S.clock + 10.0                  -- ((2026-11-23) "the podarges arent even moving": the order again, later)
     log(string.format("deal: round %d: %s up (%d): %s", D.round, T.kind, T.total, table.concat(said, ", ")))
     if T.total > 0 then
         local sub = c.text.arrive_sub[T.kind] or ""
@@ -574,8 +575,8 @@ local function targetsTick()
         end
         return
     end
-    if T.goAt and S.clock >= T.goAt then
-        T.goAt = nil
+    if (T.goAt and S.clock >= T.goAt) or (T.go2At and S.clock >= T.go2At and not T.goAt) then
+        if T.goAt then T.goAt = nil else T.go2At = nil end
         local go = (c.targets[T.kind] or {}).go
         if go then log(string.format("deal: %s onto its route (%s %s)", T.kind, go, fire(go))) end
     end
