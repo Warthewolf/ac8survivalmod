@@ -4263,3 +4263,7 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   Ctrl_All_Emissive 1 -> 60 (0.75.79). Autotest 14/14 each build, tick cost ~1.4 ms; screenshots sent. 0.75.73's run was
   stopped by Claude Code's memory guard while the game loaded (23 GB free after): tests since run in the foreground.
   Staged build/release/stage_dev_0.75.79, not registered, NOT installed.
+- 0.75.80 / 0.75.81 (2026-11-24, branch feature/ulysses): the sky's meteors "very very high" (the user): 45-65 km
+  up drew nothing (0.75.80: past what the game draws); 24-34 km, dipping at most 2 % of their speed, 8-22x (0.75.81):
+  seen overhead from the fighters' heights, hidden below the cloud deck. Autotest 14/14 both. Staged
+  build/release/stage_dev_0.75.81, not registered, NOT installed.
