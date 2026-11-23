@@ -54,6 +54,67 @@ TAIL_KEYS = [(0.0, (1.0, 0.82, 0.42)), (0.15, (1.0, 0.55, 0.12)), (0.45, (0.85, 
              (1.0, (0.03, 0.01, 0.0))]
 
 
+# ((2026-11-24, the user: "Try making it like infinities") AC:I's sky meteor streak: one of its trail sprites from its shared
+# effect atlas (DATA00 #14, texture 0x10009000, 2048x2048 DXT5; the region 1280,768 .. 1664,1000 holds ten white streaks,
+# a bright head and a fading, wavering tail, head up), cut out, turned head-left (U 0 at the head) for our streak card
+ATLAS = ('DATA00', 14, 0x10009000)
+STREAK_COL = (1280 + 2 * 32 + 4, 768, 1280 + 2 * 32 + 36, 1000)    # (its third streak: x0, y0, x1, y1 in the atlas)
+CARD_M, CARD_W = 24.0, 1.0                     # the card: 24 m along -X (its head 0.6 m ahead of the rock's centre), 1 m wide
+
+
+def atlas_image():
+    """AC:I's effect atlas (the single-texture NTP3 variant: NTP3 header, then per texture its header and data)."""
+    import struct, ntp3
+    from PIL import Image
+    pac, entry, tid = ATLAS
+    d = DPL(os.path.join(os.environ['ACI_USRDIR'], pac + '.PAC')).read(entry)
+    for _, t, o, sz in flat(fhm_tree(d)):
+        if t != b'NTP3' or sz < 1024:
+            continue
+        n = struct.unpack_from('>H', d, o + 6)[0]
+        q = o + 16
+        for _k in range(n):
+            tot, _x, dsz = struct.unpack_from('>III', d, q)
+            hl = struct.unpack_from('>H', d, q + 12)[0]
+            _m, fmt, w, h = struct.unpack_from('>HHHH', d, q + 16)
+            g = d.find(b'GIDX', q, q + hl)
+            if g >= 0 and struct.unpack_from('>I', d, g + 8)[0] == tid and fmt in ntp3.FOURCC:
+                return ntp3.dds(w, h, fmt, d[q + hl:q + hl + dsz]).convert('RGBA')
+            q += tot
+    sys.exit('%s #%d: texture %08x not found (the install differs)' % (pac, entry, tid))
+
+
+def streak_texture(path):
+    """The sprite's colour (RGB channels of the atlas) as an additive streak, head left: RGB the glow, A its strength."""
+    from PIL import Image
+    im = atlas_image().crop(STREAK_COL)                       # (32 x 232, head at the top)
+    rgb = np.asarray(im.convert('RGB'), np.float32)
+    lum = rgb.max(axis=2)
+    img = np.dstack([rgb, lum]).clip(0, 255).astype(np.uint8)
+    out = Image.fromarray(img, 'RGBA').transpose(Image.ROTATE_90)   # (head up -> head left)
+    out = out.resize((256, 32), Image.BICUBIC)
+    out.save(path)
+    return out
+
+
+def streak_card():
+    """Two crossed cards (Y and Z), each both ways round, along -X: U 0 at the head, V across."""
+    P, UV, N, T = [], [], [], []
+    x0, x1, hw = 0.6, -CARD_M, CARD_W / 2
+    for axis in (1, 2):
+        for flip in (False, True):
+            base = len(P)
+            for x, u in ((x0, 0.0), (x1, 1.0)):
+                for s, v in ((-hw, 0.0), (hw, 1.0)):
+                    q = [x, 0.0, 0.0]; q[axis] = s
+                    P.append(q); UV.append((u, v))
+                    nn = [0.0, 0.0, 0.0]; nn[3 - axis] = -1.0 if flip else 1.0
+                    N.append(nn)
+            a, b, c, dd = base, base + 1, base + 2, base + 3
+            T += [(a, c, b), (b, c, dd)] if not flip else [(a, b, c), (b, dd, c)]
+    return [(np.array(P, np.float64), np.array(N, np.float64), np.array(UV, np.float64), np.array(T, np.uint32), 0)]
+
+
 def tail_mesh():
     """The streak -> [(P, N, UV, T, tex)] in glTF's frame, metres: its body along glTF -X, which UE's importer keeps as
     UE -X (SOLG's axis probe: glTF (x, y, z) -> UE (x, z, y)), so +X faces along the fall."""
@@ -186,6 +247,13 @@ def main():
                                               'min_m': P.min(0).round(2).tolist(), 'max_m': P.max(0).round(2).tolist(),
                                               'size_m': (P.max(0) - P.min(0)).round(2).tolist()}
     layout['textures']['T_SV_Ulysses_Tail_D'] = 'ours: white-hot -> orange -> red -> black along U, alpha 1 -> 0'
+    # AC:I's sky streak: its sprite on our crossed card (static only: an effect material on it, hard rule 77)
+    streak_texture(os.path.join(OUT, 'T_SV_Ulysses_Streak.png'))
+    cp = streak_card()
+    solg.write_gltf('SM_SV_Ulysses_Streak', cp)
+    layout['meshes']['SM_SV_Ulysses_Streak'] = {'model': 'ours (tools/ulysses/prepare.py streak_card)', 'skeletal': None,
+                                                'mi': 'Tail', 'vertices': int(len(cp[0][0])), 'triangles': int(len(cp[0][3]))}
+    layout['textures']['T_SV_Ulysses_Streak'] = 'AC:I DATA00 #14 %08x, region %s (a trail sprite), head left' % (ATLAS[2], STREAK_COL)
     json.dump(layout, open(os.path.join(OUT, 'layout.json'), 'w'), indent=1)
     print('%-18s %-7s %5d vertices %5d triangles  bounds %s .. %s m' % ('SM_SV_Ulysses_Tail', 'ours', len(P), len(parts[0][3]),
           layout['meshes']['SM_SV_Ulysses_Tail']['min_m'], layout['meshes']['SM_SV_Ulysses_Tail']['max_m']))

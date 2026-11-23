@@ -143,7 +143,8 @@ local function placeAt(c, L, rot)                         -- (a whole rotation t
     return pcall(function() c:K2_SetWorldTransform({ Rotation = quatOf(rot), Translation = { X = L.X, Y = L.Y, Z = L.Z },
         Scale3D = { X = 1, Y = 1, Z = 1 } }, false, {}, true) end)
 end
--- look (optional): { paint = a key of cfg().tail (its streak's material), tail_r = its streak's thickness x, hide_rock =
+-- look (optional): { paint = a key of cfg().tail (its streak's material), mesh = its streak's static mesh (SM_SV_Ulysses_<mesh>:
+-- "Streak", AC:I's sprite card), tail_r = its streak's thickness x, hide_rock =
 -- the rock itself not drawn (a streak of light only: AC:I's sky meteors) }
 local function rock(key, at, vel, scale, spin, tailX, trails, look)
     local m = mesh(key)
@@ -203,7 +204,7 @@ local function rock(key, at, vel, scale, spin, tailX, trails, look)
     local tm = nil
     if T.enabled ~= false then
         if static then
-            local path = cfg().mesh_path:gsub("SK_SV_", "SM_SV_") .. (T.mesh or "Tail")
+            local path = cfg().mesh_path:gsub("SK_SV_", "SM_SV_") .. (look and look.mesh or T.mesh or "Tail")
             tm = loadObject(path .. "." .. path:match("[^/]+$"))
         else tm = mesh(T.mesh or "Tail") end
     end
@@ -544,6 +545,13 @@ end
 local function launch(spec, P, what, big)
     local bearing = math.random() * 2 * math.pi
     local dkm, alt = span(spec.from_km, 30), span(spec.alt_m, 10000) * 100
+    -- ((2026-11-24, the user: "Try making it like infinities"; AC:I's mission data: every meteorite dives at 45 degrees,
+    -- all the same way, 550-650 km/h) dive_deg: from from_deg's side (0 = east, +X), within spread_deg, as far out as
+    -- its height over tan(dive)
+    if spec.dive_deg then
+        bearing = math.rad(n(spec.from_deg, 0) + rnd(-1, 1) * n(spec.spread_deg, 20))
+        dkm = (alt - (P.Z or 0)) / 100000 / math.tan(math.rad(n(spec.dive_deg, 45)))
+    end
     local start = { X = P.X + math.cos(bearing) * dkm * 100000, Y = P.Y + math.sin(bearing) * dkm * 100000, Z = alt }
     local dx, dy, dz = P.X - start.X, P.Y - start.Y, P.Z - start.Z
     local d = math.sqrt(dx * dx + dy * dy + dz * dz)

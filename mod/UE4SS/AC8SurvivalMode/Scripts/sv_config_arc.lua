@@ -407,11 +407,15 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     fragments = { round1 = 16, round2 = 20, per_player = 0.15, max_n = 34, solo_x = 0.8,
                   every_s = { 4, 8 }, first_s = 8, at_once = 6,
                   -- where they come from (km from where they land, m up) and how fast (km/h, along their line)
-                  from_km = { 26, 34 }, alt_m = { 9000, 12000 }, speed_kmh = { 1100, 1500 },
+                  from_km = { 26, 34 }, alt_m = { 9000, 12000 }, speed_kmh = { 550, 650 },
+                  -- ((2026-11-24, the user: "Try making it like infinities") AC:I's meteorites: a 45 degree dive, all one way,
+                  -- 550-650 km/h (its mission data; was any bearing at 1100-1500 km/h): from the east like the sky's
+                  dive_deg = 45, from_deg = 0, spread_deg = 25,
                   meshes = { "C", "C", "D" }, scale = { 1.8, 3.2 }, spin_dps = { 10, 45 },
                   health = 350, pay = 300, airfield_damage = 8,
                   aim = { airfield = 0.6, town = 0.4 }, spread_m = 2500 },
     big = { enabled = true, mesh = "A", scale = 1.0, at_s = 45, from_km = 48, alt_m = 16000, speed_kmh = 650, spin_dps = 4,
+            dive_deg = 45, from_deg = 0, spread_deg = 10,
             health = 4000, solo_x = 0.7, pay = 6000, airfield_damage = 120 },
     -- the towns it aims at besides the airfield (cm; the airport key's town, docs/re/COMONA_MAP.md)
     towns = { { X = 1250000, Y = -320000 }, { X = 2350000, Y = -700000 } },
@@ -482,6 +486,16 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
              -- adds its Color x Opacity) and its haze (fresnel off: flat)
              line_ring = { parent = "/Game/VFX/Mission/Traning/MI_TrainingRing", scalars = { Opacity = 1 },
                            vectors = { Color = { 2.6, 2.2, 1.6 } } },
+             -- ((2026-11-24, the user: "Try making it like infinities") AC:I's own trail sprite (T_SV_Ulysses_Streak, from its
+             -- effect atlas: tools/ulysses/prepare.py) on our crossed card SM_SV_Ulysses_Streak, drawn by AC8's additive flare
+             streak = { parent = "/Game/VFX/Mission/Mission023/MI_ms23FarExp_Flare",
+                        tex = { EmissiveMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Streak",
+                                MaskMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Streak" },
+                        scalars = { Emissive_Intensity = 20, Emissive_Power = 1 }, vectors = { EmissiveColor = { 1.0, 0.92, 0.8 } } },
+             streak_b = { parent = "/Game/VFX/Mission/Mission023/MI_ms23FarExp_Flare",
+                        tex = { EmissiveMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Streak",
+                                MaskMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Streak" },
+                        scalars = { Emissive_Intensity = 80, Emissive_Power = 1 }, vectors = { EmissiveColor = { 1.0, 0.92, 0.8 } } },
              line_haze = { parent = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", scalars = { EmissiveIntensity = 3, Opacity = 1,
                            EmissiveFresnelFalloff = 0.01 }, vectors = { Color = { 3.0, 2.3, 1.3 } } },
              glow = { enabled = false, parent = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", radius_x = 1.8, length_x = 1.15,

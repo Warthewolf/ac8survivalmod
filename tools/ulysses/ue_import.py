@@ -140,7 +140,7 @@ def static(name, info, mi):
     EAL.save_loaded_asset(m)
     b = m.get_bounding_box()
     say(f'{name}: {len(mats)} slot(s), collision {col}, bounds {[round(b.min.x), round(b.min.y), round(b.min.z)]} .. '
-        f'{[round(b.max.x), round(b.max.y), round(b.max.z)]} cm (prepare.py: {info["size_m"]} m)')
+        f'{[round(b.max.x), round(b.max.y), round(b.max.z)]} cm (prepare.py: {info.get("size_m")} m)')
 
 
 def skeletal(name, mi):
@@ -178,10 +178,13 @@ def main():
     td = texture('T_SV_Ulysses_Tail_D', True, unreal.TextureCompressionSettings.TC_DEFAULT)
     fn = texture('T_SV_Ulysses_FlatN', False, unreal.TextureCompressionSettings.TC_NORMALMAP)
     mis['Tail'] = instance('MI_SV_Ulysses_Tail', base, (('T_Basecolor', td), ('T_Normalmap', fn), ('T_Livemap', lm)))
+    # ((2026-11-24) AC:I's sky streak sprite (prepare.py streak_texture): the game draws it with AC8's flare at run time)
+    texture('T_SV_Ulysses_Streak', True, unreal.TextureCompressionSettings.TC_DEFAULT)
     for name, info in sorted(layout['meshes'].items()):
         mi = mis[info.get('mi', 'Rock')]
         static(name, info, mi)
-        skeletal(info['skeletal'], mi)
+        if info.get('skeletal'):
+            skeletal(info['skeletal'], mi)
     for a in sorted(x.split('.')[0] for x in EAL.list_assets(DEST, recursive=True)):
         say(f'  {a}: {unreal.load_asset(a).get_class().get_name()}')
     say('done')
