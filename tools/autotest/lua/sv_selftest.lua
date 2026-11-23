@@ -6254,8 +6254,11 @@ SUITES.ulysses = function()
             pcall(function() vx, vy, vz = v.X, v.Y, v.Z end)
             local m = math.sqrt(vx * vx + vy * vy + vz * vz)
             if m < 1 then m = 1 end
-            -- (where it'll be when the picture's taken, 1.5 s on: the camera behind that spot, looking at it)
-            local A = { X = f.L.X + vx * 1.6, Y = f.L.Y + vy * 1.6, Z = f.L.Z + vz * 1.6 }
+            -- ((the run of 0.75.72: a moving rock missed by the camera) held still for the picture, its fall put back
+            -- after (unhold), its landing time moved on as long)
+            pcall(function() f.x.r.pm.Velocity = { X = 0, Y = 0, Z = 0 } end)
+            HELD = { f = f.x, v = { X = vx, Y = vy, Z = vz }, t = os.clock() }
+            local A = { X = f.L.X, Y = f.L.Y, Z = f.L.Z }
             AHEAD = A
             return { X = A.X - vx / m * back * 100 + side * 100, Y = A.Y - vy / m * back * 100, Z = A.Z - vz / m * back * 100 + 3000 }
         end, function() return AHEAD end
@@ -6286,8 +6289,19 @@ SUITES.ulysses = function()
     A.until_(function() return #frags() >= 2 end, 40, function(v)
         ST.check(v ~= nil, "fragments falling", string.format("%d up", #frags()))
     end)
+    local function unhold()
+        A.do_(function()
+            local h = HELD
+            HELD = nil
+            if not h then return end
+            pcall(function() h.f.r.pm.Velocity = h.v end)
+            h.f.hitAt = (h.f.hitAt or 0) + (os.clock() - h.t)
+        end)
+    end
     A.picture("u_fragment_close", beside(false, 120, 40))
+    unhold()
     A.picture("u_fragment_trail", beside(false, 600, 200))
+    unhold()
     A.do_(function() ST.shot("u_your_view_2") end)
     A.picture("u_sky_from_airfield", function() return { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 60000 } end,
         function()
@@ -6312,8 +6326,14 @@ SUITES.ulysses = function()
         ST.check(l ~= nil, "the core inbound", l)
     end)
     A.wait(4)
-    A.picture("u_core_close", beside(true, 1500, 500), nil, 60)
-    A.picture("u_core_far", beside(true, 5000, 2000), nil, 60)
+    -- ((the run of 0.75.72: "its spot not read") beside's two functions both passed: a call followed by more arguments
+    -- gives only its first value in Lua)
+    local cAt, cLook = beside(true, 1500, 500)
+    A.picture("u_core_close", cAt, cLook, 60)
+    unhold()
+    local fAt, fLook = beside(true, 5000, 2000)
+    A.picture("u_core_far", fAt, fLook, 60)
+    unhold()
     A.do_(function() ST.shot("u_core_your_view") end)
     A.log_("ulysses: a fragment landed", 200, "u0", true, function(l)
         ST.check(l ~= nil, "a fragment landed (the airfield's damage or the town's)", l)
