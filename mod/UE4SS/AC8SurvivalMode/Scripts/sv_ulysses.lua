@@ -580,7 +580,31 @@ local function launch(spec, P, what, big)
 end
 -- land or sea where P is: a trace down (near you only: hard rule 27); none: land when within sea.land_m of where it aimed
 local kis = nil
+-- ((2026-11-24) land or sea anywhere on Comona, the same on every game: the land map (sv_ulysses_land.lua, 100 m cells,
+-- from the terrain's collision mesh). Its rows parsed once into runs
+local LANDROWS
+function ULY.isLand(x, y)
+    local L = ULY.LAND
+    if not L then return nil end
+    if not LANDROWS then
+        LANDROWS = {}
+        for i, row in ipairs(L.rows) do
+            local runs = {}
+            for a, b in row:gmatch("(%d+)%-(%d+)") do runs[#runs + 1] = { tonumber(a), tonumber(b) } end
+            LANDROWS[i] = runs
+        end
+    end
+    local col = math.floor((x - L.x0) / L.cell)
+    local r = math.floor((y - L.y0) / L.cell) + 1
+    local runs = LANDROWS[r]
+    if not runs or col < 0 or col >= L.w then return false end
+    for _, ab in ipairs(runs) do if col >= ab[1] and col <= ab[2] then return true end end
+    return false
+end
 local function onLand(P, what)
+    -- (the land map first: hard rule 27, a trace far from the player finds the sea planes, not the land)
+    local m = ULY.isLand(P.X, P.Y)
+    if m ~= nil then return m, m and 500 or nil, "the land map" end
     local sc = cfg().sea or {}
     local seaZ = n(sc.sea_z, 350)
     if not valid(kis) then kis = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary") end
@@ -801,7 +825,13 @@ function ULY.roundTick(now, s)
         for _, x in ipairs(U.list) do if not x.done and not x.big then falling = falling + 1 end end
         if U.sent < U.todo and now >= U.nextAt and falling < n(f.at_once, 6) then
             U.nextAt = now + span(f.every_s, 6)
+            -- ((2026-11-24, the ulysses2 autotest: 6 of 10 fell harmless in the sea, all coming from the east onto a coastal
+            -- airfield) each aimed onto land, so each one threatens the airfield or the town; 6 tries, then as picked
             local P, what = aimPoint()
+            for _ = 1, n(cfg().fragments.land_tries, 6) do
+                if ULY.isLand(P.X, P.Y) ~= false then break end
+                P, what = aimPoint()
+            end
             local x = launch(f, P, what, false)
             if x then U.list[#U.list + 1] = x; U.sent = U.sent + 1 else U.todo = U.todo - 1 end
         end

@@ -83,5 +83,20 @@ check(c.mesh_path == "/Game/Mods/SurvivalMode/Ulysses/Model/SK_SV_Ulysses_", "it
 check(c.target_units.small == "SV_Unit_SOLG_KEW" and c.target_units.big == "SV_Unit_SOLG_MAG", "its boxes: the SOLG's KEW / MAG units borrowed")
 check(src:find("TEST ONLY BEGIN", 1, true) and src:find("TEST ONLY END", 1, true), "its test key inside TEST ONLY")
 
+-- ((2026-11-24) the land map (sv_ulysses_land.lua, tools/ulysses/landmask.py) against places the game's traces settled
+-- near the player; AC:I's settings (a 45 degree dive from the east at 550-650 km/h; the sky's sprite streak)
+assert(loadfile(S .. "sv_ulysses_land.lua"))()
+check(ULY.LAND and #ULY.LAND.rows == ULY.LAND.h, "the land map is there, its rows all")
+for _, p in ipairs({ { "the runway", AIRFIELD.X, AIRFIELD.Y, true }, { "the city", 1290000, -290000, true },
+                     { "the east key's terrain", 2470000, -730000, true }, { "the sea off the runway", 1620000, -360000, false },
+                     { "the sea south east", 1790000, -610000, false }, { "open sea", 0, 3000000, false } }) do
+    check(ULY.isLand(p[2], p[3]) == p[4], "land map: " .. p[1] .. " is " .. (p[4] and "land" or "sea"))
+end
+check(f.dive_deg == 45 and f.from_deg == 0 and f.speed_kmh[1] == 550 and f.speed_kmh[2] == 650, "fragments: AC:I's 45 degree dive from the east at 550-650 km/h")
+check(c.big.dive_deg == 45, "the core dives at 45 degrees too")
+check(c.sky.look and c.sky.look.mesh == "Streak" and c.tail.streak and c.tail.streak.tex.EmissiveMap:find("T_SV_Ulysses_Streak", 1, true),
+    "the sky: AC:I's trail sprite on the streak card")
+check(c.sounds.ambient and c.sounds.ambient.loop == true, "the Stardust rumble, looped")
+
 print(fails == 0 and "ulysses test: all passed" or ("ulysses test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)
