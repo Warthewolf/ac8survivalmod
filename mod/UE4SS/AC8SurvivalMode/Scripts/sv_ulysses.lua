@@ -98,22 +98,24 @@ local function paintMid()
     ul(string.format("paint: the rock's instance made, %d textures in", nT))
     return mid
 end
-function ULY.tailMid()
-    if PAINT.tail ~= nil then return PAINT.tail or nil end
-    local P = (cfg().tail or {}).paint or {}
+function ULY.tailMid(which)
+    which = which or "paint"
+    local key = which == "paint" and "tail" or ("tail_" .. which)
+    if PAINT[key] ~= nil then return PAINT[key] or nil end
+    local P = (cfg().tail or {})[which] or {}
     local kml = StaticFindObject("/Script/Engine.Default__KismetMaterialLibrary")
     local parent = P.parent and loadObject(P.parent .. "." .. P.parent:match("[^/]+$"))
-    if not (valid(kml) and parent and valid(parent)) then PAINT.tail = false; ul("tail paint: its parent didn't load"); return nil end
+    if not (valid(kml) and parent and valid(parent)) then PAINT[key] = false; ul("tail " .. which .. ": its parent didn't load"); return nil end
     local ok, mid = pcall(function() return kml:CreateDynamicMaterialInstance(survivalPC, parent, FName("None"), 0) end)
-    if not (ok and valid(mid)) then PAINT.tail = false; return nil end
+    if not (ok and valid(mid)) then PAINT[key] = false; return nil end
     for slot, path in pairs(P.tex or {}) do
         local t = loadObject(path .. "." .. path:match("[^/]+$"))
         if t and valid(t) then pcall(function() mid:SetTextureParameterValue(FName(slot), t) end) end
     end
     for k, v in pairs(P.scalars or {}) do pcall(function() mid:SetScalarParameterValue(FName(k), v) end) end
     for k, v in pairs(P.vectors or {}) do pcall(function() mid:SetVectorParameterValue(FName(k), { R = v[1], G = v[2], B = v[3], A = v[4] or 1 }) end) end
-    PAINT.tail = mid
-    ul("tail paint: its instance made")
+    PAINT[key] = mid
+    ul("tail " .. which .. ": its instance made")
     return mid
 end
 -- a rock: actor, AC:I's mesh at `scale` (skeletal, painted), a spin, a fire trail, an engine mover at `vel` (cm/s)
@@ -168,8 +170,24 @@ local function rock(key, at, vel, scale, spin, tailX)
             pcall(function() tc:K2_AttachToComponent(c, FName("None"), 2, 2, 1, false) end)
             local ts = n(T.scale, 1) * scale
             pcall(function() tc:SetRelativeScale3D({ X = ts * n(T.length_x, 1) * (tailX or 1), Y = ts, Z = ts }) end)
-            local tmid = T.paint and ULY.tailMid and ULY.tailMid()
+            local tmid = T.paint and ULY.tailMid and ULY.tailMid("paint")
             if tmid then pcall(function() tc:SetMaterial(0, tmid) end) end
+        end
+        -- ((2026-11-24, the 0.75.76 shots: the streaks read as solid cream tubes) a glow round it: the same mesh a little
+        -- wider and longer, on AC8's additive MI_TrainingRingGlow (VALKA's portal haze), so it burns rather than shines
+        local G = T.glow
+        local gmid = G and ULY.tailMid and ULY.tailMid("glow")
+        local gc = gmid and addComp(a, static and "/Script/Engine.StaticMeshComponent" or "/Script/Engine.SkeletalMeshComponent")
+        if gc then
+            if static then pcall(function() gc:SetStaticMesh(tm) end)
+            elseif not pcall(function() gc:SetSkeletalMeshAsset(tm) end) then pcall(function() gc:SetSkeletalMesh(tm, true) end) end
+            pcall(function() gc:SetCollisionEnabled(0) end)
+            pcall(function() gc:SetCastShadow(false) end)
+            pcall(function() gc:K2_AttachToComponent(c, FName("None"), 2, 2, 1, false) end)
+            local ts = n(T.scale, 1) * scale
+            local gr = n(G.radius_x, 1.8)
+            pcall(function() gc:SetRelativeScale3D({ X = ts * n(T.length_x, 1) * (tailX or 1) * n(G.length_x, 1.15), Y = ts * gr, Z = ts * gr }) end)
+            pcall(function() gc:SetMaterial(0, gmid) end)
         end
     end
     local pm = addComp(a, "/Script/Engine.ProjectileMovementComponent")

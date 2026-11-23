@@ -457,7 +457,11 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
                                Livemap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Rock_L" },
                        scalars = { Ctrl_All_Emissive = 1, Ctrl_LandinglightEmissive = 1, Landinglight_Emissive_Intensity = 400,
                                    Turbine_speed = 0, PlayerPlane_Damage = 0 },
-                       vectors = { Landinglight_Emissive_Color = { 1.0, 0.55, 0.15 } } } },
+                       vectors = { Landinglight_Emissive_Color = { 1.0, 0.55, 0.15 } } },
+             -- ((2026-11-24) a fire glow round the streak: the same mesh radius_x wider, on AC8's additive glow (VALKA's portal
+             -- haze material: Color, EmissiveIntensity, Opacity; its fresnel left on for a soft edge)
+             glow = { parent = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", radius_x = 1.8, length_x = 1.15,
+                      scalars = { EmissiveIntensity = 4, Opacity = 0.7 }, vectors = { Color = { 1.0, 0.42, 0.08 } } } },
     fx = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" },
     -- ((2026-11-23) the user: "if they hit the ocean they should have the tonitrus spear water impact") into the sea: the
     -- Spear's splash (THE DECOY's rods: VFX/Vehicles/Weapon/Rog/Splash) at the sea's level; on land: fx. Land or sea by a
