@@ -6429,6 +6429,15 @@ end
 -- (config_ulysses2.lua) brings the fragments in close and fast, so each lands within ~25 s.
 SUITES.ulysses2 = function()
     intoRun()
+    if ULYDAWN then                                      -- ((2026-11-24) the ulydawn suite: its real light, sunrise after the
+        A.do_(function()                                 -- festival's night: GONE FISHIN' set at a round that makes rounds 1-2
+            local F = 1 - 7 - math.floor(tonumber(((CFG.sky or {}).arc or {}).night_rounds) or 3)   -- the arc's dawn ones
+            local ok = SKY and SKY.arcSet and SKY.arcSet(F, "the ulydawn autotest")
+            ST.info(string.format("the arc set: GONE FISHIN' at round %d (%s): ULYSSES' first round %s", F, tostring(ok),
+                tostring(ULY.firstRound and ULY.firstRound())))
+        end)
+        A.wait(4)
+    end
     local function live()
         local U = ULY and ULY.debug and select(1, ULY.debug())
         local out = {}
@@ -6623,6 +6632,12 @@ SUITES.ulylines = function()
     end, function() return T.look end, 60)
     A.do_(function() for _, rk in ipairs(T.rocks) do pcall(ULY.testRockOff, rk) end end)
     A.wait(2)
+end
+
+-- ((2026-11-24) ULYSSES in its own light: the ulysses2 suite with the day-night arc set so rounds 1-2 are the dawn ones
+SUITES.ulydawn = function()
+    ULYDAWN = true
+    SUITES.ulysses2()
 end
 
 local function tick()
