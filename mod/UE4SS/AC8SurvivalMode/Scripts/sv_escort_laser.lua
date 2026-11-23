@@ -985,12 +985,17 @@ function ZLAUNCH.coverTick()
         local n = #f.objs
         local cx, cy, cz = f.x / n, f.y / n, f.z / n
         local best, bd = nil, math.huge
+        local cur, cd = nil, math.huge                     -- (the player it's with now: kept unless another's clearly nearer)
+        local was = ZLAUNCH.escorting[unit]
         for _, pl in ipairs(ps) do
             if pl.at and not pl.down and not pl.onAirfield and pl.alive ~= false then
                 local d = math.sqrt((pl.at.X - cx) ^ 2 + (pl.at.Y - cy) ^ 2 + (pl.at.Z - cz) ^ 2)
                 if d < bd then best, bd = pl, d end
+                local isMine = pl.isMe or (COOP and pl.slot == COOP.slot) or not (COOP and COOP.open)
+                if was and was == tostring(pl.slot) .. (isMine and "me" or "") then cur, cd = pl, d end
             end
         end
+        if cur and best ~= cur and cd <= bd * num(c.escort_keep_x, 1.3) then best, bd = cur, cd end
         if best then
             local mine = best.isMe or (COOP and best.slot == COOP.slot) or not (COOP and COOP.open)
             local who, r

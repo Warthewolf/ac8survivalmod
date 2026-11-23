@@ -1063,7 +1063,7 @@ CFG = {
                          -- nearest them (co-op's coverFor); escort = false: as they are
                          -- ((2026-11-11) pos_log_s: every VAMPIRES plane's place logged that often, 0 none: Saint Alessia's
                          -- run had them all on the zone's east edge, why unknown)
-                         pose_cover = { "RE_SV_ZfaCoverA", "RE_SV_ZfaCoverB" }, escort = true, escort_s = 6, pos_log_s = 30,
+                         pose_cover = { "RE_SV_ZfaCoverA", "RE_SV_ZfaCoverB" }, escort = true, escort_s = 2, escort_keep_x = 1.3, pos_log_s = 30,   -- ((2026-11-23) "vampires dont seem to escort or fire their tls much": 4-10 km behind on 6 s; 2 s, and their player kept unless another is 30 % nearer)
                          pose = { ahead_m = 300, alt_m = 1100 },
                          ship_at = { { 1270476, -1096142 }, { 2130476, 103858 } },
                          service = { rounds = 3, min_s = 60 },
@@ -1143,7 +1143,7 @@ CFG = {
                                  li_mesh = "PlaneBodyMesh", li_socket = "SOC_Gun_01",
                                  -- ((2026-11-08) the user: 2 km, for the reach; was AC7's 1240 / 1200 m: missiles at the
                                  -- player 1.5-2 km from a ZFA-44 got through in Alyssa's run of 0.74.31)
-                                 li_range_m = 2000, li_activation_m = 2000, li_angle = 180, li_search_s = 0.5,
+                                 li_range_m = 4000, li_activation_m = 4000,   -- ((2026-11-23) 2000: one volley in a round) li_angle = 180, li_search_s = 0.5,
                                  -- ((2026-11-10) the user: "up the swing speed for the laser interceptors", 0.5 s for
                                  -- these and round 30's fleet: one swing a missile in half the time; was AC7's 1.0. A swing
                                  -- curve that isn't at its end by then is cleared at the spawn: sv_escort_li.lua curveFit)
