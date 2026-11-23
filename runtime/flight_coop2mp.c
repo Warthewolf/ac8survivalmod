@@ -1118,6 +1118,13 @@ static uint8_t* EwPlane(const CoRef* r)
 {
     uint8_t* o = r->obj;
     if (!o) return NULL;
+    /* ((0.32.43) the user's 6-player co-op game of 2026-11-23, 14:43:00: a new run's level loaded, players 3 and 6 dropped,
+     * and the first plane tick after read a freed real plane's +0xC (UObjLive reads the object: EXCEPTION_ACCESS_VIOLATION
+     * in main.dll at OnPlaneEw's loop). Its GUObjectArray slot first, at the index it was spawned with: that reads the
+     * array only, never the plane; only a plane its slot still holds is read) */
+    int held = UObjSlotHolds(o, (int32_t)r->idx);
+    if (held < 0) return CoRefGet(r);
+    if (held == 0) return NULL;
     int live = UObjLive(o);
     if (live < 0) return CoRefGet(r);
     return (live == 1 && *(void**)o == r->vt && *(uint32_t*)(o + 0xC) == r->idx && *(uint64_t*)(o + 0x18) == r->name)
