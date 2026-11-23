@@ -1756,7 +1756,24 @@ function COOP.tick(tick)
     -- ((0.73.79) the round clock's answer this tick, when it asked the game: not paused, so nothing to undo)
     local clockSaysRunning = CLOCK_TICK == tick and CLOCK_PAUSED == false
     pcall(COOP.focusPause, (M.linkedPeers or 0) > 0, (M.linkedPeers or 0) > 0 and "others linked" or "nobody linked")
-    if (M.linkedPeers or 0) > 0 and not clockSaysRunning and valid(survivalPC) and gamePaused(survivalPC) then
+    -- ((2026-11-23) the un-pause waits for the pause page: Saint Alessia's 0.75.64 host log had one pause whose page was
+    -- never built, the world un-paused here the tick after the press while the game still made its menu (sv_hud.lua
+    -- PAUSE.pageUp); the user's "nothing appears" on 0.75.63 hosting too) until PAUSE.pageUp() or pause_page_wait_s on
+    local pausedNow = (M.linkedPeers or 0) > 0 and not clockSaysRunning and valid(survivalPC) and gamePaused(survivalPC)
+    if not pausedNow then M.pauseAt, M.pageWaitSaid = nil, nil end
+    local pageReady = false
+    if pausedNow then
+        M.pauseAt = M.pauseAt or os.clock()
+        local okP, up = pcall(function() return PAUSE and PAUSE.pageUp and PAUSE.pageUp() end)
+        local waited = os.clock() - M.pauseAt
+        pageReady = (okP and up == true) or waited >= (tonumber(c.pause_page_wait_s) or 1.0)
+        if pageReady and not M.pageWaitSaid then
+            M.pageWaitSaid = true
+            log(string.format("coop: pause: the world goes on %.2f s after the press (%s)", waited,
+                (okP and up == true) and "the pause page is up" or "no pause page yet: waited long enough"))
+        end
+    end
+    if pausedNow and pageReady then
         local gs = cdo("/Script/Engine.Default__GameplayStatics")
         local ok = gs and pcall(function() gs:SetGamePaused(survivalPC, false) end)
         M.unpauses = (M.unpauses or 0) + 1
