@@ -137,10 +137,15 @@ function ULY.tailMid(which)
 end
 -- a rock: actor, AC:I's mesh at `scale` (skeletal, painted), a spin, a fire trail, an engine mover at `vel` (cm/s)
 local function placeAt(c, L, rot)                         -- (a whole rotation through its quaternion: hard rule 76)
+    -- ((2026-11-24, the autotest: turning a rock again changed nothing) Scale3D read back from GetComponentScale made the
+    -- call fail, silently in its pcall: never placed nor turned (its spawn's turn kept). A plain scale, as sv_solg.lua's;
+    -- the rock's size is set after this (SetWorldScale3D)
     return pcall(function() c:K2_SetWorldTransform({ Rotation = quatOf(rot), Translation = { X = L.X, Y = L.Y, Z = L.Z },
-        Scale3D = c:GetComponentScale() }, false, {}, true) end)
+        Scale3D = { X = 1, Y = 1, Z = 1 } }, false, {}, true) end)
 end
-local function rock(key, at, vel, scale, spin, tailX, trails)
+-- look (optional): { paint = a key of cfg().tail (its streak's material), tail_r = its streak's thickness x, hide_rock =
+-- the rock itself not drawn (a streak of light only: AC:I's sky meteors) }
+local function rock(key, at, vel, scale, spin, tailX, trails, look)
     local m = mesh(key)
     -- ((2026-11-23) its own streak behind it: the rock faces along its fall (+X forward), its spin a roll about that line)
     local hz = math.sqrt(vel.X * vel.X + vel.Y * vel.Y)
@@ -155,7 +160,7 @@ local function rock(key, at, vel, scale, spin, tailX, trails)
     -- 2026-11-22 17:58, and this one's autotest of 2026-11-23: rocks 1.5 km under the sea). Put where it's wanted once its
     -- mesh is its root, the mesh itself too)
     pcall(function() a:K2_SetActorLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true) end)
-    placeAt(c, at, face)
+    local placed = placeAt(c, at, face)
     -- ((2026-11-24, the user: "The meteors look like they're travelling backwards"; the autotest measured every rock's front
     -- at -0.96 / -0.88 of its way: its height right, its heading turned round, as a pitch read as 180 - pitch) its front read
     -- back and, if it points away from its way, turned through 180 - pitch; still wrong: the plain opposite
@@ -175,9 +180,9 @@ local function rock(key, at, vel, scale, spin, tailX, trails)
             placeAt(c, at, f2)
             if along() < d1 then placeAt(c, at, f1) end
         end
-        FACELOG = (FACELOG or 0) + 1
-        if FACELOG <= 3 then ul(string.format("a rock's front: %.2f along its way as asked, %.2f turned", d0, along())) end
     end
+    FACELOG = (FACELOG or 0) + 1
+    if FACELOG <= 3 then ul(string.format("a rock's front: %.2f along its way when placed (%s), %.2f now", d0, tostring(placed), along())) end
     local mid = paintMid()
     if mid then
         local slots = 1
@@ -186,7 +191,8 @@ local function rock(key, at, vel, scale, spin, tailX, trails)
     end
     pcall(function() c:SetCollisionEnabled(0) end)
     pcall(function() c:SetWorldScale3D({ X = scale, Y = scale, Z = scale }) end)
-    pcall(function() c:SetCastShadow(true) end)
+    pcall(function() c:SetCastShadow(not (look and look.hide_rock)) end)
+    if look and look.hide_rock then pcall(function() c:SetVisibility(false, false) end) end
     local rm = addComp(a, "/Script/Engine.RotatingMovementComponent")
     if rm then pcall(function() rm.RotationRate = { Pitch = 0, Yaw = 0, Roll = spin } end) end
     -- its own streak (SK_SV_Ulysses_Tail, tools/ulysses): behind it along -X, glowing (tail.paint), scaled with the rock
@@ -208,14 +214,16 @@ local function rock(key, at, vel, scale, spin, tailX, trails)
             pcall(function() tc:SetCastShadow(false) end)
             pcall(function() tc:K2_AttachToComponent(c, FName("None"), 2, 2, 1, false) end)
             local ts = n(T.scale, 1) * scale
-            pcall(function() tc:SetRelativeScale3D({ X = ts * n(T.length_x, 1) * (tailX or 1), Y = ts, Z = ts }) end)
-            local tmid = T.paint and ULY.tailMid and ULY.tailMid("paint")
+            local tr = n(look and look.tail_r, 1)
+            pcall(function() tc:SetRelativeScale3D({ X = ts * n(T.length_x, 1) * (tailX or 1), Y = ts * tr, Z = ts * tr }) end)
+            local which = look and look.paint or "paint"
+            local tmid = T[which] and ULY.tailMid and ULY.tailMid(which)
             if tmid then pcall(function() tc:SetMaterial(0, tmid) end) end
         end
         -- ((2026-11-24, the 0.75.76 shots: the streaks read as solid cream tubes) a glow round it: the same mesh a little
         -- wider and longer, on AC8's additive MI_TrainingRingGlow (VALKA's portal haze), so it burns rather than shines
         local G = T.glow
-        local gmid = G and G.enabled ~= false and ULY.tailMid and ULY.tailMid("glow")
+        local gmid = G and G.enabled ~= false and not (look and look.paint) and ULY.tailMid and ULY.tailMid("glow")
         local gc = gmid and addComp(a, static and "/Script/Engine.StaticMeshComponent" or "/Script/Engine.SkeletalMeshComponent")
         if gc then
             if static then pcall(function() gc:SetStaticMesh(tm) end)
@@ -908,7 +916,7 @@ function ULY.debug() return U, SKYM, FILM end                  -- (the tests')
 
 -- TEST ONLY BEGIN (ULYSSES' test key: test builds only)
 -- ((2026-11-24, the user: "Shouldn't their smoke trail be thicker") the autotest's trail line-up: one rock a candidate
-ULY.testRock = function(key, at, vel, scale, trails) return rock(key, at, vel, scale, 20, 1, trails) end
+ULY.testRock = function(key, at, vel, scale, trails, look, tailX) return rock(key, at, vel, scale, 20, tailX or 1, trails, look) end
 ULY.testRockOff = function(r) rockOff(r) end
 -- Ctrl+Q: the next round is ULYSSES (phase 1; again: phase 2, then off); its log says which
 testKey("Q", "sv_ulysses.lua's ULYSSES round", function()

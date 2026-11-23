@@ -473,6 +473,13 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
              -- ((2026-11-24) a fire glow round the streak: the same mesh radius_x wider, on AC8's additive glow (VALKA's portal
              -- haze material: Color, EmissiveIntensity, Opacity; its fresnel left on for a soft edge)
              -- (OFF: the run of 0.75.77 drew it as dark grey tubes over the streaks, the gradient hidden)
+             -- ((2026-11-24, the user's Lost Butterfly reference: AC:I's sky meteors are thin glowing lines, its o_metx a marker
+             -- with an effect drawn on it) light-only streaks to try: AC8's additive MI_TrainingRing (VALKA's portal rings: it
+             -- adds its Color x Opacity) and its haze (fresnel off: flat)
+             line_ring = { parent = "/Game/VFX/Mission/Traning/MI_TrainingRing", scalars = { Opacity = 1 },
+                           vectors = { Color = { 3.0, 2.3, 1.3 } } },
+             line_haze = { parent = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", scalars = { EmissiveIntensity = 3, Opacity = 1,
+                           EmissiveFresnelFalloff = 0.01 }, vectors = { Color = { 3.0, 2.3, 1.3 } } },
              glow = { enabled = false, parent = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", radius_x = 1.8, length_x = 1.15,
                       scalars = { EmissiveIntensity = 4, Opacity = 0.7 }, vectors = { Color = { 1.0, 0.42, 0.08 } } } },
     fx = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" },
