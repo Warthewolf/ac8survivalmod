@@ -1508,6 +1508,9 @@ CFG = {
              -- P8, TIER.coopCap: 60 to round 25 whatever the room's size, 80 by round 32; the fighter pool holds 86).
              -- max_up 30: the Ace preset's late ceiling, the frame-time limit until a test says more.
              aircraft_per_player = 0.15, max_aircraft = 60, max_up = 30,
+             -- ((2026-11-23) a co-op host's pause page never built once in 13, the world un-paused the tick after the
+             -- press) the world goes on once the pause page is up (WBP_Menu_PauseTop_000), or pause_page_wait_s on
+             pause_page_wait_s = 1.0,
              -- your name on the other players' screens ("<NAME> JOINED", the roster); "" = your Steam name (user,
              -- 2026-10-25: "make it so that the player can choose their name")
              name = "",

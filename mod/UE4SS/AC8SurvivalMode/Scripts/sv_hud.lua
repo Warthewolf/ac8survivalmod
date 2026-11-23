@@ -584,6 +584,18 @@ end
 -- no menu drawn, after it had worked) at each pause: the in-game menu manager's stack (LiveMenuManager.MenuStack: what
 -- holds the menu) and the pause page's widgets, once a pause, at most 20 a run:
 -- `pause: menu stack <n> [<menus>], root <r>; pause pages <class> in viewport / visibility ...`
+-- ((2026-11-23) Saint Alessia's co-op host log of 0.75.64: one pause in 13 opened the shell (WBP_Menu_Pause_Boot, left
+-- visible) and never its page (WBP_Menu_PauseTop_000: none), the HUD back the same second, no pause after it; the user
+-- had the same "nothing appears" hosting co-op on 0.75.63, no cutscene either. Co-op un-paused the world on the tick
+-- right after the press (sv_coop_migration.lua), while the game still built its pause menu.) PAUSE.pageUp(): the pause
+-- page is there (a live WBP_Menu_PauseTop_000), so the co-op un-pause can go on without cutting its build short
+PAUSE = PAUSE or {}
+function PAUSE.pageUp()
+    for _, w in ipairs(FindAllOf("WBP_Menu_PauseTop_000_C") or {}) do
+        if liveWidget(w) then return true end
+    end
+    return false
+end
 local function pauseProbe()
     H.pauseLogs = (H.pauseLogs or 0) + 1
     if H.pauseLogs > 20 then return end
@@ -616,6 +628,10 @@ local function pauseProbe()
         end
         parts[#parts + 1] = cls .. ": " .. (#ws > 0 and table.concat(ws, "; ") or "none")
     end
+    -- ((2026-11-23) what else could hold the page back: the view (a scene's camera left on?), co-op's room)
+    local okT, vt = pcall(function() return survivalPC:GetViewTarget() end)
+    parts[#parts + 1] = "view on " .. ((okT and valid(vt)) and (nameOf(vt):match("([%w_]+)_C_%d+$") or nameOf(vt):match("[^%.:]+$") or "?") or "?")
+    parts[#parts + 1] = string.format("co-op players %s", tostring(type(playerCount) == "function" and select(2, pcall(playerCount)) or "?"))
     log("pause: " .. table.concat(parts, "; "))
 end
 function hudTick(now, paused, pc)
