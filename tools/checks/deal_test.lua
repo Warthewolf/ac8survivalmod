@@ -185,10 +185,12 @@ check(#spawns == 1 and spawns[1][1] == "SV_Unit_DealHornet" and math.abs(spawns[
 check(texts.SV_DealHornet == "WAR & HAYTHORN" and ALLY.unit.SV_Unit_DealHornet == "air", "its name WAR & HAYTHORN, an ally's unit")
 runD(1.25)
 check(fired("RE_SV_DealCam") and logged("the event zoom onto the Hornet"), "the event zoom onto it")
-check(#said == 2 and has(said[1] .. said[2], "WAR|"), "War's introduction said (an exchange of two)")
+check(#said == 3 and has(said[1] .. said[2], "WAR|") and has(said[3], "Podarge"),
+    "War's introduction (two lines) and, right after it, what the deal is: before the vote opens")
 check(D.at >= clock + C.vote_s and logged("the break held for the deal"), "the break held for the vote")
 runD(6)
 check(V.phase == "open" and has(said[3], "Podarge"), "the vote opens, War asks about the Podarge")
+check(has(texts.SV_Radio_DealAsk, "7 Podarges"), "the radio line above AC8's Yes / No names the deal: " .. tostring(texts.SV_Radio_DealAsk))
 check(callouts[1] and callouts[1][1] == "THE DEAL", "its callout")
 local row = DEAL.row()
 check(has(row, "CTRL+A YES / CTRL+X NO") and has(row, "YES 0  NO 0"), "the NEXT row: " .. tostring(row))
