@@ -4291,3 +4291,7 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   close-up showed Mission 4's radar tower under a fragment). AC:I search: o_metc in 7 more mission packages (Lost
   Butterfly's family, the Godzilla event), Stardust_Ambient unused, no streak texture (its effects not found). Autotest
   15/15 on 0.75.93. Staged build/release/stage_dev_0.75.93, not registered, NOT installed.
+- 0.75.94 (2026-11-24, branch feature/ulysses): AC:I's Stardust_Ambient (DATA01 #24 stream 4, 38.5 s, tools/ulysses/
+  sounds.py ambient.wav) looped under both rounds and the break, off at the last round's end; joiners start it on the
+  host's "r" (the user: yes to the rumble). ulysses2 autotest 17/17 (a minute's break, no crash); the sound loaded and
+  played without error (not heard by the test). Staged build/release/stage_dev_0.75.94, NOT installed.
