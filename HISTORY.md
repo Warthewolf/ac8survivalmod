@@ -4255,3 +4255,11 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   coop_guard_test rows. Screenshots sent to the user (rocks up close, the streaks far off, the film look, PRESENT DAY).
   Staged as build/release/stage_dev_0.75.7x (dev, test keys kept), not registered, NOT installed. Not yet seen: the
   streak's glow up close, a co-op game.
+- 0.75.74 - 0.75.79 (2026-11-24, branch feature/ulysses): ULYSSES' look, her calls through the night: "I want those
+  fireball trails longer" (smoke 8 -> 14, fire 6 -> 11, our streak 1.6 -> 4.5 long); "more fake meteors at high altitude
+  streaking across the sky at Sunrise" (bursts of 3-7 every 0.4-1.2 s, up to 100 at once, 5-16x); "East to West" (the
+  sky's meteors start 25-55 km east of you and fly within 12 degrees of west); "spread out more than 60km" (150 km either
+  side). A glow shell round the streak on MI_TrainingRingGlow drew dark grey tubes (0.75.77): off. The streak's
+  Ctrl_All_Emissive 1 -> 60 (0.75.79). Autotest 14/14 each build, tick cost ~1.4 ms; screenshots sent. 0.75.73's run was
+  stopped by Claude Code's memory guard while the game loaded (23 GB free after): tests since run in the foreground.
+  Staged build/release/stage_dev_0.75.79, not registered, NOT installed.
