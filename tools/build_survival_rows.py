@@ -497,6 +497,17 @@ def build_rows():
                      'LiveLevelTable', 'Mission022', 'SurvivalMode', edit_mission_row)
     build_npc_rows()
     build_model_rows()
+    # ((2026-11-23) THE DEAL's question, survival_events.DEAL_QUESTION: a copy of DT_YesNo's first row)
+    yn = uprop.U.schema('LiveYesNoDataTable')
+    yn_idx = {n: k for k, (n, t) in yn.items()}
+
+    def edit_deal_yesno(props):
+        set_prop(props, yn_idx['YesNoID'], 'YesNoID', ('name', survival_events.DEAL_QUESTION, 0))
+        set_prop(props, yn_idx['AnswerTimeLimit'], 'AnswerTimeLimit',
+                 ('raw', 'Float', struct.pack('<f', survival_events.DEAL_ANSWER_S)))
+    build_rows_table('/Game/Datatables/YesOrNo/DT_YesNo', DATA + survival_events.DEAL_YESNO_TABLE, 'LiveYesNoDataTable',
+                     'NewRow', survival_events.DEAL_QUESTION, edit_deal_yesno)
+    print(f'  {survival_events.DEAL_YESNO_TABLE}: {survival_events.DEAL_QUESTION} ({survival_events.DEAL_ANSWER_S:.0f} s)')
     build_rows_table('/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands', DATA + 'DT_SV_MenuRows',
                      'LiveMenuCommandsDataTable', 'Campaign', 'SurvivalMode', edit_menu_row,
                      more=[('SurvivalCoopHost', edit_coop_host_row), ('SurvivalCoopJoin', edit_coop_join_row),

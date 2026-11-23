@@ -19,6 +19,12 @@ DEAL_ANSWERS = (('areaB_YesNoEvent', 'Left', 'SV_DealYes', 1),
                 ('areaB_YesNoEvent_0', 'Right', 'SV_DealNo', 2),
                 ('areaB_YesNoEvent_1', 'TimeOut', 'SV_DealSilent', 3))
 INT_FLAGS += [DEAL_FLAG]  # noqa: F405
+# ((2026-11-23, the autotest: no prompt showed) a question id is a row of DT_YesNo (LiveYesNoDataTable: YesNoID, its
+# AnswerTimeLimit, the YES / NO buttons' texts; Mission 8's 4 s, Mission 12's 3 s; the question itself is the radio
+# line said with it). Survival's own row in its own table, DT_SV_YesNo (build_survival_rows.py), which Lua adds to
+# DT_YesNo at the main menu (sv_deal.lua dealSetup; a world subsystem's, read as the level loads), its time the vote's
+DEAL_YESNO_TABLE = 'DT_SV_YesNo'
+DEAL_ANSWER_S = 30.0                        # (sv_deal.lua vote_s)
 # WAR & HAYTHORN's F/A-18F (the user: "War and Haythorn's Super Hornet will appear randomly ... between rounds. They appear
 # as an allied aircraft and the player gets the event zoom in on their aircraft when they appear"; "after each deal has
 # been made, War and Haythorn turn around and exit the combat zone and despawn"): an allied unit as the ESCORT's KMG

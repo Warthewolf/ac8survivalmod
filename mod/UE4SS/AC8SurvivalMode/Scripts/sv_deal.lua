@@ -44,7 +44,8 @@ CFG.specials.deal = {
     allow_change = true,
     resend_s = 2,
     keys = { yes = "A", no = "X", ctrl = true },
-    prompt = { enabled = true, event = "RE_SV_DealAsk", flag = "SV_DealAns" },
+    prompt = { enabled = true, event = "RE_SV_DealAsk", flag = "SV_DealAns", question = "SV_Deal_Question",
+               rows = "/Game/Mods/SurvivalMode/Data/DT_SV_YesNo.DT_SV_YesNo", table = "/Game/Datatables/YesOrNo/DT_YesNo.DT_YesNo" },
     result_row_s = 8,
     leave_after_s = 7,
     hornet = { unit = "SV_Unit_DealHornet", name_key = "SV_DealHornet", name = "WAR & HAYTHORN", row = "",
@@ -251,6 +252,51 @@ local function aliveOf(unit)
     return (n and n >= 0) and n or nil
 end
 local function fleetReady() return SPORT and type(SPORT.fleet) == "function" and ALLY and ALLY.fleetReady == true end
+-- ((2026-11-23, the autotest) SV_UnitAlive counts every object of a unit, its parts too: the Podarge 38, the C-130s 9)
+-- A target is a BODY: its objects caught as they're made in its spawn (spawningUnit set, as sv_spaceport.lua's spawn:
+-- its ships' objects and turret orders, co-op's ground objects, come with it), the planes among them (LiveAIPlane: the
+-- Norn's body, each C-130), else a ship's hull (the one that isn't a turret: sv_spaceport.lua's rule); each one down
+-- when it's gone (its address another object's: hard rule 59) or at 0 health.
+local CAP = nil
+pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o) if CAP and #CAP < 200 then CAP[#CAP + 1] = o end end)
+local TURRET = { "mk15", "mk41", "mk45", "artillery", "_sam", "aagun", "turret", "vls", "ciws" }
+local planeCls
+local function isPlane(o)
+    if not (planeCls and valid(planeCls)) then planeCls = StaticFindObject("/Script/Live.LiveAIPlane") end
+    local ok, r = pcall(function() return o:IsA(planeCls) end)
+    return ok and r == true
+end
+local function isTurret(o)
+    local low = nameOf(o):lower()
+    for _, k in ipairs(TURRET) do if low:find(k, 1, true) then return true end end
+    return false
+end
+local function bodiesOf(objs)
+    local planes, hulls = {}, {}
+    for _, o in ipairs(objs) do
+        local a = liveAddr and liveAddr(o)
+        if a then
+            local e = { o = o, a = a, name = nameOf(o) }
+            if isPlane(o) then planes[#planes + 1] = e elseif not isTurret(o) then hulls[#hulls + 1] = e end
+        end
+    end
+    if #planes > 0 then return planes end
+    return (#hulls > 0) and { hulls[1] } or {}
+end
+local function bodyUp(e)
+    if not (liveAddr and liveAddr(e.o) == e.a and nameOf(e.o) == e.name) then return false end
+    local ok, h = pcall(function() return e.o.HealthInternal end)
+    return not (ok and type(h) == "number" and h <= 0)
+end
+local function spawnCaught(u)
+    CAP = {}
+    spawningUnit = u
+    local ok, r = pcall(SV_Spawn, u)
+    spawningUnit = nil
+    local objs = CAP
+    CAP = nil
+    return ok and tonumber(r) or -4, objs
+end
 -- the deal's units: { unit, ... } for its kind
 local function unitsOf(kind)
     local t = cfg().targets[kind] or {}
@@ -356,7 +402,7 @@ local function payFor(t, n) return math.max(0, math.floor((num(t.per, 0) + num(t
 local function targetsUp(T)
     local c = cfg()
     local units = unitsOf(T.kind)
-    T.units, T.alive, T.total, T.down, T.paid = {}, {}, 0, 0, 0
+    T.units, T.total, T.down, T.paid = {}, 0, 0, 0
     if T.kind == "fleet" and not fleetReady() then
         log("deal: the fleet's ships' rows aren't in (ALLY.fleetReady): no fleet this time")
         T.state = "done"
@@ -369,12 +415,19 @@ local function targetsUp(T)
         return
     end
     local said = {}
+    T.bodies = {}
     for _, u in ipairs(units) do
-        local ok, r = pcall(SV_Spawn, u)
-        r = ok and tonumber(r) or -4
-        said[#said + 1] = string.format("%s %s", u, r > 0 and (r .. " up") or ("not spawned: " .. tostring(SV_ERR and SV_ERR[r] or r)))
-        if r > 0 then T.units[#T.units + 1], T.alive[u], T.total = u, r, T.total + r end
+        local r, objs = spawnCaught(u)
+        local b = (r > 0) and bodiesOf(objs) or {}
+        said[#said + 1] = string.format("%s %s", u, r > 0 and string.format("%d objects, %d bod%s", r, #b, #b == 1 and "y" or "ies")
+            or ("not spawned: " .. tostring(SV_ERR and SV_ERR[r] or r)))
+        if r > 0 then
+            T.units[#T.units + 1] = u
+            if #b == 0 then b = { { unit = u } } end          -- (no body caught: the unit's own count, all of it down)
+            for _, e in ipairs(b) do e.unit = u; T.bodies[#T.bodies + 1] = e end
+        end
     end
+    T.total = #T.bodies
     T.state, T.at, T.goAt, T.watchAt = (T.total > 0) and "up" or "done", S.clock, S.clock + 1.0, S.clock + 3
     log(string.format("deal: round %d: %s up (%d): %s", D.round, T.kind, T.total, table.concat(said, ", ")))
     if T.total > 0 then
@@ -385,10 +438,8 @@ end
 local function targetsOver(T, why)
     local c = cfg()
     T.state = "done"
-    local left = 0
-    for _, u in ipairs(T.units or {}) do
-        if (T.alive[u] or 0) > 0 then left = left + T.alive[u]; recycle(u) end
-    end
+    local left = T.total - T.down
+    for _, u in ipairs(T.units or {}) do recycle(u) end
     if T.total > 0 and T.down >= T.total then
         local bonus = math.floor(num(c.pay.all_bonus, 0) + num(c.pay.all_bonus_per_round, 0) * (D.round or 0) + 0.5)
         if bonus > 0 then addCredits(bonus, "the deal's bonus (" .. T.kind .. " all down)") end
@@ -424,14 +475,16 @@ local function targetsTick()
     if S.clock < T.watchAt then return end
     T.watchAt = S.clock + math.max(1, num(c.watch_s, 2))
     local t = c.targets[T.kind] or {}
-    for _, u in ipairs(T.units) do
-        local was, now = T.alive[u] or 0, aliveOf(u)
-        if now and now < was then
-            local n = was - now
-            T.alive[u], T.down = now, T.down + n
-            local p = payFor(t, n)
-            if p > 0 then addCredits(p, "the deal's " .. T.kind .. " target down"); T.paid = T.paid + p end
-            log(string.format("deal: %s: %d down (%s; %d of %d), +%d", T.kind, n, u, T.down, T.total, p))
+    for _, e in ipairs(T.bodies) do
+        if not e.down then
+            local up
+            if e.o then up = bodyUp(e) else up = (aliveOf(e.unit) or 1) > 0 end
+            if not up then
+                e.down, T.down = true, T.down + 1
+                local p = payFor(t, 1)
+                if p > 0 then addCredits(p, "the deal's " .. T.kind .. " target down"); T.paid = T.paid + p end
+                log(string.format("deal: %s: a target down (%s %s; %d of %d), +%d", T.kind, e.unit, e.name or "(its unit)", T.down, T.total, p))
+            end
         end
     end
     if T.down >= T.total then targetsOver(T, "all down") end
@@ -604,6 +657,31 @@ local function promptTick()
     end
 end
 DEAL.promptTick = promptTick
+-- (sv_main.lua, at the main menu: before the level loads, as the DT_NPC rows) the question's row (DT_SV_YesNo) into
+-- the game's DT_YesNo: AC8's Yes / No shows only a question it has a row for (the autotest of 2026-11-23)
+function DEAL.setup()
+    local p = cfg().prompt
+    if DEAL.setupDone or not (p and p.enabled ~= false) then return end
+    if not (gameInstance and gameInstance()) then return end
+    DEAL.setupTries = (DEAL.setupTries or 0) + 1
+    local mine, game = loadObject(p.rows), loadObject(p.table)
+    if not (mine and game) then
+        if DEAL.setupTries >= 20 then
+            DEAL.setupDone, DEAL.rowOk = true, false
+            log("deal: DT_YesNo or DT_SV_YesNo didn't load: AC8's Yes / No won't show (the keys still vote)")
+        end
+        return
+    end
+    DEAL.setupDone = true
+    pin(mine, nameOf(mine)); pin(game, nameOf(game))
+    local _, have = dtCall(game, "FindRow", p.question)
+    if have == nil then
+        local _, r = dtCall(mine, "FindRow", p.question)
+        if r ~= nil then dtCall(game, "AddRow", p.question, r); _, have = dtCall(game, "FindRow", p.question) end
+    end
+    DEAL.rowOk = have ~= nil
+    log(string.format("deal: the question's row %s %s", p.question, DEAL.rowOk and "in DT_YesNo" or "NOT added: AC8's Yes / No won't show"))
+end
 
 -- the NEXT row (sv_hud.lua): the offer while it's open, the result a little after; else nil
 function DEAL.row()

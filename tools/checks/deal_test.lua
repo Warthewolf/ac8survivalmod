@@ -59,12 +59,38 @@ local pawn = {
 survivalPC = { Pawn = pawn }
 local HORNET_OK = true
 local ALIVE = {}
+-- the game's objects: NotifyOnNewObject's callback gets each one a spawn makes (a plane each C-130 and its 2 parts; the
+-- Podarge's body and 3 parts; a ship's hull and a turret), each with its address, name and health
+local newObj
+function NotifyOnNewObject(cls, fn) newObj = fn end
+local OBJS = {}
+local nextAddr = 1000
+local function mkObj(name, plane)
+    nextAddr = nextAddr + 1
+    local o = { name = name, addr = nextAddr, plane = plane, HealthInternal = 100 }
+    function o:IsA() return self.plane end
+    OBJS[#OBJS + 1] = o
+    if newObj then newObj(o) end
+    return o
+end
+function liveAddr(o) return (o and not o.gone) and o.addr or nil end
+function nameOf(o) return o and o.name or "?" end
+StaticFindObject = function() return {} end
+local MADE = {}
 function SV_Spawn(unit, x, y, z, yaw)
     spawns[#spawns + 1] = { unit, x, y, z, yaw }
     if unit == "SV_Unit_DealHornet" then return HORNET_OK and 1 or -2 end
-    local n = unit == "SV_Unit_DealCargo" and 3 or 1
-    ALIVE[unit] = n
-    return n
+    local l = {}
+    if unit == "SV_Unit_DealCargo" then
+        for k = 1, 3 do l[#l + 1] = mkObj("BP_OP0054_c130_CP_C_" .. k, true); mkObj("c130_part_a" .. k); mkObj("c130_part_b" .. k) end
+    elseif unit == "SV_Unit_DealPodarge" then
+        l[1] = mkObj("BP_OP0044_norn_MS12_01_CP_C_1", true); mkObj("norn_Turret_L1"); mkObj("norn_Wing_L1"); mkObj("norn_VLS_L1")
+    else
+        l[1] = mkObj("BP_VE_hull_" .. unit); mkObj("BP_Mk15_turret_" .. unit)
+    end
+    MADE[unit] = l
+    ALIVE[unit] = #l
+    return unit == "SV_Unit_DealCargo" and 9 or (unit == "SV_Unit_DealPodarge" and 4 or 2)
 end
 function SV_UnitAlive(unit) return ALIVE[unit] or -7 end
 local events = {}
@@ -124,7 +150,7 @@ local function reset()
     D = nil
     run(0.25)
     logs, callouts, said, spawns, recycles, sent, credits, own = {}, {}, {}, {}, {}, {}, {}, {}
-    isUsed, events, angers, ALIVE = {}, {}, {}, {}
+    isUsed, events, angers, ALIVE, MADE = {}, {}, {}, {}, {}
 end
 -- a break after `round` (D.at: the next round's start, `gap` s on)
 local function newBreak(round, gap)
@@ -182,8 +208,9 @@ check(spawned("SV_Unit_DealPodarge") and DEAL.T.state == "up" and lastCallout() 
 runD(1.5)
 check(fired("RE_SV_DealPodargeGo"), "onto its route")
 check(has(DEAL.row(), "PODARGE 0 / 1 DOWN"), "the row: " .. tostring(DEAL.row()))
+check(DEAL.T.total == 1 and logged("SV_Unit_DealPodarge 4 objects, 1 body"), "one target: the Podarge's body (its parts not counted)")
 credits = {}
-ALIVE.SV_Unit_DealPodarge = 0
+MADE.SV_Unit_DealPodarge[1].HealthInternal = 0
 runD(3)
 check(credits[1] and credits[1][1] == 6000 + 300 * 7 and credits[2] and credits[2][1] == 3000 + 150 * 7,
     "paid: 6000 + 300 x 7 for the Podarge, the bonus 3000 + 150 x 7")
@@ -196,11 +223,13 @@ runD(C.offer_after_s + 7)
 check(DEAL.V and DEAL.V.kind == "cargo", "the C-130s offered")
 binds[65](); runD(0.25)
 nextRound(); runD(C.targets_after_s + 2)
-check(spawned("SV_Unit_DealCargo") and DEAL.T.total == 3, "three C-130s up")
+check(spawned("SV_Unit_DealCargo") and DEAL.T.total == 3, "three C-130s up (3 bodies of 9 objects)")
 credits = {}
-ALIVE.SV_Unit_DealCargo = 1
+MADE.SV_Unit_DealCargo[1].HealthInternal = 0
+MADE.SV_Unit_DealCargo[2].gone = true
 runD(3)
-check(credits[1] and credits[1][1] == 2 * (2000 + 100 * 9) and DEAL.T.down == 2, "two down: paid 2 x (2000 + 100 x 9)")
+check(credits[1] and credits[1][1] == 2000 + 100 * 9 and credits[2] and credits[2][1] == 2000 + 100 * 9 and DEAL.T.down == 2,
+    "two down (one at 0 health, one gone): each paid 2000 + 100 x 9")
 D.state = "wait"; runD(0.5)
 check(logged("cargo over (the round's over): 2 of 3 down, 1 left") and recycles[#recycles] == "SV_Unit_DealCargo" and
     lastCallout() == "THE DEAL: TARGET ESCAPED", "the round's over: the last one taken off unpaid, TARGET ESCAPED")
@@ -211,6 +240,11 @@ runD(C.offer_after_s + 7); binds[65](); runD(0.25)
 nextRound(); runD(C.targets_after_s + 2)
 check(spawned("SV_Unit_SpWaspA") and spawned("SV_Unit_SpWaspB") and not spawned("SV_Unit_SpWaspC") and not spawned("SV_Unit_SpFord"),
     "the fleet: groups A and B's ships, not the Ford")
+check(DEAL.T.total == 2, "a body each: its hull, not its turret (" .. tostring(DEAL.T.total) .. ")")
+MADE.SV_Unit_SpWaspA[1].HealthInternal = 0
+credits = {}
+runD(3)
+check(DEAL.T.down == 1 and credits[1] and credits[1][1] == 1200 + 60 * 11, "a hull down: that ship paid, its turret still up or not")
 reset(); ALLY.fleetReady = false; newBreak(12)
 runD(C.offer_after_s + 2)
 check(DEAL.V == nil and logged("no deal to offer"), "no fleet rows: the fleet never offered")
