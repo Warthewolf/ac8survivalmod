@@ -4295,3 +4295,13 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   sounds.py ambient.wav) looped under both rounds and the break, off at the last round's end; joiners start it on the
   host's "r" (the user: yes to the rumble). ulysses2 autotest 17/17 (a minute's break, no crash); the sound loaded and
   played without error (not heard by the test). Staged build/release/stage_dev_0.75.94, NOT installed.
+- 0.75.95 - 0.75.97 (2026-11-24, branch feature/ulysses), the user: "Try making it like infinities" (after the AC:I meteor
+  research: its mission data, the OIF unit table, CRC-32/BZIP2 name hashes; micp01 = Lost Butterfly's 8 o_metx emitter
+  groups 24 km out, 3.5-5 km up, pitched 45 degrees; micp08 = Stardust; METEORITE o_metc: A 2800, V 260 (x5 = its +1300),
+  550-650 km/h, every one a 45 degree dive the same way). Fragments and the core: a 45 degree dive from the east at
+  550-650 km/h (dive_deg / from_deg / spread_deg; was any bearing at 1100-1500 km/h). The sky shower: AC:I's own trail
+  sprite (its effect atlas DATA00 #14 0x10009000, tools/ulysses/prepare.py streak_texture; the AC:I exception extended)
+  on our crossed card SM_SV_Ulysses_Streak, drawn by AC8's additive MI_ms23FarExp_Flare (EmissiveMap / MaskMap the
+  sprite, Emissive_Intensity 2000: it glows from ~600 up, dim at 20-80), ~3 km long, diving 39-45 degrees. AC:I's
+  "destroyed" o_metc pieces are the whole rock again (no break-up model). ulysses 15/15, ulysses2 17/17 on 0.75.97.
+  Staged build/release/stage_dev_0.75.97, NOT installed.
