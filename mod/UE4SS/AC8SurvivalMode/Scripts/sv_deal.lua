@@ -33,7 +33,9 @@
 -- ((2026-11-23) in every build: the user, "put war and haythorn into the public build. it worked"; docs/re/DEAL.md)
 CFG.specials.deal = {
     enabled = true,
-    chance = 0.35,                            -- a break's chance of a deal (the user: 35 %)
+    -- ((2026-11-23) the user: "War and Haythorn are appearing way to often": 35 % -> 15 %, and cooldown_breaks between two)
+    chance = 0.15,                            -- a break's chance of a deal
+    cooldown_breaks = 4,                      -- after an offer, this many breaks with no roll
     from_round = 1,                           -- the first break that can have one (after this round)
     offer_after_s = 4,                        -- into the break (never while you're in the STORE)
     hold_break = true,                        -- the next round waits for the deal's vote and result
@@ -669,6 +671,7 @@ local function hostTick()
     if S.breakRound ~= D.round then S.breakRound, S.breakAt, S.rolled = D.round, S.clock, false end
     if S.rolled or (V and V.phase ~= "closed") or DEAL.T then return end
     if D.round < num(c.from_round, 1) or S.clock - S.breakAt < c.offer_after_s then return end
+    if S.lastOffer and D.round - S.lastOffer <= num(c.cooldown_breaks, 4) then return end   -- (its cool-down)
     if SPC and SPC.storeShut and not SPC.storeShut(D.now or S.clock) then return end
     S.rolled = true
     local roll = math.random()
@@ -678,6 +681,7 @@ local function hostTick()
     end
     local kind = pickDeal()
     if not kind then log("deal: no deal to offer (every weight 0)"); return end
+    S.lastOffer = D.round
     offer(kind, string.format("chance %.2f, rolled %.2f", num(c.chance, 0.35), roll))
 end
 ---------------------------------------------------------------------------------------------------- a joiner's view
@@ -819,12 +823,13 @@ function DEAL.tick(clock)
     if not D then
         if S.hornetUp then S.hornetUp = false end
         DEAL.V, DEAL.J, DEAL.T, DEAL.ANG, S.round, S.noHornetSaid = nil, nil, nil, {}, nil, false
-        S.last, S.D, S.hornetOffAt, S.camAt = nil, nil, nil, nil
+        S.last, S.D, S.hornetOffAt, S.camAt, S.lastOffer = nil, nil, nil, nil, nil
         return
     end
     if S.D ~= D then                                    -- (a new run: nothing of the last one's carried over)
         if S.D ~= nil and (DEAL.V or DEAL.J or DEAL.T) then log("deal: a new run: the last run's deal dropped") end
         S.D, DEAL.V, DEAL.J, DEAL.T, DEAL.ANG, S.round, S.hornetOffAt, S.camAt = D, nil, nil, nil, {}, nil, nil, nil
+        S.lastOffer = nil
         if S.hornetUp then hornetOff("a new run") end
     end
     local dt = S.last and math.max(0, math.min(1, clock - S.last)) or 0
