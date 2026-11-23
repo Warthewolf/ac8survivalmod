@@ -102,6 +102,12 @@ local function rock(key, at, vel, scale, spin)
     local c = addComp(a, "/Script/Engine.SkeletalMeshComponent")
     if not c then pcall(function() a:K2_DestroyActor() end); return nil end
     if m and not pcall(function() c:SetSkeletalMeshAsset(m) end) then pcall(function() c:SetSkeletalMesh(m, true) end) end
+    -- (a bare actor has no root: its spawn place went with the first component, at the world's origin (the SOLG's run of
+    -- 2026-11-22 17:58, and this one's autotest of 2026-11-23: rocks 1.5 km under the sea). Put where it's wanted once its
+    -- mesh is its root, the mesh itself too)
+    local rot = { Pitch = 0, Yaw = math.random(0, 359), Roll = 0 }
+    pcall(function() a:K2_SetActorLocationAndRotation({ X = at.X, Y = at.Y, Z = at.Z }, rot, false, {}, true) end)
+    pcall(function() c:K2_SetWorldLocation({ X = at.X, Y = at.Y, Z = at.Z }, false, {}, true) end)
     local mid = paintMid()
     if mid then
         local slots = 1
@@ -258,8 +264,33 @@ local function filmOn()
     }
     local nOk = 0
     for _, fn in ipairs(sets) do if pcall(function() fn(v.Settings) end) then nOk = nOk + 1 end end
+    pcall(function() v.bEnabled = true end)
+    local okR, back = pcall(function() return v.Settings.FilmGrainIntensity end)
+    -- ((2026-11-23, the autotest: 4 of 4 written, nothing seen) AC8's own grading comes with the view's camera, after any
+    -- volume: the same settings on the camera components of your plane (their blend weight 1), put back at the end
+    FILM.cams = {}
+    local pawn = liveObj(survivalPC) and survivalPC.Pawn
+    local cc = StaticFindObject("/Script/Engine.CameraComponent")
+    local okC, list = pcall(function() return pawn:K2_GetComponentsByClass(cc) end)
+    if okC and list then
+        pcall(function() list:ForEach(function(_, e)
+            local cam = e:get()
+            local saved = {}
+            for _, k in ipairs({ "bOverride_ColorSaturation", "bOverride_SceneColorTint", "bOverride_FilmGrainIntensity", "bOverride_VignetteIntensity",
+                                 "ColorSaturation", "SceneColorTint", "FilmGrainIntensity", "VignetteIntensity" }) do
+                pcall(function() local x = cam.PostProcessSettings[k]; saved[k] = type(x) == "userdata" and nil or x end)
+            end
+            local w = 0
+            for _, fn in ipairs(sets) do if pcall(function() fn(cam.PostProcessSettings) end) then w = w + 1 end end
+            pcall(function() cam.PostProcessBlendWeight = 1 end)
+            FILM.cams[#FILM.cams + 1] = { cam = cam, saved = saved, w = w }
+        end) end)
+    end
+    local camW = 0
+    for _, x in ipairs(FILM.cams) do camW = camW + x.w end
     FILM.v, FILM.from, FILM.to, FILM.at = v, 0, 1, os.clock()
-    return string.format("on (%d of %d settings written)", nOk, #sets)
+    return string.format("on (%d of %d settings written, grain read back %s; on %d camera(s) of your plane, %d settings)", nOk, #sets,
+        okR and tostring(back) or "?", #FILM.cams, camW)
 end
 local function filmOff(now)
     if FILM.v and liveObj(FILM.v) then FILM.from, FILM.to, FILM.at = FILM.cur or 1, 0, now or os.clock() end
@@ -270,7 +301,21 @@ local function filmTick(now)
     local u = math.min(1, (now - (FILM.at or now)) / fs)
     FILM.cur = FILM.from + (FILM.to - FILM.from) * u
     filmSet(FILM.cur)
-    if FILM.to == 0 and u >= 1 then pcall(function() FILM.v:K2_DestroyActor() end); FILM.v = nil end
+    for _, x in ipairs(FILM.cams or {}) do                 -- (the camera's: its blend scaled the same way)
+        if valid(x.cam) then pcall(function() x.cam.PostProcessSettings.FilmGrainIntensity = n((cfg().film or {}).grain, 0.45) * FILM.cur end) end
+    end
+    if FILM.to == 0 and u >= 1 then
+        for _, x in ipairs(FILM.cams or {}) do
+            if valid(x.cam) then
+                for k, val in pairs(x.saved) do pcall(function() x.cam.PostProcessSettings[k] = val end) end
+                for _, k in ipairs({ "bOverride_ColorSaturation", "bOverride_SceneColorTint", "bOverride_FilmGrainIntensity", "bOverride_VignetteIntensity" }) do
+                    if x.saved[k] == nil then pcall(function() x.cam.PostProcessSettings[k] = false end) end
+                end
+            end
+        end
+        FILM.cams = {}
+        pcall(function() FILM.v:K2_DestroyActor() end); FILM.v = nil
+    end
 end
 
 ---------------------------------------------------------------------------------------------------- the time shift
