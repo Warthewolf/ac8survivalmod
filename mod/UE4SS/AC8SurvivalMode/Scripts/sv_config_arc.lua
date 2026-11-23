@@ -419,8 +419,10 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     -- ((2026-11-24, the user: "more fake meteors at high altitude streaking across the sky at Sunrise, like it's truly about
     -- to rain hell upon the world") was one every 1.5-4 s, 4-10x: now bursts of 2-5 every 0.4-1.2 s, up to max_up at once,
     -- bigger, their streaks longer still (tail_x on the tail's length)
-    sky = { enabled = true, every_s = { 0.4, 1.2 }, burst = { 3, 7 }, max_up = 100, alt_m = { 12000, 28000 }, from_km = { 25, 55 },
-            speed_kmh = { 8000, 16000 }, life_s = 16, meshes = { "D", "C", "C" }, scale = { 5, 16 }, tail_x = 1.5,
+    sky = { enabled = true, every_s = { 0.4, 1.2 }, burst = { 3, 7 }, max_up = 100, alt_m = { 45000, 65000 }, from_km = { 30, 70 }, dip = { 0, 0.03 },
+            speed_kmh = { 8000, 16000 }, life_s = 20, meshes = { "D", "C", "C" }, scale = { 12, 36 }, tail_x = 1.5,
+            -- ((2026-11-24, the user: "high altitude so that the player can't reach them, like very very high") 45-65 km up (was
+            -- 12-28), dipping at most 3 % of their speed (was 5-20 %: they came down to fighter heights), 12-36x to show from there
             -- (the user, 2026-11-24: "East to West": from the east (0 = +X), within 12 degrees of due west; "spread out more
             -- than 60km": lateral_km either side of you, 150 (300 km north to south), bursts and max_up raised to keep them thick)
             from_deg = 0, lateral_km = 150, spread_deg = 12 },
