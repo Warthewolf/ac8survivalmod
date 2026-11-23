@@ -1813,7 +1813,8 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     local ev0 = #events
     from = #logs + 1
     check(ZC.li_volley_s == 20.0 and ZC.li_rest_s == 10.0 and ZC.li_beam_w == 1.5, "the LaserInterceptor's volley 20 s, its rest 10 s, its beam x1.5 wide (shipped: the user, 2026-11-17)")
-    local shipV, shipR, shipW = ZC.li_volley_s, ZC.li_rest_s, ZC.li_beam_w; ZC.li_volley_s, ZC.li_rest_s, ZC.li_beam_w = 6.0, 8.0, 1   -- (this block's: AC7's)
+    check(ZC.li_range_m == 4000 and ZC.li_activation_m == 4000, "the laser's reach 4 km (shipped, 2026-11-23: one volley a round at 2)")
+    local shipV, shipR, shipW, shipG, shipA = ZC.li_volley_s, ZC.li_rest_s, ZC.li_beam_w, ZC.li_range_m, ZC.li_activation_m; ZC.li_volley_s, ZC.li_rest_s, ZC.li_beam_w, ZC.li_range_m, ZC.li_activation_m = 6.0, 8.0, 1, 2000, 2000   -- (this block's: AC7's)
     local t0 = clock
     ZLAS.tick()
     local li = spawnedL[1]
@@ -1979,7 +1980,7 @@ print("AC7's LaserInterceptor on the ZFA-44s (sv_escort_li.lua)")
     ZLI.extra, HIT.minePool = nil, nil
     ZLI.mode, HIT.msl = "tls", keepMsl                                    -- (put back for the rest of the test)
     statics["/Script/Engine.Default__GameplayStatics"], AK.PostEventAtLocation = keepGS, keepPost
-    SV_LaserBegin, SV_LaserState, SV_Intercept, SV_LaserKills = nil, nil, nil, nil; ZC.li_volley_s, ZC.li_rest_s, ZC.li_beam_w = shipV, shipR, shipW
+    SV_LaserBegin, SV_LaserState, SV_Intercept, SV_LaserKills = nil, nil, nil, nil; ZC.li_volley_s, ZC.li_rest_s, ZC.li_beam_w, ZC.li_range_m, ZC.li_activation_m = shipV, shipR, shipW, shipG, shipA
 end)()
 ---------------------------------------------------------------------------------------------------- the dressing
 print("the ZFA-44 dressing (sv_zfa44.lua)")
