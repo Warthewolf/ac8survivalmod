@@ -98,6 +98,35 @@ def build_radio():
         keep.append(((grp, 0), row))
         have.add(grp)
         tells += 1
+    # ((2026-11-23) THE DEAL's question (survival_events.DEAL_RADIO_*): Mission 8's question row, our group, a text-only
+    # line (TextID SV_Radio_DealAsk: Lua sets its text) naming our Yes / No (YesNoID SV_Deal_Question, bUseYesNoSubtitle)
+    src_t, src_k, src_g = survival_events.DEAL_RADIO_SOURCE
+    z8 = ZenPkg(stock(src_t))
+    d8, _ = dtx.parse(uprop.Ctx(bytes(z8.payloads[0]), z8.names), 0, 'LiveRadioTable')
+    q8 = dict(d8['rows'])[(src_k, 0)]
+    assert full(field(q8, 'RadioGroupID')) == src_g and field(q8, 'bUseYesNoSubtitle') == ('raw', 'Bool', b'\x01'), src_k
+    # ((2026-11-23, the 5th autotest: Mission 8's row cloned never played; THE DECOY's lines, on row 382, did) the tells'
+    # row 382 with only the question's own fields (YesNoID, bUseYesNoSubtitle: Mission 8's question row's) and its line
+    row = copy.deepcopy(tpl)
+    setf(row, 'TextID', field(q8, 'TextID'))
+    ridx = {n: k for k, (n, t) in uprop.U.schema('LiveRadioTable').items()}
+    def put(r, n, v): set_prop(r[2], ridx[n], n, v)           # (a field row 382 may not carry: added)
+    put(row, 'bUseYesNoSubtitle', ('raw', 'Bool', b'\x01'))
+    grp = survival_events.DEAL_RADIO_GROUP
+    assert grp not in have
+    for q in tpl[2]:                                   # (every mission flag on, as the tells' row 382)
+        if q[1].startswith('bM') and q[1][2:].isdigit():
+            setf(row, q[1], q[3])
+    flags_on = sum(1 for q in row[2] if q[1].startswith('bM') and q[1][2:].isdigit() and q[3] == ('raw', 'Bool', b'\x01'))
+    setf(row, 'RadioGroupID', survival_events.fname(grp))
+    setf(row, 'TextID', survival_events.fname(survival_events.DEAL_RADIO_TEXT))
+    put(row, 'YesNoID', survival_events.fname(survival_events.DEAL_ASK_ID))
+    assert field(row, 'YesNoID') == survival_events.fname(survival_events.DEAL_ASK_ID) and field(row, 'bUseYesNoSubtitle') == ('raw', 'Bool', b'\x01')
+    setf(row, 'LimitPlayCount', ('raw', 'Int8', b'\x00'))
+    for n in names_in(row) + [grp, survival_events.DEAL_RADIO_TEXT, survival_events.DEAL_ASK_ID]: z.nb.add(n)
+    keep.append(((grp, 0), row))
+    have.add(grp)
+    print(f'  radio: THE DEAL\'s question {grp} (text only, {flags_on} mission flags on, {survival_events.DEAL_ASK_ID})')
     # ((2026-11-11) the user: "Use the Mission 22 radio lines for the rocket warning") the Spaceport rockets' lines
     # (survival_events.SP_RADIO), each a group of its own with LimitPlayCount 0 (a stock ms022 row's 1 would leave it
     # silent once the shuttle round's countdown had played it): a 'group' its ms022 rows copied in their order (Baxter's

@@ -877,6 +877,7 @@ def build_events(stock_ep):
     build_festival(g, flag, stock_ep)
     build_escort(g, flag, stock_ep)          # THE ESCORT and the ZFA-44 cargo ships (ESC_* / CARGO_* / ZFA_*)
     build_decoy(g, flag, stock_ep)           # THE DECOY (DECOY_*)
+    build_deal(g, flag, stock_ep)            # THE DEAL: AC8's Yes / No (DEAL_*)
     build_tanicorn(g, stock_ep)              # THE TANICORN's test mount's engagement order (TANI_*)
     build_fleet(g, flag, stock_ep)           # THE INVINCIBLE FLEET's ships: orders and lanes (IF_*)
     return g
@@ -1498,3 +1499,4 @@ from survival_events_squads import *     # noqa: E402,F401,F403  orders, ace mov
 from survival_events_festival import *   # noqa: E402,F401,F403  GONE FISHIN', THE FESTIVAL (adds its flags)
 from survival_events_escort import *     # noqa: E402,F401,F403  THE ESCORT, the cargo ships, THE DECOY (adds its flags)
 from survival_events_fleet import *      # noqa: E402,F401,F403  THE INVINCIBLE FLEET's ships, names, formation, lanes
+from survival_events_deal import *       # noqa: E402,F401,F403  THE DEAL: AC8's Yes / No (adds its flag)

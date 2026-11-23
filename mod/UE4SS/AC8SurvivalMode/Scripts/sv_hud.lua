@@ -686,6 +686,10 @@ function hudTick(now, paused, pc)
         local n = raidLeft()
         if n > 0 then nextS = string.format(t.raid_row, n, compassName(D.raidBearing)) end
     end
+    -- DEV ONLY BEGIN (THE DEAL's vote and its result on the NEXT row: sv_deal.lua, the user's dev install only)
+    local okDl, dealS = pcall(function() return DEAL and DEAL.row and DEAL.row() end)
+    if okDl and dealS then nextS = dealS end
+    -- DEV ONLY END
     local okDn, downS = pcall(function() return DOWN and DOWN.hudLine and DOWN.hudLine() end)   -- (co-op: you're down,
     if okDn and downS then nextS = downS end                                                    -- watching: sv_down.lua)
     stackText(H.next, "nextStr", nextS)

@@ -48,6 +48,7 @@ local function totalFor(n)
     return math.max(0, math.min(maxUavs(), math.floor(num(c.max_total, 40)), t))
 end
 local function maxTotal()
+    if DECOY.cap then return DECOY.cap end            -- (War's anger: THE DEAL's own count, DECOY.angerStart)
     local T = DECOY.total
     if T.D ~= D then T.D, T.n, T.players = D, 0, 0 end
     if not isClient() then
@@ -1432,6 +1433,13 @@ local function endTrap(now, s, why)
         end
     end
     for k in pairs(DECOY.G) do dropLock(k, "the trap's over", true) end
+    if s.anger then                                   -- (War's anger: a punishment, unpaid; THE DEAL says its lines)
+        log(string.format("decoy: War's anger over (%s) %.0f s in: %d Spear UAVs came, %d shot down, %d left, %d locks", why,
+            now - (s.trapAt or now), s.spawned or 0, s.down or 0, left, s.locks or 0))
+        DECOY.cap = nil
+        share(s, now, true)
+        return
+    end
     local pay = payOf(c.reward, c.reward_per_round)
     if why == "safe" then pay = math.floor(pay * num(c.reward_safe_x, 0.5) + 0.5) end
     if pay > 0 then addCredits(pay, "THE DECOY's trap over (" .. why .. ")") end
@@ -1480,6 +1488,29 @@ function DECOY.hostTick(now, s)
     if s.state == "bait" or s.state == "trap" then share(s, now, false) end
 end
 function DECOY.busy(s) return s ~= nil and (s.state == "bait" or s.state == "trap") end
+-- ((2026-11-23) THE DEAL, the user: "War will become pissed off ... and send in a few Marker Drones that launch Tonitrus
+-- Spears at the players which can be shot down") the trap alone, n Spear UAVs, in any round (the host's; its own state,
+-- DECOY.A, never the round's special): the launchers up, then as THE DECOY's trap (locks, the 8 s, the Spears, co-op)
+function DECOY.angerStart(n, why)
+    if isClient() or not D then return false end
+    if DECOY.A and DECOY.A.state == "trap" then log("decoy: War's anger: one on already"); return false end
+    if not DECOY.unitsHere() then log("decoy: War's anger: THE DECOY's units aren't here"); return false end
+    local c, now = cfg(), clockNow()
+    local s = { anger = true, state = "trap", at = now, trapAt = now, nextSpawnAt = now + 2, u = {}, used = {}, spawned = 0,
+                down = 0, seq = 0, locks = 0 }
+    DECOY.cap = math.max(1, math.min(maxUavs(), math.floor(num(n, 5))))
+    for i = 1, math.max(1, math.floor(num(c.spears, 4))) do spawnUnit(DECOY.spear(i)) end
+    DECOY.A = s
+    log(string.format("decoy: War's anger (%s): %d Spear UAVs round the players", tostring(why), DECOY.cap))
+    share(s, now, true)
+    return true
+end
+function DECOY.angerTick(now)
+    local s = DECOY.A
+    if not s then return end
+    if s.state == "trap" then DECOY.hostTick(now, s) end
+    if s.state ~= "trap" then DECOY.A = nil end
+end
 -- (SPC.kinds.decoy.over: the round's end) a trap still on is ended here (it holds the round, so only an odd end gets here)
 function DECOY.roundOver(now, s)
     if s and (s.state == "bait" or s.state == "trap") then
@@ -1637,6 +1668,7 @@ function DECOY.tick(now)
     local okB, errB = pcall(baitStrikeTick, now)
     if not okB then said("bait strike err", "decoy: the bait strike's watch error " .. tostring(errB)) end
     joinerTick(now)
+    if DECOY.A and not isClient() then pcall(DECOY.angerTick, now) end
     recycleTick(now)
     if DECOY.testTick then DECOY.testTick(now) end
     -- the clouds' fix while the Spear is about (a trap on, a strike due, the test), put back once it's quiet
@@ -1655,6 +1687,7 @@ if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["the decoy"] = function()
         DECOY.G, DECOY.R, DECOY.W, DECOY.rq, DECOY.rods, DECOY.rodNew = {}, {}, {}, {}, {}, {}
         DECOY.cs, DECOY.jb, DECOY.have, DECOY.markMode, DECOY.runD, DECOY.rqAt, DECOY.test = nil, nil, nil, nil, nil, nil, nil
+        DECOY.A, DECOY.cap = nil, nil                      -- (War's anger: the level's)
         DECOY.moveHeld = nil
         DECOY.spearI = nil
         DECOY.cl = { orig = {}, at = -100 }                -- (the sky's objects are the level's: dropped, never put back)

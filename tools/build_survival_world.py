@@ -615,6 +615,15 @@ def escort_units(units, used_ids, z, top_number, v):
         unit_area(eu, se.ESC_AREA_M, se.ESC_ALT_M)
         place(eu, pts[0], yaw)
         paths.append(make_path(z, used_ids, tpl_air, a['route'], pts, smooth=True, after=after))
+    # ((2026-11-23) THE DEAL's WAR & HAYTHORN: an allied F/A-18F as the escorts (survival_events_deal.py), spawned by Lua
+    # (SV_Spawn) where it's wanted; its way out of the area, SV_Path_DealHornetOut. Invincible: War never dies)
+    names = port_unit(units, used_ids, z, msrc, se.DEAL_UNIT, se.DEAL_OBJ, se.DEAL_ROW, [se.DEAL_OUT_PTS[0]], 0.0, top_number)
+    assert names == [se.DEAL_OBJ], names
+    du = unit_named(units, se.DEAL_UNIT)
+    callsign(du, se.DEAL_NAME_KEY, z)
+    unit_area(du, se.ESC_AREA_M, se.ESC_ALT_M)
+    place(du, se.DEAL_OUT_PTS[0], 0.0)
+    paths.append(make_path(z, used_ids, tpl_air, se.DEAL_PATH_OUT, se.DEAL_OUT_PTS))
     # the shared paths (2026-11-07): her route on into the final and the rollout, one path (Mission 14's C-130 lands on
     # the path it flew in on); T0's final and rollout alone; the escorts' landing circuit
     final, roll = se.esc_final_pts(), se.esc_roll_pts()
@@ -907,6 +916,15 @@ def build_wd_global():
     lcac_units(units, used_ids, z, top_number, v)
     spaceport_units(units, used_ids, z, top_number, v)
     ladon_units(units, used_ids, z, top_number, v)
+    # (THE DEAL's targets, 2026-11-23: the units in build_survival_units.deal_units; placed here, where place() is)
+    parts, cu, cyaw, lanes, dpaths, dsrc = deal_units(units, used_ids, z, top_number, v)
+    place(cu, lanes[0][0], cyaw, [r[0] for r in lanes])
+    unit_area(cu, survival_events.DEAL_TARGET_AREA_M, survival_events.DEAL_TARGET_ALT_M)
+    for name, route in zip(survival_events.DEAL_CARGO_PATHS, lanes):
+        dpaths.append(make_path(z, used_ids, dsrc, name, route, smooth=True))
+    print(f'  the deal: {survival_events.DEAL_PODARGE_UNIT} (Mission 12 {survival_events.DEAL_PODARGE_SOURCE}, {parts} parts), '
+          f'{survival_events.DEAL_CARGO_UNIT} ({survival_events.DEAL_CARGO_N} x {survival_events.DEAL_CARGO_NPC}), '
+          f'{1 + len(lanes)} paths')
     heavy_paths(used_ids, z, v)
     alcn_units(units, used_ids, z, top_number, v)
     valka_unit(units, used_ids, z, top_number)

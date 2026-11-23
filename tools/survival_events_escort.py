@@ -53,7 +53,9 @@ ESC_CHAR_HEALTH_ADD = 170.0             # 130 + 170 = 300 HP (Lua may set her he
 # the main menu (hard rule 20: before the level loads).
 ESC_ROWS = {'sv_esc_su57': ('SV_Esc_Su57', 'OP1021_su57_01', 'OP1021_su57_Ally'),
             'sv_esc_su33': ('SV_Esc_Su33', 'OP1030_su33_01', 'OP1030_su33_Ally'),
-            'sv_esc_su35': ('SV_Esc_Su35', 'OP1028_su35_01', 'OP1028_su35_Ally')}
+            'sv_esc_su35': ('SV_Esc_Su35', 'OP1028_su35_01', 'OP1028_su35_Ally'),
+            # ((2026-11-23) THE DEAL's WAR & HAYTHORN, an allied F/A-18F: survival_events_deal.py)
+            'sv_deal_f18f': ('SV_Deal_F18f', 'OP1024_f18f_01', 'OP1024_f18f_Ally')}
 ESC_ROW_TEMPLATE = 'f18e_common'        # (MOONCHILD's mission row's shape)
 # speeds, km/h (ESCORT.md 1.2's table: Mission 14's landing values; the B-1's SpeedMin 300 and the Su-57's 750 are the
 # models', a path's speed overrides them as MOONCHILD's 50 km/h taxi does)
