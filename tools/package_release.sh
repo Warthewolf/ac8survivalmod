@@ -52,11 +52,17 @@ fi
 # staged as a tester's and its test keys then switched off (tools/no_test_keys.py); named ..._TANACORN without _TESTER.
 # Packed from the same TANI=1 build as the tester's, it has the same version: the two link in co-op. Never a Nexus zip:
 # TANI=1 still needs TESTER=1 or FRIENDS=1, never both.
+# ((2026-11-23) the user: "tanacorn gets merged into the public release", "Everything of hers" (the Iowa hull, the AC7 crew
+# voices)) PUBLIC=1 TANI=1: the public zip WITH THE TANACORN, packed as the friends' (her container, the fleet, its storm,
+# the crew voices style C, round 30's subtitles, the test keys off) with the public's quiet loggers, her lasers' Laser7
+# container (AC7's LaserInterceptor) kept without ZFA=1, and the public name (no _TANACORN): release_push.sh's zip
 TANIZIP=
+[ "$PUBLIC" = 1 ] && { [ "$TANI" = 1 ] || { echo "package_release.sh: PUBLIC=1 only with TANI=1 (the public zip with THE TANACORN)"; exit 1; }; }
+[ "$PUBLIC" = 1 ] && { [ "$FRIENDS" = 1 ] || [ "$TESTER" = 1 ]; } && { echo "package_release.sh: PUBLIC=1 not with FRIENDS=1 or TESTER=1"; exit 1; }
 [ "$FRIENDS" = 1 ] && [ "$TANI" != 1 ] && { echo "package_release.sh: FRIENDS=1 only with TANI=1 (the friends' zip with THE TANACORN)"; exit 1; }
 [ "$FRIENDS" = 1 ] && [ "$TESTER" = 1 ] && { echo "package_release.sh: FRIENDS=1 or TESTER=1, not both"; exit 1; }
 if [ "$TANI" = 1 ]; then
-    [ "$TESTER" = 1 ] || [ "$FRIENDS" = 1 ] || { echo "package_release.sh: TANI=1 only with TESTER=1 or FRIENDS=1 (a Nexus zip never carries THE TANACORN)"; exit 1; }
+    [ "$TESTER" = 1 ] || [ "$FRIENDS" = 1 ] || [ "$PUBLIC" = 1 ] || { echo "package_release.sh: TANI=1 only with TESTER=1, FRIENDS=1 or PUBLIC=1"; exit 1; }
     [ -f build/install/tani_wd.txt ] || { echo "package_release.sh: TANI=1 needs a TANI=1 build (ZFA=1 TANI=1 sh tools/build_all.sh)"; exit 1; }
     tc=build/install/SurvivalMode/SurvivalMode_Tani_P.utoc
     [ -f "$tc" ] || { echo "package_release.sh: TANI=1: no Tanicorn container staged ($tc)"; exit 1; }
@@ -87,7 +93,9 @@ if [ "$ZFA" = 1 ]; then
     fi
     echo "ZFA=1: the ZFA-44 kept (its container and Scripts/sv_zfa44.lua)"
 else
-rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ZFA44_P.* "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Laser7_P.*   # (and its weapon, AC7's LaserInterceptor)
+rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_ZFA44_P.*
+# (and its weapon, AC7's LaserInterceptor: kept in a zip with THE TANACORN, whose LASER mounts fire it)
+[ "$TANIZIP" = 1 ] || rm -f "$st"/ue4ss/Mods/IoStoreLoaderMod/SurvivalMode/SurvivalMode_Laser7_P.*
 if [ -f "$mod/Scripts/sv_zfa44.lua" ]; then
     head -n 1 "$mod/Scripts/sv_zfa44.lua" > "$mod/Scripts/sv_zfa44.lua.tmp" && mv "$mod/Scripts/sv_zfa44.lua.tmp" "$mod/Scripts/sv_zfa44.lua"
 fi
@@ -128,14 +136,20 @@ fi
 # TESTER=1: a tester's build (user, 2026-11-03: "give me a tester version for alyssa"): the test keys (force a special,
 # zollars, ...) and the diagnostic loggers KEPT, everything else as the friends' zip; named ..._<version>_TESTER_...
 # Only for the tester the user names: every other zip strips them (user, 2026-10-23: test keys out of releases).
-if [ "$TESTER" = 1 ] || [ "$FRIENDS" = 1 ]; then
+if [ "$TESTER" = 1 ] || [ "$FRIENDS" = 1 ] || [ "$PUBLIC" = 1 ]; then
     # ((2026-11-12, the review of the fleet's first build, finding 2) but round 30's INVINCIBLE FLEET and THE TANICORN, the
     # user's dev install only (AGENTS.md): their parts sv_fleet / sv_tanicorn / sv_cine cut to their headers, as a release
     # has them (tools/dev_only.py; their units and rows are in every build, spawned by nothing then). Until then a TESTER
     # zip kept them whole: Ctrl+N would have spawned the whole fleet in a tester's game.)
     python -X utf8 -I tools/dev_only.py ${TANIZIP:+--keep-tani} "$mod" || exit 1
-    if [ "$FRIENDS" = 1 ]; then
+    if [ "$FRIENDS" = 1 ] || [ "$PUBLIC" = 1 ]; then
         python -X utf8 -I tools/no_test_keys.py "$mod" || exit 1
+        if [ "$PUBLIC" = 1 ]; then
+            python -X utf8 -I tools/quiet_logs.py "$mod"   # (the public's loggers off, as every Nexus zip)
+            # (the default ini's TEST ONLY sections out, as every Nexus zip: Distant Thunder's [thunder] among them. Its Lua
+            # stays: its round is cut since 2026-11-18, only the storm pieces the fleet's night storm calls are left)
+            python -I tools/strip_test_only.py "$mod"/config/survival.default.ini
+        fi
         echo "FRIENDS=1: round 30 and the diagnostic loggers kept, the test keys off ($(grep -c 'TEST ONLY BEGIN' "$mod"/Scripts/*.lua | awk -F: '{s+=$2} END {print s}') test blocks)"
     else
     echo "TESTER=1: test keys and the diagnostic loggers kept ($(grep -c 'TEST ONLY BEGIN' "$mod"/Scripts/*.lua | awk -F: '{s+=$2} END {print s}') test blocks)"
@@ -181,7 +195,7 @@ python -I tools/edition.py "$ed" "$mod"/Scripts/*.lua "$mod/config/survival.defa
 python -X utf8 -I tools/checks/lua_check.py "$mod"/Scripts/*.lua
 # the last look before the zip: nothing of the user's install only (tools/checks/zip_leak_test.sh)
 ZIP_GUARD_TANI=$TANIZIP sh tools/zip_guard.sh "$st"
-[ "$TANIZIP" = 1 ] && suffix="${suffix}_TANACORN"
+[ "$TANIZIP" = 1 ] && [ "$PUBLIC" != 1 ] && suffix="${suffix}_TANACORN"
 # BUILD_NAME=<name>: a build line's own name in the zip's (BUILD_NAME=COOP2MP: docs/re/COOP2MP.md)
 tv=$ver; [ "$TESTER" = 1 ] && tv="${ver}_TESTER"
 . tools/release_dir.sh

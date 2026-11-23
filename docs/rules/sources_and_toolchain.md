@@ -24,7 +24,8 @@ Moved verbatim from AGENTS.md (2026-11-14). The exceptions and the user's quotes
   the voice lines before they go in"): the Alicorn crew's radio lines (Captain Torres and the Sub crew of AC7's DLC
   missions ex01-ex03), distorted (tools/ac7_voice.py, tools/ac7_voice_fx.py), for THE TANACORN only, and each line heard by
   the user before it goes in. No other AC7 voice line. Where they go (user, 2026-11-18: "The AC7 lines that you created go in
-  also"): the dev install and every zip WITH THE TANACORN (TESTER=1 TANI=1, FRIENDS=1 TANI=1); never a Nexus zip or one without her.
+  also"): the dev install and every zip WITH THE TANACORN (TESTER=1 TANI=1, FRIENDS=1 TANI=1, and since 0.75.60 the public
+  zip, PUBLIC=1 TANI=1: the user, 2026-11-23, "Everything of hers"); never a zip without her.
 
 - No other mod's files, assets, tables, values or text go into Survival's build, mod/, tools/, this repo (docs and
   commit messages included) or a release zip, and nothing here names or credits another mod as the source of an enemy
@@ -47,9 +48,10 @@ Moved verbatim from AGENTS.md (2026-11-14). The exceptions and the user's quotes
   / sv_leaderboard when editing those (ADDONS_MAINTAINING.md). Other people's PRs still need the user's yes, each one.
 - THE TANICORN (docs/re/TANICORN.md): the user's Anomaly boss fused from AC8's Alicorn and Sea Power's Iowa (standing in
   for the Tanager). Its model and art are in art/tanicorn at the user's request (2026-11-10: "you are allowed to push the
-  model"); its cooked container still ships in TANI=1 dev builds only (package_release.sh drops it). Round 30's
-  INVINCIBLE FLEET, whose boss it is (docs/design/INVINCIBLE_FLEET.md), is the user's dev install only too (user,
-  2026-11-10: "Keep it dev install only"): its Lua in DEV ONLY blocks, never in a release or TESTER zip
+  model"); its cooked container ships in every zip WITH THE TANACORN, the public one included since 0.75.60 (the user,
+  2026-11-23: "tanacorn gets merged into the public release", "Everything of hers": the Iowa hull and the AC7 crew voices
+  in the public GitHub / Nexus zip, her decision knowing both are other games' assets). Round 30's INVINCIBLE FLEET, whose
+  boss it is (docs/design/INVINCIBLE_FLEET.md), goes with her: its Lua in DEV ONLY blocks, kept in every zip with her
   (tools/strip_test_only.py takes them out of every zip; package_dev.sh keeps them; THE TANICORN's test mount too;
   tools/dev_only.py cuts sv_tanicorn (and its pieces _rise, _hits) / sv_fleet (and its pieces _storm, _round, _lasers, _surface, _capture) / sv_cine to their headers in a TESTER zip). Its live parts' world data
   (child descs importing the container's blueprints) is built with TANI=1 only: such a build leaves build/install/tani_wd.txt,
@@ -65,15 +67,16 @@ Moved verbatim from AGENTS.md (2026-11-14). The exceptions and the user's quotes
   data names; the zip is named ..._TANACORN. Everyone plays round 30 (user, 2026-11-18: "Everyone gets the invincible fleet
   level", "But only alyssa has the keys that activate it for everyone"): `FRIENDS=1 TANI=1 package_release.sh` makes the
   friends' ..._TANACORN zip from the same TANI=1 build as hers, staged as a tester's with its test keys off
-  (tools/no_test_keys.py); same build, same version, so they link in co-op. TANI=1 needs TESTER=1 or FRIENDS=1: never a Nexus zip.
+  (tools/no_test_keys.py); same build, same version, so they link in co-op. TANI=1 needs TESTER=1, FRIENDS=1 or PUBLIC=1
+  (the public zip: packed as the friends', the loggers quiet, the ini's TEST ONLY sections out, her lasers' Laser7 kept,
+  the public name; zip_leak_test checks it).
 - DISTANT THUNDER's round is retired (user, 2026-11-18: "It was replaced by Invincible Fleet instead"): its round and test
   keys are cut; only its storm pieces stay, for the fleet's night storm (docs/re/THUNDER.md).
-- Nothing of DISTANT THUNDER (the lightning Anomaly, docs/re/THUNDER.md) or THE TANACORN (and her INVINCIBLE FLEET) goes
-  into a release build, friends' or Nexus (user, 2026-11-14: "Anything that has to do with Distant Thunder or Tanacorn
-  does not go into the release build"). Their Lua stays in TEST ONLY / DEV ONLY blocks or test-only pieces, their assets
-  in their own containers; tools/checks/zip_leak_test.sh opens every release zip and fails on either (no Tanicorn
-  container, no DEV ONLY Lua, no Thunder trace in its Lua or ini). TESTER zips stay as the user set them (2026-11-03,
-  2026-11-12).
+- Nothing of DISTANT THUNDER (the lightning Anomaly, docs/re/THUNDER.md) goes into a release build (user, 2026-11-14;
+  retired 2026-11-18): no way to start its round, nothing of it in the ini. Its storm pieces (sv_anomalies_dev.lua's
+  THUNDER bolts and clouds) ship in every zip with THE TANACORN: the fleet's night storm calls them. THE TANACORN was in
+  that rule too until 2026-11-23 (above). tools/checks/zip_leak_test.sh opens every release zip and checks both. TESTER
+  zips stay as the user set them (2026-11-03, 2026-11-12).
 - Release zips always go to the main tree's build/release (git's main working tree), from any worktree (user,
   2026-11-07): tools/package_release.sh and package_test.sh find it through tools/release_dir.sh (`RELEASE_DIR` in
   `.env` overrides it).

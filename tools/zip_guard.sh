@@ -1,8 +1,8 @@
 #!/bin/sh
 # zip_guard.sh <stage folder> : the last look at a staged zip before tools/package_release.sh / package_test.sh pack it.
 # Refuses (exit 1) when the stage holds anything that is the user's own install only (AGENTS.md):
-#   THE TANICORN's container (SurvivalMode_Tani_P.*: the Tanager stand-in is Sea Power's Iowa; TANI=1 dev builds only,
-#   tools/package_dev.sh)
+#   THE TANICORN's container (SurvivalMode_Tani_P.*: the Tanager stand-in is Sea Power's Iowa), unless the zip is one WITH
+#   THE TANACORN (ZIP_GUARD_TANI=1: TESTER=1 / FRIENDS=1 / PUBLIC=1 with TANI=1, package_release.sh)
 # tools/checks/zip_leak_test.sh runs both packagers over a made-up build and checks this.
 st=$1
 [ -d "$st" ] || { echo "zip_guard.sh: no stage folder $st"; exit 2; }
