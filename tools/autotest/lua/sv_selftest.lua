@@ -6567,6 +6567,47 @@ SUITES.ulytrails = function()
     A.wait(2)
 end
 
+-- ((2026-11-24, the user's Lost Butterfly reference: AC:I's sky meteors are thin glowing lines) streak looks side by side
+-- at the sky's distance: rows (the top first) crossing the view 25 km out, 18 km up; pictured from 2 km over the plane,
+-- then from 9 km off
+SUITES.ulylines = function()
+    intoRun()
+    local ROWS = {
+        { "now: the lit gradient tube with its rock", nil },
+        { "the gradient, no rock, thin", { hide_rock = true, tail_r = 0.25 } },
+        { "MI_TrainingRing (additive), no rock, thin", { paint = "line_ring", hide_rock = true, tail_r = 0.25 } },
+        { "MI_TrainingRing (additive), no rock, thicker", { paint = "line_ring", hide_rock = true, tail_r = 0.6 } },
+        { "the ring's haze (flat), no rock, thin", { paint = "line_haze", hide_rock = true, tail_r = 0.25 } },
+        { "the ring's haze (flat), no rock, thicker", { paint = "line_haze", hide_rock = true, tail_r = 0.6 } },
+    }
+    local T = { rocks = {} }
+    A.wait(8)
+    A.do_(function()
+        if not ST.check(ULY ~= nil and ULY.testRock ~= nil, "ULYSSES' test rock is in this build") then return "abort" end
+        local me = playerLocation and playerLocation()
+        local yaw = 0
+        pcall(function() yaw = survivalPC:GetControlRotation().Yaw end)
+        local f = { X = math.cos(math.rad(yaw)), Y = math.sin(math.rad(yaw)) }
+        local r = { X = -f.Y, Y = f.X }
+        T.C = { X = me.X, Y = me.Y, Z = me.Z + 200000 }
+        T.F, T.R = f, r
+        T.look = { X = T.C.X + f.X * 2500000, Y = T.C.Y + f.Y * 2500000, Z = 1800000 }
+        for i, row in ipairs(ROWS) do
+            local at = { X = T.look.X - r.X * 2000000, Y = T.look.Y - r.Y * 2000000, Z = T.look.Z + (#ROWS / 2 - i + 0.5) * 150000 }
+            local rk = ULY.testRock("C", at, { X = r.X * 300000, Y = r.Y * 300000, Z = -30000 }, 15, {}, row[2], 1.5)
+            T.rocks[#T.rocks + 1] = rk
+            ST.info(string.format("row %d (top first): %s: %s", i, row[1], rk and "up" or "NOT up"))
+        end
+    end)
+    A.wait(6)
+    A.picture("l_from_the_plane", function() return T.C end, function() return T.look end, 60)
+    A.picture("l_closer", function()
+        return T.look and { X = T.look.X - T.F.X * 900000, Y = T.look.Y - T.F.Y * 900000, Z = T.look.Z - 300000 }
+    end, function() return T.look end, 60)
+    A.do_(function() for _, rk in ipairs(T.rocks) do pcall(ULY.testRockOff, rk) end end)
+    A.wait(2)
+end
+
 local function tick()
     if finished then return end
     local now = os.clock()
