@@ -6430,12 +6430,13 @@ SUITES.ulysses2 = function()
     end)
     -- ((the run of 0.75.83: the game crashed at round 2's start after a minute's break, the sky's meteors flown on
     -- untouched and freed) a minute of the break kept, as there, before round 2 is brought on
-    A.wait(60)
-    A.until_(function()                                  -- (the next round sooner, once the break has begun)
+    A.until_(function()                                  -- (the break held to a minute, once it has begun)
         if D.state ~= "wait" then return false end
-        D.at, D.announced = math.min(D.at or D.now, D.now + 3), false
+        D.at, D.announced = D.now + 60, false
         return true
-    end, 60, function(v) ST.info("the break shortened: " .. tostring(v ~= nil)) end)
+    end, 60, function(v) ST.info("the break held to 60 s: " .. tostring(v ~= nil)) end)
+    A.wait(50)
+    A.do_(function() ST.shot("v_break_sky") end)
     A.log_("ulysses: round %d+: phase 2 of 2", 120, "v2", false, function(l)
         if not ST.check(l ~= nil, "its second round started (phase 2: the core)", l) then return "abort" end
     end)
