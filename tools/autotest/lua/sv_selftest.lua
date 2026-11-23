@@ -6428,6 +6428,9 @@ SUITES.ulysses2 = function()
         D.forceSpecial = "ulysses"
         ST.doing = "ULYSSES round 2"
     end)
+    -- ((the run of 0.75.83: the game crashed at round 2's start after a minute's break, the sky's meteors flown on
+    -- untouched and freed) a minute of the break kept, as there, before round 2 is brought on
+    A.wait(60)
     A.until_(function()                                  -- (the next round sooner, once the break has begun)
         if D.state ~= "wait" then return false end
         D.at, D.announced = math.min(D.at or D.now, D.now + 3), false
