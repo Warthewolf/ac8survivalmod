@@ -235,6 +235,14 @@ D.state = "wait"; runD(0.5)
 check(logged("cargo over (the round's over): 2 of 12 down, 10 left") and recycles[#recycles]:find("^SV_Unit_DealCargo") and
     lastCallout() == "THE DEAL: TARGET ESCAPED", "the round's over: the last one taken off unpaid, TARGET ESCAPED")
 
+-- the fleet outside the combat zone: never (2026-11-23, "the fleet spawned out of the combat zone"): the dice's spot here is
+-- ~30 km east of the airfield, past the zone's east edge (sv_ai.lua ZONE)
+ZONE = { X = -707336.0, Y = -261895.0, HALF = 3700000.0 }
+reset(); C.deals = { podarge = 0, fleet = 1, cargo = 0 }; newBreak(9)
+runD(C.offer_after_s + 7); binds[65](); runD(0.25)
+nextRound(); runD(C.targets_after_s + 2)
+check(logged("no open water found for the fleet") and not logged("the fleet's spot at sea:"), "a spot past the combat zone's edge: never taken")
+ZONE = { X = 0, Y = 0, HALF = 1e9 }                           -- (a zone holding the dice's spot, for the cases below)
 -- the fleet: the first two groups' ships
 reset(); C.deals = { podarge = 0, fleet = 1, cargo = 0 }; newBreak(10)
 runD(C.offer_after_s + 7); binds[65](); runD(0.25)
