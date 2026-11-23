@@ -6222,6 +6222,110 @@ local function finish(why)
     say(string.format("RESULT %d/%d (suite %s)%s", ST.pass, ST.pass + ST.fail, tostring(ST.conf.suite),
         aborted and " (stopped early: a step it needed failed)" or ""))
 end
+-- (2026-11-23) ULYSSES (sv_ulysses.lua, 0.75.70; the user: "do a test and send me screenshots of it"): round 1 forced to
+-- ULYSSES phase 2 (the shower and the core: config_ulysses.lua brings the core in at 25 s, the fragments sooner); its
+-- start line (the film look's settings, the targets borrowed, the paint), pictures of your view, of a falling fragment
+-- from beside it, of the sky's meteors from over the airfield, one fragment finished off (its target at its floor: shot
+-- down, paid), one landing, the core up and pictured, the round's end (PRESENT DAY)
+SUITES.ulysses = function()
+    intoRun()
+    local function frags()
+        local U = ULY and ULY.debug and select(1, ULY.debug())
+        local out = {}
+        for _, x in ipairs(U and U.list or {}) do
+            if not x.done and x.r and x.r.a then
+                local ok, L = pcall(function() return x.r.a:K2_GetActorLocation() end)
+                if ok and L then out[#out + 1] = { x = x, L = { X = L.X, Y = L.Y, Z = L.Z } } end
+            end
+        end
+        return out
+    end
+    local function pick(big)
+        for _, f in ipairs(frags()) do if (f.x.big == true) == big then return f end end
+        return nil
+    end
+    -- a camera `back` m off fragment f along its way back and `up` m up, onto it
+    local function beside(big, back, side)
+        return function()
+            local f = pick(big)
+            if not f then return nil end
+            local v = f.x.r.pm and f.x.r.pm.Velocity
+            local vx, vy, vz = 0, 0, -1
+            pcall(function() vx, vy, vz = v.X, v.Y, v.Z end)
+            local m = math.sqrt(vx * vx + vy * vy + vz * vz)
+            if m < 1 then m = 1 end
+            return { X = f.L.X - vx / m * back * 100 + side * 100, Y = f.L.Y - vy / m * back * 100, Z = f.L.Z - vz / m * back * 100 + 3000 }
+        end, function() local f = pick(big); return f and f.L end
+    end
+    A.do_(function()
+        if not ST.check(ULY ~= nil and SPC.kinds.ulysses ~= nil, "ULYSSES is in this build") then return "abort" end
+        ST.marks.u0 = ST.n
+        ULY.forcedPhase = 2
+        D.forceSpecial = "ulysses"
+        if D.state == "wait" then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+        ST.info(string.format("ULYSSES forced: round %d (phase 2), state %s", (D.round or 0) + 1, tostring(D.state)))
+        ST.doing = "ULYSSES' start"
+    end)
+    A.log_("ulysses: round %d+: phase 2 of 2", 60, "u0", true, function(l)
+        if not ST.check(l ~= nil, "its round started (phase 2: the shower and the core)", l) then return "abort" end
+        ST.check(l:find("4 of 4 settings written", 1, true) ~= nil, "the film look: its 4 settings written", l)
+    end)
+    A.log_("ulysses: targets: SV_Unit_SOLG_KEW up", 10, "u0", true, function(l)
+        ST.check(l ~= nil and not l:find(" 0 objects", 1, true), "its fragments' targets borrowed (the SOLG's KEW)", l)
+    end)
+    A.wait(3)
+    A.do_(function() ST.shot("u_start_your_view") end)
+    A.log_("ulysses: paint: the rock's instance made", 30, "u0", true, function(l)
+        ST.check(l ~= nil, "the rocks painted (the x40a's gear material with the rock's textures)", l)
+    end)
+    A.until_(function() return #frags() >= 2 end, 40, function(v)
+        ST.check(v ~= nil, "fragments falling", string.format("%d up", #frags()))
+    end)
+    A.picture("u_fragment_close", beside(false, 120, 40))
+    A.picture("u_fragment_trail", beside(false, 600, 200))
+    A.do_(function() ST.shot("u_your_view_2") end)
+    A.picture("u_sky_from_airfield", function() return { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 60000 } end,
+        function()
+            local _, SK = ULY.debug()
+            local m = SK and SK.list and SK.list[1]
+            local ok, L = pcall(function() return m.r.a:K2_GetActorLocation() end)
+            if ok and L then return { X = L.X, Y = L.Y, Z = L.Z } end
+            return { X = AIRFIELD.X + 2000000, Y = AIRFIELD.Y, Z = 2000000 }
+        end, 70)
+    A.do_(function()                                     -- (one shot down: its target at its floor, as a missile would)
+        ST.marks.u1 = ST.n
+        local f = pick(false)
+        local ok = f and f.x.e and pcall(function() f.x.e.o.HealthInternal = 10 end)
+        ST.info("a fragment's target put at its floor: " .. tostring(ok))
+    end)
+    A.log_("ulysses: a fragment shot down", 10, "u1", true, function(l)
+        ST.check(l ~= nil and l:find("paid", 1, true) ~= nil, "a fragment shot down and paid", l)
+    end)
+    A.wait(1)
+    A.do_(function() ST.shot("u_shot_down") end)
+    A.log_("ulysses: the core inbound: up", 60, "u0", true, function(l)
+        ST.check(l ~= nil, "the core inbound", l)
+    end)
+    A.wait(4)
+    A.picture("u_core_close", beside(true, 1500, 500), nil, 60)
+    A.picture("u_core_far", beside(true, 5000, 2000), nil, 60)
+    A.do_(function() ST.shot("u_core_your_view") end)
+    A.log_("ulysses: a fragment landed", 90, "u0", true, function(l)
+        ST.check(l ~= nil, "a fragment landed (the airfield's damage or the town's)", l)
+    end)
+    A.do_(function()                                     -- (the round's end sooner: the rest finished off)
+        ST.marks.u2 = ST.n
+        for _, f in ipairs(frags()) do pcall(function() f.x.e.o.HealthInternal = 10 end) end
+        if ULY.debug then local U = ULY.debug(); if U then U.todo = U.sent; U.bigSent = true end end
+    end)
+    A.log_("ulysses: round %d+ over", 60, "u2", true, function(l)
+        ST.check(l ~= nil, "its round over", l)
+    end)
+    A.wait(2)
+    A.do_(function() ST.shot("u_present_day") end)
+    A.wait(3)
+end
+
 local function tick()
     if finished then return end
     local now = os.clock()
