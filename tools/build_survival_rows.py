@@ -114,7 +114,6 @@ def build_radio():
     put(row, 'bUseYesNoSubtitle', ('raw', 'Bool', b'\x01'))
     grp = survival_events.DEAL_RADIO_GROUP
     assert grp not in have
-    voiced = copy.deepcopy(row)
     for q in tpl[2]:                                   # (every mission flag on, as the tells' row 382)
         if q[1].startswith('bM') and q[1][2:].isdigit():
             setf(row, q[1], q[3])
@@ -127,26 +126,7 @@ def build_radio():
     for n in names_in(row) + [grp, survival_events.DEAL_RADIO_TEXT, survival_events.DEAL_ASK_ID]: z.nb.add(n)
     keep.append(((grp, 0), row))
     have.add(grp)
-    vgrp = survival_events.DEAL_RADIO_VOICED[0]       # (the voiced twin: the row's own stock line and voice)
-    for q in tpl[2]:
-        if q[1].startswith('bM') and q[1][2:].isdigit():
-            setf(voiced, q[1], q[3])
-    setf(voiced, 'RadioGroupID', survival_events.fname(vgrp))
-    put(voiced, 'YesNoID', survival_events.fname(survival_events.DEAL_ASK_ID))
-    assert field(voiced, 'YesNoID') == survival_events.fname(survival_events.DEAL_ASK_ID) and field(voiced, 'bUseYesNoSubtitle') == ('raw', 'Bool', b'\x01')
-    setf(voiced, 'LimitPlayCount', ('raw', 'Int8', b'\x00'))
-    assert full(field(voiced, 'TextID')) + '_Play' in voice, 'the voiced twin has no voice'
-    for n in names_in(voiced) + [vgrp]: z.nb.add(n)
-    keep.append(((vgrp, 0), voiced))
-    have.add(vgrp)
-    cgrp = survival_events.DEAL_RADIO_CONTROL[0]      # (the control: the voiced line with no Yes / No)
-    ctrl = copy.deepcopy(voiced)
-    setf(ctrl, 'RadioGroupID', survival_events.fname(cgrp))
-    ctrl[2][:] = [q for q in ctrl[2] if q[1] not in ('YesNoID', 'bUseYesNoSubtitle')]
-    for n in names_in(ctrl) + [cgrp]: z.nb.add(n)
-    keep.append(((cgrp, 0), ctrl))
-    have.add(cgrp)
-    print(f'  radio: THE DEAL\'s question {grp} (text only, {flags_on} mission flags on) and {vgrp} ({full(field(voiced, "TextID"))})')
+    print(f'  radio: THE DEAL\'s question {grp} (text only, {flags_on} mission flags on, {survival_events.DEAL_ASK_ID})')
     # ((2026-11-11) the user: "Use the Mission 22 radio lines for the rocket warning") the Spaceport rockets' lines
     # (survival_events.SP_RADIO), each a group of its own with LimitPlayCount 0 (a stock ms022 row's 1 would leave it
     # silent once the shuttle round's countdown had played it): a 'group' its ms022 rows copied in their order (Baxter's
@@ -546,17 +526,6 @@ def build_rows():
                      'LiveLevelTable', 'Mission022', 'SurvivalMode', edit_mission_row)
     build_npc_rows()
     build_model_rows()
-    # ((2026-11-23) THE DEAL's question, survival_events.DEAL_QUESTION: a copy of DT_YesNo's first row)
-    yn = uprop.U.schema('LiveYesNoDataTable')
-    yn_idx = {n: k for k, (n, t) in yn.items()}
-
-    def edit_deal_yesno(props):
-        set_prop(props, yn_idx['YesNoID'], 'YesNoID', ('name', survival_events.DEAL_QUESTION, 0))
-        set_prop(props, yn_idx['AnswerTimeLimit'], 'AnswerTimeLimit',
-                 ('raw', 'Float', struct.pack('<f', survival_events.DEAL_ANSWER_S)))
-    build_rows_table('/Game/Datatables/YesOrNo/DT_YesNo', DATA + survival_events.DEAL_YESNO_TABLE, 'LiveYesNoDataTable',
-                     'NewRow', survival_events.DEAL_QUESTION, edit_deal_yesno)
-    print(f'  {survival_events.DEAL_YESNO_TABLE}: {survival_events.DEAL_QUESTION} ({survival_events.DEAL_ANSWER_S:.0f} s)')
     build_rows_table('/Game/Datatables/UI/Menu/MainMenu/Top/DT_LiveMenuMainTopCommands', DATA + 'DT_SV_MenuRows',
                      'LiveMenuCommandsDataTable', 'Campaign', 'SurvivalMode', edit_menu_row,
                      more=[('SurvivalCoopHost', edit_coop_host_row), ('SurvivalCoopJoin', edit_coop_join_row),

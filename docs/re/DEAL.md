@@ -16,10 +16,18 @@ Characters: War (back seat, does the talking, the main character) and Haythorn (
    `SV_DealHornet` = WAR & HAYTHORN) is spawned 1.5 km ahead and 0.7 km right of you, 150 m up (700 m when you're on
    the ground). A second on, the event zoom: `RE_SV_DealCam` (Mission 22's shuttle focus camera,
    `LookAt_Event_Camera_ms22-01`, onto `SV_Obj_DealHornet`, off after 4 s).
-3. **The question.** War's introduction, then the vote: AC8's own Yes / No (Mission 8's
-   `LiveActivateYesNoExecution` and its three `YesNoEvent` triggers, cloned: `RE_SV_DealAsk` opens it on each game, the
-   answer in the int flag `SV_DealAns`: 1 YES (Left), 2 NO (Right), 3 silence (TimeOut)). Ctrl+A / Ctrl+X still vote.
-   `vote_s` 30 s. The most votes win; a tie is NO; nobody voting is silence.
+3. **The question.** War's introduction, then the vote. War's question goes out on the radio, text only (DT_SV_Radio's
+   `SV_DealRadio_Ask`: the tells' row 382 with TextID `SV_Radio_DealAsk`, whose text Lua sets, and
+   `YesNoID ms22_01_AWACS_Yes_No_Q` + `bUseYesNoSubtitle`), played by `RE_SV_DealAsk` through Survival's own radio node
+   (Mission 22's `CompositeEvent_CountDown_1`); AC8's Yes / No box shows under it, Mission 22's own question, so 4 s to
+   answer (every stock question is 2.2-4 s; the user: "Keep the 4 seconds"). Mission 22's own YesNoEvent triggers
+   (Left YES, Right NO, TimeOut silence) put the answer in the int flag `SV_DealAns` (1 / 2 / 3); Ctrl+A / Ctrl+X vote
+   for the rest of `vote_s` (30 s). The most votes win; a tie is NO; nobody voting is silence.
+   What didn't work (2026-11-23, autotest suite `deal`): Mission 8's radio node and triggers copied in (another package's
+   names: never played / matched); LiveActivateYesNoExecution; a question row of Survival's own added to DT_YesNo, and
+   Mission 22's row's AnswerTimeLimit changed in the table (read back 26 s) at the run's start or as Survival's world is
+   made: the box keeps the shipped time, so the Yes / No system copies the table earlier (its `YesNoDataMap_` isn't
+   readable from UE4SS Lua).
 4. **The break is held** while the deal's on (`hold_break`): the next round's start (`D.at`) is pushed back to the
    vote's end and the result.
 5. **The result**, then the Hornet turns away (`RE_SV_DealLeave`: the path `SV_Path_DealHornetOut`, far north east) and

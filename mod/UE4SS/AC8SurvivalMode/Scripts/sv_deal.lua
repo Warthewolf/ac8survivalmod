@@ -45,14 +45,8 @@ CFG.specials.deal = {
     resend_s = 2,
     keys = { yes = "A", no = "X", ctrl = true },
     -- (radio_key / radio_text: the radio line War's question is asked with, AC8's Yes / No under it; text only)
-    prompt = { enabled = true, event = "RE_SV_DealAsk", flag = "SV_DealAns", question = "SV_Deal_Question",
-               radio_key = "SV_Radio_DealAsk", radio_text = "WAR: Do we have a deal? YES or NO.",
-               -- ((2026-11-23) the user: "Change Mission 22's entry from 4 to 30 seconds while a Survival run is on")
-               -- the stock question War's line names (ms22_01_AWACS_Yes_No_Q, DT_YesNo's NewRow_19, 4 s): its
-               -- AnswerTimeLimit answer_s while a run is on (the box shut a little before the vote), the shipped 4 s
-               -- back as the run ends or the level goes; in the table and in the Yes / No system's own map
-               stock_id = "ms22_01_AWACS_Yes_No_Q", stock_row = "NewRow_19", answer_s = 26,
-               rows = "/Game/Mods/SurvivalMode/Data/DT_SV_YesNo.DT_SV_YesNo", table = "/Game/Datatables/YesOrNo/DT_YesNo.DT_YesNo" },
+    prompt = { enabled = true, event = "RE_SV_DealAsk", flag = "SV_DealAns",
+               radio_key = "SV_Radio_DealAsk", radio_text = "WAR: Do we have a deal? YES or NO." },
     result_row_s = 8,
     leave_after_s = 7,
     -- (dt_npc: its DT_NPC row, DT_SV_NpcRows' allied F/A-18F, added at the main menu: without it the unit spawns no plane,
@@ -763,110 +757,20 @@ local function promptTick()
 end
 DEAL.promptTick = promptTick
 
--- Mission 22's question's time while a run is on (cfg().prompt.stock_*, answer_s), put back after
-local YT = { on = false, orig = nil, map = nil }
-local function sameId(v, want)
-    local ok, sv = pcall(function() return v:ToString() end)
-    if not ok then sv = tostring(v) end
-    return sv == want
-end
--- the Yes / No system's own entry for the question (LiveYesNoRadioWorldSubsystem.YesNoDataMap_), or nil and why
-local function ynEntry(id)
-    local ss = FindFirstOf and FindFirstOf("LiveYesNoRadioWorldSubsystem")
-    if not (ss and valid(ss)) then return nil, "no Yes / No system" end
-    local found, n = nil, 0
-    local ok, err = pcall(function()
-        ss.YesNoDataMap_:ForEach(function(k, v)
-            n = n + 1
-            local okK, key = pcall(function() return k:get() end)
-            if okK and sameId(key, id) then found = v:get() end
-        end)
-    end)
-    if not ok then return nil, "its map not read: " .. tostring(err) end
-    if not found then return nil, string.format("not in its map (%d entries)", n) end
-    return found, n
-end
--- (findOnly: from the world's construction, where nothing may be loaded: the table only if it's in memory already)
-function DEAL.yesnoTime(on, findOnly, why)
-    local p = cfg().prompt
-    if not (p and p.stock_id and p.stock_row) or on == YT.on then return end
-    local path = "/Game/Datatables/YesOrNo/DT_YesNo.DT_YesNo"
-    local dt = StaticFindObject(path)
-    if not (dt and valid(dt)) then dt = (not findOnly) and loadObject(path) or nil end
-    if not dt then
-        if findOnly then log("deal: DT_YesNo isn't loaded as Survival's world is made: the answer time at the run's start") end
-        return
-    end
-    local said = {}
-    if dt then
-        local _, r = dtCall(dt, "FindRow", p.stock_row)
-        if r ~= nil and sameId(r.YesNoID, p.stock_id) then
-            -- ((2026-11-23, the 1st try: read back 4.0 after RemoveRow / AddRow) every step logged; the field set on
-            -- what FindRow gives (a live view of the row, if UE4SS gives one) and through RemoveRow / AddRow
-            if on then YT.orig = YT.orig or r.AnswerTimeLimit end
-            local want = on and num(p.answer_s, 26) or (YT.orig or 4)
-            local okSet, eSet = pcall(function() r.AnswerTimeLimit = want end)
-            local _, live = dtCall(dt, "FindRow", p.stock_row)
-            local step = string.format("FindRow gave a %s; set %s; read again %s", type(r), okSet and "ok" or ("failed: " .. tostring(eSet)),
-                tostring(live and live.AnswerTimeLimit))
-            if not (live and math.abs((tonumber(live.AnswerTimeLimit) or 0) - want) < 0.01) then
-                local okR, rr = dtCall(dt, "RemoveRow", p.stock_row)
-                local _, gone = dtCall(dt, "FindRow", p.stock_row)
-                local okA, ra = dtCall(dt, "AddRow", p.stock_row, r)
-                step = step .. string.format("; RemoveRow %s %s, the row %s after; AddRow %s %s", tostring(okR), tostring(rr),
-                    gone == nil and "gone" or "STILL THERE", tostring(okA), tostring(ra))
-            end
-            local _, back = dtCall(dt, "FindRow", p.stock_row)
-            said[#said + 1] = string.format("DT_YesNo %s %s s (%s)", p.stock_row, tostring(back and back.AnswerTimeLimit), step)
-        else
-            said[#said + 1] = "DT_YesNo's " .. p.stock_row .. " isn't " .. p.stock_id .. ": not changed"
-        end
-    else
-        said[#said + 1] = "DT_YesNo not loaded"
-    end
-    local e, why = ynEntry(p.stock_id)
-    if e then
-        local ok = pcall(function()
-            if on then YT.mapOrig = YT.mapOrig or e.AnswerTimeLimit end
-            e.AnswerTimeLimit = on and num(p.answer_s, 26) or (YT.mapOrig or 4)
-        end)
-        local okB, b = pcall(function() return e.AnswerTimeLimit end)
-        said[#said + 1] = string.format("the Yes / No system's map %s (%d entries)", ok and (tostring(okB and b or "?") .. " s") or "not written", why)
-    else
-        said[#said + 1] = "the Yes / No system's map: " .. tostring(why)
-    end
-    YT.on = on
-    log(string.format("deal: %s's answer time %s (%s): %s", p.stock_id, on and "lengthened for the run" or "back to the shipped",
-        tostring(why or "the run"), table.concat(said, "; ")))
-end
--- (sv_main.lua, at the main menu: before the level loads, as the DT_NPC rows) the question's row (DT_SV_YesNo) into
--- the game's DT_YesNo: AC8's Yes / No shows only a question it has a row for (the autotest of 2026-11-23)
+-- (sv_main.lua, at the main menu: before the level loads) the Hornet's DT_NPC row, as ESC.setup's escorts'
 function DEAL.setup()
-    local p = cfg().prompt
-    if DEAL.setupDone or not (p and p.enabled ~= false) then return end
+    if DEAL.setupDone or not cfg().enabled then return end
     if not (gameInstance and gameInstance()) then return end
     DEAL.setupTries = (DEAL.setupTries or 0) + 1
-    local mine, game = loadObject(p.rows), loadObject(p.table)
-    if not (mine and game) then
-        if DEAL.setupTries >= 20 then
-            DEAL.setupDone, DEAL.rowOk = true, false
-            log("deal: DT_YesNo or DT_SV_YesNo didn't load: AC8's Yes / No won't show (the keys still vote)")
-        end
+    local npc, rows = loadObject(PROBE_TABLES[2].path), loadObject(CFG.specials.shuttle.npc_rows)
+    if not (npc and rows) then
+        if DEAL.setupTries >= 20 then DEAL.setupDone = true; log("deal: the Hornet's row: DT_NPC or DT_SV_NpcRows didn't load") end
         return
     end
     DEAL.setupDone = true
-    pin(mine, nameOf(mine)); pin(game, nameOf(game))
-    local _, have = dtCall(game, "FindRow", p.question)
-    if have == nil then
-        local _, r = dtCall(mine, "FindRow", p.question)
-        if r ~= nil then dtCall(game, "AddRow", p.question, r); _, have = dtCall(game, "FindRow", p.question) end
-    end
-    DEAL.rowOk = have ~= nil
-    log(string.format("deal: the question's row %s %s", p.question, DEAL.rowOk and "in DT_YesNo" or "NOT added: AC8's Yes / No won't show"))
     -- the Hornet's plane: its DT_NPC row (as ESC.setup's escorts')
     local hr = cfg().hornet.dt_npc
-    local npc, rows = loadObject(PROBE_TABLES[2].path), loadObject(CFG.specials.shuttle.npc_rows)
-    if type(hr) == "string" and npc and rows then
+    if type(hr) == "string" then
         local _, h = dtCall(npc, "FindRow", hr)
         if h == nil then
             local _, r = dtCall(rows, "FindRow", hr)
@@ -874,8 +778,6 @@ function DEAL.setup()
         end
         DEAL.hornetRowOk = h ~= nil
         log(string.format("deal: the Hornet's row %s %s", hr, DEAL.hornetRowOk and "in DT_NPC" or "NOT added: its unit will spawn no plane"))
-    else
-        log("deal: the Hornet's row: DT_NPC or DT_SV_NpcRows didn't load")
     end
 end
 
@@ -903,7 +805,6 @@ end
 function DEAL.tick(clock)
     if not cfg().enabled then return end
     if not D then
-        if YT.on then pcall(DEAL.yesnoTime, false, false, "the run ended") end
         if S.hornetUp then S.hornetUp = false end
         DEAL.V, DEAL.J, DEAL.T, DEAL.ANG, S.round, S.noHornetSaid = nil, nil, nil, {}, nil, false
         S.last, S.D, S.hornetOffAt, S.camAt = nil, nil, nil, nil
@@ -914,7 +815,6 @@ function DEAL.tick(clock)
         S.D, DEAL.V, DEAL.J, DEAL.T, DEAL.ANG, S.round, S.hornetOffAt, S.camAt = D, nil, nil, nil, {}, nil, nil, nil
         if S.hornetUp then hornetOff("a new run") end
     end
-    if not YT.on then pcall(DEAL.yesnoTime, true, false, "the run started") end
     local dt = S.last and math.max(0, math.min(1, clock - S.last)) or 0
     S.last = clock
     if not paused() then S.clock = S.clock + dt end
@@ -955,18 +855,5 @@ if cfg().enabled then
     if testKey then testKey("H", "sv_deal.lua's offer now", DEAL.offerNow) end
 end
 if TEST_TICKS then TEST_TICKS[#TEST_TICKS + 1] = { name = "deal", fn = function(now) DEAL.tick(now) end } end
-if type(LEVEL_DROPS) == "table" then
-    LEVEL_DROPS["the deal's answer time"] = function() if YT.on then pcall(DEAL.yesnoTime, false, false, "the level dropped") end end
-end
--- ((2026-11-23, the autotest: the table at 26 s from the run's start, the box still shut at 4 s) the Yes / No system
--- copies DT_YesNo as the level's world is made: the time set as Survival's world is constructed (before that)
-pcall(NotifyOnNewObject, "/Script/Engine.World", function(w)
-    if not cfg().enabled then return end
-    local n = nameOf(w)
-    if n:find("PL_SurvivalMode", 1, true) and not YT.on then
-        local ok, err = pcall(DEAL.yesnoTime, true, true, "as Survival's world is made")
-        if not ok then log("deal: the answer time at the world's making: error " .. tostring(err)) end
-    end
-end)
 end
 -- DEV ONLY END

@@ -12,7 +12,6 @@ import os
 
 from survival_events import *  # noqa: F401,F403 (survival_events' names; it imports this part at its end)
 
-DEAL_QUESTION = 'SV_Deal_Question'          # (our question's id: the prompt and its triggers match on it)
 DEAL_ASK = 'RE_SV_DealAsk'
 DEAL_FLAG = 'SV_DealAns'
 # ((2026-11-23, the 9th autotest: the box shown, no answer back) Mission 22's own triggers, in our package: Mission 8's,
@@ -21,12 +20,9 @@ DEAL_ANSWERS = (('01_Wave05_YesNoEvent', 'Left', 'SV_DealYes', 1),
                 ('01_Wave05_YesNoEvent_No', 'Right', 'SV_DealNo', 2),
                 ('01_Wave05_YesNoEvent_TimeOut', 'TimeOut', 'SV_DealSilent', 3))
 INT_FLAGS += [DEAL_FLAG]  # noqa: F405
-# ((2026-11-23, the autotest: no prompt showed) a question id is a row of DT_YesNo (LiveYesNoDataTable: YesNoID, its
-# AnswerTimeLimit, the YES / NO buttons' texts; Mission 8's 4 s, Mission 12's 3 s; the question itself is the radio
-# line said with it). Survival's own row in its own table, DT_SV_YesNo (build_survival_rows.py), which Lua adds to
-# DT_YesNo at the main menu (sv_deal.lua dealSetup; a world subsystem's, read as the level loads), its time the vote's
-DEAL_YESNO_TABLE = 'DT_SV_YesNo'
-DEAL_ANSWER_S = 30.0                        # (sv_deal.lua vote_s)
+# ((2026-11-23) the user: "Keep the 4 seconds") the question is Mission 22's own (DEAL_ASK_ID, 4 s to answer:
+# every stock question is 2.2-4 s; a question of Survival's own, added to DT_YesNo, is never used: the Yes / No
+# system copies the table before Lua can reach it). Ctrl+A / Ctrl+X vote for the rest of the 30 s.
 # ((2026-11-23, the 2nd autotest: the row in, still no prompt) Mission 8 asks over the radio: its question is a radio row
 # (DT_Rdo_ST_ms008, e.g. row 497, AWACS's "01_D_Aegis_CIWS_Defense") naming the question (YesNoID, bUseYesNoSubtitle:
 # the Yes / No under the line in the com window), played by LiveRadioPlayExecution (Default_PostRadioEvent_54), and the
@@ -35,19 +31,6 @@ DEAL_ANSWER_S = 30.0                        # (sv_deal.lua vote_s)
 # set by Lua, SV_SetText; docs/re/RADIO_LOCALISATION.md 2c's text-only route, first tried here)
 DEAL_RADIO_GROUP, DEAL_RADIO_TEXT = 'SV_DealRadio_Ask', 'SV_Radio_DealAsk'
 DEAL_RADIO_SOURCE = ('/Game/Datatables/Radio/DT_Rdo_ST_ms008', '497', '01_D_Aegis_CIWS_Defense')
-# ((2026-11-23, the 3rd autotest: no radio window) the row's mission flags (bM01...) are Mission 8's: every one set, as
-# the tells' template row 382. And a voiced twin, the user's "try the box with a real voice line, or a silent one":
-# SV_DealRadio_AskV, the same row with its own stock voice (AWACS, v0001_1460), fired by RE_SV_DealAskV (the test's)
-DEAL_RADIO_VOICED = ('SV_DealRadio_AskV', 'RE_SV_DealAskV')
-# ((2026-11-23, the 6th autotest: neither line played, a DECOY line did) the voiced twin played by Survival's own radio
-# node (Mission 22's CompositeEvent_CountDown_1, THE DECOY's) with its Yes / No activated at once; and a control,
-# SV_DealRadio_AskN (RE_SV_DealAskN): the same line with no YesNoID, to see whether naming a Yes / No stops a line playing
-DEAL_RADIO_CONTROL = ('SV_DealRadio_AskN', 'RE_SV_DealAskN')
-# ((2026-11-23, the 8th autotest: War's line shown in the question's [[ ]] marks, no buttons, the time out never came)
-# Mission 22 (Survival's own base) asks with the radio line alone: 01_AWACS_Yes_No_Q's row names the question, no
-# LiveActivateYesNoExecution, then its YesNoEvent triggers. The question the radio rows and the triggers name:
-# DEAL_ASK_ID, Mission 22's own stock row (4 s) while Survival's own (DT_SV_YesNo's SV_Deal_Question, AddRow'd at the
-# main menu) is in doubt; SV_Deal_Question again once that's shown to work
 DEAL_ASK_ID = 'ms22_01_AWACS_Yes_No_Q'
 # WAR & HAYTHORN's F/A-18F (the user: "War and Haythorn's Super Hornet will appear randomly ... between rounds. They appear
 # as an allied aircraft and the player gets the event zoom in on their aircraft when they appear"; "after each deal has
@@ -125,14 +108,6 @@ def build_deal(g, flag, stock_ep):
     g.trigger('RE_SpawnEnemy_kokatu_1st', DEAL_ASK)              # (a remote event: Lua's SV_Event fires it)
     flag(DEAL_ASK, DEAL_FLAG, 'Set', 0)                        # (asked: no answer yet)
     g.execute(t_radio, DEAL_ASK, {0: DEAL_RADIO_GROUP}, delay=0.1)      # War's question on the radio, the Yes / No under it
-    t_radio22 = t_radio
-    vgrp, vev = DEAL_RADIO_VOICED
-    g.trigger('RE_SpawnEnemy_kokatu_1st', vev)
-    flag(vev, DEAL_FLAG, 'Set', 0)
-    g.execute(t_radio22, vev, {0: vgrp}, delay=0.1)
-    cgrp, cev = DEAL_RADIO_CONTROL
-    g.trigger('RE_SpawnEnemy_kokatu_1st', cev)
-    g.execute(t_radio22, cev, {0: cgrp}, delay=0.1)
     for stock_trig, button, name, value in DEAL_ANSWERS:
         t = g.trig_template(stock_trig)
         assert arg_values(t) == ['ms22_01_AWACS_Yes_No_Q', button], (stock_trig, arg_values(t))  # noqa: F405
@@ -156,5 +131,5 @@ def build_deal(g, flag, stock_ep):
     g.trigger('RE_SpawnEnemy_kokatu_1st', DEAL_CARGO_GO)
     for o, path in zip(DEAL_CARGO_OBJS, DEAL_CARGO_PATHS):
         g.execute(t_path, DEAL_CARGO_GO, {0: o, 2: path, 4: DEAL_CARGO_SPEED}, delay=0.5)
-    print(f'  the deal: {DEAL_ASK} opens AC8\'s Yes / No ({DEAL_QUESTION}); its answer in {DEAL_FLAG} '
+    print(f'  the deal: {DEAL_ASK} opens AC8\'s Yes / No ({DEAL_ASK_ID}); its answer in {DEAL_FLAG} '
           f'(1 YES / 2 NO / 3 silence): {len(g.trig) - n_trig} triggers, {len(g.ex) - n_ex} executions')
