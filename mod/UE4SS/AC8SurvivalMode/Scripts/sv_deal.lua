@@ -794,13 +794,23 @@ function DEAL.yesnoTime(on)
     if dt then
         local _, r = dtCall(dt, "FindRow", p.stock_row)
         if r ~= nil and sameId(r.YesNoID, p.stock_id) then
+            -- ((2026-11-23, the 1st try: read back 4.0 after RemoveRow / AddRow) every step logged; the field set on
+            -- what FindRow gives (a live view of the row, if UE4SS gives one) and through RemoveRow / AddRow
             if on then YT.orig = YT.orig or r.AnswerTimeLimit end
             local want = on and num(p.answer_s, 26) or (YT.orig or 4)
-            r.AnswerTimeLimit = want
-            dtCall(dt, "RemoveRow", p.stock_row)
-            dtCall(dt, "AddRow", p.stock_row, r)
+            local okSet, eSet = pcall(function() r.AnswerTimeLimit = want end)
+            local _, live = dtCall(dt, "FindRow", p.stock_row)
+            local step = string.format("FindRow gave a %s; set %s; read again %s", type(r), okSet and "ok" or ("failed: " .. tostring(eSet)),
+                tostring(live and live.AnswerTimeLimit))
+            if not (live and math.abs((tonumber(live.AnswerTimeLimit) or 0) - want) < 0.01) then
+                local okR, rr = dtCall(dt, "RemoveRow", p.stock_row)
+                local _, gone = dtCall(dt, "FindRow", p.stock_row)
+                local okA, ra = dtCall(dt, "AddRow", p.stock_row, r)
+                step = step .. string.format("; RemoveRow %s %s, the row %s after; AddRow %s %s", tostring(okR), tostring(rr),
+                    gone == nil and "gone" or "STILL THERE", tostring(okA), tostring(ra))
+            end
             local _, back = dtCall(dt, "FindRow", p.stock_row)
-            said[#said + 1] = string.format("DT_YesNo %s %s s", p.stock_row, tostring(back and back.AnswerTimeLimit))
+            said[#said + 1] = string.format("DT_YesNo %s %s s (%s)", p.stock_row, tostring(back and back.AnswerTimeLimit), step)
         else
             said[#said + 1] = "DT_YesNo's " .. p.stock_row .. " isn't " .. p.stock_id .. ": not changed"
         end
