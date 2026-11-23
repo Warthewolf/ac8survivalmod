@@ -265,6 +265,18 @@ local function nearest(p, taken)
     return any, ad
 end
 local function order(e, q)
+    -- ((2026-11-23) "the ZFA's arent doing anything": they circled at their cover area's edge, the target 34 km off) its
+    -- unit's area the whole zone first (RE_SV_ZfaFree_*, once a unit): an AI won't chase out of its area
+    local unit = e.armUnit or e.unit
+    ZDIVE.freed = ZDIVE.freed or {}
+    if unit and not ZDIVE.freed[unit] and ZLAUNCH and ZLAUNCH.freeEventOf and type(SV_Event) == "function" then
+        local ev = ZLAUNCH.freeEventOf(unit)
+        if ev then
+            ZDIVE.freed[unit] = true
+            local r = SV_Event(ev)
+            log(string.format("dive: %s's area freed to the whole zone (%s %s)", tostring(unit), ev, r == 1 and "fired" or ("NOT fired: " .. tostring(r))))
+        end
+    end
     local ok = pcall(function()
         e.obj:EngagementOrderOverride(ORDER_NORMAL or 0, q.obj, PRIO_TARGET_FIRST or 9, 0, false, FIRE_BITS or 7, false)
     end)
