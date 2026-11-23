@@ -22,7 +22,11 @@ the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the
 - Shot down (its target at its floor, MinHealth 1: read back, hard rule 63's way): blown up, paid (fragments.pay 300 /
   big.pay 6000, x specialPay), LB stat ulysses_fragment / ulysses_core. Landed: blown up where it hits; the airfield's
   damage through AF.bomb (8 a fragment, 120 the core), a town's: a callout.
-- The sky's meteors (scenery): one every 1.5-4 s, 15-25 km up, crossing the sky past you at 9000-16000 km/h, 18 s each.
+- The sky's meteors (scenery), AC:I's look (her Lost Butterfly references; AC:I's o_metx is an 8 cm marker with an effect
+  drawn on it): thin glowing lines, no body, no smoke: the streak's static twin (SM_SV_Ulysses_Tail) on AC8's additive
+  MI_TrainingRing (hard rule 77: on the skinned streak it falls back to dark grey). Bursts of 3-7 every 0.4-1.2 s, up
+  to 100, from the east (+X is east: checked in game against the minimap and the dawn sun), 150 km either side, 28-34
+  km up, falling (dip 0.22-0.4), burnt out above 16 km (out of any fighter's reach).
 - The time shift: a fade in from white and the card JULY 1999 at round 1; at round 2's end the fade, PRESENT DAY.
 - The film look: a full-screen warm wash over the picture (sv_hud.lua HUD.film: an Image on Survival's HUD canvas,
   behind its text; film.overlay / overlay_a, a slight flicker), faded in / out over 2 s on os.clock. The
@@ -42,7 +46,12 @@ the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the
   0.75.72 run's rocks landed late, under the ground, when the two drifted apart [D].
 - Landing: a trace down at the aim point; land: AC8's air explosion and the airfield's / town's damage; the sea:
   the Tonitrus Spear's splash (NS_Mission11Splash + NS_SplashRain, the user: "tonitrus spear water impact").
-- Its target box: one of the SOLG's target objects (SV_Unit_SOLG_KEW for fragments, SV_Unit_SOLG_MAG for the core:
+- Each rock is placed and turned through K2_SetWorldTransform with a plain scale (hard rule 78: an engine-read Scale3D
+  made it fail and the rocks flew backwards); the autotest reads each front back (1.00 along its way).
+- The fragments' trails: the Climber's fall smoke (Mission 20's IGC, scale 3: the thick billowing column; the
+  ulytrails autotest compared 8 stock trails) and the damaged-plane fire; their streak's gradient a burning head.
+- Its target box: one of the SOLG's target objects (the whole actor hidden: SetActorHiddenInGame; its meshes aren't
+  found by class, and Mission 4's radar tower showed under a fragment up close; its TGT box, lock and minimap mark stay) (SV_Unit_SOLG_KEW for fragments, SV_Unit_SOLG_MAG for the core:
   Mission 4's radar tower base, enemy, TGT mark) spawned at the round's start, its meshes hidden, parked, its flags off;
   attached to the rock when it falls (its lock point onto the rock), its flags on, its health set; off and parked again
   when it's done. Its boxes read "ULYSSES" / "FRAGMENT" / "ULYSSES CORE" (SV_SetText on the SOLG's keys; the SOLG's own
