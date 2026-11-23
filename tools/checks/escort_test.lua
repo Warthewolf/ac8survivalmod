@@ -1089,6 +1089,12 @@ for _, x in ipairs(recycled) do if x == "SV_Unit_Cargo1:1" then gone = true end 
 check(R.carriers[1] == nil and gone and ESC.carriersUp() == 0, "... off the spawner's list (SV_Recycle), the STORE can call another")
 alive.SV_Unit_Cargo1 = 0
 D.state = "fighting"
+-- ((2026-11-23) Kiriya's ghost carrier: a ship sent again 1 s after its unit came off, its new hull at 0 health)
+alive.SV_Unit_Cargo2 = 1                                   -- (the other ship busy)
+press("ZfaCarrier")
+check(R.carriers[1] == nil and R.carriers[2] == nil, "a ship's unit just off: not sent again before reuse_s (" .. K.reuse_s .. " s)")
+alive.SV_Unit_Cargo2 = nil
+run(K.reuse_s + 1)
 press("ZfaCarrier")
 check(R.carriers[1] ~= nil, "another bought")
 alive.SV_Unit_Cargo1 = 0
@@ -1098,6 +1104,7 @@ check(ESC.hulls.SV_Unit_Cargo1 == nil, "... its hull forgotten with its slot (th
 -- ((code review of 2026-11-07, finding 7) its hull sunk while its launchers and Stinger mount still count alive
 callouts = {}
 alive.SV_Unit_Cargo1 = 0
+run(K.reuse_s + 1)                                         -- (its unit free again: reuse_s)
 press("ZfaCarrier")
 run(0.5)
 local c7, h7 = R.carriers[1], ESC.hulls.SV_Unit_Cargo1

@@ -1032,7 +1032,9 @@ CFG = {
         -- capture_km of the ship, parked below parked_m before or new since the record) fires its arm's `climb` record:
         -- each its own climb-out path, then their orders (Scripts/sv_escort_laser.lua ZLAUNCH). None out in launch_wait_s:
         -- the climb-out fired anyway while any of the arm's planes is alive, else by pose
-        carrier      = { enabled = true, name = "ZFA-44 CARRIER", name_key = "SV_Cargo", max_up = 2,
+        -- reuse_s: a ship's unit free to be sent again this long after it came off the spawner's list (a ghost carrier
+        -- of 2026-11-22: sent 1 s after, its new hull at 0 health)
+        carrier      = { enabled = true, name = "ZFA-44 CARRIER", name_key = "SV_Cargo", max_up = 2, reuse_s = 10,
                          units = { "SV_Unit_Cargo1", "SV_Unit_Cargo2" }, dt_npc = "SV_Zfa_Ally", dt_npc_drone = "SV_Zfa_Drone",
                          launch = "container", first_s = 20, relaunch_s = 30, launch_wait_s = 15, capture_km = 4,
                          rise_m = -50, parked_m = -100,

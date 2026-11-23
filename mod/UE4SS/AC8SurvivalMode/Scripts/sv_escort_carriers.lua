@@ -23,11 +23,17 @@ local function carrierUnitsOk()
     for _, u in ipairs(cc().units or {}) do if aliveOf(u) ~= -2 then ok = true end end
     return ok
 end
--- a free ship: its index and unit (none of it up), or nil
+-- a free ship: its index and unit (none of it up), or nil.
+-- ((2026-11-23, Kiriya's run of 2026-11-22) a ship's unit taken off the spawner's list is only finished with a moment
+-- later: CARRIER 1 sank at 19:22:59, its unit came off at 19:23:02, player 2's carrier was spawned on it at 19:23:03 and
+-- its new hull read 0 health 2 s on: "sunk", 15,000 paid for nothing, then paid again. A ship's unit is free again
+-- reuse_s after it came off (ESC.freeAt, os.clock): meanwhile the other ship, or none)
+ESC.freeAt = ESC.freeAt or {}
+local function freed(i) return os.clock() >= (ESC.freeAt[i] or 0) end
 local function freeShip()
     local R = run()
     for i, u in ipairs(cc().units or {}) do
-        if not R.carriers[i] then
+        if not R.carriers[i] and freed(i) then
             local n = aliveOf(u)
             if n == 0 or n == -7 then return i, u end
         end
@@ -225,6 +231,7 @@ local function carrierTick(C, now)
                 rec = "SV_Recycle " .. (okR and tostring(r) or ("error " .. tostring(r)))
             end
             R.carriers[C.idx], RUN.dirty = nil, true
+            ESC.freeAt[C.idx] = os.clock() + num(cc().reuse_s, 10)
             -- ((code review of 2026-11-07) its hull and objects forgotten with its slot: the next ship of this unit's
             -- are recorded afresh, never this one's switched-off or sunk hull read in their place)
             ESC.hulls[C.unit] = nil
@@ -254,6 +261,7 @@ local function carrierTick(C, now)
         end
         if noneUp(aliveOf(C.unit)) and now - C.at > 5 then
             R.carriers[C.idx], RUN.dirty = nil, true
+            ESC.freeAt[C.idx] = os.clock() + num(cc().reuse_s, 10)
             ESC.hulls[C.unit] = nil
             if ESC.shipObjs then ESC.shipObjs[C.unit] = nil end
             local nf = shipDone(C, C.name .. " sunk")
@@ -677,6 +685,7 @@ function ESC.restart(why)
                 for _, e in ipairs((ESC.shipObjs or {})[C.unit] or {}) do if liveAddr(e.obj) == e.addr then offObj(e.obj) end end
             end
             ESC.recycleQ[#ESC.recycleQ + 1] = { unit = C.unit, at = os.clock() + 2, why = why }
+            ESC.freeAt[C.idx] = os.clock() + 2 + num(cc().reuse_s, 10)      -- (its unit off 2 s on: freeShip)
             ESC.hulls[C.unit] = nil
             if ESC.shipObjs then ESC.shipObjs[C.unit] = nil end
             nC = nC + 1
