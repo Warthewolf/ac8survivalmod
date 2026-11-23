@@ -624,9 +624,10 @@ def ladon_units(units, used_ids, z, top_number, v):
 
 
 def deal_units(units, used_ids, z, top_number, v):
-    """THE DEAL's targets (survival_events.DEAL_PODARGE_* / DEAL_CARGO_*): Mission 12's Norn (the Podarge) with its
-    parts but its cargo slot, ported as the Ladons; the three C-130s, a copy of the heavy flight; their routes (smooth
-    aircraft paths on Mission 16's Ladon path). Spawned by Lua (sv_deal.lua) in the round after a deal is taken."""
+    """THE DEAL's targets (survival_events.DEAL_PODARGE_* / DEAL_CARGO_*): seven Podarges, Mission 12's Norn with its parts
+    but its cargo slot, ported as the Ladons, a unit each; three flights of four C-130s, copies of the heavy flight; their
+    routes (smooth aircraft paths on Mission 16's Ladon path). Spawned by Lua (sv_deal.lua) in the round after a deal is
+    taken. Returns (parts, [(cargo unit, its yaw, its four lanes' routes, their paths)], paths, the path template)."""
     se = survival_events
     import math
     m16z = ZenPkg(stock(M16 + 'WD_Mission016_global'))
@@ -636,30 +637,35 @@ def deal_units(units, used_ids, z, top_number, v):
     m12z = ZenPkg(stock(se.DEAL_PODARGE_WD))
     m12, _ = props_of(m12z, m12z.export_index(se.DEAL_PODARGE_WD.rsplit('/', 1)[1]), 'LiveWorldData')
     src = desc_named(m12, 'UnitDescList', se.DEAL_PODARGE_SOURCE)
-    pts = se.DEAL_PODARGE_PTS
-    yaw = math.degrees(math.atan2(pts[1][1] - pts[0][1], pts[1][0] - pts[0][0]))
-    names = port_unit(units, used_ids, z, src, se.DEAL_PODARGE_UNIT, se.DEAL_PODARGE_OBJ, se.DEAL_PODARGE_ROW, [pts[0]],
-                      yaw, top_number)
-    assert names == [se.DEAL_PODARGE_OBJ], names
     uname = lambda x: [p for p in x[2] if p[1] == 'Name'][0][3][1]
-    u = [x for x in units if uname(x) == se.DEAL_PODARGE_UNIT][0]
-    ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
-    kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
     data = lambda ch: [p for p in ch[2] if p[1] == 'Data'][0][3][2]
     field = lambda ch, n: [q for q in data(ch) if q[1] == n][0][3][1]
-    kids[:] = [ch for ch in kids if field(ch, 'ComponentFieldName') not in se.DEAL_PODARGE_DROP]
-    rows = {field(ch, 'MissionNpcID') for ch in kids}
-    assert rows == set(se.DEAL_PODARGE_PART_ROWS), rows ^ set(se.DEAL_PODARGE_PART_ROWS)
-    parts = retag_parts(kids, se.DEAL_PODARGE_OBJ, used_ids, z, m12z)
-    unit_area(u, se.DEAL_TARGET_AREA_M, se.DEAL_TARGET_ALT_M)
-    paths.append(make_path(z, used_ids, src_path, se.DEAL_PODARGE_PATH, pts, smooth=True))
-    names = copy_unit(units, used_ids, z, se.DEAL_CARGO_SOURCE, se.DEAL_CARGO_UNIT, se.DEAL_CARGO_N, top_number,
-                      se.DEAL_CARGO_OBJ, se.DEAL_CARGO_ROW)
-    assert names == se.DEAL_CARGO_OBJS, names
-    cu = [x for x in units if uname(x) == se.DEAL_CARGO_UNIT][0]
-    lanes = [se.deal_cargo_route(side) for _, side in se.DEAL_CARGO_LANES]
-    cyaw = math.degrees(math.atan2(lanes[0][1][1] - lanes[0][0][1], lanes[0][1][0] - lanes[0][0][0]))
-    return parts, cu, cyaw, lanes, paths, src_path
+    parts = 0
+    for i, (unit, obj, pname) in enumerate(zip(se.DEAL_PODARGE_UNITS, se.DEAL_PODARGE_OBJS, se.DEAL_PODARGE_PATHS)):
+        pts = se.deal_podarge_route(i)
+        yaw = math.degrees(math.atan2(pts[1][1] - pts[0][1], pts[1][0] - pts[0][0]))
+        names = port_unit(units, used_ids, z, src, unit, obj, se.DEAL_PODARGE_ROW, [pts[0]], yaw, top_number)
+        assert names == [obj], names
+        u = [x for x in units if uname(x) == unit][0]
+        ob = [p for p in u[2] if p[1] == 'AIObjectDescList'][0][3][1][0]
+        kids = [p for p in ob[2] if p[1] == 'ChildAIObjectDescs'][0][3][1]
+        kids[:] = [ch for ch in kids if field(ch, 'ComponentFieldName') not in se.DEAL_PODARGE_DROP]
+        rows = {field(ch, 'MissionNpcID') for ch in kids}
+        assert rows == set(se.DEAL_PODARGE_PART_ROWS), rows ^ set(se.DEAL_PODARGE_PART_ROWS)
+        parts += retag_parts(kids, obj, used_ids, z, m12z)
+        unit_area(u, se.DEAL_TARGET_AREA_M, se.DEAL_TARGET_ALT_M)
+        paths.append(make_path(z, used_ids, src_path, pname, pts, smooth=True))
+    cargo = []
+    for fi, f in enumerate(se.DEAL_CARGO_FLIGHTS):
+        unit = se.DEAL_CARGO_UNITS[fi]
+        names = copy_unit(units, used_ids, z, se.DEAL_CARGO_SOURCE, unit, se.DEAL_CARGO_PER, top_number,
+                          se.DEAL_CARGO_OBJ[f], se.DEAL_CARGO_ROW)
+        assert names == se.DEAL_CARGO_OBJS[f], names
+        cu = [x for x in units if uname(x) == unit][0]
+        lanes = [se.deal_cargo_route(fi, k) for k in range(se.DEAL_CARGO_PER)]
+        cyaw = math.degrees(math.atan2(lanes[0][1][1] - lanes[0][0][1], lanes[0][1][0] - lanes[0][0][0]))
+        cargo.append((cu, cyaw, lanes, se.DEAL_CARGO_PATHS[f]))
+    return parts, cargo, paths, src_path
 
 
 def heavy_paths(used_ids, z, v):
