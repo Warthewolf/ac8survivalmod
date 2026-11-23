@@ -95,6 +95,13 @@ if [ -f build/solg/out/SurvivalMode_SOLG_P.utoc ]; then
 else
     echo "no SOLG container (tools/solg/build.sh): her SOLG can't come"
 fi
+# ((2026-11-23) the ULYSSES special: AC:I's meteors as our own meshes (tools/ulysses/build.sh; the user's AC:I exception)
+if [ -f build/ulysses/out/SurvivalMode_Ulysses_P.utoc ]; then
+    cp build/ulysses/out/SurvivalMode_Ulysses_P.utoc build/ulysses/out/SurvivalMode_Ulysses_P.ucas build/install/SurvivalMode/
+    echo "staged ULYSSES' meteors (build/ulysses/out/SurvivalMode_Ulysses_P)"
+else
+    echo "no ULYSSES container (sh tools/ulysses/build.sh): its meteors can't come"
+fi
 # the ZFA-44 (the user's own model, cooked in UE 5.4 by tools/zfa44/build.sh; no UE needed here): the user's dev builds
 # only, so staged with ZFA=1 only (package_dev.sh keeps it with ZFA=1; package_release.sh never ships it)
 if [ "$ZFA" = 1 ]; then
