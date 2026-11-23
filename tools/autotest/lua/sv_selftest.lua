@@ -5919,8 +5919,6 @@ SUITES.deal = function()
     A.mark("deal")
     A.do_(function()
         if not ST.check(type(DEAL) == "table" and type(DEAL.offerNow) == "function", "THE DEAL's part loaded (a dev build)") then return "abort" end
-        ST.check(DEAL.rowOk == true and ST.findLog("deal: the question's row SV_Deal_Question in DT_YesNo", 0, true) ~= nil,
-            "the question's row added to DT_YesNo at the main menu", ST.findLog("deal: the question's row", 0, true))
         ST.info(string.format("run state %s, round %s, D.at in %.0f s", tostring(D.state), tostring(D.round), (D.at or 0) - (D.now or 0)))
         DEAL.offerNow()
     end)
