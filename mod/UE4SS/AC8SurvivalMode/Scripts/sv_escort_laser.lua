@@ -1002,6 +1002,7 @@ function ZLAUNCH.coverTick()
             if mine then
                 who = "you"
                 r = f.ev and type(SV_Event) == "function" and SV_Event(f.ev) or nil
+                if ZDIVE and ZDIVE.freed then ZDIVE.freed[unit] = nil end   -- (its area 3 km again: freed anew at a dive)
             else
                 who = (COOP and COOP.name and COOP.name(best.slot)) or ("player " .. tostring((best.slot or 0) + 1))
                 local okC, k = false, 0
@@ -1070,6 +1071,11 @@ end
 local function fin()
     ZLAUNCH.fin = ZLAUNCH.fin or { failN = 0 }
     return ZLAUNCH.fin
+end
+-- ((2026-11-23) the final dive's) the event that frees unit's area to the whole zone (its cover event's twin), or nil
+function ZLAUNCH.freeEventOf(unit)
+    local _, cover = armOf(unit)
+    return type(cover) == "string" and (cover:gsub("^RE_SV_ZfaCover", "RE_SV_ZfaFree", 1)) or nil
 end
 function ZLAUNCH.finish(e, why, final)
     if not (e and ESC.same(e)) then return false, nil, "not its plane" end

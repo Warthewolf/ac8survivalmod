@@ -342,6 +342,16 @@ def zfa_cover_event(s, n=None):
     return f'RE_SV_ZfaCover_{s}_{n}' if n is not None else f'RE_SV_ZfaCover{s}'
 
 
+# ((2026-11-23) the user: "the ZFA's arent doing anything": in their final dive they circled at the edge of their cover
+# area (3 km round a player), their target 34 km off: an AI won't chase out of its area) RE_SV_ZfaFree_<s>_<n> (or
+# RE_SV_ZfaFree<L>): the unit's area radius ZFA_FREE_RADIUS_M (the whole combat zone), fired by the dive before its order
+ZFA_FREE_RADIUS_M = 80000.0
+
+
+def zfa_free_event(s, n=None):
+    return f'RE_SV_ZfaFree_{s}_{n}' if n is not None else f'RE_SV_ZfaFree{s}'
+
+
 def zfa_tls_event(s, n=None):
     """(2026-11-07) The ZFA-44s' own laser fired on command (the user: "the Laser Interceptor doesn't swing or go after
     the missiles, it also isn't attached to the aircraft"): RE_SV_ZfaTLS_<s>_<n> fires the laser's slot on every object of
@@ -665,6 +675,9 @@ def build_escort(g, flag, stock_ep):
             remote(cov)
             g.execute(t_near, cov, {0: zunit})
             g.execute(t_radius, cov, {0: zunit, 1: 'NoneSelect', 2: f'{ZFA_COVER_RADIUS_M:.1f}'})
+            free = zfa_free_event(s, n)                       # (its final dive: the whole zone, ZFA_FREE_RADIUS_M)
+            remote(free)
+            g.execute(t_radius, free, {0: zunit, 1: 'NoneSelect', 2: f'{ZFA_FREE_RADIUS_M:.1f}'})
             tls = zfa_tls_event(s, n)                         # (its laser on command: Lua picks the missile)
             remote(tls)
             for ob in zobjs:
@@ -675,6 +688,9 @@ def build_escort(g, flag, stock_ep):
         remote(cov)
         g.execute(t_near, cov, {0: unit})
         g.execute(t_radius, cov, {0: unit, 1: 'NoneSelect', 2: f'{ZFA_COVER_RADIUS_M:.1f}'})
+        free = zfa_free_event(L)
+        remote(free)
+        g.execute(t_radius, free, {0: unit, 1: 'NoneSelect', 2: f'{ZFA_FREE_RADIUS_M:.1f}'})
         tls = zfa_tls_event(L)
         remote(tls)
         for ob in objs:
