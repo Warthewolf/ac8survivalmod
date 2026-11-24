@@ -27,7 +27,8 @@ ATTENUATIONS = [
     # impacts from 40
     {'name': 'SV_Att_UlyFall', 'radius_m': 12000, 'curve': [[0, 0], [1500, -6], [5000, -15], [9000, -28], [12000, -200]]},
     {'name': 'SV_Att_UlyFallBig', 'radius_m': 30000, 'curve': [[0, 0], [4000, -6], [12000, -16], [22000, -30], [30000, -200]]},
-    {'name': 'SV_Att_UlyBoom', 'radius_m': 40000, 'curve': [[0, 0], [3000, -6], [12000, -18], [25000, -30], [40000, -200]]},
+    # ((later) "none of the impact sounds worked": spread wide, most land 15-45 km off, under your engine at -30 dB)
+    {'name': 'SV_Att_UlyBoom', 'radius_m': 60000, 'curve': [[0, 0], [3000, -4], [10000, -9], [25000, -14], [45000, -22], [60000, -200]]},
 ]
 # (name, source, settings): the event is Play_<name without SV_>, as Play_SV_<...>
 SOUNDS = [

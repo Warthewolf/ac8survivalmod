@@ -191,6 +191,9 @@ local function bang(at)
 end
 -- a falling rock's whistle (x: the host's fragment or a joiner's rock, a: its actor, where: its place for XAudio2)
 local function fallOn(x, a, big, where)
+    -- ((2026-11-24, the user: "The meteors were using the missile sound effect": AC:I's OBJ_FALL_STARTDUST_SMALL is the
+    -- same stream as its ICBM burner) sounds.whistle false: no fall loop on a fragment (the core keeps its own)
+    if not big and (cfg().sounds or {}).whistle == false then return end
     if wwOn(big and "fall_big" or "fall", a) then x.ww = a; return end
     local l = (cfg().sounds or {})[big and "fall_big" or "fall"]
     if l and SND and SND.play then
@@ -286,8 +289,13 @@ local function rock(key, at, vel, scale, spin, tailX, trails, look)
     -- ((2026-11-23) its own streak behind it: the rock faces along its fall (+X forward), its spin a roll about that line)
     local hz = math.sqrt(vel.X * vel.X + vel.Y * vel.Y)
     local face = { Pitch = math.deg(math.atan(vel.Z, math.max(1, hz))), Yaw = math.deg(math.atan(vel.Y, vel.X)), Roll = math.random(0, 359) }
-    local a = newActor(at, face)
+    -- ((2026-11-24, the user: "The target box isn't aligned") the actor's root a plain scene component, unturned and
+    -- unscaled, moved by the ProjectileMovement; the mesh under it carries the turn, the size and the spin (the
+    -- RotatingMovement on the mesh alone), and a borrowed target hangs on the root: on the spinning 1.8-3.2x mesh its
+    -- -HitCenterOffset (35 m) was scaled and swung round, its lock point 60-110 m off the rock (the autotest's probe)
+    local a = newActor(at, {})
     if not a then return nil end
+    local root = addComp(a, "/Script/Engine.SceneComponent")
     local c = addComp(a, "/Script/Engine.SkeletalMeshComponent")
     if not c then pcall(function() a:K2_DestroyActor() end); return nil end
     local okSet = m and pcall(function() c:SetSkeletalMeshAsset(m) end)
@@ -330,15 +338,11 @@ local function rock(key, at, vel, scale, spin, tailX, trails, look)
     pcall(function() c:SetCastShadow(not (look and look.hide_rock)) end)
     if look and look.hide_rock then pcall(function() c:SetVisibility(false, false) end) end
     local rm = addComp(a, "/Script/Engine.RotatingMovementComponent")
-    if rm then pcall(function() rm.RotationRate = { Pitch = 0, Yaw = 0, Roll = spin } end) end
-    -- ((2026-11-24, the user: "The target box isn't aligned") the borrowed target's anchor: on the rock's centre, never
-    -- turned or scaled with it (absolute rotation and scale). Attached to the spinning mesh scaled 1.8-3.2, the target's
-    -- -HitCenterOffset was scaled and swung round with it: its lock point off the rock, its box drawn skewed
-    local anc = addComp(a, "/Script/Engine.SceneComponent")
-    if anc then
-        pcall(function() anc:SetUsingAbsoluteRotation(true) end)
-        pcall(function() anc:SetUsingAbsoluteScale(true) end)
+    if rm then
+        pcall(function() rm:SetUpdatedComponent(c) end)          -- (the mesh spins, not the root its target hangs on)
+        pcall(function() rm.RotationRate = { Pitch = 0, Yaw = 0, Roll = spin } end)
     end
+    local anc = root                                         -- (the borrowed target's hold: the unturned root)
     -- its own streak (SK_SV_Ulysses_Tail, tools/ulysses): behind it along -X, glowing (tail.paint), scaled with the rock
     local T = cfg().tail or {}
     -- ((2026-11-24, the ulylines autotest: every glow row drew dark grey) AC8's effect materials aren't made for skinned
