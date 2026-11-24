@@ -28,8 +28,10 @@ ATTENUATIONS = [
     # (the whistle back at its first range, 7 km: the user, "back to its normal level beforehand")
     {'name': 'SV_Att_UlyFall', 'radius_m': 7000, 'curve': [[0, 0], [800, -6], [2500, -18], [5000, -36], [7000, -200]]},
     {'name': 'SV_Att_UlyFallBig', 'radius_m': 30000, 'curve': [[0, 0], [4000, -6], [12000, -16], [22000, -30], [30000, -200]]},
-    # ((later) "none of the impact sounds worked": spread wide, most land 15-45 km off, under your engine at -30 dB)
-    {'name': 'SV_Att_UlyBoom', 'radius_m': 60000, 'curve': [[0, 0], [3000, -4], [10000, -9], [25000, -14], [45000, -22], [60000, -200]]},
+    # ((later) "none of the impact sounds worked": 60 km wide for a while; then a landing sounds as AC8's Spear impact, and
+    # the explosion is a shot down's only, near you: "each sound doesn't sound quieter" (the meter: -26 / -28 / -31 / -35 dB
+    # at 0.3 / 1.5 / 5 / 11 km): a steep fade, silent at 12 km
+    {'name': 'SV_Att_UlyBoom', 'radius_m': 12000, 'curve': [[0, 0], [1500, -8], [4000, -18], [8000, -30], [12000, -200]]},
 ]
 # (name, source, settings): the event is Play_<name without SV_>, as Play_SV_<...>
 SOUNDS = [
