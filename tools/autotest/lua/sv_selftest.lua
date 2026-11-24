@@ -6780,6 +6780,68 @@ SUITES.ulysound = function()
     A.wait(1)
 end
 
+-- ((2026-11-24) ULYSSES both rounds played out whole at their real heights, speeds and pace, nobody shooting: all 50 and 61
+-- fall by themselves (their boxes handed back each time), the break between, the core; the frame time, the most falling,
+-- Survival's memory (SV_MemMB) at each round's start and end: a soak before the user's own flight
+SUITES.ulysoak = function()
+    intoRun()
+    local M = { peak = 0, dt = {}, mem = {} }
+    local function Ux() return ULY and ULY.debug and select(1, ULY.debug()) end
+    local gs
+    local function sample()
+        local U = Ux()
+        local f = 0
+        for _, x in ipairs(U and U.list or {}) do if not x.done then f = f + 1 end end
+        if f > M.peak then M.peak = f end
+        if not gs then gs = StaticFindObject("/Script/Engine.Default__GameplayStatics") end
+        local ok, v = pcall(function() return gs:GetWorldDeltaSeconds(ST.pc()) end)
+        if ok and tonumber(v) and f > 0 then M.dt[#M.dt + 1] = v end
+    end
+    local function mem(tag)
+        -- (SV_MemMB: the working set's MB x 100000 + the committed MB, runtime survival_rt_lua.c)
+        local ok, v = pcall(function() return SV_MemMB and SV_MemMB() end)
+        v = ok and tonumber(v) or nil
+        local ws, cm = v and v > 0 and math.floor(v / 100000) or nil, v and v > 0 and (v % 100000) or nil
+        M.mem[#M.mem + 1] = { tag, ws }
+        ST.info(string.format("memory at %s: %s MB in use, %s MB committed", tag, tostring(ws), tostring(cm)))
+    end
+    local function round(phase, todo, timeout)
+        A.do_(function()
+            ST.marks["s" .. phase] = ST.n
+            ULY.forcedPhase = phase
+            D.forceSpecial = "ulysses"
+            if D.state == "wait" then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+            ST.doing = "ULYSSES round " .. phase .. ", played out"
+        end)
+        A.log_("ulysses: round %d+: phase " .. phase .. " of 2", 120, "s" .. phase, false, function(l)
+            if not ST.check(l ~= nil, "round " .. phase .. " started", l) then return "abort" end
+        end)
+        A.do_(function() mem("round " .. phase .. "'s start") end)
+        A.until_(function() sample(); return ST.findLog("ulysses: round %d+ over", ST.marks["s" .. phase], false) ~= nil end, timeout, function(v)
+            local l = ST.findLog("ulysses: round %d+ over", ST.marks["s" .. phase], false)
+            ST.check(l ~= nil, "round " .. phase .. " over by itself, every fragment down", l)
+            ST.check(l and l:find("of " .. todo .. " fragments", 1, true) ~= nil, "round " .. phase .. "'s line counts " .. todo, l)
+        end)
+        A.do_(function() mem("round " .. phase .. "'s end") end)
+    end
+    A.do_(function()
+        if not ST.check(ULY ~= nil and SPC.kinds.ulysses ~= nil, "ULYSSES is in this build") then return "abort" end
+    end)
+    round(1, 50, 600)
+    A.wait(5)
+    round(2, 61, 700)
+    A.do_(function()
+        local s, w = 0, 0
+        for _, v in ipairs(M.dt) do s = s + v; if v > w then w = v end end
+        ST.info(string.format("frame time while fragments fell: avg %.1f ms, worst %.1f ms over %d frames; %d falling at the most",
+            #M.dt > 0 and s / #M.dt * 1000 or -1, w * 1000, #M.dt, M.peak))
+        local a, b = M.mem[1] and M.mem[1][2], M.mem[#M.mem] and M.mem[#M.mem][2]
+        ST.check(a and b and b - a < 1500, string.format("Survival's memory steady across both rounds (%s -> %s MB)", tostring(a), tostring(b)))
+        ST.check(not ST.findLog("ulysses: sound: .*FAILED", 0, false), "no Wwise post failed")
+    end)
+    A.wait(2)
+end
+
 -- ((2026-11-24) ULYSSES' impact against AC8's own explosions, for its loudness in the game's mix: the camera held as
 -- ulysound's, each at 1.5 and 5 km (18 s apart: ours is 16.6 s long); loudness.ps1 beside the job, loudness_report.py after
 SUITES.ulycal = function()
