@@ -561,6 +561,11 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
                -- Wwise events (tools/wwise/spec.py, SurvivalMode_Wwise_P: AC8's sfx bus, its effects volume and 3D; each
                -- whistle on its rock, an impact where it is, the encounter and the rumble 2D); a sound whose event
                -- doesn't load plays through the files above; enabled = false: all through them
+               -- ((2026-11-24, the user: "make it so that the meteorites have the tonitrus spear impact sfx too") AC8's own
+               -- Tonitrus Spear impacts beside each landing's explosion, on land and in the sea
+               spear = { enabled = true,
+                         ground = "/Game/WwiseAssets/Events/CS_AceLive_SE/Events_General/AMMO/EXP/SE_GEN_AMMO_EXP/AKE_GEN_AMMO_EXP_Tonitrus_Impact_Ground_Play",
+                         sea = "/Game/WwiseAssets/Events/CS_AceLive_SE/Events_General/AMMO/EXP/SE_GEN_AMMO_EXP/AKE_GEN_AMMO_EXP_Tonitrus_Impact_Sea_Play" },
                wwise = { enabled = true, path = "/Game/Mods/SurvivalMode/Wwise/Events/Default_Work_Unit/",
                          fall = "Play_SV_UlyFall", fall_big = "Play_SV_UlyFallBig", boom = "Play_SV_UlyBoom",
                          encounter = "Play_SV_UlyEncounter", ambient = "Play_SV_UlyAmbient" } },

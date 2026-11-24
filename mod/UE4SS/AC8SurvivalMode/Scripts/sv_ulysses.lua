@@ -158,6 +158,32 @@ function ULY.wwPause(paused)
     end
 end
 if SND then SND.onPause = SND.onPause or {}; SND.onPause.ulysses = function(p) ULY.wwPause(p) end end
+-- ((2026-11-24, the user: "make it so that the meteorites have the tonitrus spear impact sfx too") AC8's own Tonitrus
+-- Spear impacts (its event assets: sounds.spear.ground / .sea), posted where a fragment lands, beside its own explosion
+local function spearAt(kind, at)
+    local sp = (cfg().sounds or {}).spear
+    local path = type(sp) == "table" and sp.enabled ~= false and sp[kind] or nil
+    if type(path) ~= "string" or not at then return false end
+    local e = WW.ev[path]
+    if e == false then return false end
+    if not (e and liveObj(e)) then
+        e = SPC and SPC.V and SPC.V.asset and SPC.V.asset(path) or nil
+        WW.ev[path] = e or false
+        ul(string.format("sound: AC8's %s %s", path:match("[^/]+$"), e and "loaded" or "NOT loaded"))
+        if not e then return false end
+    end
+    local ak = akStat()
+    if not ak then return false end
+    local L, rot = { X = at.X, Y = at.Y, Z = at.Z or 0 }, { Pitch = 0, Yaw = 0, Roll = 0 }
+    local ok, id = pcall(function() return ak:PostEventAtLocation(e, L, rot, survivalPC) end)
+    if not ok then ok, id = pcall(function() return ak:PostEventAtLocation(e, L, rot, "", survivalPC) end) end
+    id = ok and tonumber(id) or 0
+    if not WW.said[path] then
+        WW.said[path] = true
+        ul(string.format("sound: AC8's %s posted: playing id %s", path:match("[^/]+$"), tostring(id)))
+    end
+    return id > 0
+end
 -- an impact's sound at `at`
 local function bang(at)
     local s = cfg().sounds or {}
@@ -305,6 +331,14 @@ local function rock(key, at, vel, scale, spin, tailX, trails, look)
     if look and look.hide_rock then pcall(function() c:SetVisibility(false, false) end) end
     local rm = addComp(a, "/Script/Engine.RotatingMovementComponent")
     if rm then pcall(function() rm.RotationRate = { Pitch = 0, Yaw = 0, Roll = spin } end) end
+    -- ((2026-11-24, the user: "The target box isn't aligned") the borrowed target's anchor: on the rock's centre, never
+    -- turned or scaled with it (absolute rotation and scale). Attached to the spinning mesh scaled 1.8-3.2, the target's
+    -- -HitCenterOffset was scaled and swung round with it: its lock point off the rock, its box drawn skewed
+    local anc = addComp(a, "/Script/Engine.SceneComponent")
+    if anc then
+        pcall(function() anc:SetUsingAbsoluteRotation(true) end)
+        pcall(function() anc:SetUsingAbsoluteScale(true) end)
+    end
     -- its own streak (SK_SV_Ulysses_Tail, tools/ulysses): behind it along -X, glowing (tail.paint), scaled with the rock
     local T = cfg().tail or {}
     -- ((2026-11-24, the ulylines autotest: every glow row drew dark grey) AC8's effect materials aren't made for skinned
@@ -389,7 +423,7 @@ local function rock(key, at, vel, scale, spin, tailX, trails, look)
             okA and A2 and string.format("(%.1f, %.1f, %.1f km)", A2.X / 100000, A2.Y / 100000, A2.Z / 100000) or "?",
             q(function() return addrOf(a.RootComponent) == addrOf(c) end), tostring(TRAILOK)))
     end
-    return { a = a, c = c, pm = pm, name = nameOf and nameOf(a) or nil }
+    return { a = a, c = c, pm = pm, anc = anc, name = nameOf and nameOf(a) or nil }
 end
 -- ((2026-11-24, the ulysses2 autotest's crash at round 2's start, a minute's break after round 1) still ours: its address
 -- live AND still named as when made (hard rule 59: a freed address is soon another object's)
@@ -479,10 +513,22 @@ local function arm(pool, r, hp)
     for _, e in ipairs(pool) do
         if not e.used and liveObj(e.o) and addrOf(e.o) == e.a then
             e.used = true
-            local att = pcall(function() e.o:K2_AttachToComponent(r.c, FName("None"), 2, 2, 1, false) end)
+            local to = (r.anc and liveObj(r.anc)) and r.anc or r.c
+            local att = pcall(function() e.o:K2_AttachToComponent(to, FName("None"), 2, 2, 1, false) end)
             local okH, hx, hy, hz = pcall(function() local h = e.o.HitCenterOffset; return h.X, h.Y, h.Z end)
             if att and okH and tonumber(hx) then
                 pcall(function() e.o:K2_SetActorRelativeLocation({ X = -hx, Y = -hy, Z = -hz }, false, {}, true) end)
+            end
+            -- (its lock point, the target's place + its HitCenterOffset, against the rock's centre: once, twice a run)
+            BOXLOG = (BOXLOG or 0) + 1
+            if BOXLOG <= 2 then
+                local okL, L = pcall(function() return e.o:K2_GetActorLocation() end)
+                local R = rockAt(r)
+                if okL and L and R and okH and tonumber(hx) then
+                    local d = math.sqrt((L.X + hx - R.X) ^ 2 + (L.Y + hy - R.Y) ^ 2 + (L.Z + hz - R.Z) ^ 2) / 100
+                    ul(string.format("target's lock point %.1f m from its rock's centre (HitCenterOffset %.0f, %.0f, %.0f cm; on %s)",
+                        d, hx, hy, hz, to == r.anc and "its anchor" or "its mesh"))
+                end
             end
             pcall(function() e.o.MaxHealth = hp; e.o.HealthInternal = math.floor(hp * 10 + 0.5); e.o.MinHealth = 1 end)
             local nh, seen, hid = hideOwn(e.o)
@@ -704,11 +750,14 @@ local function land(f, now)
     local sc = cfg().sea or {}
     local isLand, gz, how = onLand(f.P, f.what)
     if isLand then
-        boom({ X = f.P.X, Y = f.P.Y, Z = gz or f.P.Z }, n((cfg().fx_scale or {})[f.big and "big_land" or "land"], 10))
+        local G = { X = f.P.X, Y = f.P.Y, Z = gz or f.P.Z }
+        boom(G, n((cfg().fx_scale or {})[f.big and "big_land" or "land"], 10))
+        spearAt("ground", G)
     else                                                  -- (the Spear's splash at the sea's level)
         local W = { X = f.P.X, Y = f.P.Y, Z = n(sc.sea_z, 350) }
         if fxAt then pcall(fxAt, sc.fx or {}, W, n(f.big and sc.big_scale or sc.scale, 1.5), 20) end
         bang(W)
+        spearAt("sea", W)
     end
     f.where = (isLand and "land" or "sea") .. " (" .. how .. ")"
     tell("l", tostring(f.id), isLand and "1" or "0")
@@ -1093,12 +1142,13 @@ function ULY.fromHost(f)
         local fx = cfg().fx_scale or {}
         if at then
             if k == "s" then boom(at, n(r.big and fx.big_shot or fx.shot, 4))
-            elseif f[4] == "1" then boom(at, n(r.big and fx.big_land or fx.land, 10))
+            elseif f[4] == "1" then boom(at, n(r.big and fx.big_land or fx.land, 10)); spearAt("ground", at)
             else
                 local sc = cfg().sea or {}
                 local W = { X = at.X, Y = at.Y, Z = n(sc.sea_z, 350) }
                 if fxAt then pcall(fxAt, sc.fx or {}, W, n(r.big and sc.big_scale or sc.scale, 1.5), 20) end
                 bang(W)                                       -- (the splash heard as the host hears it)
+                spearAt("sea", W)
             end
         end
         fallOff(r)
@@ -1144,6 +1194,7 @@ ULY.testSoundAt = function(kind, at) return wwAt(kind, at) end
 ULY.testSoundOn = function(kind, a) return wwOn(kind, a) end
 ULY.testSoundOff = function(a) wwOff(a) end
 ULY.testSoundComps = function(a) return wwComps(a) end
+ULY.testSpear = function(kind, at) return spearAt(kind, at) end
 -- Ctrl+Q: the next round is ULYSSES (phase 1; again: phase 2, then off); its log says which
 testKey("Q", "sv_ulysses.lua's ULYSSES round", function()
     if not D then log("test: Ctrl+Q: no run"); return end

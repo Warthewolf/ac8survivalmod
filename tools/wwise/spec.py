@@ -22,20 +22,24 @@ UNITS_PER_M = 10
 ATTENUATIONS = [
     # (the SOLG's test of 2026-11-23: a 3 km fade)
     {'name': 'SV_Att_Far', 'radius_m': 3000, 'curve': [[0, 0], [500, -10], [1500, -25], [3000, -200]]},
-    # ULYSSES: a fragment's whistle heard from ~7 km, the core's and the impacts' from 15-20 km
-    {'name': 'SV_Att_UlyFall', 'radius_m': 7000, 'curve': [[0, 0], [800, -6], [2500, -18], [5000, -36], [7000, -200]]},
-    {'name': 'SV_Att_UlyFallBig', 'radius_m': 20000, 'curve': [[0, 0], [2500, -6], [7000, -18], [14000, -36], [20000, -200]]},
-    {'name': 'SV_Att_UlyBoom', 'radius_m': 15000, 'curve': [[0, 0], [1500, -6], [5000, -18], [11000, -36], [15000, -200]]},
+    # ULYSSES ((2026-11-24, the user: "I don't hear the meteorite sounds": the shower spread over the whole island chain,
+    # most fell beyond the first ranges, 7 / 15-20 km) a fragment's whistle heard from 12 km, the core's from 30, the
+    # impacts from 40
+    {'name': 'SV_Att_UlyFall', 'radius_m': 12000, 'curve': [[0, 0], [1500, -6], [5000, -15], [9000, -28], [12000, -200]]},
+    {'name': 'SV_Att_UlyFallBig', 'radius_m': 30000, 'curve': [[0, 0], [4000, -6], [12000, -16], [22000, -30], [30000, -200]]},
+    {'name': 'SV_Att_UlyBoom', 'radius_m': 40000, 'curve': [[0, 0], [3000, -6], [12000, -18], [25000, -30], [40000, -200]]},
 ]
 # (name, source, settings): the event is Play_<name without SV_>, as Play_SV_<...>
 SOUNDS = [
     ('SV_SolgBreakBig', ('project', 'Sources/SV_SolgBreakBig.wav'), {'attenuation': 'SV_Att_Far'}),
-    # ((2026-11-24, the ulysound autotest's meter) a whistle 300 m off at -50 dBFS, 20 dB under AC8's own missiles: +10
-    ('SV_UlyFall', ('ulysses', 'fall_small.wav'), {'attenuation': 'SV_Att_UlyFall', 'loop': True, 'volume': -10}),
-    ('SV_UlyFallBig', ('ulysses', 'fall_big.wav'), {'attenuation': 'SV_Att_UlyFallBig', 'loop': True, 'volume': -16}),
-    ('SV_UlyBoom', ('ulysses', 'explosion.wav'), {'attenuation': 'SV_Att_UlyBoom', 'volume': -18}),
-    ('SV_UlyEncounter', ('ulysses', 'encounter.wav'), {'positioning': '2d', 'volume': -24}),
-    ('SV_UlyAmbient', ('ulysses', 'ambient.wav'), {'positioning': '2d', 'loop': True, 'volume': -27}),
+    # ((2026-11-24, the ulysound autotest's meter) a whistle 300 m off at -50 dBFS, 20 dB under AC8's own missiles: +10;
+    # ((later) the user: "I don't hear the meteorite sounds") all of them up again: a whistle +6, the core's and the
+    # impacts +6 / +8 (an impact 300 m off ~-27 dBFS, as loud as AC8's own missiles), the rumble +10, the sting +6
+    ('SV_UlyFall', ('ulysses', 'fall_small.wav'), {'attenuation': 'SV_Att_UlyFall', 'loop': True, 'volume': -4}),
+    ('SV_UlyFallBig', ('ulysses', 'fall_big.wav'), {'attenuation': 'SV_Att_UlyFallBig', 'loop': True, 'volume': -10}),
+    ('SV_UlyBoom', ('ulysses', 'explosion.wav'), {'attenuation': 'SV_Att_UlyBoom', 'volume': -10}),
+    ('SV_UlyEncounter', ('ulysses', 'encounter.wav'), {'positioning': '2d', 'volume': -18}),
+    ('SV_UlyAmbient', ('ulysses', 'ambient.wav'), {'positioning': '2d', 'loop': True, 'volume': -17}),
 ]
 
 
