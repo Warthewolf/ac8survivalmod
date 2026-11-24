@@ -4317,3 +4317,12 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   (package_release.sh's dev_only branch is PUBLIC=1's too), fix/tani-vls-test (the VLS watch's throttle of 2026-11-19
   checked, then off in the test), fix/lb-contract-fleet (the Worker's SPECIALS: fleet and ulysses; its own tests 15
   specials; NOT deployed).
+- 0.75.99 (2026-11-24, branch feature/ulysses): a code review of the whole branch (dev...feature/ulysses, 29 files), its
+  findings fixed: the Spaceport kept off the round before ULYSSES (its retake took round 19, so the time shift never
+  played; THE FESTIVAL's guard copied); ULY.endAll takes everything down when its last round is lost, a run or level
+  ends, or a joiner becomes host (the film look, the rumble, the sky, rocks, fall loops, the SOLG's box names); the film
+  look is the HUD's wash only (no post-process volume, no camera writes: hard rule 59); the fragments' solo count no
+  longer also their health; joiners draw the core's blasts and fall sound; the static streak cached and pinned. Build
+  and checks pass. Autotest: the first runs stopped for low memory (the install put back, checked file by file), the
+  reruns refused to launch (Steam closed): NOT yet tested in game. Staged build/release/stage_dev_0.75.99, not
+  registered, NOT installed.
