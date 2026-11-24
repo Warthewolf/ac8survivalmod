@@ -1137,7 +1137,10 @@ function ULY.tick(now)
         end
     end
     local s = D and D.special
+    -- ((2026-11-24, the user: "during the intermission of these two rounds, the fake meteors up in the sky can still
+    -- continue to run") the break between its rounds too: still in 1999 (the film look on until its last round's end)
     local on = (s and s.kind == "ulysses" and (D.state == "fighting" or D.state == "spawning")) or J.on
+        or (FILM.on and D and D.state == "wait")
     skyClean(now)
     if on then skyTick(now)
     elseif #SKYM.list > 0 and not (U and U.phase) then
