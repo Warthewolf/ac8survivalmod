@@ -6641,8 +6641,9 @@ SUITES.ulydawn = function()
 end
 
 -- ((2026-11-24, the user: "get the wwise sounds working for the meteorites") ULYSSES' Wwise sounds one by one: the camera
--- held still 1.5 km over the airfield looking east (the listener), the game's music muted, each sound at set distances
--- east of it with quiet between; tools/autotest/loudness.ps1, run beside the job, measures what the speakers get and
+-- held still 1.5 km over the sea 41 km west of the airfield, looking east (the listener: the first run's camera over the
+-- airfield heard your plane's engine as it circled, louder than the sounds), the game's music muted, each sound at set
+-- distances east of it with quiet between (an impact is 16.6 s long: 18 s apart); tools/autotest/loudness.ps1, run beside the job, measures what the speakers get and
 -- tools/autotest/loudness_report.py matches its levels to the "SOUND ..." lines by their time
 SUITES.ulysound = function()
     intoRun()
@@ -6651,24 +6652,24 @@ SUITES.ulysound = function()
     A.wait(6)
     A.do_(function()
         if not ST.check(ULY ~= nil and ULY.testSoundAt ~= nil, "ULYSSES' sound line-up is in this build") then return "abort" end
-        T.C = { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 150000 }
-        local ok, why = ST.look(T.C, { X = AIRFIELD.X + 1000000, Y = AIRFIELD.Y, Z = 150000 }, 70)
-        ST.info("the camera held over the airfield: " .. tostring(ok) .. (why and (" (" .. tostring(why) .. ")") or ""))
+        T.C = { X = AIRFIELD.X - 4100000, Y = AIRFIELD.Y, Z = 150000 }
+        local ok, why = ST.look(T.C, { X = T.C.X + 1000000, Y = T.C.Y, Z = 150000 }, 70)
+        ST.info("the camera held over the sea 41 km west of the airfield: " .. tostring(ok) .. (why and (" (" .. tostring(why) .. ")") or ""))
         if type(SV_PlayBGM) == "function" then ST.info("the music muted: " .. tostring(select(2, pcall(SV_PlayBGM, "AKE_System_BGM_Mute_On")))) end
     end)
     A.wait(5)
     A.do_(function() ST.info("SOUND quiet (the baseline)") end)
     A.wait(5)
-    for _, km in ipairs({ 0.3, 1.5, 4, 8 }) do
+    for _, km in ipairs({ 0.3, 1.5, 5, 11, 16 }) do
         A.do_(function()
             local ok = ULY.testSoundAt("boom", at(km))
             ST.info(string.format("SOUND boom %.1f km: %s", km, tostring(ok)))
             if km == 0.3 then ST.check(ok, "an impact posted by Wwise (Play_SV_UlyBoom)") end
         end)
-        A.wait(7)
+        A.wait(18)
     end
     -- a whistle on a still rock, as each fragment's, then stopped: quiet again
-    for _, km in ipairs({ 0.3, 3 }) do
+    for _, km in ipairs({ 0.3, 0.8, 2.5, 5, 8 }) do
         A.do_(function()
             T.r = ULY.testRock("C", at(km), { X = 0, Y = 0, Z = 0 }, 2, {}, nil, 1)
             local ok = T.r ~= nil and ULY.testSoundOn("fall", T.r.a)
@@ -6683,16 +6684,18 @@ SUITES.ulysound = function()
         end)
         A.wait(4)
     end
-    A.do_(function()
-        T.r = ULY.testRock("C", at(0.3), { X = 0, Y = 0, Z = 0 }, 2, {}, nil, 1)
-        ST.info("SOUND fall_big 0.3 km: " .. tostring(T.r ~= nil and ULY.testSoundOn("fall_big", T.r.a)))
-    end)
-    A.wait(5)
-    A.do_(function()
-        if T.r then ULY.testSoundOff(T.r.a); ULY.testRockOff(T.r); T.r = nil end
-        ST.info("SOUND fall_big stopped")
-    end)
-    A.wait(4)
+    for _, km in ipairs({ 0.3, 7, 21 }) do
+        A.do_(function()
+            T.r = ULY.testRock("C", at(km), { X = 0, Y = 0, Z = 0 }, 2, {}, nil, 1)
+            ST.info(string.format("SOUND fall_big %.1f km: %s", km, tostring(T.r ~= nil and ULY.testSoundOn("fall_big", T.r.a))))
+        end)
+        A.wait(5)
+        A.do_(function()
+            if T.r then ULY.testSoundOff(T.r.a); ULY.testRockOff(T.r); T.r = nil end
+            ST.info(string.format("SOUND fall_big %.1f km stopped", km))
+        end)
+        A.wait(4)
+    end
     A.do_(function()
         local ok = ULY.testSoundAt("encounter", nil)
         ST.info("SOUND encounter: " .. tostring(ok))
@@ -6711,6 +6714,8 @@ SUITES.ulysound = function()
         ST.info("SOUND ambient stopped")
     end)
     A.wait(4)
+    A.do_(function() ST.info("SOUND quiet again (the end's baseline)") end)
+    A.wait(5)
     A.do_(function()
         ST.info("SOUND end")
         local n = 0
