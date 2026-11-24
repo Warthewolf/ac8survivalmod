@@ -4397,3 +4397,6 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   the sea, 3 on the airfield with the core's -120, 1 on the town); 25 falling at the most, 60 fps throughout, the game's
   memory 19.6 GB at the start, 11.5 GB at the end; no Wwise post failed. ulydawn 17/17 (pictures at the real sunrise,
   the new Comona Control lines on screen). With the spread wide, nearly every fragment falls harmless: the user's call.
+- New suite ulyxaudio (ULYSSES with sounds.wwise.enabled false: the XAudio2 fallback, a build without
+  SurvivalMode_Wwise_P) 10/10 on 0.75.105: 15 XAudio2 voices (the rumble, the whistles), none through Wwise; paused 6 s:
+  SND.paused true, the level down 13 dB (ours silent, the plane's own engine left), then back.
