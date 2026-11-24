@@ -6640,6 +6640,89 @@ SUITES.ulydawn = function()
     SUITES.ulysses2()
 end
 
+-- ((2026-11-24, the user: "get the wwise sounds working for the meteorites") ULYSSES' Wwise sounds one by one: the camera
+-- held still 1.5 km over the airfield looking east (the listener), the game's music muted, each sound at set distances
+-- east of it with quiet between; tools/autotest/loudness.ps1, run beside the job, measures what the speakers get and
+-- tools/autotest/loudness_report.py matches its levels to the "SOUND ..." lines by their time
+SUITES.ulysound = function()
+    intoRun()
+    local T = {}
+    local function at(km) return { X = T.C.X + km * 100000, Y = T.C.Y, Z = T.C.Z } end
+    A.wait(6)
+    A.do_(function()
+        if not ST.check(ULY ~= nil and ULY.testSoundAt ~= nil, "ULYSSES' sound line-up is in this build") then return "abort" end
+        T.C = { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 150000 }
+        local ok, why = ST.look(T.C, { X = AIRFIELD.X + 1000000, Y = AIRFIELD.Y, Z = 150000 }, 70)
+        ST.info("the camera held over the airfield: " .. tostring(ok) .. (why and (" (" .. tostring(why) .. ")") or ""))
+        if type(SV_PlayBGM) == "function" then ST.info("the music muted: " .. tostring(select(2, pcall(SV_PlayBGM, "AKE_System_BGM_Mute_On")))) end
+    end)
+    A.wait(5)
+    A.do_(function() ST.info("SOUND quiet (the baseline)") end)
+    A.wait(5)
+    for _, km in ipairs({ 0.3, 1.5, 4, 8 }) do
+        A.do_(function()
+            local ok = ULY.testSoundAt("boom", at(km))
+            ST.info(string.format("SOUND boom %.1f km: %s", km, tostring(ok)))
+            if km == 0.3 then ST.check(ok, "an impact posted by Wwise (Play_SV_UlyBoom)") end
+        end)
+        A.wait(7)
+    end
+    -- a whistle on a still rock, as each fragment's, then stopped: quiet again
+    for _, km in ipairs({ 0.3, 3 }) do
+        A.do_(function()
+            T.r = ULY.testRock("C", at(km), { X = 0, Y = 0, Z = 0 }, 2, {}, nil, 1)
+            local ok = T.r ~= nil and ULY.testSoundOn("fall", T.r.a)
+            local k = T.r and ULY.testSoundComps(T.r.a) or -1
+            ST.info(string.format("SOUND fall %.1f km: %s, %d Wwise component(s) on the rock", km, tostring(ok), k))
+            if km == 0.3 then ST.check(ok and k >= 1, "a whistle posted by Wwise on its rock (Play_SV_UlyFall)", k .. " components") end
+        end)
+        A.wait(5)
+        A.do_(function()
+            if T.r then ULY.testSoundOff(T.r.a); ULY.testRockOff(T.r); T.r = nil end
+            ST.info(string.format("SOUND fall %.1f km stopped", km))
+        end)
+        A.wait(4)
+    end
+    A.do_(function()
+        T.r = ULY.testRock("C", at(0.3), { X = 0, Y = 0, Z = 0 }, 2, {}, nil, 1)
+        ST.info("SOUND fall_big 0.3 km: " .. tostring(T.r ~= nil and ULY.testSoundOn("fall_big", T.r.a)))
+    end)
+    A.wait(5)
+    A.do_(function()
+        if T.r then ULY.testSoundOff(T.r.a); ULY.testRockOff(T.r); T.r = nil end
+        ST.info("SOUND fall_big stopped")
+    end)
+    A.wait(4)
+    A.do_(function()
+        local ok = ULY.testSoundAt("encounter", nil)
+        ST.info("SOUND encounter: " .. tostring(ok))
+        ST.check(ok, "the encounter posted by Wwise (Play_SV_UlyEncounter)")
+    end)
+    A.wait(10)
+    A.do_(function()
+        T.r = ULY.testRock("D", at(20), { X = 0, Y = 0, Z = 0 }, 1, {}, nil, 1)    -- (2D: where its actor is doesn't matter)
+        local ok = T.r ~= nil and ULY.testSoundOn("ambient", T.r.a)
+        ST.info("SOUND ambient (2D, its actor 20 km off): " .. tostring(ok))
+        ST.check(ok, "the rumble posted by Wwise (Play_SV_UlyAmbient)")
+    end)
+    A.wait(6)
+    A.do_(function()
+        if T.r then ULY.testSoundOff(T.r.a); ULY.testRockOff(T.r); T.r = nil end
+        ST.info("SOUND ambient stopped")
+    end)
+    A.wait(4)
+    A.do_(function()
+        ST.info("SOUND end")
+        local n = 0
+        for _, k in ipairs({ "Play_SV_UlyFall", "Play_SV_UlyFallBig", "Play_SV_UlyBoom", "Play_SV_UlyEncounter", "Play_SV_UlyAmbient" }) do
+            if ST.findLog("ulysses: sound: Wwise's " .. k .. " loaded", 0, true) then n = n + 1 end
+        end
+        ST.check(n == 5, "all five of its Wwise events loaded (" .. n .. " of 5)")
+        ST.lookBack()
+    end)
+    A.wait(1)
+end
+
 -- ((2026-11-24, the user: "Spawn more meteorites, have atleast 50 spawn in waves of 2") ULYSSES round 1 whole, at its
 -- real heights and speeds (config_ulymany.lua only brings the waves closer: every 3-4 s, so at_once's 30 is reached):
 -- the waves of 2, up to 30 falling, every fragment its target box though the KEW unit lends 36 (handed back when one is
