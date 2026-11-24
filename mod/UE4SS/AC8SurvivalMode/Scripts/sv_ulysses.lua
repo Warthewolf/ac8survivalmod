@@ -448,9 +448,17 @@ local function rockOff(r)
     if rockLive(r) then pcall(function() r.a:K2_DestroyActor() end) end
     if r then r.a = nil end
 end
-local function boom(at, scale)
+local function boom(at, scale, silent)
     if at and fxAt then pcall(fxAt, cfg().fx, at, scale, 8) end
+    if not silent then bang(at) end
+end
+-- ((2026-11-24, the user: "tonitrus spear impact for the impact sfx") a landing's sound: AC8's Tonitrus Spear impact
+-- (kind: ground / sea) in place of the explosion (sounds.landing "spear"); the explosion only if the Spear's won't post
+-- (a shot down in the air keeps the explosion: boom)
+local function landSound(kind, at)
+    if (cfg().sounds or {}).landing == "spear" and spearAt(kind, at) then return end
     bang(at)
+    if (cfg().sounds or {}).landing ~= "spear" then spearAt(kind, at) end
 end
 
 ---------------------------------------------------------------------------------------------------- the borrowed targets
@@ -755,13 +763,12 @@ local function land(f, now)
     local isLand, gz, how = onLand(f.P, f.what)
     if isLand then
         local G = { X = f.P.X, Y = f.P.Y, Z = gz or f.P.Z }
-        boom(G, n((cfg().fx_scale or {})[f.big and "big_land" or "land"], 10))
-        spearAt("ground", G)
+        boom(G, n((cfg().fx_scale or {})[f.big and "big_land" or "land"], 10), true)
+        landSound("ground", G)
     else                                                  -- (the Spear's splash at the sea's level)
         local W = { X = f.P.X, Y = f.P.Y, Z = n(sc.sea_z, 350) }
         if fxAt then pcall(fxAt, sc.fx or {}, W, n(f.big and sc.big_scale or sc.scale, 1.5), 20) end
-        bang(W)
-        spearAt("sea", W)
+        landSound("sea", W)
     end
     f.where = (isLand and "land" or "sea") .. " (" .. how .. ")"
     tell("l", tostring(f.id), isLand and "1" or "0")
@@ -1146,13 +1153,12 @@ function ULY.fromHost(f)
         local fx = cfg().fx_scale or {}
         if at then
             if k == "s" then boom(at, n(r.big and fx.big_shot or fx.shot, 4))
-            elseif f[4] == "1" then boom(at, n(r.big and fx.big_land or fx.land, 10)); spearAt("ground", at)
+            elseif f[4] == "1" then boom(at, n(r.big and fx.big_land or fx.land, 10), true); landSound("ground", at)
             else
                 local sc = cfg().sea or {}
                 local W = { X = at.X, Y = at.Y, Z = n(sc.sea_z, 350) }
                 if fxAt then pcall(fxAt, sc.fx or {}, W, n(r.big and sc.big_scale or sc.scale, 1.5), 20) end
-                bang(W)                                       -- (the splash heard as the host hears it)
-                spearAt("sea", W)
+                landSound("sea", W)                           -- (the splash heard as the host hears it)
             end
         end
         fallOff(r)

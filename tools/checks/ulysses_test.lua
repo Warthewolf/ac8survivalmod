@@ -119,8 +119,10 @@ check(A and A.x[1] <= -19 and A.x[2] >= 20 and A.y[1] <= -12 and A.y[2] >= 7, "f
 check(A and A.x[2] * 100000 <= ZONE_EAST_CM, "... their impacts inside the combat zone's east edge")
 check(f.land_tries == 0, "... never steered onto land")
 check(f.pay == 1000, "1000 a fragment shot down (the user's call)")
-check(c.sounds.whistle == false and src:find('(cfg().sounds or {}).whistle == false', 1, true) ~= nil,
-    "no fall loop on a fragment (AC:I's is its ICBM burner's: the user heard a missile)")
+check(c.sounds.whistle == true and src:find('(cfg().sounds or {}).whistle == false', 1, true) ~= nil,
+    "a fragment's fall loop on again (the user: back at its earlier level), and a switch for it")
+check(c.sounds.landing == "spear" and src:find('local function landSound', 1, true) ~= nil,
+    "a landing sounds as AC8's Tonitrus Spear impact (the user's call), a shot down as the explosion")
 check(f.aim_share == 0 and src:find("math.random() < n(f.aim_share, 0)", 1, true) ~= nil, "aim_share there, 0 (all spread) until the user says")
 check(f.aim_land_tries >= 1 and src:find("aimed and n(f.aim_land_tries, 6) or n(f.land_tries, 0)", 1, true) ~= nil,
     "... an aimed one steered onto land, a wide one not")
