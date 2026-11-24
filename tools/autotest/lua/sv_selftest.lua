@@ -6792,12 +6792,13 @@ SUITES.ulysound = function()
     A.wait(4)
     -- ((2026-11-24, the user: "make it so that the meteorites have the tonitrus spear impact sfx too") AC8's own Spear
     -- impacts (ground, sea) 1.5 km off, as a fragment's landing posts them beside its own explosion
-    for _, kind in ipairs({ "ground", "sea" }) do
+    -- ((2026-11-24, then the landings' only sound: the user, "tonitrus spear impact for the impact sfx") how far it carries
+    for _, row in ipairs({ { "ground", 1.5 }, { "ground", 5 }, { "ground", 15 }, { "ground", 30 }, { "sea", 1.5 }, { "sea", 15 } }) do
         A.do_(function()
-            local ok = ULY.testSpear and ULY.testSpear(kind, at(1.5))
-            ST.info(string.format("SOUND spear %s 1.5 km: %s", kind, tostring(ok)))
+            local ok = ULY.testSpear and ULY.testSpear(row[1], at(row[2]))
+            ST.info(string.format("SOUND spear %s %.1f km: %s", row[1], row[2], tostring(ok)))
         end)
-        A.wait(8)
+        A.wait(9)
     end
     -- ((2026-11-24) as in a round: a whistle posted far out of its 7 km (every fragment starts 28-34 km away), then closing
     -- on the camera at 600 m/s from 12 km: it must swell as it comes in (SOUND fall closing ... lines every 2 s: its distance)
