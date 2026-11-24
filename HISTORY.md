@@ -4400,3 +4400,18 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
 - New suite ulyxaudio (ULYSSES with sounds.wwise.enabled false: the XAudio2 fallback, a build without
   SurvivalMode_Wwise_P) 10/10 on 0.75.105: 15 XAudio2 voices (the rumble, the whistles), none through Wwise; paused 6 s:
   SND.paused true, the level down 13 dB (ours silent, the plane's own engine left), then back.
+- 0.75.106 - 0.75.107 (2026-11-24): fragments.aim_share (0 = all spread wide, as shipped) for the user's pending call:
+  that share aimed at the airfield or a town as before the spread and steered onto land (aim_land_tries 6), the rest
+  anywhere in area_km (the ulyaim autotest with 0.4: 9 on the airfield, 5 on the town, 30 in the sea; before the
+  steering only 3 / 0 / 41: the airfield and the towns are on the coast). Regression runs: smoke 5/5, valkasolg 38/38
+  (as on 0.75.44: VALKA's songs on Survival's player, the SOLG), ulysses2 17/17. The ulysses suite's close-ups wait
+  for a fragment under 8 km and look side-on (from 20-28 km up and from behind its way they showed empty sky or its
+  tail end-on).
+- 0.75.108 (2026-11-24), the user, of a fragment's fire tail up close: "dont use those tube like meteor things, they look
+  silly, just use the smoke": no tail of ours on the fragments or the core (fragments.tail_x / big.tail_x 0; rock() draws
+  none with tailX 0; joiners the same from their config), their smoke and fire trails only; the sky's meteors keep their
+  streak. "make some of the meteors even quicker": fragments 1300-3000 km/h (34-94 s down). ulysses 15/15, the pictures
+  sent to the user.
+- 0.75.109 (2026-11-24), the user: "Players should get $1000 per meteorite they destroy": fragments.pay 1000 (was 300;
+  the core 6000 as before): a full round 1 up to 50,000, round 2 up to 66,000. ulysses 15/15 ("paid 1000"). Staged
+  build/release/stage_dev_0.75.109, not registered, NOT installed.
