@@ -9,7 +9,8 @@ WAAPI over local HTTP (Python's standard library only; WwiseConsole waapi-server
 
 spec.json (machine paths stay out of the repo: the spec is written per run, sources from .env's folders):
     {"bus": "sfx",
-     "attenuations": [{"name": "SV_Att_Far", "radius_max": 300000, "curve": [[0, 0], [500, -10], [1500, -25], [3000, -200]]}],
+     "units_per_m": 10,
+     "attenuations": [{"name": "SV_Att_Far", "radius_m": 3000, "curve": [[0, 0], [500, -10], [1500, -25], [3000, -200]]}],
      "sounds": [{"name": "SV_SolgBreakBig", "wav": "<path>", "attenuation": "SV_Att_Far", "volume": 0},
                 {"name": "SV_UlyAmbient", "wav": "<path>", "positioning": "2d", "loop": true, "volume": -12}],
      "events": [{"name": "Play_SV_SolgBreakBig", "play": "SV_SolgBreakBig"}]}
@@ -20,6 +21,10 @@ never ship an Init.bnk of their own. A sound is 3D (position from the emitter, l
 unless "positioning": "2d" (the speakers as it is: no position, no attenuation); "loop": true loops it until stopped.
 (2026-11-24) ListenerRelativeRouting is written either way, never left to Wwise's default (the 0.75.66 SOLG test: "doesnt
 sound like the solg noise gets further from me").
+Distances: metres in the spec, written as metres x units_per_m (default 100: UE centimetres). AC8's listener scales every
+attenuation by 10 (DefaultListenerScalingFactor=10 in its Live/Config/DefaultGame.ini: a curve's distances are 10x on
+the ground), so AC8's units_per_m is 10 (the ulysound autotest of 0.75.103: written in centimetres, an impact meant to be
+silent at 15 km was as loud at 16 km as at 0.3 km). radius_m (or radius_max, in Wwise units) is the curve's end.
 """
 import json
 import sys
@@ -29,6 +34,7 @@ import urllib.request
 PORT, SPEC = int(sys.argv[1]), json.load(open(sys.argv[2], encoding='utf-8'))
 BANK = sys.argv[sys.argv.index('--bank') + 1] if '--bank' in sys.argv else None
 EACH = '--bank-each' in sys.argv
+UPM = float(SPEC.get('units_per_m', 100))                # (Wwise units a metre on the ground: AC8's 10, see above)
 
 
 def call(uri, args=None, options=None):
@@ -61,13 +67,14 @@ evw = first('$ from type WorkUnit where name = "Default Work Unit" and parent.na
 att = {}
 for a in SPEC.get('attenuations', []):
     o = call('ak.wwise.core.object.create', {'parent': atw['id'], 'type': 'Attenuation', 'name': a['name'], 'onNameConflict': 'merge'})
-    call('ak.wwise.core.object.setProperty', {'object': o['id'], 'property': 'RadiusMax', 'value': a['radius_max']})
+    radius = a['radius_m'] * UPM if 'radius_m' in a else a['radius_max']
+    call('ak.wwise.core.object.setProperty', {'object': o['id'], 'property': 'RadiusMax', 'value': radius})
     if a.get('curve'):                                   # [[metres, dB], ...]: the volume over distance (game units = cm)
-        pts = [{'x': m * 100.0, 'y': db, 'shape': 'Linear'} for m, db in a['curve']]
+        pts = [{'x': m * UPM, 'y': db, 'shape': 'Linear'} for m, db in a['curve']]
         call('ak.wwise.core.object.setAttenuationCurve', {'object': o['id'], 'curveType': 'VolumeDryUsage', 'use': 'Custom',
                                                          'points': pts})
     att[a['name']] = o['id']
-    print('attenuation', a['name'], o['id'], 'radius', a['radius_max'])
+    print('attenuation', a['name'], o['id'], 'radius %.0f units (%.0f m at %g units a metre)' % (radius, radius / UPM, UPM))
 snd = {}
 for s in SPEC.get('sounds', []):
     r = call('ak.wwise.core.audio.import', {'importOperation': 'useExisting', 'default': {'importLanguage': 'SFX'},
