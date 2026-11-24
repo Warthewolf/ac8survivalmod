@@ -6360,6 +6360,34 @@ SUITES.ulysses = function()
     A.until_(function() return #frags() >= 2 end, 40, function(v)
         ST.check(v ~= nil, "fragments falling", string.format("%d up", #frags()))
     end)
+    -- ((2026-11-24) the box's numbers, twice 2 s apart: each armed fragment's anchor (its world scale and rotation), its
+    -- target's place against the rock, its lock point (the target's place + HitCenterOffset) against the rock's centre
+    local function boxProbe(tag)
+        A.do_(function()
+            local U = ULY and ULY.debug and select(1, ULY.debug())
+            local k = 0
+            for _, x in ipairs(U and U.list or {}) do
+                if k < 2 and not x.done and x.e and x.e.o and x.r and x.r.a then
+                    k = k + 1
+                    local function v3(f) local ok, v = pcall(f); return ok and v and { X = v.X, Y = v.Y, Z = v.Z } or nil end
+                    local R = v3(function() return x.r.a:K2_GetActorLocation() end)
+                    local L = v3(function() return x.e.o:K2_GetActorLocation() end)
+                    local H = v3(function() return x.e.o.HitCenterOffset end)
+                    local AS = x.r.anc and v3(function() return x.r.anc:GetComponentScale() end)
+                    local AR = x.r.anc and v3(function() local r = x.r.anc:K2_GetComponentRotation(); return { X = r.Pitch, Y = r.Yaw, Z = r.Roll } end)
+                    local CS = v3(function() return x.r.c:GetComponentScale() end)
+                    local TR = v3(function() local r = x.e.o:K2_GetActorRotation(); return { X = r.Pitch, Y = r.Yaw, Z = r.Roll } end)
+                    local function f3(v, d) return v and string.format("(%.1f, %.1f, %.1f)", v.X / (d or 1), v.Y / (d or 1), v.Z / (d or 1)) or "?" end
+                    local lock = (R and L and H) and math.sqrt((L.X + H.X - R.X) ^ 2 + (L.Y + H.Y - R.Y) ^ 2 + (L.Z + H.Z - R.Z) ^ 2) / 100 or -1
+                    ST.info(string.format("box %s #%d: target - rock %s m, lock point %.1f m off; anchor scale %s rot %s; mesh scale %s; target rot %s",
+                        tag, k, (R and L) and f3({ X = L.X - R.X, Y = L.Y - R.Y, Z = L.Z - R.Z }, 100) or "?", lock, f3(AS), f3(AR), f3(CS), f3(TR)))
+                end
+            end
+        end)
+    end
+    boxProbe("now")
+    A.wait(2)
+    boxProbe("2 s on")
     -- ((2026-11-24, the user: "The target box isn't aligned") its lock point on the rock's centre (sv_ulysses.lua's line)
     A.log_("ulysses: target's lock point", 30, "u0", true, function(l)
         local d = l and tonumber(l:match("lock point ([%d%.]+) m"))
