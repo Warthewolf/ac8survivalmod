@@ -408,6 +408,9 @@ local function disarm(e)
     flags(e.o, FLAGS_OFF)
     pcall(function() e.o:K2_DetachFromActor(1, 1, 1) end)
     pcall(function() e.o:K2_SetActorLocation(PARK, false, {}, true) end)
+    -- ((2026-11-24, the user: "atleast 50") handed back for the next fragment: the KEW unit lends 36, a round has 50-90
+    -- (arm sets its health, MinHealth and flags anew)
+    e.used = false
 end
 local function atFloor(e)
     if not (e and liveObj(e.o) and addrOf(e.o) == e.a) then return false, "gone" end
@@ -789,15 +792,19 @@ function ULY.roundTick(now, s)
         for _, x in ipairs(U.list) do if not x.done and not x.big then falling = falling + 1 end end
         if U.sent < U.todo and now >= U.nextAt and falling < n(f.at_once, 6) then
             U.nextAt = now + span(f.every_s, 6)
-            -- ((2026-11-24, the ulysses2 autotest: 6 of 10 fell harmless in the sea, all coming from the east onto a coastal
-            -- airfield) each aimed onto land, so each one threatens the airfield or the town; 6 tries, then as picked
-            local P, what = aimPoint()
-            for _ = 1, n(cfg().fragments.land_tries, 6) do
-                if ULY.isLand(P.X, P.Y) ~= false then break end
-                P, what = aimPoint()
+            -- ((2026-11-24, the user: "in waves of 2") per_wave of them at once, each its own aim
+            for _ = 1, math.max(1, math.floor(n(f.per_wave, 1))) do
+                if U.sent >= U.todo or falling >= n(f.at_once, 6) then break end
+                -- ((2026-11-24, the ulysses2 autotest: 6 of 10 fell harmless in the sea, all coming from the east onto a
+                -- coastal airfield) each aimed onto land, land_tries tries, then as picked (0 since area_km: land or sea)
+                local P, what = aimPoint()
+                for _ = 1, n(cfg().fragments.land_tries, 6) do
+                    if ULY.isLand(P.X, P.Y) ~= false then break end
+                    P, what = aimPoint()
+                end
+                local x = launch(f, P, what, false)
+                if x then U.list[#U.list + 1] = x; U.sent = U.sent + 1; falling = falling + 1 else U.todo = U.todo - 1 end
             end
-            local x = launch(f, P, what, false)
-            if x then U.list[#U.list + 1] = x; U.sent = U.sent + 1 else U.todo = U.todo - 1 end
         end
         if U.bigAt and not U.bigSent and now >= U.bigAt then
             U.bigSent = true

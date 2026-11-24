@@ -404,8 +404,12 @@ CFG.specials.festival = { enabled = true, name = "THE FESTIVAL", round_after = 6
 -- high up (sky). The film look (film: a post-process volume of ours) and the time shift (fade, the card) while in 1999.
 CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offset = 0,
     -- each round's fragments (co-op: x (1 + per_player a player past the first), at most max_n); solo x solo_x
-    fragments = { round1 = 16, round2 = 20, per_player = 0.15, max_n = 34, solo_x = 0.8,
-                  every_s = { 4, 8 }, first_s = 8, at_once = 6,
+    -- ((2026-11-24, the user: "Spawn more meteorites, have atleast 50 spawn in waves of 2") 50 / 60 (was 16 / 20), solo
+    -- too (solo_x 1, was 0.8), co-op up to max_n 90 (was 34); per_wave 2 every every_s (was one every 4-8 s), at most
+    -- at_once 30 falling (was 6: the 48 sound voices hold 30 fall loops and the explosions; the SOLG's KEW unit lends 36
+    -- targets, each handed back when its fragment is done)
+    fragments = { round1 = 50, round2 = 60, per_player = 0.15, max_n = 90, solo_x = 1.0,
+                  every_s = { 5, 8 }, per_wave = 2, first_s = 8, at_once = 30,
                   -- where they come from (km from where they land, m up) and how fast (km/h, along their line)
                   -- ((2026-11-24, the user: "the meteorites need to spawn at higher altitude so the players have a chance to
                   -- intercept them, also make them quicker too, the meteorites should be going around 1300km/h") 20-24 km up

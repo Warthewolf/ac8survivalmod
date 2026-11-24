@@ -75,6 +75,13 @@ players = 4
 check(count(2) == math.min(f.max_n, math.floor(f.round2 * (1 + f.per_player * 3) + 0.5)), "4 players: round 2's x (1 + per_player x 3)")
 players = 24
 check(count(2) <= f.max_n, "24 players: at most max_n")
+-- ((2026-11-24, the user: "Spawn more meteorites, have atleast 50 spawn in waves of 2")
+players = 1
+check(count(1) >= 50 and count(2) >= 50, "solo: at least 50 fragments a round (" .. count(1) .. " / " .. count(2) .. ")")
+check(f.per_wave == 2 and src:find("math.floor(n(f.per_wave, 1))", 1, true) ~= nil, "they come in waves of 2")
+check(f.at_once <= 36, "at most 36 falling at once: the SOLG's KEW unit lends 36 targets")
+check(f.at_once + 6 <= 48, "their fall loops, the rumble and the explosions within the sound player's 48 voices")
+check(src:find("e.used = false", 1, true) ~= nil, "each target handed back when its fragment is done (50-90 a round from 36)")
 
 -- its sounds, meshes and boxes named
 local c = CFG.specials.ulysses

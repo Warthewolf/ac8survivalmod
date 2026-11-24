@@ -15,8 +15,10 @@ the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the
 
 ## 2. The round
 - No fighters (`alone`, aircraft 0): only fragments. busy until every fragment is shot down or landed (and the core sent).
-- Fragments: round1 16 / round2 20 (solo x0.8; co-op + 0.15 a player past the first, at most 34), one every 4-8 s (the
-  first 8 s in), at most 6 falling; each a 45 degree dive from the east (AC:I's), 20-24 km up, at 1250-1350 km/h
+- Fragments: round1 50 / round2 60 (solo the same; co-op + 0.15 a player past the first, at most 90; her call: "atleast
+  50 spawn in waves of 2"), 2 at a time every 5-8 s (the first 8 s in), at most 30 falling (the 48 sound voices: 30 fall
+  loops, the rumble and the explosions); the SOLG's KEW unit lends 36 targets, each handed back (disarm) when its
+  fragment is shot down or lands; each a 45 degree dive from the east (AC:I's), 20-24 km up, at 1250-1350 km/h
   (75-98 s down; her call: higher, "around 1300km/h"), onto anywhere in area_km (x -30..+24, y -20..+15 km: the whole
   island chain and the sea round it, land or sea, never steered onto land; her call: "vastly spread out around the comona
   island"). Without area_km: the airfield (60 %) or a town (40 %), 2.5 km spread.
