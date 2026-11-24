@@ -4389,3 +4389,11 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   second game in a row loaded (AC8 ~24 GB at the load of 31 GB): the installs put back, identical; the tests since run
   one at a time in the foreground. tools/checks/run_all: 86 passed, the 4 known failures of dev (their fix branches
   await the user). Staged build/release/stage_dev_0.75.105, not registered, NOT installed.
+- 2026-11-24 afternoon, more autotests on 0.75.105 (tools/ac8-autotest): ulysound 12/12 with a whistle closing from 12 km
+  at 600 m/s (silent past 8 km, then -71 / -61 / -46 / -40 dBFS at 7 / 6 / 3.4 / 1 km: every fragment starts out of
+  its range and swells as it comes in); the pause held 5 s (ST.holdPause: the kit's focus guard had un-paused it after
+  1 s): silence from 0.1 s after the pause to the resume. New suite ulysoak: both rounds played out as shipped, nobody
+  shooting, 13/13: round 1 3 min 50 s (50: 48 in the sea, 2 on open land), round 2 4 min 34 s (61 with the core: 57 in
+  the sea, 3 on the airfield with the core's -120, 1 on the town); 25 falling at the most, 60 fps throughout, the game's
+  memory 19.6 GB at the start, 11.5 GB at the end; no Wwise post failed. ulydawn 17/17 (pictures at the real sunrise,
+  the new Comona Control lines on screen). With the spread wide, nearly every fragment falls harmless: the user's call.
