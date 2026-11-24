@@ -4373,3 +4373,19 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
 - 0.75.104: AC8's listener scales every attenuation by 10 (DefaultListenerScalingFactor=10 in its Live/Config/
   DefaultGame.ini): a curve written in centimetres is 10x too wide on the ground, which is also why the SOLG test of
   0.75.66 / 0.75.67 never faded. tools/wwise: distances in metres x units_per_m 10 (spec.py UNITS_PER_M).
+- 0.75.105 (2026-11-24, branch feature/ulysses): ULYSSES' Wwise sounds pause with the game. AC8's pause
+  (AKE_System_SFX_Pause_On, decoded from AKB_GameSe.bnk with tools/pak_read.py: Pause on four buses, one a child of sfx,
+  SetBusVolume on three, never the sfx bus itself) would have left them playing through the pause menu: SND.setPaused
+  (sv_sound.lua) now tells SND.onPause, ULYSSES' ULY.wwPause pauses / resumes each loaded event on every game object
+  (UAkAudioEvent.ExecuteAction 1 / 2, a 100 ms fade). The whistle +10 dB (300 m off it was -50 dBFS, 20 dB under AC8's
+  own missiles). Hard rule 79 (AC8's listener scales attenuation x10), docs/re/WWISE_BANKS.md. The meter (0.75.104 /
+  0.75.105, the ulysound suite with its own config: its first runs had heard round 1's Su-47s): the impact -5 / -17 / -35
+  dB at 1.5 / 5 / 11 km, silent at 16; the whistle -4 / -16 / -34 dB at 0.8 / 2.5 / 5 km, silent at 8; the core's -18 at
+  7 km, silent at 21; a stop is silence; paused 5 s: silence from 0.1 s after the pause to the resume; Wwise hears from
+  the camera, not the plane. A whole shower (ulymany, 28 falling): median -45, loudest -39 dBFS (round 1's dogfight in
+  an earlier run: -26 to -35). AC8's own explosions posted by event were silent in Survival's level (banks not loaded).
+  Autotests on 0.75.105: ulysound 12/12, ulymany 14/14 (the suite's wave count judged only from consecutive looks),
+  ulysses2 17/17 (every new Comona Control line said where it belongs). Two runs were stopped for low memory as the
+  second game in a row loaded (AC8 ~24 GB at the load of 31 GB): the installs put back, identical; the tests since run
+  one at a time in the foreground. tools/checks/run_all: 86 passed, the 4 known failures of dev (their fix branches
+  await the user). Staged build/release/stage_dev_0.75.105, not registered, NOT installed.
