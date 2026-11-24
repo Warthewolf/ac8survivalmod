@@ -6268,7 +6268,12 @@ SUITES.ulysses = function()
             HELD = { f = f.x, v = { X = vx, Y = vy, Z = vz }, t = os.clock() }
             local A = { X = f.L.X, Y = f.L.Y, Z = f.L.Z }
             AHEAD = A
-            return { X = A.X - vx / m * back * 100 + side * 100, Y = A.Y - vy / m * back * 100, Z = A.Z - vz / m * back * 100 + 3000 }
+            -- ((2026-11-24) side square to its way (was along world X): from behind on its way the camera looked down its
+            -- ~280 m tail end-on, or sat inside it)
+            local h = math.max(1, math.sqrt(vx * vx + vy * vy))
+            local sx, sy = -vy / h, vx / h
+            return { X = A.X - vx / m * back * 100 + sx * side * 100, Y = A.Y - vy / m * back * 100 + sy * side * 100,
+                     Z = A.Z - vz / m * back * 100 + 3000 }
         end, function() return AHEAD end
     end
     A.do_(function()
@@ -6354,9 +6359,9 @@ SUITES.ulysses = function()
         local f = pick(false)
         ST.info(string.format("close-ups: the lowest fragment %.1f km up", f and f.L.Z / 100000 or -1))
     end)
-    A.picture("u_fragment_close", beside(false, 450, 120))   -- (its tail ~280 m since 0.75.86: 120 m back was inside it)
+    A.picture("u_fragment_close", beside(false, 120, 350))   -- (its tail ~280 m since 0.75.86: from the side, a little behind)
     unhold()
-    A.picture("u_fragment_trail", beside(false, 1200, 400))
+    A.picture("u_fragment_trail", beside(false, 400, 1000))
     unhold()
     -- ((2026-11-24) its smoke as it flies (held still, the close-ups show a puff): a fragment kept moving, the camera on
     -- its path 2.5 km ahead and 400 m aside, looking at where it'll be when the picture's taken (1.6 s on)
