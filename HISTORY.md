@@ -4351,3 +4351,25 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
 - 2026-11-24, feature/wwise-banks merged into feature/ulysses (the user: "get the wwise sounds working for the
   meteorites"): the Wwise pipeline (tools/wwise) and the SOLG's Ctrl+O test. AC8's own attenuations (AKB_GameSe_Online,
   29 with curves) run 300 to 2,000,000 units: Wwise distances are UE centimetres, as our spec writes them.
+- 0.75.102 (2026-11-24, branch feature/ulysses), the user: "Can you please get the wwise sounds working for the
+  meteorites please": ULYSSES' five sounds (AC:I's Stardust set) as Survival's own Wwise events on AC8's sfx bus
+  (tools/wwise/spec.py writes the spec: Play_SV_UlyFall / FallBig / Boom / Encounter / Ambient beside the SOLG's test
+  sound; waapi_build.py: loops, 2D, ListenerRelativeRouting written, a bank each: one shared bank made every cooked event
+  carry all six's media, 56 MB, now 9.4 MB). sv_ulysses.lua: each whistle posted ON its rock
+  (LiveSoundBlueprintLibrary.PostEventAtActorByAkEvent: Wwise's component on its root follows it) and stopped with it
+  (AkGameplayStatics.StopActor), an impact at its place (PostEventAtLocation), the encounter and the rumble 2D (the
+  rumble on an actor of ours); Survival's XAudio2 player only where an event doesn't load; joiners the same, and now the
+  sea splash's sound too. New autotest suite ulysound (each sound at set distances, the camera held still) with
+  tools/autotest/loudness.ps1 (the speakers' level every 100 ms by WASAPI loopback, levels only) and loudness_report.py:
+  10/10, all five load and play (playing ids, one Wwise component on each rock), a stop is silence. A run was stopped
+  for low memory mid-start (the gate killed with it: the install put back by kit.py restore, identical to before, the
+  saves unchanged). AC8 itself: ~21 GB in a run, ~24 GB at the level's load (Survival's own memory lines: 0.75.100 the
+  same within 0.5 GB).
+- 0.75.103 (2026-11-24): fragments 1300-2200 km/h (the user: "I want some of the Meteorites to be faster than others");
+  1999's Comona Control doesn't know your aircraft (the user: "Comona Control wonders who the player is ... but with all
+  that's happening they disregard it and ask for help regardless"): round 1's start asks who you are, then for help;
+  round 2's own lines (say.start2); the core's call to the "unknown aircraft" (sv_config_arc.lua and subtitles.ini).
+  ulysound 10/10, ulysses 15/15 (the round's sounds through Wwise). The meter: every sound as loud at 16 km as at 0.3 km.
+- 0.75.104: AC8's listener scales every attenuation by 10 (DefaultListenerScalingFactor=10 in its Live/Config/
+  DefaultGame.ini): a curve written in centimetres is 10x too wide on the ground, which is also why the SOLG test of
+  0.75.66 / 0.75.67 never faded. tools/wwise: distances in metres x units_per_m 10 (spec.py UNITS_PER_M).
