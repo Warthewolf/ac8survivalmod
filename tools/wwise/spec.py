@@ -30,7 +30,8 @@ ATTENUATIONS = [
 # (name, source, settings): the event is Play_<name without SV_>, as Play_SV_<...>
 SOUNDS = [
     ('SV_SolgBreakBig', ('project', 'Sources/SV_SolgBreakBig.wav'), {'attenuation': 'SV_Att_Far'}),
-    ('SV_UlyFall', ('ulysses', 'fall_small.wav'), {'attenuation': 'SV_Att_UlyFall', 'loop': True, 'volume': -20}),
+    # ((2026-11-24, the ulysound autotest's meter) a whistle 300 m off at -50 dBFS, 20 dB under AC8's own missiles: +10
+    ('SV_UlyFall', ('ulysses', 'fall_small.wav'), {'attenuation': 'SV_Att_UlyFall', 'loop': True, 'volume': -10}),
     ('SV_UlyFallBig', ('ulysses', 'fall_big.wav'), {'attenuation': 'SV_Att_UlyFallBig', 'loop': True, 'volume': -16}),
     ('SV_UlyBoom', ('ulysses', 'explosion.wav'), {'attenuation': 'SV_Att_UlyBoom', 'volume': -18}),
     ('SV_UlyEncounter', ('ulysses', 'encounter.wav'), {'positioning': '2d', 'volume': -24}),

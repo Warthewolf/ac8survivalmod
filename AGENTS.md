@@ -91,7 +91,7 @@ Hard rules are numbered lessons from real tests; old notes cite them as "hard ru
 | Lua code and UE4SS Lua limits | `docs/rules/lua_runtime.md` | 9 10 11 21 23 27 30 47 63 71 72 76 78 |
 | native C runtime | `docs/rules/native_runtime.md` | 14 19 25 28 43 55 |
 | spawning, events, paths, AI, damage | `docs/rules/ai_spawning_behaviour.md` | 1-6 15 16 17 20 22 26 35-41 45 46 54 59 64 73 |
-| menus, HUD, radio, music | `docs/rules/ui_menu_hud.md` | 12 13 18 24 29 33 52 57 |
+| menus, HUD, radio, music, sound | `docs/rules/ui_menu_hud.md` | 12 13 18 24 29 33 52 57 79 |
 | co-op | `docs/rules/coop.md` | 48-51 53 |
 | sky, clouds, lightning, VFX | `docs/rules/sky_weather_vfx.md` | 56 60-62 74 75 77 |
 | leaderboard | `docs/rules/leaderboard.md` | |

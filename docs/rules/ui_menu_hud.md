@@ -52,6 +52,15 @@ Moved verbatim from AGENTS.md (2026-11-14). Rule numbers are unchanged: other no
     lobby's prop) and were silent in Alyssa's run of 0.74.30. Online Mode's versions (AKE_Bgm_Online_ACE7_* ...) played in
     0.74.31; build_music_rows refuses a 3D event. A looping event is given 60 s, not -1 (0.74.31: "Hush just abruptly ends").
 
+79. AC8's Wwise listener scales every attenuation by 10 (DefaultListenerScalingFactor=10 in its Live/Config/
+    DefaultGame.ini): a Wwise distance of N units is N x 10 cm on the ground, so a metre is 10 units, not 100 (2026-11-24,
+    the ulysound autotest with tools/autotest/loudness.ps1: curves written in centimetres were 10x too wide, an impact
+    meant to be silent at 15 km as loud at 16 km as at 0.3 km; written at 10 units a metre each sound fell -5 / -17 /
+    -35 dB at 1.5 / 5 / 11 km as designed and was silent past its end). Survival's own Wwise sounds: tools/wwise/spec.py
+    writes metres, waapi_build.py multiplies by units_per_m 10. Wwise hears from the camera (the view target), not your
+    plane. The level of a sound is measured with the autotest's loudness.ps1 (WASAPI loopback, levels only), never by ear
+    alone; a test that measures sound needs its round 1 held off (enemy missiles and warnings drown it).
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
