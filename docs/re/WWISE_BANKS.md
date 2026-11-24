@@ -39,6 +39,18 @@ held camera: silent). [T]
 - 2D: a sound with no positioning plays the same wherever it's posted (on an actor of ours, to stop it with it).
 - The event asset is loaded (SPC.V.asset: loaded and pinned) before a post: its bank comes with it.
 
+## How AC8 makes a sound read as far away (its Tonitrus Spear impact, decoded from AKB_GameSe, 2026-11-24)
+The user: "the Tonitrus Spear impact definetly had a better fade with its distance". AKE_GEN_AMMO_EXP_Tonitrus_Impact_Ground_
+Play is a blend (layer) container of near / mid / far tracks of random variants (25 recordings); its ShareSet carries
+three curves, not one: the volume (-6 dB by 1 km, -24 by 2, -34 by 6, silent at 20; a bank stores it as gain - 1), a
+low-pass rising with distance (20 / 25 / 30 at 2 / 6 / 20 km: far sounds muffled) and a spread narrowing (30 % near,
+5 % at 1 km). The sea impact (_Sea_Play: a switch of blend containers) stays flat to 5-8 km and is silent at 50: a big
+splash heard from afar. Measured in game (ulysound): ground -24 / -31 / -41 / -50 dBFS at 1.5 / 5 / 15 / 30 km, sea -20 /
+-22 at 1.5 / 15. A volume curve alone (ours before) read as "doesn't sound quieter" at 2-4 dB a step: waapi_build.py
+writes "lpf" and "spread" curves beside the volume (LowPassFilterUsage, SpreadUsage), and spec.py shapes ULYSSES' 3D
+sounds so. AC8's own Spear impacts load and play in Survival's level (the railgun impact and a ship's death did not):
+a landing posts them by their event assets (ULYSSES sounds.spear, sounds.landing = "spear").
+
 ## The pause
 AC8's pause menu posts `AKE_System_SFX_Pause_On` / `_Off` (MUSIC_RADIO_CAMERA.md: LiveSoundManager's channels). Decoded
 from AKB_GameSe.bnk (tools/pak_read.py, research only): 13 actions: Pause on four buses (one a child of sfx, 2618002316;
