@@ -6909,6 +6909,42 @@ SUITES.ulyxaudio = function()
     A.wait(1)
 end
 
+-- ((2026-11-24) a fragment's tail, up close: today's (the skeletal tail on the gear material: an opaque orange tube from
+-- near) against glowing ones already in ULYSSES' config (tail.streak / streak_b: AC:I's trail sprite on AC8's additive
+-- flare, the sky meteors' look; line_ring: the thin light line), each on a rock left visible with its smoke and fire;
+-- four rocks in a column 1.5 km off, diving 45 degrees, held still; pictures side-on from 1.2 km and 450 m, for the user
+SUITES.ulytails = function()
+    intoRun()
+    local ROWS = {
+        { "today's: the opaque tail", nil, 1 },
+        { "AC:I's sprite on the flare (x20)", { paint = "streak", mesh = "Streak", tail_r = 0.25 }, 0.06 },
+        { "AC:I's sprite on the flare (x80)", { paint = "streak_b", mesh = "Streak", tail_r = 0.25 }, 0.06 },
+        { "the thin light line", { paint = "line_ring", tail_r = 0.35 }, 1 },
+    }
+    local T = { rocks = {} }
+    A.wait(8)
+    A.do_(function()
+        if not ST.check(ULY ~= nil and ULY.testRock ~= nil, "ULYSSES' test rock is in this build") then return "abort" end
+        local me = playerLocation and playerLocation()
+        T.C = { X = me.X, Y = me.Y + 2000000, Z = 300000 }                -- (20 km off your plane, 3 km up)
+        local v = { X = 70000, Y = 0, Z = -70000 }                     -- (a 45 degree dive toward +X, ~990 m/s)
+        for i, row in ipairs(ROWS) do
+            local at = { X = T.C.X, Y = T.C.Y, Z = T.C.Z + (#ROWS / 2 - i + 0.5) * 25000 }
+            local rk = ULY.testRock("C", at, v, 2.5, nil, row[2], row[3])
+            if rk and rk.pm then pcall(function() rk.pm.Velocity = { X = 0, Y = 0, Z = 0 } end) end
+            T.rocks[#T.rocks + 1] = rk
+            ST.info(string.format("row %d (top first): %s: %s", i, row[1], rk and "up" or "NOT up"))
+        end
+    end)
+    A.wait(4)
+    A.picture("t_side_far", function() return T.C and { X = T.C.X - 30000, Y = T.C.Y - 120000, Z = T.C.Z } end,
+        function() return T.C and { X = T.C.X - 20000, Y = T.C.Y, Z = T.C.Z } end, 60)
+    A.picture("t_side_near", function() return T.C and { X = T.C.X - 15000, Y = T.C.Y - 45000, Z = T.C.Z + 2000 } end,
+        function() return T.C and { X = T.C.X - 15000, Y = T.C.Y, Z = T.C.Z } end, 75)
+    A.do_(function() for _, rk in ipairs(T.rocks) do if rk then pcall(ULY.testRockOff, rk) end end end)
+    A.wait(2)
+end
+
 -- ((2026-11-24) ULYSSES' impact against AC8's own explosions, for its loudness in the game's mix: the camera held as
 -- ulysound's, each at 1.5 and 5 km (18 s apart: ours is 16.6 s long); loudness.ps1 beside the job, loudness_report.py after
 SUITES.ulycal = function()
