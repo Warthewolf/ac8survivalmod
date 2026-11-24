@@ -6274,7 +6274,7 @@ SUITES.ulysses = function()
     end)
     A.log_("ulysses: round %d+: phase 2 of 2", 60, "u0", false, function(l)
         if not ST.check(l ~= nil, "its round started (phase 2: the shower and the core)", l) then return "abort" end
-        ST.check(l:find("4 of 4 settings written", 1, true) ~= nil, "the film look: its 4 settings written", l)
+        ST.check(l:find("the film look on", 1, true) ~= nil, "the film look on (the HUD's wash)", l)
     end)
     A.log_("ulysses: targets: SV_Unit_SOLG_KEW up", 10, "u0", true, function(l)
         ST.check(l ~= nil and not l:find(" 0 objects", 1, true), "its fragments' targets borrowed (the SOLG's KEW)", l)
