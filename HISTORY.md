@@ -4326,3 +4326,18 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   and checks pass. Autotest: the first runs stopped for low memory (the install put back, checked file by file), the
   reruns refused to launch (Steam closed): NOT yet tested in game. Staged build/release/stage_dev_0.75.99, not
   registered, NOT installed.
+- 0.75.99 tested (2026-11-24, Steam open again): ulysses 15/15, ulysses2 16/16; the install put back as it was.
+- 0.75.100 (2026-11-24, branch feature/ulysses), her calls: "the meteorites need to spawn at higher altitude so the
+  players have a chance to intercept them, also make them quicker too ... around 1300km/h": fragments 20-24 km up (was
+  9-12) at 1250-1350 km/h (was 550-650), still AC:I's 45 degree dive from the east: 75-98 s down; the core 28 km up
+  (was 16) at 1300 km/h (was 650): 110 s. "it doesn't matter if meteorites miss the land mass or not, have them vastly
+  spread out around the comona island": fragments.area_km (x -30..+24, y -20..+15 km: the whole island chain and the sea
+  round it; x under +24 so the dive is seen inside the combat zone), never steered onto land (land_tries 0); the damage
+  by where one comes down: within airfield_m (4 km) of the airfield its damage, within town_m (2.5 km) of a town the
+  town's callout, the sea or open land harmless (the round's line counts "on open land"). The sky's meteors: "go quicker
+  ... zoom across the sky, not at 45 degree ... trails need to be longer": 25,000-40,000 km/h (was 8,000-14,000), dip
+  0.1-0.2 (6-11 degrees, was 39-45), from 5-40 km east of you (they used to burn out in the eastern sky before reaching
+  you), streak_x 0.12 -> 0.36 (~9 km), life 12 s. ulysses_test: the new numbers and rules. Autotests: ulysses 15/15 (the
+  real heights and speeds: the core "lands in 110 s"), ulysses2 17/17 (both rounds, a minute's break, no crash); of 20
+  fragments landed in the two runs 19 were harmless (mostly the sea): the box is ~2 % land, so the fragments rarely
+  threaten the airfield now (the core still does). Staged build/release/stage_dev_0.75.100, not registered, NOT installed.
