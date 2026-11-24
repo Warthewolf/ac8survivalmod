@@ -59,6 +59,21 @@ The stage is a `package_dev.sh` stage (test keys kept: the fast path presses Ctr
   its impact on the airfield (AF.bomb up); shot down in its second charge: its cycle over, no impact; the hull's health
   unchanged at the end.
 
+- ULYSSES (docs/re/ULYSSES.md; each its config_<suite>.lua: round 1 an hour away): `ulysses` (round 2 with the core, its
+  pictures), `ulysses2` (both rounds, a minute's break, impacts up close), `ulydawn` (ulysses2 at its real sunrise),
+  `ulymany` (round 1 whole at the real heights and speeds: 50 in waves of 2, up to 30 falling, every box though 36 are
+  lent, the frame time), `ulysoak` (both rounds played out as shipped, nobody shooting: memory and frame time),
+  `ulysound` (its Wwise sounds one by one at set distances, a whistle closing from 12 km, the pause; the camera held
+  over the sea 41 km west), `ulycal` (its impact against AC8's own explosions), `ulylines` / `ulytrails` (looks).
+
+## Sound levels (2026-11-24)
+`powershell -NoProfile -ExecutionPolicy Bypass -File tools/autotest/loudness.ps1 -Seconds N -Out <file>` beside a job: the
+default playback device's level every 100 ms by WASAPI loopback (levels only, never the sound; anything else playing on
+the PC counts too). `python -I tools/autotest/loudness_report.py <file> <run folder>` matches them to the suite's
+"SOUND ..." lines by the game's clock. A suite that measures sound holds round 1 off (enemy missiles and warnings drown
+it) and mutes the music (AKE_System_BGM_Mute_On). Two game runs in a row were twice stopped by Claude Code for low
+memory as the second loaded (AC8 ~24 GB at its load): run them one at a time in the foreground, or keep the session busy.
+
 ## Pictures and settings
 - `A.picture(name, atFn, lookFn, fov)` in a suite: a CameraActor of ours at atFn() turned onto lookFn(), your view on it,
   the game's own `HighResShot 1` and a `selftest: SHOT <name>` line; job.py grabs the game's window then (PrintWindow
