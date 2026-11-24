@@ -116,6 +116,7 @@ local ZONE_EAST_CM = -707336 + 4000000                  -- (Mission 22's combat 
 check(A and A.x[1] <= -19 and A.x[2] >= 20 and A.y[1] <= -12 and A.y[2] >= 7, "fragments spread over the whole island chain and the sea round it")
 check(A and A.x[2] * 100000 <= ZONE_EAST_CM, "... their impacts inside the combat zone's east edge")
 check(f.land_tries == 0, "... never steered onto land")
+check(f.aim_share == 0 and src:find("math.random() >= n(f.aim_share, 0)", 1, true) ~= nil, "aim_share there, 0 (all spread) until the user says")
 check(src:find("f.what == \"town\" or nearTown", 1, true) and src:find("U.landedOpen", 1, true), "open land is harmless; a town's callout only near a town")
 check(src:find("n(fr.airfield_m, 4000)", 1, true), "the airfield's damage only within airfield_m of it")
 check(c.sky.dip[2] <= 0.3 and c.sky.speed_kmh[1] >= 20000 and c.sky.streak_x >= 0.3,

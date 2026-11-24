@@ -589,7 +589,8 @@ local function aimPoint()
     -- ((2026-11-24, the user: "it doesn't matter if meteorites miss the land mass or not, have them vastly spread out around
     -- the comona island") area_km: anywhere in that box, land or sea; land() decides by where it comes down
     local A = f.area_km
-    if type(A) == "table" and type(A.x) == "table" and type(A.y) == "table" then
+    -- (aim_share: that share still aimed at the airfield or a town as before the spread, the rest anywhere; 0: none)
+    if type(A) == "table" and type(A.x) == "table" and type(A.y) == "table" and math.random() >= n(f.aim_share, 0) then
         U.lastAim = "comona"
         return { X = span(A.x, 0) * 100000, Y = span(A.y, 0) * 100000, Z = 0 }, U.lastAim
     end
