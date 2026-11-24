@@ -6736,7 +6736,7 @@ SUITES.ulysound = function()
     A.wait(5)
     A.do_(function() ST.info("SOUND quiet (the baseline)") end)
     A.wait(5)
-    for _, km in ipairs({ 0.3, 1.5, 5, 11, 16 }) do
+    for _, km in ipairs({ 0.3, 1.5, 5, 11, 16, 25, 40 }) do
         A.do_(function()
             local ok = ULY.testSoundAt("boom", at(km))
             ST.info(string.format("SOUND boom %.1f km: %s", km, tostring(ok)))
