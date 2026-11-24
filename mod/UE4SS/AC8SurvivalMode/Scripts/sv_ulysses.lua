@@ -69,6 +69,96 @@ local function addComp(a, path)
     local ok, c = pcall(function() return a:AddComponentByClass(cls, false, t, false) end)
     return ok and valid(c) and c or nil
 end
+---------------------------------------------------------------------------------------------------- its sounds
+-- ((2026-11-24, the user: "get the wwise sounds working for the meteorites") AC:I's Stardust set as Survival's own Wwise
+-- events (tools/wwise/spec.py: SurvivalMode_Wwise_P, on AC8's sfx bus: the game's effects volume, its 3D, its mix) when
+-- that container is in (sounds.wwise), else Survival's XAudio2 player (sv_sound.lua) as before, sound by sound. One on
+-- something moving (a fragment's whistle) is posted ON its actor (LiveSoundBlueprintLibrary.PostEventAtActorByAkEvent:
+-- Wwise's component on its root follows it) and stopped with it (AkGameplayStatics.StopActor); one at a place (an
+-- impact) by PostEventAtLocation (the way Survival's heard sounds go: sv_escort_laser.lua); the encounter and the rumble 2D
+local WW = { ev = {}, said = {}, on = 0 }
+local AKS, LSB = nil, nil
+local function wwEv(kind)
+    local w = (cfg().sounds or {}).wwise
+    if not (type(w) == "table" and w.enabled ~= false and type(w[kind]) == "string") then return nil end
+    local name = w[kind]
+    local e = WW.ev[name]
+    if e == false then return nil end
+    if e and liveObj(e) then return e, name end
+    e = SPC and SPC.V and SPC.V.asset and SPC.V.asset((w.path or "/Game/Mods/SurvivalMode/Wwise/Events/Default_Work_Unit/") .. name) or nil
+    WW.ev[name] = e or false
+    ul(string.format("sound: Wwise's %s %s", name, e and "loaded" or "NOT loaded (no SurvivalMode_Wwise_P?): Survival's own player plays it"))
+    return e, name
+end
+local function akStat()
+    if not (AKS and valid(AKS)) then AKS = StaticFindObject("/Script/AkAudio.Default__AkGameplayStatics") end
+    return AKS and valid(AKS) and AKS or nil
+end
+-- a one-off at `at` (nil: where you are; a 2D one plays the same anywhere) -> true when Wwise took it
+local function wwAt(kind, at)
+    local ev, name = wwEv(kind)
+    local ak = ev and akStat()
+    if not ak then return false end
+    at = at or (playerLocation and playerLocation()) or { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 0 }
+    local L, rot = { X = at.X, Y = at.Y, Z = at.Z or 0 }, { Pitch = 0, Yaw = 0, Roll = 0 }
+    local ok, id = pcall(function() return ak:PostEventAtLocation(ev, L, rot, survivalPC) end)
+    if not ok then ok, id = pcall(function() return ak:PostEventAtLocation(ev, L, rot, "", survivalPC) end) end
+    id = ok and tonumber(id) or 0
+    if not WW.said[name] then
+        WW.said[name] = true
+        ul(string.format("sound: %s posted by Wwise at a place: playing id %s%s", name, tostring(id), ok and "" or " (the call failed)"))
+    end
+    return id > 0
+end
+-- Wwise's components on actor a (its root, its root's children)
+local function wwComps(a)
+    local cls, k = StaticFindObject("/Script/AkAudio.AkComponent"), 0
+    if not (cls and valid(cls)) then return 0 end
+    pcall(function()
+        local root = a.RootComponent
+        if root ~= nil and valid(root) and root:IsA(cls) then k = k + 1 end
+        root.AttachChildren:ForEach(function(_, e) local x = e:get(); if valid(x) and x:IsA(cls) then k = k + 1 end end)
+    end)
+    return k
+end
+-- a sound ON actor a, following it (a whistle, the rumble) -> true when posted (stopped: wwOff(a))
+local function wwOn(kind, a)
+    local ev, name = wwEv(kind)
+    if not (ev and a and liveObj(a)) then return false end
+    if not (LSB and valid(LSB)) then LSB = StaticFindObject("/Script/Live.Default__LiveSoundBlueprintLibrary") end
+    if not (LSB and valid(LSB)) then return false end
+    local ok, err = pcall(function() return LSB:PostEventAtActorByAkEvent(ev, a) end)
+    WW.on = WW.on + 1
+    if WW.on <= 3 or not ok then
+        ul(string.format("sound: %s posted by Wwise on an actor: %s, %d Wwise component(s) on it", name,
+            ok and "ok" or ("FAILED: " .. tostring(err)), ok and wwComps(a) or 0))
+    end
+    return ok
+end
+local function wwOff(a)
+    local ak = akStat()
+    if ak and a and liveObj(a) then pcall(function() ak:StopActor(a) end) end
+end
+-- an impact's sound at `at`
+local function bang(at)
+    local s = cfg().sounds or {}
+    if not wwAt("boom", at) and s.boom and SND and SND.play then pcall(SND.play, s.boom, at) end
+end
+-- a falling rock's whistle (x: the host's fragment or a joiner's rock, a: its actor, where: its place for XAudio2)
+local function fallOn(x, a, big, where)
+    if wwOn(big and "fall_big" or "fall", a) then x.ww = a; return end
+    local l = (cfg().sounds or {})[big and "fall_big" or "fall"]
+    if l and SND and SND.play then
+        local ok, h = pcall(SND.play, l, where)
+        x.snd = ok and h or nil
+    end
+end
+local function fallOff(x)
+    if x.snd and SND and SND.stop then pcall(SND.stop, x.snd) end
+    x.snd = nil
+    if x.ww then wwOff(x.ww); x.ww = nil end
+end
+
 local MESH = {}
 local function mesh(key)
     local path = cfg().mesh_path .. tostring(key)
@@ -301,8 +391,7 @@ local function rockOff(r)
 end
 local function boom(at, scale)
     if at and fxAt then pcall(fxAt, cfg().fx, at, scale, 8) end
-    local s = cfg().sounds or {}
-    if s.boom and SND and SND.play then pcall(SND.play, s.boom, at) end
+    bang(at)
 end
 
 ---------------------------------------------------------------------------------------------------- the borrowed targets
@@ -527,10 +616,7 @@ local function launch(spec, P, what, big)
     -- a health one is solo_hp_x (the core's solo_x is its health's, as its config says)
     local hp = n(spec.health, 300) * (players() <= 1 and n(spec.solo_hp_x or (big and spec.solo_x) or 1, 1) or 1)
     f.e = arm(big and U.poolBig or U.pool, r, hp)
-    local s = cfg().sounds or {}
-    if SND and SND.play and (big and s.fall_big or s.fall) then
-        f.snd = SND.play(big and s.fall_big or s.fall, function() return rockAt(f.r) end)
-    end
+    fallOn(f, r.a, big, function() return rockAt(f.r) end)
     return f
 end
 -- land or sea where P is: a trace down (near you only: hard rule 27); none: land when within sea.land_m of where it aimed
@@ -600,12 +686,11 @@ local function land(f, now)
     else                                                  -- (the Spear's splash at the sea's level)
         local W = { X = f.P.X, Y = f.P.Y, Z = n(sc.sea_z, 350) }
         if fxAt then pcall(fxAt, sc.fx or {}, W, n(f.big and sc.big_scale or sc.scale, 1.5), 20) end
-        local s = cfg().sounds or {}
-        if s.boom and SND and SND.play then pcall(SND.play, s.boom, W) end
+        bang(W)
     end
     f.where = (isLand and "land" or "sea") .. " (" .. how .. ")"
     tell("l", tostring(f.id), isLand and "1" or "0")
-    if f.snd and SND and SND.stop then pcall(SND.stop, f.snd) end
+    fallOff(f)
     disarm(f.e)
     rockOff(f.r)
     local fr = cfg().fragments
@@ -642,7 +727,7 @@ end
 local function shot(f, now)
     local at = rockAt(f.r)
     boom(at, n((cfg().fx_scale or {})[f.big and "big_shot" or "shot"], 4))
-    if f.snd and SND and SND.stop then pcall(SND.stop, f.snd) end
+    fallOff(f)
     disarm(f.e)
     rockOff(f.r)
     local pay = f.big and n(cfg().big.pay, 6000) or n(cfg().fragments.pay, 300)
@@ -687,12 +772,26 @@ end
 -- Stardust_Ambient's rumble under both rounds (and the break between), looped; off at the last round's end
 local AMB = {}
 local function ambOn()
+    if AMB.h or AMB.a then return end
+    -- (Wwise's: 2D, on an actor of ours, a scene root to carry its component; stopped with it)
+    if wwEv("ambient") then
+        local me = (playerLocation and playerLocation()) or { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 0 }
+        local a = newActor({ X = me.X, Y = me.Y, Z = me.Z or 0 }, {})
+        if a then addComp(a, "/Script/Engine.SceneComponent") end
+        if a and wwOn("ambient", a) then AMB.a = a; return end
+        if a and liveObj(a) then pcall(function() a:K2_DestroyActor() end) end
+    end
     local l = (cfg().sounds or {}).ambient
-    if AMB.h or not (l and SND and SND.play) then return end
+    if not (l and SND and SND.play) then return end
     local ok, h = pcall(SND.play, l, nil)
     AMB.h = ok and h or nil
 end
 local function ambOff()
+    if AMB.a then
+        wwOff(AMB.a)
+        if liveObj(AMB.a) then pcall(function() AMB.a:K2_DestroyActor() end) end
+        AMB.a = nil
+    end
     if AMB.h and SND and SND.stop then pcall(SND.stop, AMB.h, 2) end
     AMB.h = nil
 end
@@ -723,7 +822,7 @@ function ULY.spawn(now)
     say((cfg().text.say or {}).start)
     if cfg().debug_ab then ul(debugAB()) end
     local snd = (cfg().sounds or {}).encounter
-    if snd and SND and SND.play then pcall(SND.play, snd, nil) end
+    if not wwAt("encounter", nil) and snd and SND and SND.play then pcall(SND.play, snd, nil) end
     return true
 end
 
@@ -838,8 +937,8 @@ end
 function ULY.roundOver(now, s)
     if not U then return end
     for _, x in ipairs(U.list) do
+        fallOff(x)                                                     -- (its fall loop: the code review)
         if not x.done then x.done = true; disarm(x.e); rockOff(x.r) end
-        if x.snd and SND and SND.stop then pcall(SND.stop, x.snd); x.snd = nil end   -- (its fall loop: the code review)
     end
     ul(string.format("round %d over: %d of %d fragments shot down, %d landed on the airfield, %d on the town, %d in the sea, %d on open land", D.round,
         U.shot, U.sent + (U.bigSent and 1 or 0), U.landedAirfield, U.landedTown, U.landedSea or 0, U.landedOpen or 0))
@@ -867,16 +966,16 @@ end
 -- ((2026-11-24, the code review) everything ULYSSES has up taken down, whatever ended it: its last round lost (the fleet's
 -- round 30, a spawn refused), a run over mid-round, the level gone (LEVEL_DROPS), a joiner made host mid-round
 function ULY.endAll(why)
-    local any = U ~= nil or J.on or FILM.on or AMB.h ~= nil or #SKYM.list > 0
+    local any = U ~= nil or J.on or FILM.on or AMB.h ~= nil or AMB.a ~= nil or #SKYM.list > 0
     if U then
         for _, x in ipairs(U.list) do
+            fallOff(x)
             if not x.done then x.done = true; pcall(disarm, x.e); rockOff(x.r) end
-            if x.snd and SND and SND.stop then pcall(SND.stop, x.snd); x.snd = nil end
         end
         U = nil
     end
     for _, r in pairs(J.rocks) do
-        if r.snd and SND and SND.stop then pcall(SND.stop, r.snd) end
+        fallOff(r)
         rockOff(r)
     end
     J.rocks, J.on = {}, false
@@ -953,12 +1052,7 @@ function ULY.fromHost(f)
         if r then
             -- ((2026-11-24, the code review) the core drawn as the host draws it: its own blasts, splash and fall sound)
             r.big = f[13] == "1"
-            local snds = cfg().sounds or {}
-            local l = r.big and snds.fall_big or snds.fall
-            if l and SND and SND.play then
-                local ok, h = pcall(SND.play, l, function() return rockAt(r) end)
-                r.snd = ok and h or nil
-            end
+            fallOn(r, r.a, r.big, function() return rockAt(r) end)
             J.rocks[id] = r
             pcall(function() r.a:SetLifeSpan(600) end)
         end
@@ -973,14 +1067,16 @@ function ULY.fromHost(f)
             elseif f[4] == "1" then boom(at, n(r.big and fx.big_land or fx.land, 10))
             else
                 local sc = cfg().sea or {}
-                if fxAt then pcall(fxAt, sc.fx or {}, { X = at.X, Y = at.Y, Z = n(sc.sea_z, 350) }, n(r.big and sc.big_scale or sc.scale, 1.5), 20) end
+                local W = { X = at.X, Y = at.Y, Z = n(sc.sea_z, 350) }
+                if fxAt then pcall(fxAt, sc.fx or {}, W, n(r.big and sc.big_scale or sc.scale, 1.5), 20) end
+                bang(W)                                       -- (the splash heard as the host hears it)
             end
         end
-        if r.snd and SND and SND.stop then pcall(SND.stop, r.snd) end
+        fallOff(r)
         rockOff(r)
     elseif k == "e" then
         for _, r in pairs(J.rocks) do
-            if r.snd and SND and SND.stop then pcall(SND.stop, r.snd) end
+            fallOff(r)
             rockOff(r)
         end
         J.rocks = {}
@@ -1012,6 +1108,13 @@ function ULY.debug() return U, SKYM, FILM end                  -- (the tests')
 -- ((2026-11-24, the user: "Shouldn't their smoke trail be thicker") the autotest's trail line-up: one rock a candidate
 ULY.testRock = function(key, at, vel, scale, trails, look, tailX) return rock(key, at, vel, scale, 20, tailX or 1, trails, look) end
 ULY.testRockOff = function(r) rockOff(r) end
+-- ((2026-11-24, the user: "get the wwise sounds working for the meteorites") the autotest's sound line-up: each of its
+-- Wwise sounds at a place / on an actor, and stopped, as the round plays them (kind: fall / fall_big / boom / encounter /
+-- ambient) -> whether Wwise took it
+ULY.testSoundAt = function(kind, at) return wwAt(kind, at) end
+ULY.testSoundOn = function(kind, a) return wwOn(kind, a) end
+ULY.testSoundOff = function(a) wwOff(a) end
+ULY.testSoundComps = function(a) return wwComps(a) end
 -- Ctrl+Q: the next round is ULYSSES (phase 1; again: phase 2, then off); its log says which
 testKey("Q", "sv_ulysses.lua's ULYSSES round", function()
     if not D then log("test: Ctrl+Q: no run"); return end

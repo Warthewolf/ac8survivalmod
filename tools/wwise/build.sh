@@ -5,21 +5,23 @@
 #   plugin (the Wwise Launcher's "integrate", its "UE 5.5" choice compiles on 5.4 as is), and its Wwise project
 #   AC8WwiseProject_WwiseProject (no Init.bnk of ours ever ships: AC8's own Init is loaded).
 #   1. waapi-server     WwiseConsole (WWISE, .env) with WAAPI on local HTTP; waapi_build.py makes the objects from
-#                       SPEC (a json: bus "sfx" = AC8's own sfx bus by name, sounds, attenuations, events) and the bank
-#                       SV_Sounds (every event in it), then generates it (Windows, JSON metadata)
+#                       SPEC (a json: bus "sfx" = AC8's own sfx bus by name, sounds, attenuations, events) and a bank
+#                       each (SVB_<event>: a cooked event carries its whole bank), then generates them (Windows, JSON)
 #   2. reconcile        UnrealEditor-Cmd -run=WwiseReconcileCommandlet -modes=all (stale ones deleted): the AkAudioEvent assets under
 #                       /Game/Mods/SurvivalMode/Wwise (AkSettings DefaultAssetCreationPath; RootOutputPath ../<wproj dir>/
 #                       GeneratedSoundBanks, relative to Content)
 #   3. cook             Windows, VERSIONED (hard rule 42); each event's bank comes inside its asset (bulk data)
 #   4. retoc to-zen     only /Game/Mods/SurvivalMode/Wwise/Events -> the container, 5. pad.py (hard rule 8)
-# SPEC=<spec.json> sh tools/wwise/build.sh   (the spec names the WAV sources; they stay outside the repo)
+# sh tools/wwise/build.sh   (the spec: tools/wwise/spec.py writes build/wwise/spec.json, Survival's sounds: the SOLG's test,
+#   ULYSSES' five; SPEC=<spec.json> for another; the WAV sources stay outside the repo)
 set -e
 cd "$(dirname "$0")/../.."
 . tools/env.sh
 sv_need AC8_WWISE_PROJECT "Survival's sound project (AC8Sound.uproject with the Wwise 2024.1.11 plugin)"
 sv_need WWISE "Wwise 2024.1.11's install folder"
 sv_need UE "Unreal Engine 5.4"
-[ -n "$SPEC" ] && [ -f "$SPEC" ] || { echo "wwise: SPEC=<spec.json> (see tools/wwise/waapi_build.py)"; exit 1; }
+if [ -z "$SPEC" ]; then SPEC=build/wwise/spec.json; python -I tools/wwise/spec.py "$SPEC"; fi
+[ -f "$SPEC" ] || { echo "wwise: no spec $SPEC (see tools/wwise/spec.py, waapi_build.py)"; exit 1; }
 PROJ="$AC8_WWISE_PROJECT"
 WPROJ=$(ls "$PROJ"/*_WwiseProject/*.wproj | head -1)
 CMD="$UE/Engine/Binaries/Win64/UnrealEditor-Cmd.exe"
@@ -31,7 +33,7 @@ echo "wwise: WAAPI on 127.0.0.1:$PORT ($WPROJ)"
     --wamp-port $((PORT + 1)) --allowed-addr 127.0.0.1 --no-source-control > "$OUT/waapi_server.log" 2>&1 &
 SRV=$!
 trap 'kill $SRV 2>/dev/null || true' EXIT
-python -I tools/wwise/waapi_build.py "$PORT" "$SPEC" --wait --bank SV_Sounds
+python -I tools/wwise/waapi_build.py "$PORT" "$SPEC" --wait --bank-each
 kill $SRV 2>/dev/null || true
 echo "wwise: reconcile (log: $OUT/reconcile.log)"
 "$CMD" "$PROJ/AC8Sound.uproject" -run=WwiseReconcileCommandlet -modes=all -unattended -nop4 -nosplash \

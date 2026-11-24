@@ -545,7 +545,14 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
                boom = { file = "ulysses/explosion.wav", db = 6, curve = { max = 1500000, shape = "exp1" } },
                encounter = { file = "ulysses/encounter.wav", db = 0 },
                -- ((2026-11-24, the user: yes to AC:I's Stardust_Ambient) its rumble under both rounds, looped, everywhere
-               ambient = { file = "ulysses/ambient.wav", db = -3, loop = true } },
+               ambient = { file = "ulysses/ambient.wav", db = -3, loop = true },
+               -- ((2026-11-24, the user: "get the wwise sounds working for the meteorites") the same five as Survival's own
+               -- Wwise events (tools/wwise/spec.py, SurvivalMode_Wwise_P: AC8's sfx bus, its effects volume and 3D; each
+               -- whistle on its rock, an impact where it is, the encounter and the rumble 2D); a sound whose event
+               -- doesn't load plays through the files above; enabled = false: all through them
+               wwise = { enabled = true, path = "/Game/Mods/SurvivalMode/Wwise/Events/Default_Work_Unit/",
+                         fall = "Play_SV_UlyFall", fall_big = "Play_SV_UlyFallBig", boom = "Play_SV_UlyBoom",
+                         encounter = "Play_SV_UlyEncounter", ambient = "Play_SV_UlyAmbient" } },
     text = { sub = "SHOOT DOWN THE ULYSSES FRAGMENTS", big = "THE ULYSSES CORE", big_sub = "SHOOT IT DOWN BEFORE IT HITS COMONA",
              town_hit = "A FRAGMENT HIT THE TOWN", big_hit = "ULYSSES HAS STRUCK COMONA", big_down = "THE ULYSSES CORE IS DOWN",
              say = { start = { "COMONA CONTROL|All units, the sky is falling. Ulysses fragments inbound, many of them.",

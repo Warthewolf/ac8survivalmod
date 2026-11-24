@@ -122,6 +122,22 @@ check(c.sky.dip[2] <= 0.3 and c.sky.speed_kmh[1] >= 20000 and c.sky.streak_x >= 
 check(c.sky.look and c.sky.look.mesh == "Streak" and c.tail.streak and c.tail.streak.tex.EmissiveMap:find("T_SV_Ulysses_Streak", 1, true),
     "the sky: AC:I's trail sprite on the streak card")
 check(c.sounds.ambient and c.sounds.ambient.loop == true, "the Stardust rumble, looped")
+-- ((2026-11-24, the user: "get the wwise sounds working for the meteorites") its five as Survival's own Wwise events
+local sp = io.open(S .. "../../../../tools/wwise/spec.py", "rb") or io.open(MOD .. "/../tools/wwise/spec.py", "rb")
+local spec = sp and sp:read("a") or ""
+if sp then sp:close() end
+local w = c.sounds.wwise or {}
+local allIn = spec ~= ""
+for _, k in ipairs({ "fall", "fall_big", "boom", "encounter", "ambient" }) do
+    local ev = w[k]
+    if not (type(ev) == "string" and ev:sub(1, 5) == "Play_" and spec:find("'" .. ev:sub(6) .. "'", 1, true)) then allIn = false end
+end
+check(w.enabled ~= false and allIn, "its five sounds' Wwise events are the ones tools/wwise/spec.py builds")
+check(src:find("PostEventAtActorByAkEvent", 1, true) and src:find("StopActor", 1, true) and src:find("PostEventAtLocation", 1, true),
+    "a whistle posted on its rock and stopped with it, an impact at its place")
+local direct = 0
+for line in src:gmatch("[^\n]+") do if line:find("pcall(SND.play", 1, true) and not line:find("^%s*%-%-") then direct = direct + 1 end end
+check(direct == 4, "Survival's own player only as the fallback (" .. direct .. " calls: an impact, a whistle, the rumble, the encounter)")
 
 -- ((2026-11-24, the code review) the Spaceport never the round before ULYSSES (its retake would take ULYSSES' first round)
 F = 9

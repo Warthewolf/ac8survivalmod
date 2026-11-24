@@ -1,18 +1,25 @@
 """waapi_build.py : Survival's own Wwise objects in the sound project (AC8_WWISE_PROJECT's Wwise project), through
 WAAPI over local HTTP (Python's standard library only; WwiseConsole waapi-server --http-port PORT must be running).
 
-    python -I tools/wwise/waapi_build.py <port> <spec.json> [--wait] [--bank NAME]
-    --wait: wait up to 60 s for the server; --bank: every event into that SoundBank, generated for Windows
+    python -I tools/wwise/waapi_build.py <port> <spec.json> [--wait] [--bank NAME | --bank-each]
+    --wait: wait up to 60 s for the server; --bank: every event into that SoundBank, generated for Windows;
+    --bank-each: each event its own SoundBank (SVB_<event>), any other bank of the Default Work Unit deleted
+    ((2026-11-24) each cooked event asset carries the whole bank its event is in: six events in one 9.4 MB bank made a
+    56 MB container; a bank each, each asset carries its own media only)
 
 spec.json (machine paths stay out of the repo: the spec is written per run, sources from .env's folders):
     {"bus": "sfx",
      "attenuations": [{"name": "SV_Att_Far", "radius_max": 300000, "curve": [[0, 0], [500, -10], [1500, -25], [3000, -200]]}],
-     "sounds": [{"name": "SV_SolgBreakBig", "wav": "<path>", "attenuation": "SV_Att_Far", "volume": 0}],
+     "sounds": [{"name": "SV_SolgBreakBig", "wav": "<path>", "attenuation": "SV_Att_Far", "volume": 0},
+                {"name": "SV_UlyAmbient", "wav": "<path>", "positioning": "2d", "loop": true, "volume": -12}],
      "events": [{"name": "Play_SV_SolgBreakBig", "play": "SV_SolgBreakBig"}]}
 
 The bus is named as AC8's own (Init.bnk: Master Audio Bus > PreMaster > sfx, id 393239870 = FNV-1 of "sfx"): Wwise
 IDs are hashes of names, so a sound routed to our "sfx" plays on the game's sfx bus (the effects volume) and our banks
-never ship an Init.bnk of their own. Every object is 3D (position from the emitter) with its attenuation.
+never ship an Init.bnk of their own. A sound is 3D (position from the emitter, listener relative, with its attenuation)
+unless "positioning": "2d" (the speakers as it is: no position, no attenuation); "loop": true loops it until stopped.
+(2026-11-24) ListenerRelativeRouting is written either way, never left to Wwise's default (the 0.75.66 SOLG test: "doesnt
+sound like the solg noise gets further from me").
 """
 import json
 import sys
@@ -21,6 +28,7 @@ import urllib.request
 
 PORT, SPEC = int(sys.argv[1]), json.load(open(sys.argv[2], encoding='utf-8'))
 BANK = sys.argv[sys.argv.index('--bank') + 1] if '--bank' in sys.argv else None
+EACH = '--bank-each' in sys.argv
 
 
 def call(uri, args=None, options=None):
@@ -69,14 +77,19 @@ for s in SPEC.get('sounds', []):
     sid = o['id']
     call('ak.wwise.core.object.setReference', {'object': sid, 'reference': 'OutputBus', 'value': bus['id']})
     call('ak.wwise.core.object.setProperty', {'object': sid, 'property': 'OverridePositioning', 'value': True})
-    call('ak.wwise.core.object.setProperty', {'object': sid, 'property': '3DSpatialization', 'value': 1})   # (position)
-    if s.get('attenuation'):
-        call('ak.wwise.core.object.setProperty', {'object': sid, 'property': 'EnableAttenuation', 'value': True})
+    flat = s.get('positioning') == '2d'
+    call('ak.wwise.core.object.setProperty', {'object': sid, 'property': 'ListenerRelativeRouting', 'value': not flat})
+    call('ak.wwise.core.object.setProperty', {'object': sid, 'property': '3DSpatialization', 'value': 0 if flat else 1})  # (position)
+    call('ak.wwise.core.object.setProperty', {'object': sid, 'property': 'EnableAttenuation', 'value': bool(s.get('attenuation')) and not flat})
+    if s.get('attenuation') and not flat:
         call('ak.wwise.core.object.setReference', {'object': sid, 'reference': 'Attenuation', 'value': att[s['attenuation']]})
-    if s.get('volume'):
-        call('ak.wwise.core.object.setProperty', {'object': sid, 'property': 'Volume', 'value': s['volume']})
+    call('ak.wwise.core.object.setProperty', {'object': sid, 'property': 'IsLoopingEnabled', 'value': bool(s.get('loop'))})
+    if s.get('loop'):
+        call('ak.wwise.core.object.setProperty', {'object': sid, 'property': 'IsLoopingInfinite', 'value': True})
+    call('ak.wwise.core.object.setProperty', {'object': sid, 'property': 'Volume', 'value': float(s.get('volume', 0))})
     snd[s['name']] = sid
-    print('sound', s['name'], sid, '-> bus', SPEC['bus'])
+    print('sound', s['name'], sid, '-> bus', SPEC['bus'], '2d' if flat else '3d', 'loop' if s.get('loop') else 'once',
+          '%+.0f dB' % float(s.get('volume', 0)))
 for e in SPEC.get('events', []):
     # (kept, never replaced: a new GUID orphans its Unreal asset, which reconcile then refuses to overwrite)
     have = first('$ from type Event where name = "%s"' % e['name'])
@@ -90,15 +103,27 @@ for e in SPEC.get('events', []):
         o = call('ak.wwise.core.object.create', {'parent': evw['id'], 'type': 'Event', 'name': e['name'], 'onNameConflict': 'fail',
                                                  'children': [{'type': 'Action', 'name': '', '@ActionType': 1, '@Target': snd[e['play']]}]})
     print('event', e['name'], o['id'], 'plays', e['play'])
-if BANK:
+BANKS = []
+if BANK or EACH:
     sbw = first('$ from type WorkUnit where name = "Default Work Unit" and parent.name = "SoundBanks"')
-    bank = call('ak.wwise.core.object.create', {'parent': sbw['id'], 'type': 'SoundBank', 'name': BANK, 'onNameConflict': 'merge'})
-    for e in SPEC.get('events', []):
-        ev = first('$ from type Event where name = "%s"' % e['name'])
-        call('ak.wwise.core.soundbank.setInclusions', {'soundbank': bank['id'], 'operation': 'add',
-                                                       'inclusions': [{'object': ev['id'], 'filter': ['events', 'structures', 'media']}]})
+    plan = [('SVB_' + e['name'], [e]) for e in SPEC.get('events', [])] if EACH else [(BANK, SPEC.get('events', []))]
+    keep = {name for name, _ in plan}
+    if EACH:                                             # (no event in two banks: an old shared one goes)
+        have = call('ak.wwise.core.object.get', {'from': {'id': [sbw['id']]}, 'transform': [{'select': ['children']}]},
+                    {'return': ['id', 'name', 'type']})['return']
+        for b in have:
+            if b.get('type') == 'SoundBank' and b['name'] not in keep:
+                call('ak.wwise.core.object.delete', {'object': b['id']})
+                print('bank', b['name'], 'deleted (a bank each now)')
+    for name, evs in plan:
+        bank = call('ak.wwise.core.object.create', {'parent': sbw['id'], 'type': 'SoundBank', 'name': name, 'onNameConflict': 'merge'})
+        for e in evs:
+            ev = first('$ from type Event where name = "%s"' % e['name'])
+            call('ak.wwise.core.soundbank.setInclusions', {'soundbank': bank['id'], 'operation': 'add',
+                                                           'inclusions': [{'object': ev['id'], 'filter': ['events', 'structures', 'media']}]})
+        BANKS.append(name)
 call('ak.wwise.core.project.save')
 print('saved')
-if BANK:
-    call('ak.wwise.core.soundbank.generate', {'soundbanks': [{'name': BANK}], 'platforms': ['Windows'], 'writeToDisk': True})
-    print('generated', BANK)
+if BANKS:
+    call('ak.wwise.core.soundbank.generate', {'soundbanks': [{'name': b} for b in BANKS], 'platforms': ['Windows'], 'writeToDisk': True})
+    print('generated', ', '.join(BANKS))
