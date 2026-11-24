@@ -6735,6 +6735,46 @@ SUITES.ulysound = function()
     A.wait(1)
 end
 
+-- ((2026-11-24) ULYSSES' impact against AC8's own explosions, for its loudness in the game's mix: the camera held as
+-- ulysound's, each at 1.5 and 5 km (18 s apart: ours is 16.6 s long); loudness.ps1 beside the job, loudness_report.py after
+SUITES.ulycal = function()
+    intoRun()
+    local T = {}
+    local REF = {
+        { "AC8 railgun impact", "/Game/WwiseAssets/Events/SFX/AKE_Weapon_SuperLongMainGun_Explosion_Ground_Play" },
+        { "AC8 ship killed", "/Game/WwiseAssets/Events/CS_AceLive_SE/Events_General/EXP/SEA/SE_GEN_EXP_SEA_VE004_grfd/AKE_GEN_EXP_SEA_VE004_grfd_Body_Killed_Secondary_Play" },
+    }
+    local function at(km) return { X = T.C.X + km * 100000, Y = T.C.Y, Z = T.C.Z } end
+    local function stock(path, where)
+        local ev = SPC and SPC.V and SPC.V.asset and SPC.V.asset(path)
+        local ak = StaticFindObject("/Script/AkAudio.Default__AkGameplayStatics")
+        if not (ev and ak and valid(ak)) then return "not loaded" end
+        local ok, id = pcall(function() return ak:PostEventAtLocation(ev, where, { Pitch = 0, Yaw = 0, Roll = 0 }, survivalPC) end)
+        return ok and ("playing id " .. tostring(id)) or ("failed: " .. tostring(id))
+    end
+    A.wait(6)
+    A.do_(function()
+        if not ST.check(ULY ~= nil and ULY.testSoundAt ~= nil, "ULYSSES' sound line-up is in this build") then return "abort" end
+        T.C = { X = AIRFIELD.X - 4100000, Y = AIRFIELD.Y, Z = 150000 }
+        local ok = ST.look(T.C, { X = T.C.X + 1000000, Y = T.C.Y, Z = 150000 }, 70)
+        ST.info("the camera held over the sea 41 km west of the airfield: " .. tostring(ok))
+        if type(SV_PlayBGM) == "function" then pcall(SV_PlayBGM, "AKE_System_BGM_Mute_On") end
+    end)
+    A.wait(5)
+    A.do_(function() ST.info("SOUND quiet (the baseline)") end)
+    A.wait(5)
+    for _, km in ipairs({ 1.5, 5 }) do
+        A.do_(function() ST.info(string.format("SOUND ULYSSES impact %.1f km: %s", km, tostring(ULY.testSoundAt("boom", at(km))))) end)
+        A.wait(18)
+        for _, r in ipairs(REF) do
+            A.do_(function() ST.info(string.format("SOUND %s %.1f km: %s", r[1], km, stock(r[2], at(km)))) end)
+            A.wait(12)
+        end
+    end
+    A.do_(function() ST.info("SOUND end"); ST.lookBack() end)
+    A.wait(1)
+end
+
 -- ((2026-11-24, the user: "Spawn more meteorites, have atleast 50 spawn in waves of 2") ULYSSES round 1 whole, at its
 -- real heights and speeds (config_ulymany.lua only brings the waves closer: every 3-4 s, so at_once's 30 is reached):
 -- the waves of 2, up to 30 falling, every fragment its target box though the KEW unit lends 36 (handed back when one is
