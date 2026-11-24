@@ -422,7 +422,8 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
                   -- (its mission data; was any bearing at 1100-1500 km/h): from the east like the sky's
                   dive_deg = 45, from_deg = 0, spread_deg = 25,
                   meshes = { "C", "C", "D" }, scale = { 1.8, 3.2 }, spin_dps = { 10, 45 },
-                  health = 350, pay = 300, airfield_damage = 8,
+                  -- ((2026-11-24, the user: "Players should get $1000 per meteorite they destroy") pay 1000 (was 300)
+                  health = 350, pay = 1000, airfield_damage = 8,
                   -- ((2026-11-24, the user, of the fire tail up close: "dont use those tube like meteor things, they look
                   -- silly, just use the smoke") no tail of ours (tail_x 0): the smoke and fire trails only (trails below)
                   tail_x = 0,

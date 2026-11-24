@@ -118,6 +118,7 @@ local ZONE_EAST_CM = -707336 + 4000000                  -- (Mission 22's combat 
 check(A and A.x[1] <= -19 and A.x[2] >= 20 and A.y[1] <= -12 and A.y[2] >= 7, "fragments spread over the whole island chain and the sea round it")
 check(A and A.x[2] * 100000 <= ZONE_EAST_CM, "... their impacts inside the combat zone's east edge")
 check(f.land_tries == 0, "... never steered onto land")
+check(f.pay == 1000, "1000 a fragment shot down (the user's call)")
 check(f.aim_share == 0 and src:find("math.random() < n(f.aim_share, 0)", 1, true) ~= nil, "aim_share there, 0 (all spread) until the user says")
 check(f.aim_land_tries >= 1 and src:find("aimed and n(f.aim_land_tries, 6) or n(f.land_tries, 0)", 1, true) ~= nil,
     "... an aimed one steered onto land, a wide one not")
