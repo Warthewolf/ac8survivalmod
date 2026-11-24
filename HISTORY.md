@@ -4441,3 +4441,17 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
     BUILD_NAME=COOP2MP COOP=1 FRIENDS=1 TANI=1 ZFA=1 package_release.sh online 0.75.113 ->
     build/release/AC8SurvivalMode_COOP2MP_0.75.113_Online_COOP_ZFA44_TANACORN.zip (151 MB, build d02c5c2299a9...,
     registered), zip_leak_test all passed; ulysses 16/16 on its own stage at sunrise (the box 0.0 m off), pictures sent.
+- 0.75.114 - 0.75.117 (2026-11-24 evening, branch feature/ulysses): news through ULYSSES (the user: "add more subtitles
+  through the two rounds, like News Broadcasts, go through the lore and make a story about the different areas that are
+  being affected by the planetfall", "report on it as if its happening at that current time", "don't talk about
+  refugees", "make the situation seem more dire", "Change it to reflect which Area of the News is coming from", "have
+  the news play more often"): text.news.round1 (7) / round2 (8) and core / core_down / core_hit, each line's speaker
+  its area (NEWS: USEA, SAINT ARK, FARBANTI, COMONA, ESTOVAKIA, EMMERIA, WHISKEY CORRIDOR, NEWFIELD ISLAND, SAN SALVACION,
+  LOS CANAS, SELATAPURA, MOUNT SHEZNA, FAITH PARK, FORT GRAYS ISLAND, COMBERTH HARBOR), from the Strangereal lore of
+  Ulysses 1994XF04 (acecombat.wiki.gg: Comona University predicted the day; Stonehenge's fourth gun knocked out; the
+  craters' places), live in July 1999 (no figures yet, nothing later); one every 20 s from 12 s in (news.first_s /
+  every_s), every game its own on the round's clock; Comona Control's round 2 and core lines darker. The sky's meteors
+  run through the break between its rounds too (the user: "the fake meteors up in the sky can still continue to run").
+  subtitles.ini written again from the config (subtitles.py merge). Friends' zips 0.75.114 (ulysses2 17/17 on its stage,
+  the first bulletins seen) .. 0.75.117: build/release/AC8SurvivalMode_COOP2MP_0.75.117_Online_COOP_ZFA44_TANACORN.zip
+  (build 3b4aaac60df5..., registered, zip_leak_test all passed).
