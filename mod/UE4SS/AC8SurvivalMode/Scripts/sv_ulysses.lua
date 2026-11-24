@@ -311,7 +311,9 @@ local function rock(key, at, vel, scale, spin, tailX, trails, look)
     -- meshes (the engine's fallback material drawn instead): a light-only look is drawn on the static twin of the streak
     local static = T.component == "static" or (look and look.paint ~= nil and look.paint ~= "paint")
     local tm = nil
-    if T.enabled ~= false then
+    -- ((2026-11-24, the user: "dont use those tube like meteor things, they look silly, just use the smoke") tailX 0: no
+    -- streak of ours on it, its smoke and fire only (the fragments' and the core's: fragments.tail_x / big.tail_x)
+    if T.enabled ~= false and n(tailX, 1) > 0 then
         if static then
             local path = cfg().mesh_path:gsub("SK_SV_", "SM_SV_") .. (look and look.mesh or T.mesh or "Tail")
             -- ((2026-11-24, the code review) cached and pinned as mesh() is: up to ~8 sky streaks a second looked up)
@@ -621,7 +623,7 @@ local function launch(spec, P, what, big)
     local T = d / v
     local key = type(spec.meshes) == "table" and spec.meshes[math.random(1, #spec.meshes)] or spec.mesh or "C"
     local sc, sp = span(spec.scale, 1), span(spec.spin_dps, 20)
-    local r = rock(key, start, { X = dx / T, Y = dy / T, Z = dz / T }, sc, sp)
+    local r = rock(key, start, { X = dx / T, Y = dy / T, Z = dz / T }, sc, sp, n(spec.tail_x, 1))
     if not r then return nil end
     U.lastScale, U.lastSpin = sc, sp
     U.nextId = (U.nextId or 0) + 1
@@ -935,7 +937,8 @@ function ULY.roundTick(now, s)
             local b = cfg().big
             local x = launch({ from_km = b.from_km, alt_m = b.alt_m, speed_kmh = b.speed_kmh, mesh = b.mesh, scale = b.scale,
                                spin_dps = b.spin_dps, health = b.health, solo_x = b.solo_x,
-                               dive_deg = b.dive_deg, from_deg = b.from_deg, spread_deg = b.spread_deg },   -- (AC:I's 45 degrees)
+                               dive_deg = b.dive_deg, from_deg = b.from_deg, spread_deg = b.spread_deg,    -- (AC:I's 45 degrees)
+                               tail_x = b.tail_x },
                              { X = AIRFIELD.X, Y = AIRFIELD.Y, Z = 0 }, "airfield", true)
             if x then U.list[#U.list + 1] = x end
             if hudCallout then hudCallout(cfg().text.big, cfg().text.big_sub) end
@@ -1073,7 +1076,8 @@ function ULY.fromHost(f)
         if not (KEYS[key] and fin(id, 1e6) and tonumber(id) == math.floor(tonumber(id)) and fin(x, 3e5) and fin(y, 3e5) and fin(z, 6e4) and fin(vx, 5e5) and fin(vy, 5e5)
             and fin(vz, 5e5) and fin(sc, 5000) and sc > 0 and fin(sp, 3600)) then return end
         if J.rocks[id] then rockOff(J.rocks[id]) end
-        local r = rock(key, { X = x * 100, Y = y * 100, Z = z * 100 }, { X = vx, Y = vy, Z = vz }, sc / 100, sp)
+        local tx = n((f[13] == "1" and cfg().big or cfg().fragments).tail_x, 1)     -- (as the host draws it: its own config)
+        local r = rock(key, { X = x * 100, Y = y * 100, Z = z * 100 }, { X = vx, Y = vy, Z = vz }, sc / 100, sp, tx)
         if r then
             -- ((2026-11-24, the code review) the core drawn as the host draws it: its own blasts, splash and fall sound)
             r.big = f[13] == "1"

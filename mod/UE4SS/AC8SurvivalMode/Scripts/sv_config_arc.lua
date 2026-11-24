@@ -415,13 +415,17 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
                   -- intercept them, also make them quicker too, the meteorites should be going around 1300km/h") 20-24 km up
                   -- (was 9-12) at 1250-1350 km/h (was 550-650): 78-94 s down a 45 degree dive, about as long as before
                   -- ((2026-11-24, the user: "I want some of the Meteorites to be faster than others, have them varied in
-                  -- speed from 2200 to 1300") 1300-2200 km/h: 46-94 s down
-                  from_km = { 26, 34 }, alt_m = { 20000, 24000 }, speed_kmh = { 1300, 2200 },
+                  -- speed from 2200 to 1300") 1300-2200 km/h; ((later) "make some of the meteors even quicker") 1300-3000
+                  -- km/h: 34-94 s down
+                  from_km = { 26, 34 }, alt_m = { 20000, 24000 }, speed_kmh = { 1300, 3000 },
                   -- ((2026-11-24, the user: "Try making it like infinities") AC:I's meteorites: a 45 degree dive, all one way
                   -- (its mission data; was any bearing at 1100-1500 km/h): from the east like the sky's
                   dive_deg = 45, from_deg = 0, spread_deg = 25,
                   meshes = { "C", "C", "D" }, scale = { 1.8, 3.2 }, spin_dps = { 10, 45 },
                   health = 350, pay = 300, airfield_damage = 8,
+                  -- ((2026-11-24, the user, of the fire tail up close: "dont use those tube like meteor things, they look
+                  -- silly, just use the smoke") no tail of ours (tail_x 0): the smoke and fire trails only (trails below)
+                  tail_x = 0,
                   -- ((2026-11-24, the user: "it doesn't matter if meteorites miss the land mass or not, have them vastly spread
                   -- out around the comona island") area_km: anywhere in this box (km, the world's x / y: the island chain is
                   -- x -19..+33, y -12..+7, COMONA_MAP.md; x kept under +24 so the dive from the east is seen inside the
@@ -436,7 +440,7 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
                   aim = { airfield = 0.6, town = 0.4 }, spread_m = 2500 },
     -- ((2026-11-24, the user: "around 1300km/h") the core too: 1300 km/h from 28 km up (was 650 from 16): 110 s down
     big = { enabled = true, mesh = "A", scale = 1.0, at_s = 45, from_km = 48, alt_m = 28000, speed_kmh = 1300, spin_dps = 4,
-            dive_deg = 45, from_deg = 0, spread_deg = 10,
+            dive_deg = 45, from_deg = 0, spread_deg = 10, tail_x = 0,
             health = 4000, solo_x = 0.7, pay = 6000, airfield_damage = 120 },
     -- the towns it aims at besides the airfield (cm; the airport key's town, docs/re/COMONA_MAP.md)
     towns = { { X = 1250000, Y = -320000 }, { X = 2350000, Y = -700000 } },
