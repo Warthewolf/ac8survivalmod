@@ -6228,16 +6228,15 @@ end
 -- start line (the film look's settings, the targets borrowed, the paint), pictures of your view, of a falling fragment
 -- from beside it, of the sky's meteors from over the airfield, one fragment finished off (its target at its floor: shot
 -- down, paid), one landing, the core up and pictured, the round's end (PRESENT DAY)
--- ((2026-11-24, the user: "Can you please make it sunset for these tests") ULYSSES' suites at the day-night arc's sunset:
--- GONE FISHIN' set so round 1 (the one the suites force ULYSSES into) is the sunset round (its sinking steps after F);
--- the ulydawn suite keeps its sunrise
+-- ((2026-11-24, the user: "Can you please make it sunset for these tests", then "sorry the test was meant to take place
+-- at sun rise") ULYSSES' suites at its own light, the day-night arc's first dawn round: GONE FISHIN' set so round 1 (the
+-- one the suites force ULYSSES into) is F + 7 + night_rounds, as the ulydawn suite's (which sets it itself)
 local function ulySunset()
     if ULYDAWN then return end
     A.do_(function()
-        local st = SKY and SKY.arcState and SKY.arcState()
-        local F = 1 - ((st and tonumber(st.sink)) or 5)
-        local ok = SKY and SKY.arcSet and SKY.arcSet(F, "the ULYSSES autotests at sunset")
-        ST.info(string.format("the arc set: GONE FISHIN' at round %d (%s): round 1 the sunset", F, tostring(ok)))
+        local F = 1 - 7 - math.floor(tonumber(((CFG.sky or {}).arc or {}).night_rounds) or 3)
+        local ok = SKY and SKY.arcSet and SKY.arcSet(F, "the ULYSSES autotests at sunrise")
+        ST.info(string.format("the arc set: GONE FISHIN' at round %d (%s): round 1 the sunrise", F, tostring(ok)))
     end)
     A.wait(4)
 end
