@@ -205,7 +205,13 @@ local function rock(key, at, vel, scale, spin, tailX, trails, look)
     if T.enabled ~= false then
         if static then
             local path = cfg().mesh_path:gsub("SK_SV_", "SM_SV_") .. (look and look.mesh or T.mesh or "Tail")
-            tm = loadObject(path .. "." .. path:match("[^/]+$"))
+            -- ((2026-11-24, the code review) cached and pinned as mesh() is: up to ~8 sky streaks a second looked up)
+            tm = MESH[path]
+            if not (tm and liveObj(tm)) then
+                tm = loadObject(path .. "." .. path:match("[^/]+$"))
+                MESH[path] = tm
+                if tm and pin then pcall(pin, tm, "ULYSSES' static " .. path:match("[^/]+$")) end
+            end
         else tm = mesh(T.mesh or "Tail") end
     end
     if tm and valid(tm) then
@@ -347,6 +353,7 @@ local function poolUp(unit)
 end
 local function boxTexts(on)
     if type(SV_SetText) ~= "function" then return end
+    BOXED = on and true or nil                            -- (ULY.endAll puts the SOLG's back if still ours)
     local c = cfg().box or {}
     if on then
         SV_SetText("SV_SOLG_Name", c.name or "ULYSSES")
@@ -413,98 +420,34 @@ local function atFloor(e)
 end
 
 ---------------------------------------------------------------------------------------------------- the film look
+-- ((2026-11-24, the code review) the look is the HUD's sepia wash (sv_hud.lua HUD.film): AC8's camera manager ignores a
+-- post-process volume of ours and no camera component of the plane was ever found (0 in every autotest), so neither is
+-- made any more: no engine object kept between ticks (hard rule 59). FILM: its fade (from -> to over film.fade_s, os.clock)
 local FILM = {}
-local function filmSet(w)
-    if not (FILM.v and liveObj(FILM.v)) then return end
-    pcall(function() FILM.v.BlendWeight = w end)
-end
 local function filmOn()
     local f = cfg().film or {}
     if f.enabled == false then return "off" end
-    if FILM.v and liveObj(FILM.v) then return "up" end
-    local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
-    local cls = StaticFindObject("/Script/Engine.PostProcessVolume")
-    if not (valid(gs) and valid(cls) and liveObj(survivalPC)) then return "no PostProcessVolume class" end
-    local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
-    local ok, v = pcall(function()
-        local x = gs:BeginDeferredActorSpawnFromClass(survivalPC, cls, t, 1, nil, 1)
-        return gs:FinishSpawningActor(x, t, 1)
-    end)
-    if not (ok and valid(v)) then return "the volume didn't spawn" end
-    pcall(function() v.bUnbound = true end)
-    pcall(function() v.Priority = 1000 end)
-    pcall(function() v.BlendWeight = 0 end)
-    local tint = f.tint or { 1, 0.9, 0.72 }
-    local sets = {
-        function(s) s.bOverride_ColorSaturation = true; s.ColorSaturation = { X = f.saturation, Y = f.saturation, Z = f.saturation, W = 1 } end,
-        function(s) s.bOverride_SceneColorTint = true; s.SceneColorTint = { R = tint[1], G = tint[2], B = tint[3], A = 1 } end,
-        function(s) s.bOverride_FilmGrainIntensity = true; s.FilmGrainIntensity = f.grain end,
-        function(s) s.bOverride_VignetteIntensity = true; s.VignetteIntensity = f.vignette end,
-    }
-    local nOk = 0
-    for _, fn in ipairs(sets) do if pcall(function() fn(v.Settings) end) then nOk = nOk + 1 end end
-    pcall(function() v.bEnabled = true end)
-    local okR, back = pcall(function() return v.Settings.FilmGrainIntensity end)
-    -- ((2026-11-23, the autotest: 4 of 4 written, nothing seen) AC8's own grading comes with the view's camera, after any
-    -- volume: the same settings on the camera components of your plane (their blend weight 1), put back at the end
-    FILM.cams = {}
-    local pawn = liveObj(survivalPC) and survivalPC.Pawn
-    local cc = StaticFindObject("/Script/Engine.CameraComponent")
-    local okC, list = pcall(function() return pawn:K2_GetComponentsByClass(cc) end)
-    if okC and list then
-        pcall(function() list:ForEach(function(_, e)
-            local cam = e:get()
-            local saved = {}
-            for _, k in ipairs({ "bOverride_ColorSaturation", "bOverride_SceneColorTint", "bOverride_FilmGrainIntensity", "bOverride_VignetteIntensity",
-                                 "ColorSaturation", "SceneColorTint", "FilmGrainIntensity", "VignetteIntensity" }) do
-                pcall(function() local x = cam.PostProcessSettings[k]; saved[k] = type(x) == "userdata" and nil or x end)
-            end
-            local w = 0
-            for _, fn in ipairs(sets) do if pcall(function() fn(cam.PostProcessSettings) end) then w = w + 1 end end
-            pcall(function() cam.PostProcessBlendWeight = 1 end)
-            FILM.cams[#FILM.cams + 1] = { cam = cam, saved = saved, w = w }
-        end) end)
-    end
-    local vt = liveObj(survivalPC) and select(2, pcall(function() return survivalPC:GetViewTarget() end))
-    local pcm = liveObj(survivalPC) and survivalPC.PlayerCameraManager
-    FILM.view = string.format("view on %s, camera manager %s", valid(vt) and nameOf(vt) or "?", valid(pcm) and nameOf(pcm):match("[^%.:]+$") or "?")
-    local camW = 0
-    for _, x in ipairs(FILM.cams) do camW = camW + x.w end
-    FILM.v, FILM.from, FILM.to, FILM.at = v, 0, 1, os.clock()
-    return string.format("on (%d of %d settings written, grain read back %s; on %d camera(s) of your plane, %d settings; %s)", nOk, #sets,
-        okR and tostring(back) or "?", #FILM.cams, camW, FILM.view or "?")
+    if FILM.on then return "up" end
+    FILM.on, FILM.from, FILM.to, FILM.at, FILM.cur, FILM.said = true, FILM.cur or 0, 1, os.clock(), FILM.cur or 0, false
+    return "on (the HUD's wash)"
 end
 local function filmOff(now)
-    if FILM.v and liveObj(FILM.v) then FILM.from, FILM.to, FILM.at = FILM.cur or 1, 0, os.clock() end
+    if FILM.on then FILM.from, FILM.to, FILM.at = FILM.cur or 1, 0, os.clock() end
 end
 local function filmTick(now)
+    if not FILM.on then return end
     now = os.clock()                                      -- (FILM.at is os.clock's: the tick's own clock is the game's)
-    if not (FILM.v and liveObj(FILM.v)) then return end
-    local fs = math.max(0.1, n((cfg().film or {}).fade_s, 2))
-    local u = math.min(1, (now - (FILM.at or now)) / fs)
+    local f = cfg().film or {}
+    local u = math.min(1, (now - (FILM.at or now)) / math.max(0.1, n(f.fade_s, 2)))
     FILM.cur = FILM.from + (FILM.to - FILM.from) * u
-    filmSet(FILM.cur)
-    local f = cfg().film or {}                            -- (the HUD's sepia wash: what shows, AC8's grading aside)
     if HUD and HUD.film then
         local fl = 1 + (math.random() * 2 - 1) * n(f.flicker, 0.04) / math.max(0.01, n(f.overlay_a, 0.26))
         local okF, r = pcall(HUD.film, n(f.overlay_a, 0.26) * FILM.cur * fl, f.overlay)
         if not FILM.said and FILM.cur > 0.5 then FILM.said = true; ul("film overlay: HUD.film " .. tostring(okF) .. " " .. tostring(r) .. ", opacity " .. string.format("%.2f", n(f.overlay_a, 0.26) * FILM.cur)) end
     end
-    for _, x in ipairs(FILM.cams or {}) do                 -- (the camera's: its blend scaled the same way)
-        if valid(x.cam) then pcall(function() x.cam.PostProcessSettings.FilmGrainIntensity = n((cfg().film or {}).grain, 0.45) * FILM.cur end) end
-    end
     if FILM.to == 0 and u >= 1 then
-        for _, x in ipairs(FILM.cams or {}) do
-            if valid(x.cam) then
-                for k, val in pairs(x.saved) do pcall(function() x.cam.PostProcessSettings[k] = val end) end
-                for _, k in ipairs({ "bOverride_ColorSaturation", "bOverride_SceneColorTint", "bOverride_FilmGrainIntensity", "bOverride_VignetteIntensity" }) do
-                    if x.saved[k] == nil then pcall(function() x.cam.PostProcessSettings[k] = false end) end
-                end
-            end
-        end
-        FILM.cams = {}
         if HUD and HUD.film then pcall(HUD.film, 0) end
-        pcall(function() FILM.v:K2_DestroyActor() end); FILM.v = nil
+        FILM.on, FILM.cur = false, 0
     end
 end
 
@@ -570,7 +513,9 @@ local function launch(spec, P, what, big)
     tell("f", tostring(f.id), key, string.format("%.0f", start.X / 100), string.format("%.0f", start.Y / 100), string.format("%.0f", start.Z / 100),
         string.format("%.0f", dx / T), string.format("%.0f", dy / T), string.format("%.0f", dz / T), string.format("%.0f", (U.lastScale or 1) * 100),
         string.format("%.0f", U.lastSpin or 20), big and "1" or "0")
-    local hp = n(spec.health, 300) * (players() <= 1 and n(spec.solo_x, 1) or 1)
+    -- ((2026-11-24, the code review) fragments.solo_x is their COUNT's solo multiplier (fragmentsFor), not their health's:
+    -- a health one is solo_hp_x (the core's solo_x is its health's, as its config says)
+    local hp = n(spec.health, 300) * (players() <= 1 and n(spec.solo_hp_x or (big and spec.solo_x) or 1, 1) or 1)
     f.e = arm(big and U.poolBig or U.pool, r, hp)
     local s = cfg().sounds or {}
     if SND and SND.play and (big and s.fall_big or s.fall) then
@@ -866,7 +811,10 @@ function ULY.busy(s)
 end
 function ULY.roundOver(now, s)
     if not U then return end
-    for _, x in ipairs(U.list) do if not x.done then x.done = true; disarm(x.e); rockOff(x.r) end end
+    for _, x in ipairs(U.list) do
+        if not x.done then x.done = true; disarm(x.e); rockOff(x.r) end
+        if x.snd and SND and SND.stop then pcall(SND.stop, x.snd); x.snd = nil end   -- (its fall loop: the code review)
+    end
     ul(string.format("round %d over: %d of %d fragments shot down, %d landed on the airfield, %d on the town, %d in the sea", D.round,
         U.shot, U.sent + (U.bigSent and 1 or 0), U.landedAirfield, U.landedTown, U.landedSea or 0))
     if host() then boxTexts(false) end
@@ -890,8 +838,56 @@ function ULY.row(s, t)
     return string.format("ULYSSES  %d FRAGMENTS LEFT  %d DOWN", left + ((U.bigAt and not U.bigSent) and 1 or 0), U.shot)
 end
 -- every tick (sv_main.lua): the film look's blend, the sky's meteors while in 1999 (each game its own)
+-- ((2026-11-24, the code review) everything ULYSSES has up taken down, whatever ended it: its last round lost (the fleet's
+-- round 30, a spawn refused), a run over mid-round, the level gone (LEVEL_DROPS), a joiner made host mid-round
+function ULY.endAll(why)
+    local any = U ~= nil or J.on or FILM.on or AMB.h ~= nil or #SKYM.list > 0
+    if U then
+        for _, x in ipairs(U.list) do
+            if not x.done then x.done = true; pcall(disarm, x.e); rockOff(x.r) end
+            if x.snd and SND and SND.stop then pcall(SND.stop, x.snd); x.snd = nil end
+        end
+        U = nil
+    end
+    for _, r in pairs(J.rocks) do
+        if r.snd and SND and SND.stop then pcall(SND.stop, r.snd) end
+        rockOff(r)
+    end
+    J.rocks, J.on = {}, false
+    if host() and BOXED then pcall(boxTexts, false) end
+    skyOff()
+    ambOff()
+    if FILM.on then
+        FILM.on, FILM.cur = false, 0
+        if HUD and HUD.film then pcall(HUD.film, 0) end
+    end
+    if any then ul("all taken down: " .. tostring(why)) end
+end
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["ulysses"] = function() ULY.endAll("the level dropped") end end
+-- ((2026-11-24, the code review) the Spaceport can't come the round before ULYSSES: its retake would fall on ULYSSES' first
+-- round (specialFor asks the retake first) and the time shift into 1999 would never play (THE FESTIVAL's guard, the same)
+do
+    local sk = SPC and SPC.kinds and SPC.kinds.spaceport
+    if sk and sk.ready then
+        local raw = sk.ready
+        sk.ready = function(round, ...)
+            if round and ULY.roundIs(round + 1) then return false end
+            return raw(round, ...)
+        end
+    end
+end
 function ULY.tick(now)
     filmTick(now)
+    -- (its look left on with no ULYSSES round in play or next: ended; a joiner made host keeps no host's round)
+    if D and (FILM.on or AMB.h or J.on) then
+        local s0 = D.special
+        local inUly = s0 and s0.kind == "ulysses"
+        local nextUly = D.state == "wait" and (ULY.roundIs(D.round + 1) or D.forceSpecial == "ulysses")
+        if host() and J.on and not U then ULY.endAll("this game became the host mid-round")
+        elseif host() and not inUly and not nextUly and not J.on and (D.state == "fighting" or D.state == "spawning" or D.state == "wait") then
+            ULY.endAll("no ULYSSES round in play (round " .. tostring(D.round) .. ")")
+        end
+    end
     local s = D and D.special
     local on = (s and s.kind == "ulysses" and (D.state == "fighting" or D.state == "spawning")) or J.on
     skyClean(now)
@@ -900,7 +896,7 @@ function ULY.tick(now)
         local nextIs = D and ULY.roundIs(D.round + 1)
         if not nextIs then skyOff() end
     end
-    if not D and FILM.v then filmOff(now) end
+    if not D and FILM.on then filmOff(now) end
     if not D and AMB.h then ambOff() end
 end
 
@@ -929,6 +925,14 @@ function ULY.fromHost(f)
         if J.rocks[id] then rockOff(J.rocks[id]) end
         local r = rock(key, { X = x * 100, Y = y * 100, Z = z * 100 }, { X = vx, Y = vy, Z = vz }, sc / 100, sp)
         if r then
+            -- ((2026-11-24, the code review) the core drawn as the host draws it: its own blasts, splash and fall sound)
+            r.big = f[13] == "1"
+            local snds = cfg().sounds or {}
+            local l = r.big and snds.fall_big or snds.fall
+            if l and SND and SND.play then
+                local ok, h = pcall(SND.play, l, function() return rockAt(r) end)
+                r.snd = ok and h or nil
+            end
             J.rocks[id] = r
             pcall(function() r.a:SetLifeSpan(600) end)
         end
@@ -937,17 +941,22 @@ function ULY.fromHost(f)
         if not r then return end
         J.rocks[f[3]] = nil
         local at = rockAt(r)
+        local fx = cfg().fx_scale or {}
         if at then
-            if k == "s" then boom(at, n((cfg().fx_scale or {}).shot, 4))
-            elseif f[4] == "1" then boom(at, n((cfg().fx_scale or {}).land, 10))
+            if k == "s" then boom(at, n(r.big and fx.big_shot or fx.shot, 4))
+            elseif f[4] == "1" then boom(at, n(r.big and fx.big_land or fx.land, 10))
             else
                 local sc = cfg().sea or {}
-                if fxAt then pcall(fxAt, sc.fx or {}, { X = at.X, Y = at.Y, Z = n(sc.sea_z, 350) }, n(sc.scale, 1.5), 20) end
+                if fxAt then pcall(fxAt, sc.fx or {}, { X = at.X, Y = at.Y, Z = n(sc.sea_z, 350) }, n(r.big and sc.big_scale or sc.scale, 1.5), 20) end
             end
         end
+        if r.snd and SND and SND.stop then pcall(SND.stop, r.snd) end
         rockOff(r)
     elseif k == "e" then
-        for _, r in pairs(J.rocks) do rockOff(r) end
+        for _, r in pairs(J.rocks) do
+            if r.snd and SND and SND.stop then pcall(SND.stop, r.snd) end
+            rockOff(r)
+        end
         J.rocks = {}
         J.on = false
         if f[3] == "1" then

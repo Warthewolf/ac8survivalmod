@@ -10,7 +10,7 @@ if not io.open(S .. "sv_ulysses.lua", "rb") then S = MOD .. "/Scripts/" end
 
 -- the game stubbed
 CFG = { specials = {}, sky = { arc = { night_rounds = 3 } }, hud = { text = {} } }
-SPC = { kinds = {}, V = { asset = function() return nil end } }
+SPC = { kinds = { spaceport = { ready = function() return true end } }, V = { asset = function() return nil end } }
 local logs = {}
 function log(s) logs[#logs + 1] = s end
 function valid(o) return o ~= nil end
@@ -97,6 +97,12 @@ check(c.big.dive_deg == 45, "the core dives at 45 degrees too")
 check(c.sky.look and c.sky.look.mesh == "Streak" and c.tail.streak and c.tail.streak.tex.EmissiveMap:find("T_SV_Ulysses_Streak", 1, true),
     "the sky: AC:I's trail sprite on the streak card")
 check(c.sounds.ambient and c.sounds.ambient.loop == true, "the Stardust rumble, looped")
+
+-- ((2026-11-24, the code review) the Spaceport never the round before ULYSSES (its retake would take ULYSSES' first round)
+F = 9
+check(SPC.kinds.spaceport.ready(18) == false and SPC.kinds.spaceport.ready(17) == true, "the Spaceport refused the round before ULYSSES, not others")
+check(type(ULY.endAll) == "function" and LEVEL_DROPS == nil or (LEVEL_DROPS and LEVEL_DROPS.ulysses), "its clean-up (ULY.endAll), on a level drop too")
+check(pcall(ULY.endAll, "the test"), "its clean-up runs with nothing up")
 
 print(fails == 0 and "ulysses test: all passed" or ("ulysses test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

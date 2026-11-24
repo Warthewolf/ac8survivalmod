@@ -426,8 +426,8 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     sky = { enabled = true, every_s = { 0.4, 1.2 }, burst = { 3, 7 }, max_up = 100, alt_m = { 28000, 34000 }, from_km = { 25, 60 }, dip = { 0.8, 1.0 }, floor_m = 16000,
             speed_kmh = { 8000, 14000 }, life_s = 14, meshes = { "D", "C", "C" }, scale = { 8, 22 }, tail_x = 1.5,
             -- ((2026-11-24, the user: "high altitude so that the player can't reach them, like very very high") 45-65 km up (was
-            -- 12-28; 45-65 km, 0.75.80, drew nothing: past what the game draws), 24-34 km, dipping at most 2 % of their speed (was
-            -- 5-20 %: they came down to fighter heights), 8-22x
+            -- 12-28; 45-65 km, 0.75.80, drew nothing: past what the game draws), now 28-34 km; since 0.75.96 diving like AC:I's
+            -- emitters (dip 0.8-1.0: 39-45 degrees), burnt out above floor_m (16 km: out of any fighter's reach), 8-22x
             -- (the user, 2026-11-24: "East to West": from the east (0 = +X), within 12 degrees of due west; "spread out more
             -- than 60km": lateral_km either side of you, 150 (300 km north to south), bursts and max_up raised to keep them thick)
             -- ((2026-11-24, the user: "Why are the meteors moving the wrong way?") the autotest's compass: +X IS east (the
