@@ -198,10 +198,18 @@ local function songTick()
 end
 
 -- the game paused / running: Survival's sounds silent while it's paused (their clock stops, a loop would play on)
+-- ((2026-11-24) and SND.onPause[name](paused) told, for sounds of Survival's own that Wwise plays (ULYSSES'): AC8's pause
+-- (AKE_System_SFX_Pause_On) pauses some of its sfx bus's children, never the sfx bus they play on)
+SND.onPause = SND.onPause or {}
 function SND.setPaused(paused)
     paused = paused and true or false
-    if paused == (SND.paused or false) or not SND.master or type(SV_SndMaster) ~= "function" then return end
+    if paused == (SND.paused or false) then return end
     SND.paused = paused
+    for k, f in pairs(SND.onPause) do
+        local ok, e = pcall(f, paused)
+        if not ok then log("sound: " .. tostring(k) .. "'s pause: " .. tostring(e)) end
+    end
+    if not SND.master or type(SV_SndMaster) ~= "function" then return end
     SV_SndMaster(paused and 0 or db(CFG.sound.master_db))
 end
 

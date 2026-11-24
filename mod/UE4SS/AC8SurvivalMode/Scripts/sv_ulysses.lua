@@ -139,6 +139,25 @@ local function wwOff(a)
     local ak = akStat()
     if ak and a and liveObj(a) then pcall(function() ak:StopActor(a) end) end
 end
+-- ((2026-11-24) the game paused / running (sv_sound.lua SND.onPause): AC8's own pause (AKE_System_SFX_Pause_On, its main
+-- SE bank) pauses some children of the sfx bus, never the sfx bus ours play on: each of ours paused / resumed on every
+-- game object (UAkAudioEvent.ExecuteAction: Pause 1 / Resume 2, no actor = all, a 100 ms fade)
+function ULY.wwPause(paused)
+    local n, bad = 0, nil
+    for name, e in pairs(WW.ev) do
+        if e and liveObj(e) then
+            local ok, r = pcall(function() return e:ExecuteAction(paused and 1 or 2, nil, 0, 100, 4) end)
+            if ok then n = n + 1 else bad = tostring(r) end
+        end
+    end
+    if n > 0 or bad then
+        WW.paused = (WW.paused or 0) + 1
+        if WW.paused <= 4 or bad then
+            ul(string.format("sound: Wwise's %d event(s) %s%s", n, paused and "paused" or "resumed", bad and (" (an error: " .. bad .. ")") or ""))
+        end
+    end
+end
+if SND then SND.onPause = SND.onPause or {}; SND.onPause.ulysses = function(p) ULY.wwPause(p) end end
 -- an impact's sound at `at`
 local function bang(at)
     local s = cfg().sounds or {}
