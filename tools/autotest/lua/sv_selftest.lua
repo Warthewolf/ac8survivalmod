@@ -6228,8 +6228,22 @@ end
 -- start line (the film look's settings, the targets borrowed, the paint), pictures of your view, of a falling fragment
 -- from beside it, of the sky's meteors from over the airfield, one fragment finished off (its target at its floor: shot
 -- down, paid), one landing, the core up and pictured, the round's end (PRESENT DAY)
+-- ((2026-11-24, the user: "Can you please make it sunset for these tests") ULYSSES' suites at the day-night arc's sunset:
+-- GONE FISHIN' set so round 1 (the one the suites force ULYSSES into) is the sunset round (its sinking steps after F);
+-- the ulydawn suite keeps its sunrise
+local function ulySunset()
+    if ULYDAWN then return end
+    A.do_(function()
+        local st = SKY and SKY.arcState and SKY.arcState()
+        local F = 1 - ((st and tonumber(st.sink)) or 5)
+        local ok = SKY and SKY.arcSet and SKY.arcSet(F, "the ULYSSES autotests at sunset")
+        ST.info(string.format("the arc set: GONE FISHIN' at round %d (%s): round 1 the sunset", F, tostring(ok)))
+    end)
+    A.wait(4)
+end
 SUITES.ulysses = function()
     intoRun()
+    ulySunset()
     local function frags()
         local U = ULY and ULY.debug and select(1, ULY.debug())
         local out = {}
@@ -6346,6 +6360,11 @@ SUITES.ulysses = function()
     A.until_(function() return #frags() >= 2 end, 40, function(v)
         ST.check(v ~= nil, "fragments falling", string.format("%d up", #frags()))
     end)
+    -- ((2026-11-24, the user: "The target box isn't aligned") its lock point on the rock's centre (sv_ulysses.lua's line)
+    A.log_("ulysses: target's lock point", 30, "u0", true, function(l)
+        local d = l and tonumber(l:match("lock point ([%d%.]+) m"))
+        ST.check(d ~= nil and d < 3, "a fragment's box on its rock (its lock point within 3 m of its centre)", l)
+    end)
     local function unhold()
         A.do_(function()
             local h = HELD
@@ -6450,6 +6469,7 @@ end
 -- (config_ulysses2.lua) brings the fragments in close and fast, so each lands within ~25 s.
 SUITES.ulysses2 = function()
     intoRun()
+    ulySunset()
     if ULYDAWN then                                      -- ((2026-11-24) the ulydawn suite: its real light, sunrise after the
         A.do_(function()                                 -- festival's night: GONE FISHIN' set at a round that makes rounds 1-2
             local F = 1 - 7 - math.floor(tonumber(((CFG.sky or {}).arc or {}).night_rounds) or 3)   -- the arc's dawn ones
@@ -6668,6 +6688,7 @@ end
 -- tools/autotest/loudness_report.py matches its levels to the "SOUND ..." lines by their time
 SUITES.ulysound = function()
     intoRun()
+    ulySunset()
     local T = {}
     local function at(km) return { X = T.C.X + km * 100000, Y = T.C.Y, Z = T.C.Z } end
     A.wait(6)
@@ -6735,6 +6756,15 @@ SUITES.ulysound = function()
         ST.info("SOUND ambient stopped")
     end)
     A.wait(4)
+    -- ((2026-11-24, the user: "make it so that the meteorites have the tonitrus spear impact sfx too") AC8's own Spear
+    -- impacts (ground, sea) 1.5 km off, as a fragment's landing posts them beside its own explosion
+    for _, kind in ipairs({ "ground", "sea" }) do
+        A.do_(function()
+            local ok = ULY.testSpear and ULY.testSpear(kind, at(1.5))
+            ST.info(string.format("SOUND spear %s 1.5 km: %s", kind, tostring(ok)))
+        end)
+        A.wait(8)
+    end
     -- ((2026-11-24) as in a round: a whistle posted far out of its 7 km (every fragment starts 28-34 km away), then closing
     -- on the camera at 600 m/s from 12 km: it must swell as it comes in (SOUND fall closing ... lines every 2 s: its distance)
     A.do_(function()
@@ -6805,6 +6835,7 @@ end
 -- Survival's memory (SV_MemMB) at each round's start and end: a soak before the user's own flight
 SUITES.ulysoak = function()
     intoRun()
+    ulySunset()
     local M = { peak = 0, dt = {}, mem = {} }
     local function Ux() return ULY and ULY.debug and select(1, ULY.debug()) end
     local gs
@@ -6867,6 +6898,7 @@ end
 -- (sv_sound.lua SND.setPaused changed for SND.onPause); the music muted, loudness.ps1 beside the job
 SUITES.ulyxaudio = function()
     intoRun()
+    ulySunset()
     A.do_(function()
         if not ST.check(ULY ~= nil and SPC.kinds.ulysses ~= nil, "ULYSSES is in this build") then return "abort" end
         if type(SV_PlayBGM) == "function" then pcall(SV_PlayBGM, "AKE_System_BGM_Mute_On") end
@@ -6915,6 +6947,7 @@ end
 -- four rocks in a column 1.5 km off, diving 45 degrees, held still; pictures side-on from 1.2 km and 450 m, for the user
 SUITES.ulytails = function()
     intoRun()
+    ulySunset()
     local ROWS = {
         { "today's: the opaque tail", nil, 1 },
         { "AC:I's sprite on the flare (x20)", { paint = "streak", mesh = "Streak", tail_r = 0.25 }, 0.06 },
@@ -6949,6 +6982,7 @@ end
 -- ulysound's, each at 1.5 and 5 km (18 s apart: ours is 16.6 s long); loudness.ps1 beside the job, loudness_report.py after
 SUITES.ulycal = function()
     intoRun()
+    ulySunset()
     local T = {}
     local REF = {
         { "AC8 railgun impact", "/Game/WwiseAssets/Events/SFX/AKE_Weapon_SuperLongMainGun_Explosion_Ground_Play" },
@@ -6991,6 +7025,7 @@ end
 -- shot down or lands: 6 finished off early, the rest land), the frame time as they pile up, all 50 counted at its end
 SUITES.ulymany = function()
     intoRun()
+    ulySunset()
     local M = { jumps = {}, lastSent = 0, noBox = 0, peak = 0, prev = 0, dt = { few = {}, many = {} } }
     local function Ux() return ULY and ULY.debug and select(1, ULY.debug()) end
     local function falling(U)
