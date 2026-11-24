@@ -4415,3 +4415,29 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
 - 0.75.109 (2026-11-24), the user: "Players should get $1000 per meteorite they destroy": fragments.pay 1000 (was 300;
   the core 6000 as before): a full round 1 up to 50,000, round 2 up to 66,000. ulysses 15/15 ("paid 1000"). Staged
   build/release/stage_dev_0.75.109, not registered, NOT installed.
+- 0.75.110 - 0.75.113 (2026-11-24, branch feature/ulysses), the user's calls through the evening:
+  - "The target box isn't aligned": the borrowed target hung on the rock's spinning, 1.8-3.2x mesh, its
+    -HitCenterOffset (35 m) scaled and swung round: its lock point 60-110 m off the rock (the ulysses suite's box probe,
+    twice 2 s apart). An anchor with absolute rotation and scale changed nothing; now a rock's actor is rooted on a plain
+    unturned, unscaled scene (the ProjectileMovement moves it), the mesh under it carries the turn, the size and the spin
+    (the RotatingMovement on the mesh alone), the target on the root: its lock point 0.0 m off, steady (16/16).
+  - "I don't hear the meteorite sounds": the shower spread wide lands 15-45 km off; impacts carried 40, then 60 km
+    (0.75.110-0.75.111). "The meteors were using the missile sound effect": AC:I's OBJ_FALL_STARTDUST_SMALL is one stream
+    with its ICBM burner's (the fall loop, then her call: "lower the meteor burner sfx back to its normal level
+    beforehand": -10 dB to 7 km again). "make it so that the meteorites have the tonitrus spear impact sfx too", then
+    "tonitrus spear impact for the impact sfx": a landing sounds as AC8's own AKE_GEN_AMMO_EXP_Tonitrus_Impact_Ground_Play /
+    _Sea_Play (they load and play in Survival's level: -24 / -20 dBFS at 1.5 km), a shot down as the Stardust explosion.
+    "each sound doesn't sound quieter" (the meter: -26 / -28 / -31 / -35 dB at 0.3 / 1.5 / 5 / 11 km) and "the Tonitrus
+    Spear impact definetly had a better fade": the Spear impact decoded from AKB_GameSe (a blend of near / mid / far
+    layers; its ground ShareSet -6 dB by 1 km, -24 by 2, -34 by 6, silent at 20; a low-pass 20 / 25 / 30 at 2 / 6 / 20 km; a
+    spread 30 % near, 5 % at 1 km; the sea's flat to 5-8 km, silent at 50): waapi_build.py writes "lpf" / "spread" curves
+    beside the volume, ULYSSES' three 3D sounds shaped so (the explosion as the Spear's ground). The meter of the Spear:
+    ground -24 / -31 / -41 / -50 dBFS at 1.5 / 5 / 15 / 30 km, sea -20 / -22 at 1.5 / 15.
+  - The ULYSSES test suites at its own sunrise (ulySunset sets the arc's first dawn round; the user: "the test was meant
+    to take place at sun rise"); the listening pack build/ulysses/listen (Infinity's five, the Spear's 40 layers,
+    decoded with the scratch spear_wavs.py from the stock bank) sent to the user.
+  - Friends' test build (the user: "can you give me a test build for my friends, make sure that the ulysses rounds play
+    after the festival, just as it comes into sunrise": they do, F + 7 + night_rounds, the arc's first dawn rounds):
+    BUILD_NAME=COOP2MP COOP=1 FRIENDS=1 TANI=1 ZFA=1 package_release.sh online 0.75.113 ->
+    build/release/AC8SurvivalMode_COOP2MP_0.75.113_Online_COOP_ZFA44_TANACORN.zip (151 MB, build d02c5c2299a9...,
+    registered), zip_leak_test all passed; ulysses 16/16 on its own stage at sunrise (the box 0.0 m off), pictures sent.
