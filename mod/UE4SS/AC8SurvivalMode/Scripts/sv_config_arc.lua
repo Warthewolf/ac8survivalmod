@@ -432,7 +432,7 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
                   -- (aim_share: that share of them still aimed at the airfield or a town (aim, spread_m), the rest anywhere
                   -- in area_km; 0 = all spread (the autotest ulysoak of 0.75.105: 105 of 110 fell in the sea, the airfield
                   -- hurt only by the core): the user's call)
-                  aim_share = 0,
+                  aim_share = 0, aim_land_tries = 6,
                   aim = { airfield = 0.6, town = 0.4 }, spread_m = 2500 },
     -- ((2026-11-24, the user: "around 1300km/h") the core too: 1300 km/h from 28 km up (was 650 from 16): 110 s down
     big = { enabled = true, mesh = "A", scale = 1.0, at_s = 45, from_km = 48, alt_m = 28000, speed_kmh = 1300, spin_dps = 4,

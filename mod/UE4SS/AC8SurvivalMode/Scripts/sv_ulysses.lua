@@ -584,13 +584,13 @@ local function fragmentsFor(phase)
     local x = p <= 1 and n(f.solo_x, 1) or (1 + n(f.per_player, 0) * (p - 1))
     return math.max(1, math.min(n(f.max_n, 40), math.floor(base * x + 0.5)))
 end
-local function aimPoint()
+local function aimPoint(aimed)
     local f = cfg().fragments
     -- ((2026-11-24, the user: "it doesn't matter if meteorites miss the land mass or not, have them vastly spread out around
     -- the comona island") area_km: anywhere in that box, land or sea; land() decides by where it comes down
     local A = f.area_km
-    -- (aim_share: that share still aimed at the airfield or a town as before the spread, the rest anywhere; 0: none)
-    if type(A) == "table" and type(A.x) == "table" and type(A.y) == "table" and math.random() >= n(f.aim_share, 0) then
+    -- (aimed: one of aim_share's, at the airfield or a town as before the spread; the rest anywhere in area_km)
+    if type(A) == "table" and type(A.x) == "table" and type(A.y) == "table" and not aimed then
         U.lastAim = "comona"
         return { X = span(A.x, 0) * 100000, Y = span(A.y, 0) * 100000, Z = 0 }, U.lastAim
     end
@@ -917,11 +917,14 @@ function ULY.roundTick(now, s)
             for _ = 1, math.max(1, math.floor(n(f.per_wave, 1))) do
                 if U.sent >= U.todo or falling >= n(f.at_once, 6) then break end
                 -- ((2026-11-24, the ulysses2 autotest: 6 of 10 fell harmless in the sea, all coming from the east onto a
-                -- coastal airfield) each aimed onto land, land_tries tries, then as picked (0 since area_km: land or sea)
-                local P, what = aimPoint()
-                for _ = 1, n(cfg().fragments.land_tries, 6) do
+                -- coastal airfield) one aimed at the airfield or a town (aim_share, or every one without area_km) steered
+                -- onto land, aim_land_tries tries (the airfield and the towns are on the coast: half fell in the sea);
+                -- one spread wide (area_km) land or sea as it comes (land_tries, 0)
+                local aimed = type(f.area_km) ~= "table" or math.random() < n(f.aim_share, 0)
+                local P, what = aimPoint(aimed)
+                for _ = 1, aimed and n(f.aim_land_tries, 6) or n(f.land_tries, 0) do
                     if ULY.isLand(P.X, P.Y) ~= false then break end
-                    P, what = aimPoint()
+                    P, what = aimPoint(aimed)
                 end
                 local x = launch(f, P, what, false)
                 if x then U.list[#U.list + 1] = x; U.sent = U.sent + 1; falling = falling + 1 else U.todo = U.todo - 1 end
