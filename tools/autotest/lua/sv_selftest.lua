@@ -137,7 +137,8 @@ local function holdPlane(now)
     if not pawn then return end
     -- ((2026-11-22) the valka run of 13:12 paused at 13:20:42 ("hud: hidden (paused)": the game's window lost its focus,
     -- a desktop notification likely) and its world stood still to the end: the game unpaused, each time logged)
-    if gamePaused and gamePaused(ST.pc()) then
+    -- ((2026-11-24) not while a suite holds its own pause: ST.holdPause, ulysound's pause step)
+    if gamePaused and gamePaused(ST.pc()) and not ST.holdPause then
         local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
         if valid(gs) and pcall(function() gs:SetGamePaused(ST.pc(), false) end) then
             HOLD.unpaused = HOLD.unpaused + 1
@@ -6725,11 +6726,13 @@ SUITES.ulysound = function()
     A.wait(4)
     A.do_(function()
         local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        ST.holdPause = true                            -- (the focus guard keeps off it: holdPlane)
         ST.info("SOUND pause test: the game paused: " .. tostring(pcall(function() return gs:SetGamePaused(ST.pc(), true) end)))
     end)
     A.wait(5)
     A.do_(function()
         local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        ST.holdPause = nil
         ST.info("SOUND pause test: the game running again: " .. tostring(pcall(function() return gs:SetGamePaused(ST.pc(), false) end)))
     end)
     A.wait(4)
