@@ -4341,3 +4341,13 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   real heights and speeds: the core "lands in 110 s"), ulysses2 17/17 (both rounds, a minute's break, no crash); of 20
   fragments landed in the two runs 19 were harmless (mostly the sea): the box is ~2 % land, so the fragments rarely
   threaten the airfield now (the core still does). Staged build/release/stage_dev_0.75.100, not registered, NOT installed.
+- 0.75.101 (2026-11-24, branch feature/ulysses), the user: "Spawn more meteorites, have atleast 50 spawn in waves of 2":
+  fragments 50 / 60 a round (was 16 / 20), solo too (solo_x 1), co-op up to 90 (was 34); 2 at a time every 5-8 s
+  (per_wave), at most 30 falling (at_once, was 6: the 48 sound voices); the SOLG's KEW unit lends 36 targets, so each is
+  handed back (disarm) when its fragment is shot down or lands. A fragment still pays 300 (a round ~15,000 before
+  specialPay: her call pending). New autotest suite ulymany (round 1 whole at the real heights and speeds, waves every
+  3-4 s): 14/14 (50 launched, 23 waves of 2 with room, 28 falling at the most, 0 without a box, the frame time 16.7 ms
+  with 25+ falling: the 60 fps cap held); ulysses 15/15. Staged build/release/stage_dev_0.75.101, NOT installed.
+- 2026-11-24, feature/wwise-banks merged into feature/ulysses (the user: "get the wwise sounds working for the
+  meteorites"): the Wwise pipeline (tools/wwise) and the SOLG's Ctrl+O test. AC8's own attenuations (AKB_GameSe_Online,
+  29 with curves) run 300 to 2,000,000 units: Wwise distances are UE centimetres, as our spec writes them.
