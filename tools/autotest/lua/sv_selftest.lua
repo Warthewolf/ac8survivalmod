@@ -6842,6 +6842,53 @@ SUITES.ulysoak = function()
     A.wait(2)
 end
 
+-- ((2026-11-24) ULYSSES with its Wwise sounds off (config_ulyxaudio.lua: sounds.wwise.enabled false, as a build without
+-- SurvivalMode_Wwise_P): Survival's XAudio2 player plays them as before, and still falls silent while the game is paused
+-- (sv_sound.lua SND.setPaused changed for SND.onPause); the music muted, loudness.ps1 beside the job
+SUITES.ulyxaudio = function()
+    intoRun()
+    A.do_(function()
+        if not ST.check(ULY ~= nil and SPC.kinds.ulysses ~= nil, "ULYSSES is in this build") then return "abort" end
+        if type(SV_PlayBGM) == "function" then pcall(SV_PlayBGM, "AKE_System_BGM_Mute_On") end
+        ST.marks.x0 = ST.n
+        ULY.forcedPhase = 1
+        D.forceSpecial = "ulysses"
+        if D.state == "wait" then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+    end)
+    A.log_("ulysses: round %d+: phase 1 of 2", 60, "x0", false, function(l)
+        if not ST.check(l ~= nil, "its round started", l) then return "abort" end
+    end)
+    A.wait(25)
+    A.do_(function()
+        local n = 0
+        for _ in pairs(SND and SND.live or {}) do n = n + 1 end
+        ST.check(n >= 2, "Survival's own player plays its sounds (" .. n .. " voices: the rumble and the whistles)")
+        ST.check(not ST.findLog("ulysses: sound: .*posted by Wwise", ST.marks.x0, false), "nothing through Wwise (it's off)")
+        if type(SV_PlayBGM) == "function" then pcall(SV_PlayBGM, "AKE_System_BGM_Mute_On") end
+        ST.info("SOUND xaudio playing")
+    end)
+    A.wait(5)
+    A.do_(function()
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        ST.holdPause = true
+        ST.info("SOUND xaudio paused: " .. tostring(pcall(function() return gs:SetGamePaused(ST.pc(), true) end)))
+    end)
+    A.wait(3)
+    A.do_(function() ST.check(SND and SND.paused == true, "Survival's player knows the game is paused") end)
+    A.wait(3)
+    A.do_(function()
+        local gs = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+        ST.holdPause = nil
+        ST.info("SOUND xaudio resumed: " .. tostring(pcall(function() return gs:SetGamePaused(ST.pc(), false) end)))
+    end)
+    A.wait(5)
+    A.do_(function()
+        ST.check(SND and not SND.paused, "... and that it runs again")
+        ST.info("SOUND end")
+    end)
+    A.wait(1)
+end
+
 -- ((2026-11-24) ULYSSES' impact against AC8's own explosions, for its loudness in the game's mix: the camera held as
 -- ulysound's, each at 1.5 and 5 km (18 s apart: ours is 16.6 s long); loudness.ps1 beside the job, loudness_report.py after
 SUITES.ulycal = function()
