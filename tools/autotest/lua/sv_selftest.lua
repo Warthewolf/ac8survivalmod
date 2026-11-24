@@ -7081,9 +7081,15 @@ SUITES.ulymany = function()
         local l = ST.findLog("ulysses: round %d+ over", ST.marks.m0, false)
         ST.check(l ~= nil, "round 1 over, every fragment down or landed", l)
         ST.check(l and l:find("of 50 fragments", 1, true) ~= nil, "its line counts all 50", l)
+        if ULYAIM and l then                             -- (the ulyaim suite: aim_share 0.4)
+            local a, t = l:match("(%d+) landed on the airfield, (%d+) on the town")
+            ST.check((tonumber(a) or 0) + (tonumber(t) or 0) >= 3, "aim_share 0.4: some come down on the airfield or a town", l)
+        end
     end)
     A.wait(2)
 end
+-- ((2026-11-24) the ulymany suite with fragments.aim_share 0.4 (config_ulyaim.lua): its share aimed as before the spread
+SUITES.ulyaim = function() ULYAIM = true; SUITES.ulymany() end
 
 local function tick()
     if finished then return end
