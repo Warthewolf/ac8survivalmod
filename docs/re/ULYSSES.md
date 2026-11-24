@@ -67,8 +67,18 @@ the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the
 - Assets (tools/ulysses, from AC:I): SK/SM_SV_Ulysses_A (o_meta 96.9 x 68.1 x 53.5 m), _C (o_metc 5.8 x 6.5 x 6.4 m),
   _D (o_metd 2.9 x 3.2 x 3.2 m), 644 triangles each (the same rock at three sizes). o_metb has no mesh in AC:I (a node
   tree and cutscene clips), o_metx a one-triangle placeholder, o_metc_d1..d4 the whole rock again: none built.
-- Sounds (tools/ulysses/sounds.py, Survival's own XAudio2 player): fall_small (OBJ_FALL_STARTDUST_SMALL, looped on each
-  fragment, moving), fall_big (the core's), explosion (Stardust_EXPL_*), encounter (Stardust_Encounter, at the start).
+- Sounds: AC:I's Stardust set (tools/ulysses/sounds.py: fall_small = OBJ_FALL_STARTDUST_SMALL, fall_big, explosion =
+  Stardust_EXPL_*, encounter = Stardust_Encounter, ambient = Stardust_Ambient) through AC8's own Wwise since 0.75.102 (the
+  user: "get the wwise sounds working for the meteorites"): Survival's own events Play_SV_UlyFall / _UlyFallBig / _UlyBoom /
+  _UlyEncounter / _UlyAmbient (tools/wwise/spec.py -> tools/wwise/build.sh: SurvivalMode_Wwise_P, a bank each, on AC8's
+  sfx bus: its effects volume, its 3D and mix). Each whistle is posted ON its rock (LiveSoundBlueprintLibrary.
+  PostEventAtActorByAkEvent: Wwise's component on the rock's root follows it) and stopped with it (AkGameplayStatics.
+  StopActor), an impact at its place (PostEventAtLocation), the encounter and the rumble 2D (the rumble on an actor of
+  ours, stopped with it). Fades (attenuations, metres): a whistle 0 / -6 / -18 / -36 dB at 0 / 0.8 / 2.5 / 5 km, silent
+  at 7; the core's at 0 / 2.5 / 7 / 14 km, silent at 20; an impact at 0 / 1.5 / 5 / 11 km, silent at 15. A sound whose
+  event doesn't load plays through Survival's XAudio2 player (Sounds/ulysses) as before (sounds.wwise.enabled = false:
+  all of them). Log: `ulysses: sound: Wwise's <event> loaded`, `... posted by Wwise on an actor: ok, N Wwise
+  component(s) on it`, `... posted by Wwise at a place: playing id N`. Autotest ulysound (+ loudness.ps1).
 
 - Kept between its rounds: its meshes and paints are pinned (GameInstance.ReferencedObjects) and checked by name
   before reuse: kept by Lua only, they were collected through a minute's break with no rock up, and round 2 crashed

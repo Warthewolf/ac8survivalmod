@@ -104,10 +104,11 @@ check(c.big.dive_deg == 45, "the core dives at 45 degrees too")
 -- ((2026-11-24, the user: higher, "around 1300km/h"; "vastly spread out around the comona island"; the sky's "quicker",
 -- "zoom across the sky, not at 45 degree", "trails ... longer")
 local function fall_s(alt_m, kmh) return alt_m / math.sin(math.rad(45)) / (kmh / 3.6) end
-check(f.speed_kmh[1] >= 1200 and f.speed_kmh[2] <= 1400 and c.big.speed_kmh >= 1200 and c.big.speed_kmh <= 1400,
-    "fragments and the core around 1300 km/h")
+check(f.speed_kmh[1] >= 1200 and f.speed_kmh[1] <= 1400 and c.big.speed_kmh >= 1200 and c.big.speed_kmh <= 1400,
+    "fragments from around 1300 km/h, the core at it")
+check(f.speed_kmh[2] >= 2100 and f.speed_kmh[2] <= 2300, "... some faster, up to about 2200 km/h (the user's range)")
 check(f.alt_m[1] >= 18000 and c.big.alt_m >= f.alt_m[2], "fragments from 18 km up or higher, the core higher still")
-check(fall_s(f.alt_m[1], f.speed_kmh[2]) >= 60 and fall_s(c.big.alt_m, c.big.speed_kmh) >= 90,
+check(fall_s(f.alt_m[1], f.speed_kmh[2]) >= 40 and fall_s(c.big.alt_m, c.big.speed_kmh) >= 90,
     string.format("time to catch them: fragments %.0f-%.0f s down, the core %.0f s", fall_s(f.alt_m[1], f.speed_kmh[2]),
         fall_s(f.alt_m[2], f.speed_kmh[1]), fall_s(c.big.alt_m, c.big.speed_kmh)))
 local A = f.area_km

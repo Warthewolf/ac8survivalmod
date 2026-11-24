@@ -414,7 +414,9 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
                   -- ((2026-11-24, the user: "the meteorites need to spawn at higher altitude so the players have a chance to
                   -- intercept them, also make them quicker too, the meteorites should be going around 1300km/h") 20-24 km up
                   -- (was 9-12) at 1250-1350 km/h (was 550-650): 78-94 s down a 45 degree dive, about as long as before
-                  from_km = { 26, 34 }, alt_m = { 20000, 24000 }, speed_kmh = { 1250, 1350 },
+                  -- ((2026-11-24, the user: "I want some of the Meteorites to be faster than others, have them varied in
+                  -- speed from 2200 to 1300") 1300-2200 km/h: 46-94 s down
+                  from_km = { 26, 34 }, alt_m = { 20000, 24000 }, speed_kmh = { 1300, 2200 },
                   -- ((2026-11-24, the user: "Try making it like infinities") AC:I's meteorites: a 45 degree dive, all one way
                   -- (its mission data; was any bearing at 1100-1500 km/h): from the east like the sky's
                   dive_deg = 45, from_deg = 0, spread_deg = 25,
@@ -555,9 +557,17 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
                          encounter = "Play_SV_UlyEncounter", ambient = "Play_SV_UlyAmbient" } },
     text = { sub = "SHOOT DOWN THE ULYSSES FRAGMENTS", big = "THE ULYSSES CORE", big_sub = "SHOOT IT DOWN BEFORE IT HITS COMONA",
              town_hit = "A FRAGMENT HIT THE TOWN", big_hit = "ULYSSES HAS STRUCK COMONA", big_down = "THE ULYSSES CORE IS DOWN",
-             say = { start = { "COMONA CONTROL|All units, the sky is falling. Ulysses fragments inbound, many of them.",
-                               "COMONA CONTROL|Shoot down anything that's headed for the airfield or the town." },
-                     big = { "COMONA CONTROL|Radar has a large body, very large. That one cannot be allowed to land." },
+             -- ((2026-11-24, the user: "Comona Control is also affected by the time travel ... Comona Control wonders who
+             -- the player is, as they've not seen that aircraft before, but with all that's happening they disregard it
+             -- and ask for help regardless") 1999's Comona Control: start (its first round), start2 (its second)
+             say = { start = { "COMONA CONTROL|Unidentified aircraft over Comona, identify yourself. You're not on any flight plan we have.",
+                               "COMONA CONTROL|...What is that? I've never seen an airframe like it.",
+                               "COMONA CONTROL|Forget it. Whoever you are, we need you. Ulysses has broken up, and it's coming down on us.",
+                               "COMONA CONTROL|Shoot down every fragment you can. Every one you stop is one less on the islands." },
+                     start2 = { "COMONA CONTROL|Unknown aircraft, you're still with us. Good. Radar says the worst is yet to come.",
+                                "COMONA CONTROL|More fragments inbound. Stay on them." },
+                     big = { "COMONA CONTROL|Radar has a large body, very large. That one cannot be allowed to land.",
+                             "COMONA CONTROL|Unknown aircraft, you're all we've got up there. Bring it down." },
                      home = { "COMONA CONTROL|...Comona Control. Skies are clear. Welcome back." } } } }
 -- TEST ONLY BEGIN (the lightning Anomaly and the storm test: test builds only, docs/re/THUNDER.md)
 -- "thunder" = IFF FATAL ERROR / DI..ANT TH..D..R (user, 2026-11-06: "another Anomaly, one that uses Lightning Against

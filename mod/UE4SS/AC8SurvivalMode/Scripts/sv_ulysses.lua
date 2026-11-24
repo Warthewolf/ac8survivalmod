@@ -819,7 +819,9 @@ function ULY.spawn(now)
     end
     ul(string.format("round %d: phase %d of %d, %d fragments%s; the film look %s", D.round, phase, n(cfg().rounds, 2), U.todo,
         U.bigAt and ", the core at +" .. n(cfg().big.at_s, 45) .. " s" or "", filmOn()))
-    say((cfg().text.say or {}).start)
+    -- ((2026-11-24) 1999's Comona Control doesn't know your aircraft: its first round asks who you are, its second goes on)
+    local sl = cfg().text.say or {}
+    say(phase >= 2 and sl.start2 or sl.start)
     if cfg().debug_ab then ul(debugAB()) end
     local snd = (cfg().sounds or {}).encounter
     if not wwAt("encounter", nil) and snd and SND and SND.play then pcall(SND.play, snd, nil) end
