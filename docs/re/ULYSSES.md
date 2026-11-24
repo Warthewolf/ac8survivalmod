@@ -75,7 +75,9 @@ the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the
   PostEventAtActorByAkEvent: Wwise's component on the rock's root follows it) and stopped with it (AkGameplayStatics.
   StopActor), an impact at its place (PostEventAtLocation), the encounter and the rumble 2D (the rumble on an actor of
   ours, stopped with it). Fades (attenuations, metres): a whistle 0 / -6 / -18 / -36 dB at 0 / 0.8 / 2.5 / 5 km, silent
-  at 7; the core's at 0 / 2.5 / 7 / 14 km, silent at 20; an impact at 0 / 1.5 / 5 / 11 km, silent at 15. A sound whose
+  at 7; the core's at 0 / 2.5 / 7 / 14 km, silent at 20; an impact at 0 / 1.5 / 5 / 11 km, silent at 15 (written at AC8's
+  10 units a metre: hard rule 79, docs/re/WWISE_BANKS.md; measured in game, 0.75.104). Paused with the game (SND.onPause ->
+  ULY.wwPause: AC8's own pause never reaches the sfx bus they play on). The whistle at -10 dB (0.75.105). A sound whose
   event doesn't load plays through Survival's XAudio2 player (Sounds/ulysses) as before (sounds.wwise.enabled = false:
   all of them). Log: `ulysses: sound: Wwise's <event> loaded`, `... posted by Wwise on an actor: ok, N Wwise
   component(s) on it`, `... posted by Wwise at a place: playing id N`. Autotest ulysound (+ loudness.ps1).
