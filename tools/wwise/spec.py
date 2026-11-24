@@ -26,12 +26,19 @@ ATTENUATIONS = [
     # most fell beyond the first ranges, 7 / 15-20 km) a fragment's whistle heard from 12 km, the core's from 30, the
     # impacts from 40
     # (the whistle back at its first range, 7 km: the user, "back to its normal level beforehand")
-    {'name': 'SV_Att_UlyFall', 'radius_m': 7000, 'curve': [[0, 0], [800, -6], [2500, -18], [5000, -36], [7000, -200]]},
-    {'name': 'SV_Att_UlyFallBig', 'radius_m': 30000, 'curve': [[0, 0], [4000, -6], [12000, -16], [22000, -30], [30000, -200]]},
+    # ((2026-11-24, the user: "the Tonitrus Spear impact definetly had a better fade with its distance") each as AC8's
+    # Spear impact is built (AKB_GameSe: its ground ShareSet -6 dB by 1 km, -24 by 2, -34 by 6, silent at 20; a low-pass
+    # 20 / 25 / 30 at 2 / 6 / 20 km; a spread 30 % near, 5 % at 1 km): a low-pass and a spread beside each volume curve
+    {'name': 'SV_Att_UlyFall', 'radius_m': 7000, 'curve': [[0, 0], [800, -6], [2500, -18], [5000, -36], [7000, -200]],
+     'lpf': [[0, 0], [2500, 15], [7000, 35]], 'spread': [[0, 30], [1000, 5], [7000, 0]]},
+    {'name': 'SV_Att_UlyFallBig', 'radius_m': 30000, 'curve': [[0, 0], [4000, -6], [12000, -16], [22000, -30], [30000, -200]],
+     'lpf': [[0, 0], [5000, 10], [15000, 25], [30000, 35]], 'spread': [[0, 40], [3000, 10], [30000, 0]]},
     # ((later) "none of the impact sounds worked": 60 km wide for a while; then a landing sounds as AC8's Spear impact, and
     # the explosion is a shot down's only, near you: "each sound doesn't sound quieter" (the meter: -26 / -28 / -31 / -35 dB
     # at 0.3 / 1.5 / 5 / 11 km): a steep fade, silent at 12 km
-    {'name': 'SV_Att_UlyBoom', 'radius_m': 12000, 'curve': [[0, 0], [1500, -8], [4000, -18], [8000, -30], [12000, -200]]},
+    # (a shot down's explosion: the Spear's ground impact's own shape)
+    {'name': 'SV_Att_UlyBoom', 'radius_m': 20000, 'curve': [[0, 0], [1000, -6], [2000, -20], [6000, -32], [20000, -200]],
+     'lpf': [[0, 0], [2000, 20], [6000, 25], [20000, 30]], 'spread': [[0, 30], [1000, 5], [20000, 0]]},
 ]
 # (name, source, settings): the event is Play_<name without SV_>, as Play_SV_<...>
 SOUNDS = [

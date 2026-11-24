@@ -73,6 +73,13 @@ for a in SPEC.get('attenuations', []):
         pts = [{'x': m * UPM, 'y': db, 'shape': 'Linear'} for m, db in a['curve']]
         call('ak.wwise.core.object.setAttenuationCurve', {'object': o['id'], 'curveType': 'VolumeDryUsage', 'use': 'Custom',
                                                          'points': pts})
+    # ((2026-11-24, the user: "the Tonitrus Spear impact definetly had a better fade with its distance") as AC8's own
+    # (its Spear impact's ShareSets, decoded from AKB_GameSe): a low-pass rising with distance (far sounds muffled) and a
+    # spread narrowing with it, beside the volume: "lpf" [[metres, 0-100]], "spread" [[metres, 0-100 %]]
+    for key, usage in (('lpf', 'LowPassFilterUsage'), ('spread', 'SpreadUsage')):
+        if a.get(key):
+            pts = [{'x': m * UPM, 'y': v, 'shape': 'Linear'} for m, v in a[key]]
+            call('ak.wwise.core.object.setAttenuationCurve', {'object': o['id'], 'curveType': usage, 'use': 'Custom', 'points': pts})
     att[a['name']] = o['id']
     print('attenuation', a['name'], o['id'], 'radius %.0f units (%.0f m at %g units a metre)' % (radius, radius / UPM, UPM))
 snd = {}
