@@ -6640,6 +6640,105 @@ SUITES.ulydawn = function()
     SUITES.ulysses2()
 end
 
+-- ((2026-11-24, the user: "Spawn more meteorites, have atleast 50 spawn in waves of 2") ULYSSES round 1 whole, at its
+-- real heights and speeds (config_ulymany.lua only brings the waves closer: every 3-4 s, so at_once's 30 is reached):
+-- the waves of 2, up to 30 falling, every fragment its target box though the KEW unit lends 36 (handed back when one is
+-- shot down or lands: 6 finished off early, the rest land), the frame time as they pile up, all 50 counted at its end
+SUITES.ulymany = function()
+    intoRun()
+    local M = { jumps = {}, lastSent = 0, noBox = 0, peak = 0, prev = 0, dt = { few = {}, many = {} } }
+    local function Ux() return ULY and ULY.debug and select(1, ULY.debug()) end
+    local function falling(U)
+        local n = 0
+        for _, x in ipairs(U and U.list or {}) do if not x.done and not x.big then n = n + 1 end end
+        return n
+    end
+    local gs = nil
+    local function dt()
+        if not gs then gs = StaticFindObject("/Script/Engine.Default__GameplayStatics") end
+        local ok, v = pcall(function() return gs:GetWorldDeltaSeconds(ST.pc()) end)
+        return ok and tonumber(v) or nil
+    end
+    -- every tick while it runs: the launches (their sizes), a box on each new one, the frame time by how many are falling
+    local function watch()
+        local U = Ux()
+        if not U then return end
+        if U.sent > M.lastSent then
+            -- (a wave's size counts only with room for 2 under at_once: at the cap a wave sends what there's room for)
+            if M.prev <= 28 then M.jumps[#M.jumps + 1] = U.sent - M.lastSent end
+            for i = #U.list - (U.sent - M.lastSent) + 1, #U.list do
+                local x = U.list[i]
+                if x and not x.big and not x.e then M.noBox = M.noBox + 1 end
+            end
+            M.lastSent = U.sent
+        end
+        local f = falling(U)
+        M.prev = f
+        if f > M.peak then M.peak = f end
+        local d = dt()
+        if d then
+            local t = f >= 25 and M.dt.many or (f <= 6 and M.dt.few or nil)
+            if t then t[#t + 1] = d end
+        end
+    end
+    local function stat(t)
+        if #t == 0 then return "none" end
+        local s, w = 0, 0
+        for _, v in ipairs(t) do s = s + v; if v > w then w = v end end
+        return string.format("avg %.1f ms, worst %.1f ms over %d frames", s / #t * 1000, w * 1000, #t)
+    end
+    A.do_(function()
+        if not ST.check(ULY ~= nil and SPC.kinds.ulysses ~= nil, "ULYSSES is in this build") then return "abort" end
+        local f = CFG.specials.ulysses.fragments
+        ST.info(string.format("its settings: %s / %s fragments, waves of %s, at most %s falling, %s-%s km up at %s-%s km/h",
+            tostring(f.round1), tostring(f.round2), tostring(f.per_wave), tostring(f.at_once), tostring(f.alt_m[1] / 1000),
+            tostring(f.alt_m[2] / 1000), tostring(f.speed_kmh[1]), tostring(f.speed_kmh[2])))
+        ST.marks.m0 = ST.n
+        ULY.forcedPhase = 1
+        D.forceSpecial = "ulysses"
+        if D.state == "wait" then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+        ST.doing = "ULYSSES round 1, all of it"
+    end)
+    A.log_("ulysses: round %d+: phase 1 of 2", 60, "m0", false, function(l)
+        if not ST.check(l ~= nil, "its round started", l) then return "abort" end
+        ST.check(l and l:find("50 fragments", 1, true) ~= nil, "50 fragments in round 1, solo", l)
+    end)
+    A.until_(function() watch(); local U = Ux(); return U and U.sent >= 12 end, 90, function(v)
+        ST.check(v ~= nil, "the first waves launched", tostring(M.lastSent) .. " sent")
+    end)
+    A.do_(function()                                     -- (6 shot down early: their targets handed back before any lands)
+        local n = 0
+        for _, x in ipairs(Ux().list) do
+            if n < 6 and not x.done and not x.big and x.e then pcall(function() x.e.o.HealthInternal = 10 end); n = n + 1 end
+        end
+        ST.info("finished off early: " .. n)
+    end)
+    A.until_(function() watch(); return M.peak >= 28 or (Ux() and Ux().sent >= 50) end, 150, function(v)
+        ST.check(M.peak >= 25, "up to 30 falling at once (" .. M.peak .. " at the most)")
+    end)
+    A.do_(function() ST.shot("m_many_your_view") end)
+    A.picture("m_many_from_the_airfield", function() return { X = AIRFIELD.X - 300000, Y = AIRFIELD.Y + 200000, Z = 150000 } end,
+        function() return { X = AIRFIELD.X + 2500000, Y = AIRFIELD.Y, Z = 1500000 } end, 80)
+    A.until_(function() watch(); local U = Ux(); return U and U.sent >= U.todo end, 200, function(v)
+        local U = Ux()
+        ST.check(v ~= nil and U and U.sent == 50, "all 50 launched", U and (U.sent .. " of " .. U.todo) or "no round")
+        local twos, other = 0, {}
+        for _, j in ipairs(M.jumps) do if j % 2 == 0 then twos = twos + 1 else other[#other + 1] = j end end
+        ST.check(twos >= 12 and #other == 0, "in waves of 2 with room under the cap (" .. twos .. " of them; others: " .. (#other > 0 and table.concat(other, ",") or "none") .. ")")
+        ST.check(M.noBox == 0, "every fragment its target box, more than the 36 lent (" .. M.noBox .. " without)")
+    end)
+    A.do_(function()
+        ST.info("frame time with 6 or fewer falling: " .. stat(M.dt.few))
+        ST.info("frame time with 25 or more falling: " .. stat(M.dt.many))
+    end)
+    A.until_(function() watch(); return ST.findLog("ulysses: round %d+ over", ST.marks.m0, false) ~= nil end, 150, function(v)
+        local l = ST.findLog("ulysses: round %d+ over", ST.marks.m0, false)
+        ST.check(l ~= nil, "round 1 over, every fragment down or landed", l)
+        ST.check(l and l:find("of 50 fragments", 1, true) ~= nil, "its line counts all 50", l)
+    end)
+    A.wait(2)
+end
+
 local function tick()
     if finished then return end
     local now = os.clock()
