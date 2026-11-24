@@ -7011,7 +7011,8 @@ SUITES.ulymany = function()
         if U.sent > M.lastSent then
             -- (a wave's size counts only with room for 2 under at_once (at the cap a wave sends what there's room for), and
             -- only when the last look was a moment ago: across a picture's steps (no watch for ~4 s) waves run together)
-            if M.prev <= 28 and os.clock() - (M.tPrev or 0) < 0.5 then M.jumps[#M.jumps + 1] = U.sent - M.lastSent end
+            -- (nor the last: a wave cut to 1 at the cap leaves an odd count, and the last wave then sends the one left)
+            if M.prev <= 28 and os.clock() - (M.tPrev or 0) < 0.5 and U.sent < U.todo then M.jumps[#M.jumps + 1] = U.sent - M.lastSent end
             for i = #U.list - (U.sent - M.lastSent) + 1, #U.list do
                 local x = U.list[i]
                 if x and not x.big and not x.e then M.noBox = M.noBox + 1 end
