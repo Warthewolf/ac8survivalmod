@@ -110,6 +110,14 @@ if ls build/ulysses/sounds/*.wav >/dev/null 2>&1; then
 else
     echo "no ULYSSES sounds (python tools/ulysses/sounds.py): its fragments fall silent"
 fi
+# (2026-11-23) Survival's own Wwise sounds (tools/wwise: Wwise 2024.1.11 = AC8's, cooked in the sound project
+# AC8_WWISE_PROJECT; each event carries its bank as bulk data, routed to AC8's own sfx bus by name)
+if [ -f build/wwise/out/SurvivalMode_Wwise_P.utoc ]; then
+    cp build/wwise/out/SurvivalMode_Wwise_P.utoc build/wwise/out/SurvivalMode_Wwise_P.ucas build/install/SurvivalMode/
+    echo "staged Survival's Wwise sounds (build/wwise/out/SurvivalMode_Wwise_P)"
+else
+    echo "no Wwise sound container (sh tools/wwise/build.sh): Survival's Wwise sounds can't play"
+fi
 # the ZFA-44 (the user's own model, cooked in UE 5.4 by tools/zfa44/build.sh; no UE needed here): the user's dev builds
 # only, so staged with ZFA=1 only (package_dev.sh keeps it with ZFA=1; package_release.sh never ships it)
 if [ "$ZFA" = 1 ]; then
