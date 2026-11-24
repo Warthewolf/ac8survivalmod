@@ -6715,6 +6715,22 @@ SUITES.ulysound = function()
         ST.info("SOUND ambient stopped")
     end)
     A.wait(4)
+    -- ((2026-11-24) as in a round: a whistle posted far out of its 7 km (every fragment starts 28-34 km away), then closing
+    -- on the camera at 600 m/s from 12 km: it must swell as it comes in (SOUND fall closing ... lines every 2 s: its distance)
+    A.do_(function()
+        T.r = ULY.testRock("C", at(12), { X = -60000, Y = 0, Z = 0 }, 2, {}, nil, 1)
+        T.t0 = os.clock()
+        ST.info("SOUND fall closing from 12.0 km at 600 m/s: " .. tostring(T.r ~= nil and ULY.testSoundOn("fall", T.r.a)))
+    end)
+    for k = 1, 9 do
+        A.wait(2)
+        A.do_(function() ST.info(string.format("SOUND fall closing, now %.1f km", math.max(0, 12 - 0.6 * (os.clock() - (T.t0 or os.clock()))))) end)
+    end
+    A.do_(function()
+        if T.r then ULY.testSoundOff(T.r.a); ULY.testRockOff(T.r); T.r = nil end
+        ST.info("SOUND fall closing stopped")
+    end)
+    A.wait(3)
     -- ((2026-11-24) the pause: AC8's own (AKE_System_SFX_Pause_On) never reaches the sfx bus ULYSSES' sounds play on, so
     -- Survival pauses them (SND.onPause -> ULY.wwPause): a whistle 0.3 km off, the game paused 5 s (the engine's pause:
     -- Survival reads it from the stopped game clock), resumed, stopped
