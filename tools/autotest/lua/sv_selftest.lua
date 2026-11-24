@@ -6828,8 +6828,9 @@ SUITES.ulymany = function()
         local U = Ux()
         if not U then return end
         if U.sent > M.lastSent then
-            -- (a wave's size counts only with room for 2 under at_once: at the cap a wave sends what there's room for)
-            if M.prev <= 28 then M.jumps[#M.jumps + 1] = U.sent - M.lastSent end
+            -- (a wave's size counts only with room for 2 under at_once (at the cap a wave sends what there's room for), and
+            -- only when the last look was a moment ago: across a picture's steps (no watch for ~4 s) waves run together)
+            if M.prev <= 28 and os.clock() - (M.tPrev or 0) < 0.5 then M.jumps[#M.jumps + 1] = U.sent - M.lastSent end
             for i = #U.list - (U.sent - M.lastSent) + 1, #U.list do
                 local x = U.list[i]
                 if x and not x.big and not x.e then M.noBox = M.noBox + 1 end
@@ -6837,7 +6838,7 @@ SUITES.ulymany = function()
             M.lastSent = U.sent
         end
         local f = falling(U)
-        M.prev = f
+        M.prev, M.tPrev = f, os.clock()
         if f > M.peak then M.peak = f end
         local d = dt()
         if d then
