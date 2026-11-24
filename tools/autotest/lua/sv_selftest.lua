@@ -6241,10 +6241,17 @@ SUITES.ulysses = function()
         end
         return out
     end
+    -- ((2026-11-24, 0.75.100+: fragments from 20-24 km, the core from 28) the lowest one: a camera up at their start
+    -- showed empty sky (its pictures of 0.75.103), so the close-ups wait for one under LOW (8 km)
+    local LOW = 800000
     local function pick(big)
-        for _, f in ipairs(frags()) do if (f.x.big == true) == big then return f end end
-        return nil
+        local best
+        for _, f in ipairs(frags()) do
+            if (f.x.big == true) == big and (not best or f.L.Z < best.L.Z) then best = f end
+        end
+        return best
     end
+    local function lowOne(big) local f = pick(big); return f ~= nil and f.L.Z < LOW end
     -- a camera `back` m off fragment f along its way back and `up` m up, onto it
     local function beside(big, back, side)
         return function()
@@ -6343,6 +6350,10 @@ SUITES.ulysses = function()
             h.f.hitAt = (h.f.hitAt or 0) + (os.clock() - h.t)
         end)
     end
+    A.until_(function() return lowOne(false) end, 90, function(v)
+        local f = pick(false)
+        ST.info(string.format("close-ups: the lowest fragment %.1f km up", f and f.L.Z / 100000 or -1))
+    end)
     A.picture("u_fragment_close", beside(false, 120, 40))
     unhold()
     A.picture("u_fragment_trail", beside(false, 600, 200))
@@ -6400,6 +6411,10 @@ SUITES.ulysses = function()
         ST.check(l ~= nil, "the core inbound", l)
     end)
     A.wait(4)
+    A.until_(function() return lowOne(true) end, 150, function(v)        -- (the core from 28 km: ~80 s to 8 km)
+        local f = pick(true)
+        ST.info(string.format("the core's close-ups: %.1f km up", f and f.L.Z / 100000 or -1))
+    end)
     -- ((the run of 0.75.72: "its spot not read") beside's two functions both passed: a call followed by more arguments
     -- gives only its first value in Lua)
     local cAt, cLook = beside(true, 1500, 500)
