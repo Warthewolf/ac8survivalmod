@@ -6369,7 +6369,13 @@ SUITES.ulysses = function()
             for _, x in ipairs(U and U.list or {}) do
                 if k < 2 and not x.done and x.e and x.e.o and x.r and x.r.a then
                     k = k + 1
-                    local function v3(f) local ok, v = pcall(f); return ok and v and { X = v.X, Y = v.Y, Z = v.Z } or nil end
+                    local function v3(f)                 -- (nil unless all three read as numbers)
+                        local ok, v = pcall(f)
+                        if not (ok and v) then return nil end
+                        local okx, x, y, z = pcall(function() return v.X, v.Y, v.Z end)
+                        x, y, z = okx and tonumber(x), okx and tonumber(y), okx and tonumber(z)
+                        return (x and y and z) and { X = x, Y = y, Z = z } or nil
+                    end
                     local R = v3(function() return x.r.a:K2_GetActorLocation() end)
                     local L = v3(function() return x.e.o:K2_GetActorLocation() end)
                     local H = v3(function() return x.e.o.HitCenterOffset end)
