@@ -407,14 +407,25 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     fragments = { round1 = 16, round2 = 20, per_player = 0.15, max_n = 34, solo_x = 0.8,
                   every_s = { 4, 8 }, first_s = 8, at_once = 6,
                   -- where they come from (km from where they land, m up) and how fast (km/h, along their line)
-                  from_km = { 26, 34 }, alt_m = { 9000, 12000 }, speed_kmh = { 550, 650 },
-                  -- ((2026-11-24, the user: "Try making it like infinities") AC:I's meteorites: a 45 degree dive, all one way,
-                  -- 550-650 km/h (its mission data; was any bearing at 1100-1500 km/h): from the east like the sky's
+                  -- ((2026-11-24, the user: "the meteorites need to spawn at higher altitude so the players have a chance to
+                  -- intercept them, also make them quicker too, the meteorites should be going around 1300km/h") 20-24 km up
+                  -- (was 9-12) at 1250-1350 km/h (was 550-650): 78-94 s down a 45 degree dive, about as long as before
+                  from_km = { 26, 34 }, alt_m = { 20000, 24000 }, speed_kmh = { 1250, 1350 },
+                  -- ((2026-11-24, the user: "Try making it like infinities") AC:I's meteorites: a 45 degree dive, all one way
+                  -- (its mission data; was any bearing at 1100-1500 km/h): from the east like the sky's
                   dive_deg = 45, from_deg = 0, spread_deg = 25,
                   meshes = { "C", "C", "D" }, scale = { 1.8, 3.2 }, spin_dps = { 10, 45 },
                   health = 350, pay = 300, airfield_damage = 8,
+                  -- ((2026-11-24, the user: "it doesn't matter if meteorites miss the land mass or not, have them vastly spread
+                  -- out around the comona island") area_km: anywhere in this box (km, the world's x / y: the island chain is
+                  -- x -19..+33, y -12..+7, COMONA_MAP.md; x kept under +24 so the dive from the east is seen inside the
+                  -- combat zone, whose east edge is at +33), land or sea, never steered onto land (land_tries 0). Where it
+                  -- comes down decides: within airfield_m of the airfield its damage, within town_m of a town the town's
+                  -- callout, the sea or open land harmless. Without area_km: aim's airfield / town weights, spread_m round them
+                  area_km = { x = { -30, 24 }, y = { -20, 15 } }, airfield_m = 4000, town_m = 2500, land_tries = 0,
                   aim = { airfield = 0.6, town = 0.4 }, spread_m = 2500 },
-    big = { enabled = true, mesh = "A", scale = 1.0, at_s = 45, from_km = 48, alt_m = 16000, speed_kmh = 650, spin_dps = 4,
+    -- ((2026-11-24, the user: "around 1300km/h") the core too: 1300 km/h from 28 km up (was 650 from 16): 110 s down
+    big = { enabled = true, mesh = "A", scale = 1.0, at_s = 45, from_km = 48, alt_m = 28000, speed_kmh = 1300, spin_dps = 4,
             dive_deg = 45, from_deg = 0, spread_deg = 10,
             health = 4000, solo_x = 0.7, pay = 6000, airfield_damage = 120 },
     -- the towns it aims at besides the airfield (cm; the airport key's town, docs/re/COMONA_MAP.md)
@@ -423,8 +434,12 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     -- ((2026-11-24, the user: "more fake meteors at high altitude streaking across the sky at Sunrise, like it's truly about
     -- to rain hell upon the world") was one every 1.5-4 s, 4-10x: now bursts of 2-5 every 0.4-1.2 s, up to max_up at once,
     -- bigger, their streaks longer still (tail_x on the tail's length)
-    sky = { enabled = true, every_s = { 0.4, 1.2 }, burst = { 3, 7 }, max_up = 100, alt_m = { 28000, 34000 }, from_km = { 25, 60 }, dip = { 0.8, 1.0 }, floor_m = 16000,
-            speed_kmh = { 8000, 14000 }, life_s = 14, meshes = { "D", "C", "C" }, scale = { 8, 22 }, tail_x = 1.5,
+    -- ((2026-11-24, the user: "The Meteorites that are in the sky box need to go quicker also and zoom across the sky, not at
+    -- 45 degree angle like they are currently, their trails need to be longer also") 25,000-40,000 km/h (was 8,000-14,000),
+    -- a shallow fall (dip 0.1-0.2: 6-11 degrees, was 0.8-1.0: 39-45), from 5-40 km east of you (was 25-60: they burnt out
+    -- in the eastern sky before they reached you), so each appears high and zooms over and away west; streak_x 3x (~9 km)
+    sky = { enabled = true, every_s = { 0.4, 1.2 }, burst = { 3, 7 }, max_up = 100, alt_m = { 28000, 34000 }, from_km = { 5, 40 }, dip = { 0.1, 0.2 }, floor_m = 16000,
+            speed_kmh = { 25000, 40000 }, life_s = 12, meshes = { "D", "C", "C" }, scale = { 8, 22 }, tail_x = 1.5,
             -- ((2026-11-24, the user: "high altitude so that the player can't reach them, like very very high") 45-65 km up (was
             -- 12-28; 45-65 km, 0.75.80, drew nothing: past what the game draws), now 28-34 km; since 0.75.96 diving like AC:I's
             -- emitters (dip 0.8-1.0: 39-45 degrees), burnt out above floor_m (16 km: out of any fighter's reach), 8-22x
@@ -439,7 +454,7 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
             -- one it fell back to a dark grey); the rock hidden, no trails
             -- ((2026-11-24, "Try making it like infinities") AC:I's own trail sprite on our card (the ulylines autotest: the flare
             -- glows from Emissive_Intensity ~600 up; ~3 km long, ~200 m wide 30 km out, as its emitters 24 km out)
-            look = { paint = "streak", mesh = "Streak", hide_rock = true, tail_r = 0.9 }, streak_x = 0.12, no_trails = true },
+            look = { paint = "streak", mesh = "Streak", hide_rock = true, tail_r = 0.9 }, streak_x = 0.36, no_trails = true },
     -- the meshes (tools/ulysses: AC:I's o_meta ~97 m (A), o_metc ~6.5 m (C), o_metd ~3 m (D); o_metb / o_metx have no mesh in
     -- AC:I): its one-bone skeletal copies SK_SV_Ulysses_<K> (a static mesh of ours crashed the SOLG's test T0, a skeletal
     -- one drew: docs/re/SOLG.md 8), painted at run time as the SOLG is (paint: its rock texture as Basecolor on the x40a's

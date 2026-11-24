@@ -92,8 +92,26 @@ for _, p in ipairs({ { "the runway", AIRFIELD.X, AIRFIELD.Y, true }, { "the city
                      { "the sea south east", 1790000, -610000, false }, { "open sea", 0, 3000000, false } }) do
     check(ULY.isLand(p[2], p[3]) == p[4], "land map: " .. p[1] .. " is " .. (p[4] and "land" or "sea"))
 end
-check(f.dive_deg == 45 and f.from_deg == 0 and f.speed_kmh[1] == 550 and f.speed_kmh[2] == 650, "fragments: AC:I's 45 degree dive from the east at 550-650 km/h")
+check(f.dive_deg == 45 and f.from_deg == 0, "fragments: AC:I's 45 degree dive from the east")
 check(c.big.dive_deg == 45, "the core dives at 45 degrees too")
+-- ((2026-11-24, the user: higher, "around 1300km/h"; "vastly spread out around the comona island"; the sky's "quicker",
+-- "zoom across the sky, not at 45 degree", "trails ... longer")
+local function fall_s(alt_m, kmh) return alt_m / math.sin(math.rad(45)) / (kmh / 3.6) end
+check(f.speed_kmh[1] >= 1200 and f.speed_kmh[2] <= 1400 and c.big.speed_kmh >= 1200 and c.big.speed_kmh <= 1400,
+    "fragments and the core around 1300 km/h")
+check(f.alt_m[1] >= 18000 and c.big.alt_m >= f.alt_m[2], "fragments from 18 km up or higher, the core higher still")
+check(fall_s(f.alt_m[1], f.speed_kmh[2]) >= 60 and fall_s(c.big.alt_m, c.big.speed_kmh) >= 90,
+    string.format("time to catch them: fragments %.0f-%.0f s down, the core %.0f s", fall_s(f.alt_m[1], f.speed_kmh[2]),
+        fall_s(f.alt_m[2], f.speed_kmh[1]), fall_s(c.big.alt_m, c.big.speed_kmh)))
+local A = f.area_km
+local ZONE_EAST_CM = -707336 + 4000000                  -- (Mission 22's combat zone, sv_ai.lua ZONE: its east edge, +32.9 km)
+check(A and A.x[1] <= -19 and A.x[2] >= 20 and A.y[1] <= -12 and A.y[2] >= 7, "fragments spread over the whole island chain and the sea round it")
+check(A and A.x[2] * 100000 <= ZONE_EAST_CM, "... their impacts inside the combat zone's east edge")
+check(f.land_tries == 0, "... never steered onto land")
+check(src:find("f.what == \"town\" or nearTown", 1, true) and src:find("U.landedOpen", 1, true), "open land is harmless; a town's callout only near a town")
+check(src:find("n(fr.airfield_m, 4000)", 1, true), "the airfield's damage only within airfield_m of it")
+check(c.sky.dip[2] <= 0.3 and c.sky.speed_kmh[1] >= 20000 and c.sky.streak_x >= 0.3,
+    "the sky's meteors: a shallow line across the sky (dip <= 0.3), 20,000 km/h or more, longer streaks")
 check(c.sky.look and c.sky.look.mesh == "Streak" and c.tail.streak and c.tail.streak.tex.EmissiveMap:find("T_SV_Ulysses_Streak", 1, true),
     "the sky: AC:I's trail sprite on the streak card")
 check(c.sounds.ambient and c.sounds.ambient.loop == true, "the Stardust rumble, looped")

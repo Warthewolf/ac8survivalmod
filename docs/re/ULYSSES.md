@@ -16,17 +16,23 @@ the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the
 ## 2. The round
 - No fighters (`alone`, aircraft 0): only fragments. busy until every fragment is shot down or landed (and the core sent).
 - Fragments: round1 16 / round2 20 (solo x0.8; co-op + 0.15 a player past the first, at most 34), one every 4-8 s (the
-  first 8 s in), at most 6 falling; each from 26-34 km out, 9-12 km up, at 1100-1500 km/h onto the airfield (60 %) or a
-  town (40 %), 2.5 km spread.
-- Round 2's core: o_meta (~97 m) 45 s in, from 48 km, 16 km up, 650 km/h onto the airfield; 4000 HP (solo x0.7).
+  first 8 s in), at most 6 falling; each a 45 degree dive from the east (AC:I's), 20-24 km up, at 1250-1350 km/h
+  (75-98 s down; her call: higher, "around 1300km/h"), onto anywhere in area_km (x -30..+24, y -20..+15 km: the whole
+  island chain and the sea round it, land or sea, never steered onto land; her call: "vastly spread out around the comona
+  island"). Without area_km: the airfield (60 %) or a town (40 %), 2.5 km spread.
+- Round 2's core: o_meta (~97 m) 45 s in, a 45 degree dive from 28 km up, 1300 km/h (110 s) onto the airfield; 4000 HP
+  (solo x0.7).
 - Shot down (its target at its floor, MinHealth 1: read back, hard rule 63's way): blown up, paid (fragments.pay 300 /
-  big.pay 6000, x specialPay), LB stat ulysses_fragment / ulysses_core. Landed: blown up where it hits; the airfield's
-  damage through AF.bomb (8 a fragment, 120 the core), a town's: a callout.
+  big.pay 6000, x specialPay), LB stat ulysses_fragment / ulysses_core. Landed: blown up where it hits; within
+  airfield_m (4 km) of the airfield its damage through AF.bomb (8 a fragment, 120 the core, the core wherever it lands);
+  within town_m (2.5 km) of a town a callout; the sea or open land: harmless.
 - The sky's meteors (scenery), AC:I's look (her Lost Butterfly references; AC:I's o_metx is an 8 cm marker with an effect
   drawn on it): thin glowing lines, no body, no smoke: the streak's static twin (SM_SV_Ulysses_Tail) on AC8's additive
   MI_TrainingRing (hard rule 77: on the skinned streak it falls back to dark grey). Bursts of 3-7 every 0.4-1.2 s, up
-  to 100, from the east (+X is east: checked in game against the minimap and the dawn sun), 150 km either side, 28-34
-  km up, falling (dip 0.22-0.4), burnt out above 16 km (out of any fighter's reach).
+  to 100, from 5-40 km east of you (+X is east: checked in game against the minimap and the dawn sun), 150 km either
+  side, 28-34 km up, at 25,000-40,000 km/h on a shallow fall (dip 0.1-0.2: 6-11 degrees; her call: "zoom across the sky,
+  not at 45 degree"), each appearing high and crossing over to the west, streaks ~9 km (streak_x 0.36), burnt out above
+  16 km (out of any fighter's reach) or at 12 s.
 - The time shift: a fade in from white and the card JULY 1999 at round 1; at round 2's end the fade, PRESENT DAY.
 - The film look: a full-screen warm wash over the picture (sv_hud.lua HUD.film: an Image on Survival's HUD canvas,
   behind its text; film.overlay / overlay_a, a slight flicker), faded in / out over 2 s on os.clock. The
@@ -82,8 +88,9 @@ every value checked (coop_guard_test rows):
 `ulysses: round N: phase P of 2, K fragments[, the core at +45 s]; the film look on (4 of 4 settings written)`,
 `ulysses: targets: SV_Unit_SOLG_KEW up, 36 objects borrowed`, `ulysses: paint: the rock's instance made, 5 textures in`,
 `ulysses: a fragment shot down X s before it would have hit (Z km up), paid N`,
-`ulysses: a fragment landed on the airfield (x, y km): the airfield -8`, `ulysses: the core inbound: up, lands in T s`,
-`ulysses: round N over: S of T fragments shot down, A landed on the airfield, B on the town`,
+`ulysses: a fragment landed (aimed: comona) at (x, y km), in the land (the land map): the airfield -8` (or `: the town`,
+`: harmless`), `ulysses: the core inbound: up, lands in T s`,
+`ulysses: round N over: S of T fragments shot down, A landed on the airfield, B on the town, C in the sea, E on open land`,
 `ulysses: film overlay: HUD.film true true, opacity X`, `ulysses: tail paint: its instance made`,
 a joiner's: `ulysses: the host's round: phase P; the film look ...`, `ulysses: the host's round over[: home again]`,
 `coop: the host's ULYSSES word not read: ...` (once).
