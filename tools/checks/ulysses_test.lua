@@ -133,6 +133,19 @@ check(c.sky.dip[2] <= 0.3 and c.sky.speed_kmh[1] >= 20000 and c.sky.streak_x >= 
 check(c.sky.look and c.sky.look.mesh == "Streak" and c.tail.streak and c.tail.streak.tex.EmissiveMap:find("T_SV_Ulysses_Streak", 1, true),
     "the sky: AC:I's trail sprite on the streak card")
 check(c.sounds.ambient and c.sounds.ambient.loop == true, "the Stardust rumble, looped")
+-- ((2026-11-24, the user: "add more subtitles through the two rounds, like News Broadcasts") live in July 1999
+local nw = c.text.news or {}
+check(#(nw.round1 or {}) >= 6 and #(nw.round2 or {}) >= 7 and nw.core and nw.core_down and nw.core_hit and c.news.enabled ~= false,
+    "WORLD NEWS bulletins through both rounds and on the core")
+local later = false
+for _, k in ipairs({ "round1", "round2", "core", "core_down", "core_hit" }) do
+    for _, ex in ipairs(nw[k] or {}) do for _, l in ipairs(ex) do
+        if l:lower():find("refugee", 1, true) or l:find("Continental War", 1, true) or l:find("ISAF", 1, true) then later = true end
+    end end
+end
+check(not later, "... nothing that happens later (no refugees: the user's word)")
+check(src:find("newsStart(phase, now)", 1, true) and src:find("newsStart(ph, nil)", 1, true) and src:find("newsTick(now)", 1, true),
+    "... on the host's round and a joiner's alike")
 -- ((2026-11-24, the user: "get the wwise sounds working for the meteorites") its five as Survival's own Wwise events
 local sp = io.open(S .. "../../../../tools/wwise/spec.py", "rb") or io.open(MOD .. "/../tools/wwise/spec.py", "rb")
 local spec = sp and sp:read("a") or ""

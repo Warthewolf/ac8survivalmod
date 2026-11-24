@@ -634,6 +634,34 @@ local function say(list)
         if SUB and SUB.say then pcall(SUB.say, who or "", txt or l, 4.5) end   -- (queued one after another)
     end
 end
+-- ((2026-11-24, the user: "add more subtitles through the two rounds, like News Broadcasts, go through the lore and make
+-- a story about the different areas that are being affected by the planetfall or the ulysses event", "report on it as if
+-- its happening at that current time") WORLD NEWS bulletins: an exchange of text.news.round<phase> every news.every_s
+-- from news.first_s, in order; text.news.core when the core comes, core_down / core_hit after it. Every game its own (the
+-- host's round; a joiner's from the host's word), on the round's clock (held while paused)
+local NEWS = { on = false }
+local function newsClock(now) return (D and D.now) or now or os.clock() end
+local function newsStart(phase, now)
+    local c = cfg().news or {}
+    NEWS.on = c.enabled ~= false
+    NEWS.list, NEWS.i = (((cfg().text or {}).news or {})["round" .. tostring(phase)]) or {}, 0
+    NEWS.nextAt = newsClock(now) + n(c.first_s, 30)
+end
+local function newsOne(key)
+    if (cfg().news or {}).enabled == false then return end
+    local ex = ((cfg().text or {}).news or {})[key]
+    if type(ex) == "table" and type(ex[1]) == "table" then ex = ex[1] end
+    if type(ex) == "table" then say(ex) end
+end
+local function newsTick(now)
+    if not NEWS.on or newsClock(now) < (NEWS.nextAt or 0) then return end
+    NEWS.i = NEWS.i + 1
+    local ex = NEWS.list and NEWS.list[NEWS.i]
+    if type(ex) ~= "table" then NEWS.on = false; return end
+    say(ex)
+    NEWS.nextAt = newsClock(now) + n((cfg().news or {}).every_s, 36)
+end
+local function newsOff() NEWS.on = false end
 
 ---------------------------------------------------------------------------------------------------- the round
 local function players() return (type(playerCount) == "function" and playerCount()) or 1 end
@@ -801,6 +829,7 @@ local function land(f, now)
         U.landedOpen = (U.landedOpen or 0) + 1
     end
     if f.big and hudCallout then hudCallout(cfg().text.big_hit, nil) end
+    if f.big then newsOne("core_hit") end
     ul(string.format("%s landed (aimed: %s) at (%.1f, %.1f km), in the %s%s", f.big and "the core" or "a fragment", f.what, f.P.X / 100000,
         f.P.Y / 100000, (f.where or "?") .. (LANDTRACE and (" [" .. LANDTRACE .. "]") or ""),
         hurts and string.format(": the airfield -%d", dmg) or town and ": the town" or ": harmless"))
@@ -818,6 +847,7 @@ local function shot(f, now)
     U.shot = U.shot + 1
     tell("s", tostring(f.id))
     if f.big and hudCallout then hudCallout(cfg().text.big_down, nil) end
+    if f.big then newsOne("core_down") end
     if LB and LB.stat then pcall(LB.stat, f.big and "ulysses_core" or "ulysses_fragment", 1) end
     ul(string.format("%s shot down %.0f s before it would have hit (%.1f km up), paid %d", f.big and "the core" or "a fragment",
         f.hitAt - now, at and at.Z / 100000 or -1, pay))
@@ -904,6 +934,7 @@ function ULY.spawn(now)
     -- ((2026-11-24) 1999's Comona Control doesn't know your aircraft: its first round asks who you are, its second goes on)
     local sl = cfg().text.say or {}
     say(phase >= 2 and sl.start2 or sl.start)
+    newsStart(phase, now)
     if cfg().debug_ab then ul(debugAB()) end
     local snd = (cfg().sounds or {}).encounter
     if not wwAt("encounter", nil) and snd and SND and SND.play then pcall(SND.play, snd, nil) end
@@ -1003,6 +1034,7 @@ function ULY.roundTick(now, s)
             if x then U.list[#U.list + 1] = x end
             if hudCallout then hudCallout(cfg().text.big, cfg().text.big_sub) end
             say((cfg().text.say or {}).big)
+            if x then newsOne("core") end
             ul(string.format("the core inbound: %s, lands in %.0f s", x and "up" or "NOT up", x and (x.hitAt - now) or -1))
         end
         for _, x in ipairs(U.list) do
@@ -1024,6 +1056,7 @@ function ULY.busy(s)
 end
 function ULY.roundOver(now, s)
     if not U then return end
+    newsOff()
     for _, x in ipairs(U.list) do
         fallOff(x)                                                     -- (its fall loop: the code review)
         if not x.done then x.done = true; disarm(x.e); rockOff(x.r) end
@@ -1055,6 +1088,7 @@ end
 -- round 30, a spawn refused), a run over mid-round, the level gone (LEVEL_DROPS), a joiner made host mid-round
 function ULY.endAll(why)
     local any = U ~= nil or J.on or FILM.on or AMB.h ~= nil or AMB.a ~= nil or #SKYM.list > 0
+    newsOff()
     if U then
         for _, x in ipairs(U.list) do
             fallOff(x)
@@ -1091,6 +1125,7 @@ do
 end
 function ULY.tick(now)
     filmTick(now)
+    newsTick(now)
     -- (its look left on with no ULYSSES round in play or next: ended; a joiner made host keeps no host's round)
     if D and (FILM.on or AMB.h or J.on) then
         local s0 = D.special
@@ -1124,6 +1159,7 @@ function ULY.fromHost(f)
         if not (fin(ph, 10) and ph >= 1 and ph == math.floor(ph)) then return end
         J.on = true
         ambOn()
+        newsStart(ph, nil)
         if ph == 1 then
             local sh = cfg().shift or {}
             fade(1, 0, n(sh.fade_s, 1.2) * 2, false)
@@ -1141,6 +1177,7 @@ function ULY.fromHost(f)
         if r then
             -- ((2026-11-24, the code review) the core drawn as the host draws it: its own blasts, splash and fall sound)
             r.big = f[13] == "1"
+            if r.big then newsOne("core") end                    -- (the host's core: its bulletin here too)
             fallOn(r, r.a, r.big, function() return rockAt(r) end)
             J.rocks[id] = r
             pcall(function() r.a:SetLifeSpan(600) end)
@@ -1152,6 +1189,7 @@ function ULY.fromHost(f)
         local at = rockAt(r)
         local fx = cfg().fx_scale or {}
         if at then
+            if r.big then newsOne(k == "s" and "core_down" or "core_hit") end
             if k == "s" then boom(at, n(r.big and fx.big_shot or fx.shot, 4))
             elseif f[4] == "1" then boom(at, n(r.big and fx.big_land or fx.land, 10), true); landSound("ground", at)
             else
@@ -1164,6 +1202,7 @@ function ULY.fromHost(f)
         fallOff(r)
         rockOff(r)
     elseif k == "e" then
+        newsOff()
         for _, r in pairs(J.rocks) do
             fallOff(r)
             rockOff(r)

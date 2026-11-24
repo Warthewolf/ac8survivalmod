@@ -542,6 +542,8 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     -- the borrowed target units (the SOLG's) and their boxes while ULYSSES has them
     target_units = { small = "SV_Unit_SOLG_KEW", big = "SV_Unit_SOLG_MAG" },
     box = { name = "ULYSSES", small = "FRAGMENT", big = "ULYSSES CORE" },
+    -- (the WORLD NEWS bulletins' timing: text.news below; the first first_s into each round, then one every every_s)
+    news = { enabled = true, first_s = 30, every_s = 36 },
     -- going back and coming home: a fade (s) and the cards
     shift = { fade_s = 1.2, hold_s = 0.8, card = "JULY 1999", card_sub = "ASTEROID 1994XF04 ULYSSES HAS BROKEN UP",
               home = "PRESENT DAY", home_sub = "COMONA" },
@@ -581,6 +583,43 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
              -- ((2026-11-24, the user: "Comona Control is also affected by the time travel ... Comona Control wonders who
              -- the player is, as they've not seen that aircraft before, but with all that's happening they disregard it
              -- and ask for help regardless") 1999's Comona Control: start (its first round), start2 (its second)
+             -- ((2026-11-24, the user: "add more subtitles through the two rounds, like News Broadcasts, go through the lore
+             -- and make a story about the different areas that are being affected by the planetfall", "report on it as if
+             -- its happening at that current time", "don't talk about refugees") WORLD NEWS live in July 1999, from the
+             -- Strangereal lore of Ulysses 1994XF04 (Comona University predicted the breakup; Stonehenge at San Salvacion;
+             -- Saint Ark, Farbanti, Newfield Island, Los Canas, the Skully Islands, Selatapura, Mount Shezna, Faith Park,
+             -- the Whiskey Corridor, Fort Grays Island hit; Estovakia hit, Emmeria spared; Comberth Harbor and Anchorhead
+             -- unharmed; Stonehenge's fourth railgun knocked out): one exchange every news.every_s through each round
+             news = {
+                 round1 = {
+                     { "WORLD NEWS|This is World News. Fragments of the asteroid Ulysses are falling on the Usean continent as we speak.",
+                       "WORLD NEWS|Stonehenge, the railgun array at San Salvacion, has been firing without pause since the asteroid broke apart." },
+                     { "WORLD NEWS|We have reports of an impact on the outskirts of Saint Ark. The air base there is gone.",
+                       "WORLD NEWS|We have lost all contact with the city itself." },
+                     { "FIELD REPORT|I'm on the hills above Farbanti. A fragment has come down on the coast, and the sea is pouring into the crater.",
+                       "FIELD REPORT|Rescue teams can't get anywhere near the shoreline." },
+                     { "WORLD NEWS|Comona University, whose astronomers predicted the day Ulysses would break apart, has recorded more than a dozen impacts in the last hour.",
+                       "WORLD NEWS|They warn that the largest fragments have not come down yet." },
+                     { "WORLD NEWS|In Anea, Estovakia reports heavy damage across the north. Sonne Island has been struck.",
+                       "WORLD NEWS|Emmeria says its shelters in Gracemeria are holding." },
+                     { "WORLD NEWS|A fragment has landed in the Whiskey Corridor. Witnesses say the Irsali River is changing its course.",
+                       "WORLD NEWS|Authorities ask everyone in the impact zones to stay underground until the all clear." } },
+                 round2 = {
+                     { "WORLD NEWS|World News, continuing coverage. The heaviest fragments are falling now, just as Comona University warned.",
+                       "WORLD NEWS|Newfield Island has been struck on its eastern face. North Point is cut off." },
+                     { "FIELD REPORT|This is San Salvacion. A fragment has hit inside the Stonehenge facility. One of its eight guns has gone silent.",
+                       "FIELD REPORT|The other seven are still firing. You can feel every shot through the ground." },
+                     { "WORLD NEWS|We have lost every signal from Los Canas and the Skully Islands.",
+                       "WORLD NEWS|Pilots over the area say the coastline no longer matches their charts." },
+                     { "WORLD NEWS|Off Selatapura, a fragment has struck the sea twenty kilometres from the coast. The waves have reached the harbour." },
+                     { "WORLD NEWS|A fragment has hit the slopes of Mount Shezna. Columns of steam are rising from the mountain.",
+                       "WORLD NEWS|In the Faith Park desert, the sky turned white as another one came down." },
+                     { "WORLD NEWS|Some good news: Comberth Harbor and Anchorhead report no damage so far.",
+                       "WORLD NEWS|But the town on the north shore of Fort Grays Island has not been heard from since the last impact." },
+                     { "WORLD NEWS|The fragments are still coming down. We will stay on the air for as long as we can." } },
+                 core = { { "WORLD NEWS|Breaking news: tracking stations report one fragment far larger than the rest, coming down over the Comona Islands." } },
+                 core_down = { { "WORLD NEWS|We're hearing the large fragment over the Comona Islands broke apart in the air. An unidentified aircraft was seen near it." } },
+                 core_hit = { { "WORLD NEWS|The large fragment has struck the Comona Islands. We are trying to reach anyone there." } } },
              say = { start = { "COMONA CONTROL|Unidentified aircraft over Comona, identify yourself. You're not on any flight plan we have.",
                                "COMONA CONTROL|...What is that? I've never seen an airframe like it.",
                                "COMONA CONTROL|Forget it. Whoever you are, we need you. Ulysses has broken up, and it's coming down on us.",
