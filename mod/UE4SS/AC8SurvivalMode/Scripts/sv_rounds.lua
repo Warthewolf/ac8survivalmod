@@ -246,6 +246,13 @@ function SPC.cleanUnitsOf(kind)
     elseif kind == "ladon" then for _, x in ipairs(LADON_UNITS) do add(x) end
     elseif kind == "alicorn" then add(ALICORN_UNIT)
     elseif kind == "decoy" and DECOY and DECOY.cleanUnits then for _, x in ipairs(DECOY.cleanUnits()) do add(x) end
+    -- ((2026-11-23) ULYSSES' borrowed targets (the SOLG's KEW / MAG units): finished off and off the list at its end
+    -- ((2026-11-28, Saint Alessia's co-op run of 0.75.117) at its END: not between its rounds, while ULYSSES holds them for
+    -- its next (ULY.holdsTargets: its round 20 takes round 19's again, a unit still up can't be spawned anew)
+    elseif kind == "ulysses" and type(c.ulysses) == "table" then
+        if not (ULY and ULY.holdsTargets and ULY.holdsTargets()) then
+            for _, x in pairs(c.ulysses.target_units or {}) do add(str(x)) end
+        end
     -- ((0.74.0) GONE FISHIN''s shoals, THE FESTIVAL's formations and missiles: finished off at their end; SAL's boat and
     -- the searchlights are allies, switched off by their own parts, never finished off)
     elseif kind == "fishing" and type(c.fishing) == "table" then for _, x in ipairs(c.fishing.units or {}) do add(str(x)) end
@@ -280,7 +287,9 @@ if type(LEVEL_DROPS) == "table" then
     LEVEL_DROPS["specials' clean-up"] = function() SPC.CLEAN_OBJ, SPC.cleanQ, SPC.cl = {}, {}, { up = {}, due = {} } end
 end
 local watched = {}
-for _, k in ipairs({ "valka", "anomaly", "glitch", "ladon", "alicorn", "fishing", "festival" }) do
+-- ((2026-11-28) ULYSSES' too: its borrowed targets recorded as they spawn (sv_ulysses.lua sets spawningUnit), or its end's
+-- clean-up found "0 of its 0 recorded objects" and left them up)
+for _, k in ipairs({ "valka", "anomaly", "glitch", "ladon", "alicorn", "fishing", "festival", "ulysses" }) do
     local okU, list = pcall(SPC.cleanUnitsOf, k)
     for _, x in ipairs(okU and list or {}) do watched[x] = true end
 end

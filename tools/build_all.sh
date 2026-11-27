@@ -95,6 +95,29 @@ if [ -f build/solg/out/SurvivalMode_SOLG_P.utoc ]; then
 else
     echo "no SOLG container (tools/solg/build.sh): her SOLG can't come"
 fi
+# ((2026-11-23) the ULYSSES special: AC:I's meteors as our own meshes (tools/ulysses/build.sh; the user's AC:I exception)
+if [ -f build/ulysses/out/SurvivalMode_Ulysses_P.utoc ]; then
+    cp build/ulysses/out/SurvivalMode_Ulysses_P.utoc build/ulysses/out/SurvivalMode_Ulysses_P.ucas build/install/SurvivalMode/
+    echo "staged ULYSSES' meteors (build/ulysses/out/SurvivalMode_Ulysses_P)"
+else
+    echo "no ULYSSES container (sh tools/ulysses/build.sh): its meteors can't come"
+fi
+# its sounds (AC:I's Stardust set, python tools/ulysses/sounds.py into build/ulysses/sounds; never in git)
+if ls build/ulysses/sounds/*.wav >/dev/null 2>&1; then
+    mkdir -p build/install/AC8SurvivalMode/Sounds/ulysses
+    cp build/ulysses/sounds/*.wav build/install/AC8SurvivalMode/Sounds/ulysses/
+    echo "staged ULYSSES' sounds ($(ls build/ulysses/sounds/*.wav | wc -l) in AC8SurvivalMode/Sounds/ulysses)"
+else
+    echo "no ULYSSES sounds (python tools/ulysses/sounds.py): its fragments fall silent"
+fi
+# (2026-11-23) Survival's own Wwise sounds (tools/wwise: Wwise 2024.1.11 = AC8's, cooked in the sound project
+# AC8_WWISE_PROJECT; each event carries its bank as bulk data, routed to AC8's own sfx bus by name)
+if [ -f build/wwise/out/SurvivalMode_Wwise_P.utoc ]; then
+    cp build/wwise/out/SurvivalMode_Wwise_P.utoc build/wwise/out/SurvivalMode_Wwise_P.ucas build/install/SurvivalMode/
+    echo "staged Survival's Wwise sounds (build/wwise/out/SurvivalMode_Wwise_P)"
+else
+    echo "no Wwise sound container (sh tools/wwise/build.sh): Survival's Wwise sounds can't play"
+fi
 # the ZFA-44 (the user's own model, cooked in UE 5.4 by tools/zfa44/build.sh; no UE needed here): the user's dev builds
 # only, so staged with ZFA=1 only (package_dev.sh keeps it with ZFA=1; package_release.sh never ships it)
 if [ "$ZFA" = 1 ]; then

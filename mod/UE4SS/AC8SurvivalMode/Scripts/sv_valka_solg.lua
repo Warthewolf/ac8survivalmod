@@ -327,3 +327,31 @@ function VSOLG.state(s)
     return { state = G.state, eta = G.hitAt and math.max(0, G.hitAt - os.clock()) or nil, phase = G.phase, broken = G.broken or 0,
              portal_to_solg_s = G.from and G.portalAt and (G.from - G.portalAt) or nil }
 end
+
+-- TEST ONLY BEGIN (Survival's own Wwise bank, test of 2026-11-23: tools/wwise, the sound project AC8_WWISE_PROJECT)
+-- Ctrl+O: Play_SV_SolgBreakBig (AC:I's SOLG_BREAK_BIG_01, the user's exception of 2026-11-23) 500 m ahead of you, through
+-- AC8's own Wwise (PostEventAtLocation): its event asset carries its bank (bulk data), routed to AC8's "sfx" bus by
+-- name. To hear: it plays, it fades with distance, the game's SFX volume and pause act on it. (2026-11-23, the user: "doesnt
+-- sound like the solg noise gets further from me": each press had played it 500 m ahead of wherever she was) The first
+-- press fixes the spot 500 m ahead; later presses play it there again, its distance logged; 15 km off: a new spot.
+testKey("O", "sv_valka_solg.lua's Wwise sound test", function()
+    local path = "/Game/Mods/SurvivalMode/Wwise/Events/Default_Work_Unit/Play_SV_SolgBreakBig.Play_SV_SolgBreakBig"
+    local ev, ak = SPC.V.asset(path), StaticFindObject("/Script/AkAudio.Default__AkGameplayStatics")
+    local pawn = survivalPC and valid(survivalPC) and survivalPC.Pawn
+    if not (ev and valid(ak) and pawn and valid(pawn)) then
+        log("wwise test: NOT played (" .. (ev and "no Wwise or no plane" or "its event didn't load: is SurvivalMode_Wwise_P installed?") .. ")")
+        return
+    end
+    local at, f = pawn:K2_GetActorLocation(), pawn:GetActorForwardVector()
+    local w = WWISE_TEST_AT
+    local d = w and math.sqrt((at.X - w.X) ^ 2 + (at.Y - w.Y) ^ 2 + (at.Z - w.Z) ^ 2) or math.huge
+    if d > 1500000 then
+        w = { X = at.X + f.X * 50000, Y = at.Y + f.Y * 50000, Z = at.Z + f.Z * 50000 }
+        WWISE_TEST_AT, d = w, 50000
+    end
+    local where = w
+    local ok, id = pcall(function() return ak:PostEventAtLocation(ev, where, { Pitch = 0, Yaw = 0, Roll = 0 }, survivalPC) end)
+    log(string.format("wwise test: Play_SV_SolgBreakBig %s (playing id %s) at its spot (%.0f, %.0f, %.0f), %.1f km from you",
+        ok and "posted" or "NOT posted", tostring(ok and id or id), where.X, where.Y, where.Z, d / 100000))
+end)
+-- TEST ONLY END

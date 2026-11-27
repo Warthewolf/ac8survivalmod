@@ -390,6 +390,253 @@ CFG.specials.festival = { enabled = true, name = "THE FESTIVAL", round_after = 6
                                         "ALI|First time I've seen Comona dance. I could get used to it.",
                                         "DANIELLE|Somebody save me a seat by the stage. I'm landing hungry.",
                                         "ROCK|Tell the band to play something loud. We're coming in." } } }
+
+-- "ulysses" = ULYSSES (Scripts/sv_ulysses.lua, docs/re/ULYSSES.md; the user, 2026-11-23: "Recreate the Ulysses Event from
+-- Strangereal, I want it to be A Special Round where we go back in time for a few rounds"; her picks: pure meteor
+-- defence, 2 rounds, a time-shift transition, a film look, AC:I's meteors and Stardust sounds; "Meteors that fly over
+-- head a high altitude during the mission too", "directly after the Festival Night during the early morning just as
+-- the Sun is rising"). Never drawn: its rounds are the day-night arc's first dawn rounds (GONE FISHIN''s round F + 7 +
+-- the arc's night_rounds, + dawn_offset), `rounds` of them, no fighters (pure meteor defence). Round 1 the shower,
+-- round 2 the shower and the big one. Fragments: AC:I's meteors (the container SurvivalMode_Ulysses_P, tools/ulysses)
+-- falling from far out onto the airfield or the town (aim), each with a target box (the SOLG's KEW / MAG units borrowed,
+-- their boxes "ULYSSES" / sub_*, as the two never come together), shot down: pay (x the round's specialPay); landed:
+-- the airfield takes `airfield_damage` (the town: a callout), the big one big.airfield_damage. Overhead: scenery meteors
+-- high up (sky). The film look (film: a post-process volume of ours) and the time shift (fade, the card) while in 1999.
+CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offset = 0,
+    -- each round's fragments (co-op: x (1 + per_player a player past the first), at most max_n); solo x solo_x
+    -- ((2026-11-24, the user: "Spawn more meteorites, have atleast 50 spawn in waves of 2") 50 / 60 (was 16 / 20), solo
+    -- too (solo_x 1, was 0.8), co-op up to max_n 90 (was 34); per_wave 2 every every_s (was one every 4-8 s), at most
+    -- at_once 30 falling (was 6: the 48 sound voices hold 30 fall loops and the explosions; the SOLG's KEW unit lends 36
+    -- targets, each handed back when its fragment is done)
+    fragments = { round1 = 50, round2 = 60, per_player = 0.15, max_n = 90, solo_x = 1.0,
+                  every_s = { 5, 8 }, per_wave = 2, first_s = 8, at_once = 30,
+                  -- where they come from (km from where they land, m up) and how fast (km/h, along their line)
+                  -- ((2026-11-24, the user: "the meteorites need to spawn at higher altitude so the players have a chance to
+                  -- intercept them, also make them quicker too, the meteorites should be going around 1300km/h") 20-24 km up
+                  -- (was 9-12) at 1250-1350 km/h (was 550-650): 78-94 s down a 45 degree dive, about as long as before
+                  -- ((2026-11-24, the user: "I want some of the Meteorites to be faster than others, have them varied in
+                  -- speed from 2200 to 1300") 1300-2200 km/h; ((later) "make some of the meteors even quicker") 1300-3000
+                  -- km/h: 34-94 s down
+                  from_km = { 26, 34 }, alt_m = { 20000, 24000 }, speed_kmh = { 1300, 3000 },
+                  -- ((2026-11-24, the user: "Try making it like infinities") AC:I's meteorites: a 45 degree dive, all one way
+                  -- (its mission data; was any bearing at 1100-1500 km/h): from the east like the sky's
+                  dive_deg = 45, from_deg = 0, spread_deg = 25,
+                  meshes = { "C", "C", "D" }, scale = { 1.8, 3.2 }, spin_dps = { 10, 45 },
+                  -- ((2026-11-24, the user: "Players should get $1000 per meteorite they destroy") pay 1000 (was 300)
+                  health = 350, pay = 1000, airfield_damage = 8,
+                  -- ((2026-11-24, the user, of the fire tail up close: "dont use those tube like meteor things, they look
+                  -- silly, just use the smoke") no tail of ours (tail_x 0): the smoke and fire trails only (trails below)
+                  tail_x = 0,
+                  -- ((2026-11-24, the user: "it doesn't matter if meteorites miss the land mass or not, have them vastly spread
+                  -- out around the comona island") area_km: anywhere in this box (km, the world's x / y: the island chain is
+                  -- x -19..+33, y -12..+7, COMONA_MAP.md; x kept under +24 so the dive from the east is seen inside the
+                  -- combat zone, whose east edge is at +33), land or sea, never steered onto land (land_tries 0). Where it
+                  -- comes down decides: within airfield_m of the airfield its damage, within town_m of a town the town's
+                  -- callout, the sea or open land harmless. Without area_km: aim's airfield / town weights, spread_m round them
+                  area_km = { x = { -30, 24 }, y = { -20, 15 } }, airfield_m = 4000, town_m = 2500, land_tries = 0,
+                  -- (aim_share: that share of them still aimed at the airfield or a town (aim, spread_m), the rest anywhere
+                  -- in area_km; 0 = all spread (the autotest ulysoak of 0.75.105: 105 of 110 fell in the sea, the airfield
+                  -- hurt only by the core): the user's call)
+                  aim_share = 0, aim_land_tries = 6,
+                  aim = { airfield = 0.6, town = 0.4 }, spread_m = 2500 },
+    -- ((2026-11-24, the user: "around 1300km/h") the core too: 1300 km/h from 28 km up (was 650 from 16): 110 s down
+    big = { enabled = true, mesh = "A", scale = 1.0, at_s = 45, from_km = 48, alt_m = 28000, speed_kmh = 1300, spin_dps = 4,
+            dive_deg = 45, from_deg = 0, spread_deg = 10, tail_x = 0,
+            health = 4000, solo_x = 0.7, pay = 6000, airfield_damage = 120 },
+    -- the towns it aims at besides the airfield (cm; the airport key's town, docs/re/COMONA_MAP.md)
+    towns = { { X = 1250000, Y = -320000 }, { X = 2350000, Y = -700000 } },
+    -- scenery meteors high up, crossing the sky (every_s apart, alt_m up, speed_kmh, life_s)
+    -- ((2026-11-24, the user: "more fake meteors at high altitude streaking across the sky at Sunrise, like it's truly about
+    -- to rain hell upon the world") was one every 1.5-4 s, 4-10x: now bursts of 2-5 every 0.4-1.2 s, up to max_up at once,
+    -- bigger, their streaks longer still (tail_x on the tail's length)
+    -- ((2026-11-24, the user: "The Meteorites that are in the sky box need to go quicker also and zoom across the sky, not at
+    -- 45 degree angle like they are currently, their trails need to be longer also") 25,000-40,000 km/h (was 8,000-14,000),
+    -- a shallow fall (dip 0.1-0.2: 6-11 degrees, was 0.8-1.0: 39-45), from 5-40 km east of you (was 25-60: they burnt out
+    -- in the eastern sky before they reached you), so each appears high and zooms over and away west; streak_x 3x (~9 km)
+    sky = { enabled = true, every_s = { 0.4, 1.2 }, burst = { 3, 7 }, max_up = 100, alt_m = { 28000, 34000 }, from_km = { 5, 40 }, dip = { 0.1, 0.2 }, floor_m = 16000,
+            speed_kmh = { 25000, 40000 }, life_s = 12, meshes = { "D", "C", "C" }, scale = { 8, 22 }, tail_x = 1.5,
+            -- ((2026-11-24, the user: "high altitude so that the player can't reach them, like very very high") 45-65 km up (was
+            -- 12-28; 45-65 km, 0.75.80, drew nothing: past what the game draws), now 28-34 km; since 0.75.96 diving like AC:I's
+            -- emitters (dip 0.8-1.0: 39-45 degrees), burnt out above floor_m (16 km: out of any fighter's reach), 8-22x
+            -- (the user, 2026-11-24: "East to West": from the east (0 = +X), within 12 degrees of due west; "spread out more
+            -- than 60km": lateral_km either side of you, 150 (300 km north to south), bursts and max_up raised to keep them thick)
+            -- ((2026-11-24, the user: "Why are the meteors moving the wrong way?") the autotest's compass: +X IS east (the
+            -- plane's yaw 26.7 = the minimap's south-east, the dawn sun to the east-south-east): from_deg 0 kept. What read
+            -- wrong: flying level 24-34 km up, from a fighter below they looked to climb; now they fall (dip), see alt_m
+            from_deg = 0, lateral_km = 150, spread_deg = 12,
+            -- ((2026-11-24, the user's Lost Butterfly reference) AC:I's sky meteors: thin glowing lines, no body, no smoke. The
+            -- ulylines autotest: AC8's additive MI_TrainingRing on the streak's static twin draws exactly that (on the skinned
+            -- one it fell back to a dark grey); the rock hidden, no trails
+            -- ((2026-11-24, "Try making it like infinities") AC:I's own trail sprite on our card (the ulylines autotest: the flare
+            -- glows from Emissive_Intensity ~600 up; ~3 km long, ~200 m wide 30 km out, as its emitters 24 km out)
+            look = { paint = "streak", mesh = "Streak", hide_rock = true, tail_r = 0.9 }, streak_x = 0.36, no_trails = true },
+    -- the meshes (tools/ulysses: AC:I's o_meta ~97 m (A), o_metc ~6.5 m (C), o_metd ~3 m (D); o_metb / o_metx have no mesh in
+    -- AC:I): its one-bone skeletal copies SK_SV_Ulysses_<K> (a static mesh of ours crashed the SOLG's test T0, a skeletal
+    -- one drew: docs/re/SOLG.md 8), painted at run time as the SOLG is (paint: its rock texture as Basecolor on the x40a's
+    -- gear material, its normal and livemap in their slots)
+    mesh_path = "/Game/Mods/SurvivalMode/Ulysses/Model/SK_SV_Ulysses_",
+    paint = { parent = "/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear",
+              tex = { Basecolor = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Rock_D",
+                      Normalmap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Rock_N",
+                      Livemap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Rock_L",
+                      Detail_Normal = "/Engine/EngineMaterials/DefaultNormal",
+                      Blend_Dameged_Normalmap = "/Engine/EngineMaterials/DefaultNormal" },
+              scalars = { Ctrl_All_Emissive = 0, Turbine_speed = 0, DNormal_Strength = 0, DamegedNormal_Intencity = 0,
+                          PlayerPlane_Damage = 0 } },
+    -- ((2026-11-23) the user: "The meteor fragments have to have a smoke trail and fire VFX too") on each rock: AC8's smoke
+    -- trail and its fire, each at its scale x the rock's; ((2026-11-23) "Don't use the Rod's Streak, come up with your own")
+    -- the streak is our own: tail (SK_SV_Ulysses_Tail, tools/ulysses: a glowing taper behind the rock along its fall)
+    -- ((2026-11-24, the user: "I want those fireball trails longer") smoke 8 -> 14, fire 6 -> 11, the streak 1.6 -> 4.5 long
+    -- ((2026-11-24, the user: "Shouldn't their smoke trail be thicker", with a falling-meteor reference: a thick billowing
+    -- column) the trail line-up autotest (ulytrails): the Climber's fall smoke (Mission 20's, IGC) by far the thickest,
+    -- black and billowing with fire at its head; Ladon's and Mission 3's cinematic trails draw nothing outside their scenes
+    trails = { { path = "/Game/VFX/IGC/Ms20/Ms200030/NS_IGCVFX_Ms200030_ClimberFallSmoke001", scale = 3 },
+               { path = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeFireNPC001", scale = 11 } },
+    -- the sky's meteors (up to 100 at once): the light smoke only, the heavy column's cost kept to the fragments
+    sky_trails = { { path = "/Game/VFX/Vehicles/Aircraft/Common/Damage/DamagedSmokeNPC/NS_DamagedSmokeNPC001", scale = 14 } },
+    -- our own streak: SM_SV_Ulysses_Tail (tools/ulysses: a 25 m teardrop behind the rock along -X, U along its length) on
+    -- AC8's cloud lightning material (MI_NearCloudLightning001: emissive, translucent, static meshes only: the fleet's
+    -- bolts' proven way) with the tail's own gradient T_SV_Ulysses_Tail_D (white-hot, orange, deep red, dark); component
+    -- "static" (the A/B of 2026-11-23 decides it) or "skeletal" (SK_ twin, painted, no glow)
+    -- ((2026-11-23, the A/B run: both rocks drew, the static tail on the cloud lightning material didn't) skeletal, on the
+    -- rocks' gear material with its gradient, the gear's light-emissive slots tried for a glow (EmissiveLightMap on UV 1)
+    -- ((2026-11-24) Ctrl_All_Emissive 1 -> 60: the gear master's EmissiveLightMap (UV 1: our gradient) times it, to glow
+    tail = { enabled = true, mesh = "Tail", component = "skeletal", scale = 1.0, length_x = 4.5,
+             paint = { parent = "/Game/Vehicles/Aircraft/PP/PP0016_x40a/Materials/Common/MI_PP0016_x40a_Gear",
+                       tex = { Basecolor = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Tail_D",
+                               EmissiveLightMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Tail_D",
+                               Normalmap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_FlatN",
+                               Livemap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Rock_L" },
+                       scalars = { Ctrl_All_Emissive = 60, Ctrl_LandinglightEmissive = 1, Landinglight_Emissive_Intensity = 400,
+                                   Turbine_speed = 0, PlayerPlane_Damage = 0 },
+                       vectors = { Landinglight_Emissive_Color = { 1.0, 0.55, 0.15 } } },
+             -- ((2026-11-24) a fire glow round the streak: the same mesh radius_x wider, on AC8's additive glow (VALKA's portal
+             -- haze material: Color, EmissiveIntensity, Opacity; its fresnel left on for a soft edge)
+             -- (OFF: the run of 0.75.77 drew it as dark grey tubes over the streaks, the gradient hidden)
+             -- ((2026-11-24, the user's Lost Butterfly reference: AC:I's sky meteors are thin glowing lines, its o_metx a marker
+             -- with an effect drawn on it) light-only streaks to try: AC8's additive MI_TrainingRing (VALKA's portal rings: it
+             -- adds its Color x Opacity) and its haze (fresnel off: flat)
+             line_ring = { parent = "/Game/VFX/Mission/Traning/MI_TrainingRing", scalars = { Opacity = 1 },
+                           vectors = { Color = { 2.6, 2.2, 1.6 } } },
+             -- ((2026-11-24, the user: "Try making it like infinities") AC:I's own trail sprite (T_SV_Ulysses_Streak, from its
+             -- effect atlas: tools/ulysses/prepare.py) on our crossed card SM_SV_Ulysses_Streak, drawn by AC8's additive flare
+             streak = { parent = "/Game/VFX/Mission/Mission023/MI_ms23FarExp_Flare",
+                        tex = { EmissiveMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Streak",
+                                MaskMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Streak" },
+                        scalars = { Emissive_Intensity = 2000, Emissive_Power = 1 }, vectors = { EmissiveColor = { 1.0, 0.92, 0.8 } } },
+             streak_b = { parent = "/Game/VFX/Mission/Mission023/MI_ms23FarExp_Flare",
+                        tex = { EmissiveMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Streak",
+                                MaskMap = "/Game/Mods/SurvivalMode/Ulysses/Textures/T_SV_Ulysses_Streak" },
+                        scalars = { Emissive_Intensity = 6000, Emissive_Power = 1 }, vectors = { EmissiveColor = { 1.0, 0.92, 0.8 } } },
+             line_haze = { parent = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", scalars = { EmissiveIntensity = 3, Opacity = 1,
+                           EmissiveFresnelFalloff = 0.01 }, vectors = { Color = { 3.0, 2.3, 1.3 } } },
+             glow = { enabled = false, parent = "/Game/VFX/Mission/Traning/MI_TrainingRingGlow", radius_x = 1.8, length_x = 1.15,
+                      scalars = { EmissiveIntensity = 4, Opacity = 0.7 }, vectors = { Color = { 1.0, 0.42, 0.08 } } } },
+    fx = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" },
+    -- ((2026-11-23) the user: "if they hit the ocean they should have the tonitrus spear water impact") into the sea: the
+    -- Spear's splash (THE DECOY's rods: VFX/Vehicles/Weapon/Rog/Splash) at the sea's level; on land: fx. Land or sea by a
+    -- trace down (only near you: hard rule 27); none: land when it fell within land_m of the airfield / town it aimed at
+    sea = { fx = { "/Game/VFX/Vehicles/Weapon/Rog/Splash/NS_Mission11Splash", "/Game/VFX/Vehicles/Weapon/Rog/Splash/NS_SplashRain" },
+            scale = 1.5, big_scale = 5, sea_z = 350, land_m = 1200 },
+    fx_scale = { shot = 4, land = 10, big_shot = 18, big_land = 30 },
+    -- the borrowed target units (the SOLG's) and their boxes while ULYSSES has them
+    target_units = { small = "SV_Unit_SOLG_KEW", big = "SV_Unit_SOLG_MAG" },
+    box = { name = "ULYSSES", small = "FRAGMENT", big = "ULYSSES CORE" },
+    -- (the WORLD NEWS bulletins' timing: text.news below; the first first_s into each round, then one every every_s)
+    -- ((2026-11-24) the user: "have the news play more often during the rounds so that more of the lines get seen": 12 /
+    -- 20 s (was 30 / 36): every bulletin of a round in its first two and a half minutes
+    news = { enabled = true, first_s = 12, every_s = 20 },
+    -- going back and coming home: a fade (s) and the cards
+    shift = { fade_s = 1.2, hold_s = 0.8, card = "JULY 1999", card_sub = "ASTEROID 1994XF04 ULYSSES HAS BROKEN UP",
+              home = "PRESENT DAY", home_sub = "COMONA" },
+    -- the film look in 1999 (a post-process volume of ours, unbound): saturation, tint, grain, vignette; fade_s in / out
+    film = { enabled = true, saturation = 0.55, tint = { 1.0, 0.9, 0.72 }, grain = 0.45, vignette = 0.55, fade_s = 2.0,
+             -- ((2026-11-23) the volume never showed: AC8's view is its camera manager's) the look on Survival's HUD: a
+             -- full-screen sepia wash (overlay rgb at overlay_a), flickering by flicker like old film (sv_hud.lua HUD.film)
+             overlay = { 0.45, 0.32, 0.15 }, overlay_a = 0.26, flicker = 0.04 },
+    -- the sounds (Sounds/ulysses: AC:I's Stardust set, tools/ulysses sounds)
+    sounds = { fall = { file = "ulysses/fall_small.wav", db = 4, loop = true, curve = { max = 600000, shape = "exp1" } },
+               fall_big = { file = "ulysses/fall_big.wav", db = 8, loop = true, curve = { max = 1500000, shape = "exp1" } },
+               boom = { file = "ulysses/explosion.wav", db = 6, curve = { max = 1500000, shape = "exp1" } },
+               encounter = { file = "ulysses/encounter.wav", db = 0 },
+               -- ((2026-11-24, the user: yes to AC:I's Stardust_Ambient) its rumble under both rounds, looped, everywhere
+               ambient = { file = "ulysses/ambient.wav", db = -3, loop = true },
+               -- ((2026-11-24, the user: "get the wwise sounds working for the meteorites") the same five as Survival's own
+               -- Wwise events (tools/wwise/spec.py, SurvivalMode_Wwise_P: AC8's sfx bus, its effects volume and 3D; each
+               -- whistle on its rock, an impact where it is, the encounter and the rumble 2D); a sound whose event
+               -- doesn't load plays through the files above; enabled = false: all through them
+               -- ((2026-11-24, the user: "The meteors were using the missile sound effect": AC:I's OBJ_FALL_STARTDUST_SMALL,
+               -- fall_small.wav / Play_SV_UlyFall, is one stream with its ICBM burner's) off for a while, then ((later) "lower
+               -- the meteor burner sfx back to its normal level beforehand") on again at its earlier level (-10 dB, 7 km)
+               whistle = true,
+               -- ((2026-11-24, the user: "tonitrus spear impact for the impact sfx") a landing's sound AC8's Spear impact
+               -- (ground / sea) in place of the Stardust explosion; one shot down in the air keeps the explosion
+               landing = "spear",
+               -- ((2026-11-24, the user: "make it so that the meteorites have the tonitrus spear impact sfx too") AC8's own
+               -- Tonitrus Spear impacts beside each landing's explosion, on land and in the sea
+               spear = { enabled = true,
+                         ground = "/Game/WwiseAssets/Events/CS_AceLive_SE/Events_General/AMMO/EXP/SE_GEN_AMMO_EXP/AKE_GEN_AMMO_EXP_Tonitrus_Impact_Ground_Play",
+                         sea = "/Game/WwiseAssets/Events/CS_AceLive_SE/Events_General/AMMO/EXP/SE_GEN_AMMO_EXP/AKE_GEN_AMMO_EXP_Tonitrus_Impact_Sea_Play" },
+               wwise = { enabled = true, path = "/Game/Mods/SurvivalMode/Wwise/Events/Default_Work_Unit/",
+                         fall = "Play_SV_UlyFall", fall_big = "Play_SV_UlyFallBig", boom = "Play_SV_UlyBoom",
+                         encounter = "Play_SV_UlyEncounter", ambient = "Play_SV_UlyAmbient" } },
+    text = { sub = "SHOOT DOWN THE ULYSSES FRAGMENTS", big = "THE ULYSSES CORE", big_sub = "SHOOT IT DOWN BEFORE IT HITS COMONA",
+             town_hit = "A FRAGMENT HIT THE TOWN", big_hit = "ULYSSES HAS STRUCK COMONA", big_down = "THE ULYSSES CORE IS DOWN",
+             -- ((2026-11-24, the user: "Comona Control is also affected by the time travel ... Comona Control wonders who
+             -- the player is, as they've not seen that aircraft before, but with all that's happening they disregard it
+             -- and ask for help regardless") 1999's Comona Control: start (its first round), start2 (its second)
+             -- ((2026-11-24, the user: "add more subtitles through the two rounds, like News Broadcasts, go through the lore
+             -- and make a story about the different areas that are being affected by the planetfall", "report on it as if
+             -- its happening at that current time", "don't talk about refugees") WORLD NEWS live in July 1999, from the
+             -- Strangereal lore of Ulysses 1994XF04 (Comona University predicted the breakup; Stonehenge at San Salvacion;
+             -- Saint Ark, Farbanti, Newfield Island, Los Canas, the Skully Islands, Selatapura, Mount Shezna, Faith Park,
+             -- the Whiskey Corridor, Fort Grays Island hit; Estovakia hit, Emmeria spared; Comberth Harbor and Anchorhead
+             -- unharmed; Stonehenge's fourth railgun knocked out): one exchange every news.every_s through each round
+             -- ((2026-11-24, later) the user: "can you please make the situation seem more dire": the coverage itself coming
+             -- apart (no figures, contact lost city after city, shelters sealed, emergency power), still live and canon
+             news = {
+                 round1 = {
+                     { "NEWS: USEA|We are interrupting all programming. Fragments of the asteroid Ulysses are striking the Usean continent right now.",
+                       "NEWS: USEA|Stonehenge at San Salvacion has been firing without pause, but there are too many fragments for it to stop them all." },
+                     { "NEWS: SAINT ARK|Saint Ark has been hit. The air base on the edge of the city is gone, and the fires can be seen from fifty kilometres away.",
+                       "NEWS: SAINT ARK|The last signal from the city ended mid-sentence." },
+                     { "NEWS: FARBANTI|I'm on the hills above Farbanti. The coast is just... gone. The sea is pouring into a crater where the harbour district was.",
+                       "NEWS: FARBANTI|The ground hasn't stopped shaking. There are sirens everywhere. I don't think the rescue teams can get through." },
+                     { "NEWS: COMONA|Comona University, whose astronomers predicted the day Ulysses would break apart, has recorded more than a dozen impacts in the last hour alone.",
+                       "NEWS: COMONA|They say the worst is still to come. The largest fragments haven't fallen yet." },
+                     { "NEWS: ESTOVAKIA|Anea is being hit as well. Estovakia reports heavy damage across the north, and Sonne Island has been struck.",
+                       "NEWS: EMMERIA|In Emmeria, the shelters in Gracemeria are full, and their doors have been sealed." },
+                     { "NEWS: WHISKEY CORRIDOR|A fragment has torn open the Whiskey Corridor. The Irsali River is bursting its banks and changing course.",
+                       "NEWS: USEA|There are no casualty figures. Officials will only say the number is rising by the hour." },
+                     { "NEWS: USEA|If you are in the impact zones, get underground and stay there. Do not go outside to look at the sky." } },
+                 round2 = {
+                     { "NEWS: USEA|Continuing coverage. The heaviest fragments are falling now, exactly as Comona University warned.",
+                       "NEWS: NEWFIELD ISLAND|Newfield Island has been struck on its eastern face. Part of the island is simply gone, and North Point is cut off." },
+                     { "NEWS: SAN SALVACION|This is San Salvacion. A fragment has hit inside the Stonehenge facility. One of its eight guns has gone silent.",
+                       "NEWS: SAN SALVACION|The other seven are still firing. Every shot shakes the ground, and the sky to the east is burning." },
+                     { "NEWS: LOS CANAS|We have lost every signal from Los Canas and the Skully Islands.",
+                       "NEWS: LOS CANAS|Pilots flying over the area say the coastline no longer matches their charts." },
+                     { "NEWS: SELATAPURA|A fragment has struck the sea twenty kilometres off Selatapura. A wall of water is moving towards the city.",
+                       "NEWS: SELATAPURA|If you are on the coast, get to high ground now." },
+                     { "NEWS: MOUNT SHEZNA|Mount Shezna has been hit. Columns of steam are rising from its slopes, and ash is falling on the towns below.",
+                       "NEWS: FAITH PARK|In the Faith Park desert, the sky turned white as another fragment came down." },
+                     { "NEWS: FORT GRAYS ISLAND|The town on the north shore of Fort Grays Island has not been heard from since the last impact.",
+                       "NEWS: COMBERTH HARBOR|Comberth Harbor and Anchorhead are still standing, for now." },
+                     { "NEWS: USEA|The whole sky over Usea is on fire. I've covered wars, and I have never seen anything like this." },
+                     { "NEWS: USEA|Our transmitter is running on emergency power. We will stay on the air for as long as we can." } },
+                 core = { { "NEWS: COMONA|Breaking news: tracking stations report one fragment far larger than all the rest, coming down over the Comona Islands.",
+                            "NEWS: COMONA|If it reaches the ground, the islands may not survive it." } },
+                 core_down = { { "NEWS: COMONA|The large fragment over the Comona Islands has broken apart in the air. An unidentified aircraft was seen near it moments before." } },
+                 core_hit = { { "NEWS: COMONA|The large fragment has struck the Comona Islands. We cannot reach anyone there." } } },
+             say = { start = { "COMONA CONTROL|Unidentified aircraft over Comona, identify yourself. You're not on any flight plan we have.",
+                               "COMONA CONTROL|...What is that? I've never seen an airframe like it.",
+                               "COMONA CONTROL|Forget it. Whoever you are, we need you. Ulysses has broken up, and it's coming down on us.",
+                               "COMONA CONTROL|Shoot down every fragment you can. Every one you stop is one less on the islands." },
+                     start2 = { "COMONA CONTROL|Unknown aircraft, you're still with us. Good. We're losing contact with the mainland, city after city.",
+                                "COMONA CONTROL|Radar is full of fragments. Stay on them. If they reach the islands, there won't be anything left to defend." },
+                     big = { "COMONA CONTROL|Radar has a large body, very large. That one cannot be allowed to land.",
+                             "COMONA CONTROL|Unknown aircraft, you're all we've got up there. Bring it down, or Comona is finished." },
+                     home = { "COMONA CONTROL|...Comona Control. Skies are clear. Welcome back." } } } }
 -- TEST ONLY BEGIN (the lightning Anomaly and the storm test: test builds only, docs/re/THUNDER.md)
 -- "thunder" = IFF FATAL ERROR / DI..ANT TH..D..R (user, 2026-11-06: "another Anomaly, one that uses Lightning Against
 -- you", "The Aircraft is an A-10", "Strikes should only black out and disorient you", "it can only be spawned with

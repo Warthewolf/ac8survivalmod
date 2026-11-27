@@ -712,6 +712,10 @@ local function probeTickB(tick)
                 local okDc, errDc = timed("decoy", DECOY.tick, now)
                 if not okDc and D and not D.decoyErr then D.decoyErr = true; log("decoy: error " .. tostring(errDc)) end
             end
+            if ULY and ULY.tick then                                           -- (ULYSSES' sky meteors and film look: sv_ulysses.lua)
+                local okUl, errUl = timed("ulysses", ULY.tick, now)
+                if not okUl and D and not D.ulyErr then D.ulyErr = true; log("ulysses: error " .. tostring(errUl)) end
+            end
             local okAu, errAu = timed("audit", AUDIT.tick, now)               -- (sv_audit.lua)
             if not okAu and not D.auditErr then D.auditErr = true; log("audit: error " .. tostring(errAu)) end
             if CFG.allies.kills then timed("kill marks", KILL.markTarget, survivalPC, now) end   -- (what you fired at: KILL.by)

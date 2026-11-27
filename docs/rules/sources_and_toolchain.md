@@ -16,7 +16,13 @@ Moved verbatim from AGENTS.md (2026-11-14). The exceptions and the user's quotes
 - Ace Combat Infinity, at the user's request (2026-11-03: "pull the Satellite Interception Mission from ACI"; again
   2026-11-22: "making the SOLG again but as a custom asset using the Infinity Model, it's animations have to work"):
   the SOLG special may use AC:I's SOLG model, its textures and its animations (the user's own AC:I install, $ACI (.env)
-  outside the repo, nothing of it committed). Never AC:I voice lines, map or cutscene; never a stock AC8 boss under
+  outside the repo, nothing of it committed). Its sounds too (2026-11-23, the user: "start with the SOLG"): the SOLG's own
+  bank (DATA92 #528: SOLG_BREAK_BIG_01/02, SOLG_BREAK_SML_01-04). The Ulysses special too (2026-11-23, the user: "Recreate
+  the Ulysses Event from Strangereal", "Yes, use them"): AC:I's meteor models (o_meta, o_metb, o_metc, o_metd, o_metx
+  and their debris / shell pieces), their textures (with CONT_METEORITE / CONT_ULYSSES) and the Stardust sounds
+  (Stardust_*, EXPLO_STARDUST_*, OBJ_FALL_STARTDUST_*, YUSEI_EXPLO), decoded outside the repo; and (2026-11-24, the user: "Try
+  making it like infinities") one trail sprite from AC:I's shared effect atlas (DATA00 #14, texture 0x10009000) for its
+  sky meteor streak (tools/ulysses/prepare.py streak_texture). Never AC:I voice lines, map or cutscene; never a stock AC8 boss under
   it ("the SOLG cannot use any boss from the game"). See docs/re/SOLG.md.
 - A third AC7 exception, at the user's request (2026-11-17: "extract some voice lines from Ace Combat 7's WWise Bank,
   particularly the Alicorn's Crew speeches, run them through a voice filter that makes them sound distorted and horrific",

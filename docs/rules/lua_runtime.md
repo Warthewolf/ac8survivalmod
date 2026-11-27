@@ -58,3 +58,8 @@ Moved verbatim from AGENTS.md (2026-11-14). Rule numbers are unchanged: other no
     it 45 degrees. VALKA's SOLG flew flat through four builds for it ("its angle was still flat"). Tilt through a
     transform's quaternion (Scripts/sv_solg.lua quatOf / placeAt), or an actor's spawn transform; never trust a pitch
     set by rotator, and read a turn back (forward vector) when it matters.
+78. K2_SetWorldTransform from Lua fails, silently inside a pcall, when its Scale3D is a vector read back from the engine
+    (`c:GetComponentScale()`): nothing is placed or turned. ULYSSES' rocks (the autotest of 2026-11-24) kept their spawn's
+    turn and flew backwards (their front -0.96 along their way) until the transform was given a plain table
+    `{ X = 1, Y = 1, Z = 1 }` (then 1.00). Build every struct handed to the engine from plain Lua numbers, and read a
+    turn back (forward vector) when it matters (hard rule 76).

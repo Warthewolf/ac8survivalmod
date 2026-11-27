@@ -4,7 +4,7 @@
 -- state (UE4SS gives each Lua mod its own): a name one part shares with the others is a global of that state, each
 -- part's own helpers stay local to it. A part that fails to load stops the rest, as one file used to.
 -- (Hard rule 23 counts locals per part now: python tools/checks/lua_check.py Scripts/*.lua checks them all.)
-VERSION = "0.75.69"
+VERSION = "0.75.118"
 
 local MODULES = {
     "sv_core",
@@ -38,6 +38,8 @@ local MODULES = {
     "sv_spaceport",                -- the Spaceport Assault and its retake (docs/re/SPACEPORT_ASSAULT.md)
     "sv_fishing",                  -- GONE FISHIN': the shoals and SAL's boat (docs/re/FISHING.md 1-4)
     "sv_festival",                 -- THE FESTIVAL: the cruise missiles and the siren (docs/re/FISHING.md 6)
+    "sv_ulysses_land",             -- its land map of Comona (GENERATED: tools/ulysses/landmask.py)
+    "sv_ulysses",                  -- ULYSSES: back in July 1999, the meteor shower (docs/re/ULYSSES.md)
     "sv_decoy",                    -- THE DECOY: the bait, the Spear UAVs' locks and the Tonitrus Spear (docs/re/DECOY.md)
     "sv_tanicorn",                 -- THE TANICORN's test mount, test builds only (docs/re/TANICORN.md)
     "sv_tanicorn_rise",            -- (sv_tanicorn.lua's next piece: tools/lua_split_part.py)

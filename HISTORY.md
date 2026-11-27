@@ -4237,3 +4237,243 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   a co-op host's world goes on only once the pause page is up (or CFG.coop.pause_page_wait_s 1.0 s on), the pause probe
   logs the view and the room. Untested in game. Public zip AC8SurvivalMode_0.75.69_Online.zip, build a6be673d,
   registered; zip_leak_test all passed.
+- 0.75.70 (2026-11-23, branch feature/ulysses): ULYSSES, a special round back in July 1999 (the user: "Recreate the
+  Ulysses Event from Strangereal ... go back in time for a few rounds"; docs/re/ULYSSES.md): rounds 19-20 (the arc's
+  first dawn rounds after THE FESTIVAL's night), pure meteor defence, AC:I's meteors (SurvivalMode_Ulysses_P: SK_SV_Ulysses
+  A / C / D, tools/ulysses) falling with fire trails and FRAGMENT boxes (the SOLG's KEW / MAG units borrowed), the core
+  (o_meta) in round 20, the sky's meteors, the white fade and JULY 1999 / PRESENT DAY, the film look (a post-process
+  volume), AC:I's Stardust sounds (Sounds/ulysses). TEST ONLY Ctrl+Q. ulysses_test 20/20. Staged as
+  build/release/stage_dev_0.75.70 (dev, test keys kept), not registered, NOT installed. Not yet seen in game: all of it.
+- 0.75.71 / 0.75.72 / 0.75.73 (2026-11-23/24, branch feature/ulysses): ULYSSES made to show in game, through the autotest
+  (suite ulysses, 14/14 each run): the rocks put where they fall once their mesh is their root (0.75.71: they lay under
+  the sea at the origin); an A/B run showed both our skeletal and static rocks draw and a static mesh of ours doesn't
+  crash; the rocks face their fall; smoke and fire trails (AC8's NS_DamagedSmoke(Fire)NPC001); our own streak behind
+  each rock (SK_SV_Ulysses_Tail, the user: "Don't use the Rod's Streak, come up with your own"); the Spear's sea
+  splash (the user: "tonitrus spear water impact"); the film look as a HUD wash (AC8 ignores our post-process volume),
+  its fade on os.clock (it stuck at half); landing times on the round's clock (0.75.72's rocks landed late, under the
+  ground); co-op: "ul" messages (round, fragment, shot down, landed, end) so joiners draw the rocks, splashes and cards,
+  coop_guard_test rows. Screenshots sent to the user (rocks up close, the streaks far off, the film look, PRESENT DAY).
+  Staged as build/release/stage_dev_0.75.7x (dev, test keys kept), not registered, NOT installed. Not yet seen: the
+  streak's glow up close, a co-op game.
+- 0.75.74 - 0.75.79 (2026-11-24, branch feature/ulysses): ULYSSES' look, her calls through the night: "I want those
+  fireball trails longer" (smoke 8 -> 14, fire 6 -> 11, our streak 1.6 -> 4.5 long); "more fake meteors at high altitude
+  streaking across the sky at Sunrise" (bursts of 3-7 every 0.4-1.2 s, up to 100 at once, 5-16x); "East to West" (the
+  sky's meteors start 25-55 km east of you and fly within 12 degrees of west); "spread out more than 60km" (150 km either
+  side). A glow shell round the streak on MI_TrainingRingGlow drew dark grey tubes (0.75.77): off. The streak's
+  Ctrl_All_Emissive 1 -> 60 (0.75.79). Autotest 14/14 each build, tick cost ~1.4 ms; screenshots sent. 0.75.73's run was
+  stopped by Claude Code's memory guard while the game loaded (23 GB free after): tests since run in the foreground.
+  Staged build/release/stage_dev_0.75.79, not registered, NOT installed.
+- 0.75.80 / 0.75.81 (2026-11-24, branch feature/ulysses): the sky's meteors "very very high" (the user): 45-65 km
+  up drew nothing (0.75.80: past what the game draws); 24-34 km, dipping at most 2 % of their speed, 8-22x (0.75.81):
+  seen overhead from the fighters' heights, hidden below the cloud deck. Autotest 14/14 both. Staged
+  build/release/stage_dev_0.75.81, not registered, NOT installed.
+- 0.75.82 - 0.75.85 (2026-11-24, branch feature/ulysses): the ulysses2 autotest (round 1 from its start: the white fade,
+  JULY 1999; impacts up close; a minute's break; round 2's core onto the airfield; PRESENT DAY), 17/17 on 0.75.85, and
+  the original suite 14/14. Found and fixed: (1) every impact read as the sea (Comona's runway and terrain trace at
+  3.9-5 m, under the old sea_z + 5 m), so the airfield never took a fragment's damage: land or sea now by the mesh the
+  trace hit (*_Env_Sea is the sea); (2) a fragment in the sea counted as the town's ("A FRAGMENT HIT THE TOWN"): harmless
+  now, counted as the sea's; (3) a CRASH at round 20's start after a minute's break (0x38 / 0xffff... reads): the rocks'
+  paint and meshes, kept by Lua only, were collected while no rock drew with them (hard rule 59): pinned now
+  (GameInstance.ReferencedObjects, VALKA's assets' way) and checked by name before reuse; the sky's meteors cleaned
+  every tick, the break's too. A 5 s break (the first suite's) never showed it. Staged build/release/stage_dev_0.75.85,
+  not registered, NOT installed. run_all: 4 checks fail on dev too (fleet_test, tani_vls_test, lb_contract_test,
+  thunder_test: older expectations, not ULYSSES'), left for the user's say.
+- 0.75.86 - 0.75.93 (2026-11-24, branch feature/ulysses), her calls: "Shouldn't their smoke trail be thicker" (the trail
+  line-up autotest ulytrails: of 8 stock trails the Climber's fall smoke (Mission 20's IGC) is the thick billowing
+  column; the fragments wear it, the sky's meteors not); the streak's gradient warmer (a burning head, tools/ulysses);
+  "Why are the meteors moving the wrong way?" / "travelling backwards": the autotest measured every rock's front at
+  -0.96 of its way: K2_SetWorldTransform failed silently on a Scale3D read back from the engine (hard rule 78); a
+  plain scale: 1.00. The compass checked in game: +X is east (the minimap and the dawn sun). The sky's meteors now fall
+  (dip 0.22-0.4) and burn out above 16 km. Her Lost Butterfly references (AC:I): its sky meteors are o_metx, an 8 cm
+  marker with a dummy texture and an effect drawn on it: thin glowing lines; ours are now that: MI_TrainingRing on the
+  streak's static twin, no rock, no smoke (the ulylines autotest; on the skinned streak it fell back to dark grey: hard
+  rule 77). Borrowed targets hidden whole (SetActorHiddenInGame: their meshes aren't found by class; an autotest
+  close-up showed Mission 4's radar tower under a fragment). AC:I search: o_metc in 7 more mission packages (Lost
+  Butterfly's family, the Godzilla event), Stardust_Ambient unused, no streak texture (its effects not found). Autotest
+  15/15 on 0.75.93. Staged build/release/stage_dev_0.75.93, not registered, NOT installed.
+- 0.75.94 (2026-11-24, branch feature/ulysses): AC:I's Stardust_Ambient (DATA01 #24 stream 4, 38.5 s, tools/ulysses/
+  sounds.py ambient.wav) looped under both rounds and the break, off at the last round's end; joiners start it on the
+  host's "r" (the user: yes to the rumble). ulysses2 autotest 17/17 (a minute's break, no crash); the sound loaded and
+  played without error (not heard by the test). Staged build/release/stage_dev_0.75.94, NOT installed.
+- 0.75.95 - 0.75.97 (2026-11-24, branch feature/ulysses), the user: "Try making it like infinities" (after the AC:I meteor
+  research: its mission data, the OIF unit table, CRC-32/BZIP2 name hashes; micp01 = Lost Butterfly's 8 o_metx emitter
+  groups 24 km out, 3.5-5 km up, pitched 45 degrees; micp08 = Stardust; METEORITE o_metc: A 2800, V 260 (x5 = its +1300),
+  550-650 km/h, every one a 45 degree dive the same way). Fragments and the core: a 45 degree dive from the east at
+  550-650 km/h (dive_deg / from_deg / spread_deg; was any bearing at 1100-1500 km/h). The sky shower: AC:I's own trail
+  sprite (its effect atlas DATA00 #14 0x10009000, tools/ulysses/prepare.py streak_texture; the AC:I exception extended)
+  on our crossed card SM_SV_Ulysses_Streak, drawn by AC8's additive MI_ms23FarExp_Flare (EmissiveMap / MaskMap the
+  sprite, Emissive_Intensity 2000: it glows from ~600 up, dim at 20-80), ~3 km long, diving 39-45 degrees. AC:I's
+  "destroyed" o_metc pieces are the whole rock again (no break-up model). ulysses 15/15, ulysses2 17/17 on 0.75.97.
+  Staged build/release/stage_dev_0.75.97, NOT installed.
+- 0.75.98 (2026-11-24, branch feature/ulysses): Comona's land map (Scripts/sv_ulysses_land.lua, GENERATED by
+  tools/ulysses/landmask.py from build/research/comona/height_100m.json, the terrain's collision at 100 m: 45.5 km2) for
+  land or sea anywhere and the same on every co-op game (hard rule 27: a far trace hits the sea planes), checked against
+  8 places the game's traces settled; each fragment aimed onto land (6 tries): 13 of 16 landings on land in the
+  ulysses2 run (4 of 10 before). ulysses_test 25 checks. The ulydawn autotest (the arc set so rounds 1-2 are the dawn
+  ones: round 1 with the sun 4 degrees under the horizon, round 2 10 degrees up): 16/16, pictures sent. Staged
+  build/release/stage_dev_0.75.98, NOT installed.
+- 2026-11-24, four checks failing on dev fixed on their own branches (not merged): fix/thunder-test-parts (thunder_test
+  loads sv_anomalies_dev by name: VALKA's SOLG parts sit between it and sv_anomalies in MODULES), fix/fleet-test-public
+  (package_release.sh's dev_only branch is PUBLIC=1's too), fix/tani-vls-test (the VLS watch's throttle of 2026-11-19
+  checked, then off in the test), fix/lb-contract-fleet (the Worker's SPECIALS: fleet and ulysses; its own tests 15
+  specials; NOT deployed).
+- 0.75.99 (2026-11-24, branch feature/ulysses): a code review of the whole branch (dev...feature/ulysses, 29 files), its
+  findings fixed: the Spaceport kept off the round before ULYSSES (its retake took round 19, so the time shift never
+  played; THE FESTIVAL's guard copied); ULY.endAll takes everything down when its last round is lost, a run or level
+  ends, or a joiner becomes host (the film look, the rumble, the sky, rocks, fall loops, the SOLG's box names); the film
+  look is the HUD's wash only (no post-process volume, no camera writes: hard rule 59); the fragments' solo count no
+  longer also their health; joiners draw the core's blasts and fall sound; the static streak cached and pinned. Build
+  and checks pass. Autotest: the first runs stopped for low memory (the install put back, checked file by file), the
+  reruns refused to launch (Steam closed): NOT yet tested in game. Staged build/release/stage_dev_0.75.99, not
+  registered, NOT installed.
+- 0.75.99 tested (2026-11-24, Steam open again): ulysses 15/15, ulysses2 16/16; the install put back as it was.
+- 0.75.100 (2026-11-24, branch feature/ulysses), her calls: "the meteorites need to spawn at higher altitude so the
+  players have a chance to intercept them, also make them quicker too ... around 1300km/h": fragments 20-24 km up (was
+  9-12) at 1250-1350 km/h (was 550-650), still AC:I's 45 degree dive from the east: 75-98 s down; the core 28 km up
+  (was 16) at 1300 km/h (was 650): 110 s. "it doesn't matter if meteorites miss the land mass or not, have them vastly
+  spread out around the comona island": fragments.area_km (x -30..+24, y -20..+15 km: the whole island chain and the sea
+  round it; x under +24 so the dive is seen inside the combat zone), never steered onto land (land_tries 0); the damage
+  by where one comes down: within airfield_m (4 km) of the airfield its damage, within town_m (2.5 km) of a town the
+  town's callout, the sea or open land harmless (the round's line counts "on open land"). The sky's meteors: "go quicker
+  ... zoom across the sky, not at 45 degree ... trails need to be longer": 25,000-40,000 km/h (was 8,000-14,000), dip
+  0.1-0.2 (6-11 degrees, was 39-45), from 5-40 km east of you (they used to burn out in the eastern sky before reaching
+  you), streak_x 0.12 -> 0.36 (~9 km), life 12 s. ulysses_test: the new numbers and rules. Autotests: ulysses 15/15 (the
+  real heights and speeds: the core "lands in 110 s"), ulysses2 17/17 (both rounds, a minute's break, no crash); of 20
+  fragments landed in the two runs 19 were harmless (mostly the sea): the box is ~2 % land, so the fragments rarely
+  threaten the airfield now (the core still does). Staged build/release/stage_dev_0.75.100, not registered, NOT installed.
+- 0.75.101 (2026-11-24, branch feature/ulysses), the user: "Spawn more meteorites, have atleast 50 spawn in waves of 2":
+  fragments 50 / 60 a round (was 16 / 20), solo too (solo_x 1), co-op up to 90 (was 34); 2 at a time every 5-8 s
+  (per_wave), at most 30 falling (at_once, was 6: the 48 sound voices); the SOLG's KEW unit lends 36 targets, so each is
+  handed back (disarm) when its fragment is shot down or lands. A fragment still pays 300 (a round ~15,000 before
+  specialPay: her call pending). New autotest suite ulymany (round 1 whole at the real heights and speeds, waves every
+  3-4 s): 14/14 (50 launched, 23 waves of 2 with room, 28 falling at the most, 0 without a box, the frame time 16.7 ms
+  with 25+ falling: the 60 fps cap held); ulysses 15/15. Staged build/release/stage_dev_0.75.101, NOT installed.
+- 2026-11-24, feature/wwise-banks merged into feature/ulysses (the user: "get the wwise sounds working for the
+  meteorites"): the Wwise pipeline (tools/wwise) and the SOLG's Ctrl+O test. AC8's own attenuations (AKB_GameSe_Online,
+  29 with curves) run 300 to 2,000,000 units: Wwise distances are UE centimetres, as our spec writes them.
+- 0.75.102 (2026-11-24, branch feature/ulysses), the user: "Can you please get the wwise sounds working for the
+  meteorites please": ULYSSES' five sounds (AC:I's Stardust set) as Survival's own Wwise events on AC8's sfx bus
+  (tools/wwise/spec.py writes the spec: Play_SV_UlyFall / FallBig / Boom / Encounter / Ambient beside the SOLG's test
+  sound; waapi_build.py: loops, 2D, ListenerRelativeRouting written, a bank each: one shared bank made every cooked event
+  carry all six's media, 56 MB, now 9.4 MB). sv_ulysses.lua: each whistle posted ON its rock
+  (LiveSoundBlueprintLibrary.PostEventAtActorByAkEvent: Wwise's component on its root follows it) and stopped with it
+  (AkGameplayStatics.StopActor), an impact at its place (PostEventAtLocation), the encounter and the rumble 2D (the
+  rumble on an actor of ours); Survival's XAudio2 player only where an event doesn't load; joiners the same, and now the
+  sea splash's sound too. New autotest suite ulysound (each sound at set distances, the camera held still) with
+  tools/autotest/loudness.ps1 (the speakers' level every 100 ms by WASAPI loopback, levels only) and loudness_report.py:
+  10/10, all five load and play (playing ids, one Wwise component on each rock), a stop is silence. A run was stopped
+  for low memory mid-start (the gate killed with it: the install put back by kit.py restore, identical to before, the
+  saves unchanged). AC8 itself: ~21 GB in a run, ~24 GB at the level's load (Survival's own memory lines: 0.75.100 the
+  same within 0.5 GB).
+- 0.75.103 (2026-11-24): fragments 1300-2200 km/h (the user: "I want some of the Meteorites to be faster than others");
+  1999's Comona Control doesn't know your aircraft (the user: "Comona Control wonders who the player is ... but with all
+  that's happening they disregard it and ask for help regardless"): round 1's start asks who you are, then for help;
+  round 2's own lines (say.start2); the core's call to the "unknown aircraft" (sv_config_arc.lua and subtitles.ini).
+  ulysound 10/10, ulysses 15/15 (the round's sounds through Wwise). The meter: every sound as loud at 16 km as at 0.3 km.
+- 0.75.104: AC8's listener scales every attenuation by 10 (DefaultListenerScalingFactor=10 in its Live/Config/
+  DefaultGame.ini): a curve written in centimetres is 10x too wide on the ground, which is also why the SOLG test of
+  0.75.66 / 0.75.67 never faded. tools/wwise: distances in metres x units_per_m 10 (spec.py UNITS_PER_M).
+- 0.75.105 (2026-11-24, branch feature/ulysses): ULYSSES' Wwise sounds pause with the game. AC8's pause
+  (AKE_System_SFX_Pause_On, decoded from AKB_GameSe.bnk with tools/pak_read.py: Pause on four buses, one a child of sfx,
+  SetBusVolume on three, never the sfx bus itself) would have left them playing through the pause menu: SND.setPaused
+  (sv_sound.lua) now tells SND.onPause, ULYSSES' ULY.wwPause pauses / resumes each loaded event on every game object
+  (UAkAudioEvent.ExecuteAction 1 / 2, a 100 ms fade). The whistle +10 dB (300 m off it was -50 dBFS, 20 dB under AC8's
+  own missiles). Hard rule 79 (AC8's listener scales attenuation x10), docs/re/WWISE_BANKS.md. The meter (0.75.104 /
+  0.75.105, the ulysound suite with its own config: its first runs had heard round 1's Su-47s): the impact -5 / -17 / -35
+  dB at 1.5 / 5 / 11 km, silent at 16; the whistle -4 / -16 / -34 dB at 0.8 / 2.5 / 5 km, silent at 8; the core's -18 at
+  7 km, silent at 21; a stop is silence; paused 5 s: silence from 0.1 s after the pause to the resume; Wwise hears from
+  the camera, not the plane. A whole shower (ulymany, 28 falling): median -45, loudest -39 dBFS (round 1's dogfight in
+  an earlier run: -26 to -35). AC8's own explosions posted by event were silent in Survival's level (banks not loaded).
+  Autotests on 0.75.105: ulysound 12/12, ulymany 14/14 (the suite's wave count judged only from consecutive looks),
+  ulysses2 17/17 (every new Comona Control line said where it belongs). Two runs were stopped for low memory as the
+  second game in a row loaded (AC8 ~24 GB at the load of 31 GB): the installs put back, identical; the tests since run
+  one at a time in the foreground. tools/checks/run_all: 86 passed, the 4 known failures of dev (their fix branches
+  await the user). Staged build/release/stage_dev_0.75.105, not registered, NOT installed.
+- 2026-11-24 afternoon, more autotests on 0.75.105 (tools/ac8-autotest): ulysound 12/12 with a whistle closing from 12 km
+  at 600 m/s (silent past 8 km, then -71 / -61 / -46 / -40 dBFS at 7 / 6 / 3.4 / 1 km: every fragment starts out of
+  its range and swells as it comes in); the pause held 5 s (ST.holdPause: the kit's focus guard had un-paused it after
+  1 s): silence from 0.1 s after the pause to the resume. New suite ulysoak: both rounds played out as shipped, nobody
+  shooting, 13/13: round 1 3 min 50 s (50: 48 in the sea, 2 on open land), round 2 4 min 34 s (61 with the core: 57 in
+  the sea, 3 on the airfield with the core's -120, 1 on the town); 25 falling at the most, 60 fps throughout, the game's
+  memory 19.6 GB at the start, 11.5 GB at the end; no Wwise post failed. ulydawn 17/17 (pictures at the real sunrise,
+  the new Comona Control lines on screen). With the spread wide, nearly every fragment falls harmless: the user's call.
+- New suite ulyxaudio (ULYSSES with sounds.wwise.enabled false: the XAudio2 fallback, a build without
+  SurvivalMode_Wwise_P) 10/10 on 0.75.105: 15 XAudio2 voices (the rumble, the whistles), none through Wwise; paused 6 s:
+  SND.paused true, the level down 13 dB (ours silent, the plane's own engine left), then back.
+- 0.75.106 - 0.75.107 (2026-11-24): fragments.aim_share (0 = all spread wide, as shipped) for the user's pending call:
+  that share aimed at the airfield or a town as before the spread and steered onto land (aim_land_tries 6), the rest
+  anywhere in area_km (the ulyaim autotest with 0.4: 9 on the airfield, 5 on the town, 30 in the sea; before the
+  steering only 3 / 0 / 41: the airfield and the towns are on the coast). Regression runs: smoke 5/5, valkasolg 38/38
+  (as on 0.75.44: VALKA's songs on Survival's player, the SOLG), ulysses2 17/17. The ulysses suite's close-ups wait
+  for a fragment under 8 km and look side-on (from 20-28 km up and from behind its way they showed empty sky or its
+  tail end-on).
+- 0.75.108 (2026-11-24), the user, of a fragment's fire tail up close: "dont use those tube like meteor things, they look
+  silly, just use the smoke": no tail of ours on the fragments or the core (fragments.tail_x / big.tail_x 0; rock() draws
+  none with tailX 0; joiners the same from their config), their smoke and fire trails only; the sky's meteors keep their
+  streak. "make some of the meteors even quicker": fragments 1300-3000 km/h (34-94 s down). ulysses 15/15, the pictures
+  sent to the user.
+- 0.75.109 (2026-11-24), the user: "Players should get $1000 per meteorite they destroy": fragments.pay 1000 (was 300;
+  the core 6000 as before): a full round 1 up to 50,000, round 2 up to 66,000. ulysses 15/15 ("paid 1000"). Staged
+  build/release/stage_dev_0.75.109, not registered, NOT installed.
+- 0.75.110 - 0.75.113 (2026-11-24, branch feature/ulysses), the user's calls through the evening:
+  - "The target box isn't aligned": the borrowed target hung on the rock's spinning, 1.8-3.2x mesh, its
+    -HitCenterOffset (35 m) scaled and swung round: its lock point 60-110 m off the rock (the ulysses suite's box probe,
+    twice 2 s apart). An anchor with absolute rotation and scale changed nothing; now a rock's actor is rooted on a plain
+    unturned, unscaled scene (the ProjectileMovement moves it), the mesh under it carries the turn, the size and the spin
+    (the RotatingMovement on the mesh alone), the target on the root: its lock point 0.0 m off, steady (16/16).
+  - "I don't hear the meteorite sounds": the shower spread wide lands 15-45 km off; impacts carried 40, then 60 km
+    (0.75.110-0.75.111). "The meteors were using the missile sound effect": AC:I's OBJ_FALL_STARTDUST_SMALL is one stream
+    with its ICBM burner's (the fall loop, then her call: "lower the meteor burner sfx back to its normal level
+    beforehand": -10 dB to 7 km again). "make it so that the meteorites have the tonitrus spear impact sfx too", then
+    "tonitrus spear impact for the impact sfx": a landing sounds as AC8's own AKE_GEN_AMMO_EXP_Tonitrus_Impact_Ground_Play /
+    _Sea_Play (they load and play in Survival's level: -24 / -20 dBFS at 1.5 km), a shot down as the Stardust explosion.
+    "each sound doesn't sound quieter" (the meter: -26 / -28 / -31 / -35 dB at 0.3 / 1.5 / 5 / 11 km) and "the Tonitrus
+    Spear impact definetly had a better fade": the Spear impact decoded from AKB_GameSe (a blend of near / mid / far
+    layers; its ground ShareSet -6 dB by 1 km, -24 by 2, -34 by 6, silent at 20; a low-pass 20 / 25 / 30 at 2 / 6 / 20 km; a
+    spread 30 % near, 5 % at 1 km; the sea's flat to 5-8 km, silent at 50): waapi_build.py writes "lpf" / "spread" curves
+    beside the volume, ULYSSES' three 3D sounds shaped so (the explosion as the Spear's ground). The meter of the Spear:
+    ground -24 / -31 / -41 / -50 dBFS at 1.5 / 5 / 15 / 30 km, sea -20 / -22 at 1.5 / 15.
+  - The ULYSSES test suites at its own sunrise (ulySunset sets the arc's first dawn round; the user: "the test was meant
+    to take place at sun rise"); the listening pack build/ulysses/listen (Infinity's five, the Spear's 40 layers,
+    decoded with the scratch spear_wavs.py from the stock bank) sent to the user.
+  - Friends' test build (the user: "can you give me a test build for my friends, make sure that the ulysses rounds play
+    after the festival, just as it comes into sunrise": they do, F + 7 + night_rounds, the arc's first dawn rounds):
+    BUILD_NAME=COOP2MP COOP=1 FRIENDS=1 TANI=1 ZFA=1 package_release.sh online 0.75.113 ->
+    build/release/AC8SurvivalMode_COOP2MP_0.75.113_Online_COOP_ZFA44_TANACORN.zip (151 MB, build d02c5c2299a9...,
+    registered), zip_leak_test all passed; ulysses 16/16 on its own stage at sunrise (the box 0.0 m off), pictures sent.
+- 0.75.114 - 0.75.117 (2026-11-24 evening, branch feature/ulysses): news through ULYSSES (the user: "add more subtitles
+  through the two rounds, like News Broadcasts, go through the lore and make a story about the different areas that are
+  being affected by the planetfall", "report on it as if its happening at that current time", "don't talk about
+  refugees", "make the situation seem more dire", "Change it to reflect which Area of the News is coming from", "have
+  the news play more often"): text.news.round1 (7) / round2 (8) and core / core_down / core_hit, each line's speaker
+  its area (NEWS: USEA, SAINT ARK, FARBANTI, COMONA, ESTOVAKIA, EMMERIA, WHISKEY CORRIDOR, NEWFIELD ISLAND, SAN SALVACION,
+  LOS CANAS, SELATAPURA, MOUNT SHEZNA, FAITH PARK, FORT GRAYS ISLAND, COMBERTH HARBOR), from the Strangereal lore of
+  Ulysses 1994XF04 (acecombat.wiki.gg: Comona University predicted the day; Stonehenge's fourth gun knocked out; the
+  craters' places), live in July 1999 (no figures yet, nothing later); one every 20 s from 12 s in (news.first_s /
+  every_s), every game its own on the round's clock; Comona Control's round 2 and core lines darker. The sky's meteors
+  run through the break between its rounds too (the user: "the fake meteors up in the sky can still continue to run").
+  subtitles.ini written again from the config (subtitles.py merge). Friends' zips 0.75.114 (ulysses2 17/17 on its stage,
+  the first bulletins seen) .. 0.75.117: build/release/AC8SurvivalMode_COOP2MP_0.75.117_Online_COOP_ZFA44_TANACORN.zip
+  (build 3b4aaac60df5..., registered, zip_leak_test all passed).
+- 0.75.118 (2026-11-28, branch feature/ulysses, merged into dev): Saint Alessia's co-op run of the friends' 0.75.117
+  (2026-11-24, 4 players, rounds 1-23, no crash; her report: "only the first wave of Ulysses fragments could be targeted,
+  even then only with MSL or ATG weapons, not ATA", "the sepia filter is only compatible with 16:9 moniters"; the user:
+  "the other player in the lobby couldn't target anything"):
+  - round 20 borrowed no target (`targets: SV_Unit_SOLG_KEW up, 0 objects borrowed (-3)`: round 19's 36 stayed up,
+    parked, and SV_Spawn refuses a unit still up; 15 autotest runs had the line unseen): one pool a unit for the level,
+    taken again by ULYSSES' next round (each object checked: live, same address and name), held (ULY.holdsTargets) until
+    its last round, then handed back: recorded for the specials' clean-up (spawningUnit; "ulysses" among its watched
+    kinds), which finishes them off at the next round's start and takes the unit off the spawner's list (the SOLG later
+    in a run can spawn it again);
+  - the joiners had nothing to lock in either round (no joiner hit from 01:51 to 02:03 in her host log): co-op's copies
+    of the host's targets hung where they spawned. "ul|f" now carries the target's co-op id (COOP.groundIdOf); each
+    joiner puts its copy (COOP.copyObj) on its own rock (jArm), off at the rock's end; copies on no rock hidden, box off;
+    their hits reach the host by co-op's own "ht" (coop_guard_test row for the new field: passed, 12,363 ul messages);
+  - the targets an air object while on a fragment (bIsAir, IsAir() read back): air-to-air specials should lock them;
+  - the sepia wash on the HUD widget's whole-screen root, not its 16:9 SizeBox (HUD.filmInfo).
+  lua_check, coop_guard_test, lua_load_test and TANI=1 ZFA=1 build_all passed; staged build/release/stage_dev_0.75.118
+  (registered, NOT installed). New autotest suite ulylock (tools/ac8-autotest): its first run was stopped for low memory
+  at the level load, so the air lock, the 21:9 wash and the hand-back are untested in game yet; the joiners' fix needs a
+  real co-op game. Not done (her calls pending): the Podarges' light at night (lead: Mission 12's
+  BP_CloudLight_Ms012_PodargeDead), Comona Control's 1999 line in a 1999 plane, VOID WATCHER's strike flight, her
+  friends' ideas (enemy specials by type, Aegis SASM / MPBM).

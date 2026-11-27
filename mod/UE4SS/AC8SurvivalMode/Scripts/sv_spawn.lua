@@ -1212,6 +1212,8 @@ function specialFor(round)
     -- ((0.74.0) THE FESTIVAL: never drawn, it's the round its day-night arc puts round_after rounds after GONE FISHIN'
     -- (sv_festival.lua FEST.roundIs); the Spaceport can't come the round before it, so no retake falls on it)
     if FEST and FEST.roundIs and FEST.roundIs(round) and specialOn("festival") then return "festival" end
+    -- ((2026-11-23) ULYSSES: never drawn, the arc's first dawn rounds after THE FESTIVAL's night (sv_ulysses.lua ULY.roundIs))
+    if ULY and ULY.roundIs and ULY.roundIs(round) and specialOn("ulysses") then return "ulysses" end
     local sx = SETUP and SETUP.specialsX and SETUP.specialsX() or 1   -- (the menu's SPECIAL ROUNDS, sv_menu.lua: 0 = off)
     if sx <= 0 then return nil end
     -- ((2026-11-08) the user's plan, CFG.specials.schedule: round 2 the Shuttle Launch, 6 THE ESCORT, 9 GONE FISHIN', THE

@@ -185,6 +185,11 @@ function COOP.valkaPortal(at, yaw, what)
     log(string.format("coop: VALKA's portal (%s) sent to every joiner (%d linked)", what == "o" and "open" or "she's through",
         M.linkedPeers or 0))
 end
+-- ((2026-11-23) ULYSSES (sv_ulysses.lua): "ul|<kind>|..." to every joiner: its round, each fragment's launch, its end)
+function COOP.ulysses(kind, ...)
+    if not COOP.host() then return end
+    send(true, "ul", kind, ...)
+end
 -- ((2026-11-22) her SOLG (sv_solg_coop.lua): "vs|<kind>|..." to every joiner, each step of it)
 function COOP.valkaSolg(kind, ...)
     if not COOP.host() then return end
@@ -203,6 +208,20 @@ function COOP.groundCopies(unit)
     table.sort(list, function(a, b) return a.n < b.n end)
     for _, e in ipairs(list) do out[#out + 1] = e.o end
     return out
+end
+-- ((2026-11-28) ULYSSES, Saint Alessia's co-op run of 0.75.117: the other players "couldn't target anything") the host's
+-- co-op id for its ground object o (hostGround's, M.byId), 0 for none: each fragment's target named to the joiners in
+-- "ul|f", each joiner putting its own copy (COOP.copyObj) on its rock. hint: the id it had last time (checked first)
+function COOP.groundIdOf(o, hint)
+    if not (COOP.host() and o) then return 0 end
+    local a = addrOf(o)
+    if not a then return 0 end
+    local h = tonumber(hint) and M.byId[tonumber(hint)]
+    if h and h.addr == a and h.key and not h.dead and valid(h.obj) then return tonumber(hint) end
+    for id, e in pairs(M.byId) do
+        if e.addr == a and e.key and not e.dead and valid(e.obj) then return id end
+    end
+    return 0
 end
 function COOP.planeCopies(unit)
     local cu, out = M.cunits[unit], {}

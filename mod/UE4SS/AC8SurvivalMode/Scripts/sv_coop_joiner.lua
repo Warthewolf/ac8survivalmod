@@ -353,6 +353,16 @@ function bindGround(id, o, unit, key)
                      unit = unit, key = key, mine = was and was.addr == a and was.mine or nil, hp = h }
     M.applyPendHp(id, unit, key)                            -- ((2026-11-11) the host's health, if it came first)
 end
+-- ((2026-11-28) ULYSSES: this game's copy of the host's ground object `id` (bound: bindGround), live and still the object
+-- bound (its address), -> it and its address, else nil: the host's fragment targets put on this game's rocks
+-- (sv_ulysses.lua jArm). Its hits go to the host as any copy's (clientTick's "ht")
+function COOP.copyObj(id)
+    local c = M.copies[tonumber(id) or -1]
+    if not (c and c.obj and c.key) then return nil end
+    local a = live(c.obj)
+    if not a or a ~= c.addr then return nil end
+    return c.obj, a
+end
 clientGround = function(o, unit)
     noteObj(unit, o)                                     -- (0.73.73: tracked here or not)
     local cu = M.cunits[unit]
