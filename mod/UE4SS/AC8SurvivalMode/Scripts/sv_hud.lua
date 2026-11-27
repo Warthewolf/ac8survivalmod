@@ -99,6 +99,7 @@ local function hudBuild(pc)
     if not valid(w) then error("WidgetBlueprintLibrary.Create returned nothing") end
     H = { widget = w, tree = w.WidgetTree, shown = nil, texts = {} }
     local root = H.tree.RootWidget
+    H.root = root                                           -- (the whole screen: HUD.film's wash, past the 16:9 box)
     for i = root:GetChildrenCount() - 1, 0, -1 do root:GetChildAt(i):SetVisibility(VIS.Collapsed) end   -- its own banner
     local font
     font, why = loadObject(HUD_ASSET.font)
@@ -599,12 +600,17 @@ end
 -- ((2026-11-23) ULYSSES' film look: AC8's view is its camera manager's, a post-process volume of ours never showed (the
 -- autotest of 0.75.71)) HUD.film(a, rgb): a full-screen image on the HUD's canvas, under its rows (ZOrder -1000), clicks
 -- through, tinted rgb at opacity a (0: hidden); false when the HUD isn't up
+-- ((2026-11-28, Saint Alessia's report: "the sepia filter is only compatible with 16:9 moniters, not 21:9 or larger") on
+-- the HUD widget's root, the whole screen, behind the rest: in H.canvas (the 16:9 SizeBox the ScaleBox fits to the
+-- screen) it left the sides of a wider screen bare. H.canvas only if the root isn't there
 function HUD.film(a, rgb)
     if not (H and H.canvas and liveObj(H.widget)) then return false end
     if not (H.film and liveWidget(H.film)) then
         local ok, img = pcall(newWidget, "Image", "SvFilm")
         if not (ok and img) then return false end
-        H.filmSlot = slotIn(H.canvas, img, { 0, 0 }, { 1, 1 }, { 0, 0, 0, 0 }, { 0, 0 }, false)
+        local where = (H.root and liveWidget(H.root)) and H.root or H.canvas
+        H.filmSlot = slotIn(where, img, { 0, 0 }, { 1, 1 }, { 0, 0, 0, 0 }, { 0, 0 }, false)
+        H.filmOn = where == H.root and "the whole screen" or "the 16:9 box"
         pcall(function() H.filmSlot:SetZOrder(-1000) end)
         pcall(function() img:SetVisibility(3) end)                -- (HitTestInvisible)
         H.film = img
@@ -613,6 +619,12 @@ function HUD.film(a, rgb)
     pcall(function() H.film:SetColorAndOpacity({ R = rgb[1], G = rgb[2], B = rgb[3], A = math.max(0, math.min(1, a or 0)) }) end)
     pcall(function() H.film:SetVisibility((a or 0) > 0.001 and 3 or 1) end)
     return true
+end
+-- where the wash is drawn ("the whole screen" / "the 16:9 box", nil before it's made), its image and the widget it's on
+-- (the log's and the autotest's: its size against the screen's)
+function HUD.filmInfo()
+    if not (H and H.film and liveWidget(H.film)) then return nil end
+    return H.filmOn, H.film, (H.filmOn == "the whole screen") and H.root or H.canvas
 end
 local function pauseProbe()
     H.pauseLogs = (H.pauseLogs or 0) + 1

@@ -209,6 +209,20 @@ function COOP.groundCopies(unit)
     for _, e in ipairs(list) do out[#out + 1] = e.o end
     return out
 end
+-- ((2026-11-28) ULYSSES, Saint Alessia's co-op run of 0.75.117: the other players "couldn't target anything") the host's
+-- co-op id for its ground object o (hostGround's, M.byId), 0 for none: each fragment's target named to the joiners in
+-- "ul|f", each joiner putting its own copy (COOP.copyObj) on its rock. hint: the id it had last time (checked first)
+function COOP.groundIdOf(o, hint)
+    if not (COOP.host() and o) then return 0 end
+    local a = addrOf(o)
+    if not a then return 0 end
+    local h = tonumber(hint) and M.byId[tonumber(hint)]
+    if h and h.addr == a and h.key and not h.dead and valid(h.obj) then return tonumber(hint) end
+    for id, e in pairs(M.byId) do
+        if e.addr == a and e.key and not e.dead and valid(e.obj) then return id end
+    end
+    return 0
+end
 function COOP.planeCopies(unit)
     local cu, out = M.cunits[unit], {}
     for _, o in pairs(cu and cu.planes or {}) do if valid(o) then out[#out + 1] = o end end

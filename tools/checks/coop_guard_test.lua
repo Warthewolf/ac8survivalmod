@@ -530,6 +530,8 @@ local TYPES = {
     { "join", "vs", { "vs", "st" }, extra = true },
     -- ((2026-11-23) ULYSSES' other words: a fragment (id, mesh, where, velocity, scale, spin, big), shot down, landed, its end)
     { "join", "ul", { "ul", "f", "3", "C", "-15000", "8000", "11000", "-30000", "12000", "-9000", "250", "40", "0" }, extra = true },
+    -- ((2026-11-28) and with its target's co-op id last: this game's copy put on its rock, sv_ulysses.lua jArm)
+    { "join", "ul", { "ul", "f", "4", "D", "-15000", "8000", "11000", "-30000", "12000", "-9000", "250", "40", "0", "17" }, extra = true },
     { "join", "ul", { "ul", "s", "3" }, extra = true },
     { "join", "ul", { "ul", "l", "3", "0" }, extra = true },
     { "join", "ul", { "ul", "e", "1" }, extra = true },

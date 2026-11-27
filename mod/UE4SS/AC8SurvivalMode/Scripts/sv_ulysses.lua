@@ -488,24 +488,87 @@ pcall(NotifyOnNewObject, "/Script/Live.LiveAIGameObject", function(o)
 end)
 local U = nil                                             -- this round's state (host / solo)
 local PARK = { X = 0, Y = 0, Z = -5000000 }
--- a borrowed unit up: its objects hidden, parked, off; -> the list
+-- ((2026-11-28, Saint Alessia's co-op run of 0.75.117: "only the first wave of Ulysses fragments could be targeted, even
+-- then only with MSL or ATG weapons, not ATA") the borrowed target is Mission 4's radar tower base, a ground object, so
+-- the air-to-air specials never locked it: on a fragment it's an air object (bIsAir, what IsAir() answers), parked not
+local function air(o, on) pcall(function() o.bIsAir = on and true or false end) end
+-- ((2026-11-28, the same run) a borrowed unit stays up once spawned (its objects parked, never down), and SV_Spawn refuses
+-- a unit still up (-3, SV_ERR_UP): her round 20 borrowed 0 (so did 15 autotest runs), and the SOLG later in the run would
+-- have too. One pool a unit for the level (KEEP), taken again by ULYSSES' next round (each object still ours: live, the
+-- same address and name, hard rule 59), held (HOLD) until its last round is over: then handed back, sv_rounds.lua's
+-- clean-up finishing them off and taking the unit off the spawner's list (ULY.holdsTargets false). spawningUnit names the
+-- spawn for that clean-up's list (SPC.CLEAN_OBJ), as the SOLG's does
+local KEEP, HOLD = {}, false
+local function park(o) pcall(function() o:K2_SetActorLocation(PARK, false, {}, true) end) end
+local function ours(e) return e and liveObj(e.o) and addrOf(e.o) == e.a and nameOf(e.o) == e.name end
+-- a borrowed unit up (or its pool kept from ULYSSES' last round): its objects hidden, parked, off; -> the list
 local function poolUp(unit)
+    HOLD = true
+    local kept = KEEP[unit]
+    if kept then
+        local out = {}
+        for _, e in ipairs(kept) do
+            if ours(e) then
+                e.used, e.attached, e.lastH = false, nil, nil
+                hideOwn(e.o)
+                flags(e.o, FLAGS_OFF)
+                air(e.o, false)
+                park(e.o)
+                out[#out + 1] = e
+            end
+        end
+        if #out > 0 then
+            KEEP[unit] = out
+            ul(string.format("targets: %s kept from ULYSSES' last round: %d of its %d still ours, borrowed again", unit, #out, #kept))
+            return out
+        end
+        ul(string.format("targets: %s kept from ULYSSES' last round: none of its %d still ours; spawned again", unit, #kept))
+    end
     if type(SV_Spawn) ~= "function" then return {} end
     CAPTURE = {}
-    local r = SV_Spawn(unit, AIRFIELD.X, AIRFIELD.Y, 3000000, 0)
+    spawningUnit = unit
+    local okS, r = pcall(SV_Spawn, unit, AIRFIELD.X, AIRFIELD.Y, 3000000, 0)
+    spawningUnit = nil
     local got = CAPTURE
     CAPTURE = nil
+    if not okS then r = "error " .. tostring(r) end
     local out = {}
     for _, o in ipairs(got) do
         if valid(o) then
             hideOwn(o)
             flags(o, FLAGS_OFF)
-            pcall(function() o:K2_SetActorLocation(PARK, false, {}, true) end)
+            air(o, false)
+            park(o)
             out[#out + 1] = { o = o, a = addrOf(o), name = nameOf(o) }
         end
     end
-    ul(string.format("targets: %s up, %d objects borrowed (%s)", unit, #out, r and r > 0 and (r .. " up") or tostring(r)))
+    KEEP[unit] = out
+    ul(string.format("targets: %s up, %d objects borrowed (%s)", unit, #out,
+        type(r) == "number" and r > 0 and (r .. " up") or (SV_ERR and SV_ERR[r] or tostring(r))))
     return out
+end
+-- ULYSSES done with its targets (its last round over, or ended): held no more, so the specials' clean-up (sv_rounds.lua
+-- SPC.cleanUnitsOf) finishes them off and takes their units off the spawner's list. A co-op host's held unpaid first
+-- (COOP.payHold: down on every game as a removal, nobody's kill: the joiners' hits on them in the round never make one).
+-- now: also the clean-up itself, at once (an end the specials' own clean-up won't see: a run over mid-round); dropped:
+-- the level is going, nothing of it touched (its lists forgotten)
+local function release(why, now, dropped)
+    local was = HOLD
+    HOLD = false
+    if dropped then KEEP = {}; return end
+    local units, n = {}, 0
+    for unit, pool in pairs(KEEP) do
+        units[#units + 1] = unit
+        for _, e in ipairs(pool) do
+            if ours(e) then
+                n = n + 1
+                if COOP and COOP.payHold and COOP.host and COOP.host() then pcall(COOP.payHold, e.o, true) end
+            end
+        end
+    end
+    KEEP = {}
+    if was then ul(string.format("targets: %d handed back (%s): %s", n, tostring(why), table.concat(units, ", "))) end
+    if now and was and #units > 0 and SPC and SPC.cleanUp then pcall(SPC.cleanUp, units, "ULYSSES over (" .. tostring(why) .. ")", true, now) end
 end
 local function boxTexts(on)
     if type(SV_SetText) ~= "function" then return end
@@ -545,7 +608,14 @@ local function arm(pool, r, hp)
             pcall(function() e.o.MaxHealth = hp; e.o.HealthInternal = math.floor(hp * 10 + 0.5); e.o.MinHealth = 1 end)
             local nh, seen, hid = hideOwn(e.o)
             flags(e.o, FLAGS_ON)
+            air(e.o, true)
             e.attached = att
+            if ARMLOG == nil or ARMLOG < 2 then                   -- (the air flag read back, the first two)
+                local okA, isAir = pcall(function() return e.o:IsAir() end)
+                local okB, bAir = pcall(function() return e.o.bIsAir end)
+                ul(string.format("target an air object: IsAir() %s, bIsAir %s", okA and tostring(isAir) or ("unread: " .. tostring(isAir)),
+                    okB and tostring(bAir) or "unread"))
+            end
             -- ((2026-11-24, an autotest close-up: a radar tower under a fragment) what the borrowed target is made of, once
             ARMLOG = (ARMLOG or 0) + 1
             if ARMLOG <= 2 then
@@ -574,8 +644,9 @@ end
 local function disarm(e)
     if not e then return end
     flags(e.o, FLAGS_OFF)
+    air(e.o, false)
     pcall(function() e.o:K2_DetachFromActor(1, 1, 1) end)
-    pcall(function() e.o:K2_SetActorLocation(PARK, false, {}, true) end)
+    park(e.o)
     -- ((2026-11-24, the user: "atleast 50") handed back for the next fragment: the KEW unit lends 36, a round has 50-90
     -- (arm sets its health, MinHealth and flags anew)
     e.used = false
@@ -614,7 +685,7 @@ local function filmTick(now)
     if HUD and HUD.film then
         local fl = 1 + (math.random() * 2 - 1) * n(f.flicker, 0.04) / math.max(0.01, n(f.overlay_a, 0.26))
         local okF, r = pcall(HUD.film, n(f.overlay_a, 0.26) * FILM.cur * fl, f.overlay)
-        if not FILM.said and FILM.cur > 0.5 then FILM.said = true; ul("film overlay: HUD.film " .. tostring(okF) .. " " .. tostring(r) .. ", opacity " .. string.format("%.2f", n(f.overlay_a, 0.26) * FILM.cur)) end
+        if not FILM.said and FILM.cur > 0.5 then FILM.said = true; ul("film overlay: HUD.film " .. tostring(okF) .. " " .. tostring(r) .. ", opacity " .. string.format("%.2f", n(f.overlay_a, 0.26) * FILM.cur) .. ", on " .. tostring(HUD.filmInfo and (HUD.filmInfo()) or "?")) end
     end
     if FILM.to == 0 and u >= 1 then
         if HUD and HUD.film then pcall(HUD.film, 0) end
@@ -717,13 +788,28 @@ local function launch(spec, P, what, big)
     -- roundClock: the one roundTick's now is, and the one the mover flies on), never os.clock: the two drift apart
     local t0 = (D and D.now) or os.clock()
     local f = { r = r, P = P, what = what, big = big, hitAt = t0 + T, born = t0, key = key, id = U.nextId }
-    tell("f", tostring(f.id), key, string.format("%.0f", start.X / 100), string.format("%.0f", start.Y / 100), string.format("%.0f", start.Z / 100),
-        string.format("%.0f", dx / T), string.format("%.0f", dy / T), string.format("%.0f", dz / T), string.format("%.0f", (U.lastScale or 1) * 100),
-        string.format("%.0f", U.lastSpin or 20), big and "1" or "0")
     -- ((2026-11-24, the code review) fragments.solo_x is their COUNT's solo multiplier (fragmentsFor), not their health's:
     -- a health one is solo_hp_x (the core's solo_x is its health's, as its config says)
     local hp = n(spec.health, 300) * (players() <= 1 and n(spec.solo_hp_x or (big and spec.solo_x) or 1, 1) or 1)
     f.e = arm(big and U.poolBig or U.pool, r, hp)
+    if not f.e then
+        U.unarmed = (U.unarmed or 0) + 1
+        if U.unarmed == 1 then ul("a fragment launched with no target on it (none of the borrowed ones free): it can't be locked") end
+    end
+    -- ((2026-11-28, Saint Alessia's co-op run: the other players "couldn't target anything") its target's co-op id last
+    -- (COOP.groundIdOf: the host's id for it, 0 for none): each joiner puts its own copy of that target on its rock
+    local cid = 0
+    if f.e and COOP and COOP.groundIdOf then
+        local okI, id = pcall(COOP.groundIdOf, f.e.o, f.e.cid)
+        if okI and tonumber(id) and id > 0 then cid, f.e.cid = id, id end
+    end
+    if f.e and cid == 0 and COOP and COOP.open and COOP.host and COOP.host() then
+        U.noId = (U.noId or 0) + 1
+        if U.noId == 1 then ul("a fragment's target has no co-op id yet: the other players' games can't put it on their rock") end
+    end
+    tell("f", tostring(f.id), key, string.format("%.0f", start.X / 100), string.format("%.0f", start.Y / 100), string.format("%.0f", start.Z / 100),
+        string.format("%.0f", dx / T), string.format("%.0f", dy / T), string.format("%.0f", dz / T), string.format("%.0f", (U.lastScale or 1) * 100),
+        string.format("%.0f", U.lastSpin or 20), big and "1" or "0", tostring(cid))
     fallOn(f, r.a, big, function() return rockAt(f.r) end)
     return f
 end
@@ -992,6 +1078,70 @@ skyOne = function(c, now, cx, cy)
     if r then SKYM.list[#SKYM.list + 1] = { r = r, dieAt = now + math.max(1, life) } end
 end
 local J = { on = false, rocks = {} }               -- (a joiner: the host's round on, its rocks drawn here by id)
+-- ((2026-11-28, Saint Alessia's co-op run of 0.75.117: the other players "couldn't target anything", no hit of theirs
+-- from 01:51 to 02:03) a joiner's games have copies of the host's borrowed targets (co-op's, as any unit's: bound by id,
+-- held at the floor, a hit on one sent to the host, the host's health back), but nothing put them on the rocks here: they
+-- hung where they spawned. The host's "f" names its target's co-op id; this game's copy goes on its rock (jArm: hidden,
+-- its box on, an air object), off it at the rock's end (jDisarm: parked, box off). The copies on no rock: hidden, box off
+-- (jSettle). J.hold: the host's ULYSSES has its next round to come (its "e" not the last), so the copies aren't switched
+-- off between its rounds (ULY.holdsTargets)
+J.settled = {}
+local function jUnits() local t = cfg().target_units or {}; return { t.small, t.big } end
+local function jSettle()
+    if not (COOP and COOP.groundCopies) then return end
+    local busy = {}
+    for _, r in pairs(J.rocks) do if r.tgt then busy[r.tgt.a] = true end end
+    for _, u in ipairs(jUnits()) do
+        if type(u) == "string" then
+            local okG, got = pcall(COOP.groundCopies, u)
+            for _, o in ipairs(okG and got or {}) do
+                local a = liveObj(o) and addrOf(o)
+                local nm = a and nameOf(o)
+                if a and not busy[a] and J.settled[a] ~= nm then
+                    J.settled[a] = nm
+                    hideOwn(o)
+                    flags(o, FLAGS_OFF)
+                    air(o, false)
+                    park(o)
+                end
+            end
+        end
+    end
+end
+local function jDisarm(r)
+    local t = r and r.tgt
+    if not t then return end
+    r.tgt = nil
+    if not ours(t) then return end
+    flags(t.o, FLAGS_OFF)
+    air(t.o, false)
+    pcall(function() t.o:K2_DetachFromActor(1, 1, 1) end)
+    park(t.o)
+    J.settled[t.a] = t.name
+end
+local function jArm(r, id)
+    if not (COOP and COOP.copyObj) then return false, "this build has no COOP.copyObj" end
+    local okC, o, a = pcall(COOP.copyObj, id)
+    if not (okC and o and a) then return false, "no copy of the host's target " .. tostring(id) .. " here (not bound yet?)" end
+    for _, r2 in pairs(J.rocks) do                       -- (still on another rock: the host took it again before its end came)
+        if r2 ~= r and r2.tgt and r2.tgt.a == a then jDisarm(r2) end
+    end
+    local to = (r.anc and liveObj(r.anc)) and r.anc or r.c
+    if not liveObj(to) then return false, "the rock has nothing to hold it" end
+    local att = pcall(function() o:K2_AttachToComponent(to, FName("None"), 2, 2, 1, false) end)
+    if not att then return false, "it wouldn't attach" end
+    local okH, hx, hy, hz = pcall(function() local h = o.HitCenterOffset; return h.X, h.Y, h.Z end)
+    if okH and tonumber(hx) then pcall(function() o:K2_SetActorRelativeLocation({ X = -hx, Y = -hy, Z = -hz }, false, {}, true) end) end
+    -- (switched off by the specials' clean-up here, an older build's way: back on, or it takes no hit)
+    pcall(function() o:SetActive(true, false, false) end)
+    pcall(function() o:SetActorEnableCollision(true) end)
+    pcall(function() o:SetActorTickEnabled(true) end)
+    hideOwn(o)
+    flags(o, FLAGS_ON)
+    air(o, true)
+    r.tgt = { o = o, a = a, name = nameOf(o), id = id }
+    return true
+end
 local function skyOff()
     for _, m in ipairs(SKYM.list) do rockOff(m.r) end
     SKYM.list = {}
@@ -1061,11 +1211,12 @@ function ULY.roundOver(now, s)
         fallOff(x)                                                     -- (its fall loop: the code review)
         if not x.done then x.done = true; disarm(x.e); rockOff(x.r) end
     end
-    ul(string.format("round %d over: %d of %d fragments shot down, %d landed on the airfield, %d on the town, %d in the sea, %d on open land", D.round,
-        U.shot, U.sent + (U.bigSent and 1 or 0), U.landedAirfield, U.landedTown, U.landedSea or 0, U.landedOpen or 0))
+    ul(string.format("round %d over: %d of %d fragments shot down, %d landed on the airfield, %d on the town, %d in the sea, %d on open land; %d with no target on them", D.round,
+        U.shot, U.sent + (U.bigSent and 1 or 0), U.landedAirfield, U.landedTown, U.landedSea or 0, U.landedOpen or 0, U.unarmed or 0))
     if host() then boxTexts(false) end
     local last = U.phase >= math.max(1, math.floor(n(cfg().rounds, 2)))
     tell("e", last and "1" or "0")
+    if last and host() then release("its last round over") end        -- (sv_rounds.lua's clean-up finishes them off)
     if last then
         filmOff(now)
         skyOff()
@@ -1086,21 +1237,26 @@ end
 -- every tick (sv_main.lua): the film look's blend, the sky's meteors while in 1999 (each game its own)
 -- ((2026-11-24, the code review) everything ULYSSES has up taken down, whatever ended it: its last round lost (the fleet's
 -- round 30, a spawn refused), a run over mid-round, the level gone (LEVEL_DROPS), a joiner made host mid-round
-function ULY.endAll(why)
+-- ((2026-11-28) dropped: the level is going (LEVEL_DROPS): its borrowed targets' lists forgotten, none of them touched)
+function ULY.endAll(why, dropped)
     local any = U ~= nil or J.on or FILM.on or AMB.h ~= nil or AMB.a ~= nil or #SKYM.list > 0
     newsOff()
     if U then
         for _, x in ipairs(U.list) do
             fallOff(x)
-            if not x.done then x.done = true; pcall(disarm, x.e); rockOff(x.r) end
+            if not x.done then x.done = true; if not dropped then pcall(disarm, x.e) end; rockOff(x.r) end
         end
         U = nil
     end
     for _, r in pairs(J.rocks) do
+        if dropped then r.tgt = nil else pcall(jDisarm, r) end
         fallOff(r)
         rockOff(r)
     end
-    J.rocks, J.on = {}, false
+    J.rocks, J.on, J.hold = {}, false, false
+    if dropped then J.settled = {} end
+    -- (its targets handed back, the clean-up at once: an end mid-round that the specials' own clean-up won't see)
+    pcall(release, why, os.clock(), dropped)
     if host() and BOXED then pcall(boxTexts, false) end
     skyOff()
     ambOff()
@@ -1110,7 +1266,14 @@ function ULY.endAll(why)
     end
     if any then ul("all taken down: " .. tostring(why)) end
 end
-if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["ulysses"] = function() ULY.endAll("the level dropped") end end
+if type(LEVEL_DROPS) == "table" then LEVEL_DROPS["ulysses"] = function() ULY.endAll("the level dropped", true) end end
+-- ((2026-11-28) whether ULYSSES still holds its borrowed targets (sv_rounds.lua SPC.cleanUnitsOf: not cleaned up while
+-- it does): the host's from its first round's borrow to its last round's end; a joiner's from the host's first round to
+-- its last "e"
+function ULY.holdsTargets()
+    if host() then return HOLD == true end
+    return J.hold == true
+end
 -- ((2026-11-24, the code review) the Spaceport can't come the round before ULYSSES: its retake would fall on ULYSSES' first
 -- round (specialFor asks the retake first) and the time shift into 1999 would never play (THE FESTIVAL's guard, the same)
 do
@@ -1160,9 +1323,10 @@ function ULY.fromHost(f)
     if k == "r" then
         local ph = tonumber(f[3])
         if not (fin(ph, 10) and ph >= 1 and ph == math.floor(ph)) then return end
-        J.on = true
+        J.on, J.hold = true, true
         ambOn()
         newsStart(ph, nil)
+        pcall(jSettle)
         if ph == 1 then
             local sh = cfg().shift or {}
             fade(1, 0, n(sh.fade_s, 1.2) * 2, false)
@@ -1174,7 +1338,7 @@ function ULY.fromHost(f)
         local x, y, z, vx, vy, vz, sc, sp = tonumber(f[5]), tonumber(f[6]), tonumber(f[7]), tonumber(f[8]), tonumber(f[9]), tonumber(f[10]), tonumber(f[11]), tonumber(f[12])
         if not (KEYS[key] and fin(id, 1e6) and tonumber(id) == math.floor(tonumber(id)) and fin(x, 3e5) and fin(y, 3e5) and fin(z, 6e4) and fin(vx, 5e5) and fin(vy, 5e5)
             and fin(vz, 5e5) and fin(sc, 5000) and sc > 0 and fin(sp, 3600)) then return end
-        if J.rocks[id] then rockOff(J.rocks[id]) end
+        if J.rocks[id] then jDisarm(J.rocks[id]); rockOff(J.rocks[id]) end
         local tx = n((f[13] == "1" and cfg().big or cfg().fragments).tail_x, 1)     -- (as the host draws it: its own config)
         local r = rock(key, { X = x * 100, Y = y * 100, Z = z * 100 }, { X = vx, Y = vy, Z = vz }, sc / 100, sp, tx)
         if r then
@@ -1184,11 +1348,23 @@ function ULY.fromHost(f)
             fallOn(r, r.a, r.big, function() return rockAt(r) end)
             J.rocks[id] = r
             pcall(function() r.a:SetLifeSpan(600) end)
+            -- ((2026-11-28) the host's target on it (its co-op id, 0 or none: an older host's, or none free there)
+            local tid = tonumber(f[14])
+            if tid and fin(tid, 65535) and tid >= 1 and tid == math.floor(tid) then
+                pcall(jSettle)
+                local okA, done, why = pcall(jArm, r, tid)
+                J.armed, J.missed = (J.armed or 0) + ((okA and done) and 1 or 0), (J.missed or 0) + ((okA and done) and 0 or 1)
+                if (okA and done and J.armed == 1) or (not (okA and done) and J.missed <= 3) then
+                    ul(string.format("the host's fragment %s: its target %d %s", tostring(id), tid,
+                        (okA and done) and "on this game's rock (lockable here)" or ("NOT on it: " .. tostring(okA and why or done))))
+                end
+            end
         end
     elseif k == "s" or k == "l" then
         local r = J.rocks[f[3]]
         if not r then return end
         J.rocks[f[3]] = nil
+        jDisarm(r)
         local at = rockAt(r)
         local fx = cfg().fx_scale or {}
         if at then
@@ -1207,11 +1383,17 @@ function ULY.fromHost(f)
     elseif k == "e" then
         newsOff()
         for _, r in pairs(J.rocks) do
+            jDisarm(r)
             fallOff(r)
             rockOff(r)
         end
         J.rocks = {}
         J.on = false
+        if f[3] == "1" then J.hold = false end
+        if (J.armed or 0) + (J.missed or 0) > 0 then
+            ul(string.format("the host's round over: %d of its fragments' targets put on this game's rocks, %d not", J.armed or 0, J.missed or 0))
+        end
+        J.armed, J.missed = 0, 0
         if f[3] == "1" then
             filmOff(os.clock())
             skyOff()
