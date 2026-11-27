@@ -7176,9 +7176,18 @@ SUITES.ulylock = function()
     local K = { res = {}, types = {} }
     local function Ux() return ULY and ULY.debug and select(1, ULY.debug()) end
     local KEW, MAG = "SV_Unit_SOLG_KEW", "SV_Unit_SOLG_MAG"
+    -- a lock on o: one of your seekers on it (LiveTargetLockonSeeker.LockonTarget, its CachedPlayerPlane you), or you in
+    -- its LockonAttackerPlayerPlanes (the first run of 2026-11-28 read that alone: nothing, not even the standard missile)
     local function lockCount(o)
-        local ok, nn = pcall(function() return o.LockonAttackerPlayerPlanes:GetArrayNum() end)
-        return ok and tonumber(nn) or -1
+        local a, pa, nn = addrOf(o), addrOf(ST.plane()), 0
+        for _, sk in ipairs(FindAllOf("LiveTargetLockonSeeker") or {}) do
+            local okT, t = pcall(function() return sk.LockonTarget end)
+            local okP, p = pcall(function() return sk.CachedPlayerPlane end)
+            if okT and t and addrOf(t) == a and (not (okP and p) or addrOf(p) == pa) then nn = nn + 1 end
+        end
+        local ok, la = pcall(function() return o.LockonAttackerPlayerPlanes:GetArrayNum() end)
+        if ok and tonumber(la) and la > 0 then nn = nn + la end
+        return nn
     end
     local function round(phase)
         A.do_(function()
@@ -7257,7 +7266,9 @@ SUITES.ulylock = function()
             if not (K.e and K.sel) then return true end
             local o, pl = K.e.o, ST.plane()
             pcall(function() o:K2_SetActorLocation(ST.frame(pl, 180000, 0, 0), false, {}, true) end)   -- (held ahead of you)
-            pcall(function() K.sel:SelectTarget(true, o, false) end)
+            local cur = nil                                                -- (selected again only if it moved off: a
+            pcall(function() cur = K.sel:GetSelectedTarget() end)          -- selection each frame may restart the lock)
+            if not (cur and addrOf(cur) == addrOf(o)) then pcall(function() K.sel:SelectTarget(true, o, false) end) end
             local nn = lockCount(o)
             if nn > K.best then K.best = nn end
             local okA, a = pcall(function() return pl:IsSpecialWeaponArmed() end)
@@ -7287,17 +7298,18 @@ SUITES.ulylock = function()
         local r = K.res
         ST.check((r["MSL air"] or 0) > 0, "the lock probe sees a lock (the standard missile locks the target as an air object)",
             string.format("MSL: ground %s, air %s", tostring(r["MSL ground"]), tostring(r["MSL air"])))
-        local ataSlot, notes = nil, {}
+        ST.check((r["MSL ground"] or 0) > 0, "the standard missile locks it as a ground object too", tostring(r["MSL ground"]))
+        local ataSlot, atgSlot, notes = nil, nil, {}
         for _, s in ipairs({ "SWP1", "SWP2" }) do
             local g, a = r[s .. " ground"] or -1, r[s .. " air"] or -1
             notes[#notes + 1] = string.format("%s ground %d / air %d", s, g, a)
             if a > 0 and g <= 0 then ataSlot = s end
+            if g > 0 and a <= 0 then atgSlot = s end
         end
-        if ataSlot then
-            ST.check(true, "an air-to-air special (" .. ataSlot .. ") locks a fragment's target now (it didn't as a ground object)", table.concat(notes, ", "))
-        else
-            ST.info("no air-only special on this plane to show it (" .. table.concat(notes, ", ") .. "; " .. table.concat(K.types, "; ") .. ")")
-        end
+        ST.info("specials: " .. table.concat(notes, ", ") .. "; " .. table.concat(K.types, "; "))
+        if ataSlot then ST.check(true, "an air-to-air special (" .. ataSlot .. ") locks it as an air object, not as a ground one") end
+        if atgSlot then ST.check(true, "the air flag decides the lock: a ground-only special (" .. atgSlot .. ") locks it as a ground object, not as an air one") end
+        if not (ataSlot or atgSlot) then ST.check(false, "the air flag changed no special's lock", table.concat(notes, ", ")) end
     end)
     over(1, 150)
     A.do_(function() ST.check(ULY.holdsTargets() == true, "between its rounds ULYSSES still holds its targets (no clean-up yet)") end)
@@ -7309,7 +7321,7 @@ SUITES.ulylock = function()
     -- ---- round 2: round 1's targets again, the core's
     round(2)
     A.log_("ulysses: targets: " .. KEW .. " kept from ULYSSES' last round: ", 20, "s2", true, function(l)
-        ST.check(l ~= nil and l:find(": 3[56] of its", 1, true) ~= nil, "round 2 takes round 1's KEW targets again", l)
+        ST.check(l ~= nil and l:find(": 3[56] of its", 1, false) ~= nil, "round 2 takes round 1's KEW targets again", l)
         ST.check(not ST.findLog("ulysses: targets: " .. KEW .. " up, 0 objects borrowed", ST.marks.s2, true), "and no refused spawn (-3)")
     end)
     A.log_("ulysses: targets: " .. MAG .. " up, 32 objects borrowed", 20, "s2", true, function(l)
@@ -7322,10 +7334,17 @@ SUITES.ulylock = function()
         pcall(function() local p = gus:GetScreenResolution(); K.w, K.h = p.X, p.Y end)
         pcall(function() K.mode = gus:GetFullscreenMode() end)
         ST.info(string.format("your resolution: %s x %s, mode %s", tostring(K.w), tostring(K.h), tostring(K.mode)))
-        local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
-        pcall(function() ks:ExecuteConsoleCommand(ST.pc(), "r.SetRes 2520x1080w", ST.pc()) end)
+        -- (the first run's r.SetRes 2520x1080w in windowed fullscreen changed the viewport's size, not the picture: 2560 x
+        -- 1440. The game's own settings, applied and never saved: windowed, 2520 x 1080)
+        K.gus = gus
+        local okR = pcall(function()
+            gus:SetFullscreenMode(2)
+            gus:SetScreenResolution({ X = 2520, Y = 1080 })
+            gus:ApplyResolutionSettings(false)
+        end)
+        ST.info("21:9 windowed asked: " .. tostring(okR))
     end)
-    A.wait(3)
+    A.wait(4)
     A.do_(function()
         local where, img, on = nil, nil, nil
         if HUD and HUD.filmInfo then where, img, on = HUD.filmInfo() end
@@ -7337,18 +7356,20 @@ SUITES.ulylock = function()
         local okG, errG = pcall(function() local g = img:GetCachedGeometry(); local v = sbl:GetAbsoluteSize(g); fw, fh = v.X, v.Y end)
         ST.info(string.format("at 21:9: the screen %s x %s, the wash %s x %s%s", tostring(vw), tostring(vh), tostring(fw), tostring(fh),
             okG and "" or (" (its size unread: " .. tostring(errG) .. ")")))
-        if vw and fw and vw > 0 then
+        if vw and fw and vw > 0 and fw > 0 then
             ST.check(fw >= vw * 0.98 and fh >= vh * 0.98, string.format("the wash covers a 21:9 screen edge to edge (%.0f of %.0f px wide)", fw, vw))
         end
         ST.shot("ulylock_21x9_wash")
     end)
-    A.wait(3)
+    A.wait(4)
     A.do_(function()
-        if K.w and K.h then
-            local suf = (K.mode == 2 and "w") or (K.mode == 1 and "wf") or "f"
-            local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
-            pcall(function() ks:ExecuteConsoleCommand(ST.pc(), string.format("r.SetRes %dx%d%s", K.w, K.h, suf), ST.pc()) end)
-            ST.info(string.format("your resolution put back: r.SetRes %dx%d%s", K.w, K.h, suf))
+        if K.w and K.h and K.gus then
+            local okR = pcall(function()
+                K.gus:SetFullscreenMode(K.mode or 1)
+                K.gus:SetScreenResolution({ X = K.w, Y = K.h })
+                K.gus:ApplyResolutionSettings(false)
+            end)
+            ST.info(string.format("your resolution put back: %dx%d, mode %s (%s)", K.w, K.h, tostring(K.mode), tostring(okR)))
         end
     end)
     over(2, 200)
