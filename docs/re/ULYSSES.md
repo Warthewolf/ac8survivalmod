@@ -18,7 +18,11 @@ the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the
 - Fragments: round1 50 / round2 60 (solo the same; co-op + 0.15 a player past the first, at most 90; her call: "atleast
   50 spawn in waves of 2"), 2 at a time every 5-8 s (the first 8 s in), at most 30 falling (the 48 sound voices: 30 fall
   loops, the rumble and the explosions); the SOLG's KEW unit lends 36 targets, each handed back (disarm) when its
-  fragment is shot down or lands; each a 45 degree dive from the east (AC:I's), 20-24 km up, at 1250-1350 km/h
+  fragment is shot down or lands, the same 36 taken again by round 2 (one pool a unit for the level, each object still
+  ours: hard rule 59) and finished off after round 2 by the specials' clean-up (SPC.cleanUnitsOf "ulysses", only once
+  ULY.holdsTargets is false; the unit then off the spawner's list: the SOLG can spawn it later in the run). Before
+  0.75.118 round 2 borrowed none (SV_Spawn -3, the unit still up: Saint Alessia's co-op run of 0.75.117, nothing
+  lockable in her round 20; 15 autotest runs had it unseen); each a 45 degree dive from the east (AC:I's), 20-24 km up, at 1250-1350 km/h
   (75-98 s down; her call: higher, "around 1300km/h"), onto anywhere in area_km (x -30..+24, y -20..+15 km: the whole
   island chain and the sea round it, land or sea, never steered onto land; her call: "vastly spread out around the comona
   island"). Without area_km: the airfield (60 %) or a town (40 %), 2.5 km spread.
@@ -36,8 +40,9 @@ the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the
   not at 45 degree"), each appearing high and crossing over to the west, streaks ~9 km (streak_x 0.36), burnt out above
   16 km (out of any fighter's reach) or at 12 s.
 - The time shift: a fade in from white and the card JULY 1999 at round 1; at round 2's end the fade, PRESENT DAY.
-- The film look: a full-screen warm wash over the picture (sv_hud.lua HUD.film: an Image on Survival's HUD canvas,
-  behind its text; film.overlay / overlay_a, a slight flicker), faded in / out over 2 s on os.clock. The
+- The film look: a full-screen warm wash over the picture (sv_hud.lua HUD.film: an Image on Survival's HUD widget's
+  root, the whole screen, behind its text; before 0.75.118 on its 16:9 canvas, which left the sides of a 21:9 screen
+  bare: Saint Alessia's report; HUD.filmInfo says where; film.overlay / overlay_a, a slight flicker), faded in / out over 2 s on os.clock. The
   PostProcessVolume of ours is still made (saturation, tint, grain, vignette) but AC8's camera manager ignores it (the
   view is the plane's, no CameraComponent): the 0.75.72 autotest showed the wash, not the volume [D].
 - Lines (subtitles.ini specials.ulysses.text.say.*): COMONA CONTROL at the start, the core, home.
@@ -61,7 +66,9 @@ the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the
 - Its target box: one of the SOLG's target objects (the whole actor hidden: SetActorHiddenInGame; its meshes aren't
   found by class, and Mission 4's radar tower showed under a fragment up close; its TGT box, lock and minimap mark stay) (SV_Unit_SOLG_KEW for fragments, SV_Unit_SOLG_MAG for the core:
   Mission 4's radar tower base, enemy, TGT mark) spawned at the round's start, its meshes hidden, parked, its flags off;
-  attached to the rock when it falls (its lock point onto the rock), its flags on, its health set; off and parked again
+  attached to the rock when it falls (its lock point onto the rock), its flags on, an air object (bIsAir true, IsAir()
+  read back: as a ground object the air-to-air specials never locked it, her report of 0.75.117), its health set; off
+  and parked again
   when it's done. Its boxes read "ULYSSES" / "FRAGMENT" / "ULYSSES CORE" (SV_SetText on the SOLG's keys; the SOLG's own
   put back at the round's end: the two never come together). sv_rounds.lua finishes the two units off at its end.
 - Assets (tools/ulysses, from AC:I): SK/SM_SV_Ulysses_A (o_meta 96.9 x 68.1 x 53.5 m), _C (o_metc 5.8 x 6.5 x 6.4 m),
@@ -89,11 +96,16 @@ the festival 15, night 16-18, ULYSSES 19 (the shower) and 20 (the shower and the
   across (her calls).
 
 ## 4. Co-op
-The host's (or solo): the fragments, their targets, pay and damage. Joiners see the borrowed targets (the host's units)
-and draw the rest from the host's word, "ul|<kind>|..." (sv_coop.lua COOP.ulysses, sv_coop_migration.lua, ULY.fromHost),
-every value checked (coop_guard_test rows):
+The host's (or solo): the fragments, their targets, pay and damage. Joiners have co-op's copies of the borrowed targets
+(bound by id, held at the floor, their hits sent to the host, its health back) and draw the rest from the host's word,
+"ul|<kind>|..." (sv_coop.lua COOP.ulysses, sv_coop_migration.lua, ULY.fromHost), every value checked (coop_guard_test
+rows). Before 0.75.118 the copies hung where they spawned, on no rock: the joiners had nothing to lock (her log: no
+joiner hit from 01:51 to 02:03, both ULYSSES rounds). Now each joiner puts its copy of the fragment's target on its own
+rock (jArm: hidden, box on, an air object; COOP.copyObj), off at the rock's end (jDisarm); the copies on no rock hidden,
+box off (jSettle); not switched off between its rounds (J.hold, the host's `e` not the last):
 - `r|phase` its round: the fade and JULY 1999 at phase 1; the sky's meteors run while it's on;
-- `f|id|key|x|y|z|vx|vy|vz|scale100|spin|big` a fragment launched (metres, cm/s): the same rock, trails and tail here;
+- `f|id|key|x|y|z|vx|vy|vz|scale100|spin|big|target` a fragment launched (metres, cm/s): the same rock, trails and tail
+  here; target: the host's co-op id of its target (COOP.groundIdOf; 0 none);
 - `s|id` shot down (its explosion), `l|id|land` landed (the explosion, or the sea splash);
 - `e|last` its end (the rocks gone; at the last, the film look and sky off, PRESENT DAY).
 [T: a co-op game.]
@@ -104,9 +116,16 @@ every value checked (coop_guard_test rows):
 `ulysses: a fragment shot down X s before it would have hit (Z km up), paid N`,
 `ulysses: a fragment landed (aimed: comona) at (x, y km), in the land (the land map): the airfield -8` (or `: the town`,
 `: harmless`), `ulysses: the core inbound: up, lands in T s`,
-`ulysses: round N over: S of T fragments shot down, A landed on the airfield, B on the town, C in the sea, E on open land`,
+`ulysses: round N over: S of T fragments shot down, A landed on the airfield, B on the town, C in the sea, E on open land;
+U with no target on them`, `ulysses: targets: SV_Unit_SOLG_KEW kept from ULYSSES' last round: N of its M still ours,
+borrowed again`, `ulysses: target an air object: IsAir() true, bIsAir true` (the first two),
+`ulysses: targets: N handed back (its last round over): SV_Unit_SOLG_KEW, SV_Unit_SOLG_MAG`, then the clean-up's
+`special: SV_Unit_SOLG_KEW the next round's start: ... 36 finished off`, `ulysses: a fragment launched with no target on
+it` / `a fragment's target has no co-op id yet` (once each),
 `ulysses: film overlay: HUD.film true true, opacity X`, `ulysses: tail paint: its instance made`,
 a joiner's: `ulysses: the host's round: phase P; the film look ...`, `ulysses: the host's round over[: home again]`,
+`ulysses: the host's fragment I: its target T on this game's rock (lockable here)` (the first; `NOT on it: ...` the
+first three misses), `ulysses: the host's round over: N of its fragments' targets put on this game's rocks, M not`,
 `coop: the host's ULYSSES word not read: ...` (once).
 Test key: Ctrl+Q (TEST ONLY): the next round ULYSSES, phase 1; again phase 2; again off.
 
