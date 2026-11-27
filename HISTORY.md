@@ -4455,3 +4455,25 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   subtitles.ini written again from the config (subtitles.py merge). Friends' zips 0.75.114 (ulysses2 17/17 on its stage,
   the first bulletins seen) .. 0.75.117: build/release/AC8SurvivalMode_COOP2MP_0.75.117_Online_COOP_ZFA44_TANACORN.zip
   (build 3b4aaac60df5..., registered, zip_leak_test all passed).
+- 0.75.118 (2026-11-28, branch feature/ulysses, merged into dev): Saint Alessia's co-op run of the friends' 0.75.117
+  (2026-11-24, 4 players, rounds 1-23, no crash; her report: "only the first wave of Ulysses fragments could be targeted,
+  even then only with MSL or ATG weapons, not ATA", "the sepia filter is only compatible with 16:9 moniters"; the user:
+  "the other player in the lobby couldn't target anything"):
+  - round 20 borrowed no target (`targets: SV_Unit_SOLG_KEW up, 0 objects borrowed (-3)`: round 19's 36 stayed up,
+    parked, and SV_Spawn refuses a unit still up; 15 autotest runs had the line unseen): one pool a unit for the level,
+    taken again by ULYSSES' next round (each object checked: live, same address and name), held (ULY.holdsTargets) until
+    its last round, then handed back: recorded for the specials' clean-up (spawningUnit; "ulysses" among its watched
+    kinds), which finishes them off at the next round's start and takes the unit off the spawner's list (the SOLG later
+    in a run can spawn it again);
+  - the joiners had nothing to lock in either round (no joiner hit from 01:51 to 02:03 in her host log): co-op's copies
+    of the host's targets hung where they spawned. "ul|f" now carries the target's co-op id (COOP.groundIdOf); each
+    joiner puts its copy (COOP.copyObj) on its own rock (jArm), off at the rock's end; copies on no rock hidden, box off;
+    their hits reach the host by co-op's own "ht" (coop_guard_test row for the new field: passed, 12,363 ul messages);
+  - the targets an air object while on a fragment (bIsAir, IsAir() read back): air-to-air specials should lock them;
+  - the sepia wash on the HUD widget's whole-screen root, not its 16:9 SizeBox (HUD.filmInfo).
+  lua_check, coop_guard_test, lua_load_test and TANI=1 ZFA=1 build_all passed; staged build/release/stage_dev_0.75.118
+  (registered, NOT installed). New autotest suite ulylock (tools/ac8-autotest): its first run was stopped for low memory
+  at the level load, so the air lock, the 21:9 wash and the hand-back are untested in game yet; the joiners' fix needs a
+  real co-op game. Not done (her calls pending): the Podarges' light at night (lead: Mission 12's
+  BP_CloudLight_Ms012_PodargeDead), Comona Control's 1999 line in a 1999 plane, VOID WATCHER's strike flight, her
+  friends' ideas (enemy specials by type, Aegis SASM / MPBM).
