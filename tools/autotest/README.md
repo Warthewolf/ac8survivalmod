@@ -65,6 +65,9 @@ The stage is a `package_dev.sh` stage (test keys kept: the fast path presses Ctr
   lent, the frame time), `ulysoak` (both rounds played out as shipped, nobody shooting: memory and frame time),
   `ulysound` (its Wwise sounds one by one at set distances, a whistle closing from 12 km, the pause; the camera held
   over the sea 41 km west), `ulycal` (its impact against AC8's own explosions), `ulylines` / `ulytrails` (looks).
+  `ulylock` (both rounds back to back, short: round 2 borrows round 1's targets again, every fragment a target, each
+  an air object, a lock probe per weapon as a ground and an air object, the sepia wash at 21:9 against the screen,
+  the targets handed back after the last round and the KEW unit spawnable again; Saint Alessia's run of 0.75.117).
 
 ## Sound levels (2026-11-24)
 `powershell -NoProfile -ExecutionPolicy Bypass -File tools/autotest/loudness.ps1 -Seconds N -Out <file>` beside a job: the

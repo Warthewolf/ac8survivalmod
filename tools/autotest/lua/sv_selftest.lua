@@ -7161,6 +7161,225 @@ end
 -- ((2026-11-24) the ulymany suite with fragments.aim_share 0.4 (config_ulyaim.lua): its share aimed as before the spread
 SUITES.ulyaim = function() ULYAIM = true; SUITES.ulymany() end
 
+-- ((2026-11-28) Saint Alessia's co-op run of 0.75.117 (2026-11-24): "only the first wave of Ulysses fragments could be
+-- targeted, even then only with MSL or ATG weapons, not ATA", "the sepia filter is only compatible with 16:9 moniters".
+-- ULYSSES' two rounds back to back (config_ulylock.lua: 10 fragments each, close and fast): round 2 takes round 1's
+-- borrowed targets again (no SV_Spawn -3), every fragment has a target, each an air object (IsAir), and after the last
+-- round they're handed back (finished off, the unit off the spawner's list: the SOLG can spawn it again). The lock: a
+-- free one of the borrowed targets held 1.8 km ahead of you, selected, with the standard missile and each special armed,
+-- as a ground object and as an air object: who locks it (its LockonAttackerPlayerPlanes), each weapon's own lock type
+-- (its class's LockOnTargetType: 0 air and ground, 1 air only, 2 ground only). The wash at 21:9 (r.SetRes 2520x1080w):
+-- its size against the screen's, a picture; your resolution put back
+SUITES.ulylock = function()
+    intoRun()
+    ulySunset()
+    local K = { res = {}, types = {} }
+    local function Ux() return ULY and ULY.debug and select(1, ULY.debug()) end
+    local KEW, MAG = "SV_Unit_SOLG_KEW", "SV_Unit_SOLG_MAG"
+    local function lockCount(o)
+        local ok, nn = pcall(function() return o.LockonAttackerPlayerPlanes:GetArrayNum() end)
+        return ok and tonumber(nn) or -1
+    end
+    local function round(phase)
+        A.do_(function()
+            ST.marks["s" .. phase] = ST.n
+            ULY.forcedPhase = phase
+            D.forceSpecial = "ulysses"
+            if D.state == "wait" then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+            ST.doing = "ULYSSES round " .. phase
+        end)
+        A.log_("ulysses: round %d+: phase " .. phase .. " of 2", 120, "s" .. phase, false, function(l)
+            if not ST.check(l ~= nil, "round " .. phase .. " started", l) then return "abort" end
+        end)
+    end
+    local function over(phase, timeout)
+        A.log_("ulysses: round %d+ over", timeout, "s" .. phase, false, function(l)
+            ST.check(l ~= nil, "round " .. phase .. " over by itself", l)
+            local nn = l and tonumber(l:match("; (%d+) with no target on them"))
+            ST.check(nn == 0, "round " .. phase .. ": every fragment had a target on it (" .. tostring(nn) .. " without)", l)
+        end)
+    end
+    A.do_(function()
+        if not ST.check(ULY ~= nil and SPC.kinds.ulysses ~= nil and ULY.holdsTargets ~= nil, "ULYSSES (and its kept targets) in this build") then return "abort" end
+    end)
+    -- ---- round 1: its targets borrowed, an air object each
+    round(1)
+    A.log_("ulysses: targets: " .. KEW .. " up, 36 objects borrowed", 20, "s1", true, function(l)
+        ST.check(l ~= nil, "round 1 borrows the SOLG's 36 KEW targets", l)
+    end)
+    A.log_("ulysses: target an air object:", 30, "s1", true, function(l)
+        ST.check(l ~= nil and l:find("IsAir() true", 1, true) ~= nil, "a fragment's target is an air object (IsAir() read back)", l)
+    end)
+    A.do_(function() ST.check(ULY.holdsTargets() == true, "ULYSSES holds its targets in its round 1") end)
+    -- ---- the lock probe: one free borrowed target ahead of you
+    A.do_(function()
+        local U = Ux()
+        for _, e in ipairs(U and U.pool or {}) do
+            if not e.used and liveObj(e.o) and addrOf(e.o) == e.a then K.e = e; e.used = true; break end
+        end
+        if not ST.check(K.e ~= nil, "a free borrowed target for the lock probe") then return end
+        local pl = ST.plane()
+        local pa = addrOf(pl)
+        for _, c in ipairs(FindAllOf("LiveTargetSelectionComponent") or {}) do
+            local ok, ow = pcall(function() return c:GetOwner() end)
+            if ok and ow and addrOf(ow) == pa then K.sel = c end
+        end
+        ST.info("your target selection component " .. tostring(K.sel ~= nil))
+        -- (each weapon of yours and its lock type: the activator's PlayerWeaponInformations, each class's default object)
+        for _, w in ipairs(FindAllOf("LivePlayerWeaponActivator") or {}) do
+            local ok, ow = pcall(function() return w:GetOwner() end)
+            if ok and ow and addrOf(ow) == pa then
+                pcall(function() w.PlayerWeaponInformations:ForEach(function(i, el)
+                    local info = el:get()
+                    local cls, nm, lt = nil, "?", "?"
+                    pcall(function() cls = info.WeaponClass end)
+                    pcall(function() nm = cls:GetFName():ToString() end)
+                    pcall(function() lt = tostring(cls:GetCDO().LockOnTargetType) end)
+                    K.types[#K.types + 1] = string.format("%d %s (lock type %s)", i, nm, lt)
+                end) end)
+            end
+        end
+        ST.info("your weapons: " .. (#K.types > 0 and table.concat(K.types, "; ") or "none read"))
+    end)
+    local function probe(wpn, airOn)
+        A.do_(function()
+            if not (K.e and K.sel) then return end
+            local o, pl = K.e.o, ST.plane()
+            pcall(function() o.bShowHUDBox = true; o.bIsNotLockonTarget = false; o.bIsNotFCSTargets = false; o.bIsInvincible = true end)
+            pcall(function() o.bIsAir = airOn end)
+            pcall(function() o:K2_SetActorLocation(ST.frame(pl, 180000, 0, 0), false, {}, true) end)
+            local fn = wpn == "MSL" and "OnWeaponSwitchMSLPressed" or ("OnWeaponSwitch" .. wpn .. "Pressed")
+            pcall(function() pl[fn](pl) end)
+            pcall(function() K.sel:SelectTarget(true, o, false) end)
+            K.best, K.armed = 0, nil
+        end)
+        A.until_(function()
+            if not (K.e and K.sel) then return true end
+            local o, pl = K.e.o, ST.plane()
+            pcall(function() o:K2_SetActorLocation(ST.frame(pl, 180000, 0, 0), false, {}, true) end)   -- (held ahead of you)
+            pcall(function() K.sel:SelectTarget(true, o, false) end)
+            local nn = lockCount(o)
+            if nn > K.best then K.best = nn end
+            local okA, a = pcall(function() return pl:IsSpecialWeaponArmed() end)
+            if okA then K.armed = a end
+            return K.best > 0
+        end, 4, function()
+            if not (K.e and K.sel) then return end
+            local key = wpn .. (airOn and " air" or " ground")
+            K.res[key] = K.best
+            ST.info(string.format("lock probe: %s, the target a%s object: %s (special armed %s)", wpn, airOn and "n air" or " ground",
+                K.best > 0 and "LOCKED" or (K.best < 0 and "its lock list unread" or "not locked"), tostring(K.armed)))
+        end)
+        A.wait(0.5)
+    end
+    for _, wpn in ipairs({ "MSL", "SWP1", "SWP2" }) do
+        probe(wpn, false)
+        probe(wpn, true)
+    end
+    A.do_(function()
+        if K.e then
+            local o = K.e.o
+            pcall(function() o.bShowHUDBox = false; o.bIsNotLockonTarget = true; o.bIsNotFCSTargets = true; o.bIsInvincible = true; o.bIsAir = false end)
+            pcall(function() o:K2_SetActorLocation({ X = 0, Y = 0, Z = -5000000 }, false, {}, true) end)
+            K.e.used = false
+            pcall(function() ST.plane():OnWeaponSwitchMSLPressed() end)
+        end
+        local r = K.res
+        ST.check((r["MSL air"] or 0) > 0, "the lock probe sees a lock (the standard missile locks the target as an air object)",
+            string.format("MSL: ground %s, air %s", tostring(r["MSL ground"]), tostring(r["MSL air"])))
+        local ataSlot, notes = nil, {}
+        for _, s in ipairs({ "SWP1", "SWP2" }) do
+            local g, a = r[s .. " ground"] or -1, r[s .. " air"] or -1
+            notes[#notes + 1] = string.format("%s ground %d / air %d", s, g, a)
+            if a > 0 and g <= 0 then ataSlot = s end
+        end
+        if ataSlot then
+            ST.check(true, "an air-to-air special (" .. ataSlot .. ") locks a fragment's target now (it didn't as a ground object)", table.concat(notes, ", "))
+        else
+            ST.info("no air-only special on this plane to show it (" .. table.concat(notes, ", ") .. "; " .. table.concat(K.types, "; ") .. ")")
+        end
+    end)
+    over(1, 150)
+    A.do_(function() ST.check(ULY.holdsTargets() == true, "between its rounds ULYSSES still holds its targets (no clean-up yet)") end)
+    A.wait(6)                                              -- (the specials' clean-up of round 1 comes 3 s after its end)
+    A.do_(function()
+        local nn = type(SV_UnitAlive) == "function" and SV_UnitAlive(KEW) or -9
+        ST.check(nn == 36, "the KEW targets still up between the rounds (" .. tostring(nn) .. " alive)")
+    end)
+    -- ---- round 2: round 1's targets again, the core's
+    round(2)
+    A.log_("ulysses: targets: " .. KEW .. " kept from ULYSSES' last round: ", 20, "s2", true, function(l)
+        ST.check(l ~= nil and l:find(": 3[56] of its", 1, true) ~= nil, "round 2 takes round 1's KEW targets again", l)
+        ST.check(not ST.findLog("ulysses: targets: " .. KEW .. " up, 0 objects borrowed", ST.marks.s2, true), "and no refused spawn (-3)")
+    end)
+    A.log_("ulysses: targets: " .. MAG .. " up, 32 objects borrowed", 20, "s2", true, function(l)
+        ST.check(l ~= nil, "round 2 borrows the core's 32 MAG targets", l)
+    end)
+    -- ---- the wash at 21:9, in round 2 (its film look up)
+    A.wait(4)
+    A.do_(function()
+        local gus = FindFirstOf("GameUserSettings")
+        pcall(function() local p = gus:GetScreenResolution(); K.w, K.h = p.X, p.Y end)
+        pcall(function() K.mode = gus:GetFullscreenMode() end)
+        ST.info(string.format("your resolution: %s x %s, mode %s", tostring(K.w), tostring(K.h), tostring(K.mode)))
+        local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+        pcall(function() ks:ExecuteConsoleCommand(ST.pc(), "r.SetRes 2520x1080w", ST.pc()) end)
+    end)
+    A.wait(3)
+    A.do_(function()
+        local where, img, on = nil, nil, nil
+        if HUD and HUD.filmInfo then where, img, on = HUD.filmInfo() end
+        ST.check(where == "the whole screen", "the sepia wash is on the whole screen, not the 16:9 box", tostring(where))
+        local wll = StaticFindObject("/Script/UMG.Default__WidgetLayoutLibrary")
+        local sbl = StaticFindObject("/Script/UMG.Default__SlateBlueprintLibrary")
+        local vw, vh, fw, fh
+        pcall(function() local v = wll:GetViewportSize(ST.pc()); vw, vh = v.X, v.Y end)
+        local okG, errG = pcall(function() local g = img:GetCachedGeometry(); local v = sbl:GetAbsoluteSize(g); fw, fh = v.X, v.Y end)
+        ST.info(string.format("at 21:9: the screen %s x %s, the wash %s x %s%s", tostring(vw), tostring(vh), tostring(fw), tostring(fh),
+            okG and "" or (" (its size unread: " .. tostring(errG) .. ")")))
+        if vw and fw and vw > 0 then
+            ST.check(fw >= vw * 0.98 and fh >= vh * 0.98, string.format("the wash covers a 21:9 screen edge to edge (%.0f of %.0f px wide)", fw, vw))
+        end
+        ST.shot("ulylock_21x9_wash")
+    end)
+    A.wait(3)
+    A.do_(function()
+        if K.w and K.h then
+            local suf = (K.mode == 2 and "w") or (K.mode == 1 and "wf") or "f"
+            local ks = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+            pcall(function() ks:ExecuteConsoleCommand(ST.pc(), string.format("r.SetRes %dx%d%s", K.w, K.h, suf), ST.pc()) end)
+            ST.info(string.format("your resolution put back: r.SetRes %dx%d%s", K.w, K.h, suf))
+        end
+    end)
+    over(2, 200)
+    -- ---- handed back after its last round: finished off, off the spawner's list
+    A.log_("ulysses: targets: %d+ handed back %(its last round over%)", 10, "s2", false, function(l)
+        ST.check(l ~= nil, "after its last round ULYSSES hands its targets back", l)
+    end)
+    A.do_(function()
+        ST.check(ULY.holdsTargets() == false, "and holds them no more")
+        -- (the specials' clean-up runs at the next round's start, as in her run: round 3 brought on in 3 s)
+        ST.marks.c3 = ST.n
+        if D.state == "wait" then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+    end)
+    A.until_(function()
+        local a = type(SV_UnitAlive) == "function" and SV_UnitAlive(KEW) or 9
+        local b = type(SV_UnitAlive) == "function" and SV_UnitAlive(MAG) or 9
+        return a <= 0 and b <= 0
+    end, 60, function()
+        local a, b = SV_UnitAlive(KEW), SV_UnitAlive(MAG)
+        ST.check(a <= 0 and b <= 0, string.format("the clean-up finished them off (KEW %d alive, MAG %d)", a, b))
+        local l = ST.findLog("special: " .. KEW .. " the next round's start:", ST.marks.c3, true)
+        ST.check(l ~= nil and l:find("36 finished off", 1, true) ~= nil, "every KEW target finished off by it", l)
+    end)
+    A.wait(20)                                             -- (off the spawner's list 15 s after the clean-up's check)
+    A.do_(function()
+        local r = type(SV_Spawn) == "function" and SV_Spawn(KEW, AIRFIELD.X, AIRFIELD.Y, 3000000, 0) or -9
+        ST.check(tonumber(r) and r > 0, "the KEW unit can be spawned again (the SOLG's later in a run): " .. tostring(r))
+    end)
+    A.wait(2)
+end
+
 local function tick()
     if finished then return end
     local now = os.clock()
