@@ -106,7 +106,50 @@ local function killCopy(id, o, torn, force, by)
             once("killfail", "coop: a copy here couldn't be finished (health " .. tostring(health(o)) .. " after)")
         end
     end
+    if not torn and (health(o) or 0) <= 0 then pcall(M.wreckNote, o, a) end   -- ((2026-11-28) its fall watched: wreckTick
     return how
+end
+-- ((2026-11-28) the user, a joiner: "when enemies are destroyed they hang in the air on the joiners side": "Explodes,
+-- wreck stays", gone "after a while") The host stops streaming a plane at its 0 health (sv_coop.lua: SV_CoopTrack(id, 0))
+-- and the runtime stops moving a copy at its own (coop.c CoDriveOne: "going down: let it fall"); here the wreck didn't
+-- fall. A host's kill's wreck that hasn't come down drop_m in hide_s is hidden (no collision), its explosion played;
+-- each minute what fell and what hung is logged, the first hung one with its velocity (to learn why)
+M.wrecks, M.wreckCnt = {}, { fell = 0, hung = 0, at = os.clock() }
+local WRECK = { hide_s = 1.5, drop_m = 30 }
+function M.wreckNote(o, a)
+    if #M.wrecks >= 64 then table.remove(M.wrecks, 1) end
+    local okL, z = pcall(function() return o:K2_GetActorLocation().Z end)
+    local okV, v = pcall(function() local q = o:GetVelocity(); return math.sqrt(q.X * q.X + q.Y * q.Y + q.Z * q.Z) * 0.036 end)
+    M.wrecks[#M.wrecks + 1] = { o = o, a = a, z = okL and z or nil, at = os.clock(), kmh = okV and v or nil, name = nameOf(o) }
+end
+function M.wreckTick(now)
+    local keep = {}
+    for _, w in ipairs(M.wrecks) do
+        if live(w.o) ~= w.a or not w.z then                                -- (gone already: the game's own)
+        elseif now - w.at < WRECK.hide_s then keep[#keep + 1] = w
+        else
+            local okL, z = pcall(function() return w.o:K2_GetActorLocation().Z end)
+            local drop = okL and (w.z - z) / 100 or nil
+            if drop and drop < WRECK.drop_m then
+                pcall(function() w.o:SetActorHiddenInGame(true) end)
+                pcall(function() w.o:SetActorEnableCollision(false) end)
+                M.wreckCnt.hung = M.wreckCnt.hung + 1
+                local okT, tk = pcall(function() return w.o:IsActorTickEnabled() end)
+                once("wreckhung", string.format("coop: a wreck here hung in the air (%s: down %.0f m in %.1f s, %s km/h at its kill, "
+                    .. "its tick %s): hidden, its explosion played (each minute's count: coop: wrecks)", tostring(w.name):match("[^%.]+$") or "?",
+                    drop, now - w.at, w.kmh and string.format("%.0f", w.kmh) or "?", okT and tostring(tk) or "?"))
+            else M.wreckCnt.fell = M.wreckCnt.fell + 1 end
+        end
+    end
+    M.wrecks = keep
+    local c = M.wreckCnt
+    if now - c.at >= 60 then
+        if c.fell + c.hung > 0 then
+            log(string.format("coop: wrecks: last 60 s: %d of the host's kills fell here, %d hung in the air (hidden %.1f s on)", c.fell,
+                c.hung, WRECK.hide_s))
+        end
+        c.fell, c.hung, c.at = 0, 0, now
+    end
 end
 -- (0.73.80, finding coop6) The host's "dn" for copy c (id): taken down here, with your plane as its cause when field 4
 -- names this game's player (its slot), else as before (the host's AI stand-in, or none). The 31-round test's joiners saw
@@ -1151,6 +1194,7 @@ end
 
 function clientTick()
     pcall(strayTick, os.clock())
+    pcall(M.wreckTick, os.clock())
     pcall(shotsPrune, os.clock())
     pcall(M.buildTick, os.clock())
     -- the copies' hits: what each lost since last time goes to the host, less what another player's stand-in did to it
