@@ -1148,6 +1148,10 @@ end
 local function jRetry(now)
     if now < (J.retryAt or 0) then return end
     J.retryAt = now + 1
+    -- ((2026-11-28, the user, a joiner: "the minimap is telling me the target boxes are at the airfield") the copies on no rock
+    -- hidden, box off and parked within a second of their coming (0.75.118 settled them only at the round's start, before
+    -- they were here: they hung over the airfield, on the minimap); each copy only once (J.settled)
+    pcall(jSettle)
     for _, r in pairs(J.rocks) do
         if r.tid and not r.tgt and rockLive(r) then
             local okA, done = pcall(jArm, r, r.tid)
