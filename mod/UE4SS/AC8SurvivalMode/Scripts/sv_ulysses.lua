@@ -628,6 +628,9 @@ local function arm(pool, r, hp)
             local nh, seen, hid = hideOwn(e.o)
             flags(e.o, FLAGS_ON)
             air(e.o, true)
+            -- ((2026-11-28) its hit sphere over the rock (fragments.hit_m / big.hit_m): the invisible pawn's sphere is all to hit
+            local hw, hn = hitSphere(e.o, r.big and (cfg().big or {}).hit_m or (cfg().fragments or {}).hit_m)
+            if (ARMLOG == nil or ARMLOG < 2) and hn then ul(string.format("target's hit sphere %s m -> %.1f m", hw and string.format("%.1f", hw) or "?", hn)) end
             e.attached = att
             if ARMLOG == nil or ARMLOG < 2 then                   -- (the air flag read back, the first two)
                 local okA, isAir = pcall(function() return e.o:IsAir() end)
@@ -1161,6 +1164,7 @@ local function jArm(r, id)
     hideOwn(o)
     flags(o, FLAGS_ON)
     air(o, true)
+    hitSphere(o, r.big and (cfg().big or {}).hit_m or (cfg().fragments or {}).hit_m)   -- ((2026-11-28) as the host's (arm)
     r.tgt = { o = o, a = a, name = nameOf(o), id = id }
     return true
 end

@@ -27,6 +27,7 @@ SOLG = { C = {
               scalars = { Ctrl_All_Emissive = 0, Turbine_speed = 0, NormalIntencity = 0, DNormal_Strength = 0,
                           DamegedNormal_Intencity = 0, PlayerPlane_Damage = 0 } },
     spin_rate = 1.0,                        -- the spin animation's play rate (1: AC:I's, a ring's turn in 40 s)
+    hit_m = 20,                             -- ((2026-11-28) a target's hit sphere (m) unless its type says (targets[].hit_m)
     -- a wing shot off: pushed out from the barrel (m/s), down (m/s), its tumble (deg/s, each axis up to), gone after
     pitch_min_deg = 20,                     -- its nose down at least this much as it falls (the user: 45 "way too angled down", "go to 20")
     fall = { out_mps = 35, down_mps = 15, tumble_dps = 40, gravity = 1.0, life_s = 30, body_gravity = 0.35, body_tumble_dps = 4 },
@@ -38,7 +39,10 @@ SOLG = { C = {
     -- the MAG panels, 2 the KEW shells, 3 the core units, 4 the rear hatch, 5 the SP shell; a phase's targets are
     -- lockable only then.
     targets = {
-        { key = "SAW", unit = "SV_Unit_SOLG_SAW", phase = 1, health = 900, pay = 40, bones = { "SG04_%02d", 6, "SG05_%02d", 12 } },
+        -- ((2026-11-28) hit_m: its hit sphere's radius (the SAW panels' over each panel, ~108 m across: the user, "anywhere
+        -- on the SAW panels"); the others SOLG.C.hit_m)
+        { key = "SAW", unit = "SV_Unit_SOLG_SAW", phase = 1, health = 900, pay = 40, bones = { "SG04_%02d", 6, "SG05_%02d", 12 },
+          hit_m = 55 },
         { key = "MAG", unit = "SV_Unit_SOLG_MAG", phase = 1, health = 600, pay = 25, bones = { "SG07_%02d", 32 } },
         { key = "KEW", unit = "SV_Unit_SOLG_KEW", phase = 2, health = 1000, pay = 50, bones = { "KEW_%02d", 36 } },
         { key = "CORE", unit = "SV_Unit_SOLG_CORE", phase = 3, health = 1500, pay = 200, bones = { "SG03_%02d", 4 } },
@@ -721,6 +725,17 @@ local function placeAll(t, got, on, mirror)
                 pcall(function() o.MinHealth = n(SOLG.C.floor, 1) end)
             end
             if not t.laser then hideOwn(o) elseif SOLG.C.laser_hide ~= false then hideOwn(o, false) end
+            -- ((2026-11-28) its hit sphere over the piece it stands for (t.hit_m, else SOLG.C.hit_m): the SAW panels 55 m (the
+            -- user: "if I target anywhere on the SAW panels that its hittable"); the pawn is invisible, the sphere all to hit
+            if not t.laser then
+                local was, now = hitSphere(o, t.hit_m or SOLG.C.hit_m)
+                S.sphereSaid = S.sphereSaid or {}
+                if not S.sphereSaid[t.key] then
+                    S.sphereSaid[t.key] = true
+                    sl(string.format("targets: %s's hit sphere %s m -> %s m", t.key, was and string.format("%.1f", was) or "?",
+                        now and string.format("%.1f", now) or "NOT set"))
+                end
+            end
             flags(o, on and FLAGS_ON or FLAGS_OFF)
             S.targets[#S.targets + 1] = { o = o, a = addrOf(o), key = t.key, bone = bone, t = t, hp = hp, attached = att, live = true }
             placed = placed + 1
