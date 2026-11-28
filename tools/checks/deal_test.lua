@@ -128,6 +128,9 @@ function COOP.slotOk(s) return type(s) == "number" and s == math.floor(s) and s 
 function COOP.players() local l = {}; for i = 1, COOP.peers do l[i] = { slot = i - 1 } end return l end
 function COOP.payOwn(n, why) own[#own + 1] = { n, why } end
 function COOP.localCallout(t, s) callouts[#callouts + 1] = { t, s, here = true } end
+-- ((2026-11-28) as sv_coop_migration.lua's: the host's round logic, its subtitles / callouts / pay mirrored; counted here)
+COOP.asRoundN = 0
+function COOP.asRound(fn, ...) if COOP.host() then COOP.asRoundN = COOP.asRoundN + 1 end return fn(...) end
 
 dofile(MOD .. "/Scripts/sv_deal.lua")
 local C = CFG.specials.deal
@@ -306,9 +309,12 @@ check(DEAL.V == nil and logged("the last run's deal dropped") and #recycles == 1
 
 print("co-op host")
 reset(); COOP.open, COOP.role, COOP.slot, COOP.peers = true, "host", 0, 2
+COOP.asRoundN = 0
 newBreak(12)
 runD(C.offer_after_s + 7)
 V = DEAL.V
+check(COOP.asRoundN > 0, "its tick runs as the host's round logic (COOP.asRound): War's subtitles, its callouts and pay go to "
+    .. "every joiner (the user, 2026-11-28: \"war didnt have any subtitles\")")
 local function sentOf(k, rel) local n = 0; for _, m in ipairs(sent) do if m.f[1] == k and (rel == nil or m.reliable == rel) then n = n + 1 end end return n end
 check(V.phase == "open" and sentOf("dl", true) == 1 and sent[1].to == nil and sent[1].f[2] == V.id and sent[1].f[3] == V.kind,
     "\"dl\" to everyone, reliable, as it opens")
@@ -345,9 +351,11 @@ check(logged("a deal is on already"), "Ctrl+H again with a deal on: refused")
 
 print("co-op joiner")
 reset(); COOP.role, COOP.slot = "join", 1
+COOP.asRoundN = 0
 newBreak(15)
 runD(C.offer_after_s + 7)
 check(DEAL.V == nil and #spawns == 0, "a joiner never offers")
+check(COOP.asRoundN == 0, "a joiner's tick isn't the host's round logic (nothing of it mirrored)")
 for _, bad in ipairs({ { "dl" }, { "dl", "0", "cargo", "30", "0", "0" }, { "dl", "1.5", "cargo", "30", "0", "0" },
                        { "dl", "1", "car go!", "30", "0", "0" }, { "dl", "1", "cargo", "inf", "0", "0" },
                        { "dl", "1", "cargo", "500", "0", "0" }, { "dl", "1", "cargo", "30", "25", "0" },
