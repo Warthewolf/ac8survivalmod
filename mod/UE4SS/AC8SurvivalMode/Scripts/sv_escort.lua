@@ -154,17 +154,32 @@ local function shipAt(i)
     local sp = up and (cc().ship_at or {})[i]
     return sp and { X = sp[1], Y = sp[2], Z = 0 } or nil
 end
+-- ((2026-11-28) a joiner, the user: "it only spawns 2 vampires at a time") the VAMPIRES' container drone
+-- (BP_OP0018_uavc_CP_Ally: Mission 16's allied drone, which Survival flies for the carriers alone) is always theirs. A
+-- joiner's ships came again at 12:50 with the host's count of carriers not here yet and no hull found: its 24 drones in
+-- the containers came with no unit, went in as enemy planes, and the stray sweep took them down again and again (36 a
+-- minute); the host's launches found 2 of them
+function ESC.isDrone(o)
+    local okN, nm = pcall(nameOf, o)
+    return okN and type(nm) == "string" and nm:find("_uavc_CP_Ally", 1, true) ~= nil
+end
 -- (logPlane, below) a plane of no unit, of a carrier's ship or of one of its flights, within capture_km of a carrier up
--- here: that ship's flight's unit (the host's launched arm, else its first arm's; the pose unit for a pose flight)
+-- here (a VAMPIRES drone: of a ship's spot whether or not its carrier is known up yet): that ship's flight's unit (the
+-- host's launched arm, else its first arm's; the pose unit for a pose flight)
 local function attribute(o, unit)
     local kd = unit and KIND[unit]
     if unit and kd ~= "cargo" and kd ~= "zfa" then return nil end
     if kd == "zfa" then return nil end                        -- (already a flight's: the pose spawn, a launch named)
     local at = locOf(o)
     if not at then return nil end
+    local drone = ESC.isDrone(o)
     local best, bd = nil, nil
     for i = 1, #(cc().units or {}) do
         local p = shipAt(i)
+        if not p and drone then
+            local sp = (cc().ship_at or {})[i]
+            p = sp and { X = sp[1], Y = sp[2], Z = 0 } or nil
+        end
         if p then
             local d = d2(at, p) / 1000
             if d <= num(cc().capture_km, 4) and (not bd or d < bd) then best, bd = i, d end
@@ -195,7 +210,8 @@ do
     local rawLog = logPlane
     logPlane = function(o, unit, k)
         local u2 = unit
-        if next(ESC.hulls) ~= nil or (ESC.R and next(ESC.R.carriers)) or (ESC.host and (tonumber(ESC.host.carriers) or 0) > 0) then
+        if next(ESC.hulls) ~= nil or (ESC.R and next(ESC.R.carriers)) or (ESC.host and (tonumber(ESC.host.carriers) or 0) > 0)
+            or (unit == nil and ESC.isDrone(o)) then          -- ((2026-11-28) a drone before its carrier is known up
             local okA, a = pcall(attribute, o, unit)
             if okA and a then
                 u2 = a
