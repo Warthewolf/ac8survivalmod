@@ -61,6 +61,14 @@ Moved verbatim from AGENTS.md (2026-11-14). Rule numbers are unchanged: other no
     plane. The level of a sound is measured with the autotest's loudness.ps1 (WASAPI loopback, levels only), never by ear
     alone; a test that measures sound needs its round 1 held off (enemy missiles and warnings drown it).
 
+81. Survival's HUD widget fits a fixed 16:9 design box to the screen (ScaleBox ScaleToFit -> SizeBox -> CanvasPanel, sv_hud.lua),
+    so anything anchored to that canvas stops at the 16:9 box on a wider screen: ULYSSES' sepia wash left the sides of a
+    21:9 screen bare (Saint Alessia's report of 0.75.117). A full-screen layer goes on the widget's root canvas (H.root),
+    behind the box. To test a wider screen: GameUserSettings SetFullscreenMode(2) + SetScreenResolution +
+    ApplyResolutionSettings(false), put back the same way (never saved); `r.SetRes 2520x1080w` in windowed fullscreen
+    changed the viewport's reported size but the picture stayed 2560 x 1440 (the ulylock autotest, 2026-11-28; the
+    settings' way gave a 2520 x 1080 picture, the wash edge to edge: no tint step at the 16:9 box's edges).
+
 ## Survival's menu pages (Lua 0.71.5, runtime 0.28.3; working in game 2026-10-29)
 SURVIVAL MODE opens Survival's own pages (user, 2026-10-27): SP OFFLINE / SP ONLINE / COOP HOST / COOP JOIN / QUICK START,
 each but JOIN with a setup page (PRESET, STARTING ZOLLARS, ENEMY AIRCRAFT, ...) and MORE RULES, and a BACK row on every
