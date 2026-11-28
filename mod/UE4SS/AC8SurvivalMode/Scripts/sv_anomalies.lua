@@ -119,7 +119,16 @@ function ANOM.spawn()
     local cam = 1
     for k, n in ipairs(ANOMALY_CAMERAS) do if n == c.camera then cam = k end end
     local ev = "RE_SV_AnomalyCam_" .. string.char(64 + cam)
-    local r = type(SV_Event) == "function" and SV_Event(ev) or "n/a"
+    local r
+    -- ((2026-11-28, the user, a joiner: "mind ripper didnt have the targetting focus when it spawned for me") a co-op host
+    -- fires it here and sends it with MINDRIPPER's unit: each joiner fires it once its copy is up (it went off there before
+    -- the copy came, looking at nothing). Solo, or an older co-op layer: as before
+    if COOP and COOP.host and COOP.host() and COOP.eventHere and COOP.eventThere then
+        r = COOP.eventHere(ev)
+        pcall(COOP.eventThere, ev, c.unit)    -- (MINDRIPPER's)
+    else
+        r = type(SV_Event) == "function" and SV_Event(ev) or "n/a"
+    end
     log(string.format("special: anomaly camera %s (%s): %s", ANOMALY_CAMERAS[cam], ev, tostring(r)))
     return true
 end
