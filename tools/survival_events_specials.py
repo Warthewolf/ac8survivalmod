@@ -420,7 +420,12 @@ SOLG_OBJS = {t: 'SV_Obj_SOLG_' + t for t, _ in SOLG_TARGETS}
 # (SOLG_NPC: the radar tower's NPC row on SOLG_MODEL_SV with that type's key, DT_SV_NpcRows), on its own mission row
 # (SOLG_ROWS: Mission 4's radar tower row, its NpcId that type's); Scripts/sv_solg.lua SOLG.rowsIn adds the rows and
 # sets the texts (CFG SOLG.C.names) at the main menu
-SOLG_MODEL_SOURCE = 'BPD_RadarTower02'
+# ((2026-11-28) the user: "the SOLG needs no radar towers either, make your own target boxes for them") the model row's
+# blueprint AC8's invisible target pawn (GR000_dummy: no mesh, no wreck, no children; GONE FISHIN's shoals' and THE FESTIVAL's
+# boxes), the radar tower's health kept (SOLG_MODEL_HEALTH_SOURCE: co-op's copies stay above their 1 HP floor); the NPC rows
+# stay the radar tower's (its durability rows: what a hit is dealt by; no children), on this model
+SOLG_MODEL_SOURCE = 'GR000_dummy'
+SOLG_MODEL_HEALTH_SOURCE = 'BPD_RadarTower02'
 SOLG_MODEL_SV = 'SV_Model_SOLG'
 SOLG_NAME_KEY = 'SV_SOLG_Name'
 SOLG_NPC_SOURCE = 'BPD_RadarTower02_01'
@@ -428,6 +433,19 @@ SOLG_NPC = {t: 'SV_SOLG_' + t for t, _ in SOLG_TARGETS}
 SOLG_SUB_KEYS = {t: 'SV_SOLG_Sub_' + t for t, _ in SOLG_TARGETS}
 SOLG_ROWS = {t: 'sv_solg_' + t.lower() for t, _ in SOLG_TARGETS}
 SOLG_MISSION_TABLE = '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission004'
+# ((2026-11-28) the user: "can you just stop using the radar towers and make them their own targets") ULYSSES' fragments' and
+# core's targets: units of their own, made as the SOLG's are (solg_units, the same mission / NPC rows' shape, on their own
+# model row: the invisible pawn as the SOLG's, ULY_NAME_KEY "ULYSSES" over ULY_SUB_KEYS FRAGMENT / ULYSSES CORE). It
+# borrowed the SOLG's KEW / MAG units before: the SOLG later in a co-op run of 0.75.118 had no MAG panel that could be hit.
+# Scripts/sv_ulysses.lua ULY.rowsIn adds the rows and sets the texts at the main menu
+ULY_TARGETS = [('FRAG', 36), ('CORE', 2)]
+ULY_UNITS = {t: 'SV_Unit_Uly_' + t for t, _ in ULY_TARGETS}
+ULY_OBJS = {t: 'SV_Obj_Uly_' + t for t, _ in ULY_TARGETS}
+ULY_ROWS = {t: 'sv_uly_' + t.lower() for t, _ in ULY_TARGETS}
+ULY_NPC = {t: 'SV_Uly_' + t for t, _ in ULY_TARGETS}
+ULY_SUB_KEYS = {t: 'SV_Uly_Sub_' + t for t, _ in ULY_TARGETS}
+ULY_MODEL_SV = 'SV_Model_Uly'
+ULY_NAME_KEY = 'SV_Uly_Name'
 
 VALKA_UNIT = 'SV_Unit_Valka'
 VALKA_OBJ = None                               # her AI object name, set by build_survival.py valka_unit

@@ -536,6 +536,7 @@ local TYPES = {
     { "join", "ul", { "ul", "f", "4", "D", "-15000", "8000", "11000", "-30000", "12000", "-9000", "250", "40", "0", "17" }, extra = true },
     { "join", "ul", { "ul", "s", "3" }, extra = true },
     { "join", "ul", { "ul", "l", "3", "0" }, extra = true },
+    { "join", "ul", { "ul", "l", "3", "1", "-12500", "4000", "35" }, extra = true },   -- ((2026-11-28) with the host's blast point
     { "join", "ul", { "ul", "e", "1" }, extra = true },
     { "join", "ev", { "ev", "RE_SV_AlcnOpenCore", U1 }, extra = true },
     { "join", "ev", { "ev", "RE_SV_AwacsEsm" }, extra = true },   -- ((2026-11-28) VOID WATCHER's ESM pulse: fired here too (ALLY.hostEsm)
@@ -1131,6 +1132,18 @@ do
     inbox[#inbox + 1] = "2|rk|B|escaped|1"
     tick(); tick()
     if ends("B") ~= 1 then fail(cr, "limits", "rk from slot 2", "a joiner's rk ended a rocket here") end
+end
+
+-- ((2026-11-28, the user, a joiner of 0.75.118: "the fragments arent targetable") ULYSSES' "ul|f" with its target's co-op id:
+-- the joiner's handler passes field 14 on, so ULYSSES tries to put that target's copy on its rock (0.75.118 cut it: no try)
+do
+    local cu = covOf("join", "ul")
+    feed("join", "ul", { "ul", "r", "1" })
+    feed("join", "ul", { "ul", "f", "9", "C", "-15000", "8000", "11000", "-30000", "12000", "-9000", "250", "40", "0", "23" })
+    local Jx = ULY and ULY.debug and select(4, ULY.debug())
+    if not (Jx and Jx.lastTid == 23) then
+        fail(cu, "err", "ul|f's target id", "the target's id never reached ULYSSES (field 14 not passed on): no copy put on the rock")
+    else say("  ok   a joiner's \"ul|f\" carries its target's id through to ULYSSES (its copy tried on the rock)") end
 end
 
 ---------------------------------------------------------------------------------------------------- summary

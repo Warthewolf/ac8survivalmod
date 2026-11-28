@@ -413,6 +413,23 @@ end
 -- ("damage event", "no damage event", "ApplyDamage"; nil: not down). Its caller checks it's still its own (hard rule 59).
 -- noEvent: from the "no damage event" step (ModifyHealthInternal still runs CheckDeath): the shuttle's take-off, whose
 -- damage event would set off the event package's ObjectDamage_Shuttle radio lines minutes after a clean liftoff.
+-- ((2026-11-28, the user: "make it so that if I target anywhere on the SAW panels that its hittable") a target's hit sphere
+-- (LiveGameObject.SphereCollision: what a round or a missile strikes) set to m metres across its middle; its OverlapCollision
+-- raised to it too, never lowered. On AC8's invisible target pawn (GR000_dummy: the SOLG's, ULYSSES') the sphere is all
+-- there is to hit. -> its radius before and after (metres; nil unread)
+function hitSphere(o, m)
+    m = tonumber(m)
+    if not (o and m and m > 0) then return nil, nil end
+    local was, now
+    pcall(function() was = o.SphereCollision:GetUnscaledSphereRadius() / 100 end)
+    pcall(function() o.SphereCollision:SetSphereRadius(m * 100, true) end)
+    pcall(function()
+        local ov = o.OverlapCollision
+        if ov:GetUnscaledSphereRadius() < m * 100 then ov:SetSphereRadius(m * 100, true) end
+    end)
+    pcall(function() now = o.SphereCollision:GetUnscaledSphereRadius() / 100 end)
+    return was, now
+end
 function finishUnpaid(o, noEvent)
     if not liveObj(o) then return false, nil, nil end
     local function h() local ok, v = pcall(function() return o.HealthInternal end); return (ok and type(v) == "number") and v or nil end

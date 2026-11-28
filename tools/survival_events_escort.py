@@ -443,6 +443,8 @@ ESCORT_ALLIED_ROWS = {ESC_CHAR_ROW, ZFA_ROW, ZFA_DRONE_ROW, *ESC_ROWS, *(c[3] fo
 # (row, its stock DT_NPC source, the model or None (the source's), fly MOONCHILD's set, drop its weapons, name key, full speed)
 ESCORT_DECOY_MISSION_ROWS += [(SOLG_ROWS[t], SOLG_MISSION_TABLE, SOLG_TARGET_SOURCE_ROW, SOLG_NPC[t], None)
                               for t, _ in SOLG_TARGETS]   # ((2026-11-22) VALKA's SOLG's targets, each type's own row)
+ESCORT_DECOY_MISSION_ROWS += [(ULY_ROWS[t], SOLG_MISSION_TABLE, SOLG_TARGET_SOURCE_ROW, ULY_NPC[t], None)
+                              for t, _ in ULY_TARGETS]    # ((2026-11-28) ULYSSES' own targets, as the SOLG's
 ESCORT_DECOY_NPC_ROWS = (
     [(npc, src, model, True, False, None, False) for npc, src, model in ESC_ROWS.values()]
     # ((2026-11-28) each carrier ship: its Mission 17 row whole (its own model row set by build_survival: CARGO_MODEL_OF_NPC)
@@ -452,7 +454,9 @@ ESCORT_DECOY_NPC_ROWS = (
        (DECOY_UAV_NPC, DECOY_UAV_NPC_SOURCE, None, False, True, None, False)]
     # ((2026-11-22) VALKA's SOLG's targets: the radar tower's row, unarmed, each type's name key (its model: build_survival)
     + [(SOLG_NPC[t], SOLG_LSR_NPC_SOURCE if t in SOLG_LASER_TYPES else SOLG_NPC_SOURCE, None, False,
-        t not in SOLG_LASER_TYPES, SOLG_SUB_KEYS[t], False) for t, _ in SOLG_TARGETS])
+        t not in SOLG_LASER_TYPES, SOLG_SUB_KEYS[t], False) for t, _ in SOLG_TARGETS]
+    # ((2026-11-28) ULYSSES' own targets: the SOLG's target row, unarmed, each type's name key (its model: build_survival)
+    + [(ULY_NPC[t], SOLG_NPC_SOURCE, None, False, True, ULY_SUB_KEYS[t], False) for t, _ in ULY_TARGETS])
 INT_FLAGS += ([a['leg'] for a in esc_aircraft()] + [a['slot'] for a in esc_aircraft()] + ['SV_EscortSlots', DECOY_HIT_FLAG])
 INT_FLAGS += [ZFA_TLS_FLAG]                    # (the ZFA-44s' laser's interceptions: build_escort)
 

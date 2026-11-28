@@ -460,6 +460,10 @@ function searchSetup()
             local okS, why = pcall(SOLG.rowsIn, npc, mine)
             log("solg: rows: " .. (okS and tostring(why) or ("error " .. tostring(why))))
         end
+        if ULY and ULY.rowsIn then                      -- ((2026-11-28) ULYSSES' own targets: their rows and names
+            local okU, why = pcall(ULY.rowsIn, npc, mine)
+            log("ulysses: rows: " .. (okU and tostring(why) or ("error " .. tostring(why))))
+        end
     end
     SR.levels = SR.levels or {}
     local nLevels = CFG.spikes.enabled and math.min(#CFG.spikes.levels, #SPIKE_SUFFIX) or 0

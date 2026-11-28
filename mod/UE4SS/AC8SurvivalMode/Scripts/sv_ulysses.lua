@@ -7,9 +7,9 @@
 --   SPC.kinds.ulysses       its kind (no fighters; busy until every fragment is down or landed; over: home again)
 --   ULY.tick(now)           every tick (sv_main.lua): fragments, the big one, the sky's meteors, the film look
 -- A fragment: an actor of ours (the SOLG's way: sv_solg.lua) with AC:I's meteor mesh (SK_SV_Ulysses_<A|C|D>, painted), an
--- engine mover (ProjectileMovement: its fall needs no tick), a spin, a fire trail (AC8's), and a target box: one of the
--- SOLG's KEW / MAG targets (Mission 4's radar tower base, hidden, held on it; the two never come together), its box
--- "ULYSSES" over box.small / box.big while ULYSSES has them. At its floor (MinHealth: hard rule 63's way, read back) it's
+-- engine mover (ProjectileMovement: its fall needs no tick), a spin, a fire trail (AC8's), and a target box: one of its
+-- own targets (2026-11-28: SV_Unit_Uly_FRAG / _CORE, AC8's invisible target pawn on rows of its own, "ULYSSES" over
+-- box.small / box.big; it borrowed the SOLG's KEW / MAG radar tower bases before), held on it. At its floor (MinHealth: hard rule 63's way, read back) it's
 -- shot down: blown up, paid; at its time it lands: blown up where it hits, the airfield's damage (AF.bomb) or the town's.
 -- The host's (or solo): co-op's joiners see the boxes (the borrowed units, the host's), their own sky meteors and film
 -- look; the rocks themselves are the host's only (to do: "ul" messages).
@@ -570,18 +570,37 @@ local function release(why, now, dropped)
     if was then ul(string.format("targets: %d handed back (%s): %s", n, tostring(why), table.concat(units, ", "))) end
     if now and was and #units > 0 and SPC and SPC.cleanUp then pcall(SPC.cleanUp, units, "ULYSSES over (" .. tostring(why) .. ")", true, now) end
 end
-local function boxTexts(on)
-    if type(SV_SetText) ~= "function" then return end
-    BOXED = on and true or nil                            -- (ULY.endAll puts the SOLG's back if still ours)
-    local c = cfg().box or {}
-    if on then
-        SV_SetText("SV_SOLG_Name", c.name or "ULYSSES")
-        SV_SetText("SV_SOLG_Sub_KEW", c.small or "FRAGMENT")
-        SV_SetText("SV_SOLG_Sub_MAG", c.big or "ULYSSES CORE")
-    elseif SOLG and SOLG.C then                           -- (the SOLG's own back)
-        SV_SetText("SV_SOLG_Name", SOLG.C.name or "SOLG")
-        for _, k in ipairs({ "KEW", "MAG" }) do SV_SetText("SV_SOLG_Sub_" .. k, (SOLG.C.names or {})[k] or k) end
+-- ((2026-11-28) the user: "can you just stop using the radar towers and make them their own targets") ULYSSES' own target
+-- units (the build's SV_Unit_Uly_FRAG / _CORE: AC8's invisible target pawn, its own rows, never the SOLG's): their rows
+-- into DT_NPC_Model / DT_NPC and their box names (cfg().box) at the main menu on every game (sv_rows.lua, beside
+-- SOLG.rowsIn). Its names were the SOLG's renamed while it borrowed them (boxTexts: gone) -> the log's words
+function ULY.rowsIn(npc, mine)
+    local c = cfg()
+    local tr = c.target_rows or {}
+    local mt, mr = loadObject(ACE.model_table), loadObject(ACE.model_rows)
+    if not (mt and mr and npc and mine) then return "the tables didn't load" end
+    for _, t in ipairs({ mt, mr }) do pin(t, nameOf(t)) end
+    local function add(dst, src, row)
+        local _, h = dtCall(dst, "FindRow", row)
+        if h == nil then
+            local _, r = dtCall(src, "FindRow", row)
+            if r ~= nil then dtCall(dst, "AddRow", row, r); _, h = dtCall(dst, "FindRow", row) end
+        end
+        return h ~= nil
     end
+    local modelIn = type(tr.model) == "string" and add(mt, mr, tr.model)
+    local nIn, rows = 0, tr.npc or {}
+    for _, row in ipairs(rows) do if modelIn and add(npc, mine, row) then nIn = nIn + 1 end end
+    local named = 0
+    if type(SV_SetText) == "function" then
+        local b = c.box or {}
+        for key, text in pairs({ [tr.name_key or ""] = b.name, [tr.small_key or ""] = b.small, [tr.big_key or ""] = b.big }) do
+            if key ~= "" and type(text) == "string" and SV_SetText(key, text) == 1 then named = named + 1 end
+        end
+    end
+    ULY.rowsOk = modelIn and nIn == #rows
+    return string.format("its own targets' rows: model %s %s, %d of %d target rows in DT_NPC, %d names set%s", tostring(tr.model),
+        modelIn and "in" or "NOT in", nIn, #rows, named, ULY.rowsOk and "" or ": its fragments will have no target")
 end
 -- a target from the pool onto rock r's mesh, its health hp: -> the entry
 local function arm(pool, r, hp)
@@ -609,6 +628,9 @@ local function arm(pool, r, hp)
             local nh, seen, hid = hideOwn(e.o)
             flags(e.o, FLAGS_ON)
             air(e.o, true)
+            -- ((2026-11-28) its hit sphere over the rock (fragments.hit_m / big.hit_m): the invisible pawn's sphere is all to hit
+            local hw, hn = hitSphere(e.o, r.big and (cfg().big or {}).hit_m or (cfg().fragments or {}).hit_m)
+            if (ARMLOG == nil or ARMLOG < 2) and hn then ul(string.format("target's hit sphere %s m -> %.1f m", hw and string.format("%.1f", hw) or "?", hn)) end
             e.attached = att
             if ARMLOG == nil or ARMLOG < 2 then                   -- (the air flag read back, the first two)
                 local okA, isAir = pcall(function() return e.o:IsAir() end)
@@ -885,7 +907,11 @@ local function land(f, now)
         landSound("sea", W)
     end
     f.where = (isLand and "land" or "sea") .. " (" .. how .. ")"
-    tell("l", tostring(f.id), isLand and "1" or "0")
+    -- ((2026-11-28, the user, a joiner: "the explosion for the core didn't show up either") where it blew up here (metres):
+    -- a joiner's own rock is past it by then, under the ground, and its explosion went off there unseen
+    local B = isLand and { X = f.P.X, Y = f.P.Y, Z = gz or f.P.Z } or { X = f.P.X, Y = f.P.Y, Z = n(sc.sea_z, 350) }
+    tell("l", tostring(f.id), isLand and "1" or "0", string.format("%.0f", B.X / 100), string.format("%.0f", B.Y / 100),
+        string.format("%.0f", B.Z / 100))
     fallOff(f)
     disarm(f.e)
     rockOff(f.r)
@@ -1002,7 +1028,6 @@ function ULY.spawn(now)
     U = { phase = phase, list = {}, todo = fragmentsFor(phase), sent = 0, shot = 0, landedAirfield = 0, landedTown = 0,
           nextAt = now + n(cfg().fragments.first_s, 8), startAt = now, bigAt = nil, bigSent = false }
     if host() then
-        boxTexts(true)
         U.pool = poolUp(cfg().target_units.small)
         U.poolBig = (phase >= 2 and cfg().big.enabled ~= false) and poolUp(cfg().target_units.big) or {}
         if phase >= 2 and cfg().big.enabled ~= false then U.bigAt = now + n(cfg().big.at_s, 45) end
@@ -1139,8 +1164,29 @@ local function jArm(r, id)
     hideOwn(o)
     flags(o, FLAGS_ON)
     air(o, true)
+    hitSphere(o, r.big and (cfg().big or {}).hit_m or (cfg().fragments or {}).hit_m)   -- ((2026-11-28) as the host's (arm)
     r.tgt = { o = o, a = a, name = nameOf(o), id = id }
     return true
+end
+-- ((2026-11-28, the user's co-op game of 0.75.118: this game's copies of the targets bound 22 s into the round) a rock whose
+-- target's copy wasn't here yet: tried again every second until it is (or the rock's gone), so the early fragments are
+-- lockable too
+local function jRetry(now)
+    if now < (J.retryAt or 0) then return end
+    J.retryAt = now + 1
+    -- ((2026-11-28, the user, a joiner: "the minimap is telling me the target boxes are at the airfield") the copies on no rock
+    -- hidden, box off and parked within a second of their coming (0.75.118 settled them only at the round's start, before
+    -- they were here: they hung over the airfield, on the minimap); each copy only once (J.settled)
+    pcall(jSettle)
+    for _, r in pairs(J.rocks) do
+        if r.tid and not r.tgt and rockLive(r) then
+            local okA, done = pcall(jArm, r, r.tid)
+            if okA and done then
+                J.armed, J.late = (J.armed or 0) + 1, (J.late or 0) + 1
+                if J.late == 1 then ul(string.format("the host's fragment's target %d on this game's rock now (its copy came after the rock)", r.tid)) end
+            end
+        end
+    end
 end
 local function skyOff()
     for _, m in ipairs(SKYM.list) do rockOff(m.r) end
@@ -1213,7 +1259,6 @@ function ULY.roundOver(now, s)
     end
     ul(string.format("round %d over: %d of %d fragments shot down, %d landed on the airfield, %d on the town, %d in the sea, %d on open land; %d with no target on them", D.round,
         U.shot, U.sent + (U.bigSent and 1 or 0), U.landedAirfield, U.landedTown, U.landedSea or 0, U.landedOpen or 0, U.unarmed or 0))
-    if host() then boxTexts(false) end
     local last = U.phase >= math.max(1, math.floor(n(cfg().rounds, 2)))
     tell("e", last and "1" or "0")
     if last and host() then release("its last round over") end        -- (sv_rounds.lua's clean-up finishes them off)
@@ -1257,7 +1302,6 @@ function ULY.endAll(why, dropped)
     if dropped then J.settled = {} end
     -- (its targets handed back, the clean-up at once: an end mid-round that the specials' own clean-up won't see)
     pcall(release, why, os.clock(), dropped)
-    if host() and BOXED then pcall(boxTexts, false) end
     skyOff()
     ambOff()
     if FILM.on then
@@ -1302,6 +1346,7 @@ function ULY.tick(now)
     local s = D and D.special
     -- ((2026-11-24, the user: "during the intermission of these two rounds, the fake meteors up in the sky can still
     -- continue to run") the break between its rounds too: still in 1999 (the film look on until its last round's end)
+    if J.on then pcall(jRetry, os.clock()) end            -- ((2026-11-28) a joiner's rocks still waiting for their target's copy
     local on = (s and s.kind == "ulysses" and (D.state == "fighting" or D.state == "spawning")) or J.on
         or (FILM.on and D and D.state == "wait")
     skyClean(now)
@@ -1330,7 +1375,7 @@ function ULY.fromHost(f)
         if ph == 1 then
             local sh = cfg().shift or {}
             fade(1, 0, n(sh.fade_s, 1.2) * 2, false)
-            if hudCallout then hudCallout(sh.card or "JULY 1999", sh.card_sub) end
+            -- ((2026-11-28) no JULY 1999 card of this game's: the host's comes ("co"), and both showed (the user's log)
         end
         ul(string.format("the host's round: phase %d; the film look %s", ph, filmOn()))
     elseif k == "f" then
@@ -1338,6 +1383,7 @@ function ULY.fromHost(f)
         local x, y, z, vx, vy, vz, sc, sp = tonumber(f[5]), tonumber(f[6]), tonumber(f[7]), tonumber(f[8]), tonumber(f[9]), tonumber(f[10]), tonumber(f[11]), tonumber(f[12])
         if not (KEYS[key] and fin(id, 1e6) and tonumber(id) == math.floor(tonumber(id)) and fin(x, 3e5) and fin(y, 3e5) and fin(z, 6e4) and fin(vx, 5e5) and fin(vy, 5e5)
             and fin(vz, 5e5) and fin(sc, 5000) and sc > 0 and fin(sp, 3600)) then return end
+        J.lastTid = tonumber(f[14])                          -- ((2026-11-28) the last target id heard: the guard test's
         if J.rocks[id] then jDisarm(J.rocks[id]); rockOff(J.rocks[id]) end
         local tx = n((f[13] == "1" and cfg().big or cfg().fragments).tail_x, 1)     -- (as the host draws it: its own config)
         local r = rock(key, { X = x * 100, Y = y * 100, Z = z * 100 }, { X = vx, Y = vy, Z = vz }, sc / 100, sp, tx)
@@ -1351,6 +1397,7 @@ function ULY.fromHost(f)
             -- ((2026-11-28) the host's target on it (its co-op id, 0 or none: an older host's, or none free there)
             local tid = tonumber(f[14])
             if tid and fin(tid, 65535) and tid >= 1 and tid == math.floor(tid) then
+                r.tid = tid                                   -- ((2026-11-28) kept: tried again till its copy's here (jRetry)
                 pcall(jSettle)
                 local okA, done, why = pcall(jArm, r, tid)
                 J.armed, J.missed = (J.armed or 0) + ((okA and done) and 1 or 0), (J.missed or 0) + ((okA and done) and 0 or 1)
@@ -1366,6 +1413,9 @@ function ULY.fromHost(f)
         J.rocks[f[3]] = nil
         jDisarm(r)
         local at = rockAt(r)
+        -- ((2026-11-28) a landing: the host's ground point (its fields 5-7, metres) when it sent one, as the host's own blast
+        local bx, by, bz = tonumber(f[5]), tonumber(f[6]), tonumber(f[7])
+        if k == "l" and fin(bx, 3e5) and fin(by, 3e5) and fin(bz, 6e4) then at = { X = bx * 100, Y = by * 100, Z = bz * 100 } end
         local fx = cfg().fx_scale or {}
         if at then
             if r.big then newsOne(k == "s" and "core_down" or "core_hit") end
@@ -1400,7 +1450,7 @@ function ULY.fromHost(f)
             ambOff()
             local sh = cfg().shift or {}
             fade(1, 0, n(sh.fade_s, 1.2) * 2, false)
-            if hudCallout then hudCallout(sh.home or "PRESENT DAY", sh.home_sub) end
+            -- ((2026-11-28) no PRESENT DAY card of this game's: the host's comes ("co"), as JULY 1999's
         end
         ul("the host's round over" .. (f[3] == "1" and ": home again" or ""))
     end
@@ -1415,7 +1465,7 @@ if SPC and SPC.kinds then
                           busy = function(s) return ULY.busy(s) end, over = function(now, s) return ULY.roundOver(now, s) end,
                           row = function(s, t) return ULY.row(s, t) end }
 end
-function ULY.debug() return U, SKYM, FILM end                  -- (the tests')
+function ULY.debug() return U, SKYM, FILM, J end               -- (the tests')
 
 -- TEST ONLY BEGIN (ULYSSES' test key: test builds only)
 -- ((2026-11-24, the user: "Shouldn't their smoke trail be thicker") the autotest's trail line-up: one rock a candidate

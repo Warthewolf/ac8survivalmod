@@ -408,7 +408,8 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     -- too (solo_x 1, was 0.8), co-op up to max_n 90 (was 34); per_wave 2 every every_s (was one every 4-8 s), at most
     -- at_once 30 falling (was 6: the 48 sound voices hold 30 fall loops and the explosions; the SOLG's KEW unit lends 36
     -- targets, each handed back when its fragment is done)
-    fragments = { round1 = 50, round2 = 60, per_player = 0.15, max_n = 90, solo_x = 1.0,
+    -- ((2026-11-28) hit_m: each target's hit sphere (m) over its rock: on AC8's invisible pawn the sphere is all to hit)
+    fragments = { round1 = 50, round2 = 60, per_player = 0.15, max_n = 90, solo_x = 1.0, hit_m = 30,
                   every_s = { 5, 8 }, per_wave = 2, first_s = 8, at_once = 30,
                   -- where they come from (km from where they land, m up) and how fast (km/h, along their line)
                   -- ((2026-11-24, the user: "the meteorites need to spawn at higher altitude so the players have a chance to
@@ -442,7 +443,7 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     -- ((2026-11-24, the user: "around 1300km/h") the core too: 1300 km/h from 28 km up (was 650 from 16): 110 s down
     big = { enabled = true, mesh = "A", scale = 1.0, at_s = 45, from_km = 48, alt_m = 28000, speed_kmh = 1300, spin_dps = 4,
             dive_deg = 45, from_deg = 0, spread_deg = 10, tail_x = 0,
-            health = 4000, solo_x = 0.7, pay = 6000, airfield_damage = 120 },
+            health = 4000, solo_x = 0.7, pay = 6000, airfield_damage = 120, hit_m = 80 },
     -- the towns it aims at besides the airfield (cm; the airport key's town, docs/re/COMONA_MAP.md)
     towns = { { X = 1250000, Y = -320000 }, { X = 2350000, Y = -700000 } },
     -- scenery meteors high up, crossing the sky (every_s apart, alt_m up, speed_kmh, life_s)
@@ -539,8 +540,12 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     sea = { fx = { "/Game/VFX/Vehicles/Weapon/Rog/Splash/NS_Mission11Splash", "/Game/VFX/Vehicles/Weapon/Rog/Splash/NS_SplashRain" },
             scale = 1.5, big_scale = 5, sea_z = 350, land_m = 1200 },
     fx_scale = { shot = 4, land = 10, big_shot = 18, big_land = 30 },
-    -- the borrowed target units (the SOLG's) and their boxes while ULYSSES has them
-    target_units = { small = "SV_Unit_SOLG_KEW", big = "SV_Unit_SOLG_MAG" },
+    -- ((2026-11-28) the user: "can you just stop using the radar towers and make them their own targets") its own target
+    -- units (tools/survival_events_specials.py ULY_*: AC8's invisible target pawn, never the SOLG's KEW / MAG again), their
+    -- rows (target_rows: added at the main menu, ULY.rowsIn) and the names on their boxes (box)
+    target_units = { small = "SV_Unit_Uly_FRAG", big = "SV_Unit_Uly_CORE" },
+    target_rows = { model = "SV_Model_Uly", npc = { "SV_Uly_FRAG", "SV_Uly_CORE" },
+                    name_key = "SV_Uly_Name", small_key = "SV_Uly_Sub_FRAG", big_key = "SV_Uly_Sub_CORE" },
     box = { name = "ULYSSES", small = "FRAGMENT", big = "ULYSSES CORE" },
     -- (the WORLD NEWS bulletins' timing: text.news below; the first first_s into each round, then one every every_s)
     -- ((2026-11-24) the user: "have the news play more often during the rounds so that more of the lines get seen": 12 /

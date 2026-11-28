@@ -389,11 +389,23 @@ def build_model_rows():
     assert survival_events.fname(survival_events.ZFA_MODEL_SV)[2] == 0
     out.append(((survival_events.ZFA_MODEL_SV, 0), row))
     # ((2026-11-22) VALKA's SOLG's targets: the radar tower's model row whole but its name, SOLG_NAME_KEY ("SOLG", Lua's text)
+    # ((2026-11-28) the user: "the SOLG needs no radar towers either, make your own target boxes for them") its model row
+    # AC8's invisible target pawn's (GR000_dummy), the radar tower's health on it; ULYSSES' own targets' the same
     f = survival_events.fname(survival_events.SOLG_MODEL_SOURCE)
     assert (f[1], f[2]) in crow, survival_events.SOLG_MODEL_SOURCE
-    row = copy.deepcopy(crow[(f[1], f[2])])
-    set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(survival_events.SOLG_NAME_KEY))
-    out.append(((survival_events.SOLG_MODEL_SV, 0), row))
+    hf = survival_events.fname(survival_events.SOLG_MODEL_HEALTH_SOURCE)
+    assert (hf[1], hf[2]) in crow, survival_events.SOLG_MODEL_HEALTH_SOURCE
+    tower_hp = [q[3] for q in crow[(hf[1], hf[2])][2] if q[1] == 'MaxHealth'][0]
+    assert tower_hp and tower_hp[0] == 'raw', tower_hp
+    for model_sv, key in ((survival_events.SOLG_MODEL_SV, survival_events.SOLG_NAME_KEY),
+                          (survival_events.ULY_MODEL_SV, survival_events.ULY_NAME_KEY)):
+        row = copy.deepcopy(crow[(f[1], f[2])])
+        names = dict((q[1], q[3]) for q in row[2])
+        assert names['BlueprintClass'][2][1] == 'BP_GR000_dummy_CP_C', names['BlueprintClass']
+        set_prop(row[2], idx['MaxHealth'], 'MaxHealth', tower_hp)
+        set_prop(row[2], idx['GameObjectDisplayName01'], 'GameObjectDisplayName01', s(key))
+        assert survival_events.fname(model_sv)[2] == 0
+        out.append(((model_sv, 0), row))
     # ... and its laser turrets': the land Phalanx's (enemy) model row whole but its name, SOLG_NAME_KEY
     f = survival_events.fname(survival_events.SOLG_LSR_MODEL_SOURCE)
     assert (f[1], f[2]) in crow, survival_events.SOLG_LSR_MODEL_SOURCE
