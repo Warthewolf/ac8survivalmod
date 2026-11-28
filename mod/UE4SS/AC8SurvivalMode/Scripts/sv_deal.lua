@@ -804,6 +804,14 @@ function DEAL.setup()
         DEAL.hornetRowOk = h ~= nil
         log(string.format("deal: the Hornet's row %s %s", hr, DEAL.hornetRowOk and "in DT_NPC" or "NOT added: its unit will spawn no plane"))
     end
+    -- ((2026-11-28, the user, a joiner: "war is reading as SV_DealHornet") its box's name on every game here, as the allies'
+    -- and the shoals' are (sv_allies.lua, sv_fishing.lua): hornetUp set it on the host's alone, as it spawned the Hornet,
+    -- and a joiner's copy showed its bare key
+    local hh = cfg().hornet or {}
+    if type(SV_SetText) == "function" and type(hh.name_key) == "string" and type(hh.name) == "string" then
+        local okT, r = pcall(SV_SetText, hh.name_key, hh.name)
+        log(string.format("deal: the Hornet's name %s %s", hh.name_key, (okT and r == 1) and ("set: " .. hh.name) or "NOT set"))
+    end
 end
 
 -- the NEXT row (sv_hud.lua): the offer while it's open, the result a little after; else nil
@@ -880,5 +888,15 @@ if cfg().enabled then
     bind(cfg().keys.no, function() DEAL.vote(0) end)
     if testKey then testKey("H", "sv_deal.lua's offer now", DEAL.offerNow) end
 end
-if TEST_TICKS then TEST_TICKS[#TEST_TICKS + 1] = { name = "deal", fn = function(now) DEAL.tick(now) end } end
+-- ((2026-11-28, the user: "war didnt have any subtitles", a joiner in an 8-player run of 0.75.118) on the host its tick runs as
+-- the host's round logic (COOP.asRound, sv_coop_migration.lua): its subtitles (War's, Haythorn's) go to every joiner ("sb"),
+-- its callouts ("co") and its pay split and sent ("cr"), as every special's. Outside it (since THE DEAL went public, 0.75.62)
+-- War spoke on the host's screen alone, the joiners got no callout, and the pay was the host's alone. This part loads after
+-- sv_coop_migration.lua, so its ROUND_TICKS walk never saw it: wrapped here. Solo and a joiner: as it was
+if TEST_TICKS then
+    TEST_TICKS[#TEST_TICKS + 1] = { name = "deal", asRound = true, fn = function(now)
+        if COOP and COOP.asRound then return COOP.asRound(DEAL.tick, now) end
+        return DEAL.tick(now)
+    end }
+end
 end
