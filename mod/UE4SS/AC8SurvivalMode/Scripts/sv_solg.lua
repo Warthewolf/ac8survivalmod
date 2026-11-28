@@ -120,9 +120,33 @@ SOLG = { C = {
     floor = 1,                              -- a live target's HP floor: it breaks there
     fx = { "/Game/VFX/Environment/Common/Explosion/AirExplosion/NS_airExplosionA/NS_airExplosionA_M" },
     fx_scale = { SAW = 3, MAG = 2, KEW = 3, CORE = 5, HATCH = 6, SP = 8, SOLG = 12, ARM = 6, LSRA = 2, LSRB = 2, LSRC = 2 },
+    -- ((2026-11-28) the user: "the SOLG didn't have any sounds") AC:I's own SOLG bank (tools/solg/sounds.py: its six break
+    -- sounds, no engine or laser of its own; docs/rules/sources_and_toolchain.md, 2026-11-23) through Survival's player
+    -- (sv_sound.lua SND.play) where a piece breaks, on every game: small (a panel, a shell, a laser) one of four, big
+    -- (big_keys, an arm, the SOLG itself) one of two; gap_s at least between two of a kind (a KEW chain breaks a dozen)
+    sounds = { enabled = true, gap_s = 0.3, big_keys = { CORE = true, HATCH = true, SP = true },
+               small = { files = { "solg/break_small_1.wav", "solg/break_small_2.wav", "solg/break_small_3.wav", "solg/break_small_4.wav" },
+                         db = 4, curve = { max = 900000, shape = "exp1" } },
+               big = { files = { "solg/break_big_1.wav", "solg/break_big_2.wav" }, db = 8, curve = { max = 2500000, shape = "exp1" } } },
 } }
 do
 local S = nil                                             -- the SOLG up: { actor, body, move, panels = {...} }
+local SNDAT = { small = -1, big = -1, said = false }      -- (breakSound: when each kind last played)
+local function breakSound(big, at)
+    local c = SOLG.C.sounds
+    if not (c and c.enabled ~= false and SND and SND.play and type(at) == "table") then return end
+    local s = big and c.big or c.small
+    if not (s and type(s.files) == "table" and #s.files > 0) then return end
+    local kind, now = big and "big" or "small", os.clock()
+    if now - SNDAT[kind] < (tonumber(c.gap_s) or 0.3) then return end
+    SNDAT[kind] = now
+    local f = s.files[math.random(#s.files)]
+    local ok, h = pcall(SND.play, { file = f, db = tonumber(s.db) or 0, curve = s.curve }, { X = at.X, Y = at.Y, Z = at.Z })
+    if not SNDAT.said then
+        SNDAT.said = true
+        log(string.format("solg: its break sound %s: %s", f, (ok and h) and "playing" or ("NOT played (" .. tostring(h) .. ")")))
+    end
+end
 local function step(s) if crumb then crumb("solg: " .. s) end end
 local function sl(s) log("solg: " .. s) end
 local function n(v, d) v = tonumber(v); if v == nil or v ~= v then return d end return v end
@@ -337,6 +361,7 @@ function SOLG.fall()
     local t = n(f.body_tumble_dps, 4)
     if rot then pcall(function() rot.RotationRate = { Pitch = t, Yaw = t * 0.3, Roll = t * 0.6 } end) end
     pcall(function() S.body:SetPlayRate(0.2) end)       -- (its rings winding down)
+    breakSound(true, SOLG.where())                        -- ((2026-11-28) coming apart: AC:I's big break
     sl("falling (gravity " .. (S.move and "on" or "NO mover") .. ", tumble " .. (rot and "on" or "off") .. ")")
     return true
 end
@@ -377,6 +402,7 @@ function SOLG.breakArm(armBone, pieces)
     S.panels[#S.panels + 1] = { actor = a, gone = os.clock() + n(SOLG.C.splash.fall_life_s, 150), big = true }
     if SOLG.smokeOn then SOLG.smokeOn(armBone) end        -- (its stump smokes)
     if fxAt then pcall(fxAt, SOLG.C.fx, L, n(SOLG.C.fx_scale.ARM, 6), 8) end
+    breakSound(true, L)
     sl(string.format("%s broken off with its %d pieces: falling (%s, tumble %s)", armBone, #(pieces or {}), pm and "a mover" or "NO mover", rot and "on" or "off"))
     return true
 end
@@ -873,6 +899,7 @@ breakTarget = function(e, why)
         pcall(function() S.body:UnHideBoneByName(FName(e.bone .. "_W")) end)
     end
     if L and fxAt then pcall(fxAt, SOLG.C.fx, L, n(SOLG.C.fx_scale[e.key], 3), 6) end
+    if L and why ~= "gone" then breakSound(((SOLG.C.sounds or {}).big_keys or {})[e.key] == true, L) end
     if SOLG.C.smoke and SOLG.C.smoke.keys[e.key] and why ~= "gone" then smokeOn(e.bone) end
     local kc = SOLG.C.kew_chain
     if e.key == "KEW" and L and kc and kc.enabled ~= false and not S.mirror and why ~= "gone" and why ~= "its arm's gone" then

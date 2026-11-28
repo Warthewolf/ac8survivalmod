@@ -110,6 +110,14 @@ if ls build/ulysses/sounds/*.wav >/dev/null 2>&1; then
 else
     echo "no ULYSSES sounds (python tools/ulysses/sounds.py): its fragments fall silent"
 fi
+# the SOLG's sounds (AC:I's own SOLG bank, python tools/solg/sounds.py into build/solg/sounds; never in git)
+if ls build/solg/sounds/*.wav >/dev/null 2>&1; then
+    mkdir -p build/install/AC8SurvivalMode/Sounds/solg
+    cp build/solg/sounds/*.wav build/install/AC8SurvivalMode/Sounds/solg/
+    echo "staged the SOLG's sounds ($(ls build/solg/sounds/*.wav | wc -l) in AC8SurvivalMode/Sounds/solg)"
+else
+    echo "no SOLG sounds (python tools/solg/sounds.py): its pieces break off silent"
+fi
 # (2026-11-23) Survival's own Wwise sounds (tools/wwise: Wwise 2024.1.11 = AC8's, cooked in the sound project
 # AC8_WWISE_PROJECT; each event carries its bank as bulk data, routed to AC8's own sfx bus by name)
 if [ -f build/wwise/out/SurvivalMode_Wwise_P.utoc ]; then
