@@ -413,22 +413,51 @@ end
 -- ("damage event", "no damage event", "ApplyDamage"; nil: not down). Its caller checks it's still its own (hard rule 59).
 -- noEvent: from the "no damage event" step (ModifyHealthInternal still runs CheckDeath): the shuttle's take-off, whose
 -- damage event would set off the event package's ObjectDamage_Shuttle radio lines minutes after a clean liftoff.
--- ((2026-11-28, the user: "make it so that if I target anywhere on the SAW panels that its hittable") a target's hit sphere
--- (LiveGameObject.SphereCollision: what a round or a missile strikes) set to m metres across its middle; its OverlapCollision
--- raised to it too, never lowered. On AC8's invisible target pawn (GR000_dummy: the SOLG's, ULYSSES') the sphere is all
--- there is to hit. -> its radius before and after (metres; nil unread)
+-- ((2026-11-28, the user: "make it so that if I target anywhere on the SAW panels that its hittable") a target's hit
+-- sphere, m metres round its middle: what a round or a missile strikes. AC8's invisible target pawn (GR000_dummy: the SOLG's
+-- and ULYSSES' targets) has no hit primitive of its own (docs/re/FISHING.md: a gun misses it; the autotest ulylock of
+-- 0.75.119 read no SphereCollision on it): a SphereComponent is added once (FISH.addSphere's way, the shoals': profile
+-- EnemyPawn) and its radius set from then on; a target with a SphereCollision of its own has that one set. Its
+-- OverlapCollision raised to it, never lowered. -> its radius before and after (metres; nil unread), and how
+local HITSPH, HITSPH_N = {}, 0
 function hitSphere(o, m)
     m = tonumber(m)
-    if not (o and m and m > 0) then return nil, nil end
-    local was, now
-    pcall(function() was = o.SphereCollision:GetUnscaledSphereRadius() / 100 end)
-    pcall(function() o.SphereCollision:SetSphereRadius(m * 100, true) end)
+    if not (o and m and m > 0) then return nil, nil, "no size" end
+    local a, nm = addrOf(o), nameOf(o)
+    local comp, how = nil, nil
+    local okS, sc = pcall(function() return o.SphereCollision end)
+    if okS and valid(sc) then comp, how = sc, "its own SphereCollision" end
+    if not comp and a then
+        local h = HITSPH[a]
+        if h and h.name == nm and valid(h.comp) then comp, how = h.comp, "its added sphere" end
+    end
+    local was = nil
+    if comp then
+        pcall(function() was = comp:GetUnscaledSphereRadius() / 100 end)
+    else
+        local cls = StaticFindObject("/Script/Engine.SphereComponent")
+        if valid(cls) then
+            local t = { Rotation = { X = 0, Y = 0, Z = 0, W = 1 }, Translation = { X = 0, Y = 0, Z = 0 }, Scale3D = { X = 1, Y = 1, Z = 1 } }
+            local ok, c = pcall(function() return o:AddComponentByClass(cls, false, t, false) end)
+            if ok and valid(c) then
+                comp, how = c, "a sphere added (EnemyPawn)"
+                pcall(function() c:SetCollisionProfileName(FName("EnemyPawn"), true) end)
+                if a then
+                    if HITSPH_N >= 1024 then HITSPH, HITSPH_N = {}, 0 end          -- (bounded: a long run's targets)
+                    HITSPH[a], HITSPH_N = { comp = c, name = nm }, HITSPH_N + 1
+                end
+            end
+        end
+    end
+    if not comp then return was, nil, "none of its own and none could be added" end
+    pcall(function() comp:SetSphereRadius(m * 100, true) end)
     pcall(function()
         local ov = o.OverlapCollision
-        if ov:GetUnscaledSphereRadius() < m * 100 then ov:SetSphereRadius(m * 100, true) end
+        if valid(ov) and ov:GetUnscaledSphereRadius() < m * 100 then ov:SetSphereRadius(m * 100, true) end
     end)
-    pcall(function() now = o.SphereCollision:GetUnscaledSphereRadius() / 100 end)
-    return was, now
+    local now = nil
+    pcall(function() now = comp:GetUnscaledSphereRadius() / 100 end)
+    return was, now, how
 end
 function finishUnpaid(o, noEvent)
     if not liveObj(o) then return false, nil, nil end
