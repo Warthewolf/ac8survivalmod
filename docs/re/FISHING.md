@@ -358,6 +358,14 @@ up 1.5 s on: finished off here (logged: the record's i may not be the spawner's 
 1) 3 s on. Missiles 150 Z, Tu-160s 400 Z (x the round's kill multipliers); every bomber down and nothing in the air:
 4,000 + 150 x the round (a special's: split in co-op); 900 s: what's left taken off.
 
+The town's boxes (`SV_Unit_FestTown`, 15 invisible, invincible allied dummies, tools/survival_events_festival.py
+`FEST_TOWN_BOXES`): up with the talk, off at the festival's end. First (2026-11-07) all within 155 m of the concert;
+since 2026-11-28 (the user: "spread out the festival market stalls more so they don't look like a massive clump", her
+picture: the labels piled into one) over the town south of the runway's line, about 1.6 km along it and 0.5 km across,
+each on 5 m ground among houses (build/research/comona's placements and height_20m.npy), at least 150 m apart (the build
+asserts it) but VALKA and AUDREY (12 m, side by side; festival_test.lua), FIREWORKS just off the beach. Seen from a few
+km, a box's label covers 250-300 m of ground.
+
 ### TEST ONLY keys (all stripped from a release)
 | Key | Part | Does |
 |---|---|---|
