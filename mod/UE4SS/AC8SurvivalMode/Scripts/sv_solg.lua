@@ -728,12 +728,12 @@ local function placeAll(t, got, on, mirror)
             -- ((2026-11-28) its hit sphere over the piece it stands for (t.hit_m, else SOLG.C.hit_m): the SAW panels 55 m (the
             -- user: "if I target anywhere on the SAW panels that its hittable"); the pawn is invisible, the sphere all to hit
             if not t.laser then
-                local was, now = hitSphere(o, t.hit_m or SOLG.C.hit_m)
+                local was, now, how = hitSphere(o, t.hit_m or SOLG.C.hit_m)
                 S.sphereSaid = S.sphereSaid or {}
                 if not S.sphereSaid[t.key] then
                     S.sphereSaid[t.key] = true
-                    sl(string.format("targets: %s's hit sphere %s m -> %s m", t.key, was and string.format("%.1f", was) or "?",
-                        now and string.format("%.1f", now) or "NOT set"))
+                    sl(string.format("targets: %s's hit sphere %s m -> %s m (%s)", t.key, was and string.format("%.1f", was) or "?",
+                        now and string.format("%.1f", now) or "NOT set", tostring(how)))
                 end
             end
             flags(o, on and FLAGS_ON or FLAGS_OFF)
