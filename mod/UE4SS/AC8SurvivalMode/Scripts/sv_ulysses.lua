@@ -885,7 +885,11 @@ local function land(f, now)
         landSound("sea", W)
     end
     f.where = (isLand and "land" or "sea") .. " (" .. how .. ")"
-    tell("l", tostring(f.id), isLand and "1" or "0")
+    -- ((2026-11-28, the user, a joiner: "the explosion for the core didn't show up either") where it blew up here (metres):
+    -- a joiner's own rock is past it by then, under the ground, and its explosion went off there unseen
+    local B = isLand and { X = f.P.X, Y = f.P.Y, Z = gz or f.P.Z } or { X = f.P.X, Y = f.P.Y, Z = n(sc.sea_z, 350) }
+    tell("l", tostring(f.id), isLand and "1" or "0", string.format("%.0f", B.X / 100), string.format("%.0f", B.Y / 100),
+        string.format("%.0f", B.Z / 100))
     fallOff(f)
     disarm(f.e)
     rockOff(f.r)
@@ -1354,7 +1358,7 @@ function ULY.fromHost(f)
         if ph == 1 then
             local sh = cfg().shift or {}
             fade(1, 0, n(sh.fade_s, 1.2) * 2, false)
-            if hudCallout then hudCallout(sh.card or "JULY 1999", sh.card_sub) end
+            -- ((2026-11-28) no JULY 1999 card of this game's: the host's comes ("co"), and both showed (the user's log)
         end
         ul(string.format("the host's round: phase %d; the film look %s", ph, filmOn()))
     elseif k == "f" then
@@ -1392,6 +1396,9 @@ function ULY.fromHost(f)
         J.rocks[f[3]] = nil
         jDisarm(r)
         local at = rockAt(r)
+        -- ((2026-11-28) a landing: the host's ground point (its fields 5-7, metres) when it sent one, as the host's own blast
+        local bx, by, bz = tonumber(f[5]), tonumber(f[6]), tonumber(f[7])
+        if k == "l" and fin(bx, 3e5) and fin(by, 3e5) and fin(bz, 6e4) then at = { X = bx * 100, Y = by * 100, Z = bz * 100 } end
         local fx = cfg().fx_scale or {}
         if at then
             if r.big then newsOne(k == "s" and "core_down" or "core_hit") end
@@ -1426,7 +1433,7 @@ function ULY.fromHost(f)
             ambOff()
             local sh = cfg().shift or {}
             fade(1, 0, n(sh.fade_s, 1.2) * 2, false)
-            if hudCallout then hudCallout(sh.home or "PRESENT DAY", sh.home_sub) end
+            -- ((2026-11-28) no PRESENT DAY card of this game's: the host's comes ("co"), as JULY 1999's
         end
         ul("the host's round over" .. (f[3] == "1" and ": home again" or ""))
     end

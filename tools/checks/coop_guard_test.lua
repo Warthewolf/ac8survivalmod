@@ -534,6 +534,7 @@ local TYPES = {
     { "join", "ul", { "ul", "f", "4", "D", "-15000", "8000", "11000", "-30000", "12000", "-9000", "250", "40", "0", "17" }, extra = true },
     { "join", "ul", { "ul", "s", "3" }, extra = true },
     { "join", "ul", { "ul", "l", "3", "0" }, extra = true },
+    { "join", "ul", { "ul", "l", "3", "1", "-12500", "4000", "35" }, extra = true },   -- ((2026-11-28) with the host's blast point
     { "join", "ul", { "ul", "e", "1" }, extra = true },
     { "join", "ev", { "ev", "RE_SV_AlcnOpenCore", U1 }, extra = true },
     -- ((2026-11-11) the Alicorn: rnd field 16 shut and dived; the host's health for ids not bound here yet, M.pendHp)
