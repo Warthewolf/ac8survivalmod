@@ -536,6 +536,10 @@ local function probeTick(tick)
             local okFs, errFs = pcall(FISH.setup)
             if not okFs then log("fishing: setup error " .. tostring(errFs)); FISH.setupDone = true end
         end
+        if FEST and FEST.setup then                      -- ((2026-11-28) THE FESTIVAL's town box names: sv_festival.lua)
+            local okFt, errFt = pcall(FEST.setup)
+            if not okFt then log("festival: setup error " .. tostring(errFt)); FEST.setupDone = true end
+        end
         if ESC and ESC.setup then                        -- (THE ESCORT's and the ZFA-44's rows and names: sv_escort.lua)
             local okEs, errEs = pcall(ESC.setup)
             if not okEs then log("escort: setup error " .. tostring(errEs)); ESC.setupDone = true end
