@@ -5330,6 +5330,10 @@ SUITES.valkasolg = function()
             A.log_("special: VALKA's SOLG: destroyed", 8, "z0", true, function(l)
                 ST.check(l ~= nil, "the SOLG destroyed: pay, AUDREY's lines", l)
                 ST.check(ST.findLog("solg: falling", ST.marks.z0) ~= nil, "it falls apart", ST.findLog("solg: falling", ST.marks.z0))
+                -- ((2026-11-28) the user: "the SOLG didn't have any sounds": AC:I's own break sounds, Sounds/solg)
+                local bs = ST.findLog("solg: its break sound", ST.marks.s1)
+                ST.check(bs ~= nil and bs:find("playing", 1, true) ~= nil, "its pieces' break sounds play (AC:I's SOLG bank)", bs)
+                ST.check(ST.findLog("sound: solg/", ST.marks.s1) == nil, "every SOLG sound file loads", ST.findLog("sound: solg/", ST.marks.s1))
                 local arms = 0
                 for k = 1, 4 do if ST.findLog(string.format("solg: SG01_%02d broken off with its ", k), ST.marks.s1, true) then arms = arms + 1 end end
                 ST.check(arms == 4, string.format("each autoloader broke off once its 9 KEW shells were down (%d of 4)", arms),
