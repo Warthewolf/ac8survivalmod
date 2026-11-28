@@ -1000,7 +1000,10 @@ local function strayTick(now)
     for _, p in ipairs(planes or {}) do
         local o = p.obj
         local a = live(o)
-        if a and not inFound[a] and not p.down and not (p.unit and SLOT_OF[p.unit]) and not bound[a] then
+        -- ((2026-11-28) an allied blueprint (_CP_Ally) never an enemy copy: a joiner's VAMPIRES drones went in here as
+        -- enemies, of no unit, and were taken down 36 a minute)
+        if a and not inFound[a] and not p.down and not (p.unit and SLOT_OF[p.unit]) and not bound[a]
+            and not tostring(p.name):find("_CP_Ally", 1, true) then
             stillHere[a] = true
             local first = M.strayFirst[a]
             if not first then M.strayFirst[a] = now
