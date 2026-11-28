@@ -343,6 +343,7 @@ local function p2Fight(P, now)
         return
     end
     P.up, P.of = up, of
+    if (P.phase or 1) < 3 then IFCOOP.rowSend(P) end   -- ((2026-11-28) her row on the joiners' games
     local down = of - up
     if down > P.paid then
         local v = pay(n(c.part_pay, 500) * (down - P.paid), "the TANACORN's guns")
@@ -370,6 +371,7 @@ local function p2Fight(P, now)
         local o = TANI.liveHull and TANI.liveHull() or nil
         local h = o and hullHp(o) or nil
         P.corePct = (h and P.coreMax and P.coreMax > 0) and math.max(0, math.floor(100 * (h - (P.coreFloor or 0)) / math.max(1, P.coreMax - (P.coreFloor or 0)) + 0.5)) or P.corePct
+        IFCOOP.rowSend(P)
         if not o or (h and h <= (P.coreFloor or 0) + 1) then
             local okD, how = false, nil                 -- ((0.74.137) her death: explosions, then she goes under bow first)
             if o and TANI.liveSink then okD, how = TANI.liveSink("round 30: her core destroyed", c.sink) end
@@ -916,7 +918,12 @@ function IFROUND.over(now, s)
     R = nil
 end
 function IFROUND.row(s, t)
-    if not R then return nil end
+    if not R then                                         -- ((2026-11-28) a joiner: the host's numbers ("row"), 5 s fresh
+        local J = IFCOOP.jrow
+        if not (J and os.clock() - J.at < 5 and D and J.round == D.round) then return nil end
+        if J.phase >= 3 then return string.format(tx2().core_row or "TANACORN CORE: %d%%", J.pct) end
+        return string.format(tx2().row or "TANACORN: %d OF %d GUNS", J.up, J.of)
+    end
     if R.p2 and R.p2.state == "fight" and R.p2.phase == 3 then
         return string.format(tx2().core_row or "TANACORN CORE: %d%%", R.p2.corePct or 100)
     end
@@ -927,6 +934,11 @@ function IFROUND.row(s, t)
     local shut = R.geo and R.geo.shut and not R.geo.open    -- ((2026-11-28) GEOFON screened by its Aegis: said on the row
     return string.format(tx().row or "FLEET: %d AFLOAT  CARRIER: %s", afloatN(R.F),
         (g and not g.sunk) and (IFLEET.label(g) .. (shut and (" " .. (tx().geofon_shut or "SCREENED")) or "")) or "SUNK")
+end
+-- ((2026-11-28) a co-op joiner's NEXT row in round 30: the host's numbers (sv_hud.lua asks, as the other specials' clientRow)
+function IFCOOP.clientRow(t)
+    if R or not (COOP and COOP.client and COOP.client()) then return nil end
+    return IFROUND.row(nil, t)
 end
 if SPC and SPC.kinds then
     SPC.kinds.fleet = {
@@ -1098,6 +1110,17 @@ end
 local function jlog(s) log("fleet round: " .. s) end
 function IFCOOP.send(what, ...)                          -- (the host's word, to every joiner)
     if COOP and COOP.host and COOP.host() and COOP.msg then pcall(COOP.msg, nil, "if", what, ...) end
+end
+-- ((2026-11-28) the user, a joiner: "the tanacorns core health isn't showing up for me either") her row's numbers to every
+-- joiner (phase, her guns up, of, her core's %), when they change or every 3 s, at most once a second; a joiner's
+-- IFROUND.row shows them
+function IFCOOP.rowSend(P)
+    if not (COOP and COOP.host and COOP.host() and COOP.msg) then return end
+    local now = os.clock()
+    local key = string.format("%d|%d|%d|%d", P.phase or 1, P.up or 0, P.of or 0, P.corePct or 100)
+    if now - (P.rowAt or -100) < 1 or (key == P.rowKey and now - (P.rowAt or -100) < 3) then return end
+    P.rowAt, P.rowKey = now, key
+    IFCOOP.send("row", P.phase or 1, P.up or 0, P.of or 0, P.corePct or 100)
 end
 -- ((0.74.172) to one who links (or links back) during round 30: where its phase 2 is (GEOFON watched, broken, split, its
 -- halves hidden; her core open; her sinking), 12 s on, its copies spawned there first (sv_coop.lua's hostSync)
@@ -1303,13 +1326,28 @@ function IFCOOP.onHost(f)
         return TANI.riseRelease("the host's release")
     end
     if what == "core" then                               -- (her hull boxed and lockable here: your hits go to the host's)
+        -- ((2026-11-28) the user, a joiner: "we aren't able to destroy the tanacorn, our hits aren't doing anything") her
+        -- armour off here too, as the host's openCore: this copy was cooked invincible (spec.py HULL_CDO), so no hit on it
+        -- took any health and none went to the host ("ht"); co-op's floor (floorOn) still holds it for the host's kill
         local o = TANI and TANI.anyHull and TANI.anyHull() or nil
+        local inv = "?"
         if o then
-            for k, v in pairs({ bShowHUDBox = true, bIsNotLockonTarget = false, bIsNotFCSTargets = false, TargetMarkType = 1 }) do
+            pcall(function() o:SetIsInvincible(false) end)
+            for k, v in pairs({ bIsInvincible = false, bCanBeDamaged = true, bShowHUDBox = true, bIsNotLockonTarget = false,
+                                bIsNotFCSTargets = false, TargetMarkType = 1 }) do
                 pcall(function() o[k] = v end)
             end
+            local okR, a, b = pcall(function() return o.bIsInvincible, o.bCanBeDamaged end)
+            inv = okR and string.format("invincible %s, can be damaged %s", tostring(a), tostring(b)) or "unread"
         end
-        jlog("co-op: her core open (the host's)" .. (o and "" or ": no copy of her here"))
+        jlog("co-op: her core open (the host's)" .. (o and (": her armour off here (" .. inv .. ")") or ": no copy of her here"))
+        return true
+    end
+    if what == "row" then                                -- ((2026-11-28) her row's numbers, the host's each second
+        local ph, up, of, pct = tonumber(f[3]), tonumber(f[4]), tonumber(f[5]), tonumber(f[6])
+        if not (finiteN(ph, 10) and finiteN(up, 1000) and finiteN(of, 1000) and finiteN(pct, 1000)) then return false, "bad row" end
+        if not IFCOOP.jrow then jlog(string.format("co-op: her row from the host (phase %d, %d of %d guns, core %d%%)", ph, up, of, pct)) end
+        IFCOOP.jrow = { phase = ph, up = math.floor(up), of = math.floor(of), pct = math.floor(pct), at = os.clock(), round = D and D.round }
         return true
     end
     return false, "unknown: " .. tostring(what)

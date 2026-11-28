@@ -743,6 +743,8 @@ function hudTick(now, paused, pc)
         nextS = string.format(t.amphib_row, craft, ashore, AMPH.capture())
     elseif D.special and SPC.kinds[D.special.kind] and SPC.kinds[D.special.kind].row and SPC.kinds[D.special.kind].row(D.special, t) then
         nextS = SPC.kinds[D.special.kind].row(D.special, t)          -- (the Spaceport Assault's: sv_spaceport.lua)
+    elseif IFCOOP and IFCOOP.clientRow and IFCOOP.clientRow(t) then  -- ((2026-11-28) a co-op joiner: THE TANACORN's guns /
+        nextS = IFCOOP.clientRow(t)                                   -- core from the host's "if|row" (sv_fleet_round.lua)
     elseif SPORT and SPORT.clientRow and SPORT.clientRow(t) then      -- ((0.73.77, I7: S12) a co-op joiner: the host's
         nextS = SPORT.clientRow(t)                                    -- Spaceport row, from its "spx")
     elseif DECOY and DECOY.clientRow and DECOY.clientRow(t) then      -- (a co-op joiner: the host's DECOY row, its "dk")

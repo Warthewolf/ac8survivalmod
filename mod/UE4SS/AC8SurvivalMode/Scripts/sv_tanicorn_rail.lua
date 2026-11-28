@@ -284,7 +284,9 @@ local function railHud(e)
 end
 local function orderTry(e, now, why)
     local G = TANI.railgun
-    if joiner() then e.state = "up"; gunLog(e, "up: not ordered here (a joiner: the host orders it)"); return end
+    -- ((2026-11-28) the user, a joiner: "The tanacorns railguns have no warning", "theres no minimap warning for her railguns
+    -- either") a joiner's copy is raised here too now (gunsTick: joinerSeen) and ordered as the host's: its warning and
+    -- minimap line written, it fires at this game's player, as the joiner's copies of her other guns do
     if now < (e.retryAt or 0) then return end
     local held, note = nil, nil                          -- (held while paused, hard rule 60, and through the STORE and the
     if paused() then held, note = "the game paused", "held through it"   -- landing minigames, hard rule 64)
@@ -407,8 +409,39 @@ local function gunStep(e, now, dt)
         liftCheck(e, now)
     end
 end
+-- ((2026-11-28) a joiner's game has no live hull of its own (TANI.liveSeen: the host's Ctrl+L / round 30 watch): its
+-- railguns are its copies of the host's (COOP.copiesOf the hull's unit, else by their class), looked at every 2 s while
+-- any copy of her is here; nothing walked otherwise
+local JSEEN = { at = -100, seen = nil, said = false }
+local function joinerSeen(now)
+    if now - JSEEN.at < 2 then return JSEEN.seen end
+    JSEEN.at = now
+    local pool = (COOP and COOP.copiesOf and TANI.live and COOP.copiesOf(TANI.live.unit)) or {}
+    if #pool == 0 then JSEEN.seen = nil; return nil end
+    local seen, how = {}, {}
+    for _, k in ipairs(TANI.rail or {}) do
+        if not k.cannon then
+            local function take(o, from)
+                local a = liveAddr(o)
+                if a and not seen[k.key] and nameOf(o):find(k.class, 1, true) then
+                    seen[k.key] = { o = o, a = a, name = nameOf(o), key = k.key }
+                    how[#how + 1] = k.key .. " " .. from
+                end
+            end
+            for _, o in ipairs(pool) do take(o, "(a copy)") end
+            if not seen[k.key] then for _, o in ipairs(FindAllOf(k.class) or {}) do take(o, "(by its class)") end end
+        end
+    end
+    if not JSEEN.said and #how > 0 then
+        JSEEN.said = true
+        log("tanicorn rail: a joiner: her railguns here: " .. table.concat(how, ", ") .. " (raised and ordered on this game)")
+    end
+    JSEEN.seen = seen
+    return seen
+end
 local function gunsTick(now, dt)
     local seen = TANI.liveSeen and TANI.liveSeen()
+    if joiner() then seen = joinerSeen(now) end
     for _, k in ipairs(TANI.rail or {}) do
         local s = (k.cannon ~= true) and seen and seen[k.key] or nil
         local e = RG[k.key]
