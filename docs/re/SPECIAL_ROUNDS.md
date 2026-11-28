@@ -78,6 +78,34 @@ must use its own timer: LiveStartTimerExecution + timer triggers, or plain exec 
   `01_Countdown_Shuttle8`, `..7`, `01_Countdown_Ignistion`, `01_Countdown_mainEngine`, `01_Iactive_Ignistion`,
   `01_Countdown_Shuttle2and1`. Sound flags: `AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_33sec_Set`, `_23sec_`, `_08sec_`,
   `_02sec_`, `_Interrupted_Set` (on failure). `CompositeEvent_CountDown_1` also runs `LiveDisplayRemainingExecution`.
+
+#### Mission 22's countdown radio (read 2026-11-28 from build/m022_ep.txt and DT_Rdo_ST_ms022)
+Each `CompositeEvent_CountDown_<n>` waits for its `RemainingTime_CountDown_<m>` second AND the last line's end
+(`PostRadioEvent_CountDown_<n>`, type 25), so a line never cuts in before the last one is said. Seconds left, Nagase's
+words (build/research/loc/ms022_text.tsv), what else runs on it:
+| s left | group | words (Nagase) | with it |
+|---|---|---|---|
+| 39 | `01_Wave5_Countdown_Start` | "Spruce Goose." "Counting down from X minus 33." | |
+| 33 / 32 / 31 | `01_Countdown_Shuttle33` / `32` / `31` | "33" "32" "31" | 33 s sound flag |
+| 30 | `01_Countdown_intermission_1st` | Baxter's and Tasha's (dropped in Survival) | |
+| 23 ... 19 | `01_Countdown_Shuttle23` ... `19` | "23" ... "19" | 23 s sound flag (at 22) |
+| 18 | `01_Countdown_intermission_2nd` | "WSSS active." "Main engine, hydrogen burn-off igniter system...Now active." | |
+| 8 / 7 | `01_Countdown_Shuttle8` / `7` (channel 3) | "Eight." "Seven." | 08 s sound flag (at 7) |
+| 6 | `01_Countdown_Ignistion` (+ Baxter's `01_Countdown_mainEngine`) | "Ignition." | its line's pre-radio (`Default_PreRadioEvent_12` / `_21`, on TextID v2202_0073): `RE_Shuttle_Boost_On` (plume, ignition sound), `RE_Shuttle_Fire_On` |
+| 2 | `01_Countdown_Shuttle2and1` | "Two... One..." | 02 s sound flag |
+| 0 | `01_Start_Ignistion` (played by `RE_Wave6_Setting`, the mission's end) | "Liftoff!" | its end (`Default_PostRadioEvent_12`, TextID v2202_0069): `RE_Shuttle_Launch`, `RE_Shuttle_Boost_Off` |
+Every ms022 row has `LimitPlayCount` 1 (once a level). Survival (tools/survival_events.py `SHUTTLE_RADIO`, since
+2026-11-28) plays these seconds from its own countdown clock, each group a copy of its own in DT_SV_Radio
+(`SV_Radio_Sh<X>`, LimitPlayCount 0) so a run's second shuttle round has its countdown too (autotest shuttleradio,
+2026-11-28: every line again in round 2). "Eight." and "Seven." are Mission 22's only rows on the **Sub** channel
+(ELiveRadioChannel 3): in Survival's level they never showed, not even asked for alone with the radio idle
+(ULiveRadioWorldSubsystem.RequestPlayRadio, autotest radioprobe), while the Main and Default rows did, so Survival's
+copies of them are on Main (build_survival_rows.py `RADIO_CHANNEL_*`). "Main engine, ... Now active." is up about 6.5 s
+(its box shown 2.6 s to 9.1 s after its group is asked for at 18 s, the linger included): done before "Eight.". Its booster plume and
+ignition sound stay at 14 s (Mission 22's debug chain `RE_TestShuttle`), not on "Ignition.". The first schedule
+(2026-10-22 to 0.75.122) said the start 147 s before liftoff, "Ignition." at 11 s before "Eight.", and no "Liftoff!".
+Survival's event package holds only its own records (survival_events.Graph writes `g.trig` / `g.ex`), so Mission 22's
+pre/post-radio hooks above aren't in it: playing "Ignition." or "Liftoff!" moves nothing.
 - 60 s before launch (`Default_CompositeEvent_110`): `LiveSetMinHealthExecution` {0b shuttle, 02 NoneSelect,
   0a NoneSelect, 10 1.0} (shuttle can no longer die), same for the Tower.
 Ignition / liftoff (remote events, keep this order):

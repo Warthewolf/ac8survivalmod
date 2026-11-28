@@ -4556,3 +4556,20 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   compatibility_date, the live D1 binding, no [vars]) with `--keep-vars`: read back after, the D1 binding, the four vars
   and the three secrets (ADMIN_KEY, DISCORD_TOKEN, SUBMIT_KEY) as before; the page answers 200. A plain `wrangler deploy`
   from leaderboard/ would overwrite them with the placeholders.
+- 0.75.124 (2026-11-28, fix/shuttle-countdown-radio): Nagase's shuttle countdown on Mission 22's own seconds. The user, a
+  joiner of 0.75.118 (SPECIAL ROUND 2, 11:12-11:15): "nagases countdown seemed off"; then "fix the timing and the second
+  round copies too". The first schedule (2026-10-22) said "Spruce Goose. Counting down from X minus 33." 147 s before
+  liftoff, then nothing for almost two minutes, "Ignition." at 11 s (before "Eight." and "Seven.") and never "Liftoff!".
+  Now (tools/survival_events.py SHUTTLE_RADIO, read from EP_Mission022_global's CompositeEvent_CountDown_*): 39 s the
+  start, 33-31, 23-19, 18 "WSSS active... Now active.", 8, 7, 6 "Ignition.", 2 "Two... One...", 0 "Liftoff!" with the
+  climb (docs/re/SPECIAL_ROUNDS.md "Mission 22's countdown radio"). Each group is a copy of Survival's own in DT_SV_Radio
+  (SV_Radio_Sh<X>, LimitPlayCount 0; a stock ms022 row plays once a level), and the copies of "Eight." / "Seven." (Mission
+  22's only Sub-channel rows, which never showed in Survival's level, not even alone with the radio idle) are on Main. The
+  booster plume stays at 14 s. Autotests (the kit's new shuttleradio and radioprobe suites, the game's own radio box read
+  every tick): 0.75.123 (Eight / Seven still on Sub) 37/39, every line on its second in both rounds of one level but those
+  two; radioprobe 5/5 showed why. 0.75.124: shuttleradio 43/43 (both rounds: all 17 lines in Mission 22's order, each
+  first line 0.1-0.6 s after its second, "Liftoff!" 0.3-0.5 s after the climb's). run_all on 0.75.123: 90 passed, 0
+  failed, 1 skipped (the radio table's channel change since is checked by build_all's own asserts). 0.75.123 and
+  0.75.124 staged as build/release/stage_dev_<ver> for the autotests only (SV_LB_REGISTER=0: not registered), neither
+  installed. Untested in game: co-op (a joiner hears the host's forwarded events, as before), the voices themselves
+  (the test reads the subtitles).

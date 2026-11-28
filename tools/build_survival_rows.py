@@ -21,9 +21,12 @@ RADIO = DATA + 'DT_SV_Radio'
 # like us." (v2501_0054), in place of "This is Singleton Flight. Providing support." (user, 2026-10-23)
 RADIO_REPLACE = {('01_Wave1_Ally_Take_Off', 'v2216_0007'): ('v2501_0054', 'ms25_Savia_Mercenary_Leader')}
 # The shuttle round keeps Nagase's lines and drops the Professor's (Baxter) and Tasha's (user, 2026-10-23); groups left
-# empty aren't played (survival_events.SHUTTLE_RADIO)
+# empty aren't played (survival_events.SHUTTLE_RADIO, whose groups build_radio copies from Mission 22's)
 RADIO_DROP_SPEAKERS = ('LIVE_Baxter', 'LIVE_Tasha')
 RADIO_DROP_IN = ('01_Countdown_intermission_1st', '01_Countdown_mainEngine', '01_All_Wave_Hit_Shuttle_First')
+# ELiveRadioChannel (Default, All, Main, Sub, Extra1, Extra2, InterruptMain): the shuttle countdown's copies of Mission
+# 22's Sub rows go on Main (build_radio)
+RADIO_CHANNEL_MAIN, RADIO_CHANNEL_SUB = 2, 3
 # and MOONCHILD's takeoff is the mercenary's line alone (user, 2026-10-23): Singleton's "We're joining the fight in
 # aircraft we took back from Sotoa." and Tasha's "Okay!" go
 RADIO_DROP_LINES = {('01_Wave1_Ally_Take_Off', 'v2216_0002'), ('01_Wave1_Ally_Take_Off', 'v0003_1682')}
@@ -131,7 +134,9 @@ def build_radio():
     # (survival_events.SP_RADIO), each a group of its own with LimitPlayCount 0 (a stock ms022 row's 1 would leave it
     # silent once the shuttle round's countdown had played it): a 'group' its ms022 rows copied in their order (Baxter's
     # and Tasha's left out, as the shuttle round's; a chain on to another group cut), a 'line' that ms022 line alone on
-    # the tells' template row with its own speaker
+    # the tells' template row with its own speaker. ((2026-11-28) and the shuttle round's countdown the same way
+    # (survival_events.SHUTTLE_RADIO, the user: "the second round copies too"): Nagase's groups, so a run's second shuttle
+    # round has its countdown too)
     def maybe(row, n):
         v = [q for q in row[2] if q[1] == n]
         return v[0][3] if v else None
@@ -140,8 +145,9 @@ def build_radio():
     for _, row in stock_rows:
         t = maybe(row, 'TextID')
         if t is not None: by_text.setdefault(full(t), row)
-    sp_said = []
-    for grp, kind, src in survival_events.SP_RADIO:
+    sp_said, sh_said, moved = [], [], []
+    sh_groups = [(grp, 'group', src) for _, grp, src in survival_events.SHUTTLE_RADIO]
+    for grp, kind, src in list(survival_events.SP_RADIO) + sh_groups:
         assert grp not in have, f'{grp}: a group Mission 22 has, or twice'
         if kind == 'group':
             rows = [copy.deepcopy(row) for _, row in stock_rows if full(field(row, 'RadioGroupID')) == src
@@ -162,20 +168,35 @@ def build_radio():
             if nxt is not None and full(nxt) not in ('None', ''):
                 z.nb.add('None')                           # (not in DT_SV_Radio's name map: the first build of 0.74.52 stopped here)
                 setf(row, 'NextRadioGroupID', survival_events.fname('None'))
+            # ((2026-11-28) the autotest's radio probe: "Eight." and "Seven." (Mission 22's rows on the Sub channel) never
+            # showed in Survival's level, asked for alone with the radio idle, while "Ignition." (Main) showed every
+            # time: the shuttle's copies on the Main channel, as its other countdown lines)
+            ch = maybe(row, 'Channel')
+            if (grp, kind, src) in sh_groups and ch is not None and ch[2] == ('raw', 'Byte', bytes([RADIO_CHANNEL_SUB])):
+                setf(row, 'Channel', ('enum', ch[1], ('raw', 'Byte', bytes([RADIO_CHANNEL_MAIN]))))
+                moved.append(grp)
             name = grp if i == 0 else f'{grp}{chr(65 + i)}'          # (letters only: hard rule 17)
             assert survival_events.survival_fname_plain(name), name
             for n in (grp, name, field(row, 'SpeakerID')[1]): z.nb.add(n)
             keep.append(((name, 0), row))
         have.add(grp)
-        sp_said.append(f'{grp} ({src}): ' + ', '.join(f'{full(field(r, "TextID"))} {field(r, "SpeakerID")[1]}' for r in rows))
+        said = f'{grp} ({src}): ' + ', '.join(f'{full(field(r, "TextID"))} {field(r, "SpeakerID")[1]}' for r in rows)
+        if (grp, kind, src) in sh_groups:
+            assert all(field(r, 'SpeakerID')[1] == 'ms22_Kei_Nagase' for r in rows), said     # (Nagase's lines only)
+            sh_said.append(said)
+        else:
+            sp_said.append(said)
+    assert len(sh_said) == len(survival_events.SHUTTLE_RADIO), sh_said
+    assert moved == ['SV_Radio_Sh8', 'SV_Radio_Sh7'], moved              # (Mission 22's two Sub rows: "Eight." "Seven.")
     dt['rows'] = keep
     z.payloads[0] = bytearray(dtx.write(uprop.W(z.names), dt))
     chk, _ = dtx.parse(uprop.Ctx(bytes(z.payloads[0]), z.names), 0, 'LiveRadioTable')
     assert chk['rows'] == dt['rows']
     save(z, RADIO)
     print(f'  radio: {len(keep)} rows ({dropped} dropped, {len(done)} replaced, {tells} tell and decoy lines, '
-          f'{len(sp_said)} rocket groups)')
+          f'{len(sp_said)} rocket groups, {len(sh_said)} shuttle countdown groups)')
     for line in sp_said: print('    the rockets\' ' + line)
+    for line in sh_said: print('    the shuttle\'s ' + line)
 
 
 def names_in(v):

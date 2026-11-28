@@ -1021,8 +1021,11 @@ def build_shuttle(g, flag):
     flag(up, 'SV_ShuttleRound', 'Set', 1)
     g.execute(t_maxhp, up, {3: f'{SHUTTLE_HP}'})
     g.execute(t_sound, up, {0: SHUTTLE_SOUND + 'Ignition_Stop', 1: SHUTTLE})
-    for before, key in SHUTTLE_RADIO:
-        g.execute(t_radio, at(T - before), {0: key}, conds=standing())
+    # Nagase's countdown (SHUTTLE_RADIO): Survival's copies of Mission 22's groups (DT_SV_Radio, build_radio), each on its
+    # second; "Liftoff!" (0 s before) on the climb's
+    for before, grp, _ in SHUTTLE_RADIO:
+        assert grp.startswith('SV_Radio_Sh') and survival_fname_plain(grp), grp
+        g.execute(t_radio, at(T - before), {0: grp}, conds=standing())
     for before, key in SHUTTLE_SOUND_FLAGS:
         g.execute(t_sflag, at(T - before), {0: key}, conds=standing())
     g.execute(t_minhp, at(T - 20), {0: SHUTTLE, 3: '1.0'}, conds=standing())   # the last 20 s it can't die
