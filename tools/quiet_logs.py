@@ -7,6 +7,7 @@ the world every 0.5 s, 19 ms of each 250 ms tick in the user's Spaceport rounds 
     CFG.log.audit.enabled false
   - config/survival.default.ini: their `;enabled = true` lines say false
 A player's own survival.ini can still turn them on ([log.weapons] / [log.audit] enabled = true).
+One that ships off already (the weapons log since 2026-11-28, the user: "yes switch it off by default") is left as it is.
 """
 import os
 import sys
@@ -19,10 +20,18 @@ def sub(s, old, new, what):
     return s.replace(old, new)
 
 
+def off(scripts, on, off_, what):
+    """the one `on` of sv_config's family turned `off_`; already `off_` there (once, and no `on`): nothing to do"""
+    text = lua_parts.read(scripts, 'sv_config')
+    if text.count(on) == 0 and text.count(off_) == 1:
+        return
+    lua_parts.sub(scripts, 'sv_config', on, off_, what)
+
+
 def main(mod):
     scripts = os.path.join(mod, 'Scripts')
-    lua_parts.sub(scripts, 'sv_config', 'weapons = { enabled = true, every_s = 0.5,', 'weapons = { enabled = false, every_s = 0.5,', 'sv_config log.weapons')
-    lua_parts.sub(scripts, 'sv_config', 'audit = { enabled = true, sample_s = 5,', 'audit = { enabled = false, sample_s = 5,', 'sv_config log.audit')
+    off(scripts, 'weapons = { enabled = true, every_s = 0.5,', 'weapons = { enabled = false, every_s = 0.5,', 'sv_config log.weapons')
+    off(scripts, 'audit = { enabled = true, sample_s = 5,', 'audit = { enabled = false, sample_s = 5,', 'sv_config log.audit')
     p = os.path.join(mod, 'config', 'survival.default.ini')
     s = open(p, encoding='utf-8', newline='').read()
     for sec in ('[log.weapons]', '[log.audit]'):
@@ -30,6 +39,8 @@ def main(mod):
         b = s.find('\n[', a + 1)
         b = len(s) if b < 0 else b
         part = s[a:b]
+        if part.count(';enabled   = true') == 0 and part.count(';enabled   = false') == 1:
+            continue                                     # (off already as shipped)
         assert part.count(';enabled   = true') == 1, f'ini {sec}: its enabled line'
         s = s[:a] + part.replace(';enabled   = true', ';enabled   = false') + s[b:]
     open(p, 'w', encoding='utf-8', newline='').write(s)
