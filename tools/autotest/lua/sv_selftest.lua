@@ -7511,7 +7511,7 @@ SUITES.shuttleradio = function()
             local k = D.shuttleClock
             ST.info(string.format("round %d: the countdown run on from %.0f s to %d s before liftoff", n, T - k.cd, 45))
             k.cd = math.max(k.cd, T - 45)
-            W.last = {}
+            W.last = texts()                              -- (what the boxes already hold, AC8's placeholder at first: not a line)
             ST.doing = "shuttle round " .. n .. ": the countdown's last 45 s"
         end)
         A.until_(function() return sample(R) end, 70, function() analyse(R, n) end)

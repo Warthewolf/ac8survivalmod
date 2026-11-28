@@ -129,7 +129,10 @@ def main(argv):
 
     def note(line):
         C.log_to(verdict, line)
-        print(line, flush=True)
+        # ((2026-11-28) the shuttleradio suite's radio box held AC8's placeholder text, Japanese: the console's cp1252
+        # print raised and the job stopped mid-suite) what the console can't show, replaced
+        enc = getattr(sys.stdout, 'encoding', None) or 'ascii'
+        print(line.encode(enc, 'replace').decode(enc, 'replace'), flush=True)
     if C.game_running():
         note('job: the game is running: nothing done')
         return 2
