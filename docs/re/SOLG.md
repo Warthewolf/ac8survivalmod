@@ -256,3 +256,25 @@ host's phase); breaks and phases are the host's word (S.mirror: no break on its 
 each player paid for each piece and the kill (team pay). The lines: SUB.say's "sb"; the airfield: "af".
 Tests: coop_guard covers "vs" (19,493 messages, clean); autotest solgjoiner (one PC: COOP.client true only while the
 joiner's side is handed the host's words, the copies stood in by units spawned there): 17/17. Two linked games: untested.
+
+## Sounds (2026-11-28)
+
+The user: "the SOLG didn't have any sounds". AC:I's own SOLG bank (DATA92 #528, the @UTF at 31071470: the exception of
+2026-11-23 in docs/rules/sources_and_toolchain.md) holds six streams and nothing else: no engine, hum or laser of its own.
+`python tools/solg/sounds.py` decodes them with vgmstream into build/solg/sounds (never in git); tools/build_all.sh stages
+them into AC8SurvivalMode/Sounds/solg.
+
+| file | stream | its cues | length |
+|---|---|---|---|
+| break_small_1.wav | 1 | SOLG_BREAK_BIG_01; SOLG_BREAK_SML_01 | 5.7 s |
+| break_small_2.wav | 2 | SOLG_BREAK_SML_02 | 7.8 s |
+| break_small_3.wav | 3 | SOLG_BREAK_BIG_02; SOLG_BREAK_SML_03 | 4.7 s |
+| break_small_4.wav | 4 | SOLG_BREAK_SML_04 | 7.6 s |
+| break_big_1.wav | 5 | SOLG_BREAK_BIG_01 | 8.3 s |
+| break_big_2.wav | 6 | SOLG_BREAK_BIG_02 | 8.5 s |
+
+Scripts/sv_solg.lua plays them through Survival's own player (sv_sound.lua SND.play, 3D by its curve) on every game, where
+each piece breaks (breakTarget: the host's breaks and a joiner's from the host's word alike): a small one of four for a
+SAW / MAG / KEW / laser, a big one of two for a CORE unit, the hatch, the SP shell (SOLG.C.sounds.big_keys), an arm
+(breakArm) and the SOLG coming apart (SOLG.fall); at most one of a kind every gap_s (a KEW chain breaks a dozen at once).
+Log: `solg: its break sound <file>: playing` once. Its laser turrets keep AC8's TLS emit (sv_solg_laser.lua).
