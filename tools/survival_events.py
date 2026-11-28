@@ -123,16 +123,28 @@ SHUTTLE_PATH = '01_Ground0_shuttle_0_Path0'
 SHUTTLE_HP = 175.0                          # Mission 22's
 SHUTTLE_COUNTDOWN_S = 150.0
 SHUTTLE_REMOVE_S = 180.0                    # = Scripts/main.lua CFG.specials.shuttle.remove_s
-# Mission 22's countdown radio, as seconds before liftoff (its lines count down in seconds), and its countdown sound
-# flags; Mission 22 drives them off its mission timer, Survival off delays from the shuttle's appearance. Nagase's lines
-# only (user, 2026-10-23): the Professor's and Tasha's groups (28 s intermission, 10 s main engine) are left out, and
-# build_survival.py RADIO_DROP_* takes their rows out of Survival's radio table.
-SHUTTLE_RADIO = [(SHUTTLE_COUNTDOWN_S - 3, '01_Wave5_Countdown_Start'), (33, '01_Countdown_Shuttle33'),
-                 (32, '01_Countdown_Shuttle32'), (31, '01_Countdown_Shuttle31'),
-                 (23, '01_Countdown_Shuttle23'), (22, '01_Countdown_Shuttle22'), (21, '01_Countdown_Shuttle21'),
-                 (20, '01_Countdown_Shuttle20'), (19, '01_Countdown_Shuttle19'), (15, '01_Countdown_intermission_2nd'),
-                 (11, '01_Countdown_Ignistion'), (8, '01_Countdown_Shuttle8'),
-                 (7, '01_Countdown_Shuttle7'), (2, '01_Countdown_Shuttle2and1')]
+# Mission 22's countdown radio (EP_Mission022_global's CompositeEvent_CountDown_*: each line on a RemainingTime trigger,
+# the next one once the last has been said and its second has come; docs/re/SPECIAL_ROUNDS.md "Mission 22's countdown
+# radio"): (seconds before liftoff, Survival's group, Mission 22's group). Survival fires each on the countdown second of
+# its own clock (RE_SV_ShuttleT_<s>). ((2026-11-28) the user, a joiner of 0.75.118: "nagases countdown seemed off": the
+# first schedule said "Spruce Goose. Counting down from X minus 33." 147 s before liftoff, then two minutes of nothing,
+# "Ignition." at 11 s before "Eight." and "Seven.", and never "Liftoff!"; Mission 22's seconds now, its "Liftoff!" (which
+# runs its RE_Shuttle_Launch there) on the climb's second.) Nagase's lines only (user, 2026-10-23): the Professor's and
+# Tasha's groups (30 s intermission, 6 s main engine) are left out, and build_survival_rows.py RADIO_DROP_* takes their
+# rows out of Survival's radio table. Each is a group of Survival's own (build_survival_rows.py build_radio, as SP_RADIO's:
+# Mission 22's rows copied in order, LimitPlayCount 0): a stock ms022 row plays once a level, so a run's second shuttle
+# round had no countdown (the user, 2026-11-28: "the second round copies too").
+SHUTTLE_RADIO = [(39, 'SV_Radio_ShStart', '01_Wave5_Countdown_Start'),       # "Spruce Goose." "Counting down from X minus 33."
+                 (33, 'SV_Radio_Sh33', '01_Countdown_Shuttle33'), (32, 'SV_Radio_Sh32', '01_Countdown_Shuttle32'),
+                 (31, 'SV_Radio_Sh31', '01_Countdown_Shuttle31'),
+                 (23, 'SV_Radio_Sh23', '01_Countdown_Shuttle23'), (22, 'SV_Radio_Sh22', '01_Countdown_Shuttle22'),
+                 (21, 'SV_Radio_Sh21', '01_Countdown_Shuttle21'), (20, 'SV_Radio_Sh20', '01_Countdown_Shuttle20'),
+                 (19, 'SV_Radio_Sh19', '01_Countdown_Shuttle19'),
+                 (18, 'SV_Radio_ShActive', '01_Countdown_intermission_2nd'),  # "WSSS active." "Main engine, ... Now active."
+                 (8, 'SV_Radio_Sh8', '01_Countdown_Shuttle8'), (7, 'SV_Radio_Sh7', '01_Countdown_Shuttle7'),
+                 (6, 'SV_Radio_ShIgnition', '01_Countdown_Ignistion'),       # "Ignition."
+                 (2, 'SV_Radio_ShTwoOne', '01_Countdown_Shuttle2and1'),      # "Two... One..."
+                 (0, 'SV_Radio_ShLiftoff', '01_Start_Ignistion')]            # "Liftoff!"
 SHUTTLE_SOUND_FLAGS = [(33, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_33sec_Set'),
                        (23, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_23sec_Set'),
                        (8, 'AKE_FLAG_Ms22_ARMS_SKY_OP0057_sstb_Countdown_08sec_Set'),
@@ -1002,8 +1014,8 @@ SP_ROCKET_ROWS = [(SP_ROCKET_ROW, 'Rocket')] + [r for d in SP_DEBRIS for r in d[
 # tells' template row (AWACS). Picked by what each group is in Mission 22's countdown (docs/re/SPECIAL_ROUNDS.md), the
 # lines by their known text (docs/re/RADIO_LOCALISATION.md 2a): the countdown groups' own words aren't in the repo.
 SP_RADIO = [
-    ('SV_Radio_SpBrief', 'group', '01_Wave5_Countdown_Start'),    # the launch countdown starts (the shuttle's, 3 s in)
-    ('SV_Radio_SpWarn', 'group', '01_Countdown_Ignistion'),       # ignition (the shuttle's, 11 s before its liftoff)
+    ('SV_Radio_SpBrief', 'group', '01_Wave5_Countdown_Start'),    # the launch countdown starts (the shuttle's, 39 s before)
+    ('SV_Radio_SpWarn', 'group', '01_Countdown_Ignistion'),       # ignition (the shuttle's, 6 s before its liftoff)
     ('SV_Radio_SpLaunch', 'group', '01_Countdown_Shuttle2and1'),  # the count's last call (the shuttle's, 2 s before it)
     ('SV_Radio_SpDown', 'line', 'v0001_0038'),                    # "Joker 1, bandit downed!" (AWACS; an ms022 TBD row)
 ]

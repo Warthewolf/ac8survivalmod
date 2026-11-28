@@ -14,8 +14,8 @@
 -- So "countdown over" with the shuttle still there replays this game's own liftoff once its STORE is shut (SPC.storeShut):
 -- RE_SV_ShuttleT_<T-14> (ignition) and _<T-4> (onto its path; only while it's still on its pad), _<T> 4 s after (the climb,
 -- SV_ShuttleLaunched 1, SV_ShuttleRound 0), fired here alone (COOP.eventHere: the others' shuttles flew on time, and the
--- clock sends them the tail), then _<T+7> / _<T+13> / _<T+30> at their offsets from it. Nagase's countdown radio and the
--- focus camera aren't fired again; the shuttle is invulnerable until it's taken off, as T-20's MinHealth made it. It took
+-- clock sends them the tail), then _<T+7> / _<T+13> / _<T+30> at their offsets from it. Nagase's countdown radio (but
+-- _<T>'s "Liftoff!", 2026-11-28) and the focus camera aren't fired again; the shuttle is invulnerable until it's taken off, as T-20's MinHealth made it. It took
 -- when SV_ShuttleLaunched reads 1 3 s after _<T> (the flag alone: a shuttle that moved without it leaves SV_ShuttleRound at
 -- 1); else from _<T-4> again, REPLAY_TRIES in all. Its removal (remove_s) counts from then; given up, 30 s, the tail's
 -- switch-offs (T+7, T+30) fired here. Either way every raid flight up since the countdown ran out goes back onto the
