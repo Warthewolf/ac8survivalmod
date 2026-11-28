@@ -7539,6 +7539,56 @@ SUITES.shuttleradio = function()
     round(2)
 end
 
+-- ((2026-11-28) the user, with a picture of the festival's labels piled up: "spread out the festival market stalls more so
+-- they don't look like a massive clump") THE FESTIVAL now (Ctrl+PAGE_UP's callback): the town's 15 boxes up, each where
+-- the build put it (read back), at least 145 m from every other but VALKA and AUDREY (side by side: 20 m at most), the
+-- whole over 1 km wide; two pictures of the town from about 3 km out, 1 km up (the HUD's labels as a player sees them)
+SUITES.festtown = function()
+    intoRun()
+    local K = {}
+    A.do_(function()
+        ST.marks.f0 = ST.n
+        if not ST.check(ST.press("PAGE_UP") > 0, "Ctrl+PAGE_UP: THE FESTIVAL asked for") then return "abort" end
+        ST.doing = "THE FESTIVAL's town"
+    end)
+    A.log_("festival: the town's boxes %d+ up", 120, "f0", false, function(l)
+        if not ST.check(l ~= nil, "the town's boxes up with the festival's talk", l) then return "abort" end
+    end)
+    A.wait(3)
+    A.do_(function()
+        local list, P = (FEST and FEST.actors and FEST.actors["SV_Unit_FestTown"]) or {}, {}
+        for _, o in ipairs(list) do
+            if liveObj(o) then local ok, v = pcall(ST.at, o); if ok and v then P[#P + 1] = { o = o, p = v, n = nameOf(o) } end end
+        end
+        ST.check(#P == 15, "the town's 15 boxes read back", tostring(#P))
+        local pair, gap, gapAt, cx, cy, minX, maxX, minY, maxY = nil, 1e9, "", 0, 0, 1e12, -1e12, 1e12, -1e12
+        for i, a in ipairs(P) do
+            cx, cy = cx + a.p.X / #P, cy + a.p.Y / #P
+            minX, maxX, minY, maxY = math.min(minX, a.p.X), math.max(maxX, a.p.X), math.min(minY, a.p.Y), math.max(maxY, a.p.Y)
+            for j = i + 1, #P do
+                local b = P[j]
+                local d = math.sqrt((a.p.X - b.p.X) ^ 2 + (a.p.Y - b.p.Y) ^ 2) / 100
+                if i == 2 and j == 3 then pair = d                    -- (FEST_TOWN_BOXES' order: VALKA, AUDREY)
+                elseif d < gap then gap, gapAt = d, i .. "-" .. j end
+            end
+        end
+        ST.check(pair ~= nil and pair <= 20, "VALKA and AUDREY side by side", string.format("%.0f m apart", pair or -1))
+        ST.check(gap >= 145, "every other box at least 145 m from the next", string.format("closest %.0f m (boxes %s)", gap, gapAt))
+        local w = math.sqrt((maxX - minX) ^ 2 + (maxY - minY) ^ 2) / 100
+        ST.check(w >= 1000, "the festival spread over the town", string.format("%.0f m corner to corner", w))
+        local hz = {}
+        for i, a in ipairs(P) do hz[#hz + 1] = string.format("%d (%.0f, %.0f, z %.0f m)", i, (a.p.X - cx) / 100, (a.p.Y - cy) / 100, a.p.Z / 100) end
+        ST.info("the town's boxes round their middle (m, +X east, +Y south): " .. table.concat(hz, "; "))
+        K.c = { X = cx, Y = cy, Z = 1000 }
+    end)
+    -- (the camera stays level whatever pitch it's asked (ST.look's note): low enough that the town is in the frame. From
+    -- the north (over the runway's line) and from the sea, 2.5 km off along the runway frame's across axis (yaw -23: across
+    -- +X 0.39, +Y 0.92), 450 m up; and 1.5 km off, 250 m up)
+    A.picture("festtown_from_north", function() return ST.off(K.c, -97500, -230000, 45000) end, function() return K.c end, 60)
+    A.picture("festtown_from_sea", function() return ST.off(K.c, 97500, 230000, 45000) end, function() return K.c end, 60)
+    A.picture("festtown_close", function() return ST.off(K.c, -58500, -138000, 25000) end, function() return K.c end, 60)
+end
+
 -- ((2026-11-28) the shuttleradio suite's first run: "Eight." and "Seven." (Mission 22's rows on radio channel 3) never
 -- showed, both rounds, while "Main engine, hydrogen burn-off igniter system...Now active." was up from 15.4 s to
 -- "Ignition." at 5.7 s) Nagase's groups asked for straight from the radio subsystem
