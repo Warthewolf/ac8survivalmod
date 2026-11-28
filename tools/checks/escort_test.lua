@@ -1063,7 +1063,6 @@ check(has(line("carrier: ZFA-44 CARRIER 1: none of " .. A3 .. " seen out of its 
       and evFired("RE_SV_ZfaClimb_1_3") and line("carrier: ZFA-44 CARRIER 1: RE_SV_CargoLaunch_1_3 fired", fromA3) == nil,
       "... its 2 planes alive but none seen out of the container in launch_wait_s: their climb-out anyway, not by pose")
 alive[A3], alive[A4] = nil, nil
-
 ---------------------------------------------------------------------------------------------------- service
 print("service")
 local R = ESC.R
@@ -1340,7 +1339,6 @@ check(okC == true and RUN.bought.ZfaCarrier == b0 + 1 and ESC.R.carriers[1] and 
 local list = ESC.carrierList()
 check(#list == 1 and list[1] == 2, "the carriers out for host migration's list")
 COOP = nil
-
 ---------------------------------------------------------------------------------------------------- the landing test T0
 print("the landing test T0 (Ctrl+F5)")
 alive.SV_Unit_Charlene = nil
@@ -1373,7 +1371,6 @@ check(T.state == "done" and has(line("escort: T0 over"), "stopped") and has(line
       and not ESC.unlocked() and #lbs == lb0 and RUN.credits == cr1, "landed: the test over, where her rollout began logged, no pay, unlock or leaderboard line")
 run(C.test.end_s + 1)
 check(ESC.S == nil and h0.hidden == true, "taken off end_s after she's down")
-
 ---------------------------------------------------------------------------------------------------- the build's backstops
 print("the build's backstops (its leg and slot flags)")
 local rawFlags = svFlags
@@ -1404,7 +1401,6 @@ pose(h2, slot(4).X, slot(4).Y, 750, 160, 0); run(3)
 check(T2.state == "done" and has(line("escort: T0 over"), "stopped"), "stopped on that slot: the test over")
 svFlags = rawFlags
 run(C.test.end_s + 1)
-
 ---------------------------------------------------------------------------------------------------- a restart
 -- ((code review of 2026-11-07, finding 3) a pause-menu restart mid-escort with a carrier out (sv_main.lua's level-load
 -- block calls ESC.restart before the new run's D): everything of the old run taken off, the players' landing open again
@@ -1451,7 +1447,6 @@ check(ESC.S == nil and ESC.R == nil and allOff and evFired("RE_SV_AirfieldOpen")
       "a restart: the escort's five switched off, the carrier taken off, their units queued off the list, landing open again ("
       .. tostring(line("escort: test restart:")) .. ")")
 D.special = nil
-
 ---------------------------------------------------------------------------------------------------- the laser made sure
 -- ((0.74.12) the user: "The Laser Interceptor HAS to work, no exceptions") ZLAS.drive: each ZFA-44 fires at the nearest
 -- enemy missile within 3 km (never ours, never one out of reach), the beam from it, the missile shot down at the swing's
@@ -1656,7 +1651,6 @@ do
     HIT.msl, ZLAS.armed = rawMsl, armed0
     ESC.planes[zU] = nil
 end
-
 ---------------------------------------------------------------------------------------------------- the launch watch
 -- ((2026-11-07) the launched ZFA-44s on Mission 16's allied container drone: parked in the ship until their arm fires;
 -- one seen out of the container fires the arm's climb-out record, once; none out in launch_wait_s: the climb-out anyway
