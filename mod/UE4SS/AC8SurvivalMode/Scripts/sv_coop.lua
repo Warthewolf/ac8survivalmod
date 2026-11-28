@@ -596,9 +596,11 @@ end
 -- ((2026-11-11) and the other way round) an event sent to the other players as the host's SV_Event sends it, not fired on
 -- this game: the shuttle countdown's tail while the host's own liftoff is replayed (sv_rounds.lua SPC.shuttleReplayTick).
 -- 1 when it was sent, 0 when it isn't one to send (not the host, or an event each game fires for its own)
-function COOP.eventThere(name)
+-- ((2026-11-28) unit: the unit it's for, so each joiner fires it once its copy of that unit is up (the "ev" handler's
+-- M.unitPending wait), not before: MINDRIPPER's focus camera, fired as it spawns, went off on a joiner before its copy was there)
+function COOP.eventThere(name, unit)
     if not (COOP.host() and mirroredEvent(name)) then return 0 end
-    send(true, "ev", name)
+    if type(unit) == "string" and unit ~= "" then send(true, "ev", name, unit) else send(true, "ev", name) end
     return 1
 end
 
