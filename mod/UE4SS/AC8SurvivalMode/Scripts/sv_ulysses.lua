@@ -1257,7 +1257,7 @@ function ULY.endAll(why, dropped)
     if dropped then J.settled = {} end
     -- (its targets handed back, the clean-up at once: an end mid-round that the specials' own clean-up won't see)
     pcall(release, why, os.clock(), dropped)
-    if host() and BOXED then pcall(boxTexts, false) end
+    if BOXED then pcall(boxTexts, false) end              -- ((2026-11-28) a joiner's renamed them too
     skyOff()
     ambOff()
     if FILM.on then
@@ -1327,6 +1327,9 @@ function ULY.fromHost(f)
         ambOn()
         newsStart(ph, nil)
         pcall(jSettle)
+        -- ((2026-11-28, the stall names' audit: every box name on every game) the borrowed targets' names ULYSSES / FRAGMENT /
+        -- ULYSSES CORE here too: the host's boxTexts renamed them on its game alone, the copies here read SOLG over its parts
+        pcall(boxTexts, true)
         if ph == 1 then
             local sh = cfg().shift or {}
             fade(1, 0, n(sh.fade_s, 1.2) * 2, false)
@@ -1389,7 +1392,7 @@ function ULY.fromHost(f)
         end
         J.rocks = {}
         J.on = false
-        if f[3] == "1" then J.hold = false end
+        if f[3] == "1" then J.hold = false; pcall(boxTexts, false) end   -- ((2026-11-28) the SOLG's names back here too
         if (J.armed or 0) + (J.missed or 0) > 0 then
             ul(string.format("the host's round over: %d of its fragments' targets put on this game's rocks, %d not", J.armed or 0, J.missed or 0))
         end
