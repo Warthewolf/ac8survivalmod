@@ -5297,6 +5297,17 @@ SUITES.valkasolg = function()
             local st = VSOLG.state(D.special)
             local dt = st and st.portal_to_solg_s
             ST.check(dt ~= nil and dt >= 4, string.format("the SOLG came through %.1f s after its portal began to open", dt or -1))
+            -- ((2026-11-28) its targets on AC8's invisible target pawn (no radar tower), their hit spheres over their pieces:
+            -- the SAW panels 55 m (the user: "if I target anywhere on the SAW panels that its hittable"), the others 20 m
+            if pass == 1 then
+                local sw = ST.findLog("targets: SAW's hit sphere", ST.marks.s1)
+                ST.check(sw ~= nil and sw:find("-> 55.0 m", 1, true) ~= nil, "the SAW panels' hit spheres 55 m (read back)", sw)
+                local mg = ST.findLog("targets: MAG's hit sphere", ST.marks.s1)
+                ST.check(mg ~= nil and mg:find("-> 20.0 m", 1, true) ~= nil, "the MAG panels' hit spheres 20 m (read back)", mg)
+                local bp = nil
+                for _, t in ipairs(SOLG.debugTargets and SOLG.debugTargets() or {}) do bp = bp or nameOf(t.o) end
+                ST.check(bp == nil or bp:find("GR000_dummy", 1, true) ~= nil, "its targets on the invisible target pawn", bp)
+            end
         end)
         for k = 1, 4 do
             A.do_(function() local at, look = vsCam(); if at then ST.look(at, look, 55) end end)
@@ -7175,7 +7186,9 @@ SUITES.ulylock = function()
     ulySunset()
     local K = { res = {}, types = {} }
     local function Ux() return ULY and ULY.debug and select(1, ULY.debug()) end
-    local KEW, MAG = "SV_Unit_SOLG_KEW", "SV_Unit_SOLG_MAG"
+    -- ((2026-11-28) its own target units (the user: "stop using the radar towers and make them their own targets"): never
+    -- the SOLG's KEW / MAG again; the names below kept as the suite's (KEW: the fragments', MAG: the core's)
+    local KEW, MAG = "SV_Unit_Uly_FRAG", "SV_Unit_Uly_CORE"
     -- a lock on o: one of your seekers on it (LiveTargetLockonSeeker.LockonTarget, its CachedPlayerPlane you), or you in
     -- its LockonAttackerPlayerPlanes (the first run of 2026-11-28 read that alone: nothing, not even the standard missile)
     local function lockCount(o)
@@ -7210,11 +7223,17 @@ SUITES.ulylock = function()
     end
     A.do_(function()
         if not ST.check(ULY ~= nil and SPC.kinds.ulysses ~= nil and ULY.holdsTargets ~= nil, "ULYSSES (and its kept targets) in this build") then return "abort" end
+        local l = ST.findLog("ulysses: rows: its own targets' rows:", 0, true)
+        ST.check(l ~= nil and l:find("SV_Model_Uly in, 2 of 2 target rows", 1, true) ~= nil, "its own targets' rows in at the main menu", l)
+        ST.check(type(SV_UnitAlive) ~= "function" or SV_UnitAlive("SV_Unit_SOLG_KEW") <= 0, "the SOLG's KEW unit not up (never borrowed)")
     end)
     -- ---- round 1: its targets borrowed, an air object each
     round(1)
     A.log_("ulysses: targets: " .. KEW .. " up, 36 objects borrowed", 20, "s1", true, function(l)
-        ST.check(l ~= nil, "round 1 borrows the SOLG's 36 KEW targets", l)
+        ST.check(l ~= nil, "round 1's own 36 fragment targets up", l)
+    end)
+    A.log_("ulysses: target's hit sphere", 30, "s1", true, function(l)
+        ST.check(l ~= nil and l:find("-> 30.0 m", 1, true) ~= nil, "a fragment's target's hit sphere 30 m (read back)", l)
     end)
     A.log_("ulysses: target an air object:", 30, "s1", true, function(l)
         ST.check(l ~= nil and l:find("IsAir() true", 1, true) ~= nil, "a fragment's target is an air object (IsAir() read back)", l)
@@ -7316,16 +7335,16 @@ SUITES.ulylock = function()
     A.wait(6)                                              -- (the specials' clean-up of round 1 comes 3 s after its end)
     A.do_(function()
         local nn = type(SV_UnitAlive) == "function" and SV_UnitAlive(KEW) or -9
-        ST.check(nn == 36, "the KEW targets still up between the rounds (" .. tostring(nn) .. " alive)")
+        ST.check(nn == 36, "the fragments' targets still up between the rounds (" .. tostring(nn) .. " alive)")
     end)
     -- ---- round 2: round 1's targets again, the core's
     round(2)
     A.log_("ulysses: targets: " .. KEW .. " kept from ULYSSES' last round: ", 20, "s2", true, function(l)
-        ST.check(l ~= nil and l:find(": 3[56] of its", 1, false) ~= nil, "round 2 takes round 1's KEW targets again", l)
+        ST.check(l ~= nil and l:find(": 3[56] of its", 1, false) ~= nil, "round 2 takes round 1's fragment targets again", l)
         ST.check(not ST.findLog("ulysses: targets: " .. KEW .. " up, 0 objects borrowed", ST.marks.s2, true), "and no refused spawn (-3)")
     end)
-    A.log_("ulysses: targets: " .. MAG .. " up, 32 objects borrowed", 20, "s2", true, function(l)
-        ST.check(l ~= nil, "round 2 borrows the core's 32 MAG targets", l)
+    A.log_("ulysses: targets: " .. MAG .. " up, 2 objects borrowed", 20, "s2", true, function(l)
+        ST.check(l ~= nil, "round 2's core targets up (its own 2)", l)
     end)
     -- ---- the wash at 21:9, in round 2 (its film look up)
     A.wait(4)
@@ -7389,14 +7408,14 @@ SUITES.ulylock = function()
         return a <= 0 and b <= 0
     end, 60, function()
         local a, b = SV_UnitAlive(KEW), SV_UnitAlive(MAG)
-        ST.check(a <= 0 and b <= 0, string.format("the clean-up finished them off (KEW %d alive, MAG %d)", a, b))
+        ST.check(a <= 0 and b <= 0, string.format("the clean-up finished them off (fragments %d alive, core %d)", a, b))
         local l = ST.findLog("special: " .. KEW .. " the next round's start:", ST.marks.c3, true)
-        ST.check(l ~= nil and l:find("36 finished off", 1, true) ~= nil, "every KEW target finished off by it", l)
+        ST.check(l ~= nil and l:find("36 finished off", 1, true) ~= nil, "every fragment target finished off by it", l)
     end)
     A.wait(20)                                             -- (off the spawner's list 15 s after the clean-up's check)
     A.do_(function()
         local r = type(SV_Spawn) == "function" and SV_Spawn(KEW, AIRFIELD.X, AIRFIELD.Y, 3000000, 0) or -9
-        ST.check(tonumber(r) and r > 0, "the KEW unit can be spawned again (the SOLG's later in a run): " .. tostring(r))
+        ST.check(tonumber(r) and r > 0, "the fragments' unit can be spawned again (a later ULYSSES): " .. tostring(r))
     end)
     A.wait(2)
 end
