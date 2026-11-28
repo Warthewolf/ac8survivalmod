@@ -753,6 +753,11 @@ function hostEvent(name)                          -- (a joiner) one of the host'
     if not held then
         local r = rawEvent(name)
         if r ~= 1 then once("ev" .. tostring(r), "coop: the host's event " .. name .. " not fired here (" .. (SV_ERR[r] or tostring(r)) .. ")") end
+        -- ((2026-11-28) VOID WATCHER 1's ESM: the event alone fires nothing on its copy here (a puppet): sv_allies.lua
+        if ALLY and ALLY.hostEsm then
+            local okE, errE = pcall(ALLY.hostEsm, name)
+            if not okE then once("hostesm", "coop: VOID WATCHER's ESM here: error " .. tostring(errE)) end
+        end
     end
     -- ((2026-11-11, alicorn-7) the Alicorn's dive and surfacing, for this game's check of its copy: sv_alicorn.lua)
     if SPC and SPC.alicornHostEvent and tostring(name):find("^RE_SV_Alcn") then
