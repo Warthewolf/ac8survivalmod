@@ -47,6 +47,9 @@ function addrOf(o) return type(o) == "table" and o.addr or nil end
 function liveAddr(o) return valid(o) and (addrOf(o) or 1) or nil end   -- (sv_core liveAddr: the runtime's live check, here valid())
 svLevelOn = true                                                         -- (sv_config: Survival's level loaded)
 part("sv_config.lua")
+-- ((2026-11-28) the user: "yes switch it off by default") it ships off; turned on here, as a player's survival.ini can
+check(CFG.log.weapons.enabled == false, "it ships off (CFG.log.weapons.enabled false)")
+CFG.log.weapons.enabled = true
 part("sv_weaponlog.lua")
 local function arr(t)                             -- a TArray as UE4SS hands it to Lua
     return { ForEach = function(self, f) for i, v in ipairs(t) do f(i, { get = function() return v end }) end end }
