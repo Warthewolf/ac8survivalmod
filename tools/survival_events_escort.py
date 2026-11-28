@@ -230,6 +230,18 @@ CARGO_SHIPS = [  # (s, unit, object, mission row, Mission 17's mission row, Miss
 ]
 CARGO_MISSION_TABLE = '/Game/Datatables/AI/NPC/Mission/DT_NPC_Mission017'
 CARGO_NAME_KEY = 'SV_Cargo'
+# ((2026-11-28) the user: "container ship spawns as an unknown", "KMG Container Ship") each carrier ship on Survival's own
+# DT_NPC row (CARGO_NPC_SV: a copy of its Mission 17 row, CARGO_NPC_STOCK) on its own model row (CARGO_MODEL_SV: a copy of
+# its stock model row, CARGO_MODEL_STOCK, but its name: CARGO_SHIP_NAME_KEY on the box's first line, Lua's text "KMG
+# CONTAINER SHIP"; Mission 17's model row names the disguised ship UNKNOWN); its mission row's NpcId onto it (Lua adds both
+# rows at the main menu: sv_escort_carriers.lua ESC.setup). The box's second line stays the callsign, CARGO_NAME_KEY.
+# No digit at a name's end (hard rule 17): A, B
+CARGO_SHIP_NAME_KEY = 'SV_CargoShip'
+CARGO_NPC_SV = {1: 'SV_Cargo_ShipA', 2: 'SV_Cargo_ShipB'}
+CARGO_MODEL_SV = {1: 'SV_Model_CargoA', 2: 'SV_Model_CargoB'}
+CARGO_NPC_STOCK = {1: 'VE021_ctslf_01', 2: 'VE021_ctslf_03'}
+CARGO_MODEL_STOCK = {1: 'VE021_ctslf_01', 2: 'VE021_ctslf_03'}
+CARGO_MODEL_OF_NPC = {CARGO_NPC_SV[k]: CARGO_MODEL_SV[k] for k in CARGO_NPC_SV}
 CARGO_LAUNCHER_DIR = '/Game/Blueprints/Vehicle/AI/Vessels/VE021_ctslf/CP/'     # + the launcher component: its class's package
 CARGO_ARMS_EXPECTED = {   # (read from the stock blueprints by build_survival.py cargo_arms, checked against this)
     'BP_VE021_ctslf_cntus_01_CP': ['E_Unit_01_drone_5_0', 'E_Unit_01_drone_4_0', 'E_Unit_01_drone_0_0',
@@ -422,7 +434,7 @@ ESCORT_DECOY_MISSION_ROWS = (
     [(ESC_CHAR_ROW, None, ESC_CHAR_ROW_TEMPLATE, ESC_CHAR_NPC, ESC_CHAR_HEALTH_ADD)]
     + [(row, None, ESC_ROW_TEMPLATE, npc, None) for row, (npc, _, _) in ESC_ROWS.items()]
     + [(ZFA_ROW, None, ESC_ROW_TEMPLATE, ZFA_NPC, None), (ZFA_DRONE_ROW, None, ESC_ROW_TEMPLATE, ZFA_DRONE_NPC, None)]
-    + [(c[3], CARGO_MISSION_TABLE, c[4], None, None) for c in CARGO_SHIPS]
+    + [(c[3], CARGO_MISSION_TABLE, c[4], CARGO_NPC_SV[c[0]], None) for c in CARGO_SHIPS]   # ((2026-11-28) on its own row
     + [(DECOY_BAIT_ROW, DECOY_MISSION_TABLE, DECOY_MISSION_SOURCE, None, DECOY_BAIT_HEALTH_ADD),
        (DECOY_UAV_ROW, DECOY_MISSION_TABLE, DECOY_MISSION_SOURCE, DECOY_UAV_NPC, None),
        (DECOY_SPEAR_ROW, DECOY_SPEAR_TABLE, DECOY_SPEAR_SOURCE_ROW, None, None)])
@@ -433,6 +445,8 @@ ESCORT_DECOY_MISSION_ROWS += [(SOLG_ROWS[t], SOLG_MISSION_TABLE, SOLG_TARGET_SOU
                               for t, _ in SOLG_TARGETS]   # ((2026-11-22) VALKA's SOLG's targets, each type's own row)
 ESCORT_DECOY_NPC_ROWS = (
     [(npc, src, model, True, False, None, False) for npc, src, model in ESC_ROWS.values()]
+    # ((2026-11-28) each carrier ship: its Mission 17 row whole (its own model row set by build_survival: CARGO_MODEL_OF_NPC)
+    + [(CARGO_NPC_SV[k], CARGO_NPC_STOCK[k], None, False, False, None, False) for k in sorted(CARGO_NPC_SV)]
     + [(ZFA_NPC, ZFA_NPC_SOURCE, ZFA_MODEL, True, False, ZFA_NAME_KEY, True),
        (ZFA_DRONE_NPC, ZFA_DRONE_NPC_SOURCE, ZFA_DRONE_MODEL, True, False, ZFA_NAME_KEY, True),
        (DECOY_UAV_NPC, DECOY_UAV_NPC_SOURCE, None, False, True, None, False)]

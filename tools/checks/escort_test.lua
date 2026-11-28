@@ -179,15 +179,21 @@ local function dt(name, rows)
 end
 local npcT = dt("DT_NPC", {})
 local mineT = dt("DT_SV_NpcRows", { SV_Esc_Su57 = { r = 1 }, SV_Esc_Su33 = { r = 2 }, SV_Esc_Su35 = { r = 3 }, SV_Zfa_Ally = { r = 4 },
-                                    SV_Zfa_Drone = { r = 6 } })
+                                    SV_Zfa_Drone = { r = 6 }, SV_Cargo_ShipA = { r = 7 }, SV_Cargo_ShipB = { r = 8 } })
 statics[PROBE_TABLES[2].path], statics[CFG.specials.shuttle.npc_rows] = npcT, mineT
 -- ((2026-11-07) the ZFA-44 host's own model row (its name "ZFA-44", not the Su-47's), into DT_NPC_Model first)
-local modelT, mineModelT = dt("DT_NPC_Model", {}), dt("DT_SV_ModelRows", { SV_Model_Zfa = { m = 1 }, SV_Model_ZfaDrone = { m = 2 } })
+local modelT, mineModelT = dt("DT_NPC_Model", {}), dt("DT_SV_ModelRows", { SV_Model_Zfa = { m = 1 }, SV_Model_ZfaDrone = { m = 2 },
+                                                                       SV_Model_CargoA = { m = 3 }, SV_Model_CargoB = { m = 4 } })
 statics[ACE.model_table], statics[ACE.model_rows] = modelT, mineModelT
 ESC.setup()
 check(npcT.rows.SV_Esc_Su57 and npcT.rows.SV_Esc_Su33 and npcT.rows.SV_Esc_Su35 and npcT.rows.SV_Zfa_Ally and ESC.rowsOk == true
       and ESC.zfaRowOk == true and has(line("escort: the escorts' and the ZFA-44's rows"), "SV_Zfa_Ally in DT_NPC"),
       "the escorts' and the ZFA-44 host's rows from DT_SV_NpcRows into DT_NPC at the main menu, logged")
+-- ((2026-11-28) the user: "container ship spawns as an unknown", "KMG Container Ship") the carrier ships' own rows: their
+-- model rows (named) into DT_NPC_Model, their DT_NPC rows on them into DT_NPC, on every game; their box's name set
+check(modelT.rows.SV_Model_CargoA and modelT.rows.SV_Model_CargoB and npcT.rows.SV_Cargo_ShipA and npcT.rows.SV_Cargo_ShipB
+      and has(line("carrier: the ships' own rows"), "SV_Cargo_ShipB in DT_NPC"),
+      "the carrier ships' own model and DT_NPC rows in at the main menu (KMG CONTAINER SHIP on their box), logged")
 check(modelT.rows.SV_Model_Zfa ~= nil and modelT.rows.SV_Model_ZfaDrone ~= nil and npcT.rows.SV_Zfa_Drone ~= nil
       and has(line("escort: the escorts' and the ZFA-44's rows"), "SV_Zfa_Drone in DT_NPC"),
       "... both ZFA-44 hosts' own model rows (named ZFA-44) into DT_NPC_Model before them, the container drone's row too")
@@ -216,7 +222,7 @@ local function laserSetup(on, fcsRows, mineFcsRows)
     local n2 = dt("DT_NPC", {})
     local m2 = dt("DT_SV_NpcRows", { SV_Esc_Su57 = { r = 1 }, SV_Esc_Su33 = { r = 2 }, SV_Esc_Su35 = { r = 3 },
                                      SV_Zfa_Ally = { r = 4 }, SV_Zfa_AllyTLS = { r = 5 }, SV_Zfa_Drone = { r = 6 },
-                                     SV_Zfa_DroneTLS = { r = 7 } })
+                                     SV_Zfa_DroneTLS = { r = 7 }, SV_Cargo_ShipA = { r = 8 }, SV_Cargo_ShipB = { r = 9 } })
     local f2 = fcsRows and dt("DT_NPC_FCS", fcsRows) or nil
     statics[PROBE_TABLES[2].path], statics[CFG.specials.shuttle.npc_rows] = n2, m2
     statics[FCS_TABLE], statics[Z.laser_fcs_table] = f2, mineFcsRows and dt("DT_SV_NpcFCS", mineFcsRows) or nil

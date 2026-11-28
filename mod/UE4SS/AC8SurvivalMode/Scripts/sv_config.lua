@@ -1042,7 +1042,12 @@ CFG = {
         -- the climb-out fired anyway while any of the arm's planes is alive, else by pose
         -- reuse_s: a ship's unit free to be sent again this long after it came off the spawner's list (a ghost carrier
         -- of 2026-11-22: sent 1 s after, its new hull at 0 health)
+        -- ((2026-11-28) the user: "container ship spawns as an unknown", "KMG Container Ship") ship: each ship's own rows (the
+        -- build's: tools/survival_events_escort.py CARGO_NPC_SV / CARGO_MODEL_SV, added at the main menu: ESC.setup), its
+        -- box's first line ship.name (its model row's name; Mission 17's disguised ship read UNKNOWN), its second `name`
         carrier      = { enabled = true, name = "ZFA-44 CARRIER", name_key = "SV_Cargo", max_up = 2, reuse_s = 10,
+                         ship = { name = "KMG CONTAINER SHIP", name_key = "SV_CargoShip",
+                                  rows = { "SV_Cargo_ShipA", "SV_Cargo_ShipB" }, models = { "SV_Model_CargoA", "SV_Model_CargoB" } },
                          units = { "SV_Unit_Cargo1", "SV_Unit_Cargo2" }, dt_npc = "SV_Zfa_Ally", dt_npc_drone = "SV_Zfa_Drone",
                          launch = "container", first_s = 20, relaunch_s = 30, launch_wait_s = 15, capture_km = 4,
                          rise_m = -50, parked_m = -100,

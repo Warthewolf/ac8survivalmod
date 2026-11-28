@@ -520,6 +520,7 @@ local function names()
     local list = { { c.name_key, tagged(c.name) } }
     for _, e in ipairs(c.escorts or {}) do list[#list + 1] = { e.name_key, tagged(e.name) } end
     list[#list + 1] = { k.name_key, k.name }
+    list[#list + 1] = { k.ship and k.ship.name_key, k.ship and k.ship.name }   -- ((2026-11-28) the ships' box: KMG CONTAINER SHIP)
     list[#list + 1] = { k.zfa and k.zfa.name_key, k.zfa and k.zfa.name }
     list[#list + 1] = { k.zfa and k.zfa.sub_key, k.zfa and k.zfa.sub }   -- ((2026-11-07) its box's second line)
     for _, x in ipairs(list) do
@@ -565,6 +566,36 @@ function ESC.setup()
     if type(zr) == "string" then parts[#parts + 1] = zr .. (ESC.zfaRowOk and " in DT_NPC" or " NOT added") .. (zNote or "") end
     log(string.format("escort: the escorts' and the ZFA-44's rows: %s%s%s", table.concat(parts, ", "),
         ok and "" or "; no ESCORT round this session", ESC.zfaRowOk and "" or "; no ZFA-44 carriers this session"))
+    -- ((2026-11-28) the user: "container ship spawns as an unknown", "KMG Container Ship") each carrier ship's own model row
+    -- (its name) into DT_NPC_Model, then its DT_NPC row (on that model) into DT_NPC, as the ZFA-44's (ZLAS.zfaModel): the
+    -- ships' mission rows name those rows (the build's CARGO_NPC_SV); without them a ship never spawns: no carriers then
+    local sh = cc().ship or {}
+    if type(sh.models) == "table" and #sh.models > 0 then
+        local shipOk, shipParts = true, {}
+        local mt, w1 = loadObject(ACE.model_table)
+        local mr, w2 = loadObject(ACE.model_rows)
+        for _, t in ipairs({ mt, mr }) do if t then pin(t, nameOf(t)) end end
+        for i, m in ipairs(sh.models) do
+            local got = false
+            if mt and mr then
+                local _, have = dtCall(mt, "FindRow", m)
+                if have == nil then
+                    local _, r = dtCall(mr, "FindRow", m)
+                    if r ~= nil then dtCall(mt, "AddRow", m, r); _, have = dtCall(mt, "FindRow", m) end
+                end
+                got = have ~= nil
+            end
+            local row = (sh.rows or {})[i]
+            local rowIn = got and type(row) == "string" and addRow(row) or false
+            shipOk = shipOk and got and rowIn
+            shipParts[#shipParts + 1] = string.format("%s %s, %s %s", m, got and "in DT_NPC_Model" or "NOT added", tostring(row),
+                rowIn and "in DT_NPC" or "NOT added")
+        end
+        if not shipOk then ESC.zfaRowOk = false end
+        log("carrier: the ships' own rows (KMG CONTAINER SHIP on their box): " .. table.concat(shipParts, "; ")
+            .. ((mt and mr) and "" or (" (the model tables didn't load: " .. tostring(w1 or w2) .. ")"))
+            .. (shipOk and "" or "; no ZFA-44 carriers this session"))
+    end
     names()
 end
 -- ((2026-11-07) at most per_tick a tick (was 2), each only once it's settle_s old, and not while a level comes or goes)
