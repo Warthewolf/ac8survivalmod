@@ -470,6 +470,11 @@ CFG = {
     recycle = { destroy_after_s = 30 },
     special = { enabled = true,
                 fcs = { "NPC_FCS_PlaneQAAM000", "NPC_FCS_Plane2AAM000", "NPC_FCS_PlaneLAAM000", "NPC_FCS_PlaneHCAA000" },
+                -- ((2026-11-28, the user: "qaam_Toplak_DFM turn this off for enemies then") fire-control rows taken off every
+                -- enemy row that carries them (sv_rows.lua: the slot emptied, never refilled): Mission 19's QAAM 002
+                -- (BP_wp_qaam_Toplak_DFM), slot 5 of the demon tier's Su-57 (Mission 28's Toplak row OP1021_su57_02):
+                -- carried by 14 planes and never fired in Saint Alessia's 23-round co-op run of 0.75.117
+                drop_fcs = { "NPC_FCS_PlaneMS19QAAM002" },
                 -- fired (Scripts/sv_spweapons.lua; the user, 2026-10-31: "I want the Enemies to fire their Special
                 -- Weapons too": their AI never picks the slot): every check_s, an enemy whose row carries a special in
                 -- slot 3 fires it at you (RE_SV_SpecFire_<NN><L>) when you're inside cone_deg of its nose at that
