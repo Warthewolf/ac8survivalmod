@@ -521,8 +521,8 @@ local KEEP_EVENTS = {
     -- set on the host alone (a joiner's set back to 0), and a joiner's own end of a rocket on the host's "rk")
     "^RE_SV_SpRocketHost", "^RE_SV_SpRocketEnd",
     "^RE_SV_DealAsk$",         -- THE DEAL (sv_deal.lua): AC8's Yes / No, asked on each game by its own vote
-    -- DEV ONLY BEGIN ((2026-11-12) THE TANACORN's railguns, sv_tanicorn_rail.lua: each ordered on the host once ITS copy
-    -- reads raised; a joiner's copy is never raised, and ordered it would fire from inside her hull. Kept where that part is)
+    -- DEV ONLY BEGIN ((2026-11-12) THE TANACORN's railguns, sv_tanicorn_rail.lua: each game orders its own copy once that
+    -- copy reads raised (2026-11-28: a joiner's raised there too); the host's order would fire a joiner's from inside her hull)
     "^RE_SV_TaniRailOrder",
     -- DEV ONLY END
 }                              -- ((code review of 2026-11-07, finding 1) the carriers' RE_SV_CargoLaunch_<s>_<n> is
