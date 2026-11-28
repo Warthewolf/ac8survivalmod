@@ -69,17 +69,20 @@ local function zl(v) return tostring(specialPay and specialPay(v) or v) end
 -- in the STORE), the music player's own clock held meanwhile (taken back once the STORE lets it go); (the user, 2026-11-17:
 -- "hand the music back after round completed") at the round's end the song the music player was on is played again and its
 -- clock let go: the music player goes on from it
+-- the music player's song now (to give back at the round's end), nil for none or the fleet's own
+local function songNow(track)
+    if type(SV_BGMNames) ~= "function" then return nil end
+    local okN, names = pcall(SV_BGMNames)
+    local before = okN and type(names) == "string" and names:match("^([^|]*)") or nil
+    if before == "" or before == track then before = nil end
+    -- (nothing playing: no song to give back; run 89's first break had the main menu's track named, id 0 playing)
+    if before and type(SV_BGM) == "function" then local okI, id = pcall(SV_BGM, 0); if okI and id == 0 then before = nil end end
+    return before
+end
 local function musicStart()
     local m = rc().music or {}
     if m.enabled == false or type(SV_PlayBGM) ~= "function" or type(m.track) ~= "string" then return "off" end
-    local before = nil
-    if type(SV_BGMNames) == "function" then
-        local okN, names = pcall(SV_BGMNames)
-        before = okN and type(names) == "string" and names:match("^([^|]*)") or nil
-        if before == "" or before == m.track then before = nil end
-        -- (nothing playing: no song to give back; run 89's first break had the main menu's track named, id 0 playing)
-        if before and type(SV_BGM) == "function" then local okI, id = pcall(SV_BGM, 0); if okI and id == 0 then before = nil end end
-    end
+    local before = songNow(m.track)
     local okP, r = pcall(SV_PlayBGM, m.track)
     if type(SV_MusicHold) == "function" and (D.musicHold or 0) ~= 1 then pcall(SV_MusicHold, 1) end
     R.mus = { at = R.F.t or 0, track = m.track, len = n(m.len_s, 265.832), heldAt = os.clock(), before = before }
@@ -109,6 +112,56 @@ local function musicStop()
     end
     if type(SV_MusicHold) == "function" and (D.musicHold or 0) ~= 1 then pcall(SV_MusicHold, 0) end
     return back
+end
+-- ((2026-11-28) the user: "invincible fleet didnt start playing for the joiners") a joiner's game never runs IFROUND.spawn
+-- (the host's) and so never musicStart: here the song starts with the host's surfacing ("surf"), on this game's clock (a
+-- co-op world never pauses), held, played again at its length, and again if another song took over; let go with the
+-- music player's song back at the round's end here (its break once it was fought, or a later round). IFROUND.JMUS
+IFROUND.JMUS = nil
+function IFROUND.jMusicStart()
+    local m = rc().music or {}
+    if m.enabled == false or type(SV_PlayBGM) ~= "function" or type(m.track) ~= "string" then return "off" end
+    if not D then return "not in a run" end
+    local round = (D.state == "wait") and D.round + 1 or D.round
+    local J = IFROUND.JMUS
+    if J and J.round == round then return "playing already" end
+    local before = songNow(m.track)
+    local okP, r = pcall(SV_PlayBGM, m.track)
+    if type(SV_MusicHold) == "function" then pcall(SV_MusicHold, 1) end
+    IFROUND.JMUS = { at = os.clock(), track = m.track, len = n(m.len_s, 265.832), heldAt = os.clock(), before = before,
+                     round = round }
+    return string.format("%s (SV_PlayBGM %s), the music player's clock held (its song: %s)", m.track, okP and tostring(r) or "error",
+        tostring(before or "none"))
+end
+function IFROUND.jMusicTick()
+    local J = IFROUND.JMUS
+    if not J then return end
+    if not D or D.round > J.round or (D.round == J.round and D.state == "wait" and J.fought) then
+        IFROUND.JMUS = nil
+        local back = "the music player's clock let go"
+        if J.before and type(SV_PlayBGM) == "function" then
+            local okP, r = pcall(SV_PlayBGM, J.before)
+            back = string.format("the music player's song back: %s (SV_PlayBGM %s), its clock let go", J.before, okP and tostring(r) or "error")
+        end
+        if type(SV_MusicHold) == "function" then pcall(SV_MusicHold, 0) end
+        log("fleet round: co-op: the round's over here: music: " .. back)
+        return
+    end
+    if D.round == J.round and D.state ~= "wait" then J.fought = true end
+    local now = os.clock()
+    if now - J.heldAt < 2 then return end
+    J.heldAt = now
+    if type(SV_MusicHold) == "function" then pcall(SV_MusicHold, 1) end
+    local other = songNow(J.track)                        -- (another song playing: this game's own music logic)
+    if now - J.at >= J.len or other then
+        J.at = now
+        local okP, r = pcall(SV_PlayBGM, J.track)
+        if other and not J.otherSaid then
+            J.otherSaid = true
+            log(string.format("fleet round: co-op: %s took over from the fleet's song here: played again (SV_PlayBGM %s)", other,
+                okP and tostring(r) or "error"))
+        end
+    end
 end
 
 -- the airfield fully repaired (the STORE's repair to its top, the reopen's landing back, ALLY.repairAll's allies and
@@ -930,6 +983,7 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet round", fn = function(now)
     local t0 = os.clock()                                  -- piece's own share of the round's tick on the perf line)
     pcall(scarsTick)                                      -- ((0.74.140) WP8: any fleet up, the round's or Ctrl+N's)
     share("scars", t0)
+    if IFROUND.JMUS then pcall(IFROUND.jMusicTick) end    -- ((2026-11-28) a joiner's fleet song
     if not R then return end
     if IFLEET.cur ~= R.F then return end
     t0 = os.clock(); pcall(turretsTick); pcall(musicTick); share("turrets", t0)
@@ -1125,6 +1179,8 @@ function IFCOOP.onHost(f)
         if not (IFSURF and IFSURF.start) then return false, "no surfacing in this build" end
         local okS, r = pcall(IFSURF.start, {}, math.floor(seed))
         jlog("co-op: the fleet's surfacing (the host's, seed " .. math.floor(seed) .. "): " .. ((okS and r) and "playing" or "NOT played"))
+        local okM, mus = pcall(IFROUND.jMusicStart)         -- ((2026-11-28) the round's song here too
+        jlog("co-op: music: " .. (okM and tostring(mus) or ("error " .. tostring(mus))))
         return okS and r
     end
     if what == "watch" then
