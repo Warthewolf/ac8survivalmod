@@ -4492,3 +4492,37 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   left as they were). Friends' zip: BUILD_NAME=COOP2MP COOP=1 FRIENDS=1 TANI=1 ZFA=1 package_release.sh online 0.75.118 ->
   build/release/AC8SurvivalMode_COOP2MP_0.75.118_Online_COOP_ZFA44_TANACORN.zip (151 MB, build c5e1520a16aa..., registered),
   zip_leak_test all passed. Her install and the zip link in co-op (the same mod version, coop.c CoSameVer).
+- 0.75.119 / 0.75.120 (2026-11-28, dev, merged locally, NOT pushed): her co-op session of 0.75.118 as a joiner (8 players,
+  rounds 17-30), each report fixed on its own branch and merged into dev: THE DEAL's subtitles, callouts, pay and names on
+  every game (fix/deal-coop-subtitles); the weapons log off by default (fix/weapons-log-default-off); the Toplak DFM off
+  for enemies (fix/toplak-dfm-off); GEOFON shut (no box, no lock-on, invincible) until the last Aegis destroyer is sunk
+  (feature/geofon-aegis-lock; her picks "All 5", "Hull only"); the carriers named KMG CONTAINER SHIP (fix/carrier-ship-name);
+  THE FESTIVAL's stall names on every game (fix/festival-stall-names); VOID WATCHER's ESM on joiners
+  (fix/void-watcher-esm-joiners); MINDRIPPER's camera on joiners (fix/mindripper-joiner-camera); ULYSSES on joiners (the
+  target id, stray boxes at the airfield, the core's blast point, one JULY 1999 card) and its own target units
+  SV_Unit_Uly_FRAG 36 / _CORE 2, the SOLG's and ULYSSES' targets on AC8's invisible target pawn GR000_dummy, no radar
+  towers (the user: "stop using the radar towers and make them their own targets", "the SOLG needs no radar towers
+  either"), hit spheres sized over their pieces (SAW 55 m: "if I target anywhere on the SAW panels that its hittable",
+  the SOLG's others 20 m, fragments 30 m, core 80 m) (feature/own-target-boxes); a joiner's VAMPIRES drones taken for
+  enemies and deleted 36 a minute (fix/vampires-joiner-strays; still 2 a carrier at once: her call "Keep 4"); WEAPON
+  BAYS / FLARE PODS load the room they add (feature/upgrades-fill-free; "Fill it free"); a host's kill's wreck that hangs
+  in the air on a joiner's game hidden 1.5 s on (fix/joiner-wrecks-hang; why it doesn't fall: unknown, each minute's
+  fell / hung counted in `coop: wrecks:`); THE INVINCIBLE FLEET's song on joiners (fix/fleet-music-joiners); THE
+  TANACORN on joiners: her railguns raised, flagged (warning, minimap line) and ordered on each joiner's own copy (they
+  now fire at joiners), her armour off at the core's opening (joiners' hits did nothing), her row's numbers from the host
+  (fix/tanacorn-joiners). After the merges: sv_fleet.lua's GEOFON lock settings moved to sv_fleet_round.lua (into
+  CFG_DEFAULTS too, as the crew's) and escort_test.lua six blank lines shorter, both back at 2,000 (fix/size-limits;
+  escort_test needs a real split next).
+- 0.75.119 was built and staged (stage_dev_0.75.119, registered) but never handed over: its autotest ulylock (run
+  20261128_134225) passed 31/32: no hit sphere on a fragment's target. AC8's GR000_dummy has no hit primitive of its own
+  (docs/re/FISHING.md): a gun misses it. fix/target-hit-spheres: each target a SphereComponent added once (profile
+  EnemyPawn, the shoals' way) and sized. Built as 0.75.120.
+- 0.75.120's autotests (tools/ac8-autotest 3e977e93): ulylock 32/32 (run 20261128_134908: ULYSSES' own rows at the main
+  menu, the SOLG's KEW never up, a fragment's sphere 30 m added and read back, all 38 handed back and finished off, its
+  unit spawned again); valkasolg 41/41 (run 20261128_135216: the SAW panels' spheres 55 m, the MAG panels' 20 m, every
+  target on BP_GR000_dummy_CP_C, no radar tower in the pictures). zip_leak_test failed 4 (quiet_logs.py refused the
+  weapons log already off): fix/quiet-logs-weapons-off, then all passed. Staged build/release/stage_dev_0.75.120 (TANI=1
+  VALKA=1 ZFA=1, test keys kept, registered), NOT installed; friends' zip
+  build/release/AC8SurvivalMode_COOP2MP_0.75.120_Online_COOP_ZFA44_TANACORN.zip (151 MB, build a331773571c3...,
+  registered). Untested in game: everything co-op above (needs a real co-op game), a gun's rounds on the new spheres,
+  whether a player's plane collides with the 55 m SAW spheres.
