@@ -77,7 +77,9 @@ function valid(o)
 end
 svLevelOn = true
 part("sv_config.lua"); part("sv_rows.lua"); part("sv_ai.lua"); part("sv_hud.lua"); part("sv_sound.lua"); part("sv_spawn.lua")
-part("sv_anomalies.lua"); part("sv_rounds.lua")
+-- ((2026-11-24) sv_anomalies_dev.lua, where THUNDER lives, is no longer listed right after sv_anomalies_valka in main.lua
+-- (VALKA's SOLG parts went in between, 2026-11-22), so it isn't part of its family: loaded by its own name)
+part("sv_anomalies.lua"); part("sv_anomalies_dev.lua"); part("sv_rounds.lua")
 
 local callouts, paid, events, texts, setAc, setLv, spawns, posts = {}, {}, {}, {}, {}, {}, {}, {}
 function hudCallout(a, b) callouts[#callouts + 1] = tostring(a) .. " / " .. tostring(b) end
