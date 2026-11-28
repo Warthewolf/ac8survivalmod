@@ -381,6 +381,22 @@ runD(41)
 check(DEAL.J == nil and logged("no result from the host"), "a vote with no result 10 s after its close: dropped")
 clearLogs(); testKeys.H()
 check(logged("on a joiner"), "Ctrl+H on a joiner: refused")
+-- ((2026-11-28, the user, a joiner: "war is reading as SV_DealHornet") the Hornet's name set on every game at its setup (the
+-- main menu), a joiner's too, not only by the host's spawn of it
+do
+    local saved = { gameInstance, loadObject, dtCall, PROBE_TABLES }
+    gameInstance = function() return {} end
+    loadObject = function() return {} end
+    dtCall = function(_, f) if f == "FindRow" then return true, {} end return true end
+    PROBE_TABLES = PROBE_TABLES or { {}, { path = "DT_NPC" } }
+    CFG.specials.shuttle = CFG.specials.shuttle or { npc_rows = "DT_SV_NpcRows" }
+    for k in pairs(texts) do texts[k] = nil end
+    DEAL.setupDone, DEAL.setupTries = nil, nil
+    DEAL.setup()
+    check(texts[C.hornet.name_key] == C.hornet.name, "a joiner's game names War's Hornet at its setup (" .. tostring(C.hornet.name_key)
+        .. " = " .. tostring(texts[C.hornet.name_key]) .. ")")
+    gameInstance, loadObject, dtCall, PROBE_TABLES = saved[1], saved[2], saved[3], saved[4]
+end
 
 print(fails == 0 and "deal test: all passed" or ("deal test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

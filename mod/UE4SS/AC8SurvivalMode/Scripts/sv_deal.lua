@@ -804,6 +804,14 @@ function DEAL.setup()
         DEAL.hornetRowOk = h ~= nil
         log(string.format("deal: the Hornet's row %s %s", hr, DEAL.hornetRowOk and "in DT_NPC" or "NOT added: its unit will spawn no plane"))
     end
+    -- ((2026-11-28, the user, a joiner: "war is reading as SV_DealHornet") its box's name on every game here, as the allies'
+    -- and the shoals' are (sv_allies.lua, sv_fishing.lua): hornetUp set it on the host's alone, as it spawned the Hornet,
+    -- and a joiner's copy showed its bare key
+    local hh = cfg().hornet or {}
+    if type(SV_SetText) == "function" and type(hh.name_key) == "string" and type(hh.name) == "string" then
+        local okT, r = pcall(SV_SetText, hh.name_key, hh.name)
+        log(string.format("deal: the Hornet's name %s %s", hh.name_key, (okT and r == 1) and ("set: " .. hh.name) or "NOT set"))
+    end
 end
 
 -- the NEXT row (sv_hud.lua): the offer while it's open, the result a little after; else nil
