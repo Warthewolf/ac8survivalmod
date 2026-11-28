@@ -7424,6 +7424,174 @@ SUITES.ulylock = function()
     A.wait(2)
 end
 
+-- ((2026-11-28) the user, a joiner of 0.75.118: "nagases countdown seemed off"; then "fix the timing and the second round
+-- copies too": tools/survival_events.py SHUTTLE_RADIO on Mission 22's seconds, each group a copy of Survival's own,
+-- LimitPlayCount 0) Two shuttle rounds in one level (config_shuttleradio.lua), each countdown run on to 45 s before
+-- liftoff, the shuttle invincible; the game's own radio subtitle boxes (LiveHUDRadioTextWidget.SubTitleMessageText) read
+-- every tick: Nagase's lines must show in Mission 22's order, each first line of a group on its second (no more than
+-- 0.5 s early, 2.5 s late), "Liftoff!" with the climb, and every one of them again in round 2 (a stock ms022 row plays
+-- once a level). Each round's timeline is logged whole.
+SUITES.shuttleradio = function()
+    intoRun()
+    local T = 150
+    -- (words, seconds before liftoff, a group's later line: only its order checked)
+    local WANT = { { "Spruce Goose.", 39 }, { "Counting down from", 39, true }, { "33", 33 }, { "32", 32 }, { "31", 31 },
+                   { "23", 23 }, { "22", 22 }, { "21", 21 }, { "20", 20 }, { "19", 19 }, { "WSSS active", 18 },
+                   { "Main engine", 18, true }, { "Eight.", 8 }, { "Seven.", 7 }, { "Ignition.", 6 }, { "Two... One...", 2 },
+                   { "Liftoff!", 0 } }
+    local W = { list = {}, findAt = 0, last = {} }
+    local function clean(s) return (tostring(s or ""):gsub("<[^>]*>", ""):gsub("[\r\n]+", " "):gsub("^%s+", ""):gsub("%s+$", "")) end
+    local function texts()
+        local now = os.clock()
+        if now >= W.findAt then
+            W.findAt = now + 2
+            W.list = FindAllOf("LiveHUDRadioTextWidget") or {}
+        end
+        local out = {}
+        for i, w in ipairs(W.list) do
+            local s = nil
+            pcall(function() s = w.SubTitleMessageText:GetText():ToString() end)
+            if s ~= nil then out[i] = clean(s) end
+        end
+        return out
+    end
+    local function sample(R)
+        local k = D.shuttleClock
+        local cd = k and k.cd or nil
+        for i, s in pairs(texts()) do
+            if s ~= W.last[i] then
+                W.last[i] = s
+                if s ~= "" and cd then R.ev[#R.ev + 1] = { left = T - cd, text = s } end
+            end
+        end
+        return (not k) or cd >= T + 6
+    end
+    local function analyse(R, n)
+        local tl = {}
+        for _, e in ipairs(R.ev) do tl[#tl + 1] = string.format("%.1f '%s'", e.left, e.text:sub(1, 50)) end
+        ST.info(string.format("round %d: the radio box (%d boxes) from 45 s before liftoff: %s", n, #W.list,
+            #tl > 0 and table.concat(tl, " | ") or "nothing shown"))
+        local from, missing = 1, {}
+        for _, w in ipairs(WANT) do
+            local hit = nil
+            for i = from, #R.ev do
+                local s = R.ev[i].text
+                if (w[1]:match("^%d+$") and s == w[1]) or (not w[1]:match("^%d+$") and s:find(w[1], 1, true)) then hit = i; break end
+            end
+            if not hit then
+                missing[#missing + 1] = w[1]
+            else
+                from = hit + 1
+                local left = R.ev[hit].left
+                if not w[3] then
+                    ST.check(left <= w[2] + 0.5 and left >= w[2] - 2.5, string.format("round %d: Nagase's '%s' on its second "
+                        .. "(%d s before liftoff)", n, w[1], w[2]), string.format("shown %.1f s before liftoff", left))
+                end
+            end
+        end
+        ST.check(#missing == 0, string.format("round %d: all %d of Nagase's countdown lines shown, in Mission 22's order", n,
+            #WANT), #missing > 0 and ("missing or out of order: " .. table.concat(missing, ", ")) or nil)
+    end
+    local function round(n)
+        local R = { ev = {} }
+        A.do_(function()
+            T = tonumber(CFG.specials.shuttle.countdown_s) or 150
+            ST.marks["r" .. n] = ST.n
+            D.forceSpecial = "shuttle"
+            if D.state == "wait" then D.at, D.announced = math.min(D.at or D.now, D.now + 3), false end
+            ST.doing = "shuttle round " .. n
+        end)
+        A.log_("special: shuttle .*on the pad", 60, "r" .. n, false, function(l)
+            if not ST.check(l ~= nil, "round " .. n .. ": the shuttle on its pad", l) then return "abort" end
+        end)
+        A.until_(function() return D.shuttleClock ~= nil end, 10, function(v)
+            if not ST.check(v ~= nil, "round " .. n .. ": its countdown clock runs") then return "abort" end
+            pcall(shuttleHealth)                                         -- (finds its actor)
+            pcall(function() SHUTTLE.obj:SetIsInvincible(true) end)
+            local k = D.shuttleClock
+            ST.info(string.format("round %d: the countdown run on from %.0f s to %d s before liftoff", n, T - k.cd, 45))
+            k.cd = math.max(k.cd, T - 45)
+            W.last = {}
+            ST.doing = "shuttle round " .. n .. ": the countdown's last 45 s"
+        end)
+        A.until_(function() return sample(R) end, 70, function() analyse(R, n) end)
+        A.log_("special: round %d+, the shuttle lifted off %(", 10, "r" .. n, false, function(l)
+            ST.check(l ~= nil and l:find("(event package", 1, true) ~= nil, "round " .. n .. ": the shuttle lifted off on its "
+                .. "own events", l)
+        end)
+    end
+    round(1)
+    -- (the round over: the shuttle and pad taken off now, not 180 s on; the round's planes finished off)
+    A.do_(function() D.shuttleRemoveAt = D.now; ST.doing = "round 1's end"; W.k = 0 end)
+    A.until_(function()
+        local now = os.clock()
+        if now >= (W.killAt or 0) then
+            W.killAt = now + 1
+            for _, pl in ipairs(planes or {}) do
+                if pl.unit and D.up and D.up[pl.unit] and pl.obj and pcall(finishUnpaid, pl.obj) then W.k = W.k + 1 end
+            end
+        end
+        return D.state == "wait"
+    end, 120, function(v)
+        if not ST.check(v ~= nil, "round 1 over (its planes finished off: " .. tostring(W.k) .. ")") then return "abort" end
+    end)
+    A.wait(8)                                         -- (RE_SV_ShuttleRemove 3 s after the take-off, its check 5 s)
+    round(2)
+end
+
+-- ((2026-11-28) the shuttleradio suite's first run: "Eight." and "Seven." (Mission 22's rows on radio channel 3) never
+-- showed, both rounds, while "Main engine, hydrogen burn-off igniter system...Now active." was up from 15.4 s to
+-- "Ignition." at 5.7 s) Nagase's groups asked for straight from the radio subsystem
+-- (ULiveRadioWorldSubsystem.RequestPlayRadio), no round: each radio box's text and whether it's shown, every tick, timed
+-- from each ask. Alone: SV_Radio_ShActive, SV_Radio_Sh8, SV_Radio_Sh7; then the countdown's own spacing (ShActive at 0,
+-- Sh8 at 10, Sh7 at 11, ShIgnition at 12: 18, 8, 7, 6 s before liftoff)
+SUITES.radioprobe = function()
+    intoRun()
+    local P = { list = {}, last = {}, ev = {} }
+    local function rs() return FindFirstOf("LiveRadioWorldSubsystem") end
+    local function ask(g)
+        local s, ok, err = rs(), false, "no LiveRadioWorldSubsystem"
+        if s then ok, err = pcall(function() s:RequestPlayRadio(FName(g), nil, true) end) end
+        P.ev[#P.ev + 1] = string.format("%.1f ask %s%s", os.clock() - (P.t0 or os.clock()), g, ok and "" or (" (" .. tostring(err) .. ")"))
+        return ok
+    end
+    local function watch()
+        if not P.listAt or os.clock() >= P.listAt then P.listAt = os.clock() + 2; P.list = FindAllOf("LiveHUDRadioTextWidget") or {} end
+        for i, w in ipairs(P.list) do
+            local s, vis, pv = "?", "?", "?"
+            pcall(function() s = (w.SubTitleMessageText:GetText():ToString():gsub("<[^>]*>", ""):gsub("[\r\n]+", " ")) end)
+            pcall(function() vis = tostring(w:IsVisible()) end)
+            pcall(function() pv = tostring(w.RadioPanel:IsVisible()) end)
+            local key = s .. "|" .. vis .. "|" .. pv
+            if key ~= P.last[i] then
+                P.last[i] = key
+                P.ev[#P.ev + 1] = string.format("%.1f box %d '%s' shown %s panel %s", os.clock() - P.t0, i, s:sub(1, 40), vis, pv)
+            end
+        end
+    end
+    local function run(name, plan, secs)
+        A.do_(function()
+            P.t0, P.ev, P.k = os.clock(), {}, 1
+            ST.doing = "radio probe: " .. name
+        end)
+        A.until_(function()
+            local t = os.clock() - P.t0
+            while P.k <= #plan and t >= plan[P.k][1] do ask(plan[P.k][2]); P.k = P.k + 1 end
+            watch()
+            return t >= secs
+        end, secs + 5, function()
+            ST.info("radio probe " .. name .. ": " .. table.concat(P.ev, " | "))
+        end)
+    end
+    A.do_(function() ST.check(rs() ~= nil, "the radio subsystem found (LiveRadioWorldSubsystem)") end)
+    run("ShActive alone", { { 0, "SV_Radio_ShActive" } }, 16)
+    run("Sh8 alone", { { 0, "SV_Radio_Sh8" } }, 5)
+    run("Sh7 alone", { { 0, "SV_Radio_Sh7" } }, 5)
+    run("Ignition alone", { { 0, "SV_Radio_ShIgnition" } }, 5)
+    run("the countdown's spacing", { { 0, "SV_Radio_ShActive" }, { 10, "SV_Radio_Sh8" }, { 11, "SV_Radio_Sh7" },
+                                     { 12, "SV_Radio_ShIgnition" } }, 20)
+end
+
 local function tick()
     if finished then return end
     local now = os.clock()
