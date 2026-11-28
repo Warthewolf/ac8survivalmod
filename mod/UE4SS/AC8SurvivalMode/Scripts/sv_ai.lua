@@ -173,7 +173,7 @@ end
 local function huntLog(p, key, what, t)                 -- (its 1st, 30th, 60th... write of each kind: p[key] counts)
     local n = (p[key] or 0) + 1
     p[key] = n
-    if n == 1 or n % 30 == 0 then
+    if (n == 1 or n % 30 == 0) and logVerbose and logVerbose() then      -- ((2026-11-28) the user: quieter logs: [log] verbose only
         log(string.format("aces: %s %s (was %s), %d times", p.name, what, t and (nameOf(t):match("([^%.:]+)$") or "?") or "none", n))
     end
 end

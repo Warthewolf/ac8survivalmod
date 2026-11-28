@@ -267,6 +267,8 @@ end
 local keys = {}
 TEST_TICKS, LEVEL_DROPS = {}, {}
 function testKey(name, who, fn) keys[name] = fn; return true end
+-- ((2026-11-28) the break look's 2 s lines come with [log] verbose only (quieter logs): on here, sv_core's logVerbose
+function logVerbose() return true end
 
 dofile(MOD .. "/Scripts/sv_fleet.lua")
 dofile(MOD .. "/Scripts/sv_fleet_storm.lua")              -- ((2026-11-17) its night storm, the next piece)

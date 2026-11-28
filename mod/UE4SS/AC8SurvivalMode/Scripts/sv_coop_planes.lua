@@ -921,8 +921,8 @@ function peerTick(slot)
     -- frame on, some game system still holding it; so it's never destroyed mid-level, and the next level's has them)
     if P.real and P.obj and lo ~= "" and lo ~= (P.lo or "") and P.loSaid ~= lo and not M.left[slot] then
         P.loSaid = lo
-        log(string.format("coop: player %d's loadout changed: their real plane here keeps the one it was spawned with "
-            .. "(the next level's has the new one)", slot + 1))
+        if logVerbose and logVerbose() then log(string.format("coop: player %d's loadout changed: their real plane here keeps the one it was spawned with "
+            .. "(the next level's has the new one)", slot + 1)) end   -- ((2026-11-28) the user: quieter logs: verbose only
     end
     if fresh and not P.obj and not P.spawning and levelReady() and realOn() and code and P.realFailed == nil then
         local o, why, fb, how = spawnReal(slot, P, code, lo, r0 and r0.paint or "", r0)

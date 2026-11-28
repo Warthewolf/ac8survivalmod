@@ -122,7 +122,8 @@ function pawn:K2_GetActorLocation() return you end
 survivalPC = { Pawn = pawn }
 HIT = { msl = {}, h = 800 }
 A = { caps = { [1] = 31, [2] = 10, [3] = 12, [4] = 3 } }
-CFG.stats.enabled, CFG.ai_watch, CFG.probe.kills = true, false, true
+check(CFG.stats.kill_lines == false, "the per-kill lines ship off (2026-11-28, quieter logs); on for this test")
+CFG.stats.enabled, CFG.ai_watch, CFG.probe.kills, CFG.stats.kill_lines = true, false, true, true
 
 ---------------------------------------------------------------------------------------------------- the spawn index
 print("spawn index")

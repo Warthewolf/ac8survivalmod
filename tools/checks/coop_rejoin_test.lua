@@ -135,6 +135,7 @@ local menu = 0
 function SV_MenuChoice() return menu end
 
 PARTS.dofile("sv_config.lua")
+function logVerbose() return CFG.log.verbose == true end   -- (sv_core's, not loaded here: [log] verbose's lines, 2026-11-28)
 do                                                -- (sv_spawn.lua's own specialOn / specialFor, before sv_coop wraps it)
     local sp = readAll(MOD .. "/Scripts/sv_spawn.lua")
     local a1 = sp:find("function specialOn(kind)", 1, true)
@@ -166,12 +167,14 @@ tick(); tick(4)
 local su47 = native[1]
 check(su47 and has(su47.full, "su47") and M.peers[1] and M.peers[1].obj == su47 and M.peers[1].real,
       "player 2's real Su-47 spawned in their slot (" .. tostring(su47 and su47.full) .. ")")
--- a loadout change by a player who never left: kept (the next level's has it)
+-- a loadout change by a player who never left: kept (the next level's has it); its line with [log] verbose only (2026-11-28)
+CFG.log.verbose = true
 local from, n0 = #logs + 1, #seq
 inbox[#inbox + 1] = hi(1, "su47_common", "su47", LO2, "SU-47")
 tick()
 check(native[1] == su47 and M.peers[1].obj == su47 and not has(seqSince(n0), "spawnPP") and line("player 2's loadout changed: their real plane here keeps", from),
       "new weapons from a player who never left: their plane kept, said so (today's rule)")
+CFG.log.verbose = false
 -- they leave: marked, hidden
 from = #logs + 1
 inbox[#inbox + 1] = "1|sys|left"
