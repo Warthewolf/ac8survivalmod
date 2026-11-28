@@ -4550,3 +4550,9 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   build/release/AC8SurvivalMode_COOP2MP_0.75.122_Online_COOP_ZFA44_TANACORN.zip (build d548e6905494..., registered);
   zip_leak_test all passed. The leaderboard Worker (src/index.js with the fleet and ULYSSES names): put on her clipboard
   to paste in Cloudflare's dashboard (wrangler isn't installed and wrangler.toml holds placeholder vars).
+- Leaderboard Worker deployed 2026-11-28 by Claude with wrangler (the user logged in: `npx wrangler login`), version
+  f1ad34c5: dev's src/index.js (the fleet and ULYSSES special names, fix/lb-contract-fleet). The repo's wrangler.toml holds
+  placeholders for the D1 id and the Discord vars, so the deploy used a deploy-only copy outside the repo (name, main,
+  compatibility_date, the live D1 binding, no [vars]) with `--keep-vars`: read back after, the D1 binding, the four vars
+  and the three secrets (ADMIN_KEY, DISCORD_TOKEN, SUBMIT_KEY) as before; the page answers 200. A plain `wrangler deploy`
+  from leaderboard/ would overwrite them with the placeholders.
