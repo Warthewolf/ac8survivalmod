@@ -524,6 +524,14 @@ function FEST.townNames()
     end
     return n
 end
+-- ((2026-11-28, the user, a joiner: "the festivals stalls are all SV_") their names on every game at the main menu (sv_main.lua's
+-- setup pass), as the allies' and the shoal's are: the host set them as its festival's talk began, a joiner as it saw the
+-- host's festival start, and a joiner's copies of the stalls showed their bare keys
+function FEST.setup()
+    if FEST.setupDone or type(SV_SetText) ~= "function" then return end
+    FEST.setupDone = true
+    log(string.format("festival: the town's box names set: %d (its stalls, the stage, ...)", FEST.townNames()))
+end
 function FEST.townUp(why)
     local t = townCfg()
     if not t then return nil end

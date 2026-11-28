@@ -275,6 +275,14 @@ local lights = {}
 local town = nil                                   -- ((2026-11-07) the town's boxes: SV_Unit_FestTown's 15 dummies)
 local texts = {}
 function SV_SetText(k, v) texts[k] = v; return 1 end
+-- ((2026-11-28, the user, a joiner: "the festivals stalls are all SV_") the town's box names on every game at the main menu
+do
+    FEST.setupDone = nil
+    FEST.setup()
+    local want, got = 0, 0
+    for k, v in pairs(((CFG.specials.festival or {}).text or {}).town or {}) do want = want + 1; if texts[k] == v then got = got + 1 end end
+    check(want > 0 and got == want and FEST.setupDone == true, string.format("FEST.setup at the main menu names the town's boxes on every game (%d of %d)", got, want))
+end
 function SV_Spawn(...)
     local unit, x, y, z, yaw = ...
     spawns[#spawns + 1] = { unit = unit, x = x, y = y, z = z, yaw = yaw, su = spawningUnit, n = select("#", ...), at = clock }
