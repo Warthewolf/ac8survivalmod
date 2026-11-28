@@ -349,6 +349,8 @@ function ALLY.setup()
             for i = 0, 5 do
                 pcall(function()
                     local id = have["NpcFCSId" .. i]:ToString()
+                    -- ((2026-11-28) its ESM's slot: a joiner fires it on the host's pulse, ALLY.hostEsm)
+                    if row == AWACS_ROW and id:find("ESM", 1, true) then ALLY.awacsEsmSlot = i end
                     if id ~= "None" and id ~= "" and not id:find("_SVA") then
                         local new = allyFcs(id, ROW_SHIP[row])
                         if new then have["NpcFCSId" .. i] = FName(new); boosted = boosted + 1 end
@@ -1364,6 +1366,39 @@ function ALLY.awacsTick(R, now)
             e.shown = shown
         end
     end
+end
+
+-- ((2026-11-28, the user, a joiner: "the Void Watchers ESM wasnt working for me") a joiner: the host's ESM pulse (its
+-- RE_SV_AwacsEsm, forwarded: sv_coop_joiner.lua hostEvent) told its copy here to fire, but a copy is the host's puppet (moved
+-- by its stream, its AI held): nothing fired (her weapons log: no ESM launch here after it was up). Fired here through the
+-- runtime's fire (SV_CoopFire: how the other players' ECM pods show on their stand-ins), on its ESM's fire-control slot
+-- (ALLY.awacsEsmSlot, its row's at the main menu); each field it makes set as the host's are (ALLY.awacsTick's field loop,
+-- esmSet: range_m, life_s), which runs on every game. Logged: the first fire, the first three that didn't
+function ALLY.hostEsm(name)
+    local aw = CFG.allies.awacs
+    if not (aw and aw.enabled and aw.esm and name == aw.esm.event) then return end
+    if not (COOP and COOP.client and COOP.client()) then return end
+    ALLY.jEsm = ALLY.jEsm or { n = 0, fail = 0 }
+    local J = ALLY.jEsm
+    local slot = ALLY.awacsEsmSlot
+    local o = nil
+    for _, p in ipairs((COOP.planeCopies and COOP.planeCopies(aw.unit)) or {}) do if liveObj(p) and not o then o = p end end
+    local why
+    if type(SV_CoopFire) ~= "function" then why = "no SV_CoopFire in this runtime"
+    elseif slot == nil then why = "its ESM's slot unknown (no ESM in its row's fire control)"
+    elseif not o then why = "no copy of it here"
+    else
+        local okF, r = pcall(SV_CoopFire, addrOf(o), slot, 0)
+        if okF and r == 1 then
+            J.n = J.n + 1
+            if J.n == 1 then log(string.format("allies: %s's ESM fired here on its copy, on the host's pulse (slot %d; each field set as the host's: %d m, %d s)",
+                aw.name, slot, aw.esm.range_m, aw.esm.life_s)) end
+            return
+        end
+        why = "SV_CoopFire " .. (okF and tostring(SV_ERR and SV_ERR[r] or r) or ("error " .. tostring(r)))
+    end
+    J.fail = J.fail + 1
+    if J.fail <= 3 then log(string.format("allies: %s's ESM NOT fired here on the host's pulse: %s", aw.name, why)) end
 end
 
 -- (every ESM / ECM field the game makes, its actor at construction, for ALLY.awacsTick; only VOID WATCHER 1's class is

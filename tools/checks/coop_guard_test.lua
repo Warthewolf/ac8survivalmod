@@ -536,6 +536,7 @@ local TYPES = {
     { "join", "ul", { "ul", "l", "3", "0" }, extra = true },
     { "join", "ul", { "ul", "e", "1" }, extra = true },
     { "join", "ev", { "ev", "RE_SV_AlcnOpenCore", U1 }, extra = true },
+    { "join", "ev", { "ev", "RE_SV_AwacsEsm" }, extra = true },   -- ((2026-11-28) VOID WATCHER's ESM pulse: fired here too (ALLY.hostEsm)
     -- ((2026-11-11) the Alicorn: rnd field 16 shut and dived; the host's health for ids not bound here yet, M.pendHp)
     { "join", "rnd", { "rnd", "6", "fighting", "30", "2", "3", "4", "1", "2", "m1w0s0", "alicorn", "alicorn:sail", "0", "Wingmen:1;", "0", "2:s:1" }, extra = true },
     { "join", "hp", { "hp", "77:500,78:-5,79:99999999999,0:40,70000:9" }, extra = true },
