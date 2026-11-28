@@ -196,6 +196,12 @@ dofile(DIR .. "sv_tanicorn.lua")
 dofile(DIR .. "sv_tanicorn_rise.lua")                 -- ((2026-11-12) the rise: its piece since the split)
 dofile(DIR .. "sv_tanicorn_hits.lua")              -- ((2026-11-12) the hit probe: its piece)
 dofile(DIR .. "sv_tanicorn_rail.lua")              -- ((stage 4) the railguns and the railcannon: its piece, quiet here)
+-- ((2026-11-24) since 2026-11-19 (Saint Alessia's round 30: 19.7 ms a tick) the watch looks every tick_s, reads a shown
+-- missile's owner every owner_s and the blocks every parts_s: those kept as the game has them (checked), then off here,
+-- so this test's 0.25 s ticks see each step of the watch's logic as before)
+local LID0 = { tick_s = TANI.lid.tick_s, owner_s = TANI.lid.owner_s, parts_s = TANI.lid.parts_s }
+TANI.lid.tick_s, TANI.lid.owner_s, TANI.lid.parts_s = 0, 0, 2
+check(LID0.tick_s == 0.5 and LID0.owner_s == 2 and LID0.parts_s == 6, "the watch's throttle as the game has it (every 0.5 s, owners every 2 s, blocks every 6 s)")
 
 -- the types and their names
 check(type(TANI.vls) == "table" and #TANI.vls == 9, "TANI.vls: 9 block types (" .. tostring(TANI.vls and #TANI.vls) .. ")")
