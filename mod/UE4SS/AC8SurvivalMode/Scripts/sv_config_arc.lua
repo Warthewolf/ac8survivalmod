@@ -539,8 +539,12 @@ CFG.specials.ulysses = { enabled = true, name = "ULYSSES", rounds = 2, dawn_offs
     sea = { fx = { "/Game/VFX/Vehicles/Weapon/Rog/Splash/NS_Mission11Splash", "/Game/VFX/Vehicles/Weapon/Rog/Splash/NS_SplashRain" },
             scale = 1.5, big_scale = 5, sea_z = 350, land_m = 1200 },
     fx_scale = { shot = 4, land = 10, big_shot = 18, big_land = 30 },
-    -- the borrowed target units (the SOLG's) and their boxes while ULYSSES has them
-    target_units = { small = "SV_Unit_SOLG_KEW", big = "SV_Unit_SOLG_MAG" },
+    -- ((2026-11-28) the user: "can you just stop using the radar towers and make them their own targets") its own target
+    -- units (tools/survival_events_specials.py ULY_*: AC8's invisible target pawn, never the SOLG's KEW / MAG again), their
+    -- rows (target_rows: added at the main menu, ULY.rowsIn) and the names on their boxes (box)
+    target_units = { small = "SV_Unit_Uly_FRAG", big = "SV_Unit_Uly_CORE" },
+    target_rows = { model = "SV_Model_Uly", npc = { "SV_Uly_FRAG", "SV_Uly_CORE" },
+                    name_key = "SV_Uly_Name", small_key = "SV_Uly_Sub_FRAG", big_key = "SV_Uly_Sub_CORE" },
     box = { name = "ULYSSES", small = "FRAGMENT", big = "ULYSSES CORE" },
     -- (the WORLD NEWS bulletins' timing: text.news below; the first first_s into each round, then one every every_s)
     -- ((2026-11-24) the user: "have the news play more often during the rounds so that more of the lines get seen": 12 /

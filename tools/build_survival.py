@@ -752,6 +752,8 @@ def build_npc_rows():
             # the name is the model row's (GameObjectDisplayName01): Survival's copy of its host's, ZFA_MODEL_SV / _DRONE_)
             set_prop(row[2], model_idx, 'ModelId', ('name', zfa_twin[0], 0))
             set_prop(row[2], name_idx, 'GameObjectDisplayName02', s(survival_events.ZFA_SUB_KEY))
+        if npc in survival_events.ULY_NPC.values():      # ((2026-11-28) "ULYSSES" on its box's first line: its own model row
+            set_prop(row[2], model_idx, 'ModelId', ('name', survival_events.ULY_MODEL_SV, 0))
         if npc in survival_events.SOLG_NPC.values():     # ((2026-11-22) "SOLG" on its box's first line: its own model row
             laser = npc in [survival_events.SOLG_NPC[t] for t in survival_events.SOLG_LASER_TYPES]
             set_prop(row[2], model_idx, 'ModelId', ('name', survival_events.SOLG_LSR_MODEL_SV if laser else survival_events.SOLG_MODEL_SV, 0))
@@ -1103,10 +1105,16 @@ def check_escort_decoy_build():
         assert r['LuaSetId'] is None or plain(r['LuaSetId']) != 'NLID_0400_CP', row   # (the SOLG's radar tower rows: none)
         if row in se.SOLG_NPC.values():
             assert plain(r['ModelId']) in (se.SOLG_MODEL_SV, se.SOLG_LSR_MODEL_SV), (row, r['ModelId'])
+        if row in se.ULY_NPC.values():           # ((2026-11-28) ULYSSES' own targets on its own model row
+            assert plain(r['ModelId']) == se.ULY_MODEL_SV, (row, r['ModelId'])
     # ((2026-11-07) "ZFA-44" on its box, never "SU-47": both host rows on SV_Model_Zfa, named ZFA_NAME_KEY there, and
     # ZFA_SUB_KEY under it)
     zm = table(DATA + 'DT_SV_ModelRows', 'LiveModelDataTable')
     assert se.ZFA_MODEL_SV in zm and zm[se.ZFA_MODEL_SV]['GameObjectDisplayName01'] == s(se.ZFA_NAME_KEY), zm.get(se.ZFA_MODEL_SV)
+    # ((2026-11-28) the SOLG's targets and ULYSSES' own on the invisible pawn (no radar tower), each named
+    for mm, key in ((se.SOLG_MODEL_SV, se.SOLG_NAME_KEY), (se.ULY_MODEL_SV, se.ULY_NAME_KEY)):
+        assert mm in zm and zm[mm]['GameObjectDisplayName01'] == s(key), (mm, zm.get(mm))
+        assert zm[mm]['BlueprintClass'][2][1] == 'BP_GR000_dummy_CP_C', (mm, zm[mm]['BlueprintClass'])
     for zr, zmod in ((se.ZFA_NPC, se.ZFA_MODEL_SV), (se.ZFA_TLS_NPC, se.ZFA_MODEL_SV), (se.ZFA_DRONE_NPC, se.ZFA_DRONE_MODEL_SV),
                      (se.ZFA_DRONE_TLS_NPC, se.ZFA_DRONE_MODEL_SV)):
         assert plain(npc[zr]['ModelId']) == zmod and npc[zr]['GameObjectDisplayName02'] == s(se.ZFA_SUB_KEY), \

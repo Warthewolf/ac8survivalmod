@@ -760,6 +760,15 @@ def solg_units(units, used_ids, z, top_number):
         enemy_unit(u)                       # ((2026-11-22) the user: "Target boxes have to be enemy": Faction 2, a TGT mark
         zone_area(u)
         print(f'  solg: {survival_events.SOLG_UNITS[t]}: {len(names)} {t} targets ({names[0]} ..)')
+    # ((2026-11-28) ULYSSES' own targets (survival_events.ULY_*): the same, units of their own
+    for t, nn in survival_events.ULY_TARGETS:
+        pts = [(100.0 * k, 0.0, 300000.0) for k in range(nn)]
+        names = port_unit(units, used_ids, z, src, survival_events.ULY_UNITS[t], survival_events.ULY_OBJS[t],
+                          survival_events.ULY_ROWS[t], pts, 0.0, top_number, tgt=True, clone_first=True)
+        u = [u for u in units if [p for p in u[2] if p[1] == 'Name'][0][3][1] == survival_events.ULY_UNITS[t]][0]
+        enemy_unit(u)
+        zone_area(u)
+        print(f'  ulysses: {survival_events.ULY_UNITS[t]}: {len(names)} {t} targets ({names[0]} ..)')
 
 
 def valka_eml_unit(units, used_ids, z, top_number):

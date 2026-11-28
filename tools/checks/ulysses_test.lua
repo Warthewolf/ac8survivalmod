@@ -87,7 +87,12 @@ check(src:find("e.used = false", 1, true) ~= nil, "each target handed back when 
 local c = CFG.specials.ulysses
 check(c.sounds.fall.file == "ulysses/fall_small.wav" and c.sounds.boom.file == "ulysses/explosion.wav", "its sounds (Sounds/ulysses, tools/ulysses/sounds.py)")
 check(c.mesh_path == "/Game/Mods/SurvivalMode/Ulysses/Model/SK_SV_Ulysses_", "its meshes (SurvivalMode_Ulysses_P, tools/ulysses)")
-check(c.target_units.small == "SV_Unit_SOLG_KEW" and c.target_units.big == "SV_Unit_SOLG_MAG", "its boxes: the SOLG's KEW / MAG units borrowed")
+-- ((2026-11-28) the user: "can you just stop using the radar towers and make them their own targets": its own units, never
+-- the SOLG's, and their rows (the build's ULY_*) to add at the main menu
+check(c.target_units.small == "SV_Unit_Uly_FRAG" and c.target_units.big == "SV_Unit_Uly_CORE"
+      and c.target_rows.model == "SV_Model_Uly" and #c.target_rows.npc == 2, "its boxes: its own target units (never the SOLG's) and rows")
+check(not tostring(c.target_units.small):find("SOLG", 1, true) and not tostring(c.target_units.big):find("SOLG", 1, true),
+      "none of the SOLG's units borrowed")
 check(src:find("TEST ONLY BEGIN", 1, true) and src:find("TEST ONLY END", 1, true), "its test key inside TEST ONLY")
 
 -- ((2026-11-24) the land map (sv_ulysses_land.lua, tools/ulysses/landmask.py) against places the game's traces settled
