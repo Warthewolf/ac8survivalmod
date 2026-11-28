@@ -985,6 +985,22 @@ if type(specialFor) == "function" then
     end
 end
 
+-- its settings, CFG.specials.fleet.round.geofon_lock and its texts (here: sv_fleet.lua is at its 2,000 lines), in the
+-- shipped settings' copy too (CFG_DEFAULTS is taken before this piece loads), as the crew's: enabled = false, targetable
+-- from the start as before; every_s, how often it's re-asserted while shut (a joiner's copy too)
+do
+    local GL = { geofon_lock = { enabled = true, every_s = 2 } }
+    local TX = { geofon_open = "GEOFON EXPOSED", geofon_open_sub = "HER AEGIS SCREEN IS SUNK: SINK HER", geofon_shut = "SCREENED" }
+    local function copy(t) if type(t) ~= "table" then return t end local r = {} for k, v in pairs(t) do r[k] = copy(v) end return r end
+    local function into(r)
+        if type(r) ~= "table" then return end
+        for k, v in pairs(GL) do if r[k] == nil then r[k] = copy(v) end end
+        r.text = r.text or {}
+        for k, v in pairs(TX) do if r.text[k] == nil then r.text[k] = v end end
+    end
+    into(CFG.specials and CFG.specials.fleet and CFG.specials.fleet.round)
+    into(CFG_DEFAULTS and CFG_DEFAULTS.specials and CFG_DEFAULTS.specials.fleet and CFG_DEFAULTS.specials.fleet.round)
+end
 -- ((2026-11-28) the user: "make it so that the geofon isn't targetable until some of the aegis ships are destroyed"; her
 -- picks: all of them, its hull only; rc().geofon_lock) GEOFON's hull shut (no box, no lock-on, no ally's fire, invincible)
 -- while any of the fleet's Aegis destroyers is afloat, re-asserted every every_s; open once the last is sunk: its callout,
