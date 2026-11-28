@@ -4537,3 +4537,16 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   solg/break_small_3.wav: playing`). Staged build/release/stage_dev_0.75.121 (TANI=1 VALKA=1 ZFA=1, test keys kept,
   registered), NOT installed; friends' zip build/release/AC8SurvivalMode_COOP2MP_0.75.121_Online_COOP_ZFA44_TANACORN.zip
   (6 SOLG sounds in, build f6f66fb33cb3..., registered); zip_leak_test all passed. 0.75.120's stage and zip superseded.
+- 0.75.122 (2026-11-28, dev, pushed): quieter logs (her four picks, feature/quieter-logs): GEOFON's break look lines only
+  with [log] verbose or when a look fixed something; VAMPIRES positions off (allies.carrier.pos_log_s 0); the per-kill
+  kill-time lines off (stats.kill_lines false; the round's stats line stays); the aces' hunt writes and other players'
+  loadout changes with [log] verbose only (logVerbose guarded: tests without sv_core). Also merged: the four test-fix
+  branches (fleet_test's PUBLIC=1 branch, the leaderboard Worker's fleet and ULYSSES special names, tani_vls_test's
+  throttle, thunder_test's parts): run_all 90 passed, 0 failed, 1 skipped. dev pushed (2c0b18d8..00812006), the 27 merged
+  branches deleted (none on GitHub). The user: "Do all 3": built (TANI=1 ZFA=1 build_all), staged
+  build/release/stage_dev_0.75.122 (TANI=1 VALKA=1 ZFA=1, test keys kept, build e83a149eac23..., registered) and
+  INSTALLED in her game (backup build/backup/install_before_0.75.122 of her 0.75.118; 264 files verified, enabled.txt and
+  her survival.ini kept, no log override in it); friends' zip
+  build/release/AC8SurvivalMode_COOP2MP_0.75.122_Online_COOP_ZFA44_TANACORN.zip (build d548e6905494..., registered);
+  zip_leak_test all passed. The leaderboard Worker (src/index.js with the fleet and ULYSSES names): put on her clipboard
+  to paste in Cloudflare's dashboard (wrangler isn't installed and wrangler.toml holds placeholder vars).
