@@ -576,11 +576,16 @@ function searchSetup()
                     local acRole = rolesOn and ROLE.ofAircraft(a) or nil     -- (a fighter role's airframe: CFG.roles)
                     if fcs then                      -- its weapon slots onto Survival's fire control for this level
                         local free, frees = nil, {}
+                        local drop = {}                -- ((2026-11-28) CFG.special.drop_fcs: those slots emptied, not refilled
+                        for _, d in ipairs(CFG.special.drop_fcs or {}) do drop[tostring(d)] = true end
                         for i = 0, 5 do
                             pcall(function()
                                 local id = r["NpcFCSId" .. i]:ToString()
                                 local new
-                                if id:find("^NPC_FCS_PlaneMsl") and CFG.missiles.enabled then
+                                if drop[id] then
+                                    new = "None"
+                                    if level == 0 then log(string.format("weapons: %s: %s taken off (slot %d; [special] drop_fcs)", svNpc, id, i)) end
+                                elseif id:find("^NPC_FCS_PlaneMsl") and CFG.missiles.enabled then
                                     new = (mind or valka) and anomFcs(id) or svFcs(id, level)
                                 elseif valka and id:find("^NPC_FCS_PlaneQAAM") then
                                     new = anomFcs(id)
