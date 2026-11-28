@@ -319,7 +319,15 @@ CFG.specials.fleet = {
               music = { enabled = true, track = "AKE_Bgm_Online_ACE04_Invincible_Fleet_Play", len_s = 265.832 },
               text = { sub = "INVINCIBLE FLEET", warn = "INVINCIBLE FLEET", warn_sub = "THE AEGIR FLEET IS UNDER WAY",
                        row = "FLEET: %d AFLOAT  CARRIER: %s", sunk = "%s SUNK", won = "THE AEGIR FLEET IS DESTROYED",
-                       won_sub = "+%s ZOLLARS", restored = "AIRFIELD RESTORED", restored_sub = "ITS HEALTH, DEFENCES AND ALLIES" },
+                       won_sub = "+%s ZOLLARS", restored = "AIRFIELD RESTORED", restored_sub = "ITS HEALTH, DEFENCES AND ALLIES",
+                       geofon_open = "GEOFON EXPOSED", geofon_open_sub = "HER AEGIS SCREEN IS SUNK: SINK HER",
+                       geofon_shut = "SCREENED" },
+              -- ((2026-11-28) the user: "make it so that the geofon isn't targetable until some of the aegis ships are
+              -- destroyed"; her picks: all of them, its hull only) GEOFON's hull: no box, no lock-on, no ally's fire, invincible
+              -- while any ship of the fleet of kind "aegis" is afloat (its guns as ever); open once the last is sunk (the
+              -- callout text.geofon_open, every joiner told: "if|geo|1"). Re-asserted every every_s while shut (a joiner's
+              -- copy too). enabled = false: targetable from the start, as before
+              geofon_lock = { enabled = true, every_s = 2 },
               -- ((0.74.146) the user: "Add more subtitles from Audrey and Valka, especially around notable bits like the Geofon
               -- taking damage or wondering where the Tanager is", with her two lines (tanager); the rest drafted for her to edit:
               -- tanager tanager_after_s after the sighting, stage1 / stage2 at GEOFON's stages)

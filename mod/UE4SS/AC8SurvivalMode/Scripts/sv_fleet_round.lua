@@ -871,7 +871,9 @@ function IFROUND.row(s, t)
         return string.format(tx2().row or "TANACORN: %d OF %d GUNS", R.p2.up or 0, R.p2.of)
     end
     local g = R.F.ships[1]
-    return string.format(tx().row or "FLEET: %d AFLOAT  CARRIER: %s", afloatN(R.F), (g and not g.sunk) and IFLEET.label(g) or "SUNK")
+    local shut = R.geo and R.geo.shut and not R.geo.open    -- ((2026-11-28) GEOFON screened by its Aegis: said on the row
+    return string.format(tx().row or "FLEET: %d AFLOAT  CARRIER: %s", afloatN(R.F),
+        (g and not g.sunk) and (IFLEET.label(g) .. (shut and (" " .. (tx().geofon_shut or "SCREENED")) or "")) or "SUNK")
 end
 if SPC and SPC.kinds then
     SPC.kinds.fleet = {
@@ -918,6 +920,57 @@ if type(specialFor) == "function" then
     end
 end
 
+-- ((2026-11-28) the user: "make it so that the geofon isn't targetable until some of the aegis ships are destroyed"; her
+-- picks: all of them, its hull only; rc().geofon_lock) GEOFON's hull shut (no box, no lock-on, no ally's fire, invincible)
+-- while any of the fleet's Aegis destroyers is afloat, re-asserted every every_s; open once the last is sunk: its callout,
+-- every joiner told ("if|geo|1": each puts its own copy's hull the same way, IFCOOP.geoApply). Its guns as ever. Its hull
+-- is held as the fleet holds it (sv_fleet.lua settle: { obj, addr, name }), checked still that object (hard rule 59)
+local GEO_SHUT = { bShowHUDBox = false, bIsNotLockonTarget = true, bIsNotFCSTargets = true, bIsInvincible = true }
+local GEO_OPEN = { bShowHUDBox = true, bIsNotLockonTarget = false, bIsNotFCSTargets = false, bIsInvincible = false }
+function IFCOOP.geoFlags(o, shut)
+    pcall(function() o:SetIsInvincible(shut and true or false) end)
+    for f, v in pairs(shut and GEO_SHUT or GEO_OPEN) do pcall(function() o[f] = v end) end
+end
+local function hullOurs(e) return type(e) == "table" and e.obj ~= nil and liveObj(e.obj) and addrOf(e.obj) == e.addr and nameOf(e.obj) == e.name end
+local function aegisLeft(F)
+    local left, all = 0, 0
+    for _, sh in ipairs(F.ships or {}) do
+        if sh.kind == "aegis" then all = all + 1; if not sh.sunk then left = left + 1 end end
+    end
+    return left, all
+end
+local function geoLockTick(now)
+    local c = rc().geofon_lock or {}
+    if c.enabled == false then return end
+    local F = R.F
+    local G = F and F.ships and F.ships[1]
+    if not G or G.sunk then return end
+    R.geo = R.geo or { at = 0 }
+    local L = R.geo
+    if L.open then return end
+    local left, all = aegisLeft(F)
+    if all == 0 then return end                           -- (a fleet with no Aegis: GEOFON as ever)
+    if left == 0 then
+        L.open = true
+        if hullOurs(G.hull) then IFCOOP.geoFlags(G.hull.obj, false) end
+        IFCOOP.send("geo", "1")
+        hudCallout(tx().geofon_open or "GEOFON EXPOSED", tx().geofon_open_sub or "")
+        rlog(string.format("GEOFON opened: all %d Aegis destroyers sunk (%s)", all, L.shut and "its hull open: box, lock-on, damage"
+            or "it was never shut here: its hull not up while they sailed"))
+        return
+    end
+    if now < (L.at or 0) then return end
+    L.at = now + n(c.every_s, 2)
+    if hullOurs(G.hull) then
+        IFCOOP.geoFlags(G.hull.obj, true)
+        if not L.shut then
+            L.shut = true
+            IFCOOP.send("geo", "0")
+            rlog(string.format("GEOFON shut: no box, no lock-on, invincible while %d of its %d Aegis destroyers sail", left, all))
+        end
+    end
+end
+function IFCOOP.geoState() return R and R.geo and ((R.geo.open and "1") or (R.geo.shut and "0")) or nil end
 TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet round", fn = function(now)
     local c = rc()
     -- round 29's break: the warning (its callout, then the round's own SPECIAL ROUND callout at the lead)
@@ -933,6 +986,10 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet round", fn = function(now)
     if not R then return end
     if IFLEET.cur ~= R.F then return end
     t0 = os.clock(); pcall(turretsTick); pcall(musicTick); share("turrets", t0)
+    t0 = os.clock()
+    local okG, errG = pcall(geoLockTick, now)
+    share("geofon lock", t0)
+    if not okG and not R.geoErr then R.geoErr = true; rlog("GEOFON lock: error " .. tostring(errG)) end
     t0 = os.clock()
     local okP, errP = pcall(p2Tick, now)
     share("phase 2", t0)
@@ -1063,6 +1120,11 @@ end
 
 function IFCOOP.syncTo(to)
     if not (COOP and COOP.msg) then return end
+    local gs = IFCOOP.geoState and IFCOOP.geoState()     -- ((2026-11-28) GEOFON shut or open: to one who links mid-round
+    if gs then
+        IFCOOP.pending = IFCOOP.pending or {}
+        IFCOOP.pending[#IFCOOP.pending + 1] = { to = to, at = os.clock() + 12, words = { { "geo", gs } } }
+    end
     if IFLEET and IFLEET.cur then                         -- (the fleet's place: worked out as the word goes, below)
         IFCOOP.pending = IFCOOP.pending or {}
         IFCOOP.pending[#IFCOOP.pending + 1] = { to = to, at = os.clock() + 12, words = { { "at" } } }
@@ -1127,6 +1189,14 @@ function IFCOOP.onHost(f)
         jlog("co-op: the fleet's surfacing (the host's, seed " .. math.floor(seed) .. "): " .. ((okS and r) and "playing" or "NOT played"))
         return okS and r
     end
+    if what == "geo" then                                 -- ((2026-11-28) GEOFON's hull shut / open: the host's geoLockTick
+        local v = f[3]
+        if v ~= "0" and v ~= "1" then return false, "bad geo" end
+        IFCOOP.geoWant, IFCOOP.geoAt, IFCOOP.geoN = (v == "1") and "open" or "shut", 0, 0
+        jlog("co-op: GEOFON " .. (v == "1" and "opened (the host's: its Aegis destroyers all sunk)" or "shut (the host's: its Aegis destroyers up)"))
+        pcall(IFCOOP.geoApply, os.clock())
+        return true
+    end
     if what == "watch" then
         J = { unit = f[3] }
         local G, why = jGeo()
@@ -1188,6 +1258,25 @@ function IFCOOP.onHost(f)
     end
     return false, "unknown: " .. tostring(what)
 end
+-- ((2026-11-28) a joiner: the host's word on GEOFON's hull (shut / open) put on this game's copy of it, every every_s while
+-- shut (the copy may come after the word), three times once open; its hull found afresh each time (never kept)
+function IFCOOP.geoApply(now)
+    local want = IFCOOP.geoWant
+    if not (want and COOP and COOP.client and COOP.client() and COOP.copiesOf and IFLEET and IFLEET.shipFrom) then return end
+    if now < (IFCOOP.geoAt or 0) then return end
+    local gl = ((((CFG.specials or {}).fleet or {}).round or {}).geofon_lock) or {}   -- (this part's n / rc: its first block's)
+    IFCOOP.geoAt = now + (tonumber(gl.every_s) or 2)
+    local first = (((CFG.specials or {}).fleet or {}).ships or {})[1]
+    if not (first and first.key) then return end
+    local unit = "SV_Unit_IF" .. first.key
+    local sh = IFLEET.shipFrom(unit, COOP.copiesOf(unit))
+    if not (sh and sh.hull and sh.hull.obj and liveObj(sh.hull.obj)) then return end
+    IFCOOP.geoFlags(sh.hull.obj, want == "shut")
+    if want == "open" then
+        IFCOOP.geoN = (IFCOOP.geoN or 0) + 1
+        if IFCOOP.geoN >= 3 then IFCOOP.geoWant = nil end
+    end
+end
 -- a joiner's GEOFON stepped each tick: its stages' looks (from the copy's own health: the host's "hp"), then its V
 TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet co-op", fn = function(now)
     local pend = IFCOOP.pending                           -- (the host's: round 30's state to one who linked, its 12 s up)
@@ -1232,6 +1321,8 @@ TEST_TICKS[#TEST_TICKS + 1] = { name = "fleet co-op", fn = function(now)
             jlog("co-op: the host's fleet place dropped: no copy of GEOFON here in 60 s")
         end
     end
+    if not D then IFCOOP.geoWant = nil end                -- ((2026-11-28) a new run: no word on GEOFON kept
+    if IFCOOP.geoWant then pcall(IFCOOP.geoApply, now) end
     if not (J and COOP and COOP.client and COOP.client()) then return end
     if not D then J = nil; return end
     local G = J.G
