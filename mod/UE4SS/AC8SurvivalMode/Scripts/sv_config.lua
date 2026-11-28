@@ -123,7 +123,8 @@ CFG = {
     -- watch_km (at most watch_max a tick) are read afresh, and while you're on one's tail (tail_km, tail_deg) its AI
     -- state too: a "tailed:" line per episode (its provoke values, when it went into Provoke, the states it went
     -- through, how long it lasted: died, or escaped once you'd been off its tail watch_grace_s). The host or solo only.
-    stats = { enabled = true, kill_lines = true, engage_km = 5.0, tail_km = 3.0, tail_deg = 70, close_km = 1.2,
+    -- ((2026-11-28) the user: quieter logs) kill_lines off: the per-round "stats:" line stays; true for the behaviour work
+    stats = { enabled = true, kill_lines = false, engage_km = 5.0, tail_km = 3.0, tail_deg = 70, close_km = 1.2,
               bracket_km = 1.5, gun_km = 1.5, death_window_s = 30, ttk_from_round = 7, ttk_to_round = 12,
               pawn_history = true, tail_watch = true, watch_km = 4.5, watch_max = 4, watch_grace_s = 2.0 },
     -- The learning layer (behaviour roadmap P6, "punish habits": Scripts/sv_stats.lua PROF; docs/re/BEHAVIOUR_DIRECTOR.md
@@ -1074,9 +1075,9 @@ CFG = {
                          -- escort_s each flight up covers the player nearest it: yours (or solo) by its `cover` record (its
                          -- area moved near your plane, 3 km round it), another player's by its planes onto the enemies
                          -- nearest them (co-op's coverFor); escort = false: as they are
-                         -- ((2026-11-11) pos_log_s: every VAMPIRES plane's place logged that often, 0 none: Saint Alessia's
+                         -- ((2026-11-28) the user: quieter logs: 0) ((2026-11-11) pos_log_s: every VAMPIRES plane's place logged that often, 0 none: Saint Alessia's
                          -- run had them all on the zone's east edge, why unknown)
-                         pose_cover = { "RE_SV_ZfaCoverA", "RE_SV_ZfaCoverB" }, escort = true, escort_s = 2, escort_keep_x = 1.3, pos_log_s = 30,   -- ((2026-11-23) "vampires dont seem to escort or fire their tls much": 4-10 km behind on 6 s; 2 s, and their player kept unless another is 30 % nearer)
+                         pose_cover = { "RE_SV_ZfaCoverA", "RE_SV_ZfaCoverB" }, escort = true, escort_s = 2, escort_keep_x = 1.3, pos_log_s = 0,   -- ((2026-11-23) "vampires dont seem to escort or fire their tls much": 4-10 km behind on 6 s; 2 s, and their player kept unless another is 30 % nearer)
                          pose = { ahead_m = 300, alt_m = 1100 },
                          ship_at = { { 1270476, -1096142 }, { 2130476, 103858 } },
                          service = { rounds = 3, min_s = 60 },

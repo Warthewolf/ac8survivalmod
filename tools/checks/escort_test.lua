@@ -1620,7 +1620,7 @@ do
     local R0 = ESC.R
     ESC.R = { D = D, carriers = {} }
     events = {}
-    ZLAUNCH.coverAt, ZLAUNCH.escorting, ZLAUNCH.posAt = 0, nil, 0
+    ZLAUNCH.coverAt, ZLAUNCH.escorting, ZLAUNCH.posAt, CFG.allies.carrier.pos_log_s = 0, nil, 0, 30   -- (0 as shipped since 2026-11-28)
     local fromG = #logs + 1
     ZLAS.tick()
     check(not evFired("RE_SV_ZfaCover_1_1") and line("escort you", fromG) == nil, "its carrier gone: no cover orders")

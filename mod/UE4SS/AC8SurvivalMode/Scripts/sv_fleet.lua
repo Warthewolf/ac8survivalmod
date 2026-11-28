@@ -16,7 +16,7 @@
 --                     the keel and down from Lua (part_m each way over part_s, a step every step_s: 4 a second).
 --                     Logged: `geofon: up: ...`, `geofon: break look: bow copy (DamagedStaticMesh) pitch +25 down 21 m,
 --                     stern copy (VesselMesh, 3 slots _DAM) pitch -15 down 23 m; 4 parts, 2 antennas hidden` once, and
---                     every 2 s (for log_s after the move) `geofon: break look +T s: bow (x, y, z) m, stern (x, y, z) m,
+--                     every 2 s (for log_s after the move; [log] verbose, or a look that fixed something) `geofon: break look +T s: ...,
 --                     gap G m`: each copy's origin read back in the ship's frame (x along the keel, bow +, y across, z up
 --                     from the ship's origin, its waterline), and G the gap at the waterline between the two flight decks
 --                     (deck_m up in each copy) along the keel. A second Ctrl+B takes it off (OFF.down, below).
@@ -1013,9 +1013,9 @@ local function lookLine(L)
             notes[#notes + 1] = "the bow copy hidden again: shown again"
         end
     end
-    log(string.format("geofon: break look +%.0f s: bow %s m, stern %s m, gap %s m; pitch %s / %s%s", L.t, xyz(qb), xyz(qs),
-        (xb and xs) and string.format("%.0f", xb - xs) or "?", qb and qb.p and string.format("%+.1f", qb.p) or "?",
-        qs and qs.p and string.format("%+.1f", qs.p) or "?", #notes > 0 and ("; " .. table.concat(notes, "; ")) or ""))
+    if #notes > 0 or (logVerbose and logVerbose()) then log(string.format("geofon: break look +%.0f s: bow %s m, stern %s m, gap %s m; pitch %s / %s%s", L.t, xyz(qb), xyz(qs),
+        (xb and xs) and string.format("%.0f", xb - xs) or "?", qb and qb.p and string.format("%+.1f", qb.p) or "?",   -- ((2026-11-28) the user: quieter logs)
+        qs and qs.p and string.format("%+.1f", qs.p) or "?", #notes > 0 and ("; " .. table.concat(notes, "; ")) or "")) end
 end
 
 local function lookTick(now, L0)

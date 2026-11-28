@@ -93,6 +93,7 @@ function valid(o) return type(o) == "table" and not o.gone end
 function nameOf(o) return type(o) == "table" and (o.full or "?") or "?" end
 function addrOf(o) return type(o) == "table" and o.addr or nil end
 part("sv_config.lua")
+function logVerbose() return true end                     -- (sv_core's, not loaded here; the aces' hunt lines: [log] verbose)
 CFG.coop.enabled = true                           -- (the Survival COOP build's, before sv_down binds its key)
 part("sv_rows.lua"); part("sv_ai.lua"); part("sv_hud.lua"); part("sv_spawn.lua"); part("sv_rounds.lua")
 part("sv_tactical.lua"); part("sv_stats.lua"); part("sv_tells.lua"); part("sv_director.lua"); part("sv_leaderboard.lua")
