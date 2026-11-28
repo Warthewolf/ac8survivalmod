@@ -4486,3 +4486,9 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   install and saves put back by hand, identical); run 2 (25/28) read locks from the wrong list and r.SetRes. The user's
   call, asked of the trade-off (an object is air or ground, never both): "All air" (the air-to-ground specials can't lock
   fragments now). ULYSSES merged into dev and pushed (1486a416). The joiners' fix still needs a real co-op game.
+- 0.75.118 handed over (2026-11-28, the user: "give me a new build for me and my friends, I want test keys in my installed
+  build too"): INSTALLED in her game, stage_dev_0.75.118 (TANI=1 VALKA=1 ZFA=1, test keys kept; backup
+  build/backup/install_before_0.75.118 of her 0.75.67; 258 files verified, enabled.txt and her survival.ini / profile / logs
+  left as they were). Friends' zip: BUILD_NAME=COOP2MP COOP=1 FRIENDS=1 TANI=1 ZFA=1 package_release.sh online 0.75.118 ->
+  build/release/AC8SurvivalMode_COOP2MP_0.75.118_Online_COOP_ZFA44_TANACORN.zip (151 MB, build c5e1520a16aa..., registered),
+  zip_leak_test all passed. Her install and the zip link in co-op (the same mod version, coop.c CoSameVer).
