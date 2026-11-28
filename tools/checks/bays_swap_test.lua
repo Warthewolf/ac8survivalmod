@@ -174,5 +174,50 @@ local okS, errS = pcall(shopBuy, "Special")
 line = found("shop: Special:", from) or tostring(errS)
 check(okS and line:find("FULL LOAD", 1, true) ~= nil, "Special: at full load with special 1 72/72 (" .. line .. ")")
 
+-- ((2026-11-28) the user: "you say the upgrades worked, but I see zero effects", then "Fill it free": WEAPON BAYS and
+-- FLARE PODS load the room they add; she had rearmed 4 s before she bought them and flew the same counts)
+print("WEAPON BAYS and FLARE PODS bought: the new room loaded free")
+local pawn2 = { full = "BP_PlayerPlane_PP0005_f22a_C_2", addr = 0x9010, MaxHealth = 120, HealthInternal = 1200 }
+pc.Pawn = pawn2
+function act:GetOwner() return pc.Pawn end
+survivalPC = pc
+RUN.ups = {}
+mount(config(HCAA2, LACM), 18, 10)
+mx[1], cnt[1] = 144, 138
+act.MaxFlareCount, cnt[4] = 4, 2
+run(24)                                               -- (a new plane: its ammo record 2 s in, then the maxima)
+cnt[1], cnt[2], cnt[3], cnt[4] = 138, 18, 10, 2
+check(A and A.applied and A.caps, "the new plane's ammo record")
+A.caps[1], A.caps[2], A.caps[3], A.caps[4] = 138, 18, 10, 2
+run(8)
+check(A.max[1] == 144 and A.max[2] == 18 and A.max[3] == 10 and A.max[4] == 4,
+    string.format("stock full loads 144 / 18 / 10, flares 4 (%s / %s / %s / %s)", tostring(A.max[1]), tostring(A.max[2]),
+        tostring(A.max[3]), tostring(A.max[4])))
+from = #logs + 1
+local okU, errU = pcall(shopBuy, "UpBays")
+line = found("shop: UpBays:", from) or tostring(errU)
+check(okU and mx[1] == 216 and mx[2] == 27 and mx[3] == 15, string.format("WEAPON BAYS tier 1: full loads 216 / 27 / 15 (%s / %s / %s)",
+    tostring(mx[1]), tostring(mx[2]), tostring(mx[3])))
+check(cnt[1] == 210 and cnt[2] == 27 and cnt[3] == 15, string.format("the new room loaded: 138 -> 210, 18 -> 27, 10 -> 15 (%s / %s / %s)",
+    tostring(cnt[1]), tostring(cnt[2]), tostring(cnt[3])))
+check(A.caps[1] == 210 and A.caps[2] == 27 and A.caps[3] == 15, "what you may hold raised with it")
+check(line:find("missiles +72", 1, true) ~= nil and line:find("special 2 +5", 1, true) ~= nil, "the STORE says what it loaded (" .. line .. ")")
+run(16)
+check(cnt[1] == 210 and cnt[2] == 27 and cnt[3] == 15, string.format("ammoTick keeps it (%s / %s / %s)", tostring(cnt[1]),
+    tostring(cnt[2]), tostring(cnt[3])))
+from = #logs + 1
+local okF, errF = pcall(shopBuy, "UpFlares")
+line = found("shop: UpFlares:", from) or tostring(errF)
+check(okF and act.MaxFlareCount == 6 and cnt[4] == 4, string.format("FLARE PODS tier 1: 4 -> 6 flares, 2 -> 4 loaded (%s, %s; %s)",
+    tostring(act.MaxFlareCount), tostring(cnt[4]), line))
+ground = false
+run(16)
+check(cnt[4] == 4 and cnt[1] == 210, "in the air: nothing taken for shots (" .. tostring(cnt[4]) .. ", " .. tostring(cnt[1]) .. ")")
+check(not fired[1] and not fired[4], "no shots counted")
+ground = true
+from = #logs + 1
+pcall(shopBuy, "UpAirframe")
+check(found("loaded free", from) == nil, "AIRFRAME loads nothing")
+
 print(fails == 0 and "bays swap test: all passed" or ("bays swap test: " .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

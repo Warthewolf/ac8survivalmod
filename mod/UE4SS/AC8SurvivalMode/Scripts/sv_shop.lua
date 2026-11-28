@@ -281,9 +281,9 @@ end
 
 local UP_HELP = {
     airframe = "Your aircraft's health +%d%% for the rest of the run (tier %d of %d).",
-    bays     = "Carry %d%% more missiles and special weapons for the rest of the run (tier %d of %d). Buy them after.",
+    bays     = "Carry %d%% more missiles and special weapons for the rest of the run (tier %d of %d), the new room loaded.",
     gun      = "Your gun's damage +%d%% for the rest of the run (tier %d of %d).",
-    flares   = "Carry %d more flares for the rest of the run (tier %d of %d). Buy them after.",
+    flares   = "Carry %d more flares for the rest of the run (tier %d of %d), the new room loaded.",
 }
 local TAC_HELP = {
     -- ((0.73.78, plan G6) only by its key, at most max_hit of the flight, never an ace squadron's, per_round a round;
@@ -741,9 +741,32 @@ function shopBuy(name)
         RUN.ups[it.up] = nxt
         RUN.credits, RUN.spent = RUN.credits - price, RUN.spent + price
         RUN.bought[name] = (RUN.bought[name] or 0) + 1
+        -- ((2026-11-28) the user: "you say the upgrades worked, but I see zero effects", then "Fill it free": WEAPON BAYS
+        -- and FLARE PODS made room only, a REARM filled it; her REARM came 4 s before she bought them, so she flew the
+        -- same counts.) The room a tier adds (its full load before and after: A.max) is loaded with it, free: what you may
+        -- hold (A.caps) raised by it, the count now too (or by ammoTick once it can be read: A.owed)
+        local kinds = (it.up == "bays" and { 1, 2, 3 }) or (it.up == "flares" and { 4 }) or {}
+        local was = {}
+        for _, k in ipairs(kinds) do was[k] = A and A.max and A.max[k] end
         local okU, errU = pcall(UP.apply, survivalPC and liveObj(survivalPC) and survivalPC.Pawn)
         if not okU then log("upgrades: error " .. tostring(errU)) end
-        return done(string.format("%s TIER %d for %d.", it.label, nxt, price))
+        local got = {}
+        for _, k in ipairs(kinds) do
+            local now = A and A.max and A.max[k]
+            local add = (was[k] and now) and (now - was[k]) or 0
+            if add > 0 and A.caps and A.caps[k] then
+                A.caps[k] = A.caps[k] + add
+                local n = SV_Ammo(k)
+                if n >= 0 then SV_SetAmmo(k, math.min(n + add, A.caps[k]))
+                else A.owed = A.owed or {}; A.owed[k] = true end
+                got[#got + 1] = string.format("%s +%d", ({ "missiles", "special 1", "special 2", "flares" })[k], add)
+            end
+        end
+        if #kinds > 0 then
+            log(string.format("upgrades: %s tier %d: the new room loaded free: %s", it.up, nxt, #got > 0 and table.concat(got, ", ")
+                or "nothing (no full load read yet: REARM fills it)"))
+        end
+        return done(string.format("%s TIER %d for %d%s.", it.label, nxt, price, #got > 0 and (" (" .. table.concat(got, ", ") .. " loaded)") or ""))
     elseif o.role == "tactical" then
         RUN.items = RUN.items or {}
         RUN.items[it.tac] = (RUN.items[it.tac] or 0) + 1
