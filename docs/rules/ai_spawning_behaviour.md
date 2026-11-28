@@ -115,6 +115,15 @@ Moved verbatim from AGENTS.md (2026-11-14). Rule numbers are unchanged: other no
     6's LiveAIResetUniqueAction on the ace's object after a few seconds (a unit-only reset does nothing): a turn-in,
     not a 20 s chase (0.74.204-0.74.209: she ranged 0.5-2.8 km at 1,150-1,600 km/h and followed the leg 94-97 %).
 
+80. Which of your weapons can lock an object follows its air flag (LiveAIGameObject.bIsAir, what IsAir() answers)
+    against the weapon class's LockOnTargetType (0 air and ground, 1 air only, 2 ground only): Mission 4's radar tower
+    base borrowed as ULYSSES' fragment targets (a ground object) was never locked by the air-to-air specials (Saint
+    Alessia's co-op run of 0.75.117, 2026-11-24). Set bIsAir on the object, and it changes at once: the ulylock autotest
+    (0.75.118, 2026-11-28, run 20261128_095430) locked it with the standard missile either way, with LASM (type 2) as a
+    ground object and not as an air one. A lock shows on the player's LiveTargetLockonSeeker actors (LockonTarget,
+    CachedPlayerPlane you); the target's LockonAttackerPlayerPlanes stayed empty through every lock (the first run saw
+    none at all reading it alone). An object is air or ground, never both: the player's specials of the other kind lose it.
+
 ## Spawning (Milestone 2, 2026-10-21)
 - Enemies are spawned by Survival's own spawner: the native runtime registers Lua functions (SV_Spawn, SV_SetAircraft,
   SV_UnitAlive, SV_LogUnits) that Scripts/main.lua's rounds call. Don't spawn rounds with LiveReinforcement* event nodes:

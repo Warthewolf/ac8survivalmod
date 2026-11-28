@@ -4477,3 +4477,12 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   real co-op game. Not done (her calls pending): the Podarges' light at night (lead: Mission 12's
   BP_CloudLight_Ms012_PodargeDead), Comona Control's 1999 line in a 1999 plane, VOID WATCHER's strike flight, her
   friends' ideas (enemy specials by type, Aegis SASM / MPBM).
+- 0.75.118's autotest ulylock (tools/ac8-autotest 77084cb8, run 20261128_095430, 2026-11-28): 29/29. Round 2 took round
+  1's 36 KEW targets again (no -3), every fragment of both rounds had one, each an air object; after round 2 all 68
+  handed back, the next round's start finished them off (KEW 0 alive) and the KEW unit spawned again (36). The lock:
+  the standard missile locked a target either way, LASM (ground only) as a ground object and not as an air one (hard
+  rule 80). The wash at a real 21:9 (2520 x 1080, the game's settings; hard rule 81): edge to edge, no tint step at the
+  16:9 box's edges; her resolution put back. Run 1 was stopped by Claude Code for low memory at the level load (her
+  install and saves put back by hand, identical); run 2 (25/28) read locks from the wrong list and r.SetRes. The user's
+  call, asked of the trade-off (an object is air or ground, never both): "All air" (the air-to-ground specials can't lock
+  fragments now). ULYSSES merged into dev and pushed (1486a416). The joiners' fix still needs a real co-op game.
