@@ -1142,6 +1142,22 @@ local function jArm(r, id)
     r.tgt = { o = o, a = a, name = nameOf(o), id = id }
     return true
 end
+-- ((2026-11-28, the user's co-op game of 0.75.118: this game's copies of the targets bound 22 s into the round) a rock whose
+-- target's copy wasn't here yet: tried again every second until it is (or the rock's gone), so the early fragments are
+-- lockable too
+local function jRetry(now)
+    if now < (J.retryAt or 0) then return end
+    J.retryAt = now + 1
+    for _, r in pairs(J.rocks) do
+        if r.tid and not r.tgt and rockLive(r) then
+            local okA, done = pcall(jArm, r, r.tid)
+            if okA and done then
+                J.armed, J.late = (J.armed or 0) + 1, (J.late or 0) + 1
+                if J.late == 1 then ul(string.format("the host's fragment's target %d on this game's rock now (its copy came after the rock)", r.tid)) end
+            end
+        end
+    end
+end
 local function skyOff()
     for _, m in ipairs(SKYM.list) do rockOff(m.r) end
     SKYM.list = {}
@@ -1302,6 +1318,7 @@ function ULY.tick(now)
     local s = D and D.special
     -- ((2026-11-24, the user: "during the intermission of these two rounds, the fake meteors up in the sky can still
     -- continue to run") the break between its rounds too: still in 1999 (the film look on until its last round's end)
+    if J.on then pcall(jRetry, os.clock()) end            -- ((2026-11-28) a joiner's rocks still waiting for their target's copy
     local on = (s and s.kind == "ulysses" and (D.state == "fighting" or D.state == "spawning")) or J.on
         or (FILM.on and D and D.state == "wait")
     skyClean(now)
@@ -1341,6 +1358,7 @@ function ULY.fromHost(f)
         local x, y, z, vx, vy, vz, sc, sp = tonumber(f[5]), tonumber(f[6]), tonumber(f[7]), tonumber(f[8]), tonumber(f[9]), tonumber(f[10]), tonumber(f[11]), tonumber(f[12])
         if not (KEYS[key] and fin(id, 1e6) and tonumber(id) == math.floor(tonumber(id)) and fin(x, 3e5) and fin(y, 3e5) and fin(z, 6e4) and fin(vx, 5e5) and fin(vy, 5e5)
             and fin(vz, 5e5) and fin(sc, 5000) and sc > 0 and fin(sp, 3600)) then return end
+        J.lastTid = tonumber(f[14])                          -- ((2026-11-28) the last target id heard: the guard test's
         if J.rocks[id] then jDisarm(J.rocks[id]); rockOff(J.rocks[id]) end
         local tx = n((f[13] == "1" and cfg().big or cfg().fragments).tail_x, 1)     -- (as the host draws it: its own config)
         local r = rock(key, { X = x * 100, Y = y * 100, Z = z * 100 }, { X = vx, Y = vy, Z = vz }, sc / 100, sp, tx)
@@ -1354,6 +1372,7 @@ function ULY.fromHost(f)
             -- ((2026-11-28) the host's target on it (its co-op id, 0 or none: an older host's, or none free there)
             local tid = tonumber(f[14])
             if tid and fin(tid, 65535) and tid >= 1 and tid == math.floor(tid) then
+                r.tid = tid                                   -- ((2026-11-28) kept: tried again till its copy's here (jRetry)
                 pcall(jSettle)
                 local okA, done, why = pcall(jArm, r, tid)
                 J.armed, J.missed = (J.armed or 0) + ((okA and done) and 1 or 0), (J.missed or 0) + ((okA and done) and 0 or 1)
@@ -1418,7 +1437,7 @@ if SPC and SPC.kinds then
                           busy = function(s) return ULY.busy(s) end, over = function(now, s) return ULY.roundOver(now, s) end,
                           row = function(s, t) return ULY.row(s, t) end }
 end
-function ULY.debug() return U, SKYM, FILM end                  -- (the tests')
+function ULY.debug() return U, SKYM, FILM, J end               -- (the tests')
 
 -- TEST ONLY BEGIN (ULYSSES' test key: test builds only)
 -- ((2026-11-24, the user: "Shouldn't their smoke trail be thicker") the autotest's trail line-up: one rock a candidate

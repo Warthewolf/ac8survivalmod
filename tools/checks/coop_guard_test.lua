@@ -1130,6 +1130,18 @@ do
     if ends("B") ~= 1 then fail(cr, "limits", "rk from slot 2", "a joiner's rk ended a rocket here") end
 end
 
+-- ((2026-11-28, the user, a joiner of 0.75.118: "the fragments arent targetable") ULYSSES' "ul|f" with its target's co-op id:
+-- the joiner's handler passes field 14 on, so ULYSSES tries to put that target's copy on its rock (0.75.118 cut it: no try)
+do
+    local cu = covOf("join", "ul")
+    feed("join", "ul", { "ul", "r", "1" })
+    feed("join", "ul", { "ul", "f", "9", "C", "-15000", "8000", "11000", "-30000", "12000", "-9000", "250", "40", "0", "23" })
+    local Jx = ULY and ULY.debug and select(4, ULY.debug())
+    if not (Jx and Jx.lastTid == 23) then
+        fail(cu, "err", "ul|f's target id", "the target's id never reached ULYSSES (field 14 not passed on): no copy put on the rock")
+    else say("  ok   a joiner's \"ul|f\" carries its target's id through to ULYSSES (its copy tried on the rock)") end
+end
+
 ---------------------------------------------------------------------------------------------------- summary
 say("")
 say(string.format("%-6s %-5s %7s %5s %6s %6s %6s %4s %5s", "side", "type", "fed", "err", "native", "limits", "tables", "cf", "KNOWN"))
