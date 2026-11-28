@@ -100,7 +100,10 @@ CFG = {
     -- (hit_m, turret_s: the missile outcomes' and the fleet watch's, sv_weaponlog.lua) audit: Scripts/sv_audit.lua's
     -- targets / pay audit / sync lines every report_s, the enemies' targets looked at every sample_s, a joiner's kill paid
     -- within suspect_s of a teardown flagged
-    log = { verbose = false, weapons = { enabled = true, every_s = 0.5, summary_s = 60, hit_m = 150, turret_s = 5 },
+    -- ((2026-11-28, the user: "do we still even need the weapons log?" ... "yes switch it off by default") weapons: off
+    -- by default: a diagnostic (sv_weaponlog.lua), its question of 2026-10-31 long answered; on a joiner of the 8-player
+    -- run of 0.75.118 it was 15-19 % of the Lua tick, its walks up to 82 ms. [log.weapons] enabled = true to chase a weapon
+    log = { verbose = false, weapons = { enabled = false, every_s = 0.5, summary_s = 60, hit_m = 150, turret_s = 5 },
             audit = { enabled = true, sample_s = 5, report_s = 60, suspect_s = 5 } },
     -- behaviour = false (2026-10-22): the barrel-roll probe proved the game builds Survival's scripts; its MiGs flipped
     -- between PursueTarget and ReturnToWorld and never closed in, so rounds 1-2 open with normal fighters again.
