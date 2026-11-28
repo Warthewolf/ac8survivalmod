@@ -4573,3 +4573,16 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   0.75.124 staged as build/release/stage_dev_<ver> for the autotests only (SV_LB_REGISTER=0: not registered), neither
   installed. Untested in game: co-op (a joiner hears the host's forwarded events, as before), the voices themselves
   (the test reads the subtitles).
+- 0.75.126 (2026-11-28, fix/festival-stalls-spread, on top of fix/shuttle-countdown-radio): THE FESTIVAL's town boxes
+  spread out. The user, with a picture of the labels piled into one: "spread out the festival market stalls more so they
+  don't look like a massive clump". The first layout (2026-11-07) had all 15 within 155 m of the concert (whose spot was
+  over a canal); seen from a few km a box's label covers 250-300 m of ground. Now (survival_events_festival.py
+  FEST_TOWN_BOXES) over the town south of the runway's line, about 1.7 km along it: each on 5 m ground among houses
+  (build/research/comona's placements and height map), at least 150 m apart (FEST_TOWN_MIN_GAP_M, asserted by the build)
+  but VALKA and AUDREY (still 12 m, side by side), the market stalls 240 m apart along the main road, FIREWORKS just off
+  the beach. The "ALLY" labels in her picture are the boxes' own (each shows ALLY over its marker, its name beside it).
+  Autotest festtown (new: Ctrl+PAGE_UP, the boxes read back, three pictures from 1.5-2.5 km): 0.75.125 10/10, its
+  pictures showed FIREWORKS lined up behind the concert from the north and the sea and the stalls' names touching;
+  0.75.126 10/10 (closest 172 m, 1,664 m corner to corner), only VALKA / AUDREY overlap. festival_test passed. Staged
+  build/release/stage_dev_0.75.125 / _0.75.126 for the autotests only (not registered), neither installed. Untested in
+  game: co-op (the boxes are the build's unit, the same on every game).

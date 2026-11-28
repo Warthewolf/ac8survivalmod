@@ -348,23 +348,31 @@ FEST_LIGHTS = [  # (unit, object, km along the runway from its centre (+ ENE), k
 FEST_TOWN_UNIT, FEST_TOWN_OBJ = 'SV_Unit_FestTown', 'SV_Obj_FestTown'
 FEST_TOWN_CENTRE = (-2.15, +0.30)             # km along / across the runway from its centre (LCAC_RUNWAY's frame)
 FEST_TOWN_Z_CM = 800.0                         # 8 m up (the town's ground 3-5 m: its houses' footings), bIsLanding cleared
+# ((2026-11-28) the user, with a picture of the labels piled up: "spread out the festival market stalls more so they don't
+# look like a massive clump": the first layout had every box within 155 m of the concert, and seen from a few km a box's
+# label covers 250-300 m of ground) Spread over the town south of the runway's line, about 1.6 km along it: each on a
+# house-covered street (build/research/comona's placements and height_20m.npy: 5 m ground under every one), at least
+# FEST_TOWN_MIN_GAP_M apart but VALKA and AUDREY (side by side, 12 m), FIREWORKS just off the beach (over the water, as a
+# barge's). The concert moved 60 m east: its first spot was over one of the canals.
 FEST_TOWN_BOXES = [  # (callsign key, metres along / across the runway from FEST_TOWN_CENTRE): the texts are Lua's
-    ('SV_FestBox_Concert', 0.0, 0.0),
-    ('SV_FestBox_Valka', -6.0, 45.0),          # VALKA and AUDREY side by side, 12 m apart, in front of the stage
-    ('SV_FestBox_Audrey', 6.0, 45.0),
-    ('SV_FestBox_Dance', 0.0, 95.0),
-    ('SV_FestBox_Market', 70.0, -30.0),
-    ('SV_FestBox_Market', 92.0, -30.0),
-    ('SV_FestBox_Market', 114.0, -30.0),
-    ('SV_FestBox_FoodTruck', -80.0, -40.0),
-    ('SV_FestBox_FoodTruck', -105.0, -40.0),
-    ('SV_FestBox_FishGrill', 60.0, 75.0),
-    ('SV_FestBox_Dessert', -70.0, 65.0),
-    ('SV_FestBox_Lanterns', 145.0, 20.0),
-    ('SV_FestBox_RingToss', 40.0, -105.0),
-    ('SV_FestBox_Soup', -145.0, 10.0),
-    ('SV_FestBox_Fireworks', -40.0, -155.0),
+    ('SV_FestBox_Concert', 60.0, -20.0),
+    ('SV_FestBox_Valka', 54.0, 160.0),         # VALKA and AUDREY side by side, 12 m apart, in front of the stage
+    ('SV_FestBox_Audrey', 66.0, 160.0),
+    ('SV_FestBox_Dance', -330.0, 250.0),
+    ('SV_FestBox_Market', 240.0, -60.0),       # the market street, east along the main road (240 m apart: the
+    ('SV_FestBox_Market', 480.0, -20.0),       # festtown autotest's pictures, 200 m: their long names touched from
+    ('SV_FestBox_Market', 720.0, 20.0),        # 2.5 km)
+    ('SV_FestBox_FoodTruck', -300.0, -40.0),   # by the apartments on the main road, west
+    ('SV_FestBox_FoodTruck', -520.0, 0.0),
+    ('SV_FestBox_FishGrill', 280.0, 190.0),
+    ('SV_FestBox_Dessert', -130.0, 90.0),
+    ('SV_FestBox_Lanterns', 870.0, 150.0),
+    ('SV_FestBox_RingToss', 560.0, 180.0),
+    ('SV_FestBox_Soup', -760.0, 40.0),
+    ('SV_FestBox_Fireworks', 380.0, 330.0),    # off the beach (east of the concert's line: from the north or the sea
+                                               # it, the pair and the concert stood one behind another)
 ]
+FEST_TOWN_MIN_GAP_M = 150.0                   # (the build checks it: fest_town)
 FEST_TOWN_KEYS = sorted({k for k, _, _ in FEST_TOWN_BOXES})
 
 
@@ -374,6 +382,10 @@ def fest_town():
     import math
     (rx, ry), ryaw = LCAC_RUNWAY
     ux, uy = math.cos(math.radians(ryaw)), math.sin(math.radians(ryaw))
+    pair = {'SV_FestBox_Valka', 'SV_FestBox_Audrey'}
+    for i, (k1, a1, c1) in enumerate(FEST_TOWN_BOXES):
+        for k2, a2, c2 in FEST_TOWN_BOXES[i + 1:]:
+            assert {k1, k2} == pair or math.hypot(a1 - a2, c1 - c2) >= FEST_TOWN_MIN_GAP_M, (k1, k2, 'a clump again')
     out = []
     for key, al_m, ac_m in FEST_TOWN_BOXES:
         al, ac = FEST_TOWN_CENTRE[0] + al_m / 1000.0, FEST_TOWN_CENTRE[1] + ac_m / 1000.0
