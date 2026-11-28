@@ -4526,3 +4526,14 @@ folder (since main's 0.74.67). Pushed to main, tagged v0.75.0, the GitHub Releas
   build/release/AC8SurvivalMode_COOP2MP_0.75.120_Online_COOP_ZFA44_TANACORN.zip (151 MB, build a331773571c3...,
   registered). Untested in game: everything co-op above (needs a real co-op game), a gun's rounds on the new spheres,
   whether a player's plane collides with the 55 m SAW spheres.
+- 0.75.121 (2026-11-28, dev, merged locally, NOT pushed): the SOLG's sounds (the user: "the SOLG didn't have any sounds";
+  feature/solg-sounds): AC:I's own SOLG bank (DATA92 #528, six break sounds, no engine of its own; the exception of
+  2026-11-23) cut out by tools/solg/sounds.py into build/solg/sounds, staged into Sounds/solg by build_all, played through
+  SND.play where each piece breaks on every game (small: a panel, shell or laser; big: a core unit, the hatch, the SP
+  shell, an arm, the SOLG coming apart; docs/re/SOLG.md "Sounds"). Also: weaponlog_test turns the log on itself (it
+  ships off; fix/weaponlog-test-default-off). run_all on 0.75.120's dev: 85 passed, 5 failed: weaponlog_test (fixed
+  here) and the four the waiting branches fix (fix/fleet-test-public, fix/lb-contract-fleet, fix/tani-vls-test,
+  fix/thunder-test-parts). Autotest valkasolg 43/43 (run 20261128_140527: `solg: its break sound
+  solg/break_small_3.wav: playing`). Staged build/release/stage_dev_0.75.121 (TANI=1 VALKA=1 ZFA=1, test keys kept,
+  registered), NOT installed; friends' zip build/release/AC8SurvivalMode_COOP2MP_0.75.121_Online_COOP_ZFA44_TANACORN.zip
+  (6 SOLG sounds in, build f6f66fb33cb3..., registered); zip_leak_test all passed. 0.75.120's stage and zip superseded.
